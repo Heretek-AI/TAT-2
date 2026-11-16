@@ -388,7 +388,7 @@ func _setup_preview_world(sv: SubViewport) -> void:
 	cam.fov = 40.0
 	cam.current = true
 	sv.add_child(cam)
-	cam.look_at(Vector3(0.0, 0.95, 0.0))
+	cam.look_at_from_position(cam.position, Vector3(0.0, 0.95, 0.0))
 
 
 func _setup_tool_world(sv: SubViewport) -> void:
@@ -419,7 +419,7 @@ func _setup_tool_world(sv: SubViewport) -> void:
 	cam.fov = 38.0
 	cam.current = true
 	sv.add_child(cam)
-	cam.look_at(Vector3(0.0, 0.25, 0.0))
+	cam.look_at_from_position(cam.position, Vector3(0.0, 0.25, 0.0))
 
 
 func _on_preview_gui_input(event: InputEvent) -> void:

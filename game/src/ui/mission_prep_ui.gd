@@ -12,12 +12,14 @@ signal ready_pressed(map_id: String, difficulty: int, mode: String, contract_ord
 signal closed()
 
 const BODY_CANDIDATES: Array[String] = [
+	"res://assets/ue/Content/Art/Animation/ThiefNisha/Skin/Base/SK_ThiefNisha__Body.glb",
 	"res://assets/ue/Content/Art/Character/SK_ThiefNisha__Body.glb",
 	"res://assets/ue/Content/Art/Character/Thief/SK_ThiefNisha__Body.glb",
 	"res://assets/ue/Raw/Art/Character/SK_ThiefNisha__Body.glb",
 	"res://assets/ue/Content/Art/Gameplay/Thief/SK_ThiefNisha__Body.glb",
 ]
 const HEAD_CANDIDATES: Array[String] = [
+	"res://assets/ue/Content/Art/Animation/ThiefNisha/Skin/Base/SK_ThiefNisha__Head.glb",
 	"res://assets/ue/Content/Art/Character/SK_ThiefNisha__Head.glb",
 	"res://assets/ue/Content/Art/Character/Thief/SK_ThiefNisha__Head.glb",
 	"res://assets/ue/Raw/Art/Character/SK_ThiefNisha__Head.glb",
@@ -42,6 +44,8 @@ var _mission_body: Label
 var _contract_title_lbl: Label
 var _contract_body: Label
 var _controls_lbl: Label
+var _thief_body_node: Node = null
+var _thief_head_node: Node = null
 
 
 func _ready() -> void:
@@ -236,7 +240,7 @@ func _build_stage(viewport: SubViewport) -> void:
 	cam.fov = 55.0
 	cam.current = true
 	viewport.add_child(cam)
-	cam.look_at(Vector3(0.4, 1.0, 0.0), Vector3.UP)
+	cam.look_at_from_position(cam.position, Vector3(0.4, 1.0, 0.0), Vector3.UP)
 
 	var moonlight: DirectionalLight3D = DirectionalLight3D.new()
 	moonlight.rotation_degrees = Vector3(-48, -28, 0)
@@ -356,6 +360,7 @@ func _add_thief(anchor: Node3D) -> void:
 		var body_res: Resource = ResourceLoader.load(body_path) as Resource
 		if body_res is PackedScene:
 			var body_node: Node = (body_res as PackedScene).instantiate()
+			_thief_body_node = body_node
 			anchor.add_child(body_node)
 		else:
 			_add_placeholder_body(anchor)
@@ -365,6 +370,7 @@ func _add_thief(anchor: Node3D) -> void:
 		var head_res: Resource = ResourceLoader.load(head_path) as Resource
 		if head_res is PackedScene:
 			var head_node: Node = (head_res as PackedScene).instantiate()
+			_thief_head_node = head_node
 			head_node.position = Vector3(0, 1.45, 0)
 			anchor.add_child(head_node)
 		else:
@@ -423,7 +429,7 @@ func _add_placeholder_head(anchor: Node3D) -> void:
 
 func _first_existing(paths: Array[String]) -> String:
 	for p: String in paths:
-		if ResourceLoader.exists(p):
+		if ResourceLoader.exists(p) or FileAccess.file_exists(p):
 			return p
 	return ""
 

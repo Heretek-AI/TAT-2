@@ -81,6 +81,11 @@ landscape spline/grass data.
 ### A6 — Gameplay constants (in progress)
 BP defaults carry the real movement and perception values: player 360/180 cm/s walk/crouch, +90 sprint increment, 550 jump, 91 cm capsule half height, 79.625 cm eye offset; guard 250 cm/s, 25 m sight, 30 m lose-sight, 40° half-FOV, 25 m hearing; `DA_AIStatesToSpeed_Guard` 1.5/1.7 m/s; `DA_DetectionSettings` 0.4 s/m (0.2 alerted) with crouch multiplier. Plan: parse into `game/data/generated/gameplay/`, update player/guard constants and the detection ramp.
 
+### A8 — Doors and containers
+- **Doors**: 281 `TATSwingingDoorPivotComponent` + 286 nav-link markers exist, but their normalized marker transforms are identity/zero (component stubs), so spawning door leaves from those markers would place them at the origin. The real leaf mesh (`SM_DoorCityExtA`) and instant open/close tags are known; a door wave must resolve the door actor transforms through the BP SCS component chain (same resolver as A5) rather than the marker list.
+- **Containers**: 89 `BP_ChestTrunk_MajorLoot`, 68 `BP_DisplayCaseA_MajorLoot`, 57 secret wall stashes, 20 storefront display cases. Each has real meshes (`SM_ChestTrunk`, lid, filler) and a `TATContainerSpawnerComponent` with `SpawnBucket` (major/minor). These are actor markers with real transforms and can be spawned with loot-on-open using A16's loot actor data.
+- **Guard patrols**: not recoverable — `BP_AIPatrolPath` has no spline points in the cooked actor; 249 path actors give positions only.
+
 ### A7 — Audio
 Wwise files are RIFF with codec tag `0xFFFF` (Wwise Vorbis); FFmpeg reports
 "no decoder found". `vgmstream`/`ww2ogg` are not installed. Blocked until a decoder

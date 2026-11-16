@@ -15,8 +15,13 @@ const DOOR_SFX: AudioStream = preload("res://assets/ue/audio/door.wav")
 
 const MAX_VOICES: int = 16
 const MAX_DISTANCE_M: float = 60.0
+## Honest event->clip map produced by tools/convert_wwise.py. When the audit
+## recovers no confirmed mapping, every tag keeps its synthesized fallback
+## and has_real_clip() returns false.
+const AUDIO_EVENTS_PATH: String = "res://data/generated/audio_events.json"
 
 var _sfx: Dictionary = {}
+var _real_clips: Dictionary = {}
 var _active_voices: int = 0
 
 
@@ -30,7 +35,43 @@ func _ready() -> void:
 	_sfx["alert"] = ALERT_SFX
 	_sfx["loot"] = LOOT_SFX
 	_sfx["door"] = DOOR_SFX
+	_load_real_clips()
 	NoiseBus.noise_emitted.connect(_on_noise_emitted)
+
+
+## Returns true when [param tag] currently resolves to a real extracted clip
+## instead of the synthesized fallback.
+func has_real_clip(tag: String) -> bool:
+	return bool(_real_clips.get(_resolve_tag(tag), false))
+
+
+func _load_real_clips() -> void:
+	if not FileAccess.file_exists(AUDIO_EVENTS_PATH):
+		return
+	var f: FileAccess = FileAccess.open(AUDIO_EVENTS_PATH, FileAccess.READ)
+	if f == null:
+		return
+	var parsed: Variant = JSON.parse_string(f.get_as_text())
+	if not (parsed is Dictionary):
+		return
+	var tags: Variant = (parsed as Dictionary).get("tags", {})
+	if not (tags is Dictionary):
+		return
+	for tag: Variant in (tags as Dictionary).keys():
+		var key := str(tag)
+		if not _sfx.has(key):
+			continue
+		var entry: Variant = (tags as Dictionary)[tag]
+		if not (entry is Dictionary):
+			continue
+		var clip_path := str((entry as Dictionary).get("clip", ""))
+		if clip_path.is_empty() or not ResourceLoader.exists(clip_path):
+			continue
+		var stream: AudioStream = ResourceLoader.load(clip_path) as AudioStream
+		if stream == null:
+			continue
+		_sfx[key] = stream
+		_real_clips[key] = true
 
 
 func play_sfx(tag: String, pos: Vector3 = Vector3.ZERO) -> void:

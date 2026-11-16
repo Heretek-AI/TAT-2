@@ -7,7 +7,7 @@ MOBILE_ABI  ?= arm64
 QA_CONTRACT ?= 0
 KEYSTORE_PROPS := $(HOME)/.config/tat2/keystore.properties
 
-.PHONY: build-extractor extract anims normalize audit test run android-prepare android-debug android-debug-gl android-release
+.PHONY: build-extractor extract anims normalize audit test run audio-tools android-prepare android-debug android-debug-gl android-release
 
 build-extractor:
 	DOTNET_ROOT=$(HOME)/.dotnet10 PATH=$(HOME)/.dotnet10:$(PATH) $(DOTNET) build tools/tat-extract -c Release
@@ -29,6 +29,9 @@ anims: build-extractor
 
 normalize:
 	python3 tools/parse_tables.py
+
+audio-tools:
+	bash tools/fetch_vgmstream.sh
 
 audit:
 	python3 tools/manifest_audit.py --min-coverage 0.90

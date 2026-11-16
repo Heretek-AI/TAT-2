@@ -1,5 +1,35 @@
 #!/usr/bin/env python3
-"""Build game/data/generated/materials.json from extracted MI_*/M_* JSONs and PNGs."""
+"""Build game/data/generated/materials.json from extracted MI_*/M_* JSONs and PNGs.
+
+UE -> Godot (StandardMaterial3D) parameter mapping used here and in
+``game/src/core/level_loader.gd::get_material_for_ue()``:
+
+- Scalar ``Roughness`` (fallbacks: ``FlatRoughness``, average of
+  ``Roughness Low``/``Roughness High``, average of ``RoughnessMin``/
+  ``RoughnessMax``) -> ``roughness``, clamped to 0..1.
+- Scalar ``Metallic`` (fallbacks: ``Metalness``, ``FlatMetallic``,
+  average of ``MetallicMin``/``MetallicMax``) -> ``metallic``, clamped.
+- Scalar ``Specular`` (fallback ``Spec``) -> ``metallic_specular``, clamped.
+- Vector ``EmissiveColor`` (fallbacks ``Emissive``, ``EmissiveTint``,
+  ``EmisColor``) -> ``emission`` colour; multiplied in energy by the first
+  present emissive scalar (``EmissiveStrength``, ``EmissiveIntensity``,
+  ``EmissiveMultiplier``, ``EmissiveMultiply``, ``EmisMultiply``,
+  ``EmissiveMult``, ``EmissivePower``, ``EmissiveBrightness``,
+  ``EmissiveBrillance``).
+- ``TwoSided`` -> ``cull_mode = CULL_DISABLED``.
+- ``BlendMode`` containing ``Translucent`` or ``AlphaComposite`` ->
+  ``TRANSPARENCY_ALPHA``; ``BLEND_Masked`` -> ``TRANSPARENCY_ALPHA_SCISSOR``
+  with ``alpha_scissor_threshold`` from ``BasePropertyOverrides`` /
+  ``OpacityMaskClipValue`` (default 0.5).
+- ``PhysMaterial`` name is stored for debugging; Godot has no equivalent.
+- NOT mapped (kept in the JSON for future work): shading model
+  (``MSM_Unlit`` etc. would map to ``SHADING_MODE_UNSHADED`` but current
+  art direction relies on shaded+emission materials), ``Opacity`` scalars
+  (layer-paint opacities, not alpha), ``Spec``ular colour vectors,
+  ``Refraction``/``RefractionDepthBias`` (Godot screen-space refraction is a
+  separate pipeline), rain/puddle/grunge/noise/tiling switches and scalars
+  (weathering system, no Godot equivalent), mask/channel selector vectors.
+"""
 
 import json
 import re
@@ -77,6 +107,59 @@ CATEGORY_FALLBACK_STEMS = {
         "t_dirtmossa_bc",
     ],
 }
+
+
+def _extract_real_params(props: dict) -> tuple:
+    """Flatten real UE material data: scalars, vectors, switches, render flags."""
+    params: dict = {}
+    for sv in props.get("ScalarParameterValues") or []:
+        nm = ((sv.get("ParameterInfo") or {}).get("Name")) or ""
+        val = sv.get("ParameterValue")
+        if nm != "" and isinstance(val, (int, float)):
+            params[nm] = round(float(val), 4)
+    vectors: dict = {}
+    for vv in props.get("VectorParameterValues") or []:
+        nm = ((vv.get("ParameterInfo") or {}).get("Name")) or ""
+        val = vv.get("ParameterValue") or {}
+        if nm != "" and "R" in val:
+            vectors[nm] = [
+                round(float(val.get("R", 0.0)), 4),
+                round(float(val.get("G", 0.0)), 4),
+                round(float(val.get("B", 0.0)), 4),
+                round(float(val.get("A", 1.0)), 4),
+            ]
+    switches: dict = {}
+    for sw in (props.get("StaticParametersRuntime") or {}).get(
+        "StaticSwitchParameters"
+    ) or []:
+        nm = ((sw.get("ParameterInfo") or {}).get("Name")) or ""
+        if nm != "" and isinstance(sw.get("Value"), bool):
+            switches[nm] = sw["Value"]
+    render: dict = {}
+    if "BlendMode" in props and props["BlendMode"]:
+        render["blend_mode"] = str(props["BlendMode"])
+    if props.get("TwoSided") is True:
+        render["two_sided"] = True
+    if "ShadingModel" in props and props["ShadingModel"]:
+        render["shading_model"] = str(props["ShadingModel"])
+    clip = (props.get("BasePropertyOverrides") or {}).get("OpacityMaskClipValue")
+    if clip is None:
+        clip = props.get("OpacityMaskClipValue")
+    if clip is None and isinstance(props.get("bOpacityMaskClipValue"), (int, float)):
+        clip = props["bOpacityMaskClipValue"]
+    if isinstance(clip, (int, float)):
+        render["opacity_mask_clip"] = round(float(clip), 4)
+    phys = ""
+    pm = props.get("PhysMaterial") or {}
+    if isinstance(pm, dict):
+        op = pm.get("ObjectPath") or ""
+        if op:
+            phys = op.split(".")[0].rstrip("/").split("/")[-1]
+        if not phys:
+            on = pm.get("ObjectName") or ""
+            m = re.search(r"'([^']+)'", on)
+            phys = m.group(1) if m else on
+    return params, vectors, switches, render, phys
 
 
 def _strip_material_base(mat_name: str) -> str:
@@ -280,7 +363,17 @@ def main():
                         continue
                     tint = [round(r, 3), round(g, 3), round(b, 3), round(a, 3)]
                     break
-        raw_mats[pkg] = {"parent": parent, "texs": texs, "tint": tint}
+        p_scalars, p_vectors, p_switches, p_render, p_phys = _extract_real_params(props)
+        raw_mats[pkg] = {
+            "parent": parent,
+            "texs": texs,
+            "tint": tint,
+            "params": p_scalars,
+            "vectors": p_vectors,
+            "switches": p_switches,
+            "render": p_render,
+            "phys_material": p_phys,
+        }
 
     # Resolve parent inheritance
     resolved = {}
@@ -289,27 +382,85 @@ def main():
         if pkg in resolved:
             return resolved[pkg]
         if depth > 8 or pkg not in raw_mats:
-            return {"texs": {}, "tint": None}
+            return {
+                "texs": {},
+                "tint": None,
+                "params": {},
+                "vectors": {},
+                "switches": {},
+                "render": {},
+                "phys_material": "",
+            }
         cur = raw_mats[pkg]
         base = (
             resolve(cur["parent"], depth + 1)
             if cur["parent"]
-            else {"texs": {}, "tint": None}
+            else {
+                "texs": {},
+                "tint": None,
+                "params": {},
+                "vectors": {},
+                "switches": {},
+                "render": {},
+                "phys_material": "",
+            }
         )
         texs = dict(base["texs"])
         texs.update(cur["texs"])
         tint = cur["tint"] if cur["tint"] is not None else base["tint"]
-        resolved[pkg] = {"texs": texs, "tint": tint}
+        params = dict(base["params"])
+        params.update(cur["params"])
+        vectors = dict(base["vectors"])
+        vectors.update(cur["vectors"])
+        switches = dict(base["switches"])
+        switches.update(cur["switches"])
+        render = dict(base["render"])
+        render.update(cur["render"])
+        phys = cur["phys_material"] or base["phys_material"]
+        resolved[pkg] = {
+            "texs": texs,
+            "tint": tint,
+            "params": params,
+            "vectors": vectors,
+            "switches": switches,
+            "render": render,
+            "phys_material": phys,
+        }
         return resolved[pkg]
 
     for k in raw_mats:
         resolve(k)
 
-    # Keep only entries that have at least one texture or tint
-    out = {k: v for k, v in resolved.items() if v["texs"] or v["tint"]}
+    # Keep only entries that have at least one texture, tint, or real parameter.
+    out = {}
+    for k, v in resolved.items():
+        if (
+            v["texs"]
+            or v["tint"]
+            or v["params"]
+            or v["vectors"]
+            or v["switches"]
+            or v["render"]
+            or v["phys_material"]
+        ):
+            entry = {
+                "texs": v["texs"],
+                "tint": v["tint"],
+                "params": v["params"],
+                "vectors": v["vectors"],
+                "switches": v["switches"],
+            }
+            if v["render"]:
+                entry["render"] = v["render"]
+            if v["phys_material"]:
+                entry["phys_material"] = v["phys_material"]
+            out[k] = entry
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(out, indent=2))
-    print(f"Resolved {len(out)} materials with textures/tints -> {OUT}")
+    n_params = sum(
+        1 for v in out.values() if v["params"] or v["vectors"] or v["switches"]
+    )
+    print(f"Resolved {len(out)} materials ({n_params} with real params) -> {OUT}")
 
     mesh_mats = {}
     for mf in EX_ASSETS.rglob("*.materials.json"):

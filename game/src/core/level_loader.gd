@@ -94,6 +94,100 @@ func _load_tex(res_path: String) -> Texture2D:
 	return null
 
 
+## Normalizes a UE parameter dict for case/space/underscore-insensitive lookup.
+func _ue_norm_map(d: Dictionary) -> Dictionary:
+	var out := {}
+	for k in d.keys():
+		out[str(k).to_lower().replace(" ", "").replace("_", "")] = d[k]
+	return out
+
+
+func _ue_lookup(normed: Dictionary, names: Array) -> Variant:
+	for n in names:
+		var key := str(n).to_lower().replace(" ", "").replace("_", "")
+		if normed.has(key):
+			return normed[key]
+	return null
+
+
+## Applies real UE scalar PBR params (Roughness/Metallic/Specular families from
+## materials.json "params"). Runs before the art-direction overrides in
+## get_material_for_ue() so those keep precedence; missing params keep current
+## defaults (roughness 0.78, metallic/specular 0).
+func _apply_ue_pbr_params(mat: StandardMaterial3D, info: Dictionary) -> void:
+	var params: Dictionary = _ue_norm_map(info.get("params", {}))
+	var rough: Variant = _ue_lookup(params, ["roughness", "flatroughness"])
+	if rough == null:
+		var rlo: Variant = _ue_lookup(params, ["roughnesslow", "roughnessmin"])
+		var rhi: Variant = _ue_lookup(params, ["roughnesshigh", "roughnessmax"])
+		if rlo != null and rhi != null:
+			rough = (float(rlo) + float(rhi)) * 0.5
+	if rough != null:
+		mat.roughness = clampf(float(rough), 0.0, 1.0)
+	var metal: Variant = _ue_lookup(params, ["metallic", "metalness", "flatmetallic"])
+	if metal == null:
+		var mlo: Variant = _ue_lookup(params, ["metallicmin"])
+		var mhi: Variant = _ue_lookup(params, ["metallicmax"])
+		if mlo != null and mhi != null:
+			metal = (float(mlo) + float(mhi)) * 0.5
+	if metal != null:
+		mat.metallic = clampf(float(metal), 0.0, 1.0)
+	var spec: Variant = _ue_lookup(params, ["specular", "spec"])
+	if spec != null:
+		mat.metallic_specular = clampf(float(spec), 0.0, 1.0)
+
+
+## Applies real UE render flags from materials.json "render": TwoSided ->
+## double-sided, translucent/AlphaComposite blend -> alpha transparency, masked
+## blend -> alpha scissor. Glass art overrides below still take precedence.
+func _apply_ue_render_flags(mat: StandardMaterial3D, info: Dictionary) -> void:
+	var render: Dictionary = info.get("render", {})
+	if render.get("two_sided", false):
+		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var blend := str(render.get("blend_mode", "")).to_lower()
+	if blend.find("translucent") >= 0 or blend.find("alphacomposite") >= 0:
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	elif blend.find("masked") >= 0:
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+		mat.alpha_scissor_threshold = clampf(float(render.get("opacity_mask_clip", 0.5)), 0.0, 1.0)
+
+
+## Applies real UE emissive vectors/scalars from materials.json. Merges with an
+## emissive texture bound above (the texture keeps its art-tuned energy while
+## the UE colour fills in the emission tint); otherwise enables emission from
+## the UE colour scaled by the emissive scalar. Skipped when the UE switches
+## explicitly gate emissive off.
+func _apply_ue_emissive(mat: StandardMaterial3D, info: Dictionary) -> void:
+	var switches: Dictionary = _ue_norm_map(info.get("switches", {}))
+	if _ue_lookup(switches, ["emissiveon?"]) == false:
+		return
+	if _ue_lookup(switches, ["disableemissivecontribution"]) == true:
+		return
+	var vectors: Dictionary = _ue_norm_map(info.get("vectors", {}))
+	var ecol: Variant = _ue_lookup(vectors, ["emissivecolor", "emissive", "emissivetint", "emiscolor"])
+	var params: Dictionary = _ue_norm_map(info.get("params", {}))
+	var estr: Variant = _ue_lookup(params, ["emissivestrength", "emissiveintensity", "emissivemultiplier", "emissivemultiply", "emismultiply", "emissivemult", "emissivepower", "emissivebrightness", "emissivebrillance"])
+	if ecol == null and estr == null:
+		return
+	var col := Color(1.0, 1.0, 1.0)
+	if ecol is Array and (ecol as Array).size() >= 3:
+		var ea: Array = ecol
+		col = Color(float(ea[0]), float(ea[1]), float(ea[2]))
+		if maxf(col.r, maxf(col.g, col.b)) <= 0.02 and estr == null:
+			return
+	if mat.emission_enabled:
+		mat.emission = col
+		if estr != null:
+			mat.emission_energy_multiplier = clampf(float(mat.emission_energy_multiplier) * float(estr), 0.0, 16.0)
+	else:
+		mat.emission_enabled = true
+		mat.emission = col
+		if estr != null:
+			mat.emission_energy_multiplier = clampf(float(estr), 0.0, 8.0)
+		else:
+			mat.emission_energy_multiplier = 1.0
+
+
 func get_material_for_ue(ue_mat_path: String) -> StandardMaterial3D:
 	if _std_mat_cache.has(ue_mat_path):
 		return _std_mat_cache[ue_mat_path]
@@ -101,6 +195,8 @@ func get_material_for_ue(ue_mat_path: String) -> StandardMaterial3D:
 	var info: Dictionary = _materials_db.get(ue_mat_path, _materials_db_lower.get(low_mat, {}))
 	var mat := StandardMaterial3D.new()
 	mat.roughness = 0.78
+	_apply_ue_pbr_params(mat, info)
+	_apply_ue_render_flags(mat, info)
 	var texs: Dictionary = info.get("texs", {})
 	var alb := _load_tex(str(texs.get("albedo", "")))
 	# Hard rule: the UI map textures (T_MapBuilding_*) must never dress 3D geometry.
@@ -146,6 +242,7 @@ func get_material_for_ue(ue_mat_path: String) -> StandardMaterial3D:
 		mat.emission_enabled = true
 		mat.emission_texture = em
 		mat.emission_energy_multiplier = 2.2
+	_apply_ue_emissive(mat, info)
 	if alb == null and tint == null:
 		var low: String = ue_mat_path.to_lower()
 		if "brick" in low:

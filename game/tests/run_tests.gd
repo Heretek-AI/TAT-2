@@ -420,6 +420,8 @@ func _initialize() -> void:
 			var exp_mc: Array = ml_src.get("color", [1, 1, 1])
 			var exp_fogc: Array = fog_src.get("inscattering", [0, 0, 0])
 			var exp_skyc: Array = sky_src.get("light_color", [1, 1, 1])
+			var exp_gain: Array = pp_src.get("gain_midtones", [1.0, 1.0, 1.0])
+			var exp_bri := float(exp_gain[0])
 			var wvals_ok := applied \
 				and is_equal_approx(wenv.fog_density, exp_fog) \
 				and is_equal_approx(wmoon.light_energy, exp_energy) \
@@ -431,9 +433,28 @@ func _initialize() -> void:
 				and is_equal_approx(wenv.ambient_light_color.r, float(exp_skyc[0])) \
 				and is_equal_approx(wenv.ambient_light_energy, clampf(float(sky_src.get("intensity", 0.0)), 0.02, 1.0)) \
 				and is_equal_approx(wenv.adjustment_saturation, float(pp_src.get("saturation", 1.0))) \
+				and wenv.adjustment_brightness > 0.0 \
+				and is_equal_approx(wenv.adjustment_brightness, exp_bri) \
 				and is_equal_approx(wenv.glow_intensity, clampf(float(pp_src.get("bloom_intensity", 0.0)) * 0.08, 0.0, 0.8)) \
 				and bool(wp_scr.enable_rain(wpreset)) \
 				and is_equal_approx(float(wp_scr.rain_intensity(wpreset)), float(wpreset.get("rain", {}).get("intensity", 0.0)))
+			var wden_ok := true
+			var wden_file: FileAccess = FileAccess.open("res://data/generated/weather/midnight_clear_thieves_den.json", FileAccess.READ)
+			if wden_file == null:
+				printerr("FAIL: midnight_clear_thieves_den.json weather preset missing")
+				wden_ok = false
+			else:
+				var wden_preset: Variant = JSON.parse_string(wden_file.get_as_text())
+				var wden_pp: Dictionary = (wden_preset as Dictionary).get("postprocess", {})
+				var wden_gain: Array = wden_pp.get("gain_midtones", [1.0, 1.0, 1.0])
+				var wden_env := Environment.new()
+				var wden_moon := DirectionalLight3D.new()
+				wden_ok = bool(wp_scr.apply_environment(wden_env, wden_moon, wden_preset)) \
+					and wden_env.adjustment_brightness > 0.0 \
+					and is_equal_approx(wden_env.adjustment_brightness, float(wden_gain[0])) \
+					and is_equal_approx(wden_env.adjustment_saturation, float(wden_pp.get("saturation", 1.0)))
+				if not wden_ok:
+					printerr("FAIL: thieves-den brightness regression (brightness=", wden_env.adjustment_brightness, " expected=", float(wden_gain[0]), ")")
 			var wenv2 := Environment.new()
 			var wmoon2 := DirectionalLight3D.new()
 			var map_applied: bool = bool(wp_scr.apply_for_map(wenv2, wmoon2, "old_manor"))
@@ -446,8 +467,8 @@ func _initialize() -> void:
 			var empty_applied: bool = bool(wp_scr.apply_environment(wenv3, wmoon3, {}))
 			var untouched_ok := is_equal_approx(wenv3.fog_density, b_fog) and is_equal_approx(wmoon3.light_energy, b_energy) and wmoon3.rotation_degrees.is_equal_approx(b_rot)
 			var wmap_apply_ok := map_applied and not missing_applied and not empty_applied and untouched_ok
-			if not wok or not wmap_ok or not wvals_ok or not wmap_apply_ok:
-				printerr("FAIL: weather preset apply (file=", wok, " map=", wmap_ok, " values=", wvals_ok, " apply=", wmap_apply_ok, " fog=", wenv.fog_density, " energy=", wmoon.light_energy, " rot=", wmoon.rotation_degrees, ")")
+			if not wok or not wmap_ok or not wvals_ok or not wmap_apply_ok or not wden_ok:
+				printerr("FAIL: weather preset apply (file=", wok, " map=", wmap_ok, " values=", wvals_ok, " den_bri=", wden_ok, " apply=", wmap_apply_ok, " fog=", wenv.fog_density, " energy=", wmoon.light_energy, " rot=", wmoon.rotation_degrees, ")")
 				fails += 1
 			else:
 				print("PASS: Real weather DenseFog applied (fog=", snappedf(wenv.fog_density, 0.0001), " moon_energy=", snappedf(wmoon.light_energy, 0.01), " rot=", wmoon.rotation_degrees, ")")

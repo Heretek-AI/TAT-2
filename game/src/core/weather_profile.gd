@@ -23,7 +23,8 @@ extends RefCounted
 ## - Skylight intensity maps directly to ambient_light_energy, clamped to
 ##   [0.02, 1.0] (UE night values 0.04-5.0; only the lobby cubemap hits the cap).
 ## - PostProcess ColorSaturation.X -> adjustment_saturation,
-##   ColorGainMidtones.X - 1.0 -> adjustment_brightness (Godot default 0),
+##   ColorGainMidtones.X -> adjustment_brightness (Godot multiplier, default 1.0,
+##   range 0..2; NOT an offset — assigning gain-1 renders the view black),
 ##   AutoExposureBias + 1.0 -> tonemap_exposure (Godot default 1.0),
 ##   BloomIntensity * 0.08 -> glow_intensity (DenseFog 8.0 -> 0.64, matching the
 ##   previous hand-tuned 0.65). Godot has no vignette/white-temp/film-curve
@@ -180,7 +181,7 @@ static func saturation(preset: Dictionary) -> Variant:
 static func brightness(preset: Dictionary) -> Variant:
 	var g: Variant = _section(preset, "postprocess").get("gain_midtones")
 	if _has_color(g):
-		return clampf(float(g[0]) - 1.0, -1.0, 1.0)
+		return clampf(float(g[0]), 0.0, 2.0)
 	return null
 
 
@@ -292,7 +293,7 @@ static func apply_environment(env: Environment, moon: DirectionalLight3D, preset
 			if sat != null:
 				env.adjustment_saturation = float(sat)
 			if bri != null:
-				env.adjustment_brightness = float(bri)
+				env.adjustment_brightness = clampf(float(bri), 0.0, 2.0)
 		var expo: Variant = tonemap_exposure(preset)
 		if expo != null:
 			env.tonemap_exposure = float(expo)

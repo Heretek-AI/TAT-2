@@ -2,8 +2,11 @@ class_name VfxManager
 extends RefCounted
 
 
-static func spawn_smoke_cloud(parent: Node, pos: Vector3, radius: float, ttl: float) -> void:
-	if parent == null:
+## Real UE extents (BP_SmokeBomb_WorldActor BoxExtent {250, 250, 200} cm):
+## a 5 x 5 x 4 m box. `half_extents` defaults to the real volume; `ttl`
+## defaults to the real InitialLifeSpan (25.0 s).
+static func spawn_smoke_cloud(parent: Node, pos: Vector3, half_extents: Vector3 = Vector3(2.5, 2.0, 2.5), ttl: float = 25.0) -> void:
+	if parent == null or not parent.is_inside_tree():
 		return
 	var root: Node3D = Node3D.new()
 	root.name = "SmokeCloud"
@@ -31,8 +34,8 @@ static func spawn_smoke_cloud(parent: Node, pos: Vector3, radius: float, ttl: fl
 	smoke.explosiveness = 0.85
 	smoke.emitting = true
 	smoke.mesh = puff_mesh
-	smoke.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	smoke.emission_sphere_radius = radius * 0.45
+	smoke.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	smoke.emission_box_extents = half_extents
 	smoke.gravity = Vector3(0.0, 0.25, 0.0)
 	smoke.initial_velocity_min = 0.4
 	smoke.initial_velocity_max = 1.2
@@ -40,11 +43,8 @@ static func spawn_smoke_cloud(parent: Node, pos: Vector3, radius: float, ttl: fl
 	smoke.scale_amount_max = 1.4
 	root.add_child(smoke)
 
-	var inner_mesh: SphereMesh = SphereMesh.new()
-	inner_mesh.radius = radius * 0.5
-	inner_mesh.height = radius
-	inner_mesh.radial_segments = 16
-	inner_mesh.rings = 12
+	var inner_mesh: BoxMesh = BoxMesh.new()
+	inner_mesh.size = half_extents * 2.0
 
 	var inner_mat: StandardMaterial3D = StandardMaterial3D.new()
 	inner_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -67,7 +67,9 @@ static func spawn_smoke_cloud(parent: Node, pos: Vector3, radius: float, ttl: fl
 	tree.create_timer(ttl).timeout.connect(root.queue_free)
 
 
-static func spawn_fairy_orb(parent: Node, from_pos: Vector3, to_pos: Vector3) -> void:
+## `duration` is the visible flight time; the Pickpocket Fairy caller passes
+## dist / FAIRY_SPEED (4.5 m/s). Kept 0.45 s by default for older callers.
+static func spawn_fairy_orb(parent: Node, from_pos: Vector3, to_pos: Vector3, duration: float = 0.45) -> void:
 	if parent == null:
 		return
 	var root: Node3D = Node3D.new()
@@ -106,7 +108,7 @@ static func spawn_fairy_orb(parent: Node, from_pos: Vector3, to_pos: Vector3) ->
 		root.queue_free()
 		return
 	var tween: Tween = tree.create_tween()
-	tween.tween_property(root, "global_position", to_pos, 0.45)
+	tween.tween_property(root, "global_position", to_pos, maxf(duration, 0.01))
 	tween.tween_callback(root.queue_free)
 
 

@@ -741,24 +741,51 @@ func _spawn_escape(ue_escapes: Array, anchor: Vector3) -> void:
 	add_child(eg)
 
 
-func spawn_smoke(pos: Vector3, radius: float, ttl: float) -> void:
-	VfxManager.spawn_smoke_cloud(self, pos + Vector3.UP * 1.0, radius, ttl)
-	smokes.append({"pos": pos, "radius": radius, "ttl": ttl, "node": null})
+## Real UE values (BP_SmokeBomb_Bomb_Tool 1 charge;
+## BP_SmokeBomb_WorldActor BoxExtent {250, 250, 200} cm, InitialLifeSpan 25.0):
+## the smoke volume is a 5 x 5 x 4 m axis-aligned box, not a sphere.
+const SMOKE_HALF_EXTENTS: Vector3 = Vector3(2.5, 2.0, 2.5)
+const SMOKE_TTL: float = 25.0
+
+
+func spawn_smoke(pos: Vector3, ttl: float = SMOKE_TTL) -> void:
+	VfxManager.spawn_smoke_cloud(self, pos, SMOKE_HALF_EXTENTS, ttl)
+	var half: Vector3 = SMOKE_HALF_EXTENTS
+	smokes.append({"min": pos - half, "max": pos + half, "ttl": ttl, "node": null})
 
 
 func is_blocked_by_smoke(a: Vector3, b: Vector3) -> bool:
 	for s in smokes:
-		var c: Vector3 = s["pos"]
-		var r: float = s["radius"]
-		var ab := b - a
-		var len_sq := ab.length_squared()
-		if len_sq < 0.001:
-			continue
-		var t := clampf((c - a).dot(ab) / len_sq, 0.0, 1.0)
-		var closest := a + ab * t
-		if closest.distance_to(c) <= r:
+		if _segment_hits_aabb(a, b, s["min"], s["max"]):
 			return true
 	return false
+
+
+## Segment-vs-AABB slab test (t in [0, 1] along a->b).
+func _segment_hits_aabb(a: Vector3, b: Vector3, mn: Vector3, mx: Vector3) -> bool:
+	var t_min: float = 0.0
+	var t_max: float = 1.0
+	var origins: Array[float] = [a.x, a.y, a.z]
+	var ends: Array[float] = [b.x, b.y, b.z]
+	var mins: Array[float] = [mn.x, mn.y, mn.z]
+	var maxs: Array[float] = [mx.x, mx.y, mx.z]
+	for i in range(3):
+		var d: float = ends[i] - origins[i]
+		if absf(d) < 0.000001:
+			if origins[i] < mins[i] or origins[i] > maxs[i]:
+				return false
+		else:
+			var t0: float = (mins[i] - origins[i]) / d
+			var t1: float = (maxs[i] - origins[i]) / d
+			if t0 > t1:
+				var tmp: float = t0
+				t0 = t1
+				t1 = tmp
+			t_min = maxf(t_min, t0)
+			t_max = minf(t_max, t1)
+			if t_min > t_max:
+				return false
+	return true
 
 
 func _process(delta: float) -> void:

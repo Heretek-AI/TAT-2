@@ -112,14 +112,29 @@ var grapple_target: Vector3 = Vector3.ZERO
 var astral_active: bool = false
 var astral_ttl: float = 0.0
 
-# Gadgets (charges mirror BP MaxAmmo: Slithersap/MagicSlime 4, SmokeBomb 1,
-# PickpocketFairy 2, Zipwire/Hotwire 4; see player_tools.json "sources").
+# Gadgets (charges mirror BP MaxAmmo: Slithersap/MagicSlime 4, SmokeBomb 1;
+# PickpocketFairy has no ammo field (infinite), Zipwire/Hotwire 4).
+# See game/data/generated/gameplay/player_tools.json "sources" and
+# docs/reports/tool-mechanics.md.
+const SLITHERSAP_CHARGES: int = 4 # BP_MagicSlime_Tool MaxAmmo
+const SLITHERSAP_AIM_DISTANCE: float = 30.0 # aim-raycast affordance only; no UE throw-range source
+const SMOKE_CHARGES: int = 1 # BP_SmokeBomb_Bomb_Tool
+const PICKPOCKET_RANGE: float = 25.0 # BP_Pickpocket_Tool TargetMaxRange 2500 cm
+const PICKPOCKET_CONE_DEG: float = 9.0 # TargetMaxViewAngleDeg
+const PICKPOCKET_COOLDOWN: float = 0.5 # GE_Pickpocket_Cooldown
+const PICKPOCKET_INFINITE_DISPLAY: int = 999 # no ammo field: never consumed; HUD has no infinity glyph
+const FAIRY_SPEED: float = 4.5 # BP_PickpocketFairy_FollowActor FairySpeed 450 cm/s
+const FAIRY_LIFE: float = 20.0 # FairyLifeDuration
+const FAIRY_BLOCK_ANGLE_DEG: float = 30.0 # MaximumFacingAngleToBlock
+const FAIRY_STEAL_RADIUS: float = 10.0 # retained: no UE source; loot the mark picks up nearby
+const SlipPuddleScript := preload("res://src/interact/slip_puddle.gd")
 var charges: Dictionary = {
 	"slithersap": 4,
 	"smoke_bomb": 1,
-	"pickpocket_fairy": 2,
+	"pickpocket_fairy": 999,
 	"grapple": 4,
 }
+var pickpocket_cooldown: float = 0.0
 var noise_timer: float = 0.0
 
 var head: Node3D
@@ -263,6 +278,7 @@ func _physics_process(delta: float) -> void:
 	if GameState.state != "playing":
 		return
 	ability_cooldown = maxf(0.0, ability_cooldown - delta)
+	pickpocket_cooldown = maxf(0.0, pickpocket_cooldown - delta)
 	_tick_astral(delta)
 
 	# Smooth crouch camera height interpolation.
@@ -597,11 +613,37 @@ func _use_slithersap() -> void:
 	_fp_set_tool("slithersap")
 	_fp_play_swing()
 	charges["slithersap"] = int(charges.get("slithersap", 0)) - 1
-	if light_probe != null and light_probe.has_method("short_circuit_lights"):
-		light_probe.short_circuit_lights(global_position, 20.0, 25.0, GameState.elapsed_sec)
-	VfxManager.spawn_sap_burst(get_parent(), global_position + (-cam.global_transform.basis.z) * 2.0)
-	NoiseBus.emit_noise(global_position, 4.0, self, "slithersap")
+	# Real behaviour: spawn the MagicSlime puddle (2.0 m radius, 30 s) at the
+	# aim point; the puddle itself runs the 1.5 m / 30 s light inhibitor.
+	# The cooked projectile stores no InitialSpeed, so no flight speed is
+	# invented — the puddle appears at the raycast aim point (explosion
+	# delay 0).
+	var aim: Vector3 = _slithersap_aim_point()
+	var host: Node = get_parent()
+	if host == null:
+		host = self
+	var puddle: Area3D = SlipPuddleScript.new()
+	host.add_child(puddle)
+	puddle.call("setup", aim, light_probe, GameState.elapsed_sec)
+	VfxManager.spawn_sap_burst(host, aim + Vector3.UP * 0.2)
+	NoiseBus.emit_noise(aim, 4.0, self, "slithersap")
 	tool_used.emit("slithersap", int(charges.get("slithersap", 0)))
+
+
+## Aim raycast for the Slithersap puddle. Falls back to flat ground ahead.
+func _slithersap_aim_point() -> Vector3:
+	var fallback: Vector3 = global_position + (-global_transform.basis.z) * 2.5
+	fallback.y = global_position.y
+	if cam == null:
+		return fallback
+	var space: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
+	var from: Vector3 = cam.global_position
+	var to: Vector3 = from + (-cam.global_transform.basis.z) * SLITHERSAP_AIM_DISTANCE
+	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(from, to, 1, [get_rid()])
+	var hit: Dictionary = space.intersect_ray(query)
+	if hit.is_empty():
+		return fallback
+	return hit["position"] as Vector3
 
 
 func _use_smoke_bomb() -> void:
@@ -611,43 +653,108 @@ func _use_smoke_bomb() -> void:
 	_fp_play_swing()
 	charges["smoke_bomb"] = int(charges.get("smoke_bomb", 0)) - 1
 	if level_ctrl != null and level_ctrl.has_method("spawn_smoke"):
-		level_ctrl.spawn_smoke(global_position + (-global_transform.basis.z) * 2.5, 2.5, 25.0)
+		var ground: Vector3 = global_position + (-global_transform.basis.z) * 2.5
+		level_ctrl.spawn_smoke(ground, 25.0)
 	NoiseBus.emit_noise(global_position, 7.0, self, "smoke")
 	tool_used.emit("smoke_bomb", int(charges.get("smoke_bomb", 0)))
 
 
+## Nearest guard inside the real 25 m / 9 deg cone. Returns null when empty.
+func pickpocket_select_target(candidates: Array, from_pos: Vector3, fwd: Vector3) -> Node:
+	var flat_fwd: Vector3 = Vector3(fwd.x, 0.0, fwd.z)
+	if flat_fwd.length() < 0.1:
+		return null
+	flat_fwd = flat_fwd.normalized()
+	var best: Node = null
+	var best_d: float = PICKPOCKET_RANGE
+	for c: Variant in candidates:
+		if not (c is Node3D):
+			continue
+		var n3d: Node3D = c as Node3D
+		var to: Vector3 = n3d.global_position - from_pos
+		var d: float = to.length()
+		if d > PICKPOCKET_RANGE or d < 0.1:
+			continue
+		var flat_to: Vector3 = Vector3(to.x, 0.0, to.z)
+		if flat_to.length() < 0.05:
+			continue
+		if rad_to_deg(flat_fwd.angle_to(flat_to.normalized())) > PICKPOCKET_CONE_DEG:
+			continue
+		if d < best_d:
+			best_d = d
+			best = c
+	return best
+
+
+## True when the mark is facing the player within MaximumFacingAngleToBlock
+## (30 deg): the attempt fails.
+func pickpocket_is_blocked(guard: Node3D, player_pos: Vector3) -> bool:
+	if guard == null:
+		return true
+	var to_player: Vector3 = player_pos - guard.global_position
+	to_player.y = 0.0
+	if to_player.length() < 0.05:
+		return false
+	var gf: Vector3 = -guard.global_transform.basis.z
+	gf.y = 0.0
+	if gf.length() < 0.05:
+		return false
+	return rad_to_deg(gf.normalized().angle_to(to_player.normalized())) <= FAIRY_BLOCK_ANGLE_DEG
+
+
+## Fairy flight time for a steal run (m/s, capped at FairyLifeDuration).
+func fairy_travel_time(dist: float) -> float:
+	return minf(maxf(dist, 0.0) / FAIRY_SPEED, FAIRY_LIFE)
+
+
 func _use_pickpocket_fairy() -> void:
-	if int(charges.get("pickpocket_fairy", 0)) <= 0:
+	if pickpocket_cooldown > 0.0:
 		return
+	pickpocket_cooldown = PICKPOCKET_COOLDOWN
 	_fp_set_tool("fairy")
 	_fp_play_swing()
-	charges["pickpocket_fairy"] = int(charges.get("pickpocket_fairy", 0)) - 1
-	var best_loot: Node3D = null
-	var best_d: float = 25.0
+	# No ammo field on BP_Pickpocket_Tool: the charge display is infinite and
+	# nothing is consumed.
+	charges["pickpocket_fairy"] = PICKPOCKET_INFINITE_DISPLAY
+	var fwd: Vector3 = -global_transform.basis.z
+	if cam != null:
+		fwd = -cam.global_transform.basis.z
+	var target: Node = pickpocket_select_target(get_tree().get_nodes_in_group("guards"), global_position, fwd)
+	if target == null or not (target is Node3D):
+		tool_used.emit("pickpocket_fairy", PICKPOCKET_INFINITE_DISPLAY)
+		return
+	var mark: Node3D = target as Node3D
+	if pickpocket_is_blocked(mark, global_position):
+		NoiseBus.emit_noise(mark.global_position, global_position.distance_to(mark.global_position) + 2.0, self, "pickpocket_spotted")
+		tool_used.emit("pickpocket_fairy", PICKPOCKET_INFINITE_DISPLAY)
+		return
+	var dist: float = global_position.distance_to(mark.global_position)
+	var travel: float = fairy_travel_time(dist)
+	VfxManager.spawn_fairy_orb(get_parent(), global_position + Vector3.UP * 1.3, mark.global_position + Vector3.UP * 1.2, travel)
+	NoiseBus.emit_noise(mark.global_position, 3.0, self, "fairy")
+	get_tree().create_timer(travel).timeout.connect(_on_fairy_arrived.bind(mark))
+	tool_used.emit("pickpocket_fairy", PICKPOCKET_INFINITE_DISPLAY)
+
+
+## The fairy steals the nearest uncollected loot around the mark on arrival.
+func _on_fairy_arrived(mark: Node) -> void:
+	if not is_instance_valid(mark) or not (mark is Node3D):
+		return
+	var mark_pos: Vector3 = (mark as Node3D).global_position
+	if pickpocket_is_blocked(mark as Node3D, global_position):
+		NoiseBus.emit_noise(mark_pos, 6.0, self, "pickpocket_spotted")
+		return
+	var best: Node3D = null
+	var best_d: float = FAIRY_STEAL_RADIUS
 	for n: Node in get_tree().get_nodes_in_group("loot"):
 		if n is Node3D and not n.get_meta("collected", false):
 			var loot_node: Node3D = n as Node3D
-			var d: float = global_position.distance_to(loot_node.global_position)
+			var d: float = mark_pos.distance_to(loot_node.global_position)
 			if d < best_d:
 				best_d = d
-				best_loot = loot_node
-	if best_loot != null and best_loot.has_method("interact"):
-		VfxManager.spawn_fairy_orb(get_parent(), global_position + Vector3.UP * 1.3, best_loot.global_position)
-		NoiseBus.emit_noise(best_loot.global_position, 3.0, self, "fairy")
-		best_loot.interact(self)
-	else:
-		# Insult Fairy fallback: with no loot in reach, send the fairy to taunt the
-		# nearest guard into investigating a point away from the thief.
-		var guard: Node3D = _find_nearest_guard(30.0)
-		if guard != null:
-			var away: Vector3 = guard.global_position - global_position
-			away.y = 0.0
-			if away.length() < 0.1:
-				away = -global_transform.basis.z
-			var lure: Vector3 = guard.global_position + away.normalized() * 4.0 + Vector3.UP * 0.2
-			VfxManager.spawn_fairy_orb(get_parent(), global_position + Vector3.UP * 1.3, lure)
-			NoiseBus.emit_noise(lure, 9.0, self, "insult_fairy")
-	tool_used.emit("pickpocket_fairy", int(charges.get("pickpocket_fairy", 0)))
+				best = loot_node
+	if best != null and best.has_method("interact"):
+		best.interact(self)
 
 
 func _find_nearest_guard(max_dist: float) -> Node3D:

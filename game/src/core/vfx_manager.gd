@@ -523,8 +523,11 @@ static func set_prop_highlight(target: Node, enabled: bool) -> void:
 		# Cache the mesh list so toggling the same target never rescans the tree.
 		target.set_meta("_vfx_hl_meshes", meshes)
 	for mi_var: Variant in meshes:
+		# Cached entries can be freed (e.g. an interactable rebuilt its visual).
+		if not is_instance_valid(mi_var):
+			continue
 		var mi: MeshInstance3D = mi_var as MeshInstance3D
-		if mi == null or not is_instance_valid(mi):
+		if mi == null:
 			continue
 		if enabled:
 			if mi.has_meta("_vfx_hl") and bool(mi.get_meta("_vfx_hl", false)):

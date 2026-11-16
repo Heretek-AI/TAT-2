@@ -302,6 +302,12 @@ func _initialize() -> void:
 	var hl_cached: bool = hl_host.has_meta("_vfx_hl_meshes") and hl_mesh.material_overlay != null
 	vfx_scr.set_prop_highlight(hl_host, false)
 	var hl_cleared: bool = not hl_host.has_meta("_vfx_hl_meshes") and hl_mesh.material_overlay == null
+	# Regression: a cached highlight mesh can be freed before the highlight is
+	# cleared (interactables rebuild their visuals) and must not cast-error.
+	vfx_scr.set_prop_highlight(hl_host, true)
+	hl_mesh.queue_free()
+	await process_frame
+	vfx_scr.set_prop_highlight(hl_host, false)
 	if not overlay_hidden_ok or not overlay_shown_ok or not hl_cached or not hl_cleared:
 		printerr("FAIL: HUD F3 overlay / VFX highlight cache (hidden=", overlay_hidden_ok, " shown=", overlay_shown_ok, " cached=", hl_cached, " cleared=", hl_cleared, ")")
 		fails += 1

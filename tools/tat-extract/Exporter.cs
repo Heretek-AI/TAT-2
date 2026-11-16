@@ -144,6 +144,22 @@ public sealed class Exporter
         compressionFormat: CUE4Parse_Conversion.Writers.UEFormat.Enums.EFileCompressionFormat.None
     );
 
+    ExportOptions AnimOpts() => new(
+        meshFormat: EMeshFormat.USD,
+        naniteMeshFormat: ENaniteMeshFormat.NaniteFirst,
+        meshQuality: EMeshQuality.Highest,
+        texturePlatform: ETexturePlatform.DesktopMobile,
+        textureFormat: ETextureFormat.Png,
+        textureQuality: 100,
+        exportHdrTexturesAsHdr: false,
+        exportAllTextureMips: false,
+        materialDepth: default,
+        exportMaterials: false,
+        exportMorphTargets: true,
+        socketFormat: ESocketFormat.Bone,
+        compressionFormat: CUE4Parse_Conversion.Writers.UEFormat.Enums.EFileCompressionFormat.None
+    );
+
     public void Textures()
     {
         var opts = DefaultOpts();
@@ -226,11 +242,11 @@ public sealed class Exporter
 
     public void Anims()
     {
-        var opts = DefaultOpts();
-        var outDir = Path.Combine(_o.Out, "assets");
+        var opts = AnimOpts();
+        var outDir = Path.Combine(_o.Out, "anims", "usd");
         Directory.CreateDirectory(outDir);
         var session = new ExportSession { MaxDegreeOfParallelism = _o.Threads };
-        foreach (var f in Packages(p => p.EndsWith(".uasset") && (Path.GetFileName(p).StartsWith("A_") || Path.GetFileName(p).StartsWith("AS_") || p.Contains("/Animation/"))))
+        foreach (var f in Packages(p => p.EndsWith(".uasset") && (Path.GetFileName(p).StartsWith("AN_") || Path.GetFileName(p).StartsWith("A_") || Path.GetFileName(p).StartsWith("AS_") || p.Contains("/Animation/"))))
         {
             try
             {
@@ -241,7 +257,11 @@ public sealed class Exporter
             catch (Exception e) { Count("anims", false, $"{f.Path}: {e.GetType().Name}: {Trunc(e.Message)}"); }
         }
         var results = session.RunAsync(outDir, opts).GetAwaiter().GetResult();
-        foreach (var r in results) Count("anims", r.Success, r.Error != null ? $"{r.ObjectPath}: {Trunc(r.Error.Message)}" : null);
+        foreach (var r in results)
+        {
+            FixBackslashPaths(r.DiskFilePaths);
+            Count("anims", r.Success && (r.DiskFilePaths?.Count ?? 0) > 0, r.Error != null ? $"{r.ObjectPath}: {Trunc(r.Error.Message)}" : null);
+        }
     }
 
     public void Audio()

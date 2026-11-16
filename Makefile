@@ -7,10 +7,11 @@ MOBILE_ABI  ?= arm64
 QA_CONTRACT ?= 0
 KEYSTORE_PROPS := $(HOME)/.config/tat2/keystore.properties
 
-.PHONY: build-extractor extract normalize audit test run android-prepare android-debug android-debug-gl android-release
+.PHONY: build-extractor extract anims normalize audit test run android-prepare android-debug android-debug-gl android-release
 
 build-extractor:
 	DOTNET_ROOT=$(HOME)/.dotnet10 PATH=$(HOME)/.dotnet10:$(PATH) $(DOTNET) build tools/tat-extract -c Release
+	cp tools/tat-extract/native/linux-x64/CUE4Parse-Natives.so tools/tat-extract/bin/Release/net10.0/
 
 extract: build-extractor
 	$(EX) list
@@ -20,6 +21,11 @@ extract: build-extractor
 	$(EX) audio
 	$(EX) meshes
 	$(EX) textures
+	$(EX) anims
+
+anims: build-extractor
+	$(EX) anims
+	/usr/bin/blender --background --python tools/usd_to_gltf.py -- extracted/anims/usd game/assets/ue/Anims --manifest game/data/generated/anims_manifest.json
 
 normalize:
 	python3 tools/parse_tables.py

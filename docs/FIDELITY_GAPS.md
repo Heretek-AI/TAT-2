@@ -87,14 +87,14 @@ BP defaults carry the real movement and perception values: player 360/180 cm/s w
 - **Rain**: weather presets expose real `enable_rain`/`rain_intensity` and the Niagara asset name (`NS_Rain_WeatherSystem`), but spawn rate/speed live in Niagara VM bytecode. A Godot rain particle layer can be driven by the real flag/intensity with labelled approximate particle parameters; no fake asset claim.
 
 ### A8 — Doors and containers
-- **Doors**: 281 `TATSwingingDoorPivotComponent` + 286 nav-link markers exist, but their normalized marker transforms are identity/zero (component stubs), so spawning door leaves from those markers would place them at the origin. The real leaf mesh (`SM_DoorCityExtA`) and instant open/close tags are known; a door wave must resolve the door actor transforms through the BP SCS component chain (same resolver as A5) rather than the marker list.
+- **Doors**: 281 `TATSwingingDoorPivotComponent` + 286 nav-link markers exist, but their normalized marker transforms are identity/zero (component stubs). Raw level JSON shows each pivot attaches to a `StaticMeshActor` (e.g. `StaticMeshActor_10`) with a real `RelativeLocation/RelativeRotation`; the leaf mesh (`SM_DoorCityExtA`) and instant open/close tags are known. Making doors openable requires extracting the pivot world transform AND spawning the door leaf as an individual mesh (currently batched into MultiMesh chunks, so no single door node can rotate).
 - **Containers**: 89 `BP_ChestTrunk_MajorLoot`, 68 `BP_DisplayCaseA_MajorLoot`, 57 secret wall stashes, 20 storefront display cases. Each has real meshes (`SM_ChestTrunk`, lid, filler) and a `TATContainerSpawnerComponent` with `SpawnBucket` (major/minor). These are actor markers with real transforms and can be spawned with loot-on-open using A16's loot actor data.
 - **Guard patrols**: not recoverable — `BP_AIPatrolPath` has no spline points in the cooked actor; 249 path actors give positions only.
 
 ### A7 — Audio
-Wwise files are RIFF with codec tag `0xFFFF` (Wwise Vorbis); FFmpeg reports
-"no decoder found". `vgmstream`/`ww2ogg` are not installed. Blocked until a decoder
-is available; the 9 synthesized SFX remain as placeholders.
+Wwise files are RIFF with codec tag `0xFFFF` (Wwise Vorbis); FFmpeg reports "no decoder found".
+**Decoding is now solved** with the prebuilt vgmstream r2168 Linux CLI (verified: `wwise_0000_013381358.wav` -> 0.322 s / 48 kHz stereo PCM). A conversion wave now produces `game/assets/ue/audio/wwise/<id>.ogg` + an `audio_library.json`.
+**The blocker is naming**: `AkAudioEvent` JSON exports have zero properties, `filelist.txt` contains no `.wem`/`.bnk` paths, and the raw chunks are sequentially numbered, so there is no event-name -> media-ID map in the extracted data. Clips must not be assigned to gameplay tags by guessing; the 9 synthesized SFX remain until a mapping is recovered (Wwise bank/HIRC parsing is the remaining avenue).
 
 ### A7 — Blueprint gameplay logic
 981 `BP_` packages exist. DataTables/CurveTables already drive most tuning; BP graphs

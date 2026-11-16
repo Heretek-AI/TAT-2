@@ -4,6 +4,80 @@ extends Area3D
 @export var item_name: String = "Silver Candlestick"
 @export var value: int = 75
 @export var is_quest_item: bool = false
+@export var loot_tier: String = "minor"
+
+const INTERACTABLES_PATH := "res://data/generated/gameplay/interactables.json"
+
+static var _interactables: Dictionary = {}
+
+
+static func interactables() -> Dictionary:
+	if _interactables.is_empty():
+		var data: Variant = null
+		if FileAccess.file_exists(INTERACTABLES_PATH):
+			var f: FileAccess = FileAccess.open(INTERACTABLES_PATH, FileAccess.READ)
+			if f != null:
+				data = JSON.parse_string(f.get_as_text())
+		if data is Dictionary:
+			_interactables = data
+	return _interactables
+
+
+static func _loot_section(tier: String) -> Dictionary:
+	var loot: Variant = interactables().get("loot", {})
+	if loot is Dictionary and (loot as Dictionary).has(tier):
+		var section: Variant = (loot as Dictionary)[tier]
+		if section is Dictionary:
+			return section
+	return {}
+
+
+## Spawnable rows for a tier (Value > 1: skips currency placeholders and
+## the renown test item). Falls back to the full entry list when empty.
+static func spawn_pool(tier: String) -> Array:
+	var section: Dictionary = _loot_section(tier)
+	var entries: Array = section.get("entries", [])
+	var pool: Array = []
+	for e: Variant in entries:
+		if e is Dictionary and int((e as Dictionary).get("value", 0)) > 1:
+			pool.append(e)
+	if pool.is_empty():
+		return entries
+	return pool
+
+
+## Deterministic tier entry (cycles the spawn pool). Returns {} when the
+## table provides nothing.
+static func tier_entry(tier: String, index: int) -> Dictionary:
+	var pool: Array = spawn_pool(tier)
+	if pool.is_empty():
+		return {}
+	var entry: Variant = pool[posmod(index, pool.size())]
+	return (entry as Dictionary).duplicate() if entry is Dictionary else {}
+
+
+static func tier_min_value(tier: String, fallback: float = 0.0) -> float:
+	return float(_loot_section(tier).get("min_value", fallback))
+
+
+static func tier_max_value(tier: String, fallback: float = 0.0) -> float:
+	return float(_loot_section(tier).get("max_value", fallback))
+
+
+static func quest_flagship_value(fallback: int = 2500) -> int:
+	return int(_loot_section("quest").get("flagship_value", fallback))
+
+
+## Real quest value for a contract loot tag (e.g. "Loot.Quest.Diamond").
+## Falls back to the quest flagship value (2500) when the tag is unknown.
+static func quest_value_for_tag(tag: String, fallback: int = -1) -> int:
+	if fallback < 0:
+		fallback = quest_flagship_value()
+	var entries: Array = _loot_section("quest").get("entries", [])
+	for e: Variant in entries:
+		if e is Dictionary and str((e as Dictionary).get("loot_tag", "")) == tag:
+			return int((e as Dictionary).get("value", fallback))
+	return fallback
 
 var visual_root: Node3D
 var mesh_inst: MeshInstance3D

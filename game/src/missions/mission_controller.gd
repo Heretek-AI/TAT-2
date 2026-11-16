@@ -637,16 +637,23 @@ func _spawn_loot_and_quest(ue_spawns: Array, anchor: Vector3) -> void:
 
 	var q := LootScript.new()
 	q.item_name = str(contract_info.get("quest_item", "Contract Objective"))
-	q.value = 350
 	q.is_quest_item = true
+	q.loot_tier = "quest"
+	var quest_tag: String = str(contract_info.get("loot_tag", ""))
+	q.value = LootScript.quest_value_for_tag(quest_tag)
 	q.position = nearby[mini(nearby.size() - 1, 4)] + Vector3(0, 0.5, 0)
 	add_child(q)
 
 	var count := mini(12, nearby.size())
 	for i in range(count):
+		# Every 4th spawn is a major piece; the rest cycle the real minor
+		# table (names + values straight from DT_LootInfo_Minor/Major).
+		var tier: String = "major" if i % 4 == 3 else "minor"
+		var entry: Dictionary = LootScript.tier_entry(tier, i / 4 if tier == "major" else i)
 		var l := LootScript.new()
-		l.item_name = "Noble Relic #%d" % (i + 1)
-		l.value = 75 + i * 15
+		l.loot_tier = tier
+		l.item_name = str(entry.get("name", "Noble Relic #%d" % (i + 1)))
+		l.value = int(entry.get("value", 75))
 		l.position = nearby[i] + Vector3(0, 0.5, 0)
 		add_child(l)
 
@@ -656,6 +663,7 @@ func _spawn_escape(ue_escapes: Array, anchor: Vector3) -> void:
 	var epos := anchor + Vector3(0, 0.2, 6)
 	if not ue_escapes.is_empty():
 		epos = ue_escapes[0]
+	eg.apply_escape_config(EscapeScript.escape_config())
 	eg.position = epos
 	eg.extracted.connect(_on_extracted)
 	add_child(eg)

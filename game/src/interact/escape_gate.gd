@@ -4,8 +4,40 @@ extends Area3D
 signal extracted()
 
 
+const INTERACTABLES_PATH := "res://data/generated/gameplay/interactables.json"
+## Fallbacks mirror BP_EscapePoint (_escapeOpenDuration 240,
+## _canBeUsedMultipleTimes true); the JSON above is authoritative.
+const FALLBACK_OPEN_DURATION_SEC := 240.0
+
+## Seconds the escape stays usable once opened (BP_EscapePoint).
+var open_duration_sec: float = FALLBACK_OPEN_DURATION_SEC
+## BP_EscapePoint._canBeUsedMultipleTimes: the gate keeps working after a use.
+var can_be_used_multiple_times: bool = true
+var use_count: int = 0
+
+
+static func escape_config() -> Dictionary:
+	if FileAccess.file_exists(INTERACTABLES_PATH):
+		var f: FileAccess = FileAccess.open(INTERACTABLES_PATH, FileAccess.READ)
+		if f != null:
+			var data: Variant = JSON.parse_string(f.get_as_text())
+			if data is Dictionary and (data as Dictionary).has("escape"):
+				var esc: Variant = (data as Dictionary)["escape"]
+				if esc is Dictionary:
+					return (esc as Dictionary).duplicate()
+	return {}
+
+
+func apply_escape_config(cfg: Dictionary) -> void:
+	if cfg.is_empty():
+		return
+	open_duration_sec = float(cfg.get("open_duration_s", open_duration_sec))
+	can_be_used_multiple_times = bool(cfg.get("can_be_used_multiple_times", can_be_used_multiple_times))
+
+
 func _ready() -> void:
 	collision_mask = 2
+	apply_escape_config(escape_config())
 	body_entered.connect(_on_body_entered)
 
 	var col := CollisionShape3D.new()
@@ -40,4 +72,6 @@ func _ready() -> void:
 func _on_body_entered(body: Node) -> void:
 	if body.is_in_group("player") and GameState.state == "playing":
 		if GameState.quest_item_acquired or GameState.loot_collected >= GameState.loot_needed:
-			extracted.emit()
+			if can_be_used_multiple_times or use_count == 0:
+				use_count += 1
+				extracted.emit()

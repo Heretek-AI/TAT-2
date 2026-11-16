@@ -4,11 +4,36 @@ extends CharacterBody3D
 
 enum Alertness { NEUTRAL, SUSPICIOUS, ALERTED, COMBAT, SEARCH, KNOCKED_OUT }
 
+# Real UE values (tools/parse_gameplay.py; sources in
+# game/data/generated/gameplay/*.json "sources"). Curve-table overrides are kept
+# only for rows the real data defines (GuardBaseHealth, GuardKnockoutDuration).
+const PATROL_SPEED: float = 1.5 # DA_AIStatesToSpeed_Guard Neutral 150 cm/s
+const SUSPICIOUS_SPEED: float = 1.7 # DA_AIStatesToSpeed_Guard Suspicious 170 cm/s
+const ALERTED_SPEED: float = 2.5 # BP_Guard_Base TATCharacterAIMovement MaxWalkSpeed 250 cm/s
+const SIGHT_RANGE: float = 20.0 # AIC_GuardBase Fresh SightRadius 2000cm
+const LOSE_SIGHT_RANGE: float = 30.0 # Bouncer/Hauntstable Fresh LoseSightRadius 3000cm (GuardBase Fresh=2500, see report)
+const HEARING_RANGE: float = 25.0 # AIC_GuardBase TATAISenseConfig_Hearing.HearingRange 2500cm
+const FOV_DEG: float = 80.0 # PeripheralVisionAngleDegrees 40 (UE half-angle) x 2
+const MELEE_DAMAGE: float = 10.0 # CT_Melee_RangedAttackDamage close key
+const MELEE_COOLDOWN: float = 2.0 # GE_Melee_RangedAttack_Cooldown
+const MELEE_RADIUS: float = 1.0 # GA_MeleeRangedAttack DamageRadius 100cm
+# Detection ramps: time-to-detect(s) = agnostic * dist_m + critical_time;
+# rate = 100/time. Crouch x0.75 applies at/over crouch_min (DA_DetectionSettings).
+const DETECTION_RAMPS: Dictionary = {
+	0: {"agnostic": 0.4, "critical_time": 0.0, "critical_range": 2.0, "crouch_min": 2.75, "crouch_mult": 0.75},
+	1: {"agnostic": 0.4, "critical_time": 0.0, "critical_range": 2.0, "crouch_min": 2.75, "crouch_mult": 0.75},
+	2: {"agnostic": 0.2, "critical_time": 0.0, "critical_range": 2.0, "crouch_min": 2.75, "crouch_mult": 0.75},
+	3: {"agnostic": 0.2, "critical_time": 0.0, "critical_range": 2.0, "crouch_min": 2.0, "crouch_mult": 0.75},
+}
+
 @export var patrol_points: Array[Vector3] = []
-@export var patrol_speed: float = 2.0
-@export var chase_speed: float = 4.8
-@export var sight_range: float = 18.0
-@export var fov_deg: float = 70.0
+@export var patrol_speed: float = PATROL_SPEED
+@export var suspicious_speed: float = SUSPICIOUS_SPEED
+@export var chase_speed: float = ALERTED_SPEED
+@export var sight_range: float = SIGHT_RANGE
+@export var lose_sight_range: float = LOSE_SIGHT_RANGE
+@export var hearing_range: float = HEARING_RANGE
+@export var fov_deg: float = FOV_DEG
 
 var state: int = Alertness.NEUTRAL
 var health: float = 30.0
@@ -18,6 +43,7 @@ var wp_index: int = 0
 var investigate_pos: Vector3 = Vector3.ZERO
 var state_timer: float = 0.0
 var attack_cooldown: float = 0.0
+var _speed_scale: float = 1.0
 var gravity: float = 18.0
 var walk_phase: float = 0.0
 var search_scan_phase: float = 0.0
@@ -42,7 +68,9 @@ func _ready() -> void:
 	collision_mask = 1 | 2
 	var diff_x := GameState.difficulty_curve_x()
 	health = GameData.eval_curve("CT_AIStats", "GuardBaseHealth", diff_x, 30.0)
-	patrol_speed *= lerpf(0.85, 1.2, (diff_x - 1.0) * 0.5)
+	_speed_scale = lerpf(0.85, 1.2, (diff_x - 1.0) * 0.5)
+	patrol_speed *= _speed_scale
+	suspicious_speed *= _speed_scale
 	sight_range *= lerpf(0.85, 1.25, (diff_x - 1.0) * 0.5)
 	_build_visuals()
 	NoiseBus.noise_emitted.connect(_on_noise_emitted)
@@ -53,10 +81,10 @@ func _ready() -> void:
 func _build_visuals() -> void:
 	var col := CollisionShape3D.new()
 	var cap := CapsuleShape3D.new()
-	cap.radius = 0.38
-	cap.height = 1.8
+	cap.radius = 0.45
+	cap.height = 2.36
 	col.shape = cap
-	col.position = Vector3(0, 0.9, 0)
+	col.position = Vector3(0, 1.18, 0)
 	add_child(col)
 
 	visual_root = Node3D.new()
@@ -82,17 +110,17 @@ func _build_visuals() -> void:
 	else:
 		body_mesh = MeshInstance3D.new()
 		var m := CapsuleMesh.new()
-		m.radius = 0.35
-		m.height = 1.75
+		m.radius = 0.45
+		m.height = 2.36
 		body_mesh.mesh = m
-		body_mesh.position = Vector3(0, 0.9, 0)
+		body_mesh.position = Vector3(0, 1.18, 0)
 		var mat := StandardMaterial3D.new()
 		mat.albedo_color = Color(0.14, 0.19, 0.36)
 		body_mesh.material_override = mat
 		visual_root.add_child(body_mesh)
 
 	alert_indicator = Label3D.new()
-	alert_indicator.position = Vector3(0, 2.2, 0)
+	alert_indicator.position = Vector3(0, 2.56, 0)
 	alert_indicator.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	alert_indicator.font_size = 48
 	alert_indicator.text = ""
@@ -134,6 +162,50 @@ func _enter_combat() -> void:
 	NoiseBus.emit_noise(global_position, 12.0, self, "guard_alert")
 
 
+func _ramp_for_state() -> Dictionary:
+	match state:
+		Alertness.NEUTRAL:
+			return DETECTION_RAMPS[0]
+		Alertness.SUSPICIOUS, Alertness.SEARCH:
+			return DETECTION_RAMPS[1]
+		Alertness.ALERTED:
+			return DETECTION_RAMPS[2]
+		_:
+			return DETECTION_RAMPS[3]
+
+
+## Real UE detection rate (detections/sec) at a distance for the current
+## alertness: 100 / (agnostic * dist_m + critical_time), with the crouch
+## multiplier applied only at/over CrouchSettings.MinimumDistance.
+## Returns INF inside critical range (instant spot).
+func get_detection_rate(dist_m: float, crouching: bool) -> float:
+	var ramp: Dictionary = _ramp_for_state()
+	var time_s: float = float(ramp.get("agnostic", 0.4)) * dist_m + float(ramp.get("critical_time", 0.0))
+	if dist_m <= float(ramp.get("critical_range", 2.0)) or time_s <= 0.0:
+		return INF
+	var rate: float = 100.0 / time_s
+	if crouching and dist_m >= float(ramp.get("crouch_min", 2.75)):
+		rate *= float(ramp.get("crouch_mult", 0.75))
+	return rate
+
+
+## Real movement speed (m/s) for the current alertness state.
+func get_state_speed() -> float:
+	match state:
+		Alertness.NEUTRAL:
+			return patrol_speed
+		Alertness.SUSPICIOUS:
+			return suspicious_speed
+		Alertness.ALERTED:
+			return ALERTED_SPEED * _speed_scale
+		Alertness.SEARCH:
+			return patrol_speed * 1.15
+		Alertness.COMBAT:
+			return chase_speed
+		_:
+			return 0.0
+
+
 func _physics_process(delta: float) -> void:
 	if GameState.state != "playing":
 		return
@@ -148,8 +220,17 @@ func _physics_process(delta: float) -> void:
 	var sees_player: bool = _can_see_player(player)
 
 	if sees_player:
+		# Real UE ramp (DA_DetectionSettings): time-to-detect(s) = agnostic *
+		# dist_m + critical_time; rate = 100/time; crouch x0.75 at/over 2.75m.
+		# Light-visibility multiplier, smoke/LOS checks and the 15/45/100 state
+		# thresholds below are retained (no UE source for them).
 		var vis_mult: float = clampf(0.35 + GameState.player_light_visibility * 1.15, 0.35, 1.5)
-		detection = minf(100.0, detection + 75.0 * vis_mult * delta)
+		var dist_m: float = player.global_position.distance_to(global_position)
+		var rate: float = get_detection_rate(dist_m, bool(player.get("is_crouching")))
+		if is_inf(rate):
+			detection = 100.0
+		else:
+			detection = minf(100.0, detection + rate * vis_mult * delta)
 		investigate_pos = player.global_position
 		if detection >= 100.0:
 			_enter_combat()
@@ -194,9 +275,12 @@ func _move_ai(delta: float, player: CharacterBody3D) -> void:
 			target = patrol_points[wp_index]
 			if global_position.distance_to(target) < 1.0:
 				wp_index = (wp_index + 1) % patrol_points.size()
-		Alertness.SUSPICIOUS, Alertness.ALERTED:
+		Alertness.SUSPICIOUS:
 			target = investigate_pos
-			spd = patrol_speed * 1.35
+			spd = suspicious_speed
+		Alertness.ALERTED:
+			target = investigate_pos
+			spd = ALERTED_SPEED * _speed_scale
 		Alertness.SEARCH:
 			# Fan out around the last known position instead of freezing on it.
 			_search_goal_timer -= delta
@@ -205,15 +289,15 @@ func _move_ai(delta: float, player: CharacterBody3D) -> void:
 				_search_goal = investigate_pos + Vector3(cos(ang) * 4.0, 0.0, sin(ang) * 4.0)
 				_search_goal_timer = 2.5
 			target = _search_goal
-			spd = patrol_speed * 1.15
+			spd = patrol_speed * 1.15 # retained search-hustle factor on the real Neutral base
 		Alertness.COMBAT:
 			if player != null:
 				target = player.global_position
 				spd = chase_speed
-				if global_position.distance_to(player.global_position) <= 1.8 and attack_cooldown <= 0.0:
+				if global_position.distance_to(player.global_position) <= MELEE_RADIUS and attack_cooldown <= 0.0:
 					if player.has_method("take_damage"):
-						player.take_damage(25.0)
-					attack_cooldown = 1.1
+						player.take_damage(MELEE_DAMAGE)
+					attack_cooldown = MELEE_COOLDOWN
 
 	var flat: Vector3 = Vector3(target.x - global_position.x, 0, target.z - global_position.z)
 	if flat.length() > 0.25:
@@ -244,7 +328,9 @@ func _can_see_player(player: CharacterBody3D) -> bool:
 		var integrity: float = float(player.get("disguise_integrity"))
 		if not guard_alerted and integrity >= 35.0 and dist_to_player > 3.5:
 			return false
-	var effective_range: float = sight_range * (0.65 if bool(player.get("is_crouching")) else 1.0)
+	# Retention: once sensed, the guard holds the target out to lose_sight_range.
+	var sensed: bool = detection > 0.0 or state != Alertness.NEUTRAL
+	var effective_range: float = lose_sight_range if sensed else sight_range
 	var to_player: Vector3 = player.global_position - global_position
 	var dist: float = to_player.length()
 	if dist > effective_range or dist < 0.1:

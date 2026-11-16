@@ -5,11 +5,29 @@ extends CharacterBody3D
 const VfxManager = preload("res://src/core/vfx_manager.gd")
 const MobileProfile := preload("res://src/core/mobile_profile.gd")
 
-const STAND_HEAD_HEIGHT: float = 1.55
-const CROUCH_HEAD_HEIGHT: float = 0.92
+const STAND_HEAD_HEIGHT: float = 1.66875
+const CROUCH_HEAD_HEIGHT: float = 0.88875
+# UE eye heights are relative to the capsule centre (Spider CDO BaseEyeHeight
+# 77.875 cm over capsule half-height 89 cm; crouched 38.875 cm over 50 cm):
+# stand = 0.89 + 0.77875, crouch = 0.50 + 0.38875.
 const LEAN_OFFSET: float = 0.45
 const LEAN_ROLL: float = 0.14
 const LEAN_WALL_CHECK_DIST: float = 0.6
+
+# Real UE gameplay values (tools/parse_gameplay.py; sources in
+# game/data/generated/gameplay/*.json "sources"). Curve-table overrides via
+# GameData.eval_curve are kept only for rows the real data defines.
+const AIR_CONTROL: float = 0.5 # TATCharacterMovement CharMoveComp.AirControl
+const FLOOR_MAX_ANGLE_DEG: float = 60.0 # CharMoveComp.WalkableFloorAngle
+const INTERACT_RANGE: float = 1.75 # TATInteractionTargeterComponent.MaxInteractionRange 175cm
+const CAMERA_FOV: float = 85.0 # OSECameraComponent.FirstPersonFieldOfView
+const CAMERA_FOV_SPRINT: float = 89.0 # retained velocity-feedback shape rebased on 85
+const WIRE_RANGE: float = 20.0 # DA_StandardToolSettings "Hotwire Range" 2000cm
+const WIRE_PULL_SPEED: float = 23.0 # DA_StandardToolSettings "Hotwire Speed" 2300cm/s
+const DISGUISE_COOLDOWN: float = 15.0 # GE_Disguise_Cooldown magnitude
+const DISGUISE_ACTIVE_TIME: float = 60.0 # GE_Disguise_Active magnitude (max active time)
+const BLACKJACK_LIGHT_DMG: float = 40.0 # CT_Tool_Blackjack.BlackjackDamageLight
+const BLACKJACK_HEAVY_DMG: float = 75.0 # CT_Tool_Blackjack.BlackjackDamageHeavy
 
 signal health_changed(hp: float, max_hp: float)
 signal stamina_changed(stam: float, max_stam: float)
@@ -19,11 +37,11 @@ signal tool_used(tool_id: String, charges_left: int)
 signal interacted(target: Node)
 signal downed()
 
-@export var walk_speed: float = 4.2
-@export var sprint_speed: float = 6.8
-@export var crouch_speed: float = 2.1
-@export var jump_velocity: float = 5.2
-@export var gravity: float = 18.0
+@export var walk_speed: float = 3.6
+@export var sprint_speed: float = 5.4
+@export var crouch_speed: float = 1.8
+@export var jump_velocity: float = 5.5
+@export var gravity: float = 9.8
 @export var mouse_sens: float = 0.0024
 
 var max_health: float = 300.0
@@ -37,11 +55,11 @@ var is_sprinting: bool = false
 var lean_dir: float = 0.0
 var thief_vision_on: bool = false
 var thief_vision: bool = false
-const DISGUISE_STEAL_RANGE: float = 2.8
-const GRAPPLE_ARRIVE_DIST: float = 1.8
+const DISGUISE_STEAL_RANGE: float = 2.8 # retained approximation: no UE source; interaction targeter range is 1.75
+const GRAPPLE_ARRIVE_DIST: float = 1.8 # retained: no UE source; HotwireArrivalThreshold 1.0m noted in player_tools.json
 const GRAPPLE_VAULT_Y: float = 6.5
 const GRAPPLE_MIN_RANGE: float = 3.0
-const GRAPPLE_MAX_RANGE: float = 26.0
+const GRAPPLE_MAX_RANGE: float = WIRE_RANGE
 const GRAPPLE_WINCH_TIME: float = 0.35
 const ASTRAL_DURATION: float = 8.0
 const PROP_SCAN_INTERVAL: float = 0.1
@@ -66,16 +84,19 @@ var fp_highlight_target: Node = null
 var ability_cooldown: float = 0.0
 var disguise_active: bool = false
 var disguise_integrity: float = 100.0
+var disguise_ttl: float = 0.0
 var is_grappling: bool = false
 var grapple_target: Vector3 = Vector3.ZERO
 var astral_active: bool = false
 var astral_ttl: float = 0.0
 
-# Gadgets
+# Gadgets (charges mirror BP MaxAmmo: Slithersap/MagicSlime 4, SmokeBomb 1,
+# PickpocketFairy 2, Zipwire/Hotwire 4; see player_tools.json "sources").
 var charges: Dictionary = {
-	"slithersap": 3,
-	"smoke_bomb": 2,
+	"slithersap": 4,
+	"smoke_bomb": 1,
 	"pickpocket_fairy": 2,
+	"grapple": 4,
 }
 var noise_timer: float = 0.0
 
@@ -104,17 +125,20 @@ func _apply_tuning() -> void:
 	health = max_health
 	max_stamina = GameData.eval_curve("CT_PlayerStats", "BaseStamina", diff_x, 260.0)
 	stamina = max_stamina
-	stamina_regen = GameData.eval_curve("CT_PlayerStats", "BaseStaminaRegenRate", diff_x, 2.0) * 6.0
+	# GE_Stamina_Regen: 0.25 x StaminaRegenRate per 0.1s tick -> rate x 2.5/s.
+	stamina_regen = GameData.eval_curve("CT_PlayerStats", "BaseStaminaRegenRate", diff_x, 2.0) * 2.5
 
 
 func _build_body() -> void:
 	col_shape = CollisionShape3D.new()
 	var cap: CapsuleShape3D = CapsuleShape3D.new()
-	cap.radius = 0.35
-	cap.height = 1.75
+	# Spider capsule: half-height 89 cm, radius 32 cm (centre y = 0.89).
+	cap.radius = 0.32
+	cap.height = 1.78
 	col_shape.shape = cap
-	col_shape.position = Vector3(0, 0.875, 0)
+	col_shape.position = Vector3(0, 0.89, 0)
 	add_child(col_shape)
+	floor_max_angle = deg_to_rad(FLOOR_MAX_ANGLE_DEG)
 
 	mesh_root = Node3D.new()
 	add_child(mesh_root)
@@ -153,7 +177,7 @@ func _build_body() -> void:
 	head.add_child(spring_arm)
 
 	cam = Camera3D.new()
-	cam.fov = 78.0
+	cam.fov = CAMERA_FOV
 	cam.current = true
 	spring_arm.add_child(cam)
 	_build_first_person_rig()
@@ -169,7 +193,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		is_crouching = not is_crouching
 		var cap: CapsuleShape3D = col_shape.shape as CapsuleShape3D
 		if cap != null:
-			cap.height = 1.1 if is_crouching else 1.75
+			cap.height = 1.0 if is_crouching else 1.78
 			col_shape.position.y = cap.height * 0.5
 	elif event.is_action_pressed("interact"):
 		_try_interact()
@@ -231,9 +255,7 @@ func _physics_process(delta: float) -> void:
 	# Spider grapple pull override (smooth winch ramp toward the anchor, then
 	# preserve momentum and vault upward on arrival/release).
 	if is_grappling:
-		var wire_speed: float = GameData.eval_curve("CT_Tool_Wire", "WirePullSpeed", 1.0, 16.0)
-		if wire_speed <= 0.0:
-			wire_speed = 16.0
+		var wire_speed: float = WIRE_PULL_SPEED
 		grapple_time += delta
 		var to_anchor: Vector3 = grapple_target - global_position
 		var anchor_dist: float = to_anchor.length()
@@ -262,22 +284,23 @@ func _physics_process(delta: float) -> void:
 		speed = crouch_speed
 	elif is_sprinting:
 		speed = sprint_speed
-		var drain: float = absf(GameData.eval_curve("CT_StaminaSystem", "StaminaPerSecond.Sprint", 1.0, -5.0)) * 3.0
+		var drain: float = absf(GameData.eval_curve("CT_StaminaSystem", "StaminaPerSecond.Sprint", 1.0, -5.0))
 		stamina = maxf(0.0, stamina - drain * delta)
 	else:
 		stamina = minf(max_stamina, stamina + stamina_regen * delta)
 	stamina_changed.emit(stamina, max_stamina)
 
 	# Velocity FOV feedback (BP_CameraModifier_VelocityFOV)
-	cam.fov = lerpf(cam.fov, 82.0 if is_sprinting else 75.0, delta * 8.0)
+	cam.fov = lerpf(cam.fov, CAMERA_FOV_SPRINT if is_sprinting else CAMERA_FOV, delta * 8.0)
 
 	if not is_on_floor():
 		velocity.y -= gravity * delta
 	elif Input.is_action_just_pressed("jump"):
 		velocity.y = jump_velocity
 
-	velocity.x = lerpf(velocity.x, wish.x * speed, delta * 14.0)
-	velocity.z = lerpf(velocity.z, wish.z * speed, delta * 14.0)
+	var steer: float = 14.0 if is_on_floor() else 14.0 * AIR_CONTROL
+	velocity.x = lerpf(velocity.x, wish.x * speed, delta * steer)
+	velocity.z = lerpf(velocity.z, wish.z * speed, delta * steer)
 	move_and_slide()
 
 	# Footstep cadence timer while moving on floor. Astral form makes no noise.
@@ -319,6 +342,10 @@ func _physics_process(delta: float) -> void:
 		if _is_guard_within(5.0):
 			drain_rate *= 2.0
 		disguise_integrity = maxf(0.0, disguise_integrity - drain_rate * delta)
+		disguise_ttl = maxf(0.0, disguise_ttl - delta)
+		if disguise_ttl <= 0.0:
+			disguise_active = false
+			disguise_changed.emit(disguise_integrity, disguise_active)
 		if disguise_integrity <= 0.0:
 			disguise_integrity = 0.0
 			disguise_active = false
@@ -371,7 +398,7 @@ func take_damage(amount: float) -> void:
 
 func get_nearest_interactable() -> Node:
 	var best: Node = null
-	var best_d: float = 3.0
+	var best_d: float = INTERACT_RANGE
 	for node: Node in get_tree().get_nodes_in_group("interactables"):
 		if not (node is Node3D):
 			continue
@@ -433,6 +460,7 @@ func _try_steal_disguise(guard: Node) -> bool:
 		return false
 	disguise_active = true
 	disguise_integrity = 100.0
+	disguise_ttl = DISGUISE_ACTIVE_TIME
 	disguise_changed.emit(disguise_integrity, disguise_active)
 	NoiseBus.emit_noise(global_position, 3.0, self, "disguise")
 	interacted.emit(guard)
@@ -458,10 +486,12 @@ func _trigger_thief_ability() -> void:
 			_try_spider_grapple()
 		"chameleon":
 			disguise_active = not disguise_active
-			if disguise_active and disguise_integrity <= 1.0:
-				disguise_integrity = 100.0
+			if disguise_active:
+				disguise_ttl = DISGUISE_ACTIVE_TIME
+				if disguise_integrity <= 1.0:
+					disguise_integrity = 100.0
 			disguise_changed.emit(disguise_integrity, disguise_active)
-			ability_cooldown = 2.0
+			ability_cooldown = DISGUISE_COOLDOWN
 		"moth":
 			astral_active = true
 			astral_ttl = ASTRAL_DURATION
@@ -496,6 +526,8 @@ func _try_spider_grapple() -> bool:
 		return is_grappling
 	if cam == null:
 		return false
+	if int(charges.get("grapple", 0)) <= 0:
+		return false
 	var space: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
 	var from: Vector3 = cam.global_position
 	var fwd: Vector3 = -cam.global_transform.basis.z
@@ -520,9 +552,11 @@ func _try_spider_grapple() -> bool:
 	grapple_target = hit_pos
 	is_grappling = true
 	grapple_time = 0.0
+	charges["grapple"] = int(charges.get("grapple", 0)) - 1
+	tool_used.emit("grapple", int(charges.get("grapple", 0)))
 	_fp_set_tool("zipwire")
 	_fp_play_swing()
-	ability_cooldown = GameData.eval_curve("CT_Tool_Wire", "WireCooldownPrimary", 1.0, 10.0) * 0.4
+	ability_cooldown = GameData.eval_curve("CT_Tool_Wire", "WireCooldownSecondary", 1.0, 5.0)
 	VfxManager.spawn_grapple_beam(get_parent(), global_position + Vector3.UP * 1.2, grapple_target, 0.45)
 	NoiseBus.emit_noise(global_position, 5.0, self, "wire")
 	return true
@@ -548,7 +582,7 @@ func _use_smoke_bomb() -> void:
 	_fp_play_swing()
 	charges["smoke_bomb"] = int(charges.get("smoke_bomb", 0)) - 1
 	if level_ctrl != null and level_ctrl.has_method("spawn_smoke"):
-		level_ctrl.spawn_smoke(global_position + (-global_transform.basis.z) * 2.5, 6.0, 12.0)
+		level_ctrl.spawn_smoke(global_position + (-global_transform.basis.z) * 2.5, 2.5, 25.0)
 	NoiseBus.emit_noise(global_position, 7.0, self, "smoke")
 	tool_used.emit("smoke_bomb", int(charges.get("smoke_bomb", 0)))
 
@@ -612,8 +646,8 @@ func _try_blackjack() -> void:
 		var swing_pos: Vector3 = head.global_position + swing_dir * 0.7
 		VfxManager.spawn_blackjack_swing(get_parent(), swing_pos, swing_dir)
 	_play_blackjack_camera_punch()
-	var base_dmg: float = GameData.eval_curve("CT_Tool_Blackjack", "Damage", 1.0, 35.0)
-	var heavy_dmg: float = GameData.eval_curve("CT_Tool_Blackjack", "BlackjackDamageHeavy", 1.0, 75.0)
+	var base_dmg: float = GameData.eval_curve("CT_Tool_Blackjack", "BlackjackDamageLight", 1.0, BLACKJACK_LIGHT_DMG)
+	var heavy_dmg: float = GameData.eval_curve("CT_Tool_Blackjack", "BlackjackDamageHeavy", 1.0, BLACKJACK_HEAVY_DMG)
 	if heavy_dmg <= 0.0:
 		heavy_dmg = base_dmg
 	for g: Node in get_tree().get_nodes_in_group("guards"):
@@ -631,7 +665,7 @@ func _try_blackjack() -> void:
 			var guard_back: Vector3 = guard_node.global_transform.basis.z.normalized()
 			var behind_dot: float = guard_back.dot(to_player)
 			if behind_dot > 0.25:
-				final_dmg = 999.0
+				final_dmg = heavy_dmg
 		g.take_knockout(final_dmg)
 		GameState.takedowns += 1
 		NoiseBus.emit_noise(global_position, 4.5, self, "takedown")

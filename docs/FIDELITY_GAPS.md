@@ -128,4 +128,6 @@ find extracted/json -name 'NS_*.json' | wc -l
 ### Visual verification log
 
 - 2026-11-16: first desktop screenshots after the weather/sky wave exposed a **black-screen regression**: `WeatherProfile.apply_environment` wrote `Environment.adjustment_brightness = gain_midtones - 1` (e.g. -0.2), but Godot's `adjustment_brightness` is a **multiplier (default 1.0)**. Every map rendered black except the HUD. Bypassing weather restored the den fully; skipping only the sky still black. Fix: use the gain multiplier (0.8) with a regression test. Screenshots: `/tmp/opencode/tat_den_noweather.png` (working den) vs the black `/tmp/opencode/tat_den.png`.
+- Fixed in `cba4cf2` (gain multiplier 0.8/1.1 + regression test); the den then rendered correctly with weather enabled (`/tmp/opencode/tat_den_fixed.png`).
+- Guildhall re-shoot after the fix still shows the authored spawn facing empty night; the PlayerStart basis (yaw) is dropped by the loader/`_spawn_player`, so the player always faces -Z. Spawn-orientation wave in progress (A19).
 - The same run confirmed the Guildhall contract timer (`119:14 LEFT`) and 16,903 meshes / 4,850 chunks / 170 collision bodies. A follow-up screenshot with weather enabled is required after the fix.

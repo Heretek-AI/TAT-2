@@ -33,9 +33,13 @@ func _build_ui() -> void:
 	_splash_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_splash_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_splash_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	_splash_rect.modulate = Color(1.0, 1.0, 1.0, 0.35)
+	_splash_rect.modulate = Color(1.0, 1.0, 1.0, 0.42)
 	_splash_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_splash_rect.visible = false
+	if ResourceLoader.exists("res://assets/ue/Raw/Art/UI/Shell/SplashScreen/T_loadingScreen_1.png"):
+		_splash_rect.texture = load("res://assets/ue/Raw/Art/UI/Shell/SplashScreen/T_loadingScreen_1.png") as Texture2D
+		_splash_rect.visible = true
+	else:
+		_splash_rect.visible = false
 	_root.add_child(_splash_rect)
 
 	var center: CenterContainer = CenterContainer.new()

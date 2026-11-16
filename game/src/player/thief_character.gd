@@ -41,6 +41,19 @@ const GRAPPLE_ARRIVE_DIST: float = 1.8
 const GRAPPLE_VAULT_Y: float = 6.5
 var _bj_punch_tween: Tween = null
 
+# First-person viewmodel rig (Workstream 5).
+var fp_rig: Node3D
+var fp_hand_l_root: Node3D
+var fp_hand_r_root: Node3D
+var fp_tool_root: Node3D
+var fp_tool_id: String = "blackjack"
+var fp_bob_phase: float = 0.0
+var fp_breathe_time: float = 0.0
+var fp_step_left: bool = false
+var fp_swing_t: float = 0.0
+var fp_base_rig_pos: Vector3 = Vector3.ZERO
+var fp_highlight_target: Node = null
+
 # Abilities
 var ability_cooldown: float = 0.0
 var disguise_active: bool = false
@@ -135,6 +148,7 @@ func _build_body() -> void:
 	cam.fov = 78.0
 	cam.current = true
 	spring_arm.add_child(cam)
+	_build_first_person_rig()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -248,6 +262,7 @@ func _physics_process(delta: float) -> void:
 	# Footstep cadence timer while moving on floor.
 	var planar_speed: float = Vector2(velocity.x, velocity.z).length()
 	if is_on_floor() and planar_speed > 0.5:
+		fp_bob_phase += delta * (9.0 if is_sprinting else 6.5)
 		noise_timer -= delta
 		if noise_timer <= 0.0:
 			var loudness: float = 3.5
@@ -256,12 +271,19 @@ func _physics_process(delta: float) -> void:
 			elif is_sprinting:
 				loudness = 8.0
 			NoiseBus.emit_noise(global_position, loudness, self, "footstep")
+			fp_step_left = not fp_step_left
+			var fwd_flat: Vector3 = Vector3(-global_transform.basis.z.x, 0.0, -global_transform.basis.z.z)
+			if fwd_flat.length() < 0.05:
+				fwd_flat = Vector3(0.0, 0.0, -1.0)
+			fwd_flat = fwd_flat.normalized()
+			VfxManager.spawn_footprint_decal(global_position, fwd_flat, fp_step_left)
 			if is_crouching:
 				noise_timer = 0.5
 			elif is_sprinting:
 				noise_timer = 0.28
 			else:
 				noise_timer = 0.4
+	_update_prop_highlight()
 
 	# Chameleon Disguise Integrity drain (faster while sprinting or near guards).
 	if disguise_active:
@@ -440,6 +462,8 @@ func _try_spider_grapple() -> bool:
 	var hit_pos: Vector3 = hit["position"] as Vector3
 	grapple_target = hit_pos
 	is_grappling = true
+	_fp_set_tool("zipwire")
+	_fp_play_swing()
 	ability_cooldown = GameData.eval_curve("CT_Tool_Wire", "WireCooldownPrimary", 1.0, 10.0) * 0.4
 	VfxManager.spawn_grapple_beam(get_parent(), global_position + Vector3.UP * 1.2, grapple_target, 0.45)
 	NoiseBus.emit_noise(global_position, 5.0, self, "wire")
@@ -449,6 +473,8 @@ func _try_spider_grapple() -> bool:
 func _use_slithersap() -> void:
 	if int(charges.get("slithersap", 0)) <= 0:
 		return
+	_fp_set_tool("slithersap")
+	_fp_play_swing()
 	charges["slithersap"] = int(charges.get("slithersap", 0)) - 1
 	if light_probe != null and light_probe.has_method("short_circuit_lights"):
 		light_probe.short_circuit_lights(global_position, 20.0, 25.0, GameState.elapsed_sec)
@@ -460,6 +486,8 @@ func _use_slithersap() -> void:
 func _use_smoke_bomb() -> void:
 	if int(charges.get("smoke_bomb", 0)) <= 0:
 		return
+	_fp_set_tool("smoke_bomb")
+	_fp_play_swing()
 	charges["smoke_bomb"] = int(charges.get("smoke_bomb", 0)) - 1
 	if level_ctrl != null and level_ctrl.has_method("spawn_smoke"):
 		level_ctrl.spawn_smoke(global_position + (-global_transform.basis.z) * 2.5, 6.0, 12.0)
@@ -470,6 +498,8 @@ func _use_smoke_bomb() -> void:
 func _use_pickpocket_fairy() -> void:
 	if int(charges.get("pickpocket_fairy", 0)) <= 0:
 		return
+	_fp_set_tool("fairy")
+	_fp_play_swing()
 	charges["pickpocket_fairy"] = int(charges.get("pickpocket_fairy", 0)) - 1
 	var best_loot: Node3D = null
 	var best_d: float = 25.0
@@ -488,6 +518,8 @@ func _use_pickpocket_fairy() -> void:
 
 
 func _try_blackjack() -> void:
+	_fp_set_tool("blackjack")
+	_fp_play_swing()
 	if head != null and cam != null:
 		var swing_dir: Vector3 = -cam.global_transform.basis.z
 		var swing_pos: Vector3 = head.global_position + swing_dir * 0.7
@@ -531,6 +563,312 @@ func _play_blackjack_camera_punch() -> void:
 	_bj_punch_tween.parallel().tween_property(cam, "rotation:z", base_roll + deg_to_rad(2.0), 0.08)
 	_bj_punch_tween.tween_property(cam, "rotation:x", base_pitch, 0.14)
 	_bj_punch_tween.parallel().tween_property(cam, "rotation:z", base_roll, 0.14)
+
+
+func _process(delta: float) -> void:
+	_update_first_person(delta)
+
+
+func _build_first_person_rig() -> void:
+	if cam == null:
+		return
+	if fp_rig != null and is_instance_valid(fp_rig):
+		return
+	fp_rig = Node3D.new()
+	fp_rig.name = "FirstPersonRig"
+	cam.add_child(fp_rig)
+	fp_rig.position = Vector3.ZERO
+	fp_base_rig_pos = fp_rig.position
+	var glove_mat: StandardMaterial3D = StandardMaterial3D.new()
+	glove_mat.albedo_color = Color(0.07, 0.075, 0.10)
+	glove_mat.roughness = 0.9
+	glove_mat.metallic = 0.05
+	fp_hand_l_root = Node3D.new()
+	fp_hand_l_root.name = "HandLeft"
+	fp_hand_l_root.position = Vector3(-0.28, -0.24, -0.55)
+	fp_hand_l_root.rotation_degrees = Vector3(-8.0, 18.0, 6.0)
+	fp_rig.add_child(fp_hand_l_root)
+	_make_glove_hand(fp_hand_l_root, glove_mat, false)
+	fp_hand_r_root = Node3D.new()
+	fp_hand_r_root.name = "HandRight"
+	fp_hand_r_root.position = Vector3(0.28, -0.24, -0.55)
+	fp_hand_r_root.rotation_degrees = Vector3(-8.0, -18.0, -6.0)
+	fp_rig.add_child(fp_hand_r_root)
+	_make_glove_hand(fp_hand_r_root, glove_mat, true)
+	fp_tool_root = Node3D.new()
+	fp_tool_root.name = "ToolRoot"
+	fp_tool_root.position = Vector3(0.28, -0.18, -0.62)
+	fp_rig.add_child(fp_tool_root)
+	_fp_set_tool(fp_tool_id)
+
+
+func _make_glove_hand(parent: Node3D, glove_mat: StandardMaterial3D, is_right: bool) -> void:
+	var palm_mesh: BoxMesh = BoxMesh.new()
+	palm_mesh.size = Vector3(0.09, 0.055, 0.15)
+	palm_mesh.material = glove_mat
+	var palm: MeshInstance3D = MeshInstance3D.new()
+	palm.name = "PalmRight" if is_right else "PalmLeft"
+	palm.mesh = palm_mesh
+	palm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(palm)
+	var finger_mesh: BoxMesh = BoxMesh.new()
+	finger_mesh.size = Vector3(0.08, 0.045, 0.09)
+	finger_mesh.material = glove_mat
+	var fingers: MeshInstance3D = MeshInstance3D.new()
+	fingers.name = "FingersRight" if is_right else "FingersLeft"
+	fingers.mesh = finger_mesh
+	fingers.position = Vector3(0.0, -0.008, -0.105)
+	fingers.rotation_degrees.x = 12.0
+	fingers.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(fingers)
+	var cuff_mesh: CylinderMesh = CylinderMesh.new()
+	cuff_mesh.top_radius = 0.045
+	cuff_mesh.bottom_radius = 0.055
+	cuff_mesh.height = 0.10
+	cuff_mesh.radial_segments = 10
+	cuff_mesh.material = glove_mat
+	var cuff: MeshInstance3D = MeshInstance3D.new()
+	cuff.name = "CuffRight" if is_right else "CuffLeft"
+	cuff.mesh = cuff_mesh
+	cuff.position = Vector3(0.0, 0.01, 0.11)
+	cuff.rotation_degrees.x = 78.0
+	cuff.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(cuff)
+
+
+func _fp_clear_tool() -> void:
+	if fp_tool_root == null:
+		return
+	for child: Node in fp_tool_root.get_children():
+		fp_tool_root.remove_child(child)
+		child.queue_free()
+
+
+func _fp_set_tool(tool_id: String) -> void:
+	fp_tool_id = tool_id
+	if fp_tool_root == null:
+		return
+	_fp_clear_tool()
+	if tool_id == "zipwire":
+		var loaded: Node = _fp_try_load_zipwire()
+		if loaded != null:
+			fp_tool_root.add_child(loaded)
+			return
+	match tool_id:
+		"zipwire":
+			_build_fp_zipwire_fallback()
+		"smoke_bomb":
+			_build_fp_smoke_fallback()
+		"slithersap":
+			_build_fp_sap_fallback()
+		"fairy":
+			_build_fp_fairy_fallback()
+		_:
+			_build_fp_blackjack_fallback()
+
+
+func _fp_try_load_zipwire() -> Node:
+	var candidates: Array[String] = [
+		"res://assets/ue/Content/Art/Tools/SM_Zipwire.glb",
+		"res://assets/ue/Content/Art/Tools/Zipwire/SM_Zipwire.glb",
+		"res://assets/ue/Content/Art/Tool/SM_Zipwire.glb",
+		"res://assets/ue/Content/Art/Tools/SM_Zipwire.tscn",
+	]
+	for path: String in candidates:
+		if not ResourceLoader.exists(path):
+			continue
+		var res: Resource = ResourceLoader.load(path)
+		if res is PackedScene:
+			var inst: Node = (res as PackedScene).instantiate()
+			(inst as Node3D).scale = Vector3.ONE * 0.35
+			return inst
+	return null
+
+
+func _fp_fallback_mat(base: Color, emission: Color, energy: float) -> StandardMaterial3D:
+	var mat: StandardMaterial3D = StandardMaterial3D.new()
+	mat.albedo_color = base
+	mat.roughness = 0.55
+	mat.metallic = 0.25
+	if energy > 0.0:
+		mat.emission_enabled = true
+		mat.emission = emission
+		mat.emission_energy_multiplier = energy
+	return mat
+
+
+func _build_fp_blackjack_fallback() -> void:
+	var leather: StandardMaterial3D = _fp_fallback_mat(Color(0.12, 0.09, 0.07), Color(0, 0, 0), 0.0)
+	var handle_mesh: CylinderMesh = CylinderMesh.new()
+	handle_mesh.top_radius = 0.022
+	handle_mesh.bottom_radius = 0.026
+	handle_mesh.height = 0.16
+	handle_mesh.radial_segments = 10
+	handle_mesh.material = leather
+	var handle: MeshInstance3D = MeshInstance3D.new()
+	handle.name = "BlackjackHandle"
+	handle.mesh = handle_mesh
+	handle.rotation_degrees = Vector3(65.0, 0.0, 0.0)
+	handle.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	fp_tool_root.add_child(handle)
+	var head_mesh: SphereMesh = SphereMesh.new()
+	head_mesh.radius = 0.045
+	head_mesh.height = 0.09
+	head_mesh.radial_segments = 12
+	head_mesh.rings = 8
+	head_mesh.material = leather
+	var club_head: MeshInstance3D = MeshInstance3D.new()
+	club_head.name = "BlackjackHead"
+	club_head.mesh = head_mesh
+	club_head.position = Vector3(0.0, 0.055, -0.075)
+	club_head.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	fp_tool_root.add_child(club_head)
+
+
+func _build_fp_zipwire_fallback() -> void:
+	var frame_mat: StandardMaterial3D = _fp_fallback_mat(Color(0.16, 0.15, 0.14), Color(0, 0, 0), 0.0)
+	var glow_mat: StandardMaterial3D = _fp_fallback_mat(Color(0.4, 0.85, 1.0), Color(0.35, 0.8, 1.0), 2.0)
+	var body_mesh: BoxMesh = BoxMesh.new()
+	body_mesh.size = Vector3(0.05, 0.07, 0.30)
+	body_mesh.material = frame_mat
+	var body: MeshInstance3D = MeshInstance3D.new()
+	body.name = "ZipwireBody"
+	body.mesh = body_mesh
+	body.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	fp_tool_root.add_child(body)
+	var bow_mesh: BoxMesh = BoxMesh.new()
+	bow_mesh.size = Vector3(0.22, 0.03, 0.04)
+	bow_mesh.material = frame_mat
+	var bow: MeshInstance3D = MeshInstance3D.new()
+	bow.name = "ZipwireBow"
+	bow.mesh = bow_mesh
+	bow.position = Vector3(0.0, 0.02, -0.15)
+	bow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	fp_tool_root.add_child(bow)
+	var tip_mesh: SphereMesh = SphereMesh.new()
+	tip_mesh.radius = 0.02
+	tip_mesh.height = 0.04
+	tip_mesh.material = glow_mat
+	for i: int in range(2):
+		var tip: MeshInstance3D = MeshInstance3D.new()
+		tip.name = "ZipwireTip"
+		tip.mesh = tip_mesh
+		tip.position = Vector3(-0.10 if i == 0 else 0.10, 0.02, -0.15)
+		tip.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		fp_tool_root.add_child(tip)
+
+
+func _build_fp_smoke_fallback() -> void:
+	var bomb_mat: StandardMaterial3D = _fp_fallback_mat(Color(0.10, 0.10, 0.12), Color(0, 0, 0), 0.0)
+	var bomb_mesh: SphereMesh = SphereMesh.new()
+	bomb_mesh.radius = 0.05
+	bomb_mesh.height = 0.10
+	bomb_mesh.radial_segments = 12
+	bomb_mesh.rings = 8
+	bomb_mesh.material = bomb_mat
+	var bomb: MeshInstance3D = MeshInstance3D.new()
+	bomb.name = "SmokeBomb"
+	bomb.mesh = bomb_mesh
+	bomb.position = Vector3(0.0, 0.03, 0.0)
+	bomb.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	fp_tool_root.add_child(bomb)
+	var fuse_mesh: CylinderMesh = CylinderMesh.new()
+	fuse_mesh.top_radius = 0.008
+	fuse_mesh.bottom_radius = 0.008
+	fuse_mesh.height = 0.05
+	fuse_mesh.material = _fp_fallback_mat(Color(0.5, 0.35, 0.15), Color(0, 0, 0), 0.0)
+	var fuse: MeshInstance3D = MeshInstance3D.new()
+	fuse.name = "SmokeFuse"
+	fuse.mesh = fuse_mesh
+	fuse.position = Vector3(0.0, 0.09, 0.0)
+	fuse.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	fp_tool_root.add_child(fuse)
+
+
+func _build_fp_sap_fallback() -> void:
+	var vial_mat: StandardMaterial3D = StandardMaterial3D.new()
+	vial_mat.albedo_color = Color(0.3, 0.9, 0.65, 0.85)
+	vial_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	vial_mat.emission_enabled = true
+	vial_mat.emission = Color(0.3, 1.0, 0.7)
+	vial_mat.emission_energy_multiplier = 1.5
+	var vial_mesh: CylinderMesh = CylinderMesh.new()
+	vial_mesh.top_radius = 0.03
+	vial_mesh.bottom_radius = 0.03
+	vial_mesh.height = 0.11
+	vial_mesh.radial_segments = 12
+	vial_mesh.material = vial_mat
+	var vial: MeshInstance3D = MeshInstance3D.new()
+	vial.name = "SapVial"
+	vial.mesh = vial_mesh
+	vial.rotation_degrees = Vector3(55.0, 0.0, 0.0)
+	vial.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	fp_tool_root.add_child(vial)
+
+
+func _build_fp_fairy_fallback() -> void:
+	var glow_mat: StandardMaterial3D = _fp_fallback_mat(Color(0.55, 0.95, 1.0), Color(0.4, 0.9, 1.0), 2.5)
+	var orb_mesh: SphereMesh = SphereMesh.new()
+	orb_mesh.radius = 0.035
+	orb_mesh.height = 0.07
+	orb_mesh.radial_segments = 12
+	orb_mesh.rings = 8
+	orb_mesh.material = glow_mat
+	var orb: MeshInstance3D = MeshInstance3D.new()
+	orb.name = "FairyOrb"
+	orb.mesh = orb_mesh
+	orb.position = Vector3(0.0, 0.05, -0.02)
+	orb.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	fp_tool_root.add_child(orb)
+
+
+func _fp_play_swing() -> void:
+	fp_swing_t = 0.32
+
+
+func _update_first_person(delta: float) -> void:
+	if fp_rig == null or cam == null:
+		return
+	fp_breathe_time += delta
+	if fp_swing_t > 0.0:
+		fp_swing_t = maxf(0.0, fp_swing_t - delta)
+	var planar: float = Vector2(velocity.x, velocity.z).length()
+	var moving: bool = is_on_floor() and planar > 0.5
+	var bob_amp: float = 0.012
+	if is_sprinting:
+		bob_amp = 0.022
+	elif is_crouching:
+		bob_amp = 0.008
+	elif not moving:
+		bob_amp = 0.003
+	var bob_y: float = sin(fp_bob_phase * 2.0) * bob_amp + sin(fp_breathe_time * 1.6) * 0.004
+	var bob_x: float = cos(fp_bob_phase) * bob_amp * 0.6
+	fp_rig.position = fp_base_rig_pos + Vector3(bob_x, bob_y, 0.0)
+	fp_rig.rotation.z = cos(fp_bob_phase * 0.5) * 0.008
+	var swing_k: float = 0.0
+	if fp_swing_t > 0.0:
+		swing_k = fp_swing_t / 0.32
+	if fp_tool_root != null:
+		fp_tool_root.position = Vector3(0.28, -0.18, -0.62 + swing_k * -0.22)
+		fp_tool_root.rotation_degrees = Vector3(swing_k * -55.0, 0.0, swing_k * 12.0)
+	if fp_hand_r_root != null:
+		fp_hand_r_root.position = Vector3(0.28, -0.24 + swing_k * -0.06, -0.55 + swing_k * -0.12)
+		fp_hand_r_root.rotation_degrees = Vector3(-8.0 + swing_k * -30.0, -18.0, -6.0)
+	if fp_hand_l_root != null and moving:
+		fp_hand_l_root.position.y = -0.24 + cos(fp_bob_phase * 2.0 + 1.2) * bob_amp * 0.7
+
+
+func _update_prop_highlight() -> void:
+	var best: Node = _get_nearest_ko_guard()
+	if best == null:
+		best = get_nearest_interactable()
+	if best == fp_highlight_target:
+		return
+	if fp_highlight_target != null and is_instance_valid(fp_highlight_target):
+		VfxManager.set_prop_highlight(fp_highlight_target, false)
+	fp_highlight_target = best
+	if fp_highlight_target != null:
+		VfxManager.set_prop_highlight(fp_highlight_target, true)
 
 
 func _update_thief_vision() -> void:

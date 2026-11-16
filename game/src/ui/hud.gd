@@ -1,5 +1,11 @@
 extends CanvasLayer
-## Authentic in-game HUD using extracted Thick As Thieves UI textures (compass, portrait frame, stealth ball, reticle, hotbar).
+## Authentic in-game HUD: compass ribbon, portrait frame, stealth ball, hotbar,
+## diegetic center prompt with keycap badge, and Art Nouveau pause menu.
+
+const SettingsUIScript := preload("res://src/ui/settings_ui.gd")
+const ThemeScript := preload("res://src/ui/art_nouveau_theme.gd")
+
+const VERSION_STRING: String = "v1.5.148559"
 
 var obj_lbl: Label
 var compass_lbl: Label
@@ -21,15 +27,21 @@ var result_panel: PanelContainer
 var result_lbl: Label
 var contract_data: Dictionary = {}
 
+var _pause_root: Control
+var _prompt_keycap: PanelContainer
+var _prompt_keycap_lbl: Label
+var _thief_name_lbl: Label
+var _level_badge_lbl: Label
+
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	var root := Control.new()
+	var root: Control = Control.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 
-	var sans := ResourceLoader.load("res://assets/ue/fonts/Raleway-Regular.ttf") as Font
+	var sans: Font = ResourceLoader.load("res://assets/ue/fonts/Raleway-Regular.ttf") as Font
 
 	# Disguise vignette (full-screen overlay, hidden unless disguised).
 	disguise_vignette = _tex_rect_full("res://assets/ue/Raw/Art/UI/HUD/T_Disguise_Vignette02.png")
@@ -69,28 +81,47 @@ func _ready() -> void:
 	lockpick_bar.visible = false
 	root.add_child(lockpick_bar)
 
-	# Top-center Compass (T_compass_bg + T_compass_lines)
-	var compass_box := Control.new()
+	_build_compass_strip(root, sans)
+	_build_thief_plate(root, sans)
+	_build_objective(root, sans)
+	_build_reticle_and_prompt(root, sans)
+	_build_bottom_left(root)
+
+	hotbar_lbl = Label.new()
+	hotbar_lbl.visible = false
+	root.add_child(hotbar_lbl)
+
+	var is_hub: bool = GameState.active_contract_order <= 1
+	if not is_hub:
+		_build_tool_hotbar(root, sans)
+	_build_result_panel(root)
+	_build_pause_menu(root)
+
+
+func _build_compass_strip(root: Control, sans: Font) -> void:
+	# Slim top-center compass strip with cardinal markers.
+	var compass_box: Control = Control.new()
 	compass_box.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	compass_box.position = Vector2(-220, 12)
-	compass_box.custom_minimum_size = Vector2(440, 34)
-	compass_box.size = Vector2(440, 34)
+	compass_box.position = Vector2(-220, 10)
+	compass_box.custom_minimum_size = Vector2(440, 28)
+	compass_box.size = Vector2(440, 28)
+	compass_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(compass_box)
 
-	var c_bg := _tex_rect("res://assets/ue/Raw/Art/UI/HUD/T_compass_bg.png", Vector2(440, 28))
+	var c_bg: TextureRect = _tex_rect("res://assets/ue/Raw/Art/UI/HUD/T_compass_bg.png", Vector2(440, 28))
 	if c_bg != null:
 		c_bg.modulate = Color(1, 1, 1, 0.72)
 		compass_box.add_child(c_bg)
-	var c_lines := _tex_rect("res://assets/ue/Raw/Art/UI/HUD/T_compass_lines.png", Vector2(440, 24))
+	var c_lines: TextureRect = _tex_rect("res://assets/ue/Raw/Art/UI/HUD/T_compass_lines.png", Vector2(440, 24))
 	if c_lines != null:
 		c_lines.modulate = Color(1, 1, 1, 0.75)
 		compass_box.add_child(c_lines)
 
 	# Scrolling compass ribbon: clipped strip with a wide cardinal label.
 	ribbon_clip = Control.new()
-	ribbon_clip.position = Vector2(30, 3)
-	ribbon_clip.custom_minimum_size = Vector2(380, 28)
-	ribbon_clip.size = Vector2(380, 28)
+	ribbon_clip.position = Vector2(30, 2)
+	ribbon_clip.custom_minimum_size = Vector2(380, 24)
+	ribbon_clip.size = Vector2(380, 24)
 	ribbon_clip.clip_contents = true
 	ribbon_clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	compass_box.add_child(ribbon_clip)
@@ -98,12 +129,12 @@ func _ready() -> void:
 	ribbon_lbl = Label.new()
 	ribbon_lbl.text = "W   ·   NW   ·   N   ·   NE   ·   E   ·   SE   ·   S   ·   SW   ·   W   ·   NW   ·   N   ·   NE   ·   E"
 	ribbon_lbl.position = Vector2(0, 0)
-	ribbon_lbl.custom_minimum_size = Vector2(1400, 28)
-	ribbon_lbl.size = Vector2(1400, 28)
+	ribbon_lbl.custom_minimum_size = Vector2(1400, 24)
+	ribbon_lbl.size = Vector2(1400, 24)
 	ribbon_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	ribbon_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	ribbon_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	ribbon_lbl.add_theme_font_size_override("font_size", 14)
+	ribbon_lbl.add_theme_font_size_override("font_size", 13)
 	ribbon_lbl.add_theme_color_override("font_color", Color(0.92, 0.88, 0.78))
 	if sans != null:
 		ribbon_lbl.add_theme_font_override("font", sans)
@@ -113,49 +144,70 @@ func _ready() -> void:
 	compass_lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
 	compass_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	compass_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	compass_lbl.add_theme_font_size_override("font_size", 14)
-	compass_lbl.add_theme_color_override("font_color", Color(0.92, 0.88, 0.78))
+	compass_lbl.add_theme_font_size_override("font_size", 13)
+	compass_lbl.add_theme_color_override("font_color", Color(0.95, 0.82, 0.48))
+	compass_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+	compass_lbl.add_theme_constant_override("shadow_offset_x", 1)
+	compass_lbl.add_theme_constant_override("shadow_offset_y", 1)
 	if sans != null:
 		compass_lbl.add_theme_font_override("font", sans)
 	compass_box.add_child(compass_lbl)
 
-	# Top-right Thief Portrait & Frame
-	var port_anchor := Control.new()
+
+func _build_thief_plate(root: Control, sans: Font) -> void:
+	# Top-right thief name + portrait box + level badge.
+	var port_anchor: Control = Control.new()
 	port_anchor.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	port_anchor.position = Vector2(-118, 16)
 	port_anchor.custom_minimum_size = Vector2(96, 96)
 	root.add_child(port_anchor)
 
-	var p_bg := _tex_rect("res://assets/ue/Raw/Art/UI/HUD/portrait/T_portrait_frameBg.png", Vector2(84, 84))
+	var p_bg: TextureRect = _tex_rect("res://assets/ue/Raw/Art/UI/HUD/portrait/T_portrait_frameBg.png", Vector2(84, 84))
 	if p_bg != null:
 		port_anchor.add_child(p_bg)
 
-	var port_path := "res://assets/ue/Raw/Art/UI/Shell/CharacterSelect/T_portrait_spider.png"
+	var port_path: String = "res://assets/ue/Raw/Art/UI/Shell/CharacterSelect/T_portrait_spider.png"
 	if GameState.thief_id == "chameleon" or GameState.thief_id == "moth":
 		port_path = "res://assets/ue/Raw/Art/UI/Shell/CharacterSelect/T_portrait_chameleon.png"
-	var p_img := _tex_rect(port_path, Vector2(76, 76))
+	var p_img: TextureRect = _tex_rect(port_path, Vector2(76, 76))
 	if p_img != null:
 		p_img.position = Vector2(4, 4)
 		if GameState.thief_id == "moth":
 			p_img.modulate = Color(0.75, 0.65, 1.0)
 		port_anchor.add_child(p_img)
 
-	var p_frame := _tex_rect("res://assets/ue/Raw/Art/UI/Components/T_PortraitFrame_noPlayerColor.png", Vector2(84, 84))
+	var p_frame: TextureRect = _tex_rect("res://assets/ue/Raw/Art/UI/Components/T_PortraitFrame_noPlayerColor.png", Vector2(84, 84))
 	if p_frame != null:
 		port_anchor.add_child(p_frame)
 
-	var thief_lbl := Label.new()
-	thief_lbl.text = GameState.thief_id.capitalize()
-	thief_lbl.position = Vector2(-130, 28)
-	thief_lbl.custom_minimum_size = Vector2(120, 24)
-	thief_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	thief_lbl.add_theme_font_size_override("font_size", 15)
-	thief_lbl.add_theme_color_override("font_color", Color(0.85, 0.88, 0.98))
+	_thief_name_lbl = Label.new()
+	_thief_name_lbl.text = str(GameState.thief_id).capitalize()
+	_thief_name_lbl.position = Vector2(-140, 6)
+	_thief_name_lbl.custom_minimum_size = Vector2(130, 22)
+	_thief_name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_thief_name_lbl.add_theme_font_size_override("font_size", 15)
+	_thief_name_lbl.add_theme_color_override("font_color", Color(0.95, 0.82, 0.48))
 	if sans != null:
-		thief_lbl.add_theme_font_override("font", sans)
-	port_anchor.add_child(thief_lbl)
+		_thief_name_lbl.add_theme_font_override("font", sans)
+	port_anchor.add_child(_thief_name_lbl)
 
-	# Top-left Minimal Objective Header
+	var lvl: int = 1
+	var saved_lvl: Variant = SaveSystem.data.get("level", 1)
+	if saved_lvl is float or saved_lvl is int:
+		lvl = int(saved_lvl)
+	_level_badge_lbl = Label.new()
+	_level_badge_lbl.text = "LV %d · %s" % [lvl, str(GameState.difficulty_label()).to_upper()]
+	_level_badge_lbl.position = Vector2(-140, 86)
+	_level_badge_lbl.custom_minimum_size = Vector2(130, 20)
+	_level_badge_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_level_badge_lbl.add_theme_font_size_override("font_size", 12)
+	_level_badge_lbl.add_theme_color_override("font_color", Color(0.55, 0.92, 0.95))
+	if sans != null:
+		_level_badge_lbl.add_theme_font_override("font", sans)
+	port_anchor.add_child(_level_badge_lbl)
+
+
+func _build_objective(root: Control, sans: Font) -> void:
 	obj_lbl = Label.new()
 	obj_lbl.position = Vector2(24, 18)
 	obj_lbl.add_theme_font_size_override("font_size", 15)
@@ -164,13 +216,14 @@ func _ready() -> void:
 		obj_lbl.add_theme_font_override("font", sans)
 	root.add_child(obj_lbl)
 
-	# Center Reticle (crop cell (1,0) white dot from 64x128 2x4 spritesheet) + Interact Prompt
-	var ret_tex := ResourceLoader.load("res://assets/ue/Raw/Art/UI/HUD/Reticles/T_Reticles_Main.png") as Texture2D
+
+func _build_reticle_and_prompt(root: Control, sans: Font) -> void:
+	var ret_tex: Texture2D = ResourceLoader.load("res://assets/ue/Raw/Art/UI/HUD/Reticles/T_Reticles_Main.png") as Texture2D
 	if ret_tex != null:
-		var atlas := AtlasTexture.new()
+		var atlas: AtlasTexture = AtlasTexture.new()
 		atlas.atlas = ret_tex
 		atlas.region = Rect2(32, 0, 32, 32)
-		var ret := TextureRect.new()
+		var ret: TextureRect = TextureRect.new()
 		ret.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		ret.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		ret.texture = atlas
@@ -183,20 +236,38 @@ func _ready() -> void:
 		ret.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		root.add_child(ret)
 
+	# Diegetic center prompt: keycap badge [F]/[E] + uppercase teal/blue label.
+	var prompt_row: HBoxContainer = HBoxContainer.new()
+	prompt_row.set_anchors_preset(Control.PRESET_CENTER)
+	prompt_row.position = Vector2(-180, 26)
+	prompt_row.custom_minimum_size = Vector2(360, 30)
+	prompt_row.size = Vector2(360, 30)
+	prompt_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	prompt_row.add_theme_constant_override("separation", 8)
+	prompt_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(prompt_row)
+	_prompt_keycap = ThemeScript.keycap("[F]", 14)
+	_prompt_keycap.visible = false
+	prompt_row.add_child(_prompt_keycap)
+	_prompt_keycap_lbl = _prompt_keycap.get_child(0) as Label
 	interact_lbl = Label.new()
-	interact_lbl.set_anchors_preset(Control.PRESET_CENTER)
-	interact_lbl.position = Vector2(-180, 26)
-	interact_lbl.custom_minimum_size = Vector2(360, 28)
-	interact_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	interact_lbl.custom_minimum_size = Vector2(300, 28)
+	interact_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	interact_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	interact_lbl.add_theme_font_size_override("font_size", 15)
-	interact_lbl.add_theme_color_override("font_color", Color(1.0, 0.9, 0.55))
+	interact_lbl.add_theme_color_override("font_color", Color(0.55, 0.92, 0.95))
+	interact_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+	interact_lbl.add_theme_constant_override("shadow_offset_x", 1)
+	interact_lbl.add_theme_constant_override("shadow_offset_y", 1)
 	if sans != null:
 		interact_lbl.add_theme_font_override("font", sans)
-	root.add_child(interact_lbl)
+	prompt_row.add_child(interact_lbl)
 
+
+func _build_bottom_left(root: Control) -> void:
 	# Bottom-left Stealth Ball (Light Gem) + Slim Health/Stamina (hidden in peaceful Thieves' Den hub)
 	var is_hub: bool = GameState.active_contract_order <= 1
-	var bl := Control.new()
+	var bl: Control = Control.new()
 	bl.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	bl.position = Vector2(24, -76)
 	bl.visible = not is_hub
@@ -206,7 +277,7 @@ func _ready() -> void:
 	if stealth_gem != null:
 		bl.add_child(stealth_gem)
 
-	var hp_bg := ColorRect.new()
+	var hp_bg: ColorRect = ColorRect.new()
 	hp_bg.position = Vector2(68, 16)
 	hp_bg.size = Vector2(140, 8)
 	hp_bg.color = Color(0.1, 0.1, 0.12, 0.75)
@@ -217,7 +288,7 @@ func _ready() -> void:
 	hp_fill.color = Color(0.76, 0.22, 0.22, 0.9)
 	bl.add_child(hp_fill)
 
-	var st_bg := ColorRect.new()
+	var st_bg: ColorRect = ColorRect.new()
 	st_bg.position = Vector2(68, 30)
 	st_bg.size = Vector2(140, 6)
 	st_bg.color = Color(0.1, 0.1, 0.12, 0.75)
@@ -228,21 +299,12 @@ func _ready() -> void:
 	stam_fill.color = Color(0.32, 0.72, 0.88, 0.9)
 	bl.add_child(stam_fill)
 
-	hotbar_lbl = Label.new()
-	hotbar_lbl.visible = false
-	root.add_child(hotbar_lbl)
-
-	if not is_hub:
-		_build_tool_hotbar(root, sans)
-	_build_result_panel(root)
-	_build_pause_menu(root)
-
 
 func _tex_rect(path: String, min_sz: Vector2) -> TextureRect:
-	var tex := ResourceLoader.load(path) as Texture2D
+	var tex: Texture2D = ResourceLoader.load(path) as Texture2D
 	if tex == null:
 		return null
-	var tr := TextureRect.new()
+	var tr: TextureRect = TextureRect.new()
 	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	tr.texture = tex
@@ -255,10 +317,10 @@ func _tex_rect(path: String, min_sz: Vector2) -> TextureRect:
 
 
 func _tex_rect_full(path: String) -> TextureRect:
-	var tex := ResourceLoader.load(path) as Texture2D
+	var tex: Texture2D = ResourceLoader.load(path) as Texture2D
 	if tex == null:
 		return null
-	var tr := TextureRect.new()
+	var tr: TextureRect = TextureRect.new()
 	tr.texture = tex
 	tr.set_anchors_preset(Control.PRESET_FULL_RECT)
 	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -269,14 +331,14 @@ func _tex_rect_full(path: String) -> TextureRect:
 
 func _build_tool_hotbar(root: Control, sans: Font) -> void:
 	slot_count_lbls.clear()
-	var anchor := Control.new()
+	var anchor: Control = Control.new()
 	anchor.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	anchor.position = Vector2(-320, -140)
 	anchor.custom_minimum_size = Vector2(296, 68)
 	anchor.size = Vector2(296, 68)
 	anchor.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(anchor)
-	var hb := HBoxContainer.new()
+	var hb: HBoxContainer = HBoxContainer.new()
 	hb.position = Vector2(0, 0)
 	hb.custom_minimum_size = Vector2(296, 68)
 	hb.size = Vector2(296, 68)
@@ -289,27 +351,29 @@ func _build_tool_hotbar(root: Control, sans: Font) -> void:
 		"res://assets/ue/Raw/Art/UI/Icons/Icon_Ability_Lockpick.png",
 		"res://assets/ue/Raw/Art/UI/Icons/Rewards/Gear/T_Bomb_Smoke_Wide.png",
 		"res://assets/ue/Raw/Art/UI/Icons/Rewards/Gear/T_PickpocketFairy_Wide.png",
-		"res://assets/ue/Raw/Art/UI/Icons/Rewards/Gear/T_Zipwire_Wide.png",
+		"res://assets/ue/Raw/Art/UI/Rewards/Gear/T_Zipwire_Wide.png",
 	]
+	# Fall back to the pre-existing icon path if the alternate one is missing.
+	icons[3] = "res://assets/ue/Raw/Art/UI/Icons/Rewards/Gear/T_Zipwire_Wide.png"
 	for i: int in range(4):
-		var slot := Control.new()
+		var slot: Control = Control.new()
 		slot.custom_minimum_size = Vector2(68, 68)
 		slot.size = Vector2(68, 68)
 		slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		hb.add_child(slot)
-		var bg := _tex_rect("res://assets/ue/Raw/Art/UI/HUD/T_Ability_Background.png", Vector2(68, 68))
+		var bg: TextureRect = _tex_rect("res://assets/ue/Raw/Art/UI/HUD/T_Ability_Background.png", Vector2(68, 68))
 		if bg != null:
 			bg.position = Vector2(0, 0)
 			slot.add_child(bg)
-		var icon := _tex_rect(icons[i], Vector2(44, 44))
+		var icon: TextureRect = _tex_rect(icons[i], Vector2(44, 44))
 		if icon != null:
 			icon.position = Vector2(12, 8)
 			slot.add_child(icon)
-		var border := _tex_rect("res://assets/ue/Raw/Art/UI/HUD/T_Ability_Border.png", Vector2(68, 68))
+		var border: TextureRect = _tex_rect("res://assets/ue/Raw/Art/UI/HUD/T_Ability_Border.png", Vector2(68, 68))
 		if border != null:
 			border.position = Vector2(0, 0)
 			slot.add_child(border)
-		var key_lbl := Label.new()
+		var key_lbl: Label = Label.new()
 		key_lbl.text = "[%s] %s" % [keys[i], names[i]]
 		key_lbl.position = Vector2(2, 0)
 		key_lbl.custom_minimum_size = Vector2(64, 16)
@@ -320,7 +384,7 @@ func _build_tool_hotbar(root: Control, sans: Font) -> void:
 		if sans != null:
 			key_lbl.add_theme_font_override("font", sans)
 		slot.add_child(key_lbl)
-		var count_lbl := Label.new()
+		var count_lbl: Label = Label.new()
 		count_lbl.text = "0"
 		count_lbl.position = Vector2(38, 46)
 		count_lbl.custom_minimum_size = Vector2(28, 20)
@@ -338,59 +402,119 @@ func _build_tool_hotbar(root: Control, sans: Font) -> void:
 
 
 func _build_result_panel(root: Control) -> void:
-	var cc := CenterContainer.new()
+	var cc: CenterContainer = CenterContainer.new()
 	cc.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.add_child(cc)
 	result_panel = PanelContainer.new()
 	result_panel.visible = false
 	cc.add_child(result_panel)
-	var vb := VBoxContainer.new()
+	var vb: VBoxContainer = VBoxContainer.new()
 	vb.custom_minimum_size = Vector2(520, 0)
 	result_panel.add_child(vb)
 	result_lbl = Label.new()
 	result_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	result_lbl.add_theme_font_size_override("font_size", 20)
 	vb.add_child(result_lbl)
-	var btn := Button.new()
+	var btn: Button = Button.new()
 	btn.text = "Return to Main Menu"
 	btn.pressed.connect(func() -> void: get_tree().change_scene_to_file("res://scenes/main_menu.tscn"))
 	vb.add_child(btn)
 
 
 func _build_pause_menu(root: Control) -> void:
+	_pause_root = Control.new()
+	_pause_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_pause_root.visible = false
+	root.add_child(_pause_root)
+	# Blurred/dimmed full-screen backdrop (dim + teal vignette tint).
+	var dim: ColorRect = ColorRect.new()
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.color = Color(0.004, 0.006, 0.014, 0.72)
+	_pause_root.add_child(dim)
+	var tint: ColorRect = ColorRect.new()
+	tint.set_anchors_preset(Control.PRESET_FULL_RECT)
+	tint.color = Color(0.10, 0.28, 0.30, 0.12)
+	tint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_pause_root.add_child(tint)
+
 	pause_center = CenterContainer.new()
 	pause_center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	pause_center.visible = false
-	root.add_child(pause_center)
+	_pause_root.add_child(pause_center)
 	pause_panel = PanelContainer.new()
+	pause_panel.custom_minimum_size = Vector2(420, 0)
+	pause_panel.add_theme_stylebox_override("panel", ThemeScript.panel_style())
 	pause_center.add_child(pause_panel)
-	var vb := VBoxContainer.new()
+	ThemeScript.add_filigree(pause_panel)
+	var margin: MarginContainer = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 6)
+	margin.add_theme_constant_override("margin_right", 6)
+	margin.add_theme_constant_override("margin_top", 6)
+	margin.add_theme_constant_override("margin_bottom", 6)
+	pause_panel.add_child(margin)
+	var vb: VBoxContainer = VBoxContainer.new()
 	vb.custom_minimum_size = Vector2(360, 0)
 	vb.add_theme_constant_override("separation", 10)
-	pause_panel.add_child(vb)
-	var title := Label.new()
+	margin.add_child(vb)
+	var title: Label = Label.new()
 	title.text = "PAUSED"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 24)
+	title.add_theme_font_size_override("font_size", 28)
+	title.add_theme_color_override("font_color", Color(0.95, 0.80, 0.45))
 	vb.add_child(title)
-	var resume_btn := Button.new()
-	resume_btn.text = "Resume"
+	vb.add_child(ThemeScript.divider())
+	var resume_btn: Button = Button.new()
+	resume_btn.text = "RESUME"
+	ThemeScript.style_button(resume_btn, true)
 	resume_btn.pressed.connect(func() -> void: _set_paused(false))
 	vb.add_child(resume_btn)
-	var restart_btn := Button.new()
-	restart_btn.text = "Restart Contract"
-	restart_btn.pressed.connect(func() -> void:
-		_set_paused(false)
-		get_tree().reload_current_scene()
+	var settings_btn: Button = Button.new()
+	settings_btn.text = "SETTINGS"
+	ThemeScript.style_button(settings_btn, false)
+	settings_btn.pressed.connect(func() -> void:
+		var sui: CanvasLayer = SettingsUIScript.new()
+		add_child(sui)
+		if sui.has_method("open_settings"):
+			sui.call("open_settings")
 	)
-	vb.add_child(restart_btn)
-	var menu_btn := Button.new()
-	menu_btn.text = "Main Menu"
+	vb.add_child(settings_btn)
+	var menu_btn: Button = Button.new()
+	menu_btn.text = "RETURN TO MAIN MENU"
+	ThemeScript.style_button(menu_btn, false)
 	menu_btn.pressed.connect(func() -> void:
 		_set_paused(false)
 		get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
 	)
 	vb.add_child(menu_btn)
+	var quit_btn: Button = Button.new()
+	quit_btn.text = "QUIT TO DESKTOP"
+	ThemeScript.style_button(quit_btn, false)
+	quit_btn.pressed.connect(func() -> void: get_tree().quit())
+	vb.add_child(quit_btn)
+	var esc_row: HBoxContainer = HBoxContainer.new()
+	esc_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	esc_row.add_theme_constant_override("separation", 6)
+	esc_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vb.add_child(esc_row)
+	var esc_badge: PanelContainer = ThemeScript.keycap("[ESC]", 12)
+	esc_row.add_child(esc_badge)
+	var esc_lbl: Label = Label.new()
+	esc_lbl.text = "RESUME"
+	esc_lbl.add_theme_font_size_override("font_size", 12)
+	esc_lbl.add_theme_color_override("font_color", Color(0.65, 0.75, 0.78))
+	esc_row.add_child(esc_lbl)
+	# Bottom-left version string.
+	var ver: Label = Label.new()
+	ver.text = VERSION_STRING
+	ver.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	ver.position = Vector2(16, -30)
+	ver.add_theme_font_size_override("font_size", 12)
+	ver.add_theme_color_override("font_color", Color(0.55, 0.60, 0.65, 0.85))
+	ver.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_pause_root.add_child(ver)
+
+
+func toggle_pause() -> void:
+	_toggle_pause()
 
 
 func _toggle_pause() -> void:
@@ -399,7 +523,9 @@ func _toggle_pause() -> void:
 
 func _set_paused(value: bool) -> void:
 	get_tree().paused = value
-	if pause_center != null:
+	if _pause_root != null:
+		_pause_root.visible = value
+	if pause_center != null and _pause_root == null:
 		pause_center.visible = value
 	if value:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -411,6 +537,45 @@ func set_contract_info(info: Dictionary) -> void:
 	contract_data = info
 
 
+func update_loot(collected: int, needed: int, value: int) -> void:
+	if obj_lbl == null:
+		return
+	var title: String = str(contract_data.get("title", "Contract"))
+	obj_lbl.text = "%s\n%d / %d LOOT (%dg)" % [title, collected, needed, value]
+
+
+func set_steal_prompt(text: String) -> void:
+	_set_prompt(text)
+
+
+func show_toast(text: String) -> void:
+	show_clue_toast("NOTICE", text)
+
+
+func _set_prompt(raw: String) -> void:
+	if interact_lbl == null:
+		return
+	var txt: String = raw.strip_edges()
+	if txt == "":
+		interact_lbl.text = ""
+		if _prompt_keycap != null:
+			_prompt_keycap.visible = false
+		return
+	var key: String = ""
+	var rest: String = txt
+	if txt.begins_with("["):
+		var end: int = txt.find("]")
+		if end > 1:
+			key = txt.substr(1, end - 1).strip_edges()
+			rest = txt.substr(end + 1).strip_edges()
+	if key != "" and _prompt_keycap != null and _prompt_keycap_lbl != null:
+		_prompt_keycap_lbl.text = "[" + key.to_upper() + "]"
+		_prompt_keycap.visible = true
+	elif _prompt_keycap != null:
+		_prompt_keycap.visible = false
+	interact_lbl.text = rest.to_upper()
+
+
 func _process(_delta: float) -> void:
 	if InputMap.has_action("pause") and Input.is_action_just_pressed("pause"):
 		_toggle_pause()
@@ -420,28 +585,31 @@ func _process(_delta: float) -> void:
 		return
 	var title: String = str(contract_data.get("title", "Contract #%d" % GameState.active_contract_order))
 	var item: String = str(contract_data.get("quest_item", "Objective"))
-	var status := "Reach Escape Gate" if GameState.quest_item_acquired else "%s  (%d/%d Loot | %dg)" % [item, GameState.loot_collected, GameState.loot_needed, GameState.loot_value]
+	var status: String = "Reach Escape Gate" if GameState.quest_item_acquired else "%s  (%d/%d Loot | %dg)" % [item, GameState.loot_collected, GameState.loot_needed, GameState.loot_value]
 	obj_lbl.text = "%s\n%s" % [title, status]
 
+	if _thief_name_lbl != null:
+		_thief_name_lbl.text = str(GameState.thief_id).capitalize()
+
 	if stealth_gem != null:
-		var vis := clampf(GameState.player_light_visibility, 0.0, 1.0)
+		var vis: float = clampf(GameState.player_light_visibility, 0.0, 1.0)
 		stealth_gem.modulate = Color(0.22, 0.32, 0.48).lerp(Color(1.0, 0.86, 0.35), vis)
 
-	var p := get_tree().get_first_node_in_group("player") as Node3D
+	var p: Node3D = get_tree().get_first_node_in_group("player") as Node3D
 	if p != null:
-		var deg := fposmod(-p.rotation_degrees.y, 360.0)
+		var deg: float = fposmod(-p.rotation_degrees.y, 360.0)
 		var dirs: Array[String] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
 		compass_lbl.text = dirs[int(round(deg / 45.0)) % 8]
 		if ribbon_lbl != null and ribbon_clip != null:
 			var frac: float = deg / 360.0
 			var max_scroll: float = maxf(0.0, ribbon_lbl.size.x - ribbon_clip.size.x)
 			ribbon_lbl.position.x = -frac * max_scroll
-		var mhp := maxf(1.0, float(p.get("max_health")))
-		var mst := maxf(1.0, float(p.get("max_stamina")))
+		var mhp: float = maxf(1.0, float(p.get("max_health")))
+		var mst: float = maxf(1.0, float(p.get("max_stamina")))
 		hp_fill.size.x = 140.0 * clampf(float(p.get("health")) / mhp, 0.0, 1.0)
 		stam_fill.size.x = 140.0 * clampf(float(p.get("stamina")) / mst, 0.0, 1.0)
 		var ch: Dictionary = p.get("charges")
-		var ab := "Grapple" if GameState.thief_id == "spider" else ("Disguise" if GameState.thief_id == "chameleon" else "Scout")
+		var ab: String = "Grapple" if GameState.thief_id == "spider" else ("Disguise" if GameState.thief_id == "chameleon" else "Scout")
 		hotbar_lbl.text = "[1]Sap:%d  [2]Smoke:%d  [3]Fairy:%d  [G]%s" % [
 			int(ch.get("slithersap", 0)), int(ch.get("smoke_bomb", 0)), int(ch.get("pickpocket_fairy", 0)), ab
 		]
@@ -458,12 +626,12 @@ func _process(_delta: float) -> void:
 		if disguise_vignette != null:
 			disguise_vignette.visible = bool(p.get("disguise_active")) == true
 		if p.has_method("get_look_interact_prompt"):
-			interact_lbl.text = str(p.call("get_look_interact_prompt"))
+			_set_prompt(str(p.call("get_look_interact_prompt")))
 
 
 func show_result(won: bool, score: int, info: Dictionary) -> void:
 	result_panel.visible = true
-	var rating := "GHOST (+25%)" if not GameState.ever_spotted else ("SHADOW (+10%)" if not GameState.ever_chased else "BRAWLER")
+	var rating: String = "GHOST (+25%)" if not GameState.ever_spotted else ("SHADOW (+10%)" if not GameState.ever_chased else "BRAWLER")
 	var outro: String = str(info.get("outro", ""))
 	if outro.length() > 260:
 		outro = outro.substr(0, 260) + "..."

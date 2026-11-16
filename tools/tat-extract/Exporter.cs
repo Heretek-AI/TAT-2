@@ -147,13 +147,17 @@ public sealed class Exporter
     public void Textures()
     {
         var opts = DefaultOpts();
-        ForEach(Packages(p => p.EndsWith(".uasset") && (Path.GetFileName(p).StartsWith("T_") || p.Contains("/Textures/") || p.Contains("/UI/") || p.Contains("Icon"))), "textures", f =>
+        ForEach(Packages(p => (p.EndsWith(".uasset") && (Path.GetFileName(p).StartsWith("T_") || p.Contains("/Textures/") || p.Contains("/UI/") || p.Contains("Icon"))) || (p.EndsWith(".umap") && p.Contains("Landscape"))), "textures", f =>
         {
             var pkg = _p.LoadPackage(f);
+            bool isUmap = f.Path.EndsWith(".umap", StringComparison.OrdinalIgnoreCase);
             foreach (var e in pkg.GetExports())
             {
                 if (e is not UTexture2D tex) continue;
-                var dst = OutPath("assets", f.Path, ".png");
+                var dst = isUmap
+                    ? Path.Combine(Path.ChangeExtension(OutPath("assets", f.Path, ".png"), null), e.Name + ".png")
+                    : OutPath("assets", f.Path, ".png");
+                if (isUmap) Directory.CreateDirectory(Path.GetDirectoryName(dst)!);
                 if (!_o.Overwrite && File.Exists(dst)) { Count("textures", true); continue; }
                 var decoded = TextureDecoder.Decode(tex, opts.TexturePlatform);
                 if (decoded == null) { Count("textures", false, f.Path + ": decode null"); continue; }
@@ -171,10 +175,11 @@ public sealed class Exporter
         var outDir = Path.Combine(_o.Out, "assets");
         Directory.CreateDirectory(outDir);
         var session = new ExportSession { MaxDegreeOfParallelism = _o.Threads };
-        var files = Packages(p => p.EndsWith(".uasset") && (Path.GetFileName(p).StartsWith("SM_") || Path.GetFileName(p).StartsWith("SK_") || Path.GetFileName(p).StartsWith("SKM_") || p.Contains("/Meshes/") || p.Contains("/Mesh/"))).ToList();
+        var files = Packages(p => p.EndsWith(".uasset") && (_o.Filter != null || Path.GetFileName(p).StartsWith("SM_") || Path.GetFileName(p).StartsWith("SK_") || Path.GetFileName(p).StartsWith("SKM_") || Path.GetFileName(p).StartsWith("GB_") || p.Contains("/Meshes/") || p.Contains("/Mesh/") || p.Contains("/Test/LevelKits/") || p.Contains("/GasLamps/") || p.Contains("/Furniture/Tables/") || p.Contains("/Levers/") || p.Contains("/GeneratedMeshes/") || p.Contains("/Developers/"))).ToList();
         Console.Error.WriteLine($"  queuing {files.Count} mesh packages...");
         foreach (var f in files)
         {
+            if (!_o.Overwrite && File.Exists(OutPath("assets", f.Path, ".glb"))) { Count("meshes", true); continue; }
             try
             {
                 var pkg = _p.LoadPackage(f);

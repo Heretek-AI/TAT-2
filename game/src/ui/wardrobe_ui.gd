@@ -1,21 +1,50 @@
 extends CanvasLayer
+class_name WardrobeUI
 ## Wardrobe / Bureau Character Customizer for the Thieves' Den hub.
-## Lets the player pick a thief (Spider / Chameleon / Moth) plus Body outfit,
-## Headgear/Mask and Calling Card parsed from DT_CharacterOutfitsMetadata.json,
-## then persists the choice to GameState + SaveSystem.
+## Workstream 3: 3D full-body thief preview (SubViewport turntable with warm
+## wardrobe lighting), Q/E thief switcher (Spider unlocked / Chameleon locked
+## unless unlocked in SaveSystem), Edit Loadout 4-slot tool bar with large tool
+## preview card, and Head / Body / Calling Card slots parsed from
+## DT_CharacterOutfitsMetadata.json. Persists to GameState + SaveSystem.
+##
+## All mesh paths below were verified to exist on disk. No inferred types are
+## used on Variant / Dictionary values anywhere in this file.
 
 signal closed()
 
 const OUTFITS_JSON_PATH: String = "res://data/generated/tables/Character/Player/DT_CharacterOutfitsMetadata.json"
 
-const PORTRAIT_SPIDER_TASK: String = "res://assets/ue/Content/Art/UI/Portraits/T_portrait_spider.png"
-const PORTRAIT_CHAMELEON_TASK: String = "res://assets/ue/Content/Art/UI/Portraits/T_portrait_chameleon.png"
-const PORTRAIT_MOTH_TASK: String = "res://assets/ue/Content/Art/UI/Portraits/T_portrait_moth.png"
-const PORTRAIT_SPIDER_RAW: String = "res://assets/ue/Raw/Art/UI/Shell/CharacterSelect/T_portrait_spider.png"
-const PORTRAIT_CHAMELEON_RAW: String = "res://assets/ue/Raw/Art/UI/Shell/CharacterSelect/T_portrait_chameleon.png"
+const BODY_BASE_PATH: String = "res://assets/ue/Content/Art/Animation/ThiefNisha/Skin/Base/SK_ThiefNisha__Body.glb"
+const BODY_TARANTULA_PATH: String = "res://assets/ue/Content/Art/Animation/ThiefNisha/Skin/Base/Dyn/SK_ThiefNisha_Dyn__Body_Tarantula.glb"
+const BODY_TARANTULA_B_PATH: String = "res://assets/ue/Content/Art/Animation/ThiefNisha/Skin/Base/Dyn/SK_ThiefNisha_Dyn__Body_Tarantula_PatternB.glb"
+const HEAD_STATIC_PATH: String = "res://assets/ue/Content/Art/Animation/ThiefNisha/Skin/Base/SK_ThiefNisha__Head.glb"
+const DYN_HEAD_DIR: String = "res://assets/ue/Content/Art/Animation/ThiefNisha/Skin/Base/Dyn/"
 
-const THIEF_IDS: Array[String] = ["spider", "chameleon", "moth"]
-const THIEF_LABELS: Array[String] = ["The Spider", "The Chameleon", "The Moth"]
+const CARD_SPIDER: String = "res://assets/ue/Content/Art/Gameplay/CallingCards/Spider/SM_CallingCard_Spider.glb"
+const CARD_SPIDER_SILVER: String = "res://assets/ue/Content/Art/Gameplay/CallingCards/Spider/SM_CallingCard_Spider_Silver.glb"
+const CARD_SPIDER_GOLD: String = "res://assets/ue/Content/Art/Gameplay/CallingCards/Spider/SM_CallingCard_Spider_Gold.glb"
+const CARD_SPIDER_MAGIC: String = "res://assets/ue/Content/Art/Gameplay/CallingCards/Spider/SM_CallingCard_Spider_Magic.glb"
+const CARD_SPIDER_SHIP: String = "res://assets/ue/Content/Art/Gameplay/CallingCards/Ship/SM_CallingCard_Ship_Spider.glb"
+const CARD_CHAMELEON: String = "res://assets/ue/Content/Art/Gameplay/CallingCards/Chameleon/SM_CallingCard_Chameleon.glb"
+const CARD_CHAMELEON_SILVER: String = "res://assets/ue/Content/Art/Gameplay/CallingCards/Chameleon/SM_CallingCard_Chameleon_Silver.glb"
+const CARD_CHAMELEON_GOLD: String = "res://assets/ue/Content/Art/Gameplay/CallingCards/Chameleon/SM_CallingCard_Chameleon_Gold.glb"
+const CARD_CHAMELEON_MAGIC: String = "res://assets/ue/Content/Art/Gameplay/CallingCards/Chameleon/SM_CallingCard_Chameleon_Magic.glb"
+const CARD_CHAMELEON_SHIP: String = "res://assets/ue/Content/Art/Gameplay/CallingCards/Ship/SM_CallingCard_Ship_Chameleon.glb"
+
+const TOOL_ZIPWIRE_MESH: String = "res://assets/ue/Content/Art/Gameplay/Gear/Zipwire/SM_Zipwire.glb"
+const TOOL_SMOKE_MESH: String = "res://assets/ue/Content/Art/Gameplay/Gear/SmokeBomb/SK_SmokeBomb.glb"
+const TOOL_BLACKJACK_MESH: String = "res://assets/ue/Content/Art/Gameplay/Gear/BlackJack/SM_Blackjack.glb"
+const TOOL_SLITHERSAP_MESH: String = "res://assets/ue/Content/Art/Gameplay/Gear/Slithersap/SK_SlimeBomb.glb"
+
+const THIEF_IDS: Array[String] = ["spider", "chameleon"]
+const THIEF_LABELS: Array[String] = ["The Spider", "The Chameleon"]
+
+const TOOLS: Array = [
+	{"id": "zipwire", "name": "Zipwire", "mesh": TOOL_ZIPWIRE_MESH, "desc": "Silent traversal line. Cross gaps and reach high ledges without a sound."},
+	{"id": "smoke_bomb", "name": "Smoke Bomb", "mesh": TOOL_SMOKE_MESH, "desc": "Burst of cover. Break line of sight and vanish mid-hunt."},
+	{"id": "blackjack", "name": "Blackjack", "mesh": TOOL_BLACKJACK_MESH, "desc": "Quiet takedown tool. Drop an isolated guard up close."},
+	{"id": "slithersap", "name": "Slithersap", "mesh": TOOL_SLITHERSAP_MESH, "desc": "Sticky slowing agent. Gums up patrols and devices."},
+]
 
 var _thief_id: String = "spider"
 var _rows: Dictionary = {}
@@ -25,18 +54,32 @@ var _card_keys: Array[String] = []
 var _body: String = ""
 var _head: String = ""
 var _card: String = ""
+var _active_tool: int = 0
 
-var _portrait_rect: TextureRect
+var _yaw: float = 0.6
+var _pitch: float = 0.0
+var _last_drag_msec: int = 0
+var _tool_yaw: float = 0.5
+
+var _thief_name_lbl: Label
+var _thief_lock_lbl: Label
+var _hint_lbl: Label
 var _body_opt: OptionButton
 var _head_opt: OptionButton
 var _card_opt: OptionButton
 var _desc_lbl: Label
-var _thief_btns: Array[Button] = []
+var _tool_btns: Array[Button] = []
+var _tool_name_lbl: Label
+var _tool_desc_lbl: Label
+
+var _turntable: Node3D
+var _tool_holder: Node3D
 
 
 func _ready() -> void:
 	layer = 20
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	_last_drag_msec = Time.get_ticks_msec()
 	_thief_id = str(GameState.thief_id) if str(GameState.thief_id) != "" else "spider"
 	if not THIEF_IDS.has(_thief_id):
 		_thief_id = "spider"
@@ -58,6 +101,19 @@ func close_customizer() -> void:
 	_apply_and_close(true)
 
 
+func _process(delta: float) -> void:
+	if not visible:
+		return
+	if _turntable != null and is_instance_valid(_turntable):
+		var now: int = Time.get_ticks_msec()
+		if now - _last_drag_msec > 3000:
+			_yaw += delta * 0.35
+		_turntable.rotation = Vector3(_pitch, _yaw, 0.0)
+	if _tool_holder != null and is_instance_valid(_tool_holder):
+		_tool_yaw += delta * 0.5
+		_tool_holder.rotation = Vector3(0.0, _tool_yaw, 0.0)
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if not visible:
 		return
@@ -67,8 +123,19 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event is InputEventKey:
 		var kev: InputEventKey = event as InputEventKey
-		if kev.pressed and not kev.echo and kev.keycode == KEY_ESCAPE:
+		if not kev.pressed or kev.echo:
+			return
+		if kev.keycode == KEY_ESCAPE:
 			_apply_and_close(true)
+			get_viewport().set_input_as_handled()
+		elif kev.keycode == KEY_Q:
+			_cycle_thief(-1)
+			get_viewport().set_input_as_handled()
+		elif kev.keycode == KEY_E:
+			_cycle_thief(1)
+			get_viewport().set_input_as_handled()
+		elif kev.keycode >= KEY_1 and kev.keycode <= KEY_4:
+			_on_tool_selected(int(kev.keycode - KEY_1))
 			get_viewport().set_input_as_handled()
 
 
@@ -78,73 +145,171 @@ func _build_ui() -> void:
 	add_child(root)
 	var dim: ColorRect = ColorRect.new()
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	dim.color = Color(0.01, 0.01, 0.03, 0.82)
+	dim.color = Color(0.01, 0.01, 0.03, 0.86)
 	root.add_child(dim)
-	var center: CenterContainer = CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	root.add_child(center)
-	var panel: PanelContainer = PanelContainer.new()
-	panel.custom_minimum_size = Vector2(860, 560)
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.04, 0.045, 0.08, 0.97)
-	style.border_color = Color(0.55, 0.45, 0.25, 0.9)
-	style.set_border_width_all(2)
-	style.set_content_margin_all(20)
-	panel.add_theme_stylebox_override("panel", style)
-	center.add_child(panel)
+	var margin: MarginContainer = MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", 24)
+	margin.add_theme_constant_override("margin_top", 16)
+	margin.add_theme_constant_override("margin_right", 24)
+	margin.add_theme_constant_override("margin_bottom", 16)
+	root.add_child(margin)
 	var vb: VBoxContainer = VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 12)
-	panel.add_child(vb)
-	var title: Label = Label.new()
-	title.text = "BUREAU — CHARACTER CUSTOMIZER"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 26)
-	title.add_theme_color_override("font_color", Color(0.95, 0.82, 0.48))
-	vb.add_child(title)
-
+	vb.add_theme_constant_override("separation", 10)
+	margin.add_child(vb)
+	vb.add_child(_build_top_bar())
 	var main: HBoxContainer = HBoxContainer.new()
-	main.add_theme_constant_override("separation", 24)
+	main.add_theme_constant_override("separation", 16)
 	main.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vb.add_child(main)
+	main.add_child(_build_left_panel())
+	main.add_child(_build_right_panel())
 
+
+func _build_top_bar() -> PanelContainer:
+	var bar: PanelContainer = PanelContainer.new()
+	bar.add_theme_stylebox_override("panel", _panel_style(Color(0.05, 0.05, 0.09, 0.97)))
+	var hb: HBoxContainer = HBoxContainer.new()
+	hb.add_theme_constant_override("separation", 12)
+	hb.alignment = BoxContainer.ALIGNMENT_CENTER
+	bar.add_child(hb)
+	var q_btn: Button = Button.new()
+	q_btn.text = "< Q"
+	q_btn.custom_minimum_size = Vector2(72, 44)
+	q_btn.pressed.connect(_cycle_thief.bind(-1))
+	hb.add_child(q_btn)
+	var name_vb: VBoxContainer = VBoxContainer.new()
+	name_vb.custom_minimum_size = Vector2(420, 0)
+	name_vb.alignment = BoxContainer.ALIGNMENT_CENTER
+	hb.add_child(name_vb)
+	_thief_name_lbl = Label.new()
+	_thief_name_lbl.text = "THE SPIDER"
+	_thief_name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_thief_name_lbl.add_theme_font_size_override("font_size", 26)
+	_thief_name_lbl.add_theme_color_override("font_color", Color(0.95, 0.82, 0.48))
+	name_vb.add_child(_thief_name_lbl)
+	_thief_lock_lbl = Label.new()
+	_thief_lock_lbl.text = ""
+	_thief_lock_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_thief_lock_lbl.add_theme_font_size_override("font_size", 14)
+	_thief_lock_lbl.add_theme_color_override("font_color", Color(0.75, 0.72, 0.65))
+	name_vb.add_child(_thief_lock_lbl)
+	var e_btn: Button = Button.new()
+	e_btn.text = "E >"
+	e_btn.custom_minimum_size = Vector2(72, 44)
+	e_btn.pressed.connect(_cycle_thief.bind(1))
+	hb.add_child(e_btn)
+	var spacer: Control = Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hb.add_child(spacer)
+	var back_btn: Button = Button.new()
+	back_btn.text = "< BACK [ESC]"
+	back_btn.custom_minimum_size = Vector2(170, 44)
+	back_btn.pressed.connect(func() -> void: _apply_and_close(true))
+	hb.add_child(back_btn)
+	return bar
+
+
+func _build_left_panel() -> VBoxContainer:
 	var left: VBoxContainer = VBoxContainer.new()
-	left.custom_minimum_size = Vector2(260, 0)
+	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	left.add_theme_constant_override("separation", 8)
-	main.add_child(left)
-	var thief_hdr: Label = Label.new()
-	thief_hdr.text = "THIEF"
-	thief_hdr.add_theme_font_size_override("font_size", 18)
-	left.add_child(thief_hdr)
-	for i: int in range(THIEF_IDS.size()):
+	var prev_hdr: Label = Label.new()
+	prev_hdr.text = "FULL-BODY PREVIEW - drag to rotate"
+	prev_hdr.add_theme_font_size_override("font_size", 15)
+	prev_hdr.add_theme_color_override("font_color", Color(0.85, 0.78, 0.58))
+	left.add_child(prev_hdr)
+	var svc: SubViewportContainer = SubViewportContainer.new()
+	svc.stretch = true
+	svc.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	svc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	svc.custom_minimum_size = Vector2(480, 380)
+	svc.mouse_filter = Control.MOUSE_FILTER_STOP
+	left.add_child(svc)
+	var sv: SubViewport = SubViewport.new()
+	sv.own_world_3d = true
+	sv.transparent_bg = false
+	sv.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	svc.add_child(sv)
+	_setup_preview_world(sv)
+	svc.gui_input.connect(_on_preview_gui_input)
+	var load_hdr: Label = Label.new()
+	load_hdr.text = "EDIT LOADOUT"
+	load_hdr.add_theme_font_size_override("font_size", 16)
+	load_hdr.add_theme_color_override("font_color", Color(0.95, 0.82, 0.48))
+	left.add_child(load_hdr)
+	var toolbar: HBoxContainer = HBoxContainer.new()
+	toolbar.add_theme_constant_override("separation", 8)
+	left.add_child(toolbar)
+	_tool_btns.clear()
+	for i: int in range(TOOLS.size()):
+		var entry_var: Variant = TOOLS[i]
+		var entry: Dictionary = entry_var as Dictionary
 		var b: Button = Button.new()
-		b.text = THIEF_LABELS[i]
+		b.text = "[" + str(i + 1) + "] " + str(entry.get("name", "?"))
 		b.toggle_mode = true
-		var thief_key: String = THIEF_IDS[i]
-		b.pressed.connect(_on_thief_button.bind(thief_key))
-		left.add_child(b)
-		_thief_btns.append(b)
-	_portrait_rect = TextureRect.new()
-	_portrait_rect.custom_minimum_size = Vector2(200, 200)
-	_portrait_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_portrait_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	left.add_child(_portrait_rect)
+		b.custom_minimum_size = Vector2(120, 40)
+		b.pressed.connect(_on_tool_selected.bind(i))
+		toolbar.add_child(b)
+		_tool_btns.append(b)
+	var card: PanelContainer = PanelContainer.new()
+	card.add_theme_stylebox_override("panel", _panel_style(Color(0.06, 0.055, 0.09, 0.97)))
+	left.add_child(card)
+	var card_hb: HBoxContainer = HBoxContainer.new()
+	card_hb.add_theme_constant_override("separation", 12)
+	card.add_child(card_hb)
+	var tool_svc: SubViewportContainer = SubViewportContainer.new()
+	tool_svc.stretch = true
+	tool_svc.custom_minimum_size = Vector2(220, 170)
+	tool_svc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card_hb.add_child(tool_svc)
+	var tool_sv: SubViewport = SubViewport.new()
+	tool_sv.own_world_3d = true
+	tool_sv.transparent_bg = false
+	tool_sv.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	tool_svc.add_child(tool_sv)
+	_setup_tool_world(tool_sv)
+	var tool_vb: VBoxContainer = VBoxContainer.new()
+	tool_vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tool_vb.add_theme_constant_override("separation", 6)
+	card_hb.add_child(tool_vb)
+	_tool_name_lbl = Label.new()
+	_tool_name_lbl.text = "Zipwire"
+	_tool_name_lbl.add_theme_font_size_override("font_size", 20)
+	_tool_name_lbl.add_theme_color_override("font_color", Color(0.95, 0.85, 0.55))
+	tool_vb.add_child(_tool_name_lbl)
+	_tool_desc_lbl = Label.new()
+	_tool_desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_tool_desc_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_tool_desc_lbl.add_theme_font_size_override("font_size", 14)
+	_tool_desc_lbl.add_theme_color_override("font_color", Color(0.82, 0.80, 0.72))
+	tool_vb.add_child(_tool_desc_lbl)
+	return left
 
+
+func _build_right_panel() -> VBoxContainer:
 	var right: VBoxContainer = VBoxContainer.new()
-	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	right.custom_minimum_size = Vector2(300, 0)
+	right.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	right.add_theme_constant_override("separation", 8)
-	main.add_child(right)
-	var body_hdr: Label = Label.new()
-	body_hdr.text = "BODY OUTFIT"
-	right.add_child(body_hdr)
-	_body_opt = OptionButton.new()
-	_body_opt.item_selected.connect(_on_body_selected)
-	right.add_child(_body_opt)
+	var cust_hdr: Label = Label.new()
+	cust_hdr.text = "DISGUISE"
+	cust_hdr.add_theme_font_size_override("font_size", 20)
+	cust_hdr.add_theme_color_override("font_color", Color(0.95, 0.82, 0.48))
+	right.add_child(cust_hdr)
 	var head_hdr: Label = Label.new()
-	head_hdr.text = "HEADGEAR / MASK"
+	head_hdr.text = "HEAD"
 	right.add_child(head_hdr)
 	_head_opt = OptionButton.new()
 	_head_opt.item_selected.connect(_on_head_selected)
 	right.add_child(_head_opt)
+	var body_hdr: Label = Label.new()
+	body_hdr.text = "BODY"
+	right.add_child(body_hdr)
+	_body_opt = OptionButton.new()
+	_body_opt.item_selected.connect(_on_body_selected)
+	right.add_child(_body_opt)
 	var card_hdr: Label = Label.new()
 	card_hdr.text = "CALLING CARD"
 	right.add_child(card_hdr)
@@ -154,55 +319,238 @@ func _build_ui() -> void:
 	_desc_lbl = Label.new()
 	_desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_desc_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_desc_lbl.add_theme_font_size_override("font_size", 15)
+	_desc_lbl.add_theme_font_size_override("font_size", 14)
 	_desc_lbl.add_theme_color_override("font_color", Color(0.82, 0.80, 0.72))
 	right.add_child(_desc_lbl)
-
-	var bottom: HBoxContainer = HBoxContainer.new()
-	bottom.alignment = BoxContainer.ALIGNMENT_END
-	bottom.add_theme_constant_override("separation", 12)
-	vb.add_child(bottom)
+	_hint_lbl = Label.new()
+	_hint_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_hint_lbl.add_theme_font_size_override("font_size", 14)
+	_hint_lbl.add_theme_color_override("font_color", Color(1.0, 0.6, 0.45))
+	right.add_child(_hint_lbl)
 	var apply_btn: Button = Button.new()
 	apply_btn.text = "APPLY"
 	apply_btn.custom_minimum_size = Vector2(160, 44)
 	apply_btn.pressed.connect(func() -> void: _apply_and_close(true))
-	bottom.add_child(apply_btn)
-	var close_btn: Button = Button.new()
-	close_btn.text = "CLOSE [ESC]"
-	close_btn.custom_minimum_size = Vector2(160, 44)
-	close_btn.pressed.connect(func() -> void: _apply_and_close(true))
-	bottom.add_child(close_btn)
+	right.add_child(apply_btn)
+	return right
 
 
-func _on_thief_button(thief_key: String) -> void:
-	_thief_id = thief_key
+func _panel_style(bg: Color) -> StyleBoxFlat:
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = bg
+	style.border_color = Color(0.55, 0.45, 0.25, 0.9)
+	style.set_border_width_all(2)
+	style.set_content_margin_all(12)
+	return style
+
+
+func _setup_preview_world(sv: SubViewport) -> void:
+	var env: Environment = Environment.new()
+	env.background_mode = Environment.BG_COLOR
+	env.background_color = Color(0.055, 0.045, 0.06)
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.ambient_light_color = Color(0.5, 0.4, 0.3)
+	env.ambient_light_energy = 0.75
+	var world_env: WorldEnvironment = WorldEnvironment.new()
+	world_env.environment = env
+	sv.add_child(world_env)
+	var key: DirectionalLight3D = DirectionalLight3D.new()
+	key.light_color = Color(1.0, 0.9, 0.78)
+	key.light_energy = 1.15
+	key.shadow_enabled = true
+	key.rotation_degrees = Vector3(-42.0, -28.0, 0.0)
+	sv.add_child(key)
+	var fill: OmniLight3D = OmniLight3D.new()
+	fill.light_color = Color(1.0, 0.72, 0.45)
+	fill.light_energy = 0.9
+	fill.position = Vector3(-2.0, 2.2, 2.6)
+	sv.add_child(fill)
+	var rim: DirectionalLight3D = DirectionalLight3D.new()
+	rim.light_color = Color(0.55, 0.62, 0.9)
+	rim.light_energy = 0.45
+	rim.rotation_degrees = Vector3(-18.0, 150.0, 0.0)
+	sv.add_child(rim)
+	var floor_mi: MeshInstance3D = MeshInstance3D.new()
+	var plane: PlaneMesh = PlaneMesh.new()
+	plane.size = Vector2(9.0, 9.0)
+	floor_mi.mesh = plane
+	var mat: StandardMaterial3D = StandardMaterial3D.new()
+	mat.albedo_color = Color(0.1, 0.075, 0.08)
+	mat.roughness = 0.92
+	floor_mi.material_override = mat
+	sv.add_child(floor_mi)
+	_turntable = Node3D.new()
+	_turntable.name = "Turntable"
+	_turntable.rotation = Vector3(_pitch, _yaw, 0.0)
+	sv.add_child(_turntable)
+	var cam: Camera3D = Camera3D.new()
+	cam.position = Vector3(0.0, 1.35, 3.4)
+	cam.fov = 40.0
+	cam.current = true
+	sv.add_child(cam)
+	cam.look_at(Vector3(0.0, 0.95, 0.0))
+
+
+func _setup_tool_world(sv: SubViewport) -> void:
+	var env: Environment = Environment.new()
+	env.background_mode = Environment.BG_COLOR
+	env.background_color = Color(0.06, 0.05, 0.07)
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.ambient_light_color = Color(0.5, 0.4, 0.3)
+	env.ambient_light_energy = 0.8
+	var world_env: WorldEnvironment = WorldEnvironment.new()
+	world_env.environment = env
+	sv.add_child(world_env)
+	var key: DirectionalLight3D = DirectionalLight3D.new()
+	key.light_color = Color(1.0, 0.9, 0.78)
+	key.light_energy = 1.2
+	key.rotation_degrees = Vector3(-35.0, -25.0, 0.0)
+	sv.add_child(key)
+	var fill: OmniLight3D = OmniLight3D.new()
+	fill.light_color = Color(1.0, 0.72, 0.45)
+	fill.light_energy = 0.8
+	fill.position = Vector3(-1.2, 1.4, 1.6)
+	sv.add_child(fill)
+	_tool_holder = Node3D.new()
+	_tool_holder.name = "ToolHolder"
+	sv.add_child(_tool_holder)
+	var cam: Camera3D = Camera3D.new()
+	cam.position = Vector3(0.0, 0.4, 1.7)
+	cam.fov = 38.0
+	cam.current = true
+	sv.add_child(cam)
+	cam.look_at(Vector3(0.0, 0.25, 0.0))
+
+
+func _on_preview_gui_input(event: InputEvent) -> void:
+	if _turntable == null or not is_instance_valid(_turntable):
+		return
+	if event is InputEventMouseMotion:
+		var mm: InputEventMouseMotion = event as InputEventMouseMotion
+		var mask: int = int(mm.button_mask)
+		if (mask & MOUSE_BUTTON_MASK_LEFT) != 0 or (mask & MOUSE_BUTTON_MASK_MIDDLE) != 0:
+			_yaw += mm.relative.x * 0.012
+			_pitch = clampf(_pitch - mm.relative.y * 0.008, -0.45, 0.45)
+			_last_drag_msec = Time.get_ticks_msec()
+	elif event is InputEventScreenDrag:
+		var drag: InputEventScreenDrag = event as InputEventScreenDrag
+		_yaw += drag.relative.x * 0.012
+		_pitch = clampf(_pitch - drag.relative.y * 0.008, -0.45, 0.45)
+		_last_drag_msec = Time.get_ticks_msec()
+
+
+func _cycle_thief(dir: int) -> void:
+	var idx: int = THIEF_IDS.find(_thief_id)
+	if idx < 0:
+		idx = 0
+	var next: int = (idx + dir + THIEF_IDS.size()) % THIEF_IDS.size()
+	var target: String = THIEF_IDS[next]
+	if not _is_thief_unlocked(target):
+		_set_hint("The Chameleon is locked. Finish a contract to earn this disguise.")
+		return
+	_thief_id = target
+	_set_hint("")
 	_refresh_thief_ui()
+
+
+func _is_thief_unlocked(thief: String) -> bool:
+	if thief == "spider":
+		return true
+	var data: Dictionary = SaveSystem.data
+	var unlocked_var: Variant = data.get("unlocked_thieves", [])
+	if unlocked_var is Array:
+		var unlocked: Array = unlocked_var as Array
+		if unlocked.has(thief):
+			return true
+	var flag_var: Variant = data.get("chameleon_unlocked", false)
+	if flag_var is bool and bool(flag_var):
+		return true
+	var completed_var: Variant = data.get("completed_contracts", {})
+	if completed_var is Dictionary:
+		var completed: Dictionary = completed_var as Dictionary
+		if not completed.is_empty():
+			return true
+	return false
+
+
+func _set_hint(text: String) -> void:
+	if _hint_lbl != null:
+		_hint_lbl.text = text
+
+
+func _on_tool_selected(idx: int) -> void:
+	if idx < 0 or idx >= TOOLS.size():
+		return
+	_active_tool = idx
+	_refresh_tool_ui()
+
+
+func _refresh_tool_ui() -> void:
+	for i: int in range(_tool_btns.size()):
+		var b: Button = _tool_btns[i]
+		b.button_pressed = (i == _active_tool)
+	if _tool_holder != null and is_instance_valid(_tool_holder):
+		for c: Node in _tool_holder.get_children():
+			_tool_holder.remove_child(c)
+			c.queue_free()
+		var entry_var: Variant = TOOLS[_active_tool]
+		var entry: Dictionary = entry_var as Dictionary
+		var mesh_path: String = str(entry.get("mesh", ""))
+		var node: Node = _load_model(mesh_path)
+		if node != null:
+			_tool_holder.add_child(node)
+	var entry_var2: Variant = TOOLS[_active_tool]
+	var entry2: Dictionary = entry_var2 as Dictionary
+	if _tool_name_lbl != null:
+		_tool_name_lbl.text = str(entry2.get("name", "Tool"))
+	if _tool_desc_lbl != null:
+		var lock_note: String = ""
+		if not _is_tool_unlocked(str(entry2.get("id", ""))):
+			lock_note = "\n[Locked - preview only]"
+		_tool_desc_lbl.text = str(entry2.get("desc", "")) + lock_note
+
+
+func _is_tool_unlocked(tool_id: String) -> bool:
+	var data: Dictionary = SaveSystem.data
+	var unlocked_var: Variant = data.get("unlocked_tools", [])
+	if unlocked_var is Array:
+		var unlocked: Array = unlocked_var as Array
+		return unlocked.has(tool_id)
+	return false
 
 
 func _on_body_selected(idx: int) -> void:
 	if idx >= 0 and idx < _body_keys.size():
 		_body = _body_keys[idx]
 		_update_desc()
+		_rebuild_figure()
 
 
 func _on_head_selected(idx: int) -> void:
 	if idx >= 0 and idx < _head_keys.size():
 		_head = _head_keys[idx]
 		_update_desc()
+		_rebuild_figure()
 
 
 func _on_card_selected(idx: int) -> void:
 	if idx >= 0 and idx < _card_keys.size():
 		_card = _card_keys[idx]
 		_update_desc()
+		_rebuild_figure()
 
 
 func _refresh_thief_ui() -> void:
-	for i: int in range(_thief_btns.size()):
-		_thief_btns[i].button_pressed = (THIEF_IDS[i] == _thief_id)
-	var tex: Texture2D = _portrait_for(_thief_id)
-	if tex != null and _portrait_rect != null:
-		_portrait_rect.texture = tex
+	var label_idx: int = THIEF_IDS.find(_thief_id)
+	if label_idx < 0:
+		label_idx = 0
+	if _thief_name_lbl != null:
+		_thief_name_lbl.text = THIEF_LABELS[label_idx].to_upper()
+	if _thief_lock_lbl != null:
+		if _thief_id == "chameleon":
+			_thief_lock_lbl.text = "Q / E to switch thief - Chameleon contracts pay a disguise bonus"
+		else:
+			_thief_lock_lbl.text = "Q / E to switch thief"
 	_collect_slots()
 	_fill_option(_body_opt, _body_keys, _body)
 	_fill_option(_head_opt, _head_keys, _head)
@@ -214,6 +562,127 @@ func _refresh_thief_ui() -> void:
 	if not _card_keys.is_empty() and not _card_keys.has(_card):
 		_card = _card_keys[0]
 	_update_desc()
+	_rebuild_figure()
+	_refresh_tool_ui()
+
+
+func _rebuild_figure() -> void:
+	if _turntable == null or not is_instance_valid(_turntable):
+		return
+	for c: Node in _turntable.get_children():
+		_turntable.remove_child(c)
+		c.queue_free()
+	var body_path: String = _resolve_body_path(_body)
+	var body_node: Node = _load_model(body_path)
+	if body_node != null:
+		_turntable.add_child(body_node)
+	var head_path: String = _resolve_head_path(_head)
+	if head_path != "":
+		var head_node: Node = _load_model(head_path)
+		if head_node != null:
+			_turntable.add_child(head_node)
+	var card_path: String = _resolve_card_path(_card, _thief_id)
+	if card_path != "":
+		var card_node: Node = _load_model(card_path)
+		if card_node != null:
+			var prop: Node3D = card_node as Node3D
+			if prop != null:
+				prop.position = Vector3(0.55, 1.05, 0.25)
+				prop.scale = Vector3(0.6, 0.6, 0.6)
+			_turntable.add_child(card_node)
+
+
+func _load_model(path: String) -> Node:
+	if path == "":
+		return null
+	if not ResourceLoader.exists(path):
+		return null
+	var res: Resource = ResourceLoader.load(path)
+	if res is PackedScene:
+		var scene: PackedScene = res as PackedScene
+		var node: Node = scene.instantiate()
+		return node
+	return null
+
+
+func _resolve_body_path(outfit_key: String) -> String:
+	var lowered: String = outfit_key.to_lower()
+	if "patternb" in lowered and ResourceLoader.exists(BODY_TARANTULA_B_PATH):
+		return BODY_TARANTULA_B_PATH
+	if "alta" in lowered and ResourceLoader.exists(BODY_TARANTULA_PATH):
+		return BODY_TARANTULA_PATH
+	return BODY_BASE_PATH
+
+
+func _resolve_head_path(outfit_key: String) -> String:
+	var lowered: String = outfit_key.to_lower()
+	var candidates: Array[String] = []
+	if "thiefmaska" in lowered and "mustachea" in lowered:
+		candidates.append("SK_ThiefNisha_Dyn__Head_ThiefMaskA_MustacheA.glb")
+	if "thiefmaska" in lowered:
+		candidates.append("SK_ThiefNisha_Dyn__Head_ThiefMaskA.glb")
+	if "bowlera" in lowered and "mustachea" in lowered:
+		candidates.append("SK_ThiefNisha_Dyn__Head_BowlerA_MustacheA.glb")
+	if "bowlera" in lowered:
+		candidates.append("SK_ThiefNisha_Dyn__Head_BowlerA.glb")
+	if "tophat" in lowered and "monocle" in lowered and "beard" in lowered:
+		candidates.append("SK_ThiefNisha_Dyn__Head_TopHatA_MonocleA_BeardA.glb")
+	if "tophat" in lowered and "mustache" in lowered:
+		candidates.append("SK_ThiefNisha_Dyn__Head_TopHatA_MustacheA.glb")
+	if "tophat" in lowered:
+		candidates.append("SK_ThiefNisha_Dyn__Head_TopHatA.glb")
+	if "chignon" in lowered and "thiefmask" in lowered:
+		candidates.append("SK_ThiefNisha_Dyn__Head_Hair_Chignon_ThiefMaskA.glb")
+	if "chignon" in lowered:
+		candidates.append("SK_ThiefNisha_Dyn__Head_Hair_Chignon.glb")
+	if "bob" in lowered and "eyepatch" in lowered:
+		candidates.append("SK_ThiefNisha_Dyn__Head_Hair_Bob_EyePatchA.glb")
+	if "bob" in lowered or "hairb" in lowered:
+		candidates.append("SK_ThiefNisha_Dyn__Head_Hair_Bob.glb")
+	if "eyepatch" in lowered or "eyepatcha" in lowered:
+		candidates.append("SK_ThiefNisha_Dyn__Head_EyePatchA.glb")
+	if "glasses" in lowered:
+		candidates.append("SK_ThiefNisha_Dyn__Head_GlassesA.glb")
+	if "monocle" in lowered:
+		candidates.append("SK_ThiefNisha_Dyn__Head_MonocleA.glb")
+	if "beard" in lowered:
+		candidates.append("SK_ThiefNisha_Dyn__Head_BeardA.glb")
+	if "mustache" in lowered:
+		candidates.append("SK_ThiefNisha_Dyn__Head_MustacheA.glb")
+	if "nocap" in lowered or "capa" in lowered:
+		candidates.append("SK_ThiefNisha_Dyn__Head_NoCap.glb")
+	candidates.append("SK_ThiefNisha_Dyn__Head.glb")
+	for f: String in candidates:
+		var full: String = DYN_HEAD_DIR + f
+		if ResourceLoader.exists(full):
+			return full
+	if ResourceLoader.exists(HEAD_STATIC_PATH):
+		return HEAD_STATIC_PATH
+	return ""
+
+
+func _resolve_card_path(outfit_key: String, thief: String) -> String:
+	var lowered: String = outfit_key.to_lower()
+	var use_chameleon: bool = thief == "chameleon"
+	var base: String = CARD_CHAMELEON if use_chameleon else CARD_SPIDER
+	var silver: String = CARD_CHAMELEON_SILVER if use_chameleon else CARD_SPIDER_SILVER
+	var gold: String = CARD_CHAMELEON_GOLD if use_chameleon else CARD_SPIDER_GOLD
+	var magic: String = CARD_CHAMELEON_MAGIC if use_chameleon else CARD_SPIDER_MAGIC
+	var ship: String = CARD_CHAMELEON_SHIP if use_chameleon else CARD_SPIDER_SHIP
+	var chosen: String = base
+	if "modelship" in lowered or "ship" in lowered:
+		chosen = ship
+	elif "gold" in lowered:
+		chosen = gold
+	elif "magic" in lowered:
+		chosen = magic
+	elif "silver" in lowered:
+		chosen = silver
+	if ResourceLoader.exists(chosen):
+		return chosen
+	if ResourceLoader.exists(base):
+		return base
+	return ""
 
 
 func _fill_option(opt: OptionButton, keys: Array[String], current: String) -> void:
@@ -248,22 +717,6 @@ func _update_desc() -> void:
 	_desc_lbl.text = "\n".join(lines)
 
 
-func _portrait_for(thief: String) -> Texture2D:
-	var candidates: Array[String] = []
-	if thief == "spider":
-		candidates = [PORTRAIT_SPIDER_TASK, PORTRAIT_SPIDER_RAW]
-	elif thief == "chameleon":
-		candidates = [PORTRAIT_CHAMELEON_TASK, PORTRAIT_CHAMELEON_RAW]
-	else:
-		candidates = [PORTRAIT_MOTH_TASK, PORTRAIT_SPIDER_TASK, PORTRAIT_SPIDER_RAW]
-	for p: String in candidates:
-		if ResourceLoader.exists(p):
-			var t: Texture2D = ResourceLoader.load(p) as Texture2D
-			if t != null:
-				return t
-	return null
-
-
 func _load_outfit_rows() -> Dictionary:
 	var result: Dictionary = {}
 	if not FileAccess.file_exists(OUTFITS_JSON_PATH):
@@ -296,18 +749,6 @@ func _collect_slots() -> void:
 			_head_keys.append(key)
 		elif slot == "CallingCard":
 			_card_keys.append(key)
-	if _body_keys.is_empty() and _head_keys.is_empty() and _card_keys.is_empty() and _thief_id == "moth":
-		for key_var: Variant in _rows.keys():
-			var key: String = str(key_var)
-			if not _key_matches_thief(key, "Spider"):
-				continue
-			var slot: String = _slot_of(key)
-			if slot == "Body":
-				_body_keys.append(key)
-			elif slot == "Head":
-				_head_keys.append(key)
-			elif slot == "CallingCard":
-				_card_keys.append(key)
 	_body_keys.sort()
 	_head_keys.sort()
 	_card_keys.sort()
@@ -369,7 +810,8 @@ func _display_desc(key: String) -> String:
 
 
 func _load_saved_loadout() -> void:
-	var data_var: Variant = SaveSystem.data.get("loadout", {})
+	var data: Dictionary = SaveSystem.data
+	var data_var: Variant = data.get("loadout", {})
 	if data_var is Dictionary:
 		var loadout: Dictionary = data_var as Dictionary
 		var saved_thief: String = str(loadout.get("thief_id", _thief_id))
@@ -378,15 +820,24 @@ func _load_saved_loadout() -> void:
 		_body = str(loadout.get("body", ""))
 		_head = str(loadout.get("head", ""))
 		_card = str(loadout.get("calling_card", ""))
+		var tool_var: Variant = loadout.get("active_tool", 0)
+		_active_tool = clampi(int(tool_var), 0, TOOLS.size() - 1)
 
 
 func _apply_and_close(should_emit: bool) -> void:
 	GameState.thief_id = _thief_id
+	GameState.outfit_body = _short_name(_body)
+	GameState.outfit_head = _short_name(_head)
+	GameState.calling_card = _short_name(_card)
+	var entry_var: Variant = TOOLS[_active_tool]
+	var entry: Dictionary = entry_var as Dictionary
 	var loadout: Dictionary = {
 		"thief_id": _thief_id,
 		"body": _body,
 		"head": _head,
 		"calling_card": _card,
+		"active_tool": _active_tool,
+		"active_tool_id": str(entry.get("id", "zipwire")),
 	}
 	SaveSystem.data["loadout"] = loadout
 	_set_game_state_if_present("loadout_body", _body)
@@ -400,6 +851,15 @@ func _apply_and_close(should_emit: bool) -> void:
 		closed.emit()
 	visible = false
 	queue_free()
+
+
+func _short_name(key: String) -> String:
+	if key == "":
+		return "Default"
+	var parts: PackedStringArray = key.split(".")
+	if parts.is_empty():
+		return key
+	return str(parts[parts.size() - 1])
 
 
 func _set_game_state_if_present(prop: String, value: Variant) -> void:

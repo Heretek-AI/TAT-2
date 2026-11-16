@@ -57,11 +57,11 @@ func _build_3d_backdrop() -> void:
 	scene_root.add_child(env)
 
 	_menu_cam = Camera3D.new()
-	_menu_cam.fov = 46.0
-	_menu_cam.position = Vector3(-9.2, 8.1, 11.8)
+	_menu_cam.fov = 52.0
+	_menu_cam.position = Vector3(-13.8, 5.4, 16.5)
 	_menu_cam.current = true
 	scene_root.add_child(_menu_cam)
-	_menu_cam.look_at(Vector3(-0.6, 8.7, 0.4), Vector3.UP)
+	_menu_cam.look_at(Vector3(1.5, 7.4, 0.5), Vector3.UP)
 
 	# Warm magenta/amber storefront glow matching MacNeish Jeweller
 	_shop_glow = OmniLight3D.new()
@@ -91,8 +91,8 @@ func _build_3d_backdrop() -> void:
 func _process(delta: float) -> void:
 	_sway_t += delta
 	if _menu_cam != null:
-		_menu_cam.position = Vector3(-9.2 + sin(_sway_t * 0.35) * 0.22, 8.1 + cos(_sway_t * 0.25) * 0.1, 11.8)
-		_menu_cam.look_at(Vector3(-0.6, 8.7, 0.4), Vector3.UP)
+		_menu_cam.position = Vector3(-13.8 + sin(_sway_t * 0.35) * 0.18, 5.4 + cos(_sway_t * 0.25) * 0.08, 16.5)
+		_menu_cam.look_at(Vector3(1.5, 7.4, 0.5), Vector3.UP)
 	if _shop_glow != null:
 		_shop_glow.light_energy = 3.1 + sin(_sway_t * 7.5) * 0.18 + cos(_sway_t * 17.0) * 0.08
 
@@ -119,12 +119,14 @@ func _build_ui() -> void:
 	right_anchor.set_anchors_preset(Control.PRESET_RIGHT_WIDE)
 	right_anchor.offset_left = -460
 	right_anchor.offset_right = -64
+	right_anchor.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(right_anchor)
 
 	var menu_v := VBoxContainer.new()
-	menu_v.set_anchors_preset(Control.PRESET_VCENTER_WIDE)
-	menu_v.offset_top = -170
-	menu_v.offset_bottom = 200
+	menu_v.anchor_left = 0.0
+	menu_v.anchor_right = 1.0
+	menu_v.anchor_top = 0.28
+	menu_v.anchor_bottom = 0.90
 	menu_v.add_theme_constant_override("separation", 10)
 	right_anchor.add_child(menu_v)
 
@@ -132,8 +134,8 @@ func _build_ui() -> void:
 	if logo_tex != null:
 		var logo := TextureRect.new()
 		logo.texture = logo_tex
-		logo.custom_minimum_size = Vector2(360, 180)
-		logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		logo.custom_minimum_size = Vector2(360, 170)
+		logo.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 		logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		menu_v.add_child(logo)
 	else:
@@ -155,13 +157,13 @@ func _build_ui() -> void:
 	)
 	menu_v.add_child(play_btn)
 
-	var contracts_btn := _make_menu_btn("CONTRACTS & CO-OP", sans)
-	contracts_btn.pressed.connect(func(): journal_panel.visible = not journal_panel.visible)
-	menu_v.add_child(contracts_btn)
-
 	var settings_btn := _make_menu_btn("SETTINGS", sans)
 	settings_btn.pressed.connect(_on_settings_pressed)
 	menu_v.add_child(settings_btn)
+
+	var credits_btn := _make_menu_btn("CREDITS", sans)
+	credits_btn.pressed.connect(_on_credits_pressed)
+	menu_v.add_child(credits_btn)
 
 	var quit_btn := _make_menu_btn("QUIT", sans)
 	quit_btn.pressed.connect(func(): get_tree().quit())
@@ -330,3 +332,55 @@ func _launch() -> void:
 	GameState.difficulty = diff_opt.selected + 1
 	GameState.active_contract_order = selected_order
 	get_tree().change_scene_to_file("res://scenes/mission.tscn")
+
+
+func _on_credits_pressed() -> void:
+	var layer: CanvasLayer = CanvasLayer.new()
+	layer.layer = 30
+	add_child(layer)
+	var modal: Dictionary = ArtNouveauTheme.make_modal(layer, Vector2(640, 480), "CREDITS", "Thick As Thieves — OtherSide Entertainment / Megabit")
+	var vb: VBoxContainer = modal["vbox"] as VBoxContainer
+	var scroll: ScrollContainer = ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vb.add_child(scroll)
+	var list_vb: VBoxContainer = VBoxContainer.new()
+	list_vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	list_vb.add_theme_constant_override("separation", 6)
+	scroll.add_child(list_vb)
+	var entries: Array[String] = []
+	if FileAccess.file_exists("res://data/generated/tables/UI/Credits/DT_Credits.json"):
+		var f: FileAccess = FileAccess.open("res://data/generated/tables/UI/Credits/DT_Credits.json", FileAccess.READ)
+		if f != null:
+			var parsed: Variant = JSON.parse_string(f.get_as_text())
+			if parsed is Dictionary:
+				var rows: Variant = (parsed as Dictionary).get("rows", {})
+				if rows is Dictionary:
+					for k: Variant in (rows as Dictionary).keys():
+						var r: Variant = (rows as Dictionary)[k]
+						if r is Dictionary:
+							var rd: Dictionary = r as Dictionary
+							var n_dict: Variant = rd.get("Name", {})
+							var r_dict: Variant = rd.get("Role", {})
+							var nm: String = str((n_dict as Dictionary).get("SourceString", "")) if n_dict is Dictionary else ""
+							var rl: String = str((r_dict as Dictionary).get("SourceString", "")) if r_dict is Dictionary else ""
+							if nm != "" and nm != "None":
+								entries.append("%s  —  %s" % [nm, rl] if rl != "" and rl != "None" else nm)
+							if entries.size() >= 80:
+								break
+	if entries.is_empty():
+		entries = ["OtherSide Entertainment", "Warren Spector — Studio Director", "Paul Neurath — Executive Producer", "Godot 4.7 Port — TAT-2"]
+	for line: String in entries:
+		var lbl: Label = Label.new()
+		lbl.text = line
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lbl.add_theme_font_size_override("font_size", 14)
+		lbl.add_theme_color_override("font_color", Color(0.86, 0.90, 0.92))
+		list_vb.add_child(lbl)
+	var close_btn: Button = Button.new()
+	close_btn.text = "CLOSE"
+	ArtNouveauTheme.style_button(close_btn, true)
+	close_btn.pressed.connect(func() -> void:
+		if is_instance_valid(layer):
+			layer.queue_free()
+	)
+	vb.add_child(close_btn)

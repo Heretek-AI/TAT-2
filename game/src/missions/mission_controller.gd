@@ -17,6 +17,7 @@ const WardrobeUIScript := preload("res://src/ui/wardrobe_ui.gd")
 const ContractTableUIScript := preload("res://src/ui/contract_table_ui.gd")
 const ClueItemScript := preload("res://src/interact/clue_item.gd")
 const LoadingScreenScript := preload("res://src/ui/loading_screen.gd")
+const LedgerUIScript := preload("res://src/ui/ledger_ui.gd")
 
 var light_probe: Node
 var level_loader: Node
@@ -151,15 +152,12 @@ func _map_id_to_sublevels(map_id: String, order: int = 2) -> Array[String]:
 				"res://data/generated/levels/Buildings/Guildhall/Building_Guildhall_POI.tatlevel.json",
 				"res://data/generated/levels/Buildings/Guildhall/Building_Guildhall_POI_3rdFloor.tatlevel.json",
 				"res://data/generated/levels/Buildings/Guildhall/Guildhall_Vault_CeremonialChambers.tatlevel.json",
+				"res://data/generated/levels/Guildhall/Guildhall_Gameplay.tatlevel.json",
 				"res://data/generated/levels/Guildhall/Guildhall_P.tatlevel.json",
-				"res://data/generated/levels/Guildhall/Building_Store_800_2Story_Spawn.tatlevel.json",
-				"res://data/generated/levels/Guildhall/Facade_Storefront_Cluster.tatlevel.json",
-				"res://data/generated/levels/Guildhall/Facade_Apartment_Cluster.tatlevel.json",
 				"res://data/generated/levels/Guildhall/Guildhall_Geometry.tatlevel.json",
 				"res://data/generated/levels/Guildhall/Guildhall_Landscape.tatlevel.json",
 				"res://data/generated/levels/Guildhall/Guildhall_LightingNoGameplay.tatlevel.json",
 				"res://data/generated/levels/Guildhall/Guildhall_PeripheryA.tatlevel.json",
-				"res://data/generated/levels/Guildhall/Guildhall_Gameplay.tatlevel.json",
 				"res://data/generated/levels/Guildhall/Guildhall_Loot.tatlevel.json",
 				"res://data/generated/levels/Guildhall/Guildhall_MissionClues.tatlevel.json",
 				"res://data/generated/levels/Guildhall/Guildhall_Contract_%02d.tatlevel.json" % order,
@@ -169,6 +167,7 @@ func _map_id_to_sublevels(map_id: String, order: int = 2) -> Array[String]:
 			return [
 				"res://data/generated/levels/ThievesDen/ThievesDen_Geo.tatlevel.json",
 				"res://data/generated/levels/ThievesDenTest/ThievesDenTest_P.tatlevel.json",
+				"res://data/generated/levels/ThievesDenTest/ThievesDenTest_Periphery.tatlevel.json",
 			]
 		"jaspering_hall":
 			return [
@@ -191,21 +190,17 @@ func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> 
 	add_child(attic_fill)
 	light_probe.register_light(attic_fill)
 
-	var win_positions: Array = ue_level_data.get("window_positions", [])
-	var win_pos: Vector3 = anchor + Vector3(-5.0, 3.8, -0.5)
-	if not win_positions.is_empty() and win_positions[0] is Vector3:
-		win_pos = win_positions[0] + Vector3(0.0, 1.2, 0.0)
+	# Big arched window moonlight shaft (west wall, pouring diagonally onto the attic floor)
+	var win_pos: Vector3 = Vector3(-5.8, 43.0, 271.5)
 	var moon_beam := SpotLight3D.new()
 	moon_beam.position = win_pos
 	moon_beam.light_color = Color(0.55, 0.82, 0.96)
-	moon_beam.light_energy = 2.8
-	moon_beam.spot_range = 16.0
-	moon_beam.spot_angle = 32.0
+	moon_beam.light_energy = 1.8
+	moon_beam.spot_range = 14.0
+	moon_beam.spot_angle = 26.0
 	moon_beam.shadow_enabled = true
 	add_child(moon_beam)
-	# Aim from the Thieves' Den window border (SM_ThievesDen_WindowBorder) down
-	# onto the attic floor so the moon shaft + godray always land on solid ground.
-	var beam_target: Vector3 = win_pos + Vector3(-2.8, -2.2, 3.2)
+	var beam_target: Vector3 = Vector3(-0.5, 40.1, 271.5)
 	moon_beam.look_at(beam_target, Vector3.UP)
 	light_probe.register_light(moon_beam)
 	VfxManager.spawn_window_godray(self, win_pos, beam_target)
@@ -237,7 +232,7 @@ func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> 
 	var dlbl := Label3D.new()
 	dlbl.position = Vector3(0, 1.0, 0)
 	dlbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	dlbl.text = "[E] Map Table — Select Contract"
+	dlbl.text = "[F] Map Table — Prepare for Mission"
 	dlbl.font_size = 24
 	dlbl.modulate = Color(1.0, 0.85, 0.45)
 	desk_area.add_child(dlbl)
@@ -245,7 +240,7 @@ func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> 
 	desk_script.source_code = """extends Area3D
 var mission_ctrl: Node = null
 func get_interact_prompt() -> String:
-\treturn "[E] Select Contract (Map Table)"
+\treturn "[F] Prepare for Mission (Map Table)"
 func interact(_actor: Node) -> void:
 \tif mission_ctrl != null and mission_ctrl.has_method("open_contract_table_ui"):
 \t\tmission_ctrl.open_contract_table_ui()
@@ -254,6 +249,40 @@ func interact(_actor: Node) -> void:
 	desk_area.set_script(desk_script)
 	desk_area.set("mission_ctrl", self)
 	add_child(desk_area)
+
+	# Miniature 3D buildings on the Map Table (Elway Manor & Constables' Guildhall)
+	_spawn_map_table_miniatures(desk_pos)
+
+	# Rolltop Desk Open Ledger -> [F] READ LEDGER (Journal & Black Market) + Blue Wisp VFX
+	var ledger_positions: Array = ue_level_data.get("ledger_positions", [])
+	var ledger_pos: Vector3 = anchor + Vector3(3.4, 0.95, 1.8)
+	if not ledger_positions.is_empty() and ledger_positions[0] is Vector3:
+		ledger_pos = (ledger_positions[0] as Vector3) + Vector3(0.0, 0.12, 0.0)
+	VfxManager.spawn_blue_wisp(self, ledger_pos + Vector3(-0.35, 0.42, -0.15))
+	var ledger_area := Area3D.new()
+	ledger_area.position = ledger_pos
+	ledger_area.add_to_group("interactables")
+	var lcol := CollisionShape3D.new()
+	var lsph := SphereShape3D.new()
+	lsph.radius = 1.6
+	lcol.shape = lsph
+	ledger_area.add_child(lcol)
+	var l_script := GDScript.new()
+	l_script.source_code = """extends Area3D
+var mission_ctrl: Node = null
+func get_interact_prompt() -> String:
+\treturn "[F] READ LEDGER"
+func interact(_actor: Node) -> void:
+\tif mission_ctrl != null and mission_ctrl.has_method("open_ledger_ui"):
+\t\tmission_ctrl.open_ledger_ui()
+"""
+	l_script.reload()
+	ledger_area.set_script(l_script)
+	ledger_area.set("mission_ctrl", self)
+	add_child(ledger_area)
+
+	# Trunk Decoration Pedestal + Gramophone
+	_spawn_thieves_den_props(anchor)
 
 	# Interactive Bureau / Wardrobe -> opens WardrobeUI (Thief + Outfit + Headgear + Calling Card)
 	var wardrobe_positions: Array = ue_level_data.get("wardrobe_positions", [])
@@ -279,7 +308,7 @@ func interact(_actor: Node) -> void:
 	var wlbl := Label3D.new()
 	wlbl.position = Vector3(0, 1.1, 0)
 	wlbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	wlbl.text = "[E] Bureau — Customize Thief"
+	wlbl.text = "[F] Bureau — Customize Thief"
 	wlbl.font_size = 24
 	wlbl.modulate = Color(0.75, 0.9, 1.0)
 	ward_area.add_child(wlbl)
@@ -287,7 +316,7 @@ func interact(_actor: Node) -> void:
 	ward_script.source_code = """extends Area3D
 var mission_ctrl: Node = null
 func get_interact_prompt() -> String:
-\treturn "[E] Customize Thief (Bureau)"
+\treturn "[F] Customize Thief (Bureau)"
 func interact(_actor: Node) -> void:
 \tif mission_ctrl != null and mission_ctrl.has_method("open_wardrobe_ui"):
 \t\tmission_ctrl.open_wardrobe_ui()
@@ -303,6 +332,138 @@ func open_wardrobe_ui() -> void:
 	add_child(ui)
 	if ui.has_method("open_customizer"):
 		ui.call("open_customizer")
+
+
+func open_ledger_ui() -> void:
+	var layer: CanvasLayer = CanvasLayer.new()
+	layer.layer = 20
+	layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(layer)
+	var ui: Control = LedgerUIScript.new()
+	layer.add_child(ui)
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	if ui.has_signal("closed"):
+		ui.connect("closed", func() -> void:
+			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+			if is_instance_valid(layer):
+				layer.queue_free()
+		)
+
+
+func _spawn_map_table_miniatures(desk_pos: Vector3) -> void:
+	var miniatures: Array[Dictionary] = [
+		{"path": "res://assets/ue/Content/Art/UI/Map/SM_MapBuilding_OldManor.glb", "offset": Vector3(-0.32, 0.16, -0.08), "scale": 0.08},
+		{"path": "res://assets/ue/Content/Art/UI/Map/SM_MapBuilding_GuildHall.glb", "offset": Vector3(0.28, 0.16, 0.10), "scale": 0.08},
+	]
+	for item: Dictionary in miniatures:
+		var mpath: String = str(item["path"])
+		if ResourceLoader.exists(mpath):
+			var packed: PackedScene = load(mpath) as PackedScene
+			if packed != null:
+				var inst: Node3D = packed.instantiate() as Node3D
+				if inst != null:
+					inst.position = desk_pos + (item["offset"] as Vector3)
+					var s: float = float(item["scale"])
+					inst.scale = Vector3(s, s, s)
+					add_child(inst)
+
+
+func _spawn_thieves_den_props(anchor: Vector3) -> void:
+	# Trunk Decoration Pedestal -> [F] CHANGE DECORATION
+	var deco_pos: Vector3 = anchor + Vector3(-1.8, 0.9, 1.4)
+	var deco_area := Area3D.new()
+	deco_area.position = deco_pos
+	deco_area.add_to_group("interactables")
+	var dcol := CollisionShape3D.new()
+	var dsph := SphereShape3D.new()
+	dsph.radius = 1.4
+	dcol.shape = dsph
+	deco_area.add_child(dcol)
+	var deco_visual: Node3D = Node3D.new()
+	deco_visual.name = "DecorationVisual"
+	deco_area.add_child(deco_visual)
+	var deco_script := GDScript.new()
+	deco_script.source_code = """extends Area3D
+const DECORATIONS: Array[String] = ["faberge_egg", "owl_statue", "emerald"]
+var active_idx: int = 0
+func _ready() -> void:
+\tvar saved: String = str(SaveSystem.data.get("active_decoration", "faberge_egg"))
+\tvar found: int = DECORATIONS.find(saved)
+\tif found >= 0:
+\t\tactive_idx = found
+\t_rebuild_visual()
+func get_interact_prompt() -> String:
+\treturn "[F] CHANGE DECORATION"
+func interact(_actor: Node) -> void:
+\tactive_idx = (active_idx + 1) % DECORATIONS.size()
+\tSaveSystem.data["active_decoration"] = DECORATIONS[active_idx]
+\tSaveSystem.write_save()
+\t_rebuild_visual()
+func _rebuild_visual() -> void:
+\tvar vis: Node3D = get_node_or_null("DecorationVisual") as Node3D
+\tif vis == null:
+\t\treturn
+\tfor c in vis.get_children():
+\t\tc.queue_free()
+\tvar key: String = DECORATIONS[active_idx]
+\tvar mesh_path: String = ""
+\tif key == "faberge_egg":
+\t\tmesh_path = "res://assets/ue/Content/Art/Environment/Props/SM_FabergeEggA.glb"
+\telif key == "owl_statue":
+\t\tmesh_path = "res://assets/ue/Content/Art/Environment/Props/SM_StatueOwlA.glb"
+\tif mesh_path != "" and ResourceLoader.exists(mesh_path):
+\t\tvar p: PackedScene = load(mesh_path) as PackedScene
+\t\tif p != null:
+\t\t\tvar inst: Node3D = p.instantiate() as Node3D
+\t\t\tif inst != null:
+\t\t\t\tinst.scale = Vector3(0.35, 0.35, 0.35)
+\t\t\t\tvis.add_child(inst)
+\t\t\t\treturn
+\tvar mi := MeshInstance3D.new()
+\tvar sm := SphereMesh.new()
+\tsm.radius = 0.14
+\tsm.height = 0.24 if key == "faberge_egg" else 0.22
+\tvar mat := StandardMaterial3D.new()
+\tif key == "emerald":
+\t\tmat.albedo_color = Color(0.15, 0.9, 0.45)
+\t\tmat.emission_enabled = true
+\t\tmat.emission = Color(0.1, 0.85, 0.4)
+\telif key == "owl_statue":
+\t\tmat.albedo_color = Color(0.9, 0.72, 0.25)
+\t\tmat.metallic = 0.85
+\telse:
+\t\tmat.albedo_color = Color(0.45, 0.22, 0.72)
+\t\tmat.metallic = 0.5
+\tsm.material = mat
+\tmi.mesh = sm
+\tvis.add_child(mi)
+"""
+	deco_script.reload()
+	deco_area.set_script(deco_script)
+	add_child(deco_area)
+
+	# Gramophone -> [F] TURN ON / [F] TURN OFF
+	var gram_area := Area3D.new()
+	gram_area.position = deco_pos + Vector3(-0.55, 0.0, 0.0)
+	gram_area.add_to_group("interactables")
+	var gcol := CollisionShape3D.new()
+	var gsph := SphereShape3D.new()
+	gsph.radius = 1.3
+	gcol.shape = gsph
+	gram_area.add_child(gcol)
+	var gram_script := GDScript.new()
+	gram_script.source_code = """extends Area3D
+var playing: bool = false
+func get_interact_prompt() -> String:
+\treturn "[F] TURN OFF" if playing else "[F] TURN ON"
+func interact(_actor: Node) -> void:
+\tplaying = not playing
+\tif AudioManager != null and AudioManager.has_method("play_sfx"):
+\t\tAudioManager.play_sfx("res://assets/ue/audio/chime.wav", global_position)
+"""
+	gram_script.reload()
+	gram_area.set_script(gram_script)
+	add_child(gram_area)
 
 
 func open_contract_table_ui() -> void:
@@ -352,9 +513,20 @@ func _spawn_player(ue_spawns: Array) -> void:
 	player.level_ctrl = self
 	var spawn: Vector3 = Vector3(0, 2.0, 0)
 	if not ue_spawns.is_empty():
-		var first: Variant = ue_spawns[0]
-		if first is Vector3:
-			spawn = first + Vector3(0, 1.0, 0)
+		var chosen: Variant = ue_spawns[0]
+		var w3d: World3D = get_world_3d()
+		if w3d != null:
+			var phys: PhysicsDirectSpaceState3D = w3d.direct_space_state
+			for cand: Variant in ue_spawns:
+				if cand is Vector3:
+					var cp: Vector3 = cand as Vector3
+					var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(cp + Vector3(0, 1.0, 0), cp + Vector3(0, -6.0, 0), 1)
+					var hit: Dictionary = phys.intersect_ray(q)
+					if not hit.is_empty():
+						chosen = cand
+						break
+		if chosen is Vector3:
+			spawn = (chosen as Vector3) + Vector3(0, 1.0, 0)
 	else:
 		spawn = _find_mesh_fallback_spawn()
 	player.position = spawn
@@ -389,11 +561,15 @@ func _find_first_level_mesh(n: Node) -> Node:
 func _snap_player_to_ground() -> void:
 	if player == null:
 		return
-	var space: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
-	var from_pos: Vector3 = player.position + Vector3(0, 8, 0)
+	var w3d: World3D = get_world_3d()
+	if w3d == null:
+		return
+	var phys: PhysicsDirectSpaceState3D = w3d.direct_space_state
+	# Cast from inside the room (0.5m above spawn) downward so we hit the floor, not the roof above.
+	var from_pos: Vector3 = player.position + Vector3(0, 0.5, 0)
 	var to_pos: Vector3 = player.position + Vector3(0, -32, 0)
 	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(from_pos, to_pos, 1)
-	var hit: Dictionary = space.intersect_ray(query)
+	var hit: Dictionary = phys.intersect_ray(query)
 	if not hit.is_empty():
 		var hit_pos: Variant = hit.get("position")
 		if hit_pos is Vector3:
@@ -495,6 +671,7 @@ func _on_extracted() -> void:
 	GameState.state = "victory"
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	var final_score := int(round(GameState.loot_value * GameState.compute_stealth_bonus_multiplier()))
+	SaveSystem.add_currency(final_score)
 	SaveSystem.record_contract_complete(GameState.active_contract_order, final_score, not GameState.ever_spotted)
 	if hud.has_method("show_result"):
 		hud.show_result(true, final_score, contract_info)

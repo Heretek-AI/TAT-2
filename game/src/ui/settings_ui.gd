@@ -1,8 +1,11 @@
+class_name SettingsUI
 extends CanvasLayer
-## Dark-steampunk Settings UI: Controls / Audio / Graphics.
+## Art Nouveau Settings UI: GENERAL / VIDEO / AUDIO / CONTROLS tabs (Q/E to switch).
 ## Reads/writes SaveSystem.data['settings'] and persists via SaveSystem.write_save().
 
 signal closed()
+
+const ThemeScript := preload("res://src/ui/art_nouveau_theme.gd")
 
 const SENS_MIN: float = 0.0005
 const SENS_MAX: float = 0.008
@@ -16,6 +19,8 @@ const SCALE_MIN: float = 0.6
 const SCALE_MAX: float = 1.0
 const SCALE_STEP: float = 0.05
 
+const TABS: Array[String] = ["GENERAL", "VIDEO", "AUDIO", "CONTROLS"]
+
 var _prev_mouse_mode: Input.MouseMode = Input.MOUSE_MODE_VISIBLE
 var _sens_slider: HSlider
 var _sens_val: Label
@@ -28,6 +33,9 @@ var _vol_val: Label
 var _fullscreen_check: CheckBox
 var _scale_slider: HSlider
 var _scale_val: Label
+var _tab_idx: int = 0
+var _tab_btns: Array[Button] = []
+var _pages: Array[Control] = []
 
 
 func _ready() -> void:
@@ -38,6 +46,7 @@ func _ready() -> void:
 	_build_ui()
 	_load_from_save()
 	_apply_live(false)
+	switch_tab(0)
 
 
 func open_settings() -> void:
@@ -53,6 +62,22 @@ func close_settings() -> void:
 	queue_free()
 
 
+func switch_tab(idx: int) -> void:
+	_tab_idx = clampi(idx, 0, TABS.size() - 1)
+	_refresh_tabs()
+
+
+func _refresh_tabs() -> void:
+	for i: int in range(_tab_btns.size()):
+		var b: Button = _tab_btns[i]
+		if b != null:
+			b.button_pressed = (i == _tab_idx)
+	for j: int in range(_pages.size()):
+		var p: Control = _pages[j]
+		if p != null:
+			p.visible = (j == _tab_idx)
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if not visible:
 		return
@@ -62,9 +87,20 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event is InputEventKey:
 		var kev: InputEventKey = event as InputEventKey
-		if kev.pressed and not kev.echo and kev.keycode == KEY_ESCAPE:
+		if not kev.pressed or kev.echo:
+			return
+		if kev.keycode == KEY_ESCAPE:
 			close_settings()
 			get_viewport().set_input_as_handled()
+			return
+		if kev.keycode == KEY_Q:
+			switch_tab((_tab_idx - 1 + TABS.size()) % TABS.size())
+			get_viewport().set_input_as_handled()
+			return
+		if kev.keycode == KEY_E:
+			switch_tab((_tab_idx + 1) % TABS.size())
+			get_viewport().set_input_as_handled()
+			return
 
 
 func _settings() -> Dictionary:
@@ -93,25 +129,47 @@ func _ensure_settings() -> void:
 		s["render_scale"] = 1.0
 
 
+func reset_defaults() -> void:
+	var s: Dictionary = _settings()
+	s["mouse_sensitivity"] = 0.0025
+	s["invert_y"] = false
+	s["sprint_toggle"] = false
+	s["fov"] = 75.0
+	s["master_volume"] = 0.8
+	s["fullscreen"] = false
+	s["render_scale"] = 1.0
+	_load_from_save()
+	_apply_live(true)
+
+
 func _load_from_save() -> void:
 	var s: Dictionary = _settings()
-	_sens_slider.value = clampf(float(s.get("mouse_sensitivity", 0.0025)), SENS_MIN, SENS_MAX)
-	_invert_check.button_pressed = bool(s.get("invert_y", false))
-	_sprint_check.button_pressed = bool(s.get("sprint_toggle", false))
-	_fov_slider.value = clampf(float(s.get("fov", 75.0)), FOV_MIN, FOV_MAX)
-	_vol_slider.value = clampf(float(s.get("master_volume", 0.8)), VOL_MIN, VOL_MAX)
-	_fullscreen_check.button_pressed = bool(s.get("fullscreen", false))
-	_scale_slider.value = clampf(float(s.get("render_scale", 1.0)), SCALE_MIN, SCALE_MAX)
+	if _sens_slider != null:
+		_sens_slider.value = clampf(float(s.get("mouse_sensitivity", 0.0025)), SENS_MIN, SENS_MAX)
+	if _invert_check != null:
+		_invert_check.button_pressed = bool(s.get("invert_y", false))
+	if _sprint_check != null:
+		_sprint_check.button_pressed = bool(s.get("sprint_toggle", false))
+	if _fov_slider != null:
+		_fov_slider.value = clampf(float(s.get("fov", 75.0)), FOV_MIN, FOV_MAX)
+	if _vol_slider != null:
+		_vol_slider.value = clampf(float(s.get("master_volume", 0.8)), VOL_MIN, VOL_MAX)
+	if _fullscreen_check != null:
+		_fullscreen_check.button_pressed = bool(s.get("fullscreen", false))
+	if _scale_slider != null:
+		_scale_slider.value = clampf(float(s.get("render_scale", 1.0)), SCALE_MIN, SCALE_MAX)
 	_refresh_value_labels()
 
 
 func _apply_live(persist: bool) -> void:
+	if _sens_slider == null or _fov_slider == null or _vol_slider == null:
+		return
 	var sens: float = float(_sens_slider.value)
-	var invert_y: bool = _invert_check.button_pressed
-	var sprint_toggle: bool = _sprint_check.button_pressed
+	var invert_y: bool = _invert_check.button_pressed if _invert_check != null else false
+	var sprint_toggle: bool = _sprint_check.button_pressed if _sprint_check != null else false
 	var fov: float = float(_fov_slider.value)
 	var vol: float = float(_vol_slider.value)
-	var fullscreen: bool = _fullscreen_check.button_pressed
+	var fullscreen: bool = _fullscreen_check.button_pressed if _fullscreen_check != null else false
 	var render_scale: float = float(_scale_slider.value)
 	var s: Dictionary = _settings()
 	s["mouse_sensitivity"] = sens
@@ -122,8 +180,9 @@ func _apply_live(persist: bool) -> void:
 	s["fullscreen"] = fullscreen
 	s["render_scale"] = render_scale
 	AudioServer.set_bus_volume_db(0, linear_to_db(maxf(vol, 0.001)))
-	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if fullscreen else DisplayServer.WINDOW_MODE_WINDOWED)
-	get_viewport().scaling_3d_scale = render_scale
+	if DisplayServer.get_name() != "headless":
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if fullscreen else DisplayServer.WINDOW_MODE_WINDOWED)
+		get_viewport().scaling_3d_scale = render_scale
 	var cam: Camera3D = get_viewport().get_camera_3d()
 	if cam != null:
 		cam.fov = fov
@@ -132,81 +191,134 @@ func _apply_live(persist: bool) -> void:
 
 
 func _refresh_value_labels() -> void:
-	_sens_val.text = "%.4f" % float(_sens_slider.value)
-	_fov_val.text = "%d" % int(_fov_slider.value)
-	_vol_val.text = "%d%%" % int(round(float(_vol_slider.value) * 100.0))
-	_scale_val.text = "%d%%" % int(round(float(_scale_slider.value) * 100.0))
+	if _sens_val != null and _sens_slider != null:
+		_sens_val.text = "%.4f" % float(_sens_slider.value)
+	if _fov_val != null and _fov_slider != null:
+		_fov_val.text = "%d" % int(_fov_slider.value)
+	if _vol_val != null and _vol_slider != null:
+		_vol_val.text = "%d%%" % int(round(float(_vol_slider.value) * 100.0))
+	if _scale_val != null and _scale_slider != null:
+		_scale_val.text = "%d%%" % int(round(float(_scale_slider.value) * 100.0))
 
 
 func _build_ui() -> void:
-	var root: Control = Control.new()
-	root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(root)
+	var modal: Dictionary = ThemeScript.make_modal(self, Vector2(640, 0), "SETTINGS", "[Q] / [E] SWITCH TAB   ·   [ESC] BACK")
+	var vbox: VBoxContainer = modal["vbox"] as VBoxContainer
+	var tab_row: HBoxContainer = HBoxContainer.new()
+	tab_row.add_theme_constant_override("separation", 8)
+	tab_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_child(tab_row)
+	_tab_btns.clear()
+	for i: int in range(TABS.size()):
+		var tb: Button = Button.new()
+		tb.text = TABS[i]
+		tb.toggle_mode = true
+		tb.custom_minimum_size = Vector2(132, 36)
+		ThemeScript.style_button(tb, i == 0)
+		var tab_idx: int = i
+		tb.pressed.connect(func() -> void: switch_tab(tab_idx))
+		tab_row.add_child(tb)
+		_tab_btns.append(tb)
+	var hint: HBoxContainer = HBoxContainer.new()
+	hint.alignment = BoxContainer.ALIGNMENT_CENTER
+	hint.add_theme_constant_override("separation", 6)
+	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(hint)
+	var qk: PanelContainer = ThemeScript.keycap("[Q]", 12)
+	hint.add_child(qk)
+	var ql: Label = Label.new()
+	ql.text = "PREV"
+	ql.add_theme_font_size_override("font_size", 12)
+	ql.add_theme_color_override("font_color", Color(0.65, 0.75, 0.78))
+	hint.add_child(ql)
+	var ek: PanelContainer = ThemeScript.keycap("[E]", 12)
+	hint.add_child(ek)
+	var el: Label = Label.new()
+	el.text = "NEXT"
+	el.add_theme_font_size_override("font_size", 12)
+	el.add_theme_color_override("font_color", Color(0.65, 0.75, 0.78))
+	hint.add_child(el)
 
-	var dim: ColorRect = ColorRect.new()
-	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	dim.color = Color(0.01, 0.008, 0.02, 0.82)
-	root.add_child(dim)
+	_pages.clear()
+	for t: int in range(TABS.size()):
+		var page: VBoxContainer = VBoxContainer.new()
+		page.add_theme_constant_override("separation", 10)
+		page.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		vbox.add_child(page)
+		_pages.append(page)
 
-	var center: CenterContainer = CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	root.add_child(center)
+	# GENERAL tab.
+	var general: VBoxContainer = _pages[0] as VBoxContainer
+	general.add_child(ThemeScript.section_header("GENERAL"))
+	general.add_child(_make_slider_row("Mouse Sensitivity", SENS_MIN, SENS_MAX, SENS_STEP, true))
+	general.add_child(_make_check_row("Invert Y", true))
+	general.add_child(_make_check_row("Sprint Toggle", false))
 
-	var panel: PanelContainer = PanelContainer.new()
-	panel.custom_minimum_size = Vector2(520, 0)
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.05, 0.04, 0.08, 0.97)
-	style.border_color = Color(0.72, 0.55, 0.25, 0.9)
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(6)
-	style.set_content_margin_all(24)
-	panel.add_theme_stylebox_override("panel", style)
-	center.add_child(panel)
+	# VIDEO tab.
+	var video: VBoxContainer = _pages[1] as VBoxContainer
+	video.add_child(ThemeScript.section_header("VIDEO"))
+	video.add_child(_make_slider_row("Field of View", FOV_MIN, FOV_MAX, 1.0, false))
+	video.add_child(_make_check_row("Fullscreen", false))
+	video.add_child(_make_slider_row("Resolution Scale", SCALE_MIN, SCALE_MAX, SCALE_STEP, false))
 
-	var main_v: VBoxContainer = VBoxContainer.new()
-	main_v.add_theme_constant_override("separation", 14)
-	panel.add_child(main_v)
+	# AUDIO tab.
+	var audio: VBoxContainer = _pages[2] as VBoxContainer
+	audio.add_child(ThemeScript.section_header("AUDIO"))
+	audio.add_child(_make_slider_row("Master Volume", VOL_MIN, VOL_MAX, VOL_STEP, false))
 
-	var hdr: HBoxContainer = HBoxContainer.new()
-	main_v.add_child(hdr)
-	var title: Label = Label.new()
-	title.text = "SETTINGS"
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title.add_theme_font_size_override("font_size", 30)
-	title.add_theme_color_override("font_color", Color(0.95, 0.80, 0.45))
-	hdr.add_child(title)
-	var close_btn: Button = Button.new()
-	close_btn.text = "X"
-	close_btn.pressed.connect(close_settings)
-	hdr.add_child(close_btn)
+	# CONTROLS tab (read-only reference + sprint toggle lives in GENERAL).
+	var controls: VBoxContainer = _pages[3] as VBoxContainer
+	controls.add_child(ThemeScript.section_header("CONTROLS"))
+	var rows: Array[Array] = [
+		["W A S D", "MOVE"],
+		["MOUSE", "LOOK"],
+		["F", "INTERACT / STEAL"],
+		["Q", "PREV TAB"],
+		["E", "NEXT TAB / INTERACT"],
+		["H", "THIEF VISION"],
+		["R", "RESTART CHECKPOINT"],
+		["SPACE", "JUMP / VAULT"],
+		["ESC", "BACK / PAUSE"],
+	]
+	for entry: Array in rows:
+		controls.add_child(_make_binding_row(str(entry[0]), str(entry[1])))
 
-	main_v.add_child(_make_section_label("CONTROLS"))
-	main_v.add_child(_make_slider_row("Mouse Sensitivity", SENS_MIN, SENS_MAX, SENS_STEP, true))
-	main_v.add_child(_make_check_row("Invert Y", true))
-	main_v.add_child(_make_check_row("Sprint Toggle", false))
-	main_v.add_child(_make_slider_row("Field of View", FOV_MIN, FOV_MAX, 1.0, false))
-
-	main_v.add_child(_make_section_label("AUDIO"))
-	main_v.add_child(_make_slider_row("Master Volume", VOL_MIN, VOL_MAX, VOL_STEP, false))
-
-	main_v.add_child(_make_section_label("GRAPHICS"))
-	main_v.add_child(_make_check_row("Fullscreen", false))
-	main_v.add_child(_make_slider_row("3D Render Scale", SCALE_MIN, SCALE_MAX, SCALE_STEP, false))
-
+	vbox.add_child(ThemeScript.divider())
 	var btn_row: HBoxContainer = HBoxContainer.new()
 	btn_row.add_theme_constant_override("separation", 12)
 	btn_row.alignment = BoxContainer.ALIGNMENT_END
-	main_v.add_child(btn_row)
-	var apply_btn: Button = Button.new()
-	apply_btn.text = "APPLY"
-	apply_btn.custom_minimum_size = Vector2(140, 40)
-	apply_btn.pressed.connect(func() -> void: _apply_live(true))
-	btn_row.add_child(apply_btn)
-	var done_btn: Button = Button.new()
-	done_btn.text = "CLOSE"
-	done_btn.custom_minimum_size = Vector2(140, 40)
-	done_btn.pressed.connect(close_settings)
-	btn_row.add_child(done_btn)
+	vbox.add_child(btn_row)
+	var reset_btn: Button = Button.new()
+	reset_btn.text = "RESET DEFAULTS"
+	reset_btn.custom_minimum_size = Vector2(190, 42)
+	ThemeScript.style_button(reset_btn, false)
+	reset_btn.pressed.connect(reset_defaults)
+	btn_row.add_child(reset_btn)
+	var back_row: HBoxContainer = HBoxContainer.new()
+	back_row.add_theme_constant_override("separation", 6)
+	btn_row.add_child(back_row)
+	var back_btn: Button = Button.new()
+	back_btn.text = "BACK"
+	back_btn.custom_minimum_size = Vector2(130, 42)
+	ThemeScript.style_button(back_btn, true)
+	back_btn.pressed.connect(close_settings)
+	back_row.add_child(back_btn)
+	var esc: PanelContainer = ThemeScript.keycap("[ESC]", 12)
+	back_row.add_child(esc)
+
+
+func _make_binding_row(key_text: String, action_text: String) -> HBoxContainer:
+	var row: HBoxContainer = HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	var badge: PanelContainer = ThemeScript.keycap("[" + key_text + "]", 13)
+	row.add_child(badge)
+	var lab: Label = Label.new()
+	lab.text = action_text.to_upper()
+	lab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lab.add_theme_font_size_override("font_size", 14)
+	lab.add_theme_color_override("font_color", Color(0.55, 0.92, 0.95))
+	row.add_child(lab)
+	return row
 
 
 func _make_section_label(text: String) -> Label:
@@ -248,7 +360,7 @@ func _make_slider_row(label_text: String, min_v: float, max_v: float, step_v: fl
 	elif label_text == "Master Volume":
 		_vol_slider = slider
 		_vol_val = val
-	elif label_text == "3D Render Scale":
+	elif label_text == "Resolution Scale" or label_text == "3D Render Scale":
 		_scale_slider = slider
 		_scale_val = val
 	return row

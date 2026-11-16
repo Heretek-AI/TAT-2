@@ -9,7 +9,9 @@ const _VfxManager: GDScript = preload("res://src/core/vfx_manager.gd")
 signal load_progress(pct: float, status: String)
 
 var _materials_db: Dictionary = {}
+var _materials_db_lower: Dictionary = {}
 var _mesh_mats_db: Dictionary = {}
+var _mesh_mats_db_lower: Dictionary = {}
 var _tex_cache: Dictionary = {}
 var _std_mat_cache: Dictionary = {}
 var _mesh_res_cache: Dictionary = {} # ue_path -> { "mesh": Mesh, "shape": Shape3D }
@@ -25,11 +27,17 @@ func _load_material_dbs() -> void:
 		var p: Variant = JSON.parse_string(f.get_as_text())
 		if p is Dictionary:
 			_materials_db = p
+			_materials_db_lower.clear()
+			for k: Variant in _materials_db.keys():
+				_materials_db_lower[str(k).to_lower()] = _materials_db[k]
 	if FileAccess.file_exists("res://data/generated/mesh_materials.json"):
 		var f2 := FileAccess.open("res://data/generated/mesh_materials.json", FileAccess.READ)
 		var p2: Variant = JSON.parse_string(f2.get_as_text())
 		if p2 is Dictionary:
 			_mesh_mats_db = p2
+			_mesh_mats_db_lower.clear()
+			for k2: Variant in _mesh_mats_db.keys():
+				_mesh_mats_db_lower[str(k2).to_lower()] = _mesh_mats_db[k2]
 
 
 func _load_tex(res_path: String) -> Texture2D:
@@ -47,22 +55,29 @@ func _load_tex(res_path: String) -> Texture2D:
 func get_material_for_ue(ue_mat_path: String) -> StandardMaterial3D:
 	if _std_mat_cache.has(ue_mat_path):
 		return _std_mat_cache[ue_mat_path]
-	var info: Dictionary = _materials_db.get(ue_mat_path, {})
+	var low_mat := ue_mat_path.to_lower()
+	var info: Dictionary = _materials_db.get(ue_mat_path, _materials_db_lower.get(low_mat, {}))
 	var mat := StandardMaterial3D.new()
 	mat.roughness = 0.78
 	var texs: Dictionary = info.get("texs", {})
 	var alb := _load_tex(str(texs.get("albedo", "")))
-	var low_mat := ue_mat_path.to_lower()
 	if "oldmanorpanels" in low_mat:
 		var wood_alb := _load_tex("res://assets/ue/Raw/MaterialLibrary/Environment/Wood/Manor/T_ManorWood_D.png")
 		if wood_alb != null:
 			alb = wood_alb
 		mat.albedo_color = Color(0.65, 0.55, 0.48)
-	elif "glasspanels" in low_mat:
-		mat.albedo_color = Color(0.42, 0.68, 0.82, 0.9)
-		mat.emission_enabled = true
-		mat.emission = Color(0.28, 0.55, 0.72)
-		mat.emission_energy_multiplier = 0.85
+	elif "glasspanels" in low_mat or "windowglass" in low_mat:
+		# Never bind map-building icon textures to glass panels; keep frosted translucent glass
+		alb = null
+		mat.albedo_color = Color(0.35, 0.55, 0.72, 0.34)
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		mat.roughness = 0.22
+		mat.metallic = 0.08
+		mat.rim_enabled = true
+		mat.rim = 0.3
+		_std_mat_cache[ue_mat_path] = mat
+		return mat
 	if alb != null:
 		mat.albedo_texture = alb
 	var norm := _load_tex(str(texs.get("normal", "")))
@@ -195,17 +210,19 @@ func _get_mesh_and_shape(ue_path: String) -> Dictionary:
 				out["mesh"] = m
 				out["shape"] = null
 			else:
-				# Bind UE material slots
-				var mat_slots: Array = _mesh_mats_db.get(ue_path.split(".")[0], [])
+				# Bind UE material slots (exact, then case-insensitive fallback)
+				var mesh_key: String = ue_path.split(".")[0]
+				var mat_slots: Array = _mesh_mats_db.get(mesh_key, _mesh_mats_db_lower.get(mesh_key.to_lower(), []))
 				for s in range(mini(m.get_surface_count(), mat_slots.size())):
 					var mp: String = str(mat_slots[s])
 					if mp != "":
 						m.surface_set_material(s, get_material_for_ue(mp))
 				out["mesh"] = m
+				var is_nonblocking: bool = ("rug" in low_u or "carpet" in low_u or "placemat" in low_u or "paper" in low_u or "poster" in low_u or "scroll" in low_u or "curtain" in low_u or "cloth" in low_u or "drape" in low_u or "sheet" in low_u or "cable" in low_u or "wire" in low_u or "rope" in low_u or "ivy" in low_u or "vine" in low_u or "foliage" in low_u)
 				# Fast BoxShape3D for props; trimesh only for large structural geometry
 				var aabb := m.get_aabb()
 				var sz := aabb.size
-				if sz.length() > 0.45:
+				if not is_nonblocking and sz.length() > 0.45:
 					if sz.length() < 12.0:
 						var bx := BoxShape3D.new()
 						bx.size = Vector3(maxf(sz.x, 0.1), maxf(sz.y, 0.1), maxf(sz.z, 0.1))
@@ -241,6 +258,7 @@ func load_sublevels(json_paths: Array[String], parent: Node3D, light_probe: Node
 		"candelabra_positions": [] as Array[Vector3],
 		"wardrobe_positions": [] as Array[Vector3],
 		"desk_positions": [] as Array[Vector3],
+		"ledger_positions": [] as Array[Vector3],
 		"window_positions": [] as Array[Vector3],
 		"mesh_instances": 0,
 		"light_count": 0,
@@ -250,6 +268,7 @@ func load_sublevels(json_paths: Array[String], parent: Node3D, light_probe: Node
 	var lights_added: int = 0
 	var pending_lights: Array = []
 	var seen_lights: Dictionary = {}
+	var pending_landscapes: Array = []
 
 	for jp in json_paths:
 		if not FileAccess.file_exists(jp):
@@ -261,6 +280,9 @@ func load_sublevels(json_paths: Array[String], parent: Node3D, light_probe: Node
 		if not (data is Dictionary):
 			continue
 		var data_dict: Dictionary = data
+		for lc in data_dict.get("landscapes", []):
+			if lc is Dictionary:
+				pending_landscapes.append(lc)
 
 		for m in data_dict.get("meshes", []):
 			if not (m is Dictionary):
@@ -285,9 +307,15 @@ func load_sublevels(json_paths: Array[String], parent: Node3D, light_probe: Node
 			if "wardrobe" in low_mp or "bureau" in low_mp or "armoire" in low_mp:
 				var ward_arr: Array = result["wardrobe_positions"]
 				ward_arr.append(prop_pos)
-			if "tablesideb" in low_mp or "maptable" in low_mp or "table_map" in low_mp or "desk" in low_mp:
+			if "sm_map_thievesden" in low_mp:
+				var desk_arr: Array = result["desk_positions"]
+				desk_arr.insert(0, prop_pos)
+			elif "maptable" in low_mp or "table_map" in low_mp or "desk" in low_mp:
 				var desk_arr: Array = result["desk_positions"]
 				desk_arr.append(prop_pos)
+			if "openedledger" in low_mp:
+				var led_arr: Array = result["ledger_positions"]
+				led_arr.append(prop_pos)
 			if "windowborder" in low_mp or "thievesden_window" in low_mp:
 				var win_arr: Array = result["window_positions"]
 				win_arr.append(prop_pos)
@@ -344,6 +372,8 @@ func load_sublevels(json_paths: Array[String], parent: Node3D, light_probe: Node
 		col_body.name = "LevelCollision"
 		col_body.collision_layer = 1
 		parent.add_child(col_body)
+	if not pending_landscapes.is_empty():
+		_build_landscape_terrain(pending_landscapes, parent, col_body)
 
 	var total_inst: int = 0
 	for mp in batches.keys():
@@ -361,7 +391,7 @@ func load_sublevels(json_paths: Array[String], parent: Node3D, light_probe: Node
 		for i in range(trs.size()):
 			var tr: Transform3D = trs[i]
 			mm.set_instance_transform(i, tr)
-			if col_body != null and shape != null and trs.size() <= 350 and absf(tr.basis.determinant()) >= 0.0001:
+			if col_body != null and shape != null and trs.size() <= 3000 and absf(tr.basis.determinant()) >= 0.0001:
 				var cs: CollisionShape3D = CollisionShape3D.new()
 				cs.shape = shape
 				var sc: Vector3 = tr.basis.get_scale()
@@ -396,6 +426,7 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 		"candelabra_positions": [] as Array[Vector3],
 		"wardrobe_positions": [] as Array[Vector3],
 		"desk_positions": [] as Array[Vector3],
+		"ledger_positions": [] as Array[Vector3],
 		"window_positions": [] as Array[Vector3],
 		"mesh_instances": 0,
 		"light_count": 0,
@@ -404,6 +435,7 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 	var lights_added: int = 0
 	var pending_lights: Array = []
 	var seen_lights: Dictionary = {}
+	var pending_landscapes: Array = []
 	var total_files: int = maxi(json_paths.size(), 1)
 	var file_idx: int = 0
 	load_progress.emit(0.0, "Parsing JSON...")
@@ -415,6 +447,9 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 				var data: Variant = JSON.parse_string(f.get_as_text())
 				if data is Dictionary:
 					var data_dict: Dictionary = data
+					for lc in data_dict.get("landscapes", []):
+						if lc is Dictionary:
+							pending_landscapes.append(lc)
 					for m in data_dict.get("meshes", []):
 						if not (m is Dictionary):
 							continue
@@ -438,9 +473,15 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 						if "wardrobe" in low_mp or "bureau" in low_mp or "armoire" in low_mp:
 							var ward_arr: Array = result["wardrobe_positions"]
 							ward_arr.append(prop_pos)
-						if "tablesideb" in low_mp or "maptable" in low_mp or "table_map" in low_mp or "desk" in low_mp:
+						if "sm_map_thievesden" in low_mp:
+							var desk_arr: Array = result["desk_positions"]
+							desk_arr.insert(0, prop_pos)
+						elif "maptable" in low_mp or "table_map" in low_mp or "desk" in low_mp:
 							var desk_arr: Array = result["desk_positions"]
 							desk_arr.append(prop_pos)
+						if "openedledger" in low_mp:
+							var led_arr: Array = result["ledger_positions"]
+							led_arr.append(prop_pos)
 						if "windowborder" in low_mp or "thievesden_window" in low_mp:
 							var win_arr: Array = result["window_positions"]
 							win_arr.append(prop_pos)
@@ -497,6 +538,8 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 		col_body.name = "LevelCollision"
 		col_body.collision_layer = 1
 		parent.add_child(col_body)
+	if not pending_landscapes.is_empty():
+		_build_landscape_terrain(pending_landscapes, parent, col_body)
 	var total_inst: int = 0
 	var batch_keys: Array = batches.keys()
 	var batch_idx: int = 0
@@ -516,7 +559,7 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 		for i in range(trs.size()):
 			var tr: Transform3D = trs[i]
 			mm.set_instance_transform(i, tr)
-			if col_body != null and shape != null and trs.size() <= 350 and absf(tr.basis.determinant()) >= 0.0001:
+			if col_body != null and shape != null and trs.size() <= 3000 and absf(tr.basis.determinant()) >= 0.0001:
 				var cs: CollisionShape3D = CollisionShape3D.new()
 				cs.shape = shape
 				var sc: Vector3 = tr.basis.get_scale()
@@ -617,3 +660,108 @@ func _build_light(info: Dictionary, cast_shadow: bool = false) -> Light3D:
 		# UE5 spotlights/directionals aim along +X; Godot aims along -Z
 		light.rotate_object_local(Vector3.UP, -PI * 0.5)
 	return light
+
+
+func _build_landscape_terrain(landscapes: Array, parent: Node3D, col_body: StaticBody3D) -> void:
+	var mat := StandardMaterial3D.new()
+	var ground_alb: Texture2D = _load_tex("res://assets/ue/Raw/MaterialLibrary/Legacy/T_CobbleStoneA_D.png")
+	if ground_alb == null:
+		ground_alb = _load_tex("res://assets/ue/Raw/MaterialLibrary/Environment/Nature/Dirt/T_GroundDirtA_D.png")
+	if ground_alb != null:
+		mat.albedo_texture = ground_alb
+	mat.albedo_color = Color(0.36, 0.37, 0.35)
+	mat.roughness = 0.90
+	mat.uv1_scale = Vector3(12.0, 12.0, 1.0)
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+
+	for lc_var: Variant in landscapes:
+		if not (lc_var is Dictionary):
+			continue
+		var lc: Dictionary = lc_var as Dictionary
+		var hpath: String = str(lc.get("heightmap", ""))
+		if hpath == "":
+			continue
+		var img: Image = null
+		var htex: Texture2D = _load_tex(hpath)
+		if htex != null:
+			img = htex.get_image()
+		if img == null or img.is_empty():
+			img = Image.load_from_file(hpath)
+		if img == null or img.is_empty():
+			continue
+		var iw: int = img.get_width()
+		var ih: int = img.get_height()
+		var quads: int = int(lc.get("quads", 63))
+		var sb: Array = lc.get("scale_bias", [1.0 / 64.0, 1.0 / 64.0, 0.0, 0.0])
+		var sx_b: float = float(sb[0]) if sb.size() > 0 else 1.0 / 64.0
+		var sy_b: float = float(sb[1]) if sb.size() > 1 else 1.0 / 64.0
+		var ox_b: float = float(sb[2]) if sb.size() > 2 else 0.0
+		var oy_b: float = float(sb[3]) if sb.size() > 3 else 0.0
+
+		var tr_raw: Transform3D = _dict_to_transform(lc)
+		var sc: Vector3 = tr_raw.basis.get_scale()
+		# UE LandscapeComponent scale is 100.0 (= 1m per quad)
+		var step_x: float = absf(sc.x) * 0.01
+		var step_y: float = absf(sc.y) * 0.01
+		var step_z: float = absf(sc.z) * 0.01
+		if step_x < 0.05:
+			step_x = 1.0
+		if step_y < 0.05:
+			step_y = 1.0
+		if step_z < 0.05:
+			step_z = 1.0
+
+		var verts: PackedVector3Array = PackedVector3Array()
+		var uvs: PackedVector2Array = PackedVector2Array()
+		var heights: Array[float] = []
+		var stride: int = quads + 1
+		heights.resize(stride * stride)
+		for vy: int in range(stride):
+			for vx: int in range(stride):
+				var px: int = clampi(int(round((float(vx) * sx_b + ox_b) * float(iw))), 0, iw - 1)
+				var py: int = clampi(int(round((float(vy) * sy_b + oy_b) * float(ih))), 0, ih - 1)
+				var c: Color = img.get_pixel(px, py)
+				var h16: int = (c.r8 << 8) | c.g8
+				var h_val: float = ((float(h16) - 32768.0) / 128.0) * step_y
+				heights[vy * stride + vx] = h_val
+
+		var faces: PackedVector3Array = PackedVector3Array()
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		for qy: int in range(quads):
+			for qx: int in range(quads):
+				var p00 := Vector3(float(qx) * step_x, heights[qy * stride + qx], float(qy) * step_z)
+				var p10 := Vector3(float(qx + 1) * step_x, heights[qy * stride + (qx + 1)], float(qy) * step_z)
+				var p01 := Vector3(float(qx) * step_x, heights[(qy + 1) * stride + qx], float(qy + 1) * step_z)
+				var p11 := Vector3(float(qx + 1) * step_x, heights[(qy + 1) * stride + (qx + 1)], float(qy + 1) * step_z)
+				var u00 := Vector2(float(qx) / float(quads), float(qy) / float(quads))
+				var u10 := Vector2(float(qx + 1) / float(quads), float(qy) / float(quads))
+				var u01 := Vector2(float(qx) / float(quads), float(qy + 1) / float(quads))
+				var u11 := Vector2(float(qx + 1) / float(quads), float(qy + 1) / float(quads))
+				st.set_uv(u00); st.add_vertex(p00)
+				st.set_uv(u11); st.add_vertex(p11)
+				st.set_uv(u10); st.add_vertex(p10)
+				st.set_uv(u00); st.add_vertex(p00)
+				st.set_uv(u01); st.add_vertex(p01)
+				st.set_uv(u11); st.add_vertex(p11)
+				faces.append(p00); faces.append(p11); faces.append(p10)
+				faces.append(p00); faces.append(p01); faces.append(p11)
+		st.generate_normals()
+		var arr_mesh: ArrayMesh = st.commit()
+		if arr_mesh == null:
+			continue
+		arr_mesh.surface_set_material(0, mat)
+
+		var mi := MeshInstance3D.new()
+		mi.mesh = arr_mesh
+		mi.transform = Transform3D(tr_raw.basis.orthonormalized(), tr_raw.origin)
+		parent.add_child(mi)
+
+		if col_body != null and not faces.is_empty():
+			var cshape := ConcavePolygonShape3D.new()
+			cshape.backface_collision = true
+			cshape.set_faces(faces)
+			var cs := CollisionShape3D.new()
+			cs.shape = cshape
+			cs.transform = Transform3D(tr_raw.basis.orthonormalized(), tr_raw.origin)
+			col_body.add_child(cs)

@@ -5,7 +5,10 @@ extends CanvasLayer
 ## 2P co-op host/join controls, deploy + close actions.
 
 signal deploy_requested(contract_order: int, map_id: String)
+signal mission_selected(contract_order: int, map_id: String, difficulty: int, mode: String)
 signal closed()
+
+const MissionPrepUIScript: GDScript = preload("res://src/ui/mission_prep_ui.gd")
 
 const SPLASH_CANDIDATES: Array[String] = [
 	"res://assets/ue/Content/Art/UI/MapSplash_Guildhall.png",
@@ -16,8 +19,14 @@ const SPLASH_CANDIDATES: Array[String] = [
 
 var selected_order: int = 1
 var selected_map_id: String = ""
+var coop_mode: String = "Solo"
 
 var _contracts: Array[Dictionary] = []
+var _main_root: Control
+var _confirm_root: Control
+var _confirm_lbl: Label
+var _confirm_visible: bool = false
+var _prep: Control
 var _list: ItemList
 var _splash_rect: TextureRect
 var _title_lbl: Label
@@ -52,6 +61,9 @@ func close_table() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not visible:
 		return
+	if _confirm_visible:
+		_confirm_input(event)
+		return
 	if event.is_action_pressed("ui_cancel"):
 		_close_ui()
 		get_viewport().set_input_as_handled()
@@ -63,8 +75,32 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 
+## Confirmation-modal keys: [SPACE] prepare, [ESC] cancel, [H] difficulty, [R] mode.
+func _confirm_input(event: InputEvent) -> void:
+	if event is InputEventKey:
+		var kev: InputEventKey = event as InputEventKey
+		if kev.pressed and not kev.echo:
+			if kev.keycode == KEY_ESCAPE:
+				_hide_confirm()
+				get_viewport().set_input_as_handled()
+				return
+			if kev.keycode == KEY_SPACE:
+				_confirm_prepare()
+				get_viewport().set_input_as_handled()
+				return
+			if kev.keycode == KEY_H:
+				_cycle_difficulty()
+				get_viewport().set_input_as_handled()
+				return
+			if kev.keycode == KEY_R:
+				_toggle_mode()
+				get_viewport().set_input_as_handled()
+				return
+
+
 func _build_ui() -> void:
 	var root: Control = Control.new()
+	_main_root = root
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(root)
 	var dim: ColorRect = ColorRect.new()
@@ -292,6 +328,7 @@ func _on_host_pressed() -> void:
 	elif NetManager.has_method("host"):
 		err_code = int(NetManager.call("host"))
 	if err_code == OK:
+		coop_mode = "Co-op"
 		_net_status.text = "Hosting co-op"
 	else:
 		_net_status.text = "Host failed: %d" % err_code
@@ -307,16 +344,163 @@ func _on_join_pressed() -> void:
 	elif NetManager.has_method("join"):
 		err_code = int(NetManager.call("join", addr))
 	if err_code == OK:
+		coop_mode = "Co-op"
 		_net_status.text = "Connecting to " + addr + "..."
 	else:
 		_net_status.text = "Join failed: %d" % err_code
 
 
 func _on_deploy_pressed() -> void:
-	deploy_requested.emit(selected_order, selected_map_id)
+	_show_confirm()
+
+
+## Public helper: open the blurred confirmation dialog for the current selection.
+func open_confirm() -> void:
+	_show_confirm()
+
+
+func _difficulty_label() -> String:
+	var d: int = int(GameState.difficulty)
+	if d == 1:
+		return "Novice"
+	if d == 2:
+		return "Thief"
+	return "Master Thief"
+
+
+func _confirm_text() -> String:
+	return "Join Mission with these settings?\nDifficulty: %s\nMode: %s" % [_difficulty_label(), coop_mode]
+
+
+func _show_confirm() -> void:
+	if _confirm_root == null:
+		_build_confirm()
+	_refresh_confirm_text()
+	_confirm_root.visible = true
+	_confirm_visible = true
+
+
+func _hide_confirm() -> void:
+	_confirm_visible = false
+	if _confirm_root != null:
+		_confirm_root.visible = false
+
+
+func _refresh_confirm_text() -> void:
+	if _confirm_lbl != null:
+		_confirm_lbl.text = _confirm_text()
+
+
+func _build_confirm() -> void:
+	var dim: Control = Control.new()
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(dim)
+	_confirm_root = dim
+	var bg: ColorRect = ColorRect.new()
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.color = Color(0.0, 0.0, 0.02, 0.62)
+	dim.add_child(bg)
+	var center: CenterContainer = CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.add_child(center)
+	var panel: PanelContainer = PanelContainer.new()
+	panel.custom_minimum_size = Vector2(520, 0)
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = Color(0.05, 0.055, 0.10, 0.97)
+	style.border_color = Color(0.55, 0.45, 0.25, 0.9)
+	style.set_border_width_all(2)
+	style.set_content_margin_all(24)
+	style.corner_radius_top_left = 8
+	style.corner_radius_top_right = 8
+	style.corner_radius_bottom_left = 8
+	style.corner_radius_bottom_right = 8
+	panel.add_theme_stylebox_override("panel", style)
+	center.add_child(panel)
+	var vb: VBoxContainer = VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 12)
+	panel.add_child(vb)
+	_confirm_lbl = Label.new()
+	_confirm_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_confirm_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_confirm_lbl.add_theme_font_size_override("font_size", 20)
+	_confirm_lbl.add_theme_color_override("font_color", Color(0.95, 0.88, 0.66))
+	vb.add_child(_confirm_lbl)
+	var hint: Label = Label.new()
+	hint.text = "[H] Difficulty toggle  |  [R] Mode toggle"
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.add_theme_font_size_override("font_size", 14)
+	hint.add_theme_color_override("font_color", Color(0.70, 0.72, 0.78))
+	vb.add_child(hint)
+	var row: HBoxContainer = HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 12)
+	vb.add_child(row)
+	var go_btn: Button = Button.new()
+	go_btn.text = "PREPARE FOR MISSION [SPACE]"
+	go_btn.custom_minimum_size = Vector2(280, 48)
+	go_btn.pressed.connect(_confirm_prepare)
+	row.add_child(go_btn)
+	var cancel_btn: Button = Button.new()
+	cancel_btn.text = "CANCEL [ESC]"
+	cancel_btn.custom_minimum_size = Vector2(170, 48)
+	cancel_btn.pressed.connect(_hide_confirm)
+	row.add_child(cancel_btn)
+	dim.visible = false
+
+
+func _cycle_difficulty() -> void:
+	GameState.difficulty = clampi(int(GameState.difficulty) % 3 + 1, 1, 3)
+	var idx: int = clampi(int(GameState.difficulty) - 1, 0, 2)
+	if _diff_opt != null and _diff_opt.item_count == 3:
+		_diff_opt.select(idx)
+	_refresh_confirm_text()
+
+
+func _toggle_mode() -> void:
+	if coop_mode == "Solo":
+		coop_mode = "Co-op"
+	else:
+		coop_mode = "Solo"
+	if _net_status != null:
+		_net_status.text = "Solo Mode" if coop_mode == "Solo" else "Co-op Mode (pending host/join)"
+	_refresh_confirm_text()
+
+
+## Confirm: emit the selection flow and open MissionPrepUI on top of the table.
+func _confirm_prepare() -> void:
+	_hide_confirm()
+	mission_selected.emit(selected_order, selected_map_id, int(GameState.difficulty), coop_mode)
+	var prep: Control = MissionPrepUIScript.new() as Control
+	_prep = prep
+	add_child(prep)
+	if prep.has_signal("ready_pressed"):
+		prep.connect("ready_pressed", _on_prep_ready)
+	if prep.has_signal("closed"):
+		prep.connect("closed", _on_prep_closed)
+	if _main_root != null:
+		_main_root.visible = false
+	if prep.has_method("open_prep"):
+		prep.call("open_prep", selected_map_id, int(GameState.difficulty), coop_mode, selected_order)
+
+
+func _on_prep_ready(p_map_id: String, p_difficulty: int, p_mode: String, p_order: int) -> void:
+	GameState.difficulty = clampi(p_difficulty, 1, 3)
+	mission_selected.emit(p_order, p_map_id, int(GameState.difficulty), p_mode)
+	deploy_requested.emit(p_order, p_map_id)
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	if is_instance_valid(_prep):
+		_prep.queue_free()
+	_prep = null
 	visible = false
 	queue_free()
+
+
+func _on_prep_closed() -> void:
+	_prep = null
+	if _main_root != null:
+		_main_root.visible = true
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	_refresh_list()
 
 
 func _on_close_pressed() -> void:

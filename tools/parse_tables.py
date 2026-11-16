@@ -135,9 +135,14 @@ def extract_datatables():
 
 
 def build_bp_mesh_templates():
-    """Map BPP_*_PLA component variable names -> StaticMesh ObjectPath."""
+    """Index Blueprint CDO/SCS component -> StaticMesh mappings from all Blueprints & BPP_*_PLA."""
     templates = {}
-    for jf in (EX / "json" / "Maps").rglob("BPP_*.json"):
+    scan_files = list((EX / "json" / "Maps").rglob("BPP_*.json"))
+    for jf in (EX / "json").rglob("*.json"):
+        if "/Maps/" in str(jf) or "\\Maps\\" in str(jf):
+            continue
+        scan_files.append(jf)
+    for jf in scan_files:
         try:
             exps = json.loads(jf.read_text())
         except Exception:
@@ -145,24 +150,70 @@ def build_bp_mesh_templates():
         if not isinstance(exps, list):
             continue
         bp_name = jf.stem + "_C"
-        comp_meshes = {}
+        comp_meshes = templates.setdefault(bp_name, {})
         for e in exps:
             if e.get("Type") in ("InstancedStaticMeshComponent", "HierarchicalInstancedStaticMeshComponent", "StaticMeshComponent"):
                 name = e.get("Name", "").replace("_GEN_VARIABLE", "")
                 props = e.get("Properties") or {}
                 sm = (props.get("StaticMesh") or {}).get("ObjectPath")
                 if sm:
-                    comp_meshes[name] = sm.split(".")[0]
-        if comp_meshes:
-            templates[bp_name] = comp_meshes
-    print(f"Indexed {len(templates)} PackedLevelActor (BPP_*_PLA) templates")
+                    loc = props.get("RelativeLocation")
+                    rot = props.get("RelativeRotation")
+                    scl = props.get("RelativeScale3D")
+                    lmat = ue_trs_to_mat4(loc, rot, scl, is_quat=False) if (loc or rot or scl) else None
+                    comp_meshes[name] = {"sm": sm.split(".")[0], "local": lmat}
+    templates = {k: v for k, v in templates.items() if v}
+    print(f"Indexed {len(templates)} Blueprint/PLA mesh templates")
     return templates
+
+
+def build_level_transforms():
+    """Extract LevelStreamingAlwaysLoaded LevelTransform matrices keyed by normalized sublevel path."""
+    lmap = {}
+    for jf in (EX / "json" / "Maps").rglob("*_P.json"):
+        try:
+            exps = json.loads(jf.read_text())
+        except Exception:
+            continue
+        if not isinstance(exps, list):
+            continue
+        for e in exps:
+            if e.get("Type") != "LevelStreamingAlwaysLoaded":
+                continue
+            props = e.get("Properties") or {}
+            wa = ((props.get("WorldAsset") or {}).get("AssetPathName") or "").split(".")[0]
+            lt = props.get("LevelTransform")
+            if not wa or not isinstance(lt, dict):
+                continue
+            t = lt.get("Translation")
+            r = lt.get("Rotation")
+            s = lt.get("Scale3D")
+            if t or r or s:
+                lmap[wa.lower()] = ue_trs_to_mat4(t, r, s, is_quat=True)
+    print(f"Indexed {len(lmap)} sublevel LevelTransforms")
+    return lmap
+
+
+def build_glb_stem_index():
+    """Index all extracted .glb files under game/assets/ue/Content by stem -> /Game/... path."""
+    content_dir = ROOT / "game" / "assets" / "ue" / "Content"
+    by_name = {}
+    if content_dir.exists():
+        for glb in content_dir.rglob("*.glb"):
+            rel = glb.relative_to(content_dir).with_suffix("")
+            game_path = "/Game/" + str(rel).replace("\\", "/")
+            by_name[glb.stem] = game_path
+            by_name[glb.stem.lower()] = game_path
+    print(f"Indexed {len(by_name) // 2} extracted .glb stems for component fallback")
+    return by_name
 
 
 def extract_levels():
     levels_dir = OUT_DATA / "levels"
     levels_dir.mkdir(parents=True, exist_ok=True)
     bp_templates = build_bp_mesh_templates()
+    level_transforms = build_level_transforms()
+    glb_by_name = build_glb_stem_index()
     count = 0
     total_meshes = 0
     total_lights = 0
@@ -227,9 +278,14 @@ def extract_levels():
             world_cache[idx] = local
             return local
 
+        rel = jf.relative_to(EX / "json" / "Maps")
+        game_map_key = ("/Game/Maps/" + str(rel.with_suffix("")).replace("\\", "/")).lower()
+        level_mat = level_transforms.get(game_map_key)
+
         meshes = []
         lights = []
         markers = []
+        landscapes = []
 
         for idx, e in enumerate(exps):
             et = e.get("Type", "")
@@ -237,25 +293,48 @@ def extract_levels():
             outer = e.get("Outer")
             outer_name = outer.get("ObjectName", "") if isinstance(outer, dict) else ""
 
-            # 1. StaticMeshComponent
-            if et == "StaticMeshComponent":
+            # 1. StaticMeshComponent / SplineMeshComponent (including Blueprint CDO/SCS template fallback)
+            if et in ("StaticMeshComponent", "SplineMeshComponent"):
                 sm = (props.get("StaticMesh") or {}).get("ObjectPath")
+                bp_lmat = None
+                if not sm and outer_name:
+                    bp_cls = outer_name.split("'")[0]
+                    cname = e.get("Name", "")
+                    bp_map = bp_templates.get(bp_cls, {})
+                    tpl = bp_map.get(cname) or bp_map.get(cname.rstrip("0123456789"))
+                    if isinstance(tpl, dict):
+                        sm = tpl.get("sm")
+                        if not (props.get("RelativeLocation") or props.get("RelativeRotation") or props.get("RelativeScale3D")):
+                            bp_lmat = tpl.get("local")
+                if not sm:
+                    cname = e.get("Name", "")
+                    base_c = cname.rstrip("0123456789")
+                    sm = glb_by_name.get(cname) or glb_by_name.get(base_c)
+                    if not sm and "deskvariant" in cname.lower():
+                        sm = glb_by_name.get("sm_deskvariant_b") or glb_by_name.get("sm_deskvariant_a")
                 if sm:
                     wmat = get_world_mat(idx)
+                    if bp_lmat is not None:
+                        wmat = mat4_mul(wmat, bp_lmat)
+                    if level_mat is not None:
+                        wmat = mat4_mul(level_mat, wmat)
                     trs = ue_mat4_to_godot_trs(wmat)
                     meshes.append({"mesh": sm.split(".")[0], **trs})
                     continue
 
-            # 2. InstancedStaticMeshComponent / HierarchicalInstancedStaticMeshComponent
-            if et in ("InstancedStaticMeshComponent", "HierarchicalInstancedStaticMeshComponent"):
+            # 2. InstancedStaticMeshComponent / HierarchicalInstancedStaticMeshComponent / Foliage
+            if et in ("InstancedStaticMeshComponent", "HierarchicalInstancedStaticMeshComponent", "FoliageInstancedStaticMeshComponent"):
                 sm = (props.get("StaticMesh") or {}).get("ObjectPath")
                 if not sm and outer_name:
                     # Lookup from BPP_*_PLA template
                     bp_cls = outer_name.split("'")[0]
                     cname = e.get("Name", "")
-                    sm = bp_templates.get(bp_cls, {}).get(cname)
+                    tpl2 = bp_templates.get(bp_cls, {}).get(cname)
+                    sm = tpl2.get("sm") if isinstance(tpl2, dict) else tpl2
                 if sm:
                     wmat = get_world_mat(idx)
+                    if level_mat is not None:
+                        wmat = mat4_mul(level_mat, wmat)
                     instances = e.get("PerInstanceSMData") or props.get("PerInstanceSMData") or []
                     if instances:
                         for inst in instances:
@@ -271,6 +350,8 @@ def extract_levels():
             # 3. Lights
             if "PointLightComponent" in et or "SpotLightComponent" in et or "DirectionalLightComponent" in et:
                 wmat = get_world_mat(idx)
+                if level_mat is not None:
+                    wmat = mat4_mul(level_mat, wmat)
                 trs = ue_mat4_to_godot_trs(wmat)
                 lights.append({
                     "type": et,
@@ -291,10 +372,36 @@ def extract_levels():
                     ridx = comp_by_full_objname.get(rc_name)
                     if ridx is not None:
                         wmat = get_world_mat(ridx)
+                if level_mat is not None:
+                    wmat = mat4_mul(level_mat, wmat)
                 trs = ue_mat4_to_godot_trs(wmat)
                 markers.append({"name": e.get("Name", ""), "class": et, **trs})
 
-        if meshes or lights or markers:
+            # 5. LandscapeComponent heightfield terrain
+            if et == "LandscapeComponent":
+                htex = (props.get("HeightmapTexture") or {}).get("ObjectName", "")
+                hname = htex.split(".")[-1].rstrip("'") if htex else ""
+                if hname:
+                    wmat = get_world_mat(idx)
+                    if level_mat is not None:
+                        wmat = mat4_mul(level_mat, wmat)
+                    trs = ue_mat4_to_godot_trs(wmat)
+                    bias = props.get("HeightmapScaleBias") or {}
+                    h_rel = str(rel.parent / jf.stem).replace("\\", "/")
+                    landscapes.append({
+                        "heightmap": f"res://assets/ue/Raw/Maps/{h_rel}/{hname}.png",
+                        "quads": int(props.get("ComponentSizeQuads", 63)),
+                        "scale_bias": [
+                            float(bias.get("X", 1.0 / 64.0)),
+                            float(bias.get("Y", 1.0 / 64.0)),
+                            float(bias.get("Z", 0.0)),
+                            float(bias.get("W", 0.0)),
+                        ],
+                        **trs,
+                    })
+                continue
+
+        if meshes or lights or markers or landscapes:
             rel = jf.relative_to(EX / "json" / "Maps")
             dst = levels_dir / rel.with_suffix(".tatlevel.json")
             dst.parent.mkdir(parents=True, exist_ok=True)
@@ -303,6 +410,7 @@ def extract_levels():
                 "meshes": meshes,
                 "lights": lights,
                 "markers": markers,
+                "landscapes": landscapes,
             }))
             count += 1
             total_meshes += len(meshes)

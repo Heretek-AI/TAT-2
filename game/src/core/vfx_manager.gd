@@ -375,3 +375,170 @@ static func spawn_window_godray(parent: Node, pos: Vector3, target_pos: Vector3)
 	var x_axis: Vector3 = up_hint.cross(y_axis).normalized()
 	var z_axis: Vector3 = x_axis.cross(y_axis).normalized()
 	shaft.basis = Basis(x_axis, y_axis, z_axis)
+
+
+static func spawn_footprint_decal(pos: Vector3, forward: Vector3, is_left: bool) -> void:
+	var tree: SceneTree = Engine.get_main_loop() as SceneTree
+	if tree == null:
+		return
+	var parent: Node = tree.current_scene
+	if parent == null:
+		parent = tree.root
+	if parent == null:
+		return
+	var flat: Vector3 = Vector3(forward.x, 0.0, forward.z)
+	if flat.length() < 0.01:
+		flat = Vector3(0.0, 0.0, -1.0)
+	flat = flat.normalized()
+	var side: Vector3 = flat.cross(Vector3.UP).normalized()
+	var lateral: float = -0.11 if is_left else 0.11
+	var foot_pos: Vector3 = pos + Vector3(0.0, 0.012, 0.0) + side * lateral
+	var root: Node3D = Node3D.new()
+	root.name = "FootprintLeft" if is_left else "FootprintRight"
+	parent.add_child(root)
+	root.global_position = foot_pos
+	root.rotation.y = atan2(flat.x, flat.z)
+	var quad: PlaneMesh = PlaneMesh.new()
+	quad.size = Vector2(0.13, 0.30)
+	var mat: StandardMaterial3D = StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.no_depth_test = false
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.albedo_color = Color(0.82, 0.92, 1.0, 0.55)
+	mat.emission_enabled = true
+	mat.emission = Color(0.65, 0.85, 1.0, 1.0)
+	mat.emission_energy_multiplier = 1.2
+	quad.material = mat
+	var decal: MeshInstance3D = MeshInstance3D.new()
+	decal.name = "FootprintQuad"
+	decal.mesh = quad
+	decal.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(decal)
+	var fade_tween: Tween = tree.create_tween()
+	fade_tween.set_parallel(true)
+	fade_tween.tween_property(mat, "albedo_color:a", 0.0, 6.0)
+	fade_tween.tween_property(mat, "emission_energy_multiplier", 0.0, 6.0)
+	tree.create_timer(6.1).timeout.connect(root.queue_free)
+
+
+static func spawn_blue_wisp(parent: Node3D, local_pos: Vector3) -> Node3D:
+	if parent == null:
+		return null
+	var root: Node3D = Node3D.new()
+	root.name = "BlueWisp"
+	parent.add_child(root)
+	root.position = local_pos
+	var orb_mesh: SphereMesh = SphereMesh.new()
+	orb_mesh.radius = 0.09
+	orb_mesh.height = 0.18
+	orb_mesh.radial_segments = 16
+	orb_mesh.rings = 12
+	var orb_mat: StandardMaterial3D = StandardMaterial3D.new()
+	orb_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	orb_mat.albedo_color = Color(0.55, 0.9, 1.0, 1.0)
+	orb_mat.emission_enabled = true
+	orb_mat.emission = Color(0.35, 0.8, 1.0, 1.0)
+	orb_mat.emission_energy_multiplier = 3.0
+	orb_mesh.material = orb_mat
+	var orb: MeshInstance3D = MeshInstance3D.new()
+	orb.name = "WispOrb"
+	orb.mesh = orb_mesh
+	orb.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(orb)
+	var halo_mesh: SphereMesh = SphereMesh.new()
+	halo_mesh.radius = 0.17
+	halo_mesh.height = 0.34
+	halo_mesh.radial_segments = 16
+	halo_mesh.rings = 12
+	var halo_mat: StandardMaterial3D = StandardMaterial3D.new()
+	halo_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	halo_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	halo_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	halo_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	halo_mat.albedo_color = Color(0.4, 0.8, 1.0, 0.22)
+	halo_mesh.material = halo_mat
+	var halo: MeshInstance3D = MeshInstance3D.new()
+	halo.name = "WispHalo"
+	halo.mesh = halo_mesh
+	halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(halo)
+	var glow: OmniLight3D = OmniLight3D.new()
+	glow.name = "WispLight"
+	glow.light_color = Color(0.4, 0.8, 1.0)
+	glow.omni_range = 6.0
+	glow.light_energy = 1.5
+	glow.shadow_enabled = false
+	root.add_child(glow)
+	var mote_mesh: SphereMesh = SphereMesh.new()
+	mote_mesh.radius = 0.02
+	mote_mesh.height = 0.04
+	mote_mesh.radial_segments = 6
+	mote_mesh.rings = 4
+	var mote_mat: StandardMaterial3D = StandardMaterial3D.new()
+	mote_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mote_mat.albedo_color = Color(0.6, 0.95, 1.0, 1.0)
+	mote_mat.emission_enabled = true
+	mote_mat.emission = Color(0.5, 0.9, 1.0, 1.0)
+	mote_mat.emission_energy_multiplier = 2.5
+	mote_mesh.material = mote_mat
+	var motes: CPUParticles3D = CPUParticles3D.new()
+	motes.name = "WispMotes"
+	motes.amount = 24
+	motes.lifetime = 1.8
+	motes.emitting = true
+	motes.mesh = mote_mesh
+	motes.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	motes.emission_sphere_radius = 0.12
+	motes.direction = Vector3(0.0, 1.0, 0.0)
+	motes.spread = 25.0
+	motes.gravity = Vector3(0.0, 0.5, 0.0)
+	motes.initial_velocity_min = 0.35
+	motes.initial_velocity_max = 0.9
+	motes.scale_amount_min = 0.5
+	motes.scale_amount_max = 1.0
+	root.add_child(motes)
+	var bob_tween: Tween = orb.create_tween()
+	bob_tween.set_loops()
+	bob_tween.tween_property(orb, "position:y", 0.12, 1.2).set_trans(Tween.TRANS_SINE)
+	bob_tween.tween_property(orb, "position:y", -0.05, 1.2).set_trans(Tween.TRANS_SINE)
+	return root
+
+
+static func set_prop_highlight(target: Node, enabled: bool) -> void:
+	if target == null:
+		return
+	if not is_instance_valid(target):
+		return
+	var meshes: Array[MeshInstance3D] = []
+	if target is MeshInstance3D:
+		meshes.append(target as MeshInstance3D)
+	var found: Array[Node] = target.find_children("*", "MeshInstance3D", true, false)
+	for child: Node in found:
+		if child is MeshInstance3D:
+			meshes.append(child as MeshInstance3D)
+	for mi: MeshInstance3D in meshes:
+		if enabled:
+			if mi.has_meta("_vfx_hl") and bool(mi.get_meta("_vfx_hl", false)):
+				continue
+			mi.set_meta("_vfx_hl", true)
+			mi.set_meta("_vfx_hl_orig", mi.material_overlay)
+			var hl: StandardMaterial3D = StandardMaterial3D.new()
+			hl.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+			hl.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			hl.albedo_color = Color(0.45, 0.8, 1.0, 0.28)
+			hl.emission_enabled = true
+			hl.emission = Color(0.35, 0.75, 1.0, 1.0)
+			hl.emission_energy_multiplier = 1.2
+			hl.rim_enabled = true
+			hl.rim = 0.6
+			hl.rim_tint = 0.4
+			mi.material_overlay = hl
+		else:
+			if not mi.has_meta("_vfx_hl"):
+				continue
+			var orig: Material = mi.get_meta("_vfx_hl_orig", null) as Material
+			mi.material_overlay = orig
+			mi.remove_meta("_vfx_hl")
+			if mi.has_meta("_vfx_hl_orig"):
+				mi.remove_meta("_vfx_hl_orig")

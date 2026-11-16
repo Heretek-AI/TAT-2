@@ -17,7 +17,7 @@ Re-run the census with the commands at the bottom.
 | DataTables / CurveTables / StringTables | 58 `DT_` / 79 `ST_` / curves | 141 normalized tables | good |
 | **Animations** | **879 `AN_`** | **995 USD exported** (incl. 357 ACL-decoded), GLB batch converting; 14 failures are blend spaces | **wave A2 (in progress)** |
 | **Weather / atmosphere** | 16 presets + `TATWeatherManager` in 103 levels | **applied** (`tools/parse_weather.py` -> `game/data/generated/weather/`, `weather_profile.gd`, mission wiring, suite 17) | **done (7aa34db)** |
-| **Niagara VFX** | 120 `NS_` systems + 38 level NiagaraComponents | 120 systems dumped; level components being extracted (A5); runtime conversion pending | **wave A4/A5** |
+| **Niagara VFX** | 120 `NS_` systems + 3,692 level placements | catalogue: 29 sprite-only / 70 mesh-ribbon / 21 graph-heavy; 139/148 materials resolved, 129/456 renderer textures | **catalogue done (26f9838); runtime blocked by compiled graphs** |
 | **Materials** | 1,247 `MI_` + 386 `M_` + 167 `MF_` + 289 material layers | 1,552 resolved: textures + scalar/vector/switch params + render flags + phys material | **done (ec9f700)** |
 | **Decals** | 16 `DecalComponent` files + 10 `DecalActor` | level JSON only | **wave A5** (BP template resolution needed) |
 | **Rect / sky lights** | 7 `RectLightComponent`, 1 `SkyLight`, 1 `SkyAtmosphere` | level JSON only | **wave A5** |
@@ -59,7 +59,10 @@ Plan: parse parameters into `material_params.json`; build `ShaderMaterial` or
 ### Hard limit — cooked material graphs
 Cooked UE `Material` exports contain **no expression graph and no texture references** (verified: `M_Decal_Puddle` has only BlendMode/flag properties). Textures that live in a material graph are not recoverable from the install; only exposed `TextureParameterValues` on MaterialInstances resolve. Consequence: 667 level decals and some Niagara sprite materials have no trustworthy texture. The runtime must validate material->texture stem matches and skip the rest rather than bind generic fallbacks. A true 1:1 look for those assets would require recreating graphs from reference, which is not in the cooked data.
 
-### A4 — Niagara VFX
+### A4 — Niagara VFX (catalogue done, runtime constrained)
+120 systems catalogued (`tools/parse_vfx.py`, 26f9838): 29 sprite-only, 70 mesh/ribbon, 21 graph-heavy; 139 of 148 renderer materials resolve, but only 129 of 456 renderer entries have a real texture. Loop duration is null for all systems; spawn rate, lifetime, velocity and colour curves are computed inside **Niagara VM bytecode**, not stored as values. A 1:1 particle conversion would require decompiling the Niagara VM; the runtime therefore must not invent rates. Level placements (3,692) are extracted so effects can be anchored/activated once a specific system is hand-matched or its bytecode is analysed.
+
+### A4b — Niagara VFX (original)
 120 systems dumped (curves/LUTs included). A faithful Niagara graph translation is a
 separate project; first extract emitter material, spawn/lifetime/colour parameters, then
 drive GPUParticles3D from those values. No fabricated effects.

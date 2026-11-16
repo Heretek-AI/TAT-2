@@ -393,5 +393,64 @@ func _initialize() -> void:
 	mp_scr.set_tier(1, save_sys)
 	await process_frame
 
+	# 17. Real TAT weather: DenseFog preset drives Environment/DirectionalLight3D
+	var wp_scr: GDScript = load("res://src/core/weather_profile.gd") as GDScript
+	if wp_scr == null:
+		printerr("FAIL: weather_profile.gd failed to load")
+		fails += 1
+	else:
+		var wfile: FileAccess = FileAccess.open("res://data/generated/weather/dense_fog.json", FileAccess.READ)
+		if wfile == null:
+			printerr("FAIL: dense_fog.json weather preset missing")
+			fails += 1
+		else:
+			var wpreset: Variant = JSON.parse_string(wfile.get_as_text())
+			var wok := wpreset is Dictionary and str(wpreset.get("preset", "")) == "dense_fog" and str(wpreset.get("source", "")).ends_with("BP_WeatherPreset_DenseFog.json")
+			var wmap_ok := str(wp_scr.preset_name_for_map("old_manor")) == "dense_fog_old_manor" and str(wp_scr.preset_name_for_map("thieves_den")) == "midnight_clear_thieves_den" and str(wp_scr.preset_name_for_map("jaspering_hall")) == "heavy_rain" and str(wp_scr.preset_name_for_map("main_menu")) == "midnight_clear_mission_lobby" and str(wp_scr.preset_name_for_map("guildhall")) == "midnight_clear" and str(wp_scr.preset_name_for_map("no_such_map")) == ""
+			var wenv := Environment.new()
+			var wmoon := DirectionalLight3D.new()
+			var applied: bool = bool(wp_scr.apply_environment(wenv, wmoon, wpreset))
+			var fog_src: Dictionary = wpreset.get("fog", {})
+			var ml_src: Dictionary = wpreset.get("moon_light", {})
+			var pp_src: Dictionary = wpreset.get("postprocess", {})
+			var sky_src: Dictionary = wpreset.get("sky", {})
+			var exp_fog := float(fog_src.get("density", 0.0)) * 0.01
+			var exp_energy: float = clampf(float(ml_src.get("intensity", 0.0)) * 10.0, 0.05, 1.0)
+			var exp_rot := Vector3(float(ml_src.get("pitch", 0.0)), float(ml_src.get("yaw", 0.0)), float(ml_src.get("roll", 0.0)))
+			var exp_mc: Array = ml_src.get("color", [1, 1, 1])
+			var exp_fogc: Array = fog_src.get("inscattering", [0, 0, 0])
+			var exp_skyc: Array = sky_src.get("light_color", [1, 1, 1])
+			var wvals_ok := applied \
+				and is_equal_approx(wenv.fog_density, exp_fog) \
+				and is_equal_approx(wmoon.light_energy, exp_energy) \
+				and wmoon.rotation_degrees.is_equal_approx(exp_rot) \
+				and is_equal_approx(wmoon.light_color.r, float(exp_mc[0])) \
+				and is_equal_approx(wmoon.light_color.g, float(exp_mc[1])) \
+				and is_equal_approx(wmoon.light_color.b, float(exp_mc[2])) \
+				and is_equal_approx(wenv.fog_light_color.r, float(exp_fogc[0])) \
+				and is_equal_approx(wenv.ambient_light_color.r, float(exp_skyc[0])) \
+				and is_equal_approx(wenv.ambient_light_energy, clampf(float(sky_src.get("intensity", 0.0)), 0.02, 1.0)) \
+				and is_equal_approx(wenv.adjustment_saturation, float(pp_src.get("saturation", 1.0))) \
+				and is_equal_approx(wenv.glow_intensity, clampf(float(pp_src.get("bloom_intensity", 0.0)) * 0.08, 0.0, 0.8)) \
+				and bool(wp_scr.enable_rain(wpreset)) \
+				and is_equal_approx(float(wp_scr.rain_intensity(wpreset)), float(wpreset.get("rain", {}).get("intensity", 0.0)))
+			var wenv2 := Environment.new()
+			var wmoon2 := DirectionalLight3D.new()
+			var map_applied: bool = bool(wp_scr.apply_for_map(wenv2, wmoon2, "old_manor"))
+			var wenv3 := Environment.new()
+			var wmoon3 := DirectionalLight3D.new()
+			var b_fog := wenv3.fog_density
+			var b_energy := wmoon3.light_energy
+			var b_rot := wmoon3.rotation_degrees
+			var missing_applied: bool = bool(wp_scr.apply_for_map(wenv3, wmoon3, "no_such_map"))
+			var empty_applied: bool = bool(wp_scr.apply_environment(wenv3, wmoon3, {}))
+			var untouched_ok := is_equal_approx(wenv3.fog_density, b_fog) and is_equal_approx(wmoon3.light_energy, b_energy) and wmoon3.rotation_degrees.is_equal_approx(b_rot)
+			var wmap_apply_ok := map_applied and not missing_applied and not empty_applied and untouched_ok
+			if not wok or not wmap_ok or not wvals_ok or not wmap_apply_ok:
+				printerr("FAIL: weather preset apply (file=", wok, " map=", wmap_ok, " values=", wvals_ok, " apply=", wmap_apply_ok, " fog=", wenv.fog_density, " energy=", wmoon.light_energy, " rot=", wmoon.rotation_degrees, ")")
+				fails += 1
+			else:
+				print("PASS: Real weather DenseFog applied (fog=", snappedf(wenv.fog_density, 0.0001), " moon_energy=", snappedf(wmoon.light_energy, 0.01), " rot=", wmoon.rotation_degrees, ")")
+
 	print("SUMMARY: fails=", fails)
 	quit(0 if fails == 0 else 1)

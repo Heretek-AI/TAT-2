@@ -12,6 +12,7 @@ const EscapeScript := preload("res://src/interact/escape_gate.gd")
 const LightProbeScript := preload("res://src/stealth/light_probe.gd")
 const LevelLoaderScript := preload("res://src/core/level_loader.gd")
 const MobileProfile := preload("res://src/core/mobile_profile.gd")
+const WeatherProfile := preload("res://src/core/weather_profile.gd")
 const VfxManager := preload("res://src/core/vfx_manager.gd")
 const HudScript := preload("res://src/ui/hud.gd")
 const WardrobeUIScript := preload("res://src/ui/wardrobe_ui.gd")
@@ -51,6 +52,23 @@ func _ready() -> void:
 func _setup_environment() -> void:
 	var env := WorldEnvironment.new()
 	var e := Environment.new()
+	_apply_fallback_environment(e)
+	var moon := DirectionalLight3D.new()
+	_apply_fallback_moon(moon)
+	# Real TAT weather first; hand-tuned values above survive any field the
+	# preset does not define, and fully survive when no preset maps the map.
+	WeatherProfile.apply_for_map(e, moon, GameState.active_map_id)
+	MobileProfile.apply_environment(e)
+	env.environment = e
+	add_child(env)
+
+	add_child(moon)
+	light_probe.register_light(moon)
+
+
+## Previous hand-tuned night look. Used as the base under real weather data
+## and as the full fallback when a map has no weather preset.
+func _apply_fallback_environment(e: Environment) -> void:
 	e.background_mode = Environment.BG_COLOR
 	e.background_color = Color(0.02, 0.028, 0.055)
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
@@ -63,17 +81,13 @@ func _setup_environment() -> void:
 	e.glow_intensity = 0.65
 	e.glow_bloom = 0.22
 	e.tonemap_mode = Environment.TONE_MAPPER_ACES
-	MobileProfile.apply_environment(e)
-	env.environment = e
-	add_child(env)
 
-	var moon := DirectionalLight3D.new()
+
+func _apply_fallback_moon(moon: DirectionalLight3D) -> void:
 	moon.rotation_degrees = Vector3(-48, 32, 0)
 	moon.light_color = Color(0.68, 0.78, 0.98)
 	moon.light_energy = 0.55
 	moon.shadow_enabled = true
-	add_child(moon)
-	light_probe.register_light(moon)
 
 
 func start_contract(order: int) -> void:

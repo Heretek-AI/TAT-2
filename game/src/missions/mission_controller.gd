@@ -121,6 +121,7 @@ func start_contract(order: int) -> void:
 		ue_level_data = level_loader.load_sublevels(sublevels, self, light_probe, light_budget)
 	print("TAT-2 Loaded ", map_id, ": meshes=", ue_level_data.get("mesh_instances", 0), " lights=", ue_level_data.get("light_count", 0))
 	level_stats = ue_level_data
+	_apply_level_atmosphere(ue_level_data)
 	if int(ue_level_data.get("chunk_count", 0)) > 0:
 		print("TAT-2 Perf: chunks=", ue_level_data.get("chunk_count", 0), " collision_bodies=", ue_level_data.get("collision_bodies", 0), " collision_shapes=", ue_level_data.get("collision_shapes", 0), " occluders=", ue_level_data.get("occluder_count", 0))
 
@@ -159,6 +160,77 @@ func _setup_thieves_den_env(map_id: String) -> void:
 			if wenv.environment != null:
 				wenv.environment.ambient_light_energy = 0.18
 				wenv.environment.background_color = Color(0.012, 0.016, 0.032)
+
+
+## Applies level-authored atmosphere entries extracted from the UE maps.
+## Runs after fallback -> weather preset -> mobile overrides, most specific
+## last; the existing ordering is otherwise untouched. Only fields Godot
+## supports are mapped — Lumen/UE-only post-process fields are logged as
+## unmappable and leave the environment unchanged.
+func _apply_level_atmosphere(stats: Dictionary) -> void:
+	var wenv: WorldEnvironment = null
+	for child in get_children():
+		if child is WorldEnvironment:
+			wenv = child as WorldEnvironment
+			break
+	if wenv == null or wenv.environment == null:
+		return
+	var env: Environment = wenv.environment
+	var sky: Dictionary = stats.get("sky_light", {})
+	if not sky.is_empty() and float(sky.get("intensity", 0.0)) > 0.0:
+		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+		env.ambient_light_energy = clampf(float(sky.get("intensity", 0.0)) * 0.2, 0.02, 1.0)
+		var scol: Variant = sky.get("color", null)
+		if scol is Array and (scol as Array).size() >= 3:
+			env.ambient_light_color = _level_color(scol)
+	var fog: Dictionary = stats.get("fog_volume", {})
+	if not fog.is_empty() and float(fog.get("density", 0.0)) > 0.0:
+		env.fog_enabled = true
+		# Same UE -> Godot density scale as weather_profile.
+		env.fog_density = float(fog.get("density", 0.0)) * 0.01
+		var insc: Variant = fog.get("inscattering", null)
+		if insc is Array and (insc as Array).size() >= 3:
+			env.fog_light_color = _level_color(insc)
+	var pp: Dictionary = stats.get("post_process", {})
+	if not pp.is_empty():
+		_apply_level_post_process(env, pp)
+
+
+## Accepts both 0-255 UE bytes and 0-1 floats (HeightFog inscattering is
+## already 0-1 while RectLight colours are 0-255).
+func _level_color(arr: Array) -> Color:
+	var r := float(arr[0])
+	var g := float(arr[1])
+	var b := float(arr[2])
+	if maxf(r, maxf(g, b)) > 1.0:
+		return Color(r / 255.0, g / 255.0, b / 255.0)
+	return Color(r, g, b)
+
+
+## Maps only the post-process fields Godot supports (same scales as
+## weather_profile). Lumen/UE-only fields — e.g. LumenSkylightLeaking,
+## LumenFullSkylightLeakingDistance, LocalExposure* — have no Godot
+## counterpart and are reported, not guessed.
+func _apply_level_post_process(env: Environment, pp: Dictionary) -> void:
+	var settings: Dictionary = pp.get("settings", {})
+	if settings.is_empty():
+		return
+	var mapped: int = 0
+	if settings.has("BloomIntensity"):
+		env.glow_enabled = true
+		env.glow_intensity = clampf(float(settings["BloomIntensity"]) * 0.08, 0.0, 0.8)
+		mapped += 1
+	if settings.has("Saturation"):
+		env.adjustment_enabled = true
+		env.adjustment_saturation = float(settings["Saturation"])
+		mapped += 1
+	var unmapped: Array[String] = []
+	for k in settings.keys():
+		var ks := str(k)
+		if ks != "BloomIntensity" and ks != "Saturation" and ks != "unbound":
+			unmapped.append(ks)
+	if mapped == 0:
+		print("TAT-2 post_process '", str(pp.get("source_actor", "?")), "' carries only Lumen/UE-only settings (", ", ".join(unmapped), "); nothing Godot-mappable, environment unchanged")
 
 
 func _map_id_to_sublevels(map_id: String, order: int = 2) -> Array[String]:

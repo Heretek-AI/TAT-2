@@ -38,6 +38,24 @@ const LIGHT_DISTANCE_FADE_BEGIN: float = 28.0
 const LIGHT_DISTANCE_FADE_LENGTH: float = 12.0
 const PROGRESS_YIELD_EVERY: int = 64
 
+## Level-component runtime (decals / rect lights / volumes / splines) ---------
+## UE decals project along their local +X (DecalActor arrow axis); Godot
+## Decal nodes project along local -Y, so every decal basis is post-rotated
+## +90 deg about Z (maps -Y onto +X). UE's default decal box is 1 m per axis,
+## so components with no authored DecalSize derive extents from their
+## RelativeScale3D (already converted to metres by the extractor).
+const MAX_DECALS_PER_MAP: int = 256
+const DECAL_FADE_BEGIN: float = 45.0
+const DECAL_FADE_END: float = 60.0
+const UE_DEFAULT_DECAL_M: float = 1.0
+## RectLight entries at or below this intensity are authored off (their glow
+## is animated at runtime) and must not allocate lights.
+const RECT_LIGHT_OFF_THRESHOLD: float = 0.01
+## RectLight width/height arrive as raw UU centimetres (radius is metres).
+const UU_CM_TO_M: float = 0.01
+## Tokens too generic to prove a decal texture belongs to its material.
+const DECAL_GENERIC_TOKENS: Array[String] = ["m", "mi", "t", "d", "da", "a", "inst", "decal", "decals"]
+
 ## Foliage/debris/clutter: aggressively culled, never casts shadows or collides.
 const CLUTTER_TOKENS: Array[String] = [
 	"sm_leaf", "sm_grass", "sm_newgrass", "sm_newspaper", "sm_pebble", "sm_debris",
@@ -406,6 +424,14 @@ func _new_accumulator() -> Dictionary:
 		"batches_nocol": {},
 		"lights": [] as Array,
 		"landscapes": [] as Array,
+		"decals": [] as Array,
+		"rect_lights": [] as Array,
+		"volumes": [] as Array,
+		"sky_lights": [] as Array,
+		"fog_volumes": [] as Array,
+		"post_process": [] as Array,
+		"niagara": [] as Array,
+		"splines": [] as Array,
 		"seen_lights": {},
 		"result": {
 			"player_spawns": [] as Array[Vector3],
@@ -424,6 +450,18 @@ func _new_accumulator() -> Dictionary:
 			"collision_bodies": 0,
 			"collision_shapes": 0,
 			"occluder_count": 0,
+			"decal_count": 0,
+			"decal_skipped": 0,
+			"decal_unresolved_material": 0,
+			"rect_light_count": 0,
+			"rect_light_skipped": 0,
+			"blocking_volume_count": 0,
+			"volume_skipped": 0,
+			"niagara_placements": 0,
+			"spline_count": 0,
+			"sky_light": {},
+			"fog_volume": {},
+			"post_process": {},
 		},
 	}
 
@@ -442,6 +480,18 @@ func _new_build_ctx(parent: Node3D, light_probe: Node, generate_collision: bool)
 		"light_count": 0,
 		"landscapes_built": 0,
 		"landscape_mat": null,
+		"decal_count": 0,
+		"decal_skipped": 0,
+		"decal_unresolved_material": 0,
+		"rect_light_count": 0,
+		"rect_light_skipped": 0,
+		"blocking_volume_count": 0,
+		"volume_skipped": 0,
+		"niagara_placements": 0,
+		"spline_count": 0,
+		"sky_light": {},
+		"fog_volume": {},
+		"post_process": {},
 	}
 
 
@@ -536,6 +586,32 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 		elif "Door" in cls:
 			var ds: Array = result["door_spawns"]
 			ds.append(p)
+
+	# Level-component arrays: collected verbatim, validated at build time.
+	for d in data_dict.get("decals", []):
+		if d is Dictionary:
+			(acc["decals"] as Array).append(d)
+	for r in data_dict.get("rect_lights", []):
+		if r is Dictionary:
+			(acc["rect_lights"] as Array).append(r)
+	for v in data_dict.get("volumes", []):
+		if v is Dictionary:
+			(acc["volumes"] as Array).append(v)
+	for s in data_dict.get("sky_lights", []):
+		if s is Dictionary:
+			(acc["sky_lights"] as Array).append(s)
+	for fv in data_dict.get("fog_volumes", []):
+		if fv is Dictionary:
+			(acc["fog_volumes"] as Array).append(fv)
+	for pp in data_dict.get("post_process", []):
+		if pp is Dictionary:
+			(acc["post_process"] as Array).append(pp)
+	for n in data_dict.get("niagara", []):
+		if n is Dictionary:
+			(acc["niagara"] as Array).append(n)
+	for sp in data_dict.get("landscape_splines", []):
+		if sp is Dictionary:
+			(acc["splines"] as Array).append(sp)
 
 
 func _cell_of(tr: Transform3D) -> Vector2i:
@@ -751,7 +827,298 @@ func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dict
 	result["collision_bodies"] = int(ctx.get("collision_bodies", 0))
 	result["collision_shapes"] = int(ctx.get("collision_shapes", 0))
 	result["occluder_count"] = int(ctx.get("occluders", 0))
+	result["decal_count"] = int(ctx.get("decal_count", 0))
+	result["decal_skipped"] = int(ctx.get("decal_skipped", 0))
+	result["decal_unresolved_material"] = int(ctx.get("decal_unresolved_material", 0))
+	result["rect_light_count"] = int(ctx.get("rect_light_count", 0))
+	result["rect_light_skipped"] = int(ctx.get("rect_light_skipped", 0))
+	result["blocking_volume_count"] = int(ctx.get("blocking_volume_count", 0))
+	result["volume_skipped"] = int(ctx.get("volume_skipped", 0))
+	result["niagara_placements"] = int(ctx.get("niagara_placements", 0))
+	result["spline_count"] = int(ctx.get("spline_count", 0))
+	result["sky_light"] = ctx.get("sky_light", {})
+	result["fog_volume"] = ctx.get("fog_volume", {})
+	result["post_process"] = ctx.get("post_process", {})
 	return result
+
+
+## Splits camelCase and non-alphanumeric boundaries into lowercase tokens.
+func _decal_tokens(s: String) -> Array[String]:
+	var out: Array[String] = []
+	var cur := ""
+	var prev_lower := false
+	for i in range(s.length()):
+		var ch := s[i]
+		var is_upper := ch >= "A" and ch <= "Z"
+		var is_lower := ch >= "a" and ch <= "z"
+		var is_digit := ch >= "0" and ch <= "9"
+		if not (is_upper or is_lower or is_digit):
+			if cur != "":
+				out.append(cur.to_lower())
+				cur = ""
+			prev_lower = false
+			continue
+		if is_upper and prev_lower:
+			if cur != "":
+				out.append(cur.to_lower())
+				cur = ""
+		cur += ch
+		prev_lower = is_lower
+	if cur != "":
+		out.append(cur.to_lower())
+	return out
+
+
+## Strict decal-material validation. Cooked UE Material assets carry no
+## expression graph, so a decal texture is trusted only when the bound albedo
+## stem shares a meaningful (len>=4, non-generic) token with the material
+## name — e.g. MI_SmokeBomb_Decal + T_SmokeBomb_D, MI_DirtDecalA3 +
+## T_GroundDirtA_D via "dirt", MI_Decal_Moss + T_MossA_D. The generic
+## poster fallback (T_DecalPostersA_DA) never shares such a token with
+## unrelated materials (M_Decal_Puddle, M_Decal_Glyph) and is rejected here,
+## as are placeholder swaps (MI_DecalPaperA -> T_GroundStoneA_D) and
+## texture-less cooked materials (M_Puddle_Inst). The only exception is an
+## explicitly authored tint colour (e.g. MagicSlime puddle), which yields a
+## texture-less flat-colour decal.
+func _is_decal_material_usable(ue_mat_path: String) -> Dictionary:
+	var out := {"usable": false, "texture": null, "normal": null, "color": null, "reason": ""}
+	if ue_mat_path == "":
+		out["reason"] = "empty material path"
+		return out
+	var info: Dictionary = _materials_db.get(ue_mat_path, _materials_db_lower.get(ue_mat_path.to_lower(), {}))
+	if info.is_empty():
+		out["reason"] = "material not in materials.json"
+		return out
+	var texs: Dictionary = info.get("texs", {})
+	var alb_path := str(texs.get("albedo", ""))
+	var stem := alb_path.split("/")[-1].split(".")[0]
+	var mat_tokens := _decal_tokens(ue_mat_path.split("/")[-1])
+	var stem_tokens := _decal_tokens(stem)
+	var matched := false
+	for mt in mat_tokens:
+		if mt.length() < 4 or mt in DECAL_GENERIC_TOKENS:
+			continue
+		for st in stem_tokens:
+			if st.length() < 4 or st in DECAL_GENERIC_TOKENS:
+				continue
+			if st == mt or st.find(mt) >= 0 or mt.find(st) >= 0:
+				matched = true
+				break
+		if matched:
+			break
+	if matched and alb_path != "":
+		var tex := _load_tex(alb_path)
+		if tex == null:
+			out["reason"] = "albedo file missing: " + alb_path
+			return out
+		out["usable"] = true
+		out["texture"] = tex
+		var norm := _load_tex(str(texs.get("normal", "")))
+		if norm != null:
+			out["normal"] = norm
+		var tint: Variant = info.get("tint")
+		if tint is Array and (tint as Array).size() >= 3:
+			var ta: Array = tint
+			out["color"] = Color(float(ta[0]), float(ta[1]), float(ta[2]), 1.0)
+		return out
+	var tint2: Variant = info.get("tint")
+	if tint2 is Array and (tint2 as Array).size() >= 3:
+		var tb: Array = tint2
+		var c := Color(float(tb[0]), float(tb[1]), float(tb[2]), 1.0)
+		if maxf(c.r, maxf(c.g, c.b)) >= 0.05:
+			out["usable"] = true
+			out["color"] = c
+			out["reason"] = "flat colour (explicit tint, no trustworthy texture)"
+			return out
+	if alb_path != "" and not matched:
+		out["reason"] = "albedo stem shares no token with material (cooked graph, not recoverable)"
+	else:
+		out["reason"] = "no albedo and no explicit tint"
+	return out
+
+
+## Spawns Godot Decal nodes for validated materials only. Unresolvable
+## materials are skipped and counted, never given substitute art.
+func _build_decals(decals: Array, parent: Node3D, ctx: Dictionary) -> void:
+	var spawned: int = 0
+	var skipped: int = 0
+	var unresolved: int = 0
+	for d_var in decals:
+		if not (d_var is Dictionary):
+			skipped += 1
+			continue
+		var d: Dictionary = d_var
+		var verdict: Dictionary = _is_decal_material_usable(str(d.get("material", "")))
+		if not bool(verdict.get("usable", false)):
+			skipped += 1
+			unresolved += 1
+			continue
+		if spawned >= MAX_DECALS_PER_MAP:
+			skipped += 1
+			continue
+		var tr := _dict_to_transform(d)
+		var decal := Decal.new()
+		# UE projects along local +X; Godot projects along local -Y.
+		var fix := Basis(Vector3.FORWARD, PI * 0.5)
+		decal.transform = Transform3D((tr.basis * fix).orthonormalized(), tr.origin)
+		var size_arr: Array = []
+		var size_raw: Variant = d.get("size", [])
+		if size_raw is Array:
+			size_arr = size_raw
+		var size_v: Vector3
+		if size_arr.size() >= 3:
+			# Authored DecalSize is UE-ordered (X=depth, Y=width, Z=height);
+			# Godot size is (X=width, Y=depth, Z=height).
+			size_v = Vector3(float(size_arr[1]), float(size_arr[0]), float(size_arr[2]))
+		else:
+			var sc := tr.basis.get_scale()
+			size_v = Vector3(absf(sc.y), absf(sc.x), absf(sc.z)) * UE_DEFAULT_DECAL_M
+		decal.size = Vector3(clampf(size_v.x, 0.1, 10.0), clampf(size_v.y, 0.1, 10.0), clampf(size_v.z, 0.1, 10.0))
+		var alb: Variant = verdict.get("texture")
+		if alb is Texture2D:
+			decal.texture_albedo = alb
+		var nrm: Variant = verdict.get("normal")
+		if nrm is Texture2D:
+			decal.texture_normal = nrm
+		var col: Variant = verdict.get("color")
+		if col is Color:
+			decal.modulate = col
+		decal.distance_fade_enabled = true
+		decal.distance_fade_begin = DECAL_FADE_BEGIN
+		decal.distance_fade_length = DECAL_FADE_END - DECAL_FADE_BEGIN
+		decal.name = "Decal_%d" % spawned
+		parent.add_child(decal)
+		spawned += 1
+	ctx["decal_count"] = spawned
+	ctx["decal_skipped"] = skipped
+	ctx["decal_unresolved_material"] = unresolved
+
+
+## Spawns an OmniLight3D approximation plus an emissive quad for each active
+## RectLight. Entries at intensity <= 0.01 are authored off and skipped.
+## Energy uses the same UE-unit convention as _build_light (raw < 20 ->
+## x0.95, else x0.08, clamped to [1, 4.2]); colour converts 0-255 -> 0-1.
+## The quad is sized from width x height (raw UU centimetres) and is
+## double-sided because the UE emission axis is not recorded; the light
+## itself is omnidirectional so gameplay lighting does not depend on it.
+## Shadows stay off: an omni shadow would shade the wrong hemisphere for an
+## area light; the emissive quad carries the visual instead.
+func _build_rect_lights(rects: Array, parent: Node3D, light_probe: Node, ctx: Dictionary, budget: int) -> void:
+	var spawned: int = 0
+	var skipped: int = 0
+	for r_var in rects:
+		if not (r_var is Dictionary):
+			skipped += 1
+			continue
+		var r: Dictionary = r_var
+		var raw := float(r.get("intensity", 0.0))
+		if raw <= RECT_LIGHT_OFF_THRESHOLD:
+			skipped += 1
+			continue
+		if spawned >= budget:
+			skipped += 1
+			continue
+		var omni := OmniLight3D.new()
+		omni.omni_range = clampf(float(r.get("radius", 5.0)) * 2.2, 5.0, 20.0)
+		omni.omni_attenuation = 0.9
+		if raw < 20.0:
+			omni.light_energy = clampf(raw * 0.95, 1.0, 4.2)
+		else:
+			omni.light_energy = clampf(raw * 0.08, 1.0, 4.2)
+		var col_arr: Array = [255.0, 215.0, 150.0]
+		var col_raw: Variant = r.get("color", [])
+		if col_raw is Array and (col_raw as Array).size() >= 3:
+			col_arr = col_raw
+		omni.light_color = Color(float(col_arr[0]) / 255.0, float(col_arr[1]) / 255.0, float(col_arr[2]) / 255.0)
+		omni.shadow_enabled = false
+		omni.distance_fade_enabled = true
+		omni.distance_fade_begin = LIGHT_DISTANCE_FADE_BEGIN
+		omni.distance_fade_length = LIGHT_DISTANCE_FADE_LENGTH
+		omni.distance_fade_shadow = true
+		var rtr := _dict_to_transform(r)
+		omni.transform = rtr
+		omni.name = "RectLight_%d" % spawned
+		parent.add_child(omni)
+		if light_probe != null and light_probe.has_method("register_light"):
+			light_probe.register_light(omni)
+		var quad := MeshInstance3D.new()
+		var qm := QuadMesh.new()
+		qm.size = Vector2(clampf(float(r.get("width", 1.0)) * UU_CM_TO_M, 0.1, 30.0), clampf(float(r.get("height", 1.0)) * UU_CM_TO_M, 0.1, 30.0))
+		var qmat := StandardMaterial3D.new()
+		qmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		qmat.albedo_color = omni.light_color
+		qmat.emission_enabled = true
+		qmat.emission = omni.light_color
+		qmat.emission_energy_multiplier = 2.0
+		qmat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		qm.material = qmat
+		quad.mesh = qm
+		quad.transform = Transform3D(rtr.basis.orthonormalized(), rtr.origin)
+		quad.name = "RectLightQuad_%d" % spawned
+		parent.add_child(quad)
+		spawned += 1
+	ctx["rect_light_count"] = spawned
+	ctx["rect_light_skipped"] = skipped
+
+
+## Turns designer blocking volumes into real collision. UE extent is already
+## a half-extent in metres, so the box is extent*2 at pos on layer 1.
+## NavMesh / NavModifier / Trigger / Tutorial volumes carry navigation or
+## gameplay logic, not collision, and are counted as skipped.
+func _build_volumes(volumes: Array, parent: Node3D, ctx: Dictionary) -> void:
+	var blocking: int = 0
+	var skipped: int = 0
+	for v_var in volumes:
+		if not (v_var is Dictionary):
+			skipped += 1
+			continue
+		var v: Dictionary = v_var
+		var cls := str(v.get("class", "")).to_lower()
+		if cls.find("blocking") < 0 and cls.find("block") < 0:
+			skipped += 1
+			continue
+		var ext: Array = [1.0, 1.0, 1.0]
+		var ext_raw: Variant = v.get("extent", [])
+		if ext_raw is Array and not (ext_raw as Array).is_empty():
+			ext = ext_raw
+		var ex := float(ext[0]) if ext.size() > 0 else 1.0
+		var ey := float(ext[1]) if ext.size() > 1 else 1.0
+		var ez := float(ext[2]) if ext.size() > 2 else 1.0
+		var p: Array = [0.0, 0.0, 0.0]
+		var p_raw: Variant = v.get("pos", [])
+		if p_raw is Array and (p_raw as Array).size() >= 3:
+			p = p_raw
+		var body := StaticBody3D.new()
+		body.collision_layer = 1
+		body.collision_mask = 0
+		body.position = Vector3(float(p[0]), float(p[1]), float(p[2]))
+		var shape := BoxShape3D.new()
+		shape.size = Vector3(maxf(ex * 2.0, 0.1), maxf(ey * 2.0, 0.1), maxf(ez * 2.0, 0.1))
+		var cs := CollisionShape3D.new()
+		cs.shape = shape
+		body.add_child(cs)
+		body.name = "BlockingVolume_%d" % blocking
+		parent.add_child(body)
+		blocking += 1
+	ctx["blocking_volume_count"] = blocking
+	ctx["volume_skipped"] = skipped
+	ctx["collision_bodies"] = int(ctx.get("collision_bodies", 0)) + blocking
+	ctx["collision_shapes"] = int(ctx.get("collision_shapes", 0)) + blocking
+
+
+## Records counts and first-present atmosphere entries for the result stats.
+## Landscape splines reference the editor-only SplineEditorMesh with no
+## authored material, so they are counted and skipped, never spawned.
+## Niagara placements are likewise counted here for the VFX wave.
+func _store_level_extras(acc: Dictionary, ctx: Dictionary) -> void:
+	ctx["niagara_placements"] = (acc["niagara"] as Array).size()
+	ctx["spline_count"] = (acc["splines"] as Array).size()
+	if not (acc["sky_lights"] as Array).is_empty():
+		ctx["sky_light"] = (acc["sky_lights"] as Array)[0]
+	if not (acc["fog_volumes"] as Array).is_empty():
+		ctx["fog_volume"] = (acc["fog_volumes"] as Array)[0]
+	if not (acc["post_process"] as Array).is_empty():
+		ctx["post_process"] = (acc["post_process"] as Array)[0]
 
 
 func load_sublevels(json_paths: Array[String], parent: Node3D, light_probe: Node, max_lights: int = 96, generate_collision: bool = true) -> Dictionary:
@@ -762,7 +1129,14 @@ func load_sublevels(json_paths: Array[String], parent: Node3D, light_probe: Node
 		_parse_sublevel_file(jp, acc, parent)
 
 	var ctx: Dictionary = _new_build_ctx(parent, light_probe, generate_collision)
-	_add_lights(acc["lights"], parent, light_probe, max_lights, ctx)
+	# Active RectLights are rare (one per mission map at most) and authored as
+	# area lights, so they claim budget slots before the generic point lights.
+	_build_rect_lights(acc["rect_lights"], parent, light_probe, ctx, max_lights)
+	_add_lights(acc["lights"], parent, light_probe, maxi(max_lights - int(ctx.get("rect_light_count", 0)), 0), ctx)
+	ctx["light_count"] = int(ctx.get("light_count", 0)) + int(ctx.get("rect_light_count", 0))
+	_build_decals(acc["decals"], parent, ctx)
+	_build_volumes(acc["volumes"], parent, ctx)
+	_store_level_extras(acc, ctx)
 	_build_landscapes_sync(acc["landscapes"], parent, ctx)
 
 	var items: Array = _collect_draw_items(acc)
@@ -790,7 +1164,9 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 	var pending_lights: Array = acc["lights"]
 	pending_lights.sort_custom(_sort_lights_desc)
 	load_progress.emit(0.3, "Sorting lights...")
-	var light_budget: int = mini(pending_lights.size(), max_lights)
+	# Active RectLights claim budget slots before the generic point lights.
+	_build_rect_lights(acc["rect_lights"], parent, light_probe, ctx, max_lights)
+	var light_budget: int = mini(pending_lights.size(), maxi(max_lights - int(ctx.get("rect_light_count", 0)), 0))
 	var lights_added: int = 0
 	var hero_shadows: int = mini(MobileProfile.hero_shadows(), light_budget)
 	for li in range(light_budget):
@@ -801,7 +1177,10 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 			load_progress.emit(0.3 + 0.2 * float(li + 1) / float(maxi(light_budget, 1)), "Creating lights %d/%d..." % [li + 1, light_budget])
 			if parent.get_tree() != null:
 				await parent.get_tree().process_frame
-	ctx["light_count"] = lights_added
+	ctx["light_count"] = lights_added + int(ctx.get("rect_light_count", 0))
+	_build_decals(acc["decals"], parent, ctx)
+	_build_volumes(acc["volumes"], parent, ctx)
+	_store_level_extras(acc, ctx)
 
 	var landscapes: Array = acc["landscapes"]
 	for lc_i in range(landscapes.size()):

@@ -445,6 +445,7 @@ func _new_accumulator() -> Dictionary:
 		"seen_lights": {},
 		"result": {
 			"player_spawns": [] as Array[Vector3],
+		"player_spawn_transforms": [] as Array,
 			"guard_spawns": [] as Array[Vector3],
 			"loot_spawns": [] as Array[Vector3],
 			"minor_loot_spawns": [] as Array,
@@ -598,6 +599,16 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 		if "PlayerStart" in cls:
 			var ps: Array = result["player_spawns"]
 			ps.append(p)
+			# Authored facing: UE PlayerStart yaw is the spawn facing direction.
+			# player_spawns above stays position-only for compatibility.
+			var pname: String = str(mk.get("name", ""))
+			var pbasis: Array = (mk.get("basis", [1, 0, 0, 0, 1, 0, 0, 0, 1]) as Array).duplicate()
+			(result["player_spawn_transforms"] as Array).append({
+				"pos": p,
+				"basis": pbasis,
+				"name": pname,
+				"class": cls,
+			})
 		elif "MissionSpawner_Throwable" in cls:
 			var ts: Array = result["throwable_spawns"]
 			ts.append(p)
@@ -920,6 +931,7 @@ func _add_lights(pending_lights: Array, parent: Node3D, light_probe: Node, max_l
 
 func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dictionary:
 	result["mesh_instances"] = mesh_instances
+	result["player_spawn_transform_count"] = (result.get("player_spawn_transforms", []) as Array).size()
 	result["minor_loot_spawn_count"] = (result.get("minor_loot_spawns", []) as Array).size()
 	result["major_loot_spawn_count"] = (result.get("major_loot_spawns", []) as Array).size()
 	result["loot_container_count"] = (result.get("loot_containers", []) as Array).size()

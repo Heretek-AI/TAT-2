@@ -144,7 +144,7 @@ func start_contract(order: int) -> void:
 
 	_setup_thieves_den_env(map_id)
 
-	_spawn_player(ue_level_data.get("player_spawns", []))
+	_spawn_player(ue_level_data.get("player_spawns", []), ue_level_data.get("player_spawn_transforms", []))
 	rain_node = WeatherVisuals.make_rain(self, WeatherProfile.preset_for_map(map_id))
 	if player != null and hud != null:
 		if player.has_signal("thief_vision_toggled") and hud.has_method("set_thief_vision"):
@@ -631,29 +631,73 @@ func _add_safety_floor() -> void:
 	add_child(sb)
 
 
-func _spawn_player(ue_spawns: Array) -> void:
+## Authored PlayerStart yaw in Godot space (the extractor already converted the
+## marker basis to Godot axes; UE forward is -basis.z and Godot yaw 0 faces
+## -Z). Upright only: pitch and roll are discarded so the thief never spawns
+## tilted. Degenerate bases fail closed to 0.
+func _spawn_yaw_from_basis(basis_arr: Variant) -> float:
+	var b: Array = basis_arr if (basis_arr is Array) else []
+	if b.size() < 9:
+		return 0.0
+	var basis := Basis(
+		Vector3(float(b[0]), float(b[3]), float(b[6])),
+		Vector3(float(b[1]), float(b[4]), float(b[7])),
+		Vector3(float(b[2]), float(b[5]), float(b[8]))
+	).orthonormalized()
+	if absf(basis.determinant()) < 0.0001:
+		return 0.0
+	var fwd: Vector3 = -basis.z
+	if absf(fwd.x) < 0.000001 and absf(fwd.z) < 0.000001:
+		return 0.0
+	return atan2(-fwd.x, -fwd.z)
+
+
+func _spawn_player(ue_spawns: Array, ue_spawn_transforms: Array = []) -> void:
 	player = ThiefScript.new()
 	player.light_probe = light_probe
 	player.level_ctrl = self
 	var spawn: Vector3 = Vector3(0, 2.0, 0)
-	if not ue_spawns.is_empty():
-		var chosen: Variant = ue_spawns[0]
-		var w3d: World3D = get_world_3d()
+	var spawn_yaw: float = 0.0
+	var have_yaw: bool = false
+	var w3d: World3D = get_world_3d()
+	var chosen_transform: Variant = null
+	if not ue_spawn_transforms.is_empty():
 		if w3d != null:
-			var phys: PhysicsDirectSpaceState3D = w3d.direct_space_state
-			for cand: Variant in ue_spawns:
-				if cand is Vector3:
-					var cp: Vector3 = cand as Vector3
-					var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(cp + Vector3(0, 1.0, 0), cp + Vector3(0, -6.0, 0), 1)
-					var hit: Dictionary = phys.intersect_ray(q)
-					if not hit.is_empty():
-						chosen = cand
+			var phys_t: PhysicsDirectSpaceState3D = w3d.direct_space_state
+			for t_var: Variant in ue_spawn_transforms:
+				if t_var is Dictionary:
+					var tp: Vector3 = (t_var as Dictionary).get("pos", Vector3.ZERO)
+					var qt: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(tp + Vector3(0, 1.0, 0), tp + Vector3(0, -6.0, 0), 1)
+					var hitt: Dictionary = phys_t.intersect_ray(qt)
+					if not hitt.is_empty():
+						chosen_transform = t_var
 						break
-		if chosen is Vector3:
-			spawn = (chosen as Vector3) + Vector3(0, 1.0, 0)
+		else:
+			chosen_transform = ue_spawn_transforms[0]
+	if chosen_transform is Dictionary:
+		spawn = ((chosen_transform as Dictionary).get("pos", Vector3.ZERO) as Vector3) + Vector3(0, 1.0, 0)
+		spawn_yaw = _spawn_yaw_from_basis((chosen_transform as Dictionary).get("basis", []))
+		have_yaw = true
 	else:
-		spawn = _find_mesh_fallback_spawn()
+		if not ue_spawns.is_empty():
+			var chosen: Variant = ue_spawns[0]
+			if w3d != null:
+				var phys: PhysicsDirectSpaceState3D = w3d.direct_space_state
+				for cand: Variant in ue_spawns:
+					if cand is Vector3:
+						var cp: Vector3 = cand as Vector3
+						var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(cp + Vector3(0, 1.0, 0), cp + Vector3(0, -6.0, 0), 1)
+						var hit: Dictionary = phys.intersect_ray(q)
+						if not hit.is_empty():
+							chosen = cand
+							break
+			if chosen is Vector3:
+				spawn = (chosen as Vector3) + Vector3(0, 1.0, 0)
+		else:
+			spawn = _find_mesh_fallback_spawn()
 	player.position = spawn
+	if have_yaw:
+		player.rotation = Vector3(0.0, spawn_yaw, 0.0)
 	player.downed_started.connect(_on_player_downed_started)
 	player.downed.connect(_on_player_downed)
 	add_child(player)

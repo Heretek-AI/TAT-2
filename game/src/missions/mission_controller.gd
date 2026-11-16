@@ -37,6 +37,10 @@ var level_stats: Dictionary = {}
 var spawner_meshes: Dictionary = {}
 var spawner_civilians: Array = []
 var loot_tables: Dictionary = {}
+## Which spawn path the player used: "authored" for a floor-grounded
+## PlayerStart, otherwise the marker fallback that won ("major_loot",
+## "minor_centroid", "guard", "escape", "mesh"). Logged for QA.
+var fallback_spawn_source: String = "authored"
 
 
 func _ready() -> void:
@@ -144,7 +148,7 @@ func start_contract(order: int) -> void:
 
 	_setup_thieves_den_env(map_id)
 
-	_spawn_player(ue_level_data.get("player_spawns", []), ue_level_data.get("player_spawn_transforms", []))
+	_spawn_player(ue_level_data.get("player_spawns", []), ue_level_data.get("player_spawn_transforms", []), ue_level_data)
 	rain_node = WeatherVisuals.make_rain(self, WeatherProfile.preset_for_map(map_id))
 	if player != null and hud != null:
 		if player.has_signal("thief_vision_toggled") and hud.has_method("set_thief_vision"):
@@ -652,7 +656,7 @@ func _spawn_yaw_from_basis(basis_arr: Variant) -> float:
 	return atan2(-fwd.x, -fwd.z)
 
 
-func _spawn_player(ue_spawns: Array, ue_spawn_transforms: Array = []) -> void:
+func _spawn_player(ue_spawns: Array, ue_spawn_transforms: Array = [], stats: Dictionary = {}) -> void:
 	player = ThiefScript.new()
 	player.light_probe = light_probe
 	player.level_ctrl = self
@@ -678,9 +682,13 @@ func _spawn_player(ue_spawns: Array, ue_spawn_transforms: Array = []) -> void:
 		spawn = ((chosen_transform as Dictionary).get("pos", Vector3.ZERO) as Vector3) + Vector3(0, 1.0, 0)
 		spawn_yaw = _spawn_yaw_from_basis((chosen_transform as Dictionary).get("basis", []))
 		have_yaw = true
+		fallback_spawn_source = "authored"
 	else:
+		# Authored positions only count when a floor raycast grounds them;
+		# a blind ue_spawns[0] here used to drop Old Manor onto the safety
+		# net (its TATPlayerStarts float outside the playable space).
+		var grounded: Variant = null
 		if not ue_spawns.is_empty():
-			var chosen: Variant = ue_spawns[0]
 			if w3d != null:
 				var phys: PhysicsDirectSpaceState3D = w3d.direct_space_state
 				for cand: Variant in ue_spawns:
@@ -689,19 +697,113 @@ func _spawn_player(ue_spawns: Array, ue_spawn_transforms: Array = []) -> void:
 						var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(cp + Vector3(0, 1.0, 0), cp + Vector3(0, -6.0, 0), 1)
 						var hit: Dictionary = phys.intersect_ray(q)
 						if not hit.is_empty():
-							chosen = cand
+							grounded = cand
 							break
-			if chosen is Vector3:
-				spawn = (chosen as Vector3) + Vector3(0, 1.0, 0)
+			else:
+				grounded = ue_spawns[0]
+		if grounded is Vector3:
+			spawn = (grounded as Vector3) + Vector3(0, 1.0, 0)
+			fallback_spawn_source = "authored"
 		else:
-			spawn = _find_mesh_fallback_spawn()
+			var fb: Dictionary = _marker_fallback_spawn(stats, w3d)
+			if not fb.is_empty():
+				spawn = fb["pos"] as Vector3
+				fallback_spawn_source = str(fb["source"])
+				var face: Variant = fb.get("face", null)
+				if face is Vector3:
+					var to: Vector3 = (face as Vector3) - spawn
+					to.y = 0.0
+					if to.length() > 0.05:
+						spawn_yaw = atan2(-to.x, -to.z)
+						have_yaw = true
+			else:
+				spawn = _find_mesh_fallback_spawn()
+				fallback_spawn_source = "mesh"
 	player.position = spawn
 	if have_yaw:
 		player.rotation = Vector3(0.0, spawn_yaw, 0.0)
+	print("TAT-2 player spawn: source=", fallback_spawn_source, " pos=", spawn, " yaw=", (spawn_yaw if have_yaw else "legacy"))
 	player.downed_started.connect(_on_player_downed_started)
 	player.downed.connect(_on_player_downed)
 	add_child(player)
 	_snap_player_to_ground()
+
+
+## Marker-driven spawn fallback for maps whose authored PlayerStarts have no
+## floor (Old Manor's TATPlayerStarts float outside the playable space, so the
+## authored raycasts miss and the player used to end up on the safety net).
+## Candidates in priority order: first major/loot marker, minor-loot centroid,
+## first guard, first escape. Each is raycast from +30 m to -120 m on layer 1
+## and the first floor hit wins at hit + 0.2 m. Returns {} when nothing hits
+## (the caller keeps the legacy mesh fallback). "face" is the loot-marker
+## centroid the player should face when one exists.
+func _marker_fallback_spawn(stats: Dictionary, w3d: World3D) -> Dictionary:
+	var majors: Array = stats.get("major_loot_spawns", [])
+	var minors: Array = stats.get("minor_loot_spawns", [])
+	var loots: Array = stats.get("loot_spawns", [])
+	var guards: Array = stats.get("guard_spawns", [])
+	var escapes: Array = stats.get("escape_points", [])
+	var first_major: Variant = null
+	if not majors.is_empty() and majors[0] is Dictionary:
+		first_major = (majors[0] as Dictionary).get("pos", null)
+	if not (first_major is Vector3) and not loots.is_empty() and loots[0] is Vector3:
+		first_major = loots[0]
+	var minor_centroid: Variant = null
+	if not minors.is_empty():
+		var macc := Vector3.ZERO
+		var mn := 0
+		for e_var in minors:
+			if e_var is Dictionary and (e_var as Dictionary).get("pos", null) is Vector3:
+				macc += ((e_var as Dictionary).get("pos", null) as Vector3)
+				mn += 1
+		if mn > 0:
+			minor_centroid = macc / float(mn)
+	var candidates: Array = []
+	if first_major is Vector3:
+		candidates.append({"pos": first_major, "source": "major_loot"})
+	if minor_centroid is Vector3:
+		candidates.append({"pos": minor_centroid, "source": "minor_centroid"})
+	if not guards.is_empty() and guards[0] is Vector3:
+		candidates.append({"pos": guards[0], "source": "guard"})
+	if not escapes.is_empty() and escapes[0] is Vector3:
+		candidates.append({"pos": escapes[0], "source": "escape"})
+	if candidates.is_empty() or w3d == null:
+		return {}
+	var face: Variant = _loot_centroid(stats)
+	var phys: PhysicsDirectSpaceState3D = w3d.direct_space_state
+	for c_var in candidates:
+		var c: Dictionary = c_var as Dictionary
+		var cp: Vector3 = c["pos"] as Vector3
+		var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(cp + Vector3(0, 30, 0), cp + Vector3(0, -120, 0), 1)
+		var hit: Dictionary = phys.intersect_ray(q)
+		if hit.is_empty() or not (hit.get("position", null) is Vector3):
+			continue
+		return {"pos": (hit.get("position", null) as Vector3) + Vector3(0, 0.2, 0), "source": str(c["source"]), "face": face}
+	return {}
+
+
+## Mean of all loot-marker positions (major + minor records plus the legacy
+## loot_spawns vectors); the fallback spawn faces this point so the player
+## starts looking toward the mission space. Returns null when the map has no
+## loot markers at all.
+func _loot_centroid(stats: Dictionary) -> Variant:
+	var acc := Vector3.ZERO
+	var n := 0
+	for e_var in stats.get("major_loot_spawns", []):
+		if e_var is Dictionary and (e_var as Dictionary).get("pos", null) is Vector3:
+			acc += ((e_var as Dictionary).get("pos", null) as Vector3)
+			n += 1
+	for e_var in stats.get("minor_loot_spawns", []):
+		if e_var is Dictionary and (e_var as Dictionary).get("pos", null) is Vector3:
+			acc += ((e_var as Dictionary).get("pos", null) as Vector3)
+			n += 1
+	for p_var in stats.get("loot_spawns", []):
+		if p_var is Vector3:
+			acc += p_var as Vector3
+			n += 1
+	if n == 0:
+		return null
+	return acc / float(n)
 
 
 func _find_mesh_fallback_spawn() -> Vector3:

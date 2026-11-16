@@ -7,6 +7,7 @@ extends Node3D
 const ThiefScript := preload("res://src/player/thief_character.gd")
 const GuardScript := preload("res://src/ai/guard_ai.gd")
 const LootScript := preload("res://src/interact/loot_item.gd")
+const LootContainerScript := preload("res://src/interact/loot_container.gd")
 const WorldPickupScript := preload("res://src/interact/world_pickup.gd")
 const CivilianScript := preload("res://src/ai/civilian_npc.gd")
 const DoorScript := preload("res://src/interact/lockable_door.gd")
@@ -148,6 +149,7 @@ func start_contract(order: int) -> void:
 	else:
 		_spawn_guards(ue_level_data.get("guard_spawns", []), anchor)
 		_spawn_loot_and_quest(ue_level_data, anchor)
+		_spawn_loot_containers(ue_level_data)
 		_spawn_clues(ue_level_data.get("loot_spawns", []), anchor)
 		_spawn_escape(ue_level_data.get("escape_points", []), anchor)
 	_spawn_spawner_content(ue_level_data)
@@ -871,6 +873,23 @@ func _load_loot_tables() -> void:
 	var fb: Variant = (data as Dictionary).get("fallback", {})
 	if fb is Dictionary:
 		loot_tables["fallback_quest_actor"] = str((fb as Dictionary).get("generic_quest_actor", ""))
+
+
+## Openable loot containers (tools/parse_containers.py): one trigger-only Area3D
+## per container marker, placed at the marker transform. Container meshes are
+## level geometry and are never spawned here. Skipped for the Thieves' Den hub
+## by the caller, like the loot wave.
+func _spawn_loot_containers(stats: Dictionary) -> void:
+	var order := 0
+	for e_var in stats.get("loot_containers", []):
+		if not (e_var is Dictionary):
+			continue
+		var e: Dictionary = e_var
+		var c := LootContainerScript.new()
+		c.configure(str(e.get("class", "")), e, order)
+		add_child(c)
+		order += 1
+	print("TAT-2 loot containers: ", order)
 
 
 func _spawn_escape(ue_escapes: Array, anchor: Vector3) -> void:

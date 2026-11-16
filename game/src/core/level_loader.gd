@@ -56,6 +56,16 @@ const UU_CM_TO_M: float = 0.01
 ## Tokens too generic to prove a decal texture belongs to its material.
 const DECAL_GENERIC_TOKENS: Array[String] = ["m", "mi", "t", "d", "da", "a", "inst", "decal", "decals"]
 
+## Placed loot containers (chests / display cases / secret stashes): meshes are
+## level geometry, so only the marker transform is kept for the openable wave.
+const LOOT_CONTAINER_CLASSES: Array[String] = [
+	"BP_ChestTrunk_MajorLoot_C",
+	"BP_DisplayCaseA_MajorLoot_C",
+	"BP_LootStashInteractable_Secret_ThinWall_C",
+	"BP_Storefront_DisplayCaseB_MinorLoot_C",
+	"BP_Storefront_DisplayCaseD_MinorLoot_C",
+]
+
 ## Foliage/debris/clutter: aggressively culled, never casts shadows or collides.
 const CLUTTER_TOKENS: Array[String] = [
 	"sm_leaf", "sm_grass", "sm_newgrass", "sm_newspaper", "sm_pebble", "sm_debris",
@@ -441,6 +451,7 @@ func _new_accumulator() -> Dictionary:
 			"major_loot_spawns": [] as Array,
 			"escape_points": [] as Array[Vector3],
 			"door_spawns": [] as Array[Vector3],
+			"loot_containers": [] as Array,
 			"throwable_spawns": [] as Array[Vector3],
 			"ammo_spawns": [] as Array[Vector3],
 			"health_spawns": [] as Array[Vector3],
@@ -618,6 +629,21 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 		elif "Door" in cls:
 			var ds: Array = result["door_spawns"]
 			ds.append(p)
+		elif cls in LOOT_CONTAINER_CLASSES:
+			# Openable loot container marker: meshes already live in the level
+			# geometry, so only the marker transform is recorded (existing
+			# keys above are untouched).
+			var lc_arr: Array = result["loot_containers"]
+			var sc_raw: Array = mk.get("scale", [1, 1, 1])
+			var sc := Vector3.ONE
+			if sc_raw.size() >= 3:
+				sc = Vector3(float(sc_raw[0]), float(sc_raw[1]), float(sc_raw[2]))
+			lc_arr.append({
+				"class": cls,
+				"pos": p,
+				"basis": (mk.get("basis", [1, 0, 0, 0, 1, 0, 0, 0, 1]) as Array).duplicate(),
+				"scale": sc,
+			})
 
 	# Level-component arrays: collected verbatim, validated at build time.
 	for d in data_dict.get("decals", []):
@@ -856,6 +882,7 @@ func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dict
 	result["mesh_instances"] = mesh_instances
 	result["minor_loot_spawn_count"] = (result.get("minor_loot_spawns", []) as Array).size()
 	result["major_loot_spawn_count"] = (result.get("major_loot_spawns", []) as Array).size()
+	result["loot_container_count"] = (result.get("loot_containers", []) as Array).size()
 	result["throwable_spawn_count"] = (result.get("throwable_spawns", []) as Array).size()
 	result["ammo_spawn_count"] = (result.get("ammo_spawns", []) as Array).size()
 	result["health_spawn_count"] = (result.get("health_spawns", []) as Array).size()

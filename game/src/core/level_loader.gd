@@ -453,6 +453,8 @@ func _new_accumulator() -> Dictionary:
 			"escape_points": [] as Array[Vector3],
 			"door_spawns": [] as Array[Vector3],
 			"loot_containers": [] as Array,
+			"swinging_doors": [] as Array,
+			"swinging_door_count": 0,
 			"throwable_spawns": [] as Array[Vector3],
 			"ammo_spawns": [] as Array[Vector3],
 			"health_spawns": [] as Array[Vector3],
@@ -688,6 +690,11 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 	for sp in data_dict.get("landscape_splines", []):
 		if sp is Dictionary:
 			(acc["splines"] as Array).append(sp)
+
+	# Swinging-door entries: passed through verbatim for the door wave.
+	for sd in data_dict.get("swinging_doors", []):
+		if sd is Dictionary:
+			(result["swinging_doors"] as Array).append(sd)
 
 
 ## Whether a mesh path is one of the authored moon billboards that the real
@@ -953,6 +960,8 @@ func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dict
 	result["volume_skipped"] = int(ctx.get("volume_skipped", 0))
 	result["niagara_placements"] = int(ctx.get("niagara_placements", 0))
 	result["spline_count"] = int(ctx.get("spline_count", 0))
+	result["swinging_doors"] = result.get("swinging_doors", [])
+	result["swinging_door_count"] = (result["swinging_doors"] as Array).size()
 	result["sky_light"] = ctx.get("sky_light", {})
 	result["fog_volume"] = ctx.get("fog_volume", {})
 	result["post_process"] = ctx.get("post_process", {})

@@ -1,0 +1,133 @@
+extends Node3D
+## Real swinging door built from extracted UE data (one node per
+## TATSwingingDoorPivotComponent, see tools/parse_tables.py).
+##
+## The door root sits at the authored pivot world transform (pos + basis from
+## the .tatlevel.json swinging_doors entry). A child pivot node carries one
+## MeshInstance3D per leaf at its authored relative transform (real GLB +
+## materials resolved through the level loader's existing
+## _get_mesh_and_shape/get_material_for_ue path) plus one StaticBody3D +
+## BoxShape3D collider per leaf, so collision rotates with the door.
+## interact() toggles a 90-degree swing around the pivot's local up axis over
+## ~0.4 s; only the pivot rotates (no physics teleport), closing returns to 0,
+## and repeated toggles are ignored while the tween runs.
+
+## Half-turn swing target in radians (90 degrees about pivot-local +Y).
+const OPEN_YAW_RAD: float = PI * 0.5
+## Swing duration in seconds (matches the authored door feel).
+const SWING_SEC: float = 0.4
+
+var door_entry: Dictionary = {}
+var level_loader: Node = null
+var pivot: Node3D = null
+var is_open: bool = false
+
+var _valid: bool = false
+var _tweening: bool = false
+var _tween: Tween = null
+
+
+## Must be called before add_child (like world_pickup.setup). Applies the
+## pivot world transform immediately; visuals/colliders are built in _ready.
+func configure(entry: Dictionary, loader: Node) -> void:
+	door_entry = entry
+	level_loader = loader
+	var pos_arr: Array = entry.get("pos", [])
+	var basis_arr: Array = entry.get("basis", [])
+	if pos_arr.size() < 3 or basis_arr.size() < 9:
+		return
+	var b := Basis(
+		Vector3(float(basis_arr[0]), float(basis_arr[3]), float(basis_arr[6])),
+		Vector3(float(basis_arr[1]), float(basis_arr[4]), float(basis_arr[7])),
+		Vector3(float(basis_arr[2]), float(basis_arr[5]), float(basis_arr[8]))
+	).orthonormalized()
+	if absf(b.determinant()) < 0.0001:
+		return
+	transform = Transform3D(
+		b, Vector3(float(pos_arr[0]), float(pos_arr[1]), float(pos_arr[2]))
+	)
+	_valid = true
+
+
+func _ready() -> void:
+	if not _valid:
+		return
+	add_to_group("interactables")
+	add_to_group("swinging_doors")
+	pivot = Node3D.new()
+	pivot.name = "DoorPivot"
+	add_child(pivot)
+	for leaf_var in door_entry.get("leaves", []):
+		if leaf_var is Dictionary:
+			_build_leaf(leaf_var as Dictionary)
+
+
+func _leaf_transform(leaf: Dictionary) -> Transform3D:
+	var p: Array = leaf.get("rel_pos", [0.0, 0.0, 0.0])
+	var b: Array = leaf.get("rel_basis", [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0])
+	var basis := Basis(
+		Vector3(float(b[0]), float(b[3]), float(b[6])),
+		Vector3(float(b[1]), float(b[4]), float(b[7])),
+		Vector3(float(b[2]), float(b[5]), float(b[8]))
+	).orthonormalized()
+	if absf(basis.determinant()) < 0.0001:
+		basis = Basis.IDENTITY
+	return Transform3D(
+		basis,
+		Vector3(float(p[0]), float(p[1]), float(p[2])) if p.size() >= 3 else Vector3.ZERO
+	)
+
+
+## One leaf: real mesh/material from the level loader plus a BoxShape3D body
+## parented to the pivot. A leaf whose mesh cannot be resolved is skipped
+## (fail closed, never a placeholder box).
+func _build_leaf(leaf: Dictionary) -> void:
+	if level_loader == null or pivot == null:
+		return
+	var ue_mesh := str(leaf.get("mesh", ""))
+	if ue_mesh == "" or not level_loader.has_method("_get_mesh_and_shape"):
+		return
+	var info: Dictionary = level_loader.call("_get_mesh_and_shape", ue_mesh)
+	var mesh: Mesh = info.get("mesh") as Mesh
+	if mesh == null:
+		return
+	var ltr := _leaf_transform(leaf)
+	var mi := MeshInstance3D.new()
+	mi.mesh = mesh
+	mi.transform = ltr
+	pivot.add_child(mi)
+	var aabb: AABB = mesh.get_aabb()
+	var body := StaticBody3D.new()
+	body.collision_layer = 1
+	body.collision_mask = 0
+	body.transform = ltr
+	var cs := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(maxf(aabb.size.x, 0.05), maxf(aabb.size.y, 0.05), maxf(aabb.size.z, 0.05))
+	cs.shape = box
+	cs.position = aabb.get_center()
+	body.add_child(cs)
+	pivot.add_child(body)
+
+
+func get_interact_prompt() -> String:
+	if is_open:
+		return "[F] CLOSE"
+	return "[F] OPEN"
+
+
+func interact(_actor: Node) -> void:
+	if pivot == null or _tweening:
+		return
+	is_open = not is_open
+	_tweening = true
+	if _tween != null and _tween.is_valid():
+		_tween.kill()
+	_tween = create_tween()
+	var target: float = OPEN_YAW_RAD if is_open else 0.0
+	_tween.tween_property(pivot, "rotation:y", target, SWING_SEC).set_trans(Tween.TRANS_SINE)
+	_tween.tween_callback(_on_swing_finished)
+
+
+func _on_swing_finished() -> void:
+	_tweening = false

@@ -522,6 +522,72 @@ def _merge_template_parent(props, tpl_export, depth):
     return props
 
 
+# ---------------------------------------------------------------------------
+# Swinging-door resolution (TATSwingingDoorPivotComponent).
+# ---------------------------------------------------------------------------
+# Level instances of door Blueprint actors carry stub
+# TATSwingingDoorPivotComponent exports (real RelativeLocation/Rotation under
+# the actor's RootSceneComponent, or identity with the authored transform
+# living in the BP template) plus stub leaf StaticMeshComponents attached to
+# the pivot. The authored mesh + leaf-relative transform live in the BP class
+# JSON (SCS_Node InternalVariableName -> ParentComponentOrVariableName plus
+# ComponentTemplate exports). This extends the SCS template path above.
+DOOR_LEAF_COMPONENT_TYPES = {
+    "StaticMeshComponent",
+    "SplineMeshComponent",
+    "InstancedStaticMeshComponent",
+    "HierarchicalInstancedStaticMeshComponent",
+    "FoliageInstancedStaticMeshComponent",
+}
+
+
+def _door_template_props(bp_class, stub_name, stub_type, template_ref):
+    """Authored template props for a door pivot/leaf level stub.
+
+    Prefers the stub's own Template archetype ref (exact BP export, Default__
+    CDO prefix tolerated), then the actor BP's SCS InternalVariableName match.
+    Follows Template inheritance; returns the resolve dict or None and never
+    invents values.
+    """
+    if template_ref:
+        ttype, touter, tname = _parse_template_ref(template_ref)
+        if touter and tname:
+            norm = touter.removesuffix("_C")
+            if norm.startswith("Default__"):
+                norm = norm[len("Default__") :]
+            hit = _resolve_template_in_bp(
+                norm + "_C", tname, ttype or stub_type, stub_name
+            )
+            if hit is not None:
+                return hit
+    if bp_class and bp_class.endswith("_C"):
+        hit = resolve_bp_component(bp_class, stub_name, stub_type=stub_type)
+        if hit is not None:
+            return hit
+    return None
+
+
+def _door_scs_parent(bp_class, leaf_name):
+    """SCS ParentComponentOrVariableName for a leaf component name, or None."""
+    loaded = load_bp_exports(bp_class) if bp_class else None
+    if not loaded:
+        return None
+    for e in loaded[0]:
+        if e.get("Type") != "SCS_Node":
+            continue
+        if (e.get("Properties") or {}).get("InternalVariableName") == leaf_name:
+            return (e.get("Properties") or {}).get("ParentComponentOrVariableName")
+    return None
+
+
+def _door_glb_exists(ue_path):
+    """Existence check for a /Game/... mesh path as an extracted .glb."""
+    clean = ue_path.split(".")[0]
+    if clean.startswith("/Game/"):
+        clean = clean[6:]
+    return (ROOT / "game" / "assets" / "ue" / "Content" / (clean + ".glb")).exists()
+
+
 def _color_to_rgb(c):
     if not isinstance(c, dict):
         return None
@@ -797,6 +863,200 @@ def extract_levels():
             if an and an not in actor_by_name:
                 actor_by_name[an] = aidx
 
+        # 0. Swinging-door pre-pass: resolve each TATSwingingDoorPivotComponent
+        # to (actor root world x pivot relative) plus its leaf mesh components
+        # (level SMC stubs attached to the pivot, mesh from the BP template).
+        # Resolved leaf stub indices are skipped by the mesh branches below so
+        # dynamic doors never duplicate the static batches.
+        swinging_doors = []
+        swinging_unresolved = []
+        door_leaf_idx = set()
+        door_leaves_excluded = 0
+        seen_pivots = set()
+        for pidx, pe in enumerate(exps):
+            if pe.get("Type") != "TATSwingingDoorPivotComponent":
+                continue
+            pname = pe.get("Name", "")
+            bp_class, actor_name = _stub_actor(exps, pidx)
+            dsrc = f"{rel}::{actor_name or pname}"
+            if not actor_name or not bp_class:
+                swinging_unresolved.append(
+                    {
+                        "pivot": pname,
+                        "actor": actor_name or "",
+                        "class": bp_class or "",
+                        "reason": "no_parent_actor",
+                        "source": dsrc,
+                    }
+                )
+                continue
+            dedup = (actor_name, pname)
+            if dedup in seen_pivots:
+                continue
+            seen_pivots.add(dedup)
+            aidx = actor_by_name.get(actor_name)
+            aroot = None
+            if aidx is not None:
+                rc = (exps[aidx].get("Properties") or {}).get("RootComponent") or {}
+                ridx = None
+                if isinstance(rc, dict):
+                    ridx = comp_by_full_objname.get(rc.get("ObjectName", ""))
+                    if ridx is None and "PersistentLevel." in rc.get("ObjectName", ""):
+                        ridx = comp_by_full_objname.get(
+                            rc["ObjectName"].split("PersistentLevel.")[-1].rstrip("'")
+                        )
+                if ridx is not None:
+                    aroot = get_world_mat(ridx)
+            if aroot is None:
+                swinging_unresolved.append(
+                    {
+                        "pivot": pname,
+                        "actor": actor_name,
+                        "class": bp_class,
+                        "reason": "no_actor_root",
+                        "source": dsrc,
+                    }
+                )
+                continue
+            pprops = pe.get("Properties") or {}
+            ploc = pprops.get("RelativeLocation")
+            prot = pprops.get("RelativeRotation")
+            pscl = pprops.get("RelativeScale3D")
+            if not (ploc or prot or pscl):
+                tmpl = pe.get("Template") or {}
+                tobj = tmpl.get("ObjectName", "") if isinstance(tmpl, dict) else ""
+                hit = _door_template_props(
+                    bp_class, pname, "TATSwingingDoorPivotComponent", tobj
+                )
+                if hit is not None:
+                    hp = hit.get("props") or {}
+                    ploc = hp.get("RelativeLocation")
+                    prot = hp.get("RelativeRotation")
+                    pscl = hp.get("RelativeScale3D")
+            if not (ploc or prot or pscl):
+                swinging_unresolved.append(
+                    {
+                        "pivot": pname,
+                        "actor": actor_name,
+                        "class": bp_class,
+                        "reason": "no_pivot_transform",
+                        "source": dsrc,
+                    }
+                )
+                continue
+            pwmat = mat4_mul(aroot, ue_trs_to_mat4(ploc, prot, pscl, is_quat=False))
+            if level_mat is not None:
+                pwmat = mat4_mul(level_mat, pwmat)
+            pgt = ue_mat4_to_godot_trs(pwmat)
+            leaves = []
+            leaf_bad = []
+            pend_idx = []
+            for jdx, je in enumerate(exps):
+                if je.get("Type") not in DOOR_LEAF_COMPONENT_TYPES:
+                    continue
+                _, a2 = _stub_actor(exps, jdx)
+                if a2 != actor_name:
+                    continue
+                ap = ((je.get("Properties") or {}).get("AttachParent") or {}).get(
+                    "ObjectName", ""
+                )
+                tail = (
+                    ap.split("PersistentLevel.")[-1].rstrip("'").split(".")[-1]
+                    if "PersistentLevel." in ap
+                    else ""
+                )
+                if tail != pname:
+                    continue
+                jname = je.get("Name", "")
+                jprops = je.get("Properties") or {}
+                jsm = jprops.get("StaticMesh")
+                sm = (
+                    jsm.get("ObjectPath", "")
+                    if isinstance(jsm, dict)
+                    else (jsm if isinstance(jsm, str) else "")
+                )
+                thit = None
+                if not sm:
+                    tmpl = je.get("Template") or {}
+                    tobj = tmpl.get("ObjectName", "") if isinstance(tmpl, dict) else ""
+                    thit = _door_template_props(
+                        bp_class, jname, je.get("Type", ""), tobj
+                    )
+                    if thit is not None:
+                        tp = thit.get("props") or {}
+                        tsm = tp.get("StaticMesh") or {}
+                        sm = (
+                            tsm.get("ObjectPath", "")
+                            if isinstance(tsm, dict)
+                            else (tsm if isinstance(tsm, str) else "")
+                        )
+                if not sm:
+                    tpl = bp_templates.get(bp_class, {}).get(jname) or bp_templates.get(
+                        bp_class, {}
+                    ).get(jname.rstrip("0123456789"))
+                    if isinstance(tpl, dict):
+                        sm = tpl.get("sm") or ""
+                if not sm:
+                    base = jname.rstrip("0123456789")
+                    sm = glb_by_name.get(jname) or glb_by_name.get(base) or ""
+                if not sm:
+                    leaf_bad.append(jname)
+                    continue
+                ue_mesh = sm.split(".")[0]
+                if not _door_glb_exists(ue_mesh):
+                    leaf_bad.append(jname)
+                    continue
+                lloc = jprops.get("RelativeLocation")
+                lrot = jprops.get("RelativeRotation")
+                lscl = jprops.get("RelativeScale3D")
+                if not (lloc or lrot or lscl) and thit is not None:
+                    tp = thit.get("props") or {}
+                    lloc = tp.get("RelativeLocation")
+                    lrot = tp.get("RelativeRotation")
+                    lscl = tp.get("RelativeScale3D")
+                lmat = ue_trs_to_mat4(lloc, lrot, lscl, is_quat=False)
+                lgt = ue_mat4_to_godot_trs(lmat)
+                game_rel = ue_mesh[6:] if ue_mesh.startswith("/Game/") else ue_mesh
+                leaves.append(
+                    {
+                        "mesh": ue_mesh,
+                        "res": f"res://assets/ue/Content/{game_rel}.glb",
+                        "rel_loc": lloc,
+                        "rel_rot": lrot,
+                        "rel_scale": lscl,
+                        "rel_pos": lgt["pos"],
+                        "rel_basis": lgt["basis"],
+                        "rel_scale_v": lgt["scale"],
+                        "scs_parent": _door_scs_parent(bp_class, jname),
+                    }
+                )
+                pend_idx.append(jdx)
+            if not leaves:
+                swinging_unresolved.append(
+                    {
+                        "pivot": pname,
+                        "actor": actor_name,
+                        "class": bp_class,
+                        "reason": "no_resolved_leaves"
+                        + (":" + ",".join(leaf_bad[:4]) if leaf_bad else ""),
+                        "source": dsrc,
+                    }
+                )
+                continue
+            for q in pend_idx:
+                door_leaf_idx.add(q)
+            swinging_doors.append(
+                {
+                    "name": f"{actor_name}.{pname}",
+                    "actor": actor_name,
+                    "class": bp_class,
+                    "pos": pgt["pos"],
+                    "basis": pgt["basis"],
+                    "leaves": leaves,
+                    "source": dsrc,
+                }
+            )
+
         for idx, e in enumerate(exps):
             et = e.get("Type", "")
             props = e.get("Properties") or {}
@@ -805,6 +1065,9 @@ def extract_levels():
 
             # 1. StaticMeshComponent / SplineMeshComponent (including Blueprint CDO/SCS template fallback)
             if et in ("StaticMeshComponent", "SplineMeshComponent"):
+                if idx in door_leaf_idx:
+                    door_leaves_excluded += 1
+                    continue
                 sm = (props.get("StaticMesh") or {}).get("ObjectPath")
                 bp_lmat = None
                 if not sm and outer_name:
@@ -844,6 +1107,9 @@ def extract_levels():
                 "HierarchicalInstancedStaticMeshComponent",
                 "FoliageInstancedStaticMeshComponent",
             ):
+                if idx in door_leaf_idx:
+                    door_leaves_excluded += 1
+                    continue
                 sm = (props.get("StaticMesh") or {}).get("ObjectPath")
                 if not sm and outer_name:
                     # Lookup from BPP_*_PLA template
@@ -1493,12 +1759,21 @@ def extract_levels():
                         "niagara": niagara,
                         "volumes": volumes,
                         "landscape_splines": landscape_splines,
+                        "swinging_doors": swinging_doors,
+                        "door_leaves_excluded": door_leaves_excluded,
+                        "swinging_doors_unresolved": swinging_unresolved,
                     }
                 )
             )
             count += 1
             total_meshes += len(meshes)
             total_lights += len(lights)
+            if swinging_doors or swinging_unresolved:
+                print(
+                    f"  {rel}: swinging_doors={len(swinging_doors)} "
+                    f"door_leaves_excluded={door_leaves_excluded} "
+                    f"unresolved={len(swinging_unresolved)}"
+                )
             if (
                 rect_lights
                 or sky_lights

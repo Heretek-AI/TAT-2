@@ -8,6 +8,7 @@ const ThiefScript := preload("res://src/player/thief_character.gd")
 const GuardScript := preload("res://src/ai/guard_ai.gd")
 const LootScript := preload("res://src/interact/loot_item.gd")
 const LootContainerScript := preload("res://src/interact/loot_container.gd")
+const SwingingDoorScript := preload("res://src/interact/swinging_door.gd")
 const WorldPickupScript := preload("res://src/interact/world_pickup.gd")
 const CivilianScript := preload("res://src/ai/civilian_npc.gd")
 const DoorScript := preload("res://src/interact/lockable_door.gd")
@@ -164,6 +165,7 @@ func start_contract(order: int) -> void:
 		_spawn_clues(ue_level_data.get("loot_spawns", []), anchor)
 		_spawn_escape(ue_level_data.get("escape_points", []), anchor)
 	_spawn_spawner_content(ue_level_data)
+	_spawn_swinging_doors(ue_level_data)
 
 	if hud.has_method("set_contract_info"):
 		hud.set_contract_info(contract_info)
@@ -1043,6 +1045,26 @@ func _spawn_loot_containers(stats: Dictionary) -> void:
 		add_child(c)
 		order += 1
 	print("TAT-2 loot containers: ", order)
+
+
+## Real swinging doors (tools/parse_tables.py swinging_doors): one
+## SwingingDoorScript node per pivot entry, built from the authored pivot
+## transform + template leaf meshes. Skipped when the map has no doors; no
+## extra meshes are ever spawned here (leaves were excluded from the static
+## batches at parse time).
+func _spawn_swinging_doors(stats: Dictionary) -> void:
+	var doors: Array = stats.get("swinging_doors", [])
+	if doors.is_empty():
+		return
+	var count := 0
+	for d_var in doors:
+		if not (d_var is Dictionary):
+			continue
+		var door := SwingingDoorScript.new()
+		door.configure(d_var as Dictionary, level_loader)
+		add_child(door)
+		count += 1
+	print("TAT-2 swinging doors: ", count)
 
 
 func _spawn_escape(ue_escapes: Array, anchor: Vector3) -> void:

@@ -11,6 +11,7 @@ const DoorScript := preload("res://src/interact/lockable_door.gd")
 const EscapeScript := preload("res://src/interact/escape_gate.gd")
 const LightProbeScript := preload("res://src/stealth/light_probe.gd")
 const LevelLoaderScript := preload("res://src/core/level_loader.gd")
+const MobileProfile := preload("res://src/core/mobile_profile.gd")
 const VfxManager := preload("res://src/core/vfx_manager.gd")
 const HudScript := preload("res://src/ui/hud.gd")
 const WardrobeUIScript := preload("res://src/ui/wardrobe_ui.gd")
@@ -18,6 +19,7 @@ const ContractTableUIScript := preload("res://src/ui/contract_table_ui.gd")
 const ClueItemScript := preload("res://src/interact/clue_item.gd")
 const LoadingScreenScript := preload("res://src/ui/loading_screen.gd")
 const LedgerUIScript := preload("res://src/ui/ledger_ui.gd")
+const MobileTouchUIScript := preload("res://src/ui/mobile_touch_ui.gd")
 
 var light_probe: Node
 var level_loader: Node
@@ -25,6 +27,7 @@ var player: CharacterBody3D
 var hud: CanvasLayer
 var smokes: Array[Dictionary] = []
 var contract_info: Dictionary = {}
+var level_stats: Dictionary = {}
 
 
 func _ready() -> void:
@@ -35,6 +38,11 @@ func _ready() -> void:
 	add_child(level_loader)
 	hud = HudScript.new()
 	add_child(hud)
+	MobileProfile.apply_runtime(get_tree())
+	if MobileProfile.is_mobile():
+		var touch_ui: CanvasLayer = MobileTouchUIScript.new()
+		touch_ui.set("hud", hud)
+		add_child(touch_ui)
 
 	_setup_environment()
 	start_contract(GameState.active_contract_order)
@@ -55,6 +63,7 @@ func _setup_environment() -> void:
 	e.glow_intensity = 0.65
 	e.glow_bloom = 0.22
 	e.tonemap_mode = Environment.TONE_MAPPER_ACES
+	MobileProfile.apply_environment(e)
 	env.environment = e
 	add_child(env)
 
@@ -79,12 +88,13 @@ func start_contract(order: int) -> void:
 
 	var sublevels: Array[String] = _map_id_to_sublevels(map_id, order)
 	var ue_level_data: Dictionary = {}
+	var light_budget: int = MobileProfile.max_lights()
 	if level_loader.has_method("load_sublevels_async"):
 		if level_loader.has_signal("load_progress") and loading.has_method("set_progress"):
 			var prog_cb: Callable = Callable(loading, "set_progress")
 			if not level_loader.is_connected("load_progress", prog_cb):
 				level_loader.connect("load_progress", prog_cb)
-		var async_res: Variant = await level_loader.call("load_sublevels_async", sublevels, self, light_probe, 96)
+		var async_res: Variant = await level_loader.call("load_sublevels_async", sublevels, self, light_probe, light_budget)
 		if async_res is Dictionary:
 			ue_level_data = async_res
 		if level_loader.has_signal("load_progress") and loading.has_method("set_progress"):
@@ -94,8 +104,11 @@ func start_contract(order: int) -> void:
 	else:
 		if loading.has_method("set_progress"):
 			loading.call("set_progress", 0.4, "Loading sublevels...")
-		ue_level_data = level_loader.load_sublevels(sublevels, self, light_probe, 96)
+		ue_level_data = level_loader.load_sublevels(sublevels, self, light_probe, light_budget)
 	print("TAT-2 Loaded ", map_id, ": meshes=", ue_level_data.get("mesh_instances", 0), " lights=", ue_level_data.get("light_count", 0))
+	level_stats = ue_level_data
+	if int(ue_level_data.get("chunk_count", 0)) > 0:
+		print("TAT-2 Perf: chunks=", ue_level_data.get("chunk_count", 0), " collision_bodies=", ue_level_data.get("collision_bodies", 0), " collision_shapes=", ue_level_data.get("collision_shapes", 0), " occluders=", ue_level_data.get("occluder_count", 0))
 
 	# Safety floor plane far below map so player never falls into void if stepping outside bounds
 	_add_safety_floor()

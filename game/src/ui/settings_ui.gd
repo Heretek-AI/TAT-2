@@ -6,6 +6,7 @@ extends CanvasLayer
 signal closed()
 
 const ThemeScript := preload("res://src/ui/art_nouveau_theme.gd")
+const MobileProfile := preload("res://src/core/mobile_profile.gd")
 
 const SENS_MIN: float = 0.0005
 const SENS_MAX: float = 0.008
@@ -33,6 +34,9 @@ var _vol_val: Label
 var _fullscreen_check: CheckBox
 var _scale_slider: HSlider
 var _scale_val: Label
+var _touch_slider: HSlider
+var _touch_val: Label
+var _quality_btn: Button
 var _tab_idx: int = 0
 var _tab_btns: Array[Button] = []
 var _pages: Array[Control] = []
@@ -127,6 +131,10 @@ func _ensure_settings() -> void:
 		s["fullscreen"] = false
 	if not s.has("render_scale"):
 		s["render_scale"] = 1.0
+	if not s.has("touch_sensitivity"):
+		s["touch_sensitivity"] = 2.5
+	if not s.has("mobile_quality"):
+		s["mobile_quality"] = "balanced"
 
 
 func reset_defaults() -> void:
@@ -138,6 +146,8 @@ func reset_defaults() -> void:
 	s["master_volume"] = 0.8
 	s["fullscreen"] = false
 	s["render_scale"] = 1.0
+	s["touch_sensitivity"] = 2.5
+	s["mobile_quality"] = "balanced"
 	_load_from_save()
 	_apply_live(true)
 
@@ -158,6 +168,10 @@ func _load_from_save() -> void:
 		_fullscreen_check.button_pressed = bool(s.get("fullscreen", false))
 	if _scale_slider != null:
 		_scale_slider.value = clampf(float(s.get("render_scale", 1.0)), SCALE_MIN, SCALE_MAX)
+	if _touch_slider != null:
+		_touch_slider.value = clampf(float(s.get("touch_sensitivity", 2.5)), 0.5, 5.0)
+	if _quality_btn != null:
+		_quality_btn.text = "MOBILE QUALITY: " + MobileProfile.tier_label(MobileProfile.current_tier()).to_upper()
 	_refresh_value_labels()
 
 
@@ -179,6 +193,8 @@ func _apply_live(persist: bool) -> void:
 	s["master_volume"] = vol
 	s["fullscreen"] = fullscreen
 	s["render_scale"] = render_scale
+	if _touch_slider != null:
+		s["touch_sensitivity"] = float(_touch_slider.value)
 	AudioServer.set_bus_volume_db(0, linear_to_db(maxf(vol, 0.001)))
 	if DisplayServer.get_name() != "headless":
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if fullscreen else DisplayServer.WINDOW_MODE_WINDOWED)
@@ -199,6 +215,8 @@ func _refresh_value_labels() -> void:
 		_vol_val.text = "%d%%" % int(round(float(_vol_slider.value) * 100.0))
 	if _scale_val != null and _scale_slider != null:
 		_scale_val.text = "%d%%" % int(round(float(_scale_slider.value) * 100.0))
+	if _touch_val != null and _touch_slider != null:
+		_touch_val.text = "x%.1f" % float(_touch_slider.value)
 
 
 func _build_ui() -> void:
@@ -280,8 +298,28 @@ func _build_ui() -> void:
 		["SPACE", "JUMP / VAULT"],
 		["ESC", "BACK / PAUSE"],
 	]
+	if MobileProfile.is_mobile():
+		rows = [
+			["STICK", "MOVE"],
+			["DRAG", "LOOK"],
+			["USE", "INTERACT / STEAL"],
+			["HIT / WIRE", "ATTACK / ABILITY"],
+			["1 2 3", "TOOLS"],
+			["EYE", "THIEF VISION"],
+			["II / BACK", "PAUSE"],
+		]
 	for entry: Array in rows:
 		controls.add_child(_make_binding_row(str(entry[0]), str(entry[1])))
+	if MobileProfile.is_mobile():
+		controls.add_child(_make_slider_row("Touch Look", 0.5, 5.0, 0.1, false))
+		var qrow: HBoxContainer = HBoxContainer.new()
+		_quality_btn = Button.new()
+		_quality_btn.text = "MOBILE QUALITY: " + MobileProfile.tier_label(MobileProfile.current_tier()).to_upper()
+		_quality_btn.custom_minimum_size = Vector2(300, 42)
+		ThemeScript.style_button(_quality_btn, false)
+		_quality_btn.pressed.connect(_cycle_quality)
+		qrow.add_child(_quality_btn)
+		controls.add_child(qrow)
 
 	vbox.add_child(ThemeScript.divider())
 	var btn_row: HBoxContainer = HBoxContainer.new()
@@ -305,6 +343,14 @@ func _build_ui() -> void:
 	back_row.add_child(back_btn)
 	var esc: PanelContainer = ThemeScript.keycap("[ESC]", 12)
 	back_row.add_child(esc)
+
+
+func _cycle_quality() -> void:
+	var next_tier: int = (MobileProfile.current_tier() + 1) % MobileProfile.TIER_LABELS.size()
+	MobileProfile.set_tier(next_tier, SaveSystem)
+	MobileProfile.apply_runtime(get_tree())
+	if _quality_btn != null:
+		_quality_btn.text = "MOBILE QUALITY: " + MobileProfile.tier_label(next_tier).to_upper()
 
 
 func _make_binding_row(key_text: String, action_text: String) -> HBoxContainer:
@@ -363,6 +409,9 @@ func _make_slider_row(label_text: String, min_v: float, max_v: float, step_v: fl
 	elif label_text == "Resolution Scale" or label_text == "3D Render Scale":
 		_scale_slider = slider
 		_scale_val = val
+	elif label_text == "Touch Look":
+		_touch_slider = slider
+		_touch_val = val
 	return row
 
 

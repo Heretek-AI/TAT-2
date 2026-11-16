@@ -22,6 +22,21 @@ func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_build_3d_backdrop()
 	_build_ui()
+	_maybe_autostart_contract()
+
+
+## QA hook: `tat2/debug_autostart_contract` is 0 in shipped builds. The mobile
+## packaging tool can set it to a contract order to boot straight into a mission.
+func _maybe_autostart_contract() -> void:
+	var order: int = int(ProjectSettings.get_setting("tat2/debug_autostart_contract", 0))
+	if order <= 0:
+		return
+	var info: Dictionary = GameData.get_contract_display(order)
+	var map_id: String = str(info.get("map_id", "old_manor"))
+	print("TAT-2 QA autostart contract=", order, " map=", map_id)
+	GameState.active_contract_order = order
+	GameState.active_map_id = map_id
+	get_tree().call_deferred("change_scene_to_file", "res://scenes/mission.tscn")
 
 
 func _build_3d_backdrop() -> void:

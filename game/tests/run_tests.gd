@@ -197,8 +197,11 @@ func _initialize() -> void:
 		vfx_scr.set_prop_highlight(wisp_host, true)
 		vfx_scr.set_prop_highlight(wisp_host, false)
 		var lvl_prog: Dictionary = save_sys.get_level_progress()
-		if wisp == null or int(lvl_prog.get("xp_needed", 0)) <= 0 or save_sys.get_currency() < 0:
-			printerr("FAIL: Progression or BlueWisp invalid")
+		var body_node: Node = prep.get("_thief_body_node") as Node
+		var head_node: Node = prep.get("_thief_head_node") as Node
+		var genuine_character_loaded: bool = body_node != null and head_node != null
+		if wisp == null or int(lvl_prog.get("xp_needed", 0)) <= 0 or save_sys.get_currency() < 0 or not genuine_character_loaded:
+			printerr("FAIL: Progression, BlueWisp or MissionPrepUI genuine character meshes invalid (body=", body_node != null, " head=", head_node != null, ")")
 			fails += 1
 		else:
 			print("PASS: LedgerUI, MissionPrepUI, ArtNouveauTheme, SaveSystem progression & Footprint/Wisp VFX verified")
@@ -236,7 +239,152 @@ func _initialize() -> void:
 		fails += 1
 	else:
 		print("PASS: Guildhall terrain, floor collision & spawn ground raycast verified")
+
+	# 11. Perf chunking: 32m MultiMesh chunks, split collision bodies, occluders
+	var gh_stats_v: Variant = gh_scene.get("level_stats")
+	var gh_stats: Dictionary = {}
+	if gh_stats_v is Dictionary:
+		gh_stats = gh_stats_v
+	var chunk_count: int = int(gh_stats.get("chunk_count", 0))
+	var col_bodies: int = int(gh_stats.get("collision_bodies", 0))
+	var col_shapes: int = int(gh_stats.get("collision_shapes", 0))
+	var occluders: int = int(gh_stats.get("occluder_count", 0))
+	var multi_nodes: int = 0
+	var max_chunk_span: float = 0.0
+	var culled_nodes: int = 0
+	for n: Node in gh_scene.get_children():
+		if n is MultiMeshInstance3D:
+			multi_nodes += 1
+			var mmi: MultiMeshInstance3D = n as MultiMeshInstance3D
+			if mmi.multimesh != null:
+				max_chunk_span = maxf(max_chunk_span, mmi.multimesh.custom_aabb.size.length())
+			if mmi.visibility_range_end > 0.0:
+				culled_nodes += 1
+	if chunk_count < 500 or multi_nodes < 200 or col_bodies < 4 or col_shapes <= 0 or col_shapes >= 12000 or occluders <= 0 or max_chunk_span >= 140.0 or culled_nodes < 300:
+		printerr("FAIL: perf chunking invariants (chunks=", chunk_count, " multimeshes=", multi_nodes, " bodies=", col_bodies, " shapes=", col_shapes, " occluders=", occluders, " max_span=", max_chunk_span, " culled=", culled_nodes, ")")
+		fails += 1
+	else:
+		print("PASS: Perf chunking (chunks=", chunk_count, ", multimeshes=", multi_nodes, ", collision_bodies=", col_bodies, ", shapes=", col_shapes, ", occluders=", occluders, ", max_chunk_span=", snappedf(max_chunk_span, 0.1), "m, distance-culled=", culled_nodes, ")")
 	gh_scene.queue_free()
+	await process_frame
+
+	# 12. Skybox/periphery decorative sublevels never generate physics
+	var ll_scr: GDScript = load("res://src/core/level_loader.gd") as GDScript
+	var ll: Node = ll_scr.new()
+	root.add_child(ll)
+	var dec_sky: bool = bool(ll.call("_is_decorative_sublevel", "res://data/generated/levels/Guildhall/Guildhall_SkyboxGeo.tatlevel.json"))
+	var dec_per: bool = bool(ll.call("_is_decorative_sublevel", "res://data/generated/levels/Guildhall/Guildhall_PeripheryA.tatlevel.json"))
+	var dec_geo: bool = bool(ll.call("_is_decorative_sublevel", "res://data/generated/levels/Guildhall/Guildhall_Geometry.tatlevel.json"))
+	if not dec_sky or not dec_per or dec_geo:
+		printerr("FAIL: decorative sublevel classification skybox=", dec_sky, " periphery=", dec_per, " geometry=", dec_geo)
+		fails += 1
+	else:
+		print("PASS: Skybox/Periphery sublevels excluded from physics colliders")
+	ll.queue_free()
+	await process_frame
+
+	# 13. HUD F3 perf overlay + cached prop-highlight mesh list
+	var hud_scr: GDScript = load("res://src/ui/hud.gd") as GDScript
+	var test_hud: CanvasLayer = hud_scr.new() as CanvasLayer
+	root.add_child(test_hud)
+	await process_frame
+	var overlay_hidden_ok: bool = not bool(test_hud.call("is_fps_overlay_visible"))
+	test_hud.call("toggle_fps_overlay")
+	await process_frame
+	var overlay_lbl: Label = test_hud.get("fps_overlay") as Label
+	var overlay_shown_ok: bool = bool(test_hud.call("is_fps_overlay_visible")) and overlay_lbl != null and overlay_lbl.visible and overlay_lbl.text.find("FPS") >= 0
+	var hl_host: Node3D = Node3D.new()
+	var hl_mesh: MeshInstance3D = MeshInstance3D.new()
+	hl_mesh.mesh = BoxMesh.new()
+	hl_host.add_child(hl_mesh)
+	root.add_child(hl_host)
+	vfx_scr.set_prop_highlight(hl_host, true)
+	var hl_cached: bool = hl_host.has_meta("_vfx_hl_meshes") and hl_mesh.material_overlay != null
+	vfx_scr.set_prop_highlight(hl_host, false)
+	var hl_cleared: bool = not hl_host.has_meta("_vfx_hl_meshes") and hl_mesh.material_overlay == null
+	if not overlay_hidden_ok or not overlay_shown_ok or not hl_cached or not hl_cleared:
+		printerr("FAIL: HUD F3 overlay / VFX highlight cache (hidden=", overlay_hidden_ok, " shown=", overlay_shown_ok, " cached=", hl_cached, " cleared=", hl_cleared, ")")
+		fails += 1
+	else:
+		print("PASS: HUD F3 perf overlay toggle & cached prop highlight verified")
+	test_hud.queue_free()
+	hl_host.queue_free()
+	await process_frame
+
+	# 14. LightProbe sampling throttle (12.5 Hz + squared-distance early-out)
+	var lp2: Node = (load("res://src/stealth/light_probe.gd") as GDScript).new()
+	root.add_child(lp2)
+	var l2 := OmniLight3D.new()
+	l2.position = Vector3(1, 1, 0)
+	l2.omni_range = 8.0
+	l2.light_energy = 2.0
+	root.add_child(l2)
+	lp2.register_light(l2)
+	var space2: PhysicsDirectSpaceState3D = root.world_3d.direct_space_state
+	var v1: float = float(lp2.call("sample_visibility", Vector3.ZERO, space2, [] as Array[RID]))
+	l2.visible = false
+	var v2: float = float(lp2.call("sample_visibility", Vector3.ZERO, space2, [] as Array[RID]))
+	var computes_after_2: int = int(lp2.call("sample_compute_count"))
+	await create_timer(0.15).timeout
+	var v3: float = float(lp2.call("sample_visibility", Vector3.ZERO, space2, [] as Array[RID]))
+	if v1 <= 0.1 or not is_equal_approx(v1, v2) or computes_after_2 != 1 or v3 >= v1:
+		printerr("FAIL: LightProbe throttle v1=", v1, " v2=", v2, " v3=", v3, " computes=", computes_after_2)
+		fails += 1
+	else:
+		print("PASS: LightProbe sampling throttle (cached <=80ms, recomputed after)")
+	lp2.queue_free()
+	l2.queue_free()
+	await process_frame
+
+	# 15. Moth astral projection 8s TTL start/expiry
+	gs.thief_id = "moth"
+	gs.difficulty = 2
+	var moth: CharacterBody3D = (load("res://src/player/thief_character.gd") as GDScript).new() as CharacterBody3D
+	moth.set_physics_process(false)
+	root.add_child(moth)
+	await process_frame
+	moth.call("_trigger_thief_ability")
+	var astral_started: bool = bool(moth.get("astral_active")) and float(moth.get("astral_ttl")) > 7.9
+	moth.set("astral_ttl", 0.01)
+	moth.call("_tick_astral", 0.02)
+	var astral_ended: bool = not bool(moth.get("astral_active")) and not bool(moth.get("thief_vision_on"))
+	if not astral_started or not astral_ended:
+		printerr("FAIL: Moth astral TTL (started=", astral_started, " ended=", astral_ended, ")")
+		fails += 1
+	else:
+		print("PASS: Moth astral projection 8s TTL start/expiry verified")
+	moth.queue_free()
+	gs.thief_id = "spider"
+	await process_frame
+
+	# 16. Mobile quality profile + touch UI layout/input plumbing
+	var mp_scr: GDScript = load("res://src/core/mobile_profile.gd") as GDScript
+	mp_scr.set_force_mobile(true)
+	var mobile_on: bool = bool(mp_scr.is_mobile())
+	var lights_balanced: int = int(mp_scr.max_lights())
+	var shadows_balanced: int = int(mp_scr.hero_shadows())
+	var lod_balanced: float = float(mp_scr.lod_bias())
+	mp_scr.set_tier(0, save_sys)
+	var lights_perf: int = int(mp_scr.max_lights())
+	mp_scr.set_tier(1, save_sys)
+	var touch_scr: GDScript = load("res://src/ui/mobile_touch_ui.gd") as GDScript
+	var touch_ui: CanvasLayer = touch_scr.new() as CanvasLayer
+	root.add_child(touch_ui)
+	await process_frame
+	await process_frame
+	var touch_buttons: int = int(touch_ui.call("get_button_count"))
+	var interact_center: Vector2 = touch_ui.call("get_button_center", "interact")
+	var hit_id: String = str(touch_ui.call("_hit_button", interact_center))
+	touch_ui.call("clear_input")
+	var touch_ok: bool = mobile_on and lights_balanced == 24 and shadows_balanced == 2 and is_equal_approx(lod_balanced, 2.0) and lights_perf == 12 and touch_buttons >= 13 and hit_id == "interact"
+	if not touch_ok:
+		printerr("FAIL: mobile profile/touch UI (mobile=", mobile_on, " lights=", lights_balanced, " shadows=", shadows_balanced, " lod=", lod_balanced, " perf_lights=", lights_perf, " buttons=", touch_buttons, " hit=", hit_id, ")")
+		fails += 1
+	else:
+		print("PASS: Mobile profile (24 lights/2 shadows/LOD 2.0, Performance=12) & ", touch_buttons, "-button touch UI verified")
+	touch_ui.queue_free()
+	mp_scr.set_force_mobile(false)
+	mp_scr.set_tier(1, save_sys)
 	await process_frame
 
 	print("SUMMARY: fails=", fails)

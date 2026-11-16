@@ -22,6 +22,11 @@ var gravity: float = 18.0
 var walk_phase: float = 0.0
 var search_scan_phase: float = 0.0
 var _ko_tween: Tween
+var _search_goal: Vector3 = Vector3.ZERO
+var _search_goal_timer: float = 0.0
+var _revive_target: Node = null
+var _revive_progress: float = 0.0
+var _ally_scan_timer: float = 0.0
 
 var visual_root: Node3D
 var body_mesh: MeshInstance3D
@@ -63,6 +68,10 @@ func _build_visuals() -> void:
 	_highlight_mat.emission_enabled = true
 	_highlight_mat.emission = Color(0.95, 0.2, 0.2)
 	_highlight_mat.emission_energy_multiplier = 1.6
+	# Thief Vision silhouette reads through walls (x-ray overlay) for all thieves.
+	_highlight_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_highlight_mat.no_depth_test = true
+	_highlight_mat.render_priority = 1
 
 	var glb_path: String = _resolve_guard_glb_path()
 	var packed := ResourceLoader.load(glb_path) as PackedScene
@@ -172,7 +181,7 @@ func _physics_process(delta: float) -> void:
 				state = Alertness.NEUTRAL
 
 	_update_indicator()
-	_update_ally_wakeup()
+	_update_ally_wakeup(delta)
 	_move_ai(delta, player)
 	_update_procedural_anim(delta)
 
@@ -185,9 +194,18 @@ func _move_ai(delta: float, player: CharacterBody3D) -> void:
 			target = patrol_points[wp_index]
 			if global_position.distance_to(target) < 1.0:
 				wp_index = (wp_index + 1) % patrol_points.size()
-		Alertness.SUSPICIOUS, Alertness.ALERTED, Alertness.SEARCH:
+		Alertness.SUSPICIOUS, Alertness.ALERTED:
 			target = investigate_pos
 			spd = patrol_speed * 1.35
+		Alertness.SEARCH:
+			# Fan out around the last known position instead of freezing on it.
+			_search_goal_timer -= delta
+			if _search_goal_timer <= 0.0 or _search_goal == Vector3.ZERO or global_position.distance_to(_search_goal) < 1.2:
+				var ang: float = fmod(search_scan_phase * 2.3 + float(get_instance_id() % 29), TAU)
+				_search_goal = investigate_pos + Vector3(cos(ang) * 4.0, 0.0, sin(ang) * 4.0)
+				_search_goal_timer = 2.5
+			target = _search_goal
+			spd = patrol_speed * 1.15
 		Alertness.COMBAT:
 			if player != null:
 				target = player.global_position
@@ -215,9 +233,18 @@ func _move_ai(delta: float, player: CharacterBody3D) -> void:
 func _can_see_player(player: CharacterBody3D) -> bool:
 	if player == null:
 		return false
-	if player.get("disguise_active") and global_position.distance_to(player.global_position) > 3.5:
+	# The Moth's astral form is a spirit: guards cannot see or hear it.
+	if bool(player.get("astral_active")):
 		return false
-	var effective_range: float = sight_range * (0.65 if player.get("is_crouching") else 1.0)
+	var dist_to_player: float = global_position.distance_to(player.global_position)
+	if bool(player.get("disguise_active")):
+		# Chameleon disguise edge cases: alerted/searching guards and tattered
+		# disguises no longer pass inspection at range; close range is always risky.
+		var guard_alerted: bool = state == Alertness.ALERTED or state == Alertness.COMBAT or state == Alertness.SEARCH
+		var integrity: float = float(player.get("disguise_integrity"))
+		if not guard_alerted and integrity >= 35.0 and dist_to_player > 3.5:
+			return false
+	var effective_range: float = sight_range * (0.65 if bool(player.get("is_crouching")) else 1.0)
 	var to_player: Vector3 = player.global_position - global_position
 	var dist: float = to_player.length()
 	if dist > effective_range or dist < 0.1:
@@ -238,6 +265,8 @@ func _can_see_player(player: CharacterBody3D) -> bool:
 
 func _on_noise_emitted(origin: Vector3, loudness: float, source: Node, tag: String) -> void:
 	if state == Alertness.KNOCKED_OUT or source == self:
+		return
+	if source != null and bool(source.get("astral_active")):
 		return
 	if tag == "guard_alert":
 		if global_position.distance_to(origin) <= loudness:
@@ -307,9 +336,14 @@ func _recover_from_ko() -> void:
 	_ko_tween.tween_property(visual_root, "position:y", 0.0, 0.4).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 
-func _update_ally_wakeup() -> void:
+func _update_ally_wakeup(delta: float) -> void:
 	if state != Alertness.NEUTRAL and state != Alertness.SUSPICIOUS and state != Alertness.SEARCH:
 		return
+	_ally_scan_timer -= delta
+	if _ally_scan_timer > 0.0:
+		return
+	_ally_scan_timer = 0.4
+	var revived: bool = false
 	var guards: Array[Node] = get_tree().get_nodes_in_group("guards")
 	for g in guards:
 		if g == self:
@@ -328,19 +362,34 @@ func _update_ally_wakeup() -> void:
 			continue
 		investigate_pos = other_pos
 		if global_position.distance_to(other_pos) <= 1.8:
-			g.set("ko_timer", 0.0)
-			if g.has_method("wake_up_from_ko"):
-				g.call("wake_up_from_ko")
-			state = Alertness.SEARCH
-			state_timer = 6.0
-			detection = maxf(detection, 40.0)
-			NoiseBus.emit_noise(global_position, 10.0, self, "guard_alert")
-			break
+			# Reviving an ally takes a sustained 1.6s of standing over them.
+			if _revive_target != g:
+				_revive_target = g
+				_revive_progress = 0.0
+			_revive_progress += 0.4
+			if _revive_progress >= 1.6:
+				_revive_target = null
+				_revive_progress = 0.0
+				g.set("ko_timer", 0.0)
+				if g.has_method("wake_up_from_ko"):
+					g.call("wake_up_from_ko")
+				state = Alertness.SEARCH
+				state_timer = 6.0
+				detection = maxf(detection, 40.0)
+				NoiseBus.emit_noise(global_position, 10.0, self, "guard_alert")
+				revived = true
 		else:
 			if state == Alertness.NEUTRAL:
 				state = Alertness.SUSPICIOUS
 				state_timer = 5.0
-			break
+		break
+	if not revived and _revive_target != null:
+		var still_close: bool = false
+		if is_instance_valid(_revive_target) and _revive_target is Node3D:
+			still_close = global_position.distance_to((_revive_target as Node3D).global_position) <= 2.0
+		if not still_close:
+			_revive_target = null
+			_revive_progress = 0.0
 
 
 func _update_procedural_anim(delta: float) -> void:

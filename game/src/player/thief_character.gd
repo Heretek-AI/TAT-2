@@ -3,6 +3,7 @@ extends CharacterBody3D
 ## grapple/disguise/astral abilities, Slithersap, Smoke Bomb, Pickpocket Fairy, and Blackjack.
 
 const VfxManager = preload("res://src/core/vfx_manager.gd")
+const MobileProfile := preload("res://src/core/mobile_profile.gd")
 
 const STAND_HEAD_HEIGHT: float = 1.55
 const CROUCH_HEAD_HEIGHT: float = 0.92
@@ -39,7 +40,14 @@ var thief_vision: bool = false
 const DISGUISE_STEAL_RANGE: float = 2.8
 const GRAPPLE_ARRIVE_DIST: float = 1.8
 const GRAPPLE_VAULT_Y: float = 6.5
+const GRAPPLE_MIN_RANGE: float = 3.0
+const GRAPPLE_MAX_RANGE: float = 26.0
+const GRAPPLE_WINCH_TIME: float = 0.35
+const ASTRAL_DURATION: float = 8.0
+const PROP_SCAN_INTERVAL: float = 0.1
 var _bj_punch_tween: Tween = null
+var _prop_scan_accum: float = 0.0
+var grapple_time: float = 0.0
 
 # First-person viewmodel rig (Workstream 5).
 var fp_rig: Node3D
@@ -86,7 +94,7 @@ func _ready() -> void:
 	collision_mask = 1 | 4
 	_apply_tuning()
 	_build_body()
-	if not OS.has_feature("headless") and DisplayServer.get_name() != "headless":
+	if not OS.has_feature("headless") and DisplayServer.get_name() != "headless" and not MobileProfile.is_mobile():
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 
@@ -154,7 +162,7 @@ func _build_body() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if GameState.state != "playing":
 		return
-	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not MobileProfile.is_mobile():
 		rotate_y(-event.relative.x * mouse_sens)
 		head.rotation.x = clampf(head.rotation.x - event.relative.y * mouse_sens, deg_to_rad(-80), deg_to_rad(80))
 	elif event.is_action_pressed("crouch"):
@@ -187,10 +195,22 @@ func _unhandled_input(event: InputEvent) -> void:
 		_update_thief_vision()
 
 
+## Touch look hook used by src/ui/mobile_touch_ui.gd: mouse look is unavailable on Android.
+func add_look_pixel_delta(delta_px: Vector2) -> void:
+	if GameState.state != "playing":
+		return
+	if absf(delta_px.x) < 0.001 and absf(delta_px.y) < 0.001:
+		return
+	rotate_y(-delta_px.x * mouse_sens)
+	if head != null:
+		head.rotation.x = clampf(head.rotation.x - delta_px.y * mouse_sens, deg_to_rad(-80), deg_to_rad(80))
+
+
 func _physics_process(delta: float) -> void:
 	if GameState.state != "playing":
 		return
 	ability_cooldown = maxf(0.0, ability_cooldown - delta)
+	_tick_astral(delta)
 
 	# Smooth crouch camera height interpolation.
 	var target_head_h: float = CROUCH_HEAD_HEIGHT if is_crouching else STAND_HEAD_HEIGHT
@@ -208,26 +228,27 @@ func _physics_process(delta: float) -> void:
 	head.position.x = lean_dir * LEAN_OFFSET
 	head.rotation.z = -lean_dir * LEAN_ROLL
 
-	# Spider grapple pull override (smooth pull toward anchor, vault on arrival/release).
+	# Spider grapple pull override (smooth winch ramp toward the anchor, then
+	# preserve momentum and vault upward on arrival/release).
 	if is_grappling:
 		var wire_speed: float = GameData.eval_curve("CT_Tool_Wire", "WirePullSpeed", 1.0, 16.0)
 		if wire_speed <= 0.0:
 			wire_speed = 16.0
+		grapple_time += delta
 		var to_anchor: Vector3 = grapple_target - global_position
 		var anchor_dist: float = to_anchor.length()
-		var released: bool = Input.is_action_just_released("ability") or Input.is_action_just_released("tool_4")
+		var released: bool = Input.is_action_just_released("ability") or Input.is_action_just_released("tool_4") or Input.is_action_just_released("primary_action")
+		var winch: float = clampf(grapple_time / GRAPPLE_WINCH_TIME, 0.3, 1.0)
+		var pull_dir: Vector3 = to_anchor.normalized() if anchor_dist > 0.05 else Vector3.ZERO
 		if anchor_dist < GRAPPLE_ARRIVE_DIST or released:
 			is_grappling = false
-			var vault_dir: Vector3 = Vector3.ZERO
-			if anchor_dist > 0.05:
-				vault_dir = to_anchor.normalized()
-			velocity = vault_dir * wire_speed * 0.35
-			velocity.y = GRAPPLE_VAULT_Y
+			velocity = pull_dir * wire_speed * (0.45 + 0.15 * winch)
+			velocity.y = maxf(velocity.y, GRAPPLE_VAULT_Y * (0.7 + 0.3 * winch))
 			move_and_slide()
 			return
 		else:
-			var desired: Vector3 = to_anchor.normalized() * wire_speed
-			velocity = velocity.lerp(desired, clampf(delta * 6.0, 0.0, 1.0))
+			var desired: Vector3 = pull_dir * wire_speed * winch + Vector3.UP * 1.4
+			velocity = velocity.lerp(desired, clampf(delta * 7.0, 0.0, 1.0))
 			move_and_slide()
 			return
 
@@ -259,9 +280,9 @@ func _physics_process(delta: float) -> void:
 	velocity.z = lerpf(velocity.z, wish.z * speed, delta * 14.0)
 	move_and_slide()
 
-	# Footstep cadence timer while moving on floor.
+	# Footstep cadence timer while moving on floor. Astral form makes no noise.
 	var planar_speed: float = Vector2(velocity.x, velocity.z).length()
-	if is_on_floor() and planar_speed > 0.5:
+	if is_on_floor() and planar_speed > 0.5 and not astral_active:
 		fp_bob_phase += delta * (9.0 if is_sprinting else 6.5)
 		noise_timer -= delta
 		if noise_timer <= 0.0:
@@ -283,7 +304,12 @@ func _physics_process(delta: float) -> void:
 				noise_timer = 0.28
 			else:
 				noise_timer = 0.4
-	_update_prop_highlight()
+	# Interactive-prop highlight scanning is throttled to 10 Hz instead of every
+	# physics tick (it walks the interactables/guards groups).
+	_prop_scan_accum += delta
+	if _prop_scan_accum >= PROP_SCAN_INTERVAL:
+		_prop_scan_accum = 0.0
+		_update_prop_highlight()
 
 	# Chameleon Disguise Integrity drain (faster while sprinting or near guards).
 	if disguise_active:
@@ -438,12 +464,31 @@ func _trigger_thief_ability() -> void:
 			ability_cooldown = 2.0
 		"moth":
 			astral_active = true
-			astral_ttl = 8.0
+			astral_ttl = ASTRAL_DURATION
 			ability_cooldown = 12.0
 			thief_vision = true
 			thief_vision_on = true
 			thief_vision_toggled.emit(true)
 			_update_thief_vision()
+
+
+func _tick_astral(delta: float) -> void:
+	if not astral_active:
+		return
+	astral_ttl = maxf(0.0, astral_ttl - delta)
+	if astral_ttl <= 0.0:
+		_end_astral()
+
+
+func _end_astral() -> void:
+	if not astral_active and not thief_vision_on:
+		return
+	astral_active = false
+	astral_ttl = 0.0
+	thief_vision = false
+	thief_vision_on = false
+	thief_vision_toggled.emit(false)
+	_update_thief_vision()
 
 
 func _try_spider_grapple() -> bool:
@@ -454,14 +499,27 @@ func _try_spider_grapple() -> bool:
 	var space: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
 	var from: Vector3 = cam.global_position
 	var fwd: Vector3 = -cam.global_transform.basis.z
-	var to: Vector3 = from + fwd * 26.0
+	var to: Vector3 = from + fwd * GRAPPLE_MAX_RANGE
 	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(from, to, 1, [get_rid()])
 	var hit: Dictionary = space.intersect_ray(query)
 	if hit.is_empty():
 		return false
 	var hit_pos: Vector3 = hit["position"] as Vector3
+	var hit_normal: Vector3 = Vector3.UP
+	var normal_var: Variant = hit.get("normal", Vector3.UP)
+	if normal_var is Vector3:
+		hit_normal = normal_var
+	# Anchor surface check: reject point-blank hooks, walkable floor below the
+	# thief, and downward anchors (the zipwire only winches up/forward).
+	if hit_pos.distance_to(global_position) < GRAPPLE_MIN_RANGE:
+		return false
+	if hit_normal.dot(Vector3.UP) > 0.7 and hit_pos.y < global_position.y + 2.0:
+		return false
+	if hit_pos.y < global_position.y - 0.5:
+		return false
 	grapple_target = hit_pos
 	is_grappling = true
+	grapple_time = 0.0
 	_fp_set_tool("zipwire")
 	_fp_play_swing()
 	ability_cooldown = GameData.eval_curve("CT_Tool_Wire", "WireCooldownPrimary", 1.0, 10.0) * 0.4
@@ -514,7 +572,36 @@ func _use_pickpocket_fairy() -> void:
 		VfxManager.spawn_fairy_orb(get_parent(), global_position + Vector3.UP * 1.3, best_loot.global_position)
 		NoiseBus.emit_noise(best_loot.global_position, 3.0, self, "fairy")
 		best_loot.interact(self)
+	else:
+		# Insult Fairy fallback: with no loot in reach, send the fairy to taunt the
+		# nearest guard into investigating a point away from the thief.
+		var guard: Node3D = _find_nearest_guard(30.0)
+		if guard != null:
+			var away: Vector3 = guard.global_position - global_position
+			away.y = 0.0
+			if away.length() < 0.1:
+				away = -global_transform.basis.z
+			var lure: Vector3 = guard.global_position + away.normalized() * 4.0 + Vector3.UP * 0.2
+			VfxManager.spawn_fairy_orb(get_parent(), global_position + Vector3.UP * 1.3, lure)
+			NoiseBus.emit_noise(lure, 9.0, self, "insult_fairy")
 	tool_used.emit("pickpocket_fairy", int(charges.get("pickpocket_fairy", 0)))
+
+
+func _find_nearest_guard(max_dist: float) -> Node3D:
+	var best: Node3D = null
+	var best_d: float = max_dist
+	for g: Node in get_tree().get_nodes_in_group("guards"):
+		if not (g is Node3D):
+			continue
+		var st: Variant = g.get("state")
+		if st is int and int(st) == 5:
+			continue
+		var guard_node: Node3D = g as Node3D
+		var d: float = global_position.distance_to(guard_node.global_position)
+		if d < best_d:
+			best_d = d
+			best = guard_node
+	return best
 
 
 func _try_blackjack() -> void:

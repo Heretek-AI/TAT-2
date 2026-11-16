@@ -4,6 +4,7 @@ extends CanvasLayer
 
 const SettingsUIScript := preload("res://src/ui/settings_ui.gd")
 const ThemeScript := preload("res://src/ui/art_nouveau_theme.gd")
+const MobileProfile := preload("res://src/core/mobile_profile.gd")
 
 const VERSION_STRING: String = "v1.5.148559"
 
@@ -26,12 +27,16 @@ var pause_panel: PanelContainer
 var result_panel: PanelContainer
 var result_lbl: Label
 var contract_data: Dictionary = {}
+var current_prompt: String = ""
 
 var _pause_root: Control
 var _prompt_keycap: PanelContainer
 var _prompt_keycap_lbl: Label
 var _thief_name_lbl: Label
 var _level_badge_lbl: Label
+var fps_overlay: Label
+var fps_overlay_enabled: bool = false
+var _fps_refresh: float = 0.0
 
 
 func _ready() -> void:
@@ -86,13 +91,14 @@ func _ready() -> void:
 	_build_objective(root, sans)
 	_build_reticle_and_prompt(root, sans)
 	_build_bottom_left(root)
+	_build_fps_overlay(root, sans)
 
 	hotbar_lbl = Label.new()
 	hotbar_lbl.visible = false
 	root.add_child(hotbar_lbl)
 
 	var is_hub: bool = GameState.active_contract_order <= 1
-	if not is_hub:
+	if not is_hub and not MobileProfile.is_mobile():
 		_build_tool_hotbar(root, sans)
 	_build_result_panel(root)
 	_build_pause_menu(root)
@@ -268,8 +274,13 @@ func _build_bottom_left(root: Control) -> void:
 	# Bottom-left Stealth Ball (Light Gem) + Slim Health/Stamina (hidden in peaceful Thieves' Den hub)
 	var is_hub: bool = GameState.active_contract_order <= 1
 	var bl: Control = Control.new()
-	bl.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	bl.position = Vector2(24, -76)
+	if MobileProfile.is_mobile():
+		# Bottom-left belongs to the virtual move stick on touch; move the meters up.
+		bl.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		bl.position = Vector2(24, 94)
+	else:
+		bl.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+		bl.position = Vector2(24, -76)
 	bl.visible = not is_hub
 	root.add_child(bl)
 
@@ -298,6 +309,74 @@ func _build_bottom_left(root: Control) -> void:
 	stam_fill.size = Vector2(140, 6)
 	stam_fill.color = Color(0.32, 0.72, 0.88, 0.9)
 	bl.add_child(stam_fill)
+
+
+func _build_fps_overlay(root: Control, sans: Font) -> void:
+	# F3 debug overlay: FPS, frame time, draw calls, visible objects and VRAM.
+	fps_overlay = Label.new()
+	fps_overlay.position = Vector2(24, 78)
+	fps_overlay.custom_minimum_size = Vector2(620, 44)
+	fps_overlay.add_theme_font_size_override("font_size", 13)
+	fps_overlay.add_theme_color_override("font_color", Color(0.62, 1.0, 0.72))
+	fps_overlay.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+	fps_overlay.add_theme_constant_override("shadow_offset_x", 1)
+	fps_overlay.add_theme_constant_override("shadow_offset_y", 1)
+	if sans != null:
+		fps_overlay.add_theme_font_override("font", sans)
+	fps_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fps_overlay.visible = false
+	root.add_child(fps_overlay)
+
+
+func is_fps_overlay_visible() -> bool:
+	return fps_overlay_enabled
+
+
+func toggle_fps_overlay() -> void:
+	fps_overlay_enabled = not fps_overlay_enabled
+	_fps_refresh = 0.0
+	if fps_overlay != null:
+		fps_overlay.visible = fps_overlay_enabled
+		if fps_overlay_enabled:
+			_update_fps_overlay()
+	print("TAT-2 perf overlay ", "ON" if fps_overlay_enabled else "OFF")
+
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventKey:
+		var key_event: InputEventKey = event as InputEventKey
+		if key_event.pressed and not key_event.echo:
+			if key_event.keycode == KEY_F3 or key_event.physical_keycode == KEY_F3:
+				toggle_fps_overlay()
+				get_viewport().set_input_as_handled()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_GO_BACK_REQUEST:
+		_set_paused(not get_tree().paused)
+	elif what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
+		if MobileProfile.is_mobile() and GameState.state == "playing" and not get_tree().paused:
+			_set_paused(true)
+
+
+func _update_fps_overlay() -> void:
+	if fps_overlay == null:
+		return
+	var fps: float = Engine.get_frames_per_second()
+	var frame_ms: float = 1000.0 / maxf(fps, 1.0)
+	var draw_calls: int = int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
+	var objects: int = int(Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME))
+	var primitives: int = int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME))
+	var nodes: int = int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))
+	var vram_mb: float = Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0
+	var pos_txt: String = "-"
+	var p: Node3D = get_tree().get_first_node_in_group("player") as Node3D
+	if p != null:
+		pos_txt = "%.1f, %.1f, %.1f" % [p.global_position.x, p.global_position.y, p.global_position.z]
+	fps_overlay.text = "FPS %d | %.1f ms | draws %d | objs %d | prims %d\nnodes %d | VRAM %.0f MB | pos %s | %s" % [
+		int(round(fps)), frame_ms, draw_calls, objects, primitives, nodes, vram_mb, pos_txt,
+		str(contract_data.get("title", "Contract #%d" % GameState.active_contract_order)),
+	]
 
 
 func _tex_rect(path: String, min_sz: Vector2) -> TextureRect:
@@ -523,6 +602,9 @@ func _toggle_pause() -> void:
 
 func _set_paused(value: bool) -> void:
 	get_tree().paused = value
+	var touch_ui: Node = get_tree().get_first_node_in_group("mobile_touch_ui")
+	if touch_ui != null and touch_ui.has_method("clear_input"):
+		touch_ui.call("clear_input")
 	if _pause_root != null:
 		_pause_root.visible = value
 	if pause_center != null and _pause_root == null:
@@ -556,6 +638,7 @@ func _set_prompt(raw: String) -> void:
 	if interact_lbl == null:
 		return
 	var txt: String = raw.strip_edges()
+	current_prompt = txt
 	if txt == "":
 		interact_lbl.text = ""
 		if _prompt_keycap != null:
@@ -573,10 +656,20 @@ func _set_prompt(raw: String) -> void:
 		_prompt_keycap.visible = true
 	elif _prompt_keycap != null:
 		_prompt_keycap.visible = false
+	# Touch builds show the verb next to the on-screen USE button instead.
 	interact_lbl.text = rest.to_upper()
+	if MobileProfile.is_mobile():
+		if _prompt_keycap != null:
+			_prompt_keycap.visible = false
+		interact_lbl.visible = false
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	if fps_overlay_enabled:
+		_fps_refresh += delta
+		if _fps_refresh >= 0.25:
+			_fps_refresh = 0.0
+			_update_fps_overlay()
 	if InputMap.has_action("pause") and Input.is_action_just_pressed("pause"):
 		_toggle_pause()
 	if get_tree().paused:

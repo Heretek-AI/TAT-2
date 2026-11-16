@@ -510,14 +510,22 @@ static func set_prop_highlight(target: Node, enabled: bool) -> void:
 		return
 	if not is_instance_valid(target):
 		return
-	var meshes: Array[MeshInstance3D] = []
-	if target is MeshInstance3D:
-		meshes.append(target as MeshInstance3D)
-	var found: Array[Node] = target.find_children("*", "MeshInstance3D", true, false)
-	for child: Node in found:
-		if child is MeshInstance3D:
-			meshes.append(child as MeshInstance3D)
-	for mi: MeshInstance3D in meshes:
+	var meshes: Array = []
+	if target.has_meta("_vfx_hl_meshes"):
+		meshes = target.get_meta("_vfx_hl_meshes") as Array
+	elif enabled:
+		if target is MeshInstance3D:
+			meshes.append(target as MeshInstance3D)
+		var found: Array[Node] = target.find_children("*", "MeshInstance3D", true, false)
+		for child: Node in found:
+			if child is MeshInstance3D:
+				meshes.append(child as MeshInstance3D)
+		# Cache the mesh list so toggling the same target never rescans the tree.
+		target.set_meta("_vfx_hl_meshes", meshes)
+	for mi_var: Variant in meshes:
+		var mi: MeshInstance3D = mi_var as MeshInstance3D
+		if mi == null or not is_instance_valid(mi):
+			continue
 		if enabled:
 			if mi.has_meta("_vfx_hl") and bool(mi.get_meta("_vfx_hl", false)):
 				continue
@@ -542,3 +550,5 @@ static func set_prop_highlight(target: Node, enabled: bool) -> void:
 			mi.remove_meta("_vfx_hl")
 			if mi.has_meta("_vfx_hl_orig"):
 				mi.remove_meta("_vfx_hl_orig")
+	if not enabled and target.has_meta("_vfx_hl_meshes"):
+		target.remove_meta("_vfx_hl_meshes")

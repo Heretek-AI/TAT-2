@@ -1,0 +1,63 @@
+# TAT-2 Performance Notes
+
+Measured on Godot `4.7.2.stable.flathub` (Forward+ / Jolt), headless load benchmark,
+NVIDIA RTX 4070 Laptop target for the runtime.
+
+## What changed
+
+All work is in `game/src/core/level_loader.gd` unless stated otherwise.
+
+| Area | Before | After |
+|---|---|---|
+| Mesh batching | one map-wide `MultiMeshInstance3D` per `.glb` (AABB spanned the whole city, never cullable) | partitioned into 32 m × 32 m XZ cells; explicit tight `custom_aabb` per chunk |
+| Single-instance cells | 1-instance `MultiMesh` | plain `MeshInstance3D` |
+| Distance culling | end 85 m only when mesh AABB < 1.5 m, using the merged map AABB | foliage/debris 22 m, props < 1.2 m → 45 m, props < 4 m → 95 m (effective ranges; each adds a 16 m chunk-radius pad because `visibility_range_*` measures the chunk AABB centre), structural unbounded |
+| Shadows | off only when mesh AABB < 0.8 m | off for all foliage/debris and props < 1.2 m |
+| Collision bodies | one `LevelCollision` `StaticBody3D` with 13,830 shapes (Guildhall) | per-cell bodies (`LevelCollision_<cx>_<cz>`) capped at 384 shapes per body; landscapes own `LandscapeCollision_<n>` |
+| Skybox/periphery | full physics colliders | `*_SkyboxGeo` / `*_Periphery*` sublevels generate **no** colliders |
+| Occlusion culling | disabled | `rendering/occlusion_culling/use_occlusion_culling=true` + `BoxOccluder3D` for 6–48 m structural meshes (max 768) |
+| Positional shadow atlas | 4096 | **left at 4096** — only the 4 hero lights cast shadows, so 2048 would only blur them without a meaningful win |
+| Lights | up to 96 live, no camera-distance fade | non-hero omni/spot lights fade 28 m → 40 m (`distance_fade_*`) |
+| `light_probe.gd` | sampled every physics frame, raycast every light in range | ~12.5 Hz throttle, 25 m squared-distance early-out, per-position cache |
+| Prop highlight | group scan every physics tick + `find_children` on every toggle | 10 Hz scan throttle; mesh list cached on the target by `VfxManager.set_prop_highlight()` |
+| Loading | terrain/collider loops blocked the main thread | async path yields per sublevel, per landscape, and every 64 draw items |
+
+## Measured (Guildhall, 13 sublevels)
+
+Cold-process headless load, same 96-light budget and collision enabled:
+
+| Metric | Old loader | New loader |
+|---|---|---|
+| Load time | **53.3 s** | **16.2 s** |
+| Scene nodes | 1,190 | 5,651 (4,517 chunk nodes) |
+| `MultiMeshInstance3D` | 891 map-wide | 2,030 chunked + 2,505 plain meshes |
+| Max batch AABB diagonal | map-wide (hundreds of m) | **95.2 m** (p95 56 m) |
+| Distance-culled nodes | ~0 | 1,110 |
+| Static bodies (collision) | 1 | 68 |
+| Collision shapes | 13,830 | 8,268 |
+
+Old Manor: `chunks=2470`, `collision_bodies=40`, `collision_shapes=4539`, `occluders=571`.
+Thieves' Den: `chunks=156`, `collision_bodies=2`, `collision_shapes=95`, `occluders=74`.
+
+## How to verify at runtime
+
+- `make test` — 15 headless suites; the perf suite asserts `chunks ≥ 500`, split collision
+  bodies, occluder count, a chunk span < 140 m, and ≥ 300 distance-culled nodes for Guildhall.
+  Current output: `chunks=4517, multimeshes=2030, collision_bodies=68, shapes=8268,
+  occluders=768, max_chunk_span=95.2m, distance-culled=1110`.
+- `make audit` — manifest coverage unchanged (`--min-coverage 0.90`).
+- `make run` — press **F3** for the live overlay (FPS, frame ms, draw calls, visible
+  objects/primitives, node count, VRAM, player position, contract title). It is implemented
+  in `game/src/ui/hud.gd` (`toggle_fps_overlay()`), updates at 4 Hz.
+
+## Known caveats
+
+- Headless runs cannot read back `MultiMesh` instance transforms or `get_aabb()` (the dummy
+  rendering server does not store them). Verification therefore reads the explicit
+  `custom_aabb` we set, which is the same value the renderer uses for culling.
+- Occlusion culling is conservative but not pixel-perfect: `BoxOccluder3D` boxes are sized to
+  mesh AABBs, so openings inside a wall mesh (doors, archways) are covered by the box. This
+  is why doors/windows/arches/railings are excluded from occluder creation. A visual pass in
+  `make run` is still required on Guildhall and Old Manor before shipping.
+- `rendering/occlusion_culling/use_occlusion_culling` is read at renderer startup, so a full
+  game restart (not a scene reload) is required after changing it.

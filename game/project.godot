@@ -36,6 +36,7 @@ common/physics_ticks_per_second=60
 
 renderer/rendering_method="forward_plus"
 environment/defaults/default_clear_color=Color(0.02, 0.025, 0.045, 1)
+occlusion_culling/use_occlusion_culling=true
 
 [input]
 

@@ -5,6 +5,7 @@ extends Node
 ## generates StaticBody3D collision, and extracts real spawn/guard/loot/escape markers.
 
 const _VfxManager: GDScript = preload("res://src/core/vfx_manager.gd")
+const MobileProfile: GDScript = preload("res://src/core/mobile_profile.gd")
 
 signal load_progress(pct: float, status: String)
 
@@ -15,6 +16,47 @@ var _mesh_mats_db_lower: Dictionary = {}
 var _tex_cache: Dictionary = {}
 var _std_mat_cache: Dictionary = {}
 var _mesh_res_cache: Dictionary = {} # ue_path -> { "mesh": Mesh, "shape": Shape3D }
+
+# --- Spatial chunking & culling tuning (perf P1/P2/P4) ----------------------
+## Repeated meshes are partitioned into CHUNK_SIZE x CHUNK_SIZE XZ cells so every
+## MultiMeshInstance3D gets a tight AABB that Godot's frustum culler can reject.
+const CHUNK_SIZE: float = 32.0
+## visibility_range_* is measured from the instance AABB centre; a 32m chunk's
+## centre can be half a cell away from the prop being culled, so pad the ranges.
+const CHUNK_RADIUS_PAD: float = CHUNK_SIZE * 0.5
+const CLUTTER_VIS_RANGE: float = 22.0
+const TINY_PROP_VIS_RANGE: float = 45.0
+const SMALL_PROP_VIS_RANGE: float = 95.0
+const TINY_PROP_LEN: float = 1.2
+const SMALL_PROP_LEN: float = 4.0
+const OCCLUDER_MIN_LEN: float = 6.0
+const OCCLUDER_MAX_LEN: float = 48.0
+const MAX_OCCLUDERS: int = 768
+const MAX_SHAPES_PER_BODY: int = 384
+const MAX_TOTAL_SHAPES: int = 24000
+const LIGHT_DISTANCE_FADE_BEGIN: float = 28.0
+const LIGHT_DISTANCE_FADE_LENGTH: float = 12.0
+const PROGRESS_YIELD_EVERY: int = 64
+
+## Foliage/debris/clutter: aggressively culled, never casts shadows or collides.
+const CLUTTER_TOKENS: Array[String] = [
+	"sm_leaf", "sm_grass", "sm_newgrass", "sm_newspaper", "sm_pebble", "sm_debris",
+	"foliage", "ivy", "vine", "moss", "cobweb", "sm_dust",
+]
+## Sublevels that only dress the horizon: no physics colliders, no occluders.
+const DECORATIVE_SUBLEVEL_TOKENS: Array[String] = ["skyboxgeo", "periphery"]
+## Occlusion occluders are opt-in: only obviously solid structural piece names
+## (never see-through pieces like windows, doors, rails, frames or light fixtures).
+const OCCLUDER_INCLUDE_TOKENS: Array[String] = [
+	"wall", "floor", "ceiling", "roof", "building", "pillar", "column", "stair", "block",
+]
+const OCCLUDER_EXCLUDE_TOKENS: Array[String] = [
+	"window", "door", "glass", "gate", "archway", "arch_", "frame", "rail", "beam",
+	"hole", "gap", "curtain", "drape", "cloth", "banner", "flag", "foliage", "leaf",
+	"sky", "cloud", "fog", "smoke", "water", "carpet", "rug", "paper", "poster",
+	"scroll", "cable", "wire", "rope", "ladder", "light", "lamp", "vent", "pipe",
+	"trim", "deco", "panel",
+]
 
 
 func _ready() -> void:
@@ -61,6 +103,9 @@ func get_material_for_ue(ue_mat_path: String) -> StandardMaterial3D:
 	mat.roughness = 0.78
 	var texs: Dictionary = info.get("texs", {})
 	var alb := _load_tex(str(texs.get("albedo", "")))
+	# Hard rule: the UI map textures (T_MapBuilding_*) must never dress 3D geometry.
+	if str(texs.get("albedo", "")).to_lower().find("mapbuilding") >= 0:
+		alb = null
 	if "oldmanorpanels" in low_mat:
 		var wood_alb := _load_tex("res://assets/ue/Raw/MaterialLibrary/Environment/Wood/Manor/T_ManorWood_D.png")
 		if wood_alb != null:
@@ -246,345 +291,440 @@ func _find_first_mesh(n: Node) -> MeshInstance3D:
 	return null
 
 
-func load_sublevels(json_paths: Array[String], parent: Node3D, light_probe: Node, max_lights: int = 96, generate_collision: bool = true) -> Dictionary:
-	if _materials_db.is_empty():
-		_load_material_dbs()
-	var result: Dictionary = {
-		"player_spawns": [] as Array[Vector3],
-		"guard_spawns": [] as Array[Vector3],
-		"loot_spawns": [] as Array[Vector3],
-		"escape_points": [] as Array[Vector3],
-		"door_spawns": [] as Array[Vector3],
-		"candelabra_positions": [] as Array[Vector3],
-		"wardrobe_positions": [] as Array[Vector3],
-		"desk_positions": [] as Array[Vector3],
-		"ledger_positions": [] as Array[Vector3],
-		"window_positions": [] as Array[Vector3],
-		"mesh_instances": 0,
-		"light_count": 0,
+func _has_token(haystack_low: String, tokens: Array[String]) -> bool:
+	for token: String in tokens:
+		if haystack_low.find(token) >= 0:
+			return true
+	return false
+
+
+## Skybox/periphery sublevels are horizon dressing: never spawn physics or occluders.
+func _is_decorative_sublevel(json_path: String) -> bool:
+	return _has_token(json_path.to_lower(), DECORATIVE_SUBLEVEL_TOKENS)
+
+
+func _new_accumulator() -> Dictionary:
+	return {
+		"batches": {},
+		"batches_nocol": {},
+		"lights": [] as Array,
+		"landscapes": [] as Array,
+		"seen_lights": {},
+		"result": {
+			"player_spawns": [] as Array[Vector3],
+			"guard_spawns": [] as Array[Vector3],
+			"loot_spawns": [] as Array[Vector3],
+			"escape_points": [] as Array[Vector3],
+			"door_spawns": [] as Array[Vector3],
+			"candelabra_positions": [] as Array[Vector3],
+			"wardrobe_positions": [] as Array[Vector3],
+			"desk_positions": [] as Array[Vector3],
+			"ledger_positions": [] as Array[Vector3],
+			"window_positions": [] as Array[Vector3],
+			"mesh_instances": 0,
+			"light_count": 0,
+			"chunk_count": 0,
+			"collision_bodies": 0,
+			"collision_shapes": 0,
+			"occluder_count": 0,
+		},
 	}
 
-	var batches: Dictionary = {} # ue_mesh_path -> Array[Transform3D]
-	var lights_added: int = 0
-	var pending_lights: Array = []
-	var seen_lights: Dictionary = {}
-	var pending_landscapes: Array = []
 
-	for jp in json_paths:
-		if not FileAccess.file_exists(jp):
+func _new_build_ctx(parent: Node3D, light_probe: Node, generate_collision: bool) -> Dictionary:
+	return {
+		"parent": parent,
+		"light_probe": light_probe,
+		"generate_collision": generate_collision,
+		"col_bodies": {},
+		"col_counts": {},
+		"collision_shapes": 0,
+		"collision_bodies": 0,
+		"occluders": 0,
+		"chunk_count": 0,
+		"light_count": 0,
+		"landscapes_built": 0,
+		"landscape_mat": null,
+	}
+
+
+## Parses one .tatlevel.json into the accumulator. Meshes from skybox/periphery
+## sublevels go into the non-colliding batch table so they never spawn physics.
+func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) -> void:
+	if not FileAccess.file_exists(json_path):
+		return
+	var f: FileAccess = FileAccess.open(json_path, FileAccess.READ)
+	if f == null:
+		return
+	var data: Variant = JSON.parse_string(f.get_as_text())
+	if not (data is Dictionary):
+		return
+	var data_dict: Dictionary = data
+	var result: Dictionary = acc["result"]
+	var landscapes: Array = acc["landscapes"]
+	for lc in data_dict.get("landscapes", []):
+		if lc is Dictionary:
+			landscapes.append(lc)
+
+	var collide_sublevel: bool = not _is_decorative_sublevel(json_path)
+	var batches: Dictionary = acc["batches"] if collide_sublevel else acc["batches_nocol"]
+
+	for m in data_dict.get("meshes", []):
+		if not (m is Dictionary):
 			continue
-		var f: FileAccess = FileAccess.open(jp, FileAccess.READ)
-		if f == null:
+		var m_dict: Dictionary = m
+		var mp: String = str(m_dict.get("mesh", ""))
+		if mp == "":
 			continue
-		var data: Variant = JSON.parse_string(f.get_as_text())
-		if not (data is Dictionary):
+		var low_mp: String = mp.to_lower()
+		if "emissiveshapes/sm_sphere" in low_mp or "primitives/sm_shape" in low_mp or "fogsheet" in low_mp or "volumetric" in low_mp or "skysphere" in low_mp or "blocker" in low_mp:
 			continue
-		var data_dict: Dictionary = data
-		for lc in data_dict.get("landscapes", []):
-			if lc is Dictionary:
-				pending_landscapes.append(lc)
+		var tr: Transform3D = _dict_to_transform(m_dict)
+		if not batches.has(mp):
+			batches[mp] = [] as Array[Transform3D]
+		var arr: Array = batches[mp]
+		arr.append(tr)
+		var prop_pos: Vector3 = tr.origin
+		if "candelabra" in low_mp or "candle" in low_mp or "brazier" in low_mp or "torch" in low_mp:
+			var candle_arr: Array = result["candelabra_positions"]
+			candle_arr.append(prop_pos)
+			_VfxManager.spawn_candle_flame(parent, prop_pos + Vector3(0.0, 0.48, 0.0))
+		if "wardrobe" in low_mp or "bureau" in low_mp or "armoire" in low_mp:
+			var ward_arr: Array = result["wardrobe_positions"]
+			ward_arr.append(prop_pos)
+		if "sm_map_thievesden" in low_mp:
+			var desk_arr: Array = result["desk_positions"]
+			desk_arr.insert(0, prop_pos)
+		elif "maptable" in low_mp or "table_map" in low_mp or "desk" in low_mp:
+			var desk_arr2: Array = result["desk_positions"]
+			desk_arr2.append(prop_pos)
+		if "openedledger" in low_mp:
+			var led_arr: Array = result["ledger_positions"]
+			led_arr.append(prop_pos)
+		if "windowborder" in low_mp or "thievesden_window" in low_mp:
+			var win_arr: Array = result["window_positions"]
+			win_arr.append(prop_pos)
 
-		for m in data_dict.get("meshes", []):
-			if not (m is Dictionary):
-				continue
-			var m_dict: Dictionary = m
-			var mp: String = str(m_dict.get("mesh", ""))
-			if mp == "":
-				continue
-			var low_mp: String = mp.to_lower()
-			if "emissiveshapes/sm_sphere" in low_mp or "primitives/sm_shape" in low_mp or "fogsheet" in low_mp or "volumetric" in low_mp or "skysphere" in low_mp or "blocker" in low_mp:
-				continue
-			var tr: Transform3D = _dict_to_transform(m_dict)
-			if not batches.has(mp):
-				batches[mp] = [] as Array[Transform3D]
-			var arr: Array = batches[mp]
-			arr.append(tr)
-			var prop_pos: Vector3 = tr.origin
-			if "candelabra" in low_mp or "candle" in low_mp or "brazier" in low_mp or "torch" in low_mp:
-				var candle_arr: Array = result["candelabra_positions"]
-				candle_arr.append(prop_pos)
-				_VfxManager.spawn_candle_flame(parent, prop_pos + Vector3(0.0, 0.48, 0.0))
-			if "wardrobe" in low_mp or "bureau" in low_mp or "armoire" in low_mp:
-				var ward_arr: Array = result["wardrobe_positions"]
-				ward_arr.append(prop_pos)
-			if "sm_map_thievesden" in low_mp:
-				var desk_arr: Array = result["desk_positions"]
-				desk_arr.insert(0, prop_pos)
-			elif "maptable" in low_mp or "table_map" in low_mp or "desk" in low_mp:
-				var desk_arr: Array = result["desk_positions"]
-				desk_arr.append(prop_pos)
-			if "openedledger" in low_mp:
-				var led_arr: Array = result["ledger_positions"]
-				led_arr.append(prop_pos)
-			if "windowborder" in low_mp or "thievesden_window" in low_mp:
-				var win_arr: Array = result["window_positions"]
-				win_arr.append(prop_pos)
-
-		for l in data_dict.get("lights", []):
-			if not (l is Dictionary):
-				continue
-			var l_dict: Dictionary = l
-			var lpos: Array = l_dict.get("pos", [0, 0, 0])
-			var lkey: String = "%d,%d,%d" % [roundi(float(lpos[0])), roundi(float(lpos[1])), roundi(float(lpos[2]))]
-			if seen_lights.has(lkey):
-				continue
-			seen_lights[lkey] = true
-			pending_lights.append(l_dict)
-
-		for mk in data_dict.get("markers", []):
-			if not (mk is Dictionary):
-				continue
-			var cls: String = str(mk.get("class", ""))
-			var pos_arr: Array = mk.get("pos", [0, 0, 0])
-			var p: Vector3 = Vector3(float(pos_arr[0]), float(pos_arr[1]), float(pos_arr[2]))
-			if "PlayerStart" in cls:
-				result["player_spawns"].append(p)
-			elif "MissionSpawner_Character" in cls or "Guard" in cls:
-				result["guard_spawns"].append(p)
-			elif "MissionSpawner_MajorLoot" in cls or "MissionSpawner_MinorLoot" in cls or "QuestSpawner" in cls:
-				result["loot_spawns"].append(p)
-			elif "Escape" in cls:
-				result["escape_points"].append(p)
-			elif "Door" in cls:
-				result["door_spawns"].append(p)
-
-	# Sort all collected lights by intensity/priority (brightest first),
-	# enable shadows only on the top 4 hero lights so Forward+ Clustered
-	# can handle up to 96 lights at high FPS.
-	pending_lights.sort_custom(_sort_lights_desc)
-	var light_budget: int = mini(pending_lights.size(), max_lights)
-	for li in range(light_budget):
-		var linfo: Dictionary = pending_lights[li]
-		var hero_shadow: bool = li < 4
-		var lnode: Light3D = _build_light(linfo, hero_shadow)
-		if lnode != null:
-			# Enforce shadow policy explicitly (top 4 brightest only).
-			lnode.shadow_enabled = hero_shadow
-			parent.add_child(lnode)
-			if light_probe != null and light_probe.has_method("register_light"):
-				light_probe.register_light(lnode)
-			lights_added += 1
-
-	# Build MultiMeshInstance3D batches + StaticBody3D colliders
-	var col_body: StaticBody3D = null
-	if generate_collision:
-		col_body = StaticBody3D.new()
-		col_body.name = "LevelCollision"
-		col_body.collision_layer = 1
-		parent.add_child(col_body)
-	if not pending_landscapes.is_empty():
-		_build_landscape_terrain(pending_landscapes, parent, col_body)
-
-	var total_inst: int = 0
-	for mp in batches.keys():
-		var info: Dictionary = _get_mesh_and_shape(mp)
-		var mesh: Mesh = info["mesh"]
-		if mesh == null:
+	for l in data_dict.get("lights", []):
+		if not (l is Dictionary):
 			continue
-		var trs: Array = batches[mp]
+		var l_dict: Dictionary = l
+		var lpos: Array = l_dict.get("pos", [0, 0, 0])
+		var lkey: String = "%d,%d,%d" % [roundi(float(lpos[0])), roundi(float(lpos[1])), roundi(float(lpos[2]))]
+		var seen_lights: Dictionary = acc["seen_lights"]
+		if seen_lights.has(lkey):
+			continue
+		seen_lights[lkey] = true
+		var pending_lights: Array = acc["lights"]
+		pending_lights.append(l_dict)
+
+	for mk in data_dict.get("markers", []):
+		if not (mk is Dictionary):
+			continue
+		var cls: String = str(mk.get("class", ""))
+		var pos_arr: Array = mk.get("pos", [0, 0, 0])
+		var p: Vector3 = Vector3(float(pos_arr[0]), float(pos_arr[1]), float(pos_arr[2]))
+		if "PlayerStart" in cls:
+			var ps: Array = result["player_spawns"]
+			ps.append(p)
+		elif "MissionSpawner_Character" in cls or "Guard" in cls:
+			var gs: Array = result["guard_spawns"]
+			gs.append(p)
+		elif "MissionSpawner_MajorLoot" in cls or "MissionSpawner_MinorLoot" in cls or "QuestSpawner" in cls:
+			var ls: Array = result["loot_spawns"]
+			ls.append(p)
+		elif "Escape" in cls:
+			var es: Array = result["escape_points"]
+			es.append(p)
+		elif "Door" in cls:
+			var ds: Array = result["door_spawns"]
+			ds.append(p)
+
+
+func _cell_of(tr: Transform3D) -> Vector2i:
+	return Vector2i(floori(tr.origin.x / CHUNK_SIZE), floori(tr.origin.z / CHUNK_SIZE))
+
+
+## Splits one mesh-path batch into per-cell draw items. Single instances (or
+## batches that fit in one cell) stay as a single tight-AABB node.
+func _make_draw_items(batches: Dictionary, collide: bool) -> Array:
+	var items: Array = []
+	for mp_var in batches.keys():
+		var mp: String = str(mp_var)
+		var trs: Array = batches[mp_var]
+		if trs.is_empty():
+			continue
+		if trs.size() == 1:
+			var single_tr: Transform3D = trs[0]
+			items.append({"mp": mp, "trs": trs, "collide": collide, "cell": _cell_of(single_tr)})
+			continue
+		var cells: Dictionary = {}
+		for tr_var in trs:
+			var tr: Transform3D = tr_var
+			var ck: String = "%d_%d" % [floori(tr.origin.x / CHUNK_SIZE), floori(tr.origin.z / CHUNK_SIZE)]
+			if not cells.has(ck):
+				cells[ck] = [] as Array
+			var cell_arr: Array = cells[ck]
+			cell_arr.append(tr)
+		for ck_var in cells.keys():
+			var ck_str: String = str(ck_var)
+			var parts: PackedStringArray = ck_str.split("_")
+			var cell: Vector2i = Vector2i(int(parts[0]), int(parts[1]))
+			items.append({"mp": mp, "trs": cells[ck_var], "collide": collide, "cell": cell})
+	return items
+
+
+func _collect_draw_items(acc: Dictionary) -> Array:
+	var items: Array = []
+	items.append_array(_make_draw_items(acc["batches"], true))
+	items.append_array(_make_draw_items(acc["batches_nocol"], false))
+	return items
+
+
+func _apply_culling_policy(node: GeometryInstance3D, low_mp: String, mesh: Mesh) -> void:
+	var aabb_len: float = mesh.get_aabb().size.length()
+	if _has_token(low_mp, CLUTTER_TOKENS):
+		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		node.visibility_range_end = CLUTTER_VIS_RANGE + CHUNK_RADIUS_PAD
+		node.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
+		return
+	if aabb_len < TINY_PROP_LEN:
+		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		node.visibility_range_end = TINY_PROP_VIS_RANGE + CHUNK_RADIUS_PAD
+		node.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
+	elif aabb_len < SMALL_PROP_LEN:
+		node.visibility_range_end = SMALL_PROP_VIS_RANGE + CHUNK_RADIUS_PAD
+		node.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
+
+
+func _qualifies_as_occluder(low_mp: String, mesh: Mesh) -> bool:
+	var aabb_len: float = mesh.get_aabb().size.length()
+	if aabb_len < OCCLUDER_MIN_LEN or aabb_len > OCCLUDER_MAX_LEN:
+		return false
+	if not _has_token(low_mp, OCCLUDER_INCLUDE_TOKENS):
+		return false
+	return not _has_token(low_mp, OCCLUDER_EXCLUDE_TOKENS)
+
+
+func _add_occluder(ctx: Dictionary, mesh: Mesh, tr: Transform3D) -> void:
+	var aabb: AABB = mesh.get_aabb()
+	var box: BoxOccluder3D = BoxOccluder3D.new()
+	box.size = aabb.size
+	var occ: OccluderInstance3D = OccluderInstance3D.new()
+	occ.occluder = box
+	occ.transform = Transform3D(tr.basis, tr * aabb.get_center())
+	var parent: Node3D = ctx["parent"]
+	parent.add_child(occ)
+	ctx["occluders"] = int(ctx.get("occluders", 0)) + 1
+
+
+## Adds one BoxShape3D/trimesh collider to the per-cell StaticBody3D bucket.
+## Bodies are capped at MAX_SHAPES_PER_BODY so Jolt never rebuilds a huge compound.
+func _add_collider(ctx: Dictionary, cell: Vector2i, shape: Shape3D, tr: Transform3D, shape_offset: Vector3) -> void:
+	if int(ctx.get("collision_shapes", 0)) >= MAX_TOTAL_SHAPES:
+		return
+	var bodies: Dictionary = ctx["col_bodies"]
+	var counts: Dictionary = ctx["col_counts"]
+	var base_key: String = "%d_%d" % [cell.x, cell.y]
+	var used: int = int(counts.get(base_key, 0))
+	var bucket: int = used / MAX_SHAPES_PER_BODY
+	var body_key: String = "%s_%d" % [base_key, bucket]
+	var body: StaticBody3D = bodies.get(body_key) as StaticBody3D
+	if body == null:
+		body = StaticBody3D.new()
+		body.name = "LevelCollision_%s" % body_key
+		body.collision_layer = 1
+		var parent: Node3D = ctx["parent"]
+		parent.add_child(body)
+		bodies[body_key] = body
+		ctx["collision_bodies"] = int(ctx.get("collision_bodies", 0)) + 1
+	counts[base_key] = used + 1
+	var cs: CollisionShape3D = CollisionShape3D.new()
+	cs.shape = shape
+	var sc: Vector3 = tr.basis.get_scale()
+	cs.transform = Transform3D(tr.basis.orthonormalized(), tr * shape_offset)
+	cs.scale = Vector3(maxf(absf(sc.x), 0.05), maxf(absf(sc.y), 0.05), maxf(absf(sc.z), 0.05))
+	body.add_child(cs)
+	ctx["collision_shapes"] = int(ctx.get("collision_shapes", 0)) + 1
+
+
+## Emits one chunked MultiMeshInstance3D (or plain MeshInstance3D) plus its
+## colliders and occluders. Returns the number of mesh instances added.
+func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> int:
+	var mp: String = str(item.get("mp", ""))
+	var trs: Array = item.get("trs", [])
+	if trs.is_empty():
+		return 0
+	var info: Dictionary = _get_mesh_and_shape(mp)
+	var mesh: Mesh = info["mesh"]
+	if mesh == null:
+		return 0
+	var low_mp: String = mp.to_lower()
+	var count: int = trs.size()
+	var node: GeometryInstance3D
+	if count >= 2:
 		var mm: MultiMesh = MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_3D
 		mm.mesh = mesh
-		mm.instance_count = trs.size()
-		var shape: Shape3D = info["shape"]
-		var soff: Vector3 = info.get("shape_offset", Vector3.ZERO)
-		for i in range(trs.size()):
-			var tr: Transform3D = trs[i]
-			mm.set_instance_transform(i, tr)
-			if col_body != null and shape != null and trs.size() <= 3000 and absf(tr.basis.determinant()) >= 0.0001:
-				var cs: CollisionShape3D = CollisionShape3D.new()
-				cs.shape = shape
-				var sc: Vector3 = tr.basis.get_scale()
-				cs.transform = Transform3D(tr.basis.orthonormalized(), tr * soff)
-				cs.scale = Vector3(maxf(absf(sc.x), 0.05), maxf(absf(sc.y), 0.05), maxf(absf(sc.z), 0.05))
-				col_body.add_child(cs)
+		mm.instance_count = count
+		# Explicit tight bounds: Godot only frustum-culls a MultiMesh against
+		# its AABB, so each 32m chunk gets the real merged instance bounds.
+		var mesh_aabb: AABB = mesh.get_aabb()
+		var chunk_aabb: AABB = AABB()
+		var have_bounds: bool = false
+		for i in range(count):
+			var tr_i: Transform3D = trs[i]
+			mm.set_instance_transform(i, tr_i)
+			var world_aabb: AABB = tr_i * mesh_aabb
+			if not have_bounds:
+				chunk_aabb = world_aabb
+				have_bounds = true
+			else:
+				chunk_aabb = chunk_aabb.merge(world_aabb)
+		if have_bounds:
+			mm.custom_aabb = chunk_aabb
 		var mmi: MultiMeshInstance3D = MultiMeshInstance3D.new()
 		mmi.multimesh = mm
-		var aabb_len: float = mesh.get_aabb().size.length()
-		if aabb_len < 0.8:
-			mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		if aabb_len < 1.5:
-			mmi.visibility_range_end = 85.0
-			mmi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
-		parent.add_child(mmi)
-		total_inst += trs.size()
+		node = mmi
+	else:
+		var tr_one: Transform3D = trs[0]
+		var mi: MeshInstance3D = MeshInstance3D.new()
+		mi.mesh = mesh
+		mi.transform = tr_one
+		node = mi
+	_apply_culling_policy(node, low_mp, mesh)
+	if MobileProfile.is_mobile():
+		node.lod_bias = MobileProfile.lod_bias()
+	parent.add_child(node)
+	ctx["chunk_count"] = int(ctx.get("chunk_count", 0)) + 1
 
-	result["mesh_instances"] = total_inst
-	result["light_count"] = lights_added
+	var is_clutter: bool = _has_token(low_mp, CLUTTER_TOKENS)
+	if bool(item.get("collide", false)) and bool(ctx.get("generate_collision", false)) and not is_clutter:
+		var shape: Shape3D = info["shape"] as Shape3D
+		if shape != null:
+			var soff: Vector3 = info.get("shape_offset", Vector3.ZERO)
+			var cell: Vector2i = item.get("cell", Vector2i.ZERO)
+			for i2 in range(count):
+				var tr_c: Transform3D = trs[i2]
+				if absf(tr_c.basis.determinant()) < 0.0001:
+					continue
+				_add_collider(ctx, cell, shape, tr_c, soff)
+
+	if not is_clutter and _qualifies_as_occluder(low_mp, mesh):
+		for i3 in range(count):
+			if int(ctx.get("occluders", 0)) >= MAX_OCCLUDERS:
+				break
+			var tr_o: Transform3D = trs[i3]
+			_add_occluder(ctx, mesh, tr_o)
+	return count
+
+
+func _build_landscapes_sync(landscapes: Array, parent: Node3D, ctx: Dictionary) -> void:
+	for lc_var: Variant in landscapes:
+		_build_one_landscape(lc_var, parent, ctx)
+
+
+func _add_one_light(linfo: Dictionary, parent: Node3D, light_probe: Node, hero_shadow: bool) -> bool:
+	var lnode: Light3D = _build_light(linfo, hero_shadow)
+	if lnode == null:
+		return false
+	lnode.shadow_enabled = hero_shadow
+	parent.add_child(lnode)
+	if light_probe != null and light_probe.has_method("register_light"):
+		light_probe.register_light(lnode)
+	return true
+
+
+func _add_lights(pending_lights: Array, parent: Node3D, light_probe: Node, max_lights: int, ctx: Dictionary) -> void:
+	pending_lights.sort_custom(_sort_lights_desc)
+	var budget: int = mini(pending_lights.size(), max_lights)
+	var hero_shadows: int = mini(MobileProfile.hero_shadows(), budget)
+	var added: int = 0
+	for li in range(budget):
+		var linfo: Dictionary = pending_lights[li]
+		if _add_one_light(linfo, parent, light_probe, li < hero_shadows):
+			added += 1
+	ctx["light_count"] = added
+
+
+func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dictionary:
+	result["mesh_instances"] = mesh_instances
+	result["light_count"] = int(ctx.get("light_count", 0))
+	result["chunk_count"] = int(ctx.get("chunk_count", 0))
+	result["collision_bodies"] = int(ctx.get("collision_bodies", 0))
+	result["collision_shapes"] = int(ctx.get("collision_shapes", 0))
+	result["occluder_count"] = int(ctx.get("occluders", 0))
 	return result
+
+
+func load_sublevels(json_paths: Array[String], parent: Node3D, light_probe: Node, max_lights: int = 96, generate_collision: bool = true) -> Dictionary:
+	if _materials_db.is_empty():
+		_load_material_dbs()
+	var acc: Dictionary = _new_accumulator()
+	for jp: String in json_paths:
+		_parse_sublevel_file(jp, acc, parent)
+
+	var ctx: Dictionary = _new_build_ctx(parent, light_probe, generate_collision)
+	_add_lights(acc["lights"], parent, light_probe, max_lights, ctx)
+	_build_landscapes_sync(acc["landscapes"], parent, ctx)
+
+	var items: Array = _collect_draw_items(acc)
+	var total_inst: int = 0
+	for item: Dictionary in items:
+		total_inst += _build_one_draw_item(item, parent, ctx)
+	return _finalize(acc["result"], ctx, total_inst)
 
 
 func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node = null, max_lights: int = 96, generate_collision: bool = true) -> Dictionary:
 	if _materials_db.is_empty():
 		_load_material_dbs()
-	var result: Dictionary = {
-		"player_spawns": [] as Array[Vector3],
-		"guard_spawns": [] as Array[Vector3],
-		"loot_spawns": [] as Array[Vector3],
-		"escape_points": [] as Array[Vector3],
-		"door_spawns": [] as Array[Vector3],
-		"candelabra_positions": [] as Array[Vector3],
-		"wardrobe_positions": [] as Array[Vector3],
-		"desk_positions": [] as Array[Vector3],
-		"ledger_positions": [] as Array[Vector3],
-		"window_positions": [] as Array[Vector3],
-		"mesh_instances": 0,
-		"light_count": 0,
-	}
-	var batches: Dictionary = {}
-	var lights_added: int = 0
-	var pending_lights: Array = []
-	var seen_lights: Dictionary = {}
-	var pending_landscapes: Array = []
+	var acc: Dictionary = _new_accumulator()
 	var total_files: int = maxi(json_paths.size(), 1)
 	var file_idx: int = 0
 	load_progress.emit(0.0, "Parsing JSON...")
 	for jp in json_paths:
-		var jp_str: String = str(jp)
-		if FileAccess.file_exists(jp_str):
-			var f: FileAccess = FileAccess.open(jp_str, FileAccess.READ)
-			if f != null:
-				var data: Variant = JSON.parse_string(f.get_as_text())
-				if data is Dictionary:
-					var data_dict: Dictionary = data
-					for lc in data_dict.get("landscapes", []):
-						if lc is Dictionary:
-							pending_landscapes.append(lc)
-					for m in data_dict.get("meshes", []):
-						if not (m is Dictionary):
-							continue
-						var m_dict: Dictionary = m
-						var mp: String = str(m_dict.get("mesh", ""))
-						if mp == "":
-							continue
-						var low_mp: String = mp.to_lower()
-						if "emissiveshapes/sm_sphere" in low_mp or "primitives/sm_shape" in low_mp or "fogsheet" in low_mp or "volumetric" in low_mp or "skysphere" in low_mp or "blocker" in low_mp:
-							continue
-						var tr: Transform3D = _dict_to_transform(m_dict)
-						if not batches.has(mp):
-							batches[mp] = [] as Array[Transform3D]
-						var arr: Array = batches[mp]
-						arr.append(tr)
-						var prop_pos: Vector3 = tr.origin
-						if "candelabra" in low_mp or "candle" in low_mp or "brazier" in low_mp or "torch" in low_mp:
-							var candle_arr: Array = result["candelabra_positions"]
-							candle_arr.append(prop_pos)
-							_VfxManager.spawn_candle_flame(parent, prop_pos + Vector3(0.0, 0.48, 0.0))
-						if "wardrobe" in low_mp or "bureau" in low_mp or "armoire" in low_mp:
-							var ward_arr: Array = result["wardrobe_positions"]
-							ward_arr.append(prop_pos)
-						if "sm_map_thievesden" in low_mp:
-							var desk_arr: Array = result["desk_positions"]
-							desk_arr.insert(0, prop_pos)
-						elif "maptable" in low_mp or "table_map" in low_mp or "desk" in low_mp:
-							var desk_arr: Array = result["desk_positions"]
-							desk_arr.append(prop_pos)
-						if "openedledger" in low_mp:
-							var led_arr: Array = result["ledger_positions"]
-							led_arr.append(prop_pos)
-						if "windowborder" in low_mp or "thievesden_window" in low_mp:
-							var win_arr: Array = result["window_positions"]
-							win_arr.append(prop_pos)
-					for l in data_dict.get("lights", []):
-						if not (l is Dictionary):
-							continue
-						var l_dict: Dictionary = l
-						var lpos: Array = l_dict.get("pos", [0, 0, 0])
-						var lkey: String = "%d,%d,%d" % [roundi(float(lpos[0])), roundi(float(lpos[1])), roundi(float(lpos[2]))]
-						if seen_lights.has(lkey):
-							continue
-						seen_lights[lkey] = true
-						pending_lights.append(l_dict)
-					for mk in data_dict.get("markers", []):
-						if not (mk is Dictionary):
-							continue
-						var cls: String = str(mk.get("class", ""))
-						var pos_arr: Array = mk.get("pos", [0, 0, 0])
-						var p: Vector3 = Vector3(float(pos_arr[0]), float(pos_arr[1]), float(pos_arr[2]))
-						if "PlayerStart" in cls:
-							result["player_spawns"].append(p)
-						elif "MissionSpawner_Character" in cls or "Guard" in cls:
-							result["guard_spawns"].append(p)
-						elif "MissionSpawner_MajorLoot" in cls or "MissionSpawner_MinorLoot" in cls or "QuestSpawner" in cls:
-							result["loot_spawns"].append(p)
-						elif "Escape" in cls:
-							result["escape_points"].append(p)
-						elif "Door" in cls:
-							result["door_spawns"].append(p)
+		_parse_sublevel_file(str(jp), acc, parent)
 		file_idx += 1
 		load_progress.emit(0.3 * float(file_idx) / float(total_files), "Parsing JSON %d/%d..." % [file_idx, json_paths.size()])
 		if parent.get_tree() != null:
 			await parent.get_tree().process_frame
-	load_progress.emit(0.35, "Sorting lights...")
+
+	var ctx: Dictionary = _new_build_ctx(parent, light_probe, generate_collision)
+	var pending_lights: Array = acc["lights"]
 	pending_lights.sort_custom(_sort_lights_desc)
+	load_progress.emit(0.3, "Sorting lights...")
 	var light_budget: int = mini(pending_lights.size(), max_lights)
+	var lights_added: int = 0
+	var hero_shadows: int = mini(MobileProfile.hero_shadows(), light_budget)
 	for li in range(light_budget):
 		var linfo: Dictionary = pending_lights[li]
-		var hero_shadow: bool = li < 4
-		var lnode: Light3D = _build_light(linfo, hero_shadow)
-		if lnode != null:
-			lnode.shadow_enabled = hero_shadow
-			parent.add_child(lnode)
-			if light_probe != null and light_probe.has_method("register_light"):
-				light_probe.register_light(lnode)
+		if _add_one_light(linfo, parent, light_probe, li < hero_shadows):
 			lights_added += 1
 		if li % 20 == 0 or li == light_budget - 1:
-			load_progress.emit(0.35 + 0.2 * float(li + 1) / float(maxi(light_budget, 1)), "Creating lights %d/%d..." % [li + 1, light_budget])
+			load_progress.emit(0.3 + 0.2 * float(li + 1) / float(maxi(light_budget, 1)), "Creating lights %d/%d..." % [li + 1, light_budget])
 			if parent.get_tree() != null:
 				await parent.get_tree().process_frame
-	var col_body: StaticBody3D = null
-	if generate_collision:
-		col_body = StaticBody3D.new()
-		col_body.name = "LevelCollision"
-		col_body.collision_layer = 1
-		parent.add_child(col_body)
-	if not pending_landscapes.is_empty():
-		_build_landscape_terrain(pending_landscapes, parent, col_body)
+	ctx["light_count"] = lights_added
+
+	var landscapes: Array = acc["landscapes"]
+	for lc_i in range(landscapes.size()):
+		_build_one_landscape(landscapes[lc_i], parent, ctx)
+		load_progress.emit(0.5 + 0.02 * float(lc_i + 1) / float(landscapes.size()), "Building terrain %d/%d..." % [lc_i + 1, landscapes.size()])
+		if parent.get_tree() != null:
+			await parent.get_tree().process_frame
+
+	var items: Array = _collect_draw_items(acc)
+	var built: int = 0
 	var total_inst: int = 0
-	var batch_keys: Array = batches.keys()
-	var batch_idx: int = 0
-	for mp in batch_keys:
-		var info: Dictionary = _get_mesh_and_shape(str(mp))
-		var mesh: Mesh = info["mesh"]
-		if mesh == null:
-			batch_idx += 1
-			continue
-		var trs: Array = batches[mp]
-		var mm: MultiMesh = MultiMesh.new()
-		mm.transform_format = MultiMesh.TRANSFORM_3D
-		mm.mesh = mesh
-		mm.instance_count = trs.size()
-		var shape: Shape3D = info["shape"]
-		var soff: Vector3 = info.get("shape_offset", Vector3.ZERO)
-		for i in range(trs.size()):
-			var tr: Transform3D = trs[i]
-			mm.set_instance_transform(i, tr)
-			if col_body != null and shape != null and trs.size() <= 3000 and absf(tr.basis.determinant()) >= 0.0001:
-				var cs: CollisionShape3D = CollisionShape3D.new()
-				cs.shape = shape
-				var sc: Vector3 = tr.basis.get_scale()
-				cs.transform = Transform3D(tr.basis.orthonormalized(), tr * soff)
-				cs.scale = Vector3(maxf(absf(sc.x), 0.05), maxf(absf(sc.y), 0.05), maxf(absf(sc.z), 0.05))
-				col_body.add_child(cs)
-		var mmi: MultiMeshInstance3D = MultiMeshInstance3D.new()
-		mmi.multimesh = mm
-		var aabb_len: float = mesh.get_aabb().size.length()
-		if aabb_len < 0.8:
-			mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		if aabb_len < 1.5:
-			mmi.visibility_range_end = 85.0
-			mmi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
-		parent.add_child(mmi)
-		total_inst += trs.size()
-		batch_idx += 1
-		if batch_idx % 80 == 0 or batch_idx == batch_keys.size():
-			load_progress.emit(0.55 + 0.4 * float(batch_idx) / float(maxi(batch_keys.size(), 1)), "Batching meshes %d/%d..." % [batch_idx, batch_keys.size()])
+	for item: Dictionary in items:
+		total_inst += _build_one_draw_item(item, parent, ctx)
+		built += 1
+		if built % PROGRESS_YIELD_EVERY == 0 or built == items.size():
+			load_progress.emit(0.52 + 0.46 * float(built) / float(maxi(items.size(), 1)), "Batching meshes %d/%d..." % [built, items.size()])
 			if parent.get_tree() != null:
 				await parent.get_tree().process_frame
-	result["mesh_instances"] = total_inst
-	result["light_count"] = lights_added
 	load_progress.emit(1.0, "Done")
-	return result
+	return _finalize(acc["result"], ctx, total_inst)
 
 
 func _light_score(info: Dictionary) -> float:
@@ -655,6 +795,13 @@ func _build_light(info: Dictionary, cast_shadow: bool = false) -> Light3D:
 		light = ol
 	light.light_color = col
 	light.shadow_enabled = cast_shadow
+	# P3: non-hero point/spot lights fade out with camera distance so the
+	# Forward+ clustered light list only uploads nearby lights.
+	if not cast_shadow and (light is OmniLight3D or light is SpotLight3D):
+		light.distance_fade_enabled = true
+		light.distance_fade_begin = LIGHT_DISTANCE_FADE_BEGIN
+		light.distance_fade_length = LIGHT_DISTANCE_FADE_LENGTH
+		light.distance_fade_shadow = true
 	light.transform = _dict_to_transform(info)
 	if light is SpotLight3D or light is DirectionalLight3D:
 		# UE5 spotlights/directionals aim along +X; Godot aims along -Z
@@ -662,8 +809,11 @@ func _build_light(info: Dictionary, cast_shadow: bool = false) -> Light3D:
 	return light
 
 
-func _build_landscape_terrain(landscapes: Array, parent: Node3D, col_body: StaticBody3D) -> void:
-	var mat := StandardMaterial3D.new()
+func _landscape_material(ctx: Dictionary) -> StandardMaterial3D:
+	var cached: StandardMaterial3D = ctx.get("landscape_mat") as StandardMaterial3D
+	if cached != null:
+		return cached
+	var mat: StandardMaterial3D = StandardMaterial3D.new()
 	var ground_alb: Texture2D = _load_tex("res://assets/ue/Raw/MaterialLibrary/Legacy/T_CobbleStoneA_D.png")
 	if ground_alb == null:
 		ground_alb = _load_tex("res://assets/ue/Raw/MaterialLibrary/Environment/Nature/Dirt/T_GroundDirtA_D.png")
@@ -673,95 +823,109 @@ func _build_landscape_terrain(landscapes: Array, parent: Node3D, col_body: Stati
 	mat.roughness = 0.90
 	mat.uv1_scale = Vector3(12.0, 12.0, 1.0)
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	ctx["landscape_mat"] = mat
+	return mat
 
-	for lc_var: Variant in landscapes:
-		if not (lc_var is Dictionary):
-			continue
-		var lc: Dictionary = lc_var as Dictionary
-		var hpath: String = str(lc.get("heightmap", ""))
-		if hpath == "":
-			continue
-		var img: Image = null
-		var htex: Texture2D = _load_tex(hpath)
-		if htex != null:
-			img = htex.get_image()
-		if img == null or img.is_empty():
+
+## Builds one LandscapeComponent heightfield mesh. Each component gets its own
+## StaticBody3D so a single landscape never becomes a massive compound body.
+func _build_one_landscape(lc_var: Variant, parent: Node3D, ctx: Dictionary) -> void:
+	if not (lc_var is Dictionary):
+		return
+	var lc: Dictionary = lc_var as Dictionary
+	var hpath: String = str(lc.get("heightmap", ""))
+	if hpath == "":
+		return
+	if not FileAccess.file_exists(hpath) and not ResourceLoader.exists(hpath):
+		return
+	var img: Image = null
+	var htex: Texture2D = _load_tex(hpath)
+	if htex != null:
+		img = htex.get_image()
+	if img == null or img.is_empty():
+		if FileAccess.file_exists(hpath):
 			img = Image.load_from_file(hpath)
-		if img == null or img.is_empty():
-			continue
-		var iw: int = img.get_width()
-		var ih: int = img.get_height()
-		var quads: int = int(lc.get("quads", 63))
-		var sb: Array = lc.get("scale_bias", [1.0 / 64.0, 1.0 / 64.0, 0.0, 0.0])
-		var sx_b: float = float(sb[0]) if sb.size() > 0 else 1.0 / 64.0
-		var sy_b: float = float(sb[1]) if sb.size() > 1 else 1.0 / 64.0
-		var ox_b: float = float(sb[2]) if sb.size() > 2 else 0.0
-		var oy_b: float = float(sb[3]) if sb.size() > 3 else 0.0
+	if img == null or img.is_empty():
+		return
+	var mat: StandardMaterial3D = _landscape_material(ctx)
+	var iw: int = img.get_width()
+	var ih: int = img.get_height()
+	var quads: int = int(lc.get("quads", 63))
+	var sb: Array = lc.get("scale_bias", [1.0 / 64.0, 1.0 / 64.0, 0.0, 0.0])
+	var sx_b: float = float(sb[0]) if sb.size() > 0 else 1.0 / 64.0
+	var sy_b: float = float(sb[1]) if sb.size() > 1 else 1.0 / 64.0
+	var ox_b: float = float(sb[2]) if sb.size() > 2 else 0.0
+	var oy_b: float = float(sb[3]) if sb.size() > 3 else 0.0
 
-		var tr_raw: Transform3D = _dict_to_transform(lc)
-		var sc: Vector3 = tr_raw.basis.get_scale()
-		# UE LandscapeComponent scale is 100.0 (= 1m per quad)
-		var step_x: float = absf(sc.x) * 0.01
-		var step_y: float = absf(sc.y) * 0.01
-		var step_z: float = absf(sc.z) * 0.01
-		if step_x < 0.05:
-			step_x = 1.0
-		if step_y < 0.05:
-			step_y = 1.0
-		if step_z < 0.05:
-			step_z = 1.0
+	var tr_raw: Transform3D = _dict_to_transform(lc)
+	var sc: Vector3 = tr_raw.basis.get_scale()
+	# UE LandscapeComponent scale is 100.0 (= 1m per quad)
+	var step_x: float = absf(sc.x) * 0.01
+	var step_y: float = absf(sc.y) * 0.01
+	var step_z: float = absf(sc.z) * 0.01
+	if step_x < 0.05:
+		step_x = 1.0
+	if step_y < 0.05:
+		step_y = 1.0
+	if step_z < 0.05:
+		step_z = 1.0
 
-		var verts: PackedVector3Array = PackedVector3Array()
-		var uvs: PackedVector2Array = PackedVector2Array()
-		var heights: Array[float] = []
-		var stride: int = quads + 1
-		heights.resize(stride * stride)
-		for vy: int in range(stride):
-			for vx: int in range(stride):
-				var px: int = clampi(int(round((float(vx) * sx_b + ox_b) * float(iw))), 0, iw - 1)
-				var py: int = clampi(int(round((float(vy) * sy_b + oy_b) * float(ih))), 0, ih - 1)
-				var c: Color = img.get_pixel(px, py)
-				var h16: int = (c.r8 << 8) | c.g8
-				var h_val: float = ((float(h16) - 32768.0) / 128.0) * step_y
-				heights[vy * stride + vx] = h_val
+	var heights: Array[float] = []
+	var stride: int = quads + 1
+	heights.resize(stride * stride)
+	for vy: int in range(stride):
+		for vx: int in range(stride):
+			var px: int = clampi(int(round((float(vx) * sx_b + ox_b) * float(iw))), 0, iw - 1)
+			var py: int = clampi(int(round((float(vy) * sy_b + oy_b) * float(ih))), 0, ih - 1)
+			var c: Color = img.get_pixel(px, py)
+			var h16: int = (c.r8 << 8) | c.g8
+			var h_val: float = ((float(h16) - 32768.0) / 128.0) * step_y
+			heights[vy * stride + vx] = h_val
 
-		var faces: PackedVector3Array = PackedVector3Array()
-		var st := SurfaceTool.new()
-		st.begin(Mesh.PRIMITIVE_TRIANGLES)
-		for qy: int in range(quads):
-			for qx: int in range(quads):
-				var p00 := Vector3(float(qx) * step_x, heights[qy * stride + qx], float(qy) * step_z)
-				var p10 := Vector3(float(qx + 1) * step_x, heights[qy * stride + (qx + 1)], float(qy) * step_z)
-				var p01 := Vector3(float(qx) * step_x, heights[(qy + 1) * stride + qx], float(qy + 1) * step_z)
-				var p11 := Vector3(float(qx + 1) * step_x, heights[(qy + 1) * stride + (qx + 1)], float(qy + 1) * step_z)
-				var u00 := Vector2(float(qx) / float(quads), float(qy) / float(quads))
-				var u10 := Vector2(float(qx + 1) / float(quads), float(qy) / float(quads))
-				var u01 := Vector2(float(qx) / float(quads), float(qy + 1) / float(quads))
-				var u11 := Vector2(float(qx + 1) / float(quads), float(qy + 1) / float(quads))
-				st.set_uv(u00); st.add_vertex(p00)
-				st.set_uv(u11); st.add_vertex(p11)
-				st.set_uv(u10); st.add_vertex(p10)
-				st.set_uv(u00); st.add_vertex(p00)
-				st.set_uv(u01); st.add_vertex(p01)
-				st.set_uv(u11); st.add_vertex(p11)
-				faces.append(p00); faces.append(p11); faces.append(p10)
-				faces.append(p00); faces.append(p01); faces.append(p11)
-		st.generate_normals()
-		var arr_mesh: ArrayMesh = st.commit()
-		if arr_mesh == null:
-			continue
-		arr_mesh.surface_set_material(0, mat)
+	var faces: PackedVector3Array = PackedVector3Array()
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for qy: int in range(quads):
+		for qx: int in range(quads):
+			var p00 := Vector3(float(qx) * step_x, heights[qy * stride + qx], float(qy) * step_z)
+			var p10 := Vector3(float(qx + 1) * step_x, heights[qy * stride + (qx + 1)], float(qy) * step_z)
+			var p01 := Vector3(float(qx) * step_x, heights[(qy + 1) * stride + qx], float(qy + 1) * step_z)
+			var p11 := Vector3(float(qx + 1) * step_x, heights[(qy + 1) * stride + (qx + 1)], float(qy + 1) * step_z)
+			var u00 := Vector2(float(qx) / float(quads), float(qy) / float(quads))
+			var u10 := Vector2(float(qx + 1) / float(quads), float(qy) / float(quads))
+			var u01 := Vector2(float(qx) / float(quads), float(qy + 1) / float(quads))
+			var u11 := Vector2(float(qx + 1) / float(quads), float(qy + 1) / float(quads))
+			st.set_uv(u00); st.add_vertex(p00)
+			st.set_uv(u11); st.add_vertex(p11)
+			st.set_uv(u10); st.add_vertex(p10)
+			st.set_uv(u00); st.add_vertex(p00)
+			st.set_uv(u01); st.add_vertex(p01)
+			st.set_uv(u11); st.add_vertex(p11)
+			faces.append(p00); faces.append(p11); faces.append(p10)
+			faces.append(p00); faces.append(p01); faces.append(p11)
+	st.generate_normals()
+	var arr_mesh: ArrayMesh = st.commit()
+	if arr_mesh == null:
+		return
+	arr_mesh.surface_set_material(0, mat)
 
-		var mi := MeshInstance3D.new()
-		mi.mesh = arr_mesh
-		mi.transform = Transform3D(tr_raw.basis.orthonormalized(), tr_raw.origin)
-		parent.add_child(mi)
+	var mi := MeshInstance3D.new()
+	mi.mesh = arr_mesh
+	mi.transform = Transform3D(tr_raw.basis.orthonormalized(), tr_raw.origin)
+	parent.add_child(mi)
 
-		if col_body != null and not faces.is_empty():
-			var cshape := ConcavePolygonShape3D.new()
-			cshape.backface_collision = true
-			cshape.set_faces(faces)
-			var cs := CollisionShape3D.new()
-			cs.shape = cshape
-			cs.transform = Transform3D(tr_raw.basis.orthonormalized(), tr_raw.origin)
-			col_body.add_child(cs)
+	if bool(ctx.get("generate_collision", false)) and not faces.is_empty():
+		var cshape := ConcavePolygonShape3D.new()
+		cshape.backface_collision = true
+		cshape.set_faces(faces)
+		var cs := CollisionShape3D.new()
+		cs.shape = cshape
+		cs.transform = Transform3D(tr_raw.basis.orthonormalized(), tr_raw.origin)
+		var body: StaticBody3D = StaticBody3D.new()
+		body.name = "LandscapeCollision_%d" % int(ctx.get("landscapes_built", 0))
+		body.collision_layer = 1
+		body.add_child(cs)
+		parent.add_child(body)
+		ctx["collision_bodies"] = int(ctx.get("collision_bodies", 0)) + 1
+		ctx["collision_shapes"] = int(ctx.get("collision_shapes", 0)) + 1
+	ctx["landscapes_built"] = int(ctx.get("landscapes_built", 0)) + 1

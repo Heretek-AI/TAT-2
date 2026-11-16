@@ -15,7 +15,7 @@ Re-run the census with the commands at the bottom.
 | Textures | 2,211 `T_` packages | 2,227 PNG | good (all material textures) |
 | Levels | 107 `.umap` | 107 JSON dumps, 77 shipped `.tatlevel.json` | good |
 | DataTables / CurveTables / StringTables | 58 `DT_` / 79 `ST_` / curves | 141 normalized tables | good |
-| **Animations** | **879 `AN_`** | **995 USD exported** (incl. 357 ACL-decoded), GLB batch converting; 14 failures are blend spaces | **wave A2 (in progress)** |
+| **Animations** | **879 `AN_`** | **995 GLB clips** (357 ACL-decoded, exact durations, manifest); 14 blend-space graphs unsupported | **done (acd368a); runtime wiring in progress** |
 | **Weather / atmosphere** | 16 presets + `TATWeatherManager` in 103 levels | **applied** (`tools/parse_weather.py` -> `game/data/generated/weather/`, `weather_profile.gd`, mission wiring, suite 17) | **done (7aa34db)** |
 | **Niagara VFX** | 120 `NS_` systems + 3,692 level placements | catalogue: 29 sprite-only / 70 mesh-ribbon / 21 graph-heavy; 139/148 materials resolved, 129/456 renderer textures | **catalogue done (26f9838); runtime blocked by compiled graphs** |
 | **Materials** | 1,247 `MI_` + 386 `M_` + 167 `MF_` + 289 material layers | 1,552 resolved: textures + scalar/vector/switch params + render flags + phys material | **done (ec9f700)** |
@@ -25,7 +25,8 @@ Re-run the census with the commands at the bottom.
 | **Landscape** | 128 `LandscapeComponent`, 128 heightfield collisions, splines, Nanite components | heightmaps + collision | splines/grass/layers **wave A5** |
 | **Audio** | 3,425 raw Wwise WAVs + `.bnk` | 9 synthesized SFX | **blocked**: 0xFFFF Vorbis, no decoder (wave A6) |
 | **Blueprints (logic)** | 981 `BP_` + 225 `BPUI_` | all 1,437 BP/material-graph packages dumped; movement/detection/state-speed constants located | **wave A6 (in progress)** |
-| Skeletal meshes / skins | 156 `SK_` | 156 GLB | good (no animations yet) |
+| Skeletal meshes / skins | 156 `SK_` | 156 GLB | good; guard clips being retargeted (A10) |
+| Player model | `Mesh1P_UpperBody/LowerBody`, `Mesh3P_Body/Head` = ThiefNisha meshes | Godot loads a CivMale/CivFemale body (hidden in first person); real thief meshes only in menus | **A11** (1P arms/body) |
 
 ## What is already 1:1 (or close)
 
@@ -109,4 +110,4 @@ find extracted/json -name 'NS_*.json' | wc -l
 ## Update log
 
 - 2026-11-16: census created; Niagara systems (120) dumped; animation export failure isolated (`Gltf2` unsupported); audio codec limitation confirmed.
-- 2026-11-16: level components shipped (`e17beae`): 667 decals, 3,692 Niagara placements (0 unresolved), 31 rect lights, 288 volumes, 52 splines, 1 sky/fog/atmosphere; material-graph limit documented. A1 weather shipped (`7aa34db`): 16 presets parsed, map mapping with provenance, fog 0.4 -> 0.004, moon energy/rotation, sky-light ambient, post-process saturation/bloom; suite 17 asserts real preset values. A3 materials shipped (`ec9f700`): 1,552 materials with real roughness/metallic/emissive/static-switch/render flags. A2 animations and A5 level components running.
+- 2026-11-16: animations shipped (`acd368a`): 995 USD->GLB clips with ACL natives, exact durations, Godot 354-track load check; 14 blend spaces documented. Level components shipped (`e17beae`): 667 decals, 3,692 Niagara placements (0 unresolved), 31 rect lights, 288 volumes, 52 splines, 1 sky/fog/atmosphere; material-graph limit documented. A1 weather shipped (`7aa34db`): 16 presets parsed, map mapping with provenance, fog 0.4 -> 0.004, moon energy/rotation, sky-light ambient, post-process saturation/bloom; suite 17 asserts real preset values. A3 materials shipped (`ec9f700`): 1,552 materials with real roughness/metallic/emissive/static-switch/render flags. A2 animations and A5 level components running.

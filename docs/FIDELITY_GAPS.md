@@ -56,6 +56,9 @@ opacity mask and emissive values. Currently only albedo/normal/ORM/tint are used
 Plan: parse parameters into `material_params.json`; build `ShaderMaterial` or
 `StandardMaterial3D` values from them; keep per-material overrides.
 
+### Hard limit — cooked material graphs
+Cooked UE `Material` exports contain **no expression graph and no texture references** (verified: `M_Decal_Puddle` has only BlendMode/flag properties). Textures that live in a material graph are not recoverable from the install; only exposed `TextureParameterValues` on MaterialInstances resolve. Consequence: 667 level decals and some Niagara sprite materials have no trustworthy texture. The runtime must validate material->texture stem matches and skip the rest rather than bind generic fallbacks. A true 1:1 look for those assets would require recreating graphs from reference, which is not in the cooked data.
+
 ### A4 — Niagara VFX
 120 systems dumped (curves/LUTs included). A faithful Niagara graph translation is a
 separate project; first extract emitter material, spawn/lifetime/colour parameters, then
@@ -103,4 +106,4 @@ find extracted/json -name 'NS_*.json' | wc -l
 ## Update log
 
 - 2026-11-16: census created; Niagara systems (120) dumped; animation export failure isolated (`Gltf2` unsupported); audio codec limitation confirmed.
-- 2026-11-16: A1 weather shipped (`7aa34db`): 16 presets parsed, map mapping with provenance, fog 0.4 -> 0.004, moon energy/rotation, sky-light ambient, post-process saturation/bloom; suite 17 asserts real preset values. A3 materials shipped (`ec9f700`): 1,552 materials with real roughness/metallic/emissive/static-switch/render flags. A2 animations and A5 level components running.
+- 2026-11-16: level components shipped (`e17beae`): 667 decals, 3,692 Niagara placements (0 unresolved), 31 rect lights, 288 volumes, 52 splines, 1 sky/fog/atmosphere; material-graph limit documented. A1 weather shipped (`7aa34db`): 16 presets parsed, map mapping with provenance, fog 0.4 -> 0.004, moon energy/rotation, sky-light ambient, post-process saturation/bloom; suite 17 asserts real preset values. A3 materials shipped (`ec9f700`): 1,552 materials with real roughness/metallic/emissive/static-switch/render flags. A2 animations and A5 level components running.

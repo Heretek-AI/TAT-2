@@ -154,11 +154,13 @@ const FAIRY_LIFE: float = 20.0 # FairyLifeDuration
 const FAIRY_BLOCK_ANGLE_DEG: float = 30.0 # MaximumFacingAngleToBlock
 const FAIRY_STEAL_RADIUS: float = 10.0 # retained: no UE source; loot the mark picks up nearby
 const SlipPuddleScript := preload("res://src/interact/slip_puddle.gd")
+const ThrownBottleScript := preload("res://src/interact/thrown_bottle.gd")
 var charges: Dictionary = {
 	"slithersap": 4,
 	"smoke_bomb": 1,
 	"pickpocket_fairy": 999,
 	"grapple": 4,
+	"bottle": 0,
 }
 var pickpocket_cooldown: float = 0.0
 var noise_timer: float = 0.0
@@ -449,6 +451,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				_try_blackjack()
 		else:
 			_try_blackjack()
+	elif event.is_action_pressed("secondary_action"):
+		_throw_bottle()
 	elif event.is_action_pressed("thief_vision"):
 		thief_vision = not thief_vision
 		thief_vision_on = thief_vision
@@ -875,6 +879,27 @@ func _use_smoke_bomb() -> void:
 		level_ctrl.spawn_smoke(ground, 25.0)
 	NoiseBus.emit_noise(global_position, 7.0, self, "smoke")
 	tool_used.emit("smoke_bomb", int(charges.get("smoke_bomb", 0)))
+
+
+## Throws a distraction bottle (secondary_action) when a bottle charge is
+## held. Speed/noise are documented approximations (see thrown_bottle.gd);
+## charges decrement and the HUD bottle count follows the charges dict.
+func _throw_bottle() -> void:
+	if not can_act():
+		return
+	if int(charges.get("bottle", 0)) <= 0:
+		return
+	if cam == null:
+		return
+	_fp_play_swing()
+	charges["bottle"] = int(charges.get("bottle", 0)) - 1
+	var fwd: Vector3 = -cam.global_transform.basis.z
+	var origin: Vector3 = cam.global_position + fwd * 0.6
+	var host: Node = get_parent()
+	if host == null:
+		host = self
+	ThrownBottleScript.throw_from(host, origin, fwd, self)
+	tool_used.emit("bottle", int(charges.get("bottle", 0)))
 
 
 ## Nearest guard inside the real 25 m / 9 deg cone. Returns null when empty.

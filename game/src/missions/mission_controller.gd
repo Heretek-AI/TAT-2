@@ -7,6 +7,8 @@ extends Node3D
 const ThiefScript := preload("res://src/player/thief_character.gd")
 const GuardScript := preload("res://src/ai/guard_ai.gd")
 const LootScript := preload("res://src/interact/loot_item.gd")
+const WorldPickupScript := preload("res://src/interact/world_pickup.gd")
+const CivilianScript := preload("res://src/ai/civilian_npc.gd")
 const DoorScript := preload("res://src/interact/lockable_door.gd")
 const EscapeScript := preload("res://src/interact/escape_gate.gd")
 const LightProbeScript := preload("res://src/stealth/light_probe.gd")
@@ -29,6 +31,8 @@ var hud: CanvasLayer
 var smokes: Array[Dictionary] = []
 var contract_info: Dictionary = {}
 var level_stats: Dictionary = {}
+var spawner_meshes: Dictionary = {}
+var spawner_civilians: Array = []
 
 
 func _ready() -> void:
@@ -145,6 +149,7 @@ func start_contract(order: int) -> void:
 		_spawn_loot_and_quest(ue_level_data.get("loot_spawns", []), anchor)
 		_spawn_clues(ue_level_data.get("loot_spawns", []), anchor)
 		_spawn_escape(ue_level_data.get("escape_points", []), anchor)
+	_spawn_spawner_content(ue_level_data)
 
 	if hud.has_method("set_contract_info"):
 		hud.set_contract_info(contract_info)
@@ -750,6 +755,93 @@ func _spawn_escape(ue_escapes: Array, anchor: Vector3) -> void:
 	eg.position = epos
 	eg.extracted.connect(_on_extracted)
 	add_child(eg)
+
+
+## Real spawner content (BP_MissionSpawner_Throwable/AmmoRefill/Health/
+## Civilian markers): 529 bottles + 143 ammo + 12 health + 5 civilians on
+## the shipped maps. Meshes come from spawners.json (existence-checked at
+## parse time); hardcoded paths below are the same extracted values and
+## apply only when the JSON is unreadable. Pickups are trigger-only Area3Ds
+## (no static physics bodies); meshes are distance-culled at ~45 m.
+func _load_spawner_tables() -> void:
+	if not spawner_meshes.is_empty():
+		return
+	spawner_meshes = {
+		"throwable": [
+			"res://assets/ue/Content/Art/Environment/Props/Dining/Food/Wine/SM_BottleWineB.glb",
+			"res://assets/ue/Content/Art/Environment/Props/Dining/Food/Wine/SM_BottleWineA.glb",
+		],
+		"ammo": ["res://assets/ue/Content/Art/Environment/Props/Containers/Toolbox/SM_Toolbox.glb"],
+		"health": ["res://assets/ue/Content/Art/Gameplay/Health/SM_HealthPackA.glb"],
+	}
+	spawner_civilians = [
+		{"body": "res://assets/ue/Content/Art/Animation/CivMale/Skin/Common/SK_CivMale_Common_01.glb", "head": "res://assets/ue/Content/Art/Animation/CivMale/Skin/Heads/SK_CivMale_Head_Adam_Fade01.glb"},
+		{"body": "res://assets/ue/Content/Art/Animation/CivFemale/Skin/Common/SK_CivFemale_Common_01C.glb", "head": "res://assets/ue/Content/Art/Animation/CivFemale/Skin/Heads/SK_CivFemale_Head_Abby_Short01.glb"},
+	]
+	if not FileAccess.file_exists("res://data/generated/gameplay/spawners.json"):
+		return
+	var f := FileAccess.open("res://data/generated/gameplay/spawners.json", FileAccess.READ)
+	if f == null:
+		return
+	var data: Variant = JSON.parse_string(f.get_as_text())
+	if not (data is Dictionary):
+		return
+	var by_kind: Dictionary = {"throwable": [], "ammo": [], "health": []}
+	for e_var in (data as Dictionary).get("buckets", []):
+		if not (e_var is Dictionary):
+			continue
+		var e: Dictionary = e_var
+		var k := str(e.get("kind", ""))
+		if by_kind.has(k) and str(e.get("mesh_res_path", "")) != "":
+			(by_kind[k] as Array).append(str(e["mesh_res_path"]))
+	for k2 in by_kind.keys():
+		if not (by_kind[k2] as Array).is_empty():
+			spawner_meshes[k2] = by_kind[k2]
+	var civs: Array = []
+	for ckey in (data as Dictionary).get("civilian_meshes", {}).keys():
+		var c: Dictionary = (data as Dictionary)["civilian_meshes"][ckey]
+		if str(c.get("body_res_path", "")) != "" and str(c.get("head_res_path", "")) != "":
+			civs.append({"body": str(c["body_res_path"]), "head": str(c["head_res_path"])})
+	if not civs.is_empty():
+		spawner_civilians = civs
+
+
+func _spawn_spawner_content(stats: Dictionary) -> void:
+	_load_spawner_tables()
+	var n_throw := _spawn_pickups(stats.get("throwable_spawns", []), WorldPickupScript.Kind.THROWABLE, spawner_meshes.get("throwable", []))
+	var n_ammo := _spawn_pickups(stats.get("ammo_spawns", []), WorldPickupScript.Kind.AMMO, spawner_meshes.get("ammo", []))
+	var n_hp := _spawn_pickups(stats.get("health_spawns", []), WorldPickupScript.Kind.HEALTH, spawner_meshes.get("health", []))
+	var n_civ := _spawn_civilians(stats.get("civilian_spawns", []))
+	print("TAT-2 spawners: throwable=", n_throw, " ammo=", n_ammo, " health=", n_hp, " civilian=", n_civ)
+
+
+func _spawn_pickups(spawns: Array, kind: int, meshes: Array) -> int:
+	if meshes.is_empty():
+		return 0
+	var count: int = 0
+	for pos_var in spawns:
+		if not (pos_var is Vector3):
+			continue
+		var p := WorldPickupScript.new()
+		p.setup(kind, str(meshes[count % meshes.size()]))
+		p.position = (pos_var as Vector3) + Vector3(0.0, 0.35, 0.0)
+		add_child(p)
+		count += 1
+	return count
+
+
+func _spawn_civilians(spawns: Array) -> int:
+	var count: int = 0
+	for pos_var in spawns:
+		if not (pos_var is Vector3):
+			continue
+		var variant: Dictionary = spawner_civilians[count % spawner_civilians.size()] if not spawner_civilians.is_empty() else {}
+		var c := CivilianScript.new()
+		c.setup(str(variant.get("body", "")), str(variant.get("head", "")), pos_var as Vector3)
+		c.position = (pos_var as Vector3) + Vector3(0.0, 0.5, 0.0)
+		add_child(c)
+		count += 1
+	return count
 
 
 ## Real UE values (BP_SmokeBomb_Bomb_Tool 1 charge;

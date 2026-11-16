@@ -439,6 +439,10 @@ func _new_accumulator() -> Dictionary:
 			"loot_spawns": [] as Array[Vector3],
 			"escape_points": [] as Array[Vector3],
 			"door_spawns": [] as Array[Vector3],
+			"throwable_spawns": [] as Array[Vector3],
+			"ammo_spawns": [] as Array[Vector3],
+			"health_spawns": [] as Array[Vector3],
+			"civilian_spawns": [] as Array[Vector3],
 			"candelabra_positions": [] as Array[Vector3],
 			"wardrobe_positions": [] as Array[Vector3],
 			"desk_positions": [] as Array[Vector3],
@@ -574,6 +578,18 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 		if "PlayerStart" in cls:
 			var ps: Array = result["player_spawns"]
 			ps.append(p)
+		elif "MissionSpawner_Throwable" in cls:
+			var ts: Array = result["throwable_spawns"]
+			ts.append(p)
+		elif "MissionSpawner_AmmoRefill" in cls:
+			var ams: Array = result["ammo_spawns"]
+			ams.append(p)
+		elif "MissionSpawner_Health" in cls:
+			var hs: Array = result["health_spawns"]
+			hs.append(p)
+		elif "MissionSpawner_Civilian" in cls:
+			var cs: Array = result["civilian_spawns"]
+			cs.append(p)
 		elif "MissionSpawner_Character" in cls or "Guard" in cls:
 			var gs: Array = result["guard_spawns"]
 			gs.append(p)
@@ -822,6 +838,10 @@ func _add_lights(pending_lights: Array, parent: Node3D, light_probe: Node, max_l
 
 func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dictionary:
 	result["mesh_instances"] = mesh_instances
+	result["throwable_spawn_count"] = (result.get("throwable_spawns", []) as Array).size()
+	result["ammo_spawn_count"] = (result.get("ammo_spawns", []) as Array).size()
+	result["health_spawn_count"] = (result.get("health_spawns", []) as Array).size()
+	result["civilian_spawn_count"] = (result.get("civilian_spawns", []) as Array).size()
 	result["light_count"] = int(ctx.get("light_count", 0))
 	result["chunk_count"] = int(ctx.get("chunk_count", 0))
 	result["collision_bodies"] = int(ctx.get("collision_bodies", 0))

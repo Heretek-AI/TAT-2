@@ -724,8 +724,9 @@ func _process(delta: float) -> void:
 		stam_fill.size.x = 140.0 * clampf(float(p.get("stamina")) / mst, 0.0, 1.0)
 		var ch: Dictionary = p.get("charges")
 		var ab: String = "Grapple" if GameState.thief_id == "spider" else ("Disguise" if GameState.thief_id == "chameleon" else "Scout")
-		hotbar_lbl.text = "[1]Sap:%d  [2]Smoke:%d  [3]Fairy:%d  [G]%s" % [
-			int(ch.get("slithersap", 0)), int(ch.get("smoke_bomb", 0)), int(ch.get("pickpocket_fairy", 0)), ab
+		hotbar_lbl.text = "[1]Sap:%d  [2]Smoke:%d  [3]Fairy:%d  [G]%s  |  BOTTLES:%d" % [
+			int(ch.get("slithersap", 0)), int(ch.get("smoke_bomb", 0)), int(ch.get("pickpocket_fairy", 0)), ab,
+			int(ch.get("bottle", 0))
 		]
 		if slot_count_lbls.size() >= 4:
 			slot_count_lbls[0].text = str(int(ch.get("slithersap", 0)))

@@ -33,6 +33,7 @@ var contract_info: Dictionary = {}
 var level_stats: Dictionary = {}
 var spawner_meshes: Dictionary = {}
 var spawner_civilians: Array = []
+var loot_tables: Dictionary = {}
 
 
 func _ready() -> void:
@@ -146,7 +147,7 @@ func start_contract(order: int) -> void:
 		_setup_thieves_den_hub(anchor, ue_level_data)
 	else:
 		_spawn_guards(ue_level_data.get("guard_spawns", []), anchor)
-		_spawn_loot_and_quest(ue_level_data.get("loot_spawns", []), anchor)
+		_spawn_loot_and_quest(ue_level_data, anchor)
 		_spawn_clues(ue_level_data.get("loot_spawns", []), anchor)
 		_spawn_escape(ue_level_data.get("escape_points", []), anchor)
 	_spawn_spawner_content(ue_level_data)
@@ -711,39 +712,165 @@ func _spawn_guards(ue_spawns: Array, anchor: Vector3) -> void:
 		add_child(g)
 
 
-func _spawn_loot_and_quest(ue_spawns: Array, anchor: Vector3) -> void:
-	var nearby: Array[Vector3] = []
-	for p in ue_spawns:
-		if p is Vector3 and p.distance_to(anchor) < 120.0:
-			nearby.append(p)
-	if nearby.is_empty():
-		nearby = [
-			anchor + Vector3(4, 0.8, -6), anchor + Vector3(-6, 0.8, -8),
-			anchor + Vector3(10, 0.8, -14), anchor + Vector3(-10, 0.8, -16),
-			anchor + Vector3(0, 0.8, -22), anchor + Vector3(8, 0.8, 4),
-		]
+## Real loot wave from loot_actors.json (tools/parse_loot.py): one LootScript
+## per minor/major marker with the bucket actor class picked deterministically
+## from the weighted bucket list, the real mesh + table name/value, and the
+## marker rotation. The contract quest item occupies the last minor marker
+## (last major when there are no minors), so the node count still matches the
+## marker count exactly and every position stays unique. Escape gating, groups
+## and the Thieves' Den skip in start_contract() are unchanged.
+func _spawn_loot_and_quest(stats: Dictionary, anchor: Vector3) -> void:
+	_load_loot_tables()
+	var minor: Array = []
+	minor.append_array(stats.get("minor_loot_spawns", []))
+	var major: Array = []
+	major.append_array(stats.get("major_loot_spawns", []))
+	if minor.is_empty() and major.is_empty():
+		# Compat: maps with no exact-class markers reuse the legacy Vector3
+		# loot_spawns as minor entries (keeps old counts on such maps).
+		for p in stats.get("loot_spawns", []):
+			if p is Vector3:
+				minor.append({"pos": p, "rotation": Vector3.ZERO, "class": "BP_MissionSpawner_MinorLoot_C", "source_file": ""})
+	if minor.is_empty() and major.is_empty():
+		# Maps with no markers at all keep six hand-placed fallback positions.
+		for off in [Vector3(4, 0.8, -6), Vector3(-6, 0.8, -8), Vector3(10, 0.8, -14), Vector3(-10, 0.8, -16), Vector3(0, 0.8, -22), Vector3(8, 0.8, 4)]:
+			minor.append({"pos": anchor + (off as Vector3), "rotation": Vector3.ZERO, "class": "BP_MissionSpawner_MinorLoot_C", "source_file": ""})
+	var quest_entry: Dictionary = {}
+	if not minor.is_empty():
+		quest_entry = minor[minor.size() - 1]
+		minor.remove_at(minor.size() - 1)
+	elif not major.is_empty():
+		quest_entry = major[major.size() - 1]
+		major.remove_at(major.size() - 1)
+	_spawn_loot_entries(minor, "minor")
+	_spawn_loot_entries(major, "major")
+	_spawn_quest_loot(quest_entry, anchor)
 
+
+## Deterministic weighted pick from a bucket class list (duplicates carry the
+## designer weight): a pure function of marker position + order, no RNG, so
+## every run spawns the same actor on the same marker.
+static func _loot_bucket_index(pos: Vector3, order: int, size: int) -> int:
+	if size <= 0:
+		return 0
+	var h: int = int(absf(pos.x * 12.9898 + pos.y * 78.233 + pos.z * 37.719 + float(order) * 0.731))
+	return posmod(h, size)
+
+
+func _spawn_loot_entries(entries: Array, tier: String) -> void:
+	var buckets: Dictionary = loot_tables.get("buckets", {})
+	var bucket: Array = (buckets.get(tier, {}) as Dictionary).get("classes", [])
+	var actors: Dictionary = loot_tables.get("actors", {})
+	var order := 0
+	for e_var in entries:
+		if not (e_var is Dictionary):
+			continue
+		var e: Dictionary = e_var
+		var pos: Vector3 = e.get("pos", Vector3.ZERO) as Vector3
+		var l := LootScript.new()
+		l.loot_tier = tier
+		l.is_quest_item = false
+		var resolved := false
+		if not bucket.is_empty():
+			var cls := str(bucket[_loot_bucket_index(pos, order, bucket.size())])
+			var a: Variant = actors.get(cls, null)
+			if a is Dictionary:
+				l.item_name = str((a as Dictionary).get("name", "Noble Relic"))
+				l.display_name = l.item_name
+				l.value = int((a as Dictionary).get("value", 75))
+				l.mesh_path = str((a as Dictionary).get("mesh_res", ""))
+				resolved = true
+		if not resolved:
+			# Labelled fallback (JSON unreadable or class unmapped): same
+			# tier-entry pool as the old spawner, legacy note mesh.
+			var entry: Dictionary = LootScript.tier_entry(tier, order)
+			l.item_name = str(entry.get("name", "Noble Relic #%d" % (order + 1)))
+			l.display_name = l.item_name
+			l.value = int(entry.get("value", 75))
+		l.mesh_rotation_deg = e.get("rotation", Vector3.ZERO) as Vector3
+		l.position = pos + Vector3(0, 0.5, 0)
+		add_child(l)
+		order += 1
+
+
+func _spawn_quest_loot(quest_entry: Dictionary, anchor: Vector3) -> void:
 	var q := LootScript.new()
-	q.item_name = str(contract_info.get("quest_item", "Contract Objective"))
 	q.is_quest_item = true
 	q.loot_tier = "quest"
 	var quest_tag: String = str(contract_info.get("loot_tag", ""))
+	var tag_to_actor: Dictionary = loot_tables.get("tag_to_actor", {})
+	var qactors: Dictionary = loot_tables.get("quest_actors", {})
+	var cls := str(tag_to_actor.get(quest_tag, ""))
+	if cls == "":
+		# Labelled fallback: generic quest actor (first quest-tier actor
+		# with an existing mesh, recorded in loot_actors.json).
+		cls = str(loot_tables.get("fallback_quest_actor", ""))
+	var qentry: Dictionary = LootScript.quest_entry_for_tag(quest_tag)
+	var qname := str(contract_info.get("quest_item", "Contract Objective"))
+	if not qentry.is_empty():
+		qname = str(qentry.get("name", qname))
+	q.item_name = qname
+	q.display_name = qname
 	q.value = LootScript.quest_value_for_tag(quest_tag)
-	q.position = nearby[mini(nearby.size() - 1, 4)] + Vector3(0, 0.5, 0)
+	var qactor: Variant = qactors.get(cls, null)
+	if qactor is Dictionary and str((qactor as Dictionary).get("mesh_res", "")) != "":
+		q.mesh_path = str((qactor as Dictionary).get("mesh_res", ""))
+	# else mesh_path stays "": the legacy calling-card mesh (labelled
+	# fallback for tags with no dedicated actor / missing mesh).
+	if not quest_entry.is_empty():
+		q.position = (quest_entry.get("pos", anchor) as Vector3) + Vector3(0, 0.5, 0)
+		q.mesh_rotation_deg = quest_entry.get("rotation", Vector3.ZERO) as Vector3
+	else:
+		q.position = anchor + Vector3(2.0, 0.85, -2.0)
+	_ensure_unique_loot_position(q)
 	add_child(q)
 
-	var count := mini(12, nearby.size())
-	for i in range(count):
-		# Every 4th spawn is a major piece; the rest cycle the real minor
-		# table (names + values straight from DT_LootInfo_Minor/Major).
-		var tier: String = "major" if i % 4 == 3 else "minor"
-		var entry: Dictionary = LootScript.tier_entry(tier, i / 4 if tier == "major" else i)
-		var l := LootScript.new()
-		l.loot_tier = tier
-		l.item_name = str(entry.get("name", "Noble Relic #%d" % (i + 1)))
-		l.value = int(entry.get("value", 75))
-		l.position = nearby[i] + Vector3(0, 0.5, 0)
-		add_child(l)
+
+## Belt-and-braces: the quest node never shares an exact position with a
+## regular loot node (deterministic +Y nudges, capped).
+func _ensure_unique_loot_position(q: Area3D) -> void:
+	var guard := 0
+	while guard < 64:
+		var clash := false
+		for n in get_tree().get_nodes_in_group("loot"):
+			if n != q and n is Node3D and ((n as Node3D).position - q.position).length() < 0.01:
+				clash = true
+				break
+		if not clash:
+			return
+		q.position += Vector3(0, 0.25, 0)
+		guard += 1
+
+
+## Real loot wave tables (loot_actors.json from tools/parse_loot.py): bucket
+## class lists (duplicates = designer weight), actor meshes + names/values,
+## quest tag mapping. When the JSON is unreadable the spawns fall back to the
+## tier-entry pool with legacy meshes (labelled fallback, counts unchanged).
+func _load_loot_tables() -> void:
+	if not loot_tables.is_empty():
+		return
+	loot_tables = {
+		"buckets": {"minor": {"classes": []}, "major": {"classes": []}},
+		"actors": {},
+		"quest_actors": {},
+		"tag_to_actor": {},
+		"fallback_quest_actor": "",
+	}
+	if not FileAccess.file_exists("res://data/generated/gameplay/loot_actors.json"):
+		return
+	var f := FileAccess.open("res://data/generated/gameplay/loot_actors.json", FileAccess.READ)
+	if f == null:
+		return
+	var data: Variant = JSON.parse_string(f.get_as_text())
+	if not (data is Dictionary):
+		return
+	loot_tables["buckets"] = (data as Dictionary).get("buckets", loot_tables["buckets"])
+	loot_tables["actors"] = (data as Dictionary).get("actors", {})
+	loot_tables["quest_actors"] = (data as Dictionary).get("quest_actors", {})
+	loot_tables["tag_to_actor"] = (data as Dictionary).get("tag_to_actor", {})
+	var fb: Variant = (data as Dictionary).get("fallback", {})
+	if fb is Dictionary:
+		loot_tables["fallback_quest_actor"] = str((fb as Dictionary).get("generic_quest_actor", ""))
 
 
 func _spawn_escape(ue_escapes: Array, anchor: Vector3) -> void:

@@ -437,6 +437,8 @@ func _new_accumulator() -> Dictionary:
 			"player_spawns": [] as Array[Vector3],
 			"guard_spawns": [] as Array[Vector3],
 			"loot_spawns": [] as Array[Vector3],
+			"minor_loot_spawns": [] as Array,
+			"major_loot_spawns": [] as Array,
 			"escape_points": [] as Array[Vector3],
 			"door_spawns": [] as Array[Vector3],
 			"throwable_spawns": [] as Array[Vector3],
@@ -596,6 +598,20 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 		elif "MissionSpawner_MajorLoot" in cls or "MissionSpawner_MinorLoot" in cls or "QuestSpawner" in cls:
 			var ls: Array = result["loot_spawns"]
 			ls.append(p)
+			# Real loot-actor markers: kept as full records (pos in metres,
+			# marker rotation as euler degrees, exact spawner class, source
+			# file) for the loot wave. loot_spawns above is untouched.
+			if "MissionSpawner_MinorLoot" in cls or "MissionSpawner_MajorLoot" in cls:
+				var loot_entry := {
+					"pos": p,
+					"rotation": _marker_euler_deg(mk),
+					"class": cls,
+					"source_file": json_path,
+				}
+				if "MissionSpawner_MajorLoot" in cls:
+					(result["major_loot_spawns"] as Array).append(loot_entry)
+				else:
+					(result["minor_loot_spawns"] as Array).append(loot_entry)
 		elif "Escape" in cls:
 			var es: Array = result["escape_points"]
 			es.append(p)
@@ -838,6 +854,8 @@ func _add_lights(pending_lights: Array, parent: Node3D, light_probe: Node, max_l
 
 func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dictionary:
 	result["mesh_instances"] = mesh_instances
+	result["minor_loot_spawn_count"] = (result.get("minor_loot_spawns", []) as Array).size()
+	result["major_loot_spawn_count"] = (result.get("major_loot_spawns", []) as Array).size()
 	result["throwable_spawn_count"] = (result.get("throwable_spawns", []) as Array).size()
 	result["ammo_spawn_count"] = (result.get("ammo_spawns", []) as Array).size()
 	result["health_spawn_count"] = (result.get("health_spawns", []) as Array).size()
@@ -1252,6 +1270,21 @@ func _dict_to_transform(d: Dictionary) -> Transform3D:
 		clampf(float(s[2]), 0.05, 40.0)
 	))
 	return Transform3D(basis, Vector3(float(p[0]), float(p[1]), float(p[2])))
+
+
+## Marker rotation as euler degrees (rotation only: scale is not part of the
+## loot orientation). Identity basis -> Vector3.ZERO.
+func _marker_euler_deg(d: Dictionary) -> Vector3:
+	var b: Array = d.get("basis", [1, 0, 0, 0, 1, 0, 0, 0, 1])
+	if b.size() < 9:
+		return Vector3.ZERO
+	var basis := Basis(
+		Vector3(float(b[0]), float(b[3]), float(b[6])),
+		Vector3(float(b[1]), float(b[4]), float(b[7])),
+		Vector3(float(b[2]), float(b[5]), float(b[8]))
+	).orthonormalized()
+	var e: Vector3 = basis.get_euler()
+	return Vector3(rad_to_deg(e.x), rad_to_deg(e.y), rad_to_deg(e.z))
 
 
 func _to_float(v: Variant, fallback: float) -> float:

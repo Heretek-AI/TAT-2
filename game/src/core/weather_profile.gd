@@ -210,6 +210,52 @@ static func ground_wetness(preset: Dictionary) -> Variant:
 	return _section(preset, "rain").get("ground_wetness")
 
 
+## Raw sky/moon getters for weather_visuals (null when the source JSON lacks
+## the field; no invention, fallbacks live in weather_visuals and are labelled).
+
+static func sky_stars_brightness(preset: Dictionary) -> Variant:
+	return _section(preset, "sky").get("stars_brightness")
+
+
+static func sky_cloud_color(preset: Dictionary) -> Variant:
+	var c: Variant = _section(preset, "sky").get("cloud_color")
+	if _has_color(c):
+		return _color_of(c)
+	return null
+
+
+static func sky_cloud_opacity(preset: Dictionary) -> Variant:
+	return _section(preset, "sky").get("cloud_opacity")
+
+
+static func moon_disc_size(preset: Dictionary) -> Variant:
+	return _section(preset, "moon").get("size")
+
+
+static func moon_disc_visible(preset: Dictionary) -> bool:
+	return _section(preset, "moon").get("visible", true) != false
+
+
+static func moon_disc_brightness(preset: Dictionary) -> Variant:
+	var m := _section(preset, "moon")
+	if m.get("brightness") != null:
+		return float(m["brightness"])
+	if m.get("sun_brightness") != null:
+		return float(m["sun_brightness"])
+	return null
+
+
+static func moon_disc_color(preset: Dictionary) -> Variant:
+	var m := _section(preset, "moon")
+	var c: Variant = m.get("color")
+	if _has_color(c):
+		return _color_of(c)
+	var e: Variant = m.get("emissive")
+	if _has_color(e):
+		return _color_of(e)
+	return null
+
+
 ## Applies a parsed preset to env/moon. Fields missing from the preset are
 ## skipped so existing hand-tuned values survive. Returns false only when the
 ## preset itself is empty/missing; true otherwise (even if partially applied).

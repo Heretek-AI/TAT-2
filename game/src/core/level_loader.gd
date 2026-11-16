@@ -476,6 +476,7 @@ func _new_accumulator() -> Dictionary:
 			"volume_skipped": 0,
 			"niagara_placements": 0,
 			"spline_count": 0,
+			"moonshape_hidden": 0,
 			"sky_light": {},
 			"fog_volume": {},
 			"post_process": {},
@@ -539,6 +540,12 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 		var m_dict: Dictionary = m
 		var mp: String = str(m_dict.get("mesh", ""))
 		if mp == "":
+			continue
+		# Authored moon billboards render as gray quads now that the real sky
+		# carries the moon disc (texture stripped by cooking); hide them and
+		# count them, never spawning geometry/collision for them.
+		if _is_moonshape_mesh(mp):
+			result["moonshape_hidden"] = int(result.get("moonshape_hidden", 0)) + 1
 			continue
 		var low_mp: String = mp.to_lower()
 		if "emissiveshapes/sm_sphere" in low_mp or "primitives/sm_shape" in low_mp or "fogsheet" in low_mp or "volumetric" in low_mp or "skysphere" in low_mp or "blocker" in low_mp:
@@ -670,6 +677,39 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 	for sp in data_dict.get("landscape_splines", []):
 		if sp is Dictionary:
 			(acc["splines"] as Array).append(sp)
+
+
+## Whether a mesh path is one of the authored moon billboards that the real
+## sky disc replaces. Matches (a) any bound material whose path contains
+## "Moonshape" or whose materials.json "switches" set IsMoonshape, and
+## (b) the exact 1m_Plane_Reverse moon mesh — extracted data shows its bound
+## material is MI_EmisLight_Moonlight (unlit, texture stripped by cooking),
+## not MI_MoonshapeEmissive, so the material rule alone misses the 100
+## authored instances. Clause (b) additionally requires every bound material
+## to carry no recoverable albedo texture, so nothing else can match it.
+func _is_moonshape_mesh(mp: String) -> bool:
+	var mesh_key: String = mp.split(".")[0]
+	var slots: Variant = _mesh_mats_db.get(mesh_key, _mesh_mats_db_lower.get(mesh_key.to_lower(), []))
+	if slots is Array:
+		for slot_var: Variant in slots:
+			var slot := str(slot_var)
+			if slot.to_lower().find("moonshape") >= 0:
+				return true
+			var info: Dictionary = _materials_db.get(slot, _materials_db_lower.get(slot.to_lower(), {}))
+			var switches: Variant = info.get("switches", {})
+			if switches is Dictionary:
+				for sk: Variant in (switches as Dictionary).keys():
+					if str(sk).to_lower().replace(" ", "").replace("_", "") == "ismoonshape" and bool((switches as Dictionary)[sk]):
+						return true
+	if mp.split("/")[-1].to_lower() == "1m_plane_reverse" and slots is Array and not (slots as Array).is_empty():
+		var textured := false
+		for slot_var2: Variant in slots:
+			var info2: Dictionary = _materials_db.get(str(slot_var2), _materials_db_lower.get(str(slot_var2).to_lower(), {}))
+			if str((info2.get("texs", {}) as Dictionary).get("albedo", "")) != "":
+				textured = true
+		if not textured:
+			return true
+	return false
 
 
 func _cell_of(tr: Transform3D) -> Vector2i:

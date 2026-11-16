@@ -16,6 +16,7 @@ const LightProbeScript := preload("res://src/stealth/light_probe.gd")
 const LevelLoaderScript := preload("res://src/core/level_loader.gd")
 const MobileProfile := preload("res://src/core/mobile_profile.gd")
 const WeatherProfile := preload("res://src/core/weather_profile.gd")
+const WeatherVisuals := preload("res://src/core/weather_visuals.gd")
 const VfxManager := preload("res://src/core/vfx_manager.gd")
 const HudScript := preload("res://src/ui/hud.gd")
 const WardrobeUIScript := preload("res://src/ui/wardrobe_ui.gd")
@@ -30,6 +31,7 @@ var level_loader: Node
 var player: CharacterBody3D
 var hud: CanvasLayer
 var smokes: Array[Dictionary] = []
+var rain_node: Node3D = null
 var contract_info: Dictionary = {}
 var level_stats: Dictionary = {}
 var spawner_meshes: Dictionary = {}
@@ -63,7 +65,11 @@ func _setup_environment() -> void:
 	_apply_fallback_moon(moon)
 	# Real TAT weather first; hand-tuned values above survive any field the
 	# preset does not define, and fully survive when no preset maps the map.
-	WeatherProfile.apply_for_map(e, moon, GameState.active_map_id)
+	# The real night sky then replaces the flat fallback color (BG_SKY);
+	# MobileProfile's glow override still runs last.
+	var wpreset: Dictionary = WeatherProfile.preset_for_map(GameState.active_map_id)
+	WeatherProfile.apply_environment(e, moon, wpreset)
+	WeatherVisuals.apply_sky(e, wpreset, moon)
 	MobileProfile.apply_environment(e)
 	env.environment = e
 	add_child(env)
@@ -139,6 +145,7 @@ func start_contract(order: int) -> void:
 	_setup_thieves_den_env(map_id)
 
 	_spawn_player(ue_level_data.get("player_spawns", []))
+	rain_node = WeatherVisuals.make_rain(self, WeatherProfile.preset_for_map(map_id))
 	if player != null and hud != null:
 		if player.has_signal("thief_vision_toggled") and hud.has_method("set_thief_vision"):
 			player.thief_vision_toggled.connect(hud.set_thief_vision)
@@ -1051,6 +1058,8 @@ func _process(delta: float) -> void:
 				if is_instance_valid(n):
 					n.queue_free()
 				smokes.remove_at(i)
+	if rain_node != null:
+		WeatherVisuals.snap_rain_to(rain_node, player)
 
 
 func _on_extracted() -> void:

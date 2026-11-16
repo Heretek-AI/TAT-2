@@ -94,6 +94,8 @@ func start_contract(order: int) -> void:
 	contract_info = GameData.get_contract_display(order)
 	var map_id: String = str(contract_info.get("map_id", "old_manor"))
 	GameState.reset_run(order, map_id)
+	# Real match timer from the extracted DT_Missions_* tables (0 = unlimited).
+	GameState.run_time_limit = GameData.get_match_duration(map_id, GameState.difficulty)
 
 	var loading: Node = LoadingScreenScript.new()
 	add_child(loading)
@@ -234,20 +236,24 @@ func _apply_level_post_process(env: Environment, pp: Dictionary) -> void:
 
 
 func _map_id_to_sublevels(map_id: String, order: int = 2) -> Array[String]:
+	# Base map geometry/gameplay/loot lists (kept as extracted). The old
+	# zero-padded Contract-number wildcard entry is gone: real per-contract
+	# sublevels from the extracted tables (GameData.get_contract_sublevels)
+	# are appended when present, never duplicating a path.
+	var base: Array[String] = []
 	match map_id:
 		"old_manor":
-			return [
+			base = [
 				"res://data/generated/levels/OldManor/OldManor_Geo.tatlevel.json",
 				"res://data/generated/levels/OldManor/OldManor_Landscape.tatlevel.json",
 				"res://data/generated/levels/OldManor/OldManor_Gameplay.tatlevel.json",
 				"res://data/generated/levels/OldManor/OldManor_Loot.tatlevel.json",
 				"res://data/generated/levels/OldManor/OldManor_PickUps.tatlevel.json",
 				"res://data/generated/levels/OldManor/OldManor_Clues.tatlevel.json",
-				"res://data/generated/levels/OldManor/OldManor_Contract%02d.tatlevel.json" % order,
 				"res://data/generated/levels/OldManor/OldManor_SkyboxGeo.tatlevel.json",
 			]
 		"guildhall":
-			return [
+			base = [
 				"res://data/generated/levels/Buildings/Guildhall/Building_Guildhall_POI.tatlevel.json",
 				"res://data/generated/levels/Buildings/Guildhall/Building_Guildhall_POI_3rdFloor.tatlevel.json",
 				"res://data/generated/levels/Buildings/Guildhall/Guildhall_Vault_CeremonialChambers.tatlevel.json",
@@ -259,23 +265,27 @@ func _map_id_to_sublevels(map_id: String, order: int = 2) -> Array[String]:
 				"res://data/generated/levels/Guildhall/Guildhall_PeripheryA.tatlevel.json",
 				"res://data/generated/levels/Guildhall/Guildhall_Loot.tatlevel.json",
 				"res://data/generated/levels/Guildhall/Guildhall_MissionClues.tatlevel.json",
-				"res://data/generated/levels/Guildhall/Guildhall_Contract_%02d.tatlevel.json" % order,
 				"res://data/generated/levels/Guildhall/Guildhall_SkyboxGeo.tatlevel.json",
 			]
 		"thieves_den":
-			return [
+			base = [
 				"res://data/generated/levels/ThievesDen/ThievesDen_Geo.tatlevel.json",
 				"res://data/generated/levels/ThievesDenTest/ThievesDenTest_P.tatlevel.json",
 				"res://data/generated/levels/ThievesDenTest/ThievesDenTest_Periphery.tatlevel.json",
 			]
 		"jaspering_hall":
-			return [
+			base = [
 				"res://data/generated/levels/FTUE/FTUE_Geometry.tatlevel.json",
 				"res://data/generated/levels/FTUE/FTUE_Building_JewelryStore.tatlevel.json",
 				"res://data/generated/levels/FTUE/FTUE_Building_SpawnArea.tatlevel.json",
 				"res://data/generated/levels/FTUE/FTUE_Gameplay.tatlevel.json",
 			]
-	return []
+	if base.is_empty():
+		return base
+	for sub: String in GameData.get_contract_sublevels(order):
+		if not base.has(sub):
+			base.append(sub)
+	return base
 
 
 func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> void:
@@ -792,6 +802,9 @@ func _segment_hits_aabb(a: Vector3, b: Vector3, mn: Vector3, mx: Vector3) -> boo
 func _process(delta: float) -> void:
 	if GameState.state == "playing":
 		GameState.elapsed_sec += delta
+		if GameState.run_time_limit > 0.0 and GameState.elapsed_sec >= GameState.run_time_limit:
+			_on_time_expired()
+			return
 		light_probe.tick(GameState.elapsed_sec)
 		for i in range(smokes.size() - 1, -1, -1):
 			smokes[i]["ttl"] -= delta
@@ -823,4 +836,17 @@ func _on_player_downed() -> void:
 	GameState.state = "failed"
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if hud.has_method("show_result"):
+		hud.show_result(false, GameState.loot_value, contract_info)
+
+
+## Match timer ran out: fail the run with a TIME EXPIRED reason, reusing the
+## standard result panel (no new GameState.state value).
+func _on_time_expired() -> void:
+	if GameState.state != "playing":
+		return
+	GameState.state = "failed"
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	contract_info["timed_out"] = true
+	contract_info["timeout_reason"] = "TIME EXPIRED"
+	if hud != null and hud.has_method("show_result"):
 		hud.show_result(false, GameState.loot_value, contract_info)

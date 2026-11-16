@@ -17,6 +17,7 @@ var active_map_id: String = "old_manor"
 
 var state: String = "menu" # menu | hub | playing | paused | victory | failed
 var elapsed_sec: float = 0.0
+var run_time_limit: float = 0.0 # match timer seconds; 0 = unlimited (FTUE/tutorial/expansion)
 var loot_collected: int = 0
 var loot_needed: int = 5
 var loot_value: int = 0
@@ -31,6 +32,7 @@ func reset_run(contract_order: int, map_id: String) -> void:
 	active_contract_order = contract_order
 	active_map_id = map_id
 	elapsed_sec = 0.0
+	run_time_limit = 0.0
 	loot_collected = 0
 	loot_value = 0
 	quest_item_acquired = false

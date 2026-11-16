@@ -696,7 +696,11 @@ func _process(delta: float) -> void:
 	var title: String = str(contract_data.get("title", "Contract #%d" % GameState.active_contract_order))
 	var item: String = str(contract_data.get("quest_item", "Objective"))
 	var status: String = "Reach Escape Gate" if GameState.quest_item_acquired else "%s  (%d/%d Loot | %dg)" % [item, GameState.loot_collected, GameState.loot_needed, GameState.loot_value]
-	obj_lbl.text = "%s\n%s" % [title, status]
+	var timing: String = ""
+	if GameState.run_time_limit > 0.0:
+		var remain: float = maxf(0.0, GameState.run_time_limit - GameState.elapsed_sec)
+		timing = "  |  %02d:%02d LEFT" % [int(remain) / 60, int(remain) % 60]
+	obj_lbl.text = "%s\n%s%s" % [title, status, timing]
 
 	if _thief_name_lbl != null:
 		_thief_name_lbl.text = str(GameState.thief_id).capitalize()
@@ -750,9 +754,18 @@ func show_result(won: bool, score: int, info: Dictionary) -> void:
 	var outro: String = str(info.get("outro", ""))
 	if outro.length() > 260:
 		outro = outro.substr(0, 260) + "..."
-	result_lbl.text = "%s\n\nScore: %dg | Stealth Rating: %s\nTime: %.1fs | Takedowns: %d\n\n%s" % [
+	var timed_out: bool = bool(info.get("timed_out", false))
+	if not timed_out and not won and GameState.run_time_limit > 0.0 and GameState.elapsed_sec >= GameState.run_time_limit:
+		timed_out = true
+	var timeout_note: String = ""
+	if timed_out and not won:
+		var reason: String = str(info.get("timeout_reason", "TIME EXPIRED"))
+		if reason == "":
+			reason = "TIME EXPIRED"
+		timeout_note = "\n\nTime expired — the match window closed before you escaped. (%s)" % reason
+	result_lbl.text = "%s\n\nScore: %dg | Stealth Rating: %s\nTime: %.1fs | Takedowns: %d\n\n%s%s" % [
 		"CONTRACT COMPLETE" if won else "CAPTURED BY THE CONSTABULARY",
-		score, rating, GameState.elapsed_sec, GameState.takedowns, outro
+		score, rating, GameState.elapsed_sec, GameState.takedowns, outro, timeout_note
 	]
 
 

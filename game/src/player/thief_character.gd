@@ -4,6 +4,18 @@ extends CharacterBody3D
 
 const VfxManager = preload("res://src/core/vfx_manager.gd")
 const MobileProfile := preload("res://src/core/mobile_profile.gd")
+const ThiefAnimLib = preload("res://src/core/animation_library.gd")
+
+# Real ThiefNisha meshes (BP_Player_Thief_Spider skeletal components -> GLB;
+# sources in extracted/json/Character/Player/BP_Player_Thief_Spider.json).
+const THIEF_3P_BODY_GLB: String = "res://assets/ue/Content/Art/Animation/ThiefNisha/Skin/Base/Dyn/SK_ThiefNisha_Dyn__Body_NoPostProcABP.glb"
+const THIEF_3P_HEAD_GLB: String = "res://assets/ue/Content/Art/Animation/ThiefNisha/Skin/Base/Dyn/SK_ThiefNisha_Dyn__Head.glb"
+const THIEF_1P_UPPER_GLB: String = "res://assets/ue/Content/Art/Animation/ThiefNisha/Skin/Base/SK_ThiefNisha__BodyUpper.glb"
+# Right-hand candidates for the tool mount, in preference order.
+const FP_TOOL_BONES: Array[String] = ["weapon_r_1p", "hand_r_1p", "hand_r"]
+# Skeleton joints marking the UE first-person camera, in preference order.
+const FP_CAM_BONES: Array[String] = ["camera_position", "game_camera"]
+const FP_ANIM_BLEND: float = 0.2 # crossfade window 0.15-0.25 s per deliverable
 
 const STAND_HEAD_HEIGHT: float = 1.66875
 const CROUCH_HEAD_HEIGHT: float = 0.88875
@@ -67,11 +79,21 @@ var _bj_punch_tween: Tween = null
 var _prop_scan_accum: float = 0.0
 var grapple_time: float = 0.0
 
-# First-person viewmodel rig (Workstream 5).
+# First-person viewmodel rig (Workstream 5). When _fp_use_real_arms is true
+# the rig holds the real SK_ThiefNisha__BodyUpper mesh + retargeted 1P clips;
+# otherwise the procedural box-glove fallback below is built instead.
 var fp_rig: Node3D
 var fp_hand_l_root: Node3D
 var fp_hand_r_root: Node3D
 var fp_tool_root: Node3D
+var fp_anim_player: AnimationPlayer
+var _fp_use_real_arms: bool = false
+var _fp_anim_lib: RefCounted
+var _fp_arm_skel: Skeleton3D
+var _fp_arm_holder: Node3D
+var _fp_current_clip: String = ""
+var _fp_tool_on_bone: bool = false
+var mesh_3p_glb: String = ""
 var fp_tool_id: String = "blackjack"
 var fp_bob_phase: float = 0.0
 var fp_breathe_time: float = 0.0
@@ -142,14 +164,21 @@ func _build_body() -> void:
 
 	mesh_root = Node3D.new()
 	add_child(mesh_root)
-	var glb_path: String = "res://assets/ue/Content/Art/Animation/CivMale/Skin/Common/SK_CivMale_Common_01_Jacket.glb"
-	if GameState.thief_id == "chameleon" or GameState.thief_id == "moth":
-		glb_path = "res://assets/ue/Content/Art/Animation/CivFemale/Skin/Common/SK_CivFemale_Common_01_Jacket.glb"
-	var packed: PackedScene = ResourceLoader.load(glb_path) as PackedScene
-	if packed != null:
-		var inst: Node = packed.instantiate()
-		inst.rotation_degrees.y = 180.0
-		mesh_root.add_child(inst)
+	# Real 3P body (BP_Player_Thief_Spider Mesh3P_Body/Mesh3P_Head):
+	# SK_ThiefNisha_Dyn__Body_NoPostProcABP + SK_ThiefNisha_Dyn__Head.
+	# Any load failure falls back to the procedural capsule below so there is
+	# no regression on machines without the assets.
+	var loaded_3p: bool = false
+	for glb_path in [THIEF_3P_BODY_GLB, THIEF_3P_HEAD_GLB]:
+		var packed_3p: PackedScene = ResourceLoader.load(glb_path) as PackedScene
+		if packed_3p == null:
+			continue
+		var inst_3p: Node = packed_3p.instantiate()
+		inst_3p.rotation_degrees.y = 180.0
+		mesh_root.add_child(inst_3p)
+		loaded_3p = true
+	if loaded_3p:
+		mesh_3p_glb = THIEF_3P_BODY_GLB
 	else:
 		var body_mi: MeshInstance3D = MeshInstance3D.new()
 		var body_mesh: CapsuleMesh = CapsuleMesh.new()
@@ -700,6 +729,191 @@ func _build_first_person_rig() -> void:
 	cam.add_child(fp_rig)
 	fp_rig.position = Vector3.ZERO
 	fp_base_rig_pos = fp_rig.position
+	if _try_build_real_fp_arms():
+		_fp_use_real_arms = true
+	else:
+		_fp_use_real_arms = false
+		_build_procedural_fp_hands()
+	fp_tool_root = Node3D.new()
+	fp_tool_root.name = "ToolRoot"
+	fp_tool_root.position = Vector3(0.28, -0.18, -0.62)
+	if _fp_use_real_arms:
+		_attach_fp_tool_to_hand()
+	if fp_tool_root.get_parent() == null:
+		fp_rig.add_child(fp_tool_root)
+	_fp_set_tool(fp_tool_id)
+
+
+## Real 1P viewmodel (BP_Player_Thief_Spider.Mesh1P_UpperBody):
+## SK_ThiefNisha__BodyUpper attached under the camera with the three
+## retargeted 1P clips. Placement and scale are derived, not guessed:
+## the Skeleton3D bind pose already carries the UE first-person framing in
+## the `camera_position` joint (present in both the mesh and the anim
+## skeletons), so the instanced root is counter-moved so that joint's global
+## rest lands exactly on the holder origin (i.e. the camera). Identity scale
+## is kept: the mesh is authored in meters (POSITION bounds span y 0.94-1.52
+## and the imported skeleton rests read out in meters), while the animation
+## side (authored in cm) is converted by the pelvis-rest unit factor in
+## animation_library.gd. SK_ThiefNisha__BodyLower is intentionally omitted:
+## it ships the same full skeleton (a second instance would need its own
+## AnimationPlayer) and the legs sit below the FP camera frustum.
+## Any failure returns false and the caller keeps the procedural fallback.
+func _try_build_real_fp_arms() -> bool:
+	_fp_arm_skel = null
+	_fp_arm_holder = null
+	fp_anim_player = null
+	_fp_anim_lib = null
+	_fp_tool_on_bone = false
+	if not ResourceLoader.exists(THIEF_1P_UPPER_GLB):
+		return false
+	var packed: PackedScene = ResourceLoader.load(THIEF_1P_UPPER_GLB) as PackedScene
+	if packed == null:
+		return false
+	var holder := Node3D.new()
+	holder.name = "RealArms"
+	fp_rig.add_child(holder)
+	var inst: Node = packed.instantiate()
+	inst.name = "BodyUpper1P"
+	holder.add_child(inst)
+	var skels := inst.find_children("*", "Skeleton3D", true, false)
+	if skels.is_empty():
+		holder.queue_free()
+		return false
+	var sk := skels[0] as Skeleton3D
+	if sk == null or sk.get_bone_count() == 0:
+		holder.queue_free()
+		return false
+	var cam_bone: int = -1
+	for bone_name in FP_CAM_BONES:
+		cam_bone = sk.find_bone(bone_name)
+		if cam_bone >= 0:
+			break
+	if cam_bone < 0:
+		holder.queue_free()
+		return false
+	var inst3d := inst as Node3D
+	if inst3d == null:
+		holder.queue_free()
+		return false
+	# Skeleton-space -> holder-space chain (local only, no world dependency).
+	var holder_from_skel := Transform3D.IDENTITY
+	var cursor: Node = sk
+	while cursor != null and cursor != holder:
+		if cursor is Node3D:
+			holder_from_skel = (cursor as Node3D).transform * holder_from_skel
+		cursor = cursor.get_parent()
+	var joint_in_holder: Transform3D = holder_from_skel * sk.get_bone_global_rest(cam_bone)
+	inst3d.transform = joint_in_holder.affine_inverse() * inst3d.transform
+	_fp_arm_holder = holder
+	_fp_arm_skel = sk
+	if not _setup_fp_anims():
+		holder.queue_free()
+		_fp_arm_skel = null
+		_fp_arm_holder = null
+		return false
+	return true
+
+
+## Retargets the three real 1P clips onto the 1P arm skeleton. Any failure
+## (manifest, GLB, zero shared bones) returns false for the fallback path.
+func _setup_fp_anims() -> bool:
+	fp_anim_player = null
+	_fp_anim_lib = null
+	if _fp_arm_skel == null or _fp_arm_holder == null:
+		return false
+	var lib = ThiefAnimLib.new()
+	if not lib.setup("club", _fp_arm_skel):
+		return false
+	var skel_parent := _fp_arm_skel.get_parent() as Node
+	if skel_parent == null:
+		return false
+	var player := lib.build_fp_player(_fp_arm_skel, skel_parent, _fp_arm_holder)
+	if player == null or lib.applied_clip_count() < 3:
+		return false
+	_fp_anim_lib = lib
+	fp_anim_player = player
+	_fp_current_clip = ""
+	return true
+
+
+## Attaches fp_tool_root to the 1P right-hand bone via BoneAttachment3D
+## (weapon_r_1p first, then hand fallbacks). Without a matching bone the
+## tool root stays parentless and the caller keeps the camera-relative
+## fallback.
+func _attach_fp_tool_to_hand() -> void:
+	_fp_tool_on_bone = false
+	if _fp_arm_skel == null or not is_instance_valid(_fp_arm_skel):
+		return
+	var bone_idx: int = -1
+	for bone_name in FP_TOOL_BONES:
+		bone_idx = _fp_arm_skel.find_bone(bone_name)
+		if bone_idx >= 0:
+			break
+	if bone_idx < 0:
+		return
+	var attach := BoneAttachment3D.new()
+	attach.name = "ToolBoneAttachment"
+	_fp_arm_skel.add_child(attach)
+	attach.bone_idx = bone_idx
+	attach.add_child(fp_tool_root)
+	fp_tool_root.position = Vector3.ZERO
+	fp_tool_root.rotation = Vector3.ZERO
+	_fp_tool_on_bone = true
+
+
+## Drives the real 1P clip state machine: crouch clip while crouching,
+## sprint clip while sprinting, walk clip while moving, each crossfaded over
+## FP_ANIM_BLEND (0.2 s). When stationary there is no 1P idle or jump clip
+## in the install, so nothing is fabricated: the player stops and the
+## skeleton holds its rest (bind) pose.
+func _update_fp_anim_state() -> void:
+	if not _fp_use_real_arms or fp_anim_player == null or _fp_anim_lib == null:
+		return
+	var key: String = ""
+	if GameState.state == "playing" and _fp_arm_skel != null:
+		var planar: float = Vector2(velocity.x, velocity.z).length()
+		var moving: bool = is_on_floor() and planar > 0.5
+		if moving:
+			if is_crouching:
+				key = String(_fp_anim_lib.clip_for_role("crouch"))
+			elif is_sprinting:
+				key = String(_fp_anim_lib.clip_for_role("sprint"))
+			else:
+				key = String(_fp_anim_lib.clip_for_role("walk"))
+	_fp_play_fp_clip(key)
+
+
+func _fp_play_fp_clip(clip_name: String) -> void:
+	if fp_anim_player == null:
+		return
+	if clip_name == "":
+		if _fp_current_clip != "":
+			_fp_current_clip = ""
+			fp_anim_player.stop()
+			if _fp_arm_skel != null and is_instance_valid(_fp_arm_skel):
+				_fp_arm_skel.reset_bone_poses()
+		return
+	if _fp_current_clip == clip_name and fp_anim_player.is_playing():
+		return
+	if not fp_anim_player.has_animation(clip_name):
+		return
+	_fp_current_clip = clip_name
+	fp_anim_player.play(clip_name, FP_ANIM_BLEND)
+
+
+## Small procedural swing offset for the bone-attached tool (local to the
+## hand bone; the camera-space fallback path below is untouched).
+func _update_fp_tool_on_bone(swing_k: float) -> void:
+	if not _fp_tool_on_bone or fp_tool_root == null:
+		return
+	fp_tool_root.position = Vector3(0.0, swing_k * -0.05, swing_k * -0.08)
+	fp_tool_root.rotation_degrees = Vector3(swing_k * -40.0, 0.0, 0.0)
+
+
+## Procedural fallback rig (box gloves). Built only when the real ThiefNisha
+## 1P mesh or clips fail to load, so machines without the assets see no
+## regression.
+func _build_procedural_fp_hands() -> void:
 	var glove_mat: StandardMaterial3D = StandardMaterial3D.new()
 	glove_mat.albedo_color = Color(0.07, 0.075, 0.10)
 	glove_mat.roughness = 0.9
@@ -716,11 +930,6 @@ func _build_first_person_rig() -> void:
 	fp_hand_r_root.rotation_degrees = Vector3(-8.0, -18.0, -6.0)
 	fp_rig.add_child(fp_hand_r_root)
 	_make_glove_hand(fp_hand_r_root, glove_mat, true)
-	fp_tool_root = Node3D.new()
-	fp_tool_root.name = "ToolRoot"
-	fp_tool_root.position = Vector3(0.28, -0.18, -0.62)
-	fp_rig.add_child(fp_tool_root)
-	_fp_set_tool(fp_tool_id)
 
 
 func _make_glove_hand(parent: Node3D, glove_mat: StandardMaterial3D, is_right: bool) -> void:
@@ -969,6 +1178,10 @@ func _update_first_person(delta: float) -> void:
 	var swing_k: float = 0.0
 	if fp_swing_t > 0.0:
 		swing_k = fp_swing_t / 0.32
+	if _fp_use_real_arms:
+		_update_fp_anim_state()
+		_update_fp_tool_on_bone(swing_k)
+		return
 	if fp_tool_root != null:
 		fp_tool_root.position = Vector3(0.28, -0.18, -0.62 + swing_k * -0.22)
 		fp_tool_root.rotation_degrees = Vector3(swing_k * -55.0, 0.0, swing_k * 12.0)

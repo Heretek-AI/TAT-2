@@ -6,6 +6,10 @@ extends RefCounted
 ## files, so ResourceLoader cannot open them directly), and retargets the
 ## Animation tracks onto the guard mesh Skeleton3D by bone name.
 ##
+## The same retarget core is reused for the ThiefNisha first-person viewmodel
+## (build_fp_player): explicit 1P clip names, root translation always
+## stripped, all clips looped. See FP_CLIPS.
+##
 ## Retarget rule: a source track `.../Skeleton3D:<bone>` is kept only when
 ## <bone> exists in the target skeleton; everything else (first-person `_1p`
 ## bones, cameras, SKEL helper nodes) is dropped and reported. Locomotion
@@ -61,6 +65,18 @@ const ROLE_PATTERNS := {
 }
 # Roles whose `root`-bone translation is stripped (in-place locomotion).
 const STRIP_ROOT_TRANSLATION: Array[String] = ["neutral_walk", "suspicious_walk", "alert_run"]
+# First-person (ThiefNisha 1P) clip set. Explicit manifest names only: a name
+# absent from the manifest is skipped and the caller keeps its procedural
+# fallback. No motion is invented, and no guard regex fallback applies here.
+const FP_CLIPS := {
+	"walk": "AN_Walk_F_1P",
+	"sprint": "AN_Sprint_F_1P",
+	"crouch": "AN_Crouch_F_1P",
+}
+const FP_ORDER: Array[String] = ["walk", "sprint", "crouch"]
+# All three FP clips are in-place locomotion (scripted velocity drives
+# displacement), so `root` translation is always stripped; all loop.
+const FP_BLEND: float = 0.2
 const LOOP_ROLES: Array[String] = [
 	"neutral_idle", "neutral_walk", "suspicious_idle", "suspicious_walk",
 	"alert_idle", "alert_run", "search", "knockdown",
@@ -307,7 +323,50 @@ func _resolve_clip(role: String, table: Dictionary) -> String:
 	return ""
 
 
+## Builds the real-clip AnimationPlayer for the ThiefNisha 1P viewmodel,
+## mirroring build_player but with the explicit FP_CLIPS table (no guard
+## regex fallback, root translation always stripped, all clips looped).
+## Returns null when nothing retargeted so the caller keeps its procedural
+## fallback. Reuses the same bone-name / rest-delta / unit-factor retarget
+## as the guard path via _retarget_general.
+func build_fp_player(skeleton: Skeleton3D, skeleton_parent: Node, player_host: Node) -> AnimationPlayer:
+	applied.clear()
+	anim_lengths.clear()
+	missing_roles.clear()
+	if skeleton == null or skeleton_parent == null or player_host == null:
+		return null
+	if mesh_bones.is_empty():
+		mesh_bones = _read_bone_names(skeleton)
+	skeleton_name = str(skeleton.name)
+	var player := AnimationPlayer.new()
+	player.name = "FPAnimPlayer"
+	player_host.add_child(player)
+	player.root_node = player.get_path_to(skeleton_parent)
+	var lib := AnimationLibrary.new()
+	for role in FP_ORDER:
+		var clip_name := str(FP_CLIPS.get(role, ""))
+		if clip_name == "" or not _manifest_by_name.has(clip_name):
+			missing_roles.append(role)
+			continue
+		var anim := _retarget_general(clip_name, true, true)
+		if anim == null:
+			missing_roles.append(role)
+			continue
+		lib.add_animation(clip_name, anim)
+		applied[role] = clip_name
+		anim_lengths[role] = anim.get_length()
+	if lib.get_animation_list().is_empty():
+		player.queue_free()
+		return null
+	player.add_animation_library("", lib)
+	return player
+
+
 func _retargeted(clip_name: String, role: String) -> Animation:
+	return _retarget_general(clip_name, STRIP_ROOT_TRANSLATION.has(role), LOOP_ROLES.has(role))
+
+
+func _retarget_general(clip_name: String, strip_root: bool, loop: bool) -> Animation:
 	var key := clip_name + "|" + skeleton_name
 	if _retarget_cache.has(key):
 		return _retarget_cache[key] as Animation
@@ -336,7 +395,6 @@ func _retargeted(clip_name: String, role: String) -> Animation:
 		var al: float = (arest_p as Transform3D).origin.length()
 		if al > 0.0001 and ml > 0.0001:
 			k = ml / al
-	var strip_root: bool = STRIP_ROOT_TRANSLATION.has(role)
 	# Per-bone constants: rotation pre-rotation and parent-frame correction.
 	var pre: Dictionary = {}
 	for b in mesh_set:
@@ -390,7 +448,7 @@ func _retargeted(clip_name: String, role: String) -> Animation:
 	if out.get_track_count() == 0:
 		push_warning("GuardAnimationLibrary: clip '" + clip_name + "' shares no bones with skeleton; skipped (procedural fallback kept)")
 		return null
-	if LOOP_ROLES.has(role):
+	if loop:
 		out.set_loop_mode(Animation.LOOP_LINEAR)
 	else:
 		out.set_loop_mode(Animation.LOOP_NONE)

@@ -4,6 +4,8 @@ extends CharacterBody3D
 
 enum Alertness { NEUTRAL, SUSPICIOUS, ALERTED, COMBAT, SEARCH, KNOCKED_OUT }
 
+const GuardAnimLib = preload("res://src/core/animation_library.gd")
+
 # Real UE values (tools/parse_gameplay.py; sources in
 # game/data/generated/gameplay/*.json "sources"). Curve-table overrides are kept
 # only for rows the real data defines (GuardBaseHealth, GuardKnockoutDuration).
@@ -53,6 +55,14 @@ var _search_goal_timer: float = 0.0
 var _revive_target: Node = null
 var _revive_progress: float = 0.0
 var _ally_scan_timer: float = 0.0
+# Real-clip animation state (animation_library.gd). When _use_real_anims is
+# false the guard falls back to the procedural bob in _update_procedural_anim.
+var anim_player: AnimationPlayer
+var _anim_lib: RefCounted
+var _anim_weapon: String = "club"
+var _use_real_anims: bool = false
+var _attack_anim_lock: float = 0.0
+var _slip_anim: bool = false
 
 var visual_root: Node3D
 var body_mesh: MeshInstance3D
@@ -125,6 +135,129 @@ func _build_visuals() -> void:
 	alert_indicator.font_size = 48
 	alert_indicator.text = ""
 	add_child(alert_indicator)
+	_setup_guard_anims()
+
+
+## Builds the real-clip AnimationPlayer on visual_root. Guarded: any failure
+## (missing manifest, unreadable GLB, zero shared bones) leaves anim_player
+## null and the procedural fallback in charge.
+func _guard_weapon_set() -> String:
+	var lname: String = name.to_lower()
+	if lname.find("haunt") >= 0:
+		return "hauntstable"
+	return "club"
+
+
+func _setup_guard_anims() -> void:
+	_use_real_anims = false
+	anim_player = null
+	_anim_lib = null
+	if visual_root == null:
+		return
+	var skels := visual_root.find_children("*", "Skeleton3D", true, false)
+	if skels.is_empty():
+		return
+	var sk := skels[0] as Skeleton3D
+	if sk == null or sk.get_bone_count() == 0:
+		return
+	_anim_weapon = _guard_weapon_set()
+	var lib = GuardAnimLib.new()
+	if not lib.setup(_anim_weapon, sk):
+		return
+	var skel_parent := sk.get_parent()
+	if skel_parent == null:
+		return
+	var player := lib.build_player(sk, skel_parent, visual_root)
+	if player == null or lib.applied_clip_count() < 4:
+		return
+	_anim_lib = lib
+	anim_player = player
+	_use_real_anims = true
+	anim_player.animation_finished.connect(_on_guard_anim_finished)
+
+
+func _anim_can_play() -> bool:
+	return _use_real_anims and is_instance_valid(anim_player) and anim_player.is_inside_tree() and not is_queued_for_deletion() and _anim_lib != null
+
+
+func _play_guard_clip(role: String, force: bool = false) -> void:
+	if not _anim_can_play():
+		return
+	var key := String(_anim_lib.clip_for_role(role))
+	if key == "" or not anim_player.has_animation(key):
+		return
+	if not force and anim_player.current_animation == key:
+		return
+	anim_player.play(key, 0.25)
+
+
+func _play_guard_attack() -> void:
+	if not _anim_can_play():
+		return
+	var key := String(_anim_lib.clip_for_role("attack"))
+	if key == "" or not anim_player.has_animation(key):
+		return
+	_attack_anim_lock = maxf(0.5, _anim_lib.clip_length(key))
+	_slip_anim = false
+	anim_player.play(key, 0.15)
+
+
+## Plays the MagicSlime slip montage once, then falls through to the prone
+## knockdown loop. Called by the tool wave; forces KO visuals if needed.
+func play_slip() -> void:
+	if state != Alertness.KNOCKED_OUT:
+		knock_out()
+	if not _anim_can_play():
+		return
+	var key := String(_anim_lib.clip_for_role("slip"))
+	if key == "" or not anim_player.has_animation(key):
+		return
+	_slip_anim = true
+	_attack_anim_lock = 0.0
+	anim_player.play(key, 0.2)
+
+
+func _on_guard_anim_finished(anim_name: StringName) -> void:
+	if not _anim_can_play():
+		_slip_anim = false
+		_attack_anim_lock = 0.0
+		return
+	if _slip_anim:
+		_slip_anim = false
+		if state == Alertness.KNOCKED_OUT:
+			_play_guard_clip("knockdown", true)
+		return
+	var attack_key := String(_anim_lib.clip_for_role("attack"))
+	if attack_key != "" and String(anim_name) == attack_key:
+		_attack_anim_lock = 0.0
+
+
+## Drives the real-clip state machine; falls back to procedural bob when no
+## clips are available. Never plays while KO handling owns the player.
+func _update_guard_anim(delta: float) -> void:
+	if not _use_real_anims or not _anim_can_play():
+		_update_procedural_anim(delta)
+		return
+	if _slip_anim:
+		return
+	if state == Alertness.KNOCKED_OUT:
+		_play_guard_clip("knockdown")
+		return
+	_attack_anim_lock = maxf(0.0, _attack_anim_lock - delta)
+	if _attack_anim_lock > 0.0:
+		return
+	var moving: bool = Vector2(velocity.x, velocity.z).length() > 0.5
+	match state:
+		Alertness.NEUTRAL:
+			_play_guard_clip("neutral_walk" if moving else "neutral_idle")
+		Alertness.SUSPICIOUS:
+			_play_guard_clip("suspicious_walk" if moving else "suspicious_idle")
+		Alertness.ALERTED:
+			_play_guard_clip("alert_run" if moving else "alert_idle")
+		Alertness.COMBAT:
+			_play_guard_clip("alert_run" if moving else "alert_idle")
+		Alertness.SEARCH:
+			_play_guard_clip("search")
 
 
 func _resolve_guard_glb_path() -> String:
@@ -213,6 +346,8 @@ func _physics_process(delta: float) -> void:
 		ko_timer -= delta
 		if ko_timer <= 0.0:
 			_recover_from_ko()
+		else:
+			_update_guard_anim(delta)
 		return
 
 	attack_cooldown = maxf(0.0, attack_cooldown - delta)
@@ -264,7 +399,7 @@ func _physics_process(delta: float) -> void:
 	_update_indicator()
 	_update_ally_wakeup(delta)
 	_move_ai(delta, player)
-	_update_procedural_anim(delta)
+	_update_guard_anim(delta)
 
 
 func _move_ai(delta: float, player: CharacterBody3D) -> void:
@@ -297,6 +432,7 @@ func _move_ai(delta: float, player: CharacterBody3D) -> void:
 				if global_position.distance_to(player.global_position) <= MELEE_RADIUS and attack_cooldown <= 0.0:
 					if player.has_method("take_damage"):
 						player.take_damage(MELEE_DAMAGE)
+					_play_guard_attack()
 					attack_cooldown = MELEE_COOLDOWN
 
 	var flat: Vector3 = Vector3(target.x - global_position.x, 0, target.z - global_position.z)
@@ -389,8 +525,15 @@ func knock_out(duration_override: float = -1.0) -> void:
 	else:
 		ko_timer = GameData.eval_curve("CT_AIStats", "GuardKnockoutDuration", GameState.difficulty_curve_x(), 180.0)
 	alert_indicator.text = "ZZZ"
+	_slip_anim = false
+	_attack_anim_lock = 0.0
 	if visual_root == null:
 		return
+	if _use_real_anims and _anim_can_play():
+		var ko_key := String(_anim_lib.clip_for_role("knockdown"))
+		if ko_key != "" and anim_player.has_animation(ko_key):
+			anim_player.play(ko_key, 0.25)
+			return
 	if _ko_tween != null and _ko_tween.is_valid():
 		_ko_tween.kill()
 	_ko_tween = create_tween()
@@ -413,6 +556,11 @@ func _recover_from_ko() -> void:
 	state_timer = 6.0
 	investigate_pos = global_position
 	if visual_root == null:
+		return
+	if _use_real_anims and _anim_can_play():
+		# The real search clip owns the next frames; no tip-over tween.
+		_slip_anim = false
+		_play_guard_clip("search", true)
 		return
 	if _ko_tween != null and _ko_tween.is_valid():
 		_ko_tween.kill()

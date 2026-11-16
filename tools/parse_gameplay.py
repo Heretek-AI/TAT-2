@@ -162,6 +162,141 @@ def build_character_movement() -> dict:
     }
 
 
+# ----------------------------------------------------------------- health --
+def build_fall_damage() -> dict:
+    base = load("Character/Player/BP_Player_Base.json")
+    core = load("Core/BP_TATPlayerCharacter.json")
+    curve_data = load("Character/Player/Curve_FallingDamage.json")
+
+    base_cdo = find(
+        base, {"Type": "BP_Player_Base_C", "Name": "Default__BP_Player_Base_C"}
+    )
+    death_cm = float(req(base_cdo, "_deathFallHeight", "BP_Player_Base CDO"))
+    core_cdo = find(
+        core,
+        {
+            "Type": "BP_TATPlayerCharacter_C",
+            "Name": "Default__BP_TATPlayerCharacter_C",
+        },
+    )
+    safe_cm = float(req(core_cdo, "_safeFallHeight", "BP_TATPlayerCharacter CDO"))
+
+    curve = find(curve_data, {"Type": "CurveFloat", "Name": "Curve_FallingDamage"})
+    float_curve = curve.get("FloatCurve", {})
+    keys = float_curve.get("Keys", [])
+    if len(keys) != 3:
+        raise Fail(f"Curve_FallingDamage: expected 3 keys, got {len(keys)}")
+    expected = [(0.0, 0.0), (0.7, 0.4), (1.0, 1.0)]
+    out_keys = []
+    for got, (et, ev) in zip(keys, expected):
+        t = float(got.get("Time", -1.0))
+        v = float(got.get("Value", -1.0))
+        if abs(t - et) > 1e-3 or abs(v - ev) > 1e-3:
+            raise Fail(
+                f"Curve_FallingDamage key mismatch: got ({t}, {v}), want ({et}, {ev})"
+            )
+        out_keys.append(
+            {
+                "time": round(t, 6),
+                "value": round(v, 6),
+                "arrive_tangent": float(got.get("ArriveTangent", 0.0)),
+                "leave_tangent": float(got.get("LeaveTangent", 0.0)),
+            }
+        )
+    return {
+        "safe_fall_height_cm": safe_cm,
+        "safe_fall_height_m": cm(safe_cm),
+        "death_fall_height_cm": death_cm,
+        "death_fall_height_m": cm(death_cm),
+        "curve_keys": out_keys,
+        "curve_interp": "RCIM_Cubic",
+        "sources": {
+            "safe": "extracted/json/Core/BP_TATPlayerCharacter.json (BP_TATPlayerCharacter_C Default__BP_TATPlayerCharacter_C._safeFallHeight 650)",
+            "death": "extracted/json/Character/Player/BP_Player_Base.json (BP_Player_Base_C Default__BP_Player_Base_C._deathFallHeight 2325)",
+            "curve": "extracted/json/Character/Player/Curve_FallingDamage.json (CurveFloat FloatCurve.Keys (0,0)/(0.7,~0.4)/(1,1) RCIM_Cubic)",
+        },
+    }
+
+
+def build_downed() -> dict:
+    dur_data = load("Gameplay/Combat/Common/GE_GrantPlayerDowned_Duration.json")
+    dur_s = None
+    for e in dur_data:
+        if str(e.get("Type", "")).startswith("GE_GrantPlayerDowned_Duration"):
+            mag = (e.get("Properties", {}) or {}).get("DurationMagnitude", {})
+            dur_s = float(mag.get("ScalableFloatMagnitude", {}).get("Value", 0.0))
+    if dur_s is None:
+        raise Fail("GE_GrantPlayerDowned_Duration magnitude not found")
+
+    cool_data = load("Gameplay/Combat/Common/GE_PostReviveCooldown.json")
+    cool_s = None
+    for e in cool_data:
+        if str(e.get("Type", "")).startswith("GE_PostReviveCooldown"):
+            mag = (e.get("Properties", {}) or {}).get("DurationMagnitude", {})
+            cool_s = float(mag.get("ScalableFloatMagnitude", {}).get("Value", 0.0))
+    if cool_s is None:
+        raise Fail("GE_PostReviveCooldown magnitude not found")
+
+    revive_guard = load(
+        "Gameplay/Combat/SyncedAbilities/Player/GA_SyncedAbility_Revive_Guard.json"
+    )
+    revive_player = load(
+        "Gameplay/Combat/SyncedAbilities/Player/GA_SyncedAbility_Revive_Player.json"
+    )
+    holds = []
+    for data, where in (
+        (revive_guard, "GA_SyncedAbility_Revive_Guard"),
+        (revive_player, "GA_SyncedAbility_Revive_Player"),
+    ):
+        hold = None
+        for e in data:
+            if str(e.get("Type", "")) == f"{where}_C" and str(
+                e.get("Name", "")
+            ).startswith(f"Default__{where}"):
+                props = e.get("Properties", {}) or {}
+                if "InteractHoldDuration" in props:
+                    hold = float(props["InteractHoldDuration"])
+        if hold is None:
+            raise Fail(f"{where} InteractHoldDuration not found")
+        holds.append(hold)
+    if abs(holds[0] - holds[1]) > 1e-6:
+        raise Fail(f"revive hold mismatch guard={holds[0]} player={holds[1]}")
+    return {
+        "downed_duration_s": dur_s,
+        "post_revive_cooldown_s": cool_s,
+        "revive_hold_s": holds[0],
+        "sources": {
+            "downed": "extracted/json/Gameplay/Combat/Common/GE_GrantPlayerDowned_Duration.json (DurationMagnitude 10.0)",
+            "post_revive": "extracted/json/Gameplay/Combat/Common/GE_PostReviveCooldown.json (DurationMagnitude 3.0)",
+            "revive_hold": "extracted/json/Gameplay/Combat/SyncedAbilities/Player/GA_SyncedAbility_Revive_Guard.json + GA_SyncedAbility_Revive_Player.json (InteractHoldDuration 5.0 each)",
+        },
+    }
+
+
+def build_health_blocks() -> dict:
+    out = {}
+    srcs = {}
+    for thief, rel in (
+        ("spider", "Character/Player/BP_Player_Thief_Spider.json"),
+        ("chameleon", "Character/Player/BP_Player_Thief_Chameleon.json"),
+    ):
+        data = load(rel)
+        blocks = None
+        for e in data:
+            props = e.get("Properties", {}) or {}
+            if "HealthBlockPercentages" in props:
+                blocks = [int(v) for v in props["HealthBlockPercentages"]]
+        if blocks is None:
+            raise Fail(f"HealthBlockPercentages not found in {rel}")
+        if sum(blocks) != 100:
+            raise Fail(
+                f"HealthBlockPercentages in {rel} sum to {sum(blocks)}, want 100"
+            )
+        out[thief] = blocks
+        srcs[thief] = f"extracted/json/{rel} (HealthBlockPercentages {blocks})"
+    return {"blocks": out, "sources": srcs}
+
+
 # ----------------------------------------------------------------- guard ---
 def sight_table(rel: str) -> dict:
     data = load(rel)
@@ -412,6 +547,9 @@ def main() -> int:
             "state_speeds.json": build_state_speeds(),
             "detection.json": build_detection(),
             "player_tools.json": build_player_tools(),
+            "fall_damage.json": build_fall_damage(),
+            "downed.json": build_downed(),
+            "health_blocks.json": build_health_blocks(),
         }
     except Fail as e:
         print(f"parse_gameplay: FAIL-CLOSED: {e}", file=sys.stderr)

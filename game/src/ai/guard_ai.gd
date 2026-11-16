@@ -19,6 +19,13 @@ const FOV_DEG: float = 80.0 # PeripheralVisionAngleDegrees 40 (UE half-angle) x 
 const MELEE_DAMAGE: float = 10.0 # CT_Melee_RangedAttackDamage close key
 const MELEE_COOLDOWN: float = 2.0 # GE_Melee_RangedAttack_Cooldown
 const MELEE_RADIUS: float = 1.0 # GA_MeleeRangedAttack DamageRadius 100cm
+# Real UE values (game/data/generated/gameplay/downed.json + CT_AIStats;
+# fallbacks are the extracted numbers and apply only when sources are missing).
+const DOWNED_PATH := "res://data/generated/gameplay/downed.json"
+const REVIVE_HOLD_FALLBACK: float = 5.0 # GA_SyncedAbility_Revive InteractHoldDuration
+const GUARD_REGEN_FALLBACK: float = 15.0 # CT_AIStats GuardBaseHealthRegenRate
+const GUARD_MAX_HP_FALLBACK: float = 30.0 # CT_AIStats GuardBaseHealth
+static var _downed_data: Dictionary = {}
 # Detection ramps: time-to-detect(s) = agnostic * dist_m + critical_time;
 # rate = 100/time. Crouch x0.75 applies at/over crouch_min (DA_DetectionSettings).
 const DETECTION_RAMPS: Dictionary = {
@@ -77,7 +84,7 @@ func _ready() -> void:
 	collision_layer = 4
 	collision_mask = 1 | 2
 	var diff_x := GameState.difficulty_curve_x()
-	health = GameData.eval_curve("CT_AIStats", "GuardBaseHealth", diff_x, 30.0)
+	health = _guard_max_hp()
 	_speed_scale = lerpf(0.85, 1.2, (diff_x - 1.0) * 0.5)
 	patrol_speed *= _speed_scale
 	suspicious_speed *= _speed_scale
@@ -281,6 +288,37 @@ func _resolve_guard_glb_path() -> String:
 			return "res://assets/ue/Content/Art/Animation/GuardEnforcer/Skin/Security/SK_GuardSecurity_01__Body.glb"
 
 
+## Real CT_AIStats values (GuardBaseHealth 30, GuardBaseHealthRegenRate 15/s);
+## eval_curve fallbacks repeat the extracted numbers for missing tables.
+func _guard_max_hp() -> float:
+	return GameData.eval_curve("CT_AIStats", "GuardBaseHealth", GameState.difficulty_curve_x(), GUARD_MAX_HP_FALLBACK)
+
+
+func _guard_regen_rate() -> float:
+	return GameData.eval_curve("CT_AIStats", "GuardBaseHealthRegenRate", GameState.difficulty_curve_x(), GUARD_REGEN_FALLBACK)
+
+
+## Ally-revive hold (GA_SyncedAbility_Revive InteractHoldDuration 5.0 s);
+## falls back to 5.0 when downed.json is unreadable.
+static func revive_hold_s() -> float:
+	if _downed_data.is_empty() and FileAccess.file_exists(DOWNED_PATH):
+		var f: FileAccess = FileAccess.open(DOWNED_PATH, FileAccess.READ)
+		if f != null:
+			var data: Variant = JSON.parse_string(f.get_as_text())
+			if data is Dictionary:
+				_downed_data = data
+	return float(_downed_data.get("revive_hold_s", REVIVE_HOLD_FALLBACK))
+
+
+## Health regen while conscious: +regen_rate/s up to the real max.
+func _tick_regen(delta: float) -> void:
+	if state == Alertness.KNOCKED_OUT:
+		return
+	var cap: float = _guard_max_hp()
+	if health < cap:
+		health = minf(cap, health + _guard_regen_rate() * delta)
+
+
 func _enter_alerted() -> void:
 	if state == Alertness.ALERTED or state == Alertness.COMBAT:
 		return
@@ -350,6 +388,7 @@ func _physics_process(delta: float) -> void:
 			_update_guard_anim(delta)
 		return
 
+	_tick_regen(delta)
 	attack_cooldown = maxf(0.0, attack_cooldown - delta)
 	var player: CharacterBody3D = get_tree().get_first_node_in_group("player") as CharacterBody3D
 	var sees_player: bool = _can_see_player(player)
@@ -488,7 +527,10 @@ func _can_see_player(player: CharacterBody3D) -> bool:
 func _on_noise_emitted(origin: Vector3, loudness: float, source: Node, tag: String) -> void:
 	if state == Alertness.KNOCKED_OUT or source == self:
 		return
-	if source != null and bool(source.get("astral_active")):
+	# Only the player thief carries astral_active (guards have no such
+	# property, so bool() must not be called on their lookup): the Moth's
+	# astral form makes no noise.
+	if source != null and source.is_in_group("player") and bool(source.get("astral_active")):
 		return
 	if tag == "guard_alert":
 		if global_position.distance_to(origin) <= loudness:
@@ -550,7 +592,7 @@ func wake_up_from_ko() -> void:
 
 
 func _recover_from_ko() -> void:
-	health = 30.0
+	health = _guard_max_hp()
 	alert_indicator.text = ""
 	state = Alertness.SEARCH
 	state_timer = 6.0
@@ -596,12 +638,13 @@ func _update_ally_wakeup(delta: float) -> void:
 			continue
 		investigate_pos = other_pos
 		if global_position.distance_to(other_pos) <= 1.8:
-			# Reviving an ally takes a sustained 1.6s of standing over them.
+			# Reviving an ally takes a sustained hold over them (real
+			# GA_SyncedAbility_Revive InteractHoldDuration 5.0 s).
 			if _revive_target != g:
 				_revive_target = g
 				_revive_progress = 0.0
 			_revive_progress += 0.4
-			if _revive_progress >= 1.6:
+			if _revive_progress >= revive_hold_s():
 				_revive_target = null
 				_revive_progress = 0.0
 				g.set("ko_timer", 0.0)

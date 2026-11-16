@@ -47,6 +47,7 @@ signal disguise_changed(integrity: float, active: bool)
 signal thief_vision_toggled(enabled: bool)
 signal tool_used(tool_id: String, charges_left: int)
 signal interacted(target: Node)
+signal downed_started(seconds: float)
 signal downed()
 
 @export var walk_speed: float = 3.6
@@ -61,6 +62,31 @@ var health: float = 300.0
 var max_stamina: float = 260.0
 var stamina: float = 260.0
 var stamina_regen: float = 12.0
+
+# Real combat/health tuning (game/data/generated/gameplay/*.json; fallbacks are
+# the extracted values and apply only when the JSON is unreadable).
+const FALL_DAMAGE_PATH := "res://data/generated/gameplay/fall_damage.json"
+const DOWNED_PATH := "res://data/generated/gameplay/downed.json"
+const HEALTH_BLOCKS_PATH := "res://data/generated/gameplay/health_blocks.json"
+const FALL_SAFE_M_FALLBACK: float = 6.5 # BP_TATPlayerCharacter._safeFallHeight 650cm
+const FALL_DEATH_M_FALLBACK: float = 23.25 # BP_Player_Base._deathFallHeight 2325cm
+const DOWNED_DURATION_FALLBACK: float = 10.0 # GE_GrantPlayerDowned_Duration
+const POST_REVIVE_COOLDOWN_FALLBACK: float = 3.0 # GE_PostReviveCooldown
+const HEALTH_BLOCKS_FALLBACK: Array = [25, 25, 25, 25] # Spider row
+var is_downed: bool = false
+var downed_timer: float = 0.0
+var post_revive_cooldown_s: float = 3.0
+var post_revive_ttl: float = 0.0
+var _downed_duration: float = 10.0
+var _downed_fired: bool = false
+var _fall_safe_m: float = 6.5
+var _fall_death_m: float = 23.25
+var _fall_curve: Curve
+var _was_on_floor: bool = true
+var _fall_peak_y: float = 0.0
+var _fall_data: Dictionary = {}
+var _downed_data: Dictionary = {}
+var _health_block_data: Dictionary = {}
 
 var is_crouching: bool = false
 var is_sprinting: bool = false
@@ -164,6 +190,169 @@ func _apply_tuning() -> void:
 	stamina = max_stamina
 	# GE_Stamina_Regen: 0.25 x StaminaRegenRate per 0.1s tick -> rate x 2.5/s.
 	stamina_regen = GameData.eval_curve("CT_PlayerStats", "BaseStaminaRegenRate", diff_x, 2.0) * 2.5
+	_load_combat_tuning()
+
+
+## Real fall/downed/health-block values from generated gameplay JSON.
+## Member fallbacks are the extracted UE numbers; they apply only when the
+## JSON files are missing or unreadable.
+func _load_combat_tuning() -> void:
+	_fall_data = _read_generated_json(FALL_DAMAGE_PATH)
+	_downed_data = _read_generated_json(DOWNED_PATH)
+	_health_block_data = _read_generated_json(HEALTH_BLOCKS_PATH)
+	_fall_safe_m = float(_fall_data.get("safe_fall_height_m", FALL_SAFE_M_FALLBACK))
+	_fall_death_m = float(_fall_data.get("death_fall_height_m", FALL_DEATH_M_FALLBACK))
+	_downed_duration = float(_downed_data.get("downed_duration_s", DOWNED_DURATION_FALLBACK))
+	post_revive_cooldown_s = float(_downed_data.get("post_revive_cooldown_s", POST_REVIVE_COOLDOWN_FALLBACK))
+	_fall_curve = _build_fall_curve()
+
+
+static func _read_generated_json(path: String) -> Dictionary:
+	if not FileAccess.file_exists(path):
+		return {}
+	var f: FileAccess = FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return {}
+	var data: Variant = JSON.parse_string(f.get_as_text())
+	if data is Dictionary:
+		return data
+	return {}
+
+
+## Godot Curve (cubic interpolation) built from the three real
+## Curve_FallingDamage keys, tangents included for the UE RCIM_Cubic shape.
+func _build_fall_curve() -> Curve:
+	var c := Curve.new()
+	c.bake_resolution = 64
+	var keys: Array = _fall_data.get("curve_keys", [])
+	if keys.size() == 3:
+		for k: Variant in keys:
+			var kd: Dictionary = k
+			var t: float = float(kd.get("time", 0.0))
+			var v: float = float(kd.get("value", 0.0))
+			var lt: float = float(kd.get("arrive_tangent", 0.0))
+			var rt: float = float(kd.get("leave_tangent", 0.0))
+			c.add_point(Vector2(t, v), lt, rt, Curve.TANGENT_FREE, Curve.TANGENT_FREE)
+	else:
+		c.add_point(Vector2(0.0, 0.0), 0.0, 0.0, Curve.TANGENT_FREE, Curve.TANGENT_FREE)
+		c.add_point(Vector2(0.7, 0.4), 1.2960153, 1.2960153, Curve.TANGENT_FREE, Curve.TANGENT_FREE)
+		c.add_point(Vector2(1.0, 1.0), 0.05426467, 0.05426467, Curve.TANGENT_FREE, Curve.TANGENT_FREE)
+	return c
+
+
+## Damage for a vertical fall of drop_m meters: 0 at/below the safe height,
+## max_health at/above the death height, and the real 3-key curve as a
+## fraction of max_health in between.
+func fall_damage_for_drop(drop_m: float) -> float:
+	if _fall_curve == null:
+		_load_combat_tuning()
+	if drop_m <= _fall_safe_m:
+		return 0.0
+	if drop_m >= _fall_death_m:
+		return max_health
+	var t: float = clampf((drop_m - _fall_safe_m) / (_fall_death_m - _fall_safe_m), 0.0, 1.0)
+	var frac: float = clampf(_fall_curve.sample(t), 0.0, 1.0)
+	return frac * max_health
+
+
+## Landing damage gate. Assumption (no UE source found for immunity): the
+## zipwire winch controls descent while grappling and the Moth astral form is
+## a spirit, so neither takes fall damage; the peak tracker is refreshed
+## instead so no drop accumulates across those states.
+func _apply_fall_damage(drop_m: float) -> float:
+	if is_grappling or astral_active:
+		return 0.0
+	var dmg: float = fall_damage_for_drop(drop_m)
+	if dmg > 0.0:
+		take_damage(dmg)
+	return dmg
+
+
+## Tracks the airborne peak and converts the air->floor transition into a
+## fall-damage event. Call at the top of _physics_process (is_on_floor
+## reflects the previous frame's move_and_slide).
+func _track_fall_state() -> void:
+	var on_floor_now: bool = is_on_floor()
+	if on_floor_now and not _was_on_floor:
+		_apply_fall_damage(_fall_peak_y - global_position.y)
+	if on_floor_now:
+		_fall_peak_y = global_position.y
+	else:
+		if is_grappling or astral_active:
+			_fall_peak_y = global_position.y
+		else:
+			_fall_peak_y = maxf(_fall_peak_y, global_position.y)
+	_was_on_floor = on_floor_now
+
+
+## False while downed: movement, sprint, abilities, tools and interact are
+## blocked, but camera look stays live (handled in _unhandled_input).
+func can_act() -> bool:
+	return not is_downed
+
+
+func downed_remaining() -> float:
+	if not is_downed:
+		return 0.0
+	return downed_timer
+
+
+## Health-block split for the current thief (Spider 4x25, Chameleon
+## 30/30/20/20). Moth has no extracted row and falls back to Spider;
+## documented assumption, not a UE value.
+func health_block_percentages() -> Array:
+	var picked: Array = []
+	var blocks: Variant = _health_block_data.get("blocks", {})
+	if blocks is Dictionary:
+		if (blocks as Dictionary).has(str(GameState.thief_id)):
+			picked = Array((blocks as Dictionary)[str(GameState.thief_id)])
+		elif (blocks as Dictionary).has("spider"):
+			picked = Array((blocks as Dictionary)["spider"])
+	var out: Array = []
+	for v: Variant in picked:
+		out.append(int(v))
+	if out.is_empty():
+		return HEALTH_BLOCKS_FALLBACK.duplicate()
+	return out
+
+
+func _enter_downed() -> void:
+	if is_downed:
+		return
+	is_downed = true
+	downed_timer = _downed_duration
+	_downed_fired = false
+	is_sprinting = false
+	is_grappling = false
+	downed_started.emit(_downed_duration)
+
+
+func _tick_downed(delta: float) -> void:
+	if not is_downed or _downed_fired:
+		return
+	downed_timer = maxf(0.0, downed_timer - delta)
+	if downed_timer <= 0.0:
+		_downed_fired = true
+		downed.emit()
+
+
+func _tick_post_revive(delta: float) -> void:
+	if post_revive_ttl > 0.0:
+		post_revive_ttl = maxf(0.0, post_revive_ttl - delta)
+
+
+## Single-player revive is not wired to any ability; this helper restores the
+## thief (e.g. after a co-op help-up) and starts the real 3 s post-revive
+## cooldown value. Restored HP is full health: the real post-revive attribute
+## set (GE_SetPlayerAttributesAfterRecoverFromDowned) was not extracted, so
+## full restore is an assumption.
+func revive() -> void:
+	is_downed = false
+	downed_timer = 0.0
+	_downed_fired = false
+	health = max_health
+	health_changed.emit(health, max_health)
+	post_revive_ttl = post_revive_cooldown_s
 
 
 func _build_body() -> void:
@@ -233,7 +422,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not MobileProfile.is_mobile():
 		rotate_y(-event.relative.x * mouse_sens)
 		head.rotation.x = clampf(head.rotation.x - event.relative.y * mouse_sens, deg_to_rad(-80), deg_to_rad(80))
-	elif event.is_action_pressed("crouch"):
+		return
+	# Downed: camera look above stays live; everything else is blocked.
+	if not can_act():
+		return
+	if event.is_action_pressed("crouch"):
 		is_crouching = not is_crouching
 		var cap: CapsuleShape3D = col_shape.shape as CapsuleShape3D
 		if cap != null:
@@ -280,6 +473,19 @@ func _physics_process(delta: float) -> void:
 	ability_cooldown = maxf(0.0, ability_cooldown - delta)
 	pickpocket_cooldown = maxf(0.0, pickpocket_cooldown - delta)
 	_tick_astral(delta)
+	_tick_downed(delta)
+	_tick_post_revive(delta)
+	_track_fall_state()
+
+	# Downed: no input movement, sprint, abilities or tools; gravity still
+	# settles the body and the downed timer (above) runs to mission failure.
+	if is_downed:
+		velocity.x = 0.0
+		velocity.z = 0.0
+		if not is_on_floor():
+			velocity.y -= gravity * delta
+		move_and_slide()
+		return
 
 	# Smooth crouch camera height interpolation.
 	var target_head_h: float = CROUCH_HEAD_HEIGHT if is_crouching else STAND_HEAD_HEIGHT
@@ -431,6 +637,8 @@ func _is_guard_within(dist_max: float) -> bool:
 
 
 func take_damage(amount: float) -> void:
+	if is_downed:
+		return
 	if disguise_active:
 		disguise_active = false
 		disguise_integrity = 0.0
@@ -438,7 +646,7 @@ func take_damage(amount: float) -> void:
 	health = maxf(0.0, health - amount)
 	health_changed.emit(health, max_health)
 	if health <= 0.0:
-		downed.emit()
+		_enter_downed()
 
 
 func get_nearest_interactable() -> Node:
@@ -513,6 +721,8 @@ func _try_steal_disguise(guard: Node) -> bool:
 
 
 func _try_interact() -> void:
+	if not can_act():
+		return
 	var ko_guard: Node = _get_nearest_ko_guard()
 	if ko_guard != null:
 		_try_steal_disguise(ko_guard)
@@ -524,6 +734,8 @@ func _try_interact() -> void:
 
 
 func _trigger_thief_ability() -> void:
+	if not can_act():
+		return
 	if ability_cooldown > 0.0:
 		return
 	match GameState.thief_id:
@@ -567,6 +779,8 @@ func _end_astral() -> void:
 
 
 func _try_spider_grapple() -> bool:
+	if not can_act():
+		return false
 	if ability_cooldown > 0.0:
 		return is_grappling
 	if cam == null:
@@ -608,6 +822,8 @@ func _try_spider_grapple() -> bool:
 
 
 func _use_slithersap() -> void:
+	if not can_act():
+		return
 	if int(charges.get("slithersap", 0)) <= 0:
 		return
 	_fp_set_tool("slithersap")
@@ -647,6 +863,8 @@ func _slithersap_aim_point() -> Vector3:
 
 
 func _use_smoke_bomb() -> void:
+	if not can_act():
+		return
 	if int(charges.get("smoke_bomb", 0)) <= 0:
 		return
 	_fp_set_tool("smoke_bomb")
@@ -708,6 +926,8 @@ func fairy_travel_time(dist: float) -> float:
 
 
 func _use_pickpocket_fairy() -> void:
+	if not can_act():
+		return
 	if pickpocket_cooldown > 0.0:
 		return
 	pickpocket_cooldown = PICKPOCKET_COOLDOWN
@@ -775,6 +995,8 @@ func _find_nearest_guard(max_dist: float) -> Node3D:
 
 
 func _try_blackjack() -> void:
+	if not can_act():
+		return
 	_fp_set_tool("blackjack")
 	_fp_play_swing()
 	if head != null and cam != null:

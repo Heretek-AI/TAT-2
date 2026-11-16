@@ -629,6 +629,7 @@ func _spawn_player(ue_spawns: Array) -> void:
 	else:
 		spawn = _find_mesh_fallback_spawn()
 	player.position = spawn
+	player.downed_started.connect(_on_player_downed_started)
 	player.downed.connect(_on_player_downed)
 	add_child(player)
 	_snap_player_to_ground()
@@ -809,6 +810,13 @@ func _on_extracted() -> void:
 	SaveSystem.record_contract_complete(GameState.active_contract_order, final_score, not GameState.ever_spotted)
 	if hud.has_method("show_result"):
 		hud.show_result(true, final_score, contract_info)
+
+
+func _on_player_downed_started(seconds: float) -> void:
+	# Downed is a 10 s bleed-out window (GE_GrantPlayerDowned_Duration), not
+	# instant failure: show the countdown and fail only when `downed` fires.
+	if hud != null and hud.has_method("set_downed_display"):
+		hud.set_downed_display(true, seconds)
 
 
 func _on_player_downed() -> void:

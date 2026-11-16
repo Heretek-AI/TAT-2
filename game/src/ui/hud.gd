@@ -21,6 +21,7 @@ var slot_count_lbls: Array[Label] = []
 var disguise_vignette: TextureRect
 var thief_vision_overlay: ColorRect
 var clue_toast_lbl: Label
+var downed_lbl: Label
 var lockpick_bar: ProgressBar
 var pause_center: CenterContainer
 var pause_panel: PanelContainer
@@ -74,6 +75,22 @@ func _ready() -> void:
 	clue_toast_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	clue_toast_lbl.visible = false
 	root.add_child(clue_toast_lbl)
+
+	# Downed countdown label (center, below the clue toast; driven by
+	# set_downed_display and the per-frame player poll in _process).
+	downed_lbl = Label.new()
+	downed_lbl.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	downed_lbl.position = Vector2(-280, 104)
+	downed_lbl.custom_minimum_size = Vector2(560, 44)
+	downed_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	downed_lbl.add_theme_font_size_override("font_size", 26)
+	downed_lbl.add_theme_color_override("font_color", Color(1.0, 0.32, 0.28))
+	downed_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+	downed_lbl.add_theme_constant_override("shadow_offset_x", 2)
+	downed_lbl.add_theme_constant_override("shadow_offset_y", 2)
+	downed_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	downed_lbl.visible = false
+	root.add_child(downed_lbl)
 
 	# Lockpick progress bar (center below reticle)
 	lockpick_bar = ProgressBar.new()
@@ -718,11 +735,16 @@ func _process(delta: float) -> void:
 				slot_count_lbls[3].text = "∞"
 		if disguise_vignette != null:
 			disguise_vignette.visible = bool(p.get("disguise_active")) == true
+		if p.has_method("downed_remaining") and downed_lbl != null:
+			# DOWNED — Ns countdown while the player bleeds out; hidden otherwise.
+			var downed_now: bool = bool(p.get("is_downed"))
+			set_downed_display(downed_now, float(p.call("downed_remaining")))
 		if p.has_method("get_look_interact_prompt"):
 			_set_prompt(str(p.call("get_look_interact_prompt")))
 
 
 func show_result(won: bool, score: int, info: Dictionary) -> void:
+	set_downed_display(false, 0.0)
 	result_panel.visible = true
 	var rating: String = "GHOST (+25%)" if not GameState.ever_spotted else ("SHADOW (+10%)" if not GameState.ever_chased else "BRAWLER")
 	var outro: String = str(info.get("outro", ""))
@@ -737,6 +759,16 @@ func show_result(won: bool, score: int, info: Dictionary) -> void:
 func set_thief_vision(enabled: bool) -> void:
 	if thief_vision_overlay != null:
 		thief_vision_overlay.visible = enabled
+
+
+## DOWNED — Ns bleed-out countdown. Called by the mission controller on
+## downed_started and refreshed every frame from downed_remaining().
+func set_downed_display(active: bool, seconds: float) -> void:
+	if downed_lbl == null:
+		return
+	downed_lbl.visible = active
+	if active:
+		downed_lbl.text = "DOWNED — %ds" % maxi(0, int(ceil(seconds)))
 
 
 func show_clue_toast(title: String, body: String) -> void:

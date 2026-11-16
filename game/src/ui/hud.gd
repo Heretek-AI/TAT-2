@@ -457,23 +457,37 @@ func _build_tool_hotbar(root: Control, sans: Font) -> void:
 		slot.size = Vector2(68, 68)
 		slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		hb.add_child(slot)
-		var bg: TextureRect = _tex_rect("res://assets/ue/Raw/Art/UI/HUD/T_Ability_Background.png", Vector2(68, 68))
-		if bg != null:
-			bg.position = Vector2(0, 0)
-			slot.add_child(bg)
-		var icon: TextureRect = _tex_rect(icons[i], Vector2(44, 44))
-		if icon != null:
-			icon.position = Vector2(12, 8)
+		# Slot background: dark translucent rounded panel with a thin gold
+		# border. The old T_Ability_Background / T_Ability_Border textures are
+		# opaque and covered the tool icons, rendering blank slots.
+		var bg: Panel = Panel.new()
+		bg.position = Vector2(0, 0)
+		bg.custom_minimum_size = Vector2(68, 68)
+		bg.size = Vector2(68, 68)
+		bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var bg_style: StyleBoxFlat = ThemeScript.panel_style(1, 10, Color(0.04, 0.06, 0.09, 0.55))
+		bg_style.border_color = Color(0.9, 0.78, 0.45, 0.5)
+		bg.add_theme_stylebox_override("panel", bg_style)
+		slot.add_child(bg)
+		var icon_tex: Texture2D = ResourceLoader.load(icons[i]) as Texture2D
+		if icon_tex != null:
+			var icon: TextureRect = TextureRect.new()
+			icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			icon.texture = icon_tex
+			icon.custom_minimum_size = Vector2(44, 44)
+			icon.offset_right = 44.0
+			icon.offset_bottom = 44.0
+			icon.size = Vector2(44, 44)
+			icon.position = Vector2(12, 12)
+			icon.modulate = Color(1, 1, 1, 1)
+			icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			slot.add_child(icon)
-		var border: TextureRect = _tex_rect("res://assets/ue/Raw/Art/UI/HUD/T_Ability_Border.png", Vector2(68, 68))
-		if border != null:
-			border.position = Vector2(0, 0)
-			slot.add_child(border)
 		var key_lbl: Label = Label.new()
 		key_lbl.text = "[%s] %s" % [keys[i], names[i]]
-		key_lbl.position = Vector2(2, 0)
+		key_lbl.position = Vector2(4, 2)
 		key_lbl.custom_minimum_size = Vector2(64, 16)
-		key_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		key_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		key_lbl.add_theme_font_size_override("font_size", 11)
 		key_lbl.add_theme_color_override("font_color", Color(0.95, 0.9, 0.75))
 		key_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE

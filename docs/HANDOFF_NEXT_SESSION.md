@@ -33,7 +33,7 @@ Last verified: **20/20 PASS, fails=0, zero SCRIPT ERROR**. Engine exit-time `Obj
 - **995 animation GLBs** (`game/assets/ue/Anims/...`, `game/data/generated/anims_manifest.json`) via USD + headless Blender (`tools/usd_to_gltf.py`); ACL natives built for Linux (`tools/tat-extract/native/linux-x64/`). 14 `UBlendSpace` graphs unsupported (parametric, not keyframed).
 - **Weather**: 16 `BP_WeatherPreset_*` -> `game/data/generated/weather/` with map provenance; applied to Environment/moon/fog/post-process; real 4096x2048 moon panorama `T_Moon_D.png` drives the sky shader; weather rain.
 - **Materials**: 1,552 materials with real scalar/vector/static-switch/blend/two-sided/phys material (`tools/parse_materials.py`); art-direction overrides preserved.
-- **Audio**: 3,425 Wwise `0xFFFF` chunks decoded to `game/assets/ue/audio/wwise/<id>.ogg` (vgmstream r2168), 372 MiB; `audio_library.json`. `AkAudioEvent` assets expose EventId/MediaIds/DebugNames, but **no chunk↔MediaId map** exists (no `.wem`/`.bnk`, chunk ids are ubulk offsets). Do not wire clips to tags by guess; 9 synthesized fallbacks remain.
+- **Audio**: **5,018 Wwise media chunks** decoded to `game/assets/ue/audio/wwise/<ubulk-offset>.ogg` (vgmstream r2168, 39,222.2 s, 581,494,198 bytes); `audio_library.json` + `audio_events.json`. The strict unpadded ubulk walk (`5,018` RIFF + `32` PLUG) plus an order join validated at `4,155/4,160` `InMemoryMediaSize` matches (`99.88%`) resolves `5,862/5,868` event media entries, and all nine gameplay tags are wired to verified event/media pairs. Report: `docs/reports/audio-wwise.md`.
 
 ### Runtime
 - Level loader: 32 m XZ chunking with tight custom AABB, tiered distance culling/shadows, occlusion boxes, per-cell collision bodies, skybox-only decorative exclusion (packed-city PeripheryA is collidable).
@@ -77,7 +77,7 @@ a29a06f feat(anims): retarget real guard clips
 ## Hard limits (cooked data — do not fake)
 
 1. **Niagara VFX**: 120 systems catalogued (`tools/parse_vfx.py`); spawn rate/lifetime/velocity live in Niagara VM bytecode, loop duration null. No particle rates can be extracted without VM decompilation — do not invent them.
-2. **Wwise audio naming**: clips decoded but event↔media mapping absent. Remaining avenue: Wwise bank/HIRC parsing (no banks in filelist) or a MediaId table inside the ubulk (not found). Keep fallbacks.
+2. **Wwise audio (partial limit)**: the event↔media mapping is recovered (order join, `99.88%` size-validated); `5,018` clips decode and all nine tags are wired. Remaining limit: `6` convolution-reverb IRs are PLUG media that vgmstream cannot decode, and the join is proven by size statistics rather than content hashing (equal-size permutations remain theoretically invisible). See `docs/reports/audio-wwise.md`.
 3. **Material graphs**: cooked `Material` assets have no expressions/textures. Only exposed MaterialInstance parameters/textures resolve. 667 decals -> 347 validated (112 skipped); some VFX materials have no texture. A true 1:1 look for graph-only textures requires reference recreation, not extraction.
 4. **Blueprint / QuestGraph / patrol**: cooked behaviour graphs are not translated. DataTables/CurveTables and BP defaults are used; patrol spline points don't exist in `BP_AIPatrolPath`.
 5. **Doors**: 111 pivots are window/doorway hinges with no SCS leaf child; counted, not faked.
@@ -88,7 +88,7 @@ a29a06f feat(anims): retarget real guard clips
 1. **Landscape layers**: the weightmap shader now covers GroundA/GrassA/CobbleA/CobbleB/RockTileA, Puddle normal/opacity and GroundWet; remaining work is layers on a second weightmap texture and the fifth color slot. Verify the blend on Guildhall/Old Manor/Den.
 2. **Visual QA pass** in `make run` on Guildhall/Old Manor/Den: sky/moon scale, light beam overbright, Old Manor porch spawn and door visibility. The Guildhall safe-room overhang is closed — see `docs/reports/lighting-overhang.md`.
 3. **VFX (optional)**: only if a specific system is hand-matched or Niagara bytecode analysis is undertaken; placements are already extracted. Do not fabricate rates.
-4. **Audio (optional)**: recover event↔media mapping or leave the fallbacks; never assign unnamed clips to gameplay tags.
+4. **Audio (optional)**: mapping recovered and tags wired (`docs/reports/audio-wwise.md`); optional follow-ups are the `6` PLUG convolution-reverb IRs and any additional event/media pins. Never assign unnamed clips to gameplay tags.
 5. **Spawn quality**: prefer interior markers with 2–3 m forward clearance; consider QuestGraph/contract spawn tags if discovered.
 6. **UI**: remaining title/edge cases, minimap/ledger polish.
 7. **Mobile**: rebuild APK after runtime changes (`make android-release`), then measure FPS/thermals on the phone (still unverified on hardware).

@@ -1,11 +1,29 @@
 # Audio Extraction Report — real Wwise clips + honest mapping audit
 
+> **Superseded by the audio-wwise wave** (`docs/reports/audio-wwise.md`, 2026-11-17).
+> The 3,425-chunk scan and `mapping_unavailable: true` below came from an
+> unpadded-chunk alignment bug plus a truncated bank `BulkData`. The current
+> pipeline extracts 5,050 media chunks (5,018 RIFF + 32 PLUG), decodes all
+> 5,018 clips, resolves 5,862/5,868 event media entries and wires all nine
+> gameplay tags to verified event/media pairs.
+
 ## Outcome
 
-All 3,425 extracted Wwise chunks are now playable Ogg Vorbis files, with a
-per-clip manifest. The event-name → clip mapping audit found **no recoverable
-link**, so **nothing is wired to gameplay tags**: all 9 tags keep their
-synthesized fallbacks. No event names were guessed or invented.
+**Current state:** 5,018 Wwise clips are playable Ogg Vorbis files, with a
+per-clip manifest; 5,862 of 5,868 event media entries resolve to a clip; all
+nine gameplay tags are wired to a verified event dump + resolved clip, and
+`AudioManager.has_real_clip(tag)` returns true for all nine. See
+`docs/reports/audio-wwise.md` for the root cause, join validation and caveats.
+
+The rest of this report is the historical record of the superseded 3,425-chunk
+pipeline.
+
+### Historical outcome (superseded)
+
+All 3,425 extracted Wwise chunks were then playable Ogg Vorbis files, with a
+per-clip manifest. The event-name → clip mapping audit of that pipeline found
+**no link at the time**, so **nothing was wired to gameplay tags**: all 9 tags
+kept their synthesized fallbacks. No event names were guessed or invented.
 
 ## Conversion stats
 
@@ -27,7 +45,7 @@ synthesized fallbacks. No event names were guessed or invented.
   afterwards): `ResourceLoader.load("res://assets/ue/audio/wwise/13381358.ogg")`
   → `AudioStreamOggVorbis`, `get_length() = 0.3219 > 0`. PASS.
 
-## Mapping audit (evidence, not guesses)
+## Historical mapping audit (superseded)
 
 Correction to a prior assumption: the 1,298 `AkAudioEvent` JSON exports are
 **not** empty — 1,296 parse as `AkAudioEvent` with `EventCookedData`
@@ -35,16 +53,16 @@ Correction to a prior assumption: the 1,298 `AkAudioEvent` JSON exports are
 events reference media (4,303 distinct MediaIds). The 2 remaining files are
 `IsInteractablePropLocal-Local/Remote` replicated-event variants, not audio
 events. The recoverable half (event → MediaId → source .wav name) is
-preserved verbatim in `game/data/generated/audio_events.json` (`events[]`,
-`clip: null`) for future use if a media index ever surfaces.
+preserved verbatim in `game/data/generated/audio_events.json`; the audio-wwise
+wave now joins it to clips by ubulk order.
 
-The chunk → media half is **not** recoverable:
+The 3,425-chunk pipeline did **not** recover the chunk → media half:
 
 1. Chunk ids are **ubulk byte offsets, not media ids**: `media_ids ∩
    chunk_ids = ∅` (0 matches), and seeking to the first 3 chunk ids in
    `extracted/audio/TAT/Content/Audio/WwiseSharedAssetLibrary.ubulk` lands
    on `RIFF` each time (verified).
-2. **No media index exists anywhere**: 0 `.wem`/`.bnk` hits in
+2. **No media index was found anywhere**: 0 `.wem`/`.bnk` hits in
    `extracted/filelist.txt` (22,005 paths); the bank dump
    (`WwiseSharedAssetLibrary.json`) contains `Hierarchies` only
    (8,707 `SoundSfxVoice`, etc.) — no DIDX/data-index section.
@@ -56,10 +74,10 @@ The chunk → media half is **not** recoverable:
 4. RIFF payloads carry no MediaId (subchunks are `fmt `/`hash`/`data`;
    `hash` is an opaque 16-byte blob).
 
-Recorded as `mapping_unavailable: true` with the full evidence block in
-`game/data/generated/audio_events.json`.
+Recorded at the time as `mapping_unavailable: true` with the full evidence
+block in `game/data/generated/audio_events.json`.
 
-## What is wired vs fallback
+## Historical wiring (superseded)
 
 - `tags` in `audio_events.json`: all 9 gameplay tags (`footstep`,
   `blackjack`, `lockpick`, `grapple`, `smoke`, `fairy`, `alert`, `loot`,
@@ -69,8 +87,9 @@ Recorded as `mapping_unavailable: true` with the full evidence block in
   from `audio_events.json` `tags` (skipped silently when absent/unmapped)
   and exposes `has_real_clip(tag)`. Headless check confirmed
   `has_real_clip("footstep") == false` and unknown tags return false.
-- If a media index is ever recovered, only `audio_events.json` needs
-  confirmed `tag → res://…​/wwise/<id>.ogg` entries — no code changes.
+- When the mapping was recovered, only `audio_events.json` needed confirmed
+  `tag → res://…​/wwise/<id>.ogg` entries — no `AudioManager` code changes.
+  That is what the audio-wwise wave did.
 
 ## Disk usage
 

@@ -14,7 +14,8 @@
 │   ├── tat-extract/          # .NET 10 CUE4Parse + Oodle extractor (Program.cs, Exporter.cs)
 │   ├── parse_tables.py       # Normalizes UE5 .umap/.uasset JSONs -> .tatlevel.json + tables
 │   ├── parse_materials.py    # Resolves MI_*/M_* materials -> materials.json & mesh_materials.json
-│   ├── extract_audio.py      # Converts Wwise .wem audio -> .wav in game/assets/ue/audio/
+│   ├── extract_audio.py      # Splits the cooked ubulk into raw RIFF/PLUG chunks under extracted/audio/wwise_raw/
+│   ├── convert_wwise.py      # Decodes raw chunks (vgmstream) -> Ogg Vorbis in game/assets/ue/audio/wwise/
 │   └── manifest_audit.py     # Audits extracted coverage against Steam pak filelist
 └── game/                     # Godot 4.7.2 project root
     ├── project.godot

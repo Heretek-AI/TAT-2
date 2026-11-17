@@ -922,17 +922,22 @@ def extract_levels():
             ploc = pprops.get("RelativeLocation")
             prot = pprops.get("RelativeRotation")
             pscl = pprops.get("RelativeScale3D")
-            if not (ploc or prot or pscl):
-                tmpl = pe.get("Template") or {}
-                tobj = tmpl.get("ObjectName", "") if isinstance(tmpl, dict) else ""
-                hit = _door_template_props(
+            # The pivot is itself a StaticMeshComponent subclass in the
+            # authored BPs: for doorway Blueprints (no separate leaf stub in
+            # the level) the leaf mesh lives directly on the pivot template.
+            # Resolve that template once for both transform and mesh.
+            tmpl = pe.get("Template") or {}
+            tobj = tmpl.get("ObjectName", "") if isinstance(tmpl, dict) else ""
+            pivot_hit = None
+            if not (ploc or prot or pscl) or not pprops.get("StaticMesh"):
+                pivot_hit = _door_template_props(
                     bp_class, pname, "TATSwingingDoorPivotComponent", tobj
                 )
-                if hit is not None:
-                    hp = hit.get("props") or {}
-                    ploc = hp.get("RelativeLocation")
-                    prot = hp.get("RelativeRotation")
-                    pscl = hp.get("RelativeScale3D")
+            if not (ploc or prot or pscl) and pivot_hit is not None:
+                hp = pivot_hit.get("props") or {}
+                ploc = hp.get("RelativeLocation")
+                prot = hp.get("RelativeRotation")
+                pscl = hp.get("RelativeScale3D")
             if not (ploc or prot or pscl):
                 swinging_unresolved.append(
                     {
@@ -1032,17 +1037,60 @@ def extract_levels():
                 )
                 pend_idx.append(jdx)
             if not leaves:
-                swinging_unresolved.append(
-                    {
-                        "pivot": pname,
-                        "actor": actor_name,
-                        "class": bp_class,
-                        "reason": "no_resolved_leaves"
-                        + (":" + ",".join(leaf_bad[:4]) if leaf_bad else ""),
-                        "source": dsrc,
-                    }
+                # Doorway BPs attach the leaf mesh directly to the pivot
+                # component instead of instancing a separate SMC stub. The
+                # authored StaticMesh + pivot transform is the complete leaf;
+                # its local transform is identity because the pivot already
+                # carries the hinge position.
+                psm = pprops.get("StaticMesh")
+                if not psm and pivot_hit is not None:
+                    psm = (pivot_hit.get("props") or {}).get("StaticMesh")
+                psm_path = (
+                    psm.get("ObjectPath", "")
+                    if isinstance(psm, dict)
+                    else (psm if isinstance(psm, str) else "")
                 )
-                continue
+                psm_mesh = psm_path.split(".")[0]
+                if psm_mesh and _door_glb_exists(psm_mesh):
+                    game_rel = (
+                        psm_mesh[6:] if psm_mesh.startswith("/Game/") else psm_mesh
+                    )
+                    leaves.append(
+                        {
+                            "mesh": psm_mesh,
+                            "res": f"res://assets/ue/Content/{game_rel}.glb",
+                            "rel_loc": None,
+                            "rel_rot": None,
+                            "rel_scale": None,
+                            "rel_pos": [0.0, 0.0, 0.0],
+                            "rel_basis": [
+                                1.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                1.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                1.0,
+                            ],
+                            "rel_scale_v": [1.0, 1.0, 1.0],
+                            "scs_parent": None,
+                            "leaf_source": "pivot_static_mesh",
+                        }
+                    )
+                else:
+                    swinging_unresolved.append(
+                        {
+                            "pivot": pname,
+                            "actor": actor_name,
+                            "class": bp_class,
+                            "reason": "no_resolved_leaves"
+                            + (":" + ",".join(leaf_bad[:4]) if leaf_bad else ""),
+                            "source": dsrc,
+                        }
+                    )
+                    continue
             for q in pend_idx:
                 door_leaf_idx.add(q)
             swinging_doors.append(

@@ -81,17 +81,42 @@ func _initialize() -> void:
 	var mission_scene: Node = (load("res://scenes/mission.tscn") as PackedScene).instantiate()
 	root.add_child(mission_scene)
 	var wait_frames: int = 0
-	while get_nodes_in_group("player").is_empty() and wait_frames < 120:
+	while (get_nodes_in_group("player").is_empty() or get_nodes_in_group("swinging_doors").is_empty()) and wait_frames < 240:
 		await process_frame
 		wait_frames += 1
 	await process_frame
 	var guards := get_nodes_in_group("guards")
 	var loots := get_nodes_in_group("loot")
+	var om_doors := get_nodes_in_group("swinging_doors")
+	var om_door_leaves := 0
+	for d_var: Node in om_doors:
+		var pivot_node: Node = d_var.get_node_or_null("DoorPivot")
+		if pivot_node == null:
+			continue
+		for child: Node in pivot_node.get_children():
+			if child is MeshInstance3D:
+				om_door_leaves += 1
 	if guards.size() < 4 or loots.size() < 5:
 		printerr("FAIL: mission spawn counts too low: guards=", guards.size(), " loots=", loots.size())
 		fails += 1
+	elif om_doors.size() < 120 or om_door_leaves < 120:
+		printerr("FAIL: Old Manor swinging doors too low: doors=", om_doors.size(), " leaves=", om_door_leaves)
+		fails += 1
 	else:
-		print("PASS: Old Manor mission spawned ", guards.size(), " guards and ", loots.size(), " loot items")
+		print("PASS: Old Manor mission spawned ", guards.size(), " guards, ", loots.size(), " loot items and ", om_doors.size(), " doors / ", om_door_leaves, " leaves")
+		# Real pivot-mesh doors (formerly 56 unresolved doorway hinges) must
+		# swing: interact once and verify the 90-degree tween completes.
+		var test_door: Node3D = om_doors[0] as Node3D
+		var test_pivot: Node3D = test_door.get_node_or_null("DoorPivot") as Node3D
+		if test_pivot != null:
+			test_door.call("interact", null)
+			await create_timer(0.55).timeout
+			var swung: bool = absf(absf(test_pivot.rotation.y) - PI * 0.5) < 0.02
+			if not swung:
+				printerr("FAIL: pivot-mesh door did not swing: rot=", test_pivot.rotation.y)
+				fails += 1
+			else:
+				print("PASS: pivot-mesh door swings 90 degrees (rot=", snappedf(test_pivot.rotation.y, 0.001), ")")
 
 	# 5. End-to-end contract completion
 	gs.add_loot(1, 350, true)
@@ -472,6 +497,72 @@ func _initialize() -> void:
 				fails += 1
 			else:
 				print("PASS: Real weather DenseFog applied (fog=", snappedf(wenv.fog_density, 0.0001), " moon_energy=", snappedf(wmoon.light_energy, 0.01), " rot=", wmoon.rotation_degrees, ")")
+
+	# 18. Swinging-door extraction: every pivot resolves to a real leaf mesh.
+	# The 111 doorway-BP pivots carry their leaf StaticMesh on the pivot
+	# template itself (not a separate level SMC stub); this guards both that
+	# fallback and the identity local transform it implies.
+	var door_json_stack: Array[String] = ["res://data/generated/levels"]
+	var door_json_paths: Array[String] = []
+	while not door_json_stack.is_empty():
+		var cur_dir: String = door_json_stack.pop_back()
+		var da := DirAccess.open(cur_dir)
+		if da == null:
+			continue
+		da.list_dir_begin()
+		var entry: String = da.get_next()
+		while entry != "":
+			var full_path: String = cur_dir.path_join(entry)
+			if da.current_is_dir():
+				door_json_stack.append(full_path)
+			elif entry.ends_with(".tatlevel.json"):
+				door_json_paths.append(full_path)
+			entry = da.get_next()
+		da.list_dir_end()
+	var door_total: int = 0
+	var leaf_total: int = 0
+	var unresolved_total: int = 0
+	var pivot_mesh_leaves: int = 0
+	var leaf_bad: int = 0
+	for jp: String in door_json_paths:
+		var jf := FileAccess.open(jp, FileAccess.READ)
+		if jf == null:
+			continue
+		var parsed: Variant = JSON.parse_string(jf.get_as_text())
+		if not (parsed is Dictionary):
+			continue
+		var lv: Dictionary = parsed
+		unresolved_total += (lv.get("swinging_doors_unresolved", []) as Array).size()
+		for dv: Variant in (lv.get("swinging_doors", []) as Array):
+			if not (dv is Dictionary):
+				continue
+			var dd: Dictionary = dv
+			var leaves: Array = dd.get("leaves", [])
+			door_total += 1
+			leaf_total += leaves.size()
+			if leaves.is_empty():
+				leaf_bad += 1
+			for lv2: Variant in leaves:
+				if not (lv2 is Dictionary):
+					continue
+				var ldict: Dictionary = lv2
+				if str(ldict.get("mesh", "")) == "" or str(ldict.get("res", "")) == "":
+					leaf_bad += 1
+				if str(ldict.get("leaf_source", "")) == "pivot_static_mesh":
+					pivot_mesh_leaves += 1
+					var leaf_pos: Array = ldict.get("rel_pos", [])
+					var leaf_basis: Array = ldict.get("rel_basis", [])
+					var identity_ok: bool = leaf_pos.size() == 3 and leaf_basis.size() == 9
+					if identity_ok:
+						identity_ok = absf(float(leaf_pos[0])) < 1e-6 and absf(float(leaf_pos[1])) < 1e-6 and absf(float(leaf_pos[2])) < 1e-6
+						identity_ok = identity_ok and absf(float(leaf_basis[0]) - 1.0) < 1e-6 and absf(float(leaf_basis[4]) - 1.0) < 1e-6 and absf(float(leaf_basis[8]) - 1.0) < 1e-6
+					if not identity_ok:
+						leaf_bad += 1
+	if door_json_paths.size() < 70 or door_total < 281 or leaf_total < 373 or unresolved_total != 0 or pivot_mesh_leaves < 111 or leaf_bad != 0:
+		printerr("FAIL: swinging-door extraction (files=", door_json_paths.size(), " doors=", door_total, " leaves=", leaf_total, " unresolved=", unresolved_total, " pivot_mesh_leaves=", pivot_mesh_leaves, " bad=", leaf_bad, ")")
+		fails += 1
+	else:
+		print("PASS: swinging-door extraction (", door_json_paths.size(), " levels, ", door_total, " doors, ", leaf_total, " leaves, ", pivot_mesh_leaves, " pivot meshes, 0 unresolved)")
 
 	print("SUMMARY: fails=", fails)
 	quit(0 if fails == 0 else 1)

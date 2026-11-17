@@ -104,15 +104,51 @@ Desktop/Xvfb QA screenshots:
 - `/tmp/opencode/qa_xvfb_street.png` — road-brick street surface below the
   walkway (`T_RoadBricksA_D`).
 
+## Landscape layer blend
+
+The `LandscapeComponent` exports also carry `WeightmapTextures` and
+`WeightmapLayerAllocations`, which map each authored layer to a weightmap
+texture/channel. The parser now emits:
+
+```
+"weightmap": ".../Weightmap_6.png",
+"layers": [
+  {"layer": "GroundA", "channel": 0},
+  {"layer": "LandscapeVisibilityLayerInfo", "channel": 1},
+  {"layer": "GrassA", "channel": 2},
+  {"layer": "CobbleA", "channel": 3}
+]
+```
+
+`game/src/core/tat_landscape.gdshader` blends the extracted layer albedos by
+channel, normalizes the used weights, and discards the authored
+`LandscapeVisibilityLayerInfo` holes. Layer textures are mapped from the real
+extracted files:
+
+| Layer | Texture |
+|---|---|
+| `CobbleA` | `T_RoadBricksA_D.png` |
+| `CobbleB` | `T_GroundCobbleA_D.png` |
+| `GroundA` | `T_GroundDirtA_D.png` |
+| `GrassA` | `T_GrassA_DA.png` |
+| `RockTileA` | `T_RockTile_D.png` |
+
+`Puddle` / `GroundWet` have no recovered ground albedo, and components with
+more than four allocations drop the fifth (e.g. `CobbleB` after
+GroundA/Visibility/GrassA/CobbleA). Those cases are skipped, not guessed.
+Visual check: `/tmp/opencode/qa_weightmap_walk.png` shows the blended
+road/cobble/dirt surface and the authored hole under the safe-room walkway.
+
 ## Remaining gaps (not faked)
 
-- The landscape material's per-layer weightmaps are extracted but not yet
-  blended; Guildhall uses the road-brick surface globally, while Old Manor /
-  Den keep the cobble fallback. The authored layer blend is the next landscape
-  wave.
+- `Puddle` / `GroundWet` landscape layers and the fifth allocation on a few
+  components are not blended yet (no recovered albedo / shader slot).
 - The safe-room catwalk has open gaps between its structural crossbeams; the
   street below is visible through them. No floor mesh exists at that exact
   spot in the extracted BPP class, so no floor was invented.
+- Authored visibility holes discard correctly, but the underpass/lower floor
+  below some holes is not present in the extracted BPP geometry; those holes
+  still show void until the corresponding sublevel is loaded.
 - Sky/moon scale, VFX rates and Wwise event naming remain as documented in
   `FIDELITY_GAPS.md`.
 

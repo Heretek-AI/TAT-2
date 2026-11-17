@@ -1274,11 +1274,48 @@ def extract_levels():
                         wmat = mat4_mul(level_mat, wmat)
                     trs = ue_mat4_to_godot_trs(wmat)
                     bias = props.get("HeightmapScaleBias") or {}
+                    wbias = props.get("WeightmapScaleBias") or {}
                     h_rel = str(rel.parent / jf.stem).replace("\\", "/")
+                    wtextures = props.get("WeightmapTextures") or []
+                    weightmap = ""
+                    if wtextures:
+                        wname = (
+                            (wtextures[0].get("ObjectName") or "")
+                            .split(".")[-1]
+                            .rstrip("'")
+                        )
+                        if wname:
+                            weightmap = f"res://assets/ue/Raw/Maps/{h_rel}/{wname}.png"
+                    layers = []
+                    for alloc in props.get("WeightmapLayerAllocations") or []:
+                        li = (alloc.get("LayerInfo") or {}).get("ObjectName", "")
+                        lname = (
+                            li.split("'")[1].replace("_LayerInfo", "")
+                            if "'" in li
+                            else ""
+                        )
+                        if lname:
+                            layers.append(
+                                {
+                                    "layer": lname,
+                                    "tex": int(alloc.get("WeightmapTextureIndex", 0)),
+                                    "channel": int(
+                                        alloc.get("WeightmapTextureChannel", 0)
+                                    ),
+                                }
+                            )
                     landscapes.append(
                         {
                             "heightmap": f"res://assets/ue/Raw/Maps/{h_rel}/{hname}.png",
                             "source": h_rel,
+                            "weightmap": weightmap,
+                            "weightmap_scale_bias": [
+                                float(wbias.get("X", 1.0 / 64.0)),
+                                float(wbias.get("Y", 1.0 / 64.0)),
+                                float(wbias.get("Z", 0.0)),
+                                float(wbias.get("W", 0.0)),
+                            ],
+                            "layers": layers,
                             "quads": int(props.get("ComponentSizeQuads", 63)),
                             "scale_bias": [
                                 float(bias.get("X", 1.0 / 64.0)),

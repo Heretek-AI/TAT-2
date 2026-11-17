@@ -6,6 +6,18 @@ extends Node
 
 const _VfxManager: GDScript = preload("res://src/core/vfx_manager.gd")
 const MobileProfile: GDScript = preload("res://src/core/mobile_profile.gd")
+const LANDSCAPE_SHADER: Shader = preload("res://src/core/tat_landscape.gdshader")
+
+## Landscape layer name -> extracted albedo texture. Missing layers are skipped
+## (the shader normalizes the remaining weights) instead of binding a guessed
+## texture. Puddle/GroundWet have no recovered ground albedo yet.
+const LANDSCAPE_LAYER_TEX: Dictionary = {
+	"CobbleA": "res://assets/ue/Raw/MaterialLibrary/Environment/Stone/FloorExterior/T_RoadBricksA_D.png",
+	"CobbleB": "res://assets/ue/Raw/MaterialLibrary/Environment/Stone/FloorExterior/T_GroundCobbleA_D.png",
+	"GroundA": "res://assets/ue/Raw/MaterialLibrary/Environment/Nature/Dirt/T_GroundDirtA_D.png",
+	"GrassA": "res://assets/ue/Raw/MaterialLibrary/Environment/Nature/Grass/T_GrassA_DA.png",
+	"RockTileA": "res://assets/ue/Raw/MaterialLibrary/Environment/Stone/RockTile/T_RockTile_D.png",
+}
 
 signal load_progress(pct: float, status: String)
 
@@ -1431,6 +1443,51 @@ func _build_light(info: Dictionary, cast_shadow: bool = false) -> Light3D:
 	return light
 
 
+## Builds the real layer-blended landscape material from the component's
+## WeightmapTextures + WeightmapLayerAllocations. Returns null when the
+## component has no weightmap or no resolvable layer, so the caller falls back
+## to the single-surface material.
+func _landscape_weighted_material(lc: Dictionary) -> ShaderMaterial:
+	var wm_path: String = str(lc.get("weightmap", ""))
+	if wm_path == "" or not (FileAccess.file_exists(wm_path) or ResourceLoader.exists(wm_path)):
+		return null
+	var wm: Texture2D = _load_tex(wm_path)
+	if wm == null:
+		return null
+	var mat := ShaderMaterial.new()
+	mat.shader = LANDSCAPE_SHADER
+	mat.set_shader_parameter("weightmap", wm)
+	var slot: int = 0
+	for l_var: Variant in (lc.get("layers", []) as Array):
+		if slot >= 4:
+			break
+		if not (l_var is Dictionary):
+			continue
+		var l: Dictionary = l_var
+		var lname: String = str(l.get("layer", ""))
+		var channel: int = int(l.get("channel", 0))
+		var is_visibility: bool = lname.to_lower().contains("visibility")
+		if is_visibility:
+			mat.set_shader_parameter("layer_channel_%d" % slot, channel)
+			mat.set_shader_parameter("layer_visibility_%d" % slot, 1)
+			slot += 1
+			continue
+		var tex_path: String = str(LANDSCAPE_LAYER_TEX.get(lname, ""))
+		if tex_path == "":
+			continue
+		var tex: Texture2D = _load_tex(tex_path)
+		if tex == null:
+			continue
+		mat.set_shader_parameter("layer_tex_%d" % slot, tex)
+		mat.set_shader_parameter("layer_channel_%d" % slot, channel)
+		mat.set_shader_parameter("layer_visibility_%d" % slot, 0)
+		slot += 1
+	if slot == 0:
+		return null
+	mat.set_shader_parameter("uv_scale", 12.0)
+	return mat
+
+
 func _landscape_material(ctx: Dictionary, source: String = "") -> StandardMaterial3D:
 	var cached: StandardMaterial3D = ctx.get("landscape_mat") as StandardMaterial3D
 	if cached != null:
@@ -1487,7 +1544,10 @@ func _build_one_landscape(lc_var: Variant, parent: Node3D, ctx: Dictionary) -> v
 			img = Image.load_from_file(hpath)
 	if img == null or img.is_empty():
 		return
-	var mat: StandardMaterial3D = _landscape_material(ctx, str(lc.get("source", "")))
+	var weighted: ShaderMaterial = _landscape_weighted_material(lc)
+	var mat: Material = weighted
+	if mat == null:
+		mat = _landscape_material(ctx, str(lc.get("source", "")))
 	var iw: int = img.get_width()
 	var ih: int = img.get_height()
 	var quads: int = int(lc.get("quads", 63))

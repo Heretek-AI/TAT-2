@@ -1429,15 +1429,21 @@ def extract_levels():
                     wbias = props.get("WeightmapScaleBias") or {}
                     h_rel = str(rel.parent / jf.stem).replace("\\", "/")
                     wtextures = props.get("WeightmapTextures") or []
-                    weightmap = ""
-                    if wtextures:
-                        wname = (
-                            (wtextures[0].get("ObjectName") or "")
-                            .split(".")[-1]
-                            .rstrip("'")
+                    weightmaps = []
+                    for wt in wtextures:
+                        wname = ""
+                        if isinstance(wt, dict):
+                            wname = (
+                                (wt.get("ObjectName") or "")
+                                .split(".")[-1]
+                                .rstrip("'")
+                            )
+                        weightmaps.append(
+                            f"res://assets/ue/Raw/Maps/{h_rel}/{wname}.png"
+                            if wname
+                            else ""
                         )
-                        if wname:
-                            weightmap = f"res://assets/ue/Raw/Maps/{h_rel}/{wname}.png"
+                    weightmap = weightmaps[0] if weightmaps else ""
                     layers = []
                     for alloc in props.get("WeightmapLayerAllocations") or []:
                         li = (alloc.get("LayerInfo") or {}).get("ObjectName", "")
@@ -1461,6 +1467,7 @@ def extract_levels():
                             "heightmap": f"res://assets/ue/Raw/Maps/{h_rel}/{hname}.png",
                             "source": h_rel,
                             "weightmap": weightmap,
+                            "weightmaps": weightmaps,
                             "weightmap_scale_bias": [
                                 float(wbias.get("X", 1.0 / 64.0)),
                                 float(wbias.get("Y", 1.0 / 64.0)),

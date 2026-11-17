@@ -121,3 +121,13 @@ a29a06f feat(anims): retarget real guard clips
 - Every wave: implement + test + report; run `make test` (`fails=0`, zero SCRIPT ERROR) before commit.
 - Use `agency-programmer` for code, `agency-qa` for red-proofs, `agency-drift-guard` for independent verdicts if using the fleet workflow.
 - Commit messages follow Conventional Commits; keep generated data out of git.
+
+
+## Caveats from the title/spawn wave (2026-11-16)
+
+1. **Full suite confirmed**: `make test` was re-run after the change; `/tmp/opencode/final_title_spawn_test.log` shows `SUMMARY: fails=0` and zero `SCRIPT ERROR`. (The subagent's own wait was interrupted by a server restart, so this log is the authoritative run.)
+2. **Comment-only edit after the green probe**: a misleading comment in `_fallback_spawn_has_forward_clearance` was corrected after the temp check ran; it is comment-only and behaviorally identical, but strictly the committed file differs from the probe by that comment.
+3. **Old Manor spawn is legitimately unchanged**: contract 3 still picks the first major-loot candidate `(17.5346, 23.4871, 58.3921)` because it passes floor + 2.2 m headroom + 1.5 m forward clearance (forward ray: no hit in 3 m). No `fallback_no_forward_clearance` fired — evidence, not a forced relocation.
+4. **Forward check is vacuously true with no centroid**: `_fallback_spawn_has_forward_clearance` returns true when `_loot_centroid` is null or the direction is degenerate (nothing to face). By design; not a gap.
+5. **Contract 1 titles as `Contract 1`**: it has no contract string table, so the fallback's last branch fires. Expected; visible only if the HUD lists it as a contract (the Den HUD shows `Contract #1`).
+6. **Never commit `extension_api.json`**: it is a pre-existing untracked Godot API dump; only source/docs belong in commits.

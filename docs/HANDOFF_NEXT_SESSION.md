@@ -157,3 +157,21 @@ All waves listed above are committed and green; there is no uncommitted source w
 4. **Forward check is vacuously true with no centroid**: `_fallback_spawn_has_forward_clearance` returns true when `_loot_centroid` is null or the direction is degenerate (nothing to face). By design; not a gap.
 5. **Contract 1 titles as `Contract 1`**: it has no contract string table, so the fallback's last branch fires. Expected; visible only if the HUD lists it as a contract (the Den HUD shows `Contract #1`).
 6. **Never commit `extension_api.json`**: it is a pre-existing untracked Godot API dump; only source/docs belong in commits.
+
+## Session log (2026-11-17) — post-overhang fidelity resume
+
+Shipped 20 plan tasks in 17 commits, tree clean at `1a753da`. Each wave ran `make test` (fails=0, zero SCRIPT ERROR) and `make audit` (99.4%): sky/moon (`9f337cf`..`dba6988`), lighting (`cd3590a`), landscape (`fadefa5`, `2a8f3d5`), audio (`1b78590`, `2ec9138`), gameplay defaults (`f567d23`, `3e0817f`), docs (`1a753da`). One report per wave under `docs/reports/`.
+
+### Operational caveats (read before starting work)
+
+- The swarm plan tracker (`.swarm/plan.md`) shows every task as PENDING and is wrong: `update_task_status` needs a `pre_check` gate that only an accepted coder settlement can write. Git history is the accurate record.
+- The swarm coder lane is unusable in this environment. `SCOPE_BINDING_EXPIRED` ("generation for this task expired while idle") fires before the coder's first write; the lease is hard-coded (~2 min) with no published schema key. A session restart and `worktree.policy: disabled` did not clear it. Workaround used and recommended: delegate implementation to general-purpose write agents, run Stage A yourself (`diff` + `pre_check_batch`), and require an independent fresh-context review per task plus real `make test`/`make audit` output before committing.
+- Headless `make test` does NOT compile GLSL (Godot's dummy renderer). Shader changes need a real-renderer run (`--rendering-driver vulkan` under Xvfb) or a live capture; both were used this session and caught two defects the tests could not.
+- Visual QA writes to `build/qa/` (gitignored), not `/tmp/opencode/` — that path was wiped mid-session.
+
+### Parked follow-ups (priority order)
+
+1. `tools/parse_tables.py:65` negates UE's `M[2][1]`, shearing 4,444 mesh instances. Fix + regenerate + re-verify positions in the suites.
+2. Light-probe stealth weights were tuned against the old inflated light energies; retune after the lighting wave.
+3. OldManor_P / BeautifulCorner_Startscreen_P landscape heightmaps and weightmaps were never extracted (`tools/tat-extract/Exporter.cs:166` filters on "Landscape").
+4. Niagara VFX still blocked on compiled VectorVM bytecode (120/120 systems).

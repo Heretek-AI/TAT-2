@@ -527,7 +527,14 @@ func _initialize() -> void:
 			var sky_src: Dictionary = wpreset.get("sky", {})
 			var exp_fog := float(fog_src.get("density", 0.0)) * 0.01
 			var exp_energy: float = clampf(float(ml_src.get("intensity", 0.0)) * 10.0, 0.05, 1.0)
-			var exp_rot := Vector3(float(ml_src.get("pitch", 0.0)), float(ml_src.get("yaw", 0.0)), float(ml_src.get("roll", 0.0)))
+			var exp_basis: Basis = wp_scr.moon_basis(wpreset)
+			var wb: Basis = wmoon.basis
+			var basis_ok: bool = absf(wb.x.length() - 1.0) < 1e-4 \
+				and absf(wb.y.length() - 1.0) < 1e-4 \
+				and absf(wb.z.length() - 1.0) < 1e-4 \
+				and absf(wb.x.dot(wb.y)) < 1e-4 \
+				and absf(wb.x.dot(wb.z)) < 1e-4 \
+				and absf(wb.y.dot(wb.z)) < 1e-4
 			var exp_mc: Array = ml_src.get("color", [1, 1, 1])
 			var exp_fogc: Array = fog_src.get("inscattering", [0, 0, 0])
 			var exp_skyc: Array = sky_src.get("light_color", [1, 1, 1])
@@ -536,7 +543,8 @@ func _initialize() -> void:
 			var wvals_ok := applied \
 				and is_equal_approx(wenv.fog_density, exp_fog) \
 				and is_equal_approx(wmoon.light_energy, exp_energy) \
-				and wmoon.rotation_degrees.is_equal_approx(exp_rot) \
+				and wmoon.basis.is_equal_approx(exp_basis) \
+				and basis_ok \
 				and is_equal_approx(wmoon.light_color.r, float(exp_mc[0])) \
 				and is_equal_approx(wmoon.light_color.g, float(exp_mc[1])) \
 				and is_equal_approx(wmoon.light_color.b, float(exp_mc[2])) \

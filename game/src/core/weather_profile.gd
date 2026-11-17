@@ -16,10 +16,12 @@ extends RefCounted
 ##   Godot light_energy unit. x10 preserves the inter-preset ratios (Gloomy
 ##   0.01 -> 0.1 dimmest, Stormy/HeavyRain 0.05 -> 0.5 brightest) while keeping
 ##   a visibility floor. Presets without an Intensity key are skipped.
-## - Moon rotation copies the UE RelativeRotation pitch/yaw/roll straight into
-##   rotation_degrees. UE pitch -90 (straight down) equals Godot
-##   rotation.x = -90 (the -Z forward axis maps to -Y), so the night presets
-##   that hang the moon overhead behave identically.
+## - Moon rotation converts the UE RelativeRotation FRotator to a Godot Basis
+##   with the same path used for level geometry (tools/parse_tables.py
+##   ue_rotator_to_mat3 + ue_mat4_to_godot_trs: Z-up UE -> Y-up Godot), then
+##   applies level_loader.gd's UE5 +X -> Godot -Z light aim fix-up. UE pitch
+##   -90 (straight down) therefore lights straight down along -Z instead of
+##   being misread as a Godot Euler.
 ## - Skylight intensity maps directly to ambient_light_energy, clamped to
 ##   [0.02, 1.0] (UE night values 0.04-5.0; only the lobby cubemap hits the cap).
 ## - PostProcess ColorSaturation.X -> adjustment_saturation,
@@ -140,12 +142,42 @@ static func moon_color(preset: Dictionary) -> Variant:
 	return null
 
 
-static func moon_rotation(preset: Dictionary) -> Variant:
-	var ml := _section(preset, "moon_light")
+## Converts the preset's UE FRotator (moon_light pitch/yaw/roll) to the Godot
+## Basis a DirectionalLight3D needs. Same three steps as the level pipeline:
+## UE FRotationMatrix::MakeFromEuler (tools/parse_tables.py:54), the Y/Z swap
+## to Godot space (tools/parse_tables.py:91), then the UE5 +X aim -> Godot -Z
+## aim fix-up applied to lights in level_loader.gd:1479. Returns null when the
+## preset carries no pitch/yaw.
+static func moon_basis(preset: Dictionary) -> Variant:
+	var ml: Dictionary = _section(preset, "moon_light")
 	if ml.get("pitch") == null or ml.get("yaw") == null:
 		return null
-	var roll := float(ml.get("roll", 0.0))
-	return Vector3(float(ml["pitch"]), float(ml["yaw"]), roll)
+	var p: float = deg_to_rad(float(ml["pitch"]))
+	var y: float = deg_to_rad(float(ml["yaw"]))
+	var ro: float = deg_to_rad(float(ml.get("roll", 0.0)))
+	var cp: float = cos(p)
+	var sp: float = sin(p)
+	var cy: float = cos(y)
+	var sy: float = sin(y)
+	var cr: float = cos(ro)
+	var sr: float = sin(ro)
+	var m00: float = cp * cy
+	var m01: float = sr * sp * cy - cr * sy
+	var m02: float = -(cr * sp * cy + sr * sy)
+	var m10: float = cp * sy
+	var m11: float = sr * sp * sy + cr * cy
+	# Transposed UE M[2][1] = -(cr*sp*sy - sr*cy); this sign keeps the basis
+	# orthonormal for nonzero roll.
+	var m12: float = sr * cy - cr * sp * sy
+	var m20: float = sp
+	var m21: float = -sr * cp
+	var m22: float = cr * cp
+	# Basis columns in Godot space (Y/Z swapped rows and columns).
+	var c0: Vector3 = Vector3(m00, m20, m10)
+	var c1: Vector3 = Vector3(m02, m22, m12)
+	var c2: Vector3 = Vector3(m01, m21, m11)
+	# UE5 lights aim along +X, Godot lights along -Z.
+	return Basis(c0, c1, c2) * Basis(Vector3.UP, -PI * 0.5)
 
 
 static func ambient_color(preset: Dictionary) -> Variant:
@@ -308,9 +340,9 @@ static func apply_environment(env: Environment, moon: DirectionalLight3D, preset
 		var mcol: Variant = moon_color(preset)
 		if mcol != null:
 			moon.light_color = mcol
-		var rot: Variant = moon_rotation(preset)
-		if rot != null:
-			moon.rotation_degrees = rot
+		var mbasis: Variant = moon_basis(preset)
+		if mbasis != null:
+			moon.basis = mbasis
 	return true
 
 

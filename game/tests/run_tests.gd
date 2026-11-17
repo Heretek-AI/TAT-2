@@ -237,9 +237,22 @@ func _initialize() -> void:
 
 	# 10. Guildhall full ground, landscape terrain & spawn grounding check
 	gs.active_contract_order = 4
-	gs.active_map_id = "guildhall"
+	# Regression: simulate a stale GameState default right before the mission
+	# boots. The contract's map preset (guildhall) must win, not old_manor.
+	gs.active_map_id = "old_manor"
 	var gh_scene: Node = (load("res://scenes/mission.tscn") as PackedScene).instantiate()
 	root.add_child(gh_scene)
+	var gh_env: Environment = null
+	for gh_env_node: Node in gh_scene.get_children():
+		if gh_env_node is WorldEnvironment and (gh_env_node as WorldEnvironment).environment != null:
+			gh_env = (gh_env_node as WorldEnvironment).environment
+			break
+	var gh_fog_density: float = gh_env.fog_density if gh_env != null else -1.0
+	if absf(gh_fog_density - 0.0006) >= 0.0001:
+		printerr("FAIL: Guildhall must use its map weather preset, not the stale default (fog_density=", gh_fog_density, " expected guildhall/midnight_clear 0.0006, old_manor 0.004)")
+		fails += 1
+	else:
+		print("PASS: Guildhall map preset wins over stale default map (fog_density=", gh_fog_density, ")")
 	var gh_wait: int = 0
 	while get_nodes_in_group("guards").size() == 0 and gh_wait < 240:
 		await process_frame
@@ -738,6 +751,108 @@ func _initialize() -> void:
 		print("PASS: Guildhall landscape fills visibility gaps (discard_holes=0)")
 	ll3.queue_free()
 	await process_frame
+
+	# 22. Sky/moon fidelity: inherited preset fields, geometry-derived moon
+	# diameter, tone-mapped horizon and UE->Godot moon light directions.
+	var wv_scr: GDScript = load("res://src/core/weather_visuals.gd") as GDScript
+	var mc_file: FileAccess = FileAccess.open("res://data/generated/weather/midnight_clear.json", FileAccess.READ)
+	var mc_preset: Dictionary = {}
+	if mc_file != null:
+		var mc_parsed: Variant = JSON.parse_string(mc_file.get_as_text())
+		if mc_parsed is Dictionary:
+			mc_preset = mc_parsed
+	var mc_moon_raw: Variant = mc_preset.get("moon", null)
+	var mc_moon: Dictionary = mc_moon_raw if mc_moon_raw is Dictionary else {}
+	var mc_sky_raw: Variant = mc_preset.get("sky", null)
+	var mc_sky: Dictionary = mc_sky_raw if mc_sky_raw is Dictionary else {}
+	# A pre-fix parser emits `horizon_color: null`; keep this Variant-guarded so
+	# the regression reports FAIL instead of raising on a typed Array assignment.
+	var mc_horizon_raw: Variant = mc_sky.get("horizon_color", null)
+	var mc_horizon: Array = mc_horizon_raw if mc_horizon_raw is Array else []
+	var mc_visible: bool = mc_moon.get("visible") == true
+	var mc_size: float = float(mc_moon.get("size", 0.0))
+	var mc_cloud: float = float(mc_sky.get("cloud_opacity", 0.0))
+	var mc_hdr: bool = mc_horizon.size() >= 3 and float(mc_horizon[0]) > 1.5
+	var mc_horizon_desc: String = "missing/null" if mc_horizon.is_empty() else str(mc_horizon)
+	if not mc_visible or not is_equal_approx(mc_size, 9.838636) or not is_equal_approx(mc_cloud, 3.299213) or not mc_hdr:
+		printerr("FAIL: midnight_clear inherited fields (moon.visible=", mc_moon.get("visible"), " moon.size=", mc_size, " cloud_opacity=", mc_cloud, " horizon=", mc_horizon_desc, " expected horizon_r>1.5)")
+		fails += 1
+	else:
+		print("PASS: midnight_clear inherited fields (moon.visible=true, moon.size=", mc_size, ", cloud_opacity=", mc_cloud, ", horizon_r=", float(mc_horizon[0]), ")")
+
+	var diam_a: float = -1.0
+	var diam_b: float = -1.0
+	if wv_scr != null:
+		diam_a = float(wv_scr.moon_diameter_deg(9.838636, 0.0))
+		diam_b = float(wv_scr.moon_diameter_deg(14.0, 6000.0))
+	if wv_scr == null or absf(diam_a - 8.2718) >= 0.001 or absf(diam_b - 11.7329) >= 0.001:
+		printerr("FAIL: moon angular diameter (size=9.838636 offset=0 -> ", diam_a, " expected 8.2718; size=14 offset=6000 -> ", diam_b, " expected 11.7329)")
+		fails += 1
+	else:
+		print("PASS: moon angular diameter geometry (", snappedf(diam_a, 0.0001), " deg, ", snappedf(diam_b, 0.0001), " deg)")
+
+	var mc_hc: Color = Color(-1.0, -1.0, -1.0)
+	if wv_scr != null:
+		mc_hc = wv_scr.horizon_color_of(mc_preset)
+	var hc_ok: bool = absf(mc_hc.r - 0.6599) < 0.001 and absf(mc_hc.g - 0.8622) < 0.001 and absf(mc_hc.b - 1.0) < 0.001
+	if wv_scr == null or not hc_ok:
+		printerr("FAIL: tone-mapped horizon color (got ", mc_hc, " expected (0.6599, 0.8622, 1.0))")
+		fails += 1
+	else:
+		print("PASS: tone-mapped HDR horizon (", mc_hc, ")")
+
+	var df_file: FileAccess = FileAccess.open("res://data/generated/weather/dense_fog.json", FileAccess.READ)
+	var df_preset: Dictionary = {}
+	if df_file != null:
+		var df_parsed: Variant = JSON.parse_string(df_file.get_as_text())
+		if df_parsed is Dictionary:
+			df_preset = df_parsed
+	var df_env := Environment.new()
+	var df_moon := DirectionalLight3D.new()
+	var df_applied: bool = false
+	if wp_scr != null:
+		df_applied = bool(wp_scr.apply_environment(df_env, df_moon, df_preset))
+	# NOTE: dense_fog's pitch of -90 is the degenerate case where the raw-Euler
+	# and rotator-conversion paths agree, so this only proves the sky direction
+	# is anti-parallel to the light. The discriminating rotator test is the
+	# midnight_clear_thieves_den assertion below.
+	var df_down: Vector3 = df_moon.basis * Vector3(0.0, 0.0, -1.0)
+	var df_up: Vector3 = df_moon.basis * Vector3(0.0, 0.0, 1.0)
+	var df_ok: bool = df_applied \
+		and absf(df_down.x) < 0.001 \
+		and absf(df_down.y + 1.0) < 0.001 \
+		and absf(df_down.z) < 0.001 \
+		and absf(df_up.x) < 0.001 \
+		and absf(df_up.y - 1.0) < 0.001 \
+		and absf(df_up.z) < 0.001
+	if not df_ok:
+		printerr("FAIL: DenseFog moon light (degenerate pitch -90) points straight down (applied=", df_applied, " down=", df_down, " expected (0, -1, 0), sky_dir=", df_up, " expected (0, 1, 0))")
+		fails += 1
+	else:
+		print("PASS: DenseFog moon light (degenerate pitch -90) points straight down (down=", df_down, ", sky=", df_up, ")")
+
+	var den_file: FileAccess = FileAccess.open("res://data/generated/weather/midnight_clear_thieves_den.json", FileAccess.READ)
+	var den_preset: Dictionary = {}
+	if den_file != null:
+		var den_parsed: Variant = JSON.parse_string(den_file.get_as_text())
+		if den_parsed is Dictionary:
+			den_preset = den_parsed
+	var den_env := Environment.new()
+	var den_moon := DirectionalLight3D.new()
+	var den_applied: bool = false
+	if wp_scr != null:
+		den_applied = bool(wp_scr.apply_environment(den_env, den_moon, den_preset))
+	var den_aim: Vector3 = den_moon.basis * Vector3(0.0, 0.0, -1.0)
+	var den_expected: Vector3 = Vector3(0.777677, -0.587785, -0.222995)
+	var den_ok: bool = den_applied \
+		and absf(den_aim.x - den_expected.x) < 0.001 \
+		and absf(den_aim.y - den_expected.y) < 0.001 \
+		and absf(den_aim.z - den_expected.z) < 0.001
+	if not den_ok:
+		printerr("FAIL: ThievesDen moon light direction (applied=", den_applied, " actual=", den_aim, " expected=", den_expected, ")")
+		fails += 1
+	else:
+		print("PASS: ThievesDen moon light direction (actual=", den_aim, ")")
 
 	print("SUMMARY: fails=", fails)
 	quit(0 if fails == 0 else 1)

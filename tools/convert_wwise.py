@@ -14,8 +14,10 @@ Also writes:
         chunk) and is emitted only after it is validated against the bank's
         SoundSfxVoice InMemoryMediaSize values.
 
-Gameplay tags are deliberately left on their synthesized fallbacks; no
-clip->tag assignment happens here.
+Gameplay tags are wired only when a pinned AkAudioEvent + media DebugName
+pair is present in the event dumps and its clip resolved; every other tag
+keeps its synthesized fallback.  TAG_EVENT_ASSIGNMENTS below records the
+proven pairs.
 
 Stdlib only. Per-file failures are collected and reported; existing outputs
 are probed and reported as ``skipped`` (present from an earlier pass), while
@@ -66,6 +68,74 @@ FALLBACK_TAGS = [
     "loot",
     "door",
 ]
+
+# Proven gameplay-tag -> {event, media DebugName} assignments.
+#
+# Each pair was checked against the extracted event dump
+# (extracted/json/Audio/Events/**/<event>.json) and the decoded media list:
+# the dump exists, its EventId matches the generated event record, the named
+# media entry occurs exactly once in that event, and that entry carries a
+# resolved clip.  The media DebugName is pinned because a layered event can
+# repeat a name with different clips; a re-cook must not silently swap the
+# layer.  Tags without a proven pair keep their synthesized fallback.
+#
+# Evidence (event dump -> chosen media DebugName):
+#   footstep  Character/Footsteps/Play_FS_Player_Walk.json
+#             -> S_BL_FS_Walk_WoodGeneric_01.wav
+#   blackjack Equipment/BlackJack/Play_Blackjack_Impact_Generic.json
+#             -> Equipment_Blackjack_Impact_Generic_TEMP_06.wav
+#   lockpick  Objects/PickableLock/Play_Obj_PickableLock_Unlock.json
+#             -> Prop_LockPick_OpenV2_01.wav
+#   grapple   Ability/Hotwire/Play_Ability_Hotwire_Cast.json
+#             -> Ability_Climbing_Rope_Launch_V2_03.wav
+#   smoke     Equipment/SmokeBomb/Eqp_SmokeBomb_Impact.json
+#             -> Eqp_KnockoutGas_Activate_OneOff_02.wav
+#   fairy     Equipment/PickpocketTool/Play_PickpocketingTool_Cast_Start.json
+#             -> Ability_Tulpa_Cast_01.wav
+#   alert     Objects/SecurityCamera/Play_Obj_SecurityCamera_ToAlert.json
+#             -> Obj_SecurityCamera_MagicEye_Screech_01.wav
+#   loot      Environment/Loot/Play_Loot_Pickup_Generic.json
+#             -> Loot_Pickup_Generic_V1_04.wav
+#   door      Environment/Props_Interactive/Doors/Play_Prop_Int_Door_Wood_Open.json
+#             -> Props_Int_Door_Open_Wood_V1_02.wav
+TAG_EVENT_ASSIGNMENTS = {
+    "footstep": {
+        "event": "Play_FS_Player_Walk",
+        "media": "S_BL_FS_Walk_WoodGeneric_01.wav",
+    },
+    "blackjack": {
+        "event": "Play_Blackjack_Impact_Generic",
+        "media": "Equipment_Blackjack_Impact_Generic_TEMP_06.wav",
+    },
+    "lockpick": {
+        "event": "Play_Obj_PickableLock_Unlock",
+        "media": "Prop_LockPick_OpenV2_01.wav",
+    },
+    "grapple": {
+        "event": "Play_Ability_Hotwire_Cast",
+        "media": "Ability_Climbing_Rope_Launch_V2_03.wav",
+    },
+    "smoke": {
+        "event": "Eqp_SmokeBomb_Impact",
+        "media": "Eqp_KnockoutGas_Activate_OneOff_02.wav",
+    },
+    "fairy": {
+        "event": "Play_PickpocketingTool_Cast_Start",
+        "media": "Ability_Tulpa_Cast_01.wav",
+    },
+    "alert": {
+        "event": "Play_Obj_SecurityCamera_ToAlert",
+        "media": "Obj_SecurityCamera_MagicEye_Screech_01.wav",
+    },
+    "loot": {
+        "event": "Play_Loot_Pickup_Generic",
+        "media": "Loot_Pickup_Generic_V1_04.wav",
+    },
+    "door": {
+        "event": "Play_Prop_Int_Door_Wood_Open",
+        "media": "Props_Int_Door_Open_Wood_V1_02.wav",
+    },
+}
 
 CHUNK_RE = re.compile(r"^wwise_(\d+)_(\d+)\.wav$")
 
@@ -463,6 +533,87 @@ def _validate_order_join(
     }
 
 
+def _resolve_tag_assignments(resolved_events: list, validated: bool) -> tuple:
+    """Return (tags, audit) for the proven gameplay-tag assignments.
+
+    A tag is wired only when its pinned event name resolves to exactly one
+    generated event record, the pinned media DebugName resolves to exactly one
+    media entry, and that entry carries a resolved clip.  Anything else keeps
+    ``status: "fallback"`` with a concrete reason; no clip is guessed.
+    """
+    events_by_name: dict = {}
+    for event in resolved_events:
+        name = event.get("event")
+        if name is not None:
+            events_by_name.setdefault(name, []).append(event)
+    tags: dict = {}
+    audit: list = []
+    for tag in FALLBACK_TAGS:
+        assignment = TAG_EVENT_ASSIGNMENTS.get(tag)
+        if assignment is None:
+            tags[tag] = {
+                "clip": None,
+                "status": "fallback",
+                "reason": "no proven event/media pair; synthesized fallback kept",
+            }
+            continue
+        event_name = assignment["event"]
+        media_name = assignment["media"]
+        if not validated:
+            reason = "event->clip mapping not validated; synthesized fallback kept"
+        else:
+            candidates = events_by_name.get(event_name, [])
+            if len(candidates) != 1:
+                reason = (
+                    f"expected one event dump named {event_name}, found "
+                    f"{len(candidates)}; synthesized fallback kept"
+                )
+            else:
+                event = candidates[0]
+                media_matches = [
+                    m for m in event["media"] if m["debug_name"] == media_name
+                ]
+                resolved = [m for m in media_matches if m["clip"]]
+                if len(media_matches) != 1:
+                    reason = (
+                        f"expected one media entry named {media_name} in "
+                        f"{event_name}, found {len(media_matches)}; "
+                        "synthesized fallback kept"
+                    )
+                elif not resolved:
+                    reason = (
+                        f"media entry {media_name} in {event_name} has no "
+                        "resolved clip; synthesized fallback kept"
+                    )
+                else:
+                    media = resolved[0]
+                    tags[tag] = {
+                        "clip": media["clip"],
+                        "status": "verified",
+                        "reason": "event dump + resolved media clip",
+                        "event": event_name,
+                        "event_id": event["event_id"],
+                        "media_debug_name": media_name,
+                        "media_id": media["media_id"],
+                        "hash": media["hash"],
+                    }
+                    audit.append(
+                        {
+                            "tag": tag,
+                            "event": event_name,
+                            "event_id": event["event_id"],
+                            "media_debug_name": media_name,
+                            "media_id": media["media_id"],
+                            "hash": media["hash"],
+                            "clip": media["clip"],
+                            "status": "verified",
+                        }
+                    )
+                    continue
+        tags[tag] = {"clip": None, "status": "fallback", "reason": reason}
+    return tags, audit
+
+
 def audit_mapping(entries: list) -> dict:
     """Join events to decoded clips through the validated ubulk chunk order.
 
@@ -667,31 +818,32 @@ def audit_mapping(entries: list) -> dict:
     evidence["streaming_media_entries_resolved"] = streaming_media_entries_resolved
     evidence["plugin_media_entries"] = plugin_media_entries
     evidence["events_with_resolved_clip"] = events_with_resolved
-    evidence["conclusion"] = (
-        "Order-based event->clip join validated: the k-th non-plugin IsWemFile "
-        "entry maps to the k-th RIFF chunk, confirmed by matching "
-        f"{order.get('size_matches', 0)}/{order.get('size_comparable', 0)} "
-        "comparable SoundSfxVoice InMemoryMediaSize values "
-        f"({order.get('size_match_rate', 0):.2%}) plus an exact RIFF/PLUG type "
-        "sequence match. Plugin media (PLUG chunks) remain non-decodable by "
-        "this path. No gameplay tag is assigned a clip in this task."
-        if validated
-        else "Order-based join did not pass validation; no clips were emitted."
+    tags, tag_audit = _resolve_tag_assignments(resolved_events, validated)
+    evidence["tag_assignments"] = tag_audit
+    evidence["tags_verified"] = len(tag_audit)
+    evidence["tags_fallback"] = len(FALLBACK_TAGS) - len(tag_audit)
+    tag_summary = (
+        f"{len(tag_audit)}/{len(FALLBACK_TAGS)} gameplay tags wired to a "
+        "verified event/media pair; any unwired tag keeps its synthesized "
+        "fallback."
     )
-
-    tags = {
-        tag: {
-            "clip": None,
-            "status": "fallback",
-            "reason": (
-                "event->clip map recovered; gameplay-tag assignment is a "
-                "separate task, synthesized fallback kept"
-                if validated
-                else "no validated event->clip mapping; synthesized fallback kept"
-            ),
-        }
-        for tag in FALLBACK_TAGS
-    }
+    evidence["conclusion"] = (
+        (
+            "Order-based event->clip join validated: the k-th non-plugin "
+            "IsWemFile entry maps to the k-th RIFF chunk, confirmed by matching "
+            f"{order.get('size_matches', 0)}/{order.get('size_comparable', 0)} "
+            "comparable SoundSfxVoice InMemoryMediaSize values "
+            f"({order.get('size_match_rate', 0):.2%}) plus an exact RIFF/PLUG "
+            "type sequence match. Plugin media (PLUG chunks) remain "
+            "non-decodable by this path. No gameplay tag is assigned a clip "
+            "unless its pinned event/media pair resolved. " + tag_summary
+        )
+        if validated
+        else (
+            "Order-based join did not pass validation; no clips were emitted. "
+            + tag_summary
+        )
+    )
     return {
         "mapping_unavailable": not validated,
         "counts": {

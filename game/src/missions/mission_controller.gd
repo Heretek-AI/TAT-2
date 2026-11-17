@@ -42,6 +42,10 @@ var loot_tables: Dictionary = {}
 ## PlayerStart, otherwise the marker fallback that won ("major_loot",
 ## "minor_centroid", "guard", "escape", "mesh"). Logged for QA.
 var fallback_spawn_source: String = "authored"
+## Whether the chosen spawn passed the fallback headroom check (2.2 m clear
+## above the floor plus a standing-capsule overlap test). Authored starts
+## report true; the mesh last-resort reports false. Logged for QA.
+var fallback_spawn_headroom_clear: bool = true
 
 
 func _ready() -> void:
@@ -685,6 +689,7 @@ func _spawn_player(ue_spawns: Array, ue_spawn_transforms: Array = [], stats: Dic
 		spawn_yaw = _spawn_yaw_from_basis((chosen_transform as Dictionary).get("basis", []))
 		have_yaw = true
 		fallback_spawn_source = "authored"
+		fallback_spawn_headroom_clear = true
 	else:
 		# Authored positions only count when a floor raycast grounds them;
 		# a blind ue_spawns[0] here used to drop Old Manor onto the safety
@@ -706,11 +711,13 @@ func _spawn_player(ue_spawns: Array, ue_spawn_transforms: Array = [], stats: Dic
 		if grounded is Vector3:
 			spawn = (grounded as Vector3) + Vector3(0, 1.0, 0)
 			fallback_spawn_source = "authored"
+			fallback_spawn_headroom_clear = true
 		else:
 			var fb: Dictionary = _marker_fallback_spawn(stats, w3d)
 			if not fb.is_empty():
 				spawn = fb["pos"] as Vector3
 				fallback_spawn_source = str(fb["source"])
+				fallback_spawn_headroom_clear = bool(fb.get("headroom", false))
 				var face: Variant = fb.get("face", null)
 				if face is Vector3:
 					var to: Vector3 = (face as Vector3) - spawn
@@ -721,10 +728,11 @@ func _spawn_player(ue_spawns: Array, ue_spawn_transforms: Array = [], stats: Dic
 			else:
 				spawn = _find_mesh_fallback_spawn()
 				fallback_spawn_source = "mesh"
+				fallback_spawn_headroom_clear = false
 	player.position = spawn
 	if have_yaw:
 		player.rotation = Vector3(0.0, spawn_yaw, 0.0)
-	print("TAT-2 player spawn: source=", fallback_spawn_source, " pos=", spawn, " yaw=", (spawn_yaw if have_yaw else "legacy"))
+	print("TAT-2 player spawn: source=", fallback_spawn_source, " pos=", spawn, " yaw=", (spawn_yaw if have_yaw else "legacy"), " headroom_clear=", fallback_spawn_headroom_clear)
 	player.downed_started.connect(_on_player_downed_started)
 	player.downed.connect(_on_player_downed)
 	add_child(player)
@@ -734,45 +742,52 @@ func _spawn_player(ue_spawns: Array, ue_spawn_transforms: Array = [], stats: Dic
 ## Marker-driven spawn fallback for maps whose authored PlayerStarts have no
 ## floor (Old Manor's TATPlayerStarts float outside the playable space, so the
 ## authored raycasts miss and the player used to end up on the safety net).
-## Candidates in priority order: first major/loot marker, minor-loot centroid,
-## first guard, first escape. Each is raycast from +30 m to -120 m on layer 1
-## and the first floor hit wins at hit + 0.2 m. Returns {} when nothing hits
-## (the caller keeps the legacy mesh fallback). "face" is the loot-marker
-## centroid the player should face when one exists.
+## Candidates span every marker in priority order: all major-loot markers
+## (legacy loot_spawns when the map has no major records), every minor-loot
+## marker plus the minor centroid, every guard, every escape. Each is raycast
+## from +30 m to -120 m on layer 1 and the first floor hit wins at hit + 0.2 m
+## (unchanged floor behavior). The winner must also pass the headroom check
+## (2.2 m clear above hit + 0.3 m, capsule height 1.7 + margin, and no
+## standing-capsule overlap) so the player never spawns under a low roof such
+## as the porch over Old Manor's first major-loot marker. Returns {} when
+## nothing hits (the caller keeps the legacy mesh fallback). "face" is the
+## loot-marker centroid the player should face when one exists, and "headroom"
+## reports whether the headroom check passed.
 func _marker_fallback_spawn(stats: Dictionary, w3d: World3D) -> Dictionary:
 	var majors: Array = stats.get("major_loot_spawns", [])
 	var minors: Array = stats.get("minor_loot_spawns", [])
 	var loots: Array = stats.get("loot_spawns", [])
 	var guards: Array = stats.get("guard_spawns", [])
 	var escapes: Array = stats.get("escape_points", [])
-	var first_major: Variant = null
-	if not majors.is_empty() and majors[0] is Dictionary:
-		first_major = (majors[0] as Dictionary).get("pos", null)
-	if not (first_major is Vector3) and not loots.is_empty() and loots[0] is Vector3:
-		first_major = loots[0]
-	var minor_centroid: Variant = null
-	if not minors.is_empty():
-		var macc := Vector3.ZERO
-		var mn := 0
-		for e_var in minors:
-			if e_var is Dictionary and (e_var as Dictionary).get("pos", null) is Vector3:
-				macc += ((e_var as Dictionary).get("pos", null) as Vector3)
-				mn += 1
-		if mn > 0:
-			minor_centroid = macc / float(mn)
 	var candidates: Array = []
-	if first_major is Vector3:
-		candidates.append({"pos": first_major, "source": "major_loot"})
-	if minor_centroid is Vector3:
-		candidates.append({"pos": minor_centroid, "source": "minor_centroid"})
-	if not guards.is_empty() and guards[0] is Vector3:
-		candidates.append({"pos": guards[0], "source": "guard"})
-	if not escapes.is_empty() and escapes[0] is Vector3:
-		candidates.append({"pos": escapes[0], "source": "escape"})
+	for m_var in majors:
+		if m_var is Dictionary and (m_var as Dictionary).get("pos", null) is Vector3:
+			candidates.append({"pos": (m_var as Dictionary).get("pos", null), "source": "major_loot"})
+	if candidates.is_empty():
+		for l_var in loots:
+			if l_var is Vector3:
+				candidates.append({"pos": l_var, "source": "major_loot"})
+	var macc := Vector3.ZERO
+	var mn := 0
+	for e_var in minors:
+		if e_var is Dictionary and (e_var as Dictionary).get("pos", null) is Vector3:
+			var mp: Vector3 = (e_var as Dictionary).get("pos", null)
+			candidates.append({"pos": mp, "source": "minor_loot"})
+			macc += mp
+			mn += 1
+	if mn > 0:
+		candidates.append({"pos": macc / float(mn), "source": "minor_centroid"})
+	for g_var in guards:
+		if g_var is Vector3:
+			candidates.append({"pos": g_var, "source": "guard"})
+	for x_var in escapes:
+		if x_var is Vector3:
+			candidates.append({"pos": x_var, "source": "escape"})
 	if candidates.is_empty() or w3d == null:
 		return {}
 	var face: Variant = _loot_centroid(stats)
 	var phys: PhysicsDirectSpaceState3D = w3d.direct_space_state
+	var floor_only: Dictionary = {}
 	for c_var in candidates:
 		var c: Dictionary = c_var as Dictionary
 		var cp: Vector3 = c["pos"] as Vector3
@@ -780,8 +795,35 @@ func _marker_fallback_spawn(stats: Dictionary, w3d: World3D) -> Dictionary:
 		var hit: Dictionary = phys.intersect_ray(q)
 		if hit.is_empty() or not (hit.get("position", null) is Vector3):
 			continue
-		return {"pos": (hit.get("position", null) as Vector3) + Vector3(0, 0.2, 0), "source": str(c["source"]), "face": face}
+		var ground: Vector3 = (hit.get("position", null) as Vector3) + Vector3(0, 0.2, 0)
+		if floor_only.is_empty():
+			floor_only = {"pos": ground, "source": str(c["source"]), "face": face, "headroom": false}
+		if _fallback_spawn_has_headroom(phys, ground):
+			return {"pos": ground, "source": str(c["source"]), "face": face, "headroom": true}
+	if not floor_only.is_empty():
+		print("TAT-2 fallback_no_headroom: no candidate passed the headroom check; using floor-only ", str(floor_only["source"]), " pos=", floor_only["pos"])
+		return floor_only
 	return {}
+
+
+## Rejects fallback floor hits under low roofs: the 2.2 m column above
+## floor + 0.3 m (standing capsule height 1.7 + margin) must be clear on
+## layer 1, and a standing capsule (r 0.32, h 1.7, centered at floor + 0.9 m)
+## must not overlap geometry. Fail-closed: any hit or overlap rejects.
+func _fallback_spawn_has_headroom(phys: PhysicsDirectSpaceState3D, ground: Vector3) -> bool:
+	var up_from: Vector3 = ground + Vector3(0, 0.3, 0)
+	var uq: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(up_from, up_from + Vector3(0, 2.2, 0), 1)
+	uq.hit_back_faces = true
+	if not phys.intersect_ray(uq).is_empty():
+		return false
+	var cap := CapsuleShape3D.new()
+	cap.radius = 0.32
+	cap.height = 1.7
+	var sq := PhysicsShapeQueryParameters3D.new()
+	sq.shape = cap
+	sq.collision_mask = 1
+	sq.transform = Transform3D(Basis(), ground + Vector3(0, 0.9, 0))
+	return phys.intersect_shape(sq, 1).is_empty()
 
 
 ## Mean of all loot-marker positions (major + minor records plus the legacy

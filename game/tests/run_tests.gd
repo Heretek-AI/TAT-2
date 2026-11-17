@@ -250,6 +250,9 @@ func _initialize() -> void:
 	var gh_player: Node3D = gh_scene.get("player") as Node3D
 	var gh_spawn_lights: int = 0
 	var gh_spawn_light_desc: String = ""
+	var gh_safe_light_ok: bool = false
+	var gh_safe_light_aim: Vector3 = Vector3.ZERO
+	var gh_safe_light_angle: float = 0.0
 	if gh_player != null:
 		for gh_n: Node in gh_scene.get_children():
 			if gh_n is SpotLight3D or gh_n is OmniLight3D:
@@ -258,8 +261,21 @@ func _initialize() -> void:
 					if gh_spawn_light_desc == "":
 						var gh_l: Light3D = gh_n as Light3D
 						gh_spawn_light_desc = "%s pos=%s energy=%.2f" % [gh_l.get_class(), gh_l.global_position, gh_l.light_energy]
+			if gh_n is SpotLight3D:
+				var sl_cand: SpotLight3D = gh_n as SpotLight3D
+				if sl_cand.global_position.distance_to(Vector3(126.2758, 27.1426, -2.4736)) < 1.0:
+					gh_safe_light_aim = -sl_cand.global_transform.basis.z
+					gh_safe_light_angle = sl_cand.spot_angle
+					gh_safe_light_ok = (gh_safe_light_aim.z < -0.9) and (absf(gh_safe_light_aim.y) < 0.05) and is_equal_approx(gh_safe_light_angle, 88.0)
 	var gh_ground_ok: bool = false
 	var gh_gap_hit: Dictionary = {}
+	var lc12_span_ok: bool = false
+	var lc12_span_x: float = 0.0
+	var lc12_span_z: float = 0.0
+	var alley_land_y: float = -999.0
+	var alley_ok: bool = false
+	var overhang_land_y: float = -999.0
+	var overhang_ok: bool = false
 	var space: PhysicsDirectSpaceState3D = null
 	if gh_player != null:
 		space = gh_player.get_world_3d().direct_space_state
@@ -274,11 +290,61 @@ func _initialize() -> void:
 		gap_q.collision_mask = 1
 		gap_q.hit_back_faces = true
 		gh_gap_hit = space.intersect_ray(gap_q)
-	if not gh_ground_ok or gh_gap_hit.is_empty() or gh_spawn_lights < 1 or get_nodes_in_group("guards").size() == 0:
-		printerr("FAIL: Guildhall ground raycast or guards failed (ground=", gh_ground_ok, " gap_hit=", gh_gap_hit, " spawn_lights=", gh_spawn_lights, " pos=", gh_player.global_position if gh_player != null else Vector3.ZERO, " hit=", space.intersect_ray(PhysicsRayQueryParameters3D.create(gh_player.global_position + Vector3(0, 50.0, 0), gh_player.global_position + Vector3(0, -50.0, 0))) if gh_player != null else {}, " guards=", get_nodes_in_group("guards").size(), ")")
+		var lc12_node: Node = gh_scene.get_node_or_null("LandscapeCollision_12")
+		if lc12_node is StaticBody3D and lc12_node.get_child_count() > 0:
+			var lc12_cs: CollisionShape3D = lc12_node.get_child(0) as CollisionShape3D
+			if lc12_cs != null and lc12_cs.shape is ConcavePolygonShape3D:
+				var lc12_faces: PackedVector3Array = (lc12_cs.shape as ConcavePolygonShape3D).get_faces()
+				if not lc12_faces.is_empty():
+					var min_x: float = lc12_faces[0].x
+					var max_x: float = lc12_faces[0].x
+					var min_z: float = lc12_faces[0].z
+					var max_z: float = lc12_faces[0].z
+					for fv: Vector3 in lc12_faces:
+						min_x = minf(min_x, fv.x)
+						max_x = maxf(max_x, fv.x)
+						min_z = minf(min_z, fv.z)
+						max_z = maxf(max_z, fv.z)
+					lc12_span_x = max_x - min_x
+					lc12_span_z = max_z - min_z
+					lc12_span_ok = is_equal_approx(lc12_span_x, 63.0) and is_equal_approx(lc12_span_z, 63.0)
+		var alley_y_top: float = 22.0
+		for _astep: int in range(8):
+			if alley_y_top <= 5.0:
+				break
+			var aq := PhysicsRayQueryParameters3D.create(Vector3(114.5, alley_y_top, -3.2), Vector3(114.5, 5.0, -3.2), 1)
+			aq.hit_back_faces = true
+			var ahit: Dictionary = space.intersect_ray(aq)
+			if ahit.is_empty():
+				break
+			var ahit_pos: Vector3 = ahit["position"] as Vector3
+			var acol: Variant = ahit.get("collider")
+			if acol == lc12_node:
+				alley_land_y = ahit_pos.y
+				break
+			alley_y_top = ahit_pos.y - 0.05
+		alley_ok = absf(alley_land_y - 18.56) < 0.2
+		var oh_y_top: float = 35.0
+		for _ostep: int in range(8):
+			if oh_y_top <= 5.0:
+				break
+			var oq := PhysicsRayQueryParameters3D.create(Vector3(126.0, oh_y_top, -10.43), Vector3(126.0, 5.0, -10.43), 1)
+			oq.hit_back_faces = true
+			var ohit: Dictionary = space.intersect_ray(oq)
+			if ohit.is_empty():
+				break
+			var ohit_pos: Vector3 = ohit["position"] as Vector3
+			var ocol: Variant = ohit.get("collider")
+			if ocol == lc12_node:
+				overhang_land_y = ohit_pos.y
+				break
+			oh_y_top = ohit_pos.y - 0.05
+		overhang_ok = absf(overhang_land_y - 18.56) < 0.2
+	if not gh_ground_ok or gh_gap_hit.is_empty() or gh_spawn_lights < 1 or not lc12_span_ok or not alley_ok or not overhang_ok or not gh_safe_light_ok or get_nodes_in_group("guards").size() == 0:
+		printerr("FAIL: Guildhall ground/overhang/light check failed (ground=", gh_ground_ok, " gap_hit=", gh_gap_hit, " spawn_lights=", gh_spawn_lights, " lc12_span=(", lc12_span_x, ",", lc12_span_z, ") alley_land_y=", alley_land_y, " overhang_land_y=", overhang_land_y, " safe_light_ok=", gh_safe_light_ok, " safe_aim=", gh_safe_light_aim, " safe_angle=", gh_safe_light_angle, " pos=", gh_player.global_position if gh_player != null else Vector3.ZERO, " guards=", get_nodes_in_group("guards").size(), ")")
 		fails += 1
 	else:
-		print("PASS: Guildhall terrain, floor collision & spawn ground raycast verified (gap_hit_y=", (gh_gap_hit["position"] as Vector3).y, ", spawn_lights=", gh_spawn_lights, ", light=", gh_spawn_light_desc, ")")
+		print("PASS: Guildhall terrain, floor collision & spawn ground raycast verified (gap_hit_y=", (gh_gap_hit["position"] as Vector3).y, ", lc12_span=(", lc12_span_x, ",", lc12_span_z, "), alley_y=", alley_land_y, ", overhang_y=", overhang_land_y, ", spawn_lights=", gh_spawn_lights, ", safe_aim=", gh_safe_light_aim, ", safe_angle=", gh_safe_light_angle, ", light=", gh_spawn_light_desc, ")")
 
 	# 11. Perf chunking: 32m MultiMesh chunks, split collision bodies, occluders
 	var gh_stats_v: Variant = gh_scene.get("level_stats")

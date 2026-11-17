@@ -598,6 +598,10 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 		if not (l is Dictionary):
 			continue
 		var l_dict: Dictionary = l
+		if "TATShadowFade" in str(l_dict.get("type", "")):
+			continue
+		if _to_float(l_dict.get("intensity"), 10.0) <= 0.0 or l_dict.get("visible") == false:
+			continue
 		var lpos: Array = l_dict.get("pos", [0, 0, 0])
 		var lkey: String = "%d,%d,%d" % [roundi(float(lpos[0])), roundi(float(lpos[1])), roundi(float(lpos[2]))]
 		var seen_lights: Dictionary = acc["seen_lights"]
@@ -1452,7 +1456,7 @@ func _build_light(info: Dictionary, cast_shadow: bool = false) -> Light3D:
 	elif "Spot" in ltype:
 		var sl := SpotLight3D.new()
 		sl.spot_range = clampf(_to_float(info.get("radius"), 6.0) * 2.5, 6.0, 26.0)
-		sl.spot_angle = clampf(_to_float(info.get("outer_cone"), 50.0), 18.0, 78.0)
+		sl.spot_angle = clampf(_to_float(info.get("outer_cone"), 50.0), 18.0, 89.0)
 		sl.spot_attenuation = 0.85
 		sl.light_energy = intensity
 		light = sl
@@ -1616,11 +1620,16 @@ func _build_one_landscape(lc_var: Variant, parent: Node3D, ctx: Dictionary) -> v
 	var oy_b: float = float(sb[3]) if sb.size() > 3 else 0.0
 
 	var tr_raw: Transform3D = _dict_to_transform(lc)
-	var sc: Vector3 = tr_raw.basis.get_scale()
-	# UE LandscapeComponent scale is 100.0 (= 1m per quad)
-	var step_x: float = absf(sc.x) * 0.01
-	var step_y: float = absf(sc.y) * 0.01
-	var step_z: float = absf(sc.z) * 0.01
+	var sc_raw: Variant = lc.get("scale", [100.0, 100.0, 100.0])
+	var sc_arr: Array = sc_raw if sc_raw is Array else [100.0, 100.0, 100.0]
+	# UE LandscapeComponent scale is 100.0 (= 1m per quad); read raw scale
+	# directly so _dict_to_transform()'s 40.0 clamp does not shrink 63m tiles to 25.2m.
+	var sx_raw: float = float(sc_arr[0]) if sc_arr.size() > 0 and sc_arr[0] != null else 100.0
+	var sy_raw: float = float(sc_arr[1]) if sc_arr.size() > 1 and sc_arr[1] != null else 100.0
+	var sz_raw: float = float(sc_arr[2]) if sc_arr.size() > 2 and sc_arr[2] != null else 100.0
+	var step_x: float = absf(sx_raw) * 0.01
+	var step_y: float = absf(sy_raw) * 0.01
+	var step_z: float = absf(sz_raw) * 0.01
 	if step_x < 0.05:
 		step_x = 1.0
 	if step_y < 0.05:

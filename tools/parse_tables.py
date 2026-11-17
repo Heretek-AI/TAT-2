@@ -532,6 +532,81 @@ def _merge_template_parent(props, tpl_export, depth):
     return props
 
 
+_tpl_props_cache = {}
+_bp_lookup_cache = {}
+
+
+def _bp_by_type_name(bp_class):
+    """Cached (Type, Name) -> export lookup for one BP JSON class."""
+    stem = bp_class.removesuffix("_C") if bp_class else ""
+    if stem.startswith("Default__"):
+        stem = stem[len("Default__") :]
+    if stem in _bp_lookup_cache:
+        return _bp_lookup_cache[stem]
+    loaded = load_bp_exports(stem + "_C" if stem else bp_class)
+    if not loaded:
+        _bp_lookup_cache[stem] = None
+        return None
+    by_tn = {}
+    by_n = {}
+    for be in loaded[0]:
+        bn = be.get("Name", "")
+        bt = be.get("Type", "")
+        by_tn.setdefault((bt, bn), be)
+        by_n.setdefault(bn, be)
+    _bp_lookup_cache[stem] = (by_tn, by_n)
+    return _bp_lookup_cache[stem]
+
+
+def _resolve_tpl_chain_props(ttype, touter, tname, depth=0):
+    """Merge a component Template's Properties across its Template inheritance chain."""
+    key = (ttype or "", touter or "", tname or "")
+    if key in _tpl_props_cache:
+        return _tpl_props_cache[key]
+    if depth > 6 or not touter or not tname:
+        return {}
+    lookup = _bp_by_type_name(touter)
+    if not lookup:
+        _tpl_props_cache[key] = {}
+        return {}
+    by_tn, by_n = lookup
+    tpl = by_tn.get((ttype or "", tname))
+    if tpl is None:
+        tpl = by_n.get(tname)
+    if tpl is None:
+        _tpl_props_cache[key] = {}
+        return {}
+    props = dict(tpl.get("Properties") or {})
+    ptref = tpl.get("Template")
+    if isinstance(ptref, dict) and ptref.get("ObjectName"):
+        pt, pouter, pname = _parse_template_ref(ptref.get("ObjectName", ""))
+        if pouter and pname and not (pouter == touter and pname == tname):
+            base = _resolve_tpl_chain_props(pt, pouter, pname, depth + 1)
+            if base:
+                merged = dict(base)
+                merged.update(props)
+                props = merged
+    _tpl_props_cache[key] = props
+    return props
+
+
+def _merged_comp_props(e):
+    """Merge level export Properties on top of its BP Template archetype chain."""
+    props = dict(e.get("Properties") or {})
+    tref = e.get("Template")
+    if isinstance(tref, dict):
+        oname = tref.get("ObjectName", "")
+        if oname:
+            ttype, touter, tname = _parse_template_ref(oname)
+            if touter and tname:
+                base = _resolve_tpl_chain_props(ttype, touter, tname)
+                if base:
+                    merged = dict(base)
+                    merged.update(props)
+                    return merged
+    return props
+
+
 # ---------------------------------------------------------------------------
 # Swinging-door resolution (TATSwingingDoorPivotComponent).
 # ---------------------------------------------------------------------------
@@ -873,13 +948,18 @@ def extract_levels():
 
         world_cache = {}
 
-        def get_world_mat(idx: int, depth: int = 0):
-            if idx in world_cache:
-                return world_cache[idx]
+        def get_world_mat(idx: int, depth: int = 0, use_templates: bool = False):
+            ckey = (idx, use_templates)
+            if ckey in world_cache:
+                return world_cache[ckey]
             if depth > 12 or idx < 0 or idx >= len(exps):
                 return mat4_identity()
             e = exps[idx]
-            props = e.get("Properties") or {}
+            props = (
+                _merged_comp_props(e)
+                if use_templates
+                else (e.get("Properties") or {})
+            )
             local = ue_trs_to_mat4(
                 props.get("RelativeLocation"),
                 props.get("RelativeRotation"),
@@ -894,8 +974,11 @@ def extract_levels():
                     tail = ap_name.split("PersistentLevel.")[-1].rstrip("'")
                     pidx = comp_by_full_objname.get(tail)
                 if pidx is not None and pidx != idx:
-                    local = mat4_mul(get_world_mat(pidx, depth + 1), local)
-            world_cache[idx] = local
+                    local = mat4_mul(
+                        get_world_mat(pidx, depth + 1, use_templates=use_templates),
+                        local,
+                    )
+            world_cache[ckey] = local
             return local
 
         rel = jf.relative_to(EX / "json" / "Maps")
@@ -1276,19 +1359,32 @@ def extract_levels():
                 or "SpotLightComponent" in et
                 or "DirectionalLightComponent" in et
             ):
-                wmat = get_world_mat(idx)
+                if "TATShadowFade" in et:
+                    continue
+                lprops = _merged_comp_props(e)
+                raw_int = lprops.get("Intensity", 10.0)
+                intensity = float(raw_int) if raw_int is not None else 10.0
+                if (
+                    intensity <= 0.0
+                    or lprops.get("bVisible") is False
+                    or lprops.get("bHiddenInGame") is True
+                ):
+                    continue
+                wmat = get_world_mat(idx, use_templates=True)
                 if level_mat is not None:
                     wmat = mat4_mul(level_mat, wmat)
                 trs = ue_mat4_to_godot_trs(wmat)
+                raw_rad = lprops.get("AttenuationRadius", 1000.0)
+                radius = round(
+                    float(raw_rad if raw_rad is not None else 1000.0) * 0.01, 2
+                )
                 lights.append(
                     {
                         "type": et,
-                        "intensity": props.get("Intensity", 10.0),
-                        "color": props.get("LightColor"),
-                        "radius": round(
-                            float(props.get("AttenuationRadius", 1000.0)) * 0.01, 2
-                        ),
-                        "outer_cone": props.get("OuterConeAngle"),
+                        "intensity": intensity,
+                        "color": lprops.get("LightColor"),
+                        "radius": radius,
+                        "outer_cone": lprops.get("OuterConeAngle"),
                         **trs,
                     }
                 )

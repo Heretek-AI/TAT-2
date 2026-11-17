@@ -45,10 +45,12 @@ Last verified: **20/20 PASS, fails=0, zero SCRIPT ERROR**. Engine exit-time `Obj
 - Spawn quality: authored PlayerStart yaw applied; floor-grounded fallback across markers with headroom + forward-clearance checks; `TAT-2 player spawn: source=... headroom_clear=... forward_clear=...` log.
 - HUD: real tool icons (StyleBox slots), F3 overlay, timer countdown, downed countdown, mobile touch layer (`docs/ANDROID.md`).
 - Contract titles: missing string-table titles fall back to `Contract N — <quest item>` (e.g. `Contract 3 — Mary Elway's Papers`).
+- Guildhall safe-room overhang: closed in `badf7d5`. Landscape component scale is no longer clamped to `0.4x` (63 m tiles stay 63 m, closing the 37.8 m void gap under the alley), wall lights resolve their Blueprint `Template` chain transforms so `BP_WallLightB_C_5` aims into the safe room, and the authored `88` degree spot cone is preserved. Report: `docs/reports/lighting-overhang.md`.
 
 ## Key commits (most recent first)
 
 ```
+badf7d5 fix(landscape,lighting): restore 1:1 landscape scale and BP light SCS transforms
 d802c25 feat(level): expand packed Level Actor instances and real street surface
 33fd935 feat(doors): resolve 111 doorway pivots from their own leaf mesh
 0729e90 fix(gameplay): contract title fallback and forward-clear spawn selection
@@ -84,12 +86,16 @@ a29a06f feat(anims): retarget real guard clips
 ## Next steps (priority)
 
 1. **Landscape layers**: the weightmap shader now covers GroundA/GrassA/CobbleA/CobbleB/RockTileA, Puddle normal/opacity and GroundWet; remaining work is layers on a second weightmap texture and the fifth color slot. Verify the blend on Guildhall/Old Manor/Den.
-2. **Visual QA pass** in `make run` on Guildhall/Old Manor/Den: sky/moon scale, light beam overbright, Old Manor porch spawn, door visibility, and the safe-room overhang/shadow (Guildhall `discard_holes=0`; gap ray hits an overhang at y=25, not a lower floor).
+2. **Visual QA pass** in `make run` on Guildhall/Old Manor/Den: sky/moon scale, light beam overbright, Old Manor porch spawn and door visibility. The Guildhall safe-room overhang is closed — see `docs/reports/lighting-overhang.md`.
 3. **VFX (optional)**: only if a specific system is hand-matched or Niagara bytecode analysis is undertaken; placements are already extracted. Do not fabricate rates.
 4. **Audio (optional)**: recover event↔media mapping or leave the fallbacks; never assign unnamed clips to gameplay tags.
 5. **Spawn quality**: prefer interior markers with 2–3 m forward clearance; consider QuestGraph/contract spawn tags if discovered.
 6. **UI**: remaining title/edge cases, minimap/ledger polish.
 7. **Mobile**: rebuild APK after runtime changes (`make android-release`), then measure FPS/thermals on the phone (still unverified on hardware).
+
+## Resume point (2026-11-17)
+
+Sky/moon (M2) research is complete but uncommitted. Five verified defects: (1) `tools/parse_weather.py` never walks Blueprint `Super`/`Template`, so `midnight_clear` (Guildhall's preset per `game/data/generated/weather/map_weather.json`) has `moon.visible`, `moon.size`, `moon.emissive`, `sky.horizon_color` and `sky.cloud_*` null; (2) `_norm_color()` divides the authored HDR `LinearColor` horizon `[1.979559, 2.586644, 3.0]` by 255; (3) `weather_visuals.gd` treats `moon.size` as degrees (`6.0` default) instead of deriving `2*asin(10771.60558231864 * size / 1469413.0)`, which is `8.272` degrees for `midnight_clear`; (4) `weather_profile.gd` copies UE `FRotator` into Godot `rotation_degrees` with no basis conversion; (5) `mission_controller.gd` builds the environment before `active_map_id` is set, so a menu launch applies the Old Manor preset. Baseline before-shot: `/tmp/opencode/sky_moon_before.png` (captured at `badf7d5`).
 
 ## QA recipes / gotchas
 

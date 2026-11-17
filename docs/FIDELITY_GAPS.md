@@ -152,6 +152,8 @@ find extracted/json -name 'NS_*.json' | wc -l
 
 - 2026-11-16: spawn-area light priority: `_prioritize_lights` puts lights within 25 m of player spawns ahead of the global brightest-96 budget. Guildhall now loads the authored safe-room wall `SpotLight3D` at `(126.2948, 27.1426, -2.28)` energy 4.20; suite 10 asserts it. `make test` fails=0.
 
+- 2026-11-17: Guildhall safe-room overhang closed (`badf7d5`, `docs/reports/lighting-overhang.md`): the black rectangle was not a visibility hole and not a black mesh — `_dict_to_transform()` clamped `LandscapeComponent` scale `[100,100,100]` to `40.0` (`0.4x`), shrinking `63 m` terrain tiles to `25.2 m` and leaving a `37.8 m` void gap under the alley; `tools/parse_tables.py` now resolves Blueprint `Template` chain transforms/properties for lights so `BP_WallLightB_C_5` aims into the safe room, and `_build_light()` keeps the authored `88` degree outer cone. `make test` fails=0, `make audit` 99.4%.
+
 ### Visual verification log (desktop, live GPU)
 
 - **Weather blackout** (`cba4cf2`): `Environment.adjustment_brightness` was written as `gain−1` (−0.2) but is a multiplier (default 1.0). Fixed to the gain (0.8 den / 1.1 dense fog) with a suite-17 regression test. Evidence: black `/tmp/opencode/tat_den.png` → working `/tmp/opencode/tat_den_fixed.png`.

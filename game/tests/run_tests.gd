@@ -1237,6 +1237,219 @@ func _initialize() -> void:
 	else:
 		print("PASS: XP thresholds match CT_XPToLevel.XPToLevel (L1=", xp_l1, ", L5=", xp_l5, ", L10=", xp_l10, "; flat 500 would fail L5/L10)")
 
+	# 26. AI detection authored curves
+	var guard_scr: GDScript = load("res://src/ai/guard_ai.gd") as GDScript
+	var lp_scr: GDScript = load("res://src/stealth/light_probe.gd") as GDScript
+	var guard_consts: Dictionary = guard_scr.get_script_constant_map()
+	var alertness_enum: Dictionary = {}
+	var alertness_v: Variant = guard_consts.get("Alertness", {})
+	if alertness_v is Dictionary:
+		alertness_enum = alertness_v as Dictionary
+	var detection_doc: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://data/generated/gameplay/detection.json"))
+	var decay_doc: Dictionary = {}
+	var sprint_mult_authored: float = -1.0
+	if detection_doc is Dictionary:
+		var det: Dictionary = detection_doc as Dictionary
+		var decay_v: Variant = det.get("decay", {})
+		if decay_v is Dictionary:
+			decay_doc = decay_v as Dictionary
+		var tags_v: Variant = det.get("tag_ramp_modifiers", {})
+		if tags_v is Dictionary:
+			var sprint_v: Variant = (tags_v as Dictionary).get("Status.Sprinting", {})
+			if sprint_v is Dictionary:
+				sprint_mult_authored = float((sprint_v as Dictionary).get("Neutral", -1.0))
+	var authored_decay: Dictionary = {}
+	var alertness_doc: Variant = _repo_json("extracted/json/AI/Alertness/DA_AlertnessSettings.json")
+	if alertness_doc is Array and not (alertness_doc as Array).is_empty():
+		var asset_v: Variant = (alertness_doc as Array)[0]
+		if asset_v is Dictionary:
+			var props_v: Variant = (asset_v as Dictionary).get("Properties", {})
+			if props_v is Dictionary:
+				var decay_settings_v: Variant = (props_v as Dictionary).get("DecaySettings", {})
+				if decay_settings_v is Dictionary:
+					var decay_rows_v: Variant = (decay_settings_v as Dictionary).get("DecayTimeSeconds", [])
+					if decay_rows_v is Array:
+						for decay_row_v: Variant in (decay_rows_v as Array):
+							if decay_row_v is Dictionary:
+								var decay_row: Dictionary = decay_row_v as Dictionary
+								var decay_key: String = str(decay_row.get("Key", "")).replace("EAlertnessLevel::", "").to_lower()
+								authored_decay[decay_key] = float(decay_row.get("Value", -1.0))
+	var gate_in_level: float = float(guard_consts.get("DECAY_MIN_SECONDS_IN_LEVEL", -1.0))
+	var gate_since_visible: float = float(guard_consts.get("DECAY_MIN_SECONDS_SINCE_VISIBLE", -1.0))
+	var base_seconds: float = float(guard_consts.get("DECAY_BASE_SECONDS", -1.0))
+	var decay_ok: bool = \
+		is_equal_approx(gate_in_level, float(decay_doc.get("min_seconds_in_level_before_decay", -1.0))) \
+		and is_equal_approx(gate_since_visible, float(decay_doc.get("min_seconds_since_visible_before_decay", -1.0))) \
+		and is_equal_approx(base_seconds, float(decay_doc.get("detection_decay_seconds", -1.0)))
+	var state_pairs: Array = [
+		["neutral", int(alertness_enum.get("NEUTRAL", -1))],
+		["suspicious", int(alertness_enum.get("SUSPICIOUS", -1))],
+		["alerted", int(alertness_enum.get("ALERTED", -1))],
+		["combat", int(alertness_enum.get("COMBAT", -1))],
+	]
+	var decay_rates: Dictionary = {}
+	for pair_v: Variant in state_pairs:
+		var pair: Array = pair_v as Array
+		var state_name: String = str(pair[0])
+		var state_id: int = int(pair[1])
+		var seconds: float = float(authored_decay.get(state_name, -1.0))
+		var expected_rate: float = 100.0 / seconds if seconds > 0.0 else -1.0
+		var actual_rate: float = float(guard_scr.call("detection_decay_per_second", state_id))
+		var after_one_second: float = float(guard_scr.call("decayed_detection", 100.0, 1.0, state_id))
+		var expected_after: float = maxf(0.0, 100.0 - expected_rate)
+		decay_rates[state_name] = actual_rate
+		if seconds <= 0.0 \
+			or not is_equal_approx(actual_rate, expected_rate) \
+			or is_equal_approx(actual_rate, 22.0) \
+			or not is_equal_approx(after_one_second, expected_after):
+			decay_ok = false
+	var search_id: int = int(alertness_enum.get("SEARCH", -1))
+	var search_expected: float = 100.0 / base_seconds if base_seconds > 0.0 else -1.0
+	var search_actual: float = float(guard_scr.call("detection_decay_per_second", search_id))
+	if not is_equal_approx(search_actual, search_expected):
+		decay_ok = false
+	if not decay_ok:
+		printerr("FAIL: AI detection decay gates/rates (gates=", gate_in_level, "/", gate_since_visible, "/", base_seconds, " authored=", decay_doc, " rates=", decay_rates, " search=", search_actual, ")")
+		fails += 1
+	else:
+		print("PASS: AI detection decay matches DA_AlertnessSettings.DecayTimeSeconds (Neutral ", decay_rates.get("neutral"), "/s, Suspicious ", decay_rates.get("suspicious"), "/s, Alerted ", decay_rates.get("alerted"), "/s, Combat ", decay_rates.get("combat"), "/s; 22/s would fail)")
+
+	# The two authored gates still guard the four states with
+	# DA_AlertnessSettings rows; only Godot-only SEARCH is unconditional.
+	var gates_ok: bool = true
+	var gate_desc: String = ""
+	for pair_v: Variant in state_pairs:
+		var pair: Array = pair_v as Array
+		var state_name: String = str(pair[0])
+		var state_id: int = int(pair[1])
+		var seconds_authored: float = float(authored_decay.get(state_name, -1.0))
+		var gated_frame: float = float(guard_scr.call("decay_step_detection", state_id, 50.0, gate_in_level - 1.0, gate_since_visible, 1.0))
+		var open_frame: float = float(guard_scr.call("decay_step_detection", state_id, 50.0, gate_in_level, gate_since_visible, 1.0))
+		var open_expected: float = maxf(0.0, 50.0 - 100.0 / seconds_authored) if seconds_authored > 0.0 else -1.0
+		gate_desc += "%s gate=%s open=%s " % [state_name, gated_frame, open_frame]
+		if not is_equal_approx(gated_frame, 50.0) or not is_equal_approx(open_frame, open_expected):
+			gates_ok = false
+	if not gates_ok:
+		printerr("FAIL: authored decay gates (", gate_desc, ")")
+		fails += 1
+	else:
+		print("PASS: authored 6 s in-level / 4 s unseen decay gates still hold for Neutral/Suspicious/Alerted/Combat (", gate_desc, ")")
+
+	# Behavioural transition check: a guard that loses sight in COMBAT must not
+	# carry 35-60 detection into NEUTRAL. Drives the same pure helpers
+	# _physics_process uses (downward clamp + no-sight decay step). SEARCH is
+	# entered with state_timer 6.0, equal to the in-level gate, so gated decay
+	# would open exactly when SEARCH exits.
+	var combat_id: int = int(alertness_enum.get("COMBAT", -1))
+	var alerted_id: int = int(alertness_enum.get("ALERTED", -1))
+	var neutral_id: int = int(alertness_enum.get("NEUTRAL", -1))
+	var suspicious_at: float = float(guard_consts.get("DETECTION_SUSPICIOUS_AT", -1.0))
+	var alerted_at: float = float(guard_consts.get("DETECTION_ALERTED_AT", -1.0))
+	var combat_at: float = float(guard_consts.get("DETECTION_COMBAT_AT", -1.0))
+	var neutral_ceiling: float = float(guard_scr.call("detection_entry_ceiling", neutral_id))
+	var seq_step: float = 1.0 / 60.0
+	var seq_detection: float = 60.0 # heard-only guard: _on_noise_emitted sets 60
+	var combat_to_alerted: float = float(guard_scr.call("clamped_detection_for_transition", combat_id, alerted_id, seq_detection))
+	seq_detection = combat_to_alerted
+	var seq_in_state: float = 0.0
+	var seq_since_visible: float = 0.0
+	while seq_in_state < 6.0:
+		seq_detection = float(guard_scr.call("decay_step_detection", alerted_id, seq_detection, seq_in_state, seq_since_visible, seq_step))
+		seq_in_state += seq_step
+		seq_since_visible += seq_step
+	var alerted_exit: float = seq_detection
+	seq_detection = float(guard_scr.call("clamped_detection_for_transition", alerted_id, search_id, seq_detection))
+	var seq_search_in_state: float = 0.0
+	while seq_search_in_state < 6.0:
+		seq_detection = float(guard_scr.call("decay_step_detection", search_id, seq_detection, seq_search_in_state, seq_since_visible, seq_step))
+		seq_search_in_state += seq_step
+		seq_since_visible += seq_step
+	var search_exit: float = seq_detection
+	seq_detection = float(guard_scr.call("clamped_detection_for_transition", search_id, neutral_id, seq_detection))
+	var search_fresh_frame: float = float(guard_scr.call("decay_step_detection", search_id, 60.0, 0.0, 0.0, 1.0))
+	var search_fresh_expected: float = 60.0 - 100.0 / base_seconds
+	var transition_ok: bool = \
+		is_equal_approx(suspicious_at, 15.0) \
+		and is_equal_approx(alerted_at, 45.0) \
+		and is_equal_approx(combat_at, 100.0) \
+		and is_equal_approx(neutral_ceiling, suspicious_at) \
+		and is_equal_approx(combat_to_alerted, alerted_at) \
+		and alerted_exit <= alerted_at \
+		and search_exit <= neutral_ceiling \
+		and seq_detection <= neutral_ceiling \
+		and seq_detection < 35.0 \
+		and is_equal_approx(search_fresh_frame, search_fresh_expected)
+	if not transition_ok:
+		printerr("FAIL: guard detection carry across COMBAT->ALERTED->SEARCH->NEUTRAL (start 60, combat->alerted=", combat_to_alerted, ", alerted exit=", alerted_exit, ", search exit=", search_exit, ", neutral=", seq_detection, ", ceiling=", neutral_ceiling, ", fresh SEARCH frame=", search_fresh_frame, " expected=", search_fresh_expected, ")")
+		fails += 1
+	else:
+		print("PASS: guard forgets across COMBAT->ALERTED->SEARCH->NEUTRAL (detection 60 -> ", combat_to_alerted, " at Alerted clamp -> ", search_exit, " after 6 s SEARCH -> ", seq_detection, " in Neutral, ceiling ", neutral_ceiling, "; SEARCH decays unconditionally: 60 -> ", search_fresh_frame, " in one frame)")
+
+	var sprint_ramp_const: float = float(guard_consts.get("SPRINT_RAMP_MULTIPLIER", -1.0))
+	var sprint_on: float = float(guard_scr.call("sprint_ramp_multiplier", true))
+	var sprint_off: float = float(guard_scr.call("sprint_ramp_multiplier", false))
+	var sprint_ok: bool = \
+		is_equal_approx(sprint_mult_authored, sprint_ramp_const) \
+		and is_equal_approx(sprint_on, sprint_mult_authored) \
+		and is_equal_approx(sprint_off, 1.0)
+	if not sprint_ok:
+		printerr("FAIL: AI sprint ramp multiplier (authored=", sprint_mult_authored, " const=", sprint_ramp_const, " on=", sprint_on, " off=", sprint_off, ")")
+		fails += 1
+	else:
+		print("PASS: AI sprint ramp matches detection.json Status.Sprinting x", sprint_on)
+
+	var height_keys: Array = _curve_keys("extracted/json/AI/Alertness/Curve_AI_HeightDifferenceToStrengthMultiplier.json")
+	var height_ok: bool = height_keys.size() >= 2
+	var height_desc: String = ""
+	if height_ok:
+		var hk0: Dictionary = height_keys[0] as Dictionary
+		var hk1: Dictionary = height_keys[1] as Dictionary
+		var hx0: float = float(hk0.get("Time", -1.0))
+		var hy0: float = float(hk0.get("Value", -1.0))
+		var hx1: float = float(hk1.get("Time", -1.0))
+		var hy1: float = float(hk1.get("Value", -1.0))
+		var got0: float = float(guard_scr.call("height_difference_strength_multiplier", hx0))
+		var got1: float = float(guard_scr.call("height_difference_strength_multiplier", hx1))
+		height_desc = "%s m -> %s / %s m -> %s" % [hx0, got0, hx1, got1]
+		height_ok = is_equal_approx(got0, hy0) and is_equal_approx(got1, hy1)
+	if not height_ok:
+		printerr("FAIL: AI height-difference strength curve (", height_desc, " keys=", height_keys.size(), ")")
+		fails += 1
+	else:
+		print("PASS: AI height-difference strength matches Curve_AI_HeightDifferenceToStrengthMultiplier (", height_desc, ")")
+
+	var light_keys: Array = _curve_keys("extracted/json/AI/Data/C_LightIntensityToRangeMultiplier.json")
+	var speed_keys: Array = _curve_keys("extracted/json/AI/Data/C_MovementSpeedToMinimumLightDetectionValue.json")
+	var light_ok: bool = light_keys.size() >= 2 and speed_keys.size() >= 2
+	var light_desc: String = ""
+	var speed_desc: String = ""
+	if light_ok:
+		var lk0: Dictionary = light_keys[0] as Dictionary
+		var lk1: Dictionary = light_keys[1] as Dictionary
+		var lx0: float = float(lk0.get("Time", -1.0))
+		var ly0: float = float(lk0.get("Value", -1.0))
+		var lx1: float = float(lk1.get("Time", -1.0))
+		var ly1: float = float(lk1.get("Value", -1.0))
+		var lgot0: float = float(lp_scr.call("light_intensity_range_multiplier", lx0))
+		var lgot1: float = float(lp_scr.call("light_intensity_range_multiplier", lx1))
+		light_desc = "%s -> %s / %s -> %s" % [lx0, lgot0, lx1, lgot1]
+		light_ok = is_equal_approx(lgot0, ly0) and is_equal_approx(lgot1, ly1)
+		var sk0: Dictionary = speed_keys[0] as Dictionary
+		var sk1: Dictionary = speed_keys[1] as Dictionary
+		var sx0: float = float(sk0.get("Time", -1.0))
+		var sy0: float = float(sk0.get("Value", -1.0))
+		var sx1: float = float(sk1.get("Time", -1.0))
+		var sy1: float = float(sk1.get("Value", -1.0))
+		var sgot0: float = float(lp_scr.call("minimum_light_detection_for_speed", sx0))
+		var sgot1: float = float(lp_scr.call("minimum_light_detection_for_speed", sx1))
+		speed_desc = "%s cm/s -> %s / %s cm/s -> %s" % [sx0, sgot0, sx1, sgot1]
+		light_ok = light_ok and is_equal_approx(sgot0, sy0) and is_equal_approx(sgot1, sy1)
+	if not light_ok:
+		printerr("FAIL: AI light curves (range=", light_desc, " speed=", speed_desc, " light_keys=", light_keys.size(), " speed_keys=", speed_keys.size(), ")")
+		fails += 1
+	else:
+		print("PASS: AI light curves match C_LightIntensityToRangeMultiplier (", light_desc, ") and C_MovementSpeedToMinimumLightDetectionValue (", speed_desc, ")")
+
 	print("SUMMARY: fails=", fails)
 	quit(0 if fails == 0 else 1)
 
@@ -1250,3 +1463,30 @@ func _authored_row_value(rows: Dictionary, row: String, field_path: Array[String
 	if cur == null:
 		return -1.0
 	return float(cur)
+
+
+## Reads an extracted-source JSON outside res:// (the repo checkout is the
+## parent of game/). Test-only: runtime game code never reads extracted/.
+func _repo_json(rel_path: String) -> Variant:
+	var repo_dir: String = ProjectSettings.globalize_path("res://").path_join("..").simplify_path()
+	return JSON.parse_string(FileAccess.get_file_as_string(repo_dir.path_join(rel_path)))
+
+
+## Returns FloatCurve.Keys from a UE CurveFloat JSON dump.
+func _curve_keys(rel_path: String) -> Array:
+	var doc: Variant = _repo_json(rel_path)
+	if not (doc is Array) or (doc as Array).is_empty():
+		return []
+	var asset_v: Variant = (doc as Array)[0]
+	if not (asset_v is Dictionary):
+		return []
+	var props_v: Variant = (asset_v as Dictionary).get("Properties", {})
+	if not (props_v is Dictionary):
+		return []
+	var curve_v: Variant = (props_v as Dictionary).get("FloatCurve", {})
+	if not (curve_v is Dictionary):
+		return []
+	var keys_v: Variant = (curve_v as Dictionary).get("Keys", [])
+	if not (keys_v is Array):
+		return []
+	return keys_v as Array

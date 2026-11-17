@@ -10,6 +10,22 @@ const LIGHT_SAMPLE_RANGE: float = 25.0
 const SAMPLE_MIN_INTERVAL_SEC: float = 0.08
 const SAMPLE_CACHE_DISTANCE: float = 0.75
 
+# Authored AI light curves. Both CurveFloat assets use RCIM_Cubic with zero
+# arrive/leave tangents on the first key (UE's smoothstep) and RCIM_Linear on
+# the second, so each is a clamped two-key smoothstep between the rows below.
+# - extracted/json/AI/Data/C_LightIntensityToRangeMultiplier.json rows 10-33:
+#   light intensity 0..1 -> detection range multiplier. Consumed by
+#   BP_NPC_Base._LightIntensityToRangeMultiplierCurve (BP_NPC_Base rows 785-787).
+# - extracted/json/AI/Data/C_MovementSpeedToMinimumLightDetectionValue.json rows
+#   10-33: movement speed (cm/s) -> the minimum light-detection value a moving
+#   player contributes. Consumed by the player's TATLightDetectionCharacterComponent
+#   _MovementSpeedToMinimumLightIntensity (BP_TATPlayerCharacter rows 978-981).
+const LIGHT_INTENSITY_RANGE_MIN: float = 0.15 # C_LightIntensityToRangeMultiplier Time 0.0 / Value 0.15, rows 15-16
+const LIGHT_INTENSITY_RANGE_MAX: float = 1.0 # C_LightIntensityToRangeMultiplier Time 1.0 / Value 1.0, rows 26-27
+const MOVEMENT_SPEED_LIGHT_MAX_CM_S: float = 600.0 # C_MovementSpeedToMinimumLightDetectionValue Time 600.0, row 26
+const MOVEMENT_SPEED_LIGHT_MIN_VALUE: float = 0.0 # C_MovementSpeedToMinimumLightDetectionValue Value 0.0, row 16
+const MOVEMENT_SPEED_LIGHT_MAX_VALUE: float = 0.1 # C_MovementSpeedToMinimumLightDetectionValue Value 0.1, row 27
+
 var registered_lights: Array[Light3D] = []
 var disabled_until: Dictionary = {} # Light3D instance_id -> unix/run time
 
@@ -61,6 +77,22 @@ func tick(now_sec: float) -> void:
 ## Returns how many times sampling actually recomputed (used by tests).
 func sample_compute_count() -> int:
 	return _sample_computes
+
+
+## C_LightIntensityToRangeMultiplier: light intensity 0..1 -> detection range
+## multiplier 0.15..1.0. Guards multiply their fresh sight range by this value.
+static func light_intensity_range_multiplier(intensity: float) -> float:
+	var t: float = smoothstep(0.0, 1.0, clampf(intensity, 0.0, 1.0))
+	return lerpf(LIGHT_INTENSITY_RANGE_MIN, LIGHT_INTENSITY_RANGE_MAX, t)
+
+
+## C_MovementSpeedToMinimumLightDetectionValue: movement speed in cm/s -> the
+## minimum light-detection value (0..0.1) a moving player contributes even when
+## the sampled light is darker. Callers take max(sampled_light, this value).
+static func minimum_light_detection_for_speed(speed_cm_s: float) -> float:
+	var clamped: float = clampf(speed_cm_s, 0.0, MOVEMENT_SPEED_LIGHT_MAX_CM_S)
+	var t: float = smoothstep(0.0, MOVEMENT_SPEED_LIGHT_MAX_CM_S, clamped)
+	return lerpf(MOVEMENT_SPEED_LIGHT_MIN_VALUE, MOVEMENT_SPEED_LIGHT_MAX_VALUE, t)
 
 
 func sample_visibility(world_pos: Vector3, space_state: PhysicsDirectSpaceState3D, exclude: Array[RID] = []) -> float:

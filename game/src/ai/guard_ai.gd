@@ -5,6 +5,7 @@ extends CharacterBody3D
 enum Alertness { NEUTRAL, SUSPICIOUS, ALERTED, COMBAT, SEARCH, KNOCKED_OUT }
 
 const GuardAnimLib = preload("res://src/core/animation_library.gd")
+const LightProbeScript = preload("res://src/stealth/light_probe.gd")
 
 # Real UE values (tools/parse_gameplay.py; sources in
 # game/data/generated/gameplay/*.json "sources"). Curve-table overrides are kept
@@ -35,6 +36,76 @@ const DETECTION_RAMPS: Dictionary = {
 	3: {"agnostic": 0.2, "critical_time": 0.0, "critical_range": 2.0, "crouch_min": 2.0, "crouch_mult": 0.75},
 }
 
+# Authored detection decay timing. game/data/generated/gameplay/detection.json
+# `decay` rows 30-34 (fields rows 31-33) is parsed from
+# extracted/json/AI/Data/DA_DetectionSettings.json DetectionSettings.DecaySettings
+# rows 130-134:
+# - min_seconds_in_level_before_decay 6.0
+#   = MinSecondsInCurrentDetectionLevelBeforeDecay (row 131): gate, the guard
+#     must spend 6 s in the current alertness level before the meter may decay.
+# - min_seconds_since_visible_before_decay 4.0
+#   = MinSecondsSinceVisibleBeforeDecay (row 132): gate, the guard must go 4 s
+#     without seeing the player before the meter may decay.
+# - detection_decay_seconds 7.0
+#   = DetectionDecaySeconds (row 133): authored base duration for the 0..100
+#     meter. SEARCH has no authored DA_AlertnessSettings row (it is Godot-only),
+#     so its fallback duration is DetectionDecaySeconds 7.0. That reuse is an
+#     inference from the data, not decompiled behaviour.
+const DECAY_MIN_SECONDS_IN_LEVEL: float = 6.0
+const DECAY_MIN_SECONDS_SINCE_VISIBLE: float = 4.0
+const DECAY_BASE_SECONDS: float = 7.0
+# extracted/json/AI/Alertness/DA_AlertnessSettings.json
+# Properties.DecaySettings.DecayTimeSeconds rows 26-43: the per-state duration
+# over which the 0..100 detection meter empties once both gates above are met.
+# Neutral 1.0 (row 29), Suspicious 5.0 (row 33), Alerted 10.0 (row 37),
+# Combat 10.0 (row 41). SEARCH falls back to DECAY_BASE_SECONDS.
+const DECAY_SECONDS_BY_STATE: Dictionary = {
+	Alertness.NEUTRAL: 1.0,
+	Alertness.SUSPICIOUS: 5.0,
+	Alertness.ALERTED: 10.0,
+	Alertness.COMBAT: 10.0,
+}
+# Retained Godot state thresholds (no UE source; docs/reports/gameplay-constants.md
+# records "15/45/100 state thresholds"). The upward ramp branches and the
+# downward-transition clamp below both read these constants, so the numbers have
+# one source.
+const DETECTION_SUSPICIOUS_AT: float = 15.0
+const DETECTION_ALERTED_AT: float = 45.0
+const DETECTION_COMBAT_AT: float = 100.0
+# Alertness order used to detect a DOWNWARD transition. The enum's declaration
+# order puts SEARCH after COMBAT, so it cannot be used directly: SEARCH sits
+# above SUSPICIOUS and below ALERTED for detection purposes.
+const ALERTNESS_RANK: Dictionary = {
+	Alertness.NEUTRAL: 0,
+	Alertness.SUSPICIOUS: 1,
+	Alertness.SEARCH: 2,
+	Alertness.ALERTED: 3,
+	Alertness.COMBAT: 4,
+}
+# Detection ceiling applied when a guard drops into a state, so stale detection
+# cannot carry across. NEUTRAL has no threshold of its own; it reuses the 15
+# value below which the guard stays Neutral and at/above which it becomes
+# Suspicious. SEARCH is absent on purpose: it is Godot-only with no authored row
+# and no retained threshold, so it decays unconditionally instead (see
+# decay_step_detection).
+const DETECTION_ENTRY_CEILING: Dictionary = {
+	Alertness.NEUTRAL: DETECTION_SUSPICIOUS_AT,
+	Alertness.SUSPICIOUS: DETECTION_SUSPICIOUS_AT,
+	Alertness.ALERTED: DETECTION_ALERTED_AT,
+	Alertness.COMBAT: DETECTION_COMBAT_AT,
+}
+# game/data/generated/gameplay/detection.json
+# tag_ramp_modifiers["Status.Sprinting"] rows 54-59 (values rows 55-58, all
+# 8.0), parsed from DA_DetectionSettings.GameplayTagRampModifiers rows 105-115.
+const SPRINT_RAMP_MULTIPLIER: float = 8.0
+# extracted/json/AI/Alertness/Curve_AI_HeightDifferenceToStrengthMultiplier.json
+# FloatCurve.Keys rows 10-33: (2.0 m -> 1.0) RCIM_Constant rows 15-16,
+# (3.0 m -> 0.0) RCIM_Linear rows 26-27. DA_DetectionSettings wires this curve
+# only on the Neutral ramp
+# (RampSettings[0].Value.HeightDifferenceToStrengthMultiplierCurve rows 18-21);
+# the Suspicious/Alerted/Combat ramps author null (rows 35/49/63).
+const HEIGHT_STRENGTH_ZERO_M: float = 3.0
+
 @export var patrol_points: Array[Vector3] = []
 @export var patrol_speed: float = PATROL_SPEED
 @export var suspicious_speed: float = SUSPICIOUS_SPEED
@@ -51,6 +122,8 @@ var ko_timer: float = 0.0
 var wp_index: int = 0
 var investigate_pos: Vector3 = Vector3.ZERO
 var state_timer: float = 0.0
+var _seconds_in_state: float = 0.0
+var _seconds_since_visible: float = 0.0
 var attack_cooldown: float = 0.0
 var _speed_scale: float = 1.0
 var gravity: float = 18.0
@@ -319,17 +392,40 @@ func _tick_regen(delta: float) -> void:
 		health = minf(cap, health + _guard_regen_rate() * delta)
 
 
+## Central alertness transition. Resets the authored "time in current detection
+## level" decay gate (detection.json min_seconds_in_level_before_decay) and
+## clamps detection on a downward transition so stale meter value cannot leak
+## into a calmer level. SEARCH also resets this clock, but SEARCH decay bypasses
+## the gate entirely (decay_step_detection), so the reset cannot freeze the meter.
+func _set_state(new_state: int) -> void:
+	if state == new_state:
+		return
+	var previous_state: int = state
+	state = new_state
+	_seconds_in_state = 0.0
+	detection = clamped_detection_for_transition(previous_state, new_state, detection)
+
+
+## Typed bool read for Object.get(): Godot 4.7 rejects bool(Variant) on a
+## lookup that may be null or non-bool.
+static func _bool_property(obj: Object, prop: String) -> bool:
+	if obj == null:
+		return false
+	var value: Variant = obj.get(prop)
+	return value is bool and value == true
+
+
 func _enter_alerted() -> void:
 	if state == Alertness.ALERTED or state == Alertness.COMBAT:
 		return
-	state = Alertness.ALERTED
+	_set_state(Alertness.ALERTED)
 	NoiseBus.emit_noise(global_position, 14.0, self, "guard_alert")
 
 
 func _enter_combat() -> void:
 	if state == Alertness.COMBAT:
 		return
-	state = Alertness.COMBAT
+	_set_state(Alertness.COMBAT)
 	NoiseBus.emit_noise(global_position, 12.0, self, "guard_alert")
 
 
@@ -358,6 +454,85 @@ func get_detection_rate(dist_m: float, crouching: bool) -> float:
 	if crouching and dist_m >= float(ramp.get("crouch_min", 2.75)):
 		rate *= float(ramp.get("crouch_mult", 0.75))
 	return rate
+
+
+## Authored detection-meter decay duration for an alertness level.
+static func detection_decay_seconds(alertness: int) -> float:
+	return float(DECAY_SECONDS_BY_STATE.get(alertness, DECAY_BASE_SECONDS))
+
+
+## Authored detection-meter decay in points per second: the 0..100 meter empties
+## over DA_AlertnessSettings.DecayTimeSeconds for the current alertness level.
+static func detection_decay_per_second(alertness: int) -> float:
+	var seconds: float = detection_decay_seconds(alertness)
+	if seconds <= 0.0:
+		return 0.0
+	return 100.0 / seconds
+
+
+## One frame of authored decay for the 0..100 meter. _physics_process checks
+## the two detection.json gates before calling this.
+static func decayed_detection(current: float, delta: float, alertness: int) -> float:
+	return maxf(0.0, current - detection_decay_per_second(alertness) * delta)
+
+
+## One no-sight frame of the detection meter. NEUTRAL, SUSPICIOUS, ALERTED and
+## COMBAT keep both authored DA_DetectionSettings gates. SEARCH has no authored
+## DA_AlertnessSettings row, so it decays unconditionally at the fallback
+## duration DetectionDecaySeconds (7.0 s): an inference from the data (the
+## Godot-only search level reuses the base decay duration), not decompiled
+## behaviour. Its 6 s state_timer therefore cannot freeze the meter.
+static func decay_step_detection(alertness: int, current: float, seconds_in_state: float, seconds_since_visible: float, delta: float) -> float:
+	if alertness != Alertness.SEARCH \
+		and (seconds_in_state < DECAY_MIN_SECONDS_IN_LEVEL \
+			or seconds_since_visible < DECAY_MIN_SECONDS_SINCE_VISIBLE):
+		return current
+	return decayed_detection(current, delta, alertness)
+
+
+## Detection value a state change may carry into the new level. Upward
+## transitions keep the meter; a downward transition clamps it to the new
+## state's entry ceiling so stale detection cannot leak across. SEARCH has no
+## authored/retained threshold, so it is never clamped: its unconditional
+## fallback decay empties the meter instead.
+static func clamped_detection_for_transition(old_state: int, new_state: int, current: float) -> float:
+	var old_rank: int = int(ALERTNESS_RANK.get(old_state, -1))
+	var new_rank: int = int(ALERTNESS_RANK.get(new_state, -1))
+	if old_rank < 0 or new_rank < 0 or new_rank >= old_rank:
+		return current
+	var ceiling: float = float(DETECTION_ENTRY_CEILING.get(new_state, current))
+	return minf(current, ceiling)
+
+
+## Entry ceiling for a state, exposed for tests. -1.0 means the level has no
+## clamp (SEARCH / KNOCKED_OUT).
+static func detection_entry_ceiling(alertness: int) -> float:
+	return float(DETECTION_ENTRY_CEILING.get(alertness, -1.0))
+
+
+## detection.json tag_ramp_modifiers["Status.Sprinting"]: x8 detection ramp
+## while the player is sprinting, x1 otherwise.
+static func sprint_ramp_multiplier(sprinting: bool) -> float:
+	return SPRINT_RAMP_MULTIPLIER if sprinting else 1.0
+
+
+## Curve_AI_HeightDifferenceToStrengthMultiplier. The 2.0 m key is
+## RCIM_Constant, so it holds 1.0 until the 3.0 m key drops the strength to 0.0.
+static func height_difference_strength_multiplier(height_diff_m: float) -> float:
+	if height_diff_m < HEIGHT_STRENGTH_ZERO_M:
+		return 1.0
+	return 0.0
+
+
+## Light value the guard uses for the player: sampled light visibility raised to
+## the authored movement-speed floor (C_MovementSpeedToMinimumLightDetectionValue,
+## BP_TATPlayerCharacter LightDetectionComponent._MovementSpeedToMinimumLightIntensity).
+func _player_light_value(player: CharacterBody3D) -> float:
+	if player == null:
+		return GameState.player_light_visibility
+	var planar_speed_cm_s: float = Vector2(player.velocity.x, player.velocity.z).length() * 100.0
+	var floor_value: float = LightProbeScript.minimum_light_detection_for_speed(planar_speed_cm_s)
+	return maxf(GameState.player_light_visibility, floor_value)
 
 
 ## Real movement speed (m/s) for the current alertness state.
@@ -390,50 +565,61 @@ func _physics_process(delta: float) -> void:
 
 	_tick_regen(delta)
 	attack_cooldown = maxf(0.0, attack_cooldown - delta)
+	_seconds_in_state += delta
 	var player: CharacterBody3D = get_tree().get_first_node_in_group("player") as CharacterBody3D
 	var sees_player: bool = _can_see_player(player)
 
 	if sees_player:
 		# Real UE ramp (DA_DetectionSettings): time-to-detect(s) = agnostic *
 		# dist_m + critical_time; rate = 100/time; crouch x0.75 at/over 2.75m.
-		# Light-visibility multiplier, smoke/LOS checks and the 15/45/100 state
-		# thresholds below are retained (no UE source for them).
-		var vis_mult: float = clampf(0.35 + GameState.player_light_visibility * 1.15, 0.35, 1.5)
+		# The light/sprint/height multipliers below are authored; the smoke/LOS
+		# checks and 15/45/100 state thresholds are retained (no UE source).
+		_seconds_since_visible = 0.0
+		var effective_light: float = _player_light_value(player)
+		var vis_mult: float = clampf(0.35 + effective_light * 1.15, 0.35, 1.5)
 		var dist_m: float = player.global_position.distance_to(global_position)
-		var rate: float = get_detection_rate(dist_m, bool(player.get("is_crouching")))
+		var rate: float = get_detection_rate(dist_m, _bool_property(player, "is_crouching"))
+		rate *= sprint_ramp_multiplier(_bool_property(player, "is_sprinting"))
+		if state == Alertness.NEUTRAL:
+			# DA_DetectionSettings wires the height curve only on the Neutral ramp.
+			rate *= height_difference_strength_multiplier(absf(player.global_position.y - global_position.y))
 		if is_inf(rate):
 			detection = 100.0
 		else:
 			detection = minf(100.0, detection + rate * vis_mult * delta)
 		investigate_pos = player.global_position
-		if detection >= 100.0:
+		if detection >= DETECTION_COMBAT_AT:
 			_enter_combat()
 			GameState.ever_spotted = true
 			GameState.ever_chased = true
-		elif detection >= 45.0 and state < Alertness.ALERTED:
+		elif detection >= DETECTION_ALERTED_AT and state < Alertness.ALERTED:
 			_enter_alerted()
 			state_timer = 6.0
 			GameState.ever_spotted = true
-		elif detection >= 15.0 and state == Alertness.NEUTRAL:
-			state = Alertness.SUSPICIOUS
+		elif detection >= DETECTION_SUSPICIOUS_AT and state == Alertness.NEUTRAL:
+			_set_state(Alertness.SUSPICIOUS)
 			state_timer = 5.0
 	else:
-		detection = maxf(0.0, detection - 22.0 * delta)
+		_seconds_since_visible += delta
+		# Authored decay: NEUTRAL/SUSPICIOUS/ALERTED/COMBAT need 6 s in level
+		# and 4 s without sight. SEARCH has no authored row and decays
+		# unconditionally at the fallback rate (see decay_step_detection).
+		detection = decay_step_detection(state, detection, _seconds_in_state, _seconds_since_visible, delta)
 		if state == Alertness.COMBAT and detection <= 35.0:
-			state = Alertness.ALERTED
+			_set_state(Alertness.ALERTED)
 			state_timer = 6.0
 		elif state == Alertness.ALERTED:
 			state_timer -= delta
 			if state_timer <= 0.0:
-				state = Alertness.SEARCH
+				_set_state(Alertness.SEARCH)
 				state_timer = 6.0
 		elif state == Alertness.SUSPICIOUS and detection <= 0.0:
-			state = Alertness.SEARCH
+			_set_state(Alertness.SEARCH)
 			state_timer = 4.0
 		elif state == Alertness.SEARCH:
 			state_timer -= delta
 			if state_timer <= 0.0:
-				state = Alertness.NEUTRAL
+				_set_state(Alertness.NEUTRAL)
 
 	_update_indicator()
 	_update_ally_wakeup(delta)
@@ -493,10 +679,10 @@ func _can_see_player(player: CharacterBody3D) -> bool:
 	if player == null:
 		return false
 	# The Moth's astral form is a spirit: guards cannot see or hear it.
-	if bool(player.get("astral_active")):
+	if _bool_property(player, "astral_active"):
 		return false
 	var dist_to_player: float = global_position.distance_to(player.global_position)
-	if bool(player.get("disguise_active")):
+	if _bool_property(player, "disguise_active"):
 		# Chameleon disguise edge cases: alerted/searching guards and tattered
 		# disguises no longer pass inspection at range; close range is always risky.
 		var guard_alerted: bool = state == Alertness.ALERTED or state == Alertness.COMBAT or state == Alertness.SEARCH
@@ -506,6 +692,15 @@ func _can_see_player(player: CharacterBody3D) -> bool:
 	# Retention: once sensed, the guard holds the target out to lose_sight_range.
 	var sensed: bool = detection > 0.0 or state != Alertness.NEUTRAL
 	var effective_range: float = lose_sight_range if sensed else sight_range
+	if not sensed:
+		# C_LightIntensityToRangeMultiplier (BP_NPC_Base
+		# _LightIntensityToRangeMultiplierCurve) scales the fresh detection
+		# range. Limitation: the authored curve gates acquisition only. Once
+		# `sensed` is true (detection > 0, or any state above NEUTRAL), the
+		# retained 30 m lose_sight_range applies unscaled, so retention is a
+		# Godot concept with no UE source (see LOSE_SIGHT_RANGE); it is
+		# deliberately unchanged here.
+		effective_range *= LightProbeScript.light_intensity_range_multiplier(_player_light_value(player))
 	var to_player: Vector3 = player.global_position - global_position
 	var dist: float = to_player.length()
 	if dist > effective_range or dist < 0.1:
@@ -528,9 +723,9 @@ func _on_noise_emitted(origin: Vector3, loudness: float, source: Node, tag: Stri
 	if state == Alertness.KNOCKED_OUT or source == self:
 		return
 	# Only the player thief carries astral_active (guards have no such
-	# property, so bool() must not be called on their lookup): the Moth's
-	# astral form makes no noise.
-	if source != null and source.is_in_group("player") and bool(source.get("astral_active")):
+	# property, so the typed lookup returns false): the Moth's astral form
+	# makes no noise.
+	if source != null and source.is_in_group("player") and _bool_property(source, "astral_active"):
 		return
 	if tag == "guard_alert":
 		if global_position.distance_to(origin) <= loudness:
@@ -543,7 +738,7 @@ func _on_noise_emitted(origin: Vector3, loudness: float, source: Node, tag: Stri
 	if global_position.distance_to(origin) <= loudness:
 		investigate_pos = origin
 		if state < Alertness.SUSPICIOUS:
-			state = Alertness.SUSPICIOUS
+			_set_state(Alertness.SUSPICIOUS)
 			state_timer = 5.0
 		detection = maxf(detection, 25.0)
 
@@ -561,7 +756,7 @@ func apply_damage(dmg: float) -> void:
 func knock_out(duration_override: float = -1.0) -> void:
 	if state == Alertness.KNOCKED_OUT:
 		return
-	state = Alertness.KNOCKED_OUT
+	_set_state(Alertness.KNOCKED_OUT)
 	if duration_override > 0.0:
 		ko_timer = duration_override
 	else:
@@ -594,7 +789,7 @@ func wake_up_from_ko() -> void:
 func _recover_from_ko() -> void:
 	health = _guard_max_hp()
 	alert_indicator.text = ""
-	state = Alertness.SEARCH
+	_set_state(Alertness.SEARCH)
 	state_timer = 6.0
 	investigate_pos = global_position
 	if visual_root == null:
@@ -650,14 +845,14 @@ func _update_ally_wakeup(delta: float) -> void:
 				g.set("ko_timer", 0.0)
 				if g.has_method("wake_up_from_ko"):
 					g.call("wake_up_from_ko")
-				state = Alertness.SEARCH
+				_set_state(Alertness.SEARCH)
 				state_timer = 6.0
 				detection = maxf(detection, 40.0)
 				NoiseBus.emit_noise(global_position, 10.0, self, "guard_alert")
 				revived = true
 		else:
 			if state == Alertness.NEUTRAL:
-				state = Alertness.SUSPICIOUS
+				_set_state(Alertness.SUSPICIOUS)
 				state_timer = 5.0
 		break
 	if not revived and _revive_target != null:

@@ -1036,5 +1036,127 @@ func _initialize() -> void:
 	lux_ll.queue_free()
 	await process_frame
 
+	# 24. Landscape second weightmap and fifth colour slot: the parser emits
+	# `weightmaps` per component. Index 6 allocates CobbleB/RockTileA to
+	# weightmap 1 channels 1/2 after Visibility stops consuming a colour slot,
+	# and the bound weightmap_1 must be that component's authored second
+	# weightmap file. Index 10 keeps Visibility on weightmap 1; index 1 has a
+	# single weightmap, so weightmap_1 must stay unbound while its real colour
+	# slots are bound (channel_2 == 3) and slots 3/4 stay at -1.
+	var lw2_file := FileAccess.open("res://data/generated/levels/Guildhall/Guildhall_Landscape.tatlevel.json", FileAccess.READ)
+	var lw2_lands: Array = []
+	if lw2_file != null:
+		var lw2_parsed: Variant = JSON.parse_string(lw2_file.get_as_text())
+		if lw2_parsed is Dictionary:
+			lw2_lands = (lw2_parsed as Dictionary).get("landscapes", [])
+	var lw2_ll: Node = (load("res://src/core/level_loader.gd") as GDScript).new()
+	root.add_child(lw2_ll)
+
+	var lw2_mat6: ShaderMaterial = null
+	if lw2_lands.size() > 6 and lw2_lands[6] is Dictionary:
+		lw2_mat6 = lw2_ll.call("_landscape_weighted_material", lw2_lands[6]) as ShaderMaterial
+	var lw2_6_tex_idx: int = -1
+	var lw2_6_channel: int = -1
+	var lw2_6_puddle_idx: int = -1
+	var lw2_6_puddle_ch: int = -1
+	var lw2_6_wm1: Variant = null
+	var lw2_6_idx3: int = -1
+	var lw2_6_ch3: int = -1
+	if lw2_mat6 != null:
+		lw2_6_tex_idx = int(lw2_mat6.get_shader_parameter("layer_tex_idx_4"))
+		lw2_6_channel = int(lw2_mat6.get_shader_parameter("layer_channel_4"))
+		lw2_6_puddle_idx = int(lw2_mat6.get_shader_parameter("puddle_tex_idx"))
+		lw2_6_puddle_ch = int(lw2_mat6.get_shader_parameter("puddle_channel"))
+		lw2_6_wm1 = lw2_mat6.get_shader_parameter("weightmap_1")
+		lw2_6_idx3 = int(lw2_mat6.get_shader_parameter("layer_tex_idx_3"))
+		lw2_6_ch3 = int(lw2_mat6.get_shader_parameter("layer_channel_3"))
+	# Which texture is bound, not merely that something is: weightmap_1 must be
+	# the component's authored second weightmap (CobbleB/RockTileA live there).
+	var lw2_6_wm1_path: String = ""
+	if lw2_6_wm1 is Texture2D:
+		lw2_6_wm1_path = (lw2_6_wm1 as Texture2D).resource_path
+	var lw2_6_expected_wm1: String = ""
+	if lw2_lands.size() > 6 and lw2_lands[6] is Dictionary:
+		var lw2_6_wms: Variant = (lw2_lands[6] as Dictionary).get("weightmaps", [])
+		if lw2_6_wms is Array and (lw2_6_wms as Array).size() > 1:
+			lw2_6_expected_wm1 = str((lw2_6_wms as Array)[1])
+	var lw2_ok6: bool = lw2_mat6 != null \
+		and lw2_6_tex_idx == 1 \
+		and lw2_6_channel == 2 \
+		and lw2_6_puddle_idx == 1 \
+		and lw2_6_puddle_ch == 0 \
+		and lw2_6_idx3 == 1 \
+		and lw2_6_ch3 == 1 \
+		and lw2_6_wm1_path != "" \
+		and lw2_6_wm1_path == lw2_6_expected_wm1
+	if not lw2_ok6:
+		printerr("FAIL: landscape second weightmap slot 4 (mat=", lw2_mat6 != null, " tex_idx_4=", lw2_6_tex_idx, " expected 1, channel_4=", lw2_6_channel, " expected 2, tex_idx_3=", lw2_6_idx3, " expected 1, channel_3=", lw2_6_ch3, " expected 1, puddle_tex_idx=", lw2_6_puddle_idx, " expected 1, puddle_channel=", lw2_6_puddle_ch, " expected 0, weightmap_1='", lw2_6_wm1_path, "' expected '", lw2_6_expected_wm1, "')")
+		fails += 1
+	else:
+		print("PASS: Guildhall landscape second weightmap slot 4 (RockTileA tex_idx=", lw2_6_tex_idx, ", channel=", lw2_6_channel, ", CobbleB tex_idx=", lw2_6_idx3, ", channel=", lw2_6_ch3, ", puddle tex_idx=", lw2_6_puddle_idx, ", puddle channel=", lw2_6_puddle_ch, ", weightmap_1=", lw2_6_wm1_path, ")")
+
+	var lw2_mat10: ShaderMaterial = null
+	if lw2_lands.size() > 10 and lw2_lands[10] is Dictionary:
+		lw2_mat10 = lw2_ll.call("_landscape_weighted_material", lw2_lands[10]) as ShaderMaterial
+	var lw2_10_vis_idx: int = -1
+	var lw2_10_vis_ch: int = -1
+	var lw2_10_puddle_idx: int = -1
+	var lw2_10_puddle_ch: int = -1
+	if lw2_mat10 != null:
+		lw2_10_vis_idx = int(lw2_mat10.get_shader_parameter("visibility_tex_idx"))
+		lw2_10_vis_ch = int(lw2_mat10.get_shader_parameter("visibility_channel"))
+		lw2_10_puddle_idx = int(lw2_mat10.get_shader_parameter("puddle_tex_idx"))
+		lw2_10_puddle_ch = int(lw2_mat10.get_shader_parameter("puddle_channel"))
+	var lw2_ok10: bool = lw2_mat10 != null \
+		and lw2_10_vis_idx == 1 \
+		and lw2_10_vis_ch == 0 \
+		and lw2_10_puddle_idx == 0 \
+		and lw2_10_puddle_ch == 3
+	if not lw2_ok10:
+		printerr("FAIL: landscape visibility on second weightmap (mat=", lw2_mat10 != null, " visibility_tex_idx=", lw2_10_vis_idx, " expected 1, visibility_channel=", lw2_10_vis_ch, " expected 0, puddle_tex_idx=", lw2_10_puddle_idx, " expected 0, puddle_channel=", lw2_10_puddle_ch, " expected 3)")
+		fails += 1
+	else:
+		print("PASS: Guildhall landscape visibility on second weightmap (visibility tex_idx=", lw2_10_vis_idx, ", channel=", lw2_10_vis_ch, ", puddle tex_idx=", lw2_10_puddle_idx, ", puddle channel=", lw2_10_puddle_ch, ")")
+
+	var lw2_mat1: ShaderMaterial = null
+	if lw2_lands.size() > 1 and lw2_lands[1] is Dictionary:
+		lw2_mat1 = lw2_ll.call("_landscape_weighted_material", lw2_lands[1]) as ShaderMaterial
+	var lw2_1_wm1: Variant = lw2_mat1.get_shader_parameter("weightmap_1") if lw2_mat1 != null else null
+	var lw2_1_idx_ok: bool = lw2_mat1 != null
+	var lw2_1_idx_desc: String = ""
+	var lw2_1_ch2: int = -1
+	var lw2_1_ch3: int = 0
+	var lw2_1_ch4: int = 0
+	if lw2_mat1 != null:
+		for lw2_slot: int in range(5):
+			var lw2_idx_raw: Variant = lw2_mat1.get_shader_parameter("layer_tex_idx_%d" % lw2_slot)
+			var lw2_idx: int = 0 if lw2_idx_raw == null else int(lw2_idx_raw)
+			if lw2_idx != 0:
+				lw2_1_idx_ok = false
+			lw2_1_idx_desc += str(lw2_idx)
+		# An unset parameter means the shader uniform keeps its default, so
+		# null maps to the uniform's -1 ("no layer in this slot").
+		lw2_1_ch2 = int(lw2_mat1.get_shader_parameter("layer_channel_2"))
+		var lw2_1_ch3_raw: Variant = lw2_mat1.get_shader_parameter("layer_channel_3")
+		var lw2_1_ch4_raw: Variant = lw2_mat1.get_shader_parameter("layer_channel_4")
+		lw2_1_ch3 = -1 if lw2_1_ch3_raw == null else int(lw2_1_ch3_raw)
+		lw2_1_ch4 = -1 if lw2_1_ch4_raw == null else int(lw2_1_ch4_raw)
+	# channel_2 == 3 is a genuinely bound slot (CobbleA on weightmap 0 channel
+	# 3), so this cannot pass on code that never binds the layer slots.
+	var lw2_1_ok: bool = lw2_mat1 != null \
+		and lw2_1_idx_ok \
+		and lw2_1_wm1 == null \
+		and lw2_1_ch2 == 3 \
+		and lw2_1_ch3 == -1 \
+		and lw2_1_ch4 == -1
+	if not lw2_1_ok:
+		printerr("FAIL: single-weightmap landscape (mat=", lw2_mat1 != null, " weightmap_1=", lw2_1_wm1, " expected null, layer_tex_idx=", lw2_1_idx_desc, " expected all 0, channel_2=", lw2_1_ch2, " expected 3, channel_3=", lw2_1_ch3, " expected -1, channel_4=", lw2_1_ch4, " expected -1)")
+		fails += 1
+	else:
+		print("PASS: single-weightmap landscape leaves weightmap_1 unbound (layer_tex_idx=", lw2_1_idx_desc, ", channel_2=", lw2_1_ch2, ", channel_3=", lw2_1_ch3, ", channel_4=", lw2_1_ch4, ")")
+
+	lw2_ll.queue_free()
+	await process_frame
+
 	print("SUMMARY: fails=", fails)
 	quit(0 if fails == 0 else 1)

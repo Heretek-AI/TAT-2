@@ -1533,52 +1533,75 @@ func _build_light(info: Dictionary, cast_shadow: bool = false) -> Light3D:
 ## component has no weightmap or no resolvable layer, so the caller falls back
 ## to the single-surface material.
 func _landscape_weighted_material(lc: Dictionary) -> ShaderMaterial:
-	var wm_path: String = str(lc.get("weightmap", ""))
+	var wm_paths: Array = []
+	var wm_raw: Variant = lc.get("weightmaps", [])
+	if wm_raw is Array:
+		wm_paths = wm_raw as Array
+	var wm_path: String = str(wm_paths[0]) if wm_paths.size() > 0 else ""
+	if wm_path == "":
+		wm_path = str(lc.get("weightmap", ""))
 	if wm_path == "" or not (FileAccess.file_exists(wm_path) or ResourceLoader.exists(wm_path)):
 		return null
 	var wm: Texture2D = _load_tex(wm_path)
 	if wm == null:
 		return null
+	var wm1: Texture2D = null
+	if wm_paths.size() > 1:
+		var wm1_path: String = str(wm_paths[1])
+		if wm1_path != "" and (FileAccess.file_exists(wm1_path) or ResourceLoader.exists(wm1_path)):
+			wm1 = _load_tex(wm1_path)
+	# Layers allocated to a weightmap that is not bound cannot be sampled, so
+	# they are skipped instead of reading an empty second weightmap.
+	var bound_count: int = 2 if wm1 != null else 1
+	var source: String = str(lc.get("source", ""))
+	if wm_paths.size() > 2:
+		push_warning("Landscape %s: %d weightmaps extracted but only %d bound; extra weightmaps are not sampled" % [source, wm_paths.size(), bound_count])
 	var mat := ShaderMaterial.new()
 	mat.shader = LANDSCAPE_SHADER
 	# Guildhall's packed floors are incomplete at the safe-room gap; the
 	# extracted data has no lower-floor mesh within 6 m of that visibility hole
 	# (only foundation walls at y=12). Keep the authored landscape surface
 	# visible there instead of discarding to void. Other maps keep hole discard.
-	var source_low: String = str(lc.get("source", "")).to_lower()
+	var source_low: String = source.to_lower()
 	mat.set_shader_parameter("discard_holes", 0.0 if source_low.contains("guildhall") else 1.0)
 	mat.set_shader_parameter("weightmap", wm)
+	if wm1 != null:
+		mat.set_shader_parameter("weightmap_1", wm1)
 	var slot: int = 0
+	var layer_i: int = -1
 	for l_var: Variant in (lc.get("layers", []) as Array):
-		if slot >= 4:
-			break
+		layer_i += 1
 		if not (l_var is Dictionary):
 			continue
 		var l: Dictionary = l_var
 		var lname: String = str(l.get("layer", ""))
 		var channel: int = int(l.get("channel", 0))
 		var tex_idx: int = int(l.get("tex", 0))
+		if tex_idx < 0 or tex_idx >= bound_count:
+			push_warning("Landscape %s: layer '%s' (index %d) skipped, weightmap index %d is unbound (%d bound)" % [source, lname, layer_i, tex_idx, bound_count])
+			continue
 		if lname == "Puddle":
-			if tex_idx == 0:
-				mat.set_shader_parameter("puddle_channel", channel)
-				var pn: Texture2D = _load_tex("res://assets/ue/Raw/Art/Effects/Puddles/T_Decal_Puddle_1_Normal.png")
-				var po: Texture2D = _load_tex("res://assets/ue/Raw/Art/Effects/Puddles/T_Decal_Puddle_1_Opacity.png")
-				if pn != null:
-					mat.set_shader_parameter("puddle_normal", pn)
-				if po != null:
-					mat.set_shader_parameter("puddle_opacity", po)
+			mat.set_shader_parameter("puddle_tex_idx", tex_idx)
+			mat.set_shader_parameter("puddle_channel", channel)
+			var pn: Texture2D = _load_tex("res://assets/ue/Raw/Art/Effects/Puddles/T_Decal_Puddle_1_Normal.png")
+			var po: Texture2D = _load_tex("res://assets/ue/Raw/Art/Effects/Puddles/T_Decal_Puddle_1_Opacity.png")
+			if pn != null:
+				mat.set_shader_parameter("puddle_normal", pn)
+			if po != null:
+				mat.set_shader_parameter("puddle_opacity", po)
 			continue
 		if lname == "GroundWet":
-			if tex_idx == 0:
-				mat.set_shader_parameter("groundwet_channel", channel)
-			continue
-		if tex_idx != 0:
+			mat.set_shader_parameter("groundwet_tex_idx", tex_idx)
+			mat.set_shader_parameter("groundwet_channel", channel)
 			continue
 		var is_visibility: bool = lname.to_lower().contains("visibility")
 		if is_visibility:
-			mat.set_shader_parameter("layer_channel_%d" % slot, channel)
-			mat.set_shader_parameter("layer_visibility_%d" % slot, 1)
-			slot += 1
+			# Visibility is a mask, not an albedo layer, so it must not consume
+			# one of the five colour slots.
+			mat.set_shader_parameter("visibility_tex_idx", tex_idx)
+			mat.set_shader_parameter("visibility_channel", channel)
+			continue
+		if slot >= 5:
 			continue
 		var tex_path: String = str(LANDSCAPE_LAYER_TEX.get(lname, ""))
 		if tex_path == "":
@@ -1588,7 +1611,7 @@ func _landscape_weighted_material(lc: Dictionary) -> ShaderMaterial:
 			continue
 		mat.set_shader_parameter("layer_tex_%d" % slot, tex)
 		mat.set_shader_parameter("layer_channel_%d" % slot, channel)
-		mat.set_shader_parameter("layer_visibility_%d" % slot, 0)
+		mat.set_shader_parameter("layer_tex_idx_%d" % slot, tex_idx)
 		slot += 1
 	if slot == 0:
 		return null

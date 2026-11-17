@@ -1,26 +1,34 @@
 shader_type spatial;
-// Real TAT landscape layer blend. Each LandscapeComponent has a weightmap and
-// WeightmapLayerAllocations parsed from the cooked UE map; the runtime maps
-// each layer name to the extracted layer texture and blends by channel.
-// Layers without a recovered texture are skipped, and the remaining weights
-// are normalized. LandscapeVisibilityLayerInfo is used to discard authored
-// holes instead of inventing geometry.
+// Real TAT landscape layer blend. Each LandscapeComponent has up to two
+// weightmaps and WeightmapLayerAllocations parsed from the cooked UE map; the
+// runtime maps each layer name to the extracted layer texture and blends by
+// channel. Layers without a recovered texture are skipped, and the remaining
+// weights are normalized. LandscapeVisibilityLayerInfo is used to discard
+// authored holes instead of inventing geometry.
 render_mode cull_disabled, diffuse_burley;
 
 uniform sampler2D weightmap : filter_linear, repeat_disable;
+uniform sampler2D weightmap_1 : filter_linear, repeat_disable;
 uniform sampler2D layer_tex_0 : source_color, repeat_enable;
 uniform sampler2D layer_tex_1 : source_color, repeat_enable;
 uniform sampler2D layer_tex_2 : source_color, repeat_enable;
 uniform sampler2D layer_tex_3 : source_color, repeat_enable;
+uniform sampler2D layer_tex_4 : source_color, repeat_enable;
 uniform int layer_channel_0 = -1;
 uniform int layer_channel_1 = -1;
 uniform int layer_channel_2 = -1;
 uniform int layer_channel_3 = -1;
-uniform int layer_visibility_0 = 0;
-uniform int layer_visibility_1 = 0;
-uniform int layer_visibility_2 = 0;
-uniform int layer_visibility_3 = 0;
+uniform int layer_channel_4 = -1;
+uniform int layer_tex_idx_0 = 0;
+uniform int layer_tex_idx_1 = 0;
+uniform int layer_tex_idx_2 = 0;
+uniform int layer_tex_idx_3 = 0;
+uniform int layer_tex_idx_4 = 0;
+uniform int visibility_tex_idx = -1;
+uniform int visibility_channel = -1;
+uniform int puddle_tex_idx = 0;
 uniform int puddle_channel = -1;
+uniform int groundwet_tex_idx = 0;
 uniform int groundwet_channel = -1;
 uniform sampler2D puddle_normal : hint_normal, repeat_enable;
 uniform sampler2D puddle_opacity : filter_linear, repeat_enable;
@@ -44,47 +52,55 @@ float channel_value(vec4 w, int channel) {
 	return 0.0;
 }
 
+// Explicit index mapping: only the two extracted weightmaps are bound.
+// Unknown indices (2, 3, negatives) yield zero weight rather than silently
+// reading a wrong weightmap.
+vec4 weight_at(int tex_idx, vec2 uv) {
+	if (tex_idx == 0) {
+		return texture(weightmap, uv);
+	}
+	if (tex_idx == 1) {
+		return texture(weightmap_1, uv);
+	}
+	return vec4(0.0);
+}
+
 void fragment() {
-	vec4 w = texture(weightmap, UV);
+	// A half-configured visibility mask (index set, channel missing) must fail
+	// safe to "no discard": channel_value() would return 0.0 and erase the
+	// whole landscape. The mask is only sampled when holes are actually
+	// discarded, so maps like Guildhall (discard_holes = 0) skip the fetch.
 	float vis = 1.0;
+	if (discard_holes > 0.5 && visibility_tex_idx >= 0 && visibility_channel >= 0) {
+		vis = channel_value(weight_at(visibility_tex_idx, UV), visibility_channel);
+	}
 	vec3 col = vec3(0.0);
 	float total = 0.0;
 
 	if (layer_channel_0 >= 0) {
-		float wt = channel_value(w, layer_channel_0);
-		if (layer_visibility_0 == 1) {
-			vis = wt;
-		} else {
-			col += texture(layer_tex_0, UV * uv_scale).rgb * wt;
-			total += wt;
-		}
+		float wt = channel_value(weight_at(layer_tex_idx_0, UV), layer_channel_0);
+		col += texture(layer_tex_0, UV * uv_scale).rgb * wt;
+		total += wt;
 	}
 	if (layer_channel_1 >= 0) {
-		float wt = channel_value(w, layer_channel_1);
-		if (layer_visibility_1 == 1) {
-			vis = wt;
-		} else {
-			col += texture(layer_tex_1, UV * uv_scale).rgb * wt;
-			total += wt;
-		}
+		float wt = channel_value(weight_at(layer_tex_idx_1, UV), layer_channel_1);
+		col += texture(layer_tex_1, UV * uv_scale).rgb * wt;
+		total += wt;
 	}
 	if (layer_channel_2 >= 0) {
-		float wt = channel_value(w, layer_channel_2);
-		if (layer_visibility_2 == 1) {
-			vis = wt;
-		} else {
-			col += texture(layer_tex_2, UV * uv_scale).rgb * wt;
-			total += wt;
-		}
+		float wt = channel_value(weight_at(layer_tex_idx_2, UV), layer_channel_2);
+		col += texture(layer_tex_2, UV * uv_scale).rgb * wt;
+		total += wt;
 	}
 	if (layer_channel_3 >= 0) {
-		float wt = channel_value(w, layer_channel_3);
-		if (layer_visibility_3 == 1) {
-			vis = wt;
-		} else {
-			col += texture(layer_tex_3, UV * uv_scale).rgb * wt;
-			total += wt;
-		}
+		float wt = channel_value(weight_at(layer_tex_idx_3, UV), layer_channel_3);
+		col += texture(layer_tex_3, UV * uv_scale).rgb * wt;
+		total += wt;
+	}
+	if (layer_channel_4 >= 0) {
+		float wt = channel_value(weight_at(layer_tex_idx_4, UV), layer_channel_4);
+		col += texture(layer_tex_4, UV * uv_scale).rgb * wt;
+		total += wt;
 	}
 
 	if (discard_holes > 0.5 && vis < 0.5) {
@@ -93,7 +109,7 @@ void fragment() {
 	float puddle = 0.0;
 	float groundwet = 0.0;
 	if (puddle_channel >= 0) {
-		float pw = channel_value(w, puddle_channel);
+		float pw = channel_value(weight_at(puddle_tex_idx, UV), puddle_channel);
 		if (pw > 0.001) {
 			float op = texture(puddle_opacity, UV * uv_scale).r;
 			puddle = clamp(pw * op, 0.0, 1.0);
@@ -103,7 +119,7 @@ void fragment() {
 		}
 	}
 	if (groundwet_channel >= 0) {
-		groundwet = channel_value(w, groundwet_channel);
+		groundwet = channel_value(weight_at(groundwet_tex_idx, UV), groundwet_channel);
 		col *= (1.0 - groundwet * 0.18);
 	}
 	ALBEDO = total > 0.001 ? col / total : fallback_color;

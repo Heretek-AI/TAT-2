@@ -15,7 +15,7 @@ extends RefCounted
 ##   colors; background_color/zenith aliases are accepted defensively.)
 ##   APPROXIMATE tone-map: authored LinearColor values are HDR (e.g. horizon
 ##   [1.9796, 2.5866, 3.0]) and feeding them straight into the shader's
-##   source_color vec3 clips toward white. The cooked M_Sky curve cannot be
+##   vec3 uniforms clips toward white. The cooked M_Sky curve cannot be
 ##   recovered, so the HDR color is normalised by its max channel (not divided
 ##   by 255) before upload; in-range values pass through unchanged.
 ## - Moon disc: placed along the moon DirectionalLight3D's +Z axis (the axis
@@ -23,10 +23,11 @@ extends RefCounted
 ##   RelativeScale3D.x; the real angular DIAMETER comes from the sphere
 ##   geometry: 2 * asin(sphere_radius * size / (orbit_distance +
 ##   moon.distance_offset)). A preset with no authored size keeps the 6-degree
-##   fallback. moon.visible == false hides the disc. The disc samples a
-##   centered square of the real T_Moon_D lunar panorama (4096x2048
-##   equirectangular; the cooked M_Moon / MI_Moon_Base materials kept the
-##   texture but no UV framing rect, so the centered crop is APPROXIMATE).
+##   fallback. moon.visible == false hides the disc. The disc maps the whole
+##   real T_Moon_D lunar panorama onto the visible hemisphere (4096x2048
+##   equirectangular, atan/acos UV over the near hemisphere nz >= 0); the
+##   cooked M_Moon / MI_Moon_Base materials kept the texture but no UV framing
+##   rect, so the hemisphere mapping is APPROXIMATE.
 ##   Tint = moon.color (else moon.emissive), energy =
 ##   clamp(0.3 + 0.5 * moon.brightness, 0.25, 2.0) (UE brightness spans
 ##   0.15-50, so the compressive map is APPROXIMATE). The sky-light intensity

@@ -280,14 +280,18 @@ static func moon_disc_brightness(preset: Dictionary) -> Variant:
 	return null
 
 
+## The disc's own authored emissive tint wins; `moon.color` is the authored
+## `Sun / Moon Color` sky term, not the disc material colour and not the
+## directional light colour (that is `moon_light.color`), so it is only a
+## fallback.
 static func moon_disc_color(preset: Dictionary) -> Variant:
 	var m := _section(preset, "moon")
-	var c: Variant = m.get("color")
-	if _has_color(c):
-		return _color_of(c)
 	var e: Variant = m.get("emissive")
 	if _has_color(e):
 		return _color_of(e)
+	var c: Variant = m.get("color")
+	if _has_color(c):
+		return _color_of(c)
 	return null
 
 
@@ -308,6 +312,10 @@ static func apply_environment(env: Environment, moon: DirectionalLight3D, preset
 		var scatter: Variant = fog_sun_scatter(preset)
 		if scatter != null:
 			env.fog_sun_scatter = float(scatter)
+		# UE's ExponentialHeightFog does not occlude the sky sphere. Godot's
+		# default of 1.0 lets the height fog fully replace the sky at infinite
+		# depth, so the authored gradient, stars and moon would render black.
+		env.fog_sky_affect = 0.0
 		var amb_c: Variant = ambient_color(preset)
 		if amb_c != null:
 			env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR

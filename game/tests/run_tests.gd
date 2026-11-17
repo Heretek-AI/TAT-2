@@ -753,7 +753,8 @@ func _initialize() -> void:
 	await process_frame
 
 	# 22. Sky/moon fidelity: inherited preset fields, geometry-derived moon
-	# diameter, tone-mapped horizon and UE->Godot moon light directions.
+	# diameter, overall_color-multiplied gradient and UE->Godot moon light
+	# directions.
 	var wv_scr: GDScript = load("res://src/core/weather_visuals.gd") as GDScript
 	var mc_file: FileAccess = FileAccess.open("res://data/generated/weather/midnight_clear.json", FileAccess.READ)
 	var mc_preset: Dictionary = {}
@@ -791,15 +792,45 @@ func _initialize() -> void:
 	else:
 		print("PASS: moon angular diameter geometry (", snappedf(diam_a, 0.0001), " deg, ", snappedf(diam_b, 0.0001), " deg)")
 
+	# midnight_clear: authored horizon [1.9796, 2.5866, 3.0] * overall_color
+	# 0.001 = (0.0019796, 0.0025866, 0.003). The authored multiplier is kept,
+	# so the night gradient stays legitimately dark instead of tone-mapped up.
 	var mc_hc: Color = Color(-1.0, -1.0, -1.0)
 	if wv_scr != null:
 		mc_hc = wv_scr.horizon_color_of(mc_preset)
-	var hc_ok: bool = absf(mc_hc.r - 0.6599) < 0.001 and absf(mc_hc.g - 0.8622) < 0.001 and absf(mc_hc.b - 1.0) < 0.001
+	var hc_ok: bool = absf(mc_hc.r - 0.00198) < 0.0005 and absf(mc_hc.g - 0.00259) < 0.0005 and absf(mc_hc.b - 0.003) < 0.0005
 	if wv_scr == null or not hc_ok:
-		printerr("FAIL: tone-mapped horizon color (got ", mc_hc, " expected (0.6599, 0.8622, 1.0))")
+		printerr("FAIL: overall_color-multiplied horizon color (got ", mc_hc, " expected (0.00198, 0.00259, 0.003))")
 		fails += 1
 	else:
-		print("PASS: tone-mapped HDR horizon (", mc_hc, ")")
+		print("PASS: overall_color-multiplied horizon (", mc_hc, ")")
+
+	# midnight_clear: authored zenith [0.003, 0.0096, 0.026] * overall_color
+	# 0.001 = (3e-06, 9.6e-06, 2.6e-05). Pins the multiplier on the zenith path
+	# so a change that stops multiplying zenith fails.
+	var mc_zc: Color = Color(-1.0, -1.0, -1.0)
+	if wv_scr != null:
+		mc_zc = wv_scr.zenith_color_of(mc_preset)
+	var zc_ok: bool = absf(mc_zc.r - 3e-6) < 1e-6 and absf(mc_zc.g - 9.6e-6) < 1e-6 and absf(mc_zc.b - 2.6e-5) < 1e-6
+	if wv_scr == null or not zc_ok:
+		printerr("FAIL: overall_color-multiplied zenith color (got ", mc_zc, " expected (3e-06, 9.6e-06, 2.6e-05))")
+		fails += 1
+	else:
+		print("PASS: overall_color-multiplied zenith (%.7f, %.7f, %.7f)" % [mc_zc.r, mc_zc.g, mc_zc.b])
+
+	# The moon disc's authored emissive tint must win over `moon.color` (the
+	# authored Sun / Moon Color sky term; the directional light colour is
+	# moon_light.color); midnight_clear emissive = [0.5137, 0.5216, 1.0].
+	var mdc_raw: Variant = null
+	if wp_scr != null:
+		mdc_raw = wp_scr.moon_disc_color(mc_preset)
+	var mdc: Color = mdc_raw if mdc_raw is Color else Color(-1.0, -1.0, -1.0)
+	var mdc_ok: bool = absf(mdc.r - 0.5137) < 0.001 and absf(mdc.g - 0.5216) < 0.001 and absf(mdc.b - 1.0) < 0.001
+	if wp_scr == null or not mdc_ok:
+		printerr("FAIL: moon disc colour prefers authored emissive (got ", mdc, " expected (0.5137, 0.5216, 1.0))")
+		fails += 1
+	else:
+		print("PASS: moon disc colour prefers authored emissive (", mdc, ")")
 
 	var df_file: FileAccess = FileAccess.open("res://data/generated/weather/dense_fog.json", FileAccess.READ)
 	var df_preset: Dictionary = {}
@@ -830,6 +861,16 @@ func _initialize() -> void:
 		fails += 1
 	else:
 		print("PASS: DenseFog moon light (degenerate pitch -90) points straight down (down=", df_down, ", sky=", df_up, ")")
+
+	# Godot's fog_sky_affect defaults to 1.0, which fully replaces the sky at
+	# infinite depth. UE height fog does not occlude the sky sphere, so
+	# apply_environment must pin it to 0.0 for any applied preset.
+	var fsa_ok: bool = df_applied and df_env.fog_sky_affect == 0.0
+	if not fsa_ok:
+		printerr("FAIL: DenseFog apply_environment fog_sky_affect (applied=", df_applied, " got=", df_env.fog_sky_affect, " expected 0.0)")
+		fails += 1
+	else:
+		print("PASS: DenseFog apply_environment leaves fog_sky_affect=0.0 (sky stays visible)")
 
 	var den_file: FileAccess = FileAccess.open("res://data/generated/weather/midnight_clear_thieves_den.json", FileAccess.READ)
 	var den_preset: Dictionary = {}

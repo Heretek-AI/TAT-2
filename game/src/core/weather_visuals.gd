@@ -8,16 +8,26 @@ extends RefCounted
 ## in tat_sky.gdshader.
 ##
 ## UE -> Godot value mapping used here:
-## - Sky gradient: sky.horizon_color / sky.zenith_color. Missing horizon falls
-##   back to sky.background_color, then sky.overall_color, then the zenith
-##   darkened x0.55; missing zenith falls back to overall_color, then the
-##   horizon darkened x0.6. (The JSON carries only horizon/zenith/overall
-##   colors; background_color/zenith aliases are accepted defensively.)
-##   APPROXIMATE tone-map: authored LinearColor values are HDR (e.g. horizon
-##   [1.9796, 2.5866, 3.0]) and feeding them straight into the shader's
-##   vec3 uniforms clips toward white. The cooked M_Sky curve cannot be
-##   recovered, so the HDR color is normalised by its max channel (not divided
-##   by 255) before upload; in-range values pass through unchanged.
+## - Sky gradient: authored_colour * sky.overall_color, where authored_colour
+##   is sky.horizon_color / sky.zenith_color. The multiplier is applied
+##   exactly once, and only to a colour that came from horizon_color,
+##   zenith_color or background_color.
+##   Missing horizon falls back to sky.background_color, then to the authored
+##   zenith darkened x0.55 (multiplied by overall_color when present), then to
+##   sky.overall_color returned UNMULTIPLIED (that colour already is the
+##   multiplier, so multiplying again would square it), then to
+##   FALLBACK_HORIZON. Missing zenith falls back to the authored horizon
+##   darkened x0.6 (multiplied by overall_color when present), then to
+##   sky.overall_color returned UNMULTIPLIED, then to FALLBACK_ZENITH.
+##   (The JSON carries only horizon/zenith/overall colors;
+##   background_color/zenith aliases are accepted defensively.)
+##   sky.overall_color is UE M_Sky's Overall Color multiplier (e.g.
+##   midnight_clear 0.001), so the authored HDR horizon [1.9796, 2.5866, 3.0]
+##   becomes a legitimately very dark night gradient and is not re-brightened.
+##   APPROXIMATE fallback only when a preset has no authored overall_color:
+##   the HDR colour is normalised by its max channel (not divided by 255)
+##   before upload, because the cooked M_Sky curve cannot be recovered.
+##   In-range values pass through unchanged on that fallback path.
 ## - Moon disc: placed along the moon DirectionalLight3D's +Z axis (the axis
 ##   the light shines from). moon.size is the authored SM_Moon static-mesh
 ##   RelativeScale3D.x; the real angular DIAMETER comes from the sphere
@@ -28,7 +38,10 @@ extends RefCounted
 ##   equirectangular, atan/acos UV over the near hemisphere nz >= 0); the
 ##   cooked M_Moon / MI_Moon_Base materials kept the texture but no UV framing
 ##   rect, so the hemisphere mapping is APPROXIMATE.
-##   Tint = moon.color (else moon.emissive), energy =
+##   Tint = moon.emissive (the authored MoonlightEmissiveColor tint; the
+##   binding to the disc material is INFERRED), else moon.color (the authored
+##   `Sun / Moon Color` sky term), else the directional light colour
+##   (moon_light.color). Energy =
 ##   clamp(0.3 + 0.5 * moon.brightness, 0.25, 2.0) (UE brightness spans
 ##   0.15-50, so the compressive map is APPROXIMATE). The sky-light intensity
 ##   is an ambient term and deliberately does not scale the disc.
@@ -37,7 +50,10 @@ extends RefCounted
 ##   reads full, thieves_den 3.0 subtle, 0 disables). APPROXIMATE: hash
 ##   sparkle, no recovered star catalogue.
 ## - Clouds: sky.cloud_color tints a horizon haze band with strength
-##   clamp(cloud_opacity * 0.18, 0, 0.55). No cloud texture is invented.
+##   clamp(cloud_opacity * 0.18, 0, 0.55). This is an APPROXIMATE term, not the
+##   cooked volumetric cloud material, and its tint follows the authored
+##   `Overall Color` multiplier (cloud_color * sky.overall_color when present),
+##   matching UE M_Sky's whole-sky multiply. No cloud texture is invented.
 ## - Rain: GPUParticles3D box 60x40x60 m around the emitter, amount =
 ##   1800 * clamp(intensity, 0, 1.5) clamped to [100, 2700] (APPROXIMATE;
 ##   Niagara ratios were not recovered, only the on/off + intensity scalar),
@@ -97,8 +113,9 @@ static func moon_diameter_deg(size: float, distance_offset: float) -> float:
 	return clampf(2.0 * rad_to_deg(asin(clampf(r / d, 0.0, 0.999))), 0.0, 20.0)
 
 
-## APPROXIMATE tone-map for authored HDR sky colors: normalise by the max
-## channel so the shader's source_color vec3 keeps its hue instead of clipping.
+## APPROXIMATE tone-map for authored HDR sky colors when the preset carries no
+## overall_color: normalise by the max channel so the shader's source_color
+## vec3 keeps its hue instead of clipping.
 static func _tone_safe(c: Color) -> Color:
 	var m: float = maxf(c.r, maxf(c.g, c.b))
 	if m > 1.0:
@@ -106,29 +123,48 @@ static func _tone_safe(c: Color) -> Color:
 	return c
 
 
+## UE M_Sky multiplies the authored gradient by sky.overall_color. Apply that
+## authored multiplier when present; only the no-overall_color fallback uses
+## the approximate tone-map.
+static func _authored_sky_color(c: Color, overall: Variant) -> Color:
+	if overall != null:
+		return c * (overall as Color)
+	return _tone_safe(c)
+
+
 ## Horizon gradient color with the documented fallback chain.
 static func horizon_color_of(preset: Dictionary) -> Color:
 	var sky: Dictionary = preset.get("sky", {})
-	for key: String in ["horizon_color", "background_color", "overall_color"]:
+	var overall: Variant = _color3(sky.get("overall_color"))
+	for key: String in ["horizon_color", "background_color"]:
 		var c: Variant = _color3(sky.get(key))
 		if c != null:
-			return _tone_safe(c as Color)
+			return _authored_sky_color(c as Color, overall)
 	var z: Variant = _color3(sky.get("zenith_color", sky.get("zenith", null)))
 	if z != null:
-		return _tone_safe((z as Color) * Color(0.55, 0.55, 0.55, 1.0))
+		return _authored_sky_color((z as Color) * Color(0.55, 0.55, 0.55, 1.0), overall)
+	# An authored overall_color is already the multiplier: return it as-is so it
+	# is never multiplied by itself (which would square it).
+	if overall != null:
+		return overall as Color
 	return FALLBACK_HORIZON
 
 
 ## Zenith gradient color with the documented fallback chain.
 static func zenith_color_of(preset: Dictionary) -> Color:
 	var sky: Dictionary = preset.get("sky", {})
-	for key: String in ["zenith_color", "zenith", "overall_color"]:
+	var overall: Variant = _color3(sky.get("overall_color"))
+	for key: String in ["zenith_color", "zenith"]:
 		var c: Variant = _color3(sky.get(key))
 		if c != null:
-			return _tone_safe(c as Color)
+			return _authored_sky_color(c as Color, overall)
 	var h: Variant = _color3(sky.get("horizon_color", sky.get("background_color", null)))
 	if h != null:
-		return _tone_safe((h as Color) * Color(0.6, 0.6, 0.6, 1.0))
+		return _authored_sky_color((h as Color) * Color(0.6, 0.6, 0.6, 1.0), overall)
+	# An authored overall_color is already the multiplier: return it as-is so it
+	# is never multiplied by itself (which would square it).
+	if overall != null:
+		return overall as Color
 	return FALLBACK_ZENITH
 
 
@@ -185,7 +221,14 @@ static func make_sky(preset: Dictionary, moon: DirectionalLight3D) -> Sky:
 	var cloud_op: Variant = WeatherProfile.sky_cloud_opacity(preset)
 	if cloud_col != null and cloud_op != null:
 		haze = clampf(float(cloud_op) * CLOUD_OPACITY_TO_HAZE, 0.0, CLOUD_HAZE_MAX)
-		mat.set_shader_parameter("cloud_color", cloud_col)
+		# UE M_Sky multiplies the whole sky, cloud term included, by Overall
+		# Color. The haze strength stays authored; only its tint follows the
+		# multiplier so the night sky is not tinted at full HDR brightness.
+		var haze_col: Color = cloud_col as Color
+		var overall: Variant = _color3((preset.get("sky", {}) as Dictionary).get("overall_color"))
+		if overall != null:
+			haze_col *= overall as Color
+		mat.set_shader_parameter("cloud_color", haze_col)
 	mat.set_shader_parameter("cloud_haze", haze)
 
 	var sky := Sky.new()

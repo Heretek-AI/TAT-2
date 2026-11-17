@@ -9,10 +9,14 @@ preset to `game/data/generated/weather/<preset_id>.json`, plus a
 preset (derived from the map's TATWeatherManager PresetOverrides where
 possible, otherwise from the preset that names the map).
 
-Colours are normalized to 0-1 floats. UE stores colours in two shapes:
-  - LinearColor: {"R": 0.0-1.0 floats, ...}
-  - FColor:      {"R/G/B": 0-255 ints, "Hex": ...}
-`_norm_color` handles both (any channel > 1.0 means 0-255 ints -> /255).
+Colours keep UE's two serialized shapes distinct:
+  - LinearColor: float channels with A == 1.0; HDR values above 1.0 are kept.
+  - FColor:      integer 0-255 channels with A == 255; divided by 255.
+When the extracted JSON declares a property's struct type, that declaration
+decides; the serialized-shape check is only a fallback.
+Presets inherit from parent presets, so `parse_preset` walks the
+BlueprintGeneratedClass Super / CDO Template chain and merges child over
+parent before normalizing.
 
 No numbers are invented: fields absent from the source JSON become null and
 the Godot side leaves the corresponding environment property untouched.
@@ -20,11 +24,13 @@ the Godot side leaves the corresponding environment property untouched.
 
 import json
 import re
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-EX_WEATHER = ROOT / "extracted" / "json" / "Art" / "Environment" / "Weather"
-EX_MAPS = ROOT / "extracted" / "json" / "Maps"
+EX_ROOT = ROOT / "extracted" / "json"
+EX_WEATHER = EX_ROOT / "Art" / "Environment" / "Weather"
+EX_MAPS = EX_ROOT / "Maps"
 OUT_DIR = ROOT / "game" / "data" / "generated" / "weather"
 
 # Preset id -> canonical gameplay weather tag (ManualMatch of UE Weather.Type.*).
@@ -57,8 +63,14 @@ def camel_to_snake(name: str) -> str:
     return re.sub(r"_+", "_", s).lower()
 
 
-def _norm_color(v) -> list | None:
-    """UE colour dict -> [r, g, b] 0-1 floats, or None."""
+def _norm_color(v, struct_type: str | None = None) -> list | None:
+    """UE colour dict -> [r, g, b] floats, or None.
+
+    A declared struct type wins: FColor (Color) is integer 0-255 channels
+    divided by 255, LinearColor is float channels with A == 1.0 and may exceed
+    1.0 for HDR, so those are kept. Without a declaration, fall back to the
+    serialized shape: FColor has integer channels and A == 255.
+    """
     if not isinstance(v, dict):
         return None
     if not all(k in v for k in ("R", "G", "B")):
@@ -67,8 +79,12 @@ def _norm_color(v) -> list | None:
         r, g, b = float(v["R"]), float(v["G"]), float(v["B"])
     except (TypeError, ValueError):
         return None
-    if max(r, g, b) > 1.0:
-        # FColor 0-255 ints.
+    channels = (v["R"], v["G"], v["B"])
+    if struct_type == "Color" or (
+        struct_type is None
+        and v.get("A") == 255
+        and all(isinstance(c, int) and not isinstance(c, bool) for c in channels)
+    ):
         r, g, b = r / 255.0, g / 255.0, b / 255.0
     return [round(r, 4), round(g, 4), round(b, 4)]
 
@@ -100,31 +116,170 @@ def _ref_path(v):
     return None
 
 
-def _find(exports: list, want_type: str, want_name: str = ""):
+def _find(exports: list, want_type: str, want_name: str = "", prefer_name: str = ""):
+    """Properties of the best export of want_type.
+
+    Construction-script nodes carry no Properties; they are skipped whenever a
+    non-empty candidate exists. The canonical `prefer_name` export wins over
+    the first non-empty one. Returns {} when nothing usable matches.
+    """
+    fallback = {}
     for e in exports:
-        if e.get("Type") == want_type:
-            if not want_name or want_name in str(e.get("Name", "")):
-                return e.get("Properties") or {}
+        if e.get("Type") != want_type:
+            continue
+        name = str(e.get("Name", ""))
+        if want_name and want_name not in name:
+            continue
+        props = e.get("Properties") or {}
+        if not props:
+            continue
+        if prefer_name and name == prefer_name:
+            return props
+        if not fallback:
+            fallback = props
+    return fallback
+
+
+def _cdo_export(exports: list) -> dict:
+    for e in exports:
+        if str(e.get("Name", "")).startswith("Default__"):
+            return e
     return {}
 
 
-def parse_preset(path: Path) -> dict:
-    exports = json.loads(path.read_text())
-    preset_id = camel_to_snake(path.stem.replace("BP_WeatherPreset_", ""))
+def _declared_structs(exports: list) -> dict:
+    """Property name -> struct type declared in the class's ChildProperties."""
+    out = {}
+    for e in exports:
+        if e.get("Type") != "BlueprintGeneratedClass":
+            continue
+        for prop in e.get("ChildProperties") or []:
+            name = prop.get("Name")
+            ref = prop.get("Struct")
+            if isinstance(ref, dict):
+                ref = ref.get("ObjectName")
+            if not isinstance(name, str) or not isinstance(ref, str):
+                continue
+            match = re.search(r"'([^']+)'", ref)
+            if match:
+                out[name] = match.group(1)
+    return out
 
-    cdo = {}
+
+def _cdo_color(cdo: dict, structs: dict, key: str) -> list | None:
+    """CDO colour, using the property's declared struct type when known."""
+    return _norm_color(cdo.get(key), structs.get(key))
+
+
+def _package_from_ref(ref) -> str | None:
+    """UE object reference -> package path without the trailing .<index>."""
+    if not isinstance(ref, dict):
+        return None
+    p = ref.get("ObjectPath")
+    if not isinstance(p, str) or not p:
+        return None
+    return re.sub(r"\.\d+$", "", p)
+
+
+def _package_path(package: str) -> Path | None:
+    """UE package path -> extracted JSON file inside EX_WEATHER, or None."""
+    prefix = "/Game/"
+    if not package.startswith(prefix):
+        return None
+    candidate = (EX_ROOT / (package[len(prefix) :] + ".json")).resolve()
+    try:
+        candidate.relative_to(EX_WEATHER.resolve())
+    except ValueError:
+        return None
+    return candidate
+
+
+def _parent_package(exports: list) -> str | None:
+    """Parent preset package named by the class Super or CDO Template."""
+    for e in exports:
+        if e.get("Type") == "BlueprintGeneratedClass":
+            package = _package_from_ref(e.get("Super"))
+            if package:
+                return package
+            break
     for e in exports:
         if str(e.get("Name", "")).startswith("Default__"):
-            cdo = e.get("Properties") or {}
-            break
+            return _package_from_ref(e.get("Template"))
+    return None
 
-    dl = _find(exports, "DirectionalLightComponent")
-    fog = _find(exports, "ExponentialHeightFogComponent")
-    sky = _find(exports, "SkyLightComponent")
-    pp = _find(exports, "PostProcessComponent")
+
+def preset_chain(path: Path) -> list:
+    """Exports for path and its Blueprint parents, child first, root last."""
+    chain = []
+    seen = set()
+    current = path
+    while current is not None and current not in seen:
+        seen.add(current)
+        exports = json.loads(current.read_text())
+        chain.append(exports)
+        package = _parent_package(exports)
+        if package is None:
+            break
+        parent = _package_path(package)
+        if parent is None or not parent.is_file():
+            print(
+                "warning: %s: cannot resolve parent preset package %s under %s; "
+                "inherited fields will be null" % (path.name, package, EX_WEATHER),
+                file=sys.stderr,
+            )
+            break
+        current = parent
+    return chain
+
+
+def _merge_dicts(parent: dict, child: dict) -> dict:
+    """Recursively merge property dicts; child values win over parent ones."""
+    merged = dict(parent)
+    for key, value in child.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _merge_dicts(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def parse_preset(path: Path) -> dict:
+    chain = preset_chain(path)
+    preset_id = camel_to_snake(path.stem.replace("BP_WeatherPreset_", ""))
+    structs = {}
+    for exports in reversed(chain):
+        structs.update(_declared_structs(exports))
+
+    cdo = {}
+    dl = {}
+    fog = {}
+    sky = {}
+    pp = {}
+    cloud = {}
+    rain_niagara = {}
+    # Chain is child-first; merge root-ward so child properties win and
+    # inherited ones fill the gaps.
+    for exports in reversed(chain):
+        cdo = _merge_dicts(cdo, _cdo_export(exports).get("Properties") or {})
+        dl = _merge_dicts(
+            dl,
+            _find(
+                exports,
+                "DirectionalLightComponent",
+                prefer_name="PrimaryDirectionalLightComponent",
+            ),
+        )
+        fog = _merge_dicts(fog, _find(exports, "ExponentialHeightFogComponent"))
+        sky = _merge_dicts(sky, _find(exports, "SkyLightComponent"))
+        pp = _merge_dicts(pp, _find(exports, "PostProcessComponent"))
+        cloud = _merge_dicts(
+            cloud, _find(exports, "VolumetricCloudComponent", "VolumetricCloud")
+        )
+        rain_niagara = _merge_dicts(
+            rain_niagara, _find(exports, "NiagaraComponent", "Rain")
+        )
+
     pps = pp.get("Settings") if isinstance(pp.get("Settings"), dict) else {}
-    cloud = _find(exports, "VolumetricCloudComponent", "VolumetricCloud")
-    rain_niagara = _find(exports, "NiagaraComponent", "Rain")
 
     rot = (
         dl.get("RelativeRotation")
@@ -143,12 +298,16 @@ def parse_preset(path: Path) -> dict:
         enable_rain = False
 
     sky_material = _ref_path(cdo.get("Sky material"))
-    cloud_material = _ref_path(cdo.get("VolumetricCloudMaterial")) or _ref_path(
-        cloud.get("Material")
+    own_cdo = _cdo_export(chain[0]).get("Properties") or {}
+    own_cloud = _find(chain[0], "VolumetricCloudComponent", "VolumetricCloud")
+    # The preset's own CDO slot wins when it authors one; otherwise its own
+    # component material beats an inherited CDO value, which would shadow it.
+    cloud_material = (
+        _ref_path(own_cdo.get("VolumetricCloudMaterial"))
+        or _ref_path(own_cloud.get("Material"))
+        or _ref_path(cdo.get("VolumetricCloudMaterial"))
+        or _ref_path(cloud.get("Material"))
     )
-    if cloud_material is None:
-        # Some presets name the material via a different CDO key.
-        cloud_material = _ref_path(cdo.get("VolumetricCloudMaterial"))
 
     return {
         "preset": preset_id,
@@ -159,20 +318,21 @@ def parse_preset(path: Path) -> dict:
             if isinstance(cdo.get("Moon visibility"), bool)
             else None,
             "size": _num(cdo.get("Moon Size")),
+            "distance_offset": _num(cdo.get("Moon Distance Offset")),
             "brightness": _num(cdo.get("Moon Brightness")),
             "sun_brightness": _num(cdo.get("Sun brightness")),
-            "color": _norm_color(cdo.get("Sun / Moon Color")),
-            "emissive": _norm_color(cdo.get("MoonlightEmissiveColor")),
-            "overall_color": _norm_color(cdo.get("Overall Color")),
+            "color": _cdo_color(cdo, structs, "Sun / Moon Color"),
+            "emissive": _cdo_color(cdo, structs, "MoonlightEmissiveColor"),
+            "overall_color": _cdo_color(cdo, structs, "Overall Color"),
         },
         "sky": {
             "material": sky_material,
-            "overall_color": _norm_color(cdo.get("Overall Color")),
-            "cloud_color": _norm_color(cdo.get("Cloud color")),
+            "overall_color": _cdo_color(cdo, structs, "Overall Color"),
+            "cloud_color": _cdo_color(cdo, structs, "Cloud color"),
             "cloud_opacity": _num(cdo.get("Cloud opacity")),
             "stars_brightness": _num(cdo.get("Stars brightness")),
-            "horizon_color": _norm_color(cdo.get("Horizon color")),
-            "zenith_color": _norm_color(cdo.get("Zenith Color")),
+            "horizon_color": _cdo_color(cdo, structs, "Horizon color"),
+            "zenith_color": _cdo_color(cdo, structs, "Zenith Color"),
             "volumetric_cloud_material": cloud_material,
             "volumetric_cloud_visible": cdo.get("VolumetricCloudVisibility")
             if isinstance(cdo.get("VolumetricCloudVisibility"), bool)

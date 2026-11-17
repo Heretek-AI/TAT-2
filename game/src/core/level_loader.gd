@@ -72,7 +72,10 @@ const CLUTTER_TOKENS: Array[String] = [
 	"foliage", "ivy", "vine", "moss", "cobweb", "sm_dust",
 ]
 ## Sublevels that only dress the horizon: no physics colliders, no occluders.
-const DECORATIVE_SUBLEVEL_TOKENS: Array[String] = ["skyboxgeo", "periphery"]
+## PeripheryA is NOT decorative: it contains the packed city blocks (including
+## the Guildhall safe-room buildings) and must collide. Only the skybox shell
+## is horizon-only.
+const DECORATIVE_SUBLEVEL_TOKENS: Array[String] = ["skyboxgeo"]
 ## Occlusion occluders are opt-in: only obviously solid structural piece names
 ## (never see-through pieces like windows, doors, rails, frames or light fixtures).
 const OCCLUDER_INCLUDE_TOKENS: Array[String] = [
@@ -884,6 +887,8 @@ func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> 
 	_apply_culling_policy(node, low_mp, mesh)
 	if MobileProfile.is_mobile():
 		node.lod_bias = MobileProfile.lod_bias()
+	node.set_meta("ue_mesh", mp)
+	node.set_meta("decorative", not bool(item.get("collide", false)))
 	parent.add_child(node)
 	ctx["chunk_count"] = int(ctx.get("chunk_count", 0)) + 1
 
@@ -1426,17 +1431,35 @@ func _build_light(info: Dictionary, cast_shadow: bool = false) -> Light3D:
 	return light
 
 
-func _landscape_material(ctx: Dictionary) -> StandardMaterial3D:
+func _landscape_material(ctx: Dictionary, source: String = "") -> StandardMaterial3D:
 	var cached: StandardMaterial3D = ctx.get("landscape_mat") as StandardMaterial3D
 	if cached != null:
 		return cached
 	var mat: StandardMaterial3D = StandardMaterial3D.new()
-	var ground_alb: Texture2D = _load_tex("res://assets/ue/Raw/MaterialLibrary/Legacy/T_CobbleStoneA_D.png")
+	# Guildhall's MI_Landscape TextureStreamingData names T_RoadBricksA_H, so
+	# its street surface uses the matching road-brick D/N maps. Other maps keep
+	# the cobble fallback until their own landscape layer textures are resolved.
+	var use_road: bool = source.to_lower().contains("guildhall")
+	var road_dir: String = "res://assets/ue/Raw/MaterialLibrary/Environment/Stone/FloorExterior/"
+	var cobble_dir: String = "res://assets/ue/Raw/MaterialLibrary/Legacy/"
+	var ground_alb: Texture2D = null
+	var ground_norm: Texture2D = null
+	if use_road:
+		ground_alb = _load_tex(road_dir + "T_RoadBricksA_D.png")
+		ground_norm = _load_tex(road_dir + "T_RoadBricksA_N.png")
+	if ground_alb == null:
+		ground_alb = _load_tex(cobble_dir + "T_CobbleStoneA_D.png")
+	if ground_norm == null:
+		ground_norm = _load_tex(cobble_dir + "T_CobbleStoneA_N.png")
 	if ground_alb == null:
 		ground_alb = _load_tex("res://assets/ue/Raw/MaterialLibrary/Environment/Nature/Dirt/T_GroundDirtA_D.png")
 	if ground_alb != null:
 		mat.albedo_texture = ground_alb
-	mat.albedo_color = Color(0.36, 0.37, 0.35)
+	if ground_norm != null:
+		mat.normal_enabled = true
+		mat.normal_texture = ground_norm
+		mat.normal_scale = 0.8
+	mat.albedo_color = Color(0.72, 0.70, 0.66) if use_road else Color(0.42, 0.42, 0.40)
 	mat.roughness = 0.90
 	mat.uv1_scale = Vector3(12.0, 12.0, 1.0)
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
@@ -1464,7 +1487,7 @@ func _build_one_landscape(lc_var: Variant, parent: Node3D, ctx: Dictionary) -> v
 			img = Image.load_from_file(hpath)
 	if img == null or img.is_empty():
 		return
-	var mat: StandardMaterial3D = _landscape_material(ctx)
+	var mat: StandardMaterial3D = _landscape_material(ctx, str(lc.get("source", "")))
 	var iw: int = img.get_width()
 	var ih: int = img.get_height()
 	var quads: int = int(lc.get("quads", 63))

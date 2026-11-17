@@ -36,7 +36,8 @@ Last verified: **20/20 PASS, fails=0, zero SCRIPT ERROR**. Engine exit-time `Obj
 - **Audio**: 3,425 Wwise `0xFFFF` chunks decoded to `game/assets/ue/audio/wwise/<id>.ogg` (vgmstream r2168), 372 MiB; `audio_library.json`. `AkAudioEvent` assets expose EventId/MediaIds/DebugNames, but **no chunk↔MediaId map** exists (no `.wem`/`.bnk`, chunk ids are ubulk offsets). Do not wire clips to tags by guess; 9 synthesized fallbacks remain.
 
 ### Runtime
-- Level loader: 32 m XZ chunking with tight custom AABB, tiered distance culling/shadows, occlusion boxes, per-cell collision bodies, skybox/periphery collider exclusion.
+- Level loader: 32 m XZ chunking with tight custom AABB, tiered distance culling/shadows, occlusion boxes, per-cell collision bodies, skybox-only decorative exclusion (packed-city PeripheryA is collidable).
+- **Packed Level Actors**: 39 `BPP_PL_*` classes / 3,210 instanced components / 30,127 `PerInstanceSMData` transforms expanded from BPP templates; Guildhall PeripheryA 3,587 -> 10,590 meshes; runtime 51,305 meshes / 23,125 collision shapes. Guildhall landscape uses real `T_RoadBricksA_D/N` street textures from `MI_Landscape.TextureStreamingData`. Report: `docs/reports/packed-level-instances.md`.
 - Level content: 347 validated decals, 138 blocking-volume colliders, 1 active rect light, 1 sky/fog/atmosphere, 3,692 Niagara placements counted (not spawned), 52 splines skipped (editor mesh).
 - Spawns: all 689 throwable/ammo/health/civilian markers with real meshes/pickups/civilians; 546 loot actors with real meshes/table values; 234 openable containers (real loot on open); **170 swinging doors / 262 leaves** (90° open/close, rotating collision; 111 unresolved window/doorway hinges counted).
 - Characters: guards play 10 retargeted real clips (95/97 bones, rest-delta + unit correction); player uses real ThiefNisha 3P body and 1P arms with real Walk/Sprint/Crouch clips (procedural fallback).
@@ -80,8 +81,8 @@ a29a06f feat(anims): retarget real guard clips
 
 ## Next steps (priority)
 
-1. **Visual QA pass** in `make run` on Guildhall/Old Manor/Den: sky/moon scale, light beam overbright, Guildhall periphery fragments, Old Manor porch spawn, door visibility. Use the autostart recipe below.
-2. **Doors**: resolve the 111 remaining pivots via level-actor component `AttachParent` (not just SCS children) if their leaves exist; keep counts.
+1. **Landscape layer blending**: the extracted `Weightmap_*.png` files are not yet blended; Guildhall currently uses one road-brick surface and other maps a cobble fallback. Build a shader that samples the weightmap channels and the real layer textures (`T_RoadBricksA`, `T_GrassA`, `T_GroundDirtA`, `T_CobbleA`) so streets/grass/dirt match the authored landscape. This is the remaining visual gap behind “streets missing”.
+2. **Visual QA pass** in `make run` on Guildhall/Old Manor/Den: sky/moon scale, light beam overbright, Old Manor porch spawn, door visibility, and the safe-room catwalk gaps (no floor mesh exists at that exact spot; do not invent one).
 3. **VFX (optional)**: only if a specific system is hand-matched or Niagara bytecode analysis is undertaken; placements are already extracted. Do not fabricate rates.
 4. **Audio (optional)**: recover event↔media mapping or leave the fallbacks; never assign unnamed clips to gameplay tags.
 5. **Spawn quality**: prefer interior markers with 2–3 m forward clearance; consider QuestGraph/contract spawn tags if discovered.

@@ -1,0 +1,125 @@
+# Packed Level Actor instances + Guildhall street surface (2026-11-16)
+
+Follow-up to the 2026-11-16 handoff. Live QA of contract 4 showed the player
+standing on a graybox pad surrounded by floating building fragments and black
+void. The cause was not missing art: the packed city geometry was extracted but
+collapsed to each actor's root.
+
+## Root cause
+
+Guildhall's city blocks are `BPP_PL_*` Packed Level Actors. Their geometry is
+stored in `InstancedStaticMeshComponent` templates on the BPP class, with the
+real placement transforms in a **top-level `PerInstanceSMData` array**:
+
+```
+extracted/json/Maps/Buildings/Periphery/PackedLevels/
+  BPP_PL_Periph_Apartment_1400_6Story_Front.json
+    InstancedStaticMesh10_GEN_VARIABLE
+      StaticMesh = SM_Urban_Foundation_Wall_4x6
+      PerInstanceSMData = [ ... 14 transforms ... ]
+```
+
+The level instance stub only has `Template` + `AttachParent`; it has no
+`StaticMesh` and no `PerInstanceSMData`:
+
+```
+Guildhall_PeripheryA.json
+  InstancedStaticMeshComponent'...BPP_PL_..._C_0.InstancedStaticMesh'
+    Template -> BPP_PL_..._C:InstancedStaticMesh_GEN_VARIABLE
+```
+
+`tools/parse_tables.py` previously read `PerInstanceSMData` only from the level
+stub. The mesh path fell back to the BPP template, but every instance was
+emitted at the actor root. That is the “objects collided” / floating-fragment
+look.
+
+## Fix
+
+`tools/parse_tables.py`:
+
+- `build_bp_mesh_templates` now stores each template's `PerInstanceSMData` and
+  local transform alongside its mesh.
+- The instanced-component branch falls back to the template's mesh,
+  `PerInstanceSMData`, and local transform when the level stub omits them.
+- Instance transforms are composed as
+  `level_transform × actor_root × component_local × instance_transform`.
+
+`game/src/core/level_loader.gd`:
+
+- `PeripheryA` is no longer treated as decorative horizon dressing. It contains
+  the safe-room buildings and now generates collision; only `SkyboxGeo` remains
+  non-colliding.
+- Chunk nodes carry `ue_mesh` / `decorative` metadata for diagnostics.
+- Guildhall's landscape material uses the real `T_RoadBricksA_D/N` textures
+  named by `MI_Landscape.TextureStreamingData` (`T_RoadBricksA_H`). Other maps
+  keep the cobble fallback.
+
+## Verified counts
+
+Before:
+
+- `Guildhall_PeripheryA`: 3,587 mesh instances, all packed components collapsed
+  at their actor roots.
+- Guildhall runtime: 16,767 meshes.
+- Safe-room spawn: 9 meshes within 18 m.
+
+After `make normalize`:
+
+- 39 `BPP_*` files expose **3,210 instanced components / 30,127 real
+  instances**.
+- `Guildhall_PeripheryA`: **10,590** mesh instances.
+- Guildhall generated total: **55,234** mesh instances.
+- Guildhall runtime load: **51,305** meshes, 7,866 chunks, 217 collision
+  bodies, 23,125 collision shapes.
+- Safe-room spawn at `(127.27, 25.47, -5.33)`: **630 meshes within 25 m**,
+  including the apartment walls/floors/roofs, crates, barrels and debris.
+
+The packed apartment actor's real instance AABB is
+`x 111.9..131.8, y 12.0..61.4, z -25.7..-5.5`, which encloses the Guildhall
+safe-room spawn. Previously every one of those pieces sat at
+`(121.74, 12.00, -16.19)`.
+
+## Runtime evidence
+
+`make test` (`/tmp/opencode/final_packed_test.log`):
+
+```
+PASS: Perf chunking (chunks=7866, multimeshes=4829, collision_bodies=217,
+      shapes=23125, occluders=768, max_chunk_span=96.7m, distance-culled=2149)
+PASS: Skybox excluded from physics; packed-city PeripheryA is collidable
+PASS: packed Level Actor instances expanded (PeripheryA meshes=10590,
+      630 around safe-room spawn)
+SUMMARY: fails=0
+EXIT=0
+```
+
+`make audit`: 12,630 / 12,704 manifest entries resolved (99.4%), exit 0.
+
+Desktop/Xvfb QA screenshots:
+
+- `/tmp/opencode/qa_guildhall_packed2.png` — safe room now enclosed by brick
+  walls, crates and a solid floor.
+- `/tmp/opencode/qa_xvfb_look.png` — exit onto the metal walkway; brick
+  buildings across the gap, no floating fragments.
+- `/tmp/opencode/qa_xvfb_street.png` — road-brick street surface below the
+  walkway (`T_RoadBricksA_D`).
+
+## Remaining gaps (not faked)
+
+- The landscape material's per-layer weightmaps are extracted but not yet
+  blended; Guildhall uses the road-brick surface globally, while Old Manor /
+  Den keep the cobble fallback. The authored layer blend is the next landscape
+  wave.
+- The safe-room catwalk has open gaps between its structural crossbeams; the
+  street below is visible through them. No floor mesh exists at that exact
+  spot in the extracted BPP class, so no floor was invented.
+- Sky/moon scale, VFX rates and Wwise event naming remain as documented in
+  `FIDELITY_GAPS.md`.
+
+## Reproduce
+
+```bash
+make normalize
+make test
+make audit
+```

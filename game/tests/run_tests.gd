@@ -276,17 +276,22 @@ func _initialize() -> void:
 	var occluders: int = int(gh_stats.get("occluder_count", 0))
 	var multi_nodes: int = 0
 	var max_chunk_span: float = 0.0
+	var max_chunk_mesh: String = ""
 	var culled_nodes: int = 0
 	for n: Node in gh_scene.get_children():
 		if n is MultiMeshInstance3D:
 			multi_nodes += 1
 			var mmi: MultiMeshInstance3D = n as MultiMeshInstance3D
 			if mmi.multimesh != null:
-				max_chunk_span = maxf(max_chunk_span, mmi.multimesh.custom_aabb.size.length())
+				var span: float = mmi.multimesh.custom_aabb.size.length()
+				var is_decorative: bool = bool(mmi.get_meta("decorative", false))
+				if not is_decorative and span > max_chunk_span:
+					max_chunk_span = span
+					max_chunk_mesh = str(mmi.get_meta("ue_mesh", ""))
 			if mmi.visibility_range_end > 0.0:
 				culled_nodes += 1
-	if chunk_count < 500 or multi_nodes < 200 or col_bodies < 4 or col_shapes <= 0 or col_shapes >= 12000 or occluders <= 0 or max_chunk_span >= 140.0 or culled_nodes < 300:
-		printerr("FAIL: perf chunking invariants (chunks=", chunk_count, " multimeshes=", multi_nodes, " bodies=", col_bodies, " shapes=", col_shapes, " occluders=", occluders, " max_span=", max_chunk_span, " culled=", culled_nodes, ")")
+	if chunk_count < 500 or multi_nodes < 200 or col_bodies < 4 or col_shapes <= 0 or col_shapes >= 24000 or occluders <= 0 or max_chunk_span >= 140.0 or culled_nodes < 300:
+		printerr("FAIL: perf chunking invariants (chunks=", chunk_count, " multimeshes=", multi_nodes, " bodies=", col_bodies, " shapes=", col_shapes, " occluders=", occluders, " max_span=", max_chunk_span, " max_mesh=", max_chunk_mesh, " culled=", culled_nodes, ")")
 		fails += 1
 	else:
 		print("PASS: Perf chunking (chunks=", chunk_count, ", multimeshes=", multi_nodes, ", collision_bodies=", col_bodies, ", shapes=", col_shapes, ", occluders=", occluders, ", max_chunk_span=", snappedf(max_chunk_span, 0.1), "m, distance-culled=", culled_nodes, ")")
@@ -300,11 +305,11 @@ func _initialize() -> void:
 	var dec_sky: bool = bool(ll.call("_is_decorative_sublevel", "res://data/generated/levels/Guildhall/Guildhall_SkyboxGeo.tatlevel.json"))
 	var dec_per: bool = bool(ll.call("_is_decorative_sublevel", "res://data/generated/levels/Guildhall/Guildhall_PeripheryA.tatlevel.json"))
 	var dec_geo: bool = bool(ll.call("_is_decorative_sublevel", "res://data/generated/levels/Guildhall/Guildhall_Geometry.tatlevel.json"))
-	if not dec_sky or not dec_per or dec_geo:
+	if not dec_sky or dec_per or dec_geo:
 		printerr("FAIL: decorative sublevel classification skybox=", dec_sky, " periphery=", dec_per, " geometry=", dec_geo)
 		fails += 1
 	else:
-		print("PASS: Skybox/Periphery sublevels excluded from physics colliders")
+		print("PASS: Skybox excluded from physics; packed-city PeripheryA is collidable")
 	ll.queue_free()
 	await process_frame
 
@@ -563,6 +568,32 @@ func _initialize() -> void:
 		fails += 1
 	else:
 		print("PASS: swinging-door extraction (", door_json_paths.size(), " levels, ", door_total, " doors, ", leaf_total, " leaves, ", pivot_mesh_leaves, " pivot meshes, 0 unresolved)")
+
+	# 19. Packed Level Actor instance expansion: PeripheryA is the city ring
+	# with the Guildhall safe-room buildings. Its BPP class templates carry
+	# 30k+ PerInstanceSMData transforms; collapsing them to the actor root is
+	# the black-void / floating-fragment regression.
+	var pa_file := FileAccess.open("res://data/generated/levels/Guildhall/Guildhall_PeripheryA.tatlevel.json", FileAccess.READ)
+	var pa_meshes: Array = []
+	if pa_file != null:
+		var pa_parsed: Variant = JSON.parse_string(pa_file.get_as_text())
+		if pa_parsed is Dictionary:
+			pa_meshes = (pa_parsed as Dictionary).get("meshes", [])
+	var pa_spawn := Vector3(127.2747, 25.4694, -5.3296)
+	var pa_near_spawn: int = 0
+	for pa_m: Variant in pa_meshes:
+		if not (pa_m is Dictionary):
+			continue
+		var pa_pos: Array = (pa_m as Dictionary).get("pos", [])
+		if pa_pos.size() >= 3:
+			var pa_v := Vector3(float(pa_pos[0]), float(pa_pos[1]), float(pa_pos[2]))
+			if pa_v.distance_to(pa_spawn) < 25.0:
+				pa_near_spawn += 1
+	if pa_meshes.size() < 10000 or pa_near_spawn < 200:
+		printerr("FAIL: packed Level Actor instances not expanded (PeripheryA meshes=", pa_meshes.size(), " near_spawn=", pa_near_spawn, ")")
+		fails += 1
+	else:
+		print("PASS: packed Level Actor instances expanded (PeripheryA meshes=", pa_meshes.size(), ", ", pa_near_spawn, " around safe-room spawn)")
 
 	print("SUMMARY: fails=", fails)
 	quit(0 if fails == 0 else 1)

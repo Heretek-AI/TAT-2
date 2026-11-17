@@ -182,7 +182,17 @@ def build_bp_mesh_templates():
                         if (loc or rot or scl)
                         else None
                     )
-                    comp_meshes[name] = {"sm": sm.split(".")[0], "local": lmat}
+                    # Packed Level Actor instance transforms live in the
+                    # component template export, not in the level stub.
+                    instances = e.get("PerInstanceSMData") or props.get(
+                        "PerInstanceSMData"
+                    )
+                    comp_meshes[name] = {
+                        "sm": sm.split(".")[0],
+                        "local": lmat,
+                        "instances": instances if isinstance(instances, list) else [],
+                        "type": e.get("Type", ""),
+                    }
     templates = {k: v for k, v in templates.items() if v}
     print(f"Indexed {len(templates)} Blueprint/PLA mesh templates")
     return templates
@@ -1159,21 +1169,35 @@ def extract_levels():
                     door_leaves_excluded += 1
                     continue
                 sm = (props.get("StaticMesh") or {}).get("ObjectPath")
-                if not sm and outer_name:
-                    # Lookup from BPP_*_PLA template
-                    bp_cls = outer_name.split("'")[0]
-                    cname = e.get("Name", "")
-                    tpl2 = bp_templates.get(bp_cls, {}).get(cname)
-                    sm = tpl2.get("sm") if isinstance(tpl2, dict) else tpl2
+                bp_cls = outer_name.split("'")[0] if outer_name else ""
+                cname = e.get("Name", "")
+                tpl2 = bp_templates.get(bp_cls, {}).get(cname)
+                if not isinstance(tpl2, dict):
+                    tpl2 = bp_templates.get(bp_cls, {}).get(cname.rstrip("0123456789"))
+                if not sm and isinstance(tpl2, dict):
+                    # Packed Level Actor components keep their mesh and
+                    # per-instance transforms in the BPP class template.
+                    sm = tpl2.get("sm")
+                instances = (
+                    e.get("PerInstanceSMData") or props.get("PerInstanceSMData") or []
+                )
+                if not instances and isinstance(tpl2, dict):
+                    instances = tpl2.get("instances") or []
                 if sm:
                     wmat = get_world_mat(idx)
+                    stub_has_transform = bool(
+                        props.get("RelativeLocation")
+                        or props.get("RelativeRotation")
+                        or props.get("RelativeScale3D")
+                    )
+                    if (
+                        isinstance(tpl2, dict)
+                        and tpl2.get("local") is not None
+                        and not stub_has_transform
+                    ):
+                        wmat = mat4_mul(wmat, tpl2["local"])
                     if level_mat is not None:
                         wmat = mat4_mul(level_mat, wmat)
-                    instances = (
-                        e.get("PerInstanceSMData")
-                        or props.get("PerInstanceSMData")
-                        or []
-                    )
                     if instances:
                         for inst in instances:
                             td = inst.get("TransformData") or {}
@@ -1254,6 +1278,7 @@ def extract_levels():
                     landscapes.append(
                         {
                             "heightmap": f"res://assets/ue/Raw/Maps/{h_rel}/{hname}.png",
+                            "source": h_rel,
                             "quads": int(props.get("ComponentSizeQuads", 63)),
                             "scale_bias": [
                                 float(bias.get("X", 1.0 / 64.0)),

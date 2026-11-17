@@ -1466,6 +1466,23 @@ func _landscape_weighted_material(lc: Dictionary) -> ShaderMaterial:
 		var l: Dictionary = l_var
 		var lname: String = str(l.get("layer", ""))
 		var channel: int = int(l.get("channel", 0))
+		var tex_idx: int = int(l.get("tex", 0))
+		if lname == "Puddle":
+			if tex_idx == 0:
+				mat.set_shader_parameter("puddle_channel", channel)
+				var pn: Texture2D = _load_tex("res://assets/ue/Raw/Art/Effects/Puddles/T_Decal_Puddle_1_Normal.png")
+				var po: Texture2D = _load_tex("res://assets/ue/Raw/Art/Effects/Puddles/T_Decal_Puddle_1_Opacity.png")
+				if pn != null:
+					mat.set_shader_parameter("puddle_normal", pn)
+				if po != null:
+					mat.set_shader_parameter("puddle_opacity", po)
+			continue
+		if lname == "GroundWet":
+			if tex_idx == 0:
+				mat.set_shader_parameter("groundwet_channel", channel)
+			continue
+		if tex_idx != 0:
+			continue
 		var is_visibility: bool = lname.to_lower().contains("visibility")
 		if is_visibility:
 			mat.set_shader_parameter("layer_channel_%d" % slot, channel)

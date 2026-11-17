@@ -132,10 +132,16 @@ extracted files:
 | `GroundA` | `T_GroundDirtA_D.png` |
 | `GrassA` | `T_GrassA_DA.png` |
 | `RockTileA` | `T_RockTile_D.png` |
+| `Puddle` | `T_Decal_Puddle_1_Normal.png` + `_Opacity.png` (normal/alpha, dark water tint) |
+| `GroundWet` | weightmap darkening + roughness reduction |
 
-`Puddle` / `GroundWet` have no recovered ground albedo, and components with
-more than four allocations drop the fifth (e.g. `CobbleB` after
-GroundA/Visibility/GrassA/CobbleA). Those cases are skipped, not guessed.
+`Puddle` uses the real extracted puddle normal/opacity maps and the authored
+weightmap channel; the albedo is a labelled dark-water tint because the cooked
+puddle material kept no albedo. `GroundWet` is a wetness modifier (darken +
+lower roughness), not a separate albedo layer. Layers whose allocation lives on
+a second weightmap texture (`tex != 0`) are still skipped because the shader
+samples the first weightmap only.
+
 Visual check: `/tmp/opencode/qa_weightmap_walk.png` shows the blended
 road/cobble/dirt surface and the authored hole under the safe-room walkway.
 
@@ -170,8 +176,11 @@ Runtime effect:
   If the safe-room gap still shows void, the next fix is either a missing floor
   mesh in the packed class or disabling visibility discard for that component
   so the landscape surface fills it.
-- `Puddle` / `GroundWet` landscape layers and the fifth allocation on a few
-  components are not blended yet (no recovered albedo / shader slot).
+- Layers allocated to a second weightmap texture (`tex != 0`) are skipped; the
+  shader currently samples only the first weightmap. Components with more than
+  four color allocations drop the fifth.
+- `Puddle` albedo is a labelled dark-water tint (the cooked material kept only
+  normal/opacity); `GroundWet` is a darken/roughness modifier.
 - The safe-room catwalk has open gaps between its structural crossbeams; the
   street below is visible through them. No floor mesh exists at that exact
   spot in the extracted BPP class, so no floor was invented.

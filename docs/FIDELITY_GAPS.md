@@ -22,7 +22,7 @@ Re-run the census with the commands at the bottom.
 | **Decals** | 667 placements (16 files) | **347 spawned / 112 skipped** after material validation (OldManor 203/89, Guildhall 135/23, Den 9/0) | **wired (9b1a22a)** |
 | **Rect / sky lights** | 31 rect placements, 1 sky light, 1 atmosphere | 1 active rect light wired (26 authored off), sky/atmosphere applied | **wired (9b1a22a)** |
 | **Post-process / fog** | 2 `PostProcessVolume`, 1 `ExponentialHeightFog` | fog + Godot-mappable post-process applied; Lumen-only fields logged as unmappable | **wired (9b1a22a)** |
-| **Landscape** | 128 `LandscapeComponent`, 128 heightfield collisions, splines, Nanite components | heightmaps + collision + weightmap layer blend (`tat_landscape.gdshader`); Guildhall road/cobble/dirt/grass from extracted textures | Puddle/GroundWet layers **wave A5** |
+| **Landscape** | 128 `LandscapeComponent`, 128 heightfield collisions, splines, Nanite components | heightmaps + collision + weightmap layer blend (`tat_landscape.gdshader`); GroundA/GrassA/CobbleA/CobbleB/RockTileA + Puddle/GroundWet | second weightmap texture / 5th color slot **wave A5** |
 | **Packed Level Actors** | 39 `BPP_PL_*` classes, 3,210 instanced components, 30,127 instances | all instances expanded with real `PerInstanceSMData`; Guildhall PeripheryA 3,587 -> 12,594 meshes, collidable; **138 LevelInstances / 32,166 meshes** merged at authored transforms | **done (packed-level-instances)** |
 | **Audio** | 3,425 Wwise chunks + 1,296 event assets | **3,425/3,425 decoded to Ogg** (372 MiB, `4742103`); event assets expose EventId/MediaIds/DebugNames but chunk↔MediaId mapping is unrecoverable | **decode done; naming blocked** |
 | **Tools** | MagicSlime 4 charges / 2 m puddle / 30 s / 10 s slip; smoke 1 ch / 5x5x4 m / 25 s; pickpocket 25 m/9°/0.5 s/4.5 m/s | **implemented** (`50252b5`); projectile flight and player-slip are documented simplifications | **done** |
@@ -87,8 +87,8 @@ collapse at actor roots. Guildhall `PeripheryA` is collidable (25,074 shapes,
 apartment / storefront sublevels at authored transforms (138 LevelInstances /
 32,166 meshes across all maps). Landscape layer weightmaps are also blended by
 `tat_landscape.gdshader` (GroundA/GrassA/CobbleA/CobbleB/RockTileA +
-Visibility). Remaining A5 work: Puddle/GroundWet layers and the fifth
-allocation on a few components.
+Visibility, plus Puddle normal/opacity and GroundWet darkening). Remaining A5
+work: layers allocated to a second weightmap texture and the fifth color slot.
 
 ### A6 — Gameplay constants (in progress)
 BP defaults carry the real movement and perception values: player 360/180 cm/s walk/crouch, +90 sprint increment, 550 jump, 91 cm capsule half height, 79.625 cm eye offset; guard 250 cm/s, 25 m sight, 30 m lose-sight, 40° half-FOV, 25 m hearing; `DA_AIStatesToSpeed_Guard` 1.5/1.7 m/s; `DA_DetectionSettings` 0.4 s/m (0.2 alerted) with crouch multiplier. Plan: parse into `game/data/generated/gameplay/`, update player/guard constants and the detection ramp.
@@ -143,6 +143,8 @@ find extracted/json -name 'NS_*.json' | wc -l
 - 2026-11-16: landscape layer blend shipped (`tat_landscape.gdshader`): parser emits `WeightmapTextures` + `WeightmapLayerAllocations`; shader blends GroundA/GrassA/CobbleA/CobbleB/RockTileA by channel and discards `LandscapeVisibilityLayerInfo` holes; `Puddle`/`GroundWet` remain skipped. Visual: `/tmp/opencode/qa_weightmap_walk.png`; `make test` fails=0, audit 99.4%.
 
 - 2026-11-16: LevelInstance sublevels shipped: 138 instances / 32,166 meshes merged with `LevelInstanceComponent` transforms; Guildhall PeripheryA 12,594 meshes; car-underpass LevelInstance has 697 meshes near its authored transform; Guildhall runtime 63,210 meshes / 25,074 shapes. Tests suite 20; `make test` fails=0.
+
+- 2026-11-16: Puddle/GroundWet landscape layers: `Puddle` uses the real `T_Decal_Puddle_1_Normal/Opacity` textures plus the authored weightmap channel with a labelled dark-water tint; `GroundWet` darkens albedo and lowers roughness. Shader compiles/renders (`/tmp/opencode/qa_puddle_spawn.png`); `make test` fails=0.
 
 ### Visual verification log (desktop, live GPU)
 

@@ -20,6 +20,10 @@ uniform int layer_visibility_0 = 0;
 uniform int layer_visibility_1 = 0;
 uniform int layer_visibility_2 = 0;
 uniform int layer_visibility_3 = 0;
+uniform int puddle_channel = -1;
+uniform int groundwet_channel = -1;
+uniform sampler2D puddle_normal : hint_normal, repeat_enable;
+uniform sampler2D puddle_opacity : filter_linear, repeat_enable;
 uniform float uv_scale = 12.0;
 uniform vec3 fallback_color : source_color = vec3(0.42, 0.42, 0.40);
 
@@ -85,6 +89,22 @@ void fragment() {
 	if (vis < 0.5) {
 		discard;
 	}
+	float puddle = 0.0;
+	float groundwet = 0.0;
+	if (puddle_channel >= 0) {
+		float pw = channel_value(w, puddle_channel);
+		if (pw > 0.001) {
+			float op = texture(puddle_opacity, UV * uv_scale).r;
+			puddle = clamp(pw * op, 0.0, 1.0);
+			col = mix(col, vec3(0.035, 0.045, 0.060) * max(total, 1.0), puddle * 0.85);
+			NORMAL_MAP = texture(puddle_normal, UV * uv_scale).rgb;
+			NORMAL_MAP_DEPTH = puddle;
+		}
+	}
+	if (groundwet_channel >= 0) {
+		groundwet = channel_value(w, groundwet_channel);
+		col *= (1.0 - groundwet * 0.18);
+	}
 	ALBEDO = total > 0.001 ? col / total : fallback_color;
-	ROUGHNESS = 0.9;
+	ROUGHNESS = mix(mix(0.9, 0.18, puddle), 0.45, groundwet);
 }

@@ -49,6 +49,8 @@ Last verified: **20/20 PASS, fails=0, zero SCRIPT ERROR**. Engine exit-time `Obj
 ## Key commits (most recent first)
 
 ```
+d802c25 feat(level): expand packed Level Actor instances and real street surface
+33fd935 feat(doors): resolve 111 doorway pivots from their own leaf mesh
 0729e90 fix(gameplay): contract title fallback and forward-clear spawn selection
 caec0d4 feat(doors): real swinging doors end-to-end from authored pivots
 e2a61aa fix(hud): render tool hotbar icons over translucent panel slots

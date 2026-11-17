@@ -384,4 +384,19 @@ func get_contract_display(order: int) -> Dictionary:
 			if st.has(ck):
 				clues.append(str(st[ck]))
 		base["clue_facts"] = clues
+	# Display-title fallback: a missing string-table entry leaves the raw row
+	# id (e.g. "Contract.Main.3" — the Contract 3 table ships the key as
+	# "Contract3.TItle") or an empty title when the contract has no table at
+	# all. Rebuild a human-readable title from already-parsed quest data only
+	# — never invent lore. Real titles are untouched.
+	var raw_title: String = str(base.get("title", ""))
+	if raw_title == "" or raw_title.begins_with("Contract."):
+		var qi: String = str(base.get("quest_item", "")).strip_edges()
+		var loc: String = str(base.get("location", "")).strip_edges()
+		if qi != "" and qi != "Objective" and not qi.begins_with("Loot."):
+			base["title"] = "Contract %d — %s" % [order, qi]
+		elif loc != "":
+			base["title"] = "Contract %d — %s" % [order, loc]
+		else:
+			base["title"] = "Contract %d" % order
 	return base

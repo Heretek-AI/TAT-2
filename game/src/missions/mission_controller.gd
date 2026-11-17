@@ -46,6 +46,11 @@ var fallback_spawn_source: String = "authored"
 ## above the floor plus a standing-capsule overlap test). Authored starts
 ## report true; the mesh last-resort reports false. Logged for QA.
 var fallback_spawn_headroom_clear: bool = true
+## Whether the chosen spawn passed the fallback forward-clearance check
+## (no layer-1 geometry within 1.5 m on the 3 m horizontal ray toward the
+## loot centroid). Authored starts report true; the mesh last-resort and
+## the floor/headroom-only fallbacks report false. Logged for QA.
+var fallback_spawn_forward_clear: bool = true
 
 
 func _ready() -> void:
@@ -690,6 +695,7 @@ func _spawn_player(ue_spawns: Array, ue_spawn_transforms: Array = [], stats: Dic
 		have_yaw = true
 		fallback_spawn_source = "authored"
 		fallback_spawn_headroom_clear = true
+		fallback_spawn_forward_clear = true
 	else:
 		# Authored positions only count when a floor raycast grounds them;
 		# a blind ue_spawns[0] here used to drop Old Manor onto the safety
@@ -712,12 +718,14 @@ func _spawn_player(ue_spawns: Array, ue_spawn_transforms: Array = [], stats: Dic
 			spawn = (grounded as Vector3) + Vector3(0, 1.0, 0)
 			fallback_spawn_source = "authored"
 			fallback_spawn_headroom_clear = true
+			fallback_spawn_forward_clear = true
 		else:
 			var fb: Dictionary = _marker_fallback_spawn(stats, w3d)
 			if not fb.is_empty():
 				spawn = fb["pos"] as Vector3
 				fallback_spawn_source = str(fb["source"])
 				fallback_spawn_headroom_clear = bool(fb.get("headroom", false))
+				fallback_spawn_forward_clear = fb.get("forward") == true
 				var face: Variant = fb.get("face", null)
 				if face is Vector3:
 					var to: Vector3 = (face as Vector3) - spawn
@@ -729,10 +737,11 @@ func _spawn_player(ue_spawns: Array, ue_spawn_transforms: Array = [], stats: Dic
 				spawn = _find_mesh_fallback_spawn()
 				fallback_spawn_source = "mesh"
 				fallback_spawn_headroom_clear = false
+				fallback_spawn_forward_clear = false
 	player.position = spawn
 	if have_yaw:
 		player.rotation = Vector3(0.0, spawn_yaw, 0.0)
-	print("TAT-2 player spawn: source=", fallback_spawn_source, " pos=", spawn, " yaw=", (spawn_yaw if have_yaw else "legacy"), " headroom_clear=", fallback_spawn_headroom_clear)
+	print("TAT-2 player spawn: source=", fallback_spawn_source, " pos=", spawn, " yaw=", (spawn_yaw if have_yaw else "legacy"), " headroom_clear=", fallback_spawn_headroom_clear, " forward_clear=", fallback_spawn_forward_clear)
 	player.downed_started.connect(_on_player_downed_started)
 	player.downed.connect(_on_player_downed)
 	add_child(player)
@@ -749,10 +758,16 @@ func _spawn_player(ue_spawns: Array, ue_spawn_transforms: Array = [], stats: Dic
 ## (unchanged floor behavior). The winner must also pass the headroom check
 ## (2.2 m clear above hit + 0.3 m, capsule height 1.7 + margin, and no
 ## standing-capsule overlap) so the player never spawns under a low roof such
-## as the porch over Old Manor's first major-loot marker. Returns {} when
-## nothing hits (the caller keeps the legacy mesh fallback). "face" is the
-## loot-marker centroid the player should face when one exists, and "headroom"
-## reports whether the headroom check passed.
+## as the porch over Old Manor's first major-loot marker, and the forward
+## clearance check (no layer-1 geometry within 1.5 m on a ~3.0 m horizontal
+## ray toward the loot centroid) so the player does not spawn facing a wall
+## or roof 10-13 m ahead. Remaining candidates are tried when a check fails;
+## when no candidate passes the forward check the first headroom-clear choice
+## wins (logged as fallback_no_forward_clearance), and when none passes the
+## headroom check the first floor-only hit wins (logged as
+## fallback_no_headroom). Returns {} when nothing hits (the caller keeps the
+## legacy mesh fallback). "face" is the loot-marker centroid the player should
+## face when one exists, "headroom"/"forward" report which checks passed.
 func _marker_fallback_spawn(stats: Dictionary, w3d: World3D) -> Dictionary:
 	var majors: Array = stats.get("major_loot_spawns", [])
 	var minors: Array = stats.get("minor_loot_spawns", [])
@@ -788,6 +803,7 @@ func _marker_fallback_spawn(stats: Dictionary, w3d: World3D) -> Dictionary:
 	var face: Variant = _loot_centroid(stats)
 	var phys: PhysicsDirectSpaceState3D = w3d.direct_space_state
 	var floor_only: Dictionary = {}
+	var headroom_only: Dictionary = {}
 	for c_var in candidates:
 		var c: Dictionary = c_var as Dictionary
 		var cp: Vector3 = c["pos"] as Vector3
@@ -797,9 +813,16 @@ func _marker_fallback_spawn(stats: Dictionary, w3d: World3D) -> Dictionary:
 			continue
 		var ground: Vector3 = (hit.get("position", null) as Vector3) + Vector3(0, 0.2, 0)
 		if floor_only.is_empty():
-			floor_only = {"pos": ground, "source": str(c["source"]), "face": face, "headroom": false}
-		if _fallback_spawn_has_headroom(phys, ground):
-			return {"pos": ground, "source": str(c["source"]), "face": face, "headroom": true}
+			floor_only = {"pos": ground, "source": str(c["source"]), "face": face, "headroom": false, "forward": false}
+		if not _fallback_spawn_has_headroom(phys, ground):
+			continue
+		if headroom_only.is_empty():
+			headroom_only = {"pos": ground, "source": str(c["source"]), "face": face, "headroom": true, "forward": false}
+		if _fallback_spawn_has_forward_clearance(phys, ground, face):
+			return {"pos": ground, "source": str(c["source"]), "face": face, "headroom": true, "forward": true}
+	if not headroom_only.is_empty():
+		print("TAT-2 fallback_no_forward_clearance: no headroom-clear candidate had 1.5 m forward clearance; using headroom-only ", str(headroom_only["source"]), " pos=", headroom_only["pos"])
+		return headroom_only
 	if not floor_only.is_empty():
 		print("TAT-2 fallback_no_headroom: no candidate passed the headroom check; using floor-only ", str(floor_only["source"]), " pos=", floor_only["pos"])
 		return floor_only
@@ -824,6 +847,31 @@ func _fallback_spawn_has_headroom(phys: PhysicsDirectSpaceState3D, ground: Vecto
 	sq.collision_mask = 1
 	sq.transform = Transform3D(Basis(), ground + Vector3(0, 0.9, 0))
 	return phys.intersect_shape(sq, 1).is_empty()
+
+
+## Forward-clearance check for a fallback spawn candidate: from 1.0 m above
+## the floor hit, cast ~3.0 m toward the loot centroid (horizontal only) on
+## layer 1. A hit within 1.5 m (wall, column, or overhang edge right in front
+## of the spawn) rejects the candidate; geometry farther out — e.g. the porch
+## roof desktop rays hit 10-13 m ahead of Old Manor's major-loot point —
+## passes. No centroid or a degenerate (straight-down) direction passes since
+## there is nothing to face. Fail-closed on a hit that carries no position.
+func _fallback_spawn_has_forward_clearance(phys: PhysicsDirectSpaceState3D, ground: Vector3, target: Variant) -> bool:
+	if not (target is Vector3):
+		return true
+	var dir: Vector3 = (target as Vector3) - ground
+	dir.y = 0.0
+	if dir.length() < 0.05:
+		return true
+	var from: Vector3 = ground + Vector3(0, 1.0, 0)
+	var fq: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(from, from + dir.normalized() * 3.0, 1)
+	var hit: Dictionary = phys.intersect_ray(fq)
+	if hit.is_empty():
+		return true
+	var hp: Variant = hit.get("position", null)
+	if hp is Vector3:
+		return (hp as Vector3).distance_to(from) >= 1.5
+	return false
 
 
 ## Mean of all loot-marker positions (major + minor records plus the legacy

@@ -1158,5 +1158,95 @@ func _initialize() -> void:
 	lw2_ll.queue_free()
 	await process_frame
 
+	# 25. Disguise and XP authored defaults
+	var disguise_rows: Dictionary = {}
+	var disguise_doc: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://data/generated/tables/Gameplay/Tools/PrimaryTools/Disguise/DT_DisguiseV3IntegrityReduction.json"))
+	if disguise_doc is Dictionary:
+		var disguise_rows_v: Variant = (disguise_doc as Dictionary).get("rows", {})
+		if disguise_rows_v is Dictionary:
+			disguise_rows = disguise_rows_v as Dictionary
+	var timer_row: float = _authored_row_value(disguise_rows, "DisguiseTimer", ["IntegrityReduction", "Value"])
+	var sprint_row: float = _authored_row_value(disguise_rows, "Sprinting", ["IntegrityReduction", "Value"])
+	var proximity_row: float = _authored_row_value(disguise_rows, "GuardProximity", ["IntegrityReduction", "Value"])
+	var proximity_radius_cm: float = _authored_row_value(disguise_rows, "GuardProximity", ["NearbyCharacterState", "CharacterRadius"])
+	var damage_row: float = _authored_row_value(disguise_rows, "DamageTaken", ["IntegrityReduction", "Value"])
+	var thief_scr: GDScript = load("res://src/player/thief_character.gd") as GDScript
+	var thief_consts: Dictionary = thief_scr.get_script_constant_map()
+	var timer_const: float = float(thief_consts.get("DISGUISE_DRAIN_TIMER", -1.0))
+	var sprint_const: float = float(thief_consts.get("DISGUISE_DRAIN_SPRINTING", -1.0))
+	var proximity_const: float = float(thief_consts.get("DISGUISE_DRAIN_GUARD_PROXIMITY", -1.0))
+	var proximity_m_const: float = float(thief_consts.get("DISGUISE_GUARD_PROXIMITY_M", -1.0))
+	var damage_const: float = float(thief_consts.get("DISGUISE_DAMAGE_INTEGRITY_LOSS", -1.0))
+	var base_rate: float = float(thief_scr.call("disguise_drain_rate", false, false))
+	var sprint_rate: float = float(thief_scr.call("disguise_drain_rate", true, false))
+	var proximity_rate: float = float(thief_scr.call("disguise_drain_rate", false, true))
+	var disguise_ok: bool = \
+		timer_row == 1.0 \
+		and sprint_row == 40.0 \
+		and proximity_row == 5.0 \
+		and proximity_radius_cm == 100.0 \
+		and damage_row == 40.0 \
+		and timer_const == timer_row \
+		and sprint_const == sprint_row \
+		and proximity_const == proximity_row \
+		and is_equal_approx(proximity_m_const, proximity_radius_cm * 0.01) \
+		and damage_const == damage_row \
+		and base_rate == timer_row \
+		and sprint_rate - base_rate == sprint_row \
+		and proximity_rate - base_rate == proximity_row
+	if not disguise_ok:
+		printerr("FAIL: disguise authored defaults (rows=", disguise_rows.size(), " timer=", timer_row, "/", timer_const, " sprint=", sprint_row, "/", sprint_const, " proximity=", proximity_row, "/", proximity_const, " radius_cm=", proximity_radius_cm, " radius_m=", proximity_m_const, " damage=", damage_row, "/", damage_const, " rates=", base_rate, "/", sprint_rate, "/", proximity_rate, ")")
+		fails += 1
+	else:
+		print("PASS: disguise drain matches DT_DisguiseV3IntegrityReduction (timer ", timer_row, "/s, sprint ", sprint_row, "/s, guard proximity ", proximity_row, "/s within ", proximity_radius_cm, "cm; damage event ", damage_row, ")")
+
+	var xp_keys: Array = []
+	var xp_doc: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://data/generated/tables/Gameplay/Tuning/CT_XPToLevel.json"))
+	if xp_doc is Dictionary:
+		var xp_rows_v: Variant = (xp_doc as Dictionary).get("rows", {})
+		if xp_rows_v is Dictionary:
+			var xp_row_v: Variant = (xp_rows_v as Dictionary).get("XPToLevel", {})
+			if xp_row_v is Dictionary:
+				var xp_keys_v: Variant = (xp_row_v as Dictionary).get("Keys", [])
+				if xp_keys_v is Array:
+					xp_keys = xp_keys_v as Array
+	var authored_xp: Dictionary = {}
+	for key_v: Variant in xp_keys:
+		if key_v is Dictionary:
+			var key_d: Dictionary = key_v as Dictionary
+			authored_xp[int(float(key_d.get("Time", -1.0)))] = float(key_d.get("Value", -1.0))
+	var authored_l1: float = float(authored_xp.get(1, -1.0))
+	var authored_l5: float = float(authored_xp.get(5, -1.0))
+	var authored_l10: float = float(authored_xp.get(10, -1.0))
+	var xp_l1: int = int(save_sys.xp_threshold_for_level(1))
+	var xp_l5: int = int(save_sys.xp_threshold_for_level(5))
+	var xp_l10: int = int(save_sys.xp_threshold_for_level(10))
+	# The old flat constant was 500: levels 5 and 10 must now differ from it.
+	var xp_ok: bool = \
+		authored_l1 == 500.0 \
+		and authored_l5 == 1000.0 \
+		and authored_l10 == 2500.0 \
+		and float(xp_l1) == authored_l1 \
+		and float(xp_l5) == authored_l5 \
+		and float(xp_l10) == authored_l10 \
+		and float(xp_l5) != 500.0 \
+		and float(xp_l10) != 500.0
+	if not xp_ok:
+		printerr("FAIL: XP authored curve (keys=", xp_keys.size(), " authored L1/L5/L10=", authored_l1, "/", authored_l5, "/", authored_l10, " thresholds=", xp_l1, "/", xp_l5, "/", xp_l10, ")")
+		fails += 1
+	else:
+		print("PASS: XP thresholds match CT_XPToLevel.XPToLevel (L1=", xp_l1, ", L5=", xp_l5, ", L10=", xp_l10, "; flat 500 would fail L5/L10)")
+
 	print("SUMMARY: fails=", fails)
 	quit(0 if fails == 0 else 1)
+
+
+func _authored_row_value(rows: Dictionary, row: String, field_path: Array[String]) -> float:
+	var cur: Variant = rows.get(row, {})
+	for field: String in field_path:
+		if not (cur is Dictionary):
+			return -1.0
+		cur = (cur as Dictionary).get(field, null)
+	if cur == null:
+		return -1.0
+	return float(cur)

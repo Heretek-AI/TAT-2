@@ -38,6 +38,12 @@ const WIRE_RANGE: float = 20.0 # DA_StandardToolSettings "Hotwire Range" 2000cm
 const WIRE_PULL_SPEED: float = 23.0 # DA_StandardToolSettings "Hotwire Speed" 2300cm/s
 const DISGUISE_COOLDOWN: float = 15.0 # GE_Disguise_Cooldown magnitude
 const DISGUISE_ACTIVE_TIME: float = 60.0 # GE_Disguise_Active magnitude (max active time)
+# Authored disguise integrity rows (DT_DisguiseV3IntegrityReduction, enabled rows).
+const DISGUISE_DRAIN_TIMER: float = 1.0 # DisguiseTimer.IntegrityReduction.Value per s
+const DISGUISE_DRAIN_SPRINTING: float = 40.0 # Sprinting.IntegrityReduction.Value per s
+const DISGUISE_DRAIN_GUARD_PROXIMITY: float = 5.0 # GuardProximity.IntegrityReduction.Value per s
+const DISGUISE_GUARD_PROXIMITY_M: float = 1.0 # GuardProximity.CharacterRadius 100cm
+const DISGUISE_DAMAGE_INTEGRITY_LOSS: float = 40.0 # DamageTaken.IntegrityReduction.Value
 const BLACKJACK_LIGHT_DMG: float = 40.0 # CT_Tool_Blackjack.BlackjackDamageLight
 const BLACKJACK_HEAVY_DMG: float = 75.0 # CT_Tool_Blackjack.BlackjackDamageHeavy
 
@@ -589,13 +595,12 @@ func _physics_process(delta: float) -> void:
 		_prop_scan_accum = 0.0
 		_update_prop_highlight()
 
-	# Chameleon Disguise Integrity drain (faster while sprinting or near guards).
+	# Chameleon Disguise Integrity drain. Per-second rates are summed from the
+	# enabled rows of DT_DisguiseV3IntegrityReduction (unported rows are named
+	# in disguise_drain_rate below); DamageTaken is handled in take_damage.
 	if disguise_active:
-		var drain_rate: float = 6.7
-		if is_sprinting:
-			drain_rate *= 1.8
-		if _is_guard_within(5.0):
-			drain_rate *= 2.0
+		var guard_near: bool = _is_guard_within(DISGUISE_GUARD_PROXIMITY_M)
+		var drain_rate: float = disguise_drain_rate(is_sprinting, guard_near)
 		disguise_integrity = maxf(0.0, disguise_integrity - drain_rate * delta)
 		disguise_ttl = maxf(0.0, disguise_ttl - delta)
 		if disguise_ttl <= 0.0:
@@ -640,13 +645,38 @@ func _is_guard_within(dist_max: float) -> bool:
 	return false
 
 
+## Authored per-second disguise drain from the enabled rows of
+## DT_DisguiseV3IntegrityReduction. The component accumulates every matching
+## row, so the rates sum instead of multiplying a base approximation.
+## Rows not ported (kept out rather than inventing a query/state):
+## - Lockpicking (Status.Lockpicking, 5.0/s): a lockpick resolves in one
+##   instant interact here; there is no sustained lockpicking state or tag.
+## - GuardViewCone (10.0/s, 1000cm, 65deg, UseAISightToLimitMaxViewConeDistance
+##   true): no player-facing guard view-cone query exists, and the row does not
+##   say whether 65deg is a half or full angle; guard_ai._can_see_player is
+##   private and uses its own 20m / 80deg sight config.
+static func disguise_drain_rate(sprinting: bool, guard_near: bool) -> float:
+	var rate: float = DISGUISE_DRAIN_TIMER
+	if sprinting:
+		rate += DISGUISE_DRAIN_SPRINTING
+	if guard_near:
+		rate += DISGUISE_DRAIN_GUARD_PROXIMITY
+	return rate
+
+
 func take_damage(amount: float) -> void:
 	if is_downed:
 		return
 	if disguise_active:
-		disguise_active = false
-		disguise_integrity = 0.0
-		disguise_changed.emit(0.0, false)
+		# DT_DisguiseV3IntegrityReduction.DamageTaken: EventType
+		# AttributeDecrease on Health, IntegrityReduction.Value 40.0,
+		# AttributeDeltaMultiplier 1.0 but MaxExtraReductionFromAttributeDelta
+		# 0.0, so the health delta adds nothing. InstantCancel is false: damage
+		# removes 40 integrity instead of zeroing the disguise outright.
+		disguise_integrity = maxf(0.0, disguise_integrity - DISGUISE_DAMAGE_INTEGRITY_LOSS)
+		if disguise_integrity <= 0.0:
+			disguise_active = false
+		disguise_changed.emit(disguise_integrity, disguise_active)
 	health = maxf(0.0, health - amount)
 	health_changed.emit(health, max_health)
 	if health <= 0.0:

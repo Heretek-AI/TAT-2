@@ -13,20 +13,24 @@ extends RefCounted
 ##   darkened x0.55; missing zenith falls back to overall_color, then the
 ##   horizon darkened x0.6. (The JSON carries only horizon/zenith/overall
 ##   colors; background_color/zenith aliases are accepted defensively.)
+##   APPROXIMATE tone-map: authored LinearColor values are HDR (e.g. horizon
+##   [1.9796, 2.5866, 3.0]) and feeding them straight into the shader's
+##   source_color vec3 clips toward white. The cooked M_Sky curve cannot be
+##   recovered, so the HDR color is normalised by its max channel (not divided
+##   by 255) before upload; in-range values pass through unchanged.
 ## - Moon disc: placed along the moon DirectionalLight3D's +Z axis (the axis
-##   the light shines from). moon.size is the only authored size value, read
-##   as an apparent angular DIAMETER in degrees (disc half-angle = size/2).
-##   The authored 1m_Plane_Reverse billboards are ~4.25 m quads, consistent
-##   with a large stylized disc rather than the real 0.5-degree moon; the
-##   mapping stays honest by clamping to [1, 40] degrees and defaulting to
-##   6 degrees when the preset has no size. moon.visible == false hides the
-##   disc. The disc samples a centered square of the real T_Moon_D lunar
-##   panorama (4096x2048 equirectangular; the cooked M_Moon / MI_Moon_Base
-##   materials kept the texture but no UV framing rect, so the centered crop
-##   is APPROXIMATE). Tint = moon.color (else moon.emissive), energy =
+##   the light shines from). moon.size is the authored SM_Moon static-mesh
+##   RelativeScale3D.x; the real angular DIAMETER comes from the sphere
+##   geometry: 2 * asin(sphere_radius * size / (orbit_distance +
+##   moon.distance_offset)). A preset with no authored size keeps the 6-degree
+##   fallback. moon.visible == false hides the disc. The disc samples a
+##   centered square of the real T_Moon_D lunar panorama (4096x2048
+##   equirectangular; the cooked M_Moon / MI_Moon_Base materials kept the
+##   texture but no UV framing rect, so the centered crop is APPROXIMATE).
+##   Tint = moon.color (else moon.emissive), energy =
 ##   clamp(0.3 + 0.5 * moon.brightness, 0.25, 2.0) (UE brightness spans
-##   0.15-50, so the compressive map is APPROXIMATE), times sky.intensity
-##   clamped to [0.25, 1.5].
+##   0.15-50, so the compressive map is APPROXIMATE). The sky-light intensity
+##   is an ambient term and deliberately does not scale the disc.
 ## - Stars: sky.stars_brightness drives a sparse procedural term only when it
 ##   is > 0 (star_amount = clamp(brightness / 8, 0, 1); midnight_clear 10.0
 ##   reads full, thieves_den 3.0 subtle, 0 disables). APPROXIMATE: hash
@@ -44,9 +48,18 @@ const WeatherProfile := preload("res://src/core/weather_profile.gd")
 const SKY_SHADER := preload("res://src/core/tat_sky.gdshader")
 const MOON_PANORAMA_PATH := "res://assets/ue/Raw/Art/Environment/City/Architecture/BeautifulCorner/Materials/T_Moon_D.png"
 
-# moon.size read as apparent angular diameter, degrees (see mapping above).
-const MOON_DIAMETER_MIN_DEG := 1.0
-const MOON_DIAMETER_MAX_DEG := 40.0
+# Moon disc: authored SM_Moon scale -> real angular diameter (see mapping).
+# MOON_SPHERE_RADIUS_CM: SM_Moon SphereRadius, 10771.60558231864 cm
+#   (extracted/json/Art/Environment/City/Architecture/BeautifulCorner/SM_Moon.json).
+const MOON_SPHERE_RADIUS_CM := 10771.60558231864
+# MOON_ORBIT_DISTANCE_CM: |Moon_GEN_VARIABLE RelativeLocation.X|, 1469413.0 cm
+#   (extracted/json/Art/Environment/Weather/BP_WeatherPreset_Base_Skybox.json).
+const MOON_ORBIT_DISTANCE_CM := 1469413.0
+# moon.size is the authored Blueprint variable "Moon Size", which the extracted
+# data exposes as the Moon_GEN_VARIABLE RelativeScale3D.x. The BP graph that
+# drives it is cooked, so the correspondence is INFERRED from the matching
+# value (9.838636 in both), not decompiled. "Moon Distance Offset" is treated
+# as an additive centimetre term (worth 0.048 degrees on DenseFog).
 const DEFAULT_MOON_DIAMETER_DEG := 6.0
 const MOON_ENERGY_MIN := 0.25
 const MOON_ENERGY_MAX := 2.0
@@ -74,16 +87,34 @@ static func _color3(raw: Variant) -> Variant:
 	return null
 
 
+## Real angular diameter of the moon disc for an authored SM_Moon scale and
+## orbit offset. See the header mapping.
+static func moon_diameter_deg(size: float, distance_offset: float) -> float:
+	var r: float = MOON_SPHERE_RADIUS_CM * size
+	var d: float = MOON_ORBIT_DISTANCE_CM + distance_offset
+	# Result clamp is a corrupt-data guard only; shipped presets span 2.10-11.90.
+	return clampf(2.0 * rad_to_deg(asin(clampf(r / d, 0.0, 0.999))), 0.0, 20.0)
+
+
+## APPROXIMATE tone-map for authored HDR sky colors: normalise by the max
+## channel so the shader's source_color vec3 keeps its hue instead of clipping.
+static func _tone_safe(c: Color) -> Color:
+	var m: float = maxf(c.r, maxf(c.g, c.b))
+	if m > 1.0:
+		return Color(c.r / m, c.g / m, c.b / m, c.a)
+	return c
+
+
 ## Horizon gradient color with the documented fallback chain.
 static func horizon_color_of(preset: Dictionary) -> Color:
 	var sky: Dictionary = preset.get("sky", {})
 	for key: String in ["horizon_color", "background_color", "overall_color"]:
 		var c: Variant = _color3(sky.get(key))
 		if c != null:
-			return c
+			return _tone_safe(c as Color)
 	var z: Variant = _color3(sky.get("zenith_color", sky.get("zenith", null)))
 	if z != null:
-		return (z as Color) * Color(0.55, 0.55, 0.55, 1.0)
+		return _tone_safe((z as Color) * Color(0.55, 0.55, 0.55, 1.0))
 	return FALLBACK_HORIZON
 
 
@@ -93,10 +124,10 @@ static func zenith_color_of(preset: Dictionary) -> Color:
 	for key: String in ["zenith_color", "zenith", "overall_color"]:
 		var c: Variant = _color3(sky.get(key))
 		if c != null:
-			return c
+			return _tone_safe(c as Color)
 	var h: Variant = _color3(sky.get("horizon_color", sky.get("background_color", null)))
 	if h != null:
-		return (h as Color) * Color(0.6, 0.6, 0.6, 1.0)
+		return _tone_safe((h as Color) * Color(0.6, 0.6, 0.6, 1.0))
 	return FALLBACK_ZENITH
 
 
@@ -112,7 +143,7 @@ static func make_sky(preset: Dictionary, moon: DirectionalLight3D) -> Sky:
 
 	var moon_dir := Vector3(0.0, 1.0, 0.0)
 	if moon != null:
-		var d: Vector3 = Basis.from_euler(moon.rotation) * Vector3(0.0, 0.0, 1.0)
+		var d: Vector3 = moon.basis * Vector3(0.0, 0.0, 1.0)
 		if d.length() > 0.001:
 			moon_dir = d.normalized()
 	mat.set_shader_parameter("moon_direction", moon_dir)
@@ -121,7 +152,10 @@ static func make_sky(preset: Dictionary, moon: DirectionalLight3D) -> Sky:
 	var size_raw: Variant = WeatherProfile.moon_disc_size(preset)
 	var diam: float = DEFAULT_MOON_DIAMETER_DEG
 	if size_raw != null:
-		diam = clampf(float(size_raw), MOON_DIAMETER_MIN_DEG, MOON_DIAMETER_MAX_DEG)
+		var moon_section: Dictionary = preset.get("moon", {})
+		var off_raw: Variant = moon_section.get("distance_offset")
+		var offset: float = float(off_raw) if off_raw != null else 0.0
+		diam = moon_diameter_deg(float(size_raw), offset)
 	mat.set_shader_parameter("moon_angular_radius", deg_to_rad(diam * 0.5))
 
 	var pano: Texture2D = load(MOON_PANORAMA_PATH) as Texture2D if ResourceLoader.exists(MOON_PANORAMA_PATH) else null
@@ -137,9 +171,6 @@ static func make_sky(preset: Dictionary, moon: DirectionalLight3D) -> Sky:
 	var bright_raw: Variant = WeatherProfile.moon_disc_brightness(preset)
 	var bright: float = float(bright_raw) if bright_raw != null else 1.0
 	var energy: float = clampf(0.3 + 0.5 * bright, MOON_ENERGY_MIN, MOON_ENERGY_MAX)
-	var sky_e: Variant = WeatherProfile.ambient_energy(preset)
-	if sky_e != null:
-		energy *= clampf(float(sky_e), 0.25, 1.5)
 	mat.set_shader_parameter("moon_energy", energy)
 
 	var stars_raw: Variant = WeatherProfile.sky_stars_brightness(preset)

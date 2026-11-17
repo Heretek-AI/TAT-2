@@ -166,8 +166,10 @@ static func moon_basis(preset: Dictionary) -> Variant:
 	var m02: float = -(cr * sp * cy + sr * sy)
 	var m10: float = cp * sy
 	var m11: float = sr * sp * sy + cr * cy
-	# Transposed UE M[2][1] = -(cr*sp*sy - sr*cy); this sign keeps the basis
-	# orthonormal for nonzero roll.
+	# m12 is -M[2][1] of UE's FRotationMatrix (M[2][1] = CR*SP*SY - SR*CY).
+	# This negated form is what keeps the Godot basis orthonormal; the
+	# un-negated literal used in tools/parse_tables.py:65 produces a
+	# non-orthonormal basis and shears meshes.
 	var m12: float = sr * cy - cr * sp * sy
 	var m20: float = sp
 	var m21: float = -sr * cp

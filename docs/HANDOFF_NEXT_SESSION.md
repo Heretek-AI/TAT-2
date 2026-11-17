@@ -33,7 +33,7 @@ Last verified: **20/20 PASS, fails=0, zero SCRIPT ERROR**. Engine exit-time `Obj
 - **995 animation GLBs** (`game/assets/ue/Anims/...`, `game/data/generated/anims_manifest.json`) via USD + headless Blender (`tools/usd_to_gltf.py`); ACL natives built for Linux (`tools/tat-extract/native/linux-x64/`). 14 `UBlendSpace` graphs unsupported (parametric, not keyframed).
 - **Weather**: 16 `BP_WeatherPreset_*` -> `game/data/generated/weather/` with map provenance; applied to Environment/moon/fog/post-process; real 4096x2048 moon panorama `T_Moon_D.png` drives the sky shader; weather rain.
 - **Materials**: 1,552 materials with real scalar/vector/static-switch/blend/two-sided/phys material (`tools/parse_materials.py`); art-direction overrides preserved.
-- **Audio**: 3,425 Wwise `0xFFFF` chunks decoded to `game/assets/ue/audio/woise/<id>.ogg` (vgmstream r2168), 372 MiB; `audio_library.json`. `AkAudioEvent` assets expose EventId/MediaIds/DebugNames, but **no chunk↔MediaId map** exists (no `.wem`/`.bnk`, chunk ids are ubulk offsets). Do not wire clips to tags by guess; 9 synthesized fallbacks remain.
+- **Audio**: 3,425 Wwise `0xFFFF` chunks decoded to `game/assets/ue/audio/wwise/<id>.ogg` (vgmstream r2168), 372 MiB; `audio_library.json`. `AkAudioEvent` assets expose EventId/MediaIds/DebugNames, but **no chunk↔MediaId map** exists (no `.wem`/`.bnk`, chunk ids are ubulk offsets). Do not wire clips to tags by guess; 9 synthesized fallbacks remain.
 
 ### Runtime
 - Level loader: 32 m XZ chunking with tight custom AABB, tiered distance culling/shadows, occlusion boxes, per-cell collision bodies, skybox/periphery collider exclusion.

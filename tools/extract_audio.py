@@ -2,8 +2,8 @@
 """Extract embedded audio chunks and synthesize fallback SFX.
 
 Inspects extracted/audio/ (including WwiseSharedAssetLibrary.ubulk, which
-stores Wwise Vorbis-in-WAVE RIFF chunks) and extracts any valid
-RIFF/WAVE/OGG chunks into game/assets/ue/audio/ for archival.
+stores Wwise Vorbis-in-WAVE RIFF chunks) and extracts every media chunk
+into extracted/audio/wwise_raw/ for tools/convert_wwise.py to decode.
 
 The embedded Wwise chunks use format tag 0xFFFF (Wwise Vorbis) which Godot
 cannot decode, so this script additionally synthesizes clean fallback
@@ -22,6 +22,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SRC_DIR = ROOT / "extracted" / "audio"
 OUT_DIR = ROOT / "game" / "assets" / "ue" / "audio"
+RAW_DIR = SRC_DIR / "wwise_raw"
 
 SAMPLE_RATE = 22050
 
@@ -44,55 +45,166 @@ OVERLAP = 32
 # ---------------------------------------------------------------------------
 # Chunk extraction
 # ---------------------------------------------------------------------------
-def _is_valid_riff_at(f, abs_off: int, file_size: int):
-    """Return chunk total length if a valid RIFF/WAVE chunk starts at abs_off."""
-    f.seek(abs_off)
-    head = f.read(20)
-    if len(head) < 20 or head[0:4] != b"RIFF" or head[8:12] != b"WAVE":
-        return 0
-    (size,) = struct.unpack_from("<I", head, 4)
-    if size < 16 or abs_off + 8 + size > file_size or size > 300_000_000:
-        return 0
-    if b"fmt " not in head[12:20]:
-        # fmt marker must appear right after the WAVE tag
-        f.seek(abs_off + 12)
-        probe = f.read(64)
-        if b"fmt " not in probe:
-            return 0
-    total = 8 + size + (size & 1)  # RIFF chunks are word-aligned
-    return total
+# A cooked Wwise ubulk is a run of bank sections (BKHD/INIT/STMG/HIRC/...)
+# followed by the media payload: a flat concatenation of RIFF and PLUG chunks.
+BANK_SECTION_TAGS = {
+    b"BKHD",
+    b"INIT",
+    b"STMG",
+    b"HIRC",
+    b"ENVS",
+    b"PLAT",
+    b"STID",
+    b"DIDX",
+    b"DATA",
+}
+MEDIA_TAGS = (b"RIFF", b"PLUG")
 
 
-def extract_riff_chunks(src: Path, out_dir: Path) -> int:
+class ChunkScanError(RuntimeError):
+    """Raised when the ubulk does not match the expected chunk layout."""
+
+
+def _valid_riff_header(blob: bytes) -> bool:
+    if len(blob) < 20:
+        return False
+    if blob[0:4] != b"RIFF" or blob[8:12] != b"WAVE":
+        return False
+    return b"fmt " in blob[12:64]
+
+
+def scan_media_chunks(src: Path) -> list:
+    """Walk a cooked ubulk and return every media chunk in file order.
+
+    The bank section run is followed by RIFF/PLUG media chunks that are
+    stored back-to-back with NO RIFF word-alignment padding: a chunk's
+    successor always starts at ``offset + 8 + size``.  This is verified for
+    WwiseSharedAssetLibrary.ubulk by landing exactly on EOF.
+
+    The previous scanner advanced by ``8 + size + (size & 1)`` on the
+    assumption that "RIFF chunks are word-aligned".  The cooked ubulk is
+    unpadded, so after every odd-sized chunk the scan skipped one byte into
+    the next chunk's tag and then silently drifted through payload bytes,
+    extracting only 3,425 of the 5,018 RIFF chunks.  This scanner therefore
+    advances by exactly ``8 + size`` and raises ``ChunkScanError`` if it ever
+    lands on a tag that is neither a known bank section nor RIFF/PLUG.
+
+    Returns a list of dicts: offset, tag, payload_size, total_size, index
+    (index among all media chunks), riff_index (index among RIFF chunks,
+    None for PLUG), valid_riff.
+    """
     file_size = src.stat().st_size
-    count = 0
+    chunks: list = []
+    media_started = False
+    riff_index = 0
     cursor = 0
     with src.open("rb") as f:
         while cursor < file_size:
+            if cursor + 8 > file_size:
+                raise ChunkScanError(
+                    f"{src.name}: truncated chunk header at offset {cursor} "
+                    f"({file_size - cursor} byte(s) left)"
+                )
             f.seek(cursor)
-            window = f.read(WINDOW + OVERLAP)
-            if not window:
-                break
-            rel = window.find(b"RIFF")
-            if rel < 0:
-                cursor += WINDOW
+            header = f.read(8)
+            tag = header[0:4]
+            (size,) = struct.unpack("<I", header[4:8])
+            end = cursor + 8 + size
+            if end > file_size:
+                raise ChunkScanError(
+                    f"{src.name}: {tag!r} chunk at offset {cursor} claims "
+                    f"{size} payload bytes, ending past EOF ({end} > {file_size})"
+                )
+            if tag in MEDIA_TAGS:
+                media_started = True
+                valid_riff = False
+                if tag == b"RIFF":
+                    f.seek(cursor)
+                    valid_riff = _valid_riff_header(f.read(64))
+                chunks.append(
+                    {
+                        "offset": cursor,
+                        "tag": tag,
+                        "payload_size": size,
+                        "total_size": end - cursor,
+                        "index": len(chunks),
+                        "riff_index": riff_index if tag == b"RIFF" else None,
+                        "valid_riff": valid_riff,
+                    }
+                )
+                if tag == b"RIFF":
+                    riff_index += 1
+            elif tag in BANK_SECTION_TAGS:
+                if media_started:
+                    raise ChunkScanError(
+                        f"{src.name}: bank section {tag!r} at offset {cursor} "
+                        f"after the media region began at offset "
+                        f"{chunks[0]['offset']}"
+                    )
+            else:
+                where = "media region" if media_started else "bank header region"
+                raise ChunkScanError(
+                    f"{src.name}: unexpected chunk tag {tag!r} at offset {cursor} "
+                    f"in the {where}; expected RIFF/PLUG media or a known bank "
+                    f"section ({', '.join(sorted(t.decode() for t in BANK_SECTION_TAGS))})"
+                )
+            cursor = end
+    if cursor != file_size:
+        raise ChunkScanError(
+            f"{src.name}: chunk scan ended at {cursor}, not EOF ({file_size})"
+        )
+    if not media_started:
+        raise ChunkScanError(f"{src.name}: no RIFF/PLUG media chunks found")
+    return chunks
+
+
+def extract_riff_chunks(src: Path, out_dir: Path) -> dict:
+    """Write every RIFF/WAVE media chunk from *src* into *out_dir*.
+
+    PLUG chunks are plugin-processed media that the vgmstream path cannot
+    decode; they are counted and skipped.  Files left over from an earlier
+    scan are pruned so the directory always mirrors the current ubulk.
+    """
+    chunks = scan_media_chunks(src)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    produced: set = set()
+    invalid: list = []
+    plug = 0
+    with src.open("rb") as f:
+        for ch in chunks:
+            if ch["tag"] == b"PLUG":
+                plug += 1
                 continue
-            abs_off = cursor + rel
-            total = _is_valid_riff_at(f, abs_off, file_size)
-            if total <= 0:
-                cursor = abs_off + 1
+            if not ch["valid_riff"]:
+                invalid.append({"offset": ch["offset"], "size": ch["payload_size"]})
                 continue
-            f.seek(abs_off)
-            chunk = f.read(total)
-            if len(chunk) != total or chunk[8:12] != b"WAVE":
-                cursor = abs_off + 1
+            f.seek(ch["offset"])
+            blob = f.read(ch["total_size"])
+            if len(blob) != ch["total_size"]:
+                invalid.append(
+                    {
+                        "offset": ch["offset"],
+                        "size": ch["payload_size"],
+                        "error": "short read",
+                    }
+                )
                 continue
-            dest = out_dir / f"wwise_{count:04d}_{abs_off:09d}.wav"
-            if not (dest.exists() and dest.stat().st_size == total):
-                dest.write_bytes(chunk)
-            count += 1
-            cursor = abs_off + total
-    return count
+            dest = out_dir / f"wwise_{ch['riff_index']:04d}_{ch['offset']:09d}.wav"
+            if not (dest.exists() and dest.stat().st_size == ch["total_size"]):
+                dest.write_bytes(blob)
+            produced.add(dest.name)
+    pruned = 0
+    for stale in out_dir.glob("wwise_*.wav"):
+        if stale.name not in produced:
+            stale.unlink()
+            pruned += 1
+    return {
+        "riff": len(produced),
+        "plug": plug,
+        "invalid": invalid,
+        "pruned": pruned,
+        "chunks": len(chunks),
+    }
 
 
 def extract_ogg_chains(src: Path, out_dir: Path) -> int:
@@ -154,8 +266,13 @@ def copy_loose_audio(out_dir: Path) -> int:
     count = 0
     if not SRC_DIR.is_dir():
         return 0
+    raw_root = RAW_DIR.resolve()
     for src in sorted(SRC_DIR.rglob("*")):
         if not src.is_file():
+            continue
+        # Raw Wwise chunks under wwise_raw/ are conversion intermediates, not
+        # loose game audio; they must not be copied into the Godot project.
+        if raw_root in src.resolve().parents:
             continue
         suf = src.suffix.lower()
         if suf not in (".wav", ".ogg"):
@@ -349,13 +466,26 @@ def verify_wav(path: Path) -> bool:
 def main() -> int:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     ubulks = sorted(SRC_DIR.rglob("*.ubulk")) if SRC_DIR.is_dir() else []
-    riff_total, ogg_total = 0, 0
-    for ub in ubulks:
-        r = extract_riff_chunks(ub, OUT_DIR)
-        o = extract_ogg_chains(ub, OUT_DIR)
-        print(f"{ub.name}: {r} RIFF/WAVE chunks, {o} Ogg chains")
-        riff_total += r
-        ogg_total += o
+    riff_total, ogg_total, plug_total = 0, 0, 0
+    try:
+        for ub in ubulks:
+            stats = extract_riff_chunks(ub, RAW_DIR)
+            o = extract_ogg_chains(ub, OUT_DIR)
+            print(
+                f"{ub.name}: {stats['riff']} RIFF/WAVE chunks extracted, "
+                f"{stats['plug']} PLUG chunks skipped (plugin codec), "
+                f"{stats['pruned']} stale raw chunk(s) pruned, "
+                f"{o} Ogg chains"
+            )
+            if stats["invalid"]:
+                print(f"ERROR: invalid RIFF chunks in {ub.name}: {stats['invalid']}")
+                return 1
+            riff_total += stats["riff"]
+            plug_total += stats["plug"]
+            ogg_total += o
+    except ChunkScanError as exc:
+        print(f"ERROR: {exc}")
+        return 2
     loose = copy_loose_audio(OUT_DIR)
     print(f"loose audio files copied: {loose}")
     made = synthesize_fallbacks(OUT_DIR)
@@ -368,8 +498,8 @@ def main() -> int:
         print(f"ERROR: invalid wav files: {bad}")
         return 1
     print(
-        f"done: {riff_total} wwise chunks, {ogg_total} ogg chains, "
-        f"{loose} loose, {len(made)} fallbacks -> {OUT_DIR}"
+        f"done: {riff_total} wwise chunks extracted ({plug_total} PLUG skipped), "
+        f"{ogg_total} ogg chains, {loose} loose, {len(made)} fallbacks -> {OUT_DIR}"
     )
     return 0
 

@@ -167,15 +167,28 @@ Runtime effect:
 - Guildhall loot containers: 103 -> 107; swinging doors: 153 -> 155.
 - `make test` suite 20 asserts the car-underpass LevelInstance is merged.
 
+## Guildhall visibility-hole fallback
+
+The safe-room gap was checked against the extracted packed floors: there is **no
+floor-like mesh within 6 m** of `(126.0, 18.56, -10.43)` at y < 18.5, only
+foundation walls at y=12. A vertical ray from `(126, 30, -10.43)` hits an
+overhang/wall at **y=25.0**, not a lower floor. Since the lower-floor geometry
+is genuinely absent, `_landscape_weighted_material` sets
+`discard_holes = 0` for Guildhall landscape components, so the authored
+landscape surface fills the gap instead of being discarded to void. Other maps
+keep hole discard. Suite 21 asserts the parameter.
+
+The remaining dark rectangle under the walkway is an overhang/shadow area, not
+a discarded landscape hole; lighting QA still needs to confirm the final look.
+
 ## Remaining gaps (not faked)
 
-- The safe-room black rectangle is a landscape visibility gap between packed
-  building floors; no matching underpass/lower-floor sublevel was found at that
-  exact location in the extracted Guildhall maps. The `Facade_Apartment_CarUnderpass`
-  LevelInstance is now loaded at its authored transform `(-67.1, 17.6, 61.9)`.
-  If the safe-room gap still shows void, the next fix is either a missing floor
-  mesh in the packed class or disabling visibility discard for that component
-  so the landscape surface fills it.
+- The safe-room black rectangle is not a discarded landscape hole anymore:
+  Guildhall sets `discard_holes = 0`, and the gap raycast hits an overhang/wall
+  at y=25. No lower-floor mesh exists within 6 m of the gap; the remaining dark
+  area is an overhang/shadow and needs lighting QA, not invented geometry.
+  The `Facade_Apartment_CarUnderpass` LevelInstance is loaded at its authored
+  transform `(-67.1, 17.6, 61.9)`.
 - Layers allocated to a second weightmap texture (`tex != 0`) are skipped; the
   shader currently samples only the first weightmap. Components with more than
   four color allocations drop the fifth.

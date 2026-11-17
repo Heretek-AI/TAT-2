@@ -249,6 +249,7 @@ func _initialize() -> void:
 	await physics_frame
 	var gh_player: Node3D = gh_scene.get("player") as Node3D
 	var gh_ground_ok: bool = false
+	var gh_gap_hit: Dictionary = {}
 	var space: PhysicsDirectSpaceState3D = null
 	if gh_player != null:
 		space = gh_player.get_world_3d().direct_space_state
@@ -259,11 +260,15 @@ func _initialize() -> void:
 			q.exclude = [(gh_player as CollisionObject3D).get_rid()]
 		var hit: Dictionary = space.intersect_ray(q)
 		gh_ground_ok = (not hit.is_empty()) and (hit["position"] as Vector3).y > 15.0
-	if not gh_ground_ok or get_nodes_in_group("guards").size() == 0:
-		printerr("FAIL: Guildhall ground raycast or guards failed (ground=", gh_ground_ok, " pos=", gh_player.global_position if gh_player != null else Vector3.ZERO, " hit=", space.intersect_ray(PhysicsRayQueryParameters3D.create(gh_player.global_position + Vector3(0, 50.0, 0), gh_player.global_position + Vector3(0, -50.0, 0))) if gh_player != null else {}, " guards=", get_nodes_in_group("guards").size(), ")")
+		var gap_q := PhysicsRayQueryParameters3D.create(Vector3(126.0, 30.0, -10.43), Vector3(126.0, 8.0, -10.43))
+		gap_q.collision_mask = 1
+		gap_q.hit_back_faces = true
+		gh_gap_hit = space.intersect_ray(gap_q)
+	if not gh_ground_ok or gh_gap_hit.is_empty() or get_nodes_in_group("guards").size() == 0:
+		printerr("FAIL: Guildhall ground raycast or guards failed (ground=", gh_ground_ok, " gap_hit=", gh_gap_hit, " pos=", gh_player.global_position if gh_player != null else Vector3.ZERO, " hit=", space.intersect_ray(PhysicsRayQueryParameters3D.create(gh_player.global_position + Vector3(0, 50.0, 0), gh_player.global_position + Vector3(0, -50.0, 0))) if gh_player != null else {}, " guards=", get_nodes_in_group("guards").size(), ")")
 		fails += 1
 	else:
-		print("PASS: Guildhall terrain, floor collision & spawn ground raycast verified")
+		print("PASS: Guildhall terrain, floor collision & spawn ground raycast verified (gap_hit_y=", (gh_gap_hit["position"] as Vector3).y, ")")
 
 	# 11. Perf chunking: 32m MultiMesh chunks, split collision bodies, occluders
 	var gh_stats_v: Variant = gh_scene.get("level_stats")
@@ -622,6 +627,33 @@ func _initialize() -> void:
 		fails += 1
 	else:
 		print("PASS: LevelInstance sublevels merged (", li_instances.size(), " instances, ", li_car_near, " car-underpass meshes near authored transform)")
+
+	# 21. Guildhall visibility-hole fallback: the safe-room gap has no lower
+	# floor mesh within 6 m (only foundation walls at y=12), so the landscape
+	# surface must fill it instead of discarding to void.
+	var ghl_file := FileAccess.open("res://data/generated/levels/Guildhall/Guildhall_Landscape.tatlevel.json", FileAccess.READ)
+	var ghl_lc: Dictionary = {}
+	if ghl_file != null:
+		var ghl_parsed: Variant = JSON.parse_string(ghl_file.get_as_text())
+		if ghl_parsed is Dictionary:
+			var ghl_lands: Array = (ghl_parsed as Dictionary).get("landscapes", [])
+			for ghl_var: Variant in ghl_lands:
+				if ghl_var is Dictionary and str((ghl_var as Dictionary).get("weightmap", "")) != "":
+					ghl_lc = ghl_var
+					break
+	var ll3: Node = (load("res://src/core/level_loader.gd") as GDScript).new()
+	root.add_child(ll3)
+	var ghl_mat: ShaderMaterial = null
+	if not ghl_lc.is_empty():
+		ghl_mat = ll3.call("_landscape_weighted_material", ghl_lc) as ShaderMaterial
+	var discard_val: Variant = ghl_mat.get_shader_parameter("discard_holes") if ghl_mat != null else null
+	if ghl_mat == null or discard_val == null or not is_equal_approx(float(discard_val), 0.0):
+		printerr("FAIL: Guildhall visibility-hole fallback missing (mat=", ghl_mat != null, " discard=", discard_val, ")")
+		fails += 1
+	else:
+		print("PASS: Guildhall landscape fills visibility gaps (discard_holes=0)")
+	ll3.queue_free()
+	await process_frame
 
 	print("SUMMARY: fails=", fails)
 	quit(0 if fails == 0 else 1)

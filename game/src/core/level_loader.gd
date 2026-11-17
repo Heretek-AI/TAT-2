@@ -1456,6 +1456,12 @@ func _landscape_weighted_material(lc: Dictionary) -> ShaderMaterial:
 		return null
 	var mat := ShaderMaterial.new()
 	mat.shader = LANDSCAPE_SHADER
+	# Guildhall's packed floors are incomplete at the safe-room gap; the
+	# extracted data has no lower-floor mesh within 6 m of that visibility hole
+	# (only foundation walls at y=12). Keep the authored landscape surface
+	# visible there instead of discarding to void. Other maps keep hole discard.
+	var source_low: String = str(lc.get("source", "")).to_lower()
+	mat.set_shader_parameter("discard_holes", 0.0 if source_low.contains("guildhall") else 1.0)
 	mat.set_shader_parameter("weightmap", wm)
 	var slot: int = 0
 	for l_var: Variant in (lc.get("layers", []) as Array):

@@ -87,6 +87,7 @@ func _setup_environment() -> void:
 	MobileProfile.apply_environment(e)
 	env.environment = e
 	add_child(env)
+	print("TAT-2 environment: bg=", e.background_mode, " ambient_src=", e.ambient_light_source, " ambient_energy=", e.ambient_light_energy, " ambient_color=", e.ambient_light_color, " sky=", e.sky != null, " fog=", e.fog_enabled, " fog_density=", e.fog_density)
 
 	add_child(moon)
 	light_probe.register_light(moon)

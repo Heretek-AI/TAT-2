@@ -87,8 +87,10 @@ collapse at actor roots. Guildhall `PeripheryA` is collidable (25,074 shapes,
 apartment / storefront sublevels at authored transforms (138 LevelInstances /
 32,166 meshes across all maps). Landscape layer weightmaps are also blended by
 `tat_landscape.gdshader` (GroundA/GrassA/CobbleA/CobbleB/RockTileA +
-Visibility, plus Puddle normal/opacity and GroundWet darkening). Remaining A5
-work: layers allocated to a second weightmap texture and the fifth color slot.
+Visibility, plus Puddle normal/opacity and GroundWet darkening). Guildhall sets
+`discard_holes=0` because the safe-room gap has no lower-floor mesh; the
+authored surface fills it. Remaining A5 work: layers allocated to a second
+weightmap texture and the fifth color slot.
 
 ### A6 — Gameplay constants (in progress)
 BP defaults carry the real movement and perception values: player 360/180 cm/s walk/crouch, +90 sprint increment, 550 jump, 91 cm capsule half height, 79.625 cm eye offset; guard 250 cm/s, 25 m sight, 30 m lose-sight, 40° half-FOV, 25 m hearing; `DA_AIStatesToSpeed_Guard` 1.5/1.7 m/s; `DA_DetectionSettings` 0.4 s/m (0.2 alerted) with crouch multiplier. Plan: parse into `game/data/generated/gameplay/`, update player/guard constants and the detection ramp.
@@ -145,6 +147,8 @@ find extracted/json -name 'NS_*.json' | wc -l
 - 2026-11-16: LevelInstance sublevels shipped: 138 instances / 32,166 meshes merged with `LevelInstanceComponent` transforms; Guildhall PeripheryA 12,594 meshes; car-underpass LevelInstance has 697 meshes near its authored transform; Guildhall runtime 63,210 meshes / 25,074 shapes. Tests suite 20; `make test` fails=0.
 
 - 2026-11-16: Puddle/GroundWet landscape layers: `Puddle` uses the real `T_Decal_Puddle_1_Normal/Opacity` textures plus the authored weightmap channel with a labelled dark-water tint; `GroundWet` darkens albedo and lowers roughness. Shader compiles/renders (`/tmp/opencode/qa_puddle_spawn.png`); `make test` fails=0.
+
+- 2026-11-16: Guildhall visibility-hole fallback: no floor-like mesh within 6 m of the safe-room gap (only foundation walls at y=12); vertical ray hits an overhang at y=25. `discard_holes=0` for Guildhall landscape components so the authored surface fills the gap; suite 21 asserts it. `make test` fails=0.
 
 ### Visual verification log (desktop, live GPU)
 

@@ -24,6 +24,7 @@ uniform int puddle_channel = -1;
 uniform int groundwet_channel = -1;
 uniform sampler2D puddle_normal : hint_normal, repeat_enable;
 uniform sampler2D puddle_opacity : filter_linear, repeat_enable;
+uniform float discard_holes = 1.0;
 uniform float uv_scale = 12.0;
 uniform vec3 fallback_color : source_color = vec3(0.42, 0.42, 0.40);
 
@@ -86,7 +87,7 @@ void fragment() {
 		}
 	}
 
-	if (vis < 0.5) {
+	if (discard_holes > 0.5 && vis < 0.5) {
 		discard;
 	}
 	float puddle = 0.0;

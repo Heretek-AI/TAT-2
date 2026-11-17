@@ -139,8 +139,37 @@ GroundA/Visibility/GrassA/CobbleA). Those cases are skipped, not guessed.
 Visual check: `/tmp/opencode/qa_weightmap_walk.png` shows the blended
 road/cobble/dirt surface and the authored hole under the safe-room walkway.
 
+## LevelInstance sublevels
+
+`Guildhall_PeripheryA` also places separate maps as `LevelInstance` actors. These
+are not in the `LevelStreamingAlwaysLoaded` list, so they were absent from the
+runtime even though their source maps are extracted. The parser now reads each
+`LevelInstance` actor's `CookedWorldAsset`, resolves its
+`LevelInstanceComponent` transform, loads the generated sublevel, and merges its
+meshes/lights/markers/decals/volumes/doors with that transform.
+
+Across all maps: **138 LevelInstances loaded, 32,166 meshes, 0 unresolved**.
+For Guildhall `PeripheryA`: 4 LevelInstances, including
+`Facade_Apartment_CarUnderpass` at `(-67.1, 17.6, 61.9)`, with **697 meshes**
+within 30 m of the authored transform.
+
+Runtime effect:
+
+- Guildhall: 51,305 -> **63,210 meshes**, 10,865 chunks, 222 collision bodies,
+  **25,074 collision shapes** (cap raised from 24,000 to 32,000 after measuring
+  the real count).
+- Guildhall loot containers: 103 -> 107; swinging doors: 153 -> 155.
+- `make test` suite 20 asserts the car-underpass LevelInstance is merged.
+
 ## Remaining gaps (not faked)
 
+- The safe-room black rectangle is a landscape visibility gap between packed
+  building floors; no matching underpass/lower-floor sublevel was found at that
+  exact location in the extracted Guildhall maps. The `Facade_Apartment_CarUnderpass`
+  LevelInstance is now loaded at its authored transform `(-67.1, 17.6, 61.9)`.
+  If the safe-room gap still shows void, the next fix is either a missing floor
+  mesh in the packed class or disabling visibility discard for that component
+  so the landscape surface fills it.
 - `Puddle` / `GroundWet` landscape layers and the fifth allocation on a few
   components are not blended yet (no recovered albedo / shader slot).
 - The safe-room catwalk has open gaps between its structural crossbeams; the

@@ -290,7 +290,7 @@ func _initialize() -> void:
 					max_chunk_mesh = str(mmi.get_meta("ue_mesh", ""))
 			if mmi.visibility_range_end > 0.0:
 				culled_nodes += 1
-	if chunk_count < 500 or multi_nodes < 200 or col_bodies < 4 or col_shapes <= 0 or col_shapes >= 24000 or occluders <= 0 or max_chunk_span >= 140.0 or culled_nodes < 300:
+	if chunk_count < 500 or multi_nodes < 200 or col_bodies < 4 or col_shapes <= 0 or col_shapes >= 32000 or occluders <= 0 or max_chunk_span >= 140.0 or culled_nodes < 300:
 		printerr("FAIL: perf chunking invariants (chunks=", chunk_count, " multimeshes=", multi_nodes, " bodies=", col_bodies, " shapes=", col_shapes, " occluders=", occluders, " max_span=", max_chunk_span, " max_mesh=", max_chunk_mesh, " culled=", culled_nodes, ")")
 		fails += 1
 	else:
@@ -575,10 +575,12 @@ func _initialize() -> void:
 	# the black-void / floating-fragment regression.
 	var pa_file := FileAccess.open("res://data/generated/levels/Guildhall/Guildhall_PeripheryA.tatlevel.json", FileAccess.READ)
 	var pa_meshes: Array = []
+	var pa_dict: Dictionary = {}
 	if pa_file != null:
 		var pa_parsed: Variant = JSON.parse_string(pa_file.get_as_text())
 		if pa_parsed is Dictionary:
-			pa_meshes = (pa_parsed as Dictionary).get("meshes", [])
+			pa_dict = pa_parsed
+			pa_meshes = pa_dict.get("meshes", [])
 	var pa_spawn := Vector3(127.2747, 25.4694, -5.3296)
 	var pa_near_spawn: int = 0
 	for pa_m: Variant in pa_meshes:
@@ -594,6 +596,32 @@ func _initialize() -> void:
 		fails += 1
 	else:
 		print("PASS: packed Level Actor instances expanded (PeripheryA meshes=", pa_meshes.size(), ", ", pa_near_spawn, " around safe-room spawn)")
+
+	# 20. LevelInstance sublevels: PeripheryA places Facade_Apartment_CarUnderpass
+	# at its authored transform. These sublevels are not in the AlwaysLoaded
+	# list, so the parser must merge them explicitly.
+	var li_instances: Array = []
+	var li_car_near: int = 0
+	var li_car_pos := Vector3(-67.1, 17.6, 61.9)
+	if not pa_dict.is_empty():
+		li_instances = pa_dict.get("level_instances", [])
+		for li_m: Variant in (pa_dict.get("meshes", []) as Array):
+			if not (li_m is Dictionary):
+				continue
+			var li_pos: Array = (li_m as Dictionary).get("pos", [])
+			if li_pos.size() >= 3:
+				var li_v := Vector3(float(li_pos[0]), float(li_pos[1]), float(li_pos[2]))
+				if li_v.distance_to(li_car_pos) < 30.0:
+					li_car_near += 1
+	var li_has_car: bool = false
+	for li_s: Variant in li_instances:
+		if str(li_s).find("Facade_Apartment_CarUnderpass") >= 0:
+			li_has_car = true
+	if not li_has_car or li_car_near < 100:
+		printerr("FAIL: LevelInstance sublevels not merged (car_underpass=", li_has_car, " near_meshes=", li_car_near, ")")
+		fails += 1
+	else:
+		print("PASS: LevelInstance sublevels merged (", li_instances.size(), " instances, ", li_car_near, " car-underpass meshes near authored transform)")
 
 	print("SUMMARY: fails=", fails)
 	quit(0 if fails == 0 else 1)

@@ -598,6 +598,59 @@ def _door_glb_exists(ue_path):
     return (ROOT / "game" / "assets" / "ue" / "Content" / (clean + ".glb")).exists()
 
 
+def _apply_godot_transform(entry, trs):
+    """Apply a Godot-space rigid transform to a generated level entry."""
+    p = entry.get("pos")
+    b = entry.get("basis")
+    if not isinstance(p, list) or len(p) < 3:
+        return
+    ib = trs.get("basis", [1, 0, 0, 0, 1, 0, 0, 0, 1])
+    r = [
+        [float(ib[0]), float(ib[1]), float(ib[2])],
+        [float(ib[3]), float(ib[4]), float(ib[5])],
+        [float(ib[6]), float(ib[7]), float(ib[8])],
+    ]
+    v = [float(p[0]), float(p[1]), float(p[2])]
+    tp = trs.get("pos", [0.0, 0.0, 0.0])
+    np = [sum(r[i][j] * v[j] for j in range(3)) + float(tp[i]) for i in range(3)]
+    entry["pos"] = [round(np[0], 4), round(np[1], 4), round(np[2], 4)]
+    if isinstance(b, list) and len(b) >= 9:
+        bb = [
+            [float(b[0]), float(b[1]), float(b[2])],
+            [float(b[3]), float(b[4]), float(b[5])],
+            [float(b[6]), float(b[7]), float(b[8])],
+        ]
+        nb = [
+            [sum(r[i][k] * bb[k][j] for k in range(3)) for j in range(3)]
+            for i in range(3)
+        ]
+        entry["basis"] = [
+            round(nb[0][0], 5),
+            round(nb[0][1], 5),
+            round(nb[0][2], 5),
+            round(nb[1][0], 5),
+            round(nb[1][1], 5),
+            round(nb[1][2], 5),
+            round(nb[2][0], 5),
+            round(nb[2][1], 5),
+            round(nb[2][2], 5),
+        ]
+
+
+def _apply_godot_point(point, trs):
+    ib = trs.get("basis", [1, 0, 0, 0, 1, 0, 0, 0, 1])
+    r = [
+        [float(ib[0]), float(ib[1]), float(ib[2])],
+        [float(ib[3]), float(ib[4]), float(ib[5])],
+        [float(ib[6]), float(ib[7]), float(ib[8])],
+    ]
+    v = [float(point[0]), float(point[1]), float(point[2])]
+    tp = trs.get("pos", [0.0, 0.0, 0.0])
+    return [
+        round(sum(r[i][j] * v[j] for j in range(3)) + float(tp[i]), 4) for i in range(3)
+    ]
+
+
 def _color_to_rgb(c):
     if not isinstance(c, dict):
         return None
@@ -771,6 +824,9 @@ def extract_levels():
     count = 0
     total_meshes = 0
     total_lights = 0
+    total_level_instances_loaded = 0
+    total_level_instance_meshes = 0
+    total_level_instances_unresolved = 0
 
     for jf in sorted((EX / "json" / "Maps").rglob("*.json")):
         if jf.name.startswith("BPP_"):
@@ -1834,6 +1890,87 @@ def extract_levels():
                 }
             )
 
+        # LevelInstance actors reference another map and place it with the
+        # LevelInstanceComponent transform. The referenced sublevels are not in
+        # the AlwaysLoaded list, so without this pass their buildings/underpasses
+        # are absent from the runtime. Merge the generated sublevel data with the
+        # instance transform (rigid translation + yaw).
+        level_instance_sources = []
+        for e in exps:
+            if e.get("Type") != "LevelInstance":
+                continue
+            props = e.get("Properties") or {}
+            asset = (props.get("CookedWorldAsset") or {}).get("AssetPathName", "")
+            if not asset:
+                continue
+            rel_asset = asset.split(".")[0]
+            prefix = "/Game/Maps/"
+            if not rel_asset.startswith(prefix):
+                continue
+            rel_asset = rel_asset[len(prefix) :]
+            if rel_asset == str(rel.with_suffix("")).replace("\\", "/"):
+                continue
+            sub_path = levels_dir / (rel_asset + ".tatlevel.json")
+            if not sub_path.exists():
+                total_level_instances_unresolved += 1
+                continue
+            comp_ref = (props.get("LevelInstanceComponent") or {}).get("ObjectName", "")
+            ridx = comp_by_full_objname.get(comp_ref)
+            if ridx is None and "PersistentLevel." in comp_ref:
+                ridx = comp_by_full_objname.get(
+                    comp_ref.split("PersistentLevel.")[-1].rstrip("'")
+                )
+            if ridx is None:
+                total_level_instances_unresolved += 1
+                continue
+            inst_mat = get_world_mat(ridx)
+            if level_mat is not None:
+                inst_mat = mat4_mul(level_mat, inst_mat)
+            inst_trs = ue_mat4_to_godot_trs(inst_mat)
+            try:
+                sub = json.loads(sub_path.read_text())
+            except Exception:
+                total_level_instances_unresolved += 1
+                continue
+            if not isinstance(sub, dict):
+                total_level_instances_unresolved += 1
+                continue
+            dest_map = {
+                "meshes": meshes,
+                "lights": lights,
+                "markers": markers,
+                "landscapes": landscapes,
+                "rect_lights": rect_lights,
+                "sky_lights": sky_lights,
+                "fog_volumes": fog_volumes,
+                "post_process": post_process,
+                "sky_atmospheres": sky_atmospheres,
+                "decals": decals,
+                "niagara": niagara,
+                "volumes": volumes,
+                "landscape_splines": landscape_splines,
+                "swinging_doors": swinging_doors,
+            }
+            for key, dest in dest_map.items():
+                for entry in sub.get(key) or []:
+                    if not isinstance(entry, dict):
+                        continue
+                    e2 = dict(entry)
+                    if key == "landscape_splines":
+                        pts = e2.get("points") or []
+                        e2["points"] = [
+                            _apply_godot_point(pt, inst_trs)
+                            for pt in pts
+                            if isinstance(pt, list) and len(pt) >= 3
+                        ]
+                    else:
+                        _apply_godot_transform(e2, inst_trs)
+                    e2["level_instance"] = f"{rel}::{e.get('Name')}"
+                    dest.append(e2)
+            total_level_instances_loaded += 1
+            level_instance_sources.append(rel_asset)
+            total_level_instance_meshes += len(sub.get("meshes") or [])
+
         if (
             meshes
             or lights
@@ -1872,6 +2009,7 @@ def extract_levels():
                         "swinging_doors": swinging_doors,
                         "door_leaves_excluded": door_leaves_excluded,
                         "swinging_doors_unresolved": swinging_unresolved,
+                        "level_instances": level_instance_sources,
                     }
                 )
             )
@@ -1905,6 +2043,11 @@ def extract_levels():
 
     print(
         f"Normalized {count} level JSONs -> {total_meshes} mesh instances, {total_lights} lights"
+    )
+    print(
+        f"Level instances: {total_level_instances_loaded} loaded "
+        f"({total_level_instance_meshes} meshes), "
+        f"{total_level_instances_unresolved} unresolved"
     )
 
 

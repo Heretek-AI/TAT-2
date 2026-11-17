@@ -23,7 +23,7 @@ Re-run the census with the commands at the bottom.
 | **Rect / sky lights** | 31 rect placements, 1 sky light, 1 atmosphere | 1 active rect light wired (26 authored off), sky/atmosphere applied | **wired (9b1a22a)** |
 | **Post-process / fog** | 2 `PostProcessVolume`, 1 `ExponentialHeightFog` | fog + Godot-mappable post-process applied; Lumen-only fields logged as unmappable | **wired (9b1a22a)** |
 | **Landscape** | 128 `LandscapeComponent`, 128 heightfield collisions, splines, Nanite components | heightmaps + collision + weightmap layer blend (`tat_landscape.gdshader`); Guildhall road/cobble/dirt/grass from extracted textures | Puddle/GroundWet layers **wave A5** |
-| **Packed Level Actors** | 39 `BPP_PL_*` classes, 3,210 instanced components, 30,127 instances | all instances expanded with real `PerInstanceSMData`; Guildhall PeripheryA 3,587 -> 10,590 meshes, collidable | **done (packed-level-instances)** |
+| **Packed Level Actors** | 39 `BPP_PL_*` classes, 3,210 instanced components, 30,127 instances | all instances expanded with real `PerInstanceSMData`; Guildhall PeripheryA 3,587 -> 12,594 meshes, collidable; **138 LevelInstances / 32,166 meshes** merged at authored transforms | **done (packed-level-instances)** |
 | **Audio** | 3,425 Wwise chunks + 1,296 event assets | **3,425/3,425 decoded to Ogg** (372 MiB, `4742103`); event assets expose EventId/MediaIds/DebugNames but chunk↔MediaId mapping is unrecoverable | **decode done; naming blocked** |
 | **Tools** | MagicSlime 4 charges / 2 m puddle / 30 s / 10 s slip; smoke 1 ch / 5x5x4 m / 25 s; pickpocket 25 m/9°/0.5 s/4.5 m/s | **implemented** (`50252b5`); projectile flight and player-slip are documented simplifications | **done** |
 | **Combat/health** | fall 6.5→23.25 m curve, 10 s downed, 5 s revive, 15/s guard regen | **implemented** (`16edb4e`) with curve-verified damage and a downed countdown | **done** |
@@ -34,7 +34,7 @@ Re-run the census with the commands at the bottom.
 
 ## What is already 1:1 (or close)
 
-- **Geometry**: every shipped mesh is a real GLB exported from the install. Guildhall 51,305 runtime instances / Old Manor 19,503 / Thieves' Den 286, with 32 m chunks, real material slots and landscape heightmaps. Packed Level Actors expand their real `PerInstanceSMData` (30,127 instances across 39 `BPP_*` classes), and Guildhall's packed-city `PeripheryA` is collidable.
+- **Geometry**: every shipped mesh is a real GLB exported from the install. Guildhall 63,210 runtime instances / Old Manor 19,503 / Thieves' Den 286, with 32 m chunks, real material slots and landscape heightmaps. Packed Level Actors expand their real `PerInstanceSMData` (30,127 instances across 39 `BPP_*` classes), 138 LevelInstance sublevels merge at authored transforms, and Guildhall's packed-city `PeripheryA` is collidable.
 - **Materials (albedo/normal/ORM)**: `materials.json` maps 1,272 UE material instances to real textures; glass, wallpaper, wood, brick and stone overrides were derived from those assets.
 - **Tuning data**: 141 DataTables/CurveTables/StringTables drive contracts, difficulty, tools, stamina, AI and progression.
 - **Lighting positions/colours**: 3,479 extracted lights (96 loaded per map, brightest 4 shadowed).
@@ -82,8 +82,10 @@ landscape spline/grass data.
 **Packed Level Actors are now expanded** (`docs/reports/packed-level-instances.md`):
 level stubs with a `Template` ref and no `PerInstanceSMData` resolve the BPP
 class template's mesh + instance transforms, so the city blocks no longer
-collapse at actor roots. Guildhall `PeripheryA` is collidable (23,125 shapes,
-217 bodies). Landscape layer weightmaps are also blended by
+collapse at actor roots. Guildhall `PeripheryA` is collidable (25,074 shapes,
+222 bodies) and its 4 `LevelInstance` actors merge the car-underpass /
+apartment / storefront sublevels at authored transforms (138 LevelInstances /
+32,166 meshes across all maps). Landscape layer weightmaps are also blended by
 `tat_landscape.gdshader` (GroundA/GrassA/CobbleA/CobbleB/RockTileA +
 Visibility). Remaining A5 work: Puddle/GroundWet layers and the fifth
 allocation on a few components.
@@ -139,6 +141,8 @@ find extracted/json -name 'NS_*.json' | wc -l
 - 2026-11-16: packed Level Actor instances shipped (`docs/reports/packed-level-instances.md`): level stubs now resolve BPP template `PerInstanceSMData` (39 classes, 3,210 components, 30,127 instances); Guildhall PeripheryA 3,587 -> 10,590 meshes and is collidable; runtime 51,305 meshes / 23,125 shapes; safe-room spawn has 630 meshes within 25 m. Guildhall landscape uses the real `T_RoadBricksA_D/N` street surface named by `MI_Landscape.TextureStreamingData`; `make test` fails=0, `make audit` 99.4%.
 
 - 2026-11-16: landscape layer blend shipped (`tat_landscape.gdshader`): parser emits `WeightmapTextures` + `WeightmapLayerAllocations`; shader blends GroundA/GrassA/CobbleA/CobbleB/RockTileA by channel and discards `LandscapeVisibilityLayerInfo` holes; `Puddle`/`GroundWet` remain skipped. Visual: `/tmp/opencode/qa_weightmap_walk.png`; `make test` fails=0, audit 99.4%.
+
+- 2026-11-16: LevelInstance sublevels shipped: 138 instances / 32,166 meshes merged with `LevelInstanceComponent` transforms; Guildhall PeripheryA 12,594 meshes; car-underpass LevelInstance has 697 meshes near its authored transform; Guildhall runtime 63,210 meshes / 25,074 shapes. Tests suite 20; `make test` fails=0.
 
 ### Visual verification log (desktop, live GPU)
 

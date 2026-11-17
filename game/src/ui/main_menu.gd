@@ -346,6 +346,10 @@ func _launch() -> void:
 	GameState.thief_id = ["spider", "chameleon", "moth"][thief_opt.selected]
 	GameState.difficulty = diff_opt.selected + 1
 	GameState.active_contract_order = selected_order
+	# Resolve the map here so the mission's weather preset comes from the
+	# selected contract, not the GameState default ("old_manor").
+	var info: Dictionary = GameData.get_contract_display(selected_order)
+	GameState.active_map_id = str(info.get("map_id", "old_manor"))
 	get_tree().change_scene_to_file("res://scenes/mission.tscn")
 
 

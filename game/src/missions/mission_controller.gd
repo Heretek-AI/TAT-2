@@ -67,6 +67,10 @@ func _ready() -> void:
 		touch_ui.set("hud", hud)
 		add_child(touch_ui)
 
+	# Resolve the map before building the environment so the weather preset is
+	# chosen from the contract's map, not the GameState default ("old_manor").
+	var map_id: String = str(GameData.get_contract_display(GameState.active_contract_order).get("map_id", "old_manor"))
+	GameState.active_map_id = map_id
 	_setup_environment()
 	start_contract(GameState.active_contract_order)
 

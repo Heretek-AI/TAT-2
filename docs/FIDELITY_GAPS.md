@@ -150,6 +150,8 @@ find extracted/json -name 'NS_*.json' | wc -l
 
 - 2026-11-16: Guildhall visibility-hole fallback: no floor-like mesh within 6 m of the safe-room gap (only foundation walls at y=12); vertical ray hits an overhang at y=25. `discard_holes=0` for Guildhall landscape components so the authored surface fills the gap; suite 21 asserts it. `make test` fails=0.
 
+- 2026-11-16: spawn-area light priority: `_prioritize_lights` puts lights within 25 m of player spawns ahead of the global brightest-96 budget. Guildhall now loads the authored safe-room wall `SpotLight3D` at `(126.2948, 27.1426, -2.28)` energy 4.20; suite 10 asserts it. `make test` fails=0.
+
 ### Visual verification log (desktop, live GPU)
 
 - **Weather blackout** (`cba4cf2`): `Environment.adjustment_brightness` was written as `gain−1` (−0.2) but is a multiplier (default 1.0). Fixed to the gain (0.8 den / 1.1 dense fog) with a suite-17 regression test. Evidence: black `/tmp/opencode/tat_den.png` → working `/tmp/opencode/tat_den_fixed.png`.

@@ -941,13 +941,49 @@ func _add_one_light(linfo: Dictionary, parent: Node3D, light_probe: Node, hero_s
 	return true
 
 
-func _add_lights(pending_lights: Array, parent: Node3D, light_probe: Node, max_lights: int, ctx: Dictionary) -> void:
-	pending_lights.sort_custom(_sort_lights_desc)
-	var budget: int = mini(pending_lights.size(), max_lights)
+func _prioritize_lights(pending_lights: Array, focus_points: Array) -> Array:
+	# Spawn-area lights must survive the global budget even when a distant
+	# authored light is brighter; otherwise safe rooms render with an emissive
+	# lamp mesh but no actual light. Priority is distance to any player spawn.
+	if focus_points.is_empty():
+		var copy: Array = pending_lights.duplicate()
+		copy.sort_custom(_sort_lights_desc)
+		return copy
+	var priority: Array = []
+	var rest: Array = []
+	for l_var: Variant in pending_lights:
+		if not (l_var is Dictionary):
+			continue
+		var l: Dictionary = l_var
+		var p: Array = l.get("pos", [0, 0, 0])
+		var near: bool = false
+		for fp_var: Variant in focus_points:
+			if not (fp_var is Vector3):
+				continue
+			var fp: Vector3 = fp_var
+			var dx: float = float(p[0]) - fp.x
+			var dy: float = float(p[1]) - fp.y
+			var dz: float = float(p[2]) - fp.z
+			if dx * dx + dy * dy + dz * dz <= 25.0 * 25.0:
+				near = true
+				break
+		if near:
+			priority.append(l)
+		else:
+			rest.append(l)
+	priority.sort_custom(_sort_lights_desc)
+	rest.sort_custom(_sort_lights_desc)
+	var ordered: Array = priority + rest
+	return ordered
+
+
+func _add_lights(pending_lights: Array, parent: Node3D, light_probe: Node, max_lights: int, ctx: Dictionary, focus_points: Array = []) -> void:
+	var ordered: Array = _prioritize_lights(pending_lights, focus_points)
+	var budget: int = mini(ordered.size(), max_lights)
 	var hero_shadows: int = mini(MobileProfile.hero_shadows(), budget)
 	var added: int = 0
 	for li in range(budget):
-		var linfo: Dictionary = pending_lights[li]
+		var linfo: Dictionary = ordered[li]
 		if _add_one_light(linfo, parent, light_probe, li < hero_shadows):
 			added += 1
 	ctx["light_count"] = added
@@ -1275,7 +1311,7 @@ func load_sublevels(json_paths: Array[String], parent: Node3D, light_probe: Node
 	# Active RectLights are rare (one per mission map at most) and authored as
 	# area lights, so they claim budget slots before the generic point lights.
 	_build_rect_lights(acc["rect_lights"], parent, light_probe, ctx, max_lights)
-	_add_lights(acc["lights"], parent, light_probe, maxi(max_lights - int(ctx.get("rect_light_count", 0)), 0), ctx)
+	_add_lights(acc["lights"], parent, light_probe, maxi(max_lights - int(ctx.get("rect_light_count", 0)), 0), ctx, acc["result"]["player_spawns"])
 	ctx["light_count"] = int(ctx.get("light_count", 0)) + int(ctx.get("rect_light_count", 0))
 	_build_decals(acc["decals"], parent, ctx)
 	_build_volumes(acc["volumes"], parent, ctx)
@@ -1304,8 +1340,7 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 			await parent.get_tree().process_frame
 
 	var ctx: Dictionary = _new_build_ctx(parent, light_probe, generate_collision)
-	var pending_lights: Array = acc["lights"]
-	pending_lights.sort_custom(_sort_lights_desc)
+	var pending_lights: Array = _prioritize_lights(acc["lights"], acc["result"]["player_spawns"])
 	load_progress.emit(0.3, "Sorting lights...")
 	# Active RectLights claim budget slots before the generic point lights.
 	_build_rect_lights(acc["rect_lights"], parent, light_probe, ctx, max_lights)

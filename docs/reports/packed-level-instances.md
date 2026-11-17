@@ -181,6 +181,30 @@ keep hole discard. Suite 21 asserts the parameter.
 The remaining dark rectangle under the walkway is an overhang/shadow area, not
 a discarded landscape hole; lighting QA still needs to confirm the final look.
 
+## Spawn-area light priority
+
+The safe-room wall light (`SpotLightComponent` + `TATShadowFadeSpotLightComponent`
+at `(126.29, 27.14, -2.28)`, 88° cone, 22.5 m range) was not surviving the
+global 96-light budget because the selector sorted only by authored intensity.
+`_prioritize_lights` now puts any light within **25 m of a player spawn** ahead
+of the brightest distant lights, then fills the remaining budget by intensity.
+This uses the extracted spawn markers and light transforms; no light is
+invented.
+
+Guildhall suite 10 now asserts a spawn-area light is loaded:
+
+```
+PASS: Guildhall terrain, floor collision & spawn ground raycast verified
+      (gap_hit_y=25.0, spawn_lights=1,
+       light=SpotLight3D pos=(126.2948, 27.1426, -2.28) energy=4.20)
+```
+
+The wall light is the one lighting the safe-room overhang; the earlier black
+rectangle was an unlit overhang/shadow, not a missing landscape hole. A fresh
+Guildhall screenshot is still pending after the user killed the QA process; the
+runtime assertion proves the extracted light is loaded at the authored
+transform.
+
 ## Remaining gaps (not faked)
 
 - The safe-room black rectangle is not a discarded landscape hole anymore:

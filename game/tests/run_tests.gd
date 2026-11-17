@@ -248,6 +248,16 @@ func _initialize() -> void:
 	await physics_frame
 	await physics_frame
 	var gh_player: Node3D = gh_scene.get("player") as Node3D
+	var gh_spawn_lights: int = 0
+	var gh_spawn_light_desc: String = ""
+	if gh_player != null:
+		for gh_n: Node in gh_scene.get_children():
+			if gh_n is SpotLight3D or gh_n is OmniLight3D:
+				if (gh_n as Node3D).global_position.distance_to(gh_player.global_position) < 20.0:
+					gh_spawn_lights += 1
+					if gh_spawn_light_desc == "":
+						var gh_l: Light3D = gh_n as Light3D
+						gh_spawn_light_desc = "%s pos=%s energy=%.2f" % [gh_l.get_class(), gh_l.global_position, gh_l.light_energy]
 	var gh_ground_ok: bool = false
 	var gh_gap_hit: Dictionary = {}
 	var space: PhysicsDirectSpaceState3D = null
@@ -264,11 +274,11 @@ func _initialize() -> void:
 		gap_q.collision_mask = 1
 		gap_q.hit_back_faces = true
 		gh_gap_hit = space.intersect_ray(gap_q)
-	if not gh_ground_ok or gh_gap_hit.is_empty() or get_nodes_in_group("guards").size() == 0:
-		printerr("FAIL: Guildhall ground raycast or guards failed (ground=", gh_ground_ok, " gap_hit=", gh_gap_hit, " pos=", gh_player.global_position if gh_player != null else Vector3.ZERO, " hit=", space.intersect_ray(PhysicsRayQueryParameters3D.create(gh_player.global_position + Vector3(0, 50.0, 0), gh_player.global_position + Vector3(0, -50.0, 0))) if gh_player != null else {}, " guards=", get_nodes_in_group("guards").size(), ")")
+	if not gh_ground_ok or gh_gap_hit.is_empty() or gh_spawn_lights < 1 or get_nodes_in_group("guards").size() == 0:
+		printerr("FAIL: Guildhall ground raycast or guards failed (ground=", gh_ground_ok, " gap_hit=", gh_gap_hit, " spawn_lights=", gh_spawn_lights, " pos=", gh_player.global_position if gh_player != null else Vector3.ZERO, " hit=", space.intersect_ray(PhysicsRayQueryParameters3D.create(gh_player.global_position + Vector3(0, 50.0, 0), gh_player.global_position + Vector3(0, -50.0, 0))) if gh_player != null else {}, " guards=", get_nodes_in_group("guards").size(), ")")
 		fails += 1
 	else:
-		print("PASS: Guildhall terrain, floor collision & spawn ground raycast verified (gap_hit_y=", (gh_gap_hit["position"] as Vector3).y, ")")
+		print("PASS: Guildhall terrain, floor collision & spawn ground raycast verified (gap_hit_y=", (gh_gap_hit["position"] as Vector3).y, ", spawn_lights=", gh_spawn_lights, ", light=", gh_spawn_light_desc, ")")
 
 	# 11. Perf chunking: 32m MultiMesh chunks, split collision bodies, occluders
 	var gh_stats_v: Variant = gh_scene.get("level_stats")

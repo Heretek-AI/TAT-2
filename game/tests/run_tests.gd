@@ -895,5 +895,146 @@ func _initialize() -> void:
 	else:
 		print("PASS: ThievesDen moon light direction (actual=", den_aim, ")")
 
+	# 23. Light intensity and attenuation fidelity: authored intensities map
+	# through one linear scale (median 15.0 -> energy 1.0) so authored ratios
+	# survive, instead of the old two-branch clamp pinning most lights to 1.0
+	# or 4.2. Radii stay authored metres and attenuation is Godot's 1.0.
+	# The loader helpers are private, so they are invoked through an instance
+	# with call(), as block 21 does for _landscape_weighted_material.
+	var lux_scr: GDScript = load("res://src/core/level_loader.gd") as GDScript
+	var lux_ll: Node = lux_scr.new()
+	root.add_child(lux_ll)
+	var lux_i15: Dictionary = {"type": "SpotLightComponent", "intensity": 15.0, "radius": 9.0, "outer_cone": 50.0}
+	var lux_i45: Dictionary = {"type": "SpotLightComponent", "intensity": 45.0, "radius": 9.0, "outer_cone": 50.0}
+	var lux_i2500: Dictionary = {"type": "SpotLightComponent", "intensity": 2500.0, "radius": 9.0, "outer_cone": 50.0}
+	var lux_i199: Dictionary = {"type": "SpotLightComponent", "intensity": 19.9, "radius": 9.0, "outer_cone": 50.0}
+	var lux_i200: Dictionary = {"type": "SpotLightComponent", "intensity": 20.0, "radius": 9.0, "outer_cone": 50.0}
+	var lux_iwall: Dictionary = {"type": "SpotLightComponent", "intensity": 5.0, "radius": 9.0, "outer_cone": 88.0}
+	var lux_iwall2: Dictionary = {"type": "SpotLightComponent", "intensity": 5.0, "radius": 12.0, "outer_cone": 88.0}
+	var lux_iomni: Dictionary = {"type": "PointLightComponent", "intensity": 15.0, "radius": 4.5}
+	var lux_ifloor: Dictionary = {"type": "PointLightComponent", "intensity": 0.01, "radius": 5.0}
+	var lux_l15: Light3D = lux_ll.call("_build_light", lux_i15) as Light3D
+	var lux_l45: Light3D = lux_ll.call("_build_light", lux_i45) as Light3D
+	var lux_l2500: Light3D = lux_ll.call("_build_light", lux_i2500) as Light3D
+	var lux_l199: Light3D = lux_ll.call("_build_light", lux_i199) as Light3D
+	var lux_l200: Light3D = lux_ll.call("_build_light", lux_i200) as Light3D
+	var lux_lwall: Light3D = lux_ll.call("_build_light", lux_iwall) as Light3D
+	var lux_lwall2: Light3D = lux_ll.call("_build_light", lux_iwall2) as Light3D
+	var lux_lomni: Light3D = lux_ll.call("_build_light", lux_iomni) as Light3D
+	var lux_lfloor: Light3D = lux_ll.call("_build_light", lux_ifloor) as Light3D
+	var lux_e15: float = lux_l15.light_energy if lux_l15 != null else -1.0
+	var lux_e45: float = lux_l45.light_energy if lux_l45 != null else -1.0
+	var lux_e2500: float = lux_l2500.light_energy if lux_l2500 != null else -1.0
+	var lux_e199: float = lux_l199.light_energy if lux_l199 != null else -1.0
+	var lux_e200: float = lux_l200.light_energy if lux_l200 != null else -1.0
+	var lux_ratio: float = lux_e45 / lux_e15 if absf(lux_e15) > 0.000001 else 0.0
+	if lux_l15 == null or lux_l45 == null or not is_equal_approx(lux_ratio, 3.0) or is_equal_approx(lux_e15, lux_e45):
+		printerr("FAIL: authored light ratio 15:45 (e15=", lux_e15, " e45=", lux_e45, " ratio=", lux_ratio, " expected 3.0 and distinct)")
+		fails += 1
+	else:
+		print("PASS: authored light ratio preserved (e15=", lux_e15, ", e45=", lux_e45, ", ratio=", lux_ratio, ")")
+
+	# The old clamp returned exactly 4.2 for authored 15.0 and jumped 4.2 ->
+	# 1.6 at 20.0. The linear scale must not reproduce those constants and
+	# must stay continuous across the removed branch (19.9 vs 20.0 < 1%).
+	# Monotonicity (e15 < e20 < e45) is the real no-collapse guarantee; it
+	# does not depend on the truncated 0.0666667 constant the way an
+	# `absf(e15 - 1.0) > 1e-7` check did.
+	var lux_monotonic: bool = lux_l15 != null and lux_l200 != null and lux_l45 != null \
+		and lux_e15 < lux_e200 and lux_e200 < lux_e45
+	var lux_distinct: bool = absf(lux_e15 - 4.2) > 0.0001 \
+		and absf(lux_e45 - 1.0) > 0.0001 \
+		and absf(lux_e45 - 4.2) > 0.0001
+	var lux_anchor_ok: bool = lux_l15 != null and absf(lux_e15 - 1.0) < 0.001
+	var lux_no_collapse: bool = lux_monotonic and lux_distinct and lux_anchor_ok \
+		and lux_l199 != null and lux_l200 != null \
+		and absf(lux_e200 - lux_e199) / lux_e200 < 0.01
+	if not lux_no_collapse:
+		printerr("FAIL: light energy collapse or 20.0 branch jump (e15=", lux_e15, " e20=", lux_e200, " e45=", lux_e45, " e19.9=", lux_e199, " e20.0=", lux_e200, " monotonic=", lux_monotonic, " distinct=", lux_distinct, " anchor=", lux_anchor_ok, ")")
+		fails += 1
+	else:
+		print("PASS: monotonic light energy, no collapse or 20.0 branch jump (e15=", lux_e15, ", e20=", lux_e200, ", e45=", lux_e45, ", e19.9=", lux_e199, ")")
+
+	var lux_ceil_ok: bool = lux_l2500 != null and absf(lux_e2500 - 4.0) < 0.0000001
+	if not lux_ceil_ok:
+		printerr("FAIL: light energy ceiling for authored 2500 (got ", lux_e2500, " expected 4.0)")
+		fails += 1
+	else:
+		print("PASS: light energy ceiling saturates at 4.0 (authored 2500 -> ", lux_e2500, ")")
+
+	var lux_range: float = -1.0
+	var lux_att: float = -1.0
+	if lux_lwall is SpotLight3D:
+		var lux_spot: SpotLight3D = lux_lwall as SpotLight3D
+		lux_range = lux_spot.spot_range
+		lux_att = lux_spot.spot_attenuation
+	var lux_range2: float = -1.0
+	if lux_lwall2 is SpotLight3D:
+		lux_range2 = (lux_lwall2 as SpotLight3D).spot_range
+	var lux_radius_ok: bool = lux_lwall != null and absf(lux_range - 9.0) <= 0.01 \
+		and absf(lux_range2 - 12.0) <= 0.01 \
+		and is_equal_approx(lux_att, 1.0)
+	if not lux_radius_ok:
+		printerr("FAIL: Guildhall wall spot radius/attenuation (range=", lux_range, " expected 9.0, range2=", lux_range2, " expected 12.0, attenuation=", lux_att, " expected 1.0)")
+		fails += 1
+	else:
+		print("PASS: authored radius kept 1:1 (spot_range=", lux_range, ", spot_range2=", lux_range2, ", attenuation=", lux_att, ")")
+
+	# PointLightComponent takes the OmniLight3D branch; authored 15.0 is the
+	# median anchor (energy 1.0) and 4.5 m must stay 4.5 m.
+	var lux_omni_energy: float = -1.0
+	var lux_omni_range: float = -1.0
+	if lux_lomni is OmniLight3D:
+		lux_omni_energy = lux_lomni.light_energy
+		lux_omni_range = (lux_lomni as OmniLight3D).omni_range
+	var lux_omni_ok: bool = lux_lomni is OmniLight3D \
+		and absf(lux_omni_energy - 1.0) < 0.001 \
+		and absf(lux_omni_range - 4.5) <= 0.01
+	if not lux_omni_ok:
+		printerr("FAIL: PointLightComponent omni energy/range (energy=", lux_omni_energy, " expected 1.0, range=", lux_omni_range, " expected 4.5)")
+		fails += 1
+	else:
+		print("PASS: PointLightComponent maps to OmniLight3D (energy=", lux_omni_energy, ", range=", lux_omni_range, ")")
+
+	# Authored-off 0.01 would map to 0.000667 without the floor; the floor must
+	# keep it at 0.01 instead of collapsing it to zero.
+	var lux_floor_energy: float = lux_lfloor.light_energy if lux_lfloor != null else -1.0
+	var lux_floor_ok: bool = lux_lfloor != null and absf(lux_floor_energy - 0.01) < 0.000001
+	if not lux_floor_ok:
+		printerr("FAIL: light energy floor for authored 0.01 (got ", lux_floor_energy, " expected 0.01)")
+		fails += 1
+	else:
+		print("PASS: light energy floor holds at 0.01 (authored 0.01 -> ", lux_floor_energy, ")")
+
+	var lux_rects: Array = [{"intensity": 15.0, "radius": 4.0, "color": [255.0, 215.0, 150.0], "width": 200.0, "height": 100.0}]
+	var lux_parent := Node3D.new()
+	root.add_child(lux_parent)
+	var lux_ctx: Dictionary = {}
+	lux_ll.call("_build_rect_lights", lux_rects, lux_parent, null, lux_ctx, 4)
+	var lux_rect_light: OmniLight3D = null
+	for lux_child: Node in lux_parent.get_children():
+		if lux_child is OmniLight3D:
+			lux_rect_light = lux_child as OmniLight3D
+			break
+	var lux_rect_expected: float = clampf(15.0 * (1.0 / 15.0), 0.01, 4.0)
+	var lux_rect_ok: bool = lux_rect_light != null \
+		and is_equal_approx(lux_rect_light.light_energy, lux_rect_expected) \
+		and is_equal_approx(lux_rect_light.omni_range, 4.0) \
+		and is_equal_approx(lux_rect_light.omni_attenuation, 1.0) \
+		and int(lux_ctx.get("rect_light_count", 0)) == 1
+	if not lux_rect_ok:
+		var lux_rect_got: float = lux_rect_light.light_energy if lux_rect_light != null else -1.0
+		printerr("FAIL: rect light energy scale (got ", lux_rect_got, " expected ", lux_rect_expected, ", count=", lux_ctx.get("rect_light_count", 0), ")")
+		fails += 1
+	else:
+		print("PASS: rect light uses the same energy scale (energy=", lux_rect_light.light_energy, ", range=", lux_rect_light.omni_range, ")")
+
+	for lux_node: Light3D in [lux_l15, lux_l45, lux_l2500, lux_l199, lux_l200, lux_lwall, lux_lwall2, lux_lomni, lux_lfloor]:
+		if lux_node != null:
+			lux_node.free()
+	lux_parent.queue_free()
+	lux_ll.queue_free()
+	await process_frame
+
 	print("SUMMARY: fails=", fails)
 	quit(0 if fails == 0 else 1)

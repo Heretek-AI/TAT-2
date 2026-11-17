@@ -50,6 +50,32 @@ const LIGHT_DISTANCE_FADE_BEGIN: float = 28.0
 const LIGHT_DISTANCE_FADE_LENGTH: float = 12.0
 const PROGRESS_YIELD_EVERY: int = 64
 
+## Authored UE light intensity -> Godot light_energy.
+## There is no faithful lumen/candela -> Godot `light_energy` conversion for
+## these stylized authored values (Guildhall spans 0.01..2500, median 15), so
+## this is a documented approximation: a single linear scale preserves the
+## authored RATIO inside the band and only compresses at the extremes. The
+## scale is anchored so the median authored intensity (15.0) becomes energy
+## 1.0.
+##
+## The old two-branch mapping (raw < 20 -> raw * 0.95, else raw * 0.08,
+## clamped to [1.0, 4.2]) pinned 468 of the 682 lights in
+## `game/data/generated/levels/Guildhall/` (68.6%) to a constant: 142 at the
+## 1.0 floor and 326 at the 4.2 ceiling. Another 159 lights authored 20-52.5
+## escaped the clamp through the * 0.08 branch, so an "in band" count that
+## includes them overstates how much of the authored ratio the old mapping
+## kept. The 682 figure is that directory only; the loaded Guildhall map also
+## merges `Buildings/Guildhall/`, for 982 runtime lights. Under the new
+## mapping those 982 split into 778 in band, 70 at the ceiling and 134 at the
+## floor (the 682 directory alone: 486 in band, 62 ceiling, 134 floor).
+const LIGHT_INTENSITY_SCALE: float = 0.0666667 # 1/15: median authored intensity -> energy 1.0
+const LIGHT_ENERGY_FLOOR: float = 0.01
+const LIGHT_ENERGY_CEIL: float = 4.0
+## Defensive guard only: authored AttenuationRadius values are 0.35-30 m, and
+## the old 26 m clamp was clipping 24 legitimate 20-30 m lights. This ceiling
+## exists so a corrupt authored radius cannot create an unbounded light.
+const LIGHT_RANGE_CEIL: float = 200.0
+
 ## Level-component runtime (decals / rect lights / volumes / splines) ---------
 ## UE decals project along their local +X (DecalActor arrow axis); Godot
 ## Decal nodes project along local -Y, so every decal basis is post-rotated
@@ -1179,8 +1205,9 @@ func _build_decals(decals: Array, parent: Node3D, ctx: Dictionary) -> void:
 
 ## Spawns an OmniLight3D approximation plus an emissive quad for each active
 ## RectLight. Entries at intensity <= 0.01 are authored off and skipped.
-## Energy uses the same UE-unit convention as _build_light (raw < 20 ->
-## x0.95, else x0.08, clamped to [1, 4.2]); colour converts 0-255 -> 0-1.
+## Energy uses the same linear authored-intensity scale as _build_light
+## (LIGHT_INTENSITY_SCALE, floored at LIGHT_ENERGY_FLOOR and capped at
+## LIGHT_ENERGY_CEIL); colour converts 0-255 -> 0-1.
 ## The quad is sized from width x height (raw UU centimetres) and is
 ## double-sided because the UE emission axis is not recorded; the light
 ## itself is omnidirectional so gameplay lighting does not depend on it.
@@ -1202,12 +1229,14 @@ func _build_rect_lights(rects: Array, parent: Node3D, light_probe: Node, ctx: Di
 			skipped += 1
 			continue
 		var omni := OmniLight3D.new()
-		omni.omni_range = clampf(float(r.get("radius", 5.0)) * 2.2, 5.0, 20.0)
-		omni.omni_attenuation = 0.9
-		if raw < 20.0:
-			omni.light_energy = clampf(raw * 0.95, 1.0, 4.2)
-		else:
-			omni.light_energy = clampf(raw * 0.08, 1.0, 4.2)
+		omni.omni_range = clampf(maxf(float(r.get("radius", 5.0)), 1.0), 1.0, LIGHT_RANGE_CEIL)
+		# Godot's default attenuation. 2.0 would be the physically accurate
+		# inverse-square choice; the authored UE lights use inverse-squared
+		# falloff with lumen units, but 1.0 is kept as the art default. The
+		# previous 0.9 -> 1.0 raises the attenuation exponent, so falloff is
+		# FASTER, not slower.
+		omni.omni_attenuation = 1.0
+		omni.light_energy = clampf(raw * LIGHT_INTENSITY_SCALE, LIGHT_ENERGY_FLOOR, LIGHT_ENERGY_CEIL)
 		var col_arr: Array = [255.0, 215.0, 150.0]
 		var col_raw: Variant = r.get("color", [])
 		if col_raw is Array and (col_raw as Array).size() >= 3:
@@ -1385,14 +1414,21 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 	return _finalize(acc["result"], ctx, total_inst)
 
 
+## Ranks authored lights into the fixed light budget. This score is used ONLY
+## for that ordering; it tracks the rendered energy (the same linear scale as
+## _build_light / _build_rect_lights) so the budget keeps the brightest lights
+## instead of the old non-monotonic heuristic. The type bonuses are expressed
+## against LIGHT_ENERGY_CEIL to keep their previous weight (Directional 10.0
+## and Spot 2.0 against the old ~4.2 maximum), which is why they are large
+## next to an energy term of at most LIGHT_ENERGY_CEIL.
 func _light_score(info: Dictionary) -> float:
-	var raw: float = _to_float(info.get("intensity"), 2.5)
-	var energy: float = raw * 0.95 if raw < 20.0 else raw * 0.08
+	var raw: float = _to_float(info.get("intensity"), 15.0)
+	var energy: float = clampf(raw * LIGHT_INTENSITY_SCALE, LIGHT_ENERGY_FLOOR, LIGHT_ENERGY_CEIL)
 	var ltype: String = str(info.get("type", ""))
 	if "Directional" in ltype:
-		energy += 10.0
+		energy += LIGHT_ENERGY_CEIL * 2.5
 	elif "Spot" in ltype:
-		energy += 2.0
+		energy += LIGHT_ENERGY_CEIL * 0.5
 	return energy
 
 
@@ -1439,8 +1475,8 @@ func _to_float(v: Variant, fallback: float) -> float:
 
 func _build_light(info: Dictionary, cast_shadow: bool = false) -> Light3D:
 	var ltype: String = str(info.get("type", ""))
-	var raw_i := _to_float(info.get("intensity"), 2.5)
-	var intensity := clampf(raw_i * 0.95, 1.0, 4.2) if raw_i < 20.0 else clampf(raw_i * 0.08, 1.0, 4.2)
+	var raw_i := _to_float(info.get("intensity"), 15.0)
+	var intensity := clampf(raw_i * LIGHT_INTENSITY_SCALE, LIGHT_ENERGY_FLOOR, LIGHT_ENERGY_CEIL)
 	var col_dict: Variant = info.get("color")
 	var col := Color(1.0, 0.85, 0.62)
 	if col_dict is Dictionary:
@@ -1455,15 +1491,25 @@ func _build_light(info: Dictionary, cast_shadow: bool = false) -> Light3D:
 		light.light_energy = 0.45
 	elif "Spot" in ltype:
 		var sl := SpotLight3D.new()
-		sl.spot_range = clampf(_to_float(info.get("radius"), 6.0) * 2.5, 6.0, 26.0)
+		sl.spot_range = clampf(maxf(_to_float(info.get("radius"), 6.0), 1.0), 1.0, LIGHT_RANGE_CEIL)
 		sl.spot_angle = clampf(_to_float(info.get("outer_cone"), 50.0), 18.0, 89.0)
-		sl.spot_attenuation = 0.85
+		# Godot's default attenuation. 2.0 would be the physically accurate
+		# inverse-square choice; the authored UE lights use inverse-squared
+		# falloff with lumen units, but 1.0 is kept as the art default. The
+		# previous 0.85 -> 1.0 raises the attenuation exponent, so falloff is
+		# FASTER, not slower.
+		sl.spot_attenuation = 1.0
 		sl.light_energy = intensity
 		light = sl
 	else:
 		var ol := OmniLight3D.new()
-		ol.omni_range = clampf(_to_float(info.get("radius"), 5.0) * 2.2, 5.0, 20.0)
-		ol.omni_attenuation = 0.9
+		ol.omni_range = clampf(maxf(_to_float(info.get("radius"), 5.0), 1.0), 1.0, LIGHT_RANGE_CEIL)
+		# Godot's default attenuation. 2.0 would be the physically accurate
+		# inverse-square choice; the authored UE lights use inverse-squared
+		# falloff with lumen units, but 1.0 is kept as the art default. The
+		# previous 0.9 -> 1.0 raises the attenuation exponent, so falloff is
+		# FASTER, not slower.
+		ol.omni_attenuation = 1.0
 		ol.light_energy = intensity
 		light = ol
 	light.light_color = col

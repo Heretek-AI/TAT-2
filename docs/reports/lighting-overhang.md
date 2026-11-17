@@ -26,6 +26,13 @@ In `extracted/json/Maps/Guildhall/Guildhall_PeripheryA.json` (actor `BP_WallLigh
 - `[6123] TATShadowFadeSpotLightComponent TATShadowFadeSpotLight` (template): `RelativeRotation = (Pitch: -10.0, ...)`, `Intensity = 5.0`, `InnerConeAngle = 0.0`, `OuterConeAngle = 88.0`, `AttenuationRadius = 900.0`, `LightColor = {R: 177, G: 255, B: 229, Hex: "B1FFE5"}`, `MinDrawDistance = 2500.0..4000.0`, `bUseInverseSquaredFalloff = true`, `IntensityUnits = "ELightUnits::Lumens"`.
 - `[3581] SpotLightComponent TATShadowSpotLight`: `OuterConeAngle = 88.0`, `AttenuationRadius = 900.0`, `Intensity = 5.0`, `LightColor = {R: 177, G: 255, B: 229, Hex: "B1FFE5"}`, `bUseInverseSquaredFalloff = true`, `SourceRadius = 20.0`, `SoftSourceRadius = 5.0`, `IntensityUnits = "ELightUnits::Lumens"`. `CastShadows` is omitted on both stub and templates (UE default `true`).
 
+> **Superseded mapping note (light-intensity wave):** the `light_energy` and
+> `spot_range` values in this table describe the mapping as it stood during the
+> overhang wave. They were superseded by the linear authored-intensity mapping in
+> `level_loader.gd` (`LIGHT_INTENSITY_SCALE`, median `15.0` -> energy `1.0`) and
+> 1:1 authored metres for range; see `docs/reports/lighting-intensity.md`. The
+> evidence below is left as recorded for that wave.
+
 | Property | UE Source (`[3581]`) | Pre-fix `.tatlevel.json` (`[149]`) & Runtime | Post-fix `.tatlevel.json` & Runtime |
 |---|---|---|---|
 | Position (`m`) | `(126.2758, 27.1426, -2.4736)` (with `LightBaseRoot` `19.45 cm` offset) | `(126.2948, 27.1426, -2.28)` | `(126.2758, 27.1426, -2.4736)` |

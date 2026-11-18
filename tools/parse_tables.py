@@ -835,6 +835,34 @@ def _component_override_paths(
     return out
 
 
+_EMISSIVE_CPD_MAT_FAMILY = frozenset(
+    {
+        "m_emissivebase",
+        "mi_emissiveshape",
+        "mi_emissiveshapeexterior",
+        "mi_moonshapeemissive",
+    }
+)
+
+
+def _extract_emissive_cpd(mprops, ov_paths):
+    """Extract 5-float CustomPrimitiveData.Data for M_EmissiveBase-family meshes."""
+    if not ov_paths:
+        return None
+    if not any(_norm_mat_name(p) in _EMISSIVE_CPD_MAT_FAMILY for p in ov_paths if p):
+        return None
+    cpd = (mprops or {}).get("CustomPrimitiveData")
+    data = cpd.get("Data") if isinstance(cpd, dict) else cpd
+    if not isinstance(data, list) or len(data) != 5:
+        return None
+    out = []
+    for v in data:
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
+            return None
+        out.append(round(float(v), 6))
+    return out
+
+
 def _merged_comp_props(e):
     """Merge level export Properties on top of its BP Template archetype chain."""
     props = dict(e.get("Properties") or {})
@@ -1564,6 +1592,11 @@ def extract_levels():
                         entry["override_materials"] = ov_paths
                         if ov_paths[0]:
                             entry["override_material"] = ov_paths[0]
+                    cpd_vals = _extract_emissive_cpd(mprops, ov_paths)
+                    if cpd_vals is not None:
+                        entry["cpd"] = cpd_vals
+                    if mprops.get("bHiddenInGame") is True:
+                        entry["hidden_in_game"] = True
                     meshes.append(entry)
                     continue
 
@@ -1620,6 +1653,8 @@ def extract_levels():
                         wmat = mat4_mul(wmat, tpl2["local"])
                     if level_mat is not None:
                         wmat = mat4_mul(level_mat, wmat)
+                    cpd_vals2 = _extract_emissive_cpd(mprops2, ov_paths2)
+                    hidden2 = mprops2.get("bHiddenInGame") is True
                     if instances:
                         for inst in instances:
                             td = inst.get("TransformData") or {}
@@ -1635,6 +1670,10 @@ def extract_levels():
                                 ientry["override_materials"] = ov_paths2
                                 if ov_paths2[0]:
                                     ientry["override_material"] = ov_paths2[0]
+                            if cpd_vals2 is not None:
+                                ientry["cpd"] = list(cpd_vals2)
+                            if hidden2:
+                                ientry["hidden_in_game"] = True
                             meshes.append(ientry)
                     else:
                         trs = ue_mat4_to_godot_trs(wmat)
@@ -1643,6 +1682,10 @@ def extract_levels():
                             sentry["override_materials"] = ov_paths2
                             if ov_paths2[0]:
                                 sentry["override_material"] = ov_paths2[0]
+                        if cpd_vals2 is not None:
+                            sentry["cpd"] = cpd_vals2
+                        if hidden2:
+                            sentry["hidden_in_game"] = True
                         meshes.append(sentry)
                     continue
 
@@ -2408,6 +2451,8 @@ def extract_levels():
                     e2 = dict(entry)
                     if "override_materials" in e2 and isinstance(e2["override_materials"], list):
                         e2["override_materials"] = list(e2["override_materials"])
+                    if "cpd" in e2 and isinstance(e2["cpd"], list):
+                        e2["cpd"] = list(e2["cpd"])
                     if mkey == "landscape_splines":
                         pts = e2.get("points") or []
                         e2["points"] = [

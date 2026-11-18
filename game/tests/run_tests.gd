@@ -2152,6 +2152,321 @@ func _initialize() -> void:
 	ov_ll.queue_free()
 	await process_frame
 
+	# 32. Phase 1(b) Emissive CustomPrimitiveData MultiMesh + tat_emissive_cpd.gdshader.
+	# 32a. Generated .tatlevel.json cpd + hidden_in_game checks & global sweep.
+	var cpd_bc_meshes: Array = []
+	var cpd_bc_file: FileAccess = FileAccess.open("res://data/generated/levels/Menus/MainMenu/BeautifulCorner_Startscreen_P.tatlevel.json", FileAccess.READ)
+	if cpd_bc_file != null:
+		var cpd_bc_parsed: Variant = JSON.parse_string(cpd_bc_file.get_as_text())
+		if cpd_bc_parsed is Dictionary:
+			cpd_bc_meshes = (cpd_bc_parsed as Dictionary).get("meshes", []) as Array
+	var cpd_bc_hits: int = 0
+	var cpd_bc_ok: bool = true
+	var cpd_bc_want: Array = [0.0, 8.0, 1.0, 0.161586, 0.031644]
+	for cpd_m: Variant in cpd_bc_meshes:
+		if cpd_m is Dictionary and str((cpd_m as Dictionary).get("mesh", "")).ends_with("SM_Shape_Sphere"):
+			cpd_bc_hits += 1
+			var cpd_md: Dictionary = cpd_m as Dictionary
+			var cpd_arr_v: Variant = cpd_md.get("cpd", null)
+			var cpd_hid_v: Variant = cpd_md.get("hidden_in_game", false)
+			if not (cpd_arr_v is Array) or (cpd_arr_v as Array).size() != 5 or not (cpd_hid_v is bool and (cpd_hid_v as bool)):
+				cpd_bc_ok = false
+			else:
+				var cpd_arr: Array = cpd_arr_v as Array
+				for cpd_i: int in range(5):
+					if absf(float(cpd_arr[cpd_i]) - float(cpd_bc_want[cpd_i])) > 0.0001:
+						cpd_bc_ok = false
+
+	var cpd_fs_meshes: Array = []
+	var cpd_fs_file: FileAccess = FileAccess.open("res://data/generated/levels/Buildings/Facades/Facade_Store_1000_2Story_Flat.tatlevel.json", FileAccess.READ)
+	if cpd_fs_file != null:
+		var cpd_fs_parsed: Variant = JSON.parse_string(cpd_fs_file.get_as_text())
+		if cpd_fs_parsed is Dictionary:
+			cpd_fs_meshes = (cpd_fs_parsed as Dictionary).get("meshes", []) as Array
+	var cpd_fs_hits: int = 0
+	var cpd_fs_ok: bool = true
+	var cpd_fs_want: Array = [1.0, 0.5, 0.380208, 0.540048, 1.0]
+	for cpd_fm: Variant in cpd_fs_meshes:
+		if cpd_fm is Dictionary and str((cpd_fm as Dictionary).get("mesh", "")).ends_with("SM_Sphere2Count"):
+			cpd_fs_hits += 1
+			var cpd_fmd: Dictionary = cpd_fm as Dictionary
+			var cpd_fa_v: Variant = cpd_fmd.get("cpd", null)
+			var cpd_fh_v: Variant = cpd_fmd.get("hidden_in_game", false)
+			if not (cpd_fa_v is Array) or (cpd_fa_v as Array).size() != 5 or not (cpd_fh_v is bool and (cpd_fh_v as bool)):
+				cpd_fs_ok = false
+			else:
+				var cpd_fa: Array = cpd_fa_v as Array
+				for cpd_fi: int in range(5):
+					if absf(float(cpd_fa[cpd_fi]) - float(cpd_fs_want[cpd_fi])) > 0.0001:
+						cpd_fs_ok = false
+
+	var cpd_al_meshes: Array = []
+	var cpd_al_file: FileAccess = FileAccess.open("res://data/generated/levels/Buildings/Alley/Alley_Arched_1800.tatlevel.json", FileAccess.READ)
+	if cpd_al_file != null:
+		var cpd_al_parsed: Variant = JSON.parse_string(cpd_al_file.get_as_text())
+		if cpd_al_parsed is Dictionary:
+			cpd_al_meshes = (cpd_al_parsed as Dictionary).get("meshes", []) as Array
+	var cpd_al_hits: int = 0
+	var cpd_al_ok: bool = true
+	var cpd_al_want: Array = [0.0, 0.75, 0.043199, 0.121815, 1.0]
+	for cpd_am: Variant in cpd_al_meshes:
+		if cpd_am is Dictionary and str((cpd_am as Dictionary).get("mesh", "")).ends_with("SM_Sphere4Count"):
+			cpd_al_hits += 1
+			var cpd_amd: Dictionary = cpd_am as Dictionary
+			var cpd_aa_v: Variant = cpd_amd.get("cpd", null)
+			var cpd_ah_v: Variant = cpd_amd.get("hidden_in_game", false)
+			if not (cpd_aa_v is Array) or (cpd_aa_v as Array).size() != 5 or not (cpd_ah_v is bool and (cpd_ah_v as bool)):
+				cpd_al_ok = false
+			else:
+				var cpd_aa: Array = cpd_aa_v as Array
+				for cpd_ai: int in range(5):
+					if absf(float(cpd_aa[cpd_ai]) - float(cpd_al_want[cpd_ai])) > 0.0001:
+						cpd_al_ok = false
+
+	var cpd_global_total: int = 0
+	var cpd_global_bad: int = 0
+	var cpd_donut_total: int = 0
+	var cpd_donut_bad: int = 0
+	var cpd_water_hits: int = 0
+	var cpd_water_bad: int = 0
+	for cpd_jp: String in ov_spline_files:
+		var cpd_jf: FileAccess = FileAccess.open(cpd_jp, FileAccess.READ)
+		if cpd_jf == null:
+			continue
+		var cpd_jparsed: Variant = JSON.parse_string(cpd_jf.get_as_text())
+		if not (cpd_jparsed is Dictionary):
+			continue
+		var cpd_is_manor: bool = cpd_jp.ends_with("OldManor_Geo.tatlevel.json")
+		for cpd_ge: Variant in ((cpd_jparsed as Dictionary).get("meshes", []) as Array):
+			if not (cpd_ge is Dictionary):
+				continue
+			var cpd_ged: Dictionary = cpd_ge as Dictionary
+			var cpd_gmp: String = str(cpd_ged.get("mesh", ""))
+			if cpd_ged.has("cpd"):
+				cpd_global_total += 1
+				var cpd_gv: Variant = cpd_ged.get("cpd", null)
+				var cpd_gh: Variant = cpd_ged.get("hidden_in_game", false)
+				if not (cpd_gv is Array) or (cpd_gv as Array).size() != 5 or not (cpd_gh is bool and (cpd_gh as bool)):
+					cpd_global_bad += 1
+				else:
+					for cpd_el: Variant in (cpd_gv as Array):
+						if not (cpd_el is float or cpd_el is int):
+							cpd_global_bad += 1
+							break
+			if cpd_gmp.ends_with("SM_DonutShell"):
+				cpd_donut_total += 1
+				var cpd_dv: Variant = cpd_ged.get("cpd", null)
+				if not (cpd_dv is Array) or (cpd_dv as Array).size() != 5:
+					cpd_donut_bad += 1
+			if cpd_is_manor and cpd_gmp.ends_with("SM_Shape_Plane"):
+				var cpd_mov: Variant = cpd_ged.get("override_materials", [])
+				if cpd_mov is Array and (cpd_mov as Array).size() > 0 and str((cpd_mov as Array)[0]).ends_with("MI_WaterTest_Inst"):
+					cpd_water_hits += 1
+					if cpd_ged.has("cpd"):
+						cpd_water_bad += 1
+
+	if cpd_bc_hits != 1 or not cpd_bc_ok or cpd_fs_hits != 1 or not cpd_fs_ok or cpd_al_hits != 2 or not cpd_al_ok or cpd_global_total < 1200 or cpd_global_bad != 0 or cpd_donut_total != 12 or cpd_donut_bad != 0 or cpd_water_hits != 2 or cpd_water_bad != 0:
+		printerr("FAIL: 32a generated cpd sweep (bc=", cpd_bc_hits, "/", cpd_bc_ok, " fs=", cpd_fs_hits, "/", cpd_fs_ok, " al=", cpd_al_hits, "/", cpd_al_ok, " global=", cpd_global_total, "/bad=", cpd_global_bad, " donut=", cpd_donut_total, "/bad=", cpd_donut_bad, " water=", cpd_water_hits, "/bad=", cpd_water_bad, ")")
+		fails += 1
+	else:
+		print("PASS: 32a generated .tatlevel.json cpd checks (total=", cpd_global_total, ", donut=", cpd_donut_total, ", OldManor water=", cpd_water_hits, " clean)")
+
+	# 32b. Non-emissive separation: Firewood_01 and SM_WardBox (MI_WardZone_Slow).
+	var cpd_fw_files: Array[String] = [
+		"res://data/generated/levels/Buildings/Guildhall/Building_Guildhall_POI.tatlevel.json",
+		"res://data/generated/levels/Guildhall/Guildhall_PeripheryA.tatlevel.json",
+		"res://data/generated/levels/OldManor/OldManor_Geo.tatlevel.json",
+	]
+	var cpd_fw_count: int = 0
+	var cpd_fw_bad: int = 0
+	for cpd_fwp: String in cpd_fw_files:
+		var cpd_fwf: FileAccess = FileAccess.open(cpd_fwp, FileAccess.READ)
+		if cpd_fwf == null:
+			continue
+		var cpd_fw_parsed: Variant = JSON.parse_string(cpd_fwf.get_as_text())
+		if not (cpd_fw_parsed is Dictionary):
+			continue
+		for cpd_fwe: Variant in ((cpd_fw_parsed as Dictionary).get("meshes", []) as Array):
+			if cpd_fwe is Dictionary and str((cpd_fwe as Dictionary).get("mesh", "")).ends_with("Firewood_01"):
+				cpd_fw_count += 1
+				if (cpd_fwe as Dictionary).has("cpd"):
+					cpd_fw_bad += 1
+
+	var cpd_wb_files: Array[String] = [
+		"res://data/generated/levels/Guildhall/Guildhall_Gameplay.tatlevel.json",
+		"res://data/generated/levels/OldManor/OldManor_Gameplay.tatlevel.json",
+	]
+	var cpd_wb_count: int = 0
+	var cpd_wb_bad: int = 0
+	for cpd_wbp: String in cpd_wb_files:
+		var cpd_wbf: FileAccess = FileAccess.open(cpd_wbp, FileAccess.READ)
+		if cpd_wbf == null:
+			continue
+		var cpd_wb_parsed: Variant = JSON.parse_string(cpd_wbf.get_as_text())
+		if not (cpd_wb_parsed is Dictionary):
+			continue
+		for cpd_wbe: Variant in ((cpd_wb_parsed as Dictionary).get("meshes", []) as Array):
+			if cpd_wbe is Dictionary and str((cpd_wbe as Dictionary).get("mesh", "")).ends_with("SM_WardBox"):
+				cpd_wb_count += 1
+				if (cpd_wbe as Dictionary).has("cpd"):
+					cpd_wb_bad += 1
+
+	var cpd_host: Node3D = Node3D.new()
+	root.add_child(cpd_host)
+	var cpd_ll: Node = (load("res://src/core/level_loader.gd") as GDScript).new()
+	root.add_child(cpd_ll)
+	await process_frame
+	var cpd_ctx_nonem: Dictionary = cpd_ll.call("_new_build_ctx", cpd_host, null, false)
+	var cpd_fw_mp: String = "/Game/Art/VFX/FluidNinja/WIP/Meshes/Firewood_01"
+	var cpd_fw_item: Dictionary = {
+		"mp": cpd_fw_mp,
+		"override_materials": [],
+		"trs": [Transform3D.IDENTITY],
+		"cpds": [] as Array[Color],
+		"hidden_in_game": false,
+		"collide": false,
+		"cell": Vector2i.ZERO,
+	}
+	var cpd_fw_built: int = int(cpd_ll.call("_build_one_draw_item", cpd_fw_item, cpd_host, cpd_ctx_nonem))
+	var cpd_fw_node: MeshInstance3D = cpd_host.get_child(cpd_host.get_child_count() - 1) as MeshInstance3D if cpd_host.get_child_count() > 0 else null
+	var cpd_fw_mat_ok: bool = cpd_fw_built == 1 and cpd_fw_node != null and cpd_fw_node.material_override == null \
+		and cpd_fw_node.mesh != null and (cpd_fw_node.mesh.surface_get_material(0) is StandardMaterial3D)
+
+	var cpd_wb_mp: String = "/Game/Art/Gameplay/Wards/SM_WardBox"
+	var cpd_wb_ov: Array[String] = ["/Game/Art/Effects/WardZones/MI_WardZone_Slow"]
+	var cpd_wb_gate_false: bool = not bool(cpd_ll.call("_is_emissive_cpd_override", cpd_wb_ov))
+	var cpd_wb_item: Dictionary = {
+		"mp": cpd_wb_mp,
+		"override_materials": cpd_wb_ov,
+		"trs": [Transform3D.IDENTITY],
+		"cpds": [] as Array[Color],
+		"hidden_in_game": false,
+		"collide": false,
+		"cell": Vector2i.ZERO,
+	}
+	var cpd_wb_built: int = int(cpd_ll.call("_build_one_draw_item", cpd_wb_item, cpd_host, cpd_ctx_nonem))
+	var cpd_wb_node: MeshInstance3D = cpd_host.get_child(cpd_host.get_child_count() - 1) as MeshInstance3D if cpd_host.get_child_count() > 1 else null
+	var cpd_wb_mat_ok: bool = cpd_wb_built == 1 and cpd_wb_node != null and cpd_wb_node.material_override == null \
+		and cpd_wb_node.mesh != null and (cpd_wb_node.mesh.surface_get_material(0) is StandardMaterial3D)
+
+	if cpd_fw_count != 35 or cpd_fw_bad != 0 or not cpd_fw_mat_ok or cpd_wb_count != 80 or cpd_wb_bad != 0 or not cpd_wb_gate_false or not cpd_wb_mat_ok:
+		printerr("FAIL: 32b non-emissive separation (fw=", cpd_fw_count, "/bad=", cpd_fw_bad, "/mat=", cpd_fw_mat_ok, " wb=", cpd_wb_count, "/bad=", cpd_wb_bad, "/gate=", cpd_wb_gate_false, "/mat=", cpd_wb_mat_ok, ")")
+		fails += 1
+	else:
+		print("PASS: 32b Firewood_01 (", cpd_fw_count, ") and SM_WardBox/MI_WardZone_Slow (", cpd_wb_count, ") bind StandardMaterial3D without CPD shader")
+
+	# 32c. Runtime level_loader.gd MultiMesh custom_data, visible vs hidden_in_game, batching, and end-to-end sublevel load.
+	var cpd_has_rd: bool = RenderingServer.get_rendering_device() != null
+	var cpd_ctx_rt: Dictionary = cpd_ll.call("_new_build_ctx", cpd_host, null, true)
+	var cpd_c1_arr: Array[Color] = [Color(1.0, 0.161586, 0.031644, 8.0)]
+	var cpd_item_vis1: Dictionary = {
+		"mp": "/Game/Test/Art/Primitives/SM_Shape_Sphere",
+		"override_materials": ["/Game/MaterialLibrary/Environment/Lights/MI_EmissiveShapeExterior"],
+		"trs": [Transform3D.IDENTITY],
+		"cpds": cpd_c1_arr,
+		"hidden_in_game": false,
+		"collide": true,
+		"cell": Vector2i.ZERO,
+	}
+	var cpd_b_vis1: int = int(cpd_ll.call("_build_one_draw_item", cpd_item_vis1, cpd_host, cpd_ctx_rt))
+	var cpd_n_vis1: MultiMeshInstance3D = cpd_host.get_child(cpd_host.get_child_count() - 1) as MultiMeshInstance3D
+	var cpd_vis1_sh: ShaderMaterial = cpd_n_vis1.material_override as ShaderMaterial if cpd_n_vis1 != null else null
+	var cpd_vis1_d0: Color = cpd_n_vis1.multimesh.get_instance_custom_data(0) if cpd_n_vis1 != null and cpd_n_vis1.multimesh != null else Color(-1, -1, -1, -1)
+	var cpd_vis1_d0_ok: bool = (not cpd_has_rd) or cpd_vis1_d0.is_equal_approx(cpd_c1_arr[0])
+	var cpd_vis1_ok: bool = cpd_b_vis1 == 1 and cpd_n_vis1 != null and cpd_n_vis1.multimesh != null \
+		and cpd_n_vis1.multimesh.use_custom_data == true and cpd_n_vis1.multimesh.instance_count == 1 \
+		and cpd_vis1_d0_ok \
+		and cpd_n_vis1.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF \
+		and cpd_n_vis1.visible == true \
+		and cpd_vis1_sh != null and cpd_vis1_sh.shader != null and cpd_vis1_sh.shader.resource_path == "res://src/core/tat_emissive_cpd.gdshader"
+
+	var cpd_item_hid1: Dictionary = {
+		"mp": "/Game/Test/Art/Primitives/SM_Shape_Sphere",
+		"override_materials": ["/Game/MaterialLibrary/Environment/Lights/MI_EmissiveShapeExterior"],
+		"trs": [Transform3D(Basis.IDENTITY, Vector3(2, 0, 0))],
+		"cpds": cpd_c1_arr,
+		"hidden_in_game": true,
+		"collide": true,
+		"cell": Vector2i.ZERO,
+	}
+	var cpd_b_hid1: int = int(cpd_ll.call("_build_one_draw_item", cpd_item_hid1, cpd_host, cpd_ctx_rt))
+	var cpd_n_hid1: MultiMeshInstance3D = cpd_host.get_child(cpd_host.get_child_count() - 1) as MultiMeshInstance3D
+	var cpd_hid1_sh: ShaderMaterial = cpd_n_hid1.material_override as ShaderMaterial if cpd_n_hid1 != null else null
+	var cpd_hid1_d0: Color = cpd_n_hid1.multimesh.get_instance_custom_data(0) if cpd_n_hid1 != null and cpd_n_hid1.multimesh != null else Color(-1, -1, -1, -1)
+	var cpd_hid1_d0_ok: bool = (not cpd_has_rd) or cpd_hid1_d0.is_equal_approx(cpd_c1_arr[0])
+	var cpd_hid1_ok: bool = cpd_b_hid1 == 1 and cpd_n_hid1 != null and cpd_n_hid1.multimesh != null \
+		and cpd_n_hid1.multimesh.use_custom_data == true and cpd_n_hid1.multimesh.instance_count == 1 \
+		and cpd_hid1_d0_ok \
+		and cpd_n_hid1.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF \
+		and cpd_n_hid1.visible == false \
+		and cpd_n_hid1.gi_mode == GeometryInstance3D.GI_MODE_STATIC \
+		and cpd_hid1_sh != null and cpd_hid1_sh.shader != null and cpd_hid1_sh.shader.resource_path == "res://src/core/tat_emissive_cpd.gdshader"
+
+	var cpd_c2_arr: Array[Color] = [
+		Color(0.043199, 0.121815, 1.0, 0.75),
+		Color(0.380208, 0.540048, 1.0, 0.5),
+	]
+	var cpd_item_bat2: Dictionary = {
+		"mp": "/Game/Art/Environment/Lights/LightModules/EmissiveShapes/SM_Sphere4Count",
+		"override_materials": ["/Game/MaterialLibrary/Environment/Lights/MI_EmissiveShape"],
+		"trs": [Transform3D.IDENTITY, Transform3D(Basis.IDENTITY, Vector3(4, 0, 0))],
+		"cpds": cpd_c2_arr,
+		"hidden_in_game": true,
+		"collide": true,
+		"cell": Vector2i.ZERO,
+	}
+	var cpd_b_bat2: int = int(cpd_ll.call("_build_one_draw_item", cpd_item_bat2, cpd_host, cpd_ctx_rt))
+	var cpd_n_bat2: MultiMeshInstance3D = cpd_host.get_child(cpd_host.get_child_count() - 1) as MultiMeshInstance3D
+	var cpd_bat2_sh: ShaderMaterial = cpd_n_bat2.material_override as ShaderMaterial if cpd_n_bat2 != null else null
+	var cpd_bat2_d0: Color = cpd_n_bat2.multimesh.get_instance_custom_data(0) if cpd_n_bat2 != null and cpd_n_bat2.multimesh != null else Color(-1, -1, -1, -1)
+	var cpd_bat2_d1: Color = cpd_n_bat2.multimesh.get_instance_custom_data(1) if cpd_n_bat2 != null and cpd_n_bat2.multimesh != null else Color(-1, -1, -1, -1)
+	var cpd_bat2_data_ok: bool = (not cpd_has_rd) or (cpd_bat2_d0.is_equal_approx(cpd_c2_arr[0]) and cpd_bat2_d1.is_equal_approx(cpd_c2_arr[1]) and not cpd_bat2_d0.is_equal_approx(cpd_bat2_d1))
+	var cpd_bat2_ok: bool = cpd_b_bat2 == 2 and cpd_n_bat2 != null and cpd_n_bat2.multimesh != null \
+		and cpd_n_bat2.multimesh.use_custom_data == true and cpd_n_bat2.multimesh.instance_count == 2 \
+		and cpd_bat2_data_ok \
+		and cpd_n_bat2.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF \
+		and cpd_n_bat2.visible == false \
+		and cpd_bat2_sh != null and cpd_bat2_sh.shader != null and cpd_bat2_sh.shader.resource_path == "res://src/core/tat_emissive_cpd.gdshader"
+
+	var cpd_col_zero_ok: bool = int(cpd_ctx_rt.get("collision_shapes", -1)) == 0 and int(cpd_ctx_rt.get("collision_bodies", -1)) == 0
+
+	var cpd_e2e_host: Node3D = Node3D.new()
+	root.add_child(cpd_e2e_host)
+	var cpd_acc: Dictionary = cpd_ll.call("_new_accumulator") as Dictionary
+	cpd_ll.call("_parse_sublevel_file", "res://data/generated/levels/Menus/MainMenu/BeautifulCorner_Startscreen_P.tatlevel.json", cpd_acc, cpd_e2e_host)
+	var cpd_e2e_items: Array = cpd_ll.call("_collect_draw_items", cpd_acc) as Array
+	var cpd_e2e_ctx: Dictionary = cpd_ll.call("_new_build_ctx", cpd_e2e_host, null, true)
+	var cpd_e2e_ok: bool = false
+	for cpd_it_v: Variant in cpd_e2e_items:
+		if cpd_it_v is Dictionary and str((cpd_it_v as Dictionary).get("mp", "")).ends_with("SM_Shape_Sphere"):
+			var cpd_e2e_cnt: int = int(cpd_ll.call("_build_one_draw_item", cpd_it_v, cpd_e2e_host, cpd_e2e_ctx))
+			var cpd_e2e_node: MultiMeshInstance3D = cpd_e2e_host.get_child(cpd_e2e_host.get_child_count() - 1) as MultiMeshInstance3D
+			var cpd_e2e_d0_ok: bool = (not cpd_has_rd) or (cpd_e2e_node != null and cpd_e2e_node.multimesh != null and cpd_e2e_node.multimesh.get_instance_custom_data(0).is_equal_approx(Color(1.0, 0.161586, 0.031644, 8.0)))
+			if cpd_e2e_cnt == 1 and cpd_e2e_node != null and cpd_e2e_node.multimesh != null \
+				and cpd_e2e_node.multimesh.use_custom_data == true and cpd_e2e_node.multimesh.instance_count == 1 \
+				and cpd_e2e_d0_ok \
+				and cpd_e2e_node.visible == false \
+				and cpd_e2e_node.material_override is ShaderMaterial \
+				and (cpd_e2e_node.material_override as ShaderMaterial).shader != null \
+				and (cpd_e2e_node.material_override as ShaderMaterial).shader.resource_path == "res://src/core/tat_emissive_cpd.gdshader":
+				cpd_e2e_ok = true
+
+	var cpd_manor_acc: Dictionary = cpd_ll.call("_new_accumulator") as Dictionary
+	cpd_ll.call("_parse_sublevel_file", "res://data/generated/levels/OldManor/OldManor_Geo.tatlevel.json", cpd_manor_acc, cpd_e2e_host)
+	var cpd_manor_res: Dictionary = cpd_manor_acc.get("result", {}) as Dictionary
+	var cpd_moon_ok: bool = int(cpd_manor_res.get("moonshape_hidden", -1)) == 22
+
+	if not cpd_vis1_ok or not cpd_hid1_ok or not cpd_bat2_ok or not cpd_col_zero_ok or not cpd_e2e_ok or not cpd_moon_ok:
+		printerr("FAIL: 32c runtime CPD MultiMesh (vis1=", cpd_vis1_ok, " hid1=", cpd_hid1_ok, " bat2=", cpd_bat2_ok, " col0=", cpd_col_zero_ok, " e2e=", cpd_e2e_ok, " moon22=", cpd_moon_ok, " got=", cpd_manor_res.get("moonshape_hidden", -1), ")")
+		fails += 1
+	else:
+		print("PASS: 32c runtime CPD MultiMesh (count=1 vis/hid, count=2 distinct, zero collision, BeautifulCorner e2e, OldManor moonshape_hidden=22)")
+
+	cpd_e2e_host.queue_free()
+	cpd_host.queue_free()
+	cpd_ll.queue_free()
+	await process_frame
+
 	print("SUMMARY: fails=", fails)
 	quit(0 if fails == 0 else 1)
 

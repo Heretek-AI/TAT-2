@@ -7,6 +7,7 @@ extends Node
 const _VfxManager: GDScript = preload("res://src/core/vfx_manager.gd")
 const MobileProfile: GDScript = preload("res://src/core/mobile_profile.gd")
 const LANDSCAPE_SHADER: Shader = preload("res://src/core/tat_landscape.gdshader")
+const EMISSIVE_CPD_SHADER: Shader = preload("res://src/core/tat_emissive_cpd.gdshader")
 
 ## Landscape layer name -> extracted albedo texture. Missing layers are skipped
 ## (the shader normalizes the remaining weights) instead of binding a guessed
@@ -29,6 +30,7 @@ var _tex_cache: Dictionary = {}
 var _std_mat_cache: Dictionary = {}
 var _mesh_res_cache: Dictionary = {} # ue_path -> { "mesh": Mesh, "shape": Shape3D }
 var _override_mesh_cache: Dictionary = {} # ue_path + "||" + ov_key -> Mesh
+var _emissive_cpd_mat: ShaderMaterial = null
 
 # --- Spatial chunking & culling tuning (perf P1/P2/P4) ----------------------
 ## Repeated meshes are partitioned into CHUNK_SIZE x CHUNK_SIZE XZ cells so every
@@ -562,6 +564,24 @@ func _get_overridden_mesh(ue_path: String, base_mesh: Mesh, ov_arr: Array[String
 	return ov_mesh
 
 
+func _get_emissive_cpd_material() -> ShaderMaterial:
+	if _emissive_cpd_mat == null:
+		var mat: ShaderMaterial = ShaderMaterial.new()
+		mat.shader = EMISSIVE_CPD_SHADER
+		_emissive_cpd_mat = mat
+	return _emissive_cpd_mat
+
+
+func _is_emissive_cpd_override(ov_arr: Array[String]) -> bool:
+	for ov_path: String in ov_arr:
+		if ov_path == "":
+			continue
+		var stem: String = ov_path.get_file().split(".")[0].to_lower()
+		if stem == "m_emissivebase" or stem == "mi_emissiveshape" or stem == "mi_emissiveshapeexterior" or stem == "mi_moonshapeemissive":
+			return true
+	return false
+
+
 func _find_first_mesh(n: Node) -> MeshInstance3D:
 	if n is MeshInstance3D:
 		return n
@@ -707,18 +727,49 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 			result["moonshape_hidden"] = int(result.get("moonshape_hidden", 0)) + 1
 			continue
 		var low_mp: String = mp.to_lower()
-		if "emissiveshapes/sm_sphere" in low_mp or "primitives/sm_shape" in low_mp or "fogsheet" in low_mp or "volumetric" in low_mp or "skysphere" in low_mp or "blocker" in low_mp:
+		if "fogsheet" in low_mp or "volumetric" in low_mp or "skysphere" in low_mp or "blocker" in low_mp:
 			continue
 		var tr: Transform3D = _dict_to_transform(m_dict)
 		# Per-component OverrideMaterials split the batch so each MultiMesh
 		# shares an identically overridden duplicated Mesh resource.
 		var ov_arr: Array[String] = _extract_override_materials(m_dict)
 		var ov_key: String = "" if ov_arr.is_empty() else "|".join(ov_arr)
+		var cpd_raw: Variant = m_dict.get("cpd", null)
+		var has_cpd: bool = false
+		var cpd_color: Color = Color(1.0, 1.0, 1.0, 0.0)
+		if cpd_raw is Array and (cpd_raw as Array).size() == 5 and _is_emissive_cpd_override(ov_arr):
+			var cpd_arr: Array = cpd_raw as Array
+			var cpd_num_ok: bool = true
+			for ci: int in range(5):
+				var cv: Variant = cpd_arr[ci]
+				if not (cv is float or cv is int):
+					cpd_num_ok = false
+					break
+			if cpd_num_ok:
+				cpd_color = Color(float(cpd_arr[2]), float(cpd_arr[3]), float(cpd_arr[4]), float(cpd_arr[1]))
+				has_cpd = true
+		var hidden_raw: Variant = m_dict.get("hidden_in_game", false)
+		var hidden_in_game: bool = hidden_raw is bool and (hidden_raw as bool)
 		var bkey: String = mp if ov_key == "" else mp + "||" + ov_key
+		if has_cpd:
+			bkey += "||cpd"
+		if hidden_in_game:
+			bkey += "||hidden"
 		if not batches.has(bkey):
-			batches[bkey] = [] as Array[Transform3D]
-		var arr: Array = batches[bkey]
+			batches[bkey] = {
+				"mp": mp,
+				"override_materials": ov_arr,
+				"override_key": ov_key,
+				"trs": [] as Array[Transform3D],
+				"cpds": [] as Array[Color],
+				"hidden_in_game": hidden_in_game,
+			}
+		var batch_rec: Dictionary = batches[bkey] as Dictionary
+		var arr: Array[Transform3D] = batch_rec["trs"]
 		arr.append(tr)
+		if has_cpd:
+			var carr: Array[Color] = batch_rec["cpds"]
+			carr.append(cpd_color)
 		var prop_pos: Vector3 = tr.origin
 		if "candelabra" in low_mp or "candle" in low_mp or "brazier" in low_mp or "torch" in low_mp:
 			var candle_arr: Array = result["candelabra_positions"]
@@ -906,37 +957,88 @@ func _make_draw_items(batches: Dictionary, collide: bool) -> Array:
 	for mp_var in batches.keys():
 		# Batch keys carry an optional "||ov_key" suffix where ov_key is
 		# "|".join(override_materials); UE mesh paths never contain "||".
-		var mp_key: String = str(mp_var)
+		var bval: Variant = batches[mp_var]
+		var mp: String = ""
 		var ov_key: String = ""
-		var mp: String = mp_key
-		var sep: int = mp_key.find("||")
-		if sep >= 0:
-			ov_key = mp_key.substr(sep + 2)
-			mp = mp_key.substr(0, sep)
 		var ov_arr: Array[String] = []
-		if ov_key != "":
-			for part: String in ov_key.split("|"):
-				ov_arr.append(part)
-		var trs: Array = batches[mp_var]
+		var trs: Array = []
+		var cpds: Array[Color] = []
+		var hidden_in_game: bool = false
+		if bval is Dictionary:
+			var bdict: Dictionary = bval as Dictionary
+			mp = str(bdict.get("mp", ""))
+			ov_key = str(bdict.get("override_key", ""))
+			var bov_raw: Variant = bdict.get("override_materials", [])
+			if bov_raw is Array:
+				for s_var: Variant in (bov_raw as Array):
+					ov_arr.append(str(s_var))
+			var trs_raw: Variant = bdict.get("trs", [])
+			if trs_raw is Array:
+				trs = trs_raw as Array
+			var cpds_raw: Variant = bdict.get("cpds", [])
+			if cpds_raw is Array:
+				for c_var: Variant in (cpds_raw as Array):
+					if c_var is Color:
+						cpds.append(c_var as Color)
+			var hid_raw: Variant = bdict.get("hidden_in_game", false)
+			hidden_in_game = hid_raw is bool and (hid_raw as bool)
+		elif bval is Array:
+			var mp_key: String = str(mp_var)
+			mp = mp_key
+			var sep: int = mp_key.find("||")
+			if sep >= 0:
+				ov_key = mp_key.substr(sep + 2)
+				mp = mp_key.substr(0, sep)
+			if ov_key != "":
+				for part: String in ov_key.split("|"):
+					ov_arr.append(part)
+			trs = bval as Array
 		if trs.is_empty():
 			continue
+		var has_cpds: bool = not cpds.is_empty() and cpds.size() == trs.size()
 		if trs.size() == 1:
 			var single_tr: Transform3D = trs[0]
-			items.append({"mp": mp, "override_materials": ov_arr, "override_key": ov_key, "trs": trs, "collide": collide, "cell": _cell_of(single_tr)})
+			var single_cpds: Array[Color] = cpds if has_cpds else ([] as Array[Color])
+			items.append({
+				"mp": mp,
+				"override_materials": ov_arr,
+				"override_key": ov_key,
+				"trs": trs,
+				"cpds": single_cpds,
+				"hidden_in_game": hidden_in_game,
+				"collide": collide,
+				"cell": _cell_of(single_tr),
+			})
 			continue
 		var cells: Dictionary = {}
-		for tr_var in trs:
-			var tr: Transform3D = tr_var
+		var cell_cpds_map: Dictionary = {}
+		for idx: int in range(trs.size()):
+			var tr: Transform3D = trs[idx]
 			var ck: String = "%d_%d" % [floori(tr.origin.x / CHUNK_SIZE), floori(tr.origin.z / CHUNK_SIZE)]
 			if not cells.has(ck):
 				cells[ck] = [] as Array
+				if has_cpds:
+					cell_cpds_map[ck] = [] as Array[Color]
 			var cell_arr: Array = cells[ck]
 			cell_arr.append(tr)
+			if has_cpds:
+				var cell_carr: Array[Color] = cell_cpds_map[ck]
+				cell_carr.append(cpds[idx])
 		for ck_var in cells.keys():
 			var ck_str: String = str(ck_var)
 			var parts: PackedStringArray = ck_str.split("_")
 			var cell: Vector2i = Vector2i(int(parts[0]), int(parts[1]))
-			items.append({"mp": mp, "override_materials": ov_arr, "override_key": ov_key, "trs": cells[ck_var], "collide": collide, "cell": cell})
+			var item_cpds: Array[Color] = cell_cpds_map[ck_var] if has_cpds else ([] as Array[Color])
+			items.append({
+				"mp": mp,
+				"override_materials": ov_arr,
+				"override_key": ov_key,
+				"trs": cells[ck_var],
+				"cpds": item_cpds,
+				"hidden_in_game": hidden_in_game,
+				"collide": collide,
+				"cell": cell,
+			})
 	return items
 
 
@@ -1026,17 +1128,28 @@ func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> 
 	if mesh == null:
 		return 0
 	var ov_arr: Array[String] = _extract_override_materials(item)
-	if not ov_arr.is_empty():
+	var cpds_raw: Variant = item.get("cpds", [])
+	var cpds: Array[Color] = []
+	if cpds_raw is Array:
+		for c_var: Variant in (cpds_raw as Array):
+			if c_var is Color:
+				cpds.append(c_var as Color)
+	var count: int = trs.size()
+	var use_cpd: bool = not cpds.is_empty() and cpds.size() == count
+	var hidden_raw: Variant = item.get("hidden_in_game", false)
+	var hidden_in_game: bool = hidden_raw is bool and (hidden_raw as bool)
+	if not use_cpd and not ov_arr.is_empty():
 		var ov_key: String = str(item.get("override_key", ""))
 		if ov_key == "":
 			ov_key = "|".join(ov_arr)
 		mesh = _get_overridden_mesh(mp, mesh, ov_arr, ov_key)
 	var low_mp: String = mp.to_lower()
-	var count: int = trs.size()
 	var node: GeometryInstance3D
-	if count >= 2:
+	if count >= 2 or use_cpd:
 		var mm: MultiMesh = MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_3D
+		if use_cpd:
+			mm.use_custom_data = true
 		mm.mesh = mesh
 		mm.instance_count = count
 		# Explicit tight bounds: Godot only frustum-culls a MultiMesh against
@@ -1047,6 +1160,8 @@ func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> 
 		for i in range(count):
 			var tr_i: Transform3D = trs[i]
 			mm.set_instance_transform(i, tr_i)
+			if use_cpd:
+				mm.set_instance_custom_data(i, cpds[i])
 			var world_aabb: AABB = tr_i * mesh_aabb
 			if not have_bounds:
 				chunk_aabb = world_aabb
@@ -1057,6 +1172,8 @@ func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> 
 			mm.custom_aabb = chunk_aabb
 		var mmi: MultiMeshInstance3D = MultiMeshInstance3D.new()
 		mmi.multimesh = mm
+		if use_cpd:
+			mmi.material_override = _get_emissive_cpd_material()
 		node = mmi
 	else:
 		var tr_one: Transform3D = trs[0]
@@ -1065,6 +1182,11 @@ func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> 
 		mi.transform = tr_one
 		node = mi
 	_apply_culling_policy(node, low_mp, mesh)
+	if use_cpd or hidden_in_game:
+		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	if hidden_in_game:
+		node.visible = false
+		node.gi_mode = GeometryInstance3D.GI_MODE_STATIC
 	if MobileProfile.is_mobile():
 		node.lod_bias = MobileProfile.lod_bias()
 	node.set_meta("ue_mesh", mp)
@@ -1075,7 +1197,7 @@ func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> 
 	ctx["chunk_count"] = int(ctx.get("chunk_count", 0)) + 1
 
 	var is_clutter: bool = _has_token(low_mp, CLUTTER_TOKENS)
-	if bool(item.get("collide", false)) and bool(ctx.get("generate_collision", false)) and not is_clutter:
+	if not use_cpd and not hidden_in_game and bool(item.get("collide", false)) and bool(ctx.get("generate_collision", false)) and not is_clutter:
 		var shape: Shape3D = info["shape"] as Shape3D
 		if shape != null:
 			var soff: Vector3 = info.get("shape_offset", Vector3.ZERO)
@@ -1086,7 +1208,7 @@ func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> 
 					continue
 				_add_collider(ctx, cell, shape, tr_c, soff)
 
-	if not is_clutter and _qualifies_as_occluder(low_mp, mesh):
+	if not use_cpd and not hidden_in_game and not is_clutter and _qualifies_as_occluder(low_mp, mesh):
 		for i3 in range(count):
 			if int(ctx.get("occluders", 0)) >= MAX_OCCLUDERS:
 				break

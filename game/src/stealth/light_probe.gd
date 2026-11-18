@@ -26,6 +26,18 @@ const MOVEMENT_SPEED_LIGHT_MAX_CM_S: float = 600.0 # C_MovementSpeedToMinimumLig
 const MOVEMENT_SPEED_LIGHT_MIN_VALUE: float = 0.0 # C_MovementSpeedToMinimumLightDetectionValue Value 0.0, row 16
 const MOVEMENT_SPEED_LIGHT_MAX_VALUE: float = 0.1 # C_MovementSpeedToMinimumLightDetectionValue Value 0.1, row 27
 
+# Energy -> per-light visibility weight. Loader lights map authored UE
+# Intensity through level_loader.LIGHT_INTENSITY_SCALE (1/15), so a median
+# authored light (Intensity 15) arrives as energy 1.0. Before the lighting-
+# fidelity wave that median light saturated at the old 4.2 ceiling and
+# contributed 0.9; scaling by 0.9 restores that response while preserving the
+# authored ordering below the median (authored 5 -> energy 0.333 -> 0.30).
+# Floor/ceiling match the previous clamps so dim fills stay > 0 and a single
+# light cannot exceed the fully-lit weight.
+const LIGHT_ENERGY_TO_VISIBILITY: float = 0.9
+const LIGHT_VISIBILITY_MIN: float = 0.15
+const LIGHT_VISIBILITY_MAX: float = 0.9
+
 var registered_lights: Array[Light3D] = []
 var disabled_until: Dictionary = {} # Light3D instance_id -> unix/run time
 
@@ -95,6 +107,15 @@ static func minimum_light_detection_for_speed(speed_cm_s: float) -> float:
 	return lerpf(MOVEMENT_SPEED_LIGHT_MIN_VALUE, MOVEMENT_SPEED_LIGHT_MAX_VALUE, t)
 
 
+## Per-light stealth weight for a local (omni/spot) light energy. 1.0 is the
+## authored median (UE Intensity 15 -> energy 1.0 via the loader's 1/15 scale)
+## and must read as the pre-lighting-wave 0.9 so fixing the render scale did not
+## silently halve detection. Hand-placed Godot lights use the same energy space.
+## Directional lights bypass this helper (0.25 factor in sample_visibility).
+static func light_visibility_weight(energy: float) -> float:
+	return clampf(energy * LIGHT_ENERGY_TO_VISIBILITY, LIGHT_VISIBILITY_MIN, LIGHT_VISIBILITY_MAX)
+
+
 func sample_visibility(world_pos: Vector3, space_state: PhysicsDirectSpaceState3D, exclude: Array[RID] = []) -> float:
 	_sample_calls += 1
 	if _has_cache:
@@ -128,7 +149,7 @@ func sample_visibility(world_pos: Vector3, space_state: PhysicsDirectSpaceState3
 			continue
 		var dist: float = sqrt(dist_sq)
 		var falloff := 1.0 - clampf(dist / max_range, 0.0, 1.0)
-		total += falloff * falloff * clampf(l.light_energy * 0.35, 0.15, 0.9)
+		total += falloff * falloff * light_visibility_weight(l.light_energy)
 	var result: float = clampf(total, 0.0, 1.0)
 	_has_cache = true
 	_cached_pos = world_pos

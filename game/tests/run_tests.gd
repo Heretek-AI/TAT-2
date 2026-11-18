@@ -2773,6 +2773,54 @@ func _initialize() -> void:
 	else:
 		print("PASS: 35c Mission Prep loaded all ", all_mis_cnt, " CDT_Missions rows with real location artwork & objective icons")
 
+	# 36. Light-probe authored-light retune: the authored median light (UE
+	# Intensity 15 -> energy 1.0 after the linear 1/15 lighting scale) must
+	# contribute the pre-lighting-wave 0.9 weight again, while authored dimmer
+	# lights keep a monotonic lower weight.
+	var lp_retune: GDScript = load("res://src/stealth/light_probe.gd") as GDScript
+	var w_median: float = float(lp_retune.call("light_visibility_weight", 1.0))
+	var w_authored5: float = float(lp_retune.call("light_visibility_weight", 0.3333333))
+	var w_dim: float = float(lp_retune.call("light_visibility_weight", 0.2))
+	var w_floor: float = float(lp_retune.call("light_visibility_weight", 0.01))
+	var w_bright: float = float(lp_retune.call("light_visibility_weight", 4.0))
+	var retune_ok: bool = \
+		absf(w_median - 0.9) < 0.001 \
+		and absf(w_authored5 - 0.3) < 0.001 \
+		and absf(w_dim - 0.18) < 0.001 \
+		and absf(w_floor - 0.15) < 0.001 \
+		and absf(w_bright - 0.9) < 0.001 \
+		and w_dim < w_authored5 and w_authored5 < w_median
+	if not retune_ok:
+		printerr("FAIL: 36 light-probe retune (median=", w_median, " authored5=", w_authored5, " dim=", w_dim, " floor=", w_floor, " bright=", w_bright, ")")
+		fails += 1
+	else:
+		print("PASS: 36 Light-probe authored-light retune (median 1.0 -> 0.90, authored 5 -> 0.30, dim 0.2 -> 0.18, floor/ceil 0.15/0.90)")
+
+	# 36b. Integration: sample_visibility must apply the retuned weight. An
+	# energy-1.0 omni 2 m from the sample point (empty physics space far from
+	# level geometry): falloff = 1 - 2/10 = 0.8, contribution = 0.8^2 * 0.90,
+	# plus the 0.08 ambient floor.
+	var lp_integration: Node = (load("res://src/stealth/light_probe.gd") as GDScript).new()
+	root.add_child(lp_integration)
+	var retune_light := OmniLight3D.new()
+	var retune_origin := Vector3(9000, 500, 9000)
+	retune_light.position = retune_origin + Vector3(0, 2, 0)
+	retune_light.omni_range = 10.0
+	retune_light.light_energy = 1.0
+	root.add_child(retune_light)
+	lp_integration.register_light(retune_light)
+	var retune_space: PhysicsDirectSpaceState3D = root.world_3d.direct_space_state
+	var sampled: float = float(lp_integration.call("sample_visibility", retune_origin, retune_space, [] as Array[RID]))
+	var expected: float = 0.08 + 0.8 * 0.8 * 0.9
+	if absf(sampled - expected) >= 0.01:
+		printerr("FAIL: 36b light-probe integration sampled=", sampled, " expected=", expected)
+		fails += 1
+	else:
+		print("PASS: 36b LightProbe integration (energy 1.0 at 2 m / 10 m range -> ", snappedf(sampled, 0.001), ")")
+	lp_integration.queue_free()
+	retune_light.queue_free()
+	await process_frame
+
 	print("SUMMARY: fails=", fails)
 	quit(0 if fails == 0 else 1)
 

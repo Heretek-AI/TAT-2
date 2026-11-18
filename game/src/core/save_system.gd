@@ -28,14 +28,47 @@ var data: Dictionary = {
 	"active_decoration": "faberge_egg",
 	"settings": {
 		"mouse_sensitivity": 0.0025,
+		"invert_y": false,
 		"sprint_toggle": false,
+		"reduced_camera_bounce": false,
 		"fov": 75.0,
+		"vsync": true,
+		"master_volume": 0.8,
+		"music_volume": 0.8,
+		"sfx_volume": 0.8,
+		"dialogue_volume": 0.8,
+		"fullscreen": false,
+		"render_scale": 1.0,
+		"touch_sensitivity": 2.5,
+		"mobile_quality": "balanced",
 	},
 }
 
 
 func _ready() -> void:
 	load_save()
+	apply_saved_settings()
+
+
+func get_settings() -> Dictionary:
+	if not data.has("settings") or not (data["settings"] is Dictionary):
+		data["settings"] = {}
+	return data["settings"] as Dictionary
+
+
+func apply_saved_settings() -> void:
+	var s: Dictionary = get_settings()
+	var vol: float = clampf(float(s.get("master_volume", 0.8)), 0.0, 1.0)
+	if AudioServer.get_bus_count() > 0:
+		AudioServer.set_bus_volume_db(0, linear_to_db(maxf(vol, 0.001)))
+	if DisplayServer.get_name() != "headless":
+		var fullscreen: bool = bool(s.get("fullscreen", false))
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if fullscreen else DisplayServer.WINDOW_MODE_WINDOWED)
+		var vsync_on: bool = bool(s.get("vsync", true))
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if vsync_on else DisplayServer.VSYNC_DISABLED)
+		var vp: Viewport = get_viewport()
+		if vp != null:
+			vp.scaling_3d_scale = clampf(float(s.get("render_scale", 1.0)), 0.6, 1.0)
 
 
 func _defaults() -> Dictionary:
@@ -50,6 +83,22 @@ func _defaults() -> Dictionary:
 		"equipped_loadout": ["blackjack", "smoke_bomb", "zipwire", "slither_sap"],
 		"equipped_cosmetics": {"head": "bowler_hat", "body": "", "calling_card": ""},
 		"active_decoration": "faberge_egg",
+		"settings": {
+			"mouse_sensitivity": 0.0025,
+			"invert_y": false,
+			"sprint_toggle": false,
+			"reduced_camera_bounce": false,
+			"fov": 75.0,
+			"vsync": true,
+			"master_volume": 0.8,
+			"music_volume": 0.8,
+			"sfx_volume": 0.8,
+			"dialogue_volume": 0.8,
+			"fullscreen": false,
+			"render_scale": 1.0,
+			"touch_sensitivity": 2.5,
+			"mobile_quality": "balanced",
+		},
 	}
 
 

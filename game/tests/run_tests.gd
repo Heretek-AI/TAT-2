@@ -2684,6 +2684,95 @@ func _initialize() -> void:
 	p2_den.queue_free()
 	await process_frame
 
+	# 35. Phase 2B: Startscreen camera, Settings teal+grouped+persistence, Mission Prep artwork+11 DT_Missions rows
+	# 35a. Startscreen camera (authored CineCameraActor_0 eye, pitch 13.8 deg, vFOV 48.03)
+	var mm_scr: GDScript = load("res://src/ui/main_menu.gd") as GDScript
+	var mm_node: Control = mm_scr.new() as Control
+	root.add_child(mm_node)
+	await process_frame
+	var mm_cam: Camera3D = mm_node.get("_menu_cam") as Camera3D
+	var mm_eye_ok: bool = mm_cam != null and mm_cam.position.distance_to(Vector3(-12.7196, 0.4566, 14.6089)) < 0.25
+	var mm_fov_ok: bool = mm_cam != null and absf(mm_cam.fov - 48.03) < 0.05
+	var mm_fwd: Vector3 = (-mm_cam.global_basis.z).normalized() if mm_cam != null else Vector3.ZERO
+	var mm_pitch_deg: float = rad_to_deg(asin(clampf(mm_fwd.y, -1.0, 1.0)))
+	var mm_pitch_ok: bool = mm_cam != null and absf(mm_pitch_deg - 13.8) < 0.6
+	if not mm_eye_ok or not mm_fov_ok or not mm_pitch_ok:
+		printerr("FAIL: 35a Startscreen camera (eye_ok=", mm_eye_ok, " fov=", mm_cam.fov if mm_cam != null else -1.0, " pitch=", mm_pitch_deg, ")")
+		fails += 1
+	else:
+		print("PASS: 35a Startscreen CineCamera eye=", mm_cam.position, " pitch=", snappedf(mm_pitch_deg, 0.01), " deg vFOV=", mm_cam.fov)
+	mm_node.queue_free()
+	await process_frame
+
+	# 35b. Settings teal theme + grouped rows + persisted values wired into ThiefCharacter
+	var st_ui: CanvasLayer = (load("res://src/ui/settings_ui.gd") as GDScript).new() as CanvasLayer
+	root.add_child(st_ui)
+	await process_frame
+	var st_panel: PanelContainer = st_ui.get("_modal_panel") as PanelContainer
+	var st_box: StyleBoxFlat = st_panel.get_theme_stylebox("panel") as StyleBoxFlat if st_panel != null else null
+	var st_teal_ok: bool = st_box != null and st_box.border_color.b > st_box.border_color.r and st_box.border_color.g > st_box.border_color.r
+	var st_groups_v: Variant = st_ui.get("_group_cards")
+	var st_groups_cnt: int = (st_groups_v as Array).size() if st_groups_v is Array else 0
+	var st_save: Node = root.get_node_or_null("/root/SaveSystem")
+	var st_orig: Dictionary = (st_save.call("get_settings") as Dictionary).duplicate(true) if st_save != null else {}
+	var st_sens_sl: HSlider = st_ui.get("_sens_slider") as HSlider
+	var st_inv_cb: CheckBox = st_ui.get("_invert_check") as CheckBox
+	var st_spr_cb: CheckBox = st_ui.get("_sprint_check") as CheckBox
+	var st_fov_sl: HSlider = st_ui.get("_fov_slider") as HSlider
+	if st_sens_sl != null:
+		st_sens_sl.value = 0.0042
+	if st_inv_cb != null:
+		st_inv_cb.button_pressed = true
+	if st_spr_cb != null:
+		st_spr_cb.button_pressed = true
+	if st_fov_sl != null:
+		st_fov_sl.value = 92.0
+	st_ui.call("_apply_live", false)
+	var st_thief: Node = (load("res://src/player/thief_character.gd") as GDScript).new()
+	root.add_child(st_thief)
+	await process_frame
+	var st_wire_ok: bool = absf(float(st_thief.get("mouse_sens")) - 0.0042) < 0.0005 \
+		and st_thief.get("invert_y") == true \
+		and st_thief.get("sprint_toggle_mode") == true \
+		and absf(float(st_thief.get("base_fov")) - 92.0) < 0.1
+	st_thief.queue_free()
+	if st_save != null and not st_orig.is_empty():
+		var sd: Dictionary = st_save.get("data") as Dictionary
+		sd["settings"] = st_orig
+		st_save.call("apply_saved_settings")
+	st_ui.queue_free()
+	await process_frame
+	if not st_teal_ok or st_groups_cnt < 6 or not st_wire_ok:
+		printerr("FAIL: 35b Settings UI/persistence (teal=", st_teal_ok, " groups=", st_groups_cnt, " wired=", st_wire_ok, ")")
+		fails += 1
+	else:
+		print("PASS: 35b Settings teal theme, ", st_groups_cnt, " grouped cards, persisted values wired into ThiefCharacter")
+
+	# 35c. Mission Prep real artwork/icons + all 11 DT_Missions/CDT_Missions rows
+	var gd_node: Node = root.get_node_or_null("/root/GameData")
+	var all_mis_v: Variant = gd_node.call("get_all_missions") if gd_node != null else []
+	var all_mis_cnt: int = (all_mis_v as Array).size() if all_mis_v is Array else 0
+	var mp_ui: Control = (load("res://src/ui/mission_prep_ui.gd") as GDScript).new() as Control
+	root.add_child(mp_ui)
+	await process_frame
+	mp_ui.call("open_prep", "old_manor", 2, "Solo", 0)
+	var mp_sel: OptionButton = mp_ui.get("_mission_selector") as OptionButton
+	var mp_loc_art: TextureRect = mp_ui.get("_location_art") as TextureRect
+	var mp_mis_ico: TextureRect = mp_ui.get("_mission_icon") as TextureRect
+	var mp_om_ok: bool = mp_sel != null and mp_sel.item_count == 11 \
+		and mp_loc_art != null and mp_loc_art.texture != null \
+		and mp_mis_ico != null and mp_mis_ico.texture != null
+	mp_ui.call("open_prep", "guildhall", 1, "Solo", 0)
+	var mp_gh_ok: bool = mp_loc_art != null and mp_loc_art.texture != null \
+		and mp_mis_ico != null and mp_mis_ico.texture != null
+	mp_ui.queue_free()
+	await process_frame
+	if all_mis_cnt != 11 or not mp_om_ok or not mp_gh_ok:
+		printerr("FAIL: 35c Mission Prep (rows=", all_mis_cnt, " om_ok=", mp_om_ok, " gh_ok=", mp_gh_ok, ")")
+		fails += 1
+	else:
+		print("PASS: 35c Mission Prep loaded all ", all_mis_cnt, " CDT_Missions rows with real location artwork & objective icons")
+
 	print("SUMMARY: fails=", fails)
 	quit(0 if fails == 0 else 1)
 

@@ -32,6 +32,13 @@ const LOC_GUILDHALL_TITLE: String = "CONSTABLES' GUILDHALL"
 const LOC_GUILDHALL_DESC: String = "This is the headquarters and operational base for the Constables, Kilcairn's police force."
 const CONTRACT_INACTIVE: String = "Contract Inactive"
 
+const LOCATION_ART_MAP: Dictionary = {
+	"old_manor": "res://assets/ue/Raw/Art/UI/Icons/Rewards/Maps/T_Map_OldManor.png",
+	"guildhall": "res://assets/ue/Raw/Art/UI/Shell/MapSplash_Guildhall.png",
+	"jaspering_hall": "res://assets/ue/Raw/Art/UI/Shell/SplashScreen/T_loadingScreen_1.png",
+	"thieves_den": "res://assets/ue/Raw/Art/UI/Shell/SplashScreen/T_loadingScreen_2.png",
+}
+
 var map_id: String = "old_manor"
 var difficulty: int = 1
 var mode: String = "Solo"
@@ -39,8 +46,13 @@ var contract_order: int = 1
 
 var _location_body: Label
 var _location_title_lbl: Label
+var _location_art: TextureRect
 var _mission_title_lbl: Label
 var _mission_body: Label
+var _mission_icon: TextureRect
+var _mission_selector: OptionButton
+var _mission_rows: Array[Dictionary] = []
+var _selected_mission_idx: int = -1
 var _contract_title_lbl: Label
 var _contract_body: Label
 var _controls_lbl: Label
@@ -132,19 +144,55 @@ func _build_all() -> void:
 
 	var left: VBoxContainer = VBoxContainer.new()
 	left.set_anchors_preset(Control.PRESET_CENTER_LEFT)
-	left.position = Vector2(36, -250)
-	left.custom_minimum_size = Vector2(400, 500)
-	left.add_theme_constant_override("separation", 14)
-	left.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	left.position = Vector2(36, -290)
+	left.custom_minimum_size = Vector2(420, 580)
+	left.add_theme_constant_override("separation", 12)
+	left.mouse_filter = Control.MOUSE_FILTER_PASS
 	add_child(left)
 	var loc_card: PanelContainer = _make_card("LOCATION", "", "")
 	left.add_child(loc_card)
 	_location_title_lbl = loc_card.get_meta("title_lbl") as Label
 	_location_body = loc_card.get_meta("body_lbl") as Label
+	var loc_vb: VBoxContainer = loc_card.get_meta("vbox") as VBoxContainer
+	_location_art = TextureRect.new()
+	_location_art.name = "LocationArt"
+	_location_art.custom_minimum_size = Vector2(390, 96)
+	_location_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_location_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	_location_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	loc_vb.add_child(_location_art)
+	loc_vb.move_child(_location_art, 1)
+
 	var mis_card: PanelContainer = _make_card("MISSION", "", "")
+	mis_card.mouse_filter = Control.MOUSE_FILTER_PASS
 	left.add_child(mis_card)
 	_mission_title_lbl = mis_card.get_meta("title_lbl") as Label
 	_mission_body = mis_card.get_meta("body_lbl") as Label
+	var mis_vb: VBoxContainer = mis_card.get_meta("vbox") as VBoxContainer
+	mis_vb.mouse_filter = Control.MOUSE_FILTER_PASS
+	var mis_row: HBoxContainer = HBoxContainer.new()
+	mis_row.add_theme_constant_override("separation", 10)
+	mis_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_mission_icon = TextureRect.new()
+	_mission_icon.name = "MissionIcon"
+	_mission_icon.custom_minimum_size = Vector2(56, 56)
+	_mission_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_mission_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_mission_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mis_row.add_child(_mission_icon)
+	mis_vb.remove_child(_mission_title_lbl)
+	_mission_title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_mission_title_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	mis_row.add_child(_mission_title_lbl)
+	mis_vb.add_child(mis_row)
+	mis_vb.move_child(mis_row, 1)
+	_mission_selector = OptionButton.new()
+	_mission_selector.name = "MissionSelector"
+	_mission_selector.custom_minimum_size = Vector2(380, 30)
+	_mission_selector.item_selected.connect(_on_mission_selected)
+	mis_vb.add_child(_mission_selector)
+	_populate_mission_rows()
+
 	var con_card: PanelContainer = _make_card("CONTRACT", "", "")
 	left.add_child(con_card)
 	_contract_title_lbl = con_card.get_meta("title_lbl") as Label
@@ -214,6 +262,7 @@ func _make_card(header: String, title_text: String, body_text: String) -> PanelC
 	vb.add_child(body_lbl)
 	panel.set_meta("title_lbl", title_lbl)
 	panel.set_meta("body_lbl", body_lbl)
+	panel.set_meta("vbox", vb)
 	return panel
 
 
@@ -434,11 +483,65 @@ func _first_existing(paths: Array[String]) -> String:
 	return ""
 
 
+func _load_ui_tex(path: String) -> Texture2D:
+	if path == "":
+		return null
+	if ResourceLoader.exists(path):
+		var t: Variant = load(path)
+		if t is Texture2D:
+			return t as Texture2D
+	if FileAccess.file_exists(path):
+		var img: Image = Image.load_from_file(ProjectSettings.globalize_path(path))
+		if img != null and not img.is_empty():
+			return ImageTexture.create_from_image(img)
+	return null
+
+
+func _populate_mission_rows() -> void:
+	_mission_rows.clear()
+	if _mission_selector != null:
+		_mission_selector.clear()
+	var gd: Node = get_node_or_null("/root/GameData")
+	if gd != null and gd.has_method("get_all_missions"):
+		var raw: Variant = gd.call("get_all_missions")
+		if raw is Array:
+			for m_v: Variant in (raw as Array):
+				if m_v is Dictionary:
+					_mission_rows.append(m_v as Dictionary)
+	for m: Dictionary in _mission_rows:
+		if _mission_selector != null:
+			_mission_selector.add_item("%s (%s)" % [str(m.get("title", "")), str(m.get("id", ""))])
+
+
+func _on_mission_selected(idx: int) -> void:
+	if idx >= 0 and idx < _mission_rows.size():
+		_selected_mission_idx = idx
+		_apply_selected_mission_row()
+
+
 func _refresh_all() -> void:
+	if _mission_rows.is_empty():
+		_populate_mission_rows()
+	_select_default_mission_for_map()
 	_refresh_location_card()
 	_refresh_mission_card()
 	_refresh_contract_card()
 	_refresh_controls()
+
+
+func _select_default_mission_for_map() -> void:
+	var matching: Array[int] = []
+	for i: int in range(_mission_rows.size()):
+		if str(_mission_rows[i].get("map_id", "")) == map_id:
+			matching.append(i)
+	if not matching.is_empty():
+		_selected_mission_idx = matching[abs(contract_order) % matching.size()]
+	elif not _mission_rows.is_empty():
+		_selected_mission_idx = 0
+	else:
+		_selected_mission_idx = -1
+	if _mission_selector != null and _selected_mission_idx >= 0 and _selected_mission_idx < _mission_selector.item_count:
+		_mission_selector.select(_selected_mission_idx)
 
 
 func _refresh_location_card() -> void:
@@ -447,6 +550,11 @@ func _refresh_location_card() -> void:
 	var info: Array = _location_info()
 	_location_title_lbl.text = str(info[0])
 	_location_body.text = str(info[1])
+	if _location_art != null:
+		var art_path: String = str(LOCATION_ART_MAP.get(map_id, ""))
+		var tex: Texture2D = _load_ui_tex(art_path)
+		_location_art.texture = tex
+		_location_art.visible = tex != null
 
 
 func _location_info() -> Array:
@@ -462,12 +570,39 @@ func _location_info() -> Array:
 func _refresh_mission_card() -> void:
 	if _mission_title_lbl == null or _mission_body == null:
 		return
+	if _selected_mission_idx >= 0 and _selected_mission_idx < _mission_rows.size():
+		_apply_selected_mission_row()
+		return
 	var idx: int = abs(contract_order) % 3
 	var titles: Array[String] = ["Vault Heist", "Item Collection Heist", "Cleanout Heist"]
 	_mission_title_lbl.text = titles[idx]
 	var minutes: int = _mission_minutes(idx, difficulty)
 	var desc: String = _mission_description(idx, minutes)
 	_mission_body.text = desc + "\nTime Limit: %d minutes" % minutes
+	if _mission_icon != null:
+		_mission_icon.texture = null
+		_mission_icon.visible = false
+
+
+func _apply_selected_mission_row() -> void:
+	var row: Dictionary = _mission_rows[_selected_mission_idx]
+	_mission_title_lbl.text = str(row.get("title", row.get("id", "Mission")))
+	var durs_v: Variant = row.get("durations", [])
+	var durs: Array = durs_v as Array if durs_v is Array else []
+	var d_idx: int = clampi(difficulty - 1, 0, maxi(durs.size() - 1, 0))
+	var dur_sec: float = float(durs[d_idx]) if d_idx < durs.size() else 0.0
+	var minutes: int = int(round(dur_sec / 60.0))
+	var desc: String = str(row.get("description", ""))
+	if desc.find("{MatchDurationInMinutes}") >= 0:
+		desc = desc.replace("{MatchDurationInMinutes}", str(minutes))
+	if minutes > 0:
+		_mission_body.text = desc + "\nTime Limit: %d minutes" % minutes
+	else:
+		_mission_body.text = desc + "\nTime Limit: Unlimited"
+	if _mission_icon != null:
+		var icon_tex: Texture2D = _load_ui_tex(str(row.get("icon_path", "")))
+		_mission_icon.texture = icon_tex
+		_mission_icon.visible = icon_tex != null
 
 
 func _mission_minutes(mission_idx: int, diff: int) -> int:

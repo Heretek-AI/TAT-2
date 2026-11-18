@@ -4,6 +4,15 @@ extends Control
 const LevelLoaderScript := preload("res://src/core/level_loader.gd")
 const SettingsUIScript := preload("res://src/ui/settings_ui.gd")
 
+## Authored CineCameraActor_0 from MainMenu.json:
+## RelativeLocation (-1271.964, 1460.8873, 45.659775) cm -> Godot metres
+## RelativeRotation Pitch +13.8 deg, Yaw -46.335075 deg; FieldOfView 76.758446 (16:9) -> vFOV 48.03 deg.
+const STARTSCREEN_CAM_EYE: Vector3 = Vector3(-12.7196, 0.4566, 14.6089)
+const STARTSCREEN_CAM_FWD: Vector3 = Vector3(0.67051, 0.238533, -0.702509)
+const STARTSCREEN_CAM_FOCUS_M: float = 17.03233
+const STARTSCREEN_CAM_VFOV: float = 48.03
+const STARTSCREEN_CAM_PITCH_DEG: float = 13.8
+
 var thief_opt: OptionButton
 var diff_opt: OptionButton
 var contract_list: ItemList
@@ -72,44 +81,38 @@ func _build_3d_backdrop() -> void:
 	scene_root.add_child(env)
 
 	_menu_cam = Camera3D.new()
-	_menu_cam.fov = 52.0
-	_menu_cam.position = Vector3(-13.8, 5.4, 16.5)
+	_menu_cam.name = "StartscreenCineCamera"
+	_menu_cam.fov = STARTSCREEN_CAM_VFOV
+	_menu_cam.position = STARTSCREEN_CAM_EYE
 	_menu_cam.current = true
 	scene_root.add_child(_menu_cam)
-	_menu_cam.look_at(Vector3(1.5, 7.4, 0.5), Vector3.UP)
+	_menu_cam.look_at(STARTSCREEN_CAM_EYE + STARTSCREEN_CAM_FWD * STARTSCREEN_CAM_FOCUS_M, Vector3.UP)
 
 	# Warm magenta/amber storefront glow matching MacNeish Jeweller
 	_shop_glow = OmniLight3D.new()
 	_shop_glow.position = Vector3(-1.2, 8.8, 2.2)
 	_shop_glow.light_color = Color(1.0, 0.28, 0.72)
-	_shop_glow.light_energy = 3.2
+	_shop_glow.light_energy = 1.6
 	_shop_glow.omni_range = 14.0
 	scene_root.add_child(_shop_glow)
 
-	var street_lamp := SpotLight3D.new()
-	street_lamp.position = Vector3(-4.5, 13.0, 6.0)
-	street_lamp.light_color = Color(1.0, 0.72, 0.35)
-	street_lamp.light_energy = 2.6
-	street_lamp.spot_range = 18.0
-	street_lamp.spot_angle = 55.0
-	scene_root.add_child(street_lamp)
-	street_lamp.look_at(Vector3(-1.0, 6.2, 1.5), Vector3.UP)
-
 	var loader := LevelLoaderScript.new()
+	scene_root.add_child(loader)
 	var sublevels: Array[String] = [
 		"res://data/generated/levels/Menus/MainMenu/BeautifulCorner_Startscreen_P.tatlevel.json",
 		"res://data/generated/levels/Menus/MainMenu/BeautifulCorner_Startscreen_Lighting.tatlevel.json",
 	]
-	loader.load_sublevels(sublevels, scene_root, null, 16, false)
+	loader.load_sublevels(sublevels, scene_root, null, 32, false)
 
 
 func _process(delta: float) -> void:
 	_sway_t += delta
 	if _menu_cam != null:
-		_menu_cam.position = Vector3(-13.8 + sin(_sway_t * 0.35) * 0.18, 5.4 + cos(_sway_t * 0.25) * 0.08, 16.5)
-		_menu_cam.look_at(Vector3(1.5, 7.4, 0.5), Vector3.UP)
+		var sway_eye: Vector3 = STARTSCREEN_CAM_EYE + Vector3(sin(_sway_t * 0.35) * 0.08, cos(_sway_t * 0.25) * 0.04, 0.0)
+		_menu_cam.position = sway_eye
+		_menu_cam.look_at(STARTSCREEN_CAM_EYE + STARTSCREEN_CAM_FWD * STARTSCREEN_CAM_FOCUS_M, Vector3.UP)
 	if _shop_glow != null:
-		_shop_glow.light_energy = 3.1 + sin(_sway_t * 7.5) * 0.18 + cos(_sway_t * 17.0) * 0.08
+		_shop_glow.light_energy = 1.55 + sin(_sway_t * 7.5) * 0.10 + cos(_sway_t * 17.0) * 0.05
 
 
 func _make_menu_btn(text: String, font: Font) -> Button:

@@ -6,6 +6,8 @@ var curves: Dictionary = {} # table_name -> { row_name -> Array[{time, value}] }
 var tables: Dictionary = {} # data table_name -> rows Dictionary (non-curve DataTables)
 var contract_strings: Dictionary = {} # contract_order -> Dictionary[key -> text]
 var mission_durations: Dictionary = {} # map_id -> { durations, quest_graph_ue_path, title/description, source_* }
+var missions: Array[Dictionary] = [] # all CDT_Missions / DT_Missions_* rows (11 authored rows)
+var missions_by_id: Dictionary = {}
 var contracts_source_table: String = ""
 
 func _ready() -> void:
@@ -13,6 +15,7 @@ func _ready() -> void:
 	_load_contracts()
 	_load_contracts_json()
 	_load_contract_strings()
+	_load_missions()
 
 
 func _load_json(path: String) -> Variant:
@@ -400,3 +403,108 @@ func get_contract_display(order: int) -> Dictionary:
 		else:
 			base["title"] = "Contract %d" % order
 	return base
+
+
+func _extract_ue_text(v: Variant) -> String:
+	if v is Dictionary:
+		var d: Dictionary = v as Dictionary
+		for k: String in ["LocalizedString", "SourceString", "CultureInvariantString"]:
+			var s: String = str(d.get(k, "")).strip_edges()
+			if s != "":
+				return s
+	elif v is String:
+		return (v as String).strip_edges()
+	return ""
+
+
+func _ue_texture_to_res(asset_path: String) -> String:
+	var p: String = asset_path.strip_edges()
+	if p == "":
+		return ""
+	var dot_idx: int = p.find(".")
+	var clean: String = p.substr(0, dot_idx) if dot_idx >= 0 else p
+	if clean.begins_with("/Game/"):
+		clean = clean.substr("/Game/".length())
+	var raw_path: String = "res://assets/ue/Raw/" + clean + ".png"
+	if ResourceLoader.exists(raw_path) or FileAccess.file_exists(raw_path):
+		return raw_path
+	var content_path: String = "res://assets/ue/Content/" + clean + ".png"
+	if ResourceLoader.exists(content_path) or FileAccess.file_exists(content_path):
+		return content_path
+	return ""
+
+
+func _mission_map_id(row_key: String) -> String:
+	var low: String = row_key.to_lower()
+	if "oldmanor" in low:
+		return "old_manor"
+	if "guildhall" in low:
+		return "guildhall"
+	if "thievesden" in low:
+		return "thieves_den"
+	if "tutorial" in low:
+		return "jaspering_hall"
+	return "example"
+
+
+func _load_missions() -> void:
+	missions.clear()
+	missions_by_id.clear()
+	var files: Array[String] = [
+		"res://data/generated/tables/Gameplay/Quests/CDT_Missions.json",
+		"res://data/generated/tables/Gameplay/Quests/DT_Missions_OldManor.json",
+		"res://data/generated/tables/Gameplay/Quests/DT_Missions_Guildhall.json",
+		"res://data/generated/tables/Gameplay/Quests/DT_Missions_Tutorial.json",
+		"res://data/generated/tables/Gameplay/Quests/DT_Missions_ThievesDen_Tutorial.json",
+		"res://data/generated/tables/Gameplay/Quests/DT_Missions_Example.json",
+	]
+	for fp: String in files:
+		var parsed: Variant = _load_json(fp)
+		if not (parsed is Dictionary):
+			continue
+		var rows_v: Variant = (parsed as Dictionary).get("rows", {})
+		if not (rows_v is Dictionary):
+			continue
+		var rows: Dictionary = rows_v as Dictionary
+		for rk_v: Variant in rows.keys():
+			var rk: String = str(rk_v)
+			if missions_by_id.has(rk):
+				continue
+			var rv_v: Variant = rows[rk_v]
+			if not (rv_v is Dictionary):
+				continue
+			var rv: Dictionary = rv_v as Dictionary
+			var title_s: String = _extract_ue_text(rv.get("Title", null))
+			if title_s == "":
+				title_s = rk
+			var desc_s: String = _extract_ue_text(rv.get("Description", null))
+			var d0: float = float(rv.get("MatchDurationsByDifficulty", 0.0))
+			var d1: float = float(rv.get("MatchDurationsByDifficulty[1]", d0))
+			var d2: float = float(rv.get("MatchDurationsByDifficulty[2]", d1))
+			var img_raw: Variant = rv.get("ObjectiveDisplayImage", {})
+			var img_ap: String = str((img_raw as Dictionary).get("AssetPathName", "")) if img_raw is Dictionary else ""
+			var icon_res: String = _ue_texture_to_res(img_ap)
+			var entry: Dictionary = {
+				"id": rk,
+				"map_id": _mission_map_id(rk),
+				"title": title_s,
+				"description": desc_s,
+				"durations": [d0, d1, d2],
+				"icon_path": icon_res,
+				"icon_ue_path": img_ap,
+				"source_file": fp.get_file(),
+			}
+			missions.append(entry)
+			missions_by_id[rk] = entry
+
+
+func get_all_missions() -> Array[Dictionary]:
+	return missions
+
+
+func get_missions_for_map(p_map_id: String) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for m: Dictionary in missions:
+		if str(m.get("map_id", "")) == p_map_id:
+			out.append(m)
+	return out

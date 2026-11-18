@@ -96,6 +96,11 @@ var _health_block_data: Dictionary = {}
 
 var is_crouching: bool = false
 var is_sprinting: bool = false
+var _sprint_toggled: bool = false
+var invert_y: bool = false
+var sprint_toggle_mode: bool = false
+var reduced_camera_bounce: bool = false
+var base_fov: float = CAMERA_FOV
 var lean_dir: float = 0.0
 var thief_vision_on: bool = false
 var thief_vision: bool = false
@@ -418,22 +423,52 @@ func _build_body() -> void:
 	head.add_child(spring_arm)
 
 	cam = Camera3D.new()
-	cam.fov = CAMERA_FOV
+	apply_saved_settings(true)
+	cam.fov = base_fov
 	cam.current = true
 	spring_arm.add_child(cam)
 	_build_first_person_rig()
+
+
+func apply_saved_settings(sync_cam: bool = false) -> void:
+	var save_node: Node = get_node_or_null("/root/SaveSystem")
+	if save_node == null:
+		return
+	var data_v: Variant = save_node.get("data")
+	if not (data_v is Dictionary):
+		return
+	var settings_v: Variant = (data_v as Dictionary).get("settings", {})
+	if not (settings_v is Dictionary):
+		return
+	var s: Dictionary = settings_v as Dictionary
+	if s.has("mouse_sensitivity"):
+		mouse_sens = clampf(float(s["mouse_sensitivity"]), 0.0005, 0.008)
+	if s.has("invert_y"):
+		invert_y = bool(s["invert_y"])
+	if s.has("sprint_toggle"):
+		sprint_toggle_mode = bool(s["sprint_toggle"])
+	if s.has("reduced_camera_bounce"):
+		reduced_camera_bounce = bool(s["reduced_camera_bounce"])
+	if s.has("fov"):
+		base_fov = clampf(float(s["fov"]), 60.0, 105.0)
+	if sync_cam and cam != null:
+		cam.fov = base_fov
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	if GameState.state != "playing":
 		return
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not MobileProfile.is_mobile():
+		apply_saved_settings()
+		var y_dir: float = 1.0 if invert_y else -1.0
 		rotate_y(-event.relative.x * mouse_sens)
-		head.rotation.x = clampf(head.rotation.x - event.relative.y * mouse_sens, deg_to_rad(-80), deg_to_rad(80))
+		head.rotation.x = clampf(head.rotation.x + event.relative.y * mouse_sens * y_dir, deg_to_rad(-80), deg_to_rad(80))
 		return
 	# Downed: camera look above stays live; everything else is blocked.
 	if not can_act():
 		return
+	if sprint_toggle_mode and event.is_action_pressed("sprint"):
+		_sprint_toggled = not _sprint_toggled
 	if event.is_action_pressed("crouch"):
 		is_crouching = not is_crouching
 		var cap: CapsuleShape3D = col_shape.shape as CapsuleShape3D
@@ -472,9 +507,11 @@ func add_look_pixel_delta(delta_px: Vector2) -> void:
 		return
 	if absf(delta_px.x) < 0.001 and absf(delta_px.y) < 0.001:
 		return
+	apply_saved_settings()
+	var y_dir: float = 1.0 if invert_y else -1.0
 	rotate_y(-delta_px.x * mouse_sens)
 	if head != null:
-		head.rotation.x = clampf(head.rotation.x - delta_px.y * mouse_sens, deg_to_rad(-80), deg_to_rad(80))
+		head.rotation.x = clampf(head.rotation.x + delta_px.y * mouse_sens * y_dir, deg_to_rad(-80), deg_to_rad(80))
 
 
 func _physics_process(delta: float) -> void:
@@ -536,9 +573,15 @@ func _physics_process(delta: float) -> void:
 			return
 
 	# Movement & Stamina
+	apply_saved_settings()
 	var inp: Vector2 = Input.get_vector("move_left", "move_right", "move_forward", "move_backward")
 	var wish: Vector3 = (transform.basis * Vector3(inp.x, 0.0, inp.y)).normalized()
-	is_sprinting = Input.is_action_pressed("sprint") and not is_crouching and wish.length() > 0.1 and stamina > 2.0
+	if sprint_toggle_mode:
+		if wish.length() <= 0.1 or is_crouching or stamina <= 2.0:
+			_sprint_toggled = false
+		is_sprinting = _sprint_toggled and not is_crouching and wish.length() > 0.1 and stamina > 2.0
+	else:
+		is_sprinting = Input.is_action_pressed("sprint") and not is_crouching and wish.length() > 0.1 and stamina > 2.0
 
 	var speed: float = walk_speed
 	if is_crouching:
@@ -551,8 +594,9 @@ func _physics_process(delta: float) -> void:
 		stamina = minf(max_stamina, stamina + stamina_regen * delta)
 	stamina_changed.emit(stamina, max_stamina)
 
-	# Velocity FOV feedback (BP_CameraModifier_VelocityFOV)
-	cam.fov = lerpf(cam.fov, CAMERA_FOV_SPRINT if is_sprinting else CAMERA_FOV, delta * 8.0)
+	# Velocity FOV feedback (BP_CameraModifier_VelocityFOV) honoring persisted base_fov
+	var target_fov: float = (base_fov + (CAMERA_FOV_SPRINT - CAMERA_FOV)) if is_sprinting else base_fov
+	cam.fov = lerpf(cam.fov, target_fov, delta * 8.0)
 
 	if not is_on_floor():
 		velocity.y -= gravity * delta

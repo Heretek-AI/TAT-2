@@ -2666,20 +2666,23 @@ func _initialize() -> void:
 	else:
 		print("PASS: 34c Footprint decal uses authored T_Decal_Footstep.png alpha mask with emission_enabled=false")
 
-	# 34d. Map table: +0.75 offset removed, token materials bound
+	# 34d. Map table: +0.75 offset removed, token materials bound, tokens scaled to UE reference framing
 	var p2_tok_om: MeshInstance3D = p2_den.get_node_or_null("MapTokenOldManor") as MeshInstance3D
 	var p2_tok_gh: MeshInstance3D = p2_den.get_node_or_null("MapTokenGuildHall") as MeshInstance3D
 	var p2_tok_ok: bool = false
+	var p2_tok_dbg: String = ""
 	if p2_tok_om != null and p2_tok_gh != null:
 		var y_ok: bool = absf(p2_tok_om.position.y - 41.1337) < 0.1 and absf(p2_tok_gh.position.y - 41.1337) < 0.1
+		var s_ok: bool = absf(p2_tok_om.scale.x - 0.24) < 0.001 and absf(p2_tok_om.scale.y - 0.24) < 0.001 and absf(p2_tok_om.scale.z - 0.24) < 0.001 and absf(p2_tok_gh.scale.x - 0.24) < 0.001 and absf(p2_tok_gh.scale.y - 0.24) < 0.001 and absf(p2_tok_gh.scale.z - 0.24) < 0.001
 		var om_mat: StandardMaterial3D = p2_tok_om.get_surface_override_material(0) as StandardMaterial3D
 		var gh_mat: StandardMaterial3D = p2_tok_gh.get_surface_override_material(0) as StandardMaterial3D
-		p2_tok_ok = y_ok and om_mat != null and om_mat.albedo_texture != null and gh_mat != null and gh_mat.albedo_texture != null
+		p2_tok_ok = y_ok and s_ok and om_mat != null and om_mat.albedo_texture != null and gh_mat != null and gh_mat.albedo_texture != null
+		p2_tok_dbg = "y_ok=" + str(y_ok) + " s_ok=" + str(s_ok) + " s_om=" + str(p2_tok_om.scale) + " s_gh=" + str(p2_tok_gh.scale) + " om_mat=" + str(om_mat != null) + " gh_mat=" + str(gh_mat != null)
 	if not p2_tok_ok:
-		printerr("FAIL: 34d Map table tokens (om=", p2_tok_om != null, " gh=", p2_tok_gh != null, " y_om=", p2_tok_om.position.y if p2_tok_om != null else -1.0, ")")
+		printerr("FAIL: 34d Map table tokens (om=", p2_tok_om != null, " gh=", p2_tok_gh != null, " y_om=", p2_tok_om.position.y if p2_tok_om != null else -1.0, " ", p2_tok_dbg, ")")
 		fails += 1
 	else:
-		print("PASS: 34d Map table tokens seated at y=", snappedf(p2_tok_om.position.y, 0.001), " (+0.75 removed) with authored M_MapBuilding_* materials")
+		print("PASS: 34d Map table tokens seated at y=", snappedf(p2_tok_om.position.y, 0.001), " scale=", snappedf(p2_tok_om.scale.x, 0.001), " (+0.75 removed) with authored M_MapBuilding_* materials")
 
 	p2_den.queue_free()
 	await process_frame

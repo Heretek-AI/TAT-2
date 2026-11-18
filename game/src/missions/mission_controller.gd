@@ -527,14 +527,14 @@ func _spawn_map_table_miniatures(desk_pos: Vector3) -> void:
 			"ue_mesh": "/Game/Art/UI/Map/SM_MapBuilding_OldManor",
 			"ue_mat": "/Game/Art/UI/Map/M_MapBuilding_OldManor",
 			"offset": Vector3(-0.32, 0.02, -0.08),
-			"scale": 0.08,
+			"scale": 0.24,
 		},
 		{
 			"name": "MapTokenGuildHall",
 			"ue_mesh": "/Game/Art/UI/Map/SM_MapBuilding_GuildHall",
 			"ue_mat": "/Game/Art/UI/Map/M_MapBuilding_GuildHall",
 			"offset": Vector3(0.28, 0.02, 0.10),
-			"scale": 0.08,
+			"scale": 0.24,
 		},
 	]
 	for item: Dictionary in miniatures:

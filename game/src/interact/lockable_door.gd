@@ -1,5 +1,9 @@
 extends StaticBody3D
 ## Interactive door with optional lock level (1..4, using CT_LockpickDamage).
+## The root StaticBody3D is the frame/jamb (kept static); the swinging leaf
+## is an AnimatableBody3D (sync_to_physics) under the pivot so rotation never
+## teleports physics. Past OPEN_DISABLE_DEG the leaf shapes are disabled
+## (deferred) and the leaf layer is 0; closing re-enables them.
 
 signal lockpick_updated(active: bool, progress: float, lock_level: int)
 
@@ -10,6 +14,8 @@ const INTERACTABLES_PATH := "res://data/generated/gameplay/interactables.json"
 ## 5/10/20/40, doors MaxLockLevel 4); the JSON above is authoritative.
 const FALLBACK_JAM_DAMAGE := {1: 5.0, 2: 10.0, 3: 20.0, 4: 40.0}
 const FALLBACK_MAX_LOCK_LEVEL := 4
+## Past this pivot yaw the open leaf must not block the doorway.
+const OPEN_DISABLE_DEG: float = 70.0
 
 static var _interactables: Dictionary = {}
 
@@ -58,6 +64,10 @@ var mesh_inst: MeshInstance3D
 var lockpick_progress: float = 0.0
 var is_lockpicking: bool = false
 var _lockpick_actor: Node = null
+## Leaf mover + shape toggled by open angle (frame root stays static).
+var _leaf_body: AnimatableBody3D = null
+var _leaf_shape: CollisionShape3D = null
+var _leaf_disabled: bool = false
 
 
 static func minigame_variation_for_level(p_lock_level: int, variant_index: int = 0) -> Dictionary:
@@ -89,12 +99,18 @@ func _ready() -> void:
 	pivot = Node3D.new()
 	add_child(pivot)
 
+	_leaf_body = AnimatableBody3D.new()
+	_leaf_body.sync_to_physics = true
+	_leaf_body.collision_layer = 1
+	_leaf_body.collision_mask = 0
+	pivot.add_child(_leaf_body)
 	var col := CollisionShape3D.new()
 	var box := BoxShape3D.new()
 	box.size = Vector3(1.3, 2.4, 0.16)
 	col.shape = box
 	col.position = Vector3(0.65, 1.2, 0)
-	pivot.add_child(col)
+	_leaf_body.add_child(col)
+	_leaf_shape = col
 
 	var packed := ResourceLoader.load("res://assets/ue/Content/Art/Environment/City/Architecture/Doorways/SM_DoorCityExtA.glb") as PackedScene
 	if packed != null:
@@ -111,6 +127,42 @@ func _ready() -> void:
 		mat.albedo_color = Color(0.45, 0.25, 0.12) if locked else Color(0.32, 0.22, 0.14)
 		mesh_inst.material_override = mat
 		pivot.add_child(mesh_inst)
+
+
+## Current pivot yaw in degrees (0 = closed, ~88 = fully open).
+func open_angle_deg() -> float:
+	if pivot == null:
+		return 0.0
+	return absf(rad_to_deg(pivot.rotation.y))
+
+
+## Pure helper so tests can assert the 70-degree gate without physics.
+func should_disable_leaf(angle_deg: float) -> bool:
+	return absf(angle_deg) > OPEN_DISABLE_DEG
+
+
+## Disables the leaf mover past OPEN_DISABLE_DEG (deferred + layer 0),
+## re-enables on close. The frame root stays on layer 1 the whole time.
+func _update_leaf_collision() -> void:
+	if pivot == null or _leaf_body == null or not is_instance_valid(_leaf_body):
+		return
+	var disable: bool = should_disable_leaf(open_angle_deg())
+	if disable == _leaf_disabled:
+		return
+	_leaf_disabled = disable
+	if disable:
+		_leaf_body.set_deferred("collision_layer", 0)
+		if _leaf_shape != null and is_instance_valid(_leaf_shape):
+			_leaf_shape.set_deferred("disabled", true)
+	else:
+		_leaf_body.set_deferred("collision_layer", 1)
+		if _leaf_shape != null and is_instance_valid(_leaf_shape):
+			_leaf_shape.set_deferred("disabled", false)
+
+
+func _process(_delta: float) -> void:
+	if pivot != null and _leaf_body != null:
+		_update_leaf_collision()
 
 
 func get_jam_damage() -> float:

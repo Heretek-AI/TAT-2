@@ -6,8 +6,11 @@ extends Node3D
 ## the .tatlevel.json swinging_doors entry). A child pivot node carries one
 ## MeshInstance3D per leaf at its authored relative transform (real GLB +
 ## materials resolved through the level loader's existing
-## _get_mesh_and_shape/get_material_for_ue path) plus one StaticBody3D +
-## BoxShape3D collider per leaf, so collision rotates with the door.
+## _get_mesh_and_shape/get_material_for_ue path) plus one AnimatableBody3D
+## (sync_to_physics) + BoxShape3D collider per leaf, so collision rotates
+## with the door. Past OPEN_DISABLE_DEG the leaf shapes are disabled
+## (deferred) and the leaf layer is 0 so the open doorway never blocks;
+## closing re-enables them. Frame/jamb stay StaticBody3D level collision.
 ## interact() toggles a 90-degree swing around the pivot's local up axis over
 ## ~0.4 s; only the pivot rotates (no physics teleport), closing returns to 0,
 ## and repeated toggles are ignored while the tween runs.
@@ -21,6 +24,8 @@ const _VfxManager := preload("res://src/core/vfx_manager.gd")
 const OPEN_YAW_RAD: float = PI * 0.5
 ## Swing duration in seconds (matches the authored door feel).
 const SWING_SEC: float = 0.4
+## Past this pivot yaw the open leaf must not block the doorway.
+const OPEN_DISABLE_DEG: float = 70.0
 
 var door_entry: Dictionary = {}
 var level_loader: Node = null
@@ -35,6 +40,9 @@ var _valid: bool = false
 var _tweening: bool = false
 var _tween: Tween = null
 var _lockpick_actor: Node = null
+## Leaf movers toggled by open angle (frame/jamb stay static level bodies).
+var _leaf_bodies: Array = []
+var _leaf_disabled: bool = false
 
 
 func set_locked(p_locked: bool, p_lock_level: int = 1) -> void:
@@ -138,7 +146,8 @@ func _build_leaf(leaf: Dictionary) -> void:
 	mi.transform = Transform3D(ltr.basis.scaled(leaf_scale), ltr.origin)
 	pivot.add_child(mi)
 	var aabb: AABB = mesh.get_aabb()
-	var body := StaticBody3D.new()
+	var body := AnimatableBody3D.new()
+	body.sync_to_physics = true
 	body.collision_layer = 1
 	body.collision_mask = 0
 	body.transform = ltr
@@ -153,6 +162,50 @@ func _build_leaf(leaf: Dictionary) -> void:
 	cs.position = aabb.get_center() * leaf_scale
 	body.add_child(cs)
 	pivot.add_child(body)
+	_leaf_bodies.append(body)
+
+
+## Current pivot yaw in degrees (0 = closed, 90 = fully open).
+func open_angle_deg() -> float:
+	if pivot == null:
+		return 0.0
+	return absf(rad_to_deg(pivot.rotation.y))
+
+
+## Pure helper so tests can assert the 70-degree gate without physics.
+func should_disable_leaf(angle_deg: float) -> bool:
+	return absf(angle_deg) > OPEN_DISABLE_DEG
+
+
+## Disables the leaf movers past OPEN_DISABLE_DEG (deferred + layer 0),
+## re-enables on close. Frame/jamb level statics are never touched here.
+func _update_leaf_collision() -> void:
+	if pivot == null:
+		return
+	_leaf_bodies = _leaf_bodies.filter(func(b: Variant) -> bool: return is_instance_valid(b))
+	var disable: bool = should_disable_leaf(open_angle_deg())
+	if disable == _leaf_disabled:
+		return
+	_leaf_disabled = disable
+	for b_var: Variant in _leaf_bodies:
+		if not (b_var is AnimatableBody3D):
+			continue
+		var leaf: AnimatableBody3D = b_var as AnimatableBody3D
+		if disable:
+			leaf.set_deferred("collision_layer", 0)
+			for ch: Node in leaf.get_children():
+				if ch is CollisionShape3D:
+					(ch as CollisionShape3D).set_deferred("disabled", true)
+		else:
+			leaf.set_deferred("collision_layer", 1)
+			for ch2: Node in leaf.get_children():
+				if ch2 is CollisionShape3D:
+					(ch2 as CollisionShape3D).set_deferred("disabled", false)
+
+
+func _process(_delta: float) -> void:
+	if pivot != null and not _leaf_bodies.is_empty():
+		_update_leaf_collision()
 
 
 func get_interact_prompt() -> String:
@@ -269,3 +322,4 @@ func interact(actor: Node) -> void:
 
 func _on_swing_finished() -> void:
 	_tweening = false
+	_update_leaf_collision()

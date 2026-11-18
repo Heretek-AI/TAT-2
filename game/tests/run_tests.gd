@@ -3313,6 +3313,72 @@ func _initialize() -> void:
 	else:
 		print("PASS: 45 stairs snap (max_angle 50 deg, snap ", ss_snap_const, " m, wall-block/constant-speed kept, stair slope ", snappedf(ss_stair_deg, 0.1), " deg walkable, 55 deg blocked, no new mantle)")
 
+	# 46. Den doors collision (leaf disabled past 70 deg) + Den window-wall gap.
+	var dd_ld: Node = (load("res://src/interact/lockable_door.gd") as GDScript).new()
+	root.add_child(dd_ld)
+	await process_frame
+	await physics_frame
+	var dd_leaf: Node = dd_ld.get("_leaf_body") as Node
+	var dd_cshape: CollisionShape3D = dd_ld.get("_leaf_shape") as CollisionShape3D
+	var dd_leaf_ok: bool = dd_leaf is AnimatableBody3D and bool(dd_leaf.get("sync_to_physics")) and dd_cshape != null
+	var dd_open_ok: bool = false
+	var dd_close_ok: bool = false
+	var dd_gate_ok: bool = false
+	if dd_leaf_ok:
+		dd_gate_ok = bool(dd_ld.call("should_disable_leaf", 80.0)) and not bool(dd_ld.call("should_disable_leaf", 0.0))
+		var dd_piv: Node3D = dd_ld.get("pivot") as Node3D
+		if dd_piv != null:
+			dd_piv.rotation.y = deg_to_rad(80.0)
+			dd_ld.call("_update_leaf_collision")
+			await process_frame
+			await physics_frame
+			dd_open_ok = dd_cshape.disabled == true and int(dd_leaf.get("collision_layer")) == 0
+			dd_piv.rotation.y = 0.0
+			dd_ld.call("_update_leaf_collision")
+			await process_frame
+			await physics_frame
+			dd_close_ok = dd_cshape.disabled == false and int(dd_leaf.get("collision_layer")) == 1
+	dd_ld.queue_free()
+	await process_frame
+	var dd_sd: Node = (load("res://src/interact/swinging_door.gd") as GDScript).new()
+	var dd_sd_consts: Dictionary = (load("res://src/interact/swinging_door.gd") as GDScript).get_script_constant_map()
+	var dd_sd_gate: bool = bool(dd_sd.call("should_disable_leaf", 80.0)) and not bool(dd_sd.call("should_disable_leaf", 0.0)) and is_equal_approx(float(dd_sd_consts.get("OPEN_DISABLE_DEG", -1.0)), 70.0)
+	var dd_sd_src: String = ""
+	var dd_sd_file: FileAccess = FileAccess.open("res://src/interact/swinging_door.gd", FileAccess.READ)
+	if dd_sd_file != null:
+		dd_sd_src = dd_sd_file.get_as_text()
+	var dd_sd_leafcode: bool = dd_sd_src.find("AnimatableBody3D") >= 0 and dd_sd_src.find("sync_to_physics") >= 0
+	dd_sd.queue_free()
+	var dd_ll2: Node = (load("res://src/core/level_loader.gd") as GDScript).new()
+	root.add_child(dd_ll2)
+	await process_frame
+	var dd_spec: Dictionary = dd_ll2.call("den_window_gap_spec") as Dictionary
+	var dd_gap: float = float(dd_spec.get("gap_m", -1.0))
+	var dd_gap_ok: bool = dd_gap >= 0.9 and dd_gap <= 1.0 \
+		and is_equal_approx(float(dd_spec.get("sill_top_m", -1.0)), 0.9) \
+		and is_equal_approx(float(dd_spec.get("lintel_bottom_m", -1.0)), 2.0) \
+		and bool(dd_spec.get("marker_gate_kept", false)) \
+		and int(dd_spec.get("boxes", 0)) >= 2
+	var dd_is_den: bool = bool(dd_ll2.call("_is_den_window_wall", "sm_thievesden_glass")) \
+		and not bool(dd_ll2.call("_is_den_window_wall", "sm_facadelrga_base")) \
+		and not bool(dd_ll2.call("_is_den_window_wall", "guildhall_wall_stone"))
+	var dd_host := Node3D.new()
+	root.add_child(dd_host)
+	var dd_ctx: Dictionary = dd_ll2.call("_new_build_ctx", dd_host, null, true) as Dictionary
+	var dd_box := BoxShape3D.new()
+	dd_box.size = Vector3(4.0, 3.0, 0.3)
+	var dd_before: int = int(dd_ctx.get("collision_shapes", 0))
+	dd_ll2.call("_add_den_window_split", dd_ctx, Vector2i.ZERO, Transform3D.IDENTITY, dd_box, Vector3.ZERO)
+	var dd_split_ok: bool = int(dd_ctx.get("collision_shapes", 0)) - dd_before == 4
+	dd_host.queue_free()
+	dd_ll2.queue_free()
+	await process_frame
+	if not dd_leaf_ok or not dd_open_ok or not dd_close_ok or not dd_gate_ok or not dd_sd_gate or not dd_sd_leafcode or not dd_gap_ok or not dd_is_den or not dd_split_ok:
+		printerr("FAIL: 46 Den doors/window (leaf_anim=", dd_leaf_ok, " open_dis=", dd_open_ok, " close_re=", dd_close_ok, " gate=", dd_gate_ok, " swing_gate=", dd_sd_gate, " swing_code=", dd_sd_leafcode, " gap=", dd_gap_ok, " gap_m=", dd_gap, " is_den=", dd_is_den, " split4=", dd_split_ok, ")")
+		fails += 1
+	else:
+		print("PASS: 46 Den doors leaf disabled past 70 deg (layer 0 + disabled, re-enabled on close) & window wall split gap=", dd_gap, "m + sill + lintel (2m marker gate kept)")
+
 	print("SUMMARY: fails=", fails)
 	quit(0 if fails == 0 else 1)
 

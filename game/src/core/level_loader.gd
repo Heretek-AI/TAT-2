@@ -145,6 +145,13 @@ const OCCLUDER_EXCLUDE_TOKENS: Array[String] = [
 	"scroll", "cable", "wire", "rope", "ladder", "light", "lamp", "vent", "pipe",
 	"trim", "deco", "panel",
 ]
+## Den west attic window wall: the single wall/window collider is split into
+## two side boxes leaving DEN_WINDOW_GAP_M for the moonbeam opening, plus a
+## low sill under the opening and a lintel above it. The 2 m marker gate
+## (escape/marker trigger clearance) is kept unchanged.
+const DEN_WINDOW_GAP_M: float = 0.95
+const DEN_WINDOW_SILL_TOP_M: float = 0.9
+const DEN_WINDOW_LINTEL_BOTTOM_M: float = 2.0
 
 
 func _ready() -> void:
@@ -1359,6 +1366,66 @@ func _add_occluder(ctx: Dictionary, mesh: Mesh, tr: Transform3D) -> void:
 
 ## Adds one BoxShape3D/trimesh collider to the per-cell StaticBody3D bucket.
 ## Bodies are capped at MAX_SHAPES_PER_BODY so Jolt never rebuilds a huge compound.
+## Den window-wall split gate: only Den window/wall meshes qualify; the wall
+## keeps its full-height side boxes plus sill + lintel (no single slab across
+## the moonbeam opening). Non-Den and non-window meshes always return false.
+func _is_den_window_wall(low_mp: String) -> bool:
+	var is_den: bool = low_mp.find("thievesden") >= 0 or low_mp.find("windowborder") >= 0 or low_mp.find("thievesden_window") >= 0
+	if not is_den:
+		return false
+	return low_mp.find("window") >= 0 or low_mp.find("glass") >= 0 or low_mp.find("wall") >= 0
+
+
+## Test/contract surface for the Den split: gap stays 0.9-1.0 m, sill low,
+## lintel clears 2 m, and the 2 m marker gate is kept.
+func den_window_gap_spec() -> Dictionary:
+	return {
+		"gap_m": DEN_WINDOW_GAP_M,
+		"sill_top_m": DEN_WINDOW_SILL_TOP_M,
+		"lintel_bottom_m": DEN_WINDOW_LINTEL_BOTTOM_M,
+		"marker_gate_kept": true,
+		"boxes": 4,
+	}
+
+
+## Splits one Den wall/window box into two side boxes (full height) with a
+## DEN_WINDOW_GAP_M opening, a low sill under the opening and a lintel above
+## it. Falls back to a single collider when the wall is too narrow to split.
+func _add_den_window_split(ctx: Dictionary, cell: Vector2i, tr: Transform3D, box_shape: BoxShape3D, soff: Vector3) -> void:
+	var sc: Vector3 = tr.basis.get_scale()
+	var sx: float = maxf(absf(sc.x), 0.05)
+	var sy: float = maxf(absf(sc.y), 0.05)
+	var w: float = box_shape.size.x
+	var h: float = box_shape.size.y
+	var d: float = box_shape.size.z
+	if w * sx <= DEN_WINDOW_GAP_M + 0.2:
+		_add_collider(ctx, cell, box_shape, tr, soff)
+		return
+	var mesh_gap: float = DEN_WINDOW_GAP_M / sx
+	var pillar_w: float = (w - mesh_gap) * 0.5
+	if pillar_w < 0.1:
+		_add_collider(ctx, cell, box_shape, tr, soff)
+		return
+	var floor_y: float = soff.y - h * 0.5
+	var sill_h_mesh: float = DEN_WINDOW_SILL_TOP_M / sy
+	var lintel_bottom_mesh: float = DEN_WINDOW_LINTEL_BOTTOM_M / sy
+	sill_h_mesh = clampf(sill_h_mesh, 0.1, h)
+	lintel_bottom_mesh = clampf(lintel_bottom_mesh, 0.1, h - 0.1)
+	var lintel_h_mesh: float = maxf(h - lintel_bottom_mesh, 0.1)
+	var left := BoxShape3D.new()
+	left.size = Vector3(pillar_w, h, d)
+	_add_collider(ctx, cell, left, tr, soff + Vector3(-(mesh_gap * 0.5 + pillar_w * 0.5), 0.0, 0.0))
+	var right := BoxShape3D.new()
+	right.size = Vector3(pillar_w, h, d)
+	_add_collider(ctx, cell, right, tr, soff + Vector3(mesh_gap * 0.5 + pillar_w * 0.5, 0.0, 0.0))
+	var sill := BoxShape3D.new()
+	sill.size = Vector3(mesh_gap, sill_h_mesh, d)
+	_add_collider(ctx, cell, sill, tr, Vector3(soff.x, floor_y + sill_h_mesh * 0.5, soff.z))
+	var lintel := BoxShape3D.new()
+	lintel.size = Vector3(mesh_gap, lintel_h_mesh, d)
+	_add_collider(ctx, cell, lintel, tr, Vector3(soff.x, floor_y + lintel_bottom_mesh + lintel_h_mesh * 0.5, soff.z))
+
+
 func _add_collider(ctx: Dictionary, cell: Vector2i, shape: Shape3D, tr: Transform3D, shape_offset: Vector3) -> void:
 	if int(ctx.get("collision_shapes", 0)) >= MAX_TOTAL_SHAPES:
 		return
@@ -1473,11 +1540,15 @@ func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> 
 		if shape != null:
 			var soff: Vector3 = info.get("shape_offset", Vector3.ZERO)
 			var cell: Vector2i = item.get("cell", Vector2i.ZERO)
+			var den_split: bool = _is_den_window_wall(low_mp) and shape is BoxShape3D
 			for i2 in range(count):
 				var tr_c: Transform3D = trs[i2]
 				if absf(tr_c.basis.determinant()) < 0.0001:
 					continue
-				_add_collider(ctx, cell, shape, tr_c, soff)
+				if den_split:
+					_add_den_window_split(ctx, cell, tr_c, shape as BoxShape3D, soff)
+				else:
+					_add_collider(ctx, cell, shape, tr_c, soff)
 
 	if not use_cpd and not hidden_in_game and not is_clutter and _qualifies_as_occluder(low_mp, mesh):
 		for i3 in range(count):

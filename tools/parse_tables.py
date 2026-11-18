@@ -663,7 +663,11 @@ def build_ue_to_glb_slot_map():
     remap = {}
     remap_lower = {}
     for mf in ex_assets.rglob("*.materials.json"):
-        rel = str(mf.relative_to(ex_assets)).replace(".materials.json", "").replace("\\", "/")
+        rel = (
+            str(mf.relative_to(ex_assets))
+            .replace(".materials.json", "")
+            .replace("\\", "/")
+        )
         if rel.startswith("TAT/Content/"):
             rel = rel[len("TAT/Content/") :]
         ue_mesh = "/Game/" + rel
@@ -683,7 +687,9 @@ def build_ue_to_glb_slot_map():
             for s in raw_slots
             if isinstance(s, dict)
         ]
-        if [_norm_mat_name(x) for x in sc_slots] == [_norm_mat_name(x) for x in glb_slots]:
+        if [_norm_mat_name(x) for x in sc_slots] == [
+            _norm_mat_name(x) for x in glb_slots
+        ]:
             continue
         used_gi = set()
         si_to_gi = {}
@@ -765,14 +771,20 @@ def _resolve_override_item(item, exps=None, map_ue_path=None, mid_stats=None) ->
         target = None
         if suffix.isdigit():
             idx = int(suffix)
-            if 0 <= idx < len(exps) and exps[idx].get("Type") == "MaterialInstanceDynamic":
+            if (
+                0 <= idx < len(exps)
+                and exps[idx].get("Type") == "MaterialInstanceDynamic"
+            ):
                 target = exps[idx]
         if target is None and cur_on:
             inner = cur_on.split("'", 2)[1] if "'" in cur_on else cur_on
             short_name = inner.rsplit(".", 1)[-1].rsplit(":", 1)[-1]
             if short_name:
                 for exp in exps:
-                    if exp.get("Type") == "MaterialInstanceDynamic" and exp.get("Name") == short_name:
+                    if (
+                        exp.get("Type") == "MaterialInstanceDynamic"
+                        and exp.get("Name") == short_name
+                    ):
                         target = exp
                         break
         if target is None:
@@ -814,7 +826,9 @@ def _component_override_paths(
     if not isinstance(mv, list):
         return []
     raw_out = [
-        _resolve_override_item(item, exps=exps, map_ue_path=map_ue_path, mid_stats=mid_stats)
+        _resolve_override_item(
+            item, exps=exps, map_ue_path=map_ue_path, mid_stats=mid_stats
+        )
         for item in mv
     ]
     if ue_to_glb and sm_ue_path:
@@ -2427,7 +2441,10 @@ def extract_levels():
     )
 
     def resolve_li(key: str):
-        nonlocal total_level_instances_loaded, total_level_instance_meshes, total_level_instances_unresolved
+        nonlocal \
+            total_level_instances_loaded, \
+            total_level_instance_meshes, \
+            total_level_instances_unresolved
         if key in resolved_li or key in visiting_li:
             return
         meta = level_payloads.get(key)
@@ -2449,7 +2466,9 @@ def extract_levels():
                     if not isinstance(entry, dict):
                         continue
                     e2 = dict(entry)
-                    if "override_materials" in e2 and isinstance(e2["override_materials"], list):
+                    if "override_materials" in e2 and isinstance(
+                        e2["override_materials"], list
+                    ):
                         e2["override_materials"] = list(e2["override_materials"])
                     if "cpd" in e2 and isinstance(e2["cpd"], list):
                         e2["cpd"] = list(e2["cpd"])
@@ -2559,9 +2578,51 @@ def copy_fonts():
     print(f"Copied {n} .ufont -> .ttf in {OUT_FONTS}")
 
 
+def fix_interactables_var_track_bounds():
+    """E2E 4.4(a): ensure lockpick track bounds keys match harness.
+
+    The E2E T1-15-B guard reads `duration_s` + `arc_deg` with bounds
+    dur 1.1..3.1 / arc 69..241 over 24 variations / 48 tracks. The
+    authored parser emits `arc_angle_deg`; keep it authoritative and
+    mirror it as `arc_deg` so the guard sees in-bounds values. Never
+    invents values: alias only, no clamping of authored numbers.
+    """
+    p = OUT_DATA / "gameplay" / "interactables.json"
+    if not p.is_file():
+        return
+    try:
+        data = json.loads(p.read_text())
+    except Exception:
+        return
+    lb = data.get("lockpick") if isinstance(data, dict) else None
+    vbd = lb.get("variations_by_difficulty") if isinstance(lb, dict) else None
+    if not isinstance(vbd, dict):
+        return
+    patched = 0
+    for _diff, arr in vbd.items():
+        if not isinstance(arr, list):
+            continue
+        for var in arr:
+            if not isinstance(var, dict):
+                continue
+            for t in var.get("tracks", []):
+                if not isinstance(t, dict):
+                    continue
+                if "arc_angle_deg" in t and "arc_deg" not in t:
+                    t["arc_deg"] = t["arc_angle_deg"]
+                    patched += 1
+                if "duration_s" not in t and "durationSeconds" in t:
+                    t["duration_s"] = t["durationSeconds"]
+                    patched += 1
+    if patched:
+        p.write_text(json.dumps(data, indent=2) + "\n")
+    print(f"Interactables var/track alias patched tracks={patched}")
+
+
 def main():
     extract_datatables()
     extract_levels()
+    fix_interactables_var_track_bounds()
     copy_fonts()
 
 

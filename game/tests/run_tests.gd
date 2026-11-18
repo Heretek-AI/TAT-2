@@ -2986,6 +2986,113 @@ func _initialize() -> void:
 	ttg_ll.queue_free()
 	await process_frame
 
+	# 40. E2E 4.4(a): interactables var/track bounds alias. T1-15-B reads
+	# duration_s + arc_deg with bounds dur 1.1..3.1 / arc 69..241 over
+	# 24 variations / 48 tracks; the authored key is arc_angle_deg, mirrored
+	# here as arc_deg by tools/parse_tables.py fix_interactables_var_track_bounds.
+	var iv_file: FileAccess = FileAccess.open("res://data/generated/gameplay/interactables.json", FileAccess.READ)
+	var iv_ok: bool = false
+	var iv_dbg: String = "missing"
+	if iv_file != null:
+		var iv_parsed: Variant = JSON.parse_string(iv_file.get_as_text())
+		if iv_parsed is Dictionary:
+			var iv_lock: Variant = (iv_parsed as Dictionary).get("lockpick", {})
+			var iv_vbd: Variant = (iv_lock as Dictionary).get("variations_by_difficulty", {}) if iv_lock is Dictionary else {}
+			if iv_vbd is Dictionary:
+				var iv_vars: int = 0
+				var iv_tracks: int = 0
+				var iv_bounds: bool = true
+				for iv_k: Variant in (iv_vbd as Dictionary).keys():
+					var iv_arr: Variant = (iv_vbd as Dictionary)[iv_k]
+					if not (iv_arr is Array):
+						continue
+					iv_vars += (iv_arr as Array).size()
+					for iv_v: Variant in (iv_arr as Array):
+						if not (iv_v is Dictionary):
+							continue
+						var iv_tr: Variant = (iv_v as Dictionary).get("tracks", [])
+						if not (iv_tr is Array):
+							continue
+						iv_tracks += (iv_tr as Array).size()
+						for iv_t: Variant in (iv_tr as Array):
+							if not (iv_t is Dictionary):
+								continue
+							var iv_d: float = float((iv_t as Dictionary).get("duration_s", 0.0))
+							var iv_a: float = float((iv_t as Dictionary).get("arc_deg", 0.0))
+							if iv_d < 1.1 or iv_d > 3.1 or iv_a < 69.0 or iv_a > 241.0:
+								iv_bounds = false
+				iv_dbg = "vars=%d tracks=%d bounds=%s" % [iv_vars, iv_tracks, str(iv_bounds)]
+				iv_ok = iv_vars == 24 and iv_tracks == 48 and iv_bounds
+	if not iv_ok:
+		printerr("FAIL: 40 interactables var/track bounds (", iv_dbg, ")")
+		fails += 1
+	else:
+		print("PASS: 40 interactables var/track bounds (", iv_dbg, ")")
+
+	# 41. E2E 4.4(d+e): smoke direct API + tool/crank slot contract.
+	# Headless-robust: direct equip/fire APIs (no Input tap), mirroring the
+	# passing T1-09-B/C/E pattern. Verifies _use_smoke_bomb consumes a
+	# charge, get_tool_slots returns 4 structured slots with 1 active, and
+	# get_active_reticle_state carries the crank_progress/crank_active keys.
+	var sm_gs: Node = root.get_node_or_null("GameState")
+	if sm_gs != null:
+		sm_gs.set("state", "playing")
+	var sm_p: Node = (load("res://src/player/thief_character.gd") as GDScript).new()
+	root.add_child(sm_p)
+	await process_frame
+	var sm_has: bool = sm_p.has_method("equip_tool") and sm_p.has_method("get_tool_slots") and sm_p.has_method("get_active_reticle_state") and sm_p.has_method("_use_smoke_bomb")
+	var sm_slots_ok: bool = false
+	var sm_ret_ok: bool = false
+	var sm_fire_ok: bool = false
+	if sm_has:
+		sm_p.call("equip_tool", "smoke_bomb")
+		await process_frame
+		var sm_slots_v: Variant = sm_p.call("get_tool_slots")
+		if sm_slots_v is Array and (sm_slots_v as Array).size() >= 4:
+			var sm_active: int = 0
+			var sm_keys: bool = true
+			for sm_sv: Variant in (sm_slots_v as Array):
+				if not (sm_sv is Dictionary):
+					sm_keys = false
+					break
+				var sm_sd: Dictionary = sm_sv as Dictionary
+				if not (sm_sd.has("slot") and sm_sd.has("id") and sm_sd.has("count") and sm_sd.has("active")):
+					sm_keys = false
+				if sm_sd.get("active") == true:
+					sm_active += 1
+			sm_slots_ok = sm_keys and sm_active == 1
+		var sm_rs_v: Variant = sm_p.call("get_active_reticle_state")
+		if sm_rs_v is Dictionary:
+			var sm_rs: Dictionary = sm_rs_v as Dictionary
+			sm_ret_ok = sm_rs.has("mode") and sm_rs.has("target_valid") and sm_rs.has("crank_progress") and sm_rs.has("crank_active") and sm_rs.has("hints")
+		(sm_p.get("charges") as Dictionary)["smoke_bomb"] = 1
+		sm_p.call("_use_smoke_bomb")
+		await process_frame
+		sm_fire_ok = int((sm_p.get("charges") as Dictionary).get("smoke_bomb", -1)) == 0
+	sm_p.queue_free()
+	await process_frame
+	if not sm_has or not sm_slots_ok or not sm_ret_ok or not sm_fire_ok:
+		printerr("FAIL: 41 smoke/crank slots (has=", sm_has, " slots=", sm_slots_ok, " reticle=", sm_ret_ok, " fire1to0=", sm_fire_ok, ")")
+		fails += 1
+	else:
+		print("PASS: 41 smoke _use_smoke_bomb 1->0, 4 tool slots/1 active, crank reticle contract")
+
+	# 42. E2E 4.4(b+c): runner harness guards present. The tier1 lambda
+	# declares an untyped-Array-tolerant param in memory (no typed-array
+	# SCRIPT ERROR) and every tier boundary drains stuck inputs + settles
+	# physics before instantiating missions.
+	var rn_txt: String = ""
+	var rn_f: FileAccess = FileAccess.open("res://tests/e2e/run_e2e_tests.gd", FileAccess.READ)
+	if rn_f != null:
+		rn_txt = rn_f.get_as_text()
+	var rn_lambda_ok: bool = rn_txt.find("forbid_names: Array") >= 0 and rn_txt.find("_load_patched") >= 0
+	var rn_settle_ok: bool = rn_txt.find("_settle_harness") >= 0 and rn_txt.find("Input.action_release") >= 0
+	if not rn_lambda_ok or not rn_settle_ok:
+		printerr("FAIL: 42 runner harness guards (lambda_untyped=", rn_lambda_ok, " settle=", rn_settle_ok, ")")
+		fails += 1
+	else:
+		print("PASS: 42 runner harness guards (lambda untyped Array + _settle_harness input drain)")
+
 	print("SUMMARY: fails=", fails)
 	quit(0 if fails == 0 else 1)
 

@@ -2939,6 +2939,53 @@ func _initialize() -> void:
 	else:
 		print("PASS: 38 OldManor_P landscape assets (128 components, 101 heightmaps, 54 weightmaps, 0 missing, runtime build=1)")
 
+	# 39. Tiny-texture mip guard with visible skip accounting (TASK 4.2):
+	# icon-size sprites skip the mip chain and are recorded in
+	# skipped_tiny_textures/skipped_tiny_count (no silent hide);
+	# landscape/PBR textures keep full res + mipmaps.
+	var ttg_ll: Node = (load("res://src/core/level_loader.gd") as GDScript).new()
+	root.add_child(ttg_ll)
+	await process_frame
+	var ttg_tiny_ok: bool = bool(ttg_ll.call("_is_tiny_texture", 8, 8)) \
+		and bool(ttg_ll.call("_is_tiny_texture", 16, 64)) \
+		and not bool(ttg_ll.call("_is_tiny_texture", 32, 32)) \
+		and not bool(ttg_ll.call("_is_tiny_texture", 256, 256)) \
+		and not bool(ttg_ll.call("_is_tiny_texture", 1024, 512))
+	var ttg_tiny_path: String = "user://__tiny_guard_8x8.png"
+	var ttg_big_path: String = "user://__tiny_guard_256x256.png"
+	var ttg_img_small: Image = Image.create(8, 8, false, Image.FORMAT_RGBA8)
+	ttg_img_small.fill(Color(1, 0, 0, 1))
+	ttg_img_small.save_png(ttg_tiny_path)
+	var ttg_img_big: Image = Image.create(256, 256, false, Image.FORMAT_RGBA8)
+	ttg_img_big.fill(Color(0, 1, 0, 1))
+	ttg_img_big.save_png(ttg_big_path)
+	var ttg_tex_small: Texture2D = ttg_ll.call("_load_tex", ttg_tiny_path) as Texture2D
+	var ttg_tex_big: Texture2D = ttg_ll.call("_load_tex", ttg_big_path) as Texture2D
+	ttg_ll.call("_load_tex", ttg_tiny_path)
+	var ttg_skipped: Array = (ttg_ll.get("skipped_tiny_textures") as Array).duplicate()
+	var ttg_count: int = int(ttg_ll.get("skipped_tiny_count"))
+	var ttg_small_img: Image = ttg_tex_small.get_image() if ttg_tex_small != null else null
+	var ttg_big_img: Image = ttg_tex_big.get_image() if ttg_tex_big != null else null
+	var ttg_small_mips: bool = ttg_small_img.has_mipmaps() if ttg_small_img != null else true
+	var ttg_big_mips: bool = ttg_big_img.has_mipmaps() if ttg_big_img != null else false
+	var ttg_acct_ok: bool = ttg_tex_small != null and ttg_tex_big != null \
+		and ttg_skipped.has(ttg_tiny_path) and not ttg_skipped.has(ttg_big_path) \
+		and ttg_count == ttg_skipped.size() and ttg_count >= 1 \
+		and ttg_tex_small.get_width() == 8 and ttg_tex_small.get_height() == 8 \
+		and ttg_tex_big.get_width() == 256 and ttg_tex_big.get_height() == 256 \
+		and not ttg_small_mips and ttg_big_mips
+	if not ttg_tiny_ok or not ttg_acct_ok:
+		printerr("FAIL: 39 tiny-texture mip guard (thresholds=", ttg_tiny_ok, " acct=", ttg_acct_ok, " skipped=", ttg_skipped, " count=", ttg_count, " small_mips=", ttg_small_mips, " big_mips=", ttg_big_mips, ")")
+		fails += 1
+	else:
+		print("PASS: 39 tiny-texture mip guard (8x8 skipped, 256x256 keeps mips, skipped_tiny_count=", ttg_count, ")")
+	var ttg_udir: DirAccess = DirAccess.open("user://")
+	if ttg_udir != null:
+		ttg_udir.remove("__tiny_guard_8x8.png")
+		ttg_udir.remove("__tiny_guard_256x256.png")
+	ttg_ll.queue_free()
+	await process_frame
+
 	print("SUMMARY: fails=", fails)
 	quit(0 if fails == 0 else 1)
 

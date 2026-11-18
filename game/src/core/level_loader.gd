@@ -35,6 +35,16 @@ var _mesh_res_cache: Dictionary = {} # ue_path -> { "mesh": Mesh, "shape": Shape
 var _override_mesh_cache: Dictionary = {} # ue_path + "||" + ov_key -> Mesh
 var _emissive_cpd_mat: ShaderMaterial = null
 
+## TASK 4.2 tiny-texture mip guard: icon-size sprites (min dimension <32px,
+## i.e. below TINY_TEX_MIN_SIZE) skip the mip chain — a full mip chain on a <32px
+## wastes memory and can warn/error on some drivers. Landscape/PBR textures
+## (>= TINY_TEX_MIN_SIZE) always keep/generate mipmaps; no project-wide import
+## default is changed. Skips are visibly accounted in skipped_tiny_textures
+## (no silent hide); skipped_tiny_count mirrors the array size.
+const TINY_TEX_MIN_SIZE: int = 32
+var skipped_tiny_textures: Array[String] = []
+var skipped_tiny_count: int = 0
+
 # --- Spatial chunking & culling tuning (perf P1/P2/P4) ----------------------
 ## Repeated meshes are partitioned into CHUNK_SIZE x CHUNK_SIZE XZ cells so every
 ## MultiMeshInstance3D gets a tight AABB that Godot's frustum culler can reject.
@@ -157,6 +167,12 @@ func _load_material_dbs() -> void:
 				_mesh_mats_db_lower[str(k2).to_lower()] = _mesh_mats_db[k2]
 
 
+## TASK 4.2 helper: true when the mip chain must be skipped for an icon-size
+## sprite. Landscape/PBR textures return false and keep their mips.
+func _is_tiny_texture(w: int, h: int) -> bool:
+	return mini(w, h) < TINY_TEX_MIN_SIZE
+
+
 func _load_tex(res_path: String) -> Texture2D:
 	if res_path == "":
 		return null
@@ -170,6 +186,21 @@ func _load_tex(res_path: String) -> Texture2D:
 	if FileAccess.file_exists(res_path):
 		var img: Image = Image.load_from_file(ProjectSettings.globalize_path(res_path))
 		if img != null and not img.is_empty():
+			var tex_w: int = img.get_width()
+			var tex_h: int = img.get_height()
+			var tex_has_mips: bool = img.has_mipmaps()
+			if _is_tiny_texture(tex_w, tex_h):
+				if not skipped_tiny_textures.has(res_path):
+					skipped_tiny_textures.append(res_path)
+				skipped_tiny_count = skipped_tiny_textures.size()
+				push_warning("[level_loader] _load_tex skipped mip chain for tiny texture ", res_path, " size=", tex_w, "x", tex_h, " has_mipmaps=", tex_has_mips, " skipped_tiny_count=", skipped_tiny_count)
+				var itex_tiny: ImageTexture = ImageTexture.create_from_image(img)
+				if itex_tiny != null:
+					_tex_cache[res_path] = itex_tiny
+					return itex_tiny
+				return null
+			if not tex_has_mips:
+				img.generate_mipmaps()
 			var itex: ImageTexture = ImageTexture.create_from_image(img)
 			if itex != null:
 				_tex_cache[res_path] = itex

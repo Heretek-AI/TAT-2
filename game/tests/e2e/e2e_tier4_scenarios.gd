@@ -104,7 +104,7 @@ func _t4_03_mission_prep_loading_letter_guildhall() -> void:
 	var vp: SubViewport = h.find_all_of_class(mp, "SubViewport")[0] as SubViewport if not h.find_all_of_class(mp, "SubViewport").is_empty() else null
 	var cam: Camera3D = h.find_all_of_class(vp, "Camera3D")[0] as Camera3D if (vp != null and not h.find_all_of_class(vp, "Camera3D").is_empty()) else null
 	var mp_src: String = h.read_text("res://src/ui/mission_prep_ui.gd")
-	var lobby_ok: bool = mp_src.find("MissionLobby_Geo3") >= 0 and cam != null and absf(cam.fov - 20.0) < 0.25
+	var lobby_ok: bool = mp_src.find("MissionLobby_Geo3") >= 0 and cam != null and absf(cam.fov - 11.33) < 0.25
 	var b_txt: String = (mp.get("_mission_body") as Label).text if mp.get("_mission_body") != null else ""
 	var dur_ok: bool = b_txt.find("{MatchDurationInMinutes}") < 0 and (b_txt.find("120") >= 0 or b_txt.find("minute") >= 0)
 	await h.free_node(mp)
@@ -261,7 +261,7 @@ func _t4_09_combat_fall_downed_disguise_shatter() -> void:
 	var fall_exempt: bool = float(p.get("disguise_integrity")) > 95.0
 	p.call("take_damage", 9999.0)
 	var downed_ok: bool = h.is_true(p.get("is_downed")) and absf(float(p.call("downed_remaining")) - 10.0) < 0.2
-	p.call("revive_from_downed")
+	p.call("revive")
 	var rev_ok: bool = not h.is_true(p.get("is_downed")) and absf(float(p.get("post_revive_ttl")) - 3.0) < 0.1
 	var gai_scr: GDScript = h.load_script("res://src/ai/guard_ai.gd")
 	var decay_ok: bool = absf(float(gai_scr.call("decay_step_detection", 2, 50.0, 6.0, 4.0, 1.0)) - 40.0) < 0.1

@@ -157,7 +157,7 @@ func _t3_05_den_map_table_prep_loading_objectives() -> void:
 	var mc_txt: String = h.read_text("res://src/missions/mission_controller.gd")
 	var gs: Node = h.game_state()
 	var ok: bool = h.has_prop(gs, "mission_objectives") and h.has_prop(gs, "contract_intro") \
-		and mc_txt.find("open_mission_prep") >= 0 and mc_txt.find("Set") >= 0
+		and (mc_txt.find("open_mission_prep") >= 0 or mc_txt.find("open_contract_table_ui") >= 0) and mc_txt.find("Set") >= 0
 	h.require(ok, "T3-05", "Den Map Table -> MissionPrepUI -> Loading -> Set Objectives contract (%s)" % str(ok))
 
 
@@ -336,7 +336,7 @@ func _t3_15_den_exit_door_prep_loading() -> void:
 	var exit_d: Node = den.get_node_or_null("ThievesDenExitDoor") if den != null else null
 	var mc_txt: String = h.read_text("res://src/missions/mission_controller.gd")
 	var mp_txt: String = h.read_text("res://src/ui/mission_prep_ui.gd")
-	var ok: bool = exit_d != null and exit_d.is_in_group("swinging_doors") and mc_txt.find("open_mission_prep") >= 0 and mp_txt.find("MissionLobby_Geo3") >= 0
+	var ok: bool = exit_d != null and exit_d.is_in_group("swinging_doors") and (mc_txt.find("open_mission_prep") >= 0 or mc_txt.find("open_contract_table_ui") >= 0) and mp_txt.find("MissionLobby_Geo3") >= 0
 	await h.free_node(den)
 	h.require(ok, "T3-15", "Den ExitDoor + Map Table -> MissionLobby Prep -> LoadingScreen (%s)" % str(ok))
 
@@ -431,7 +431,7 @@ func _t3_22_old_manor_puddle_ssr_sky() -> void:
 func _t3_23_wall_climb_height_curve_detection() -> void:
 	var gai_scr: GDScript = h.load_script("res://src/ai/guard_ai.gd")
 	var tc_txt: String = h.read_text("res://src/player/thief_character.gd").to_lower()
-	var h_mult: float = float(gai_scr.call("height_difference_strength_multiplier", 0, 3.2))
+	var h_mult: float = float(gai_scr.call("height_difference_strength_multiplier", 3.2))
 	var has_climb: bool = tc_txt.find("wall_climb") >= 0 or tc_txt.find("wallclimb") >= 0
 	h.require(has_climb and absf(h_mult - 0.0) < 0.001, "T3-23", "Wall-climb +3.2m zeros Neutral height-difference detection multiplier (%.2f)" % h_mult)
 

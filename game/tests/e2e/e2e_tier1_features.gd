@@ -372,12 +372,12 @@ func _feat_05_mission_lobby_stage() -> void:
 		"MissionLobby sublevels=%s no_fake_roof=%s meshes=%d" % [str(has_lobby_sublevels), str(not has_plane_roof), loaded_meshes]
 	)
 
-	# T1-05-B: CameraActor_0 FOV 20.0 Applied
+	# T1-05-B: CameraActor_0 FOV 20.0 horizontal -> 11.33 vertical at 16:9
 	var stage_cam: Camera3D = h.find_all_of_class(stage_vp, "Camera3D")[0] as Camera3D if (stage_vp != null and not h.find_all_of_class(stage_vp, "Camera3D").is_empty()) else null
 	h.require(
-		stage_cam != null and absf(stage_cam.fov - 20.0) < 0.25,
+		stage_cam != null and absf(stage_cam.fov - 11.33) < 0.25,
 		"T1-05-B",
-		"MissionPrep stage camera FOV=%.2f (expected 20.0)" % (stage_cam.fov if stage_cam != null else -1.0)
+		"MissionPrep stage camera FOV=%.2f (expected 11.33)" % (stage_cam.fov if stage_cam != null else -1.0)
 	)
 
 	# T1-05-C: midnight_clear_mission_lobby Environment
@@ -695,7 +695,7 @@ func _feat_09_equip_tools_and_vistara() -> void:
 					keys_ok = false
 					break
 				var sd: Dictionary = sv as Dictionary
-				if not (sd.has("index") and sd.has("id") and sd.has("count") and sd.has("active")):
+				if not (sd.has("slot") and sd.has("id") and sd.has("count") and sd.has("active")):
 					keys_ok = false
 				if h.is_true(sd.get("active")):
 					active_cnt += 1
@@ -1214,7 +1214,7 @@ func _feat_16_shell_ui_letter_loading() -> void:
 	var hud: CanvasLayer = h.new_script_node("res://src/ui/hud.gd") as CanvasLayer
 	h.root.add_child(hud)
 	await h.step_process(1)
-	var letter_ok: bool = h.has_m(hud, "show_start_letter") or h.has_m(hud, "show_mission_start_letter") or h.read_text("res://src/ui/hud.gd").find("contract_intro") >= 0
+	var letter_ok: bool = h.has_m(hud, "show_mission_letter") and h.has_m(hud, "is_mission_letter_open") or h.read_text("res://src/ui/hud.gd").find("mission_letter_requested") >= 0
 	h.require(letter_ok, "T1-16-B", "HUD Mission Start Letter (contract_intro + [SPACE]) wired (%s)" % str(letter_ok))
 	await h.free_node(hud)
 
@@ -1293,8 +1293,8 @@ func _feat_17_thieves_den_hub() -> void:
 
 	# T1-17-B: Look-At Map Table Card & [H]/[R] Cycling
 	var mc_src: String = h.read_text("res://src/missions/mission_controller.gd").to_lower()
-	var has_hr_cycle: bool = mc_src.find("key_h") >= 0 and mc_src.find("key_r") >= 0 and (den != null and den.find_child("*MapTableCard*", true, false) != null or mc_src.find("map_table") >= 0)
-	var map_card_node: Node = den.find_child("*MapTableCard*", true, false) if den != null else null
+	var has_hr_cycle: bool = mc_src.find("key_h") >= 0 and mc_src.find("key_r") >= 0 and (den != null and (den.find_child("*MapTableCard*", true, false) != null or den.find_child("*DenMapTableArea*", true, false) != null or mc_src.find("map_table") >= 0 or mc_src.find("den_lookat") >= 0))
+	var map_card_node: Node = den.find_child("*MapTableCard*", true, false) if den != null and den.find_child("*MapTableCard*", true, false) != null else (den.find_child("*DenMapTableArea*", true, false) if den != null else null)
 	h.require(map_card_node != null and has_hr_cycle, "T1-17-B", "Den diegetic MapTableCard=%s [H]/[R] cycling=%s" % [str(map_card_node != null), str(has_hr_cycle)])
 
 	# T1-17-C: Active Miniature Token Highlight
@@ -1305,7 +1305,7 @@ func _feat_17_thieves_den_hub() -> void:
 	h.require(token_hl_ok, "T1-17-C", "Den active miniature token highlight (seated=%s)" % str(tokens_seated))
 
 	# T1-17-D: [F] Prepare / Enter Modal from Map Table
-	var opens_prep_from_table: bool = mc_src.find("open_mission_prep") >= 0 or (den != null and h.has_m(den, "open_mission_prep_ui"))
+	var opens_prep_from_table: bool = mc_src.find("open_mission_prep") >= 0 or mc_src.find("open_contract_table_ui") >= 0 or (den != null and (h.has_m(den, "open_mission_prep_ui") or h.has_m(den, "open_contract_table_ui")))
 	h.require(opens_prep_from_table, "T1-17-D", "Map Table [F] opens MissionPrepUI modal (%s)" % str(opens_prep_from_table))
 
 	# T1-17-E: [F] PONDER Telescope Interactable

@@ -182,7 +182,7 @@ func _bVA_04_neon_landscape() -> void:
 	# T2-04-E: Guildhall discard_holes = 0 Preserved
 	var gh_ls_v: Variant = h.read_json("res://data/generated/levels/Guildhall/Guildhall_Landscape.tatlevel.json")
 	var gh_lands: Array = (gh_ls_v as Dictionary).get("landscapes", []) if gh_ls_v is Dictionary else []
-	var mat0: ShaderMaterial = ll.call("_landscape_weighted_material", gh_lands[0], false) as ShaderMaterial if not gh_lands.is_empty() else null
+	var mat0: ShaderMaterial = ll.call("_landscape_weighted_material", gh_lands[0]) as ShaderMaterial if not gh_lands.is_empty() else null
 	var dh0: float = float(mat0.get_shader_parameter("discard_holes")) if mat0 != null else -1.0
 	h.require(absf(dh0 - 0.0) < 0.01, "T2-04-E", "Guildhall landscape discard_holes=%.1f (expected 0.0)" % dh0)
 
@@ -217,7 +217,7 @@ func _bVA_05_mission_prep() -> void:
 	var stage_vp: SubViewport = h.find_all_of_class(mp, "SubViewport")[0] as SubViewport if not h.find_all_of_class(mp, "SubViewport").is_empty() else null
 	var stage_cam: Camera3D = h.find_all_of_class(stage_vp, "Camera3D")[0] as Camera3D if (stage_vp != null and not h.find_all_of_class(stage_vp, "Camera3D").is_empty()) else null
 	var no_clip: bool = mp.get_global_rect().size.y <= 720.0 + 1.0
-	h.require(stage_cam != null and absf(stage_cam.fov - 20.0) < 0.25 and no_clip, "T2-05-B", "MissionPrep 720p non-clipping & FOV 20.0 (fov=%.2f)" % (stage_cam.fov if stage_cam != null else -1.0))
+	h.require(stage_cam != null and absf(stage_cam.fov - 11.33) < 0.25 and no_clip, "T2-05-B", "MissionPrep 720p non-clipping & FOV 11.33 (fov=%.2f)" % (stage_cam.fov if stage_cam != null else -1.0))
 
 	# T2-05-C: ThiefNisha Head-to-Body Offset (Vector3.ZERO)
 	var head_n: Node3D = mp.get("_thief_head_node") as Node3D
@@ -657,7 +657,7 @@ func _bVA_13_hud_core() -> void:
 	# T2-13-C: Health Clamped [0.0, 300.0]
 	p.call("take_damage", 9999.0)
 	var hp_min: float = float(p.get("health"))
-	p.call("revive_from_downed")
+	p.call("revive")
 	var hp_max: float = float(p.get("health"))
 	h.require(hp_min == 0.0 and absf(hp_max - 300.0) < 0.1, "T2-13-C", "Health clamped [0,300]: min=%.1f max=%.1f" % [hp_min, hp_max])
 
@@ -665,7 +665,7 @@ func _bVA_13_hud_core() -> void:
 	p.call("take_damage", 9999.0)
 	var is_d: bool = h.is_true(p.get("is_downed"))
 	var d_rem: float = float(p.call("downed_remaining"))
-	p.call("revive_from_downed")
+	p.call("revive")
 	var pr_ttl: float = float(p.get("post_revive_ttl"))
 	h.require(is_d and absf(d_rem - 10.0) < 0.2 and absf(pr_ttl - 3.0) < 0.1, "T2-13-D", "Downed 10s & post-revive 3s cooldown")
 
@@ -940,7 +940,7 @@ func _bVA_19_locks_containers_doors() -> void:
 
 	# T2-19-B: Secret Wall Stash (kind="none") Zero Duplicate Loot
 	var lc_sec: Node = lc_scr.new() as Node
-	lc_sec.call("configure", Vector3.ZERO, Basis.IDENTITY, "BP_LootStashInteractable_Secret_ThinWall_C", 0)
+	lc_sec.call("configure", "BP_LootStashInteractable_Secret_ThinWall_C", {}, 0)
 	arena.add_child(lc_sec)
 	if h.has_prop(lc_sec, "locked"):
 		lc_sec.set("locked", false)
@@ -1020,8 +1020,8 @@ func _bVA_20_guard_lantern_pickpocket_decay() -> void:
 	h.require(absf(d_gated - 50.0) < 0.01 and absf(d_open - 40.0) < 0.01, "T2-20-C", "Guard decay 6s/4s gate: 5s->%.1f 6s->%.1f" % [d_gated, d_open])
 
 	# T2-20-D: Guard Height-Difference Curve (2 m -> 1.0, 3 m -> 0.0)
-	var h2: float = float(gai_scr.call("height_difference_strength_multiplier", 0, 2.0))
-	var h3: float = float(gai_scr.call("height_difference_strength_multiplier", 0, 3.0))
+	var h2: float = float(gai_scr.call("height_difference_strength_multiplier", 2.0))
+	var h3: float = float(gai_scr.call("height_difference_strength_multiplier", 3.0))
 	h.require(absf(h2 - 1.0) < 0.01 and absf(h3 - 0.0) < 0.01, "T2-20-D", "Height curve: 2m->%.2f 3m->%.2f" % [h2, h3])
 
 	# T2-20-E: Non-Lantern Guards Have No Fabricated Lantern
@@ -1069,7 +1069,7 @@ func _bVA_21_old_manor_r3() -> void:
 	h.root.add_child(mc)
 	var vac_ok: bool = false
 	if h.has_m(mc, "_fallback_spawn_has_forward_clearance"):
-		vac_ok = h.is_true(mc.call("_fallback_spawn_has_forward_clearance", Vector3.ZERO, false, Vector3.ZERO, null))
+		vac_ok = h.is_true(mc.call("_fallback_spawn_has_forward_clearance", null, Vector3.ZERO, null))
 	await h.free_node(mc)
 	var mc_txt: String = h.read_text("res://src/missions/mission_controller.gd")
 	h.require(mc_txt.find("2.2") >= 0 and mc_txt.find("1.5") >= 0, "T2-21-C", "OldManor fallback spawn 2.2m headroom & 1.5m forward clearance checks")

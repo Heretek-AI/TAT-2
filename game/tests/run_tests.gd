@@ -2824,6 +2824,53 @@ func _initialize() -> void:
 	retune_light.queue_free()
 	await process_frame
 
+	# 37. Startscreen neon: authored HDR "Color" tints on untextured materials
+	# must drive a linear HDR unshaded pass, not a clamped/sRGB-converted
+	# StandardMaterial3D colour (MI_Neon authored 50/4.109/0.521 previously
+	# rendered as a saturated red diffuse blob).
+	var neon_ll: Node = (load("res://src/core/level_loader.gd") as GDScript).new()
+	root.add_child(neon_ll)
+	await process_frame
+	var neon_mat: ShaderMaterial = neon_ll.call("get_material_for_ue", "/Game/Art/Environment/City/Architecture/BeautifulCorner/MI_Neon") as ShaderMaterial
+	var neon_again: Material = neon_ll.call("get_material_for_ue", "/Game/Art/Environment/City/Architecture/BeautifulCorner/MI_Neon") as Material
+	var neon_mac: ShaderMaterial = neon_ll.call("get_material_for_ue", "/Game/Art/Environment/City/Architecture/BeautifulCorner/MI_Neon_MacNeish") as ShaderMaterial
+	var neon_head: StandardMaterial3D = neon_ll.call("get_material_for_ue", "/Game/Art/Character/ThiefNisha/Base/MI_ThiefNisha_Head") as StandardMaterial3D
+	var neon_knife: StandardMaterial3D = neon_ll.call("get_material_for_ue", "/Game/Art/Gameplay/Loot/LootMinor/JeweledKnife/MI_JeweledKnife") as StandardMaterial3D
+	var neon_cat: StandardMaterial3D = neon_ll.call("get_material_for_ue", "/Game/Art/Gameplay/Loot/LootMajor/StatueCat/MI_CatStatueA") as StandardMaterial3D
+	var neon_beam: StandardMaterial3D = neon_ll.call("get_material_for_ue", "/Game/Gameplay/Traps/Detectors/LightBeam/MI_LightBeam_SM") as StandardMaterial3D
+	var neon_col_v: Variant = neon_mat.get_shader_parameter("hdr_color") if neon_mat != null else null
+	var neon_col: Vector3 = neon_col_v if neon_col_v is Vector3 else Vector3.ZERO
+	var neon_mac_col_v: Variant = neon_mac.get_shader_parameter("hdr_color") if neon_mac != null else null
+	var neon_mac_col: Vector3 = neon_mac_col_v if neon_mac_col_v is Vector3 else Vector3.ZERO
+	var neon_scale: float = float(neon_mat.get_shader_parameter("hdr_scale")) if neon_mat != null else -1.0
+	var neon_mac_scale: float = float(neon_mac.get_shader_parameter("hdr_scale")) if neon_mac != null else -1.0
+	var neon_mesh_info: Dictionary = neon_ll.call("_get_mesh_and_shape", "/Game/Art/Environment/City/Architecture/BeautifulCorner/SM_NeonB")
+	var neon_mesh: Mesh = neon_mesh_info.get("mesh") as Mesh
+	var neon_bound: Material = neon_mesh.surface_get_material(0) if neon_mesh != null and neon_mesh.get_surface_count() > 0 else null
+	var neon_ok: bool = neon_mat != null and neon_mat.shader != null \
+		and neon_mat.shader.resource_path.ends_with("tat_hdr_emissive.gdshader") \
+		and neon_col.is_equal_approx(Vector3(50.0, 4.109, 0.521)) \
+		and absf(neon_scale - 0.08) < 0.001 \
+		and neon_again == neon_mat \
+		and neon_bound == neon_mat
+	var neon_mac_ok: bool = neon_mac != null and neon_mac.shader != null \
+		and neon_mac.shader.resource_path.ends_with("tat_hdr_emissive.gdshader") \
+		and neon_mac_col.is_equal_approx(Vector3(1.5, 0.055, 1.234)) \
+		and absf(neon_mac_scale - 1.0) < 0.001
+	var neon_head_ok: bool = neon_head != null and neon_head.albedo_texture != null \
+		and (not neon_head.emission_enabled or neon_head.emission.r <= 1.0)
+	var neon_knife_ok: bool = neon_knife != null and neon_knife.albedo_texture != null \
+		and neon_knife.albedo_color.r > 1.0
+	var neon_cat_ok: bool = neon_cat != null and neon_cat.albedo_texture != null and neon_cat.albedo_color.r > 1.0
+	var neon_beam_ok: bool = neon_beam != null and neon_beam.albedo_texture != null and neon_beam.cull_mode == BaseMaterial3D.CULL_DISABLED
+	if not neon_ok or not neon_mac_ok or not neon_head_ok or not neon_knife_ok or not neon_cat_ok or not neon_beam_ok:
+		printerr("FAIL: 37 neon HDR shader (neon=", neon_ok, " mac=", neon_mac_ok, " head_tex_control=", neon_head_ok, " hdr_tex_control=", neon_knife_ok, " hdr_tex_cat=", neon_cat_ok, " two_sided_beam=", neon_beam_ok, ")")
+		fails += 1
+	else:
+		print("PASS: 37 startscreen neon HDR shader (MI_Neon ", neon_col, " x", snappedf(neon_scale, 0.001), ", MI_Neon_MacNeish ", neon_mac_col, " x", snappedf(neon_mac_scale, 0.001), ")")
+	neon_ll.queue_free()
+	await process_frame
+
 	print("SUMMARY: fails=", fails)
 	quit(0 if fails == 0 else 1)
 

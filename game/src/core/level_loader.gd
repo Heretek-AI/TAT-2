@@ -9,6 +9,7 @@ const MobileProfile: GDScript = preload("res://src/core/mobile_profile.gd")
 const LANDSCAPE_SHADER: Shader = preload("res://src/core/tat_landscape.gdshader")
 const EMISSIVE_CPD_SHADER: Shader = preload("res://src/core/tat_emissive_cpd.gdshader")
 const GLASS_SHADER: Shader = preload("res://src/core/tat_glass.gdshader")
+const HDR_EMISSIVE_SHADER: Shader = preload("res://src/core/tat_hdr_emissive.gdshader")
 
 ## Landscape layer name -> extracted albedo texture. Missing layers are skipped
 ## (the shader normalizes the remaining weights) instead of binding a guessed
@@ -401,7 +402,30 @@ func get_material_for_ue(ue_mat_path: String) -> Material:
 		mat.metallic_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_BLUE
 	var tint: Variant = info.get("tint")
 	if tint is Array and tint.size() >= 3:
-		mat.albedo_color = Color(float(tint[0]), float(tint[1]), float(tint[2]), 1.0)
+		var tint_col: Color = Color(float(tint[0]), float(tint[1]), float(tint[2]), 1.0)
+		var tint_hdr: bool = maxf(tint_col.r, maxf(tint_col.g, tint_col.b)) > 1.0
+		var tint_vectors: Dictionary = info.get("vectors", {})
+		var plain_hdr_tint: bool = tint_hdr and alb == null and texs.is_empty() \
+			and render_early.get("two_sided", false) != true \
+			and not (tint_vectors.has("Overlay") or tint_vectors.has("Multiply") or tint_vectors.has("Desaturation"))
+		if plain_hdr_tint:
+			# Authored UE HDR "Color" on an untextured emissive material
+			# (MI_Neon): StandardMaterial3D colour parameters are sRGB-
+			# converted and diffuse albedo clamps at 1.0, which collapsed the
+			# authored orange-gold (50, 4.109, 0.521) into a saturated red
+			# blob. Carry the authored linear values through an unshaded HDR
+			# pass instead. Scale the brightest channel to 4.0 so the authored
+			# hue survives ACES and the tube core stays orange-gold with a
+			# modest halo (2.5 measured dimmer than the UE reference); scaling
+			# preserves the authored ratio.
+			var hdr_peak: float = maxf(tint_col.r, maxf(tint_col.g, tint_col.b))
+			var hdr_mat: ShaderMaterial = ShaderMaterial.new()
+			hdr_mat.shader = HDR_EMISSIVE_SHADER
+			hdr_mat.set_shader_parameter("hdr_color", Vector3(tint_col.r, tint_col.g, tint_col.b))
+			hdr_mat.set_shader_parameter("hdr_scale", clampf(4.0 / hdr_peak, 0.02, 1.0))
+			_std_mat_cache[ue_mat_path] = hdr_mat
+			return hdr_mat
+		mat.albedo_color = tint_col
 	var vectors_raw: Dictionary = info.get("vectors", {})
 	if vectors_raw.has("Overlay") or vectors_raw.has("Multiply") or vectors_raw.has("Desaturation"):
 		var vc: Color = mat.albedo_color

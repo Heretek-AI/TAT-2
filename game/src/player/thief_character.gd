@@ -33,7 +33,8 @@ const LEAN_WALL_CHECK_DIST: float = 0.6
 # game/data/generated/gameplay/*.json "sources"). Curve-table overrides via
 # GameData.eval_curve are kept only for rows the real data defines.
 const AIR_CONTROL: float = 0.5 # TATCharacterMovement CharMoveComp.AirControl
-const FLOOR_MAX_ANGLE_DEG: float = 60.0 # CharMoveComp.WalkableFloorAngle
+const FLOOR_MAX_ANGLE_DEG: float = 50.0 # CharMoveComp.WalkableFloorAngle 60.0 retuned to 50.0 for stair stick (no mantle)
+const FLOOR_SNAP_LENGTH: float = 0.3 # stairs snap fix: 0.25-0.3 window keeps body grounded on 0.18-0.2 m risers
 const INTERACT_RANGE: float = 1.75 # TATInteractionTargeterComponent.MaxInteractionRange 175cm
 const CAMERA_FOV: float = 85.0 # OSECameraComponent.FirstPersonFieldOfView
 const CAMERA_FOV_SPRINT: float = 89.0 # retained velocity-feedback shape rebased on 85
@@ -423,6 +424,9 @@ func _build_body() -> void:
 	col_shape.position = Vector3(0, 0.89, 0)
 	add_child(col_shape)
 	floor_max_angle = deg_to_rad(FLOOR_MAX_ANGLE_DEG)
+	floor_snap_length = FLOOR_SNAP_LENGTH
+	floor_block_on_wall = true
+	floor_constant_speed = true
 
 	mesh_root = Node3D.new()
 	add_child(mesh_root)

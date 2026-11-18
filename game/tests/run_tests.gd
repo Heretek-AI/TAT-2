@@ -3178,6 +3178,102 @@ func _initialize() -> void:
 	else:
 		print("PASS: 44 triage locks (outline/reticle/lockpick/arms/vm/loco/crank/toggle/lantern/steal/stealth/visreg)")
 
+	# 45. Stairs snap fix: 50 deg max angle + 0.25-0.3 snap, wall-block/constant-speed kept, no new mantle.
+	var stair_scr: GDScript = load("res://src/player/thief_character.gd") as GDScript
+	var ss_thief: CharacterBody3D = stair_scr.new() as CharacterBody3D
+	ss_thief.set_physics_process(false)
+	root.add_child(ss_thief)
+	await process_frame
+	await physics_frame
+	var ss_consts: Dictionary = stair_scr.get_script_constant_map()
+	var ss_angle_const: float = float(ss_consts.get("FLOOR_MAX_ANGLE_DEG", -1.0))
+	var ss_snap_const: float = float(ss_consts.get("FLOOR_SNAP_LENGTH", -1.0))
+	var ss_mantle_const: float = float(ss_consts.get("MANTLE_MAX_HEIGHT_M", -1.0))
+	var ss_angle_ok: bool = is_equal_approx(ss_angle_const, 50.0) and is_equal_approx(rad_to_deg(ss_thief.floor_max_angle), 50.0)
+	var ss_snap_ok: bool = ss_snap_const >= 0.25 and ss_snap_const <= 0.300001 and ss_thief.floor_snap_length >= 0.249999 and ss_thief.floor_snap_length <= 0.300001 and is_equal_approx(ss_thief.floor_snap_length, ss_snap_const)
+	var ss_flags_ok: bool = ss_thief.floor_block_on_wall == true and ss_thief.floor_constant_speed == true
+	var ss_mantle_ok: bool = is_equal_approx(ss_mantle_const, 4.0)
+	var ss_txt: String = ""
+	var ss_f: FileAccess = FileAccess.open("res://src/player/thief_character.gd", FileAccess.READ)
+	if ss_f != null:
+		ss_txt = ss_f.get_as_text()
+	var ss_no_mantle_ok: bool = ss_txt.find("stair_mantle") < 0 and ss_txt.find("STAIR_MANTLE") < 0
+	var ss_stair_deg: float = rad_to_deg(atan2(0.18, 0.28))
+	var ss_stair_ok: bool = ss_stair_deg < ss_angle_const and ss_snap_const >= 0.2
+	var ss_base := Vector3(50, 0, 50)
+	var ss_slope35 := StaticBody3D.new()
+	ss_slope35.position = ss_base + Vector3(0, -0.1, 0)
+	ss_slope35.rotation.x = deg_to_rad(35.0)
+	var ss_cs35 := CollisionShape3D.new()
+	var ss_box35 := BoxShape3D.new()
+	ss_box35.size = Vector3(10, 0.2, 10)
+	ss_cs35.shape = ss_box35
+	ss_slope35.add_child(ss_cs35)
+	root.add_child(ss_slope35)
+	var ss_b35 := CharacterBody3D.new()
+	var ss_cap35 := CollisionShape3D.new()
+	var ss_sh35 := CapsuleShape3D.new()
+	ss_sh35.radius = 0.32
+	ss_sh35.height = 1.78
+	ss_cap35.shape = ss_sh35
+	ss_cap35.position = Vector3(0, 0.89, 0)
+	ss_b35.add_child(ss_cap35)
+	root.add_child(ss_b35)
+	ss_b35.floor_max_angle = ss_thief.floor_max_angle
+	ss_b35.floor_snap_length = ss_thief.floor_snap_length
+	ss_b35.floor_block_on_wall = true
+	ss_b35.floor_constant_speed = true
+	ss_b35.position = ss_base + Vector3(0, 2.0, 0)
+	for ss_i in range(60):
+		await physics_frame
+		ss_b35.velocity = Vector3(0, -5.0, 0)
+		ss_b35.move_and_slide()
+	var ss_walk_ok: bool = ss_b35.is_on_floor()
+	var ss_y35: float = ss_b35.global_position.y
+	ss_b35.queue_free()
+	ss_slope35.queue_free()
+	await physics_frame
+	var ss_slope55 := StaticBody3D.new()
+	ss_slope55.position = ss_base + Vector3(0, -0.1, 0)
+	ss_slope55.rotation.x = deg_to_rad(55.0)
+	var ss_cs55 := CollisionShape3D.new()
+	var ss_box55 := BoxShape3D.new()
+	ss_box55.size = Vector3(10, 0.2, 10)
+	ss_cs55.shape = ss_box55
+	ss_slope55.add_child(ss_cs55)
+	root.add_child(ss_slope55)
+	var ss_b55 := CharacterBody3D.new()
+	var ss_cap55 := CollisionShape3D.new()
+	var ss_sh55 := CapsuleShape3D.new()
+	ss_sh55.radius = 0.32
+	ss_sh55.height = 1.78
+	ss_cap55.shape = ss_sh55
+	ss_cap55.position = Vector3(0, 0.89, 0)
+	ss_b55.add_child(ss_cap55)
+	root.add_child(ss_b55)
+	ss_b55.floor_max_angle = ss_thief.floor_max_angle
+	ss_b55.floor_snap_length = ss_thief.floor_snap_length
+	ss_b55.floor_block_on_wall = true
+	ss_b55.floor_constant_speed = true
+	ss_b55.position = ss_base + Vector3(0, 2.0, 0)
+	for ss_j in range(60):
+		await physics_frame
+		ss_b55.velocity = Vector3(0, -5.0, 0)
+		ss_b55.move_and_slide()
+	var ss_steep_ok: bool = not ss_b55.is_on_floor()
+	var ss_y55: float = ss_b55.global_position.y
+	var ss_live_deg: float = rad_to_deg(ss_thief.floor_max_angle)
+	var ss_live_snap: float = ss_thief.floor_snap_length
+	ss_b55.queue_free()
+	ss_slope55.queue_free()
+	ss_thief.queue_free()
+	await physics_frame
+	if not ss_angle_ok or not ss_snap_ok or not ss_flags_ok or not ss_mantle_ok or not ss_no_mantle_ok or not ss_stair_ok or not ss_walk_ok or not ss_steep_ok:
+		printerr("FAIL: 45 stairs snap (angle_const=", ss_angle_const, " live_deg=", ss_live_deg, " snap_const=", ss_snap_const, " live_snap=", ss_live_snap, " flags=", ss_flags_ok, " mantle4=", ss_mantle_ok, " no_new_mantle=", ss_no_mantle_ok, " stair_deg=", ss_stair_deg, " walk35=", ss_walk_ok, " y35=", ss_y35, " steep55_blocked=", ss_steep_ok, " y55=", ss_y55, ")")
+		fails += 1
+	else:
+		print("PASS: 45 stairs snap (max_angle 50 deg, snap ", ss_snap_const, " m, wall-block/constant-speed kept, stair slope ", snappedf(ss_stair_deg, 0.1), " deg walkable, 55 deg blocked, no new mantle)")
+
 	print("SUMMARY: fails=", fails)
 	quit(0 if fails == 0 else 1)
 

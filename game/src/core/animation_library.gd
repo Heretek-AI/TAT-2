@@ -74,6 +74,40 @@ const FP_CLIPS := {
 	"crouch": "AN_Crouch_F_1P",
 }
 const FP_ORDER: Array[String] = ["walk", "sprint", "crouch"]
+# Verified 1P tool, idle, crank, action, and disguise clips (all 70/70 `_1p`
+# bones in SK_ThiefNisha__BodyUpper.glb; loaded lazily via ensure_fp_clip).
+const FP_TOOL_CLIPS := {
+	"zipwire_idle": {"clip": "AN_ThiefNisha_Zipwire_StandIdle", "loop": true},
+	"zipwire_crouch_idle": {"clip": "AN_ThiefNisha_Zipwire_Crouch_Idle", "loop": true},
+	"zipwire_walk": {"clip": "AN_Zipwire_Walk_F_1P", "loop": true},
+	"zipwire_sprint": {"clip": "AN_Zipwire_Run_F_1P", "loop": true},
+	"zipwire_crank": {"clip": "AN_ThiefNisha_Zipwire__Reload_Loop", "loop": true},
+	"zipwire_cast": {"clip": "AN_ThiefNisha_Zipwire__Cast", "loop": false},
+	"zipwire_travel": {"clip": "AN_Zipwire_Travel_1P", "loop": true},
+	"blackjack_idle": {"clip": "AN_BlackJack__StandIdle", "loop": true},
+	"blackjack_crouch_idle": {"clip": "AN_BlackJack_CrouchIdle", "loop": true},
+	"blackjack_walk": {"clip": "AN_BlackJack_Walk_F", "loop": true},
+	"blackjack_swing": {"clip": "AN_BlackJack_Attack_Light__Slash_R_01", "loop": false},
+	"smoke_idle": {"clip": "AN_SmokeBomb__Idle", "loop": true},
+	"smoke_crouch_idle": {"clip": "AN_SmokeBomb_Loco_CrouchIdle", "loop": true},
+	"smoke_walk": {"clip": "AN_SmokeBomb_Loco_Walk_F", "loop": true},
+	"smoke_throw": {"clip": "AN_SmokeBomb__Throw", "loop": false},
+	"slithersap_idle": {"clip": "AN_Gear_Generic_InHand_R_Idle", "loop": true},
+	"slithersap_crouch_idle": {"clip": "AN_Gear_Generic_InHand_R_CrouchIdle", "loop": true},
+	"slithersap_throw": {"clip": "AN_Slime_Throw", "loop": false},
+	"fairy_idle": {"clip": "AN_Pickpocket_StandIdle", "loop": true},
+	"fairy_crouch_idle": {"clip": "AN_Pickpocket_CrouchIdle", "loop": true},
+	"fairy_deploy": {"clip": "AN_Pickpocket_Deploy", "loop": false},
+	"vistara_idle": {"clip": "AN_VistaraDiamond_StandIdle", "loop": true},
+	"vistara_crouch_idle": {"clip": "AN_VistaraDiamond_CrouchIdle", "loop": true},
+	"vistara_equip": {"clip": "AN_VistaraDiamond_Equip", "loop": false},
+	"disguise_walk": {"clip": "AN_Disguise_Walk_F_1P", "loop": true},
+	"disguise_sprint": {"clip": "AN_Disguise_Sprint_1P", "loop": true},
+	"disguise_crouch": {"clip": "AN_Disguise_Crouch_F_1P", "loop": true},
+	"disguise_crouch_idle": {"clip": "AN_Disguise_Crouch_Idle_1P", "loop": true},
+	"disguise_apply": {"clip": "AN_Disguise_ApplySelf", "loop": false},
+	"unarmed_idle": {"clip": "AN_ThiefNisha_Unarmed_StandIdle", "loop": true},
+}
 # All three FP clips are in-place locomotion (scripted velocity drives
 # displacement), so `root` translation is always stripped; all loop.
 const FP_BLEND: float = 0.2
@@ -326,9 +360,10 @@ func _resolve_clip(role: String, table: Dictionary) -> String:
 ## Builds the real-clip AnimationPlayer for the ThiefNisha 1P viewmodel,
 ## mirroring build_player but with the explicit FP_CLIPS table (no guard
 ## regex fallback, root translation always stripped, all clips looped).
+## Uses similarity retargeting (use_similarity=true) so +90 deg X rest-frame
+## differences between mesh and anim GLBs are properly rotated.
 ## Returns null when nothing retargeted so the caller keeps its procedural
-## fallback. Reuses the same bone-name / rest-delta / unit-factor retarget
-## as the guard path via _retarget_general.
+## fallback.
 func build_fp_player(skeleton: Skeleton3D, skeleton_parent: Node, player_host: Node) -> AnimationPlayer:
 	applied.clear()
 	anim_lengths.clear()
@@ -348,7 +383,7 @@ func build_fp_player(skeleton: Skeleton3D, skeleton_parent: Node, player_host: N
 		if clip_name == "" or not _manifest_by_name.has(clip_name):
 			missing_roles.append(role)
 			continue
-		var anim := _retarget_general(clip_name, true, true)
+		var anim := _retarget_general(clip_name, true, true, true)
 		if anim == null:
 			missing_roles.append(role)
 			continue
@@ -359,15 +394,62 @@ func build_fp_player(skeleton: Skeleton3D, skeleton_parent: Node, player_host: N
 		player.queue_free()
 		return null
 	player.add_animation_library("", lib)
+	ensure_fp_clip(player, "zipwire_idle")
 	return player
 
 
+func ensure_fp_clip(player: AnimationPlayer, role: String) -> String:
+	if applied.has(role):
+		return str(applied[role])
+	if player == null or not load_manifest():
+		return ""
+	var clip_name := ""
+	var loop := true
+	if FP_TOOL_CLIPS.has(role):
+		var spec: Dictionary = FP_TOOL_CLIPS[role] as Dictionary
+		clip_name = str(spec.get("clip", ""))
+		loop = spec.get("loop", true) == true
+	elif FP_CLIPS.has(role):
+		clip_name = str(FP_CLIPS[role])
+		loop = true
+	else:
+		return ""
+	if clip_name == "" or not _manifest_by_name.has(clip_name):
+		return ""
+	var anim := _retarget_general(clip_name, true, loop, true)
+	if anim == null:
+		return ""
+	var lib: AnimationLibrary = player.get_animation_library("") if player.has_animation_library("") else null
+	if lib == null:
+		lib = AnimationLibrary.new()
+		player.add_animation_library("", lib)
+	if not lib.has_animation(clip_name):
+		lib.add_animation(clip_name, anim)
+	applied[role] = clip_name
+	anim_lengths[role] = anim.get_length()
+	return clip_name
+
+
+func has_fp_role(role: String) -> bool:
+	return applied.has(role) or FP_TOOL_CLIPS.has(role) or FP_CLIPS.has(role)
+
+
+func fp_clip_for_role(role: String) -> String:
+	if applied.has(role):
+		return str(applied[role])
+	if FP_TOOL_CLIPS.has(role):
+		return str((FP_TOOL_CLIPS[role] as Dictionary).get("clip", ""))
+	if FP_CLIPS.has(role):
+		return str(FP_CLIPS[role])
+	return ""
+
+
 func _retargeted(clip_name: String, role: String) -> Animation:
-	return _retarget_general(clip_name, STRIP_ROOT_TRANSLATION.has(role), LOOP_ROLES.has(role))
+	return _retarget_general(clip_name, STRIP_ROOT_TRANSLATION.has(role), LOOP_ROLES.has(role), false)
 
 
-func _retarget_general(clip_name: String, strip_root: bool, loop: bool) -> Animation:
-	var key := clip_name + "|" + skeleton_name
+func _retarget_general(clip_name: String, strip_root: bool, loop: bool, use_similarity: bool = false) -> Animation:
+	var key := clip_name + "|" + skeleton_name + ("|sim" if use_similarity else "")
 	if _retarget_cache.has(key):
 		return _retarget_cache[key] as Animation
 	var info := _load_source(clip_name)
@@ -411,12 +493,23 @@ func _retarget_general(clip_name: String, strip_root: bool, loop: bool) -> Anima
 			rm = ((_mesh_global[mp] as Transform3D).basis.get_rotation_quaternion()).normalized()
 		if sp != "" and src_global.has(sp):
 			ra = ((src_global[sp] as Transform3D).basis.get_rotation_quaternion()).normalized()
-		pre[bs] = {
-			"q": (qm * qa.inverse()).normalized(),
-			"corr": (rm * ra.inverse()).normalized(),
-			"pa": (src_local[bs] as Transform3D).origin,
-			"pm": (_mesh_local[bs] as Transform3D).origin,
-		}
+		if use_similarity:
+			var gm_b: Quaternion = ((_mesh_global[bs] as Transform3D).basis.get_rotation_quaternion()).normalized() if _mesh_global.has(bs) else Quaternion.IDENTITY
+			var ga_b: Quaternion = ((src_global[bs] as Transform3D).basis.get_rotation_quaternion()).normalized() if src_global.has(bs) else Quaternion.IDENTITY
+			pre[bs] = {
+				"q_left": (rm.inverse() * ra).normalized(),
+				"q_right": (ga_b.inverse() * gm_b).normalized(),
+				"corr": (rm.inverse() * ra).normalized(),
+				"pa": (src_local[bs] as Transform3D).origin,
+				"pm": (_mesh_local[bs] as Transform3D).origin,
+			}
+		else:
+			pre[bs] = {
+				"q": (qm * qa.inverse()).normalized(),
+				"corr": (rm * ra.inverse()).normalized(),
+				"pa": (src_local[bs] as Transform3D).origin,
+				"pm": (_mesh_local[bs] as Transform3D).origin,
+			}
 	var out := Animation.new()
 	out.set_length(src.get_length())
 	out.set_step(src.get_step())
@@ -442,7 +535,10 @@ func _retarget_general(clip_name: String, strip_root: bool, loop: bool) -> Anima
 				var off: Vector3 = ((kv as Vector3) - (c["pa"] as Vector3)) * k
 				nv = (c["pm"] as Vector3) + ((c["corr"] as Quaternion) * off)
 			elif ttype == Animation.TYPE_ROTATION_3D and kv is Quaternion:
-				nv = ((c["q"] as Quaternion) * (kv as Quaternion)).normalized()
+				if use_similarity:
+					nv = ((c["q_left"] as Quaternion) * (kv as Quaternion) * (c["q_right"] as Quaternion)).normalized()
+				else:
+					nv = ((c["q"] as Quaternion) * (kv as Quaternion)).normalized()
 			var nki: int = out.track_insert_key(nti, kt, nv)
 			out.track_set_key_transition(nti, nki, src.track_get_key_transition(ti, ki))
 	if out.get_track_count() == 0:

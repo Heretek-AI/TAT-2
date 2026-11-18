@@ -5,6 +5,8 @@ extends CharacterBody3D
 const VfxManager = preload("res://src/core/vfx_manager.gd")
 const MobileProfile := preload("res://src/core/mobile_profile.gd")
 const ThiefAnimLib = preload("res://src/core/animation_library.gd")
+const LevelLoaderScript := preload("res://src/core/level_loader.gd")
+const SmokeProjectileScript := preload("res://src/player/smoke_projectile.gd")
 
 # Real ThiefNisha meshes (BP_Player_Thief_Spider skeletal components -> GLB;
 # sources in extracted/json/Character/Player/BP_Player_Thief_Spider.json).
@@ -16,6 +18,7 @@ const FP_TOOL_BONES: Array[String] = ["weapon_r_1p", "hand_r_1p", "hand_r"]
 # Skeleton joints marking the UE first-person camera, in preference order.
 const FP_CAM_BONES: Array[String] = ["camera_position", "game_camera"]
 const FP_ANIM_BLEND: float = 0.2 # crossfade window 0.15-0.25 s per deliverable
+const FP_VM_FOV_DEG: float = 85.0 # OSECameraComponent.FirstPersonFieldOfView lock
 
 const STAND_HEAD_HEIGHT: float = 1.66875
 const CROUCH_HEAD_HEIGHT: float = 0.88875
@@ -36,6 +39,16 @@ const CAMERA_FOV: float = 85.0 # OSECameraComponent.FirstPersonFieldOfView
 const CAMERA_FOV_SPRINT: float = 89.0 # retained velocity-feedback shape rebased on 85
 const WIRE_RANGE: float = 20.0 # DA_StandardToolSettings "Hotwire Range" 2000cm
 const WIRE_PULL_SPEED: float = 23.0 # DA_StandardToolSettings "Hotwire Speed" 2300cm/s
+const WIRE_CRANK_MIN_TIME: float = 0.5 # GA_Hotwire_Crank.MinimumCrankTime
+const WIRE_CRANK_DURATION_FALLBACK: float = 6.0 # CT_WireCrank.CrankDuration (lvl 0)
+const GRAPPLE_MAX_CHARGES: int = 4 # BP_Hotwire_Tool.MaxAmmo
+const MANTLE_MAX_HEIGHT_M: float = 4.0 # BP_Player_Base._mantleSettings.MaxHeight 400cm
+const MANTLE_MAX_ANGLE_DEG: float = 25.0 # BP_Player_Base._mantleSettings.MaxAngleFacing
+const WALL_CLIMB_SPEED: float = 2.5 # BP_Player_Base._wallClimbSettings.WallClimbDashSpeed 250cm/s
+const WALL_CLIMB_ACCEL: float = 12.0 # BP_Player_Base._wallClimbSettings.WallClimbDashAcceleration 1200cm/s2
+# Documented gameplay fallback: CT_StaminaSystem.StaminaPerSecond.Climb.Base stores 0.0;
+# 5.0/s matches StaminaPerSecond.Sprint so wall-climb consumes stamina per M2 scope.
+const CLIMB_STAMINA_BURN_FALLBACK: float = 5.0
 const DISGUISE_COOLDOWN: float = 15.0 # GE_Disguise_Cooldown magnitude
 const DISGUISE_ACTIVE_TIME: float = 60.0 # GE_Disguise_Active magnitude (max active time)
 # Authored disguise integrity rows (DT_DisguiseV3IntegrityReduction, enabled rows).
@@ -44,6 +57,10 @@ const DISGUISE_DRAIN_SPRINTING: float = 40.0 # Sprinting.IntegrityReduction.Valu
 const DISGUISE_DRAIN_GUARD_PROXIMITY: float = 5.0 # GuardProximity.IntegrityReduction.Value per s
 const DISGUISE_GUARD_PROXIMITY_M: float = 1.0 # GuardProximity.CharacterRadius 100cm
 const DISGUISE_DAMAGE_INTEGRITY_LOSS: float = 40.0 # DamageTaken.IntegrityReduction.Value
+const DISGUISE_DRAIN_LOCKPICKING: float = 5.0 # Lockpicking (Status.Lockpicking) per s
+const DISGUISE_DRAIN_GUARD_VIEWCONE: float = 10.0 # GuardViewCone per s
+const DISGUISE_GUARD_VIEWCONE_M: float = 10.0 # GuardViewCone.CharacterRadius 1000cm
+const DISGUISE_GUARD_VIEWCONE_DEG: float = 65.0 # GuardViewCone.CharacterViewConeAngleDegrees
 const BLACKJACK_LIGHT_DMG: float = 40.0 # CT_Tool_Blackjack.BlackjackDamageLight
 const BLACKJACK_HEAVY_DMG: float = 75.0 # CT_Tool_Blackjack.BlackjackDamageHeavy
 
@@ -52,6 +69,7 @@ signal stamina_changed(stam: float, max_stam: float)
 signal disguise_changed(integrity: float, active: bool)
 signal thief_vision_toggled(enabled: bool)
 signal tool_used(tool_id: String, charges_left: int)
+signal tool_equipped(tool_id: String, slot_index: int)
 signal interacted(target: Node)
 signal downed_started(seconds: float)
 signal downed()
@@ -131,7 +149,16 @@ var _fp_arm_holder: Node3D
 var _fp_current_clip: String = ""
 var _fp_tool_on_bone: bool = false
 var mesh_3p_glb: String = ""
-var fp_tool_id: String = "blackjack"
+var fp_tool_id: String = "zipwire"
+var equipped_tool: String = "zipwire"
+var _slot3_subtool: String = "slithersap"
+var _vistara_vision_active: bool = false
+var _manual_vision_active: bool = false
+var _fp_action_ttl: float = 0.0
+var _fp_mat_loader: Node = null
+static var _vm_opaque_shader: Shader = null
+static var _vm_opaque_cull_disabled_shader: Shader = null
+static var _vm_glass_shader: Shader = null
 var fp_bob_phase: float = 0.0
 var fp_breathe_time: float = 0.0
 var fp_step_left: bool = false
@@ -139,13 +166,25 @@ var fp_swing_t: float = 0.0
 var fp_base_rig_pos: Vector3 = Vector3.ZERO
 var fp_highlight_target: Node = null
 
-# Abilities
+# Abilities & M2 traversal/tool states
 var ability_cooldown: float = 0.0
 var disguise_active: bool = false
 var disguise_integrity: float = 100.0
 var disguise_ttl: float = 0.0
+var is_lockpicking: bool = false
+var _viewcone_decay_handled: bool = false
 var is_grappling: bool = false
 var grapple_target: Vector3 = Vector3.ZERO
+var _is_cranking: bool = false
+var _crank_elapsed: float = 0.0
+var crank_progress: float = 0.0
+var _zipwire_cable_mesh: MeshInstance3D = null
+var _smoke_traj_mesh: MeshInstance3D = null
+var is_mantling: bool = false
+var _mantle_start: Vector3 = Vector3.ZERO
+var _mantle_end: Vector3 = Vector3.ZERO
+var _mantle_t: float = 0.0
+var is_wall_climbing: bool = false
 var astral_active: bool = false
 var astral_ttl: float = 0.0
 
@@ -193,6 +232,12 @@ func _ready() -> void:
 	_build_body()
 	if not OS.has_feature("headless") and DisplayServer.get_name() != "headless" and not MobileProfile.is_mobile():
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+func _exit_tree() -> void:
+	if _fp_mat_loader != null and is_instance_valid(_fp_mat_loader):
+		_fp_mat_loader.queue_free()
+		_fp_mat_loader = null
 
 
 func _apply_tuning() -> void:
@@ -480,25 +525,167 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("ability"):
 		_trigger_thief_ability()
 	elif event.is_action_pressed("tool_1"):
-		_use_slithersap()
+		equip_tool("blackjack" if equipped_tool == "zipwire" else "zipwire")
 	elif event.is_action_pressed("tool_2"):
-		_use_smoke_bomb()
+		equip_tool("blackjack" if equipped_tool == "smoke_bomb" else "smoke_bomb")
 	elif event.is_action_pressed("tool_3"):
-		_use_pickpocket_fairy()
-	elif event.is_action_pressed("tool_4") or event.is_action_pressed("primary_action"):
-		if GameState.thief_id == "spider":
-			var grappled: bool = _try_spider_grapple()
-			if not grappled:
-				_try_blackjack()
+		if equipped_tool == "slithersap":
+			_slot3_subtool = "fairy"
+			equip_tool("fairy")
+		elif equipped_tool == "fairy":
+			_slot3_subtool = "slithersap"
+			equip_tool("blackjack")
 		else:
-			_try_blackjack()
+			equip_tool(_slot3_subtool)
+	elif event.is_action_pressed("tool_4"):
+		equip_tool("blackjack" if equipped_tool == "vistara_diamond" else "vistara_diamond")
+	elif event.is_action_pressed("primary_action"):
+		_use_equipped_primary()
 	elif event.is_action_pressed("secondary_action"):
-		_throw_bottle()
+		if equipped_tool == "zipwire" and not is_grappling:
+			_begin_wire_crank()
+		elif int(charges.get("bottle", 0)) > 0:
+			_throw_bottle()
+	elif event.is_action_released("secondary_action"):
+		if _is_cranking:
+			_end_wire_crank()
 	elif event.is_action_pressed("thief_vision"):
-		thief_vision = not thief_vision
-		thief_vision_on = thief_vision
-		thief_vision_toggled.emit(thief_vision)
+		_manual_vision_active = not _manual_vision_active
+		_sync_thief_vision()
+
+
+func _slot_for_tool(tool_id: String) -> int:
+	match tool_id:
+		"zipwire":
+			return 1
+		"smoke_bomb":
+			return 2
+		"slithersap", "fairy":
+			return 3
+		"vistara_diamond":
+			return 4
+		_:
+			return 0
+
+
+func _sync_thief_vision() -> void:
+	var next_on: bool = _vistara_vision_active or _manual_vision_active or astral_active
+	if next_on != thief_vision_on:
+		thief_vision_on = next_on
+		thief_vision = next_on
+		thief_vision_toggled.emit(thief_vision_on)
 		_update_thief_vision()
+
+
+func equip_tool(tool_id: String) -> void:
+	if not (tool_id in ["zipwire", "smoke_bomb", "slithersap", "fairy", "vistara_diamond", "blackjack"]):
+		return
+	if tool_id != "zipwire" and _is_cranking:
+		_end_wire_crank()
+	equipped_tool = tool_id
+	_fp_action_ttl = 0.0
+	if tool_id == "slithersap" or tool_id == "fairy":
+		_slot3_subtool = tool_id
+	_vistara_vision_active = (tool_id == "vistara_diamond")
+	_sync_thief_vision()
+	_fp_set_tool(tool_id)
+	if tool_id == "vistara_diamond":
+		_fp_play_action("vistara_equip")
+	else:
+		_update_fp_anim_state()
+	tool_equipped.emit(equipped_tool, _slot_for_tool(equipped_tool))
+
+
+func _use_equipped_primary() -> void:
+	match equipped_tool:
+		"zipwire":
+			_try_spider_grapple()
+		"smoke_bomb":
+			_use_smoke_bomb()
+		"slithersap":
+			_use_slithersap()
+		"fairy":
+			_use_pickpocket_fairy()
+		"vistara_diamond":
+			_fp_play_action("vistara_equip")
+		_:
+			_try_blackjack()
+
+
+func get_equipped_tool() -> String:
+	return equipped_tool
+
+
+func get_tool_slots() -> Array[Dictionary]:
+	var s3_count: int = int(charges.get("slithersap", 0)) if _slot3_subtool == "slithersap" else -1
+	var slots: Array[Dictionary] = [
+		{
+			"slot": 1,
+			"id": "zipwire",
+			"count": int(charges.get("grapple", 0)),
+			"active": equipped_tool == "zipwire",
+		},
+		{
+			"slot": 2,
+			"id": "smoke_bomb",
+			"count": int(charges.get("smoke_bomb", 0)),
+			"active": equipped_tool == "smoke_bomb",
+		},
+		{
+			"slot": 3,
+			"id": _slot3_subtool,
+			"count": s3_count,
+			"active": equipped_tool == "slithersap" or equipped_tool == "fairy",
+		},
+		{
+			"slot": 4,
+			"id": "vistara_diamond",
+			"count": -1,
+			"active": equipped_tool == "vistara_diamond",
+		},
+	]
+	return slots
+
+
+func get_active_reticle_state() -> Dictionary:
+	var target_valid: bool = false
+	var hints: Array[Dictionary] = []
+	match equipped_tool:
+		"zipwire":
+			var zw: Dictionary = validate_zipwire_target()
+			target_valid = zw.get("valid", false) == true
+			var can_launch: bool = target_valid and ability_cooldown <= 0.0 and int(charges.get("grapple", 0)) > 0
+			var can_crank: bool = not is_grappling and (ability_cooldown > 0.0 or int(charges.get("grapple", 0)) < GRAPPLE_MAX_CHARGES)
+			hints.append({"key": "LMB", "label": "LAUNCH", "enabled": can_launch})
+			hints.append({"key": "RMB", "label": "[HOLD] CRANK", "enabled": can_crank})
+		"smoke_bomb":
+			target_valid = int(charges.get("smoke_bomb", 0)) > 0
+			hints.append({"key": "LMB", "label": "THROW", "enabled": target_valid})
+		"slithersap":
+			target_valid = int(charges.get("slithersap", 0)) > 0
+			hints.append({"key": "LMB", "label": "SPLASH", "enabled": target_valid})
+		"fairy":
+			var fwd: Vector3 = -cam.global_transform.basis.z if cam != null else -global_transform.basis.z
+			var guards: Array = get_tree().get_nodes_in_group("guards") if is_inside_tree() else []
+			target_valid = pickpocket_select_target(guards, global_position, fwd) != null
+			hints.append({"key": "LMB", "label": "DEPLOY", "enabled": pickpocket_cooldown <= 0.0})
+		"vistara_diamond":
+			target_valid = true
+			hints.append({"key": "4", "label": "THIEF VISION", "enabled": true})
+		_:
+			target_valid = is_inside_tree() and _find_nearest_guard(2.4) != null
+			hints.append({"key": "LMB", "label": "STRIKE", "enabled": true})
+	return {
+		"mode": equipped_tool,
+		"target_valid": target_valid,
+		"crank_progress": crank_progress,
+		"crank_active": _is_cranking,
+		"hints": hints,
+	}
+
+
+func is_thief_vision_active() -> bool:
+	return thief_vision_on
 
 
 ## Touch look hook used by src/ui/mobile_touch_ui.gd: mouse look is unavailable on Android.
@@ -516,6 +703,7 @@ func add_look_pixel_delta(delta_px: Vector2) -> void:
 
 func _physics_process(delta: float) -> void:
 	if GameState.state != "playing":
+		_update_zipwire_cable()
 		return
 	ability_cooldown = maxf(0.0, ability_cooldown - delta)
 	pickpocket_cooldown = maxf(0.0, pickpocket_cooldown - delta)
@@ -527,11 +715,16 @@ func _physics_process(delta: float) -> void:
 	# Downed: no input movement, sprint, abilities or tools; gravity still
 	# settles the body and the downed timer (above) runs to mission failure.
 	if is_downed:
+		if _is_cranking:
+			_end_wire_crank()
+		is_mantling = false
+		is_wall_climbing = false
 		velocity.x = 0.0
 		velocity.z = 0.0
 		if not is_on_floor():
 			velocity.y -= gravity * delta
 		move_and_slide()
+		_update_zipwire_cable()
 		return
 
 	# Smooth crouch camera height interpolation.
@@ -550,6 +743,22 @@ func _physics_process(delta: float) -> void:
 	head.position.x = lean_dir * LEAN_OFFSET
 	head.rotation.z = -lean_dir * LEAN_ROLL
 
+	# Active Zipwire [RMB] crank tick.
+	_tick_wire_crank(delta, false)
+
+	# Auto-mantle interpolation (BP_Player_Base _mantleSettings + GE_Traversal_AutoMantle 0.3s).
+	if is_mantling:
+		_mantle_t = minf(1.0, _mantle_t + delta / 0.3)
+		var smooth_t: float = _mantle_t * _mantle_t * (3.0 - 2.0 * _mantle_t)
+		global_position = _mantle_start.lerp(_mantle_end, smooth_t)
+		velocity = Vector3.ZERO
+		_fall_peak_y = global_position.y
+		if _mantle_t >= 1.0:
+			is_mantling = false
+			global_position = _mantle_end
+		_update_zipwire_cable()
+		return
+
 	# Spider grapple pull override (smooth winch ramp toward the anchor, then
 	# preserve momentum and vault upward on arrival/release).
 	if is_grappling:
@@ -565,12 +774,16 @@ func _physics_process(delta: float) -> void:
 			velocity = pull_dir * wire_speed * (0.45 + 0.15 * winch)
 			velocity.y = maxf(velocity.y, GRAPPLE_VAULT_Y * (0.7 + 0.3 * winch))
 			move_and_slide()
+			_update_zipwire_cable()
 			return
 		else:
 			var desired: Vector3 = pull_dir * wire_speed * winch + Vector3.UP * 1.4
 			velocity = velocity.lerp(desired, clampf(delta * 7.0, 0.0, 1.0))
 			move_and_slide()
+			_update_zipwire_cable()
 			return
+
+	_update_zipwire_cable()
 
 	# Movement & Stamina
 	apply_saved_settings()
@@ -583,6 +796,7 @@ func _physics_process(delta: float) -> void:
 	else:
 		is_sprinting = Input.is_action_pressed("sprint") and not is_crouching and wish.length() > 0.1 and stamina > 2.0
 
+	var climbing_now: bool = _tick_wall_climb(delta, wish)
 	var speed: float = walk_speed
 	if is_crouching:
 		speed = crouch_speed
@@ -590,7 +804,7 @@ func _physics_process(delta: float) -> void:
 		speed = sprint_speed
 		var drain: float = absf(GameData.eval_curve("CT_StaminaSystem", "StaminaPerSecond.Sprint", 1.0, -5.0))
 		stamina = maxf(0.0, stamina - drain * delta)
-	else:
+	elif not climbing_now:
 		stamina = minf(max_stamina, stamina + stamina_regen * delta)
 	stamina_changed.emit(stamina, max_stamina)
 
@@ -598,15 +812,19 @@ func _physics_process(delta: float) -> void:
 	var target_fov: float = (base_fov + (CAMERA_FOV_SPRINT - CAMERA_FOV)) if is_sprinting else base_fov
 	cam.fov = lerpf(cam.fov, target_fov, delta * 8.0)
 
-	if not is_on_floor():
-		velocity.y -= gravity * delta
-	elif Input.is_action_just_pressed("jump"):
-		velocity.y = jump_velocity
+	if not climbing_now:
+		if not is_on_floor():
+			velocity.y -= gravity * delta
+		elif Input.is_action_just_pressed("jump"):
+			velocity.y = jump_velocity
 
-	var steer: float = 14.0 if is_on_floor() else 14.0 * AIR_CONTROL
-	velocity.x = lerpf(velocity.x, wish.x * speed, delta * steer)
-	velocity.z = lerpf(velocity.z, wish.z * speed, delta * steer)
+		var steer: float = 14.0 if is_on_floor() else 14.0 * AIR_CONTROL
+		velocity.x = lerpf(velocity.x, wish.x * speed, delta * steer)
+		velocity.z = lerpf(velocity.z, wish.z * speed, delta * steer)
 	move_and_slide()
+
+	if not is_on_floor() and not is_mantling and (Input.is_action_pressed("jump") or wish.length() > 0.1):
+		try_auto_mantle()
 
 	# Footstep cadence timer while moving on floor. Astral form makes no noise.
 	var planar_speed: float = Vector2(velocity.x, velocity.z).length()
@@ -639,26 +857,207 @@ func _physics_process(delta: float) -> void:
 		_prop_scan_accum = 0.0
 		_update_prop_highlight()
 
-	# Chameleon Disguise Integrity drain. Per-second rates are summed from the
-	# enabled rows of DT_DisguiseV3IntegrityReduction (unported rows are named
-	# in disguise_drain_rate below); DamageTaken is handled in take_damage.
+	# Chameleon Disguise Integrity drain. Per-second rates are summed from all 6
+	# enabled rows of DT_DisguiseV3IntegrityReduction (DisguiseTimer, Sprinting,
+	# GuardProximity, Lockpicking, GuardViewCone; DamageTaken is in take_damage).
 	if disguise_active:
 		var guard_near: bool = _is_guard_within(DISGUISE_GUARD_PROXIMITY_M)
-		var drain_rate: float = disguise_drain_rate(is_sprinting, guard_near)
+		var in_cone: bool = false
+		if not _viewcone_decay_handled:
+			in_cone = _is_in_guard_viewcone()
+		var drain_rate: float = disguise_drain_rate(is_sprinting, guard_near, is_lockpicking, in_cone)
 		disguise_integrity = maxf(0.0, disguise_integrity - drain_rate * delta)
 		disguise_ttl = maxf(0.0, disguise_ttl - delta)
 		if disguise_ttl <= 0.0:
 			disguise_active = false
-			disguise_changed.emit(disguise_integrity, disguise_active)
 		if disguise_integrity <= 0.0:
 			disguise_integrity = 0.0
 			disguise_active = false
 		disguise_changed.emit(disguise_integrity, disguise_active)
+	_viewcone_decay_handled = false
 
 	# Light visibility probe
 	if light_probe != null and light_probe.has_method("sample_visibility"):
 		var excl: Array[RID] = [get_rid()]
 		GameState.player_light_visibility = light_probe.sample_visibility(global_position, get_world_3d().direct_space_state, excl)
+
+
+func _begin_wire_crank() -> void:
+	if not can_act() or equipped_tool != "zipwire" or is_grappling or is_mantling:
+		return
+	_is_cranking = true
+	_crank_elapsed = 0.0
+	crank_progress = 0.0
+
+
+func _tick_wire_crank(delta: float, force_holding: bool = false) -> void:
+	if not _is_cranking:
+		return
+	var holding: bool = force_holding or Input.is_action_pressed("secondary_action")
+	if not holding or equipped_tool != "zipwire" or is_grappling or is_mantling or not can_act():
+		_end_wire_crank()
+		return
+	_crank_elapsed += delta
+	var dur: float = GameData.eval_curve("CT_WireCrank", "CrankDuration", 0.0, WIRE_CRANK_DURATION_FALLBACK)
+	if dur <= 0.0:
+		dur = WIRE_CRANK_DURATION_FALLBACK
+	crank_progress = clampf(_crank_elapsed / maxf(dur, WIRE_CRANK_MIN_TIME), 0.0, 1.0)
+	if _crank_elapsed >= dur:
+		ability_cooldown = 0.0
+		charges["grapple"] = mini(GRAPPLE_MAX_CHARGES, int(charges.get("grapple", 0)) + 1)
+		tool_used.emit("zipwire_crank", int(charges["grapple"]))
+		_is_cranking = false
+		_crank_elapsed = 0.0
+		crank_progress = 0.0
+
+
+func _end_wire_crank() -> void:
+	if not _is_cranking:
+		return
+	if _crank_elapsed >= WIRE_CRANK_MIN_TIME and ability_cooldown > 0.0:
+		ability_cooldown = maxf(0.0, ability_cooldown - _crank_elapsed)
+	_is_cranking = false
+	_crank_elapsed = 0.0
+	crank_progress = 0.0
+
+
+func _update_zipwire_cable() -> void:
+	if not is_grappling:
+		if _zipwire_cable_mesh != null and is_instance_valid(_zipwire_cable_mesh):
+			_zipwire_cable_mesh.visible = false
+		return
+	if not is_inside_tree():
+		return
+	if _zipwire_cable_mesh == null or not is_instance_valid(_zipwire_cable_mesh):
+		var cyl := CylinderMesh.new()
+		cyl.top_radius = 0.022 # BP_Hotwire_Cable CableWidth 5cm (~0.044m diameter)
+		cyl.bottom_radius = 0.022
+		cyl.height = 1.0
+		cyl.radial_segments = 8
+		cyl.rings = 1
+		var cmat := StandardMaterial3D.new()
+		cmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		cmat.albedo_color = Color(0.95, 0.96, 0.85, 0.95)
+		cmat.emission_enabled = true
+		cmat.emission = Color(0.85, 0.92, 0.72)
+		cmat.emission_energy_multiplier = 2.8
+		cyl.material = cmat
+		_zipwire_cable_mesh = MeshInstance3D.new()
+		_zipwire_cable_mesh.name = "ZipwireCableMesh"
+		_zipwire_cable_mesh.top_level = true
+		_zipwire_cable_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_zipwire_cable_mesh.mesh = cyl
+		add_child(_zipwire_cable_mesh)
+	var from_pos: Vector3 = global_position + Vector3.UP * 1.2
+	if fp_tool_root != null and is_instance_valid(fp_tool_root) and fp_tool_root.is_inside_tree():
+		from_pos = fp_tool_root.global_position
+	var offset: Vector3 = grapple_target - from_pos
+	var dist: float = offset.length()
+	if dist < 0.05:
+		_zipwire_cable_mesh.visible = false
+		return
+	_zipwire_cable_mesh.visible = true
+	var y_axis: Vector3 = offset / dist
+	var up_hint: Vector3 = Vector3.RIGHT if absf(y_axis.dot(Vector3.UP)) > 0.99 else Vector3.UP
+	var x_axis: Vector3 = up_hint.cross(y_axis).normalized()
+	var z_axis: Vector3 = x_axis.cross(y_axis).normalized()
+	_zipwire_cable_mesh.global_position = (from_pos + grapple_target) * 0.5
+	_zipwire_cable_mesh.basis = Basis(x_axis, y_axis, z_axis).scaled(Vector3(1.0, dist, 1.0))
+
+
+func try_auto_mantle() -> bool:
+	if not can_act() or is_grappling or is_mantling or not is_inside_tree():
+		return false
+	var w3d := get_world_3d()
+	if w3d == null:
+		return false
+	var space: PhysicsDirectSpaceState3D = w3d.direct_space_state
+	var fwd: Vector3 = Vector3(-global_transform.basis.z.x, 0.0, -global_transform.basis.z.z)
+	if fwd.length() < 0.05:
+		return false
+	fwd = fwd.normalized()
+	var excl: Array[RID] = [get_rid()]
+	var wall_hit: Dictionary = {}
+	for h_off: float in [0.5, 1.1, 1.7]:
+		var from: Vector3 = global_position + Vector3.UP * h_off
+		var q := PhysicsRayQueryParameters3D.create(from, from + fwd * 0.85, 1, excl)
+		var hit: Dictionary = space.intersect_ray(q)
+		if not hit.is_empty():
+			wall_hit = hit
+			break
+	if wall_hit.is_empty():
+		return false
+	var wn: Vector3 = wall_hit.get("normal", Vector3.ZERO) as Vector3
+	if absf(wn.y) > 0.35:
+		return false
+	var wall_in: Vector3 = Vector3(-wn.x, 0.0, -wn.z)
+	if wall_in.length() < 0.05:
+		return false
+	if rad_to_deg(wall_in.normalized().angle_to(fwd)) > MANTLE_MAX_ANGLE_DEG:
+		return false
+	var wp: Vector3 = wall_hit["position"] as Vector3
+	var top_from: Vector3 = Vector3(wp.x + fwd.x * 0.45, global_position.y + MANTLE_MAX_HEIGHT_M + 0.25, wp.z + fwd.z * 0.45)
+	var top_to: Vector3 = Vector3(top_from.x, global_position.y + 0.45, top_from.z)
+	var top_hit: Dictionary = space.intersect_ray(PhysicsRayQueryParameters3D.create(top_from, top_to, 1, excl))
+	if top_hit.is_empty():
+		return false
+	var ledge_n: Vector3 = top_hit.get("normal", Vector3.ZERO) as Vector3
+	if ledge_n.dot(Vector3.UP) < 0.7:
+		return false
+	var ledge_pos: Vector3 = top_hit["position"] as Vector3
+	var ledge_h: float = ledge_pos.y - global_position.y
+	if ledge_h < 0.45 or ledge_h > MANTLE_MAX_HEIGHT_M:
+		return false
+	var need_h: float = 1.05 if is_crouching else 1.8
+	var head_hit: Dictionary = space.intersect_ray(PhysicsRayQueryParameters3D.create(ledge_pos + Vector3.UP * 0.1, ledge_pos + Vector3.UP * need_h, 1, excl))
+	if not head_hit.is_empty():
+		return false
+	is_mantling = true
+	is_wall_climbing = false
+	_mantle_t = 0.0
+	_mantle_start = global_position
+	_mantle_end = ledge_pos + Vector3.UP * 0.05
+	_fall_peak_y = ledge_pos.y
+	return true
+
+
+func _tick_wall_climb(delta: float, wish: Vector3) -> bool:
+	if is_on_floor() or is_crouching or is_grappling or is_mantling or stamina <= 2.0 or not is_inside_tree():
+		is_wall_climbing = false
+		return false
+	var w3d := get_world_3d()
+	if w3d == null:
+		is_wall_climbing = false
+		return false
+	var fwd: Vector3 = Vector3(-global_transform.basis.z.x, 0.0, -global_transform.basis.z.z)
+	if fwd.length() < 0.05:
+		is_wall_climbing = false
+		return false
+	fwd = fwd.normalized()
+	var from: Vector3 = global_position + Vector3.UP * 1.1
+	var hit: Dictionary = w3d.direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(from, from + fwd * 0.65, 1, [get_rid()]))
+	if hit.is_empty():
+		is_wall_climbing = false
+		return false
+	var wn: Vector3 = hit.get("normal", Vector3.ZERO) as Vector3
+	if absf(wn.y) > 0.35:
+		is_wall_climbing = false
+		return false
+	var pressing_into_wall: bool = (wish.length() > 0.1 and wish.dot(-wn) > 0.3) or Input.is_action_pressed("jump")
+	if not pressing_into_wall:
+		is_wall_climbing = false
+		return false
+	is_wall_climbing = true
+	velocity.y = move_toward(velocity.y, WALL_CLIMB_SPEED, WALL_CLIMB_ACCEL * delta)
+	velocity.x = -wn.x * 0.5
+	velocity.z = -wn.z * 0.5
+	var climb_curve: float = absf(GameData.eval_curve("CT_StaminaSystem", "StaminaPerSecond.Climb.Base", 1.0, 0.0))
+	var climb_burn: float = climb_curve if climb_curve > 0.0 else CLIMB_STAMINA_BURN_FALLBACK
+	stamina = maxf(0.0, stamina - climb_burn * delta)
+	_fall_peak_y = global_position.y
+	if stamina <= 0.0:
+		is_wall_climbing = false
+	return is_wall_climbing
 
 
 func _get_lean_wall_factor(side_sign: float) -> float:
@@ -689,23 +1088,73 @@ func _is_guard_within(dist_max: float) -> bool:
 	return false
 
 
-## Authored per-second disguise drain from the enabled rows of
-## DT_DisguiseV3IntegrityReduction. The component accumulates every matching
-## row, so the rates sum instead of multiplying a base approximation.
-## Rows not ported (kept out rather than inventing a query/state):
-## - Lockpicking (Status.Lockpicking, 5.0/s): a lockpick resolves in one
-##   instant interact here; there is no sustained lockpicking state or tag.
-## - GuardViewCone (10.0/s, 1000cm, 65deg, UseAISightToLimitMaxViewConeDistance
-##   true): no player-facing guard view-cone query exists, and the row does not
-##   say whether 65deg is a half or full angle; guard_ai._can_see_player is
-##   private and uses its own 20m / 80deg sight config.
-static func disguise_drain_rate(sprinting: bool, guard_near: bool) -> float:
+## Authored per-second disguise drain from the 6 enabled rows of
+## DT_DisguiseV3IntegrityReduction: DisguiseTimer (1.0/s), Sprinting (40.0/s),
+## GuardProximity (5.0/s <= 1.0 m), Lockpicking (5.0/s, Status.Lockpicking),
+## GuardViewCone (10.0/s <= 10.0 m & <= 65 deg); DamageTaken (40.0) in take_damage.
+static func disguise_drain_rate(
+	sprinting: bool,
+	guard_near: bool,
+	lockpicking: bool = false,
+	in_viewcone: bool = false
+) -> float:
 	var rate: float = DISGUISE_DRAIN_TIMER
 	if sprinting:
 		rate += DISGUISE_DRAIN_SPRINTING
 	if guard_near:
 		rate += DISGUISE_DRAIN_GUARD_PROXIMITY
+	if lockpicking:
+		rate += DISGUISE_DRAIN_LOCKPICKING
+	if in_viewcone:
+		rate += DISGUISE_DRAIN_GUARD_VIEWCONE
 	return rate
+
+
+func set_lockpicking_active(active: bool) -> void:
+	is_lockpicking = active
+
+
+func apply_guard_viewcone_disguise_decay(delta: float, in_cone: bool) -> void:
+	if not disguise_active or not in_cone or delta <= 0.0:
+		return
+	_viewcone_decay_handled = true
+	disguise_integrity = maxf(0.0, disguise_integrity - DISGUISE_DRAIN_GUARD_VIEWCONE * delta)
+	if disguise_integrity <= 0.0:
+		disguise_integrity = 0.0
+		disguise_active = false
+	disguise_changed.emit(disguise_integrity, disguise_active)
+
+
+func _is_in_guard_viewcone() -> bool:
+	if not is_inside_tree():
+		return false
+	var w3d := get_world_3d()
+	if w3d == null:
+		return false
+	var space: PhysicsDirectSpaceState3D = w3d.direct_space_state
+	var player_eye: Vector3 = global_position + Vector3.UP * 1.3
+	for g: Node in get_tree().get_nodes_in_group("guards"):
+		if not (g is Node3D):
+			continue
+		var st: Variant = g.get("state")
+		if st is int and int(st) == 5:
+			continue
+		var gn: Node3D = g as Node3D
+		var guard_eye: Vector3 = gn.global_position + Vector3.UP * 1.5
+		var to_p: Vector3 = player_eye - guard_eye
+		var dist: float = to_p.length()
+		if dist > DISGUISE_GUARD_VIEWCONE_M or dist < 0.05:
+			continue
+		var g_fwd: Vector3 = -gn.global_transform.basis.z
+		if g_fwd.length() < 0.05:
+			continue
+		var ang_deg: float = rad_to_deg(g_fwd.normalized().angle_to(to_p / dist))
+		if ang_deg > DISGUISE_GUARD_VIEWCONE_DEG:
+			continue
+		var hit: Dictionary = space.intersect_ray(PhysicsRayQueryParameters3D.create(guard_eye, player_eye, 1, [get_rid()]))
+		if hit.is_empty():
+			return true
+	return false
 
 
 func take_damage(amount: float) -> void:
@@ -825,16 +1274,14 @@ func _trigger_thief_ability() -> void:
 				disguise_ttl = DISGUISE_ACTIVE_TIME
 				if disguise_integrity <= 1.0:
 					disguise_integrity = 100.0
+				_fp_play_action("disguise_apply")
 			disguise_changed.emit(disguise_integrity, disguise_active)
 			ability_cooldown = DISGUISE_COOLDOWN
 		"moth":
 			astral_active = true
 			astral_ttl = ASTRAL_DURATION
 			ability_cooldown = 12.0
-			thief_vision = true
-			thief_vision_on = true
-			thief_vision_toggled.emit(true)
-			_update_thief_vision()
+			_sync_thief_vision()
 
 
 func _tick_astral(delta: float) -> void:
@@ -850,10 +1297,37 @@ func _end_astral() -> void:
 		return
 	astral_active = false
 	astral_ttl = 0.0
-	thief_vision = false
-	thief_vision_on = false
-	thief_vision_toggled.emit(false)
-	_update_thief_vision()
+	_sync_thief_vision()
+
+
+func validate_zipwire_target() -> Dictionary:
+	if cam == null or not is_inside_tree():
+		return {"valid": false, "pos": Vector3.ZERO, "reason": "no_camera"}
+	var w3d := get_world_3d()
+	if w3d == null:
+		return {"valid": false, "pos": Vector3.ZERO, "reason": "no_world"}
+	var space: PhysicsDirectSpaceState3D = w3d.direct_space_state
+	var from: Vector3 = cam.global_position
+	var fwd: Vector3 = -cam.global_transform.basis.z
+	var to: Vector3 = from + fwd * GRAPPLE_MAX_RANGE
+	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(from, to, 1, [get_rid()])
+	var hit: Dictionary = space.intersect_ray(query)
+	if hit.is_empty():
+		return {"valid": false, "pos": Vector3.ZERO, "reason": "no_hit"}
+	var hit_pos: Vector3 = hit["position"] as Vector3
+	var hit_normal: Vector3 = Vector3.UP
+	var normal_var: Variant = hit.get("normal", Vector3.UP)
+	if normal_var is Vector3:
+		hit_normal = normal_var
+	# Anchor surface check: reject point-blank hooks, walkable floor below the
+	# thief, and downward anchors (the zipwire only winches up/forward).
+	if hit_pos.distance_to(global_position) < GRAPPLE_MIN_RANGE:
+		return {"valid": false, "pos": hit_pos, "reason": "too_close"}
+	if hit_normal.dot(Vector3.UP) > 0.7 and hit_pos.y < global_position.y + 2.0:
+		return {"valid": false, "pos": hit_pos, "reason": "floor"}
+	if hit_pos.y < global_position.y - 0.5:
+		return {"valid": false, "pos": hit_pos, "reason": "below"}
+	return {"valid": true, "pos": hit_pos, "normal": hit_normal, "reason": "ok"}
 
 
 func _try_spider_grapple() -> bool:
@@ -865,36 +1339,23 @@ func _try_spider_grapple() -> bool:
 		return false
 	if int(charges.get("grapple", 0)) <= 0:
 		return false
-	var space: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
-	var from: Vector3 = cam.global_position
-	var fwd: Vector3 = -cam.global_transform.basis.z
-	var to: Vector3 = from + fwd * GRAPPLE_MAX_RANGE
-	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(from, to, 1, [get_rid()])
-	var hit: Dictionary = space.intersect_ray(query)
-	if hit.is_empty():
+	var check: Dictionary = validate_zipwire_target()
+	if check.get("valid", false) != true:
 		return false
-	var hit_pos: Vector3 = hit["position"] as Vector3
-	var hit_normal: Vector3 = Vector3.UP
-	var normal_var: Variant = hit.get("normal", Vector3.UP)
-	if normal_var is Vector3:
-		hit_normal = normal_var
-	# Anchor surface check: reject point-blank hooks, walkable floor below the
-	# thief, and downward anchors (the zipwire only winches up/forward).
-	if hit_pos.distance_to(global_position) < GRAPPLE_MIN_RANGE:
-		return false
-	if hit_normal.dot(Vector3.UP) > 0.7 and hit_pos.y < global_position.y + 2.0:
-		return false
-	if hit_pos.y < global_position.y - 0.5:
-		return false
-	grapple_target = hit_pos
+	grapple_target = check["pos"] as Vector3
 	is_grappling = true
+	_is_cranking = false
+	_crank_elapsed = 0.0
+	crank_progress = 0.0
 	grapple_time = 0.0
 	charges["grapple"] = int(charges.get("grapple", 0)) - 1
 	tool_used.emit("grapple", int(charges.get("grapple", 0)))
-	_fp_set_tool("zipwire")
+	if equipped_tool != "zipwire":
+		_fp_set_tool("zipwire")
+	_fp_play_action("zipwire_cast")
 	_fp_play_swing()
 	ability_cooldown = GameData.eval_curve("CT_Tool_Wire", "WireCooldownSecondary", 1.0, 5.0)
-	VfxManager.spawn_grapple_beam(get_parent(), global_position + Vector3.UP * 1.2, grapple_target, 0.45)
+	_update_zipwire_cable()
 	NoiseBus.emit_noise(global_position, 5.0, self, "wire")
 	return true
 
@@ -905,6 +1366,7 @@ func _use_slithersap() -> void:
 	if int(charges.get("slithersap", 0)) <= 0:
 		return
 	_fp_set_tool("slithersap")
+	_fp_play_action("slithersap_throw")
 	_fp_play_swing()
 	charges["slithersap"] = int(charges.get("slithersap", 0)) - 1
 	# Real behaviour: spawn the MagicSlime puddle (2.0 m radius, 30 s) at the
@@ -946,9 +1408,16 @@ func _use_smoke_bomb() -> void:
 	if int(charges.get("smoke_bomb", 0)) <= 0:
 		return
 	_fp_set_tool("smoke_bomb")
+	_fp_play_action("smoke_throw")
 	_fp_play_swing()
 	charges["smoke_bomb"] = int(charges.get("smoke_bomb", 0)) - 1
-	if level_ctrl != null and level_ctrl.has_method("spawn_smoke"):
+	if cam != null and get_parent() != null:
+		var fwd: Vector3 = -cam.global_transform.basis.z
+		var right: Vector3 = cam.global_transform.basis.x
+		var up: Vector3 = cam.global_transform.basis.y
+		var origin: Vector3 = cam.global_position + fwd * 0.5 + right * 0.14 - up * 0.05
+		SmokeProjectileScript.throw_from(get_parent(), origin, fwd, self, level_ctrl)
+	elif level_ctrl != null and level_ctrl.has_method("spawn_smoke"):
 		var ground: Vector3 = global_position + (-global_transform.basis.z) * 2.5
 		level_ctrl.spawn_smoke(ground, 25.0)
 	NoiseBus.emit_noise(global_position, 7.0, self, "smoke")
@@ -1031,6 +1500,7 @@ func _use_pickpocket_fairy() -> void:
 		return
 	pickpocket_cooldown = PICKPOCKET_COOLDOWN
 	_fp_set_tool("fairy")
+	_fp_play_action("fairy_deploy")
 	_fp_play_swing()
 	# No ammo field on BP_Pickpocket_Tool: the charge display is infinite and
 	# nothing is consumed.
@@ -1097,6 +1567,7 @@ func _try_blackjack() -> void:
 	if not can_act():
 		return
 	_fp_set_tool("blackjack")
+	_fp_play_action("blackjack_swing")
 	_fp_play_swing()
 	if head != null and cam != null:
 		var swing_dir: Vector3 = -cam.global_transform.basis.z
@@ -1145,6 +1616,7 @@ func _play_blackjack_camera_punch() -> void:
 
 func _process(delta: float) -> void:
 	_update_first_person(delta)
+	_update_smoke_trajectory()
 
 
 func _build_first_person_rig() -> void:
@@ -1152,6 +1624,7 @@ func _build_first_person_rig() -> void:
 		return
 	if fp_rig != null and is_instance_valid(fp_rig):
 		return
+	fp_tool_id = equipped_tool
 	fp_rig = Node3D.new()
 	fp_rig.name = "FirstPersonRig"
 	cam.add_child(fp_rig)
@@ -1170,22 +1643,273 @@ func _build_first_person_rig() -> void:
 	if fp_tool_root.get_parent() == null:
 		fp_rig.add_child(fp_tool_root)
 	_fp_set_tool(fp_tool_id)
+	if _fp_use_real_arms:
+		_update_fp_anim_state()
+
+
+func _get_fp_mat_loader() -> Node:
+	if _fp_mat_loader == null or not is_instance_valid(_fp_mat_loader):
+		_fp_mat_loader = LevelLoaderScript.new()
+		_fp_mat_loader.name = "FPMaterialLoader"
+		add_child(_fp_mat_loader)
+	return _fp_mat_loader
+
+
+func _bind_ue_mesh_materials(root_node: Node, ue_mesh_path: String) -> void:
+	if root_node == null or ue_mesh_path == "":
+		return
+	var loader: Node = _get_fp_mat_loader()
+	if loader == null:
+		return
+	var db: Variant = loader.get("_mesh_mats_db")
+	var slots_v: Variant = (db as Dictionary).get(ue_mesh_path, null) if db is Dictionary else null
+	if not (slots_v is Array):
+		var db_low: Variant = loader.get("_mesh_mats_db_lower")
+		if db_low is Dictionary:
+			slots_v = (db_low as Dictionary).get(ue_mesh_path.to_lower(), null)
+	if not (slots_v is Array):
+		return
+	var slots: Array = slots_v as Array
+	for child: Node in root_node.find_children("*", "MeshInstance3D", true, false):
+		var mi: MeshInstance3D = child as MeshInstance3D
+		if mi == null or mi.mesh == null:
+			continue
+		var count: int = mini(mi.mesh.get_surface_count(), slots.size())
+		for s: int in range(count):
+			var mat_path: String = str(slots[s])
+			if mat_path == "":
+				continue
+			var mat: Material = loader.call("get_material_for_ue", mat_path) as Material
+			if mat != null:
+				mi.set_surface_override_material(s, mat)
+
+
+func _set_cast_shadow_recursive(root_node: Node, mode: GeometryInstance3D.ShadowCastingSetting) -> void:
+	if root_node is GeometryInstance3D:
+		(root_node as GeometryInstance3D).cast_shadow = mode
+	for child: Node in root_node.get_children():
+		_set_cast_shadow_recursive(child, mode)
+
+
+static func _ensure_vm_shaders() -> void:
+	if _vm_opaque_shader == null:
+		_vm_opaque_shader = Shader.new()
+		_vm_opaque_shader.code = """shader_type spatial;
+render_mode depth_draw_opaque, specular_schlick_ggx;
+
+uniform float vm_fov_deg = 85.0;
+uniform sampler2D albedo_tex : source_color, hint_default_white, filter_linear_mipmap, repeat_enable;
+uniform sampler2D normal_tex : hint_normal, filter_linear_mipmap, repeat_enable;
+uniform sampler2D orm_tex : hint_default_white, filter_linear_mipmap, repeat_enable;
+uniform sampler2D emission_tex : source_color, hint_default_black, filter_linear_mipmap, repeat_enable;
+uniform vec4 albedo_tint : source_color = vec4(1.0);
+uniform float roughness_val = 0.78;
+uniform float metallic_val = 0.0;
+uniform float specular_val = 0.5;
+uniform float uv_scale = 1.0;
+uniform vec3 emission_color : source_color = vec3(0.0);
+uniform float emission_energy = 0.0;
+uniform bool use_albedo_tex = false;
+uniform bool use_normal_tex = false;
+uniform bool use_orm_tex = false;
+uniform bool use_emission_tex = false;
+
+void vertex() {
+	vec4 view_pos = MODELVIEW_MATRIX * vec4(VERTEX, 1.0);
+	float cur_fy = abs(PROJECTION_MATRIX[1][1]);
+	float vm_fy = 1.0 / tan(radians(vm_fov_deg) * 0.5);
+	float fov_scale = vm_fy / max(cur_fy, 0.0001);
+	mat4 vm_proj = PROJECTION_MATRIX;
+	vm_proj[0][0] *= fov_scale;
+	vm_proj[1][1] *= fov_scale;
+	POSITION = vm_proj * view_pos;
+	float near_z = 0.02;
+	if (-view_pos.z >= near_z) {
+		float depth_t = clamp((-view_pos.z - near_z) / 1.25, 0.0, 1.0);
+		POSITION.z = mix(0.996, 0.78, depth_t) * POSITION.w;
+	}
+}
+
+void fragment() {
+	vec2 uv = UV * uv_scale;
+	vec4 alb = use_albedo_tex ? texture(albedo_tex, uv) : vec4(1.0);
+	ALBEDO = alb.rgb * albedo_tint.rgb;
+	if (use_orm_tex) {
+		vec3 orm = texture(orm_tex, uv).rgb;
+		AO = orm.r;
+		ROUGHNESS = clamp(orm.g * roughness_val, 0.04, 1.0);
+		METALLIC = clamp(orm.b * metallic_val, 0.0, 1.0);
+	} else {
+		ROUGHNESS = clamp(roughness_val, 0.04, 1.0);
+		METALLIC = clamp(metallic_val, 0.0, 1.0);
+	}
+	SPECULAR = specular_val;
+	if (use_normal_tex) {
+		NORMAL_MAP = texture(normal_tex, uv).rgb;
+	}
+	if (use_emission_tex) {
+		EMISSION = texture(emission_tex, uv).rgb * max(emission_energy, 1.0);
+	} else if (emission_energy > 0.001) {
+		EMISSION = emission_color * emission_energy;
+	}
+}
+"""
+	if _vm_opaque_cull_disabled_shader == null:
+		_vm_opaque_cull_disabled_shader = Shader.new()
+		_vm_opaque_cull_disabled_shader.code = _vm_opaque_shader.code.replace(
+			"render_mode depth_draw_opaque, specular_schlick_ggx;",
+			"render_mode depth_draw_opaque, cull_disabled, specular_schlick_ggx;"
+		)
+	if _vm_glass_shader == null:
+		_vm_glass_shader = Shader.new()
+		_vm_glass_shader.code = """shader_type spatial;
+render_mode blend_mix, depth_draw_never, cull_disabled, specular_schlick_ggx;
+
+uniform float vm_fov_deg = 85.0;
+uniform sampler2D albedo_tex : source_color, hint_default_white, filter_linear_mipmap, repeat_enable;
+uniform sampler2D opacity_tex : hint_default_white, filter_linear_mipmap, repeat_enable;
+uniform sampler2D normal_tex : hint_normal, filter_linear_mipmap, repeat_enable;
+uniform sampler2D orm_tex : hint_default_white, filter_linear_mipmap, repeat_enable;
+uniform vec4 albedo_tint : source_color = vec4(1.0);
+uniform float opacity_scale = 1.0;
+uniform float roughness_val = 0.2;
+uniform float metallic_val = 0.0;
+uniform float specular_val = 0.5;
+uniform float uv_scale = 1.0;
+uniform vec3 emission_color : source_color = vec3(0.0);
+uniform float emission_energy = 0.0;
+uniform vec3 fresnel_color : source_color = vec3(0.0);
+uniform float fresnel_power = 3.0;
+uniform float fresnel_strength = 0.0;
+uniform bool use_albedo_tex = false;
+uniform bool use_opacity_tex = false;
+uniform bool use_normal_tex = false;
+uniform bool use_orm_tex = false;
+
+void vertex() {
+	vec4 view_pos = MODELVIEW_MATRIX * vec4(VERTEX, 1.0);
+	float cur_fy = abs(PROJECTION_MATRIX[1][1]);
+	float vm_fy = 1.0 / tan(radians(vm_fov_deg) * 0.5);
+	float fov_scale = vm_fy / max(cur_fy, 0.0001);
+	mat4 vm_proj = PROJECTION_MATRIX;
+	vm_proj[0][0] *= fov_scale;
+	vm_proj[1][1] *= fov_scale;
+	POSITION = vm_proj * view_pos;
+	float near_z = 0.02;
+	if (-view_pos.z >= near_z) {
+		float depth_t = clamp((-view_pos.z - near_z) / 1.25, 0.0, 1.0);
+		POSITION.z = mix(0.996, 0.78, depth_t) * POSITION.w;
+	}
+}
+
+void fragment() {
+	vec2 uv = UV * uv_scale;
+	vec4 alb = use_albedo_tex ? texture(albedo_tex, uv) : vec4(1.0);
+	ALBEDO = alb.rgb * albedo_tint.rgb;
+	float op_sample = use_opacity_tex ? texture(opacity_tex, uv).r : (use_albedo_tex ? alb.a : 1.0);
+	ALPHA = clamp(op_sample * albedo_tint.a * opacity_scale, 0.0, 1.0);
+	if (use_orm_tex) {
+		vec3 orm = texture(orm_tex, uv).rgb;
+		AO = orm.r;
+		ROUGHNESS = clamp(orm.g * roughness_val, 0.04, 1.0);
+		METALLIC = clamp(orm.b * metallic_val, 0.0, 1.0);
+	} else {
+		ROUGHNESS = clamp(roughness_val, 0.04, 1.0);
+		METALLIC = clamp(metallic_val, 0.0, 1.0);
+	}
+	SPECULAR = specular_val;
+	if (use_normal_tex) {
+		NORMAL_MAP = texture(normal_tex, uv).rgb;
+	}
+	float fres = pow(1.0 - clamp(dot(normalize(NORMAL), normalize(VIEW)), 0.0, 1.0), fresnel_power);
+	EMISSION = emission_color * emission_energy + fresnel_color * fresnel_strength * fres;
+}
+"""
+
+
+func _wrap_material_for_vm(src_mat: Material) -> ShaderMaterial:
+	_ensure_vm_shaders()
+	var smat := ShaderMaterial.new()
+	if src_mat is ShaderMaterial:
+		var src_sh := src_mat as ShaderMaterial
+		smat.shader = _vm_glass_shader
+		smat.set_shader_parameter("vm_fov_deg", FP_VM_FOV_DEG)
+		for p_name: String in [
+			"albedo_tex", "opacity_tex", "normal_tex", "orm_tex",
+			"albedo_tint", "opacity_scale", "roughness_val", "metallic_val",
+			"specular_val", "uv_scale", "emission_color", "emission_energy",
+			"use_albedo_tex", "use_opacity_tex", "use_normal_tex", "use_orm_tex"
+		]:
+			var val: Variant = src_sh.get_shader_parameter(p_name)
+			if val != null:
+				smat.set_shader_parameter(p_name, val)
+		return smat
+	var std := src_mat as StandardMaterial3D
+	if std == null:
+		smat.shader = _vm_opaque_shader
+		smat.set_shader_parameter("vm_fov_deg", FP_VM_FOV_DEG)
+		return smat
+	var is_trans: bool = std.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED
+	if is_trans:
+		smat.shader = _vm_glass_shader
+		smat.set_shader_parameter("opacity_scale", 1.0)
+		smat.set_shader_parameter("use_opacity_tex", false)
+	else:
+		smat.shader = _vm_opaque_cull_disabled_shader if std.cull_mode == BaseMaterial3D.CULL_DISABLED else _vm_opaque_shader
+	smat.set_shader_parameter("vm_fov_deg", FP_VM_FOV_DEG)
+	smat.set_shader_parameter("albedo_tint", std.albedo_color)
+	smat.set_shader_parameter("roughness_val", std.roughness)
+	var metal_v: float = 1.0 if (std.metallic_texture != null and std.metallic <= 0.001) else std.metallic
+	smat.set_shader_parameter("metallic_val", metal_v)
+	smat.set_shader_parameter("specular_val", std.metallic_specular)
+	smat.set_shader_parameter("uv_scale", std.uv1_scale.x)
+	smat.set_shader_parameter("use_albedo_tex", std.albedo_texture != null)
+	if std.albedo_texture != null:
+		smat.set_shader_parameter("albedo_tex", std.albedo_texture)
+	smat.set_shader_parameter("use_normal_tex", std.normal_enabled and std.normal_texture != null)
+	if std.normal_enabled and std.normal_texture != null:
+		smat.set_shader_parameter("normal_tex", std.normal_texture)
+	var has_orm: bool = std.roughness_texture != null
+	smat.set_shader_parameter("use_orm_tex", has_orm)
+	if has_orm:
+		smat.set_shader_parameter("orm_tex", std.roughness_texture)
+	if std.emission_enabled:
+		smat.set_shader_parameter("emission_color", Vector3(std.emission.r, std.emission.g, std.emission.b))
+		smat.set_shader_parameter("emission_energy", std.emission_energy_multiplier)
+		if not is_trans:
+			smat.set_shader_parameter("use_emission_tex", std.emission_texture != null)
+			if std.emission_texture != null:
+				smat.set_shader_parameter("emission_tex", std.emission_texture)
+	if std.has_meta("fresnel_strength"):
+		var fc: Color = std.get_meta("fresnel_color", Color(0.75, 0.92, 1.0)) as Color
+		smat.set_shader_parameter("fresnel_color", Vector3(fc.r, fc.g, fc.b))
+		smat.set_shader_parameter("fresnel_power", float(std.get_meta("fresnel_power", 2.5)))
+		smat.set_shader_parameter("fresnel_strength", float(std.get_meta("fresnel_strength", 0.0)))
+	return smat
+
+
+func _apply_viewmodel_isolation(root_node: Node) -> void:
+	if root_node == null:
+		return
+	for child: Node in root_node.find_children("*", "MeshInstance3D", true, false):
+		var mi: MeshInstance3D = child as MeshInstance3D
+		if mi == null or mi.mesh == null:
+			continue
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		for s: int in range(mi.mesh.get_surface_count()):
+			var mat: Material = mi.get_surface_override_material(s)
+			if mat == null:
+				mat = mi.mesh.surface_get_material(s)
+			var vm_mat: ShaderMaterial = _wrap_material_for_vm(mat)
+			mi.set_surface_override_material(s, vm_mat)
 
 
 ## Real 1P viewmodel (BP_Player_Thief_Spider.Mesh1P_UpperBody):
-## SK_ThiefNisha__BodyUpper attached under the camera with the three
-## retargeted 1P clips. Placement and scale are derived, not guessed:
-## the Skeleton3D bind pose already carries the UE first-person framing in
-## the `camera_position` joint (present in both the mesh and the anim
-## skeletons), so the instanced root is counter-moved so that joint's global
-## rest lands exactly on the holder origin (i.e. the camera). Identity scale
-## is kept: the mesh is authored in meters (POSITION bounds span y 0.94-1.52
-## and the imported skeleton rests read out in meters), while the animation
-## side (authored in cm) is converted by the pelvis-rest unit factor in
-## animation_library.gd. SK_ThiefNisha__BodyLower is intentionally omitted:
-## it ships the same full skeleton (a second instance would need its own
-## AnimationPlayer) and the legs sit below the FP camera frustum.
-## Any failure returns false and the caller keeps the procedural fallback.
+## SK_ThiefNisha__BodyUpper attached under the camera with retargeted 1P clips.
+## SK_ThiefNisha__BodyUpper faces +Z in glTF Y-up (like 3P meshes), so it is
+## rotated 180 deg around Y and shifted vertically by -cam_origin.y (instead of
+## inverting camera_position's +90 deg X root basis, which pitched the torso
+## onto its back). Identity scale is kept (mesh bounds already in meters).
 func _try_build_real_fp_arms() -> bool:
 	_fp_arm_skel = null
 	_fp_arm_holder = null
@@ -1223,15 +1947,18 @@ func _try_build_real_fp_arms() -> bool:
 	if inst3d == null:
 		holder.queue_free()
 		return false
-	# Skeleton-space -> holder-space chain (local only, no world dependency).
 	var holder_from_skel := Transform3D.IDENTITY
 	var cursor: Node = sk
 	while cursor != null and cursor != holder:
 		if cursor is Node3D:
 			holder_from_skel = (cursor as Node3D).transform * holder_from_skel
 		cursor = cursor.get_parent()
-	var joint_in_holder: Transform3D = holder_from_skel * sk.get_bone_global_rest(cam_bone)
-	inst3d.transform = joint_in_holder.affine_inverse() * inst3d.transform
+	var cam_origin: Vector3 = (holder_from_skel * sk.get_bone_global_rest(cam_bone)).origin
+	inst3d.rotation_degrees = Vector3(0.0, 180.0, 0.0)
+	inst3d.position = Vector3(cam_origin.x, -cam_origin.y, cam_origin.z)
+	_bind_ue_mesh_materials(inst3d, "/Game/Art/Animation/ThiefNisha/Skin/Base/SK_ThiefNisha__BodyUpper")
+	_set_cast_shadow_recursive(inst3d, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	_apply_viewmodel_isolation(inst3d)
 	_fp_arm_holder = holder
 	_fp_arm_skel = sk
 	if not _setup_fp_anims():
@@ -1242,7 +1969,7 @@ func _try_build_real_fp_arms() -> bool:
 	return true
 
 
-## Retargets the three real 1P clips onto the 1P arm skeleton. Any failure
+## Retargets the 1P clips onto the 1P arm skeleton. Any failure
 ## (manifest, GLB, zero shared bones) returns false for the fallback path.
 func _setup_fp_anims() -> bool:
 	fp_anim_player = null
@@ -1289,37 +2016,95 @@ func _attach_fp_tool_to_hand() -> void:
 	_fp_tool_on_bone = true
 
 
-## Drives the real 1P clip state machine: crouch clip while crouching,
-## sprint clip while sprinting, walk clip while moving, each crossfaded over
-## FP_ANIM_BLEND (0.2 s). When stationary there is no 1P idle or jump clip
-## in the install, so nothing is fabricated: the player stops and the
-## skeleton holds its rest (bind) pose.
+func _fp_play_action(role: String) -> void:
+	if not _fp_use_real_arms or fp_anim_player == null or _fp_anim_lib == null:
+		return
+	var clip_name: String = str(_fp_anim_lib.call("ensure_fp_clip", fp_anim_player, role))
+	if clip_name == "" or not fp_anim_player.has_animation(clip_name):
+		return
+	var dur: float = fp_anim_player.get_animation(clip_name).length
+	_fp_action_ttl = maxf(dur, 0.25)
+	_fp_current_clip = clip_name
+	fp_anim_player.play(clip_name, 0.08)
+
+
+func _select_fp_anim_role(moving: bool) -> String:
+	if is_grappling:
+		return "zipwire_travel"
+	if _is_cranking:
+		return "zipwire_crank"
+	if disguise_active:
+		if moving:
+			if is_crouching:
+				return "disguise_crouch"
+			if is_sprinting:
+				return "disguise_sprint"
+			return "disguise_walk"
+		if is_crouching:
+			return "disguise_crouch_idle"
+	match fp_tool_id:
+		"zipwire":
+			if moving:
+				if is_crouching:
+					return "crouch"
+				if is_sprinting:
+					return "zipwire_sprint"
+				return "zipwire_walk"
+			return "zipwire_crouch_idle" if is_crouching else "zipwire_idle"
+		"blackjack":
+			if moving:
+				if is_crouching:
+					return "crouch"
+				if is_sprinting:
+					return "sprint"
+				return "blackjack_walk"
+			return "blackjack_crouch_idle" if is_crouching else "blackjack_idle"
+		"smoke_bomb":
+			if moving:
+				if is_crouching:
+					return "crouch"
+				if is_sprinting:
+					return "sprint"
+				return "smoke_walk"
+			return "smoke_crouch_idle" if is_crouching else "smoke_idle"
+		"slithersap":
+			if moving:
+				return "crouch" if is_crouching else ("sprint" if is_sprinting else "walk")
+			return "slithersap_crouch_idle" if is_crouching else "slithersap_idle"
+		"fairy":
+			if moving:
+				return "crouch" if is_crouching else ("sprint" if is_sprinting else "walk")
+			return "fairy_crouch_idle" if is_crouching else "fairy_idle"
+		"vistara_diamond":
+			if moving:
+				return "crouch" if is_crouching else ("sprint" if is_sprinting else "walk")
+			return "vistara_crouch_idle" if is_crouching else "vistara_idle"
+		_:
+			if moving:
+				return "crouch" if is_crouching else ("sprint" if is_sprinting else "walk")
+			return "unarmed_idle"
+
+
+## Drives the real 1P clip state machine using verified tool idle/loco/crank/
+## disguise clips (respecting R3 L6: no fabricated unarmed 1P jump/idle clips).
 func _update_fp_anim_state() -> void:
 	if not _fp_use_real_arms or fp_anim_player == null or _fp_anim_lib == null:
 		return
-	var key: String = ""
-	if GameState.state == "playing" and _fp_arm_skel != null:
-		var planar: float = Vector2(velocity.x, velocity.z).length()
-		var moving: bool = is_on_floor() and planar > 0.5
-		if moving:
-			if is_crouching:
-				key = String(_fp_anim_lib.clip_for_role("crouch"))
-			elif is_sprinting:
-				key = String(_fp_anim_lib.clip_for_role("sprint"))
-			else:
-				key = String(_fp_anim_lib.clip_for_role("walk"))
-	_fp_play_fp_clip(key)
+	if _fp_action_ttl > 0.0 and fp_anim_player.is_playing():
+		return
+	var planar: float = Vector2(velocity.x, velocity.z).length()
+	var moving: bool = is_on_floor() and planar > 0.5
+	var role: String = _select_fp_anim_role(moving)
+	var clip_name: String = str(_fp_anim_lib.call("ensure_fp_clip", fp_anim_player, role))
+	if clip_name == "" and moving:
+		var fallback_role: String = "crouch" if is_crouching else ("sprint" if is_sprinting else "walk")
+		clip_name = str(_fp_anim_lib.clip_for_role(fallback_role))
+	if clip_name != "":
+		_fp_play_fp_clip(clip_name)
 
 
 func _fp_play_fp_clip(clip_name: String) -> void:
-	if fp_anim_player == null:
-		return
-	if clip_name == "":
-		if _fp_current_clip != "":
-			_fp_current_clip = ""
-			fp_anim_player.stop()
-			if _fp_arm_skel != null and is_instance_valid(_fp_arm_skel):
-				_fp_arm_skel.reset_bone_poses()
+	if fp_anim_player == null or clip_name == "":
 		return
 	if _fp_current_clip == clip_name and fp_anim_player.is_playing():
 		return
@@ -1329,10 +2114,14 @@ func _fp_play_fp_clip(clip_name: String) -> void:
 	fp_anim_player.play(clip_name, FP_ANIM_BLEND)
 
 
-## Small procedural swing offset for the bone-attached tool (local to the
-## hand bone; the camera-space fallback path below is untouched).
+## Small procedural swing offset for the bone-attached tool when no real
+## one-shot action animation is driving the wrist/socket.
 func _update_fp_tool_on_bone(swing_k: float) -> void:
 	if not _fp_tool_on_bone or fp_tool_root == null:
+		return
+	if _fp_action_ttl > 0.0 or swing_k <= 0.001:
+		fp_tool_root.position = Vector3.ZERO
+		fp_tool_root.rotation = Vector3.ZERO
 		return
 	fp_tool_root.position = Vector3(0.0, swing_k * -0.05, swing_k * -0.08)
 	fp_tool_root.rotation_degrees = Vector3(swing_k * -40.0, 0.0, 0.0)
@@ -1407,11 +2196,10 @@ func _fp_set_tool(tool_id: String) -> void:
 	if fp_tool_root == null:
 		return
 	_fp_clear_tool()
-	if tool_id == "zipwire":
-		var loaded: Node = _fp_try_load_zipwire()
-		if loaded != null:
-			fp_tool_root.add_child(loaded)
-			return
+	var loaded: Node = _fp_try_load_tool_glb(tool_id)
+	if loaded != null:
+		fp_tool_root.add_child(loaded)
+		return
 	match tool_id:
 		"zipwire":
 			_build_fp_zipwire_fallback()
@@ -1425,22 +2213,158 @@ func _fp_set_tool(tool_id: String) -> void:
 			_build_fp_blackjack_fallback()
 
 
-func _fp_try_load_zipwire() -> Node:
-	var candidates: Array[String] = [
-		"res://assets/ue/Content/Art/Tools/SM_Zipwire.glb",
-		"res://assets/ue/Content/Art/Tools/Zipwire/SM_Zipwire.glb",
-		"res://assets/ue/Content/Art/Tool/SM_Zipwire.glb",
-		"res://assets/ue/Content/Art/Tools/SM_Zipwire.tscn",
-	]
-	for path: String in candidates:
-		if not ResourceLoader.exists(path):
+func _load_raw_tex(path: String) -> Texture2D:
+	if path == "" or not ResourceLoader.exists(path):
+		return null
+	return ResourceLoader.load(path) as Texture2D
+
+
+func _apply_blackjack_materials(root_node: Node) -> void:
+	# Mi_Blackjack is null in materials.json (lowercase Mi_ skipped by parser);
+	# bind T_Blackjack_{D,N,ORM}.png directly per Mi_Blackjack.json.
+	var mat := StandardMaterial3D.new()
+	mat.roughness = 0.6
+	mat.albedo_texture = _load_raw_tex("res://assets/ue/Raw/Art/Gameplay/Gear/BlackJack/T_Blackjack_D.png")
+	var norm: Texture2D = _load_raw_tex("res://assets/ue/Raw/Art/Gameplay/Gear/BlackJack/T_Blackjack_N.png")
+	if norm != null:
+		mat.normal_enabled = true
+		mat.normal_texture = norm
+	var orm: Texture2D = _load_raw_tex("res://assets/ue/Raw/Art/Gameplay/Gear/BlackJack/T_Blackjack_ORM.png")
+	if orm != null:
+		mat.ao_enabled = true
+		mat.ao_texture = orm
+		mat.ao_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
+		mat.roughness_texture = orm
+		mat.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
+		mat.metallic = 1.0
+		mat.metallic_texture = orm
+		mat.metallic_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_BLUE
+	for child: Node in root_node.find_children("*", "MeshInstance3D", true, false):
+		var mi: MeshInstance3D = child as MeshInstance3D
+		if mi != null and mi.mesh != null:
+			for s: int in range(mi.mesh.get_surface_count()):
+				mi.set_surface_override_material(s, mat)
+
+
+func _apply_vistara_materials(root_node: Node) -> void:
+	# SK_VistaraDiamond collides in mesh_materials.json on MI_VistaraDiamond:
+	# surface 0 is GemShader crystal, surface 1 is brass tongs.
+	var loader: Node = _get_fp_mat_loader()
+	var gem_mat := StandardMaterial3D.new()
+	gem_mat.albedo_color = Color(0.318, 0.664, 1.0, 0.78)
+	gem_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	gem_mat.roughness = 0.2
+	gem_mat.metallic = 0.05
+	gem_mat.emission_enabled = true
+	gem_mat.emission = Color(0.32, 0.72, 1.0)
+	gem_mat.emission_energy_multiplier = 1.25
+	gem_mat.set_meta("fresnel_color", Color(0.75, 0.94, 1.0))
+	gem_mat.set_meta("fresnel_power", 2.4)
+	gem_mat.set_meta("fresnel_strength", 1.8)
+	var tong_mat: Material = null
+	if loader != null:
+		tong_mat = loader.call("get_material_for_ue", "/Game/Art/Gameplay/Gear/VistaraDiamond/MI_VistaraDiamond") as Material
+	for child: Node in root_node.find_children("*", "MeshInstance3D", true, false):
+		var mi: MeshInstance3D = child as MeshInstance3D
+		if mi == null or mi.mesh == null:
 			continue
-		var res: Resource = ResourceLoader.load(path)
-		if res is PackedScene:
-			var inst: Node = (res as PackedScene).instantiate()
-			(inst as Node3D).scale = Vector3.ONE * 0.35
-			return inst
-	return null
+		if mi.mesh.get_surface_count() >= 1:
+			mi.set_surface_override_material(0, gem_mat)
+		if mi.mesh.get_surface_count() >= 2 and tong_mat != null:
+			mi.set_surface_override_material(1, tong_mat)
+
+
+func _apply_fairy_materials(root_node: Node) -> void:
+	# SK_PickpocketFairy has 5 surfaces: [0] bubble orb & [2] jar had stem
+	# collision onto T_InsultFairy_Teeth_D.png in materials.json; override
+	# [0] & [2] cleanly and load [1, 3, 4] via LevelLoader.
+	_bind_ue_mesh_materials(root_node, "/Game/Art/Gameplay/Gear/PickpocketFairy/SK_PickpocketFairy")
+	var orb_mat := StandardMaterial3D.new()
+	orb_mat.albedo_color = Color(0.48, 0.25, 1.0, 0.65)
+	orb_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	orb_mat.roughness = 0.15
+	orb_mat.emission_enabled = true
+	orb_mat.emission = Color(0.45, 0.85, 1.0)
+	orb_mat.emission_energy_multiplier = 2.2
+	orb_mat.set_meta("fresnel_color", Color(0.55, 0.95, 1.0))
+	orb_mat.set_meta("fresnel_power", 2.2)
+	orb_mat.set_meta("fresnel_strength", 1.5)
+	var jar_mat := StandardMaterial3D.new()
+	jar_mat.albedo_color = Color(0.06, 0.042, 0.034)
+	jar_mat.roughness = 0.72
+	jar_mat.metallic = 0.15
+	var wicker_n: Texture2D = _load_raw_tex("res://assets/ue/Raw/MaterialLibrary/Environment/WickerClay/T_WickerClayTrimTexture_N.png")
+	if wicker_n != null:
+		jar_mat.normal_enabled = true
+		jar_mat.normal_texture = wicker_n
+	var wicker_orm: Texture2D = _load_raw_tex("res://assets/ue/Raw/MaterialLibrary/Environment/WickerClay/T_WickerClayTrimTexture_ORM.png")
+	if wicker_orm != null:
+		jar_mat.roughness_texture = wicker_orm
+		jar_mat.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
+	for child: Node in root_node.find_children("*", "MeshInstance3D", true, false):
+		var mi: MeshInstance3D = child as MeshInstance3D
+		if mi == null or mi.mesh == null:
+			continue
+		if mi.mesh.get_surface_count() >= 1:
+			mi.set_surface_override_material(0, orb_mat)
+		if mi.mesh.get_surface_count() >= 3:
+			mi.set_surface_override_material(2, jar_mat)
+
+
+func _fp_try_load_tool_glb(tool_id: String) -> Node:
+	var specs: Dictionary = {
+		"zipwire": {
+			"glb": "res://assets/ue/Content/Art/Gameplay/Gear/Zipwire/SK_Zipwire.glb",
+			"ue": "/Game/Art/Gameplay/Gear/Zipwire/SK_Zipwire",
+		},
+		"smoke_bomb": {
+			"glb": "res://assets/ue/Content/Art/Gameplay/Gear/SmokeBomb/SK_SmokeBomb.glb",
+			"ue": "/Game/Art/Gameplay/Gear/SmokeBomb/SK_SmokeBomb",
+		},
+		"slithersap": {
+			"glb": "res://assets/ue/Content/Art/Gameplay/Gear/Slithersap/SK_SlimeBomb.glb",
+			"ue": "/Game/Art/Gameplay/Gear/Slithersap/SK_SlimeBomb",
+		},
+		"blackjack": {
+			"glb": "res://assets/ue/Content/Art/Gameplay/Gear/BlackJack/SK_BlackJack.glb",
+			"ue": "/Game/Art/Gameplay/Gear/BlackJack/SK_BlackJack",
+		},
+		"fairy": {
+			"glb": "res://assets/ue/Content/Art/Gameplay/Gear/PickpocketFairy/SK_PickpocketFairy.glb",
+			"ue": "/Game/Art/Gameplay/Gear/PickpocketFairy/SK_PickpocketFairy",
+		},
+		"vistara_diamond": {
+			"glb": "res://assets/ue/Content/Art/Gameplay/Gear/VistaraDiamond/SK_VistaraDiamond.glb",
+			"ue": "/Game/Art/Gameplay/Gear/VistaraDiamond/SK_VistaraDiamond",
+		},
+	}
+	if not specs.has(tool_id):
+		return null
+	var spec: Dictionary = specs[tool_id] as Dictionary
+	var glb_path: String = str(spec["glb"])
+	if not ResourceLoader.exists(glb_path):
+		return null
+	var res: Resource = ResourceLoader.load(glb_path)
+	if not (res is PackedScene):
+		return null
+	var inst: Node = (res as PackedScene).instantiate()
+	var inst3d := inst as Node3D
+	if inst3d != null:
+		inst3d.scale = Vector3.ONE
+		# SKEL_Base.json weapon_r_1pSocket RelativeRotation Roll = -90 deg.
+		inst3d.rotation_degrees = Vector3(-90.0, 0.0, 0.0)
+	match tool_id:
+		"blackjack":
+			_apply_blackjack_materials(inst)
+		"vistara_diamond":
+			_apply_vistara_materials(inst)
+		"fairy":
+			_apply_fairy_materials(inst)
+		_:
+			_bind_ue_mesh_materials(inst, str(spec["ue"]))
+	_set_cast_shadow_recursive(inst, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	_apply_viewmodel_isolation(inst)
+	return inst
 
 
 func _fp_fallback_mat(base: Color, emission: Color, energy: float) -> StandardMaterial3D:
@@ -1584,10 +2508,89 @@ func _fp_play_swing() -> void:
 	fp_swing_t = 0.32
 
 
+func _update_smoke_trajectory() -> void:
+	var show_traj: bool = (
+		equipped_tool == "smoke_bomb"
+		and int(charges.get("smoke_bomb", 0)) > 0
+		and GameState.state == "playing"
+		and can_act()
+		and cam != null
+		and is_inside_tree()
+	)
+	if not show_traj:
+		if _smoke_traj_mesh != null and is_instance_valid(_smoke_traj_mesh):
+			_smoke_traj_mesh.visible = false
+		return
+	var w3d := get_world_3d()
+	if w3d == null:
+		return
+	if _smoke_traj_mesh == null or not is_instance_valid(_smoke_traj_mesh):
+		var im := ImmediateMesh.new()
+		var tmat := StandardMaterial3D.new()
+		tmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		tmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		tmat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		tmat.albedo_color = Color(0.98, 0.96, 0.84, 0.85)
+		tmat.emission_enabled = true
+		tmat.emission = Color(0.95, 0.92, 0.78)
+		tmat.emission_energy_multiplier = 2.0
+		_smoke_traj_mesh = MeshInstance3D.new()
+		_smoke_traj_mesh.name = "SmokeTrajectoryMesh"
+		_smoke_traj_mesh.top_level = true
+		_smoke_traj_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_smoke_traj_mesh.mesh = im
+		_smoke_traj_mesh.material_override = tmat
+		add_child(_smoke_traj_mesh)
+	var mesh_im := _smoke_traj_mesh.mesh as ImmediateMesh
+	if mesh_im == null:
+		return
+	mesh_im.clear_surfaces()
+	var fwd: Vector3 = -cam.global_transform.basis.z
+	var right: Vector3 = cam.global_transform.basis.x
+	var up: Vector3 = cam.global_transform.basis.y
+	var p0: Vector3 = cam.global_position + fwd * 0.5 + right * 0.14 - up * 0.05
+	var v0: Vector3 = fwd * SmokeProjectileScript.INITIAL_SPEED_M_S
+	var g_vec := Vector3(0.0, -gravity, 0.0)
+	var pts: PackedVector3Array = [p0]
+	var space: PhysicsDirectSpaceState3D = w3d.direct_space_state
+	var excl: Array[RID] = [get_rid()]
+	var prev: Vector3 = p0
+	for i: int in range(1, 33):
+		var t: float = float(i) * 0.06
+		var nxt: Vector3 = p0 + v0 * t + 0.5 * g_vec * (t * t)
+		var hit: Dictionary = space.intersect_ray(PhysicsRayQueryParameters3D.create(prev, nxt, 1, excl))
+		if not hit.is_empty():
+			pts.append(hit["position"] as Vector3)
+			break
+		pts.append(nxt)
+		prev = nxt
+	if pts.size() < 2:
+		_smoke_traj_mesh.visible = false
+		return
+	_smoke_traj_mesh.visible = true
+	_smoke_traj_mesh.global_transform = Transform3D.IDENTITY
+	mesh_im.surface_begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
+	for i: int in range(pts.size()):
+		var pt: Vector3 = pts[i]
+		var frac: float = float(i) / float(pts.size() - 1)
+		var half_w: float = lerpf(0.016, 0.008, frac)
+		var tang: Vector3 = (pts[mini(i + 1, pts.size() - 1)] - pts[maxi(i - 1, 0)]).normalized()
+		var side: Vector3 = tang.cross(Vector3.UP)
+		if side.length() < 0.05:
+			side = right
+		else:
+			side = side.normalized()
+		mesh_im.surface_add_vertex(pt - side * half_w)
+		mesh_im.surface_add_vertex(pt + side * half_w)
+	mesh_im.surface_end()
+
+
 func _update_first_person(delta: float) -> void:
 	if fp_rig == null or cam == null:
 		return
 	fp_breathe_time += delta
+	if _fp_action_ttl > 0.0:
+		_fp_action_ttl = maxf(0.0, _fp_action_ttl - delta)
 	if fp_swing_t > 0.0:
 		fp_swing_t = maxf(0.0, fp_swing_t - delta)
 	var planar: float = Vector2(velocity.x, velocity.z).length()
@@ -1635,6 +2638,8 @@ func _update_prop_highlight() -> void:
 
 func _update_thief_vision() -> void:
 	thief_vision = thief_vision_on
+	if not is_inside_tree():
+		return
 	for n: Node in get_tree().get_nodes_in_group("thief_vision_highlight"):
 		if n.has_method("set_highlighted"):
 			n.call("set_highlighted", thief_vision_on)

@@ -107,6 +107,9 @@ def build_character_movement() -> dict:
     fov = float(req(cam, "FirstPersonFieldOfView", "OSECameraComponent"))
     targeter = find(base, {"Type": "TATInteractionTargeterComponent"})
     interact_cm = float(req(targeter, "MaxInteractionRange", "TATInteractionTargeter"))
+    mantle = req(move, "_mantleSettings", "CharMoveComp")
+    wall_climb = req(move, "_wallClimbSettings", "CharMoveComp")
+    allow_mantle_from_crouch = bool(move.get("_allowMantleFromCrouch", True))
 
     st = load("Gameplay/Tuning/CT_StaminaSystem.json")
     stam_rows = st[0]["Rows"]
@@ -141,6 +144,12 @@ def build_character_movement() -> dict:
             "sprint_drain_per_s": abs(sprint_drain),
             "stamina_regen_rate": regen_rate,
             "stamina_regen_per_s": round(regen_rate * 0.25 / 0.1, 6),
+            "mantle_max_height_m": cm(req(mantle, "MaxHeight", "_mantleSettings")),
+            "mantle_max_angle_deg": float(req(mantle, "MaxAngleFacing", "_mantleSettings")),
+            "allow_mantle_from_crouch": allow_mantle_from_crouch,
+            "wall_climb_speed_m_s": cm(req(wall_climb, "WallClimbDashSpeed", "_wallClimbSettings")),
+            "wall_climb_accel_m_s2": cm(req(wall_climb, "WallClimbDashAcceleration", "_wallClimbSettings")),
+            "wall_climb_dash_duration_s": float(req(wall_climb, "WallClimbDashDuration", "_wallClimbSettings")),
         },
         "guard": {
             "max_walk_m_s": cm(float(req(gmove, "MaxWalkSpeed", "guard CharMoveComp"))),
@@ -154,6 +163,8 @@ def build_character_movement() -> dict:
             "spider_eyes_capsule": "extracted/json/Character/Player/BP_Player_Thief_Spider.json (BP_Player_Thief_Spider_C CDO + CollisionOverlayCapsuleComponent)",
             "camera": "extracted/json/Character/Player/BP_Player_Base.json (OSECameraComponent CameraComponent.FirstPersonFieldOfView)",
             "interaction": "extracted/json/Character/Player/BP_Player_Base.json (TATInteractionTargeterComponent.MaxInteractionRange)",
+            "mantle": "extracted/json/Character/Player/BP_Player_Base.json (CharMoveComp._mantleSettings + _allowMantleFromCrouch)",
+            "wall_climb": "extracted/json/Character/Player/BP_Player_Base.json (CharMoveComp._wallClimbSettings)",
             "stamina_drain": "extracted/json/Gameplay/Tuning/CT_StaminaSystem.json (StaminaPerSecond.Sprint)",
             "stamina_regen": "extracted/json/Gameplay/Tuning/CT_PlayerStats.json (BaseStaminaRegenRate) x extracted/json/Gameplay/Abilities/Effects/Regen/Stamina/GE_Stamina_Regen.json (0.25 coeff / 0.1s period)",
             "gravity": "UE default gravity 980 cm/s^2 (no override in CharMoveComp)",
@@ -425,6 +436,15 @@ def build_player_tools() -> dict:
         load("Gameplay/Tools/PrimaryTools/Hotwire/BP_Hotwire_Tool.json"),
         {"Type": "BP_Hotwire_Tool_C"},
     )
+    crank_rows = load("Gameplay/Tools/PrimaryTools/Hotwire/CT_WireCrank.json")[0][
+        "Rows"
+    ]
+    crank_dur = curve_val(crank_rows, "CrankDuration", 0)
+    ga_crank = find(
+        load("Gameplay/Tools/PrimaryTools/Hotwire/Abilities/GA_Hotwire_Crank.json"),
+        {"Type": "GA_Hotwire_Crank_C"},
+    )
+    crank_min_time = float(req(ga_crank, "MinimumCrankTime", "GA_Hotwire_Crank"))
     slime = find(
         load("Gameplay/Tools/PrimaryTools/MagicSlime/BP_MagicSlime_Tool.json"),
         {"Type": "BP_MagicSlime_Tool_C"},
@@ -432,6 +452,24 @@ def build_player_tools() -> dict:
     smoke = find(
         load("Gameplay/Tools/Bombs/SmokeBomb/BP_SmokeBomb_Bomb_Tool.json"),
         {"Type": "BP_SmokeBomb_Bomb_Tool_C"},
+    )
+    smoke_proj_data = load("Gameplay/Tools/Bombs/SmokeBomb/BP_Projectile_SmokeBomb.json")
+    smoke_proj_cdo = find(smoke_proj_data, {"Type": "BP_Projectile_SmokeBomb_C"})
+    smoke_proj_comp = find(
+        smoke_proj_data,
+        {"Type": "ProjectileMovementComponent", "Name": "ProjectileComp"},
+    )
+    smoke_init_speed_m_s = cm(
+        req(smoke_proj_comp, "InitialSpeed", "BP_Projectile_SmokeBomb.ProjectileComp")
+    )
+    smoke_bounciness = float(
+        req(smoke_proj_comp, "Bounciness", "BP_Projectile_SmokeBomb.ProjectileComp")
+    )
+    smoke_friction = float(
+        req(smoke_proj_comp, "Friction", "BP_Projectile_SmokeBomb.ProjectileComp")
+    )
+    smoke_destroy_delay_s = float(
+        req(smoke_proj_cdo, "DestroySeconds", "BP_Projectile_SmokeBomb_C")
     )
     world = find(
         load("Gameplay/Tools/Bombs/SmokeBomb/BP_SmokeBomb_WorldActor.json"),
@@ -502,6 +540,8 @@ def build_player_tools() -> dict:
             "arrival_threshold_m": cm(da["HotwireArrivalThreshold"]),
             "cooldown_s": curve_val(wire_curves, "WireCooldownSecondary"),
             "charges": int(hotwire["MaxAmmo"]),
+            "crank_duration_s": crank_dur,
+            "crank_min_time_s": crank_min_time,
         },
         "smoke_bomb": {
             "charges": int(smoke["MaxAmmo"]),
@@ -512,6 +552,10 @@ def build_player_tools() -> dict:
                 cm(smoke_box["Z"]) * 2.0,
             ],
             "cloud_radius_m": cm(smoke_box["X"]),
+            "initial_speed_m_s": smoke_init_speed_m_s,
+            "bounciness": smoke_bounciness,
+            "friction": smoke_friction,
+            "destroy_delay_s": smoke_destroy_delay_s,
         },
         "disguise": {"cooldown_s": dis_cool, "active_s": dis_active},
         "blackjack": {
@@ -529,7 +573,9 @@ def build_player_tools() -> dict:
             "zipwire_range_speed": "extracted/json/Gameplay/Tools/PrimaryTools/DA_StandardToolSettings.json (Hotwire Range 2000 / Hotwire Speed 2300)",
             "zipwire_cooldown": "extracted/json/Gameplay/Tuning/CT_Tool_Wire.json (WireCooldownSecondary 5.0)",
             "zipwire_charges": "extracted/json/Gameplay/Tools/PrimaryTools/Hotwire/BP_Hotwire_Tool.json (MaxAmmo 4)",
+            "zipwire_crank": "extracted/json/Gameplay/Tools/PrimaryTools/Hotwire/CT_WireCrank.json (CrankDuration 6.0->4.0) + GA_Hotwire_Crank.json (MinimumCrankTime 0.5)",
             "smoke": "extracted/json/Gameplay/Tools/Bombs/SmokeBomb/BP_SmokeBomb_Bomb_Tool.json (MaxAmmo 1) + BP_SmokeBomb_WorldActor.json (InitialLifeSpan 25 / BoxExtent 250x250x200)",
+            "smoke_projectile": "extracted/json/Gameplay/Tools/Bombs/SmokeBomb/BP_Projectile_SmokeBomb.json (InitialSpeed 3000, Bounciness 0.064, Friction 1.0, DestroySeconds 0.5)",
             "disguise": "extracted/json/Gameplay/Tools/PrimaryTools/Disguise/GE_Disguise_Cooldown.json (15) + GE_Disguise_Active.json (60)",
             "blackjack": "extracted/json/Gameplay/Tuning/CT_Tool_Blackjack.json (Light 40 / Heavy 75)",
             "slithersap": "extracted/json/Gameplay/Tools/PrimaryTools/MagicSlime/BP_MagicSlime_Tool.json (MaxAmmo 4)",

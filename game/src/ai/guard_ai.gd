@@ -4,8 +4,16 @@ extends CharacterBody3D
 
 enum Alertness { NEUTRAL, SUSPICIOUS, ALERTED, COMBAT, SEARCH, KNOCKED_OUT }
 
+signal alert_state_changed(state_info: Dictionary)
+signal carried_item_stolen(item: Dictionary)
+
 const GuardAnimLib = preload("res://src/core/animation_library.gd")
 const LightProbeScript = preload("res://src/stealth/light_probe.gd")
+const LANTERN_GLB_PRIMARY := "res://assets/ue/Content/Art/Environment/Lights/Mobile/SM_LanternGuardA.glb"
+const LANTERN_GLB_FALLBACK := "res://assets/ue/Content/Art/Gameplay/Gear/Lantern/SK_Lantern.glb"
+const DEFAULT_KEY_GLB := "res://assets/ue/Content/Art/Gameplay/KeyCabinets/SM_LootableKeys_LockedRoomKey.glb"
+const VIEWCONE_DISGUISE_RANGE_M: float = 10.0
+const VIEWCONE_DISGUISE_HALF_DEG: float = 65.0
 
 # Real UE values (tools/parse_gameplay.py; sources in
 # game/data/generated/gameplay/*.json "sources"). Curve-table overrides are kept
@@ -150,12 +158,21 @@ var _highlight_mat: StandardMaterial3D
 var alert_indicator: Label3D
 var level_ctrl: Node
 
+@export var carries_lantern: bool = false
+var carried_item: Dictionary = {}
+var lantern_root: Node3D = null
+var lantern_light: OmniLight3D = null
+var _carried_node: Node3D = null
+var _last_emitted_suspicion: float = -1.0
+
 
 func _ready() -> void:
 	add_to_group("guards")
 	add_to_group("thief_vision_highlight")
 	collision_layer = 4
 	collision_mask = 1 | 2
+	if name.to_lower().find("lantern") >= 0:
+		carries_lantern = true
 	var diff_x := GameState.difficulty_curve_x()
 	health = _guard_max_hp()
 	_speed_scale = lerpf(0.85, 1.2, (diff_x - 1.0) * 0.5)
@@ -163,6 +180,10 @@ func _ready() -> void:
 	suspicious_speed *= _speed_scale
 	sight_range *= lerpf(0.85, 1.25, (diff_x - 1.0) * 0.5)
 	_build_visuals()
+	if carries_lantern:
+		_build_lantern()
+	if not carried_item.is_empty():
+		_rebuild_carried_visual()
 	NoiseBus.noise_emitted.connect(_on_noise_emitted)
 	if patrol_points.is_empty():
 		patrol_points = [global_position, global_position + Vector3(6, 0, 0), global_position + Vector3(6, 0, 6)]
@@ -404,6 +425,7 @@ func _set_state(new_state: int) -> void:
 	state = new_state
 	_seconds_in_state = 0.0
 	detection = clamped_detection_for_transition(previous_state, new_state, detection)
+	_emit_alert_state_if_needed(true)
 
 
 ## Typed bool read for Object.get(): Godot 4.7 rejects bool(Variant) on a
@@ -567,6 +589,7 @@ func _physics_process(delta: float) -> void:
 	attack_cooldown = maxf(0.0, attack_cooldown - delta)
 	_seconds_in_state += delta
 	var player: CharacterBody3D = get_tree().get_first_node_in_group("player") as CharacterBody3D
+	_update_disguise_viewcone(delta, player)
 	var sees_player: bool = _can_see_player(player)
 
 	if sees_player:
@@ -622,6 +645,7 @@ func _physics_process(delta: float) -> void:
 				_set_state(Alertness.NEUTRAL)
 
 	_update_indicator()
+	_emit_alert_state_if_needed(false)
 	_update_ally_wakeup(delta)
 	_move_ai(delta, player)
 	_update_guard_anim(delta)
@@ -762,6 +786,8 @@ func knock_out(duration_override: float = -1.0) -> void:
 	else:
 		ko_timer = GameData.eval_curve("CT_AIStats", "GuardKnockoutDuration", GameState.difficulty_curve_x(), 180.0)
 	alert_indicator.text = "ZZZ"
+	if lantern_light != null and is_instance_valid(lantern_light):
+		lantern_light.visible = false
 	_slip_anim = false
 	_attack_anim_lock = 0.0
 	if visual_root == null:
@@ -789,6 +815,8 @@ func wake_up_from_ko() -> void:
 func _recover_from_ko() -> void:
 	health = _guard_max_hp()
 	alert_indicator.text = ""
+	if lantern_light != null and is_instance_valid(lantern_light):
+		lantern_light.visible = true
 	_set_state(Alertness.SEARCH)
 	state_timer = 6.0
 	investigate_pos = global_position
@@ -935,3 +963,229 @@ func _update_indicator() -> void:
 			alert_indicator.modulate = Color(1.0, 0.6, 0.1)
 		Alertness.KNOCKED_OUT:
 			alert_indicator.text = "ZZZ"
+
+
+func _state_name() -> String:
+	match state:
+		Alertness.NEUTRAL:
+			return "NEUTRAL"
+		Alertness.SUSPICIOUS:
+			return "SUSPICIOUS"
+		Alertness.ALERTED:
+			return "ALERTED"
+		Alertness.COMBAT:
+			return "COMBAT"
+		Alertness.SEARCH:
+			return "SEARCH"
+		Alertness.KNOCKED_OUT:
+			return "KNOCKED_OUT"
+	return "NEUTRAL"
+
+
+## Alert telemetry snapshot consumed by M3 HUD pips & offscreen threat arcs.
+func get_alert_state() -> Dictionary:
+	return {
+		"state": _state_name(),
+		"suspicion": clampf(detection / 100.0, 0.0, 1.0),
+		"world_pos": global_position,
+		"alerted": state == Alertness.ALERTED or state == Alertness.COMBAT,
+		"combat": state == Alertness.COMBAT,
+	}
+
+
+func _emit_alert_state_if_needed(force: bool) -> void:
+	var norm: float = clampf(detection / 100.0, 0.0, 1.0)
+	if not force and absf(norm - _last_emitted_suspicion) < 0.05:
+		return
+	_last_emitted_suspicion = norm
+	alert_state_changed.emit(get_alert_state())
+
+
+## Enables the warm handheld lantern on ClubLantern guards and registers its
+## OmniLight3D with LightProbe so the guard illuminates the player for stealth.
+func enable_lantern() -> void:
+	carries_lantern = true
+	if visual_root != null and lantern_light == null:
+		_build_lantern()
+
+
+func _build_lantern() -> void:
+	if visual_root == null or lantern_root != null:
+		return
+	lantern_root = Node3D.new()
+	lantern_root.name = "GuardLantern"
+	lantern_root.position = Vector3(-0.36, 1.12, -0.38)
+	visual_root.add_child(lantern_root)
+
+	var glb_path: String = ""
+	if ResourceLoader.exists(LANTERN_GLB_PRIMARY):
+		glb_path = LANTERN_GLB_PRIMARY
+	elif ResourceLoader.exists(LANTERN_GLB_FALLBACK):
+		glb_path = LANTERN_GLB_FALLBACK
+	if glb_path != "":
+		var packed: PackedScene = ResourceLoader.load(glb_path) as PackedScene
+		if packed != null:
+			var inst: Node3D = packed.instantiate() as Node3D
+			if inst != null:
+				inst.name = "LanternMesh"
+				lantern_root.add_child(inst)
+
+	lantern_light = OmniLight3D.new()
+	lantern_light.name = "LanternLight"
+	lantern_light.position = Vector3(0.0, 0.08, 0.0)
+	lantern_light.light_color = Color(1.0, 0.72, 0.34)
+	lantern_light.light_energy = 1.4
+	lantern_light.omni_range = 8.5
+	lantern_light.omni_attenuation = 1.35
+	lantern_light.shadow_enabled = false
+	lantern_root.add_child(lantern_light)
+	_register_lantern_with_probe()
+
+
+func _register_lantern_with_probe() -> void:
+	if lantern_light == null:
+		return
+	var lp: Node = null
+	if level_ctrl != null:
+		var lp_v: Variant = level_ctrl.get("light_probe")
+		if lp_v is Node:
+			lp = lp_v as Node
+	if lp == null and is_inside_tree():
+		var m: Node = get_tree().get_first_node_in_group("mission")
+		if m != null:
+			var lp_v2: Variant = m.get("light_probe")
+			if lp_v2 is Node:
+				lp = lp_v2 as Node
+	if lp != null and lp.has_method("register_light"):
+		lp.call("register_light", lantern_light)
+
+
+func set_carried_item(item: Dictionary) -> void:
+	carried_item = item.duplicate(true)
+	if visual_root != null:
+		_rebuild_carried_visual()
+
+
+func has_carried_item() -> bool:
+	return not carried_item.is_empty()
+
+
+func steal_carried_item() -> Dictionary:
+	if carried_item.is_empty():
+		return {}
+	var stolen: Dictionary = carried_item.duplicate(true)
+	carried_item = {}
+	if _carried_node != null and is_instance_valid(_carried_node):
+		_carried_node.set_meta("collected", true)
+		_carried_node.remove_from_group("loot")
+		_carried_node.remove_from_group("interactables")
+		_carried_node.queue_free()
+	_carried_node = null
+	if is_in_group("interactables"):
+		remove_from_group("interactables")
+	var val: int = int(stolen.get("value", 0))
+	if val > 0:
+		GameState.add_loot(1, val, false)
+	if str(stolen.get("kind", "")) == "key":
+		var kid: String = str(stolen.get("id", stolen.get("name", "guard_key")))
+		if GameState.has_method("add_stolen_key"):
+			GameState.call("add_stolen_key", kid)
+	carried_item_stolen.emit(stolen)
+	return stolen
+
+
+func _rebuild_carried_visual() -> void:
+	if _carried_node != null and is_instance_valid(_carried_node):
+		_carried_node.set_meta("collected", true)
+		_carried_node.remove_from_group("loot")
+		_carried_node.queue_free()
+	_carried_node = null
+	if carried_item.is_empty() or visual_root == null:
+		if is_in_group("interactables"):
+			remove_from_group("interactables")
+		return
+	add_to_group("interactables")
+	_carried_node = Node3D.new()
+	_carried_node.name = "CarriedItemNode"
+	_carried_node.position = Vector3(0.32, 0.96, 0.08)
+	_carried_node.add_to_group("loot")
+	_carried_node.set_meta("collected", false)
+	var carry_scr := GDScript.new()
+	carry_scr.source_code = """extends Node3D
+var owner_guard: Node = null
+func get_interact_prompt() -> String:
+\tif owner_guard != null and owner_guard.has_method("get_interact_prompt"):
+\t\treturn str(owner_guard.call("get_interact_prompt"))
+\treturn "[F] PICKPOCKET"
+func interact(_actor: Node) -> void:
+\tif owner_guard != null and owner_guard.has_method("steal_carried_item"):
+\t\towner_guard.call("steal_carried_item")
+"""
+	carry_scr.reload()
+	_carried_node.set_script(carry_scr)
+	_carried_node.set("owner_guard", self)
+	visual_root.add_child(_carried_node)
+
+	var mesh_path: String = str(carried_item.get("mesh_path", DEFAULT_KEY_GLB))
+	if mesh_path != "" and ResourceLoader.exists(mesh_path):
+		var packed: PackedScene = ResourceLoader.load(mesh_path) as PackedScene
+		if packed != null:
+			var inst: Node3D = packed.instantiate() as Node3D
+			if inst != null:
+				inst.name = "CarriedKeyMesh"
+				inst.scale = Vector3(0.85, 0.85, 0.85)
+				_carried_node.add_child(inst)
+
+
+func get_interact_prompt() -> String:
+	if carried_item.is_empty():
+		return ""
+	var item_name: String = str(carried_item.get("name", "Key"))
+	if state == Alertness.KNOCKED_OUT:
+		return "[F] LOOT %s" % item_name
+	return "[F] PICKPOCKET %s" % item_name
+
+
+func interact(_actor: Node) -> void:
+	if carried_item.is_empty():
+		return
+	if state == Alertness.COMBAT:
+		return
+	steal_carried_item()
+
+
+## DT_DisguiseV3IntegrityReduction GuardViewCone row: drains Chameleon disguise
+## integrity at 10.0/s when disguised player is within 10.0 m and <= 65 deg
+## half-cone with unobstructed LOS.
+func _update_disguise_viewcone(delta: float, player: CharacterBody3D) -> void:
+	if player == null or state == Alertness.KNOCKED_OUT or delta <= 0.0:
+		return
+	if _bool_property(player, "astral_active"):
+		return
+	if not _bool_property(player, "disguise_active"):
+		return
+	if not player.has_method("apply_guard_viewcone_disguise_decay"):
+		return
+	var guard_eye: Vector3 = global_position + Vector3.UP * 1.5
+	var player_eye: Vector3 = player.global_position + Vector3.UP * 1.3
+	var to_player: Vector3 = player_eye - guard_eye
+	var dist: float = to_player.length()
+	if dist > VIEWCONE_DISGUISE_RANGE_M or dist < 0.05:
+		return
+	var fwd: Vector3 = -global_transform.basis.z
+	if fwd.length() < 0.05:
+		return
+	var angle_deg: float = rad_to_deg(fwd.normalized().angle_to(to_player / dist))
+	if angle_deg > VIEWCONE_DISGUISE_HALF_DEG:
+		return
+	if level_ctrl != null and level_ctrl.has_method("is_blocked_by_smoke"):
+		if level_ctrl.call("is_blocked_by_smoke", guard_eye, player_eye) == true:
+			return
+	var w3d: World3D = get_world_3d()
+	if w3d == null:
+		return
+	var space: PhysicsDirectSpaceState3D = w3d.direct_space_state
+	var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(guard_eye, player_eye, 1, [get_rid(), player.get_rid()])
+	var hit: Dictionary = space.intersect_ray(q)
+	if hit.is_empty():
+		player.call("apply_guard_viewcone_disguise_decay", delta, true)

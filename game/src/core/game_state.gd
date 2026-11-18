@@ -4,6 +4,8 @@ extends Node
 signal loot_changed(collected: int, needed: int, value: int)
 signal objective_completed()
 signal state_changed(new_state: String)
+signal objectives_updated()
+signal mission_letter_requested(title: String, intro_text: String)
 
 enum Difficulty { NOVICE = 1, THIEF = 2, MASTER_THIEF = 3 }
 
@@ -14,6 +16,8 @@ var calling_card: String = "Default"
 var difficulty: int = Difficulty.NOVICE
 var active_contract_order: int = 2
 var active_map_id: String = "old_manor"
+var active_mission_id: String = ""
+var active_mission_mode: String = "Solo"
 
 var state: String = "menu" # menu | hub | playing | paused | victory | failed
 var elapsed_sec: float = 0.0
@@ -21,6 +25,11 @@ var run_time_limit: float = 0.0 # match timer seconds; 0 = unlimited (FTUE/tutor
 var loot_collected: int = 0
 var loot_needed: int = 5
 var loot_value: int = 0
+var loot_goal: int = 0
+var mission_objectives: Array[Dictionary] = []
+var contract_title: String = ""
+var contract_intro: String = ""
+var stolen_keys: Array[String] = []
 var quest_item_acquired: bool = false
 var ever_spotted: bool = false
 var ever_chased: bool = false
@@ -30,11 +39,18 @@ var player_light_visibility: float = 0.2 # 0.0 shadow .. 1.0 bright
 
 func reset_run(contract_order: int, map_id: String) -> void:
 	active_contract_order = contract_order
+	if active_map_id != map_id:
+		active_mission_id = ""
 	active_map_id = map_id
 	elapsed_sec = 0.0
 	run_time_limit = 0.0
 	loot_collected = 0
 	loot_value = 0
+	loot_goal = 0
+	mission_objectives = []
+	contract_title = ""
+	contract_intro = ""
+	stolen_keys = []
 	quest_item_acquired = false
 	ever_spotted = false
 	ever_chased = false
@@ -42,14 +58,164 @@ func reset_run(contract_order: int, map_id: String) -> void:
 	player_light_visibility = 0.2
 	state = "playing"
 	state_changed.emit(state)
+	objectives_updated.emit()
 	loot_changed.emit(loot_collected, loot_needed, loot_value)
 
 
-func add_loot(amount: int, value: int, is_quest_item: bool = false) -> void:
+func set_mission_objectives(objs: Array, p_loot_goal: int = -1) -> void:
+	var normalized: Array[Dictionary] = []
+	for item_v: Variant in objs:
+		if not (item_v is Dictionary):
+			continue
+		var d: Dictionary = item_v as Dictionary
+		var target_val: int = maxi(int(d.get("target", 1)), 0)
+		var cur_val: int = maxi(int(d.get("current", 0)), 0)
+		var is_done: bool = d.get("done") == true
+		if target_val > 0 and cur_val >= target_val:
+			is_done = true
+		normalized.append({
+			"id": str(d.get("id", "obj_%d" % normalized.size())),
+			"label": str(d.get("label", "")),
+			"done": is_done,
+			"current": cur_val,
+			"target": target_val,
+		})
+	mission_objectives = normalized
+	if p_loot_goal >= 0:
+		loot_goal = p_loot_goal
+	objectives_updated.emit()
+
+
+func update_objective_progress(obj_id: String, delta_or_current: int, is_absolute: bool = false) -> bool:
+	var matched_done: bool = false
+	var found: bool = false
+	for i: int in range(mission_objectives.size()):
+		var entry: Dictionary = mission_objectives[i]
+		if str(entry.get("id", "")) != obj_id:
+			continue
+		found = true
+		var target_val: int = maxi(int(entry.get("target", 1)), 0)
+		var prev_cur: int = int(entry.get("current", 0))
+		var next_cur: int = delta_or_current if is_absolute else (prev_cur + delta_or_current)
+		if target_val > 0:
+			next_cur = clampi(next_cur, 0, target_val)
+		else:
+			next_cur = maxi(next_cur, 0)
+		entry["current"] = next_cur
+		entry["done"] = (next_cur >= target_val) if target_val > 0 else (next_cur > 0)
+		mission_objectives[i] = entry
+		matched_done = entry["done"] == true
+		break
+	if found:
+		if are_all_objectives_complete() and not quest_item_acquired:
+			quest_item_acquired = true
+			objective_completed.emit()
+		objectives_updated.emit()
+	return matched_done
+
+
+func mark_objective_done(obj_id: String) -> void:
+	for i: int in range(mission_objectives.size()):
+		var entry: Dictionary = mission_objectives[i]
+		if str(entry.get("id", "")) == obj_id:
+			var target_val: int = maxi(int(entry.get("target", 1)), 1)
+			update_objective_progress(obj_id, target_val, true)
+			return
+
+
+func are_all_objectives_complete() -> bool:
+	if loot_goal > 0 and loot_value >= loot_goal:
+		return true
+	if mission_objectives.is_empty():
+		return quest_item_acquired
+	for entry: Dictionary in mission_objectives:
+		if entry.get("done") != true:
+			return false
+	return true
+
+
+func request_mission_letter(title: String, intro_text: String) -> void:
+	contract_title = title
+	contract_intro = intro_text
+	mission_letter_requested.emit(title, intro_text)
+
+
+func add_stolen_key(key_id: String) -> void:
+	if key_id != "" and not stolen_keys.has(key_id):
+		stolen_keys.append(key_id)
+
+
+func has_stolen_key(key_id: String) -> bool:
+	return stolen_keys.has(key_id)
+
+
+func add_loot(amount: int, value: int, is_quest_item: bool = false, objective_id: String = "") -> void:
 	loot_collected += amount
 	loot_value += value
+	var obj_dirty: bool = false
+	var should_emit_complete: bool = false
+	if loot_goal > 0:
+		for i: int in range(mission_objectives.size()):
+			var entry: Dictionary = mission_objectives[i]
+			if str(entry.get("id", "")) == "cleanout_loot":
+				var next_val: int = mini(loot_value, loot_goal)
+				entry["current"] = next_val
+				entry["done"] = loot_value >= loot_goal
+				mission_objectives[i] = entry
+				obj_dirty = true
+				break
+		if loot_value >= loot_goal and not quest_item_acquired:
+			quest_item_acquired = true
+			should_emit_complete = true
 	if is_quest_item:
-		quest_item_acquired = true
+		var handled_set: bool = false
+		if objective_id != "":
+			for i: int in range(mission_objectives.size()):
+				var entry: Dictionary = mission_objectives[i]
+				if str(entry.get("id", "")) == objective_id:
+					var target_val: int = maxi(int(entry.get("target", 1)), 1)
+					entry["current"] = mini(int(entry.get("current", 0)) + 1, target_val)
+					entry["done"] = int(entry["current"]) >= target_val
+					mission_objectives[i] = entry
+					obj_dirty = true
+					break
+		for i: int in range(mission_objectives.size()):
+			var entry: Dictionary = mission_objectives[i]
+			if str(entry.get("id", "")) == "set_main":
+				var target_val: int = maxi(int(entry.get("target", 3)), 1)
+				var next_cur: int = mini(int(entry.get("current", 0)) + 1, target_val)
+				entry["current"] = next_cur
+				entry["done"] = next_cur >= target_val
+				mission_objectives[i] = entry
+				# Also mark the next incomplete set sub-item done.
+				for j: int in range(mission_objectives.size()):
+					var sub: Dictionary = mission_objectives[j]
+					if str(sub.get("id", "")).begins_with("set_item_") and sub.get("done") != true:
+						sub["current"] = maxi(int(sub.get("target", 1)), 1)
+						sub["done"] = true
+						mission_objectives[j] = sub
+						break
+				obj_dirty = true
+				handled_set = true
+				if entry["done"] == true:
+					quest_item_acquired = true
+					should_emit_complete = true
+				break
+		if not handled_set:
+			quest_item_acquired = true
+			should_emit_complete = true
+			for i: int in range(mission_objectives.size()):
+				var entry: Dictionary = mission_objectives[i]
+				var eid: String = str(entry.get("id", ""))
+				if eid == "vault_main" or eid == "contract_main":
+					var t_val: int = maxi(int(entry.get("target", 1)), 1)
+					entry["current"] = t_val
+					entry["done"] = true
+					mission_objectives[i] = entry
+					obj_dirty = true
+	if obj_dirty:
+		objectives_updated.emit()
+	if should_emit_complete:
 		objective_completed.emit()
 	loot_changed.emit(loot_collected, loot_needed, loot_value)
 

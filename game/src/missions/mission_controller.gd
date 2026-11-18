@@ -52,6 +52,17 @@ var fallback_spawn_headroom_clear: bool = true
 ## the floor/headroom-only fallbacks report false. Logged for QA.
 var fallback_spawn_forward_clear: bool = true
 
+var _is_thieves_den: bool = false
+var _den_map_table_pos: Vector3 = Vector3.ZERO
+var _den_telescope_pos: Vector3 = Vector3(-4.9202, 41.0, 270.7337)
+var _den_selected_map_id: String = "old_manor"
+var _den_lookat_card: Dictionary = {}
+var _den_tokens: Dictionary = {}
+var _ponder_active: bool = false
+var _ponder_cam: Camera3D = null
+var _ponder_cheese: Node3D = null
+var _active_mission_row: Dictionary = {}
+
 
 func _ready() -> void:
 	add_to_group("mission")
@@ -124,9 +135,11 @@ func _apply_fallback_moon(moon: DirectionalLight3D) -> void:
 func start_contract(order: int) -> void:
 	contract_info = GameData.get_contract_display(order)
 	var map_id: String = str(contract_info.get("map_id", "old_manor"))
+	_is_thieves_den = (map_id == "thieves_den")
 	GameState.reset_run(order, map_id)
 	# Real match timer from the extracted DT_Missions_* tables (0 = unlimited).
 	GameState.run_time_limit = GameData.get_match_duration(map_id, GameState.difficulty)
+	_setup_mission_objectives(map_id, order)
 
 	var loading: Node = LoadingScreenScript.new()
 	add_child(loading)
@@ -186,6 +199,9 @@ func start_contract(order: int) -> void:
 
 	if is_instance_valid(loading) and loading.has_method("finish_loading"):
 		loading.call("finish_loading")
+
+	if not _is_thieves_den:
+		_trigger_mission_start_letter()
 
 
 func _setup_thieves_den_env(map_id: String) -> void:
@@ -281,6 +297,7 @@ func _map_id_to_sublevels(map_id: String, order: int = 2) -> Array[String]:
 	match map_id:
 		"old_manor":
 			base = [
+				"res://data/generated/levels/OldManor/OldManor_P.tatlevel.json",
 				"res://data/generated/levels/OldManor/OldManor_Geo.tatlevel.json",
 				"res://data/generated/levels/OldManor/OldManor_Landscape.tatlevel.json",
 				"res://data/generated/levels/OldManor/OldManor_Gameplay.tatlevel.json",
@@ -371,6 +388,7 @@ func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> 
 	var desk_pos: Vector3 = anchor + Vector3(3.2, 0.8, -2.5)
 	if not desk_positions.is_empty() and desk_positions[0] is Vector3:
 		desk_pos = desk_positions[0] as Vector3
+	_den_map_table_pos = desk_pos
 	VfxManager.spawn_candle_flame(self, desk_pos + Vector3(0.35, 0.45, 0.0))
 
 	# Warm table pool light
@@ -384,8 +402,9 @@ func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> 
 	add_child(table_light)
 	light_probe.register_light(table_light)
 
-	# Interactive Map Table -> opens ContractTableUI (all 18 contracts + Co-op + Deploy)
+	# Interactive Map Table -> opens ContractTableUI (diegetic HUD prompt, no giant Label3D billboard)
 	var desk_area := Area3D.new()
+	desk_area.name = "DenMapTableArea"
 	desk_area.position = desk_pos
 	desk_area.add_to_group("interactables")
 	var dcol := CollisionShape3D.new()
@@ -393,18 +412,11 @@ func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> 
 	dsph.radius = 2.2
 	dcol.shape = dsph
 	desk_area.add_child(dcol)
-	var dlbl := Label3D.new()
-	dlbl.position = Vector3(0, 1.0, 0)
-	dlbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	dlbl.text = "[F] Map Table — Prepare for Mission"
-	dlbl.font_size = 24
-	dlbl.modulate = Color(1.0, 0.85, 0.45)
-	desk_area.add_child(dlbl)
 	var desk_script := GDScript.new()
 	desk_script.source_code = """extends Area3D
 var mission_ctrl: Node = null
 func get_interact_prompt() -> String:
-\treturn "[F] Prepare for Mission (Map Table)"
+\treturn "[F] ENTER MATCH"
 func interact(_actor: Node) -> void:
 \tif mission_ctrl != null and mission_ctrl.has_method("open_contract_table_ui"):
 \t\tmission_ctrl.open_contract_table_ui()
@@ -428,6 +440,7 @@ func interact(_actor: Node) -> void:
 		if wisp_light is Light3D:
 			(wisp_light as Light3D).add_to_group("den_hand_fills")
 	var ledger_area := Area3D.new()
+	ledger_area.name = "DenLedgerArea"
 	ledger_area.position = ledger_pos
 	ledger_area.add_to_group("interactables")
 	var lcol := CollisionShape3D.new()
@@ -449,10 +462,37 @@ func interact(_actor: Node) -> void:
 	ledger_area.set("mission_ctrl", self)
 	add_child(ledger_area)
 
+	# Telescope -> [F] PONDER (authored SM_TeleScope position in ThievesDenTest_P)
+	_den_telescope_pos = Vector3(-4.9202, 41.0, 270.7337)
+	var tele_area := Area3D.new()
+	tele_area.name = "DenTelescopeArea"
+	tele_area.position = _den_telescope_pos
+	tele_area.add_to_group("interactables")
+	var tcol := CollisionShape3D.new()
+	var tsph := SphereShape3D.new()
+	tsph.radius = 1.8
+	tcol.shape = tsph
+	tele_area.add_child(tcol)
+	var tele_script := GDScript.new()
+	tele_script.source_code = """extends Area3D
+var mission_ctrl: Node = null
+func get_interact_prompt() -> String:
+\tif mission_ctrl != null and mission_ctrl.get("_ponder_active") == true:
+\t\treturn "[F] EXIT"
+\treturn "[F] PONDER"
+func interact(_actor: Node) -> void:
+\tif mission_ctrl != null and mission_ctrl.has_method("toggle_telescope_ponder"):
+\t\tmission_ctrl.toggle_telescope_ponder()
+"""
+	tele_script.reload()
+	tele_area.set_script(tele_script)
+	tele_area.set("mission_ctrl", self)
+	add_child(tele_area)
+
 	# Trunk Decoration Pedestal + Gramophone
 	_spawn_thieves_den_props(anchor)
 
-	# Interactive Bureau / Wardrobe -> opens WardrobeUI (Thief + Outfit + Headgear + Calling Card)
+	# Interactive Bureau / Wardrobe -> opens WardrobeUI (diegetic HUD prompt, no giant Label3D billboard)
 	var wardrobe_positions: Array = ue_level_data.get("wardrobe_positions", [])
 	var wardrobe_pos: Vector3 = anchor + Vector3(-2.6, 0.9, -2.0)
 	if not wardrobe_positions.is_empty() and wardrobe_positions[0] is Vector3:
@@ -468,6 +508,7 @@ func interact(_actor: Node) -> void:
 	light_probe.register_light(ward_light)
 
 	var ward_area := Area3D.new()
+	ward_area.name = "DenWardrobeArea"
 	ward_area.position = wardrobe_pos
 	ward_area.add_to_group("interactables")
 	var wcol := CollisionShape3D.new()
@@ -475,18 +516,11 @@ func interact(_actor: Node) -> void:
 	wsph.radius = 2.2
 	wcol.shape = wsph
 	ward_area.add_child(wcol)
-	var wlbl := Label3D.new()
-	wlbl.position = Vector3(0, 1.1, 0)
-	wlbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	wlbl.text = "[F] Bureau — Customize Thief"
-	wlbl.font_size = 24
-	wlbl.modulate = Color(0.75, 0.9, 1.0)
-	ward_area.add_child(wlbl)
 	var ward_script := GDScript.new()
 	ward_script.source_code = """extends Area3D
 var mission_ctrl: Node = null
 func get_interact_prompt() -> String:
-\treturn "[F] Customize Thief (Bureau)"
+\treturn "[F] CUSTOMIZE LOADOUT"
 func interact(_actor: Node) -> void:
 \tif mission_ctrl != null and mission_ctrl.has_method("open_wardrobe_ui"):
 \t\tmission_ctrl.open_wardrobe_ui()
@@ -521,9 +555,11 @@ func open_ledger_ui() -> void:
 
 
 func _spawn_map_table_miniatures(desk_pos: Vector3) -> void:
+	_den_tokens.clear()
 	var miniatures: Array[Dictionary] = [
 		{
 			"name": "MapTokenOldManor",
+			"map_id": "old_manor",
 			"ue_mesh": "/Game/Art/UI/Map/SM_MapBuilding_OldManor",
 			"ue_mat": "/Game/Art/UI/Map/M_MapBuilding_OldManor",
 			"offset": Vector3(-0.32, 0.02, -0.08),
@@ -531,6 +567,7 @@ func _spawn_map_table_miniatures(desk_pos: Vector3) -> void:
 		},
 		{
 			"name": "MapTokenGuildHall",
+			"map_id": "guildhall",
 			"ue_mesh": "/Game/Art/UI/Map/SM_MapBuilding_GuildHall",
 			"ue_mat": "/Game/Art/UI/Map/M_MapBuilding_GuildHall",
 			"offset": Vector3(0.28, 0.02, 0.10),
@@ -552,13 +589,211 @@ func _spawn_map_table_miniatures(desk_pos: Vector3) -> void:
 		if level_loader != null and level_loader.has_method("get_material_for_ue"):
 			var tok_mat: Material = level_loader.call("get_material_for_ue", ue_mat) as Material
 			if tok_mat != null:
+				# Duplicate per token so warm golden emissive highlight toggles
+				# independently while keeping StandardMaterial3D + albedo_texture intact.
+				var inst_mat: Material = tok_mat.duplicate() as Material
 				for s: int in range(mesh.get_surface_count()):
-					mi.set_surface_override_material(s, tok_mat)
+					mi.set_surface_override_material(s, inst_mat if inst_mat != null else tok_mat)
 		mi.position = desk_pos + (item["offset"] as Vector3)
 		var sc: float = float(item["scale"])
 		mi.scale = Vector3(sc, sc, sc)
 		mi.add_to_group("map_table_tokens")
 		add_child(mi)
+		_den_tokens[str(item["map_id"])] = mi
+	_update_map_token_highlights()
+
+
+func _update_map_token_highlights() -> void:
+	for mid_v: Variant in _den_tokens.keys():
+		var mid: String = str(mid_v)
+		var mi_v: Variant = _den_tokens.get(mid, null)
+		if not (mi_v is MeshInstance3D) or not is_instance_valid(mi_v as Node):
+			continue
+		var mi: MeshInstance3D = mi_v as MeshInstance3D
+		var active: bool = (mid == _den_selected_map_id)
+		var surf_cnt: int = mi.mesh.get_surface_count() if mi.mesh != null else 0
+		for s: int in range(surf_cnt):
+			var mat: Material = mi.get_surface_override_material(s)
+			if mat is StandardMaterial3D:
+				var sm: StandardMaterial3D = mat as StandardMaterial3D
+				sm.emission_enabled = active
+				if active:
+					sm.emission = Color(1.0, 0.72, 0.24)
+					sm.emission_energy_multiplier = 0.85
+				else:
+					sm.emission = Color.BLACK
+					sm.emission_energy_multiplier = 0.0
+
+
+func set_den_selected_map(map_id: String) -> void:
+	if map_id != "old_manor" and map_id != "guildhall":
+		return
+	if _den_selected_map_id == map_id:
+		return
+	_den_selected_map_id = map_id
+	_update_map_token_highlights()
+	_refresh_den_lookat_card(true)
+
+
+func cycle_den_difficulty() -> void:
+	GameState.difficulty = (GameState.difficulty % 3) + 1
+	_refresh_den_lookat_card(true)
+
+
+func cycle_den_mode() -> void:
+	GameState.active_mission_mode = "Co-op" if GameState.active_mission_mode == "Solo" else "Solo"
+	_refresh_den_lookat_card(true)
+
+
+func get_den_lookat_card() -> Dictionary:
+	return _den_lookat_card.duplicate(true)
+
+
+func toggle_telescope_ponder() -> void:
+	if not _is_thieves_den:
+		return
+	_ponder_active = not _ponder_active
+	if _ponder_active:
+		if _ponder_cam == null or not is_instance_valid(_ponder_cam):
+			_ponder_cam = Camera3D.new()
+			_ponder_cam.name = "DenTelescopeCam"
+			_ponder_cam.fov = 34.0
+			_ponder_cam.position = Vector3(-5.9, 42.3, 271.2)
+			add_child(_ponder_cam)
+			_ponder_cam.look_at(Vector3(-40.0, 46.0, 271.2), Vector3.UP)
+		if _ponder_cheese == null or not is_instance_valid(_ponder_cheese):
+			_ponder_cheese = Node3D.new()
+			_ponder_cheese.name = "DenTelescopeCheese"
+			_ponder_cheese.position = Vector3(-16.0, 44.2, 271.2)
+			add_child(_ponder_cheese)
+			var cheese_path: String = "res://assets/ue/Content/Art/Gameplay/Loot/LootMajor/LootCheese/SM_LootCheese.glb"
+			if not ResourceLoader.exists(cheese_path):
+				cheese_path = "res://assets/ue/Content/Art/Environment/Props/Dining/Food/SM_CheeseB.glb"
+			if ResourceLoader.exists(cheese_path):
+				var packed: PackedScene = ResourceLoader.load(cheese_path) as PackedScene
+				if packed != null:
+					var inst: Node3D = packed.instantiate() as Node3D
+					if inst != null:
+						inst.scale = Vector3(1.8, 1.8, 1.8)
+						_ponder_cheese.add_child(inst)
+		_ponder_cam.current = true
+	else:
+		if _ponder_cam != null and is_instance_valid(_ponder_cam):
+			_ponder_cam.current = false
+		if player != null and is_instance_valid(player):
+			var pcam_v: Variant = player.get("cam")
+			if pcam_v is Camera3D and is_instance_valid(pcam_v as Node):
+				(pcam_v as Camera3D).current = true
+	_refresh_den_lookat_card(true)
+
+
+func _refresh_den_lookat_card(force_push: bool = false) -> void:
+	if not _is_thieves_den or player == null or not is_instance_valid(player):
+		return
+	var eye: Vector3 = player.global_position + Vector3(0.0, 1.55, 0.0)
+	var fwd: Vector3 = -player.global_transform.basis.z
+	var pcam_v: Variant = player.get("cam")
+	if pcam_v is Camera3D and is_instance_valid(pcam_v as Node):
+		var pcam: Camera3D = pcam_v as Camera3D
+		eye = pcam.global_position
+		fwd = -pcam.global_transform.basis.z
+	if fwd.length() > 0.001:
+		fwd = fwd.normalized()
+	else:
+		fwd = Vector3.FORWARD
+
+	var card: Dictionary = {"visible": false, "target": "", "title": "", "hints": []}
+	if _ponder_active:
+		card = {
+			"visible": true,
+			"target": "telescope",
+			"title": "KILCAIRN SKYLINE",
+			"hints": [{"key": "F", "label": "EXIT"}],
+		}
+	else:
+		var to_table: Vector3 = _den_map_table_pos - eye
+		var table_dist: float = to_table.length()
+		var table_dot: float = fwd.dot(to_table / maxf(table_dist, 0.001))
+		var looking_at_table: bool = (table_dist <= 4.5 and table_dot >= 0.52) or (table_dist <= 2.6 and table_dot >= 0.22)
+		if looking_at_table:
+			# Check which miniature token the player's gaze ray passes closer to.
+			var best_mid: String = ""
+			var best_perp: float = 0.55
+			for mid_v: Variant in _den_tokens.keys():
+				var mid: String = str(mid_v)
+				var mi_v: Variant = _den_tokens.get(mid, null)
+				if not (mi_v is MeshInstance3D) or not is_instance_valid(mi_v as Node):
+					continue
+				var tpos: Vector3 = (mi_v as MeshInstance3D).global_position + Vector3(0.0, 0.12, 0.0)
+				var v_to: Vector3 = tpos - eye
+				var along: float = v_to.dot(fwd)
+				if along <= 0.1 or along > 5.0:
+					continue
+				var perp: float = (v_to - fwd * along).length()
+				if perp < best_perp:
+					best_perp = perp
+					best_mid = mid
+			if best_mid != "" and best_mid != _den_selected_map_id:
+				_den_selected_map_id = best_mid
+				_update_map_token_highlights()
+			var loc_title: String = "ELWAY MANOR" if _den_selected_map_id == "old_manor" else "CONSTABLES' GUILDHALL"
+			card = {
+				"visible": true,
+				"target": "map_table",
+				"map_id": _den_selected_map_id,
+				"title": loc_title,
+				"difficulty": GameState.difficulty_label(),
+				"mode": GameState.active_mission_mode,
+				"hints": [
+					{"key": "H", "label": "Difficulty: %s" % GameState.difficulty_label()},
+					{"key": "R", "label": "Mode: %s" % GameState.active_mission_mode},
+					{"key": "F", "label": "Prepare for Mission"},
+				],
+			}
+		else:
+			var to_tele: Vector3 = _den_telescope_pos - eye
+			var tele_dist: float = to_tele.length()
+			var tele_dot: float = fwd.dot(to_tele / maxf(tele_dist, 0.001))
+			if tele_dist <= 3.5 and tele_dot >= 0.62:
+				card = {
+					"visible": true,
+					"target": "telescope",
+					"title": "TELESCOPE",
+					"hints": [{"key": "F", "label": "PONDER"}],
+				}
+
+	var changed: bool = force_push \
+		or card.get("visible") != _den_lookat_card.get("visible") \
+		or str(card.get("target", "")) != str(_den_lookat_card.get("target", "")) \
+		or str(card.get("title", "")) != str(_den_lookat_card.get("title", "")) \
+		or str(card.get("difficulty", "")) != str(_den_lookat_card.get("difficulty", "")) \
+		or str(card.get("mode", "")) != str(_den_lookat_card.get("mode", ""))
+	if changed:
+		_den_lookat_card = card
+		if hud != null and hud.has_method("set_den_lookat_card"):
+			hud.call("set_den_lookat_card", _den_lookat_card.duplicate(true))
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not _is_thieves_den or GameState.state != "playing":
+		return
+	if not (event is InputEventKey):
+		return
+	var kev: InputEventKey = event as InputEventKey
+	if not kev.pressed or kev.echo:
+		return
+	if _ponder_active:
+		if kev.keycode == KEY_F or kev.keycode == KEY_ESCAPE:
+			toggle_telescope_ponder()
+			get_viewport().set_input_as_handled()
+		return
+	if str(_den_lookat_card.get("target", "")) == "map_table":
+		if kev.keycode == KEY_H:
+			cycle_den_difficulty()
+			get_viewport().set_input_as_handled()
+		elif kev.keycode == KEY_R:
+			cycle_den_mode()
+			get_viewport().set_input_as_handled()
 
 
 func _spawn_thieves_den_props(anchor: Vector3) -> void:
@@ -657,6 +892,8 @@ func interact(_actor: Node) -> void:
 
 func open_contract_table_ui() -> void:
 	var ui: CanvasLayer = ContractTableUIScript.new()
+	ui.set("selected_map_id", _den_selected_map_id)
+	ui.set("coop_mode", GameState.active_mission_mode)
 	add_child(ui)
 	if ui.has_signal("deploy_requested"):
 		ui.connect("deploy_requested", func(order_id: int, map_id: String) -> void:
@@ -665,6 +902,85 @@ func open_contract_table_ui() -> void:
 		)
 	if ui.has_method("open_table"):
 		ui.call("open_table")
+
+
+func _setup_mission_objectives(map_id: String, order: int) -> void:
+	_active_mission_row = {}
+	if map_id == "thieves_den":
+		GameState.set_mission_objectives([], 0)
+		return
+	var chosen: Dictionary = {}
+	if GameState.active_mission_id != "" and GameData.missions_by_id.has(GameState.active_mission_id):
+		var cand: Variant = GameData.missions_by_id.get(GameState.active_mission_id)
+		if cand is Dictionary and str((cand as Dictionary).get("map_id", "")) == map_id:
+			chosen = (cand as Dictionary).duplicate(true)
+	if chosen.is_empty():
+		var matching: Array[Dictionary] = GameData.get_missions_for_map(map_id)
+		if not matching.is_empty():
+			chosen = matching[absi(order) % matching.size()].duplicate(true)
+	_active_mission_row = chosen
+	var mid: String = str(chosen.get("id", ""))
+	if mid != "":
+		GameState.active_mission_id = mid
+	contract_info["mission_id"] = mid
+	contract_info["mission_title"] = str(chosen.get("title", ""))
+
+	var objs: Array[Dictionary] = []
+	var goal_val: int = 0
+	if mid.ends_with(".Set") or mid.ends_with(".Multi"):
+		if map_id == "guildhall":
+			objs = [
+				{"id": "set_main", "label": "Steal the components of the Staff of Edinburgh", "done": false, "current": 0, "target": 3},
+				{"id": "set_item_0", "label": "Sapphire of Edinburgh", "done": false, "current": 0, "target": 1},
+				{"id": "set_item_1", "label": "Ruby of Edinburgh", "done": false, "current": 0, "target": 1},
+				{"id": "set_item_2", "label": "Emerald of Edinburgh", "done": false, "current": 0, "target": 1},
+			]
+		elif map_id == "old_manor":
+			objs = [
+				{"id": "set_main", "label": "Retrieve the Claymur Urns", "done": false, "current": 0, "target": 3},
+				{"id": "set_item_0", "label": "Claymur Urn — North Wing", "done": false, "current": 0, "target": 1},
+				{"id": "set_item_1", "label": "Claymur Urn — Gallery", "done": false, "current": 0, "target": 1},
+				{"id": "set_item_2", "label": "Claymur Urn — Cellar", "done": false, "current": 0, "target": 1},
+			]
+		else:
+			objs = [
+				{"id": "set_main", "label": str(chosen.get("title", "Item Collection Heist")), "done": false, "current": 0, "target": 3},
+				{"id": "set_item_0", "label": "Relic Piece I", "done": false, "current": 0, "target": 1},
+				{"id": "set_item_1", "label": "Relic Piece II", "done": false, "current": 0, "target": 1},
+				{"id": "set_item_2", "label": "Relic Piece III", "done": false, "current": 0, "target": 1},
+			]
+	elif mid.ends_with(".LootTheRoom"):
+		goal_val = 1000 * clampi(GameState.difficulty, 1, 3)
+		objs = [
+			{"id": "cleanout_loot", "label": "Steal £%d worth of loot" % goal_val, "done": false, "current": 0, "target": goal_val},
+		]
+	else:
+		var target_name: String = str(contract_info.get("quest_item", ""))
+		if target_name == "" or target_name == "Objective" or target_name.begins_with("Loot."):
+			if map_id == "guildhall":
+				target_name = "Warburg Effigy"
+			elif map_id == "old_manor":
+				target_name = "Book of Truth"
+			else:
+				target_name = "Contract Objective"
+		objs = [
+			{"id": "vault_main", "label": "Steal the %s" % target_name, "done": false, "current": 0, "target": 1},
+		]
+	GameState.set_mission_objectives(objs, goal_val)
+
+
+func _trigger_mission_start_letter() -> void:
+	var title_s: String = str(contract_info.get("title", _active_mission_row.get("title", "Contract")))
+	var intro_s: String = str(contract_info.get("intro", "")).strip_edges()
+	if intro_s == "":
+		intro_s = str(_active_mission_row.get("description", contract_info.get("description", ""))).strip_edges()
+	if intro_s.find("{MatchDurationInMinutes}") >= 0:
+		var mins: int = int(round(GameState.run_time_limit / 60.0)) if GameState.run_time_limit > 0.0 else 120
+		intro_s = intro_s.replace("{MatchDurationInMinutes}", str(mins))
+	if intro_s == "":
+		intro_s = "Esteemed Colleague — Infiltrate the target site, secure the objective, and slip away unseen."
+	contract_info["intro"] = intro_s
+	GameState.request_mission_letter(title_s, intro_s)
 
 
 func _spawn_clues(ue_spawns: Array, anchor: Vector3) -> void:
@@ -989,6 +1305,20 @@ func _snap_player_to_ground() -> void:
 			player.position = hit_pos + Vector3(0, 0.15, 0)
 
 
+func _ground_position(pos: Vector3, up_m: float = 8.0, down_m: float = 30.0, offset_y: float = 0.15) -> Vector3:
+	var w3d: World3D = get_world_3d()
+	if w3d == null:
+		return pos + Vector3(0.0, offset_y, 0.0)
+	var phys: PhysicsDirectSpaceState3D = w3d.direct_space_state
+	var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(pos + Vector3(0.0, up_m, 0.0), pos + Vector3(0.0, -down_m, 0.0), 1)
+	var hit: Dictionary = phys.intersect_ray(q)
+	if not hit.is_empty():
+		var hp: Variant = hit.get("position", null)
+		if hp is Vector3:
+			return (hp as Vector3) + Vector3(0.0, offset_y, 0.0)
+	return pos + Vector3(0.0, 0.5, 0.0)
+
+
 func _spawn_guards(ue_spawns: Array, anchor: Vector3) -> void:
 	var limit := 6 + (2 if GameState.difficulty == GameState.Difficulty.MASTER_THIEF else 0)
 	var chosen: Array[Vector3] = []
@@ -1000,12 +1330,33 @@ func _spawn_guards(ue_spawns: Array, anchor: Vector3) -> void:
 	if chosen.is_empty():
 		chosen = [anchor + Vector3(12, 0, 0), anchor + Vector3(-12, 0, -10), anchor + Vector3(0, 0, -18), anchor + Vector3(16, 0, -16)]
 
-	for pos in chosen:
+	var key_pool: Array[Dictionary] = [
+		{"id": "key_manor", "name": "Manor Key", "kind": "key", "value": 150, "mesh_path": "res://assets/ue/Content/Art/Gameplay/KeyCabinets/SM_LootableKeys_ManorKey.glb"},
+		{"id": "key_locked_room", "name": "Locked Room Key", "kind": "key", "value": 120, "mesh_path": "res://assets/ue/Content/Art/Gameplay/KeyCabinets/SM_LootableKeys_LockedRoomKey.glb"},
+		{"id": "key_secret_chest", "name": "Secret Chest Key", "kind": "key", "value": 180, "mesh_path": "res://assets/ue/Content/Art/Gameplay/KeyCabinets/SM_LootableKeys_SecretChestKey.glb"},
+		{"id": "key_small_chest", "name": "Small Chest Key", "kind": "key", "value": 90, "mesh_path": "res://assets/ue/Content/Art/Gameplay/KeyCabinets/SM_LootableKeys_SmallChestKey.glb"},
+	]
+
+	for idx: int in range(chosen.size()):
+		var pos: Vector3 = chosen[idx]
 		var g := GuardScript.new()
 		g.level_ctrl = self
-		var pts: Array[Vector3] = [pos, pos + Vector3(6, 0, 0), pos + Vector3(6, 0, 6), pos + Vector3(0, 0, 6)]
+		if idx % 2 == 0:
+			g.name = "Guard_ClubLantern_%d" % idx
+			g.carries_lantern = true
+		else:
+			g.name = "Guard_%d" % idx
+		var grounded_pos: Vector3 = _ground_position(pos, 8.0, 30.0, 0.15)
+		var pts: Array[Vector3] = [
+			grounded_pos,
+			_ground_position(pos + Vector3(6, 0, 0), 8.0, 30.0, 0.15),
+			_ground_position(pos + Vector3(6, 0, 6), 8.0, 30.0, 0.15),
+			_ground_position(pos + Vector3(0, 0, 6), 8.0, 30.0, 0.15),
+		]
 		g.patrol_points = pts
-		g.position = pos + Vector3(0, 0.5, 0)
+		g.position = grounded_pos
+		if idx % 2 == 0 or idx == 1:
+			g.set_carried_item(key_pool[idx % key_pool.size()])
 		add_child(g)
 
 
@@ -1032,16 +1383,28 @@ func _spawn_loot_and_quest(stats: Dictionary, anchor: Vector3) -> void:
 		# Maps with no markers at all keep six hand-placed fallback positions.
 		for off in [Vector3(4, 0.8, -6), Vector3(-6, 0.8, -8), Vector3(10, 0.8, -14), Vector3(-10, 0.8, -16), Vector3(0, 0.8, -22), Vector3(8, 0.8, 4)]:
 			minor.append({"pos": anchor + (off as Vector3), "rotation": Vector3.ZERO, "class": "BP_MissionSpawner_MinorLoot_C", "source_file": ""})
-	var quest_entry: Dictionary = {}
-	if not minor.is_empty():
-		quest_entry = minor[minor.size() - 1]
-		minor.remove_at(minor.size() - 1)
-	elif not major.is_empty():
-		quest_entry = major[major.size() - 1]
-		major.remove_at(major.size() - 1)
+	var mid: String = str(_active_mission_row.get("id", ""))
+	var is_set_mission: bool = mid.ends_with(".Set") or mid.ends_with(".Multi")
+	var quest_count: int = 3 if is_set_mission else 1
+	var quest_entries: Array[Dictionary] = []
+	for _qi: int in range(quest_count):
+		if not minor.is_empty():
+			quest_entries.append(minor[minor.size() - 1] as Dictionary)
+			minor.remove_at(minor.size() - 1)
+		elif not major.is_empty():
+			quest_entries.append(major[major.size() - 1] as Dictionary)
+			major.remove_at(major.size() - 1)
+		else:
+			quest_entries.append({})
 	_spawn_loot_entries(minor, "minor")
 	_spawn_loot_entries(major, "major")
-	_spawn_quest_loot(quest_entry, anchor)
+	var set_labels: Array[String] = []
+	for obj_d: Dictionary in GameState.mission_objectives:
+		if str(obj_d.get("id", "")).begins_with("set_item_"):
+			set_labels.append(str(obj_d.get("label", "")))
+	for qi_idx: int in range(quest_entries.size()):
+		var override_name: String = set_labels[qi_idx] if qi_idx < set_labels.size() else ""
+		_spawn_quest_loot(quest_entries[qi_idx], anchor + Vector3(float(qi_idx) * 1.5, 0.0, 0.0), override_name)
 
 
 ## Deterministic weighted pick from a bucket class list (duplicates carry the
@@ -1090,7 +1453,7 @@ func _spawn_loot_entries(entries: Array, tier: String) -> void:
 		order += 1
 
 
-func _spawn_quest_loot(quest_entry: Dictionary, anchor: Vector3) -> void:
+func _spawn_quest_loot(quest_entry: Dictionary, anchor: Vector3, override_name: String = "") -> void:
 	var q := LootScript.new()
 	q.is_quest_item = true
 	q.loot_tier = "quest"
@@ -1106,6 +1469,8 @@ func _spawn_quest_loot(quest_entry: Dictionary, anchor: Vector3) -> void:
 	var qname := str(contract_info.get("quest_item", "Contract Objective"))
 	if not qentry.is_empty():
 		qname = str(qentry.get("name", qname))
+	if override_name != "":
+		qname = override_name
 	q.item_name = qname
 	q.display_name = qname
 	q.value = LootScript.quest_value_for_tag(quest_tag)
@@ -1199,8 +1564,22 @@ func _spawn_swinging_doors(stats: Dictionary) -> void:
 	for d_var in doors:
 		if not (d_var is Dictionary):
 			continue
+		var dd: Dictionary = d_var as Dictionary
 		var door := SwingingDoorScript.new()
-		door.configure(d_var as Dictionary, level_loader)
+		door.configure(dd, level_loader)
+		# Lock high-security/vault/prison swinging doors on missions (never index 0 or Thieves' Den).
+		if not _is_thieves_den and count > 0 and not door.locked:
+			var hi_sec: bool = false
+			for lf_v: Variant in (dd.get("leaves", []) as Array):
+				if lf_v is Dictionary:
+					var m_file: String = str((lf_v as Dictionary).get("mesh", "")).get_file().to_lower()
+					if m_file.find("prison") >= 0 or m_file.find("vault") >= 0 or m_file.find("cell") >= 0 or m_file.find("security") >= 0 or m_file.find("safe") >= 0:
+						hi_sec = true
+						break
+			if hi_sec:
+				door.set_locked(true, 3 + (count % 2))
+			elif count % 12 == 5:
+				door.set_locked(true, 1 + (count % 3))
 		add_child(door)
 		count += 1
 	for rec_var in door_records:
@@ -1386,6 +1765,8 @@ func _process(delta: float) -> void:
 				if is_instance_valid(n):
 					n.queue_free()
 				smokes.remove_at(i)
+		if _is_thieves_den:
+			_refresh_den_lookat_card(false)
 	if rain_node != null:
 		WeatherVisuals.snap_rain_to(rain_node, player)
 

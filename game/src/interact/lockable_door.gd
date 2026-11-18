@@ -56,6 +56,31 @@ var is_open: bool = false
 var pivot: Node3D
 var mesh_inst: MeshInstance3D
 var lockpick_progress: float = 0.0
+var is_lockpicking: bool = false
+var _lockpick_actor: Node = null
+
+
+static func minigame_variation_for_level(p_lock_level: int, variant_index: int = 0) -> Dictionary:
+	var lvl: int = clampi(p_lock_level, 1, 6)
+	var variations: Variant = lockpick_table().get("variations_by_difficulty", {})
+	if variations is Dictionary:
+		var diff_variants: Variant = (variations as Dictionary).get(str(lvl - 1), [])
+		if diff_variants is Array and not (diff_variants as Array).is_empty():
+			var arr: Array = diff_variants as Array
+			var chosen: Variant = arr[posmod(variant_index, arr.size())]
+			if chosen is Dictionary:
+				return (chosen as Dictionary).duplicate(true)
+	return {}
+
+
+static func minigame_track_for_level(p_lock_level: int, variant_index: int = 0) -> Dictionary:
+	var variation: Dictionary = minigame_variation_for_level(p_lock_level, variant_index)
+	var tracks: Variant = variation.get("tracks", [])
+	if tracks is Array and not (tracks as Array).is_empty():
+		var first: Variant = (tracks as Array)[0]
+		if first is Dictionary:
+			return (first as Dictionary).duplicate(true)
+	return {}
 
 
 func _ready() -> void:
@@ -100,25 +125,83 @@ func get_jam_damage() -> float:
 ## difficulty = lock_level - 1). Returns {} when the table provides nothing.
 func get_minigame_track() -> Dictionary:
 	var lvl: int = clampi(lock_level, 1, table_max_lock_level())
-	var variations: Variant = lockpick_table().get("variations_by_difficulty", {})
-	if variations is Dictionary:
-		var diff_variants: Variant = (variations as Dictionary).get(str(lvl - 1), [])
-		if diff_variants is Array and not (diff_variants as Array).is_empty():
-			var first: Variant = (diff_variants as Array)[0]
-			if first is Dictionary:
-				var tracks: Variant = (first as Dictionary).get("tracks", [])
-				if tracks is Array and not (tracks as Array).is_empty():
-					return (tracks as Array)[0]
-	return {}
+	return minigame_track_for_level(lvl, 0)
+
+
+func get_minigame_variation() -> Dictionary:
+	var lvl: int = clampi(lock_level, 1, table_max_lock_level())
+	return minigame_variation_for_level(lvl, 0)
 
 
 func get_track_duration() -> float:
 	return float(get_minigame_track().get("duration_s", 0.0))
 
 
+func _exit_tree() -> void:
+	_clear_actor_lockpicking()
+
+
+func _clear_actor_lockpicking() -> void:
+	is_lockpicking = false
+	if _lockpick_actor != null and is_instance_valid(_lockpick_actor) and _lockpick_actor.has_method("set_lockpicking_active"):
+		_lockpick_actor.call("set_lockpicking_active", false)
+	_lockpick_actor = null
+
+
+func _find_hud() -> Node:
+	if not is_inside_tree():
+		return null
+	var tree: SceneTree = get_tree()
+	var mission: Node = tree.get_first_node_in_group("mission")
+	if mission != null:
+		var h_v: Variant = mission.get("hud")
+		if h_v is Node and is_instance_valid(h_v as Node):
+			return h_v as Node
+	var h_group: Node = tree.get_first_node_in_group("hud")
+	if h_group != null and is_instance_valid(h_group):
+		return h_group
+	return null
+
+
+func _on_minigame_finished(success: bool, actor: Node) -> void:
+	is_lockpicking = false
+	if actor != null and is_instance_valid(actor) and actor.has_method("set_lockpicking_active"):
+		actor.call("set_lockpicking_active", false)
+	if _lockpick_actor == actor:
+		_lockpick_actor = null
+	if not is_inside_tree():
+		return
+	if success:
+		locked = false
+		lockpick_progress = 1.0
+		is_open = true
+		lockpick_updated.emit(false, 1.0, lock_level)
+		var open_tween: Tween = create_tween()
+		open_tween.tween_property(pivot, "rotation_degrees:y", 88.0, 0.35)
+		NoiseBus.emit_noise(global_position, 5.5, self, "door")
+	else:
+		_VfxManager.spawn_lockpick_sparks(get_parent(), global_position + Vector3(0.4, 1.1, 0))
+		NoiseBus.emit_noise(global_position, 5.0, self, "lockpick")
+		lockpick_updated.emit(false, lockpick_progress, lock_level)
+
+
 func interact(actor: Node) -> void:
 	lock_level = clampi(lock_level, 1, table_max_lock_level())
 	if locked:
+		if is_lockpicking:
+			return
+		var hud_node: Node = _find_hud()
+		if actor != null and actor.has_method("set_lockpicking_active"):
+			_lockpick_actor = actor
+			actor.call("set_lockpicking_active", true)
+		if actor != null and hud_node != null and hud_node.has_method("start_lockpick_minigame"):
+			is_lockpicking = true
+			lockpick_updated.emit(true, lockpick_progress, lock_level)
+			NoiseBus.emit_noise(global_position, 4.0, self, "lockpick")
+			hud_node.call("start_lockpick_minigame", lock_level, "Door Lock (Lv %d)" % lock_level, func(success: bool = true) -> void:
+				_on_minigame_finished(success, actor)
+			)
+			return
 		var dmg: float = get_jam_damage()
 		# One attempt strains the pick by the base unit (5) against this
 		# level's jam damage (5/10/20/40): L1 opens in 1 attempt, L4 in 8.
@@ -132,10 +215,20 @@ func interact(actor: Node) -> void:
 		if lockpick_progress >= 1.0:
 			locked = false
 			is_open = true
+			_clear_actor_lockpicking()
 			lockpick_updated.emit(false, 1.0, lock_level)
 			var open_tween: Tween = create_tween()
 			open_tween.tween_property(pivot, "rotation_degrees:y", 88.0, 0.35)
 			NoiseBus.emit_noise(global_position, 5.5, self, "door")
+		elif actor != null and is_inside_tree():
+			# Headless fallback: keep Status.Lockpicking active briefly so
+			# disguise drain ticks, then clear when the attempt window ends.
+			is_lockpicking = true
+			var dur: float = clampf(get_track_duration(), 0.35, 1.5)
+			get_tree().create_timer(dur).timeout.connect(func() -> void:
+				if is_instance_valid(self) and is_lockpicking:
+					_clear_actor_lockpicking()
+			)
 		return
 	is_open = not is_open
 	var target_yaw: float = 88.0 if is_open else 0.0

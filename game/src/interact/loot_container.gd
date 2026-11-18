@@ -12,7 +12,11 @@ extends Area3D
 ## position; the secret stash (kind "none", no spawn bucket) opens with no
 ## loot — its loot arrives as separately placed actors.
 
+signal lockpick_updated(active: bool, progress: float, lock_level: int)
+
 const LootScript := preload("res://src/interact/loot_item.gd")
+const LockableDoorScript := preload("res://src/interact/lockable_door.gd")
+const _VfxManager := preload("res://src/core/vfx_manager.gd")
 
 const CONTAINERS_PATH := "res://data/generated/gameplay/containers.json"
 const LOOT_ACTORS_PATH := "res://data/generated/gameplay/loot_actors.json"
@@ -102,6 +106,34 @@ var slot_offset_cm: Vector3 = Vector3.ZERO
 var slot_rotation_deg: Vector3 = Vector3.ZERO
 var spawn_index: int = 0
 var opened: bool = false
+@export var locked: bool = false
+@export var lock_level: int = 0
+var lockpick_progress: float = 0.0
+var is_lockpicking: bool = false
+var _lockpick_actor: Node = null
+
+
+func set_locked(p_locked: bool, p_lock_level: int = 1) -> void:
+	locked = p_locked
+	lock_level = clampi(p_lock_level, 1, 6) if p_locked else 0
+	lockpick_progress = 0.0
+	is_lockpicking = false
+
+
+func get_minigame_variation() -> Dictionary:
+	if lock_level <= 0:
+		return {}
+	return LockableDoorScript.minigame_variation_for_level(lock_level, spawn_index)
+
+
+func get_minigame_track() -> Dictionary:
+	if lock_level <= 0:
+		return {}
+	return LockableDoorScript.minigame_track_for_level(lock_level, spawn_index)
+
+
+func get_track_duration() -> float:
+	return float(get_minigame_track().get("duration_s", 0.0))
 
 
 ## Must be called before add_child (like world_pickup.setup). Resolves the
@@ -134,6 +166,14 @@ func configure(p_class: String, entry: Dictionary, p_index: int) -> void:
 		loot_tier = "major"
 	elif loot_tier == "" and (p_class.find("MinorLoot") >= 0):
 		loot_tier = "minor"
+	# Wire lock levels on vault/safe/major containers using DA_LockpickMinigameVariations.
+	var entry_lvl: int = int(entry.get("lock_level", 0))
+	if entry.get("locked") == true or entry_lvl > 0:
+		set_locked(true, maxi(entry_lvl, 1))
+	elif p_class.find("Safe") >= 0 or p_class.find("Vault") >= 0 or p_class.find("DisplayCaseA_MajorLoot") >= 0:
+		set_locked(true, 2 + (p_index % 2))
+	elif loot_tier == "major":
+		set_locked(true, 1 + (p_index % 3))
 
 
 func _ready() -> void:
@@ -156,13 +196,108 @@ func _ready() -> void:
 func get_interact_prompt() -> String:
 	if opened:
 		return "[Opened]"
+	if locked:
+		if is_lockpicking:
+			return "[Picking Lock...]"
+		return "[F] PICK LOCK (Lv %d)" % maxi(lock_level, 1)
 	return "[F] OPEN"
 
 
-## One-shot open. Major/minor containers spawn exactly one loot item at the
-## marker position plus the slot offset; kind "none" (secret stash) only marks
-## itself opened.
-func interact(_actor: Node) -> void:
+func _exit_tree() -> void:
+	_clear_actor_lockpicking()
+
+
+func _clear_actor_lockpicking() -> void:
+	is_lockpicking = false
+	if _lockpick_actor != null and is_instance_valid(_lockpick_actor) and _lockpick_actor.has_method("set_lockpicking_active"):
+		_lockpick_actor.call("set_lockpicking_active", false)
+	_lockpick_actor = null
+
+
+func _find_hud() -> Node:
+	if not is_inside_tree():
+		return null
+	var tree: SceneTree = get_tree()
+	var mission: Node = tree.get_first_node_in_group("mission")
+	if mission != null:
+		var h_v: Variant = mission.get("hud")
+		if h_v is Node and is_instance_valid(h_v as Node):
+			return h_v as Node
+	var h_group: Node = tree.get_first_node_in_group("hud")
+	if h_group != null and is_instance_valid(h_group):
+		return h_group
+	return null
+
+
+func _container_label() -> String:
+	if container_class.find("DisplayCase") >= 0:
+		return "Display Safe (Lv %d)" % maxi(lock_level, 1)
+	if container_class.find("Chest") >= 0:
+		return "Locked Chest (Lv %d)" % maxi(lock_level, 1)
+	return "Safe Lock (Lv %d)" % maxi(lock_level, 1)
+
+
+func _on_lockpick_finished(success: bool, actor: Node) -> void:
+	is_lockpicking = false
+	if actor != null and is_instance_valid(actor) and actor.has_method("set_lockpicking_active"):
+		actor.call("set_lockpicking_active", false)
+	if _lockpick_actor == actor:
+		_lockpick_actor = null
+	if not is_inside_tree():
+		return
+	if success:
+		locked = false
+		lockpick_progress = 1.0
+		lockpick_updated.emit(false, 1.0, maxi(lock_level, 1))
+		_open_container()
+	else:
+		_VfxManager.spawn_lockpick_sparks(get_parent(), global_position + Vector3(0.0, 0.5, 0.0))
+		NoiseBus.emit_noise(global_position, 5.0, self, "lockpick")
+		lockpick_updated.emit(false, lockpick_progress, maxi(lock_level, 1))
+
+
+## One-shot open (after unlocking if locked). Major/minor containers spawn
+## exactly one loot item at the marker position plus the slot offset; kind
+## "none" (secret stash) only marks itself opened.
+func interact(actor: Node) -> void:
+	if opened:
+		return
+	if locked:
+		if is_lockpicking:
+			return
+		var lvl: int = clampi(maxi(lock_level, 1), 1, 6)
+		lock_level = lvl
+		if actor != null and actor.has_method("set_lockpicking_active"):
+			_lockpick_actor = actor
+			actor.call("set_lockpicking_active", true)
+		var hud_node: Node = _find_hud()
+		if actor != null and hud_node != null and hud_node.has_method("start_lockpick_minigame"):
+			is_lockpicking = true
+			lockpick_updated.emit(true, lockpick_progress, lvl)
+			NoiseBus.emit_noise(global_position, 4.0, self, "lockpick")
+			hud_node.call("start_lockpick_minigame", lvl, _container_label(), func(success: bool = true) -> void:
+				_on_lockpick_finished(success, actor)
+			)
+			return
+		if actor != null and is_inside_tree():
+			# Headless fallback: timed unlock so Status.Lockpicking (5.0/s) ticks.
+			is_lockpicking = true
+			lockpick_updated.emit(true, lockpick_progress, lvl)
+			_VfxManager.spawn_lockpick_sparks(get_parent(), global_position + Vector3(0.0, 0.5, 0.0))
+			NoiseBus.emit_noise(global_position, 4.0, self, "lockpick")
+			var dur: float = clampf(get_track_duration(), 0.35, 1.2)
+			get_tree().create_timer(dur).timeout.connect(func() -> void:
+				if is_instance_valid(self) and is_lockpicking:
+					_on_lockpick_finished(true, actor)
+			)
+			return
+		locked = false
+		lockpick_progress = 1.0
+		_clear_actor_lockpicking()
+	_open_container()
+
+
+func _open_container() -> void:
 	if opened:
 		return
 	opened = true

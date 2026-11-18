@@ -176,3 +176,51 @@ Remaining headless FAILs (2, both game-side, no harness fix without weakening): 
 - Headless E2E tier-1 after Task 5.5 triage: `SUMMARY: fails=2 passed=108 total=110` (was `fails=17`), `SCRIPT ERROR = 0`. Remaining: `T1-03-E` (trim), `T1-18-E` (escapes) — both game-side, documented in §5.5.1.
 - `make audit`: `12,630 / 12,704 (99.4%)`, files written `29,939`, exit 0.
 - Next: game-side fixes for `T1-03-E` + `T1-18-E` + parity-harness aliases (S03/S04/S06a-b/S11/S14/S15b, outside 4-file scope), then live rerun with `--strict` toward `parity_fails=0`; Steam-JPG side-by-side pass still open.
+
+## 6. Full-port Phase 4 (2026-11-18 — headless-green, live blocked)
+
+Headless wave on top of §5. No live-GPU confirm yet; live Den run is still RD-cascade-blocked (see below).
+
+### 6.1 Commits
+
+| Commit | What | Suite |
+|---|---|---|
+| `9f4ef7c` | fix(rendering): cap Den glow to 2-level bloom (`weather_profile.gd` + `mission_controller.gd` post-process clamp; Den `glow_intensity` cap `0.32`, levels 0–1 only) | headless `make test` green |
+| `6ab91a3` | feat(anim): wire zipwire crank clip playback (`_play_wire_crank_clip` via `ensure_fp_clip("zipwire_crank")` = `AN_ThiefNisha_Zipwire__Reload_Loop`, sustained by `_update_fp_anim_state` while `_is_cranking`) | 43: table + manifest + `fp_clip_for_role` + role + synthetic-player playback |
+| `2799c8e` | fix(movement): stairs snap `0.3` / angle `50` (`FLOOR_MAX_ANGLE_DEG 60 -> 50`, `FLOOR_SNAP_LENGTH 0.3`, `floor_block_on_wall` + `floor_constant_speed` kept, no new mantle) | 45: consts + live flags + 32.7° stair walkable + 55° blocked |
+| `bcb3e0a` | fix(loading): strip mips on tiny ResourceLoader textures with accounting (`_guard_tiny_resource_texture`: mipmapped 16×16 re-created mip-free, linear `.ctex` kept linear, both counted in `skipped_tiny_textures`/`skipped_tiny_count`) | 39b: 16×16 stripped + recorded, 256×256 untouched |
+| `dd2ecb2` | docs(tests): triage parity/E2E gaps tier1 `17 -> 2` (in-memory `_load_patched` replaces, suite 44 locks; no game-code edits) | 44 + tier-1 `fails=2 passed=108 total=110` |
+| `b58c69e` | fix(doors): open-leaf disable past 70° + Den window gap (leaf movers `AnimatableBody3D` `sync_to_physics`; `should_disable_leaf` / `OPEN_DISABLE_DEG 70.0`; Den wall split `gap 0.95 m` + sill `0.9 m` + lintel `2.0 m`, 2 m marker gate kept) | 46: leaf layer 0 + disabled on open, re-enabled on close; split yields 4 boxes |
+
+### 6.2 Headless gates (verified)
+
+- `make test`: `SUMMARY: fails=0`, zero `SCRIPT ERROR` (suites through 46 incl. 39b/43/44/45/46).
+- E2E tier-1: `SUMMARY: fails=2 passed=108 total=110` — remaining `T1-03-E` (trim specular, game-side) + `T1-18-E` (contract-2 `escape_points`, level-data gap). No harness weakening.
+
+### 6.3 Live-blocked (not verified — needs user GPU)
+
+- **Den RD cascade**: reported strip counts `strip 0=591 / 1=17 / 2=569`; §5.4 "cascade gone" claim does NOT hold for the live Den run — Den needs a user-GPU recapture.
+- **Parity**: `14/21` (`parity_fails=7` content gaps, §5.3); needs `--strict` recapture after harness aliases.
+- **Tier-1**: `T1-03-E` + `T1-18-E` still open (game/level edits required).
+- **Crank/stairs/doors**: crank proven headless-only (suite 43 synthetic player, no GLB import); stairs (suite 45) and doors (suite 46) likewise need live confirm.
+- **Screenshots**: live capture run hits swapchain/`X connection` teardown breaks (see `strip8`-class logs) — artifacts may be missing even when the run itself progresses.
+- **FPS**: no 60 FPS profile yet (see §5.2 rerun below).
+
+### 6.4 TEMP debug hook (uncommitted — do NOT commit as-is)
+
+`game/src/missions/mission_controller.gd` carries an uncommitted revert-friendly TEMP strip hook (`--env-strip=N`, now `0-8`):
+
+```bash
+flatpak run org.godotengine.Godot --path game -- --env-strip=0  # all heavy off
+flatpak run org.godotengine.Godot --path game -- --env-strip=8  # base-minimal fallback (heavy off + LINEAR tonemap + shadows/viewport/MSAA minimal)
+```
+
+Levels are cumulative (`0` = all heavy off, `1` = +glow, `2` = +adjust/LUT, `3` = +ssr, `4` = +ssil, `5` = +volumetric, `6` = +probe ONCE, `7` = full restore no-op, `8` = base-minimal fallback). Revert by deleting the `_env_strip_level` var + helpers (`_env_strip_level_from_args`, `_apply_env_strip`, `_apply_env_strip_viewport`, `_apply_env_strip_after_load`) + call sites.
+
+### 6.5 Next session checklist
+
+1. User-GPU Den run: record `strip 0` vs `strip 8` RD counts and confirm whether the cap (`9f4ef7c`) + res-guard (`bcb3e0a`) move the cascade.
+2. FPS profile rerun (§5.2 shape) toward 60 FPS.
+3. Parity recapture (`capture_e2e_parity.sh`, then `--strict`) toward `parity_fails=0` after harness aliases (S03/S04/S06a-b/S11/S14/S15b).
+4. Live confirm crank clip, stairs stick, and doors leaf-disable / Den window gap.
+5. Revert or land a decision on the TEMP strip hook before the next commit.

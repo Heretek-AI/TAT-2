@@ -6,6 +6,7 @@ extends Node
 
 const _VfxManager: GDScript = preload("res://src/core/vfx_manager.gd")
 const MobileProfile: GDScript = preload("res://src/core/mobile_profile.gd")
+const WeatherProfile: GDScript = preload("res://src/core/weather_profile.gd")
 const LANDSCAPE_SHADER: Shader = preload("res://src/core/tat_landscape.gdshader")
 const EMISSIVE_CPD_SHADER: Shader = preload("res://src/core/tat_emissive_cpd.gdshader")
 const GLASS_SHADER: Shader = preload("res://src/core/tat_glass.gdshader")
@@ -224,14 +225,34 @@ func _apply_ue_pbr_params(mat: StandardMaterial3D, info: Dictionary) -> void:
 ## blend -> alpha scissor. Glass art overrides below still take precedence.
 func _apply_ue_render_flags(mat: StandardMaterial3D, info: Dictionary) -> void:
 	var render: Dictionary = info.get("render", {})
-	if render.get("two_sided", false):
+	if render.get("two_sided", false) == true:
 		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	var blend := str(render.get("blend_mode", "")).to_lower()
+	var blend: String = str(render.get("blend_mode", "")).to_lower()
+	var shading: String = str(render.get("shading_model", ""))
+	var texs_rf_v: Variant = info.get("texs", {})
+	var texs_rf: Dictionary = texs_rf_v as Dictionary if texs_rf_v is Dictionary else {}
+	var is_bark: bool = "bark" in str(texs_rf.get("albedo", "")).to_lower()
+	var is_foliage_shading: bool = ("TwoSidedFoliage" in shading or ("Subsurface" in shading and not ("SubsurfaceProfile" in shading))) and not is_bark
 	if blend.find("translucent") >= 0 or blend.find("alphacomposite") >= 0:
 		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	elif blend.find("masked") >= 0:
 		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
 		mat.alpha_scissor_threshold = clampf(float(render.get("opacity_mask_clip", 0.5)), 0.0, 1.0)
+	elif blend == "" and render.has("opacity_mask_clip") and is_foliage_shading:
+		# Foliage instances (e.g. MI_BirchLeaves*) inherit masked blend from M_FoliageBase
+		# while emitting opacity_mask_clip + foliage shading_model in materials.json.
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+		mat.alpha_scissor_threshold = clampf(float(render.get("opacity_mask_clip", 0.3333)), 0.0, 1.0)
+	if is_foliage_shading:
+		# R3 APPROXIMATE backlight stand-in for UE MSM_TwoSidedFoliage / foliage MSM_Subsurface.
+		mat.backlight_enabled = true
+		var rf_vecs: Dictionary = _ue_norm_map(info.get("vectors", {}))
+		var ssc: Variant = _ue_lookup(rf_vecs, ["subsurfacecolor", "sscolor"])
+		if ssc is Array and (ssc as Array).size() >= 3:
+			var sa: Array = ssc as Array
+			mat.backlight = Color(float(sa[0]), float(sa[1]), float(sa[2])).clamp(Color(0.18, 0.14, 0.08), Color(0.75, 0.75, 0.75))
+		else:
+			mat.backlight = Color(0.35, 0.28, 0.16)
 
 
 ## Applies real UE emissive vectors/scalars from materials.json. Merges with an
@@ -312,6 +333,10 @@ func _build_glass_material(info: Dictionary, alb: Texture2D, op: Texture2D) -> S
 			vc.g *= float(mua[1])
 			vc.b *= float(mua[2])
 	smat.set_shader_parameter("albedo_tint", vc)
+	var trans_c: Variant = _ue_lookup(vectors_norm, ["translucentcolor"])
+	if trans_c is Array and (trans_c as Array).size() >= 3:
+		var tca: Array = trans_c as Array
+		smat.set_shader_parameter("translucent_color", Vector3(float(tca[0]), float(tca[1]), float(tca[2])))
 	var op_val: Variant = _ue_lookup(params, ["opacity", "glassopacity", "opacitymultiply"])
 	var op_scale: float = clampf(float(op_val), 0.0, 8.0) if op_val != null else 1.0
 	smat.set_shader_parameter("opacity_scale", op_scale)
@@ -423,6 +448,21 @@ func get_material_for_ue(ue_mat_path: String) -> Material:
 			hdr_mat.shader = HDR_EMISSIVE_SHADER
 			hdr_mat.set_shader_parameter("hdr_color", Vector3(tint_col.r, tint_col.g, tint_col.b))
 			hdr_mat.set_shader_parameter("hdr_scale", clampf(4.0 / hdr_peak, 0.02, 1.0))
+			# R3 APPROXIMATE ACES core boost + Fresnel/flicker from authored MI_Neon* params
+			# (keeps hdr_color and hdr_scale unchanged for Suite 37).
+			var neon_params: Dictionary = _ue_norm_map(info.get("params", {}))
+			hdr_mat.set_shader_parameter("hdr_boost", clampf(hdr_peak / 10.0, 2.4, 5.0))
+			var exp_in: Variant = _ue_lookup(neon_params, ["exponentin"])
+			var base_ref_v: Variant = _ue_lookup(neon_params, ["basereflect"])
+			if exp_in != null or base_ref_v != null:
+				var base_ref: float = float(base_ref_v) if base_ref_v != null else 0.0
+				hdr_mat.set_shader_parameter("fresnel_power", 0.85 if base_ref < 0.0 else 0.65)
+				hdr_mat.set_shader_parameter("fresnel_min", 0.28 if base_ref < 0.0 else 0.38)
+			var fspd: Variant = _ue_lookup(neon_params, ["flickerspeeda"])
+			var fint: Variant = _ue_lookup(neon_params, ["flickeringintensitya"])
+			if fspd != null and float(fspd) > 0.0 and (fint == null or float(fint) > 0.0):
+				hdr_mat.set_shader_parameter("flicker_speed", clampf(float(fspd) * 8.0, 0.4, 4.0))
+				hdr_mat.set_shader_parameter("flicker_amp", 0.22)
 			_std_mat_cache[ue_mat_path] = hdr_mat
 			return hdr_mat
 		mat.albedo_color = tint_col
@@ -870,7 +910,7 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 			result["moonshape_hidden"] = int(result.get("moonshape_hidden", 0)) + 1
 			continue
 		var low_mp: String = mp.to_lower()
-		if "fogsheet" in low_mp or "volumetric" in low_mp or "skysphere" in low_mp or "blocker" in low_mp:
+		if "fogsheet" in low_mp or "fogsphere" in low_mp or "volumetric" in low_mp or "skysphere" in low_mp or "blocker" in low_mp:
 			continue
 		var tr: Transform3D = _dict_to_transform(m_dict)
 		# Per-component OverrideMaterials split the batch so each MultiMesh
@@ -917,7 +957,15 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 		if "candelabra" in low_mp or "candle" in low_mp or "brazier" in low_mp or "torch" in low_mp:
 			var candle_arr: Array = result["candelabra_positions"]
 			candle_arr.append(prop_pos)
-			_VfxManager.spawn_candle_flame(parent, prop_pos + Vector3(0.0, 0.48, 0.0))
+			var wick_y: float = 0.16
+			if "candelabrafloor" in low_mp:
+				wick_y = 1.35
+			elif "candelabra" in low_mp:
+				wick_y = 0.46
+			elif "brazier" in low_mp or "torch" in low_mp:
+				wick_y = 0.55
+			wick_y *= tr.basis.get_scale().y
+			_VfxManager.spawn_candle_flame(parent, prop_pos + Vector3(0.0, wick_y, 0.0))
 		if "wardrobe" in low_mp or "bureau" in low_mp or "armoire" in low_mp:
 			var ward_arr: Array = result["wardrobe_positions"]
 			ward_arr.append(prop_pos)
@@ -1199,7 +1247,7 @@ func _collect_draw_items(acc: Dictionary) -> Array:
 
 func _apply_culling_policy(node: GeometryInstance3D, low_mp: String, mesh: Mesh) -> void:
 	var aabb_len: float = mesh.get_aabb().size.length()
-	if _has_token(low_mp, CLUTTER_TOKENS):
+	if _has_token(low_mp, CLUTTER_TOKENS) and aabb_len < 2.0:
 		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		node.visibility_range_end = CLUTTER_VIS_RANGE + CHUNK_RADIUS_PAD
 		node.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
@@ -1743,6 +1791,57 @@ func _store_level_extras(acc: Dictionary, ctx: Dictionary) -> void:
 		ctx["post_process"] = (acc["post_process"] as Array)[0]
 
 
+## Desktop-only R3 APPROXIMATE replacements for UE5 LumenSkylightLeaking and
+## LocalExposure* settings carried in level PostProcessVolumes (e.g. ThievesDenTest_P).
+## Never registers bounce fills with light_probe (Suite 36/36b) or group
+## "den_hand_fills" (Suite 34b), and never mutates ambient_light_energy or
+## adjustment_brightness (Suites 17 & 34b).
+func _build_post_process_gi_fills(post_processes: Array, parent: Node3D, _ctx: Dictionary) -> void:
+	if MobileProfile.is_mobile() or parent == null:
+		return
+	var fill_idx: int = 0
+	var wenv: WorldEnvironment = null
+	for child: Node in parent.get_children():
+		if child is WorldEnvironment:
+			wenv = child as WorldEnvironment
+			break
+	for pp_v: Variant in post_processes:
+		if not (pp_v is Dictionary):
+			continue
+		var pp: Dictionary = pp_v as Dictionary
+		var settings_v: Variant = pp.get("settings", {})
+		if not (settings_v is Dictionary):
+			continue
+		var settings: Dictionary = settings_v as Dictionary
+		var leak: float = float(settings.get("LumenSkylightLeaking", 0.0))
+		if leak > 0.0:
+			var fill := OmniLight3D.new()
+			fill.name = "SkylightLeakingFill_%d" % fill_idx
+			fill_idx += 1
+			var pos_v: Variant = pp.get("pos", [0.0, 0.0, 0.0])
+			if pos_v is Array and (pos_v as Array).size() >= 3:
+				var pa: Array = pos_v as Array
+				fill.position = Vector3(float(pa[0]), float(pa[1]), float(pa[2]))
+			var sc_v: Variant = pp.get("scale", [10.0, 5.0, 10.0])
+			var sx: float = 10.0
+			var sz: float = 10.0
+			if sc_v is Array and (sc_v as Array).size() >= 3:
+				var sa: Array = sc_v as Array
+				sx = absf(float(sa[0]))
+				sz = absf(float(sa[2]))
+			fill.shadow_enabled = false
+			fill.light_color = Color(0.55, 0.72, 0.95)
+			fill.light_energy = clampf(leak * 0.9, 0.1, 0.45)
+			fill.omni_range = clampf(maxf(sx, sz) * 1.5, 8.0, 30.0)
+			fill.omni_attenuation = 0.4
+			parent.add_child(fill)
+		if (settings.has("LocalExposureShadowContrastScale") or settings.has("LocalExposureMiddleGreyBias")) and wenv != null and wenv.environment != null:
+			var sc: float = float(settings.get("LocalExposureShadowContrastScale", 0.6))
+			var mb: float = float(settings.get("LocalExposureMiddleGreyBias", 0.25))
+			wenv.environment.adjustment_enabled = true
+			wenv.environment.adjustment_color_correction = WeatherProfile.build_shadow_toe_lut(1.2, sc, mb)
+
+
 func load_sublevels(json_paths: Array[String], parent: Node3D, light_probe: Node, max_lights: int = 96, generate_collision: bool = true) -> Dictionary:
 	if _materials_db.is_empty():
 		_load_material_dbs()
@@ -1759,6 +1858,7 @@ func load_sublevels(json_paths: Array[String], parent: Node3D, light_probe: Node
 	_build_decals(acc["decals"], parent, ctx)
 	_build_volumes(acc["volumes"], parent, ctx)
 	_store_level_extras(acc, ctx)
+	_build_post_process_gi_fills(acc["post_process"], parent, ctx)
 	_build_landscapes_sync(acc["landscapes"], parent, ctx)
 
 	var items: Array = _collect_draw_items(acc)
@@ -1802,6 +1902,7 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 	_build_decals(acc["decals"], parent, ctx)
 	_build_volumes(acc["volumes"], parent, ctx)
 	_store_level_extras(acc, ctx)
+	_build_post_process_gi_fills(acc["post_process"], parent, ctx)
 
 	var landscapes: Array = acc["landscapes"]
 	for lc_i in range(landscapes.size()):
@@ -1854,7 +1955,7 @@ func _dict_to_transform(d: Dictionary) -> Transform3D:
 		Vector3(float(b[0]), float(b[3]), float(b[6])),
 		Vector3(float(b[1]), float(b[4]), float(b[7])),
 		Vector3(float(b[2]), float(b[5]), float(b[8]))
-	).scaled(Vector3(
+	).scaled_local(Vector3(
 		clampf(float(s[0]), 0.05, 40.0),
 		clampf(float(s[1]), 0.05, 40.0),
 		clampf(float(s[2]), 0.05, 40.0)

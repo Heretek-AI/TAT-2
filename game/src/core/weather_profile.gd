@@ -35,8 +35,13 @@ extends RefCounted
 ## - enable_rain / rain_intensity are exposed for later particle wiring; this
 ##   module never spawns rain.
 
+const MobileProfile: GDScript = preload("res://src/core/mobile_profile.gd")
+
 const WEATHER_DIR := "res://data/generated/weather"
 const MAP_TABLE_PATH := "res://data/generated/weather/map_weather.json"
+
+# Cache for desktop shadow-toe lift 1D LUTs (R3 APPROXIMATE Local Exposure / gain_shadows).
+static var _lut_cache: Dictionary = {}
 
 # UE centimetres -> Godot metres (matches tools/parse_tables.py).
 const FOG_DENSITY_SCALE := 0.01
@@ -219,6 +224,48 @@ static func brightness(preset: Dictionary) -> Variant:
 	return null
 
 
+static func shadow_gain(preset: Dictionary) -> Variant:
+	var g: Variant = _section(preset, "postprocess").get("gain_shadows")
+	if _has_color(g):
+		return float(g[0])
+	return null
+
+
+## R3 APPROXIMATE 1D shadow-toe color-correction LUT lifting deep shadows
+## according to authored `gain_shadows` and UE5 `LocalExposure*` scalars without
+## mutating `env.adjustment_brightness` (Suite 17).
+static func build_shadow_toe_lut(gain_shadow: float, shadow_contrast: float = 1.0, mid_bias: float = 0.0) -> GradientTexture1D:
+	var key: String = "%d_%d_%d" % [
+		int(round(gain_shadow * 100.0)),
+		int(round(shadow_contrast * 100.0)),
+		int(round(mid_bias * 100.0)),
+	]
+	if _lut_cache.has(key):
+		return _lut_cache[key] as GradientTexture1D
+	var lift: float = clampf((gain_shadow - 1.0) * 0.65 + (1.0 - shadow_contrast) * 0.35 + mid_bias * 0.25, 0.0, 0.42)
+	var grad := Gradient.new()
+	var offsets := PackedFloat32Array()
+	var colors := PackedColorArray()
+	for i: int in range(17):
+		var x: float = float(i) / 16.0
+		var y: float = x
+		if i == 0:
+			y = 0.008 * clampf(lift * 3.0, 0.0, 1.0)
+		elif x < 0.55:
+			var t: float = smoothstep(0.0, 0.55, x)
+			y = clampf(lerpf(pow(x, 1.0 - lift), x, t), 0.0, 1.0)
+		offsets.append(x)
+		colors.append(Color(y, y, y, 1.0))
+	grad.offsets = offsets
+	grad.colors = colors
+	var tex := GradientTexture1D.new()
+	tex.gradient = grad
+	tex.width = 256
+	tex.use_hdr = false
+	_lut_cache[key] = tex
+	return tex
+
+
 static func tonemap_exposure(preset: Dictionary) -> Variant:
 	var raw: Variant = _section(preset, "postprocess").get("auto_exposure_bias")
 	if raw == null:
@@ -309,6 +356,16 @@ static func apply_environment(env: Environment, moon: DirectionalLight3D, preset
 		var fog_c: Variant = fog_light_color(preset)
 		if fog_c != null:
 			env.fog_light_color = fog_c
+		# Compensate UE5 pre-exposed fog inscattering (0.001..0.004) via energy
+		# and aerial perspective while keeping fog_density & fog_light_color exact
+		# for Suites 10 & 17 (R3 APPROXIMATE Eye Adaptation replacement).
+		if fog_d != null and fog_c != null:
+			var fc: Color = fog_c as Color
+			var fog_lum: float = 0.2126 * fc.r + 0.7152 * fc.g + 0.0722 * fc.b
+			var is_low_density: bool = float(fog_d) <= 0.1
+			if fog_lum > 0.0 and fog_lum < 0.02:
+				env.fog_light_energy = clampf(0.06 / fog_lum, 1.0, 24.0) if is_low_density else clampf(0.025 / fog_lum, 1.0, 8.0)
+				env.fog_aerial_perspective = 0.65 if is_low_density else 0.25
 		var scatter: Variant = fog_sun_scatter(preset)
 		if scatter != null:
 			env.fog_sun_scatter = float(scatter)
@@ -316,6 +373,28 @@ static func apply_environment(env: Environment, moon: DirectionalLight3D, preset
 		# default of 1.0 lets the height fog fully replace the sky at infinite
 		# depth, so the authored gradient, stars and moon would render black.
 		env.fog_sky_affect = 0.0
+		var is_desktop: bool = not MobileProfile.is_mobile()
+		if is_desktop and fog_d != null:
+			# Desktop volumetric distance haze driven by authored fog extinction/distance/hue
+			# (R3 APPROXIMATE stand-in for UE5 ExponentialHeightFog volumetric scattering).
+			var fog_sec: Dictionary = _section(preset, "fog")
+			var vol_ext: float = float(fog_sec.get("volumetric_extinction_scale", 0.6))
+			var vol_dist_m: float = clampf(float(fog_sec.get("volumetric_distance", 4000.0)) * 0.01, 25.0, 180.0)
+			var is_low_d: bool = float(fog_d) <= 0.1
+			var preset_id: String = str(preset.get("preset", "")).to_lower()
+			var is_indoor_den: bool = "thieves_den" in preset_id
+			env.volumetric_fog_enabled = true
+			env.volumetric_fog_sky_affect = 0.0
+			env.volumetric_fog_gi_inject = 0.0
+			env.volumetric_fog_anisotropy = 0.35
+			env.volumetric_fog_length = 60.0 if is_indoor_den else maxf(vol_dist_m * 2.5, 120.0)
+			env.volumetric_fog_density = clampf(0.0035 * vol_ext + (0.002 if is_low_d else 0.0), 0.001, 0.012)
+			var base_fc: Color = fog_c as Color if fog_c != null else Color(0.35, 0.5, 1.0)
+			var fc_max: float = maxf(base_fc.r, maxf(base_fc.g, maxf(base_fc.b, 0.001)))
+			var hue: Color = Color(base_fc.r / fc_max, base_fc.g / fc_max, base_fc.b / fc_max)
+			env.volumetric_fog_albedo = hue.lerp(Color(0.65, 0.78, 1.0), 0.5)
+			var em_scale: float = 0.002 if is_indoor_den else (0.032 if (is_low_d or "dense_fog" in preset_id) else 0.012)
+			env.volumetric_fog_emission = hue * em_scale
 		var amb_c: Variant = ambient_color(preset)
 		if amb_c != null:
 			env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
@@ -336,6 +415,17 @@ static func apply_environment(env: Environment, moon: DirectionalLight3D, preset
 				env.adjustment_saturation = float(sat)
 			if bri != null:
 				env.adjustment_brightness = clampf(float(bri), 0.0, 2.0)
+		if is_desktop:
+			# Desktop SSIL + shadow-toe LUT (R3 APPROXIMATE replacement for UE5 Lumen GI & Local Exposure).
+			env.ssil_enabled = true
+			env.ssil_radius = 4.5
+			env.ssil_intensity = 1.25
+			env.ssil_sharpness = 0.98
+			env.ssil_normal_rejection = 1.0
+			var gs: Variant = shadow_gain(preset)
+			if gs != null and float(gs) > 1.02:
+				env.adjustment_enabled = true
+				env.adjustment_color_correction = build_shadow_toe_lut(float(gs))
 		var expo: Variant = tonemap_exposure(preset)
 		if expo != null:
 			env.tonemap_exposure = float(expo)
@@ -343,6 +433,20 @@ static func apply_environment(env: Environment, moon: DirectionalLight3D, preset
 		if glow != null:
 			env.glow_enabled = true
 			env.glow_intensity = float(glow)
+			if is_desktop:
+				env.glow_hdr_threshold = 1.0
+				env.glow_hdr_scale = 2.0
+				env.glow_bloom = 0.14
+				env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
+				for gl_i: int in range(5):
+					env.set_glow_level(gl_i, true)
+		if is_desktop:
+			# Desktop SSR for wet cobblestone puddles (tat_landscape.gdshader roughness ~0.04).
+			env.ssr_enabled = true
+			env.ssr_max_steps = 48
+			env.ssr_fade_in = 0.15
+			env.ssr_fade_out = 2.0
+			env.ssr_depth_tolerance = 0.2
 	if moon != null:
 		var energy: Variant = moon_energy(preset)
 		if energy != null:

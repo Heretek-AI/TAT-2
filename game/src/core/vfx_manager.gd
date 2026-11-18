@@ -212,6 +212,59 @@ static func spawn_sap_burst(parent: Node, pos: Vector3) -> void:
 	tree.create_timer(0.9).timeout.connect(root.queue_free)
 
 
+static var _candle_quad: QuadMesh = null
+static var _godray_shader: Shader = null
+static var _prop_outline_mat: ShaderMaterial = null
+
+
+static func _get_candle_quad() -> QuadMesh:
+	if _candle_quad != null:
+		return _candle_quad
+	var sh := Shader.new()
+	# R3 APPROXIMATE procedural billboarding teardrop flame quad stand-in for
+	# compiled Niagara candle flame VectorVM bytecode, calibrated to Steam ref.
+	sh.code = """shader_type spatial;
+render_mode blend_add, unshaded, cull_disabled, depth_draw_never;
+void vertex() {
+	vec3 origin_w = MODEL_MATRIX[3].xyz;
+	float phase = dot(origin_w, vec3(7.3, 11.1, 5.7));
+	float tip_t = clamp((VERTEX.y + 0.029) / 0.058, 0.0, 1.0);
+	VERTEX.x += sin(TIME * 6.5 + phase) * 0.0025 * tip_t * tip_t;
+	vec3 cam_z = INV_VIEW_MATRIX[2].xyz;
+	vec3 right = vec3(cam_z.z, 0.0, -cam_z.x);
+	float rl = length(right);
+	right = (rl > 0.001) ? (right / rl) : vec3(1.0, 0.0, 0.0);
+	vec3 up = vec3(0.0, 1.0, 0.0);
+	vec3 fwd = cross(right, up);
+	MODELVIEW_MATRIX = VIEW_MATRIX * mat4(
+		vec4(right, 0.0),
+		vec4(up, 0.0),
+		vec4(fwd, 0.0),
+		MODEL_MATRIX[3]
+	);
+}
+void fragment() {
+	float y = 1.0 - UV.y;
+	float width = sin(pow(clamp(y, 0.0, 1.0), 0.65) * 3.14159265) * (1.0 - 0.35 * y);
+	float dx = abs(UV.x - 0.5) * 2.0;
+	float w = max(width, 0.001);
+	float mask = smoothstep(w, w * 0.18, dx) * smoothstep(0.0, 0.12, y) * smoothstep(1.0, 0.72, y);
+	float core = smoothstep(0.55, 0.0, length(vec2(dx * 1.15, (y - 0.32) * 1.6)));
+	float flick = 0.90 + 0.10 * sin(TIME * 11.3 + NODE_POSITION_WORLD.x * 9.7 + NODE_POSITION_WORLD.z * 13.1);
+	vec3 col = mix(vec3(1.8, 0.55, 0.08), vec3(3.2, 2.4, 1.1), clamp(core * 1.2 + (1.0 - y) * 0.25, 0.0, 1.0));
+	ALBEDO = col * flick;
+	ALPHA = clamp(mask, 0.0, 1.0);
+}
+"""
+	var mat := ShaderMaterial.new()
+	mat.shader = sh
+	var q := QuadMesh.new()
+	q.size = Vector2(0.026, 0.058)
+	q.material = mat
+	_candle_quad = q
+	return _candle_quad
+
+
 static func spawn_candle_flame(parent: Node, pos: Vector3) -> void:
 	if parent == null:
 		return
@@ -220,34 +273,11 @@ static func spawn_candle_flame(parent: Node, pos: Vector3) -> void:
 	parent.add_child(root)
 	root.global_position = pos
 
-	var flame_mesh: SphereMesh = SphereMesh.new()
-	flame_mesh.radius = 0.04
-	flame_mesh.height = 0.08
-	flame_mesh.radial_segments = 8
-	flame_mesh.rings = 4
-
-	var flame_mat: StandardMaterial3D = StandardMaterial3D.new()
-	flame_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	flame_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	flame_mat.albedo_color = Color(1.0, 0.6, 0.2, 0.9)
-	flame_mat.emission_enabled = true
-	flame_mat.emission = Color(1.0, 0.55, 0.15, 1.0)
-	flame_mat.emission_energy_multiplier = 2.0
-	flame_mesh.material = flame_mat
-
-	var flame: CPUParticles3D = CPUParticles3D.new()
-	flame.name = "FlameParticles"
-	flame.amount = 8
-	flame.lifetime = 0.6
-	flame.emitting = true
-	flame.mesh = flame_mesh
-	flame.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	flame.emission_sphere_radius = 0.03
-	flame.gravity = Vector3(0.0, 0.8, 0.0)
-	flame.initial_velocity_min = 0.05
-	flame.initial_velocity_max = 0.2
-	flame.scale_amount_min = 0.7
-	flame.scale_amount_max = 1.1
+	var flame: MeshInstance3D = MeshInstance3D.new()
+	flame.name = "FlameQuad"
+	flame.mesh = _get_candle_quad()
+	flame.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	flame.position = Vector3(0.0, 0.028, 0.0)
 	root.add_child(flame)
 
 
@@ -356,11 +386,15 @@ static func spawn_window_godray(parent: Node, pos: Vector3, target_pos: Vector3)
 	cone.height = dist
 	cone.radial_segments = 16
 	cone.rings = 1
+	cone.cap_top = false
+	cone.cap_bottom = false
 
-	var shaft_shader: Shader = Shader.new()
-	shaft_shader.code = "shader_type spatial;\nrender_mode blend_add, unshaded, cull_disabled, depth_draw_never;\nuniform vec4 beam_color : source_color = vec4(0.45, 0.72, 0.96, 0.16);\nvoid fragment() {\n\tfloat fresnel = pow(abs(dot(normalize(NORMAL), normalize(VIEW))), 2.2);\n\tfloat axial = smoothstep(0.0, 0.25, UV.y) * smoothstep(1.0, 0.15, UV.y);\n\tALBEDO = beam_color.rgb;\n\tALPHA = beam_color.a * fresnel * axial;\n}\n"
+	if _godray_shader == null:
+		_godray_shader = Shader.new()
+		# R3 APPROXIMATE soft volumetric dust beam stand-in (open-ended cylinder).
+		_godray_shader.code = "shader_type spatial;\nrender_mode blend_add, unshaded, cull_disabled, depth_draw_never;\nuniform vec4 beam_color : source_color = vec4(0.45, 0.72, 0.96, 0.065);\nvoid fragment() {\n\tfloat fresnel = pow(abs(dot(normalize(NORMAL), normalize(VIEW))), 2.8);\n\tfloat axial = smoothstep(0.0, 0.35, UV.y) * smoothstep(1.0, 0.42, UV.y);\n\tALBEDO = beam_color.rgb;\n\tALPHA = beam_color.a * fresnel * axial;\n}\n"
 	var shaft_mat: ShaderMaterial = ShaderMaterial.new()
-	shaft_mat.shader = shaft_shader
+	shaft_mat.shader = _godray_shader
 	cone.material = shaft_mat
 
 	var shaft: MeshInstance3D = MeshInstance3D.new()
@@ -541,6 +575,30 @@ static func spawn_blue_wisp(parent: Node3D, local_pos: Vector3, light_energy: fl
 	return root
 
 
+static func _get_prop_outline_material() -> ShaderMaterial:
+	if _prop_outline_mat != null:
+		return _prop_outline_mat
+	var sh := Shader.new()
+	# R3 APPROXIMATE crisp yellow-gold inverted-hull silhouette outline stand-in
+	# for UE post-process interaction highlight (zero interior surface tint).
+	sh.code = """shader_type spatial;
+render_mode unshaded, cull_front, depth_draw_never;
+void vertex() {
+	float view_dist = length((MODELVIEW_MATRIX * vec4(VERTEX, 1.0)).xyz);
+	float width = clamp(0.005 + 0.0025 * view_dist, 0.004, 0.018);
+	vec3 dir = normalize(NORMAL + normalize(VERTEX + vec3(1e-5)) * 0.25);
+	VERTEX += dir * width;
+}
+void fragment() {
+	ALBEDO = vec3(1.4, 1.15, 0.30);
+}
+"""
+	var mat := ShaderMaterial.new()
+	mat.shader = sh
+	_prop_outline_mat = mat
+	return _prop_outline_mat
+
+
 static func set_prop_highlight(target: Node, enabled: bool) -> void:
 	if target == null:
 		return
@@ -566,21 +624,11 @@ static func set_prop_highlight(target: Node, enabled: bool) -> void:
 		if mi == null:
 			continue
 		if enabled:
-			if mi.has_meta("_vfx_hl") and bool(mi.get_meta("_vfx_hl", false)):
+			if mi.has_meta("_vfx_hl") and mi.get_meta("_vfx_hl", false) == true:
 				continue
 			mi.set_meta("_vfx_hl", true)
 			mi.set_meta("_vfx_hl_orig", mi.material_overlay)
-			var hl: StandardMaterial3D = StandardMaterial3D.new()
-			hl.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
-			hl.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-			hl.albedo_color = Color(0.45, 0.8, 1.0, 0.28)
-			hl.emission_enabled = true
-			hl.emission = Color(0.35, 0.75, 1.0, 1.0)
-			hl.emission_energy_multiplier = 1.2
-			hl.rim_enabled = true
-			hl.rim = 0.6
-			hl.rim_tint = 0.4
-			mi.material_overlay = hl
+			mi.material_overlay = _get_prop_outline_material()
 		else:
 			if not mi.has_meta("_vfx_hl"):
 				continue

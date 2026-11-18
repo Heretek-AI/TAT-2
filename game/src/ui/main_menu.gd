@@ -3,6 +3,11 @@ extends Control
 
 const LevelLoaderScript := preload("res://src/core/level_loader.gd")
 const SettingsUIScript := preload("res://src/ui/settings_ui.gd")
+const MobileProfile: GDScript = preload("res://src/core/mobile_profile.gd")
+const GuardAnimLibScript: GDScript = preload("res://src/core/animation_library.gd")
+
+const STARTSCREEN_GUARD_GLB: String = "res://assets/ue/Content/Art/Animation/GuardEnforcer/Skin/Base/SK_GuardEnforcer__Preview.glb"
+const STARTSCREEN_GUARD_UE_MESH: String = "/Game/Art/Animation/GuardEnforcer/Skin/Base/SK_GuardEnforcer__Preview"
 
 ## Authored CineCameraActor_0 from MainMenu.json:
 ## RelativeLocation (-1271.964, 1460.8873, 45.659775) cm -> Godot metres
@@ -64,20 +69,82 @@ func _build_3d_backdrop() -> void:
 	var scene_root := Node3D.new()
 	vp.add_child(scene_root)
 
+	var loader := LevelLoaderScript.new()
+	scene_root.add_child(loader)
+	var sublevels: Array[String] = [
+		"res://data/generated/levels/Menus/MainMenu/BeautifulCorner_Startscreen_P.tatlevel.json",
+		"res://data/generated/levels/Menus/MainMenu/BeautifulCorner_Startscreen_Lighting.tatlevel.json",
+	]
+	var load_res: Dictionary = loader.load_sublevels(sublevels, scene_root, null, 32, false)
+
+	var sky_light_v: Variant = load_res.get("sky_light", {})
+	var sky_light: Dictionary = sky_light_v as Dictionary if sky_light_v is Dictionary else {}
+	var fog_vol_v: Variant = load_res.get("fog_volume", {})
+	var fog_vol: Dictionary = fog_vol_v as Dictionary if fog_vol_v is Dictionary else {}
+	var pp_v: Variant = load_res.get("post_process", {})
+	var pp_doc: Dictionary = pp_v as Dictionary if pp_v is Dictionary else {}
+	var pp_set_v: Variant = pp_doc.get("settings", {})
+	var pp_settings: Dictionary = pp_set_v as Dictionary if pp_set_v is Dictionary else {}
+
 	var env := WorldEnvironment.new()
 	var e := Environment.new()
 	e.background_mode = Environment.BG_COLOR
-	e.background_color = Color(0.025, 0.02, 0.05)
+	e.background_color = Color(0.012, 0.016, 0.036)
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	e.ambient_light_color = Color(0.18, 0.14, 0.28)
-	e.ambient_light_energy = 0.42
+	e.ambient_light_color = Color(0.55, 0.58, 0.85)
+	e.ambient_light_energy = clampf(float(sky_light.get("intensity", 2.0)) * 0.16, 0.08, 0.45)
+
+	var fog_col: Color = Color(0.06, 0.07, 0.14)
+	var fog_ins_v: Variant = fog_vol.get("inscattering", null)
+	if fog_ins_v is Array and (fog_ins_v as Array).size() >= 3:
+		var fa: Array = fog_ins_v as Array
+		var fmax: float = maxf(float(fa[0]), maxf(float(fa[1]), maxf(float(fa[2]), 0.001)))
+		fog_col = Color(float(fa[0]) / fmax * 0.14, float(fa[1]) / fmax * 0.14, float(fa[2]) / fmax * 0.14)
 	e.fog_enabled = true
-	e.fog_light_color = Color(0.14, 0.07, 0.22)
-	e.fog_density = 0.014
-	e.glow_enabled = true
-	e.glow_intensity = 0.8
-	e.glow_bloom = 0.3
+	e.fog_light_color = fog_col
+	e.fog_density = 0.008
+	e.fog_sky_affect = 0.0
+
 	e.tonemap_mode = Environment.TONE_MAPPER_ACES
+	e.tonemap_exposure = 1.15
+	e.glow_enabled = true
+	e.glow_intensity = clampf(float(pp_settings.get("BloomIntensity", 6.336)) * 0.08, 0.0, 0.8)
+	e.glow_bloom = 0.22
+	e.glow_hdr_threshold = 1.0
+	if pp_settings.has("ColorContrast"):
+		var cc_v: Variant = pp_settings.get("ColorContrast")
+		var cc_val: float = 1.0
+		if cc_v is Dictionary:
+			cc_val = float((cc_v as Dictionary).get("X", 1.0))
+		elif cc_v is Array and not (cc_v as Array).is_empty():
+			cc_val = float((cc_v as Array)[0])
+		elif cc_v is float or cc_v is int:
+			cc_val = float(cc_v)
+		e.adjustment_enabled = true
+		e.adjustment_contrast = clampf(cc_val, 0.5, 1.5)
+
+	if not MobileProfile.is_mobile():
+		# Desktop volumetric mist for car headlights, multi-octave neon bloom, SSR & SSIL
+		# (R3 APPROXIMATE Forward+ mappings for BeautifulCorner_Startscreen_Lighting).
+		e.volumetric_fog_enabled = true
+		e.volumetric_fog_density = 0.016
+		e.volumetric_fog_albedo = Color(0.85, 0.82, 0.90)
+		e.volumetric_fog_anisotropy = 0.45
+		e.volumetric_fog_length = 45.0
+		e.volumetric_fog_sky_affect = 0.0
+		e.glow_hdr_scale = 2.0
+		e.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
+		for gl_i: int in range(5):
+			e.set_glow_level(gl_i, true)
+		e.ssr_enabled = true
+		e.ssr_max_steps = 48
+		e.ssr_fade_in = 0.15
+		e.ssr_fade_out = 2.0
+		e.ssr_depth_tolerance = 0.2
+		e.ssil_enabled = true
+		e.ssil_radius = 4.0
+		e.ssil_intensity = 1.1
+
 	env.environment = e
 	scene_root.add_child(env)
 
@@ -89,21 +156,96 @@ func _build_3d_backdrop() -> void:
 	scene_root.add_child(_menu_cam)
 	_menu_cam.look_at(STARTSCREEN_CAM_EYE + STARTSCREEN_CAM_FWD * STARTSCREEN_CAM_FOCUS_M, Vector3.UP)
 
-	# Warm magenta/amber storefront glow matching MacNeish Jeweller
-	_shop_glow = OmniLight3D.new()
-	_shop_glow.position = Vector3(-1.2, 8.8, 2.2)
-	_shop_glow.light_color = Color(1.0, 0.28, 0.72)
-	_shop_glow.light_energy = 1.6
-	_shop_glow.omni_range = 14.0
-	scene_root.add_child(_shop_glow)
+	# Tune extracted car headlights (#8/#9, BP_CarBC Temperature 3500K) for warm volumetric mist.
+	for child: Node in scene_root.get_children():
+		if child is SpotLight3D:
+			var sl: SpotLight3D = child as SpotLight3D
+			if sl.light_energy >= 3.9 and sl.position.x < -10.0:
+				sl.light_color = Color(1.0, 0.80, 0.55)
+				sl.spot_angle = 32.0
+				sl.spot_attenuation = 2.0
+				sl.light_energy = 2.6
+				sl.light_volumetric_fog_energy = 2.5
 
-	var loader := LevelLoaderScript.new()
-	scene_root.add_child(loader)
-	var sublevels: Array[String] = [
-		"res://data/generated/levels/Menus/MainMenu/BeautifulCorner_Startscreen_P.tatlevel.json",
-		"res://data/generated/levels/Menus/MainMenu/BeautifulCorner_Startscreen_Lighting.tatlevel.json",
-	]
-	loader.load_sublevels(sublevels, scene_root, null, 32, false)
+	# Restore missing SM_LightStreetA glowing cream-gold bulb aligned with BP_StreetlightA_C_2 & Spot10.
+	var bulb := MeshInstance3D.new()
+	bulb.name = "StartscreenStreetlampBulb"
+	var bulb_mesh := SphereMesh.new()
+	bulb_mesh.radius = 0.24
+	bulb_mesh.height = 0.48
+	bulb_mesh.radial_segments = 16
+	bulb_mesh.rings = 10
+	var bulb_mat := StandardMaterial3D.new()
+	bulb_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	bulb_mat.albedo_color = Color(1.0, 0.90, 0.72)
+	bulb_mat.emission_enabled = true
+	bulb_mat.emission = Color(1.0, 0.84, 0.62)
+	bulb_mat.emission_energy_multiplier = 4.5
+	bulb_mesh.material = bulb_mat
+	bulb.mesh = bulb_mesh
+	bulb.position = Vector3(7.72, 12.25, 4.83)
+	bulb.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	scene_root.add_child(bulb)
+
+	_spawn_startscreen_guard(scene_root, loader)
+
+
+## Spawns the extracted Startscreen idle Constable guard (SkeletalMeshActor_16 from
+## BeautifulCorner_Startscreen_P.json) with authored PBR slots and neutral idle clip.
+func _spawn_startscreen_guard(scene_root: Node3D, loader: Node) -> void:
+	if not ResourceLoader.exists(STARTSCREEN_GUARD_GLB):
+		return
+	var guard_res: Resource = ResourceLoader.load(STARTSCREEN_GUARD_GLB) as Resource
+	if not (guard_res is PackedScene):
+		return
+	var guard_node: Node = (guard_res as PackedScene).instantiate()
+	if not (guard_node is Node3D):
+		guard_node.queue_free()
+		return
+	var g3: Node3D = guard_node as Node3D
+	g3.name = "StartscreenIdleConstable"
+	g3.position = Vector3(-4.2615, -0.0148, 2.5352)
+	g3.rotation_degrees = Vector3(0.0, -18.0, 0.0)
+	g3.scale = Vector3(1.1, 1.1, 1.1)
+	scene_root.add_child(g3)
+
+	var db_v: Variant = loader.get("_mesh_mats_db")
+	var slots_v: Variant = (db_v as Dictionary).get(STARTSCREEN_GUARD_UE_MESH, null) if db_v is Dictionary else null
+	if not (slots_v is Array):
+		var db_low_v: Variant = loader.get("_mesh_mats_db_lower")
+		slots_v = (db_low_v as Dictionary).get(STARTSCREEN_GUARD_UE_MESH.to_lower(), null) if db_low_v is Dictionary else null
+	if slots_v is Array:
+		var slots: Array = slots_v as Array
+		var meshes: Array[Node] = g3.find_children("*", "MeshInstance3D", true, false)
+		for m_node: Node in meshes:
+			var mi: MeshInstance3D = m_node as MeshInstance3D
+			if mi == null or mi.mesh == null:
+				continue
+			var count: int = mini(mi.mesh.get_surface_count(), slots.size())
+			for s: int in range(count):
+				var mat_path: String = str(slots[s])
+				if mat_path == "":
+					continue
+				var mat: Material = loader.call("get_material_for_ue", mat_path) as Material
+				if mat != null:
+					mi.set_surface_override_material(s, mat)
+
+	var skels: Array[Node] = g3.find_children("*", "Skeleton3D", true, false)
+	if not skels.is_empty():
+		var skel: Skeleton3D = skels[0] as Skeleton3D
+		if skel != null and skel.get_parent() != null:
+			var alib: GuardAnimationLibrary = GuardAnimLibScript.new()
+			if alib.setup("club", skel):
+				var anim: Animation = alib._retarget_general("AN_GuardEnforcer_NeutralFresh_Idle", false, true, false)
+				if anim != null:
+					var ap := AnimationPlayer.new()
+					ap.name = "StartscreenGuardAnim"
+					g3.add_child(ap)
+					ap.root_node = ap.get_path_to(skel.get_parent())
+					var lib := AnimationLibrary.new()
+					lib.add_animation("neutral_idle", anim)
+					ap.add_animation_library("", lib)
+					ap.play("neutral_idle")
 
 
 func _process(delta: float) -> void:

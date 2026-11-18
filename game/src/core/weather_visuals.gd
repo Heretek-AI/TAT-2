@@ -178,6 +178,19 @@ static func make_sky(preset: Dictionary, moon: DirectionalLight3D) -> Sky:
 	mat.set_shader_parameter("horizon_color", horizon)
 	mat.set_shader_parameter("zenith_color", zenith)
 
+	var sky_sec_v: Variant = preset.get("sky", {})
+	var sky_sec: Dictionary = sky_sec_v as Dictionary if sky_sec_v is Dictionary else {}
+	var overall: Variant = _color3(sky_sec.get("overall_color"))
+	# Decouple rendered sky radiance from UE5's pre-exposed 0.001 overall_color
+	# scalar while keeping horizon_color_of() / zenith_color_of() untouched (Suite 22).
+	var sky_radiance_scale: float = 1.0
+	if overall != null:
+		var oc: Color = overall as Color
+		var max_overall: float = maxf(oc.r, maxf(oc.g, oc.b))
+		if max_overall > 0.0 and max_overall < 0.05:
+			sky_radiance_scale = clampf(0.025 / max_overall, 1.0, 35.0)
+	mat.set_shader_parameter("sky_radiance_scale", sky_radiance_scale)
+
 	var moon_dir := Vector3(0.0, 1.0, 0.0)
 	if moon != null:
 		var d: Vector3 = moon.basis * Vector3(0.0, 0.0, 1.0)
@@ -189,7 +202,8 @@ static func make_sky(preset: Dictionary, moon: DirectionalLight3D) -> Sky:
 	var size_raw: Variant = WeatherProfile.moon_disc_size(preset)
 	var diam: float = DEFAULT_MOON_DIAMETER_DEG
 	if size_raw != null:
-		var moon_section: Dictionary = preset.get("moon", {})
+		var moon_section_v: Variant = preset.get("moon", {})
+		var moon_section: Dictionary = moon_section_v as Dictionary if moon_section_v is Dictionary else {}
 		var off_raw: Variant = moon_section.get("distance_offset")
 		var offset: float = float(off_raw) if off_raw != null else 0.0
 		diam = moon_diameter_deg(float(size_raw), offset)
@@ -201,6 +215,7 @@ static func make_sky(preset: Dictionary, moon: DirectionalLight3D) -> Sky:
 	else:
 		show_moon = false
 	mat.set_shader_parameter("moon_visible", 1.0 if show_moon else 0.0)
+	mat.set_shader_parameter("moon_halo_strength", 0.45 if show_moon else 0.0)
 	var mcol: Variant = WeatherProfile.moon_disc_color(preset)
 	if mcol == null and moon != null:
 		mcol = moon.light_color
@@ -221,15 +236,29 @@ static func make_sky(preset: Dictionary, moon: DirectionalLight3D) -> Sky:
 	var cloud_op: Variant = WeatherProfile.sky_cloud_opacity(preset)
 	if cloud_col != null and cloud_op != null:
 		haze = clampf(float(cloud_op) * CLOUD_OPACITY_TO_HAZE, 0.0, CLOUD_HAZE_MAX)
-		# UE M_Sky multiplies the whole sky, cloud term included, by Overall
-		# Color. The haze strength stays authored; only its tint follows the
-		# multiplier so the night sky is not tinted at full HDR brightness.
+		# Lift cloud tint separately from UE5's 0.001 dome scalar so procedural
+		# FBM wisps read in deep indigo night skies (R3 APPROXIMATE stand-in
+		# calibrated from MI_VolumetricCloud_* ratios and Steam captures).
 		var haze_col: Color = cloud_col as Color
-		var overall: Variant = _color3((preset.get("sky", {}) as Dictionary).get("overall_color"))
 		if overall != null:
-			haze_col *= overall as Color
+			var oc2: Color = overall as Color
+			var mo2: float = maxf(oc2.r, maxf(oc2.g, oc2.b))
+			if mo2 > 0.0 and mo2 < 0.05:
+				haze_col *= oc2 * clampf(0.085 / mo2, 1.0, 85.0)
+			else:
+				haze_col *= oc2
 		mat.set_shader_parameter("cloud_color", haze_col)
 	mat.set_shader_parameter("cloud_haze", haze)
+
+	var vc_mat: String = str(sky_sec.get("volumetric_cloud_material", "")).to_lower()
+	var cloud_cov: float = 0.42
+	if "stormy" in vc_mat:
+		cloud_cov = 0.78
+	elif "overcast" in vc_mat or "cloudy" in vc_mat:
+		cloud_cov = 0.68
+	if cloud_op != null:
+		cloud_cov = clampf(cloud_cov * clampf(float(cloud_op) / 3.3, 0.3, 1.2), 0.12, 0.90)
+	mat.set_shader_parameter("cloud_coverage", cloud_cov)
 
 	var sky := Sky.new()
 	sky.sky_material = mat

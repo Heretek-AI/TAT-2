@@ -115,7 +115,7 @@ void fragment() {
 			puddle = clamp(pw * op, 0.0, 1.0);
 			col = mix(col, vec3(0.035, 0.045, 0.060) * max(total, 1.0), puddle * 0.85);
 			NORMAL_MAP = texture(puddle_normal, UV * uv_scale).rgb;
-			NORMAL_MAP_DEPTH = puddle;
+			NORMAL_MAP_DEPTH = puddle * 0.25;
 		}
 	}
 	if (groundwet_channel >= 0) {
@@ -123,5 +123,7 @@ void fragment() {
 		col *= (1.0 - groundwet * 0.18);
 	}
 	ALBEDO = total > 0.001 ? col / total : fallback_color;
-	ROUGHNESS = mix(mix(0.9, 0.18, puddle), 0.45, groundwet);
+	float base_rough = mix(0.9, 0.42, groundwet);
+	ROUGHNESS = mix(base_rough, 0.04, puddle);
+	SPECULAR = mix(0.5, 0.85, max(puddle, groundwet * 0.4));
 }

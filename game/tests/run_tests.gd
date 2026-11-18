@@ -2467,6 +2467,91 @@ func _initialize() -> void:
 	cpd_ll.queue_free()
 	await process_frame
 
+	# 33. Phase 1(c): tat_glass.gdshader (authored albedo + opacity map) replacing flat-blue fallback
+	var gl_ll: Node = (load("res://src/core/level_loader.gd") as GDScript).new()
+	root.add_child(gl_ll)
+	await process_frame
+
+	# 33a. materials.json opacity map resolution
+	var gl_mats_f: FileAccess = FileAccess.open("res://data/generated/materials.json", FileAccess.READ)
+	var gl_mats_v: Variant = JSON.parse_string(gl_mats_f.get_as_text()) if gl_mats_f != null else null
+	var gl_mats: Dictionary = gl_mats_v as Dictionary if gl_mats_v is Dictionary else {}
+	var gl_gp_op: String = str(_entry_texs(gl_mats.get("/Game/MaterialLibrary/Environment/Glass/WIndowPanels/MI_GlassPanels", {})).get("opacity", ""))
+	var gl_mgp_op: String = str(_entry_texs(gl_mats.get("/Game/MaterialLibrary/Environment/Glass/WIndowPanels/M_GlassPanels", {})).get("opacity", ""))
+	var gl_om_op: String = str(_entry_texs(gl_mats.get("/Game/MaterialLibrary/Environment/Glass/WIndowPanels/MI_GlassPanels_oldmanor", {})).get("opacity", ""))
+	var gl_mg_op: String = str(_entry_texs(gl_mats.get("/Game/MaterialLibrary/Environment/Glass/WIndowPanels/M_Glass", {})).get("opacity", ""))
+	var gl_33a_ok: bool = gl_gp_op.ends_with("WindowPanel_O.png") and gl_mgp_op.ends_with("WindowPanel_O.png") \
+		and gl_om_op.ends_with("WindowPanels_Oldmanor_O.png") and gl_mg_op.ends_with("T_StorefrontGlass_O.png")
+	if not gl_33a_ok:
+		printerr("FAIL: 33a materials.json opacity resolution (MI_GlassPanels=", gl_gp_op, " M_GlassPanels=", gl_mgp_op, " oldmanor=", gl_om_op, " M_Glass=", gl_mg_op, ")")
+		fails += 1
+	else:
+		print("PASS: 33a materials.json opacity maps resolved (WindowPanel_O, WindowPanels_Oldmanor_O, T_StorefrontGlass_O)")
+
+	# 33b. Translucent glass binds tat_glass.gdshader with authored albedo + opacity map
+	var gl_gp_m: Variant = gl_ll.call("get_material_for_ue", "/Game/MaterialLibrary/Environment/Glass/WIndowPanels/MI_GlassPanels")
+	var gl_gp_sh: ShaderMaterial = gl_gp_m as ShaderMaterial
+	var gl_gp_alb: Variant = gl_gp_sh.get_shader_parameter("albedo_tex") if gl_gp_sh != null else null
+	var gl_gp_opt: Variant = gl_gp_sh.get_shader_parameter("opacity_tex") if gl_gp_sh != null else null
+	var gl_gp_tint: Variant = gl_gp_sh.get_shader_parameter("albedo_tint") if gl_gp_sh != null else null
+	var gl_gp_opsc: float = float(gl_gp_sh.get_shader_parameter("opacity_scale")) if gl_gp_sh != null else -1.0
+	var gl_gp_ok: bool = gl_gp_sh != null and gl_gp_sh.shader != null \
+		and gl_gp_sh.shader.resource_path == "res://src/core/tat_glass.gdshader" \
+		and (gl_gp_alb is Texture2D) and (gl_gp_opt is Texture2D) \
+		and gl_gp_sh.get_shader_parameter("use_albedo_tex") == true \
+		and gl_gp_sh.get_shader_parameter("use_opacity_tex") == true \
+		and absf(gl_gp_opsc - 1.5) < 0.01 \
+		and (gl_gp_tint is Color) and absf((gl_gp_tint as Color).r - 0.311) < 0.01
+
+	var gl_om_m: Variant = gl_ll.call("get_material_for_ue", "/Game/MaterialLibrary/Environment/Glass/WIndowPanels/MI_GlassPanels_oldmanor")
+	var gl_om_sh: ShaderMaterial = gl_om_m as ShaderMaterial
+	var gl_om_ok: bool = gl_om_sh != null and gl_om_sh.shader != null \
+		and gl_om_sh.shader.resource_path == "res://src/core/tat_glass.gdshader" \
+		and (gl_om_sh.get_shader_parameter("albedo_tex") is Texture2D) \
+		and (gl_om_sh.get_shader_parameter("opacity_tex") is Texture2D) \
+		and gl_om_sh.get_shader_parameter("use_opacity_tex") == true \
+		and absf(float(gl_om_sh.get_shader_parameter("opacity_scale")) - 2.0) < 0.01
+
+	var gl_unlit_m: Variant = gl_ll.call("get_material_for_ue", "/Game/MaterialLibrary/Environment/MasterMaterials/M_EnvGlassUnlit")
+	var gl_unlit_sh: ShaderMaterial = gl_unlit_m as ShaderMaterial
+	var gl_unlit_ok: bool = gl_unlit_sh != null and gl_unlit_sh.shader != null \
+		and gl_unlit_sh.shader.resource_path == "res://src/core/tat_glass.gdshader" \
+		and (gl_unlit_sh.get_shader_parameter("albedo_tex") is Texture2D) \
+		and gl_unlit_sh.get_shader_parameter("use_albedo_tex") == true \
+		and gl_unlit_sh.get_shader_parameter("use_opacity_tex") == false
+
+	if not gl_gp_ok or not gl_om_ok or not gl_unlit_ok:
+		printerr("FAIL: 33b tat_glass.gdshader bindings (MI_GlassPanels=", gl_gp_ok, " oldmanor=", gl_om_ok, " M_EnvGlassUnlit=", gl_unlit_ok, ")")
+		fails += 1
+	else:
+		print("PASS: 33b tat_glass.gdshader bound with authored albedo+opacity (MI_GlassPanels, MI_GlassPanels_oldmanor, M_EnvGlassUnlit)")
+
+	# 33c. Opaque glass materials stay opaque StandardMaterial3D (no flat-blue hijack)
+	var gl_op_paths: Array[String] = [
+		"/Game/MaterialLibrary/Environment/Glass/WIndowPanels/MI_GlassPanels_Opaque",
+		"/Game/MaterialLibrary/Environment/Glass/WIndowPanels/MI_GlassPanels_PeriphBuilding",
+		"/Game/Maps/Prototype/TempAssets/Windows/MI_WindowGlassOpaque",
+	]
+	var gl_op_bad: Array[String] = []
+	for gl_opp: String in gl_op_paths:
+		var gl_om_mat: Variant = gl_ll.call("get_material_for_ue", gl_opp)
+		if not (gl_om_mat is StandardMaterial3D):
+			gl_op_bad.append(gl_opp + ":not_std")
+			continue
+		var gl_std: StandardMaterial3D = gl_om_mat as StandardMaterial3D
+		if gl_std.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED:
+			gl_op_bad.append(gl_opp + ":transparent")
+		if gl_std.albedo_texture == null:
+			gl_op_bad.append(gl_opp + ":no_albedo_tex")
+	if not gl_op_bad.is_empty():
+		printerr("FAIL: 33c opaque glass kept opaque: ", gl_op_bad)
+		fails += 1
+	else:
+		print("PASS: 33c opaque glass stays opaque StandardMaterial3D with authored albedo (3/3)")
+
+	gl_ll.queue_free()
+	await process_frame
+
 	print("SUMMARY: fails=", fails)
 	quit(0 if fails == 0 else 1)
 

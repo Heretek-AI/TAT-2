@@ -795,6 +795,18 @@ def main():
             )
             if orm_pick != "":
                 texs["orm"] = orm_pick
+        if "opacity" not in texs:
+            opacity_pick: str = _best_texture_candidate(
+                extra_paths,
+                ("_o", "_opacity"),
+                tokens,
+                family_words,
+                path_category,
+                is_character,
+                allow_ui_map,
+            )
+            if opacity_pick != "":
+                texs["opacity"] = opacity_pick
         # Albedo: TextureStreamingData is a used-texture list, not array-first.
         # Rank every candidate by family anchor, path category, tokens and stem
         # specificity. A signal-less stream pick is ignored (F4) except for

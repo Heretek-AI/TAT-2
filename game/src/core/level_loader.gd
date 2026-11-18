@@ -8,6 +8,7 @@ const _VfxManager: GDScript = preload("res://src/core/vfx_manager.gd")
 const MobileProfile: GDScript = preload("res://src/core/mobile_profile.gd")
 const LANDSCAPE_SHADER: Shader = preload("res://src/core/tat_landscape.gdshader")
 const EMISSIVE_CPD_SHADER: Shader = preload("res://src/core/tat_emissive_cpd.gdshader")
+const GLASS_SHADER: Shader = preload("res://src/core/tat_glass.gdshader")
 
 ## Landscape layer name -> extracted albedo texture. Missing layers are skipped
 ## (the shader normalizes the remaining weights) instead of binding a guessed
@@ -155,14 +156,22 @@ func _load_material_dbs() -> void:
 
 
 func _load_tex(res_path: String) -> Texture2D:
-	if res_path == "" or not ResourceLoader.exists(res_path):
+	if res_path == "":
 		return null
 	if _tex_cache.has(res_path):
-		return _tex_cache[res_path]
-	var t: Variant = load(res_path)
-	if t is Texture2D:
-		_tex_cache[res_path] = t
-		return t
+		return _tex_cache[res_path] as Texture2D
+	if ResourceLoader.exists(res_path):
+		var t: Variant = load(res_path)
+		if t is Texture2D:
+			_tex_cache[res_path] = t
+			return t as Texture2D
+	if FileAccess.file_exists(res_path):
+		var img: Image = Image.load_from_file(ProjectSettings.globalize_path(res_path))
+		if img != null and not img.is_empty():
+			var itex: ImageTexture = ImageTexture.create_from_image(img)
+			if itex != null:
+				_tex_cache[res_path] = itex
+				return itex
 	return null
 
 
@@ -260,14 +269,89 @@ func _apply_ue_emissive(mat: StandardMaterial3D, info: Dictionary) -> void:
 			mat.emission_energy_multiplier = 1.0
 
 
-func get_material_for_ue(ue_mat_path: String) -> StandardMaterial3D:
+func _build_glass_material(info: Dictionary, alb: Texture2D, op: Texture2D) -> ShaderMaterial:
+	var smat: ShaderMaterial = ShaderMaterial.new()
+	smat.shader = GLASS_SHADER
+	var texs: Dictionary = info.get("texs", {})
+	var params: Dictionary = _ue_norm_map(info.get("params", {}))
+	var vectors_raw: Dictionary = info.get("vectors", {})
+	var vectors_norm: Dictionary = _ue_norm_map(vectors_raw)
+	var switches: Dictionary = _ue_norm_map(info.get("switches", {}))
+	smat.set_shader_parameter("use_albedo_tex", alb != null)
+	if alb != null:
+		smat.set_shader_parameter("albedo_tex", alb)
+	smat.set_shader_parameter("use_opacity_tex", op != null)
+	if op != null:
+		smat.set_shader_parameter("opacity_tex", op)
+	var norm: Texture2D = _load_tex(str(texs.get("normal", "")))
+	smat.set_shader_parameter("use_normal_tex", norm != null)
+	if norm != null:
+		smat.set_shader_parameter("normal_tex", norm)
+	var orm: Texture2D = _load_tex(str(texs.get("orm", "")))
+	smat.set_shader_parameter("use_orm_tex", orm != null)
+	if orm != null:
+		smat.set_shader_parameter("orm_tex", orm)
+	var vc: Color = Color(1.0, 1.0, 1.0, 1.0)
+	var tint: Variant = info.get("tint")
+	if tint is Array and (tint as Array).size() >= 3:
+		var ta: Array = tint as Array
+		vc = Color(float(ta[0]), float(ta[1]), float(ta[2]), 1.0)
+	if vectors_raw.has("Overlay"):
+		var ov: Variant = vectors_raw["Overlay"]
+		if ov is Array and (ov as Array).size() >= 3:
+			var ova: Array = ov as Array
+			vc.r *= float(ova[0])
+			vc.g *= float(ova[1])
+			vc.b *= float(ova[2])
+	if vectors_raw.has("Multiply"):
+		var mu: Variant = vectors_raw["Multiply"]
+		if mu is Array and (mu as Array).size() >= 3:
+			var mua: Array = mu as Array
+			vc.r *= float(mua[0])
+			vc.g *= float(mua[1])
+			vc.b *= float(mua[2])
+	smat.set_shader_parameter("albedo_tint", vc)
+	var op_val: Variant = _ue_lookup(params, ["opacity", "glassopacity", "opacitymultiply"])
+	var op_scale: float = clampf(float(op_val), 0.0, 8.0) if op_val != null else 1.0
+	smat.set_shader_parameter("opacity_scale", op_scale)
+	var rough_val: Variant = _ue_lookup(params, ["roughness", "glassroughness", "flatroughness"])
+	if rough_val != null:
+		smat.set_shader_parameter("roughness_val", clampf(float(rough_val), 0.04, 4.0 if orm != null else 1.0))
+	else:
+		smat.set_shader_parameter("roughness_val", 1.0 if orm != null else 0.25)
+	var metal_val: Variant = _ue_lookup(params, ["metallic", "metalness", "flatmetallic"])
+	if metal_val != null:
+		smat.set_shader_parameter("metallic_val", clampf(float(metal_val), 0.0, 1.0))
+	else:
+		smat.set_shader_parameter("metallic_val", 1.0 if orm != null else 0.0)
+	var spec_val: Variant = _ue_lookup(params, ["specular", "spec"])
+	if spec_val != null:
+		smat.set_shader_parameter("specular_val", clampf(float(spec_val), 0.0, 1.0))
+	var tile_val: Variant = _ue_lookup(params, ["texturesize", "uvtiling", "uvtilinga"])
+	if tile_val != null and float(tile_val) > 0.01:
+		smat.set_shader_parameter("uv_scale", float(tile_val))
+	var em_allowed: bool = _ue_lookup(switches, ["emissiveon?"]) != false and _ue_lookup(switches, ["disableemissivecontribution"]) != true
+	if em_allowed:
+		var ecol: Variant = _ue_lookup(vectors_norm, ["emissivecolor", "emissive", "emissivetint", "emiscolor"])
+		var estr: Variant = _ue_lookup(params, ["emissivestrength", "emissiveintensity", "emissivemultiplier", "emissivemultiply", "emismultiply", "emissivemult", "emissivepower", "emissivebrightness", "emissivebrillance", "emissive"])
+		if ecol is Array and (ecol as Array).size() >= 3 and estr != null:
+			var ea: Array = ecol as Array
+			var e_col: Color = Color(float(ea[0]), float(ea[1]), float(ea[2]))
+			var e_str: float = clampf(float(estr), 0.0, 8.0)
+			if maxf(e_col.r, maxf(e_col.g, e_col.b)) * e_str > 0.005:
+				smat.set_shader_parameter("emission_color", Vector3(e_col.r, e_col.g, e_col.b))
+				smat.set_shader_parameter("emission_energy", e_str)
+	return smat
+
+
+func get_material_for_ue(ue_mat_path: String) -> Material:
 	if _std_mat_cache.has(ue_mat_path):
-		return _std_mat_cache[ue_mat_path]
-	var low_mat := ue_mat_path.to_lower()
+		return _std_mat_cache[ue_mat_path] as Material
+	var low_mat: String = ue_mat_path.to_lower()
 	var info: Dictionary = _materials_db.get(ue_mat_path, _materials_db_lower.get(low_mat, {}))
 	var render_early: Dictionary = info.get("render", {})
 	var texs_early: Dictionary = info.get("texs", {})
-	var shading_early := str(render_early.get("shading_model", ""))
+	var shading_early: String = str(render_early.get("shading_model", ""))
 	if low_mat.ends_with("blackunlitmaterial") or (shading_early.ends_with("MSM_Unlit") and texs_early.is_empty()):
 		var black := StandardMaterial3D.new()
 		black.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -275,32 +359,30 @@ func get_material_for_ue(ue_mat_path: String) -> StandardMaterial3D:
 		black.cull_mode = BaseMaterial3D.CULL_DISABLED
 		_std_mat_cache[ue_mat_path] = black
 		return black
+	var blend_early: String = str(render_early.get("blend_mode", "")).to_lower()
+	var is_translucent_early: bool = blend_early.find("translucent") >= 0 or blend_early.find("alphacomposite") >= 0
+	if is_translucent_early and ("glass" in low_mat or "window" in low_mat):
+		var glass_alb_path: String = str(texs_early.get("albedo", ""))
+		var glass_alb: Texture2D = null if glass_alb_path.to_lower().find("mapbuilding") >= 0 else _load_tex(glass_alb_path)
+		var glass_op: Texture2D = _load_tex(str(texs_early.get("opacity", "")))
+		if glass_alb != null or glass_op != null:
+			var gmat: ShaderMaterial = _build_glass_material(info, glass_alb, glass_op)
+			_std_mat_cache[ue_mat_path] = gmat
+			return gmat
 	var mat := StandardMaterial3D.new()
 	mat.roughness = 0.78
 	_apply_ue_pbr_params(mat, info)
 	_apply_ue_render_flags(mat, info)
 	var texs: Dictionary = info.get("texs", {})
-	var alb := _load_tex(str(texs.get("albedo", "")))
+	var alb: Texture2D = _load_tex(str(texs.get("albedo", "")))
 	# Hard rule: the UI map textures (T_MapBuilding_*) must never dress 3D geometry.
 	if str(texs.get("albedo", "")).to_lower().find("mapbuilding") >= 0:
 		alb = null
 	if "oldmanorpanels" in low_mat:
-		var wood_alb := _load_tex("res://assets/ue/Raw/MaterialLibrary/Environment/Wood/Manor/T_ManorWood_D.png")
+		var wood_alb: Texture2D = _load_tex("res://assets/ue/Raw/MaterialLibrary/Environment/Wood/Manor/T_ManorWood_D.png")
 		if wood_alb != null:
 			alb = wood_alb
 		mat.albedo_color = Color(0.65, 0.55, 0.48)
-	elif "glasspanels" in low_mat or "windowglass" in low_mat:
-		# Never bind map-building icon textures to glass panels; keep frosted translucent glass
-		alb = null
-		mat.albedo_color = Color(0.35, 0.55, 0.72, 0.34)
-		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-		mat.roughness = 0.22
-		mat.metallic = 0.08
-		mat.rim_enabled = true
-		mat.rim = 0.3
-		_std_mat_cache[ue_mat_path] = mat
-		return mat
 	if alb != null:
 		mat.albedo_texture = alb
 	var norm := _load_tex(str(texs.get("normal", "")))
@@ -391,10 +473,6 @@ func get_material_for_ue(ue_mat_path: String) -> StandardMaterial3D:
 			mat.albedo_color = Color(0.24, 0.26, 0.29)
 			mat.metallic = 0.8
 			mat.roughness = 0.42
-		elif "glass" in low or "window" in low:
-			mat.albedo_color = Color(0.35, 0.52, 0.68, 0.35)
-			mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-			mat.roughness = 0.12
 		elif "wall" in low:
 			mat.albedo_color = Color(0.26, 0.25, 0.27)
 		else:
@@ -557,7 +635,7 @@ func _get_overridden_mesh(ue_path: String, base_mesh: Mesh, ov_arr: Array[String
 		var slot_mat_path: String = ov_arr[s]
 		if slot_mat_path == "":
 			continue
-		var mat: StandardMaterial3D = get_material_for_ue(slot_mat_path)
+		var mat: Material = get_material_for_ue(slot_mat_path)
 		if mat != null:
 			ov_mesh.surface_set_material(s, mat)
 	_override_mesh_cache[cache_key] = ov_mesh

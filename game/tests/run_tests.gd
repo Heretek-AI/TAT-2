@@ -2986,6 +2986,45 @@ func _initialize() -> void:
 	ttg_ll.queue_free()
 	await process_frame
 
+	# 39b. Tiny-texture ResourceLoader/.ctex fallback guard (TASK 4.2): a
+	# synthetic tiny ImageTexture WITH mipmaps must come back mip-free and
+	# be recorded in the same skipped_tiny counter; a 256x256 mipmapped
+	# texture passes through untouched and unrecorded.
+	var ttf_ll: Node = (load("res://src/core/level_loader.gd") as GDScript).new()
+	root.add_child(ttf_ll)
+	await process_frame
+	var ttf_tiny_img: Image = Image.create(16, 16, false, Image.FORMAT_RGBA8)
+	ttf_tiny_img.fill(Color(0, 0, 1, 1))
+	ttf_tiny_img.generate_mipmaps()
+	var ttf_tiny_src: ImageTexture = ImageTexture.create_from_image(ttf_tiny_img)
+	var ttf_big_img: Image = Image.create(256, 256, false, Image.FORMAT_RGBA8)
+	ttf_big_img.fill(Color(1, 1, 0, 1))
+	ttf_big_img.generate_mipmaps()
+	var ttf_big_src: ImageTexture = ImageTexture.create_from_image(ttf_big_img)
+	var ttf_tiny_has_mips_before: bool = ttf_tiny_src.get_image().has_mipmaps()
+	var ttf_count_before: int = int(ttf_ll.get("skipped_tiny_count"))
+	var ttf_tiny_out: Texture2D = ttf_ll.call("_guard_tiny_resource_texture", ttf_tiny_src, "res://__synthetic_tiny.ctex") as Texture2D
+	var ttf_big_out: Texture2D = ttf_ll.call("_guard_tiny_resource_texture", ttf_big_src, "res://__synthetic_big.ctex") as Texture2D
+	var ttf_tiny_out_img: Image = ttf_tiny_out.get_image() if ttf_tiny_out != null else null
+	var ttf_big_out_img: Image = ttf_big_out.get_image() if ttf_big_out != null else null
+	var ttf_skipped: Array = (ttf_ll.get("skipped_tiny_textures") as Array).duplicate()
+	var ttf_count_after: int = int(ttf_ll.get("skipped_tiny_count"))
+	var ttf_tiny_mips_after: bool = ttf_tiny_out_img.has_mipmaps() if ttf_tiny_out_img != null else true
+	var ttf_big_mips_after: bool = ttf_big_out_img.has_mipmaps() if ttf_big_out_img != null else false
+	var ttf_fallback_ok: bool = ttf_tiny_has_mips_before \
+		and ttf_tiny_out != null and ttf_tiny_out.get_width() == 16 and ttf_tiny_out.get_height() == 16 \
+		and not ttf_tiny_mips_after \
+		and ttf_skipped.has("res://__synthetic_tiny.ctex") and not ttf_skipped.has("res://__synthetic_big.ctex") \
+		and ttf_count_after == ttf_count_before + 1 and ttf_count_after == ttf_skipped.size() \
+		and ttf_big_out == ttf_big_src and ttf_big_mips_after
+	if not ttf_fallback_ok:
+		printerr("FAIL: 39b tiny-texture ResourceLoader fallback (mips_before=", ttf_tiny_has_mips_before, " mips_after=", ttf_tiny_mips_after, " big_mips=", ttf_big_mips_after, " skipped=", ttf_skipped, " count=", ttf_count_before, "->", ttf_count_after, ")")
+		fails += 1
+	else:
+		print("PASS: 39b tiny-texture ResourceLoader fallback (16x16 mips stripped, 256x256 untouched, skipped_tiny_count=", ttf_count_after, ")")
+	ttf_ll.queue_free()
+	await process_frame
+
 	# 40. E2E 4.4(a): interactables var/track bounds alias. T1-15-B reads
 	# duration_s + arc_deg with bounds dur 1.1..3.1 / arc 69..241 over
 	# 24 variations / 48 tracks; the authored key is arc_angle_deg, mirrored

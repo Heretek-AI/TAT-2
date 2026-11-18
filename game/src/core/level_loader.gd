@@ -39,8 +39,11 @@ var _emissive_cpd_mat: ShaderMaterial = null
 ## i.e. below TINY_TEX_MIN_SIZE) skip the mip chain — a full mip chain on a <32px
 ## wastes memory and can warn/error on some drivers. Landscape/PBR textures
 ## (>= TINY_TEX_MIN_SIZE) always keep/generate mipmaps; no project-wide import
-## default is changed. Skips are visibly accounted in skipped_tiny_textures
-## (no silent hide); skipped_tiny_count mirrors the array size.
+## default is changed. The FileAccess path skips generate_mipmaps(); the
+## ResourceLoader/.ctex path strips the import mip chain (or keeps the tiny
+## texture linear) via _guard_tiny_resource_texture. Skips are visibly
+## accounted in skipped_tiny_textures (no silent hide); skipped_tiny_count
+## mirrors the array size.
 const TINY_TEX_MIN_SIZE: int = 32
 var skipped_tiny_textures: Array[String] = []
 var skipped_tiny_count: int = 0
@@ -173,6 +176,42 @@ func _is_tiny_texture(w: int, h: int) -> bool:
 	return mini(w, h) < TINY_TEX_MIN_SIZE
 
 
+## TASK 4.2 fallback: ResourceLoader/.ctex path for the tiny-texture mip
+## guard. Imported (.ctex) textures arrive with their import mip chain, so
+## there is no generate_mipmaps() call to skip here — instead, after load(),
+## a tiny ImageTexture whose image still carries mipmaps is re-created
+## without them (clear_mipmaps + ImageTexture.create_from_image). A tiny
+## texture with no strippable mip chain (already linear, or a
+## CompressedTexture2D whose import chain cannot be rebuilt at runtime) is
+## returned as-is and sampled linear. Both cases are recorded in the same
+## skipped_tiny_textures/skipped_tiny_count accounting as the FileAccess
+## path (no silent hide).
+func _guard_tiny_resource_texture(tex: Texture2D, res_path: String) -> Texture2D:
+	if tex == null:
+		return null
+	if res_path == "" or not _is_tiny_texture(tex.get_width(), tex.get_height()):
+		return tex
+	if tex is ImageTexture:
+		var src: Image = (tex as ImageTexture).get_image()
+		if src != null and not src.is_empty() and src.has_mipmaps():
+			if not skipped_tiny_textures.has(res_path):
+				skipped_tiny_textures.append(res_path)
+			skipped_tiny_count = skipped_tiny_textures.size()
+			push_warning("[level_loader] _load_tex stripped mip chain for tiny ResourceLoader texture ", res_path, " size=", tex.get_width(), "x", tex.get_height(), " skipped_tiny_count=", skipped_tiny_count)
+			var clean: Image = src.duplicate() as Image
+			if clean != null:
+				clean.clear_mipmaps()
+				var stripped: ImageTexture = ImageTexture.create_from_image(clean)
+				if stripped != null:
+					return stripped
+			return tex
+	if not skipped_tiny_textures.has(res_path):
+		skipped_tiny_textures.append(res_path)
+	skipped_tiny_count = skipped_tiny_textures.size()
+	push_warning("[level_loader] _load_tex tiny ResourceLoader texture kept linear (no strippable mip chain) ", res_path, " size=", tex.get_width(), "x", tex.get_height(), " skipped_tiny_count=", skipped_tiny_count)
+	return tex
+
+
 func _load_tex(res_path: String) -> Texture2D:
 	if res_path == "":
 		return null
@@ -181,8 +220,13 @@ func _load_tex(res_path: String) -> Texture2D:
 	if ResourceLoader.exists(res_path):
 		var t: Variant = load(res_path)
 		if t is Texture2D:
-			_tex_cache[res_path] = t
-			return t as Texture2D
+			var res_tex: Texture2D = t as Texture2D
+			if _is_tiny_texture(res_tex.get_width(), res_tex.get_height()):
+				var guarded: Texture2D = _guard_tiny_resource_texture(res_tex, res_path)
+				_tex_cache[res_path] = guarded
+				return guarded
+			_tex_cache[res_path] = res_tex
+			return res_tex
 	if FileAccess.file_exists(res_path):
 		var img: Image = Image.load_from_file(ProjectSettings.globalize_path(res_path))
 		if img != null and not img.is_empty():

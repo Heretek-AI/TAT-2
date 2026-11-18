@@ -2887,6 +2887,58 @@ func _initialize() -> void:
 	neon_ll.queue_free()
 	await process_frame
 
+	# 38. OldManor_P landscape: the extractor now exports the 128 components'
+	# heightmaps/weightmaps from the map package; every generated path must exist.
+	var om_doc: Variant = _repo_json("game/data/generated/levels/OldManor/OldManor_P.tatlevel.json")
+	var om_ls: Array = []
+	if om_doc is Dictionary:
+		var om_ls_v: Variant = (om_doc as Dictionary).get("landscapes", [])
+		if om_ls_v is Array:
+			om_ls = om_ls_v as Array
+	var om_missing: int = 0
+	var om_heightmaps: Dictionary = {}
+	var om_weightmaps: Dictionary = {}
+	for lc_v: Variant in om_ls:
+		if not (lc_v is Dictionary):
+			continue
+		var lc: Dictionary = lc_v as Dictionary
+		var hp: String = str(lc.get("heightmap", ""))
+		if hp != "":
+			om_heightmaps[hp] = true
+			if not FileAccess.file_exists(hp):
+				om_missing += 1
+		var wms_v: Variant = lc.get("weightmaps", [])
+		if wms_v is Array:
+			for wm_v: Variant in (wms_v as Array):
+				var wm: String = str(wm_v)
+				if wm == "":
+					continue
+				om_weightmaps[wm] = true
+				if not FileAccess.file_exists(wm):
+					om_missing += 1
+	var om_ls_ok: bool = om_ls.size() == 128 and om_missing == 0 \
+		and om_heightmaps.size() == 101 and om_weightmaps.size() == 54
+	var om_built: int = 0
+	if not om_ls.is_empty():
+		var om_ll: Node = (load("res://src/core/level_loader.gd") as GDScript).new()
+		root.add_child(om_ll)
+		await process_frame
+		var om_host: Node3D = Node3D.new()
+		root.add_child(om_host)
+		var om_ctx: Dictionary = om_ll.call("_new_build_ctx", om_host, null, false)
+		om_ll.call("_build_one_landscape", om_ls[0], om_host, om_ctx)
+		om_built = int(om_ctx.get("landscapes_built", 0))
+		om_ll.queue_free()
+		om_host.queue_free()
+		await process_frame
+	var om_built_ok: bool = om_built == 1
+	var om_all_ok: bool = om_ls_ok and om_built_ok
+	if not om_all_ok:
+		printerr("FAIL: 38 OldManor_P landscape assets (components=", om_ls.size(), " heightmaps=", om_heightmaps.size(), " weightmaps=", om_weightmaps.size(), " missing=", om_missing, " built=", om_built, ")")
+		fails += 1
+	else:
+		print("PASS: 38 OldManor_P landscape assets (128 components, 101 heightmaps, 54 weightmaps, 0 missing, runtime build=1)")
+
 	print("SUMMARY: fails=", fails)
 	quit(0 if fails == 0 else 1)
 

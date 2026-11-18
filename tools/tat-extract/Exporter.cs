@@ -167,7 +167,9 @@ public sealed class Exporter
                 || Path.GetFileName(p).StartsWith("WindowPanel_", StringComparison.Ordinal)
                 || Path.GetFileName(p).StartsWith("StorefrontWoodTile_", StringComparison.Ordinal)
                 || Path.GetFileName(p).StartsWith("TrimFabricFancyA_", StringComparison.Ordinal)
-                || Path.GetFileName(p).StartsWith("OldBricksB_", StringComparison.Ordinal))) || (p.EndsWith(".umap") && (p.Contains("Landscape") || p.Contains("BeautifulCorner_Startscreen_P")))), "textures", f =>
+                || Path.GetFileName(p).StartsWith("OldBricksB_", StringComparison.Ordinal))) || (p.EndsWith(".umap") && (p.Contains("Landscape")
+                    || p.Contains("BeautifulCorner_Startscreen_P")
+                    || Path.GetFileNameWithoutExtension(p).Equals("OldManor_P", StringComparison.OrdinalIgnoreCase)))), "textures", f =>
         {
             var pkg = _p.LoadPackage(f);
             bool isUmap = f.Path.EndsWith(".umap", StringComparison.OrdinalIgnoreCase);

@@ -12,6 +12,9 @@ class_name WardrobeUI
 
 signal closed()
 
+const ThemeScript: GDScript = preload("res://src/ui/art_nouveau_theme.gd")
+const LevelLoaderScript: GDScript = preload("res://src/core/level_loader.gd")
+
 const OUTFITS_JSON_PATH: String = "res://data/generated/tables/Character/Player/DT_CharacterOutfitsMetadata.json"
 
 const BODY_BASE_PATH: String = "res://assets/ue/Content/Art/Animation/ThiefNisha/Skin/Base/SK_ThiefNisha__Body.glb"
@@ -74,6 +77,7 @@ var _tool_desc_lbl: Label
 
 var _turntable: Node3D
 var _tool_holder: Node3D
+var _mat_loader: Node = null
 
 
 func _ready() -> void:
@@ -168,14 +172,18 @@ func _build_ui() -> void:
 
 func _build_top_bar() -> PanelContainer:
 	var bar: PanelContainer = PanelContainer.new()
-	bar.add_theme_stylebox_override("panel", _panel_style(Color(0.05, 0.05, 0.09, 0.97)))
+	bar.add_theme_stylebox_override("panel", ThemeScript.teal_panel_style(2, 6, ThemeScript.TEAL_PANEL_BG, 12))
+	ThemeScript.add_teal_filigree(bar, 3.0, 14.0)
+	var serif: Font = ThemeScript.font_serif()
+	var sans: Font = ThemeScript.font_sans()
 	var hb: HBoxContainer = HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 12)
 	hb.alignment = BoxContainer.ALIGNMENT_CENTER
 	bar.add_child(hb)
 	var q_btn: Button = Button.new()
 	q_btn.text = "< Q"
-	q_btn.custom_minimum_size = Vector2(72, 44)
+	q_btn.custom_minimum_size = Vector2(72, 42)
+	ThemeScript.style_teal_button(q_btn, false)
 	q_btn.pressed.connect(_cycle_thief.bind(-1))
 	hb.add_child(q_btn)
 	var name_vb: VBoxContainer = VBoxContainer.new()
@@ -186,45 +194,55 @@ func _build_top_bar() -> PanelContainer:
 	_thief_name_lbl.text = "THE SPIDER"
 	_thief_name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_thief_name_lbl.add_theme_font_size_override("font_size", 26)
-	_thief_name_lbl.add_theme_color_override("font_color", Color(0.95, 0.82, 0.48))
+	_thief_name_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
+	if serif != null:
+		_thief_name_lbl.add_theme_font_override("font", serif)
 	name_vb.add_child(_thief_name_lbl)
 	_thief_lock_lbl = Label.new()
 	_thief_lock_lbl.text = ""
 	_thief_lock_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_thief_lock_lbl.add_theme_font_size_override("font_size", 14)
-	_thief_lock_lbl.add_theme_color_override("font_color", Color(0.75, 0.72, 0.65))
+	_thief_lock_lbl.add_theme_font_size_override("font_size", 13)
+	_thief_lock_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_MUTED)
+	if sans != null:
+		_thief_lock_lbl.add_theme_font_override("font", sans)
 	name_vb.add_child(_thief_lock_lbl)
 	var e_btn: Button = Button.new()
 	e_btn.text = "E >"
-	e_btn.custom_minimum_size = Vector2(72, 44)
+	e_btn.custom_minimum_size = Vector2(72, 42)
+	ThemeScript.style_teal_button(e_btn, false)
 	e_btn.pressed.connect(_cycle_thief.bind(1))
 	hb.add_child(e_btn)
 	var spacer: Control = Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hb.add_child(spacer)
 	var back_btn: Button = Button.new()
-	back_btn.text = "< BACK [ESC]"
-	back_btn.custom_minimum_size = Vector2(170, 44)
+	back_btn.text = "BACK [ESC]"
+	back_btn.custom_minimum_size = Vector2(160, 42)
+	ThemeScript.style_teal_button(back_btn, false)
 	back_btn.pressed.connect(func() -> void: _apply_and_close(true))
 	hb.add_child(back_btn)
 	return bar
 
 
 func _build_left_panel() -> VBoxContainer:
+	var serif: Font = ThemeScript.font_serif()
+	var sans: Font = ThemeScript.font_sans()
 	var left: VBoxContainer = VBoxContainer.new()
 	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	left.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	left.add_theme_constant_override("separation", 8)
 	var prev_hdr: Label = Label.new()
-	prev_hdr.text = "FULL-BODY PREVIEW - drag to rotate"
-	prev_hdr.add_theme_font_size_override("font_size", 15)
-	prev_hdr.add_theme_color_override("font_color", Color(0.85, 0.78, 0.58))
+	prev_hdr.text = "WARDROBE — DRAG TO ROTATE"
+	prev_hdr.add_theme_font_size_override("font_size", 14)
+	prev_hdr.add_theme_color_override("font_color", ThemeScript.TEAL_ACCENT)
+	if sans != null:
+		prev_hdr.add_theme_font_override("font", sans)
 	left.add_child(prev_hdr)
 	var svc: SubViewportContainer = SubViewportContainer.new()
 	svc.stretch = true
 	svc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	svc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	svc.custom_minimum_size = Vector2(480, 380)
+	svc.custom_minimum_size = Vector2(480, 360)
 	svc.mouse_filter = Control.MOUSE_FILTER_STOP
 	left.add_child(svc)
 	var sv: SubViewport = SubViewport.new()
@@ -236,8 +254,10 @@ func _build_left_panel() -> VBoxContainer:
 	svc.gui_input.connect(_on_preview_gui_input)
 	var load_hdr: Label = Label.new()
 	load_hdr.text = "EDIT LOADOUT"
-	load_hdr.add_theme_font_size_override("font_size", 16)
-	load_hdr.add_theme_color_override("font_color", Color(0.95, 0.82, 0.48))
+	load_hdr.add_theme_font_size_override("font_size", 15)
+	load_hdr.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
+	if serif != null:
+		load_hdr.add_theme_font_override("font", serif)
 	left.add_child(load_hdr)
 	var toolbar: HBoxContainer = HBoxContainer.new()
 	toolbar.add_theme_constant_override("separation", 8)
@@ -249,19 +269,21 @@ func _build_left_panel() -> VBoxContainer:
 		var b: Button = Button.new()
 		b.text = "[" + str(i + 1) + "] " + str(entry.get("name", "?"))
 		b.toggle_mode = true
-		b.custom_minimum_size = Vector2(120, 40)
+		b.custom_minimum_size = Vector2(120, 38)
+		ThemeScript.style_teal_tab(b, i == _active_tool)
 		b.pressed.connect(_on_tool_selected.bind(i))
 		toolbar.add_child(b)
 		_tool_btns.append(b)
 	var card: PanelContainer = PanelContainer.new()
-	card.add_theme_stylebox_override("panel", _panel_style(Color(0.06, 0.055, 0.09, 0.97)))
+	card.add_theme_stylebox_override("panel", ThemeScript.teal_card_style(1, 5, ThemeScript.TEAL_PANEL_BG, 12))
+	ThemeScript.add_teal_filigree(card, 3.0, 14.0)
 	left.add_child(card)
 	var card_hb: HBoxContainer = HBoxContainer.new()
 	card_hb.add_theme_constant_override("separation", 12)
 	card.add_child(card_hb)
 	var tool_svc: SubViewportContainer = SubViewportContainer.new()
 	tool_svc.stretch = true
-	tool_svc.custom_minimum_size = Vector2(220, 170)
+	tool_svc.custom_minimum_size = Vector2(220, 160)
 	tool_svc.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card_hb.add_child(tool_svc)
 	var tool_sv: SubViewport = SubViewport.new()
@@ -277,71 +299,89 @@ func _build_left_panel() -> VBoxContainer:
 	_tool_name_lbl = Label.new()
 	_tool_name_lbl.text = "Zipwire"
 	_tool_name_lbl.add_theme_font_size_override("font_size", 20)
-	_tool_name_lbl.add_theme_color_override("font_color", Color(0.95, 0.85, 0.55))
+	_tool_name_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
+	if serif != null:
+		_tool_name_lbl.add_theme_font_override("font", serif)
 	tool_vb.add_child(_tool_name_lbl)
 	_tool_desc_lbl = Label.new()
 	_tool_desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_tool_desc_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_tool_desc_lbl.add_theme_font_size_override("font_size", 14)
-	_tool_desc_lbl.add_theme_color_override("font_color", Color(0.82, 0.80, 0.72))
+	_tool_desc_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_TEXT)
+	if sans != null:
+		_tool_desc_lbl.add_theme_font_override("font", sans)
 	tool_vb.add_child(_tool_desc_lbl)
 	return left
 
 
-func _build_right_panel() -> VBoxContainer:
+func _build_right_panel() -> PanelContainer:
+	var serif: Font = ThemeScript.font_serif()
+	var sans: Font = ThemeScript.font_sans()
+	var right_card: PanelContainer = PanelContainer.new()
+	right_card.custom_minimum_size = Vector2(310, 0)
+	right_card.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	right_card.add_theme_stylebox_override("panel", ThemeScript.teal_panel_style(1, 6, ThemeScript.TEAL_PANEL_BG, 16))
+	ThemeScript.add_teal_filigree(right_card, 3.0, 14.0)
 	var right: VBoxContainer = VBoxContainer.new()
-	right.custom_minimum_size = Vector2(300, 0)
 	right.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	right.add_theme_constant_override("separation", 8)
+	right_card.add_child(right)
 	var cust_hdr: Label = Label.new()
-	cust_hdr.text = "DISGUISE"
-	cust_hdr.add_theme_font_size_override("font_size", 20)
-	cust_hdr.add_theme_color_override("font_color", Color(0.95, 0.82, 0.48))
+	cust_hdr.text = "CUSTOMIZATION"
+	cust_hdr.add_theme_font_size_override("font_size", 19)
+	cust_hdr.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
+	if serif != null:
+		cust_hdr.add_theme_font_override("font", serif)
 	right.add_child(cust_hdr)
+	right.add_child(ThemeScript.teal_divider())
 	var head_hdr: Label = Label.new()
 	head_hdr.text = "HEAD"
+	head_hdr.add_theme_color_override("font_color", ThemeScript.TEAL_ACCENT)
 	right.add_child(head_hdr)
 	_head_opt = OptionButton.new()
+	ThemeScript.style_teal_option(_head_opt)
 	_head_opt.item_selected.connect(_on_head_selected)
 	right.add_child(_head_opt)
 	var body_hdr: Label = Label.new()
 	body_hdr.text = "BODY"
+	body_hdr.add_theme_color_override("font_color", ThemeScript.TEAL_ACCENT)
 	right.add_child(body_hdr)
 	_body_opt = OptionButton.new()
+	ThemeScript.style_teal_option(_body_opt)
 	_body_opt.item_selected.connect(_on_body_selected)
 	right.add_child(_body_opt)
 	var card_hdr: Label = Label.new()
 	card_hdr.text = "CALLING CARD"
+	card_hdr.add_theme_color_override("font_color", ThemeScript.TEAL_ACCENT)
 	right.add_child(card_hdr)
 	_card_opt = OptionButton.new()
+	ThemeScript.style_teal_option(_card_opt)
 	_card_opt.item_selected.connect(_on_card_selected)
 	right.add_child(_card_opt)
 	_desc_lbl = Label.new()
 	_desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_desc_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_desc_lbl.add_theme_font_size_override("font_size", 14)
-	_desc_lbl.add_theme_color_override("font_color", Color(0.82, 0.80, 0.72))
+	_desc_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_TEXT)
+	if sans != null:
+		_desc_lbl.add_theme_font_override("font", sans)
 	right.add_child(_desc_lbl)
 	_hint_lbl = Label.new()
 	_hint_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_hint_lbl.add_theme_font_size_override("font_size", 14)
-	_hint_lbl.add_theme_color_override("font_color", Color(1.0, 0.6, 0.45))
+	_hint_lbl.add_theme_color_override("font_color", Color(0.95, 0.55, 0.65))
 	right.add_child(_hint_lbl)
 	var apply_btn: Button = Button.new()
 	apply_btn.text = "APPLY"
-	apply_btn.custom_minimum_size = Vector2(160, 44)
+	apply_btn.custom_minimum_size = Vector2(160, 42)
+	ThemeScript.style_teal_button(apply_btn, true)
 	apply_btn.pressed.connect(func() -> void: _apply_and_close(true))
 	right.add_child(apply_btn)
-	return right
+	return right_card
 
 
 func _panel_style(bg: Color) -> StyleBoxFlat:
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = bg
-	style.border_color = Color(0.55, 0.45, 0.25, 0.9)
-	style.set_border_width_all(2)
-	style.set_content_margin_all(12)
-	return style
+	return ThemeScript.teal_panel_style(1, 5, bg, 12)
 
 
 func _setup_preview_world(sv: SubViewport) -> void:
@@ -489,6 +529,7 @@ func _refresh_tool_ui() -> void:
 	for i: int in range(_tool_btns.size()):
 		var b: Button = _tool_btns[i]
 		b.button_pressed = (i == _active_tool)
+		ThemeScript.style_teal_tab(b, i == _active_tool)
 	if _tool_holder != null and is_instance_valid(_tool_holder):
 		for c: Node in _tool_holder.get_children():
 			_tool_holder.remove_child(c)
@@ -499,6 +540,7 @@ func _refresh_tool_ui() -> void:
 		var node: Node = _load_model(mesh_path)
 		if node != null:
 			_tool_holder.add_child(node)
+			_bind_preview_materials(node, _glb_to_ue_mesh(mesh_path))
 	var entry_var2: Variant = TOOLS[_active_tool]
 	var entry2: Dictionary = entry_var2 as Dictionary
 	if _tool_name_lbl != null:
@@ -576,11 +618,13 @@ func _rebuild_figure() -> void:
 	var body_node: Node = _load_model(body_path)
 	if body_node != null:
 		_turntable.add_child(body_node)
+		_bind_preview_materials(body_node, _glb_to_ue_mesh(body_path))
 	var head_path: String = _resolve_head_path(_head)
 	if head_path != "":
 		var head_node: Node = _load_model(head_path)
 		if head_node != null:
 			_turntable.add_child(head_node)
+			_bind_preview_materials(head_node, _glb_to_ue_mesh(head_path))
 	var card_path: String = _resolve_card_path(_card, _thief_id)
 	if card_path != "":
 		var card_node: Node = _load_model(card_path)
@@ -590,6 +634,57 @@ func _rebuild_figure() -> void:
 				prop.position = Vector3(0.55, 1.05, 0.25)
 				prop.scale = Vector3(0.6, 0.6, 0.6)
 			_turntable.add_child(card_node)
+			_bind_preview_materials(card_node, _glb_to_ue_mesh(card_path))
+
+
+func _glb_to_ue_mesh(res_path: String) -> String:
+	var marker: String = "assets/ue/Content/"
+	var idx: int = res_path.find(marker)
+	if idx < 0:
+		return ""
+	var rel: String = res_path.substr(idx + marker.length())
+	if rel.ends_with(".glb"):
+		rel = rel.substr(0, rel.length() - 4)
+	return "/Game/" + rel
+
+
+func _get_mat_loader() -> Node:
+	if _mat_loader == null:
+		_mat_loader = LevelLoaderScript.new()
+		add_child(_mat_loader)
+	return _mat_loader
+
+
+func _bind_preview_materials(root: Node, ue_mesh_path: String) -> void:
+	if root == null or ue_mesh_path == "":
+		return
+	var loader: Node = _get_mat_loader()
+	if loader == null:
+		return
+	var db: Variant = loader.get("_mesh_mats_db")
+	var slots_v: Variant = (db as Dictionary).get(ue_mesh_path, null) if db is Dictionary else null
+	if not (slots_v is Array):
+		var db_low: Variant = loader.get("_mesh_mats_db_lower")
+		slots_v = (db_low as Dictionary).get(ue_mesh_path.to_lower(), null) if db_low is Dictionary else null
+	if not (slots_v is Array):
+		return
+	_bind_preview_meshes(root, loader, slots_v as Array)
+
+
+func _bind_preview_meshes(node: Node, loader: Node, slots: Array) -> void:
+	if node is MeshInstance3D:
+		var mi: MeshInstance3D = node as MeshInstance3D
+		if mi.mesh != null:
+			var count: int = mini(mi.mesh.get_surface_count(), slots.size())
+			for s: int in range(count):
+				var mat_path: String = str(slots[s])
+				if mat_path == "":
+					continue
+				var mat: Material = loader.call("get_material_for_ue", mat_path) as Material
+				if mat != null:
+					mi.set_surface_override_material(s, mat)
+	for child: Node in node.get_children():
+		_bind_preview_meshes(child, loader, slots)
 
 
 func _load_model(path: String) -> Node:

@@ -9,6 +9,7 @@ signal mission_selected(contract_order: int, map_id: String, difficulty: int, mo
 signal closed()
 
 const MissionPrepUIScript: GDScript = preload("res://src/ui/mission_prep_ui.gd")
+const ThemeScript: GDScript = preload("res://src/ui/art_nouveau_theme.gd")
 
 const SPLASH_CANDIDATES: Array[String] = [
 	"res://assets/ue/Content/Art/UI/MapSplash_Guildhall.png",
@@ -112,13 +113,11 @@ func _build_ui() -> void:
 	root.add_child(center)
 	var panel: PanelContainer = PanelContainer.new()
 	panel.custom_minimum_size = Vector2(1020, 640)
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.04, 0.045, 0.08, 0.97)
-	style.border_color = Color(0.55, 0.45, 0.25, 0.9)
-	style.set_border_width_all(2)
-	style.set_content_margin_all(20)
-	panel.add_theme_stylebox_override("panel", style)
+	panel.add_theme_stylebox_override("panel", ThemeScript.teal_panel_style(2, 6, ThemeScript.TEAL_PANEL_BG, 20))
 	center.add_child(panel)
+	ThemeScript.add_teal_filigree(panel)
+	var serif: Font = ThemeScript.font_serif()
+	var sans: Font = ThemeScript.font_sans()
 	var vb: VBoxContainer = VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 12)
 	panel.add_child(vb)
@@ -126,8 +125,11 @@ func _build_ui() -> void:
 	title.text = "MAP TABLE — CONTRACT SELECTOR"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 26)
-	title.add_theme_color_override("font_color", Color(0.95, 0.82, 0.48))
+	title.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
+	if serif != null:
+		title.add_theme_font_override("font", serif)
 	vb.add_child(title)
+	vb.add_child(ThemeScript.teal_divider())
 
 	var split: HBoxContainer = HBoxContainer.new()
 	split.add_theme_constant_override("separation", 20)
@@ -137,6 +139,12 @@ func _build_ui() -> void:
 	_list = ItemList.new()
 	_list.custom_minimum_size = Vector2(360, 0)
 	_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var list_style: StyleBoxFlat = ThemeScript.teal_card_style(1, 4, Color(0.028, 0.062, 0.082, 0.92), 8)
+	_list.add_theme_stylebox_override("panel", list_style)
+	_list.add_theme_color_override("font_color", ThemeScript.TEAL_TEXT)
+	_list.add_theme_color_override("font_selected_color", Color(0.98, 1.0, 1.0))
+	if sans != null:
+		_list.add_theme_font_override("font", sans)
 	_list.item_selected.connect(_on_contract_selected)
 	split.add_child(_list)
 
@@ -154,19 +162,25 @@ func _build_ui() -> void:
 
 	_title_lbl = Label.new()
 	_title_lbl.add_theme_font_size_override("font_size", 22)
-	_title_lbl.add_theme_color_override("font_color", Color(0.95, 0.82, 0.48))
+	_title_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
+	if serif != null:
+		_title_lbl.add_theme_font_override("font", serif)
 	right.add_child(_title_lbl)
 
 	_detail_lbl = Label.new()
 	_detail_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_detail_lbl.add_theme_font_size_override("font_size", 15)
-	_detail_lbl.add_theme_color_override("font_color", Color(0.86, 0.84, 0.76))
+	_detail_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_TEXT)
+	if sans != null:
+		_detail_lbl.add_theme_font_override("font", sans)
 	right.add_child(_detail_lbl)
 
 	_intel_lbl = Label.new()
 	_intel_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_intel_lbl.add_theme_font_size_override("font_size", 14)
-	_intel_lbl.add_theme_color_override("font_color", Color(0.70, 0.78, 0.88))
+	_intel_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_MUTED)
+	if sans != null:
+		_intel_lbl.add_theme_font_override("font", sans)
 	right.add_child(_intel_lbl)
 
 	var diff_row: HBoxContainer = HBoxContainer.new()
@@ -175,11 +189,13 @@ func _build_ui() -> void:
 	var diff_lbl: Label = Label.new()
 	diff_lbl.text = "Difficulty:"
 	diff_lbl.add_theme_font_size_override("font_size", 16)
+	diff_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_ACCENT)
 	diff_row.add_child(diff_lbl)
 	_diff_opt = OptionButton.new()
 	_diff_opt.add_item("Novice (1)", 1)
 	_diff_opt.add_item("Thief (2)", 2)
 	_diff_opt.add_item("Master Thief (3)", 3)
+	ThemeScript.style_teal_option(_diff_opt)
 	_diff_opt.item_selected.connect(_on_difficulty_selected)
 	diff_row.add_child(_diff_opt)
 
@@ -188,19 +204,25 @@ func _build_ui() -> void:
 	right.add_child(coop_row)
 	var host_btn: Button = Button.new()
 	host_btn.text = "Host Co-op"
+	ThemeScript.style_teal_button(host_btn, false)
 	host_btn.pressed.connect(_on_host_pressed)
 	coop_row.add_child(host_btn)
 	_ip_edit = LineEdit.new()
 	_ip_edit.text = "127.0.0.1"
 	_ip_edit.custom_minimum_size = Vector2(130, 0)
+	var ip_style: StyleBoxFlat = ThemeScript.teal_card_style(1, 4, Color(0.04, 0.09, 0.115, 0.94), 6)
+	_ip_edit.add_theme_stylebox_override("normal", ip_style)
+	_ip_edit.add_theme_color_override("font_color", ThemeScript.TEAL_TEXT)
 	coop_row.add_child(_ip_edit)
 	var join_btn: Button = Button.new()
 	join_btn.text = "Join Co-op"
+	ThemeScript.style_teal_button(join_btn, false)
 	join_btn.pressed.connect(_on_join_pressed)
 	coop_row.add_child(join_btn)
 	_net_status = Label.new()
 	_net_status.text = "Solo Mode"
 	_net_status.add_theme_font_size_override("font_size", 14)
+	_net_status.add_theme_color_override("font_color", ThemeScript.TEAL_MUTED)
 	coop_row.add_child(_net_status)
 
 	var bottom: HBoxContainer = HBoxContainer.new()
@@ -209,12 +231,14 @@ func _build_ui() -> void:
 	vb.add_child(bottom)
 	var deploy_btn: Button = Button.new()
 	deploy_btn.text = "DEPLOY CONTRACT"
-	deploy_btn.custom_minimum_size = Vector2(220, 48)
+	deploy_btn.custom_minimum_size = Vector2(220, 44)
+	ThemeScript.style_teal_button(deploy_btn, true)
 	deploy_btn.pressed.connect(_on_deploy_pressed)
 	bottom.add_child(deploy_btn)
 	var close_btn: Button = Button.new()
 	close_btn.text = "CLOSE [ESC]"
-	close_btn.custom_minimum_size = Vector2(160, 48)
+	close_btn.custom_minimum_size = Vector2(160, 44)
+	ThemeScript.style_teal_button(close_btn, false)
 	close_btn.pressed.connect(_on_close_pressed)
 	bottom.add_child(close_btn)
 
@@ -404,18 +428,10 @@ func _build_confirm() -> void:
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dim.add_child(center)
 	var panel: PanelContainer = PanelContainer.new()
-	panel.custom_minimum_size = Vector2(520, 0)
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.05, 0.055, 0.10, 0.97)
-	style.border_color = Color(0.55, 0.45, 0.25, 0.9)
-	style.set_border_width_all(2)
-	style.set_content_margin_all(24)
-	style.corner_radius_top_left = 8
-	style.corner_radius_top_right = 8
-	style.corner_radius_bottom_left = 8
-	style.corner_radius_bottom_right = 8
-	panel.add_theme_stylebox_override("panel", style)
+	panel.custom_minimum_size = Vector2(540, 0)
+	panel.add_theme_stylebox_override("panel", ThemeScript.teal_panel_style(2, 6, ThemeScript.TEAL_PANEL_BG, 24))
 	center.add_child(panel)
+	ThemeScript.add_teal_filigree(panel)
 	var vb: VBoxContainer = VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 12)
 	panel.add_child(vb)
@@ -423,26 +439,32 @@ func _build_confirm() -> void:
 	_confirm_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_confirm_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_confirm_lbl.add_theme_font_size_override("font_size", 20)
-	_confirm_lbl.add_theme_color_override("font_color", Color(0.95, 0.88, 0.66))
+	_confirm_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
+	var serif: Font = ThemeScript.font_serif()
+	if serif != null:
+		_confirm_lbl.add_theme_font_override("font", serif)
 	vb.add_child(_confirm_lbl)
+	vb.add_child(ThemeScript.teal_divider())
 	var hint: Label = Label.new()
-	hint.text = "[H] Difficulty toggle  |  [R] Mode toggle"
+	hint.text = "[H] Difficulty toggle   ·   [R] Mode toggle"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.add_theme_font_size_override("font_size", 14)
-	hint.add_theme_color_override("font_color", Color(0.70, 0.72, 0.78))
+	hint.add_theme_color_override("font_color", ThemeScript.TEAL_MUTED)
 	vb.add_child(hint)
 	var row: HBoxContainer = HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 12)
 	vb.add_child(row)
 	var go_btn: Button = Button.new()
-	go_btn.text = "PREPARE FOR MISSION [SPACE]"
-	go_btn.custom_minimum_size = Vector2(280, 48)
+	go_btn.text = "[SPACE] PREPARE FOR MISSION"
+	go_btn.custom_minimum_size = Vector2(280, 44)
+	ThemeScript.style_teal_button(go_btn, true)
 	go_btn.pressed.connect(_confirm_prepare)
 	row.add_child(go_btn)
 	var cancel_btn: Button = Button.new()
-	cancel_btn.text = "CANCEL [ESC]"
-	cancel_btn.custom_minimum_size = Vector2(170, 48)
+	cancel_btn.text = "[ESC] CANCEL"
+	cancel_btn.custom_minimum_size = Vector2(160, 44)
+	ThemeScript.style_teal_button(cancel_btn, false)
 	cancel_btn.pressed.connect(_hide_confirm)
 	row.add_child(cancel_btn)
 	dim.visible = false

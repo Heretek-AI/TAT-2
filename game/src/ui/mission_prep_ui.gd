@@ -40,6 +40,20 @@ const LOCATION_ART_MAP: Dictionary = {
 }
 
 const LevelLoaderScript: GDScript = preload("res://src/core/level_loader.gd")
+const WeatherProfile: GDScript = preload("res://src/core/weather_profile.gd")
+const WeatherVisuals: GDScript = preload("res://src/core/weather_visuals.gd")
+const GuardAnimLibScript: GDScript = preload("res://src/core/animation_library.gd")
+const MobileProfile: GDScript = preload("res://src/core/mobile_profile.gd")
+const ThemeScript: GDScript = preload("res://src/ui/art_nouveau_theme.gd")
+
+## Authored MissionLobby_Geo3 CameraActor_0 (FieldOfView 20.0 hFOV 16:9 -> 11.33 vFOV).
+const LOBBY_CAM_POS: Vector3 = Vector3(12.6065, -0.1670, -1.0538)
+const LOBBY_CAM_FWD: Vector3 = Vector3(-0.986184, 0.116419, 0.117848)
+const LOBBY_CAM_VFOV: float = 11.33
+const LOBBY_CAM_ROLL_DEG: float = -14.780165
+## Authored BP_MatchLobbyDummyPlayer_C_1 (IsForLocalPlayer: True) rooftop slot.
+const LOBBY_THIEF_POS: Vector3 = Vector3(-1.5871, 0.82, -0.7868)
+const LOBBY_THIEF_YAW_DEG: float = 45.0
 
 var map_id: String = "old_manor"
 var difficulty: int = 1
@@ -58,6 +72,8 @@ var _selected_mission_idx: int = -1
 var _contract_title_lbl: Label
 var _contract_body: Label
 var _controls_lbl: Label
+var _mode_sub_lbl: Label
+var _diff_sub_lbl: Label
 var _thief_body_node: Node = null
 var _thief_head_node: Node = null
 var _mat_loader: Node = null
@@ -130,41 +146,81 @@ func _build_all() -> void:
 
 	var shade: ColorRect = ColorRect.new()
 	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
-	shade.color = Color(0.0, 0.0, 0.02, 0.25)
+	shade.color = Color(0.0, 0.01, 0.03, 0.08)
 	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(shade)
 
+	var serif: Font = ThemeScript.font_serif()
+	var sans: Font = ThemeScript.font_sans()
+	var italic: Font = ThemeScript.font_italic()
+
+	var top_hdr: VBoxContainer = VBoxContainer.new()
+	top_hdr.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	top_hdr.offset_left = -240.0
+	top_hdr.offset_top = 14.0
+	top_hdr.offset_right = 240.0
+	top_hdr.offset_bottom = 96.0
+	top_hdr.add_theme_constant_override("separation", 2)
+	top_hdr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(top_hdr)
+
 	var title: Label = Label.new()
 	title.text = "MISSION PREPARATION"
-	title.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	title.position = Vector2(-260, 18)
-	title.custom_minimum_size = Vector2(520, 0)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 34)
-	title.add_theme_color_override("font_color", Color(0.95, 0.82, 0.48))
+	title.add_theme_font_size_override("font_size", 24)
+	title.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
+	title.add_theme_color_override("font_shadow_color", Color(0.0, 0.02, 0.05, 0.85))
+	title.add_theme_constant_override("shadow_offset_x", 1)
+	title.add_theme_constant_override("shadow_offset_y", 1)
+	if serif != null:
+		title.add_theme_font_override("font", serif)
 	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(title)
+	top_hdr.add_child(title)
+
+	_mode_sub_lbl = Label.new()
+	_mode_sub_lbl.text = "Mode: Solo"
+	_mode_sub_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_mode_sub_lbl.add_theme_font_size_override("font_size", 14)
+	_mode_sub_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_TEXT)
+	if sans != null:
+		_mode_sub_lbl.add_theme_font_override("font", sans)
+	_mode_sub_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top_hdr.add_child(_mode_sub_lbl)
+
+	_diff_sub_lbl = Label.new()
+	_diff_sub_lbl.text = "Difficulty: Novice"
+	_diff_sub_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_diff_sub_lbl.add_theme_font_size_override("font_size", 14)
+	_diff_sub_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_MUTED)
+	if sans != null:
+		_diff_sub_lbl.add_theme_font_override("font", sans)
+	_diff_sub_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top_hdr.add_child(_diff_sub_lbl)
 
 	var left: VBoxContainer = VBoxContainer.new()
 	left.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	left.position = Vector2(36, 68)
-	left.custom_minimum_size = Vector2(420, 0)
+	left.position = Vector2(28, 34)
+	left.custom_minimum_size = Vector2(416, 0)
 	left.add_theme_constant_override("separation", 10)
 	left.mouse_filter = Control.MOUSE_FILTER_PASS
 	add_child(left)
 	var loc_card: PanelContainer = _make_card("LOCATION", "", "")
 	left.add_child(loc_card)
 	_location_title_lbl = loc_card.get_meta("title_lbl") as Label
+	_location_title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_location_body = loc_card.get_meta("body_lbl") as Label
+	_location_body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	if italic != null:
+		_location_body.add_theme_font_override("font", italic)
 	var loc_vb: VBoxContainer = loc_card.get_meta("vbox") as VBoxContainer
 	_location_art = TextureRect.new()
 	_location_art.name = "LocationArt"
-	_location_art.custom_minimum_size = Vector2(390, 96)
+	_location_art.custom_minimum_size = Vector2(382, 108)
 	_location_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_location_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	_location_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	loc_vb.add_child(_location_art)
-	loc_vb.move_child(_location_art, 1)
+	loc_vb.move_child(_location_art, 2)
 
 	var mis_card: PanelContainer = _make_card("MISSION", "", "")
 	mis_card.mouse_filter = Control.MOUSE_FILTER_PASS
@@ -178,7 +234,7 @@ func _build_all() -> void:
 	mis_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_mission_icon = TextureRect.new()
 	_mission_icon.name = "MissionIcon"
-	_mission_icon.custom_minimum_size = Vector2(56, 56)
+	_mission_icon.custom_minimum_size = Vector2(48, 48)
 	_mission_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_mission_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	_mission_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -191,7 +247,8 @@ func _build_all() -> void:
 	mis_vb.move_child(mis_row, 1)
 	_mission_selector = OptionButton.new()
 	_mission_selector.name = "MissionSelector"
-	_mission_selector.custom_minimum_size = Vector2(380, 30)
+	_mission_selector.custom_minimum_size = Vector2(380, 28)
+	ThemeScript.style_teal_option(_mission_selector)
 	_mission_selector.item_selected.connect(_on_mission_selected)
 	mis_vb.add_child(_mission_selector)
 	_populate_mission_rows()
@@ -203,15 +260,19 @@ func _build_all() -> void:
 
 	var bottom: VBoxContainer = VBoxContainer.new()
 	bottom.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	bottom.position = Vector2(-380, -150)
-	bottom.custom_minimum_size = Vector2(344, 114)
+	bottom.offset_left = -360.0
+	bottom.offset_top = -126.0
+	bottom.offset_right = -24.0
+	bottom.offset_bottom = -20.0
 	bottom.alignment = BoxContainer.ALIGNMENT_END
 	bottom.add_theme_constant_override("separation", 8)
 	add_child(bottom)
 	_controls_lbl = Label.new()
 	_controls_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_controls_lbl.add_theme_font_size_override("font_size", 18)
-	_controls_lbl.add_theme_color_override("font_color", Color(0.92, 0.88, 0.72))
+	_controls_lbl.add_theme_font_size_override("font_size", 14)
+	_controls_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_MUTED)
+	if sans != null:
+		_controls_lbl.add_theme_font_override("font", sans)
 	_controls_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bottom.add_child(_controls_lbl)
 	var btn_row: HBoxContainer = HBoxContainer.new()
@@ -219,13 +280,15 @@ func _build_all() -> void:
 	btn_row.add_theme_constant_override("separation", 10)
 	bottom.add_child(btn_row)
 	var ready_btn: Button = Button.new()
-	ready_btn.text = "READY [F]"
-	ready_btn.custom_minimum_size = Vector2(160, 46)
+	ready_btn.text = "[F]  READY"
+	ready_btn.custom_minimum_size = Vector2(150, 42)
+	ThemeScript.style_teal_button(ready_btn, true)
 	ready_btn.pressed.connect(_emit_ready)
 	btn_row.add_child(ready_btn)
 	var back_btn: Button = Button.new()
-	back_btn.text = "BACK [ESC]"
-	back_btn.custom_minimum_size = Vector2(160, 46)
+	back_btn.text = "[ESC]  BACK"
+	back_btn.custom_minimum_size = Vector2(146, 42)
+	ThemeScript.style_teal_button(back_btn, false)
 	back_btn.pressed.connect(close_prep)
 	btn_row.add_child(back_btn)
 
@@ -233,34 +296,38 @@ func _build_all() -> void:
 func _make_card(header: String, title_text: String, body_text: String) -> PanelContainer:
 	var panel: PanelContainer = PanelContainer.new()
 	panel.custom_minimum_size = Vector2(400, 0)
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.03, 0.035, 0.07, 0.88)
-	style.border_color = Color(0.55, 0.45, 0.25, 0.9)
-	style.set_border_width_all(2)
-	style.set_content_margin_all(14)
-	panel.add_theme_stylebox_override("panel", style)
+	panel.add_theme_stylebox_override("panel", ThemeScript.teal_card_style(1, 4, Color(0.024, 0.056, 0.075, 0.84), 12))
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ThemeScript.add_teal_filigree(panel, 3.0, 16.0)
+	var serif: Font = ThemeScript.font_serif()
+	var sans: Font = ThemeScript.font_sans()
 	var vb: VBoxContainer = VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 6)
+	vb.add_theme_constant_override("separation", 5)
 	vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(vb)
 	var hdr: Label = Label.new()
 	hdr.text = header
-	hdr.add_theme_font_size_override("font_size", 15)
-	hdr.add_theme_color_override("font_color", Color(0.65, 0.60, 0.42))
+	hdr.add_theme_font_size_override("font_size", 12)
+	hdr.add_theme_color_override("font_color", ThemeScript.TEAL_ACCENT)
+	if sans != null:
+		hdr.add_theme_font_override("font", sans)
 	hdr.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vb.add_child(hdr)
 	var title_lbl: Label = Label.new()
 	title_lbl.text = title_text
-	title_lbl.add_theme_font_size_override("font_size", 22)
-	title_lbl.add_theme_color_override("font_color", Color(0.95, 0.82, 0.48))
+	title_lbl.add_theme_font_size_override("font_size", 20)
+	title_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
+	if serif != null:
+		title_lbl.add_theme_font_override("font", serif)
 	title_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vb.add_child(title_lbl)
 	var body_lbl: Label = Label.new()
 	body_lbl.text = body_text
 	body_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	body_lbl.add_theme_font_size_override("font_size", 14)
-	body_lbl.add_theme_color_override("font_color", Color(0.86, 0.84, 0.76))
+	body_lbl.add_theme_font_size_override("font_size", 13)
+	body_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_TEXT)
+	if sans != null:
+		body_lbl.add_theme_font_override("font", sans)
 	body_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vb.add_child(body_lbl)
 	panel.set_meta("title_lbl", title_lbl)
@@ -270,138 +337,61 @@ func _make_card(header: String, title_text: String, body_text: String) -> PanelC
 
 
 func _build_stage(viewport: SubViewport) -> void:
+	var stage_root: Node3D = Node3D.new()
+	stage_root.name = "MissionLobbyStage"
+	viewport.add_child(stage_root)
+
 	var wenv: WorldEnvironment = WorldEnvironment.new()
 	var env: Environment = Environment.new()
+	env.tonemap_mode = Environment.TONE_MAPPER_ACES
+	env.glow_enabled = true
+	env.glow_intensity = 0.65
+	env.glow_bloom = 0.20
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color(0.015, 0.03, 0.09)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.22, 0.30, 0.48)
-	env.ambient_light_energy = 0.55
-	env.glow_enabled = true
-	env.glow_intensity = 0.8
-	env.glow_bloom = 0.25
-	env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	env.fog_enabled = true
-	env.fog_light_color = Color(0.05, 0.08, 0.16)
-	env.fog_density = 0.01
+	env.ambient_light_color = Color(0.28, 0.36, 0.56)
+	env.ambient_light_energy = 0.45
 	wenv.environment = env
-	viewport.add_child(wenv)
-
-	var cam: Camera3D = Camera3D.new()
-	cam.position = Vector3(0.2, 2.6, 7.2)
-	cam.fov = 55.0
-	cam.current = true
-	viewport.add_child(cam)
-	cam.look_at_from_position(cam.position, Vector3(0.4, 1.0, 0.0), Vector3.UP)
+	stage_root.add_child(wenv)
 
 	var moonlight: DirectionalLight3D = DirectionalLight3D.new()
-	moonlight.rotation_degrees = Vector3(-48, -28, 0)
-	moonlight.light_color = Color(0.68, 0.78, 0.98)
-	moonlight.light_energy = 0.85
+	moonlight.name = "MissionLobbyMoonLight"
+	moonlight.light_color = Color(0.6039, 0.702, 1.0)
+	moonlight.light_energy = 0.35
 	moonlight.shadow_enabled = true
-	viewport.add_child(moonlight)
+	stage_root.add_child(moonlight)
 
-	var fill: OmniLight3D = OmniLight3D.new()
-	fill.position = Vector3(0.5, 2.4, 5.5)
-	fill.light_color = Color(0.45, 0.60, 0.85)
-	fill.light_energy = 0.5
-	fill.omni_range = 9.0
-	viewport.add_child(fill)
+	var preset: Dictionary = WeatherProfile.load_preset("midnight_clear_mission_lobby")
+	if not preset.is_empty():
+		WeatherProfile.apply_environment(env, moonlight, preset)
+		WeatherVisuals.apply_sky(env, preset, moonlight)
+	if not MobileProfile.is_mobile():
+		env.ssil_enabled = true
 
-	_add_moon(viewport)
-	_add_stars(viewport)
-	_add_roof(viewport)
+	var loader: Node = _get_preview_mat_loader()
+	if loader != null:
+		var sublevels: Array[String] = [
+			"res://data/generated/levels/MissionLobby/MissionLobby_Geo3.tatlevel.json",
+			"res://data/generated/levels/MissionLobby/MissionLobby_Periphery.tatlevel.json",
+		]
+		loader.call("load_sublevels", sublevels, stage_root, null, 64, false)
 
+	var cam: Camera3D = Camera3D.new()
+	cam.name = "MissionLobbyCamera"
+	cam.position = LOBBY_CAM_POS
+	cam.fov = LOBBY_CAM_VFOV
+	cam.far = 2000.0
+	cam.current = true
+	stage_root.add_child(cam)
+	cam.look_at_from_position(cam.position, cam.position + LOBBY_CAM_FWD.normalized() * 15.0, Vector3.UP)
+	cam.rotate_object_local(Vector3.FORWARD, deg_to_rad(LOBBY_CAM_ROLL_DEG))
 
-func _add_moon(viewport: SubViewport) -> void:
-	var mat: StandardMaterial3D = StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.albedo_color = Color(0.92, 0.95, 1.0)
-	mat.emission_enabled = true
-	mat.emission = Color(0.85, 0.90, 1.0)
-	mat.emission_energy_multiplier = 2.5
-	var moon: MeshInstance3D = MeshInstance3D.new()
-	var sphere: SphereMesh = SphereMesh.new()
-	sphere.radius = 1.2
-	sphere.height = 2.4
-	moon.mesh = sphere
-	moon.material_override = mat
-	moon.position = Vector3(-4.5, 6.5, -20.0)
-	viewport.add_child(moon)
-	var halo_mat: StandardMaterial3D = StandardMaterial3D.new()
-	halo_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	halo_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	halo_mat.albedo_color = Color(0.55, 0.65, 0.95, 0.16)
-	halo_mat.emission_enabled = true
-	halo_mat.emission = Color(0.55, 0.65, 0.95)
-	halo_mat.emission_energy_multiplier = 0.6
-	var halo: MeshInstance3D = MeshInstance3D.new()
-	var halo_sphere: SphereMesh = SphereMesh.new()
-	halo_sphere.radius = 2.1
-	halo_sphere.height = 4.2
-	halo.mesh = halo_sphere
-	halo.material_override = halo_mat
-	halo.position = Vector3(-4.5, 6.5, -20.0)
-	viewport.add_child(halo)
-
-
-func _add_stars(viewport: SubViewport) -> void:
-	var mat: StandardMaterial3D = StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.albedo_color = Color(0.9, 0.93, 1.0)
-	mat.emission_enabled = true
-	mat.emission = Color(0.9, 0.93, 1.0)
-	mat.emission_energy_multiplier = 1.2
-	var mesh: SphereMesh = SphereMesh.new()
-	mesh.radius = 0.035
-	mesh.height = 0.07
-	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
-	rng.seed = 12345
-	for i: int in range(60):
-		var ang: float = rng.randf_range(0.0, TAU)
-		var elev: float = rng.randf_range(0.15, 1.2)
-		var dist: float = 38.0
-		var star: MeshInstance3D = MeshInstance3D.new()
-		star.mesh = mesh
-		star.material_override = mat
-		star.position = Vector3(cos(ang) * cos(elev), sin(elev), sin(ang) * cos(elev)) * dist
-		viewport.add_child(star)
-
-
-func _add_roof(viewport: SubViewport) -> void:
-	var roof_root: Node3D = Node3D.new()
-	roof_root.rotation_degrees = Vector3(-18, 0, 0)
-	viewport.add_child(roof_root)
-	var tile_mat: StandardMaterial3D = StandardMaterial3D.new()
-	tile_mat.albedo_color = Color(0.09, 0.11, 0.19)
-	tile_mat.roughness = 0.9
-	var slab: MeshInstance3D = MeshInstance3D.new()
-	var plane: PlaneMesh = PlaneMesh.new()
-	plane.size = Vector2(30, 16)
-	slab.mesh = plane
-	slab.material_override = tile_mat
-	roof_root.add_child(slab)
-	var ridge_mat: StandardMaterial3D = StandardMaterial3D.new()
-	ridge_mat.albedo_color = Color(0.13, 0.16, 0.26)
-	ridge_mat.roughness = 0.85
-	for i: int in range(8):
-		var ridge: MeshInstance3D = MeshInstance3D.new()
-		var bar: BoxMesh = BoxMesh.new()
-		bar.size = Vector3(30, 0.07, 0.35)
-		ridge.mesh = bar
-		ridge.material_override = ridge_mat
-		ridge.position = Vector3(0, 0.05, -7.0 + float(i) * 2.0)
-		roof_root.add_child(ridge)
-	var chimney: MeshInstance3D = MeshInstance3D.new()
-	var ch_box: BoxMesh = BoxMesh.new()
-	ch_box.size = Vector3(1.1, 1.6, 1.1)
-	chimney.mesh = ch_box
-	chimney.material_override = tile_mat
-	chimney.position = Vector3(-4.5, 0.8, -3.0)
-	roof_root.add_child(chimney)
 	var thief_anchor: Node3D = Node3D.new()
-	thief_anchor.position = Vector3(0.8, 0.0, 1.0)
-	roof_root.add_child(thief_anchor)
+	thief_anchor.name = "MissionLobbyThiefAnchor"
+	thief_anchor.position = LOBBY_THIEF_POS
+	thief_anchor.rotation_degrees = Vector3(0.0, LOBBY_THIEF_YAW_DEG, 0.0)
+	stage_root.add_child(thief_anchor)
 	_add_thief(thief_anchor)
 
 
@@ -415,6 +405,7 @@ func _add_thief(anchor: Node3D) -> void:
 			_thief_body_node = body_node
 			anchor.add_child(body_node)
 			_bind_preview_character_materials(body_node, _glb_to_ue_mesh(body_path))
+			_apply_thief_idle_pose(body_node)
 		else:
 			_add_placeholder_body(anchor)
 	else:
@@ -427,10 +418,38 @@ func _add_thief(anchor: Node3D) -> void:
 			head_node.position = Vector3.ZERO
 			anchor.add_child(head_node)
 			_bind_preview_character_materials(head_node, _glb_to_ue_mesh(head_path))
+			_apply_thief_idle_pose(head_node)
 		else:
 			_add_placeholder_head(anchor)
 	else:
 		_add_placeholder_head(anchor)
+
+
+func _apply_thief_idle_pose(root: Node) -> void:
+	if root == null:
+		return
+	var skels: Array[Node] = root.find_children("*", "Skeleton3D", true, false)
+	if skels.is_empty():
+		return
+	var skel: Skeleton3D = skels[0] as Skeleton3D
+	if skel == null or skel.get_parent() == null:
+		return
+	var alib: GuardAnimationLibrary = GuardAnimLibScript.new()
+	if not alib.setup("club", skel):
+		return
+	var anim: Animation = alib._retarget_general("AN_ThiefNisha_Unarmed_StandIdle", true, true, false)
+	if anim == null:
+		anim = alib._retarget_general("AN_ThiefNisha_WardrobeIdle", true, true, false)
+	if anim == null:
+		return
+	var ap := AnimationPlayer.new()
+	ap.name = "ThiefIdleAnimPlayer"
+	root.add_child(ap)
+	ap.root_node = ap.get_path_to(skel.get_parent())
+	var lib := AnimationLibrary.new()
+	lib.add_animation("idle", anim)
+	ap.add_animation_library("", lib)
+	ap.play("idle")
 
 
 func _add_placeholder_body(anchor: Node3D) -> void:
@@ -708,11 +727,11 @@ func _refresh_contract_card() -> void:
 
 func _contract_info() -> Array:
 	if contract_order <= 0:
-		return [CONTRACT_INACTIVE, "No available contract for this co-op mission."]
+		return [CONTRACT_INACTIVE, "Your active contract is not available for the currently selected map."]
 	var disp: Dictionary = GameData.get_contract_display(contract_order)
 	var title_text: String = str(disp.get("title", ""))
 	if title_text == "":
-		return [CONTRACT_INACTIVE, "No available contract for this co-op mission."]
+		return [CONTRACT_INACTIVE, "Your active contract is not available for the currently selected map."]
 	var quest_text: String = str(disp.get("quest_item", ""))
 	var loc_text: String = str(disp.get("location", ""))
 	var body_text: String = "Active contract: %s" % title_text
@@ -724,9 +743,13 @@ func _contract_info() -> Array:
 
 
 func _refresh_controls() -> void:
+	if _mode_sub_lbl != null:
+		_mode_sub_lbl.text = "Mode: %s" % mode
+	if _diff_sub_lbl != null:
+		_diff_sub_lbl.text = "Difficulty: %s" % _difficulty_label()
 	if _controls_lbl == null:
 		return
-	_controls_lbl.text = "Difficulty: %s  |  Mode: %s\n[F] READY  |  [ESC] BACK" % [_difficulty_label(), mode]
+	_controls_lbl.text = "Difficulty: %s  ·  Mode: %s" % [_difficulty_label(), mode]
 
 
 func _difficulty_label() -> String:

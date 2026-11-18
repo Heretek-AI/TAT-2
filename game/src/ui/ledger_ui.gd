@@ -7,6 +7,8 @@ extends Control
 
 signal closed()
 
+const ThemeScript := preload("res://src/ui/art_nouveau_theme.gd")
+
 const FALLBACK_CONTRACTS: Array = [
 	{"order": 1, "title": "In the Eye of the Beholder", "description": "Steal the Beholder's Eye diamond from the Guildhall vault.", "location": "Constables' Guildhall"},
 	{"order": 2, "title": "Into the Lion's Den", "description": "Infiltrate the Guildhall under heightened watch.", "location": "Constables' Guildhall"},
@@ -118,20 +120,18 @@ func _unhandled_input(event: InputEvent) -> void:
 func _build_ui() -> void:
 	var dim: ColorRect = ColorRect.new()
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	dim.color = Color(0.01, 0.01, 0.03, 0.88)
+	dim.color = Color(0.008, 0.012, 0.025, 0.86)
 	add_child(dim)
 	var center: CenterContainer = CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
 	var panel: PanelContainer = PanelContainer.new()
 	panel.custom_minimum_size = Vector2(1100, 660)
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.04, 0.045, 0.08, 0.97)
-	style.border_color = Color(0.55, 0.45, 0.25, 0.9)
-	style.set_border_width_all(2)
-	style.set_content_margin_all(20)
-	panel.add_theme_stylebox_override("panel", style)
+	panel.add_theme_stylebox_override("panel", ThemeScript.teal_panel_style(2, 6, ThemeScript.TEAL_PANEL_BG, 20))
 	center.add_child(panel)
+	ThemeScript.add_teal_filigree(panel)
+	var serif: Font = ThemeScript.font_serif()
+	var sans: Font = ThemeScript.font_sans()
 	var vb: VBoxContainer = VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 12)
 	panel.add_child(vb)
@@ -140,13 +140,15 @@ func _build_ui() -> void:
 	header.add_theme_constant_override("separation", 12)
 	vb.add_child(header)
 	_journal_btn = Button.new()
-	_journal_btn.text = "JOURNAL [Q]"
-	_journal_btn.custom_minimum_size = Vector2(200, 44)
+	_journal_btn.text = "[Q] JOURNAL"
+	_journal_btn.custom_minimum_size = Vector2(200, 42)
+	ThemeScript.style_teal_tab(_journal_btn, true)
 	_journal_btn.pressed.connect(_show_tab.bind(0))
 	header.add_child(_journal_btn)
 	_market_btn = Button.new()
 	_market_btn.text = "BLACK MARKET [E]"
-	_market_btn.custom_minimum_size = Vector2(220, 44)
+	_market_btn.custom_minimum_size = Vector2(220, 42)
+	ThemeScript.style_teal_tab(_market_btn, false)
 	_market_btn.pressed.connect(_show_tab.bind(1))
 	header.add_child(_market_btn)
 	var spacer: Control = Control.new()
@@ -154,9 +156,11 @@ func _build_ui() -> void:
 	header.add_child(spacer)
 	var back_btn: Button = Button.new()
 	back_btn.text = "BACK [ESC]"
-	back_btn.custom_minimum_size = Vector2(160, 44)
+	back_btn.custom_minimum_size = Vector2(150, 42)
+	ThemeScript.style_teal_button(back_btn, false)
 	back_btn.pressed.connect(_on_back_pressed)
 	header.add_child(back_btn)
+	vb.add_child(ThemeScript.teal_divider())
 
 	_journal_page = VBoxContainer.new()
 	_journal_page.add_theme_constant_override("separation", 10)
@@ -164,19 +168,33 @@ func _build_ui() -> void:
 	vb.add_child(_journal_page)
 	_level_lbl = Label.new()
 	_level_lbl.add_theme_font_size_override("font_size", 22)
-	_level_lbl.add_theme_color_override("font_color", Color(0.95, 0.82, 0.48))
+	_level_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
+	if serif != null:
+		_level_lbl.add_theme_font_override("font", serif)
 	_journal_page.add_child(_level_lbl)
 	var xp_row: HBoxContainer = HBoxContainer.new()
 	xp_row.add_theme_constant_override("separation", 10)
 	_journal_page.add_child(xp_row)
 	_xp_bar = ProgressBar.new()
-	_xp_bar.custom_minimum_size = Vector2(0, 26)
+	_xp_bar.custom_minimum_size = Vector2(0, 22)
 	_xp_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_xp_bar.show_percentage = false
+	var xp_bg: StyleBoxFlat = StyleBoxFlat.new()
+	xp_bg.bg_color = Color(0.03, 0.07, 0.09, 0.95)
+	xp_bg.border_color = ThemeScript.TEAL_BORDER
+	xp_bg.set_border_width_all(1)
+	xp_bg.set_corner_radius_all(3)
+	var xp_fg: StyleBoxFlat = StyleBoxFlat.new()
+	xp_fg.bg_color = ThemeScript.TEAL
+	xp_fg.set_corner_radius_all(2)
+	_xp_bar.add_theme_stylebox_override("background", xp_bg)
+	_xp_bar.add_theme_stylebox_override("fill", xp_fg)
 	xp_row.add_child(_xp_bar)
 	_xp_lbl = Label.new()
-	_xp_lbl.add_theme_font_size_override("font_size", 16)
-	_xp_lbl.add_theme_color_override("font_color", Color(0.86, 0.84, 0.76))
+	_xp_lbl.add_theme_font_size_override("font_size", 15)
+	_xp_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_TEXT)
+	if sans != null:
+		_xp_lbl.add_theme_font_override("font", sans)
 	xp_row.add_child(_xp_lbl)
 	var scroll: ScrollContainer = ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -192,8 +210,10 @@ func _build_ui() -> void:
 	vb.add_child(_market_page)
 	_assets_lbl = Label.new()
 	_assets_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_assets_lbl.add_theme_font_size_override("font_size", 22)
-	_assets_lbl.add_theme_color_override("font_color", Color(0.95, 0.82, 0.48))
+	_assets_lbl.add_theme_font_size_override("font_size", 20)
+	_assets_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
+	if serif != null:
+		_assets_lbl.add_theme_font_override("font", serif)
 	_market_page.add_child(_assets_lbl)
 	var split: HBoxContainer = HBoxContainer.new()
 	split.add_theme_constant_override("separation", 16)
@@ -201,12 +221,8 @@ func _build_ui() -> void:
 	_market_page.add_child(split)
 	var preview: PanelContainer = PanelContainer.new()
 	preview.custom_minimum_size = Vector2(300, 0)
-	var pstyle: StyleBoxFlat = StyleBoxFlat.new()
-	pstyle.bg_color = Color(0.07, 0.075, 0.12, 0.97)
-	pstyle.border_color = Color(0.55, 0.45, 0.25, 0.9)
-	pstyle.set_border_width_all(1)
-	pstyle.set_content_margin_all(14)
-	preview.add_theme_stylebox_override("panel", pstyle)
+	preview.add_theme_stylebox_override("panel", ThemeScript.teal_card_style(1, 5, ThemeScript.TEAL_GROUP_BG, 14))
+	ThemeScript.add_teal_filigree(preview, 3.0, 14.0)
 	split.add_child(preview)
 	var pv: VBoxContainer = VBoxContainer.new()
 	pv.add_theme_constant_override("separation", 8)
@@ -214,20 +230,25 @@ func _build_ui() -> void:
 	_preview_title = Label.new()
 	_preview_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_preview_title.add_theme_font_size_override("font_size", 20)
-	_preview_title.add_theme_color_override("font_color", Color(0.95, 0.82, 0.48))
+	_preview_title.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
+	if serif != null:
+		_preview_title.add_theme_font_override("font", serif)
 	pv.add_child(_preview_title)
 	_preview_desc = Label.new()
 	_preview_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_preview_desc.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_preview_desc.add_theme_font_size_override("font_size", 15)
-	_preview_desc.add_theme_color_override("font_color", Color(0.86, 0.84, 0.76))
+	_preview_desc.add_theme_font_size_override("font_size", 14)
+	_preview_desc.add_theme_color_override("font_color", ThemeScript.TEAL_TEXT)
+	if sans != null:
+		_preview_desc.add_theme_font_override("font", sans)
 	pv.add_child(_preview_desc)
 	_preview_status = Label.new()
-	_preview_status.add_theme_font_size_override("font_size", 17)
+	_preview_status.add_theme_font_size_override("font_size", 16)
 	pv.add_child(_preview_status)
 	_buy_btn = Button.new()
 	_buy_btn.text = "BUY"
-	_buy_btn.custom_minimum_size = Vector2(0, 48)
+	_buy_btn.custom_minimum_size = Vector2(0, 44)
+	ThemeScript.style_teal_button(_buy_btn, true)
 	_buy_btn.pressed.connect(_on_buy_pressed)
 	pv.add_child(_buy_btn)
 	var mscroll: ScrollContainer = ScrollContainer.new()
@@ -248,8 +269,10 @@ func _show_tab(idx: int) -> void:
 		_market_page.visible = (_tab == 1)
 	if _journal_btn != null:
 		_journal_btn.disabled = (_tab == 0)
+		ThemeScript.style_teal_tab(_journal_btn, _tab == 0)
 	if _market_btn != null:
 		_market_btn.disabled = (_tab == 1)
+		ThemeScript.style_teal_tab(_market_btn, _tab == 1)
 
 
 func _collect_contracts() -> Array:
@@ -299,12 +322,11 @@ func _refresh_journal() -> void:
 		var order: int = int(cd.get("order", 0))
 		var done: bool = _is_contract_complete(order)
 		var card: PanelContainer = PanelContainer.new()
-		var cstyle: StyleBoxFlat = StyleBoxFlat.new()
-		cstyle.bg_color = Color(0.07, 0.075, 0.12, 0.97)
-		cstyle.border_color = Color(0.35, 0.55, 0.35, 0.9) if done else Color(0.55, 0.45, 0.25, 0.9)
-		cstyle.set_border_width_all(1)
-		cstyle.set_content_margin_all(10)
+		var cstyle: StyleBoxFlat = ThemeScript.teal_card_style(1, 5, ThemeScript.TEAL_GROUP_BG, 12)
+		if done:
+			cstyle.border_color = Color(0.32, 0.72, 0.56, 0.85)
 		card.add_theme_stylebox_override("panel", cstyle)
+		ThemeScript.add_teal_filigree(card, 3.0, 12.0)
 		var cv: VBoxContainer = VBoxContainer.new()
 		cv.add_theme_constant_override("separation", 4)
 		card.add_child(cv)
@@ -315,12 +337,12 @@ func _refresh_journal() -> void:
 		t.text = "#%02d  %s" % [order, str(cd.get("title", "Contract"))]
 		t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		t.add_theme_font_size_override("font_size", 18)
-		t.add_theme_color_override("font_color", Color(0.95, 0.82, 0.48))
+		t.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE if not done else ThemeScript.TEAL_TEXT)
 		head.add_child(t)
 		var status: Label = Label.new()
 		status.text = "Completed" if done else "Active"
-		status.add_theme_font_size_override("font_size", 15)
-		status.add_theme_color_override("font_color", Color(0.45, 0.85, 0.45) if done else Color(0.95, 0.75, 0.35))
+		status.add_theme_font_size_override("font_size", 14)
+		status.add_theme_color_override("font_color", Color(0.45, 0.90, 0.65) if done else ThemeScript.TEAL_ACCENT)
 		head.add_child(status)
 		var loc: String = str(cd.get("location", ""))
 		var desc: String = str(cd.get("description", ""))
@@ -329,7 +351,7 @@ func _refresh_journal() -> void:
 			d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			d.text = ("Location: %s\n" % loc if loc != "" else "") + desc
 			d.add_theme_font_size_override("font_size", 14)
-			d.add_theme_color_override("font_color", Color(0.82, 0.80, 0.72))
+			d.add_theme_color_override("font_color", ThemeScript.TEAL_MUTED)
 			cv.add_child(d)
 		_contracts_box.add_child(card)
 
@@ -352,8 +374,8 @@ func _refresh_market() -> void:
 		var sd: Dictionary = s as Dictionary
 		var hdr: Label = Label.new()
 		hdr.text = str(sd.get("title", ""))
-		hdr.add_theme_font_size_override("font_size", 19)
-		hdr.add_theme_color_override("font_color", Color(0.95, 0.82, 0.48))
+		hdr.add_theme_font_size_override("font_size", 17)
+		hdr.add_theme_color_override("font_color", ThemeScript.TEAL_ACCENT)
 		_market_list.add_child(hdr)
 		var grid: GridContainer = GridContainer.new()
 		grid.columns = 2
@@ -366,8 +388,9 @@ func _refresh_market() -> void:
 			var item: Dictionary = it as Dictionary
 			var b: Button = Button.new()
 			b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			b.custom_minimum_size = Vector2(0, 40)
+			b.custom_minimum_size = Vector2(0, 38)
 			b.text = _item_button_text(item)
+			ThemeScript.style_teal_button(b, false)
 			b.pressed.connect(_on_item_pressed.bind(item.duplicate()))
 			grid.add_child(b)
 	if _selected.is_empty():

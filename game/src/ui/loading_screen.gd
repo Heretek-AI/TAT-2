@@ -1,7 +1,25 @@
 extends CanvasLayer
-## Responsive Loading Screen overlay shown while contracts/sublevels stream in.
-## Dark atmospheric backdrop + optional map splash, title, subtitle,
-## progress bar and status line. Pauses nothing: PROCESS_MODE_ALWAYS.
+## Full-art Loading Screen overlay matching UE5 parity (T_loadingScreen_1.png):
+## Full-brightness illustrated Kilcairn cityscape, centered animated teal-white
+## ring spinner + LOADING..., and bottom-center gold THICK AS THIEVES logo.
+## Preserves start_loading / set_progress / finish_loading API and internal _bar.
+
+const ThemeScript := preload("res://src/ui/art_nouveau_theme.gd")
+
+const LOADING_ART_PRIMARY: String = "res://assets/ue/Raw/Art/UI/Shell/SplashScreen/T_loadingScreen_1.png"
+const LOADING_ART_ALT: String = "res://assets/ue/Raw/Art/UI/Shell/SplashScreen/T_loadingScreen_2.png"
+const SPINNER_TEX_PATH: String = "res://assets/ue/Raw/Art/UI/Icons/T_Spinner_Full.png"
+const LOGO_TEX_PATH: String = "res://assets/ue/Raw/Art/UI/Branding/T_TaT_Logo_Primary_White.png"
+
+const SPINNER_SHADER_CODE: String = """
+shader_type canvas_item;
+uniform vec4 tint_color : source_color = vec4(0.70, 0.92, 0.96, 1.0);
+void fragment() {
+	vec4 src = texture(TEXTURE, UV);
+	float lum = max(max(src.r, src.g), src.b);
+	COLOR = vec4(tint_color.rgb, lum * tint_color.a);
+}
+"""
 
 var _backdrop: ColorRect
 var _splash_rect: TextureRect
@@ -10,6 +28,10 @@ var _subtitle_lbl: Label
 var _bar: ProgressBar
 var _status_lbl: Label
 var _root: Control
+var _spinner_rect: TextureRect
+var _spinner_atlas: AtlasTexture
+var _spinner_frame: float = 0.0
+var _logo_rect: TextureRect
 
 
 func _ready() -> void:
@@ -19,6 +41,19 @@ func _ready() -> void:
 	visible = false
 
 
+func _process(delta: float) -> void:
+	if not visible:
+		return
+	if _spinner_atlas != null:
+		_spinner_frame = fposmod(_spinner_frame + delta * 36.0, 64.0)
+		var idx: int = int(_spinner_frame)
+		var col: int = idx % 8
+		var row: int = idx / 8
+		_spinner_atlas.region = Rect2(col * 256.0, row * 256.0, 256.0, 256.0)
+	elif _spinner_rect != null:
+		_spinner_rect.rotation = fposmod(_spinner_rect.rotation + delta * 3.2, TAU)
+
+
 func _build_ui() -> void:
 	_root = Control.new()
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -26,76 +61,148 @@ func _build_ui() -> void:
 
 	_backdrop = ColorRect.new()
 	_backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_backdrop.color = Color(0.03, 0.035, 0.06, 0.96)
+	_backdrop.color = Color(0.02, 0.025, 0.055, 1.0)
 	_root.add_child(_backdrop)
 
 	_splash_rect = TextureRect.new()
+	_splash_rect.name = "LoadingSplashArt"
 	_splash_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_splash_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_splash_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	_splash_rect.modulate = Color(1.0, 1.0, 1.0, 0.42)
+	_splash_rect.modulate = Color(1.0, 1.0, 1.0, 1.0)
 	_splash_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	if ResourceLoader.exists("res://assets/ue/Raw/Art/UI/Shell/SplashScreen/T_loadingScreen_1.png"):
-		_splash_rect.texture = load("res://assets/ue/Raw/Art/UI/Shell/SplashScreen/T_loadingScreen_1.png") as Texture2D
+	var art: Texture2D = _load_art(LOADING_ART_PRIMARY)
+	if art == null:
+		art = _load_art(LOADING_ART_ALT)
+	if art != null:
+		_splash_rect.texture = art
 		_splash_rect.visible = true
 	else:
 		_splash_rect.visible = false
 	_root.add_child(_splash_rect)
 
+	var serif: Font = ThemeScript.font_serif()
+	var sans: Font = ThemeScript.font_sans()
+
+	# Center spinner + LOADING... matching UE5 reference screenshot.
 	var center: CenterContainer = CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(center)
 
 	var vb: VBoxContainer = VBoxContainer.new()
-	vb.custom_minimum_size = Vector2(560, 0)
-	vb.add_theme_constant_override("separation", 14)
+	vb.custom_minimum_size = Vector2(460, 0)
+	vb.add_theme_constant_override("separation", 8)
 	vb.alignment = BoxContainer.ALIGNMENT_CENTER
+	vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	center.add_child(vb)
 
+	var spin_wrap: CenterContainer = CenterContainer.new()
+	spin_wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vb.add_child(spin_wrap)
+
+	_spinner_rect = TextureRect.new()
+	_spinner_rect.name = "LoadingSpinner"
+	_spinner_rect.custom_minimum_size = Vector2(56, 56)
+	_spinner_rect.size = Vector2(56, 56)
+	_spinner_rect.pivot_offset = Vector2(28, 28)
+	_spinner_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_spinner_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_spinner_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var spin_tex: Texture2D = _load_art(SPINNER_TEX_PATH)
+	if spin_tex != null:
+		_spinner_atlas = AtlasTexture.new()
+		_spinner_atlas.atlas = spin_tex
+		_spinner_atlas.region = Rect2(0.0, 0.0, 256.0, 256.0)
+		_spinner_rect.texture = _spinner_atlas
+		var sh: Shader = Shader.new()
+		sh.code = SPINNER_SHADER_CODE
+		var sm: ShaderMaterial = ShaderMaterial.new()
+		sm.shader = sh
+		sm.set_shader_parameter("tint_color", Color(0.72, 0.92, 0.96, 0.96))
+		_spinner_rect.material = sm
+	spin_wrap.add_child(_spinner_rect)
+
 	_title_lbl = Label.new()
-	_title_lbl.text = "LOADING CONTRACT..."
+	_title_lbl.name = "LoadingTitle"
+	_title_lbl.text = "LOADING..."
 	_title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_title_lbl.add_theme_font_size_override("font_size", 32)
-	_title_lbl.add_theme_color_override("font_color", Color(0.95, 0.84, 0.52))
+	_title_lbl.add_theme_font_size_override("font_size", 24)
+	_title_lbl.add_theme_color_override("font_color", Color(0.74, 0.88, 0.96, 0.98))
+	_title_lbl.add_theme_color_override("font_shadow_color", Color(0.01, 0.02, 0.05, 0.9))
+	_title_lbl.add_theme_constant_override("shadow_offset_x", 1)
+	_title_lbl.add_theme_constant_override("shadow_offset_y", 2)
+	if serif != null:
+		_title_lbl.add_theme_font_override("font", serif)
 	vb.add_child(_title_lbl)
 
 	_subtitle_lbl = Label.new()
 	_subtitle_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_subtitle_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_subtitle_lbl.custom_minimum_size = Vector2(560, 0)
-	_subtitle_lbl.add_theme_font_size_override("font_size", 16)
-	_subtitle_lbl.add_theme_color_override("font_color", Color(0.80, 0.82, 0.88))
+	_subtitle_lbl.custom_minimum_size = Vector2(460, 0)
+	_subtitle_lbl.add_theme_font_size_override("font_size", 14)
+	_subtitle_lbl.add_theme_color_override("font_color", Color(0.78, 0.86, 0.92, 0.85))
+	_subtitle_lbl.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.85))
+	_subtitle_lbl.add_theme_constant_override("shadow_offset_x", 1)
+	_subtitle_lbl.add_theme_constant_override("shadow_offset_y", 1)
+	if sans != null:
+		_subtitle_lbl.add_theme_font_override("font", sans)
+	_subtitle_lbl.visible = false
 	vb.add_child(_subtitle_lbl)
 
+	# Keep _bar intact for progress tracking/tests without obscuring full-bleed art.
 	_bar = ProgressBar.new()
 	_bar.min_value = 0.0
 	_bar.max_value = 100.0
 	_bar.value = 5.0
-	_bar.custom_minimum_size = Vector2(560, 22)
-	_bar.show_percentage = true
+	_bar.custom_minimum_size = Vector2(280, 4)
+	_bar.show_percentage = false
+	_bar.visible = false
 	vb.add_child(_bar)
 
 	_status_lbl = Label.new()
-	_status_lbl.text = "Preparing sublevels..."
+	_status_lbl.text = ""
 	_status_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_status_lbl.add_theme_font_size_override("font_size", 14)
-	_status_lbl.add_theme_color_override("font_color", Color(0.65, 0.72, 0.82))
+	_status_lbl.add_theme_font_size_override("font_size", 12)
+	_status_lbl.add_theme_color_override("font_color", Color(0.62, 0.78, 0.86, 0.78))
+	_status_lbl.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.85))
+	_status_lbl.add_theme_constant_override("shadow_offset_x", 1)
+	_status_lbl.add_theme_constant_override("shadow_offset_y", 1)
+	if sans != null:
+		_status_lbl.add_theme_font_override("font", sans)
 	vb.add_child(_status_lbl)
 
+	# Bottom-center gold THICK AS THIEVES logo.
+	var logo_tex: Texture2D = _load_art(LOGO_TEX_PATH)
+	if logo_tex != null:
+		_logo_rect = TextureRect.new()
+		_logo_rect.name = "LoadingLogo"
+		_logo_rect.texture = logo_tex
+		_logo_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		_logo_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		_logo_rect.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+		_logo_rect.offset_left = -96.0
+		_logo_rect.offset_top = -124.0
+		_logo_rect.offset_right = 96.0
+		_logo_rect.offset_bottom = -16.0
+		_logo_rect.modulate = Color(0.92, 0.72, 0.22, 0.98)
+		_logo_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_root.add_child(_logo_rect)
 
-## Show the overlay, reset the bar to 5%, set texts and optional splash.
+
+## Show the overlay, reset progress to 5%, keep full-brightness T_loadingScreen_1 art.
 func start_loading(title: String, clue: String, map_id: String) -> void:
 	visible = true
 	if _bar != null:
 		_bar.value = 5.0
 	if _title_lbl != null:
-		_title_lbl.text = "LOADING CONTRACT..."
+		_title_lbl.text = "LOADING..."
 	if _subtitle_lbl != null:
-		if clue.strip_edges() == "":
-			_subtitle_lbl.text = title
-		else:
-			_subtitle_lbl.text = title + "\n" + clue
+		var sub_txt: String = title.strip_edges()
+		if clue.strip_edges() != "":
+			sub_txt = (sub_txt + " — " + clue.strip_edges()) if sub_txt != "" else clue.strip_edges()
+		_subtitle_lbl.text = sub_txt
+		_subtitle_lbl.visible = sub_txt != ""
 	if _status_lbl != null:
 		_status_lbl.text = "Preparing sublevels..."
 	_update_splash(map_id)
@@ -120,33 +227,29 @@ func finish_loading() -> void:
 	queue_free()
 
 
-func _update_splash(map_id: String) -> void:
+func _update_splash(_map_id: String) -> void:
 	if _splash_rect == null:
 		return
-	var tex: Texture2D = _splash_for(map_id)
+	var tex: Texture2D = _load_art(LOADING_ART_PRIMARY)
+	if tex == null:
+		tex = _load_art(LOADING_ART_ALT)
 	if tex != null:
 		_splash_rect.texture = tex
-		_splash_rect.modulate = Color(1.0, 1.0, 1.0, 0.35)
+		_splash_rect.modulate = Color(1.0, 1.0, 1.0, 1.0)
 		_splash_rect.visible = true
 	else:
 		_splash_rect.visible = false
 
 
-func _splash_for(map_id: String) -> Texture2D:
-	var ordered: Array[String] = []
-	if map_id == "old_manor":
-		ordered = [
-			"res://assets/ue/Content/Art/UI/T_MapBuilding_OldManor_D.png",
-			"res://assets/ue/Content/Art/UI/MapSplash_Guildhall.png",
-		]
-	else:
-		ordered = [
-			"res://assets/ue/Content/Art/UI/MapSplash_Guildhall.png",
-			"res://assets/ue/Content/Art/UI/T_MapBuilding_OldManor_D.png",
-		]
-	for p: String in ordered:
-		if ResourceLoader.exists(p):
-			var t: Texture2D = ResourceLoader.load(p) as Texture2D
-			if t != null:
-				return t
+func _load_art(path: String) -> Texture2D:
+	if path == "":
+		return null
+	if ResourceLoader.exists(path):
+		var t: Variant = ResourceLoader.load(path)
+		if t is Texture2D:
+			return t as Texture2D
+	if FileAccess.file_exists(path):
+		var img: Image = Image.load_from_file(ProjectSettings.globalize_path(path))
+		if img != null and not img.is_empty():
+			return ImageTexture.create_from_image(img)
 	return null

@@ -3093,6 +3093,63 @@ func _initialize() -> void:
 	else:
 		print("PASS: 42 runner harness guards (lambda untyped Array + _settle_harness input drain)")
 
+	# 43. Zipwire crank 1P clip: AN_ThiefNisha_Zipwire__Reload_Loop resolves via
+	# ensure_fp_clip and plays on crank. Headless-robust: manifest/table/role
+	# resolution asserted unconditionally; live playback asserted through a
+	# synthetic player (no GLB import needed), mirroring the T1-09 direct-API
+	# pattern (no Input tap).
+	var cr_lib_scr: GDScript = load("res://src/core/animation_library.gd") as GDScript
+	var cr_thief_scr: GDScript = load("res://src/player/thief_character.gd") as GDScript
+	var cr_want: String = "AN_ThiefNisha_Zipwire__Reload_Loop"
+	var cr_spec: Dictionary = cr_lib_scr.FP_TOOL_CLIPS.get("zipwire_crank", {}) as Dictionary
+	var cr_table_ok: bool = str(cr_spec.get("clip", "")) == cr_want and cr_spec.get("loop", false) == true
+	var cr_manifest_ok: bool = false
+	var cr_mf: FileAccess = FileAccess.open("res://data/generated/anims_manifest.json", FileAccess.READ)
+	if cr_mf != null:
+		var cr_parsed: Variant = JSON.parse_string(cr_mf.get_as_text())
+		if cr_parsed is Dictionary:
+			for cr_e: Variant in ((cr_parsed as Dictionary).get("entries", []) as Array):
+				if cr_e is Dictionary and str((cr_e as Dictionary).get("animation", "")) == cr_want:
+					cr_manifest_ok = true
+					break
+	var cr_li: RefCounted = cr_lib_scr.new() as RefCounted
+	var cr_resolve_ok: bool = str(cr_li.call("fp_clip_for_role", "zipwire_crank")) == cr_want
+	var cr_role_ok: bool = false
+	var cr_play_ok: bool = false
+	var cr_p: Node = cr_thief_scr.new()
+	root.add_child(cr_p)
+	await process_frame
+	if is_instance_valid(cr_p) and cr_p.has_method("_select_fp_anim_role") and cr_p.has_method("_begin_wire_crank") and cr_p.has_method("_play_wire_crank_clip"):
+		cr_p.set("_is_cranking", true)
+		cr_role_ok = str(cr_p.call("_select_fp_anim_role", false)) == "zipwire_crank"
+		cr_p.set("_is_cranking", false)
+		# Synthetic live playback: seed the resolve cache, attach a player
+		# carrying the crank clip, then crank; current_animation must follow.
+		(cr_li.get("applied") as Dictionary)["zipwire_crank"] = cr_want
+		cr_p.set("_fp_anim_lib", cr_li)
+		var cr_player := AnimationPlayer.new()
+		cr_p.add_child(cr_player)
+		var cr_anim_lib := AnimationLibrary.new()
+		var cr_dummy := Animation.new()
+		cr_dummy.set_length(1.2)
+		cr_dummy.set_loop_mode(Animation.LOOP_LINEAR)
+		cr_anim_lib.add_animation(cr_want, cr_dummy)
+		cr_player.add_animation_library("", cr_anim_lib)
+		cr_p.set("fp_anim_player", cr_player)
+		cr_p.set("_fp_use_real_arms", true)
+		cr_p.call("_begin_wire_crank")
+		await process_frame
+		if is_instance_valid(cr_player):
+			cr_play_ok = cr_player.current_animation == cr_want and cr_player.is_playing()
+		cr_p.call("_end_wire_crank")
+	cr_p.queue_free()
+	await process_frame
+	if not cr_table_ok or not cr_manifest_ok or not cr_resolve_ok or not cr_role_ok or not cr_play_ok:
+		printerr("FAIL: 43 zipwire crank clip (table=", cr_table_ok, " manifest=", cr_manifest_ok, " resolve=", cr_resolve_ok, " role=", cr_role_ok, " plays=", cr_play_ok, ")")
+		fails += 1
+	else:
+		print("PASS: 43 zipwire crank ", cr_want, " resolves via ensure_fp_clip and plays on crank")
+
 	print("SUMMARY: fails=", fails)
 	quit(0 if fails == 0 else 1)
 

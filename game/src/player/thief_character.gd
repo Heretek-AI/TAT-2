@@ -888,6 +888,19 @@ func _begin_wire_crank() -> void:
 	_is_cranking = true
 	_crank_elapsed = 0.0
 	crank_progress = 0.0
+	_play_wire_crank_clip()
+
+
+## Starts the looping zipwire crank 1P clip (AN_ThiefNisha_Zipwire__Reload_Loop
+## via ensure_fp_clip). No-op without real arms; the per-frame state machine
+## (_update_fp_anim_state) sustains the loop while _is_cranking holds.
+func _play_wire_crank_clip() -> void:
+	if not _fp_use_real_arms or fp_anim_player == null or _fp_anim_lib == null:
+		return
+	var clip_name: String = str(_fp_anim_lib.call("ensure_fp_clip", fp_anim_player, "zipwire_crank"))
+	if clip_name == "":
+		return
+	_fp_play_fp_clip(clip_name)
 
 
 func _tick_wire_crank(delta: float, force_holding: bool = false) -> void:

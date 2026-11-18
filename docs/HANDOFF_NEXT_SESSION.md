@@ -13,12 +13,12 @@ Source of truth: `/home/john/.local/share/Steam/steamapps/common/Thick As Thieve
 ## Verification (run these first)
 
 ```bash
-make test     # 38 numbered suites, must be SUMMARY: fails=0, zero SCRIPT ERROR
+make test     # 42 suites, must be SUMMARY: fails=0, zero SCRIPT ERROR
 make audit    # manifest coverage, currently 99.4%
 make run      # desktop client; F3 overlay for FPS/draws/nodes
 ```
 
-Last verified (2026-11-18): **38 numbered suites, `SUMMARY: fails=0`, zero `SCRIPT ERROR`** on headless `make test`; `make audit` **12,630 / 12,704 (99.4%)**, **files written 29,939**. Live Vulkan Forward+ captures (`bash build/qa/capture_vf.sh`, `bash build/qa/capture_mp_only.sh`; NVIDIA GeForce RTX 4070 Laptop GPU, **`SHADER ERROR = 0`**, **`SCRIPT ERROR = 0`**) cover the polish wave. Engine exit-time `ObjectDB/RID leaked` warnings after `SUMMARY` are pre-existing harness noise, not script errors.
+Last verified (2026-11-18): **42 suites, `SUMMARY: fails=0`, zero `SCRIPT ERROR`** on headless `make test`; `make audit` **12,630 / 12,704 (99.4%)**, **files written 29,939**. Live Vulkan Forward+ captures (VF 6 PNGs `EXIT=0`, MP `EXIT=0`, E2E 21 shots parity `14/7`; NVIDIA GeForce RTX 4070 Laptop GPU, **`SHADER ERROR = 0`**, **`SCRIPT ERROR = 0`**, RD cascade gone) cover the fidelity-mechanics wave (`docs/reports/fidelity-mechanics-wave.md`). Engine exit-time `ObjectDB/RID leaked` warnings after `SUMMARY` are pre-existing harness noise, not script errors.
 
 ## Repo / branch state
 
@@ -102,13 +102,14 @@ dba6988 fix(sky): restore authored night sky visibility and moon tint
 1. **Light-probe stealth weights** — **DONE 2026-11-18 (`277baba`)**. See `docs/reports/lighting-intensity.md` ("Stealth retune").
 2. **Visual-fidelity polish follow-ups** — **DONE 2026-11-18** (`3448f82`, `1912d04`, `63ea64c`; `docs/reports/visual-polish.md`): Mission Prep preview PBR bound, map table tokens `0.08 -> 0.24`, Startscreen neon via unshaded HDR pass.
 3. **OldManor_P landscape PNGs** — **DONE 2026-11-18** (`24abf18`, suite 38, 155 PNGs; `docs/reports/visual-polish.md` + `docs/reports/landscape-weightmaps.md` "OldManor_P extraction"). Remaining landscape work is splines/grass runtime.
-4. **Niagara VFX remains blocked**: 120/120 systems use compiled VectorVM bytecode for spawn/lifetime/velocity and 91/139 resolved materials carry no texture. Only hand-match a specific system or decompile the VM; do not invent rates.
+4. **Fidelity-mechanics wave** — **DONE 2026-11-18** (`deabbbd`, `432f1bf`, `fe31e58`, `d9bc629`; `docs/reports/fidelity-mechanics-wave.md`): RD cascade gone (0 `texture_create`/`update_sizes`/`uniform_set`), VF 6 PNGs `EXIT=0` 0/0, MP `EXIT=0` 0/0, E2E 21 shots parity `14/7` (`shader0 script0 missing0`); tier-1 `19 -> 17` fails. Remaining: 7 E2E content gaps (tier/game edits) + `--strict` rerun toward `parity_fails=0` + Steam-JPG side-by-side.
+5. **Niagara VFX remains blocked**: 120/120 systems use compiled VectorVM bytecode for spawn/lifetime/velocity and 91/139 resolved materials carry no texture. Only hand-match a specific system or decompile the VM; do not invent rates.
 5. **Android APK rebuild & profiling**: rebuild after runtime/shader changes (`make android-release`) and verify FPS/thermals on device.
 6. **Optional residual parity** (polish leftovers, low priority): Startscreen ambient/exposure match and neon core saturation vs UE's pale gold.
 
 ## Resume point (2026-11-18)
 
-The visual-polish wave is complete (`3448f82`, `63ea64c`, `1912d04`, `24abf18`), verified on headless `make test` (`38` numbered suites, `SUMMARY: fails=0`, zero `SCRIPT ERROR`) and live RTX 4070 Vulkan Forward+ (`bash build/qa/capture_vf.sh`, `bash build/qa/capture_mp_only.sh`, `SHADER ERROR = 0`, `SCRIPT ERROR = 0`; `make audit` `12,630/12,704 (99.4%)`, `29,939` files written), and documented in `docs/reports/visual-polish.md` (with follow-up sections in `docs/reports/visual-fidelity.md` and `docs/reports/landscape-weightmaps.md`). Start next with Android rebuild/profiling and the Niagara hand-match/decompile decision; the only open visual-polish residuals are the optional Startscreen ambient/exposure and neon-core saturation notes; Niagara VFX and landscape splines/grass remain separate known limits.
+The fidelity-mechanics wave is complete (`deabbbd`, `432f1bf`, `fe31e58`, `d9bc629`), verified on headless `make test` (`42` suites incl. 39/40/41/42, `SUMMARY: fails=0`, zero `SCRIPT ERROR`) and live RTX 4070 Vulkan Forward+ (VF 6 PNGs `EXIT=0`, MP `EXIT=0`, E2E 21 shots parity `14/7` with `shader0 script0 missing0`; RD cascade gone; `make audit` `12,630/12,704 (99.4%)`, `29,939` files written), and documented in `docs/reports/fidelity-mechanics-wave.md` (with the FIDELITY_GAPS update log). Start next with the 7 E2E content-gap fixes (map look-at card, wardrobe clipped controls, lobby FOV-20 x2, zipwire equip, guard pips/arcs, circular lockpick), then `--strict` rerun toward `parity_fails=0` and the Steam-JPG side-by-side pass; then Android rebuild/profiling and the Niagara hand-match/decompile decision. Niagara VFX and landscape splines/grass remain separate known limits.
 
 ## QA recipes / gotchas
 
@@ -156,6 +157,10 @@ The visual-polish wave is complete (`3448f82`, `63ea64c`, `1912d04`, `24abf18`),
 4. **Forward check is vacuously true with no centroid**: `_fallback_spawn_has_forward_clearance` returns true when `_loot_centroid` is null or the direction is degenerate (nothing to face). By design; not a gap.
 5. **Contract 1 titles as `Contract 1`**: it has no contract string table, so the fallback's last branch fires. Expected; visible only if the HUD lists it as a contract (the Den HUD shows `Contract #1`).
 6. **Never commit `extension_api.json`**: it is a pre-existing untracked Godot API dump; only source/docs belong in commits.
+
+## Session log (2026-11-18) — fidelity-mechanics wave (finalize)
+
+Objective: finalize Task 4.6 with live RTX 4070 Vulkan Forward+ results. Code already on `main`: `deabbbd` (glass/icon samplers linear-only), `432f1bf` (tiny-texture mip guard + suite 39), `fe31e58` (preview viewports update-when-visible), `d9bc629` (arc-bound alias vars24/tracks48, runner settle/lambda, suites 40/41/42; tier-1 `19 -> 17` fails, `SCRIPT 1 -> 0`). Docs: `docs/reports/fidelity-mechanics-wave.md` finalized (§5 live tables), `docs/FIDELITY_GAPS.md` update log, this handoff resume point. Gates: `make test` 42 suites `SUMMARY: fails=0`, zero `SCRIPT ERROR`, exit 0; `make audit` `12,630/12,704 (99.4%)`, `29,939` files, exit 0. Live: VF 6 PNGs `EXIT=0` 0/0, MP `EXIT=0` 0/0, E2E 21 shots parity `14/7` (`shader0 script0 missing0`); 7 content fails (map look-at card, wardrobe clipped controls, lobby FOV-20 x2, zipwire equip, guard pips/arcs, circular lockpick); RD cascade gone (0 `texture_create`/`update_sizes`/`uniform_set`). Build/QA artifacts stay gitignored; commit is docs-only.
 
 ## Session log (2026-11-18) — visual polish wave
 

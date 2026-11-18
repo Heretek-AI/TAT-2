@@ -183,6 +183,8 @@ The old mapping saturated median lights at `4.2`; the new values are dimmer but 
 
 ### Stealth detection is now mis-tuned
 
+**Retuned 2026-11-18 (`277baba`) — the numbers below describe the pre-retune state; see "Stealth retune (2026-11-18)" at the end of this report.**
+
 `game/src/stealth/light_probe.gd` was tuned against the old inflated energies. It contributes:
 
 ```gdscript
@@ -194,6 +196,63 @@ and skips lights with `light_energy <= 0.01`. Under the old mapping, a light aut
 ### Implicit threshold coupling
 
 `LIGHT_ENERGY_FLOOR = 0.01` coincides with the light probe's skip threshold (`<= 0.01`) and `RECT_LIGHT_OFF_THRESHOLD = 0.01`. The three values are currently independent literals; changing one without the others would silently change which lights count as "off" for rendering versus stealth. Worth revisiting as a shared constant or an explicit policy.
+
+## Stealth retune (2026-11-18)
+
+Shipped as `277baba fix(stealth): retune light probe weights for linear light energies`. Scope is `game/src/stealth/light_probe.gd` and `game/tests/run_tests.gd` only; no level data, loader, guard AI, or mission changes.
+
+### Root cause
+
+The probe's old `energy * 0.35` weight was calibrated against the old saturated energies. Under the new linear scale (`LIGHT_INTENSITY_SCALE = 1/15`: median authored `Intensity 15` -> energy `1.0`, floor `0.01`, ceiling `4.0`) the authored median fell from `0.90` to `0.35` visibility weight, roughly halving detection. Pre-retune the median light contributed `0.35`; the pre-lighting-wave probe contributed `0.90` because median lights saturated at the old `4.2` energy ceiling.
+
+### Fix
+
+One call-site change in `game/src/stealth/light_probe.gd`. Local (omni/spot) lights now use:
+
+```gdscript
+const LIGHT_ENERGY_TO_VISIBILITY: float = 0.9
+const LIGHT_VISIBILITY_MIN: float = 0.15
+const LIGHT_VISIBILITY_MAX: float = 0.9
+
+static func light_visibility_weight(energy: float) -> float:
+    return clampf(energy * 0.9, 0.15, 0.9)
+```
+
+Directional lights keep their separate `clampf(energy * 0.25, 0.0, 0.35)` branch, and ambient stays `0.08`.
+
+### Mapping (authored intensity -> energy -> probe weight)
+
+| Authored Intensity | Old energy | Old weight | New energy | New weight |
+|---:|---:|---:|---:|---:|
+| 0.15 | 1.0 | 0.35 | 0.01 | 0.15 |
+| 2.5 | 2.375 | 0.83 | 0.1667 | 0.15 |
+| 5 | 4.2 | 0.90 | 0.3333 | 0.30 |
+| 15 | 4.2 | 0.90 | 1.0 | 0.90 |
+| 19.9 | 4.2 | 0.90 | 1.3267 | 0.90 |
+| 20 | 1.6 | 0.56 | 1.3333 | 0.90 |
+| 30 | 2.4 | 0.84 | 2.0 | 0.90 |
+| 45 | 3.6 | 0.90 | 3.0 | 0.90 |
+| 52.5 | 4.2 | 0.90 | 3.5 | 0.90 |
+| 300 | 4.2 | 0.90 | 4.0 | 0.90 |
+| 2500 | 4.2 | 0.90 | 4.0 | 0.90 |
+
+This is a rebalance, not a revert: authored `2.5` goes `0.83 -> 0.15`, authored `5` goes `0.90 -> 0.30`, so sub-median lights intentionally sit below the old collapsed values; authored `>= 15` saturates at `0.90`. The old non-monotonic `19.9 (0.90)` / `20.0 (0.56)` branch jump is gone.
+
+### Guard detection effect
+
+`game/src/ai/guard_ai.gd` uses `vis_mult = clampf(0.35 + visibility * 1.15, 0.35, 1.5)`. At zero distance: under the authored median light `vis_mult` is restored from `0.845` (pre-retune) to `1.477` (pre-wave `1.477`); under an authored-5 light it is `0.787` (pre-wave `1.477`, pre-retune `0.615`).
+
+### Den hand fills / HUD
+
+Den hand fills (`mission_controller.gd` energies `0.25 / 0.30 / 0.35 / 0.65`) now weigh `0.225 / 0.27 / 0.315 / 0.585` instead of the old `0.15` floor (the `0.65` light was `0.2275`). The Den has `0` hostile guards (suite 7), so there is no AI detection impact; the HUD light meter reads brighter in the hub.
+
+### Verification
+
+Suites 36 (helper mapping) and 36b (`sample_visibility` integration: one energy-`1.0` omni at `2 m` with a `10 m` range far from level geometry samples `0.656 = 0.08 + 0.64*0.9`). `make test`: `36` suites, `SUMMARY: fails=0`, exit `0`, zero `FAIL:`/`SCRIPT ERROR`/`SHADER ERROR`; `make audit` `12,630 / 12,704 (99.4%)`. Exit-time `ObjectDB`/`RID ... leaked` warnings are pre-existing harness noise.
+
+### Residual coupling (unchanged)
+
+The probe skip threshold (`<= 0.01`) still equals `LIGHT_ENERGY_FLOOR` as an independent literal. The retune does not change that coupling.
 
 ## Caveats & reproduce
 

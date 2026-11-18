@@ -13,12 +13,12 @@ Source of truth: `/home/john/.local/share/Steam/steamapps/common/Thick As Thieve
 ## Verification (run these first)
 
 ```bash
-make test     # 35 numbered suites, must be SUMMARY: fails=0, zero SCRIPT ERROR
+make test     # 36 numbered suites, must be SUMMARY: fails=0, zero SCRIPT ERROR
 make audit    # manifest coverage, currently 99.4%
 make run      # desktop client; F3 overlay for FPS/draws/nodes
 ```
 
-Last verified (2026-11-18): **35 numbered suites, `SUMMARY: fails=0`, zero `SCRIPT ERROR`** (both headless `make test` and live Vulkan Forward+ `build/qa/make_test_vulkan_vf.log` on NVIDIA GeForce RTX 4070 Laptop GPU with **`SHADER ERROR = 0`**); `make audit` **12,630 / 12,704 (99.4%)**. Engine exit-time `ObjectDB/RID leaked` warnings after `SUMMARY` are pre-existing harness noise, not script errors.
+Last verified (2026-11-18): **36 numbered suites (incl. 36/36b light-probe retune), `SUMMARY: fails=0`, zero `SCRIPT ERROR`** on headless `make test`; `make audit` **12,630 / 12,704 (99.4%)**. The earlier live Vulkan Forward+ run (`build/qa/make_test_vulkan_vf.log`, NVIDIA GeForce RTX 4070 Laptop GPU, **`SHADER ERROR = 0`**) covers the prior 35-suite wave, not the retune. Engine exit-time `ObjectDB/RID leaked` warnings after `SUMMARY` are pre-existing harness noise, not script errors.
 
 ## Repo / branch state
 
@@ -38,7 +38,7 @@ Last verified (2026-11-18): **35 numbered suites, `SUMMARY: fails=0`, zero `SCRI
 ### Runtime
 - Level loader: 32 m XZ chunking with tight custom AABB, tiered distance culling/shadows, occlusion boxes, per-cell collision bodies, skybox-only decorative exclusion (packed-city PeripheryA is collidable).
 - **Packed Level Actors + LevelInstances**: 39 `BPP_PL_*` classes / 3,210 instanced components / 30,127 `PerInstanceSMData` transforms expanded; 138 LevelInstance sublevels / 32,166 meshes merged at authored transforms. Guildhall PeripheryA 12,594 meshes; runtime 63,210 meshes / 25,074 collision shapes. Guildhall landscape uses `tat_landscape.gdshader` to blend the real weightmap layers across two weightmaps and five colour slots (GroundA/GrassA/CobbleA/CobbleB/RockTileA + Visibility, Puddle normal/opacity, GroundWet darkening); 210/210 components emit `weightmaps`, 15 have two, Guildhall 8/18; Guildhall sets `discard_holes=0` because the safe-room gap has no lower-floor mesh. Spawn-area lights within 25 m are prioritized over the global brightest-96 budget; the safe-room wall `SpotLight3D` at `(126.2948, 27.1426, -2.28)` is loaded (energy `0.333`, authored range `9.0 m`). Reports: `docs/reports/packed-level-instances.md`, `docs/reports/landscape-weightmaps.md`.
-- **Lighting intensity/range**: authored `Intensity` maps linearly (`1/15`; median `15` -> energy `1.0`, floor `0.01`, ceiling `4.0`) instead of the old two-branch clamp that pinned 468/682 Guildhall lights (68.6%); attenuation radius is 1:1 in metres with a 200 m defensive ceiling, attenuation `1.0`, and the 96-light budget ranking uses the same scale. Spawned-set energy is ~41% lower and ranges ~57% shorter; the light-probe stealth weights are still tuned to the old values (parked follow-up). Report: `docs/reports/lighting-intensity.md`.
+- **Lighting intensity/range**: authored `Intensity` maps linearly (`1/15`; median `15` -> energy `1.0`, floor `0.01`, ceiling `4.0`) instead of the old two-branch clamp that pinned 468/682 Guildhall lights (68.6%); attenuation radius is 1:1 in metres with a 200 m defensive ceiling, attenuation `1.0`, and the 96-light budget ranking uses the same scale. Spawned-set energy is ~41% lower and ranges ~57% shorter; the light-probe stealth weights were retuned for the linear scale in `277baba` (suites 36/36b). Report: `docs/reports/lighting-intensity.md`.
 - Level content: 347 validated decals, 138 blocking-volume colliders, 1 active rect light, 1 sky/fog/atmosphere, 3,692 Niagara placements counted (not spawned), 52 splines skipped (editor mesh).
 - Spawns: all 689 throwable/ammo/health/civilian markers with real meshes/pickups/civilians; 546 loot actors with real meshes/table values; 234 openable containers (real loot on open); **281 swinging doors / 373 leaves** (90° open/close, rotating collision; 111 doorway-BP pivots counted, 0 unresolved). Report: `docs/reports/doors-attachparent.md`.
 - Characters: guards play 10 retargeted real clips (95/97 bones, rest-delta + unit correction); player uses real ThiefNisha 3P body and 1P arms with real Walk/Sprint/Crouch clips (procedural fallback).
@@ -51,6 +51,8 @@ Last verified (2026-11-18): **35 numbered suites, `SUMMARY: fails=0`, zero `SCRI
 ## Key commits (most recent first)
 
 ```
+277baba fix(stealth): retune light probe weights for linear light energies
+05e6d89 docs(qa): record live Vulkan visual-fidelity QA and polish UI framing
 2da2ebe feat(ui): wire Startscreen CineCamera, teal grouped Settings persistence, and Mission Prep artwork+DT_Missions
 0361577 feat(den): wire exit door, rebalance lighting+probe, fix deco/map tokens and footprint mask
 32d6a52 feat(materials): add tat_glass.gdshader with authored albedo+opacity and remove flat-blue fallback
@@ -86,7 +88,7 @@ dba6988 fix(sky): restore authored night sky visibility and moon tint
 
 ## Next steps (priority)
 
-1. **Retune the light-probe stealth weights** for the linear `1/15` lighting energies (`game/src/stealth/light_probe.gd`). See `docs/reports/lighting-intensity.md`.
+1. **Retune the light-probe stealth weights** for the linear `1/15` lighting energies (`game/src/stealth/light_probe.gd`) — **DONE 2026-11-18 (`277baba`)**. See `docs/reports/lighting-intensity.md` ("Stealth retune").
 2. **Visual-fidelity polish follow-ups** from live Vulkan QA (`docs/reports/visual-fidelity.md`):
    - Bind authored ThiefNisha PBR textures onto the 3D preview character in `MissionPrepUI` (currently default untextured GLB surface).
    - Scale map table miniature tokens (`SM_MapBuilding_OldManor`/`GuildHall`) from `0.08` to `~0.22–0.25` to match official UE framing (`Screenshot_20261118_002339.png`).
@@ -97,7 +99,7 @@ dba6988 fix(sky): restore authored night sky visibility and moon tint
 
 ## Resume point (2026-11-18)
 
-The entire Visual-Fidelity Wave (Phases 1–3) is complete, verified on both headless `make test` and real RTX 4070 Vulkan Forward+ (`35` numbered suites, `SUMMARY: fails=0`, `SHADER ERROR = 0`, `SCRIPT ERROR = 0`, `make audit` `99.4%`), and documented in `docs/reports/visual-fidelity.md`. Start next with item 1 (light-probe stealth retune) or item 2 (Mission Prep preview textures / Map Table token scale / Startscreen neon bloom polish).
+The entire Visual-Fidelity Wave (Phases 1–3) is complete, verified on both headless `make test` and real RTX 4070 Vulkan Forward+ (`35` numbered suites, `SUMMARY: fails=0`, `SHADER ERROR = 0`, `SCRIPT ERROR = 0`, `make audit` `99.4%`), and documented in `docs/reports/visual-fidelity.md`. The light-probe stealth retune is also complete and verified (`277baba`, suites 36/36b, `36` suites `SUMMARY: fails=0`); see `docs/reports/lighting-intensity.md` ("Stealth retune"). Start next with item 2 (Mission Prep preview textures / Map Table token scale / Startscreen neon bloom), then item 3 (OldManor_P landscape PNGs).
 
 ## QA recipes / gotchas
 
@@ -143,6 +145,10 @@ The entire Visual-Fidelity Wave (Phases 1–3) is complete, verified on both hea
 4. **Forward check is vacuously true with no centroid**: `_fallback_spawn_has_forward_clearance` returns true when `_loot_centroid` is null or the direction is degenerate (nothing to face). By design; not a gap.
 5. **Contract 1 titles as `Contract 1`**: it has no contract string table, so the fallback's last branch fires. Expected; visible only if the HUD lists it as a contract (the Den HUD shows `Contract #1`).
 6. **Never commit `extension_api.json`**: it is a pre-existing untracked Godot API dump; only source/docs belong in commits.
+
+## Session log (2026-11-18) — light-probe retune
+
+Objective: retune `game/src/stealth/light_probe.gd` for the linear `1/15` lighting energies. Files changed: `game/src/stealth/light_probe.gd`, `game/tests/run_tests.gd` (suites 36/36b). Tests/gates: `make test` `36` suites `SUMMARY: fails=0`, zero `SCRIPT ERROR`; `make audit` `12,630 / 12,704 (99.4%)`. Commit: `277baba fix(stealth): retune light probe weights for linear light energies`. Details: `docs/reports/lighting-intensity.md` ("Stealth retune").
 
 ## Session log (2026-11-17) — post-overhang fidelity resume
 

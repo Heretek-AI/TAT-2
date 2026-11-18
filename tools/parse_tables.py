@@ -60,9 +60,13 @@ def ue_rotator_to_mat3(r: dict):
     cy, sy = math.cos(y), math.sin(y)
     cr, sr = math.cos(ro), math.sin(ro)
     # UE FRotationMatrix::MakeFromEuler
+    # m12 is the negated UE M[2][1] (M[2][1] = CR*SP*SY - SR*CY); this
+    # negated form is what keeps the Godot basis orthonormal (cf.
+    # game/src/core/weather_profile.gd moon_basis). The un-negated
+    # literal shears meshes.
     return [
         [cp * cy, sr * sp * cy - cr * sy, -(cr * sp * cy + sr * sy)],
-        [cp * sy, sr * sp * sy + cr * cy, cr * sp * sy - sr * cy],
+        [cp * sy, sr * sp * sy + cr * cy, sr * cy - cr * sp * sy],
         [sp, -sr * cp, cr * cp],
     ]
 
@@ -98,18 +102,54 @@ def ue_mat4_to_godot_trs(m):
     sx = math.sqrt(sum(v * v for v in c0)) or 1.0
     sy = math.sqrt(sum(v * v for v in c1)) or 1.0
     sz = math.sqrt(sum(v * v for v in c2)) or 1.0
+    # Composed non-uniform scale can leave non-orthogonal columns; this
+    # rebuilds a rigid rotation with Gram-Schmidt while preserving the scale
+    # magnitudes. 44 baseline instances needed it.
+    n0 = [v / sx for v in c0]
+    n1_raw = [v / sy for v in c1]
+    n1_proj = sum(n1_raw[i] * n0[i] for i in range(3))
+    n1 = [n1_raw[i] - n1_proj * n0[i] for i in range(3)]
+    n1_len = math.sqrt(sum(v * v for v in n1))
+    if n1_len < 1e-8:
+        axis = [1.0, 0.0, 0.0] if abs(n0[0]) < 0.9 else [0.0, 1.0, 0.0]
+        n1 = [
+            n0[1] * axis[2] - n0[2] * axis[1],
+            n0[2] * axis[0] - n0[0] * axis[2],
+            n0[0] * axis[1] - n0[1] * axis[0],
+        ]
+        n1_len = math.sqrt(sum(v * v for v in n1))
+        if n1_len < 1e-8:
+            n1 = [0.0, 1.0, 0.0]
+            n1_len = 1.0
+    n1 = [v / n1_len for v in n1]
+    n2_raw = [v / sz for v in c2]
+    n2_proj0 = sum(n2_raw[i] * n0[i] for i in range(3))
+    n2_proj1 = sum(n2_raw[i] * n1[i] for i in range(3))
+    n2 = [n2_raw[i] - n2_proj0 * n0[i] - n2_proj1 * n1[i] for i in range(3)]
+    n2_len = math.sqrt(sum(v * v for v in n2))
+    if n2_len < 1e-8:
+        n2 = [
+            n0[1] * n1[2] - n0[2] * n1[1],
+            n0[2] * n1[0] - n0[0] * n1[2],
+            n0[0] * n1[1] - n0[1] * n1[0],
+        ]
+        n2_len = math.sqrt(sum(v * v for v in n2))
+        if n2_len < 1e-8:
+            n2 = [0.0, 0.0, 1.0]
+            n2_len = 1.0
+    n2 = [v / n2_len for v in n2]
     return {
         "pos": [round(p[0], 4), round(p[1], 4), round(p[2], 4)],
         "basis": [
-            round(c0[0] / sx, 5),
-            round(c1[0] / sy, 5),
-            round(c2[0] / sz, 5),
-            round(c0[1] / sx, 5),
-            round(c1[1] / sy, 5),
-            round(c2[1] / sz, 5),
-            round(c0[2] / sx, 5),
-            round(c1[2] / sy, 5),
-            round(c2[2] / sz, 5),
+            round(n0[0], 5),
+            round(n1[0], 5),
+            round(n2[0], 5),
+            round(n0[1], 5),
+            round(n1[1], 5),
+            round(n2[1], 5),
+            round(n0[2], 5),
+            round(n1[2], 5),
+            round(n2[2], 5),
         ],
         "scale": [round(sx, 4), round(sy, 4), round(sz, 4)],
     }

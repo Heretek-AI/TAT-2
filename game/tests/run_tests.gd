@@ -1450,6 +1450,85 @@ func _initialize() -> void:
 	else:
 		print("PASS: AI light curves match C_LightIntensityToRangeMultiplier (", light_desc, ") and C_MovementSpeedToMinimumLightDetectionValue (", speed_desc, ")")
 
+	# 27. UE rotator shear regression: every generated basis is orthonormal.
+	# The parser stores bases with 5-decimal rounding, so the tolerance is
+	# 1e-4 (rounding noise is <= ~1e-5; the m12 shear signal was ~6.5e-2).
+	var ortho_files: Array[String] = []
+	var ortho_stack: Array[String] = ["res://data/generated/levels"]
+	var ortho_probe: DirAccess = DirAccess.open("res://data/generated/levels")
+	if ortho_probe == null:
+		printerr("FAIL: generated levels dir missing (res://data/generated/levels); regenerate with python3 tools/parse_tables.py")
+		fails += 1
+	else:
+		while not ortho_stack.is_empty():
+			var ortho_dir: String = ortho_stack.pop_back()
+			var ortho_da: DirAccess = DirAccess.open(ortho_dir)
+			if ortho_da == null:
+				continue
+			ortho_da.list_dir_begin()
+			var ortho_entry: String = ortho_da.get_next()
+			while ortho_entry != "":
+				var ortho_full: String = ortho_dir.path_join(ortho_entry)
+				if ortho_da.current_is_dir():
+					ortho_stack.append(ortho_full)
+				elif ortho_entry.ends_with(".tatlevel.json"):
+					ortho_files.append(ortho_full)
+				ortho_entry = ortho_da.get_next()
+			ortho_da.list_dir_end()
+		var ortho_total: int = 0
+		var ortho_bad: int = 0
+		var ortho_bad_files: Array[String] = []
+		for ortho_path: String in ortho_files:
+			var ortho_f: FileAccess = FileAccess.open(ortho_path, FileAccess.READ)
+			if ortho_f == null:
+				continue
+			var ortho_parsed: Variant = JSON.parse_string(ortho_f.get_as_text())
+			if not (ortho_parsed is Dictionary):
+				continue
+			var ortho_pending: Array = [ortho_parsed]
+			while not ortho_pending.is_empty():
+				var ortho_node: Variant = ortho_pending.pop_back()
+				if ortho_node is Dictionary:
+					var ortho_dict: Dictionary = ortho_node
+					for ortho_key: Variant in ortho_dict.keys():
+						var ortho_val: Variant = ortho_dict[ortho_key]
+						if (str(ortho_key) == "basis" or str(ortho_key) == "rel_basis") and ortho_val is Array and (ortho_val as Array).size() == 9:
+							var ortho_b: Array = ortho_val
+							var ortho_nums_ok: bool = true
+							for ortho_el: Variant in ortho_b:
+								if not (ortho_el is float or ortho_el is int):
+									ortho_nums_ok = false
+							var ortho_ok: bool = false
+							if ortho_nums_ok:
+								var ortho_c0: Vector3 = Vector3(float(ortho_b[0]), float(ortho_b[3]), float(ortho_b[6]))
+								var ortho_c1: Vector3 = Vector3(float(ortho_b[1]), float(ortho_b[4]), float(ortho_b[7]))
+								var ortho_c2: Vector3 = Vector3(float(ortho_b[2]), float(ortho_b[5]), float(ortho_b[8]))
+								ortho_ok = absf(ortho_c0.length() - 1.0) <= 1e-4 \
+									and absf(ortho_c1.length() - 1.0) <= 1e-4 \
+									and absf(ortho_c2.length() - 1.0) <= 1e-4 \
+									and absf(ortho_c0.dot(ortho_c1)) <= 1e-4 \
+									and absf(ortho_c0.dot(ortho_c2)) <= 1e-4 \
+									and absf(ortho_c1.dot(ortho_c2)) <= 1e-4
+							ortho_total += 1
+							if not ortho_ok:
+								ortho_bad += 1
+								if not ortho_bad_files.has(ortho_path) and ortho_bad_files.size() < 5:
+									ortho_bad_files.append(ortho_path)
+						elif ortho_val is Dictionary or ortho_val is Array:
+							ortho_pending.append(ortho_val)
+				elif ortho_node is Array:
+					for ortho_item: Variant in (ortho_node as Array):
+						if ortho_item is Dictionary or ortho_item is Array:
+							ortho_pending.append(ortho_item)
+		if ortho_files.is_empty() or ortho_total == 0:
+			printerr("FAIL: no generated bases scanned (files=", ortho_files.size(), " total=", ortho_total, ")")
+			fails += 1
+		elif ortho_bad != 0:
+			printerr("FAIL: ", ortho_bad, " non-orthonormal bases in generated levels (", ortho_bad_files, ")")
+			fails += 1
+		else:
+			print("PASS: ", ortho_total, " generated bases orthonormal (", ortho_files.size(), " files)")
+
 	print("SUMMARY: fails=", fails)
 	quit(0 if fails == 0 else 1)
 

@@ -431,15 +431,23 @@ static func apply_environment(env: Environment, moon: DirectionalLight3D, preset
 			env.tonemap_exposure = float(expo)
 		var glow: Variant = glow_intensity(preset)
 		if glow != null:
+			# Den RD cap: indoor Den preset keeps glow on for the warm look
+			# but uses fewer mip levels (0-1 = 2 textures vs 0-4 = 6) and a
+			# lower HDR scale so strip 1 (+glow) can't cascade texture_create.
+			var den_preset_id: String = str(preset.get("preset", "")).to_lower()
+			var is_den_glow: bool = "thieves_den" in den_preset_id
 			env.glow_enabled = true
-			env.glow_intensity = float(glow)
+			env.glow_intensity = float(glow) * 0.6 if is_den_glow else float(glow)
 			if is_desktop:
 				env.glow_hdr_threshold = 1.0
-				env.glow_hdr_scale = 2.0
-				env.glow_bloom = 0.14
+				env.glow_hdr_scale = 1.0 if is_den_glow else 2.0
+				env.glow_bloom = 0.10 if is_den_glow else 0.14
 				env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
-				for gl_i: int in range(5):
+				for gl_i: int in range(2 if is_den_glow else 5):
 					env.set_glow_level(gl_i, true)
+				if is_den_glow:
+					for gl_off: int in range(2, 5):
+						env.set_glow_level(gl_off, false)
 		if is_desktop:
 			# Desktop SSR for wet cobblestone puddles (tat_landscape.gdshader roughness ~0.04).
 			env.ssr_enabled = true

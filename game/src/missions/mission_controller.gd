@@ -62,6 +62,9 @@ var _ponder_active: bool = false
 var _ponder_cam: Camera3D = null
 var _ponder_cheese: Node3D = null
 var _active_mission_row: Dictionary = {}
+## TEMP STRIP MENU debug hook (TASK 5.1b, revert-friendly): --env-strip=N (0-7).
+## -1 = no flag passed (hook off). Delete this var + the helpers/call sites to revert.
+var _env_strip_level: int = -1
 
 
 func _ready() -> void:
@@ -100,6 +103,10 @@ func _setup_environment() -> void:
 	WeatherProfile.apply_environment(e, moon, wpreset)
 	WeatherVisuals.apply_sky(e, wpreset, moon)
 	MobileProfile.apply_environment(e)
+	# TEMP STRIP MENU (TASK 5.1b): revert by deleting this block + helpers below.
+	_env_strip_level = _env_strip_level_from_args()
+	print("TAT-2 STRIP MENU: env-strip level=", _env_strip_level, " (-1=off, 7=full restore)")
+	_apply_env_strip(e)
 	env.environment = e
 	add_child(env)
 	print("TAT-2 environment: bg=", e.background_mode, " ambient_src=", e.ambient_light_source, " ambient_energy=", e.ambient_light_energy, " ambient_color=", e.ambient_light_color, " sky=", e.sky != null, " fog=", e.fog_enabled, " fog_density=", e.fog_density)
@@ -130,6 +137,54 @@ func _apply_fallback_moon(moon: DirectionalLight3D) -> void:
 	moon.light_color = Color(0.68, 0.78, 0.98)
 	moon.light_energy = 0.55
 	moon.shadow_enabled = true
+
+
+## TEMP STRIP MENU debug hook (TASK 5.1b, revert-friendly: delete this block,
+## the _env_strip_level var, and the three call sites to revert). Reads
+## OS.get_cmdline_user_args() for --env-strip=N (0-7). Levels are cumulative:
+## 0 = all heavy off, 1 = +glow, 2 = +adjust/LUT, 3 = +ssr, 4 = +ssil,
+## 5 = +volumetric, 6 = +probe ONCE, 7 = full restore (no-op).
+func _env_strip_level_from_args() -> int:
+	for arg: String in OS.get_cmdline_user_args():
+		var a: String = str(arg).strip_edges()
+		if a.begins_with("--env-strip="):
+			return clampi(int(a.get_slice("=", 1)), 0, 7)
+	return -1
+
+
+## TEMP STRIP MENU: force off every heavy feature above the active level,
+## leaving at-or-below-level features at their pipeline values. Fog stays off
+## for 0-6 (level 7 early-returns = full restore, no override).
+func _apply_env_strip(e: Environment) -> void:
+	if e == null:
+		return
+	if _env_strip_level < 0 or _env_strip_level >= 7:
+		return
+	if _env_strip_level < 1:
+		e.glow_enabled = false
+	if _env_strip_level < 2:
+		e.adjustment_enabled = false
+		e.adjustment_color_correction = null
+	if _env_strip_level < 3:
+		e.ssr_enabled = false
+	if _env_strip_level < 4:
+		e.ssil_enabled = false
+	if _env_strip_level < 5:
+		e.volumetric_fog_enabled = false
+	e.fog_enabled = false
+
+
+## TEMP STRIP MENU: re-strip after level load (level presets re-enable
+## glow/adjust) and drop Lumen GI fill lights for levels 0-6.
+func _apply_env_strip_after_load() -> void:
+	if _env_strip_level < 0 or _env_strip_level >= 7:
+		return
+	for child: Node in get_children():
+		if child is WorldEnvironment and (child as WorldEnvironment).environment != null:
+			_apply_env_strip((child as WorldEnvironment).environment)
+	for n: Node in get_children():
+		if n is OmniLight3D and str(n.name).begins_with("SkylightLeakingFill_"):
+			n.queue_free()
 
 
 func start_contract(order: int) -> void:
@@ -168,6 +223,8 @@ func start_contract(order: int) -> void:
 	print("TAT-2 Loaded ", map_id, ": meshes=", ue_level_data.get("mesh_instances", 0), " lights=", ue_level_data.get("light_count", 0))
 	level_stats = ue_level_data
 	_apply_level_atmosphere(ue_level_data)
+	# TEMP STRIP MENU: re-strip env (level presets re-enable glow/adjust) + drop GI fills.
+	_apply_env_strip_after_load()
 	if int(ue_level_data.get("chunk_count", 0)) > 0:
 		print("TAT-2 Perf: chunks=", ue_level_data.get("chunk_count", 0), " collision_bodies=", ue_level_data.get("collision_bodies", 0), " collision_shapes=", ue_level_data.get("collision_shapes", 0), " occluders=", ue_level_data.get("occluder_count", 0))
 
@@ -272,8 +329,21 @@ func _apply_level_post_process(env: Environment, pp: Dictionary) -> void:
 		return
 	var mapped: int = 0
 	if settings.has("BloomIntensity"):
+		# Den RD cap: level post-process BloomIntensity re-enables glow after
+		# the weather preset; clamp lower and keep levels 0-1 only (2
+		# textures) so strip 1 (+glow) can't cascade texture_create.
+		# Strip 0 still wins via _apply_env_strip_after_load (runs after this).
+		var is_den_map: bool = str(GameState.active_map_id) == "thieves_den"
 		env.glow_enabled = true
-		env.glow_intensity = clampf(float(settings["BloomIntensity"]) * 0.08, 0.0, 0.8)
+		var glow_cap: float = 0.32 if is_den_map else 0.8
+		env.glow_intensity = clampf(float(settings["BloomIntensity"]) * 0.08, 0.0, glow_cap)
+		if is_den_map:
+			env.glow_hdr_scale = 1.0
+			env.glow_bloom = 0.10
+			for gl_i: int in range(2):
+				env.set_glow_level(gl_i, true)
+			for gl_off: int in range(2, 5):
+				env.set_glow_level(gl_off, false)
 		mapped += 1
 	if settings.has("Saturation"):
 		env.adjustment_enabled = true
@@ -366,6 +436,9 @@ func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> 
 	moon_beam.spot_range = 14.0
 	moon_beam.spot_angle = 26.0
 	moon_beam.shadow_enabled = true
+	# TEMP STRIP MENU: DenMoonBeam shadow off for levels 0-6.
+	if _env_strip_level >= 0 and _env_strip_level <= 6:
+		moon_beam.shadow_enabled = false
 	moon_beam.add_to_group("den_hand_fills")
 	add_child(moon_beam)
 	var beam_target: Vector3 = Vector3(-0.5, 40.1, 271.5)
@@ -381,6 +454,10 @@ func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> 
 	den_probe.interior = true
 	den_probe.ambient_mode = ReflectionProbe.AMBIENT_DISABLED
 	den_probe.update_mode = ReflectionProbe.UPDATE_ONCE
+	# TEMP STRIP MENU: probe DISABLED for levels 0-5 (ReflectionProbe has no
+	# UPDATE_DISABLED in 4.x, so hide it; level 6+ keeps ONCE).
+	if _env_strip_level >= 0 and _env_strip_level <= 5:
+		den_probe.hide()
 	den_probe.intensity = 0.8
 	add_child(den_probe)
 

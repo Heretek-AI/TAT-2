@@ -163,7 +163,11 @@ public sealed class Exporter
     public void Textures()
     {
         var opts = DefaultOpts();
-        ForEach(Packages(p => (p.EndsWith(".uasset") && (Path.GetFileName(p).StartsWith("T_") || p.Contains("/Textures/") || p.Contains("/UI/") || p.Contains("Icon") || p.Contains("WindowPanels_Oldmanor"))) || (p.EndsWith(".umap") && (p.Contains("Landscape") || p.Contains("BeautifulCorner_Startscreen_P")))), "textures", f =>
+        ForEach(Packages(p => (p.EndsWith(".uasset") && (Path.GetFileName(p).StartsWith("T_") || p.Contains("/Textures/") || p.Contains("/UI/") || p.Contains("Icon") || p.Contains("WindowPanels_Oldmanor")
+                || Path.GetFileName(p).StartsWith("WindowPanel_", StringComparison.Ordinal)
+                || Path.GetFileName(p).StartsWith("StorefrontWoodTile_", StringComparison.Ordinal)
+                || Path.GetFileName(p).StartsWith("TrimFabricFancyA_", StringComparison.Ordinal)
+                || Path.GetFileName(p).StartsWith("OldBricksB_", StringComparison.Ordinal))) || (p.EndsWith(".umap") && (p.Contains("Landscape") || p.Contains("BeautifulCorner_Startscreen_P")))), "textures", f =>
         {
             var pkg = _p.LoadPackage(f);
             bool isUmap = f.Path.EndsWith(".umap", StringComparison.OrdinalIgnoreCase);

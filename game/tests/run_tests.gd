@@ -1529,6 +1529,127 @@ func _initialize() -> void:
 		else:
 			print("PASS: ", ortho_total, " generated bases orthonormal (", ortho_files.size(), " files)")
 
+	# 28. Material discovery/classification: authored decal and glass textures
+	# bind directly, and no non-UI environment material falls back to map art.
+	var mats_path: String = "res://data/generated/materials.json"
+	var mats_doc: Dictionary = {}
+	if not FileAccess.file_exists(mats_path):
+		printerr("FAIL: materials.json missing at ", mats_path, "; run python3 tools/parse_materials.py")
+		fails += 1
+	else:
+		var mats_file: FileAccess = FileAccess.open(mats_path, FileAccess.READ)
+		var mats_doc_v: Variant = null
+		if mats_file != null:
+			mats_doc_v = JSON.parse_string(mats_file.get_as_text())
+		if mats_doc_v is Dictionary:
+			mats_doc = mats_doc_v as Dictionary
+		else:
+			printerr("FAIL: materials.json is not a JSON object; run python3 tools/parse_materials.py")
+			fails += 1
+	if not mats_doc.is_empty():
+		var mat_fails: Array[String] = []
+		var foot_entry: Dictionary = _material_entry_ending_with(mats_doc, "MI_Decal_TrailMarker_Footstep")
+		var foot_albedo: String = str(_entry_texs(foot_entry).get("albedo", ""))
+		if not foot_albedo.ends_with("T_Decal_Footstep.png"):
+			mat_fails.append("MI_Decal_TrailMarker_Footstep albedo=" + foot_albedo)
+		var disguise_entry: Dictionary = _material_entry_ending_with(mats_doc, "MI_Decal_TrailMarker_Footstep_Disguise")
+		var disguise_albedo: String = str(_entry_texs(disguise_entry).get("albedo", ""))
+		if not disguise_albedo.ends_with("T_Decal_Footstep_Disguise.png"):
+			mat_fails.append("MI_Decal_TrailMarker_Footstep_Disguise albedo=" + disguise_albedo)
+		var glass_texs: Dictionary = _entry_texs(_material_entry_ending_with(mats_doc, "MI_GlassPanels_oldmanor"))
+		var glass_expect: Dictionary = {
+			"albedo": "WindowPanels_Oldmanor_D.png",
+			"normal": "WindowPanels_Oldmanor_N.png",
+			"opacity": "WindowPanels_Oldmanor_O.png",
+			"orm": "WindowPanels_Oldmanor_ORM.png",
+		}
+		for glass_slot: Variant in glass_expect.keys():
+			var glass_got: String = str(glass_texs.get(str(glass_slot), ""))
+			if not glass_got.ends_with(str(glass_expect[glass_slot])):
+				mat_fails.append("MI_GlassPanels_oldmanor " + str(glass_slot) + "=" + glass_got)
+		var fallback_expect: Dictionary = {
+			"MI_TrimMetalA_brass_dark": "T_TrimMetalA_D.png",
+			"MI_ManorPanels_Dark": "T_ManorPanels_D.png",
+			"MI_PlasterSmoothD": "T_Plaster_D.png",
+			"MI_WoodBoardsOld": "T_WoodBoardsA_D.png",
+			"MI_WallMoldingTrimA_Dark": "T_WallMoldingTrimA_D.png",
+			"MI_OldManorStone_exterior": "T_WallStoneManorA_D.png",
+			"MI_StoreFrontWoodTile": "StorefrontWoodTile_D.png",
+			"MI_TrimFabricFancyA_Default": "TrimFabricFancyA_D.png",
+			"MI_OldBricksB": "T_OldBricksB_D.png",
+		}
+		for fallback_suffix: Variant in fallback_expect.keys():
+			var fallback_albedo: String = str(_entry_texs(_material_entry_ending_with(mats_doc, str(fallback_suffix))).get("albedo", ""))
+			if not fallback_albedo.ends_with(str(fallback_expect[fallback_suffix])):
+				mat_fails.append(str(fallback_suffix) + " albedo=" + fallback_albedo)
+		var glass_panels_albedo: String = str(_entry_texs(_material_entry_ending_with(mats_doc, "M_GlassPanels")).get("albedo", ""))
+		if not glass_panels_albedo.contains("/Glass/") or not glass_panels_albedo.ends_with("WindowPanel_D.png"):
+			mat_fails.append("M_GlassPanels albedo=" + glass_panels_albedo)
+		var emissive_expect: Array[String] = ["M_EmissiveBase", "MI_EmissiveShape", "MI_MoonshapeEmissive"]
+		for emissive_suffix: String in emissive_expect:
+			var emissive_albedo: String = str(_entry_texs(_material_entry_ending_with(mats_doc, emissive_suffix)).get("albedo", ""))
+			if emissive_albedo.contains("T_Carpet"):
+				mat_fails.append(emissive_suffix + " albedo=" + emissive_albedo)
+		var brass_entry: Dictionary = _material_entry_ending_with(mats_doc, "MI_TrimMetalA_brass")
+		var brass_vectors_v: Variant = brass_entry.get("vectors", null)
+		var brass_overlay: Array = []
+		if brass_vectors_v is Dictionary:
+			var brass_overlay_v: Variant = (brass_vectors_v as Dictionary).get("Overlay", null)
+			if brass_overlay_v is Array:
+				brass_overlay = brass_overlay_v as Array
+		var brass_want: Array = [0.2135, 0.1995, 0.1902]
+		var brass_ok: bool = brass_overlay.size() >= brass_want.size()
+		if brass_ok:
+			for bi: int in range(brass_want.size()):
+				if absf(float(brass_overlay[bi]) - float(brass_want[bi])) > 1e-4:
+					brass_ok = false
+		if not brass_ok:
+			mat_fails.append("MI_TrimMetalA_brass vectors.Overlay=" + str(brass_overlay))
+		var mats_total: int = mats_doc.size()
+		var albedo_count: int = 0
+		var map_albedo_bad: Array[String] = []
+		var eye_albedo_bad: Array[String] = []
+		var glass_albedo_bad: Array[String] = []
+		for mat_key: Variant in mats_doc.keys():
+			var key_s: String = str(mat_key)
+			var entry_v: Variant = mats_doc[mat_key]
+			var texs: Dictionary = {}
+			if entry_v is Dictionary:
+				texs = _entry_texs(entry_v as Dictionary)
+			var albedo: String = str(texs.get("albedo", ""))
+			if albedo != "":
+				albedo_count += 1
+			var is_ui: bool = key_s.contains("/UI/") or key_s.contains("MI_UI") or key_s.contains("M_UI")
+			if not is_ui and albedo.contains("T_MapBuilding_"):
+				map_albedo_bad.append(key_s)
+			var is_character: bool = key_s.contains("/Character/") or key_s.contains("EyeLibrary") or key_s.contains("Eye")
+			if not is_character and albedo.contains("T_Eye_"):
+				eye_albedo_bad.append(key_s)
+			if key_s.contains("/Glass/") and albedo != "":
+				# Authored glass stems may live outside /Glass/ (e.g. car glass).
+				# Light fixtures stored under Glass/Opaque (DisplayLight, GlassBulb)
+				# legitimately use light-emission textures instead of glass.
+				var glass_name: String = key_s.get_file().to_lower()
+				var is_light_fixture: bool = glass_name.contains("light") or glass_name.contains("bulb")
+				if not is_light_fixture and not albedo.contains("/Glass/") and not albedo.get_file().to_lower().contains("glass"):
+					glass_albedo_bad.append(key_s + " -> " + albedo)
+		if not map_albedo_bad.is_empty():
+			mat_fails.append("non-UI materials with map albedo: " + str(map_albedo_bad.slice(0, 5)))
+		if not eye_albedo_bad.is_empty():
+			mat_fails.append("non-character materials with eye albedo: " + str(eye_albedo_bad.slice(0, 5)))
+		if not glass_albedo_bad.is_empty():
+			mat_fails.append("glass materials with non-glass albedo: " + str(glass_albedo_bad.slice(0, 5)))
+		if mats_total <= 1500:
+			mat_fails.append("material count " + str(mats_total) + " <= 1500")
+		if albedo_count <= 1000:
+			mat_fails.append("albedo count " + str(albedo_count) + " <= 1000")
+		if mat_fails.is_empty():
+			print("PASS: materials.json bindings (", mats_total, " materials, ", albedo_count, " with albedo; footstep/disguise/glass/brass/fallback families authored, 0 map/eye/glass leaks)")
+		else:
+			for mat_fail: String in mat_fails:
+				printerr("FAIL: material binding: ", mat_fail)
+			fails += 1
+
 	print("SUMMARY: fails=", fails)
 	quit(0 if fails == 0 else 1)
 
@@ -1569,3 +1690,21 @@ func _curve_keys(rel_path: String) -> Array:
 	if not (keys_v is Array):
 		return []
 	return keys_v as Array
+
+
+## Returns the first materials.json entry whose /Game/... key ends with `suffix`.
+func _material_entry_ending_with(mat_doc: Dictionary, suffix: String) -> Dictionary:
+	for mat_key: Variant in mat_doc.keys():
+		if str(mat_key).ends_with(suffix):
+			var entry_v: Variant = mat_doc[mat_key]
+			if entry_v is Dictionary:
+				return entry_v as Dictionary
+	return {}
+
+
+## Returns the `texs` dictionary of a materials.json entry (empty if absent).
+func _entry_texs(entry: Dictionary) -> Dictionary:
+	var texs_v: Variant = entry.get("texs", null)
+	if texs_v is Dictionary:
+		return texs_v as Dictionary
+	return {}

@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Build game/data/generated/materials.json from extracted MI_*/M_* JSONs and PNGs.
+"""Build game/data/generated/materials.json from extracted material JSONs and PNGs.
+
+Material assets are discovered by name (``MI_*``/``M_*``, ``*_MI``/``*_MI8``)
+and by path (``MaterialLibrary``/``Developers``), then accepted only when the
+dump's ``Type`` is ``Material``, ``MaterialInstanceConstant`` or
+``MaterialInstance``.
 
 UE -> Godot (StandardMaterial3D) parameter mapping used here and in
 ``game/src/core/level_loader.gd::get_material_for_ue()``:
@@ -56,6 +61,188 @@ def ue_to_res_png(obj_path: str) -> str:
 
 
 DIFFUSE_SUFFIXES = ("_d", "_da", "_bc", "_bco", "_c", "_alb", "_basecolor", "_diffuse")
+
+MATERIAL_TYPES = ("Material", "MaterialInstanceConstant", "MaterialInstance")
+
+# Strong family words anchor a candidate even when its stem is named differently
+# (e.g. /Glass/WindowPanel_D belongs to the glass family).
+STRONG_FAMILIES = (
+    "glass",
+    "metal",
+    "brass",
+    "bronze",
+    "iron",
+    "steel",
+    "wood",
+    "plank",
+    "board",
+    "stone",
+    "rock",
+    "marble",
+    "plaster",
+    "ceramic",
+    "brick",
+    "fabric",
+    "roof",
+)
+
+# Material-package categories used when no strong family word applies.
+PATH_CATEGORIES = (
+    "Wood",
+    "Stone",
+    "Metal",
+    "Plaster",
+    "Brick",
+    "Roof",
+    "Glass",
+    "Fabric",
+    "Character",
+)
+
+
+def _is_material_candidate(jf: Path) -> bool:
+    """Cheap pre-filter so huge level JSONs are never parsed as materials."""
+    name = jf.stem
+    if name.startswith(("MI_", "M_")):
+        return True
+    if name.endswith(("_MI", "_MI8")):
+        return True
+    return "MaterialLibrary" in str(jf.parent) or "Developers" in str(jf.parent)
+
+
+def _is_ui_or_map_stem(low: str) -> bool:
+    """UI/map art must never dress 3D geometry."""
+    return (
+        "mapbuilding" in low
+        or low.startswith("t_map")
+        or "poster" in low
+        or "icon" in low
+        or "glyph" in low
+        or "logo" in low
+        or "ui_" in low
+        or "hud_" in low
+    )
+
+
+def _is_eye_stem(low: str) -> bool:
+    return low.startswith("t_eye")
+
+
+def _is_character_context(mat_name: str, pkg: str) -> bool:
+    return (
+        "/character/" in pkg.lower()
+        or "eyelibrary" in pkg.lower()
+        or "eye" in mat_name.lower()
+    )
+
+
+def _family_words(mat_name: str) -> list:
+    low: str = mat_name.lower()
+    return [w for w in STRONG_FAMILIES if w in low]
+
+
+def _path_category(pkg: str) -> str:
+    parts = {p.lower() for p in pkg.split("/")}
+    for cat in PATH_CATEGORIES:
+        if cat.lower() in parts:
+            return cat
+    return ""
+
+
+def _candidate_score(
+    res_path: str, tokens: list, family_words: list, path_category: str
+) -> tuple:
+    """Comparable (family_hit, path_hit, token_score, -stem_len).
+
+    ``family_hit`` and ``path_hit`` inspect the full res path so a texture's
+    folder (``/Glass/``) anchors it even when its stem has no family word.
+    """
+    stem: str = Path(res_path).stem.lower()
+    hay: str = res_path.lower()
+    family_hit: int = 1 if any(w in hay for w in family_words) else 0
+    path_hit: int = 1 if path_category and path_category.lower() in hay else 0
+    token_score: int = sum(len(tok) for tok in tokens if tok in stem)
+    return (family_hit, path_hit, token_score, -len(stem))
+
+
+def _is_albedo_stem(low: str, allow_ui_map: bool = False) -> bool:
+    if not low.endswith(DIFFUSE_SUFFIXES):
+        return False
+    if not allow_ui_map and _is_ui_or_map_stem(low):
+        return False
+    if low.endswith(("_ma", "_mask", "_ao", "_e")):
+        return False
+    return not any(
+        k in low
+        for k in ("paintstroke", "grunge", "noise", "default", "black", "white")
+    )
+
+
+def _best_albedo_candidate(
+    res_paths,
+    tokens: list,
+    family_words: list,
+    path_category: str,
+    is_character: bool,
+    allow_unsignalled: bool = False,
+    allow_ui_map: bool = False,
+) -> str:
+    needs_anchor: bool = bool(family_words) or (
+        path_category != "" and path_category != "Character"
+    )
+    best: str = ""
+    best_score: tuple | None = None
+    for res in res_paths:
+        low: str = Path(res).stem.lower()
+        if not _is_albedo_stem(low, allow_ui_map):
+            continue
+        if _is_eye_stem(low) and not is_character:
+            continue
+        score: tuple = _candidate_score(res, tokens, family_words, path_category)
+        if not allow_unsignalled:
+            if score[0] == 0 and score[1] == 0 and score[2] <= 0:
+                continue
+            # F2: a categorised material must not borrow a cross-category
+            # texture; leave it untextured instead of inventing a binding.
+            if needs_anchor and score[0] == 0 and score[1] == 0:
+                continue
+        if best_score is None or score > best_score:
+            best = res
+            best_score = score
+    return best
+
+
+def _best_texture_candidate(
+    res_paths,
+    suffixes: tuple,
+    tokens: list,
+    family_words: list,
+    path_category: str,
+    is_character: bool,
+    allow_ui_map: bool = False,
+) -> str:
+    """Best normal/ORM candidate, falling back to the first when unsignalled."""
+    first: str = ""
+    best: str = ""
+    best_score: tuple | None = None
+    for res in res_paths:
+        low: str = Path(res).stem.lower()
+        if not low.endswith(suffixes):
+            continue
+        if not allow_ui_map and _is_ui_or_map_stem(low):
+            continue
+        if _is_eye_stem(low) and not is_character:
+            continue
+        if first == "":
+            first = res
+        score: tuple = _candidate_score(res, tokens, family_words, path_category)
+        if score[0] == 0 and score[1] == 0 and score[2] <= 0:
+            continue
+        if best_score is None or score > best_score:
+            best = res
+            best_score = score
+    return best if best != "" else first
+
 
 # Category -> candidate texture stems (lowercase, verified against extracted Raw set).
 CATEGORY_FALLBACK_STEMS = {
@@ -170,18 +357,90 @@ def _strip_material_base(mat_name: str) -> str:
     return base
 
 
+TOKEN_DROP = {
+    "mi",
+    "m",
+    "ml",
+    "inst",
+    "instance",
+    "d",
+    "da",
+    "bc",
+    "bco",
+    "c",
+    "alb",
+    "default",
+    "base",
+    "black",
+    "white",
+    "blue",
+    "red",
+    "green",
+    "yellow",
+    "orange",
+    "purple",
+    "teal",
+    "cream",
+    "grey",
+    "gray",
+    "pink",
+    "cyan",
+    "magenta",
+    "dark",
+    "light",
+    "bright",
+    "old",
+    "new",
+    "smooth",
+    "rough",
+    "dirty",
+    "clean",
+    "worn",
+    "alt",
+    "variant",
+    "var",
+}
+
+
+def _diffuse_tokens(mat_name: str) -> list:
+    """Family tokens from the material stem, for scoring diffuse candidates.
+
+    Combines underscore-separated tokens with CamelCase words so
+    ``MI_PlasterSmoothD`` yields ``plaster`` while modifier words such as
+    ``dark``/``old``/``smooth`` never vote for an unrelated texture family.
+    """
+    base: str = _strip_material_base(mat_name)
+    underscored: list = re.split(r"[^a-z0-9]+", base)
+    camel: str = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", mat_name)
+    camel = re.sub(r"(?<=[A-Z])(?=[A-Z][a-z])", " ", camel)
+    camel_words: list = re.split(r"[^A-Za-z0-9]+", camel.lower())
+    tokens: list = []
+    for tok in underscored + camel_words:
+        if len(tok) < 4 or tok in TOKEN_DROP or tok in tokens:
+            continue
+        tokens.append(tok)
+    return tokens
+
+
 def _stem_fallback_albedo(
     mat_name: str, pkg: str, parent: str, tex_by_stem: dict
 ) -> str:
     base: str = _strip_material_base(mat_name)
     if base == "":
         return ""
+    is_character: bool = _is_character_context(mat_name, pkg)
+    tokens: list = _diffuse_tokens(mat_name)
+    family_words: list = _family_words(mat_name)
+    path_category: str = _path_category(pkg)
+    allow_ui_map: bool = "/ui/" in pkg.lower() or "/map/" in pkg.lower()
     # 1) Direct stem match: look for diffuse textures whose stem mentions the base.
     best: str = ""
     best_len: int = 10_000
     for tstem, res in tex_by_stem.items():
         low: str = tstem.lower()
-        if not low.endswith(DIFFUSE_SUFFIXES):
+        if not _is_albedo_stem(low, allow_ui_map):
+            continue
+        if _is_eye_stem(low) and not is_character:
             continue
         if base in low or low in ("t_" + base + "_d", "t_" + base + "_bc"):
             if len(low) < best_len:
@@ -189,16 +448,19 @@ def _stem_fallback_albedo(
                 best_len = len(low)
     if best != "":
         return best
-    # Token match: any underscore-separated token of base inside a diffuse stem.
-    tokens: list = [t for t in re.split(r"[^a-z0-9]+", base) if len(t) >= 4]
-    for tstem, res in tex_by_stem.items():
-        low2: str = tstem.lower()
-        if not low2.endswith(DIFFUSE_SUFFIXES):
-            continue
-        for tok in tokens:
-            if tok in low2:
-                return res
-    # 2) Category fallback: material/pkg/parent name mentions Brick/Stone/Wood/etc.
+    # 2) Rank every diffuse candidate by family anchor, path category, tokens
+    # and stem specificity. Candidates with no signal at all are rejected.
+    best_res: str = _best_albedo_candidate(
+        tex_by_stem.values(),
+        tokens,
+        family_words,
+        path_category,
+        is_character,
+        allow_ui_map=allow_ui_map,
+    )
+    if best_res != "":
+        return best_res
+    # 3) Category fallback: material/pkg/parent name mentions Brick/Stone/Wood/etc.
     hay: str = (mat_name + " " + pkg + " " + parent).lower()
     for cat, stems in CATEGORY_FALLBACK_STEMS.items():
         if cat in hay:
@@ -223,8 +485,7 @@ def main():
 
     raw_mats = {}
     for jf in EX_JSON.rglob("*.json"):
-        name = jf.stem
-        if not (name.startswith("MI_") or name.startswith("M_")):
+        if not _is_material_candidate(jf):
             continue
         try:
             exps = json.loads(jf.read_text())
@@ -233,6 +494,9 @@ def main():
         if not isinstance(exps, list) or not exps:
             continue
         exp = exps[0]
+        if exp.get("Type") not in MATERIAL_TYPES:
+            continue
+        name = jf.stem
         props = exp.get("Properties") or {}
         pkg = exp.get("Package") or (
             "/Game/" + str(jf.relative_to(EX_JSON).with_suffix(""))
@@ -281,6 +545,8 @@ def main():
             elif "emissive" in pname or stem.endswith("_e"):
                 if "black" not in stem and not name.startswith("M_Env"):
                     texs.setdefault("emissive", tpath)
+            elif "opacity" in pname or stem.endswith(("_o", "_opacity")):
+                texs.setdefault("opacity", tpath)
             elif not is_mask and (
                 any(
                     k in pname
@@ -294,42 +560,95 @@ def main():
                         "base texture",
                     )
                 )
+                or pname == "texture"
                 or stem.endswith(("_d", "_da", "_bc", "_bco", "_c", "_alb"))
             ):
                 texs.setdefault("albedo", tpath)
 
         # Fallback: UE5 MaterialLayers store used textures in TextureStreamingData and CachedExpressionData.ReferencedTextures
-        extra_paths = []
+        stream_paths = []
         for tsd in props.get("TextureStreamingData") or []:
             tn = (tsd.get("TextureName") or "").lower()
             if tn and tn in tex_by_stem:
-                extra_paths.append(tex_by_stem[tn])
+                stream_paths.append(tex_by_stem[tn])
+        ref_paths = []
         for rt in (exp.get("CachedExpressionData") or {}).get(
             "ReferencedTextures"
         ) or []:
             if isinstance(rt, dict):
                 tp = ue_to_res_png(rt.get("ObjectPath") or "")
                 if tp:
-                    extra_paths.append(tp)
-        for tpath in extra_paths:
-            stem = Path(tpath).stem.lower()
-            if stem.endswith(("_ma", "_mask", "_ao", "_e")) or any(
-                k in stem
-                for k in ("paintstroke", "grunge", "noise", "default", "black", "white")
-            ):
-                continue
-            if stem.endswith(("_n", "_nm")):
-                texs.setdefault("normal", tpath)
-            elif stem.endswith(("_orm", "_ormm", "_arm")):
-                texs.setdefault("orm", tpath)
-            elif stem.endswith(("_d", "_da", "_bc", "_bco", "_c", "_alb")):
-                texs.setdefault("albedo", tpath)
-        # Stem-based fallback: strip MI_/M_/Inst and search indexed Raw diffuse
-        # textures; then fall back to category textures (Brick/Stone/Wood/...).
+                    ref_paths.append(tp)
+        tokens: list = _diffuse_tokens(name)
+        family_words: list = _family_words(name)
+        path_category: str = _path_category(pkg)
+        is_character: bool = _is_character_context(name, pkg)
+        allow_ui_map: bool = "/ui/" in pkg.lower() or "/map/" in pkg.lower()
+        extra_paths = stream_paths + ref_paths
+        if "normal" not in texs:
+            normal_pick: str = _best_texture_candidate(
+                extra_paths,
+                ("_n", "_nm"),
+                tokens,
+                family_words,
+                path_category,
+                is_character,
+                allow_ui_map,
+            )
+            if normal_pick != "":
+                texs["normal"] = normal_pick
+        if "orm" not in texs:
+            orm_pick: str = _best_texture_candidate(
+                extra_paths,
+                ("_orm", "_ormm", "_arm"),
+                tokens,
+                family_words,
+                path_category,
+                is_character,
+                allow_ui_map,
+            )
+            if orm_pick != "":
+                texs["orm"] = orm_pick
+        # Albedo: TextureStreamingData is a used-texture list, not array-first.
+        # Rank every candidate by family anchor, path category, tokens and stem
+        # specificity. A signal-less stream pick is ignored (F4) except for
+        # Character materials, whose cooked metal/glass TSDs are authored truth.
         if "albedo" not in texs:
+            stream_pick: str = _best_albedo_candidate(
+                stream_paths,
+                tokens,
+                family_words,
+                path_category,
+                is_character,
+                allow_unsignalled=(path_category == "Character"),
+                allow_ui_map=allow_ui_map,
+            )
+            if stream_pick == "":
+                # A single authored stream diffuse is not an arbitrary pick;
+                # trust it even when its name shares no token with the material.
+                unique_stream: list = []
+                for res in stream_paths:
+                    low: str = Path(res).stem.lower()
+                    if not _is_albedo_stem(low, allow_ui_map):
+                        continue
+                    if _is_eye_stem(low) and not is_character:
+                        continue
+                    if res not in unique_stream:
+                        unique_stream.append(res)
+                if len(unique_stream) == 1:
+                    stream_pick = unique_stream[0]
             fb: str = _stem_fallback_albedo(name, pkg, parent, tex_by_stem)
-            if fb != "":
-                texs["albedo"] = fb
+            ref_pick: str = _best_albedo_candidate(
+                ref_paths,
+                tokens,
+                family_words,
+                path_category,
+                is_character,
+                allow_ui_map=allow_ui_map,
+            )
+            pick: str = stream_pick or fb or ref_pick
+            if pick != "":
+                texs["albedo"] = pick
         tint = None
         for vv in props.get("VectorParameterValues") or []:
             pinfo = vv.get("ParameterInfo") or {}

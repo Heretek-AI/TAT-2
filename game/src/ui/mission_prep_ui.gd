@@ -39,6 +39,8 @@ const LOCATION_ART_MAP: Dictionary = {
 	"thieves_den": "res://assets/ue/Raw/Art/UI/Shell/SplashScreen/T_loadingScreen_2.png",
 }
 
+const LevelLoaderScript: GDScript = preload("res://src/core/level_loader.gd")
+
 var map_id: String = "old_manor"
 var difficulty: int = 1
 var mode: String = "Solo"
@@ -58,6 +60,7 @@ var _contract_body: Label
 var _controls_lbl: Label
 var _thief_body_node: Node = null
 var _thief_head_node: Node = null
+var _mat_loader: Node = null
 
 
 func _ready() -> void:
@@ -411,6 +414,7 @@ func _add_thief(anchor: Node3D) -> void:
 			var body_node: Node = (body_res as PackedScene).instantiate()
 			_thief_body_node = body_node
 			anchor.add_child(body_node)
+			_bind_preview_character_materials(body_node, _glb_to_ue_mesh(body_path))
 		else:
 			_add_placeholder_body(anchor)
 	else:
@@ -422,6 +426,7 @@ func _add_thief(anchor: Node3D) -> void:
 			_thief_head_node = head_node
 			head_node.position = Vector3.ZERO
 			anchor.add_child(head_node)
+			_bind_preview_character_materials(head_node, _glb_to_ue_mesh(head_path))
 		else:
 			_add_placeholder_head(anchor)
 	else:
@@ -481,6 +486,64 @@ func _first_existing(paths: Array[String]) -> String:
 		if ResourceLoader.exists(p) or FileAccess.file_exists(p):
 			return p
 	return ""
+
+
+## Maps a res:// GLB path under assets/ue/Content to its UE package key,
+## so mesh_materials.json can be looked up without a second table.
+func _glb_to_ue_mesh(res_path: String) -> String:
+	var marker: String = "assets/ue/Content/"
+	var idx: int = res_path.find(marker)
+	if idx < 0:
+		return ""
+	var rel: String = res_path.substr(idx + marker.length())
+	if rel.ends_with(".glb"):
+		rel = rel.substr(0, rel.length() - 4)
+	return "/Game/" + rel
+
+
+## Lazily creates the LevelLoader used only as a material resolver for the
+## preview character. Its _ready() loads materials.json + mesh_materials.json;
+## no level is loaded through it.
+func _get_preview_mat_loader() -> Node:
+	if _mat_loader == null:
+		_mat_loader = LevelLoaderScript.new()
+		add_child(_mat_loader)
+	return _mat_loader
+
+
+## Binds authored PBR materials onto an instantiated character GLB by its
+## GLB primitive-order slots (mesh_materials.json). Surfaces are overridden,
+## not the shared mesh resource, so the GLB import cache stays immutable.
+func _bind_preview_character_materials(root: Node, ue_mesh_path: String) -> void:
+	if root == null or ue_mesh_path == "":
+		return
+	var loader: Node = _get_preview_mat_loader()
+	if loader == null:
+		return
+	var db: Dictionary = loader.get("_mesh_mats_db") as Dictionary
+	var slots_v: Variant = db.get(ue_mesh_path, null) if db != null else null
+	if not (slots_v is Array):
+		var db_low: Dictionary = loader.get("_mesh_mats_db_lower") as Dictionary
+		slots_v = db_low.get(ue_mesh_path.to_lower(), null) if db_low != null else null
+	if not (slots_v is Array):
+		return
+	_bind_preview_meshes(root, loader, slots_v as Array)
+
+
+func _bind_preview_meshes(node: Node, loader: Node, slots: Array) -> void:
+	if node is MeshInstance3D:
+		var mi: MeshInstance3D = node as MeshInstance3D
+		if mi.mesh != null:
+			var count: int = mini(mi.mesh.get_surface_count(), slots.size())
+			for s: int in range(count):
+				var mat_path: String = str(slots[s])
+				if mat_path == "":
+					continue
+				var mat: Material = loader.call("get_material_for_ue", mat_path) as Material
+				if mat != null:
+					mi.set_surface_override_material(s, mat)
+	for child: Node in node.get_children():
+		_bind_preview_meshes(child, loader, slots)
 
 
 func _load_ui_tex(path: String) -> Texture2D:

@@ -2768,13 +2768,29 @@ func _initialize() -> void:
 	mp_ui.call("open_prep", "guildhall", 1, "Solo", 0)
 	var mp_gh_ok: bool = mp_loc_art != null and mp_loc_art.texture != null \
 		and mp_mis_ico != null and mp_mis_ico.texture != null
+	var mp_body_node: Node = mp_ui.get("_thief_body_node") as Node
+	var mp_head_node: Node = mp_ui.get("_thief_head_node") as Node
+	var mp_body_mi: MeshInstance3D = _find_first_mesh_instance(mp_body_node)
+	var mp_head_mi: MeshInstance3D = _find_first_mesh_instance(mp_head_node)
+	var mp_body_mat: StandardMaterial3D = null
+	var mp_head_mat: StandardMaterial3D = null
+	var mp_head_glass: Material = mp_head_mi.get_surface_override_material(1) if mp_head_mi != null and mp_head_mi.mesh != null and mp_head_mi.mesh.get_surface_count() > 1 else null
+	if mp_body_mi != null and mp_body_mi.mesh != null and mp_body_mi.mesh.get_surface_count() > 2:
+		mp_body_mat = mp_body_mi.get_surface_override_material(2) as StandardMaterial3D
+	if mp_head_mi != null and mp_head_mi.mesh != null and mp_head_mi.mesh.get_surface_count() > 2:
+		mp_head_mat = mp_head_mi.get_surface_override_material(2) as StandardMaterial3D
+	var mp_mats_ok: bool = mp_body_mat != null and mp_body_mat.albedo_texture != null \
+		and mp_body_mat.albedo_texture.resource_path.find("T_ThiefNisha_Body_D") >= 0 \
+		and mp_head_mat != null and mp_head_mat.albedo_texture != null \
+		and mp_head_mat.albedo_texture.resource_path.find("T_ThiefNisha_Head_D") >= 0 \
+		and (mp_head_glass is ShaderMaterial)
 	mp_ui.queue_free()
 	await process_frame
-	if all_mis_cnt != 11 or not mp_om_ok or not mp_gh_ok:
-		printerr("FAIL: 35c Mission Prep (rows=", all_mis_cnt, " om_ok=", mp_om_ok, " gh_ok=", mp_gh_ok, ")")
+	if all_mis_cnt != 11 or not mp_om_ok or not mp_gh_ok or not mp_mats_ok:
+		printerr("FAIL: 35c Mission Prep (rows=", all_mis_cnt, " om_ok=", mp_om_ok, " gh_ok=", mp_gh_ok, " preview_pbr=", mp_mats_ok, " head_glass=", mp_head_glass is ShaderMaterial, ")")
 		fails += 1
 	else:
-		print("PASS: 35c Mission Prep loaded all ", all_mis_cnt, " CDT_Missions rows with real location artwork & objective icons")
+		print("PASS: 35c Mission Prep loaded all ", all_mis_cnt, " CDT_Missions rows with real artwork, icons & preview PBR")
 
 	# 36. Light-probe authored-light retune: the authored median light (UE
 	# Intensity 15 -> energy 1.0 after the linear 1/15 lighting scale) must
@@ -2873,6 +2889,20 @@ func _initialize() -> void:
 
 	print("SUMMARY: fails=", fails)
 	quit(0 if fails == 0 else 1)
+
+
+## Returns the first MeshInstance3D at or below `node` (null when absent).
+## Test-only: the imported character GLBs wrap the mesh in a skeleton root.
+func _find_first_mesh_instance(node: Node) -> MeshInstance3D:
+	if node == null:
+		return null
+	if node is MeshInstance3D:
+		return node as MeshInstance3D
+	for child: Node in node.get_children():
+		var found: MeshInstance3D = _find_first_mesh_instance(child)
+		if found != null:
+			return found
+	return null
 
 
 func _authored_row_value(rows: Dictionary, row: String, field_path: Array[String]) -> float:

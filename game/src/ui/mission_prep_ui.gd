@@ -140,7 +140,7 @@ func _build_all() -> void:
 	var viewport: SubViewport = SubViewport.new()
 	viewport.own_world_3d = true
 	viewport.size = Vector2i(1280, 720)
-	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	viewport.render_target_update_mode = SubViewport.UPDATE_WHEN_VISIBLE
 	stage_box.add_child(viewport)
 	_build_stage(viewport)
 

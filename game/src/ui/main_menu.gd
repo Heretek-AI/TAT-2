@@ -63,7 +63,7 @@ func _build_3d_backdrop() -> void:
 	var vp := SubViewport.new()
 	vp.own_world_3d = true
 	vp.scaling_3d_scale = 0.75
-	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	vp.render_target_update_mode = SubViewport.UPDATE_WHEN_VISIBLE
 	svc.add_child(vp)
 
 	var scene_root := Node3D.new()

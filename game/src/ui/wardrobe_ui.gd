@@ -248,7 +248,7 @@ func _build_left_panel() -> VBoxContainer:
 	var sv: SubViewport = SubViewport.new()
 	sv.own_world_3d = true
 	sv.transparent_bg = false
-	sv.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	sv.render_target_update_mode = SubViewport.UPDATE_WHEN_VISIBLE
 	svc.add_child(sv)
 	_setup_preview_world(sv)
 	svc.gui_input.connect(_on_preview_gui_input)
@@ -289,7 +289,7 @@ func _build_left_panel() -> VBoxContainer:
 	var tool_sv: SubViewport = SubViewport.new()
 	tool_sv.own_world_3d = true
 	tool_sv.transparent_bg = false
-	tool_sv.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	tool_sv.render_target_update_mode = SubViewport.UPDATE_WHEN_VISIBLE
 	tool_svc.add_child(tool_sv)
 	_setup_tool_world(tool_sv)
 	var tool_vb: VBoxContainer = VBoxContainer.new()

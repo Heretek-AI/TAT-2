@@ -13,12 +13,12 @@ Source of truth: `/home/john/.local/share/Steam/steamapps/common/Thick As Thieve
 ## Verification (run these first)
 
 ```bash
-make test     # 36 numbered suites, must be SUMMARY: fails=0, zero SCRIPT ERROR
+make test     # 38 numbered suites, must be SUMMARY: fails=0, zero SCRIPT ERROR
 make audit    # manifest coverage, currently 99.4%
 make run      # desktop client; F3 overlay for FPS/draws/nodes
 ```
 
-Last verified (2026-11-18): **36 numbered suites (incl. 36/36b light-probe retune), `SUMMARY: fails=0`, zero `SCRIPT ERROR`** on headless `make test`; `make audit` **12,630 / 12,704 (99.4%)**. The earlier live Vulkan Forward+ run (`build/qa/make_test_vulkan_vf.log`, NVIDIA GeForce RTX 4070 Laptop GPU, **`SHADER ERROR = 0`**) covers the prior 35-suite wave, not the retune. Engine exit-time `ObjectDB/RID leaked` warnings after `SUMMARY` are pre-existing harness noise, not script errors.
+Last verified (2026-11-18): **38 numbered suites, `SUMMARY: fails=0`, zero `SCRIPT ERROR`** on headless `make test`; `make audit` **12,630 / 12,704 (99.4%)**, **files written 29,939**. Live Vulkan Forward+ captures (`bash build/qa/capture_vf.sh`, `bash build/qa/capture_mp_only.sh`; NVIDIA GeForce RTX 4070 Laptop GPU, **`SHADER ERROR = 0`**, **`SCRIPT ERROR = 0`**) cover the polish wave. Engine exit-time `ObjectDB/RID leaked` warnings after `SUMMARY` are pre-existing harness noise, not script errors.
 
 ## Repo / branch state
 
@@ -29,7 +29,7 @@ Last verified (2026-11-18): **36 numbered suites (incl. 36/36b light-probe retun
 ## What is done (verified)
 
 ### Extraction / asset pipeline
-- CUE4Parse extractor (`tools/tat-extract`) over `TAT/Content`: 13,162 packages, 2,045 GLB meshes, 2,227 PNG textures, 107 level dumps, 141 tables, 1,437 Blueprint/material-graph dumps.
+- CUE4Parse extractor (`tools/tat-extract`) over `TAT/Content`: 13,162 packages, 2,045 GLB meshes, 2,416 PNG textures (base 2,227 + startscreen/window-panel + 155 OldManor landscape), 107 level dumps, 141 tables, 1,437 Blueprint/material-graph dumps.
 - **995 animation GLBs** (`game/assets/ue/Anims/...`, `game/data/generated/anims_manifest.json`) via USD + headless Blender (`tools/usd_to_gltf.py`); ACL natives built for Linux (`tools/tat-extract/native/linux-x64/`). 14 `UBlendSpace` graphs unsupported (parametric, not keyframed).
 - **Weather / sky / moon**: 16 `BP_WeatherPreset_*` -> `game/data/generated/weather/` with map provenance; the parser walks the Blueprint `Super`/`Template` chain so child presets inherit authored values, and HDR `LinearColor` is preserved. Applied to Environment/moon/fog/post-process; `T_Moon_D.png` is hemisphere-projected by `tat_sky.gdshader`; `midnight_clear` moon diameter is `8.2718°` from `SM_Moon` geometry (`10771.60558231864 cm` at `1469413 cm`); `sky.overall_color` (`0.001`) multiplies the gradient; `fog_sky_affect = 0`; the disc uses the authored emissive tint. Report: `docs/reports/sky-moon.md`.
 - **Materials**: 1,552 materials with real scalar/vector/static-switch/blend/two-sided/phys material (`tools/parse_materials.py`); art-direction overrides preserved.
@@ -48,9 +48,20 @@ Last verified (2026-11-18): **36 numbered suites (incl. 36/36b light-probe retun
 - Contract titles: missing string-table titles fall back to `Contract N — <quest item>` (e.g. `Contract 3 — Mary Elway's Papers`).
 - Guildhall safe-room overhang: closed in `badf7d5`. Landscape component scale is no longer clamped to `0.4x` (63 m tiles stay 63 m, closing the 37.8 m void gap under the alley), wall lights resolve their Blueprint `Template` chain transforms so `BP_WallLightB_C_5` aims into the safe room, and the authored `88` degree spot cone is preserved. Report: `docs/reports/lighting-overhang.md`.
 
+### Visual polish (2026-11-18)
+
+- Map table tokens `0.08 -> 0.24` uniform scale (`3448f82`; suite 34d asserts `0.24`, seated Y, authored materials; live `build/qa/vf_map_tokens_024.png`).
+- Authored HDR neon tints through unshaded `tat_hdr_emissive.gdshader` (`63ea64c`; `MI_Neon` `50/4.109/0.521`, `MI_Neon_MacNeish` `1.5/0.055/1.234`, `hdr_scale = clampf(4.0 / peak, 0.02, 1.0)`; suite 37 exact vectors, `0.08`/`1.0` scales, cache identity, `SM_NeonB`, negative controls; retained capture thin tubes `(255,183,101)`/`(255,157,84)`, before red blobs `(254,78,77)`/`(254,57,67)` measured at the time in the discarded run with no artifact retained; earlier `StandardMaterial3D`-emission approach discarded before commit).
+- Mission Prep ThiefNisha PBR (`1912d04`; one lazily created `LevelLoader` resolver, `mesh_materials.json` slots per surface; suite 35c body/head albedo + head glass `ShaderMaterial`; live `build/qa/vf_mission_prep.png` shows authored blue top/dark trousers/skin/hair).
+- OldManor_P landscape PNGs (`24abf18`; exact `OldManor_P` basename predicate; 155 PNGs = 101 heightmaps + 54 weightmaps, 135 references, 7 dual-weightmap components; suite 38 asserts 128 / 101 / 54 / 0 missing + real `_build_one_landscape()` build (`runtime build=1`); `build/qa/vf_old_manor.png` renders cleanly (terrain walk/collision not verified)). Report: `docs/reports/visual-polish.md`.
+
 ## Key commits (most recent first)
 
 ```
+24abf18 feat(extract): export OldManor_P landscape heightmaps and weightmaps
+1912d04 feat(ui): bind authored ThiefNisha PBR materials on Mission Prep preview
+63ea64c fix(materials): render authored HDR neon tints through an unshaded HDR pass
+3448f82 feat(den): scale map table tokens to UE reference framing
 277baba fix(stealth): retune light probe weights for linear light energies
 05e6d89 docs(qa): record live Vulkan visual-fidelity QA and polish UI framing
 2da2ebe feat(ui): wire Startscreen CineCamera, teal grouped Settings persistence, and Mission Prep artwork+DT_Missions
@@ -88,18 +99,16 @@ dba6988 fix(sky): restore authored night sky visibility and moon tint
 
 ## Next steps (priority)
 
-1. **Retune the light-probe stealth weights** for the linear `1/15` lighting energies (`game/src/stealth/light_probe.gd`) — **DONE 2026-11-18 (`277baba`)**. See `docs/reports/lighting-intensity.md` ("Stealth retune").
-2. **Visual-fidelity polish follow-ups** from live Vulkan QA (`docs/reports/visual-fidelity.md`):
-   - Bind authored ThiefNisha PBR textures onto the 3D preview character in `MissionPrepUI` (currently default untextured GLB surface).
-   - Scale map table miniature tokens (`SM_MapBuilding_OldManor`/`GuildHall`) from `0.08` to `~0.22–0.25` to match official UE framing (`Screenshot_20261118_002339.png`).
-   - Tune Startscreen upper neon arch CPD bloom intensity / tone mapping to match UE's tighter orange-gold neon tubes.
-3. **Extract remaining `OldManor_P` landscape PNGs** (128 components; `BeautifulCorner_Startscreen_P` 20 PNGs are already extracted in `8f07b7d`).
+1. **Light-probe stealth weights** — **DONE 2026-11-18 (`277baba`)**. See `docs/reports/lighting-intensity.md` ("Stealth retune").
+2. **Visual-fidelity polish follow-ups** — **DONE 2026-11-18** (`3448f82`, `1912d04`, `63ea64c`; `docs/reports/visual-polish.md`): Mission Prep preview PBR bound, map table tokens `0.08 -> 0.24`, Startscreen neon via unshaded HDR pass.
+3. **OldManor_P landscape PNGs** — **DONE 2026-11-18** (`24abf18`, suite 38, 155 PNGs; `docs/reports/visual-polish.md` + `docs/reports/landscape-weightmaps.md` "OldManor_P extraction"). Remaining landscape work is splines/grass runtime.
 4. **Niagara VFX remains blocked**: 120/120 systems use compiled VectorVM bytecode for spawn/lifetime/velocity and 91/139 resolved materials carry no texture. Only hand-match a specific system or decompile the VM; do not invent rates.
 5. **Android APK rebuild & profiling**: rebuild after runtime/shader changes (`make android-release`) and verify FPS/thermals on device.
+6. **Optional residual parity** (polish leftovers, low priority): Startscreen ambient/exposure match and neon core saturation vs UE's pale gold.
 
 ## Resume point (2026-11-18)
 
-The entire Visual-Fidelity Wave (Phases 1–3) is complete, verified on both headless `make test` and real RTX 4070 Vulkan Forward+ (`35` numbered suites, `SUMMARY: fails=0`, `SHADER ERROR = 0`, `SCRIPT ERROR = 0`, `make audit` `99.4%`), and documented in `docs/reports/visual-fidelity.md`. The light-probe stealth retune is also complete and verified (`277baba`, suites 36/36b, `36` suites `SUMMARY: fails=0`); see `docs/reports/lighting-intensity.md` ("Stealth retune"). Start next with item 2 (Mission Prep preview textures / Map Table token scale / Startscreen neon bloom), then item 3 (OldManor_P landscape PNGs).
+The visual-polish wave is complete (`3448f82`, `63ea64c`, `1912d04`, `24abf18`), verified on headless `make test` (`38` numbered suites, `SUMMARY: fails=0`, zero `SCRIPT ERROR`) and live RTX 4070 Vulkan Forward+ (`bash build/qa/capture_vf.sh`, `bash build/qa/capture_mp_only.sh`, `SHADER ERROR = 0`, `SCRIPT ERROR = 0`; `make audit` `12,630/12,704 (99.4%)`, `29,939` files written), and documented in `docs/reports/visual-polish.md` (with follow-up sections in `docs/reports/visual-fidelity.md` and `docs/reports/landscape-weightmaps.md`). Start next with Android rebuild/profiling and the Niagara hand-match/decompile decision; the only open visual-polish residuals are the optional Startscreen ambient/exposure and neon-core saturation notes; Niagara VFX and landscape splines/grass remain separate known limits.
 
 ## QA recipes / gotchas
 
@@ -122,12 +131,14 @@ The entire Visual-Fidelity Wave (Phases 1–3) is complete, verified on both hea
 - `game/src/core/level_loader.gd` — streaming/batching/culling/decals/volumes/doors/loot spawn arrays.
 - `game/src/missions/mission_controller.gd` — mission flow, spawns, weather/sky/rain, timers, spawn fallback.
 - `game/src/core/weather_profile.gd`, `weather_visuals.gd`, `src/core/tat_sky.gdshader` — atmosphere.
+- `game/src/core/tat_hdr_emissive.gdshader` — unshaded HDR neon pass.
+- `game/src/ui/mission_prep_ui.gd` — Mission Prep UI + ThiefNisha preview binding.
 - `game/src/player/thief_character.gd`, `src/ai/guard_ai.gd`, `src/ai/civilian_npc.gd` — actors.
 - `game/src/stealth/light_probe.gd`, `game/src/core/save_system.gd` — authored light/speed curves and XP progression.
 - `game/src/core/animation_library.gd` — GLB animation retargeting.
 - `game/src/interact/{world_pickup,loot_item,loot_container,swinging_door,lockable_door}.gd`.
 - `tools/parse_{tables,materials,weather,gameplay,interactables,loot,containers,spawners,vfx}.py`, `tools/tat-extract/`, `tools/convert_wwise.py`, `tools/usd_to_gltf.py`.
-- `game/tests/run_tests.gd` (26 suites), `docs/reports/`, `docs/FIDELITY_GAPS.md`.
+- `game/tests/run_tests.gd` (38 suites), `docs/reports/`, `docs/FIDELITY_GAPS.md`.
 
 ## Engineering conventions
 
@@ -146,6 +157,10 @@ The entire Visual-Fidelity Wave (Phases 1–3) is complete, verified on both hea
 5. **Contract 1 titles as `Contract 1`**: it has no contract string table, so the fallback's last branch fires. Expected; visible only if the HUD lists it as a contract (the Den HUD shows `Contract #1`).
 6. **Never commit `extension_api.json`**: it is a pre-existing untracked Godot API dump; only source/docs belong in commits.
 
+## Session log (2026-11-18) — visual polish wave
+
+Objective: close the three Phase 3 visual-fidelity follow-ups (Mission Prep preview PBR, map table token scale, Startscreen neon bloom) plus the OldManor_P landscape PNG gap. Files changed (code, already on `main`): `game/src/missions/mission_controller.gd`, `game/src/core/tat_hdr_emissive.gdshader` (new), `game/src/core/level_loader.gd`, `game/src/ui/mission_prep_ui.gd`, `game/tests/run_tests.gd` (suites 34d/35c/37/38), `tools/tat-extract/Exporter.cs`. Commits: `3448f82`, `63ea64c`, `1912d04`, `24abf18`. Tests/gates: `make test` `38` numbered suites `SUMMARY: fails=0`, zero `SCRIPT ERROR`, exit 0; `make audit` `12,630 / 12,704 (99.4%)`, files written `29,939`. Live Vulkan Forward+ (`bash build/qa/capture_vf.sh`, `bash build/qa/capture_mp_only.sh`; RTX 4070, `SHADER ERROR = 0`, `SCRIPT ERROR = 0`): neon retained capture thin tubes `(255,183,101)`/`(255,157,84)` (before red blobs `(254,78,77)`/`(254,57,67)` measured at the time in the discarded run, no artifact retained; earlier `StandardMaterial3D`-emission approach discarded before commit), `vf_mission_prep.png` (authored blue top/dark trousers/skin/hair), `vf_old_manor.png` (landscape builds, `runtime build=1`, renders cleanly; terrain walk/collision not verified), `vf_map_tokens_024.png` (0.24 tokens). Details: `docs/reports/visual-polish.md`.
+
 ## Session log (2026-11-18) — light-probe retune
 
 Objective: retune `game/src/stealth/light_probe.gd` for the linear `1/15` lighting energies. Files changed: `game/src/stealth/light_probe.gd`, `game/tests/run_tests.gd` (suites 36/36b). Tests/gates: `make test` `36` suites `SUMMARY: fails=0`, zero `SCRIPT ERROR`; `make audit` `12,630 / 12,704 (99.4%)`. Commit: `277baba fix(stealth): retune light probe weights for linear light energies`. Details: `docs/reports/lighting-intensity.md` ("Stealth retune").
@@ -163,7 +178,7 @@ Shipped 20 plan tasks in 17 commits, tree clean at `1a753da`. Each wave ran `mak
 
 ### Parked follow-ups (priority order)
 
-1. `tools/parse_tables.py:65` negates UE's `M[2][1]`, shearing 4,444 mesh instances. Fix + regenerate + re-verify positions in the suites.
-2. Light-probe stealth weights were tuned against the old inflated light energies; retune after the lighting wave.
-3. OldManor_P / BeautifulCorner_Startscreen_P landscape heightmaps and weightmaps were never extracted (`tools/tat-extract/Exporter.cs:166` filters on "Landscape").
-4. Niagara VFX still blocked on compiled VectorVM bytecode (120/120 systems).
+1. `tools/parse_tables.py` m12 sign shear — **DONE** `7458198` (correct literal + Gram-Schmidt; suite 27, 146,563 bases).
+2. Light-probe stealth weights — **DONE** `277baba` (suite 36/36b; `docs/reports/lighting-intensity.md`).
+3. OldManor_P landscape — **DONE** `24abf18` (155 files, suite 38); remaining landscape work is splines/grass runtime.
+4. Niagara VFX remains blocked on compiled VectorVM bytecode (120/120 systems).

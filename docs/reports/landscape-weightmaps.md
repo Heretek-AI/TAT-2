@@ -340,6 +340,8 @@ Same-code noise floor on flat patches of the courtyard pair:
 
 ### `OldManor_P` and `BeautifulCorner_Startscreen_P` still have no extracted landscape PNGs
 
+> **Superseded on 2026-11-18** — for Startscreen by `8f07b7d` (20 PNGs) and for `OldManor_P` by `24abf18` (155 PNGs; suite 38) — see `## OldManor_P extraction (2026-11-18)` below. The text that follows is the pre-extraction record.
+
 `tools/tat-extract/Exporter.cs:166` only exports `.umap` textures whose package path contains `"Landscape"`:
 
 ```csharp
@@ -390,3 +392,14 @@ bash build/qa/pixel_stats_landscape_noisefloor.sh
 ```
 
 The capture helper writes `build/qa/project.godot.bak`, appends the QA autostart contract, and restores the file in its `EXIT` trap. The `build/qa/*.py` and `build/qa/*.sh` helpers are temporary QA artifacts in the gitignored build tree. The reference images `lighting_after_sky.png` and `lighting_after_safe.png` are left untouched.
+
+## OldManor_P extraction (2026-11-18)
+
+The `OldManor_P` / `BeautifulCorner_Startscreen_P` gap in "Caveats & follow-ups" above is now fully resolved: Startscreen by `8f07b7d` (20 PNGs = 1 heightmap + 19 weightmaps; all 64 component references resolve) and OldManor by `24abf18` (155 PNGs = 101 heightmaps + 54 weightmaps), which adds the exact `OldManor_P` basename to the `.umap` textures predicate (`tools/tat-extract/Exporter.cs`).
+
+- **Predicate change**: exact `OldManor_P` basename match in the `.umap` textures predicate (Startscreen was already extracted; no widening to all `.uasset` textures).
+- **Counts**: `155` PNGs written (`101` heightmaps + `54` weightmaps; `135` weightmap references, `7` components with two weightmaps).
+- **Tests**: suite `38` asserts `128` components / `101` / `54` / `0` missing and a real `_build_one_landscape()` build.
+- **Commit**: `24abf18 feat(extract): export OldManor_P landscape heightmaps and weightmaps`.
+- **Live evidence**: Old Manor landscape builds (one component exercised by suite 38; all 128 heightmap paths present); `build/qa/vf_old_manor.png` renders cleanly. Terrain walk/collision was not verified.
+- **Remaining limit**: landscape splines/grass data remains unparsed at runtime. Full wave report: `docs/reports/visual-polish.md`.

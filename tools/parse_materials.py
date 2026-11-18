@@ -38,6 +38,7 @@ UE -> Godot (StandardMaterial3D) parameter mapping used here and in
 
 import json
 import re
+import struct
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -45,6 +46,191 @@ EX_JSON = ROOT / "extracted" / "json"
 EX_ASSETS = ROOT / "extracted" / "assets"
 OUT = ROOT / "game" / "data" / "generated" / "materials.json"
 OUT_MESH_MATS = ROOT / "game" / "data" / "generated" / "mesh_materials.json"
+
+_CHUNK_JSON = 0x4E4F534A
+_CHUNK_BIN = 0x004E4942
+_GLTF_COMPONENT = {5121: ("<B", 1), 5123: ("<H", 2), 5125: ("<I", 4)}
+
+
+def _short_mat_name(value: str) -> str:
+    return str(value).replace("\\", "/").rsplit("/", 1)[-1].split(".")[0]
+
+
+def _norm_mat_name(value: str) -> str:
+    name = _short_mat_name(value).lower()
+    while "." in name and name.rsplit(".", 1)[-1].isdigit():
+        name = name.rsplit(".", 1)[0]
+    return name
+
+
+def _find_glb_for_ue_mesh(ue_mesh: str):
+    if not ue_mesh.startswith("/Game/"):
+        return None
+    rel = ue_mesh[len("/Game/") :]
+    candidates = [
+        ROOT / "game" / "assets" / "ue" / "Content" / (rel + ".glb"),
+        ROOT / "game" / "assets" / "ue" / "Raw" / "TAT" / "Content" / (rel + ".glb"),
+        ROOT / "extracted" / "assets" / "TAT" / "Content" / (rel + ".glb"),
+    ]
+    for c in candidates:
+        if c.is_file():
+            return c
+    return None
+
+
+def _glb_primitive_material_names(glb_path):
+    """GLB primitive material names in primitive order, degenerate filtered.
+
+    Parses the 12-byte GLB header plus JSON chunk, mapping
+    primitives[].material -> materials[].name per mesh. Primitives Godot
+    drops (fewer than 3 distinct indices or 0 triangles) are filtered so the
+    emitted count matches the imported ArrayMesh surface count. Returns None
+    when the GLB is missing or unparseable so the caller falls back to
+    sidecar order.
+    """
+    if glb_path is None:
+        return None
+    try:
+        raw = glb_path.read_bytes()
+    except Exception:
+        return None
+    try:
+        if len(raw) < 12:
+            return None
+        magic, _version, _declared = struct.unpack_from("<4sII", raw, 0)
+        if magic != b"glTF":
+            return None
+        off = 12
+        json_chunk = None
+        bin_chunk = b""
+        while off + 8 <= len(raw):
+            clen, ctype = struct.unpack_from("<II", raw, off)
+            off += 8
+            chunk = raw[off : off + clen]
+            if len(chunk) != clen:
+                return None
+            if ctype == _CHUNK_JSON and json_chunk is None:
+                json_chunk = chunk
+            elif ctype == _CHUNK_BIN and len(bin_chunk) == 0:
+                bin_chunk = chunk
+            off += clen
+        if json_chunk is None:
+            return None
+        gltf = json.loads(json_chunk.rstrip(b" \t\r\n\0").decode("utf-8"))
+        materials = gltf.get("materials") or []
+        mat_names = [
+            (m.get("name") if isinstance(m, dict) else "") or f"material_{i}"
+            for i, m in enumerate(materials)
+        ]
+        accessors = gltf.get("accessors") or []
+        buffer_views = gltf.get("bufferViews") or []
+
+        def _is_degenerate(prim: dict) -> bool:
+            try:
+                mode = int(prim.get("mode", 4))
+                attrs = prim.get("attributes") or {}
+                pos_acc = attrs.get("POSITION")
+                vert_count = None
+                if pos_acc is not None:
+                    try:
+                        vert_count = int(accessors[int(pos_acc)]["count"])
+                    except Exception:
+                        vert_count = None
+                if "indices" in prim:
+                    try:
+                        acc = accessors[int(prim["indices"])]
+                    except Exception:
+                        return False
+                    if acc.get("sparse"):
+                        return False
+                    try:
+                        count = int(acc["count"])
+                    except Exception:
+                        return False
+                    if count <= 0:
+                        return True
+                    bv_index = acc.get("bufferView")
+                    if bv_index is None:
+                        return True
+                    try:
+                        ctype = int(acc["componentType"])
+                    except Exception:
+                        return False
+                    if ctype not in _GLTF_COMPONENT:
+                        return False
+                    fmt, elem = _GLTF_COMPONENT[ctype]
+                    try:
+                        view = buffer_views[int(bv_index)]
+                    except Exception:
+                        return False
+                    base = int(view.get("byteOffset", 0)) + int(
+                        acc.get("byteOffset", 0)
+                    )
+                    stride = int(view.get("byteStride", elem))
+                    end = base + (count - 1) * stride + elem if count else base
+                    if end > len(bin_chunk):
+                        return False
+                    seen = set()
+                    for i in range(count):
+                        v = struct.unpack_from(fmt, bin_chunk, base + i * stride)[0]
+                        seen.add(v)
+                        if len(seen) >= 3:
+                            break
+                    distinct = len(seen)
+                    # Full distinct set when fewer than 3 found early is
+                    # already complete; otherwise at least 3 exist.
+                    if distinct < 3:
+                        full = set()
+                        for i in range(count):
+                            full.add(
+                                struct.unpack_from(fmt, bin_chunk, base + i * stride)[0]
+                            )
+                        distinct = len(full)
+                    if mode == 4:
+                        triangles = count // 3
+                    elif mode in (5, 6):
+                        triangles = max(0, count - 2)
+                    else:
+                        triangles = count
+                    return distinct < 3 or triangles == 0
+                else:
+                    if vert_count is None:
+                        return True
+                    if mode == 4:
+                        triangles = vert_count // 3
+                    elif mode in (5, 6):
+                        triangles = max(0, vert_count - 2)
+                    else:
+                        triangles = vert_count
+                    return vert_count < 3 or triangles == 0
+            except Exception:
+                return False
+
+        names: list = []
+        meshes = gltf.get("meshes") or []
+        if not meshes:
+            return None
+        for mesh in meshes:
+            prims = (mesh.get("primitives") if isinstance(mesh, dict) else None) or []
+            for prim in prims:
+                if not isinstance(prim, dict):
+                    continue
+                if _is_degenerate(prim):
+                    continue
+                mat_idx = prim.get("material")
+                if mat_idx is None:
+                    continue
+                try:
+                    idx = int(mat_idx)
+                except Exception:
+                    continue
+                if 0 <= idx < len(mat_names):
+                    names.append(mat_names[idx])
+                else:
+                    names.append("")
+        return names if names else None
+    except Exception:
+        return None
 
 
 def ue_to_res_png(obj_path: str) -> str:
@@ -782,6 +968,8 @@ def main():
     print(f"Resolved {len(out)} materials ({n_params} with real params) -> {OUT}")
 
     mesh_mats = {}
+    glb_ordered = 0
+    sidecar_fallback = 0
     for mf in EX_ASSETS.rglob("*.materials.json"):
         rel = str(mf.relative_to(EX_ASSETS)).replace(".materials.json", "")
         if rel.startswith("TAT/Content/"):
@@ -791,13 +979,32 @@ def main():
             slots = json.loads(mf.read_text())
         except Exception:
             continue
-        mesh_mats[ue_mesh] = [
-            (s.get("material") or "").split(".")[0]
-            for s in slots
-            if isinstance(s, dict)
-        ]
+        sidecar_list = [s for s in slots if isinstance(s, dict)]
+        sidecar_index: dict = {}
+        for s in sidecar_list:
+            full = (s.get("material") or "").split(".")[0]
+            if not full:
+                continue
+            key = _norm_mat_name(full)
+            if key and key not in sidecar_index:
+                sidecar_index[key] = full
+        glb_names = _glb_primitive_material_names(_find_glb_for_ue_mesh(ue_mesh))
+        if glb_names is not None:
+            resolved: list = []
+            for gname in glb_names:
+                resolved.append(sidecar_index.get(_norm_mat_name(gname), ""))
+            mesh_mats[ue_mesh] = resolved
+            glb_ordered += 1
+        else:
+            mesh_mats[ue_mesh] = [
+                (s.get("material") or "").split(".")[0] for s in sidecar_list
+            ]
+            sidecar_fallback += 1
     OUT_MESH_MATS.write_text(json.dumps(mesh_mats, indent=2))
-    print(f"Mapped {len(mesh_mats)} mesh material slot lists -> {OUT_MESH_MATS}")
+    print(
+        f"Mapped {len(mesh_mats)} mesh material slot lists "
+        f"({glb_ordered} GLB-ordered, {sidecar_fallback} sidecar-fallback) -> {OUT_MESH_MATS}"
+    )
 
 
 if __name__ == "__main__":

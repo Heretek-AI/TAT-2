@@ -459,13 +459,14 @@ func _get_mesh_and_shape(ue_path: String) -> Dictionary:
 				out["mesh"] = m
 				out["shape"] = null
 			else:
-				# Bind UE material slots (exact, then case-insensitive fallback)
+				# Bind GLB-ordered material slots by surface name, then index.
+				# mesh_materials.json is emitted in GLB primitive order and Godot
+				# names imported surfaces after the GLB material, so prefer a
+				# case-insensitive name-substring match; fall back to primitive
+				# index when the surface name is generic or matches nothing.
 				var mesh_key: String = ue_path.split(".")[0]
 				var mat_slots: Array = _mesh_mats_db.get(mesh_key, _mesh_mats_db_lower.get(mesh_key.to_lower(), []))
-				for s in range(mini(m.get_surface_count(), mat_slots.size())):
-					var mp: String = str(mat_slots[s])
-					if mp != "":
-						m.surface_set_material(s, get_material_for_ue(mp))
+				_bind_glb_materials(m, mat_slots)
 				out["mesh"] = m
 				var is_nonblocking: bool = ("rug" in low_u or "carpet" in low_u or "placemat" in low_u or "paper" in low_u or "poster" in low_u or "scroll" in low_u or "curtain" in low_u or "cloth" in low_u or "drape" in low_u or "sheet" in low_u or "cable" in low_u or "wire" in low_u or "rope" in low_u or "ivy" in low_u or "vine" in low_u or "foliage" in low_u)
 				# Fast BoxShape3D for props; trimesh only for large structural geometry
@@ -483,6 +484,37 @@ func _get_mesh_and_shape(ue_path: String) -> Dictionary:
 		inst.free()
 	_mesh_res_cache[ue_path] = out
 	return out
+
+
+## Binds GLB-ordered material slots to the imported ArrayMesh surfaces.
+## mesh_materials.json is emitted in GLB primitive order, and Godot names
+## imported GLB surfaces after the GLB material, so prefer a case-insensitive
+## name-substring match (GLB material object name in the surface name or vice
+## versa). Fall back to primitive index when the surface name is generic
+## (e.g. "Surface 0") or matches nothing, preserving the old index behavior.
+func _bind_glb_materials(m: Mesh, mat_slots: Array) -> void:
+	if m == null or mat_slots.is_empty():
+		return
+	for s in range(m.get_surface_count()):
+		var surf_name := str(m.surface_get_name(s)).to_lower()
+		var matched := -1
+		if surf_name != "" and surf_name.length() >= 3:
+			for i in range(mat_slots.size()):
+				var mp := str(mat_slots[i])
+				if mp == "":
+					continue
+				var short := mp.get_file().split(".")[0].to_lower()
+				if short == "" or short.length() < 3:
+					continue
+				if surf_name.find(short) >= 0 or short.find(surf_name) >= 0:
+					matched = i
+					break
+		if matched == -1 and s < mat_slots.size():
+			matched = s
+		if matched >= 0 and matched < mat_slots.size():
+			var mp2 := str(mat_slots[matched])
+			if mp2 != "":
+				m.surface_set_material(s, get_material_for_ue(mp2))
 
 
 func _find_first_mesh(n: Node) -> MeshInstance3D:

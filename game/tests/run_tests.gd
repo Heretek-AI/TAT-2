@@ -1694,6 +1694,103 @@ func _initialize() -> void:
 	vec_ll.queue_free()
 	await process_frame
 
+	# 30. GLB material-slot order: mesh_materials.json follows GLB primitive
+	# order (authoritative), not UE sidecar slot order. Regression for the
+	# 17/27 wrong surfaces in docs/reports/glb-material-slot-proof.md:
+	# ThievesDen surface7 must be MI_WoodBoardsOld (not WorldGridMaterial),
+	# WindowStandardA 0 wood/1 glass (not swapped), FacadeLrgA_Base/TopA and
+	# RoofCity reorders corrected. Counts are GLB primitive counts
+	# (ThievesDen 10 source slots -> 8, TopA 7 -> 6; dropped source slots
+	# OldManorPanels/Pipes/StoneWallA never bound).
+	var mm_path := "res://data/generated/mesh_materials.json"
+	var mm_doc: Dictionary = {}
+	if not FileAccess.file_exists(mm_path):
+		printerr("FAIL: mesh_materials.json missing at ", mm_path, "; run python3 tools/parse_materials.py")
+		fails += 1
+	else:
+		var mm_v: Variant = JSON.parse_string(FileAccess.get_file_as_string(mm_path))
+		if mm_v is Dictionary:
+			mm_doc = mm_v as Dictionary
+		if mm_doc.is_empty():
+			printerr("FAIL: mesh_materials.json empty or invalid; run python3 tools/parse_materials.py")
+			fails += 1
+	if not mm_doc.is_empty():
+		var glb_expect := {
+			"/Game/Developers/gjasp/SM_ThievesDen": [
+				"/Game/MaterialLibrary/Environment/Wood/ML/MI_OldManorWood",
+				"/Game/MaterialLibrary/Environment/Wood/Floors/ML/MI_WoodFloorA",
+				"/Game/MaterialLibrary/Environment/Wallpaper/ML/MI_WallpaperFloralC_5",
+				"/Game/MaterialLibrary/Environment/Wood/ML/MI_OldManorTrim",
+				"/Game/MaterialLibrary/Environment/Stone/Trimsheets/ML/MI_Manor_StoneTrim_Dark",
+				"/Game/MaterialLibrary/Environment/Metal/MI_TrimMetalA_brass",
+				"/Engine/EngineMaterials/WorldGridMaterial",
+				"/Game/MaterialLibrary/Environment/Wood/TrimInterior/ML/MI_WoodBoardsOld",
+			],
+			"/Game/Maps/Prototype/TempAssets/Windows/SM_WindowStandardA": [
+				"/Game/Maps/Prototype/TempAssets/MI_WoodBasicA",
+				"/Game/MaterialLibrary/Environment/MasterMaterials/M_EnvGlassUnlit",
+			],
+			"/Game/Maps/Prototype/TempAssets/Windows/SM_WindowStandardA_Open": [
+				"/Game/Maps/Prototype/TempAssets/MI_WoodBasicA",
+				"/Game/MaterialLibrary/Environment/MasterMaterials/M_EnvGlassUnlit",
+			],
+			"/Game/Art/Environment/City/Facades/SM_FacadeLrgA_Base": [
+				"/Game/MaterialLibrary/Environment/Stone/Trimsheets/ML/MI_StoneTrimsheetB_Grey",
+				"/Game/MaterialLibrary/Environment/Wood/TrimInterior/MI_TrimOrnateWoodA_White",
+				"/Game/MaterialLibrary/Environment/Mirror/MI_GlassFacadeA",
+				"/Game/MaterialLibrary/Environment/Wood/TrimInterior/MI_TrimOrnateBronze",
+				"/Game/MaterialLibrary/Environment/Stone/ML/MI_StoneStripA",
+				"/Game/MaterialLibrary/Environment/Stone/Wall/ML/MI_StoneWallA",
+			],
+			"/Game/Art/Environment/City/Facades/SM_FacadeLrgA_TopA": [
+				"/Game/MaterialLibrary/Environment/Stone/Trimsheets/ML/MI_StoneTrimsheetB_Grey",
+				"/Game/MaterialLibrary/Environment/Roof/Shingles/ML/MI_RoofSlateC",
+				"/Game/MaterialLibrary/Environment/Roof/FloorExterior/MI_RoofBitumenA",
+				"/Game/MaterialLibrary/Environment/Glass/Opaque/ML/MI_WindowDecoOpaque",
+				"/Game/Art/Environment/City/Architecture/BeautifulCorner/Materials/ML/MI_WindowDecoTrim",
+				"/Game/MaterialLibrary/Environment/Stone/WallsExterior/ML/MI_WallStoneBlockD",
+			],
+			"/Game/Art/Environment/City/Architecture/Roofs/RoofDetails/SM_RoofCity_WindowA": [
+				"/Game/MaterialLibrary/Environment/Metal/MI_TrimMetalA_Iron",
+				"/Game/MaterialLibrary/Environment/Metal/MI_CopperTile",
+				"/Game/MaterialLibrary/Environment/Glass/Opaque/MI_GlassSkylightA",
+			],
+		}
+		var glb_bad: Array[String] = []
+		for glb_key: Variant in glb_expect.keys():
+			var want: Array = glb_expect[glb_key]
+			var got_v: Variant = mm_doc.get(str(glb_key), null)
+			if not (got_v is Array):
+				glb_bad.append(str(glb_key) + " missing (got null)")
+				continue
+			var got: Array = got_v as Array
+			if got.size() != want.size():
+				glb_bad.append(str(glb_key) + " count " + str(got.size()) + " expected " + str(want.size()))
+				continue
+			for gi: int in range(want.size()):
+				if str(got[gi]) != str(want[gi]):
+					glb_bad.append(str(glb_key) + " surface" + str(gi) + " got=" + str(got[gi]) + " expected=" + str(want[gi]))
+					break
+		var den_slots: Array = mm_doc.get("/Game/Developers/gjasp/SM_ThievesDen", [])
+		var den_s7_ok: bool = den_slots.size() == 8 and str(den_slots[7]).ends_with("MI_WoodBoardsOld")
+		var den_dropped_ok: bool = true
+		for den_s: Variant in den_slots:
+			var den_n := str(den_s)
+			if den_n.ends_with("MI_OldManorPanels") or den_n.ends_with("MI_Pipes"):
+				den_dropped_ok = false
+		var win_slots: Array = mm_doc.get("/Game/Maps/Prototype/TempAssets/Windows/SM_WindowStandardA", [])
+		var win_ok: bool = win_slots.size() == 2 and str(win_slots[0]).ends_with("MI_WoodBasicA") and str(win_slots[1]).ends_with("M_EnvGlassUnlit")
+		var top_slots: Array = mm_doc.get("/Game/Art/Environment/City/Facades/SM_FacadeLrgA_TopA", [])
+		var top_dropped_ok: bool = true
+		for top_s: Variant in top_slots:
+			if str(top_s).ends_with("/MI_StoneWallA"):
+				top_dropped_ok = false
+		if not glb_bad.is_empty() or not den_s7_ok or not den_dropped_ok or not win_ok or not top_dropped_ok:
+			printerr("FAIL: GLB material-slot order (mismatches=", glb_bad, " den_s7=", den_s7_ok, " den_dropped=", den_dropped_ok, " win01=", win_ok, " top_no_stonewall=", top_dropped_ok, ")")
+			fails += 1
+		else:
+			print("PASS: GLB material-slot order (ThievesDen 8 incl surface7 MI_WoodBoardsOld, Windows 2 wood/glass, FacadeBase 6, FacadeTopA 6, RoofCity 3)")
+
 	print("SUMMARY: fails=", fails)
 	quit(0 if fails == 0 else 1)
 

@@ -1,4 +1,4 @@
-# TAT-2 — Next Session Handoff (2026-11-17)
+# TAT-2 — Next Session Handoff (2026-11-18)
 
 Repo: `/home/john/Projects/TAT-2` · Godot `4.7.2.stable.flathub` (Forward+/Jolt) · game project in `game/`.
 Source of truth: `/home/john/.local/share/Steam/steamapps/common/Thick As Thieves/` (extracted to `extracted/`, 4.7 GB).
@@ -6,19 +6,19 @@ Source of truth: `/home/john/.local/share/Steam/steamapps/common/Thick As Thieve
 ## Read first
 
 1. `docs/FIDELITY_GAPS.md` — live coverage tracker + hard limits (start here).
-2. `docs/ARCHITECTURE.md` — pipeline/module map; `docs/PERFORMANCE.md` — batching/culling numbers.
-3. `docs/reports/*.md` — one report per wave (weather, materials, anims, doors, spawns, audio, …).
-4. `HANDOFF_DEEPSEEK.md` — original brief (historical; superseded by this file).
+2. `docs/reports/visual-fidelity.md` — latest visual-fidelity wave report (Phases 1–3, red-proofs, live Vulkan QA vs official screenshots).
+3. `docs/ARCHITECTURE.md` — pipeline/module map; `docs/PERFORMANCE.md` — batching/culling numbers.
+4. `docs/reports/*.md` — one report per wave (weather, materials, anims, doors, spawns, audio, glb-material-slot-proof, visual-fidelity, …).
 
 ## Verification (run these first)
 
 ```bash
-make test     # 26 numbered suites, must be SUMMARY: fails=0, zero SCRIPT ERROR
+make test     # 35 numbered suites, must be SUMMARY: fails=0, zero SCRIPT ERROR
 make audit    # manifest coverage, currently 99.4%
 make run      # desktop client; F3 overlay for FPS/draws/nodes
 ```
 
-Last verified (2026-11-17, HEAD `3e0817f`): **26 numbered suites, fails=0, zero SCRIPT ERROR** (`/tmp/opencode/final_test.log`); `make audit` **12,630 / 12,704 (99.4%)**. Engine exit-time `ObjectDB/RID leaked` warnings after `SUMMARY` are pre-existing harness noise, not script errors.
+Last verified (2026-11-18): **35 numbered suites, `SUMMARY: fails=0`, zero `SCRIPT ERROR`** (both headless `make test` and live Vulkan Forward+ `build/qa/make_test_vulkan_vf.log` on NVIDIA GeForce RTX 4070 Laptop GPU with **`SHADER ERROR = 0`**); `make audit` **12,630 / 12,704 (99.4%)**. Engine exit-time `ObjectDB/RID leaked` warnings after `SUMMARY` are pre-existing harness noise, not script errors.
 
 ## Repo / branch state
 
@@ -51,6 +51,18 @@ Last verified (2026-11-17, HEAD `3e0817f`): **26 numbered suites, fails=0, zero 
 ## Key commits (most recent first)
 
 ```
+2da2ebe feat(ui): wire Startscreen CineCamera, teal grouped Settings persistence, and Mission Prep artwork+DT_Missions
+0361577 feat(den): wire exit door, rebalance lighting+probe, fix deco/map tokens and footprint mask
+32d6a52 feat(materials): add tat_glass.gdshader with authored albedo+opacity and remove flat-blue fallback
+d0f895a feat(levels): wire emissive CustomPrimitiveData MultiMesh and tat_emissive_cpd.gdshader
+24cac7e feat(levels): apply per-surface OverrideMaterials, MID/BPP resolution, and visibility/spline filtering
+6783c2d feat(materials): bind mesh slots in GLB primitive order
+7737ed1 feat(materials): apply UE Overlay/Multiply vectors and unshaded black
+754bbb6 fix(materials): resolve authored texture families instead of fallback misbinds
+8f07b7d feat(extract): cover startscreen landscape and window-panel textures
+7458198 fix(level): correct UE rotator m12 shear and orthonormalize bases
+a6a7a1b docs: record session log and operational caveats in handoff
+1a753da docs: record sky, lighting, landscape, audio and gameplay waves
 3e0817f feat(ai): port authored detection decay, sprint ramp and light curves
 f567d23 feat(gameplay): port authored disguise integrity and XP curve
 637da18 docs(audio): record wwise recovery and correct stale limits
@@ -60,36 +72,8 @@ f567d23 feat(gameplay): port authored disguise integrity and XP curve
 fadefa5 feat(landscape): emit all weightmap textures per component
 cd3590a fix(lighting): preserve authored intensity ratios and attenuation radii
 dba6988 fix(sky): restore authored night sky visibility and moon tint
-7e240bb test(sky): assert inherited presets, moon geometry and map resolution
-156999e fix(sky): project the moon panorama onto the visible hemisphere
-7ea5d59 fix(sky): derive moon diameter from SM_Moon geometry and tone-map HDR horizon
-48e67c6 fix(weather): resolve map id before building the environment
-cfd9771 fix(weather): convert UE moon-light rotator to a Godot basis
-9f337cf fix(weather): inherit blueprint preset chain and preserve HDR colours
-f831e17 docs: record overhang wave and resume point
-badf7d5 fix(landscape,lighting): restore 1:1 landscape scale and BP light SCS transforms
-d802c25 feat(level): expand packed Level Actor instances and real street surface
-33fd935 feat(doors): resolve 111 doorway pivots from their own leaf mesh
-0729e90 fix(gameplay): contract title fallback and forward-clear spawn selection
-caec0d4 feat(doors): real swinging doors end-to-end from authored pivots
-e2a61aa fix(hud): render tool hotbar icons over translucent panel slots
-05f8657 fix(spawn): score all fallback markers with headroom and capsule checks
-b06cf8b fix(spawn): fall back to mission markers when authored starts have no floor
-90486ef fix(spawn): honour authored PlayerStart orientation on mission spawn
-cba4cf2 fix(weather): map gain_midtones to adjustment_brightness multiplier (0..2)
-a801e79 feat(sky): real night sky from weather presets plus weather-driven rain
-5bc2d83 feat(loot): openable loot containers grant real loot from mapped buckets
-1c5225f feat(loot): spawn real loot actors at mission loot-spawner markers
-7172096 feat(spawners): spawn real map pickup, bottle and civilian content
-1b8db68 feat(contracts): resolve sublevel lists and match timers from extracted tables
-16edb4e feat(combat): real fall damage, downed state, revive timing and guard regen
-50252b5 feat(tools): real MagicSlime, smoke and pickpocket mechanics
-acd368a feat(anims): USD animation export with ACL natives, Blender GLB pipeline
-a29a06f feat(anims): retarget real guard clips
-9ef3bdc feat(player): real 1P arms and ThiefNisha body
-...
 ```
-(`git log --oneline` for the full list.)
+(`git log --oneline` for the full list; final Phase 3 polish + docs commit sits on top of `2da2ebe`.)
 
 ## Hard limits (cooked data — do not fake)
 
@@ -102,16 +86,18 @@ a29a06f feat(anims): retarget real guard clips
 
 ## Next steps (priority)
 
-1. **Retune the light-probe stealth weights** for the new lighting energies. `game/src/stealth/light_probe.gd` still contributes `falloff² * clamp(light_energy * 0.35, 0.15, 0.9)` and skips lights at `<= 0.01`; it was tuned when median lights saturated at `4.2`, but the median is now `1.0`, so visibility (and detection via `vis_mult`) near those lights is roughly halved. See the "Stealth detection is now mis-tuned" section of `docs/reports/lighting-intensity.md`.
-2. **Fix the `tools/parse_tables.py:65` m12 shear** (4,444 mesh instances). The term is not the negated form used by `weather_profile.gd`; see the `docs/reports/sky-moon.md` caveat. This is a geometry-correctness bug, not a visual tweak.
-3. **Extract the missing landscape PNGs for `OldManor_P` / `BeautifulCorner_Startscreen_P`**. `tools/tat-extract/Exporter.cs:166` only exports `.umap` textures whose package path contains `"Landscape"`, so 128 + 64 components have no heightmaps/weightmaps (263 + 128 referenced PNG paths missing) and are not built. Counted, not faked; see `docs/reports/landscape-weightmaps.md`.
-4. **Niagara VFX remains blocked**. 120/120 systems use compiled VectorVM bytecode for spawn/lifetime/velocity and 91/139 resolved materials carry no texture. Only hand-match a specific system or decompile the VM; do not invent rates. Placements are already extracted.
-5. **Visual QA pass** in `make run` on Guildhall/Old Manor/Den: confirm the implemented sky/moon (`8.2718°` disc, near-black gradient, stars, authored tint), the new lighting energies/ranges, the landscape blend, and door/spawn visibility. This is verification, not pending implementation.
-6. **Spawn quality / UI / mobile**: prefer interior markers with 2–3 m forward clearance and consider QuestGraph/contract spawn tags; remaining title/edge cases and minimap/ledger polish; rebuild the APK after runtime changes (`make android-release`) and measure FPS/thermals on hardware.
+1. **Retune the light-probe stealth weights** for the linear `1/15` lighting energies (`game/src/stealth/light_probe.gd`). See `docs/reports/lighting-intensity.md`.
+2. **Visual-fidelity polish follow-ups** from live Vulkan QA (`docs/reports/visual-fidelity.md`):
+   - Bind authored ThiefNisha PBR textures onto the 3D preview character in `MissionPrepUI` (currently default untextured GLB surface).
+   - Scale map table miniature tokens (`SM_MapBuilding_OldManor`/`GuildHall`) from `0.08` to `~0.22–0.25` to match official UE framing (`Screenshot_20261118_002339.png`).
+   - Tune Startscreen upper neon arch CPD bloom intensity / tone mapping to match UE's tighter orange-gold neon tubes.
+3. **Extract remaining `OldManor_P` landscape PNGs** (128 components; `BeautifulCorner_Startscreen_P` 20 PNGs are already extracted in `8f07b7d`).
+4. **Niagara VFX remains blocked**: 120/120 systems use compiled VectorVM bytecode for spawn/lifetime/velocity and 91/139 resolved materials carry no texture. Only hand-match a specific system or decompile the VM; do not invent rates.
+5. **Android APK rebuild & profiling**: rebuild after runtime/shader changes (`make android-release`) and verify FPS/thermals on device.
 
-## Resume point (2026-11-17, HEAD `3e0817f`)
+## Resume point (2026-11-18)
 
-All waves listed above are committed and green; there is no uncommitted source work to recover. Start with the light-probe retune (item 1), then the `parse_tables.py:65` m12 shear and the missing `OldManor_P` / `BeautifulCorner_Startscreen_P` landscape PNGs. Niagara VFX stays blocked. Re-run `make test` (26 numbered suites, `SUMMARY: fails=0`, zero `SCRIPT ERROR`) and `make audit` (99.4%) after each change.
+The entire Visual-Fidelity Wave (Phases 1–3) is complete, verified on both headless `make test` and real RTX 4070 Vulkan Forward+ (`35` numbered suites, `SUMMARY: fails=0`, `SHADER ERROR = 0`, `SCRIPT ERROR = 0`, `make audit` `99.4%`), and documented in `docs/reports/visual-fidelity.md`. Start next with item 1 (light-probe stealth retune) or item 2 (Mission Prep preview textures / Map Table token scale / Startscreen neon bloom polish).
 
 ## QA recipes / gotchas
 

@@ -28,6 +28,7 @@ var selected_order: int = 1
 
 
 func _ready() -> void:
+	set_anchors_preset(Control.PRESET_FULL_RECT)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_build_3d_backdrop()
 	_build_ui()

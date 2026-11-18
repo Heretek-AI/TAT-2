@@ -143,10 +143,10 @@ func _build_all() -> void:
 	add_child(title)
 
 	var left: VBoxContainer = VBoxContainer.new()
-	left.set_anchors_preset(Control.PRESET_CENTER_LEFT)
-	left.position = Vector2(36, -290)
-	left.custom_minimum_size = Vector2(420, 580)
-	left.add_theme_constant_override("separation", 12)
+	left.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	left.position = Vector2(36, 68)
+	left.custom_minimum_size = Vector2(420, 0)
+	left.add_theme_constant_override("separation", 10)
 	left.mouse_filter = Control.MOUSE_FILTER_PASS
 	add_child(left)
 	var loc_card: PanelContainer = _make_card("LOCATION", "", "")
@@ -420,7 +420,7 @@ func _add_thief(anchor: Node3D) -> void:
 		if head_res is PackedScene:
 			var head_node: Node = (head_res as PackedScene).instantiate()
 			_thief_head_node = head_node
-			head_node.position = Vector3(0, 1.45, 0)
+			head_node.position = Vector3.ZERO
 			anchor.add_child(head_node)
 		else:
 			_add_placeholder_head(anchor)

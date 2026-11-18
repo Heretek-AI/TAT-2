@@ -126,7 +126,7 @@ public sealed class Exporter
 
     public void Levels() => ForEach(Packages(p => p.EndsWith(".umap") || Path.GetFileName(p).StartsWith("BPP_") || Path.GetFileName(p).StartsWith("SV_") || Path.GetFileName(p).StartsWith("S_") || Path.GetFileName(p).StartsWith("SS_") || Path.GetFileName(p).StartsWith("QG_")), "levels", DumpJson);
 
-    public void Materials() => ForEach(Packages(p => p.EndsWith(".uasset") && (Path.GetFileName(p).StartsWith("MI_") || Path.GetFileName(p).StartsWith("M_"))), "materials", DumpJson);
+    public void Materials() => ForEach(Packages(p => p.EndsWith(".uasset") && (Path.GetFileName(p).StartsWith("MI_") || Path.GetFileName(p).StartsWith("M_") || p.Contains("/Developers/") || p.Contains("/MaterialLibrary/"))), "materials", DumpJson);
 
     ExportOptions DefaultOpts() => new(
         meshFormat: EMeshFormat.Gltf2,
@@ -163,7 +163,7 @@ public sealed class Exporter
     public void Textures()
     {
         var opts = DefaultOpts();
-        ForEach(Packages(p => (p.EndsWith(".uasset") && (Path.GetFileName(p).StartsWith("T_") || p.Contains("/Textures/") || p.Contains("/UI/") || p.Contains("Icon"))) || (p.EndsWith(".umap") && p.Contains("Landscape"))), "textures", f =>
+        ForEach(Packages(p => (p.EndsWith(".uasset") && (Path.GetFileName(p).StartsWith("T_") || p.Contains("/Textures/") || p.Contains("/UI/") || p.Contains("Icon") || p.Contains("WindowPanels_Oldmanor"))) || (p.EndsWith(".umap") && (p.Contains("Landscape") || p.Contains("BeautifulCorner_Startscreen_P")))), "textures", f =>
         {
             var pkg = _p.LoadPackage(f);
             bool isUmap = f.Path.EndsWith(".umap", StringComparison.OrdinalIgnoreCase);

@@ -18,6 +18,7 @@ extract: build-extractor
 	$(EX) raw
 	$(EX) tables
 	$(EX) levels
+	$(EX) materials
 	$(EX) audio
 	$(EX) meshes
 	$(EX) textures

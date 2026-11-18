@@ -1650,6 +1650,50 @@ func _initialize() -> void:
 				printerr("FAIL: material binding: ", mat_fail)
 			fails += 1
 
+	# 29. UE vector tint (Overlay/Multiply) darkens metals; BlackUnlit is unshaded black.
+	var vec_ll: Node = (load("res://src/core/level_loader.gd") as GDScript).new()
+	root.add_child(vec_ll)
+	await process_frame
+	var brass_mat29: StandardMaterial3D = vec_ll.call("get_material_for_ue", "/Game/MaterialLibrary/Environment/Metal/MI_TrimMetalA_brass") as StandardMaterial3D
+	var iron_mat29: StandardMaterial3D = vec_ll.call("get_material_for_ue", "/Game/MaterialLibrary/Environment/Metal/MI_TrimMetalA_Iron") as StandardMaterial3D
+	var black_mat29: StandardMaterial3D = vec_ll.call("get_material_for_ue", "/Game/MaterialLibrary/Utility/BlackUnlitMaterial") as StandardMaterial3D
+	var brass_entry29: Dictionary = _material_entry_ending_with(mats_doc, "MI_TrimMetalA_brass")
+	var brass_vec29: Array = []
+	var brass_vecs29: Variant = brass_entry29.get("vectors", null)
+	if brass_vecs29 is Dictionary:
+		var bov29: Variant = (brass_vecs29 as Dictionary).get("Overlay", null)
+		if bov29 is Array:
+			brass_vec29 = bov29
+	var brass_want29: Array = [0.2135, 0.1995, 0.1902]
+	var brass_vec_ok29: bool = brass_vec29.size() >= 3
+	if brass_vec_ok29:
+		for bi29: int in range(3):
+			if absf(float(brass_vec29[bi29]) - float(brass_want29[bi29])) > 0.0001:
+				brass_vec_ok29 = false
+	var iron_entry29: Dictionary = _material_entry_ending_with(mats_doc, "MI_TrimMetalA_Iron")
+	var iron_vec29: Array = []
+	var iron_vecs29: Variant = iron_entry29.get("vectors", null)
+	if iron_vecs29 is Dictionary:
+		var imv29: Variant = (iron_vecs29 as Dictionary).get("Multiply", null)
+		if imv29 is Array:
+			iron_vec29 = imv29
+	var iron_want29: Array = [0.3595, 0.4062, 0.4022]
+	var iron_vec_ok29: bool = iron_vec29.size() >= 3
+	if iron_vec_ok29:
+		for ii29: int in range(3):
+			if absf(float(iron_vec29[ii29]) - float(iron_want29[ii29])) > 0.0001:
+				iron_vec_ok29 = false
+	var brass_ok29: bool = brass_mat29 != null and brass_mat29.albedo_color.r < 1.0 and brass_mat29.albedo_color.g < 1.0 and brass_mat29.albedo_color.b < 1.0
+	var iron_ok29: bool = iron_mat29 != null and iron_mat29.albedo_color.r < 1.0 and iron_mat29.albedo_color.g < 1.0 and iron_mat29.albedo_color.b < 1.0
+	var black_ok29: bool = black_mat29 != null and black_mat29.shading_mode == BaseMaterial3D.SHADING_MODE_UNSHADED and is_equal_approx(black_mat29.albedo_color.r, 0.0) and is_equal_approx(black_mat29.albedo_color.g, 0.0) and is_equal_approx(black_mat29.albedo_color.b, 0.0)
+	if not brass_vec_ok29 or not iron_vec_ok29 or not brass_ok29 or not iron_ok29 or not black_ok29:
+		printerr("FAIL: UE vector tint / BlackUnlit (brass_vec=", brass_vec29, " ok=", brass_vec_ok29, " brass_albedo=", brass_mat29.albedo_color if brass_mat29 != null else Color(-1, -1, -1), " iron_vec=", iron_vec29, " ok=", iron_vec_ok29, " iron_albedo=", iron_mat29.albedo_color if iron_mat29 != null else Color(-1, -1, -1), " black_shading=", black_mat29.shading_mode if black_mat29 != null else -1, " black_albedo=", black_mat29.albedo_color if black_mat29 != null else Color(-1, -1, -1), ")")
+		fails += 1
+	else:
+		print("PASS: UE Overlay/Multiply darken metals (brass ", brass_mat29.albedo_color, ", iron ", iron_mat29.albedo_color, ") and BlackUnlit is unshaded black")
+	vec_ll.queue_free()
+	await process_frame
+
 	print("SUMMARY: fails=", fails)
 	quit(0 if fails == 0 else 1)
 

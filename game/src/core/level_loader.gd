@@ -262,6 +262,16 @@ func get_material_for_ue(ue_mat_path: String) -> StandardMaterial3D:
 		return _std_mat_cache[ue_mat_path]
 	var low_mat := ue_mat_path.to_lower()
 	var info: Dictionary = _materials_db.get(ue_mat_path, _materials_db_lower.get(low_mat, {}))
+	var render_early: Dictionary = info.get("render", {})
+	var texs_early: Dictionary = info.get("texs", {})
+	var shading_early := str(render_early.get("shading_model", ""))
+	if low_mat.ends_with("blackunlitmaterial") or (shading_early.ends_with("MSM_Unlit") and texs_early.is_empty()):
+		var black := StandardMaterial3D.new()
+		black.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		black.albedo_color = Color(0.0, 0.0, 0.0, 1.0)
+		black.cull_mode = BaseMaterial3D.CULL_DISABLED
+		_std_mat_cache[ue_mat_path] = black
+		return black
 	var mat := StandardMaterial3D.new()
 	mat.roughness = 0.78
 	_apply_ue_pbr_params(mat, info)
@@ -306,6 +316,34 @@ func get_material_for_ue(ue_mat_path: String) -> StandardMaterial3D:
 	var tint: Variant = info.get("tint")
 	if tint is Array and tint.size() >= 3:
 		mat.albedo_color = Color(float(tint[0]), float(tint[1]), float(tint[2]), 1.0)
+	var vectors_raw: Dictionary = info.get("vectors", {})
+	if vectors_raw.has("Overlay") or vectors_raw.has("Multiply") or vectors_raw.has("Desaturation"):
+		var vc: Color = mat.albedo_color
+		if vectors_raw.has("Overlay"):
+			var ov: Variant = vectors_raw["Overlay"]
+			if ov is Array and (ov as Array).size() >= 3:
+				var ova: Array = ov
+				vc.r *= float(ova[0])
+				vc.g *= float(ova[1])
+				vc.b *= float(ova[2])
+		if vectors_raw.has("Multiply"):
+			var mu: Variant = vectors_raw["Multiply"]
+			if mu is Array and (mu as Array).size() >= 3:
+				var mua: Array = mu
+				vc.r *= float(mua[0])
+				vc.g *= float(mua[1])
+				vc.b *= float(mua[2])
+		if vectors_raw.has("Desaturation"):
+			var ds: Variant = vectors_raw["Desaturation"]
+			if ds is Array and (ds as Array).size() >= 3:
+				var dsa: Array = ds
+				var lum: float = vc.r * 0.299 + vc.g * 0.587 + vc.b * 0.114
+				var amt: float = float(dsa[3]) if dsa.size() >= 4 else 1.0
+				amt = clampf(amt, 0.0, 1.0)
+				vc.r = lerpf(vc.r, lum, amt)
+				vc.g = lerpf(vc.g, lum, amt)
+				vc.b = lerpf(vc.b, lum, amt)
+		mat.albedo_color = vc
 	var em := _load_tex(str(texs.get("emissive", "")))
 	if em != null:
 		mat.emission_enabled = true

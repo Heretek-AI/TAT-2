@@ -306,14 +306,14 @@ _bp_exports_cache = {}
 
 
 def build_bp_file_index():
-    """Map BP basename (stem) -> JSON path for all non-Maps extracted JSONs."""
+    """Map BP basename (stem) -> JSON path for non-Maps JSONs and Maps BPP_* PLAs."""
     global _bp_file_index
     if _bp_file_index is not None:
         return _bp_file_index
     idx = {}
     for jf in (EX / "json").rglob("*.json"):
         s = str(jf)
-        if "/Maps/" in s or "\\Maps\\" in s:
+        if ("/Maps/" in s or "\\Maps\\" in s) and not jf.name.startswith("BPP_"):
             continue
         idx.setdefault(jf.stem, jf)
     _bp_file_index = idx
@@ -630,6 +630,211 @@ def _resolve_tpl_chain_props(ttype, touter, tname, depth=0):
     return props
 
 
+def _norm_mat_name(value: str) -> str:
+    name = str(value).replace("\\", "/").rsplit("/", 1)[-1].split(".")[0].lower()
+    while "." in name and name.rsplit(".", 1)[-1].isdigit():
+        name = name.rsplit(".", 1)[0]
+    return name
+
+
+def build_ue_to_glb_slot_map():
+    """Build UE sidecar slot index -> GLB primitive index remaps for reordered meshes.
+
+    Matches non-empty slot material names in occurrence order against
+    game/data/generated/mesh_materials.json (which is in GLB primitive order).
+    Meshes whose sidecar order already equals GLB primitive order are omitted so
+    they pass through at raw slot indices with zero overhead.
+    """
+    mm_path = OUT_DATA / "mesh_materials.json"
+    if not mm_path.is_file():
+        return ({}, {})
+    try:
+        mesh_mats = json.loads(mm_path.read_text())
+    except Exception:
+        return ({}, {})
+    if not isinstance(mesh_mats, dict):
+        return ({}, {})
+    mm_lower = {str(k).lower(): v for k, v in mesh_mats.items() if isinstance(v, list)}
+
+    ex_assets = EX / "assets"
+    if not ex_assets.exists():
+        return ({}, {})
+
+    remap = {}
+    remap_lower = {}
+    for mf in ex_assets.rglob("*.materials.json"):
+        rel = str(mf.relative_to(ex_assets)).replace(".materials.json", "").replace("\\", "/")
+        if rel.startswith("TAT/Content/"):
+            rel = rel[len("TAT/Content/") :]
+        ue_mesh = "/Game/" + rel
+        glb_slots = mesh_mats.get(ue_mesh)
+        if not isinstance(glb_slots, list):
+            glb_slots = mm_lower.get(ue_mesh.lower())
+        if not isinstance(glb_slots, list):
+            continue
+        try:
+            raw_slots = json.loads(mf.read_text())
+        except Exception:
+            continue
+        if not isinstance(raw_slots, list):
+            continue
+        sc_slots = [
+            (s.get("material") or "").split(".")[0]
+            for s in raw_slots
+            if isinstance(s, dict)
+        ]
+        if [_norm_mat_name(x) for x in sc_slots] == [_norm_mat_name(x) for x in glb_slots]:
+            continue
+        used_gi = set()
+        si_to_gi = {}
+        for si, smat in enumerate(sc_slots):
+            sn = _norm_mat_name(smat)
+            if not sn:
+                continue
+            for gi, gmat in enumerate(glb_slots):
+                if gi not in used_gi and _norm_mat_name(gmat) == sn:
+                    si_to_gi[si] = gi
+                    used_gi.add(gi)
+                    break
+        for si, smat in enumerate(sc_slots):
+            if (
+                not _norm_mat_name(smat)
+                and si < len(glb_slots)
+                and not _norm_mat_name(glb_slots[si])
+                and si not in used_gi
+            ):
+                si_to_gi[si] = si
+                used_gi.add(si)
+        val = (si_to_gi, len(glb_slots))
+        remap[ue_mesh] = val
+        remap_lower[ue_mesh.lower()] = val
+    print(f"Indexed {len(remap)} UE-to-GLB material slot remaps")
+    return (remap, remap_lower)
+
+
+def _extract_obj_ref(item) -> tuple:
+    if item is None:
+        return ("", "")
+    op = ""
+    on = ""
+    if isinstance(item, dict):
+        obj = item.get("Object")
+        if isinstance(obj, dict):
+            raw_op = obj.get("ObjectPath", "")
+            raw_on = obj.get("ObjectName", "")
+            op = raw_op if isinstance(raw_op, str) else ""
+            on = raw_on if isinstance(raw_on, str) else ""
+        if not op and isinstance(item.get("ObjectPath"), str):
+            op = item["ObjectPath"]
+        if not on and isinstance(item.get("ObjectName"), str):
+            on = item["ObjectName"]
+    elif isinstance(item, str):
+        op = item
+    return (op, on)
+
+
+def _is_mid_ref(op: str, on: str, exps, map_ue_path: str | None) -> bool:
+    if on.startswith("MaterialInstanceDynamic'"):
+        return True
+    if not map_ue_path or not exps:
+        return False
+    base_op, _, suffix = op.rpartition(".")
+    if base_op.lower() == map_ue_path.lower() and suffix.isdigit():
+        idx = int(suffix)
+        if 0 <= idx < len(exps) and exps[idx].get("Type") == "MaterialInstanceDynamic":
+            return True
+    return False
+
+
+def _resolve_override_item(item, exps=None, map_ue_path=None, mid_stats=None) -> str:
+    op, on = _extract_obj_ref(item)
+    if not op:
+        return ""
+    if not _is_mid_ref(op, on, exps, map_ue_path):
+        return op.split(".")[0]
+    if not exps:
+        if mid_stats is not None:
+            mid_stats["unresolved"] += 1
+            if len(mid_stats["samples"]) < 10:
+                mid_stats["samples"].append((map_ue_path or "", op, on))
+        return ""
+
+    cur_op, cur_on = op, on
+    for _depth in range(4):
+        _, _, suffix = cur_op.rpartition(".")
+        target = None
+        if suffix.isdigit():
+            idx = int(suffix)
+            if 0 <= idx < len(exps) and exps[idx].get("Type") == "MaterialInstanceDynamic":
+                target = exps[idx]
+        if target is None and cur_on:
+            inner = cur_on.split("'", 2)[1] if "'" in cur_on else cur_on
+            short_name = inner.rsplit(".", 1)[-1].rsplit(":", 1)[-1]
+            if short_name:
+                for exp in exps:
+                    if exp.get("Type") == "MaterialInstanceDynamic" and exp.get("Name") == short_name:
+                        target = exp
+                        break
+        if target is None:
+            break
+        parent = (target.get("Properties") or {}).get("Parent")
+        pop, pon = _extract_obj_ref(parent)
+        if not pop:
+            break
+        if _is_mid_ref(pop, pon, exps, map_ue_path):
+            cur_op, cur_on = pop, pon
+            continue
+        if mid_stats is not None:
+            mid_stats["resolved"] += 1
+        return pop.split(".")[0]
+
+    if mid_stats is not None:
+        mid_stats["unresolved"] += 1
+        if len(mid_stats["samples"]) < 10:
+            mid_stats["samples"].append((map_ue_path or "", op, on))
+    return ""
+
+
+def _component_override_paths(
+    mprops,
+    exps=None,
+    map_ue_path=None,
+    mid_stats=None,
+    sm_ue_path=None,
+    ue_to_glb=None,
+):
+    """Slot-indexed /Game/... OverrideMaterials paths in GLB primitive order.
+
+    Preserves "" for None/unresolvable slots, resolves map-local
+    MaterialInstanceDynamic refs via Properties.Parent, remaps UE sidecar
+    slot indices to GLB primitive indices when mesh_materials.json differs,
+    and trims only trailing "". Never invents values.
+    """
+    mv = (mprops or {}).get("OverrideMaterials")
+    if not isinstance(mv, list):
+        return []
+    raw_out = [
+        _resolve_override_item(item, exps=exps, map_ue_path=map_ue_path, mid_stats=mid_stats)
+        for item in mv
+    ]
+    if ue_to_glb and sm_ue_path:
+        remap_map, remap_lower = ue_to_glb
+        remap = remap_map.get(sm_ue_path) or remap_lower.get(sm_ue_path.lower())
+        if remap is not None:
+            si_to_gi, glb_len = remap
+            out = [""] * glb_len
+            for si, val in enumerate(raw_out):
+                if val and si in si_to_gi:
+                    out[si_to_gi[si]] = val
+        else:
+            out = raw_out
+    else:
+        out = raw_out
+    while out and not out[-1]:
+        out.pop()
+    return out
+
+
 def _merged_comp_props(e):
     """Merge level export Properties on top of its BP Template archetype chain."""
     props = dict(e.get("Properties") or {})
@@ -933,15 +1138,22 @@ def _compose_bp_world(
 def extract_levels():
     levels_dir = OUT_DATA / "levels"
     levels_dir.mkdir(parents=True, exist_ok=True)
+    stale_removed = 0
+    for old_tat in levels_dir.rglob("*.tatlevel.json"):
+        old_tat.unlink()
+        stale_removed += 1
     bp_templates = build_bp_mesh_templates()
     level_transforms = build_level_transforms()
     glb_by_name = build_glb_stem_index()
+    ue_to_glb = build_ue_to_glb_slot_map()
     count = 0
     total_meshes = 0
     total_lights = 0
     total_level_instances_loaded = 0
     total_level_instance_meshes = 0
     total_level_instances_unresolved = 0
+    mid_stats = {"resolved": 0, "unresolved": 0, "samples": []}
+    level_payloads = {}
 
     for jf in sorted((EX / "json" / "Maps").rglob("*.json")):
         if jf.name.startswith("BPP_"):
@@ -996,9 +1208,7 @@ def extract_levels():
                 return mat4_identity()
             e = exps[idx]
             props = (
-                _merged_comp_props(e)
-                if use_templates
-                else (e.get("Properties") or {})
+                _merged_comp_props(e) if use_templates else (e.get("Properties") or {})
             )
             local = ue_trs_to_mat4(
                 props.get("RelativeLocation"),
@@ -1022,9 +1232,9 @@ def extract_levels():
             return local
 
         rel = jf.relative_to(EX / "json" / "Maps")
-        game_map_key = (
-            "/Game/Maps/" + str(rel.with_suffix("")).replace("\\", "/")
-        ).lower()
+        rel_key = str(rel.with_suffix("")).replace("\\", "/")
+        raw_map_ue_path = "/Game/Maps/" + rel_key
+        game_map_key = raw_map_ue_path.lower()
         level_mat = level_transforms.get(game_map_key)
 
         meshes = []
@@ -1305,6 +1515,9 @@ def extract_levels():
                 if idx in door_leaf_idx:
                     door_leaves_excluded += 1
                     continue
+                mprops = _merged_comp_props(e)
+                if mprops.get("bVisible") is False:
+                    continue
                 sm = (props.get("StaticMesh") or {}).get("ObjectPath")
                 bp_lmat = None
                 if not sm and outer_name:
@@ -1329,13 +1542,29 @@ def extract_levels():
                             "sm_deskvariant_a"
                         )
                 if sm:
+                    if "SplineEditorMesh" in sm:
+                        continue
                     wmat = get_world_mat(idx)
                     if bp_lmat is not None:
                         wmat = mat4_mul(wmat, bp_lmat)
                     if level_mat is not None:
                         wmat = mat4_mul(level_mat, wmat)
                     trs = ue_mat4_to_godot_trs(wmat)
-                    meshes.append({"mesh": sm.split(".")[0], **trs})
+                    sm_clean = sm.split(".")[0]
+                    entry = {"mesh": sm_clean, **trs}
+                    ov_paths = _component_override_paths(
+                        mprops,
+                        exps=exps,
+                        map_ue_path=raw_map_ue_path,
+                        mid_stats=mid_stats,
+                        sm_ue_path=sm_clean,
+                        ue_to_glb=ue_to_glb,
+                    )
+                    if ov_paths:
+                        entry["override_materials"] = ov_paths
+                        if ov_paths[0]:
+                            entry["override_material"] = ov_paths[0]
+                    meshes.append(entry)
                     continue
 
             # 2. InstancedStaticMeshComponent / HierarchicalInstancedStaticMeshComponent / Foliage
@@ -1346,6 +1575,9 @@ def extract_levels():
             ):
                 if idx in door_leaf_idx:
                     door_leaves_excluded += 1
+                    continue
+                mprops2 = _merged_comp_props(e)
+                if mprops2.get("bVisible") is False:
                     continue
                 sm = (props.get("StaticMesh") or {}).get("ObjectPath")
                 bp_cls = outer_name.split("'")[0] if outer_name else ""
@@ -1363,6 +1595,17 @@ def extract_levels():
                 if not instances and isinstance(tpl2, dict):
                     instances = tpl2.get("instances") or []
                 if sm:
+                    if "SplineEditorMesh" in sm:
+                        continue
+                    sm_clean2 = sm.split(".")[0]
+                    ov_paths2 = _component_override_paths(
+                        mprops2,
+                        exps=exps,
+                        map_ue_path=raw_map_ue_path,
+                        mid_stats=mid_stats,
+                        sm_ue_path=sm_clean2,
+                        ue_to_glb=ue_to_glb,
+                    )
                     wmat = get_world_mat(idx)
                     stub_has_transform = bool(
                         props.get("RelativeLocation")
@@ -1387,10 +1630,20 @@ def extract_levels():
                                 is_quat=True,
                             )
                             trs = ue_mat4_to_godot_trs(mat4_mul(wmat, imat))
-                            meshes.append({"mesh": sm.split(".")[0], **trs})
+                            ientry = {"mesh": sm_clean2, **trs}
+                            if ov_paths2:
+                                ientry["override_materials"] = ov_paths2
+                                if ov_paths2[0]:
+                                    ientry["override_material"] = ov_paths2[0]
+                            meshes.append(ientry)
                     else:
                         trs = ue_mat4_to_godot_trs(wmat)
-                        meshes.append({"mesh": sm.split(".")[0], **trs})
+                        sentry = {"mesh": sm_clean2, **trs}
+                        if ov_paths2:
+                            sentry["override_materials"] = ov_paths2
+                            if ov_paths2[0]:
+                                sentry["override_material"] = ov_paths2[0]
+                        meshes.append(sentry)
                     continue
 
             # 3. Lights
@@ -1474,9 +1727,7 @@ def extract_levels():
                         wname = ""
                         if isinstance(wt, dict):
                             wname = (
-                                (wt.get("ObjectName") or "")
-                                .split(".")[-1]
-                                .rstrip("'")
+                                (wt.get("ObjectName") or "").split(".")[-1].rstrip("'")
                             )
                         weightmaps.append(
                             f"res://assets/ue/Raw/Maps/{h_rel}/{wname}.png"
@@ -1978,7 +2229,7 @@ def extract_levels():
                                 mat_path = mop.split(".")[0]
                                 break
                     break
-            if not mesh_path:
+            if not mesh_path or "SplineEditorMesh" in mesh_path:
                 splines_skipped += 1
                 continue
             out_pts = []
@@ -2034,11 +2285,11 @@ def extract_levels():
             )
 
         # LevelInstance actors reference another map and place it with the
-        # LevelInstanceComponent transform. The referenced sublevels are not in
-        # the AlwaysLoaded list, so without this pass their buildings/underpasses
-        # are absent from the runtime. Merge the generated sublevel data with the
-        # instance transform (rigid translation + yaw).
-        level_instance_sources = []
+        # LevelInstanceComponent transform. Collect pending refs in Pass 1 and
+        # resolve recursively in Pass 2 so alphabetical ordering (e.g.
+        # FTUE/FTUE_Geometry -> Guildhall/Facade_Apartment_CarUnderpass) and
+        # multi-level LevelInstance chains merge from fresh in-memory payloads.
+        pending_li = []
         for e in exps:
             if e.get("Type") != "LevelInstance":
                 continue
@@ -2051,11 +2302,7 @@ def extract_levels():
             if not rel_asset.startswith(prefix):
                 continue
             rel_asset = rel_asset[len(prefix) :]
-            if rel_asset == str(rel.with_suffix("")).replace("\\", "/"):
-                continue
-            sub_path = levels_dir / (rel_asset + ".tatlevel.json")
-            if not sub_path.exists():
-                total_level_instances_unresolved += 1
+            if rel_asset == rel_key:
                 continue
             comp_ref = (props.get("LevelInstanceComponent") or {}).get("ObjectName", "")
             ridx = comp_by_full_objname.get(comp_ref)
@@ -2070,51 +2317,9 @@ def extract_levels():
             if level_mat is not None:
                 inst_mat = mat4_mul(level_mat, inst_mat)
             inst_trs = ue_mat4_to_godot_trs(inst_mat)
-            try:
-                sub = json.loads(sub_path.read_text())
-            except Exception:
-                total_level_instances_unresolved += 1
-                continue
-            if not isinstance(sub, dict):
-                total_level_instances_unresolved += 1
-                continue
-            dest_map = {
-                "meshes": meshes,
-                "lights": lights,
-                "markers": markers,
-                "landscapes": landscapes,
-                "rect_lights": rect_lights,
-                "sky_lights": sky_lights,
-                "fog_volumes": fog_volumes,
-                "post_process": post_process,
-                "sky_atmospheres": sky_atmospheres,
-                "decals": decals,
-                "niagara": niagara,
-                "volumes": volumes,
-                "landscape_splines": landscape_splines,
-                "swinging_doors": swinging_doors,
-            }
-            for key, dest in dest_map.items():
-                for entry in sub.get(key) or []:
-                    if not isinstance(entry, dict):
-                        continue
-                    e2 = dict(entry)
-                    if key == "landscape_splines":
-                        pts = e2.get("points") or []
-                        e2["points"] = [
-                            _apply_godot_point(pt, inst_trs)
-                            for pt in pts
-                            if isinstance(pt, list) and len(pt) >= 3
-                        ]
-                    else:
-                        _apply_godot_transform(e2, inst_trs)
-                    e2["level_instance"] = f"{rel}::{e.get('Name')}"
-                    dest.append(e2)
-            total_level_instances_loaded += 1
-            level_instance_sources.append(rel_asset)
-            total_level_instance_meshes += len(sub.get("meshes") or [])
+            pending_li.append((rel_asset, inst_trs, e.get("Name")))
 
-        if (
+        has_base_entities = bool(
             meshes
             or lights
             or markers
@@ -2128,70 +2333,170 @@ def extract_levels():
             or niagara
             or volumes
             or landscape_splines
+        )
+        if has_base_entities or pending_li:
+            level_payloads[rel_key] = {
+                "rel": rel,
+                "pending_li": pending_li,
+                "niagara_unresolved": niagara_unresolved,
+                "decals_unresolved": decals_unresolved,
+                "splines_skipped": splines_skipped,
+                "data": {
+                    "source": str(rel),
+                    "meshes": meshes,
+                    "lights": lights,
+                    "markers": markers,
+                    "landscapes": landscapes,
+                    "rect_lights": rect_lights,
+                    "sky_lights": sky_lights,
+                    "fog_volumes": fog_volumes,
+                    "post_process": post_process,
+                    "sky_atmospheres": sky_atmospheres,
+                    "decals": decals,
+                    "niagara": niagara,
+                    "volumes": volumes,
+                    "landscape_splines": landscape_splines,
+                    "swinging_doors": swinging_doors,
+                    "door_leaves_excluded": door_leaves_excluded,
+                    "swinging_doors_unresolved": swinging_unresolved,
+                    "level_instances": [],
+                },
+            }
+
+    # Pass 2: Memoized recursive LevelInstance merge over in-memory payloads.
+    resolved_li = set()
+    visiting_li = set()
+    li_merge_keys = (
+        "meshes",
+        "lights",
+        "markers",
+        "landscapes",
+        "rect_lights",
+        "sky_lights",
+        "fog_volumes",
+        "post_process",
+        "sky_atmospheres",
+        "decals",
+        "niagara",
+        "volumes",
+        "landscape_splines",
+        "swinging_doors",
+    )
+
+    def resolve_li(key: str):
+        nonlocal total_level_instances_loaded, total_level_instance_meshes, total_level_instances_unresolved
+        if key in resolved_li or key in visiting_li:
+            return
+        meta = level_payloads.get(key)
+        if meta is None:
+            return
+        visiting_li.add(key)
+        pdata = meta["data"]
+        prel = meta["rel"]
+        for rel_asset, inst_trs, actor_name in meta["pending_li"]:
+            sub_meta = level_payloads.get(rel_asset)
+            if sub_meta is None:
+                total_level_instances_unresolved += 1
+                continue
+            resolve_li(rel_asset)
+            sub_data = sub_meta["data"]
+            for mkey in li_merge_keys:
+                dest = pdata[mkey]
+                for entry in list(sub_data.get(mkey) or []):
+                    if not isinstance(entry, dict):
+                        continue
+                    e2 = dict(entry)
+                    if "override_materials" in e2 and isinstance(e2["override_materials"], list):
+                        e2["override_materials"] = list(e2["override_materials"])
+                    if mkey == "landscape_splines":
+                        pts = e2.get("points") or []
+                        e2["points"] = [
+                            _apply_godot_point(pt, inst_trs)
+                            for pt in pts
+                            if isinstance(pt, list) and len(pt) >= 3
+                        ]
+                    else:
+                        _apply_godot_transform(e2, inst_trs)
+                    e2["level_instance"] = f"{prel}::{actor_name}"
+                    dest.append(e2)
+            total_level_instances_loaded += 1
+            pdata["level_instances"].append(rel_asset)
+            total_level_instance_meshes += len(sub_data.get("meshes") or [])
+        visiting_li.remove(key)
+        resolved_li.add(key)
+
+    for key in list(level_payloads.keys()):
+        resolve_li(key)
+
+    # Write Pass: emit non-empty .tatlevel.json payloads.
+    for key, meta in level_payloads.items():
+        pdata = meta["data"]
+        if (
+            pdata["meshes"]
+            or pdata["lights"]
+            or pdata["markers"]
+            or pdata["landscapes"]
+            or pdata["rect_lights"]
+            or pdata["sky_lights"]
+            or pdata["fog_volumes"]
+            or pdata["post_process"]
+            or pdata["sky_atmospheres"]
+            or pdata["decals"]
+            or pdata["niagara"]
+            or pdata["volumes"]
+            or pdata["landscape_splines"]
         ):
-            rel = jf.relative_to(EX / "json" / "Maps")
-            dst = levels_dir / rel.with_suffix(".tatlevel.json")
+            prel = meta["rel"]
+            dst = levels_dir / prel.with_suffix(".tatlevel.json")
             dst.parent.mkdir(parents=True, exist_ok=True)
-            dst.write_text(
-                json.dumps(
-                    {
-                        "source": str(rel),
-                        "meshes": meshes,
-                        "lights": lights,
-                        "markers": markers,
-                        "landscapes": landscapes,
-                        "rect_lights": rect_lights,
-                        "sky_lights": sky_lights,
-                        "fog_volumes": fog_volumes,
-                        "post_process": post_process,
-                        "sky_atmospheres": sky_atmospheres,
-                        "decals": decals,
-                        "niagara": niagara,
-                        "volumes": volumes,
-                        "landscape_splines": landscape_splines,
-                        "swinging_doors": swinging_doors,
-                        "door_leaves_excluded": door_leaves_excluded,
-                        "swinging_doors_unresolved": swinging_unresolved,
-                        "level_instances": level_instance_sources,
-                    }
-                )
-            )
+            dst.write_text(json.dumps(pdata))
             count += 1
-            total_meshes += len(meshes)
-            total_lights += len(lights)
-            if swinging_doors or swinging_unresolved:
+            total_meshes += len(pdata["meshes"])
+            total_lights += len(pdata["lights"])
+            if pdata["swinging_doors"] or pdata["swinging_doors_unresolved"]:
                 print(
-                    f"  {rel}: swinging_doors={len(swinging_doors)} "
-                    f"door_leaves_excluded={door_leaves_excluded} "
-                    f"unresolved={len(swinging_unresolved)}"
+                    f"  {prel}: swinging_doors={len(pdata['swinging_doors'])} "
+                    f"door_leaves_excluded={pdata['door_leaves_excluded']} "
+                    f"unresolved={len(pdata['swinging_doors_unresolved'])}"
                 )
             if (
-                rect_lights
-                or sky_lights
-                or fog_volumes
-                or post_process
-                or sky_atmospheres
-                or decals
-                or niagara
-                or volumes
-                or landscape_splines
+                pdata["rect_lights"]
+                or pdata["sky_lights"]
+                or pdata["fog_volumes"]
+                or pdata["post_process"]
+                or pdata["sky_atmospheres"]
+                or pdata["decals"]
+                or pdata["niagara"]
+                or pdata["volumes"]
+                or pdata["landscape_splines"]
             ):
                 print(
-                    f"  {rel}: rect={len(rect_lights)} sky={len(sky_lights)} fog={len(fog_volumes)} "
-                    f"pp={len(post_process)} atmo={len(sky_atmospheres)} decals={len(decals)} "
-                    f"niagara={len(niagara)} (+{niagara_unresolved} unresolved) "
-                    f"volumes={len(volumes)} splines={len(landscape_splines)} "
-                    f"(+{decals_unresolved} decal-no-material, +{splines_skipped} spline-no-mesh)"
+                    f"  {prel}: rect={len(pdata['rect_lights'])} sky={len(pdata['sky_lights'])} fog={len(pdata['fog_volumes'])} "
+                    f"pp={len(pdata['post_process'])} atmo={len(pdata['sky_atmospheres'])} decals={len(pdata['decals'])} "
+                    f"niagara={len(pdata['niagara'])} (+{meta['niagara_unresolved']} unresolved) "
+                    f"volumes={len(pdata['volumes'])} splines={len(pdata['landscape_splines'])} "
+                    f"(+{meta['decals_unresolved']} decal-no-material, +{meta['splines_skipped']} spline-no-mesh)"
                 )
 
+    for d in sorted(levels_dir.rglob("*"), reverse=True):
+        if d.is_dir() and not any(d.iterdir()):
+            d.rmdir()
+
     print(
-        f"Normalized {count} level JSONs -> {total_meshes} mesh instances, {total_lights} lights"
+        f"Normalized {count} level JSONs -> {total_meshes} mesh instances, {total_lights} lights "
+        f"(stale_removed={stale_removed})"
     )
     print(
         f"Level instances: {total_level_instances_loaded} loaded "
         f"({total_level_instance_meshes} meshes), "
         f"{total_level_instances_unresolved} unresolved"
     )
+    print(
+        f"MID overrides: mid_resolved={mid_stats['resolved']}, "
+        f"mid_unresolved={mid_stats['unresolved']}"
+    )
+    if mid_stats["samples"]:
+        print(f"  unresolved MID samples: {mid_stats['samples']}")
 
 
 def copy_fonts():

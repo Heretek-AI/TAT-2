@@ -1791,6 +1791,367 @@ func _initialize() -> void:
 		else:
 			print("PASS: GLB material-slot order (ThievesDen 8 incl surface7 MI_WoodBoardsOld, Windows 2 wood/glass, FacadeBase 6, FacadeTopA 6, RoofCity 3)")
 
+	# 31. Per-component OverrideMaterials + MID + BPP_* + UE-to-GLB slot remap + bVisible:false + SplineEditorMesh.
+	# 31a. Box_83DC6DA6 single-slot override in BeautifulCorner_Startscreen_P.
+	var ov_box_meshes: Array = []
+	var ov_box_file: FileAccess = FileAccess.open("res://data/generated/levels/Menus/MainMenu/BeautifulCorner_Startscreen_P.tatlevel.json", FileAccess.READ)
+	if ov_box_file != null:
+		var ov_box_parsed: Variant = JSON.parse_string(ov_box_file.get_as_text())
+		if ov_box_parsed is Dictionary:
+			ov_box_meshes = (ov_box_parsed as Dictionary).get("meshes", []) as Array
+	var ov_slab_count: int = 0
+	var ov_slab_bad: int = 0
+	for ov_m: Variant in ov_box_meshes:
+		if ov_m is Dictionary and str((ov_m as Dictionary).get("mesh", "")).ends_with("Box_83DC6DA6"):
+			ov_slab_count += 1
+			var ov_slab_arr: Variant = (ov_m as Dictionary).get("override_materials", [])
+			if not (ov_slab_arr is Array) or (ov_slab_arr as Array).is_empty() or not str((ov_slab_arr as Array)[0]).ends_with("MI_FloorStoneBlockF"):
+				ov_slab_bad += 1
+	if ov_slab_count != 5 or ov_slab_bad != 0:
+		printerr("FAIL: 31a Box_83DC6DA6 slab overrides (slabs=", ov_slab_count, " expected 5, bad=", ov_slab_bad, ")")
+		fails += 1
+	else:
+		print("PASS: 31a 5 Box_83DC6DA6 slabs carry MI_FloorStoneBlockF in override_materials")
+
+	# 31b. None-slot preservation + UE-to-GLB slot remapping in JSON.
+	var ov_front_meshes: Array = []
+	var ov_front_file: FileAccess = FileAccess.open("res://data/generated/levels/Buildings/Facades/Facade_Apartment_1000_2Story_Front.tatlevel.json", FileAccess.READ)
+	if ov_front_file != null:
+		var ov_front_parsed: Variant = JSON.parse_string(ov_front_file.get_as_text())
+		if ov_front_parsed is Dictionary:
+			ov_front_meshes = (ov_front_parsed as Dictionary).get("meshes", []) as Array
+	var ov_lsm_count: int = 0
+	var ov_lsm_bad: int = 0
+	var ov_lsm_want: Array = ["", "/Game/Art/Environment/Lights/LightModules/MI_LightSmGlassA_Off"]
+	for ov_fm: Variant in ov_front_meshes:
+		if ov_fm is Dictionary and str((ov_fm as Dictionary).get("mesh", "")).ends_with("SM_LightSmC_Iron"):
+			ov_lsm_count += 1
+			var ov_fd: Dictionary = ov_fm as Dictionary
+			var ov_farr: Variant = ov_fd.get("override_materials", [])
+			if not (ov_farr is Array) or (ov_farr as Array) != ov_lsm_want or ov_fd.has("override_material"):
+				ov_lsm_bad += 1
+	var ov_alley_meshes: Array = []
+	var ov_alley_file: FileAccess = FileAccess.open("res://data/generated/levels/Buildings/Alley/Alley_Arched_1800.tatlevel.json", FileAccess.READ)
+	if ov_alley_file != null:
+		var ov_alley_parsed: Variant = JSON.parse_string(ov_alley_file.get_as_text())
+		if ov_alley_parsed is Dictionary:
+			ov_alley_meshes = (ov_alley_parsed as Dictionary).get("meshes", []) as Array
+	var ov_facb_count: int = 0
+	var ov_facb_bad: int = 0
+	var ov_facb_slot1_hits: int = 0
+	var ov_arch_hits: int = 0
+	for ov_am: Variant in ov_alley_meshes:
+		if not (ov_am is Dictionary):
+			continue
+		var ov_ad: Dictionary = ov_am as Dictionary
+		var ov_amp: String = str(ov_ad.get("mesh", ""))
+		if ov_amp.ends_with("SM_FacadeLrgB"):
+			ov_facb_count += 1
+			var ov_aarr: Variant = ov_ad.get("override_materials", [])
+			if not (ov_aarr is Array) or (ov_aarr as Array).size() != 6:
+				ov_facb_bad += 1
+			else:
+				var ov_aa: Array = ov_aarr as Array
+				if str(ov_aa[0]) != "" or str(ov_aa[2]) != "" or str(ov_aa[3]) != "" or str(ov_aa[4]) != "" or not str(ov_aa[5]).ends_with("MI_WallStoneAlley_XYZ") or ov_ad.has("override_material"):
+					ov_facb_bad += 1
+				if str(ov_aa[1]).ends_with("MI_WallStoneAlley_XYZ"):
+					ov_facb_slot1_hits += 1
+		elif ov_amp.ends_with("SM_ArchCityA_4x8"):
+			var ov_arch_arr: Variant = ov_ad.get("override_materials", [])
+			if ov_arch_arr is Array and (ov_arch_arr as Array) == ["", "/Game/MaterialLibrary/Environment/Stone/WallsInterior/ML/MI_WallStoneAlley_XYZ"]:
+				ov_arch_hits += 1
+	if ov_lsm_count != 2 or ov_lsm_bad != 0 or ov_facb_count != 2 or ov_facb_bad != 0 or ov_facb_slot1_hits < 1 or ov_arch_hits < 1:
+		printerr("FAIL: 31b None-slot/GLB-remap (lsm=", ov_lsm_count, "/", ov_lsm_bad, " facb=", ov_facb_count, "/", ov_facb_bad, " s1=", ov_facb_slot1_hits, " arch=", ov_arch_hits, ")")
+		fails += 1
+	else:
+		print("PASS: 31b None-slot preservation + GLB-slot remapping (SM_LightSmC_Iron, SM_FacadeLrgB, SM_ArchCityA_4x8)")
+
+	# 31c. Multi-slot >1 distinct overrides in Facade_Storefront_1000.
+	var ov_sf_meshes: Array = []
+	var ov_sf_file: FileAccess = FileAccess.open("res://data/generated/levels/Buildings/Facades/Facade_Storefront_1000.tatlevel.json", FileAccess.READ)
+	if ov_sf_file != null:
+		var ov_sf_parsed: Variant = JSON.parse_string(ov_sf_file.get_as_text())
+		if ov_sf_parsed is Dictionary:
+			ov_sf_meshes = (ov_sf_parsed as Dictionary).get("meshes", []) as Array
+	var ov_sff_want: Array = [
+		"/Game/MaterialLibrary/Environment/Wood/ML/MI_StoreFrontTrimA_Painted",
+		"/Game/MaterialLibrary/Environment/Wood/ML/MI_StoreFrontTrimB_Painted_Inst",
+		"/Game/MaterialLibrary/Environment/Wood/ML/MI_StoreFrontWoodTile_Painted",
+		"/Game/MaterialLibrary/Environment/Wood/ML/MI_StoreFrontTrimB_Painted_Inst",
+	]
+	var ov_sff_count: int = 0
+	var ov_sff_bad: int = 0
+	for ov_sm: Variant in ov_sf_meshes:
+		if ov_sm is Dictionary and str((ov_sm as Dictionary).get("mesh", "")).ends_with("SM_Storefront_Facade_1200"):
+			ov_sff_count += 1
+			var ov_sarr: Variant = (ov_sm as Dictionary).get("override_materials", [])
+			if not (ov_sarr is Array) or (ov_sarr as Array) != ov_sff_want:
+				ov_sff_bad += 1
+	if ov_sff_count != 1 or ov_sff_bad != 0:
+		printerr("FAIL: 31c multi-slot overrides (count=", ov_sff_count, " bad=", ov_sff_bad, ")")
+		fails += 1
+	else:
+		print("PASS: 31c SM_Storefront_Facade_1200 carries 4-slot distinct override_materials")
+
+	# 31d. MID -> Parent resolution in Alley_Arched_1800 and Facade_Apartment_1000_2Story_Mansard.
+	var ov_lrgb_count: int = 0
+	var ov_lrgb_bad: int = 0
+	var ov_lrgb_want: Array = [
+		"/Game/Art/Environment/Lights/LightModules/MI_LightLrgABC",
+		"/Game/Art/Environment/Lights/LightModules/MI_LightLrgABC_Glass_Blue",
+	]
+	for ov_am2: Variant in ov_alley_meshes:
+		if ov_am2 is Dictionary and str((ov_am2 as Dictionary).get("mesh", "")).ends_with("SM_LightLrgB"):
+			ov_lrgb_count += 1
+			var ov_larr: Variant = (ov_am2 as Dictionary).get("override_materials", [])
+			if not (ov_larr is Array) or (ov_larr as Array) != ov_lrgb_want:
+				ov_lrgb_bad += 1
+	var ov_mans_meshes: Array = []
+	var ov_mans_file: FileAccess = FileAccess.open("res://data/generated/levels/Buildings/Facades/Facade_Apartment_1000_2Story_Mansard.tatlevel.json", FileAccess.READ)
+	if ov_mans_file != null:
+		var ov_mans_parsed: Variant = JSON.parse_string(ov_mans_file.get_as_text())
+		if ov_mans_parsed is Dictionary:
+			ov_mans_meshes = (ov_mans_parsed as Dictionary).get("meshes", []) as Array
+	var ov_mans_count: int = 0
+	var ov_mans_bad: int = 0
+	var ov_mans_want: Array = [
+		"/Game/Art/Environment/Lights/LightModules/MI_LightSmA_Iron",
+		"/Game/Art/Environment/Lights/LightModules/MI_LightSmGlassA_Blue",
+	]
+	for ov_mm: Variant in ov_mans_meshes:
+		if ov_mm is Dictionary and str((ov_mm as Dictionary).get("mesh", "")).ends_with("SM_LightSmC_Iron"):
+			ov_mans_count += 1
+			var ov_marr: Variant = (ov_mm as Dictionary).get("override_materials", [])
+			if not (ov_marr is Array) or (ov_marr as Array) != ov_mans_want:
+				ov_mans_bad += 1
+	if ov_lrgb_count != 2 or ov_lrgb_bad != 0 or ov_mans_count != 2 or ov_mans_bad != 0:
+		printerr("FAIL: 31d MID resolution (lrgb=", ov_lrgb_count, "/", ov_lrgb_bad, " mansard=", ov_mans_count, "/", ov_mans_bad, ")")
+		fails += 1
+	else:
+		print("PASS: 31d MID overrides resolved via Parent.ObjectPath (SM_LightLrgB, SM_LightSmC_Iron)")
+
+	# 31e. BPP_* template overrides in Facade_Monorail_Passthrough and Guildhall_PeripheryA.
+	var ov_mono_meshes: Array = []
+	var ov_mono_file: FileAccess = FileAccess.open("res://data/generated/levels/Guildhall/Facade_Monorail_Passthrough.tatlevel.json", FileAccess.READ)
+	if ov_mono_file != null:
+		var ov_mono_parsed: Variant = JSON.parse_string(ov_mono_file.get_as_text())
+		if ov_mono_parsed is Dictionary:
+			ov_mono_meshes = (ov_mono_parsed as Dictionary).get("meshes", []) as Array
+	var ov_bay_want: Array = [
+		"/Game/MaterialLibrary/Environment/Stone/WallsExterior/MI_Urban_Ext_Stone",
+		"",
+		"",
+		"/Game/MaterialLibrary/Environment/Glass/WIndowPanels/MI_GlassPanels_PeriphBuilding_Deco",
+	]
+	var ov_mono_bay: int = 0
+	var ov_mono_bad: int = 0
+	for ov_bm: Variant in ov_mono_meshes:
+		if ov_bm is Dictionary and str((ov_bm as Dictionary).get("mesh", "")).ends_with("SM_RoofUrbanB_Ext_BayWindowA_6x8"):
+			ov_mono_bay += 1
+			var ov_barr: Variant = (ov_bm as Dictionary).get("override_materials", [])
+			if not (ov_barr is Array) or (ov_barr as Array) != ov_bay_want:
+				ov_mono_bad += 1
+	var ov_gp_meshes: Array = []
+	var ov_gp_file: FileAccess = FileAccess.open("res://data/generated/levels/Guildhall/Guildhall_PeripheryA.tatlevel.json", FileAccess.READ)
+	if ov_gp_file != null:
+		var ov_gp_parsed: Variant = JSON.parse_string(ov_gp_file.get_as_text())
+		if ov_gp_parsed is Dictionary:
+			ov_gp_meshes = (ov_gp_parsed as Dictionary).get("meshes", []) as Array
+	var ov_gp_bay: int = 0
+	var ov_gp_4slot: int = 0
+	var ov_gp_stone0: int = 0
+	for ov_gm: Variant in ov_gp_meshes:
+		if ov_gm is Dictionary and str((ov_gm as Dictionary).get("mesh", "")).ends_with("SM_RoofUrbanB_Ext_BayWindowA_6x8"):
+			ov_gp_bay += 1
+			var ov_garr: Variant = (ov_gm as Dictionary).get("override_materials", [])
+			if ov_garr is Array and not (ov_garr as Array).is_empty():
+				if str((ov_garr as Array)[0]) == "/Game/MaterialLibrary/Environment/Stone/WallsExterior/MI_Urban_Ext_Stone":
+					ov_gp_stone0 += 1
+				if (ov_garr as Array) == ov_bay_want:
+					ov_gp_4slot += 1
+	if ov_mono_bay != 2 or ov_mono_bad != 0 or ov_gp_bay != 3 or ov_gp_4slot != 2 or ov_gp_stone0 != 3:
+		printerr("FAIL: 31e BPP_ overrides (mono=", ov_mono_bay, "/", ov_mono_bad, " gp=", ov_gp_bay, " 4slot=", ov_gp_4slot, " stone0=", ov_gp_stone0, ")")
+		fails += 1
+	else:
+		print("PASS: 31e BPP_* template overrides preserved (Facade_Monorail_Passthrough, Guildhall_PeripheryA)")
+
+	# 31f. bVisible:false filtering, stale *_Audio.tatlevel.json removal, SplineEditorMesh == 0, and global MID sweep.
+	var ov_den_meshes: Array = []
+	var ov_den_file: FileAccess = FileAccess.open("res://data/generated/levels/ThievesDenTest/ThievesDenTest_P.tatlevel.json", FileAccess.READ)
+	if ov_den_file != null:
+		var ov_den_parsed: Variant = JSON.parse_string(ov_den_file.get_as_text())
+		if ov_den_parsed is Dictionary:
+			ov_den_meshes = (ov_den_parsed as Dictionary).get("meshes", []) as Array
+	var ov_desk: int = 0
+	var ov_tables: int = 0
+	for ov_m2: Variant in ov_den_meshes:
+		if ov_m2 is Dictionary:
+			var ov_mp2: String = str((ov_m2 as Dictionary).get("mesh", ""))
+			if ov_mp2.ends_with("SM_Storefront_Countertop_Desk"):
+				ov_desk += 1
+			if ov_mp2.ends_with("SM_DiningTable_2m_End"):
+				ov_tables += 1
+	var ov_stale_audio: Array[String] = [
+		"res://data/generated/levels/OldManor/OldManor_Audio.tatlevel.json",
+		"res://data/generated/levels/Buildings/Guildhall/Building_Guildhall_POI_Audio.tatlevel.json",
+		"res://data/generated/levels/Guildhall/Guildhall_Audio.tatlevel.json",
+		"res://data/generated/levels/FTUE/FTUE_Audio.tatlevel.json",
+	]
+	var ov_stale_found: int = 0
+	for ov_ap: String in ov_stale_audio:
+		if FileAccess.file_exists(ov_ap):
+			ov_stale_found += 1
+	if ov_desk != 0 or ov_tables != 2 or ov_stale_found != 0:
+		printerr("FAIL: 31f bVisible/stale audio (desk=", ov_desk, " tables=", ov_tables, " stale_audio=", ov_stale_found, ")")
+		fails += 1
+	else:
+		print("PASS: 31f hidden desk absent, 2 tables stay, 4 stale *_Audio.tatlevel.json removed")
+
+	var ov_mats_db: Dictionary = {}
+	var ov_mats_file: FileAccess = FileAccess.open("res://data/generated/materials.json", FileAccess.READ)
+	if ov_mats_file != null:
+		var ov_mats_parsed: Variant = JSON.parse_string(ov_mats_file.get_as_text())
+		if ov_mats_parsed is Dictionary:
+			ov_mats_db = ov_mats_parsed as Dictionary
+	var ov_spline_files: Array[String] = []
+	var ov_spline_stack: Array[String] = ["res://data/generated/levels"]
+	while not ov_spline_stack.is_empty():
+		var ov_dir: String = ov_spline_stack.pop_back()
+		var ov_da: DirAccess = DirAccess.open(ov_dir)
+		if ov_da == null:
+			continue
+		ov_da.list_dir_begin()
+		var ov_entry: String = ov_da.get_next()
+		while ov_entry != "":
+			var ov_full: String = ov_dir.path_join(ov_entry)
+			if ov_da.current_is_dir():
+				ov_spline_stack.append(ov_full)
+			elif ov_entry.ends_with(".tatlevel.json"):
+				ov_spline_files.append(ov_full)
+			ov_entry = ov_da.get_next()
+		ov_da.list_dir_end()
+	var ov_spline_count: int = 0
+	var ov_unresolved_map_ov: int = 0
+	for ov_jp: String in ov_spline_files:
+		var ov_jf: FileAccess = FileAccess.open(ov_jp, FileAccess.READ)
+		if ov_jf == null:
+			continue
+		var ov_parsed2: Variant = JSON.parse_string(ov_jf.get_as_text())
+		if not (ov_parsed2 is Dictionary):
+			continue
+		for ov_e: Variant in ((ov_parsed2 as Dictionary).get("meshes", []) as Array):
+			if ov_e is Dictionary:
+				var ov_ed: Dictionary = ov_e as Dictionary
+				if str(ov_ed.get("mesh", "")).find("SplineEditorMesh") >= 0:
+					ov_spline_count += 1
+				var ov_eov: Variant = ov_ed.get("override_materials", [])
+				if ov_eov is Array:
+					for ov_slot: Variant in (ov_eov as Array):
+						var ov_s: String = str(ov_slot)
+						if ov_s.begins_with("/Game/Maps/") and not ov_mats_db.has(ov_s):
+							ov_unresolved_map_ov += 1
+		for ov_e2: Variant in ((ov_parsed2 as Dictionary).get("landscape_splines", []) as Array):
+			if ov_e2 is Dictionary and str((ov_e2 as Dictionary).get("mesh", "")).find("SplineEditorMesh") >= 0:
+				ov_spline_count += 1
+	if ov_spline_count != 0 or ov_spline_files.size() != 73 or ov_unresolved_map_ov != 0:
+		printerr("FAIL: 31f global sweep (SplineEditorMesh=", ov_spline_count, " files=", ov_spline_files.size(), " unresolved_map_ov=", ov_unresolved_map_ov, ")")
+		fails += 1
+	else:
+		print("PASS: 31f SplineEditorMesh=0 and unresolved_map_ov=0 across ", ov_spline_files.size(), " clean levels")
+
+	# 31g. Runtime level_loader.gd per-surface override_materials + non-mutation + batch separation.
+	var ov_host: Node3D = Node3D.new()
+	root.add_child(ov_host)
+	var ov_ll: Node = (load("res://src/core/level_loader.gd") as GDScript).new()
+	root.add_child(ov_ll)
+	await process_frame
+	var ov_ctx: Dictionary = ov_ll.call("_new_build_ctx", ov_host, null, false)
+
+	var ov_lsm_mp: String = "/Game/Art/Environment/Lights/LightModules/SM_LightSmC_Iron"
+	var ov_mat_iron: Variant = ov_ll.call("get_material_for_ue", "/Game/Art/Environment/Lights/LightModules/MI_LightSmA_Iron")
+	var ov_mat_off: Variant = ov_ll.call("get_material_for_ue", "/Game/Art/Environment/Lights/LightModules/MI_LightSmGlassA_Off")
+	var ov_mat_gold: Variant = ov_ll.call("get_material_for_ue", "/Game/Art/Environment/Lights/LightModules/MI_LightSmGlassA_Gold")
+	var ov_item1: Dictionary = {
+		"mp": ov_lsm_mp,
+		"override_materials": ["", "/Game/Art/Environment/Lights/LightModules/MI_LightSmGlassA_Off"],
+		"trs": [Transform3D.IDENTITY],
+		"collide": false,
+		"cell": Vector2i.ZERO,
+	}
+	var ov_built1: int = int(ov_ll.call("_build_one_draw_item", ov_item1, ov_host, ov_ctx))
+	var ov_node1: MeshInstance3D = ov_host.get_child(ov_host.get_child_count() - 1) as MeshInstance3D if ov_host.get_child_count() > 0 else null
+	var ov_r1_ok: bool = ov_built1 == 1 and ov_node1 != null and ov_node1.mesh != null \
+		and ov_node1.material_override == null \
+		and ov_node1.mesh.surface_get_material(0) == ov_mat_iron \
+		and ov_node1.mesh.surface_get_material(1) == ov_mat_off \
+		and ov_node1.mesh.surface_get_material(1) != ov_mat_gold \
+		and (ov_node1.get_meta("override_materials", []) as Array) == ov_lsm_want
+
+	var ov_item2: Dictionary = {
+		"mp": ov_lsm_mp,
+		"override_materials": [],
+		"trs": [Transform3D.IDENTITY, Transform3D(Basis.IDENTITY, Vector3(1, 0, 0))],
+		"collide": false,
+		"cell": Vector2i.ZERO,
+	}
+	var ov_built2: int = int(ov_ll.call("_build_one_draw_item", ov_item2, ov_host, ov_ctx))
+	var ov_node2: MultiMeshInstance3D = ov_host.get_child(ov_host.get_child_count() - 1) as MultiMeshInstance3D if ov_host.get_child_count() > 1 else null
+	var ov_r2_ok: bool = ov_built2 == 2 and ov_node2 != null and ov_node2.multimesh != null and ov_node2.multimesh.mesh != null \
+		and ov_node2.material_override == null \
+		and not ov_node2.has_meta("override_materials") \
+		and ov_node2.multimesh.mesh.surface_get_material(0) == ov_mat_iron \
+		and ov_node2.multimesh.mesh.surface_get_material(1) == ov_mat_gold
+
+	var ov_sff_mp: String = "/Game/Art/Environment/Storefront/Architecture/Facades/SM_Storefront_Facade_1200"
+	var ov_item3: Dictionary = {
+		"mp": ov_sff_mp,
+		"override_materials": ov_sff_want,
+		"trs": [Transform3D.IDENTITY],
+		"collide": false,
+		"cell": Vector2i.ZERO,
+	}
+	var ov_built3: int = int(ov_ll.call("_build_one_draw_item", ov_item3, ov_host, ov_ctx))
+	var ov_node3: MeshInstance3D = ov_host.get_child(ov_host.get_child_count() - 1) as MeshInstance3D if ov_host.get_child_count() > 2 else null
+	var ov_sff_m0: Variant = ov_ll.call("get_material_for_ue", ov_sff_want[0])
+	var ov_sff_m1: Variant = ov_ll.call("get_material_for_ue", ov_sff_want[1])
+	var ov_sff_m2: Variant = ov_ll.call("get_material_for_ue", ov_sff_want[2])
+	var ov_sff_m4: Variant = ov_ll.call("get_material_for_ue", "/Game/MaterialLibrary/Environment/Glass/Opaque/ML/MI_WindowDecoBOpaque")
+	var ov_sff_m5: Variant = ov_ll.call("get_material_for_ue", "/Game/MaterialLibrary/Environment/Stone/FloorExterior/MI_Manor_StoneBlockF")
+	var ov_r3_ok: bool = ov_built3 == 1 and ov_node3 != null and ov_node3.mesh != null \
+		and ov_node3.material_override == null \
+		and ov_node3.mesh.surface_get_material(0) == ov_sff_m0 \
+		and ov_node3.mesh.surface_get_material(1) == ov_sff_m1 \
+		and ov_node3.mesh.surface_get_material(2) == ov_sff_m2 \
+		and ov_node3.mesh.surface_get_material(3) == ov_sff_m1 \
+		and ov_node3.mesh.surface_get_material(4) == ov_sff_m4 \
+		and ov_node3.mesh.surface_get_material(5) == ov_sff_m5 \
+		and ov_sff_m0 != ov_sff_m1 and ov_sff_m1 != ov_sff_m2
+
+	var ov_batches: Dictionary = {}
+	ov_batches[ov_lsm_mp + "||" + "|/Game/Art/Environment/Lights/LightModules/MI_LightSmGlassA_Off"] = [Transform3D.IDENTITY] as Array[Transform3D]
+	ov_batches[ov_lsm_mp + "||" + "|/Game/Art/Environment/Lights/LightModules/MI_LightSmGlassA_Blue"] = [Transform3D.IDENTITY] as Array[Transform3D]
+	ov_batches["/Game/Art/Environment/City/Facades/SM_FacadeLrgB||" + "|||||/Game/MaterialLibrary/Environment/Stone/WallsInterior/ML/MI_WallStoneAlley_XYZ"] = [Transform3D.IDENTITY] as Array[Transform3D]
+	var ov_draw_items: Array = ov_ll.call("_make_draw_items", ov_batches, true) as Array
+	var ov_batch_ok: bool = ov_draw_items.size() == 3
+	if ov_batch_ok:
+		var ov_di0: Dictionary = ov_draw_items[0] as Dictionary
+		var ov_di1: Dictionary = ov_draw_items[1] as Dictionary
+		var ov_di2: Dictionary = ov_draw_items[2] as Dictionary
+		ov_batch_ok = str(ov_di0.get("mp", "")) == ov_lsm_mp \
+			and str(ov_di1.get("mp", "")) == ov_lsm_mp \
+			and (ov_di0.get("override_materials", []) as Array) != (ov_di1.get("override_materials", []) as Array) \
+			and str(ov_di2.get("mp", "")) == "/Game/Art/Environment/City/Facades/SM_FacadeLrgB" \
+			and (ov_di2.get("override_materials", []) as Array).size() == 6
+
+	if not ov_r1_ok or not ov_r2_ok or not ov_r3_ok or not ov_batch_ok:
+		printerr("FAIL: 31g runtime per-surface overrides (r1_none_slot=", ov_r1_ok, " r2_base_nonmut=", ov_r2_ok, " r3_multislot=", ov_r3_ok, " batch_sep=", ov_batch_ok, ")")
+		fails += 1
+	else:
+		print("PASS: 31g runtime per-surface surface_set_material, material_override==null, base cache non-mutation, batch separation")
+	ov_host.queue_free()
+	ov_ll.queue_free()
+	await process_frame
+
 	print("SUMMARY: fails=", fails)
 	quit(0 if fails == 0 else 1)
 

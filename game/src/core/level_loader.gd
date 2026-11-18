@@ -28,6 +28,7 @@ var _mesh_mats_db_lower: Dictionary = {}
 var _tex_cache: Dictionary = {}
 var _std_mat_cache: Dictionary = {}
 var _mesh_res_cache: Dictionary = {} # ue_path -> { "mesh": Mesh, "shape": Shape3D }
+var _override_mesh_cache: Dictionary = {} # ue_path + "||" + ov_key -> Mesh
 
 # --- Spatial chunking & culling tuning (perf P1/P2/P4) ----------------------
 ## Repeated meshes are partitioned into CHUNK_SIZE x CHUNK_SIZE XZ cells so every
@@ -517,6 +518,50 @@ func _bind_glb_materials(m: Mesh, mat_slots: Array) -> void:
 				m.surface_set_material(s, get_material_for_ue(mp2))
 
 
+func _extract_override_materials(entry: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	var raw_arr: Variant = entry.get("override_materials", null)
+	if raw_arr is Array:
+		for slot_var: Variant in (raw_arr as Array):
+			out.append("" if slot_var == null else str(slot_var))
+	elif entry.has("override_material"):
+		var single: String = str(entry.get("override_material", ""))
+		if single != "":
+			out.append(single)
+	while not out.is_empty() and out[out.size() - 1] == "":
+		out.pop_back()
+	var has_nonempty: bool = false
+	for s: String in out:
+		if s != "":
+			has_nonempty = true
+			break
+	if not has_nonempty:
+		return []
+	return out
+
+
+func _get_overridden_mesh(ue_path: String, base_mesh: Mesh, ov_arr: Array[String], ov_key: String) -> Mesh:
+	if base_mesh == null or ov_arr.is_empty():
+		return base_mesh
+	var cache_key: String = ue_path + "||" + ov_key
+	if _override_mesh_cache.has(cache_key):
+		return _override_mesh_cache[cache_key] as Mesh
+	var ov_mesh: Mesh = base_mesh.duplicate(false) as Mesh
+	if ov_mesh == null:
+		return base_mesh
+	var surf_count: int = ov_mesh.get_surface_count()
+	var limit: int = mini(ov_arr.size(), surf_count)
+	for s: int in range(limit):
+		var slot_mat_path: String = ov_arr[s]
+		if slot_mat_path == "":
+			continue
+		var mat: StandardMaterial3D = get_material_for_ue(slot_mat_path)
+		if mat != null:
+			ov_mesh.surface_set_material(s, mat)
+	_override_mesh_cache[cache_key] = ov_mesh
+	return ov_mesh
+
+
 func _find_first_mesh(n: Node) -> MeshInstance3D:
 	if n is MeshInstance3D:
 		return n
@@ -665,9 +710,14 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 		if "emissiveshapes/sm_sphere" in low_mp or "primitives/sm_shape" in low_mp or "fogsheet" in low_mp or "volumetric" in low_mp or "skysphere" in low_mp or "blocker" in low_mp:
 			continue
 		var tr: Transform3D = _dict_to_transform(m_dict)
-		if not batches.has(mp):
-			batches[mp] = [] as Array[Transform3D]
-		var arr: Array = batches[mp]
+		# Per-component OverrideMaterials split the batch so each MultiMesh
+		# shares an identically overridden duplicated Mesh resource.
+		var ov_arr: Array[String] = _extract_override_materials(m_dict)
+		var ov_key: String = "" if ov_arr.is_empty() else "|".join(ov_arr)
+		var bkey: String = mp if ov_key == "" else mp + "||" + ov_key
+		if not batches.has(bkey):
+			batches[bkey] = [] as Array[Transform3D]
+		var arr: Array = batches[bkey]
 		arr.append(tr)
 		var prop_pos: Vector3 = tr.origin
 		if "candelabra" in low_mp or "candle" in low_mp or "brazier" in low_mp or "torch" in low_mp:
@@ -854,13 +904,25 @@ func _cell_of(tr: Transform3D) -> Vector2i:
 func _make_draw_items(batches: Dictionary, collide: bool) -> Array:
 	var items: Array = []
 	for mp_var in batches.keys():
-		var mp: String = str(mp_var)
+		# Batch keys carry an optional "||ov_key" suffix where ov_key is
+		# "|".join(override_materials); UE mesh paths never contain "||".
+		var mp_key: String = str(mp_var)
+		var ov_key: String = ""
+		var mp: String = mp_key
+		var sep: int = mp_key.find("||")
+		if sep >= 0:
+			ov_key = mp_key.substr(sep + 2)
+			mp = mp_key.substr(0, sep)
+		var ov_arr: Array[String] = []
+		if ov_key != "":
+			for part: String in ov_key.split("|"):
+				ov_arr.append(part)
 		var trs: Array = batches[mp_var]
 		if trs.is_empty():
 			continue
 		if trs.size() == 1:
 			var single_tr: Transform3D = trs[0]
-			items.append({"mp": mp, "trs": trs, "collide": collide, "cell": _cell_of(single_tr)})
+			items.append({"mp": mp, "override_materials": ov_arr, "override_key": ov_key, "trs": trs, "collide": collide, "cell": _cell_of(single_tr)})
 			continue
 		var cells: Dictionary = {}
 		for tr_var in trs:
@@ -874,7 +936,7 @@ func _make_draw_items(batches: Dictionary, collide: bool) -> Array:
 			var ck_str: String = str(ck_var)
 			var parts: PackedStringArray = ck_str.split("_")
 			var cell: Vector2i = Vector2i(int(parts[0]), int(parts[1]))
-			items.append({"mp": mp, "trs": cells[ck_var], "collide": collide, "cell": cell})
+			items.append({"mp": mp, "override_materials": ov_arr, "override_key": ov_key, "trs": cells[ck_var], "collide": collide, "cell": cell})
 	return items
 
 
@@ -963,6 +1025,12 @@ func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> 
 	var mesh: Mesh = info["mesh"]
 	if mesh == null:
 		return 0
+	var ov_arr: Array[String] = _extract_override_materials(item)
+	if not ov_arr.is_empty():
+		var ov_key: String = str(item.get("override_key", ""))
+		if ov_key == "":
+			ov_key = "|".join(ov_arr)
+		mesh = _get_overridden_mesh(mp, mesh, ov_arr, ov_key)
 	var low_mp: String = mp.to_lower()
 	var count: int = trs.size()
 	var node: GeometryInstance3D
@@ -1001,6 +1069,8 @@ func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> 
 		node.lod_bias = MobileProfile.lod_bias()
 	node.set_meta("ue_mesh", mp)
 	node.set_meta("decorative", not bool(item.get("collide", false)))
+	if not ov_arr.is_empty():
+		node.set_meta("override_materials", ov_arr)
 	parent.add_child(node)
 	ctx["chunk_count"] = int(ctx.get("chunk_count", 0)) + 1
 

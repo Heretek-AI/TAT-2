@@ -1698,10 +1698,10 @@ static func _ensure_vm_shaders() -> void:
 render_mode depth_draw_opaque, specular_schlick_ggx;
 
 uniform float vm_fov_deg = 85.0;
-uniform sampler2D albedo_tex : source_color, hint_default_white, filter_linear_mipmap, repeat_enable;
-uniform sampler2D normal_tex : hint_normal, filter_linear_mipmap, repeat_enable;
-uniform sampler2D orm_tex : hint_default_white, filter_linear_mipmap, repeat_enable;
-uniform sampler2D emission_tex : source_color, hint_default_black, filter_linear_mipmap, repeat_enable;
+uniform sampler2D albedo_tex : source_color, hint_default_white, filter_linear, repeat_enable;
+uniform sampler2D normal_tex : hint_normal, filter_linear, repeat_enable;
+uniform sampler2D orm_tex : hint_default_white, filter_linear, repeat_enable;
+uniform sampler2D emission_tex : source_color, hint_default_black, filter_linear, repeat_enable;
 uniform vec4 albedo_tint : source_color = vec4(1.0);
 uniform float roughness_val = 0.78;
 uniform float metallic_val = 0.0;
@@ -1766,10 +1766,10 @@ void fragment() {
 render_mode blend_mix, depth_draw_never, cull_disabled, specular_schlick_ggx;
 
 uniform float vm_fov_deg = 85.0;
-uniform sampler2D albedo_tex : source_color, hint_default_white, filter_linear_mipmap, repeat_enable;
-uniform sampler2D opacity_tex : hint_default_white, filter_linear_mipmap, repeat_enable;
-uniform sampler2D normal_tex : hint_normal, filter_linear_mipmap, repeat_enable;
-uniform sampler2D orm_tex : hint_default_white, filter_linear_mipmap, repeat_enable;
+uniform sampler2D albedo_tex : source_color, hint_default_white, filter_linear, repeat_enable;
+uniform sampler2D opacity_tex : hint_default_white, filter_linear, repeat_enable;
+uniform sampler2D normal_tex : hint_normal, filter_linear, repeat_enable;
+uniform sampler2D orm_tex : hint_default_white, filter_linear, repeat_enable;
 uniform vec4 albedo_tint : source_color = vec4(1.0);
 uniform float opacity_scale = 1.0;
 uniform float roughness_val = 0.2;

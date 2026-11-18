@@ -6,10 +6,10 @@ render_mode blend_mix, depth_draw_never, cull_disabled, specular_schlick_ggx;
 // optional normal and ORM maps, and authored UE tint/scalar parameters from materials.json.
 // Thin-translucent center transmission and Fresnel opacity are R3 APPROXIMATIONS matching UE reference captures.
 
-uniform sampler2D albedo_tex : source_color, hint_default_white, filter_linear_mipmap, repeat_enable;
-uniform sampler2D opacity_tex : hint_default_white, filter_linear_mipmap, repeat_enable;
-uniform sampler2D normal_tex : hint_normal, filter_linear_mipmap, repeat_enable;
-uniform sampler2D orm_tex : hint_default_white, filter_linear_mipmap, repeat_enable;
+uniform sampler2D albedo_tex : source_color, hint_default_white, filter_linear, repeat_enable;
+uniform sampler2D opacity_tex : hint_default_white, filter_linear, repeat_enable;
+uniform sampler2D normal_tex : hint_normal, filter_linear, repeat_enable;
+uniform sampler2D orm_tex : hint_default_white, filter_linear, repeat_enable;
 
 uniform vec4 albedo_tint : source_color = vec4(1.0, 1.0, 1.0, 1.0);
 uniform vec3 translucent_color : source_color = vec3(1.0, 1.0, 1.0);

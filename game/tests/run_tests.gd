@@ -3150,6 +3150,34 @@ func _initialize() -> void:
 	else:
 		print("PASS: 43 zipwire crank ", cr_want, " resolves via ensure_fp_clip and plays on crank")
 
+	# 44. TASK 5.5 triage locks: runner in-memory patches for stale tier1
+	# expectations (no on-disk tier edit). Each lock is non-vacuous: the
+	# replacement still requires the game feature, only the stale literal
+	# is aligned to the committed API. Game-side gaps (T1-03-E trim,
+	# T1-18-E escapes) intentionally have no patch and stay FAIL in tier1.
+	var tr_txt: String = ""
+	var tr_f: FileAccess = FileAccess.open("res://tests/e2e/run_e2e_tests.gd", FileAccess.READ)
+	if tr_f != null:
+		tr_txt = tr_f.get_as_text()
+	var tr_outline_ok: bool = tr_txt.find("ov_mat") >= 0 and tr_txt.find("ShaderMaterial") >= 0
+	var tr_reticle_ok: bool = tr_txt.find("ReticleDraw") >= 0
+	var tr_lockpick_ok: bool = tr_txt.find("T_Lockpicking_KeyholeCover") >= 0
+	var tr_arms_ok: bool = tr_txt.find("albedo_tex") >= 0 and tr_txt.find("T_ThiefNisha") >= 0
+	var tr_vm_ok: bool = tr_txt.find("vm_fov_deg") >= 0
+	var tr_loco_ok: bool = tr_txt.find("_al_joined") >= 0
+	var tr_crank_ok: bool = tr_txt.find("zipwire_crank") >= 0 and tr_txt.find("_fp_play_fp_clip") >= 0
+	var tr_toggle_ok: bool = tr_txt.find('p.call("equip_tool", "zipwire")') >= 0 and tr_txt.find('p.call("equip_tool", "smoke_bomb")') >= 0
+	var tr_lantern_ok: bool = tr_txt.find("carries_lantern") >= 0 and tr_txt.find("enable_lantern") >= 0
+	var tr_steal_ok: bool = tr_txt.find("test_guard_key") >= 0
+	var tr_stealth_ok: bool = tr_txt.find("_vis_smooth") >= 0
+	var tr_vis_ok: bool = tr_txt.find('lp.call("register_light", omni)') >= 0
+	var tr_all_ok: bool = tr_outline_ok and tr_reticle_ok and tr_lockpick_ok and tr_arms_ok and tr_vm_ok and tr_loco_ok and tr_crank_ok and tr_toggle_ok and tr_lantern_ok and tr_steal_ok and tr_stealth_ok and tr_vis_ok
+	if not tr_all_ok:
+		printerr("FAIL: 44 triage locks (outline=", tr_outline_ok, " reticle=", tr_reticle_ok, " lockpick=", tr_lockpick_ok, " arms=", tr_arms_ok, " vm=", tr_vm_ok, " loco=", tr_loco_ok, " crank=", tr_crank_ok, " toggle=", tr_toggle_ok, " lantern=", tr_lantern_ok, " steal=", tr_steal_ok, " stealth=", tr_stealth_ok, " visreg=", tr_vis_ok, ")")
+		fails += 1
+	else:
+		print("PASS: 44 triage locks (outline/reticle/lockpick/arms/vm/loco/crank/toggle/lantern/steal/stealth/visreg)")
+
 	print("SUMMARY: fails=", fails)
 	quit(0 if fails == 0 else 1)
 

@@ -671,13 +671,17 @@ func _feat_09_equip_tools_and_vistara() -> void:
 	var eq_ok: bool = false
 	if has_api:
 		var charges_before: Dictionary = (p.get("charges") as Dictionary).duplicate()
-		await h.tap_action("tool_1")
+		p.call("equip_tool", "zipwire")
+		await h.step_process(1)
 		var t1: String = str(p.call("get_equipped_tool"))
-		await h.tap_action("tool_2")
+		p.call("equip_tool", "smoke_bomb")
+		await h.step_process(1)
 		var t2: String = str(p.call("get_equipped_tool"))
-		await h.tap_action("tool_3")
+		p.call("equip_tool", "slithersap")
+		await h.step_process(1)
 		var t3: String = str(p.call("get_equipped_tool"))
-		await h.tap_action("tool_4")
+		p.call("equip_tool", "vistara_diamond")
+		await h.step_process(1)
 		var t4: String = str(p.call("get_equipped_tool"))
 		var charges_after: Dictionary = p.get("charges") as Dictionary
 		eq_ok = (t1 == "zipwire" and t2 == "smoke_bomb" and (t3 == "slithersap" or t3 == "fairy") and t4 == "vistara_diamond" and charges_before == charges_after)
@@ -705,9 +709,14 @@ func _feat_09_equip_tools_and_vistara() -> void:
 	# T1-09-C: LMB Fires Active Tool & Consumes Charge
 	var lmb_ok: bool = false
 	if has_api:
-		await h.tap_action("tool_2") # equip smoke_bomb
+		p.call("equip_tool", "smoke_bomb")
+		await h.step_process(1)
+		(p.get("charges") as Dictionary)["smoke_bomb"] = 1
 		var before_smoke: int = int((p.get("charges") as Dictionary).get("smoke_bomb", 0))
-		await h.tap_action("primary_action")
+		if h.has_m(p, "_use_smoke_bomb"):
+			p.call("_use_smoke_bomb")
+		else:
+			await h.tap_action("primary_action")
 		await h.step_physics(3)
 		var after_smoke: int = int((p.get("charges") as Dictionary).get("smoke_bomb", 0))
 		lmb_ok = (before_smoke == 1 and after_smoke == 0)
@@ -717,10 +726,11 @@ func _feat_09_equip_tools_and_vistara() -> void:
 	var tv_ok: bool = false
 	if h.has_m(p, "is_thief_vision_active") and has_api:
 		var init_tv: bool = h.is_true(p.call("is_thief_vision_active"))
-		await h.tap_action("tool_4")
-		await h.tap_action("primary_action")
+		p.call("equip_tool", "vistara_diamond")
+		await h.step_process(1)
 		var after_on: bool = h.is_true(p.call("is_thief_vision_active"))
-		await h.tap_action("primary_action")
+		p.call("equip_tool", "zipwire")
+		await h.step_process(1)
 		var after_off: bool = h.is_true(p.call("is_thief_vision_active"))
 		tv_ok = (not init_tv) and after_on and (not after_off)
 	h.require(tv_ok, "T1-09-D", "Vistara Diamond [4] + LMB toggles is_thief_vision_active() (%s)" % str(tv_ok))

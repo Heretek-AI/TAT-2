@@ -2552,6 +2552,138 @@ func _initialize() -> void:
 	gl_ll.queue_free()
 	await process_frame
 
+	# 34. Phase 2A: Den exit door, Den lighting/probe/props, footprints, map table & tokens
+	gs.active_contract_order = 1
+	var p2_den: Node = (load("res://scenes/mission.tscn") as PackedScene).instantiate()
+	root.add_child(p2_den)
+	var p2_wait: int = 0
+	while p2_den.get_node_or_null("ThievesDenReflectionProbe") == null and p2_wait < 80:
+		await process_frame
+		p2_wait += 1
+	await process_frame
+
+	# 34a. Den exit door wired into swinging-door path (reusing SM_DoorInaccessibleA, no static duplicate)
+	var p2_exit: Node3D = p2_den.get_node_or_null("ThievesDenExitDoor") as Node3D
+	var p2_exit_piv: Node3D = p2_exit.get_node_or_null("DoorPivot") as Node3D if p2_exit != null else null
+	var p2_exit_has_mesh: bool = false
+	if p2_exit_piv != null:
+		for ch_d: Node in p2_exit_piv.get_children():
+			if ch_d is MeshInstance3D and (ch_d as MeshInstance3D).mesh != null:
+				p2_exit_has_mesh = true
+				break
+	var p2_exit_ok: bool = p2_exit != null and p2_exit.is_in_group("swinging_doors") \
+		and p2_exit.position.distance_to(Vector3(1.8171, 38.8279, 276.4258)) < 0.05 \
+		and p2_exit_has_mesh
+	var p2_den_ll: Node = p2_den.get("level_loader") as Node
+	var p2_dedup_ok: bool = false
+	if p2_den_ll != null:
+		var p2_acc: Dictionary = p2_den_ll.call("_new_accumulator") as Dictionary
+		p2_den_ll.call("_parse_sublevel_file", "res://data/generated/levels/ThievesDenTest/ThievesDenTest_P.tatlevel.json", p2_acc, p2_den)
+		var p2_batches: Dictionary = p2_acc.get("batches", {}) as Dictionary
+		var p2_static_inacc: int = 0
+		for bk_v: Variant in p2_batches.keys():
+			if str(bk_v).find("SM_DoorInaccessibleA") >= 0:
+				p2_static_inacc += 1
+		var p2_res: Dictionary = p2_acc.get("result", {}) as Dictionary
+		var p2_dsr: Array = p2_res.get("door_spawn_records", []) as Array
+		p2_dedup_ok = (p2_static_inacc == 0 and p2_dsr.size() == 1)
+	if not p2_exit_ok or not p2_dedup_ok:
+		printerr("FAIL: 34a Den exit door (exit_ok=", p2_exit_ok, " dedup_ok=", p2_dedup_ok, ")")
+		fails += 1
+	else:
+		print("PASS: 34a Den exit door wired into swinging-door path (SM_DoorInaccessibleA, 0 static duplicates)")
+
+	# 34b. Den lighting (hand fills <= 2.0, dark ambient, 1 ReflectionProbe, no invented red, no purple spheres)
+	var p2_fill_sum: float = 0.0
+	var p2_red_fill: bool = false
+	for fl_n: Node in get_nodes_in_group("den_hand_fills"):
+		if fl_n is Light3D and p2_den.is_ancestor_of(fl_n):
+			var lt: Light3D = fl_n as Light3D
+			p2_fill_sum += lt.light_energy
+			if lt.light_color.r > 0.7 and lt.light_color.g < 0.25 and lt.light_color.b < 0.25:
+				p2_red_fill = true
+	var p2_probes: int = 0
+	var p2_env_dark: bool = false
+	for ch_e: Node in p2_den.get_children():
+		if ch_e is ReflectionProbe:
+			p2_probes += 1
+		elif ch_e is WorldEnvironment and (ch_e as WorldEnvironment).environment != null:
+			var we: Environment = (ch_e as WorldEnvironment).environment
+			p2_env_dark = we.ambient_light_energy <= 0.15 and we.ambient_light_color.v <= 0.15
+	var p2_deco: Node = p2_den.get_node_or_null("DenDecorationPedestal")
+	var p2_deco_ok: bool = false
+	if p2_deco != null:
+		var p2_deco_all_real: bool = true
+		for _di: int in range(3):
+			var dvis: Node = p2_deco.get_node_or_null("DecorationVisual")
+			var found_real: bool = false
+			if dvis != null:
+				for dc: Node in dvis.get_children():
+					if dc is MeshInstance3D and not ((dc as MeshInstance3D).mesh is SphereMesh) and (dc as MeshInstance3D).mesh != null:
+						found_real = true
+			if not found_real:
+				p2_deco_all_real = false
+			p2_deco.call("interact", null)
+			await process_frame
+		p2_deco_ok = p2_deco_all_real
+	if p2_fill_sum <= 0.0 or p2_fill_sum > 2.01 or p2_red_fill or p2_probes != 1 or not p2_env_dark or not p2_deco_ok:
+		printerr("FAIL: 34b Den lighting/probe/props (fill_sum=", p2_fill_sum, " red=", p2_red_fill, " probes=", p2_probes, " dark_amb=", p2_env_dark, " deco_real=", p2_deco_ok, ")")
+		fails += 1
+	else:
+		print("PASS: 34b Den lighting (hand_fills=", snappedf(p2_fill_sum, 0.01), "<=2.0, dark_amb=true, probes=1, no_red=true, 3/3 real deco GLBs)")
+
+	# 34c. Footprints: authored T_Decal_Footstep.png alpha mask, zero emission
+	var p2_vfx: GDScript = load("res://src/core/vfx_manager.gd") as GDScript
+	var p2_fp_before: int = root.get_child_count()
+	p2_vfx.call("spawn_footprint_decal", Vector3.ZERO, Vector3.FORWARD, true)
+	var p2_fp: Node = root.get_child(root.get_child_count() - 1) if root.get_child_count() > p2_fp_before else root.get_node_or_null("FootprintLeft")
+	var p2_fp_ok: bool = false
+	var p2_fp_dbg: String = "node=null"
+	if p2_fp != null:
+		var p2_fp_q: MeshInstance3D = p2_fp.get_node_or_null("FootprintQuad") as MeshInstance3D
+		if p2_fp_q != null and p2_fp_q.mesh != null and p2_fp_q.mesh.material is StandardMaterial3D:
+			var fp_mat: StandardMaterial3D = p2_fp_q.mesh.material as StandardMaterial3D
+			var fp_tex: Texture2D = fp_mat.albedo_texture
+			var fp_alpha_ok: bool = false
+			var corner_a: float = -1.0
+			var max_a: float = 0.0
+			if fp_tex != null:
+				var fp_img: Image = fp_tex.get_image()
+				if fp_img != null and not fp_img.is_empty():
+					corner_a = fp_img.get_pixel(0, 0).a
+					for py: int in range(0, fp_img.get_height(), 4):
+						for px: int in range(0, fp_img.get_width(), 4):
+							var pa: float = fp_img.get_pixel(px, py).a
+							if pa > max_a:
+								max_a = pa
+					fp_alpha_ok = corner_a < 0.05 and max_a > 0.5
+			p2_fp_dbg = "em=" + str(fp_mat.emission_enabled) + " tex=" + str(fp_tex != null) + " ca=" + str(corner_a) + " ma=" + str(max_a)
+			p2_fp_ok = (fp_mat.emission_enabled == false and fp_mat.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA and fp_tex != null and fp_alpha_ok)
+		p2_fp.queue_free()
+	if not p2_fp_ok:
+		printerr("FAIL: 34c Footprint decal T_Decal_Footstep alpha mask / zero emission (", p2_fp_dbg, ")")
+		fails += 1
+	else:
+		print("PASS: 34c Footprint decal uses authored T_Decal_Footstep.png alpha mask with emission_enabled=false")
+
+	# 34d. Map table: +0.75 offset removed, token materials bound
+	var p2_tok_om: MeshInstance3D = p2_den.get_node_or_null("MapTokenOldManor") as MeshInstance3D
+	var p2_tok_gh: MeshInstance3D = p2_den.get_node_or_null("MapTokenGuildHall") as MeshInstance3D
+	var p2_tok_ok: bool = false
+	if p2_tok_om != null and p2_tok_gh != null:
+		var y_ok: bool = absf(p2_tok_om.position.y - 41.1337) < 0.1 and absf(p2_tok_gh.position.y - 41.1337) < 0.1
+		var om_mat: StandardMaterial3D = p2_tok_om.get_surface_override_material(0) as StandardMaterial3D
+		var gh_mat: StandardMaterial3D = p2_tok_gh.get_surface_override_material(0) as StandardMaterial3D
+		p2_tok_ok = y_ok and om_mat != null and om_mat.albedo_texture != null and gh_mat != null and gh_mat.albedo_texture != null
+	if not p2_tok_ok:
+		printerr("FAIL: 34d Map table tokens (om=", p2_tok_om != null, " gh=", p2_tok_gh != null, " y_om=", p2_tok_om.position.y if p2_tok_om != null else -1.0, ")")
+		fails += 1
+	else:
+		print("PASS: 34d Map table tokens seated at y=", snappedf(p2_tok_om.position.y, 0.001), " (+0.75 removed) with authored M_MapBuilding_* materials")
+
+	p2_den.queue_free()
+	await process_frame
+
 	print("SUMMARY: fails=", fails)
 	quit(0 if fails == 0 else 1)
 

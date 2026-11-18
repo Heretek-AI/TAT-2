@@ -379,6 +379,38 @@ static func spawn_window_godray(parent: Node, pos: Vector3, target_pos: Vector3)
 	shaft.basis = Basis(x_axis, y_axis, z_axis)
 
 
+const FOOTSTEP_MASK_PATH: String = "res://assets/ue/Raw/Art/UI/Icons/T_Decal_Footstep.png"
+static var _footstep_mask_tex: Texture2D = null
+
+
+static func _get_footstep_mask_tex() -> Texture2D:
+	if _footstep_mask_tex != null:
+		return _footstep_mask_tex
+	var src_img: Image = null
+	if ResourceLoader.exists(FOOTSTEP_MASK_PATH):
+		var loaded: Variant = load(FOOTSTEP_MASK_PATH)
+		if loaded is Texture2D:
+			src_img = (loaded as Texture2D).get_image()
+	if (src_img == null or src_img.is_empty()) and FileAccess.file_exists(FOOTSTEP_MASK_PATH):
+		src_img = Image.load_from_file(ProjectSettings.globalize_path(FOOTSTEP_MASK_PATH))
+	if src_img == null or src_img.is_empty():
+		return null
+	var img: Image = src_img.duplicate() as Image
+	if img.is_compressed():
+		img.decompress()
+	if img.get_format() != Image.FORMAT_RGBA8:
+		img.convert(Image.FORMAT_RGBA8)
+	var w: int = img.get_width()
+	var h: int = img.get_height()
+	for y: int in range(h):
+		for x: int in range(w):
+			var c: Color = img.get_pixel(x, y)
+			var lum: float = clampf(c.r * 0.299 + c.g * 0.587 + c.b * 0.114, 0.0, 1.0)
+			img.set_pixel(x, y, Color(1.0, 1.0, 1.0, lum))
+	_footstep_mask_tex = ImageTexture.create_from_image(img)
+	return _footstep_mask_tex
+
+
 static func spawn_footprint_decal(pos: Vector3, forward: Vector3, is_left: bool) -> void:
 	var tree: SceneTree = Engine.get_main_loop() as SceneTree
 	if tree == null:
@@ -401,30 +433,32 @@ static func spawn_footprint_decal(pos: Vector3, forward: Vector3, is_left: bool)
 	root.global_position = foot_pos
 	root.rotation.y = atan2(flat.x, flat.z)
 	var quad: PlaneMesh = PlaneMesh.new()
-	quad.size = Vector2(0.13, 0.30)
+	quad.size = Vector2(0.16, 0.32)
 	var mat: StandardMaterial3D = StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.no_depth_test = false
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	mat.albedo_color = Color(0.82, 0.92, 1.0, 0.55)
-	mat.emission_enabled = true
-	mat.emission = Color(0.65, 0.85, 1.0, 1.0)
-	mat.emission_energy_multiplier = 1.2
+	mat.albedo_color = Color(0.68, 0.74, 0.80, 0.55)
+	mat.roughness = 0.85
+	mat.emission_enabled = false
+	var mask_tex: Texture2D = _get_footstep_mask_tex()
+	if mask_tex != null:
+		mat.albedo_texture = mask_tex
 	quad.material = mat
 	var decal: MeshInstance3D = MeshInstance3D.new()
 	decal.name = "FootprintQuad"
 	decal.mesh = quad
+	if not is_left:
+		decal.scale = Vector3(-1.0, 1.0, 1.0)
 	decal.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(decal)
 	var fade_tween: Tween = tree.create_tween()
-	fade_tween.set_parallel(true)
 	fade_tween.tween_property(mat, "albedo_color:a", 0.0, 6.0)
-	fade_tween.tween_property(mat, "emission_energy_multiplier", 0.0, 6.0)
 	tree.create_timer(6.1).timeout.connect(root.queue_free)
 
 
-static func spawn_blue_wisp(parent: Node3D, local_pos: Vector3) -> Node3D:
+static func spawn_blue_wisp(parent: Node3D, local_pos: Vector3, light_energy: float = 0.30) -> Node3D:
 	if parent == null:
 		return null
 	var root: Node3D = Node3D.new()
@@ -469,7 +503,7 @@ static func spawn_blue_wisp(parent: Node3D, local_pos: Vector3) -> Node3D:
 	glow.name = "WispLight"
 	glow.light_color = Color(0.4, 0.8, 1.0)
 	glow.omni_range = 6.0
-	glow.light_energy = 1.5
+	glow.light_energy = light_energy
 	glow.shadow_enabled = false
 	root.add_child(glow)
 	var mote_mesh: SphereMesh = SphereMesh.new()

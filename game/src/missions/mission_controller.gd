@@ -195,7 +195,9 @@ func _setup_thieves_den_env(map_id: String) -> void:
 		if child is WorldEnvironment:
 			var wenv: WorldEnvironment = child as WorldEnvironment
 			if wenv.environment != null:
-				wenv.environment.ambient_light_energy = 0.18
+				wenv.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+				wenv.environment.ambient_light_color = Color(0.06, 0.08, 0.12)
+				wenv.environment.ambient_light_energy = 0.12
 				wenv.environment.background_color = Color(0.012, 0.016, 0.032)
 
 
@@ -324,43 +326,61 @@ func _map_id_to_sublevels(map_id: String, order: int = 2) -> Array[String]:
 
 
 func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> void:
-	# Cozy warm attic fill + cool window moonlight bounce so the Thieves' Den matches the official mood
+	# Subtle hand fill lights totaling <= 2.0 energy (0.35 + 0.65 + 0.35 + 0.25 + 0.30 = 1.90)
+	# so authored ThievesDen_Geo spots carry the room with no invented red.
 	var attic_fill := OmniLight3D.new()
+	attic_fill.name = "DenAtticFill"
 	attic_fill.position = anchor + Vector3(1.5, 2.6, -1.5)
-	attic_fill.light_color = Color(1.0, 0.74, 0.42)
-	attic_fill.light_energy = 1.4
+	attic_fill.light_color = Color(1.0, 0.78, 0.50)
+	attic_fill.light_energy = 0.35
 	attic_fill.omni_range = 13.0
 	attic_fill.omni_attenuation = 0.85
+	attic_fill.add_to_group("den_hand_fills")
 	add_child(attic_fill)
 	light_probe.register_light(attic_fill)
 
 	# Big arched window moonlight shaft (west wall, pouring diagonally onto the attic floor)
 	var win_pos: Vector3 = Vector3(-5.8, 43.0, 271.5)
 	var moon_beam := SpotLight3D.new()
+	moon_beam.name = "DenMoonBeam"
 	moon_beam.position = win_pos
 	moon_beam.light_color = Color(0.55, 0.82, 0.96)
-	moon_beam.light_energy = 1.8
+	moon_beam.light_energy = 0.65
 	moon_beam.spot_range = 14.0
 	moon_beam.spot_angle = 26.0
 	moon_beam.shadow_enabled = true
+	moon_beam.add_to_group("den_hand_fills")
 	add_child(moon_beam)
 	var beam_target: Vector3 = Vector3(-0.5, 40.1, 271.5)
 	moon_beam.look_at(beam_target, Vector3.UP)
 	light_probe.register_light(moon_beam)
 	VfxManager.spawn_window_godray(self, win_pos, beam_target)
 
+	# Single interior ReflectionProbe for Thieves' Den specular reflections.
+	var den_probe: ReflectionProbe = ReflectionProbe.new()
+	den_probe.name = "ThievesDenReflectionProbe"
+	den_probe.position = Vector3(1.5, 42.0, 271.5)
+	den_probe.size = Vector3(20.0, 10.0, 16.0)
+	den_probe.interior = true
+	den_probe.ambient_mode = ReflectionProbe.AMBIENT_DISABLED
+	den_probe.update_mode = ReflectionProbe.UPDATE_ONCE
+	den_probe.intensity = 0.8
+	add_child(den_probe)
+
 	var desk_positions: Array = ue_level_data.get("desk_positions", [])
 	var desk_pos: Vector3 = anchor + Vector3(3.2, 0.8, -2.5)
 	if not desk_positions.is_empty() and desk_positions[0] is Vector3:
-		desk_pos = desk_positions[0] + Vector3(0.0, 0.75, 0.0)
+		desk_pos = desk_positions[0] as Vector3
 	VfxManager.spawn_candle_flame(self, desk_pos + Vector3(0.35, 0.45, 0.0))
 
 	# Warm table pool light
 	var table_light := OmniLight3D.new()
+	table_light.name = "DenTableLight"
 	table_light.position = desk_pos + Vector3(0.0, 1.1, 0.0)
-	table_light.light_color = Color(1.0, 0.76, 0.42)
-	table_light.light_energy = 1.6
+	table_light.light_color = Color(1.0, 0.78, 0.48)
+	table_light.light_energy = 0.35
 	table_light.omni_range = 6.5
+	table_light.add_to_group("den_hand_fills")
 	add_child(table_light)
 	light_probe.register_light(table_light)
 
@@ -402,7 +422,11 @@ func interact(_actor: Node) -> void:
 	var ledger_pos: Vector3 = anchor + Vector3(3.4, 0.95, 1.8)
 	if not ledger_positions.is_empty() and ledger_positions[0] is Vector3:
 		ledger_pos = (ledger_positions[0] as Vector3) + Vector3(0.0, 0.12, 0.0)
-	VfxManager.spawn_blue_wisp(self, ledger_pos + Vector3(-0.35, 0.42, -0.15))
+	var wisp_node: Node3D = VfxManager.spawn_blue_wisp(self, ledger_pos + Vector3(-0.35, 0.42, -0.15), 0.30)
+	if wisp_node != null:
+		var wisp_light: Node = wisp_node.get_node_or_null("WispLight")
+		if wisp_light is Light3D:
+			(wisp_light as Light3D).add_to_group("den_hand_fills")
 	var ledger_area := Area3D.new()
 	ledger_area.position = ledger_pos
 	ledger_area.add_to_group("interactables")
@@ -434,10 +458,12 @@ func interact(_actor: Node) -> void:
 	if not wardrobe_positions.is_empty() and wardrobe_positions[0] is Vector3:
 		wardrobe_pos = wardrobe_positions[0] + Vector3(0.0, 0.8, 0.0)
 	var ward_light := OmniLight3D.new()
+	ward_light.name = "DenWardLight"
 	ward_light.position = wardrobe_pos + Vector3(0.0, 1.1, 0.4)
-	ward_light.light_color = Color(1.0, 0.8, 0.5)
-	ward_light.light_energy = 1.4
+	ward_light.light_color = Color(1.0, 0.82, 0.55)
+	ward_light.light_energy = 0.25
 	ward_light.omni_range = 5.5
+	ward_light.add_to_group("den_hand_fills")
 	add_child(ward_light)
 	light_probe.register_light(ward_light)
 
@@ -496,26 +522,50 @@ func open_ledger_ui() -> void:
 
 func _spawn_map_table_miniatures(desk_pos: Vector3) -> void:
 	var miniatures: Array[Dictionary] = [
-		{"path": "res://assets/ue/Content/Art/UI/Map/SM_MapBuilding_OldManor.glb", "offset": Vector3(-0.32, 0.16, -0.08), "scale": 0.08},
-		{"path": "res://assets/ue/Content/Art/UI/Map/SM_MapBuilding_GuildHall.glb", "offset": Vector3(0.28, 0.16, 0.10), "scale": 0.08},
+		{
+			"name": "MapTokenOldManor",
+			"ue_mesh": "/Game/Art/UI/Map/SM_MapBuilding_OldManor",
+			"ue_mat": "/Game/Art/UI/Map/M_MapBuilding_OldManor",
+			"offset": Vector3(-0.32, 0.02, -0.08),
+			"scale": 0.08,
+		},
+		{
+			"name": "MapTokenGuildHall",
+			"ue_mesh": "/Game/Art/UI/Map/SM_MapBuilding_GuildHall",
+			"ue_mat": "/Game/Art/UI/Map/M_MapBuilding_GuildHall",
+			"offset": Vector3(0.28, 0.02, 0.10),
+			"scale": 0.08,
+		},
 	]
 	for item: Dictionary in miniatures:
-		var mpath: String = str(item["path"])
-		if ResourceLoader.exists(mpath):
-			var packed: PackedScene = load(mpath) as PackedScene
-			if packed != null:
-				var inst: Node3D = packed.instantiate() as Node3D
-				if inst != null:
-					inst.position = desk_pos + (item["offset"] as Vector3)
-					var s: float = float(item["scale"])
-					inst.scale = Vector3(s, s, s)
-					add_child(inst)
+		var ue_mesh: String = str(item["ue_mesh"])
+		var ue_mat: String = str(item["ue_mat"])
+		var mesh: Mesh = null
+		if level_loader != null and level_loader.has_method("_get_mesh_and_shape"):
+			var info: Dictionary = level_loader.call("_get_mesh_and_shape", ue_mesh)
+			mesh = info.get("mesh") as Mesh
+		if mesh == null:
+			continue
+		var mi: MeshInstance3D = MeshInstance3D.new()
+		mi.name = str(item["name"])
+		mi.mesh = mesh
+		if level_loader != null and level_loader.has_method("get_material_for_ue"):
+			var tok_mat: Material = level_loader.call("get_material_for_ue", ue_mat) as Material
+			if tok_mat != null:
+				for s: int in range(mesh.get_surface_count()):
+					mi.set_surface_override_material(s, tok_mat)
+		mi.position = desk_pos + (item["offset"] as Vector3)
+		var sc: float = float(item["scale"])
+		mi.scale = Vector3(sc, sc, sc)
+		mi.add_to_group("map_table_tokens")
+		add_child(mi)
 
 
 func _spawn_thieves_den_props(anchor: Vector3) -> void:
 	# Trunk Decoration Pedestal -> [F] CHANGE DECORATION
 	var deco_pos: Vector3 = anchor + Vector3(-1.8, 0.9, 1.4)
 	var deco_area := Area3D.new()
+	deco_area.name = "DenDecorationPedestal"
 	deco_area.position = deco_pos
 	deco_area.add_to_group("interactables")
 	var dcol := CollisionShape3D.new()
@@ -529,6 +579,12 @@ func _spawn_thieves_den_props(anchor: Vector3) -> void:
 	var deco_script := GDScript.new()
 	deco_script.source_code = """extends Area3D
 const DECORATIONS: Array[String] = ["faberge_egg", "owl_statue", "emerald"]
+const DECO_UE_MESHES: Dictionary = {
+\t"faberge_egg": "/Game/Art/Gameplay/Loot/LootMajor/FabergeEgg/SM_FabergeEggA",
+\t"owl_statue": "/Game/Art/Gameplay/Loot/LootMajor/FigurineOwl/SM_StatueOwlA",
+\t"emerald": "/Game/Art/Gameplay/Loot/LootMajor/HugeJewel/SM_HugeJewel",
+}
+var level_loader: Node = null
 var active_idx: int = 0
 func _ready() -> void:
 \tvar saved: String = str(SaveSystem.data.get("active_decoration", "faberge_egg"))
@@ -550,40 +606,29 @@ func _rebuild_visual() -> void:
 \tfor c in vis.get_children():
 \t\tc.queue_free()
 \tvar key: String = DECORATIONS[active_idx]
-\tvar mesh_path: String = ""
-\tif key == "faberge_egg":
-\t\tmesh_path = "res://assets/ue/Content/Art/Environment/Props/SM_FabergeEggA.glb"
-\telif key == "owl_statue":
-\t\tmesh_path = "res://assets/ue/Content/Art/Environment/Props/SM_StatueOwlA.glb"
-\tif mesh_path != "" and ResourceLoader.exists(mesh_path):
-\t\tvar p: PackedScene = load(mesh_path) as PackedScene
+\tvar ue_mesh: String = str(DECO_UE_MESHES.get(key, ""))
+\tif ue_mesh != "" and level_loader != null and level_loader.has_method("_get_mesh_and_shape"):
+\t\tvar info: Dictionary = level_loader.call("_get_mesh_and_shape", ue_mesh)
+\t\tvar mesh: Mesh = info.get("mesh") as Mesh
+\t\tif mesh != null:
+\t\t\tvar mi := MeshInstance3D.new()
+\t\t\tmi.name = "DecoMesh"
+\t\t\tmi.mesh = mesh
+\t\t\tmi.scale = Vector3(0.35, 0.35, 0.35)
+\t\t\tvis.add_child(mi)
+\t\t\treturn
+\tvar glb_path: String = "res://assets/ue/Content/" + ue_mesh.trim_prefix("/Game/") + ".glb"
+\tif ue_mesh != "" and ResourceLoader.exists(glb_path):
+\t\tvar p: PackedScene = load(glb_path) as PackedScene
 \t\tif p != null:
 \t\t\tvar inst: Node3D = p.instantiate() as Node3D
 \t\t\tif inst != null:
 \t\t\t\tinst.scale = Vector3(0.35, 0.35, 0.35)
 \t\t\t\tvis.add_child(inst)
-\t\t\t\treturn
-\tvar mi := MeshInstance3D.new()
-\tvar sm := SphereMesh.new()
-\tsm.radius = 0.14
-\tsm.height = 0.24 if key == "faberge_egg" else 0.22
-\tvar mat := StandardMaterial3D.new()
-\tif key == "emerald":
-\t\tmat.albedo_color = Color(0.15, 0.9, 0.45)
-\t\tmat.emission_enabled = true
-\t\tmat.emission = Color(0.1, 0.85, 0.4)
-\telif key == "owl_statue":
-\t\tmat.albedo_color = Color(0.9, 0.72, 0.25)
-\t\tmat.metallic = 0.85
-\telse:
-\t\tmat.albedo_color = Color(0.45, 0.22, 0.72)
-\t\tmat.metallic = 0.5
-\tsm.material = mat
-\tmi.mesh = sm
-\tvis.add_child(mi)
 """
 	deco_script.reload()
 	deco_area.set_script(deco_script)
+	deco_area.set("level_loader", level_loader)
 	add_child(deco_area)
 
 	# Gramophone -> [F] TURN ON / [F] TURN OFF
@@ -1149,8 +1194,7 @@ func _spawn_loot_containers(stats: Dictionary) -> void:
 ## batches at parse time).
 func _spawn_swinging_doors(stats: Dictionary) -> void:
 	var doors: Array = stats.get("swinging_doors", [])
-	if doors.is_empty():
-		return
+	var door_records: Array = stats.get("door_spawn_records", [])
 	var count := 0
 	for d_var in doors:
 		if not (d_var is Dictionary):
@@ -1159,7 +1203,28 @@ func _spawn_swinging_doors(stats: Dictionary) -> void:
 		door.configure(d_var as Dictionary, level_loader)
 		add_child(door)
 		count += 1
-	print("TAT-2 swinging doors: ", count)
+	for rec_var in door_records:
+		if not (rec_var is Dictionary):
+			continue
+		var rec: Dictionary = rec_var as Dictionary
+		var leaf_mesh: String = str(rec.get("leaf_mesh", "/Game/Art/Environment/Props/Doors/SM_DoorInaccessibleA"))
+		var entry: Dictionary = {
+			"pos": rec.get("pos", [0.0, 0.0, 0.0]),
+			"basis": rec.get("basis", [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]),
+			"leaves": [{
+				"mesh": leaf_mesh,
+				"rel_pos": rec.get("leaf_rel_pos", [-1.22, 0.0, 0.0]),
+				"rel_basis": rec.get("leaf_rel_basis", [-1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, -1.0]),
+				"rel_scale": rec.get("leaf_rel_scale", [1.0, 0.8925, 1.0]),
+			}],
+		}
+		var exit_door := SwingingDoorScript.new()
+		exit_door.name = "ThievesDenExitDoor"
+		exit_door.configure(entry, level_loader)
+		add_child(exit_door)
+		count += 1
+	if count > 0:
+		print("TAT-2 swinging doors: ", count)
 
 
 func _spawn_escape(ue_escapes: Array, anchor: Vector3) -> void:

@@ -363,7 +363,7 @@ func get_material_for_ue(ue_mat_path: String) -> Material:
 	var is_translucent_early: bool = blend_early.find("translucent") >= 0 or blend_early.find("alphacomposite") >= 0
 	if is_translucent_early and ("glass" in low_mat or "window" in low_mat):
 		var glass_alb_path: String = str(texs_early.get("albedo", ""))
-		var glass_alb: Texture2D = null if glass_alb_path.to_lower().find("mapbuilding") >= 0 else _load_tex(glass_alb_path)
+		var glass_alb: Texture2D = null if (glass_alb_path.to_lower().find("mapbuilding") >= 0 and low_mat.find("mapbuilding") < 0) else _load_tex(glass_alb_path)
 		var glass_op: Texture2D = _load_tex(str(texs_early.get("opacity", "")))
 		if glass_alb != null or glass_op != null:
 			var gmat: ShaderMaterial = _build_glass_material(info, glass_alb, glass_op)
@@ -375,8 +375,9 @@ func get_material_for_ue(ue_mat_path: String) -> Material:
 	_apply_ue_render_flags(mat, info)
 	var texs: Dictionary = info.get("texs", {})
 	var alb: Texture2D = _load_tex(str(texs.get("albedo", "")))
-	# Hard rule: the UI map textures (T_MapBuilding_*) must never dress 3D geometry.
-	if str(texs.get("albedo", "")).to_lower().find("mapbuilding") >= 0:
+	# Hard rule: the UI map textures (T_MapBuilding_*) must never dress non-map 3D geometry,
+	# while M_MapBuilding_* token materials themselves bind their authored textures.
+	if str(texs.get("albedo", "")).to_lower().find("mapbuilding") >= 0 and low_mat.find("mapbuilding") < 0:
 		alb = null
 	if "oldmanorpanels" in low_mat:
 		var wood_alb: Texture2D = _load_tex("res://assets/ue/Raw/MaterialLibrary/Environment/Wood/Manor/T_ManorWood_D.png")
@@ -706,6 +707,7 @@ func _new_accumulator() -> Dictionary:
 			"major_loot_spawns": [] as Array,
 			"escape_points": [] as Array[Vector3],
 			"door_spawns": [] as Array[Vector3],
+			"door_spawn_records": [] as Array,
 			"loot_containers": [] as Array,
 			"swinging_doors": [] as Array,
 			"swinging_door_count": 0,
@@ -791,6 +793,29 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 	var collide_sublevel: bool = not _is_decorative_sublevel(json_path)
 	var batches: Dictionary = acc["batches"] if collide_sublevel else acc["batches_nocol"]
 
+	# Collect Thieves' Den exit door markers first so their SM_DoorInaccessibleA leaf
+	# is wired into the swinging-door path instead of spawning a static duplicate.
+	var den_exit_doors: Array[Dictionary] = []
+	for mk_pre in data_dict.get("markers", []):
+		if not (mk_pre is Dictionary):
+			continue
+		var mk_d: Dictionary = mk_pre as Dictionary
+		if str(mk_d.get("class", "")) == "BP_ThievesDenExitDoorInteractable_C":
+			var dp_arr: Array = mk_d.get("pos", [0.0, 0.0, 0.0])
+			var dp: Vector3 = Vector3(float(dp_arr[0]), float(dp_arr[1]), float(dp_arr[2]))
+			var rec: Dictionary = {
+				"name": str(mk_d.get("name", "")),
+				"class": "BP_ThievesDenExitDoorInteractable_C",
+				"pos": [dp.x, dp.y, dp.z],
+				"basis": (mk_d.get("basis", [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]) as Array).duplicate(),
+				"leaf_mesh": "/Game/Art/Environment/Props/Doors/SM_DoorInaccessibleA",
+				"leaf_rel_pos": [-1.22, 0.0, 0.0],
+				"leaf_rel_basis": [-1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, -1.0],
+				"leaf_rel_scale": [1.0, 0.8925, 1.0],
+				"_pivot_vec": dp,
+			}
+			den_exit_doors.append(rec)
+
 	for m in data_dict.get("meshes", []):
 		if not (m is Dictionary):
 			continue
@@ -798,6 +823,22 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 		var mp: String = str(m_dict.get("mesh", ""))
 		if mp == "":
 			continue
+		if not den_exit_doors.is_empty() and mp.ends_with("SM_DoorInaccessibleA"):
+			var tr_door: Transform3D = _dict_to_transform(m_dict)
+			var matched_exit: bool = false
+			for ex_rec: Dictionary in den_exit_doors:
+				var piv_v: Vector3 = ex_rec["_pivot_vec"] as Vector3
+				if tr_door.origin.distance_to(piv_v) <= 2.0:
+					var rel_p: Vector3 = tr_door.origin - piv_v
+					ex_rec["leaf_rel_pos"] = [rel_p.x, rel_p.y, rel_p.z]
+					var sc_d: Variant = m_dict.get("scale", null)
+					if sc_d is Array and (sc_d as Array).size() >= 3:
+						var sca: Array = sc_d as Array
+						ex_rec["leaf_rel_scale"] = [float(sca[0]), float(sca[1]), float(sca[2])]
+					matched_exit = true
+					break
+			if matched_exit:
+				continue
 		# Authored moon billboards render as gray quads now that the real sky
 		# carries the moon disc (texture stripped by cooking); hide them and
 		# count them, never spawning geometry/collision for them.
@@ -958,6 +999,11 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 				"basis": (mk.get("basis", [1, 0, 0, 0, 1, 0, 0, 0, 1]) as Array).duplicate(),
 				"scale": sc,
 			})
+	for ex_rec2: Dictionary in den_exit_doors:
+		var clean_rec: Dictionary = ex_rec2.duplicate()
+		clean_rec.erase("_pivot_vec")
+		var dsr: Array = result["door_spawn_records"]
+		dsr.append(clean_rec)
 
 	# Level-component arrays: collected verbatim, validated at build time.
 	for d in data_dict.get("decals", []):

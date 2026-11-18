@@ -92,9 +92,14 @@ func _build_leaf(leaf: Dictionary) -> void:
 	if mesh == null:
 		return
 	var ltr := _leaf_transform(leaf)
+	var sc_arr: Variant = leaf.get("rel_scale", null)
+	var leaf_scale: Vector3 = Vector3.ONE
+	if sc_arr is Array and (sc_arr as Array).size() >= 3:
+		var sa: Array = sc_arr as Array
+		leaf_scale = Vector3(maxf(absf(float(sa[0])), 0.01), maxf(absf(float(sa[1])), 0.01), maxf(absf(float(sa[2])), 0.01))
 	var mi := MeshInstance3D.new()
 	mi.mesh = mesh
-	mi.transform = ltr
+	mi.transform = Transform3D(ltr.basis.scaled(leaf_scale), ltr.origin)
 	pivot.add_child(mi)
 	var aabb: AABB = mesh.get_aabb()
 	var body := StaticBody3D.new()
@@ -103,9 +108,13 @@ func _build_leaf(leaf: Dictionary) -> void:
 	body.transform = ltr
 	var cs := CollisionShape3D.new()
 	var box := BoxShape3D.new()
-	box.size = Vector3(maxf(aabb.size.x, 0.05), maxf(aabb.size.y, 0.05), maxf(aabb.size.z, 0.05))
+	box.size = Vector3(
+		maxf(aabb.size.x * leaf_scale.x, 0.05),
+		maxf(aabb.size.y * leaf_scale.y, 0.05),
+		maxf(aabb.size.z * leaf_scale.z, 0.05)
+	)
 	cs.shape = box
-	cs.position = aabb.get_center()
+	cs.position = aabb.get_center() * leaf_scale
 	body.add_child(cs)
 	pivot.add_child(body)
 

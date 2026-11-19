@@ -7,7 +7,7 @@ MOBILE_ABI  ?= arm64
 QA_CONTRACT ?= 0
 KEYSTORE_PROPS := $(HOME)/.config/tat2/keystore.properties
 
-.PHONY: build-extractor extract anims normalize audit test run audio-tools android-prepare android-debug android-debug-gl android-release
+.PHONY: build-extractor extract anims normalize audit test run audio-tools linux-build linux-run android-prepare android-debug android-debug-gl android-release
 
 build-extractor:
 	DOTNET_ROOT=$(HOME)/.dotnet10 PATH=$(HOME)/.dotnet10:$(PATH) $(DOTNET) build tools/tat-extract -c Release
@@ -42,6 +42,16 @@ test:
 
 run:
 	$(GODOT) --path game
+
+# --- Linux x86_64 export (Tier-1 gate) ----------------------------------------
+# Requires the 4.7.2 Linux export templates (linux_debug.x86_64 /
+# linux_release.x86_64) in the flatpak template dir; see game/export_presets.cfg.
+# Output lands under gitignored build/.
+linux-build:
+	$(GODOT) --headless --path game --export-release "Linux" $(CURDIR)/build/tat2-linux-x86_64
+
+linux-run:
+	$(CURDIR)/build/tat2-linux-x86_64
 
 # --- Android (internal sideload build) --------------------------------------
 # Generates build/mobile_game/ (gitignored) with ETC2 textures, Mobile renderer

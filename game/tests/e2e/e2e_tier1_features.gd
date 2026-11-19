@@ -372,12 +372,15 @@ func _feat_05_mission_lobby_stage() -> void:
 		"MissionLobby sublevels=%s no_fake_roof=%s meshes=%d" % [str(has_lobby_sublevels), str(not has_plane_roof), loaded_meshes]
 	)
 
-	# T1-05-B: CameraActor_0 FOV 20.0 horizontal -> 11.33 vertical at 16:9
+	# T1-05-B: CameraActor_0 authored FieldOfView 20.0 is UE horizontal FOV,
+	# mapped in Godot via keep_aspect KEEP_WIDTH (fov property reads 20.0,
+	# rendered vertical stays ~11.33 at 16:9).
 	var stage_cam: Camera3D = h.find_all_of_class(stage_vp, "Camera3D")[0] as Camera3D if (stage_vp != null and not h.find_all_of_class(stage_vp, "Camera3D").is_empty()) else null
+	var fov_is_hfov: bool = stage_cam != null and stage_cam.keep_aspect == Camera3D.KEEP_WIDTH
 	h.require(
-		stage_cam != null and absf(stage_cam.fov - 11.33) < 0.25,
+		stage_cam != null and absf(stage_cam.fov - 20.0) < 0.25 and fov_is_hfov,
 		"T1-05-B",
-		"MissionPrep stage camera FOV=%.2f (expected 11.33)" % (stage_cam.fov if stage_cam != null else -1.0)
+		"MissionPrep stage camera FOV=%.2f (expected 20.0 hFOV, KEEP_WIDTH=%s)" % [(stage_cam.fov if stage_cam != null else -1.0), str(fov_is_hfov)]
 	)
 
 	# T1-05-C: midnight_clear_mission_lobby Environment
@@ -1010,6 +1013,13 @@ func _feat_12_disguise_integrity_rows() -> void:
 
 # --- Feature #13: In-Game Stealth Ball, SoundWaves & Top-Left Health Bar ---
 func _feat_13_hud_stealth_sound_health() -> void:
+	# Cross-feat isolation: a stale player from an earlier feat can linger in
+	# the "player" group (T1-13-E flaked with players=2 in full runs while
+	# passing in isolation). Purge leftovers so the HUD binds this feat's player.
+	for stale: Node in h.tree.get_nodes_in_group("player"):
+		if is_instance_valid(stale):
+			stale.queue_free()
+	await h.step_process(2)
 	var arena_d: Dictionary = await h.make_arena()
 	var arena: Node3D = arena_d["arena"] as Node3D
 	var gs: Node = h.game_state()

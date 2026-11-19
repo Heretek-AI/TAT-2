@@ -213,11 +213,12 @@ func _bVA_05_mission_prep() -> void:
 					empty_ok = false
 	h.require(tested_empty >= 3 and empty_ok, "T2-05-A", "Unauthored CDT_Missions hide icon cleanly without invented texture (checked=%d)" % tested_empty)
 
-	# T2-05-B: CameraActor_0 Aspect & 720p Framing Clamp
+	# T2-05-B: CameraActor_0 Aspect & 720p Framing Clamp (authored FOV 20.0 is
+	# UE horizontal FOV, mapped via keep_aspect KEEP_WIDTH; see T1-05-B).
 	var stage_vp: SubViewport = h.find_all_of_class(mp, "SubViewport")[0] as SubViewport if not h.find_all_of_class(mp, "SubViewport").is_empty() else null
 	var stage_cam: Camera3D = h.find_all_of_class(stage_vp, "Camera3D")[0] as Camera3D if (stage_vp != null and not h.find_all_of_class(stage_vp, "Camera3D").is_empty()) else null
 	var no_clip: bool = mp.get_global_rect().size.y <= 720.0 + 1.0
-	h.require(stage_cam != null and absf(stage_cam.fov - 11.33) < 0.25 and no_clip, "T2-05-B", "MissionPrep 720p non-clipping & FOV 11.33 (fov=%.2f)" % (stage_cam.fov if stage_cam != null else -1.0))
+	h.require(stage_cam != null and absf(stage_cam.fov - 20.0) < 0.25 and stage_cam.keep_aspect == Camera3D.KEEP_WIDTH and no_clip, "T2-05-B", "MissionPrep 720p non-clipping & FOV 20.0 hFOV (fov=%.2f)" % (stage_cam.fov if stage_cam != null else -1.0))
 
 	# T2-05-C: ThiefNisha Head-to-Body Offset (Vector3.ZERO)
 	var head_n: Node3D = mp.get("_thief_head_node") as Node3D

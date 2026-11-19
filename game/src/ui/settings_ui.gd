@@ -100,9 +100,13 @@ func open_settings() -> void:
 	visible = true
 	_prev_mouse_mode = Input.mouse_mode
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	if AudioManager != null and AudioManager.has_method("play_ui"):
+		AudioManager.play_ui("open")
 
 
 func close_settings() -> void:
+	if AudioManager != null and AudioManager.has_method("play_ui"):
+		AudioManager.play_ui("back")
 	_apply_live(true)
 	closed.emit()
 	Input.mouse_mode = _prev_mouse_mode
@@ -110,6 +114,8 @@ func close_settings() -> void:
 
 
 func switch_tab(idx: int) -> void:
+	if AudioManager != null and AudioManager.has_method("play_ui"):
+		AudioManager.play_ui("click")
 	_tab_idx = clampi(idx, 0, TABS.size() - 1)
 	_refresh_tabs()
 

@@ -222,7 +222,7 @@ static func _get_candle_quad() -> QuadMesh:
 		return _candle_quad
 	var sh := Shader.new()
 	# R3 APPROXIMATE procedural billboarding teardrop flame quad stand-in for
-	# compiled Niagara candle flame VectorVM bytecode, calibrated to Steam ref.
+	# compiled Niagara candle-flame bytecode, calibrated to Steam ref.
 	sh.code = """shader_type spatial;
 render_mode blend_add, unshaded, cull_disabled, depth_draw_never;
 void vertex() {
@@ -392,7 +392,10 @@ static func spawn_window_godray(parent: Node, pos: Vector3, target_pos: Vector3)
 	if _godray_shader == null:
 		_godray_shader = Shader.new()
 		# R3 APPROXIMATE soft volumetric dust beam stand-in (open-ended cylinder).
-		_godray_shader.code = "shader_type spatial;\nrender_mode blend_add, unshaded, cull_disabled, depth_draw_never;\nuniform vec4 beam_color : source_color = vec4(0.45, 0.72, 0.96, 0.065);\nvoid fragment() {\n\tfloat fresnel = pow(abs(dot(normalize(NORMAL), normalize(VIEW))), 2.8);\n\tfloat axial = smoothstep(0.0, 0.35, UV.y) * smoothstep(1.0, 0.42, UV.y);\n\tALBEDO = beam_color.rgb;\n\tALPHA = beam_color.a * fresnel * axial;\n}\n"
+		# REFERENCE_MATCHED tint: teal-cyan moon shaft vs KF02/KF06 (S03/S05 Den
+		# window shaft). Compiled Niagara falloff curves were not decoded; the
+		# fresnel*axial envelope is an eyeballed stand-in, never an extraction.
+		_godray_shader.code = "shader_type spatial;\nrender_mode blend_add, unshaded, cull_disabled, depth_draw_never;\nuniform vec4 beam_color : source_color = vec4(0.42, 0.78, 0.90, 0.07);\nvoid fragment() {\n\tfloat fresnel = pow(abs(dot(normalize(NORMAL), normalize(VIEW))), 2.8);\n\tfloat axial = smoothstep(0.0, 0.35, UV.y) * smoothstep(1.0, 0.42, UV.y);\n\tALBEDO = beam_color.rgb;\n\tALPHA = beam_color.a * fresnel * axial;\n}\n"
 	var shaft_mat: ShaderMaterial = ShaderMaterial.new()
 	shaft_mat.shader = _godray_shader
 	cone.material = shaft_mat
@@ -639,3 +642,374 @@ static func set_prop_highlight(target: Node, enabled: bool) -> void:
 				mi.remove_meta("_vfx_hl_orig")
 	if not enabled and target.has_meta("_vfx_hl_meshes"):
 		target.remove_meta("_vfx_hl_meshes")
+
+
+## R3 APPROXIMATE / REFERENCE_MATCHED (HL-1): KF20 smoke plume (S18).
+## Opaque grey-white volumetric puffs billow horizontally across the grand
+## steps after the 02:28.20 ignition flash. The compiled Niagara system
+## (NS_SmokeBomb: 24 scripts, 172 curve LUTs) was NOT decompiled: puff count,
+## velocities, growth and the 25 s box life (5 x 5 x 4 m authored volume) are
+## eyeballed stand-ins around the real extents/ttl defaults. Never an extraction.
+static func spawn_smoke_plume(parent: Node, pos: Vector3, half_extents: Vector3 = Vector3(2.5, 2.0, 2.5), ttl: float = 25.0) -> Node3D:
+	if parent == null:
+		return null
+	var root: Node3D = Node3D.new()
+	root.name = "SmokePlume"
+	parent.add_child(root)
+	root.global_position = pos
+
+	var flash: OmniLight3D = OmniLight3D.new()
+	flash.name = "IgnitionFlash"
+	flash.light_color = Color(1.0, 0.75, 0.45)
+	flash.omni_range = 9.0
+	flash.light_energy = 3.0
+	root.add_child(flash)
+
+	var puff_mesh: SphereMesh = SphereMesh.new()
+	puff_mesh.radius = 0.9
+	puff_mesh.height = 1.8
+	puff_mesh.radial_segments = 12
+	puff_mesh.rings = 8
+	var puff_mat: StandardMaterial3D = StandardMaterial3D.new()
+	puff_mat.vertex_color_use_as_albedo = true
+	puff_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	puff_mat.albedo_color = Color(0.86, 0.88, 0.91, 0.5)
+	puff_mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+	puff_mesh.material = puff_mat
+
+	var pm: ParticleProcessMaterial = ParticleProcessMaterial.new()
+	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	pm.emission_box_extents = half_extents
+	pm.direction = Vector3(0.0, 0.3, 0.0)
+	pm.spread = 70.0
+	pm.gravity = Vector3(0.0, 0.3, 0.0)
+	pm.initial_velocity_min = 0.8
+	pm.initial_velocity_max = 2.4
+	pm.damping_min = 0.8
+	pm.damping_max = 1.2
+	pm.scale_min = 0.8
+	pm.scale_max = 1.7
+	pm.color = Color(0.84, 0.86, 0.89, 1.0)
+
+	var burst: GPUParticles3D = GPUParticles3D.new()
+	burst.name = "PlumeBurst"
+	burst.amount = 56
+	burst.lifetime = 4.5
+	burst.one_shot = true
+	burst.explosiveness = 0.8
+	burst.process_material = pm
+	burst.draw_pass_1 = puff_mesh
+	burst.visibility_aabb = AABB(Vector3(-6, -1, -6), Vector3(12, 8, 12))
+	root.add_child(burst)
+	burst.emitting = true
+
+	var tree: SceneTree = parent.get_tree()
+	if tree != null:
+		var fade: Tween = tree.create_tween()
+		fade.tween_property(flash, "light_energy", 0.0, 1.2)
+		tree.create_timer(maxf(ttl, 6.0)).timeout.connect(root.queue_free)
+	return root
+
+
+## R3 APPROXIMATE / REFERENCE_MATCHED (HL-1): KF27 foyer security beams (S24).
+## Two crisp horizontal white volumetric beams span wall-to-wall from the
+## mid-height circular emitter (KF27#1) with the glowing cyan diamond node
+## above the far doors (KF27#3). Sweep/trip logic lives in HL-3 territory;
+## this only dresses the S24 look. Never an extraction.
+static func spawn_foyer_security_beam(parent: Node, emitter_pos: Vector3, far_pos: Vector3, beam_gap: float = 0.7, ttl: float = 0.0) -> Node3D:
+	if parent == null:
+		return null
+	var root: Node3D = Node3D.new()
+	root.name = "FoyerSecurityBeam"
+	parent.add_child(root)
+	root.global_position = emitter_pos
+	for i: int in [-1, 1]:
+		var a: Vector3 = emitter_pos + Vector3(0.0, float(i) * beam_gap * 0.5, 0.0)
+		var b: Vector3 = far_pos + Vector3(0.0, float(i) * beam_gap * 0.5, 0.0)
+		_add_beam_mesh(root, a, b, 0.035, Color(1.0, 1.0, 1.0, 0.55), 2.0)
+	var housing_mesh: SphereMesh = SphereMesh.new()
+	housing_mesh.radius = 0.12
+	housing_mesh.height = 0.24
+	var housing_mat: StandardMaterial3D = StandardMaterial3D.new()
+	housing_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	housing_mat.albedo_color = Color(1.0, 1.0, 1.0)
+	housing_mat.emission_enabled = true
+	housing_mat.emission = Color(1.0, 1.0, 1.0)
+	housing_mat.emission_energy_multiplier = 3.0
+	housing_mesh.material = housing_mat
+	var housing: MeshInstance3D = MeshInstance3D.new()
+	housing.name = "BeamEmitter"
+	housing.mesh = housing_mesh
+	housing.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(housing)
+	housing.global_position = emitter_pos
+	var glow: OmniLight3D = OmniLight3D.new()
+	glow.name = "EmitterGlow"
+	glow.light_color = Color(1.0, 1.0, 1.0)
+	glow.omni_range = 5.0
+	glow.light_energy = 1.2
+	root.add_child(glow)
+	glow.global_position = emitter_pos
+	var node_mesh: BoxMesh = BoxMesh.new()
+	node_mesh.size = Vector3(0.22, 0.22, 0.22)
+	var node_mat: StandardMaterial3D = StandardMaterial3D.new()
+	node_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	node_mat.albedo_color = Color(0.3, 0.95, 1.0)
+	node_mat.emission_enabled = true
+	node_mat.emission = Color(0.3, 0.95, 1.0)
+	node_mat.emission_energy_multiplier = 3.0
+	node_mesh.material = node_mat
+	var node: MeshInstance3D = MeshInstance3D.new()
+	node.name = "CeilingNode"
+	node.mesh = node_mesh
+	node.rotation = Vector3(0.0, 0.0, deg_to_rad(45.0))
+	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(node)
+	node.global_position = (emitter_pos + far_pos) * 0.5 + Vector3(0.0, 1.6, 0.0)
+	if ttl > 0.0:
+		var tree: SceneTree = parent.get_tree()
+		if tree != null:
+			tree.create_timer(ttl).timeout.connect(root.queue_free)
+	return root
+
+
+## Shared unshaded beam quad-strip used by the foyer/grapple-style beams.
+static func _add_beam_mesh(root: Node3D, a: Vector3, b: Vector3, radius: float, color: Color, energy: float) -> void:
+	var offset: Vector3 = b - a
+	var dist: float = offset.length()
+	if dist < 0.001:
+		return
+	var cyl: CylinderMesh = CylinderMesh.new()
+	cyl.top_radius = radius
+	cyl.bottom_radius = radius
+	cyl.height = dist
+	cyl.radial_segments = 12
+	cyl.rings = 1
+	var beam_mat: StandardMaterial3D = StandardMaterial3D.new()
+	beam_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	beam_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	beam_mat.albedo_color = color
+	beam_mat.emission_enabled = true
+	beam_mat.emission = Color(color.r, color.g, color.b)
+	beam_mat.emission_energy_multiplier = energy
+	cyl.material = beam_mat
+	var beam: MeshInstance3D = MeshInstance3D.new()
+	beam.name = "SecurityBeam"
+	beam.mesh = cyl
+	beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(beam)
+	beam.global_position = (a + b) * 0.5
+	_aim_node(beam, a, b)
+
+
+static func _aim_node(node: Node3D, a: Vector3, b: Vector3) -> void:
+	var offset: Vector3 = b - a
+	if offset.length() < 0.001:
+		return
+	var y_axis: Vector3 = offset.normalized()
+	var up_hint: Vector3 = Vector3.UP
+	if absf(y_axis.dot(Vector3.UP)) > 0.99:
+		up_hint = Vector3.RIGHT
+	var x_axis: Vector3 = up_hint.cross(y_axis).normalized()
+	var z_axis: Vector3 = x_axis.cross(y_axis).normalized()
+	node.basis = Basis(x_axis, y_axis, z_axis)
+
+
+## R3 APPROXIMATE / REFERENCE_MATCHED (HL-1): KF28 purple arcane ward (S25).
+## Faceted crystalline barrier sealing the foyer archway (KF28#2) plus the
+## sustained ward hum lighting. Shard layout is eyeballed from the frame;
+## nothing here decodes a Niagara system. Never an extraction.
+static func spawn_arcane_ward(parent: Node, pos: Vector3, facing_yaw: float = 0.0, width: float = 3.2, height: float = 2.6, ttl: float = 0.0) -> Node3D:
+	if parent == null:
+		return null
+	var root: Node3D = Node3D.new()
+	root.name = "ArcaneWard"
+	parent.add_child(root)
+	root.global_position = pos
+	root.rotation.y = facing_yaw
+	var veil_mesh: PlaneMesh = PlaneMesh.new()
+	veil_mesh.size = Vector2(width, height)
+	var veil_mat: StandardMaterial3D = StandardMaterial3D.new()
+	veil_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	veil_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	veil_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	veil_mat.albedo_color = Color(0.55, 0.2, 0.9, 0.35)
+	veil_mat.emission_enabled = true
+	veil_mat.emission = Color(0.55, 0.2, 0.9)
+	veil_mat.emission_energy_multiplier = 1.6
+	veil_mesh.material = veil_mat
+	var veil: MeshInstance3D = MeshInstance3D.new()
+	veil.name = "WardVeil"
+	veil.mesh = veil_mesh
+	veil.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(veil)
+	veil.position = Vector3(0.0, height * 0.5, 0.0)
+	var shard_mat: StandardMaterial3D = StandardMaterial3D.new()
+	shard_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	shard_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	shard_mat.albedo_color = Color(0.6, 0.25, 1.0, 0.85)
+	shard_mat.emission_enabled = true
+	shard_mat.emission = Color(0.55, 0.2, 0.9)
+	shard_mat.emission_energy_multiplier = 2.5
+	for i: int in range(6):
+		var shard_mesh: BoxMesh = BoxMesh.new()
+		var t: float = float(i) / 5.0
+		shard_mesh.size = Vector3(0.18, height * (0.45 + 0.25 * (1.0 - absf(t * 2.0 - 1.0))), 0.08)
+		shard_mesh.material = shard_mat
+		var shard: MeshInstance3D = MeshInstance3D.new()
+		shard.name = "WardShard"
+		shard.mesh = shard_mesh
+		shard.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		root.add_child(shard)
+		shard.position = Vector3(lerpf(-width * 0.45, width * 0.45, t), height * 0.5, 0.05 * float(i % 2))
+		shard.rotation = Vector3(0.0, 0.12 * float(i - 2), 0.10 * float((i % 3) - 1))
+	var wash: OmniLight3D = OmniLight3D.new()
+	wash.name = "WardWash"
+	wash.light_color = Color(0.55, 0.25, 1.0)
+	wash.omni_range = 7.0
+	wash.light_energy = 1.6
+	root.add_child(wash)
+	wash.position = Vector3(0.0, height * 0.6, 1.0)
+	var mote_mesh: SphereMesh = SphereMesh.new()
+	mote_mesh.radius = 0.035
+	mote_mesh.height = 0.07
+	var mote_mat: StandardMaterial3D = StandardMaterial3D.new()
+	mote_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mote_mat.albedo_color = Color(0.7, 0.4, 1.0)
+	mote_mat.emission_enabled = true
+	mote_mat.emission = Color(0.65, 0.35, 1.0)
+	mote_mat.emission_energy_multiplier = 2.0
+	mote_mesh.material = mote_mat
+	var pm: ParticleProcessMaterial = ParticleProcessMaterial.new()
+	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	pm.emission_box_extents = Vector3(width * 0.45, 0.2, 0.3)
+	pm.direction = Vector3(0.0, 1.0, 0.0)
+	pm.spread = 20.0
+	pm.gravity = Vector3(0.0, 0.4, 0.0)
+	pm.initial_velocity_min = 0.3
+	pm.initial_velocity_max = 0.8
+	pm.scale_min = 0.5
+	pm.scale_max = 1.0
+	pm.color = Color(0.7, 0.4, 1.0, 1.0)
+	var motes: GPUParticles3D = GPUParticles3D.new()
+	motes.name = "WardMotes"
+	motes.amount = 28
+	motes.lifetime = 2.2
+	motes.process_material = pm
+	motes.draw_pass_1 = mote_mesh
+	motes.visibility_aabb = AABB(Vector3(-4, -1, -2), Vector3(8, 5, 4))
+	root.add_child(motes)
+	motes.position = Vector3(0.0, 0.4, 0.0)
+	motes.emitting = true
+	if ttl > 0.0:
+		var tree: SceneTree = parent.get_tree()
+		if tree != null:
+			tree.create_timer(ttl).timeout.connect(root.queue_free)
+	return root
+
+
+## R3 APPROXIMATE / REFERENCE_MATCHED (HL-1): KF28 green vine lock (S25).
+## Emissive thorny vines across the Basement Stairs doorway (KF28#5).
+## Placement/trigger is HL-3 gameplay logic; this only dresses the look.
+## Never an extraction.
+static func spawn_vine_lock(parent: Node, pos: Vector3, facing_yaw: float = 0.0, width: float = 2.0, height: float = 2.4, ttl: float = 0.0) -> Node3D:
+	if parent == null:
+		return null
+	var root: Node3D = Node3D.new()
+	root.name = "VineLock"
+	parent.add_child(root)
+	root.global_position = pos
+	root.rotation.y = facing_yaw
+	var vine_mat: StandardMaterial3D = StandardMaterial3D.new()
+	vine_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	vine_mat.albedo_color = Color(0.25, 0.9, 0.35)
+	vine_mat.emission_enabled = true
+	vine_mat.emission = Color(0.2, 0.85, 0.3)
+	vine_mat.emission_energy_multiplier = 2.0
+	for i: int in range(8):
+		var strand_mesh: CylinderMesh = CylinderMesh.new()
+		strand_mesh.top_radius = 0.02
+		strand_mesh.bottom_radius = 0.07
+		strand_mesh.height = height * (0.5 + 0.1 * float(i % 3))
+		strand_mesh.radial_segments = 6
+		strand_mesh.material = vine_mat
+		var strand: MeshInstance3D = MeshInstance3D.new()
+		strand.name = "VineStrand"
+		strand.mesh = strand_mesh
+		strand.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		root.add_child(strand)
+		var t: float = float(i) / 7.0
+		strand.position = Vector3(lerpf(-width * 0.45, width * 0.45, t), height * 0.45, 0.0)
+		strand.rotation = Vector3(0.15 * float((i % 3) - 1), 0.0, lerpf(-0.5, 0.5, t))
+	var glow: OmniLight3D = OmniLight3D.new()
+	glow.name = "VineGlow"
+	glow.light_color = Color(0.25, 0.9, 0.35)
+	glow.omni_range = 5.0
+	glow.light_energy = 1.2
+	root.add_child(glow)
+	glow.position = Vector3(0.0, height * 0.5, 0.6)
+	if ttl > 0.0:
+		var tree: SceneTree = parent.get_tree()
+		if tree != null:
+			tree.create_timer(ttl).timeout.connect(root.queue_free)
+	return root
+
+
+## R3 APPROXIMATE / REFERENCE_MATCHED (HL-1): KF29 crimson alarm wash (S26).
+## Intense crimson spotlight from the wall security fixture over the slate
+## stairs (KF29#2, 03:38.20-03:39.60). The crimson cast is authored light,
+## not a particle effect. ttl fades the fixture wash, then frees it.
+## Never an extraction.
+static func spawn_crimson_alarm(parent: Node, fixture_pos: Vector3, target_pos: Vector3, ttl: float = 6.0) -> Node3D:
+	if parent == null:
+		return null
+	var root: Node3D = Node3D.new()
+	root.name = "CrimsonAlarm"
+	parent.add_child(root)
+	root.global_position = fixture_pos
+	var offset: Vector3 = target_pos - fixture_pos
+	var dist: float = maxf(offset.length(), 0.5)
+	var spot: SpotLight3D = SpotLight3D.new()
+	spot.name = "AlarmSpot"
+	spot.light_color = Color(1.0, 0.07, 0.05)
+	spot.light_energy = 4.5
+	spot.spot_range = dist + 4.0
+	spot.spot_angle = 32.0
+	spot.spot_attenuation = 1.0
+	root.add_child(spot)
+	_aim_spot(spot, offset)
+	var bulb_mesh: SphereMesh = SphereMesh.new()
+	bulb_mesh.radius = 0.09
+	bulb_mesh.height = 0.18
+	var bulb_mat: StandardMaterial3D = StandardMaterial3D.new()
+	bulb_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	bulb_mat.albedo_color = Color(1.0, 0.1, 0.08)
+	bulb_mat.emission_enabled = true
+	bulb_mat.emission = Color(1.0, 0.08, 0.06)
+	bulb_mat.emission_energy_multiplier = 4.0
+	bulb_mesh.material = bulb_mat
+	var bulb: MeshInstance3D = MeshInstance3D.new()
+	bulb.name = "AlarmBulb"
+	bulb.mesh = bulb_mesh
+	bulb.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(bulb)
+	var tree: SceneTree = parent.get_tree()
+	if tree != null and ttl > 0.0:
+		var fade: Tween = tree.create_tween()
+		fade.tween_property(spot, "light_energy", 0.0, ttl)
+		tree.create_timer(ttl + 0.1).timeout.connect(root.queue_free)
+	return root
+
+
+static func _aim_spot(spot: SpotLight3D, offset: Vector3) -> void:
+	if offset.length() < 0.001:
+		return
+	var fwd: Vector3 = offset.normalized()
+	var up_hint: Vector3 = Vector3.UP
+	if absf(fwd.dot(Vector3.UP)) > 0.99:
+		up_hint = Vector3.RIGHT
+	# SpotLight3D shines along -Z: build the basis with -Z toward the target.
+	var z_axis: Vector3 = -fwd
+	var x_axis: Vector3 = up_hint.cross(z_axis).normalized()
+	var y_axis: Vector3 = z_axis.cross(x_axis).normalized()
+	spot.basis = Basis(x_axis, y_axis, z_axis)

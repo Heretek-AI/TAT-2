@@ -91,6 +91,8 @@ func _ready() -> void:
 func open_ledger() -> void:
 	visible = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	if AudioManager != null and AudioManager.has_method("play_ui"):
+		AudioManager.play_ui("ledger_open")
 	_refresh_journal()
 	_refresh_market()
 	_show_tab(_tab)
@@ -433,6 +435,8 @@ func _refresh_preview() -> void:
 
 func _on_item_pressed(item: Dictionary) -> void:
 	_selected = item
+	if AudioManager != null and AudioManager.has_method("play_ui"):
+		AudioManager.play_ui("click")
 	_refresh_preview()
 
 
@@ -440,6 +444,8 @@ func _on_buy_pressed() -> void:
 	if _selected.is_empty():
 		return
 	var ok: bool = SaveSystem.purchase_item(str(_selected.get("cat", "")), str(_selected.get("id", "")), int(_selected.get("cost", 0)))
+	if AudioManager != null and AudioManager.has_method("play_ui"):
+		AudioManager.play_ui("confirm" if ok else "back")
 	if ok:
 		_refresh_market()
 	else:
@@ -452,6 +458,8 @@ func _on_buy_pressed() -> void:
 
 
 func _on_back_pressed() -> void:
+	if AudioManager != null and AudioManager.has_method("play_ui"):
+		AudioManager.play_ui("back")
 	_close_ui()
 
 

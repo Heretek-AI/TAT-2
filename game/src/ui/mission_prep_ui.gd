@@ -46,10 +46,12 @@ const GuardAnimLibScript: GDScript = preload("res://src/core/animation_library.g
 const MobileProfile: GDScript = preload("res://src/core/mobile_profile.gd")
 const ThemeScript: GDScript = preload("res://src/ui/art_nouveau_theme.gd")
 
-## Authored MissionLobby_Geo3 CameraActor_0 (FieldOfView 20.0 hFOV 16:9 -> 11.33 vFOV).
+## Authored MissionLobby_Geo3 CameraActor_0 FieldOfView 20.0. UE FOV is the
+## horizontal field of view, so Godot maps it with keep_aspect KEEP_WIDTH:
+## fov reads 20.0 while the rendered vertical stays ~11.33 at 16:9.
 const LOBBY_CAM_POS: Vector3 = Vector3(12.6065, -0.1670, -1.0538)
 const LOBBY_CAM_FWD: Vector3 = Vector3(-0.986184, 0.116419, 0.117848)
-const LOBBY_CAM_VFOV: float = 11.33
+const LOBBY_CAM_FOV: float = 20.0
 const LOBBY_CAM_ROLL_DEG: float = -14.780165
 ## Authored BP_MatchLobbyDummyPlayer_C_1 (IsForLocalPlayer: True) rooftop slot.
 const LOBBY_THIEF_POS: Vector3 = Vector3(-1.5871, 0.82, -0.7868)
@@ -94,12 +96,16 @@ func open_prep(p_map_id: String, p_difficulty: int, p_mode: String, p_contract_o
 	contract_order = p_contract_order
 	visible = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	if AudioManager != null and AudioManager.has_method("play_ui"):
+		AudioManager.play_ui("open")
 	_refresh_all()
 
 
 ## Hide, restore mouse, emit closed and free.
 func close_prep() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	if AudioManager != null and AudioManager.has_method("play_ui"):
+		AudioManager.play_ui("back")
 	closed.emit()
 	visible = false
 	queue_free()
@@ -380,7 +386,8 @@ func _build_stage(viewport: SubViewport) -> void:
 	var cam: Camera3D = Camera3D.new()
 	cam.name = "MissionLobbyCamera"
 	cam.position = LOBBY_CAM_POS
-	cam.fov = LOBBY_CAM_VFOV
+	cam.fov = LOBBY_CAM_FOV
+	cam.keep_aspect = Camera3D.KEEP_WIDTH
 	cam.far = 2000.0
 	cam.current = true
 	stage_root.add_child(cam)

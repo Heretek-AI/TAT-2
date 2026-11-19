@@ -36,6 +36,8 @@ var data: Dictionary = {
 		"master_volume": 0.8,
 		"music_volume": 0.8,
 		"sfx_volume": 0.8,
+		"ambience_volume": 0.8,
+		"ui_volume": 0.8,
 		"dialogue_volume": 0.8,
 		"fullscreen": false,
 		"render_scale": 1.0,
@@ -59,8 +61,25 @@ func get_settings() -> Dictionary:
 func apply_saved_settings() -> void:
 	var s: Dictionary = get_settings()
 	var vol: float = clampf(float(s.get("master_volume", 0.8)), 0.0, 1.0)
+	var music_vol: float = clampf(float(s.get("music_volume", 0.8)), 0.0, 1.0)
+	var sfx_vol: float = clampf(float(s.get("sfx_volume", 0.8)), 0.0, 1.0)
+	var ambience_vol: float = clampf(float(s.get("ambience_volume", sfx_vol)), 0.0, 1.0)
+	var ui_vol: float = clampf(float(s.get("ui_volume", sfx_vol)), 0.0, 1.0)
+	var dialogue_vol: float = clampf(float(s.get("dialogue_volume", sfx_vol)), 0.0, 1.0)
 	if AudioServer.get_bus_count() > 0:
 		AudioServer.set_bus_volume_db(0, linear_to_db(maxf(vol, 0.001)))
+	# Route the full bus architecture (PG-6): AudioManager owns bus creation
+	# and per-bus volumes; direct AudioServer writes here keep volumes applied
+	# even if the AudioManager autoload is unavailable in a minimal scene.
+	var am: Node = get_node_or_null("/root/AudioManager")
+	if am != null and am.has_method("apply_volumes"):
+		am.call("apply_volumes", vol, music_vol, sfx_vol, ambience_vol, ui_vol, dialogue_vol)
+	else:
+		_apply_bus_direct("Music", music_vol)
+		_apply_bus_direct("SFX", sfx_vol)
+		_apply_bus_direct("Ambience", ambience_vol)
+		_apply_bus_direct("UI", ui_vol)
+		_apply_bus_direct("Dialogue", dialogue_vol)
 	if DisplayServer.get_name() != "headless":
 		var fullscreen: bool = bool(s.get("fullscreen", false))
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if fullscreen else DisplayServer.WINDOW_MODE_WINDOWED)
@@ -69,6 +88,14 @@ func apply_saved_settings() -> void:
 		var vp: Viewport = get_viewport()
 		if vp != null:
 			vp.scaling_3d_scale = clampf(float(s.get("render_scale", 1.0)), 0.6, 1.0)
+
+
+func _apply_bus_direct(bus_name: String, bus_vol: float) -> void:
+	var idx: int = AudioServer.get_bus_index(bus_name)
+	if idx < 0:
+		return
+	AudioServer.set_bus_volume_db(idx, linear_to_db(maxf(bus_vol, 0.001)))
+	AudioServer.set_bus_mute(idx, bus_vol <= 0.001)
 
 
 func _defaults() -> Dictionary:
@@ -93,6 +120,8 @@ func _defaults() -> Dictionary:
 			"master_volume": 0.8,
 			"music_volume": 0.8,
 			"sfx_volume": 0.8,
+			"ambience_volume": 0.8,
+			"ui_volume": 0.8,
 			"dialogue_volume": 0.8,
 			"fullscreen": false,
 			"render_scale": 1.0,
@@ -104,6 +133,13 @@ func _defaults() -> Dictionary:
 
 func _ensure_defaults() -> void:
 	var defaults: Dictionary = _defaults()
+	# Backfill the PG-6 bus volumes on old saves that predate them.
+	if data.has("settings") and data["settings"] is Dictionary:
+		var s: Dictionary = data["settings"] as Dictionary
+		var fallback_vol: float = clampf(float(s.get("sfx_volume", 0.8)), 0.0, 1.0)
+		for bus_key: String in ["ambience_volume", "ui_volume", "dialogue_volume"]:
+			if not s.has(bus_key):
+				s[bus_key] = fallback_vol
 	for key: Variant in defaults.keys():
 		var k: String = str(key)
 		if not data.has(k):

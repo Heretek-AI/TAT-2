@@ -97,11 +97,15 @@ func _ready() -> void:
 func open_customizer() -> void:
 	visible = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	if AudioManager != null and AudioManager.has_method("play_ui"):
+		AudioManager.play_ui("wardrobe_open")
 	_refresh_thief_ui()
 
 
 ## Instance helper: persist selection, restore mouse, emit closed, hide.
 func close_customizer() -> void:
+	if AudioManager != null and AudioManager.has_method("play_ui"):
+		AudioManager.play_ui("back")
 	_apply_and_close(true)
 
 
@@ -242,7 +246,7 @@ func _build_left_panel() -> VBoxContainer:
 	svc.stretch = true
 	svc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	svc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	svc.custom_minimum_size = Vector2(480, 360)
+	svc.custom_minimum_size = Vector2(420, 300)
 	svc.mouse_filter = Control.MOUSE_FILTER_STOP
 	left.add_child(svc)
 	var sv: SubViewport = SubViewport.new()
@@ -283,7 +287,7 @@ func _build_left_panel() -> VBoxContainer:
 	card.add_child(card_hb)
 	var tool_svc: SubViewportContainer = SubViewportContainer.new()
 	tool_svc.stretch = true
-	tool_svc.custom_minimum_size = Vector2(220, 160)
+	tool_svc.custom_minimum_size = Vector2(200, 120)
 	tool_svc.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card_hb.add_child(tool_svc)
 	var tool_sv: SubViewport = SubViewport.new()

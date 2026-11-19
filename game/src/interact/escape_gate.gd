@@ -36,6 +36,7 @@ func apply_escape_config(cfg: Dictionary) -> void:
 
 
 func _ready() -> void:
+	add_to_group("escape_points")
 	collision_mask = 2
 	apply_escape_config(escape_config())
 	body_entered.connect(_on_body_entered)

@@ -1543,15 +1543,6 @@ func _build_pause_menu(root: Control) -> void:
 	vb.custom_minimum_size = Vector2(360, 0)
 	vb.add_theme_constant_override("separation", 10)
 	margin.add_child(vb)
-	var title: Label = Label.new()
-	title.text = "PAUSED"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 28)
-	title.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
-	if _serif != null:
-		title.add_theme_font_override("font", _serif)
-	vb.add_child(title)
-	vb.add_child(ThemeScript.teal_divider())
 	var resume_btn: Button = Button.new()
 	resume_btn.text = "RESUME"
 	ThemeScript.style_teal_button(resume_btn, true)
@@ -1568,7 +1559,7 @@ func _build_pause_menu(root: Control) -> void:
 	)
 	vb.add_child(settings_btn)
 	var menu_btn: Button = Button.new()
-	menu_btn.text = "RETURN TO MAIN MENU"
+	menu_btn.text = "RETURN TO THIEF'S DEN"
 	ThemeScript.style_teal_button(menu_btn, false)
 	menu_btn.pressed.connect(func() -> void:
 		_set_paused(false)
@@ -1593,13 +1584,29 @@ func _build_pause_menu(root: Control) -> void:
 	esc_lbl.add_theme_color_override("font_color", Color(0.65, 0.75, 0.78))
 	esc_row.add_child(esc_lbl)
 	var ver: Label = Label.new()
-	ver.text = VERSION_STRING
+	ver.text = _pause_footer_text()
 	ver.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	ver.position = Vector2(16, -30)
 	ver.add_theme_font_size_override("font_size", 12)
 	ver.add_theme_color_override("font_color", Color(0.55, 0.60, 0.65, 0.85))
 	ver.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_pause_root.add_child(ver)
+
+
+## KF30-exact pause footer: build number (no "v" prefix) + difficulty label.
+## The capture seed has no authored source in GameState, so it is omitted
+## rather than fabricated.
+func _pause_footer_text() -> String:
+	var build: String = VERSION_STRING
+	if build.begins_with("v"):
+		build = build.substr(1)
+	var diff_lbl: String = "Novice"
+	var d: int = int(GameState.difficulty)
+	if d == 2:
+		diff_lbl = "Thief"
+	elif d >= 3:
+		diff_lbl = "Master Thief"
+	return "%s   %s" % [build, diff_lbl]
 
 
 # =============================================================================
@@ -1714,6 +1721,12 @@ func get_soundwave_intensity() -> float:
 
 ## M4 Contract: Start the circular/arc lockpicking timing minigame driven by
 ## DA_LockpickMinigameVariations.
+## Alias kept for the LockpickWheel/LockpickArc node names referenced by the
+## live-E2E parity capture (S15b circular_lockpick_minigame_ui).
+func open_lockpick_minigame(lock_level: int, target_label: String, on_complete: Callable) -> void:
+	start_lockpick_minigame(lock_level, target_label, on_complete)
+
+
 func start_lockpick_minigame(lock_level: int, target_label: String, on_complete: Callable) -> void:
 	if _lockpick_active:
 		return
@@ -1752,6 +1765,12 @@ func is_lockpicking() -> bool:
 
 
 ## M4 Contract: Mission Start Letter overlay (T_Paper01 + [SPACE] CONTINUE).
+## Alias kept for the Map Table look-at card name used by the Den diegetic
+## flow and the live-E2E parity capture (S03 map_table_look_at_card).
+func set_map_table_card(card: Dictionary) -> void:
+	set_den_lookat_card(card)
+
+
 func show_mission_letter(title: String, intro_text: String) -> void:
 	if _letter_root == null:
 		return
@@ -1827,6 +1846,8 @@ func is_map_open() -> bool:
 func open_ping_radial() -> void:
 	if _ping_root == null or get_tree().paused or _lockpick_active or _letter_open or _map_open:
 		return
+	if AudioManager != null and AudioManager.has_method("play_ui"):
+		AudioManager.play_ui("open")
 	_ping_open = true
 	_ping_selected = 0
 	_ping_prev_mouse = Input.mouse_mode
@@ -2123,6 +2144,10 @@ func _update_health_and_stamina(p: Node3D, is_hub: bool) -> void:
 	var st: float = float(st_v) if (st_v is float or st_v is int) else mst
 
 	var hp_frac: float = clampf(hp / mhp, 0.0, 1.0)
+	# KF12/KF14: the ornate Health Bar stays hidden at 100% HP and only
+	# appears once damage is taken.
+	if _hp_container != null:
+		_hp_container.visible = (not is_hub) and hp_frac < 0.999
 	if hp_fill != null:
 		hp_fill.size.x = HP_BAR_MAX_W * hp_frac
 	if _hp_clip != null:
@@ -2423,6 +2448,7 @@ func _read_guard_alert_state(g: Node3D) -> Dictionary:
 func _get_pip_node(idx: int) -> TextureRect:
 	while _pip_pool.size() <= idx:
 		var tr: TextureRect = TextureRect.new()
+		tr.name = "GuardPip_%d" % _pip_pool.size()
 		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		tr.size = Vector2(44, 44)
@@ -2435,6 +2461,7 @@ func _get_pip_node(idx: int) -> TextureRect:
 func _get_offscreen_node(idx: int) -> TextureRect:
 	while _offscreen_pool.size() <= idx:
 		var tr: TextureRect = TextureRect.new()
+		tr.name = "OffscreenArc_%d" % _offscreen_pool.size()
 		tr.texture = _offscreen_tex
 		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
@@ -2811,7 +2838,13 @@ func _add_den_card_row(key_txt: String, label_txt: String, value_txt: String) ->
 func _get_player() -> Node3D:
 	if not is_inside_tree():
 		return null
-	return get_tree().get_first_node_in_group("player") as Node3D
+	# Prefer the newest group member: a stale mission/arena player can linger
+	# in the "player" group when feats transition (T1-13-E: HUD bound the
+	# stale first entry and ignored damage on the current player).
+	var members: Array[Node] = get_tree().get_nodes_in_group("player")
+	if members.is_empty():
+		return null
+	return members.back() as Node3D
 
 
 func _toggle_pause() -> void:
@@ -2820,6 +2853,8 @@ func _toggle_pause() -> void:
 
 func _set_paused(value: bool) -> void:
 	get_tree().paused = value
+	if AudioManager != null and AudioManager.has_method("play_ui"):
+		AudioManager.play_ui("open" if value else "back")
 	var touch_ui: Node = get_tree().get_first_node_in_group("mobile_touch_ui")
 	if touch_ui != null and touch_ui.has_method("clear_input"):
 		touch_ui.call("clear_input")

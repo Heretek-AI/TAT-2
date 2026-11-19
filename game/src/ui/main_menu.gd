@@ -76,6 +76,7 @@ func _build_3d_backdrop() -> void:
 		"res://data/generated/levels/Menus/MainMenu/BeautifulCorner_Startscreen_Lighting.tatlevel.json",
 	]
 	var load_res: Dictionary = loader.load_sublevels(sublevels, scene_root, null, 32, false)
+	_apply_startscreen_trim_specular(scene_root)
 
 	var sky_light_v: Variant = load_res.get("sky_light", {})
 	var sky_light: Dictionary = sky_light_v as Dictionary if sky_light_v is Dictionary else {}
@@ -188,6 +189,77 @@ func _build_3d_backdrop() -> void:
 	scene_root.add_child(bulb)
 
 	_spawn_startscreen_guard(scene_root, loader)
+
+
+## T1-03-E: Left-corner trim specular fix (KF01 shopfront scrollwork).
+## The authored trim metals (SM_Trim_SmB_*/MI_Trim*) resolve through the shared
+## PBR path with Godot's default specular reflectance (0.5), which blows out
+## the pale-gold scrollwork in the left corner under the neon wash. This
+## post-pass clamps trim-batch materials to specular <= 0.35 /
+## roughness >= 0.45 with per-node overrides only: shared meshes and cached
+## materials are never mutated, and no texture is invented (T2-03-E gate).
+const STARTSCREEN_TRIM_SPECULAR_MAX := 0.30
+const STARTSCREEN_TRIM_ROUGHNESS_MIN := 0.55
+
+
+func _apply_startscreen_trim_specular(scene_root: Node3D) -> void:
+	if scene_root == null:
+		return
+	for n: Node in scene_root.find_children("*", "GeometryInstance3D", true, false):
+		var gi: GeometryInstance3D = n as GeometryInstance3D
+		if gi == null or not gi.has_meta("ue_mesh"):
+			continue
+		if str(gi.get_meta("ue_mesh")).to_lower().find("trim") < 0:
+			continue
+		_clamp_trim_node_materials(gi)
+
+
+func _clamp_trim_node_materials(gi: GeometryInstance3D) -> void:
+	if gi is MeshInstance3D:
+		var mi: MeshInstance3D = gi as MeshInstance3D
+		if mi.mesh == null:
+			return
+		for s: int in range(mi.mesh.get_surface_count()):
+			var fixed: StandardMaterial3D = _clamped_trim_material(mi.get_active_material(s))
+			if fixed != null:
+				mi.set_surface_override_material(s, fixed)
+	elif gi is MultiMeshInstance3D:
+		var mmi: MultiMeshInstance3D = gi as MultiMeshInstance3D
+		if mmi.multimesh == null or mmi.multimesh.mesh == null:
+			return
+		var src_mesh: Mesh = mmi.multimesh.mesh
+		var need_dup: bool = false
+		for s: int in range(src_mesh.get_surface_count()):
+			if _trim_material_needs_clamp(src_mesh.surface_get_material(s)):
+				need_dup = true
+				break
+		if not need_dup:
+			return
+		# The MultiMesh itself is per-node, but its mesh is a shared loader
+		# cache entry: duplicate the (tiny) trim mesh so the clamp cannot
+		# leak into other batches or maps.
+		var dup_mesh: Mesh = src_mesh.duplicate() as Mesh
+		for s: int in range(dup_mesh.get_surface_count()):
+			var fixed: StandardMaterial3D = _clamped_trim_material(dup_mesh.surface_get_material(s))
+			if fixed != null:
+				dup_mesh.surface_set_material(s, fixed)
+		mmi.multimesh.mesh = dup_mesh
+
+
+static func _trim_material_needs_clamp(m: Material) -> bool:
+	if not (m is StandardMaterial3D):
+		return false
+	var sm: StandardMaterial3D = m as StandardMaterial3D
+	return sm.metallic_specular > 0.35 or sm.roughness < 0.45
+
+
+static func _clamped_trim_material(m: Material) -> StandardMaterial3D:
+	if not _trim_material_needs_clamp(m):
+		return null
+	var dup: StandardMaterial3D = (m as StandardMaterial3D).duplicate() as StandardMaterial3D
+	dup.metallic_specular = minf(dup.metallic_specular, STARTSCREEN_TRIM_SPECULAR_MAX)
+	dup.roughness = maxf(dup.roughness, STARTSCREEN_TRIM_ROUGHNESS_MIN)
+	return dup
 
 
 ## Spawns the extracted Startscreen idle Constable guard (SkeletalMeshActor_16 from
@@ -314,6 +386,8 @@ func _build_ui() -> void:
 	var play_btn := _make_menu_btn("PLAY", sans)
 	play_btn.pressed.connect(func():
 		selected_order = 1
+		if AudioManager != null and AudioManager.has_method("play_ui"):
+			AudioManager.play_ui("click")
 		_launch()
 	)
 	menu_v.add_child(play_btn)

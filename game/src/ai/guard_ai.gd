@@ -442,6 +442,8 @@ func _enter_alerted() -> void:
 		return
 	_set_state(Alertness.ALERTED)
 	NoiseBus.emit_noise(global_position, 14.0, self, "guard_alert")
+	if AudioManager != null and AudioManager.has_method("play_vo"):
+		AudioManager.play_vo("guard_alert", global_position)
 
 
 func _enter_combat() -> void:
@@ -449,6 +451,8 @@ func _enter_combat() -> void:
 		return
 	_set_state(Alertness.COMBAT)
 	NoiseBus.emit_noise(global_position, 12.0, self, "guard_alert")
+	if AudioManager != null and AudioManager.has_method("play_vo"):
+		AudioManager.play_vo("guard_alert", global_position)
 
 
 func _ramp_for_state() -> Dictionary:
@@ -588,7 +592,8 @@ func _physics_process(delta: float) -> void:
 	_tick_regen(delta)
 	attack_cooldown = maxf(0.0, attack_cooldown - delta)
 	_seconds_in_state += delta
-	var player: CharacterBody3D = get_tree().get_first_node_in_group("player") as CharacterBody3D
+	var players: Array[Node] = get_tree().get_nodes_in_group("player")
+	var player: CharacterBody3D = (players.back() if not players.is_empty() else null) as CharacterBody3D
 	_update_disguise_viewcone(delta, player)
 	var sees_player: bool = _can_see_player(player)
 
@@ -727,7 +732,10 @@ func _can_see_player(player: CharacterBody3D) -> bool:
 		effective_range *= LightProbeScript.light_intensity_range_multiplier(_player_light_value(player))
 	var to_player: Vector3 = player.global_position - global_position
 	var dist: float = to_player.length()
-	if dist > effective_range or dist < 0.1:
+	# No point-blank blind spot: inside the 2 m critical range the authored
+	# ramp (get_detection_rate) already resolves to an instant spot, so a
+	# near-zero distance must still count as seen.
+	if dist > effective_range:
 		return false
 	var fwd: Vector3 = -global_transform.basis.z
 	var angle: float = rad_to_deg(fwd.angle_to(to_player.normalized()))
@@ -877,6 +885,8 @@ func _update_ally_wakeup(delta: float) -> void:
 				state_timer = 6.0
 				detection = maxf(detection, 40.0)
 				NoiseBus.emit_noise(global_position, 10.0, self, "guard_alert")
+				if AudioManager != null and AudioManager.has_method("play_vo"):
+					AudioManager.play_vo("guard_search", global_position)
 				revived = true
 		else:
 			if state == Alertness.NEUTRAL:

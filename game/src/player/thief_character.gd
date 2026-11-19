@@ -529,20 +529,21 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("ability"):
 		_trigger_thief_ability()
 	elif event.is_action_pressed("tool_1"):
-		equip_tool("blackjack" if equipped_tool == "zipwire" else "zipwire")
+		equip_tool("zipwire")
 	elif event.is_action_pressed("tool_2"):
-		equip_tool("blackjack" if equipped_tool == "smoke_bomb" else "smoke_bomb")
+		equip_tool("smoke_bomb")
 	elif event.is_action_pressed("tool_3"):
+		# Slot [3] pair: Slithersap <-> Pickpocket Fairy, never a dead key.
 		if equipped_tool == "slithersap":
 			_slot3_subtool = "fairy"
 			equip_tool("fairy")
 		elif equipped_tool == "fairy":
 			_slot3_subtool = "slithersap"
-			equip_tool("blackjack")
+			equip_tool("slithersap")
 		else:
 			equip_tool(_slot3_subtool)
 	elif event.is_action_pressed("tool_4"):
-		equip_tool("blackjack" if equipped_tool == "vistara_diamond" else "vistara_diamond")
+		equip_tool("vistara_diamond")
 	elif event.is_action_pressed("primary_action"):
 		_use_equipped_primary()
 	elif event.is_action_pressed("secondary_action"):
@@ -579,6 +580,22 @@ func _sync_thief_vision() -> void:
 		thief_vision = next_on
 		thief_vision_toggled.emit(thief_vision_on)
 		_update_thief_vision()
+
+
+func _audio_gait() -> String:
+	if is_crouching:
+		return "crouch"
+	if is_sprinting:
+		return "run"
+	return "walk"
+
+
+## AU3 footstep surface for AudioManager variation pools (PG-6): the Den hub
+## (contract 1) is timber; Guildhall stone. Kept to existing GameState data.
+func _audio_surface() -> String:
+	if GameState.active_contract_order == 1:
+		return NoiseBus.SURFACE_WOOD
+	return NoiseBus.SURFACE_STONE
 
 
 func equip_tool(tool_id: String) -> void:
@@ -842,6 +859,8 @@ func _physics_process(delta: float) -> void:
 			elif is_sprinting:
 				loudness = 8.0
 			NoiseBus.emit_noise(global_position, loudness, self, "footstep")
+			if AudioManager != null and AudioManager.has_method("play_footstep"):
+				AudioManager.play_footstep(_audio_surface(), _audio_gait(), global_position)
 			fp_step_left = not fp_step_left
 			var fwd_flat: Vector3 = Vector3(-global_transform.basis.z.x, 0.0, -global_transform.basis.z.z)
 			if fwd_flat.length() < 0.05:

@@ -135,8 +135,11 @@ static func apply_environment(env: Environment) -> void:
 		return
 	env.glow_enabled = glow_enabled()
 	if env.glow_enabled:
-		env.glow_intensity = 0.45
-		env.glow_bloom = 0.12
+		# PG-1: soften, never amplify. minf keeps earlier pipeline caps
+		# intact (e.g. the Thieves' Den 0.32 RD cap from the weather
+		# preset / level post-process) instead of stomping them to 0.45.
+		env.glow_intensity = minf(env.glow_intensity, 0.45)
+		env.glow_bloom = minf(env.glow_bloom, 0.12)
 
 
 static func _settings() -> Dictionary:

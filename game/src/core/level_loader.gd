@@ -158,6 +158,17 @@ func _ready() -> void:
 	_load_material_dbs()
 
 
+## PG-1 teardown: release cached textures/materials/meshes when the loader
+## leaves the tree (scene reload / quit-to-desktop) so their RIDs are freed
+## in scene order instead of at global exit (exit-time RID-leak /
+## PagedAllocator noise on live Vulkan). All four caches rebuild on demand.
+func _exit_tree() -> void:
+	_tex_cache.clear()
+	_std_mat_cache.clear()
+	_mesh_res_cache.clear()
+	_override_mesh_cache.clear()
+
+
 func _load_material_dbs() -> void:
 	if FileAccess.file_exists("res://data/generated/materials.json"):
 		var f := FileAccess.open("res://data/generated/materials.json", FileAccess.READ)

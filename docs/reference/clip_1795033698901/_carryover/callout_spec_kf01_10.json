@@ -1,0 +1,801 @@
+{
+  "schema_version": "1.0",
+  "resolution": [1920, 1080],
+  "fonts": {
+    "badge_numeral": "/usr/share/fonts/google-noto/NotoSans-Bold.ttf",
+    "label_text": "/usr/share/fonts/google-noto/NotoSans-SemiBold.ttf",
+    "fallback_regular": "/usr/share/fonts/google-noto/NotoSans-Regular.ttf"
+  },
+  "palette": {
+    "Visual": "#FFB300",
+    "HUD/UI": "#00E5FF",
+    "Gameplay/Audio": "#FF4081"
+  },
+  "geometry": {
+    "badge_diameter_px": 28,
+    "badge_stroke_px": 2,
+    "leader_width_px": 2.5,
+    "leader_casing_px": 1,
+    "target_dot_diameter_px": 6,
+    "pill_height_px": 32,
+    "pill_pad_x_px": 12,
+    "badge_pill_gap_px": 6,
+    "label_font_size_px": 17,
+    "badge_font_size_px": 16,
+    "safe_bounds": [16, 16, 1904, 1064]
+  },
+  "keyframes": {
+    "KF01": {
+      "filename": "KF01_00m01s_startscreen.jpg",
+      "segment": "S01",
+      "timestamp": "00:01.00",
+      "hud_exclusions": [
+        [1295, 280, 1800, 595],
+        [1295, 655, 1480, 885]
+      ],
+      "callouts": [
+        {
+          "id": 1,
+          "category": "Visual",
+          "code": "V1",
+          "label": "Neon Sign & Flicker",
+          "target": [885, 440],
+          "anchor": [575, 160],
+          "placement": "pill_left",
+          "bbox": null,
+          "observed_ue5_detail": "Magenta cursive neon `Mac Neish` / `Jeweller` (lit full at `00:01.00` amidst `00:00.1–00:02.1` flicker) with warm amber window/awning neon bars and Art Nouveau gold scrollwork."
+        },
+        {
+          "id": 2,
+          "category": "Visual",
+          "code": "V2",
+          "label": "Shopfront Orb & Lamp",
+          "target": [878, 326],
+          "anchor": [940, 110],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Glowing purple egg/orb inside upper Art Nouveau shopframe (`x=848..909, y=290..364`) beneath upper-right warm streetlamp (`x=1375, y=210`)."
+        },
+        {
+          "id": 3,
+          "category": "HUD/UI",
+          "code": "UI1",
+          "label": "Title & Menu Stack",
+          "target": [1436, 675],
+          "anchor": [1550, 680],
+          "placement": "pill_right",
+          "bbox": [1295, 655, 1475, 885],
+          "observed_ue5_detail": "Right-aligned `THICK AS THIEVES` logo above `PLAY`, `SETTINGS`, `CREDITS`, `QUIT` with cursor approaching `PLAY` (`00:02.0` click, `pk=-33.4 dBFS`)."
+        },
+        {
+          "id": 4,
+          "category": "Gameplay/Audio",
+          "code": "G2",
+          "label": "Idle Guard Patrol",
+          "target": [775, 740],
+          "anchor": [560, 740],
+          "placement": "pill_left",
+          "bbox": null,
+          "observed_ue5_detail": "Stationary idle guard in dark uniform, helmet, and brown belt standing before the `Mac Neish` shopfront."
+        },
+        {
+          "id": 5,
+          "category": "Visual",
+          "code": "V5",
+          "label": "Puddle & Rain Streaks",
+          "target": [960, 945],
+          "anchor": [620, 995],
+          "placement": "pill_left",
+          "bbox": null,
+          "observed_ue5_detail": "Rain-slick cobblestones reflecting magenta/amber shopfront neon in foreground puddle with diagonal falling rain streaks."
+        },
+        {
+          "id": 6,
+          "category": "Gameplay/Audio",
+          "code": "AU1",
+          "label": "Rain Ambience (No BGM)",
+          "target": [220, 780],
+          "anchor": [60, 520],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Steady night rain hiss + distant street air (`-53 to -49 dBFS` RMS, explicit zero BGM) framing vintage car rear fender on left."
+        }
+      ]
+    },
+    "KF02": {
+      "filename": "KF02_00m04s_den_entry.jpg",
+      "segment": "S03",
+      "timestamp": "00:04.50",
+      "hud_exclusions": [
+        [500, 40, 1420, 80],
+        [1605, 18, 1900, 165]
+      ],
+      "callouts": [
+        {
+          "id": 1,
+          "category": "Visual",
+          "code": "V1",
+          "label": "Volumetric Moon Shaft",
+          "target": [460, 290],
+          "anchor": [440, 110],
+          "placement": "pill_left",
+          "bbox": null,
+          "observed_ue5_detail": "Volumetric teal-cyan moonlight shaft pouring through arched frosted leaded-glass window, casting mullion shadows across dark floorboards."
+        },
+        {
+          "id": 2,
+          "category": "HUD/UI",
+          "code": "UI1",
+          "label": "Player Card (Lvl 4)",
+          "target": [1750, 95],
+          "anchor": [1565, 195],
+          "placement": "pill_left",
+          "bbox": [1605, 18, 1900, 165],
+          "observed_ue5_detail": "Top-right `Johnny Cipher` player card with Spider portrait and level `4` badge fading in by `00:02.70`."
+        },
+        {
+          "id": 3,
+          "category": "HUD/UI",
+          "code": "UI2",
+          "label": "Top-Center Compass",
+          "target": [960, 58],
+          "anchor": [960, 118],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Subtle horizontal top-center compass bar with center tick and `NW` heading indicator."
+        },
+        {
+          "id": 4,
+          "category": "Gameplay/Audio",
+          "code": "G1",
+          "label": "Interactive Den Stations",
+          "target": [140, 340],
+          "anchor": [110, 620],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Open illuminated Wardrobe armoire (left) and brass tripod telescope in quiet Thieves' Den (`-76.3 to -73.1 dBFS` room tone, wooden footsteps, no BGM)."
+        },
+        {
+          "id": 5,
+          "category": "Visual",
+          "code": "V4",
+          "label": "Candlelit Rolltop Desk",
+          "target": [1115, 385],
+          "anchor": [1060, 230],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Warm point-lit 3-candle candelabra illuminating open Ledger book on rolltop desk, contrasting with cool moonlight shaft."
+        },
+        {
+          "id": 6,
+          "category": "Gameplay/Audio",
+          "code": "G2",
+          "label": "Kilcairn Map Table",
+          "target": [1660, 490],
+          "anchor": [1540, 710],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Mission-selection `KILCAIRN` parchment map table with 3D wooden building tokens; scattered newspapers on foreground floorboards."
+        }
+      ]
+    },
+    "KF03": {
+      "filename": "KF03_00m07s_wardrobe_loadout.jpg",
+      "segment": "S04",
+      "timestamp": "00:07.00",
+      "hud_exclusions": [
+        [795, 40, 1120, 95],
+        [165, 72, 745, 360],
+        [338, 370, 546, 424],
+        [200, 425, 680, 590],
+        [180, 595, 720, 650],
+        [172, 710, 750, 1025],
+        [1515, 220, 1705, 795],
+        [1745, 1005, 1885, 1055]
+      ],
+      "callouts": [
+        {
+          "id": 1,
+          "category": "HUD/UI",
+          "code": "UI1",
+          "label": "Character Switch [Q/E]",
+          "target": [450, 200],
+          "anchor": [420, 40],
+          "placement": "pill_left",
+          "bbox": [165, 72, 745, 360],
+          "observed_ue5_detail": "`[Q]` `The Spider` (selected, cyan border) vs `[E]` `The Chameleon` (`LOCKED` with pink padlock) under `WARDROBE` header."
+        },
+        {
+          "id": 2,
+          "category": "HUD/UI",
+          "code": "UI2",
+          "label": "Loadout Slots 1–4",
+          "target": [550, 505],
+          "anchor": [580, 392],
+          "placement": "pill_right",
+          "bbox": [200, 425, 680, 590],
+          "observed_ue5_detail": "`Edit Loadout` slots `[1]` Zipwire (grey signature lock), `[2]` Smoke Bomb, `[3]` empty, `[4]` Vistara Diamond (grey signature lock)."
+        },
+        {
+          "id": 3,
+          "category": "HUD/UI",
+          "code": "UI3",
+          "label": "Zipwire Tooltip Card",
+          "target": [460, 865],
+          "anchor": [460, 1044],
+          "placement": "pill_left",
+          "bbox": [172, 710, 750, 1025],
+          "observed_ue5_detail": "Bottom-left ornate tooltip card showing 3D `Zipwire` grapple gun preview and verbatim grapple-recoil description."
+        },
+        {
+          "id": 4,
+          "category": "Visual",
+          "code": "V3",
+          "label": "3D Spider Turntable",
+          "target": [940, 420],
+          "anchor": [1120, 210],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "3D `The Spider` character turntable wearing Bowler Hat, yellow goggles, and purple ribbed sweater before open armoire."
+        },
+        {
+          "id": 5,
+          "category": "Visual",
+          "code": "V2",
+          "label": "Open Wardrobe Armoire",
+          "target": [1290, 460],
+          "anchor": [1160, 850],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Open wooden armoire interior lit by overhead curved lamp with hanging bottles/tools; Wardrobe open chime at `00:06.7` (`pk=-23.5 dBFS`, no BGM)."
+        },
+        {
+          "id": 6,
+          "category": "HUD/UI",
+          "code": "UI4",
+          "label": "Cosmetic & Back Slots",
+          "target": [1615, 515],
+          "anchor": [1460, 140],
+          "placement": "pill_right",
+          "bbox": [1515, 220, 1705, 795],
+          "observed_ue5_detail": "Right customization column (`Head`, `Body`, `Calling Card` spider emblem) above bottom-right `BACK [ESC]` button."
+        }
+      ]
+    },
+    "KF04": {
+      "filename": "KF04_00m16s_wardrobe_vistara_diamond.jpg",
+      "segment": "S04",
+      "timestamp": "00:16.50",
+      "hud_exclusions": [
+        [795, 40, 1120, 95],
+        [165, 72, 745, 360],
+        [338, 370, 546, 424],
+        [205, 425, 690, 710],
+        [172, 710, 750, 1025],
+        [1515, 220, 1705, 795],
+        [1745, 1005, 1885, 1055]
+      ],
+      "callouts": [
+        {
+          "id": 1,
+          "category": "HUD/UI",
+          "code": "UI2",
+          "label": "Slot 3 Tool Drawer",
+          "target": [265, 645],
+          "anchor": [42, 392],
+          "placement": "pill_right",
+          "bbox": [205, 588, 660, 708],
+          "observed_ue5_detail": "Slot `3` selected (cyan highlight) expanding 4-tool row: `Smoke Bomb` unlocked; `Pickpocket Fairy`, `Insult Fairy`, `Slither Sap` with pink padlocks."
+        },
+        {
+          "id": 2,
+          "category": "Gameplay/Audio",
+          "code": "UI5",
+          "label": "Slot Hover Click SFX",
+          "target": [618, 505],
+          "anchor": [575, 392],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Cursor hovering Slot `4` (`Vistara Diamond`, grey signature padlock); crisp metallic slot ticks (`pk=-34.6 to -39.4 dBFS`, no BGM)."
+        },
+        {
+          "id": 3,
+          "category": "HUD/UI",
+          "code": "UI3",
+          "label": "Vistara Diamond Card",
+          "target": [460, 865],
+          "anchor": [460, 1044],
+          "placement": "pill_left",
+          "bbox": [172, 710, 750, 1025],
+          "observed_ue5_detail": "`Vistara Diamond` tooltip card (`A mysterious gem that allows the holder to see traps and treasures.`) with diamond-caliper preview."
+        },
+        {
+          "id": 4,
+          "category": "Visual",
+          "code": "V3",
+          "label": "Cap Equipped on Spider",
+          "target": [940, 240],
+          "anchor": [1120, 210],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "3D Spider turntable wearing reddish-brown `Cap` headgear (updated from Bowler Hat, mirrored in right `Head` slot)."
+        },
+        {
+          "id": 5,
+          "category": "HUD/UI",
+          "code": "UI4",
+          "label": "Updated Head Preview",
+          "target": [1612, 315],
+          "anchor": [1460, 140],
+          "placement": "pill_right",
+          "bbox": [1525, 225, 1695, 405],
+          "observed_ue5_detail": "`Head` thumbnail synced to equipped `Cap` alongside `Body` (`Classic`), `Calling Card`, and `BACK [ESC]`."
+        }
+      ]
+    },
+    "KF05": {
+      "filename": "KF05_00m20s_telescope_cheese_moon.jpg",
+      "segment": "S05",
+      "timestamp": "00:20.80",
+      "hud_exclusions": [
+        [500, 40, 1420, 80],
+        [1605, 18, 1900, 165],
+        [875, 515, 985, 558]
+      ],
+      "callouts": [
+        {
+          "id": 1,
+          "category": "Visual",
+          "code": "V1",
+          "label": "Night Sky & Moon",
+          "target": [1360, 160],
+          "anchor": [1530, 250],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Bright crater-textured full moon in upper-right against cloudy teal-blue night sky and faint stars."
+        },
+        {
+          "id": 2,
+          "category": "Visual",
+          "code": "V4",
+          "label": "Golden Cheese Wedge",
+          "target": [975, 480],
+          "anchor": [1190, 355],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Giant rotating golden Pac-Man-shaped cheese wedge (`x=800..1154, y=342..689`) suspended over Kilcairn rooftops."
+        },
+        {
+          "id": 3,
+          "category": "Visual",
+          "code": "V5",
+          "label": "Orbiting Cheese Chunks",
+          "target": [575, 415],
+          "anchor": [430, 240],
+          "placement": "pill_left",
+          "bbox": null,
+          "observed_ue5_detail": "Three porous golden cheese chunks orbiting the central giant wedge (`x~575`, `745`, and `1315`)."
+        },
+        {
+          "id": 4,
+          "category": "HUD/UI",
+          "code": "UI1",
+          "label": "Telescope [F] EXIT",
+          "target": [930, 535],
+          "anchor": [960, 840],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "`[F] EXIT` prompt centered in telescope reticle, accompanied by subtle `NW` compass and `Johnny Cipher` (`4`) card."
+        },
+        {
+          "id": 5,
+          "category": "Gameplay/Audio",
+          "code": "AU2",
+          "label": "Rooftop Wind Swell",
+          "target": [310, 620],
+          "anchor": [160, 840],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Dark Kilcairn chimney silhouettes; exterior wind whoosh swell (`00:19.6–00:21.9`, peaking `-39.5 dBFS` RMS / `-29.8 dBFS` pk, no BGM)."
+        }
+      ]
+    },
+    "KF06": {
+      "filename": "KF06_00m24s_den_wanted_window.jpg",
+      "segment": "S05",
+      "timestamp": "00:24.60",
+      "hud_exclusions": [
+        [500, 40, 1420, 80],
+        [1605, 18, 1900, 165]
+      ],
+      "callouts": [
+        {
+          "id": 1,
+          "category": "Visual",
+          "code": "V1",
+          "label": "Arched Frosted Window",
+          "target": [780, 350],
+          "anchor": [1140, 210],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Arched leaded-glass frosted window radiating a volumetric teal-cyan moonlight shaft into the attic Den."
+        },
+        {
+          "id": 2,
+          "category": "Visual",
+          "code": "V4",
+          "label": "Wall Electrical Fuse Box",
+          "target": [315, 405],
+          "anchor": [160, 220],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Mounted industrial electrical fuse box with twin circular gauges on left timber wall beside window."
+        },
+        {
+          "id": 3,
+          "category": "Visual",
+          "code": "V3",
+          "label": "Open Armoire & Mirror",
+          "target": [105, 730],
+          "anchor": [180, 950],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Open illuminated Wardrobe mirror and curved brass wall lamp on far left (`[F] CUSTOMIZE LOADOUT` station)."
+        },
+        {
+          "id": 4,
+          "category": "Gameplay/Audio",
+          "code": "G1",
+          "label": "Brass Tripod Telescope",
+          "target": [845, 945],
+          "anchor": [680, 990],
+          "placement": "pill_left",
+          "bbox": null,
+          "observed_ue5_detail": "Brass tripod telescope below window (`[F] PONDER`); wooden footsteps (`00:23.1–00:23.9`, `pk=-27.1 dBFS`) in quiet Den (no BGM)."
+        },
+        {
+          "id": 5,
+          "category": "Visual",
+          "code": "V5",
+          "label": "5 Framed Wanted Posters",
+          "target": [1475, 720],
+          "anchor": [1230, 470],
+          "placement": "pill_left",
+          "bbox": [1275, 515, 1665, 1075],
+          "observed_ue5_detail": "Five Wanted posters (`HIS HANDS ARE FAST`, `CHARMING MAN?`, `TELL A CONSTABLE!`, `£10000`, `REWARD £5000`) on right wall."
+        },
+        {
+          "id": 6,
+          "category": "HUD/UI",
+          "code": "UI1",
+          "label": "Top-Right Player Card",
+          "target": [1750, 95],
+          "anchor": [1565, 110],
+          "placement": "pill_left",
+          "bbox": [1605, 18, 1900, 165],
+          "observed_ue5_detail": "Top-right `Johnny Cipher` card (level `4`) and subtle top-center compass ticks."
+        }
+      ]
+    },
+    "KF07": {
+      "filename": "KF07_00m27s_ledger_journal.jpg",
+      "segment": "S06",
+      "timestamp": "00:27.00",
+      "hud_exclusions": [
+        [685, 60, 1235, 118],
+        [360, 130, 1575, 345],
+        [262, 398, 1082, 958],
+        [1108, 398, 1915, 958],
+        [1745, 1005, 1885, 1055]
+      ],
+      "callouts": [
+        {
+          "id": 1,
+          "category": "HUD/UI",
+          "code": "UI1",
+          "label": "Journal / Market Tabs",
+          "target": [960, 88],
+          "anchor": [1290, 88],
+          "placement": "pill_right",
+          "bbox": [685, 60, 1235, 118],
+          "observed_ue5_detail": "`[Q] JOURNAL` (active) and `BLACK MARKET [E]` Ledger navigation tabs."
+        },
+        {
+          "id": 2,
+          "category": "HUD/UI",
+          "code": "UI2",
+          "label": "Level 4 XP Progress",
+          "target": [780, 220],
+          "anchor": [1605, 220],
+          "placement": "pill_right",
+          "bbox": [360, 130, 1575, 345],
+          "observed_ue5_detail": "`Johnny Cipher` portrait, `Level 4` header, and teal XP progress bar reading `94/500`."
+        },
+        {
+          "id": 3,
+          "category": "HUD/UI",
+          "code": "UI3",
+          "label": "Contract #1 Clipped",
+          "target": [110, 620],
+          "anchor": [55, 345],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Left-clipped `Completed` `Contract #1` card (`...nd managed... The \"Vistara... origins.`)."
+        },
+        {
+          "id": 4,
+          "category": "HUD/UI",
+          "code": "UI4",
+          "label": "Contract #2 Lore Card",
+          "target": [670, 680],
+          "anchor": [670, 1020],
+          "placement": "pill_left",
+          "bbox": [262, 398, 1082, 958],
+          "observed_ue5_detail": "`Completed` `Contract #2` — *Into the Lion's Den* detailing Vistara Diamond looted from Calcutta 50 years ago and smuggled by Hugh Montgomery."
+        },
+        {
+          "id": 5,
+          "category": "HUD/UI",
+          "code": "UI5",
+          "label": "Contract #3 Active Card",
+          "target": [1515, 680],
+          "anchor": [1210, 1020],
+          "placement": "pill_right",
+          "bbox": [1108, 398, 1915, 958],
+          "observed_ue5_detail": "`Active` `Contract #3` — *In the Eye of the Beholder* (Mary Elway & Hugh Montgomery marriage condition) with cursor."
+        },
+        {
+          "id": 6,
+          "category": "Gameplay/Audio",
+          "code": "AU1",
+          "label": "Parchment & Tab Clicks",
+          "target": [1815, 1030],
+          "anchor": [1690, 1025],
+          "placement": "pill_left",
+          "bbox": null,
+          "observed_ue5_detail": "`BACK [ESC]` prompt; Ledger opens with crisp parchment rustle & tab clicks (`00:26.6–00:27.1`, `pk=-30.4 dBFS`, zero BGM)."
+        }
+      ]
+    },
+    "KF08": {
+      "filename": "KF08_00m28s_ledger_black_market.jpg",
+      "segment": "S06",
+      "timestamp": "00:28.50",
+      "hud_exclusions": [
+        [685, 60, 1235, 118],
+        [720, 145, 1200, 215],
+        [155, 235, 895, 628],
+        [105, 635, 925, 985],
+        [955, 248, 1385, 1018],
+        [1400, 248, 1835, 1018],
+        [1745, 1005, 1885, 1055]
+      ],
+      "callouts": [
+        {
+          "id": 1,
+          "category": "HUD/UI",
+          "code": "UI1",
+          "label": "Assets Banner (£26,275)",
+          "target": [960, 180],
+          "anchor": [670, 180],
+          "placement": "pill_left",
+          "bbox": [720, 145, 1200, 215],
+          "observed_ue5_detail": "`BLACK MARKET [E]` active tab (hovered by cursor) above `YOUR TOTAL ASSETS: (£) 26,275`."
+        },
+        {
+          "id": 2,
+          "category": "HUD/UI",
+          "code": "UI2",
+          "label": "Zipwire Purchase Card",
+          "target": [300, 400],
+          "anchor": [55, 180],
+          "placement": "pill_right",
+          "bbox": [155, 235, 895, 628],
+          "observed_ue5_detail": "Selected `Zipwire` preview box showing `✓ PURCHASED` badge, 3D model, and grapple description."
+        },
+        {
+          "id": 3,
+          "category": "HUD/UI",
+          "code": "UI3",
+          "label": "Tools & Guild Perks",
+          "target": [510, 800],
+          "anchor": [520, 1035],
+          "placement": "pill_left",
+          "bbox": [105, 635, 925, 985],
+          "observed_ue5_detail": "`TOOLS` (`Zipwire`, `Smoke Bomb` `✓`; 3 fairies/sap `🔒`) and `GUILD PERKS` (`Novice`, `Guildhall`, `Elway Manor`, `The Spider` `✓`; `Thief`/`Master`/`Chameleon` `🔒`)."
+        },
+        {
+          "id": 4,
+          "category": "HUD/UI",
+          "code": "UI4",
+          "label": "Spider Cosmetics Table",
+          "target": [1170, 320],
+          "anchor": [1245, 212],
+          "placement": "pill_right",
+          "bbox": [955, 248, 1385, 1018],
+          "observed_ue5_detail": "Scrollable `SPIDER COSMETICS` column showing `✓` (`Bowler Hat`), prices (`7,500`, `5,000`, `2,500`), and pink padlocks (`🔒`)."
+        },
+        {
+          "id": 5,
+          "category": "HUD/UI",
+          "code": "UI5",
+          "label": "Chameleon Cosmetics",
+          "target": [1615, 320],
+          "anchor": [1550, 155],
+          "placement": "pill_right",
+          "bbox": [1400, 248, 1835, 1018],
+          "observed_ue5_detail": "Scrollable `CHAMELEON COSMETICS` column showing all 17 visible entries locked with pink padlocks (`🔒`)."
+        },
+        {
+          "id": 6,
+          "category": "Gameplay/Audio",
+          "code": "AU1",
+          "label": "Quiet Market Browse",
+          "target": [1815, 1030],
+          "anchor": [1690, 1042],
+          "placement": "pill_left",
+          "bbox": null,
+          "observed_ue5_detail": "`BACK [ESC]` prompt; tab click (`00:28.0`, `pk=-34.5 dBFS`) followed by `~5.8 s` quiet reading (`-68 dBFS` room tone, zero BGM)."
+        }
+      ]
+    },
+    "KF09": {
+      "filename": "KF09_00m46s_den_gramophone.jpg",
+      "segment": "S07",
+      "timestamp": "00:46.25",
+      "hud_exclusions": [
+        [500, 40, 1420, 80],
+        [1605, 18, 1900, 165],
+        [875, 518, 1035, 562]
+      ],
+      "callouts": [
+        {
+          "id": 1,
+          "category": "Gameplay/Audio",
+          "code": "AU3",
+          "label": "Diegetic Brass Gramophone",
+          "target": [745, 300],
+          "anchor": [1160, 210],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "**ONLY music in clip:** brass-horn Gramophone playing warped wind-up + scratchy 1920s jazz/ragtime with vinyl crackle (`00:45.4–00:47.8`, `pk=-24.9 dBFS`)."
+        },
+        {
+          "id": 2,
+          "category": "HUD/UI",
+          "code": "UI1",
+          "label": "Interact [F] TURN OFF",
+          "target": [955, 540],
+          "anchor": [1210, 430],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Center reticle `[F] TURN OFF` prompt (flipped from `[F] TURN ON` after switch click at `00:44.4`) with subtle `SE` compass above."
+        },
+        {
+          "id": 3,
+          "category": "Visual",
+          "code": "V1",
+          "label": "3-Candle Candelabra",
+          "target": [415, 220],
+          "anchor": [230, 75],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Warm 3-candle candelabra casting amber highlights onto the fluted brass horn and wooden trunk."
+        },
+        {
+          "id": 4,
+          "category": "Gameplay/Audio",
+          "code": "G1",
+          "label": "Interactive Trunk Gems",
+          "target": [100, 205],
+          "anchor": [55, 430],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Faceted pink gem resting atop stacked trunks (swappable via `[F] CHANGE DECORATION` alongside Fabergé egg / golden chalice)."
+        },
+        {
+          "id": 5,
+          "category": "Visual",
+          "code": "V2",
+          "label": "Iridescent Table Diamond",
+          "target": [1250, 642],
+          "anchor": [1390, 720],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Faceted iridescent white-blue diamond shader on chest top beside Gramophone."
+        },
+        {
+          "id": 6,
+          "category": "Visual",
+          "code": "V3",
+          "label": "Glowing Green Diamond",
+          "target": [60, 645],
+          "anchor": [160, 860],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Emissive faceted green diamond resting on left floorboards beside trunk shadow."
+        }
+      ]
+    },
+    "KF10": {
+      "filename": "KF10_00m52s_den_map_table.jpg",
+      "segment": "S08",
+      "timestamp": "00:52.35",
+      "hud_exclusions": [
+        [555, 8, 900, 255],
+        [500, 40, 1420, 80],
+        [1605, 18, 1900, 165],
+        [860, 515, 1075, 585],
+        [1635, 925, 1890, 1050]
+      ],
+      "callouts": [
+        {
+          "id": 1,
+          "category": "HUD/UI",
+          "code": "UI1",
+          "label": "Mission Settings Card",
+          "target": [748, 130],
+          "anchor": [495, 120],
+          "placement": "pill_left",
+          "bbox": [555, 8, 900, 255],
+          "observed_ue5_detail": "Top-center floating card: `CONSTABLES' GUILDHALL`, `[H] Difficulty: Novice`, `[R] Mode: Solo`, `[F] Prepare for Mission`."
+        },
+        {
+          "id": 2,
+          "category": "Gameplay/Audio",
+          "code": "G1",
+          "label": "3D Map Token Selected",
+          "target": [775, 505],
+          "anchor": [42, 310],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Highlighted 3D wooden `CONSTABLES' GUILDHALL` token on `KILCAIRN` parchment map (second `ELWAY MANOR` token bottom-left)."
+        },
+        {
+          "id": 3,
+          "category": "HUD/UI",
+          "code": "UI2",
+          "label": "Center [F] ENTER MATCH",
+          "target": [965, 548],
+          "anchor": [1530, 640],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Center reticle `[F] ENTER MATCH` prompt over illuminated parchment map; Map Table toggle clicks (`00:52.2–00:55.1`, `pk=-38.3 dBFS`, no BGM)."
+        },
+        {
+          "id": 4,
+          "category": "Visual",
+          "code": "V1",
+          "label": "Brass Banker's Lamp",
+          "target": [985, 195],
+          "anchor": [1045, 100],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Brass banker's lamp casting warm directional pool across `KILCAIRN` map & Guildhall token (`NE` compass visible above)."
+        },
+        {
+          "id": 5,
+          "category": "Visual",
+          "code": "V4",
+          "label": "Marble Bust & Card",
+          "target": [1415, 220],
+          "anchor": [1565, 260],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Classical white marble bust on table corner beside top-right `Johnny Cipher` (`4`) player card."
+        },
+        {
+          "id": 6,
+          "category": "HUD/UI",
+          "code": "UI3",
+          "label": "Bottom-Right Legend",
+          "target": [1760, 985],
+          "anchor": [1570, 985],
+          "placement": "pill_left",
+          "bbox": [1635, 925, 1890, 1050],
+          "observed_ue5_detail": "Bottom-right keybind legend (`JOIN GAME [F]`, `TOGGLE MODE [R]`, `TOGGLE DIFFICULTY [H]`)."
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,2207 @@
+{
+  "schema_version": "1.0",
+  "resolution": [
+    1920,
+    1080
+  ],
+  "safe_margin_bbox": [
+    16,
+    16,
+    1904,
+    1064
+  ],
+  "badge_diameter_px": 28,
+  "palette": {
+    "Visual": "#FFB300",
+    "HUD/UI": "#00E5FF",
+    "Gameplay/Audio": "#FF4081"
+  },
+  "keyframes": [
+    {
+      "kf_id": "KF21",
+      "filename": "KF21_02m32s_vistara_diamond_red_guard.jpg",
+      "timestamp": "02:32.20",
+      "segment": "S19",
+      "hud_exclusion_zones": [
+        [
+          "top_left_hud",
+          [
+            30,
+            20,
+            535,
+            200
+          ]
+        ],
+        [
+          "top_center_compass",
+          [
+            620,
+            20,
+            1300,
+            85
+          ]
+        ],
+        [
+          "top_right_card",
+          [
+            1605,
+            20,
+            1900,
+            165
+          ]
+        ],
+        [
+          "bottom_left_hotbar",
+          [
+            10,
+            865,
+            330,
+            1070
+          ]
+        ],
+        [
+          "bottom_center_gem",
+          [
+            825,
+            930,
+            1095,
+            1065
+          ]
+        ],
+        [
+          "bottom_right_prompt",
+          [
+            1670,
+            950,
+            1900,
+            1068
+          ]
+        ]
+      ],
+      "callouts": [
+        {
+          "id": 1,
+          "category": "HUD/UI",
+          "code": "UI1",
+          "color": "#00E5FF",
+          "label": "Health Bar ~75% HP",
+          "target": [
+            233,
+            56
+          ],
+          "label_anchor": [
+            56,
+            260
+          ],
+          "placement": "pill_right",
+          "bbox": [
+            34,
+            24,
+            420,
+            92
+          ],
+          "observed_detail": "Ornate top-left Health Bar visible post-02:23.30 fall damage, drained to ~75% red fill above '(\u00a3) 0' and 'Mission: Steal 4,000 in loot value[0/4,000]'.",
+          "estimated_pill_bbox": [
+            42,
+            243,
+            284,
+            277
+          ]
+        },
+        {
+          "id": 2,
+          "category": "Visual",
+          "code": "V5",
+          "color": "#FFB300",
+          "label": "Scaffolded Courtyard Wing",
+          "target": [
+            565,
+            480
+          ],
+          "label_anchor": [
+            56,
+            480
+          ],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_detail": "Multi-tier tubular metal and timber scaffolding rigged against the wet stone left courtyard wing.",
+          "estimated_pill_bbox": [
+            42,
+            463,
+            354,
+            497
+          ]
+        },
+        {
+          "id": 3,
+          "category": "Gameplay/Audio",
+          "code": "G2",
+          "color": "#FF4081",
+          "label": "Red Guard Scan Silhouette",
+          "target": [
+            960,
+            678
+          ],
+          "label_anchor": [
+            740,
+            320
+          ],
+          "placement": "pill_left",
+          "bbox": null,
+          "observed_detail": "Patrolling constable on portico steps highlighted as a RED silhouette by the Vistara Diamond [4] scan pulse (02:31.40-02:32.60).",
+          "estimated_pill_bbox": [
+            442,
+            303,
+            754,
+            337
+          ]
+        },
+        {
+          "id": 4,
+          "category": "Visual",
+          "code": "V4",
+          "color": "#FFB300",
+          "label": "Iridescent Vistara Diamond",
+          "target": [
+            1458,
+            666
+          ],
+          "label_anchor": [
+            1500,
+            360
+          ],
+          "placement": "pill_right",
+          "bbox": [
+            1333,
+            551,
+            1614,
+            803
+          ],
+          "observed_detail": "Faceted iridescent Vistara Diamond held in 1P brass-and-leather caliper mount while scan shimmer/chime plays (02:32.8-02:33.6, pk=-28.0 dBFS).",
+          "estimated_pill_bbox": [
+            1486,
+            343,
+            1808,
+            377
+          ]
+        },
+        {
+          "id": 5,
+          "category": "HUD/UI",
+          "code": "UI4",
+          "color": "#00E5FF",
+          "label": "Slot 4 Tool Active",
+          "target": [
+            255,
+            970
+          ],
+          "label_anchor": [
+            380,
+            920
+          ],
+          "placement": "pill_right",
+          "bbox": [
+            10,
+            915,
+            325,
+            1060
+          ],
+          "observed_detail": "Bottom-left hotbar shows slot [4] Vistara Diamond highlighted white alongside [1] Zipwire, [2] Smoke Bomb, and '[TAB] MAP [MMB] [HOLD] PING MENU'.",
+          "estimated_pill_bbox": [
+            366,
+            903,
+            608,
+            937
+          ]
+        },
+        {
+          "id": 6,
+          "category": "HUD/UI",
+          "code": "UI2",
+          "color": "#00E5FF",
+          "label": "THROW [LMB] Prompt",
+          "target": [
+            1818,
+            1027
+          ],
+          "label_anchor": [
+            1855,
+            880
+          ],
+          "placement": "pill_left",
+          "bbox": null,
+          "observed_detail": "Bottom-right tool action legend displays 'THROW [LMB]' with left-mouse icon for the equipped Vistara Diamond.",
+          "estimated_pill_bbox": [
+            1627,
+            863,
+            1869,
+            897
+          ]
+        }
+      ]
+    },
+    {
+      "kf_id": "KF22",
+      "filename": "KF22_02m33s_vistara_diamond_green_guard.jpg",
+      "timestamp": "02:33.00",
+      "segment": "S19",
+      "hud_exclusion_zones": [
+        [
+          "top_left_hud",
+          [
+            30,
+            20,
+            535,
+            200
+          ]
+        ],
+        [
+          "top_center_compass",
+          [
+            620,
+            20,
+            1300,
+            85
+          ]
+        ],
+        [
+          "top_right_card",
+          [
+            1605,
+            20,
+            1900,
+            165
+          ]
+        ],
+        [
+          "bottom_left_hotbar",
+          [
+            10,
+            865,
+            330,
+            1070
+          ]
+        ],
+        [
+          "bottom_center_gem",
+          [
+            825,
+            930,
+            1095,
+            1065
+          ]
+        ],
+        [
+          "bottom_right_prompt",
+          [
+            1670,
+            950,
+            1900,
+            1068
+          ]
+        ]
+      ],
+      "callouts": [
+        {
+          "id": 1,
+          "category": "Visual",
+          "code": "V4",
+          "color": "#FFB300",
+          "label": "Green Guard Silhouette",
+          "target": [
+            891,
+            598
+          ],
+          "label_anchor": [
+            740,
+            320
+          ],
+          "placement": "pill_left",
+          "bbox": null,
+          "observed_detail": "Highlighted constable silhouette under the portico transitions from RED to bright GREEN at 02:33.00.",
+          "estimated_pill_bbox": [
+            472,
+            303,
+            754,
+            337
+          ]
+        },
+        {
+          "id": 2,
+          "category": "Visual",
+          "code": "V3",
+          "color": "#FFB300",
+          "label": "Warm Courtyard Glint",
+          "target": [
+            1046,
+            789
+          ],
+          "label_anchor": [
+            760,
+            789
+          ],
+          "placement": "pill_left",
+          "bbox": null,
+          "observed_detail": "Bright warm golden glint/flare reflects off the rain-wet courtyard flagstones center-frame.",
+          "estimated_pill_bbox": [
+            512,
+            772,
+            774,
+            806
+          ]
+        },
+        {
+          "id": 3,
+          "category": "Gameplay/Audio",
+          "code": "G3",
+          "color": "#FF4081",
+          "label": "ZipWire [1] Re-Equipped",
+          "target": [
+            1530,
+            520
+          ],
+          "label_anchor": [
+            1320,
+            320
+          ],
+          "placement": "pill_left",
+          "bbox": null,
+          "observed_detail": "Player switches back from Vistara Diamond [4] to ZipWire [1] mechanical crank launcher (02:32.80-02:33.00).",
+          "estimated_pill_bbox": [
+            1042,
+            303,
+            1334,
+            337
+          ]
+        },
+        {
+          "id": 4,
+          "category": "HUD/UI",
+          "code": "UI4",
+          "color": "#00E5FF",
+          "label": "Slot 1 Selected",
+          "target": [
+            74,
+            970
+          ],
+          "label_anchor": [
+            380,
+            960
+          ],
+          "placement": "pill_right",
+          "bbox": [
+            10,
+            915,
+            325,
+            1060
+          ],
+          "observed_detail": "Bottom-left hotbar switches active white border highlight back to slot [1] Zipwire.",
+          "estimated_pill_bbox": [
+            366,
+            943,
+            578,
+            977
+          ]
+        },
+        {
+          "id": 5,
+          "category": "HUD/UI",
+          "code": "UI2",
+          "color": "#00E5FF",
+          "label": "ZipWire Action Prompts",
+          "target": [
+            1790,
+            1005
+          ],
+          "label_anchor": [
+            1460,
+            960
+          ],
+          "placement": "pill_left",
+          "bbox": [
+            1675,
+            955,
+            1895,
+            1060
+          ],
+          "observed_detail": "Bottom-right tool prompts update to 'LAUNCH [LMB]' above '[HOLD] CRANK [RMB]' for the re-equipped ZipWire.",
+          "estimated_pill_bbox": [
+            1192,
+            943,
+            1474,
+            977
+          ]
+        }
+      ]
+    },
+    {
+      "kf_id": "KF23",
+      "filename": "KF23_02m41s_side_wing_macleod_sign.jpg",
+      "timestamp": "02:41.00",
+      "segment": "S20",
+      "hud_exclusion_zones": [
+        [
+          "top_left_hud",
+          [
+            30,
+            20,
+            535,
+            200
+          ]
+        ],
+        [
+          "top_center_compass",
+          [
+            620,
+            20,
+            1300,
+            85
+          ]
+        ],
+        [
+          "top_right_card",
+          [
+            1605,
+            20,
+            1900,
+            165
+          ]
+        ],
+        [
+          "bottom_left_hotbar",
+          [
+            10,
+            865,
+            330,
+            1070
+          ]
+        ],
+        [
+          "bottom_center_gem",
+          [
+            825,
+            930,
+            1095,
+            1065
+          ]
+        ],
+        [
+          "bottom_right_prompt",
+          [
+            1670,
+            950,
+            1900,
+            1068
+          ]
+        ]
+      ],
+      "callouts": [
+        {
+          "id": 1,
+          "category": "HUD/UI",
+          "code": "UI1",
+          "color": "#00E5FF",
+          "label": "Compass Heading NE",
+          "target": [
+            666,
+            66
+          ],
+          "label_anchor": [
+            690,
+            140
+          ],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_detail": "Top-center compass bar displays 'NE' heading tick above the side-wing balcony traversal.",
+          "estimated_pill_bbox": [
+            676,
+            123,
+            918,
+            157
+          ]
+        },
+        {
+          "id": 2,
+          "category": "Visual",
+          "code": "V3",
+          "color": "#FFB300",
+          "label": "Red-Lit Barred Window",
+          "target": [
+            549,
+            520
+          ],
+          "label_anchor": [
+            340,
+            380
+          ],
+          "placement": "pill_left",
+          "bbox": [
+            499,
+            376,
+            584,
+            697
+          ],
+          "observed_detail": "Stone side-wing facade features ornate diamond iron window grilles glowing warm red from an interior light source.",
+          "estimated_pill_bbox": [
+            82,
+            363,
+            354,
+            397
+          ]
+        },
+        {
+          "id": 3,
+          "category": "Visual",
+          "code": "V6",
+          "color": "#FFB300",
+          "label": "Wet Balcony Balustrade",
+          "target": [
+            880,
+            750
+          ],
+          "label_anchor": [
+            620,
+            820
+          ],
+          "placement": "pill_left",
+          "bbox": null,
+          "observed_detail": "Rain-slick stone balcony pavers and carved stone balustrade reflecting cool moonlight beside wet stone footsteps (02:34-02:41).",
+          "estimated_pill_bbox": [
+            352,
+            803,
+            634,
+            837
+          ]
+        },
+        {
+          "id": 4,
+          "category": "Visual",
+          "code": "V2",
+          "color": "#FFB300",
+          "label": "Misty Viaduct Silhouette",
+          "target": [
+            1350,
+            225
+          ],
+          "label_anchor": [
+            1220,
+            140
+          ],
+          "placement": "pill_left",
+          "bbox": null,
+          "observed_detail": "Elevated steel railway/bridge arch and distant Kilcairn rooflines receding into volumetric night fog.",
+          "estimated_pill_bbox": [
+            932,
+            123,
+            1234,
+            157
+          ]
+        },
+        {
+          "id": 5,
+          "category": "Visual",
+          "code": "V1",
+          "color": "#FFB300",
+          "label": "MACLEOD Vertical Sign",
+          "target": [
+            1809,
+            290
+          ],
+          "label_anchor": [
+            1730,
+            300
+          ],
+          "placement": "pill_left",
+          "bbox": [
+            1780,
+            175,
+            1845,
+            430
+          ],
+          "observed_detail": "Crisp illuminated vertical gold serif 'MACLEOD' signage mounted on the distant right-hand brick facade.",
+          "estimated_pill_bbox": [
+            1472,
+            283,
+            1744,
+            317
+          ]
+        }
+      ]
+    },
+    {
+      "kf_id": "KF24",
+      "filename": "KF24_03m00s_locked_blue_double_doors.jpg",
+      "timestamp": "03:00.60",
+      "segment": "S21",
+      "hud_exclusion_zones": [
+        [
+          "top_left_hud",
+          [
+            30,
+            20,
+            535,
+            200
+          ]
+        ],
+        [
+          "top_center_compass",
+          [
+            620,
+            20,
+            1300,
+            85
+          ]
+        ],
+        [
+          "top_right_card",
+          [
+            1605,
+            20,
+            1900,
+            165
+          ]
+        ],
+        [
+          "bottom_left_hotbar",
+          [
+            10,
+            865,
+            330,
+            1070
+          ]
+        ],
+        [
+          "bottom_center_gem",
+          [
+            825,
+            930,
+            1095,
+            1065
+          ]
+        ],
+        [
+          "bottom_right_prompt",
+          [
+            1670,
+            950,
+            1900,
+            1068
+          ]
+        ],
+        [
+          "center_prompts",
+          [
+            870,
+            515,
+            1055,
+            615
+          ]
+        ]
+      ],
+      "callouts": [
+        {
+          "id": 1,
+          "category": "Visual",
+          "code": "V5",
+          "color": "#FFB300",
+          "label": "Blue Diamond-Mullion Doors",
+          "target": [
+            480,
+            570
+          ],
+          "label_anchor": [
+            340,
+            340
+          ],
+          "placement": "pill_left",
+          "bbox": null,
+          "observed_detail": "Blue-painted wooden double doors with diamond-mullion glass panes and twin vertical brass pull handles.",
+          "estimated_pill_bbox": [
+            32,
+            323,
+            354,
+            357
+          ]
+        },
+        {
+          "id": 2,
+          "category": "HUD/UI",
+          "code": "UI2",
+          "color": "#00E5FF",
+          "label": "[F] OPEN Prompt",
+          "target": [
+            950,
+            551
+          ],
+          "label_anchor": [
+            1100,
+            440
+          ],
+          "placement": "pill_right",
+          "bbox": [
+            885,
+            515,
+            1058,
+            615
+          ],
+          "observed_detail": "Center reticle displays '[F] OPEN' prompt prior to door latch click and wooden creak open at 03:01.0-03:02.2 (pk=-29.8 dBFS).",
+          "estimated_pill_bbox": [
+            1086,
+            423,
+            1298,
+            457
+          ]
+        },
+        {
+          "id": 3,
+          "category": "HUD/UI",
+          "code": "UI2",
+          "color": "#00E5FF",
+          "label": "[F] [HOLD] LOCK Prompt",
+          "target": [
+            950,
+            598
+          ],
+          "label_anchor": [
+            800,
+            700
+          ],
+          "placement": "pill_left",
+          "bbox": null,
+          "observed_detail": "Stacked secondary prompt '[F] [HOLD] LOCK' beneath '[F] OPEN' on the unlocked portico entrance doors.",
+          "estimated_pill_bbox": [
+            532,
+            683,
+            814,
+            717
+          ]
+        },
+        {
+          "id": 4,
+          "category": "Gameplay/Audio",
+          "code": "G3",
+          "color": "#FF4081",
+          "label": "ZipWire [1] Ready",
+          "target": [
+            1460,
+            640
+          ],
+          "label_anchor": [
+            1560,
+            340
+          ],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_detail": "1P gloved hand grips the ZipWire [1] launcher in foreground while sheltered portico reduces exterior rain wash.",
+          "estimated_pill_bbox": [
+            1546,
+            323,
+            1778,
+            357
+          ]
+        },
+        {
+          "id": 5,
+          "category": "HUD/UI",
+          "code": "UI3",
+          "color": "#00E5FF",
+          "label": "Light Gem Threat Arcs",
+          "target": [
+            960,
+            1008
+          ],
+          "label_anchor": [
+            780,
+            970
+          ],
+          "placement": "pill_left",
+          "bbox": [
+            865,
+            955,
+            1055,
+            1060
+          ],
+          "observed_detail": "Bottom-center Light Gem glows bright pale-gold flanked by twin red directional threat/noise arcs.",
+          "estimated_pill_bbox": [
+            522,
+            953,
+            794,
+            987
+          ]
+        }
+      ]
+    },
+    {
+      "kf_id": "KF25",
+      "filename": "KF25_03m16s_parlor_pickpocket_takedown.jpg",
+      "timestamp": "03:16.80",
+      "segment": "S22",
+      "hud_exclusion_zones": [
+        [
+          "top_left_hud",
+          [
+            30,
+            20,
+            535,
+            200
+          ]
+        ],
+        [
+          "top_center_compass",
+          [
+            620,
+            20,
+            1300,
+            85
+          ]
+        ],
+        [
+          "top_right_card",
+          [
+            1605,
+            20,
+            1900,
+            165
+          ]
+        ],
+        [
+          "bottom_left_hotbar",
+          [
+            10,
+            865,
+            330,
+            1070
+          ]
+        ],
+        [
+          "bottom_center_gem",
+          [
+            825,
+            930,
+            1095,
+            1065
+          ]
+        ],
+        [
+          "bottom_right_prompt",
+          [
+            1670,
+            950,
+            1900,
+            1068
+          ]
+        ],
+        [
+          "center_prompts",
+          [
+            835,
+            535,
+            1090,
+            614
+          ]
+        ]
+      ],
+      "callouts": [
+        {
+          "id": 1,
+          "category": "Visual",
+          "code": "V3",
+          "color": "#FFB300",
+          "label": "Roaring Hearth Lighting",
+          "target": [
+            368,
+            869
+          ],
+          "label_anchor": [
+            56,
+            520
+          ],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_detail": "Roaring parlor fireplace casts warm amber radial light and crackle ambience (-61 to -55 dBFS) across wood-parquet floor.",
+          "estimated_pill_bbox": [
+            42,
+            503,
+            334,
+            537
+          ]
+        },
+        {
+          "id": 2,
+          "category": "Gameplay/Audio",
+          "code": "G2",
+          "color": "#FF4081",
+          "label": "Glowing Blue Hip Baton",
+          "target": [
+            650,
+            625
+          ],
+          "label_anchor": [
+            540,
+            340
+          ],
+          "placement": "pill_left",
+          "bbox": null,
+          "observed_detail": "Patrolling constable carries an illuminated glowing-blue-tip baton holstered on his left belt hip.",
+          "estimated_pill_bbox": [
+            272,
+            323,
+            554,
+            357
+          ]
+        },
+        {
+          "id": 3,
+          "category": "Gameplay/Audio",
+          "code": "G2",
+          "color": "#FF4081",
+          "label": "Constable Clasped-Hands Idle",
+          "target": [
+            910,
+            385
+          ],
+          "label_anchor": [
+            1160,
+            340
+          ],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_detail": "Standing constable faces fireplace with hands clasped behind back, unaware of crouched stealth approach.",
+          "estimated_pill_bbox": [
+            1146,
+            323,
+            1488,
+            357
+          ]
+        },
+        {
+          "id": 4,
+          "category": "HUD/UI",
+          "code": "UI2",
+          "color": "#00E5FF",
+          "label": "[F] PICK POCKET Prompt",
+          "target": [
+            960,
+            552
+          ],
+          "label_anchor": [
+            1160,
+            480
+          ],
+          "placement": "pill_right",
+          "bbox": [
+            835,
+            535,
+            1090,
+            614
+          ],
+          "observed_detail": "Center reticle displays '[F] PICK POCKET' just 0.30s prior to Guildhall Key pickup chime at 03:17.10 (pk=-23.6 dBFS).",
+          "estimated_pill_bbox": [
+            1146,
+            463,
+            1428,
+            497
+          ]
+        },
+        {
+          "id": 5,
+          "category": "HUD/UI",
+          "code": "UI2",
+          "color": "#00E5FF",
+          "label": "[F] [HOLD] TAKEDOWN",
+          "target": [
+            960,
+            597
+          ],
+          "label_anchor": [
+            1160,
+            620
+          ],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_detail": "Stacked contextual prompt '[F] [HOLD] TAKEDOWN' beneath '[F] PICK POCKET' when crouched directly behind guard.",
+          "estimated_pill_bbox": [
+            1146,
+            603,
+            1398,
+            637
+          ]
+        },
+        {
+          "id": 6,
+          "category": "HUD/UI",
+          "code": "UI3",
+          "color": "#00E5FF",
+          "label": "Exposed Bright Light Gem",
+          "target": [
+            960,
+            1008
+          ],
+          "label_anchor": [
+            780,
+            970
+          ],
+          "placement": "pill_left",
+          "bbox": [
+            880,
+            945,
+            1040,
+            1060
+          ],
+          "observed_detail": "Light Gem glows bright white-gold from nearby hearth firelight without red alert arcs.",
+          "estimated_pill_bbox": [
+            492,
+            953,
+            794,
+            987
+          ]
+        }
+      ]
+    },
+    {
+      "kf_id": "KF26",
+      "filename": "KF26_03m20s_parlor_guard_takedown.jpg",
+      "timestamp": "03:20.20",
+      "segment": "S23",
+      "hud_exclusion_zones": [
+        [
+          "top_left_hud",
+          [
+            30,
+            20,
+            535,
+            200
+          ]
+        ],
+        [
+          "top_center_compass",
+          [
+            620,
+            20,
+            1300,
+            85
+          ]
+        ],
+        [
+          "top_right_card",
+          [
+            1605,
+            20,
+            1900,
+            165
+          ]
+        ],
+        [
+          "bottom_left_hotbar",
+          [
+            10,
+            865,
+            330,
+            1070
+          ]
+        ],
+        [
+          "bottom_center_gem",
+          [
+            825,
+            930,
+            1095,
+            1065
+          ]
+        ],
+        [
+          "bottom_right_prompt",
+          [
+            1670,
+            950,
+            1900,
+            1068
+          ]
+        ],
+        [
+          "guildhall_key",
+          [
+            18,
+            858,
+            190,
+            932
+          ]
+        ],
+        [
+          "center_prompt",
+          [
+            830,
+            530,
+            1090,
+            575
+          ]
+        ]
+      ],
+      "callouts": [
+        {
+          "id": 1,
+          "category": "Visual",
+          "code": "V3",
+          "color": "#FFB300",
+          "label": "Hearth Glow & Bust",
+          "target": [
+            1115,
+            355
+          ],
+          "label_anchor": [
+            840,
+            200
+          ],
+          "placement": "pill_left",
+          "bbox": null,
+          "observed_detail": "Warm fireplace light illuminates the carved mantel and classical bust behind the tilted 1P takedown camera.",
+          "estimated_pill_bbox": [
+            612,
+            183,
+            854,
+            217
+          ]
+        },
+        {
+          "id": 2,
+          "category": "Gameplay/Audio",
+          "code": "G2",
+          "color": "#FF4081",
+          "label": "1P Guard Takedown Grapple",
+          "target": [
+            1420,
+            540
+          ],
+          "label_anchor": [
+            1220,
+            240
+          ],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_detail": "1P camera tilts closely over the constable's helmet and corded shoulder during the melee knockdown sequence (03:17.80-03:20.60).",
+          "estimated_pill_bbox": [
+            1206,
+            223,
+            1518,
+            257
+          ]
+        },
+        {
+          "id": 3,
+          "category": "HUD/UI",
+          "code": "UI2",
+          "color": "#00E5FF",
+          "label": "Active Takedown Hold Arc",
+          "target": [
+            960,
+            552
+          ],
+          "label_anchor": [
+            760,
+            440
+          ],
+          "placement": "pill_left",
+          "bbox": [
+            834,
+            530,
+            1084,
+            576
+          ],
+          "observed_detail": "Center '[F] [HOLD] TAKEDOWN' prompt displays an active circular hold-progress arc around the reticle.",
+          "estimated_pill_bbox": [
+            472,
+            423,
+            774,
+            457
+          ]
+        },
+        {
+          "id": 4,
+          "category": "Gameplay/Audio",
+          "code": "AU4",
+          "color": "#FF4081",
+          "label": "Takedown Lunge & Impact",
+          "target": [
+            420,
+            740
+          ],
+          "label_anchor": [
+            340,
+            420
+          ],
+          "placement": "pill_left",
+          "bbox": null,
+          "observed_detail": "1P gloved hands & ZipWire [1] lunge forward alongside grapple grunts (03:18.8-03:19.7) and blunt KO thud + groan (03:20.6-03:21.5, pk=-22.1 dBFS).",
+          "estimated_pill_bbox": [
+            62,
+            403,
+            354,
+            437
+          ]
+        },
+        {
+          "id": 5,
+          "category": "HUD/UI",
+          "code": "UI3",
+          "color": "#00E5FF",
+          "label": "Bright Parlor Light Gem",
+          "target": [
+            960,
+            1008
+          ],
+          "label_anchor": [
+            780,
+            680
+          ],
+          "placement": "pill_left",
+          "bbox": [
+            880,
+            945,
+            1040,
+            1060
+          ],
+          "observed_detail": "Light Gem remains illuminated bright pale-gold against the dark 1P forearm during takedown.",
+          "estimated_pill_bbox": [
+            502,
+            663,
+            794,
+            697
+          ]
+        }
+      ]
+    },
+    {
+      "kf_id": "KF27",
+      "filename": "KF27_03m27s_foyer_security_beam.jpg",
+      "timestamp": "03:27.60",
+      "segment": "S24",
+      "hud_exclusion_zones": [
+        [
+          "top_left_hud",
+          [
+            30,
+            20,
+            535,
+            200
+          ]
+        ],
+        [
+          "top_center_compass",
+          [
+            620,
+            20,
+            1300,
+            85
+          ]
+        ],
+        [
+          "top_right_card",
+          [
+            1605,
+            20,
+            1900,
+            165
+          ]
+        ],
+        [
+          "bottom_left_hotbar",
+          [
+            10,
+            865,
+            330,
+            1070
+          ]
+        ],
+        [
+          "bottom_center_gem",
+          [
+            825,
+            930,
+            1095,
+            1065
+          ]
+        ],
+        [
+          "bottom_right_prompt",
+          [
+            1670,
+            950,
+            1900,
+            1068
+          ]
+        ],
+        [
+          "guildhall_key",
+          [
+            18,
+            858,
+            190,
+            932
+          ]
+        ],
+        [
+          "gem_red_arcs",
+          [
+            805,
+            940,
+            1115,
+            1062
+          ]
+        ]
+      ],
+      "callouts": [
+        {
+          "id": 1,
+          "category": "Gameplay/Audio",
+          "code": "G4",
+          "color": "#FF4081",
+          "label": "Left-Wall Beam Emitter",
+          "target": [
+            341,
+            432
+          ],
+          "label_anchor": [
+            56,
+            310
+          ],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_detail": "Mid-height circular glowing white beam emitter mounted on the left marble foyer wall (~40% height).",
+          "estimated_pill_bbox": [
+            42,
+            293,
+            324,
+            327
+          ]
+        },
+        {
+          "id": 2,
+          "category": "Visual",
+          "code": "V4",
+          "color": "#FFB300",
+          "label": "Horizontal Volumetric Beam",
+          "target": [
+            580,
+            435
+          ],
+          "label_anchor": [
+            520,
+            620
+          ],
+          "placement": "pill_left",
+          "bbox": null,
+          "observed_detail": "Crisp horizontal white volumetric security beam spanning wall-to-wall across the checkered marble foyer.",
+          "estimated_pill_bbox": [
+            212,
+            603,
+            534,
+            637
+          ]
+        },
+        {
+          "id": 3,
+          "category": "Visual",
+          "code": "V5",
+          "color": "#FFB300",
+          "label": "Glass Statue Display Case",
+          "target": [
+            735,
+            358
+          ],
+          "label_anchor": [
+            700,
+            245
+          ],
+          "placement": "pill_left",
+          "bbox": null,
+          "observed_detail": "Tall internally lit glass display vitrine housing a bust/statue beside a velvet armchair and ottoman.",
+          "estimated_pill_bbox": [
+            402,
+            228,
+            714,
+            262
+          ]
+        },
+        {
+          "id": 4,
+          "category": "Visual",
+          "code": "V6",
+          "color": "#FFB300",
+          "label": "Cyan Ceiling Diamond Node",
+          "target": [
+            1026,
+            252
+          ],
+          "label_anchor": [
+            1010,
+            140
+          ],
+          "placement": "pill_left",
+          "bbox": null,
+          "observed_detail": "Glowing cyan diamond security/junction node mounted high above the far foyer double doors.",
+          "estimated_pill_bbox": [
+            712,
+            123,
+            1024,
+            157
+          ]
+        },
+        {
+          "id": 5,
+          "category": "Gameplay/Audio",
+          "code": "G4",
+          "color": "#FF4081",
+          "label": "Overhead Security Camera",
+          "target": [
+            1151,
+            84
+          ],
+          "label_anchor": [
+            1290,
+            130
+          ],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_detail": "Rotating overhead security camera/spotlight housing mounted high on the right foyer wall above the Basement Stairs doorway.",
+          "estimated_pill_bbox": [
+            1276,
+            113,
+            1578,
+            147
+          ]
+        },
+        {
+          "id": 6,
+          "category": "Gameplay/Audio",
+          "code": "G4",
+          "color": "#FF4081",
+          "label": "Square Metal Floor Plate",
+          "target": [
+            910,
+            608
+          ],
+          "label_anchor": [
+            1160,
+            620
+          ],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_detail": "Flush square metallic pressure/junction plate embedded in the checkered marble floor ahead of the carpet runner.",
+          "estimated_pill_bbox": [
+            1146,
+            603,
+            1448,
+            637
+          ]
+        },
+        {
+          "id": 7,
+          "category": "HUD/UI",
+          "code": "UI4",
+          "color": "#00E5FF",
+          "label": "Guildhall Key HUD",
+          "target": [
+            104,
+            895
+          ],
+          "label_anchor": [
+            360,
+            895
+          ],
+          "placement": "pill_right",
+          "bbox": [
+            20,
+            865,
+            185,
+            922
+          ],
+          "observed_detail": "Pickpocketed 'Guildhall Key' icon and label persist in the bottom-left HUD directly above slot [1] Zipwire.",
+          "estimated_pill_bbox": [
+            346,
+            878,
+            578,
+            912
+          ]
+        },
+        {
+          "id": 8,
+          "category": "HUD/UI",
+          "code": "UI3",
+          "color": "#00E5FF",
+          "label": "Threat Arcs Active",
+          "target": [
+            870,
+            1005
+          ],
+          "label_anchor": [
+            740,
+            975
+          ],
+          "placement": "pill_left",
+          "bbox": [
+            805,
+            940,
+            1115,
+            1062
+          ],
+          "observed_detail": "Outer twin red directional threat/noise arcs pulse around the lit Light Gem during marble footstep approach (pk=-28.9 dBFS).",
+          "estimated_pill_bbox": [
+            512,
+            958,
+            754,
+            992
+          ]
+        }
+      ]
+    },
+    {
+      "kf_id": "KF28",
+      "filename": "KF28_03m35s_foyer_arcane_barriers.jpg",
+      "timestamp": "03:35.00",
+      "segment": "S25",
+      "hud_exclusion_zones": [
+        [
+          "top_left_hud",
+          [
+            30,
+            20,
+            535,
+            200
+          ]
+        ],
+        [
+          "top_center_compass",
+          [
+            620,
+            20,
+            1300,
+            85
+          ]
+        ],
+        [
+          "top_right_card",
+          [
+            1605,
+            20,
+            1900,
+            165
+          ]
+        ],
+        [
+          "bottom_left_hotbar",
+          [
+            10,
+            865,
+            330,
+            1070
+          ]
+        ],
+        [
+          "bottom_center_gem",
+          [
+            825,
+            930,
+            1095,
+            1065
+          ]
+        ],
+        [
+          "bottom_right_prompt",
+          [
+            1670,
+            950,
+            1900,
+            1068
+          ]
+        ],
+        [
+          "guildhall_key",
+          [
+            18,
+            858,
+            190,
+            932
+          ]
+        ],
+        [
+          "status_icons",
+          [
+            910,
+            775,
+            1020,
+            840
+          ]
+        ]
+      ],
+      "callouts": [
+        {
+          "id": 1,
+          "category": "Visual",
+          "code": "V4",
+          "color": "#FFB300",
+          "label": "Sweeping Security Beam",
+          "target": [
+            420,
+            558
+          ],
+          "label_anchor": [
+            360,
+            440
+          ],
+          "placement": "pill_left",
+          "bbox": null,
+          "observed_detail": "White volumetric security beam projecting from the left wall into the triggered foyer ward barrier.",
+          "estimated_pill_bbox": [
+            92,
+            423,
+            374,
+            457
+          ]
+        },
+        {
+          "id": 2,
+          "category": "Visual",
+          "code": "V4",
+          "color": "#FFB300",
+          "label": "Purple Crystalline Ward",
+          "target": [
+            870,
+            360
+          ],
+          "label_anchor": [
+            720,
+            260
+          ],
+          "placement": "pill_left",
+          "bbox": [
+            793,
+            76,
+            1080,
+            1065
+          ],
+          "observed_detail": "Bright faceted purple crystalline arcane barrier sealing the main foyer archway after crossing the beam at 03:29.00 (ward hum -59 dBFS).",
+          "estimated_pill_bbox": [
+            442,
+            243,
+            734,
+            277
+          ]
+        },
+        {
+          "id": 3,
+          "category": "Gameplay/Audio",
+          "code": "G4",
+          "color": "#FF4081",
+          "label": "Basement Stairs Plaque",
+          "target": [
+            1214,
+            603
+          ],
+          "label_anchor": [
+            1214,
+            240
+          ],
+          "placement": "pill_right",
+          "bbox": [
+            1185,
+            555,
+            1245,
+            645
+          ],
+          "observed_detail": "Framed 'Basement Stairs' wall plaque mounted immediately left of the vine-sealed side stairwell doorway.",
+          "estimated_pill_bbox": [
+            1200,
+            223,
+            1482,
+            257
+          ]
+        },
+        {
+          "id": 4,
+          "category": "Gameplay/Audio",
+          "code": "G4",
+          "color": "#FF4081",
+          "label": "Overhead Security Camera",
+          "target": [
+            1400,
+            435
+          ],
+          "label_anchor": [
+            1520,
+            360
+          ],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_detail": "Rotating overhead security camera/spotlight above the Basement Stairs doorway sweeping across the foyer.",
+          "estimated_pill_bbox": [
+            1506,
+            343,
+            1808,
+            377
+          ]
+        },
+        {
+          "id": 5,
+          "category": "Visual",
+          "code": "V4",
+          "color": "#FFB300",
+          "label": "Green Arcane Vine Lock",
+          "target": [
+            1331,
+            599
+          ],
+          "label_anchor": [
+            1520,
+            560
+          ],
+          "placement": "pill_right",
+          "bbox": [
+            1285,
+            535,
+            1395,
+            655
+          ],
+          "observed_detail": "Glowing green thorny arcane vines erupting across the Basement Stairs doorway upon beam tripwire trigger.",
+          "estimated_pill_bbox": [
+            1506,
+            543,
+            1788,
+            577
+          ]
+        },
+        {
+          "id": 6,
+          "category": "HUD/UI",
+          "code": "UI3",
+          "color": "#00E5FF",
+          "label": "Jaw-Trap Status Icon",
+          "target": [
+            939,
+            808
+          ],
+          "label_anchor": [
+            760,
+            740
+          ],
+          "placement": "pill_left",
+          "bbox": [
+            915,
+            778,
+            1015,
+            838
+          ],
+          "observed_detail": "White circular mechanical jaw/bear-trap icon with active countdown ring appearing above Light Gem from 03:29.00+.",
+          "estimated_pill_bbox": [
+            512,
+            723,
+            774,
+            757
+          ]
+        },
+        {
+          "id": 7,
+          "category": "HUD/UI",
+          "code": "UI3",
+          "color": "#00E5FF",
+          "label": "Unconscious Guard Icon",
+          "target": [
+            992,
+            805
+          ],
+          "label_anchor": [
+            760,
+            880
+          ],
+          "placement": "pill_left",
+          "bbox": null,
+          "observed_detail": "Orange-arc unconscious-head ('xx' eyes + 'zz' + '>>') circular status icon active above Light Gem from 03:31.20+.",
+          "estimated_pill_bbox": [
+            492,
+            863,
+            774,
+            897
+          ]
+        }
+      ]
+    },
+    {
+      "kf_id": "KF29",
+      "filename": "KF29_03m39s_stairs_crimson_alarm.jpg",
+      "timestamp": "03:39.40",
+      "segment": "S26",
+      "hud_exclusion_zones": [
+        [
+          "top_left_hud",
+          [
+            30,
+            20,
+            535,
+            200
+          ]
+        ],
+        [
+          "top_center_compass",
+          [
+            620,
+            20,
+            1300,
+            85
+          ]
+        ],
+        [
+          "top_right_card",
+          [
+            1605,
+            20,
+            1900,
+            165
+          ]
+        ],
+        [
+          "bottom_left_hotbar",
+          [
+            10,
+            865,
+            330,
+            1070
+          ]
+        ],
+        [
+          "bottom_center_gem",
+          [
+            825,
+            930,
+            1095,
+            1065
+          ]
+        ],
+        [
+          "bottom_right_prompt",
+          [
+            1670,
+            950,
+            1900,
+            1068
+          ]
+        ],
+        [
+          "guildhall_key",
+          [
+            18,
+            858,
+            190,
+            932
+          ]
+        ],
+        [
+          "status_icon",
+          [
+            930,
+            775,
+            990,
+            840
+          ]
+        ],
+        [
+          "center_crank",
+          [
+            905,
+            490,
+            1015,
+            635
+          ]
+        ]
+      ],
+      "callouts": [
+        {
+          "id": 1,
+          "category": "Visual",
+          "code": "V6",
+          "color": "#FFB300",
+          "label": "Unlit Slate Stair Treads",
+          "target": [
+            1080,
+            120
+          ],
+          "label_anchor": [
+            1480,
+            220
+          ],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_detail": "Upper staircase treads remain plain dark grey/slate outside the sweeping crimson alarm spotlight cone.",
+          "estimated_pill_bbox": [
+            1466,
+            203,
+            1768,
+            237
+          ]
+        },
+        {
+          "id": 2,
+          "category": "Visual",
+          "code": "V3",
+          "color": "#FFB300",
+          "label": "Crimson Alarm Spotlight",
+          "target": [
+            1220,
+            540
+          ],
+          "label_anchor": [
+            1480,
+            360
+          ],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_detail": "Wall security spotlight bathes the dark grey/slate treads in intense crimson alarm light (03:38.20-03:39.60) post-barrier shatter (pk=-23.5 dBFS).",
+          "estimated_pill_bbox": [
+            1466,
+            343,
+            1758,
+            377
+          ]
+        },
+        {
+          "id": 3,
+          "category": "HUD/UI",
+          "code": "UI2",
+          "color": "#00E5FF",
+          "label": "CRANK [LMB] Reticle",
+          "target": [
+            960,
+            550
+          ],
+          "label_anchor": [
+            620,
+            480
+          ],
+          "placement": "pill_left",
+          "bbox": [
+            910,
+            495,
+            1010,
+            630
+          ],
+          "observed_detail": "Six-tick circular center reticle displays 'CRANK [LMB]' prompt during rapid staircase ascent.",
+          "estimated_pill_bbox": [
+            382,
+            463,
+            634,
+            497
+          ]
+        },
+        {
+          "id": 4,
+          "category": "HUD/UI",
+          "code": "UI3",
+          "color": "#00E5FF",
+          "label": "Re-Triggered Jaw-Trap Icon",
+          "target": [
+            960,
+            808
+          ],
+          "label_anchor": [
+            1160,
+            810
+          ],
+          "placement": "pill_right",
+          "bbox": [
+            935,
+            780,
+            985,
+            835
+          ],
+          "observed_detail": "3rd status-icon event: re-triggered white mechanical jaw-trap icon with partial countdown arc above Light Gem (03:38.07-03:41.87).",
+          "estimated_pill_bbox": [
+            1146,
+            793,
+            1468,
+            827
+          ]
+        },
+        {
+          "id": 5,
+          "category": "Gameplay/Audio",
+          "code": "G3",
+          "color": "#FF4081",
+          "label": "Crimson-Lit ZipWire [1]",
+          "target": [
+            720,
+            880
+          ],
+          "label_anchor": [
+            620,
+            740
+          ],
+          "placement": "pill_left",
+          "bbox": null,
+          "observed_detail": "1P ZipWire [1] launcher and gloved hand receive crimson spotlight + brief blue/purple highlight while ascending (ZipWire clack pk=-24.5 dBFS).",
+          "estimated_pill_bbox": [
+            342,
+            723,
+            634,
+            757
+          ]
+        }
+      ]
+    },
+    {
+      "kf_id": "KF30",
+      "filename": "KF30_03m43s_pause_menu.jpg",
+      "timestamp": "03:43.20",
+      "segment": "S27",
+      "hud_exclusion_zones": [
+        [
+          "modal",
+          [
+            670,
+            338,
+            1250,
+            742
+          ]
+        ],
+        [
+          "footer",
+          [
+            15,
+            1040,
+            300,
+            1065
+          ]
+        ]
+      ],
+      "callouts": [
+        {
+          "id": 1,
+          "category": "Visual",
+          "code": "V1",
+          "color": "#FFB300",
+          "label": "Teal/Copper Art-Nouveau Frame",
+          "target": [
+            680,
+            350
+          ],
+          "label_anchor": [
+            520,
+            350
+          ],
+          "placement": "pill_left",
+          "bbox": [
+            673,
+            341,
+            1246,
+            739
+          ],
+          "observed_detail": "Centered Pause Menu modal framed with curved teal/copper Art-Nouveau corner filigree over darkened blurred gameplay backdrop.",
+          "estimated_pill_bbox": [
+            182,
+            333,
+            534,
+            367
+          ]
+        },
+        {
+          "id": 2,
+          "category": "HUD/UI",
+          "code": "UI1",
+          "color": "#00E5FF",
+          "label": "Pause Action Buttons",
+          "target": [
+            776,
+            565
+          ],
+          "label_anchor": [
+            520,
+            565
+          ],
+          "placement": "pill_left",
+          "bbox": null,
+          "observed_detail": "Four centered vertical menu items: 'RESUME', 'SETTINGS', 'RETURN TO THIEF'S DEN' (straight apostrophe), and 'QUIT TO DESKTOP'.",
+          "estimated_pill_bbox": [
+            272,
+            548,
+            534,
+            582
+          ]
+        },
+        {
+          "id": 3,
+          "category": "HUD/UI",
+          "code": "UI5",
+          "color": "#00E5FF",
+          "label": "QUIT TO DESKTOP Hover",
+          "target": [
+            1070,
+            682
+          ],
+          "label_anchor": [
+            1380,
+            682
+          ],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_detail": "Clean single cursor hovers 'QUIT TO DESKTOP' at 03:43.20 (prior to 03:43.70+ multi-cursor trail), matching UI hover/click at 03:43.2-03:43.6 (pk=-34.2 dBFS).",
+          "estimated_pill_bbox": [
+            1366,
+            665,
+            1638,
+            699
+          ]
+        },
+        {
+          "id": 4,
+          "category": "Gameplay/Audio",
+          "code": "AU6",
+          "color": "#FF4081",
+          "label": "-19 dB Ambience Ducking",
+          "target": [
+            1240,
+            455
+          ],
+          "label_anchor": [
+            1380,
+            455
+          ],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_detail": "Opening Pause Menu at 03:41.90 ducks gameplay ambience by -19 dB (-53 dBFS to -72.4 dBFS), followed by digital silence (-240 dBFS) after quit.",
+          "estimated_pill_bbox": [
+            1366,
+            438,
+            1658,
+            472
+          ]
+        },
+        {
+          "id": 5,
+          "category": "HUD/UI",
+          "code": "UI1",
+          "color": "#00E5FF",
+          "label": "Build & Seed Footer",
+          "target": [
+            158,
+            1052
+          ],
+          "label_anchor": [
+            158,
+            920
+          ],
+          "placement": "pill_right",
+          "bbox": [
+            15,
+            1042,
+            295,
+            1062
+          ],
+          "observed_detail": "Bottom-left build/difficulty/seed footer reads '1.5.148559   Novice   1025051536'.",
+          "estimated_pill_bbox": [
+            144,
+            903,
+            396,
+            937
+          ]
+        }
+      ]
+    }
+  ]
+}

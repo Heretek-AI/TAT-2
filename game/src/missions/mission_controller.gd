@@ -62,7 +62,7 @@ var _ponder_active: bool = false
 var _ponder_cam: Camera3D = null
 var _ponder_cheese: Node3D = null
 var _active_mission_row: Dictionary = {}
-## TEMP STRIP MENU debug hook (TASK 5.1b, revert-friendly): --env-strip=N (0-7).
+## TEMP STRIP MENU debug hook (TASK 5.1b, revert-friendly): --env-strip=N (0-8).
 ## -1 = no flag passed (hook off). Delete this var + the helpers/call sites to revert.
 var _env_strip_level: int = -1
 
@@ -105,8 +105,9 @@ func _setup_environment() -> void:
 	MobileProfile.apply_environment(e)
 	# TEMP STRIP MENU (TASK 5.1b): revert by deleting this block + helpers below.
 	_env_strip_level = _env_strip_level_from_args()
-	print("TAT-2 STRIP MENU: env-strip level=", _env_strip_level, " (-1=off, 7=full restore)")
+	print("TAT-2 STRIP MENU: env-strip level=", _env_strip_level, " (-1=off, 7=full restore, 8=base-minimal fallback)")
 	_apply_env_strip(e)
+	_apply_env_strip_viewport(moon)
 	env.environment = e
 	add_child(env)
 	print("TAT-2 environment: bg=", e.background_mode, " ambient_src=", e.ambient_light_source, " ambient_energy=", e.ambient_light_energy, " ambient_color=", e.ambient_light_color, " sky=", e.sky != null, " fog=", e.fog_enabled, " fog_density=", e.fog_density)
@@ -141,24 +142,40 @@ func _apply_fallback_moon(moon: DirectionalLight3D) -> void:
 
 ## TEMP STRIP MENU debug hook (TASK 5.1b, revert-friendly: delete this block,
 ## the _env_strip_level var, and the three call sites to revert). Reads
-## OS.get_cmdline_user_args() for --env-strip=N (0-7). Levels are cumulative:
+## OS.get_cmdline_user_args() for --env-strip=N (0-8). Levels are cumulative:
 ## 0 = all heavy off, 1 = +glow, 2 = +adjust/LUT, 3 = +ssr, 4 = +ssil,
-## 5 = +volumetric, 6 = +probe ONCE, 7 = full restore (no-op).
+## 5 = +volumetric, 6 = +probe ONCE, 7 = full restore (no-op),
+## 8 = base-minimal fallback (all heavy off + probe disabled + shadows off
+##     + tonemap LINEAR exposure 1.0 + viewport scale 1.0 + MSAA off).
 func _env_strip_level_from_args() -> int:
 	for arg: String in OS.get_cmdline_user_args():
 		var a: String = str(arg).strip_edges()
 		if a.begins_with("--env-strip="):
-			return clampi(int(a.get_slice("=", 1)), 0, 7)
+			return clampi(int(a.get_slice("=", 1)), 0, 8)
 	return -1
 
 
 ## TEMP STRIP MENU: force off every heavy feature above the active level,
 ## leaving at-or-below-level features at their pipeline values. Fog stays off
-## for 0-6 (level 7 early-returns = full restore, no override).
+## for 0-6 (level 7 early-returns = full restore, no override). Level 8 is the
+## base-minimal fallback: all heavy chains off + HDR off (tonemap LINEAR,
+## exposure 1.0); viewport scale / MSAA / shadows are handled in
+## _apply_env_strip_viewport (moon) + _apply_env_strip_after_load (re-assert).
 func _apply_env_strip(e: Environment) -> void:
 	if e == null:
 		return
-	if _env_strip_level < 0 or _env_strip_level >= 7:
+	if _env_strip_level < 0 or _env_strip_level == 7:
+		return
+	if _env_strip_level == 8:
+		e.glow_enabled = false
+		e.adjustment_enabled = false
+		e.adjustment_color_correction = null
+		e.ssr_enabled = false
+		e.ssil_enabled = false
+		e.volumetric_fog_enabled = false
+		e.fog_enabled = false
+		e.tonemap_mode = Environment.TONE_MAPPER_LINEAR
+		e.tonemap_exposure = 1.0
 		return
 	if _env_strip_level < 1:
 		e.glow_enabled = false
@@ -174,10 +191,24 @@ func _apply_env_strip(e: Environment) -> void:
 	e.fog_enabled = false
 
 
+## TEMP STRIP MENU: level 8 base-minimal fallback viewport/render overrides
+## (HDR off is handled on the Environment in _apply_env_strip): viewport
+## scaling_3d_scale 1.0, MSAA off, moon shadows off.
+func _apply_env_strip_viewport(moon: DirectionalLight3D) -> void:
+	if _env_strip_level != 8:
+		return
+	var vp: Viewport = get_viewport()
+	if vp != null:
+		vp.scaling_3d_scale = 1.0
+		vp.msaa_3d = Viewport.MSAA_DISABLED
+	if moon != null:
+		moon.shadow_enabled = false
+
+
 ## TEMP STRIP MENU: re-strip after level load (level presets re-enable
-## glow/adjust) and drop Lumen GI fill lights for levels 0-6.
+## glow/adjust) and drop Lumen GI fill lights for levels 0-6 and 8.
 func _apply_env_strip_after_load() -> void:
-	if _env_strip_level < 0 or _env_strip_level >= 7:
+	if _env_strip_level < 0 or _env_strip_level == 7:
 		return
 	for child: Node in get_children():
 		if child is WorldEnvironment and (child as WorldEnvironment).environment != null:
@@ -185,6 +216,14 @@ func _apply_env_strip_after_load() -> void:
 	for n: Node in get_children():
 		if n is OmniLight3D and str(n.name).begins_with("SkylightLeakingFill_"):
 			n.queue_free()
+	if _env_strip_level == 8:
+		for d: Node in get_children():
+			if d is DirectionalLight3D:
+				(d as DirectionalLight3D).shadow_enabled = false
+		var vp2: Viewport = get_viewport()
+		if vp2 != null:
+			vp2.scaling_3d_scale = 1.0
+			vp2.msaa_3d = Viewport.MSAA_DISABLED
 
 
 func start_contract(order: int) -> void:
@@ -436,8 +475,8 @@ func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> 
 	moon_beam.spot_range = 14.0
 	moon_beam.spot_angle = 26.0
 	moon_beam.shadow_enabled = true
-	# TEMP STRIP MENU: DenMoonBeam shadow off for levels 0-6.
-	if _env_strip_level >= 0 and _env_strip_level <= 6:
+	# TEMP STRIP MENU: DenMoonBeam shadow off for levels 0-6 and 8.
+	if (_env_strip_level >= 0 and _env_strip_level <= 6) or _env_strip_level == 8:
 		moon_beam.shadow_enabled = false
 	moon_beam.add_to_group("den_hand_fills")
 	add_child(moon_beam)
@@ -454,9 +493,9 @@ func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> 
 	den_probe.interior = true
 	den_probe.ambient_mode = ReflectionProbe.AMBIENT_DISABLED
 	den_probe.update_mode = ReflectionProbe.UPDATE_ONCE
-	# TEMP STRIP MENU: probe DISABLED for levels 0-5 (ReflectionProbe has no
+	# TEMP STRIP MENU: probe DISABLED for levels 0-5 and 8 (ReflectionProbe has no
 	# UPDATE_DISABLED in 4.x, so hide it; level 6+ keeps ONCE).
-	if _env_strip_level >= 0 and _env_strip_level <= 5:
+	if (_env_strip_level >= 0 and _env_strip_level <= 5) or _env_strip_level == 8:
 		den_probe.hide()
 	den_probe.intensity = 0.8
 	add_child(den_probe)

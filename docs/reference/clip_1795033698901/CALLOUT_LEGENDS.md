@@ -7,6 +7,16 @@ annotated/<same filename as clean/> exactly.
 Badge colour key: Amber #FFB300 = Visual (V*);
 Cyan #00E5FF = HUD/UI (UI*); Magenta #FF4081 = Gameplay/Audio.
 
+## HUD semantics glossary (user-confirmed)
+
+- **Light Gem** (bottom-centre ornate gem, UI3): shows how much light is on the player **and from which direction**.
+  The warm cream/white lit sector's size = light amount; its position within the gem = the direction the light comes from.
+  Bright = exposed, dark = concealed. It is NOT a detection meter.
+- **Red arcs** flanking the gem (UI5): show how much sound the player is making (player noise level).
+  Large/bright = loud; absent = quiet. They are NOT enemy threat/detection arcs and do not track guard proximity.
+- **Guard-alert direction pip** (KF17 only): three-dash crimson indicator away from the gem showing the direction of an alerted guard.
+  A guard-perception alert element, different from the player-noise arcs.
+
 Regenerate images and this file with:
 `/usr/bin/python3 docs/reference/clip_1795033698901/tools/render_annotations.py`
 `/usr/bin/python3 docs/reference/clip_1795033698901/tools/render_annotations.py --emit-legends`
@@ -24,9 +34,9 @@ Regenerate images and this file with:
 | V7 | Visual | Camera and post: FOV, framing, motion, exposure, grade |
 | UI1 | HUD/UI | Front-end menus (Startscreen, Pause, Settings) |
 | UI2 | HUD/UI | In-world interaction prompts |
-| UI3 | HUD/UI | Persistent HUD: player card, compass, tools, health |
+| UI3 | HUD/UI | Persistent HUD: player card, compass, tools, health, light gem |
 | UI4 | HUD/UI | Full-screen panels: Wardrobe, Journal, Market, Map, Briefing |
-| UI5 | HUD/UI | Alerts and feedback: pips, threat arcs, alarms, countdowns |
+| UI5 | HUD/UI | Alerts and feedback: guard-alert pips, player-noise arcs, status icons, alarms, countdowns |
 | G1 | Gameplay | Interactables and stations (den, doors, loot, scope) |
 | G2 | Gameplay | Traversal and movement (zipwire, climb, stairs) |
 | G3 | Gameplay | Tools and abilities (smoke bomb, zipwire gun) |
@@ -70,6 +80,7 @@ Regenerate images and this file with:
 | 4 | Gameplay/Audio | G1 | Interactive Den Stations | (140, 340) | Open illuminated Wardrobe armoire (left) and brass tripod telescope in quiet Thieves' Den (`-76.3 to -73.1 dBFS` room tone, wooden footsteps, no BGM). | -- |
 | 5 | Visual | V4 | Candlelit Rolltop Desk | (1115, 385) | Warm point-lit 3-candle candelabra illuminating open Ledger book on rolltop desk, contrasting with cool moonlight shaft. | -- |
 | 6 | Gameplay/Audio | G1 | Kilcairn Map Table | (1660, 490) | Mission-selection `KILCAIRN` parchment map table with 3D wooden building tokens; scattered newspapers on foreground floorboards. | -- |
+| 7 | Gameplay/Audio | AU1 | Quiet Den Room Tone | (770, 980) | Thieves' Den indoor room tone (`-76.3 to -73.1 dBFS` RMS) under the opening pan across floorboards and newspapers; Explicit BGM Absence. | -- |
 
 ### KF03 - wardrobe_loadout
 (00:07.00, S04)
@@ -133,6 +144,7 @@ Regenerate images and this file with:
 | 4 | Gameplay/Audio | G1 | Brass Tripod Telescope | (845, 945) | Brass tripod telescope below window (`[F] PONDER`); wooden footsteps (`00:23.1–00:23.9`, `pk=-27.1 dBFS`) in quiet Den (no BGM). | -- |
 | 5 | Visual | V4 | 5 Framed Wanted Posters | (1475, 720) | Five Wanted posters (`HIS HANDS ARE FAST`, `CHARMING MAN?`, `TELL A CONSTABLE!`, `£10000`, `REWARD £5000`) on right wall. | -- |
 | 6 | HUD/UI | UI3 | Top-Right Player Card | (1750, 95) | Top-right `Johnny Cipher` card (level `4`) and subtle top-center compass ticks. | -- |
+| 7 | Gameplay/Audio | AU3 | Quiet Den Footsteps | (550, 1020) | Wooden-plank footfalls (`00:23.1-00:23.9`, `pk=-27.1 dBFS`) settling to quiet Den room tone; Ledger click follows (`00:25.2`); Explicit BGM Absence. | -- |
 
 ### KF07 - ledger_journal
 (00:27.00, S06)
@@ -163,7 +175,7 @@ Regenerate images and this file with:
 | 2 | HUD/UI | UI4 | Zipwire Purchase Card | (300, 400) | Selected `Zipwire` preview box showing `✓ PURCHASED` badge, 3D model, and grapple description. | -- |
 | 3 | HUD/UI | UI4 | Tools & Guild Perks | (510, 800) | `TOOLS` (`Zipwire`, `Smoke Bomb` `✓`; 3 fairies/sap `🔒`) and `GUILD PERKS` (`Novice`, `Guildhall`, `Elway Manor`, `The Spider` `✓`; `Thief`/`Master`/`Chameleon` `🔒`). | -- |
 | 4 | HUD/UI | UI4 | Spider Cosmetics Table | (1170, 320) | Scrollable `SPIDER COSMETICS` column showing `✓` (`Bowler Hat`), prices (`7,500`, `5,000`, `2,500`), and pink padlocks (`🔒`). | -- |
-| 5 | HUD/UI | UI5 | Chameleon Cosmetics | (1615, 320) | Scrollable `CHAMELEON COSMETICS` column showing all 17 visible entries locked with pink padlocks (`🔒`). | -- |
+| 5 | HUD/UI | UI4 | Chameleon Cosmetics | (1615, 320) | Scrollable `CHAMELEON COSMETICS` column showing all 17 visible entries locked with pink padlocks (`🔒`). | -- |
 | 6 | Gameplay/Audio | AU4 | Quiet Market Browse | (1815, 1030) | `BACK [ESC]` prompt; tab click (`00:28.0`, `pk=-34.5 dBFS`) followed by `~5.8 s` quiet reading (`-68 dBFS` room tone, zero BGM). | -- |
 
 ### KF09 - den_gramophone
@@ -197,6 +209,7 @@ Regenerate images and this file with:
 | 4 | Visual | V1 | Brass Banker's Lamp | (985, 195) | Brass banker's lamp casting warm directional pool across `KILCAIRN` map & Guildhall token (`NE` compass visible above). | -- |
 | 5 | Visual | V4 | Marble Bust & Card | (1415, 220) | Classical white marble bust on table corner beside top-right `Johnny Cipher` (`4`) player card. | -- |
 | 6 | HUD/UI | UI3 | Bottom-Right Legend | (1760, 985) | Bottom-right keybind legend (`JOIN GAME [F]`, `TOGGLE MODE [R]`, `TOGGLE DIFFICULTY [H]`). | -- |
+| 7 | Gameplay/Audio | AU4 | Map Toggle Clicks | (450, 650) | Map Table selection and mode-toggle clicks (`00:52.2-00:55.1`, `pk=-38.3 dBFS`) plus confirm chime (`00:55.4`); Explicit BGM Absence. | -- |
 
 ### KF11 - mission_prep_countdown
 (01:00.30, S09)
@@ -212,7 +225,7 @@ Regenerate images and this file with:
 | 3 | HUD/UI | UI4 | Contract Inactive Card | (680, 805) | Bottom-left card reading "Contract Inactive: Your active contract is not available for the currently selected map." | -- |
 | 4 | Visual | V1 | Moon & Searchlights | (1455, 72) | Full moon upper-right casting cool blue-slate rim lighting and angled volumetric searchlight beams across gothic Kilcairn rooftops. | -- |
 | 5 | Visual | V5 | 3D Spider Rooftop Pose | (1545, 430) | 3D Spider character ("Johnny Cipher") standing on slate roof ridge wearing cap, goggles, and belt pouches. | -- |
-| 6 | Gameplay/Audio | AU4 | Ready & Countdown Ticks | (1460, 745) | Green "READY" toggle ([F] UNREADY / [ESC] BACK) paired with 6 percussive UI ticks at 1.00 s intervals (00:59.0–01:04.0). | -- |
+| 6 | Gameplay/Audio | AU4 | Ready & Countdown Ticks | (1460, 745) | Green "READY" toggle ([F] UNREADY / [ESC] BACK) paired with 6 percussive UI ticks at 1.00 s intervals (00:59.0–01:04.0). Explicit BGM Absence. | -- |
 
 ### KF12 - loading_screen
 (01:06.50, S10)
@@ -242,7 +255,7 @@ Regenerate images and this file with:
 | 2 | HUD/UI | UI4 | Folded Parchment Sheet | (565, 500) | Centered folded cream parchment sheet with horizontal crease shadow and 11-line typewriter briefing text. | -- |
 | 3 | HUD/UI | UI4 | 55m/20m Mission Rules | (760, 595) | Verbatim briefing specifies "55 minute window" (matching Mission Prep) and "magic door ... summoned for 20 minutes". | -- |
 | 4 | HUD/UI | UI4 | Letter Right Scrollbar | (1335, 420) | Thin bright vertical scrollbar along right inner margin of parchment letter. | -- |
-| 5 | Gameplay/Audio | AU3 | Continue & Paper Rustle | (960, 898) | "[SPACE] CONTINUE" button below letter; opening/dismissing plays crisp paper rustle (01:09.5–01:10.3) over exterior rain. | -- |
+| 5 | Gameplay/Audio | AU3 | Continue & Paper Rustle | (960, 898) | "[SPACE] CONTINUE" button below letter; opening/dismissing plays crisp paper rustle (01:09.5–01:10.3) over exterior rain. Explicit BGM Absence; no VO narration. | -- |
 
 ### KF14 - saferoom_portal_hud
 (01:15.75, S12)
@@ -258,8 +271,9 @@ Regenerate images and this file with:
 | 3 | HUD/UI | UI3 | Loot Tracker (No HP) | (260, 165) | Top-left "(£) 0" and "Mission: Steal 4,000 in loot value[0/4,000]"; Health Bar stays hidden at 100% HP until 02:23.30. | -- |
 | 4 | HUD/UI | UI3 | Player Card & Compass | (1760, 85) | Top-right "Johnny Cipher" (Level 4, Spider portrait) and subtle top-center "SE" compass bar. | -- |
 | 5 | HUD/UI | UI3 | Hotbar & Ping Menu | (165, 975) | Bottom-left tool slots [1] Zipwire, [2] Smoke Bomb, [4] Vistara Diamond plus "[TAB] MAP [MMB] [HOLD] PING MENU". | -- |
-| 6 | HUD/UI | UI5 | Light Gem & Arcs | (958, 998) | Bottom-center stealth Light Gem glowing warm cream-gold (lit by lantern) flanked by faint red directional threat arcs. | -- |
-| 7 | Gameplay/Audio | AU6 | Nisha VO & Lantern | (960, 540) | ThiefNisha VO "Let the thieving begin." (01:11.6–01:13.1) and lantern ignite click-whoosh (01:15.1); zero BGM. | -- |
+| 6 | HUD/UI | UI3 | Lit Light Gem | (958, 998) | Bottom-center Light Gem glowing warm cream-white (lit sector upper-left, lantern side; exposed, not concealed). Faint red player-noise arcs flank it (right arc brighter) from safe-room footstep movement; NOT a detection meter. | -- |
+| 7 | HUD/UI | UI5 | Faint Noise Arcs | (828, 1002) | Faint twin red player-noise arcs flanking the lit Light Gem (left arc partial, right arc brighter); they show how much sound the player is making while moving in the safe room, NOT enemy threat or detection. | -- |
+| 8 | Gameplay/Audio | AU6 | Nisha VO & Lantern | (960, 540) | ThiefNisha VO "Let the thieving begin." (01:11.6–01:13.1) and lantern ignite click-whoosh (01:15.1); zero BGM. | -- |
 
 ### KF15 - alley_barrons_demolition
 (01:21.38, S13)
@@ -273,8 +287,9 @@ Regenerate images and this file with:
 | 1 | Visual | V4 | BARRON'S DEMOLITION Banner | (440, 385) | Weathered brick wall banner reading "BARRON'S DEMOLITION" (faint "EST. 1865") and "Out with the old, in with the new!". | -- |
 | 2 | Visual | V1 | Cyan Doorway & Reflections | (985, 172) | Teal-cyan caged bulkhead light illuminating rain-slicked alley cobblestones, puddle speculars, and metal wall ladder. | -- |
 | 3 | Visual | V4 | Alley Ladder & Drums | (1230, 420) | Vertical steel access ladder beside brick corner, crates, fallen steel oil drums, and sparse alley weeds. | -- |
-| 4 | HUD/UI | UI3 | Shadowed Dark Light Gem | (958, 998) | Bottom-center Light Gem rests in deep indigo-blue (full shadow concealment) with zero threat arcs. | -- |
+| 4 | HUD/UI | UI3 | Shadowed Dark Light Gem | (958, 998) | Bottom-center Light Gem rests in deep indigo-blue (no lit sector; fully shadow-concealed) with no red player-noise arcs (quiet alley-drop approach; silent at this instant). | -- |
 | 5 | Gameplay/Audio | G2 | 1P Drop & Foley | (1620, 860) | 1P gloved hands & forearm brace alley drop; rain ambience (-49 dBFS) transitions to wet cobble footsteps & puddle splashes. | -- |
+| 6 | Gameplay/Audio | AU3 | Wet Cobble Footsteps | (1010, 640) | Steady rain ambience (`-49 dBFS` RMS) at the alley drop; wet-cobble footfalls and puddle splashes follow (`01:24.4-01:27.4`, `pk=-25.2 dBFS`); Explicit BGM Absence. | -- |
 
 ### KF16 - zipwire_gate_headlights
 (01:40.20, S14)
@@ -289,8 +304,9 @@ Regenerate images and this file with:
 | 2 | Gameplay/Audio | G4 | Guard Alert & Eyes | (871, 422) | Alerted constable inside gate with glowing red eyes, hip flashlight, vertical yellow alert bar, and VO "I know someone's here!" (01:39.3–01:40.6). | -- |
 | 3 | Visual | V1 | Vintage Car Headlights | (1605, 585) | Flashing dual headlights on parked vintage car (triggered by [F] INTERACT + double-honk at 01:35.68) casting glare across wet cobbles. | -- |
 | 4 | Gameplay/Audio | G3 | ZipWire [1] Crank Launcher | (1160, 720) | 1P mechanical spring-loaded ZipWire crank launcher equipped in slot [1] (no fall damage occurs on 01:44 foliage drop). | -- |
-| 5 | HUD/UI | UI3 | Half-Lit Light Gem | (958, 995) | Half-lit white/indigo Light Gem reflecting partial headlight/streetlamp exposure while bottom-right shows LAUNCH [LMB] / [HOLD] CRANK [RMB]. | -- |
+| 5 | HUD/UI | UI3 | Half-Lit Light Gem | (958, 995) | Half-lit white/indigo Light Gem (cream lit sector on the left, indigo shadow on the right) reflecting partial headlight/streetlamp exposure, with no red player-noise arcs (quiet aim/equip moment). | -- |
 | 6 | HUD/UI | UI2 | ZipWire Action Prompts | (1795, 1005) | Bottom-right tool prompts: "LAUNCH [LMB]" and "[HOLD] CRANK [RMB]" paired with white-highlighted slot [1] bottom-left. | -- |
+| 7 | Gameplay/Audio | AU6 | Guard Alert VO | (855, 395) | Alerted constable VO: `I know someone's here!` (`01:39.3-01:40.6`, `pk=-25.9 dBFS`) overlapping the ZipWire equip clank; Explicit BGM Absence. | -- |
 
 ### KF17 - zipwire_aim_roof
 (01:51.20, S15)
@@ -304,8 +320,9 @@ Regenerate images and this file with:
 | 1 | Gameplay/Audio | G3 | Anchored ZipWire Cable | (755, 250) | 2nd ZipWire shot anchored to upper brick roof parapet; accompanied by spring launch (01:51.7) and cable zip whine (01:52.2). | -- |
 | 2 | Visual | V2 | Clocktower Fog Silhouette | (1145, 190) | Distant Guildhall spire/clocktower silhouette with tiny red window accents emerging through volumetric night mist. | -- |
 | 3 | HUD/UI | UI2 | CRANK [LMB] Progress Ring | (890, 535) | Center-screen radial segmented progress ring displaying "CRANK [LMB]" while cable attaches for facade ascent. | -- |
-| 4 | HUD/UI | UI5 | Red Directional Threat Pip | (1195, 832) | Three-dash crimson directional alert indicator pulsing over lower-right view as patrolling guard shouts "Oh, I will find you, thief!". | -- |
-| 5 | Gameplay/Audio | AU5 | Ratchet Crank Audio Cue | (1240, 620) | 1P ZipWire crank handle initiates rhythmic ratchet hand-cranking SFX (01:56.1–02:01.2, pk=-22.2 dBFS) during roof climb. | -- |
+| 4 | HUD/UI | UI5 | Guard Alert Direction Pip | (1195, 832) | Three-dash crimson directional guard-alert indicator mid-right showing the shouting guard direction as patrol shouts "Oh, I will find you, thief!". This is a guard-perception alert pip, NOT the red player-noise arcs at the Light Gem (no gem arcs present). | -- |
+| 5 | Gameplay/Audio | AU5 | Ratchet Crank Audio Cue | (1240, 620) | 1P ZipWire crank handle initiates rhythmic ratchet hand-cranking SFX (01:56.1–02:01.2, pk=-22.2 dBFS) during roof climb. Explicit BGM Absence. | -- |
+| 6 | HUD/UI | UI3 | Dark Concealed Light Gem | (960, 1000) | Bottom-center Light Gem fully dark indigo (no lit sector; concealed) with no red player-noise arcs during the quiet ZipWire crank-aim moment. | -- |
 
 ### KF18 - guildhall_arch_overlook
 (02:14.80, S17)
@@ -321,7 +338,9 @@ Regenerate images and this file with:
 | 3 | Gameplay/Audio | G4 | Green Guard Silhouette | (1128, 268) | Patrolling constable beneath portico highlighted in bright green silhouette across courtyard fog. | -- |
 | 4 | Visual | V4 | Twin Griffin Statues | (1350, 420) | Pair of winged stone griffin statues perched on brick pedestals flanking Guildhall grand exterior staircase. | -- |
 | 5 | Visual | V4 | CONSTABLE'S Arch (Right) | (1760, 375) | Partial wrought-iron "CONSTABL..." arch lettering visible at right edge from elevated gate-pillar cable angle. | -- |
-| 6 | HUD/UI | UI5 | Intense Red Threat Arcs | (875, 1005) | Twin bright-red directional threat/alert arcs bracketing dark indigo Light Gem during high-elevation crossing. | -- |
+| 6 | HUD/UI | UI3 | Shadowed Light Gem | (960, 1002) | Bottom-center Light Gem mostly dark indigo (concealed; small cream lit sector upper-left) during the high-elevation cable crossing. | -- |
+| 7 | HUD/UI | UI5 | Bright Noise Arcs | (1130, 985) | Twin bright-red player-noise arcs bracketing the shadowed Light Gem (NOT threat/detection); they flare with ZipWire cable-traversal ratchet clicks (02:13.4-02:15.1) and track player noise, not guard proximity. | -- |
+| 8 | Gameplay/Audio | AU5 | Cable Ratchet Clicks | (900, 480) | ZipWire cable-traversal ratchet clicks (`02:13.4-02:15.1`, `pk=-31.3 dBFS`) mid-crossing; Explicit BGM Absence. | -- |
 
 ### KF19 - smoke_bomb_equip
 (02:25.40, S18)
@@ -337,7 +356,8 @@ Regenerate images and this file with:
 | 3 | Visual | V4 | Distant MACLEOD Sign | (1672, 345) | Vertical illuminated gold serif "MACL..." ("MACLEOD") sign glowing through night mist on distant right facade. | -- |
 | 4 | Gameplay/Audio | G3 | Smoke Bomb [2] Canister | (1680, 630) | 1P gloved right hand grips dark cylindrical Smoke Bomb canister with lever; slot [2] active bottom-left. Guard VO: Hey! Show yourself! (02:24.8-02:26.0, pk -33.3 dBFS); no BGM. | -- |
 | 5 | HUD/UI | UI2 | THROW [LMB] Prompt | (1820, 1025) | Bottom-right action prompt switches to "THROW [LMB]" matching equipped Smoke Bomb [2]. | -- |
-| 6 | HUD/UI | UI3 | Warm-Lit Light Gem | (958, 995) | Light Gem glows warm cream-gold on wet courtyard flagstones (Guard VO: "Hey! Show yourself!" at 02:24.8–02:26.0). | -- |
+| 6 | HUD/UI | UI3 | Warm-Lit Light Gem | (958, 995) | Light Gem glows warm cream-gold (lit sector upper-left) on wet courtyard flagstones with no red player-noise arcs (quiet walk holding the Smoke Bomb; Guard VO: "Hey! Show yourself!" at 02:24.8-02:26.0). | -- |
+| 7 | Gameplay/Audio | AU6 | Guard Shout VO | (1080, 480) | Guard VO `Hey! Show yourself!` (`02:24.8-02:26.0`, `pk=-33.3 dBFS`) as the player walks past the crates; Explicit BGM Absence. | -- |
 
 ### KF20 - smoke_bomb_plume
 (02:29.20, S18)
@@ -349,10 +369,11 @@ Regenerate images and this file with:
 | # | Category | Code | Label | Target (x, y) | Observed UE5 Detail | TAT-2 Ref |
 |---|---|---|---|---|---|---|
 | 1 | Visual | V6 | Volumetric Smoke Plume VFX | (820, 560) | Opaque grey-white volumetric smoke puffs expanding horizontally across grand stairs post-02:28.20 ignition flash to block line-of-sight. | -- |
-| 2 | Gameplay/Audio | AU5 | Detonation & Smoke Hiss | (1350, 505) | Detonation pop + sustained pressurized hiss/whoosh (02:28.3–02:29.8, pk=-20.5 dBFS) followed by guard cough & VO. | -- |
+| 2 | Gameplay/Audio | AU5 | Detonation & Smoke Hiss | (1350, 505) | Detonation pop + sustained pressurized hiss/whoosh (02:28.3–02:29.8, pk=-20.5 dBFS) followed by guard cough & VO. Explicit BGM Absence. | -- |
 | 3 | HUD/UI | UI3 | Health Bar (~75% Fill) | (245, 58) | Ornate top-left Health Bar remains visible below 100% HP (~75% fill) above "(£) 0" and loot mission tracker. | -- |
-| 4 | HUD/UI | UI5 | Intense Red Threat Arcs | (825, 1005) | Wide twin red directional threat arcs flaring around lit Light Gem as guard reacts ("You stop making noise, you dog!"). | -- |
-| 5 | HUD/UI | UI2 | Slot [2] THROW Prompt | (1820, 1025) | Smoke Bomb slot [2] remains active bottom-left with "THROW [LMB]" bottom-right after canister throw. | -- |
+| 4 | HUD/UI | UI3 | Lit Light Gem | (958, 1000) | Bottom-center Light Gem lit cream-white (lit sector upper-left; exposed) at the moment of the smoke-bomb detonation. | -- |
+| 5 | HUD/UI | UI5 | Loud Noise Arcs | (1195, 980) | Wide twin bright-red player-noise arcs flaring around the lit Light Gem (NOT threat/detection); they spike with the detonation pop + pressurized hiss (02:28.3-02:29.8, pk=-20.5 dBFS) and track player noise, not guard proximity. | -- |
+| 6 | HUD/UI | UI2 | Slot [2] THROW Prompt | (1820, 1025) | Smoke Bomb slot [2] remains active bottom-left with "THROW [LMB]" bottom-right after canister throw. | -- |
 
 ### KF21 - vistara_diamond_red_guard
 (02:32.20, S19)
@@ -369,6 +390,8 @@ Regenerate images and this file with:
 | 4 | Visual | V4 | Iridescent Vistara Diamond | (1458, 666) | Faceted iridescent Vistara Diamond held in 1P brass-and-leather caliper mount while scan shimmer/chime plays (02:32.8-02:33.6, pk=-28.0 dBFS). | -- |
 | 5 | HUD/UI | UI3 | Slot 4 Tool Active | (255, 970) | Bottom-left hotbar shows slot [4] Vistara Diamond highlighted white alongside [1] Zipwire, [2] Smoke Bomb, and '[TAB] MAP [MMB] [HOLD] PING MENU'. | -- |
 | 6 | HUD/UI | UI2 | THROW [LMB] Prompt | (1818, 1027) | Bottom-right tool action legend displays 'THROW [LMB]' with left-mouse icon for the equipped Vistara Diamond. | -- |
+| 7 | HUD/UI | UI3 | Dark Concealed Gem | (960, 990) | Bottom-center Light Gem dark indigo (concealed; small white highlight upper-left) with no red player-noise arcs during the quiet Vistara Diamond scan moment. | -- |
+| 8 | Gameplay/Audio | AU5 | Diamond Scan Shimmer | (1430, 720) | Vistara Diamond scan shimmer/chime pulse (`02:32.8-02:33.6`, `pk=-28.0 dBFS`) as the guard flips RED; Explicit BGM Absence. | -- |
 
 ### KF22 - vistara_diamond_green_guard
 (02:33.00, S19)
@@ -384,6 +407,8 @@ Regenerate images and this file with:
 | 3 | Gameplay/Audio | G3 | ZipWire [1] Re-Equipped | (1530, 520) | Player switches back from Vistara Diamond [4] to ZipWire [1] mechanical crank launcher (02:32.80-02:33.00). Vistara shimmer decay plus ZipWire re-equip click (02:34.0, pk -28.2 dBFS); no BGM. | -- |
 | 4 | HUD/UI | UI3 | Slot 1 Selected | (74, 970) | Bottom-left hotbar switches active white border highlight back to slot [1] Zipwire. | -- |
 | 5 | HUD/UI | UI2 | ZipWire Action Prompts | (1790, 1005) | Bottom-right tool prompts update to 'LAUNCH [LMB]' above '[HOLD] CRANK [RMB]' for the re-equipped ZipWire. | -- |
+| 6 | HUD/UI | UI3 | Dark Concealed Gem | (960, 990) | Bottom-center Light Gem dark indigo (concealed; small white highlight upper-left) with no red player-noise arcs during the quiet ZipWire re-equip moment. | -- |
+| 7 | Gameplay/Audio | AU5 | Re-Equip Click (No BGM) | (1560, 480) | Vistara shimmer decay plus ZipWire [1] re-equip click (`02:34.0`, `pk=-28.2 dBFS`) under steady rain; Explicit BGM Absence. | -- |
 
 ### KF23 - side_wing_macleod_sign
 (02:41.00, S20)
@@ -400,6 +425,7 @@ Regenerate images and this file with:
 | 4 | Visual | V2 | Misty Viaduct Silhouette | (1350, 225) | Elevated steel railway/bridge arch and distant Kilcairn rooflines receding into volumetric night fog. | -- |
 | 5 | Visual | V1 | MACLEOD Vertical Sign | (1809, 290) | Crisp illuminated vertical gold serif 'MACLEOD' signage mounted on the distant right-hand brick facade. | -- |
 | 6 | Gameplay/Audio | AU1 | Rain and Footsteps | (700, 900) | Steady rain on wet stone balcony plus rapid wet footstep bed and ZipWire re-equip click (02:34.0, pk -28.2 dBFS); distant guard throat-clear follows at 02:41.5; no BGM. | -- |
+| 7 | HUD/UI | UI3 | Dark Concealed Gem | (960, 990) | Bottom-center Light Gem dark indigo (concealed; small white highlight upper-left) with no red player-noise arcs during the quiet balcony traversal. | -- |
 
 ### KF24 - locked_blue_double_doors
 (03:00.60, S21)
@@ -414,7 +440,9 @@ Regenerate images and this file with:
 | 2 | HUD/UI | UI2 | [F] OPEN Prompt | (950, 551) | Center reticle displays '[F] OPEN' prompt prior to door latch click and wooden creak open at 03:01.0-03:02.2 (pk=-29.8 dBFS). | -- |
 | 3 | HUD/UI | UI2 | [F] [HOLD] LOCK Prompt | (950, 598) | Stacked secondary prompt '[F] [HOLD] LOCK' beneath '[F] OPEN' on the unlocked portico entrance doors. | -- |
 | 4 | Gameplay/Audio | G3 | ZipWire [1] Ready | (1460, 640) | 1P gloved hand grips the ZipWire [1] launcher in foreground while sheltered portico reduces exterior rain wash. | -- |
-| 5 | HUD/UI | UI5 | Light Gem Threat Arcs | (960, 1008) | Bottom-center Light Gem glows bright pale-gold flanked by twin red directional threat/noise arcs. | -- |
+| 5 | HUD/UI | UI3 | Fully Lit Light Gem | (960, 1000) | Bottom-center Light Gem fully lit cream-white (lit sector fills the gem; fully exposed) at the sheltered portico doors. | -- |
+| 6 | HUD/UI | UI5 | Small Noise Arcs | (1060, 1010) | Small twin red player-noise arcs flanking the fully lit Light Gem (NOT threat/detection); faint at this quiet door-approach instant before the latch click and door creak (03:01.0-03:02.2). | -- |
+| 7 | Gameplay/Audio | AU5 | Door Latch & Creak | (540, 600) | Door handle latch click plus wooden door creak open (`03:01.0-03:02.2`, `pk=-29.8 dBFS`) as rain gives way to sheltered interior tone; Explicit BGM Absence. | -- |
 
 ### KF25 - parlor_pickpocket_takedown
 (03:16.80, S22)
@@ -430,7 +458,8 @@ Regenerate images and this file with:
 | 3 | Gameplay/Audio | G4 | Constable Clasped-Hands Idle | (910, 385) | Standing constable faces fireplace with hands clasped behind back, unaware of crouched stealth approach. | -- |
 | 4 | HUD/UI | UI2 | [F] PICK POCKET Prompt | (960, 552) | Center reticle displays '[F] PICK POCKET' just 0.30s prior to Guildhall Key pickup chime at 03:17.10 (pk=-23.6 dBFS). | -- |
 | 5 | HUD/UI | UI2 | [F] [HOLD] TAKEDOWN | (960, 597) | Stacked contextual prompt '[F] [HOLD] TAKEDOWN' beneath '[F] PICK POCKET' when crouched directly behind guard. | -- |
-| 6 | HUD/UI | UI3 | Exposed Bright Light Gem | (960, 1008) | Light Gem glows bright white-gold from nearby hearth firelight without red alert arcs. | -- |
+| 6 | HUD/UI | UI3 | Exposed Bright Light Gem | (960, 1008) | Light Gem glows bright white-gold (lit sector fills the gem; fully exposed by nearby hearth firelight) with no red player-noise arcs (quiet crouch before the 03:17.10 pickpocket). | -- |
+| 7 | Gameplay/Audio | AU1 | Hearth Crackle (No BGM) | (350, 960) | Roaring-hearth crackle bed (`-67.5 to -54.0 dBFS`) under the quiet crouched parquet approach; key jingle and acquisition chime follow at `03:17.1`; Explicit BGM Absence. | -- |
 
 ### KF26 - parlor_guard_takedown
 (03:20.20, S23)
@@ -444,8 +473,8 @@ Regenerate images and this file with:
 | 1 | Visual | V1 | Hearth Glow & Bust | (1115, 355) | Warm fireplace light illuminates the carved mantel and classical bust behind the tilted 1P takedown camera. | -- |
 | 2 | Gameplay/Audio | G4 | 1P Guard Takedown Grapple | (1420, 540) | 1P camera tilts closely over the constable's helmet and corded shoulder during the melee knockdown sequence (03:17.80-03:20.60). | -- |
 | 3 | HUD/UI | UI5 | Active Takedown Hold Arc | (960, 552) | Center '[F] [HOLD] TAKEDOWN' prompt displays an active circular hold-progress arc around the reticle. | -- |
-| 4 | Gameplay/Audio | AU5 | Takedown Lunge & Impact | (420, 740) | 1P gloved hands & ZipWire [1] lunge forward alongside grapple grunts (03:18.8-03:19.7) and blunt KO thud + groan (03:20.6-03:21.5, pk=-22.1 dBFS). | -- |
-| 5 | HUD/UI | UI3 | Bright Parlor Light Gem | (960, 1008) | Light Gem remains illuminated bright pale-gold against the dark 1P forearm during takedown. | -- |
+| 4 | Gameplay/Audio | AU5 | Takedown Lunge & Impact | (420, 740) | 1P gloved hands & ZipWire [1] lunge forward alongside grapple grunts (03:18.8-03:19.7) and blunt KO thud + groan (03:20.6-03:21.5, pk=-22.1 dBFS). Explicit BGM Absence. | -- |
+| 5 | HUD/UI | UI3 | Bright Parlor Light Gem | (960, 1008) | Light Gem remains illuminated bright pale-gold (exposed) against the dark 1P forearm during the takedown, with no red player-noise arcs visible at this instant. | -- |
 
 ### KF27 - foyer_security_beam
 (03:27.60, S24)
@@ -456,14 +485,14 @@ Regenerate images and this file with:
 
 | # | Category | Code | Label | Target (x, y) | Observed UE5 Detail | TAT-2 Ref |
 |---|---|---|---|---|---|---|
-| 1 | Gameplay/Audio | G5 | Left-Wall Beam Emitter | (305, 432) | Mid-height circular glowing white beam emitter mounted on the left marble foyer wall (~40% height). | -- |
-| 2 | Visual | V6 | Horizontal Volumetric Beam | (580, 435) | Crisp horizontal white volumetric security beam spanning wall-to-wall across the checkered marble foyer. | -- |
-| 3 | Visual | V4 | Glass Statue Display Case | (735, 358) | Tall internally lit glass display vitrine housing a bust/statue beside a velvet armchair and ottoman. | -- |
-| 4 | Visual | V6 | Cyan Ceiling Diamond Node | (1026, 252) | Glowing cyan diamond security/junction node mounted high above the far foyer double doors. | -- |
-| 5 | Gameplay/Audio | G5 | Overhead Security Camera | (1151, 84) | Rotating overhead security camera/spotlight housing mounted high on the right foyer wall above the Basement Stairs doorway. | -- |
-| 6 | Gameplay/Audio | G1 | Square Metal Floor Plate | (910, 608) | Flush square metallic pressure/junction plate embedded in the checkered marble floor ahead of the carpet runner. | -- |
-| 7 | HUD/UI | UI3 | Guildhall Key HUD | (104, 895) | Pickpocketed 'Guildhall Key' icon and label persist in the bottom-left HUD directly above slot [1] Zipwire. | -- |
-| 8 | HUD/UI | UI5 | Threat Arcs Active | (870, 1005) | Outer twin red directional threat/noise arcs pulse around the lit Light Gem during marble footstep approach (pk=-28.9 dBFS). | -- |
+| 1 | Gameplay/Audio | G5 | Wall Emitter & Beam | (305, 432) | Mid-height circular glowing white beam emitter on the left marble foyer wall (~40% height) projecting the crisp horizontal white volumetric beam spanning wall-to-wall; crossing it triggers the ward lockdown (`03:29.00`). | -- |
+| 2 | Visual | V4 | Case & Floor Plate | (735, 358) | Tall internally lit glass display vitrine housing a bust/statue beside a velvet armchair and ottoman; flush square metallic pressure/junction plate embedded in the checkered marble floor ahead of the carpet runner (`x~910, y~608`). | -- |
+| 3 | Visual | V6 | Cyan Ceiling Diamond Node | (1026, 252) | Glowing cyan diamond security/junction node mounted high above the far foyer double doors. | -- |
+| 4 | Gameplay/Audio | G5 | Overhead Security Camera | (1151, 84) | Rotating overhead security camera/spotlight housing mounted high on the right foyer wall above the Basement Stairs doorway. | -- |
+| 5 | HUD/UI | UI3 | Guildhall Key HUD | (104, 895) | Pickpocketed 'Guildhall Key' icon and label persist in the bottom-left HUD directly above slot [1] Zipwire. | -- |
+| 6 | HUD/UI | UI3 | Half-Lit Light Gem | (960, 1005) | Bottom-center Light Gem half-lit cream upper-left (partially exposed; foyer doorway side) with dark indigo lower-right. | -- |
+| 7 | HUD/UI | UI5 | Bright Noise Arcs | (1185, 1000) | Twin inner + outer red player-noise arcs flanking the half-lit Light Gem (NOT threat/detection); they flare with the hard-sole marble footsteps (03:23.8-03:28.9, pk=-28.9 dBFS) and track player noise, not guard proximity. | -- |
+| 8 | Gameplay/Audio | AU3 | Marble Footstep Sequence | (850, 700) | Crisp hard-sole footfalls on checkered marble (`03:23.8-03:28.9`, `pk=-28.9 dBFS`) crossing the foyer; Explicit BGM Absence. | -- |
 
 ### KF28 - foyer_arcane_barriers
 (03:35.00, S25)
@@ -479,8 +508,9 @@ Regenerate images and this file with:
 | 3 | Gameplay/Audio | G1 | Basement Stairs Plaque | (1214, 603) | Framed 'Basement Stairs' wall plaque mounted immediately left of the vine-sealed side stairwell doorway. | -- |
 | 4 | Gameplay/Audio | G5 | Overhead Security Camera | (1400, 435) | Rotating overhead security camera/spotlight above the Basement Stairs doorway sweeping across the foyer. | -- |
 | 5 | Visual | V6 | Green Arcane Vine Lock | (1331, 599) | Glowing green thorny arcane vines erupting across the Basement Stairs doorway upon beam tripwire trigger. | -- |
-| 6 | HUD/UI | UI5 | Jaw-Trap Status Icon | (939, 808) | White circular mechanical jaw/bear-trap icon with active countdown ring appearing above Light Gem from 03:29.00+. | -- |
-| 7 | HUD/UI | UI5 | Unconscious Guard Icon | (992, 805) | Orange-arc unconscious-head ('xx' eyes + 'zz' + '>>') circular status icon active above Light Gem from 03:31.20+. | -- |
+| 6 | HUD/UI | UI5 | Status Icons Above Gem | (965, 806) | White circular mechanical jaw/bear-trap icon with active countdown ring (`03:29.00+`) plus orange-arc unconscious-head (`xx` eyes + `zz`) circular icon (`03:31.20+`) stacked above the Light Gem. | -- |
+| 7 | HUD/UI | UI3 | Half-Lit Light Gem | (960, 1000) | Bottom-center Light Gem half-lit cream upper-left (partially exposed) with dark indigo lower-right and no red player-noise arcs visible at this instant. | -- |
+| 8 | Gameplay/Audio | AU5 | Ward Tripwire Chime | (1000, 600) | Two-note metallic tripwire chime (`03:29.1-03:29.6`, `pk=-30.4 dBFS`) plus shimmer whoosh settling into the sustained low ward hum (`-59 dBFS`); Explicit BGM Absence. | -- |
 
 ### KF29 - stairs_crimson_alarm
 (03:39.40, S26)
@@ -496,6 +526,8 @@ Regenerate images and this file with:
 | 3 | HUD/UI | UI2 | CRANK [LMB] Reticle | (960, 550) | Six-tick circular center reticle displays 'CRANK [LMB]' prompt during rapid staircase ascent. | -- |
 | 4 | HUD/UI | UI5 | Re-Triggered Jaw-Trap Icon | (960, 808) | 3rd status-icon event: re-triggered white mechanical jaw-trap icon with partial countdown arc above Light Gem (03:38.07-03:41.87). | -- |
 | 5 | Gameplay/Audio | G3 | Crimson-Lit ZipWire [1] | (720, 880) | 1P ZipWire [1] launcher and gloved hand receive crimson spotlight + brief blue/purple highlight while ascending (ZipWire clack pk=-24.5 dBFS). | -- |
+| 6 | HUD/UI | UI3 | Fully Lit Light Gem | (890, 1012) | Bottom-center Light Gem fully lit cream-white (fully exposed under the crimson alarm spotlight) with no red player-noise arcs visible at this ascent instant. | -- |
+| 7 | Gameplay/Audio | AU5 | Shatter Sting & Climb | (800, 700) | Barrier shatter plus alert sting (`03:37.7-03:38.2`, `pk=-23.5 dBFS`), then rapid slate-stair footfalls and ZipWire clack (`03:39.8`, `pk=-24.5 dBFS`); Explicit BGM Absence. | -- |
 
 ### KF30 - pause_menu
 (03:43.20, S27)
@@ -508,6 +540,6 @@ Regenerate images and this file with:
 |---|---|---|---|---|---|---|
 | 1 | Visual | V7 | Teal/Copper Art-Nouveau Frame | (680, 350) | Centered Pause Menu modal framed with curved teal/copper Art-Nouveau corner filigree over darkened blurred gameplay backdrop. | -- |
 | 2 | HUD/UI | UI1 | Pause Action Buttons | (776, 565) | Four centered vertical menu items: 'RESUME', 'SETTINGS', 'RETURN TO THIEF'S DEN' (straight apostrophe), and 'QUIT TO DESKTOP'. | -- |
-| 3 | HUD/UI | UI5 | QUIT TO DESKTOP Hover | (1070, 682) | Clean single cursor hovers 'QUIT TO DESKTOP' at 03:43.20 (prior to 03:43.70+ multi-cursor trail), matching UI hover/click at 03:43.2-03:43.6 (pk=-34.2 dBFS). | -- |
+| 3 | HUD/UI | UI1 | QUIT TO DESKTOP Hover | (1070, 682) | Clean single cursor hovers 'QUIT TO DESKTOP' at 03:43.20 (prior to 03:43.70+ multi-cursor trail), matching UI hover/click at 03:43.2-03:43.6 (pk=-34.2 dBFS). | -- |
 | 4 | Gameplay/Audio | AU4 | -19 dB Ambience Ducking | (1240, 455) | Opening Pause Menu at 03:41.90 ducks gameplay ambience by -19 dB (-53 dBFS to -72.4 dBFS), followed by digital silence (-240 dBFS) after quit. | -- |
 | 5 | HUD/UI | UI1 | Build & Seed Footer | (158, 1052) | Bottom-left build/difficulty/seed footer reads '1.5.148559   Novice   1025051536'. | -- |

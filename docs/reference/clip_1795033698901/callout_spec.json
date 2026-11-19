@@ -287,6 +287,23 @@
           "placement": "pill_right",
           "bbox": null,
           "observed_ue5_detail": "Mission-selection `KILCAIRN` parchment map table with 3D wooden building tokens; scattered newspapers on foreground floorboards."
+        },
+        {
+          "id": 7,
+          "category": "Gameplay/Audio",
+          "code": "AU1",
+          "label": "Quiet Den Room Tone",
+          "target": [
+            770,
+            980
+          ],
+          "anchor": [
+            250,
+            850
+          ],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Thieves' Den indoor room tone (`-76.3 to -73.1 dBFS` RMS) under the opening pan across floorboards and newspapers; Explicit BGM Absence."
         }
       ]
     },
@@ -879,6 +896,23 @@
             165
           ],
           "observed_ue5_detail": "Top-right `Johnny Cipher` card (level `4`) and subtle top-center compass ticks."
+        },
+        {
+          "id": 7,
+          "category": "Gameplay/Audio",
+          "code": "AU3",
+          "label": "Quiet Den Footsteps",
+          "target": [
+            550,
+            1020
+          ],
+          "anchor": [
+            120,
+            1010
+          ],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Wooden-plank footfalls (`00:23.1-00:23.9`, `pk=-27.1 dBFS`) settling to quiet Den room tone; Ledger click follows (`00:25.2`); Explicit BGM Absence."
         }
       ]
     },
@@ -1183,7 +1217,7 @@
         {
           "id": 5,
           "category": "HUD/UI",
-          "code": "UI5",
+          "code": "UI4",
           "label": "Chameleon Cosmetics",
           "target": [
             1615,
@@ -1498,6 +1532,23 @@
             1050
           ],
           "observed_ue5_detail": "Bottom-right keybind legend (`JOIN GAME [F]`, `TOGGLE MODE [R]`, `TOGGLE DIFFICULTY [H]`)."
+        },
+        {
+          "id": 7,
+          "category": "Gameplay/Audio",
+          "code": "AU4",
+          "label": "Map Toggle Clicks",
+          "target": [
+            450,
+            650
+          ],
+          "anchor": [
+            90,
+            70
+          ],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Map Table selection and mode-toggle clicks (`00:52.2-00:55.1`, `pk=-38.3 dBFS`) plus confirm chime (`00:55.4`); Explicit BGM Absence."
         }
       ]
     },
@@ -1646,7 +1697,7 @@
           ],
           "placement": "pill_left",
           "bbox": null,
-          "observed_ue5_detail": "Green \"READY\" toggle ([F] UNREADY / [ESC] BACK) paired with 6 percussive UI ticks at 1.00 s intervals (00:59.0\u201301:04.0)."
+          "observed_ue5_detail": "Green \"READY\" toggle ([F] UNREADY / [ESC] BACK) paired with 6 percussive UI ticks at 1.00 s intervals (00:59.0\u201301:04.0). Explicit BGM Absence."
         }
       ]
     },
@@ -1878,7 +1929,7 @@
             1072,
             888
           ],
-          "observed_ue5_detail": "\"[SPACE] CONTINUE\" button below letter; opening/dismissing plays crisp paper rustle (01:09.5\u201301:10.3) over exterior rain."
+          "observed_ue5_detail": "\"[SPACE] CONTINUE\" button below letter; opening/dismissing plays crisp paper rustle (01:09.5\u201301:10.3) over exterior rain. Explicit BGM Absence; no VO narration."
         }
       ]
     },
@@ -2022,8 +2073,8 @@
         {
           "id": 6,
           "category": "HUD/UI",
-          "code": "UI5",
-          "label": "Light Gem & Arcs",
+          "code": "UI3",
+          "label": "Lit Light Gem",
           "target": [
             958,
             998
@@ -2039,10 +2090,27 @@
             1045,
             1060
           ],
-          "observed_ue5_detail": "Bottom-center stealth Light Gem glowing warm cream-gold (lit by lantern) flanked by faint red directional threat arcs."
+          "observed_ue5_detail": "Bottom-center Light Gem glowing warm cream-white (lit sector upper-left, lantern side; exposed, not concealed). Faint red player-noise arcs flank it (right arc brighter) from safe-room footstep movement; NOT a detection meter."
         },
         {
           "id": 7,
+          "category": "HUD/UI",
+          "code": "UI5",
+          "label": "Faint Noise Arcs",
+          "target": [
+            828,
+            1002
+          ],
+          "anchor": [
+            800,
+            948
+          ],
+          "placement": "pill_left",
+          "bbox": null,
+          "observed_ue5_detail": "Faint twin red player-noise arcs flanking the lit Light Gem (left arc partial, right arc brighter); they show how much sound the player is making while moving in the safe room, NOT enemy threat or detection."
+        },
+        {
+          "id": 8,
           "category": "Gameplay/Audio",
           "code": "AU6",
           "label": "Nisha VO & Lantern",
@@ -2113,7 +2181,7 @@
           "placement": "pill_right",
           "bbox": [
             8,
-            100,
+            210,
             845,
             610
           ],
@@ -2173,7 +2241,7 @@
             1028,
             1060
           ],
-          "observed_ue5_detail": "Bottom-center Light Gem rests in deep indigo-blue (full shadow concealment) with zero threat arcs."
+          "observed_ue5_detail": "Bottom-center Light Gem rests in deep indigo-blue (no lit sector; fully shadow-concealed) with no red player-noise arcs (quiet alley-drop approach; silent at this instant)."
         },
         {
           "id": 5,
@@ -2191,6 +2259,23 @@
           "placement": "pill_left",
           "bbox": null,
           "observed_ue5_detail": "1P gloved hands & forearm brace alley drop; rain ambience (-49 dBFS) transitions to wet cobble footsteps & puddle splashes."
+        },
+        {
+          "id": 6,
+          "category": "Gameplay/Audio",
+          "code": "AU3",
+          "label": "Wet Cobble Footsteps",
+          "target": [
+            1010,
+            640
+          ],
+          "anchor": [
+            700,
+            150
+          ],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Steady rain ambience (`-49 dBFS` RMS) at the alley drop; wet-cobble footfalls and puddle splashes follow (`01:24.4-01:27.4`, `pk=-25.2 dBFS`); Explicit BGM Absence."
         }
       ]
     },
@@ -2320,7 +2405,7 @@
           ],
           "placement": "pill_left",
           "bbox": null,
-          "observed_ue5_detail": "Half-lit white/indigo Light Gem reflecting partial headlight/streetlamp exposure while bottom-right shows LAUNCH [LMB] / [HOLD] CRANK [RMB]."
+          "observed_ue5_detail": "Half-lit white/indigo Light Gem (cream lit sector on the left, indigo shadow on the right) reflecting partial headlight/streetlamp exposure, with no red player-noise arcs (quiet aim/equip moment)."
         },
         {
           "id": 6,
@@ -2338,6 +2423,23 @@
           "placement": "pill_left",
           "bbox": null,
           "observed_ue5_detail": "Bottom-right tool prompts: \"LAUNCH [LMB]\" and \"[HOLD] CRANK [RMB]\" paired with white-highlighted slot [1] bottom-left."
+        },
+        {
+          "id": 7,
+          "category": "Gameplay/Audio",
+          "code": "AU6",
+          "label": "Guard Alert VO",
+          "target": [
+            855,
+            395
+          ],
+          "anchor": [
+            420,
+            840
+          ],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Alerted constable VO: `I know someone's here!` (`01:39.3-01:40.6`, `pk=-25.9 dBFS`) overlapping the ZipWire equip clank; Explicit BGM Absence."
         }
       ]
     },
@@ -2444,7 +2546,7 @@
           "id": 4,
           "category": "HUD/UI",
           "code": "UI5",
-          "label": "Red Directional Threat Pip",
+          "label": "Guard Alert Direction Pip",
           "target": [
             1195,
             832
@@ -2455,7 +2557,7 @@
           ],
           "placement": "pill_right",
           "bbox": null,
-          "observed_ue5_detail": "Three-dash crimson directional alert indicator pulsing over lower-right view as patrolling guard shouts \"Oh, I will find you, thief!\"."
+          "observed_ue5_detail": "Three-dash crimson directional guard-alert indicator mid-right showing the shouting guard direction as patrol shouts \"Oh, I will find you, thief!\". This is a guard-perception alert pip, NOT the red player-noise arcs at the Light Gem (no gem arcs present)."
         },
         {
           "id": 5,
@@ -2472,7 +2574,24 @@
           ],
           "placement": "pill_right",
           "bbox": null,
-          "observed_ue5_detail": "1P ZipWire crank handle initiates rhythmic ratchet hand-cranking SFX (01:56.1\u201302:01.2, pk=-22.2 dBFS) during roof climb."
+          "observed_ue5_detail": "1P ZipWire crank handle initiates rhythmic ratchet hand-cranking SFX (01:56.1\u201302:01.2, pk=-22.2 dBFS) during roof climb. Explicit BGM Absence."
+        },
+        {
+          "id": 6,
+          "category": "HUD/UI",
+          "code": "UI3",
+          "label": "Dark Concealed Light Gem",
+          "target": [
+            960,
+            1000
+          ],
+          "anchor": [
+            1130,
+            975
+          ],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Bottom-center Light Gem fully dark indigo (no lit sector; concealed) with no red player-noise arcs during the quiet ZipWire crank-aim moment."
         }
       ]
     },
@@ -2601,11 +2720,11 @@
         {
           "id": 6,
           "category": "HUD/UI",
-          "code": "UI5",
-          "label": "Intense Red Threat Arcs",
+          "code": "UI3",
+          "label": "Shadowed Light Gem",
           "target": [
-            875,
-            1005
+            960,
+            1002
           ],
           "anchor": [
             720,
@@ -2618,7 +2737,41 @@
             1064,
             1060
           ],
-          "observed_ue5_detail": "Twin bright-red directional threat/alert arcs bracketing dark indigo Light Gem during high-elevation crossing."
+          "observed_ue5_detail": "Bottom-center Light Gem mostly dark indigo (concealed; small cream lit sector upper-left) during the high-elevation cable crossing."
+        },
+        {
+          "id": 7,
+          "category": "HUD/UI",
+          "code": "UI5",
+          "label": "Bright Noise Arcs",
+          "target": [
+            1130,
+            985
+          ],
+          "anchor": [
+            1300,
+            985
+          ],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Twin bright-red player-noise arcs bracketing the shadowed Light Gem (NOT threat/detection); they flare with ZipWire cable-traversal ratchet clicks (02:13.4-02:15.1) and track player noise, not guard proximity."
+        },
+        {
+          "id": 8,
+          "category": "Gameplay/Audio",
+          "code": "AU5",
+          "label": "Cable Ratchet Clicks",
+          "target": [
+            900,
+            480
+          ],
+          "anchor": [
+            450,
+            750
+          ],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "ZipWire cable-traversal ratchet clicks (`02:13.4-02:15.1`, `pk=-31.3 dBFS`) mid-crossing; Explicit BGM Absence."
         }
       ]
     },
@@ -2776,7 +2929,24 @@
           ],
           "placement": "pill_right",
           "bbox": null,
-          "observed_ue5_detail": "Light Gem glows warm cream-gold on wet courtyard flagstones (Guard VO: \"Hey! Show yourself!\" at 02:24.8\u201302:26.0)."
+          "observed_ue5_detail": "Light Gem glows warm cream-gold (lit sector upper-left) on wet courtyard flagstones with no red player-noise arcs (quiet walk holding the Smoke Bomb; Guard VO: \"Hey! Show yourself!\" at 02:24.8-02:26.0)."
+        },
+        {
+          "id": 7,
+          "category": "Gameplay/Audio",
+          "code": "AU6",
+          "label": "Guard Shout VO",
+          "target": [
+            1080,
+            480
+          ],
+          "anchor": [
+            900,
+            150
+          ],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Guard VO `Hey! Show yourself!` (`02:24.8-02:26.0`, `pk=-33.3 dBFS`) as the player walks past the crates; Explicit BGM Absence."
         }
       ]
     },
@@ -2866,7 +3036,7 @@
           ],
           "placement": "pill_right",
           "bbox": null,
-          "observed_ue5_detail": "Detonation pop + sustained pressurized hiss/whoosh (02:28.3\u201302:29.8, pk=-20.5 dBFS) followed by guard cough & VO."
+          "observed_ue5_detail": "Detonation pop + sustained pressurized hiss/whoosh (02:28.3\u201302:29.8, pk=-20.5 dBFS) followed by guard cough & VO. Explicit BGM Absence."
         },
         {
           "id": 3,
@@ -2888,11 +3058,11 @@
         {
           "id": 4,
           "category": "HUD/UI",
-          "code": "UI5",
-          "label": "Intense Red Threat Arcs",
+          "code": "UI3",
+          "label": "Lit Light Gem",
           "target": [
-            825,
-            1005
+            958,
+            1000
           ],
           "anchor": [
             660,
@@ -2905,10 +3075,27 @@
             1115,
             1060
           ],
-          "observed_ue5_detail": "Wide twin red directional threat arcs flaring around lit Light Gem as guard reacts (\"You stop making noise, you dog!\")."
+          "observed_ue5_detail": "Bottom-center Light Gem lit cream-white (lit sector upper-left; exposed) at the moment of the smoke-bomb detonation."
         },
         {
           "id": 5,
+          "category": "HUD/UI",
+          "code": "UI5",
+          "label": "Loud Noise Arcs",
+          "target": [
+            1195,
+            980
+          ],
+          "anchor": [
+            1330,
+            980
+          ],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Wide twin bright-red player-noise arcs flaring around the lit Light Gem (NOT threat/detection); they spike with the detonation pop + pressurized hiss (02:28.3-02:29.8, pk=-20.5 dBFS) and track player noise, not guard proximity."
+        },
+        {
+          "id": 6,
           "category": "HUD/UI",
           "code": "UI2",
           "label": "Slot [2] THROW Prompt",
@@ -3085,6 +3272,40 @@
           "placement": "pill_left",
           "bbox": null,
           "observed_ue5_detail": "Bottom-right tool action legend displays 'THROW [LMB]' with left-mouse icon for the equipped Vistara Diamond."
+        },
+        {
+          "id": 7,
+          "category": "HUD/UI",
+          "code": "UI3",
+          "label": "Dark Concealed Gem",
+          "target": [
+            960,
+            990
+          ],
+          "anchor": [
+            750,
+            975
+          ],
+          "placement": "pill_left",
+          "bbox": null,
+          "observed_ue5_detail": "Bottom-center Light Gem dark indigo (concealed; small white highlight upper-left) with no red player-noise arcs during the quiet Vistara Diamond scan moment."
+        },
+        {
+          "id": 8,
+          "category": "Gameplay/Audio",
+          "code": "AU5",
+          "label": "Diamond Scan Shimmer",
+          "target": [
+            1430,
+            720
+          ],
+          "anchor": [
+            1100,
+            880
+          ],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Vistara Diamond scan shimmer/chime pulse (`02:32.8-02:33.6`, `pk=-28.0 dBFS`) as the guard flips RED; Explicit BGM Absence."
         }
       ]
     },
@@ -3225,6 +3446,40 @@
             1060
           ],
           "observed_ue5_detail": "Bottom-right tool prompts update to 'LAUNCH [LMB]' above '[HOLD] CRANK [RMB]' for the re-equipped ZipWire."
+        },
+        {
+          "id": 6,
+          "category": "HUD/UI",
+          "code": "UI3",
+          "label": "Dark Concealed Gem",
+          "target": [
+            960,
+            990
+          ],
+          "anchor": [
+            1120,
+            1015
+          ],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Bottom-center Light Gem dark indigo (concealed; small white highlight upper-left) with no red player-noise arcs during the quiet ZipWire re-equip moment."
+        },
+        {
+          "id": 7,
+          "category": "Gameplay/Audio",
+          "code": "AU5",
+          "label": "Re-Equip Click (No BGM)",
+          "target": [
+            1560,
+            480
+          ],
+          "anchor": [
+            1100,
+            880
+          ],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Vistara shimmer decay plus ZipWire [1] re-equip click (`02:34.0`, `pk=-28.2 dBFS`) under steady rain; Explicit BGM Absence."
         }
       ]
     },
@@ -3382,6 +3637,23 @@
           "placement": "pill_right",
           "bbox": null,
           "observed_ue5_detail": "Steady rain on wet stone balcony plus rapid wet footstep bed and ZipWire re-equip click (02:34.0, pk -28.2 dBFS); distant guard throat-clear follows at 02:41.5; no BGM."
+        },
+        {
+          "id": 7,
+          "category": "HUD/UI",
+          "code": "UI3",
+          "label": "Dark Concealed Gem",
+          "target": [
+            960,
+            990
+          ],
+          "anchor": [
+            1120,
+            975
+          ],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Bottom-center Light Gem dark indigo (concealed; small white highlight upper-left) with no red player-noise arcs during the quiet balcony traversal."
         }
       ]
     },
@@ -3510,11 +3782,11 @@
         {
           "id": 5,
           "category": "HUD/UI",
-          "code": "UI5",
-          "label": "Light Gem Threat Arcs",
+          "code": "UI3",
+          "label": "Fully Lit Light Gem",
           "target": [
             960,
-            1008
+            1000
           ],
           "anchor": [
             780,
@@ -3527,7 +3799,41 @@
             1055,
             1060
           ],
-          "observed_ue5_detail": "Bottom-center Light Gem glows bright pale-gold flanked by twin red directional threat/noise arcs."
+          "observed_ue5_detail": "Bottom-center Light Gem fully lit cream-white (lit sector fills the gem; fully exposed) at the sheltered portico doors."
+        },
+        {
+          "id": 6,
+          "category": "HUD/UI",
+          "code": "UI5",
+          "label": "Small Noise Arcs",
+          "target": [
+            1060,
+            1010
+          ],
+          "anchor": [
+            1200,
+            1010
+          ],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Small twin red player-noise arcs flanking the fully lit Light Gem (NOT threat/detection); faint at this quiet door-approach instant before the latch click and door creak (03:01.0-03:02.2)."
+        },
+        {
+          "id": 7,
+          "category": "Gameplay/Audio",
+          "code": "AU5",
+          "label": "Door Latch & Creak",
+          "target": [
+            540,
+            600
+          ],
+          "anchor": [
+            1300,
+            150
+          ],
+          "placement": "pill_left",
+          "bbox": null,
+          "observed_ue5_detail": "Door handle latch click plus wooden door creak open (`03:01.0-03:02.2`, `pk=-29.8 dBFS`) as rain gives way to sheltered interior tone; Explicit BGM Absence."
         }
       ]
     },
@@ -3690,7 +3996,24 @@
             1040,
             1060
           ],
-          "observed_ue5_detail": "Light Gem glows bright white-gold from nearby hearth firelight without red alert arcs."
+          "observed_ue5_detail": "Light Gem glows bright white-gold (lit sector fills the gem; fully exposed by nearby hearth firelight) with no red player-noise arcs (quiet crouch before the 03:17.10 pickpocket)."
+        },
+        {
+          "id": 7,
+          "category": "Gameplay/Audio",
+          "code": "AU1",
+          "label": "Hearth Crackle (No BGM)",
+          "target": [
+            350,
+            960
+          ],
+          "anchor": [
+            400,
+            1010
+          ],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Roaring-hearth crackle bed (`-67.5 to -54.0 dBFS`) under the quiet crouched parquet approach; key jingle and acquisition chime follow at `03:17.1`; Explicit BGM Absence."
         }
       ]
     },
@@ -3820,7 +4143,7 @@
           ],
           "placement": "pill_left",
           "bbox": null,
-          "observed_ue5_detail": "1P gloved hands & ZipWire [1] lunge forward alongside grapple grunts (03:18.8-03:19.7) and blunt KO thud + groan (03:20.6-03:21.5, pk=-22.1 dBFS)."
+          "observed_ue5_detail": "1P gloved hands & ZipWire [1] lunge forward alongside grapple grunts (03:18.8-03:19.7) and blunt KO thud + groan (03:20.6-03:21.5, pk=-22.1 dBFS). Explicit BGM Absence."
         },
         {
           "id": 5,
@@ -3842,7 +4165,7 @@
             1040,
             1060
           ],
-          "observed_ue5_detail": "Light Gem remains illuminated bright pale-gold against the dark 1P forearm during takedown."
+          "observed_ue5_detail": "Light Gem remains illuminated bright pale-gold (exposed) against the dark 1P forearm during the takedown, with no red player-noise arcs visible at this instant."
         }
       ]
     },
@@ -3905,7 +4228,7 @@
           "id": 1,
           "category": "Gameplay/Audio",
           "code": "G5",
-          "label": "Left-Wall Beam Emitter",
+          "label": "Wall Emitter & Beam",
           "target": [
             305,
             432
@@ -3916,30 +4239,13 @@
           ],
           "placement": "pill_right",
           "bbox": null,
-          "observed_ue5_detail": "Mid-height circular glowing white beam emitter mounted on the left marble foyer wall (~40% height)."
+          "observed_ue5_detail": "Mid-height circular glowing white beam emitter on the left marble foyer wall (~40% height) projecting the crisp horizontal white volumetric beam spanning wall-to-wall; crossing it triggers the ward lockdown (`03:29.00`)."
         },
         {
           "id": 2,
           "category": "Visual",
-          "code": "V6",
-          "label": "Horizontal Volumetric Beam",
-          "target": [
-            580,
-            435
-          ],
-          "anchor": [
-            520,
-            620
-          ],
-          "placement": "pill_left",
-          "bbox": null,
-          "observed_ue5_detail": "Crisp horizontal white volumetric security beam spanning wall-to-wall across the checkered marble foyer."
-        },
-        {
-          "id": 3,
-          "category": "Visual",
           "code": "V4",
-          "label": "Glass Statue Display Case",
+          "label": "Case & Floor Plate",
           "target": [
             735,
             358
@@ -3950,10 +4256,10 @@
           ],
           "placement": "pill_left",
           "bbox": null,
-          "observed_ue5_detail": "Tall internally lit glass display vitrine housing a bust/statue beside a velvet armchair and ottoman."
+          "observed_ue5_detail": "Tall internally lit glass display vitrine housing a bust/statue beside a velvet armchair and ottoman; flush square metallic pressure/junction plate embedded in the checkered marble floor ahead of the carpet runner (`x~910, y~608`)."
         },
         {
-          "id": 4,
+          "id": 3,
           "category": "Visual",
           "code": "V6",
           "label": "Cyan Ceiling Diamond Node",
@@ -3970,7 +4276,7 @@
           "observed_ue5_detail": "Glowing cyan diamond security/junction node mounted high above the far foyer double doors."
         },
         {
-          "id": 5,
+          "id": 4,
           "category": "Gameplay/Audio",
           "code": "G5",
           "label": "Overhead Security Camera",
@@ -3987,24 +4293,7 @@
           "observed_ue5_detail": "Rotating overhead security camera/spotlight housing mounted high on the right foyer wall above the Basement Stairs doorway."
         },
         {
-          "id": 6,
-          "category": "Gameplay/Audio",
-          "code": "G1",
-          "label": "Square Metal Floor Plate",
-          "target": [
-            910,
-            608
-          ],
-          "anchor": [
-            1160,
-            620
-          ],
-          "placement": "pill_right",
-          "bbox": null,
-          "observed_ue5_detail": "Flush square metallic pressure/junction plate embedded in the checkered marble floor ahead of the carpet runner."
-        },
-        {
-          "id": 7,
+          "id": 5,
           "category": "HUD/UI",
           "code": "UI3",
           "label": "Guildhall Key HUD",
@@ -4026,12 +4315,12 @@
           "observed_ue5_detail": "Pickpocketed 'Guildhall Key' icon and label persist in the bottom-left HUD directly above slot [1] Zipwire."
         },
         {
-          "id": 8,
+          "id": 6,
           "category": "HUD/UI",
-          "code": "UI5",
-          "label": "Threat Arcs Active",
+          "code": "UI3",
+          "label": "Half-Lit Light Gem",
           "target": [
-            870,
+            960,
             1005
           ],
           "anchor": [
@@ -4039,13 +4328,47 @@
             975
           ],
           "placement": "pill_left",
+          "bbox": null,
+          "observed_ue5_detail": "Bottom-center Light Gem half-lit cream upper-left (partially exposed; foyer doorway side) with dark indigo lower-right."
+        },
+        {
+          "id": 7,
+          "category": "HUD/UI",
+          "code": "UI5",
+          "label": "Bright Noise Arcs",
+          "target": [
+            1185,
+            1000
+          ],
+          "anchor": [
+            1330,
+            1000
+          ],
+          "placement": "pill_right",
           "bbox": [
             805,
             940,
             1115,
             1062
           ],
-          "observed_ue5_detail": "Outer twin red directional threat/noise arcs pulse around the lit Light Gem during marble footstep approach (pk=-28.9 dBFS)."
+          "observed_ue5_detail": "Twin inner + outer red player-noise arcs flanking the half-lit Light Gem (NOT threat/detection); they flare with the hard-sole marble footsteps (03:23.8-03:28.9, pk=-28.9 dBFS) and track player noise, not guard proximity."
+        },
+        {
+          "id": 8,
+          "category": "Gameplay/Audio",
+          "code": "AU3",
+          "label": "Marble Footstep Sequence",
+          "target": [
+            850,
+            700
+          ],
+          "anchor": [
+            700,
+            780
+          ],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Crisp hard-sole footfalls on checkered marble (`03:23.8-03:28.9`, `pk=-28.9 dBFS`) crossing the foyer; Explicit BGM Absence."
         }
       ]
     },
@@ -4208,10 +4531,10 @@
           "id": 6,
           "category": "HUD/UI",
           "code": "UI5",
-          "label": "Jaw-Trap Status Icon",
+          "label": "Status Icons Above Gem",
           "target": [
-            939,
-            808
+            965,
+            806
           ],
           "anchor": [
             600,
@@ -4224,24 +4547,41 @@
             1015,
             838
           ],
-          "observed_ue5_detail": "White circular mechanical jaw/bear-trap icon with active countdown ring appearing above Light Gem from 03:29.00+."
+          "observed_ue5_detail": "White circular mechanical jaw/bear-trap icon with active countdown ring (`03:29.00+`) plus orange-arc unconscious-head (`xx` eyes + `zz`) circular icon (`03:31.20+`) stacked above the Light Gem."
         },
         {
           "id": 7,
           "category": "HUD/UI",
-          "code": "UI5",
-          "label": "Unconscious Guard Icon",
+          "code": "UI3",
+          "label": "Half-Lit Light Gem",
           "target": [
-            992,
-            805
+            960,
+            1000
           ],
           "anchor": [
-            600,
-            880
+            740,
+            985
           ],
           "placement": "pill_left",
           "bbox": null,
-          "observed_ue5_detail": "Orange-arc unconscious-head ('xx' eyes + 'zz' + '>>') circular status icon active above Light Gem from 03:31.20+."
+          "observed_ue5_detail": "Bottom-center Light Gem half-lit cream upper-left (partially exposed) with dark indigo lower-right and no red player-noise arcs visible at this instant."
+        },
+        {
+          "id": 8,
+          "category": "Gameplay/Audio",
+          "code": "AU5",
+          "label": "Ward Tripwire Chime",
+          "target": [
+            1000,
+            600
+          ],
+          "anchor": [
+            560,
+            880
+          ],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Two-note metallic tripwire chime (`03:29.1-03:29.6`, `pk=-30.4 dBFS`) plus shimmer whoosh settling into the sustained low ward hum (`-59 dBFS`); Explicit BGM Absence."
         }
       ]
     },
@@ -4400,6 +4740,40 @@
           "placement": "pill_left",
           "bbox": null,
           "observed_ue5_detail": "1P ZipWire [1] launcher and gloved hand receive crimson spotlight + brief blue/purple highlight while ascending (ZipWire clack pk=-24.5 dBFS)."
+        },
+        {
+          "id": 6,
+          "category": "HUD/UI",
+          "code": "UI3",
+          "label": "Fully Lit Light Gem",
+          "target": [
+            890,
+            1012
+          ],
+          "anchor": [
+            620,
+            975
+          ],
+          "placement": "pill_left",
+          "bbox": null,
+          "observed_ue5_detail": "Bottom-center Light Gem fully lit cream-white (fully exposed under the crimson alarm spotlight) with no red player-noise arcs visible at this ascent instant."
+        },
+        {
+          "id": 7,
+          "category": "Gameplay/Audio",
+          "code": "AU5",
+          "label": "Shatter Sting & Climb",
+          "target": [
+            800,
+            700
+          ],
+          "anchor": [
+            250,
+            600
+          ],
+          "placement": "pill_right",
+          "bbox": null,
+          "observed_ue5_detail": "Barrier shatter plus alert sting (`03:37.7-03:38.2`, `pk=-23.5 dBFS`), then rapid slate-stair footfalls and ZipWire clack (`03:39.8`, `pk=-24.5 dBFS`); Explicit BGM Absence."
         }
       ]
     },
@@ -4464,7 +4838,7 @@
         {
           "id": 3,
           "category": "HUD/UI",
-          "code": "UI5",
+          "code": "UI1",
           "label": "QUIT TO DESKTOP Hover",
           "target": [
             1070,

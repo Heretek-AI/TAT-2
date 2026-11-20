@@ -35,6 +35,9 @@ const LEAN_WALL_CHECK_DIST: float = 0.6
 const AIR_CONTROL: float = 0.5 # TATCharacterMovement CharMoveComp.AirControl
 const FLOOR_MAX_ANGLE_DEG: float = 50.0 # CharMoveComp.WalkableFloorAngle 60.0 retuned to 50.0 for stair stick (no mantle)
 const FLOOR_SNAP_LENGTH: float = 0.3 # stairs snap fix: 0.25-0.3 window keeps body grounded on 0.18-0.2 m risers
+const STEP_UP_MAX_M: float = 0.3 # stair assist bound: 0.18-0.2 m risers climb, 0.6 m walls block
+const STEP_UP_FORWARD_M: float = 0.35 # forward probe after the lift: clears one tread, not a room
+const STEP_UP_SKIN_M: float = 0.02 # headroom probe skin above the lift
 const INTERACT_RANGE: float = 1.75 # TATInteractionTargeterComponent.MaxInteractionRange 175cm
 ## KF25/KF26: F taps the primary action (pick pocket / OPEN), holding F runs
 ## the stacked secondary ([HOLD] TAKEDOWN on a guard, [HOLD] LOCK on a door).
@@ -917,6 +920,24 @@ func _physics_process(delta: float) -> void:
 		velocity.z = lerpf(velocity.z, wish.z * speed, delta * steer)
 	move_and_slide()
 
+	# Stair step-up assist, bounded by the 0.3 m snap philosophy. When the body
+	# is grounded but a riser face blocked horizontal motion, test a lift ->
+	# forward -> down sequence and commit only if all three fit: headroom must
+	# be free, the lifted pose must advance one tread, and a floor must catch
+	# the drop. 0.18 m risers climb; 0.6 m walls still block, and
+	# floor_block_on_wall keeps true walls solid. One assist per frame at most.
+	if not climbing_now and not is_mantling and is_on_floor() and is_on_wall():
+		var push_dir := Vector3(wish.x, 0.0, wish.z)
+		if push_dir.length() > 0.05:
+			push_dir = push_dir.normalized()
+			if not test_move(global_transform, Vector3.UP * (STEP_UP_MAX_M + STEP_UP_SKIN_M)):
+				var stepped := global_transform
+				stepped.origin += Vector3.UP * STEP_UP_MAX_M
+				if not test_move(stepped, push_dir * STEP_UP_FORWARD_M):
+					stepped.origin += push_dir * STEP_UP_FORWARD_M
+					if test_move(stepped, Vector3.DOWN * (STEP_UP_MAX_M + FLOOR_SNAP_LENGTH)):
+						global_position = stepped.origin
+
 	if not is_on_floor() and not is_mantling and (Input.is_action_pressed("jump") or wish.length() > 0.1):
 		try_auto_mantle()
 
@@ -996,15 +1017,26 @@ func _begin_wire_crank() -> void:
 
 
 ## Starts the looping zipwire crank 1P clip (AN_ThiefNisha_Zipwire__Reload_Loop
-## via ensure_fp_clip). No-op without real arms; the per-frame state machine
-## (_update_fp_anim_state) sustains the loop while _is_cranking holds.
+## via ensure_fp_clip; 1P viewmodel of the F13 UE montage
+## TAT/Content/Art/Animation/Thief/Anim/Gear/Zipwire/AN_Zipwire_Crank_Montage).
+## Logged no-op when the manifest lacks the clip, the retarget shares zero
+## bones, or the real-arms rig is off; never crashes. The per-frame state
+## machine (_update_fp_anim_state) sustains the loop while _is_cranking holds.
+## Also starts the 3P drive (_tp_crank_start): the AN_Zipwire_Crank_Montage
+## player on the firing thief rig plus the crank-handle spin, so the handle
+## moves when cranking after firing even where the 1P viewmodel is hidden.
 func _play_wire_crank_clip() -> void:
 	if not _fp_use_real_arms or fp_anim_player == null or _fp_anim_lib == null:
+		push_warning("ZipwireCrank: crank clip no-op without real arms (UE clip TAT/Content/Art/Animation/ThiefNisha/Anim/Zipwire/AN_ThiefNisha_Zipwire__Reload_Loop)")
+		_tp_crank_start()
 		return
 	var clip_name: String = str(_fp_anim_lib.call("ensure_fp_clip", fp_anim_player, "zipwire_crank"))
 	if clip_name == "":
+		push_warning("ZipwireCrank: crank clip no-op, manifest lacks clip or zero shared bones (UE clip TAT/Content/Art/Animation/ThiefNisha/Anim/Zipwire/AN_ThiefNisha_Zipwire__Reload_Loop)")
+		_tp_crank_start()
 		return
 	_fp_play_fp_clip(clip_name)
+	_tp_crank_start()
 
 
 func _tick_wire_crank(delta: float, force_holding: bool = false) -> void:
@@ -1019,10 +1051,12 @@ func _tick_wire_crank(delta: float, force_holding: bool = false) -> void:
 	if dur <= 0.0:
 		dur = WIRE_CRANK_DURATION_FALLBACK
 	crank_progress = clampf(_crank_elapsed / maxf(dur, WIRE_CRANK_MIN_TIME), 0.0, 1.0)
+	_tp_crank_tick()
 	if _crank_elapsed >= dur:
 		ability_cooldown = 0.0
 		charges["grapple"] = mini(GRAPPLE_MAX_CHARGES, int(charges.get("grapple", 0)) + 1)
 		tool_used.emit("zipwire_crank", int(charges["grapple"]))
+		_tp_crank_stop()
 		_is_cranking = false
 		_crank_elapsed = 0.0
 		crank_progress = 0.0
@@ -1031,6 +1065,7 @@ func _tick_wire_crank(delta: float, force_holding: bool = false) -> void:
 func _end_wire_crank() -> void:
 	if not _is_cranking:
 		return
+	_tp_crank_stop()
 	if _crank_elapsed >= WIRE_CRANK_MIN_TIME and ability_cooldown > 0.0:
 		ability_cooldown = maxf(0.0, ability_cooldown - _crank_elapsed)
 	_is_cranking = false
@@ -1039,6 +1074,7 @@ func _end_wire_crank() -> void:
 
 
 func _update_zipwire_cable() -> void:
+	const ZIPWIRE_CABLE_ENERGY_CAP := 0.65
 	if not is_grappling:
 		if _zipwire_cable_mesh != null and is_instance_valid(_zipwire_cable_mesh):
 			_zipwire_cable_mesh.visible = false
@@ -1057,7 +1093,9 @@ func _update_zipwire_cable() -> void:
 		cmat.albedo_color = Color(0.95, 0.96, 0.85, 0.95)
 		cmat.emission_enabled = true
 		cmat.emission = Color(0.85, 0.92, 0.72)
-		cmat.emission_energy_multiplier = 2.8
+		cmat.emission_energy_multiplier = ZIPWIRE_CABLE_ENERGY_CAP
+		assert(cmat.emission_energy_multiplier <= ZIPWIRE_CABLE_ENERGY_CAP + 0.001, "CableCap: zipwire cable energy exceeds cap")
+		print("CableCap: zipwire cable emission_energy=", cmat.emission_energy_multiplier, " cap=", ZIPWIRE_CABLE_ENERGY_CAP, " (UE MI_Zipwire Emissive Off; mission glow 0.65)")
 		cyl.material = cmat
 		_zipwire_cable_mesh = MeshInstance3D.new()
 		_zipwire_cable_mesh.name = "ZipwireCableMesh"
@@ -1718,6 +1756,7 @@ func _try_blackjack() -> void:
 		var swing_pos: Vector3 = head.global_position + swing_dir * 0.7
 		VfxManager.spawn_blackjack_swing(get_parent(), swing_pos, swing_dir)
 	_play_blackjack_camera_punch()
+	_tp_takedown_atk_start()
 	var base_dmg: float = GameData.eval_curve("CT_Tool_Blackjack", "BlackjackDamageLight", 1.0, BLACKJACK_LIGHT_DMG)
 	var heavy_dmg: float = GameData.eval_curve("CT_Tool_Blackjack", "BlackjackDamageHeavy", 1.0, BLACKJACK_HEAVY_DMG)
 	if heavy_dmg <= 0.0:
@@ -1756,6 +1795,41 @@ func _play_blackjack_camera_punch() -> void:
 	_bj_punch_tween.parallel().tween_property(cam, "rotation:z", base_roll + deg_to_rad(2.0), 0.08)
 	_bj_punch_tween.tween_property(cam, "rotation:x", base_pitch, 0.14)
 	_bj_punch_tween.parallel().tween_property(cam, "rotation:z", base_roll, 0.14)
+
+
+## Takedown attacker handoff (thief 3P form): plays the BlackJack stealth
+## montage vs GuardEnforcer on the firing thief rig (mesh_root 3P skeleton),
+## synced with the guard victim montage (guard_ai play_takedown_vic).
+## Camera punch + takedown counter + noise are kept by the caller; this is
+## the animation half only. No-op (loud UE-path warning, never a crash) when
+## the 3P body failed to load, the manifest lacks the clip, or the skeletons
+## share no bones -- the instant-KO + punch path still applies.
+func _tp_takedown_atk_start() -> void:
+	var skel := _tp_crank_body_skel()
+	if skel == null:
+		return
+	var host := skel.get_parent() as Node
+	if host == null:
+		return
+	var player := host.get_node_or_null("TPTakedownPlayer") as AnimationPlayer
+	if player == null:
+		player = AnimationPlayer.new()
+		player.name = "TPTakedownPlayer"
+		host.add_child(player)
+		player.root_node = player.get_path_to(host)
+	var clip_name := ""
+	if player.has_animation("AN_BlackJack_StealthTakedown__GuardEnforcer_FromBehind_Montage"):
+		clip_name = "AN_BlackJack_StealthTakedown__GuardEnforcer_FromBehind_Montage"
+	else:
+		var lib = ThiefAnimLib.new()
+		if not lib.setup("club", skel):
+			push_warning("BlackjackTakedown3P: no 3P takedown player, skeleton bind failed (UE clip TAT/Content/Art/Animation/Thief/Anim/Gear/BlackJack/AN_BlackJack_StealthTakedown__GuardEnforcer_FromBehind_Montage)")
+			return
+		clip_name = str(lib.ensure_tp_takedown_atk_clip(player))
+	if clip_name == "" or not player.has_animation(clip_name):
+		push_warning("BlackjackTakedown3P: takedown Atk clip no-op on 3P rig, manifest lacks clip or zero shared bones (UE clip TAT/Content/Art/Animation/Thief/Anim/Gear/BlackJack/AN_BlackJack_StealthTakedown__GuardEnforcer_FromBehind_Montage)")
+		return
+	player.play(clip_name, FP_ANIM_BLEND)
 
 
 func _process(delta: float) -> void:
@@ -1972,6 +2046,7 @@ void fragment() {
 
 
 func _wrap_material_for_vm(src_mat: Material) -> ShaderMaterial:
+	const VM_EMISSION_CAP := 0.65
 	_ensure_vm_shaders()
 	var smat := ShaderMaterial.new()
 	if src_mat is ShaderMaterial:
@@ -2018,8 +2093,11 @@ func _wrap_material_for_vm(src_mat: Material) -> ShaderMaterial:
 	if has_orm:
 		smat.set_shader_parameter("orm_tex", std.roughness_texture)
 	if std.emission_enabled:
+		var vm_e: float = minf(std.emission_energy_multiplier, VM_EMISSION_CAP)
+		assert(vm_e <= VM_EMISSION_CAP + 0.001, "TongCap: viewmodel emission exceeds cap")
+		print("TongCap: viewmodel emission_energy=", vm_e, " cap=", VM_EMISSION_CAP, " (loader PBR tongs/3P clamped to mission glow 0.65)")
 		smat.set_shader_parameter("emission_color", Vector3(std.emission.r, std.emission.g, std.emission.b))
-		smat.set_shader_parameter("emission_energy", std.emission_energy_multiplier)
+		smat.set_shader_parameter("emission_energy", vm_e)
 		if not is_trans:
 			smat.set_shader_parameter("use_emission_tex", std.emission_texture != null)
 			if std.emission_texture != null:
@@ -2258,6 +2336,104 @@ func _fp_play_fp_clip(clip_name: String) -> void:
 	fp_anim_player.play(clip_name, FP_ANIM_BLEND)
 
 
+## Third-person crank drive (F13 3P form). Resolves the firing thief rig --
+## the 3P body skeleton under mesh_root (SK_ThiefNisha_Dyn__Body) for the
+## AN_Zipwire_Crank_Montage player, and the zipwire tool's crank handle
+## (real SK_Zipwire crank_handle bone, else the ZipwireCrankHandle fallback
+## sub-node) for the per-tick spin. Never touches fp_anim_player: the hidden
+## 1P viewmodel keeps its own reload loop (animation_library.gd:84 untouched).
+func _tp_crank_body_skel() -> Skeleton3D:
+	if mesh_root == null or not is_instance_valid(mesh_root):
+		return null
+	for n in mesh_root.find_children("*", "Skeleton3D", true, false):
+		var sk := n as Skeleton3D
+		if sk != null and sk.get_bone_count() > 0:
+			return sk
+	return null
+
+
+## Starts the 3P crank montage on the firing thief rig. No-op with a warning
+## (never a crash) when the 3P body failed to load, the manifest lacks the
+## clip, or the skeletons share no bones; the fallback handle still spins
+## procedurally via _tp_crank_tick in that case.
+func _tp_crank_start() -> void:
+	_tp_crank_reset_handle()
+	var skel := _tp_crank_body_skel()
+	if skel == null:
+		return
+	var host := skel.get_parent() as Node
+	if host == null:
+		return
+	var player := host.get_node_or_null("TPCrankPlayer") as AnimationPlayer
+	if player == null:
+		player = AnimationPlayer.new()
+		player.name = "TPCrankPlayer"
+		host.add_child(player)
+		player.root_node = player.get_path_to(host)
+	var clip_name := ""
+	if player.has_animation("AN_Zipwire_Crank_Montage"):
+		clip_name = "AN_Zipwire_Crank_Montage"
+	else:
+		var lib = ThiefAnimLib.new()
+		if not lib.setup("club", skel):
+			push_warning("ZipwireCrank3P: no 3P crank player, skeleton bind failed (UE clip TAT/Content/Art/Animation/Thief/Anim/Gear/Zipwire/AN_Zipwire_Crank_Montage)")
+			return
+		clip_name = str(lib.ensure_tp_crank_clip(player))
+	if clip_name == "" or not player.has_animation(clip_name):
+		push_warning("ZipwireCrank3P: crank clip no-op on 3P rig, manifest lacks clip or zero shared bones (UE clip TAT/Content/Art/Animation/Thief/Anim/Gear/Zipwire/AN_Zipwire_Crank_Montage)")
+		return
+	player.play(clip_name, FP_ANIM_BLEND)
+
+
+## Spins the crank handle from crank_progress (absolute: 3 full turns over a
+## full crank, so the handle rests exactly when cranking stops). Prefers the
+## real SK_Zipwire crank_handle bone pose; falls back to the
+## ZipwireCrankHandle sub-node. Called every tick while _is_cranking holds.
+func _tp_crank_tick() -> void:
+	if fp_tool_root == null or not is_instance_valid(fp_tool_root):
+		return
+	var angle: float = TAU * 3.0 * clampf(crank_progress, 0.0, 1.0)
+	for n in fp_tool_root.find_children("*", "Skeleton3D", true, false):
+		var sk := n as Skeleton3D
+		if sk == null:
+			continue
+		var bi: int = sk.find_bone("crank_handle")
+		if bi >= 0:
+			sk.set_bone_pose_rotation(bi, Quaternion(Vector3.RIGHT, angle))
+			return
+	var handle := fp_tool_root.get_node_or_null("ZipwireCrankHandle") as Node3D
+	if handle != null:
+		handle.rotation = Vector3(angle, 0.0, 0.0)
+
+
+## Resets the handle to rest pose (identity bone pose / zero pivot rotation).
+func _tp_crank_reset_handle() -> void:
+	if fp_tool_root == null or not is_instance_valid(fp_tool_root):
+		return
+	for n in fp_tool_root.find_children("*", "Skeleton3D", true, false):
+		var sk := n as Skeleton3D
+		if sk == null:
+			continue
+		var bi: int = sk.find_bone("crank_handle")
+		if bi >= 0:
+			sk.set_bone_pose_rotation(bi, Quaternion.IDENTITY)
+			return
+	var handle := fp_tool_root.get_node_or_null("ZipwireCrankHandle") as Node3D
+	if handle != null:
+		handle.rotation = Vector3.ZERO
+
+
+## Stops the 3P crank montage player; the handle keeps its final pose until
+## the next crank resets it.
+func _tp_crank_stop() -> void:
+	if mesh_root == null or not is_instance_valid(mesh_root):
+		return
+	for n in mesh_root.find_children("*", "TPCrankPlayer", true, false):
+		var player := n as AnimationPlayer
+		if player != null and player.is_playing():
+			player.stop()
+
+
 ## Small procedural swing offset for the bone-attached tool when no real
 ## one-shot action animation is driving the wrist/socket.
 func _update_fp_tool_on_bone(swing_k: float) -> void:
@@ -2393,6 +2569,13 @@ func _apply_blackjack_materials(root_node: Node) -> void:
 func _apply_vistara_materials(root_node: Node) -> void:
 	# SK_VistaraDiamond collides in mesh_materials.json on MI_VistaraDiamond:
 	# surface 0 is GemShader crystal, surface 1 is brass tongs.
+	# UE-derived energy cap: MI_VistaraDiamond cooks with "Emissive On?" = false
+	# and null Emissive (extracted/json/Art/Gameplay/Gear/VistaraDiamond/
+	# MI_VistaraDiamond.json), so the port gem emissive stays modest under
+	# bloom (mission glow_intensity 0.65, DenMoonBeam 0.65). VFX spawn knobs
+	# stay in the 0.3-4.5 range, light_probe.gd:115 weight unchanged.
+	const TONGS_ENERGY_CAP := 0.65
+	const DIAMOND_ENERGY_CAP := 0.65
 	var loader: Node = _get_fp_mat_loader()
 	var gem_mat := StandardMaterial3D.new()
 	gem_mat.albedo_color = Color(0.318, 0.664, 1.0, 0.78)
@@ -2401,13 +2584,19 @@ func _apply_vistara_materials(root_node: Node) -> void:
 	gem_mat.metallic = 0.05
 	gem_mat.emission_enabled = true
 	gem_mat.emission = Color(0.32, 0.72, 1.0)
-	gem_mat.emission_energy_multiplier = 1.25
+	gem_mat.emission_energy_multiplier = DIAMOND_ENERGY_CAP
+	assert(gem_mat.emission_energy_multiplier <= DIAMOND_ENERGY_CAP + 0.001, "DiamondCap: gem energy exceeds UE-derived cap")
+	print("DiamondCap: vistara gem emission_energy=", gem_mat.emission_energy_multiplier, " cap=", DIAMOND_ENERGY_CAP, " (UE MI_VistaraDiamond Emissive Off; mission glow 0.65)")
 	gem_mat.set_meta("fresnel_color", Color(0.75, 0.94, 1.0))
 	gem_mat.set_meta("fresnel_power", 2.4)
 	gem_mat.set_meta("fresnel_strength", 1.8)
 	var tong_mat: Material = null
 	if loader != null:
 		tong_mat = loader.call("get_material_for_ue", "/Game/Art/Gameplay/Gear/VistaraDiamond/MI_VistaraDiamond") as Material
+	if tong_mat is StandardMaterial3D and (tong_mat as StandardMaterial3D).emission_enabled:
+		(tong_mat as StandardMaterial3D).emission_energy_multiplier = minf((tong_mat as StandardMaterial3D).emission_energy_multiplier, TONGS_ENERGY_CAP)
+		assert((tong_mat as StandardMaterial3D).emission_energy_multiplier <= TONGS_ENERGY_CAP + 0.001, "TongsCap: tongs energy exceeds cap")
+		print("TongsCap: tongs emission_energy=", (tong_mat as StandardMaterial3D).emission_energy_multiplier, " cap=", TONGS_ENERGY_CAP, " (UE MI_VistaraDiamond Emissive Off; mission glow 0.65)")
 	for child: Node in root_node.find_children("*", "MeshInstance3D", true, false):
 		var mi: MeshInstance3D = child as MeshInstance3D
 		if mi == null or mi.mesh == null:
@@ -2419,6 +2608,7 @@ func _apply_vistara_materials(root_node: Node) -> void:
 
 
 func _apply_fairy_materials(root_node: Node) -> void:
+	const FAIRY_ORB_ENERGY_CAP := 0.65
 	# SK_PickpocketFairy has 5 surfaces: [0] bubble orb & [2] jar had stem
 	# collision onto T_InsultFairy_Teeth_D.png in materials.json; override
 	# [0] & [2] cleanly and load [1, 3, 4] via LevelLoader.
@@ -2429,7 +2619,9 @@ func _apply_fairy_materials(root_node: Node) -> void:
 	orb_mat.roughness = 0.15
 	orb_mat.emission_enabled = true
 	orb_mat.emission = Color(0.45, 0.85, 1.0)
-	orb_mat.emission_energy_multiplier = 2.2
+	orb_mat.emission_energy_multiplier = FAIRY_ORB_ENERGY_CAP
+	assert(orb_mat.emission_energy_multiplier <= FAIRY_ORB_ENERGY_CAP + 0.001, "FairyCap: fairy orb energy exceeds cap")
+	print("FairyCap: fairy orb emission_energy=", orb_mat.emission_energy_multiplier, " cap=", FAIRY_ORB_ENERGY_CAP, " (no UE orb authoring; mission glow 0.65)")
 	orb_mat.set_meta("fresnel_color", Color(0.55, 0.95, 1.0))
 	orb_mat.set_meta("fresnel_power", 2.2)
 	orb_mat.set_meta("fresnel_strength", 1.5)
@@ -2511,6 +2703,7 @@ func _fp_try_load_tool_glb(tool_id: String) -> Node:
 	return inst
 
 
+const FP_FALLBACK_ENERGY_CAP := 0.65
 func _fp_fallback_mat(base: Color, emission: Color, energy: float) -> StandardMaterial3D:
 	var mat: StandardMaterial3D = StandardMaterial3D.new()
 	mat.albedo_color = base
@@ -2519,7 +2712,10 @@ func _fp_fallback_mat(base: Color, emission: Color, energy: float) -> StandardMa
 	if energy > 0.0:
 		mat.emission_enabled = true
 		mat.emission = emission
-		mat.emission_energy_multiplier = energy
+		mat.emission_energy_multiplier = minf(energy, FP_FALLBACK_ENERGY_CAP)
+		assert(mat.emission_energy_multiplier <= FP_FALLBACK_ENERGY_CAP + 0.001, "FallbackCap: fp fallback energy exceeds cap")
+		if energy > FP_FALLBACK_ENERGY_CAP + 0.001:
+			print("FallbackCap: fp fallback emission_energy=", mat.emission_energy_multiplier, " cap=", FP_FALLBACK_ENERGY_CAP, " (port-authored glow clamped to mission glow 0.65)")
 	return mat
 
 
@@ -2552,8 +2748,11 @@ func _build_fp_blackjack_fallback() -> void:
 
 
 func _build_fp_zipwire_fallback() -> void:
+	const ZIPWIRE_TIP_ENERGY_CAP := 0.65
 	var frame_mat: StandardMaterial3D = _fp_fallback_mat(Color(0.16, 0.15, 0.14), Color(0, 0, 0), 0.0)
 	var glow_mat: StandardMaterial3D = _fp_fallback_mat(Color(0.4, 0.85, 1.0), Color(0.35, 0.8, 1.0), 2.0)
+	assert(glow_mat.emission_energy_multiplier <= ZIPWIRE_TIP_ENERGY_CAP + 0.001, "ZipwireTipCap: zipwire tip energy exceeds cap")
+	print("ZipwireTipCap: zipwire tip emission_energy=", glow_mat.emission_energy_multiplier, " cap=", ZIPWIRE_TIP_ENERGY_CAP, " (port-authored glow clamped to mission glow 0.65)")
 	var body_mesh: BoxMesh = BoxMesh.new()
 	body_mesh.size = Vector3(0.05, 0.07, 0.30)
 	body_mesh.material = frame_mat
@@ -2582,6 +2781,37 @@ func _build_fp_zipwire_fallback() -> void:
 		tip.position = Vector3(-0.10 if i == 0 else 0.10, 0.02, -0.15)
 		tip.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		fp_tool_root.add_child(tip)
+	# Crank-handle sub-node (F13 3P form). The driven pivot the 3P crank tick
+	# spins while _is_cranking holds: Node3D pivot + arm + knob, mirroring the
+	# SKEL_Zipwire crank_arm -> crank_handle chain on the real SK_Zipwire GLB
+	# (UE /Game/Art/Gameplay/Gear/Zipwire/SKEL_Zipwire). Absolute rotation is
+	# set from crank_progress, so the handle rests when cranking stops.
+	var crank_pivot: Node3D = Node3D.new()
+	crank_pivot.name = "ZipwireCrankHandle"
+	crank_pivot.position = Vector3(0.035, -0.01, 0.06)
+	fp_tool_root.add_child(crank_pivot)
+	var crank_arm_mesh: BoxMesh = BoxMesh.new()
+	crank_arm_mesh.size = Vector3(0.015, 0.09, 0.015)
+	crank_arm_mesh.material = frame_mat
+	var crank_arm: MeshInstance3D = MeshInstance3D.new()
+	crank_arm.name = "CrankArm"
+	crank_arm.mesh = crank_arm_mesh
+	crank_arm.position = Vector3(0.0, 0.045, 0.0)
+	crank_arm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	crank_pivot.add_child(crank_arm)
+	var knob_mesh: CylinderMesh = CylinderMesh.new()
+	knob_mesh.top_radius = 0.012
+	knob_mesh.bottom_radius = 0.012
+	knob_mesh.height = 0.05
+	knob_mesh.radial_segments = 8
+	knob_mesh.material = frame_mat
+	var knob: MeshInstance3D = MeshInstance3D.new()
+	knob.name = "CrankKnob"
+	knob.mesh = knob_mesh
+	knob.position = Vector3(0.0, 0.09, -0.02)
+	knob.rotation_degrees = Vector3(90.0, 0.0, 0.0)
+	knob.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	crank_pivot.add_child(knob)
 
 
 func _build_fp_smoke_fallback() -> void:
@@ -2612,12 +2842,15 @@ func _build_fp_smoke_fallback() -> void:
 
 
 func _build_fp_sap_fallback() -> void:
+	const SAP_VIAL_ENERGY_CAP := 0.65
 	var vial_mat: StandardMaterial3D = StandardMaterial3D.new()
 	vial_mat.albedo_color = Color(0.3, 0.9, 0.65, 0.85)
 	vial_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	vial_mat.emission_enabled = true
 	vial_mat.emission = Color(0.3, 1.0, 0.7)
-	vial_mat.emission_energy_multiplier = 1.5
+	vial_mat.emission_energy_multiplier = SAP_VIAL_ENERGY_CAP
+	assert(vial_mat.emission_energy_multiplier <= SAP_VIAL_ENERGY_CAP + 0.001, "SapCap: sap vial energy exceeds cap")
+	print("SapCap: sap vial emission_energy=", vial_mat.emission_energy_multiplier, " cap=", SAP_VIAL_ENERGY_CAP, " (UE MI_SlimeBomb EmissiveStrength unrecovered; mission glow 0.65)")
 	var vial_mesh: CylinderMesh = CylinderMesh.new()
 	vial_mesh.top_radius = 0.03
 	vial_mesh.bottom_radius = 0.03
@@ -2633,9 +2866,12 @@ func _build_fp_sap_fallback() -> void:
 
 
 func _build_fp_fairy_fallback() -> void:
+	const FAIRY_FALLBACK_ENERGY_CAP := 0.65
 	var glow_mat: StandardMaterial3D = _fp_fallback_mat(Color(0.55, 0.95, 1.0), Color(0.4, 0.9, 1.0), 2.5)
 	var orb_mesh: SphereMesh = SphereMesh.new()
 	orb_mesh.radius = 0.035
+	assert(glow_mat.emission_energy_multiplier <= FAIRY_FALLBACK_ENERGY_CAP + 0.001, "FairyFallbackCap: fairy fallback energy exceeds cap")
+	print("FairyFallbackCap: fairy fallback emission_energy=", glow_mat.emission_energy_multiplier, " cap=", FAIRY_FALLBACK_ENERGY_CAP, " (port-authored glow clamped to mission glow 0.65)")
 	orb_mesh.height = 0.07
 	orb_mesh.radial_segments = 12
 	orb_mesh.rings = 8
@@ -2653,6 +2889,7 @@ func _fp_play_swing() -> void:
 
 
 func _update_smoke_trajectory() -> void:
+	const SMOKE_TRAJ_ENERGY_CAP := 0.65
 	var show_traj: bool = (
 		equipped_tool == "smoke_bomb"
 		and int(charges.get("smoke_bomb", 0)) > 0
@@ -2677,7 +2914,9 @@ func _update_smoke_trajectory() -> void:
 		tmat.albedo_color = Color(0.98, 0.96, 0.84, 0.85)
 		tmat.emission_enabled = true
 		tmat.emission = Color(0.95, 0.92, 0.78)
-		tmat.emission_energy_multiplier = 2.0
+		tmat.emission_energy_multiplier = SMOKE_TRAJ_ENERGY_CAP
+		assert(tmat.emission_energy_multiplier <= SMOKE_TRAJ_ENERGY_CAP + 0.001, "SmokeTrajCap: smoke traj energy exceeds cap")
+		print("SmokeTrajCap: smoke traj emission_energy=", tmat.emission_energy_multiplier, " cap=", SMOKE_TRAJ_ENERGY_CAP, " (no UE traj authoring; mission glow 0.65)")
 		_smoke_traj_mesh = MeshInstance3D.new()
 		_smoke_traj_mesh.name = "SmokeTrajectoryMesh"
 		_smoke_traj_mesh.top_level = true

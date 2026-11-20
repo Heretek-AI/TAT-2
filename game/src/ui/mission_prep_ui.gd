@@ -57,6 +57,13 @@ const LOBBY_CAM_ROLL_DEG: float = -14.780165
 const LOBBY_THIEF_POS: Vector3 = Vector3(-1.5871, 0.82, -0.7868)
 const LOBBY_THIEF_YAW_DEG: float = 45.0
 
+## Authored backdrop size for the 3D rooftop stage. The stage container must
+## deliver at least this size at runtime: anything smaller (in particular the
+## (2,2) engine-minimum floor) plus SSIL enabled reproduces the
+## godotengine/godot#86631 RenderingDevice error cascade, so both _build_all
+## and _ensure_stage_size treat this as a floor that is never shrunk.
+const STAGE_VIEWPORT_SIZE: Vector2i = Vector2i(1280, 720)
+
 var map_id: String = "old_manor"
 var difficulty: int = 1
 var mode: String = "Solo"
@@ -85,6 +92,8 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_build_all()
 	_refresh_all()
+	resized.connect(_ensure_stage_size)
+	call_deferred("_ensure_stage_size")
 	if AudioManager != null and AudioManager.has_method("wire_hover_sfx"):
 		AudioManager.wire_hover_sfx(self)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -152,15 +161,39 @@ func _exit_tree() -> void:
 
 
 func _build_all() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	# NOTE: keep_offsets=false is load-bearing on both full-rect presets below.
+	# This Control is constructed via .new() at size (0,0) and parented to a
+	# CanvasLayer; the set_anchors_preset default (keep_offsets=true) would
+	# preserve that zero size, leaving this Control and stage_box at (0,0) and
+	# crushing the authored 1280x720 backdrop SubViewport to the (2,2)
+	# engine-minimum floor, which emits the godot#86631 cascade with SSIL on.
+	set_anchors_preset(Control.PRESET_FULL_RECT, false)
+	offset_left = 0.0
+	offset_top = 0.0
+	offset_right = 0.0
+	offset_bottom = 0.0
+	size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	size_flags_vertical = Control.SIZE_EXPAND_FILL
 	var stage_box: SubViewportContainer = SubViewportContainer.new()
-	stage_box.set_anchors_preset(Control.PRESET_FULL_RECT)
+	stage_box.name = "PrepBackdropContainer"
+	stage_box.set_anchors_preset(Control.PRESET_FULL_RECT, false)
+	stage_box.offset_left = 0.0
+	stage_box.offset_top = 0.0
+	stage_box.offset_right = 0.0
+	stage_box.offset_bottom = 0.0
+	stage_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	stage_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	# Floor, not a shrink target: the authored backdrop is 1280x720 and the
+	# container must never report smaller; it still stretches to fill the
+	# window via the full-rect anchors above.
+	stage_box.custom_minimum_size = Vector2(STAGE_VIEWPORT_SIZE)
 	stage_box.stretch = true
 	stage_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(stage_box)
 	var viewport: SubViewport = SubViewport.new()
+	viewport.name = "PrepBackdropViewport"
 	viewport.own_world_3d = true
-	viewport.size = Vector2i(1280, 720)
+	viewport.size = STAGE_VIEWPORT_SIZE
 	viewport.render_target_update_mode = SubViewport.UPDATE_WHEN_VISIBLE
 	stage_box.add_child(viewport)
 	_build_stage(viewport)
@@ -312,6 +345,41 @@ func _build_all() -> void:
 	ThemeScript.style_teal_button(back_btn, false)
 	back_btn.pressed.connect(close_prep)
 	btn_row.add_child(back_btn)
+
+
+## Container-crush guard (godot#86631): re-asserts full-rect layout without
+## keeping offsets and re-applies the authored 1280x720 backdrop floor if the
+## container chain ever measures near-zero again (late layout, window resize).
+## Runs deferred after _ready and on every resized signal. SSIL/SSAO handling
+## is untouched: this only guarantees the viewport SSIL renders into is real.
+func _ensure_stage_size() -> void:
+	if not is_inside_tree():
+		return
+	set_anchors_preset(Control.PRESET_FULL_RECT, false)
+	offset_left = 0.0
+	offset_top = 0.0
+	offset_right = 0.0
+	offset_bottom = 0.0
+	if size.x < 32.0 or size.y < 32.0:
+		var want: Vector2 = get_viewport_rect().size
+		if want.x >= 32.0 and want.y >= 32.0:
+			position = Vector2.ZERO
+			size = want
+	for child: Node in get_children():
+		if not (child is SubViewportContainer):
+			continue
+		var box: SubViewportContainer = child as SubViewportContainer
+		box.set_anchors_preset(Control.PRESET_FULL_RECT, false)
+		box.offset_left = 0.0
+		box.offset_top = 0.0
+		box.offset_right = 0.0
+		box.offset_bottom = 0.0
+		for vp_child: Node in box.get_children():
+			if not (vp_child is SubViewport):
+				continue
+			var sv: SubViewport = vp_child as SubViewport
+			if sv.size.x < STAGE_VIEWPORT_SIZE.x or sv.size.y < STAGE_VIEWPORT_SIZE.y:
+				sv.size = STAGE_VIEWPORT_SIZE
 
 
 func _make_card(header: String, title_text: String, body_text: String) -> PanelContainer:

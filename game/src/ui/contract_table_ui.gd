@@ -518,6 +518,17 @@ func _confirm_prepare() -> void:
 	var prep: Control = MissionPrepUIScript.new() as Control
 	_prep = prep
 	add_child(prep)
+	# Parentage-side crush guard (godot#86631): prep._ready() runs during
+	# add_child while the fresh Control still measures (0,0), and its full-rect
+	# anchors must not keep those zero offsets or the backdrop container chain
+	# stays (0,0) and crushes the authored 1280x720 SubViewport to the (2,2)
+	# floor. Re-assert full-rect here; mission_prep_ui._ensure_stage_size
+	# re-checks after layout and on resize.
+	prep.set_anchors_preset(Control.PRESET_FULL_RECT, false)
+	prep.offset_left = 0.0
+	prep.offset_top = 0.0
+	prep.offset_right = 0.0
+	prep.offset_bottom = 0.0
 	if prep.has_signal("ready_pressed"):
 		prep.connect("ready_pressed", _on_prep_ready)
 	if prep.has_signal("closed"):

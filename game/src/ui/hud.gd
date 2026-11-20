@@ -444,11 +444,14 @@ class TacticalMapDraw extends Control:
 				var pt: Vector2 = _world_to_screen((lv as Dictionary).get("pos", Vector3.ZERO) as Vector3)
 				draw_circle(pt, 3.2, Color(0.95, 0.80, 0.36, 0.78))
 
-		# Objectives (gold diamonds).
+		# Objectives (gold diamonds). Map buildings grow/shrink with map zoom
+		# (KF10/S08 KILCAIRN tokens): marker size tracks _world_span against
+		# the 64.0 default so buildings stay world-proportioned (7.0 px at the
+		# default span) while guard/loot/ping markers stay screen-constant.
 		for ov: Variant in objective_points:
 			if ov is Dictionary:
 				var pt2: Vector2 = _world_to_screen((ov as Dictionary).get("pos", Vector3.ZERO) as Vector3)
-				var d: float = 7.0
+				var d: float = 7.0 * (64.0 / maxf(_world_span, 1.0))
 				var poly: PackedVector2Array = PackedVector2Array([
 					pt2 + Vector2(0, -d), pt2 + Vector2(d, 0), pt2 + Vector2(0, d), pt2 + Vector2(-d, 0)
 				])

@@ -19,7 +19,7 @@ const FALLBACK_CONTRACTS: Array = [
 ]
 
 const TOOLS: Array = [
-	{"id": "zipwire", "name": "Zipwire", "cat": "tools", "cost": 1500, "desc": "Fire a wire to traverse rooftops and gaps in seconds."},
+	{"id": "zipwire", "name": "Zipwire", "cat": "tools", "cost": 1500, "desc": "A spring-loaded grapple gun that launches out, connects to a surface and then quickly recoils its cable, yanking both the gun and its wielder along for the ride."},
 	{"id": "smoke_bomb", "name": "Smoke Bomb", "cat": "tools", "cost": 800, "desc": "Burst of thick smoke. Breaks line of sight to slip away."},
 	{"id": "pickpocket_fairy", "name": "Pickpocket Fairy", "cat": "tools", "cost": 2000, "desc": "A nimble fey that lifts keys and coins from the unwary."},
 	{"id": "insult_fairy", "name": "Insult Fairy", "cat": "tools", "cost": 2000, "desc": "Taunts guards into abandoning their posts to chase it."},
@@ -66,9 +66,10 @@ var _market_btn: Button
 var _journal_page: VBoxContainer
 var _market_page: VBoxContainer
 var _level_lbl: Label
+var _thief_lbl: Label
 var _xp_bar: ProgressBar
 var _xp_lbl: Label
-var _contracts_box: VBoxContainer
+var _contracts_box: HBoxContainer
 var _assets_lbl: Label
 var _preview_title: Label
 var _preview_desc: Label
@@ -176,6 +177,15 @@ func _build_ui() -> void:
 	if serif != null:
 		_level_lbl.add_theme_font_override("font", serif)
 	_journal_page.add_child(_level_lbl)
+	# KF07 cite: portrait card reads "Johnny Cipher" below the Level/XP header.
+	# Portrait art path unrecovered (HARD_LIMIT 5.1): name label only, no invented art.
+	_thief_lbl = Label.new()
+	_thief_lbl.text = "Johnny Cipher"
+	_thief_lbl.add_theme_font_size_override("font_size", 15)
+	_thief_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_TEXT)
+	if sans != null:
+		_thief_lbl.add_theme_font_override("font", sans)
+	_journal_page.add_child(_thief_lbl)
 	var xp_row: HBoxContainer = HBoxContainer.new()
 	xp_row.add_theme_constant_override("separation", 10)
 	_journal_page.add_child(xp_row)
@@ -200,12 +210,18 @@ func _build_ui() -> void:
 	if sans != null:
 		_xp_lbl.add_theme_font_override("font", sans)
 	xp_row.add_child(_xp_lbl)
+	# KF07 cite: contracts read as a horizontal carousel (Contract #1 clipped
+	# left, #2 Completed center, #3 Active right) with the status word floating
+	# ABOVE each card and a top-center "Contract #N" tab. No UMG rect numbers
+	# in cooked (HARD_LIMIT 5.2): structural order only, no pixel constants.
 	var scroll: ScrollContainer = ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	_journal_page.add_child(scroll)
-	_contracts_box = VBoxContainer.new()
+	_contracts_box = HBoxContainer.new()
 	_contracts_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_contracts_box.add_theme_constant_override("separation", 8)
+	_contracts_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_contracts_box.add_theme_constant_override("separation", 16)
 	scroll.add_child(_contracts_box)
 
 	_market_page = VBoxContainer.new()
@@ -318,6 +334,8 @@ func _refresh_journal() -> void:
 	var in_level: int = int(prog.get("xp_in_level", 0))
 	var needed: int = int(prog.get("xp_needed", 500))
 	_level_lbl.text = "Level %d" % level
+	if _thief_lbl != null:
+		_thief_lbl.text = "Johnny Cipher"
 	_xp_bar.min_value = 0.0
 	_xp_bar.max_value = float(maxi(1, needed))
 	_xp_bar.value = float(in_level)
@@ -329,7 +347,22 @@ func _refresh_journal() -> void:
 		var cd: Dictionary = c as Dictionary
 		var order: int = int(cd.get("order", 0))
 		var done: bool = _is_contract_complete(order)
+		# KF07 cite: status floats above the card; card opens with a
+		# top-center "Contract #N" tab, then the italic-serif title.
+		var slot: VBoxContainer = VBoxContainer.new()
+		slot.custom_minimum_size = Vector2(340, 0)
+		slot.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		slot.add_theme_constant_override("separation", 4)
+		_contracts_box.add_child(slot)
+		var status_above: Label = Label.new()
+		status_above.text = "Completed" if done else "Active"
+		status_above.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		status_above.add_theme_font_size_override("font_size", 14)
+		status_above.add_theme_color_override("font_color", Color(0.45, 0.90, 0.65) if done else ThemeScript.TEAL_ACCENT)
+		slot.add_child(status_above)
 		var card: PanelContainer = PanelContainer.new()
+		card.custom_minimum_size = Vector2(340, 0)
+		card.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		var cstyle: StyleBoxFlat = ThemeScript.teal_card_style(1, 5, ThemeScript.TEAL_GROUP_BG, 12)
 		if done:
 			cstyle.border_color = Color(0.32, 0.72, 0.56, 0.85)
@@ -338,20 +371,24 @@ func _refresh_journal() -> void:
 		var cv: VBoxContainer = VBoxContainer.new()
 		cv.add_theme_constant_override("separation", 4)
 		card.add_child(cv)
+		# KF07 cite: top-center "Contract #N" tab with scroll icon (text only;
+		# icon art unrecovered, no invented glyph).
+		var tab: Label = Label.new()
+		tab.text = "Contract #%d" % order
+		tab.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		tab.add_theme_font_size_override("font_size", 15)
+		tab.add_theme_color_override("font_color", ThemeScript.TEAL_ACCENT)
+		cv.add_child(tab)
 		var head: HBoxContainer = HBoxContainer.new()
 		head.add_theme_constant_override("separation", 10)
 		cv.add_child(head)
 		var t: Label = Label.new()
-		t.text = "#%02d  %s" % [order, str(cd.get("title", "Contract"))]
+		t.text = str(cd.get("title", "Contract"))
 		t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		t.add_theme_font_size_override("font_size", 18)
 		t.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE if not done else ThemeScript.TEAL_TEXT)
 		head.add_child(t)
-		var status: Label = Label.new()
-		status.text = "Completed" if done else "Active"
-		status.add_theme_font_size_override("font_size", 14)
-		status.add_theme_color_override("font_color", Color(0.45, 0.90, 0.65) if done else ThemeScript.TEAL_ACCENT)
-		head.add_child(status)
+		# KF07 cite: status lives above the card (status_above); no badge inside.
 		var loc: String = str(cd.get("location", ""))
 		var desc: String = str(cd.get("description", ""))
 		if loc != "" or desc != "":
@@ -361,7 +398,7 @@ func _refresh_journal() -> void:
 			d.add_theme_font_size_override("font_size", 14)
 			d.add_theme_color_override("font_color", ThemeScript.TEAL_MUTED)
 			cv.add_child(d)
-		_contracts_box.add_child(card)
+		slot.add_child(card)
 
 
 func _sections() -> Array:

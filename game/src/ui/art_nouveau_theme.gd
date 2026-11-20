@@ -15,6 +15,10 @@ const TEAL_ACCENT: Color = Color(0.55, 0.92, 0.94, 1.0)
 const TEAL_TITLE: Color = Color(0.76, 0.94, 0.95, 1.0)
 const TEAL_TEXT: Color = Color(0.88, 0.94, 0.95, 1.0)
 const TEAL_MUTED: Color = Color(0.62, 0.78, 0.82, 0.90)
+# Task-6 parity note (KF08/KF03-KF04 cite): purchase-green check, "Active"
+# green, and pink LOCKED/padlock accents are verified on footage but have no
+# cooked UE source in scope (HARD_LIMIT 5.7). No tokens added here on purpose:
+# extend the system with named tokens first, never inline hex at call sites.
 
 const GOLD: Color = Color(0.95, 0.80, 0.45, 1.0)
 const GOLD_DIM: Color = Color(0.72, 0.55, 0.25, 1.0)

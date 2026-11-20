@@ -39,11 +39,17 @@ const TOOL_SMOKE_MESH: String = "res://assets/ue/Content/Art/Gameplay/Gear/Smoke
 const TOOL_BLACKJACK_MESH: String = "res://assets/ue/Content/Art/Gameplay/Gear/BlackJack/SM_Blackjack.glb"
 const TOOL_SLITHERSAP_MESH: String = "res://assets/ue/Content/Art/Gameplay/Gear/Slithersap/SK_SlimeBomb.glb"
 
+## KF03/KF04 cite: pink/magenta LOCKED badges (thief portrait overlay, slot-3
+## expanded-row tool locks). Standing HARD_LIMIT 5.7: no pink-lock token exists
+## in art_nouveau_theme.gd (teal/gold/ivory only) and scope bars theme edits, so
+## this local const is the fallback until the design-system pass adds a token.
+const LOCKED_PINK: Color = Color(1.0, 0.38, 0.72)
+
 const THIEF_IDS: Array[String] = ["spider", "chameleon"]
 const THIEF_LABELS: Array[String] = ["The Spider", "The Chameleon"]
 
 const TOOLS: Array = [
-	{"id": "zipwire", "name": "Zipwire", "mesh": TOOL_ZIPWIRE_MESH, "desc": "Silent traversal line. Cross gaps and reach high ledges without a sound."},
+	{"id": "zipwire", "name": "Zipwire", "mesh": TOOL_ZIPWIRE_MESH, "desc": "A spring-loaded grapple gun that launches out, connects to a surface and then quickly recoils its cable, yanking both the gun and its wielder along for the ride."},
 	{"id": "smoke_bomb", "name": "Smoke Bomb", "mesh": TOOL_SMOKE_MESH, "desc": "Burst of cover. Break line of sight and vanish mid-hunt."},
 	{"id": "blackjack", "name": "Blackjack", "mesh": TOOL_BLACKJACK_MESH, "desc": "Quiet takedown tool. Drop an isolated guard up close."},
 	{"id": "slithersap", "name": "Slithersap", "mesh": TOOL_SLITHERSAP_MESH, "desc": "Sticky slowing agent. Gums up patrols and devices."},
@@ -64,12 +70,17 @@ var _pitch: float = 0.0
 var _last_drag_msec: int = 0
 var _tool_yaw: float = 0.5
 
-var _thief_name_lbl: Label
-var _thief_lock_lbl: Label
 var _hint_lbl: Label
-var _body_opt: OptionButton
-var _head_opt: OptionButton
-var _card_opt: OptionButton
+var _body_card: Button
+var _head_card: Button
+var _card_card: Button
+var _spider_frame_btn: Button
+var _cham_frame_btn: Button
+var _spider_lock_lbl: Label
+var _cham_lock_lbl: Label
+var _slot_lock_lbls: Array[Label] = []
+var _cell_btns: Array[Button] = []
+var _cell_lock_lbls: Array[Label] = []
 var _desc_lbl: Label
 var _tool_btns: Array[Button] = []
 var _tool_name_lbl: Label
@@ -167,6 +178,16 @@ func _build_ui() -> void:
 	var vb: VBoxContainer = VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 10)
 	margin.add_child(vb)
+	# KF03/KF04 cite: centered "WARDROBE" header above the thief switcher.
+	var ward_hdr: Label = Label.new()
+	ward_hdr.text = "WARDROBE"
+	ward_hdr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ward_hdr.add_theme_font_size_override("font_size", 30)
+	ward_hdr.add_theme_color_override("font_color", ThemeScript.TEAL_ACCENT)
+	var _serif: Font = ThemeScript.font_serif()
+	if _serif != null:
+		ward_hdr.add_theme_font_override("font", _serif)
+	vb.add_child(ward_hdr)
 	vb.add_child(_build_top_bar())
 	var main: HBoxContainer = HBoxContainer.new()
 	main.add_theme_constant_override("separation", 16)
@@ -174,14 +195,16 @@ func _build_ui() -> void:
 	vb.add_child(main)
 	main.add_child(_build_left_panel())
 	main.add_child(_build_right_panel())
+	vb.add_child(_build_bottom_bar())
 
 
 func _build_top_bar() -> PanelContainer:
+	# KF03 cite: Q/E-flanked thief portrait switcher (Spider selected w/ teal
+	# frame, Chameleon dimmed w/ pink LOCKED). Portraits are empty frames:
+	# standing HARD_LIMIT 5.1 (no cooked portrait texture path recovered).
 	var bar: PanelContainer = PanelContainer.new()
 	bar.add_theme_stylebox_override("panel", ThemeScript.teal_panel_style(2, 6, ThemeScript.TEAL_PANEL_BG, 12))
 	ThemeScript.add_teal_filigree(bar, 3.0, 14.0)
-	var serif: Font = ThemeScript.font_serif()
-	var sans: Font = ThemeScript.font_sans()
 	var hb: HBoxContainer = HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 12)
 	hb.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -192,42 +215,125 @@ func _build_top_bar() -> PanelContainer:
 	ThemeScript.style_teal_button(q_btn, false)
 	q_btn.pressed.connect(_cycle_thief.bind(-1))
 	hb.add_child(q_btn)
-	var name_vb: VBoxContainer = VBoxContainer.new()
-	name_vb.custom_minimum_size = Vector2(420, 0)
-	name_vb.alignment = BoxContainer.ALIGNMENT_CENTER
-	hb.add_child(name_vb)
-	_thief_name_lbl = Label.new()
-	_thief_name_lbl.text = "THE SPIDER"
-	_thief_name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_thief_name_lbl.add_theme_font_size_override("font_size", 26)
-	_thief_name_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
-	if serif != null:
-		_thief_name_lbl.add_theme_font_override("font", serif)
-	name_vb.add_child(_thief_name_lbl)
-	_thief_lock_lbl = Label.new()
-	_thief_lock_lbl.text = ""
-	_thief_lock_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_thief_lock_lbl.add_theme_font_size_override("font_size", 13)
-	_thief_lock_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_MUTED)
-	if sans != null:
-		_thief_lock_lbl.add_theme_font_override("font", sans)
-	name_vb.add_child(_thief_lock_lbl)
+	hb.add_child(_build_thief_card("spider", THIEF_LABELS[0]))
+	hb.add_child(_build_thief_card("chameleon", THIEF_LABELS[1]))
 	var e_btn: Button = Button.new()
 	e_btn.text = "E >"
 	e_btn.custom_minimum_size = Vector2(72, 42)
 	ThemeScript.style_teal_button(e_btn, false)
 	e_btn.pressed.connect(_cycle_thief.bind(1))
 	hb.add_child(e_btn)
-	var spacer: Control = Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hb.add_child(spacer)
+	return bar
+
+
+## KF03 cite: portrait card + name label per thief. Empty frame until portrait
+## art source found (standing HARD_LIMIT 5.1); pink LOCKED overlay cites KF03
+## (standing HARD_LIMIT 5.7: local LOCKED_PINK, no theme token in scope).
+func _build_thief_card(thief: String, title: String) -> VBoxContainer:
+	var vb: VBoxContainer = VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 4)
+	vb.alignment = BoxContainer.ALIGNMENT_CENTER
+	var stack: Control = Control.new()
+	stack.custom_minimum_size = Vector2(120, 140)
+	vb.add_child(stack)
+	var frame: Button = Button.new()
+	frame.text = ""
+	frame.set_anchors_preset(Control.PRESET_FULL_RECT)
+	frame.custom_minimum_size = Vector2(120, 140)
+	ThemeScript.style_teal_tab(frame, thief == _thief_id)
+	frame.pressed.connect(_on_portrait_pressed.bind(thief))
+	stack.add_child(frame)
+	var lock_lbl: Label = Label.new()
+	lock_lbl.text = "LOCKED"
+	lock_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lock_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	lock_lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
+	lock_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	lock_lbl.add_theme_font_size_override("font_size", 15)
+	lock_lbl.add_theme_color_override("font_color", LOCKED_PINK)
+	stack.add_child(lock_lbl)
+	var name_lbl: Label = Label.new()
+	name_lbl.text = title
+	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_lbl.add_theme_font_size_override("font_size", 18)
+	name_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
+	var serif: Font = ThemeScript.font_serif()
+	if serif != null:
+		name_lbl.add_theme_font_override("font", serif)
+	vb.add_child(name_lbl)
+	if thief == "spider":
+		_spider_frame_btn = frame
+		_spider_lock_lbl = lock_lbl
+	else:
+		_cham_frame_btn = frame
+		_cham_lock_lbl = lock_lbl
+	_refresh_portraits()
+	return vb
+
+
+## KF03 cite: selected portrait glows teal, locked portrait shows pink LOCKED.
+func _refresh_portraits() -> void:
+	var spider_locked: bool = not _is_thief_unlocked("spider")
+	var cham_locked: bool = not _is_thief_unlocked("chameleon")
+	if _spider_frame_btn != null:
+		ThemeScript.style_teal_tab(_spider_frame_btn, _thief_id == "spider")
+	if _cham_frame_btn != null:
+		ThemeScript.style_teal_tab(_cham_frame_btn, _thief_id == "chameleon")
+	if _spider_lock_lbl != null:
+		_spider_lock_lbl.visible = spider_locked
+	if _cham_lock_lbl != null:
+		_cham_lock_lbl.visible = cham_locked
+
+
+## KF03 cite: clicking a portrait selects that thief (locked -> hint only).
+func _on_portrait_pressed(thief: String) -> void:
+	if AudioManager != null and AudioManager.has_method("play_ui"):
+		AudioManager.play_ui("click")
+	if not _is_thief_unlocked(thief):
+		_set_hint("The Chameleon is locked. Finish a contract to earn this disguise.")
+		return
+	_thief_id = thief
+	_set_hint("")
+	_refresh_thief_ui()
+
+
+## KF03/KF04 cite: BACK sits bottom-right (was top bar: task-6 row 22 MISMATCH).
+func _build_bottom_bar() -> HBoxContainer:
+	var hb: HBoxContainer = HBoxContainer.new()
+	hb.alignment = BoxContainer.ALIGNMENT_END
 	var back_btn: Button = Button.new()
 	back_btn.text = "BACK [ESC]"
 	back_btn.custom_minimum_size = Vector2(160, 42)
 	ThemeScript.style_teal_button(back_btn, false)
 	back_btn.pressed.connect(func() -> void: _apply_and_close(true))
 	hb.add_child(back_btn)
-	return bar
+	return hb
+
+
+## KF03 (slots w/ grey locks) / KF04 (expanded row w/ pink locks) cite.
+## lock_color is TEAL_MUTED for slots, local LOCKED_PINK for the expanded row
+## (standing HARD_LIMIT 5.7: no pink theme token; scope bars theme edits).
+func _add_tool_slot(parent: Container, idx: int, lock_color: Color, btns: Array[Button], locks: Array[Label]) -> void:
+	var entry: Dictionary = TOOLS[idx] as Dictionary
+	var cell: VBoxContainer = VBoxContainer.new()
+	cell.add_theme_constant_override("separation", 2)
+	cell.alignment = BoxContainer.ALIGNMENT_CENTER
+	parent.add_child(cell)
+	var b: Button = Button.new()
+	b.text = "[" + str(idx + 1) + "] " + str(entry.get("name", "?"))
+	b.toggle_mode = true
+	b.custom_minimum_size = Vector2(120, 38)
+	ThemeScript.style_teal_tab(b, idx == _active_tool)
+	b.pressed.connect(_on_tool_selected.bind(idx))
+	cell.add_child(b)
+	btns.append(b)
+	var lock_lbl: Label = Label.new()
+	lock_lbl.text = "LOCKED"
+	lock_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lock_lbl.add_theme_font_size_override("font_size", 11)
+	lock_lbl.add_theme_color_override("font_color", lock_color)
+	cell.add_child(lock_lbl)
+	locks.append(lock_lbl)
 
 
 func _build_left_panel() -> VBoxContainer:
@@ -265,21 +371,33 @@ func _build_left_panel() -> VBoxContainer:
 	if serif != null:
 		load_hdr.add_theme_font_override("font", serif)
 	left.add_child(load_hdr)
+	# KF03 cite: numbered loadout slots 1-4 with grey LOCKED badges on locked
+	# slots (TEAL_MUTED; text buttons stand: no slot icon-art source in scope).
 	var toolbar: HBoxContainer = HBoxContainer.new()
 	toolbar.add_theme_constant_override("separation", 8)
 	left.add_child(toolbar)
 	_tool_btns.clear()
+	_slot_lock_lbls.clear()
 	for i: int in range(TOOLS.size()):
-		var entry_var: Variant = TOOLS[i]
-		var entry: Dictionary = entry_var as Dictionary
-		var b: Button = Button.new()
-		b.text = "[" + str(i + 1) + "] " + str(entry.get("name", "?"))
-		b.toggle_mode = true
-		b.custom_minimum_size = Vector2(120, 38)
-		ThemeScript.style_teal_tab(b, i == _active_tool)
-		b.pressed.connect(_on_tool_selected.bind(i))
-		toolbar.add_child(b)
-		_tool_btns.append(b)
+		_add_tool_slot(toolbar, i, ThemeScript.TEAL_MUTED, _tool_btns, _slot_lock_lbls)
+	# KF04 cite: expanded candidate row under the slots (4 tools, pink locks on
+	# locked entries). Clicking a cell equips that tool. Standing HARD_LIMIT
+	# 5.7 (LOCKED_PINK local const) + 5.8 (TOOLS const only, no fairy/sap paths).
+	var expanded: HBoxContainer = HBoxContainer.new()
+	expanded.add_theme_constant_override("separation", 8)
+	left.add_child(expanded)
+	_cell_btns.clear()
+	_cell_lock_lbls.clear()
+	for i: int in range(TOOLS.size()):
+		_add_tool_slot(expanded, i, LOCKED_PINK, _cell_btns, _cell_lock_lbls)
+	# KF03 cite: hint below the loadout slots (verified on-screen text).
+	var load_hint: Label = Label.new()
+	load_hint.text = "Select a loadout slot to equip or swap out tools"
+	load_hint.add_theme_font_size_override("font_size", 14)
+	load_hint.add_theme_color_override("font_color", ThemeScript.TEAL_MUTED)
+	if sans != null:
+		load_hint.add_theme_font_override("font", sans)
+	left.add_child(load_hint)
 	var card: PanelContainer = PanelContainer.new()
 	card.add_theme_stylebox_override("panel", ThemeScript.teal_card_style(1, 5, ThemeScript.TEAL_PANEL_BG, 12))
 	ThemeScript.add_teal_filigree(card, 3.0, 14.0)
@@ -344,26 +462,39 @@ func _build_right_panel() -> PanelContainer:
 	head_hdr.text = "HEAD"
 	head_hdr.add_theme_color_override("font_color", ThemeScript.TEAL_ACCENT)
 	right.add_child(head_hdr)
-	_head_opt = OptionButton.new()
-	ThemeScript.style_teal_option(_head_opt)
-	_head_opt.item_selected.connect(_on_head_selected)
-	right.add_child(_head_opt)
+	# KF03/KF04 cite: framed thumbnail portrait card for the equipped Head.
+	# No thumbnail bytes in scope (standing HARD_LIMIT 5.9): name + DT
+	# level-tag card; click cycles outfits. Replaces the OptionButton dropdown.
+	_head_card = Button.new()
+	_head_card.custom_minimum_size = Vector2(0, 72)
+	_head_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ThemeScript.style_teal_tab(_head_card, true)
+	_head_card.pressed.connect(_on_head_card_pressed)
+	right.add_child(_head_card)
 	var body_hdr: Label = Label.new()
 	body_hdr.text = "BODY"
 	body_hdr.add_theme_color_override("font_color", ThemeScript.TEAL_ACCENT)
 	right.add_child(body_hdr)
-	_body_opt = OptionButton.new()
-	ThemeScript.style_teal_option(_body_opt)
-	_body_opt.item_selected.connect(_on_body_selected)
-	right.add_child(_body_opt)
+	# KF03/KF04 cite: framed thumbnail portrait card for the equipped Body
+	# (standing HARD_LIMIT 5.9, as HEAD).
+	_body_card = Button.new()
+	_body_card.custom_minimum_size = Vector2(0, 72)
+	_body_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ThemeScript.style_teal_tab(_body_card, true)
+	_body_card.pressed.connect(_on_body_card_pressed)
+	right.add_child(_body_card)
 	var card_hdr: Label = Label.new()
 	card_hdr.text = "CALLING CARD"
 	card_hdr.add_theme_color_override("font_color", ThemeScript.TEAL_ACCENT)
 	right.add_child(card_hdr)
-	_card_opt = OptionButton.new()
-	ThemeScript.style_teal_option(_card_opt)
-	_card_opt.item_selected.connect(_on_card_selected)
-	right.add_child(_card_opt)
+	# KF03/KF04 cite: framed thumbnail portrait card for the Calling Card
+	# (standing HARD_LIMIT 5.9, as HEAD).
+	_card_card = Button.new()
+	_card_card.custom_minimum_size = Vector2(0, 72)
+	_card_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ThemeScript.style_teal_tab(_card_card, true)
+	_card_card.pressed.connect(_on_card_card_pressed)
+	right.add_child(_card_card)
 	_desc_lbl = Label.new()
 	_desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_desc_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -390,6 +521,8 @@ func _panel_style(bg: Color) -> StyleBoxFlat:
 	return ThemeScript.teal_panel_style(1, 5, bg, 12)
 
 
+## KF03/KF04 cite: warm practical-lit turntable staging. Exact rig numbers are
+## port-authored (standing HARD_LIMIT 5.2: no UMG/light values in cooked JSON).
 func _setup_preview_world(sv: SubViewport) -> void:
 	var env: Environment = Environment.new()
 	env.background_mode = Environment.BG_COLOR
@@ -437,6 +570,8 @@ func _setup_preview_world(sv: SubViewport) -> void:
 	cam.look_at_from_position(cam.position, Vector3(0.0, 0.95, 0.0))
 
 
+## KF03/KF04 cite: tool tooltip-card staging (3D model + name + desc).
+## Port-authored numbers (standing HARD_LIMIT 5.2).
 func _setup_tool_world(sv: SubViewport) -> void:
 	var env: Environment = Environment.new()
 	env.background_mode = Environment.BG_COLOR
@@ -540,6 +675,19 @@ func _refresh_tool_ui() -> void:
 		var b: Button = _tool_btns[i]
 		b.button_pressed = (i == _active_tool)
 		ThemeScript.style_teal_tab(b, i == _active_tool)
+	for i: int in range(_cell_btns.size()):
+		var cb: Button = _cell_btns[i]
+		cb.button_pressed = (i == _active_tool)
+		ThemeScript.style_teal_tab(cb, i == _active_tool)
+	# KF03 (slots, grey) / KF04 (expanded row, pink) lock badges from SaveSystem
+	# unlock state; no invented gating (unlock keys pre-date this change).
+	for i: int in range(TOOLS.size()):
+		var entry: Dictionary = TOOLS[i] as Dictionary
+		var locked: bool = not _is_tool_unlocked(str(entry.get("id", "")))
+		if i < _slot_lock_lbls.size():
+			_slot_lock_lbls[i].visible = locked
+		if i < _cell_lock_lbls.size():
+			_cell_lock_lbls[i].visible = locked
 	if _tool_holder != null and is_instance_valid(_tool_holder):
 		for c: Node in _tool_holder.get_children():
 			_tool_holder.remove_child(c)
@@ -571,54 +719,80 @@ func _is_tool_unlocked(tool_id: String) -> bool:
 	return false
 
 
-func _on_body_selected(idx: int) -> void:
-	if idx >= 0 and idx < _body_keys.size():
-		if AudioManager != null and AudioManager.has_method("play_ui"):
-			AudioManager.play_ui("click")
-		_body = _body_keys[idx]
-		_update_desc()
-		_rebuild_figure()
+func _on_body_card_pressed() -> void:
+	_cycle_outfit("Body")
 
 
-func _on_head_selected(idx: int) -> void:
-	if idx >= 0 and idx < _head_keys.size():
-		if AudioManager != null and AudioManager.has_method("play_ui"):
-			AudioManager.play_ui("click")
-		_head = _head_keys[idx]
-		_update_desc()
-		_rebuild_figure()
+func _on_head_card_pressed() -> void:
+	_cycle_outfit("Head")
 
 
-func _on_card_selected(idx: int) -> void:
-	if idx >= 0 and idx < _card_keys.size():
-		if AudioManager != null and AudioManager.has_method("play_ui"):
-			AudioManager.play_ui("click")
-		_card = _card_keys[idx]
-		_update_desc()
-		_rebuild_figure()
+func _on_card_card_pressed() -> void:
+	_cycle_outfit("CallingCard")
+
+
+## KF03/KF04 cite: a card click steps to the next DT outfit in that slot
+## (54-row table: Spider 20 Head / 3 Body / 5 CallingCard, Chameleon
+## 18 Head / 3 Body / 5 CallingCard). Replaces the OptionButton dropdowns.
+func _cycle_outfit(slot: String) -> void:
+	var keys: Array[String] = _head_keys
+	var current: String = _head
+	if slot == "Body":
+		keys = _body_keys
+		current = _body
+	elif slot == "CallingCard":
+		keys = _card_keys
+		current = _card
+	if keys.is_empty():
+		return
+	var next: int = (keys.find(current) + 1) % keys.size()
+	if slot == "Body":
+		_body = keys[next]
+	elif slot == "CallingCard":
+		_card = keys[next]
+	else:
+		_head = keys[next]
+	if AudioManager != null and AudioManager.has_method("play_ui"):
+		AudioManager.play_ui("click")
+	_update_desc()
+	_update_outfit_cards()
+	_rebuild_figure()
+
+
+## DT cite: "Unlocked at Level N" parsed from each row's LocalizedString
+## description; base outfits carry no level tag.
+func _outfit_level_tag(key: String) -> String:
+	var desc: String = _display_desc(key)
+	var re: RegEx = RegEx.new()
+	if re.compile("Level (\\d+)") == OK:
+		var m: RegExMatch = re.search(desc)
+		if m != null:
+			return " · Lv " + m.get_string(1)
+	return ""
+
+
+## KF03/KF04 cite: one framed thumbnail portrait card per Head / Body /
+## CallingCard slot. No thumbnail bytes in scope (standing HARD_LIMIT 5.9):
+## name + DT level-tag card until IconSprite textures resolve.
+func _update_outfit_cards() -> void:
+	if _head_card != null:
+		_head_card.text = _display_name(_head) + _outfit_level_tag(_head)
+	if _body_card != null:
+		_body_card.text = _display_name(_body) + _outfit_level_tag(_body)
+	if _card_card != null:
+		_card_card.text = _display_name(_card) + _outfit_level_tag(_card)
 
 
 func _refresh_thief_ui() -> void:
-	var label_idx: int = THIEF_IDS.find(_thief_id)
-	if label_idx < 0:
-		label_idx = 0
-	if _thief_name_lbl != null:
-		_thief_name_lbl.text = THIEF_LABELS[label_idx].to_upper()
-	if _thief_lock_lbl != null:
-		if _thief_id == "chameleon":
-			_thief_lock_lbl.text = "Q / E to switch thief - Chameleon contracts pay a disguise bonus"
-		else:
-			_thief_lock_lbl.text = "Q / E to switch thief"
 	_collect_slots()
-	_fill_option(_body_opt, _body_keys, _body)
-	_fill_option(_head_opt, _head_keys, _head)
-	_fill_option(_card_opt, _card_keys, _card)
 	if not _body_keys.is_empty() and not _body_keys.has(_body):
 		_body = _body_keys[0]
 	if not _head_keys.is_empty() and not _head_keys.has(_head):
 		_head = _head_keys[0]
 	if not _card_keys.is_empty() and not _card_keys.has(_card):
 		_card = _card_keys[0]
+	_refresh_portraits()
+	_update_outfit_cards()
 	_update_desc()
 	_rebuild_figure()
 	_refresh_tool_ui()
@@ -794,20 +968,6 @@ func _resolve_card_path(outfit_key: String, thief: String) -> String:
 	if ResourceLoader.exists(base):
 		return base
 	return ""
-
-
-func _fill_option(opt: OptionButton, keys: Array[String], current: String) -> void:
-	if opt == null:
-		return
-	opt.clear()
-	var sel: int = 0
-	for i: int in range(keys.size()):
-		var label_text: String = _display_name(keys[i])
-		opt.add_item(label_text, i)
-		if keys[i] == current:
-			sel = i
-	if opt.item_count > 0:
-		opt.select(sel)
 
 
 func _update_desc() -> void:

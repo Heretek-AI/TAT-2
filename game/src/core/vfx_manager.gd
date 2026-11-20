@@ -24,6 +24,8 @@ static func spawn_smoke_cloud(parent: Node, pos: Vector3, half_extents: Vector3 
 ## `duration` is the visible flight time; the Pickpocket Fairy caller passes
 ## dist / FAIRY_SPEED (4.5 m/s). Kept 0.45 s by default for older callers.
 static func spawn_fairy_orb(parent: Node, from_pos: Vector3, to_pos: Vector3, duration: float = 0.45) -> void:
+	const FAIRY_ORB_ENERGY_CAP := 0.65
+	const ORBLIGHT_ENERGY_CAP := 0.65
 	if parent == null:
 		return
 	var root: Node3D = Node3D.new()
@@ -42,7 +44,9 @@ static func spawn_fairy_orb(parent: Node, from_pos: Vector3, to_pos: Vector3, du
 	orb_mat.albedo_color = Color(0.55, 0.95, 1.0, 1.0)
 	orb_mat.emission_enabled = true
 	orb_mat.emission = Color(0.4, 0.9, 1.0, 1.0)
-	orb_mat.emission_energy_multiplier = 2.0
+	orb_mat.emission_energy_multiplier = FAIRY_ORB_ENERGY_CAP
+	assert(orb_mat.emission_energy_multiplier <= FAIRY_ORB_ENERGY_CAP + 0.001, "FairyOrbCap: fairy orb energy exceeds cap")
+	print("FairyOrbCap: fairy orb emission_energy=", orb_mat.emission_energy_multiplier, " cap=", FAIRY_ORB_ENERGY_CAP, " (no UE orb authoring; mission glow 0.65)")
 	orb_mesh.material = orb_mat
 
 	var orb: MeshInstance3D = MeshInstance3D.new()
@@ -54,7 +58,9 @@ static func spawn_fairy_orb(parent: Node, from_pos: Vector3, to_pos: Vector3, du
 	glow.name = "OrbLight"
 	glow.light_color = Color(0.4, 0.95, 1.0)
 	glow.omni_range = 4.0
-	glow.light_energy = 1.2
+	glow.light_energy = ORBLIGHT_ENERGY_CAP
+	assert(glow.light_energy <= ORBLIGHT_ENERGY_CAP + 0.001, "OrbLightCap: orb light energy exceeds cap")
+	print("OrbLightCap: orb light energy=", glow.light_energy, " cap=", ORBLIGHT_ENERGY_CAP, " (no UE orb light; mission glow 0.65)")
 	root.add_child(glow)
 
 	var tree: SceneTree = parent.get_tree()
@@ -113,6 +119,8 @@ static func spawn_grapple_beam(parent: Node, from_pos: Vector3, to_pos: Vector3,
 
 
 static func spawn_sap_burst(parent: Node, pos: Vector3) -> void:
+	const SAP_SPARK_ENERGY_CAP := 0.65
+	const SAP_FLASH_ENERGY_CAP := 0.65
 	if parent == null:
 		return
 	var root: Node3D = Node3D.new()
@@ -131,7 +139,9 @@ static func spawn_sap_burst(parent: Node, pos: Vector3) -> void:
 	spark_mat.albedo_color = Color(0.35, 1.0, 0.75, 1.0)
 	spark_mat.emission_enabled = true
 	spark_mat.emission = Color(0.3, 1.0, 0.7, 1.0)
-	spark_mat.emission_energy_multiplier = 3.0
+	spark_mat.emission_energy_multiplier = SAP_SPARK_ENERGY_CAP
+	assert(spark_mat.emission_energy_multiplier <= SAP_SPARK_ENERGY_CAP + 0.001, "SapSparkCap: sap spark energy exceeds cap")
+	print("SapSparkCap: sap spark emission_energy=", spark_mat.emission_energy_multiplier, " cap=", SAP_SPARK_ENERGY_CAP, " (UE MI_SlimeBomb EmissiveStrength unrecovered; mission glow 0.65)")
 	spark_mesh.material = spark_mat
 
 	var sparks: CPUParticles3D = CPUParticles3D.new()
@@ -155,7 +165,9 @@ static func spawn_sap_burst(parent: Node, pos: Vector3) -> void:
 	flash.name = "SapFlash"
 	flash.light_color = Color(0.4, 1.0, 0.75)
 	flash.omni_range = 5.0
-	flash.light_energy = 2.0
+	flash.light_energy = SAP_FLASH_ENERGY_CAP
+	assert(flash.light_energy <= SAP_FLASH_ENERGY_CAP + 0.001, "SapFlashCap: sap flash energy exceeds cap")
+	print("SapFlashCap: sap flash energy=", flash.light_energy, " cap=", SAP_FLASH_ENERGY_CAP, " (no UE flash light; mission glow 0.65)")
 	root.add_child(flash)
 
 	var tree: SceneTree = parent.get_tree()
@@ -611,6 +623,7 @@ static func set_prop_highlight(target: Node, enabled: bool) -> void:
 ##   PlumeBillow - slower, larger puffs that expand horizontally over ~5 s
 ##   PlumeHaze   - long-lived low drift layer that fades across the 25 s ttl
 static func spawn_smoke_plume(parent: Node, pos: Vector3, half_extents: Vector3 = Vector3(2.5, 2.0, 2.5), ttl: float = 25.0) -> Node3D:
+	const IGNITION_FLASH_ENERGY_CAP := 0.65
 	if parent == null or not parent.is_inside_tree():
 		return null
 	var root: Node3D = Node3D.new()
@@ -622,7 +635,9 @@ static func spawn_smoke_plume(parent: Node, pos: Vector3, half_extents: Vector3 
 	flash.name = "IgnitionFlash"
 	flash.light_color = Color(1.0, 0.75, 0.45)
 	flash.omni_range = 9.0
-	flash.light_energy = 3.0
+	flash.light_energy = IGNITION_FLASH_ENERGY_CAP
+	assert(flash.light_energy <= IGNITION_FLASH_ENERGY_CAP + 0.001, "SmokeFlashCap: ignition flash energy exceeds cap")
+	print("SmokeFlashCap: ignition flash energy=", flash.light_energy, " cap=", IGNITION_FLASH_ENERGY_CAP, " (no UE flash light; mission glow 0.65)")
 	root.add_child(flash)
 
 	var tint: Color = Color(0.86, 0.88, 0.91, 1.0)

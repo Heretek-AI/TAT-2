@@ -1,0 +1,159 @@
+Godot Engine v4.7.2.stable.flathub.ed1daf0bf - https://godotengine.org
+
+PASS: [T1-01-A] moon diameter mc=8.2718 (exp 8.2718), df=11.7329 (exp 11.7329), visible=true
+PASS: [T1-01-B] horizon=(0.002, 0.0026, 0.003, 1.0) zenith=(0.0, 0.0, 0.0, 1.0)
+PASS: [T1-01-C] fog_sky_affect=0.0 bg=2 moon_color=(0.5137, 0.5216, 1.0, 1.0) moon_visible=1.0
+PASS: [T1-01-D] tat_sky.gdshader fbm_clouds=true moon_halo=true
+PASS: [T1-01-E] sky_radiance_decoupled=true indigo_fog=true fog_col=(0.0011, 0.0016, 0.004, 1.0)
+PASS: [T1-02-B] gain_shadows applied: adj_enabled=true bright=1.200 ssil=true
+TAT-2 environment: bg=2 ambient_src=2 ambient_energy=1.0 ambient_color=(0.851, 0.9922, 1.0, 1.0) sky=true fog=true fog_density=0.00300000002608
+TAT-2 Loaded thieves_den: meshes=283 lights=8
+TAT-2 post_process 'PostProcessVolume_1' carries only Lumen/UE-only settings (LumenSkylightLeaking, LumenFullSkylightLeakingDistance, LocalExposureHighlightContrastScale, LocalExposureShadowContrastScale, LocalExposureMiddleGreyBias); nothing Godot-mappable, environment unchanged
+TAT-2 Perf: chunks=177 collision_bodies=31 collision_shapes=207 occluders=1
+TAT-2 player spawn: source=authored pos=(5.6692, 42.1592, 270.6863) yaw=3.05529569165687 headroom_clear=true forward_clear=true
+TAT-2 spawners: throwable=0 ammo=0 health=0 civilian=0
+TAT-2 swinging doors: 1
+PASS: [T1-02-C] den_hand_fills=1.90 red=false probes=1 dark_amb=true
+TAT-2 environment: bg=2 ambient_src=2 ambient_energy=1.0 ambient_color=(0.8745, 0.9137, 1.0, 1.0) sky=true fog=true fog_density=0.0006000000285
+TAT-2 Loaded guildhall: meshes=63219 lights=48
+TAT-2 Perf: chunks=5735 collision_bodies=221 collision_shapes=24512 occluders=768
+TAT-2 player spawn: source=authored pos=(127.2747, 26.4694, -5.3296) yaw=-3.05432154567525 headroom_clear=true forward_clear=true
+TAT-2 loot containers: 107
+TAT-2 spawners: throwable=133 ammo=45 health=5 civilian=3
+TAT-2 swinging doors: 155
+PASS: [T1-02-A] guildhall env.ssil_enabled=true
+PASS: [T1-02-D] shadow_lift ssil=true ssil_int=1.25 amb=1.000 adj=true
+PASS: [T1-02-E] safe_room_spot dist=0.19 energy=0.333 range=9.00
+PASS: [T1-03-A] cam eye_ok=true fov=48.03 pitch=13.67
+PASS: [T1-03-B] startscreen dirs=1 total_lights=24 env=true
+PASS: [T1-03-C] volumetric_fog_enabled=true mist_node=false
+PASS: [T1-03-D] streetlamp emissive=true nodes=1
+PASS: [T1-03-E] left_corner_trim_fix code=true mat=false
+PASS: [T1-04-A] MI_Neon & MI_Neon_MacNeish shader vectors & cache identity
+PASS: [T1-04-B] tat_hdr_emissive core_desat/fresnel=true flicker=true
+PASS: [T1-04-C] desktop ssr_enabled on MainMenu=true and Mission/Weather=true
+PASS: [T1-04-D] tat_landscape.gdshader wet puddle roughness ~0.04 (found_0.04=true)
+PASS: [T1-04-E] Guildhall dual-weightmap slot 4 & single-weightmap negative control
+PASS: [T1-05-A] MissionLobby sublevels=true no_fake_roof=true meshes=411
+PASS: [T1-05-B] MissionPrep stage camera FOV=20.00 (expected 20.0 hFOV, KEEP_WIDTH=true)
+PASS: [T1-05-C] midnight_clear_mission_lobby=true stage_bg_sky=true
+PASS: [T1-05-D] ThiefNisha PBR=true idle_playing=true
+PASS: [T1-05-E] 11 CDT_Missions rows + art (gh=true om=true)
+PASS: [T1-06-A] CandleFlame uses tapered quad/non-sphere mesh (true)
+PASS: [T1-06-B] tat_glass.gdshader bound & depth_draw updated (true)
+PASS: [T1-06-C] soft godray falloff shader/gradient (true)
+PASS: [T1-06-D] tree vis_range_end=0.0 backlight=true
+PASS: [T1-06-E] yellow outline=true restored=true
+ERROR: Parameter "material" is null.
+   at: material_get_instance_shader_parameters (servers/rendering/dummy/storage/material_storage.cpp:264)
+PASS: [T1-07-A] 1P Zipwire real GLB loaded from Art/Gameplay/Gear (true)
+PASS: [T1-07-B] 1P SmokeBomb=true Slithersap=true real GLBs
+PASS: [T1-07-C] 1P BlackJack=true Fairy=true VistaraDiamond=true
+PASS: [T1-07-D] 1P tool GLB binds authored PBR texture/material (true)
+PASS: [T1-07-E] fp_tool_root child count after switches=1 (expected 1)
+PASS: [T1-08-A] 1P arms SK_ThiefNisha__BodyUpper PBR bound (true)
+PASS: [T1-08-B] 1P clips loco=true tool_clips=true count=4
+PASS: [T1-08-C] disguise_anim=true zipwire_anim=true
+PASS: [T1-08-D] stationary idle holds pose without reset_bone_poses() (reset_found=false)
+PASS: [T1-08-E] 1P viewmodel SubViewport/layer isolation (false)
+ERROR: Parameter "material" is null.
+   at: material_get_instance_shader_parameters (servers/rendering/dummy/storage/material_storage.cpp:264)
+PASS: [T1-09-A] equip [1]..[4] without firing (has_api=true eq_ok=true)
+PASS: [T1-09-B] get_tool_slots() returns structured Array[Dictionary] with 1 active
+PASS: [T1-09-C] LMB fires equipped Smoke Bomb & consumes charge 1->0 (true)
+PASS: [T1-09-D] Vistara Diamond [4] + LMB toggles is_thief_vision_active() (true)
+PASS: [T1-09-E] get_active_reticle_state() returns required contract keys
+ERROR: Parameter "material" is null.
+   at: material_get_instance_shader_parameters (servers/rendering/dummy/storage/material_storage.cpp:264)
+PASS: [T1-10-A] Zipwire aim validation: wall=true sky_rejected=true
+PASS: [T1-10-B] Persistent Zipwire cable during grapple (true)
+PASS: [T1-10-C] [RMB] crank_active & crank_progress > 0 (true)
+PASS: [T1-10-D] auto-mantle logic=true y=2.00 (expected >= 1.8)
+PASS: [T1-10-E] wall_climb logic=true climb_y=2.07
+PASS: [T1-11-D] Smoke Bomb trajectory arc preview active (true)
+PASS: [T1-11-A] SmokeBomb RigidBody3D speed=29.95 m/s (exp ~30.0)
+PASS: [T1-11-B] SmokeBomb detonated into smoke AABB (1)
+PASS: [T1-11-C] Smoke box blocks guard LOS (true)
+PASS: [T1-11-E] Slithersap immediate raycast puddle (0->1), zero RigidBody
+PASS: [T1-12-A] disguise base=1.0 sprint=41.0 prox=6.0
+PASS: [T1-12-B] Status.Lockpicking 5.0/s + 1.0/s timer (integ=94.00)
+PASS: [T1-12-C] GuardViewCone 10.0/s decay hook (integ=90.00)
+PASS: [T1-12-D] DamageTaken 40/hit: hit1=10.0(active=true) hit2=0.0(active=false)
+PASS: [T1-12-E] DISGUISE_ACTIVE_TIME=60.0 expired=true
+PASS: [T1-13-A] StealthBall centered=true light_reactive=true
+PASS: [T1-13-B] Bilateral SoundWaves reacts to NoiseBus (true)
+PASS: [T1-13-C] HealthBar top-left=true T_healthBar_straight=true
+PASS: [T1-13-D] spider=[25, 25, 25, 25] chameleon=[30, 30, 20, 20] hud_segments=0
+PASS: [T1-13-E] hp_fill scaled=0.75 splatter=true
+PASS: [T1-14-A] bottom-left hotbar=true wide_icons=true
+PASS: [T1-14-B] HUD displays infinity glyph for -1 slots (true)
+PASS: [T1-14-C] HUD MAP/PING/LMB/RMB hints wired
+PASS: [T1-14-D] Portrait badge & slim T_compass_lines (true)
+PASS: [T1-14-E] Reticles, crank ring, GuardPip & OffscreenDetectionMeter wired (true)
+PASS: [T1-15-A] Lockpicking circular/arc UI & T_Lockpicking_* textures (true)
+PASS: [T1-15-B] DA_LockpickMinigameVariations vars=24 tracks=48 bounds=true
+PASS: [T1-15-C] [TAB] map_toggle action=true overlay=true
+PASS: [T1-15-D] [MMB] ping_menu action=true radial=true
+PASS: [T1-15-E] Thief Vision has zero flat cyan wash (overlay_vis=false alpha=0.00)
+PASS: [T1-16-A] 5 shell UIs teal ArtNouveau cohesion: settings_ui.gd=true, mission_prep_ui.gd=true, wardrobe_ui.gd=true, contract_table_ui.gd=true, ledger_ui.gd=true
+PASS: [T1-16-B] HUD Mission Start Letter (contract_intro + [SPACE]) wired (true)
+PASS: [T1-16-C] LoadingScreen art=true spinner=true bar=50.0
+PASS: [T1-16-D] Settings persisted into ThiefCharacter (true)
+PASS: [T1-16-E] MissionPrepUI substituted {MatchDurationInMinutes} (text_len=237)
+TAT-2 environment: bg=2 ambient_src=2 ambient_energy=1.0 ambient_color=(0.851, 0.9922, 1.0, 1.0) sky=true fog=true fog_density=0.00300000002608
+TAT-2 Loaded thieves_den: meshes=283 lights=8
+TAT-2 post_process 'PostProcessVolume_1' carries only Lumen/UE-only settings (LumenSkylightLeaking, LumenFullSkylightLeakingDistance, LocalExposureHighlightContrastScale, LocalExposureShadowContrastScale, LocalExposureMiddleGreyBias); nothing Godot-mappable, environment unchanged
+TAT-2 Perf: chunks=177 collision_bodies=31 collision_shapes=207 occluders=1
+TAT-2 player spawn: source=authored pos=(5.6692, 42.1592, 270.6863) yaw=3.05529569165687 headroom_clear=true forward_clear=true
+TAT-2 spawners: throwable=0 ammo=0 health=0 civilian=0
+TAT-2 swinging doors: 1
+PASS: [T1-17-A] Den giant Label3D billboards=0 (expected 0)
+PASS: [T1-17-B] Den diegetic MapTableCard=true [H]/[R] cycling=true
+PASS: [T1-17-C] Den active miniature token highlight (seated=true)
+PASS: [T1-17-D] Map Table [F] opens MissionPrepUI modal (true)
+PASS: [T1-17-E] Thieves' Den [F] PONDER telescope interactable (true)
+PASS: [T1-18-A] GameState.mission_objectives/Set [0/3] support (true)
+PASS: [T1-18-B] Cleanout Heist loot_goal threshold support (true)
+PASS: [T1-18-C] MissionPrepUI selected mode propagates to mission_controller
+TAT-2 environment: bg=2 ambient_src=2 ambient_energy=1.0 ambient_color=(0.8745, 0.9137, 1.0, 1.0) sky=true fog=true fog_density=0.0006000000285
+TAT-2 Loaded guildhall: meshes=63219 lights=48
+TAT-2 Perf: chunks=5735 collision_bodies=221 collision_shapes=24512 occluders=768
+TAT-2 player spawn: source=authored pos=(127.2747, 26.4694, -5.3296) yaw=-3.05432154567525 headroom_clear=true forward_clear=true
+TAT-2 loot containers: 107
+TAT-2 spawners: throwable=133 ammo=45 health=5 civilian=3
+TAT-2 swinging doors: 155
+PASS: [T1-18-D] Contract 2 populates GameState.contract_intro (len=257)
+PASS: [T1-18-E] Escape multipliers ghost=1.25 shadow=1.10 loud=1.00 escapes=1
+PASS: [T1-19-A] LootContainer & SwingingDoor expose locked + lock_level (true)
+PASS: [T1-19-B] Locked containers/doors wire player.set_lockpicking_active (true)
+PASS: [T1-19-C] Locked safe unlocks & spawns MajorLoot (true, loot 0->1)
+PASS: [T1-19-D] High-security SwingingDoor lockpicking wired (true)
+PASS: [T1-19-E] CT_LockpickDamage 5/10/20/40 across lock levels 1..4 (true)
+PASS: [T1-20-A] ClubLantern guard has warm OmniLight3D & SK_Lantern (true)
+PASS: [T1-20-B] Guard lantern affects LightProbe visibility=0.543 (> 0.10)
+PASS: [T1-20-C] guard.steal_carried_item() yields carried item once (true)
+PASS: [T1-20-D] guard.get_alert_state() returns {state, suspicion, world_pos}
+PASS: [T1-20-E] HUD consumes guard.get_alert_state() for pips/offscreen arcs (true)
+PASS: [T1-21-A] OldManor_P landscapes=128 heightmaps=101 weightmaps=54 missing=0
+TAT-2 environment: bg=2 ambient_src=2 ambient_energy=0.03999999910593 ambient_color=(0.6157, 0.6118, 0.6, 1.0) sky=true fog=true fog_density=0.00400000018999
+TAT-2 Loaded old_manor: meshes=23194 lights=48
+TAT-2 Perf: chunks=4034 collision_bodies=451 collision_shapes=18029 occluders=768
+TAT-2 player spawn: source=authored pos=(5.9512, 9.5283, 126.025) yaw=1.5707963267949 headroom_clear=true forward_clear=true
+TAT-2 loot containers: 110
+TAT-2 spawners: throwable=385 ammo=97 health=7 civilian=2
+TAT-2 swinging doors: 120
+PASS: [T1-21-D] OldManor spawn headroom=true forward=true
+PASS: [T1-21-B] OldManor_P player walk & collision stable (true)
+PASS: [T1-21-C] OldManor_P guard collision stable (true, guards=6)
+PASS: [T1-21-E] OldManor_P dual-weightmap components=7 shader=true
+PASS: [T1-22-A] run_tests.gd preserves 38 suites & SUMMARY: fails= contract
+PASS: [T1-22-B] manifest_audit.py & anims_manifest.json intact
+PASS: [T1-22-C] Standalone E2E suite files present under res://tests/e2e/
+PASS: [T1-22-D] build/qa/capture_e2e_parity.{sh,gd} with SHADER/SCRIPT ERROR=0 gate (true)
+PASS: [T1-22-E] Steam refs=56 (>=56) & capture_e2e_parity.gd present=true
+SUMMARY: fails=0 passed=110 total=110
+WARNING: 16 ObjectDB instances were leaked at exit (run with `--verbose` for details).
+   at: cleanup (core/object/object.cpp:2536)
+ERROR: 5 resources still in use at exit (run with --verbose for details).
+   at: clear (core/io/resource.cpp:822)
+ERROR: 2 RID allocations of type 'N17RendererSceneCull8InstanceE' were leaked at exit.

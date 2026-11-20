@@ -29,7 +29,10 @@ public sealed class Exporter
 
     IEnumerable<GameFile> Packages(Func<string, bool>? pathPred = null) =>
         _p.Files.Values.Where(f => (f.Extension == "uasset" || f.Extension == "umap")
-                                   && f.Path.StartsWith("TAT/", StringComparison.OrdinalIgnoreCase)
+                                   && (f.Path.StartsWith("TAT/", StringComparison.OrdinalIgnoreCase)
+                                       // task-1 (round-2 mesh repair): Engine/BasicShapes primitives are
+                                       // referenced by Den/Guildhall levels but live outside TAT/.
+                                       || f.Path.StartsWith("Engine/Content/BasicShapes/", StringComparison.OrdinalIgnoreCase))
                                    && (_o.Filter == null || _o.Filter.IsMatch(f.Path))
                                    && (pathPred == null || pathPred(f.Path)))
                        .OrderBy(f => f.Path);
@@ -197,7 +200,9 @@ public sealed class Exporter
         var outDir = Path.Combine(_o.Out, "assets");
         Directory.CreateDirectory(outDir);
         var session = new ExportSession { MaxDegreeOfParallelism = _o.Threads };
-        var files = Packages(p => p.EndsWith(".uasset") && (_o.Filter != null || Path.GetFileName(p).StartsWith("SM_") || Path.GetFileName(p).StartsWith("SK_") || Path.GetFileName(p).StartsWith("SKM_") || Path.GetFileName(p).StartsWith("GB_") || p.Contains("/Meshes/") || p.Contains("/Mesh/") || p.Contains("/Test/LevelKits/") || p.Contains("/GasLamps/") || p.Contains("/Furniture/Tables/") || p.Contains("/Levers/") || p.Contains("/GeneratedMeshes/") || p.Contains("/Developers/"))).ToList();
+        // task-1 (round-2 mesh repair): also queue VFX_*/Coin_* meshes and Engine
+        // BasicShapes primitives dropped by the SM_/SK_/SKM_/GB_ allowlist.
+        var files = Packages(p => p.EndsWith(".uasset") && (_o.Filter != null || Path.GetFileName(p).StartsWith("SM_") || Path.GetFileName(p).StartsWith("SK_") || Path.GetFileName(p).StartsWith("SKM_") || Path.GetFileName(p).StartsWith("GB_") || Path.GetFileName(p).StartsWith("VFX_") || Path.GetFileName(p).StartsWith("Coin_") || p.Contains("/Meshes/") || p.Contains("/Mesh/") || p.Contains("/Test/LevelKits/") || p.Contains("/GasLamps/") || p.Contains("/Furniture/Tables/") || p.Contains("/Levers/") || p.Contains("/GeneratedMeshes/") || p.Contains("/BasicShapes/") || p.Contains("/Developers/"))).ToList();
         Console.Error.WriteLine($"  queuing {files.Count} mesh packages...");
         foreach (var f in files)
         {

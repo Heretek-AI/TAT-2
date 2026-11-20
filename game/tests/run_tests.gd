@@ -2673,7 +2673,12 @@ func _initialize() -> void:
 	var p2_tok_dbg: String = ""
 	if p2_tok_om != null and p2_tok_gh != null:
 		var y_ok: bool = absf(p2_tok_om.position.y - 41.1337) < 0.1 and absf(p2_tok_gh.position.y - 41.1337) < 0.1
-		var s_ok: bool = absf(p2_tok_om.scale.x - 0.24) < 0.001 and absf(p2_tok_om.scale.y - 0.24) < 0.001 and absf(p2_tok_om.scale.z - 0.24) < 0.001 and absf(p2_tok_gh.scale.x - 0.24) < 0.001 and absf(p2_tok_gh.scale.y - 0.24) < 0.001 and absf(p2_tok_gh.scale.z - 0.24) < 0.001
+		# T10 UE-relative framing: GH 0.24 anchor, OM 0.24*45.56192/27.39531
+		# (SM_MapBuilding_* ExtendedBounds); selected token rests at base*1.15,
+		# so any scale in [base, base*1.15] is a legal animation state.
+		var om_b: float = float(p2_tok_om.get_meta("minis_base", 0.24))
+		var gh_b: float = float(p2_tok_gh.get_meta("minis_base", 0.24))
+		var s_ok: bool = absf(gh_b - 0.24) < 0.001 and absf(om_b / maxf(gh_b, 0.0001) - 45.56192 / 27.39531) < 0.01 and p2_tok_om.scale.x >= om_b - 0.01 and p2_tok_om.scale.x <= om_b * 1.15 + 0.01 and p2_tok_gh.scale.x >= gh_b - 0.01 and p2_tok_gh.scale.x <= gh_b * 1.15 + 0.01
 		var om_mat: StandardMaterial3D = p2_tok_om.get_surface_override_material(0) as StandardMaterial3D
 		var gh_mat: StandardMaterial3D = p2_tok_gh.get_surface_override_material(0) as StandardMaterial3D
 		p2_tok_ok = y_ok and s_ok and om_mat != null and om_mat.albedo_texture != null and gh_mat != null and gh_mat.albedo_texture != null

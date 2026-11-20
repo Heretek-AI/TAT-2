@@ -82,6 +82,14 @@ const TINY_PROP_LEN: float = 1.2
 const SMALL_PROP_LEN: float = 4.0
 const OCCLUDER_MIN_LEN: float = 6.0
 const OCCLUDER_MAX_LEN: float = 48.0
+## F9 wall-flicker guard: occluder candidates thinner than this never qualify.
+## Measured across all 143 Guildhall occluder-candidate GLBs (POSITION
+## accessor min/max): thin skins (grates 0.08-0.16 m, plates 0.11-0.13 m,
+## signs 0.12 m) sit below 0.25 m, while the SM_Urban_Ext_Wall_4x6 workhorse
+## (11879 instances) measures 0.30 m and foundations 0.39 m, so 0.25 m keeps
+## every load-bearing occluder class and only drops degenerate skins whose
+## faces sit coplanar with the masonry behind them.
+const OCCLUDER_MIN_THICK_M: float = 0.25
 const MAX_OCCLUDERS: int = 768
 const MAX_SHAPES_PER_BODY: int = 384
 const MAX_TOTAL_SHAPES: int = 32000
@@ -153,6 +161,16 @@ const CLUTTER_TOKENS: Array[String] = [
 ## the Guildhall safe-room buildings) and must collide. Only the skybox shell
 ## is horizon-only.
 const DECORATIVE_SUBLEVEL_TOKENS: Array[String] = ["skyboxgeo"]
+## F9 wall-flicker guard: structural masonry tokens whose instances never
+## take a distance fade. Small Guildhall wall/building segments (aabb < 4 m)
+## used to take the 95 m VISIBILITY_RANGE_FADE_SELF dither fade, whose
+## screen-door pattern shimmers on coplanar masonry at the fade boundary.
+## Clutter/foliage/loose props keep their fades (the Suite 11 culled-node
+## budget lives there); e2e-cleared foliage paths (sm_leaf, sm_tree_*)
+## match none of these tokens.
+const STRUCTURAL_NO_FADE_TOKENS: Array[String] = [
+	"wall", "building", "block", "pillar", "column",
+]
 ## Occlusion occluders are opt-in: only obviously solid structural piece names
 ## (never see-through pieces like windows, doors, rails, frames or light fixtures).
 const OCCLUDER_INCLUDE_TOKENS: Array[String] = [
@@ -793,11 +811,21 @@ func _get_mesh_and_shape(ue_path: String) -> Dictionary:
 				_bind_glb_materials(m, mat_slots)
 				out["mesh"] = m
 				var is_nonblocking: bool = ("rug" in low_u or "carpet" in low_u or "placemat" in low_u or "paper" in low_u or "poster" in low_u or "scroll" in low_u or "curtain" in low_u or "cloth" in low_u or "drape" in low_u or "sheet" in low_u or "cable" in low_u or "wire" in low_u or "rope" in low_u or "ivy" in low_u or "vine" in low_u or "foliage" in low_u)
-				# Fast BoxShape3D for props; trimesh only for large structural geometry
+				# Fast BoxShape3D for props; trimesh for walkable surfaces and large structural geometry.
+				# Stair runs must present tread faces instead of a full-AABB wall (an
+				# SM_StairsCity4x2m box is a flat-topped 2 m wall; an open-riser
+				# SM_Stairs_Industrial run boxes into a 0.69 m wall at the low end).
+				# Lipped sidewalk slabs must collide at the authored walk band
+				# instead of floating a flat box top at trim height
+				# (SM_SidewalkCityStone_6m: walk band ~0, box top +0.2).
+				# Cheek walls / rails / posts / banisters / upstairs masses keep
+				# boxes; tiny and non-blocking props keep the old fast path.
+				var is_stair_run: bool = "stair" in low_u and not ("rail" in low_u or "boundary" in low_u or "post" in low_u or "banister" in low_u or "balustrade" in low_u or "upstairs" in low_u)
+				var is_walk_surface: bool = "sidewalk" in low_u
 				var aabb := m.get_aabb()
 				var sz := aabb.size
 				if not is_nonblocking and sz.length() > 0.45:
-					if sz.length() < 12.0:
+					if sz.length() < 12.0 and not is_stair_run and not is_walk_surface:
 						var bx := BoxShape3D.new()
 						bx.size = Vector3(maxf(sz.x, 0.1), maxf(sz.y, 0.1), maxf(sz.z, 0.1))
 						out["shape"] = bx
@@ -996,6 +1024,9 @@ func _new_build_ctx(parent: Node3D, light_probe: Node, generate_collision: bool)
 		"collision_shapes": 0,
 		"collision_bodies": 0,
 		"occluders": 0,
+		"missing_meshes": [] as Array,
+		"missing_mesh_count": 0,
+		"curb_built": 0,
 		"chunk_count": 0,
 		"light_count": 0,
 		"landscapes_built": 0,
@@ -1446,6 +1477,8 @@ func _collect_draw_items(acc: Dictionary) -> Array:
 
 func _apply_culling_policy(node: GeometryInstance3D, low_mp: String, mesh: Mesh) -> void:
 	var aabb_len: float = mesh.get_aabb().size.length()
+	if _has_token(low_mp, STRUCTURAL_NO_FADE_TOKENS):
+		return
 	if _has_token(low_mp, CLUTTER_TOKENS) and aabb_len < 2.0:
 		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		node.visibility_range_end = CLUTTER_VIS_RANGE + CHUNK_RADIUS_PAD
@@ -1461,8 +1494,11 @@ func _apply_culling_policy(node: GeometryInstance3D, low_mp: String, mesh: Mesh)
 
 
 func _qualifies_as_occluder(low_mp: String, mesh: Mesh) -> bool:
-	var aabb_len: float = mesh.get_aabb().size.length()
+	var aabb_size: Vector3 = mesh.get_aabb().size
+	var aabb_len: float = aabb_size.length()
 	if aabb_len < OCCLUDER_MIN_LEN or aabb_len > OCCLUDER_MAX_LEN:
+		return false
+	if minf(aabb_size.x, minf(aabb_size.y, aabb_size.z)) < OCCLUDER_MIN_THICK_M:
 		return false
 	if not _has_token(low_mp, OCCLUDER_INCLUDE_TOKENS):
 		return false
@@ -1472,7 +1508,11 @@ func _qualifies_as_occluder(low_mp: String, mesh: Mesh) -> bool:
 func _add_occluder(ctx: Dictionary, mesh: Mesh, tr: Transform3D) -> void:
 	var aabb: AABB = mesh.get_aabb()
 	var box: BoxOccluder3D = BoxOccluder3D.new()
-	box.size = aabb.size
+	# F9: inset the occluder one centimetre per side so its faces never sit
+	# exactly coplanar with the wall faces that spawned them (coplanar
+	# occluder/geometry pairs pop as the camera moves). A smaller occluder
+	# under-occludes rather than over-occludes, which is the safe direction.
+	box.size = Vector3(maxf(aabb.size.x - 0.04, 0.1), maxf(aabb.size.y - 0.04, 0.1), maxf(aabb.size.z - 0.04, 0.1))
 	var occ: OccluderInstance3D = OccluderInstance3D.new()
 	occ.occluder = box
 	occ.transform = Transform3D(tr.basis, tr * aabb.get_center())
@@ -1494,7 +1534,12 @@ func _is_den_window_wall(low_mp: String) -> bool:
 
 
 ## Test/contract surface for the Den split: gap stays 0.9-1.0 m, sill low,
-## lintel clears 2 m, and the 2 m marker gate is kept.
+## lintel clears 2 m, and the 2 m marker gate is kept. The round-1 dead
+## vista_* keys are deleted, not consumed: vista geometry is MISSING-UPSTREAM
+## (ledger task-0 A8 — no MoonShape/view kit in extracted/filelist.txt, the
+## UE moons live only as in-level BP_MoonShape_C_0..C_7 actors), so the
+## procedural replica in mission_controller._spawn_den_window_vista stands
+## under the F5 precedent and no hand UE path may masquerade as a value.
 func den_window_gap_spec() -> Dictionary:
 	return {
 		"gap_m": DEN_WINDOW_GAP_M,
@@ -1503,6 +1548,29 @@ func den_window_gap_spec() -> Dictionary:
 		"marker_gate_kept": true,
 		"boxes": 4,
 	}
+
+
+## F1 collider grounding for Den floor props. When a prop-scale Den collider
+## base floats above its instance ground plane, the box is grown down to the
+## plane so physics rests on the floor the visuals snap to. Fires only for
+## thievesden meshes with box height < 2.5 m floating within (0.02, 1.0] m;
+## architecture and table-top items (base at/near the instance origin) pass
+## through untouched, and shared shapes are duplicated, never mutated.
+func _ground_den_prop_shape(low_mp: String, shape: BoxShape3D, tr: Transform3D, soff: Vector3) -> Array:
+	if low_mp.find("thievesden") < 0:
+		return [shape, soff]
+	var sy: float = maxf(absf(tr.basis.get_scale().y), 0.05)
+	var h: float = shape.size.y
+	if h >= 2.5:
+		return [shape, soff]
+	var world_bottom: float = (tr * soff).y - h * 0.5 * sy
+	var float_m: float = world_bottom - tr.origin.y
+	if float_m <= 0.02 or float_m > 1.0:
+		return [shape, soff]
+	var grown := BoxShape3D.new()
+	grown.size = Vector3(shape.size.x, h + float_m / sy, shape.size.z)
+	var grown_soff: Vector3 = soff + Vector3(0.0, -float_m / sy * 0.5, 0.0)
+	return [grown, grown_soff]
 
 
 ## Splits one Den wall/window box into two side boxes (full height) with a
@@ -1541,6 +1609,77 @@ func _add_den_window_split(ctx: Dictionary, cell: Vector2i, tr: Transform3D, box
 	var lintel := BoxShape3D.new()
 	lintel.size = Vector3(mesh_gap, lintel_h_mesh, d)
 	_add_collider(ctx, cell, lintel, tr, Vector3(soff.x, floor_y + lintel_bottom_mesh + lintel_h_mesh * 0.5, soff.z))
+	_clip_den_window_visual(ctx, tr, soff, mesh_gap, sill_h_mesh, lintel_bottom_mesh, floor_y, d)
+
+
+## Cuts the visual wall where the collider splits. The converted
+## SM_ThievesDen_Glass GLB bakes its two UE material slots opaque (glTF with
+## no alpha mode and no images), so the full assembly renders as a gray slab
+## across the collider gap. This hides that slab and seats an opening-fitted
+## frosted pane plus a wood trim frame in the gap, bound to the authored UE
+## materials from mesh_materials.json (MI_GlassPanels ThinTranslucent +
+## MI_StoreFrontTrimA, both present with textures on disk). The trim stands
+## in for the upstream SM_ThievesDen_WindowBorder mesh, which exists in the
+## Pak filelist but has no converted GLB (extractor allowlist
+## tools/tat-extract/Exporter.cs:200): sizes reuse the DEN_WINDOW_* split
+## constants, so no measurement here is a hand value. No-ops when the
+## sibling visual is absent (bare-host test path) and never emits collision.
+func _clip_den_window_visual(ctx: Dictionary, tr: Transform3D, soff: Vector3, mesh_gap: float, sill_h_mesh: float, lintel_bottom_mesh: float, floor_y: float, wall_d_mesh: float) -> void:
+	var parent: Node = ctx.get("parent") as Node
+	if parent == null:
+		return
+	var visual: MeshInstance3D = null
+	for i in range(parent.get_child_count() - 1, -1, -1):
+		var cand: Node = parent.get_child(i)
+		if cand is MeshInstance3D and not (cand as MeshInstance3D).has_meta("den_window_clipped"):
+			var mi: MeshInstance3D = cand as MeshInstance3D
+			if mi.transform.origin.distance_to(tr.origin) < 0.01:
+				visual = mi
+				break
+	if visual == null:
+		return
+	visual.visible = false
+	visual.set_meta("den_window_clipped", true)
+	var sc: Vector3 = tr.basis.get_scale()
+	var sx: float = maxf(absf(sc.x), 0.05)
+	var sy: float = maxf(absf(sc.y), 0.05)
+	var sz: float = maxf(absf(sc.z), 0.05)
+	var pane_mat: Material = get_material_for_ue("/Game/MaterialLibrary/Environment/Glass/WIndowPanels/MI_GlassPanels")
+	var trim_mat: Material = get_material_for_ue("/Game/MaterialLibrary/Environment/Wood/ML/MI_StoreFrontTrimA")
+	var opening_h: float = maxf(lintel_bottom_mesh - sill_h_mesh, 0.1)
+	var mid_y: float = floor_y + sill_h_mesh + opening_h * 0.5
+	var basis_o: Basis = tr.basis.orthonormalized()
+	var scl := Vector3(sx, sy, sz)
+	var pane := MeshInstance3D.new()
+	pane.name = "DenWindowPane"
+	var pane_box := BoxMesh.new()
+	pane_box.size = Vector3(mesh_gap, opening_h, 0.06 / sz)
+	pane.mesh = pane_box
+	if pane_mat != null:
+		pane.set_surface_override_material(0, pane_mat)
+	pane.transform = Transform3D(basis_o, tr * Vector3(soff.x, mid_y, soff.z))
+	pane.scale = scl
+	parent.add_child(pane)
+	var jamb_w: float = 0.12 / sx
+	var head_h: float = 0.12 / sy
+	var trim_d: float = maxf(wall_d_mesh, 0.1)
+	var trim_defs: Array = [
+		["DenWindowTrimL", Vector3(jamb_w, opening_h, trim_d), Vector3(soff.x - mesh_gap * 0.5 - jamb_w * 0.5, mid_y, soff.z)],
+		["DenWindowTrimR", Vector3(jamb_w, opening_h, trim_d), Vector3(soff.x + mesh_gap * 0.5 + jamb_w * 0.5, mid_y, soff.z)],
+		["DenWindowTrimHead", Vector3(mesh_gap + jamb_w * 2.0, head_h, trim_d), Vector3(soff.x, floor_y + lintel_bottom_mesh + head_h * 0.5, soff.z)],
+		["DenWindowTrimSill", Vector3(mesh_gap + jamb_w * 2.0, head_h, trim_d), Vector3(soff.x, floor_y + sill_h_mesh - head_h * 0.5, soff.z)],
+	]
+	for tdef in trim_defs:
+		var trim := MeshInstance3D.new()
+		trim.name = str(tdef[0])
+		var trim_box := BoxMesh.new()
+		trim_box.size = tdef[1] as Vector3
+		trim.mesh = trim_box
+		if trim_mat != null:
+			trim.set_surface_override_material(0, trim_mat)
+		trim.transform = Transform3D(basis_o, tr * (tdef[2] as Vector3))
+		trim.scale = scl
+		parent.add_child(trim)
 
 
 func _add_collider(ctx: Dictionary, cell: Vector2i, shape: Shape3D, tr: Transform3D, shape_offset: Vector3) -> void:
@@ -1581,6 +1720,19 @@ func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> 
 	var info: Dictionary = _get_mesh_and_shape(mp)
 	var mesh: Mesh = info["mesh"]
 	if mesh == null:
+		# Headless-safe missing-mesh path: log the UE path (the value the
+		# fix todos cross-reference against ThievesDen_Geo/Guildhall actors),
+		# emit nothing, and never touch null. A missing vista mesh degrades
+		# to the procedural replica instead of crashing.
+		push_warning("[level_loader] missing mesh for UE path ", mp, "; skipping draw item (no collider/occluder emitted)")
+		# F8 evidence: keep the UE path (cross-reference against the T1
+		# cooked actors: Guildhall_Geometry 981 actors / ThievesDen_Geo 348
+		# exports) plus a headless-safe count, and never touch null. Stored
+		# paths are capped at 128; the count is exact.
+		ctx["missing_mesh_count"] = int(ctx.get("missing_mesh_count", 0)) + 1
+		var miss_arr: Array = ctx.get("missing_meshes", [] as Array) as Array
+		if miss_arr.size() < 128 and not miss_arr.has(mp):
+			miss_arr.append(mp)
 		return 0
 	var ov_arr: Array[String] = _extract_override_materials(item)
 	var cpds_raw: Variant = item.get("cpds", [])
@@ -1670,6 +1822,9 @@ func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> 
 					continue
 				if den_split:
 					_add_den_window_split(ctx, cell, tr_c, shape as BoxShape3D, soff)
+				elif low_mp.find("thievesden") >= 0 and shape is BoxShape3D:
+					var grounded: Array = _ground_den_prop_shape(low_mp, shape as BoxShape3D, tr_c, soff)
+					_add_collider(ctx, cell, grounded[0] as Shape3D, tr_c, grounded[1] as Vector3)
 				else:
 					_add_collider(ctx, cell, shape, tr_c, soff)
 
@@ -1685,6 +1840,207 @@ func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> 
 func _build_landscapes_sync(landscapes: Array, parent: Node3D, ctx: Dictionary) -> void:
 	for lc_var: Variant in landscapes:
 		_build_one_landscape(lc_var, parent, ctx)
+
+
+## F7 procedural curb replica (Guildhall exterior + any map with splines).
+## No SM_*Curb* asset exists in filelist.txt / extracted/json (backlog F7
+## stalled: `grep -ri curb|kerb filelist.txt` is empty), so the UE-cooked
+## curb profile is unrecoverable from cooked data. This replica extrudes the
+## authored landscape-spline ribbon itself (Guildhall_Landscape splines 0-1:
+## one continuous sidewalk path, width 3.0, mesh SM_SidewalkCityA_6m, flat
+## y 7.8594; OldManor_P: 8 driveway splines, width 6.0, mesh
+## SM_OldManor_DrivewayA_x6) with a footage-derived curb lip on both edges
+## (KF15 01:21.38 alley wet cobbles / KF16 01:40.20 gate steps-cobbles; the
+## street side is not authored, so both edges carry the lip). Ribbon top
+## keeps the authored spline y (the UE spline height IS the ground height;
+## nothing invented). The 0.15 m lip stays under the 0.3 m stair snap, so
+## the restored surface walks like the authored sidewalk. Material prefers
+## the spline's authored override material, else the spline mesh path
+## through the standard get_material_for_ue() fallback chain (both maps'
+## spline meshes are unbound in materials.json, so the deterministic
+## stone-grey fallback binds).
+const CURB_LIP_H_M: float = 0.15
+const CURB_LIP_W_M: float = 0.30
+const CURB_SKIRT_M: float = 0.10
+const CURB_MAX_SPLINES: int = 64
+
+
+## Emits one triangle with an explicit flat normal, flipping the winding
+## when the authored vertex order faces away from `want`, so procedural
+## ribbon faces can never come out inside-out regardless of path direction.
+func _curb_tri(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, want: Vector3, uva: Vector2, uvb: Vector2, uvc: Vector2) -> void:
+	var n: Vector3 = (b - a).cross(c - a)
+	if n.length() < 0.0000001:
+		return
+	st.set_normal(want)
+	if n.dot(want) < 0.0:
+		st.set_uv(uva)
+		st.add_vertex(a)
+		st.set_uv(uvc)
+		st.add_vertex(c)
+		st.set_uv(uvb)
+		st.add_vertex(b)
+	else:
+		st.set_uv(uva)
+		st.add_vertex(a)
+		st.set_uv(uvb)
+		st.add_vertex(b)
+		st.set_uv(uvc)
+		st.add_vertex(c)
+
+
+## Extrudes one spline ribbon (walk band at the authored spline y, curb lips
+## on both edges, skirts below) plus matching walk/lip collision boxes.
+## The cross-section profile, swept from outer-left-bottom around to
+## outer-right-bottom, is clockwise in (offset, height), so each profile
+## segment's outward normal is the left of its travel direction.
+func _build_one_curb_ribbon(pts: Array[Vector3], width: float, sp_mesh: String, sp_mat: String, parent: Node3D, ctx: Dictionary) -> void:
+	var count: int = pts.size()
+	var half: float = width * 0.5
+	var lip: float = minf(CURB_LIP_W_M, half * 0.5)
+	var sides: Array[Vector3] = []
+	sides.resize(count)
+	for i in range(count):
+		var pa: Vector3 = pts[maxi(i - 1, 0)]
+		var pb: Vector3 = pts[mini(i + 1, count - 1)]
+		var dd: Vector3 = pb - pa
+		dd.y = 0.0
+		if dd.length() < 0.001:
+			dd = Vector3(1, 0, 0)
+		dd = dd.normalized()
+		sides[i] = Vector3(-dd.z, 0.0, dd.x)
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var arc: Array[float] = []
+	arc.resize(count)
+	var run: float = 0.0
+	for i2 in range(count):
+		if i2 > 0:
+			run += pts[i2].distance_to(pts[i2 - 1])
+		arc[i2] = run
+	# Profile loop P0..P7 (offset, height) from outer-left-bottom around.
+	var prof_o: Array[float] = [-half, -half, -half + lip, -half + lip, half - lip, half - lip, half, half]
+	var prof_h: Array[float] = [-CURB_SKIRT_M, CURB_LIP_H_M, CURB_LIP_H_M, 0.0, 0.0, CURB_LIP_H_M, CURB_LIP_H_M, -CURB_SKIRT_M]
+	for seg in range(count - 1):
+		var m_avg: Vector3 = (sides[seg] + sides[seg + 1]) * 0.5
+		if m_avg.length() < 0.001:
+			m_avg = sides[seg]
+		m_avg = m_avg.normalized()
+		for k in range(8):
+			var k2: int = (k + 1) % 8
+			if k == 7:
+				continue # open bottom: never visible, never emitted
+			var do: float = prof_o[k2] - prof_o[k]
+			var dh: float = prof_h[k2] - prof_h[k]
+			var seg_l: float = sqrt(do * do + dh * dh)
+			if seg_l < 0.000001:
+				continue
+			var want: Vector3 = m_avg * (-dh / seg_l) + Vector3.UP * (do / seg_l)
+			var a: Vector3 = pts[seg] + sides[seg] * prof_o[k] + Vector3.UP * prof_h[k]
+			var b: Vector3 = pts[seg] + sides[seg] * prof_o[k2] + Vector3.UP * prof_h[k2]
+			var c: Vector3 = pts[seg + 1] + sides[seg + 1] * prof_o[k2] + Vector3.UP * prof_h[k2]
+			var dpt: Vector3 = pts[seg + 1] + sides[seg + 1] * prof_o[k] + Vector3.UP * prof_h[k]
+			var uva := Vector2(prof_o[k], arc[seg])
+			var uvb := Vector2(prof_o[k2], arc[seg])
+			var uvc := Vector2(prof_o[k2], arc[seg + 1])
+			var uvd := Vector2(prof_o[k], arc[seg + 1])
+			_curb_tri(st, a, b, c, want, uva, uvb, uvc)
+			_curb_tri(st, a, c, dpt, want, uva, uvc, uvd)
+	# Rect end caps (bounding rect of the profile; the lip-step notches are
+	# solid-capped, which only shows if a ribbon end is left exposed).
+	for cap in range(2):
+		var ci: int = 0 if cap == 0 else count - 1
+		var cdir: Vector3 = pts[0] - pts[1] if cap == 0 else pts[count - 1] - pts[count - 2]
+		cdir.y = 0.0
+		if cdir.length() < 0.001:
+			cdir = Vector3(0, 0, 1 if cap == 1 else -1)
+		cdir = cdir.normalized()
+		var m: Vector3 = sides[ci]
+		var bl: Vector3 = pts[ci] - m * half + Vector3.UP * -CURB_SKIRT_M
+		var br: Vector3 = pts[ci] + m * half + Vector3.UP * -CURB_SKIRT_M
+		var tr: Vector3 = pts[ci] + m * half + Vector3.UP * CURB_LIP_H_M
+		var tl: Vector3 = pts[ci] - m * half + Vector3.UP * CURB_LIP_H_M
+		var cv: float = arc[ci]
+		_curb_tri(st, bl, br, tr, cdir, Vector2(-half, cv), Vector2(half, cv), Vector2(half, cv))
+		_curb_tri(st, bl, tr, tl, cdir, Vector2(-half, cv), Vector2(half, cv), Vector2(-half, cv))
+	var arr_mesh: ArrayMesh = st.commit()
+	if arr_mesh == null:
+		return
+	var cmat_path: String = sp_mat if sp_mat != "" else sp_mesh
+	if cmat_path == "":
+		return
+	arr_mesh.surface_set_material(0, get_material_for_ue(cmat_path))
+	var mi := MeshInstance3D.new()
+	mi.mesh = arr_mesh
+	mi.name = "CurbRibbon"
+	# Structural ground surface: never distance-faded, like the masonry in
+	# _apply_culling_policy.
+	mi.set_meta("ue_mesh", sp_mesh)
+	mi.set_meta("decorative", false)
+	parent.add_child(mi)
+	if not bool(ctx.get("generate_collision", false)):
+		return
+	# Restored authored surface: walk band flush with the spline y, curb
+	# lips above it. One box per band per segment, pitched with the path so
+	# sloped driveways keep contact; boxes overlap by one lip width along
+	# the path to close curve gaps.
+	for seg2 in range(count - 1):
+		var p0: Vector3 = pts[seg2]
+		var p1: Vector3 = pts[seg2 + 1]
+		var seg_len: float = p0.distance_to(p1)
+		if seg_len < 0.001:
+			continue
+		var z_ax: Vector3 = (p1 - p0) / seg_len
+		var x_ax: Vector3 = Vector3.UP.cross(z_ax)
+		if x_ax.length() < 0.01:
+			x_ax = Vector3.RIGHT
+		x_ax = x_ax.normalized()
+		var y_ax: Vector3 = z_ax.cross(x_ax).normalized()
+		var basis := Basis(x_ax, y_ax, z_ax)
+		var mid: Vector3 = (p0 + p1) * 0.5
+		var cell: Vector2i = _cell_of(Transform3D(basis, mid))
+		var tr := Transform3D(basis, mid)
+		var ext: float = seg_len + CURB_LIP_W_M
+		var walk := BoxShape3D.new()
+		walk.size = Vector3(maxf(width - lip * 2.0, 0.1), CURB_SKIRT_M + 0.02, ext)
+		_add_collider(ctx, cell, walk, tr, Vector3(0, -CURB_SKIRT_M * 0.5 + 0.01, 0))
+		for side_sign in [-1.0, 1.0]:
+			var lip_box := BoxShape3D.new()
+			lip_box.size = Vector3(lip, CURB_LIP_H_M + CURB_SKIRT_M, ext)
+			_add_collider(ctx, cell, lip_box, tr, Vector3(side_sign * (half - lip * 0.5), (CURB_LIP_H_M - CURB_SKIRT_M) * 0.5, 0))
+
+
+## Builds one procedural curb ribbon per authored landscape spline (F7).
+## SplineEditorMesh entries never reach this table (the extractor drops
+## them), so every entry names a real authored mesh; entries with fewer
+## than 2 points or no width are skipped, never guessed.
+func _build_curbs_from_splines(splines: Array, parent: Node3D, ctx: Dictionary) -> void:
+	if splines.is_empty() or parent == null:
+		return
+	var done: int = 0
+	for sp_var: Variant in splines:
+		if done >= CURB_MAX_SPLINES:
+			push_warning("[level_loader] curb build hit CURB_MAX_SPLINES=", CURB_MAX_SPLINES, "; remaining splines skipped")
+			break
+		if not (sp_var is Dictionary):
+			continue
+		var sp: Dictionary = sp_var
+		var pts_raw: Variant = sp.get("points", [])
+		if not (pts_raw is Array) or (pts_raw as Array).size() < 2:
+			continue
+		var width: float = float(sp.get("width", 0.0))
+		if width <= 0.0:
+			continue
+		var gpts: Array[Vector3] = []
+		for p_var: Variant in (pts_raw as Array):
+			if p_var is Array and (p_var as Array).size() >= 3:
+				var parr: Array = p_var
+				gpts.append(Vector3(float(parr[0]), float(parr[1]), float(parr[2])))
+		if gpts.size() < 2:
+			continue
+		_build_one_curb_ribbon(gpts, width, str(sp.get("mesh", "")), str(sp.get("material", "")), parent, ctx)
+		done += 1
+	ctx["curb_built"] = int(ctx.get("curb_built", 0)) + done
 
 
 func _add_one_light(linfo: Dictionary, parent: Node3D, light_probe: Node, hero_shadow: bool) -> bool:
@@ -1770,6 +2126,9 @@ func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dict
 	result["volume_skipped"] = int(ctx.get("volume_skipped", 0))
 	result["niagara_placements"] = int(ctx.get("niagara_placements", 0))
 	result["spline_count"] = int(ctx.get("spline_count", 0))
+	result["curb_built"] = int(ctx.get("curb_built", 0))
+	result["missing_mesh_count"] = int(ctx.get("missing_mesh_count", 0))
+	result["missing_meshes"] = (ctx.get("missing_meshes", [] as Array) as Array).duplicate()
 	result["swinging_doors"] = result.get("swinging_doors", [])
 	result["swinging_door_count"] = (result["swinging_doors"] as Array).size()
 	result["sky_light"] = ctx.get("sky_light", {})
@@ -2046,8 +2405,11 @@ func _build_volumes(volumes: Array, parent: Node3D, ctx: Dictionary) -> void:
 
 
 ## Records counts and first-present atmosphere entries for the result stats.
-## Landscape splines reference the editor-only SplineEditorMesh with no
-## authored material, so they are counted and skipped, never spawned.
+## SplineEditorMesh entries never reach the splines table (the extractor
+## drops them), so every spline here names a real authored mesh
+## (SM_SidewalkCityA_6m / SM_OldManor_DrivewayA_x6) and is rebuilt as a
+## procedural curb ribbon by _build_curbs_from_splines (F7 replica);
+## spline_count still records the authored count.
 ## Niagara placements are likewise counted here for the VFX wave.
 func _store_level_extras(acc: Dictionary, ctx: Dictionary) -> void:
 	ctx["niagara_placements"] = (acc["niagara"] as Array).size()
@@ -2129,6 +2491,7 @@ func load_sublevels(json_paths: Array[String], parent: Node3D, light_probe: Node
 	_store_level_extras(acc, ctx)
 	_build_post_process_gi_fills(acc["post_process"], parent, ctx)
 	_build_landscapes_sync(acc["landscapes"], parent, ctx)
+	_build_curbs_from_splines(acc["splines"], parent, ctx)
 
 	var items: Array = _collect_draw_items(acc)
 	var total_inst: int = 0
@@ -2179,6 +2542,8 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 		load_progress.emit(0.5 + 0.02 * float(lc_i + 1) / float(landscapes.size()), "Building terrain %d/%d..." % [lc_i + 1, landscapes.size()])
 		if parent.get_tree() != null:
 			await parent.get_tree().process_frame
+	_build_curbs_from_splines(acc["splines"], parent, ctx)
+	load_progress.emit(0.52, "Building curbs...")
 
 	var items: Array = _collect_draw_items(acc)
 	var built: int = 0

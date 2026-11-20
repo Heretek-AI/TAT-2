@@ -382,8 +382,18 @@ func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> 
 	add_child(attic_fill)
 	light_probe.register_light(attic_fill)
 
-	# Big arched window moonlight shaft (west wall, pouring diagonally onto the attic floor)
-	var win_pos: Vector3 = Vector3(-5.8, 43.0, 271.5)
+	# Arched east window moonlight shaft (authored geometry, not hand values).
+	# UE WindowBorder StaticMeshComponent0 at cm
+	# (523.73975, 26666.291, 4064.7085) -> port m
+	# (5.2374, 40.6471, 266.6629). The shaft lands mid-room on the
+	# scope->window sightline: L = 6.1076 m is the horizontal
+	# WindowBorder->floor-shell-center distance (UE SM_ThievesDen shell/floor
+	# at cm (132.74524, 27135.502, 3957.8376) -> port
+	# (1.3275, 39.5784, 271.355)), stepped back from the window along the
+	# sightline axis with Y on the floor plane (F1 rule). outward
+	# (= win_pos - beam_target) therefore extends the scope->window axis past
+	# the wall, so the ponder ray threads the collider gap onto the vista.
+	var win_pos: Vector3 = Vector3(5.2374, 40.6471, 266.6629)
 	var moon_beam := SpotLight3D.new()
 	moon_beam.name = "DenMoonBeam"
 	moon_beam.position = win_pos
@@ -394,10 +404,11 @@ func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> 
 	moon_beam.shadow_enabled = true
 	moon_beam.add_to_group("den_hand_fills")
 	add_child(moon_beam)
-	var beam_target: Vector3 = Vector3(-0.5, 40.1, 271.5)
+	var beam_target: Vector3 = Vector3(-0.4317, anchor.y + 0.1, 268.9349)
 	moon_beam.look_at(beam_target, Vector3.UP)
 	light_probe.register_light(moon_beam)
 	VfxManager.spawn_window_godray(self, win_pos, beam_target)
+	_spawn_den_window_vista(win_pos, beam_target)
 
 	# Single interior ReflectionProbe for Thieves' Den specular reflections.
 	var den_probe: ReflectionProbe = ReflectionProbe.new()
@@ -410,8 +421,15 @@ func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> 
 	den_probe.intensity = 0.8
 	add_child(den_probe)
 
+	# F1 ground-placement rule: authored tatlevel positions are UE-grounded
+	# (ThievesDen_Geo, 348 exports — per-prop StaticMeshComponent AttachParent
+	# + relative transform vs BodySetup bounds) and are used as-is. Hand
+	# fallback offsets are built from the floor (anchor = floor-grounded
+	# player spawn) upward: floor-standing props sit at floor_y, table-top
+	# items add the hand table height on top. Nothing floats on a bare offset.
+	var floor_y: float = anchor.y
 	var desk_positions: Array = ue_level_data.get("desk_positions", [])
-	var desk_pos: Vector3 = anchor + Vector3(3.2, 0.8, -2.5)
+	var desk_pos: Vector3 = Vector3(anchor.x + 3.2, floor_y + 0.8, anchor.z - 2.5)
 	if not desk_positions.is_empty() and desk_positions[0] is Vector3:
 		desk_pos = desk_positions[0] as Vector3
 	_den_map_table_pos = desk_pos
@@ -457,7 +475,7 @@ func interact(_actor: Node) -> void:
 
 	# Rolltop Desk Open Ledger -> [F] READ LEDGER (Journal & Black Market) + Blue Wisp VFX
 	var ledger_positions: Array = ue_level_data.get("ledger_positions", [])
-	var ledger_pos: Vector3 = anchor + Vector3(3.4, 0.95, 1.8)
+	var ledger_pos: Vector3 = Vector3(anchor.x + 3.4, floor_y + 0.95, anchor.z + 1.8)
 	if not ledger_positions.is_empty() and ledger_positions[0] is Vector3:
 		ledger_pos = (ledger_positions[0] as Vector3) + Vector3(0.0, 0.12, 0.0)
 	var wisp_node: Node3D = VfxManager.spawn_blue_wisp(self, ledger_pos + Vector3(-0.35, 0.42, -0.15), 0.30)
@@ -488,8 +506,12 @@ func interact(_actor: Node) -> void:
 	ledger_area.set("mission_ctrl", self)
 	add_child(ledger_area)
 
-	# Telescope -> [F] PONDER (authored SM_TeleScope position in ThievesDenTest_P)
-	_den_telescope_pos = Vector3(-4.9202, 41.0, 270.7337)
+	# Telescope -> [F] PONDER. UE BP_HidingSpot_Telescope_C_1 Root in
+	# ThievesDenTest_P:PersistentLevel sits at UE cm
+	# (-492.02435, 27073.371, 4011.2234) -> port m (-4.9202, floor, 270.7337);
+	# the tripod is floor-standing (F1 rule), so Y snaps to floor_y instead of
+	# the stale 41.0 hand value. SM_TeleScope BodySetup_1 + MI_TeleScope_Inst.
+	_den_telescope_pos = Vector3(-4.9202, floor_y, 270.7337)
 	var tele_area := Area3D.new()
 	tele_area.name = "DenTelescopeArea"
 	tele_area.position = _den_telescope_pos
@@ -520,9 +542,9 @@ func interact(_actor: Node) -> void:
 
 	# Interactive Bureau / Wardrobe -> opens WardrobeUI (diegetic HUD prompt, no giant Label3D billboard)
 	var wardrobe_positions: Array = ue_level_data.get("wardrobe_positions", [])
-	var wardrobe_pos: Vector3 = anchor + Vector3(-2.6, 0.9, -2.0)
+	var wardrobe_pos: Vector3 = Vector3(anchor.x - 2.6, floor_y, anchor.z - 2.0)
 	if not wardrobe_positions.is_empty() and wardrobe_positions[0] is Vector3:
-		wardrobe_pos = wardrobe_positions[0] + Vector3(0.0, 0.8, 0.0)
+		wardrobe_pos = wardrobe_positions[0] as Vector3
 	var ward_light := OmniLight3D.new()
 	ward_light.name = "DenWardLight"
 	ward_light.position = wardrobe_pos + Vector3(0.0, 1.1, 0.4)
@@ -589,7 +611,12 @@ func _spawn_map_table_miniatures(desk_pos: Vector3) -> void:
 			"ue_mesh": "/Game/Art/UI/Map/SM_MapBuilding_OldManor",
 			"ue_mat": "/Game/Art/UI/Map/M_MapBuilding_OldManor",
 			"offset": Vector3(-0.32, 0.02, -0.08),
-			"scale": 0.24,
+			# UE-derived token size: SM_MapBuilding_OldManor ExtendedBounds
+			# SphereRadius 45.56192 vs SM_MapBuilding_GuildHall 27.39531
+			# (extracted/json/Art/UI/Map/SM_MapBuilding_*.json, StaticMesh
+			# ExtendedBounds). GuildHall keeps the port base 0.24; OldManor
+			# scales by the UE SphereRadius ratio (~0.399).
+			"scale": 0.24 * (45.56192 / 27.39531),
 		},
 		{
 			"name": "MapTokenGuildHall",
@@ -597,6 +624,8 @@ func _spawn_map_table_miniatures(desk_pos: Vector3) -> void:
 			"ue_mesh": "/Game/Art/UI/Map/SM_MapBuilding_GuildHall",
 			"ue_mat": "/Game/Art/UI/Map/M_MapBuilding_GuildHall",
 			"offset": Vector3(0.28, 0.02, 0.10),
+			# UE anchor of the token-size ratio above (GuildHall SphereRadius
+			# 27.39531); base kept at the port 0.24.
 			"scale": 0.24,
 		},
 	]
@@ -608,6 +637,10 @@ func _spawn_map_table_miniatures(desk_pos: Vector3) -> void:
 			var info: Dictionary = level_loader.call("_get_mesh_and_shape", ue_mesh)
 			mesh = info.get("mesh") as Mesh
 		if mesh == null:
+			# Never silent: a missing token mesh must name its UE path so
+			# the GH token can never vanish quietly (round-2 GH-mini fix).
+			push_error("[mission_controller] missing mesh for UE path %s; skipping map token %s (%s)" % [ue_mesh, str(item["name"]), str(item["map_id"])])
+			assert(false, "missing map token mesh: " + ue_mesh)
 			continue
 		var mi: MeshInstance3D = MeshInstance3D.new()
 		mi.name = str(item["name"])
@@ -623,6 +656,8 @@ func _spawn_map_table_miniatures(desk_pos: Vector3) -> void:
 		mi.position = desk_pos + (item["offset"] as Vector3)
 		var sc: float = float(item["scale"])
 		mi.scale = Vector3(sc, sc, sc)
+		# UE-derived per-token base for the selection grow/shrink below.
+		mi.set_meta("minis_base", sc)
 		mi.add_to_group("map_table_tokens")
 		add_child(mi)
 		_den_tokens[str(item["map_id"])] = mi
@@ -630,6 +665,14 @@ func _spawn_map_table_miniatures(desk_pos: Vector3) -> void:
 
 
 func _update_map_token_highlights() -> void:
+	# Selection grow/shrink (KF10/S08 KILCAIRN tokens: the selected map token
+	# reads larger with a warm-gold emissive). Per-token bases are UE-derived
+	# (minis_base meta, see _spawn_map_table_miniatures); 1.15x/0.25s is port
+	# presentation — no UE scale timeline exists in cooked data (F4 backlog:
+	# material-param vs timeline undecided). Highlight energies kept
+	# (active 0.85 / inactive 0.0).
+	const MINIS_SELECT_GROW := 1.15
+	const MINIS_GROW_TIME := 0.25
 	for mid_v: Variant in _den_tokens.keys():
 		var mid: String = str(mid_v)
 		var mi_v: Variant = _den_tokens.get(mid, null)
@@ -637,6 +680,19 @@ func _update_map_token_highlights() -> void:
 			continue
 		var mi: MeshInstance3D = mi_v as MeshInstance3D
 		var active: bool = (mid == _den_selected_map_id)
+		var base_sc: float = float(mi.get_meta("minis_base", mi.scale.x))
+		var target_sc: float = base_sc * MINIS_SELECT_GROW if active else base_sc
+		var target_scale := Vector3(target_sc, target_sc, target_sc)
+		if mi.is_inside_tree():
+			if mi.has_meta("minis_tween"):
+				var old_tw: Tween = mi.get_meta("minis_tween") as Tween
+				if old_tw != null and old_tw.is_valid():
+					old_tw.kill()
+			var tw: Tween = mi.create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+			tw.tween_property(mi, "scale", target_scale, MINIS_GROW_TIME)
+			mi.set_meta("minis_tween", tw)
+		else:
+			mi.scale = target_scale
 		var surf_cnt: int = mi.mesh.get_surface_count() if mi.mesh != null else 0
 		for s: int in range(surf_cnt):
 			var mat: Material = mi.get_surface_override_material(s)
@@ -675,34 +731,169 @@ func get_den_lookat_card() -> Dictionary:
 	return _den_lookat_card.duplicate(true)
 
 
+## F5 window vista (procedural replica). The loader hides authored moonshape
+## billboards (they cook to gray quads; the real sky carries the moon disc)
+## and the Den wall keeps only the collision split + moonbeam shaft, so the
+## arched east window showed no exterior. This stages the exterior the UE
+## level authors in the same PersistentLevel (ThievesDen_Geo, 348 exports):
+## full moon BP_MoonShape_C_1 (SM_Shape_Sphere at UE cm
+## (750.6698, 27377.701, 4185.192)), seven companion glow discs
+## (BP_MoonShape_C_0/C_2..C_7), glass shell SM_ThievesDen_Glass + frame
+## SM_ThievesDen_WindowBorder (UE cm (523.73975, 26666.291, 4064.7085)).
+## The replica is laid along the scope->window axis: the hub seats
+## beam_target on that sightline (telescope UE Root cm
+## (-492.02435, 27073.371, 4011.2234)), so outward extends the axis past the
+## wall and the ponder ray threads the collider gap.
+## Staging matches KF05 (00:20.80): Kilcairn rooftop/chimney silhouettes,
+## bright full moon, giant golden cheese wedge with 3 orbiting chunks.
+## Sizes are framed from KF05 for the 13 deg ponder zoom (frame half-width
+## ~3.9 m at the 34 m focus): moon 2.2 m radius, rooftop row inside +/-4.5 m,
+## cheese center-frame below the moon.
+## Decorative only: no collision, no occluder, unshaded materials.
+func _spawn_den_window_vista(win_pos: Vector3, beam_target: Vector3) -> void:
+	var old: Node = get_node_or_null("DenWindowVista")
+	if old != null:
+		old.queue_free()
+	var outward: Vector3 = win_pos - beam_target
+	# UE-fed axis: win_pos is the WindowBorder port and beam_target sits on
+	# the scope->window sightline, so outward extends that axis past the wall
+	# (the ponder ray threads the collider gap onto the focus below).
+	outward.y = 0.0
+	if outward.length() < 0.01:
+		outward = Vector3(-1.0, 0.0, 0.0)
+	outward = outward.normalized()
+	var side: Vector3 = outward.cross(Vector3.UP).normalized()
+	var root := Node3D.new()
+	root.name = "DenWindowVista"
+	root.position = win_pos
+	add_child(root)
+	var moon := MeshInstance3D.new()
+	moon.name = "VistaMoon"
+	var moon_mesh := SphereMesh.new()
+	# KF05-framed: 2.2 m radius at ~49 m from the scope eye subtends ~5 deg,
+	# sharing the 13 deg ponder frame with the rooftops + cheese below.
+	moon_mesh.radius = 2.2
+	moon_mesh.height = 4.4
+	moon.mesh = moon_mesh
+	var moon_mat := StandardMaterial3D.new()
+	moon_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	moon_mat.albedo_color = Color(0.92, 0.95, 0.88)
+	moon_mat.emission_enabled = true
+	moon_mat.emission = Color(0.92, 0.95, 0.88)
+	moon_mat.emission_energy_multiplier = 1.6
+	moon.set_surface_override_material(0, moon_mat)
+	# Moon rides low on the axis (+3 m over the window) so the sightline
+	# through the opening lands it inside the ponder frame (KF05).
+	moon.position = outward * 38.0 + Vector3(0.0, 3.0, 0.0)
+	root.add_child(moon)
+	var sil_mat := StandardMaterial3D.new()
+	sil_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	sil_mat.albedo_color = Color(0.03, 0.045, 0.09)
+	# KF05-framed row: +/-3.2 m lateral + 1.3 m half-width fits the 13 deg
+	# frame (~3.9 m half-width at the 30 m roof line).
+	var roof_heights: Array[float] = [3.0, 5.5, 2.2, 7.0, 4.2]
+	for i in range(roof_heights.size()):
+		var h: float = roof_heights[i]
+		var block := MeshInstance3D.new()
+		block.name = "VistaRoof%d" % i
+		var box := BoxMesh.new()
+		box.size = Vector3(2.6, h, 5.0)
+		block.mesh = box
+		block.set_surface_override_material(0, sil_mat)
+		block.position = outward * 30.0 + side * (float(i) * 1.6 - 3.2) + Vector3(0.0, h * 0.5 - 4.0, 0.0)
+		root.add_child(block)
+	var cheese_mat := StandardMaterial3D.new()
+	cheese_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	cheese_mat.albedo_color = Color(1.0, 0.78, 0.25)
+	cheese_mat.emission_enabled = true
+	cheese_mat.emission = Color(1.0, 0.72, 0.2)
+	cheese_mat.emission_energy_multiplier = 0.9
+	var wedge := MeshInstance3D.new()
+	wedge.name = "VistaCheese"
+	var wedge_mesh := BoxMesh.new()
+	wedge_mesh.size = Vector3(4.2, 2.0, 3.0)
+	wedge.mesh = wedge_mesh
+	wedge.set_surface_override_material(0, cheese_mat)
+	# Center-frame below the moon (KF05 cheese-against-moon composition).
+	wedge.position = outward * 30.0 + Vector3(0.0, 1.5, 0.0)
+	wedge.rotation = Vector3(0.0, 0.6, 0.35)
+	root.add_child(wedge)
+	for c in range(3):
+		var chunk := MeshInstance3D.new()
+		chunk.name = "VistaCheeseChunk%d" % c
+		var chunk_mesh := BoxMesh.new()
+		chunk_mesh.size = Vector3(0.7, 0.7, 0.7)
+		chunk.mesh = chunk_mesh
+		chunk.set_surface_override_material(0, cheese_mat)
+		chunk.position = wedge.position + Vector3(cos(float(c) * TAU / 3.0) * 3.2, 0.8 + 0.5 * float(c), sin(float(c) * TAU / 3.0) * 3.2)
+		chunk.rotation = Vector3(0.3 * float(c), 0.5 * float(c), 0.2 * float(c))
+		root.add_child(chunk)
+	# On-axis focus: the ray from the scope eye through the window opening
+	# lands here, so the ponder frame centers on the staged vista (KF05).
+	root.set_meta("focus", root.position + outward * 34.0 + Vector3(0.0, 0.65, 0.0))
+	var halo_mat := StandardMaterial3D.new()
+	halo_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	halo_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	halo_mat.albedo_color = Color(0.6, 0.8, 0.9, 0.18)
+	var halo := MeshInstance3D.new()
+	halo.name = "VistaHalo"
+	var halo_mesh := SphereMesh.new()
+	halo_mesh.radius = 4.0
+	halo_mesh.height = 8.0
+	halo.mesh = halo_mesh
+	halo.set_surface_override_material(0, halo_mat)
+	halo.position = moon.position
+	root.add_child(halo)
+
+
 func toggle_telescope_ponder() -> void:
 	if not _is_thieves_den:
+		push_warning("[mission_controller] toggle_telescope_ponder called outside thieves_den; ignoring")
 		return
+	# F dispatch guard: Area.interact (player _unhandled_input) and the
+	# lookat path below both route here on the same keypress, so an
+	# unguarded toggle would fire twice and collapse to a no-op. Collapse
+	# same-frame re-entry so F flips ponder exactly once per press.
+	var frame_now: int = Engine.get_process_frames()
+	if int(get_meta("ponder_toggle_frame", -1)) == frame_now:
+		return
+	set_meta("ponder_toggle_frame", frame_now)
 	_ponder_active = not _ponder_active
 	if _ponder_active:
+		# F6: real zoom view against UE values. Authored rig is
+		# BP_HidingSpot_Telescope_C_1 in ThievesDenTest_P:PersistentLevel:
+		# MainMesh yaw 60.08 deg, Camera rel (10, 0, 170) cm yaw 148 deg —
+		# eye 1.7 m above the tripod base, aimed out the east window at the
+		# KF05 vista (rooftops, full moon, golden cheese, [F] EXIT).
+		# No cooked FOV exists on the UE CameraComponent, so the zoom
+		# (13 deg) is framed from KF05 (moon + rooftops in one frame).
 		if _ponder_cam == null or not is_instance_valid(_ponder_cam):
 			_ponder_cam = Camera3D.new()
 			_ponder_cam.name = "DenTelescopeCam"
-			_ponder_cam.fov = 34.0
-			_ponder_cam.position = Vector3(-5.9, 42.3, 271.2)
+			_ponder_cam.fov = 13.0
 			add_child(_ponder_cam)
-			_ponder_cam.look_at(Vector3(-40.0, 46.0, 271.2), Vector3.UP)
-		if _ponder_cheese == null or not is_instance_valid(_ponder_cheese):
-			_ponder_cheese = Node3D.new()
-			_ponder_cheese.name = "DenTelescopeCheese"
-			_ponder_cheese.position = Vector3(-16.0, 44.2, 271.2)
-			add_child(_ponder_cheese)
-			var cheese_path: String = "res://assets/ue/Content/Art/Gameplay/Loot/LootMajor/LootCheese/SM_LootCheese.glb"
-			if not ResourceLoader.exists(cheese_path):
-				cheese_path = "res://assets/ue/Content/Art/Environment/Props/Dining/Food/SM_CheeseB.glb"
-			if ResourceLoader.exists(cheese_path):
-				var packed: PackedScene = ResourceLoader.load(cheese_path) as PackedScene
-				if packed != null:
-					var inst: Node3D = packed.instantiate() as Node3D
-					if inst != null:
-						inst.scale = Vector3(1.8, 1.8, 1.8)
-						_ponder_cheese.add_child(inst)
+		# Global-space eye: the tripod's world position plus the UE camera
+		# rel (10, 0, 170) cm -> port m (0.1, 1.7, 0.0). Refreshed on every
+		# enter (not just at creation) so a moved tripod stays framed.
+		var tele_global: Vector3 = _den_telescope_pos
+		var tele_area: Node = get_node_or_null("DenTelescopeArea")
+		if tele_area is Node3D:
+			tele_global = (tele_area as Node3D).global_position
+		_ponder_cam.global_position = tele_global + Vector3(0.1, 1.7, 0.0)
+		# On-axis fallback focus (3x the UE scope->window port delta) when
+		# the replica is absent; the vista focus meta wins when present.
+		var focus: Vector3 = _den_telescope_pos + Vector3(10.1576, 0.55, -4.0708) * 3.0
+		var vista: Node = get_node_or_null("DenWindowVista")
+		if vista != null and vista.has_meta("focus"):
+			var focus_v: Variant = vista.get_meta("focus")
+			if focus_v is Vector3:
+				focus = focus_v
+		_ponder_cam.look_at(focus, Vector3.UP)
 		_ponder_cam.current = true
+		# S05 rooftop wind swell (KF 00:19.6-00:21.9, peaks -39.5 dBFS RMS
+		# = the wind bed trim): opt-in bed, off again on exit.
+		if AudioManager != null and AudioManager.has_method("start_bed"):
+			AudioManager.start_bed("wind")
 	else:
 		if _ponder_cam != null and is_instance_valid(_ponder_cam):
 			_ponder_cam.current = false
@@ -710,6 +901,8 @@ func toggle_telescope_ponder() -> void:
 			var pcam_v: Variant = player.get("cam")
 			if pcam_v is Camera3D and is_instance_valid(pcam_v as Node):
 				(pcam_v as Camera3D).current = true
+		if AudioManager != null and AudioManager.has_method("stop_bed"):
+			AudioManager.stop_bed("wind")
 	_refresh_den_lookat_card(true)
 
 
@@ -813,6 +1006,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			toggle_telescope_ponder()
 			get_viewport().set_input_as_handled()
 		return
+	# Lookat-path enter: the [F] PONDER card shows up to 3.5 m, past the
+	# 1.8 m Area3D range, so F here enters the zoom when the card offers the
+	# scope. Same-press double dispatch with Area.interact collapses to one
+	# flip in toggle_telescope_ponder's frame guard.
+	if kev.keycode == KEY_F and str(_den_lookat_card.get("target", "")) == "telescope":
+		toggle_telescope_ponder()
+		get_viewport().set_input_as_handled()
+		return
 	if str(_den_lookat_card.get("target", "")) == "map_table":
 		if kev.keycode == KEY_H:
 			cycle_den_difficulty()
@@ -823,8 +1024,10 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _spawn_thieves_den_props(anchor: Vector3) -> void:
+	var floor_y: float = anchor.y
 	# Trunk Decoration Pedestal -> [F] CHANGE DECORATION
-	var deco_pos: Vector3 = anchor + Vector3(-1.8, 0.9, 1.4)
+	# Trunk pedestal is floor-standing: base snaps to floor_y (F1 rule).
+	var deco_pos: Vector3 = Vector3(anchor.x - 1.8, floor_y, anchor.z + 1.4)
 	var deco_area := Area3D.new()
 	deco_area.name = "DenDecorationPedestal"
 	deco_area.position = deco_pos

@@ -1,0 +1,62 @@
+TAT-2 task-2 sizes report: live SubViewport sizes + RD blur-target sizes
+Route: Den -> Guildhall (main menu backdrop, MissionPrepUI for guildhall order, WardrobeUI den customizer, live guildhall mission)
+Date (UTC): 2026-11-20
+Engine: Godot v4.7.2.stable.flathub, Vulkan 1.4.357 Forward+
+GPU path: LIVE Vulkan Forward+ on NVIDIA GeForce RTX 4070 Laptop GPU (device #0, as reported by RenderingServer).
+Display: X11 via Xvfb (screen 1280x720); rendering is real-GPU, NOT software rasterization.
+Window: 1280x720 (--resolution 1280x720; project viewport_width/height 1280/720, project.godot:24-25).
+Probe: temporary SceneTree script (deleted after run, never committed); stages waited 25 frames each; mission stage settled live (player spawned, 37.4 s load, guildhall order 2).
+Game files changed: NONE. Only this report was written, plus the one temp probe script (removed).
+
+PER-VIEWPORT LIVE SIZES (every SubViewport found at runtime, all own_world_3d=true)
+1) main_menu backdrop (game/src/ui/main_menu.gd:63-70; container full-rect + stretch, main_menu.gd:63-66; no explicit SubViewport.size set, engine default overridden by container)
+   size=(1280, 720)  texture=(1280, 720)  scaling_3d_scale=0.75  update=WHEN_VISIBLE
+   container rect=(1280.0, 720.0) stretch=true
+   env: ssil=true (main_menu.gd:150) ssao=false ssr=true (main_menu.gd:145) glow=true bg=COLOR
+2) mission_prep guildhall stage (game/src/ui/mission_prep_ui.gd:155-163; explicit viewport.size=(1280,720) at :163, container full-rect + stretch at :156-158)
+   size=(2, 2)  texture=(2, 2)  scaling_3d_scale=1.0  update=WHEN_VISIBLE
+   container rect=(0.0, 0.0) stretch=true; prep Control itself measured (0.0, 0.0)
+   env: ssil=true (mission_prep_ui.gd:391, desktop path) ssao=false ssr=true glow=true bg=SKY
+3) wardrobe preview turntable (game/src/ui/wardrobe_ui.gd:244-262; NO explicit SubViewport.size; container stretch=true at :248, min (420,300) at :251)
+   size=(906, 339)  texture=(906, 339)  scaling_3d_scale=1.0  update=ALWAYS(default)
+   container rect=(906.0, 339.0) stretch=true
+   env: ssil=false ssao=false ssr=false glow=false bg=COLOR
+4) wardrobe tool card (game/src/ui/wardrobe_ui.gd:287-296; NO explicit SubViewport.size; container stretch=true at :291, min (200,120) at :292)
+   size=(200, 120)  texture=(200, 120)  scaling_3d_scale=1.0  update=ALWAYS(default)
+   container rect=(200.0, 120.0) stretch=true
+   env: ssil=false ssao=false ssr=false glow=false bg=COLOR
+5) live guildhall mission (mission.tscn, GameState.active_contract_order=2 -> map_id guildhall, player spawned)
+   subviewports=0. The mission renders into the main window viewport only (1280x720).
+
+THE <32px-ON-AN-AXIS SET (explicit, exhaustive)
+  { mission_prep SubViewport = (2, 2) } -- BOTH axes < 32. THIS IS THE ONLY MEMBER.
+  Possibly-empty answer: it is NOT empty; exactly one viewport qualifies.
+  All others (1280x720, 906x339, 200x120) are >= 32px on both axes.
+
+RD BLUR-TARGET SIZES (SSAO/SSIL; GDScript cannot query RD textures, so derived per engine behavior from the measured live sizes above)
+  SSAO: NO targets anywhere on this route. Zero `ssao_enabled = true` sites exist under game/src (grep).
+  SSIL (allocated at half the viewport's 3D render size = size * scaling_3d_scale / 2):
+    main_menu: render 1280x720*0.75 = 960x540 -> SSIL targets 480x270. HEALTHY.
+    mission_prep: render 2x2*1.0 = 2x2 -> SSIL targets 1x1. DEGENERATE (below mip minimum; see cascade below).
+    guildhall mission main view: render 1280x720 (window scaling 1.0; SSIL on via weather_profile.gd:420 desktop path) -> SSIL targets 640x360. HEALTHY.
+    wardrobe x2: SSIL off -> no targets.
+  SSR trace buffers (render size): main_menu 960x540; mission_prep 2x2; mission 1280x720 (weather_profile.gd:453).
+  Glow mip chain: main_menu from 960x540, 5 levels (main_menu.gd glow_level loop); mission_prep from 2x2 (feeds the mipmap errors); mission den/guildhall per mission_controller.gd:291-302 caps; mobile caps per mobile_profile.gd apply_environment (checked, no viewport sizing there); weather_visuals.gd builds sky/rain only (checked, no env toggles, no viewports).
+  Godot issue context: https://github.com/godotengine/godot/issues/86631 -- "SubViewport with BOTH x and y < 32px + SSIL enabled => render_scene_buffers_rd null-texture error spam". The (2,2)+SSIL prep viewport is exactly that trigger.
+
+86631 SIGNATURE REPRODUCED LIVE (during the (2,2) viewport's lifetime; ~4300 error lines between the main_menu and mission_prep dumps; only 1 stray ERROR line across the wardrobe+mission stages):
+  ERROR: Too many mipmaps requested for texture format and dimensions (6), maximum allowed: (2). (x25)
+  ERROR: Too many mipmaps requested for texture format and dimensions (5), maximum allowed: (1).
+  at: texture_create (servers/rendering/rendering_device.cpp:1616)
+  ERROR: Condition "p_named_texture.texture.is_null()" is true. at: update_sizes (.../render_scene_buffers_rd.cpp:86)
+  ERROR: Condition "named_texture.texture.is_null()" is true. Returning: RID() at: get_texture_slice_view (.../render_scene_buffers_rd.cpp:435)
+  (+ uniform_set / compute-dispatch knock-ons identical to the issue thread)
+
+NOT-A-PROBE-ARTIFACT PROOF (parentage micro-run, same temp file, NVIDIA GPU)
+  Stage A (prep parented to root Window, as in the first probe): prep.size=(0,0), container=(0,0), viewport=(2,2).
+  Stage B (prep parented to a CanvasLayer): prep.size=(0,0), container=(0,0), viewport=(2,2).
+  Real game parentage == Stage B: ContractTableUI extends CanvasLayer (contract_table_ui.gd:1) and does add_child(prep) (contract_table_ui.gd:518). So the shipped prep screen crushes its 3D rooftop backdrop to the (2,2) engine-minimum clamp the same way.
+
+VERDICT: container-crush CONFIRMED, tiny-blur-target REJECTED.
+  The (2,2) is not an authored small size and no RD target is authored small: the authored prep size is (1280,720) (mission_prep_ui.gd:163) but its zero-size container (0,0) crushes the child to the (2,2) floor at runtime, and that crushed SSIL viewport emits the 86631 cascade. All healthy viewports derive healthy half-res targets (480x270, 640x360). No game/src content was modified by this probe.
+  GPU-required claim: CLOSED. The route ran under live Vulkan Forward+ on a real NVIDIA GPU (see adapter line); Xvfb supplied only the X display. Nothing is left open for lack of GPU.

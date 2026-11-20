@@ -1,0 +1,113 @@
+# Task 10 — Map building behavior + diamond tool-light levels (evidence log)
+
+Date: 2026-11-20. File-level verify only (no `make test`, no live-GPU run per
+task instructions; the orchestrator runs the suite once at settle).
+
+## F4 — Map buildings grow/shrink per reference
+
+Reference: KF10 (`00:52.35`, S08 Map Table) + S08 text: KILCAIRN parchment map
+with wooden 3D `ELWAY MANOR` / `CONSTABLES' GUILDHALL` tokens, selected token
+highlighted, `[F] ENTER MATCH` reticle. Prior state (draft F4): Den minis at
+fixed scale 0.24 with highlight-only response; 2D tactical map had no grow logic.
+
+### UE-derived values (cooked, verified on disk 2026-11-20)
+- `extracted/json/Art/UI/Map/SM_MapBuilding_OldManor.json` — StaticMesh
+  ExtendedBounds SphereRadius **45.56192**, BoxExtent (36.6074, 25.39115, 20.92738).
+- `extracted/json/Art/UI/Map/SM_MapBuilding_GuildHall.json` — StaticMesh
+  ExtendedBounds SphereRadius **27.39531**, BoxExtent (20.48586, 14.78825, 13.43562).
+- Ratio OldManor/GuildHall = 45.56192/27.39531 ≈ 1.6631 (python3 float division).
+
+### Edits — game/src/missions/mission_controller.gd (minis spans ONLY)
+- `_spawn_map_table_miniatures` (~lines 601-650 post-edit): per-token base scale
+  is now UE-relative — GuildHall keeps port base `0.24` (anchor), OldManor is
+  `0.24 * (45.56192 / 27.39531)` ≈ 0.399. Base stored per token in
+  `minis_base` meta. Desks offsets (-0.32/-0.08, 0.28/0.10) and UE mesh/mat
+  paths unchanged.
+- `_update_map_token_highlights` (~lines 652-700 post-edit): selection now
+  tweens each token to `base * 1.15` (selected) or `base` (deselected) over
+  0.25s (SINE/EASE_OUT, prior tween killed via `minis_tween` meta, direct set
+  when not in tree). Called on spawn, `set_den_selected_map`, and the gaze
+  path — so tokens grow/shrink as selection changes. Highlight energies KEPT:
+  active emission (1.0, 0.72, 0.24) @ 0.85, inactive BLACK @ 0.0.
+- Port presentation (no UE curve in cooked data — F4 backlog records the
+  material-param-vs-timeline question as undecided): `MINIS_SELECT_GROW 1.15`,
+  `MINIS_GROW_TIME 0.25`. Labeled as such in code.
+- Scope proof: new hunks are ONLY the five minis hunks
+  (`@@ -589,7 / -597,6 / -623,6 / -630,6 / -637,6`, func context
+  `_spawn_map_table_miniatures` / `_update_map_token_highlights`). All other
+  mission_controller hunks in the working tree are pre-existing uncommitted
+  Wave 1 work (T5 Den hub: vista, F1 grounding, telescope, wardrobe — untouched
+  by this task).
+
+### Edits — game/src/ui/hud.gd (tactical points)
+- Single hunk `@@ -444,11 +444,14 @@ class TacticalMapDraw` (:374 class span):
+  objective (building) diamonds now scale with map zoom —
+  `d = 7.0 * (64.0 / maxf(_world_span, 1.0))` — so buildings grow/shrink
+  against the existing 64.0 default span and 36–220 clamp (7.0 px at default:
+  zero change at the default view). Guard/loot/ping markers stay
+  screen-constant (3.2 / tri / 9.0+3.5). No new numbers introduced.
+- `:1402` instantiation (`TacticalMapCanvas`, min size, signal) and `:2711+`
+  `_refresh_tactical_map` fill (guards skip knocked_out; loot/objectives from
+  visible group nodes; per-frame refresh while map open drives the animation)
+  verified correct — no change needed.
+
+## F10 — Diamond tool light sane, never blinding
+
+Reference: KF21 (02:32.20 RED guard silhouette in diamond scan), KF22 (02:33.00
+GREEN transition), KF09 (Den table diamond). Prior state (draft F10):
+emissive + bloom with no FP light node; gem at 1.25.
+
+### UE-derived values (cooked, verified on disk 2026-11-20)
+- `extracted/json/Art/Gameplay/Gear/VistaraDiamond/MI_VistaraDiamond.json` —
+  `MaterialInstanceConstant/MI_VistaraDiamond`: StaticSwitch `Emissive On?` =
+  **false**, `Emissive` TextureParameterValue = **null**. UE authors the
+  diamond brass with emissive OFF.
+- `extracted/json/Gameplay/Tools/PrimaryTools/VistaraDiamond/BP_VistaraDiamond_Tool.json`
+  — `BlueprintGeneratedClass/BP_VistaraDiamond_Tool_C` (2 exports).
+- `extracted/json/Art/Gameplay/Gear/VistaraDiamond/SK_VistaraDiamond.json` — present.
+
+### Edits — game/src/player/thief_character.gd (diamond spans ONLY)
+- `_apply_vistara_materials` (hunks `@@ -2393,6 / -2401,7`, ~lines 2398-2426
+  post-edit): `const DIAMOND_ENERGY_CAP := 0.65`; gem
+  `emission_energy_multiplier` was **1.25**, now **DIAMOND_ENERGY_CAP (0.65)**.
+  Cap = mission `glow_intensity 0.65` (`_apply_fallback_environment`) — the same
+  0.65 the Den `DenMoonBeam` carries — i.e. the diamond emissive now sits at,
+  never above, the port bloom reference. Tongs surface still loads the authored
+  UE `MI_VistaraDiamond` via the loader (emissive-off path, unchanged).
+- Cap assertion (code + run-log line, in `_apply_vistara_materials`):
+  `assert(gem_mat.emission_energy_multiplier <= DIAMOND_ENERGY_CAP + 0.001, ...)`
+  and `print("DiamondCap: vistara gem emission_energy=", ..., " cap=", ...)`
+  Expected run-log line: `DiamondCap: vistara gem emission_energy= 0.65  cap= 0.65
+  (UE MI_VistaraDiamond Emissive Off; mission glow 0.65)`.
+  Verify at settle with: `grep -c "DiamondCap: vistara gem emission_energy= 0.65" <run.log>`
+  and `grep -c "DiamondCap.*exceeds" <run.log>` (expect 0).
+- Out of scope, verified unchanged: fairy orb 2.2 (`_apply_fairy_materials` —
+  PickpocketFairy tool system), zipwire cable 2.8, sap vial 1.5, smoke traj 2.0
+  (other tools; task forbids touching them). Original :2430-2432 maps by drift
+  onto the fairy orb block — left untouched per the no-other-tools rule.
+- Kept UE-derived values (verified, not edited): VFX spawn knobs in 0.3–4.5
+  (`spawn_blue_wisp` default 0.30, fairy OrbLight 1.2, sap flash 2.0, smoke
+  flash 3.0 — all inside the range); `light_probe.gd:115`
+  `light_visibility_weight` (energy*0.9, min 0.15, max 0.9); mission
+  `glow_intensity 0.65` + `glow_bloom 0.22`.
+- Stalled rows noted, not touched: F7 (no curb asset in filelist — procedural
+  replica is T8's scope), F9 flicker flags (not enumerated — T8 scope),
+  F14 RD cascade (owned by T4, `task-4.log` reports 0 errors).
+
+## Changed ranges (post-edit line numbers)
+- mission_controller.gd: ~601-650 (`_spawn_map_table_miniatures` token sizes +
+  `minis_base` meta), ~652-700 (`_update_map_token_highlights` grow tween +
+  kept highlight).
+- hud.gd: ~444-460 (`TacticalMapDraw._draw` objective zoom sizing).
+- thief_character.gd: ~2398-2426 (`_apply_vistara_materials` cap + assert + log).
+- This file: `.omo/evidence/tat2-playtest-ground-truth-fixes/task-10.log` (exists).
+
+## Verify performed (file-level, no test/live run)
+- Re-read all three edited spans post-edit — content matches the design above.
+- `git diff` hunk headers: mission_controller new hunks touch only the two
+  minis functions; hud hunk only `TacticalMapDraw`; thief new hunks only
+  `_apply_vistara_materials` (the `@@ -996` hunk is pre-existing Wave 1).
+- Cap assertion string `DIAMOND_ENERGY_CAP` + `assert(` confirmed present in
+  thief_character.gd; `task-10.log` exists at this path.
+- `make test` NOT run (task instruction; Wave 1 green at 90 PASS must not regress —
+  edits are additive/comment-scale plus one clamped scalar, no API changes).

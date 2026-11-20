@@ -1,0 +1,87 @@
+TAT-2 task-8: Guildhall exterior geometry (curbs, missing meshes, ground height, wall flicker)
+Date (UTC): 2026-11-20. File-level change only: no make test / live-GPU run
+(the orchestrator runs the suite once at settle; VERIFY here is re-reads +
+value cross-checks). Only game/src/core/level_loader.gd edited; mission_controller.gd
+glow spans read-only (NOT edited). No gameplay collision semantics changed
+beyond restoring authored spline surfaces (curb walk band at spline y, 0.15 m
+lip under the 0.3 m stair snap). Den hub/prop/vista spans untouched (T5 owns them).
+
+VALUE SOURCES (re-derived, nothing invented)
+- Backlog: .omo/waves/tat2-ground-truth/backlog.md F7 (ghidra-stalled: no
+  SM_*Curb*/SM_*Kerb* in filelist.txt — verified: `grep -ri curb|kerb`
+  filelist.txt is empty; no *Curb* in extracted/json) + F8 (cooked found:
+  Guildhall_Landscape.json 156 exports / Guildhall_Geometry.json 981 actors /
+  Guildhall_P.json present; all three exist on disk) + F9 (ghidra-stalled:
+  per-actor cull/occluder flags + glow scalars not enumerated; car-mesh path
+  UNMAPPED per task-3.md HARD_LIMIT) + F14 (RD cascade owned by T4, done per
+  task-4.log; this task keeps the RD-zero posture: no viewport, mipmap, glow,
+  or SubViewport behavior touched).
+- task-3.md: vehicles fall through the generic _get_mesh_and_shape /
+  _bind_glb_materials path — no dedicated handler; T3 HARD_LIMIT stands
+  (no car handler added). Guard SK coverage (Hauntstable / Security /
+  Enforcer Preview) untouched.
+- Footage keyframes (docs/reference/clip_1795033698901/KEYFRAME_INDEX.md):
+  KF15 (01:21.38 alley, wet cobbles) + KF16 (01:40.20 gate steps/cobbles) —
+  curb-lip profile source, recorded below as footage-derived.
+- Spline ground truth (game/data/generated/levels): Guildhall_Landscape
+  splines 0-1 = ONE continuous sidewalk path (spline 1 ends where spline 0
+  begins at [90.1034, 7.8594, 190.9973]), width 3.0, mesh
+  SM_SidewalkCityA_6m, flat y 7.8594; OldManor_P = 8 driveway splines,
+  width 6.0, mesh SM_OldManor_DrivewayA_x6. Extractor drops SplineEditorMesh
+  entries (tools/parse_tables.py:2289), so every tabled spline names a real
+  authored mesh. Ribbon top keeps the authored spline y (UE spline height =
+  ground height; T1 landscape heightmap decode ((h16-32768)/128)*step_y with
+  1 m/quad left unchanged — verified correct per UE R16 heightmap convention).
+- GLB measurement (POSITION accessor min/max over all 143 Guildhall
+  occluder-candidate GLBs in game/assets/ue/Content): thin skins sit below
+  0.25 m min-axis (grates 0.08-0.16, plates 0.11-0.13, signs 0.12);
+  SM_Urban_Ext_Wall_4x6 (11879 instances) measures 0.30 m, foundations
+  0.39 m. Threshold 0.25 keeps every load-bearing occluder class.
+- materials.json (1571 entries): only 2 two_sided wall-path hits
+  (MI_IvyWallVineA, MI_Stash_ThinWall_Glow — both legitimately double-sided),
+  so render-flags cull logic (:404/:407) never affects Guildhall masonry:
+  inspected, kept. No SidewalkCity/Driveway materials exist, so curb ribbons
+  bind the deterministic stone-grey token fallback via get_material_for_ue().
+
+CHANGED RANGES (new-file line numbers in level_loader.gd)
+1. Occluder thickness const + comment: ~L85-92 (OCCLUDER_MIN_THICK_M = 0.25).
+   Structural no-fade tokens + comment: ~L165-174.
+2. _apply_culling_policy structural early-return: ~L1468-1471.
+3. _qualifies_as_occluder min-axis guard: ~L1486-1492.
+4. _add_occluder 1 cm/side inset: ~L1498-1505.
+5. _new_build_ctx accounting keys: ~L1017-1019 (missing_meshes capped list,
+   missing_mesh_count, curb_built).
+6. _build_one_draw_item missing-mesh accounting: ~L1646-1654 (logs UE path,
+   counts, stores first 128 UE paths; still emits nothing and never touches
+   null — headless-safe path preserved).
+7. Curb system: CURB_* consts + _curb_tri + _build_one_curb_ribbon +
+   _build_curbs_from_splines ~L1763-1961; spline-comment update in
+   _store_level_extras; hooks in load_sublevels (~L2412) and
+   load_sublevels_async (~L2463-2464); result keys in _finalize (~L2047-2049:
+   curb_built, missing_mesh_count, missing_meshes).
+8. NOT edited: render-flags cull (:404/:407, inspected-kept per above),
+   landscape height decode + weighted/fallback materials (verified per T1,
+   unchanged), mission_controller.gd glow (read-only), all Den spans
+   (_is_den_window_wall, den_window_gap_spec, _ground_den_prop_shape,
+   _add_den_window_split — untouched; diff hunks at old -1504/-1507 are
+   pre-existing Wave-1 uncommitted work, not this task).
+
+HEADLESS-SAFE BEHAVIOR
+- Missing mesh: push_warning with the UE path (cross-ref vs the T1 actor
+  counts), skip draw/collider/occluder, never null-crash; ctx now also
+  carries missing_mesh_count + first-128 missing_meshes for F8 evidence.
+- Curbs: skips entries with <2 points or width <= 0; CURB_MAX_SPLINES = 64
+  bound with warning; degenerate segments/triangles skipped; empty commit
+  returns before spawning; failed material path returns before spawning.
+- Occluders: count still saturates via chunky walls/foundations/roofs
+  (Suite 11 occluders > 0 holds); culled-node budget untouched except small
+  masonry no longer dither-fades (e2e foliage paths match no exempt token).
+
+REMAINING STALLED (recorded, not fixed here)
+- F7 curb profile (lip 0.15 x 0.30 m, both edges, rect end caps, pitched
+  3-box-per-segment collision) is a procedural approximation: no cooked curb
+  asset exists to replicate exactly.
+- F9 per-actor cull/occluder flags + glow scalars unenumerated (backlog
+  stalled); car-mesh path UNMAPPED, generic-path fallthrough kept.
+- RD-zero posture kept: no render-pipeline, viewport, glow, or SubViewport
+  changes in this task.

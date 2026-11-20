@@ -1,0 +1,119 @@
+# Task 9 — Zipwire crank reload animation: manifest -> player -> HUD wiring
+
+Date: 2026-11-20. Scope: `game/src/core/animation_library.gd:84`
+(manifest entry, verified unchanged),
+`game/src/player/thief_character.gd` crank spans
+(`_begin_wire_crank` :989, `_play_wire_crank_clip` :1001-1011,
+`_tick_wire_crank` :1014, `_end_wire_crank` :1035),
+`game/src/ui/hud.gd` crank ring (:268-269, :282-291, feed :2283-2296,
+prompt :2295-2296 + :1013-1030), plus this log. No live-GPU run, no
+`make test` (orchestrator-gated); verification is file-level: span re-read
++ manifest grep. Untouched per scope: all other tool wiring, all guard
+spans in animation_library.gd (t7-guards owns the shared file).
+
+## (a) Sources re-derived (nothing invented)
+
+- Backlog: `.omo/waves/tat2-ground-truth/backlog.md` F13
+  (`cooked found`). UE source
+  `TAT/Content/Art/Animation/Thief/Anim/Gear/Zipwire/AN_Zipwire_Crank_Montage.uasset`
+  + cast/idle/travel set + `SK_Zipwire` / `SKEL_Zipwire`.
+- Cooked, re-verified this turn:
+  - `extracted/json/Art/Animation/Thief/Anim/Gear/Zipwire/AN_Zipwire_Crank_Montage.json`
+    (`AnimMontage/AN_Zipwire_Crank_Montage`, 2 exports; CompositeSections
+    `CrankStart -> CrankLoop`, SegmentLength 4.6666665).
+  - `extracted/json/Art/Animation/Thief/Anim/Gear/Zipwire/` holds the
+    cast-idle set (`AN_Zipwire_CastIdle_000` + `_Reach` + 045/090/135/180/
+    225/270/315 variants + `_Ref`) and the reload pair
+    (`AN_Zipwire__Reload`, `AN_Zipwire__Gear_Zipwire_Reload[_Montage]`).
+  - `extracted/json/Art/Animation/ThiefNisha/Anim/Zipwire/AN_ThiefNisha_Zipwire__Reload_Loop.json`
+    present (the 1P viewmodel loop the port wires).
+- Manifest `game/data/generated/anims_manifest.json` (995 entries),
+  re-queried this turn:
+  - `AN_ThiefNisha_Zipwire__Reload_Loop`: source
+    `TAT/Content/Art/Animation/ThiefNisha/Anim/Zipwire/AN_ThiefNisha_Zipwire__Reload_Loop.usda`,
+    duration 1.3168724215233159 s, 501 tracks / 501 samplers, 1670 channels,
+    135270 keys, frames 0-80. This is the loop wired at :84 (1P rig), not
+    the 4.65 s 3P `AN_Zipwire_Crank_Montage` (280 frames, 469270 keys),
+    which remains the F13 UE montage anchor cited in the player doc comment.
+- Footage: `docs/reference/clip_1795033698901/KEYFRAME_INDEX.md` S15
+  (01:49.50-01:58.50 2nd ZipWire launch & crank ascent): circular
+  blue/white progress reticle with `CRANK [LMB]` center-screen (01:51.20),
+  cable anchored to roof parapet, cranking 1P arm animation
+  (01:52.20-01:58.00). Port binds crank hold to `secondary_action` (RMB):
+  existing `get_active_reticle_state` hint `RMB [HOLD] CRANK` + HUD
+  `[RMB] CRANK` prompt; not changed (out of scope, no layout invented).
+- Coverage context from `task-3.md` (this evidence dir): car/vehicle path
+  HARD_LIMIT (no dedicated handler; generic `_get_mesh_and_shape` /
+  `_bind_glb_materials` path) — cited only to record that no crank-adjacent
+  vehicle wiring was touched.
+
+## (b) Manifest entry (:84) — verified correct, unchanged
+
+`game/src/core/animation_library.gd:84`:
+`"zipwire_crank": {"clip": "AN_ThiefNisha_Zipwire__Reload_Loop", "loop": true}`
+— byte-verified this turn via grep; both the loop name and `loop: true`
+match the cooked 1P reload-loop asset above, and `ensure_fp_clip`
+(:434-458) resolves exactly this manifest name, returning `""` when the
+manifest lacks it or the retarget yields no animation. No edit needed;
+guard spans in the same file untouched.
+
+## (c) Player wiring — thief_character.gd (edited span :997-1011)
+
+- `_begin_wire_crank` (:989-995): gate unchanged (`can_act`,
+  `equipped_tool == "zipwire"`, not grappling/mantling), sets
+  `_is_cranking`, zeroes `_crank_elapsed` / `crank_progress`, calls
+  `_play_wire_crank_clip`. Unchanged.
+- `_play_wire_crank_clip` (:997-1011) — the one edited span. Before: two
+  silent `return` no-ops (arms-off, `clip_name == ""`). After: same two
+  returns, each logging first with the UE clip path, never crashing:
+  - arms-off / null player / null lib ->
+    `push_warning("ZipwireCrank: crank clip no-op without real arms
+    (UE clip TAT/Content/Art/Animation/ThiefNisha/Anim/Zipwire/AN_ThiefNisha_Zipwire__Reload_Loop)")`
+  - `ensure_fp_clip` returns `""` (manifest lacks the clip OR the
+    `_retarget_general` zero-shared-bone path returned null, which already
+    logs `shares no bones with skeleton; skipped (procedural fallback
+    kept)` at animation_library.gd) ->
+    `push_warning("ZipwireCrank: crank clip no-op, manifest lacks clip or
+    zero shared bones (UE clip ...)")`.
+  Doc comment now cites both the F13 UE montage path and the wired 1P
+  viewmodel path. No exceptions, no fallback motion invented: on no-op the
+  crank ring still tracks `crank_progress` (procedural HUD fallback kept).
+- `_tick_wire_crank` (:1014-1032) and `_end_wire_crank` (:1035-1042):
+  verified unchanged — hold on `secondary_action`, duration from
+  `GameData.eval_curve("CT_WireCrank", "CrankDuration", ...)` with
+  `WIRE_CRANK_DURATION_FALLBACK` (6.0 s) floor, progress published to
+  `crank_progress`, charge granted on completion.
+- Sustain loop verified unchanged: `_select_fp_anim_role` returns
+  `"zipwire_crank"` while `_is_cranking`, and `_update_fp_anim_state`
+  re-resolves it every frame via `ensure_fp_clip`, so the 1.32 s loop
+  sustains for the whole crank hold.
+
+## (d) HUD ring — hud.gd (verified, unchanged)
+
+- `ReticleDraw` vars :268-269 (`crank_progress`, `crank_active`), ring
+  draw :282-291 (28 px crank ring + 6 ticks + clockwise progress arc).
+- Feed :2283-2296 (`crank_progress` / `crank_active` from
+  `get_active_reticle_state`, queued redraw) and prompt :2295-2296 +
+  :1013-1030 (`[RMB] CRANK` label, visible only for zipwire mode while
+  cranking). Player state source :744-778 (`get_active_reticle_state`
+  returns `crank_progress` / `crank_active: _is_cranking` + hints
+  `LMB LAUNCH` / `RMB [HOLD] CRANK`). All re-read this turn; already
+  wired, no edits.
+
+## Verification (file-level, this turn)
+
+- Re-read `thief_character.gd` crank span after edit: both `push_warning`
+  lines present, each containing the UE clip path
+  `TAT/Content/Art/Animation/ThiefNisha/Anim/Zipwire/AN_ThiefNisha_Zipwire__Reload_Loop`;
+  function still returns `void` with early returns only (no-op, never
+  crash); surrounding `_begin/_tick/_end` spans byte-identical to pre-edit
+  read.
+- Re-read `animation_library.gd:84` + `hud.gd:268-291`: content matches the
+  pre-edit reads quoted above (manifest entry + ring intact).
+- Manifest grep: `AN_ThiefNisha_Zipwire__Reload_Loop` present in
+  `anims_manifest.json` with the duration/track counts quoted in (a).
+- This log exists at
+  `.omo/evidence/tat2-playtest-ground-truth-fixes/task-9.log`.
+- Changed ranges reported: `thief_character.gd` :997-1011 (doc comment +
+  logged no-op); `animation_library.gd:84` and `hud.gd` crank spans read
+  but unmodified. No `make test`, no live-GPU run (orchestrator-gated).

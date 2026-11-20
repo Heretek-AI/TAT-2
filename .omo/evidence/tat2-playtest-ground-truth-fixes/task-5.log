@@ -1,0 +1,102 @@
+TASK-5 Den interior: ground floating props, window vista, telescope — evidence log
+Date: 2026-11-20. No live-GPU run (orchestrator runs the suite at settle); verify is file-level.
+
+VALUE SOURCES (re-derived, nothing invented)
+- backlog.md F1/F5/F6 rows (all `cooked found`):
+  F1 ground placement — UE `TAT/Content/Maps/ThievesDen/ThievesDen_Geo.umap`
+    object `ThievesDen_Geo:PersistentLevel`; cooked
+    `extracted/json/Maps/ThievesDen/ThievesDen_Geo.json` (348 exports, first
+    `ArrowComponent/Arrow` on `BP_CandelabraTableA_C_0`); per-prop
+    `StaticMeshComponent` entries carry `AttachParent` + relative transform
+    (ground-snap source = prop actor location vs `BodySetup` bounds).
+    Fallbacks KF02 (00:04.50 Den entry, desk/ledger sightline) + KF09
+    (00:46.25 gramophone/table props).
+  F5 window vista — UE `SM_ThievesDen_WindowBorder` +
+    `ThievesDen_Geo.umap` window actor + vista actors in the same
+    PersistentLevel; cooked `extracted/json/Art/Environment/Urban/
+    WallWindow/SM_ThievesDen_WindowBorder.json` (3 exports, `BodySetup_0`).
+    Re-derived placements: WindowBorder `StaticMeshComponent0` at UE cm
+    (523.73975, 26666.291, 4064.7085) scale (1.0401987, 1.0, 0.9991704);
+    glass shell `SM_ThievesDen_Glass` at UE cm
+    (132.74524, 27135.502, 3957.8376) yaw -90.135864; den shell
+    `SM_ThievesDen` same transform; exterior moons `BP_MoonShape_C_0..C_7`
+    (full moon C_1 = `SM_Shape_Sphere` at UE cm
+    (750.6698, 27377.701, 4185.192)). Fallbacks KF02 (moon shaft through
+    arched frosted window) + KF06 (00:24.60 leaded-glass window + Wanted wall).
+  F6 telescope — UE `TAT/Content/ThirdParty/Stylized_Furniture/Meshes/
+    SM_TeleScope.uasset` + `TAT/Content/Art/Gameplay/HidingSpots/
+    BP_HidingSpot_Telescope.uasset` (both in filelist); cooked
+    `extracted/json/ThirdParty/Stylized_Furniture/Meshes/SM_TeleScope.json`
+    (3 exports, `BodySetup_1`, slot `lambert2` -> `MI_TeleScope_Inst`);
+    `extracted/json/Art/Gameplay/HidingSpots/BP_HidingSpot_Telescope.json`
+    (16 exports). Re-derived rig `BP_HidingSpot_Telescope_C_1` in
+    `ThievesDenTest_P:PersistentLevel`: Root `RelativeLocation` UE cm
+    (-492.02435, 27073.371, 4011.2234); Camera rel (10, 0, 170)cm yaw 148;
+    MainMesh yaw 60.084366; ExitCapsule rel (80, -40, 100). No cooked FOV on
+    the UE CameraComponent, so zoom is framed from footage. Fallback KF05
+    (00:20.80 telescope view: rooftops, full moon, rotating golden cheese +
+    3 chunks, [F] EXIT).
+- task-3.md constraints honored: car path HARD_LIMIT (no dedicated handler;
+  vehicles fall through generic mesh path — untouched); guard SK coverage
+  (all 3 SKs covered; 3 empty slots on Preview are upstream data gap —
+  untouched); F7/F9/F14 stalled rows untouched.
+
+FILES CHANGED (spans as edited; line numbers re-read post-edit)
+- game/src/missions/mission_controller.gd
+  vista call :400-401: `_spawn_den_window_vista(win_pos, beam_target)` after
+    `spawn_window_godray`.
+  F1 rule + desk :414-425: rule comment + `floor_y = anchor.y`; desk fallback
+    `Vector3(anchor.x + 3.2, floor_y + 0.8, anchor.z - 2.5)` (table-top height
+    kept above snapped floor base; authored tatlevel pos used as-is).
+  ledger :467-470: fallback `Vector3(anchor.x + 3.4, floor_y + 0.95,
+    anchor.z + 1.8)`; authored +0.12 kept.
+  telescope pos :499-505: `_den_telescope_pos =
+    Vector3(-4.9202, floor_y, 270.7337)` — x/z = UE Root/100, Y snapped from
+    stale 41.0 to floor (tripod is floor-standing).
+  wardrobe :534-537: floor-standing base `Vector3(anchor.x - 2.6, floor_y,
+    anchor.z - 2.0)`; authored pos used as-is (removed +0.8 float).
+  deco :933-934: floor-standing base `Vector3(anchor.x - 1.8, floor_y,
+    anchor.z + 1.4)` (was +0.9); gramophone area follows deco_pos.
+  NEW `_spawn_den_window_vista` :702-784: procedural replica of the UE
+    exterior — VistaMoon (pale emissive sphere, BP_MoonShape_C_1 replica),
+    5 rooftop silhouette boxes (KF05), golden cheese wedge + 3 chunks (KF05),
+    alpha halo (C_0/C_2..C_7 companions); stores `focus` meta; decorative
+    only (no collision, no occluder, unshaded).
+  `toggle_telescope_ponder` :786-820: zoomed view — fov 13.0 (framed from
+    KF05; no cooked UE FOV exists), eye at tele pos + (0.1, 1.7, 0.0) (UE
+    Camera rel (10,0,170)cm), look_at vista focus (falls back to the old
+    (-40, 46, 271.2) target when no vista); exit restores player cam.
+    Placeholder cheese GLB chain (LootCheese/SM_CheeseB) removed; vista
+    cheese per KF05 replaces it. Lookat card (KILCAIRN SKYLINE/[F] EXIT)
+    unchanged.
+- game/src/core/level_loader.gd
+  `den_window_gap_spec` :1498-1510: additive vista keys only
+    (`vista_moon_ue`, `vista_moon_bodies: 8`, `vista_glass_ue`,
+    `vista_frame_ue`); existing gap/sill/lintel/marker/boxes untouched
+    (run_tests.gd:3355 assertions preserved).
+  NEW `_ground_den_prop_shape` :1518-1540: F1 collider grounding — grows
+    prop-scale (<2.5 m) thievesden boxes floating (0.02, 1.0] m down to the
+    instance ground plane; duplicates shared shapes, never mutates.
+  `_build_one_draw_item` mesh-null :1609-1616: headless-safe log
+    `push_warning("[level_loader] missing mesh for UE path ", mp, ...)` +
+    `return 0`; no collider/occluder emitted, no null deref.
+  collider loop :1704-1710: Den prop branch routes BoxShape3D through
+    `_ground_den_prop_shape`; window split + generic path unchanged.
+  Untouched: `:1447` collect path, `:1511` split math, car/guard/animation/
+    UI files.
+
+HEADLESS-SAFE LOADER BEHAVIOR
+- Missing vista/prop mesh: `_get_mesh_and_shape` returns null mesh ->
+  `_build_one_draw_item` logs the UE path (`mp`, e.g.
+  `/Game/Art/Environment/Urban/WallWindow/SM_ThievesDen_WindowBorder`) via
+  `push_warning` (works headless, no GPU/ResourceLoader GUI needed) and
+  returns 0 before any mesh/shape/occluder use — never null-crashes.
+- Vista replica uses only `BoxMesh`/`SphereMesh` + `StandardMaterial3D`
+  (no external assets, no physics queries, safe before first physics frame).
+
+ASSUMPTIONS (recorded, not hidden)
+- `anchor.y` (floor-grounded PlayerStart spawn) is the Den floor; table-top
+  hand heights (+0.8 desk, +0.95 ledger) are legitimate furniture heights.
+- Telescope zoom 13 deg: no cooked UE FOV; framed from KF05.
+- Vista cheese/rooftops are static (footage rotation is motion, not geometry);
+  single halo stands in for the 7 companion discs (procedural-replica scope).

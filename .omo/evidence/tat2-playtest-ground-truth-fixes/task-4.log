@@ -1,0 +1,88 @@
+TAT-2 task-4: container-crush fix verification (Den -> Guildhall staged run)
+Date (UTC): 2026-11-20
+Engine: Godot v4.7.2.stable.flathub, Vulkan 1.4.357 Forward+
+GPU path: LIVE Vulkan Forward+ on NVIDIA GeForce RTX 4070 Laptop GPU (device #0, as reported by RenderingServer).
+Display: X11 via Xvfb (screen 1280x720); rendering is real-GPU, NOT software rasterization.
+Window: 1280x720 (--resolution 1280x720; project viewport 1280x720).
+Probe: temporary SceneTree script (deleted after run, never committed; sibling of
+the task-2 probe method). Stages waited 25 frames each. Game files changed: ONLY
+the two fix files below. Run log: /tmp/tat2_task4_run.log (ephemeral).
+
+FIX (keeps the authored 1280x720 backdrop intent, SSAO/SSIL enabled everywhere)
+Root cause (matches task-2 verdict): MissionPrepUI is built via
+MissionPrepUIScript.new() at Control size (0,0) and parented to a CanvasLayer
+(ContractTableUI._confirm_prepare). set_anchors_preset(PRESET_FULL_RECT) defaults
+to keep_offsets=true, which preserved the zero size down the chain, so the
+SubViewportContainer measured (0,0) and crushed the authored 1280x720
+SubViewport to the (2,2) engine-minimum floor; with SSIL on that is the exact
+godotengine/godot#86631 cascade trigger.
+
+Changed spans (git diff --stat: 2 files, +82/-3):
+1) game/src/ui/mission_prep_ui.gd
+   - const STAGE_VIEWPORT_SIZE = (1280,720) (was inline Vector2i(1280,720) at :163).
+   - _build_all: self + stage_box now set_anchors_preset(PRESET_FULL_RECT, false)
+     with zeroed offsets, SIZE_EXPAND_FILL flags, named nodes
+     (PrepBackdropContainer / PrepBackdropViewport), and
+     stage_box.custom_minimum_size = (1280,720) as a floor (never a shrink
+     target; full-rect anchors still stretch to fill larger windows).
+   - _ready: resized.connect(_ensure_stage_size) + call_deferred("_ensure_stage_size").
+   - new _ensure_stage_size(): re-asserts no-keep-offsets full-rect after layout
+     and on resize; if the Control still measures <32px on an axis it takes the
+     viewport rect size; any child SubViewport below the authored floor is
+     restored to STAGE_VIEWPORT_SIZE. SSIL/SSAO env code untouched
+     (ssil_enabled=true site still at mission_prep_ui.gd:457 post-edit).
+2) game/src/ui/contract_table_ui.gd _confirm_prepare (the :518 parentage):
+   after add_child(prep), re-asserts prep full-rect with keep_offsets=false and
+   zeroed offsets (prep._ready runs during add_child while still (0,0)).
+
+Sizing mechanism: kill the keep_offsets preservation of the (0,0) birth size at
+both ends of the parentage (prep root in _build_all + _confirm_prepare after
+add_child), floor the container at the authored 1280x720 minimum, and re-check
+deferred + on resized. The SubViewportContainer then delivers a real non-zero
+size to the child SubViewport instead of crushing it to (2,2).
+
+SSAO/SSIL posture (grep, unchanged): ssil_enabled=true at exactly 3 sites --
+weather_profile.gd:420 (mission), mission_prep_ui.gd:457 (prep backdrop),
+main_menu.gd:150 (menu). Zero ssao_enabled sites under game/src. NOTHING
+disabled, globally or per-viewport. level_loader.gd untouched; mission
+controller/guard/wardrobe/ledger/thief/hud files untouched.
+
+LIVE PER-VIEWPORT SIZES (post-fix, same stages as task-2)
+--- main_menu backdrop ---
+vp=(1280, 720) container=(1280.0, 720.0) ssil=true ssao=false ssr=true glow=true
+--- mission_prep guildhall stage (real ContractTableUI parentage) ---
+vp=PrepBackdropViewport size=(1280, 720) container=(1280.0, 720.0) ssil=true ssao=false ssr=true glow=true
+prep Control size=(1280.0, 720.0); prep container size=(1280.0, 720.0)
+prep_nonzero_32px=true   <-- was size=(2,2) in task-2; crush FIXED
+--- wardrobe previews ---
+turntable (906, 300) + tool card (200, 120), both ssil=false (unchanged, healthy)
+--- live guildhall mission ---
+NOT SETTLED (see blocker below); subviewports=0 at the empty change_scene fallback.
+
+LIVE RENDERINGDEVICE ERROR COUNT
+  grep -c 'RenderingDevice.*ERROR' /tmp/tat2_task4_run.log  =>  0
+  (task-2 pre-fix: ~4300 error lines across the same menu->prep span.)
+Remaining ERROR lines in the run log (all recorded, none RenderingDevice):
+  - "SCRIPT ERROR: Parse Error: Identifier floor_y not declared in the current
+    scope (mission_controller.gd:934)" + "Failed to load script
+    mission_controller.gd". PRE-EXISTING working-tree breakage from another
+    in-flight edit (git diff shows +floor_y den-props lines; HEAD version is
+    clean). mission_controller is explicitly out of scope (sibling-owned), so it
+    was NOT fixed here. Consequence: change_scene_to_file(mission.tscn) could
+    not load, "TIMEOUT waiting: player-spawn" fired, and no live-mission RD
+    data exists. FOLLOW-UP for the mission-controller owner: fix the floor_y
+    scope error, then re-run the mission stage.
+  - Benign level_loader "missing mesh ... skipping draw item" WARNINGs only
+    (Searchlight/Cylinder/Plane/Cube placeholders; also present pre-fix).
+
+Caveats: (a) probe printed guildhall_order=0 (runtime GameData.contracts shape
+vs static contracts.json where order 2 = guildhall); the prep stage was still
+driven with selected_map_id="guildhall" through the real _confirm_prepare path
+and the MissionLobby backdrop geometry is order-independent, so the size
+verdict stands. (b) Per-stage sizes above are quoted from the captured engine
+log (the probe's print lines), which is the durable record.
+
+VERDICT: container-crush FIXED at the single probe-confirmed site with
+SSIL/SSAO posture unchanged; post-fix cascade count is 0 over every stage that
+ran. Live-mission re-verification is blocked on the out-of-scope
+mission_controller.gd floor_y parse error owned by a sibling edit.

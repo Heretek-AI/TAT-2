@@ -1,0 +1,138 @@
+# Task 7 — White guards: authored binds + animation state-machine repair
+
+Date: 2026-11-20. Scope: `game/src/ai/guard_ai.gd`,
+`game/src/core/animation_library.gd` (guard-role spans only),
+this log. No live-GPU run, no `make test` (orchestrator-gated);
+verification is file-level: span re-read + fallback grep.
+Untouched per scope: `thief_character.gd`, HUD files,
+`animation_library.gd:84` crank entry (verified byte-identical shape).
+
+Scope note: the standing read-only agreement for `/home/john/Projects/TAT-2`
+is recorded; this wave task explicitly authorizes writes to exactly these
+two source files plus this log, so the work proceeds on that explicit scope.
+
+## (a) Sources re-derived (nothing invented)
+
+- Backlog: `.omo/waves/tat2-ground-truth/backlog.md` F11 (white GLBs) + F12
+  (state machine + clip roles), both `cooked found`.
+- Coverage: `task-3.md` (this evidence dir), re-verified this turn against
+  `game/data/generated/mesh_materials.json` (2045 keys) +
+  `game/data/generated/materials.json` (1571 keys):
+  - `/Game/Art/Animation/GuardEnforcer/Skin/Hauntstable/SK_Hauntstable__Body`
+    -> 2/2 slots, both covered
+    (`/Game/Art/Character/Hauntstable/MI_Hauntstable_Top`,
+    `.../MI_Hauntstable_Bottom`).
+  - `/Game/Art/Animation/GuardEnforcer/Skin/Security/SK_GuardSecurity_01__Body`
+    -> 2/2 slots, both covered
+    (`/Game/Art/Character/GuardEnforcer/PrivateSecurity/MI_GuardSecurity_Bottom`,
+    `.../MI_GuardSecurity_Top`).
+  - `/Game/Art/Animation/GuardEnforcer/Skin/Base/SK_GuardEnforcer__Preview`
+    -> 8 slots: 3 empty-string (upstream data gap, nothing to resolve) + 5
+    covered (`MI_GuardEnforcer_Head_01A`, `MI_GuardEnforcer_Top`,
+    `MI_GuardEnforcer_HelmetEyes`, `MI_GuardEnforcer_Bottom`,
+    `MI_GuardEnforcer_BodyA`).
+- Clip roles: `extracted/json/AI/StateTrees/ST_Guard.json` (126 states incl.
+  Patrolling / Greet / React-to-Intruder / Raise-Alertness / Combat /
+  Search Defensive Locations + Move-to-nearby-location + EQS (states 9-17) /
+  Unconscious), `DAM_CharacterAnimationMapping_GuardBase.json` (14 tags incl.
+  Guard.Idle / Guard.Search / Guard.Attack.Ranged / Alert.Transition),
+  `DAM_CharacterAnimationMapping_GuardHauntsable.json` (same tag set),
+  `AnimSet_Guard_Club.json` / `AnimSet_Guard_ClubLantern.json` /
+  `AnimSet_Guard_Hauntsable.json` (FreshNeutral / Mindful / Vigilant / Combat
+  rows; Combat_Idle/Combat_Run reuse the Club Alert clips),
+  `game/data/generated/anims_manifest.json` (995 entries; all 10 CLUB_CLIPS
+  + 10 HA_CLIPS names verified present, incl. both search clips and both
+  DAM shortened montages).
+- Footage: `docs/reference/clip_1795033698901/KEYFRAME_INDEX.md`
+  KF16 (01:40.20 patrol/alert), KF25 (03:16.80 idle stance, hands behind
+  back), KF26 (03:20.20 takedown grapple).
+
+## (b) Binds fixed (F11) — guard_ai.gd:182-183, :237-250, :479-642
+
+- `_build_visuals` (:237-250) now calls `_bind_guard_glb_materials(inst)`
+  on the instantiated GLB. Previously the GLB was added with no material
+  work at all: untextured imports render white. That was the whole bug.
+- New bind chain (:479-642): `_guard_ensure_material_dbs` (same generated DBs
+  the `level_loader.gd` PBR path binds, re-read locally so guards never depend
+  on loader ordering; exact + case-insensitive keys) -> `_guard_ue_key_for_glb`
+  (`res://assets/ue/Content/` -> `/Game/`, strip `.glb`, matching
+  mesh_materials.json key shape) -> `_bind_guard_glb_materials` (GLB
+  material-name substring first, slot-index fallback — mirrors
+  `level_loader._bind_glb_materials`; per-`MeshInstance3D`
+  `set_surface_override_material` so the shared import is never mutated).
+- `get_guard_material_for_ue` (:535-576): authored PBR bind (albedo / normal /
+  ORM channels + `tint`). Every missing-texture path resolves to the retained
+  navy uniform `GUARD_NAVY = Color(0.14, 0.19, 0.36)` — the same navy as the
+  pre-existing capsule fallback (:258) — never white.
+- Fallback behavior (grep-verified, each logs the UE path via `push_warning`):
+  - missing/empty material entry -> `_guard_navy_fallback(ue_mat_path)` (:524).
+  - entry present but no recoverable albedo (or authored white with no
+    texture) -> navy + `ue_mat_path` (:557-561).
+  - empty mesh_materials slot (Preview slots 0-2) -> navy + `ue_key slot N`
+    (:640); surface with no slot -> navy + `ue_key surface N` (:636).
+  - no mesh_materials slots at all -> logged, import material kept (:612).
+  - GLB itself missing -> logged navy capsule fallback (:250).
+  - `Color(1,1,1,1)` in this file is a comparison only (:557); no albedo is
+    ever assigned white. `Color(1.0, ...)` hits are the pre-existing
+    alert-indicator / lantern colors, not materials.
+- Civilian compare: `civilian_npc.gd` holds rest pose + position bob when clips
+  are missing (never white, never errors). The brief's `:152/:208` line pins
+  have drifted (current file is 233 lines; those lines are `_idle_ttl` /
+  `_has_anims` bookkeeping), but the retained behavior is as described, and
+  the guard side now matches it: navy + procedural bob fallback, always logged.
+
+## (c) Transitions repaired (F12)
+
+- `guard_ai.gd _update_guard_anim` (:404-433): the hand-rolled per-state match
+  (which duplicated `clip_for_state` and pinned SEARCH to the stationary
+  search clip even while the guard fans out) is replaced by a single source:
+  `Alertness -> _anim_state_name()` (:389-401) ->
+  `GuardAnimationLibrary.clip_for_state(state, weapon, moving)`. Empty role
+  falls through to `_update_procedural_anim`. KO / slip / attack-lock
+  ownership is unchanged.
+- `animation_library.gd clip_for_state` (:276-293): SEARCH while moving now
+  plays `suspicious_walk` (ST_Guard search states 9-17 fan out via Move to
+  nearby location / EQS; the search clip is stationary, so sliding it under
+  scripted velocity is wrong motion), idle SEARCH keeps the `search` role.
+- Per-role UE citations added at the call sites:
+  `:335-340` attack (Light_A montage both sets; DAM Attack.Ranged is the
+  ranged tag, not this melee swing), `:352-355` slip montage,
+  `:370-372` slip->knockdown / attack-lock handoff,
+  `:323` role playback, `:286-291` setup sources,
+  `:271-283` weapon-set mapping. Retained approximation (not silence):
+  ClubLantern/Security bodies reuse CLUB_CLIPS — `AnimSet_Guard_ClubLantern`
+  authors its own Lantern rows and the Security SK has no Security anims —
+  until a lantern/security clip table is authored.
+- DAM vs AnimSet search reconciliation (comment, :266-270): DAM Guard.Search
+  points at `AN_GuardEnforcer_MindfulSuspicious_Search_Montage_Shortened`
+  (stationary tag montage); the port loops the AnimSet VigilantSuspicious
+  search row for the SEARCH state. Both names verified in the manifest.
+- `clip_for_role` (:256-257): documented as the UE-role lookup; returns ""
+  when the role did not retarget so callers keep their fallback.
+- `setup` (:187-197): logic unchanged; weapon mapping documented against
+  `AnimSet_Guard_Club` / `_ClubLantern` / `_Hauntsable` + both DAMs.
+
+## (d) Changed ranges (post-edit)
+
+- `game/src/ai/guard_ai.gd` (1461 lines): member DBs + `GUARD_NAVY` :182-188;
+  GLB bind call + capsule-log :237-250; weapon-set citations :271-283;
+  setup citations :286-291; role/attack/slip/finished citations
+  :323/:335-340/:352-355/:370-372; `_anim_state_name` :389-401;
+  `_update_guard_anim` delegation :404-433; bind chain :479-642.
+- `game/src/core/animation_library.gd` (658 lines): `setup` :179-197
+  (comment only, logic identical); `clip_for_role` :251-257 (comment only);
+  `clip_for_state` :260-293 (comment + SEARCH-moving branch :284-289).
+- `git status --short` shows only these two source files modified by this
+  task (other modified files belong to concurrent wave tasks, untouched here).
+
+## VERIFY (file-level)
+
+- Re-read all edited spans above; indentation and block structure checked.
+- Grep: every missing-bind path logs its UE path (`guard_ai.gd`
+  :250/:524/:561/:612) and resolves navy (`GUARD_NAVY` / capsule navy),
+  never white (no white albedo assignment exists).
+- `clip_for_state` is the single transition source for `_update_guard_anim`
+  (grep: one call site, :429); SEARCH-moving returns `suspicious_walk`.
+- Crank entry `:84` untouched; `thief_character.gd` + HUD files untouched.
+- This log exists at
+  `.omo/evidence/tat2-playtest-ground-truth-fixes/task-7.log`.

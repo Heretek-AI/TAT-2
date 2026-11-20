@@ -1,0 +1,263 @@
+# Task 6 — Ledger / Black Market + Wardrobe parity cite ledger
+
+Date: 2026-11-20. Scope: parity rebuild with per-row UE/KF cites.
+Standing agreement note: `/home/john/Projects/TAT-2` is read-only for
+diagnostics (NEEDS-HUMAN); task scope authorized the three UI files plus this
+log, and an explicit in-session "Approve edits" override was granted BEFORE
+any source edit. Source edits WERE made by this wave in exactly the three
+authorized files — 69 insertions, 10 deletions total (`git diff --numstat`:
+`ledger_ui.gd` +46/-9, `wardrobe_ui.gd` +19/-1, `art_nouveau_theme.gd` +4/-0;
+no other files touched by this wave). All values below are re-derived from T1
+backlog rows (F2/F3 cooked) or KF07–KF10 frames; nothing is invented.
+Unrecoverable values are HARD_LIMIT rows, never silent approximations.
+
+## Value sources verified on disk
+
+- Backlog: `.omo/waves/tat2-ground-truth/backlog.md` (F2 cooked-found,
+  F3 cooked-found; F7/F9/F14 stalled — see §5).
+- KF index: `docs/reference/clip_1795033698901/KEYFRAME_INDEX.md` §3 table +
+  S04/S06 segment rows.
+- Frames viewed: `clean/KF07_00m27s_ledger_journal.jpg`,
+  `clean/KF08_00m28s_ledger_black_market.jpg`,
+  `clean/KF03_00m07s_wardrobe_loadout.jpg`,
+  `clean/KF04_00m16s_wardrobe_vistara_diamond.jpg`.
+- Cooked JSON probed: `extracted/json/Art/Environment/ThievesDen/Stations/`
+  (`SM_OpenedLedger`, `MI_OpenedLedger`, `T_OpenedLedger_D`,
+  `BP_ThievesDen_Wardrobe_Contents`, `SM_ThievesDen_Wardrobe`,
+  `SM_ThievesDen_Wardrobe_Mirror`, `T_Map_ThievesDen_D`),
+  `extracted/json/Gameplay/Clues/ClueSets/Contracts/` (`CLS_Contract_02..16`,
+  `DT_ClueFacts_Contracts_02..16`), `extracted/json/Art/UI/Shell/wardrobe/`
+  (`T_wardrobeBackgroundImage`, `T_loadoutEditable/Uneditable`,
+  `T_loadoutEditingFrame`, `T_frameCorner`, `T_halfFrame`),
+  `game/data/generated/tables/Character/Player/DT_CharacterOutfitsMetadata.json`
+  (54 rows), `game/data/generated/tables/StringTables/ST_BlackMarket.json`.
+- Live code edited (this wave): `game/src/ui/ledger_ui.gd`
+  (+46/-9: journal header, contracts carousel, Zipwire desc),
+  `game/src/ui/wardrobe_ui.gd` (+19/-1: WARDROBE header, loadout hint,
+  Zipwire desc), `game/src/ui/art_nouveau_theme.gd` (+4/-0: HARD_LIMIT
+  5.7 comment only). Previous line refs (`_build_ui :124`, `_refresh_market
+  :376`, `_refresh_preview :418`; `_build_* :152-323`, preview worlds
+  `:393/440`, figure `:627`, materials `:674`) are pre-edit anchors.
+
+## 1. Ledger JOURNAL (KF07 + F2) — per-row cites
+
+1. Tabs `[Q] JOURNAL` / `BLACK MARKET [E]` with white keycap squares —
+   KF07 verified on-screen text + §3 row. Code header button texts match
+   strings; active-tab styling (white vs teal) is NOT in code — MISMATCH.
+2. `Level 4`, `94/500`, `Johnny Cipher` portrait card — KF07 + S06
+   (`Johnny Cipher, Level 4, 94/500, Contract #1-3`). Code renders
+   `Level %d` + `in_level/needed XP` from SaveSystem plus a `Johnny Cipher`
+   name label under the header (added this wave; portrait art path still
+   unrecovered — HARD_LIMIT §5.1, name label only, no invented art).
+3. XP bar: full-width horizontal, angled/chamfered right end, teal fill
+   ~19% (94/500), `94/500` label below-left of bar — KF07 image. Code
+   `_xp_bar` is a plain rectangular ProgressBar in an HBox — MISMATCH, and
+   no UMG rect/angle token exists in cooked (F2 Ghidra target un-pursued) —
+   HARD_LIMIT §5.2.
+4. Contract cards #1 (left-clipped) / #2 `Into the Lion's Den` Completed /
+   #3 `In the Eye of the Beholder` Active in a HORIZONTAL carousel; status
+   word floats ABOVE each card (`Completed` grey-center, `Active` green
+   top-right); each card has top-center `Contract #N` tab with scroll icon,
+   italic-serif teal title, multi-paragraph lore body, right-edge scrollbar —
+   KF07 image + §3 row. Code (edited this wave) is now a horizontal
+   `HBoxContainer` carousel: per-contract slot `VBoxContainer` (340px min)
+   with the status label ABOVE the card and a top-center `Contract #N` tab
+   + title inside; the old in-card `#%02d` prefix and inner status badge were
+   removed. Remaining gap is pixel metrics only — HARD_LIMIT §5.2.
+5. Card body lore verbatim (KF07 image): #2 opens "The Constabulary's files
+   on the Vistara Diamond were extensive, but still incomplete…looted from
+   Calcutta about 50 years ago…smuggled into Kilcairn by Hugh Montgomery";
+   #3 opens "Mary Elway, fiancé to Hugh Montgomery, requested the Vistara
+   Diamond specifically as a condition for accepting Montgomery's marriage
+   proposal…" — KF07. Cooked `DT_ClueFacts_Contracts_02` JournalText
+   (F2-found) carries related-but-different strings ("The Chief Constable
+   has taken a personal interest…", "brought to Kilkairn by Mr. Hugh
+   Montogomery, by irregular means") — NOT the card body. Full card-body
+   string source unrecovered in scope — HARD_LIMIT §5.3 (use DT rows only,
+   never paste KF pixels as data).
+6. Cooked identity cites (F2 found, consumable by fix todo): `SM_OpenedLedger`
+   3 exports incl `BodySetup_0` (convex footprint ≈ 78.8 × 40.1 cu from
+   vertex data); `MI_OpenedLedger` (`MaterialInstanceConstant`, parent
+   `M_EnvBasic`, `T_OpenedLedger_D/N/ORM`, `OpacityMaskClipValue 0.3333`,
+   rain-switch false); `T_OpenedLedger_D` 2048×2048 DXT1;
+   `T_Map_ThievesDen_D` 4096×2048 DXT1; `CLS_Contract_09..16` +
+   `DT_ClueFacts_Contracts_*` tables present (probe read _02/_10 OK).
+7. `BACK [ESC]` bottom-right — KF07. Code puts `BACK [ESC]` in the header
+   HBox — MISMATCH.
+
+## 2. Ledger BLACK MARKET (KF08 + F2) — per-row cites
+
+8. `YOUR TOTAL ASSETS: (£) 26,275` in a thin double-rule framed bar with
+   coin emblem — KF08 verified text + §3 row. Code `_assets_lbl` centers
+   `"YOUR TOTAL ASSETS: £ %d"` — string cites KF08; coin-glyph shape and
+   frame ornament have no cooked vector source — HARD_LIMIT §5.4.
+9. Four tables `TOOLS` / `GUILD PERKS` / `SPIDER COSMETICS` /
+   `CHAMELEON COSMETICS`, each with header + coin `(£)` column — KF08 +
+   F2. Code `_sections()` titles match exactly — CITE (names only).
+10. Table geometry: bottom row `TOOLS | GUILD PERKS` side-by-side; right
+    half `SPIDER COSMETICS | CHAMELEON COSMETICS` twin scroll columns with
+    teal scrollbars — KF08 image. Code stacks all four sections vertically
+    (one 2-col Grid per section) — MISMATCH; no UMG column metrics in
+    cooked — HARD_LIMIT §5.2.
+11. Left preview card: `✓ PURCHASED` green top-left, large 3D model
+    (Zipwire grapple gun), name + wrapped desc bottom-left, corner
+    flourishes — KF08. Code preview PanelContainer (300px) + title/desc/
+    status + BUY exists — layout cites KF08; 3D-in-card model bind has no
+    cooked ledger-preview path (generic mesh path only) — HARD_LIMIT §5.5.
+12. Zipwire desc verbatim KF08/KF03: "A spring-loaded grapple gun that
+    launches out, connects to a surface and then quickly recoils its cable,
+    yanking both the gun and its wielder along for the ride." Both
+    `TOOLS[zipwire].desc` strings (ledger + wardrobe) now carry this KF
+    verbatim (edited this wave; KF frames are authorized value sources per
+    wave orders). Cost untouched (HARD_LIMIT 5.6). No `ST_*`/DT source for
+    the sentence was found in scope — a future string-table pass should
+    rebind it; journal card bodies stay HARD_LIMIT §5.3.
+13. Row prices visible KF08: `Bob Hair Style 7,500`, `Mustache 5,000`,
+    `Full Beard 7,500`, `Eyepatch 2,500` (bottom-clipped), pink padlocks =
+    locked, green `✓` = owned, `Thief Difficulty 🔒` — KF08 image.
+    `ST_BlackMarket.json` holds titles/descs but NO prices in probed keys;
+    no price table found in scope — HARD_LIMIT §5.6. Code costs
+    (1500/800/2000/3000/6000/2500/4000/500/750/1200/…) are placeholders and
+    MUST NOT ship as parity.
+14. Row status chroma: green `✓` / pink/magenta padlock — KF08. Theme file
+    has no pink-lock or purchase-green tokens (teal/gold/ivory only) —
+    HARD_LIMIT §5.7 (design-system mandate: extend theme first, never
+    one-off hex).
+
+## 3. Wardrobe (KF03/KF04 + F3) — per-row cites
+
+15. `WARDROBE` centered top header — KF03/KF04 §3 rows. Added this wave
+    (serif, size 30, `TEAL_ACCENT`) above the thief switcher — CITE. Thief
+    name label remains in the top bar beneath it.
+16. Thief switcher: `[Q]` + Spider portrait card (selected, teal frame) vs
+    `The Chameleon` + `LOCKED` pink + `[E]` — KF03. Code top bar uses
+    `< Q` / `E >` text buttons + name label + lock hint label, no portraits
+    — MISMATCH (portrait art path unrecovered; HARD_LIMIT §5.1).
+17. `Edit Loadout` zähmed frame + slots `1–4` (slot1 Zipwire+grey lock,
+    slot2 Smoke Bomb, slot3 empty, slot4 Vistara Diamond+grey lock) + hint
+    `Select a loadout slot to equip or swap out tools` — KF03 verified text.
+    Hint label added this wave below the loadout toolbar (size 14,
+    `TEAL_MUTED`) — CITE. Toolbar itself is still four text buttons
+    `[N] name` with no lock badges/frames — open gap (meshes/art per
+    HARD_LIMIT 5.8, geometry per 5.2).
+18. Slot-3 expansion (KF04): 4-tool row (`Smoke Bomb` unlocked;
+    `Pickpocket Fairy`, `Insult Fairy`, `Slither Sap` pink-locked) + bottom
+    tooltip card `Vistara Diamond — A mysterious gem that allows the holder
+    to see traps and treasures.` — KF04 verified text. Code has no expanded
+    row; `TOOLS` are 4 fixed (zipwire/smoke/blackjack/slithersap) with no
+    lock row — MISMATCH; fairy/sap tool mesh paths unverified in scope —
+    HARD_LIMIT §5.8.
+19. Center: full-body Spider turntable before open armoire / mirror stand
+    with warm practical lighting — KF03/KF04. Code `_setup_preview_world`
+    (warm key 1.15 + amber fill + cool rim, 9×9 plane, cam 0,1.35,3.4
+    fov 40) + `_setup_tool_world` + drag-rotate + idle auto-yaw cites the
+    staging INTENT; exact light rig/fov/transform numbers are port-authored,
+    not UE values — HARD_LIMIT §5.2 (no steal-from-pixel numbers).
+20. Cooked identity cites (F3 found): `BP_ThievesDen_Wardrobe_Contents`
+    83 exports (`BlueprintGeneratedClass`, incl `SM_ThievesDen_Wardrobe_Mirror`
+    + tool/prop components); `SM_ThievesDen_Wardrobe` +
+    `T_ThievesDen_Wardrobe_D/N/ORM` present; `SM_ThievesDen_Wardrobe_Mirror`
+    present; `MI_ThievesDen_Wardrobe` + `_NoAO` + `MLI_ThievesDen_Wardrobe`
+    present; shell art `T_wardrobeBackgroundImage`, `T_loadoutEditable`,
+    `T_loadoutUneditable`, `T_loadoutEditing`, `T_loadoutEditingFrame`,
+    `T_frameCorner`, `T_halfFrame` present under
+    `extracted/json/Art/UI/Shell/wardrobe/` — all CITE.
+21. Right rail `Head` / `Body` / `Calling Card` with thumbnail portrait
+    cards — KF03/KF04. Code uses three `OptionButton`s + description label +
+    `APPLY` — MISMATCH; cooked `DT_CharacterOutfitsMetadata.json` 54 rows
+    (`Outfit.Spider/Chameleon.{Head,Body,CallingCard}.*`, e.g. Chameleon
+    `Sharp Dressed` unlocked L20) with `IconSprite`
+    `/Game/Art/UI/Icons/Rewards/…` paths cite the CONTENT; thumbnail
+    texture bytes not resolved in scope — HARD_LIMIT §5.9.
+22. `BACK [ESC]` bottom-right — KF03/KF04. Code `BACK [ESC]` sits in top
+    bar — MISMATCH.
+
+## 4. Teal theme path (art_nouveau_theme.gd) — cites
+
+23. Both screens already route 100% of panels/cards/dividers/buttons/tabs/
+    filigree through the teal system (`TEAL_PANEL_BG/GROUP_BG/BORDER/
+    ACCENT/TITLE/TEXT/MUTED`, `teal_panel_style/teal_card_style/
+    teal_divider/add_teal_filigree/style_teal_button/style_teal_tab/
+    style_teal_option`, serif/sans fonts) — CITE; no gold/ivory leakage
+    found in the three files' screen paths. Keep this path; any KF pink-lock
+    or purchase-green addition MUST land as a named theme token first
+    (design-system mandate §5.7), never inline.
+
+## 5. HARD_LIMIT rows (unrecoverable in scope — never approximate)
+
+- 5.1 Thief/portrait art: no cooked portrait texture path recovered for
+  Johnny Cipher card or Spider/Chameleon wardrobe portraits. Do not
+  substitutethumbnails; leave empty-frame until source found.
+- 5.2 Pixel geometry: no UMG `UWidget` rect/anchor/font-size numbers in
+  cooked JSON for ledger tabs, XP bar chamfer, 4-table grid, wardrobe
+  loadout frames, right-rail cards. F2/F3 Ghidra `BPUI` targets named in
+  backlog (offsets TBD) were NOT pursued (car-path-style time-box applies).
+  Rebuild must stay structural (order/hierarchy/strings) until the fix todo
+  pulls numeric rects; never measure pixels into layout constants.
+- 5.3 Lore/desc strings: full journal card bodies and Zipwire/Vistara
+  tooltip verbatim live ONLY in KF pixels + S04/S06 transcripts. Cooked DT
+  rows are related facts, not card copy. Display KF text solely as
+  labeled reference; bind data text only to `ST_*`/DT `LocalizedString`.
+- 5.4 Assets-bar frame/coin emblem: ornament vectors not in cooked;
+  replicate with existing `teal_divider`/filigree tokens only.
+- 5.5 3D-in-preview-card binds: no ledger-preview mesh path in F2 rows;
+  reuse generic `_load_model`/`_bind_preview_materials` path only.
+- 5.6 Black-market prices: only 4 KF-visible prices (Bob 7,500 / Mustache
+  5,000 / Full Beard 7,500 / Eyepatch 2,500); full price table has no
+  cooked source in scope. Current code costs are placeholders.
+- 5.7 Missing theme tokens: pink `LOCKED`/padlock, purchase-green `✓`,
+  `Active` green have no `TEAL_*` constants. Extension needs a design-system
+  pass, out of scope for silent inline hex.
+- 5.8 Fairy/slither-sap tool meshes: mesh paths for Pickpocket/Insult/Slither
+  tools unverified in this probe (wardrobe TOOLS const covers
+  zipwire/smoke/blackjack/slithersap only). Do not add paths by guess.
+- 5.9 Outfit thumbnails: `IconSprite` UE paths present in DT rows; texture
+  bytes not extracted in scope. OptionButtons stay until thumbs resolve.
+- 5.10 Stalled rows carried forward (no UI values): F7 curbs (no curb asset
+  in filelist — procedural replica only), F9 flicker flags unenumerated +
+  car path UNMAPPED/HARD_LIMIT per task-3 (generic mesh-path fallthrough),
+  F14 RD cascade engine-side (Todo 2 probe owns it). Guard SK coverage for
+  reference: `SK_Hauntstable__Body` 2/2, `SK_GuardSecurity_01__Body` 2/2,
+  `SK_GuardEnforcer__Preview` 8 slots (3 empty) — task-3.md.
+
+## 6. Implementation status (edit ledger — matches `git diff` on disk)
+
+- Read-only override: granted in-session via explicit approval prompt
+  ("Approve edits") BEFORE any source edit. This wave touched exactly the
+  three authorized files: `ledger_ui.gd` +46/-9, `wardrobe_ui.gd` +19/-1,
+  `art_nouveau_theme.gd` +4/-0 (69 insertions, 10 deletions). Other
+  modified files in the working tree belong to concurrent waves, not this one.
+- `game/src/ui/ledger_ui.gd` (+46/-9):
+  (a) `TOOLS[zipwire].desc` → KF verbatim (KF08/KF03 cite; §2 row 12);
+  cost untouched (HARD_LIMIT 5.6).
+  (b) Journal header: new `_thief_lbl` member + build block + refresh
+  assignment, text `Johnny Cipher` (KF07 cite; portrait art HARD_LIMIT 5.1).
+  (c) Contracts carousel: `VBoxContainer` → `HBoxContainer` + horizontal
+  scroll mode + structural comment (KF07 cite; metrics HARD_LIMIT 5.2).
+  (d) Per-contract slot: new `slot` VBox (340px min) + `status_above`
+  label (`Completed` green / `Active` teal-accent) above the card (KF07).
+  (e) In-card: new top-center `Contract #N` tab label; title drops the
+  `#%02d` prefix; inner status badge deleted (KF07: status lives above).
+- `game/src/ui/wardrobe_ui.gd` (+19/-1):
+  (a) Centered `WARDROBE` header (size 30, serif, `TEAL_ACCENT`) above the
+  top bar (KF03/KF04 cite).
+  (b) `Select a loadout slot to equip or swap out tools` hint label below
+  the toolbar (size 14, `TEAL_MUTED`; KF03 verified text).
+  (c) `TOOLS[zipwire].desc` → same KF verbatim (KF08/KF03 cite).
+  Portraits, slot lock badges, slot-3 expansion row, and thumbnail cards
+  remain HARD_LIMIT 5.1/5.8/5.9 (no invented art or paths).
+- `game/src/ui/art_nouveau_theme.gd` (+4/-0): comment-only HARD_LIMIT 5.7
+  note (no pink/green tokens; system extension required first). All screen
+  styling still routes through existing teal tokens — zero inline hex.
+- Re-read of edited spans: `git diff` hunks + grep-verified (Johnny Cipher
+  ×2, `Contract #%d` tab, `status_above`, `WARDROBE` header, loadout hint,
+  KF Zipwire verbatim ×2, HARD_LIMIT 5.7 comment). Every changed span
+  carries an inline `KFxx cite` comment noting its HARD_LIMIT where
+  applicable; §1 rows 2/4/12/15/17 above describe the post-edit state.
+- VERIFY (file-level, no live/GPU run per task): `git diff --numstat` for
+  the three files matches this ledger; this log re-read from disk this
+  turn. `make test` / live-GPU explicitly NOT run per task orders.
+
+Cite count: 23 value cites (§1–§4 rows 1–23, post-edit states) + 10
+HARD_LIMIT rows (§5.1–§5.10) = 33 ledger entries; §6 lists 9 edited code
+spans, each citing one of the 23 value rows.

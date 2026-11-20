@@ -159,6 +159,7 @@ var _anim_weapon: String = "club"
 var _use_real_anims: bool = false
 var _attack_anim_lock: float = 0.0
 var _slip_anim: bool = false
+var _takedown_vic_anim: bool = false
 
 var visual_root: Node3D
 var body_mesh: MeshInstance3D
@@ -172,6 +173,50 @@ var lantern_root: Node3D = null
 var lantern_light: OmniLight3D = null
 var _carried_node: Node3D = null
 var _last_emitted_suspicion: float = -1.0
+
+# Authored guard materials (F11 ground truth). mesh_materials.json keys are UE
+# paths without extension; materials.json keys are UE material paths. Coverage
+# (task-3.md, extended task-7.md): SK_Hauntstable__Body 2/2 + SK_Hauntstable__Head
+# 3/3 via head sub-skeleton attach, SK_GuardSecurity_01_Body 5/5 headed (path
+# swap from the headless __Body torso), SK_GuardEnforcer__Preview 8 slots
+# (slots 0-2 empty upstream -> authored eye rescue below; slots 3-7 covered).
+# Only a genuinely missing bind falls back to the retained navy uniform below
+# with the UE path logged; never white.
+const GUARD_NAVY: Color = Color(0.14, 0.19, 0.36)
+## Eye-material rescue (task-7). The Preview GLB carries generic eye material
+## names (Cornea/Eyes/Overlay) for slots 0-2, which are empty upstream; a raw
+## substring match would misroute the "Eyes" surface onto the HelmetEyes slot
+## ("helmeteyes".find("eyes")). Exact-match rescue binds the authored eye
+## materials instead. All three rescue paths are covered in materials.json with
+## albedo textures on disk (see task-7.md).
+const GUARD_EYE_RESCUE := {
+	"cornea": "/Game/MaterialLibrary/Character/EyeLibrary/MI_Eye_Cornea",
+	"eyes": "/Game/MaterialLibrary/Character/EyeLibrary/MI_Eye_Base_Brown",
+	"overlay": "/Game/MaterialLibrary/Character/EyeLibrary/MI_Eye_Overlay",
+}
+## Preview slot-index eye rescue (task-7). When the import leaves surface names
+## empty, slots 0-2 fall through to slot-index fallback; map those indices to
+## the authored eye materials instead of navy (same three paths as above).
+const GUARD_PREVIEW_EYE_BY_SLOT := [
+	"/Game/MaterialLibrary/Character/EyeLibrary/MI_Eye_Cornea",
+	"/Game/MaterialLibrary/Character/EyeLibrary/MI_Eye_Base_Brown",
+	"/Game/MaterialLibrary/Character/EyeLibrary/MI_Eye_Overlay",
+]
+## Head-GLB attach map (task-7): body-only SK res path -> headed SK res path.
+## SK_Hauntstable__Body.glb carries torso only (2 prims); its head geometry
+## lives in SK_Hauntstable__Head.glb (3 prims, 97 joints in identical name+order
+## to the body — verified by GLB JSON dump in task-7.md). Security needs no
+## entry: SK_GuardSecurity_01_Body is the skeleton-identical headed variant, so
+## the path swap in _resolve_guard_glb_path covers it with no extra instance.
+const GUARD_HEAD_GLB := {
+	"res://assets/ue/Content/Art/Animation/GuardEnforcer/Skin/Hauntstable/SK_Hauntstable__Body.glb": "res://assets/ue/Content/Art/Animation/GuardEnforcer/Skin/Hauntstable/SK_Hauntstable__Head.glb",
+}
+var _guard_mats_db: Dictionary = {}
+var _guard_mats_lower: Dictionary = {}
+var _guard_mesh_mats: Dictionary = {}
+var _guard_mesh_lower: Dictionary = {}
+var _guard_tex_cache: Dictionary = {}
+var _guard_std_cache: Dictionary = {}
 
 
 func _ready() -> void:
@@ -226,7 +271,16 @@ func _build_visuals() -> void:
 		var inst := packed.instantiate()
 		inst.rotation_degrees.y = 180.0
 		visual_root.add_child(inst)
+		# F11/task-7: bind the authored slot materials. Untextured GLB imports
+		# render white; every missing bind below resolves to logged navy, never
+		# white. Body-only SKs then get their extracted head sub-skeleton.
+		_bind_guard_glb_materials(inst)
+		_attach_guard_head(inst, glb_path)
 	else:
+		# Retained navy capsule fallback (compare civilian rest-pose + bob:
+		# missing art holds a readable pose, never white). Unexpected: all 3
+		# task-3.md SK GLBs ship, so log the missing GLB path.
+		push_warning("[guard_ai] guard GLB missing, navy capsule fallback (never white): " + glb_path)
 		body_mesh = MeshInstance3D.new()
 		var m := CapsuleMesh.new()
 		m.radius = 0.45
@@ -247,9 +301,14 @@ func _build_visuals() -> void:
 	_setup_guard_anims()
 
 
-## Builds the real-clip AnimationPlayer on visual_root. Guarded: any failure
-## (missing manifest, unreadable GLB, zero shared bones) leaves anim_player
-## null and the procedural fallback in charge.
+## UE weapon-set mapping (F12 ground truth): "hauntstable" -> HA_CLIPS
+## (AnimSet_Guard_Hauntsable + DAM_CharacterAnimationMapping_GuardHauntsable);
+## every other guard (club / ClubLantern / Security bodies) -> CLUB_CLIPS
+## (AnimSet_Guard_Club + DAM_CharacterAnimationMapping_GuardBase). Retained
+## approximation, not silence: AnimSet_Guard_ClubLantern authors its own
+## Lantern locomotion rows (AN_GuardEnforcer_Lantern_* in anims_manifest.json)
+## and the Security SK has no Security-specific anims, so both reuse the Club
+## table until a lantern/security clip table is authored.
 func _guard_weapon_set() -> String:
 	var lname: String = name.to_lower()
 	if lname.find("haunt") >= 0:
@@ -257,6 +316,11 @@ func _guard_weapon_set() -> String:
 	return "club"
 
 
+## Real-clip AnimationPlayer (UE sources: ST_Guard StateTree states,
+## DAM_CharacterAnimationMapping_GuardBase / _GuardHauntsable tags,
+## AnimSet_Guard_Club / _Hauntsable rows, anims_manifest.json clip GLBs).
+## Guarded: any failure (missing manifest, unreadable GLB, zero shared bones)
+## leaves anim_player null and the procedural fallback in charge.
 func _setup_guard_anims() -> void:
 	_use_real_anims = false
 	anim_player = null
@@ -289,6 +353,7 @@ func _anim_can_play() -> bool:
 	return _use_real_anims and is_instance_valid(anim_player) and anim_player.is_inside_tree() and not is_queued_for_deletion() and _anim_lib != null
 
 
+## Role playback (UE clip role; see GuardAnimationLibrary.clip_for_role).
 func _play_guard_clip(role: String, force: bool = false) -> void:
 	if not _anim_can_play():
 		return
@@ -300,6 +365,11 @@ func _play_guard_clip(role: String, force: bool = false) -> void:
 	anim_player.play(key, 0.25)
 
 
+## Melee attack one-shot (UE role "attack":
+## AN_GuardEnforcer_Club_Attack_Light_A_Montage for both weapon sets; no
+## HA-specific attack clip exists in anims_manifest.json. DAM
+## Guard.Attack.Ranged (AN_GuardEnforcer_Club_Attack_Ranged_Montage) is the
+## ranged tag, not this melee swing). Locks locomotion for the clip length.
 func _play_guard_attack() -> void:
 	if not _anim_can_play():
 		return
@@ -308,12 +378,15 @@ func _play_guard_attack() -> void:
 		return
 	_attack_anim_lock = maxf(0.5, _anim_lib.clip_length(key))
 	_slip_anim = false
+	_takedown_vic_anim = false
 	anim_player.speed_scale = 1.0
 	anim_player.play(key, 0.15)
 
 
-## Plays the MagicSlime slip montage once, then falls through to the prone
-## knockdown loop. Called by the tool wave; forces KO visuals if needed.
+## Plays the MagicSlime slip montage once (UE role "slip":
+## AN_GuardEnforcer_Slip_MagicSlime_Montage, anims_manifest.json), then falls
+## through to the prone knockdown loop. Called by the tool wave; forces KO
+## visuals if needed.
 func play_slip() -> void:
 	if state != Alertness.KNOCKED_OUT:
 		knock_out()
@@ -323,18 +396,47 @@ func play_slip() -> void:
 	if key == "" or not anim_player.has_animation(key):
 		return
 	_slip_anim = true
+	_takedown_vic_anim = false
 	_attack_anim_lock = 0.0
 	anim_player.speed_scale = 1.0
 	anim_player.play(key, 0.2)
 
 
+## Takedown victim entry (synced montage, UE role "takedown_vic":
+## AN_StealthTakedown_GuardEnforcer__Vic_Montage primary, overhead behind /
+## front as manifest fallback, anims_manifest.json). Called by the blackjack
+## takedown path via take_knockout -> knock_out; falls through to the prone
+## knockdown loop on finish. No-op when the role did not retarget (caller
+## keeps the knockdown loop).
+func play_takedown_vic() -> void:
+	if not _anim_can_play():
+		return
+	var key := String(_anim_lib.clip_for_role("takedown_vic"))
+	if key == "" or not anim_player.has_animation(key):
+		return
+	_takedown_vic_anim = true
+	_slip_anim = false
+	_attack_anim_lock = 0.0
+	anim_player.speed_scale = 1.0
+	anim_player.play(key, 0.2)
+
+
+## One-shot handoff: slip montage -> knockdown loop, takedown victim montage
+## -> knockdown loop (all UE roles above); attack montage end releases the
+## locomotion lock.
 func _on_guard_anim_finished(anim_name: StringName) -> void:
 	if not _anim_can_play():
 		_slip_anim = false
+		_takedown_vic_anim = false
 		_attack_anim_lock = 0.0
 		return
 	if _slip_anim:
 		_slip_anim = false
+		if state == Alertness.KNOCKED_OUT:
+			_play_guard_clip("knockdown", true)
+		return
+	if _takedown_vic_anim:
+		_takedown_vic_anim = false
 		if state == Alertness.KNOCKED_OUT:
 			_play_guard_clip("knockdown", true)
 		return
@@ -343,13 +445,34 @@ func _on_guard_anim_finished(anim_name: StringName) -> void:
 		_attack_anim_lock = 0.0
 
 
-## Drives the real-clip state machine; falls back to procedural bob when no
-## clips are available. Never plays while KO handling owns the player.
+## Alertness -> ST_Guard / clip_for_state state name. KNOCKED_OUT never
+## reaches clip_for_state (KO handling owns the player in _update_guard_anim).
+func _anim_state_name() -> String:
+	match state:
+		Alertness.NEUTRAL:
+			return "NEUTRAL"
+		Alertness.SUSPICIOUS:
+			return "SUSPICIOUS"
+		Alertness.ALERTED:
+			return "ALERTED"
+		Alertness.COMBAT:
+			return "COMBAT"
+		Alertness.SEARCH:
+			return "SEARCH"
+	return "NEUTRAL"
+
+
+## Drives the real-clip state machine, single-sourced against
+## GuardAnimationLibrary.clip_for_state so every transition cites the UE clip
+## roles (ST_Guard states + DAM tags + AnimSet rows; KF16 patrol/alert,
+## KF25 idle stance, KF26 grapple). Falls back to procedural bob when no
+## clips are available. Never plays while KO handling owns the player, while
+## the slip or takedown-victim montage owns it, or while the attack lock holds it.
 func _update_guard_anim(delta: float) -> void:
 	if not _use_real_anims or not _anim_can_play():
 		_update_procedural_anim(delta)
 		return
-	if _slip_anim:
+	if _slip_anim or _takedown_vic_anim:
 		return
 	if state == Alertness.KNOCKED_OUT:
 		_play_guard_clip("knockdown")
@@ -359,18 +482,15 @@ func _update_guard_anim(delta: float) -> void:
 	if _attack_anim_lock > 0.0:
 		return
 	var moving: bool = Vector2(velocity.x, velocity.z).length() > 0.5
-	var role: String = ""
-	match state:
-		Alertness.NEUTRAL:
-			role = "neutral_walk" if moving else "neutral_idle"
-		Alertness.SUSPICIOUS:
-			role = "suspicious_walk" if moving else "suspicious_idle"
-		Alertness.ALERTED:
-			role = "alert_run" if moving else "alert_idle"
-		Alertness.COMBAT:
-			role = "alert_run" if moving else "alert_idle"
-		Alertness.SEARCH:
-			role = "search"
+	# Single transition source: Alertness -> clip_for_state -> UE clip role.
+	# (Repaired: the per-state match duplicated clip_for_state here and pinned
+	# SEARCH to the stationary search clip even while fanning out; ST_Guard
+	# search states Move to nearby location / EQS, so clip_for_state now plays
+	# suspicious_walk while SEARCH is moving.)
+	var role: String = String(_anim_lib.clip_for_state(_anim_state_name(), _anim_weapon, moving))
+	if role == "":
+		_update_procedural_anim(delta)
+		return
 	_update_guard_loco_playback(role, moving, delta)
 
 
@@ -397,7 +517,9 @@ func _resolve_guard_glb_path() -> String:
 	if lname.find("haunt") >= 0:
 		return "res://assets/ue/Content/Art/Animation/GuardEnforcer/Skin/Hauntstable/SK_Hauntstable__Body.glb"
 	if lname.find("security") >= 0:
-		return "res://assets/ue/Content/Art/Animation/GuardEnforcer/Skin/Security/SK_GuardSecurity_01__Body.glb"
+		# task-7: headed _Body variant (skeleton-identical to the headless __Body
+		# torso, 97 joints same name+order; mesh_materials slots cover head+badge).
+		return "res://assets/ue/Content/Art/Animation/GuardEnforcer/Skin/Security/SK_GuardSecurity_01_Body.glb"
 	if lname.find("enforcer") >= 0:
 		return "res://assets/ue/Content/Art/Animation/GuardEnforcer/Skin/Base/SK_GuardEnforcer__Preview.glb"
 	match GameState.difficulty:
@@ -405,12 +527,251 @@ func _resolve_guard_glb_path() -> String:
 			return "res://assets/ue/Content/Art/Animation/GuardEnforcer/Skin/Hauntstable/SK_Hauntstable__Body.glb"
 		GameState.Difficulty.THIEF:
 			if absi(get_index()) % 3 == 2:
-				return "res://assets/ue/Content/Art/Animation/GuardEnforcer/Skin/Security/SK_GuardSecurity_01__Body.glb"
+				return "res://assets/ue/Content/Art/Animation/GuardEnforcer/Skin/Security/SK_GuardSecurity_01_Body.glb"
 			return "res://assets/ue/Content/Art/Animation/GuardEnforcer/Skin/Base/SK_GuardEnforcer__Preview.glb"
 		_:
 			if absi(get_index()) % 3 == 2:
 				return "res://assets/ue/Content/Art/Animation/GuardEnforcer/Skin/Base/SK_GuardEnforcer__Preview.glb"
-			return "res://assets/ue/Content/Art/Animation/GuardEnforcer/Skin/Security/SK_GuardSecurity_01__Body.glb"
+			return "res://assets/ue/Content/Art/Animation/GuardEnforcer/Skin/Security/SK_GuardSecurity_01_Body.glb"
+
+
+## Loads materials.json + mesh_materials.json once (the same generated DBs
+## the level_loader PBR path binds; re-read here so guards never depend on
+## loader ordering). Keys: materials.json = UE material paths (exact +
+## case-insensitive); mesh_materials.json = UE mesh paths without extension.
+func _guard_ensure_material_dbs() -> void:
+	if _guard_mats_db.is_empty() and FileAccess.file_exists("res://data/generated/materials.json"):
+		var f := FileAccess.open("res://data/generated/materials.json", FileAccess.READ)
+		if f != null:
+			var p: Variant = JSON.parse_string(f.get_as_text())
+			if p is Dictionary:
+				_guard_mats_db = p
+				for k: Variant in _guard_mats_db.keys():
+					_guard_mats_lower[str(k).to_lower()] = _guard_mats_db[k]
+	if _guard_mesh_mats.is_empty() and FileAccess.file_exists("res://data/generated/mesh_materials.json"):
+		var f2 := FileAccess.open("res://data/generated/mesh_materials.json", FileAccess.READ)
+		if f2 != null:
+			var p2: Variant = JSON.parse_string(f2.get_as_text())
+			if p2 is Dictionary:
+				_guard_mesh_mats = p2
+				for k2: Variant in _guard_mesh_mats.keys():
+					_guard_mesh_lower[str(k2).to_lower()] = _guard_mesh_mats[k2]
+
+
+## Minimal texture load for guard binds. Returns null on a missing path; the
+## caller logs the UE material path and falls back to navy, never white.
+func _guard_load_tex(res_path: String) -> Texture2D:
+	if res_path == "":
+		return null
+	if _guard_tex_cache.has(res_path):
+		return _guard_tex_cache[res_path] as Texture2D
+	var tex: Texture2D = null
+	if ResourceLoader.exists(res_path):
+		var loaded: Variant = load(res_path)
+		if loaded is Texture2D:
+			tex = loaded as Texture2D
+	elif FileAccess.file_exists(res_path):
+		var img: Image = Image.load_from_file(ProjectSettings.globalize_path(res_path))
+		if img != null and not img.is_empty():
+			if not img.has_mipmaps():
+				img.generate_mipmaps()
+			tex = ImageTexture.create_from_image(img)
+	_guard_tex_cache[res_path] = tex
+	return tex
+
+
+## Logged navy fallback. Never returns white: the retained uniform navy keeps
+## the guard readable and the UE path is always pushed to the warning log
+## (compare civilian rest-pose + bob: missing art holds a readable pose).
+func _guard_navy_fallback(ue_path: String) -> StandardMaterial3D:
+	push_warning("[guard_ai] missing authored bind, navy fallback (never white): " + ue_path)
+	var fb := StandardMaterial3D.new()
+	fb.albedo_color = GUARD_NAVY
+	fb.roughness = 0.78
+	return fb
+
+
+## Authored PBR bind for one UE material path (materials.json "texs"
+## albedo / normal / ORM + "tint"). A missing entry, a missing texture, or
+## an authored white-with-no-texture all resolve to the logged navy fallback,
+## never white.
+func get_guard_material_for_ue(ue_mat_path: String) -> Material:
+	if ue_mat_path == "":
+		return _guard_navy_fallback("(empty slot)")
+	if _guard_std_cache.has(ue_mat_path):
+		return _guard_std_cache[ue_mat_path] as Material
+	var low_mat: String = ue_mat_path.to_lower()
+	var info: Variant = _guard_mats_db.get(ue_mat_path, _guard_mats_lower.get(low_mat, {}))
+	if not (info is Dictionary) or (info as Dictionary).is_empty():
+		var fb_missing := _guard_navy_fallback(ue_mat_path)
+		_guard_std_cache[ue_mat_path] = fb_missing
+		return fb_missing
+	var texs: Dictionary = (info as Dictionary).get("texs", {})
+	var tint: Variant = (info as Dictionary).get("tint")
+	var has_tint: bool = tint is Array and (tint as Array).size() >= 3
+	var alb: Texture2D = _guard_load_tex(str(texs.get("albedo", "")))
+	var mat := StandardMaterial3D.new()
+	mat.roughness = 0.78
+	if alb != null:
+		mat.albedo_texture = alb
+		if has_tint:
+			mat.albedo_color = Color(float((tint as Array)[0]), float((tint as Array)[1]), float((tint as Array)[2]), 1.0)
+	else:
+		if has_tint and Color(float((tint as Array)[0]), float((tint as Array)[1]), float((tint as Array)[2]), 1.0) != Color(1, 1, 1, 1):
+			mat.albedo_color = Color(float((tint as Array)[0]), float((tint as Array)[1]), float((tint as Array)[2]), 1.0)
+		else:
+			mat.albedo_color = GUARD_NAVY
+			push_warning("[guard_ai] no recoverable albedo texture, navy fallback (never white): " + ue_mat_path)
+	var norm: Texture2D = _guard_load_tex(str(texs.get("normal", "")))
+	if norm != null:
+		mat.normal_enabled = true
+		mat.normal_texture = norm
+	var orm: Texture2D = _guard_load_tex(str(texs.get("orm", "")))
+	if orm != null:
+		mat.ao_enabled = true
+		mat.ao_texture = orm
+		mat.ao_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
+		mat.roughness_texture = orm
+		mat.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
+		mat.metallic_texture = orm
+		mat.metallic_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_BLUE
+	_guard_std_cache[ue_mat_path] = mat
+	return mat
+
+
+## GLB UE key for the mesh_materials.json lookup (keys are UE paths without
+## extension, e.g. /Game/Art/Animation/GuardEnforcer/Skin/Hauntstable/..).
+func _guard_ue_key_for_glb(glb_path: String) -> String:
+	var p: String = glb_path
+	if p.begins_with("res://assets/ue/Content/"):
+		p = p.replace("res://assets/ue/Content/", "/Game/")
+	if p.ends_with(".glb"):
+		p = p.substr(0, p.length() - 4)
+	return p
+
+
+## Slot lookup shared by the body bind and the head attach (mesh_materials
+## exact key first, case-insensitive fallback; empty = no authored data).
+func _guard_slots_for_ue_key(ue_key: String) -> Array:
+	var slots: Array = []
+	if _guard_mesh_mats.has(ue_key):
+		var raw: Variant = _guard_mesh_mats[ue_key]
+		if raw is Array:
+			slots = (raw as Array).duplicate()
+	if slots.is_empty():
+		var low_key: String = ue_key.to_lower()
+		if _guard_mesh_lower.has(low_key):
+			var raw2: Variant = _guard_mesh_lower[low_key]
+			if raw2 is Array:
+				slots = (raw2 as Array).duplicate()
+	return slots
+
+
+## Per-MeshInstance3D surface bind shared by the body GLB and the head
+## sub-skeleton (per-surface overrides, so the shared import is never
+## mutated). Surface match mirrors level_loader _bind_glb_materials: exact
+## eye rescue first (task-7: "Eyes" would substring-match the HelmetEyes
+## slot), then GLB material-name substring, then slot-index fallback.
+## A Preview slot-index hit on empty slots 0-2 resolves to the authored eye
+## rescue; only a genuinely missing bind resolves to the logged navy fallback,
+## never white.
+func _bind_guard_mi_surfaces(mi: MeshInstance3D, slots: Array, ue_key: String) -> void:
+	if mi == null or mi.mesh == null:
+		return
+	var is_preview: bool = ue_key.ends_with("SK_GuardEnforcer__Preview")
+	for s in range(mi.mesh.get_surface_count()):
+		var surf_name: String = str(mi.mesh.surface_get_name(s)).to_lower()
+		if GUARD_EYE_RESCUE.has(surf_name):
+			mi.set_surface_override_material(s, get_guard_material_for_ue(str(GUARD_EYE_RESCUE[surf_name])))
+			continue
+		var matched: int = -1
+		if surf_name != "" and surf_name.length() >= 3:
+			for i in range(slots.size()):
+				var mp := str(slots[i])
+				if mp == "":
+					continue
+				var short := mp.get_file().split(".")[0].to_lower()
+				if short == "" or short.length() < 3:
+					continue
+				if surf_name.find(short) >= 0 or short.find(surf_name) >= 0:
+					matched = i
+					break
+		if matched == -1 and s < slots.size():
+			matched = s
+		if matched < 0 or matched >= slots.size():
+			mi.set_surface_override_material(s, _guard_navy_fallback(ue_key + " surface " + str(s)))
+			continue
+		var slot_path := str(slots[matched])
+		if slot_path == "":
+			if is_preview and matched >= 0 and matched < GUARD_PREVIEW_EYE_BY_SLOT.size():
+				mi.set_surface_override_material(s, get_guard_material_for_ue(str(GUARD_PREVIEW_EYE_BY_SLOT[matched])))
+			else:
+				mi.set_surface_override_material(s, _guard_navy_fallback(ue_key + " slot " + str(matched)))
+		else:
+			mi.set_surface_override_material(s, get_guard_material_for_ue(slot_path))
+
+
+## Binds the authored slot materials from mesh_materials.json onto the
+## instantiated guard GLB (per-MeshInstance3D surface overrides, so the shared
+## import is never mutated). Head geometry for body-only SKs arrives via
+## _attach_guard_head below; this bind covers the body instance only.
+func _bind_guard_glb_materials(inst: Node) -> void:
+	_guard_ensure_material_dbs()
+	var ue_key: String = _guard_ue_key_for_glb(_resolve_guard_glb_path())
+	var slots: Array = _guard_slots_for_ue_key(ue_key)
+	if slots.is_empty():
+		push_warning("[guard_ai] no mesh_materials slots for " + ue_key + "; surfaces keep import material (white risk logged)")
+		return
+	for mi_var in inst.find_children("*", "MeshInstance3D", true, false):
+		_bind_guard_mi_surfaces(mi_var as MeshInstance3D, slots, ue_key)
+
+
+## Head sub-skeleton attach (task-7). Body-only SKs carry no head geometry;
+## the extracted headed SK is instanced and its MeshInstance3Ds are reparented
+## under the body Skeleton3D, so the head follows the guard animation (the
+## joint name+order identity is verified by GLB JSON dump in task-7.md).
+## The moved meshes keep their global transform and resolve their skeleton via
+## the new parent; the spare head instance is freed. Head surfaces bind the
+## head UE key slots through the same authored chain; only a genuinely missing
+## bind falls to logged navy with the UE path.
+func _attach_guard_head(inst: Node, body_glb_path: String) -> void:
+	var head_glb: String = str(GUARD_HEAD_GLB.get(body_glb_path, ""))
+	if head_glb == "":
+		return
+	var packed := ResourceLoader.load(head_glb) as PackedScene
+	if packed == null:
+		push_warning("[guard_ai] head GLB missing, body keeps torso-only mesh (never white): " + head_glb)
+		return
+	var skels: Array[Node] = inst.find_children("*", "Skeleton3D", true, false)
+	var body_skel := (skels[0] as Skeleton3D) if not skels.is_empty() else null
+	if body_skel == null:
+		push_warning("[guard_ai] no body Skeleton3D under " + body_glb_path + "; head attach skipped")
+		return
+	_guard_ensure_material_dbs()
+	var head_ue_key: String = _guard_ue_key_for_glb(head_glb)
+	var head_slots: Array = _guard_slots_for_ue_key(head_ue_key)
+	var head_inst := packed.instantiate() as Node
+	if head_inst == null:
+		push_warning("[guard_ai] head GLB failed to instantiate: " + head_glb)
+		return
+	visual_root.add_child(head_inst)
+	head_inst.rotation_degrees.y = 180.0
+	var moved := 0
+	for mi_var in head_inst.find_children("*", "MeshInstance3D", true, false):
+		var mi := mi_var as MeshInstance3D
+		if mi == null:
+			continue
+		if not head_slots.is_empty():
+			_bind_guard_mi_surfaces(mi, head_slots, head_ue_key)
+		var t: Transform3D = mi.global_transform
+		mi.get_parent().remove_child(mi)
+		body_skel.add_child(mi)
+		mi.global_transform = t
+		mi.skeleton = mi.get_path_to(body_skel)
+		moved += 1
+	head_inst.queue_free()
+	if moved == 0:
+		push_warning("[guard_ai] head GLB carried no meshes, body keeps torso-only mesh: " + head_glb)
 
 
 ## Real CT_AIStats values (GuardBaseHealth 30, GuardBaseHealthRegenRate 15/s);
@@ -828,10 +1189,18 @@ func knock_out(duration_override: float = -1.0) -> void:
 	if lantern_light != null and is_instance_valid(lantern_light):
 		lantern_light.visible = false
 	_slip_anim = false
+	_takedown_vic_anim = false
 	_attack_anim_lock = 0.0
 	if visual_root == null:
 		return
 	if _use_real_anims and _anim_can_play():
+		var vic_key := String(_anim_lib.clip_for_role("takedown_vic"))
+		if vic_key != "" and anim_player.has_animation(vic_key):
+			_takedown_vic_anim = true
+			_slip_anim = false
+			anim_player.speed_scale = 1.0
+			anim_player.play(vic_key, 0.25)
+			return
 		var ko_key := String(_anim_lib.clip_for_role("knockdown"))
 		if ko_key != "" and anim_player.has_animation(ko_key):
 			anim_player.play(ko_key, 0.25)
@@ -864,6 +1233,7 @@ func _recover_from_ko() -> void:
 	if _use_real_anims and _anim_can_play():
 		# The real search clip owns the next frames; no tip-over tween.
 		_slip_anim = false
+		_takedown_vic_anim = false
 		_play_guard_clip("search", true)
 		return
 	if _ko_tween != null and _ko_tween.is_valid():

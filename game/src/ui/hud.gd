@@ -4,8 +4,9 @@ extends CanvasLayer
 ##   loot counter (£), and multi-part Mission Objectives.
 ## - Top-center slim glowing blue Compass (T_compass_lines + PoI diamonds).
 ## - Top-right Portrait + T_portrait_levelFrame numeric badge.
-## - Bottom-center light-reactive shaded Stealth Ball (T_stealthball_frame) +
-##   bilateral red SoundWaves driven by NoiseBus.
+## - Bottom-center light-reactive shaded Stealth Ball (T_stealthball_frame)
+##   with a directional warm light sector (UI3) + bilateral red SoundWaves
+##   driven by the player's own NoiseBus output (UI5).
 ## - Bottom-left octagonal Tool Hotbar (T_Ability_Border + masked T_Ability_Background +
 ##   real tool icons + ∞ glyph) + [TAB] MAP / [MMB] PING MENU hints.
 ## - Bottom-right contextual [LMB]/[RMB] tool & Den action hints.
@@ -46,10 +47,15 @@ void fragment() {
 const STEALTH_ORB_SHADER: String = """
 shader_type canvas_item;
 uniform float visibility : hint_range(0.0, 1.0) = 0.2;
+// UI3: warm sector pointing at the strongest scene light. sector_angle is in
+// canvas space (+Y down), mirroring the HUD's screen-space mapping.
+uniform float sector_angle = 0.0;
+uniform float sector_strength : hint_range(0.0, 1.0) = 0.0;
 void fragment() {
 	vec2 p = UV * 2.0 - 1.0;
-	float r = length(p);
-	float mask = 1.0 - smoothstep(0.90, 1.0, r);
+	// UI3: the Light Gem is a bottom-centre cut diamond, not a sphere.
+	float d = abs(p.x) + abs(p.y);
+	float mask = 1.0 - smoothstep(0.82, 0.94, d);
 	float z = sqrt(max(0.0, 1.0 - dot(p, p)));
 	vec3 n = normalize(vec3(p.x, p.y, z));
 	vec3 light_dir = normalize(vec3(-0.38, -0.45, 0.80));
@@ -64,6 +70,12 @@ void fragment() {
 	vec3 hi_col = mix(dark_hi, lit_hi, visibility);
 	vec3 shaded = base_col * (0.42 + 0.68 * ndl) + hi_col * (0.28 * ndl * visibility + 0.82 * spec);
 	shaded += mix(vec3(0.12, 0.18, 0.46), vec3(0.96, 0.90, 0.62), visibility) * fresnel * 0.35;
+	float ang = atan(p.y, p.x);
+	float d_ang = abs(mod(ang - sector_angle + PI, 6.28318530718) - PI);
+	float wedge = 1.0 - smoothstep(0.32, 0.88, d_ang);
+	float rim = smoothstep(0.42, 0.90, d);
+	shaded += mix(vec3(0.16, 0.22, 0.58), vec3(1.0, 0.96, 0.78), visibility) * pow(rim, 2.4) * 0.55;
+	shaded += vec3(1.0, 0.70, 0.30) * wedge * sector_strength * (0.30 + 0.55 * rim);
 	COLOR = vec4(shaded, mask * 0.98);
 }
 """
@@ -86,6 +98,7 @@ var compass_lbl: Label
 var ribbon_clip: Control
 var ribbon_lbl: Label
 var interact_lbl: Label
+var _prompt_secondary_lbl: Label
 var stealth_gem: TextureRect
 var hp_fill: ColorRect
 var stam_fill: ColorRect
@@ -112,6 +125,8 @@ var _italic: Font
 var _serif: Font
 var _typewriter: Font
 var _fps_refresh: float = 0.0
+## KF30 footer seed: generated once per HUD session (no authored seed exists).
+var _run_seed: int = 0
 
 var _pause_root: Control
 var _prompt_keycap: PanelContainer
@@ -252,11 +267,17 @@ class ReticleDraw extends Control:
 	var target_valid: bool = false
 	var crank_progress: float = 0.0
 	var crank_active: bool = false
+	var hold_progress: float = 0.0
 
 	func _draw() -> void:
 		var c: Vector2 = size * 0.5
 		# Center dot always visible.
 		draw_circle(c, 2.2, Color(0.96, 0.98, 1.0, 0.92))
+		# KF26: active circular hold-progress arc for [HOLD] TAKEDOWN.
+		if hold_progress > 0.001:
+			var r_hold: float = 22.0
+			draw_arc(c, r_hold, 0.0, TAU, 40, Color(0.86, 0.92, 1.0, 0.22), 2.0, true)
+			draw_arc(c, r_hold, -PI * 0.5, -PI * 0.5 + TAU * clampf(hold_progress, 0.0, 1.0), 40, Color(1.0, 0.94, 0.72, 0.95), 3.0, true)
 		if mode == "zipwire":
 			if crank_active or crank_progress > 0.001:
 				var r_crank: float = 28.0
@@ -510,6 +531,9 @@ func _ready() -> void:
 	_serif = ThemeScript.font_serif()
 	_typewriter = ThemeScript.font_typewriter()
 	_load_lockpick_db()
+	_run_seed = int(Time.get_unix_time_from_system()) & 0x3FFFFFFF
+	if _run_seed == 0:
+		_run_seed = 1
 
 	_root = Control.new()
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -1032,6 +1056,27 @@ func _build_reticle_and_prompt(root: Control) -> void:
 		interact_lbl.add_theme_font_override("font", _sans)
 	interact_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	prompt_row.add_child(interact_lbl)
+
+	# KF24/KF25 stacked secondary prompt: [F] [HOLD] LOCK on blue doors and
+	# [F] [HOLD] TAKEDOWN over a guard, directly beneath the primary prompt.
+	_prompt_secondary_lbl = Label.new()
+	_prompt_secondary_lbl.set_anchors_preset(Control.PRESET_CENTER)
+	_prompt_secondary_lbl.offset_left = -190.0
+	_prompt_secondary_lbl.offset_top = 58.0
+	_prompt_secondary_lbl.offset_right = 190.0
+	_prompt_secondary_lbl.offset_bottom = 82.0
+	_prompt_secondary_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_prompt_secondary_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_prompt_secondary_lbl.add_theme_font_size_override("font_size", 12)
+	_prompt_secondary_lbl.add_theme_color_override("font_color", Color(0.58, 0.72, 0.98, 0.88))
+	_prompt_secondary_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+	_prompt_secondary_lbl.add_theme_constant_override("shadow_offset_x", 1)
+	_prompt_secondary_lbl.add_theme_constant_override("shadow_offset_y", 1)
+	if _sans != null:
+		_prompt_secondary_lbl.add_theme_font_override("font", _sans)
+	_prompt_secondary_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_prompt_secondary_lbl.visible = false
+	root.add_child(_prompt_secondary_lbl)
 
 
 func _build_tool_hotbar(root: Control) -> void:
@@ -1593,9 +1638,8 @@ func _build_pause_menu(root: Control) -> void:
 	_pause_root.add_child(ver)
 
 
-## KF30-exact pause footer: build number (no "v" prefix) + difficulty label.
-## The capture seed has no authored source in GameState, so it is omitted
-## rather than fabricated.
+## KF30-exact pause footer: build number (no "v" prefix), difficulty label
+## and the per-session run seed.
 func _pause_footer_text() -> String:
 	var build: String = VERSION_STRING
 	if build.begins_with("v"):
@@ -1606,7 +1650,7 @@ func _pause_footer_text() -> String:
 		diff_lbl = "Thief"
 	elif d >= 3:
 		diff_lbl = "Master Thief"
-	return "%s   %s" % [build, diff_lbl]
+	return "%s   %s   %d" % [build, diff_lbl, _run_seed]
 
 
 # =============================================================================
@@ -2025,7 +2069,7 @@ func _process(delta: float) -> void:
 	var p: Node3D = _get_player()
 
 	_update_objectives_and_loot(is_hub)
-	_update_stealth_ball_and_soundwaves(delta, is_hub)
+	_update_stealth_ball_and_soundwaves(p, delta, is_hub)
 	_update_portrait_plate()
 
 	if p != null:
@@ -2050,6 +2094,10 @@ func _process(delta: float) -> void:
 			set_downed_display(downed_now, float(p.call("downed_remaining")))
 		if p.has_method("get_look_interact_prompt"):
 			_set_prompt(str(p.call("get_look_interact_prompt")))
+		if p.has_method("get_look_secondary_prompt"):
+			_set_secondary_prompt(str(p.call("get_look_secondary_prompt")))
+		else:
+			_set_secondary_prompt("")
 
 		_update_compass_pois(p)
 		_update_guard_pips_and_offscreen(p, is_hub)
@@ -2102,7 +2150,7 @@ func _update_objectives_and_loot(is_hub: bool) -> void:
 	obj_lbl.text = "Mission: %s%s\n   %s" % [title, timing, status]
 
 
-func _update_stealth_ball_and_soundwaves(delta: float, is_hub: bool) -> void:
+func _update_stealth_ball_and_soundwaves(p: Node3D, delta: float, is_hub: bool) -> void:
 	if _stealth_holder != null:
 		_stealth_holder.visible = not is_hub
 	if is_hub:
@@ -2111,6 +2159,25 @@ func _update_stealth_ball_and_soundwaves(delta: float, is_hub: bool) -> void:
 	_vis_smooth = lerpf(_vis_smooth, target_vis, clampf(delta * 8.0, 0.0, 1.0))
 	if _stealth_orb_mat != null:
 		_stealth_orb_mat.set_shader_parameter("visibility", _vis_smooth)
+		# UI3 directional warm sector: the player publishes the strongest
+		# nearby light direction; convert it to canvas angle (+Y down).
+		var sector_angle: float = 0.0
+		var sector_strength: float = 0.0
+		if p != null:
+			var dir_v: Variant = p.get("light_sector_dir")
+			var strength_v: Variant = p.get("light_sector_strength")
+			var strength: float = float(strength_v) if (strength_v is float or strength_v is int) else 0.0
+			var cam3d: Camera3D = get_viewport().get_camera_3d() if is_inside_tree() else null
+			if dir_v is Vector3 and cam3d != null:
+				var dir: Vector3 = dir_v
+				if dir.length_squared() > 0.0001:
+					dir = dir.normalized()
+					var cam_right: Vector3 = cam3d.global_transform.basis.x
+					var cam_up: Vector3 = cam3d.global_transform.basis.y
+					sector_angle = atan2(-dir.dot(cam_up), dir.dot(cam_right))
+					sector_strength = clampf(strength, 0.0, 1.0)
+		_stealth_orb_mat.set_shader_parameter("sector_angle", sector_angle)
+		_stealth_orb_mat.set_shader_parameter("sector_strength", sector_strength)
 	if stealth_gem != null:
 		stealth_gem.modulate = Color(0.45, 0.56, 0.96, 0.96).lerp(Color(0.96, 0.90, 0.62, 1.0), _vis_smooth * 0.65)
 	if _soundwave_energy > 0.0:
@@ -2215,12 +2282,15 @@ func _update_tool_hotbar_and_reticle(p: Node3D, is_hub: bool) -> void:
 	var target_valid: bool = ret_state.get("target_valid", false) == true
 	var crank_prog: float = float(ret_state.get("crank_progress", 0.0))
 	var crank_act: bool = ret_state.get("crank_active", false) == true
+	var hold_prog_v: Variant = p.get("interact_hold_progress")
+	var hold_prog: float = float(hold_prog_v) if (hold_prog_v is float or hold_prog_v is int) else 0.0
 
 	if _reticle_draw != null:
 		_reticle_draw.mode = "blackjack" if is_hub else mode_str
 		_reticle_draw.target_valid = target_valid
 		_reticle_draw.crank_progress = crank_prog
 		_reticle_draw.crank_active = crank_act
+		_reticle_draw.hold_progress = hold_prog
 		_reticle_draw.queue_redraw()
 	if _crank_prompt_lbl != null:
 		_crank_prompt_lbl.visible = (not is_hub) and mode_str == "zipwire" and (crank_act or crank_prog > 0.001)
@@ -2396,7 +2466,9 @@ func _update_guard_pips_and_offscreen(p: Node3D, is_hub: bool) -> void:
 				else:
 					pip.texture = _pip_tex_warn
 				pip.position = spos - Vector2(22.0, 44.0)
-				pip.modulate = Color(1.0, 1.0, 1.0, clampf(0.45 + susp * 0.55, 0.45, 1.0))
+				# UI5: red = alerted/combat, green = suspicion/warning.
+				var pip_alpha: float = clampf(0.45 + susp * 0.55, 0.45, 1.0)
+				pip.modulate = Color(1.0, 0.36, 0.30, pip_alpha) if (alerted or combat) else Color(0.46, 1.0, 0.58, pip_alpha)
 				pip.visible = pip.texture != null
 			else:
 				var off: TextureRect = _get_offscreen_node(off_used)
@@ -2413,9 +2485,9 @@ func _update_guard_pips_and_offscreen(p: Node3D, is_hub: bool) -> void:
 				off.position = pos2 - Vector2(18.0, 21.0)
 				# T_DetectionMeter_Offscreen points downward (+Y), so align +Y with dir2.
 				off.rotation = atan2(dir2.y, dir2.x) - PI * 0.5
-				var col: Color = Color(0.98, 0.22, 0.20, 0.95) if combat else (
-					Color(0.98, 0.58, 0.20, 0.92) if alerted else Color(0.96, 0.86, 0.32, clampf(0.4 + susp * 0.6, 0.4, 0.92))
-				)
+				# UI5 parity: red = alerted/combat, green = suspicion/warning,
+				# matching the overhead pips (KF21/KF22).
+				var col: Color = Color(0.98, 0.22, 0.20, 0.95) if (combat or alerted) else Color(0.46, 1.0, 0.58, clampf(0.4 + susp * 0.6, 0.4, 0.92))
 				off.modulate = col
 				off.visible = off.texture != null
 
@@ -2784,21 +2856,19 @@ func _on_mission_letter_requested(title: String, intro_text: String) -> void:
 	show_mission_letter(title, intro_text)
 
 
-func _on_noise_emitted(origin: Vector3, loudness_meters: float, source: Node, _tag: String) -> void:
+func _on_noise_emitted(_origin: Vector3, loudness_meters: float, source: Node, _tag: String) -> void:
 	if not is_inside_tree():
 		return
-	var is_player_noise: bool = false
-	if source == null:
-		is_player_noise = true
-	elif source.is_in_group("player"):
-		is_player_noise = true
-	else:
-		var p: Node3D = _get_player()
-		if p != null and p.global_position.distance_to(origin) <= 2.5:
-			is_player_noise = true
-	if is_player_noise:
-		var amp: float = clampf(loudness_meters / 16.0, 0.25, 1.0)
-		_soundwave_energy = maxf(_soundwave_energy, amp)
+	# UI5: the bilateral arcs read the player's own noise output only. Guard
+	# alerts, door slams and tool hisses must never drive them even when they
+	# happen right next to the player, so the source group is the sole authority.
+	if source != null and not source.is_in_group("player"):
+		return
+	# T2-13-B: a zero-loudness event must not flash the arcs.
+	if loudness_meters <= 0.0:
+		return
+	var amp: float = clampf(loudness_meters / 16.0, 0.25, 1.0)
+	_soundwave_energy = maxf(_soundwave_energy, amp)
 
 
 func _add_den_card_row(key_txt: String, label_txt: String, value_txt: String) -> void:
@@ -2885,6 +2955,18 @@ func _set_prompt(raw: String) -> void:
 		if end > 1:
 			key = txt.substr(1, end - 1).strip_edges()
 			rest = txt.substr(end + 1).strip_edges()
+	# Interact is bound to F (project.godot physical key 70); E is a legacy
+	# alias, so the visible keycap always reads F. Lock/close phrasing follows
+	# the KF24 door prompts while the test-facing door strings stay intact.
+	if key == "E":
+		key = "F"
+	# KF24 door flow: OPEN / CLOSE are the primary prompts. The [HOLD] LOCK
+	# secondary is pushed separately by the door's secondary prompt so a pick
+	# lock action is never mislabelled as a hold action.
+	if rest == "Open Door":
+		rest = "OPEN"
+	elif rest == "Close Door":
+		rest = "CLOSE"
 	if key != "" and _prompt_keycap != null and _prompt_keycap_lbl != null:
 		_prompt_keycap_lbl.text = key.to_upper()
 		_prompt_keycap.visible = true
@@ -2895,6 +2977,18 @@ func _set_prompt(raw: String) -> void:
 		if _prompt_keycap != null:
 			_prompt_keycap.visible = false
 		interact_lbl.visible = false
+
+
+func _set_secondary_prompt(raw: String) -> void:
+	if _prompt_secondary_lbl == null:
+		return
+	var txt: String = raw.strip_edges()
+	if txt == "" or MobileProfile.is_mobile():
+		_prompt_secondary_lbl.text = ""
+		_prompt_secondary_lbl.visible = false
+		return
+	_prompt_secondary_lbl.text = txt.to_upper()
+	_prompt_secondary_lbl.visible = true
 
 
 func _update_fps_overlay() -> void:

@@ -81,6 +81,8 @@ var _selected: Dictionary = {}
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	_build_ui()
+	if AudioManager != null and AudioManager.has_method("wire_hover_sfx"):
+		AudioManager.wire_hover_sfx(self)
 	_refresh_journal()
 	_refresh_market()
 	_show_tab(0)
@@ -264,7 +266,11 @@ func _build_ui() -> void:
 
 
 func _show_tab(idx: int) -> void:
+	var changed: bool = clampi(idx, 0, 1) != _tab
 	_tab = clampi(idx, 0, 1)
+	# S06/S08: tab switch is the crisp radial tab tick, not the generic click.
+	if changed and AudioManager != null and AudioManager.has_method("play_ui"):
+		AudioManager.play_ui("tab")
 	if _journal_page != null:
 		_journal_page.visible = (_tab == 0)
 	if _market_page != null:
@@ -445,7 +451,7 @@ func _on_buy_pressed() -> void:
 		return
 	var ok: bool = SaveSystem.purchase_item(str(_selected.get("cat", "")), str(_selected.get("id", "")), int(_selected.get("cost", 0)))
 	if AudioManager != null and AudioManager.has_method("play_ui"):
-		AudioManager.play_ui("confirm" if ok else "back")
+		AudioManager.play_ui("purchase" if ok else "error")
 	if ok:
 		_refresh_market()
 	else:

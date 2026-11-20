@@ -36,6 +36,9 @@ const AIR_CONTROL: float = 0.5 # TATCharacterMovement CharMoveComp.AirControl
 const FLOOR_MAX_ANGLE_DEG: float = 50.0 # CharMoveComp.WalkableFloorAngle 60.0 retuned to 50.0 for stair stick (no mantle)
 const FLOOR_SNAP_LENGTH: float = 0.3 # stairs snap fix: 0.25-0.3 window keeps body grounded on 0.18-0.2 m risers
 const INTERACT_RANGE: float = 1.75 # TATInteractionTargeterComponent.MaxInteractionRange 175cm
+## KF25/KF26: F taps the primary action (pick pocket / OPEN), holding F runs
+## the stacked secondary ([HOLD] TAKEDOWN on a guard, [HOLD] LOCK on a door).
+const HOLD_INTERACT_SEC: float = 0.45
 const CAMERA_FOV: float = 85.0 # OSECameraComponent.FirstPersonFieldOfView
 const CAMERA_FOV_SPRINT: float = 89.0 # retained velocity-feedback shape rebased on 85
 const WIRE_RANGE: float = 20.0 # DA_StandardToolSettings "Hotwire Range" 2000cm
@@ -155,6 +158,10 @@ var equipped_tool: String = "zipwire"
 var _slot3_subtool: String = "slithersap"
 var _vistara_vision_active: bool = false
 var _manual_vision_active: bool = false
+## Press timestamp for the KF25/KF26 hold-secondary interact; -1 = not armed.
+var _interact_hold_ms: int = -1
+## 0..1 hold progress published to the HUD reticle's active takedown arc.
+var interact_hold_progress: float = 0.0
 var _fp_action_ttl: float = 0.0
 var _fp_mat_loader: Node = null
 static var _vm_opaque_shader: Shader = null
@@ -223,6 +230,11 @@ var col_shape: CollisionShape3D
 var mesh_root: Node3D
 var light_probe: Node
 var level_ctrl: Node
+## UI3 light-gem warm sector: world direction and 0..1 strength of the
+## strongest nearby light, refreshed at ~4 Hz from the stealth probe's lights.
+var light_sector_dir: Vector3 = Vector3.ZERO
+var light_sector_strength: float = 0.0
+var _light_sector_refresh: float = 0.0
 
 
 func _ready() -> void:
@@ -525,7 +537,20 @@ func _unhandled_input(event: InputEvent) -> void:
 			cap.height = 1.0 if is_crouching else 1.78
 			col_shape.position.y = cap.height * 0.5
 	elif event.is_action_pressed("interact"):
-		_try_interact()
+		# Defer when a hold-secondary is offered; otherwise interact on press.
+		if get_look_secondary_prompt() != "":
+			_interact_hold_ms = Time.get_ticks_msec()
+		else:
+			_interact_hold_ms = -1
+			_try_interact()
+	elif event.is_action_released("interact"):
+		if _interact_hold_ms >= 0:
+			var held_sec: float = float(Time.get_ticks_msec() - _interact_hold_ms) / 1000.0
+			_interact_hold_ms = -1
+			if held_sec >= HOLD_INTERACT_SEC:
+				_perform_hold_action()
+			else:
+				_try_interact()
 	elif event.is_action_pressed("ability"):
 		_trigger_thief_ability()
 	elif event.is_action_pressed("tool_1"):
@@ -596,6 +621,54 @@ func _audio_surface() -> String:
 	if GameState.active_contract_order == 1:
 		return NoiseBus.SURFACE_WOOD
 	return NoiseBus.SURFACE_STONE
+
+
+## UI3: strongest local light direction for the HUD light-gem warm sector.
+## Reuses the stealth probe's registered light set and its falloff shape
+## ((1 - d/range)^2 * energy); no extra raycast, since the HUD only needs
+## direction and relative strength.
+func _refresh_light_sector() -> void:
+	light_sector_dir = Vector3.ZERO
+	light_sector_strength = 0.0
+	if light_probe == null or not is_inside_tree():
+		return
+	var lights_v: Variant = light_probe.get("registered_lights")
+	if not (lights_v is Array):
+		return
+	var lights: Array = lights_v
+	var eye: Vector3 = global_position + Vector3.UP * 1.2
+	var best: float = 0.0
+	var best_dir: Vector3 = Vector3.ZERO
+	for l_var: Variant in lights:
+		if not (l_var is Light3D):
+			continue
+		var l: Light3D = l_var
+		if not is_instance_valid(l) or not l.visible or l.light_energy <= 0.01:
+			continue
+		if l is DirectionalLight3D:
+			# Directional light emits along local -Z; +Z points at the source.
+			var d_weight: float = clampf(l.light_energy * 0.25, 0.0, 0.35)
+			if d_weight > best:
+				best = d_weight
+				best_dir = l.global_transform.basis.z.normalized()
+			continue
+		var to_light: Vector3 = l.global_position - eye
+		var dist: float = to_light.length()
+		var max_range: float = 12.0
+		if l is OmniLight3D:
+			max_range = (l as OmniLight3D).omni_range
+		elif l is SpotLight3D:
+			max_range = (l as SpotLight3D).spot_range
+		if dist <= 0.01 or dist > max_range:
+			continue
+		var falloff: float = 1.0 - clampf(dist / max_range, 0.0, 1.0)
+		var weight: float = falloff * falloff * l.light_energy
+		if weight > best:
+			best = weight
+			best_dir = to_light / dist
+	if best > 0.0:
+		light_sector_dir = best_dir
+		light_sector_strength = clampf(best / 1.2, 0.2, 1.0)
 
 
 func equip_tool(tool_id: String) -> void:
@@ -689,13 +762,13 @@ func get_active_reticle_state() -> Dictionary:
 			var fwd: Vector3 = -cam.global_transform.basis.z if cam != null else -global_transform.basis.z
 			var guards: Array = get_tree().get_nodes_in_group("guards") if is_inside_tree() else []
 			target_valid = pickpocket_select_target(guards, global_position, fwd) != null
-			hints.append({"key": "LMB", "label": "DEPLOY", "enabled": pickpocket_cooldown <= 0.0})
+			hints.append({"key": "LMB", "label": "PICK POCKET", "enabled": pickpocket_cooldown <= 0.0})
 		"vistara_diamond":
 			target_valid = true
 			hints.append({"key": "4", "label": "THIEF VISION", "enabled": true})
 		_:
 			target_valid = is_inside_tree() and _find_nearest_guard(2.4) != null
-			hints.append({"key": "LMB", "label": "STRIKE", "enabled": true})
+			hints.append({"key": "LMB", "label": "TAKEDOWN", "enabled": true})
 	return {
 		"mode": equipped_tool,
 		"target_valid": target_valid,
@@ -903,6 +976,14 @@ func _physics_process(delta: float) -> void:
 	if light_probe != null and light_probe.has_method("sample_visibility"):
 		var excl: Array[RID] = [get_rid()]
 		GameState.player_light_visibility = light_probe.sample_visibility(global_position, get_world_3d().direct_space_state, excl)
+		_light_sector_refresh -= delta
+		if _light_sector_refresh <= 0.0:
+			_light_sector_refresh = 0.25
+			_refresh_light_sector()
+	if _interact_hold_ms >= 0:
+		interact_hold_progress = clampf(float(Time.get_ticks_msec() - _interact_hold_ms) / (HOLD_INTERACT_SEC * 1000.0), 0.0, 1.0)
+	else:
+		interact_hold_progress = 0.0
 
 
 func _begin_wire_crank() -> void:
@@ -1239,6 +1320,33 @@ func get_look_interact_prompt() -> String:
 	if item_nm != null:
 		return "[E] Steal %s" % str(item_nm)
 	return "[E] Interact"
+
+
+## KF24/KF25 stacked secondary prompt, shown beneath the primary centre
+## prompt: [F] [HOLD] TAKEDOWN over a guard, [F] [HOLD] LOCK on a closed
+## unlocked door. Empty when no hold action is available.
+func get_look_secondary_prompt() -> String:
+	if not can_act():
+		return ""
+	if _find_nearest_guard(2.4) != null:
+		return "[F] [HOLD] TAKEDOWN"
+	var n: Node = get_nearest_interactable()
+	if n != null and n.has_method("get_interact_secondary_prompt"):
+		return str(n.call("get_interact_secondary_prompt"))
+	return ""
+
+
+## Runs the stacked secondary action on F release after HOLD_INTERACT_SEC.
+func _perform_hold_action() -> void:
+	if not can_act():
+		return
+	if _find_nearest_guard(2.4) != null:
+		_try_blackjack()
+		return
+	var n: Node = get_nearest_interactable()
+	if n != null and n.has_method("interact_hold"):
+		n.call("interact_hold", self)
+		interacted.emit(n)
 
 
 func _get_nearest_ko_guard() -> Node:

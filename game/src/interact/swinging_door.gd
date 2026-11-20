@@ -218,6 +218,22 @@ func get_interact_prompt() -> String:
 	return "[F] OPEN"
 
 
+## KF24: closed unlocked doors stack [F] [HOLD] LOCK under the primary OPEN.
+func get_interact_secondary_prompt() -> String:
+	if locked or is_open or _tweening:
+		return ""
+	return "[F] [HOLD] LOCK"
+
+
+## KF24 secondary action: hold F to lock the closed door again.
+func interact_hold(_actor: Node) -> void:
+	if locked or is_open or _tweening:
+		return
+	set_locked(true, 1)
+	lockpick_updated.emit(false, 0.0, lock_level)
+	NoiseBus.emit_noise(global_position, 3.0, self, "lock")
+
+
 func _exit_tree() -> void:
 	_clear_actor_lockpicking()
 

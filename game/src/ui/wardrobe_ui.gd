@@ -89,6 +89,8 @@ func _ready() -> void:
 		_thief_id = "spider"
 	_rows = _load_outfit_rows()
 	_build_ui()
+	if AudioManager != null and AudioManager.has_method("wire_hover_sfx"):
+		AudioManager.wire_hover_sfx(self)
 	_load_saved_loadout()
 	_refresh_thief_ui()
 
@@ -484,6 +486,8 @@ func _on_preview_gui_input(event: InputEvent) -> void:
 
 
 func _cycle_thief(dir: int) -> void:
+	if AudioManager != null and AudioManager.has_method("play_ui"):
+		AudioManager.play_ui("click")
 	var idx: int = THIEF_IDS.find(_thief_id)
 	if idx < 0:
 		idx = 0
@@ -525,6 +529,8 @@ func _set_hint(text: String) -> void:
 func _on_tool_selected(idx: int) -> void:
 	if idx < 0 or idx >= TOOLS.size():
 		return
+	if AudioManager != null and AudioManager.has_method("play_ui"):
+		AudioManager.play_ui("click")
 	_active_tool = idx
 	_refresh_tool_ui()
 
@@ -567,6 +573,8 @@ func _is_tool_unlocked(tool_id: String) -> bool:
 
 func _on_body_selected(idx: int) -> void:
 	if idx >= 0 and idx < _body_keys.size():
+		if AudioManager != null and AudioManager.has_method("play_ui"):
+			AudioManager.play_ui("click")
 		_body = _body_keys[idx]
 		_update_desc()
 		_rebuild_figure()
@@ -574,6 +582,8 @@ func _on_body_selected(idx: int) -> void:
 
 func _on_head_selected(idx: int) -> void:
 	if idx >= 0 and idx < _head_keys.size():
+		if AudioManager != null and AudioManager.has_method("play_ui"):
+			AudioManager.play_ui("click")
 		_head = _head_keys[idx]
 		_update_desc()
 		_rebuild_figure()
@@ -581,6 +591,8 @@ func _on_head_selected(idx: int) -> void:
 
 func _on_card_selected(idx: int) -> void:
 	if idx >= 0 and idx < _card_keys.size():
+		if AudioManager != null and AudioManager.has_method("play_ui"):
+			AudioManager.play_ui("click")
 		_card = _card_keys[idx]
 		_update_desc()
 		_rebuild_figure()

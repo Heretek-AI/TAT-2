@@ -16,8 +16,12 @@ extends Node
 ## AU coverage against docs/reference/clip_1795033698901 KEYFRAME_INDEX §4:
 ## - AU1 beds: rain (S01, -53..-49 dBFS, zero BGM) / den roomtone (S03,
 ##   -76..-73) / rooftop wind (S05/S09) / roomtone. Bed players are trimmed
-##   relative to the mastered clip level (RAIN_DB etc.); absolute clip dBFS
-##   from the keyframe table is preserved, not re-mastered.
+##   relative to the measured RMS of the decoded clip (ffmpeg astats), so the
+##   BUS level lands on the absolute KEYFRAME dBFS target (see BED_TRIM_DB);
+##   absolute clip dBFS from the keyframe table is preserved, not re-mastered.
+##   Scene beds: S01 menu rain only; S03 Den room tone only; S12+ Guildhall
+##   rain + quiet safe-room tone; loading screens stop all beds. The wind bed
+##   is opt-in via start_bed("wind") for the S05/S09 rooftop sky view.
 ## - AU4 UI: hover/select/confirm/back/open/close/ledger/paper + the S09
 ##   6 x 1.00 s countdown ticks (UI_MainMenu_Countdown) + modal chime.
 ## - AU3 footsteps: per-surface variation pools drawn from the
@@ -56,16 +60,51 @@ const BUS_AMBIENCE: String = "Ambience"
 const BUS_UI: String = "UI"
 const BUS_DIALOGUE: String = "Dialogue"
 
-# Bed trims relative to mastered clip level (KEYFRAME §4 peak/RMS preserved).
-const BED_RAIN_DB: float = -14.0
-const BED_DEN_DB: float = -20.0
-const BED_ROOMTONE_DB: float = -22.0
-const BED_WIND_DB: float = -18.0
-const BED_GUILDHALL_DB: float = -24.0
-const BED_GRAMOPHONE_DB: float = -12.0
+# AU1 bed levels. `BED_CLIP_RMS_DB` is the whole-loop RMS of the resolved
+# decoded Ogg measured with ffmpeg astats (48 kHz stereo) on 2026-11-19; the
+# player trim is `BED_TARGET_DBFS - BED_CLIP_RMS_DB`, so the Ambience bus
+# carries the absolute KEYFRAME §4 level and the clip is never re-mastered.
+# Targets:
+#   rain      -51.0 (S01 -53..-49, zero BGM)
+#   den       -74.5 (S03 -76.3..-73.1)
+#   roomtone    -61.5 (interior safe room / foyer bed)
+#   wind      -39.4 (S05 PONDER swell RMS)
+#   guildhall -64.0 (safe-room bed layered under the S12 rain)
+#   wind_prep -58.0 (S09 prep bed, -64..-52 RMS)
+const BED_CLIP_RMS_DB: Dictionary = {
+	"rain": -45.7,
+	"den": -34.1,
+	"roomtone": -32.8,
+	"wind": -31.9,
+	"guildhall": -32.8,
+	"wind_prep": -31.9,
+}
+const BED_TARGET_DBFS: Dictionary = {
+	"rain": -51.0,
+	"den": -74.5,
+	"roomtone": -61.5,
+	"wind": -39.4,
+	"guildhall": -64.0,
+	"wind_prep": -58.0,
+}
+const BED_TRIM_DB: Dictionary = {
+	"rain": -5.3,
+	"den": -40.4,
+	"roomtone": -28.7,
+	"wind": -7.5,
+	"guildhall": -31.2,
+	"wind_prep": -26.1,
+}
+# S07 diegetic gramophone: clip RMS -23.3 -> about -41.5 RMS with the trim
+# below (doc -40..-45 RMS, pk -24.9). Only Music-bus source in the game;
+# started on activation.
+const GRAMOPHONE_TRIM_DB: float = -18.2
 const UI_DB: float = -8.0
 const COUNTDOWN_DB: float = -10.0
 const VO_DB: float = -6.0
+## S27: opening the pause menu ducks gameplay ambience by 19 dB (doc:
+## -53 -> -72.4 dBFS by 03:42.6); resuming restores the saved bus level.
+const PAUSE_DUCK_DB: float = -19.0
 
 # (event, media DebugName) pins. Clips resolve through the events join only.
 const EXTRA_PINS := {
@@ -77,20 +116,44 @@ const EXTRA_PINS := {
 	"jawtrap": ["Play_JawTrapTriggered", "Projectile_JawTrap_Trigger_TEMP_03.wav"],
 	"paper": ["Play_Equipment_Map_Paper_Movement", "Obj_Page_Turn_Soft_Sequence_01.wav"],
 	"ledger_open": ["Play_UI_Open_Ledger_Book_01", "UI_Radial_Open_TP_01.wav"],
-	"ui_hover": ["Play_UI_MapAvailableHover", "UI_ThievesDen_Map_Hover_Available_02.wav"],
-	"ui_click": ["Play_UI_Item_Loot_Generic_Acquire", "Obj_Loot_Minor_TEMP_02.wav"],
+	"ui_hover": ["Play_UI_Menu_Hover", "UI_Radial_Hover_TP_02.wav"],
+	"ui_click": ["Play_UI_Menu_Press", "UI_Menu_Press.wav"],
 	"ui_confirm": ["Play_UI_ClickedJoinGameValidSound", "UI_Menu_Hover2.wav"],
 	"ui_back": ["Play_UI_Radial_Close", "UI_Radial_Close_TP_01.wav"],
 	"ui_open": ["Play_UI_Radial_Open", "UI_Radial_Open_TP_01.wav"],
-	"wardrobe_open": ["Play_UI_Open_ChangeLoadout_CabinetWood_Open__01", "UI_Radial_Open_TP_01.wav"],
+	"ui_tab": ["Play_UI_Radial_Tab", "UI_Radial_Tab_TP_01.wav"],
+	"ui_error": ["Play_UI_Invalid", "UI_Invalid_V1_01.wav"],
+	"ui_purchase": ["Play_UI_Upgrade_Button_Press", "UI_Purchase_Upgrade.wav"],
+	"wardrobe_open": ["Play_UI_Open_ChangeLoadout_CabinetWood_Open__01", "UI_ChangeEquipment_Cabinet_Open_01.wav"],
+}
+# AU5 contextual one-shots that are not NoiseBus mirrors (cast/attach/crank/
+# impact families). Resolved through the events join exactly like EXTRA_PINS.
+const CUE_PINS: Dictionary = {
+	"smoke_cast": ["Eqp_SmokeBomb_Cast", "Eqp_SmokeGrenade_Throw_01.wav"],
+	"smoke_cloud": ["Eqp_SmokeBomb_Alive_Loop", "Eqp_KnockoutGas_Alive_Loop_Sml_02.wav"],
+	"zipwire_launch": ["Play_Ability_Hotwire_Cast", "S_BL_Skill_Hotwire_Launch_02.wav"],
+	"zipwire_attach": ["Play_Ability_Hotwire_Attach", "Ability_Climbing_Rope_Attach_V2_02.wav"],
+	"zipwire_crank": ["Play_Ability_Hotwire_Crank_Loop", "Eqp_Zipwire_Crank_Single_01.wav"],
+	"zipwire_detach": ["Play_Ability_Hotwire_Detach", "Ability_Vrilwire_Detatch_03.wav"],
+	"pickpocket_success": ["Play_PickpocketingTool_Success", "PickpocketingTool_Success_02.wav"],
+	"pickpocket_fail": ["Play_PickpocketingTool_Failure", "PickpocketingTool_Failure_01.wav"],
+	"takedown_impact": ["Play_Ability_TakeDown_BodyFall", "Ability_Takedown_Bodyfall_01.wav"],
+	"lightbeam_trip": ["Play_Obj_LightBeam_Triggering", "Obj_LightBeam_Triggering_02.wav"],
+	"lightbeam_hum": ["Play_Obj_LightBeam_Beam_Loop", "Obj_LightBeam_Beam_Loop_04.wav"],
+	"alarm_loop": ["Play_Prop_Alarm_Guard_Alarm_Lp", "Obj_SecurityCamera_MagicEye_Alarm_02.wav"],
+	"door_latch": ["Play_Prop_Int_Door_Wood_Open", "Props_Int_Door_Open_Wood_V1_02.wav"],
+	"lock_unlock": ["Play_Obj_PickableLock_Unlock", "Prop_LockPick_OpenV2_01.wav"],
 }
 const COUNTDOWN_PIN := ["Play_UI_MainMenu_Countdown", "UI_MainMenu_Countdown_TP_01.wav"]
 const BED_PINS := {
-	"rain": ["Play_Amb_Weather_Rain_Impact_Puddle_Loop", "", -14.0],
-	"den": ["Play_Amb_ThievesDen_Interior_Small_Room", "", -20.0],
-	"roomtone": ["Play_Amb_Int_RoomTone_A", "", -22.0],
-	"wind": ["Play_Amb_AbbotsfordPark_Exterior_Rooftops", "", -18.0],
-	"guildhall": ["Play_Amb_Int_RoomTone_A", "", -24.0],
+	"rain": ["Play_Amb_Weather_Rain_Impact_Puddle_Loop", ""],
+	"den": ["Play_Amb_ThievesDen_Interior_Small_Room", ""],
+	"roomtone": ["Play_Amb_Int_RoomTone_A", ""],
+	"wind": ["Play_Amb_AbbotsfordPark_Exterior_Rooftops", ""],
+	"guildhall": ["Play_Amb_Int_RoomTone_A", ""],
+	# S09 Mission Preparation: softer rooftop wind under the 6 s countdown
+	# (-64..-52 RMS), distinct from the S05 PONDER swell above.
+	"wind_prep": ["Play_Amb_AbbotsfordPark_Exterior_Rooftops", ""],
 }
 const GRAMOPHONE_PIN := ["Play_Mus_Source_WindowLife_Random_Playlist_All", "Mus_Source_Phonograph_FX_Piano_Sonatina_Loop_01.wav"]
 const VO_PINS := {
@@ -126,9 +189,18 @@ var _beds: Dictionary = {}
 var _gramophone_player: AudioStreamPlayer = null
 var _countdown_running: bool = false
 var _named_clips: Dictionary = {}
+## Bus linear levels are cached so the S27 pause duck can be applied on top of
+## the saved slider value without losing it.
+var _bus_linear: Dictionary = {}
+var _pause_duck_db: float = 0.0
+var _pause_was_active: bool = false
 
 
 func _ready() -> void:
+	# S27 pause duck must keep evaluating while the scene tree is paused.
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	_pause_was_active = get_tree() != null and get_tree().paused
+	_pause_duck_db = PAUSE_DUCK_DB if _pause_was_active else 0.0
 	_ensure_buses()
 	_sfx["footstep"] = FOOTSTEP_SFX
 	_sfx["blackjack"] = BLACKJACK_SFX
@@ -145,6 +217,11 @@ func _ready() -> void:
 	_build_footstep_pools()
 	_pull_volumes_from_savesystem()
 	NoiseBus.noise_emitted.connect(_on_noise_emitted)
+	# S01: the Startscreen owns the rain bed and no music score. The menu
+	# script is outside this file's ownership, so the bed autostarts when the
+	# main-menu scene is the current scene (mission loads replace it via
+	# play_bed_scene).
+	call_deferred("_autostart_scene_bed")
 
 
 func _ensure_buses() -> void:
@@ -155,12 +232,36 @@ func _ensure_buses() -> void:
 
 
 func _set_bus_vol(bus_name: String, vol: float) -> void:
+	_bus_linear[bus_name] = clampf(vol, 0.0, 1.0)
+	_apply_bus_level(bus_name)
+
+
+## Applies a cached slider level plus the transient pause duck. Called by
+## apply_volumes and by the pause transition; never clobbers the saved level.
+func _apply_bus_level(bus_name: String) -> void:
 	var idx: int = AudioServer.get_bus_index(bus_name)
 	if idx < 0:
 		return
-	var v: float = clampf(vol, 0.0, 1.0)
-	AudioServer.set_bus_volume_db(idx, linear_to_db(maxf(v, 0.001)))
+	var v: float = float(_bus_linear.get(bus_name, 1.0))
+	var db: float = linear_to_db(maxf(v, 0.001))
+	if bus_name == BUS_AMBIENCE:
+		db += _pause_duck_db
+	AudioServer.set_bus_volume_db(idx, db)
 	AudioServer.set_bus_mute(idx, v <= 0.001)
+
+
+## S27: pause menu ambience duck (AU4-05). The tree's paused flag is the
+## authority, so HUD pause handling stays outside this file's ownership.
+func _process(_delta: float) -> void:
+	var tree: SceneTree = get_tree()
+	if tree == null:
+		return
+	var paused: bool = tree.paused
+	if paused == _pause_was_active:
+		return
+	_pause_was_active = paused
+	_pause_duck_db = PAUSE_DUCK_DB if paused else 0.0
+	_apply_bus_level(BUS_AMBIENCE)
 
 
 ## Push volumes from SaveSystem settings (also called by SaveSystem so the
@@ -288,6 +389,8 @@ func _load_real_clips() -> void:
 func _load_extra_pins() -> void:
 	for key: Variant in EXTRA_PINS.keys():
 		_register_named(str(key), _resolve_pin(EXTRA_PINS[key] as Array), true)
+	for cue: Variant in CUE_PINS.keys():
+		_register_named(str(cue), _resolve_pin(CUE_PINS[cue] as Array), false)
 	# Countdown / gramophone / VO / beds are played through dedicated AU
 	# paths (not the SFX-tag mirror), but they must still report real clips.
 	_register_named("ui_countdown", _resolve_pin(COUNTDOWN_PIN), true)
@@ -346,18 +449,68 @@ func _build_footstep_pools() -> void:
 				_foot_idx[pool_key] = 0
 
 
+## Resolves the surface actually under the player for the current map: the
+## Den is timber; the Guildhall route is wet cobblestone outside and marble
+## stone inside; Elway Manor is stone outside and parquet timber inside. The
+## indoor test is a ceiling probe, so no gameplay state is touched.
+func _scene_surface(preferred: String) -> String:
+	var gs: Node = get_node_or_null("/root/GameState")
+	var map_id: String = str(gs.get("active_map_id")) if gs != null else ""
+	if map_id == "thieves_den":
+		return "wood"
+	if map_id == "guildhall":
+		return "stone" if _is_indoor() else "wet"
+	if map_id == "old_manor":
+		return "wood" if _is_indoor() else "stone"
+	var p: String = preferred.to_lower().strip_edges()
+	return p if FOOTSTEP_SURFACE_KEYS.has(p) else "stone"
+
+
+func _is_indoor() -> bool:
+	var tree: SceneTree = get_tree()
+	if tree == null:
+		return false
+	var player: Node3D = tree.get_first_node_in_group("player") as Node3D
+	var vp: Viewport = get_viewport()
+	if player == null or vp == null:
+		return false
+	var world: World3D = vp.find_world_3d()
+	if world == null:
+		return false
+	var from: Vector3 = player.global_position + Vector3.UP * 1.2
+	var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(from, from + Vector3.UP * 10.0)
+	var excluded: Array[RID] = [player.get_rid()]
+	q.exclude = excluded
+	return not world.direct_space_state.intersect_ray(q).is_empty()
+
+
+## Round-robin pool draw. Crouch/Jog families lack some surfaces in the Wwise
+## event (e.g. no crouch wood/stone), so the search falls back across gaits
+## before ever returning a single fixed clip.
 func _footstep_clip(gait: String, surface: String) -> String:
 	var g: String = gait.to_lower().strip_edges()
 	if not FOOTSTEP_GAIT_EVENTS.has(g):
 		g = "walk"
-	var s: String = surface.to_lower().strip_edges()
-	var pool_key := g + "|" + s
-	if not _foot_pools.has(pool_key):
-		pool_key = g + "|wood"
-	if not _foot_pools.has(pool_key):
-		return ""
+	var s: String = _scene_surface(surface)
+	var gaits: Array[String] = [g, "walk", "jog", "run", "crouch"]
+	for gg: String in gaits:
+		var pool_key: String = gg + "|" + s
+		if _foot_pools.has(pool_key):
+			return _next_foot_clip(pool_key)
+	for gg: String in gaits:
+		var wood_key: String = gg + "|wood"
+		if _foot_pools.has(wood_key):
+			return _next_foot_clip(wood_key)
+	for pool_key_v: Variant in _foot_pools.keys():
+		return _next_foot_clip(str(pool_key_v))
+	return ""
+
+
+func _next_foot_clip(pool_key: String) -> String:
 	var pool: Array = _foot_pools[pool_key] as Array
-	var idx: int = int(_foot_idx.get(pool_key, 0)) % maxi(1, pool.size())
+	if pool.is_empty():
+		return ""
+	var idx: int = int(_foot_idx.get(pool_key, 0)) % pool.size()
 	_foot_idx[pool_key] = idx + 1
 	return str(pool[idx])
 
@@ -382,15 +535,58 @@ func play_footstep(surface: String = "wood", gait: String = "walk", pos: Vector3
 ## AU4: UI cue (2D, UI bus). Accepts either the bare cue name ("click",
 ## "ledger_open", "paper", "wardrobe_open", ...) or the "ui_"-prefixed
 ## tag form; unknown cues fall back to the click.
+## AU4: UI cue (2D, UI bus). Cue names: hover / click / confirm / back
+## (also cancel, close) / open / tab / error / purchase / ledger_open /
+## paper / wardrobe_open / countdown. Unknown cues fall back to the click.
+## AU4: recursively wires hover ticks onto every button under [param root].
+## UIs call this once after building (and again after lazy sub-panels), so the
+## S04/S08 metallic hover ticks fire without duplicating per-control plumbing.
+func wire_hover_sfx(root: Node) -> void:
+	if root == null:
+		return
+	for child: Node in root.get_children():
+		if child is BaseButton and not child.has_meta("pg6_hover"):
+			child.set_meta("pg6_hover", true)
+			(child as BaseButton).mouse_entered.connect(_on_ui_hover)
+		wire_hover_sfx(child)
+
+
+func _on_ui_hover() -> void:
+	play_ui("hover")
+
+
 func play_ui(cue: String = "click") -> bool:
 	var c := cue.to_lower().strip_edges()
 	if c == "countdown" or c == "ui_countdown":
 		return play_countdown_tick(0)
+	var alias: String = c
+	if c == "hover" or c == "mouseover":
+		alias = "ui_hover"
+	elif c == "click" or c == "press" or c == "select":
+		alias = "ui_click"
+	elif c == "confirm" or c == "accept":
+		alias = "ui_confirm"
+	elif c == "back" or c == "cancel" or c == "close":
+		alias = "ui_back"
+	elif c == "open":
+		alias = "ui_open"
+	elif c == "tab" or c == "tab_switch":
+		alias = "ui_tab"
+	elif c == "error" or c == "invalid" or c == "fail":
+		alias = "ui_error"
+	elif c == "purchase" or c == "buy":
+		alias = "ui_purchase"
+	elif c == "ledger":
+		alias = "ledger_open"
+	elif c == "wardrobe":
+		alias = "wardrobe_open"
+	elif c == "page" or c == "page_turn":
+		alias = "paper"
 	var key := ""
-	if _sfx.has(c):
-		key = c
-	elif _sfx.has("ui_" + c):
-		key = "ui_" + c
+	if _sfx.has(alias):
+		key = alias
+	elif _sfx.has("ui_" + alias):
+		key = "ui_" + alias
 	elif _sfx.has("ui_click"):
 		key = "ui_click"
 	else:
@@ -455,9 +651,9 @@ func _bed_stream(ev_name: String, media_sub: String) -> AudioStream:
 
 
 ## AU1/AU2: start a looped ambience bed (2D, Ambience bus).
-## Beds: rain / den / roomtone / wind / guildhall. Volumes mirror the
-## KEYFRAME §4 hierarchy (rain loudest outdoors, roomtone quietest).
-func start_bed(bed: String) -> bool:
+## Beds: rain / den / roomtone / wind / guildhall. The player trim lands the
+## bed on BED_TARGET_DBFS (KEYFRAME §4); fade_s crossfades in.
+func start_bed(bed: String, fade_s: float = 0.6) -> bool:
 	var key := bed.to_lower().strip_edges()
 	if not BED_PINS.has(key):
 		return false
@@ -467,50 +663,100 @@ func start_bed(bed: String) -> bool:
 	var stream: AudioStream = _bed_stream(str(pin[0]), str(pin[1]))
 	if stream == null:
 		return false
+	var target: float = float(BED_TRIM_DB.get(key, 0.0))
 	var player := AudioStreamPlayer.new()
 	player.stream = stream
 	player.bus = BUS_AMBIENCE
-	player.volume_db = float(pin[2])
+	player.volume_db = target if fade_s <= 0.0 else target - 20.0
 	add_child(player)
 	player.play()
 	_beds[key] = player
+	if fade_s > 0.0:
+		var tw: Tween = create_tween()
+		tw.tween_property(player, "volume_db", target, fade_s)
 	return true
 
 
-func stop_bed(bed: String) -> void:
+func stop_bed(bed: String, fade_s: float = 0.25) -> void:
 	var key := bed.to_lower().strip_edges()
 	if not _beds.has(key):
 		return
 	var player: AudioStreamPlayer = _beds[key] as AudioStreamPlayer
 	_beds.erase(key)
-	if is_instance_valid(player):
+	if not is_instance_valid(player):
+		return
+	if fade_s > 0.0:
+		var tw: Tween = create_tween()
+		tw.tween_property(player, "volume_db", -60.0, fade_s)
+		tw.tween_callback(player.queue_free)
+	else:
 		player.stop()
 		player.queue_free()
 
 
-func stop_all_beds() -> void:
+func stop_all_beds(fade_s: float = 0.0) -> void:
 	for key: Variant in _beds.keys():
 		var player: AudioStreamPlayer = _beds[key] as AudioStreamPlayer
-		if is_instance_valid(player):
+		if not is_instance_valid(player):
+			continue
+		if fade_s > 0.0:
+			var tw: Tween = create_tween()
+			tw.tween_property(player, "volume_db", -60.0, fade_s)
+			tw.tween_callback(player.queue_free)
+		else:
 			player.stop()
 			player.queue_free()
 	_beds.clear()
 	stop_gramophone()
 
 
-## AU1 scene beds: thieves_den -> den roomtone; elsewhere rain + roomtone.
-## Loading screens stay silent (call stop_all_beds there).
+## AU1 scene beds against KEYFRAME §4. The Den is room tone only (no BGM);
+## Guildhall layers the S12 rain under a quiet safe-room bed; the Manor is
+## exterior rain; loading screens silence everything (LoadingScreen calls
+## stop_all_beds). The wind bed is opt-in for the S05/S09 rooftop view.
 func play_bed_scene(map_id: String) -> void:
-	stop_all_beds()
+	stop_all_beds(0.2)
 	var m := map_id.to_lower()
-	if m.find("thieves_den") >= 0 or m.find("den") >= 0:
+	if m.find("thieves_den") >= 0 or m == "den":
 		start_bed("den")
-		start_bed("roomtone")
+	elif m.find("guildhall") >= 0:
+		start_bed("rain")
+		start_bed("guildhall")
+	elif m.find("old_manor") >= 0:
+		start_bed("rain")
 	else:
 		start_bed("rain")
-		start_bed("roomtone")
-		if m.find("guildhall") >= 0 or m.find("roof") >= 0 or m.find("mission") >= 0:
-			start_bed("wind")
+
+
+func _autostart_scene_bed() -> void:
+	var tree: SceneTree = get_tree()
+	if tree == null or _beds.has("rain"):
+		return
+	var scene: Node = tree.current_scene
+	if scene == null:
+		return
+	if scene.scene_file_path.ends_with("main_menu.tscn"):
+		start_bed("rain", 1.2)
+
+
+## Effective bed level on the bus for QA/reporting: target dBFS, applied trim
+## and which beds are currently live.
+func bed_target_dbfs(bed: String) -> float:
+	return float(BED_TARGET_DBFS.get(bed.to_lower().strip_edges(), 0.0))
+
+
+func active_bed_levels() -> Dictionary:
+	var out: Dictionary = {}
+	for key: Variant in _beds.keys():
+		var player: AudioStreamPlayer = _beds[key] as AudioStreamPlayer
+		if not is_instance_valid(player):
+			continue
+		out[str(key)] = {
+			"target_dbfs": bed_target_dbfs(str(key)),
+			"volume_db": player.volume_db,
+			"bus": player.bus,
+		}
+	return out
 
 
 ## AU2: diegetic gramophone record (S07, ONLY music in the clip) on Music bus.
@@ -523,7 +769,7 @@ func start_gramophone() -> bool:
 	_gramophone_player = AudioStreamPlayer.new()
 	_gramophone_player.stream = stream
 	_gramophone_player.bus = BUS_MUSIC
-	_gramophone_player.volume_db = BED_GRAMOPHONE_DB
+	_gramophone_player.volume_db = GRAMOPHONE_TRIM_DB
 	add_child(_gramophone_player)
 	_gramophone_player.play()
 	return true
@@ -672,11 +918,33 @@ func play_sfx(tag: String, pos: Vector3 = Vector3.ZERO) -> void:
 
 
 func _on_noise_emitted(origin: Vector3, loudness_meters: float, _source: Node, tag: String) -> void:
+	# Footsteps already fire with a per-surface variation pool from the player
+	# controller; mirroring the tag here would double every step with the
+	# single fallback clip and defeat the variation requirement.
+	if tag == "footstep":
+		return
 	var key: String = _resolve_tag(tag)
 	if key.is_empty():
 		return
 	var volume_db: float = clampf((loudness_meters - 6.0) * 1.5, -10.0, 4.0)
 	_play_at(key, origin, volume_db)
+
+
+## AU5 contextual cue resolved from CUE_PINS (3D on the SFX bus when a
+## position is supplied, otherwise 2D). Returns false when the pin did not
+## resolve through the events join.
+func play_cue(cue: String, pos: Variant = null) -> bool:
+	var key: String = cue.to_lower().strip_edges()
+	if not _named_clips.has(key):
+		return false
+	var stream: AudioStream = _named_clips[key] as AudioStream
+	if stream == null:
+		return false
+	if pos is Vector3:
+		_play_stream_3d(stream, pos, 0.0, BUS_SFX)
+	else:
+		_play_stream_2d(stream, BUS_SFX, 0.0)
+	return true
 
 
 func _play_at(key: String, pos: Vector3, volume_db: float) -> void:

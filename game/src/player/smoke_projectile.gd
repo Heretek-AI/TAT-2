@@ -46,6 +46,12 @@ static func throw_from(
 	var dir: Vector3 = direction.normalized() if direction.length() > 0.01 else Vector3.FORWARD
 	proj.linear_velocity = dir * INITIAL_SPEED_M_S
 	proj.angular_velocity = Vector3(6.0, 2.0, 4.0)
+	# S18: smoke-bomb equip/throw foley (real Wwise Eqp_SmokeBomb_Cast).
+	var loop: MainLoop = Engine.get_main_loop()
+	if loop is SceneTree:
+		var am: Node = (loop as SceneTree).root.get_node_or_null("AudioManager")
+		if am != null and am.has_method("play_cue"):
+			am.call("play_cue", "smoke_cast", origin)
 	return proj
 
 
@@ -149,4 +155,8 @@ func _detonate() -> void:
 	if nb != null and nb.has_method("emit_noise"):
 		var src: Node = thrower if (thrower != null and is_instance_valid(thrower)) else self
 		nb.call("emit_noise", global_position, 7.0, src, "smoke")
+	# S18: sustained pressurized hiss layer over the detonation pop.
+	var am: Node = get_node_or_null("/root/AudioManager")
+	if am != null and am.has_method("play_cue"):
+		am.call("play_cue", "smoke_cloud", global_position)
 	queue_free()

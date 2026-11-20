@@ -21,6 +21,14 @@ const VIEWCONE_DISGUISE_HALF_DEG: float = 65.0
 const PATROL_SPEED: float = 1.5 # DA_AIStatesToSpeed_Guard Neutral 150 cm/s
 const SUSPICIOUS_SPEED: float = 1.7 # DA_AIStatesToSpeed_Guard Suspicious 170 cm/s
 const ALERTED_SPEED: float = 2.5 # BP_Guard_Base TATCharacterAIMovement MaxWalkSpeed 250 cm/s
+## Authored in-place ground speed per locomotion clip (root-motion audit in
+## docs/reports/guard-animations.md). Playback is scaled by scripted speed /
+## clip speed so the feet plant instead of sliding.
+const CLIP_GROUND_SPEED: Dictionary = {
+	"neutral_walk": 1.24,
+	"suspicious_walk": 2.5,
+	"alert_run": 7.6,
+}
 const SIGHT_RANGE: float = 20.0 # AIC_GuardBase Fresh SightRadius 2000cm
 const LOSE_SIGHT_RANGE: float = 30.0 # Bouncer/Hauntstable Fresh LoseSightRadius 3000cm (GuardBase Fresh=2500, see report)
 const HEARING_RANGE: float = 25.0 # AIC_GuardBase TATAISenseConfig_Hearing.HearingRange 2500cm
@@ -300,6 +308,7 @@ func _play_guard_attack() -> void:
 		return
 	_attack_anim_lock = maxf(0.5, _anim_lib.clip_length(key))
 	_slip_anim = false
+	anim_player.speed_scale = 1.0
 	anim_player.play(key, 0.15)
 
 
@@ -315,6 +324,7 @@ func play_slip() -> void:
 		return
 	_slip_anim = true
 	_attack_anim_lock = 0.0
+	anim_player.speed_scale = 1.0
 	anim_player.play(key, 0.2)
 
 
@@ -343,22 +353,43 @@ func _update_guard_anim(delta: float) -> void:
 		return
 	if state == Alertness.KNOCKED_OUT:
 		_play_guard_clip("knockdown")
+		anim_player.speed_scale = 1.0
 		return
 	_attack_anim_lock = maxf(0.0, _attack_anim_lock - delta)
 	if _attack_anim_lock > 0.0:
 		return
 	var moving: bool = Vector2(velocity.x, velocity.z).length() > 0.5
+	var role: String = ""
 	match state:
 		Alertness.NEUTRAL:
-			_play_guard_clip("neutral_walk" if moving else "neutral_idle")
+			role = "neutral_walk" if moving else "neutral_idle"
 		Alertness.SUSPICIOUS:
-			_play_guard_clip("suspicious_walk" if moving else "suspicious_idle")
+			role = "suspicious_walk" if moving else "suspicious_idle"
 		Alertness.ALERTED:
-			_play_guard_clip("alert_run" if moving else "alert_idle")
+			role = "alert_run" if moving else "alert_idle"
 		Alertness.COMBAT:
-			_play_guard_clip("alert_run" if moving else "alert_idle")
+			role = "alert_run" if moving else "alert_idle"
 		Alertness.SEARCH:
-			_play_guard_clip("search")
+			role = "search"
+	_update_guard_loco_playback(role, moving, delta)
+
+
+## Foot-slide fix: match locomotion playback to the speed the controller is
+## actually moving. The authored clips carry root speeds of 1.24 m/s (neutral
+## walk), 2.5 m/s (suspicious walk) and 7.6 m/s (alert run); scripted speeds
+## are 1.5/1.7/2.5, so the unmodified clips slide. Clamped to [0.35, 1.8] so a
+## blend or a stall can never freeze or whirl the legs.
+func _update_guard_loco_playback(role: String, moving: bool, delta: float) -> void:
+	_play_guard_clip(role)
+	if not _anim_can_play():
+		return
+	var clip_speed: float = float(CLIP_GROUND_SPEED.get(role, 0.0))
+	if not moving or clip_speed <= 0.0:
+		anim_player.speed_scale = 1.0
+		return
+	var planar: float = Vector2(velocity.x, velocity.z).length()
+	var target_rate: float = clampf(planar / clip_speed, 0.35, 1.8)
+	anim_player.speed_scale = lerpf(anim_player.speed_scale, target_rate, clampf(delta * 8.0, 0.0, 1.0))
 
 
 func _resolve_guard_glb_path() -> String:
@@ -1126,7 +1157,7 @@ var owner_guard: Node = null
 func get_interact_prompt() -> String:
 \tif owner_guard != null and owner_guard.has_method("get_interact_prompt"):
 \t\treturn str(owner_guard.call("get_interact_prompt"))
-\treturn "[F] PICKPOCKET"
+\treturn "[F] PICK POCKET"
 func interact(_actor: Node) -> void:
 \tif owner_guard != null and owner_guard.has_method("steal_carried_item"):
 \t\towner_guard.call("steal_carried_item")
@@ -1153,7 +1184,7 @@ func get_interact_prompt() -> String:
 	var item_name: String = str(carried_item.get("name", "Key"))
 	if state == Alertness.KNOCKED_OUT:
 		return "[F] LOOT %s" % item_name
-	return "[F] PICKPOCKET %s" % item_name
+	return "[F] PICK POCKET"
 
 
 func interact(_actor: Node) -> void:

@@ -85,6 +85,8 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_build_all()
 	_refresh_all()
+	if AudioManager != null and AudioManager.has_method("wire_hover_sfx"):
+		AudioManager.wire_hover_sfx(self)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
@@ -98,6 +100,10 @@ func open_prep(p_map_id: String, p_difficulty: int, p_mode: String, p_contract_o
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if AudioManager != null and AudioManager.has_method("play_ui"):
 		AudioManager.play_ui("open")
+	# S09: soft rooftop wind under the prep screen + 6 s countdown. The louder
+	# S05 PONDER swell remains opt-in through start_bed("wind").
+	if AudioManager != null and AudioManager.has_method("start_bed"):
+		AudioManager.start_bed("wind_prep", 0.8)
 	_refresh_all()
 
 
@@ -131,9 +137,18 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _emit_ready() -> void:
+	if AudioManager != null and AudioManager.has_method("play_ui"):
+		AudioManager.play_ui("confirm")
 	ready_pressed.emit(map_id, difficulty, mode, contract_order)
 	visible = false
 	queue_free()
+
+
+## Leaving the prep screen (READY, BACK, or table teardown) ends the S09 bed;
+## mission_controller then starts the destination scene beds.
+func _exit_tree() -> void:
+	if AudioManager != null and AudioManager.has_method("stop_bed"):
+		AudioManager.stop_bed("wind_prep", 0.25)
 
 
 func _build_all() -> void:
@@ -603,6 +618,8 @@ func _populate_mission_rows() -> void:
 
 
 func _on_mission_selected(idx: int) -> void:
+	if AudioManager != null and AudioManager.has_method("play_ui"):
+		AudioManager.play_ui("click")
 	if idx >= 0 and idx < _mission_rows.size():
 		_selected_mission_idx = idx
 		_apply_selected_mission_row()

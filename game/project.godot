@@ -24,6 +24,7 @@ SaveSystem="*res://src/core/save_system.gd"
 window/size/viewport_width=1280
 window/size/viewport_height=720
 window/size/resizable=true
+window/dpi/allow_hidpi=false
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 
@@ -37,6 +38,9 @@ common/physics_ticks_per_second=60
 renderer/rendering_method="forward_plus"
 environment/defaults/default_clear_color=Color(0.02, 0.025, 0.045, 1)
 occlusion_culling/use_occlusion_culling=true
+lights_and_shadows/directional_shadow/size=2048
+lights_and_shadows/directional_shadow/max_distance=80.0
+lights_and_shadows/positional_shadow/atlas_size=2048
 
 [input]
 

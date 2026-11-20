@@ -48,6 +48,26 @@ const TINY_TEX_MIN_SIZE: int = 32
 var skipped_tiny_textures: Array[String] = []
 var skipped_tiny_count: int = 0
 
+## PG-1 texture VRAM budget. The generated .ctex library is imported Lossless
+## with mipmaps off and no size limit, so a Guildhall load pulls ~8.9 GB of
+## RGBA8 textures onto an 8 GB card and the driver thrashes (measured
+## 86.7 ms/frame, 7.8 GB GPU use at 1920x1080). Godot 4.7.2 has no texture
+## streaming, so the loader caps the long edge of every oversized texture at
+## load time instead. 0 disables the cap; the QA/perf harness overrides the
+## value with TAT2_TEX_CAP=<px> for A/B runs. Downscales are accounted in
+## downscaled_textures/downscaled_count (no silent hide), the same way the
+## tiny-texture mip guard is.
+##
+## 1024 is measured, not guessed: the Guildhall binds 631 unique textures =
+## 5.95 GB RGBA8 at a 2048 cap (355 of them 2048^2) and only 2.04 GB at 1024.
+## Live Vulkan 1080p frame time fell 125.7 -> 58.2 ms from that change alone.
+## The real long-term fix is the import pipeline (VRAM compression + size
+## cap, as tools/prepare_mobile_project.py already does for Android).
+const TEX_BUDGET_MAX_DIM: int = 1024
+var texture_budget_max_dim: int = TEX_BUDGET_MAX_DIM
+var downscaled_textures: Array[String] = []
+var downscaled_count: int = 0
+
 # --- Spatial chunking & culling tuning (perf P1/P2/P4) ----------------------
 ## Repeated meshes are partitioned into CHUNK_SIZE x CHUNK_SIZE XZ cells so every
 ## MultiMeshInstance3D gets a tight AABB that Godot's frustum culler can reject.
@@ -155,7 +175,63 @@ const DEN_WINDOW_LINTEL_BOTTOM_M: float = 2.0
 
 
 func _ready() -> void:
+	texture_budget_max_dim = _resolve_texture_budget()
 	_load_material_dbs()
+
+
+## PG-1: effective per-texture long-edge cap. TAT2_TEX_CAP (pixels, 0 = off)
+## lets the perf harness compare capped vs uncapped on one binary.
+func _resolve_texture_budget() -> int:
+	var env_cap: String = OS.get_environment("TAT2_TEX_CAP")
+	if env_cap.is_valid_int():
+		return maxi(0, int(env_cap))
+	return TEX_BUDGET_MAX_DIM
+
+
+## PG-1: downscale an image whose long edge exceeds the budget. Returns the
+## same image untouched when it already fits, else resizes it in place. The
+## mip contract of the source is kept (imported .ctex ships no mip chain).
+func _cap_image(img: Image, res_path: String) -> Image:
+	var cap: int = texture_budget_max_dim
+	if cap <= 0 or img == null or img.is_empty():
+		return img
+	var w: int = img.get_width()
+	var h: int = img.get_height()
+	var longest: int = maxi(w, h)
+	if longest <= cap:
+		return img
+	if img.is_compressed():
+		img.decompress()
+	img.clear_mipmaps()
+	var scale: float = float(cap) / float(longest)
+	var nw: int = maxi(1, int(round(float(w) * scale)))
+	var nh: int = maxi(1, int(round(float(h) * scale)))
+	img.resize(nw, nh, Image.INTERPOLATE_BILINEAR)
+	if not downscaled_textures.has(res_path):
+		downscaled_textures.append(res_path)
+	downscaled_count = downscaled_textures.size()
+	return img
+
+
+## PG-1: capped ImageTexture copy of a loaded texture, or the original when
+## it already fits the budget (or cannot be read back).
+func _cap_texture(tex: Texture2D, res_path: String) -> Texture2D:
+	var src: Image = tex.get_image()
+	if src == null or src.is_empty():
+		return tex
+	var img: Image = src.duplicate() as Image
+	if img == null:
+		return tex
+	_cap_image(img, res_path)
+	var out: ImageTexture = ImageTexture.create_from_image(img)
+	if out == null:
+		return tex
+	# Keep the source resource path on the capped copy: QA and UI code identify
+	# textures by path (e.g. the Mission Prep PBR check), and the capped copy is
+	# now the texture for that path in this process.
+	if res_path.begins_with("res://") and out.resource_path != res_path:
+		out.take_over_path(res_path)
+	return out
 
 
 ## PG-1 teardown: release cached textures/materials/meshes when the loader
@@ -243,6 +319,10 @@ func _load_tex(res_path: String) -> Texture2D:
 				var guarded: Texture2D = _guard_tiny_resource_texture(res_tex, res_path)
 				_tex_cache[res_path] = guarded
 				return guarded
+			if texture_budget_max_dim > 0 and maxi(res_tex.get_width(), res_tex.get_height()) > texture_budget_max_dim:
+				var capped_res: Texture2D = _cap_texture(res_tex, res_path)
+				_tex_cache[res_path] = capped_res
+				return capped_res
 			_tex_cache[res_path] = res_tex
 			return res_tex
 	if FileAccess.file_exists(res_path):
@@ -261,7 +341,12 @@ func _load_tex(res_path: String) -> Texture2D:
 					_tex_cache[res_path] = itex_tiny
 					return itex_tiny
 				return null
-			if not tex_has_mips:
+			# PG-1: cap before mip generation so the resized image gets a valid
+			# chain (imports ship none; resized mips would be stale).
+			img = _cap_image(img, res_path)
+			if img == null:
+				return null
+			if not img.has_mipmaps():
 				img.generate_mipmaps()
 			var itex: ImageTexture = ImageTexture.create_from_image(img)
 			if itex != null:
@@ -844,6 +929,7 @@ func _new_accumulator() -> Dictionary:
 	return {
 		"batches": {},
 		"batches_nocol": {},
+		"batches_far": {},
 		"lights": [] as Array,
 		"landscapes": [] as Array,
 		"decals": [] as Array,
@@ -947,8 +1033,11 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 		if lc is Dictionary:
 			landscapes.append(lc)
 
-	var collide_sublevel: bool = not _is_decorative_sublevel(json_path)
+	var decorative_sublevel: bool = _is_decorative_sublevel(json_path)
+	var collide_sublevel: bool = not decorative_sublevel
 	var batches: Dictionary = acc["batches"] if collide_sublevel else acc["batches_nocol"]
+	if decorative_sublevel:
+		batches = acc["batches_far"]
 
 	# Collect Thieves' Den exit door markers first so their SM_DoorInaccessibleA leaf
 	# is wired into the swinging-door path instead of spawning a static duplicate.
@@ -1240,8 +1329,11 @@ func _cell_of(tr: Transform3D) -> Vector2i:
 
 
 ## Splits one mesh-path batch into per-cell draw items. Single instances (or
-## batches that fit in one cell) stay as a single tight-AABB node.
-func _make_draw_items(batches: Dictionary, collide: bool) -> Array:
+## batches that fit in one cell) stay as a single tight-AABB node. Decorative
+## horizon sublevels pass global_batch=true and keep one node per mesh path:
+## a 3km skyline shell has no useful per-cell culling and would otherwise spend
+## thousands of draw calls on near-identical wall pieces.
+func _make_draw_items(batches: Dictionary, collide: bool, global_batch: bool = false) -> Array:
 	var items: Array = []
 	for mp_var in batches.keys():
 		# Batch keys carry an optional "||ov_key" suffix where ov_key is
@@ -1285,6 +1377,19 @@ func _make_draw_items(batches: Dictionary, collide: bool) -> Array:
 		if trs.is_empty():
 			continue
 		var has_cpds: bool = not cpds.is_empty() and cpds.size() == trs.size()
+		if global_batch:
+			items.append({
+				"mp": mp,
+				"override_materials": ov_arr,
+				"override_key": ov_key,
+				"trs": trs,
+				"cpds": cpds if has_cpds else ([] as Array[Color]),
+				"hidden_in_game": hidden_in_game,
+				"collide": collide,
+				"cell": Vector2i.ZERO,
+				"far": true,
+			})
+			continue
 		if trs.size() == 1:
 			var single_tr: Transform3D = trs[0]
 			var single_cpds: Array[Color] = cpds if has_cpds else ([] as Array[Color])
@@ -1335,6 +1440,7 @@ func _collect_draw_items(acc: Dictionary) -> Array:
 	var items: Array = []
 	items.append_array(_make_draw_items(acc["batches"], true))
 	items.append_array(_make_draw_items(acc["batches_nocol"], false))
+	items.append_array(_make_draw_items(acc["batches_far"], false, true))
 	return items
 
 
@@ -1487,6 +1593,8 @@ func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> 
 	var use_cpd: bool = not cpds.is_empty() and cpds.size() == count
 	var hidden_raw: Variant = item.get("hidden_in_game", false)
 	var hidden_in_game: bool = hidden_raw is bool and (hidden_raw as bool)
+	var far_raw: Variant = item.get("far", false)
+	var far_item: bool = far_raw is bool and (far_raw as bool)
 	if not use_cpd and not ov_arr.is_empty():
 		var ov_key: String = str(item.get("override_key", ""))
 		if ov_key == "":
@@ -1531,6 +1639,10 @@ func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> 
 		mi.transform = tr_one
 		node = mi
 	_apply_culling_policy(node, low_mp, mesh)
+	if far_item:
+		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		node.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+		node.visibility_range_end = 0.0
 	if use_cpd or hidden_in_game:
 		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	if hidden_in_game:
@@ -1561,7 +1673,7 @@ func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> 
 				else:
 					_add_collider(ctx, cell, shape, tr_c, soff)
 
-	if not use_cpd and not hidden_in_game and not is_clutter and _qualifies_as_occluder(low_mp, mesh):
+	if not use_cpd and not hidden_in_game and not is_clutter and not far_item and _qualifies_as_occluder(low_mp, mesh):
 		for i3 in range(count):
 			if int(ctx.get("occluders", 0)) >= MAX_OCCLUDERS:
 				break

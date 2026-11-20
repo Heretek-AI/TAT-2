@@ -47,6 +47,10 @@ var _music_slider: HSlider
 var _music_val: Label
 var _sfx_slider: HSlider
 var _sfx_val: Label
+var _amb_slider: HSlider
+var _amb_val: Label
+var _ui_vol_slider: HSlider
+var _ui_vol_val: Label
 var _dlg_slider: HSlider
 var _dlg_val: Label
 var _fullscreen_check: CheckBox
@@ -185,6 +189,10 @@ func _ensure_settings() -> void:
 		s["music_volume"] = 0.8
 	if not s.has("sfx_volume"):
 		s["sfx_volume"] = 0.8
+	if not s.has("ambience_volume"):
+		s["ambience_volume"] = 0.8
+	if not s.has("ui_volume"):
+		s["ui_volume"] = 0.8
 	if not s.has("dialogue_volume"):
 		s["dialogue_volume"] = 0.8
 	if not s.has("fullscreen"):
@@ -208,6 +216,8 @@ func reset_defaults() -> void:
 	s["master_volume"] = 0.8
 	s["music_volume"] = 0.8
 	s["sfx_volume"] = 0.8
+	s["ambience_volume"] = 0.8
+	s["ui_volume"] = 0.8
 	s["dialogue_volume"] = 0.8
 	s["fullscreen"] = false
 	s["render_scale"] = 1.0
@@ -238,6 +248,10 @@ func _load_from_save() -> void:
 		_music_slider.value = clampf(float(s.get("music_volume", 0.8)), VOL_MIN, VOL_MAX)
 	if _sfx_slider != null:
 		_sfx_slider.value = clampf(float(s.get("sfx_volume", 0.8)), VOL_MIN, VOL_MAX)
+	if _amb_slider != null:
+		_amb_slider.value = clampf(float(s.get("ambience_volume", s.get("sfx_volume", 0.8))), VOL_MIN, VOL_MAX)
+	if _ui_vol_slider != null:
+		_ui_vol_slider.value = clampf(float(s.get("ui_volume", s.get("sfx_volume", 0.8))), VOL_MIN, VOL_MAX)
 	if _dlg_slider != null:
 		_dlg_slider.value = clampf(float(s.get("dialogue_volume", 0.8)), VOL_MIN, VOL_MAX)
 	if _fullscreen_check != null:
@@ -267,6 +281,10 @@ func _apply_live(persist: bool) -> void:
 		s["music_volume"] = float(_music_slider.value)
 	if _sfx_slider != null:
 		s["sfx_volume"] = float(_sfx_slider.value)
+	if _amb_slider != null:
+		s["ambience_volume"] = float(_amb_slider.value)
+	if _ui_vol_slider != null:
+		s["ui_volume"] = float(_ui_vol_slider.value)
 	if _dlg_slider != null:
 		s["dialogue_volume"] = float(_dlg_slider.value)
 	s["fullscreen"] = _fullscreen_check.button_pressed if _fullscreen_check != null else false
@@ -301,6 +319,10 @@ func _refresh_value_labels() -> void:
 		_music_val.text = "%d%%" % int(round(float(_music_slider.value) * 100.0))
 	if _sfx_val != null and _sfx_slider != null:
 		_sfx_val.text = "%d%%" % int(round(float(_sfx_slider.value) * 100.0))
+	if _amb_val != null and _amb_slider != null:
+		_amb_val.text = "%d%%" % int(round(float(_amb_slider.value) * 100.0))
+	if _ui_vol_val != null and _ui_vol_slider != null:
+		_ui_vol_val.text = "%d%%" % int(round(float(_ui_vol_slider.value) * 100.0))
 	if _dlg_val != null and _dlg_slider != null:
 		_dlg_val.text = "%d%%" % int(round(float(_dlg_slider.value) * 100.0))
 	if _scale_val != null and _scale_slider != null:
@@ -439,6 +461,8 @@ func _build_ui() -> void:
 	vol_vb.add_child(_make_slider_row("master_volume", _label("Settings.Volume.MasterVolume", "Master Volume"), VOL_MIN, VOL_MAX, VOL_STEP))
 	vol_vb.add_child(_make_slider_row("music_volume", _label("Settings.Volume.MusicVolume", "Music Volume"), VOL_MIN, VOL_MAX, VOL_STEP))
 	vol_vb.add_child(_make_slider_row("sfx_volume", _label("Settings.Volume.SFXVolume", "SFX Volume"), VOL_MIN, VOL_MAX, VOL_STEP))
+	vol_vb.add_child(_make_slider_row("ambience_volume", _label("Settings.Volume.AmbienceVolume", "Ambience Volume"), VOL_MIN, VOL_MAX, VOL_STEP))
+	vol_vb.add_child(_make_slider_row("ui_volume", _label("Settings.Volume.UIVolume", "UI Volume"), VOL_MIN, VOL_MAX, VOL_STEP))
 	vol_vb.add_child(_make_slider_row("dialogue_volume", _label("Settings.Volume.DialogueVolume", "Dialogue Volume"), VOL_MIN, VOL_MAX, VOL_STEP))
 
 	# CONTROLS tab: grouped card.
@@ -571,6 +595,12 @@ func _make_slider_row(setting_key: String, label_text: String, min_v: float, max
 		"sfx_volume":
 			_sfx_slider = slider
 			_sfx_val = val
+		"ambience_volume":
+			_amb_slider = slider
+			_amb_val = val
+		"ui_volume":
+			_ui_vol_slider = slider
+			_ui_vol_val = val
 		"dialogue_volume":
 			_dlg_slider = slider
 			_dlg_val = val

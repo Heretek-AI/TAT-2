@@ -1,70 +1,24 @@
 class_name VfxManager
 extends RefCounted
 
+## APPROX_SHADER / REFERENCE_MATCHED procedural materials (HL-1). Each was
+## authored from the published KF frames, never from decompiled VM/shader
+## bytecode; the cooked UE graphs stay unread.
+const SMOKE_SHADER: Shader = preload("res://src/core/tat_smoke.gdshader")
+const BEAM_SHADER: Shader = preload("res://src/core/tat_beam.gdshader")
+const WARD_SHADER: Shader = preload("res://src/core/tat_ward.gdshader")
+const ALARM_SHADER: Shader = preload("res://src/core/tat_alarm.gdshader")
+
 
 ## Real UE extents (BP_SmokeBomb_WorldActor BoxExtent {250, 250, 200} cm):
 ## a 5 x 5 x 4 m box. `half_extents` defaults to the real volume; `ttl`
-## defaults to the real InitialLifeSpan (25.0 s).
-static func spawn_smoke_cloud(parent: Node, pos: Vector3, half_extents: Vector3 = Vector3(2.5, 2.0, 2.5), ttl: float = 25.0) -> void:
-	if parent == null or not parent.is_inside_tree():
-		return
-	var root: Node3D = Node3D.new()
-	root.name = "SmokeCloud"
-	parent.add_child(root)
-	root.global_position = pos
-
-	var puff_mesh: SphereMesh = SphereMesh.new()
-	puff_mesh.radius = 0.9
-	puff_mesh.height = 1.8
-	puff_mesh.radial_segments = 12
-	puff_mesh.rings = 8
-
-	var puff_mat: StandardMaterial3D = StandardMaterial3D.new()
-	puff_mat.vertex_color_use_as_albedo = true
-	puff_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	puff_mat.albedo_color = Color(0.22, 0.25, 0.3, 0.45)
-	puff_mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
-	puff_mesh.material = puff_mat
-
-	var smoke: CPUParticles3D = CPUParticles3D.new()
-	smoke.name = "SmokeParticles"
-	smoke.amount = 36
-	smoke.lifetime = 2.5
-	smoke.one_shot = true
-	smoke.explosiveness = 0.85
-	smoke.emitting = true
-	smoke.mesh = puff_mesh
-	smoke.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
-	smoke.emission_box_extents = half_extents
-	smoke.gravity = Vector3(0.0, 0.25, 0.0)
-	smoke.initial_velocity_min = 0.4
-	smoke.initial_velocity_max = 1.2
-	smoke.scale_amount_min = 0.6
-	smoke.scale_amount_max = 1.4
-	root.add_child(smoke)
-
-	var inner_mesh: BoxMesh = BoxMesh.new()
-	inner_mesh.size = half_extents * 2.0
-
-	var inner_mat: StandardMaterial3D = StandardMaterial3D.new()
-	inner_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	inner_mat.albedo_color = Color(0.3, 0.33, 0.38, 0.35)
-	inner_mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
-	inner_mesh.material = inner_mat
-
-	var inner: MeshInstance3D = MeshInstance3D.new()
-	inner.name = "InnerPuff"
-	inner.mesh = inner_mesh
-	root.add_child(inner)
-
-	var tree: SceneTree = parent.get_tree()
-	if tree == null:
-		return
-	var fade_tween: Tween = tree.create_tween()
-	fade_tween.set_parallel(true)
-	fade_tween.tween_property(inner, "scale", Vector3.ONE * 1.4, ttl)
-	fade_tween.tween_property(inner_mat, "albedo_color:a", 0.0, ttl)
-	tree.create_timer(ttl).timeout.connect(root.queue_free)
+## defaults to the real InitialLifeSpan (25.0 s). Gameplay callers
+## (smoke_projectile, mission_controller) share the layered KF20 plume look.
+static func spawn_smoke_cloud(parent: Node, pos: Vector3, half_extents: Vector3 = Vector3(2.5, 2.0, 2.5), ttl: float = 25.0) -> Node3D:
+	var plume: Node3D = spawn_smoke_plume(parent, pos, half_extents, ttl)
+	if plume != null:
+		plume.name = "SmokeCloud"
+	return plume
 
 
 ## `duration` is the visible flight time; the Pickpocket Fairy caller passes
@@ -646,12 +600,18 @@ static func set_prop_highlight(target: Node, enabled: bool) -> void:
 
 ## R3 APPROXIMATE / REFERENCE_MATCHED (HL-1): KF20 smoke plume (S18).
 ## Opaque grey-white volumetric puffs billow horizontally across the grand
-## steps after the 02:28.20 ignition flash. The compiled Niagara system
-## (NS_SmokeBomb: 24 scripts, 172 curve LUTs) was NOT decompiled: puff count,
-## velocities, growth and the 25 s box life (5 x 5 x 4 m authored volume) are
-## eyeballed stand-ins around the real extents/ttl defaults. Never an extraction.
+## steps after the 02:28.20 ignition flash, then linger and dissipate. The
+## compiled Niagara system (NS_SmokeBomb: 24 scripts, 172 curve LUTs) was NOT
+## decompiled: layer counts, velocities, growth and the 25 s box life
+## (5 x 5 x 4 m authored volume) are REFERENCE_MATCHED stand-ins around the
+## real extents/ttl defaults. Never an extraction.
+##
+## Three GPUParticles3D layers replace the old single burst + box stand-in:
+##   PlumeCore   - fast dense core thrown out at the ignition instant
+##   PlumeBillow - slower, larger puffs that expand horizontally over ~5 s
+##   PlumeHaze   - long-lived low drift layer that fades across the 25 s ttl
 static func spawn_smoke_plume(parent: Node, pos: Vector3, half_extents: Vector3 = Vector3(2.5, 2.0, 2.5), ttl: float = 25.0) -> Node3D:
-	if parent == null:
+	if parent == null or not parent.is_inside_tree():
 		return null
 	var root: Node3D = Node3D.new()
 	root.name = "SmokePlume"
@@ -665,50 +625,103 @@ static func spawn_smoke_plume(parent: Node, pos: Vector3, half_extents: Vector3 
 	flash.light_energy = 3.0
 	root.add_child(flash)
 
-	var puff_mesh: SphereMesh = SphereMesh.new()
-	puff_mesh.radius = 0.9
-	puff_mesh.height = 1.8
-	puff_mesh.radial_segments = 12
-	puff_mesh.rings = 8
-	var puff_mat: StandardMaterial3D = StandardMaterial3D.new()
-	puff_mat.vertex_color_use_as_albedo = true
-	puff_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	puff_mat.albedo_color = Color(0.86, 0.88, 0.91, 0.5)
-	puff_mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
-	puff_mesh.material = puff_mat
+	var tint: Color = Color(0.86, 0.88, 0.91, 1.0)
+	var ext: Vector3 = Vector3(maxf(half_extents.x, 0.2), maxf(half_extents.y, 0.2), maxf(half_extents.z, 0.2))
 
-	var pm: ParticleProcessMaterial = ParticleProcessMaterial.new()
-	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	pm.emission_box_extents = half_extents
-	pm.direction = Vector3(0.0, 0.3, 0.0)
-	pm.spread = 70.0
-	pm.gravity = Vector3(0.0, 0.3, 0.0)
-	pm.initial_velocity_min = 0.8
-	pm.initial_velocity_max = 2.4
-	pm.damping_min = 0.8
-	pm.damping_max = 1.2
-	pm.scale_min = 0.8
-	pm.scale_max = 1.7
-	pm.color = Color(0.84, 0.86, 0.89, 1.0)
-
-	var burst: GPUParticles3D = GPUParticles3D.new()
-	burst.name = "PlumeBurst"
-	burst.amount = 56
-	burst.lifetime = 4.5
-	burst.one_shot = true
-	burst.explosiveness = 0.8
-	burst.process_material = pm
-	burst.draw_pass_1 = puff_mesh
-	burst.visibility_aabb = AABB(Vector3(-6, -1, -6), Vector3(12, 8, 12))
-	root.add_child(burst)
-	burst.emitting = true
+	_add_smoke_layer(root, "PlumeCore", 40, 3.2, 0.9, true, 0.75,
+		ext * 0.7, 1.6, 3.2, 1.0, tint, 1.0, 0.06, 1.0, 0.0)
+	_add_smoke_layer(root, "PlumeBillow", 64, 5.5, 0.7, true, 1.0,
+		ext, 0.8, 2.2, 1.35, tint, 0.92, 0.07, 1.0, 0.0)
+	var haze_mat: ShaderMaterial = _add_smoke_layer(root, "PlumeHaze", 26, 6.5, 0.15, false, 1.35,
+		Vector3(ext.x * 1.1, 0.35, ext.z * 1.1), 0.15, 0.55, 1.6, tint, 0.55, 0.04, 0.5, -ext.y * 0.55)
 
 	var tree: SceneTree = parent.get_tree()
 	if tree != null:
 		var fade: Tween = tree.create_tween()
 		fade.tween_property(flash, "light_energy", 0.0, 1.2)
+		# KF20 linger/dissipate: the low haze thins out before the authored
+		# 25 s box life ends instead of vanishing with the burst layers.
+		var haze_fade: Tween = tree.create_tween()
+		haze_fade.tween_interval(2.0)
+		haze_fade.tween_property(haze_mat, "shader_parameter/density", 0.0, maxf(ttl - 2.0, 2.0))
 		tree.create_timer(maxf(ttl, 6.0)).timeout.connect(root.queue_free)
 	return root
+
+
+static func _smoke_material(density: float, glow: float, tint: Color) -> ShaderMaterial:
+	var mat: ShaderMaterial = ShaderMaterial.new()
+	mat.shader = SMOKE_SHADER
+	mat.set_shader_parameter("smoke_tint", tint)
+	mat.set_shader_parameter("density", density)
+	mat.set_shader_parameter("glow", glow)
+	return mat
+
+
+static func _smoke_growth_curve() -> CurveTexture:
+	var curve: Curve = Curve.new()
+	curve.max_value = 2.0
+	curve.add_point(Vector2(0.0, 0.28))
+	curve.add_point(Vector2(0.35, 0.85))
+	curve.add_point(Vector2(1.0, 1.55))
+	var tex: CurveTexture = CurveTexture.new()
+	tex.curve = curve
+	return tex
+
+
+static func _smoke_alpha_ramp(tint: Color, peak: float) -> GradientTexture1D:
+	var grad: Gradient = Gradient.new()
+	grad.offsets = PackedFloat32Array([0.0, 0.08, 0.72, 1.0])
+	grad.colors = PackedColorArray([
+		Color(tint.r, tint.g, tint.b, 0.0),
+		Color(tint.r, tint.g, tint.b, peak),
+		Color(tint.r, tint.g, tint.b, peak * 0.8),
+		Color(tint.r, tint.g, tint.b, 0.0),
+	])
+	var tex: GradientTexture1D = GradientTexture1D.new()
+	tex.gradient = grad
+	return tex
+
+
+static func _add_smoke_layer(root: Node3D, layer_name: String, amount: int, lifetime: float,
+		explosiveness: float, one_shot: bool, puff_radius: float, extents: Vector3,
+		velocity_min: float, velocity_max: float, scale_mul: float, tint: Color,
+		density: float, glow: float, alpha_peak: float, y_offset: float) -> ShaderMaterial:
+	var puff_mesh: SphereMesh = SphereMesh.new()
+	puff_mesh.radius = puff_radius
+	puff_mesh.height = puff_radius * 2.0
+	puff_mesh.radial_segments = 12
+	puff_mesh.rings = 8
+	var mat: ShaderMaterial = _smoke_material(density, glow, tint)
+	puff_mesh.material = mat
+
+	var pm: ParticleProcessMaterial = ParticleProcessMaterial.new()
+	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	pm.emission_box_extents = extents
+	pm.direction = Vector3(0.0, 0.12, 0.0)
+	pm.spread = 85.0
+	pm.gravity = Vector3(0.0, 0.22, 0.0)
+	pm.initial_velocity_min = velocity_min
+	pm.initial_velocity_max = velocity_max
+	pm.damping_min = 1.0
+	pm.damping_max = 1.8
+	pm.scale_min = 0.75 * scale_mul
+	pm.scale_max = 1.15 * scale_mul
+	pm.scale_curve = _smoke_growth_curve()
+	pm.color_ramp = _smoke_alpha_ramp(tint, alpha_peak)
+
+	var particles: GPUParticles3D = GPUParticles3D.new()
+	particles.name = layer_name
+	particles.amount = amount
+	particles.lifetime = lifetime
+	particles.one_shot = one_shot
+	particles.explosiveness = explosiveness
+	particles.process_material = pm
+	particles.draw_pass_1 = puff_mesh
+	particles.visibility_aabb = AABB(Vector3(-8.0, -2.0, -8.0), Vector3(16.0, 10.0, 16.0))
+	particles.position = Vector3(0.0, y_offset, 0.0)
+	root.add_child(particles)
+	particles.emitting = true
+	return mat
 
 
 ## R3 APPROXIMATE / REFERENCE_MATCHED (HL-1): KF27 foyer security beams (S24).
@@ -766,6 +779,24 @@ static func spawn_foyer_security_beam(parent: Node, emitter_pos: Vector3, far_po
 	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(node)
 	node.global_position = (emitter_pos + far_pos) * 0.5 + Vector3(0.0, 1.6, 0.0)
+	# KF27#2: flush square metallic floor plate between the beams. The caller
+	# owns the real foyer floor height; 2 cm sits flush on a y=0 floor tile.
+	var plate_mesh: BoxMesh = BoxMesh.new()
+	plate_mesh.size = Vector3(0.86, 0.03, 0.86)
+	var plate_mat: StandardMaterial3D = StandardMaterial3D.new()
+	plate_mat.albedo_color = Color(0.55, 0.57, 0.60)
+	plate_mat.metallic = 0.85
+	plate_mat.roughness = 0.28
+	plate_mat.emission_enabled = true
+	plate_mat.emission = Color(0.80, 0.92, 1.0)
+	plate_mat.emission_energy_multiplier = 0.35
+	plate_mesh.material = plate_mat
+	var plate: MeshInstance3D = MeshInstance3D.new()
+	plate.name = "FloorPlate"
+	plate.mesh = plate_mesh
+	plate.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(plate)
+	plate.global_position = Vector3((emitter_pos.x + far_pos.x) * 0.5, 0.015, far_pos.z)
 	if ttl > 0.0:
 		var tree: SceneTree = parent.get_tree()
 		if tree != null:
@@ -785,13 +816,13 @@ static func _add_beam_mesh(root: Node3D, a: Vector3, b: Vector3, radius: float, 
 	cyl.height = dist
 	cyl.radial_segments = 12
 	cyl.rings = 1
-	var beam_mat: StandardMaterial3D = StandardMaterial3D.new()
-	beam_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	beam_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	beam_mat.albedo_color = color
-	beam_mat.emission_enabled = true
-	beam_mat.emission = Color(color.r, color.g, color.b)
-	beam_mat.emission_energy_multiplier = energy
+	# APPROX_SHADER (HL-1, KF27): the UE beam cards were not decompiled; the
+	# view-facing core + feathered silhouette makes the cylinder read as a
+	# crisp white volumetric shaft instead of a lit plastic rod.
+	var beam_mat: ShaderMaterial = ShaderMaterial.new()
+	beam_mat.shader = BEAM_SHADER
+	beam_mat.set_shader_parameter("beam_color", color)
+	beam_mat.set_shader_parameter("energy", energy)
 	cyl.material = beam_mat
 	var beam: MeshInstance3D = MeshInstance3D.new()
 	beam.name = "SecurityBeam"
@@ -829,14 +860,15 @@ static func spawn_arcane_ward(parent: Node, pos: Vector3, facing_yaw: float = 0.
 	root.rotation.y = facing_yaw
 	var veil_mesh: PlaneMesh = PlaneMesh.new()
 	veil_mesh.size = Vector2(width, height)
-	var veil_mat: StandardMaterial3D = StandardMaterial3D.new()
-	veil_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	veil_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	veil_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	veil_mat.albedo_color = Color(0.55, 0.2, 0.9, 0.35)
-	veil_mat.emission_enabled = true
-	veil_mat.emission = Color(0.55, 0.2, 0.9)
-	veil_mat.emission_energy_multiplier = 1.6
+	# APPROX_SHADER (HL-1, KF28): procedural faceted crystal cells + rim vein
+	# stand in for the cooked ward graph (never decompiled). edge_fade keeps
+	# the archway veil feathered; the shard meshes keep full coverage.
+	var veil_mat: ShaderMaterial = ShaderMaterial.new()
+	veil_mat.shader = WARD_SHADER
+	veil_mat.set_shader_parameter("ward_color", Color(0.62, 0.28, 1.0, 0.40))
+	veil_mat.set_shader_parameter("energy", 2.4)
+	veil_mat.set_shader_parameter("facet_scale", 6.5)
+	veil_mat.set_shader_parameter("edge_fade", 1.0)
 	veil_mesh.material = veil_mat
 	var veil: MeshInstance3D = MeshInstance3D.new()
 	veil.name = "WardVeil"
@@ -844,13 +876,12 @@ static func spawn_arcane_ward(parent: Node, pos: Vector3, facing_yaw: float = 0.
 	veil.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(veil)
 	veil.position = Vector3(0.0, height * 0.5, 0.0)
-	var shard_mat: StandardMaterial3D = StandardMaterial3D.new()
-	shard_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	shard_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	shard_mat.albedo_color = Color(0.6, 0.25, 1.0, 0.85)
-	shard_mat.emission_enabled = true
-	shard_mat.emission = Color(0.55, 0.2, 0.9)
-	shard_mat.emission_energy_multiplier = 2.5
+	var shard_mat: ShaderMaterial = ShaderMaterial.new()
+	shard_mat.shader = WARD_SHADER
+	shard_mat.set_shader_parameter("ward_color", Color(0.66, 0.32, 1.0, 0.90))
+	shard_mat.set_shader_parameter("energy", 2.8)
+	shard_mat.set_shader_parameter("facet_scale", 4.0)
+	shard_mat.set_shader_parameter("edge_fade", 0.0)
 	for i: int in range(6):
 		var shard_mesh: BoxMesh = BoxMesh.new()
 		var t: float = float(i) / 5.0
@@ -957,8 +988,9 @@ static func spawn_vine_lock(parent: Node, pos: Vector3, facing_yaw: float = 0.0,
 
 ## R3 APPROXIMATE / REFERENCE_MATCHED (HL-1): KF29 crimson alarm wash (S26).
 ## Intense crimson spotlight from the wall security fixture over the slate
-## stairs (KF29#2, 03:38.20-03:39.60). The crimson cast is authored light,
-## not a particle effect. ttl fades the fixture wash, then frees it.
+## stairs (KF29#2, 03:38.20-03:39.60), with a strobing volumetric cone so the
+## alarm reads as a sweeping wash rather than a point light. The crimson cast
+## is authored light, not a particle effect. ttl frees the fixture wash.
 ## Never an extraction.
 static func spawn_crimson_alarm(parent: Node, fixture_pos: Vector3, target_pos: Vector3, ttl: float = 6.0) -> Node3D:
 	if parent == null:
@@ -978,6 +1010,28 @@ static func spawn_crimson_alarm(parent: Node, fixture_pos: Vector3, target_pos: 
 	spot.spot_attenuation = 1.0
 	root.add_child(spot)
 	_aim_spot(spot, offset)
+	# APPROX_SHADER / REFERENCE_MATCHED (HL-1): TIME-strobed volume cone.
+	var cone_mesh: CylinderMesh = CylinderMesh.new()
+	cone_mesh.top_radius = 0.12
+	cone_mesh.bottom_radius = clampf(dist * tan(deg_to_rad(16.0)), 0.25, 4.0)
+	cone_mesh.height = dist
+	cone_mesh.radial_segments = 20
+	cone_mesh.rings = 1
+	cone_mesh.cap_top = false
+	cone_mesh.cap_bottom = false
+	var cone_mat: ShaderMaterial = ShaderMaterial.new()
+	cone_mat.shader = ALARM_SHADER
+	cone_mat.set_shader_parameter("alarm_color", Color(1.0, 0.07, 0.05, 0.12))
+	cone_mat.set_shader_parameter("energy", 2.2)
+	cone_mat.set_shader_parameter("strobe_hz", 2.2)
+	cone_mesh.material = cone_mat
+	var cone: MeshInstance3D = MeshInstance3D.new()
+	cone.name = "AlarmCone"
+	cone.mesh = cone_mesh
+	cone.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(cone)
+	cone.global_position = fixture_pos + offset * 0.5
+	_aim_node(cone, fixture_pos, target_pos)
 	var bulb_mesh: SphereMesh = SphereMesh.new()
 	bulb_mesh.radius = 0.09
 	bulb_mesh.height = 0.18
@@ -995,8 +1049,17 @@ static func spawn_crimson_alarm(parent: Node, fixture_pos: Vector3, target_pos: 
 	root.add_child(bulb)
 	var tree: SceneTree = parent.get_tree()
 	if tree != null and ttl > 0.0:
+		# Alarm strobe pulse (KF29): two dips per second through the wash.
+		var strobe: Tween = tree.create_tween()
+		strobe.set_loops(maxi(int(ttl * 2.2), 2))
+		strobe.tween_property(spot, "light_energy", 2.2, 0.11)
+		strobe.tween_property(spot, "light_energy", 5.4, 0.11)
 		var fade: Tween = tree.create_tween()
-		fade.tween_property(spot, "light_energy", 0.0, ttl)
+		fade.tween_interval(maxf(ttl - 0.6, 0.1))
+		fade.tween_property(spot, "light_energy", 0.0, 0.6)
+		var cone_fade: Tween = tree.create_tween()
+		cone_fade.tween_interval(maxf(ttl - 0.8, 0.1))
+		cone_fade.tween_property(cone_mat, "shader_parameter/energy", 0.0, 0.8)
 		tree.create_timer(ttl + 0.1).timeout.connect(root.queue_free)
 	return root
 

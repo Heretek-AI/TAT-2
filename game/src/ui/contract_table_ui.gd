@@ -44,13 +44,21 @@ func _ready() -> void:
 	_collect_contracts()
 	_build_ui()
 	_refresh_list()
+	if AudioManager != null and AudioManager.has_method("wire_hover_sfx"):
+		AudioManager.wire_hover_sfx(self)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+
+func _ui_sfx(cue: String) -> void:
+	if AudioManager != null and AudioManager.has_method("play_ui"):
+		AudioManager.play_ui(cue)
 
 
 ## Instance helper: show the table and take mouse control.
 func open_table() -> void:
 	visible = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	_ui_sfx("open")
 	_refresh_list()
 
 
@@ -273,15 +281,17 @@ func _refresh_list() -> void:
 	if _list.item_count > 0:
 		var target: int = clampi(sel_idx, 0, _list.item_count - 1)
 		_list.select(target)
-		_on_contract_selected(target)
+		_on_contract_selected(target, false)
 	var diff_idx: int = clampi(int(GameState.difficulty) - 1, 0, 2)
 	if _diff_opt != null and _diff_opt.item_count == 3:
 		_diff_opt.select(diff_idx)
 
 
-func _on_contract_selected(idx: int) -> void:
+func _on_contract_selected(idx: int, play_sfx: bool = true) -> void:
 	if idx < 0 or idx >= _contracts.size():
 		return
+	if play_sfx:
+		_ui_sfx("click")
 	var c: Dictionary = _contracts[idx]
 	selected_order = int(c.get("order", 1))
 	selected_map_id = str(c.get("map_id", ""))
@@ -342,6 +352,7 @@ func _splash_for(map_id: String) -> Texture2D:
 
 
 func _on_difficulty_selected(idx: int) -> void:
+	_ui_sfx("click")
 	GameState.difficulty = clampi(idx + 1, 1, 3)
 
 
@@ -354,8 +365,10 @@ func _on_host_pressed() -> void:
 	if err_code == OK:
 		coop_mode = "Co-op"
 		_net_status.text = "Hosting co-op"
+		_ui_sfx("confirm")
 	else:
 		_net_status.text = "Host failed: %d" % err_code
+		_ui_sfx("error")
 
 
 func _on_join_pressed() -> void:
@@ -370,8 +383,10 @@ func _on_join_pressed() -> void:
 	if err_code == OK:
 		coop_mode = "Co-op"
 		_net_status.text = "Connecting to " + addr + "..."
+		_ui_sfx("confirm")
 	else:
 		_net_status.text = "Join failed: %d" % err_code
+		_ui_sfx("error")
 
 
 func _on_deploy_pressed() -> void:
@@ -399,12 +414,15 @@ func _confirm_text() -> String:
 func _show_confirm() -> void:
 	if _confirm_root == null:
 		_build_confirm()
+	_ui_sfx("confirm")
 	_refresh_confirm_text()
 	_confirm_root.visible = true
 	_confirm_visible = true
 
 
-func _hide_confirm() -> void:
+func _hide_confirm(play_sfx: bool = true) -> void:
+	if play_sfx:
+		_ui_sfx("back")
 	_confirm_visible = false
 	if _confirm_root != null:
 		_confirm_root.visible = false
@@ -468,9 +486,12 @@ func _build_confirm() -> void:
 	cancel_btn.pressed.connect(_hide_confirm)
 	row.add_child(cancel_btn)
 	dim.visible = false
+	if AudioManager != null and AudioManager.has_method("wire_hover_sfx"):
+		AudioManager.wire_hover_sfx(self)
 
 
 func _cycle_difficulty() -> void:
+	_ui_sfx("click")
 	GameState.difficulty = clampi(int(GameState.difficulty) % 3 + 1, 1, 3)
 	var idx: int = clampi(int(GameState.difficulty) - 1, 0, 2)
 	if _diff_opt != null and _diff_opt.item_count == 3:
@@ -479,6 +500,7 @@ func _cycle_difficulty() -> void:
 
 
 func _toggle_mode() -> void:
+	_ui_sfx("click")
 	if coop_mode == "Solo":
 		coop_mode = "Co-op"
 	else:
@@ -490,7 +512,8 @@ func _toggle_mode() -> void:
 
 ## Confirm: emit the selection flow and open MissionPrepUI on top of the table.
 func _confirm_prepare() -> void:
-	_hide_confirm()
+	_hide_confirm(false)
+	_ui_sfx("confirm")
 	mission_selected.emit(selected_order, selected_map_id, int(GameState.difficulty), coop_mode)
 	var prep: Control = MissionPrepUIScript.new() as Control
 	_prep = prep
@@ -530,6 +553,7 @@ func _on_close_pressed() -> void:
 
 
 func _close_ui() -> void:
+	_ui_sfx("back")
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	closed.emit()
 	visible = false

@@ -41,9 +41,14 @@ func _ready() -> void:
 
 
 ## QA hook: `tat2/debug_autostart_contract` is 0 in shipped builds. The mobile
-## packaging tool can set it to a contract order to boot straight into a mission.
+## packaging tool can set it to a contract order to boot straight into a mission;
+## `--qa-contract=N` overrides it for export-binary perf and capture runs.
 func _maybe_autostart_contract() -> void:
 	var order: int = int(ProjectSettings.get_setting("tat2/debug_autostart_contract", 0))
+	for args: PackedStringArray in [OS.get_cmdline_user_args(), OS.get_cmdline_args()]:
+		for arg: String in args:
+			if arg.begins_with("--qa-contract="):
+				order = int(arg.substr(14))
 	if order <= 0:
 		return
 	var info: Dictionary = GameData.get_contract_display(order)

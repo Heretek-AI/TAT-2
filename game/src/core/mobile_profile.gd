@@ -11,8 +11,8 @@ enum Tier { PERFORMANCE, BALANCED, QUALITY }
 
 const TIER_KEYS: Array[String] = ["performance", "balanced", "quality"]
 const TIER_LABELS: Array[String] = ["Performance", "Balanced", "Quality"]
-const DESKTOP_MAX_LIGHTS: int = 96
-const DESKTOP_HERO_SHADOWS: int = 4
+const DESKTOP_MAX_LIGHTS: int = 48
+const DESKTOP_HERO_SHADOWS: int = 2
 
 static var _force_mobile: bool = false
 

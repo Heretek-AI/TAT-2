@@ -193,6 +193,10 @@ func _build_ui() -> void:
 ## Show the overlay, reset progress to 5%, keep full-brightness T_loadingScreen_1 art.
 func start_loading(title: String, clue: String, map_id: String) -> void:
 	visible = true
+	# S02/S10: loading screens are explicit digital silence (no music, no
+	# narration) — fade the previous scene's ambience out before the load.
+	if AudioManager != null and AudioManager.has_method("stop_all_beds"):
+		AudioManager.stop_all_beds(0.35)
 	if _bar != null:
 		_bar.value = 5.0
 	if _title_lbl != null:

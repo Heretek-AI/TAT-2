@@ -768,9 +768,19 @@ func _ue_mesh_to_res(ue_path: String) -> String:
 	var candidate := "res://assets/ue/Content/" + clean + ".glb"
 	if ResourceLoader.exists(candidate):
 		return candidate
-	var gltf := "res://assets/ue/Content/" + clean + ".gltf"
-	if ResourceLoader.exists(gltf):
-		return gltf
+	var gltf_candidate := "res://assets/ue/Content/" + clean + ".gltf"
+	if ResourceLoader.exists(gltf_candidate):
+		return gltf_candidate
+	# Engine primitives ship outside TAT/Content (round-2 T1 repair): level JSON
+	# cites them short ("/Engine/BasicShapes/Cube") while the export root keeps
+	# the full Pak path (Engine/Content/BasicShapes/...glb), reachable through
+	# the Raw mirror (game/assets/ue/Raw -> extracted/assets).
+	if clean.begins_with("/Engine/"):
+		var raw_base := "res://assets/ue/Raw/Engine/Content/" + clean.substr("/Engine/".length())
+		if ResourceLoader.exists(raw_base + ".glb"):
+			return raw_base + ".glb"
+		if ResourceLoader.exists(raw_base + ".gltf"):
+			return raw_base + ".gltf"
 	return ""
 
 

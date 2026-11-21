@@ -65,6 +65,11 @@ const BLOOM_TO_GLOW := 0.08
 ## P3 companion: fog-energy compensation ceiling. Both density branches
 ## share one cap so the tuning lives in one place, not two literals.
 const FOG_ENERGY_COMP_MAX := 8.0
+## P3 single-sample: the clamp fires once per preset per apply (9 loud lines
+## in the reference log for 4 presets). Only the first clamp is loud; the
+## rest are counted silently. fog_clamp_total() exposes the exact count.
+static var _fog_clamp_total: int = 0
+static var _fog_clamp_sample_logged: bool = false
 ## P4 companion: off-Den glow uses 3 mip levels (0-2), not 5, and a 1.5x
 ## HDR scale instead of 2.0x. Levels 3-4 are explicitly disabled so a preset
 ## that leaves them on cannot stack 5 mips + 2x HDR outside the Den.
@@ -78,13 +83,22 @@ const GLOW_HDR_SCALE_NON_DEN := 1.5
 static func _clamped_fog_compensation(want_energy: float, is_low_density: bool, preset: Dictionary) -> float:
 	if want_energy <= FOG_ENERGY_COMP_MAX:
 		return maxf(want_energy, 1.0)
+	_fog_clamp_total += 1
+	if _fog_clamp_sample_logged:
+		return FOG_ENERGY_COMP_MAX
+	_fog_clamp_sample_logged = true
 	var fog_c: Variant = fog_light_color(preset)
 	var lum_dbg: String = "?"
 	if fog_c is Color:
 		var fc: Color = fog_c as Color
 		lum_dbg = str(snappedf(0.2126 * fc.r + 0.7152 * fc.g + 0.0722 * fc.b, 0.0005))
-	push_warning("[weather_profile] fog energy compensation clamped ", snappedf(want_energy, 0.1), "x -> ", FOG_ENERGY_COMP_MAX, "x for preset '", str(preset.get("preset", "?")), "' (fog_lum=", lum_dbg, ", low_density=", is_low_density, ")")
+	push_warning("[weather_profile] fog energy compensation clamped ", snappedf(want_energy, 0.1), "x -> ", FOG_ENERGY_COMP_MAX, "x for preset '", str(preset.get("preset", "?")), "' (fog_lum=", lum_dbg, ", low_density=", is_low_density, ", clamp_total=", _fog_clamp_total, ")")
 	return FOG_ENERGY_COMP_MAX
+
+
+## Exact clamp count this session (first clamp is the loud sample line).
+static func fog_clamp_total() -> int:
+	return _fog_clamp_total
 
 
 ## Desktop quality toggle (P2 companion). The old path enabled volumetric

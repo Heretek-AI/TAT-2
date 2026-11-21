@@ -14,6 +14,10 @@ var missions_by_id: Dictionary = {}
 var contracts_source_table: String = ""
 ## G1/G2 sentinels: every fallback routing decision is counted and named so
 ## a misspelled row or map can never route silently. Export gates on these.
+## The 64-row list caps below are named constants so the bound is provable
+## (warning lines print cap=<CONST>); counts stay exact past the cap.
+const MAP_FALLBACK_MAX_ROWS := 64
+const ICON_UNIMPORTED_MAX_ROWS := 64
 var map_fallback_count: int = 0
 var map_fallback_rows: Array[String] = []
 var icon_unimported_count: int = 0
@@ -399,9 +403,9 @@ func get_match_duration(map_id: String, difficulty: int) -> float:
 ## stored list at 64; the count stays exact.
 func _note_map_fallback(row_key: String, why: String) -> void:
 	map_fallback_count += 1
-	if map_fallback_rows.size() < 64 and not map_fallback_rows.has(row_key):
+	if map_fallback_rows.size() < MAP_FALLBACK_MAX_ROWS and not map_fallback_rows.has(row_key):
 		map_fallback_rows.append(row_key)
-	push_warning("[game_data] map fallback (", why, ") for row '", row_key, "' (fallbacks=", map_fallback_count, ")")
+	push_warning("[game_data] map fallback (", why, ") for row '", row_key, "' (fallbacks=", map_fallback_count, ", cap=", MAP_FALLBACK_MAX_ROWS, ")")
 
 
 func get_contract_display(order: int) -> Dictionary:
@@ -476,9 +480,9 @@ func _ue_texture_to_res(asset_path: String) -> String:
 	if FileAccess.file_exists(raw_path) or FileAccess.file_exists(content_path):
 		icon_unimported_count += 1
 		var hit: String = raw_path if FileAccess.file_exists(raw_path) else content_path
-		if icon_unimported_rows.size() < 64 and not icon_unimported_rows.has(asset_path):
+		if icon_unimported_rows.size() < ICON_UNIMPORTED_MAX_ROWS and not icon_unimported_rows.has(asset_path):
 			icon_unimported_rows.append(asset_path)
-		push_warning("[game_data] icon path not imported (raw file only, runtime load() may fail): ", hit, " from UE '", asset_path, "' (unimported=", icon_unimported_count, ")")
+		push_warning("[game_data] icon path not imported (raw file only, runtime load() may fail): ", hit, " from UE '", asset_path, "' (unimported=", icon_unimported_count, ", cap=", ICON_UNIMPORTED_MAX_ROWS, ")")
 		return hit
 	return ""
 

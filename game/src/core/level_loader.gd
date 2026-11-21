@@ -2663,6 +2663,7 @@ func load_sublevels(json_paths: Array[String], parent: Node3D, light_probe: Node
 	_build_post_process_gi_fills(acc["post_process"], parent, ctx)
 	_build_landscapes_sync(acc["landscapes"], parent, ctx)
 	_build_curbs_from_splines(acc["splines"], parent, ctx)
+	_build_guildhall_saferoom_floor(parent, ctx)
 
 	var items: Array = _collect_draw_items(acc)
 	var total_inst: int = 0
@@ -2716,6 +2717,7 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 		if parent.get_tree() != null:
 			await parent.get_tree().process_frame
 	_build_curbs_from_splines(acc["splines"], parent, ctx)
+	_build_guildhall_saferoom_floor(parent, ctx)
 	load_progress.emit(0.52, "Building curbs...")
 
 	var items: Array = _collect_draw_items(acc)
@@ -2844,6 +2846,61 @@ func _build_light(info: Dictionary, cast_shadow: bool = false) -> Light3D:
 		# UE5 spotlights/directionals aim along +X; Godot aims along -Z
 		light.rotate_object_local(Vector3.UP, -PI * 0.5)
 	return light
+
+
+## Guildhall safe-room lower floor (todo 4 repair). Verdict MISSING-UPSTREAM:
+## re-surveyed post-extract (2026-11-21) in Guildhall_PeripheryA around the
+## suite gap coordinate (126.0, 18.56, -10.43): no floor-like mesh within 6 m
+## at y < 18.5, only SM_Urban_Foundation walls at y=12 (7.1-7.9 m away); the
+## closest floor-like meshes are GB_Cube_6m at 10.18 m and GB_Floor_6x6 at
+## 10.43 m (y=18.0). The task-2 greybox pieces (GB_Floor_2x2 x3, GB_Floor_3x2
+## x1, 1m_Plane_Reverse x3, SM_FloorConcreteB_4x4 x78) live in the
+## Guildhall_Geometry sublevel frame (~160 m away) and already bind through
+## the generic mesh path where present, so they are not a lower floor for
+## this gap. The Heightmap_6.png tile is flat h16=33774 across the gap, i.e.
+## world y = 10.7 + (33774-32768)/128 = 18.56: the discard_holes=0 fill
+## renders as a flat plane exactly at the gap coordinate, 6 m below the 24.5
+## walkway and level with the wall bases (ext walls based 18.5, foundations
+## top out at 12+6=18). One authored slab closes the architectural gap; its
+## top sits 0.06 proud of the fill so the two surfaces never z-fight. Probe
+## safety: suite 10 steps DOWN through non-landscape hits to
+## LandscapeCollision_12 at 18.56, so a slab top at 18.62 still lands the
+## probes on the landscape (restart at hit.y-0.05=18.57 sees the 18.56
+## landscape 0.01 below before the slab exit 0.05 below).
+const GUILDHALL_SAFEROOM_FLOOR_POS: Vector3 = Vector3(126.0, 18.52, -10.43)
+const GUILDHALL_SAFEROOM_FLOOR_SIZE: Vector3 = Vector3(8.0, 0.2, 8.0)
+## Builds the single authored safe-room slab for guildhall loads only (the
+## map_hint derives from the level JSON paths, so a renamed source still
+## builds it and the source-vs-map mismatch push_error below still fires).
+## No-op for every other map; runs once per load via the ctx guard.
+func _build_guildhall_saferoom_floor(parent: Node3D, ctx: Dictionary) -> void:
+	if str(ctx.get("map_hint", "")) != "guildhall":
+		return
+	if bool(ctx.get("saferoom_floor_built", false)):
+		return
+	ctx["saferoom_floor_built"] = true
+	var slab := BoxMesh.new()
+	slab.size = GUILDHALL_SAFEROOM_FLOOR_SIZE
+	slab.material = _landscape_material(ctx, "Guildhall")
+	var mi := MeshInstance3D.new()
+	mi.name = "GuildhallSafeRoomFloor"
+	mi.mesh = slab
+	mi.position = GUILDHALL_SAFEROOM_FLOOR_POS
+	parent.add_child(mi)
+	if not bool(ctx.get("generate_collision", false)):
+		return
+	var shape := BoxShape3D.new()
+	shape.size = GUILDHALL_SAFEROOM_FLOOR_SIZE
+	var cs := CollisionShape3D.new()
+	cs.shape = shape
+	var body := StaticBody3D.new()
+	body.name = "GuildhallSafeRoomFloorBody"
+	body.collision_layer = 1
+	body.position = GUILDHALL_SAFEROOM_FLOOR_POS
+	body.add_child(cs)
+	parent.add_child(body)
+	ctx["collision_bodies"] = int(ctx.get("collision_bodies", 0)) + 1
+	ctx["collision_shapes"] = int(ctx.get("collision_shapes", 0)) + 1
 
 
 ## Builds the real layer-blended landscape material from the component's

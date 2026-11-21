@@ -645,6 +645,20 @@ func _retarget_general(clip_name: String, strip_root: bool, loop: bool, use_simi
 	return out
 
 
+# Verified GLB-internal take names (the importer keeps the take name, which
+# can differ from the manifest stem derived from the filename). Consulted by
+# _pick_named_animation's exact pass only, so the firing crank path resolves
+# exact with no warning while genuinely unknown clips keep the
+# exact -> contains -> first chain with its warnings. Probe-verified:
+# AN_ThiefNisha_Zipwire__Reload_Loop.glb carries exactly one take named
+# AN_ThiefNisha_Zipwire__Reload (400 tracks, 162/162 BodyUpper bones shared).
+# The 3P AN_Zipwire_Crank_Montage needs no entry: its internal name already
+# matches the manifest stem exactly.
+const CLIP_INTERNAL_EXACT := {
+	"AN_ThiefNisha_Zipwire__Reload_Loop": "AN_ThiefNisha_Zipwire__Reload",
+}
+
+
 ## Name-matched clip pick (P0-2 fix). Manifest clip names equal the GLB stem
 ## (e.g. AN_StealthTakedown_GuardEnforcer__Vic_Montage); a takedown GLB packing
 ## Atk+Vic takes must resolve the requested side, never the first animation.
@@ -656,6 +670,7 @@ static func _pick_named_animation(players: Array, clip_name: String) -> Animatio
 	var fallback_name := ""
 	var loose: Animation = null
 	var loose_name := ""
+	var exact_alias := str(CLIP_INTERNAL_EXACT.get(clip_name, ""))
 	for p in players:
 		var pl := p as AnimationPlayer
 		if pl == null:
@@ -672,7 +687,7 @@ static func _pick_named_animation(players: Array, clip_name: String) -> Animatio
 					fallback = cand
 					fallback_name = str(an)
 				var an_name := str(an)
-				if an_name == clip_name:
+				if an_name == clip_name or (exact_alias != "" and an_name == exact_alias):
 					return cand
 				if loose == null and (an_name.contains(clip_name) or clip_name.contains(an_name)):
 					loose = cand

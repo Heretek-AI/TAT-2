@@ -588,3 +588,11 @@ static func apply_for_map(env: Environment, moon: DirectionalLight3D, map_id: St
 	if preset.is_empty():
 		return false
 	return apply_environment(env, moon, preset)
+
+
+## Clears parsed preset/LUT caches held for the process lifetime.
+static func cleanup_static_caches() -> void:
+	_map_table_cache.clear()
+	_map_table_ready = false
+	_preset_cache.clear()
+	_lut_cache.clear()

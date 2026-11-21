@@ -355,13 +355,12 @@ func _map_id_to_sublevels(map_id: String, order: int = 2) -> Array[String]:
 				"res://data/generated/levels/ThievesDenTest/ThievesDenTest_P.tatlevel.json",
 				"res://data/generated/levels/ThievesDenTest/ThievesDenTest_Periphery.tatlevel.json",
 			]
-		"jaspering_hall":
-			base = [
-				"res://data/generated/levels/FTUE/FTUE_Geometry.tatlevel.json",
-				"res://data/generated/levels/FTUE/FTUE_Building_JewelryStore.tatlevel.json",
-				"res://data/generated/levels/FTUE/FTUE_Building_SpawnArea.tatlevel.json",
-				"res://data/generated/levels/FTUE/FTUE_Gameplay.tatlevel.json",
-			]
+		"ftue":
+			# Steam's tutorial map set. The old key was "jaspering_hall", a scene
+			# that does not exist in the shipped game, and it loaded only 4 of the
+			# 10 authored FTUE sublevels.
+			for ftue_sub: String in GameData.get_ftue_sublevels():
+				base.append("res://data/generated/levels/FTUE/%s.tatlevel.json" % ftue_sub)
 	if base.is_empty():
 		return base
 	for sub: String in GameData.get_contract_sublevels(order):
@@ -649,20 +648,8 @@ func _spawn_map_table_miniatures(desk_pos: Vector3) -> void:
 			# 27.39531); base kept at the port 0.24.
 			"scale": 0.24,
 		},
-		{
-			# P1 Jaspering Hall unpreviewable: contracts 17-18 deploy to
-			# jaspering_hall but the Den roster was hardcoded to two maps.
-			# No SM_MapBuilding_Jasper mesh exists in extracted data, so this
-			# entry is a loud procedural fallback (never silent): selection,
-			# gaze and card work; the warning names the missing art.
-			"name": "MapTokenJasperingHall",
-			"map_id": "jaspering_hall",
-			"ue_mesh": "",
-			"ue_mat": "",
-			"offset": Vector3(-0.02, 0.02, 0.32),
-			"scale": 0.20,
-			"fallback_token": true,
-		},
+		# The invented "jaspering_hall" token was removed: Steam ships no such
+		# map, scene or token mesh. The tutorial route is "ftue".
 	]
 	for item: Dictionary in miniatures:
 		if bool(item.get("fallback_token", false)):
@@ -773,7 +760,7 @@ func _update_map_token_highlights() -> void:
 ## P1 Jaspering-Hall-unpreviewable roster: selectable Den maps in one place so
 ## set_den_selected_map and the gaze path cannot drift (P2 gaze bypass).
 static func is_selectable_den_map(map_id: String) -> bool:
-	return map_id == "old_manor" or map_id == "guildhall" or map_id == "jaspering_hall"
+	return map_id == "old_manor" or map_id == "guildhall" or map_id == "ftue"
 
 
 func set_den_selected_map(map_id: String) -> void:
@@ -2242,3 +2229,15 @@ func _on_time_expired() -> void:
 	contract_info["timeout_reason"] = "TIME EXPIRED"
 	if hud != null and hud.has_method("show_result"):
 		hud.show_result(false, GameState.loot_value, contract_info)
+
+
+## Releases the process-lifetime caches owned by level/weather/VFX/animation
+## systems when a mission leaves the tree. Without this the last mission's
+## textures, LUTs and retarget caches survive shutdown as leaked resources.
+func _exit_tree() -> void:
+	VfxManager.cleanup_static_caches()
+	GuardAnimationLibrary.cleanup_static_caches()
+	ArtNouveauTheme.cleanup_static_caches()
+	(load("res://src/core/weather_profile.gd") as GDScript).cleanup_static_caches()
+	(load("res://src/core/weather_visuals.gd") as GDScript).cleanup_static_caches()
+	(load("res://src/ai/guard_ai.gd") as GDScript).cleanup_static_caches()

@@ -15,39 +15,12 @@ const XP_PER_LEVEL_FALLBACK := 500
 const MAX_SAVE_LEVEL := 200
 const MAX_SAVE_XP := 1_000_000
 
-var data: Dictionary = {
-	"xp": 0,
-	"level": 1,
-	"completed_contracts": {},
-	"unlocked_tools": ["blackjack", "slither_sap", "smoke_bomb", "pickpocket_fairy", "zipwire"],
-	"unlocked_perks": ["novice_difficulty", "guildhall", "old_manor", "spider"],
-	"unlocked_cosmetics": ["bowler_hat"],
-	"currency": 26275,
-	"equipped_loadout": ["blackjack", "smoke_bomb", "zipwire", "slither_sap"],
-	"equipped_cosmetics": {"head": "bowler_hat", "body": "", "calling_card": ""},
-	"active_decoration": "faberge_egg",
-	"settings": {
-		"mouse_sensitivity": 0.0025,
-		"invert_y": false,
-		"sprint_toggle": false,
-		"reduced_camera_bounce": false,
-		"fov": 75.0,
-		"vsync": true,
-		"master_volume": 0.8,
-		"music_volume": 0.8,
-		"sfx_volume": 0.8,
-		"ambience_volume": 0.8,
-		"ui_volume": 0.8,
-		"dialogue_volume": 0.8,
-		"fullscreen": false,
-		"render_scale": 1.0,
-		"touch_sensitivity": 2.5,
-		"mobile_quality": "balanced",
-	},
-}
+## Populated from _defaults() in _ready() so the schema has one source of truth.
+var data: Dictionary = {}
 
 
 func _ready() -> void:
+	data = _defaults()
 	load_save()
 	apply_saved_settings()
 
@@ -104,6 +77,21 @@ func _apply_bus_direct(bus_name: String, bus_vol: float) -> void:
 	AudioServer.set_bus_mute(idx, bus_vol <= 0.001)
 
 
+func _default_loadout() -> Dictionary:
+	return {
+		"head": "bowler_hat",
+		"body": "",
+		"calling_card": "",
+		"tools": ["blackjack", "smoke_bomb", "zipwire", "slither_sap"],
+		"perks": [],
+		"active_tool": 0,
+		"active_tool_id": "zipwire",
+	}
+
+
+## Canonical schema. `equipped_loadout` is keyed by thief id so Spider and
+## Chameleon keep independent cosmetics/tools (the old flat "loadout" key and
+## the array form are migrated in _ensure_defaults).
 func _defaults() -> Dictionary:
 	return {
 		"xp": 0,
@@ -112,9 +100,8 @@ func _defaults() -> Dictionary:
 		"unlocked_tools": ["blackjack", "slither_sap", "smoke_bomb", "pickpocket_fairy", "zipwire"],
 		"unlocked_perks": ["novice_difficulty", "guildhall", "old_manor", "spider"],
 		"unlocked_cosmetics": ["bowler_hat"],
-		"currency": 26275,
-		"equipped_loadout": ["blackjack", "smoke_bomb", "zipwire", "slither_sap"],
-		"equipped_cosmetics": {"head": "bowler_hat", "body": "", "calling_card": ""},
+		"currency": 0,
+		"equipped_loadout": {"spider": _default_loadout(), "chameleon": _default_loadout()},
 		"active_decoration": "faberge_egg",
 		"settings": {
 			"mouse_sensitivity": 0.0025,
@@ -130,11 +117,59 @@ func _defaults() -> Dictionary:
 			"ui_volume": 0.8,
 			"dialogue_volume": 0.8,
 			"fullscreen": false,
+			"window_mode": "windowed_fullscreen",
+			"gamepad_sensitivity": 0.0025,
+			"gamepad_invert_y": false,
 			"render_scale": 1.0,
 			"touch_sensitivity": 2.5,
 			"mobile_quality": "balanced",
 		},
 	}
+
+
+## Loadout accessors used by the wardrobe and gameplay identity code.
+func get_loadout(thief_id: String) -> Dictionary:
+	var eq: Variant = data.get("equipped_loadout", {})
+	if eq is Dictionary and (eq as Dictionary).get(thief_id) is Dictionary:
+		var out: Dictionary = _default_loadout()
+		out.merge((eq as Dictionary)[thief_id] as Dictionary, true)
+		return out
+	return _default_loadout()
+
+
+func set_loadout(thief_id: String, loadout: Dictionary) -> void:
+	if not (data.get("equipped_loadout") is Dictionary):
+		data["equipped_loadout"] = {}
+	var eq: Dictionary = data["equipped_loadout"] as Dictionary
+	var entry: Dictionary = _default_loadout()
+	entry.merge(loadout, true)
+	eq[thief_id] = entry
+	data["equipped_loadout"] = eq
+
+
+## Recursive type-checked merge. Only known keys with compatible types are
+## accepted; a wrong-typed value (e.g. "currency": "bad") leaves the default
+## intact instead of crashing the first caller that casts it.
+func _merge_validated(incoming: Dictionary, target: Dictionary = {}) -> void:
+	if target.is_empty():
+		target = data
+	for key_v: Variant in incoming.keys():
+		var key: String = str(key_v)
+		if not target.has(key):
+			continue
+		var base: Variant = target[key]
+		var inc: Variant = incoming[key_v]
+		if base is Dictionary and inc is Dictionary:
+			_merge_validated(inc as Dictionary, base as Dictionary)
+		elif key == "equipped_loadout" and (inc is Array or inc is Dictionary):
+			target[key] = inc  # normalized by _ensure_defaults
+		elif base is Array:
+			if inc is Array:
+				target[key] = (inc as Array).duplicate(true)
+		elif typeof(base) == typeof(inc) \
+				or (base is int and inc is float) \
+				or (base is float and inc is int):
+			target[key] = inc
 
 
 func _ensure_defaults() -> void:
@@ -170,6 +205,30 @@ func _ensure_defaults() -> void:
 		var cosmetics: Array = data["unlocked_cosmetics"] as Array
 		if not cosmetics.has("bowler_hat"):
 			cosmetics.append("bowler_hat")
+	# Normalize every legacy loadout shape into the per-thief canonical dict.
+	var eq_v: Variant = data.get("equipped_loadout", null)
+	if eq_v is Array:
+		var legacy_tools: Array = eq_v as Array
+		var lo: Dictionary = _default_loadout()
+		lo["tools"] = legacy_tools.duplicate()
+		data["equipped_loadout"] = {"spider": lo, "chameleon": _default_loadout()}
+	elif eq_v is Dictionary and (eq_v as Dictionary).has("thief_id"):
+		var flat: Dictionary = eq_v as Dictionary
+		var cur: Dictionary = _default_loadout()
+		for field: String in ["head", "body", "calling_card", "active_tool_id"]:
+			if flat.has(field):
+				cur[field] = str(flat[field])
+		cur["active_tool"] = int(flat.get("active_tool", 0))
+		data["equipped_loadout"] = {"spider": cur, "chameleon": _default_loadout()}
+	var legacy_flat: Variant = data.get("loadout", null)
+	if legacy_flat is Dictionary:
+		var tid: String = str((legacy_flat as Dictionary).get("thief_id", "spider"))
+		set_loadout(tid, legacy_flat as Dictionary)
+		data.erase("loadout")
+	var eq: Dictionary = data["equipped_loadout"] as Dictionary
+	for thief: String in ["spider", "chameleon"]:
+		if not (eq.get(thief) is Dictionary):
+			eq[thief] = _default_loadout()
 
 
 ## Stored levels are legacy: old saves used `xp / 500 + 1`, which is higher
@@ -197,8 +256,7 @@ func load_save() -> void:
 		return
 	var parsed: Variant = JSON.parse_string(f.get_as_text())
 	if parsed is Dictionary:
-		var pd: Dictionary = parsed as Dictionary
-		data.merge(pd, true)
+		_merge_validated(parsed as Dictionary)
 	_ensure_defaults()
 	_sync_level_from_xp()
 

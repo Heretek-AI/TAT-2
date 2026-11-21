@@ -497,3 +497,8 @@ static func make_modal(parent: CanvasLayer, min_size: Vector2, title_text: Strin
 		"title": title,
 	}
 	return out
+
+
+## Drops cached FontFile resources so fonts do not survive shutdown.
+static func cleanup_static_caches() -> void:
+	_font_cache.clear()

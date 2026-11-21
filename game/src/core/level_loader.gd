@@ -2635,8 +2635,8 @@ static func _map_hint_from_paths(paths: Array) -> String:
 		return "old_manor"
 	if "thieves_den" in joined or "thievesden" in joined:
 		return "thieves_den"
-	if "jaspering" in joined:
-		return "jaspering_hall"
+	if "jaspering" in joined or "ftue" in joined:
+		return "ftue"
 	return ""
 
 

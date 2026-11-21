@@ -299,7 +299,7 @@ func _t4_12_r3_cooked_data_adversarial_audit() -> void:
 	var sys_v: Variant = h.read_json("res://data/generated/vfx/systems.json")
 	var r3_1: bool = sys_v is Dictionary and h.read_text("res://src/core/vfx_manager.gd").find("VectorVM") < 0
 	var r3_2: bool = h.read_text("res://src/core/tat_sky.gdshader").find("APPROXIMATE") >= 0 and h.read_text("res://src/core/level_loader.gd").find("DECAL_GENERIC_TOKENS") >= 0
-	var r3_3: bool = h.read_text("res://src/ai/guard_ai.gd").find("BP_AIPatrolPath") < 0 or true
+	var r3_3: bool = h.read_text("res://src/ai/guard_ai.gd").find("BP_AIPatrolPath") < 0
 	var al_txt: String = h.read_text("res://src/core/animation_library.gd")
 	var r3_4: bool = al_txt.find("AN_Unarmed_Idle_1P") < 0 and al_txt.find("AN_Jump_1P") < 0
 	var r3_5: bool = h.read_text("res://src/player/thief_character.gd").find("SLITHERSAP_SPEED") < 0

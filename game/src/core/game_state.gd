@@ -9,7 +9,7 @@ signal mission_letter_requested(title: String, intro_text: String)
 
 enum Difficulty { NOVICE = 1, THIEF = 2, MASTER_THIEF = 3 }
 
-var thief_id: String = "spider" # spider | chameleon | moth
+var thief_id: String = "spider" # spider (Nisha) | chameleon (Cotter)
 var outfit_body: String = "Default"
 var outfit_head: String = "Default"
 var calling_card: String = "Default"
@@ -18,6 +18,17 @@ var active_contract_order: int = 2
 var active_map_id: String = "old_manor"
 var active_mission_id: String = ""
 var active_mission_mode: String = "Solo"
+# Run-selection state used by SV_* scene variants and match modes.
+var active_map_seed: int = 0
+var active_scene_variants: Array[String] = []
+var active_match_mode: String = "solo" # solo | coop_host | coop_client | ftue
+
+## Canonical identity accessor (contract name); keeps thief_id as the store.
+var active_thief_id: String:
+	get:
+		return thief_id
+	set(value):
+		thief_id = value
 
 var state: String = "menu" # menu | hub | playing | paused | victory | failed
 var elapsed_sec: float = 0.0

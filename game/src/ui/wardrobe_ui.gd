@@ -1082,18 +1082,15 @@ func _display_desc(key: String) -> String:
 
 
 func _load_saved_loadout() -> void:
-	var data: Dictionary = SaveSystem.data
-	var data_var: Variant = data.get("loadout", {})
-	if data_var is Dictionary:
-		var loadout: Dictionary = data_var as Dictionary
-		var saved_thief: String = str(loadout.get("thief_id", _thief_id))
-		if THIEF_IDS.has(saved_thief):
-			_thief_id = saved_thief
-		_body = str(loadout.get("body", ""))
-		_head = str(loadout.get("head", ""))
-		_card = str(loadout.get("calling_card", ""))
-		var tool_var: Variant = loadout.get("active_tool", 0)
-		_active_tool = clampi(int(tool_var), 0, TOOLS.size() - 1)
+	var saved_thief: String = str(GameState.thief_id)
+	if THIEF_IDS.has(saved_thief):
+		_thief_id = saved_thief
+	var loadout: Dictionary = SaveSystem.get_loadout(_thief_id)
+	_body = str(loadout.get("body", ""))
+	_head = str(loadout.get("head", ""))
+	_card = str(loadout.get("calling_card", ""))
+	var tool_var: Variant = loadout.get("active_tool", 0)
+	_active_tool = clampi(int(tool_var), 0, TOOLS.size() - 1)
 
 
 func _apply_and_close(should_emit: bool) -> void:
@@ -1104,14 +1101,14 @@ func _apply_and_close(should_emit: bool) -> void:
 	var entry_var: Variant = TOOLS[_active_tool]
 	var entry: Dictionary = entry_var as Dictionary
 	var loadout: Dictionary = {
-		"thief_id": _thief_id,
-		"body": _body,
 		"head": _head,
+		"body": _body,
 		"calling_card": _card,
 		"active_tool": _active_tool,
 		"active_tool_id": str(entry.get("id", "zipwire")),
 	}
-	SaveSystem.data["loadout"] = loadout
+	SaveSystem.set_loadout(_thief_id, loadout)
+	SaveSystem.data.erase("loadout")
 	_set_game_state_if_present("loadout_body", _body)
 	_set_game_state_if_present("loadout_head", _head)
 	_set_game_state_if_present("loadout_calling_card", _card)

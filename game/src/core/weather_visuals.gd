@@ -356,3 +356,8 @@ static func snap_rain_to(rain: Node3D, target: Node3D) -> void:
 	if not is_instance_valid(rain) or not is_instance_valid(target):
 		return
 	rain.global_position = (target as Node3D).global_position
+
+
+## Clears the cached panorama texture held for the process lifetime.
+static func cleanup_static_caches() -> void:
+	_pano_cache = null

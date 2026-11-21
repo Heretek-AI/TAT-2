@@ -32,12 +32,19 @@ func _initialize() -> void:
 	var fx_order: int = int(gs.active_contract_order)
 	var fx_map_id: String = str(gs.active_map_id)
 
-	# 1. Contracts loaded (16 shipped + 2 expansion = 18)
-	if gd.contracts.size() != 18:
-		printerr("FAIL: expected 18 contracts, got ", gd.contracts.size())
+	# 1. Contracts loaded: Steam ships exactly 16 (Contract.Main.1..16).
+	var c1_orders: Array = []
+	for c1_v: Variant in gd.contracts:
+		c1_orders.append(int((c1_v as Dictionary).get("order", -1)))
+	c1_orders.sort()
+	var c1_expect: Array = []
+	for c1_i: int in range(1, 17):
+		c1_expect.append(c1_i)
+	if gd.contracts.size() != 16 or c1_orders != c1_expect:
+		printerr("FAIL: expected 16 ordered contracts 1..16, got ", gd.contracts.size(), " orders=", c1_orders)
 		fails += 1
 	else:
-		print("PASS: 18 contracts loaded (16 shipped + 2 expansion)")
+		print("PASS: 16 shipped contracts, orders 1..16 (Contract.Main.15 repaired)")
 
 	var c2: Dictionary = gd.get_contract_display(2)
 	if str(c2.get("title", "")) != "Into the Lion's Den":
@@ -619,6 +626,7 @@ func _initialize() -> void:
 					and is_equal_approx(wden_env.adjustment_saturation, float(wden_pp.get("saturation", 1.0)))
 				if not wden_ok:
 					printerr("FAIL: thieves-den brightness regression (brightness=", wden_env.adjustment_brightness, " expected=", float(wden_gain[0]), ")")
+				wden_moon.free()
 			var wenv2 := Environment.new()
 			var wmoon2 := DirectionalLight3D.new()
 			var map_applied: bool = bool(wp_scr.apply_for_map(wenv2, wmoon2, "old_manor"))
@@ -636,6 +644,9 @@ func _initialize() -> void:
 				fails += 1
 			else:
 				print("PASS: Real weather DenseFog applied (fog=", snappedf(wenv.fog_density, 0.0001), " moon_energy=", snappedf(wmoon.light_energy, 0.01), " rot=", wmoon.rotation_degrees, ")")
+			wmoon.free()
+			wmoon2.free()
+			wmoon3.free()
 
 	# 18. Swinging-door extraction: every pivot resolves to a real leaf mesh.
 	# The 111 doorway-BP pivots carry their leaf StaticMesh on the pivot
@@ -903,6 +914,7 @@ func _initialize() -> void:
 		fails += 1
 	else:
 		print("PASS: DenseFog apply_environment leaves fog_sky_affect=0.0 (sky stays visible)")
+	df_moon.free()
 
 	var den_file: FileAccess = FileAccess.open("res://data/generated/weather/midnight_clear_thieves_den.json", FileAccess.READ)
 	var den_preset: Dictionary = {}
@@ -926,6 +938,7 @@ func _initialize() -> void:
 		fails += 1
 	else:
 		print("PASS: ThievesDen moon light direction (actual=", den_aim, ")")
+	den_moon.free()
 
 	# 23. Light intensity and attenuation fidelity: authored intensities map
 	# through one linear scale (median 15.0 -> energy 1.0) so authored ratios
@@ -3155,21 +3168,9 @@ func _initialize() -> void:
 	else:
 		print("PASS: 41 smoke _use_smoke_bomb 1->0, 4 tool slots/1 active, crank reticle contract")
 
-	# 42. E2E 4.4(b+c): runner harness guards present. The tier1 lambda
-	# declares an untyped-Array-tolerant param in memory (no typed-array
-	# SCRIPT ERROR) and every tier boundary drains stuck inputs + settles
-	# physics before instantiating missions.
-	var rn_txt: String = ""
-	var rn_f: FileAccess = FileAccess.open("res://tests/e2e/run_e2e_tests.gd", FileAccess.READ)
-	if rn_f != null:
-		rn_txt = rn_f.get_as_text()
-	var rn_lambda_ok: bool = rn_txt.find("forbid_names: Array") >= 0 and rn_txt.find("_load_patched") >= 0
-	var rn_settle_ok: bool = rn_txt.find("_settle_harness") >= 0 and rn_txt.find("Input.action_release") >= 0
-	if not rn_lambda_ok or not rn_settle_ok:
-		printerr("FAIL: 42 runner harness guards (lambda_untyped=", rn_lambda_ok, " settle=", rn_settle_ok, ")")
-		fails += 1
-	else:
-		print("PASS: 42 runner harness guards (lambda untyped Array + _settle_harness input drain)")
+	# 42. (removed) This suite asserted that the E2E runner still carried
+	# in-memory expectation patches and _load_patched(). Both are masking and
+	# were deleted in Phase 12; Suite 43 below is a real functional assertion.
 
 	# 43. Zipwire crank 1P clip: AN_ThiefNisha_Zipwire__Reload_Loop resolves via
 	# ensure_fp_clip and plays on crank. Headless-robust: manifest/table/role
@@ -3228,33 +3229,10 @@ func _initialize() -> void:
 	else:
 		print("PASS: 43 zipwire crank ", cr_want, " resolves via ensure_fp_clip and plays on crank")
 
-	# 44. TASK 5.5 triage locks: runner in-memory patches for stale tier1
-	# expectations (no on-disk tier edit). Each lock is non-vacuous: the
-	# replacement still requires the game feature, only the stale literal
-	# is aligned to the committed API. Game-side gaps (T1-03-E trim,
-	# T1-18-E escapes) intentionally have no patch and stay FAIL in tier1.
-	var tr_txt: String = ""
-	var tr_f: FileAccess = FileAccess.open("res://tests/e2e/run_e2e_tests.gd", FileAccess.READ)
-	if tr_f != null:
-		tr_txt = tr_f.get_as_text()
-	var tr_outline_ok: bool = tr_txt.find("ov_mat") >= 0 and tr_txt.find("ShaderMaterial") >= 0
-	var tr_reticle_ok: bool = tr_txt.find("ReticleDraw") >= 0
-	var tr_lockpick_ok: bool = tr_txt.find("T_Lockpicking_KeyholeCover") >= 0
-	var tr_arms_ok: bool = tr_txt.find("albedo_tex") >= 0 and tr_txt.find("T_ThiefNisha") >= 0
-	var tr_vm_ok: bool = tr_txt.find("vm_fov_deg") >= 0
-	var tr_loco_ok: bool = tr_txt.find("_al_joined") >= 0
-	var tr_crank_ok: bool = tr_txt.find("zipwire_crank") >= 0 and tr_txt.find("_fp_play_fp_clip") >= 0
-	var tr_toggle_ok: bool = tr_txt.find('p.call("equip_tool", "zipwire")') >= 0 and tr_txt.find('p.call("equip_tool", "smoke_bomb")') >= 0
-	var tr_lantern_ok: bool = tr_txt.find("carries_lantern") >= 0 and tr_txt.find("enable_lantern") >= 0
-	var tr_steal_ok: bool = tr_txt.find("test_guard_key") >= 0
-	var tr_stealth_ok: bool = tr_txt.find("_vis_smooth") >= 0
-	var tr_vis_ok: bool = tr_txt.find('lp.call("register_light", omni)') >= 0
-	var tr_all_ok: bool = tr_outline_ok and tr_reticle_ok and tr_lockpick_ok and tr_arms_ok and tr_vm_ok and tr_loco_ok and tr_crank_ok and tr_toggle_ok and tr_lantern_ok and tr_steal_ok and tr_stealth_ok and tr_vis_ok
-	if not tr_all_ok:
-		printerr("FAIL: 44 triage locks (outline=", tr_outline_ok, " reticle=", tr_reticle_ok, " lockpick=", tr_lockpick_ok, " arms=", tr_arms_ok, " vm=", tr_vm_ok, " loco=", tr_loco_ok, " crank=", tr_crank_ok, " toggle=", tr_toggle_ok, " lantern=", tr_lantern_ok, " steal=", tr_steal_ok, " stealth=", tr_stealth_ok, " visreg=", tr_vis_ok, ")")
-		fails += 1
-	else:
-		print("PASS: 44 triage locks (outline/reticle/lockpick/arms/vm/loco/crank/toggle/lantern/steal/stealth/visreg)")
+	# 44. (removed) This suite asserted that the E2E runner contained the
+	# in-memory triage patches for stale tier-1 expectations. That patching is
+	# masking, deleted in Phase 12; the stale expectations are fixed on disk in
+	# tests/e2e instead.
 
 	# 45. Stairs snap fix: 50 deg max angle + 0.25-0.3 snap, wall-block/constant-speed kept, no new mantle.
 	var stair_scr: GDScript = load("res://src/player/thief_character.gd") as GDScript
@@ -3950,6 +3928,19 @@ func _initialize() -> void:
 	gs.difficulty = fx_difficulty
 	gs.active_contract_order = fx_order
 	gs.active_map_id = fx_map_id
+
+	# 12.6/12.7 process-lifetime caches must not outlive the run.
+	var am_node: Node = root.get_node_or_null("/root/AudioManager")
+	if am_node != null and am_node.has_method("cleanup_on_exit"):
+		am_node.call("cleanup_on_exit")
+		await process_frame
+		await process_frame
+	VfxManager.cleanup_static_caches()
+	GuardAnimationLibrary.cleanup_static_caches()
+	ArtNouveauTheme.cleanup_static_caches()
+	(load("res://src/core/weather_profile.gd") as GDScript).cleanup_static_caches()
+	(load("res://src/core/weather_visuals.gd") as GDScript).cleanup_static_caches()
+	(load("res://src/ai/guard_ai.gd") as GDScript).cleanup_static_caches()
 
 	print("SUMMARY: fails=", fails)
 	quit(0 if fails == 0 else 1)

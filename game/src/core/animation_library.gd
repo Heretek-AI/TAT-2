@@ -761,3 +761,13 @@ static func _load_source(clip_name: String) -> Dictionary:
 	result = {"anim": anim, "bones": bones, "src_local": src_local, "src_parents": src_parents, "src_global": src_global}
 	_source_cache[clip_name] = result
 	return result
+
+
+## Drops manifest and retarget caches so animations do not survive shutdown.
+static func cleanup_static_caches() -> void:
+	_manifest_loaded = false
+	_manifest_ok = false
+	_manifest_by_name.clear()
+	_manifest_entries.clear()
+	_source_cache.clear()
+	_retarget_cache.clear()

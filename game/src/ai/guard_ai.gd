@@ -1721,3 +1721,9 @@ func _update_disguise_viewcone(delta: float, player: CharacterBody3D) -> void:
 	var hit: Dictionary = space.intersect_ray(q)
 	if hit.is_empty():
 		player.call("apply_guard_viewcone_disguise_decay", delta, true)
+
+
+## Drops per-guard shared caches held for the process lifetime.
+static func cleanup_static_caches() -> void:
+	_downed_data.clear()
+	_carry_scr_cache = null

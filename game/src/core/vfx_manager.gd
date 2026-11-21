@@ -1206,3 +1206,14 @@ static func _aim_spot(spot: SpotLight3D, offset: Vector3) -> void:
 	var x_axis: Vector3 = up_hint.cross(z_axis).normalized()
 	var y_axis: Vector3 = z_axis.cross(x_axis).normalized()
 	spot.basis = Basis(x_axis, y_axis, z_axis)
+
+
+## Drops every process-lifetime VFX resource so shutdown reports no leaks.
+static func cleanup_static_caches() -> void:
+	_candle_quad = null
+	_godray_shader = null
+	_prop_outline_mat = null
+	_footstep_mask_tex = null
+	_footprint_quad = null
+	_footprints_live.clear()
+	_persistent_vfx.clear()

@@ -46,6 +46,22 @@ func _load_curves() -> void:
 	_load_tables_from_dir("res://data/generated/tables/Character/Player", false)
 	_load_tables_from_dir("res://data/generated/tables/Gameplay/Tools", true)
 	_load_tables_from_dir("res://data/generated/tables/AI/Data", false)
+	# Curves that live outside the scanned roots. Together with the four roots
+	# above this loads all 31 authored CurveTables (the audit found 7 silently
+	# missing, including the two gamepad response curves and the weather
+	# exposure curves).
+	for dir_path: String in [
+		"res://data/generated/tables/Gameplay/Abilities/Effects",
+		"res://data/generated/tables/Gameplay/Combat/Guard/Melee/RangedAttack",
+		"res://data/generated/tables/Gameplay/Interactables/ElectricPower",
+		"res://data/generated/tables/Gameplay/Progression",
+		"res://data/generated/tables/AI/Alertness",
+		"res://data/generated/tables/Art/Environment/Weather",
+		"res://data/generated/tables/Gameplay/Carry",
+		"res://data/generated/tables/Gameplay/Input/Character",
+		"res://data/generated/tables/Gameplay/Traversal/Dodge",
+	]:
+		_load_tables_from_dir(dir_path, true)
 
 
 func _load_tables_from_dir(base_dir: String, recursive: bool) -> void:
@@ -131,6 +147,47 @@ func eval_curve(table_name: String, row_name: String, x: float, fallback: float 
 	return float(last.get("Value", fallback))
 
 
+## Tolerant table lookup by name hint: the converter keys tables by their asset
+## name, which is stable, but a suffix match keeps this resilient.
+func _table_by_hint(hint: String) -> Dictionary:
+	for key: Variant in tables.keys():
+		if str(key).find(hint) >= 0 and tables[key] is Dictionary:
+			return tables[key] as Dictionary
+	return {}
+
+
+func _curve_by_hint(hint: String) -> Dictionary:
+	for key: Variant in curves.keys():
+		if str(key).find(hint) >= 0 and curves[key] is Dictionary:
+			return curves[key] as Dictionary
+	return {}
+
+
+## DT_PlayerStats row by id (Alarms.Disabled, Cooperation.Respawns, ...).
+func get_player_stat_def(id: String) -> Dictionary:
+	var row: Variant = _table_by_hint("PlayerStats").get(id)
+	return row as Dictionary if row is Dictionary else {}
+
+
+## DT_PlayerExperience row by category (FinishedTutorial, MajorLoot, ...).
+func get_xp_def(category: String) -> Dictionary:
+	var row: Variant = _table_by_hint("PlayerExperience").get(category)
+	return row as Dictionary if row is Dictionary else {}
+
+
+## CT_UpgradeStatCurves sampled at a level (falls back to the curve table if the
+## progression table is keyed by row name).
+func get_upgrade_curve(id: String, level: int) -> float:
+	var curve_name: String = ""
+	for key: Variant in curves.keys():
+		if str(key).find("UpgradeStat") >= 0:
+			curve_name = str(key)
+			break
+	if curve_name == "":
+		return 0.0
+	return eval_curve(curve_name, id, float(level), 0.0)
+
+
 func get_data_row(table_name: String, row_name: String) -> Dictionary:
 	var tbl: Variant = tables.get(table_name)
 	if tbl == null or not (tbl is Dictionary):
@@ -165,6 +222,14 @@ func _load_contracts() -> void:
 	for key: Variant in rows.keys():
 		var row: Dictionary = rows[key]
 		var order: int = int(row.get("ContractOrder", 0))
+		if order <= 0:
+			# Shipped data bug: Contract.Main.15 has ContractOrder 0. Repair it
+			# from the row key (parse_contracts does the same) instead of sorting
+			# a contract to the front of the table.
+			var key_s: String = str(key)
+			var suffix: String = key_s.get_slice(".", key_s.get_slice_count(".") - 1)
+			if suffix.is_valid_int():
+				order = int(suffix)
 		var map_raw: Variant = row.get("Map")
 		var map_d: Dictionary = map_raw if map_raw is Dictionary else {}
 		var map_path: String = str(map_d.get("AssetPathName", ""))
@@ -206,35 +271,28 @@ func _load_contracts() -> void:
 		})
 	list.sort_custom(func(a, b): return a["order"] < b["order"])
 	contracts = list
-	# Add TAT-2 Expansion Contracts (17-18)
-	contracts.append({
-		"id": "Contract.Expansion.17",
-		"order": 17,
-		"map_id": "jaspering_hall",
-		"map_path": "res://scenes/maps/jaspering_hall.tscn",
-		"loot_tag": "Loot.Quest.BlueMalcolm",
-		"outro_flow": "Expansion",
-		"title": "The Blue Malcolm",
-		"description": "Infiltrate Jaspering Hall, bypass the Private Security detail, and liberate the Blue Malcolm painting from Rose Hall's private vault.",
-		"quest_item": "Blue Malcolm Painting",
-		"location": "Jaspering Hall — Rose Gallery",
-		"sublevels": [],
-		"sublevel_tag": "",
-	})
-	contracts.append({
-		"id": "Contract.Expansion.18",
-		"order": 18,
-		"map_id": "jaspering_hall",
-		"map_path": "res://scenes/maps/jaspering_hall.tscn",
-		"loot_tag": "Loot.Quest.OberonSeal",
-		"outro_flow": "Expansion",
-		"title": "The Jaspering Vault",
-		"description": "Breach the twin-lock Jaspering Hall Treasury and steal the Arcane Seal of Oberon before the Constabulary lockdown.",
-		"quest_item": "Arcane Seal of Oberon",
-		"location": "Jaspering Hall — Lower Treasury",
-		"sublevels": [],
-		"sublevel_tag": "",
-	})
+
+
+## Exactly the 16 contracts Steam ships (Contract.Main.1..16).
+func get_contracts() -> Array[Dictionary]:
+	return contracts
+
+
+## The tutorial route: Steam's FTUE maps, in load order. The port previously
+## routed "jaspering_hall" at a scene that does not exist.
+func get_ftue_sublevels() -> Array[String]:
+	return [
+		"FTUE_P",
+		"FTUE_Checkpoints",
+		"FTUE_AI",
+		"FTUE_Fairy",
+		"FTUE_TutorialRunner",
+		"FTUE_Building_JewelryStore",
+		"FTUE_Building_SpawnArea",
+		"FTUE_Gameplay",
+		"FTUE_Geometry",
+		"FTUE_Audio",
+	]
 
 
 func _load_contract_strings() -> void:
@@ -501,10 +559,10 @@ func _mission_map_id(row_key: String, row: Dictionary = {}) -> String:
 	if "thievesden" in hay:
 		return "thieves_den"
 	if "ftue" in hay:
-		return "thieves_den"
+		return "ftue"
 	if "tutorial" in low:
-		_note_map_fallback(row_key, "tutorial row without FTUE/map hint routes to jaspering_hall")
-		return "jaspering_hall"
+		# Steam's tutorial is the FTUE map set, not a Jaspering Hall scene.
+		return "ftue"
 	_note_map_fallback(row_key, "unrecognized mission row routes to example")
 	return "example"
 
@@ -537,7 +595,6 @@ func _load_missions() -> void:
 		"res://data/generated/tables/Gameplay/Quests/DT_Missions_Guildhall.json",
 		"res://data/generated/tables/Gameplay/Quests/DT_Missions_Tutorial.json",
 		"res://data/generated/tables/Gameplay/Quests/DT_Missions_ThievesDen_Tutorial.json",
-		"res://data/generated/tables/Gameplay/Quests/DT_Missions_Example.json",
 	]
 	for fp: String in files:
 		var parsed: Variant = _load_json(fp)

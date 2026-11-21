@@ -28,4 +28,9 @@ func _run() -> void:
 	for pl3: Node in h.tree.get_nodes_in_group("player"):
 		var ok: String = str(is_instance_valid(pl3))
 		print("PROBE leftover valid=" + ok + " path=" + (str(pl3.get_path()) if is_instance_valid(pl3) else "<invalid>"))
+	var am_node: Node = root.get_node_or_null("/root/AudioManager")
+	if am_node != null and am_node.has_method("cleanup_on_exit"):
+		am_node.call("cleanup_on_exit")
+		await process_frame
+		await process_frame
 	quit(0)

@@ -239,6 +239,45 @@ func _ready() -> void:
 	call_deferred("_autostart_scene_bed")
 
 
+func _exit_tree() -> void:
+	cleanup_on_exit()
+
+
+## Release every live playback, stream reference and cached clip before the
+## manager leaves the tree. Without this, active Ogg playbacks and their
+## OggPacketSequence resources survive shutdown (leaked resources/RIDs).
+func cleanup_on_exit() -> void:
+	for child: Node in get_children():
+		if child is AudioStreamPlayer or child is AudioStreamPlayer3D:
+			child.call("stop")
+			child.set("stream", null)
+			child.queue_free()
+	for player: Node in _voice_players:
+		if is_instance_valid(player):
+			player.call("stop")
+			player.set("stream", null)
+			player.queue_free()
+	_voice_players.clear()
+	_active_voices = 0
+	if _gramophone_player != null and is_instance_valid(_gramophone_player):
+		_gramophone_player.stop()
+		_gramophone_player.stream = null
+		_gramophone_player.queue_free()
+		_gramophone_player = null
+	for bed: Variant in _beds.values():
+		if bed is Node and is_instance_valid(bed as Node):
+			(bed as Node).call("stop")
+			(bed as Node).set("stream", null)
+			(bed as Node).queue_free()
+	_beds.clear()
+	_bed_loop_cache.clear()
+	_event_clips.clear()
+	_named_clips.clear()
+	_real_clips.clear()
+	_sfx.clear()
+	_foot_pools.clear()
+
+
 func _ensure_buses() -> void:
 	for bus_name: String in [BUS_MUSIC, BUS_SFX, BUS_AMBIENCE, BUS_UI, BUS_DIALOGUE]:
 		if AudioServer.get_bus_index(bus_name) == -1:

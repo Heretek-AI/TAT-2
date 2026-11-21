@@ -8,6 +8,7 @@ PackedLevelActors (BPP_*_PLA), InstancedStaticMeshComponent (PerInstanceSMData),
 
 import json
 import math
+import os
 import shutil
 from pathlib import Path
 
@@ -752,7 +753,9 @@ def _is_mid_ref(op: str, on: str, exps, map_ue_path: str | None) -> bool:
     return False
 
 
-def _resolve_override_item(item, exps=None, map_ue_path=None, mid_stats=None, slot_ctx=None) -> str:
+def _resolve_override_item(
+    item, exps=None, map_ue_path=None, mid_stats=None, slot_ctx=None
+) -> str:
     def _note_unresolved(op, on):
         if mid_stats is None:
             return
@@ -1198,6 +1201,41 @@ def _compose_bp_world(
     return wmat
 
 
+def map_dump_files() -> list:
+    """Every cooked map dump. The extractor strips TAT/Content/, so maps outside
+    Content/Maps (Art/.../Level_Instances/FacadeA, Developers/...) land beside
+    json/Maps. The Steam manifest is the authoritative .umap list when present;
+    without it, only dumps that actually contain a World export are considered.
+    """
+    manifest = Path(
+        os.environ.get(
+            "TAT_MANIFEST",
+            str(
+                Path.home()
+                / ".local/share/Steam/steamapps/common/Thick As Thieves"
+                / "Manifest_UFSFiles_Win64.txt"
+            ),
+        )
+    )
+    if manifest.is_file():
+        files = set()
+        for line in manifest.read_text(errors="replace").splitlines():
+            path = line.split("\t")[0].strip()
+            if not path.endswith(".umap") or "TAT/Content/" not in path:
+                continue
+            rel = path.split("TAT/Content/", 1)[1][: -len(".umap")]
+            cand = EX / "json" / (rel + ".json")
+            if cand.is_file():
+                files.add(cand)
+        return sorted(files)
+    return sorted(
+        jf
+        for jf in (EX / "json" / "Maps").rglob("*.json")
+        if not jf.name.startswith("BPP_")
+        and '"Type": "World"' in jf.read_text(errors="replace")
+    )
+
+
 def extract_levels():
     levels_dir = OUT_DATA / "levels"
     levels_dir.mkdir(parents=True, exist_ok=True)
@@ -1212,6 +1250,8 @@ def extract_levels():
     count = 0
     total_meshes = 0
     total_lights = 0
+    total_patrol_paths = 0
+    total_patrol_points = 0
     total_level_instances_loaded = 0
     total_level_instance_meshes = 0
     total_level_instances_unresolved = 0
@@ -1223,23 +1263,26 @@ def extract_levels():
     skipped_files: list = []
     bpp_skipped = 0
 
-    for jf in sorted((EX / "json" / "Maps").rglob("*.json")):
+    for jf in map_dump_files():
         if jf.name.startswith("BPP_"):
             bpp_skipped += 1
             skipped_files.append(
-                (str(jf.relative_to(EX / "json" / "Maps")), "BPP template re-consumed elsewhere")
+                (
+                    str(jf.relative_to(EX / "json")),
+                    "BPP template re-consumed elsewhere",
+                )
             )
             continue
         try:
             exps = json.loads(jf.read_text())
         except Exception as e:
             skipped_files.append(
-                (str(jf.relative_to(EX / "json" / "Maps")), f"corrupt JSON: {e}")
+                (str(jf.relative_to(EX / "json")), f"corrupt JSON: {e}")
             )
             continue
         if not isinstance(exps, list) or not exps:
             skipped_files.append(
-                (str(jf.relative_to(EX / "json" / "Maps")), "empty or non-list exports")
+                (str(jf.relative_to(EX / "json")), "empty or non-list exports")
             )
             continue
 
@@ -1309,15 +1352,23 @@ def extract_levels():
             world_cache[ckey] = local
             return local
 
-        rel = jf.relative_to(EX / "json" / "Maps")
-        rel_key = str(rel.with_suffix("")).replace("\\", "/")
-        raw_map_ue_path = "/Game/Maps/" + rel_key
+        rel_full = jf.relative_to(EX / "json")
+        if rel_full.parts and rel_full.parts[0] == "Maps":
+            rel = Path(*rel_full.parts[1:])  # keep historical levels/<map> layout
+            rel_key = str(rel.with_suffix("")).replace("\\", "/")
+            raw_map_ue_path = "/Game/Maps/" + rel_key
+        else:
+            rel = rel_full  # Art/.../FacadeA, Developers/... stay qualified
+            rel_key = str(rel.with_suffix("")).replace("\\", "/")
+            raw_map_ue_path = "/Game/" + rel_key
         game_map_key = raw_map_ue_path.lower()
         level_mat = level_transforms.get(game_map_key)
 
         meshes = []
         lights = []
         markers = []
+        actors = []
+        patrol_paths = []
         landscapes = []
         rect_lights = []
         sky_lights = []
@@ -1801,6 +1852,84 @@ def extract_levels():
                     wmat = mat4_mul(level_mat, wmat)
                 trs = ue_mat4_to_godot_trs(wmat)
                 markers.append({"name": e.get("Name", ""), "class": et, **trs})
+
+            # 4b. Generic actor capture. Blueprint actors and gameplay components
+            # without a dedicated payload still define a level: clue-only and
+            # spawner-only sublevels (Guildhall_MissionClues, *_Contract_XX,
+            # FTUE_TutorialRunner, Launcher, Transition) contain nothing else, so
+            # without this pass their .tatlevel.json is never written. The same
+            # list feeds the device manifest consumed by the security/power work.
+            if et.endswith("_C") or any(
+                k in et
+                for k in (
+                    "QuestActorSpawner",
+                    "ReadableClue",
+                    "ClueSpawner",
+                    "TutorialRunner",
+                    "AcousticPortal",
+                    "AudioRoom",
+                    "WeatherManager",
+                )
+            ):
+                rc2 = props.get("RootComponent")
+                wmat2 = mat4_identity()
+                if isinstance(rc2, dict):
+                    ridx2 = comp_by_full_objname.get(rc2.get("ObjectName", ""))
+                    if ridx2 is not None:
+                        wmat2 = get_world_mat(ridx2)
+                if level_mat is not None:
+                    wmat2 = mat4_mul(level_mat, wmat2)
+                actors.append(
+                    {
+                        "name": e.get("Name", ""),
+                        "class": et,
+                        **ue_mat4_to_godot_trs(wmat2),
+                    }
+                )
+
+            # 4c. Authored patrol paths: APatrolPath stores waypoints in
+            # Properties.Points (TArray<FPatrolPoint>), not a spline. 210 of the
+            # 249 BP_AIPatrolPath_C actors carry 673 points; the runtime previously
+            # invented 6x6 m squares because this data never reached the loader.
+            if "PatrolPath" in et and isinstance(props.get("Points"), list):
+                rc3 = props.get("RootComponent")
+                wmat3 = mat4_identity()
+                if isinstance(rc3, dict):
+                    ridx3 = comp_by_full_objname.get(rc3.get("ObjectName", ""))
+                    if ridx3 is not None:
+                        wmat3 = get_world_mat(ridx3)
+                if level_mat is not None:
+                    wmat3 = mat4_mul(level_mat, wmat3)
+                pts_out = []
+                for pt in props.get("Points") or []:
+                    if not isinstance(pt, dict):
+                        continue
+                    lp = pt.get("position") or {}
+                    local = mat4_identity()
+                    local[0][3] = float(lp.get("X", 0.0))
+                    local[1][3] = float(lp.get("Y", 0.0))
+                    local[2][3] = float(lp.get("Z", 0.0))
+                    gtrs = ue_mat4_to_godot_trs(mat4_mul(wmat3, local))
+                    facing = pt.get("Facing") or {}
+                    pts_out.append(
+                        {
+                            "pos": gtrs["pos"],
+                            "wait": float(pt.get("WaitSeconds", 0.0)),
+                            "wait_deviation": float(pt.get("WaitDeviation", 0.0)),
+                            "facing": bool(pt.get("HasFacing", False)),
+                            "yaw": float(facing.get("Yaw", 0.0)),
+                            "type": str(pt.get("PatrolPointType", "")),
+                        }
+                    )
+                if pts_out:
+                    patrol_paths.append(
+                        {
+                            "actor": e.get("Name", ""),
+                            "class": et,
+                            "loop_type": str(props.get("LoopType", "")),
+                            "points": pts_out,
+                        }
+                    )
 
             # 5. LandscapeComponent heightfield terrain
             if et == "LandscapeComponent":
@@ -2412,22 +2541,11 @@ def extract_levels():
             inst_trs = ue_mat4_to_godot_trs(inst_mat)
             pending_li.append((rel_asset, inst_trs, e.get("Name")))
 
-        has_base_entities = bool(
-            meshes
-            or lights
-            or markers
-            or landscapes
-            or rect_lights
-            or sky_lights
-            or fog_volumes
-            or post_process
-            or sky_atmospheres
-            or decals
-            or niagara
-            or volumes
-            or landscape_splines
-        )
-        if has_base_entities or pending_li:
+        # Every valid map dump is emitted. World-only maps (Guildhall_Sequencer,
+        # Transition) and developer/level-instance maps are real levels; emptiness
+        # is recorded in the payload rather than silently dropping the file.
+        emit_payload = True
+        if emit_payload:
             level_payloads[rel_key] = {
                 "rel": rel,
                 "pending_li": pending_li,
@@ -2439,6 +2557,8 @@ def extract_levels():
                     "meshes": meshes,
                     "lights": lights,
                     "markers": markers,
+                    "actors": actors,
+                    "patrol_paths": patrol_paths,
                     "landscapes": landscapes,
                     "rect_lights": rect_lights,
                     "sky_lights": sky_lights,
@@ -2463,6 +2583,8 @@ def extract_levels():
         "meshes",
         "lights",
         "markers",
+        "actors",
+        "patrol_paths",
         "landscapes",
         "rect_lights",
         "sky_lights",
@@ -2528,24 +2650,11 @@ def extract_levels():
     for key in list(level_payloads.keys()):
         resolve_li(key)
 
-    # Write Pass: emit non-empty .tatlevel.json payloads.
+    # Write Pass: emit every map payload. A world-only or developer map is still a
+    # level; the payload itself records whether it holds renderable entities.
     for key, meta in level_payloads.items():
         pdata = meta["data"]
-        if (
-            pdata["meshes"]
-            or pdata["lights"]
-            or pdata["markers"]
-            or pdata["landscapes"]
-            or pdata["rect_lights"]
-            or pdata["sky_lights"]
-            or pdata["fog_volumes"]
-            or pdata["post_process"]
-            or pdata["sky_atmospheres"]
-            or pdata["decals"]
-            or pdata["niagara"]
-            or pdata["volumes"]
-            or pdata["landscape_splines"]
-        ):
+        if pdata is not None:
             prel = meta["rel"]
             dst = levels_dir / prel.with_suffix(".tatlevel.json")
             dst.parent.mkdir(parents=True, exist_ok=True)
@@ -2553,6 +2662,10 @@ def extract_levels():
             count += 1
             total_meshes += len(pdata["meshes"])
             total_lights += len(pdata["lights"])
+            total_patrol_paths += len(pdata.get("patrol_paths") or [])
+            total_patrol_points += sum(
+                len(p.get("points") or []) for p in (pdata.get("patrol_paths") or [])
+            )
             if pdata["swinging_doors"] or pdata["swinging_doors_unresolved"]:
                 print(
                     f"  {prel}: swinging_doors={len(pdata['swinging_doors'])} "
@@ -2599,6 +2712,10 @@ def extract_levels():
     print(
         f"Normalized {count} level JSONs -> {total_meshes} mesh instances, {total_lights} lights "
         f"(stale_removed={stale_removed})"
+    )
+    print(
+        f"Patrol paths: {total_patrol_paths} authored paths, "
+        f"{total_patrol_points} waypoints"
     )
     print(
         f"Level instances: {total_level_instances_loaded} loaded "
@@ -2689,10 +2806,204 @@ def fix_interactables_var_track_bounds():
     print(f"Interactables var/track alias patched tracks={patched}")
 
 
+def write_scene_variants():
+    """Emit TATSceneVariantConfig (SV_*) assets as a deterministic dataset.
+
+    Each SV_* dump is a TATSceneVariantConfig holding spawner overrides (tag ->
+    chance/force) and a space-privacy mode. The runtime picks from these per map
+    using the run seed; before this they were never extracted at all.
+    """
+    variants = []
+    for jf in sorted((EX / "json").rglob("SV_*.json")):
+        try:
+            doc = json.loads(jf.read_text())
+        except Exception:
+            continue
+        if not isinstance(doc, list) or not doc:
+            continue
+        cfg = next((e for e in doc if e.get("Type") == "TATSceneVariantConfig"), None)
+        if cfg is None:
+            continue
+        props = cfg.get("Properties") or {}
+        rel = jf.relative_to(EX / "json")
+        parent = rel.parent
+        if parent.parts and parent.parts[0] == "Maps":
+            parent = Path(*parent.parts[1:])
+        overrides = []
+        for ov in props.get("_spawnerOverrides") or []:
+            if not isinstance(ov, dict):
+                continue
+            key = ov.get("Key") or {}
+            val = ov.get("Value") or {}
+            overrides.append(
+                {
+                    "tag": str(key.get("TagName", "")),
+                    "type": str(val.get("Type", "")),
+                    "chance": float(val.get("SpawnChancePercent", 0.0)),
+                }
+            )
+        variants.append(
+            {
+                "id": jf.stem,
+                "asset": str(rel.with_suffix("")).replace("\\", "/"),
+                "map_id": str(parent).replace("\\", "/"),
+                "space_privacy": str(props.get("_spacePrivacy", "")),
+                "overrides": overrides,
+            }
+        )
+    payload = {"count": len(variants), "variants": variants}
+    out = OUT_DATA / "scene_variants.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(payload, separators=(",", ":")))
+    print(f"Scene variants: {len(variants)} configs -> {out}")
+
+
+DEVICE_FAMILIES = {
+    "turrets": (
+        lambda t: t.startswith("BP_SecurityTurret"),
+        "sum(classes with prefix BP_SecurityTurret)",
+    ),
+    "alarm_eyes": (
+        lambda t: t.startswith("BP_MagicAlarm"),
+        "sum(classes with prefix BP_MagicAlarm)",
+    ),
+    "light_beams": (lambda t: t == "BP_Detector_LightBeam_C", "exact class"),
+    "pressure_plates": (lambda t: t == "BP_Detector_PressurePlate_C", "exact class"),
+    "noise_alarms": (lambda t: t == "BP_Trap_Action_NoiseAlarm_C", "exact class"),
+    "ward_zones": (
+        lambda t: t.startswith("BP_WardZone"),
+        "sum(classes with prefix BP_WardZone)",
+    ),
+    "goo_pipes": (lambda t: t == "BP_GooPipe_C", "exact class"),
+    "acoustic_portals": (lambda t: t == "BP_TATAcousticPortal_C", "exact class"),
+    "breakables": (
+        lambda t: t == "TATBreakableComponent" or t.startswith("BP_BreakableComponent"),
+        "TATBreakableComponent + BP_BreakableComponent* (one component per breakable)",
+    ),
+    "vault_doors": (
+        lambda t: t.startswith("BP_VaultDoor"),
+        "sum(classes with prefix BP_VaultDoor)",
+    ),
+    "sliding_windows": (
+        lambda t: t.startswith("BP_") and "Window" in t and "WallExt" not in t,
+        "BP_*Window* actors excluding WallExt statics",
+    ),
+    "combination_locks": (
+        lambda t: "CombinationLock" in t,
+        "TATCombinationLockComponent + BP_*CombinationLock*",
+    ),
+    "teleporters": (lambda t: t == "BP_SecretRoom_Teleporter_C", "exact class"),
+    "secret_switches": (
+        lambda t: (
+            t
+            in (
+                "TATInteractableToggleSwitchComponent",
+                "OSEInteractableToggleSwitchComponent",
+            )
+            or ("Secret" in t and "Switch" in t)
+        ),
+        "toggle-switch components + secret-labelled switches",
+    ),
+    "stashes": (
+        lambda t: t.startswith("BP_LootStashInteractable"),
+        "sum(classes with prefix BP_LootStashInteractable)",
+    ),
+    "electrotype_booths": (
+        lambda t: "Electrotype" in t and "Booth" in t,
+        "classes containing Electrotype and Booth",
+    ),
+    "escape_gates": (lambda t: t == "BP_EscapePoint_C", "exact class"),
+    "power_switches": (lambda t: t == "BP_PowerSupply_LightSwitch_C", "exact class"),
+    "wall_supplies": (lambda t: t == "BP_PowerSupply_Wall_C", "exact class"),
+    "junctions": (
+        lambda t: t.startswith("BP_PowerJunction"),
+        "sum(classes with prefix BP_PowerJunction)",
+    ),
+    "mag_locks": (lambda t: t == "BP_MagneticLockComponent_C", "exact class"),
+}
+
+# Counts the read-only audit reported; deviations are surfaced, never silently
+# rounded to match.
+DEVICE_AUDIT_EXPECTED = {
+    "turrets": 478,
+    "alarm_eyes": 181,
+    "light_beams": 330,
+    "pressure_plates": 581,
+    "noise_alarms": 136,
+    "ward_zones": 143,
+    "goo_pipes": 135,
+    "acoustic_portals": 285,
+    "breakables": 1897,
+    "vault_doors": 12,
+    "sliding_windows": 70,
+    "combination_locks": 6,
+    "teleporters": 6,
+    "secret_switches": 9,
+    "stashes": 57,
+    "electrotype_booths": 3,
+    "escape_gates": 25,
+    "power_switches": 57,
+    "wall_supplies": 15,
+    "junctions": 11,
+    "mag_locks": 12,
+}
+
+
+def write_device_manifest():
+    """Aggregate placed gameplay devices from the cooked maps.
+
+    Every family is defined by an explicit class predicate and its aggregation
+    rule, so a count is reproducible from the source maps. The manifest also
+    records the audit's expected totals and the delta, instead of forcing the
+    numbers to agree.
+    """
+    counts: dict[str, dict[str, int]] = {}
+    for jf in map_dump_files():
+        try:
+            doc = json.loads(jf.read_text())
+        except Exception:
+            continue
+        if not isinstance(doc, list):
+            continue
+        for e in doc:
+            t = str(e.get("Type", ""))
+            if not t:
+                continue
+            for name, (pred, _rule) in DEVICE_FAMILIES.items():
+                if pred(t):
+                    bucket = counts.setdefault(name, {})
+                    bucket[t] = bucket.get(t, 0) + 1
+    families = {}
+    for name, (_pred, rule) in DEVICE_FAMILIES.items():
+        by_class = counts.get(name, {})
+        total = sum(by_class.values())
+        expected = DEVICE_AUDIT_EXPECTED.get(name)
+        families[name] = {
+            "count": total,
+            "rule": rule,
+            "by_class": dict(sorted(by_class.items())),
+            "audit_expected": expected,
+            "audit_delta": None if expected is None else total - expected,
+        }
+    payload = {
+        "source": "extracted/json/Maps (Steam 1.5.193.148559)",
+        "families": families,
+        "total": sum(f["count"] for f in families.values()),
+    }
+    out = OUT_DATA / "gameplay" / "devices.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    print(
+        f"Devices: {payload['total']} placements across {len(families)} families -> {out}"
+    )
+
+
 def main():
     extract_datatables()
     extract_levels()
     fix_interactables_var_track_bounds()
+    write_scene_variants()
+    write_device_manifest()
     copy_fonts()
 
 

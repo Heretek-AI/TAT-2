@@ -38,7 +38,11 @@ public sealed class Exporter
                                        // under Engine/ is still excluded and counted per-command.
                                        || f.Path.StartsWith("Engine/Content/BasicShapes/", StringComparison.OrdinalIgnoreCase)
                                        || f.Path.StartsWith("Engine/Content/EngineMaterials/", StringComparison.OrdinalIgnoreCase)
-                                       || f.Path.StartsWith("Engine/Content/EngineMeshes/", StringComparison.OrdinalIgnoreCase))
+                                       || f.Path.StartsWith("Engine/Content/EngineMeshes/", StringComparison.OrdinalIgnoreCase)
+                                       // Two engine templates are referenced by the shipped developer
+                                       // maps that only became visible once every .umap was emitted.
+                                       || f.Path.StartsWith("Engine/Content/MapTemplates/", StringComparison.OrdinalIgnoreCase)
+                                       || f.Path.StartsWith("Engine/Content/EngineSky/", StringComparison.OrdinalIgnoreCase))
                                    && (_o.Filter == null || _o.Filter.IsMatch(f.Path))
                                    && (pathPred == null || pathPred(f.Path)))
                        .OrderBy(f => f.Path);

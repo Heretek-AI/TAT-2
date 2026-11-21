@@ -2007,7 +2007,9 @@ func _initialize() -> void:
 	else:
 		print("PASS: 31e BPP_* template overrides preserved (Facade_Monorail_Passthrough, Guildhall_PeripheryA)")
 
-	# 31f. bVisible:false filtering, stale *_Audio.tatlevel.json removal, SplineEditorMesh == 0, and global MID sweep.
+	# 31f. bVisible:false filtering, audio sublevels present (they carry the
+	# acoustic portals / audio-room components), SplineEditorMesh == 0, and a
+	# global MID sweep over all 107 emitted maps.
 	var ov_den_meshes: Array = []
 	var ov_den_file: FileAccess = FileAccess.open("res://data/generated/levels/ThievesDenTest/ThievesDenTest_P.tatlevel.json", FileAccess.READ)
 	if ov_den_file != null:
@@ -2023,21 +2025,21 @@ func _initialize() -> void:
 				ov_desk += 1
 			if ov_mp2.ends_with("SM_DiningTable_2m_End"):
 				ov_tables += 1
-	var ov_stale_audio: Array[String] = [
+	var ov_audio_maps: Array[String] = [
 		"res://data/generated/levels/OldManor/OldManor_Audio.tatlevel.json",
 		"res://data/generated/levels/Buildings/Guildhall/Building_Guildhall_POI_Audio.tatlevel.json",
 		"res://data/generated/levels/Guildhall/Guildhall_Audio.tatlevel.json",
 		"res://data/generated/levels/FTUE/FTUE_Audio.tatlevel.json",
 	]
-	var ov_stale_found: int = 0
-	for ov_ap: String in ov_stale_audio:
+	var ov_audio_found: int = 0
+	for ov_ap: String in ov_audio_maps:
 		if FileAccess.file_exists(ov_ap):
-			ov_stale_found += 1
-	if ov_desk != 0 or ov_tables != 2 or ov_stale_found != 0:
-		printerr("FAIL: 31f bVisible/stale audio (desk=", ov_desk, " tables=", ov_tables, " stale_audio=", ov_stale_found, ")")
+			ov_audio_found += 1
+	if ov_desk != 0 or ov_tables != 2 or ov_audio_found != 4:
+		printerr("FAIL: 31f bVisible/audio sublevels (desk=", ov_desk, " tables=", ov_tables, " audio_maps=", ov_audio_found, ")")
 		fails += 1
 	else:
-		print("PASS: 31f hidden desk absent, 2 tables stay, 4 stale *_Audio.tatlevel.json removed")
+		print("PASS: 31f hidden desk absent, 2 tables stay, 4 authored *_Audio.tatlevel.json present")
 
 	var ov_mats_db: Dictionary = {}
 	var ov_mats_file: FileAccess = FileAccess.open("res://data/generated/materials.json", FileAccess.READ)
@@ -2085,7 +2087,7 @@ func _initialize() -> void:
 		for ov_e2: Variant in ((ov_parsed2 as Dictionary).get("landscape_splines", []) as Array):
 			if ov_e2 is Dictionary and str((ov_e2 as Dictionary).get("mesh", "")).find("SplineEditorMesh") >= 0:
 				ov_spline_count += 1
-	if ov_spline_count != 0 or ov_spline_files.size() != 73 or ov_unresolved_map_ov != 0:
+	if ov_spline_count != 0 or ov_spline_files.size() != 107 or ov_unresolved_map_ov != 0:
 		printerr("FAIL: 31f global sweep (SplineEditorMesh=", ov_spline_count, " files=", ov_spline_files.size(), " unresolved_map_ov=", ov_unresolved_map_ov, ")")
 		fails += 1
 	else:

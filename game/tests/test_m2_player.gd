@@ -211,7 +211,8 @@ func _run() -> void:
 	player.set("is_grappling", false)
 	player.call("_update_zipwire_cable")
 	var cable_hid: bool = cable_node != null and not cable_node.visible
-	# Crank test: partial crank >= 0.5s reduces cooldown; full 6.0s crank resets cooldown & restores +1 charge
+	# Crank test: partial cranks grant nothing (GA_Hotwire_Crank full-crank
+	# reward only); a full 6.0s crank clears cooldown and restores +1 charge.
 	player.set("ability_cooldown", 5.0)
 	var ch_before: int = int((player.get("charges") as Dictionary).get("grapple", 0))
 	player.call("_begin_wire_crank")
@@ -220,7 +221,7 @@ func _run() -> void:
 	var crank_ret: Dictionary = player.call("get_active_reticle_state") as Dictionary
 	var crank_active_ok: bool = crank_ret.get("crank_active", false) == true and crank_prog_mid > 0.1
 	player.call("_end_wire_crank")
-	var cd_reduced: bool = float(player.get("ability_cooldown")) < 4.5
+	var cd_unchanged: bool = is_equal_approx(float(player.get("ability_cooldown")), 5.0)
 	player.call("_begin_wire_crank")
 	player.call("_tick_wire_crank", 6.1, true)
 	var ch_after: int = int((player.get("charges") as Dictionary).get("grapple", 0))
@@ -229,9 +230,9 @@ func _run() -> void:
 	if head_node != null:
 		head_node.rotation.x = 0.0
 	await physics_frame
-	_check(valid_hit_ok and launched and cable_vis and cable_hid and crank_active_ok and cd_reduced and crank_full_ok,
+	_check(valid_hit_ok and launched and cable_vis and cable_hid and crank_active_ok and cd_unchanged and crank_full_ok,
 		"M2.5 Zipwire target validation, persistent cable & [RMB] crank verified",
-		"M2.5 Zipwire failed: valid=" + str(valid_hit_ok) + " launch=" + str(launched) + " cable=" + str(cable_vis) + "/" + str(cable_hid) + " crank=" + str(crank_active_ok) + "/" + str(cd_reduced) + "/" + str(crank_full_ok))
+		"M2.5 Zipwire failed: valid=" + str(valid_hit_ok) + " launch=" + str(launched) + " cable=" + str(cable_vis) + "/" + str(cable_hid) + " crank=" + str(crank_active_ok) + "/" + str(cd_unchanged) + "/" + str(crank_full_ok))
 
 	# 6. Feature #10b: Auto-mantle (4.0m max, 25 deg, crouch allowed) & stamina-burning wall-climb (2.5 m/s)
 	var ledge: StaticBody3D = _add_static_box(arena, Vector3(0.0, 1.25, -1.0), Vector3(4.0, 2.5, 1.2))
@@ -295,18 +296,25 @@ func _run() -> void:
 	var r_cone: float = float(ThiefScript.call("disguise_drain_rate", false, false, false, true))
 	var r_both: float = float(ThiefScript.call("disguise_drain_rate", false, false, true, true))
 	player.set("disguise_active", true)
-	player.set("disguise_integrity", 100.0)
 	player.set("disguise_ttl", 60.0)
 	player.call("set_lockpicking_active", true)
 	var lp_flag_ok: bool = player.get("is_lockpicking") == true
-	player.call("apply_guard_viewcone_disguise_decay", 1.0, false)
-	var no_cone_ok: bool = is_equal_approx(float(player.get("disguise_integrity")), 100.0)
-	player.call("apply_guard_viewcone_disguise_decay", 1.0, true)
-	var cone_drain_ok: bool = is_equal_approx(float(player.get("disguise_integrity")), 90.0)
 	player.call("set_lockpicking_active", false)
+	# P1 call-order fix: external viewcone decay is queued and consumed once per
+	# sustained-systems tick, and the tick always applies the base timer drain.
+	player.set("disguise_integrity", 100.0)
+	player.call("apply_guard_viewcone_disguise_decay", 1.0, false)
+	player.call("_tick_sustained_systems", 1.0)
+	var no_cone_drained: float = 100.0 - float(player.get("disguise_integrity"))
+	player.set("disguise_integrity", 100.0)
+	player.call("apply_guard_viewcone_disguise_decay", 1.0, true)
+	player.call("_tick_sustained_systems", 1.0)
+	var cone_drained: float = 100.0 - float(player.get("disguise_integrity"))
+	var no_cone_ok: bool = is_equal_approx(no_cone_drained, r_base)
+	var cone_drain_ok: bool = is_equal_approx(cone_drained, r_cone)
 	_check(is_equal_approx(r_base, 1.0) and is_equal_approx(r_lock, 6.0) and is_equal_approx(r_cone, 11.0) and is_equal_approx(r_both, 16.0) and lp_flag_ok and no_cone_ok and cone_drain_ok,
 		"M2.8 Disguise Lockpicking (5.0/s) & GuardViewCone (10.0/s) decay verified",
-		"M2.8 Disguise failed: rates=" + str([r_base, r_lock, r_cone, r_both]) + " lp=" + str(lp_flag_ok) + " no_cone=" + str(no_cone_ok) + " cone=" + str(cone_drain_ok))
+		"M2.8 Disguise failed: rates=" + str([r_base, r_lock, r_cone, r_both]) + " lp=" + str(lp_flag_ok) + " no_cone=" + str(no_cone_ok) + "/" + str(no_cone_drained) + " cone=" + str(cone_drain_ok) + "/" + str(cone_drained))
 
 	arena.queue_free()
 	await process_frame

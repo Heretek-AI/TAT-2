@@ -3649,21 +3649,9 @@ func _initialize() -> void:
 
 	# 51. P1-9(e): GLB-for-every-mesh_res. Mirrors level_loader _ue_mesh_to_res
 	# (Content first, Raw Engine mirror for /Engine/ paths, .gltf second).
-	# The 9 _GENERATED gjasp meshes are the documented gap: authored .uasset
-	# files (Box_/Cylinder_/Combined_ under OldManor/_GENERATED) whose GLBs
-	# were never queued pre-fix; P1-1 now queues /_GENERATED/ on re-extract
-	# and this allow-list must shrink to zero then.
-	var glb51_known: Dictionary = {
-		"/Game/Maps/OldManor/_GENERATED/gjasp/Box_42F388A7": true,
-		"/Game/Maps/OldManor/_GENERATED/gjasp/Box_5C7B8085": true,
-		"/Game/Maps/OldManor/_GENERATED/gjasp/Box_696059A2": true,
-		"/Game/Maps/OldManor/_GENERATED/gjasp/Box_760A8A3A": true,
-		"/Game/Maps/OldManor/_GENERATED/gjasp/Box_760A8A3A1": true,
-		"/Game/Maps/OldManor/_GENERATED/gjasp/Box_ADE72DA6": true,
-		"/Game/Maps/OldManor/_GENERATED/gjasp/Box_C9A6CCD3": true,
-		"/Game/Maps/OldManor/_GENERATED/gjasp/Combined_3356956A": true,
-		"/Game/Maps/OldManor/_GENERATED/gjasp/Cylinder_A665D774": true,
-	}
+	# The 9 _GENERATED gjasp meshes are exported and imported (P1-1 queues
+	# /_GENERATED/); the old allow-list that masked them is gone, so a missing
+	# GLB is a real failure.
 	var glb51_checked: Dictionary = {}
 	var glb51_missing: Array = []
 	var glb51_empty: int = 0
@@ -3689,8 +3677,6 @@ func _initialize() -> void:
 			if glb51_mp == "":
 				glb51_empty += 1
 				continue
-			if glb51_known.has(glb51_mp):
-				continue
 			var glb51_cand: String = ""
 			if glb51_mp.begins_with("/Engine/"):
 				glb51_cand = "res://assets/ue/Raw/Engine/Content/" + glb51_mp.substr("/Engine/".length()) + ".glb"
@@ -3708,7 +3694,7 @@ func _initialize() -> void:
 		printerr("FAIL: 51 GLB gate (total=", glb51_total, " empty=", glb51_empty, " missing=", glb51_missing.size(), "): ", "; ".join(PackedStringArray(glb51_missing.slice(0, 12))))
 		fails += 1
 	else:
-		print("PASS: 51 GLB-for-every-mesh_res (", glb51_total, " refs, ", glb51_checked.size(), " unique, 9 known _GENERATED gap)")
+		print("PASS: 51 GLB-for-every-mesh_res (", glb51_total, " refs, ", glb51_checked.size(), " unique, 0 allowlisted)")
 
 	# 52. P1-9(d,f,g): guard transition data, VFX catalogue boundary, export
 	# presence. Guard behavior stays in e2e tiers; here the transition

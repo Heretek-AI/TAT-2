@@ -262,6 +262,13 @@ public sealed class Exporter
         var opts = DefaultOpts();
         var outDir = Path.Combine(_o.Out, "assets");
         Directory.CreateDirectory(outDir);
+        // Godot scans res://assets/ue/Raw/TAT/** and res://assets/ue/Content/** for the
+        // same physical TAT tree (Raw -> extracted/assets, Content -> .../TAT/Content),
+        // producing a duplicate UID for every mesh. The ignore must live at the
+        // physical TAT root (never under Content/, which would hide the whole tree).
+        // Writing it here keeps it alive across `make extract` and clean rebuilds.
+        Directory.CreateDirectory(Path.Combine(outDir, "TAT"));
+        File.WriteAllText(Path.Combine(outDir, "TAT", ".gdignore"), "");
         var session = new ExportSession { MaxDegreeOfParallelism = _o.Threads };
         // task-1 (round-2 mesh repair): also queue VFX_*/Coin_* meshes and Engine
         // BasicShapes primitives dropped by the SM_/SK_/SKM_/GB_ allowlist.

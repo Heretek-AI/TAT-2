@@ -16,3 +16,7 @@ __pycache__/
 tools/ue4ss/cache/
 tools/ue4ss/output/
 build/
+.agents/
+.claude/
+.claude-flow/
+.omo/

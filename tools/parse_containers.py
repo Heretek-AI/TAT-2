@@ -109,6 +109,16 @@ def interact_props(bp_data) -> dict | None:
 
 def main() -> None:
     classes_out: dict[str, dict] = {}
+    # P2-4: the CLASSES dict is closed — a 6th container Blueprint in cooked
+    # data would never emit. Scan for container-shaped Blueprints outside the
+    # dict and warn so the gap is a visible line, not a silent hole.
+    known_stems = {Path(r).stem for r in CLASSES}
+    for bp_file in sorted(EX.rglob("BP_*.json")):
+        stem = bp_file.stem
+        if stem in known_stems:
+            continue
+        if any(k in stem for k in ("Container", "Stash", "DisplayCase", "Chest", "LootStash")):
+            print(f"WARN: container-shaped Blueprint outside CLASSES (not emitted): {bp_file.relative_to(ROOT)}")
     for rel, kind in CLASSES.items():
         bp_file = EX / rel
         if not bp_file.is_file():

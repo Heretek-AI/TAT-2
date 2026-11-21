@@ -65,8 +65,12 @@ func _on_body_entered(_body: Node) -> void:
 
 
 func _on_expire() -> void:
+	# P2 mid-air failsafe: the 6 s timer used to _impact() mid-air (a loud
+	# 10 m noise from the sky). A bottle that never impacted despawns silently
+	# instead (UE thrown-bottle path: impact noise only on impact).
 	if not _impacted:
-		_impact()
+		_impacted = true
+		queue_free()
 
 
 func _impact() -> void:

@@ -32,6 +32,29 @@ public static class Program
         provider.Initialize();
         provider.Mount();
         Console.Error.WriteLine($"mounted {provider.Files.Count} files");
+        // P1-1 sentinel: the mount is a single hard-coded pak dir, so any
+        // sibling pak chunk / patch dir / DLC dir placed beside it is
+        // invisible to every command. Never silently continue: name each one.
+        try
+        {
+            var pakDir = Path.Combine(opt.Game, "TAT/Content/Paks");
+            var parent = Directory.GetParent(pakDir.TrimEnd(Path.DirectorySeparatorChar));
+            if (parent != null && Directory.Exists(parent.FullName))
+            {
+                foreach (var sib in Directory.GetFileSystemEntries(parent.FullName).OrderBy(x => x))
+                {
+                    var name = Path.GetFileName(sib);
+                    if (name.Equals("Paks", StringComparison.OrdinalIgnoreCase)) continue;
+                    bool looksPak = name.EndsWith(".pak", StringComparison.OrdinalIgnoreCase)
+                        || name.EndsWith(".utoc", StringComparison.OrdinalIgnoreCase)
+                        || name.EndsWith(".ucas", StringComparison.OrdinalIgnoreCase)
+                        || (Directory.Exists(sib) && Directory.GetFiles(sib, "*.pak").Length > 0);
+                    if (looksPak)
+                        Console.Error.WriteLine($"WARNING: sibling pak entry NOT mounted (single-pak mount): {sib}");
+                }
+            }
+        }
+        catch (Exception e) { Console.Error.WriteLine($"WARNING: sibling-pak scan failed: {e.Message}"); }
         var ex = new Exporter(provider, opt);
         var cmds = args[0] == "all" ? new[] { "list", "raw", "tables", "levels", "textures", "meshes", "audio" } : new[] { args[0] };
         foreach (var c in cmds)

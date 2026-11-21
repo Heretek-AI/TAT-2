@@ -752,17 +752,36 @@ def _is_mid_ref(op: str, on: str, exps, map_ue_path: str | None) -> bool:
     return False
 
 
-def _resolve_override_item(item, exps=None, map_ue_path=None, mid_stats=None) -> str:
+def _resolve_override_item(item, exps=None, map_ue_path=None, mid_stats=None, slot_ctx=None) -> str:
+    def _note_unresolved(op, on):
+        if mid_stats is None:
+            return
+        mid_stats["unresolved"] += 1
+        if len(mid_stats["samples"]) < 10:
+            mid_stats["samples"].append((map_ue_path or "", op, on))
+        # Full provenance record (uncapped): UNRESOLVED MID refs are emitted
+        # as "" in override_materials, indistinguishable from authored-empty
+        # slots without this record. Slots NOT listed in the sidecar are
+        # authored-empty (null/NoOverride). In-band "" values are kept so
+        # run_tests.gd block 31 exact-array pins keep passing.
+        ctx = slot_ctx or {}
+        mid_stats["records"].append(
+            {
+                "map": map_ue_path or "",
+                "mesh": ctx.get("mesh", ""),
+                "ue_slot": ctx.get("ue_slot", -1),
+                "op": op,
+                "on": on,
+            }
+        )
+
     op, on = _extract_obj_ref(item)
     if not op:
         return ""
     if not _is_mid_ref(op, on, exps, map_ue_path):
         return op.split(".")[0]
     if not exps:
-        if mid_stats is not None:
-            mid_stats["unresolved"] += 1
-            if len(mid_stats["samples"]) < 10:
-                mid_stats["samples"].append((map_ue_path or "", op, on))
+        _note_unresolved(op, on)
         return ""
 
     cur_op, cur_on = op, on
@@ -801,9 +820,7 @@ def _resolve_override_item(item, exps=None, map_ue_path=None, mid_stats=None) ->
         return pop.split(".")[0]
 
     if mid_stats is not None:
-        mid_stats["unresolved"] += 1
-        if len(mid_stats["samples"]) < 10:
-            mid_stats["samples"].append((map_ue_path or "", op, on))
+        _note_unresolved(op, on)
     return ""
 
 
@@ -827,9 +844,13 @@ def _component_override_paths(
         return []
     raw_out = [
         _resolve_override_item(
-            item, exps=exps, map_ue_path=map_ue_path, mid_stats=mid_stats
+            item,
+            exps=exps,
+            map_ue_path=map_ue_path,
+            mid_stats=mid_stats,
+            slot_ctx={"mesh": sm_ue_path or "", "ue_slot": si},
         )
-        for item in mv
+        for si, item in enumerate(mv)
     ]
     if ue_to_glb and sm_ue_path:
         remap_map, remap_lower = ue_to_glb
@@ -1194,17 +1215,32 @@ def extract_levels():
     total_level_instances_loaded = 0
     total_level_instance_meshes = 0
     total_level_instances_unresolved = 0
-    mid_stats = {"resolved": 0, "unresolved": 0, "samples": []}
+    mid_stats = {"resolved": 0, "unresolved": 0, "samples": [], "records": []}
     level_payloads = {}
+    # Fail-closed file gate (pipeline P0-4): every Maps/*.json that does not
+    # become a level payload is recorded here. BPP_* skips are legitimate
+    # (re-consumed as packed-actor templates); corrupt/empty files are fatal.
+    skipped_files: list = []
+    bpp_skipped = 0
 
     for jf in sorted((EX / "json" / "Maps").rglob("*.json")):
         if jf.name.startswith("BPP_"):
+            bpp_skipped += 1
+            skipped_files.append(
+                (str(jf.relative_to(EX / "json" / "Maps")), "BPP template re-consumed elsewhere")
+            )
             continue
         try:
             exps = json.loads(jf.read_text())
-        except Exception:
+        except Exception as e:
+            skipped_files.append(
+                (str(jf.relative_to(EX / "json" / "Maps")), f"corrupt JSON: {e}")
+            )
             continue
         if not isinstance(exps, list) or not exps:
+            skipped_files.append(
+                (str(jf.relative_to(EX / "json" / "Maps")), "empty or non-list exports")
+            )
             continue
 
         # Map export index (1-based in UE ObjectPath: "/Game/.../Map.123" -> exps[122] or exps[123]?)
@@ -2542,6 +2578,20 @@ def extract_levels():
                     f"(+{meta['decals_unresolved']} decal-no-material, +{meta['splines_skipped']} spline-no-mesh)"
                 )
 
+    # Fail-closed gate: a corrupt/empty Maps JSON must never vanish silently.
+    # BPP_* entries are listed for transparency but never fail (by design).
+    fatal_skips = [s for s in skipped_files if not s[1].startswith("BPP template")]
+    if skipped_files:
+        print(f"Skipped {len(skipped_files)} Maps JSONs (BPP templates={bpp_skipped}):")
+        for path, reason in skipped_files:
+            print(f"  SKIP {path}: {reason}")
+    if fatal_skips:
+        listing = "; ".join(f"{p} ({r})" for p, r in fatal_skips)
+        raise SystemExit(
+            f"parse_tables: REFUSING to normalize with {len(fatal_skips)} "
+            f"skipped Maps JSONs: {listing}"
+        )
+
     for d in sorted(levels_dir.rglob("*"), reverse=True):
         if d.is_dir() and not any(d.iterdir()):
             d.rmdir()
@@ -2561,6 +2611,26 @@ def extract_levels():
     )
     if mid_stats["samples"]:
         print(f"  unresolved MID samples: {mid_stats['samples']}")
+    # Sidecar list (pipeline P0-5): every UNRESOLVED MID slot, explicitly.
+    # "" slots NOT listed here are authored-empty (null/NoOverride).
+    mid_sidecar = levels_dir / "_mid_unresolved.json"
+    mid_sidecar.write_text(
+        json.dumps(
+            {
+                "note": "UNRESOLVED MaterialInstanceDynamic refs, emitted as '' in "
+                "override_materials. Empty slots NOT listed here are "
+                "authored-empty (null/NoOverride), not failures.",
+                "unresolved_count": mid_stats["unresolved"],
+                "records": mid_stats["records"],
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+    print(
+        f"MID unresolved sidecar: {mid_sidecar.relative_to(ROOT)} "
+        f"({len(mid_stats['records'])} records)"
+    )
 
 
 def copy_fonts():

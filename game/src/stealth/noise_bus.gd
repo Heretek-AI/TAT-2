@@ -3,10 +3,13 @@ extends Node
 ## AudioManager mirrors these stimuli as 3D positional audio on the SFX bus;
 ## guard VO and footstep variation are layered there (PG-6 full audio runtime).
 ##
-## Surface tags for footstep variation pools (AU3): emitters SHOULD pass one
-## of these as [param tag] prefix "footstep:<surface>" is NOT required;
-## surface travels in the dedicated [param surface] argument so AI hearing
-## stays surface-agnostic while AudioManager picks a variation pool.
+## Footstep-surface vocabulary (AU3). NOTE (P2-D7): the surface does NOT
+## travel on this bus — emit_noise has no surface argument. The player
+## controller resolves its surface listener-side and calls
+## AudioManager.play_footstep(surface, ...) directly; AI hearing stays
+## surface-agnostic by design (listeners use distance <= loudness only).
+## is_known_surface() lets emitters fail loud on typos instead of silently
+## falling back to the "wood" default pool.
 
 signal noise_emitted(origin: Vector3, loudness_meters: float, source: Node, tag: String)
 
@@ -22,5 +25,11 @@ const SURFACE_GLASS: String = "glass"
 const SURFACES: Array[String] = ["wood", "stone", "carpet", "metal", "wet", "earth", "glass"]
 
 
+static func is_known_surface(surface: String) -> bool:
+	return SURFACES.has(surface.to_lower().strip_edges())
+
+
 func emit_noise(origin: Vector3, loudness_meters: float, source: Node = null, tag: String = "generic") -> void:
+	if tag.strip_edges() == "":
+		push_warning("[noise_bus] emit_noise called with empty tag; emitting unchanged (listeners resolve it as before)")
 	noise_emitted.emit(origin, loudness_meters, source, tag)

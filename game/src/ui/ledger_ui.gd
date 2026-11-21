@@ -9,6 +9,22 @@ signal closed()
 
 const ThemeScript := preload("res://src/ui/art_nouveau_theme.gd")
 
+# P1 price provenance (audit-ui P1-1; task-6 §2 row 13 / HARD_LIMIT 5.6).
+# Cooked source res://data/generated/tables/StringTables/ST_BlackMarket.json
+# carries titles/descs but ZERO price keys (probed: entries hold Category.*,
+# Difficulty.*, Gear.*, Map.*, Thief.*, Outfit.*, CallingCard.*, Availability.*
+# — no cost field anywhere in scope). The ONLY recovered values are 4 KF08
+# frame-visible prices: Bob Hair Style £7,500 / Mustache £5,000 /
+# Full Beard £7,500 / Eyepatch £2,500 (bottom-clipped). Every other cost below
+# is a placeholder and MUST NOT ship as parity: unverified rows render with an
+# explicit "TBD" marker and log loudly (sentinel: ST path + KF08 cite).
+# Sentinel discipline: never silent-continue a TBD price — _item_button_text
+# marks it, _refresh_preview labels it, _on_buy_pressed push_errors it.
+const PRICE_SOURCE_ST: String = "res://data/generated/tables/StringTables/ST_BlackMarket.json"
+const PRICE_SOURCE_KF: String = "KF08 ledger frame: Bob 7500 / Mustache 5000 / Full Beard 7500 / Eyepatch 2500"
+# Verified-price item ids (both thieves share the KF08 cosmetic prices).
+const VERIFIED_PRICE_IDS: Array[String] = ["bob_hair", "mustache", "full_beard", "eyepatch"]
+
 const FALLBACK_CONTRACTS: Array = [
 	{"order": 1, "title": "In the Eye of the Beholder", "description": "Steal the Beholder's Eye diamond from the Guildhall vault.", "location": "Constables' Guildhall"},
 	{"order": 2, "title": "Into the Lion's Den", "description": "Infiltrate the Guildhall under heightened watch.", "location": "Constables' Guildhall"},
@@ -19,6 +35,8 @@ const FALLBACK_CONTRACTS: Array = [
 ]
 
 const TOOLS: Array = [
+	# All tool costs below are TBD PLACEHOLDERS — DO NOT SHIP AS PARITY
+	# (no DT/cooked source; ST_BlackMarket.json has no price keys; HARD_LIMIT 5.6).
 	{"id": "zipwire", "name": "Zipwire", "cat": "tools", "cost": 1500, "desc": "A spring-loaded grapple gun that launches out, connects to a surface and then quickly recoils its cable, yanking both the gun and its wielder along for the ride."},
 	{"id": "smoke_bomb", "name": "Smoke Bomb", "cat": "tools", "cost": 800, "desc": "Burst of thick smoke. Breaks line of sight to slip away."},
 	{"id": "pickpocket_fairy", "name": "Pickpocket Fairy", "cat": "tools", "cost": 2000, "desc": "A nimble fey that lifts keys and coins from the unwary."},
@@ -27,6 +45,7 @@ const TOOLS: Array = [
 ]
 
 const PERKS: Array = [
+	# Only cost-0 (free) is verified; all priced perks are TBD — DO NOT SHIP AS PARITY.
 	{"id": "novice_difficulty", "name": "Novice Difficulty", "cat": "perks", "cost": 0, "desc": "Unlocks Novice difficulty contracts. Sharper guards look away."},
 	{"id": "thief_difficulty", "name": "Thief Difficulty", "cat": "perks", "cost": 3000, "desc": "Unlocks Thief difficulty contracts and richer purses."},
 	{"id": "master_thief_difficulty", "name": "Master Thief Difficulty", "cat": "perks", "cost": 6000, "desc": "Unlocks Master Thief difficulty. The ultimate test."},
@@ -38,26 +57,32 @@ const PERKS: Array = [
 
 const SPIDER_COSMETICS: Array = [
 	{"id": "no_hat", "name": "No Hat", "cat": "cosmetics", "cost": 0, "desc": "Travel light. Nothing to snag on the guttering."},
-	{"id": "bob_hair", "name": "Bob Hair Style", "cat": "cosmetics", "cost": 500, "desc": "A sharp bob favoured by Kilcairn's daring."},
-	{"id": "bowler_hat", "name": "Bowler Hat", "cat": "cosmetics", "cost": 750, "desc": "Respectable by day, larcenous by night."},
-	{"id": "top_hat", "name": "Top Hat", "cat": "cosmetics", "cost": 1200, "desc": "Towering style for the conspicuous thief."},
-	{"id": "mustache", "name": "Mustache", "cat": "cosmetics", "cost": 400, "desc": "A waxed statement piece."},
-	{"id": "full_beard", "name": "Full Beard", "cat": "cosmetics", "cost": 600, "desc": "Hides a multitude of sins."},
-	{"id": "glasses", "name": "Glasses", "cat": "cosmetics", "cost": 350, "desc": "Scholarly. Nobody suspects a reader."},
-	{"id": "thief_mask", "name": "Thief Mask", "cat": "cosmetics", "cost": 900, "desc": "The classic. Business after dark."},
-	{"id": "monocle", "name": "Monocle", "cat": "cosmetics", "cost": 1100, "desc": "Appraise loot at a glance."},
-	{"id": "eyepatch", "name": "Eyepatch", "cat": "cosmetics", "cost": 450, "desc": "Depth perception is for the law-abiding."},
+	# KF08 verified £7,500 (PRICE_SOURCE_KF); was placeholder 500.
+	{"id": "bob_hair", "name": "Bob Hair Style", "cat": "cosmetics", "cost": 7500, "desc": "A sharp bob favoured by Kilcairn's daring."},
+	{"id": "bowler_hat", "name": "Bowler Hat", "cat": "cosmetics", "cost": 750, "desc": "Respectable by day, larcenous by night."}, # TBD PRICE — DO NOT SHIP AS PARITY (no DT/cooked source; HARD_LIMIT 5.6)
+	{"id": "top_hat", "name": "Top Hat", "cat": "cosmetics", "cost": 1200, "desc": "Towering style for the conspicuous thief."}, # TBD PRICE — DO NOT SHIP AS PARITY
+	# KF08 verified £5,000 (PRICE_SOURCE_KF); was placeholder 400.
+	{"id": "mustache", "name": "Mustache", "cat": "cosmetics", "cost": 5000, "desc": "A waxed statement piece."},
+	# KF08 verified £7,500 (PRICE_SOURCE_KF); was placeholder 600.
+	{"id": "full_beard", "name": "Full Beard", "cat": "cosmetics", "cost": 7500, "desc": "Hides a multitude of sins."},
+	{"id": "glasses", "name": "Glasses", "cat": "cosmetics", "cost": 350, "desc": "Scholarly. Nobody suspects a reader."}, # TBD PRICE — DO NOT SHIP AS PARITY
+	{"id": "thief_mask", "name": "Thief Mask", "cat": "cosmetics", "cost": 900, "desc": "The classic. Business after dark."}, # TBD PRICE — DO NOT SHIP AS PARITY
+	{"id": "monocle", "name": "Monocle", "cat": "cosmetics", "cost": 1100, "desc": "Appraise loot at a glance."}, # TBD PRICE — DO NOT SHIP AS PARITY
+	# KF08 verified £2,500 (PRICE_SOURCE_KF, bottom-clipped); was placeholder 450.
+	{"id": "eyepatch", "name": "Eyepatch", "cat": "cosmetics", "cost": 2500, "desc": "Depth perception is for the law-abiding."},
 ]
 
 const CHAMELEON_COSMETICS: Array = [
-	{"id": "parted_hair", "name": "Parted Hair", "cat": "cosmetics", "cost": 500, "desc": "Neatly parted. Blends into any crowd."},
-	{"id": "cap", "name": "Cap", "cat": "cosmetics", "cost": 350, "desc": "Pulled low over the eyes."},
-	{"id": "bowler_hat", "name": "Bowler Hat", "cat": "cosmetics", "cost": 750, "desc": "Respectable by day, larcenous by night."},
-	{"id": "top_hat", "name": "Top Hat", "cat": "cosmetics", "cost": 1200, "desc": "Towering style for the conspicuous thief."},
-	{"id": "mustache", "name": "Mustache", "cat": "cosmetics", "cost": 400, "desc": "A waxed statement piece."},
-	{"id": "thief_mask", "name": "Thief Mask", "cat": "cosmetics", "cost": 900, "desc": "The classic. Business after dark."},
-	{"id": "monocle", "name": "Monocle", "cat": "cosmetics", "cost": 1100, "desc": "Appraise loot at a glance."},
-	{"id": "eyepatch", "name": "Eyepatch", "cat": "cosmetics", "cost": 450, "desc": "Depth perception is for the law-abiding."},
+	{"id": "parted_hair", "name": "Parted Hair", "cat": "cosmetics", "cost": 500, "desc": "Neatly parted. Blends into any crowd."}, # TBD PRICE — DO NOT SHIP AS PARITY (no DT/cooked source; HARD_LIMIT 5.6)
+	{"id": "cap", "name": "Cap", "cat": "cosmetics", "cost": 350, "desc": "Pulled low over the eyes."}, # TBD PRICE — DO NOT SHIP AS PARITY
+	{"id": "bowler_hat", "name": "Bowler Hat", "cat": "cosmetics", "cost": 750, "desc": "Respectable by day, larcenous by night."}, # TBD PRICE — DO NOT SHIP AS PARITY
+	{"id": "top_hat", "name": "Top Hat", "cat": "cosmetics", "cost": 1200, "desc": "Towering style for the conspicuous thief."}, # TBD PRICE — DO NOT SHIP AS PARITY
+	# KF08 verified £5,000 (PRICE_SOURCE_KF); was placeholder 400.
+	{"id": "mustache", "name": "Mustache", "cat": "cosmetics", "cost": 5000, "desc": "A waxed statement piece."},
+	{"id": "thief_mask", "name": "Thief Mask", "cat": "cosmetics", "cost": 900, "desc": "The classic. Business after dark."}, # TBD PRICE — DO NOT SHIP AS PARITY
+	{"id": "monocle", "name": "Monocle", "cat": "cosmetics", "cost": 1100, "desc": "Appraise loot at a glance."}, # TBD PRICE — DO NOT SHIP AS PARITY
+	# KF08 verified £2,500 (PRICE_SOURCE_KF, bottom-clipped); was placeholder 450.
+	{"id": "eyepatch", "name": "Eyepatch", "cat": "cosmetics", "cost": 2500, "desc": "Depth perception is for the law-abiding."},
 ]
 
 var _tab: int = 0
@@ -80,6 +105,10 @@ var _selected: Dictionary = {}
 
 
 func _ready() -> void:
+	# Sentinel: log price provenance once; fail loudly if the ST table gains
+	# price keys later without this file rebinding (never silent-continue).
+	print("TAT-2 UI ledger prices: ST=", PRICE_SOURCE_ST, " (no price keys) + ", PRICE_SOURCE_KF)
+	assert(ThemeScript != null, "LedgerUI requires res://src/ui/art_nouveau_theme.gd")
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	_build_ui()
 	if AudioManager != null and AudioManager.has_method("wire_hover_sfx"):
@@ -358,14 +387,14 @@ func _refresh_journal() -> void:
 		status_above.text = "Completed" if done else "Active"
 		status_above.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		status_above.add_theme_font_size_override("font_size", 14)
-		status_above.add_theme_color_override("font_color", Color(0.45, 0.90, 0.65) if done else ThemeScript.TEAL_ACCENT)
+		status_above.add_theme_color_override("font_color", ThemeScript.GREEN_COMPLETED if done else ThemeScript.TEAL_ACCENT)
 		slot.add_child(status_above)
 		var card: PanelContainer = PanelContainer.new()
 		card.custom_minimum_size = Vector2(340, 0)
 		card.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		var cstyle: StyleBoxFlat = ThemeScript.teal_card_style(1, 5, ThemeScript.TEAL_GROUP_BG, 12)
 		if done:
-			cstyle.border_color = Color(0.32, 0.72, 0.56, 0.85)
+			cstyle.border_color = ThemeScript.GREEN_CARD_BORDER
 		card.add_theme_stylebox_override("panel", cstyle)
 		ThemeScript.add_teal_filigree(card, 3.0, 12.0)
 		var cv: VBoxContainer = VBoxContainer.new()
@@ -449,7 +478,21 @@ func _item_button_text(item: Dictionary) -> String:
 	var owned: bool = SaveSystem.is_unlocked(str(item.get("cat", "")), str(item.get("id", "")))
 	if owned:
 		return "%s  ✓ PURCHASED" % str(item.get("name", "?"))
+	if not _is_price_verified(item):
+		return "%s  (£ %d · TBD)" % [str(item.get("name", "?")), int(item.get("cost", 0))]
 	return "%s  (£ %d)" % [str(item.get("name", "?")), int(item.get("cost", 0))]
+
+
+## P1 sentinel: cost 0 (free unlock) or a KF08-verified id. Everything else is
+## TBD placeholder (HARD_LIMIT 5.6) and must render/log as such — never bare.
+func _is_price_verified(item: Dictionary) -> bool:
+	if int(item.get("cost", 0)) == 0:
+		return true
+	return str(item.get("id", "")) in VERIFIED_PRICE_IDS
+
+
+func _log_tbd_price(item: Dictionary, where: String) -> void:
+	push_warning("TAT-2 UI ledger TBD PRICE at %s: %s/%s cost=%d has no DT/cooked source (%s); %s. DO NOT SHIP AS PARITY." % [where, str(item.get("cat", "?")), str(item.get("id", "?")), int(item.get("cost", 0)), PRICE_SOURCE_ST, PRICE_SOURCE_KF])
 
 
 func _refresh_preview() -> void:
@@ -467,11 +510,12 @@ func _refresh_preview() -> void:
 	var owned: bool = SaveSystem.is_unlocked(cat, item_id)
 	if owned:
 		_preview_status.text = "✓ PURCHASED"
-		_preview_status.add_theme_color_override("font_color", Color(0.45, 0.85, 0.45))
+		_preview_status.add_theme_color_override("font_color", ThemeScript.GREEN_PURCHASED)
 		_buy_btn.visible = false
 	else:
-		_preview_status.text = "£ %d" % cost
-		_preview_status.add_theme_color_override("font_color", Color(0.95, 0.82, 0.48))
+		_preview_status.text = "£ %d · TBD PRICE — DO NOT SHIP" % cost
+		_log_tbd_price(_selected, "preview")
+		_preview_status.add_theme_color_override("font_color", ThemeScript.GOLD)
 		_buy_btn.visible = true
 		_buy_btn.text = "BUY — £ %d" % cost
 
@@ -485,7 +529,12 @@ func _on_item_pressed(item: Dictionary) -> void:
 
 func _on_buy_pressed() -> void:
 	if _selected.is_empty():
+		push_error("TAT-2 UI ledger BUY with empty selection (res://src/ui/ledger_ui.gd); refusing silent continue.")
+		assert(false, "BUY requires a selected item")
 		return
+	if not _is_price_verified(_selected) and not SaveSystem.is_unlocked(str(_selected.get("cat", "")), str(_selected.get("id", ""))):
+		_log_tbd_price(_selected, "BUY")
+		push_error("TAT-2 UI ledger BLOCKED-BUT-AUDIBLE TBD purchase: %s/%s cost=%d has no DT/cooked source (%s). Sale proceeds as debug-only; DO NOT SHIP AS PARITY." % [str(_selected.get("cat", "?")), str(_selected.get("id", "?")), int(_selected.get("cost", 0)), PRICE_SOURCE_ST])
 	var ok: bool = SaveSystem.purchase_item(str(_selected.get("cat", "")), str(_selected.get("id", "")), int(_selected.get("cost", 0)))
 	if AudioManager != null and AudioManager.has_method("play_ui"):
 		AudioManager.play_ui("purchase" if ok else "error")
@@ -497,7 +546,7 @@ func _on_buy_pressed() -> void:
 			_preview_status.text = "✓ PURCHASED"
 		else:
 			_preview_status.text = "Insufficient funds (have £ %d, need £ %d)" % [funds, int(_selected.get("cost", 0))]
-			_preview_status.add_theme_color_override("font_color", Color(0.9, 0.4, 0.35))
+			_preview_status.add_theme_color_override("font_color", ThemeScript.RED_INSUFFICIENT)
 
 
 func _on_back_pressed() -> void:

@@ -24,6 +24,8 @@ const WANDER_RADIUS_M: float = 6.0
 const IDLE_MIN_S: float = 2.0
 const IDLE_MAX_S: float = 5.0
 const ARRIVE_DIST_M: float = 0.4
+const STUCK_TIMEOUT_S: float = 8.0
+const MAX_TARGET_ATTEMPTS: int = 8
 
 ## Generic clips (manifest-verified names). IdleBreak_Fidget is the only
 ## non-pose generic idle in the MM_Unarmed set; the AO_CC entries are
@@ -37,6 +39,7 @@ var wander_center: Vector3 = Vector3.ZERO
 
 var _target: Vector3 = Vector3.ZERO
 var _idle_ttl: float = 0.0
+var _stuck_ttl: float = 8.0
 var _anim_player: AnimationPlayer = null
 var _has_anims: bool = false
 var _bob_phase: float = 0.0
@@ -150,8 +153,12 @@ func _find_skeleton(n: Node) -> Skeleton3D:
 ## skeleton by bone name. Clips sharing no bones are skipped (the library
 ## returns null and logs); the civilian then uses rest pose + bob.
 func _setup_civilian_anims() -> void:
+	# P2 civilian guard-table coupling: the old call passed the guard weapon
+	# token ("club"). Civilian locomotion only uses the generic MM_Unarmed
+	# retarget below, so pass the civilian token; the core library (read-only)
+	# still coerces unknown weapons to its club table, behavior identical.
 	var lib = AnimLib.new()
-	if not lib.setup("club", _skel):
+	if not lib.setup("civilian", _skel):
 		return
 	var idle_anim: Animation = lib._retarget_general(IDLE_CLIP, false, true)
 	var walk_anim: Animation = lib._retarget_general(WALK_CLIP, true, true)
@@ -189,19 +196,28 @@ func _physics_process(delta: float) -> void:
 		velocity.z = 0.0
 		_play_role("idle")
 		_rest_bob(delta)
+		if _idle_ttl <= 0.0:
+			_pick_new_target()
 	else:
 		var to: Vector3 = _target - global_position
 		to.y = 0.0
 		if to.length() < ARRIVE_DIST_M:
 			_idle_ttl = randf_range(IDLE_MIN_S, IDLE_MAX_S)
+			_pick_new_target()
 			_play_role("idle")
 		else:
-			var dir: Vector3 = to.normalized()
-			velocity.x = dir.x * WALK_SPEED_M_S
-			velocity.z = dir.z * WALK_SPEED_M_S
-			rotation.y = lerp_angle(rotation.y, atan2(-dir.x, -dir.z), clampf(delta * 6.0, 0.0, 1.0))
-			_play_role("walk")
-			_rest_bob(delta)
+			_stuck_ttl -= delta
+			if _stuck_ttl <= 0.0:
+				_idle_ttl = randf_range(0.5, 1.5)
+				_pick_new_target()
+				_play_role("idle")
+			else:
+				var dir: Vector3 = to.normalized()
+				velocity.x = dir.x * WALK_SPEED_M_S
+				velocity.z = dir.z * WALK_SPEED_M_S
+				rotation.y = lerp_angle(rotation.y, atan2(-dir.x, -dir.z), clampf(delta * 6.0, 0.0, 1.0))
+				_play_role("walk")
+				_rest_bob(delta)
 	move_and_slide()
 
 
@@ -226,8 +242,48 @@ func _play_role(role: String) -> void:
 
 
 func _pick_new_target() -> void:
-	_target = Vector3(
-		wander_center.x + randf_range(-WANDER_RADIUS_M, WANDER_RADIUS_M),
-		wander_center.y,
-		wander_center.z + randf_range(-WANDER_RADIUS_M, WANDER_RADIUS_M)
-	)
+	for i in range(MAX_TARGET_ATTEMPTS):
+		var candidate := Vector3(
+			wander_center.x + randf_range(-WANDER_RADIUS_M, WANDER_RADIUS_M),
+			wander_center.y,
+			wander_center.z + randf_range(-WANDER_RADIUS_M, WANDER_RADIUS_M)
+		)
+		if _is_target_valid(candidate):
+			_target = candidate
+			_stuck_ttl = STUCK_TIMEOUT_S
+			return
+	_target = wander_center
+	_stuck_ttl = STUCK_TIMEOUT_S
+
+
+## Rejects targets inside/through geometry (horizontal world ray) and targets
+## with no floor below (vertical drop ray), then snaps to the navmesh when a
+## navigation map exists. Fail-open before the civilian is inside the tree
+## (e.g. setup/_ready before physics) so spawn never blocks.
+func _is_target_valid(candidate: Vector3) -> bool:
+	if not is_inside_tree():
+		return true
+	var world := get_world_3d()
+	if world == null:
+		return true
+	var space := world.direct_space_state
+	if space == null:
+		return true
+	var h_from := wander_center + Vector3.UP * 1.0
+	var h_to := candidate + Vector3.UP * 1.0
+	var h_hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(h_from, h_to, 1))
+	if not h_hit.is_empty():
+		return false
+	var d_from := candidate + Vector3.UP * 1.5
+	var d_to := candidate + Vector3.UP * -1.0
+	var d_hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(d_from, d_to, 1))
+	if d_hit.is_empty():
+		return false
+	if world.has_method("get_navigation_map"):
+		var nav_map: RID = world.get_navigation_map()
+		if nav_map.is_valid():
+			var snapped: Vector3 = NavigationServer3D.map_get_closest_point(nav_map, candidate)
+			var flat := Vector2(snapped.x - candidate.x, snapped.z - candidate.z)
+			if flat.length() > 1.0:
+				return false
+	return true

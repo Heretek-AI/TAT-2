@@ -55,8 +55,10 @@ static func loot_tables() -> Dictionary:
 
 
 ## Deterministic weighted pick from a bucket class list (duplicates carry the
-## designer weight): pure function of marker position + order, no RNG. Same
-## formula as mission_controller._loot_bucket_index so both waves agree.
+## designer weight): pure function of marker position + order, no RNG.
+## P2 bucket-hash duplication: this static is the single source of truth;
+## mission_controller._loot_bucket_index delegates here and pins parity with
+## an assert, so the two waves cannot drift.
 static func bucket_index(pos: Vector3, order: int, size: int) -> int:
 	if size <= 0:
 		return 0
@@ -237,6 +239,15 @@ func _container_label() -> String:
 	return "Safe Lock (Lv %d)" % maxi(lock_level, 1)
 
 
+## P1 container noise sourced self: same HUD-arcs gap as the doors (guards
+## heard lockpicking, the player saw no feedback). Emit with the stored player
+## driver when one is mid-interaction (UE lockpick noise path).
+func _noise_source() -> Node:
+	if _lockpick_actor != null and is_instance_valid(_lockpick_actor):
+		return _lockpick_actor
+	return self
+
+
 func _on_lockpick_finished(success: bool, actor: Node) -> void:
 	is_lockpicking = false
 	if actor != null and is_instance_valid(actor) and actor.has_method("set_lockpicking_active"):
@@ -252,7 +263,7 @@ func _on_lockpick_finished(success: bool, actor: Node) -> void:
 		_open_container()
 	else:
 		_VfxManager.spawn_lockpick_sparks(get_parent(), global_position + Vector3(0.0, 0.5, 0.0))
-		NoiseBus.emit_noise(global_position, 5.0, self, "lockpick")
+		NoiseBus.emit_noise(global_position, 5.0, _noise_source(), "lockpick")
 		lockpick_updated.emit(false, lockpick_progress, maxi(lock_level, 1))
 
 
@@ -274,7 +285,7 @@ func interact(actor: Node) -> void:
 		if actor != null and hud_node != null and hud_node.has_method("start_lockpick_minigame"):
 			is_lockpicking = true
 			lockpick_updated.emit(true, lockpick_progress, lvl)
-			NoiseBus.emit_noise(global_position, 4.0, self, "lockpick")
+			NoiseBus.emit_noise(global_position, 4.0, _noise_source(), "lockpick")
 			hud_node.call("start_lockpick_minigame", lvl, _container_label(), func(success: bool = true) -> void:
 				_on_lockpick_finished(success, actor)
 			)
@@ -284,7 +295,7 @@ func interact(actor: Node) -> void:
 			is_lockpicking = true
 			lockpick_updated.emit(true, lockpick_progress, lvl)
 			_VfxManager.spawn_lockpick_sparks(get_parent(), global_position + Vector3(0.0, 0.5, 0.0))
-			NoiseBus.emit_noise(global_position, 4.0, self, "lockpick")
+			NoiseBus.emit_noise(global_position, 4.0, _noise_source(), "lockpick")
 			var dur: float = clampf(get_track_duration(), 0.35, 1.2)
 			get_tree().create_timer(dur).timeout.connect(func() -> void:
 				if is_instance_valid(self) and is_lockpicking:

@@ -368,13 +368,21 @@ def build_state_speeds() -> dict:
     for k in ("neutral", "suspicious"):
         if k not in speeds:
             raise Fail(f"DA_AIStatesToSpeed_Guard missing {k}")
+    # P1-6: alerted/combat have no StatesToSpeeds row, so derive the shared
+    # fallback from the authored guard movement component instead of
+    # hand-writing 2.5. A BP change rots nothing: the parse fails loudly.
+    guard = load("Character/Guards/BP_Guard_Base.json")
+    move = find(guard, {"Type": "TATCharacterAIMovement", "Name": "CharMoveComp"})
+    max_walk = req(move, "MaxWalkSpeed", "BP_Guard_Base CharMoveComp")
+    fallback_m_s = cm(max_walk)
+    print(f"alerted_combat_fallback_m_s derived from BP_Guard_Base MaxWalkSpeed {max_walk} -> {fallback_m_s}")
     return {
         "neutral_m_s": speeds["neutral"],
         "suspicious_m_s": speeds["suspicious"],
-        "alerted_combat_fallback_m_s": 2.5,
+        "alerted_combat_fallback_m_s": fallback_m_s,
         "sources": {
             "neutral_suspicious": "extracted/json/AI/Data/DA_AIStatesToSpeed_Guard.json (StatesToSpeeds 150/170)",
-            "fallback": "extracted/json/Character/Guards/BP_Guard_Base.json (TATCharacterAIMovement MaxWalkSpeed 250)",
+            "fallback": f"extracted/json/Character/Guards/BP_Guard_Base.json (TATCharacterAIMovement MaxWalkSpeed {max_walk})",
         },
     }
 

@@ -66,8 +66,11 @@ def map_id_from_ue(map_path: str) -> str:
         return "thieves_den"
     if "FTUE" in mp or "Tutorial" in mp:
         return "ftue"
-    # Contract 1 (Thieves' Den hub tutorial) ships with an empty Map path;
-    # the runtime default for an empty path is the thieves_den hub.
+    # P2-2: Contract 1 (Thieves' Den hub tutorial) ships with an empty Map
+    # path; the runtime default for an empty path is the thieves_den hub.
+    # Any other contract landing here is a data gap, not a hub — the caller
+    # collects defaulted orders and warns so a future empty path cannot
+    # silently become thieves_den.
     return "thieves_den"
 
 
@@ -93,6 +96,7 @@ def load_contract_rows() -> tuple[dict, str]:
 def main() -> None:
     rows, source_rel = load_contract_rows()
     contracts = []
+    defaulted_maps: list[str] = []
     for key, row in rows.items():
         if not isinstance(row, dict):
             continue
@@ -144,11 +148,19 @@ def main() -> None:
         )
         title_raw = row.get("Title") or {}
         desc_raw = row.get("Description") or {}
+        map_id = map_id_from_ue(map_ue)
+        if not map_ue or (
+            map_id == "thieves_den"
+            and not any(
+                s in map_ue for s in ("ThievesDen", "FTUE", "Tutorial")
+            )
+        ):
+            defaulted_maps.append(f"{key} (order {order})")
         contracts.append(
             {
                 "order": order,
                 "id": str(key),
-                "map_id": map_id_from_ue(map_ue),
+                "map_id": map_id,
                 "map_ue_path": map_ue,
                 "sublevels_ue_paths": subs,
                 "sublevels_res_paths": [ue_asset_to_res(s) for s in subs],
@@ -204,6 +216,10 @@ def main() -> None:
     print(
         f"Wrote {len(contracts)} contracts + {len(mission_durations)} mission durations -> {OUT}"
     )
+    # P2-2: every thieves_den default must be explainable. Today only
+    # Contract.Main.1 (empty hub path) is expected; anything else is a gap.
+    if defaulted_maps:
+        print(f"WARN: {len(defaulted_maps)} contract(s) defaulted to thieves_den: " + ", ".join(defaulted_maps))
 
 
 if __name__ == "__main__":

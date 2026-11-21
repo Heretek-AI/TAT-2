@@ -312,6 +312,21 @@ def main() -> None:
         generic = next(
             (c for c in sorted(quest_actors) if quest_actors[c]["mesh_exists"]), ""
         )
+    # P1-5 sentinel: the "fallback never fires on shipped content" invariant
+    # is now code, not prose. Every shipped contract loot_tag must resolve to
+    # a dedicated actor; a re-extract that unmaps one fails here instead of
+    # silently serving the generic box at runtime. Quest-row tags without an
+    # actor stay a printed warning (future/unmapped quest content is allowed
+    # to use the generic fallback by design).
+    if unmapped_contract_tags:
+        raise SystemExit(
+            "shipped contract loot_tag(s) with no dedicated actor: "
+            f"{unmapped_contract_tags} (see fallback.unmapped_contract_tags)"
+        )
+    if not generic:
+        raise SystemExit("no quest actor with a mesh on disk: generic fallback is NONE")
+    for cname in sorted(c for c, a in quest_actors.items() if not a["mesh_exists"]):
+        print(f"[quest-mesh-missing] {cname}: keeps mesh_res '' (labelled box fallback in loot_item.gd)")
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:

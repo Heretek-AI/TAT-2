@@ -182,13 +182,28 @@ const FOOTSTEP_SURFACE_KEYS := {
 var _sfx: Dictionary = {}
 var _real_clips: Dictionary = {}
 var _active_voices: int = 0
+## U1: live voice list for stealing. The old code silently dropped new
+## voices past MAX_VOICES (fights lost alert/VO cues with no signal). Now
+## the oldest voice is stolen, the steal is counted, and UE-path-identified
+## warnings fire (5 s throttle) so drops are visible, never silent.
+var _voice_players: Array[Node] = []
+var _voice_steals: int = 0
+var _last_steal_warn_msec: int = -100000
 var _event_clips: Dictionary = {}
 var _foot_pools: Dictionary = {}
 var _foot_idx: Dictionary = {}
 var _beds: Dictionary = {}
 var _gramophone_player: AudioStreamPlayer = null
+## U3: scene-safe countdown. The old fire-and-forget loop held
+## _countdown_running = true across scene changes forever (blocking every
+## later start_countdown) and ticked into dead scenes. Now the loop captures
+## the tree + scene + a generation token and bails (resetting the flag) when
+## the scene changes or a newer countdown starts.
+var _countdown_token: int = 0
 var _countdown_running: bool = false
 var _named_clips: Dictionary = {}
+## U4: one looped duplicate per unique bed/gramophone clip (see _bed_stream).
+var _bed_loop_cache: Dictionary = {}
 ## Bus linear levels are cached so the S27 pause duck can be applied on top of
 ## the saved slider value without losing it.
 var _bus_linear: Dictionary = {}
@@ -479,7 +494,11 @@ func _is_indoor() -> bool:
 		return false
 	var from: Vector3 = player.global_position + Vector3.UP * 1.2
 	var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(from, from + Vector3.UP * 10.0)
-	var excluded: Array[RID] = [player.get_rid()]
+	var excluded: Array[RID] = []
+	if player is CollisionObject3D:
+		var body: CollisionObject3D = player as CollisionObject3D
+		excluded.append_array(body.get_collision_exceptions())
+		excluded.append(body.get_rid())
 	q.exclude = excluded
 	return not world.direct_space_state.intersect_ray(q).is_empty()
 
@@ -530,14 +549,11 @@ func play_footstep(surface: String = "wood", gait: String = "walk", pos: Vector3
 	return false
 
 
-## AU4: UI cue (2D, UI bus). Names: hover/click/confirm/back/open/close/
-## ledger_open/paper/countdown/wardrobe_open.
 ## AU4: UI cue (2D, UI bus). Accepts either the bare cue name ("click",
-## "ledger_open", "paper", "wardrobe_open", ...) or the "ui_"-prefixed
-## tag form; unknown cues fall back to the click.
-## AU4: UI cue (2D, UI bus). Cue names: hover / click / confirm / back
-## (also cancel, close) / open / tab / error / purchase / ledger_open /
-## paper / wardrobe_open / countdown. Unknown cues fall back to the click.
+## "ledger_open", ...) or the "ui_"-prefixed tag form; unknown cues fall
+## back to the click. Cue names: hover / click / confirm / back (also
+## cancel, close) / open / tab / error / purchase / ledger_open / paper /
+## wardrobe_open / countdown.
 ## AU4: recursively wires hover ticks onto every button under [param root].
 ## UIs call this once after building (and again after lazy sub-panels), so the
 ## S04/S08 metallic hover ticks fire without duplicating per-control plumbing.
@@ -617,9 +633,17 @@ func start_countdown() -> void:
 
 
 func _countdown_async() -> void:
+	_countdown_token += 1
+	var token: int = _countdown_token
+	var tree: SceneTree = get_tree()
+	var scene: Node = tree.current_scene if tree != null else null
 	for i: int in range(6):
 		play_countdown_tick(i)
-		await get_tree().create_timer(1.0).timeout
+		if tree == null:
+			break
+		await tree.create_timer(1.0).timeout
+		if _countdown_token != token or get_tree() == null or get_tree().current_scene != scene:
+			break
 	_countdown_running = false
 
 
@@ -640,12 +664,21 @@ func _bed_stream(ev_name: String, media_sub: String) -> AudioStream:
 		var stream: AudioStream = ResourceLoader.load(clip) as AudioStream
 		if stream == null:
 			continue
-		var dup: Resource = stream.duplicate() as Resource
-		var looped: AudioStream = stream
-		if dup != null and dup is AudioStream:
-			looped = dup as AudioStream
+		# U4: Godot 4 has no AudioStreamLoop (Godot 3 API), and the bed
+		# clips are shared with one-shot events (audio_events.json reuses
+		# the same .ogg across events), so flipping loop on the shared
+		# resource would strand one-shot players (finished never fires).
+		# One looped duplicate per unique clip, cached — not one per
+		# start_bed call — so map changes stop re-duplicating the OGG.
+		var cached: AudioStream = _bed_loop_cache.get(clip) as AudioStream
+		if cached != null:
+			return cached
+		var looped: AudioStream = stream.duplicate() as AudioStream
+		if looped == null:
+			continue
 		if looped is AudioStreamOggVorbis:
 			(looped as AudioStreamOggVorbis).loop = true
+		_bed_loop_cache[clip] = looped
 		return looped
 	return null
 
@@ -840,9 +873,30 @@ func play_car_horn(pos: Vector3 = Vector3.ZERO) -> bool:
 
 
 func _horn_second_blast(horn: AudioStream, pos: Vector3) -> void:
+	# U3: the 0.15 s replay is skipped when the scene changed under it, so a
+	# stale timer never honks at a dead position in the new scene.
+	var tree: SceneTree = get_tree()
+	var scene: Node = tree.current_scene if tree != null else null
 	await get_tree().create_timer(0.15).timeout
-	if horn != null:
+	if horn != null and get_tree() != null and get_tree().current_scene == scene:
 		_play_stream_3d(horn, pos, 0.0, BUS_SFX)
+
+
+## U2: calibrated play trims per bus. The old fire_event path played
+## everything at -10.0 dB, bypassing BED_TRIM_DB / UI_DB / VO_DB.
+## Ambience events resolve a bed trim by event-name substring (rain / den /
+## room / wind / guildhall); anything else uses a documented uncalibrated
+## fallback const instead of a magic literal.
+const AMB_FALLBACK_DB: float = -10.0
+const MUSIC_FALLBACK_DB: float = -10.0
+
+
+func _ambience_trim_db(ev: String) -> float:
+	var low: String = ev.to_lower()
+	for bed_key: Variant in BED_TRIM_DB.keys():
+		if low.find(str(bed_key)) >= 0:
+			return float(BED_TRIM_DB[bed_key])
+	return AMB_FALLBACK_DB
 
 
 ## Generic probe/event entry: plays the first joined clip of any Wwise event
@@ -875,12 +929,20 @@ func fire_event(event_name: String, pos: Vector3 = Vector3.ZERO, use_3d: bool = 
 			break
 	if stream == null:
 		return false
-	if bus == BUS_UI or bus == BUS_AMBIENCE or bus == BUS_MUSIC:
-		_play_stream_2d(stream, bus, -10.0)
+	# U2: per-bus calibrated trims (UI_DB / VO_DB / BED_TRIM_DB) instead of
+	# the old flat -10.0 dB. Music keeps a documented uncalibrated fallback.
+	if bus == BUS_UI:
+		_play_stream_2d(stream, bus, UI_DB)
+	elif bus == BUS_DIALOGUE:
+		_play_stream_2d(stream, bus, VO_DB)
+	elif bus == BUS_AMBIENCE:
+		_play_stream_2d(stream, bus, _ambience_trim_db(ev))
+	elif bus == BUS_MUSIC:
+		_play_stream_2d(stream, bus, MUSIC_FALLBACK_DB)
 	elif use_3d:
 		_play_stream_3d(stream, pos, 0.0, bus)
 	else:
-		_play_stream_2d(stream, bus, -10.0)
+		_play_stream_2d(stream, BUS_SFX, 0.0)
 	return true
 
 
@@ -905,7 +967,10 @@ func _resolve_tag(tag: String) -> String:
 			return "footstep"
 		"bottle", "smash", "shatter":
 			return "bottle"
-		"lockpick_jam":
+		# P2 (gameplay lane P2-8): door/swinging-door relock emits tag "lock";
+		# mirror it on the lockpick cue so the audio path matches the
+		# NoiseBus path guards already hear.
+		"lock", "lockpick_jam":
 			return "lockpick"
 	return ""
 
@@ -957,8 +1022,9 @@ func _play_at(key: String, pos: Vector3, volume_db: float) -> void:
 
 
 func _play_stream_3d(stream: AudioStream, pos: Vector3, volume_db: float, bus: String) -> void:
-	if _active_voices >= MAX_VOICES or stream == null:
+	if stream == null:
 		return
+	_steal_voice_if_full("3d")
 	if AudioServer.get_bus_index(bus) == -1:
 		bus = "Master"
 	var player := AudioStreamPlayer3D.new()
@@ -969,14 +1035,16 @@ func _play_stream_3d(stream: AudioStream, pos: Vector3, volume_db: float, bus: S
 	player.max_distance = MAX_DISTANCE_M
 	player.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE
 	add_child(player)
+	_voice_players.append(player)
 	_active_voices += 1
 	player.finished.connect(_on_player_finished.bind(player))
 	player.play()
 
 
 func _play_stream_2d(stream: AudioStream, bus: String, volume_db: float) -> void:
-	if _active_voices >= MAX_VOICES or stream == null:
+	if stream == null:
 		return
+	_steal_voice_if_full("2d")
 	if AudioServer.get_bus_index(bus) == -1:
 		bus = "Master"
 	var player := AudioStreamPlayer.new()
@@ -984,6 +1052,7 @@ func _play_stream_2d(stream: AudioStream, bus: String, volume_db: float) -> void
 	player.bus = bus
 	player.volume_db = volume_db
 	add_child(player)
+	_voice_players.append(player)
 	_active_voices += 1
 	player.finished.connect(_on_player_finished.bind(player))
 	player.play()
@@ -991,4 +1060,35 @@ func _play_stream_2d(stream: AudioStream, bus: String, volume_db: float) -> void
 
 func _on_player_finished(player: Node) -> void:
 	_active_voices = maxi(0, _active_voices - 1)
+	_voice_players.erase(player)
 	player.queue_free()
+
+
+## U1: voice stealing. At cap the oldest live voice is freed for the new
+## one (fights keep their alert/VO cues); the steal is counted and warned
+## with the bus path at most once per 5 s. finished-signal cleanup keeps
+## the list exact, so a double-free can never happen (is_instance_valid
+## guard + erase before free).
+func _steal_voice_if_full(kind: String) -> void:
+	_prune_dead_voices()
+	if _active_voices < MAX_VOICES:
+		return
+	_voice_steals += 1
+	var now: int = Time.get_ticks_msec()
+	if now - _last_steal_warn_msec > 5000:
+		_last_steal_warn_msec = now
+		push_warning("[audio_manager] MAX_VOICES (", MAX_VOICES, ") reached on ", kind, " playback; stealing oldest voice (steals=", _voice_steals, ")")
+	for old: Node in _voice_players:
+		if is_instance_valid(old):
+			_voice_players.erase(old)
+			_active_voices = maxi(0, _active_voices - 1)
+			old.queue_free()
+			return
+
+
+## Drops finished/freed players the finished signal never saw (scene churn).
+func _prune_dead_voices() -> void:
+	for i: int in range(_voice_players.size() - 1, -1, -1):
+		if not is_instance_valid(_voice_players[i]):
+			_voice_players.remove_at(i)
+	_active_voices = mini(_active_voices, _voice_players.size())

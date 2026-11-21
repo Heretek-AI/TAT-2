@@ -226,12 +226,30 @@ func get_interact_secondary_prompt() -> String:
 
 
 ## KF24 secondary action: hold F to lock the closed door again.
-func interact_hold(_actor: Node) -> void:
+func interact_hold(actor: Node) -> void:
 	if locked or is_open or _tweening:
 		return
-	set_locked(true, 1)
+	# P2 relock downgrade fixed: the old set_locked(true, 1) reset any vault to
+	# Lv1; keep the authored level like lockable_door.interact_hold does.
+	set_locked(true, maxi(lock_level, 1))
 	lockpick_updated.emit(false, 0.0, lock_level)
-	NoiseBus.emit_noise(global_position, 3.0, self, "lock")
+	NoiseBus.emit_noise(global_position, 3.0, _audible_source(actor), "lock")
+
+
+## P1 door noise sourced self (swinging leaf): same HUD-arcs gap as the
+## frame door. Emits use the stored player driver when one is
+## mid-interaction (UE lockpick/door noise path).
+func _noise_source() -> Node:
+	if _lockpick_actor != null and is_instance_valid(_lockpick_actor):
+		return _lockpick_actor
+	return self
+
+
+## Hold/relock path carries the actor directly (no stored driver).
+func _audible_source(actor: Node) -> Node:
+	if actor != null and is_instance_valid(actor):
+		return actor
+	return _noise_source()
 
 
 func _exit_tree() -> void:
@@ -285,12 +303,12 @@ func _on_lockpick_finished(success: bool, actor: Node) -> void:
 		locked = false
 		lockpick_progress = 1.0
 		lockpick_updated.emit(false, 1.0, maxi(lock_level, 1))
-		NoiseBus.emit_noise(global_position, 5.5, self, "door")
+		NoiseBus.emit_noise(global_position, 5.5, _noise_source(), "door")
 		if not is_open:
 			_start_swing_toggle()
 	else:
 		_VfxManager.spawn_lockpick_sparks(get_parent(), global_position + Vector3(0.0, 1.1, 0.0))
-		NoiseBus.emit_noise(global_position, 5.0, self, "lockpick")
+		NoiseBus.emit_noise(global_position, 5.0, _noise_source(), "lockpick")
 		lockpick_updated.emit(false, lockpick_progress, maxi(lock_level, 1))
 
 
@@ -309,7 +327,7 @@ func interact(actor: Node) -> void:
 		if actor != null and hud_node != null and hud_node.has_method("start_lockpick_minigame"):
 			is_lockpicking = true
 			lockpick_updated.emit(true, lockpick_progress, lvl)
-			NoiseBus.emit_noise(global_position, 4.0, self, "lockpick")
+			NoiseBus.emit_noise(global_position, 4.0, _noise_source(), "lockpick")
 			hud_node.call("start_lockpick_minigame", lvl, "Door Lock (Lv %d)" % lvl, func(success: bool = true) -> void:
 				_on_lockpick_finished(success, actor)
 			)
@@ -319,7 +337,7 @@ func interact(actor: Node) -> void:
 			is_lockpicking = true
 			lockpick_updated.emit(true, lockpick_progress, lvl)
 			_VfxManager.spawn_lockpick_sparks(get_parent(), global_position + Vector3(0.0, 1.1, 0.0))
-			NoiseBus.emit_noise(global_position, 4.0, self, "lockpick")
+			NoiseBus.emit_noise(global_position, 4.0, _noise_source(), "lockpick")
 			var dur: float = clampf(get_track_duration(), 0.35, 1.2)
 			get_tree().create_timer(dur).timeout.connect(func() -> void:
 				if is_instance_valid(self) and is_lockpicking:
@@ -328,7 +346,7 @@ func interact(actor: Node) -> void:
 			return
 		var dmg: float = LockableDoorScript.jam_damage_for_level(lvl)
 		lockpick_progress = minf(1.0, lockpick_progress + 5.0 / maxf(dmg, 1.0))
-		NoiseBus.emit_noise(global_position, 4.0, self, "lockpick")
+		NoiseBus.emit_noise(global_position, 4.0, _noise_source(), "lockpick")
 		lockpick_updated.emit(true, lockpick_progress, lvl)
 		if lockpick_progress >= 1.0:
 			_on_lockpick_finished(true, actor)

@@ -1070,7 +1070,7 @@ func _build_reticle_and_prompt(root: Control) -> void:
 	_prompt_secondary_lbl.offset_bottom = 82.0
 	_prompt_secondary_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_prompt_secondary_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_prompt_secondary_lbl.add_theme_font_size_override("font_size", 12)
+	_prompt_secondary_lbl.add_theme_font_size_override("font_size", 14)
 	_prompt_secondary_lbl.add_theme_color_override("font_color", Color(0.58, 0.72, 0.98, 0.88))
 	_prompt_secondary_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
 	_prompt_secondary_lbl.add_theme_constant_override("shadow_offset_x", 1)
@@ -1756,9 +1756,11 @@ func show_clue_toast(title: String, body: String) -> void:
 
 
 func set_lockpick_progress(active: bool, progress: float, _lock_level: int) -> void:
+	# P2-2: the LockpickDialDraw minigame is the live UI; this legacy bar stays
+	# hidden and only retains its M2 value/property contract for callers.
 	if lockpick_bar == null:
 		return
-	lockpick_bar.visible = active
+	lockpick_bar.visible = false
 	lockpick_bar.value = clampf(progress, 0.0, 1.0)
 
 
@@ -2149,7 +2151,9 @@ func _update_objectives_and_loot(is_hub: bool) -> void:
 
 	var title: String = str(contract_data.get("title", "Contract #%d" % GameState.active_contract_order))
 	var item: String = str(contract_data.get("quest_item", "Objective"))
-	var status: String = "Reach Escape Gate" if GameState.quest_item_acquired else "❧ %s  (%d/%d Loot)" % [item, GameState.loot_collected, GameState.loot_needed]
+	var _loot_goal: int = maxi(GameState.loot_goal, 0)
+	var _loot_status: String = "❧ %s  (£ %d / £ %d)" % [item, GameState.loot_value, _loot_goal] if _loot_goal > 0 else "❧ %s" % item
+	var status: String = "Reach Escape Gate" if GameState.are_all_objectives_complete() else _loot_status
 	obj_lbl.text = "Mission: %s%s\n   %s" % [title, timing, status]
 
 
@@ -2237,13 +2241,11 @@ func _update_health_and_stamina(p: Node3D, is_hub: bool) -> void:
 
 
 func _update_tool_hotbar_and_reticle(p: Node3D, is_hub: bool) -> void:
-	# Update legacy hotbar_lbl text + bottom-left octagonal slots from M2 API.
+	## P2-2: legacy hotbar_lbl is a hidden API-compat stub (e2e_tier2_boundaries
+	## asserts its existence). The octagonal hotbar below is the live UI, so no
+	## per-frame text is pushed here anymore.
 	var ch_v: Variant = p.get("charges")
 	var ch: Dictionary = ch_v as Dictionary if ch_v is Dictionary else {}
-	var ab: String = "Grapple" if GameState.thief_id == "spider" else ("Disguise" if GameState.thief_id == "chameleon" else "Scout")
-	hotbar_lbl.text = "[1]Zip:%d  [2]Smoke:%d  [3]Sap:%d  [4]Diamond:∞  |  %s" % [
-		int(ch.get("grapple", 0)), int(ch.get("smoke_bomb", 0)), int(ch.get("slithersap", 0)), ab
-	]
 
 	if p.has_method("get_tool_slots"):
 		var slots_v: Variant = p.call("get_tool_slots")

@@ -72,7 +72,7 @@ func _ready() -> void:
 
 func _on_body_entered(body: Node) -> void:
 	if body.is_in_group("player") and GameState.state == "playing":
-		if GameState.quest_item_acquired or GameState.loot_collected >= GameState.loot_needed:
+		if GameState.are_all_objectives_complete():
 			if can_be_used_multiple_times or use_count == 0:
 				use_count += 1
 				extracted.emit()

@@ -114,7 +114,6 @@ const FP_TOOL_CLIPS := {
 }
 # All three FP clips are in-place locomotion (scripted velocity drives
 # displacement), so `root` translation is always stripped; all loop.
-const FP_BLEND: float = 0.2
 const LOOP_ROLES: Array[String] = [
 	"neutral_idle", "neutral_walk", "suspicious_idle", "suspicious_walk",
 	"alert_idle", "alert_run", "search", "knockdown",
@@ -300,39 +299,7 @@ func clip_length(key: String) -> float:
 	return float(anim_lengths.get(key, 0.0))
 
 
-func bone_report() -> Dictionary:
-	var animated := {}
-	for clip_name in _source_cache:
-		var info = _source_cache[clip_name]
-		if info is Dictionary:
-			var bones = (info as Dictionary).get("bones", [])
-			if bones is PackedStringArray:
-				for b in (bones as PackedStringArray):
-					animated[str(b)] = true
-			elif bones is Array:
-				for b in (bones as Array):
-					animated[str(b)] = true
-	var mesh_set := {}
-	for b in mesh_bones:
-		mesh_set[str(b)] = true
-	var matched: int = 0
-	var missing: Array = []
-	for b in mesh_set:
-		if animated.has(b):
-			matched += 1
-		else:
-			missing.append(b)
-	var extra: Array = []
-	for b in animated:
-		if not mesh_set.has(b):
-			extra.append(b)
-	return {
-		"mesh_bones": mesh_set.size(),
-		"anim_bones": animated.size(),
-		"matched": matched,
-		"missing": missing,
-		"extra": extra,
-	}
+
 
 
 func build_player(skeleton: Skeleton3D, skeleton_parent: Node, player_host: Node) -> AnimationPlayer:
@@ -440,17 +407,19 @@ func ensure_fp_clip(player: AnimationPlayer, role: String) -> String:
 		return str(applied[role])
 	if player == null or not load_manifest():
 		return ""
+	# D2: has_fp_role() is the single table-membership check (the applied hit
+	# returned above, so reaching here with no table entry means unknown role).
+	if not has_fp_role(role):
+		return ""
 	var clip_name := ""
 	var loop := true
 	if FP_TOOL_CLIPS.has(role):
 		var spec: Dictionary = FP_TOOL_CLIPS[role] as Dictionary
 		clip_name = str(spec.get("clip", ""))
 		loop = spec.get("loop", true) == true
-	elif FP_CLIPS.has(role):
+	else:
 		clip_name = str(FP_CLIPS[role])
 		loop = true
-	else:
-		return ""
 	if clip_name == "" or not _manifest_by_name.has(clip_name):
 		return ""
 	var anim := _retarget_general(clip_name, true, loop, true)
@@ -676,6 +645,46 @@ func _retarget_general(clip_name: String, strip_root: bool, loop: bool, use_simi
 	return out
 
 
+## Name-matched clip pick (P0-2 fix). Manifest clip names equal the GLB stem
+## (e.g. AN_StealthTakedown_GuardEnforcer__Vic_Montage); a takedown GLB packing
+## Atk+Vic takes must resolve the requested side, never the first animation.
+## Pass 1: exact match. Pass 2: contains-match (importer renames). Else first
+## with a loud warning naming the mismatch. Returns null when no player carries
+## any animation.
+static func _pick_named_animation(players: Array, clip_name: String) -> Animation:
+	var fallback: Animation = null
+	var fallback_name := ""
+	var loose: Animation = null
+	var loose_name := ""
+	for p in players:
+		var pl := p as AnimationPlayer
+		if pl == null:
+			continue
+		for lib_name in pl.get_animation_library_list():
+			var lib := pl.get_animation_library(lib_name)
+			if lib == null:
+				continue
+			for an in lib.get_animation_list():
+				var cand := lib.get_animation(an) as Animation
+				if cand == null:
+					continue
+				if fallback == null:
+					fallback = cand
+					fallback_name = str(an)
+				var an_name := str(an)
+				if an_name == clip_name:
+					return cand
+				if loose == null and (an_name.contains(clip_name) or clip_name.contains(an_name)):
+					loose = cand
+					loose_name = an_name
+	if loose != null:
+		push_warning("GuardAnimationLibrary: clip '" + clip_name + "' has no exact animation; using contains-match '" + loose_name + "' (verify Atk vs Vic side)")
+		return loose
+	if fallback != null:
+		push_warning("GuardAnimationLibrary: clip '" + clip_name + "' not found in GLB; using first animation '" + fallback_name + "' (wrong-side risk)")
+	return fallback
+
+
 static func _load_source(clip_name: String) -> Dictionary:
 	if _source_cache.has(clip_name):
 		return _source_cache[clip_name] as Dictionary
@@ -693,13 +702,8 @@ static func _load_source(clip_name: String) -> Dictionary:
 	if packed != null:
 		var inst: Node = packed.instantiate()
 		if inst != null:
-			for p in inst.find_children("*", "AnimationPlayer", true, false):
-				var pl := p as AnimationPlayer
-				for lib_name in pl.get_animation_library_list():
-					var lib := pl.get_animation_library(lib_name)
-					for an in lib.get_animation_list():
-						if anim == null:
-							anim = lib.get_animation(an) as Animation
+			var anim_players := inst.find_children("*", "AnimationPlayer", true, false)
+			anim = _pick_named_animation(anim_players, clip_name)
 			for s in inst.find_children("*", "Skeleton3D", true, false):
 				if src_local.is_empty():
 					var ssk := s as Skeleton3D
@@ -717,13 +721,8 @@ static func _load_source(clip_name: String) -> Dictionary:
 			if err == OK:
 				var gen: Node = doc.generate_scene(state, 30.0, false, true)
 				if gen != null:
-					for p in gen.find_children("*", "AnimationPlayer", true, false):
-						var pl := p as AnimationPlayer
-						for lib_name in pl.get_animation_library_list():
-							var lib := pl.get_animation_library(lib_name)
-							for an in lib.get_animation_list():
-								if anim == null:
-									anim = lib.get_animation(an) as Animation
+					var gen_players := gen.find_children("*", "AnimationPlayer", true, false)
+					anim = _pick_named_animation(gen_players, clip_name)
 					for s in gen.find_children("*", "Skeleton3D", true, false):
 						if src_local.is_empty():
 							var ssk := s as Skeleton3D

@@ -8,6 +8,11 @@ extends CanvasLayer
 ## single source of truth. Look is delivered through add_look_pixel_delta().
 
 const MobileProfile := preload("res://src/core/mobile_profile.gd")
+const ThemeScript := preload("res://src/ui/art_nouveau_theme.gd")
+
+# P1 theme routing (audit-ui P1-3): every fill/border/label below references a
+# ThemeScript.TOUCH_* token (the teal/gold/ivory aliases in
+# res://src/ui/art_nouveau_theme.gd). Zero inline Color( in screen code.
 
 const STICK_ZONE_WIDTH_FRACTION: float = 0.42
 const STICK_ZONE_TOP_FRACTION: float = 0.28
@@ -43,6 +48,9 @@ var _safe: Rect2 = Rect2()
 
 
 func _ready() -> void:
+	# Sentinel: theme is the single source — log it, refuse silent drift.
+	print("TAT-2 UI touch: theme=res://src/ui/art_nouveau_theme.gd (TOUCH_* tokens)")
+	assert(ThemeScript != null, "MobileTouchUI requires res://src/ui/art_nouveau_theme.gd")
 	add_to_group("mobile_touch_ui")
 	layer = 6
 	_build_ui()
@@ -89,8 +97,8 @@ func _build_ui() -> void:
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_root)
 
-	_stick_base = _make_circle(Color(1.0, 1.0, 1.0, 0.10), Color(1.0, 0.86, 0.55, 0.45), 3.0)
-	_stick_knob = _make_circle(Color(1.0, 0.88, 0.62, 0.30), Color(1.0, 0.9, 0.7, 0.8), 2.0)
+	_stick_base = _make_circle(ThemeScript.TOUCH_STICK_FILL, ThemeScript.TOUCH_STICK_RING, 3.0)
+	_stick_knob = _make_circle(ThemeScript.TOUCH_KNOB_FILL, ThemeScript.TOUCH_KNOB_RING, 2.0)
 	_stick_base.visible = false
 	_stick_knob.visible = false
 
@@ -116,8 +124,8 @@ func _build_ui() -> void:
 	_prompt_label = Label.new()
 	_prompt_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_prompt_label.add_theme_font_size_override("font_size", 14)
-	_prompt_label.add_theme_color_override("font_color", Color(0.65, 0.95, 1.0))
-	_prompt_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+	_prompt_label.add_theme_color_override("font_color", ThemeScript.TOUCH_PROMPT)
+	_prompt_label.add_theme_color_override("font_shadow_color", ThemeScript.TOUCH_SHADOW)
 	_prompt_label.add_theme_constant_override("shadow_offset_x", 1)
 	_prompt_label.add_theme_constant_override("shadow_offset_y", 1)
 	_prompt_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -141,15 +149,15 @@ func _make_circle(fill: Color, border: Color, border_px: float) -> Panel:
 
 
 func _add_button(id: String, action: String, hold: bool, radius: float, text: String, icon_path: String) -> void:
-	var panel: Panel = _make_circle(Color(0.04, 0.06, 0.09, 0.42), Color(0.9, 0.78, 0.45, 0.55), 2.0)
+	var panel: Panel = _make_circle(ThemeScript.TOUCH_BTN_FILL, ThemeScript.TOUCH_BTN_BORDER, 2.0)
 	panel.name = "Touch_" + id
 	var label: Label = Label.new()
 	label.text = text
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.add_theme_font_size_override("font_size", 12)
-	label.add_theme_color_override("font_color", Color(0.95, 0.9, 0.75))
-	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+	label.add_theme_color_override("font_color", ThemeScript.TOUCH_BTN_LABEL)
+	label.add_theme_color_override("font_shadow_color", ThemeScript.TOUCH_SHADOW)
 	label.add_theme_constant_override("shadow_offset_x", 1)
 	label.add_theme_constant_override("shadow_offset_y", 1)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -159,7 +167,7 @@ func _add_button(id: String, action: String, hold: bool, radius: float, text: St
 		icon.texture = ResourceLoader.load(icon_path) as Texture2D
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		icon.modulate = Color(1, 1, 1, 0.85)
+		icon.modulate = ThemeScript.TOUCH_ICON_MODULATE
 		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		icon.name = "Icon"
 		panel.add_child(icon)
@@ -390,7 +398,7 @@ func _flash(id: String, down: bool) -> void:
 		return
 	var style: StyleBoxFlat = panel.get_theme_stylebox("panel") as StyleBoxFlat
 	if style != null:
-		style.bg_color = Color(0.55, 0.42, 0.18, 0.62) if down else Color(0.04, 0.06, 0.09, 0.42)
+		style.bg_color = ThemeScript.TOUCH_FLASH_DOWN if down else ThemeScript.TOUCH_BTN_FILL
 
 
 func _apply_stick() -> void:
@@ -497,7 +505,7 @@ func _refresh_prompt() -> void:
 	if panel != null and not bool(_button_touches.has(_interact_btn_id)):
 		var style: StyleBoxFlat = panel.get_theme_stylebox("panel") as StyleBoxFlat
 		if style != null:
-			style.border_color = Color(0.55, 0.95, 1.0, 0.95) if available else Color(0.9, 0.78, 0.45, 0.35)
+			style.border_color = ThemeScript.TOUCH_GLOW_ACTIVE if available else ThemeScript.TOUCH_GLOW_IDLE
 	_prompt_label.text = prompt
 	_prompt_label.visible = available
 
@@ -523,7 +531,7 @@ func _set_badge(id: String, count: int) -> void:
 	if panel == null or label == null:
 		return
 	label.text = "%s\n%d" % [str(entry["text"]), count] if count > 0 else str(entry["text"])
-	label.modulate = Color(1, 1, 1, 1.0) if count > 0 else Color(1, 1, 1, 0.35)
+	label.modulate = ThemeScript.TOUCH_BADGE_FULL if count > 0 else ThemeScript.TOUCH_BADGE_EMPTY
 
 
 func _refresh_ability_label() -> void:

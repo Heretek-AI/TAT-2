@@ -66,8 +66,14 @@ func apply_saved_settings() -> void:
 	var ambience_vol: float = clampf(float(s.get("ambience_volume", sfx_vol)), 0.0, 1.0)
 	var ui_vol: float = clampf(float(s.get("ui_volume", sfx_vol)), 0.0, 1.0)
 	var dialogue_vol: float = clampf(float(s.get("dialogue_volume", sfx_vol)), 0.0, 1.0)
-	if AudioServer.get_bus_count() > 0:
-		AudioServer.set_bus_volume_db(0, linear_to_db(maxf(vol, 0.001)))
+	# D8: address the Master bus by name, not index 0 — bus layout is data,
+	# not law (AudioManager._ensure_buses appends in fixed order today, but
+	# a user-added bus would shift index 0).
+	var master_idx: int = AudioServer.get_bus_index("Master")
+	if master_idx >= 0:
+		AudioServer.set_bus_volume_db(master_idx, linear_to_db(maxf(vol, 0.001)))
+	elif AudioServer.get_bus_count() > 0:
+		push_warning("[save_system] Master bus missing; leaving bus levels untouched")
 	# Route the full bus architecture (PG-6): AudioManager owns bus creation
 	# and per-bus volumes; direct AudioServer writes here keep volumes applied
 	# even if the AudioManager autoload is unavailable in a minimal scene.
@@ -200,12 +206,22 @@ func load_save() -> void:
 func write_save() -> void:
 	var f: FileAccess = FileAccess.open(TMP_PATH, FileAccess.WRITE)
 	if f == null:
+		# C2 (partial): the tmp-open failure was silent while callers report
+		# success. Warn here; full type-checked merge validation stays
+		# HARD_LIMIT (needs a save-migration design).
+		push_warning("[save_system] cannot open tmp save for write: ", TMP_PATH)
 		return
 	f.store_string(JSON.stringify(data, "\t"))
 	f.close()
 	var dir: DirAccess = DirAccess.open("user://")
-	if dir != null:
-		dir.rename("tat2_save.json.tmp", "tat2_save.json")
+	if dir == null:
+		push_warning("[save_system] cannot open user://; save not persisted")
+		return
+	# D8: check the atomic-rename result; a failed rename used to be silent
+	# while callers report success unconditionally.
+	var rename_err: Error = dir.rename("tat2_save.json.tmp", "tat2_save.json")
+	if rename_err != OK:
+		push_warning("[save_system] atomic save rename failed: ", error_string(rename_err))
 
 
 func record_contract_complete(order: int, score: int, ghost: bool) -> void:
@@ -290,6 +306,12 @@ func is_unlocked(category: String, item_id: String) -> bool:
 
 
 func purchase_item(category: String, item_id: String, cost: int) -> bool:
+	# C1: validate the category BEFORE deducting — the old order kept the
+	# deduction in memory for unknown categories (no write_save, but the
+	# autoload balance was already reduced until reload).
+	var lst: Array = _unlock_list_for(category)
+	if lst.is_empty():
+		return false
 	var clean_id: String = item_id.strip_edges()
 	if clean_id == "":
 		return false
@@ -298,9 +320,6 @@ func purchase_item(category: String, item_id: String, cost: int) -> bool:
 	if int(data.get("currency", 0)) < cost:
 		return false
 	data["currency"] = int(data.get("currency", 0)) - cost
-	var lst: Array = _unlock_list_for(category)
-	if lst.is_empty():
-		return false
 	lst.append(clean_id)
 	write_save()
 	return true

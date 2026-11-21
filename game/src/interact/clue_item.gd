@@ -67,6 +67,11 @@ func _build_parchment_fallback() -> void:
 
 
 func interact(actor: Node) -> void:
+	# P1 clue re-fire: every press re-emitted 1.5 m noise (guards
+	# re-investigate) + the HUD toast. The first read collects; later reads are
+	# silent re-reads (UE clue pickup is one-shot; prompt flips to [Read]).
+	if collected:
+		return
 	collected = true
 	clue_collected.emit(clue_title, clue_body)
 	NoiseBus.emit_noise(global_position, 1.5, actor, 'clue')

@@ -150,21 +150,32 @@ func _build_ui() -> void:
 	_subtitle_lbl.visible = false
 	vb.add_child(_subtitle_lbl)
 
-	# Keep _bar intact for progress tracking/tests without obscuring full-bleed art.
+	# P2-3: slim visible progress bar under the spinner (was permanently hidden).
+	# Full-bleed art stays uncovered: 4px bar in the center column.
 	_bar = ProgressBar.new()
 	_bar.min_value = 0.0
 	_bar.max_value = 100.0
 	_bar.value = 5.0
 	_bar.custom_minimum_size = Vector2(280, 4)
 	_bar.show_percentage = false
-	_bar.visible = false
+	_bar.visible = true
+	var bar_bg: StyleBoxFlat = StyleBoxFlat.new()
+	bar_bg.bg_color = Color(0.02, 0.05, 0.08, 0.85)
+	bar_bg.border_color = ThemeScript.TEAL_BORDER
+	bar_bg.set_border_width_all(1)
+	bar_bg.set_corner_radius_all(2)
+	var bar_fg: StyleBoxFlat = StyleBoxFlat.new()
+	bar_fg.bg_color = ThemeScript.TEAL_ACCENT
+	bar_fg.set_corner_radius_all(2)
+	_bar.add_theme_stylebox_override("background", bar_bg)
+	_bar.add_theme_stylebox_override("fill", bar_fg)
 	vb.add_child(_bar)
 
 	_status_lbl = Label.new()
 	_status_lbl.text = ""
 	_status_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_status_lbl.add_theme_font_size_override("font_size", 12)
-	_status_lbl.add_theme_color_override("font_color", Color(0.62, 0.78, 0.86, 0.78))
+	_status_lbl.add_theme_font_size_override("font_size", 13)
+	_status_lbl.add_theme_color_override("font_color", Color(0.70, 0.84, 0.90, 0.90))
 	_status_lbl.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.85))
 	_status_lbl.add_theme_constant_override("shadow_offset_x", 1)
 	_status_lbl.add_theme_constant_override("shadow_offset_y", 1)

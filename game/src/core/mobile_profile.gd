@@ -15,6 +15,12 @@ const DESKTOP_MAX_LIGHTS: int = 48
 const DESKTOP_HERO_SHADOWS: int = 2
 
 static var _force_mobile: bool = false
+## M1: tier cache. Every cap query funnels through current_tier(); without
+## this the tree lookup + dict walk in _settings() runs per call (per-frame
+## callers pay node lookup + string hash). Invalidated by set_tier() and
+## set_force_mobile() — the only writers — so cached reads stay exact.
+static var _cached_tier: int = 1
+static var _tier_dirty: bool = true
 
 
 static func is_mobile() -> bool:
@@ -23,6 +29,15 @@ static func is_mobile() -> bool:
 
 static func set_force_mobile(value: bool) -> void:
 	_force_mobile = value
+	_tier_dirty = true
+
+
+## D10: test isolation. _force_mobile is static and persists across scene
+## reloads, so suites that toggle it must call this between cases instead
+## of leaking the override into the next test.
+static func reset_test_state() -> void:
+	_force_mobile = false
+	_tier_dirty = true
 
 
 static func tier_from_key(key: String) -> int:
@@ -31,19 +46,31 @@ static func tier_from_key(key: String) -> int:
 
 
 static func current_tier() -> int:
-	return tier_from_key(str(_settings().get("mobile_quality", "balanced")))
+	if _tier_dirty:
+		_cached_tier = tier_from_key(str(_settings().get("mobile_quality", "balanced")))
+		_tier_dirty = false
+		if _cached_tier < 0 or _cached_tier >= TIER_KEYS.size():
+			push_warning("[mobile_profile] current_tier cache out of range: ", _cached_tier, "; falling back to BALANCED")
+			_cached_tier = int(Tier.BALANCED)
+	return _cached_tier
 
 
 static func tier_label(tier: int) -> String:
 	return TIER_LABELS[clampi(tier, 0, TIER_LABELS.size() - 1)]
 
 
+## D10: unknown tiers clamp (with a warning, never a silent no-op) and
+## non-dictionary save data warns instead of silently dropping the write.
 static func set_tier(tier: int, save_system: Node) -> void:
 	if save_system == null:
+		push_warning("[mobile_profile] set_tier called with null save_system; tier unchanged")
 		return
 	var data_variant: Variant = save_system.get("data")
 	if not (data_variant is Dictionary):
+		push_warning("[mobile_profile] set_tier: save data is not a Dictionary; tier unchanged")
 		return
+	if tier < 0 or tier >= TIER_KEYS.size():
+		push_warning("[mobile_profile] set_tier: tier ", tier, " out of range; clamping to ", clampi(tier, 0, TIER_KEYS.size() - 1))
 	var data: Dictionary = data_variant
 	var settings: Variant = data.get("settings", {})
 	if not (settings is Dictionary):
@@ -51,6 +78,7 @@ static func set_tier(tier: int, save_system: Node) -> void:
 	var settings_dict: Dictionary = settings
 	settings_dict["mobile_quality"] = TIER_KEYS[clampi(tier, 0, TIER_KEYS.size() - 1)]
 	data["settings"] = settings_dict
+	_tier_dirty = true
 	if save_system.has_method("write_save"):
 		save_system.call("write_save")
 
@@ -115,9 +143,28 @@ static func target_fps() -> int:
 	return 30 if current_tier() == Tier.PERFORMANCE else 60
 
 
-## Applies viewport scaling and frame cap. Safe to call on desktop (no-op values).
+## Rain-particle scale per tier (W3 companion): Performance 0.35 /
+## Balanced 0.6 / Quality 0.8 of the desktop amount. Desktop keeps 1.0.
+## Ratios are perf policy, not extracted data.
+static func rain_scale() -> float:
+	if not is_mobile():
+		return 1.0
+	match current_tier():
+		Tier.PERFORMANCE:
+			return 0.35
+		Tier.QUALITY:
+			return 0.8
+		_:
+			return 0.6
+
+
+## Applies viewport scaling and frame cap. M2: early-out on desktop — the
+## old path forced Engine.max_fps = 0 (stomping any prior cap) and enabled
+## the bilinear 3D scaler at 1.0x (still a scaler pass) on every call.
 static func apply_runtime(tree: SceneTree) -> void:
 	if tree == null:
+		return
+	if not is_mobile():
 		return
 	Engine.max_fps = target_fps()
 	var win: Window = tree.root

@@ -23,7 +23,7 @@ var state: String = "menu" # menu | hub | playing | paused | victory | failed
 var elapsed_sec: float = 0.0
 var run_time_limit: float = 0.0 # match timer seconds; 0 = unlimited (FTUE/tutorial/expansion)
 var loot_collected: int = 0
-var loot_needed: int = 5
+var loot_needed: int = 0 # LEGACY compat for loot_changed/snapshots only; the live threshold is loot_goal.
 var loot_value: int = 0
 var loot_goal: int = 0
 var mission_objectives: Array[Dictionary] = []
@@ -45,6 +45,7 @@ func reset_run(contract_order: int, map_id: String) -> void:
 	elapsed_sec = 0.0
 	run_time_limit = 0.0
 	loot_collected = 0
+	loot_needed = 0
 	loot_value = 0
 	loot_goal = 0
 	mission_objectives = []
@@ -83,6 +84,12 @@ func set_mission_objectives(objs: Array, p_loot_goal: int = -1) -> void:
 	mission_objectives = normalized
 	if p_loot_goal >= 0:
 		loot_goal = p_loot_goal
+		# S2 companion: loot_needed is the LEGACY HUD/gate threshold (read by
+		# hud.gd + escape_gate.gd). It used to sit at 5 forever while the real
+		# completion read loot_goal — two thresholds, one stale. Sync it here
+		# so legacy readers follow the live goal; the loot_changed signal
+		# keeps its (collected, needed, value) shape for compat.
+		loot_needed = p_loot_goal
 	objectives_updated.emit()
 
 
@@ -107,8 +114,7 @@ func update_objective_progress(obj_id: String, delta_or_current: int, is_absolut
 		matched_done = entry["done"] == true
 		break
 	if found:
-		if are_all_objectives_complete() and not quest_item_acquired:
-			quest_item_acquired = true
+		if are_all_objectives_complete():
 			objective_completed.emit()
 		objectives_updated.emit()
 	return matched_done
@@ -124,8 +130,8 @@ func mark_objective_done(obj_id: String) -> void:
 
 
 func are_all_objectives_complete() -> bool:
-	if loot_goal > 0 and loot_value >= loot_goal:
-		return true
+	if loot_goal > 0 and loot_value < loot_goal:
+		return false
 	if mission_objectives.is_empty():
 		return quest_item_acquired
 	for entry: Dictionary in mission_objectives:
@@ -164,8 +170,11 @@ func add_loot(amount: int, value: int, is_quest_item: bool = false, objective_id
 				mission_objectives[i] = entry
 				obj_dirty = true
 				break
-		if loot_value >= loot_goal and not quest_item_acquired:
-			quest_item_acquired = true
+		# S1: the loot path used to set quest_item_acquired + emit complete
+		# on its own, so a rich run finished with vault/set objectives open
+		# (dual completion sources). Now it only completes when the full
+		# objective list — including the quest item — is actually done.
+		if are_all_objectives_complete():
 			should_emit_complete = true
 	if is_quest_item:
 		var handled_set: bool = false
@@ -179,28 +188,34 @@ func add_loot(amount: int, value: int, is_quest_item: bool = false, objective_id
 					mission_objectives[i] = entry
 					obj_dirty = true
 					break
-		for i: int in range(mission_objectives.size()):
-			var entry: Dictionary = mission_objectives[i]
-			if str(entry.get("id", "")) == "set_main":
-				var target_val: int = maxi(int(entry.get("target", 3)), 1)
-				var next_cur: int = mini(int(entry.get("current", 0)) + 1, target_val)
-				entry["current"] = next_cur
-				entry["done"] = next_cur >= target_val
-				mission_objectives[i] = entry
-				# Also mark the next incomplete set sub-item done.
-				for j: int in range(mission_objectives.size()):
-					var sub: Dictionary = mission_objectives[j]
-					if str(sub.get("id", "")).begins_with("set_item_") and sub.get("done") != true:
-						sub["current"] = maxi(int(sub.get("target", 1)), 1)
-						sub["done"] = true
-						mission_objectives[j] = sub
-						break
-				obj_dirty = true
-				handled_set = true
-				if entry["done"] == true:
-					quest_item_acquired = true
-					should_emit_complete = true
-				break
+		# S2: the old code bumped set_main on EVERY quest pickup, even when
+			# a specific objective_id was given (double-counting that item
+			# toward both its own objective and the set counter). The set
+			# counter now advances only for generic pickups (objective_id
+			# "" — the live loot_item flow) or an explicit "set_main".
+		if objective_id == "" or objective_id == "set_main":
+			for i: int in range(mission_objectives.size()):
+				var entry: Dictionary = mission_objectives[i]
+				if str(entry.get("id", "")) == "set_main":
+					var target_val: int = maxi(int(entry.get("target", 3)), 1)
+					var next_cur: int = mini(int(entry.get("current", 0)) + 1, target_val)
+					entry["current"] = next_cur
+					entry["done"] = next_cur >= target_val
+					mission_objectives[i] = entry
+					# Also mark the next incomplete set sub-item done.
+					for j: int in range(mission_objectives.size()):
+						var sub: Dictionary = mission_objectives[j]
+						if str(sub.get("id", "")).begins_with("set_item_") and sub.get("done") != true:
+							sub["current"] = maxi(int(sub.get("target", 1)), 1)
+							sub["done"] = true
+							mission_objectives[j] = sub
+							break
+					obj_dirty = true
+					handled_set = true
+					if entry["done"] == true:
+						quest_item_acquired = true
+						should_emit_complete = true
+					break
 		if not handled_set:
 			quest_item_acquired = true
 			should_emit_complete = true

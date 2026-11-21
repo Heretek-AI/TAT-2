@@ -43,6 +43,7 @@ const REVIVE_HOLD_FALLBACK: float = 5.0 # GA_SyncedAbility_Revive InteractHoldDu
 const GUARD_REGEN_FALLBACK: float = 15.0 # CT_AIStats GuardBaseHealthRegenRate
 const GUARD_MAX_HP_FALLBACK: float = 30.0 # CT_AIStats GuardBaseHealth
 static var _downed_data: Dictionary = {}
+static var _carry_scr_cache: GDScript = null # P2 per-guard runtime compile: shared carried-item script, compiled once.
 # Detection ramps: time-to-detect(s) = agnostic * dist_m + critical_time;
 # rate = 100/time. Crouch x0.75 applies at/over crouch_min (DA_DetectionSettings).
 const DETECTION_RAMPS: Dictionary = {
@@ -150,6 +151,7 @@ var _search_goal: Vector3 = Vector3.ZERO
 var _search_goal_timer: float = 0.0
 var _revive_target: Node = null
 var _revive_progress: float = 0.0
+var _regen_blackout: float = 0.0 # P1 in-combat regen: damage starts a blackout window; regen is gated on it (see _tick_regen).
 var _ally_scan_timer: float = 0.0
 # Real-clip animation state (animation_library.gd). When _use_real_anims is
 # false the guard falls back to the procedural bob in _update_procedural_anim.
@@ -231,6 +233,12 @@ func _ready() -> void:
 	_speed_scale = lerpf(0.85, 1.2, (diff_x - 1.0) * 0.5)
 	patrol_speed *= _speed_scale
 	suspicious_speed *= _speed_scale
+	# P1 ALERTED-outruns-COMBAT: chase_speed was never scaled while ALERTED was
+	# (ALERTED 3.0 m/s > COMBAT 2.5 m/s at max scale: the guard slowed down on
+	# catching the player). Scale the chase with the same difficulty lever
+	# (UE TATCharacterAIMovement MaxWalkSpeed 250 cm/s base).
+	chase_speed *= _speed_scale
+	lose_sight_range *= lerpf(0.85, 1.25, (diff_x - 1.0) * 0.5)
 	sight_range *= lerpf(0.85, 1.25, (diff_x - 1.0) * 0.5)
 	_build_visuals()
 	if carries_lantern:
@@ -404,15 +412,18 @@ func play_slip() -> void:
 
 ## Takedown victim entry (synced montage, UE role "takedown_vic":
 ## AN_StealthTakedown_GuardEnforcer__Vic_Montage primary, overhead behind /
-## front as manifest fallback, anims_manifest.json). Called by the blackjack
-## takedown path via take_knockout -> knock_out; falls through to the prone
-## knockdown loop on finish. No-op when the role did not retarget (caller
-## keeps the knockdown loop).
+## front as manifest fallback, anims_manifest.json). Wired on the blackjack
+## takedown path via take_knockout -> knock_out, which calls this explicitly;
+## falls through to the prone knockdown loop on finish. Loud UE-path warning
+## (never a crash) when the role did not retarget or the player cannot play,
+## so a silent procedural fallback is always diagnosable.
 func play_takedown_vic() -> void:
 	if not _anim_can_play():
+		push_warning("[guard_ai] play_takedown_vic no-op, real anims unavailable (UE clip TAT/Content/Art/Animation/Base/Anim/Synced/AN_StealthTakedown_GuardEnforcer__Vic_Montage); knockdown loop owns KO")
 		return
 	var key := String(_anim_lib.clip_for_role("takedown_vic"))
 	if key == "" or not anim_player.has_animation(key):
+		push_warning("[guard_ai] play_takedown_vic no-op, role 'takedown_vic' did not retarget (UE clip TAT/Content/Art/Animation/Base/Anim/Synced/AN_StealthTakedown_GuardEnforcer__Vic_Montage); knockdown loop owns KO")
 		return
 	_takedown_vic_anim = true
 	_slip_anim = false
@@ -797,8 +808,14 @@ static func revive_hold_s() -> float:
 
 
 ## Health regen while conscious: +regen_rate/s up to the real max.
+## P1 in-combat regen: CT_AIStats GuardBaseHealthRegenRate 15/s healed 0->full
+## in ~2 s mid-fight, so chip damage evaporated (UE CT_AIStats regen rows are
+## real; the Godot-side combat gate + damage blackout below are retained
+## tuning, fail-loud when the table is unreadable).
 func _tick_regen(delta: float) -> void:
-	if state == Alertness.KNOCKED_OUT:
+	if state == Alertness.KNOCKED_OUT or state == Alertness.COMBAT:
+		return
+	if _regen_blackout > 0.0:
 		return
 	var cap: float = _guard_max_hp()
 	if health < cap:
@@ -816,6 +833,15 @@ func _set_state(new_state: int) -> void:
 	var previous_state: int = state
 	state = new_state
 	_seconds_in_state = 0.0
+	# P1 sticky de-escalation: state_timer was set manually at every call
+	# site, so one miss = stale-timer leak. Central reset (callers overwrite).
+	state_timer = 0.0
+	# P1 ally-revive strand: escalating mid-revive left _revive_target set with
+	# no reset path (the old early return skipped cleanup). Clear on leaving
+	# the calm set (UE GA_SyncedAbility_Revive channel breaks on alert).
+	if new_state != Alertness.NEUTRAL and new_state != Alertness.SUSPICIOUS and new_state != Alertness.SEARCH and new_state != Alertness.ALERTED:
+		_revive_target = null
+		_revive_progress = 0.0
 	detection = clamped_detection_for_transition(previous_state, new_state, detection)
 	_emit_alert_state_if_needed(true)
 
@@ -983,9 +1009,10 @@ func _physics_process(delta: float) -> void:
 
 	_tick_regen(delta)
 	attack_cooldown = maxf(0.0, attack_cooldown - delta)
+	_regen_blackout = maxf(0.0, _regen_blackout - delta)
 	_seconds_in_state += delta
 	var players: Array[Node] = get_tree().get_nodes_in_group("player")
-	var player: CharacterBody3D = (players.back() if not players.is_empty() else null) as CharacterBody3D
+	var player: CharacterBody3D = _nearest_player(players)
 	_update_disguise_viewcone(delta, player)
 	var sees_player: bool = _can_see_player(player)
 
@@ -995,7 +1022,12 @@ func _physics_process(delta: float) -> void:
 		# The light/sprint/height multipliers below are authored; the smoke/LOS
 		# checks and 15/45/100 state thresholds are retained (no UE source).
 		_seconds_since_visible = 0.0
-		var effective_light: float = _player_light_value(player)
+		# P1 sprint double-count: the movement floor in _player_light_value
+		# already raises visibility while sprinting, and the authored x8 ramp
+		# multiplied it again (UE detection.json Status.Sprinting 8.0 kept;
+		# UE Curve_AI_HeightDifferenceToStrengthMultiplierCurve kept). Rate the
+		# raw sampled light so sprint pays once, not twice.
+		var effective_light: float = GameState.player_light_visibility
 		var vis_mult: float = clampf(0.35 + effective_light * 1.15, 0.35, 1.5)
 		var dist_m: float = player.global_position.distance_to(global_position)
 		var rate: float = get_detection_rate(dist_m, _bool_property(player, "is_crouching"))
@@ -1008,15 +1040,21 @@ func _physics_process(delta: float) -> void:
 		else:
 			detection = minf(100.0, detection + rate * vis_mult * delta)
 		investigate_pos = player.global_position
+		# Rank-based promotion: the enum declares SEARCH(4) after COMBAT(3),
+		# so raw </== comparisons misorder it (T2 dead zone 15-99). Compare
+		# detection-ladder ranks instead; KNOCKED_OUT is unranked and sorts
+		# above every conscious level so sight can never promote it (the KO
+		# branch returns before this ramp in any case).
+		var sight_rank: int = int(ALERTNESS_RANK.get(state, 99))
 		if detection >= DETECTION_COMBAT_AT:
 			_enter_combat()
 			GameState.ever_spotted = true
 			GameState.ever_chased = true
-		elif detection >= DETECTION_ALERTED_AT and state < Alertness.ALERTED:
+		elif detection >= DETECTION_ALERTED_AT and sight_rank < int(ALERTNESS_RANK[Alertness.ALERTED]):
 			_enter_alerted()
 			state_timer = 6.0
 			GameState.ever_spotted = true
-		elif detection >= DETECTION_SUSPICIOUS_AT and state == Alertness.NEUTRAL:
+		elif detection >= DETECTION_SUSPICIOUS_AT and sight_rank < int(ALERTNESS_RANK[Alertness.SUSPICIOUS]):
 			_set_state(Alertness.SUSPICIOUS)
 			state_timer = 5.0
 	else:
@@ -1048,6 +1086,23 @@ func _physics_process(delta: float) -> void:
 	_update_guard_anim(delta)
 
 
+## P2 players.back(): the guard sensed only the last node in the player
+## group, fragile if a decoy/astral clone ever joins. Sense the nearest
+## player-group body instead (single-player behavior unchanged).
+func _nearest_player(players: Array[Node]) -> CharacterBody3D:
+	var best: CharacterBody3D = null
+	var best_d: float = INF
+	for n in players:
+		var b := n as CharacterBody3D
+		if b == null:
+			continue
+		var d: float = global_position.distance_to(b.global_position)
+		if d < best_d:
+			best_d = d
+			best = b
+	return best
+
+
 func _move_ai(delta: float, player: CharacterBody3D) -> void:
 	var target: Vector3 = global_position
 	var spd: float = patrol_speed
@@ -1061,7 +1116,7 @@ func _move_ai(delta: float, player: CharacterBody3D) -> void:
 			spd = suspicious_speed
 		Alertness.ALERTED:
 			target = investigate_pos
-			spd = ALERTED_SPEED * _speed_scale
+			spd = get_state_speed()
 		Alertness.SEARCH:
 			# Fan out around the last known position instead of freezing on it.
 			_search_goal_timer -= delta
@@ -1074,7 +1129,7 @@ func _move_ai(delta: float, player: CharacterBody3D) -> void:
 		Alertness.COMBAT:
 			if player != null:
 				target = player.global_position
-				spd = chase_speed
+				spd = get_state_speed()
 				if global_position.distance_to(player.global_position) <= MELEE_RADIUS and attack_cooldown <= 0.0:
 					if player.has_method("take_damage"):
 						player.take_damage(MELEE_DAMAGE)
@@ -1086,7 +1141,14 @@ func _move_ai(delta: float, player: CharacterBody3D) -> void:
 		var dir: Vector3 = flat.normalized()
 		velocity.x = dir.x * spd
 		velocity.z = dir.z * spd
-		look_at(global_position + dir, Vector3.UP)
+		if state == Alertness.SEARCH:
+			# P2 SEARCH pan vs look_at: the body snap-turn fought the
+			# procedural visual_root +/-35 deg scan. Ease the yaw so the scan
+			# reads as head motion over a turning body.
+			var target_yaw: float = atan2(-dir.x, -dir.z)
+			rotation.y = lerp_angle(rotation.y, target_yaw, clampf(delta * 5.0, 0.0, 1.0))
+		else:
+			look_at(global_position + dir, Vector3.UP)
 	else:
 		velocity.x = 0.0
 		velocity.z = 0.0
@@ -1108,20 +1170,23 @@ func _can_see_player(player: CharacterBody3D) -> bool:
 		# disguises no longer pass inspection at range; close range is always risky.
 		var guard_alerted: bool = state == Alertness.ALERTED or state == Alertness.COMBAT or state == Alertness.SEARCH
 		var integrity: float = float(player.get("disguise_integrity"))
+		# P1 hard-gate: calm + healthy disguise was invisible at 4 m in full
+		# light while the viewcone drain still ran (two systems disagreeing).
+		# The gate now needs distance (> 9 m) or darkness (sampled < 0.35);
+		# near + lit still inspects (UE DT_DisguiseV3 proximity/viewcone rows
+		# keep draining through _update_disguise_viewcone).
 		if not guard_alerted and integrity >= 35.0 and dist_to_player > 3.5:
-			return false
+			if dist_to_player > 9.0 or GameState.player_light_visibility < 0.35:
+				return false
 	# Retention: once sensed, the guard holds the target out to lose_sight_range.
-	var sensed: bool = detection > 0.0 or state != Alertness.NEUTRAL
+	# P1 retention snap + light drop: any 1-point blip held the unscaled 30 m
+	# lose_sight_range and dropped the light gate acquisition obeys. Retention
+	# now needs a real lead (>= SUSPICIOUS threshold or a non-neutral state)
+	# and the authored light multiplier gates both branches (UE
+	# _LightIntensityToRangeMultiplierCurve).
+	var sensed: bool = detection >= DETECTION_SUSPICIOUS_AT or state != Alertness.NEUTRAL
 	var effective_range: float = lose_sight_range if sensed else sight_range
-	if not sensed:
-		# C_LightIntensityToRangeMultiplier (BP_NPC_Base
-		# _LightIntensityToRangeMultiplierCurve) scales the fresh detection
-		# range. Limitation: the authored curve gates acquisition only. Once
-		# `sensed` is true (detection > 0, or any state above NEUTRAL), the
-		# retained 30 m lose_sight_range applies unscaled, so retention is a
-		# Godot concept with no UE source (see LOSE_SIGHT_RANGE); it is
-		# deliberately unchanged here.
-		effective_range *= LightProbeScript.light_intensity_range_multiplier(_player_light_value(player))
+	effective_range *= LightProbeScript.light_intensity_range_multiplier(_player_light_value(player))
 	var to_player: Vector3 = player.global_position - global_position
 	var dist: float = to_player.length()
 	# No point-blank blind spot: inside the 2 m critical range the authored
@@ -1137,13 +1202,23 @@ func _can_see_player(player: CharacterBody3D) -> bool:
 	if level_ctrl != null and level_ctrl.has_method("is_blocked_by_smoke"):
 		if level_ctrl.is_blocked_by_smoke(global_position + Vector3.UP * 1.5, player.global_position + Vector3.UP * 1.0):
 			return false
+	# P1 body-transparent sight: the world-only mask let a line of guards
+	# screen the player (UE sight is body-blocked). World + player + guard +
+	# civilian layers; self excluded by RID (player RID excluded too).
 	var space: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
-	var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(global_position + Vector3.UP * 1.5, player.global_position + Vector3.UP * 1.0, 1, [get_rid()])
+	var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(global_position + Vector3.UP * 1.5, player.global_position + Vector3.UP * 1.0, 1 | 2 | 4 | 8, [get_rid()])
 	var hit: Dictionary = space.intersect_ray(q)
 	return hit.is_empty()
 
 
 func _on_noise_emitted(origin: Vector3, loudness: float, source: Node, tag: String) -> void:
+	# P1 dead hearing_range: the 25 m AIC_GuardBase HearingRange export was
+	# never read, so radius = emitter loudness (a loud emitter tuned
+	# difficulty). Clamp to the authored range (UE TATAISenseConfig_Hearing
+	# HearingRange 2500 cm); oversized emitters fail loud in the log.
+	var radius: float = minf(loudness, hearing_range)
+	if loudness > hearing_range:
+		push_warning("[guard_ai] noise '", tag, "' loudness ", loudness, " m exceeds HearingRange ", hearing_range, " m; clamped (UE TATAISenseConfig_Hearing)")
 	if state == Alertness.KNOCKED_OUT or source == self:
 		return
 	# Only the player thief carries astral_active (guards have no such
@@ -1152,16 +1227,16 @@ func _on_noise_emitted(origin: Vector3, loudness: float, source: Node, tag: Stri
 	if source != null and source.is_in_group("player") and _bool_property(source, "astral_active"):
 		return
 	if tag == "guard_alert":
-		if global_position.distance_to(origin) <= loudness:
+		if global_position.distance_to(origin) <= radius:
 			investigate_pos = origin
 			detection = maxf(detection, 60.0)
 			if state != Alertness.ALERTED and state != Alertness.COMBAT:
 				_enter_alerted()
 				state_timer = 6.0
 		return
-	if global_position.distance_to(origin) <= loudness:
+	if global_position.distance_to(origin) <= radius:
 		investigate_pos = origin
-		if state < Alertness.SUSPICIOUS:
+		if state == Alertness.NEUTRAL:
 			_set_state(Alertness.SUSPICIOUS)
 			state_timer = 5.0
 		detection = maxf(detection, 25.0)
@@ -1169,6 +1244,7 @@ func _on_noise_emitted(origin: Vector3, loudness: float, source: Node, tag: Stri
 
 func take_knockout(dmg: float) -> void:
 	health -= dmg
+	_regen_blackout = 4.0 # P1: chip damage must stick; regen resumes 4 s after the last hit.
 	if health <= 0.0:
 		knock_out()
 
@@ -1194,17 +1270,17 @@ func knock_out(duration_override: float = -1.0) -> void:
 	if visual_root == null:
 		return
 	if _use_real_anims and _anim_can_play():
-		var vic_key := String(_anim_lib.clip_for_role("takedown_vic"))
-		if vic_key != "" and anim_player.has_animation(vic_key):
-			_takedown_vic_anim = true
-			_slip_anim = false
-			anim_player.speed_scale = 1.0
-			anim_player.play(vic_key, 0.25)
+		# Explicit victim-montage call: take_knockout -> knock_out -> play_takedown_vic.
+		# play_takedown_vic warns loudly when the role did not retarget.
+		play_takedown_vic()
+		if _takedown_vic_anim:
 			return
+		push_warning("[guard_ai] knock_out victim montage unavailable, falling back to knockdown loop (UE clip TAT/Content/Art/Animation/Base/Anim/Synced/AN_StealthTakedown_GuardEnforcer__Vic_Montage)")
 		var ko_key := String(_anim_lib.clip_for_role("knockdown"))
 		if ko_key != "" and anim_player.has_animation(ko_key):
 			anim_player.play(ko_key, 0.25)
 			return
+		push_warning("[guard_ai] knock_out knockdown role missing too; procedural tween owns KO")
 	if _ko_tween != null and _ko_tween.is_valid():
 		_ko_tween.kill()
 	_ko_tween = create_tween()
@@ -1225,9 +1301,16 @@ func _recover_from_ko() -> void:
 	alert_indicator.text = ""
 	if lantern_light != null and is_instance_valid(lantern_light):
 		lantern_light.visible = true
+	# P1 KO wake searches own feet + keeps pre-KO 100: clamp the meter to the
+	# revive ceiling (40, like the ally-revive path) and keep the last
+	# stimulus instead of overwriting investigate_pos with the fall spot
+	# (UE path: none authored for wake position/meter; Godot-side parity with
+	# wake_up_from_ko, fail-loud if the meter table is unreadable).
+	detection = minf(detection, 40.0)
+	if investigate_pos == Vector3.ZERO:
+		investigate_pos = global_position
 	_set_state(Alertness.SEARCH)
 	state_timer = 6.0
-	investigate_pos = global_position
 	if visual_root == null:
 		return
 	if _use_real_anims and _anim_can_play():
@@ -1245,43 +1328,50 @@ func _recover_from_ko() -> void:
 
 
 func _update_ally_wakeup(delta: float) -> void:
-	if state != Alertness.NEUTRAL and state != Alertness.SUSPICIOUS and state != Alertness.SEARCH:
+	# P1 ally-revive: the old scan acted on the first KO in group order (a
+	# distant KO blocked an adjacent one) and stranded progress when the
+	# reviver escalated (early return skipped the reset). Scan nearest-first;
+	# _set_state clears the strand on escalation. ALERTED may revive (COMBAT
+	# may not: it is fighting for its life; UE GA_SyncedAbility_Revive
+	# InteractHoldDuration 5.0 s still gates the hold).
+	if state != Alertness.NEUTRAL and state != Alertness.SUSPICIOUS and state != Alertness.SEARCH and state != Alertness.ALERTED:
+		_revive_target = null
+		_revive_progress = 0.0
 		return
 	_ally_scan_timer -= delta
 	if _ally_scan_timer > 0.0:
 		return
 	_ally_scan_timer = 0.4
-	var revived: bool = false
-	var guards: Array[Node] = get_tree().get_nodes_in_group("guards")
-	for g in guards:
-		if g == self:
+	var best_ko: Node = null
+	var best_d: float = 6.0
+	for g in get_tree().get_nodes_in_group("guards"):
+		if g == self or not (g is Node3D):
 			continue
-		if not (g is Node3D):
-			continue
-		var other: Node3D = g as Node3D
-		var other_pos: Vector3 = other.global_position
-		if global_position.distance_to(other_pos) > 6.0:
+		var d: float = global_position.distance_to((g as Node3D).global_position)
+		if d > best_d:
 			continue
 		var state_var: Variant = g.get("state")
-		if state_var == null:
+		if state_var == null or int(state_var) != Alertness.KNOCKED_OUT:
 			continue
-		var ally_state: int = int(state_var)
-		if ally_state != Alertness.KNOCKED_OUT:
-			continue
+		best_ko = g
+		best_d = d
+	var revived: bool = false
+	if best_ko != null:
+		var other_pos: Vector3 = (best_ko as Node3D).global_position
 		investigate_pos = other_pos
-		if global_position.distance_to(other_pos) <= 1.8:
+		if best_d <= 1.8:
 			# Reviving an ally takes a sustained hold over them (real
 			# GA_SyncedAbility_Revive InteractHoldDuration 5.0 s).
-			if _revive_target != g:
-				_revive_target = g
+			if _revive_target != best_ko:
+				_revive_target = best_ko
 				_revive_progress = 0.0
 			_revive_progress += 0.4
 			if _revive_progress >= revive_hold_s():
 				_revive_target = null
 				_revive_progress = 0.0
-				g.set("ko_timer", 0.0)
-				if g.has_method("wake_up_from_ko"):
-					g.call("wake_up_from_ko")
+				best_ko.set("ko_timer", 0.0)
+				if best_ko.has_method("wake_up_from_ko"):
+					best_ko.call("wake_up_from_ko")
 				_set_state(Alertness.SEARCH)
 				state_timer = 6.0
 				detection = maxf(detection, 40.0)
@@ -1289,16 +1379,14 @@ func _update_ally_wakeup(delta: float) -> void:
 				if AudioManager != null and AudioManager.has_method("play_vo"):
 					AudioManager.play_vo("guard_search", global_position)
 				revived = true
-		else:
-			if state == Alertness.NEUTRAL:
-				_set_state(Alertness.SUSPICIOUS)
-				state_timer = 5.0
-		break
+		elif state == Alertness.NEUTRAL:
+			_set_state(Alertness.SUSPICIOUS)
+			state_timer = 5.0
 	if not revived and _revive_target != null:
 		var still_close: bool = false
 		if is_instance_valid(_revive_target) and _revive_target is Node3D:
 			still_close = global_position.distance_to((_revive_target as Node3D).global_position) <= 2.0
-		if not still_close:
+		if not still_close or _revive_target != best_ko:
 			_revive_target = null
 			_revive_progress = 0.0
 
@@ -1486,6 +1574,12 @@ func steal_carried_item() -> Dictionary:
 		return {}
 	var stolen: Dictionary = carried_item.duplicate(true)
 	carried_item = {}
+	# P1 pickpocket not free/silent: a calm (NEUTRAL) lift still risks the
+	# victim noticing (UE path: none authored for theft awareness; Godot-side
+	# SUSPICIOUS bump + 4 m tell, fail-loud below if the meter table breaks).
+	if state == Alertness.NEUTRAL:
+		detection = maxf(detection, DETECTION_SUSPICIOUS_AT)
+		NoiseBus.emit_noise(global_position, 4.0, self, "pickpocket")
 	if _carried_node != null and is_instance_valid(_carried_node):
 		_carried_node.set_meta("collected", true)
 		_carried_node.remove_from_group("loot")
@@ -1521,19 +1615,30 @@ func _rebuild_carried_visual() -> void:
 	_carried_node.position = Vector3(0.32, 0.96, 0.08)
 	_carried_node.add_to_group("loot")
 	_carried_node.set_meta("collected", false)
-	var carry_scr := GDScript.new()
-	carry_scr.source_code = """extends Node3D
+	# P2 per-guard runtime GDScript compile: the carried-item script was built
+	# and compiled per guard. One shared script resource, compiled once, reused
+	# by every guard (UE path: none; Godot-side compile cache, fail-loud).
+	if _carry_scr_cache == null:
+		_carry_scr_cache = GDScript.new()
+		_carry_scr_cache.source_code = """extends Node3D
 var owner_guard: Node = null
 func get_interact_prompt() -> String:
 \tif owner_guard != null and owner_guard.has_method("get_interact_prompt"):
 \t\treturn str(owner_guard.call("get_interact_prompt"))
 \treturn "[F] PICK POCKET"
-func interact(_actor: Node) -> void:
-\tif owner_guard != null and owner_guard.has_method("steal_carried_item"):
-\t\towner_guard.call("steal_carried_item")
+func interact(actor: Node) -> void:
+\t# P1 pickpocket gate bypass: this proxy used to call steal_carried_item
+\t# directly, skipping the owner's alert-state gate. Route through
+\t# interact(actor) so alert victims notice the attempt.
+\tif owner_guard != null and owner_guard.has_method("interact"):
+\t\towner_guard.call("interact", actor)
 """
-	carry_scr.reload()
-	_carried_node.set_script(carry_scr)
+		var scr_err: Error = _carry_scr_cache.reload()
+		if scr_err != OK:
+			push_error("[guard_ai] carried-item shared script failed to compile (UE key-belt visual path)")
+			assert(false, "carried item script compile failed")
+			return
+	_carried_node.set_script(_carry_scr_cache)
 	_carried_node.set("owner_guard", self)
 	visual_root.add_child(_carried_node)
 
@@ -1560,7 +1665,22 @@ func get_interact_prompt() -> String:
 func interact(_actor: Node) -> void:
 	if carried_item.is_empty():
 		return
-	if state == Alertness.COMBAT:
+	# P1 pickpocket free/silent on alert victims: SUSPICIOUS/ALERTED/SEARCH
+	# victims used to pay out with no check, cooldown, detection bump, noise
+	# or state change. Only calm (NEUTRAL) victims can be lifted and knocked
+	# down (KNOCKED_OUT) victims are looted; an attempt on an alert victim
+	# escalates it instead (UE path: none authored for alert theft; Godot-side
+	# escalation, fail-loud below if the alert path breaks).
+	if state != Alertness.NEUTRAL and state != Alertness.KNOCKED_OUT:
+		var actor_pos: Vector3 = global_position
+		if _actor is Node3D:
+			actor_pos = (_actor as Node3D).global_position
+		investigate_pos = actor_pos
+		detection = maxf(detection, DETECTION_ALERTED_AT)
+		if state != Alertness.ALERTED and state != Alertness.COMBAT:
+			_enter_alerted()
+			state_timer = 6.0
+		NoiseBus.emit_noise(global_position, 6.0, self, "pickpocket_spotted")
 		return
 	steal_carried_item()
 
@@ -1596,7 +1716,8 @@ func _update_disguise_viewcone(delta: float, player: CharacterBody3D) -> void:
 	if w3d == null:
 		return
 	var space: PhysicsDirectSpaceState3D = w3d.direct_space_state
-	var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(guard_eye, player_eye, 1, [get_rid(), player.get_rid()])
+	# P1 body-transparent sight (disguise ray): same layer fix as _can_see_player.
+	var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(guard_eye, player_eye, 1 | 2 | 4 | 8, [get_rid(), player.get_rid()])
 	var hit: Dictionary = space.intersect_ray(q)
 	if hit.is_empty():
 		player.call("apply_guard_viewcone_disguise_decay", delta, true)

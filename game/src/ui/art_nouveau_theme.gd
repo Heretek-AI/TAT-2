@@ -15,10 +15,22 @@ const TEAL_ACCENT: Color = Color(0.55, 0.92, 0.94, 1.0)
 const TEAL_TITLE: Color = Color(0.76, 0.94, 0.95, 1.0)
 const TEAL_TEXT: Color = Color(0.88, 0.94, 0.95, 1.0)
 const TEAL_MUTED: Color = Color(0.62, 0.78, 0.82, 0.90)
+## P2-1 tokens (clears HARD_LIMIT 5.7): KF-verified pink/green/red accents
+## previously inline at call sites. Values port the exact inline colors from
+## wardrobe_ui.gd (LOCKED_PINK, hint pink) and ledger_ui.gd (completed /
+## purchased greens, card-done border, insufficient red) into named tokens;
+## no UE cooked source exists, so the theme file is the source of truth.
+const PINK_LOCKED: Color = Color(1.0, 0.38, 0.72)
+const PINK_HINT: Color = Color(0.95, 0.55, 0.65)
+const GREEN_COMPLETED: Color = Color(0.45, 0.90, 0.65)
+const GREEN_PURCHASED: Color = Color(0.45, 0.85, 0.45)
+const GREEN_CARD_BORDER: Color = Color(0.32, 0.72, 0.56, 0.85)
+const RED_INSUFFICIENT: Color = Color(0.9, 0.4, 0.35)
 # Task-6 parity note (KF08/KF03-KF04 cite): purchase-green check, "Active"
 # green, and pink LOCKED/padlock accents are verified on footage but have no
-# cooked UE source in scope (HARD_LIMIT 5.7). No tokens added here on purpose:
-# extend the system with named tokens first, never inline hex at call sites.
+# cooked UE source in scope (was HARD_LIMIT 5.7). P2-1 pass adds the named
+# tokens above (PINK_*/GREEN_*/RED_INSUFFICIENT) and routes call sites;
+# never inline hex at call sites.
 
 const GOLD: Color = Color(0.95, 0.80, 0.45, 1.0)
 const GOLD_DIM: Color = Color(0.72, 0.55, 0.25, 1.0)
@@ -29,6 +41,27 @@ const DIM_COLOR: Color = Color(0.008, 0.010, 0.022, 0.78)
 const PROMPT_TEAL: Color = Color(0.55, 0.92, 0.95, 1.0)
 const KEYCAP_WHITE_BG: Color = Color(0.94, 0.95, 0.98, 0.96)
 const KEYCAP_DARK_TEXT: Color = Color(0.08, 0.10, 0.16, 1.0)
+# P1 touch tokens (mobile_touch_ui.gd route): translucent aliases of the
+# IVORY / GOLD / TEAL palette above, named so call sites never inline hex.
+# Cooked source: no UE touch-theme values in scope; alphas are port-authored
+# for finger-target legibility (HARD_LIMIT 5.2 class). UE path: n/a (mobile
+# overlay); theme file is the source of truth:
+# res://src/ui/art_nouveau_theme.gd.
+const TOUCH_STICK_FILL: Color = Color(1.0, 1.0, 1.0, 0.10)
+const TOUCH_STICK_RING: Color = Color(1.0, 0.86, 0.55, 0.45)
+const TOUCH_KNOB_FILL: Color = Color(1.0, 0.88, 0.62, 0.30)
+const TOUCH_KNOB_RING: Color = Color(1.0, 0.90, 0.70, 0.80)
+const TOUCH_BTN_FILL: Color = Color(0.04, 0.06, 0.09, 0.42)
+const TOUCH_BTN_BORDER: Color = Color(0.90, 0.78, 0.45, 0.55)
+const TOUCH_BTN_LABEL: Color = Color(0.95, 0.90, 0.75, 1.0)
+const TOUCH_PROMPT: Color = Color(0.65, 0.95, 1.0, 1.0)
+const TOUCH_SHADOW: Color = Color(0.0, 0.0, 0.0, 0.90)
+const TOUCH_FLASH_DOWN: Color = Color(0.55, 0.42, 0.18, 0.62)
+const TOUCH_GLOW_ACTIVE: Color = Color(0.55, 0.95, 1.0, 0.95)
+const TOUCH_GLOW_IDLE: Color = Color(0.90, 0.78, 0.45, 0.35)
+const TOUCH_ICON_MODULATE: Color = Color(1.0, 1.0, 1.0, 0.85)
+const TOUCH_BADGE_FULL: Color = Color(1.0, 1.0, 1.0, 1.0)
+const TOUCH_BADGE_EMPTY: Color = Color(1.0, 1.0, 1.0, 0.35)
 
 const FONT_SANS_PATH: String = "res://assets/ue/fonts/Raleway-Regular.ttf"
 const FONT_ITALIC_PATH: String = "res://assets/ue/fonts/Raleway-Italic.ttf"
@@ -109,6 +142,35 @@ static func inner_line_style() -> StyleBoxFlat:
 	style.set_corner_radius_all(5)
 	style.set_content_margin_all(0)
 	return style
+
+
+## P1 dedup target: settings group card (ex-settings_ui._make_group_card).
+## Single source of truth for grouped teal cards: TEAL_GROUP_BG + TEAL_BORDER
+## + 14/14/10/10 margins, header label 14 TEAL_ACCENT, soft divider.
+## Cooked source: port-authored grouping (HARD_LIMIT 5.2); theme file is truth:
+## res://src/ui/art_nouveau_theme.gd. Sentinel: fail loudly on empty title.
+static func group_card(title_text: String) -> Dictionary:
+	if title_text.strip_edges() == "":
+		push_error("TAT-2 UI theme group_card: empty title (res://src/ui/art_nouveau_theme.gd)")
+		assert(false, "group_card requires a non-empty title")
+	var card: PanelContainer = PanelContainer.new()
+	card.name = "Group_" + title_text.replace(" ", "")
+	var style: StyleBoxFlat = teal_card_style(1, 6, TEAL_GROUP_BG, 0)
+	style.content_margin_left = 14
+	style.content_margin_right = 14
+	style.content_margin_top = 10
+	style.content_margin_bottom = 10
+	card.add_theme_stylebox_override("panel", style)
+	var vb: VBoxContainer = VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 8)
+	card.add_child(vb)
+	var hdr: Label = Label.new()
+	hdr.text = title_text.to_upper()
+	hdr.add_theme_font_size_override("font_size", 14)
+	hdr.add_theme_color_override("font_color", TEAL_ACCENT)
+	vb.add_child(hdr)
+	vb.add_child(teal_divider(0.45))
+	return {"card": card, "vbox": vb}
 
 
 static func style_button(btn: Button, primary: bool = false) -> void:

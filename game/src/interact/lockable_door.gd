@@ -11,8 +11,11 @@ const _VfxManager = preload('res://src/core/vfx_manager.gd')
 
 const INTERACTABLES_PATH := "res://data/generated/gameplay/interactables.json"
 ## Fallbacks mirror the extracted table (CT_LockpickDamage DamageByLockLevel
-## 5/10/20/40, doors MaxLockLevel 4); the JSON above is authoritative.
-const FALLBACK_JAM_DAMAGE := {1: 5.0, 2: 10.0, 3: 20.0, 4: 40.0}
+## 5/10/20/40, doors MaxLockLevel 4); Lv5-6 continue the authored doubling
+## (80/160, retained inference — containers accept 1-6 while the jam rows stop
+## at 4). The table above wins whenever it provides the row; the JSON is
+## authoritative.
+const FALLBACK_JAM_DAMAGE := {1: 5.0, 2: 10.0, 3: 20.0, 4: 40.0, 5: 80.0, 6: 160.0}
 const FALLBACK_MAX_LOCK_LEVEL := 4
 ## Past this pivot yaw the open leaf must not block the doorway.
 const OPEN_DISABLE_DEG: float = 70.0
@@ -54,7 +57,7 @@ static func jam_damage_for_level(lock_level: int) -> float:
 	var per_level: Variant = lockpick_table().get("jam_damage_by_lock_level", {})
 	if per_level is Dictionary and (per_level as Dictionary).has(str(lock_level)):
 		return float((per_level as Dictionary)[str(lock_level)])
-	return float(FALLBACK_JAM_DAMAGE.get(clampi(lock_level, 1, 4), 5.0))
+	return float(FALLBACK_JAM_DAMAGE.get(clampi(lock_level, 1, 6), 5.0))
 
 @export var locked: bool = false
 @export var lock_level: int = 1
@@ -215,6 +218,23 @@ func _find_hud() -> Node:
 	return null
 
 
+## P1 door noise sourced self: lockpick/door noises passed self, so the HUD
+## player-only soundwave arcs never flashed though guards heard everything
+## (audibility was correct; the UI feedback was missing). Emits use the stored
+## player driver when one is mid-interaction (UE lockpick/door noise path).
+func _noise_source() -> Node:
+	if _lockpick_actor != null and is_instance_valid(_lockpick_actor):
+		return _lockpick_actor
+	return self
+
+
+## Hold/relock path carries the actor directly (no stored driver).
+func _audible_source(actor: Node) -> Node:
+	if actor != null and is_instance_valid(actor):
+		return actor
+	return _noise_source()
+
+
 func _on_minigame_finished(success: bool, actor: Node) -> void:
 	is_lockpicking = false
 	if actor != null and is_instance_valid(actor) and actor.has_method("set_lockpicking_active"):
@@ -230,10 +250,10 @@ func _on_minigame_finished(success: bool, actor: Node) -> void:
 		lockpick_updated.emit(false, 1.0, lock_level)
 		var open_tween: Tween = create_tween()
 		open_tween.tween_property(pivot, "rotation_degrees:y", 88.0, 0.35)
-		NoiseBus.emit_noise(global_position, 5.5, self, "door")
+		NoiseBus.emit_noise(global_position, 5.5, _noise_source(), "door")
 	else:
 		_VfxManager.spawn_lockpick_sparks(get_parent(), global_position + Vector3(0.4, 1.1, 0))
-		NoiseBus.emit_noise(global_position, 5.0, self, "lockpick")
+		NoiseBus.emit_noise(global_position, 5.0, _noise_source(), "lockpick")
 		lockpick_updated.emit(false, lockpick_progress, lock_level)
 
 
@@ -249,7 +269,7 @@ func interact(actor: Node) -> void:
 		if actor != null and hud_node != null and hud_node.has_method("start_lockpick_minigame"):
 			is_lockpicking = true
 			lockpick_updated.emit(true, lockpick_progress, lock_level)
-			NoiseBus.emit_noise(global_position, 4.0, self, "lockpick")
+			NoiseBus.emit_noise(global_position, 4.0, _noise_source(), "lockpick")
 			hud_node.call("start_lockpick_minigame", lock_level, "Door Lock (Lv %d)" % lock_level, func(success: bool = true) -> void:
 				_on_minigame_finished(success, actor)
 			)
@@ -262,7 +282,7 @@ func interact(actor: Node) -> void:
 		var gain: float = 5.0 / maxf(dmg, 1.0)
 		lockpick_progress = minf(1.0, lockpick_progress + gain)
 		_VfxManager.spawn_lockpick_sparks(get_parent(), global_position + Vector3(0.4, 1.1, 0))
-		NoiseBus.emit_noise(global_position, 4.0, self, "lockpick")
+		NoiseBus.emit_noise(global_position, 4.0, _noise_source(), "lockpick")
 		lockpick_updated.emit(true, lockpick_progress, lock_level)
 		if lockpick_progress >= 1.0:
 			locked = false
@@ -271,7 +291,7 @@ func interact(actor: Node) -> void:
 			lockpick_updated.emit(false, 1.0, lock_level)
 			var open_tween: Tween = create_tween()
 			open_tween.tween_property(pivot, "rotation_degrees:y", 88.0, 0.35)
-			NoiseBus.emit_noise(global_position, 5.5, self, "door")
+			NoiseBus.emit_noise(global_position, 5.5, _noise_source(), "door")
 		elif actor != null and is_inside_tree():
 			# Headless fallback: keep Status.Lockpicking active briefly so
 			# disguise drain ticks, then clear when the attempt window ends.
@@ -286,7 +306,7 @@ func interact(actor: Node) -> void:
 	var target_yaw: float = 88.0 if is_open else 0.0
 	var swing_tween: Tween = create_tween()
 	swing_tween.tween_property(pivot, "rotation_degrees:y", target_yaw, 0.35)
-	NoiseBus.emit_noise(global_position, 5.5, self, "door")
+	NoiseBus.emit_noise(global_position, 5.5, _noise_source(), "door")
 
 
 func get_interact_prompt() -> String:
@@ -305,11 +325,11 @@ func get_interact_secondary_prompt() -> String:
 
 
 ## KF24 secondary action: hold F to lock the closed door again.
-func interact_hold(_actor: Node) -> void:
+func interact_hold(actor: Node) -> void:
 	if locked or is_open:
 		return
 	locked = true
 	lock_level = maxi(lock_level, 1)
 	lockpick_progress = 0.0
 	lockpick_updated.emit(false, 0.0, lock_level)
-	NoiseBus.emit_noise(global_position, 3.0, self, "lock")
+	NoiseBus.emit_noise(global_position, 3.0, _audible_source(actor), "lock")

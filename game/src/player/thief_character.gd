@@ -48,6 +48,11 @@ const WIRE_RANGE: float = 20.0 # DA_StandardToolSettings "Hotwire Range" 2000cm
 const WIRE_PULL_SPEED: float = 23.0 # DA_StandardToolSettings "Hotwire Speed" 2300cm/s
 const WIRE_CRANK_MIN_TIME: float = 0.5 # GA_Hotwire_Crank.MinimumCrankTime
 const WIRE_CRANK_DURATION_FALLBACK: float = 6.0 # CT_WireCrank.CrankDuration (lvl 0)
+const GRAPPLE_MIN_HOLD_SEC: float = 0.12 # P1 tap-fire guard: releases shorter than this keep the winch engaged (no UE source; one physics-frame margin at 60 Hz physics + input jitter). Below this the tap becomes a hop, not a pull.
+const SPRINT_START_STAMINA: float = 3.0 # P2 no-hysteresis sprint: sprint (re)starts only above this; stops at 2.0. Kills the FOV flicker at the old single 2.0 threshold.
+const SPRINT_STOP_STAMINA: float = 2.0
+const SAP_ARM_DELAY_SEC: float = 0.3 # P1 sap instant-placement: fixed arm delay between throw anim and puddle setup (no UE InitialSpeed source; delay is Godot-side pacing, not an invented speed).
+const FAIRY_FAIL_RADIUS_M: float = 8.0 # P2 dynamic fail radius: blocked-pickpocket noise was distance_to(mark)+2.0 (farther mark = louder failure). Fixed 8 m FailRadius replaces it.
 const GRAPPLE_MAX_CHARGES: int = 4 # BP_Hotwire_Tool.MaxAmmo
 const MANTLE_MAX_HEIGHT_M: float = 4.0 # BP_Player_Base._mantleSettings.MaxHeight 400cm
 const MANTLE_MAX_ANGLE_DEG: float = 25.0 # BP_Player_Base._mantleSettings.MaxAngleFacing
@@ -80,6 +85,7 @@ signal tool_equipped(tool_id: String, slot_index: int)
 signal interacted(target: Node)
 signal downed_started(seconds: float)
 signal downed()
+signal revived() # P2 hygiene: revive previously emitted only health_changed; co-op help-up now has a downed-cleared counterpart.
 
 @export var walk_speed: float = 3.6
 @export var sprint_speed: float = 5.4
@@ -183,7 +189,9 @@ var disguise_active: bool = false
 var disguise_integrity: float = 100.0
 var disguise_ttl: float = 0.0
 var is_lockpicking: bool = false
-var _viewcone_decay_handled: bool = false
+var _viewcone_decay_handled: bool = false # retained: external viewcone decay is now queued (see _pending_viewcone_*); flag kept for save-compat, no longer gates the drain.
+var _pending_viewcone_delta: float = 0.0 # P1 viewcone call-order: guard calls queue here; _physics_process consumes before its own drain section so external-before-tick order no longer matters.
+var _pending_viewcone_in_cone: bool = false
 var is_grappling: bool = false
 var grapple_target: Vector3 = Vector3.ZERO
 var _is_cranking: bool = false
@@ -225,6 +233,15 @@ var charges: Dictionary = {
 }
 var pickpocket_cooldown: float = 0.0
 var noise_timer: float = 0.0
+var _fairy_seq: int = 0 # P1 fairy SceneTree-timer cancel: each cast bumps the seq; stale arrivals (level change, downed mid-flight, superseded cast) return silently.
+var _sap_seq: int = 0 # P1 sap arm-delay guard: same stale-timer discipline as the fairy.
+var _air_grapple_chains: int = 0 # P1 fall-immunity chains: consecutive airborne grapple/astral engagements without a grounded reset.
+var _fall_immunity_revoked: bool = false # set at the chain limit; cleared on grounded reset.
+var _interact_hold_sec: float = -1.0 # P2 two-clock hold: physics-delta accumulation replaces wall-clock diffs (pause/slow-mo safe).
+var _last_stamina_emitted: float = -1.0 # P2 per-tick signal spam: emit only on change.
+var _last_disguise_emitted: float = -1.0
+var _last_disguise_active_emitted: bool = false
+var _smoke_preview_accum: float = 0.0 # P2 smoke preview: 32-ray ballistic sweep throttled to PROP_SCAN_INTERVAL (was every rendered frame).
 
 var head: Node3D
 var cam: Camera3D
@@ -333,9 +350,29 @@ func fall_damage_for_drop(drop_m: float) -> float:
 ## zipwire winch controls descent while grappling and the Moth astral form is
 ## a spirit, so neither takes fall damage; the peak tracker is refreshed
 ## instead so no drop accumulates across those states.
+## P1 fall-immunity chains: the immunity above is per-engagement. Consecutive
+## airborne re-engagements without a grounded reset (release-at-apex +
+## re-grapple) revoke it at the chain limit (UE path: none authored; retained
+## tuning AIR_GRAPPLE_CHAIN_LIMIT, fail-loud below).
+const AIR_GRAPPLE_CHAIN_LIMIT: int = 2
+## P1 fall-immunity chains: counts consecutive airborne immune-engagement
+## starts (grapple fire, astral activation) without a grounded reset. Starting
+## link 3+ revokes the immunity so release-at-apex + re-grapple loops pay
+## normal fall damage (UE path: none authored; retained tuning, fail-loud).
+func _note_air_link_start() -> void:
+	if is_on_floor():
+		_air_grapple_chains = 1
+		_fall_immunity_revoked = false
+		return
+	_air_grapple_chains += 1
+	if _air_grapple_chains > AIR_GRAPPLE_CHAIN_LIMIT:
+		_fall_immunity_revoked = true
+		push_warning("[thief] fall immunity revoked: ", _air_grapple_chains, " consecutive air links (UE path: none; retained tuning AIR_GRAPPLE_CHAIN_LIMIT=", AIR_GRAPPLE_CHAIN_LIMIT, ")")
 func _apply_fall_damage(drop_m: float) -> float:
-	if is_grappling or astral_active:
+	if (is_grappling or astral_active) and not _fall_immunity_revoked:
 		return 0.0
+	if _fall_immunity_revoked:
+		push_warning("[thief] fall immunity revoked after ", _air_grapple_chains, " chained air engagements (no UE immunity chain source; retained tuning AIR_GRAPPLE_CHAIN_LIMIT=", AIR_GRAPPLE_CHAIN_LIMIT, ")")
 	var dmg: float = fall_damage_for_drop(drop_m)
 	if dmg > 0.0:
 		take_damage(dmg)
@@ -351,6 +388,9 @@ func _track_fall_state() -> void:
 		_apply_fall_damage(_fall_peak_y - global_position.y)
 	if on_floor_now:
 		_fall_peak_y = global_position.y
+		if not is_grappling and not astral_active:
+			_air_grapple_chains = 0
+			_fall_immunity_revoked = false
 	else:
 		if is_grappling or astral_active:
 			_fall_peak_y = global_position.y
@@ -398,6 +438,7 @@ func _enter_downed() -> void:
 	_downed_fired = false
 	is_sprinting = false
 	is_grappling = false
+	_tp_takedown_stop() # P2: the attacker montage kept playing over the KO loop; stop it on downed.
 	downed_started.emit(_downed_duration)
 
 
@@ -427,6 +468,7 @@ func revive() -> void:
 	health = max_health
 	health_changed.emit(health, max_health)
 	post_revive_ttl = post_revive_cooldown_s
+	revived.emit() # P2 hygiene: downed-cleared counterpart to downed_started/downed.
 
 
 func _build_body() -> void:
@@ -532,7 +574,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not can_act():
 		return
 	if sprint_toggle_mode and event.is_action_pressed("sprint"):
-		_sprint_toggled = not _sprint_toggled
+		# P2 hysteresis: a fresh keypress only engages above the start floor;
+		# disengaging is free. Recovery never auto-sprints (see physics).
+		if _sprint_toggled:
+			_sprint_toggled = false
+		elif stamina >= SPRINT_START_STAMINA:
+			_sprint_toggled = true
 	if event.is_action_pressed("crouch"):
 		is_crouching = not is_crouching
 		var cap: CapsuleShape3D = col_shape.shape as CapsuleShape3D
@@ -543,13 +590,17 @@ func _unhandled_input(event: InputEvent) -> void:
 		# Defer when a hold-secondary is offered; otherwise interact on press.
 		if get_look_secondary_prompt() != "":
 			_interact_hold_ms = Time.get_ticks_msec()
+			_interact_hold_sec = 0.0 # P2 two-clock hold: physics accumulates from here.
 		else:
 			_interact_hold_ms = -1
 			_try_interact()
 	elif event.is_action_released("interact"):
 		if _interact_hold_ms >= 0:
-			var held_sec: float = float(Time.get_ticks_msec() - _interact_hold_ms) / 1000.0
+			# P2 two-clock hold: release reads the physics-accumulated seconds
+			# (pause/slow-mo safe), not a wall-clock diff.
+			var held_sec: float = maxf(_interact_hold_sec, 0.0)
 			_interact_hold_ms = -1
+			_interact_hold_sec = -1.0
 			if held_sec >= HOLD_INTERACT_SEC:
 				_perform_hold_action()
 			else:
@@ -782,6 +833,8 @@ func get_active_reticle_state() -> Dictionary:
 
 
 func is_thief_vision_active() -> bool:
+	# P2 dual vision vars: thief_vision_on is the single source of truth;
+	# thief_vision mirrors it for legacy readers. New code must call this.
 	return thief_vision_on
 
 
@@ -816,6 +869,7 @@ func _physics_process(delta: float) -> void:
 			_end_wire_crank()
 		is_mantling = false
 		is_wall_climbing = false
+		is_grappling = false # P2 single-entry invariant: _enter_downed clears this too; both sites clear so neither can strand the winch.
 		velocity.x = 0.0
 		velocity.z = 0.0
 		if not is_on_floor():
@@ -844,12 +898,18 @@ func _physics_process(delta: float) -> void:
 	_tick_wire_crank(delta, false)
 
 	# Auto-mantle interpolation (BP_Player_Base _mantleSettings + GE_Traversal_AutoMantle 0.3s).
+	# P1 mantle-skips-systems: stamina regen, disguise drain, light probe and
+	# hold progress tick here too (via _tick_sustained_systems) so the 0.3 s
+	# traversal no longer freezes them (disguise-TTL pause exploit + hold freeze).
 	if is_mantling:
 		_mantle_t = minf(1.0, _mantle_t + delta / 0.3)
 		var smooth_t: float = _mantle_t * _mantle_t * (3.0 - 2.0 * _mantle_t)
 		global_position = _mantle_start.lerp(_mantle_end, smooth_t)
 		velocity = Vector3.ZERO
 		_fall_peak_y = global_position.y
+		stamina = minf(max_stamina, stamina + stamina_regen * delta)
+		_emit_stamina_if_changed()
+		_tick_sustained_systems(delta)
 		if _mantle_t >= 1.0:
 			is_mantling = false
 			global_position = _mantle_end
@@ -863,7 +923,11 @@ func _physics_process(delta: float) -> void:
 		grapple_time += delta
 		var to_anchor: Vector3 = grapple_target - global_position
 		var anchor_dist: float = to_anchor.length()
-		var released: bool = Input.is_action_just_released("ability") or Input.is_action_just_released("tool_4") or Input.is_action_just_released("primary_action")
+		var raw_released: bool = Input.is_action_just_released("ability") or Input.is_action_just_released("tool_4") or Input.is_action_just_released("primary_action")
+		# P1 tap-fire hop: a tap-to-fire releases on the next physics frame with
+		# winch starting at 0.3 (instant vault). Releases shorter than
+		# GRAPPLE_MIN_HOLD_SEC keep the winch engaged so quick taps pull.
+		var released: bool = raw_released and grapple_time >= GRAPPLE_MIN_HOLD_SEC
 		var winch: float = clampf(grapple_time / GRAPPLE_WINCH_TIME, 0.3, 1.0)
 		var pull_dir: Vector3 = to_anchor.normalized() if anchor_dist > 0.05 else Vector3.ZERO
 		if anchor_dist < GRAPPLE_ARRIVE_DIST or released:
@@ -887,11 +951,17 @@ func _physics_process(delta: float) -> void:
 	var inp: Vector2 = Input.get_vector("move_left", "move_right", "move_forward", "move_backward")
 	var wish: Vector3 = (transform.basis * Vector3(inp.x, 0.0, inp.y)).normalized()
 	if sprint_toggle_mode:
-		if wish.length() <= 0.1 or is_crouching or stamina <= 2.0:
+		# P2 hysteresis: dropping the toggle needs the stop floor; re-enabling
+		# needs a fresh keypress (gated at the input site) so stamina recovery
+		# never auto-sprints.
+		if wish.length() <= 0.1 or is_crouching or stamina <= SPRINT_STOP_STAMINA:
 			_sprint_toggled = false
-		is_sprinting = _sprint_toggled and not is_crouching and wish.length() > 0.1 and stamina > 2.0
+		is_sprinting = _sprint_toggled and not is_crouching and wish.length() > 0.1 and stamina > SPRINT_STOP_STAMINA
 	else:
-		is_sprinting = Input.is_action_pressed("sprint") and not is_crouching and wish.length() > 0.1 and stamina > 2.0
+		var want_sprint: bool = Input.is_action_pressed("sprint") and not is_crouching and wish.length() > 0.1
+		if want_sprint and not is_sprinting and stamina < SPRINT_START_STAMINA:
+			want_sprint = false
+		is_sprinting = want_sprint and stamina > SPRINT_STOP_STAMINA
 
 	var climbing_now: bool = _tick_wall_climb(delta, wish)
 	var speed: float = walk_speed
@@ -899,11 +969,17 @@ func _physics_process(delta: float) -> void:
 		speed = crouch_speed
 	elif is_sprinting:
 		speed = sprint_speed
-		var drain: float = absf(GameData.eval_curve("CT_StaminaSystem", "StaminaPerSecond.Sprint", 1.0, -5.0))
+		# P2 absf sign check: CT_StaminaSystem.Sprint stores a drain (<= 0).
+		# absf would silently turn a future positive regen row into a drain.
+		var raw_drain: float = GameData.eval_curve("CT_StaminaSystem", "StaminaPerSecond.Sprint", 1.0, -5.0)
+		if raw_drain > 0.0:
+			push_error("[thief] CT_StaminaSystem.StaminaPerSecond.Sprint returned positive ", raw_drain, "; expected a drain (UE CT_StaminaSystem)")
+			assert(false, "sprint stamina curve sign flipped positive")
+		var drain: float = absf(raw_drain)
 		stamina = maxf(0.0, stamina - drain * delta)
 	elif not climbing_now:
 		stamina = minf(max_stamina, stamina + stamina_regen * delta)
-	stamina_changed.emit(stamina, max_stamina)
+	_emit_stamina_if_changed()
 
 	# Velocity FOV feedback (BP_CameraModifier_VelocityFOV) honoring persisted base_fov
 	var target_fov: float = (base_fov + (CAMERA_FOV_SPRINT - CAMERA_FOV)) if is_sprinting else base_fov
@@ -974,14 +1050,24 @@ func _physics_process(delta: float) -> void:
 		_prop_scan_accum = 0.0
 		_update_prop_highlight()
 
+	# Chameleon Disguise Integrity drain + light probe + hold progress. Held in
+	# one helper so the mid-mantle branch ticks the identical systems (P1).
+	_tick_sustained_systems(delta)
+
+
+## P1 mantle-skips-systems: sustained per-tick systems that must run even
+## mid-mantle (called from the mantle branch and from the normal path).
+## P1 viewcone call-order: queued external decay is consumed here, before the
+## local scan, so guard-call-vs-tick ordering no longer matters.
+## P2 two-clock hold: progress accumulates from physics delta (pause-safe).
+## P2 signal spam: stamina/disguise emit only on change (see _emit_*).
+func _tick_sustained_systems(delta: float) -> void:
 	# Chameleon Disguise Integrity drain. Per-second rates are summed from all 6
 	# enabled rows of DT_DisguiseV3IntegrityReduction (DisguiseTimer, Sprinting,
 	# GuardProximity, Lockpicking, GuardViewCone; DamageTaken is in take_damage).
 	if disguise_active:
 		var guard_near: bool = _is_guard_within(DISGUISE_GUARD_PROXIMITY_M)
-		var in_cone: bool = false
-		if not _viewcone_decay_handled:
-			in_cone = _is_in_guard_viewcone()
+		var in_cone: bool = _consume_pending_viewcone() or _is_in_guard_viewcone()
 		var drain_rate: float = disguise_drain_rate(is_sprinting, guard_near, is_lockpicking, in_cone)
 		disguise_integrity = maxf(0.0, disguise_integrity - drain_rate * delta)
 		disguise_ttl = maxf(0.0, disguise_ttl - delta)
@@ -990,9 +1076,8 @@ func _physics_process(delta: float) -> void:
 		if disguise_integrity <= 0.0:
 			disguise_integrity = 0.0
 			disguise_active = false
-		disguise_changed.emit(disguise_integrity, disguise_active)
+		_emit_disguise_if_changed()
 	_viewcone_decay_handled = false
-
 	# Light visibility probe
 	if light_probe != null and light_probe.has_method("sample_visibility"):
 		var excl: Array[RID] = [get_rid()]
@@ -1002,13 +1087,42 @@ func _physics_process(delta: float) -> void:
 			_light_sector_refresh = 0.25
 			_refresh_light_sector()
 	if _interact_hold_ms >= 0:
-		interact_hold_progress = clampf(float(Time.get_ticks_msec() - _interact_hold_ms) / (HOLD_INTERACT_SEC * 1000.0), 0.0, 1.0)
+		_interact_hold_sec += delta
+		interact_hold_progress = clampf(_interact_hold_sec / HOLD_INTERACT_SEC, 0.0, 1.0)
 	else:
+		_interact_hold_sec = -1.0
 		interact_hold_progress = 0.0
 
 
+## P2 per-tick signal spam: stamina_changed fires only when the value moved.
+func _emit_stamina_if_changed() -> void:
+	if absf(stamina - _last_stamina_emitted) > 0.01:
+		_last_stamina_emitted = stamina
+		stamina_changed.emit(stamina, max_stamina)
+
+
+## P2 per-tick signal spam: disguise_changed fires only when integrity or state moved.
+func _emit_disguise_if_changed() -> void:
+	if absf(disguise_integrity - _last_disguise_emitted) > 0.01 or disguise_active != _last_disguise_active_emitted:
+		_last_disguise_emitted = disguise_integrity
+		_last_disguise_active_emitted = disguise_active
+		disguise_changed.emit(disguise_integrity, disguise_active)
+
+
+## P1 viewcone call-order: consume the queued external decay (one drain per
+## tick no matter how many guards called, no ordering dependence).
+func _consume_pending_viewcone() -> bool:
+	var pending: bool = _pending_viewcone_in_cone
+	_pending_viewcone_in_cone = false
+	_pending_viewcone_delta = 0.0
+	return pending
+
+
 func _begin_wire_crank() -> void:
-	if not can_act() or equipped_tool != "zipwire" or is_grappling or is_mantling:
+	# P1 crank-on-wall-climb: GA_Hotwire_Crank never authorizes crank while
+	# climbing (UE crank is a grounded/channelled action); wall-climb excluded
+	# at both entry and tick so no charge accrues mid-climb.
+	if not can_act() or equipped_tool != "zipwire" or is_grappling or is_mantling or is_wall_climbing:
 		return
 	_is_cranking = true
 	_crank_elapsed = 0.0
@@ -1043,7 +1157,7 @@ func _tick_wire_crank(delta: float, force_holding: bool = false) -> void:
 	if not _is_cranking:
 		return
 	var holding: bool = force_holding or Input.is_action_pressed("secondary_action")
-	if not holding or equipped_tool != "zipwire" or is_grappling or is_mantling or not can_act():
+	if not holding or equipped_tool != "zipwire" or is_grappling or is_mantling or is_wall_climbing or not can_act():
 		_end_wire_crank()
 		return
 	_crank_elapsed += delta
@@ -1066,8 +1180,11 @@ func _end_wire_crank() -> void:
 	if not _is_cranking:
 		return
 	_tp_crank_stop()
-	if _crank_elapsed >= WIRE_CRANK_MIN_TIME and ability_cooldown > 0.0:
-		ability_cooldown = maxf(0.0, ability_cooldown - _crank_elapsed)
+	# P1 crank 0.5 s trickle refund removed: GA_Hotwire_Crank.MinimumCrankTime
+	# gates the channel, but only a FULL crank (see _tick_wire_crank) clears
+	# the cooldown and grants the charge. Partial cranks now grant nothing, so
+	# repeated taps can no longer offset WireCooldownSecondary without
+	# completing (UE GA_Hotwire_Crank full-crank reward).
 	_is_cranking = false
 	_crank_elapsed = 0.0
 	crank_progress = 0.0
@@ -1270,14 +1387,14 @@ func set_lockpicking_active(active: bool) -> void:
 
 
 func apply_guard_viewcone_disguise_decay(delta: float, in_cone: bool) -> void:
+	# P1 viewcone call-order: the old code drained immediately AND set the
+	# handled flag, so correctness depended on the external call landing before
+	# this tick's drain section (and two guards per tick double-drained).
+	# Now the call only queues; _tick_sustained_systems consumes once per tick.
 	if not disguise_active or not in_cone or delta <= 0.0:
 		return
-	_viewcone_decay_handled = true
-	disguise_integrity = maxf(0.0, disguise_integrity - DISGUISE_DRAIN_GUARD_VIEWCONE * delta)
-	if disguise_integrity <= 0.0:
-		disguise_integrity = 0.0
-		disguise_active = false
-	disguise_changed.emit(disguise_integrity, disguise_active)
+	_pending_viewcone_delta += delta
+	_pending_viewcone_in_cone = true
 
 
 func _is_in_guard_viewcone() -> bool:
@@ -1378,8 +1495,9 @@ func get_look_secondary_prompt() -> String:
 func _perform_hold_action() -> void:
 	if not can_act():
 		return
-	if _find_nearest_guard(2.4) != null:
-		_try_blackjack()
+	var prompted_guard: Node3D = _find_nearest_guard(2.4)
+	if prompted_guard != null:
+		_try_blackjack(prompted_guard) # P1: strike the prompted guard, not group-order first.
 		return
 	var n: Node = get_nearest_interactable()
 	if n != null and n.has_method("interact_hold"):
@@ -1424,6 +1542,7 @@ func _try_steal_disguise(guard: Node) -> bool:
 	disguise_integrity = 100.0
 	disguise_ttl = DISGUISE_ACTIVE_TIME
 	disguise_changed.emit(disguise_integrity, disguise_active)
+	tool_used.emit("disguise", -1) # P1 tool_used gap (disguise steal path).
 	NoiseBus.emit_noise(global_position, 3.0, self, "disguise")
 	interacted.emit(guard)
 	return true
@@ -1458,11 +1577,26 @@ func _trigger_thief_ability() -> void:
 					disguise_integrity = 100.0
 				_fp_play_action("disguise_apply")
 			disguise_changed.emit(disguise_integrity, disguise_active)
+			_last_disguise_emitted = disguise_integrity
+			_last_disguise_active_emitted = disguise_active
+			tool_used.emit("disguise", -1) # P1 tool_used gap: HUD/cooldown listeners keyed on tool_used missed the chameleon toggle.
 			ability_cooldown = DISGUISE_COOLDOWN
 		"moth":
+			# P1 no-astral-cleanup: the moth branch set astral_active without
+				# clearing grapple/mantle/climb/crank, so movement priority was
+				# ambiguous and fall immunity stacked (UE moth astral owns
+				# movement while active; winch/crank/climb must be down first).
+			if is_grappling:
+				is_grappling = false
+			is_mantling = false
+			is_wall_climbing = false
+			if _is_cranking:
+				_end_wire_crank()
 			astral_active = true
+			_note_air_link_start()
 			astral_ttl = ASTRAL_DURATION
 			ability_cooldown = 12.0
+			tool_used.emit("astral", -1) # P1 tool_used gap.
 			_sync_thief_vision()
 
 
@@ -1475,7 +1609,10 @@ func _tick_astral(delta: float) -> void:
 
 
 func _end_astral() -> void:
-	if not astral_active and not thief_vision_on:
+	# P2 inverted guard fixed: astral owns the timer; vision is synced, never
+	# gating. Old `not active and not vision` form could reset vision state on
+	# a path where astral was never on.
+	if not astral_active:
 		return
 	astral_active = false
 	astral_ttl = 0.0
@@ -1526,6 +1663,7 @@ func _try_spider_grapple() -> bool:
 		return false
 	grapple_target = check["pos"] as Vector3
 	is_grappling = true
+	_note_air_link_start()
 	_is_cranking = false
 	_crank_elapsed = 0.0
 	crank_progress = 0.0
@@ -1551,12 +1689,26 @@ func _use_slithersap() -> void:
 	_fp_play_action("slithersap_throw")
 	_fp_play_swing()
 	charges["slithersap"] = int(charges.get("slithersap", 0)) - 1
-	# Real behaviour: spawn the MagicSlime puddle (2.0 m radius, 30 s) at the
-	# aim point; the puddle itself runs the 1.5 m / 30 s light inhibitor.
-	# The cooked projectile stores no InitialSpeed, so no flight speed is
-	# invented — the puddle appears at the raycast aim point (explosion
-	# delay 0).
+	# P1 sap instant-30 m: the throw anim no longer teleports the puddle to
+	# the 30 m aim point on the same tick (UE cook stores no InitialSpeed, so
+	# no speed is invented). Snapshot the aim now, arm after SAP_ARM_DELAY_SEC;
+	# _on_sap_armed re-validates before spawning (stale-timer discipline).
 	var aim: Vector3 = _slithersap_aim_point()
+	_sap_seq += 1
+	var seq: int = _sap_seq
+	get_tree().create_timer(SAP_ARM_DELAY_SEC).timeout.connect(_on_sap_armed.bind(seq, aim))
+
+
+## P1 sap arm delay: spawns the MagicSlime puddle (2.0 m radius, 30 s) at the
+## throw-time aim snapshot; the puddle runs the 1.5 m / 30 s light inhibitor.
+## Stale timers (level change, downed mid-arm, superseded throw) refund the
+## charge instead of spawning into a dead scene (UE path: no InitialSpeed
+## source; Godot-side SAP_ARM_DELAY_SEC pacing only).
+func _on_sap_armed(seq: int, aim: Vector3) -> void:
+	if seq != _sap_seq or not is_inside_tree() or GameState.state != "playing" or not can_act():
+		charges["slithersap"] = int(charges.get("slithersap", 0)) + 1
+		push_warning("[thief] sap arm timer went stale (seq/state/down); charge refunded (UE MagicSlime throw path, no speed source)")
+		return
 	var host: Node = get_parent()
 	if host == null:
 		host = self
@@ -1566,8 +1718,6 @@ func _use_slithersap() -> void:
 	VfxManager.spawn_sap_burst(host, aim + Vector3.UP * 0.2)
 	NoiseBus.emit_noise(aim, 4.0, self, "slithersap")
 	tool_used.emit("slithersap", int(charges.get("slithersap", 0)))
-
-
 ## Aim raycast for the Slithersap puddle. Falls back to flat ground ahead.
 func _slithersap_aim_point() -> Vector3:
 	var fallback: Vector3 = global_position + (-global_transform.basis.z) * 2.5
@@ -1592,16 +1742,27 @@ func _use_smoke_bomb() -> void:
 	_fp_set_tool("smoke_bomb")
 	_fp_play_action("smoke_throw")
 	_fp_play_swing()
-	charges["smoke_bomb"] = int(charges.get("smoke_bomb", 0)) - 1
+	# P1 smoke charge-before-spawn: the charge used to decrement before the
+	# spawn path was known, so a missing camera AND missing level spawner ate
+	# the charge with no cloud (UE BP_SmokeBomb_Bomb_Tool throw path). Decrement
+	# only after a spawn path commits; otherwise fail loudly and keep it.
+	var smoke_spawned: bool = false
 	if cam != null and get_parent() != null:
 		var fwd: Vector3 = -cam.global_transform.basis.z
 		var right: Vector3 = cam.global_transform.basis.x
 		var up: Vector3 = cam.global_transform.basis.y
 		var origin: Vector3 = cam.global_position + fwd * 0.5 + right * 0.14 - up * 0.05
 		SmokeProjectileScript.throw_from(get_parent(), origin, fwd, self, level_ctrl)
+		smoke_spawned = true
 	elif level_ctrl != null and level_ctrl.has_method("spawn_smoke"):
 		var ground: Vector3 = global_position + (-global_transform.basis.z) * 2.5
 		level_ctrl.spawn_smoke(ground, 25.0)
+		smoke_spawned = true
+	if not smoke_spawned:
+		push_error("[thief] smoke throw had no camera and no level smoke spawner; charge kept (UE BP_SmokeBomb_Bomb_Tool path)")
+		assert(false, "smoke spawn has no valid path")
+		return
+	charges["smoke_bomb"] = int(charges.get("smoke_bomb", 0)) - 1
 	NoiseBus.emit_noise(global_position, 7.0, self, "smoke")
 	tool_used.emit("smoke_bomb", int(charges.get("smoke_bomb", 0)))
 
@@ -1696,23 +1857,34 @@ func _use_pickpocket_fairy() -> void:
 		return
 	var mark: Node3D = target as Node3D
 	if pickpocket_is_blocked(mark, global_position):
-		NoiseBus.emit_noise(mark.global_position, global_position.distance_to(mark.global_position) + 2.0, self, "pickpocket_spotted")
+		# P2 dynamic fail radius fixed: was distance_to+2.0 (farther = louder).
+		NoiseBus.emit_noise(mark.global_position, FAIRY_FAIL_RADIUS_M, self, "pickpocket_spotted")
 		tool_used.emit("pickpocket_fairy", PICKPOCKET_INFINITE_DISPLAY)
 		return
+	var throw_pos: Vector3 = global_position # P1 fairy recheck: arrival re-tested with the moved player pos, so walking into view mid-flight converted success into spotted. Snapshot throw-time geometry.
+	_fairy_seq += 1
+	var seq: int = _fairy_seq
 	var dist: float = global_position.distance_to(mark.global_position)
 	var travel: float = fairy_travel_time(dist)
 	VfxManager.spawn_fairy_orb(get_parent(), global_position + Vector3.UP * 1.3, mark.global_position + Vector3.UP * 1.2, travel)
 	NoiseBus.emit_noise(mark.global_position, 3.0, self, "fairy")
-	get_tree().create_timer(travel).timeout.connect(_on_fairy_arrived.bind(mark))
+	get_tree().create_timer(travel).timeout.connect(_on_fairy_arrived.bind(mark, throw_pos, seq))
 	tool_used.emit("pickpocket_fairy", PICKPOCKET_INFINITE_DISPLAY)
 
 
 ## The fairy steals the nearest uncollected loot around the mark on arrival.
-func _on_fairy_arrived(mark: Node) -> void:
+## P1 SceneTree-cancel: stale timers (level change, downed mid-flight,
+## superseded cast) return silently via the seq guard. P1 recheck: the
+## block test replays throw-time player geometry (UE BP_Pickpocket_Tool
+## MaximumFacingAngleToBlock), not the moved position.
+func _on_fairy_arrived(mark: Node, throw_pos: Vector3, seq: int) -> void:
+	if seq != _fairy_seq or not is_inside_tree() or GameState.state != "playing" or not can_act():
+		return
 	if not is_instance_valid(mark) or not (mark is Node3D):
+		push_warning("[thief] fairy arrived at a freed mark; steal skipped (UE BP_PickpocketFairy_FollowActor path)")
 		return
 	var mark_pos: Vector3 = (mark as Node3D).global_position
-	if pickpocket_is_blocked(mark as Node3D, global_position):
+	if pickpocket_is_blocked(mark as Node3D, throw_pos):
 		NoiseBus.emit_noise(mark_pos, 6.0, self, "pickpocket_spotted")
 		return
 	var best: Node3D = null
@@ -1745,12 +1917,16 @@ func _find_nearest_guard(max_dist: float) -> Node3D:
 	return best
 
 
-func _try_blackjack() -> void:
+func _try_blackjack(preferred: Node3D = null) -> void:
+	# P1 prompt/target mismatch: the hold action prompts off _find_nearest_guard
+	# but the old loop struck group-order first, so the struck guard could differ
+	# from the prompted one. The prompted guard leads; the loop is the fallback.
 	if not can_act():
 		return
 	_fp_set_tool("blackjack")
 	_fp_play_action("blackjack_swing")
 	_fp_play_swing()
+	tool_used.emit("blackjack", -1) # P1 tool_used gap.
 	if head != null and cam != null:
 		var swing_dir: Vector3 = -cam.global_transform.basis.z
 		var swing_pos: Vector3 = head.global_position + swing_dir * 0.7
@@ -1761,7 +1937,7 @@ func _try_blackjack() -> void:
 	var heavy_dmg: float = GameData.eval_curve("CT_Tool_Blackjack", "BlackjackDamageHeavy", 1.0, BLACKJACK_HEAVY_DMG)
 	if heavy_dmg <= 0.0:
 		heavy_dmg = base_dmg
-	for g: Node in get_tree().get_nodes_in_group("guards"):
+	for g: Node in _blackjack_candidates(preferred):
 		if not (g is Node3D):
 			continue
 		var guard_node: Node3D = g as Node3D
@@ -1769,8 +1945,10 @@ func _try_blackjack() -> void:
 			continue
 		if not g.has_method("take_knockout"):
 			continue
-		var final_dmg: float = heavy_dmg
 		var guard_state: int = int(g.get("state"))
+		if guard_state == 5: # Alertness.KNOCKED_OUT: already down, not a target
+			continue
+		var final_dmg: float = base_dmg
 		if guard_state == 0 or guard_state == 1:
 			var to_player: Vector3 = (global_position - guard_node.global_position).normalized()
 			var guard_back: Vector3 = guard_node.global_transform.basis.z.normalized()
@@ -1778,9 +1956,21 @@ func _try_blackjack() -> void:
 			if behind_dot > 0.25:
 				final_dmg = heavy_dmg
 		g.take_knockout(final_dmg)
-		GameState.takedowns += 1
-		NoiseBus.emit_noise(global_position, 4.5, self, "takedown")
+		if int(g.get("state")) == 5: # count/noise only on transitions into KO
+			GameState.takedowns += 1
+			NoiseBus.emit_noise(global_position, 4.5, self, "takedown")
 		return
+
+
+## P1 prompt/target mismatch: prompted (nearest) guard first, group order after.
+func _blackjack_candidates(preferred: Node3D) -> Array[Node]:
+	var candidates: Array[Node] = []
+	if preferred != null and is_instance_valid(preferred):
+		candidates.append(preferred)
+	for g: Node in get_tree().get_nodes_in_group("guards"):
+		if g != (preferred as Node):
+			candidates.append(g)
+	return candidates
 
 
 func _play_blackjack_camera_punch() -> void:
@@ -1805,6 +1995,7 @@ func _play_blackjack_camera_punch() -> void:
 ## the 3P body failed to load, the manifest lacks the clip, or the skeletons
 ## share no bones -- the instant-KO + punch path still applies.
 func _tp_takedown_atk_start() -> void:
+	_tp_takedown_stop() # P2: kill a stale attacker montage before replaying so swings never layer.
 	var skel := _tp_crank_body_skel()
 	if skel == null:
 		return
@@ -1834,7 +2025,12 @@ func _tp_takedown_atk_start() -> void:
 
 func _process(delta: float) -> void:
 	_update_first_person(delta)
-	_update_smoke_trajectory()
+	# P2 smoke preview: 32-ray ballistic sweep throttled to 10 Hz (was every
+	# rendered frame; same PROP_SCAN_INTERVAL discipline as prop highlight).
+	_smoke_preview_accum += delta
+	if _smoke_preview_accum >= PROP_SCAN_INTERVAL:
+		_smoke_preview_accum = 0.0
+		_update_smoke_trajectory()
 
 
 func _build_first_person_rig() -> void:
@@ -2319,6 +2515,9 @@ func _update_fp_anim_state() -> void:
 	var role: String = _select_fp_anim_role(moving)
 	var clip_name: String = str(_fp_anim_lib.call("ensure_fp_clip", fp_anim_player, role))
 	if clip_name == "" and moving:
+		# P2 anim fallback asymmetry: the crank path warns loudly on missing
+		# clips; the locomotion fallback was silent. Warn the same way.
+		push_warning("[thief] FP role clip missing, falling back to locomotion clip (UE clip manifest path)")
 		var fallback_role: String = "crouch" if is_crouching else ("sprint" if is_sprinting else "walk")
 		clip_name = str(_fp_anim_lib.clip_for_role(fallback_role))
 	if clip_name != "":
@@ -2429,6 +2628,18 @@ func _tp_crank_stop() -> void:
 	if mesh_root == null or not is_instance_valid(mesh_root):
 		return
 	for n in mesh_root.find_children("*", "TPCrankPlayer", true, false):
+		var player := n as AnimationPlayer
+		if player != null and player.is_playing():
+			player.stop()
+
+
+## P2 TPTakedownPlayer never stopped: overlapping crank+takedown montages
+## fought on the same rig. Stops the attacker montage (never a crash when the
+## rig failed to load; UE clip TAT/Content/Art/Animation/Thief/Anim/Gear/BlackJack/AN_BlackJack_StealthTakedown__GuardEnforcer_FromBehind_Montage).
+func _tp_takedown_stop() -> void:
+	if mesh_root == null or not is_instance_valid(mesh_root):
+		return
+	for n in mesh_root.find_children("*", "TPTakedownPlayer", true, false):
 		var player := n as AnimationPlayer
 		if player != null and player.is_playing():
 			player.stop()

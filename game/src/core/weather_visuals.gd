@@ -62,6 +62,7 @@ extends RefCounted
 ##   player without smearing.
 
 const WeatherProfile := preload("res://src/core/weather_profile.gd")
+const MobileProfile := preload("res://src/core/mobile_profile.gd")
 const SKY_SHADER := preload("res://src/core/tat_sky.gdshader")
 const MOON_PANORAMA_PATH := "res://assets/ue/Raw/Art/Environment/City/Architecture/BeautifulCorner/Materials/T_Moon_D.png"
 
@@ -95,6 +96,15 @@ const RAIN_BOX_HALF := Vector3(30.0, 20.0, 30.0)
 
 const FALLBACK_HORIZON := Color(0.02, 0.03, 0.06)
 const FALLBACK_ZENITH := Color(0.005, 0.008, 0.02)
+
+## W1: the 4096x2048 moon panorama was load()ed synchronously on every
+## make_sky call. One static cache: disk decode happens once per session,
+## every later sky build reuses the texture. RefCounted Sky/ShaderMaterial
+## pairs are still built per preset (W2) — they are small and the old pair
+## is refcount-freed when env.sky is reassigned, so no Sky objects
+## accumulate; the 4K texture was the allocation that mattered.
+static var _pano_cache: Texture2D = null
+static var _pano_cache_miss_logged: bool = false
 
 
 static func _color3(raw: Variant) -> Variant:
@@ -168,6 +178,22 @@ static func zenith_color_of(preset: Dictionary) -> Color:
 	return FALLBACK_ZENITH
 
 
+## W1 cached fetch: logs the UE path once on first decode (hit or miss),
+## then serves the cache silently — one pano load per session, never per sky.
+static func _moon_panorama() -> Texture2D:
+	if _pano_cache != null:
+		return _pano_cache
+	if ResourceLoader.exists(MOON_PANORAMA_PATH):
+		_pano_cache = load(MOON_PANORAMA_PATH) as Texture2D
+	if not _pano_cache_miss_logged:
+		_pano_cache_miss_logged = true
+		if _pano_cache != null:
+			print("MoonPanorama: cached ", MOON_PANORAMA_PATH, " (4096x2048, one decode per session)")
+		else:
+			push_warning("[weather_visuals] moon panorama missing at ", MOON_PANORAMA_PATH, "; moon disc hidden (no invented texture)")
+	return _pano_cache
+
+
 ## Builds the real-sky Sky resource for a preset. The moon disc sits along the
 ## moon light's +Z axis (requires apply_environment to have set its rotation).
 static func make_sky(preset: Dictionary, moon: DirectionalLight3D) -> Sky:
@@ -209,7 +235,7 @@ static func make_sky(preset: Dictionary, moon: DirectionalLight3D) -> Sky:
 		diam = moon_diameter_deg(float(size_raw), offset)
 	mat.set_shader_parameter("moon_angular_radius", deg_to_rad(diam * 0.5))
 
-	var pano: Texture2D = load(MOON_PANORAMA_PATH) as Texture2D if ResourceLoader.exists(MOON_PANORAMA_PATH) else null
+	var pano: Texture2D = _moon_panorama()
 	if pano != null:
 		mat.set_shader_parameter("moon_texture", pano)
 	else:
@@ -292,8 +318,12 @@ static func make_rain(parent: Node3D, preset: Dictionary) -> Node3D:
 	if raw == null or float(raw) <= RAIN_MIN_INTENSITY:
 		return null
 	var intensity: float = clampf(float(raw), 0.0, 1.5)
+	var tier_scale: float = MobileProfile.rain_scale()
+	var scaled_max: int = maxi(int(float(RAIN_AMOUNT_MAX) * tier_scale), RAIN_AMOUNT_MIN)
 	var drops := GPUParticles3D.new()
-	drops.amount = clampi(int(RAIN_AMOUNT_AT_FULL * intensity), RAIN_AMOUNT_MIN, RAIN_AMOUNT_MAX)
+	drops.amount = clampi(int(RAIN_AMOUNT_AT_FULL * intensity * tier_scale), RAIN_AMOUNT_MIN, scaled_max)
+	if tier_scale < 1.0:
+		print("RainTier: mobile scale=", tier_scale, " max=", scaled_max, " (preset intensity=", intensity, ")")
 	drops.lifetime = RAIN_LIFETIME
 	drops.local_coords = false
 	drops.visibility_aabb = AABB(-Vector3(35.0, 25.0, 35.0), Vector3(70.0, 50.0, 70.0))

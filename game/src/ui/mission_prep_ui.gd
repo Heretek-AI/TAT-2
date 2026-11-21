@@ -109,7 +109,7 @@ func open_prep(p_map_id: String, p_difficulty: int, p_mode: String, p_contract_o
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if AudioManager != null and AudioManager.has_method("play_ui"):
 		AudioManager.play_ui("open")
-	# S09: soft rooftop wind under the prep screen + 6 s countdown. The louder
+	# S09: soft rooftop wind bed under the prep screen. The louder
 	# S05 PONDER swell remains opt-in through start_bed("wind").
 	if AudioManager != null and AudioManager.has_method("start_bed"):
 		AudioManager.start_bed("wind_prep", 0.8)
@@ -148,6 +148,15 @@ func _unhandled_input(event: InputEvent) -> void:
 func _emit_ready() -> void:
 	if AudioManager != null and AudioManager.has_method("play_ui"):
 		AudioManager.play_ui("confirm")
+	# T7: thread the OptionButton choice into the deploy handoff. _selected_mission_idx
+	# carries the player's override (_on_mission_selected) or the map default; without
+	# this, setup re-derived positionally and the override was silently discarded.
+	if _selected_mission_idx >= 0 and _selected_mission_idx < _mission_rows.size():
+		var picked: Dictionary = _mission_rows[_selected_mission_idx]
+		if str(picked.get("map_id", "")) == map_id:
+			var picked_id: String = str(picked.get("id", ""))
+			if picked_id != "":
+				GameState.active_mission_id = picked_id
 	ready_pressed.emit(map_id, difficulty, mode, contract_order)
 	visible = false
 	queue_free()
@@ -396,7 +405,7 @@ func _make_card(header: String, title_text: String, body_text: String) -> PanelC
 	panel.add_child(vb)
 	var hdr: Label = Label.new()
 	hdr.text = header
-	hdr.add_theme_font_size_override("font_size", 12)
+	hdr.add_theme_font_size_override("font_size", 13)
 	hdr.add_theme_color_override("font_color", ThemeScript.TEAL_ACCENT)
 	if sans != null:
 		hdr.add_theme_font_override("font", sans)
@@ -413,7 +422,7 @@ func _make_card(header: String, title_text: String, body_text: String) -> PanelC
 	var body_lbl: Label = Label.new()
 	body_lbl.text = body_text
 	body_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	body_lbl.add_theme_font_size_override("font_size", 13)
+	body_lbl.add_theme_font_size_override("font_size", 14)
 	body_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_TEXT)
 	if sans != null:
 		body_lbl.add_theme_font_override("font", sans)
@@ -841,7 +850,7 @@ func _refresh_controls() -> void:
 		_diff_sub_lbl.text = "Difficulty: %s" % _difficulty_label()
 	if _controls_lbl == null:
 		return
-	_controls_lbl.text = "Difficulty: %s  ·  Mode: %s" % [_difficulty_label(), mode]
+	_controls_lbl.text = "[F] READY  ·  [ESC] BACK"
 
 
 func _difficulty_label() -> String:

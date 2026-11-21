@@ -15,6 +15,23 @@ func _initialize() -> void:
 		quit(1)
 		return
 
+	# P2-7: res://assets/ue/Content + Raw are symlinks into extracted/;
+	# deleting/regenerating extracted/ orphans every GLB/PNG/OGG path.
+	if DirAccess.open("res://assets/ue/Content") == null or DirAccess.open("res://assets/ue/Raw") == null:
+		printerr("FAIL: assets/ue symlink target missing (extracted/ deleted or regenerated?)")
+		fails += 1
+	else:
+		print("PASS: assets/ue symlinks resolve (Content + Raw)")
+
+	# P2-6 fixture: blocks below mutate shared autoloads in place
+	# (gs.thief_id/difficulty/active_contract_order/active_map_id). Snapshot
+	# the boot values here, restore before SUMMARY, so inserting or
+	# reordering blocks cannot cascade through stale autoload state.
+	var fx_thief_id: String = str(gs.thief_id)
+	var fx_difficulty: int = int(gs.difficulty)
+	var fx_order: int = int(gs.active_contract_order)
+	var fx_map_id: String = str(gs.active_map_id)
+
 	# 1. Contracts loaded (16 shipped + 2 expansion = 18)
 	if gd.contracts.size() != 18:
 		printerr("FAIL: expected 18 contracts, got ", gd.contracts.size())
@@ -110,8 +127,15 @@ func _initialize() -> void:
 		var test_pivot: Node3D = test_door.get_node_or_null("DoorPivot") as Node3D
 		if test_pivot != null:
 			test_door.call("interact", null)
-			await create_timer(0.55).timeout
-			var swung: bool = absf(absf(test_pivot.rotation.y) - PI * 0.5) < 0.02
+			# P2-6: was `await create_timer(0.55).timeout` (tween 0.5 s +
+			# 50 ms margin — machine-speed dependent). Poll the tween to
+			# completion with a generous frame cap instead (fail-closed).
+			var swung: bool = false
+			var swing_wait: int = 0
+			while swing_wait < 300 and not swung:
+				await process_frame
+				swing_wait += 1
+				swung = absf(absf(test_pivot.rotation.y) - PI * 0.5) < 0.02
 			if not swung:
 				printerr("FAIL: pivot-mesh door did not swing: rot=", test_pivot.rotation.y)
 				fails += 1
@@ -455,8 +479,16 @@ func _initialize() -> void:
 	l2.visible = false
 	var v2: float = float(lp2.call("sample_visibility", Vector3.ZERO, space2, [] as Array[RID]))
 	var computes_after_2: int = int(lp2.call("sample_compute_count"))
-	await create_timer(0.15).timeout
-	var v3: float = float(lp2.call("sample_visibility", Vector3.ZERO, space2, [] as Array[RID]))
+	# P2-6: was `await create_timer(0.15).timeout` (150 ms wait vs the 80 ms
+	# throttle window — 70 ms margin, flakes on slow CI). Poll until the
+	# throttle window expires and a recompute lands, with a frame cap
+	# (fail-closed: a cap hit keeps computes_after_2 == 1 and fails below).
+	var v3: float = v1
+	var probe_wait: int = 0
+	while int(lp2.call("sample_compute_count")) <= computes_after_2 and probe_wait < 240:
+		await process_frame
+		probe_wait += 1
+		v3 = float(lp2.call("sample_visibility", Vector3.ZERO, space2, [] as Array[RID]))
 	if v1 <= 0.1 or not is_equal_approx(v1, v2) or computes_after_2 != 1 or v3 >= v1:
 		printerr("FAIL: LightProbe throttle v1=", v1, " v2=", v2, " v3=", v3, " computes=", computes_after_2)
 		fails += 1
@@ -3384,6 +3416,357 @@ func _initialize() -> void:
 	else:
 		print("PASS: 46 Den doors leaf disabled past 70 deg (layer 0 + disabled, re-enabled on close) & window wall split gap=", dd_gap, "m + sill + lintel (2m marker gate kept)")
 
+	# 47. P1-9(a): every contract (not just the booted 3/1/4) resolves
+	# title/map/loot at data level. Runtime boot of all 18 is suite-cost
+	# prohibitive (see HARD_LIMIT in task-p1-pipeline.md); this gates the
+	# wiring the boot depends on: contiguity, titles, map ids, loot actors.
+	var c47_bad: Array = []
+	var c47_notes: Array = []
+	var c47_orders: Array = []
+	var c47_loot_doc: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://data/generated/gameplay/loot_actors.json"))
+	var c47_tag_to_actor: Dictionary = {}
+	var c47_generic: String = ""
+	if c47_loot_doc is Dictionary:
+		var c47_tta_v: Variant = (c47_loot_doc as Dictionary).get("tag_to_actor", {})
+		if c47_tta_v is Dictionary:
+			c47_tag_to_actor = c47_tta_v as Dictionary
+		var c47_fb_v: Variant = (c47_loot_doc as Dictionary).get("fallback", {})
+		if c47_fb_v is Dictionary:
+			c47_generic = str((c47_fb_v as Dictionary).get("generic_quest_actor", ""))
+	if c47_tag_to_actor.is_empty() or c47_generic == "":
+		c47_bad.append("loot_actors.json tag map or generic fallback unreadable")
+	for c47_c: Variant in gd.contracts:
+		if not (c47_c is Dictionary):
+			c47_bad.append("non-dict contract entry")
+			continue
+		var c47_cd: Dictionary = c47_c as Dictionary
+		var c47_order: int = int(c47_cd.get("order", -1))
+		# Shipped data bug (mirrors parse_contracts.py repair): Contract.Main.15
+		# carries ContractOrder 0; the row key is authoritative. Named here,
+		# never silently assumed.
+		if c47_order <= 0:
+			var c47_parts: PackedStringArray = str(c47_cd.get("id", "")).split(".")
+			if c47_parts.size() == 3 and c47_parts[2].is_valid_int():
+				c47_order = int(c47_parts[2])
+			c47_notes.append("%s -> %d (raw ContractOrder 0)" % [str(c47_cd.get("id", "")), c47_order])
+		c47_orders.append(c47_order)
+		var c47_disp: Dictionary = gd.get_contract_display(c47_order)
+		var c47_title: String = str(c47_disp.get("title", ""))
+		var c47_map: String = str(c47_cd.get("map_id", ""))
+		var c47_loot: String = str(c47_cd.get("loot_tag", ""))
+		var c47_subs: Array = []
+		var c47_subs_v: Variant = c47_cd.get("sublevels", [])
+		if c47_subs_v is Array:
+			c47_subs = c47_subs_v as Array
+		var c47_stag: String = str(c47_cd.get("sublevel_tag", ""))
+		var c47_loot_ok: bool = c47_loot != "" and (c47_tag_to_actor.has(c47_loot) or c47_generic != "")
+		if c47_title == "":
+			c47_bad.append("order=%d empty title" % c47_order)
+		if c47_map == "":
+			c47_bad.append("order=%d empty map_id" % c47_order)
+		if not c47_loot_ok:
+			c47_bad.append("order=%d loot_tag unresolvable: %s" % [c47_order, c47_loot])
+		if not c47_subs.is_empty() and c47_stag == "":
+			c47_bad.append("order=%d sublevels without sublevel_tag" % c47_order)
+	c47_orders.sort()
+	var c47_expect: Array = []
+	for c47_i: int in range(1, gd.contracts.size() + 1):
+		c47_expect.append(c47_i)
+	if c47_orders != c47_expect:
+		c47_bad.append("contract orders not contiguous 1..%d" % gd.contracts.size())
+	if not c47_bad.is_empty():
+		printerr("FAIL: 47 all-contracts sweep (", "; ".join(PackedStringArray(c47_bad.slice(0, 8))), ")")
+		fails += 1
+	else:
+		print("PASS: 47 all ", gd.contracts.size(), " contracts resolve title/map/loot_tag (generic=", c47_generic, ") repairs: ", ", ".join(PackedStringArray(c47_notes)))
+
+	# 48. P1-7/P1-6: spawner approximations pinned to the implementation they
+	# document, and the alerted/combat fallback pinned to the authored BP.
+	var sp48_ok: bool = true
+	var sp48_doc: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://data/generated/gameplay/spawners.json"))
+	var sp48_approx: Dictionary = {}
+	if sp48_doc is Dictionary:
+		var sp48_av: Variant = (sp48_doc as Dictionary).get("approximations", {})
+		if sp48_av is Dictionary:
+			sp48_approx = sp48_av as Dictionary
+	for sp48_k: String in ["health_heal_amount", "ammo_refill_amount", "bottle_throw_speed_m_s", "bottle_impact_noise_m", "civilian_walk_speed_m_s"]:
+		if not sp48_approx.has(sp48_k):
+			printerr("FAIL: 48 spawners.json approximations missing key: ", sp48_k)
+			sp48_ok = false
+	var sp48_rx := RegEx.new()
+	sp48_rx.compile("\\d+\\.\\d+")
+	var tb48_consts: Dictionary = (load("res://src/interact/thrown_bottle.gd") as GDScript).get_script_constant_map()
+	var civ48_consts: Dictionary = (load("res://src/ai/civilian_npc.gd") as GDScript).get_script_constant_map()
+	var pk48_consts: Dictionary = (load("res://src/interact/world_pickup.gd") as GDScript).get_script_constant_map()
+	var tb48_speed: float = float(tb48_consts.get("THROW_SPEED_M_S", -1.0))
+	var tb48_noise: float = float(tb48_consts.get("IMPACT_NOISE_M", -1.0))
+	var civ48_walk: float = float(civ48_consts.get("WALK_SPEED_M_S", -1.0))
+	var tb48_m: RegExMatch = sp48_rx.search(str(sp48_approx.get("bottle_throw_speed_m_s", "")))
+	var tb48_n: RegExMatch = sp48_rx.search(str(sp48_approx.get("bottle_impact_noise_m", "")))
+	var civ48_m: RegExMatch = sp48_rx.search(str(sp48_approx.get("civilian_walk_speed_m_s", "")))
+	var tb48_doc_speed: float = float(tb48_m.get_string()) if tb48_m != null else -1.0
+	var tb48_doc_noise: float = float(tb48_n.get_string()) if tb48_n != null else -1.0
+	var civ48_doc_walk: float = float(civ48_m.get_string()) if civ48_m != null else -1.0
+	if not is_equal_approx(tb48_speed, 12.0) or not is_equal_approx(tb48_doc_speed, tb48_speed):
+		printerr("FAIL: 48 bottle throw speed const/doc mismatch: const=", tb48_speed, " doc=", tb48_doc_speed)
+		sp48_ok = false
+	if not is_equal_approx(tb48_noise, 10.0) or not is_equal_approx(tb48_doc_noise, tb48_noise):
+		printerr("FAIL: 48 bottle impact noise const/doc mismatch: const=", tb48_noise, " doc=", tb48_doc_noise)
+		sp48_ok = false
+	if not is_equal_approx(civ48_walk, 1.4) or not is_equal_approx(civ48_doc_walk, civ48_walk):
+		printerr("FAIL: 48 civilian walk speed const/doc mismatch: const=", civ48_walk, " doc=", civ48_doc_walk)
+		sp48_ok = false
+	var pk48_scr: GDScript = load("res://src/interact/world_pickup.gd") as GDScript
+	var pk48_max: Dictionary = {}
+	var pk48_max_v: Variant = pk48_consts.get("AMMO_REFILL_MAX", {})
+	if pk48_max_v is Dictionary:
+		pk48_max = pk48_max_v as Dictionary
+	# THROWABLE=0: +1 bottle. AMMO=1: refill every charge key to its max.
+	# HEALTH=2: full-HP restore (the documented no-heal-amount approximation).
+	var mk48_throw: Node = P1MockActor.new()
+	var pk48_throw: Node = pk48_scr.new()
+	pk48_throw.call("setup", 0, "")
+	pk48_throw.call("interact", mk48_throw)
+	if int((mk48_throw.get("charges") as Dictionary).get("bottle", -1)) != 1:
+		printerr("FAIL: 48 throwable pickup did not +1 bottle")
+		sp48_ok = false
+	var mk48_ammo: Node = P1MockActor.new()
+	var pk48_ammo: Node = pk48_scr.new()
+	pk48_ammo.call("setup", 1, "")
+	pk48_ammo.call("interact", mk48_ammo)
+	for pk48_k: Variant in pk48_max.keys():
+		if int((mk48_ammo.get("charges") as Dictionary).get(pk48_k, -999)) != int(pk48_max[pk48_k]):
+			printerr("FAIL: 48 ammo refill key not restored to max: ", pk48_k)
+			sp48_ok = false
+	var mk48_hp: Node = P1MockActor.new()
+	mk48_hp.set("health", 20.0)
+	var pk48_hp: Node = pk48_scr.new()
+	pk48_hp.call("setup", 2, "")
+	pk48_hp.call("interact", mk48_hp)
+	if not is_equal_approx(float(mk48_hp.get("health")), float(mk48_hp.get("max_health"))):
+		printerr("FAIL: 48 health pack did not restore full HP")
+		sp48_ok = false
+	# Alerted/combat fallback: BP-authored MaxWalkSpeed/100 == state_speeds == guard const.
+	var st48_doc: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://data/generated/gameplay/state_speeds.json"))
+	var st48_fallback: float = -1.0
+	if st48_doc is Dictionary:
+		st48_fallback = float((st48_doc as Dictionary).get("alerted_combat_fallback_m_s", -1.0))
+	var bp48_doc: Variant = _repo_json("extracted/json/Character/Guards/BP_Guard_Base.json")
+	var bp48_walk: float = -1.0
+	if bp48_doc is Array:
+		for bp48_e: Variant in (bp48_doc as Array):
+			if bp48_e is Dictionary and str((bp48_e as Dictionary).get("Type", "")) == "TATCharacterAIMovement" and str((bp48_e as Dictionary).get("Name", "")) == "CharMoveComp":
+				var bp48_p: Variant = (bp48_e as Dictionary).get("Properties", {})
+				if bp48_p is Dictionary:
+					bp48_walk = float((bp48_p as Dictionary).get("MaxWalkSpeed", -1.0))
+	var gd48_consts: Dictionary = (load("res://src/ai/guard_ai.gd") as GDScript).get_script_constant_map()
+	var gd48_alerted: float = float(gd48_consts.get("ALERTED_SPEED", -1.0))
+	if bp48_walk <= 0.0 or not is_equal_approx(st48_fallback, bp48_walk / 100.0) or not is_equal_approx(gd48_alerted, st48_fallback):
+		printerr("FAIL: 48 alerted speed chain broken: BP=", bp48_walk, " state_speeds=", st48_fallback, " guard=", gd48_alerted)
+		sp48_ok = false
+	if not sp48_ok:
+		fails += 1
+	else:
+		print("PASS: 48 spawner approximations pinned (throw 12.0/noise 10.0/walk 1.4, ammo refill-all, full-heal) & alerted=", st48_fallback, "m/s derived from BP ", bp48_walk)
+
+	# 49. P1-9(b): save write/reload round-trip + corrupt-save fail-closed.
+	var sv49_ok: bool = true
+	var sv49: Node = root.get_node_or_null("/root/SaveSystem")
+	var sv49_path: String = "user://tat2_save.json"
+	if sv49 == null:
+		printerr("FAIL: 49 SaveSystem missing")
+		sv49_ok = false
+	else:
+		var sv49_orig: int = int(sv49.call("get_currency"))
+		sv49.call("add_currency", 7)
+		sv49.call("load_save")
+		if int(sv49.call("get_currency")) != sv49_orig + 7:
+			printerr("FAIL: 49 currency did not survive write/reload")
+			sv49_ok = false
+		var sv49_backup: String = FileAccess.get_file_as_string(sv49_path)
+		var sv49_w: FileAccess = FileAccess.open(sv49_path, FileAccess.WRITE)
+		sv49_w.store_string("{broken json,,")
+		sv49_w.close()
+		sv49.call("load_save")
+		if int(sv49.call("get_currency")) < 0:
+			printerr("FAIL: 49 corrupt save produced negative currency")
+			sv49_ok = false
+		var sv49_r: FileAccess = FileAccess.open(sv49_path, FileAccess.WRITE)
+		sv49_r.store_string(sv49_backup)
+		sv49_r.close()
+		sv49.call("load_save")
+		if int(sv49.call("get_currency")) != sv49_orig + 7:
+			printerr("FAIL: 49 save backup restore mismatch")
+			sv49_ok = false
+		var sv49_data: Dictionary = sv49.get("data") as Dictionary
+		sv49_data["currency"] = sv49_orig
+		sv49.call("write_save")
+		sv49.call("load_save")
+		if int(sv49.call("get_currency")) != sv49_orig:
+			printerr("FAIL: 49 original currency not restored")
+			sv49_ok = false
+	if not sv49_ok:
+		fails += 1
+	else:
+		print("PASS: 49 save round-trip (+7 persisted, corrupt load fail-closed, original restored)")
+
+	# 50. P1-9(c): audio audibility smoke. Block #1 only pins the autoload;
+	# this pins that the gameplay one-shots resolve to real clips on disk.
+	var au50_ok: bool = true
+	var au50: Node = root.get_node_or_null("AudioManager")
+	var au50_doc: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://data/generated/audio_events.json"))
+	var au50_counts: Dictionary = {}
+	var au50_tags: Dictionary = {}
+	if au50_doc is Dictionary:
+		var au50_cv: Variant = (au50_doc as Dictionary).get("counts", {})
+		if au50_cv is Dictionary:
+			au50_counts = au50_cv as Dictionary
+		var au50_tv: Variant = (au50_doc as Dictionary).get("tags", {})
+		if au50_tv is Dictionary:
+			au50_tags = au50_tv as Dictionary
+	if int(au50_counts.get("events_with_resolved_clip", 0)) < 1200:
+		printerr("FAIL: 50 resolved audio events below floor: ", au50_counts.get("events_with_resolved_clip", 0))
+		au50_ok = false
+	if au50 == null:
+		printerr("FAIL: 50 AudioManager missing")
+		au50_ok = false
+	else:
+		for au50_tag: String in ["footstep", "blackjack", "lockpick", "grapple", "smoke", "fairy", "alert", "loot"]:
+			if not bool(au50.call("has_real_clip", au50_tag)):
+				printerr("FAIL: 50 no real clip for tag: ", au50_tag)
+				au50_ok = false
+			else:
+				var au50_entry_v: Variant = au50_tags.get(au50_tag, {})
+				if au50_entry_v is Dictionary:
+					var au50_clip: String = str((au50_entry_v as Dictionary).get("clip", ""))
+					if au50_clip == "" or not ResourceLoader.exists(au50_clip):
+						printerr("FAIL: 50 clip file missing for tag ", au50_tag, ": ", au50_clip)
+						au50_ok = false
+	if not au50_ok:
+		fails += 1
+	else:
+		print("PASS: 50 audio audibility (", au50_counts.get("events_with_resolved_clip", 0), " resolved events, 8 gameplay one-shots real)")
+
+	# 51. P1-9(e): GLB-for-every-mesh_res. Mirrors level_loader _ue_mesh_to_res
+	# (Content first, Raw Engine mirror for /Engine/ paths, .gltf second).
+	# The 9 _GENERATED gjasp meshes are the documented gap: authored .uasset
+	# files (Box_/Cylinder_/Combined_ under OldManor/_GENERATED) whose GLBs
+	# were never queued pre-fix; P1-1 now queues /_GENERATED/ on re-extract
+	# and this allow-list must shrink to zero then.
+	var glb51_known: Dictionary = {
+		"/Game/Maps/OldManor/_GENERATED/gjasp/Box_42F388A7": true,
+		"/Game/Maps/OldManor/_GENERATED/gjasp/Box_5C7B8085": true,
+		"/Game/Maps/OldManor/_GENERATED/gjasp/Box_696059A2": true,
+		"/Game/Maps/OldManor/_GENERATED/gjasp/Box_760A8A3A": true,
+		"/Game/Maps/OldManor/_GENERATED/gjasp/Box_760A8A3A1": true,
+		"/Game/Maps/OldManor/_GENERATED/gjasp/Box_ADE72DA6": true,
+		"/Game/Maps/OldManor/_GENERATED/gjasp/Box_C9A6CCD3": true,
+		"/Game/Maps/OldManor/_GENERATED/gjasp/Combined_3356956A": true,
+		"/Game/Maps/OldManor/_GENERATED/gjasp/Cylinder_A665D774": true,
+	}
+	var glb51_checked: Dictionary = {}
+	var glb51_missing: Array = []
+	var glb51_empty: int = 0
+	var glb51_total: int = 0
+	var glb51_files: Array = []
+	_p1_collect_json("res://data/generated/levels", glb51_files)
+	for glb51_f: String in glb51_files:
+		var glb51_doc: Variant = JSON.parse_string(FileAccess.get_file_as_string(glb51_f))
+		if not (glb51_doc is Dictionary):
+			continue
+		var glb51_meshes_v: Variant = (glb51_doc as Dictionary).get("meshes", [])
+		if not (glb51_meshes_v is Array):
+			continue
+		for glb51_m: Variant in (glb51_meshes_v as Array):
+			if not (glb51_m is Dictionary):
+				continue
+			var glb51_raw: Variant = (glb51_m as Dictionary).get("mesh", "")
+			if glb51_raw == null:
+				glb51_empty += 1
+				continue
+			var glb51_mp: String = str(glb51_raw)
+			glb51_total += 1
+			if glb51_mp == "":
+				glb51_empty += 1
+				continue
+			if glb51_known.has(glb51_mp):
+				continue
+			var glb51_cand: String = ""
+			if glb51_mp.begins_with("/Engine/"):
+				glb51_cand = "res://assets/ue/Raw/Engine/Content/" + glb51_mp.substr("/Engine/".length()) + ".glb"
+			elif glb51_mp.begins_with("/Game/"):
+				glb51_cand = "res://assets/ue/Content/" + glb51_mp.substr("/Game/".length()) + ".glb"
+			else:
+				glb51_missing.append(glb51_mp + " (non-/Game non-/Engine path)")
+				continue
+			if glb51_checked.has(glb51_cand):
+				continue
+			glb51_checked[glb51_cand] = true
+			if not ResourceLoader.exists(glb51_cand) and not ResourceLoader.exists(glb51_cand.get_basename() + ".gltf"):
+				glb51_missing.append(glb51_mp)
+	if glb51_empty > 0 or not glb51_missing.is_empty():
+		printerr("FAIL: 51 GLB gate (total=", glb51_total, " empty=", glb51_empty, " missing=", glb51_missing.size(), "): ", "; ".join(PackedStringArray(glb51_missing.slice(0, 12))))
+		fails += 1
+	else:
+		print("PASS: 51 GLB-for-every-mesh_res (", glb51_total, " refs, ", glb51_checked.size(), " unique, 9 known _GENERATED gap)")
+
+	# 52. P1-9(d,f,g): guard transition data, VFX catalogue boundary, export
+	# presence. Guard behavior stays in e2e tiers; here the transition
+	# inputs (ramps + speeds) must equal the tables the AI reads.
+	var gx52_ok: bool = true
+	var gx52_det: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://data/generated/gameplay/detection.json"))
+	for gx52_ramp: String in ["neutral", "suspicious", "alerted", "combat"]:
+		if not (gx52_det is Dictionary) or not (gx52_det as Dictionary).has(gx52_ramp):
+			printerr("FAIL: 52 detection.json missing ramp: ", gx52_ramp)
+			gx52_ok = false
+	var gx52_speeds: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://data/generated/gameplay/state_speeds.json"))
+	var gx52_gconsts: Dictionary = (load("res://src/ai/guard_ai.gd") as GDScript).get_script_constant_map()
+	if gx52_speeds is Dictionary:
+		var gx52_sd: Dictionary = gx52_speeds as Dictionary
+		if not is_equal_approx(float(gx52_gconsts.get("PATROL_SPEED", -1.0)), float(gx52_sd.get("neutral_m_s", -2.0))) \
+			or not is_equal_approx(float(gx52_gconsts.get("SUSPICIOUS_SPEED", -1.0)), float(gx52_sd.get("suspicious_m_s", -2.0))) \
+			or not is_equal_approx(float(gx52_gconsts.get("ALERTED_SPEED", -1.0)), float(gx52_sd.get("alerted_combat_fallback_m_s", -2.0))):
+			printerr("FAIL: 52 guard speed consts drifted from state_speeds.json")
+			gx52_ok = false
+	var gx52_vfx: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://data/generated/vfx/systems.json"))
+	var gx52_vok: bool = false
+	if gx52_vfx is Dictionary:
+		var gx52_vd: Dictionary = gx52_vfx as Dictionary
+		var gx52_cls_v: Variant = gx52_vd.get("classes", {})
+		var gx52_sys_v: Variant = gx52_vd.get("systems", [])
+		var gx52_notes_v: Variant = gx52_vd.get("notes", [])
+		var gx52_notes: String = " ".join(PackedStringArray(gx52_notes_v as Array)) if gx52_notes_v is Array else ""
+		if int(gx52_vd.get("system_count", 0)) == 120 and gx52_sys_v is Array and (gx52_sys_v as Array).size() == 120 \
+			and gx52_cls_v is Dictionary and int((gx52_cls_v as Dictionary).get("graph_heavy", 0)) == 21 \
+			and int((gx52_cls_v as Dictionary).get("mesh_or_ribbon", 0)) == 70 \
+			and int((gx52_cls_v as Dictionary).get("sprite_only", 0)) == 29 \
+			and gx52_notes.find("ParameterData") >= 0:
+			gx52_vok = true
+	if not gx52_vok:
+		printerr("FAIL: 52 vfx catalogue boundary changed (120/21/70/29 + ParameterData note)")
+		gx52_ok = false
+	var gx52_cfg := ConfigFile.new()
+	if gx52_cfg.load("res://export_presets.cfg") != OK or not gx52_cfg.has_section("preset.0") \
+		or str(gx52_cfg.get_value("preset.0", "platform", "")) != "Linux":
+		printerr("FAIL: 52 export_presets.cfg Linux preset missing")
+		gx52_ok = false
+	var gx52_mob_path: String = ProjectSettings.globalize_path("res://").path_join("../tools/prepare_mobile_project.py")
+	var gx52_mob: String = FileAccess.get_file_as_string(gx52_mob_path)
+	if gx52_mob.find("--texture-cap") < 0 or gx52_mob.find("ETC2") < 0:
+		printerr("FAIL: 52 prepare_mobile_project.py lost texture-cap/ETC2 path")
+		gx52_ok = false
+	if not gx52_ok:
+		fails += 1
+	else:
+		print("PASS: 52 guard ramps+speeds/data-consistent, vfx catalogue 120 (21/70/29) + ParameterData boundary, Linux preset + mobile ETC2 path")
+
+	# P2-6 fixture restore (see boot snapshot): leave no mutated autoload
+	# state behind for the next run or embedding harness.
+	gs.thief_id = fx_thief_id
+	gs.difficulty = fx_difficulty
+	gs.active_contract_order = fx_order
+	gs.active_map_id = fx_map_id
+
 	print("SUMMARY: fails=", fails)
 	quit(0 if fails == 0 else 1)
 
@@ -3456,3 +3839,39 @@ func _entry_texs(entry: Dictionary) -> Dictionary:
 	if texs_v is Dictionary:
 		return texs_v as Dictionary
 	return {}
+
+
+## P1-9(e) helper: collect every *.tatlevel.json under a res:// dir.
+func _p1_collect_json(dir_path: String, out: Array) -> void:
+	var dir: DirAccess = DirAccess.open(dir_path)
+	if dir == null:
+		return
+	dir.list_dir_begin()
+	var fname: String = dir.get_next()
+	while fname != "":
+		if fname == "." or fname == "..":
+			fname = dir.get_next()
+			continue
+		var full: String = dir_path.path_join(fname)
+		if dir.current_is_dir():
+			_p1_collect_json(full, out)
+		elif fname.ends_with(".tatlevel.json"):
+			out.append(full)
+		fname = dir.get_next()
+	dir.list_dir_end()
+
+
+## P1-7 mock pickup interactor: exposes the health/max_health/charges
+## surface world_pickup.interact() reads, plus the signals it emits.
+class P1MockActor extends Node:
+	var health: float = 20.0
+	var max_health: float = 100.0
+	var charges: Dictionary = {
+		"slithersap": 0,
+		"smoke_bomb": 0,
+		"pickpocket_fairy": 0,
+		"grapple": 0,
+		"bottle": 0,
+	}
+	signal health_changed(h, mh)
+	signal tool_used(a, b)

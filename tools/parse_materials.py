@@ -46,6 +46,7 @@ EX_JSON = ROOT / "extracted" / "json"
 EX_ASSETS = ROOT / "extracted" / "assets"
 OUT = ROOT / "game" / "data" / "generated" / "materials.json"
 OUT_MESH_MATS = ROOT / "game" / "data" / "generated" / "mesh_materials.json"
+OUT_PROV = ROOT / "game" / "data" / "generated" / "mesh_materials_provenance.json"
 
 _CHUNK_JSON = 0x4E4F534A
 _CHUNK_BIN = 0x004E4942
@@ -71,6 +72,10 @@ def _find_glb_for_ue_mesh(ue_mesh: str):
         ROOT / "game" / "assets" / "ue" / "Content" / (rel + ".glb"),
         ROOT / "game" / "assets" / "ue" / "Raw" / "TAT" / "Content" / (rel + ".glb"),
         ROOT / "extracted" / "assets" / "TAT" / "Content" / (rel + ".glb"),
+        # P1-1: Engine carriers (BasicShapes/EngineMaterials) ship outside
+        # TAT/Content; the Raw mirror (game/assets/ue/Raw -> extracted/assets)
+        # resolves them at runtime, so order by their real GLB here.
+        ROOT / "extracted" / "assets" / (rel + ".glb"),
     ]
     for c in candidates:
         if c.is_file():
@@ -87,19 +92,24 @@ def _glb_primitive_material_names(glb_path):
     emitted count matches the imported ArrayMesh surface count. Returns None
     when the GLB is missing or unparseable so the caller falls back to
     sidecar order.
+
+    P1-4: also returns a detail dict so the provenance sidecar can mark
+    every entry with its slot_order_source plus how many authored
+    primitives were filtered (previously invisible slot loss).
+    Returns (names_or_None, detail: dict).
     """
     if glb_path is None:
-        return None
+        return None, {"glb_found": False, "authored_primitives": 0, "degenerate_filtered": 0}
     try:
         raw = glb_path.read_bytes()
     except Exception:
-        return None
+        return None, {"glb_found": False, "authored_primitives": 0, "degenerate_filtered": 0}
     try:
         if len(raw) < 12:
-            return None
+            return None, {"glb_found": True, "authored_primitives": 0, "degenerate_filtered": 0, "glb_parse_error": True}
         magic, _version, _declared = struct.unpack_from("<4sII", raw, 0)
         if magic != b"glTF":
-            return None
+            return None, {"glb_found": True, "authored_primitives": 0, "degenerate_filtered": 0, "glb_parse_error": True}
         off = 12
         json_chunk = None
         bin_chunk = b""
@@ -108,14 +118,14 @@ def _glb_primitive_material_names(glb_path):
             off += 8
             chunk = raw[off : off + clen]
             if len(chunk) != clen:
-                return None
+                return None, {"glb_found": True, "authored_primitives": 0, "degenerate_filtered": 0, "glb_parse_error": True}
             if ctype == _CHUNK_JSON and json_chunk is None:
                 json_chunk = chunk
             elif ctype == _CHUNK_BIN and len(bin_chunk) == 0:
                 bin_chunk = chunk
             off += clen
         if json_chunk is None:
-            return None
+            return None, {"glb_found": True, "authored_primitives": 0, "degenerate_filtered": 0, "glb_parse_error": True}
         gltf = json.loads(json_chunk.rstrip(b" \t\r\n\0").decode("utf-8"))
         materials = gltf.get("materials") or []
         mat_names = [
@@ -207,15 +217,19 @@ def _glb_primitive_material_names(glb_path):
                 return False
 
         names: list = []
+        degenerate_filtered: int = 0
+        authored_primitives: int = 0
         meshes = gltf.get("meshes") or []
         if not meshes:
-            return None
+            return None, {"glb_found": True, "authored_primitives": 0, "degenerate_filtered": 0}
         for mesh in meshes:
             prims = (mesh.get("primitives") if isinstance(mesh, dict) else None) or []
             for prim in prims:
                 if not isinstance(prim, dict):
                     continue
+                authored_primitives += 1
                 if _is_degenerate(prim):
+                    degenerate_filtered += 1
                     continue
                 mat_idx = prim.get("material")
                 if mat_idx is None:
@@ -228,9 +242,16 @@ def _glb_primitive_material_names(glb_path):
                     names.append(mat_names[idx])
                 else:
                     names.append("")
-        return names if names else None
+        detail = {
+            "glb_found": True,
+            "authored_primitives": authored_primitives,
+            "degenerate_filtered": degenerate_filtered,
+        }
+        if not names:
+            return None, detail
+        return names, detail
     except Exception:
-        return None
+        return None, {"glb_found": True, "authored_primitives": 0, "degenerate_filtered": 0, "glb_parse_error": True}
 
 
 def ue_to_res_png(obj_path: str) -> str:
@@ -610,10 +631,15 @@ def _diffuse_tokens(mat_name: str) -> list:
 
 def _stem_fallback_albedo(
     mat_name: str, pkg: str, parent: str, tex_by_stem: dict
-) -> str:
+) -> tuple[str, str]:
+    """Tiered albedo guess. Returns (res_path, tier) where tier is one of
+    "stem-direct" (Tier 1 exact-stem hit), "ranked" (Tier 2 scored
+    candidate), "category" (Tier 3 generic family guess), or "" (no bind).
+    P1-3: the tier is recorded per material as albedo_source so a generic
+    category bind is never mistaken for authored truth downstream."""
     base: str = _strip_material_base(mat_name)
     if base == "":
-        return ""
+        return "", ""
     is_character: bool = _is_character_context(mat_name, pkg)
     tokens: list = _diffuse_tokens(mat_name)
     family_words: list = _family_words(mat_name)
@@ -633,7 +659,7 @@ def _stem_fallback_albedo(
                 best = res
                 best_len = len(low)
     if best != "":
-        return best
+        return best, "stem-direct"
     # 2) Rank every diffuse candidate by family anchor, path category, tokens
     # and stem specificity. Candidates with no signal at all are rejected.
     best_res: str = _best_albedo_candidate(
@@ -645,7 +671,7 @@ def _stem_fallback_albedo(
         allow_ui_map=allow_ui_map,
     )
     if best_res != "":
-        return best_res
+        return best_res, "ranked"
     # 3) Category fallback: material/pkg/parent name mentions Brick/Stone/Wood/etc.
     hay: str = (mat_name + " " + pkg + " " + parent).lower()
     for cat, stems in CATEGORY_FALLBACK_STEMS.items():
@@ -653,8 +679,8 @@ def _stem_fallback_albedo(
             for cand in stems:
                 if cand in tex_by_stem:
                     found: str = tex_by_stem[cand]
-                    return found
-    return ""
+                    return found, "category"
+    return "", ""
 
 
 def main():
@@ -821,6 +847,7 @@ def main():
                 allow_unsignalled=(path_category == "Character"),
                 allow_ui_map=allow_ui_map,
             )
+            stream_single: bool = False
             if stream_pick == "":
                 # A single authored stream diffuse is not an arbitrary pick;
                 # trust it even when its name shares no token with the material.
@@ -835,7 +862,8 @@ def main():
                         unique_stream.append(res)
                 if len(unique_stream) == 1:
                     stream_pick = unique_stream[0]
-            fb: str = _stem_fallback_albedo(name, pkg, parent, tex_by_stem)
+                    stream_single = True
+            fb, fb_tier = _stem_fallback_albedo(name, pkg, parent, tex_by_stem)
             ref_pick: str = _best_albedo_candidate(
                 ref_paths,
                 tokens,
@@ -847,6 +875,20 @@ def main():
             pick: str = stream_pick or fb or ref_pick
             if pick != "":
                 texs["albedo"] = pick
+            # P1-3 sentinel: record HOW the albedo was bound. "authored"
+            # (UE parameter) > stream-ranked/single > stem-direct > ranked >
+            # reference-ranked > category (generic family guess). Anything
+            # reading materials.json must be able to tell a guess from truth.
+            if stream_pick != "" and pick == stream_pick:
+                albedo_source = "stream-single" if stream_single else "stream-ranked"
+            elif fb != "" and pick == fb:
+                albedo_source = "fallback-" + fb_tier
+            elif ref_pick != "" and pick == ref_pick:
+                albedo_source = "reference-ranked"
+            else:
+                albedo_source = "none"
+        else:
+            albedo_source = "authored"
         tint = None
         for vv in props.get("VectorParameterValues") or []:
             pinfo = vv.get("ParameterInfo") or {}
@@ -890,6 +932,7 @@ def main():
             "switches": p_switches,
             "render": p_render,
             "phys_material": p_phys,
+            "albedo_source": albedo_source,
         }
 
     # Resolve parent inheritance
@@ -907,6 +950,7 @@ def main():
                 "switches": {},
                 "render": {},
                 "phys_material": "",
+                "albedo_source": "none",
             }
         cur = raw_mats[pkg]
         base = (
@@ -920,6 +964,7 @@ def main():
                 "switches": {},
                 "render": {},
                 "phys_material": "",
+                "albedo_source": "none",
             }
         )
         texs = dict(base["texs"])
@@ -934,6 +979,12 @@ def main():
         render = dict(base["render"])
         render.update(cur["render"])
         phys = cur["phys_material"] or base["phys_material"]
+        # P1-3: an albedo bound on the child wins with the child's source;
+        # otherwise the inherited source travels with the inherited bind.
+        if "albedo" in cur["texs"]:
+            albedo_source = cur["albedo_source"]
+        else:
+            albedo_source = base["albedo_source"]
         resolved[pkg] = {
             "texs": texs,
             "tint": tint,
@@ -942,6 +993,7 @@ def main():
             "switches": switches,
             "render": render,
             "phys_material": phys,
+            "albedo_source": albedo_source,
         }
         return resolved[pkg]
 
@@ -966,6 +1018,8 @@ def main():
                 "params": v["params"],
                 "vectors": v["vectors"],
                 "switches": v["switches"],
+                # P1-3: HOW the albedo was bound (authored vs guess tier).
+                "albedo_source": v.get("albedo_source", "none"),
             }
             if v["render"]:
                 entry["render"] = v["render"]
@@ -978,8 +1032,23 @@ def main():
         1 for v in out.values() if v["params"] or v["vectors"] or v["switches"]
     )
     print(f"Resolved {len(out)} materials ({n_params} with real params) -> {OUT}")
+    # P1-3 sentinel: Tier-3 (generic category guess) binds are counted and
+    # fail loudly on growth. Baseline pinned 2026-11-20; a re-extract that
+    # heals guesses into authored/stream binds LOWERs this number (good),
+    # but a number above the cap means new guessing crept in (bad).
+    from collections import Counter as _Counter
+    src_counts = _Counter(v.get("albedo_source", "none") for v in out.values())
+    print(f"albedo_source counts: {dict(sorted(src_counts.items()))}")
+    MAX_CATEGORY_FALLBACK_ALBEDOS = 0  # pinned 2026-11-20: no shipped material needs it
+    n_category = src_counts.get("fallback-category", 0)
+    if n_category > MAX_CATEGORY_FALLBACK_ALBEDOS:
+        raise SystemExit(
+            f"category-fallback albedos grew to {n_category} "
+            f"(cap {MAX_CATEGORY_FALLBACK_ALBEDOS}); new guessing crept in"
+        )
 
     mesh_mats = {}
+    mesh_mats_prov: dict = {}
     glb_ordered = 0
     sidecar_fallback = 0
     for mf in EX_ASSETS.rglob("*.materials.json"):
@@ -1000,23 +1069,50 @@ def main():
             key = _norm_mat_name(full)
             if key and key not in sidecar_index:
                 sidecar_index[key] = full
-        glb_names = _glb_primitive_material_names(_find_glb_for_ue_mesh(ue_mesh))
+        glb_names, glb_detail = _glb_primitive_material_names(_find_glb_for_ue_mesh(ue_mesh))
+        # P1-4 sentinel: per-entry slot_order_source. mesh_materials.json
+        # values stay plain slot lists (level_loader.gd binds them positionally
+        # and cannot be touched from here); the HOW lives in the sidecar.
+        prov: dict = {
+            "slot_order_source": "glb" if glb_names is not None else "sidecar",
+            "glb_found": glb_detail.get("glb_found", False),
+            "authored_primitives": glb_detail.get("authored_primitives", 0),
+            "degenerate_filtered": glb_detail.get("degenerate_filtered", 0),
+            "emitted_slots": 0,
+        }
+        if glb_detail.get("glb_parse_error"):
+            prov["glb_parse_error"] = True
         if glb_names is not None:
             resolved: list = []
             for gname in glb_names:
                 resolved.append(sidecar_index.get(_norm_mat_name(gname), ""))
             mesh_mats[ue_mesh] = resolved
+            prov["emitted_slots"] = len(resolved)
             glb_ordered += 1
         else:
             mesh_mats[ue_mesh] = [
                 (s.get("material") or "").split(".")[0] for s in sidecar_list
             ]
+            prov["emitted_slots"] = len(mesh_mats[ue_mesh])
+            prov["authored_primitives"] = len(sidecar_list)
             sidecar_fallback += 1
+        mesh_mats_prov[ue_mesh] = prov
     OUT_MESH_MATS.write_text(json.dumps(mesh_mats, indent=2))
     print(
         f"Mapped {len(mesh_mats)} mesh material slot lists "
         f"({glb_ordered} GLB-ordered, {sidecar_fallback} sidecar-fallback) -> {OUT_MESH_MATS}"
     )
+    # P1-4: degenerate primitives Godot drops are invisible slot loss unless
+    # counted. Name every sidecar-fallback mesh (no GLB to order by) and
+    # every mesh that lost primitives to the degenerate filter.
+    n_degen = sum(1 for p in mesh_mats_prov.values() if p["degenerate_filtered"] > 0)
+    n_degen_slots = sum(p["degenerate_filtered"] for p in mesh_mats_prov.values())
+    print(f"meshes with degenerate-filtered primitives: {n_degen} ({n_degen_slots} primitives)")
+    for ue_mesh in sorted(mesh_mats_prov):
+        if mesh_mats_prov[ue_mesh]["slot_order_source"] == "sidecar":
+            print(f"[slot-order-sidecar] {ue_mesh}")
+    OUT_PROV.write_text(json.dumps(mesh_mats_prov, indent=2))
+    print(f"wrote slot-order provenance ({len(mesh_mats_prov)} entries) -> {OUT_PROV}")
 
 
 if __name__ == "__main__":

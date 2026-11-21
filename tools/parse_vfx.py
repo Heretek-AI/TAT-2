@@ -368,6 +368,11 @@ def _parse_system(path, materials):
         "compiled_variables": variables,
         "compiled_variable_count": len(variables),
         "exposed_parameters": params,
+        # P2-5: defaults live in raw ParameterData bytes and are NOT
+        # decoded — recorded explicitly per system so "no authored look"
+        # is a stated boundary, not an assumption a reader must recover
+        # from the file notes.
+        "parameter_defaults": "unknown (ParameterData bytes not decoded)",
         "exposed_object_refs": sorted(set(exposed_refs)),
         "curve_luts": {**lut_counts, "total": lut_total},
         "curve_lut_names": sorted(set(lut_names)),
@@ -406,6 +411,26 @@ def main() -> None:
         systems.append(rec)
     systems.sort(key=lambda s: s["name"])
     print("Parsed %d Niagara systems" % len(systems))
+
+    # P2-5 drift review: the GRAPH_HEAVY cutoffs are constants pinned by the
+    # suite (21/70/29), so they are NOT recomputed here. Instead each run
+    # prints the live p90 of the bulk distribution and warns when the bulk
+    # has drifted past the constants (re-extract changed the corpus shape).
+    def _p90(vals: list) -> float:
+        s = sorted(vals)
+        return float(s[min(len(s) - 1, int(len(s) * 0.9))]) if s else 0.0
+
+    p90_scripts = _p90([s["script_count"] for s in systems])
+    p90_luts = _p90([s["curve_luts"]["total"] for s in systems])
+    print(
+        "cutoff review: p90 scripts=%.0f (const %d), p90 LUTs=%.0f (const %d)"
+        % (p90_scripts, GRAPH_HEAVY_MIN_SCRIPTS, p90_luts, GRAPH_HEAVY_MIN_LUTS)
+    )
+    if p90_scripts > GRAPH_HEAVY_MIN_SCRIPTS or p90_luts > GRAPH_HEAVY_MIN_LUTS:
+        print(
+            "WARN: bulk distribution drifted past GRAPH_HEAVY constants; "
+            "review cutoffs (suite pins 21/70/29 — update both together)"
+        )
 
     by_class = Counter(s["complexity"] for s in systems)
     by_folder = Counter(s["folder"] for s in systems)

@@ -75,8 +75,7 @@ static func spawn_fairy_orb(parent: Node, from_pos: Vector3, to_pos: Vector3, du
 static func spawn_grapple_beam(parent: Node, from_pos: Vector3, to_pos: Vector3, ttl: float = 0.35) -> void:
 	if parent == null:
 		return
-	var offset: Vector3 = to_pos - from_pos
-	var dist: float = offset.length()
+	var dist: float = (to_pos - from_pos).length()
 	if dist < 0.001:
 		return
 	var midpoint: Vector3 = (from_pos + to_pos) * 0.5
@@ -103,13 +102,8 @@ static func spawn_grapple_beam(parent: Node, from_pos: Vector3, to_pos: Vector3,
 	parent.add_child(beam)
 	beam.global_position = midpoint
 
-	var y_axis: Vector3 = offset / dist
-	var up_hint: Vector3 = Vector3.UP
-	if absf(y_axis.dot(Vector3.UP)) > 0.99:
-		up_hint = Vector3.RIGHT
-	var x_axis: Vector3 = up_hint.cross(y_axis).normalized()
-	var z_axis: Vector3 = x_axis.cross(y_axis).normalized()
-	beam.basis = Basis(x_axis, y_axis, z_axis)
+	# D9: Y-beam aim consolidated on _aim_node (same +Y convention).
+	_aim_node(beam, from_pos, to_pos)
 
 	var tree: SceneTree = parent.get_tree()
 	if tree == null:
@@ -302,6 +296,8 @@ static func spawn_blackjack_swing(parent: Node, pos: Vector3, dir: Vector3) -> v
 	parent.add_child(root)
 	root.global_position = pos
 
+	# D9: Z-facing convention (streak modeled along +Z), intentionally NOT
+	# _aim_node (Y-beams) or _aim_spot (-Z spotlights).
 	var z_axis: Vector3 = safe_dir
 	var up_hint: Vector3 = Vector3.UP
 	if absf(z_axis.dot(Vector3.UP)) > 0.99:
@@ -337,11 +333,13 @@ static func spawn_blackjack_swing(parent: Node, pos: Vector3, dir: Vector3) -> v
 	tree.create_timer(0.18).timeout.connect(root.queue_free)
 
 
-static func spawn_window_godray(parent: Node, pos: Vector3, target_pos: Vector3) -> void:
+static func spawn_window_godray(parent: Node, pos: Vector3, target_pos: Vector3, ttl: float = 0.0) -> Node3D:
+	# V5: ttl <= 0 godrays used to vanish from all accounting (a missed
+	# manual free = a permanent cone + lights). The node is now returned AND
+	# registered in the persistent set; freed-with-parent still frees it.
 	if parent == null:
-		return
-	var offset: Vector3 = target_pos - pos
-	var dist: float = offset.length()
+		return null
+	var dist: float = (target_pos - pos).length()
 	if dist < 0.001:
 		return
 	var midpoint: Vector3 = (pos + target_pos) * 0.5
@@ -373,17 +371,67 @@ static func spawn_window_godray(parent: Node, pos: Vector3, target_pos: Vector3)
 	parent.add_child(shaft)
 	shaft.global_position = midpoint
 
-	var y_axis: Vector3 = offset / dist
-	var up_hint: Vector3 = Vector3.UP
-	if absf(y_axis.dot(Vector3.UP)) > 0.99:
-		up_hint = Vector3.RIGHT
-	var x_axis: Vector3 = up_hint.cross(y_axis).normalized()
-	var z_axis: Vector3 = x_axis.cross(y_axis).normalized()
-	shaft.basis = Basis(x_axis, y_axis, z_axis)
+	# D9: Y-beam aim consolidated on _aim_node (same +Y convention).
+	_aim_node(shaft, pos, target_pos)
+	if ttl > 0.0:
+		var godray_tree: SceneTree = parent.get_tree()
+		if godray_tree != null:
+			godray_tree.create_timer(ttl).timeout.connect(shaft.queue_free)
+	else:
+		_register_persistent_vfx(shaft, "WindowGodray")
+	return shaft
+
+
+## V5 registry: caller-owned (ttl <= 0) decor. Weakrefs pruned on every
+## register/count so the list stays exact; capped at MAX_PERSISTENT_VFX
+## entries (the total stays exact past the cap).
+static func _register_persistent_vfx(node: Node3D, label: String) -> void:
+	for i: int in range(_persistent_vfx.size() - 1, -1, -1):
+		var wr: Variant = _persistent_vfx[i]
+		if not (wr is WeakRef) or (wr as WeakRef).get_ref() == null:
+			_persistent_vfx.remove_at(i)
+	_persistent_vfx_total += 1
+	if _persistent_vfx.size() < MAX_PERSISTENT_VFX:
+		_persistent_vfx.append(weakref(node))
+	if _persistent_vfx_total == 1 or _persistent_vfx_total % 25 == 0:
+		print("PersistentVfx: '", label, "' caller-owned (ttl<=0); live=", _persistent_vfx.size(), " total=", _persistent_vfx_total, " (freed with parent; live count via persistent_vfx_count())")
+
+
+## Live caller-owned VFX for the ledger (prunes dead weakrefs first).
+static func persistent_vfx_count() -> int:
+	for i: int in range(_persistent_vfx.size() - 1, -1, -1):
+		var wr: Variant = _persistent_vfx[i]
+		if not (wr is WeakRef) or (wr as WeakRef).get_ref() == null:
+			_persistent_vfx.remove_at(i)
+	return _persistent_vfx.size()
 
 
 const FOOTSTEP_MASK_PATH: String = "res://assets/ue/Raw/Art/UI/Icons/T_Decal_Footstep.png"
 static var _footstep_mask_tex: Texture2D = null
+## V4: every footstep allocated a PlaneMesh + StandardMaterial3D + Tween +
+## 6.1 s timer (sprinting = dozens of live transparent quads). The mesh is
+## now one shared static; live decals are capped with oldest-first eviction
+## (counted, never silent). Per-decal materials stay unique — the fade tween
+## drives each decal's own albedo alpha, so sharing them would fade all.
+static var _footprint_quad: PlaneMesh = null
+static var _footprints_live: Array = []
+static var _footprints_evicted: int = 0
+const MAX_FOOTPRINTS: int = 24
+## V5: ttl <= 0 spawns (godray, foyer beams) are caller-owned decor that used
+## to vanish from all accounting. They register here (weakrefs, pruned on
+## register, capped) with a log + count; freed-with-parent still frees them,
+## and persistent_vfx_count() exposes the live set for the ledger.
+static var _persistent_vfx: Array = []
+static var _persistent_vfx_total: int = 0
+const MAX_PERSISTENT_VFX: int = 512
+
+
+static func _prune_footprints() -> void:
+	for i: int in range(_footprints_live.size() - 1, -1, -1):
+		var wr: Variant = _footprints_live[i]
+		var ref: Object = (wr as WeakRef).get_ref() if wr is WeakRef else null
+		if ref == null or not is_instance_valid(ref):
+			_footprints_live.remove_at(i)
 
 
 static func _get_footstep_mask_tex() -> Texture2D:
@@ -403,6 +451,15 @@ static func _get_footstep_mask_tex() -> Texture2D:
 		img.decompress()
 	if img.get_format() != Image.FORMAT_RGBA8:
 		img.convert(Image.FORMAT_RGBA8)
+	# V6: the old path ran get_pixel/set_pixel per texel at full authored
+	# resolution on the first wet step (main-thread stall). A 128 px
+	# luminance mask keeps the footprint alpha the test pins (corner < 0.05,
+	# max > 0.5) while the loop drops to <= 16k px; the result is still
+	# cached once per session below, and prewarm_footstep_mask() lets the
+	# loader hide even that behind the loading screen.
+	if img.get_width() > 128 or img.get_height() > 128:
+		img.resize(128, 128, Image.INTERPOLATE_BILINEAR)
+		print("FootstepMask: downscaled ", src_img.get_width(), "x", src_img.get_height(), " -> 128x128 for one-time alpha bake")
 	var w: int = img.get_width()
 	var h: int = img.get_height()
 	for y: int in range(h):
@@ -411,10 +468,28 @@ static func _get_footstep_mask_tex() -> Texture2D:
 			var lum: float = clampf(c.r * 0.299 + c.g * 0.587 + c.b * 0.114, 0.0, 1.0)
 			img.set_pixel(x, y, Color(1.0, 1.0, 1.0, lum))
 	_footstep_mask_tex = ImageTexture.create_from_image(img)
+	print("FootstepMask: baked one-time alpha mask (", img.get_width(), "x", img.get_height(), ") from ", FOOTSTEP_MASK_PATH, ")")
 	return _footstep_mask_tex
 
 
+## V6 companion: bakes the mask now (loading screen) instead of on the
+## first wet footstep. Safe to call repeatedly; the cache makes it a no-op.
+static func prewarm_footstep_mask() -> void:
+	_get_footstep_mask_tex()
+
+
 static func spawn_footprint_decal(pos: Vector3, forward: Vector3, is_left: bool) -> void:
+	_prune_footprints()
+	# V4 cap: evict the oldest live decal instead of growing transparent
+	# quads without bound; evictions are counted for the ledger.
+	while _footprints_live.size() >= MAX_FOOTPRINTS:
+		var oldest: Variant = _footprints_live.pop_front()
+		var old_node: Object = (oldest as WeakRef).get_ref() if oldest is WeakRef else null
+		if old_node is Node and is_instance_valid(old_node as Node):
+			(old_node as Node).queue_free()
+		_footprints_evicted += 1
+		if _footprints_evicted == 1 or _footprints_evicted % 50 == 0:
+			push_warning("[vfx_manager] footprint cap (", MAX_FOOTPRINTS, ") evicted oldest live decal (evicted=", _footprints_evicted, ")")
 	var tree: SceneTree = Engine.get_main_loop() as SceneTree
 	if tree == null:
 		return
@@ -435,8 +510,10 @@ static func spawn_footprint_decal(pos: Vector3, forward: Vector3, is_left: bool)
 	parent.add_child(root)
 	root.global_position = foot_pos
 	root.rotation.y = atan2(flat.x, flat.z)
-	var quad: PlaneMesh = PlaneMesh.new()
-	quad.size = Vector2(0.16, 0.32)
+	if _footprint_quad == null:
+		_footprint_quad = PlaneMesh.new()
+		_footprint_quad.size = Vector2(0.16, 0.32)
+	var quad: PlaneMesh = _footprint_quad
 	var mat: StandardMaterial3D = StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -459,11 +536,22 @@ static func spawn_footprint_decal(pos: Vector3, forward: Vector3, is_left: bool)
 	var fade_tween: Tween = tree.create_tween()
 	fade_tween.tween_property(mat, "albedo_color:a", 0.0, 6.0)
 	tree.create_timer(6.1).timeout.connect(root.queue_free)
+	_footprints_live.append(weakref(root))
 
 
 static func spawn_blue_wisp(parent: Node3D, local_pos: Vector3, light_energy: float = 0.30) -> Node3D:
 	if parent == null:
 		return null
+	# V3: caller-controlled energy is clamped to the shared 0.65 mission-glow
+	# cap (old default 0.30 kept); over-cap callers are logged, not silently
+	# honoured. The bob tween is node-bound (orb.create_tween dies with the
+	# orb), so no orphan tween survives a freed wisp.
+	const WISP_LIGHT_ENERGY_CAP := 0.65
+	var wisp_energy: float = clampf(light_energy, 0.0, WISP_LIGHT_ENERGY_CAP)
+	if light_energy != wisp_energy:
+		push_warning("[vfx_manager] blue wisp energy clamped ", light_energy, " -> ", wisp_energy, " (cap ", WISP_LIGHT_ENERGY_CAP, ")")
+	assert(wisp_energy <= WISP_LIGHT_ENERGY_CAP + 0.001, "WispCap: wisp light energy exceeds cap")
+	print("WispCap: wisp light energy=", wisp_energy, " cap=", WISP_LIGHT_ENERGY_CAP)
 	var root: Node3D = Node3D.new()
 	root.name = "BlueWisp"
 	parent.add_child(root)
@@ -506,7 +594,7 @@ static func spawn_blue_wisp(parent: Node3D, local_pos: Vector3, light_energy: fl
 	glow.name = "WispLight"
 	glow.light_color = Color(0.4, 0.8, 1.0)
 	glow.omni_range = 6.0
-	glow.light_energy = light_energy
+	glow.light_energy = wisp_energy
 	glow.shadow_enabled = false
 	root.add_child(glow)
 	var mote_mesh: SphereMesh = SphereMesh.new()
@@ -812,10 +900,7 @@ static func spawn_foyer_security_beam(parent: Node, emitter_pos: Vector3, far_po
 	plate.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(plate)
 	plate.global_position = Vector3((emitter_pos.x + far_pos.x) * 0.5, 0.015, far_pos.z)
-	if ttl > 0.0:
-		var tree: SceneTree = parent.get_tree()
-		if tree != null:
-			tree.create_timer(ttl).timeout.connect(root.queue_free)
+	_register_or_free(root, parent, ttl, "FoyerSecurityBeam")
 	return root
 
 
@@ -848,6 +933,10 @@ static func _add_beam_mesh(root: Node3D, a: Vector3, b: Vector3, radius: float, 
 	_aim_node(beam, a, b)
 
 
+## D9: shared +Y aim (cylinder/cone beams are modeled along +Y). Callers:
+## grapple beam, security beam, godray shaft, foyer beams, alarm cone.
+## Z-facing streaks (blackjack swing) and -Z spotlights keep their own
+## convention (_aim_spot / inline with a comment) — same math, different axis.
 static func _aim_node(node: Node3D, a: Vector3, b: Vector3) -> void:
 	var offset: Vector3 = b - a
 	if offset.length() < 0.001:
@@ -866,6 +955,13 @@ static func _aim_node(node: Node3D, a: Vector3, b: Vector3) -> void:
 ## sustained ward hum lighting. Shard layout is eyeballed from the frame;
 ## nothing here decodes a Niagara system. Never an extraction.
 static func spawn_arcane_ward(parent: Node, pos: Vector3, facing_yaw: float = 0.0, width: float = 3.2, height: float = 2.6, ttl: float = 0.0) -> Node3D:
+	# V2: ward energies (wash 1.6, veil 2.4, shards 2.8) sat above every other
+	# cap with no shared budget. Capped + asserted here; stacked wards stay
+	# inside the Forward+ budget instead of busting it silently.
+	const WARD_WASH_ENERGY := 1.2
+	const WARD_SHADER_ENERGY := 2.0
+	assert(WARD_WASH_ENERGY <= 1.2 and WARD_SHADER_ENERGY <= 2.0, "WardCap: ward energies exceed budget")
+	print("WardCap: wash=", WARD_WASH_ENERGY, " shader=", WARD_SHADER_ENERGY, " (KF28 ward; shared VFX budget, was 1.6/2.4/2.8)")
 	if parent == null:
 		return null
 	var root: Node3D = Node3D.new()
@@ -881,7 +977,7 @@ static func spawn_arcane_ward(parent: Node, pos: Vector3, facing_yaw: float = 0.
 	var veil_mat: ShaderMaterial = ShaderMaterial.new()
 	veil_mat.shader = WARD_SHADER
 	veil_mat.set_shader_parameter("ward_color", Color(0.62, 0.28, 1.0, 0.40))
-	veil_mat.set_shader_parameter("energy", 2.4)
+	veil_mat.set_shader_parameter("energy", WARD_SHADER_ENERGY)
 	veil_mat.set_shader_parameter("facet_scale", 6.5)
 	veil_mat.set_shader_parameter("edge_fade", 1.0)
 	veil_mesh.material = veil_mat
@@ -894,7 +990,7 @@ static func spawn_arcane_ward(parent: Node, pos: Vector3, facing_yaw: float = 0.
 	var shard_mat: ShaderMaterial = ShaderMaterial.new()
 	shard_mat.shader = WARD_SHADER
 	shard_mat.set_shader_parameter("ward_color", Color(0.66, 0.32, 1.0, 0.90))
-	shard_mat.set_shader_parameter("energy", 2.8)
+	shard_mat.set_shader_parameter("energy", WARD_SHADER_ENERGY)
 	shard_mat.set_shader_parameter("facet_scale", 4.0)
 	shard_mat.set_shader_parameter("edge_fade", 0.0)
 	for i: int in range(6):
@@ -913,7 +1009,8 @@ static func spawn_arcane_ward(parent: Node, pos: Vector3, facing_yaw: float = 0.
 	wash.name = "WardWash"
 	wash.light_color = Color(0.55, 0.25, 1.0)
 	wash.omni_range = 7.0
-	wash.light_energy = 1.6
+	wash.light_energy = WARD_WASH_ENERGY
+	assert(wash.light_energy <= WARD_WASH_ENERGY + 0.001, "WardWashCap: ward wash energy exceeds cap")
 	root.add_child(wash)
 	wash.position = Vector3(0.0, height * 0.6, 1.0)
 	var mote_mesh: SphereMesh = SphereMesh.new()
@@ -947,10 +1044,7 @@ static func spawn_arcane_ward(parent: Node, pos: Vector3, facing_yaw: float = 0.
 	root.add_child(motes)
 	motes.position = Vector3(0.0, 0.4, 0.0)
 	motes.emitting = true
-	if ttl > 0.0:
-		var tree: SceneTree = parent.get_tree()
-		if tree != null:
-			tree.create_timer(ttl).timeout.connect(root.queue_free)
+	_register_or_free(root, parent, ttl, "ArcaneWard")
 	return root
 
 
@@ -994,11 +1088,19 @@ static func spawn_vine_lock(parent: Node, pos: Vector3, facing_yaw: float = 0.0,
 	glow.light_energy = 1.2
 	root.add_child(glow)
 	glow.position = Vector3(0.0, height * 0.5, 0.6)
+	_register_or_free(root, parent, ttl, "VineLock")
+	return root
+
+
+## V5 shared tail: timed spawns self-free; caller-owned (ttl <= 0) decor
+## registers in the persistent set instead of vanishing from accounting.
+static func _register_or_free(root: Node3D, parent: Node, ttl: float, label: String) -> void:
 	if ttl > 0.0:
 		var tree: SceneTree = parent.get_tree()
 		if tree != null:
 			tree.create_timer(ttl).timeout.connect(root.queue_free)
-	return root
+	else:
+		_register_persistent_vfx(root, label)
 
 
 ## R3 APPROXIMATE / REFERENCE_MATCHED (HL-1): KF29 crimson alarm wash (S26).
@@ -1008,6 +1110,15 @@ static func spawn_vine_lock(parent: Node, pos: Vector3, facing_yaw: float = 0.0,
 ## is authored light, not a particle effect. ttl frees the fixture wash.
 ## Never an extraction.
 static func spawn_crimson_alarm(parent: Node, fixture_pos: Vector3, target_pos: Vector3, ttl: float = 6.0) -> Node3D:
+	# V1: the old strobe peaked at 5.4 (base 4.5 + overshoot) while a second
+	# fade tween drove the same light_energy — last-writer-wins flicker/pop.
+	# Now the strobe dips 4.5 -> 2.2 -> 4.5 (no overshoot), the strobe is
+	# killed before the fade owns the property, and caps assert loudly.
+	const ALARM_BASE_ENERGY := 4.5
+	const ALARM_DIP_ENERGY := 2.2
+	const ALARM_BULB_ENERGY := 3.0
+	assert(ALARM_BASE_ENERGY <= 4.5 and ALARM_DIP_ENERGY >= 2.0, "AlarmCap: strobe bounds changed")
+	print("AlarmCap: spot base=", ALARM_BASE_ENERGY, " dip=", ALARM_DIP_ENERGY, " bulb=", ALARM_BULB_ENERGY, " (KF29 alarm wash; strobe never exceeds base)")
 	if parent == null:
 		return null
 	var root: Node3D = Node3D.new()
@@ -1019,7 +1130,7 @@ static func spawn_crimson_alarm(parent: Node, fixture_pos: Vector3, target_pos: 
 	var spot: SpotLight3D = SpotLight3D.new()
 	spot.name = "AlarmSpot"
 	spot.light_color = Color(1.0, 0.07, 0.05)
-	spot.light_energy = 4.5
+	spot.light_energy = ALARM_BASE_ENERGY
 	spot.spot_range = dist + 4.0
 	spot.spot_angle = 32.0
 	spot.spot_attenuation = 1.0
@@ -1055,7 +1166,8 @@ static func spawn_crimson_alarm(parent: Node, fixture_pos: Vector3, target_pos: 
 	bulb_mat.albedo_color = Color(1.0, 0.1, 0.08)
 	bulb_mat.emission_enabled = true
 	bulb_mat.emission = Color(1.0, 0.08, 0.06)
-	bulb_mat.emission_energy_multiplier = 4.0
+	bulb_mat.emission_energy_multiplier = ALARM_BULB_ENERGY
+	assert(bulb_mat.emission_energy_multiplier <= ALARM_BULB_ENERGY + 0.001, "AlarmBulbCap: alarm bulb energy exceeds cap")
 	bulb_mesh.material = bulb_mat
 	var bulb: MeshInstance3D = MeshInstance3D.new()
 	bulb.name = "AlarmBulb"
@@ -1067,10 +1179,13 @@ static func spawn_crimson_alarm(parent: Node, fixture_pos: Vector3, target_pos: 
 		# Alarm strobe pulse (KF29): two dips per second through the wash.
 		var strobe: Tween = tree.create_tween()
 		strobe.set_loops(maxi(int(ttl * 2.2), 2))
-		strobe.tween_property(spot, "light_energy", 2.2, 0.11)
-		strobe.tween_property(spot, "light_energy", 5.4, 0.11)
+		strobe.tween_property(spot, "light_energy", ALARM_DIP_ENERGY, 0.11)
+		strobe.tween_property(spot, "light_energy", ALARM_BASE_ENERGY, 0.11)
 		var fade: Tween = tree.create_tween()
 		fade.tween_interval(maxf(ttl - 0.6, 0.1))
+		# The fade owns light_energy last: kill the strobe first so the two
+		# tweens never fight over the same property (old flicker/pop).
+		fade.tween_callback(strobe.kill)
 		fade.tween_property(spot, "light_energy", 0.0, 0.6)
 		var cone_fade: Tween = tree.create_tween()
 		cone_fade.tween_interval(maxf(ttl - 0.8, 0.1))

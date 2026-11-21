@@ -53,6 +53,7 @@ var fallback_spawn_headroom_clear: bool = true
 var fallback_spawn_forward_clear: bool = true
 
 var _is_thieves_den: bool = false
+var _letter_grace_sec: float = 0.0 # P1 timer-during-letter: run-clock hold after the start letter (see _process).
 var _den_map_table_pos: Vector3 = Vector3.ZERO
 var _den_telescope_pos: Vector3 = Vector3(-4.9202, 41.0, 270.7337)
 var _den_selected_map_id: String = "old_manor"
@@ -144,7 +145,7 @@ func start_contract(order: int) -> void:
 	var loading: Node = LoadingScreenScript.new()
 	add_child(loading)
 	if loading.has_method("start_loading"):
-		loading.call("start_loading", str(contract_info.get("title", "Contract")), str(contract_info.get("clue", "")), map_id)
+		loading.call("start_loading", str(contract_info.get("title", "Contract")), _contract_clue_text(contract_info, ""), map_id)
 
 	var sublevels: Array[String] = _map_id_to_sublevels(map_id, order)
 	var ue_level_data: Dictionary = {}
@@ -189,6 +190,7 @@ func start_contract(order: int) -> void:
 		_spawn_guards(ue_level_data.get("guard_spawns", []), anchor)
 		_spawn_loot_and_quest(ue_level_data, anchor)
 		_spawn_loot_containers(ue_level_data)
+		_audit_loot_economy()
 		_spawn_clues(ue_level_data.get("loot_spawns", []), anchor)
 		_spawn_escape(ue_level_data.get("escape_points", []), anchor)
 	_spawn_spawner_content(ue_level_data)
@@ -628,8 +630,25 @@ func _spawn_map_table_miniatures(desk_pos: Vector3) -> void:
 			# 27.39531); base kept at the port 0.24.
 			"scale": 0.24,
 		},
+		{
+			# P1 Jaspering Hall unpreviewable: contracts 17-18 deploy to
+			# jaspering_hall but the Den roster was hardcoded to two maps.
+			# No SM_MapBuilding_Jasper mesh exists in extracted data, so this
+			# entry is a loud procedural fallback (never silent): selection,
+			# gaze and card work; the warning names the missing art.
+			"name": "MapTokenJasperingHall",
+			"map_id": "jaspering_hall",
+			"ue_mesh": "",
+			"ue_mat": "",
+			"offset": Vector3(-0.02, 0.02, 0.32),
+			"scale": 0.20,
+			"fallback_token": true,
+		},
 	]
 	for item: Dictionary in miniatures:
+		if bool(item.get("fallback_token", false)):
+			_add_fallback_map_token(item, desk_pos)
+			continue
 		var ue_mesh: String = str(item["ue_mesh"])
 		var ue_mat: String = str(item["ue_mat"])
 		var mesh: Mesh = null
@@ -662,6 +681,31 @@ func _spawn_map_table_miniatures(desk_pos: Vector3) -> void:
 		add_child(mi)
 		_den_tokens[str(item["map_id"])] = mi
 	_update_map_token_highlights()
+
+
+## P1 Jaspering fallback token: procedural stand-in so the expansion map is
+## selectable/previewable despite the missing authored mesh. Loud by design
+## (UE SM_MapBuilding_* family has no Jaspering entry in extracted data).
+func _add_fallback_map_token(item: Dictionary, desk_pos: Vector3) -> void:
+	push_warning("[mission_controller] Jaspering Hall has no authored Den token mesh; using a procedural fallback (UE SM_MapBuilding_* family)")
+	var mi := MeshInstance3D.new()
+	mi.name = str(item.get("name", "MapTokenFallback"))
+	var bm := BoxMesh.new()
+	bm.size = Vector3(0.30, 0.10, 0.22)
+	mi.mesh = bm
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.55, 0.42, 0.20)
+	mat.emission_enabled = true
+	mat.emission = Color(1.0, 0.72, 0.24)
+	mat.emission_energy_multiplier = 0.0
+	mi.set_surface_override_material(0, mat)
+	mi.position = desk_pos + (item.get("offset", Vector3.ZERO) as Vector3)
+	var sc: float = float(item.get("scale", 0.20))
+	mi.scale = Vector3(sc, sc, sc)
+	mi.set_meta("minis_base", sc)
+	mi.add_to_group("map_table_tokens")
+	add_child(mi)
+	_den_tokens[str(item.get("map_id", "jaspering_hall"))] = mi
 
 
 func _update_map_token_highlights() -> void:
@@ -707,8 +751,15 @@ func _update_map_token_highlights() -> void:
 					sm.emission_energy_multiplier = 0.0
 
 
+## P1 Jaspering-Hall-unpreviewable roster: selectable Den maps in one place so
+## set_den_selected_map and the gaze path cannot drift (P2 gaze bypass).
+static func is_selectable_den_map(map_id: String) -> bool:
+	return map_id == "old_manor" or map_id == "guildhall" or map_id == "jaspering_hall"
+
+
 func set_den_selected_map(map_id: String) -> void:
-	if map_id != "old_manor" and map_id != "guildhall":
+	if not is_selectable_den_map(map_id):
+		push_warning("[mission_controller] rejecting non-selectable Den map (UE Den map table): ", map_id)
 		return
 	if _den_selected_map_id == map_id:
 		return
@@ -921,13 +972,14 @@ func _refresh_den_lookat_card(force_push: bool = false) -> void:
 	else:
 		fwd = Vector3.FORWARD
 
-	var card: Dictionary = {"visible": false, "target": "", "title": "", "hints": []}
+	var card: Dictionary = {"visible": false, "target": "", "title": "", "prompt": "", "bottom_hints": []}
 	if _ponder_active:
 		card = {
 			"visible": true,
 			"target": "telescope",
 			"title": "KILCAIRN SKYLINE",
-			"hints": [{"key": "F", "label": "EXIT"}],
+			"prompt": "EXIT",
+			"bottom_hints": [{"key": "F", "label": "EXIT"}],
 		}
 	else:
 		var to_table: Vector3 = _den_map_table_pos - eye
@@ -952,10 +1004,13 @@ func _refresh_den_lookat_card(force_push: bool = false) -> void:
 				if perp < best_perp:
 					best_perp = perp
 					best_mid = mid
-			if best_mid != "" and best_mid != _den_selected_map_id:
+			if best_mid != "" and best_mid != _den_selected_map_id and is_selectable_den_map(best_mid):
+				# P2 gaze bypass: intentional direct write, not set_den_selected_map
+				# (that setter re-enters _refresh_den_lookat_card; we are inside
+				# it). Highlights converge on _update_map_token_highlights, one path.
 				_den_selected_map_id = best_mid
 				_update_map_token_highlights()
-			var loc_title: String = "ELWAY MANOR" if _den_selected_map_id == "old_manor" else "CONSTABLES' GUILDHALL"
+			var loc_title: String = "ELWAY MANOR" if _den_selected_map_id == "old_manor" else ("JASPERING HALL" if _den_selected_map_id == "jaspering_hall" else "CONSTABLES' GUILDHALL")
 			card = {
 				"visible": true,
 				"target": "map_table",
@@ -963,7 +1018,8 @@ func _refresh_den_lookat_card(force_push: bool = false) -> void:
 				"title": loc_title,
 				"difficulty": GameState.difficulty_label(),
 				"mode": GameState.active_mission_mode,
-				"hints": [
+				"prompt": "Prepare for Mission",
+				"bottom_hints": [
 					{"key": "H", "label": "Difficulty: %s" % GameState.difficulty_label()},
 					{"key": "R", "label": "Mode: %s" % GameState.active_mission_mode},
 					{"key": "F", "label": "Prepare for Mission"},
@@ -978,7 +1034,8 @@ func _refresh_den_lookat_card(force_push: bool = false) -> void:
 					"visible": true,
 					"target": "telescope",
 					"title": "TELESCOPE",
-					"hints": [{"key": "F", "label": "PONDER"}],
+					"prompt": "PONDER",
+					"bottom_hints": [{"key": "F", "label": "PONDER"}],
 				}
 
 	var changed: bool = force_push \
@@ -1126,18 +1183,30 @@ func interact(_actor: Node) -> void:
 func open_contract_table_ui() -> void:
 	var ui: CanvasLayer = ContractTableUIScript.new()
 	ui.set("selected_map_id", _den_selected_map_id)
+	# P2 table highlights wrong row: the opener set the map but never the
+	# order, so the highlight sat on contract #1 regardless of the active
+	# contract (contract_table_ui default selected_order = 1).
+	ui.set("selected_order", GameState.active_contract_order)
 	ui.set("coop_mode", GameState.active_mission_mode)
 	add_child(ui)
 	if ui.has_signal("deploy_requested"):
 		ui.connect("deploy_requested", func(order_id: int, map_id: String) -> void:
+			# T7: reset_run clears active_mission_id on map change (Den -> mission map
+			# always changes), which dropped the prep-table choice; the table-local
+			# coop_mode likewise never reached GameState. Stash both across the reset;
+			# _setup_mission_objectives validates the id against missions_by_id + map.
+			var pending_mission_id: String = GameState.active_mission_id
+			var pending_mode: String = GameState.active_mission_mode
 			GameState.reset_run(order_id, map_id)
+			GameState.active_mission_id = pending_mission_id
+			GameState.active_mission_mode = pending_mode
 			get_tree().reload_current_scene()
 		)
 	if ui.has_method("open_table"):
 		ui.call("open_table")
 
 
-func _setup_mission_objectives(map_id: String, order: int) -> void:
+func _setup_mission_objectives(map_id: String, _order: int) -> void:
 	_active_mission_row = {}
 	if map_id == "thieves_den":
 		GameState.set_mission_objectives([], 0)
@@ -1148,9 +1217,14 @@ func _setup_mission_objectives(map_id: String, order: int) -> void:
 		if cand is Dictionary and str((cand as Dictionary).get("map_id", "")) == map_id:
 			chosen = (cand as Dictionary).duplicate(true)
 	if chosen.is_empty():
+		# T7: no positional re-derivation — the contract order never identified a
+		# mission (absi(order) % size silently discarded the OptionButton override).
+		# The deploy handoff threads the chosen id via GameState.active_mission_id;
+		# this fallback only serves legacy paths that never set one, and stays
+		# deterministic without pretending the order selects a mission.
 		var matching: Array[Dictionary] = GameData.get_missions_for_map(map_id)
 		if not matching.is_empty():
-			chosen = matching[absi(order) % matching.size()].duplicate(true)
+			chosen = matching[0].duplicate(true)
 	_active_mission_row = chosen
 	var mid: String = str(chosen.get("id", ""))
 	if mid != "":
@@ -1214,11 +1288,39 @@ func _trigger_mission_start_letter() -> void:
 		intro_s = "Esteemed Colleague — Infiltrate the target site, secure the objective, and slip away unseen."
 	contract_info["intro"] = intro_s
 	GameState.request_mission_letter(title_s, intro_s)
+	_letter_grace_sec = LETTER_GRACE_SEC
+
+
+## T8: GameData.get_contract_display writes clue text only as "clue_facts"
+## (array, game_data.gd:389); zero producers write a "clue" key. Resolve in
+## that order: legacy "clue" first (forward-compat), then the "clue_facts"
+## joined exactly the way the table intel panel shows them
+## (contract_table_ui.gd:310-315), then the caller fallback. The assert pins
+## the key contract: a dict carrying neither key is a producer bug, caught
+## in debug without changing release behavior.
+func _contract_clue_text(info: Dictionary, fallback: String) -> String:
+	if not info.has("clue") and not info.has("clue_facts"):
+		push_error("[mission_controller] contract dict carries neither 'clue' nor 'clue_facts'; using fallback")
+		assert(false, "contract clue key contract broken: expected 'clue_facts' (game_data.gd:389)")
+		return fallback
+	var legacy: String = str(info.get("clue", "")).strip_edges()
+	if legacy != "":
+		return legacy
+	var facts_v: Variant = info.get("clue_facts", null)
+	if facts_v is Array and not (facts_v as Array).is_empty():
+		var parts: Array[String] = []
+		for fact: Variant in (facts_v as Array):
+			var f: String = str(fact).strip_edges()
+			if f != "":
+				parts.append("• " + f)
+		if not parts.is_empty():
+			return "\n".join(parts)
+	return fallback
 
 
 func _spawn_clues(ue_spawns: Array, anchor: Vector3) -> void:
 	var clue_title: String = str(contract_info.get("title", "Contract Clue"))
-	var clue_body: String = str(contract_info.get("clue", "Locate the target vault and watch the Constabulary patrol timing."))
+	var clue_body: String = _contract_clue_text(contract_info, "Locate the target vault and watch the Constabulary patrol timing.")
 	if clue_body == "":
 		clue_body = "Locate the target vault and watch the Constabulary patrol timing."
 	var pos: Vector3 = anchor + Vector3(2.5, 0.85, -3.5)
@@ -1553,7 +1655,16 @@ func _ground_position(pos: Vector3, up_m: float = 8.0, down_m: float = 30.0, off
 
 
 func _spawn_guards(ue_spawns: Array, anchor: Vector3) -> void:
-	var limit := 6 + (2 if GameState.difficulty == GameState.Difficulty.MASTER_THIEF else 0)
+	# P1 flat Novice-to-Thief guard count: the old limit ignored the first two
+	# difficulties (identical patrol density Novice/Thief). Novice 4 / Thief 6 /
+	# Master Thief 8 (UE path: none authored per difficulty; retained tuning,
+	# fail-loud if the difficulty enum is unreadable).
+	var limit: int = 6
+	match GameState.difficulty:
+		GameState.Difficulty.NOVICE:
+			limit = 4
+		GameState.Difficulty.MASTER_THIEF:
+			limit = 8
 	var chosen: Array[Vector3] = []
 	for p in ue_spawns:
 		if p is Vector3 and p.distance_to(anchor) > 10.0 and p.distance_to(anchor) < 120.0:
@@ -1643,11 +1754,17 @@ func _spawn_loot_and_quest(stats: Dictionary, anchor: Vector3) -> void:
 ## Deterministic weighted pick from a bucket class list (duplicates carry the
 ## designer weight): a pure function of marker position + order, no RNG, so
 ## every run spawns the same actor on the same marker.
+## P2 bucket-hash duplication: loot_container.bucket_index is the single
+## source of truth (same formula, one home). This wrapper keeps call sites
+## stable and pins parity: any drift between the two fails loud.
 static func _loot_bucket_index(pos: Vector3, order: int, size: int) -> int:
-	if size <= 0:
-		return 0
+	var shared: int = LootContainerScript.bucket_index(pos, order, size)
 	var h: int = int(absf(pos.x * 12.9898 + pos.y * 78.233 + pos.z * 37.719 + float(order) * 0.731))
-	return posmod(h, size)
+	var local: int = posmod(h, size) if size > 0 else 0
+	if shared != local:
+		push_error("[mission_controller] loot bucket hash drift vs loot_container.bucket_index (UE loot wave parity)")
+		assert(false, "loot bucket hash drift")
+	return shared
 
 
 func _spawn_loot_entries(entries: Array, tier: String) -> void:
@@ -1768,6 +1885,24 @@ func _load_loot_tables() -> void:
 		loot_tables["fallback_quest_actor"] = str((fb as Dictionary).get("generic_quest_actor", ""))
 
 
+## P1 spawner/eco check vs the unified loot_goal (Phase-1 T3 single source of
+## truth): sums every spawned loot value after the wave + containers and
+## fails loud when the map cannot pay the goal. Data-driven, so no assert —
+## the error log is the signal (UE loot_actors.json values vs loot_goal).
+func _audit_loot_economy() -> void:
+	if GameState.loot_goal <= 0:
+		return
+	var total: int = 0
+	for n in get_tree().get_nodes_in_group("loot"):
+		var lv: Variant = n.get("value")
+		if lv != null:
+			total += int(lv)
+	if total < GameState.loot_goal:
+		push_error("[mission_controller] loot economy shortfall: spawned value ", total, " < loot_goal ", GameState.loot_goal, " (UE loot_actors.json vs unified goal)")
+	else:
+		print("TAT-2 loot economy: ", total, " >= loot_goal ", GameState.loot_goal)
+
+
 ## Openable loot containers (tools/parse_containers.py): one trigger-only Area3D
 ## per container marker, placed at the marker transform. Container meshes are
 ## level geometry and are never spawned here. Skipped for the Thieves' Den hub
@@ -1839,11 +1974,35 @@ func _spawn_swinging_doors(stats: Dictionary) -> void:
 		print("TAT-2 swinging doors: ", count)
 
 
+## P2 escape grounding: explicit floor raycast with a hit flag (unlike
+## _ground_position's fail-soft fallback, which is indistinguishable from a hit).
+func _ground_escape_position(raw: Vector3) -> Vector3:
+	var w3d: World3D = get_world_3d()
+	if w3d == null:
+		push_warning("[mission_controller] escape grounding without a world; keeping authored marker (UE escape path)")
+		return raw
+	var phys: PhysicsDirectSpaceState3D = w3d.direct_space_state
+	var hit: Dictionary = phys.intersect_ray(PhysicsRayQueryParameters3D.create(raw + Vector3(0.0, 8.0, 0.0), raw + Vector3(0.0, -30.0, 0.0), 1))
+	if hit.is_empty():
+		push_warning("[mission_controller] escape marker has no floor below; keeping authored pos (UE escape marker): ", raw)
+		return raw
+	var hp: Variant = hit.get("position", null)
+	if hp is Vector3:
+		return (hp as Vector3) + Vector3(0.0, 0.15, 0.0)
+	push_warning("[mission_controller] escape raycast hit without a position; keeping authored marker (UE escape path)")
+	return raw
+
+
 func _spawn_escape(ue_escapes: Array, anchor: Vector3) -> void:
+	# P2 escape not floor-grounded: guards/loot raycast to the floor, the gate
+	# used the raw authored marker (a floating marker = a floating gate, UE
+	# escape marker path). Ground it; keep the authored pos with a loud warning
+	# when no floor is found instead of silently floating.
 	var eg := EscapeScript.new()
 	var epos := anchor + Vector3(0, 0.2, 6)
 	if not ue_escapes.is_empty():
-		epos = ue_escapes[0]
+		var raw: Vector3 = ue_escapes[0]
+		epos = _ground_escape_position(raw)
 	eg.apply_escape_config(EscapeScript.escape_config())
 	eg.position = epos
 	eg.extracted.connect(_on_extracted)
@@ -1942,12 +2101,24 @@ func _spawn_civilians(spawns: Array) -> int:
 ## the smoke volume is a 5 x 5 x 4 m axis-aligned box, not a sphere.
 const SMOKE_HALF_EXTENTS: Vector3 = Vector3(2.5, 2.0, 2.5)
 const SMOKE_TTL: float = 25.0
+## P1 timer-during-letter grace: run clock holds this long after the start
+## letter is requested (retained tuning, no UE source; HUD letter is read-only).
+const LETTER_GRACE_SEC: float = 6.0
 
 
 func spawn_smoke(pos: Vector3, ttl: float = SMOKE_TTL) -> void:
-	VfxManager.spawn_smoke_cloud(self, pos, SMOKE_HALF_EXTENTS, ttl)
+	# P1 smoke visual/gameplay desync: the old bookkeeping stored node:null
+	# while the visual lived on VfxManager's own lifetime, so expiry bookkeeping
+	# and the visual could disagree. Gameplay occlusion is authoritative here
+	# (single 5x5x4 m box over SMOKE_TTL); the visual is cosmetic. Callers pass
+	# the same 25.0 (thrown_bottle IMPACT path, thief fallback path); any other
+	# TTL fails loud so the two can never drift silently.
+	if absf(ttl - SMOKE_TTL) > 0.001:
+		push_error("[mission_controller] non-standard smoke TTL ", ttl, "; expected SMOKE_TTL ", SMOKE_TTL, " (gameplay/visual parity)")
+		assert(false, "smoke TTL drift vs SMOKE_TTL")
+	VfxManager.spawn_smoke_cloud(self, pos, SMOKE_HALF_EXTENTS, SMOKE_TTL)
 	var half: Vector3 = SMOKE_HALF_EXTENTS
-	smokes.append({"min": pos - half, "max": pos + half, "ttl": ttl, "node": null})
+	smokes.append({"min": pos - half, "max": pos + half, "ttl": SMOKE_TTL})
 
 
 func is_blocked_by_smoke(a: Vector3, b: Vector3) -> bool:
@@ -1986,22 +2157,30 @@ func _segment_hits_aabb(a: Vector3, b: Vector3, mn: Vector3, mx: Vector3) -> boo
 
 func _process(delta: float) -> void:
 	if GameState.state == "playing":
-		GameState.elapsed_sec += delta
-		if GameState.run_time_limit > 0.0 and GameState.elapsed_sec >= GameState.run_time_limit:
-			_on_time_expired()
-			return
+		# P1 timer-during-letter: the mission-start letter (HUD-side, read-only)
+		# never stopped elapsed_sec, so the run clock ate the read time and
+		# _on_time_expired could fire mid-letter. Hold the clock for a short
+		# grace after the letter is requested (retained tuning
+		# LETTER_GRACE_SEC; the lockpick minigame still runs the clock by
+		# design — that time is player action, not forced UI).
+		if _letter_grace_sec > 0.0:
+			_letter_grace_sec = maxf(0.0, _letter_grace_sec - delta)
+		else:
+			GameState.elapsed_sec += delta
+			if GameState.run_time_limit > 0.0 and GameState.elapsed_sec >= GameState.run_time_limit:
+				_on_time_expired()
+				return
 		light_probe.tick(GameState.elapsed_sec)
 		for i in range(smokes.size() - 1, -1, -1):
 			smokes[i]["ttl"] -= delta
 			if smokes[i]["ttl"] <= 0.0:
-				var n: Node = smokes[i]["node"]
-				if is_instance_valid(n):
-					n.queue_free()
 				smokes.remove_at(i)
 		if _is_thieves_den:
 			_refresh_den_lookat_card(false)
-	if rain_node != null:
-		WeatherVisuals.snap_rain_to(rain_node, player)
+		# P2 rain-on-result-screens: snap ran every frame including
+			# victory/failed panels. Frozen weather on end screens.
+		if rain_node != null:
+			WeatherVisuals.snap_rain_to(rain_node, player)
 
 
 func _on_extracted() -> void:

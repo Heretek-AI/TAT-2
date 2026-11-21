@@ -198,6 +198,17 @@ func _process(delta: float) -> void:
 		visual_root.rotate_y(delta * 1.4)
 
 
+## P2 loot_item prompt fallback: quest loot used to fall through to the
+## generic "[E] Steal %s" branch in thief_character (wrong verb for a
+## contract relic the player must take). Quest items read Take; regular loot
+## keeps Steal.
+func get_interact_prompt() -> String:
+	var label: String = display_name if display_name != "" else item_name
+	if is_quest_item:
+		return "[E] Take %s" % label
+	return "[E] Steal %s" % label
+
+
 func interact(_actor: Node) -> void:
 	if get_meta("collected", false):
 		return

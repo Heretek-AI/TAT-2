@@ -40,6 +40,14 @@ const MobileProfile: GDScript = preload("res://src/core/mobile_profile.gd")
 const WEATHER_DIR := "res://data/generated/weather"
 const MAP_TABLE_PATH := "res://data/generated/weather/map_weather.json"
 
+## P1: disk + JSON re-parse per lookup. Static caches: the map table is
+## immutable at runtime and presets are content-addressed by name, so one
+## decode each per session. reload_weather_cache() invalidates (tests /
+## content reloads); every lookup still fails closed on missing data.
+static var _map_table_cache: Dictionary = {}
+static var _map_table_ready: bool = false
+static var _preset_cache: Dictionary = {}
+
 # Cache for desktop shadow-toe lift 1D LUTs (R3 APPROXIMATE Local Exposure / gain_shadows).
 static var _lut_cache: Dictionary = {}
 
@@ -54,6 +62,61 @@ const AMBIENT_ENERGY_MIN := 0.02
 const AMBIENT_ENERGY_MAX := 1.0
 # UE BloomIntensity -> Godot glow_intensity (DenseFog 8.0 -> 0.64).
 const BLOOM_TO_GLOW := 0.08
+## P3 companion: fog-energy compensation ceiling. Both density branches
+## share one cap so the tuning lives in one place, not two literals.
+const FOG_ENERGY_COMP_MAX := 8.0
+## P4 companion: off-Den glow uses 3 mip levels (0-2), not 5, and a 1.5x
+## HDR scale instead of 2.0x. Levels 3-4 are explicitly disabled so a preset
+## that leaves them on cannot stack 5 mips + 2x HDR outside the Den.
+const GLOW_LEVELS_NON_DEN := 3
+const GLOW_HDR_SCALE_NON_DEN := 1.5
+
+
+## P3: the old compensation divided up to 24x on pre-exposed dark presets
+## and whited out the fog. Capped at FOG_ENERGY_COMP_MAX; anything above
+## logs the preset so the authored value stays visible, never silently cut.
+static func _clamped_fog_compensation(want_energy: float, is_low_density: bool, preset: Dictionary) -> float:
+	if want_energy <= FOG_ENERGY_COMP_MAX:
+		return maxf(want_energy, 1.0)
+	var fog_c: Variant = fog_light_color(preset)
+	var lum_dbg: String = "?"
+	if fog_c is Color:
+		var fc: Color = fog_c as Color
+		lum_dbg = str(snappedf(0.2126 * fc.r + 0.7152 * fc.g + 0.0722 * fc.b, 0.0005))
+	push_warning("[weather_profile] fog energy compensation clamped ", snappedf(want_energy, 0.1), "x -> ", FOG_ENERGY_COMP_MAX, "x for preset '", str(preset.get("preset", "?")), "' (fog_lum=", lum_dbg, ", low_density=", is_low_density, ")")
+	return FOG_ENERGY_COMP_MAX
+
+
+## Desktop quality toggle (P2 companion). The old path enabled volumetric
+## fog + SSIL + 48-step SSR on every desktop GPU with no way down. Levels:
+## 2 = high (current desktop behaviour), 1 = medium (SSR steps halved, no
+## SSIL), 0 = low (no volumetric/SSIL/SSR). Defaults to high so shipped
+## behaviour is unchanged; SaveSystem "graphics_quality" (low/medium/high)
+## is honoured when present. Values are perf policy, logged at apply time.
+static var _quality_override: int = -1
+
+
+static func set_quality_level(level: int) -> void:
+	_quality_override = clampi(level, 0, 2)
+
+
+static func quality_level() -> int:
+	if _quality_override >= 0:
+		return _quality_override
+	var tree: SceneTree = Engine.get_main_loop() as SceneTree
+	if tree != null:
+		var save_system: Node = tree.root.get_node_or_null("SaveSystem")
+		if save_system != null:
+			var data_variant: Variant = save_system.get("data")
+			if data_variant is Dictionary:
+				var settings: Variant = (data_variant as Dictionary).get("settings", {})
+				if settings is Dictionary:
+					match str((settings as Dictionary).get("graphics_quality", "high")).to_lower():
+						"low":
+							return 0
+						"medium":
+							return 1
+	return 2
 
 
 static func _load_json(path: String) -> Variant:
@@ -65,13 +128,27 @@ static func _load_json(path: String) -> Variant:
 	return JSON.parse_string(f.get_as_text())
 
 
+## Drops all cached tables/presets so the next lookup re-reads disk.
+static func reload_weather_cache() -> void:
+	_map_table_cache = {}
+	_map_table_ready = false
+	_preset_cache = {}
+
+
 static func load_map_table() -> Dictionary:
+	if _map_table_ready:
+		return _map_table_cache
 	var parsed: Variant = _load_json(MAP_TABLE_PATH)
 	if parsed is Dictionary:
 		var maps: Variant = (parsed as Dictionary).get("maps")
 		if maps is Dictionary:
-			return maps
-	return {}
+			_map_table_cache = maps
+			_map_table_ready = true
+			return _map_table_cache
+	push_warning("[weather_profile] map_weather.json missing or has no maps table at ", MAP_TABLE_PATH, "; preset lookups fail closed")
+	_map_table_cache = {}
+	_map_table_ready = true
+	return _map_table_cache
 
 
 static func preset_name_for_map(map_id: String) -> String:
@@ -85,9 +162,14 @@ static func preset_name_for_map(map_id: String) -> String:
 static func load_preset(preset_name: String) -> Dictionary:
 	if preset_name == "":
 		return {}
+	if _preset_cache.has(preset_name):
+		return _preset_cache[preset_name] as Dictionary
 	var parsed: Variant = _load_json(WEATHER_DIR + "/" + preset_name + ".json")
 	if parsed is Dictionary:
+		_preset_cache[preset_name] = parsed
 		return parsed
+	push_warning("[weather_profile] weather preset missing or corrupt: ", preset_name, " (expected ", WEATHER_DIR, "/", preset_name, ".json); failing closed")
+	_preset_cache[preset_name] = {}
 	return {}
 
 
@@ -364,7 +446,7 @@ static func apply_environment(env: Environment, moon: DirectionalLight3D, preset
 			var fog_lum: float = 0.2126 * fc.r + 0.7152 * fc.g + 0.0722 * fc.b
 			var is_low_density: bool = float(fog_d) <= 0.1
 			if fog_lum > 0.0 and fog_lum < 0.02:
-				env.fog_light_energy = clampf(0.06 / fog_lum, 1.0, 24.0) if is_low_density else clampf(0.025 / fog_lum, 1.0, 8.0)
+				env.fog_light_energy = _clamped_fog_compensation(0.06 / fog_lum, is_low_density, preset) if is_low_density else _clamped_fog_compensation(0.025 / fog_lum, is_low_density, preset)
 				env.fog_aerial_perspective = 0.65 if is_low_density else 0.25
 		var scatter: Variant = fog_sun_scatter(preset)
 		if scatter != null:
@@ -374,7 +456,14 @@ static func apply_environment(env: Environment, moon: DirectionalLight3D, preset
 		# depth, so the authored gradient, stars and moon would render black.
 		env.fog_sky_affect = 0.0
 		var is_desktop: bool = not MobileProfile.is_mobile()
-		if is_desktop and fog_d != null:
+		# P2: volumetric/SSIL/SSR are desktop-quality-gated, not unconditional.
+		# High (2) keeps shipped behaviour; medium (1) halves SSR steps and
+		# drops SSIL; low (0) drops all three. Set via SaveSystem
+		# "graphics_quality" or set_quality_level(); logged once per apply.
+		var desktop_quality: int = quality_level() if is_desktop else 2
+		if is_desktop:
+			print("WeatherQuality: desktop level=", desktop_quality, " (0=low 1=medium 2=high) for preset '", str(preset.get("preset", "?")), "'")
+		if is_desktop and fog_d != null and desktop_quality >= 1:
 			# Desktop volumetric distance haze driven by authored fog extinction/distance/hue
 			# (R3 APPROXIMATE stand-in for UE5 ExponentialHeightFog volumetric scattering).
 			var fog_sec: Dictionary = _section(preset, "fog")
@@ -415,7 +504,7 @@ static func apply_environment(env: Environment, moon: DirectionalLight3D, preset
 				env.adjustment_saturation = float(sat)
 			if bri != null:
 				env.adjustment_brightness = clampf(float(bri), 0.0, 2.0)
-		if is_desktop:
+		if is_desktop and desktop_quality >= 2:
 			# Desktop SSIL + shadow-toe LUT (R3 APPROXIMATE replacement for UE5 Lumen GI & Local Exposure).
 			env.ssil_enabled = true
 			env.ssil_radius = 4.5
@@ -440,21 +529,31 @@ static func apply_environment(env: Environment, moon: DirectionalLight3D, preset
 			env.glow_intensity = float(glow) * 0.6 if is_den_glow else float(glow)
 			if is_desktop:
 				env.glow_hdr_threshold = 1.0
-				env.glow_hdr_scale = 1.0 if is_den_glow else 2.0
+				env.glow_hdr_scale = 1.0 if is_den_glow else GLOW_HDR_SCALE_NON_DEN
 				env.glow_bloom = 0.10 if is_den_glow else 0.14
 				env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
-				for gl_i: int in range(2 if is_den_glow else 5):
+				for gl_i: int in range(2 if is_den_glow else GLOW_LEVELS_NON_DEN):
 					env.set_glow_level(gl_i, true)
 				if is_den_glow:
 					for gl_off: int in range(2, 5):
 						env.set_glow_level(gl_off, false)
+				else:
+					for gl_off: int in range(GLOW_LEVELS_NON_DEN, 5):
+						env.set_glow_level(gl_off, false)
 		if is_desktop:
 			# Desktop SSR for wet cobblestone puddles (tat_landscape.gdshader roughness ~0.04).
-			env.ssr_enabled = true
-			env.ssr_max_steps = 48
+			env.ssr_enabled = desktop_quality >= 1
+			env.ssr_max_steps = 48 if desktop_quality >= 2 else 24
 			env.ssr_fade_in = 0.15
 			env.ssr_fade_out = 2.0
 			env.ssr_depth_tolerance = 0.2
+	# M3: the mobile glow cap must run AFTER weather apply — callers that
+	# apply mobile first get silently stomped here. Enforcing the order at
+	# this seam (MobileProfile is already preloaded above) instead of
+	# trusting call order. Re-checks is_mobile() directly so this also holds
+	# when env was null above (no reliance on the block-scoped is_desktop).
+	if env != null and MobileProfile.is_mobile():
+		MobileProfile.apply_environment(env)
 	if moon != null:
 		var energy: Variant = moon_energy(preset)
 		if energy != null:

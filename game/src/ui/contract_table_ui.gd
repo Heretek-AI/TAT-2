@@ -84,7 +84,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 
-## Confirmation-modal keys: [SPACE] prepare, [ESC] cancel, [H] difficulty, [R] mode.
+## Confirmation-modal keys: [SPACE/F] prepare, [ESC] cancel, [H] difficulty, [R] mode.
 func _confirm_input(event: InputEvent) -> void:
 	if event is InputEventKey:
 		var kev: InputEventKey = event as InputEventKey
@@ -93,7 +93,7 @@ func _confirm_input(event: InputEvent) -> void:
 				_hide_confirm()
 				get_viewport().set_input_as_handled()
 				return
-			if kev.keycode == KEY_SPACE:
+			if kev.keycode == KEY_SPACE or kev.keycode == KEY_F:
 				_confirm_prepare()
 				get_viewport().set_input_as_handled()
 				return
@@ -329,6 +329,14 @@ func _update_splash(map_id: String) -> void:
 
 
 func _splash_for(map_id: String) -> Texture2D:
+	# P2-5: non-Manor/Guildhall maps fall back to the mission_prep
+	# LOCATION_ART_MAP portraits (jaspering_hall / thieves_den) before hiding.
+	var art_fallbacks: Array[String] = [
+		"res://assets/ue/Raw/Art/UI/Icons/Rewards/Maps/T_Map_OldManor.png",
+		"res://assets/ue/Raw/Art/UI/Shell/MapSplash_Guildhall.png",
+		"res://assets/ue/Raw/Art/UI/Shell/SplashScreen/T_loadingScreen_1.png",
+		"res://assets/ue/Raw/Art/UI/Shell/SplashScreen/T_loadingScreen_2.png",
+	]
 	var ordered: Array[String] = []
 	if map_id == "old_manor":
 		ordered = [
@@ -343,6 +351,9 @@ func _splash_for(map_id: String) -> Texture2D:
 	for extra: String in SPLASH_CANDIDATES:
 		if not ordered.has(extra):
 			ordered.append(extra)
+	for fb: String in art_fallbacks:
+		if not ordered.has(fb):
+			ordered.append(fb)
 	for p: String in ordered:
 		if ResourceLoader.exists(p):
 			var t: Texture2D = ResourceLoader.load(p) as Texture2D
@@ -464,7 +475,7 @@ func _build_confirm() -> void:
 	vb.add_child(_confirm_lbl)
 	vb.add_child(ThemeScript.teal_divider())
 	var hint: Label = Label.new()
-	hint.text = "[H] Difficulty toggle   ·   [R] Mode toggle"
+	hint.text = "[H] Difficulty toggle   ·   [R] Mode toggle   ·   [SPACE/F] PREPARE"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.add_theme_font_size_override("font_size", 14)
 	hint.add_theme_color_override("font_color", ThemeScript.TEAL_MUTED)
@@ -541,6 +552,11 @@ func _confirm_prepare() -> void:
 
 func _on_prep_ready(p_map_id: String, p_difficulty: int, p_mode: String, p_order: int) -> void:
 	GameState.difficulty = clampi(p_difficulty, 1, 3)
+	# T7: the table-local coop_mode never reached GameState — the deploy closure only
+	# took (order, map). Persist the prep-confirmed mode here so the deploy closure can
+	# carry it across reset_run into the run.
+	GameState.active_mission_mode = p_mode
+	coop_mode = p_mode
 	mission_selected.emit(p_order, p_map_id, int(GameState.difficulty), p_mode)
 	deploy_requested.emit(p_order, p_map_id)
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED

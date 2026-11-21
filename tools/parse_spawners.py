@@ -285,13 +285,22 @@ def main() -> None:
                 entries.append(rec)
 
     missing = [e for e in entries if "mesh_res_path" in e and not e.get("mesh_exists")]
-    assert not missing, f"resolved meshes missing on disk: {missing}"
+    # P1-7: fail-closed AND optimization-proof. `assert` vanishes under
+    # `python -O`; a validator that disappears in optimized builds is no
+    # validator. UE path is logged per missing mesh (sentinel discipline).
+    if missing:
+        for e in missing:
+            print(f"[spawner-mesh-missing] kind={e.get('kind')} class={e.get('class')} ue={e.get('mesh_ue_path')}")
+        raise SystemExit(f"resolved spawner meshes missing on disk: {len(missing)}")
     missing_civ = [
         k
         for k, v in civilian_meshes.items()
         if not (v["body_exists"] and v["head_exists"])
     ]
-    assert not missing_civ, f"civilian meshes missing on disk: {missing_civ}"
+    if missing_civ:
+        for k in missing_civ:
+            print(f"[spawner-mesh-missing] civilian generator {k}: {civilian_meshes[k]}")
+        raise SystemExit(f"civilian meshes missing on disk: {missing_civ}")
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:

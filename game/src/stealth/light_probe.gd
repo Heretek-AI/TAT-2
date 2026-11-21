@@ -37,14 +37,32 @@ const MOVEMENT_SPEED_LIGHT_MAX_VALUE: float = 0.1 # C_MovementSpeedToMinimumLigh
 const LIGHT_ENERGY_TO_VISIBILITY: float = 0.9
 const LIGHT_VISIBILITY_MIN: float = 0.15
 const LIGHT_VISIBILITY_MAX: float = 0.9
+## H1/H3 seam: probe raycasts use the loader's physics layer (bodies are
+## created with collision_layer = 1 in level_loader._add_collider) and an
+## eye-height offset. Named consts so a layer or offset change is one edit
+## with a comment, not a silent mismatch. H3 stays HARD_LIMIT: layer 1 is
+## correct today and the 0.9 m offset is stealth balance (see ledger).
+const OCCLUSION_MASK: int = 1
+const EYE_OFFSET_M: float = 0.9
+## H1: directionals are occluded along their light axis, not free. The
+## to-light direction is the moon basis +Z convention shared with
+## weather_visuals (moon disc sits along the +Z axis the light shines from).
+## Range 50 m covers interiors; the sky always wins beyond that.
+const DIRECTIONAL_OCCLUSION_RANGE: float = 50.0
 
 var registered_lights: Array[Light3D] = []
 var disabled_until: Dictionary = {} # Light3D instance_id -> unix/run time
 
-var _has_cache: bool = false
-var _cached_value: float = 0.1
-var _cached_pos: Vector3 = Vector3.ZERO
-var _cached_ms: int = -100000000
+## (Single-slot _has_cache_* fields removed by H4: the two-slot ring above
+## replaces them. short_circuit_lights/tick invalidate via _clear_slots().)
+## H4: the single-slot cache thrashed with >1 sampler (player + guard
+## queries alternate positions, so the 80 ms throttle never hit). Two slots —
+## one per sampler in the 2-actor stealth loop — keyed by quantized position.
+## More samplers than slots degrade to recompute, never to wrong values.
+var _slot_pos: Array[Vector3] = []
+var _slot_val: Array[float] = []
+var _slot_ms: Array[int] = []
+var _slot_next: int = 0
 var _sample_calls: int = 0
 var _sample_computes: int = 0
 
@@ -57,7 +75,7 @@ func register_light(light: Light3D) -> void:
 func clear_lights() -> void:
 	registered_lights.clear()
 	disabled_until.clear()
-	_has_cache = false
+	_clear_slots()
 
 
 func short_circuit_lights(origin: Vector3, radius: float, duration_sec: float, now_sec: float) -> int:
@@ -71,7 +89,7 @@ func short_circuit_lights(origin: Vector3, radius: float, duration_sec: float, n
 			l.visible = false
 			disabled_until[l.get_instance_id()] = now_sec + duration_sec
 			count += 1
-	_has_cache = false
+	_clear_slots()
 	return count
 
 
@@ -83,12 +101,19 @@ func tick(now_sec: float) -> void:
 		if disabled_until.has(iid) and now_sec >= float(disabled_until[iid]):
 			l.visible = true
 			disabled_until.erase(iid)
-			_has_cache = false
+			_clear_slots()
 
 
 ## Returns how many times sampling actually recomputed (used by tests).
 func sample_compute_count() -> int:
 	return _sample_computes
+
+
+## P2-D6: _sample_calls was write-only telemetry. Total sample_visibility
+## invocations (including 80 ms / 0.75 m cache hits); compare against
+## sample_compute_count() to see the throttle/cache hit rate.
+func sample_call_count() -> int:
+	return _sample_calls
 
 
 ## C_LightIntensityToRangeMultiplier: light intensity 0..1 -> detection range
@@ -118,19 +143,27 @@ static func light_visibility_weight(energy: float) -> float:
 
 func sample_visibility(world_pos: Vector3, space_state: PhysicsDirectSpaceState3D, exclude: Array[RID] = []) -> float:
 	_sample_calls += 1
-	if _has_cache:
-		var age_ms: int = Time.get_ticks_msec() - _cached_ms
+	var now_ms: int = Time.get_ticks_msec()
+	for slot_i: int in range(_slot_pos.size()):
+		var age_ms: int = now_ms - _slot_ms[slot_i]
 		if age_ms >= 0 and float(age_ms) < SAMPLE_MIN_INTERVAL_SEC * 1000.0:
-			if _cached_pos.distance_squared_to(world_pos) <= SAMPLE_CACHE_DISTANCE * SAMPLE_CACHE_DISTANCE:
-				return _cached_value
+			if _slot_pos[slot_i].distance_squared_to(world_pos) <= SAMPLE_CACHE_DISTANCE * SAMPLE_CACHE_DISTANCE:
+				return _slot_val[slot_i]
 	var total := 0.08 # ambient Kilcairn night floor
 	var max_dist_sq: float = LIGHT_SAMPLE_RANGE * LIGHT_SAMPLE_RANGE
 	for l in registered_lights:
 		if not is_instance_valid(l) or not l.visible:
 			continue
 		if l is DirectionalLight3D:
-			total += clampf(l.light_energy * 0.25, 0.0, 0.35)
-			continue
+			# H1: directionals no longer bypass occlusion. A moon/sky light
+				# hidden behind level geometry must not leak up to 0.35
+				# indoors. Off lights (energy <= 0.01) skip like locals.
+				if l.light_energy <= 0.01:
+					continue
+				if _directional_occluded(l, world_pos, space_state, exclude):
+					continue
+				total += clampf(l.light_energy * 0.25, 0.0, 0.35)
+				continue
 		if l.light_energy <= 0.01:
 			continue
 		var dist_sq: float = l.global_position.distance_squared_to(world_pos)
@@ -143,7 +176,7 @@ func sample_visibility(world_pos: Vector3, space_state: PhysicsDirectSpaceState3
 			max_range = l.spot_range
 		if max_range <= 0.01 or dist_sq > max_range * max_range:
 			continue
-		var q := PhysicsRayQueryParameters3D.create(l.global_position, world_pos + Vector3.UP * 0.9, 1, exclude)
+		var q := PhysicsRayQueryParameters3D.create(l.global_position, world_pos + Vector3.UP * EYE_OFFSET_M, OCCLUSION_MASK, exclude)
 		var hit := space_state.intersect_ray(q)
 		if not hit.is_empty():
 			continue
@@ -151,9 +184,41 @@ func sample_visibility(world_pos: Vector3, space_state: PhysicsDirectSpaceState3
 		var falloff := 1.0 - clampf(dist / max_range, 0.0, 1.0)
 		total += falloff * falloff * light_visibility_weight(l.light_energy)
 	var result: float = clampf(total, 0.0, 1.0)
-	_has_cache = true
-	_cached_pos = world_pos
-	_cached_value = result
-	_cached_ms = Time.get_ticks_msec()
+	_store_slot(world_pos, result, now_ms)
 	_sample_computes += 1
 	return result
+
+
+## H1 helper: ray from the sample point toward the directional source.
+## Returns true (occluded) on any blocking hit; fail-open (false) when the
+## physics space is unusable so a bad query never reports full darkness.
+func _directional_occluded(light: DirectionalLight3D, world_pos: Vector3, space_state: PhysicsDirectSpaceState3D, exclude: Array[RID]) -> bool:
+	if light == null or space_state == null:
+		return false
+	var to_light: Vector3 = light.basis * Vector3(0.0, 0.0, 1.0)
+	if to_light.length() < 0.001:
+		return false
+	var q := PhysicsRayQueryParameters3D.create(world_pos + Vector3.UP * EYE_OFFSET_M, world_pos + Vector3.UP * EYE_OFFSET_M + to_light.normalized() * DIRECTIONAL_OCCLUSION_RANGE, OCCLUSION_MASK, exclude)
+	var hit: Dictionary = space_state.intersect_ray(q)
+	return not hit.is_empty()
+
+
+## H4: ring-store one computed value; two slots cover the player + guard
+## sampler pair without thrash.
+func _clear_slots() -> void:
+	_slot_pos.clear()
+	_slot_val.clear()
+	_slot_ms.clear()
+	_slot_next = 0
+
+
+func _store_slot(world_pos: Vector3, value: float, now_ms: int) -> void:
+	if _slot_pos.size() < 2:
+		_slot_pos.append(world_pos)
+		_slot_val.append(value)
+		_slot_ms.append(now_ms)
+		return
+	_slot_pos[_slot_next] = world_pos
+	_slot_val[_slot_next] = value
+	_slot_ms[_slot_next] = now_ms
+	_slot_next = (_slot_next + 1) % 2

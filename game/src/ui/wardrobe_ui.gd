@@ -40,9 +40,8 @@ const TOOL_BLACKJACK_MESH: String = "res://assets/ue/Content/Art/Gameplay/Gear/B
 const TOOL_SLITHERSAP_MESH: String = "res://assets/ue/Content/Art/Gameplay/Gear/Slithersap/SK_SlimeBomb.glb"
 
 ## KF03/KF04 cite: pink/magenta LOCKED badges (thief portrait overlay, slot-3
-## expanded-row tool locks). Standing HARD_LIMIT 5.7: no pink-lock token exists
-## in art_nouveau_theme.gd (teal/gold/ivory only) and scope bars theme edits, so
-## this local const is the fallback until the design-system pass adds a token.
+## expanded-row tool locks). P2-1 token pass: routed to ThemeScript.PINK_LOCKED;
+## this alias stays so existing comments/call sites keep a local name.
 const LOCKED_PINK: Color = Color(1.0, 0.38, 0.72)
 
 const THIEF_IDS: Array[String] = ["spider", "chameleon"]
@@ -250,7 +249,7 @@ func _build_thief_card(thief: String, title: String) -> VBoxContainer:
 	lock_lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
 	lock_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	lock_lbl.add_theme_font_size_override("font_size", 15)
-	lock_lbl.add_theme_color_override("font_color", LOCKED_PINK)
+	lock_lbl.add_theme_color_override("font_color", ThemeScript.PINK_LOCKED)
 	stack.add_child(lock_lbl)
 	var name_lbl: Label = Label.new()
 	name_lbl.text = title
@@ -330,7 +329,7 @@ func _add_tool_slot(parent: Container, idx: int, lock_color: Color, btns: Array[
 	var lock_lbl: Label = Label.new()
 	lock_lbl.text = "LOCKED"
 	lock_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	lock_lbl.add_theme_font_size_override("font_size", 11)
+	lock_lbl.add_theme_font_size_override("font_size", 13)
 	lock_lbl.add_theme_color_override("font_color", lock_color)
 	cell.add_child(lock_lbl)
 	locks.append(lock_lbl)
@@ -389,7 +388,7 @@ func _build_left_panel() -> VBoxContainer:
 	_cell_btns.clear()
 	_cell_lock_lbls.clear()
 	for i: int in range(TOOLS.size()):
-		_add_tool_slot(expanded, i, LOCKED_PINK, _cell_btns, _cell_lock_lbls)
+		_add_tool_slot(expanded, i, ThemeScript.PINK_LOCKED, _cell_btns, _cell_lock_lbls)
 	# KF03 cite: hint below the loadout slots (verified on-screen text).
 	var load_hint: Label = Label.new()
 	load_hint.text = "Select a loadout slot to equip or swap out tools"
@@ -506,7 +505,7 @@ func _build_right_panel() -> PanelContainer:
 	_hint_lbl = Label.new()
 	_hint_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_hint_lbl.add_theme_font_size_override("font_size", 14)
-	_hint_lbl.add_theme_color_override("font_color", Color(0.95, 0.55, 0.65))
+	_hint_lbl.add_theme_color_override("font_color", ThemeScript.PINK_HINT)
 	right.add_child(_hint_lbl)
 	var apply_btn: Button = Button.new()
 	apply_btn.text = "APPLY"
@@ -517,8 +516,10 @@ func _build_right_panel() -> PanelContainer:
 	return right_card
 
 
-func _panel_style(bg: Color) -> StyleBoxFlat:
-	return ThemeScript.teal_panel_style(1, 5, bg, 12)
+## P2-8: removed dead _panel_style helper (all call sites use
+## ThemeScript.teal_panel_style directly). Both preview SubViewports already
+## render UPDATE_WHEN_VISIBLE and _process early-returns when hidden, so no
+## per-frame cost accrues while the wardrobe is closed.
 
 
 ## KF03/KF04 cite: warm practical-lit turntable staging. Exact rig numbers are

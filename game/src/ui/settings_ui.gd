@@ -11,11 +11,9 @@ const MobileProfile := preload("res://src/core/mobile_profile.gd")
 
 const ST_SETTINGS_PATH: String = "res://data/generated/tables/StringTables/ST_Settings.json"
 
-const TEAL_PANEL_BG: Color = Color(0.035, 0.085, 0.105, 0.96)
-const TEAL_GROUP_BG: Color = Color(0.055, 0.130, 0.155, 0.90)
-const TEAL_BORDER: Color = Color(0.24, 0.66, 0.68, 0.92)
-const TEAL_ACCENT: Color = Color(0.45, 0.90, 0.90, 1.0)
-const TEAL_TEXT: Color = Color(0.86, 0.94, 0.94, 1.0)
+# P1 dedup (audit-ui P1-2): local TEAL_* consts deleted. Single source of truth
+# is res://src/ui/art_nouveau_theme.gd (ThemeScript.TEAL_*). Any future accent/
+# radius/margin change lands in the theme file only — settings drifts no more.
 
 const SENS_MIN: float = 0.0005
 const SENS_MAX: float = 0.008
@@ -68,6 +66,9 @@ var _loading_ui: bool = false
 
 
 func _ready() -> void:
+	# Sentinel: theme is the single source — log it, refuse silent drift.
+	print("TAT-2 UI settings: theme=res://src/ui/art_nouveau_theme.gd strings=", ST_SETTINGS_PATH)
+	assert(ThemeScript != null, "SettingsUI requires res://src/ui/art_nouveau_theme.gd")
 	layer = 25
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_prev_mouse_mode = Input.mouse_mode
@@ -80,7 +81,9 @@ func _ready() -> void:
 
 
 func _load_string_table() -> void:
+	# Sentinel: log the cooked source; fail loudly (not silently) when absent.
 	if not FileAccess.file_exists(ST_SETTINGS_PATH):
+		push_error("TAT-2 UI settings: missing string table " + ST_SETTINGS_PATH + "; labels fall back to code defaults. DO NOT SHIP without the cooked table.")
 		return
 	var f: FileAccess = FileAccess.open(ST_SETTINGS_PATH, FileAccess.READ)
 	if f == null:
@@ -129,7 +132,7 @@ func _refresh_tabs() -> void:
 		var b: Button = _tab_btns[i]
 		if b != null:
 			b.button_pressed = (i == _tab_idx)
-			_style_teal_tab(b, i == _tab_idx)
+			ThemeScript.style_teal_tab(b, i == _tab_idx)
 	for j: int in range(_pages.size()):
 		var p: Control = _pages[j]
 		if p != null:
@@ -331,67 +334,29 @@ func _refresh_value_labels() -> void:
 		_touch_val.text = "x%.1f" % float(_touch_slider.value)
 
 
-func _style_teal_tab(btn: Button, active: bool) -> void:
-	var st_box: StyleBoxFlat = StyleBoxFlat.new()
-	st_box.set_border_width_all(1)
-	st_box.set_corner_radius_all(5)
-	st_box.set_content_margin_all(10)
-	if active:
-		st_box.bg_color = Color(0.14, 0.42, 0.44, 0.98)
-		st_box.border_color = TEAL_ACCENT
-		btn.add_theme_color_override("font_color", Color(0.96, 1.0, 0.99))
-	else:
-		st_box.bg_color = Color(0.05, 0.12, 0.14, 0.94)
-		st_box.border_color = Color(TEAL_BORDER.r, TEAL_BORDER.g, TEAL_BORDER.b, 0.55)
-		btn.add_theme_color_override("font_color", TEAL_TEXT)
-	btn.add_theme_stylebox_override("normal", st_box)
-	btn.add_theme_stylebox_override("pressed", st_box)
-	var hov: StyleBoxFlat = st_box.duplicate() as StyleBoxFlat
-	hov.border_color = TEAL_ACCENT
-	btn.add_theme_stylebox_override("hover", hov)
-	btn.add_theme_font_size_override("font_size", 15)
-
-
+# P1 dedup: local tab styler deleted — ThemeScript.style_teal_tab is the single
+# implementation (audit-ui P1-2). Group cards delegate likewise; this wrapper
+# only preserves the _group_cards test hook (run_tests.gd 35b needs >= 6).
+# Sentinel: fail loudly on empty titles instead of building blank cards.
 func _make_group_card(group_title: String) -> Dictionary:
-	var card: PanelContainer = PanelContainer.new()
-	card.name = "Group_" + group_title.replace(" ", "")
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = TEAL_GROUP_BG
-	style.border_color = TEAL_BORDER
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(6)
-	style.content_margin_left = 14
-	style.content_margin_right = 14
-	style.content_margin_top = 10
-	style.content_margin_bottom = 10
-	card.add_theme_stylebox_override("panel", style)
-	var vb: VBoxContainer = VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 8)
-	card.add_child(vb)
-	var hdr: Label = Label.new()
-	hdr.text = group_title.to_upper()
-	hdr.add_theme_font_size_override("font_size", 14)
-	hdr.add_theme_color_override("font_color", TEAL_ACCENT)
-	vb.add_child(hdr)
-	var sep: ColorRect = ColorRect.new()
-	sep.color = Color(TEAL_BORDER.r, TEAL_BORDER.g, TEAL_BORDER.b, 0.45)
-	sep.custom_minimum_size = Vector2(0, 1)
-	sep.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	vb.add_child(sep)
-	_group_cards.append(card)
-	return {"card": card, "vbox": vb}
+	if group_title.strip_edges() == "":
+		push_error("TAT-2 UI settings group_card: empty title (res://src/ui/settings_ui.gd); refusing silent blank card.")
+		assert(false, "group_card requires a non-empty title")
+	var out: Dictionary = ThemeScript.group_card(group_title)
+	_group_cards.append(out["card"] as PanelContainer)
+	return out
 
 
 func _build_ui() -> void:
 	var modal: Dictionary = ThemeScript.make_modal(self, Vector2(680, 0), "SETTINGS", "[Q] / [E] SWITCH TAB   ·   [ESC] BACK")
 	_modal_panel = modal["panel"] as PanelContainer
 	if _modal_panel != null:
-		var teal_panel: StyleBoxFlat = ThemeScript.panel_style(2, 8, TEAL_PANEL_BG)
-		teal_panel.border_color = TEAL_BORDER
+		var teal_panel: StyleBoxFlat = ThemeScript.panel_style(2, 8, ThemeScript.TEAL_PANEL_BG)
+		teal_panel.border_color = ThemeScript.TEAL_BORDER
 		_modal_panel.add_theme_stylebox_override("panel", teal_panel)
 	var title_lbl: Label = modal["title"] as Label
 	if title_lbl != null:
-		title_lbl.add_theme_color_override("font_color", TEAL_ACCENT)
+		title_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_ACCENT)
 	var vbox: VBoxContainer = modal["vbox"] as VBoxContainer
 
 	var tab_labels: Array[String] = [
@@ -410,7 +375,7 @@ func _build_ui() -> void:
 		tb.text = tab_labels[i]
 		tb.toggle_mode = true
 		tb.custom_minimum_size = Vector2(142, 36)
-		_style_teal_tab(tb, i == 0)
+		ThemeScript.style_teal_tab(tb, i == 0)
 		var tab_idx: int = i
 		tb.pressed.connect(func() -> void: switch_tab(tab_idx))
 		tab_row.add_child(tb)
@@ -545,7 +510,7 @@ func _make_binding_row(key_text: String, action_text: String) -> HBoxContainer:
 	lab.text = action_text.to_upper()
 	lab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lab.add_theme_font_size_override("font_size", 14)
-	lab.add_theme_color_override("font_color", TEAL_ACCENT)
+	lab.add_theme_color_override("font_color", ThemeScript.TEAL_ACCENT)
 	row.add_child(lab)
 	return row
 
@@ -557,7 +522,7 @@ func _make_slider_row(setting_key: String, label_text: String, min_v: float, max
 	lab.text = label_text
 	lab.custom_minimum_size = Vector2(210, 0)
 	lab.add_theme_font_size_override("font_size", 15)
-	lab.add_theme_color_override("font_color", TEAL_TEXT)
+	lab.add_theme_color_override("font_color", ThemeScript.TEAL_TEXT)
 	row.add_child(lab)
 	var slider: HSlider = HSlider.new()
 	slider.min_value = min_v
@@ -565,7 +530,7 @@ func _make_slider_row(setting_key: String, label_text: String, min_v: float, max
 	slider.step = step_v
 	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var grab_area: StyleBoxFlat = StyleBoxFlat.new()
-	grab_area.bg_color = TEAL_BORDER
+	grab_area.bg_color = ThemeScript.TEAL_BORDER
 	grab_area.set_corner_radius_all(3)
 	slider.add_theme_stylebox_override("grabber_area", grab_area)
 	row.add_child(slider)
@@ -573,7 +538,7 @@ func _make_slider_row(setting_key: String, label_text: String, min_v: float, max
 	val.custom_minimum_size = Vector2(70, 0)
 	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	val.add_theme_font_size_override("font_size", 15)
-	val.add_theme_color_override("font_color", TEAL_ACCENT)
+	val.add_theme_color_override("font_color", ThemeScript.TEAL_ACCENT)
 	row.add_child(val)
 	slider.value_changed.connect(func(_v: float) -> void:
 		_refresh_value_labels()
@@ -618,7 +583,7 @@ func _make_check_row(setting_key: String, label_text: String) -> HBoxContainer:
 	var check: CheckBox = CheckBox.new()
 	check.text = label_text
 	check.add_theme_font_size_override("font_size", 15)
-	check.add_theme_color_override("font_color", TEAL_TEXT)
+	check.add_theme_color_override("font_color", ThemeScript.TEAL_TEXT)
 	check.toggled.connect(func(_pressed: bool) -> void: _apply_live(false))
 	row.add_child(check)
 	match setting_key:

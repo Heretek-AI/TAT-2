@@ -32,6 +32,14 @@ var _mesh_mats_db_lower: Dictionary = {}
 var _tex_cache: Dictionary = {}
 var _std_mat_cache: Dictionary = {}
 var _mesh_res_cache: Dictionary = {} # ue_path -> { "mesh": Mesh, "shape": Shape3D }
+## L1/L2 sentinels: corrupt imports (resolved path, failed load) are tracked
+## separately from missing meshes so a broken GLB never hides in the missing
+## list; substring-guess fallback materials are tiered + counted. Export
+## gates read these via _finalize (meshes_ok).
+var corrupt_meshes: Array[String] = []
+var corrupt_mesh_count: int = 0
+var fallback_materials: Array[String] = []
+var fallback_material_count: int = 0
 var _override_mesh_cache: Dictionary = {} # ue_path + "||" + ov_key -> Mesh
 var _emissive_cpd_mat: ShaderMaterial = null
 
@@ -93,9 +101,21 @@ const OCCLUDER_MIN_THICK_M: float = 0.25
 const MAX_OCCLUDERS: int = 768
 const MAX_SHAPES_PER_BODY: int = 384
 const MAX_TOTAL_SHAPES: int = 32000
+## T6 collider-budget partition (AUDIT.md T6 + core P1-L4): the single 32k
+## shape budget is split so curb ribbons can never starve building colliders
+## (or vice versa). Buildings carry world integrity (walls/floors), so they
+## keep 28000; curb ribbons emit 3 boxes per segment across at most
+## CURB_MAX_SPLINES (64) splines and are capped at 4000. The partitions sum
+## exactly to MAX_TOTAL_SHAPES, so the global cap still holds as a backstop.
+const MAX_BUILDING_SHAPES: int = 28000
+const MAX_CURB_SHAPES: int = 4000
 const LIGHT_DISTANCE_FADE_BEGIN: float = 28.0
 const LIGHT_DISTANCE_FADE_LENGTH: float = 12.0
 const PROGRESS_YIELD_EVERY: int = 64
+## L6: rect-light quad emission shares constants with its omni. The quad
+## used a disconnected 2.0 energy while its omni faded with distance — glow
+## without light at range. Energy stays 2.0 (authored look) but the quad now
+## fades over LIGHT_DISTANCE_FADE_* like its omni, so the two cannot desync.
 
 ## Authored UE light intensity -> Godot light_energy.
 ## There is no faithful lumen/candela -> Godot `light_energy` conversion for
@@ -738,6 +758,15 @@ func get_material_for_ue(ue_mat_path: String) -> Material:
 			mat.albedo_color = Color(0.26, 0.25, 0.27)
 		else:
 			mat.albedo_color = Color(0.32, 0.30, 0.28)
+	if alb == null and tint == null:
+		# L2: the substring-guess chain above bound a plausible-but-wrong
+		# texture (tier 2) or a flat color (tier 3) instead of authored data.
+		# The tier rides on the material as metadata and the UE path is
+		# counted + warned, so coverage holes read as wrong-but-rendered
+		# walls no longer pass silently.
+		var fallback_tier: int = 2 if mat.albedo_texture != null else 3
+		mat.set_meta("tat_fallback_tier", fallback_tier)
+		_note_fallback_material(ue_mat_path, fallback_tier)
 	var low_wall: String = ue_mat_path.to_lower()
 	if "wallpaper" in low_wall or "thievesden" in low_wall:
 		if mat.albedo_texture == null:
@@ -793,6 +822,12 @@ func _get_mesh_and_shape(ue_path: String) -> Dictionary:
 		_mesh_res_cache[ue_path] = out
 		return out
 	var packed: Variant = load(res_path)
+	if not (packed is PackedScene):
+		# L1 corrupt-import path: ResourceLoader.exists() passed but the
+		# load failed (corrupt import, non-scene resource). Named + counted
+		# apart from genuinely-missing meshes; still cached below since a
+		# retry cannot heal a bad import at runtime.
+		_note_corrupt_mesh(ue_path, res_path)
 	if packed is PackedScene:
 		var inst: Node = packed.instantiate()
 		var mi := _find_first_mesh(inst)
@@ -846,6 +881,25 @@ func _get_mesh_and_shape(ue_path: String) -> Dictionary:
 		inst.free()
 	_mesh_res_cache[ue_path] = out
 	return out
+
+
+## L1 accounting: name the UE path + resolved file, count, cap the stored
+## list at 128 (count stays exact). push_error, not warning — a corrupt
+## import drops geometry AND collision for that mesh.
+func _note_corrupt_mesh(ue_path: String, res_path: String) -> void:
+	corrupt_mesh_count += 1
+	if corrupt_meshes.size() < 128 and not corrupt_meshes.has(ue_path):
+		corrupt_meshes.append(ue_path)
+	push_error("[level_loader] corrupt mesh import for UE path '", ue_path, "' (resolved ", res_path, "); cached as missing (corrupt=", corrupt_mesh_count, ")")
+
+
+## L2 accounting: substring-guess fallbacks bind plausible-but-wrong
+## textures (tier 2) or flat colors (tier 3). Named + counted per new path.
+func _note_fallback_material(ue_mat_path: String, tier: int) -> void:
+	fallback_material_count += 1
+	if fallback_materials.size() < 128 and not fallback_materials.has(ue_mat_path):
+		fallback_materials.append(ue_mat_path)
+	push_warning("[level_loader] material fallback tier ", tier, " for '", ue_mat_path, "' (guessed, not authored; fallbacks=", fallback_material_count, ")")
 
 
 ## Binds GLB-ordered material slots to the imported ArrayMesh surfaces.
@@ -1033,6 +1087,12 @@ func _new_build_ctx(parent: Node3D, light_probe: Node, generate_collision: bool)
 		"col_counts": {},
 		"collision_shapes": 0,
 		"collision_bodies": 0,
+		"building_shapes": 0,
+		"curb_shapes": 0,
+		"collision_dropped": 0,
+		"building_dropped": 0,
+		"curb_dropped": 0,
+		"dropped_colliders": [] as Array,
 		"occluders": 0,
 		"missing_meshes": [] as Array,
 		"missing_mesh_count": 0,
@@ -1586,7 +1646,7 @@ func _ground_den_prop_shape(low_mp: String, shape: BoxShape3D, tr: Transform3D, 
 ## Splits one Den wall/window box into two side boxes (full height) with a
 ## DEN_WINDOW_GAP_M opening, a low sill under the opening and a lintel above
 ## it. Falls back to a single collider when the wall is too narrow to split.
-func _add_den_window_split(ctx: Dictionary, cell: Vector2i, tr: Transform3D, box_shape: BoxShape3D, soff: Vector3) -> void:
+func _add_den_window_split(ctx: Dictionary, cell: Vector2i, tr: Transform3D, box_shape: BoxShape3D, soff: Vector3, kind: String = "building", label: String = "") -> void:
 	var sc: Vector3 = tr.basis.get_scale()
 	var sx: float = maxf(absf(sc.x), 0.05)
 	var sy: float = maxf(absf(sc.y), 0.05)
@@ -1594,12 +1654,14 @@ func _add_den_window_split(ctx: Dictionary, cell: Vector2i, tr: Transform3D, box
 	var h: float = box_shape.size.y
 	var d: float = box_shape.size.z
 	if w * sx <= DEN_WINDOW_GAP_M + 0.2:
-		_add_collider(ctx, cell, box_shape, tr, soff)
+		ctx["den_window_unsplit"] = int(ctx.get("den_window_unsplit", 0)) + 1
+		_add_collider(ctx, cell, box_shape, tr, soff, kind, label)
 		return
 	var mesh_gap: float = DEN_WINDOW_GAP_M / sx
 	var pillar_w: float = (w - mesh_gap) * 0.5
 	if pillar_w < 0.1:
-		_add_collider(ctx, cell, box_shape, tr, soff)
+		ctx["den_window_unsplit"] = int(ctx.get("den_window_unsplit", 0)) + 1
+		_add_collider(ctx, cell, box_shape, tr, soff, kind, label)
 		return
 	var floor_y: float = soff.y - h * 0.5
 	var sill_h_mesh: float = DEN_WINDOW_SILL_TOP_M / sy
@@ -1609,16 +1671,17 @@ func _add_den_window_split(ctx: Dictionary, cell: Vector2i, tr: Transform3D, box
 	var lintel_h_mesh: float = maxf(h - lintel_bottom_mesh, 0.1)
 	var left := BoxShape3D.new()
 	left.size = Vector3(pillar_w, h, d)
-	_add_collider(ctx, cell, left, tr, soff + Vector3(-(mesh_gap * 0.5 + pillar_w * 0.5), 0.0, 0.0))
+	_add_collider(ctx, cell, left, tr, soff + Vector3(-(mesh_gap * 0.5 + pillar_w * 0.5), 0.0, 0.0), kind, label + "/pillar_L")
 	var right := BoxShape3D.new()
 	right.size = Vector3(pillar_w, h, d)
-	_add_collider(ctx, cell, right, tr, soff + Vector3(mesh_gap * 0.5 + pillar_w * 0.5, 0.0, 0.0))
+	_add_collider(ctx, cell, right, tr, soff + Vector3(mesh_gap * 0.5 + pillar_w * 0.5, 0.0, 0.0), kind, label + "/pillar_R")
 	var sill := BoxShape3D.new()
 	sill.size = Vector3(mesh_gap, sill_h_mesh, d)
-	_add_collider(ctx, cell, sill, tr, Vector3(soff.x, floor_y + sill_h_mesh * 0.5, soff.z))
+	_add_collider(ctx, cell, sill, tr, Vector3(soff.x, floor_y + sill_h_mesh * 0.5, soff.z), kind, label + "/sill")
 	var lintel := BoxShape3D.new()
 	lintel.size = Vector3(mesh_gap, lintel_h_mesh, d)
-	_add_collider(ctx, cell, lintel, tr, Vector3(soff.x, floor_y + lintel_bottom_mesh + lintel_h_mesh * 0.5, soff.z))
+	_add_collider(ctx, cell, lintel, tr, Vector3(soff.x, floor_y + lintel_bottom_mesh + lintel_h_mesh * 0.5, soff.z), kind, label + "/lintel")
+	ctx["den_window_splits"] = int(ctx.get("den_window_splits", 0)) + 1
 	_clip_den_window_visual(ctx, tr, soff, mesh_gap, sill_h_mesh, lintel_bottom_mesh, floor_y, d)
 
 
@@ -1647,6 +1710,16 @@ func _clip_den_window_visual(ctx: Dictionary, tr: Transform3D, soff: Vector3, me
 				visual = mi
 				break
 	if visual == null:
+		# L3: the 1 cm sibling-visual lookup no-op'd silently, leaving the
+		# baked-opaque gray slab across the collider gap. Counted + warned
+		# (capped list) with the collider origin so a renamed mesh that
+		# breaks the string-gated split shows up instead of vanishing.
+		ctx["den_window_clip_miss"] = int(ctx.get("den_window_clip_miss", 0)) + 1
+		var clip_miss: Array = ctx.get("den_window_clip_miss_list", [] as Array) as Array
+		if clip_miss.size() < 16:
+			clip_miss.append(tr.origin)
+			push_warning("[level_loader] Den window visual clip missed: no sibling visual within 1 cm of ", tr.origin, " (misses=", ctx["den_window_clip_miss"], ")")
+		ctx["den_window_clip_miss_list"] = clip_miss
 		return
 	visual.visible = false
 	visual.set_meta("den_window_clipped", true)
@@ -1692,8 +1765,29 @@ func _clip_den_window_visual(ctx: Dictionary, tr: Transform3D, soff: Vector3, me
 		parent.add_child(trim)
 
 
-func _add_collider(ctx: Dictionary, cell: Vector2i, shape: Shape3D, tr: Transform3D, shape_offset: Vector3) -> void:
-	if int(ctx.get("collision_shapes", 0)) >= MAX_TOTAL_SHAPES:
+## T6 partitioned collider budget (AUDIT.md T6): `kind` is "building"
+## (default: walls/floors, Den window splits, grounded Den props) or "curb"
+## (procedural curb ribbons, 3 boxes per segment). Each partition has its own
+## cap (MAX_BUILDING_SHAPES / MAX_CURB_SHAPES, summing to MAX_TOTAL_SHAPES)
+## plus the global cap as a backstop. Overflow never returns silently: the
+## drop is counted per partition and named in a push_warning carrying both
+## partition counts. `label` names the dropped item (mesh path for
+## buildings, ribbon/segment id for curbs).
+func _add_collider(ctx: Dictionary, cell: Vector2i, shape: Shape3D, tr: Transform3D, shape_offset: Vector3, kind: String = "building", label: String = "") -> void:
+	var is_curb: bool = kind == "curb"
+	var part_cap: int = MAX_CURB_SHAPES if is_curb else MAX_BUILDING_SHAPES
+	var part_key: String = "curb_shapes" if is_curb else "building_shapes"
+	var part_count: int = int(ctx.get(part_key, 0))
+	if int(ctx.get("collision_shapes", 0)) >= MAX_TOTAL_SHAPES or part_count >= part_cap:
+		ctx["collision_dropped"] = int(ctx.get("collision_dropped", 0)) + 1
+		var drop_key: String = "curb_dropped" if is_curb else "building_dropped"
+		ctx[drop_key] = int(ctx.get(drop_key, 0)) + 1
+		var item_name: String = label if label != "" else "unlabeled collider"
+		var drop_log: Array = ctx.get("dropped_colliders", [] as Array) as Array
+		if drop_log.size() < 128 and not drop_log.has(item_name):
+			drop_log.append(item_name)
+		var part_name: String = "curb" if is_curb else "building"
+		push_warning("[level_loader] collider budget overflow: dropped ", part_name, " item '", item_name, "' (", part_name, " ", part_count, "/", part_cap, "; total ", int(ctx.get("collision_shapes", 0)), "/", MAX_TOTAL_SHAPES, ")")
 		return
 	var bodies: Dictionary = ctx["col_bodies"]
 	var counts: Dictionary = ctx["col_counts"]
@@ -1718,6 +1812,22 @@ func _add_collider(ctx: Dictionary, cell: Vector2i, shape: Shape3D, tr: Transfor
 	cs.scale = Vector3(maxf(absf(sc.x), 0.05), maxf(absf(sc.y), 0.05), maxf(absf(sc.z), 0.05))
 	body.add_child(cs)
 	ctx["collision_shapes"] = int(ctx.get("collision_shapes", 0)) + 1
+	ctx[part_key] = part_count + 1
+
+
+## T6 fail-loud export-time accounting hook. Call after a level build (or
+## from the export pipeline over the _finalize result dict) to fail closed on
+## collider overflow: returns true when nothing was dropped and the total is
+## within cap, else emits a push_error with the partition counts and returns
+## false. Accepts either the build ctx or the finalized result dict (both
+## carry the same keys).
+static func check_collider_budget(stats: Dictionary) -> bool:
+	var dropped: int = int(stats.get("collision_dropped", 0))
+	var total: int = int(stats.get("collision_shapes", 0))
+	if dropped <= 0 and total <= MAX_TOTAL_SHAPES:
+		return true
+	push_error("[level_loader] COLLIDER BUDGET EXCEEDED: dropped ", dropped, " colliders (building ", int(stats.get("building_dropped", 0)), " dropped, ", int(stats.get("building_shapes", 0)), "/", MAX_BUILDING_SHAPES, "; curb ", int(stats.get("curb_dropped", 0)), " dropped, ", int(stats.get("curb_shapes", 0)), "/", MAX_CURB_SHAPES, "; total ", total, "/", MAX_TOTAL_SHAPES, "). World geometry is missing collision — resize the partition, do not raise the cap silently.")
+	return false
 
 
 ## Emits one chunked MultiMeshInstance3D (or plain MeshInstance3D) plus its
@@ -1831,12 +1941,12 @@ func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> 
 				if absf(tr_c.basis.determinant()) < 0.0001:
 					continue
 				if den_split:
-					_add_den_window_split(ctx, cell, tr_c, shape as BoxShape3D, soff)
+					_add_den_window_split(ctx, cell, tr_c, shape as BoxShape3D, soff, "building", mp)
 				elif low_mp.find("thievesden") >= 0 and shape is BoxShape3D:
 					var grounded: Array = _ground_den_prop_shape(low_mp, shape as BoxShape3D, tr_c, soff)
-					_add_collider(ctx, cell, grounded[0] as Shape3D, tr_c, grounded[1] as Vector3)
+					_add_collider(ctx, cell, grounded[0] as Shape3D, tr_c, grounded[1] as Vector3, "building", mp)
 				else:
-					_add_collider(ctx, cell, shape, tr_c, soff)
+					_add_collider(ctx, cell, shape, tr_c, soff, "building", mp)
 
 	if not use_cpd and not hidden_in_game and not is_clutter and not far_item and _qualifies_as_occluder(low_mp, mesh):
 		for i3 in range(count):
@@ -2013,11 +2123,11 @@ func _build_one_curb_ribbon(pts: Array[Vector3], width: float, sp_mesh: String, 
 		var ext: float = seg_len + CURB_LIP_W_M
 		var walk := BoxShape3D.new()
 		walk.size = Vector3(maxf(width - lip * 2.0, 0.1), CURB_SKIRT_M + 0.02, ext)
-		_add_collider(ctx, cell, walk, tr, Vector3(0, -CURB_SKIRT_M * 0.5 + 0.01, 0))
+		_add_collider(ctx, cell, walk, tr, Vector3(0, -CURB_SKIRT_M * 0.5 + 0.01, 0), "curb", "curb walk seg %d (%s)" % [seg2, sp_mesh])
 		for side_sign in [-1.0, 1.0]:
 			var lip_box := BoxShape3D.new()
 			lip_box.size = Vector3(lip, CURB_LIP_H_M + CURB_SKIRT_M, ext)
-			_add_collider(ctx, cell, lip_box, tr, Vector3(side_sign * (half - lip * 0.5), (CURB_LIP_H_M - CURB_SKIRT_M) * 0.5, 0))
+			_add_collider(ctx, cell, lip_box, tr, Vector3(side_sign * (half - lip * 0.5), (CURB_LIP_H_M - CURB_SKIRT_M) * 0.5, 0), "curb", "curb lip seg %d side %s (%s)" % [seg2, str(int(side_sign)), sp_mesh])
 
 
 ## Builds one procedural curb ribbon per authored landscape spline (F7).
@@ -2126,6 +2236,15 @@ func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dict
 	result["chunk_count"] = int(ctx.get("chunk_count", 0))
 	result["collision_bodies"] = int(ctx.get("collision_bodies", 0))
 	result["collision_shapes"] = int(ctx.get("collision_shapes", 0))
+	result["building_shapes"] = int(ctx.get("building_shapes", 0))
+	result["curb_shapes"] = int(ctx.get("curb_shapes", 0))
+	result["collision_dropped"] = int(ctx.get("collision_dropped", 0))
+	result["building_dropped"] = int(ctx.get("building_dropped", 0))
+	result["curb_dropped"] = int(ctx.get("curb_dropped", 0))
+	result["dropped_colliders"] = (ctx.get("dropped_colliders", [] as Array) as Array).duplicate()
+	# T6 fail-loud: any dropped collider (or total over cap) push_errors here
+	# so overflow can never pass silently; export gates on this flag.
+	result["collider_budget_ok"] = check_collider_budget(result)
 	result["occluder_count"] = int(ctx.get("occluders", 0))
 	result["decal_count"] = int(ctx.get("decal_count", 0))
 	result["decal_skipped"] = int(ctx.get("decal_skipped", 0))
@@ -2139,6 +2258,19 @@ func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dict
 	result["curb_built"] = int(ctx.get("curb_built", 0))
 	result["missing_mesh_count"] = int(ctx.get("missing_mesh_count", 0))
 	result["missing_meshes"] = (ctx.get("missing_meshes", [] as Array) as Array).duplicate()
+	result["corrupt_mesh_count"] = corrupt_mesh_count
+	result["corrupt_meshes"] = corrupt_meshes.duplicate()
+	result["fallback_material_count"] = fallback_material_count
+	result["fallback_materials"] = fallback_materials.duplicate()
+	result["den_window_splits"] = int(ctx.get("den_window_splits", 0))
+	result["den_window_unsplit"] = int(ctx.get("den_window_unsplit", 0))
+	result["den_window_clip_miss"] = int(ctx.get("den_window_clip_miss", 0))
+	# L1 fail-loud: any geometry hole (missing or corrupt mesh) push_errors
+	# at settle so a level with vanished meshes can never pass silently;
+	# export gates on meshes_ok, mirroring the collider-budget pattern.
+	result["meshes_ok"] = int(ctx.get("missing_mesh_count", 0)) == 0 and corrupt_mesh_count == 0
+	if not result["meshes_ok"]:
+		push_error("[level_loader] MESH HOLES: missing=", int(ctx.get("missing_mesh_count", 0)), " corrupt=", corrupt_mesh_count, " (see missing_meshes/corrupt_meshes). Geometry, colliders and occluders are absent for these UE paths.")
 	result["swinging_doors"] = result.get("swinging_doors", [])
 	result["swinging_door_count"] = (result["swinging_doors"] as Array).size()
 	result["sky_light"] = ctx.get("sky_light", {})
@@ -2357,12 +2489,16 @@ func _build_rect_lights(rects: Array, parent: Node3D, light_probe: Node, ctx: Di
 		qmat.albedo_color = omni.light_color
 		qmat.emission_enabled = true
 		qmat.emission = omni.light_color
-		qmat.emission_energy_multiplier = 2.0
+		qmat.emission_energy_multiplier = 2.0 # L6: keep authored energy; range sync is via visibility fade below
 		qmat.cull_mode = BaseMaterial3D.CULL_DISABLED
 		qm.material = qmat
 		quad.mesh = qm
 		quad.transform = Transform3D(rtr.basis.orthonormalized(), rtr.origin)
 		quad.name = "RectLightQuad_%d" % spawned
+		# L6: fade the emissive quad over the same range its omni uses
+		# (LIGHT_DISTANCE_FADE_BEGIN/LENGTH) so glow cannot outlive light.
+		quad.visibility_range_end = LIGHT_DISTANCE_FADE_BEGIN + LIGHT_DISTANCE_FADE_LENGTH
+		quad.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
 		parent.add_child(quad)
 		spawned += 1
 	ctx["rect_light_count"] = spawned
@@ -2410,8 +2546,12 @@ func _build_volumes(volumes: Array, parent: Node3D, ctx: Dictionary) -> void:
 		blocking += 1
 	ctx["blocking_volume_count"] = blocking
 	ctx["volume_skipped"] = skipped
+	# T6 accounting: blocking volumes always emit (no cap check, no silent
+	# drop), but they consume world-integrity budget, so they count against
+	# the building partition.
 	ctx["collision_bodies"] = int(ctx.get("collision_bodies", 0)) + blocking
 	ctx["collision_shapes"] = int(ctx.get("collision_shapes", 0)) + blocking
+	ctx["building_shapes"] = int(ctx.get("building_shapes", 0)) + blocking
 
 
 ## Records counts and first-present atmosphere entries for the result stats.
@@ -2483,14 +2623,35 @@ func _build_post_process_gi_fills(post_processes: Array, parent: Node3D, _ctx: D
 			wenv.environment.adjustment_color_correction = WeatherProfile.build_shadow_toe_lut(1.2, sc, mb)
 
 
+## Derives the map hint for L5 from the level JSON paths (directory token).
+## Returns "" when no known token matches — the source scan then decides.
+static func _map_hint_from_paths(paths: Array) -> String:
+	var joined: String = ""
+	for p: Variant in paths:
+		joined += "|" + str(p).to_lower()
+	if "guildhall" in joined:
+		return "guildhall"
+	if "old_manor" in joined or "oldmanor" in joined:
+		return "old_manor"
+	if "thieves_den" in joined or "thievesden" in joined:
+		return "thieves_den"
+	if "jaspering" in joined:
+		return "jaspering_hall"
+	return ""
+
+
 func load_sublevels(json_paths: Array[String], parent: Node3D, light_probe: Node, max_lights: int = 96, generate_collision: bool = true) -> Dictionary:
 	if _materials_db.is_empty():
 		_load_material_dbs()
+	# V6 companion: bake the footprint alpha mask now (loading screen),
+	# not on the first wet footstep. Static cache makes repeats free.
+	_VfxManager.prewarm_footstep_mask()
 	var acc: Dictionary = _new_accumulator()
 	for jp: String in json_paths:
 		_parse_sublevel_file(jp, acc, parent)
 
 	var ctx: Dictionary = _new_build_ctx(parent, light_probe, generate_collision)
+	ctx["map_hint"] = _map_hint_from_paths(json_paths)
 	# Active RectLights are rare (one per mission map at most) and authored as
 	# area lights, so they claim budget slots before the generic point lights.
 	_build_rect_lights(acc["rect_lights"], parent, light_probe, ctx, max_lights)
@@ -2514,6 +2675,7 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 	if _materials_db.is_empty():
 		_load_material_dbs()
 	var acc: Dictionary = _new_accumulator()
+	_VfxManager.prewarm_footstep_mask()
 	var total_files: int = maxi(json_paths.size(), 1)
 	var file_idx: int = 0
 	load_progress.emit(0.0, "Parsing JSON...")
@@ -2525,6 +2687,7 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 			await parent.get_tree().process_frame
 
 	var ctx: Dictionary = _new_build_ctx(parent, light_probe, generate_collision)
+	ctx["map_hint"] = _map_hint_from_paths(json_paths)
 	var pending_lights: Array = _prioritize_lights(acc["lights"], acc["result"]["player_spawns"])
 	load_progress.emit(0.3, "Sorting lights...")
 	# Active RectLights claim budget slots before the generic point lights.
@@ -2687,7 +2850,7 @@ func _build_light(info: Dictionary, cast_shadow: bool = false) -> Light3D:
 ## WeightmapTextures + WeightmapLayerAllocations. Returns null when the
 ## component has no weightmap or no resolvable layer, so the caller falls back
 ## to the single-surface material.
-func _landscape_weighted_material(lc: Dictionary) -> ShaderMaterial:
+func _landscape_weighted_material(lc: Dictionary, map_hint: String = "") -> ShaderMaterial:
 	var wm_paths: Array = []
 	var wm_raw: Variant = lc.get("weightmaps", [])
 	if wm_raw is Array:
@@ -2709,6 +2872,16 @@ func _landscape_weighted_material(lc: Dictionary) -> ShaderMaterial:
 	# they are skipped instead of reading an empty second weightmap.
 	var bound_count: int = 2 if wm1 != null else 1
 	var source: String = str(lc.get("source", ""))
+	# L5: the old rule keyed the safe-room fill on a map-name substring of
+	# the source, so a renamed source silently reopened the void. The caller
+	# passes map_hint (derived from the level JSON path); an explicit hint
+	# wins, the source scan is the fallback, and a disagreement between them
+	# is a loud error naming both — the rename detector the old match lacked.
+	var source_low_guildhall: bool = source.to_lower().contains("guildhall")
+	var hint_guildhall: bool = map_hint == "guildhall"
+	if map_hint != "" and hint_guildhall != source_low_guildhall:
+		push_error("[level_loader] discard_holes source/map mismatch: source '", source, "' says guildhall=", source_low_guildhall, " but map_hint='", map_hint, "' says ", hint_guildhall, "; trusting the explicit hint")
+	var is_guildhall_fill: bool = hint_guildhall or (source_low_guildhall and map_hint == "")
 	if wm_paths.size() > 2:
 		push_warning("Landscape %s: %d weightmaps extracted but only %d bound; extra weightmaps are not sampled" % [source, wm_paths.size(), bound_count])
 	var mat := ShaderMaterial.new()
@@ -2717,8 +2890,7 @@ func _landscape_weighted_material(lc: Dictionary) -> ShaderMaterial:
 	# extracted data has no lower-floor mesh within 6 m of that visibility hole
 	# (only foundation walls at y=12). Keep the authored landscape surface
 	# visible there instead of discarding to void. Other maps keep hole discard.
-	var source_low: String = source.to_lower()
-	mat.set_shader_parameter("discard_holes", 0.0 if source_low.contains("guildhall") else 1.0)
+	mat.set_shader_parameter("discard_holes", 0.0 if is_guildhall_fill else 1.0)
 	mat.set_shader_parameter("weightmap", wm)
 	if wm1 != null:
 		mat.set_shader_parameter("weightmap_1", wm1)
@@ -2830,7 +3002,7 @@ func _build_one_landscape(lc_var: Variant, parent: Node3D, ctx: Dictionary) -> v
 			img = Image.load_from_file(hpath)
 	if img == null or img.is_empty():
 		return
-	var weighted: ShaderMaterial = _landscape_weighted_material(lc)
+	var weighted: ShaderMaterial = _landscape_weighted_material(lc, str(ctx.get("map_hint", "")))
 	var mat: Material = weighted
 	if mat == null:
 		mat = _landscape_material(ctx, str(lc.get("source", "")))
@@ -2864,12 +3036,37 @@ func _build_one_landscape(lc_var: Variant, parent: Node3D, ctx: Dictionary) -> v
 	var heights: Array[float] = []
 	var stride: int = quads + 1
 	heights.resize(stride * stride)
+	# Level-loader per-texel loop: (stride+1)^2 get_pixel calls per landscape
+	# component on the load path. Bulk-read the bytes when the layout is known
+	# (RG8/RGB8/RGBA8, uncompressed) — byte-identical to get_pixel — with a
+	# size guard + get_pixel fallback so an odd format can never corrupt.
+	var bulk_stride: int = 0
+	var bulk_data: PackedByteArray = PackedByteArray()
+	if not img.is_compressed():
+		match img.get_format():
+			Image.FORMAT_RG8:
+				bulk_stride = 2
+			Image.FORMAT_RGB8:
+				bulk_stride = 3
+			Image.FORMAT_RGBA8:
+				bulk_stride = 4
+		if bulk_stride > 0:
+			var raw_bytes: PackedByteArray = img.get_data()
+			if raw_bytes.size() >= iw * ih * bulk_stride:
+				bulk_data = raw_bytes
+			else:
+				bulk_stride = 0
 	for vy: int in range(stride):
 		for vx: int in range(stride):
 			var px: int = clampi(int(round((float(vx) * sx_b + ox_b) * float(iw))), 0, iw - 1)
 			var py: int = clampi(int(round((float(vy) * sy_b + oy_b) * float(ih))), 0, ih - 1)
-			var c: Color = img.get_pixel(px, py)
-			var h16: int = (c.r8 << 8) | c.g8
+			var h16: int
+			if bulk_stride > 0:
+				var bo: int = (py * iw + px) * bulk_stride
+				h16 = (int(bulk_data[bo]) << 8) | int(bulk_data[bo + 1])
+			else:
+				var c: Color = img.get_pixel(px, py)
+				h16 = (c.r8 << 8) | c.g8
 			var h_val: float = ((float(h16) - 32768.0) / 128.0) * step_y
 			heights[vy * stride + vx] = h_val
 
@@ -2919,4 +3116,7 @@ func _build_one_landscape(lc_var: Variant, parent: Node3D, ctx: Dictionary) -> v
 		parent.add_child(body)
 		ctx["collision_bodies"] = int(ctx.get("collision_bodies", 0)) + 1
 		ctx["collision_shapes"] = int(ctx.get("collision_shapes", 0)) + 1
+		# T6 accounting: landscape colliders always emit (no cap check, no
+		# silent drop); counted against the building partition like volumes.
+		ctx["building_shapes"] = int(ctx.get("building_shapes", 0)) + 1
 	ctx["landscapes_built"] = int(ctx.get("landscapes_built", 0)) + 1

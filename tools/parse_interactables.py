@@ -99,12 +99,27 @@ def parse_loot_table(path: Path, table_name: str) -> tuple[list, dict]:
     return entries, rows
 
 
+# Rows never spawned: Value 0 rows are currency placeholders. Value 1 is the
+# renown test item JEWELKNIFERENOWN ('jewellknife') — excluded by KEY, not by
+# value, so a future real Value-1 loot item still spawns (P2-3). Any other
+# Value-1 row reaching the pool is warned about in main().
+KNOWN_TEST_KEYS = {"JEWELKNIFERENOWN"}
+
+
 def spawn_pool(entries: list) -> list:
     """Rows actually worth spawning: skips currency placeholders (Value 0)
-    and the renown test item (Value 1)."""
-    return [
-        e for e in entries if isinstance(e["value"], (int, float)) and e["value"] > 1
-    ]
+    and known test items by key (Value 1 renown test item)."""
+    pool = []
+    for e in entries:
+        v = e["value"]
+        if not isinstance(v, (int, float)):
+            continue
+        if v <= 0:
+            continue
+        if v == 1 and e["key"] in KNOWN_TEST_KEYS:
+            continue
+        pool.append(e)
+    return pool
 
 
 def minmax(pool: list) -> tuple:
@@ -269,6 +284,12 @@ def main() -> None:
     minor_pool = spawn_pool(minor)
     major_pool = spawn_pool(major)
     quest_pool = spawn_pool(quest)
+    # P2-3: a real Value-1 loot item must never vanish silently. Anything at
+    # Value 1 that is not a known test key now enters the pool — warn loudly.
+    for tier_name, tier_entries in (("minor", minor), ("major", major), ("quest", quest)):
+        for e in tier_entries:
+            if e["value"] == 1 and e["key"] not in KNOWN_TEST_KEYS:
+                print(f"WARN: {tier_name} {e['key']} has Value 1 and is NOT a known test item; kept in spawn pool")
     minor_min, minor_max = minmax(minor_pool)
     major_min, major_max = minmax(major_pool)
     flagship_vals = [e["value"] for e in quest_pool if e["is_quest_related"]]

@@ -28,14 +28,24 @@ anims: build-extractor
 	$(EX) anims
 	/usr/bin/blender --background --python tools/usd_to_gltf.py -- extracted/anims/usd game/assets/ue/Anims --manifest game/data/generated/anims_manifest.json
 
+# Every generated-data producer. `normalize` fails if any is missing or errors,
+# so a silently dropped parser cannot pass the gate.
+NORMALIZERS := parse_tables parse_materials parse_gameplay parse_contracts \
+               parse_containers parse_interactables parse_loot parse_spawners \
+               parse_vfx parse_weather parse_locres convert_videos
+
 normalize:
-	python3 tools/parse_tables.py
+	@for t in $(NORMALIZERS); do \
+		if [ ! -f tools/$$t.py ]; then echo "ERROR: missing tools/$$t.py" >&2; exit 1; fi; \
+		echo "== $$t"; \
+		python3 tools/$$t.py || exit 1; \
+	done
 
 audio-tools:
 	bash tools/fetch_vgmstream.sh
 
 audit:
-	python3 tools/manifest_audit.py --min-coverage 0.90
+	python3 tools/manifest_audit.py --min-coverage 0.90 --fail-on-stale --fail-on-errors
 
 test:
 	$(GODOT) --headless --path game --script res://tests/run_tests.gd

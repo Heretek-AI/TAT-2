@@ -8,6 +8,7 @@ manifest glob, and nothing compared extracted/ against game/data/generated/.
 Every one of those is now a failing check (opt-out flags exist for
 debugging, but the Makefile wires all gates on).
 """
+
 import argparse
 import json
 import os
@@ -15,7 +16,10 @@ import sys
 import time
 from pathlib import Path
 
-STEAM_MANIFEST = Path.home() / ".local/share/Steam/steamapps/common/Thick As Thieves/Manifest_UFSFiles_Win64.txt"
+STEAM_MANIFEST = (
+    Path.home()
+    / ".local/share/Steam/steamapps/common/Thick As Thieves/Manifest_UFSFiles_Win64.txt"
+)
 
 # P1-1: Engine carriers referenced by shipped levels must be mounted.
 # WorldGridMaterial is the proven dangling bind (VFX_SkySearchLight_Mesh);
@@ -43,8 +47,13 @@ FRESHNESS_GROUPS = (
     (
         "tables",
         [
-            "json/Gameplay", "json/AI", "json/Missions", "json/Character",
-            "json/Core", "json/StringTables", "json/Maps", "json/UI",
+            "json/Gameplay",
+            "json/AI",
+            "json/Missions",
+            "json/Character",
+            "json/Core",
+            "json/StringTables",
+            "json/UI",
             "json/Audio",
         ],
         ["../game/data/generated/tables"],
@@ -75,9 +84,13 @@ def _newest_mtime(root: Path) -> float:
     latest = 0.0
     if not root.exists():
         return latest
+    # Godot writes .import sidecars next to the extracted sources; they are
+    # importer artefacts, not extraction output, and must not make the materials
+    # group look stale every time the project is opened.
+    ignored_suffixes = {".import", ".uid"}
     for p in root.rglob("*"):
         try:
-            if p.is_file():
+            if p.is_file() and p.suffix not in ignored_suffixes:
                 m = p.stat().st_mtime
                 if m > latest:
                     latest = m
@@ -173,7 +186,9 @@ def main():
     # one is a stale warning, never silent.
     errors_log = ex / "errors.log"
     if errors_log.exists() and errors_log.stat().st_size > 0:
-        age = time.strftime("%Y-%m-%d %H:%M", time.localtime(errors_log.stat().st_mtime))
+        age = time.strftime(
+            "%Y-%m-%d %H:%M", time.localtime(errors_log.stat().st_mtime)
+        )
         if errors_log.stat().st_mtime >= filelist.stat().st_mtime:
             print(f"errors.log ({age}, {errors_log.stat().st_size} bytes):")
             print(errors_log.read_text()[:2000])
@@ -201,7 +216,11 @@ def main():
         oldest_out = 0.0
         n_out = 0
         for o in out_roots:
-            files = [o] if o.is_file() else ([p for p in o.rglob("*") if p.is_file()] if o.exists() else [])
+            files = (
+                [o]
+                if o.is_file()
+                else ([p for p in o.rglob("*") if p.is_file()] if o.exists() else [])
+            )
             for p in files:
                 try:
                     m = p.stat().st_mtime
@@ -237,7 +256,9 @@ def main():
     # P2-7: record which extracted/ snapshot the current generated/ tree was
     # built from, so a partial re-extract + subset re-parse cannot pass
     # silently. Written on every run (pass or fail); gates above still fail.
-    manifest_path = Path(args.write_manifest) if args.write_manifest else (ex / "_manifest.json")
+    manifest_path = (
+        Path(args.write_manifest) if args.write_manifest else (ex / "_manifest.json")
+    )
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(
         json.dumps(

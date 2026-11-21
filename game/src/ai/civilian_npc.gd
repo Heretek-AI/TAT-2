@@ -33,6 +33,15 @@ const MAX_TARGET_ATTEMPTS: int = 8
 const IDLE_CLIP: String = "MM_Unarmed_IdleBreak_Fidget"
 const WALK_CLIP: String = "MM_Unarmed_Walk_Fwd"
 
+## Navmesh queries before the first map sync log an engine ERROR
+## ("navigation map query failed ... before first map synchronization").
+## The snap is deferred until NavigationServer3D has synced once
+## (map iteration id > 0); targets fail open meanwhile. Exactly one loud
+## warning is kept for the first pre-sync query that still lands; the rest
+## are counted silently via nav_pre_sync_deferred().
+static var _nav_pre_sync_warned: bool = false
+static var _nav_pre_sync_deferred: int = 0
+
 var body_res_path: String = ""
 var head_res_path: String = ""
 var wander_center: Vector3 = Vector3.ZERO
@@ -185,6 +194,11 @@ func has_civilian_anims() -> bool:
 	return _has_anims and _anim_player != null
 
 
+## Exact pre-sync deferral count this session (first deferral warns loudly).
+static func nav_pre_sync_deferred() -> int:
+	return _nav_pre_sync_deferred
+
+
 func _physics_process(delta: float) -> void:
 	if not is_on_floor():
 		velocity.y -= 9.8 * delta
@@ -282,6 +296,12 @@ func _is_target_valid(candidate: Vector3) -> bool:
 	if world.has_method("get_navigation_map"):
 		var nav_map: RID = world.get_navigation_map()
 		if nav_map.is_valid():
+			if NavigationServer3D.map_get_iteration_id(nav_map) == 0:
+				_nav_pre_sync_deferred += 1
+				if not _nav_pre_sync_warned:
+					_nav_pre_sync_warned = true
+					push_warning("[civilian_npc] navmesh snap deferred: query landed before first map sync (deferred=", _nav_pre_sync_deferred, "); target fails open until sync")
+				return true
 			var snapped: Vector3 = NavigationServer3D.map_get_closest_point(nav_map, candidate)
 			var flat := Vector2(snapped.x - candidate.x, snapped.z - candidate.z)
 			if flat.length() > 1.0:

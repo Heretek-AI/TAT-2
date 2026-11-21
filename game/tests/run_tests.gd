@@ -3760,6 +3760,202 @@ func _initialize() -> void:
 	else:
 		print("PASS: 52 guard ramps+speeds/data-consistent, vfx catalogue 120 (21/70/29) + ParameterData boundary, Linux preset + mobile ETC2 path")
 
+	# 53. Doors traversal (todo 6): closed leaf blocks the player capsule,
+	# past-70-deg shapes-off + layer-0 lets it through, re-toggle returns to
+	# 0 and re-enables, close-while-occupied never teleports the occupant,
+	# and a count%12==5 auto-locked door opens through the lockpick path.
+	# Lock level 1+(count%3) mirrors mission_controller _spawn_swinging_doors
+	# (read-only here); capsule dims match the Spider body (thief_character
+	# _build_body: radius 0.32, height 1.78, centre 0.89). The rig sits at a
+	# remote origin so no other test body can join the sweep query.
+	var dr53_ok := true
+	var dr53_base := Vector3(5000.0, 0.0, 5000.0)
+	var dr53_swing: GDScript = load("res://src/interact/swinging_door.gd") as GDScript
+	var dr53_door: Node = dr53_swing.new() as Node
+	dr53_door.call("configure", {"pos": [dr53_base.x, dr53_base.y, dr53_base.z], "basis": [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0], "leaves": []}, null)
+	root.add_child(dr53_door)
+	await process_frame
+	await physics_frame
+	var dr53_piv := dr53_door.get_node_or_null("DoorPivot") as Node3D
+	if dr53_piv == null:
+		printerr("FAIL: 53 door rig pivot missing")
+		dr53_ok = false
+	else:
+		var dr53_leaf := AnimatableBody3D.new()
+		dr53_leaf.sync_to_physics = true
+		dr53_leaf.collision_layer = 1
+		dr53_leaf.collision_mask = 0
+		dr53_piv.add_child(dr53_leaf)
+		var dr53_cs := CollisionShape3D.new()
+		var dr53_box := BoxShape3D.new()
+		dr53_box.size = Vector3(1.3, 2.4, 0.16)
+		dr53_cs.shape = dr53_box
+		dr53_cs.position = Vector3(0.65, 1.2, 0.0)
+		dr53_leaf.add_child(dr53_cs)
+		(dr53_door.get("_leaf_bodies") as Array).append(dr53_leaf)
+		await physics_frame
+		var dr53_space: PhysicsDirectSpaceState3D = root.get_world_3d().direct_space_state
+		var dr53_cap := CapsuleShape3D.new()
+		dr53_cap.radius = 0.32
+		dr53_cap.height = 1.78
+		# 53a. Closed leaf blocks the capsule.
+		var dr53_closed: float = _door53_cast(dr53_space, dr53_cap, dr53_base)
+		if dr53_closed < 0.0 or dr53_closed >= 0.99:
+			printerr("FAIL: 53 closed leaf did not block capsule: safe=", dr53_closed)
+			dr53_ok = false
+		# 53b. Real swing opens past 70 deg: shapes off + layer 0, capsule passes.
+		dr53_door.call("interact", null)
+		var dr53_sw := 0
+		var dr53_open := false
+		while dr53_sw < 300 and not dr53_open:
+			await process_frame
+			dr53_sw += 1
+			dr53_open = absf(absf(dr53_piv.rotation.y) - PI * 0.5) < 0.02
+		if not dr53_open:
+			printerr("FAIL: 53 door did not swing open: rot=", dr53_piv.rotation.y)
+			dr53_ok = false
+		else:
+			var dr53_bsettle := 0
+			while bool(dr53_door.get("_tweening")) and dr53_bsettle < 300:
+				await process_frame
+				dr53_bsettle += 1
+			await physics_frame
+			if dr53_cs.disabled != true or int(dr53_leaf.collision_layer) != 0:
+				printerr("FAIL: 53 open leaf still blocking: disabled=", dr53_cs.disabled, " layer=", dr53_leaf.collision_layer)
+				dr53_ok = false
+			var dr53_thru: float = _door53_cast(dr53_space, dr53_cap, dr53_base)
+			if dr53_thru < 0.999:
+				printerr("FAIL: 53 open doorway did not let capsule through: safe=", dr53_thru)
+				dr53_ok = false
+			# 53c. Gate explicit on the instance: 60 deg still blocks, 80 deg clears.
+			dr53_piv.rotation.y = deg_to_rad(60.0)
+			dr53_door.call("_update_leaf_collision")
+			await process_frame
+			await physics_frame
+			if dr53_cs.disabled != false or int(dr53_leaf.collision_layer) != 1:
+				printerr("FAIL: 53 60-deg leaf wrongly cleared: disabled=", dr53_cs.disabled, " layer=", dr53_leaf.collision_layer)
+				dr53_ok = false
+			dr53_piv.rotation.y = deg_to_rad(80.0)
+			dr53_door.call("_update_leaf_collision")
+			await process_frame
+			await physics_frame
+			if dr53_cs.disabled != true or int(dr53_leaf.collision_layer) != 0:
+				printerr("FAIL: 53 80-deg leaf still blocking: disabled=", dr53_cs.disabled, " layer=", dr53_leaf.collision_layer)
+				dr53_ok = false
+		# 53d. Re-toggle closes to 0 and re-enables (re-blocks the capsule).
+		dr53_door.call("interact", null)
+		var dr53_cw := 0
+		var dr53_shut := false
+		while dr53_cw < 300 and not dr53_shut:
+			await process_frame
+			dr53_cw += 1
+			dr53_shut = absf(dr53_piv.rotation.y) < 0.02
+		if not dr53_shut:
+			printerr("FAIL: 53 re-toggle did not return to 0: rot=", dr53_piv.rotation.y)
+			dr53_ok = false
+		else:
+			var dr53_dsettle := 0
+			while bool(dr53_door.get("_tweening")) and dr53_dsettle < 300:
+				await process_frame
+				dr53_dsettle += 1
+			await physics_frame
+			if dr53_cs.disabled != false or int(dr53_leaf.collision_layer) != 1:
+				printerr("FAIL: 53 closed leaf did not re-enable: disabled=", dr53_cs.disabled, " layer=", dr53_leaf.collision_layer)
+				dr53_ok = false
+			var dr53_reblock: float = _door53_cast(root.get_world_3d().direct_space_state, dr53_cap, dr53_base)
+			if dr53_reblock < 0.0 or dr53_reblock >= 0.99:
+				printerr("FAIL: 53 re-closed leaf did not re-block capsule: safe=", dr53_reblock)
+				dr53_ok = false
+		# 53e. F-spam mid-tween: the second toggle is ignored, one swing lands open.
+		dr53_door.call("interact", null)
+		dr53_door.call("interact", null)
+		var dr53_fw := 0
+		var dr53_fopen := false
+		while dr53_fw < 300 and not dr53_fopen:
+			await process_frame
+			dr53_fw += 1
+			dr53_fopen = absf(absf(dr53_piv.rotation.y) - PI * 0.5) < 0.02
+		if dr53_fopen:
+			var dr53_fsettle := 0
+			while bool(dr53_door.get("_tweening")) and dr53_fsettle < 300:
+				await process_frame
+				dr53_fsettle += 1
+		if not dr53_fopen or not bool(dr53_door.get("is_open")):
+			printerr("FAIL: 53 F-spam broke the single swing: rot=", dr53_piv.rotation.y, " open=", dr53_door.get("is_open"))
+			dr53_ok = false
+		# 53f. Close-while-occupied: the occupant never moves, the door still closes.
+		var dr53_occ := Node3D.new()
+		dr53_occ.position = dr53_base + Vector3(0.0, 1.0, 0.0)
+		root.add_child(dr53_occ)
+		await process_frame
+		var dr53_before: Vector3 = dr53_occ.global_position
+		dr53_door.call("interact", null)
+		var dr53_ow := 0
+		var dr53_oshut := false
+		while dr53_ow < 300 and not dr53_oshut:
+			await process_frame
+			dr53_ow += 1
+			dr53_oshut = absf(dr53_piv.rotation.y) < 0.02
+		if not dr53_oshut:
+			printerr("FAIL: 53 occupied close did not finish: rot=", dr53_piv.rotation.y)
+			dr53_ok = false
+		else:
+			var dr53_osettle := 0
+			while bool(dr53_door.get("_tweening")) and dr53_osettle < 300:
+				await process_frame
+				dr53_osettle += 1
+			if not dr53_occ.global_position.is_equal_approx(dr53_before):
+				printerr("FAIL: 53 occupant teleported by close: was=", dr53_before, " now=", dr53_occ.global_position)
+				dr53_ok = false
+			await physics_frame
+			if dr53_cs.disabled != false or int(dr53_leaf.collision_layer) != 1:
+				printerr("FAIL: 53 occupied close did not re-enable leaf")
+				dr53_ok = false
+		dr53_occ.queue_free()
+	dr53_door.queue_free()
+	await process_frame
+	# 53g. count%12==5 auto-locked door opens through the lockpick path.
+	# Level 1+(5%3)=3 mirrors _spawn_swinging_doors for count=5.
+	var dr53_lock: Node = dr53_swing.new() as Node
+	var dr53_lbase := dr53_base + Vector3(10.0, 0.0, 0.0)
+	dr53_lock.call("configure", {"pos": [dr53_lbase.x, dr53_lbase.y, dr53_lbase.z], "basis": [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0], "leaves": []}, null)
+	root.add_child(dr53_lock)
+	await process_frame
+	await physics_frame
+	dr53_lock.call("set_locked", true, 1 + (5 % 3))
+	if not bool(dr53_lock.get("locked")) or int(dr53_lock.get("lock_level")) != 3:
+		printerr("FAIL: 53 auto-lock setup wrong: locked=", dr53_lock.get("locked"), " level=", dr53_lock.get("lock_level"))
+		dr53_ok = false
+	elif not str(dr53_lock.call("get_interact_prompt")).begins_with("[F] PICK LOCK (Lv 3)"):
+		printerr("FAIL: 53 auto-lock prompt wrong: ", dr53_lock.call("get_interact_prompt"))
+		dr53_ok = false
+	else:
+		var dr53_spins := 0
+		while bool(dr53_lock.get("locked")) and dr53_spins < 12:
+			dr53_lock.call("interact", null)
+			dr53_spins += 1
+		if bool(dr53_lock.get("locked")):
+			printerr("FAIL: 53 lockpick path never unlocked after ", dr53_spins, " attempts")
+			dr53_ok = false
+		else:
+			var dr53_lpiv := dr53_lock.get_node_or_null("DoorPivot") as Node3D
+			var dr53_lw := 0
+			var dr53_lopen := false
+			while dr53_lw < 300 and not dr53_lopen:
+				await process_frame
+				dr53_lw += 1
+				if dr53_lpiv != null:
+					dr53_lopen = absf(absf(dr53_lpiv.rotation.y) - PI * 0.5) < 0.02
+			if not dr53_lopen:
+				printerr("FAIL: 53 lockpicked door did not swing open")
+				dr53_ok = false
+	dr53_lock.queue_free()
+	await process_frame
+	if not dr53_ok:
+		fails += 1
+	else:
+		print("PASS: 53 doors traversal (closed blocks / 70-deg gate / re-toggle re-blocks / F-spam single swing / occupied close no-teleport / count5 lockpick opens)")
+
 	# P2-6 fixture restore (see boot snapshot): leave no mutated autoload
 	# state behind for the next run or embedding harness.
 	gs.thief_id = fx_thief_id
@@ -3875,3 +4071,19 @@ class P1MockActor extends Node:
 	}
 	signal health_changed(h, mh)
 	signal tool_used(a, b)
+
+
+## Todo 6: sweep a player-sized capsule across a doorway. Returns the safe
+## motion fraction (1.0 = passes through, <1 = blocked by the leaf).
+func _door53_cast(space: PhysicsDirectSpaceState3D, cap: CapsuleShape3D, base: Vector3) -> float:
+	var q := PhysicsShapeQueryParameters3D.new()
+	q.shape = cap
+	q.collision_mask = 1
+	q.collide_with_areas = false
+	q.collide_with_bodies = true
+	q.transform = Transform3D(Basis(), base + Vector3(0.0, 0.89, -2.0))
+	q.motion = Vector3(0.0, 0.0, 4.0)
+	var r: PackedFloat32Array = space.cast_motion(q)
+	if r.size() < 1:
+		return -1.0
+	return float(r[0])

@@ -14,6 +14,11 @@ extends Node3D
 ## interact() toggles a 90-degree swing around the pivot's local up axis over
 ## ~0.4 s; only the pivot rotates (no physics teleport), closing returns to 0,
 ## and repeated toggles are ignored while the tween runs.
+##
+## Close-while-occupied contract (todo 6, behavior of record): closing only
+## rotates the pivot back to 0 and re-enables the leaf shapes; occupants are
+## never moved or teleported — a body standing in the doorway is simply
+## overlapped by the re-enabled leaf until it steps out.
 
 signal lockpick_updated(active: bool, progress: float, lock_level: int)
 

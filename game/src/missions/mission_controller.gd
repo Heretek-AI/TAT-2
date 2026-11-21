@@ -40,15 +40,15 @@ var spawner_civilians: Array = []
 var loot_tables: Dictionary = {}
 ## Which spawn path the player used: "authored" for a floor-grounded
 ## PlayerStart, otherwise the marker fallback that won ("major_loot",
-## "minor_centroid", "guard", "escape", "mesh"). Logged for QA.
+## "minor_centroid", "guard", "escape", "legacy"). Logged for QA.
 var fallback_spawn_source: String = "authored"
 ## Whether the chosen spawn passed the fallback headroom check (2.2 m clear
 ## above the floor plus a standing-capsule overlap test). Authored starts
-## report true; the mesh last-resort reports false. Logged for QA.
+## report true; the legacy last-resort reports false. Logged for QA.
 var fallback_spawn_headroom_clear: bool = true
 ## Whether the chosen spawn passed the fallback forward-clearance check
 ## (no layer-1 geometry within 1.5 m on the 3 m horizontal ray toward the
-## loot centroid). Authored starts report true; the mesh last-resort and
+## loot centroid). Authored starts report true; the legacy last-resort and
 ## the floor/headroom-only fallbacks report false. Logged for QA.
 var fallback_spawn_forward_clear: bool = true
 
@@ -580,6 +580,25 @@ func interact(_actor: Node) -> void:
 	ward_area.set("mission_ctrl", self)
 	add_child(ward_area)
 
+	# IS-2: the den spawn faces the hub. Authored PlayerStart yaw is kept when
+	# it already faces the map table; otherwise the spawn rotates to face the
+	# table so first sight is the hub (map table + telescope wall), never a
+	# wall. The logged before-angle is the <=30 deg proof.
+	if player != null and _den_map_table_pos != Vector3.ZERO:
+		var to_hub: Vector3 = _den_map_table_pos - player.global_position
+		to_hub.y = 0.0
+		if to_hub.length() > 0.05:
+			var hub_dir: Vector3 = to_hub.normalized()
+			var facing_now: Vector3 = -player.global_transform.basis.z
+			facing_now.y = 0.0
+			var misalign_deg: float = 180.0
+			if facing_now.length() > 0.05:
+				misalign_deg = rad_to_deg(facing_now.normalized().angle_to(hub_dir))
+			var rotated: bool = misalign_deg > 30.0
+			if rotated:
+				player.rotation = Vector3(0.0, atan2(-hub_dir.x, -hub_dir.z), 0.0)
+			print("TAT-2 den spawn hub-facing: misalign_before_deg=", snappedf(misalign_deg, 0.1), " rotated_to_face=", rotated, " table=", _den_map_table_pos)
+
 
 func open_wardrobe_ui() -> void:
 	var ui: CanvasLayer = WardrobeUIScript.new()
@@ -906,7 +925,10 @@ func toggle_telescope_ponder() -> void:
 	# unguarded toggle would fire twice and collapse to a no-op. Collapse
 	# same-frame re-entry so F flips ponder exactly once per press.
 	var frame_now: int = Engine.get_process_frames()
-	if int(get_meta("ponder_toggle_frame", -1)) == frame_now:
+	# has_meta first: get_meta on a missing key logs a Godot ERROR even with
+	# a default, which would bury the single-fire proof line in noise.
+	var last_toggle: int = int(get_meta("ponder_toggle_frame")) if has_meta("ponder_toggle_frame") else -1
+	if last_toggle == frame_now:
 		return
 	set_meta("ponder_toggle_frame", frame_now)
 	_ponder_active = not _ponder_active
@@ -945,6 +967,9 @@ func toggle_telescope_ponder() -> void:
 		# = the wind bed trim): opt-in bed, off again on exit.
 		if AudioManager != null and AudioManager.has_method("start_bed"):
 			AudioManager.start_bed("wind")
+		# Log-count proof: exactly one ponder-enter line per F press (the
+		# frame guard above collapses the Area + lookat double dispatch).
+		print("TAT-2 telescope ponder-enter: cam=", _ponder_cam.name, " current=", _ponder_cam.current, " fov=", _ponder_cam.fov, " eye=", _ponder_cam.global_position)
 	else:
 		if _ponder_cam != null and is_instance_valid(_ponder_cam):
 			_ponder_cam.current = false
@@ -954,6 +979,7 @@ func toggle_telescope_ponder() -> void:
 				(pcam_v as Camera3D).current = true
 		if AudioManager != null and AudioManager.has_method("stop_bed"):
 			AudioManager.stop_bed("wind")
+		print("TAT-2 telescope ponder-exit")
 	_refresh_den_lookat_card(true)
 
 
@@ -1350,22 +1376,27 @@ func _add_safety_floor() -> void:
 ## Authored PlayerStart yaw in Godot space (the extractor already converted the
 ## marker basis to Godot axes; UE forward is -basis.z and Godot yaw 0 faces
 ## -Z). Upright only: pitch and roll are discarded so the thief never spawns
-## tilted. Degenerate bases fail closed to 0.
-func _spawn_yaw_from_basis(basis_arr: Variant) -> float:
+## tilted. Returns {"yaw": float, "valid": bool}: every degenerate path warns
+## loudly and reports valid=false, so a silent 0.0 can never pose as authored
+## facing again (GAP-2).
+func _spawn_yaw_from_basis(basis_arr: Variant) -> Dictionary:
 	var b: Array = basis_arr if (basis_arr is Array) else []
 	if b.size() < 9:
-		return 0.0
+		push_warning("[mission_controller] spawn yaw: basis array has %d entries (need 9); yaw 0.0 is a fallback, not authored" % b.size())
+		return {"yaw": 0.0, "valid": false}
 	var basis := Basis(
 		Vector3(float(b[0]), float(b[3]), float(b[6])),
 		Vector3(float(b[1]), float(b[4]), float(b[7])),
 		Vector3(float(b[2]), float(b[5]), float(b[8]))
 	).orthonormalized()
 	if absf(basis.determinant()) < 0.0001:
-		return 0.0
+		push_warning("[mission_controller] spawn yaw: degenerate basis (determinant ~0); yaw 0.0 is a fallback, not authored")
+		return {"yaw": 0.0, "valid": false}
 	var fwd: Vector3 = -basis.z
 	if absf(fwd.x) < 0.000001 and absf(fwd.z) < 0.000001:
-		return 0.0
-	return atan2(-fwd.x, -fwd.z)
+		push_warning("[mission_controller] spawn yaw: degenerate forward (straight up/down); yaw 0.0 is a fallback, not authored")
+		return {"yaw": 0.0, "valid": false}
+	return {"yaw": atan2(-fwd.x, -fwd.z), "valid": true}
 
 
 func _spawn_player(ue_spawns: Array, ue_spawn_transforms: Array = [], stats: Dictionary = {}) -> void:
@@ -1392,8 +1423,11 @@ func _spawn_player(ue_spawns: Array, ue_spawn_transforms: Array = [], stats: Dic
 			chosen_transform = ue_spawn_transforms[0]
 	if chosen_transform is Dictionary:
 		spawn = ((chosen_transform as Dictionary).get("pos", Vector3.ZERO) as Vector3) + Vector3(0, 1.0, 0)
-		spawn_yaw = _spawn_yaw_from_basis((chosen_transform as Dictionary).get("basis", []))
-		have_yaw = true
+		var yaw_res: Dictionary = _spawn_yaw_from_basis((chosen_transform as Dictionary).get("basis", []))
+		spawn_yaw = float(yaw_res.get("yaw", 0.0))
+		# GAP-2: only an authored-valid basis may set facing; a degenerate
+		# basis keeps the legacy facing instead of a silent 0.0.
+		have_yaw = bool(yaw_res.get("valid", false))
 		fallback_spawn_source = "authored"
 		fallback_spawn_headroom_clear = true
 		fallback_spawn_forward_clear = true
@@ -1435,10 +1469,23 @@ func _spawn_player(ue_spawns: Array, ue_spawn_transforms: Array = [], stats: Dic
 						spawn_yaw = atan2(-to.x, -to.z)
 						have_yaw = true
 			else:
-				spawn = _find_mesh_fallback_spawn()
-				fallback_spawn_source = "mesh"
+				# GAP-8: no blind spawns. The old mesh fallback posed an
+				# arbitrary mesh position as a spawn with no facing (Old Manor
+				# fell through to it and the safety net). Last resort keeps
+				# the legacy origin but still faces the loot centroid when
+				# the map has one, and says so loudly.
+				spawn = Vector3(0, 2.0, 0)
+				fallback_spawn_source = "legacy"
 				fallback_spawn_headroom_clear = false
 				fallback_spawn_forward_clear = false
+				var last_face: Variant = _loot_centroid(stats)
+				if last_face is Vector3:
+					var last_to: Vector3 = (last_face as Vector3) - spawn
+					last_to.y = 0.0
+					if last_to.length() > 0.05:
+						spawn_yaw = atan2(-last_to.x, -last_to.z)
+						have_yaw = true
+				push_warning("[mission_controller] spawn fallback exhausted (no grounded authored start, no marker floor hit); legacy origin with centroid facing, source=legacy")
 	player.position = spawn
 	if have_yaw:
 		player.rotation = Vector3(0.0, spawn_yaw, 0.0)
@@ -1597,29 +1644,6 @@ func _loot_centroid(stats: Dictionary) -> Variant:
 	if n == 0:
 		return null
 	return acc / float(n)
-
-
-func _find_mesh_fallback_spawn() -> Vector3:
-	var found: Node = _find_first_level_mesh(self)
-	if found is MeshInstance3D:
-		var mi: MeshInstance3D = found as MeshInstance3D
-		return mi.global_position + Vector3(0, 2.0, 0)
-	if found is MultiMeshInstance3D:
-		var mmi: MultiMeshInstance3D = found as MultiMeshInstance3D
-		return mmi.global_position + Vector3(0, 2.0, 0)
-	return Vector3(0, 2.0, 0)
-
-
-func _find_first_level_mesh(n: Node) -> Node:
-	for child in n.get_children():
-		if child is MeshInstance3D or child is MultiMeshInstance3D:
-			return child
-		if child == player or child == hud or child == light_probe or child == level_loader:
-			continue
-		var deep: Node = _find_first_level_mesh(child)
-		if deep != null:
-			return deep
-	return null
 
 
 func _snap_player_to_ground() -> void:

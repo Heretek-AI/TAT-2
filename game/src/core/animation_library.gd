@@ -478,6 +478,57 @@ const TP_CRANK_CLIPS := {
 }
 
 
+## Zipwire gear (tool skeletal mesh) reload clips. The gear mesh is a separate
+## skeleton from the thief character: SK_Zipwire.glb carries 18 joints
+## (root/base/barrel/crank/crank_arm/crank_handle/gear/arrow/spring01-03/
+## blade_*/hinge_*/battery/trigger), and the UE gear montage animates exactly
+## those joints (AN_ThiefNisha_Zipwire__Gear_Zipwire_Reload_Montage 4.35 s,
+## 507 keys on crank_arm/gear; _Loop 1.32 s, 81 keys). The character 1P reload
+## loop (FP_TOOL_CLIPS["zipwire_crank"]) and 3P body montage (TP_CRANK_CLIPS)
+## stay separate; this table is consumed only by the tool's own AnimationPlayer
+## so the crank/arrow/spring/blade mechanism moves with the hand.
+## `start` is the full one-shot reload (4.35 s), `loop` the sustained crank
+## cycle (1.32 s at ~1.5 rev/s). Both are authored for the same Zipwire rest
+## skeleton as SK_Zipwire.glb, so local rotation tracks map 1:1.
+const GEAR_CLIPS := {
+	"zipwire_gear_reload_start": {"clip": "AN_ThiefNisha_Zipwire__Gear_Zipwire_Reload_Montage", "loop": false},
+	"zipwire_gear_reload_loop": {"clip": "AN_ThiefNisha_Zipwire__Gear_Zipwire_Reload_Loop", "loop": true},
+}
+
+
+## Lazily retargets a zipwire gear clip onto the tool skeleton this instance
+## was setup() with (mirrors ensure_fp_clip / ensure_tp_crank_clip). Source and
+## target are the same SKEL_Zipwire skeleton exported at different unit/root
+## frames, so this uses the same-skeleton rotation retarget below (not the
+## cross-rig similarity path). Returns the animation name, or "" when the
+## manifest lacks the clip or the skeletons share no bones. Dedicated library
+## instance bound to the tool skeleton only (never the 1P/3P character instances).
+func ensure_gear_clip(player: AnimationPlayer, role: String) -> String:
+	if applied.has(role):
+		return str(applied[role])
+	if player == null or not load_manifest():
+		return ""
+	if not GEAR_CLIPS.has(role):
+		return ""
+	var spec: Dictionary = GEAR_CLIPS[role] as Dictionary
+	var clip_name := str(spec.get("clip", ""))
+	var loop: bool = spec.get("loop", true) == true
+	if clip_name == "" or not _manifest_by_name.has(clip_name):
+		return ""
+	var anim := _retarget_gear_clip(clip_name, loop)
+	if anim == null:
+		return ""
+	var lib: AnimationLibrary = player.get_animation_library("") if player.has_animation_library("") else null
+	if lib == null:
+		lib = AnimationLibrary.new()
+		player.add_animation_library("", lib)
+	if not lib.has_animation(clip_name):
+		lib.add_animation(clip_name, anim)
+	applied[role] = clip_name
+	anim_lengths[role] = anim.get_length()
+	return clip_name
+
+
 ## Synced takedown attacker entries (thief 3P form). Primary is the thief-side
 ## BlackJack stealth pair vs GuardEnforcer (AN_BlackJack_StealthTakedown__
 ## GuardEnforcer_FromBehind_Montage); alternates are the base Synced stealth
@@ -557,6 +608,72 @@ func ensure_tp_takedown_atk_clip(player: AnimationPlayer, role: String = "takedo
 
 func _retargeted(clip_name: String, role: String) -> Animation:
 	return _retarget_general(clip_name, STRIP_ROOT_TRANSLATION.has(role), LOOP_ROLES.has(role), true)
+
+
+## Same-skeleton retarget for the zipwire gear (SK_Zipwire -> SK_Zipwire).
+## The Anims GLB and the mesh GLB share every local bone rest except the root
+## (+90 deg X in the imported mesh skeleton, -90 deg X instance rotation) and
+## crank (-19.5 deg X static roll), so the identity that must be preserved is
+## the *bind-relative* local pose:
+##   pose_delta = anim_local * source_rest_local^-1
+## Only rotation tracks are mapped: the exporter's translation/scale channels
+## are written in an absolute node space whose rest differs from the skin bind
+## rest (e.g. crank_arm track 5.25 cm vs bind 6.0 cm), so replaying them would
+## translate the mechanism off its pivots. The UE reload's visible motion is
+## rotational (crank/gear/arrow/blades); one-key rotation tracks are skipped so
+## the crank bind roll is not double-applied.
+## The generic similarity retarget rotates the crank axis from local +Y into
+## local +Z because it compensates the root export difference; that is correct
+## for cross-rig character retargets but wrong for this same-skeleton pair.
+func _retarget_gear_clip(clip_name: String, loop: bool) -> Animation:
+	var key := clip_name + "|gear|" + skeleton_name
+	if _retarget_cache.has(key):
+		return _retarget_cache[key] as Animation
+	var info := _load_source(clip_name)
+	if info.is_empty():
+		return null
+	var src := info["anim"] as Animation
+	if src == null:
+		return null
+	var src_local := info["src_local"] as Dictionary
+	if src_local.is_empty() or _mesh_local.is_empty():
+		return null
+	var mesh_set := {}
+	for b in mesh_bones:
+		mesh_set[str(b)] = true
+	var out := Animation.new()
+	out.set_length(src.get_length())
+	out.set_step(src.get_step())
+	for ti in range(src.get_track_count()):
+		var path: NodePath = src.track_get_path(ti)
+		if path.get_subname_count() == 0:
+			continue
+		if src.track_get_type(ti) != Animation.TYPE_ROTATION_3D:
+			continue
+		var bone := str(path.get_subname(0))
+		if not mesh_set.has(bone) or not src_local.has(bone):
+			continue
+		if src.track_get_key_count(ti) <= 1:
+			continue
+		var nti: int = out.add_track(Animation.TYPE_ROTATION_3D)
+		out.track_set_path(nti, NodePath(skeleton_name + ":" + bone))
+		out.track_set_interpolation_type(nti, src.track_get_interpolation_type(ti))
+		var src_rest: Transform3D = src_local[bone] as Transform3D
+		var inv_rest_q: Quaternion = src_rest.basis.get_rotation_quaternion().inverse().normalized()
+		for ki in range(src.track_get_key_count(ti)):
+			var kt: float = src.track_get_key_time(ti, ki)
+			var kv = src.track_get_key_value(ti, ki)
+			var nv = kv
+			if kv is Quaternion:
+				nv = ((kv as Quaternion) * inv_rest_q).normalized()
+			var nki: int = out.track_insert_key(nti, kt, nv)
+			out.track_set_key_transition(nti, nki, src.track_get_key_transition(ti, ki))
+	if out.get_track_count() == 0:
+		push_warning("GuardAnimationLibrary: gear clip '" + clip_name + "' shares no rotation tracks with the tool skeleton; skipped")
+		return null
+	out.set_loop_mode(Animation.LOOP_LINEAR if loop else Animation.LOOP_NONE)
+	_retarget_cache[key] = out
+	return out
 
 
 func _retarget_general(clip_name: String, strip_root: bool, loop: bool, use_similarity: bool = true) -> Animation:
@@ -674,6 +791,7 @@ func _retarget_general(clip_name: String, strip_root: bool, loop: bool, use_simi
 # matches the manifest stem exactly.
 const CLIP_INTERNAL_EXACT := {
 	"AN_ThiefNisha_Zipwire__Reload_Loop": "AN_ThiefNisha_Zipwire__Reload",
+	"AN_ThiefNisha_Zipwire__Gear_Zipwire_Reload_Loop": "AN_ThiefNisha_Zipwire__Gear_Zipwire_Reload",
 }
 
 

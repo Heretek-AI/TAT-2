@@ -49,6 +49,10 @@ const WIRE_RANGE: float = 20.0 # DA_StandardToolSettings "Hotwire Range" 2000cm
 const WIRE_PULL_SPEED: float = 23.0 # DA_StandardToolSettings "Hotwire Speed" 2300cm/s
 const WIRE_CRANK_MIN_TIME: float = 0.5 # GA_Hotwire_Crank.MinimumCrankTime
 const WIRE_CRANK_DURATION_FALLBACK: float = 6.0 # CT_WireCrank.CrankDuration (lvl 0)
+## UE IA_Ability_Action_Primary_Hold is a 0.2 s hold trigger; the launch
+## ability (GA_Hotwire_Child_Launch travel) fires only after the hold
+## completes, not on the raw mouse-down event.
+const WIRE_LAUNCH_HOLD_SEC: float = 0.2
 const GRAPPLE_MIN_HOLD_SEC: float = 0.12 # P1 tap-fire guard: releases shorter than this keep the winch engaged (no UE source; one physics-frame margin at 60 Hz physics + input jitter). Below this the tap becomes a hop, not a pull.
 const SPRINT_START_STAMINA: float = 3.0 # P2 no-hysteresis sprint: sprint (re)starts only above this; stops at 2.0. Kills the FOV flicker at the old single 2.0 threshold.
 const SPRINT_STOP_STAMINA: float = 2.0
@@ -162,6 +166,18 @@ var _fp_arm_skel: Skeleton3D
 var _fp_arm_holder: Node3D
 var _fp_current_clip: String = ""
 var _fp_tool_on_bone: bool = false
+## True once the physics tick has observed no floor contact. The 1P state
+## machine must not read is_on_floor() directly: a rig with physics disabled
+## (test/probe) never calls move_and_slide, so is_on_floor() is false at rest
+## and a stationary zipwire idle was misclassified as jump_inair (M2.3).
+var _fp_airborne: bool = false
+## Separate AnimationPlayer for the SK_Zipwire tool skeleton: the gear montage
+## animates gear/arrow/spring/blade/hinge/trigger, a different skeleton from the
+## 1P arms and 3P body (UE AN_ThiefNisha_Zipwire__Gear_Zipwire_Reload_*).
+var _gear_anim_player: AnimationPlayer = null
+var _gear_anim_lib: RefCounted = null
+var _gear_loop_clip: String = ""
+var _gear_current_clip: String = ""
 var mesh_3p_glb: String = ""
 var fp_tool_id: String = "zipwire"
 var equipped_tool: String = "zipwire"
@@ -198,6 +214,10 @@ var grapple_target: Vector3 = Vector3.ZERO
 var _is_cranking: bool = false
 var _crank_elapsed: float = 0.0
 var crank_progress: float = 0.0
+## LMB launch hold (IA_Ability_Action_Primary_Hold 0.2 s). Armed on press,
+## accumulated in physics, cleared on release/cancel.
+var _wire_launch_arming: bool = false
+var _wire_launch_hold_sec: float = 0.0
 var _zipwire_cable_mesh: MeshInstance3D = null
 var _smoke_traj_mesh: MeshInstance3D = null
 var is_mantling: bool = false
@@ -390,6 +410,7 @@ func _apply_fall_damage(drop_m: float) -> float:
 ## reflects the previous frame's move_and_slide).
 func _track_fall_state() -> void:
 	var on_floor_now: bool = is_on_floor()
+	_fp_airborne = not on_floor_now
 	if on_floor_now and not _was_on_floor:
 		_apply_fall_damage(_fall_peak_y - global_position.y)
 		_fp_play_action("jump_land")
@@ -789,7 +810,7 @@ func equip_tool(tool_id: String) -> void:
 func _use_equipped_primary() -> void:
 	match equipped_tool:
 		"zipwire":
-			_try_spider_grapple()
+			_arm_wire_launch()
 		"smoke_bomb":
 			_use_smoke_bomb()
 		"slithersap":
@@ -800,6 +821,29 @@ func _use_equipped_primary() -> void:
 			_fp_play_action("vistara_equip")
 		_:
 			_try_blackjack()
+
+
+## IA_Ability_Action_Primary_Hold: arm the 0.2 s hold. The launch itself is
+## fired by _tick_wire_launch once the hold completes; releasing early
+## cancels (GA_Hotwire_Child_Launch travel never starts).
+func _arm_wire_launch() -> void:
+	_wire_launch_arming = true
+	_wire_launch_hold_sec = 0.0
+
+
+func _tick_wire_launch(delta: float) -> void:
+	if not _wire_launch_arming:
+		return
+	if not can_act() or equipped_tool != "zipwire" or not Input.is_action_pressed("primary_action"):
+		_wire_launch_arming = false
+		_wire_launch_hold_sec = 0.0
+		return
+	_wire_launch_hold_sec += delta
+	if _wire_launch_hold_sec < WIRE_LAUNCH_HOLD_SEC:
+		return
+	_wire_launch_arming = false
+	_wire_launch_hold_sec = 0.0
+	_try_spider_grapple()
 
 
 func get_equipped_tool() -> String:
@@ -938,6 +982,8 @@ func _physics_process(delta: float) -> void:
 
 	# Active Zipwire [RMB] crank tick.
 	_tick_wire_crank(delta, false)
+	# LMB 0.2 s hold -> GA_Hotwire_Child_Launch travel.
+	_tick_wire_launch(delta)
 
 	# Auto-mantle interpolation (BP_Player_Base _mantleSettings + GE_Traversal_AutoMantle 0.3s).
 	# P1 mantle-skips-systems: stamina regen, disguise drain, light probe and
@@ -1173,6 +1219,7 @@ func _begin_wire_crank() -> void:
 	_crank_elapsed = 0.0
 	crank_progress = 0.0
 	_play_wire_crank_clip()
+	_start_gear_crank()
 
 
 ## Starts the looping zipwire crank 1P clip (AN_ThiefNisha_Zipwire__Reload_Loop
@@ -1211,6 +1258,7 @@ func _tick_wire_crank(delta: float, force_holding: bool = false) -> void:
 		dur = WIRE_CRANK_DURATION_FALLBACK
 	crank_progress = clampf(_crank_elapsed / maxf(dur, WIRE_CRANK_MIN_TIME), 0.0, 1.0)
 	_tp_crank_tick()
+	_tick_gear_crank()
 	if _crank_elapsed >= dur:
 		ability_cooldown = 0.0
 		charges["grapple"] = mini(GRAPPLE_MAX_CHARGES, int(charges.get("grapple", 0)) + 1)
@@ -1727,9 +1775,10 @@ func _try_spider_grapple() -> bool:
 	grapple_target = check["pos"] as Vector3
 	is_grappling = true
 	_note_air_link_start()
-	_is_cranking = false
-	_crank_elapsed = 0.0
-	crank_progress = 0.0
+	_wire_launch_arming = false
+	_wire_launch_hold_sec = 0.0
+	if _is_cranking:
+		_end_wire_crank()
 	grapple_time = 0.0
 	charges["grapple"] = int(charges.get("grapple", 0)) - 1
 	tool_used.emit("grapple", int(charges.get("grapple", 0)))
@@ -2520,7 +2569,7 @@ func _select_fp_anim_role(moving: bool) -> String:
 		return "zipwire_travel_up" if grapple_target.y > global_position.y + 2.0 else "zipwire_travel"
 	if _is_cranking:
 		return "zipwire_crank"
-	if not is_on_floor():
+	if _fp_airborne:
 		return "jump_inair"
 	if disguise_active:
 		if moving:
@@ -2606,6 +2655,95 @@ func _fp_play_fp_clip(clip_name: String) -> void:
 	fp_anim_player.play(clip_name, FP_ANIM_BLEND)
 
 
+## Builds the separate gear (SK_Zipwire tool) AnimationPlayer. The UE zipwire
+## reload is a montage pair: the character clip drives the 1P/3P arm skeleton,
+## and AN_ThiefNisha_Zipwire__Gear_Zipwire_Reload_* drives the tool skeleton's
+## gear/arrow/spring/blade/hinge/trigger joints. Without this second player the
+## crank hand moved but the mechanism stayed frozen.
+func _setup_gear_anim(loaded: Node) -> void:
+	_gear_anim_player = null
+	_gear_anim_lib = null
+	_gear_loop_clip = ""
+	_gear_current_clip = ""
+	if loaded == null:
+		return
+	var skel: Skeleton3D = null
+	for n: Node in loaded.find_children("*", "Skeleton3D", true, false):
+		var sk := n as Skeleton3D
+		if sk != null and sk.get_bone_count() > 0 and sk.find_bone("crank_arm") >= 0:
+			skel = sk
+			break
+	if skel == null:
+		push_warning("ZipwireGear: SK_Zipwire skeleton has no crank_arm bone; gear montage skipped")
+		return
+	var lib = ThiefAnimLib.new()
+	if not lib.setup("club", skel):
+		push_warning("ZipwireGear: gear animation library bind failed; mechanism falls back to the manual crank spin")
+		return
+	var host := skel.get_parent() as Node
+	if host == null:
+		return
+	var player := AnimationPlayer.new()
+	player.name = "GearAnimPlayer"
+	host.add_child(player)
+	player.root_node = player.get_path_to(host)
+	_gear_anim_player = player
+	_gear_anim_lib = lib
+
+
+## Plays the 4.35 s authored reload montage once, then the 1.32 s crank loop
+## for the remainder of the 6 s hold (CT_WireCrank.CrankDuration lvl 0).
+func _start_gear_crank() -> void:
+	if _gear_anim_player == null or not is_instance_valid(_gear_anim_player) or _gear_anim_lib == null:
+		return
+	var start_clip: String = str(_gear_anim_lib.call("ensure_gear_clip", _gear_anim_player, "zipwire_gear_reload_start"))
+	var loop_clip: String = str(_gear_anim_lib.call("ensure_gear_clip", _gear_anim_player, "zipwire_gear_reload_loop"))
+	_gear_loop_clip = loop_clip
+	if start_clip != "" and _gear_anim_player.has_animation(start_clip):
+		_gear_current_clip = start_clip
+		_gear_anim_player.play(start_clip, 0.0)
+	elif loop_clip != "" and _gear_anim_player.has_animation(loop_clip):
+		_gear_current_clip = loop_clip
+		_gear_anim_player.play(loop_clip, 0.0)
+
+
+func _tick_gear_crank() -> void:
+	if _gear_anim_player == null or not is_instance_valid(_gear_anim_player):
+		return
+	if _gear_loop_clip == "" or _gear_current_clip == _gear_loop_clip:
+		return
+	if not _gear_anim_player.is_playing():
+		_gear_current_clip = _gear_loop_clip
+		_gear_anim_player.play(_gear_loop_clip, 0.0)
+
+
+func _stop_gear_crank() -> void:
+	if _gear_anim_player != null and is_instance_valid(_gear_anim_player) and _gear_anim_player.is_playing():
+		_gear_anim_player.stop()
+	_gear_current_clip = ""
+
+
+## True when the gear player is actually driving crank_arm this frame. The
+## manual _tp_crank_tick spin is then skipped so the authored UE rotation (and
+## its arrow/gear phase) is not overwritten; the probe still gets the manual
+## path because it calls _tp_crank_tick without starting a crank.
+func _gear_drives_crank_arm() -> bool:
+	if _gear_anim_player == null or not is_instance_valid(_gear_anim_player) or not _gear_anim_player.is_playing():
+		return false
+	var an: String = _gear_anim_player.current_animation
+	if an == "":
+		return false
+	var anim: Animation = _gear_anim_player.get_animation(an)
+	if anim == null:
+		return false
+	for ti in range(anim.get_track_count()):
+		var path: NodePath = anim.track_get_path(ti)
+		if path.get_subname_count() > 0 and str(path.get_subname(0)) == "crank_arm" \
+				and anim.track_get_type(ti) == Animation.TYPE_ROTATION_3D:
+			return true
+	return false
+
+
 ## Third-person crank drive (F13 3P form). Resolves the firing thief rig --
 ## the 3P body skeleton under mesh_root (SK_ThiefNisha_Dyn__Body) for the
 ## AN_Zipwire_Crank_Montage player, and the zipwire tool's crank handle
@@ -2627,6 +2765,7 @@ func _tp_crank_body_skel() -> Skeleton3D:
 ## clip, or the skeletons share no bones; the fallback handle still spins
 ## procedurally via _tp_crank_tick in that case.
 func _tp_crank_start() -> void:
+	_stop_gear_crank()
 	_tp_crank_reset_handle()
 	var skel := _tp_crank_body_skel()
 	if skel == null:
@@ -2667,6 +2806,8 @@ const ZIPWIRE_CRANK_BONES: Array[String] = ["crank_arm", "crank_handle", "crank"
 func _tp_crank_tick() -> void:
 	if fp_tool_root == null or not is_instance_valid(fp_tool_root):
 		return
+	if _gear_drives_crank_arm():
+		return
 	var angle: float = TAU * 3.0 * clampf(crank_progress, 0.0, 1.0)
 	for n in fp_tool_root.find_children("*", "Skeleton3D", true, false):
 		var sk := n as Skeleton3D
@@ -2703,6 +2844,8 @@ func _tp_crank_reset_handle() -> void:
 ## Stops the 3P crank montage player; the handle keeps its final pose until
 ## the next crank resets it.
 func _tp_crank_stop() -> void:
+	_stop_gear_crank()
+	_tp_crank_reset_handle()
 	if mesh_root == null or not is_instance_valid(mesh_root):
 		return
 	for n in mesh_root.find_children("*", "TPCrankPlayer", true, false):
@@ -2793,6 +2936,10 @@ func _make_glove_hand(parent: Node3D, glove_mat: StandardMaterial3D, is_right: b
 
 
 func _fp_clear_tool() -> void:
+	_stop_gear_crank()
+	_gear_anim_player = null
+	_gear_anim_lib = null
+	_gear_loop_clip = ""
 	if fp_tool_root == null:
 		return
 	for child: Node in fp_tool_root.get_children():
@@ -2808,6 +2955,8 @@ func _fp_set_tool(tool_id: String) -> void:
 	var loaded: Node = _fp_try_load_tool_glb(tool_id)
 	if loaded != null:
 		fp_tool_root.add_child(loaded)
+		if tool_id == "zipwire":
+			_setup_gear_anim(loaded)
 		return
 	match tool_id:
 		"zipwire":

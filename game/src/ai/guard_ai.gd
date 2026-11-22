@@ -212,6 +212,7 @@ const GUARD_PREVIEW_EYE_BY_SLOT := [
 ## the path swap in _resolve_guard_glb_path covers it with no extra instance.
 const GUARD_HEAD_GLB := {
 	"res://assets/ue/Content/Art/Animation/GuardEnforcer/Skin/Hauntstable/SK_Hauntstable__Body.glb": "res://assets/ue/Content/Art/Animation/GuardEnforcer/Skin/Hauntstable/SK_Hauntstable__Head.glb",
+	"res://assets/ue/Content/Art/Animation/GuardEnforcer/Skin/Base/Dyn/SK_GuardEnforcer_Dyn__Body.glb": "res://assets/ue/Content/Art/Animation/GuardEnforcer/Skin/Base/Heads/SK_Guard_Head01__Helm.glb",
 }
 var _guard_mats_db: Dictionary = {}
 var _guard_mats_lower: Dictionary = {}
@@ -322,6 +323,8 @@ func _guard_weapon_set() -> String:
 	var lname: String = name.to_lower()
 	if lname.find("haunt") >= 0:
 		return "hauntstable"
+	if carries_lantern or lname.find("lantern") >= 0:
+		return "lantern"
 	return "club"
 
 
@@ -533,18 +536,12 @@ func _resolve_guard_glb_path() -> String:
 		# torso, 97 joints same name+order; mesh_materials slots cover head+badge).
 		return "res://assets/ue/Content/Art/Animation/GuardEnforcer/Skin/Security/SK_GuardSecurity_01_Body.glb"
 	if lname.find("enforcer") >= 0:
-		return "res://assets/ue/Content/Art/Animation/GuardEnforcer/Skin/Base/SK_GuardEnforcer__Preview.glb"
+		return "res://assets/ue/Content/Art/Animation/GuardEnforcer/Skin/Base/Dyn/SK_GuardEnforcer_Dyn__Body.glb"
 	match GameState.difficulty:
 		GameState.Difficulty.MASTER_THIEF:
 			return "res://assets/ue/Content/Art/Animation/GuardEnforcer/Skin/Hauntstable/SK_Hauntstable__Body.glb"
-		GameState.Difficulty.THIEF:
-			if absi(get_index()) % 3 == 2:
-				return "res://assets/ue/Content/Art/Animation/GuardEnforcer/Skin/Security/SK_GuardSecurity_01_Body.glb"
-			return "res://assets/ue/Content/Art/Animation/GuardEnforcer/Skin/Base/SK_GuardEnforcer__Preview.glb"
 		_:
-			if absi(get_index()) % 3 == 2:
-				return "res://assets/ue/Content/Art/Animation/GuardEnforcer/Skin/Base/SK_GuardEnforcer__Preview.glb"
-			return "res://assets/ue/Content/Art/Animation/GuardEnforcer/Skin/Security/SK_GuardSecurity_01_Body.glb"
+			return "res://assets/ue/Content/Art/Animation/GuardEnforcer/Skin/Base/Dyn/SK_GuardEnforcer_Dyn__Body.glb"
 
 
 ## Loads materials.json + mesh_materials.json once (the same generated DBs
@@ -766,6 +763,8 @@ func _attach_guard_head(inst: Node, body_glb_path: String) -> void:
 	if head_inst == null:
 		push_warning("[guard_ai] head GLB failed to instantiate: " + head_glb)
 		return
+	var head_skels: Array[Node] = head_inst.find_children("*", "Skeleton3D", true, false)
+	var head_skel: Skeleton3D = (head_skels[0] as Skeleton3D) if not head_skels.is_empty() else null
 	visual_root.add_child(head_inst)
 	head_inst.rotation_degrees.y = 180.0
 	var moved := 0
@@ -775,6 +774,22 @@ func _attach_guard_head(inst: Node, body_glb_path: String) -> void:
 			continue
 		if not head_slots.is_empty():
 			_bind_guard_mi_surfaces(mi, head_slots, head_ue_key)
+		if mi.skin != null and head_skel != null:
+			# Dyn body has 100 joints, Head01 Helm 95 and a different order;
+			# remap every skin bind to the body index by bone name.
+			var old_skin: Skin = mi.skin
+			var new_skin: Skin = old_skin.duplicate() as Skin
+			if new_skin != null:
+				for b in range(new_skin.get_bind_count()):
+					var bn: String = str(new_skin.get_bind_name(b))
+					if bn == "":
+						var ob: int = new_skin.get_bind_bone(b)
+						if ob >= 0 and ob < head_skel.get_bone_count():
+							bn = str(head_skel.get_bone_name(ob))
+					var nb: int = body_skel.find_bone(bn)
+					if nb >= 0:
+						new_skin.set_bind_bone(b, nb)
+				mi.skin = new_skin
 		var t: Transform3D = mi.global_transform
 		mi.get_parent().remove_child(mi)
 		body_skel.add_child(mi)

@@ -49,6 +49,19 @@ const HA_CLIPS := {
 	"slip": ["AN_GuardEnforcer_Slip_MagicSlime_Montage"],
 	"takedown_vic": ["AN_StealthTakedown_GuardEnforcer__Vic_Montage", "AN_StealthTakedown_GuardEnforcer__Vic", "AN_TakedownOverhead_Behind_Montage", "AN_TakedownOverhead_Behind", "AN_TakedownOverhead_Front_Montage", "AN_TakedownOverhead_Front"],
 }
+const LANTERN_CLIPS := {
+	"neutral_idle": ["AN_GuardEnforcer_Lantern_NeutralFresh_Idle"],
+	"neutral_walk": ["AN_GuardEnforcer_Lantern_NeutralFresh_Walk_F"],
+	"suspicious_idle": ["AN_GuardEnforcer_Lantern_Suspicious_Idle"],
+	"suspicious_walk": ["AN_GuardEnforcer_Lantern_Suspicious_Walk_F"],
+	"alert_idle": ["AN_GuardEnforcer_Lantern_Alert_Idle"],
+	"alert_run": ["AN_GuardEnforcer_Lantern_Alert_Run__F", "AN_GuardEnforcer_Lantern_Alert_Run_F"],
+	"attack": ["AN_GuardEnforcer_Club_Attack_Light_A_Montage"],
+	"search": ["AN_GuardEnforcer_Lantern_VigilantAlert_Search", "AN_GuardEnforcer_Lantern_MindfulSuspicious_Search", "AN_GuardEnforcer_Lantern_VigilantSuspicious_Search"],
+	"knockdown": ["AN_GuardEnforcer_Club_Knockdown_Prone__Idle"],
+	"slip": ["AN_GuardEnforcer_Slip_MagicSlime_Montage"],
+	"takedown_vic": ["AN_StealthTakedown_GuardEnforcer__Vic_Montage", "AN_StealthTakedown_GuardEnforcer__Vic", "AN_TakedownOverhead_Behind_Montage", "AN_TakedownOverhead_Behind", "AN_TakedownOverhead_Front_Montage", "AN_TakedownOverhead_Front"],
+}
 const ROLE_ORDER: Array[String] = [
 	"neutral_idle", "neutral_walk", "suspicious_idle", "suspicious_walk",
 	"alert_idle", "alert_run", "attack", "search", "knockdown", "slip",
@@ -194,6 +207,8 @@ static func manifest_clip_count() -> int:
 func _role_table() -> Dictionary:
 	if weapon == "hauntstable":
 		return HA_CLIPS
+	if weapon == "lantern":
+		return LANTERN_CLIPS
 	return CLUB_CLIPS
 
 
@@ -208,7 +223,7 @@ func _role_table() -> Dictionary:
 func setup(p_weapon: String, skeleton: Skeleton3D) -> bool:
 	if not load_manifest():
 		return false
-	weapon = "hauntstable" if p_weapon == "hauntstable" else "club"
+	weapon = p_weapon if p_weapon in ["hauntstable", "lantern"] else "club"
 	if skeleton != null:
 		skeleton_name = str(skeleton.name)
 		mesh_bones = _read_bone_names(skeleton)

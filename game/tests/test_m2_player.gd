@@ -67,8 +67,10 @@ func _run() -> void:
 	_add_static_box(arena, Vector3(0.0, -0.5, 0.0), Vector3(40.0, 1.0, 40.0))
 
 	var player: CharacterBody3D = ThiefScript.new() as CharacterBody3D
-	player.set_physics_process(false)
 	arena.add_child(player)
+	# Entering the tree re-enables the physics process; disable after add so
+	# the stationary 1P-anim checks do not pick up gravity/steering velocity.
+	player.set_physics_process(false)
 	player.global_position = Vector3(0.0, 0.05, 0.0)
 	await process_frame
 	await process_frame

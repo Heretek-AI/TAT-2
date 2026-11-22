@@ -10,7 +10,7 @@
 #            newer than its .glb.import sidecar (staleness probe for CI).
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-GODOT="${GODOT:-flatpak run org.godotengine.Godot}"
+GODOT="${GODOT:-tools/godot}"
 # game/assets/ue/Raw -> extracted/assets and game/assets/ue/Content -> extracted/assets/TAT/Content,
 # so Godot sees the TAT tree through two res:// routes and reports duplicate UIDs. The
 # ignore must sit at the physical TAT root; placing it under Content/ would hide every mesh.

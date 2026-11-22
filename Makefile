@@ -1,5 +1,6 @@
 DOTNET := $(HOME)/.dotnet10/dotnet
-GODOT  := flatpak run org.godotengine.Godot
+# Prefer the native 4.7.2 binary; tools/godot falls back to Flatpak.
+GODOT  ?= tools/godot
 EX     := tools/tat-extract/bin/Release/net10.0/tat-extract
 
 TEXTURE_CAP ?= 1024

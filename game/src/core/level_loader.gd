@@ -1090,6 +1090,70 @@ func _new_accumulator() -> Dictionary:
 
 ## FTUE is a whole-city tutorial map. Give it the larger budget explicitly so
 ## the overflow is not silent, and leave every other map on the default.
+## Deterministic SceneVariant selection (task B4).
+## `scene_variants.json` holds the parsed TATSceneVariantConfig records. The
+## runtime picks one record per state group (e.g. *_Open / *_Closed / *_Quest)
+## from the run seed, so the same seed always produces the same world. Applying
+## the per-record spawner overrides to tagged actors is tracked separately
+## (the parsed data names SceneElement tags while actors carry SpawnGroup tags).
+static var _scene_variants: Array = []
+static var _scene_variants_loaded: bool = false
+
+
+static func _sv_fnv1a(text: String) -> int:
+	var h: int = 0x811C9DC5
+	for i: int in text.length():
+		h = (h ^ text.unicode_at(i)) & 0xFFFFFFFF
+		h = (h * 0x01000193) & 0xFFFFFFFF
+	return h
+
+
+static func load_scene_variants() -> Array:
+	if not _scene_variants_loaded:
+		_scene_variants_loaded = true
+		var txt: String = FileAccess.get_file_as_string("res://data/generated/scene_variants.json")
+		var doc: Variant = JSON.parse_string(txt)
+		if doc is Dictionary:
+			_scene_variants = (doc as Dictionary).get("variants", []) as Array
+	return _scene_variants
+
+
+static func select_scene_variants(map_id: String, seed_value: int, requested: Array[String] = []) -> Array[Dictionary]:
+	var map_key: String = map_id.strip_edges().to_lower().replace("_", "").replace("-", "")
+	var groups: Dictionary = {}
+	for v: Variant in load_scene_variants():
+		if not (v is Dictionary):
+			continue
+		var rec: Dictionary = v as Dictionary
+		var vid: String = str(rec.get("id", ""))
+		if vid == "":
+			continue
+		if not requested.is_empty() and not requested.has(vid):
+			continue
+		if requested.is_empty():
+			var vmap: String = str(rec.get("map_id", "")).to_lower().replace("_", "").replace("-", "")
+			if map_key != "" and vmap.find(map_key) < 0 and map_key.find(vmap) < 0:
+				continue
+		var group: String = vid
+		for suffix: String in ["_open", "_closed", "_quest", "_damaged", "_locked", "_on", "_off"]:
+			if group.to_lower().ends_with(suffix):
+				group = group.substr(0, group.length() - suffix.length())
+				break
+		if not groups.has(group):
+			groups[group] = []
+		(groups[group] as Array).append(rec)
+	var out: Array[Dictionary] = []
+	var keys: Array = groups.keys()
+	keys.sort()
+	for key: Variant in keys:
+		var members: Array = groups[key]
+		if members.is_empty():
+			continue
+		var idx: int = _sv_fnv1a("%d|%s" % [seed_value, str(key)]) % members.size()
+		out.append(members[idx] as Dictionary)
+	return out
+
+
 func _apply_collider_budget(ctx: Dictionary, json_paths: Array) -> void:
 	for jp: Variant in json_paths:
 		if str(jp).find("/FTUE/") >= 0:

@@ -63,6 +63,7 @@ var _den_tokens: Dictionary = {}
 var _ponder_active: bool = false
 var _ponder_cam: Camera3D = null
 var _ponder_cheese: Node3D = null
+var _ponder_vista: Node3D = null
 var _active_mission_row: Dictionary = {}
 
 
@@ -938,6 +939,92 @@ func _spawn_den_window_vista(win_pos: Vector3, beam_target: Vector3) -> void:
 	root.add_child(halo)
 
 
+func _spawn_ponder_vista() -> void:
+	if _ponder_cam == null:
+		return
+	if _ponder_vista != null and is_instance_valid(_ponder_vista):
+		_ponder_vista.queue_free()
+	var root := Node3D.new()
+	root.name = "PonderVista"
+	_ponder_cam.add_child(root)
+	_ponder_vista = root
+	# Render only the diorama while pondering: the room/ceiling is layer 1 and
+	# would otherwise occlude the camera-space vista at close range.
+	_ponder_cam.cull_mask = 2
+	var back := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = Vector3(20.0, 12.0, 0.05)
+	back.mesh = bm
+	var bmat := StandardMaterial3D.new()
+	bmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	bmat.albedo_color = Color(0.025, 0.07, 0.12)
+	bmat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	back.set_surface_override_material(0, bmat)
+	back.position = Vector3(0.0, 0.0, -7.5)
+	back.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(back)
+	var moon := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 0.35
+	sm.height = 0.70
+	moon.mesh = sm
+	var mmat := StandardMaterial3D.new()
+	mmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mmat.albedo_color = Color(0.92, 0.95, 0.88)
+	mmat.emission_enabled = true
+	mmat.emission = Color(0.92, 0.95, 0.88)
+	mmat.emission_energy_multiplier = 1.6
+	var moon_tex: Texture2D = load("res://assets/ue/Raw/Art/Environment/City/Architecture/BeautifulCorner/Materials/T_Moon_D.png") as Texture2D
+	if moon_tex != null:
+		mmat.albedo_texture = moon_tex
+		mmat.emission_texture = moon_tex
+	moon.set_surface_override_material(0, mmat)
+	moon.position = Vector3(0.9, 0.45, -6.8)
+	moon.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(moon)
+	var sil := StandardMaterial3D.new()
+	sil.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	sil.albedo_color = Color(0.012, 0.018, 0.035)
+	var heights: Array[float] = [0.5, 0.8, 0.4, 1.0, 0.6]
+	for i in range(heights.size()):
+		var h: float = heights[i]
+		var block := MeshInstance3D.new()
+		var bx := BoxMesh.new()
+		bx.size = Vector3(0.5, h, 0.8)
+		block.mesh = bx
+		block.set_surface_override_material(0, sil)
+		block.position = Vector3(-1.2 + float(i) * 0.6, -0.75 + h * 0.5, -6.4)
+		block.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		root.add_child(block)
+	var cheese := MeshInstance3D.new()
+	var cbox := BoxMesh.new()
+	cbox.size = Vector3(0.8, 0.4, 0.55)
+	cheese.mesh = cbox
+	var cmat := StandardMaterial3D.new()
+	cmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	cmat.albedo_color = Color(1.0, 0.78, 0.25)
+	cmat.emission_enabled = true
+	cmat.emission = Color(1.0, 0.72, 0.2)
+	cmat.emission_energy_multiplier = 0.9
+	cheese.set_surface_override_material(0, cmat)
+	cheese.position = Vector3(0.0, -0.25, -6.6)
+	cheese.rotation = Vector3(0.0, 0.6, 0.35)
+	cheese.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(cheese)
+	for c in range(3):
+		var chunk := MeshInstance3D.new()
+		var chm := BoxMesh.new()
+		chm.size = Vector3(0.14, 0.14, 0.14)
+		chunk.mesh = chm
+		chunk.set_surface_override_material(0, cmat)
+		chunk.position = cheese.position + Vector3(cos(float(c) * TAU / 3.0) * 0.7, 0.25 + 0.16 * float(c), sin(float(c) * TAU / 3.0) * 0.7)
+		chunk.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		root.add_child(chunk)
+	for child: Node in root.get_children():
+		if child is GeometryInstance3D:
+			(child as GeometryInstance3D).layers = 2
+
+
 func toggle_telescope_ponder() -> void:
 	if not _is_thieves_den:
 		push_warning("[mission_controller] toggle_telescope_ponder called outside thieves_den; ignoring")
@@ -985,6 +1072,7 @@ func toggle_telescope_ponder() -> void:
 				focus = focus_v
 		_ponder_cam.look_at(focus, Vector3.UP)
 		_ponder_cam.current = true
+		_spawn_ponder_vista()
 		# S05 rooftop wind swell (KF 00:19.6-00:21.9, peaks -39.5 dBFS RMS
 		# = the wind bed trim): opt-in bed, off again on exit.
 		if AudioManager != null and AudioManager.has_method("start_bed"):
@@ -993,8 +1081,12 @@ func toggle_telescope_ponder() -> void:
 		# frame guard above collapses the Area + lookat double dispatch).
 		print("TAT-2 telescope ponder-enter: cam=", _ponder_cam.name, " current=", _ponder_cam.current, " fov=", _ponder_cam.fov, " eye=", _ponder_cam.global_position)
 	else:
+		if _ponder_vista != null and is_instance_valid(_ponder_vista):
+			_ponder_vista.queue_free()
+			_ponder_vista = null
 		if _ponder_cam != null and is_instance_valid(_ponder_cam):
 			_ponder_cam.current = false
+			_ponder_cam.cull_mask = 0xFFFFF
 		if player != null and is_instance_valid(player):
 			var pcam_v: Variant = player.get("cam")
 			if pcam_v is Camera3D and is_instance_valid(pcam_v as Node):

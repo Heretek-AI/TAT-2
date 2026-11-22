@@ -190,6 +190,7 @@ var _fp_airborne: bool = false
 ## 1P arms and 3P body (UE AN_ThiefNisha_Zipwire__Gear_Zipwire_Reload_*).
 var _gear_anim_player: AnimationPlayer = null
 var _gear_anim_lib: RefCounted = null
+var _gear_skel: Skeleton3D = null
 var _gear_loop_clip: String = ""
 var _gear_current_clip: String = ""
 var mesh_3p_glb: String = ""
@@ -2588,7 +2589,12 @@ func _select_fp_anim_role(moving: bool) -> String:
 	if is_wall_climbing:
 		return "climb_wall"
 	if is_grappling:
-		return "zipwire_travel_up" if grapple_target.y > global_position.y + 2.0 else "zipwire_travel"
+		# KF17: keep the launcher/hands in frame through the winch. The
+		# AN_Zipwire_Travel_1P retarget dropped the 1P tool below the camera
+		# (muzzle y ~= -0.34), so it is no longer selected here; CastIdle is
+		# proven in-frame from the KF16/KF17 launch capture. Crank still wins
+		# if the crank state is ever held during the winch.
+		return "zipwire_crank" if _is_cranking else "zipwire_cast_idle"
 	if _is_cranking:
 		return "zipwire_crank"
 	if _fp_airborne:
@@ -2603,9 +2609,9 @@ func _select_fp_anim_role(moving: bool) -> String:
 		if is_crouching:
 			return "disguise_crouch_idle"
 	# Zipwire cast/aim/anchored pose: the 0.2 s LMB launch hold and a live
-	# zipwire action clip keep the authored CastIdle; the grapple travel branch
-	# above still owns the winch itself (order unchanged per audit), and a
-	# relaxed standing idle falls through to StandIdle below.
+	# zipwire action clip keep the authored CastIdle. The is_grappling branch
+	# above selects the same in-frame pose for the winch itself; a relaxed
+	# standing idle falls through to StandIdle below.
 	if fp_tool_id == "zipwire" and not is_crouching \
 			and (_wire_launch_arming or _fp_action_ttl > 0.0):
 		return "zipwire_cast_idle"
@@ -2692,6 +2698,7 @@ func _fp_play_fp_clip(clip_name: String) -> void:
 func _setup_gear_anim(loaded: Node) -> void:
 	_gear_anim_player = null
 	_gear_anim_lib = null
+	_gear_skel = null
 	_gear_loop_clip = ""
 	_gear_current_clip = ""
 	if loaded == null:
@@ -2718,6 +2725,7 @@ func _setup_gear_anim(loaded: Node) -> void:
 	player.root_node = player.get_path_to(host)
 	_gear_anim_player = player
 	_gear_anim_lib = lib
+	_gear_skel = skel
 
 
 ## Plays the 4.35 s authored reload montage once, then the 1.32 s crank loop
@@ -2749,6 +2757,12 @@ func _tick_gear_crank() -> void:
 func _stop_gear_crank() -> void:
 	if _gear_anim_player != null and is_instance_valid(_gear_anim_player) and _gear_anim_player.is_playing():
 		_gear_anim_player.stop()
+	# Stop() leaves the last evaluated pose on the tool skeleton, so the gear/
+	# handle stayed frozen cranked after release (KF24 exit capture). Reset the
+	# tool bind pose explicitly; the arm clip already returns to StandIdle.
+	if _gear_skel != null and is_instance_valid(_gear_skel):
+		_gear_skel.reset_bone_poses()
+		_gear_skel.force_update_all_bone_transforms()
 	_gear_current_clip = ""
 
 
@@ -2968,6 +2982,7 @@ func _fp_clear_tool() -> void:
 	_stop_gear_crank()
 	_gear_anim_player = null
 	_gear_anim_lib = null
+	_gear_skel = null
 	_gear_loop_clip = ""
 	if fp_tool_root == null:
 		return

@@ -318,5 +318,20 @@ func _run() -> void:
 
 	arena.queue_free()
 	await process_frame
+	# Same process-lifetime teardown as run_tests: audio playbacks, VFX/weather
+	# caches and animation retarget caches otherwise report leaked resources.
+	var m2_am: Node = root.get_node_or_null("/root/AudioManager")
+	if m2_am != null and m2_am.has_method("cleanup_on_exit"):
+		m2_am.call("cleanup_on_exit")
+		for _a: int in range(8):
+			await process_frame
+	VfxManager.cleanup_static_caches()
+	GuardAnimationLibrary.cleanup_static_caches()
+	ArtNouveauTheme.cleanup_static_caches()
+	(load("res://src/core/weather_profile.gd") as GDScript).cleanup_static_caches()
+	(load("res://src/core/weather_visuals.gd") as GDScript).cleanup_static_caches()
+	(load("res://src/ai/guard_ai.gd") as GDScript).cleanup_static_caches()
+	for _b: int in range(8):
+		await process_frame
 	print("M2_SUMMARY: fails=", fails)
 	quit(0 if fails == 0 else 1)

@@ -485,6 +485,29 @@ func _apply_ue_render_flags(mat: StandardMaterial3D, info: Dictionary) -> void:
 ## the UE colour fills in the emission tint); otherwise enables emission from
 ## the UE colour scaled by the emissive scalar. Skipped when the UE switches
 ## explicitly gate emissive off.
+## True when materials.json carries an authored emissive colour (and a
+## non-zero strength when one is present). Emissive-only materials such as
+## MI_PowerLight_On have no albedo/tint by design; they are authored, not a
+## tier-3 fallback.
+func _has_authored_emissive(info: Dictionary) -> bool:
+	var switches: Dictionary = _ue_norm_map(info.get("switches", {}))
+	if _ue_lookup(switches, ["emissiveon?"]) == false:
+		return false
+	if _ue_lookup(switches, ["disableemissivecontribution"]) == true:
+		return false
+	var vectors: Dictionary = _ue_norm_map(info.get("vectors", {}))
+	var ecol: Variant = _ue_lookup(vectors, ["emissivecolor", "emissive", "emissivetint", "emiscolor"])
+	if not (ecol is Array) or (ecol as Array).size() < 3:
+		return false
+	var ea: Array = ecol as Array
+	var peak: float = maxf(float(ea[0]), maxf(float(ea[1]), float(ea[2])))
+	if peak <= 0.005:
+		return false
+	var params: Dictionary = _ue_norm_map(info.get("params", {}))
+	var estr: Variant = _ue_lookup(params, ["emissivestrength", "emissiveintensity", "emissivemultiplier", "emissivemultiply", "emismultiply", "emissivemult", "emissivepower", "emissivebrightness", "emissivebrillance"])
+	return estr == null or peak * float(estr) > 0.005
+
+
 func _apply_ue_emissive(mat: StandardMaterial3D, info: Dictionary) -> void:
 	var switches: Dictionary = _ue_norm_map(info.get("switches", {}))
 	if _ue_lookup(switches, ["emissiveon?"]) == false:
@@ -767,7 +790,14 @@ func get_material_for_ue(ue_mat_path: String) -> Material:
 			mat.albedo_color = Color(0.26, 0.25, 0.27)
 		else:
 			mat.albedo_color = Color(0.32, 0.30, 0.28)
-	if alb == null and tint == null:
+	# Emissive-only materials (MI_PowerLight_On, M_DefaultEmissive_*) carry
+	# their authored appearance in the emissive vector, not albedo/tint.
+	# Give them a near-black base so the authored emission reads, and never
+	# count them as a guessed fallback.
+	var authored_emissive: bool = _has_authored_emissive(info)
+	if alb == null and tint == null and authored_emissive:
+		mat.albedo_color = Color(0.02, 0.02, 0.02, 1.0)
+	if alb == null and tint == null and not authored_emissive:
 		# L2: the substring-guess chain above bound a plausible-but-wrong
 		# texture (tier 2) or a flat color (tier 3) instead of authored data.
 		# The tier rides on the material as metadata and the UE path is
@@ -2204,7 +2234,15 @@ func _build_one_curb_ribbon(pts: Array[Vector3], width: float, sp_mesh: String, 
 	var arr_mesh: ArrayMesh = st.commit()
 	if arr_mesh == null:
 		return
-	var cmat_path: String = sp_mat if sp_mat != "" else sp_mesh
+	# Authored landscape splines often carry only a mesh, not a material.
+	# Resolve the mesh's own slot 0 from mesh_materials.json instead of feeding
+	# the mesh path to get_material_for_ue() (which counted it as a fallback).
+	var cmat_path: String = sp_mat
+	if cmat_path == "" and sp_mesh != "":
+		var curb_key: String = sp_mesh.split(".")[0]
+		var curb_slots: Variant = _mesh_mats_db.get(curb_key, _mesh_mats_db_lower.get(curb_key.to_lower(), []))
+		if curb_slots is Array and not (curb_slots as Array).is_empty():
+			cmat_path = str((curb_slots as Array)[0])
 	if cmat_path == "":
 		return
 	arr_mesh.surface_set_material(0, get_material_for_ue(cmat_path))

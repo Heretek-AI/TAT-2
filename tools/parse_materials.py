@@ -99,17 +99,35 @@ def _glb_primitive_material_names(glb_path):
     Returns (names_or_None, detail: dict).
     """
     if glb_path is None:
-        return None, {"glb_found": False, "authored_primitives": 0, "degenerate_filtered": 0}
+        return None, {
+            "glb_found": False,
+            "authored_primitives": 0,
+            "degenerate_filtered": 0,
+        }
     try:
         raw = glb_path.read_bytes()
     except Exception:
-        return None, {"glb_found": False, "authored_primitives": 0, "degenerate_filtered": 0}
+        return None, {
+            "glb_found": False,
+            "authored_primitives": 0,
+            "degenerate_filtered": 0,
+        }
     try:
         if len(raw) < 12:
-            return None, {"glb_found": True, "authored_primitives": 0, "degenerate_filtered": 0, "glb_parse_error": True}
+            return None, {
+                "glb_found": True,
+                "authored_primitives": 0,
+                "degenerate_filtered": 0,
+                "glb_parse_error": True,
+            }
         magic, _version, _declared = struct.unpack_from("<4sII", raw, 0)
         if magic != b"glTF":
-            return None, {"glb_found": True, "authored_primitives": 0, "degenerate_filtered": 0, "glb_parse_error": True}
+            return None, {
+                "glb_found": True,
+                "authored_primitives": 0,
+                "degenerate_filtered": 0,
+                "glb_parse_error": True,
+            }
         off = 12
         json_chunk = None
         bin_chunk = b""
@@ -118,14 +136,24 @@ def _glb_primitive_material_names(glb_path):
             off += 8
             chunk = raw[off : off + clen]
             if len(chunk) != clen:
-                return None, {"glb_found": True, "authored_primitives": 0, "degenerate_filtered": 0, "glb_parse_error": True}
+                return None, {
+                    "glb_found": True,
+                    "authored_primitives": 0,
+                    "degenerate_filtered": 0,
+                    "glb_parse_error": True,
+                }
             if ctype == _CHUNK_JSON and json_chunk is None:
                 json_chunk = chunk
             elif ctype == _CHUNK_BIN and len(bin_chunk) == 0:
                 bin_chunk = chunk
             off += clen
         if json_chunk is None:
-            return None, {"glb_found": True, "authored_primitives": 0, "degenerate_filtered": 0, "glb_parse_error": True}
+            return None, {
+                "glb_found": True,
+                "authored_primitives": 0,
+                "degenerate_filtered": 0,
+                "glb_parse_error": True,
+            }
         gltf = json.loads(json_chunk.rstrip(b" \t\r\n\0").decode("utf-8"))
         materials = gltf.get("materials") or []
         mat_names = [
@@ -221,7 +249,11 @@ def _glb_primitive_material_names(glb_path):
         authored_primitives: int = 0
         meshes = gltf.get("meshes") or []
         if not meshes:
-            return None, {"glb_found": True, "authored_primitives": 0, "degenerate_filtered": 0}
+            return None, {
+                "glb_found": True,
+                "authored_primitives": 0,
+                "degenerate_filtered": 0,
+            }
         for mesh in meshes:
             prims = (mesh.get("primitives") if isinstance(mesh, dict) else None) or []
             for prim in prims:
@@ -251,7 +283,12 @@ def _glb_primitive_material_names(glb_path):
             return None, detail
         return names, detail
     except Exception:
-        return None, {"glb_found": True, "authored_primitives": 0, "degenerate_filtered": 0, "glb_parse_error": True}
+        return None, {
+            "glb_found": True,
+            "authored_primitives": 0,
+            "degenerate_filtered": 0,
+            "glb_parse_error": True,
+        }
 
 
 def ue_to_res_png(obj_path: str) -> str:
@@ -260,6 +297,10 @@ def ue_to_res_png(obj_path: str) -> str:
     clean = obj_path.split(".")[0]
     if clean.startswith("/Game/"):
         clean = clean[6:]
+    # Engine packages live under Engine/Content/... on disk; UE object paths
+    # omit Content (e.g. /Engine/EngineMaterials/T_Default_Material_Grid_M).
+    if clean.startswith("/Engine/"):
+        clean = "Engine/Content/" + clean[len("/Engine/") :]
     if (EX_ASSETS / (clean + ".png")).exists():
         return "res://assets/ue/Raw/" + clean + ".png"
     if (EX_ASSETS / "TAT" / "Content" / (clean + ".png")).exists():
@@ -373,7 +414,11 @@ def _candidate_score(
 
 
 def _is_albedo_stem(low: str, allow_ui_map: bool = False) -> bool:
-    if not low.endswith(DIFFUSE_SUFFIXES):
+    # Numbered diffuse variants (T_Plaster_D04, T_Wood_BC2) are authored
+    # albedo textures; the old endswith("-D") test dropped them.
+    if not (
+        low.endswith(DIFFUSE_SUFFIXES) or re.search(r"_(d|da|bc|bco|c|alb)\d+$", low)
+    ):
         return False
     if not allow_ui_map and _is_ui_or_map_stem(low):
         return False
@@ -556,6 +601,141 @@ def _extract_real_params(props: dict) -> tuple:
     return params, vectors, switches, render, phys
 
 
+def _extract_cached_defaults(exp: dict) -> tuple:
+    """Authored defaults for a base UMaterial.
+
+    Cooked ``Material`` exports have no ScalarParameterValues/VectorParameterValues;
+    the authored defaults live in ``CachedExpressionData`` as parallel arrays.
+    RuntimeEntries group 0 = scalar names, 1 = vector names, 3 = texture names,
+    8 = static-switch names (verified on M_Train/M_Solid/M_DefaultEmissive_*).
+    Base Material values are authored truth, not a guess; instances still
+    override them through Parent inheritance.
+    """
+    cached = exp.get("CachedExpressionData") or {}
+    if not isinstance(cached, dict):
+        return {}, {}, {}
+    groups: dict = {}
+    for key, val in cached.items():
+        if not isinstance(val, dict):
+            continue
+        if key == "RuntimeEntries":
+            idx = 0
+        elif key.startswith("RuntimeEntries[") and key.endswith("]"):
+            try:
+                idx = int(key[len("RuntimeEntries[") : -1])
+            except ValueError:
+                continue
+        else:
+            continue
+        names = [
+            (p.get("Name") or "")
+            for p in (val.get("ParameterInfoSet") or [])
+            if isinstance(p, dict)
+        ]
+        groups[idx] = names
+
+    # Only cached defaults that the Godot material path actually maps:
+    # PBR scalars + base-colour/emissive vectors. Master-material blend
+    # defaults such as Overlay/Multiply/Desaturation are deliberately excluded;
+    # inheriting them into instances halves authored HDR tints (MI_JeweledKnife
+    # regressed from x2.0 to x1.0 in suite 37).
+    def _scalar_kept(nm: str) -> bool:
+        n = re.sub(r"[^a-z0-9]", "", nm.lower())
+        return any(k in n for k in ("metal", "rough", "specular", "emissive", "flat"))
+
+    def _vector_kept(nm: str) -> bool:
+        n = re.sub(r"[^a-z0-9]", "", nm.lower())
+        return any(
+            k in n
+            for k in (
+                "basecolor",
+                "albedo",
+                "diffuse",
+                "color",
+                "param",
+                "emissive",
+                "tint",
+            )
+        )
+
+    params: dict = {}
+    for i, name in enumerate(groups.get(0, [])):
+        scalars = cached.get("ScalarValues") or []
+        if (
+            name
+            and _scalar_kept(name)
+            and i < len(scalars)
+            and isinstance(scalars[i], (int, float))
+        ):
+            params[name] = round(float(scalars[i]), 4)
+    vectors: dict = {}
+    raw_vectors = cached.get("VectorValues") or []
+    for i, name in enumerate(groups.get(1, [])):
+        if not name or not _vector_kept(name) or i >= len(raw_vectors):
+            continue
+        val = raw_vectors[i]
+        if isinstance(val, dict) and "R" in val:
+            vectors[name] = [
+                round(float(val.get("R", 0.0)), 4),
+                round(float(val.get("G", 0.0)), 4),
+                round(float(val.get("B", 0.0)), 4),
+                round(float(val.get("A", 1.0)), 4),
+            ]
+    switches: dict = {}
+    raw_switches = cached.get("StaticSwitchValues") or []
+    for i, name in enumerate(groups.get(8, [])):
+        if name and i < len(raw_switches) and isinstance(raw_switches[i], bool):
+            switches[name] = raw_switches[i]
+    # Base Material texture defaults (group 3) are authored path values too.
+    textures: dict = {}
+    raw_textures = cached.get("TextureValues") or []
+    for i, name in enumerate(groups.get(3, [])):
+        if not name or i >= len(raw_textures):
+            continue
+        tv = raw_textures[i]
+        if isinstance(tv, dict):
+            ap = tv.get("AssetPathName") or tv.get("ObjectPath") or ""
+            if ap:
+                textures[name] = ap
+    return params, vectors, switches, textures
+
+
+def _pick_tint(vectors: dict):
+    """Pick the authored base-colour vector from merged parameter values.
+
+    Explicit BaseColor/Albedo/Diffuse names win even when A=0 (MI_Solid_Blue's
+    "Base Color"; MI_DefaultRig_DarkGrey's "DefaultBaseColor"). Generic
+    Color/Param/Tint names keep the old channel-selector guard: A=0 and pure
+    RGB masks are rejected. Emissive tints are never treated as albedo.
+    """
+    best_score = 0
+    best = None
+    for name, val in vectors.items():
+        if not isinstance(val, list) or len(val) < 3:
+            continue
+        norm = re.sub(r"[^a-z0-9]", "", str(name).lower())
+        if any(k in norm for k in ("mask", "channel", "emissive", "emis", "fresnel")):
+            continue
+        explicit_hard = "basecolor" in norm  # includes DefaultBaseColor
+        explicit = any(k in norm for k in ("basecolor", "albedo", "diffuse"))
+        generic = norm == "color" or norm == "param" or norm.endswith("tint")
+        if not (explicit or generic):
+            continue
+        r, g, b = float(val[0]), float(val[1]), float(val[2])
+        a = float(val[3]) if len(val) >= 4 else 1.0
+        if not explicit_hard and a <= 0.01:
+            continue
+        if not explicit and (
+            max(r, g, b) >= 0.99 and min(r, g, b) == 0.0 and (r + g + b) <= 1.01
+        ):
+            continue
+        score = 2 if explicit else 1
+        if score > best_score:
+            best_score = score
+            best = [round(r, 3), round(g, 3), round(b, 3), round(a, 3)]
+    return best
+
+
 def _strip_material_base(mat_name: str) -> str:
     base: str = mat_name.lower()
     base = re.sub(r"^(mi_|m_)", "", base)
@@ -695,9 +875,31 @@ def main():
         )
         tex_by_stem.setdefault(png.stem.lower(), res)
 
+    # The extractor writes an explicit index of material packages. When present
+    # it is authoritative: parse exactly those dumps and never mistake a level
+    # or table JSON for a material. Fall back to the legacy name/path filter
+    # only for trees produced before the index existed.
+    index_path = EX_JSON.parent / "materials_index.json"
+    material_index = None
+    if index_path.is_file():
+        try:
+            loaded = json.loads(index_path.read_text())
+            if isinstance(loaded, list):
+                material_index = {str(x).replace("\\", "/") for x in loaded}
+        except Exception:
+            material_index = None
+    print(
+        f"material index: {len(material_index)} packages"
+        if material_index is not None
+        else "material index: absent, using legacy name/path filter"
+    )
+
     raw_mats = {}
     for jf in EX_JSON.rglob("*.json"):
-        if not _is_material_candidate(jf):
+        if material_index is not None:
+            if str(jf.relative_to(EX_JSON)).replace("\\", "/") not in material_index:
+                continue
+        elif not _is_material_candidate(jf):
             continue
         try:
             exps = json.loads(jf.read_text())
@@ -714,6 +916,9 @@ def main():
             "/Game/" + str(jf.relative_to(EX_JSON).with_suffix(""))
         )
         parent = ((props.get("Parent") or {}).get("ObjectPath") or "").split(".")[0]
+        cached_scalars, cached_vectors, cached_switches, cached_textures = (
+            _extract_cached_defaults(exp)
+        )
         texs = {}
         for tv in props.get("TextureParameterValues") or []:
             pinfo = tv.get("ParameterInfo") or {}
@@ -725,6 +930,19 @@ def main():
             if not tpath:
                 continue
             stem = Path(tpath).stem.lower()
+            # An explicitly named Albedo/Diffuse/Base Color parameter is authored
+            # truth. The old stem-suffix filter rejected valid textures such as
+            # T_TeleScope_A (ends "_a") and Web_Fogy_diff (not a "_d" suffix).
+            explicit_albedo = any(
+                k in pname
+                for k in (
+                    "albedo",
+                    "diffuse",
+                    "basecolor",
+                    "base color",
+                    "base_color",
+                )
+            )
             is_mask = (
                 "blendparameter" in assoc.lower()
                 or stem.endswith(("_ma", "_mask", "_m", "_r", "_g", "_b", "_a", "_ao"))
@@ -759,23 +977,46 @@ def main():
                     texs.setdefault("emissive", tpath)
             elif "opacity" in pname or stem.endswith(("_o", "_opacity")):
                 texs.setdefault("opacity", tpath)
-            elif not is_mask and (
-                any(
-                    k in pname
-                    for k in (
-                        "albedo",
-                        "basecolor",
-                        "base_color",
-                        "diffuse",
-                        "color",
-                        "bc",
-                        "base texture",
+            elif explicit_albedo or (
+                not is_mask
+                and (
+                    any(
+                        k in pname
+                        for k in (
+                            "color",
+                            "bc",
+                            "base texture",
+                        )
                     )
+                    or pname == "texture"
+                    or stem.endswith(("_d", "_da", "_bc", "_bco", "_c", "_alb"))
                 )
-                or pname == "texture"
-                or stem.endswith(("_d", "_da", "_bc", "_bco", "_c", "_alb"))
             ):
                 texs.setdefault("albedo", tpath)
+
+        # Authored base-Material texture defaults (CachedExpressionData group 3).
+        # BaseMaterial's Albedo = Web_diff2 exists only here, not in
+        # TextureParameterValues or TextureStreamingData. Instances also carry
+        # inherited layer defaults here (T_Plaster_D), but their own
+        # TextureStreamingData is the authoritative used-texture list; applying
+        # both would let the inherited default mask the real texture.
+        for cname, cpath in (
+            cached_textures.items() if exp.get("Type") == "Material" else ()
+        ):
+            tp = ue_to_res_png(str(cpath))
+            if not tp:
+                continue
+            norm_name = re.sub(r"[^a-z0-9]", "", cname.lower())
+            if any(k in norm_name for k in ("albedo", "diffuse", "basecolor", "color")):
+                texs.setdefault("albedo", tp)
+            elif "normal" in norm_name or norm_name.endswith("norm"):
+                texs.setdefault("normal", tp)
+            elif any(k in norm_name for k in ("orm", "roughness", "arm")):
+                texs.setdefault("orm", tp)
+            elif "emissive" in norm_name:
+                texs.setdefault("emissive", tp)
+            elif "opacity" in norm_name:
+                texs.setdefault("opacity", tp)
 
         # Fallback: UE5 MaterialLayers store used textures in TextureStreamingData and CachedExpressionData.ReferencedTextures
         stream_paths = []
@@ -791,6 +1032,16 @@ def main():
                 tp = ue_to_res_png(rt.get("ObjectPath") or "")
                 if tp:
                     ref_paths.append(tp)
+        # Engine WorldGridMaterial has no parameter values; its authored look is
+        # exactly the two referenced grid textures. Bind them by name instead of
+        # guessing a diffuse family.
+        if name == "WorldGridMaterial":
+            for rp in ref_paths:
+                stem = Path(rp).stem.lower()
+                if stem.endswith(("_grid_m", "_grid")):
+                    texs.setdefault("albedo", rp)
+                elif stem.endswith("_grid_n"):
+                    texs.setdefault("normal", rp)
         tokens: list = _diffuse_tokens(name)
         family_words: list = _family_words(name)
         path_category: str = _path_category(pkg)
@@ -889,40 +1140,33 @@ def main():
                 albedo_source = "none"
         else:
             albedo_source = "authored"
-        tint = None
-        for vv in props.get("VectorParameterValues") or []:
-            pinfo = vv.get("ParameterInfo") or {}
-            pname = (pinfo.get("Name") or "").lower()
-            if (
-                "mask" in pname
-                or "channel" in pname
-                or "blendparameter" in (pinfo.get("Association") or "").lower()
-            ):
-                continue
-            if (
-                "tint" in pname
-                or "basecolor" in pname
-                or "albedo" in pname
-                or pname == "color"
-            ):
-                val = vv.get("ParameterValue") or {}
-                if "R" in val:
-                    r, g, b, a = (
-                        float(val["R"]),
-                        float(val["G"]),
-                        float(val["B"]),
-                        float(val.get("A", 1.0)),
-                    )
-                    # Skip RGBA channel selector vectors like [0, 1, 0, 0] or [1, 0, 0, 0]
-                    if a <= 0.01 or (
-                        max(r, g, b) >= 0.99
-                        and min(r, g, b) == 0.0
-                        and (r + g + b) <= 1.01
-                    ):
-                        continue
-                    tint = [round(r, 3), round(g, 3), round(b, 3), round(a, 3)]
-                    break
         p_scalars, p_vectors, p_switches, p_render, p_phys = _extract_real_params(props)
+        # Base UMaterial authored defaults live only in CachedExpressionData.
+        # They are inherited by instances through the normal Parent resolution;
+        # an instance value with the same name still wins here.
+        merged_scalars = dict(cached_scalars)
+        merged_scalars.update(p_scalars)
+        merged_vectors = dict(cached_vectors)
+        merged_vectors.update(p_vectors)
+        merged_switches = dict(cached_switches)
+        merged_switches.update(p_switches)
+        p_scalars = merged_scalars
+        p_vectors = merged_vectors
+        p_switches = merged_switches
+        tint = _pick_tint(p_vectors)
+        # An authored colour with no authored texture signal is a flat PBR
+        # material (M_BasicGrey, BasicShapeMaterial, M_Solid). Binding a
+        # ranked guess such as T_BasicBrick_D would turn authored grey into
+        # brick; the tint is the truth, so drop only fallback-tier binds.
+        if (
+            tint is not None
+            and str(albedo_source).startswith("fallback-")
+            and not stream_paths
+            and not ref_paths
+            and not (props.get("TextureParameterValues") or [])
+        ):
+            texs.pop("albedo", None)
+            albedo_source = "none"
         raw_mats[pkg] = {
             "parent": parent,
             "texs": texs,
@@ -1037,6 +1281,7 @@ def main():
     # heals guesses into authored/stream binds LOWERs this number (good),
     # but a number above the cap means new guessing crept in (bad).
     from collections import Counter as _Counter
+
     src_counts = _Counter(v.get("albedo_source", "none") for v in out.values())
     print(f"albedo_source counts: {dict(sorted(src_counts.items()))}")
     MAX_CATEGORY_FALLBACK_ALBEDOS = 0  # pinned 2026-11-20: no shipped material needs it
@@ -1069,7 +1314,9 @@ def main():
             key = _norm_mat_name(full)
             if key and key not in sidecar_index:
                 sidecar_index[key] = full
-        glb_names, glb_detail = _glb_primitive_material_names(_find_glb_for_ue_mesh(ue_mesh))
+        glb_names, glb_detail = _glb_primitive_material_names(
+            _find_glb_for_ue_mesh(ue_mesh)
+        )
         # P1-4 sentinel: per-entry slot_order_source. mesh_materials.json
         # values stay plain slot lists (level_loader.gd binds them positionally
         # and cannot be touched from here); the HOW lives in the sidecar.
@@ -1107,7 +1354,9 @@ def main():
     # every mesh that lost primitives to the degenerate filter.
     n_degen = sum(1 for p in mesh_mats_prov.values() if p["degenerate_filtered"] > 0)
     n_degen_slots = sum(p["degenerate_filtered"] for p in mesh_mats_prov.values())
-    print(f"meshes with degenerate-filtered primitives: {n_degen} ({n_degen_slots} primitives)")
+    print(
+        f"meshes with degenerate-filtered primitives: {n_degen} ({n_degen_slots} primitives)"
+    )
     for ue_mesh in sorted(mesh_mats_prov):
         if mesh_mats_prov[ue_mesh]["slot_order_source"] == "sidecar":
             print(f"[slot-order-sidecar] {ue_mesh}")

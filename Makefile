@@ -18,9 +18,12 @@ extract: build-extractor
 	$(EX) raw
 	$(EX) tables
 	$(EX) levels
-	$(EX) materials
-	$(EX) audio
+	# meshes writes *.materials.json sidecars; materials consumes them to queue
+	# authored materials whose names don't start MI_/M_ (CobwebFogy, T_*).
+	# --overwrite keeps a changed material filter effective on an existing tree.
 	$(EX) meshes
+	$(EX) materials --overwrite
+	$(EX) audio
 	$(EX) textures
 	$(EX) anims
 

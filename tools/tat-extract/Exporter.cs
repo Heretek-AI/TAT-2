@@ -14,6 +14,7 @@ using CUE4Parse_Conversion.Exporters;
 using CUE4Parse_Conversion.Options;
 using CUE4Parse_Conversion.Textures;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace TatExtract;
 
@@ -177,18 +178,74 @@ public sealed class Exporter
         ForEach(queued, "levels", f => DumpJson(f, "levels"));
     }
 
+    // Material packages referenced by mesh sidecars (*.materials.json). The
+    // name-based filter alone missed authored materials such as CobwebFogy,
+    // BaseMaterial, Mi_Blackjack (lowercase i) and T_LightSm_SconceA_Brass
+    // (T_ prefix). Sidecars are written by the meshes command, so the Makefile
+    // runs meshes before materials; a missing sidecar tree simply yields an
+    // empty set and the path/name filters still apply.
+    HashSet<string> SidecarMaterialPackages()
+    {
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var assets = Path.Combine(_o.Out, "assets");
+        if (!Directory.Exists(assets)) return set;
+        foreach (var mf in Directory.EnumerateFiles(assets, "*.materials.json", SearchOption.AllDirectories))
+        {
+            try
+            {
+                var arr = JArray.Parse(File.ReadAllText(mf));
+                foreach (var item in arr.OfType<JObject>())
+                {
+                    var mat = item["material"]?.ToString();
+                    if (string.IsNullOrEmpty(mat)) continue;
+                    var pkg = mat.Split('.')[0];
+                    if (pkg.StartsWith("/Game/", StringComparison.OrdinalIgnoreCase))
+                        set.Add("TAT/Content/" + pkg["/Game/".Length..] + ".uasset");
+                    else if (pkg.StartsWith("/Engine/", StringComparison.OrdinalIgnoreCase))
+                        set.Add("Engine/Content/" + pkg["/Engine/".Length..] + ".uasset");
+                }
+            }
+            catch { /* malformed sidecar: never fail the whole materials pass */ }
+        }
+        return set;
+    }
+
+    static string RelJsonPath(GameFile f)
+    {
+        var rel = f.Path.StartsWith("TAT/Content/", StringComparison.OrdinalIgnoreCase)
+            ? f.Path["TAT/Content/".Length..]
+            : f.Path;
+        return Path.ChangeExtension(rel, ".json").Replace('\\', '/');
+    }
+
     public void Materials()
     {
-        // Queued: MI_/M_ names + /Developers/ + /MaterialLibrary/ paths.
+        // Queued: MI_/M_ names (case-insensitive, catches Mi_Blackjack),
+        // every /Materials/ and /MaterialLibrary/ package (CobwebFogy,
+        // BaseMaterial), /Developers/, Engine material carriers, BasicShapes,
+        // and every material referenced by a mesh sidecar (T_LightSm_*).
         // Other material assets never reach parse_materials: materials-filtered.
-        // P1-1: Engine material carriers (WorldGridMaterial, bound by the
-        // repaired VFX mesh) are queued explicitly — the MI_/M_ prefixes
-        // never match Engine names, so the Packages() widening alone would
-        // still drop them here.
+        var refs = SidecarMaterialPackages();
         var candidates = Packages(p => p.EndsWith(".uasset")).ToList();
-        var queued = candidates.Where(f => Path.GetFileName(f.Path).StartsWith("MI_") || Path.GetFileName(f.Path).StartsWith("M_") || f.Path.Contains("/Developers/") || f.Path.Contains("/MaterialLibrary/") || f.Path.StartsWith("Engine/Content/EngineMaterials/")).ToList();
+        var queued = candidates.Where(f =>
+        {
+            var name = Path.GetFileNameWithoutExtension(f.Path);
+            return name.StartsWith("MI_", StringComparison.OrdinalIgnoreCase)
+                || name.StartsWith("M_", StringComparison.OrdinalIgnoreCase)
+                || f.Path.Contains("/Materials/", StringComparison.OrdinalIgnoreCase)
+                || f.Path.Contains("/MaterialLibrary/", StringComparison.OrdinalIgnoreCase)
+                || f.Path.Contains("/Developers/", StringComparison.OrdinalIgnoreCase)
+                || f.Path.StartsWith("Engine/Content/EngineMaterials/", StringComparison.OrdinalIgnoreCase)
+                || f.Path.StartsWith("Engine/Content/BasicShapes/", StringComparison.OrdinalIgnoreCase)
+                || refs.Contains(f.Path);
+        }).ToList();
         CountSkip("materials-filtered", candidates.Count - queued.Count);
         ForEach(queued, "materials", f => DumpJson(f, "materials"));
+        // Explicit index so parse_materials never has to guess which JSON files
+        // are material dumps (and never parses a huge level/table by mistake).
+        var index = queued.Select(RelJsonPath).OrderBy(x => x, StringComparer.Ordinal).ToList();
+        File.WriteAllText(Path.Combine(_o.Out, "materials_index.json"), JsonConvert.SerializeObject(index, Formatting.Indented));
+        Console.Error.WriteLine($"  materials index: {index.Count} packages");
     }
 
     ExportOptions DefaultOpts() => new(
@@ -223,13 +280,85 @@ public sealed class Exporter
         compressionFormat: CUE4Parse_Conversion.Writers.UEFormat.Enums.EFileCompressionFormat.None
     );
 
+    // Textures referenced by material dumps that the T_/path filter misses.
+    // Example: MI_WoodBoardsOld streams WoodBoardsOld_D/N/ORM, which live under
+    // a non-Textures folder and have no T_ prefix. Read the material index and
+    // honour both explicit texture parameters and CachedExpressionData refs.
+    HashSet<string> ReferencedTexturePackages()
+    {
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var indexPath = Path.Combine(_o.Out, "materials_index.json");
+        if (!File.Exists(indexPath)) return set;
+        var byStem = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var ambiguous = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var f in _p.Files.Values)
+        {
+            if (!f.Path.EndsWith(".uasset", StringComparison.OrdinalIgnoreCase)) continue;
+            var stem = Path.GetFileNameWithoutExtension(f.Path);
+            if (byStem.TryGetValue(stem, out var existing) && !string.Equals(existing, f.Path, StringComparison.OrdinalIgnoreCase))
+            {
+                ambiguous.Add(stem);
+                byStem.Remove(stem);
+            }
+            else if (!ambiguous.Contains(stem))
+            {
+                byStem[stem] = f.Path;
+            }
+        }
+
+        void AddObjectPath(string? objPath)
+        {
+            if (string.IsNullOrEmpty(objPath)) return;
+            var pkg = objPath.Split('.')[0];
+            if (pkg.StartsWith("/Game/", StringComparison.OrdinalIgnoreCase))
+                set.Add("TAT/Content/" + pkg["/Game/".Length..] + ".uasset");
+            else if (pkg.StartsWith("/Engine/", StringComparison.OrdinalIgnoreCase))
+                set.Add("Engine/Content/" + pkg["/Engine/".Length..] + ".uasset");
+        }
+
+        JArray index;
+        try { index = JArray.Parse(File.ReadAllText(indexPath)); }
+        catch { return set; }
+        foreach (var rel in index.OfType<JValue>())
+        {
+            var jf = Path.Combine(_o.Out, "json", rel.ToString()!);
+            if (!File.Exists(jf)) continue;
+            JArray exps;
+            try { exps = JArray.Parse(File.ReadAllText(jf)); }
+            catch { continue; }
+            foreach (var exp in exps.OfType<JObject>())
+            {
+                var props = exp["Properties"] as JObject;
+                if (props != null)
+                {
+                    foreach (var tv in (props["TextureParameterValues"] as JArray)?.OfType<JObject>() ?? Enumerable.Empty<JObject>())
+                        AddObjectPath((tv["ParameterValue"] as JObject)?["ObjectPath"]?.ToString());
+                    foreach (var tsd in (props["TextureStreamingData"] as JArray)?.OfType<JObject>() ?? Enumerable.Empty<JObject>())
+                    {
+                        var name = tsd["TextureName"]?.ToString();
+                        if (!string.IsNullOrEmpty(name) && byStem.TryGetValue(name, out var pth))
+                            set.Add(pth);
+                    }
+                }
+                var cached = exp["CachedExpressionData"] as JObject;
+                if (cached != null)
+                {
+                    foreach (var rt in (cached["ReferencedTextures"] as JArray)?.OfType<JObject>() ?? Enumerable.Empty<JObject>())
+                        AddObjectPath(rt["ObjectPath"]?.ToString());
+                }
+            }
+        }
+        return set;
+    }
+
     public void Textures()
     {
         var opts = DefaultOpts();
+        var refTextures = ReferencedTexturePackages();
         // Deny-list (documented, unchanged): T_ prefix / /Textures/ / /UI/ /
         // Icon / 4 hardcoded stems for .uasset, 3 hardcoded sources for .umap.
         // Anything else never reaches the decoder: textures-filtered.
-        bool TextureQueued(string p) => (p.EndsWith(".uasset") && (Path.GetFileName(p).StartsWith("T_") || p.Contains("/Textures/") || p.Contains("/UI/") || p.Contains("Icon") || p.Contains("WindowPanels_Oldmanor")
+        bool TextureQueued(string p) => (p.EndsWith(".uasset") && (refTextures.Contains(p) || Path.GetFileName(p).StartsWith("T_") || p.Contains("/Textures/") || p.Contains("/UI/") || p.Contains("Icon") || p.Contains("WindowPanels_Oldmanor")
                 || Path.GetFileName(p).StartsWith("WindowPanel_", StringComparison.Ordinal)
                 || Path.GetFileName(p).StartsWith("StorefrontWoodTile_", StringComparison.Ordinal)
                 || Path.GetFileName(p).StartsWith("TrimFabricFancyA_", StringComparison.Ordinal)

@@ -33,4 +33,17 @@ func _run() -> void:
 		am_node.call("cleanup_on_exit")
 		await process_frame
 		await process_frame
+	# Same process-lifetime caches run_tests clears. Without these the probe
+	# reports textures/materials retained by VFX/weather/theme/animation caches.
+	VfxManager.cleanup_static_caches()
+	GuardAnimationLibrary.cleanup_static_caches()
+	ArtNouveauTheme.cleanup_static_caches()
+	(load("res://src/core/weather_profile.gd") as GDScript).cleanup_static_caches()
+	(load("res://src/core/weather_visuals.gd") as GDScript).cleanup_static_caches()
+	(load("res://src/ai/guard_ai.gd") as GDScript).cleanup_static_caches()
+	# Audio playbacks are released by the audio thread only after the player is
+	# freed; give it several frames before quitting (4 was still flaky in
+	# headless, 8 is deterministic on 4.7.2).
+	for _i: int in range(8):
+		await process_frame
 	quit(0)

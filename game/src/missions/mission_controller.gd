@@ -2235,6 +2235,11 @@ func _on_time_expired() -> void:
 ## systems when a mission leaves the tree. Without this the last mission's
 ## textures, LUTs and retarget caches survive shutdown as leaked resources.
 func _exit_tree() -> void:
+	# Stop scene-owned beds/gramophone immediately. Their fade tweens otherwise
+	# survive the mission and hold the last rain/roomtone players through quit.
+	var am: Node = get_node_or_null("/root/AudioManager")
+	if am != null and am.has_method("stop_all_beds"):
+		am.call("stop_all_beds", 0.0)
 	VfxManager.cleanup_static_caches()
 	GuardAnimationLibrary.cleanup_static_caches()
 	ArtNouveauTheme.cleanup_static_caches()

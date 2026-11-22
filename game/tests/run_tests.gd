@@ -399,6 +399,7 @@ func _initialize() -> void:
 	var col_bodies: int = int(gh_stats.get("collision_bodies", 0))
 	var col_shapes: int = int(gh_stats.get("collision_shapes", 0))
 	var occluders: int = int(gh_stats.get("occluder_count", 0))
+	var gh_fallback_materials: int = int(gh_stats.get("fallback_material_count", -1))
 	var multi_nodes: int = 0
 	var max_chunk_span: float = 0.0
 	var max_chunk_mesh: String = ""
@@ -415,11 +416,11 @@ func _initialize() -> void:
 					max_chunk_mesh = str(mmi.get_meta("ue_mesh", ""))
 			if mmi.visibility_range_end > 0.0:
 				culled_nodes += 1
-	if chunk_count < 500 or multi_nodes < 200 or col_bodies < 4 or col_shapes <= 0 or col_shapes >= 32000 or occluders <= 0 or max_chunk_span >= 140.0 or culled_nodes < 300:
-		printerr("FAIL: perf chunking invariants (chunks=", chunk_count, " multimeshes=", multi_nodes, " bodies=", col_bodies, " shapes=", col_shapes, " occluders=", occluders, " max_span=", max_chunk_span, " max_mesh=", max_chunk_mesh, " culled=", culled_nodes, ")")
+	if chunk_count < 500 or multi_nodes < 200 or col_bodies < 4 or col_shapes <= 0 or col_shapes >= 32000 or occluders <= 0 or max_chunk_span >= 140.0 or culled_nodes < 300 or gh_fallback_materials != 0:
+		printerr("FAIL: perf chunking invariants (chunks=", chunk_count, " multimeshes=", multi_nodes, " bodies=", col_bodies, " shapes=", col_shapes, " occluders=", occluders, " max_span=", max_chunk_span, " max_mesh=", max_chunk_mesh, " culled=", culled_nodes, " material_fallbacks=", gh_fallback_materials, ")")
 		fails += 1
 	else:
-		print("PASS: Perf chunking (chunks=", chunk_count, ", multimeshes=", multi_nodes, ", collision_bodies=", col_bodies, ", shapes=", col_shapes, ", occluders=", occluders, ", max_chunk_span=", snappedf(max_chunk_span, 0.1), "m, distance-culled=", culled_nodes, ")")
+		print("PASS: Perf chunking (chunks=", chunk_count, ", multimeshes=", multi_nodes, ", collision_bodies=", col_bodies, ", shapes=", col_shapes, ", occluders=", occluders, ", max_chunk_span=", snappedf(max_chunk_span, 0.1), "m, distance-culled=", culled_nodes, ", material_fallbacks=0)")
 	gh_scene.queue_free()
 	await process_frame
 
@@ -1615,8 +1616,10 @@ func _initialize() -> void:
 		var fallback_expect: Dictionary = {
 			"MI_TrimMetalA_brass_dark": "T_TrimMetalA_D.png",
 			"MI_ManorPanels_Dark": "T_ManorPanels_D.png",
-			"MI_PlasterSmoothD": "T_Plaster_D.png",
-			"MI_WoodBoardsOld": "T_WoodBoardsA_D.png",
+			# Authored TextureStreamingData: T_Plaster_D04 (not the old generic
+			# T_Plaster_D guess) and WoodBoardsOld_D (not T_WoodBoardsA_D).
+			"MI_PlasterSmoothD": "T_Plaster_D04.png",
+			"MI_WoodBoardsOld": "WoodBoardsOld_D.png",
 			"MI_WallMoldingTrimA_Dark": "T_WallMoldingTrimA_D.png",
 			"MI_OldManorStone_exterior": "T_WallStoneManorA_D.png",
 			"MI_StoreFrontWoodTile": "StorefrontWoodTile_D.png",
@@ -1630,6 +1633,47 @@ func _initialize() -> void:
 		var glass_panels_albedo: String = str(_entry_texs(_material_entry_ending_with(mats_doc, "M_GlassPanels")).get("albedo", ""))
 		if not glass_panels_albedo.contains("/Glass/") or not glass_panels_albedo.ends_with("WindowPanel_D.png"):
 			mat_fails.append("M_GlassPanels albedo=" + glass_panels_albedo)
+		# C5: authored defaults from CachedExpressionData, explicit texture
+		# params, and the Engine carriers. These are the paths that used to emit
+		# "material fallback" warnings or render flat grey.
+		var c5_albedo_expect: Dictionary = {
+			"MI_TeleScope_Inst": "T_TeleScope_A.png",
+			"Mi_Blackjack": "T_Blackjack_D.png",
+			"T_LightSm_SconceA_Brass": "T_LightWallCastleSm_D.png",
+			"CobwebFogy": "Web_Fogy_diff.png",
+			"BaseMaterial": "Web_diff2.png",
+			"WorldGridMaterial": "T_Default_Material_Grid_M.png",
+		}
+		for c5_suffix: Variant in c5_albedo_expect.keys():
+			var c5_entry: Dictionary = _material_entry_ending_with(mats_doc, str(c5_suffix))
+			var c5_albedo: String = str(_entry_texs(c5_entry).get("albedo", ""))
+			if not c5_albedo.ends_with(str(c5_albedo_expect[c5_suffix])):
+				mat_fails.append("C5 " + str(c5_suffix) + " albedo=" + c5_albedo)
+		var c5_tint_expect: Dictionary = {
+			"Utility/M_DarkGrey": [0.09, 0.09, 0.09],
+			"gjasp/Chrome": [0.427, 0.427, 0.427],
+			"MI_Solid_Blue": [0.002, 0.138, 0.578],
+			"BasicShapeMaterial": [0.9, 0.9, 0.9],
+		}
+		for c5_suffix2: Variant in c5_tint_expect.keys():
+			var c5_entry2: Dictionary = _material_entry_ending_with(mats_doc, str(c5_suffix2))
+			var c5_tint_v: Variant = c5_entry2.get("tint", null)
+			var c5_want: Array = c5_tint_expect[c5_suffix2] as Array
+			var c5_tint_ok: bool = c5_tint_v is Array and (c5_tint_v as Array).size() >= 3
+			if c5_tint_ok:
+				var c5_got: Array = c5_tint_v as Array
+				for ci: int in range(3):
+					if absf(float(c5_got[ci]) - float(c5_want[ci])) > 0.003:
+						c5_tint_ok = false
+			if not c5_tint_ok:
+				mat_fails.append("C5 " + str(c5_suffix2) + " tint=" + str(c5_tint_v))
+		var c5_power: Dictionary = _material_entry_ending_with(mats_doc, "MI_PowerLight_On")
+		var c5_power_vecs: Variant = c5_power.get("vectors", null)
+		var c5_power_emissive: bool = c5_power_vecs is Dictionary and (c5_power_vecs as Dictionary).has("EmissiveColor")
+		var c5_power_params: Variant = c5_power.get("params", null)
+		var c5_power_strength: bool = c5_power_params is Dictionary and (c5_power_params as Dictionary).has("EmissiveStrength")
+		if not c5_power_emissive or not c5_power_strength:
+			mat_fails.append("C5 MI_PowerLight_On emissive defaults missing")
 		var emissive_expect: Array[String] = ["M_EmissiveBase", "MI_EmissiveShape", "MI_MoonshapeEmissive"]
 		for emissive_suffix: String in emissive_expect:
 			var emissive_albedo: String = str(_entry_texs(_material_entry_ending_with(mats_doc, emissive_suffix)).get("albedo", ""))
@@ -3526,6 +3570,11 @@ func _initialize() -> void:
 	if not is_equal_approx(float(mk48_hp.get("health")), float(mk48_hp.get("max_health"))):
 		printerr("FAIL: 48 health pack did not restore full HP")
 		sp48_ok = false
+	# These mock actors/pickups are never parented to the tree; unparented
+	# Nodes are not auto-freed and leaked at exit (suite 48 hygiene).
+	for pk48_node: Node in [mk48_throw, pk48_throw, mk48_ammo, pk48_ammo, mk48_hp, pk48_hp]:
+		if is_instance_valid(pk48_node) and not pk48_node.is_queued_for_deletion():
+			pk48_node.free()
 	# Alerted/combat fallback: BP-authored MaxWalkSpeed/100 == state_speeds == guard const.
 	var st48_doc: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://data/generated/gameplay/state_speeds.json"))
 	var st48_fallback: float = -1.0
@@ -3933,14 +3982,18 @@ func _initialize() -> void:
 	var am_node: Node = root.get_node_or_null("/root/AudioManager")
 	if am_node != null and am_node.has_method("cleanup_on_exit"):
 		am_node.call("cleanup_on_exit")
-		await process_frame
-		await process_frame
+		# Audio playbacks are released by the audio thread after the player is
+		# freed; 2 frames left Ogg playback refs alive at exit.
+		for _i: int in range(8):
+			await process_frame
 	VfxManager.cleanup_static_caches()
 	GuardAnimationLibrary.cleanup_static_caches()
 	ArtNouveauTheme.cleanup_static_caches()
 	(load("res://src/core/weather_profile.gd") as GDScript).cleanup_static_caches()
 	(load("res://src/core/weather_visuals.gd") as GDScript).cleanup_static_caches()
 	(load("res://src/ai/guard_ai.gd") as GDScript).cleanup_static_caches()
+	for _j: int in range(8):
+		await process_frame
 
 	print("SUMMARY: fails=", fails)
 	quit(0 if fails == 0 else 1)

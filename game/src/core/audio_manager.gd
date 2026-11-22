@@ -201,6 +201,13 @@ var _gramophone_player: AudioStreamPlayer = null
 ## the scene changes or a newer countdown starts.
 var _countdown_token: int = 0
 var _countdown_running: bool = false
+## Fade tweens created by start_bed/stop_bed/stop_all_beds. They hold a
+## reference to the player node until they finish, so teardown must kill them
+## before freeing players or the last ambience beds survive shutdown.
+var _bed_tweens: Array[Tween] = []
+## Set by cleanup_on_exit(); every late async caller (countdown timer, second
+## car-horn blast, deferred VO) must not create a new playback after teardown.
+var _shutdown: bool = false
 var _named_clips: Dictionary = {}
 ## U4: one looped duplicate per unique bed/gramophone clip (see _bed_stream).
 var _bed_loop_cache: Dictionary = {}
@@ -247,28 +254,41 @@ func _exit_tree() -> void:
 ## manager leaves the tree. Without this, active Ogg playbacks and their
 ## OggPacketSequence resources survive shutdown (leaked resources/RIDs).
 func cleanup_on_exit() -> void:
+	# Invalidate every deferred/async producer before stopping players. The
+	# countdown coroutine and the 0.15 s second car-horn blast would otherwise
+	# spawn a fresh playback in the two frames between teardown and quit.
+	_shutdown = true
+	_countdown_token += 1
+	_countdown_running = false
+	for tw: Tween in _bed_tweens:
+		if tw != null and tw.is_valid():
+			tw.kill()
+	_bed_tweens.clear()
+	# Free, not queue_free: at process shutdown the deferred free queue is not
+	# guaranteed to run, and that is exactly where the Ogg playback refs leaked
+	# (countdown tick, briefing VO, rain/roomtone beds).
 	for child: Node in get_children():
 		if child is AudioStreamPlayer or child is AudioStreamPlayer3D:
 			child.call("stop")
 			child.set("stream", null)
-			child.queue_free()
+			child.free()
 	for player: Node in _voice_players:
 		if is_instance_valid(player):
 			player.call("stop")
 			player.set("stream", null)
-			player.queue_free()
+			player.free()
 	_voice_players.clear()
 	_active_voices = 0
 	if _gramophone_player != null and is_instance_valid(_gramophone_player):
 		_gramophone_player.stop()
 		_gramophone_player.stream = null
-		_gramophone_player.queue_free()
-		_gramophone_player = null
+		_gramophone_player.free()
+	_gramophone_player = null
 	for bed: Variant in _beds.values():
 		if bed is Node and is_instance_valid(bed as Node):
 			(bed as Node).call("stop")
 			(bed as Node).set("stream", null)
-			(bed as Node).queue_free()
+			(bed as Node).free()
 	_beds.clear()
 	_bed_loop_cache.clear()
 	_event_clips.clear()
@@ -276,6 +296,7 @@ func cleanup_on_exit() -> void:
 	_real_clips.clear()
 	_sfx.clear()
 	_foot_pools.clear()
+	_foot_idx.clear()
 
 
 func _ensure_buses() -> void:
@@ -725,7 +746,19 @@ func _bed_stream(ev_name: String, media_sub: String) -> AudioStream:
 ## AU1/AU2: start a looped ambience bed (2D, Ambience bus).
 ## Beds: rain / den / roomtone / wind / guildhall. The player trim lands the
 ## bed on BED_TARGET_DBFS (KEYFRAME §4); fade_s crossfades in.
+## Registers a bed fade tween so cleanup_on_exit() can kill it before freeing
+## the player it references. The tween removes itself when it finishes.
+func _track_bed_tween(tw: Tween) -> Tween:
+	_bed_tweens.append(tw)
+	tw.finished.connect(func() -> void:
+		_bed_tweens.erase(tw)
+	)
+	return tw
+
+
 func start_bed(bed: String, fade_s: float = 0.6) -> bool:
+	if _shutdown:
+		return false
 	var key := bed.to_lower().strip_edges()
 	if not BED_PINS.has(key):
 		return false
@@ -744,7 +777,7 @@ func start_bed(bed: String, fade_s: float = 0.6) -> bool:
 	player.play()
 	_beds[key] = player
 	if fade_s > 0.0:
-		var tw: Tween = create_tween()
+		var tw: Tween = _track_bed_tween(create_tween())
 		tw.tween_property(player, "volume_db", target, fade_s)
 	return true
 
@@ -758,11 +791,12 @@ func stop_bed(bed: String, fade_s: float = 0.25) -> void:
 	if not is_instance_valid(player):
 		return
 	if fade_s > 0.0:
-		var tw: Tween = create_tween()
+		var tw: Tween = _track_bed_tween(create_tween())
 		tw.tween_property(player, "volume_db", -60.0, fade_s)
 		tw.tween_callback(player.queue_free)
 	else:
 		player.stop()
+		player.stream = null
 		player.queue_free()
 
 
@@ -772,11 +806,12 @@ func stop_all_beds(fade_s: float = 0.0) -> void:
 		if not is_instance_valid(player):
 			continue
 		if fade_s > 0.0:
-			var tw: Tween = create_tween()
+			var tw: Tween = _track_bed_tween(create_tween())
 			tw.tween_property(player, "volume_db", -60.0, fade_s)
 			tw.tween_callback(player.queue_free)
 		else:
 			player.stop()
+			player.stream = null
 			player.queue_free()
 	_beds.clear()
 	stop_gramophone()
@@ -833,6 +868,8 @@ func active_bed_levels() -> Dictionary:
 
 ## AU2: diegetic gramophone record (S07, ONLY music in the clip) on Music bus.
 func start_gramophone() -> bool:
+	if _shutdown:
+		return false
 	if is_instance_valid(_gramophone_player):
 		return true
 	var stream: AudioStream = _bed_stream(str(GRAMOPHONE_PIN[0]), str(GRAMOPHONE_PIN[1]))
@@ -852,6 +889,7 @@ func stop_gramophone() -> void:
 		_gramophone_player = null
 		return
 	_gramophone_player.stop()
+	_gramophone_player.stream = null
 	_gramophone_player.queue_free()
 	_gramophone_player = null
 
@@ -1061,7 +1099,7 @@ func _play_at(key: String, pos: Vector3, volume_db: float) -> void:
 
 
 func _play_stream_3d(stream: AudioStream, pos: Vector3, volume_db: float, bus: String) -> void:
-	if stream == null:
+	if stream == null or _shutdown:
 		return
 	_steal_voice_if_full("3d")
 	if AudioServer.get_bus_index(bus) == -1:
@@ -1081,7 +1119,7 @@ func _play_stream_3d(stream: AudioStream, pos: Vector3, volume_db: float, bus: S
 
 
 func _play_stream_2d(stream: AudioStream, bus: String, volume_db: float) -> void:
-	if stream == null:
+	if stream == null or _shutdown:
 		return
 	_steal_voice_if_full("2d")
 	if AudioServer.get_bus_index(bus) == -1:

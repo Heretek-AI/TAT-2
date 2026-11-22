@@ -31,7 +31,10 @@ var _mesh_mats_db: Dictionary = {}
 var _mesh_mats_db_lower: Dictionary = {}
 var _tex_cache: Dictionary = {}
 var _std_mat_cache: Dictionary = {}
-var _mesh_res_cache: Dictionary = {} # ue_path -> { "mesh": Mesh, "shape": Shape3D }
+var _mesh_res_cache: Dictionary = {}
+var _prof_glb_ms: int = 0
+var _prof_mat_ms: int = 0
+var _prof_shape_ms: int = 0 # ue_path -> { "mesh": Mesh, "shape": Shape3D }
 ## L1/L2 sentinels: corrupt imports (resolved path, failed load) are tracked
 ## separately from missing meshes so a broken GLB never hides in the missing
 ## list; substring-guess fallback materials are tiered + counted. Export
@@ -918,6 +921,7 @@ func _get_mesh_and_shape(ue_path: String) -> Dictionary:
 	if res_path == "":
 		_mesh_res_cache[ue_path] = out
 		return out
+	var _p0: int = Time.get_ticks_msec()
 	var packed: Variant = load(res_path)
 	if not (packed is PackedScene):
 		# L1 corrupt-import path: ResourceLoader.exists() passed but the
@@ -928,6 +932,7 @@ func _get_mesh_and_shape(ue_path: String) -> Dictionary:
 	if packed is PackedScene:
 		var inst: Node = packed.instantiate()
 		var mi := _find_first_mesh(inst)
+		_prof_glb_ms += Time.get_ticks_msec() - _p0
 		if mi != null and mi.mesh != null:
 			var m := mi.mesh.duplicate() as Mesh
 			var low_u := ue_path.to_lower()
@@ -950,7 +955,9 @@ func _get_mesh_and_shape(ue_path: String) -> Dictionary:
 				# index when the surface name is generic or matches nothing.
 				var mesh_key: String = ue_path.split(".")[0]
 				var mat_slots: Array = _mesh_mats_db.get(mesh_key, _mesh_mats_db_lower.get(mesh_key.to_lower(), []))
+				var _m0: int = Time.get_ticks_msec()
 				_bind_glb_materials(m, mat_slots)
+				_prof_mat_ms += Time.get_ticks_msec() - _m0
 				out["mesh"] = m
 				var is_nonblocking: bool = ("rug" in low_u or "carpet" in low_u or "placemat" in low_u or "paper" in low_u or "poster" in low_u or "scroll" in low_u or "curtain" in low_u or "cloth" in low_u or "drape" in low_u or "sheet" in low_u or "cable" in low_u or "wire" in low_u or "rope" in low_u or "ivy" in low_u or "vine" in low_u or "foliage" in low_u)
 				# Fast BoxShape3D for props; trimesh for walkable surfaces and large structural geometry.
@@ -969,6 +976,7 @@ func _get_mesh_and_shape(ue_path: String) -> Dictionary:
 				# an invisible wall 0.5-0.9 m in front of the leaf. A trimesh
 				# follows the modelled hole and is cheap for ~200 frames.
 				var is_door_aperture: bool = "door" in low_u or "archway" in low_u
+				var _s0: int = Time.get_ticks_msec()
 				var aabb := m.get_aabb()
 				var sz := aabb.size
 				if not is_nonblocking and sz.length() > 0.45:
@@ -2353,7 +2361,10 @@ func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> 
 	var trs: Array = item.get("trs", [])
 	if trs.is_empty():
 		return 0
+	var _pm0: int = Time.get_ticks_msec() if ctx.has("perf_mesh_ms") else 0
 	var info: Dictionary = _get_mesh_and_shape(mp)
+	if ctx.has("perf_mesh_ms"):
+		ctx["perf_mesh_ms"] = int(ctx["perf_mesh_ms"]) + (Time.get_ticks_msec() - _pm0)
 	var mesh: Mesh = info["mesh"]
 	if mesh == null:
 		# Headless-safe missing-mesh path: log the UE path (the value the
@@ -2449,6 +2460,8 @@ func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> 
 		node.set_meta("override_materials", ov_arr)
 	parent.add_child(node)
 	ctx["chunk_count"] = int(ctx.get("chunk_count", 0)) + 1
+	if ctx.has("perf_build_ms"):
+		ctx["perf_build_ms"] = int(ctx["perf_build_ms"]) + (Time.get_ticks_msec() - _pm0)
 
 	var is_clutter: bool = _has_token(low_mp, CLUTTER_TOKENS)
 	if not use_cpd and not hidden_in_game and bool(item.get("collide", false)) and bool(ctx.get("generate_collision", false)) and not is_clutter:
@@ -3322,6 +3335,9 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 	if _materials_db.is_empty():
 		_load_material_dbs()
 	var acc: Dictionary = _new_accumulator()
+	_prof_glb_ms = 0
+	_prof_mat_ms = 0
+	_prof_shape_ms = 0
 	_VfxManager.prewarm_footstep_mask()
 	var total_files: int = maxi(json_paths.size(), 1)
 	var file_idx: int = 0
@@ -3337,6 +3353,9 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 		print("LoadTiming parse_ms=", Time.get_ticks_msec() - _t0)
 	var ctx: Dictionary = _new_build_ctx(parent, light_probe, generate_collision)
 	ctx["map_hint"] = _map_hint_from_paths(json_paths)
+	if _timing:
+		ctx["perf_mesh_ms"] = 0
+		ctx["perf_build_ms"] = 0
 	_apply_collider_budget(ctx, json_paths)
 	var pending_lights: Array = _prioritize_lights(acc["lights"], acc["result"]["player_spawns"])
 	load_progress.emit(0.3, "Sorting lights...")
@@ -3384,7 +3403,7 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 			if parent.get_tree() != null:
 				await parent.get_tree().process_frame
 	if _timing:
-		print("LoadTiming draw_ms=", Time.get_ticks_msec() - _t0, " items=", items.size(), " instances=", total_inst)
+		print("LoadTiming draw_ms=", Time.get_ticks_msec() - _t0, " items=", items.size(), " instances=", total_inst, " mesh_ms=", int(ctx.get("perf_mesh_ms", 0)), " build_ms=", int(ctx.get("perf_build_ms", 0)), " glb_ms=", _prof_glb_ms, " mat_ms=", _prof_mat_ms, " shape_ms=", _prof_shape_ms)
 	load_progress.emit(1.0, "Done")
 	return _finalize(acc["result"], ctx, total_inst)
 

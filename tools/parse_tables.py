@@ -1118,6 +1118,35 @@ def _uu_vec_to_godot_m(v):
         return None
 
 
+def _scene_requirement_tag(props: dict) -> str:
+    """Authored ETATSceneRequirement ElementTag on an actor/component."""
+    for key in ("_sceneRequirement", "SceneRequirement"):
+        sr = props.get(key)
+        if isinstance(sr, dict):
+            tag = (sr.get("ElementTag") or {}).get("TagName") or ""
+            if tag and tag != "None":
+                return tag
+    return ""
+
+
+def _scene_element_kind(cls: str) -> str:
+    if "MissionSpawner_Character" in cls or "Guard" in cls:
+        return "guard"
+    if "MajorLoot" in cls:
+        return "major_loot"
+    if "MinorLoot" in cls:
+        return "minor_loot"
+    if "QuestSpawner" in cls or "QuestActorSpawner" in cls:
+        return "quest"
+    if "Door" in cls:
+        return "door"
+    if "Window" in cls:
+        return "window"
+    if "Civilian" in cls:
+        return "civilian"
+    return ""
+
+
 def _stub_actor(exps, idx):
     """(bp_class_or_None, actor_name_or_None) from a component's Outer."""
     outer = exps[idx].get("Outer") or {}
@@ -1368,6 +1397,7 @@ def extract_levels():
         lights = []
         markers = []
         actors = []
+        spawn_elements = []
         patrol_paths = []
         landscapes = []
         rect_lights = []
@@ -1423,6 +1453,21 @@ def extract_levels():
                 continue
             seen_pivots.add(dedup)
             aidx = actor_by_name.get(actor_name)
+            door_tag = (
+                _scene_requirement_tag(exps[aidx].get("Properties") or {})
+                if aidx is not None
+                else ""
+            )
+            door_group = (
+                ((exps[aidx].get("Properties") or {}).get("SpawnGroup") or {}).get(
+                    "TagName", ""
+                )
+                if aidx is not None
+                and isinstance(
+                    (exps[aidx].get("Properties") or {}).get("SpawnGroup"), dict
+                )
+                else ""
+            )
             aroot = None
             if aidx is not None:
                 rc = (exps[aidx].get("Properties") or {}).get("RootComponent") or {}
@@ -1630,6 +1675,8 @@ def extract_levels():
                     "basis": pgt["basis"],
                     "leaves": leaves,
                     "source": dsrc,
+                    **({"element_tag": door_tag} if door_tag else {}),
+                    **({"spawn_group": door_group} if door_group else {}),
                 }
             )
 
@@ -1851,7 +1898,34 @@ def extract_levels():
                 if level_mat is not None:
                     wmat = mat4_mul(level_mat, wmat)
                 trs = ue_mat4_to_godot_trs(wmat)
-                markers.append({"name": e.get("Name", ""), "class": et, **trs})
+                scene_tag = _scene_requirement_tag(props)
+                spawn_group = (
+                    (props.get("SpawnGroup") or {}).get("TagName", "")
+                    if isinstance(props.get("SpawnGroup"), dict)
+                    else ""
+                )
+                marker_rec = {
+                    "name": e.get("Name", ""),
+                    "class": et,
+                    **trs,
+                    "source": str(rel),
+                    **({"scene_requirement": scene_tag} if scene_tag else {}),
+                    **({"spawn_group": spawn_group} if spawn_group else {}),
+                }
+                markers.append(marker_rec)
+                kind = _scene_element_kind(et)
+                if kind:
+                    spawn_elements.append(
+                        {
+                            "kind": kind,
+                            "name": marker_rec["name"],
+                            "class": et,
+                            "pos": marker_rec["pos"],
+                            "element_tag": scene_tag,
+                            "spawn_group": spawn_group,
+                            "source": str(rel),
+                        }
+                    )
 
             # 4b. Generic actor capture. Blueprint actors and gameplay components
             # without a dedicated payload still define a level: clue-only and
@@ -1879,6 +1953,12 @@ def extract_levels():
                         wmat2 = get_world_mat(ridx2)
                 if level_mat is not None:
                     wmat2 = mat4_mul(level_mat, wmat2)
+                actor_tag = _scene_requirement_tag(props)
+                actor_group = (
+                    (props.get("SpawnGroup") or {}).get("TagName", "")
+                    if isinstance(props.get("SpawnGroup"), dict)
+                    else ""
+                )
                 actors.append(
                     {
                         "name": e.get("Name", ""),
@@ -1889,28 +1969,24 @@ def extract_levels():
                             if isinstance(props.get("Tags"), list) and props.get("Tags")
                             else {}
                         ),
-                        **(
-                            {
-                                "scene_requirement": (
-                                    (props.get("_sceneRequirement") or {})
-                                    .get("ElementTag", {})
-                                    .get("TagName", "")
-                                )
-                            }
-                            if isinstance(props.get("_sceneRequirement"), dict)
-                            else {}
-                        ),
-                        **(
-                            {
-                                "spawn_group": (
-                                    (props.get("SpawnGroup") or {}).get("TagName", "")
-                                )
-                            }
-                            if isinstance(props.get("SpawnGroup"), dict)
-                            else {}
-                        ),
+                        **({"scene_requirement": actor_tag} if actor_tag else {}),
+                        **({"spawn_group": actor_group} if actor_group else {}),
                     }
                 )
+                kind2 = _scene_element_kind(et)
+                if kind2 and actor_tag:
+                    a_pos = (ue_mat4_to_godot_trs(wmat2)).get("pos", [0.0, 0.0, 0.0])
+                    spawn_elements.append(
+                        {
+                            "kind": kind2,
+                            "name": e.get("Name", ""),
+                            "class": et,
+                            "pos": a_pos,
+                            "element_tag": actor_tag,
+                            "spawn_group": actor_group,
+                            "source": str(rel),
+                        }
+                    )
 
             # 4c. Authored patrol paths: APatrolPath stores waypoints in
             # Properties.Points (TArray<FPatrolPoint>), not a spline. 210 of the
@@ -2585,6 +2661,7 @@ def extract_levels():
                     "lights": lights,
                     "markers": markers,
                     "actors": actors,
+                    "spawn_elements": spawn_elements,
                     "patrol_paths": patrol_paths,
                     "landscapes": landscapes,
                     "rect_lights": rect_lights,

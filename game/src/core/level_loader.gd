@@ -1076,6 +1076,9 @@ func _new_accumulator() -> Dictionary:
 			"player_spawns": [] as Array[Vector3],
 		"player_spawn_transforms": [] as Array,
 			"guard_spawns": [] as Array[Vector3],
+			# Authored-tag index for SceneElement overrides (#11). Kept parallel
+			# to the legacy Vector3 arrays so no consumer changes shape.
+			"scene_element_spawns": [] as Array,
 			"smart_objects": [] as Array,
 			"loot_spawns": [] as Array[Vector3],
 			"minor_loot_spawns": [] as Array,
@@ -1138,6 +1141,55 @@ static func _sv_fnv1a(text: String) -> int:
 	return h
 
 
+static func _scene_override_kind(tag: String) -> String:
+	if tag.contains("Locks.Doors"):
+		return "door"
+	if tag.contains("Locks.Windows"):
+		return "window"
+	if tag.contains(".Lights"):
+		return "light"
+	if tag.contains(".Guards"):
+		return "guard"
+	if tag.contains(".MajorLoot") or tag.contains(".NoMajorLoot"):
+		return "major_loot"
+	if tag.contains(".MinorLoot"):
+		return "minor_loot"
+	if tag.contains(".Quest"):
+		return "quest"
+	if tag.contains(".Civilian"):
+		return "civilian"
+	return ""
+
+
+static func _sv_pos_key(v: Variant) -> String:
+	if v is Vector3:
+		var p: Vector3 = v as Vector3
+		return "%.3f|%.3f|%.3f" % [p.x, p.y, p.z]
+	if v is Array and (v as Array).size() >= 3:
+		var a: Array = v as Array
+		return "%.3f|%.3f|%.3f" % [float(a[0]), float(a[1]), float(a[2])]
+	return ""
+
+
+static func _sv_source_map(source: String) -> String:
+	var base: String = source.split("::")[0]
+	if base.ends_with(".json") or base.ends_with(".tatlevel"):
+		base = base.get_basename()
+	return base
+
+
+static func _sv_override_applies(typ: String, chance: float, seed_value: int, actor_name: String, tag: String) -> bool:
+	var low: String = typ.to_lower()
+	if low.ends_with("always"):
+		return true
+	if low.ends_with("never"):
+		return false
+	if low.ends_with("overridechance"):
+		var roll: int = _sv_fnv1a("%d|%s|%s" % [seed_value, actor_name, tag]) % 10000
+		return roll < int(clampf(chance, 0.0, 100.0) * 100.0)
+	return false
+
+
 static func load_scene_variants() -> Array:
 	if not _scene_variants_loaded:
 		_scene_variants_loaded = true
@@ -1181,6 +1233,157 @@ static func select_scene_variants(map_id: String, seed_value: int, requested: Ar
 			continue
 		var idx: int = _sv_fnv1a("%d|%s" % [seed_value, str(key)]) % members.size()
 		out.append(members[idx] as Dictionary)
+	return out
+
+
+## Applies the selected SceneVariantConfig overrides where this port has an
+## authored tag. Exact matches only: a spawner must carry
+## _sceneRequirement.ElementTag (e.g. MapVariation.SceneElement.Quest) equal to
+## the override tag (or a parent/child of it). Untagged spawners are never
+## guessed at; the unresolved count is returned for the report.
+##
+## Locks.Doors maps to a lock state (Always = locked, Never = unlocked,
+## OverrideChance = seeded lock roll). Presence categories (Guards,
+## MajorLoot/MinorLoot, Quest, Civilian) suppress a matching spawn when the
+## override resolves false. Lights/Windows have no per-spawn tag index yet;
+## they are counted as unmapped, not silently applied.
+func apply_scene_variant_overrides(_map_id: String, seed_value: int, variant_ids: Array[String], stats: Dictionary) -> Dictionary:
+	var out: Dictionary = {
+		"active": 0,
+		"source_variants": 0,
+		"applied": 0,
+		"suppressed": 0,
+		"locked": 0,
+		"class_mapped": 0,
+		"unmapped": 0,
+		"tags": [] as Array,
+	}
+	if stats.is_empty():
+		return out
+	var records: Array = stats.get("scene_element_spawns", []) as Array
+	var active: Array = []
+	for v: Variant in load_scene_variants():
+		if v is Dictionary and variant_ids.has(str((v as Dictionary).get("id", ""))):
+			active.append(v)
+	out["active"] = active.size()
+	# Global map variants apply everywhere; building/sublevel variants apply to
+	# their own source map (the LevelInstance building that owns the spawner).
+	# The latter is where almost all Locks/MajorLoot overrides live.
+	var override_sets: Array = []
+	if not active.is_empty():
+		override_sets.append({"variants": active, "source": ""})
+	var sources: Dictionary = {}
+	for rec_var: Variant in records:
+		if rec_var is Dictionary:
+			var sm: String = _sv_source_map(str((rec_var as Dictionary).get("source", "")))
+			if sm != "":
+				sources[sm] = true
+	for d_var: Variant in stats.get("swinging_doors", []) as Array:
+		if d_var is Dictionary:
+			var sm2: String = _sv_source_map(str((d_var as Dictionary).get("source", "")))
+			if sm2 != "":
+				sources[sm2] = true
+	for smv: Variant in sources.keys():
+		var src_map: String = str(smv)
+		var svs: Array = select_scene_variants(src_map, seed_value, [] as Array[String])
+		var with_ov: Array = []
+		for s_var: Variant in svs:
+			if s_var is Dictionary and not ((s_var as Dictionary).get("overrides", []) as Array).is_empty():
+				with_ov.append(s_var)
+		if not with_ov.is_empty():
+			override_sets.append({"variants": with_ov, "source": src_map})
+			out["source_variants"] = int(out["source_variants"]) + with_ov.size()
+	var suppress: Dictionary = {}
+	for set_var: Variant in override_sets:
+		if not (set_var is Dictionary):
+			continue
+		var set: Dictionary = set_var as Dictionary
+		var source_filter: String = str(set.get("source", ""))
+		var variants: Array = set.get("variants", []) as Array
+		for v_var: Variant in variants:
+			if not (v_var is Dictionary):
+				continue
+			var overrides: Array = (v_var as Dictionary).get("overrides", []) as Array
+			for ov_var: Variant in overrides:
+				if not (ov_var is Dictionary):
+					continue
+				var ov: Dictionary = ov_var as Dictionary
+				var tag: String = str(ov.get("tag", ""))
+				var kind: String = _scene_override_kind(tag)
+				if kind == "":
+					out["unmapped"] = int(out["unmapped"]) + 1
+					continue
+				var typ: String = str(ov.get("type", ""))
+				var chance: float = float(ov.get("chance", 100.0))
+				var matched: bool = false
+				for rec_var2: Variant in records:
+					if not (rec_var2 is Dictionary):
+						continue
+					var rec: Dictionary = rec_var2 as Dictionary
+					if str(rec.get("kind", "")) != kind or kind == "door":
+						continue
+					if source_filter != "" and _sv_source_map(str(rec.get("source", ""))) != source_filter:
+						continue
+					var rec_tag: String = str(rec.get("element_tag", ""))
+					if rec_tag != "" and rec_tag != tag and not rec_tag.begins_with(tag + ".") and not tag.begins_with(rec_tag + "."):
+						continue
+					matched = true
+					var applies: bool = _sv_override_applies(typ, chance, seed_value, str(rec.get("name", "")), tag)
+					if not applies:
+						suppress[_sv_pos_key(rec.get("pos", [0.0, 0.0, 0.0]))] = true
+						out["suppressed"] = int(out["suppressed"]) + 1
+					if rec_tag == "":
+						out["class_mapped"] = int(out["class_mapped"]) + 1
+					out["applied"] = int(out["applied"]) + 1
+				if kind == "door":
+					var door_arr: Array = stats.get("swinging_doors", []) as Array
+					for dv2: Variant in door_arr:
+						if not (dv2 is Dictionary):
+							continue
+						var dd: Dictionary = dv2 as Dictionary
+						if source_filter != "" and _sv_source_map(str(dd.get("source", ""))) != source_filter:
+							continue
+						var dtag: String = str(dd.get("element_tag", ""))
+						if dtag != "" and dtag != tag and not dtag.begins_with(tag + ".") and not tag.begins_with(dtag + "."):
+							continue
+						if dd.has("scene_locked"):
+							continue
+						var door_key: String = str(dd.get("actor", dd.get("name", "")))
+						var door_applies: bool = _sv_override_applies(typ, chance, seed_value, door_key, tag)
+						dd["scene_locked"] = door_applies
+						if door_applies:
+							out["locked"] = int(out["locked"]) + 1
+						if dtag == "":
+							out["class_mapped"] = int(out["class_mapped"]) + 1
+						out["applied"] = int(out["applied"]) + 1
+						matched = true
+				if not matched:
+					out["unmapped"] = int(out["unmapped"]) + 1
+				(out["tags"] as Array).append(tag)
+
+	# Presence arrays: filter poses that resolved false. Typed arrays are kept
+	# typed so existing consumers never see a shape change.
+	var gs_in: Array = stats.get("guard_spawns", []) as Array
+	var gs_out: Array[Vector3] = []
+	for gv: Variant in gs_in:
+		if gv is Vector3 and not suppress.has(_sv_pos_key(gv)):
+			gs_out.append(gv as Vector3)
+	stats["guard_spawns"] = gs_out
+	for arr_key: String in ["loot_spawns", "door_spawns", "civilian_spawns"]:
+		var arr_in: Array = stats.get(arr_key, []) as Array
+		var arr_out: Array[Vector3] = []
+		for av: Variant in arr_in:
+			if av is Vector3 and not suppress.has(_sv_pos_key(av)):
+				arr_out.append(av as Vector3)
+		stats[arr_key] = arr_out
+	for rec_key: String in ["major_loot_spawns", "minor_loot_spawns"]:
+		var rec_in: Array = stats.get(rec_key, []) as Array
+		var rec_out: Array = []
+		for rv: Variant in rec_in:
+			if rv is Dictionary and suppress.has(_sv_pos_key((rv as Dictionary).get("pos", [0.0, 0.0, 0.0]))):
+				continue
+			rec_out.append(rv)
+		stats[rec_key] = rec_out
 	return out
 
 
@@ -1234,6 +1437,23 @@ func _new_build_ctx(parent: Node3D, light_probe: Node, generate_collision: bool)
 		"fog_volume": {},
 		"post_process": {},
 	}
+
+
+## Records one authored spawner against its SceneElement tag. The legacy
+## position arrays stay Vector3; this parallel index is what #11 matches.
+func _note_scene_element(result: Dictionary, kind: String, mk: Dictionary, p: Vector3) -> void:
+	if kind == "":
+		return
+	var arr: Array = result["scene_element_spawns"]
+	arr.append({
+		"kind": kind,
+		"name": str(mk.get("name", "")),
+		"class": str(mk.get("class", "")),
+		"pos": [p.x, p.y, p.z],
+		"element_tag": str(mk.get("scene_requirement", "")),
+		"spawn_group": str(mk.get("spawn_group", "")),
+		"source": str(mk.get("source", "")),
+	})
 
 
 ## Parses one .tatlevel.json into the accumulator. Meshes from skybox/periphery
@@ -1433,6 +1653,7 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 		elif "MissionSpawner_Civilian" in cls:
 			var cs: Array = result["civilian_spawns"]
 			cs.append(p)
+			_note_scene_element(result, "civilian", mk, p)
 		elif "SmartObject" in cls:
 			# 1,707 BP_SmartObject_GuardDefensiveLocation_C markers are posts a
 			# guard can occupy, not guard spawns. Keeping them in guard_spawns
@@ -1448,9 +1669,12 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 		elif "MissionSpawner_Character" in cls or "Guard" in cls:
 			var gs: Array = result["guard_spawns"]
 			gs.append(p)
+			_note_scene_element(result, "guard", mk, p)
 		elif "MissionSpawner_MajorLoot" in cls or "MissionSpawner_MinorLoot" in cls or "QuestSpawner" in cls:
 			var ls: Array = result["loot_spawns"]
 			ls.append(p)
+			var loot_kind: String = "quest" if "QuestSpawner" in cls else ("major_loot" if "MajorLoot" in cls else "minor_loot")
+			_note_scene_element(result, loot_kind, mk, p)
 			# Real loot-actor markers: kept as full records (pos in metres,
 			# marker rotation as euler degrees, exact spawner class, source
 			# file) for the loot wave. loot_spawns above is untouched.
@@ -1471,6 +1695,7 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 		elif "Door" in cls:
 			var ds: Array = result["door_spawns"]
 			ds.append(p)
+			_note_scene_element(result, "door", mk, p)
 		elif cls in LOOT_CONTAINER_CLASSES:
 			# Openable loot container marker: meshes already live in the level
 			# geometry, so only the marker transform is recorded (existing

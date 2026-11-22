@@ -138,6 +138,19 @@ func start_contract(order: int) -> void:
 	var map_id: String = str(contract_info.get("map_id", "old_manor"))
 	_is_thieves_den = (map_id == "thieves_den")
 	GameState.reset_run(order, map_id)
+	# Deterministic per-contract scene-variant seed. active_map_seed is the
+	# single source of truth; a zero seed is initialised from map+contract so
+	# repeated runs of the same contract reproduce the same variant set.
+	if GameState.active_map_seed == 0:
+		GameState.active_map_seed = LevelLoaderScript._sv_fnv1a("%s|%d" % [map_id, order]) & 0x7FFFFFFF
+	var sv_selected: Array = LevelLoaderScript.select_scene_variants(map_id, GameState.active_map_seed, [] as Array[String])
+	var sv_ids: Array[String] = []
+	for sv_rec_v: Variant in sv_selected:
+		if sv_rec_v is Dictionary:
+			sv_ids.append(str((sv_rec_v as Dictionary).get("id", "")))
+	GameState.active_scene_variants = sv_ids
+	if not sv_ids.is_empty():
+		print("TAT-2 scene variants selected=", sv_ids.size(), " seed=", GameState.active_map_seed)
 	# Real match timer from the extracted DT_Missions_* tables (0 = unlimited).
 	GameState.run_time_limit = GameData.get_match_duration(map_id, GameState.difficulty)
 	_setup_mission_objectives(map_id, order)
@@ -167,6 +180,12 @@ func start_contract(order: int) -> void:
 			loading.call("set_progress", 0.4, "Loading sublevels...")
 		ue_level_data = level_loader.load_sublevels(sublevels, self, light_probe, light_budget)
 	print("TAT-2 Loaded ", map_id, ": meshes=", ue_level_data.get("mesh_instances", 0), " lights=", ue_level_data.get("light_count", 0))
+	# #11: apply only exact authored SceneElement tags. Untagged spawners stay
+	# untouched and are reported as unmapped; no category guessing.
+	if level_loader.has_method("apply_scene_variant_overrides"):
+		var sv_apply: Dictionary = level_loader.call("apply_scene_variant_overrides", map_id, GameState.active_map_seed, GameState.active_scene_variants, ue_level_data) as Dictionary
+		if int(sv_apply.get("applied", 0)) > 0 or int(sv_apply.get("unmapped", 0)) > 0:
+			print("TAT-2 scene variants: active=", sv_apply.get("active", 0), " applied=", sv_apply.get("applied", 0), " suppressed=", sv_apply.get("suppressed", 0), " locked=", sv_apply.get("locked", 0), " unmapped=", sv_apply.get("unmapped", 0))
 	level_stats = ue_level_data
 	_apply_level_atmosphere(ue_level_data)
 	if int(ue_level_data.get("chunk_count", 0)) > 0:
@@ -1947,18 +1966,23 @@ func _spawn_swinging_doors(stats: Dictionary) -> void:
 		var door := SwingingDoorScript.new()
 		door.configure(dd, level_loader)
 		# Lock high-security/vault/prison swinging doors on missions (never index 0 or Thieves' Den).
-		if not _is_thieves_den and count > 0 and not door.locked:
-			var hi_sec: bool = false
-			for lf_v: Variant in (dd.get("leaves", []) as Array):
-				if lf_v is Dictionary:
-					var m_file: String = str((lf_v as Dictionary).get("mesh", "")).get_file().to_lower()
-					if m_file.find("prison") >= 0 or m_file.find("vault") >= 0 or m_file.find("cell") >= 0 or m_file.find("security") >= 0 or m_file.find("safe") >= 0:
-						hi_sec = true
-						break
-			if hi_sec:
-				door.set_locked(true, 3 + (count % 2))
-			elif count % 12 == 5:
-				door.set_locked(true, 1 + (count % 3))
+		# A SceneVariant Locks.Doors override with an exact authored tag wins.
+		if not _is_thieves_den and count > 0:
+			var sv_locked: Variant = dd.get("scene_locked", null)
+			if sv_locked is bool:
+				door.set_locked(bool(sv_locked), 3 if bool(sv_locked) else 0)
+			elif not door.locked:
+				var hi_sec: bool = false
+				for lf_v: Variant in (dd.get("leaves", []) as Array):
+					if lf_v is Dictionary:
+						var m_file: String = str((lf_v as Dictionary).get("mesh", "")).get_file().to_lower()
+						if m_file.find("prison") >= 0 or m_file.find("vault") >= 0 or m_file.find("cell") >= 0 or m_file.find("security") >= 0 or m_file.find("safe") >= 0:
+							hi_sec = true
+							break
+				if hi_sec:
+					door.set_locked(true, 3 + (count % 2))
+				elif count % 12 == 5:
+					door.set_locked(true, 1 + (count % 3))
 		add_child(door)
 		count += 1
 	for rec_var in door_records:

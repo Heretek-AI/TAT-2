@@ -375,7 +375,7 @@ func _apply_fall_damage(drop_m: float) -> float:
 		push_warning("[thief] fall immunity revoked after ", _air_grapple_chains, " chained air engagements (no UE immunity chain source; retained tuning AIR_GRAPPLE_CHAIN_LIMIT=", AIR_GRAPPLE_CHAIN_LIMIT, ")")
 	var dmg: float = fall_damage_for_drop(drop_m)
 	if dmg > 0.0:
-		take_damage(dmg)
+		take_damage(dmg, "fall")
 	return dmg
 
 
@@ -1429,10 +1429,12 @@ func _is_in_guard_viewcone() -> bool:
 	return false
 
 
-func take_damage(amount: float) -> void:
+func take_damage(amount: float, source: String = "") -> void:
 	if is_downed:
 		return
-	if disguise_active:
+	# Fall damage is exempt from DT_DisguiseV3IntegrityReduction.DamageTaken:
+	# a bad jump must not silently strip the Chameleon's cover.
+	if disguise_active and source != "fall":
 		# DT_DisguiseV3IntegrityReduction.DamageTaken: EventType
 		# AttributeDecrease on Health, IntegrityReduction.Value 40.0,
 		# AttributeDeltaMultiplier 1.0 but MaxExtraReductionFromAttributeDelta

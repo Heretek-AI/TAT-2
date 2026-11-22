@@ -171,8 +171,12 @@ func is_blocked_by_smoke(a: Vector3, b: Vector3) -> bool:
 	var lantern_ok: bool = not h.find_all_of_class(g1, "OmniLight3D").is_empty() and h.has_m(g1, "get_alert_state")
 	var smoke_ok: bool = false
 	if h.has_m(p, "equip_tool_slot"):
-		await h.tap_action("tool_2")
-		await h.tap_action("primary_action")
+		p.call("equip_tool", "smoke_bomb")
+		await h.step_process(1)
+		if h.has_m(p, "_use_smoke_bomb"):
+			p.call("_use_smoke_bomb")
+		else:
+			await h.tap_action("primary_action")
 		await h.step_physics(65)
 		smoke_ok = not (host.get("smokes") as Array).is_empty()
 	var lamp: OmniLight3D = OmniLight3D.new()
@@ -202,6 +206,7 @@ func _t4_06_disguised_lockpicking_extraction() -> void:
 		p.set("disguise_active", true)
 		p.set("disguise_integrity", 100.0)
 		p.call("apply_guard_viewcone_disguise_decay", 1.0, true)
+		p.call("_tick_sustained_systems", 1.0)
 		var after_vc: float = float(p.get("disguise_integrity"))
 		p.call("set_lockpicking_active", true)
 		await h.step_physics(60)

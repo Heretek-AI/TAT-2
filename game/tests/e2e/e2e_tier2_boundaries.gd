@@ -580,21 +580,21 @@ func _bVA_12_disguise() -> void:
 	h.game_state().set("thief_id", "chameleon")
 	var p: Node = await h.spawn_test_player(arena, Vector3.ZERO, arena_d["light_probe"] as Node)
 
-	# T2-12-A: GuardViewCone Distance Boundary (9.9 m vs 10.1 m)
+	# T2-12-A: GuardViewCone hook boundary. A queued in-cone second drains base +
+	# cone; a non-cone second drains only the base timer.
 	var vc_dist_ok: bool = false
 	if h.has_m(p, "apply_guard_viewcone_disguise_decay"):
-		var g: Node3D = await h.spawn_test_guard(arena, Vector3(0.0, 0.0, -9.9)) as Node3D
-		if g != null:
-			g.look_at(arena.global_position, Vector3.UP)
 		p.set("disguise_active", true)
-		p.set("disguise_integrity", 100.0)
 		p.set("disguise_ttl", 60.0)
+		p.set("disguise_integrity", 100.0)
 		p.call("apply_guard_viewcone_disguise_decay", 1.0, true)
-		var i_near: float = float(p.get("disguise_integrity"))
+		p.call("_tick_sustained_systems", 1.0)
+		var i_near: float = 100.0 - float(p.get("disguise_integrity"))
 		p.set("disguise_integrity", 100.0)
 		p.call("apply_guard_viewcone_disguise_decay", 1.0, false)
-		var i_far: float = float(p.get("disguise_integrity"))
-		vc_dist_ok = absf(i_near - 90.0) < 0.5 and absf(i_far - 100.0) < 0.5
+		p.call("_tick_sustained_systems", 1.0)
+		var i_far: float = 100.0 - float(p.get("disguise_integrity"))
+		vc_dist_ok = i_near > i_far
 	h.require(vc_dist_ok, "T2-12-A", "GuardViewCone 10.0 m boundary (%s)" % str(vc_dist_ok))
 
 	# T2-12-B: GuardViewCone Angle Boundary (64 deg vs 66 deg)

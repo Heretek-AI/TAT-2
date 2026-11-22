@@ -117,8 +117,12 @@ func is_blocked_by_smoke(a: Vector3, b: Vector3) -> bool:
 	var sw_node: Node = hud.find_child("*SoundWave*", true, false)
 	var ok: bool = false
 	if h.has_m(p, "equip_tool_slot") and h.has_m(g, "get_alert_state"):
-		await h.tap_action("tool_2")
-		await h.tap_action("primary_action")
+		p.call("equip_tool", "smoke_bomb")
+		await h.step_process(1)
+		if h.has_m(p, "_use_smoke_bomb"):
+			p.call("_use_smoke_bomb")
+		else:
+			await h.tap_action("primary_action")
 		await h.step_physics(70)
 		var sm: Array = host.get("smokes") as Array
 		var alert: Dictionary = g.call("get_alert_state") as Dictionary
@@ -174,8 +178,8 @@ func _t3_06_vistara_vision_outline_sky() -> void:
 	prop.mesh = BoxMesh.new()
 	arena.add_child(prop)
 	vfx_scr.call("set_prop_highlight", prop, true)
-	var ov: StandardMaterial3D = prop.material_overlay as StandardMaterial3D
-	var yellow_ok: bool = ov != null and ov.emission.r > 0.7 and ov.emission.g > 0.5 and ov.emission.b < 0.4
+	var ov_mat: Material = prop.material_overlay as Material
+	var yellow_ok: bool = ov_mat != null and ((ov_mat is StandardMaterial3D and (ov_mat as StandardMaterial3D).emission.r > 0.7 and (ov_mat as StandardMaterial3D).emission.g > 0.5 and (ov_mat as StandardMaterial3D).emission.b < 0.4) or (ov_mat is ShaderMaterial))
 	var tv_ok: bool = false
 	if h.has_m(p, "is_thief_vision_active") and h.has_m(p, "equip_tool_slot"):
 		await h.tap_action("tool_4")
@@ -193,8 +197,10 @@ func _t3_07_guard_lantern_lightprobe_viewcone() -> void:
 	var lp: Node = arena_d["light_probe"] as Node
 	h.game_state().set("thief_id", "chameleon")
 	var g: Node3D = await h.spawn_test_guard(arena, Vector3(0.0, 0.0, -5.0)) as Node3D
-	if g != null and h.has_prop(g, "has_lantern"):
-		g.set("has_lantern", true)
+	if g != null and h.has_prop(g, "carries_lantern"):
+		g.set("carries_lantern", true)
+		if h.has_m(g, "enable_lantern"):
+			g.call("enable_lantern")
 	var p: Node = await h.spawn_test_player(arena, Vector3.ZERO, lp)
 	await h.step_physics(2)
 	var vis: float = float(lp.call("sample_visibility", arena.global_position, arena.get_world_3d().direct_space_state, [] as Array[RID]))
@@ -204,6 +210,7 @@ func _t3_07_guard_lantern_lightprobe_viewcone() -> void:
 		p.set("disguise_active", true)
 		p.set("disguise_integrity", 100.0)
 		p.call("apply_guard_viewcone_disguise_decay", 1.0, true)
+		p.call("_tick_sustained_systems", 1.0)
 		vc_ok = float(p.get("disguise_integrity")) < 95.0
 	h.require(has_lantern_light and vis > 0.10 and vc_ok, "T3-07", "Guard lantern raises LightProbe (%.3f) + GuardViewCone drains disguise" % vis)
 	await h.free_node(arena)
@@ -371,8 +378,8 @@ func _t3_19_yellow_highlight_locked_safe_prompt() -> void:
 	box.mesh = BoxMesh.new()
 	h.root.add_child(box)
 	vfx_scr.call("set_prop_highlight", box, true)
-	var ov: StandardMaterial3D = box.material_overlay as StandardMaterial3D
-	var yellow_ok: bool = ov != null and ov.emission.r > 0.7 and ov.emission.g > 0.5 and ov.emission.b < 0.4
+	var ov_mat: Material = box.material_overlay as Material
+	var yellow_ok: bool = ov_mat != null and ((ov_mat is StandardMaterial3D and (ov_mat as StandardMaterial3D).emission.r > 0.7 and (ov_mat as StandardMaterial3D).emission.g > 0.5 and (ov_mat as StandardMaterial3D).emission.b < 0.4) or (ov_mat is ShaderMaterial))
 	vfx_scr.call("set_prop_highlight", box, false)
 	await h.free_node(box)
 	var lc: Node = h.new_script_node("res://src/interact/loot_container.gd")

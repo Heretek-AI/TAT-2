@@ -204,6 +204,8 @@ var is_mantling: bool = false
 var _mantle_start: Vector3 = Vector3.ZERO
 var _mantle_end: Vector3 = Vector3.ZERO
 var _mantle_t: float = 0.0
+var _mantle_clip_role: String = "mantle_100"
+var _was_wall_climbing: bool = false
 var is_wall_climbing: bool = false
 var astral_active: bool = false
 var astral_ttl: float = 0.0
@@ -390,6 +392,7 @@ func _track_fall_state() -> void:
 	var on_floor_now: bool = is_on_floor()
 	if on_floor_now and not _was_on_floor:
 		_apply_fall_damage(_fall_peak_y - global_position.y)
+		_fp_play_action("jump_land")
 	if on_floor_now:
 		_fall_peak_y = global_position.y
 		if not is_grappling and not astral_active:
@@ -1029,6 +1032,7 @@ func _physics_process(delta: float) -> void:
 			velocity.y -= gravity * delta
 		elif Input.is_action_just_pressed("jump"):
 			velocity.y = jump_velocity
+			_fp_play_action("jump_inair")
 
 		var steer: float = 14.0 if is_on_floor() else 14.0 * AIR_CONTROL
 		velocity.x = lerpf(velocity.x, wish.x * speed, delta * steer)
@@ -1053,7 +1057,9 @@ func _physics_process(delta: float) -> void:
 					if test_move(stepped, Vector3.DOWN * (STEP_UP_MAX_M + FLOOR_SNAP_LENGTH)):
 						global_position = stepped.origin
 
-	if not is_on_floor() and not is_mantling and (Input.is_action_pressed("jump") or wish.length() > 0.1):
+	# Grounded mantle: walking into a 0.5-1.2 m ledge used to do nothing until
+	# the player jumped. is_on_wall() is populated by the move_and_slide above.
+	if not is_mantling and (not is_on_floor() or is_on_wall()) 			and (Input.is_action_pressed("jump") or wish.length() > 0.1):
 		try_auto_mantle()
 
 	# Footstep cadence timer while moving on floor. Astral form makes no noise.
@@ -1329,10 +1335,24 @@ func try_auto_mantle() -> bool:
 	_mantle_start = global_position
 	_mantle_end = ledge_pos + Vector3.UP * 0.05
 	_fall_peak_y = ledge_pos.y
+	if ledge_h < 0.75:
+		_mantle_clip_role = "mantle_050"
+	elif ledge_h < 1.25:
+		_mantle_clip_role = "mantle_100"
+	elif ledge_h < 1.75:
+		_mantle_clip_role = "mantle_150"
+	elif ledge_h < 2.25:
+		_mantle_clip_role = "mantle_200"
+	elif ledge_h < 2.75:
+		_mantle_clip_role = "mantle_250"
+	else:
+		_mantle_clip_role = "mantle_300"
+	_fp_play_action(_mantle_clip_role)
 	return true
 
 
 func _tick_wall_climb(delta: float, wish: Vector3) -> bool:
+	var was_climbing: bool = is_wall_climbing
 	if is_on_floor() or is_crouching or is_grappling or is_mantling or stamina <= 2.0 or not is_inside_tree():
 		is_wall_climbing = false
 		return false
@@ -1359,6 +1379,8 @@ func _tick_wall_climb(delta: float, wish: Vector3) -> bool:
 		is_wall_climbing = false
 		return false
 	is_wall_climbing = true
+	if not was_climbing:
+		_fp_play_action("climb_wall")
 	velocity.y = move_toward(velocity.y, WALL_CLIMB_SPEED, WALL_CLIMB_ACCEL * delta)
 	velocity.x = -wn.x * 0.5
 	velocity.z = -wn.z * 0.5
@@ -2203,7 +2225,9 @@ void fragment() {
 		NORMAL_MAP = texture(normal_tex, uv).rgb;
 	}
 	if (use_emission_tex) {
-		EMISSION = texture(emission_tex, uv).rgb * max(emission_energy, 1.0);
+		// max(emission_energy, 1.0) defeated the 0.65 VM cap and ignore
+		// EmissiveTint; the authored energy and colour must both apply.
+		EMISSION = texture(emission_tex, uv).rgb * emission_color * emission_energy;
 	} else if (emission_energy > 0.001) {
 		EMISSION = emission_color * emission_energy;
 	}
@@ -2488,10 +2512,16 @@ func _fp_play_action(role: String) -> void:
 
 
 func _select_fp_anim_role(moving: bool) -> String:
+	if is_mantling:
+		return _mantle_clip_role
+	if is_wall_climbing:
+		return "climb_wall"
 	if is_grappling:
-		return "zipwire_travel"
+		return "zipwire_travel_up" if grapple_target.y > global_position.y + 2.0 else "zipwire_travel"
 	if _is_cranking:
 		return "zipwire_crank"
+	if not is_on_floor():
+		return "jump_inair"
 	if disguise_active:
 		if moving:
 			if is_crouching:
@@ -2626,9 +2656,14 @@ func _tp_crank_start() -> void:
 
 
 ## Spins the crank handle from crank_progress (absolute: 3 full turns over a
-## full crank, so the handle rests exactly when cranking stops). Prefers the
-## real SK_Zipwire crank_handle bone pose; falls back to the
-## ZipwireCrankHandle sub-node. Called every tick while _is_cranking holds.
+## full crank, so the handle rests exactly when cranking stops). The shipped
+## SK_Zipwire.glb weights all 1,321 crank vertices to `crank_arm`; the
+## `crank_handle` bone has ZERO weighted vertices. The old code rotated
+## `crank_handle`, so the hand moved but the visible handle never did.
+## Fallback order: crank_arm -> crank_handle -> crank -> procedural pivot.
+const ZIPWIRE_CRANK_BONES: Array[String] = ["crank_arm", "crank_handle", "crank"]
+
+
 func _tp_crank_tick() -> void:
 	if fp_tool_root == null or not is_instance_valid(fp_tool_root):
 		return
@@ -2637,10 +2672,11 @@ func _tp_crank_tick() -> void:
 		var sk := n as Skeleton3D
 		if sk == null:
 			continue
-		var bi: int = sk.find_bone("crank_handle")
-		if bi >= 0:
-			sk.set_bone_pose_rotation(bi, Quaternion(Vector3.RIGHT, angle))
-			return
+		for bone_name: String in ZIPWIRE_CRANK_BONES:
+			var bi: int = sk.find_bone(bone_name)
+			if bi >= 0:
+				sk.set_bone_pose_rotation(bi, Quaternion(Vector3.UP, angle))
+				return
 	var handle := fp_tool_root.get_node_or_null("ZipwireCrankHandle") as Node3D
 	if handle != null:
 		handle.rotation = Vector3(angle, 0.0, 0.0)
@@ -2654,10 +2690,11 @@ func _tp_crank_reset_handle() -> void:
 		var sk := n as Skeleton3D
 		if sk == null:
 			continue
-		var bi: int = sk.find_bone("crank_handle")
-		if bi >= 0:
-			sk.set_bone_pose_rotation(bi, Quaternion.IDENTITY)
-			return
+		for bone_name: String in ZIPWIRE_CRANK_BONES:
+			var bi: int = sk.find_bone(bone_name)
+			if bi >= 0:
+				sk.set_bone_pose_rotation(bi, Quaternion.IDENTITY)
+				return
 	var handle := fp_tool_root.get_node_or_null("ZipwireCrankHandle") as Node3D
 	if handle != null:
 		handle.rotation = Vector3.ZERO

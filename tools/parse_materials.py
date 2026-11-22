@@ -601,6 +601,18 @@ def _extract_real_params(props: dict) -> tuple:
     return params, vectors, switches, render, phys
 
 
+def _static_switch(props: dict, switch_name: str):
+    for sw in (props.get("StaticParametersRuntime") or {}).get(
+        "StaticSwitchParameters"
+    ) or []:
+        if not isinstance(sw, dict):
+            continue
+        nm = ((sw.get("ParameterInfo") or {}).get("Name")) or ""
+        if nm == switch_name and isinstance(sw.get("Value"), bool):
+            return sw["Value"]
+    return None
+
+
 def _extract_cached_defaults(exp: dict) -> tuple:
     """Authored defaults for a base UMaterial.
 
@@ -927,6 +939,16 @@ def main():
             tpath = ue_to_res_png(
                 (tv.get("ParameterValue") or {}).get("ObjectPath") or ""
             )
+            # An explicit Emissive parameter with a null value or a black
+            # texture is an authored "no emission" signal. Record an empty
+            # bind so the parent master's stray default (e.g. M_EnvProp's
+            # T_LightWallCastleSm_E, M_BasicChar_Tintable's T_TrimMetalB_DA)
+            # cannot be inherited into the instance.
+            if "emissive" in pname:
+                stem0 = Path(tpath).stem.lower() if tpath else ""
+                if not tpath or "black" in stem0:
+                    texs["emissive"] = ""
+                    continue
             if not tpath:
                 continue
             stem = Path(tpath).stem.lower()
@@ -1084,6 +1106,21 @@ def main():
             )
             if opacity_pick != "":
                 texs["opacity"] = opacity_pick
+        # UE window/storefront masters carry their emissive E map only in
+        # TextureStreamingData/ReferencedTextures (MI_WindowDecoOpaque has
+        # T_WindowDecoOpaque_E, Emissive On?=true, but no explicit parameter).
+        if "emissive" not in texs and _static_switch(props, "Emissive On?") is not False:
+            emissive_pick: str = _best_texture_candidate(
+                extra_paths,
+                ("_e",),
+                tokens,
+                family_words,
+                path_category,
+                is_character,
+                allow_ui_map,
+            )
+            if emissive_pick != "":
+                texs["emissive"] = emissive_pick
         # Albedo: TextureStreamingData is a used-texture list, not array-first.
         # Rank every candidate by family anchor, path category, tokens and stem
         # specificity. A signal-less stream pick is ignored (F4) except for
@@ -1189,6 +1226,7 @@ def main():
             return {
                 "texs": {},
                 "tint": None,
+                "parent": "",
                 "params": {},
                 "vectors": {},
                 "switches": {},
@@ -1220,6 +1258,11 @@ def main():
         vectors.update(cur["vectors"])
         switches = dict(base["switches"])
         switches.update(cur["switches"])
+        # An inherited master emissive default is not authored appearance when
+        # the material's own switch/strength says emission is off. Drop it at
+        # the data layer too; the runtime gate is not the only consumer.
+        if switches.get("Emissive On?") is False:
+            texs.pop("emissive", None)
         render = dict(base["render"])
         render.update(cur["render"])
         phys = cur["phys_material"] or base["phys_material"]
@@ -1232,6 +1275,7 @@ def main():
         resolved[pkg] = {
             "texs": texs,
             "tint": tint,
+            "parent": cur["parent"] or base.get("parent", ""),
             "params": params,
             "vectors": vectors,
             "switches": switches,
@@ -1257,8 +1301,10 @@ def main():
             or v["phys_material"]
         ):
             entry = {
+                "path": k,
                 "texs": v["texs"],
                 "tint": v["tint"],
+                "parent": v.get("parent", ""),
                 "params": v["params"],
                 "vectors": v["vectors"],
                 "switches": v["switches"],

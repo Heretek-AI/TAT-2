@@ -11,8 +11,8 @@ enum Tier { PERFORMANCE, BALANCED, QUALITY }
 
 const TIER_KEYS: Array[String] = ["performance", "balanced", "quality"]
 const TIER_LABELS: Array[String] = ["Performance", "Balanced", "Quality"]
-const DESKTOP_MAX_LIGHTS: int = 48
-const DESKTOP_HERO_SHADOWS: int = 2
+const DESKTOP_MAX_LIGHTS: int = 160
+const DESKTOP_HERO_SHADOWS: int = 6
 
 static var _force_mobile: bool = false
 ## M1: tier cache. Every cap query funnels through current_tier(); without

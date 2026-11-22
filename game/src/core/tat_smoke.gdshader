@@ -4,7 +4,7 @@ shader_type spatial;
 // was NOT decompiled; this is a procedural soft-puff stand-in: view-facing
 // body mask keeps the puff core opaque and feathers the silhouette so layered
 // GPUParticles3D spheres read as one billowing cloud instead of hard balls.
-render_mode blend_mix, depth_draw_never, cull_disabled, diffuse_lambert;
+render_mode unshaded, blend_mix, depth_draw_never, cull_disabled;
 
 uniform vec4 smoke_tint : source_color = vec4(0.86, 0.88, 0.91, 1.0);
 uniform float body_power = 1.7;
@@ -27,7 +27,9 @@ void fragment() {
 	float lump_b = sin(obj_pos.y * (lump_scale * 0.73) - TIME * drift_speed * 0.7);
 	float lump = 0.84 + 0.16 * lump_a * lump_b;
 	float particle_alpha = clamp(COLOR.a, 0.0, 1.0);
+	// Authored TAT smoke materials are MSM_Unlit. diffuse_lambert made the
+	// same plume black in the Den (ambient 0.04) and white in Guildhall (1.0).
 	ALBEDO = smoke_tint.rgb * lump;
-	ALPHA = clamp(smoke_tint.a * density * body * particle_alpha, 0.0, 1.0);
+	ALPHA = clamp(smoke_tint.a * density * body * particle_alpha, 0.0, 0.62);
 	EMISSION = smoke_tint.rgb * glow * particle_alpha;
 }

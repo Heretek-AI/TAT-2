@@ -179,12 +179,12 @@ func _bVA_04_neon_landscape() -> void:
 	var has_safe_weight_at: bool = ls_txt.find("if (tex_idx == 0)") >= 0 and ls_txt.find("if (tex_idx == 1)") >= 0 and ls_txt.find("return vec4(0.0);") >= 0
 	h.require(has_safe_weight_at, "T2-04-D", "tat_landscape weight_at() fails safe to vec4(0.0) on unknown index")
 
-	# T2-04-E: Guildhall discard_holes = 0 Preserved
+	# T2-04-E: Guildhall discard_holes = 1 (UE LandscapeVisibilityLayerInfo 1=hole)
 	var gh_ls_v: Variant = h.read_json("res://data/generated/levels/Guildhall/Guildhall_Landscape.tatlevel.json")
 	var gh_lands: Array = (gh_ls_v as Dictionary).get("landscapes", []) if gh_ls_v is Dictionary else []
 	var mat0: ShaderMaterial = ll.call("_landscape_weighted_material", gh_lands[0]) as ShaderMaterial if not gh_lands.is_empty() else null
 	var dh0: float = float(mat0.get_shader_parameter("discard_holes")) if mat0 != null else -1.0
-	h.require(absf(dh0 - 0.0) < 0.01, "T2-04-E", "Guildhall landscape discard_holes=%.1f (expected 0.0)" % dh0)
+	h.require(absf(dh0 - 1.0) < 0.01, "T2-04-E", "Guildhall landscape discard_holes=%.1f (expected 1.0, UE hole mask)" % dh0)
 
 	await h.free_node(ll)
 

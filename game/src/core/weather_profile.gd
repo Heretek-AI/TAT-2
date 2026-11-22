@@ -58,8 +58,13 @@ const MOON_ENERGY_SCALE := 10.0
 const MOON_ENERGY_MIN := 0.05
 const MOON_ENERGY_MAX := 1.0
 # UE SkyLight intensity -> Godot ambient_light_energy.
-const AMBIENT_ENERGY_MIN := 0.02
-const AMBIENT_ENERGY_MAX := 1.0
+const AMBIENT_ENERGY_MIN := 0.05
+const AMBIENT_ENERGY_MAX := 0.35
+## UE SkyLight intensity is an irradiance scale, not a Godot
+## ambient_light_energy. The old 1:1 clamp pinned MidnightClear at 1.0 (flat
+## white wash, white-clipped statues) while the Den sat at 0.04. 0.06 keeps
+## the authored relative order and places MidnightClear at 0.15.
+const AMBIENT_UE_TO_GODOT := 0.06
 # UE BloomIntensity -> Godot glow_intensity (DenseFog 8.0 -> 0.64).
 const BLOOM_TO_GLOW := 0.08
 ## P3 companion: fog-energy compensation ceiling. Both density branches
@@ -73,8 +78,8 @@ static var _fog_clamp_sample_logged: bool = false
 ## P4 companion: off-Den glow uses 3 mip levels (0-2), not 5, and a 1.5x
 ## HDR scale instead of 2.0x. Levels 3-4 are explicitly disabled so a preset
 ## that leaves them on cannot stack 5 mips + 2x HDR outside the Den.
-const GLOW_LEVELS_NON_DEN := 3
-const GLOW_HDR_SCALE_NON_DEN := 1.5
+const GLOW_LEVELS_NON_DEN := 5
+const GLOW_HDR_SCALE_NON_DEN := 1.8
 
 
 ## P3: the old compensation divided up to 24x on pre-exposed dark presets
@@ -294,7 +299,7 @@ static func ambient_energy(preset: Dictionary) -> Variant:
 	var raw: Variant = _section(preset, "sky").get("intensity")
 	if raw == null:
 		return null
-	return clampf(float(raw), AMBIENT_ENERGY_MIN, AMBIENT_ENERGY_MAX)
+	return clampf(float(raw) * AMBIENT_UE_TO_GODOT, AMBIENT_ENERGY_MIN, AMBIENT_ENERGY_MAX)
 
 
 static func background_color(preset: Dictionary) -> Variant:
@@ -502,6 +507,11 @@ static func apply_environment(env: Environment, moon: DirectionalLight3D, preset
 		if amb_c != null:
 			env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 			env.ambient_light_color = amb_c
+			# The authored SkyLight is a specified cubemap at intensity 2.5, not
+			# the near-black M_Sky sphere. Godot's default 1.0 sky contribution
+			# blends that black sphere into ambient and erases the authored
+			# color, which is why Guildhall/Den crushed to black.
+			env.ambient_light_sky_contribution = 0.0
 		var amb_e: Variant = ambient_energy(preset)
 		if amb_e != null:
 			env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
@@ -544,7 +554,7 @@ static func apply_environment(env: Environment, moon: DirectionalLight3D, preset
 			if is_desktop:
 				env.glow_hdr_threshold = 1.0
 				env.glow_hdr_scale = 1.0 if is_den_glow else GLOW_HDR_SCALE_NON_DEN
-				env.glow_bloom = 0.10 if is_den_glow else 0.14
+				env.glow_bloom = 0.10 if is_den_glow else 0.08
 				env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
 				for gl_i: int in range(2 if is_den_glow else GLOW_LEVELS_NON_DEN):
 					env.set_glow_level(gl_i, true)

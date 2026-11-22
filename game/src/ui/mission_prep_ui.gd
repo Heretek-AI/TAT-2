@@ -464,8 +464,9 @@ func _build_stage(viewport: SubViewport) -> void:
 	if not preset.is_empty():
 		WeatherProfile.apply_environment(env, moonlight, preset)
 		WeatherVisuals.apply_sky(env, preset, moonlight)
-	if not MobileProfile.is_mobile():
-		env.ssil_enabled = true
+	# SSIL on this own-world SubViewport is unstable in 4.7 (the static/RGB
+	# cascade). The lobby is lit by the practical rig; keep SSR/glow only.
+	env.ssil_enabled = false
 
 	var loader: Node = _get_preview_mat_loader()
 	if loader != null:
@@ -483,6 +484,10 @@ func _build_stage(viewport: SubViewport) -> void:
 	cam.far = 2000.0
 	cam.current = true
 	stage_root.add_child(cam)
+	# Godot 4.7: a WorldEnvironment inside an own-world SubViewport registers on
+	# the parent world; bind the environment to the camera after it enters the
+	# tree so the lobby stage is actually lit.
+	cam.environment = env
 	cam.look_at_from_position(cam.position, cam.position + LOBBY_CAM_FWD.normalized() * 15.0, Vector3.UP)
 	cam.rotate_object_local(Vector3.FORWARD, deg_to_rad(LOBBY_CAM_ROLL_DEG))
 
@@ -536,9 +541,9 @@ func _apply_thief_idle_pose(root: Node) -> void:
 	var alib: GuardAnimationLibrary = GuardAnimLibScript.new()
 	if not alib.setup("club", skel):
 		return
-	var anim: Animation = alib._retarget_general("AN_ThiefNisha_Unarmed_StandIdle", true, true, false)
+	var anim: Animation = alib._retarget_general("AN_ThiefNisha_Unarmed_StandIdle", true, true, true)
 	if anim == null:
-		anim = alib._retarget_general("AN_ThiefNisha_WardrobeIdle", true, true, false)
+		anim = alib._retarget_general("AN_ThiefNisha_WardrobeIdle", true, true, true)
 	if anim == null:
 		return
 	var ap := AnimationPlayer.new()

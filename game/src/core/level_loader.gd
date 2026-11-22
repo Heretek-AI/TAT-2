@@ -207,6 +207,10 @@ const OCCLUDER_EXCLUDE_TOKENS: Array[String] = [
 	"sky", "cloud", "fog", "smoke", "water", "carpet", "rug", "paper", "poster",
 	"scroll", "cable", "wire", "rope", "ladder", "light", "lamp", "vent", "pipe",
 	"trim", "deco", "panel",
+	# Interior wall classes were the 768-occluder set in Guildhall (prison and
+	# civic interior walls). Their AABBs span baked doorways, so rooms popped
+	# in/out as the camera moved. Exterior walls remain valid occluders.
+	"prison", "_int_", "interior",
 ]
 ## Den west attic window wall: the single wall/window collider is split into
 ## two side boxes leaving DEN_WINDOW_GAP_M for the moonbeam opening, plus a
@@ -424,7 +428,22 @@ func _ue_lookup(normed: Dictionary, names: Array) -> Variant:
 ## defaults (roughness 0.78, metallic/specular 0).
 func _apply_ue_pbr_params(mat: StandardMaterial3D, info: Dictionary) -> void:
 	var params: Dictionary = _ue_norm_map(info.get("params", {}))
-	var rough: Variant = _ue_lookup(params, ["roughness", "flatroughness"])
+	var switches: Dictionary = _ue_norm_map(info.get("switches", {}))
+	var texs: Dictionary = {}
+	var texs_v: Variant = info.get("texs", {})
+	if texs_v is Dictionary:
+		texs = texs_v as Dictionary
+	var has_orm: bool = str(texs.get("orm", "")) != ""
+	var rough_map_switch: Variant = _ue_lookup(switches, ["roughnessmap?"])
+	var adjust_rough: bool = _ue_lookup(switches, ["adjustroughness?"]) == true
+	# FlatRoughness is a UE master-material fallback used only when the
+	# roughness map is off. It was being applied even when T_*_ORM was bound,
+	# multiplying the map by 0 and producing mirror-metal props (MI_Zipwire:
+	# FlatRoughness 0.0 + ORM mean 0.665 -> 0.04). Prefer an explicit
+	# Roughness scalar, otherwise let the ORM map drive (value 1.0).
+	var rough: Variant = _ue_lookup(params, ["roughness"])
+	if rough == null and not (has_orm and rough_map_switch != false and not adjust_rough):
+		rough = _ue_lookup(params, ["flatroughness"])
 	if rough == null:
 		var rlo: Variant = _ue_lookup(params, ["roughnesslow", "roughnessmin"])
 		var rhi: Variant = _ue_lookup(params, ["roughnesshigh", "roughnessmax"])
@@ -432,6 +451,8 @@ func _apply_ue_pbr_params(mat: StandardMaterial3D, info: Dictionary) -> void:
 			rough = (float(rlo) + float(rhi)) * 0.5
 	if rough != null:
 		mat.roughness = clampf(float(rough), 0.0, 1.0)
+	elif has_orm:
+		mat.roughness = 1.0
 	var metal: Variant = _ue_lookup(params, ["metallic", "metalness", "flatmetallic"])
 	if metal == null:
 		var mlo: Variant = _ue_lookup(params, ["metallicmin"])
@@ -489,6 +510,24 @@ func _apply_ue_render_flags(mat: StandardMaterial3D, info: Dictionary) -> void:
 ## non-zero strength when one is present). Emissive-only materials such as
 ## MI_PowerLight_On have no albedo/tint by design; they are authored, not a
 ## tier-3 fallback.
+## Whether the authoring switches allow the emissive texture to be bound.
+## get_material_for_ue() used to bind texs.emissive and enable emission before
+## _apply_ue_emissive() checked `Emissive On?`; MI_Zipwire and
+## MI_ThiefNisha_Top therefore glowed with T_LightWallCastleSm_E (the
+## white-spotted wall-light map) despite Emissive On? = false. That produced
+## the black/white speckles on the 1P hands and launcher.
+func _ue_emissive_allowed(info: Dictionary) -> bool:
+	var switches: Dictionary = _ue_norm_map(info.get("switches", {}))
+	if _ue_lookup(switches, ["emissiveon?"]) == false:
+		return false
+	if _ue_lookup(switches, ["disableemissivecontribution"]) == true:
+		return false
+	# Do not reject on EmissiveStrength=0: UE window masters leave the scalar
+	# at 0 while their E map and Emissive On?=true are the authored light.
+	# The switch is the authority; texture presence is handled by the caller.
+	return true
+
+
 func _has_authored_emissive(info: Dictionary) -> bool:
 	var switches: Dictionary = _ue_norm_map(info.get("switches", {}))
 	if _ue_lookup(switches, ["emissiveon?"]) == false:
@@ -509,6 +548,23 @@ func _has_authored_emissive(info: Dictionary) -> bool:
 
 
 func _apply_ue_emissive(mat: StandardMaterial3D, info: Dictionary) -> void:
+	# A flat EmissiveTint with no E map is authored neon/light only. Character
+	# masters (M_BasicChar_Tintable) expose EmissiveTint as a green debug value
+	# with Emissive On?=true but no emissive texture; applying it turned every
+	# guard and Hauntstable bust into a flat green silhouette.
+	var texs_em: Dictionary = info.get("texs", {})
+	if str(texs_em.get("emissive", "")).strip_edges() == "":
+		var path_low: String = str(info.get("path", "")).to_lower()
+		var parent_low: String = str(info.get("parent", "")).to_lower()
+		var render_em: Dictionary = info.get("render", {})
+		var shading_em: String = str(render_em.get("shading_model", "")).to_lower()
+		var flat_ok: bool = shading_em.find("unlit") >= 0 \
+			or path_low.find("neon") >= 0 or parent_low.find("neon") >= 0 \
+			or path_low.find("light") >= 0 or parent_low.find("light") >= 0 \
+			or path_low.find("lamp") >= 0 or path_low.find("bulb") >= 0 \
+			or path_low.find("emissive") >= 0 or path_low.find("glow") >= 0
+		if not flat_ok:
+			return
 	var switches: Dictionary = _ue_norm_map(info.get("switches", {}))
 	if _ue_lookup(switches, ["emissiveon?"]) == false:
 		return
@@ -715,7 +771,9 @@ func get_material_for_ue(ue_mat_path: String) -> Material:
 			return hdr_mat
 		mat.albedo_color = tint_col
 	var vectors_raw: Dictionary = info.get("vectors", {})
-	if vectors_raw.has("Overlay") or vectors_raw.has("Multiply") or vectors_raw.has("Desaturation"):
+	var parent_low: String = str(info.get("parent", "")).to_lower()
+	var skip_albedo_vectors: bool = parent_low.ends_with("m_envprop") or parent_low.ends_with("m_assetmaster") or parent_low.ends_with("m_basicchar_tintable")
+	if not skip_albedo_vectors and (vectors_raw.has("Overlay") or vectors_raw.has("Multiply") or vectors_raw.has("Desaturation")):
 		var vc: Color = mat.albedo_color
 		if vectors_raw.has("Overlay"):
 			var ov: Variant = vectors_raw["Overlay"]
@@ -742,11 +800,12 @@ func get_material_for_ue(ue_mat_path: String) -> Material:
 				vc.g = lerpf(vc.g, lum, amt)
 				vc.b = lerpf(vc.b, lum, amt)
 		mat.albedo_color = vc
-	var em := _load_tex(str(texs.get("emissive", "")))
-	if em != null:
-		mat.emission_enabled = true
-		mat.emission_texture = em
-		mat.emission_energy_multiplier = 2.2
+	if _ue_emissive_allowed(info):
+		var em := _load_tex(str(texs.get("emissive", "")))
+		if em != null:
+			mat.emission_enabled = true
+			mat.emission_texture = em
+			mat.emission_energy_multiplier = 2.2
 	_apply_ue_emissive(mat, info)
 	if alb == null and tint == null:
 		var low: String = ue_mat_path.to_lower()
@@ -906,10 +965,18 @@ func _get_mesh_and_shape(ue_path: String) -> Dictionary:
 				# boxes; tiny and non-blocking props keep the old fast path.
 				var is_stair_run: bool = "stair" in low_u and not ("rail" in low_u or "boundary" in low_u or "post" in low_u or "banister" in low_u or "balustrade" in low_u or "upstairs" in low_u)
 				var is_walk_surface: bool = "sidewalk" in low_u
+				# Door frames/doorways are modelled with an opening, but their
+				# AABB is solid. The old box path sealed every open doorway with
+				# an invisible wall 0.5-0.9 m in front of the leaf. A trimesh
+				# follows the modelled hole and is cheap for ~200 frames.
+				var is_door_aperture: bool = "door" in low_u or "archway" in low_u
 				var aabb := m.get_aabb()
 				var sz := aabb.size
 				if not is_nonblocking and sz.length() > 0.45:
-					if sz.length() < 12.0 and not is_stair_run and not is_walk_surface:
+					if is_door_aperture:
+						out["shape"] = _door_aperture_trimesh(m, mat_slots)
+						out["shape_offset"] = Vector3.ZERO
+					elif sz.length() < 12.0 and not is_stair_run and not is_walk_surface:
 						var bx := BoxShape3D.new()
 						bx.size = Vector3(maxf(sz.x, 0.1), maxf(sz.y, 0.1), maxf(sz.z, 0.1))
 						out["shape"] = bx
@@ -918,8 +985,60 @@ func _get_mesh_and_shape(ue_path: String) -> Dictionary:
 						out["shape"] = m.create_trimesh_shape()
 						out["shape_offset"] = Vector3.ZERO
 		inst.free()
+	if out.get("shape") is Shape3D:
+		(out["shape"] as Shape3D).set_meta("ue_mesh", ue_path)
 	_mesh_res_cache[ue_path] = out
 	return out
+
+
+## Collision for a doorway frame: UE frames bake the closed leaf/glass into the
+## same render mesh (SM_Urban_ext_Door_4x6 slot 4 = MI_WindowDecoOpaque), so
+## the old full trimesh sealed every opened doorway even after the box→trimesh
+## fix. Build a collision-only trimesh that drops glass/window panel surfaces
+## and any triangle centred in the authored central opening. The visual mesh
+## is untouched.
+func _door_aperture_trimesh(m: Mesh, mat_slots: Array) -> ConcavePolygonShape3D:
+	var faces := PackedVector3Array()
+	var aabb: AABB = m.get_aabb()
+	var half_w: float = minf(1.0, aabb.size.x * 0.35)
+	var half_h: float = minf(2.0, aabb.size.y * 0.45)
+	var cx: float = aabb.get_center().x
+	var cz: float = aabb.get_center().z
+	var y0: float = aabb.position.y + 0.15
+	var y1: float = y0 + half_h * 2.0
+	for s: int in range(m.get_surface_count()):
+		var mat_path: String = str(mat_slots[s]) if s < mat_slots.size() else ""
+		var mlow: String = mat_path.to_lower()
+		if mlow.find("glass") >= 0 or mlow.find("windowdeco") >= 0 or mlow.find("doorpanel") >= 0:
+			continue
+		var arrays: Array = m.surface_get_arrays(s)
+		if arrays.is_empty():
+			continue
+		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array
+		if verts.is_empty():
+			continue
+		var idx_v: Variant = arrays[Mesh.ARRAY_INDEX]
+		var indices: PackedInt32Array = idx_v as PackedInt32Array if idx_v is PackedInt32Array else PackedInt32Array()
+		var tri_count: int = (indices.size() / 3) if not indices.is_empty() else (verts.size() / 3)
+		for t: int in range(tri_count):
+			var ia: int = indices[t * 3] if not indices.is_empty() else t * 3
+			var ib: int = indices[t * 3 + 1] if not indices.is_empty() else t * 3 + 1
+			var ic: int = indices[t * 3 + 2] if not indices.is_empty() else t * 3 + 2
+			if ia < 0 or ib < 0 or ic < 0 or ia >= verts.size() or ib >= verts.size() or ic >= verts.size():
+				continue
+			var a: Vector3 = verts[ia]
+			var b: Vector3 = verts[ib]
+			var c: Vector3 = verts[ic]
+			var mid: Vector3 = (a + b + c) / 3.0
+			if absf(mid.x - cx) <= half_w and absf(mid.z - cz) <= 0.75 and mid.y >= y0 and mid.y <= y1:
+				continue
+			faces.append(a)
+			faces.append(b)
+			faces.append(c)
+	var shape := ConcavePolygonShape3D.new()
+	shape.backface_collision = true
+	shape.set_faces(faces)
+	return shape
 
 
 ## L1 accounting: name the UE path + resolved file, count, cap the stored
@@ -1061,6 +1180,10 @@ func _new_accumulator() -> Dictionary:
 		"batches": {},
 		"batches_nocol": {},
 		"batches_far": {},
+		# Cross-sublevel exact-duplicate guard. Periphery/POI/Gameplay and
+		# baked SplineMeshComponents contained 424 instances / 276 surplus
+		# draws at identical transforms (z-fighting / wall flicker).
+		"mesh_dedupe": {},
 		"lights": [] as Array,
 		"landscapes": [] as Array,
 		"decals": [] as Array,
@@ -1419,6 +1542,7 @@ func _new_build_ctx(parent: Node3D, light_probe: Node, generate_collision: bool)
 		"occluders": 0,
 		"missing_meshes": [] as Array,
 		"missing_mesh_count": 0,
+		"duplicate_meshes": 0,
 		"curb_built": 0,
 		"chunk_count": 0,
 		"light_count": 0,
@@ -1562,6 +1686,12 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 			bkey += "||cpd"
 		if hidden_in_game:
 			bkey += "||hidden"
+		var dedupe_key: String = bkey + "||" + str(tr)
+		var seen_meshes: Dictionary = acc.get("mesh_dedupe", {}) as Dictionary
+		if seen_meshes.has(dedupe_key):
+			result["duplicate_meshes"] = int(result.get("duplicate_meshes", 0)) + 1
+			continue
+		seen_meshes[dedupe_key] = true
 		if not batches.has(bkey):
 			batches[bkey] = {
 				"mp": mp,
@@ -1936,11 +2066,11 @@ func _qualifies_as_occluder(low_mp: String, mesh: Mesh) -> bool:
 func _add_occluder(ctx: Dictionary, mesh: Mesh, tr: Transform3D) -> void:
 	var aabb: AABB = mesh.get_aabb()
 	var box: BoxOccluder3D = BoxOccluder3D.new()
-	# F9: inset the occluder one centimetre per side so its faces never sit
-	# exactly coplanar with the wall faces that spawned them (coplanar
-	# occluder/geometry pairs pop as the camera moves). A smaller occluder
-	# under-occludes rather than over-occludes, which is the safe direction.
-	box.size = Vector3(maxf(aabb.size.x - 0.04, 0.1), maxf(aabb.size.y - 0.04, 0.1), maxf(aabb.size.z - 0.04, 0.1))
+	# F9: inset the occluder 10 cm per side so its faces never sit exactly
+	# coplanar with the wall faces that spawned them (coplanar occluder/geometry
+	# pairs pop as the camera moves). The old 2 cm inset was still coplanar with
+	# the 4 cm wall trim; a smaller occluder under-occludes, which is safe.
+	box.size = Vector3(maxf(aabb.size.x - 0.20, 0.1), maxf(aabb.size.y - 0.20, 0.1), maxf(aabb.size.z - 0.20, 0.1))
 	var occ: OccluderInstance3D = OccluderInstance3D.new()
 	occ.occluder = box
 	occ.transform = Transform3D(tr.basis, tr * aabb.get_center())
@@ -2179,6 +2309,8 @@ func _add_collider(ctx: Dictionary, cell: Vector2i, shape: Shape3D, tr: Transfor
 	counts[base_key] = used + 1
 	var cs: CollisionShape3D = CollisionShape3D.new()
 	cs.shape = shape
+	if label != "":
+		cs.set_meta("ue_mesh", label)
 	var sc: Vector3 = tr.basis.get_scale()
 	cs.transform = Transform3D(tr.basis.orthonormalized(), tr * shape_offset)
 	cs.scale = Vector3(maxf(absf(sc.x), 0.05), maxf(absf(sc.y), 0.05), maxf(absf(sc.z), 0.05))
@@ -2710,6 +2842,7 @@ func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dict
 	result["spline_count"] = int(ctx.get("spline_count", 0))
 	result["curb_built"] = int(ctx.get("curb_built", 0))
 	result["missing_mesh_count"] = int(ctx.get("missing_mesh_count", 0))
+	result["duplicate_meshes"] = int(result.get("duplicate_meshes", 0))
 	result["missing_meshes"] = (ctx.get("missing_meshes", [] as Array) as Array).duplicate()
 	result["corrupt_mesh_count"] = corrupt_mesh_count
 	result["corrupt_meshes"] = corrupt_meshes.duplicate()
@@ -3306,8 +3439,9 @@ func _light_score(info: Dictionary) -> float:
 	var ltype: String = str(info.get("type", ""))
 	if "Directional" in ltype:
 		energy += LIGHT_ENERGY_CEIL * 2.5
-	elif "Spot" in ltype:
-		energy += LIGHT_ENERGY_CEIL * 0.5
+	# A flat +2.0 for every Spot made all 47 Guildhall slots spots and dropped
+	# every warm point lamp. Rank on authored energy only; the type tie-break
+	# is no longer needed with the 160-light desktop budget.
 	return energy
 
 
@@ -3488,25 +3622,14 @@ func _landscape_weighted_material(lc: Dictionary, map_hint: String = "") -> Shad
 	# they are skipped instead of reading an empty second weightmap.
 	var bound_count: int = 2 if wm1 != null else 1
 	var source: String = str(lc.get("source", ""))
-	# L5: the old rule keyed the safe-room fill on a map-name substring of
-	# the source, so a renamed source silently reopened the void. The caller
-	# passes map_hint (derived from the level JSON path); an explicit hint
-	# wins, the source scan is the fallback, and a disagreement between them
-	# is a loud error naming both — the rename detector the old match lacked.
-	var source_low_guildhall: bool = source.to_lower().contains("guildhall")
-	var hint_guildhall: bool = map_hint == "guildhall"
-	if map_hint != "" and hint_guildhall != source_low_guildhall:
-		push_error("[level_loader] discard_holes source/map mismatch: source '", source, "' says guildhall=", source_low_guildhall, " but map_hint='", map_hint, "' says ", hint_guildhall, "; trusting the explicit hint")
-	var is_guildhall_fill: bool = hint_guildhall or (source_low_guildhall and map_hint == "")
 	if wm_paths.size() > 2:
 		push_warning("Landscape %s: %d weightmaps extracted but only %d bound; extra weightmaps are not sampled" % [source, wm_paths.size(), bound_count])
 	var mat := ShaderMaterial.new()
 	mat.shader = LANDSCAPE_SHADER
-	# Guildhall's packed floors are incomplete at the safe-room gap; the
-	# extracted data has no lower-floor mesh within 6 m of that visibility hole
-	# (only foundation walls at y=12). Keep the authored landscape surface
-	# visible there instead of discarding to void. Other maps keep hole discard.
-	mat.set_shader_parameter("discard_holes", 0.0 if is_guildhall_fill else 1.0)
+	# UE LandscapeVisibilityLayerInfo stores 1 = hole. Always discard authored
+	# holes; the old Guildhall discard_holes=0 workaround rendered the 27 m
+	# elevated shell as a solid cobblestone ceiling over the lower street.
+	mat.set_shader_parameter("discard_holes", 1.0)
 	mat.set_shader_parameter("weightmap", wm)
 	if wm1 != null:
 		mat.set_shader_parameter("weightmap_1", wm1)
@@ -3593,7 +3716,7 @@ func _landscape_material(ctx: Dictionary, source: String = "") -> StandardMateri
 	mat.albedo_color = Color(0.72, 0.70, 0.66) if use_road else Color(0.42, 0.42, 0.40)
 	mat.roughness = 0.90
 	mat.uv1_scale = Vector3(12.0, 12.0, 1.0)
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.cull_mode = BaseMaterial3D.CULL_BACK
 	ctx["landscape_mat"] = mat
 	return mat
 

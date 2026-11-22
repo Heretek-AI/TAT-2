@@ -731,12 +731,12 @@ static func spawn_smoke_plume(parent: Node, pos: Vector3, half_extents: Vector3 
 	var tint: Color = Color(0.86, 0.88, 0.91, 1.0)
 	var ext: Vector3 = Vector3(maxf(half_extents.x, 0.2), maxf(half_extents.y, 0.2), maxf(half_extents.z, 0.2))
 
-	_add_smoke_layer(root, "PlumeCore", 40, 3.2, 0.9, true, 0.75,
-		ext * 0.7, 1.6, 3.2, 1.0, tint, 1.0, 0.06, 1.0, 0.0)
-	_add_smoke_layer(root, "PlumeBillow", 64, 5.5, 0.7, true, 1.0,
-		ext, 0.8, 2.2, 1.35, tint, 0.92, 0.07, 1.0, 0.0)
-	var haze_mat: ShaderMaterial = _add_smoke_layer(root, "PlumeHaze", 26, 6.5, 0.15, false, 1.35,
-		Vector3(ext.x * 1.1, 0.35, ext.z * 1.1), 0.15, 0.55, 1.6, tint, 0.55, 0.04, 0.5, -ext.y * 0.55)
+	_add_smoke_layer(root, "PlumeCore", 14, 3.2, 0.9, true, 0.75,
+		ext * 0.7, 1.6, 3.2, 1.0, tint, 1.0, 0.06, 0.60, 0.0)
+	_add_smoke_layer(root, "PlumeBillow", 22, 5.5, 0.7, true, 1.0,
+		ext, 0.8, 2.2, 1.35, tint, 0.92, 0.07, 0.58, 0.0)
+	var haze_mat: ShaderMaterial = _add_smoke_layer(root, "PlumeHaze", 8, 6.5, 0.15, false, 1.35,
+		Vector3(ext.x * 1.1, 0.35, ext.z * 1.1), 0.15, 0.55, 1.6, tint, 0.55, 0.04, 0.42, -ext.y * 0.55)
 
 	var tree: SceneTree = parent.get_tree()
 	if tree != null:
@@ -820,7 +820,8 @@ static func _add_smoke_layer(root: Node3D, layer_name: String, amount: int, life
 	particles.explosiveness = explosiveness
 	particles.process_material = pm
 	particles.draw_pass_1 = puff_mesh
-	particles.visibility_aabb = AABB(Vector3(-8.0, -2.0, -8.0), Vector3(16.0, 10.0, 16.0))
+	particles.visibility_aabb = AABB(Vector3(-14.0, -9.0, -14.0), Vector3(28.0, 18.0, 28.0))
+	particles.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	particles.position = Vector3(0.0, y_offset, 0.0)
 	root.add_child(particles)
 	particles.emitting = true

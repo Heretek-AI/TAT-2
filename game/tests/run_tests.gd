@@ -603,7 +603,7 @@ func _initialize() -> void:
 				and is_equal_approx(wmoon.light_color.b, float(exp_mc[2])) \
 				and is_equal_approx(wenv.fog_light_color.r, float(exp_fogc[0])) \
 				and is_equal_approx(wenv.ambient_light_color.r, float(exp_skyc[0])) \
-				and is_equal_approx(wenv.ambient_light_energy, clampf(float(sky_src.get("intensity", 0.0)), 0.02, 1.0)) \
+				and is_equal_approx(wenv.ambient_light_energy, float(wp_scr.ambient_energy(wpreset))) \
 				and is_equal_approx(wenv.adjustment_saturation, float(pp_src.get("saturation", 1.0))) \
 				and wenv.adjustment_brightness > 0.0 \
 				and is_equal_approx(wenv.adjustment_brightness, exp_bri) \
@@ -769,9 +769,10 @@ func _initialize() -> void:
 	else:
 		print("PASS: LevelInstance sublevels merged (", li_instances.size(), " instances, ", li_car_near, " car-underpass meshes near authored transform)")
 
-	# 21. Guildhall visibility-hole fallback: the safe-room gap has no lower
-	# floor mesh within 6 m (only foundation walls at y=12), so the landscape
-	# surface must fill it instead of discarding to void.
+	# 21. Guildhall visibility-hole semantics: UE stores 1 = hole. The shader
+	# must discard authored holes (discard_holes=1) so the 27 m elevated shell
+	# no longer renders as a solid ceiling over the lower street. Components
+	# without a visibility mask fail safe to vis=0 and stay visible.
 	var ghl_file := FileAccess.open("res://data/generated/levels/Guildhall/Guildhall_Landscape.tatlevel.json", FileAccess.READ)
 	var ghl_lc: Dictionary = {}
 	if ghl_file != null:
@@ -788,11 +789,11 @@ func _initialize() -> void:
 	if not ghl_lc.is_empty():
 		ghl_mat = ll3.call("_landscape_weighted_material", ghl_lc) as ShaderMaterial
 	var discard_val: Variant = ghl_mat.get_shader_parameter("discard_holes") if ghl_mat != null else null
-	if ghl_mat == null or discard_val == null or not is_equal_approx(float(discard_val), 0.0):
-		printerr("FAIL: Guildhall visibility-hole fallback missing (mat=", ghl_mat != null, " discard=", discard_val, ")")
+	if ghl_mat == null or discard_val == null or not is_equal_approx(float(discard_val), 1.0):
+		printerr("FAIL: Guildhall visibility-hole discard missing (mat=", ghl_mat != null, " discard=", discard_val, ")")
 		fails += 1
 	else:
-		print("PASS: Guildhall landscape fills visibility gaps (discard_holes=0)")
+		print("PASS: Guildhall landscape discards authored visibility holes (discard_holes=1, UE 1=hole)")
 	ll3.queue_free()
 	await process_frame
 

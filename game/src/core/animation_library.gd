@@ -111,6 +111,24 @@ const FP_TOOL_CLIPS := {
 	"disguise_crouch_idle": {"clip": "AN_Disguise_Crouch_Idle_1P", "loop": true},
 	"disguise_apply": {"clip": "AN_Disguise_ApplySelf", "loop": false},
 	"unarmed_idle": {"clip": "AN_ThiefNisha_Unarmed_StandIdle", "loop": true},
+	# Traversal clips exist in the 995-clip manifest and retarget onto the same
+	# 1P arm skeleton. They were never wired, so the arms stayed in zipwire_idle
+	# through mantles/wall climbs (S15/S26 reference expects visible traversal).
+	"mantle_050": {"clip": "AN_Mantle_050CM", "loop": false},
+	"mantle_100": {"clip": "AN_Mantle_100CM", "loop": false},
+	"mantle_150": {"clip": "AN_Mantle_150CM", "loop": false},
+	"mantle_200": {"clip": "AN_Mantle_200CM", "loop": false},
+	"mantle_250": {"clip": "AN_Mantle_250CM", "loop": false},
+	"mantle_300": {"clip": "AN_Mantle_300CM", "loop": false},
+	"climb_wall": {"clip": "AN_Climb_WallToMantle_200CM", "loop": true},
+	"climb_idle": {"clip": "AN_Climb_Ledge_Idle", "loop": true},
+	"climb_to_mantle": {"clip": "AN_Climb_Ledge_ToMantle", "loop": false},
+	"jump_inair": {"clip": "AN_Jump_100CM__InAir", "loop": true},
+	"jump_land": {"clip": "AN_Jump_100CM__Land", "loop": false},
+	"zipwire_travel_up": {"clip": "AN_Zipwire_Travel_Up", "loop": true},
+	"zipwire_travel_up_start": {"clip": "AN_Zipwire_Travel_Up_Start", "loop": false},
+	"zipwire_travel_start": {"clip": "AN_Zipwire_Travel_Start_1P", "loop": false},
+	"vault": {"clip": "AN_CrouchMantle_100", "loop": false},
 }
 # All three FP clips are in-place locomotion (scripted velocity drives
 # displacement), so `root` translation is always stripped; all loop.
@@ -538,10 +556,10 @@ func ensure_tp_takedown_atk_clip(player: AnimationPlayer, role: String = "takedo
 
 
 func _retargeted(clip_name: String, role: String) -> Animation:
-	return _retarget_general(clip_name, STRIP_ROOT_TRANSLATION.has(role), LOOP_ROLES.has(role), false)
+	return _retarget_general(clip_name, STRIP_ROOT_TRANSLATION.has(role), LOOP_ROLES.has(role), true)
 
 
-func _retarget_general(clip_name: String, strip_root: bool, loop: bool, use_similarity: bool = false) -> Animation:
+func _retarget_general(clip_name: String, strip_root: bool, loop: bool, use_similarity: bool = true) -> Animation:
 	var key := clip_name + "|" + skeleton_name + ("|sim" if use_similarity else "")
 	if _retarget_cache.has(key):
 		return _retarget_cache[key] as Animation

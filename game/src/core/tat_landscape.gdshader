@@ -5,7 +5,7 @@ shader_type spatial;
 // channel. Layers without a recovered texture are skipped, and the remaining
 // weights are normalized. LandscapeVisibilityLayerInfo is used to discard
 // authored holes instead of inventing geometry.
-render_mode cull_disabled, diffuse_burley;
+render_mode cull_back, diffuse_burley;
 
 uniform sampler2D weightmap : filter_linear, repeat_disable;
 uniform sampler2D weightmap_1 : filter_linear, repeat_disable;
@@ -66,11 +66,11 @@ vec4 weight_at(int tex_idx, vec2 uv) {
 }
 
 void fragment() {
-	// A half-configured visibility mask (index set, channel missing) must fail
-	// safe to "no discard": channel_value() would return 0.0 and erase the
-	// whole landscape. The mask is only sampled when holes are actually
-	// discarded, so maps like Guildhall (discard_holes = 0) skip the fetch.
-	float vis = 1.0;
+	// UE LandscapeVisibilityLayerInfo stores 1 = hole/invisible. The old test
+	// was inverted (vis < 0.5), and Guildhall forced discard_holes=0 to hide
+	// the resulting solid elevated shell. Fail safe to 0 (no discard) when a
+	// component has no mask; discard only authored holes (vis > 0.5).
+	float vis = 0.0;
 	if (discard_holes > 0.5 && visibility_tex_idx >= 0 && visibility_channel >= 0) {
 		vis = channel_value(weight_at(visibility_tex_idx, UV), visibility_channel);
 	}
@@ -103,7 +103,7 @@ void fragment() {
 		total += wt;
 	}
 
-	if (discard_holes > 0.5 && vis < 0.5) {
+	if (discard_holes > 0.5 && vis > 0.5) {
 		discard;
 	}
 	float puddle = 0.0;

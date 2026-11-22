@@ -14,6 +14,7 @@ signal closed()
 
 const ThemeScript: GDScript = preload("res://src/ui/art_nouveau_theme.gd")
 const LevelLoaderScript: GDScript = preload("res://src/core/level_loader.gd")
+const GuardAnimLibScript: GDScript = preload("res://src/core/animation_library.gd")
 
 const OUTFITS_JSON_PATH: String = "res://data/generated/tables/Character/Player/DT_CharacterOutfitsMetadata.json"
 
@@ -242,6 +243,15 @@ func _build_thief_card(thief: String, title: String) -> VBoxContainer:
 	ThemeScript.style_teal_tab(frame, thief == _thief_id)
 	frame.pressed.connect(_on_portrait_pressed.bind(thief))
 	stack.add_child(frame)
+	var portrait_path: String = "res://assets/ue/Raw/Art/UI/Shell/CharacterSelect/T_portrait_%s.png" % thief
+	if ResourceLoader.exists(portrait_path):
+		var portrait := TextureRect.new()
+		portrait.texture = ResourceLoader.load(portrait_path) as Texture2D
+		portrait.set_anchors_preset(Control.PRESET_FULL_RECT)
+		portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		stack.add_child(portrait)
 	var lock_lbl: Label = Label.new()
 	lock_lbl.text = "LOCKED"
 	lock_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -568,6 +578,9 @@ func _setup_preview_world(sv: SubViewport) -> void:
 	cam.fov = 40.0
 	cam.current = true
 	sv.add_child(cam)
+	# Godot 4.7: WorldEnvironment is missed inside own-world SubViewports; bind
+	# the environment to the camera after it enters the tree.
+	cam.environment = env
 	cam.look_at_from_position(cam.position, Vector3(0.0, 0.95, 0.0))
 
 
@@ -601,6 +614,7 @@ func _setup_tool_world(sv: SubViewport) -> void:
 	cam.fov = 38.0
 	cam.current = true
 	sv.add_child(cam)
+	cam.environment = env
 	cam.look_at_from_position(cam.position, Vector3(0.0, 0.25, 0.0))
 
 
@@ -810,6 +824,7 @@ func _rebuild_figure() -> void:
 	if body_node != null:
 		_turntable.add_child(body_node)
 		_bind_preview_materials(body_node, _glb_to_ue_mesh(body_path))
+		_apply_preview_idle(body_node)
 	var head_path: String = _resolve_head_path(_head)
 	if head_path != "":
 		var head_node: Node = _load_model(head_path)
@@ -826,6 +841,33 @@ func _rebuild_figure() -> void:
 				prop.scale = Vector3(0.6, 0.6, 0.6)
 			_turntable.add_child(card_node)
 			_bind_preview_materials(card_node, _glb_to_ue_mesh(card_path))
+
+
+func _apply_preview_idle(root: Node) -> void:
+	var skels: Array[Node] = root.find_children("*", "Skeleton3D", true, false)
+	if skels.is_empty():
+		return
+	var skel: Skeleton3D = skels[0] as Skeleton3D
+	if skel == null or skel.get_parent() == null:
+		return
+	var alib: GuardAnimationLibrary = GuardAnimLibScript.new()
+	if not alib.setup("club", skel):
+		return
+	var anim: Animation = alib._retarget_general("AN_ThiefNisha_WardrobeIdle", true, true, true)
+	if anim == null:
+		anim = alib._retarget_general("AN_GuardEnforcer_NeutralFresh_Idle", true, true, true)
+	if anim == null:
+		anim = alib._retarget_general("AN_ThiefNisha_Unarmed_StandIdle", true, true, true)
+	if anim == null:
+		return
+	var ap := AnimationPlayer.new()
+	ap.name = "WardrobePreviewIdle"
+	root.add_child(ap)
+	ap.root_node = ap.get_path_to(skel.get_parent())
+	var lib := AnimationLibrary.new()
+	lib.add_animation("idle", anim)
+	ap.add_animation_library("", lib)
+	ap.play("idle")
 
 
 func _glb_to_ue_mesh(res_path: String) -> String:

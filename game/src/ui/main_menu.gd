@@ -6,6 +6,8 @@ const LevelLoaderScript := preload("res://src/core/level_loader.gd")
 const SettingsUIScript := preload("res://src/ui/settings_ui.gd")
 const MobileProfile: GDScript = preload("res://src/core/mobile_profile.gd")
 const GuardAnimLibScript: GDScript = preload("res://src/core/animation_library.gd")
+const WeatherProfile := preload("res://src/core/weather_profile.gd")
+const WeatherVisuals := preload("res://src/core/weather_visuals.gd")
 
 const STARTSCREEN_GUARD_GLB: String = "res://assets/ue/Content/Art/Animation/GuardEnforcer/Skin/Base/SK_GuardEnforcer__Preview.glb"
 const STARTSCREEN_GUARD_UE_MESH: String = "/Game/Art/Animation/GuardEnforcer/Skin/Base/SK_GuardEnforcer__Preview"
@@ -20,6 +22,10 @@ const STARTSCREEN_CAM_VFOV: float = 48.03
 const STARTSCREEN_CAM_PITCH_DEG: float = 13.8
 
 var _menu_cam: Camera3D
+var _menu_pp_settings: Dictionary
+var _menu_fog_vol: Dictionary
+var _menu_preset: Dictionary
+var _menu_moon: DirectionalLight3D
 var _shop_glow: OmniLight3D
 var _sway_t: float = 0.0
 var selected_order: int = 1
@@ -80,76 +86,20 @@ func _build_3d_backdrop() -> void:
 	var load_res: Dictionary = loader.load_sublevels(sublevels, scene_root, null, 32, false)
 	_apply_startscreen_trim_specular(scene_root)
 
-	var sky_light_v: Variant = load_res.get("sky_light", {})
-	var sky_light: Dictionary = sky_light_v as Dictionary if sky_light_v is Dictionary else {}
 	var fog_vol_v: Variant = load_res.get("fog_volume", {})
-	var fog_vol: Dictionary = fog_vol_v as Dictionary if fog_vol_v is Dictionary else {}
+	_menu_fog_vol = fog_vol_v as Dictionary if fog_vol_v is Dictionary else {}
 	var pp_v: Variant = load_res.get("post_process", {})
 	var pp_doc: Dictionary = pp_v as Dictionary if pp_v is Dictionary else {}
 	var pp_set_v: Variant = pp_doc.get("settings", {})
-	var pp_settings: Dictionary = pp_set_v as Dictionary if pp_set_v is Dictionary else {}
+	_menu_pp_settings = pp_set_v as Dictionary if pp_set_v is Dictionary else {}
+	_menu_preset = WeatherProfile.preset_for_map("main_menu")
 
-	var env := WorldEnvironment.new()
-	var e := Environment.new()
-	e.background_mode = Environment.BG_COLOR
-	e.background_color = Color(0.012, 0.016, 0.036)
-	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	e.ambient_light_color = Color(0.55, 0.58, 0.85)
-	e.ambient_light_energy = clampf(float(sky_light.get("intensity", 2.0)) * 0.16, 0.08, 0.45)
-
-	var fog_col: Color = Color(0.06, 0.07, 0.14)
-	var fog_ins_v: Variant = fog_vol.get("inscattering", null)
-	if fog_ins_v is Array and (fog_ins_v as Array).size() >= 3:
-		var fa: Array = fog_ins_v as Array
-		var fmax: float = maxf(float(fa[0]), maxf(float(fa[1]), maxf(float(fa[2]), 0.001)))
-		fog_col = Color(float(fa[0]) / fmax * 0.14, float(fa[1]) / fmax * 0.14, float(fa[2]) / fmax * 0.14)
-	e.fog_enabled = true
-	e.fog_light_color = fog_col
-	e.fog_density = 0.008
-	e.fog_sky_affect = 0.0
-
-	e.tonemap_mode = Environment.TONE_MAPPER_ACES
-	e.tonemap_exposure = 1.15
-	e.glow_enabled = true
-	e.glow_intensity = clampf(float(pp_settings.get("BloomIntensity", 6.336)) * 0.08, 0.0, 0.8)
-	e.glow_bloom = 0.22
-	e.glow_hdr_threshold = 1.0
-	if pp_settings.has("ColorContrast"):
-		var cc_v: Variant = pp_settings.get("ColorContrast")
-		var cc_val: float = 1.0
-		if cc_v is Dictionary:
-			cc_val = float((cc_v as Dictionary).get("X", 1.0))
-		elif cc_v is Array and not (cc_v as Array).is_empty():
-			cc_val = float((cc_v as Array)[0])
-		elif cc_v is float or cc_v is int:
-			cc_val = float(cc_v)
-		e.adjustment_enabled = true
-		e.adjustment_contrast = clampf(cc_val, 0.5, 1.5)
-
-	if not MobileProfile.is_mobile():
-		# Desktop volumetric mist for car headlights, multi-octave neon bloom, SSR & SSIL
-		# (R3 APPROXIMATE Forward+ mappings for BeautifulCorner_Startscreen_Lighting).
-		e.volumetric_fog_enabled = true
-		e.volumetric_fog_density = 0.016
-		e.volumetric_fog_albedo = Color(0.85, 0.82, 0.90)
-		e.volumetric_fog_anisotropy = 0.45
-		e.volumetric_fog_length = 45.0
-		e.volumetric_fog_sky_affect = 0.0
-		e.glow_hdr_scale = 2.0
-		e.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
-		for gl_i: int in range(5):
-			e.set_glow_level(gl_i, true)
-		e.ssr_enabled = true
-		e.ssr_max_steps = 48
-		e.ssr_fade_in = 0.15
-		e.ssr_fade_out = 2.0
-		e.ssr_depth_tolerance = 0.2
-		e.ssil_enabled = true
-		e.ssil_radius = 4.0
-		e.ssil_intensity = 1.1
-
-	env.environment = e
-	scene_root.add_child(env)
+	_menu_moon = DirectionalLight3D.new()
+	_menu_moon.rotation_degrees = Vector3(-13.0, -3.0, 0.0)
+	_menu_moon.light_color = Color(0.6039, 0.702, 1.0)
+	_menu_moon.light_energy = 0.10
+	_menu_moon.shadow_enabled = true
+	scene_root.add_child(_menu_moon)
 
 	_menu_cam = Camera3D.new()
 	_menu_cam.name = "StartscreenCineCamera"
@@ -157,13 +107,24 @@ func _build_3d_backdrop() -> void:
 	_menu_cam.position = STARTSCREEN_CAM_EYE
 	_menu_cam.current = true
 	scene_root.add_child(_menu_cam)
+	# Godot 4.7: an Environment assigned to a Camera3D before the camera enters
+	# the tree is silently ignored, and a WorldEnvironment inside a SubViewport
+	# with own_world_3d registers on the parent world (Viewport.find_world_3d
+	# does not see the SubViewport's own world). Assign after add_child so the
+	# authored sky/fog/exposure/ambient actually render.
 	_menu_cam.look_at(STARTSCREEN_CAM_EYE + STARTSCREEN_CAM_FWD * STARTSCREEN_CAM_FOCUS_M, Vector3.UP)
 
 	# Tune extracted car headlights (#8/#9, BP_CarBC Temperature 3500K) for warm volumetric mist.
 	for child: Node in scene_root.get_children():
 		if child is SpotLight3D:
 			var sl: SpotLight3D = child as SpotLight3D
-			if sl.light_energy >= 3.9 and sl.position.x < -10.0:
+			if sl.position.distance_to(Vector3(7.7192, 11.7935, 4.8289)) < 1.0:
+				sl.light_color = Color(1.0, 0.82, 0.60)
+				sl.light_energy = 8.0
+				sl.spot_range = 22.0
+				sl.light_volumetric_fog_energy = 2.4
+				sl.shadow_enabled = true
+			elif sl.light_energy >= 3.9 and sl.position.x < -10.0:
 				sl.light_color = Color(1.0, 0.80, 0.55)
 				sl.spot_angle = 32.0
 				sl.spot_attenuation = 2.0
@@ -183,13 +144,26 @@ func _build_3d_backdrop() -> void:
 	bulb_mat.albedo_color = Color(1.0, 0.90, 0.72)
 	bulb_mat.emission_enabled = true
 	bulb_mat.emission = Color(1.0, 0.84, 0.62)
-	bulb_mat.emission_energy_multiplier = 4.5
+	bulb_mat.emission_energy_multiplier = 9.0
 	bulb_mesh.material = bulb_mat
 	bulb.mesh = bulb_mesh
 	bulb.position = Vector3(7.72, 12.25, 4.83)
 	bulb.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	scene_root.add_child(bulb)
 
+	# The declared _shop_glow was animated but never created, so the warm
+	# shopfront pool in KF01 did not exist.
+	_shop_glow = OmniLight3D.new()
+	_shop_glow.name = "StartscreenShopGlow"
+	_shop_glow.position = Vector3(0.2, 3.2, 1.8)
+	_shop_glow.light_color = Color(1.0, 0.72, 0.42)
+	_shop_glow.omni_range = 9.0
+	_shop_glow.light_energy = 1.55
+	_shop_glow.light_volumetric_fog_energy = 1.2
+	_shop_glow.shadow_enabled = false
+	scene_root.add_child(_shop_glow)
+
+	call_deferred("_bind_menu_env")
 	_spawn_startscreen_guard(scene_root, loader)
 
 
@@ -202,6 +176,39 @@ func _build_3d_backdrop() -> void:
 ## materials are never mutated, and no texture is invented (T2-03-E gate).
 const STARTSCREEN_TRIM_SPECULAR_MAX := 0.30
 const STARTSCREEN_TRIM_ROUGHNESS_MIN := 0.55
+
+
+func _bind_menu_env() -> void:
+	# Godot 4.7: an Environment resource created before this own-world
+	# SubViewport has rendered is never picked up by the camera, and a
+	# WorldEnvironment inside the SubViewport registers on the parent world
+	# (Viewport.find_world_3d misses the SubViewport's own world). Build the
+	# environment after the first frames and assign it to the camera, which is
+	# the only binding that renders here.
+	for _i: int in range(12):
+		await get_tree().process_frame
+	if _menu_cam == null:
+		return
+	var e := Environment.new()
+	e.background_mode = Environment.BG_COLOR
+	e.background_color = Color(0.012, 0.016, 0.036)
+	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	e.ambient_light_color = Color(0.55, 0.58, 0.85)
+	e.ambient_light_energy = 1.3
+	e.tonemap_mode = Environment.TONE_MAPPER_ACES
+	e.tonemap_exposure = 0.9
+	e.glow_enabled = true
+	e.glow_intensity = 0.6
+	e.glow_bloom = 0.1
+	e.glow_hdr_threshold = 0.9
+	e.glow_hdr_scale = 1.8
+	e.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
+	for gl_i: int in range(5):
+		e.set_glow_level(gl_i, true)
+	if _menu_moon != null and not _menu_preset.is_empty():
+		WeatherVisuals.apply_sky(e, _menu_preset, _menu_moon)
+		e.ambient_light_sky_contribution = 0.0
+	_menu_cam.environment = e
 
 
 func _apply_startscreen_trim_specular(scene_root: Node3D) -> void:
@@ -299,10 +306,20 @@ func _spawn_startscreen_guard(scene_root: Node3D, loader: Node) -> void:
 			for s: int in range(count):
 				var mat_path: String = str(slots[s])
 				if mat_path == "":
+					# UE's Preview mesh keeps Cornea/Eyes/Overlay unbound; the
+					# GLB default for the full-body Overlay slot is an opaque
+					# green debug material that hides the real guard. Hide it.
+					var hidden := StandardMaterial3D.new()
+					hidden.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+					hidden.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+					hidden.albedo_color = Color(0, 0, 0, 0)
+					hidden.cull_mode = BaseMaterial3D.CULL_DISABLED
+					mi.set_surface_override_material(s, hidden)
 					continue
 				var mat: Material = loader.call("get_material_for_ue", mat_path) as Material
 				if mat != null:
 					mi.set_surface_override_material(s, mat)
+
 
 	var skels: Array[Node] = g3.find_children("*", "Skeleton3D", true, false)
 	if not skels.is_empty():
@@ -310,7 +327,7 @@ func _spawn_startscreen_guard(scene_root: Node3D, loader: Node) -> void:
 		if skel != null and skel.get_parent() != null:
 			var alib: GuardAnimationLibrary = GuardAnimLibScript.new()
 			if alib.setup("club", skel):
-				var anim: Animation = alib._retarget_general("AN_GuardEnforcer_NeutralFresh_Idle", false, true, false)
+				var anim: Animation = alib._retarget_general("AN_GuardEnforcer_NeutralFresh_Idle", false, true, true)
 				if anim != null:
 					var ap := AnimationPlayer.new()
 					ap.name = "StartscreenGuardAnim"

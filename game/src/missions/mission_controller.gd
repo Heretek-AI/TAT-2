@@ -127,6 +127,7 @@ func _apply_fallback_environment(e: Environment) -> void:
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	e.ambient_light_color = Color(0.16, 0.21, 0.30)
 	e.ambient_light_energy = 0.38
+	e.ambient_light_sky_contribution = 0.0
 	e.fog_enabled = true
 	e.fog_light_color = Color(0.05, 0.08, 0.14)
 	e.fog_density = 0.008

@@ -30,7 +30,15 @@ Started 2026-11-21. Decisions taken with the user:
 
 ### Track C (next)
 
-C1 NPR/SNN post-process, C2 OSEXray, C3 weather (roof occlusion, lens drops, volumetric/clouds), C4 Niagara placements (target: absolute 3,695; raw maps contain 3,710 NiagaraComponent exports and 37 systems, emitted level records 3,699), C5 material fallback warnings to 0.
+C1 NPR/SNN post-process, C2 OSEXray, C3 weather (roof occlusion, lens drops, volumetric/clouds), C4 Niagara placements, C5 material fallback warnings to 0.
+
+| Item | State | Evidence |
+|---|---|---|
+| C4 level Niagara | **done** | clean re-extraction yields **3,695 placements / 37 systems** (matches the audit); `probe_niagara` spawns all 3,695 instances as 37 MultiMesh nodes, shader clean |
+| C1 NPR/SNN | pending | |
+| C2 OSEXray | pending | |
+| C3 weather | pending | |
+| C5 material fallbacks | pending | |
 
 ## Baseline evidence
 

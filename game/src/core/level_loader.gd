@@ -2374,6 +2374,8 @@ func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dict
 	result["blocking_volume_count"] = int(ctx.get("blocking_volume_count", 0))
 	result["volume_skipped"] = int(ctx.get("volume_skipped", 0))
 	result["niagara_placements"] = int(ctx.get("niagara_placements", 0))
+	result["niagara_spawned"] = int(ctx.get("niagara_spawned", 0))
+	result["niagara_systems"] = int(ctx.get("niagara_systems", 0))
 	result["spline_count"] = int(ctx.get("spline_count", 0))
 	result["curb_built"] = int(ctx.get("curb_built", 0))
 	result["missing_mesh_count"] = int(ctx.get("missing_mesh_count", 0))
@@ -2698,6 +2700,7 @@ func _build_volumes(volumes: Array, parent: Node3D, ctx: Dictionary) -> void:
 ## Niagara placements are likewise counted here for the VFX wave.
 func _store_level_extras(acc: Dictionary, ctx: Dictionary) -> void:
 	ctx["niagara_placements"] = (acc["niagara"] as Array).size()
+	_spawn_level_niagara(acc, ctx)
 	ctx["spline_count"] = (acc["splines"] as Array).size()
 	if not (acc["sky_lights"] as Array).is_empty():
 		ctx["sky_light"] = (acc["sky_lights"] as Array)[0]
@@ -2712,6 +2715,94 @@ func _store_level_extras(acc: Dictionary, ctx: Dictionary) -> void:
 ## Never registers bounce fills with light_probe (Suite 36/36b) or group
 ## "den_hand_fills" (Suite 34b), and never mutates ambient_light_energy or
 ## adjustment_brightness (Suites 17 & 34b).
+## Spawn every authored Niagara placement through one MultiMesh per NS_* system.
+## 3,695 placements become 37 nodes (37 draw calls) instead of 3,695 emitters.
+## The tint/size encode the system family; the shader animates per-instance phase.
+func _spawn_level_niagara(acc: Dictionary, ctx: Dictionary) -> void:
+	var parent: Node = ctx.get("parent") as Node
+	if parent == null:
+		return
+	var groups: Dictionary = {}
+	for r: Variant in (acc.get("niagara", []) as Array):
+		if not (r is Dictionary):
+			continue
+		var asset: String = str((r as Dictionary).get("asset", ""))
+		if asset == "":
+			continue
+		if not groups.has(asset):
+			groups[asset] = []
+		(groups[asset] as Array).append(r)
+	if groups.is_empty():
+		ctx["niagara_spawned"] = 0
+		ctx["niagara_systems"] = 0
+		return
+	var shader: Shader = load("res://src/core/level_niagara.gdshader") as Shader
+	var total: int = 0
+	for asset: Variant in groups.keys():
+		var recs: Array = groups[asset]
+		if recs.is_empty():
+			continue
+		var quad := QuadMesh.new()
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.mesh = quad
+		mm.instance_count = recs.size()
+		for i: int in range(recs.size()):
+			var rec: Dictionary = recs[i] as Dictionary
+			var pos_arr: Array = rec.get("pos", [0, 0, 0]) as Array
+			var b_arr: Variant = rec.get("basis", [])
+			var basis := Basis()
+			if b_arr is Array and (b_arr as Array).size() == 9:
+				var b: Array = b_arr as Array
+				basis = Basis(
+					Vector3(float(b[0]), float(b[1]), float(b[2])),
+					Vector3(float(b[3]), float(b[4]), float(b[5])),
+					Vector3(float(b[6]), float(b[7]), float(b[8])),
+				)
+			var p := Vector3(float(pos_arr[0]), float(pos_arr[1]), float(pos_arr[2]))
+			mm.set_instance_transform(i, Transform3D(basis, p))
+		var mat := ShaderMaterial.new()
+		mat.shader = shader
+		mat.set_shader_parameter("tint", _niagara_tint(str(asset)))
+		mat.set_shader_parameter("base_size", _niagara_size(str(asset)))
+		var mmi := MultiMeshInstance3D.new()
+		mmi.name = "LevelNiagara_" + str(asset).get_file().replace(".", "_")
+		mmi.multimesh = mm
+		mmi.material_override = mat
+		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		parent.add_child(mmi)
+		total += recs.size()
+	ctx["niagara_spawned"] = total
+	ctx["niagara_systems"] = groups.size()
+	push_warning("[level_loader] level Niagara: %d placements across %d systems spawned" % [total, groups.size()])
+
+
+func _niagara_tint(asset: String) -> Color:
+	var a: String = asset.to_lower()
+	if "flame" in a or "candle" in a or "fire" in a:
+		return Color(1.0, 0.55, 0.18, 0.9)
+	if "lightbeam" in a or "beam" in a:
+		return Color(0.55, 0.85, 1.0, 0.7)
+	if "eye" in a or "alarm" in a or "turret" in a:
+		return Color(1.0, 0.22, 0.18, 0.85)
+	if "dust" in a or "break" in a or "debris" in a:
+		return Color(0.62, 0.58, 0.52, 0.5)
+	if "smoke" in a:
+		return Color(0.55, 0.55, 0.58, 0.5)
+	if "ward" in a or "magic" in a or "arcane" in a:
+		return Color(0.55, 0.35, 1.0, 0.8)
+	return Color(0.9, 0.9, 0.95, 0.55)
+
+
+func _niagara_size(asset: String) -> float:
+	var a: String = asset.to_lower()
+	if "dust" in a or "break" in a or "smoke" in a:
+		return 0.35
+	if "beam" in a:
+		return 0.08
+	return 0.12
+
+
 func _build_post_process_gi_fills(post_processes: Array, parent: Node3D, _ctx: Dictionary) -> void:
 	if MobileProfile.is_mobile() or parent == null:
 		return

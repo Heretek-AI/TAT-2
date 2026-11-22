@@ -49,13 +49,36 @@ const ThemeScript: GDScript = preload("res://src/ui/art_nouveau_theme.gd")
 ## Authored MissionLobby_Geo3 CameraActor_0 FieldOfView 20.0. UE FOV is the
 ## horizontal field of view, so Godot maps it with keep_aspect KEEP_WIDTH:
 ## fov reads 20.0 while the rendered vertical stays ~11.33 at 16:9.
-const LOBBY_CAM_POS: Vector3 = Vector3(12.6065, -0.1670, -1.0538)
-const LOBBY_CAM_FWD: Vector3 = Vector3(-0.986184, 0.116419, 0.117848)
+## Authored CameraActor_0 in the level's (x, z, y) Godot mapping is
+## (12.6065, -0.16698, -1.05384) looking (-0.986184, 0.116419, +0.117848).
+## That slot sits tight against the foreground facade, so the prep stage
+## mirrors the Z position/look component across the dummy: same X/Y, FOV 20
+## and roll -14.78, but it looks back across the open rooftop instead of into
+## the wall. This is a deliberate stage reframe, not a coordinate fix.
+const LOBBY_CAM_POS: Vector3 = Vector3(12.6065, -0.16698, 1.05384)
+const LOBBY_CAM_FWD: Vector3 = Vector3(-0.986184, 0.116419, -0.117848)
 const LOBBY_CAM_FOV: float = 20.0
 const LOBBY_CAM_ROLL_DEG: float = -14.780165
 ## Authored BP_MatchLobbyDummyPlayer_C_1 (IsForLocalPlayer: True) rooftop slot.
+## The GLB's front is +Z, so the authored 45° faces the camera (world +X) and
+## screen-left (+Z): the KF11 three-quarter view.
 const LOBBY_THIEF_POS: Vector3 = Vector3(-1.5871, 0.82, -0.7868)
 const LOBBY_THIEF_YAW_DEG: float = 45.0
+## KF11 stage exposure lift. The weather preset is authored for a
+## multiplayer-lobby camera and lands at 0.5 tonemap exposure / 0.3 ambient,
+## which renders the rooftop as near-black behind the opaque UI cards.
+const STAGE_EXPOSURE: float = 2.6
+const STAGE_AMBIENT_ENERGY: float = 1.8
+const STAGE_GLOW_INTENSITY: float = 1.0
+## The authored weather preset points the moon off-frame. Re-aim the shared
+## moon light/disc toward the open upper-centre-right of the prep camera
+## (normalised UI coords) so it can key the thief; the near rooftop can still
+## occlude the disc itself, but the light direction remains authored-overridable.
+const MOON_SCREEN_X: float = 0.63
+const MOON_SCREEN_Y: float = 0.10
+const STAGE_MOON_ENERGY: float = 0.85
+const STAGE_SKY_ENERGY: float = 3.0
+const STAGE_MOON_DISC_ENERGY: float = 2.4
 
 ## Authored backdrop size for the 3D rooftop stage. The stage container must
 ## deliver at least this size at runtime: anything smaller (in particular the
@@ -83,6 +106,9 @@ var _contract_body: Label
 var _controls_lbl: Label
 var _mode_sub_lbl: Label
 var _diff_sub_lbl: Label
+var _countdown_lbl: Label
+var _readiness_lbl: Label
+var _thief_name_lbl: Label
 var _thief_body_node: Node = null
 var _thief_head_node: Node = null
 var _mat_loader: Node = null
@@ -228,7 +254,7 @@ func _build_all() -> void:
 	add_child(top_hdr)
 
 	var title: Label = Label.new()
-	title.text = "MISSION PREPARATION"
+	title.text = "MISSION STARTING IN 5..."
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 24)
 	title.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
@@ -239,6 +265,12 @@ func _build_all() -> void:
 		title.add_theme_font_override("font", serif)
 	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	top_hdr.add_child(title)
+	_countdown_lbl = title
+	var underline: ColorRect = ColorRect.new()
+	underline.custom_minimum_size = Vector2(0.0, 1.0)
+	underline.color = Color(ThemeScript.TEAL_ACCENT.r, ThemeScript.TEAL_ACCENT.g, ThemeScript.TEAL_ACCENT.b, 0.55)
+	underline.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top_hdr.add_child(underline)
 
 	_mode_sub_lbl = Label.new()
 	_mode_sub_lbl.text = "Mode: Solo"
@@ -320,6 +352,36 @@ func _build_all() -> void:
 	left.add_child(con_card)
 	_contract_title_lbl = con_card.get_meta("title_lbl") as Label
 	_contract_body = con_card.get_meta("body_lbl") as Label
+
+	# KF11: READY / player name sit under the thief, above the action row.
+	var ready_box: VBoxContainer = VBoxContainer.new()
+	ready_box.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	ready_box.offset_left = -360.0
+	ready_box.offset_top = -180.0
+	ready_box.offset_right = -24.0
+	ready_box.offset_bottom = -132.0
+	ready_box.alignment = BoxContainer.ALIGNMENT_END
+	ready_box.add_theme_constant_override("separation", 0)
+	ready_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(ready_box)
+	_readiness_lbl = Label.new()
+	_readiness_lbl.text = "READY"
+	_readiness_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_readiness_lbl.add_theme_font_size_override("font_size", 22)
+	_readiness_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_ACCENT)
+	if serif != null:
+		_readiness_lbl.add_theme_font_override("font", serif)
+	_readiness_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ready_box.add_child(_readiness_lbl)
+	_thief_name_lbl = Label.new()
+	_thief_name_lbl.text = "The Spider"
+	_thief_name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_thief_name_lbl.add_theme_font_size_override("font_size", 16)
+	_thief_name_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_TEXT)
+	if serif != null:
+		_thief_name_lbl.add_theme_font_override("font", serif)
+	_thief_name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ready_box.add_child(_thief_name_lbl)
 
 	var bottom: VBoxContainer = VBoxContainer.new()
 	bottom.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
@@ -467,6 +529,19 @@ func _build_stage(viewport: SubViewport) -> void:
 	# SSIL on this own-world SubViewport is unstable in 4.7 (the static/RGB
 	# cascade). The lobby is lit by the practical rig; keep SSR/glow only.
 	env.ssil_enabled = false
+	# KF11 lift: keep the authored midnight sky and practicals, but raise the
+	# camera-bound environment's exposure/ambient so the rooftop reads behind
+	# the UI. The CanvasLayer UI is unaffected (no WorldEnvironment on it).
+	env.tonemap_exposure = maxf(env.tonemap_exposure, STAGE_EXPOSURE)
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.ambient_light_color = Color(0.42, 0.50, 0.72)
+	env.ambient_light_sky_contribution = 0.0
+	env.ambient_light_energy = STAGE_AMBIENT_ENERGY
+	env.glow_enabled = true
+	env.glow_intensity = STAGE_GLOW_INTENSITY
+	env.glow_bloom = 0.12
+	env.glow_hdr_threshold = 0.95
+	env.background_energy_multiplier = STAGE_SKY_ENERGY
 
 	var loader: Node = _get_preview_mat_loader()
 	if loader != null:
@@ -488,8 +563,11 @@ func _build_stage(viewport: SubViewport) -> void:
 	# the parent world; bind the environment to the camera after it enters the
 	# tree so the lobby stage is actually lit.
 	cam.environment = env
+	# The authored yaw already keeps the information stack left and the
+	# thief in the open right half; adding yaw here swings into the facade.
 	cam.look_at_from_position(cam.position, cam.position + LOBBY_CAM_FWD.normalized() * 15.0, Vector3.UP)
 	cam.rotate_object_local(Vector3.FORWARD, deg_to_rad(LOBBY_CAM_ROLL_DEG))
+	_aim_kf11_moon(env, cam, viewport, moonlight)
 
 	var thief_anchor: Node3D = Node3D.new()
 	thief_anchor.name = "MissionLobbyThiefAnchor"
@@ -497,6 +575,35 @@ func _build_stage(viewport: SubViewport) -> void:
 	thief_anchor.rotation_degrees = Vector3(0.0, LOBBY_THIEF_YAW_DEG, 0.0)
 	stage_root.add_child(thief_anchor)
 	_add_thief(thief_anchor)
+
+
+## Re-aims the moon light so its sky disc lands at the KF11 screen position,
+## and pushes the same world direction into the sky shader (built earlier by
+## WeatherVisuals before the prep camera existed). The light also becomes the
+## cool key that lifts the thief's front out of the dark rooftop.
+func _aim_kf11_moon(env: Environment, cam: Camera3D, viewport: SubViewport, moonlight: DirectionalLight3D) -> void:
+	if env == null or cam == null or moonlight == null:
+		return
+	var basis: Basis = cam.global_transform.basis
+	var fwd: Vector3 = -basis.z
+	var right: Vector3 = basis.x
+	var up: Vector3 = basis.y
+	var aspect: float = 1.7777778
+	if viewport != null and viewport.size.y > 0:
+		aspect = float(viewport.size.x) / float(viewport.size.y)
+	var tan_h: float = tan(deg_to_rad(cam.fov * 0.5))
+	var tan_v: float = tan(atan(tan_h / aspect)) if aspect > 0.001 else tan_h
+	var ndc_x: float = MOON_SCREEN_X * 2.0 - 1.0
+	var ndc_y: float = 1.0 - MOON_SCREEN_Y * 2.0
+	var moon_dir: Vector3 = (fwd + right * (ndc_x * tan_h) + up * (ndc_y * tan_v)).normalized()
+	moonlight.light_energy = maxf(moonlight.light_energy, STAGE_MOON_ENERGY)
+	moonlight.look_at_from_position(moonlight.global_position, moonlight.global_position - moon_dir, Vector3.UP)
+	var sky_mat: Material = env.sky.sky_material if env.sky != null else null
+	if sky_mat is ShaderMaterial:
+		var sm: ShaderMaterial = sky_mat as ShaderMaterial
+		sm.set_shader_parameter("moon_direction", moon_dir)
+		sm.set_shader_parameter("moon_energy", STAGE_MOON_DISC_ENERGY)
+		sm.set_shader_parameter("moon_halo_strength", 0.7)
 
 
 func _add_thief(anchor: Node3D) -> void:
@@ -853,9 +960,27 @@ func _refresh_controls() -> void:
 		_mode_sub_lbl.text = "Mode: %s" % mode
 	if _diff_sub_lbl != null:
 		_diff_sub_lbl.text = "Difficulty: %s" % _difficulty_label()
+	_refresh_countdown()
+	if _thief_name_lbl != null:
+		_thief_name_lbl.text = _thief_label()
 	if _controls_lbl == null:
 		return
 	_controls_lbl.text = "[F] READY  ·  [ESC] BACK"
+
+
+## KF11 header line. The port's prep screen is player-paced (no lobby timer),
+## so the copy stays at the reference's 5-second line rather than inventing a
+## deadline; READY remains the [F] action.
+func _refresh_countdown() -> void:
+	if _countdown_lbl == null:
+		return
+	_countdown_lbl.text = "MISSION STARTING IN 5..."
+
+
+func _thief_label() -> String:
+	if str(GameState.thief_id) == "chameleon":
+		return "The Chameleon"
+	return "The Spider"
 
 
 func _difficulty_label() -> String:

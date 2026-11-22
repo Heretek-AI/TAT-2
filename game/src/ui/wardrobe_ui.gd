@@ -87,6 +87,8 @@ var _tool_name_lbl: Label
 var _tool_desc_lbl: Label
 
 var _turntable: Node3D
+var _preview_cam: Camera3D
+var _tool_cam: Camera3D
 var _tool_holder: Node3D
 var _mat_loader: Node = null
 
@@ -166,23 +168,25 @@ func _build_ui() -> void:
 	add_child(root)
 	var dim: ColorRect = ColorRect.new()
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	dim.color = Color(0.01, 0.01, 0.03, 0.86)
+	# KF03: warm, almost-black room behind the left/right cards; the preview
+	# stage itself is a warm 3D set, not a black void.
+	dim.color = Color(0.015, 0.012, 0.018, 0.90)
 	root.add_child(dim)
 	var margin: MarginContainer = MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	margin.add_theme_constant_override("margin_left", 24)
-	margin.add_theme_constant_override("margin_top", 16)
-	margin.add_theme_constant_override("margin_right", 24)
-	margin.add_theme_constant_override("margin_bottom", 16)
+	margin.add_theme_constant_override("margin_left", 20)
+	margin.add_theme_constant_override("margin_top", 12)
+	margin.add_theme_constant_override("margin_right", 20)
+	margin.add_theme_constant_override("margin_bottom", 10)
 	root.add_child(margin)
 	var vb: VBoxContainer = VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 10)
+	vb.add_theme_constant_override("separation", 8)
 	margin.add_child(vb)
 	# KF03/KF04 cite: centered "WARDROBE" header above the thief switcher.
 	var ward_hdr: Label = Label.new()
 	ward_hdr.text = "WARDROBE"
 	ward_hdr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	ward_hdr.add_theme_font_size_override("font_size", 30)
+	ward_hdr.add_theme_font_size_override("font_size", 27)
 	ward_hdr.add_theme_color_override("font_color", ThemeScript.TEAL_ACCENT)
 	var _serif: Font = ThemeScript.font_serif()
 	if _serif != null:
@@ -190,10 +194,11 @@ func _build_ui() -> void:
 	vb.add_child(ward_hdr)
 	vb.add_child(_build_top_bar())
 	var main: HBoxContainer = HBoxContainer.new()
-	main.add_theme_constant_override("separation", 16)
+	main.add_theme_constant_override("separation", 12)
 	main.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vb.add_child(main)
 	main.add_child(_build_left_panel())
+	main.add_child(_build_preview_panel())
 	main.add_child(_build_right_panel())
 	vb.add_child(_build_bottom_bar())
 
@@ -203,7 +208,9 @@ func _build_top_bar() -> PanelContainer:
 	# frame, Chameleon dimmed w/ pink LOCKED). Portraits are empty frames:
 	# standing HARD_LIMIT 5.1 (no cooked portrait texture path recovered).
 	var bar: PanelContainer = PanelContainer.new()
-	bar.add_theme_stylebox_override("panel", ThemeScript.teal_panel_style(2, 6, ThemeScript.TEAL_PANEL_BG, 12))
+	bar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	bar.custom_minimum_size = Vector2(400, 0)
+	bar.add_theme_stylebox_override("panel", ThemeScript.teal_panel_style(2, 6, ThemeScript.TEAL_PANEL_BG, 8))
 	ThemeScript.add_teal_filigree(bar, 3.0, 14.0)
 	var hb: HBoxContainer = HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 12)
@@ -211,7 +218,7 @@ func _build_top_bar() -> PanelContainer:
 	bar.add_child(hb)
 	var q_btn: Button = Button.new()
 	q_btn.text = "< Q"
-	q_btn.custom_minimum_size = Vector2(72, 42)
+	q_btn.custom_minimum_size = Vector2(56, 34)
 	ThemeScript.style_teal_button(q_btn, false)
 	q_btn.pressed.connect(_cycle_thief.bind(-1))
 	hb.add_child(q_btn)
@@ -219,7 +226,7 @@ func _build_top_bar() -> PanelContainer:
 	hb.add_child(_build_thief_card("chameleon", THIEF_LABELS[1]))
 	var e_btn: Button = Button.new()
 	e_btn.text = "E >"
-	e_btn.custom_minimum_size = Vector2(72, 42)
+	e_btn.custom_minimum_size = Vector2(56, 34)
 	ThemeScript.style_teal_button(e_btn, false)
 	e_btn.pressed.connect(_cycle_thief.bind(1))
 	hb.add_child(e_btn)
@@ -234,12 +241,12 @@ func _build_thief_card(thief: String, title: String) -> VBoxContainer:
 	vb.add_theme_constant_override("separation", 4)
 	vb.alignment = BoxContainer.ALIGNMENT_CENTER
 	var stack: Control = Control.new()
-	stack.custom_minimum_size = Vector2(120, 140)
+	stack.custom_minimum_size = Vector2(88, 100)
 	vb.add_child(stack)
 	var frame: Button = Button.new()
 	frame.text = ""
 	frame.set_anchors_preset(Control.PRESET_FULL_RECT)
-	frame.custom_minimum_size = Vector2(120, 140)
+	frame.custom_minimum_size = Vector2(88, 100)
 	ThemeScript.style_teal_tab(frame, thief == _thief_id)
 	frame.pressed.connect(_on_portrait_pressed.bind(thief))
 	stack.add_child(frame)
@@ -258,13 +265,13 @@ func _build_thief_card(thief: String, title: String) -> VBoxContainer:
 	lock_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	lock_lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
 	lock_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	lock_lbl.add_theme_font_size_override("font_size", 15)
+	lock_lbl.add_theme_font_size_override("font_size", 12)
 	lock_lbl.add_theme_color_override("font_color", ThemeScript.PINK_LOCKED)
 	stack.add_child(lock_lbl)
 	var name_lbl: Label = Label.new()
 	name_lbl.text = title
 	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	name_lbl.add_theme_font_size_override("font_size", 18)
+	name_lbl.add_theme_font_size_override("font_size", 15)
 	name_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
 	var serif: Font = ThemeScript.font_serif()
 	if serif != null:
@@ -312,111 +319,124 @@ func _build_bottom_bar() -> HBoxContainer:
 	hb.alignment = BoxContainer.ALIGNMENT_END
 	var back_btn: Button = Button.new()
 	back_btn.text = "BACK [ESC]"
-	back_btn.custom_minimum_size = Vector2(160, 42)
+	back_btn.custom_minimum_size = Vector2(160, 34)
 	ThemeScript.style_teal_button(back_btn, false)
 	back_btn.pressed.connect(func() -> void: _apply_and_close(true))
 	hb.add_child(back_btn)
 	return hb
 
 
-## KF03 (slots w/ grey locks) / KF04 (expanded row w/ pink locks) cite.
-## lock_color is TEAL_MUTED for slots, local LOCKED_PINK for the expanded row
-## (standing HARD_LIMIT 5.7: no pink theme token; scope bars theme edits).
-func _add_tool_slot(parent: Container, idx: int, lock_color: Color, btns: Array[Button], locks: Array[Label]) -> void:
+## KF03 (slot row: numbered squares + grey locks) / KF04 (candidate row:
+## full names + pink locks) cite. The two rows are intentionally different
+## shapes so the numbered equipped slots never read as a duplicate list.
+func _add_tool_slot(parent: Container, idx: int, is_slot: bool, lock_color: Color, btns: Array[Button], locks: Array[Label]) -> void:
 	var entry: Dictionary = TOOLS[idx] as Dictionary
 	var cell: VBoxContainer = VBoxContainer.new()
+	cell.custom_minimum_size = Vector2(84, 0)
 	cell.add_theme_constant_override("separation", 2)
 	cell.alignment = BoxContainer.ALIGNMENT_CENTER
 	parent.add_child(cell)
 	var b: Button = Button.new()
-	b.text = "[" + str(idx + 1) + "] " + str(entry.get("name", "?"))
 	b.toggle_mode = true
-	b.custom_minimum_size = Vector2(120, 38)
+	if is_slot:
+		b.text = str(idx + 1)
+		b.custom_minimum_size = Vector2(80, 66)
+		b.add_theme_font_size_override("font_size", 30)
+	else:
+		b.text = str(entry.get("name", "?"))
+		b.custom_minimum_size = Vector2(84, 32)
+		b.add_theme_font_size_override("font_size", 12)
 	ThemeScript.style_teal_tab(b, idx == _active_tool)
 	b.pressed.connect(_on_tool_selected.bind(idx))
 	cell.add_child(b)
 	btns.append(b)
+	if is_slot:
+		var nm: Label = Label.new()
+		nm.text = str(entry.get("name", "?"))
+		nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		nm.add_theme_font_size_override("font_size", 10)
+		nm.add_theme_color_override("font_color", ThemeScript.TEAL_MUTED)
+		nm.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		cell.add_child(nm)
 	var lock_lbl: Label = Label.new()
 	lock_lbl.text = "LOCKED"
 	lock_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	lock_lbl.add_theme_font_size_override("font_size", 13)
+	lock_lbl.add_theme_font_size_override("font_size", 11)
 	lock_lbl.add_theme_color_override("font_color", lock_color)
+	lock_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cell.add_child(lock_lbl)
 	locks.append(lock_lbl)
 
 
+func _small_header(text: String, color: Color) -> Label:
+	var lbl: Label = Label.new()
+	lbl.text = text
+	lbl.add_theme_font_size_override("font_size", 11)
+	lbl.add_theme_color_override("font_color", color)
+	var sans: Font = ThemeScript.font_sans()
+	if sans != null:
+		lbl.add_theme_font_override("font", sans)
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return lbl
+
+
+## KF03: loadout is the left column (numbers 1-4, candidate row below, tool
+## detail card under that); the 3D preview is the tall centre column.
 func _build_left_panel() -> VBoxContainer:
 	var serif: Font = ThemeScript.font_serif()
 	var sans: Font = ThemeScript.font_sans()
 	var left: VBoxContainer = VBoxContainer.new()
-	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left.custom_minimum_size = Vector2(380, 0)
 	left.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	left.add_theme_constant_override("separation", 8)
-	var prev_hdr: Label = Label.new()
-	prev_hdr.text = "WARDROBE — DRAG TO ROTATE"
-	prev_hdr.add_theme_font_size_override("font_size", 14)
-	prev_hdr.add_theme_color_override("font_color", ThemeScript.TEAL_ACCENT)
-	if sans != null:
-		prev_hdr.add_theme_font_override("font", sans)
-	left.add_child(prev_hdr)
-	var svc: SubViewportContainer = SubViewportContainer.new()
-	svc.stretch = true
-	svc.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	svc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	svc.custom_minimum_size = Vector2(420, 300)
-	svc.mouse_filter = Control.MOUSE_FILTER_STOP
-	left.add_child(svc)
-	var sv: SubViewport = SubViewport.new()
-	sv.own_world_3d = true
-	sv.transparent_bg = false
-	sv.render_target_update_mode = SubViewport.UPDATE_WHEN_VISIBLE
-	svc.add_child(sv)
-	_setup_preview_world(sv)
-	svc.gui_input.connect(_on_preview_gui_input)
+	left.add_theme_constant_override("separation", 6)
 	var load_hdr: Label = Label.new()
 	load_hdr.text = "EDIT LOADOUT"
-	load_hdr.add_theme_font_size_override("font_size", 15)
+	load_hdr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	load_hdr.add_theme_font_size_override("font_size", 18)
 	load_hdr.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
 	if serif != null:
 		load_hdr.add_theme_font_override("font", serif)
 	left.add_child(load_hdr)
-	# KF03 cite: numbered loadout slots 1-4 with grey LOCKED badges on locked
-	# slots (TEAL_MUTED; text buttons stand: no slot icon-art source in scope).
+	left.add_child(ThemeScript.teal_divider())
+	left.add_child(_small_header("LOADOUT SLOTS", ThemeScript.TEAL_ACCENT))
+	# KF03: numbered loadout slots 1-4 (the equipped tool takes the slot).
 	var toolbar: HBoxContainer = HBoxContainer.new()
-	toolbar.add_theme_constant_override("separation", 8)
+	toolbar.add_theme_constant_override("separation", 6)
 	left.add_child(toolbar)
 	_tool_btns.clear()
 	_slot_lock_lbls.clear()
 	for i: int in range(TOOLS.size()):
-		_add_tool_slot(toolbar, i, ThemeScript.TEAL_MUTED, _tool_btns, _slot_lock_lbls)
-	# KF04 cite: expanded candidate row under the slots (4 tools, pink locks on
-	# locked entries). Clicking a cell equips that tool. Standing HARD_LIMIT
-	# 5.7 (LOCKED_PINK local const) + 5.8 (TOOLS const only, no fairy/sap paths).
+		_add_tool_slot(toolbar, i, true, ThemeScript.TEAL_MUTED, _tool_btns, _slot_lock_lbls)
+	left.add_child(_small_header("CANDIDATES", ThemeScript.TEAL_MUTED))
+	# KF04: expanded candidate row with full tool names + pink locks.
 	var expanded: HBoxContainer = HBoxContainer.new()
-	expanded.add_theme_constant_override("separation", 8)
+	expanded.add_theme_constant_override("separation", 6)
 	left.add_child(expanded)
 	_cell_btns.clear()
 	_cell_lock_lbls.clear()
 	for i: int in range(TOOLS.size()):
-		_add_tool_slot(expanded, i, ThemeScript.PINK_LOCKED, _cell_btns, _cell_lock_lbls)
+		_add_tool_slot(expanded, i, false, ThemeScript.PINK_LOCKED, _cell_btns, _cell_lock_lbls)
 	# KF03 cite: hint below the loadout slots (verified on-screen text).
 	var load_hint: Label = Label.new()
 	load_hint.text = "Select a loadout slot to equip or swap out tools"
-	load_hint.add_theme_font_size_override("font_size", 14)
+	load_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	load_hint.add_theme_font_size_override("font_size", 12)
 	load_hint.add_theme_color_override("font_color", ThemeScript.TEAL_MUTED)
 	if sans != null:
 		load_hint.add_theme_font_override("font", sans)
 	left.add_child(load_hint)
 	var card: PanelContainer = PanelContainer.new()
-	card.add_theme_stylebox_override("panel", ThemeScript.teal_card_style(1, 5, ThemeScript.TEAL_PANEL_BG, 12))
-	ThemeScript.add_teal_filigree(card, 3.0, 14.0)
+	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	card.add_theme_stylebox_override("panel", ThemeScript.teal_card_style(1, 5, ThemeScript.TEAL_PANEL_BG, 10))
+	ThemeScript.add_teal_filigree(card, 2.0, 10.0)
 	left.add_child(card)
 	var card_hb: HBoxContainer = HBoxContainer.new()
-	card_hb.add_theme_constant_override("separation", 12)
+	card_hb.add_theme_constant_override("separation", 8)
 	card.add_child(card_hb)
 	var tool_svc: SubViewportContainer = SubViewportContainer.new()
 	tool_svc.stretch = true
-	tool_svc.custom_minimum_size = Vector2(200, 120)
+	tool_svc.custom_minimum_size = Vector2(130, 104)
+	tool_svc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	tool_svc.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card_hb.add_child(tool_svc)
 	var tool_sv: SubViewport = SubViewport.new()
@@ -427,11 +447,11 @@ func _build_left_panel() -> VBoxContainer:
 	_setup_tool_world(tool_sv)
 	var tool_vb: VBoxContainer = VBoxContainer.new()
 	tool_vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	tool_vb.add_theme_constant_override("separation", 6)
+	tool_vb.add_theme_constant_override("separation", 4)
 	card_hb.add_child(tool_vb)
 	_tool_name_lbl = Label.new()
 	_tool_name_lbl.text = "Zipwire"
-	_tool_name_lbl.add_theme_font_size_override("font_size", 20)
+	_tool_name_lbl.add_theme_font_size_override("font_size", 18)
 	_tool_name_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
 	if serif != null:
 		_tool_name_lbl.add_theme_font_override("font", serif)
@@ -439,7 +459,7 @@ func _build_left_panel() -> VBoxContainer:
 	_tool_desc_lbl = Label.new()
 	_tool_desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_tool_desc_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_tool_desc_lbl.add_theme_font_size_override("font_size", 14)
+	_tool_desc_lbl.add_theme_font_size_override("font_size", 12)
 	_tool_desc_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_TEXT)
 	if sans != null:
 		_tool_desc_lbl.add_theme_font_override("font", sans)
@@ -447,21 +467,53 @@ func _build_left_panel() -> VBoxContainer:
 	return left
 
 
+## Tall centre stage (KF03): the thief fills the column between loadout and
+## customization, not a letterboxed strip above the loadout.
+func _build_preview_panel() -> VBoxContainer:
+	var panel: VBoxContainer = VBoxContainer.new()
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	panel.add_theme_constant_override("separation", 4)
+	var prev_hdr: Label = Label.new()
+	prev_hdr.text = "WARDROBE — DRAG TO ROTATE"
+	prev_hdr.add_theme_font_size_override("font_size", 13)
+	prev_hdr.add_theme_color_override("font_color", ThemeScript.TEAL_ACCENT)
+	var sans: Font = ThemeScript.font_sans()
+	if sans != null:
+		prev_hdr.add_theme_font_override("font", sans)
+	panel.add_child(prev_hdr)
+	var svc: SubViewportContainer = SubViewportContainer.new()
+	svc.stretch = true
+	svc.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	svc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	svc.custom_minimum_size = Vector2(360, 300)
+	svc.mouse_filter = Control.MOUSE_FILTER_STOP
+	panel.add_child(svc)
+	var sv: SubViewport = SubViewport.new()
+	sv.own_world_3d = true
+	sv.transparent_bg = false
+	sv.render_target_update_mode = SubViewport.UPDATE_WHEN_VISIBLE
+	svc.add_child(sv)
+	_setup_preview_world(sv)
+	svc.gui_input.connect(_on_preview_gui_input)
+	return panel
+
+
 func _build_right_panel() -> PanelContainer:
 	var serif: Font = ThemeScript.font_serif()
 	var sans: Font = ThemeScript.font_sans()
 	var right_card: PanelContainer = PanelContainer.new()
-	right_card.custom_minimum_size = Vector2(310, 0)
+	right_card.custom_minimum_size = Vector2(292, 0)
 	right_card.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	right_card.add_theme_stylebox_override("panel", ThemeScript.teal_panel_style(1, 6, ThemeScript.TEAL_PANEL_BG, 16))
 	ThemeScript.add_teal_filigree(right_card, 3.0, 14.0)
 	var right: VBoxContainer = VBoxContainer.new()
 	right.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	right.add_theme_constant_override("separation", 8)
+	right.add_theme_constant_override("separation", 4)
 	right_card.add_child(right)
 	var cust_hdr: Label = Label.new()
 	cust_hdr.text = "CUSTOMIZATION"
-	cust_hdr.add_theme_font_size_override("font_size", 19)
+	cust_hdr.add_theme_font_size_override("font_size", 18)
 	cust_hdr.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
 	if serif != null:
 		cust_hdr.add_theme_font_override("font", serif)
@@ -475,7 +527,7 @@ func _build_right_panel() -> PanelContainer:
 	# No thumbnail bytes in scope (standing HARD_LIMIT 5.9): name + DT
 	# level-tag card; click cycles outfits. Replaces the OptionButton dropdown.
 	_head_card = Button.new()
-	_head_card.custom_minimum_size = Vector2(0, 72)
+	_head_card.custom_minimum_size = Vector2(0, 40)
 	_head_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	ThemeScript.style_teal_tab(_head_card, true)
 	_head_card.pressed.connect(_on_head_card_pressed)
@@ -487,7 +539,7 @@ func _build_right_panel() -> PanelContainer:
 	# KF03/KF04 cite: framed thumbnail portrait card for the equipped Body
 	# (standing HARD_LIMIT 5.9, as HEAD).
 	_body_card = Button.new()
-	_body_card.custom_minimum_size = Vector2(0, 72)
+	_body_card.custom_minimum_size = Vector2(0, 40)
 	_body_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	ThemeScript.style_teal_tab(_body_card, true)
 	_body_card.pressed.connect(_on_body_card_pressed)
@@ -499,7 +551,7 @@ func _build_right_panel() -> PanelContainer:
 	# KF03/KF04 cite: framed thumbnail portrait card for the Calling Card
 	# (standing HARD_LIMIT 5.9, as HEAD).
 	_card_card = Button.new()
-	_card_card.custom_minimum_size = Vector2(0, 72)
+	_card_card.custom_minimum_size = Vector2(0, 40)
 	_card_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	ThemeScript.style_teal_tab(_card_card, true)
 	_card_card.pressed.connect(_on_card_card_pressed)
@@ -507,19 +559,21 @@ func _build_right_panel() -> PanelContainer:
 	_desc_lbl = Label.new()
 	_desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_desc_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_desc_lbl.add_theme_font_size_override("font_size", 14)
+	_desc_lbl.max_lines_visible = 3
+	_desc_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_desc_lbl.add_theme_font_size_override("font_size", 12)
 	_desc_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_TEXT)
 	if sans != null:
 		_desc_lbl.add_theme_font_override("font", sans)
 	right.add_child(_desc_lbl)
 	_hint_lbl = Label.new()
 	_hint_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_hint_lbl.add_theme_font_size_override("font_size", 14)
+	_hint_lbl.add_theme_font_size_override("font_size", 11)
 	_hint_lbl.add_theme_color_override("font_color", ThemeScript.PINK_HINT)
 	right.add_child(_hint_lbl)
 	var apply_btn: Button = Button.new()
 	apply_btn.text = "APPLY"
-	apply_btn.custom_minimum_size = Vector2(160, 42)
+	apply_btn.custom_minimum_size = Vector2(160, 32)
 	ThemeScript.style_teal_button(apply_btn, true)
 	apply_btn.pressed.connect(func() -> void: _apply_and_close(true))
 	right.add_child(apply_btn)
@@ -532,56 +586,133 @@ func _build_right_panel() -> PanelContainer:
 ## per-frame cost accrues while the wardrobe is closed.
 
 
-## KF03/KF04 cite: warm practical-lit turntable staging. Exact rig numbers are
-## port-authored (standing HARD_LIMIT 5.2: no UMG/light values in cooked JSON).
+## KF03/KF04 cite: warm practical-lit dressing-room staging. Exact rig
+## numbers are port-authored (standing HARD_LIMIT 5.2: no UMG/light values in
+## cooked JSON), but the room palette follows the reference's walnut panelling,
+## dresser, rug and warm wall lamp instead of a grey plane on black.
 func _setup_preview_world(sv: SubViewport) -> void:
 	var env: Environment = Environment.new()
 	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.055, 0.045, 0.06)
+	env.background_color = Color(0.045, 0.030, 0.026)
+	env.tonemap_mode = Environment.TONE_MAPPER_ACES
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.5, 0.4, 0.3)
-	env.ambient_light_energy = 0.75
+	env.ambient_light_color = Color(0.55, 0.40, 0.28)
+	env.ambient_light_energy = 0.98
+	env.tonemap_exposure = 1.12
+	env.glow_enabled = true
+	env.glow_intensity = 0.35
+	env.glow_bloom = 0.06
 	var world_env: WorldEnvironment = WorldEnvironment.new()
 	world_env.environment = env
 	sv.add_child(world_env)
-	var key: DirectionalLight3D = DirectionalLight3D.new()
-	key.light_color = Color(1.0, 0.9, 0.78)
-	key.light_energy = 1.15
+
+	var key: SpotLight3D = SpotLight3D.new()
+	key.name = "WardrobeKey"
+	key.light_color = Color(1.0, 0.88, 0.72)
+	key.light_energy = 3.2
+	key.spot_range = 9.0
+	key.spot_angle = 42.0
 	key.shadow_enabled = true
-	key.rotation_degrees = Vector3(-42.0, -28.0, 0.0)
+	key.position = Vector3(2.4, 3.1, 2.8)
 	sv.add_child(key)
+	key.look_at_from_position(key.position, Vector3(0.0, 1.15, 0.0))
+
 	var fill: OmniLight3D = OmniLight3D.new()
-	fill.light_color = Color(1.0, 0.72, 0.45)
-	fill.light_energy = 0.9
-	fill.position = Vector3(-2.0, 2.2, 2.6)
+	fill.light_color = Color(1.0, 0.70, 0.44)
+	fill.light_energy = 1.1
+	fill.omni_range = 6.0
+	fill.position = Vector3(-2.0, 2.1, 1.8)
 	sv.add_child(fill)
+
 	var rim: DirectionalLight3D = DirectionalLight3D.new()
-	rim.light_color = Color(0.55, 0.62, 0.9)
-	rim.light_energy = 0.45
-	rim.rotation_degrees = Vector3(-18.0, 150.0, 0.0)
+	rim.light_color = Color(0.52, 0.62, 0.90)
+	rim.light_energy = 0.55
+	rim.rotation_degrees = Vector3(-24.0, 158.0, 0.0)
 	sv.add_child(rim)
-	var floor_mi: MeshInstance3D = MeshInstance3D.new()
-	var plane: PlaneMesh = PlaneMesh.new()
-	plane.size = Vector2(9.0, 9.0)
-	floor_mi.mesh = plane
-	var mat: StandardMaterial3D = StandardMaterial3D.new()
-	mat.albedo_color = Color(0.1, 0.075, 0.08)
-	mat.roughness = 0.92
-	floor_mi.material_override = mat
-	sv.add_child(floor_mi)
+
+	_build_dressing_room(sv)
+
 	_turntable = Node3D.new()
 	_turntable.name = "Turntable"
 	_turntable.rotation = Vector3(_pitch, _yaw, 0.0)
 	sv.add_child(_turntable)
 	var cam: Camera3D = Camera3D.new()
-	cam.position = Vector3(0.0, 1.35, 3.4)
-	cam.fov = 40.0
+	cam.name = "WardrobePreviewCam"
+	cam.position = Vector3(0.0, 1.15, 3.4)
+	cam.fov = 36.0
 	cam.current = true
 	sv.add_child(cam)
 	# Godot 4.7: WorldEnvironment is missed inside own-world SubViewports; bind
 	# the environment to the camera after it enters the tree.
 	cam.environment = env
-	cam.look_at_from_position(cam.position, Vector3(0.0, 0.95, 0.0))
+	cam.look_at_from_position(cam.position, Vector3(0.0, 1.0, 0.0))
+	_preview_cam = cam
+
+
+## Warm room shell built from primitive boxes: walnut back/side walls, plank
+## floor, rug, dresser and wall lamp. Kept in-scope (no level load) so the
+## wardrobe stays a lightweight canvas-layer screen.
+func _build_dressing_room(sv: SubViewport) -> void:
+	var room: Node3D = Node3D.new()
+	room.name = "DressingRoom"
+	sv.add_child(room)
+	var floor_col: Color = Color(0.145, 0.095, 0.065)
+	var wall_col: Color = Color(0.130, 0.078, 0.052)
+	var trim_col: Color = Color(0.205, 0.126, 0.080)
+	_add_room_box(room, Vector3(8.0, 0.10, 7.4), Vector3(0.0, -0.05, 0.2), floor_col, 0.86)
+	_add_room_box(room, Vector3(2.6, 0.025, 1.9), Vector3(0.0, 0.015, 0.45), Color(0.235, 0.075, 0.060), 0.95)
+	_add_room_box(room, Vector3(8.0, 3.8, 0.12), Vector3(0.0, 1.9, -2.4), wall_col, 0.92)
+	_add_room_box(room, Vector3(0.12, 3.8, 7.4), Vector3(-3.1, 1.9, 0.2), wall_col.darkened(0.12), 0.94)
+	_add_room_box(room, Vector3(0.12, 3.8, 7.4), Vector3(3.1, 1.9, 0.2), wall_col.darkened(0.12), 0.94)
+	# Vertical panelling battens + chair rail / baseboard.
+	for i: int in range(8):
+		var x: float = -2.8 + float(i) * 0.8
+		_add_room_box(room, Vector3(0.055, 3.5, 0.035), Vector3(x, 1.75, -2.32), trim_col, 0.80)
+	_add_room_box(room, Vector3(7.6, 0.10, 0.055), Vector3(0.0, 0.95, -2.31), Color(0.085, 0.050, 0.033), 0.72)
+	_add_room_box(room, Vector3(7.6, 0.14, 0.07), Vector3(0.0, 0.07, -2.31), Color(0.085, 0.050, 0.033), 0.72)
+	# Dresser on the right, matching the reference's chest of drawers.
+	_add_room_box(room, Vector3(1.7, 1.05, 0.60), Vector3(1.95, 0.525, -1.45), Color(0.145, 0.083, 0.055), 0.78)
+	_add_room_box(room, Vector3(1.82, 0.07, 0.68), Vector3(1.95, 1.085, -1.45), trim_col, 0.62)
+	for d: int in range(3):
+		var dy: float = 0.24 + float(d) * 0.29
+		_add_room_box(room, Vector3(1.42, 0.22, 0.035), Vector3(1.95, dy, -1.13), Color(0.180, 0.108, 0.070), 0.70)
+		_add_room_box(room, Vector3(0.11, 0.03, 0.030), Vector3(1.95, dy, -1.10), Color(0.60, 0.44, 0.20), 0.35, true)
+	# Warm wall lamp above the dresser: fixture, glowing globe + practical.
+	_add_room_box(room, Vector3(0.16, 0.28, 0.09), Vector3(2.52, 1.95, -2.31), Color(0.42, 0.30, 0.14), 0.40, true)
+	var globe: MeshInstance3D = MeshInstance3D.new()
+	var sphere: SphereMesh = SphereMesh.new()
+	sphere.radius = 0.13
+	sphere.height = 0.26
+	globe.mesh = sphere
+	var glow_mat: StandardMaterial3D = StandardMaterial3D.new()
+	glow_mat.albedo_color = Color(1.0, 0.78, 0.48)
+	glow_mat.emission_enabled = true
+	glow_mat.emission = Color(1.0, 0.62, 0.30)
+	glow_mat.emission_energy_multiplier = 3.0
+	globe.material_override = glow_mat
+	globe.position = Vector3(2.52, 1.78, -2.19)
+	room.add_child(globe)
+	var lamp: OmniLight3D = OmniLight3D.new()
+	lamp.light_color = Color(1.0, 0.64, 0.36)
+	lamp.light_energy = 2.6
+	lamp.omni_range = 5.5
+	lamp.position = Vector3(2.35, 1.75, -1.75)
+	room.add_child(lamp)
+
+
+func _add_room_box(parent: Node, box_size: Vector3, pos: Vector3, color: Color, roughness: float, metallic: bool = false) -> MeshInstance3D:
+	var mi: MeshInstance3D = MeshInstance3D.new()
+	var box: BoxMesh = BoxMesh.new()
+	box.size = box_size
+	mi.mesh = box
+	var mat: StandardMaterial3D = StandardMaterial3D.new()
+	mat.albedo_color = color
+	mat.roughness = roughness
+	mat.metallic = 1.0 if metallic else 0.0
+	mi.material_override = mat
+	mi.position = pos
+	parent.add_child(mi)
+	return mi
 
 
 ## KF03/KF04 cite: tool tooltip-card staging (3D model + name + desc).
@@ -589,13 +720,15 @@ func _setup_preview_world(sv: SubViewport) -> void:
 func _setup_tool_world(sv: SubViewport) -> void:
 	var env: Environment = Environment.new()
 	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.06, 0.05, 0.07)
+	env.background_color = Color(0.075, 0.052, 0.040)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.5, 0.4, 0.3)
-	env.ambient_light_energy = 0.8
+	env.ambient_light_color = Color(0.58, 0.42, 0.28)
+	env.ambient_light_energy = 0.95
 	var world_env: WorldEnvironment = WorldEnvironment.new()
 	world_env.environment = env
 	sv.add_child(world_env)
+	_add_room_box(sv, Vector3(3.2, 2.2, 0.08), Vector3(0.0, 1.0, -0.8), Color(0.13, 0.078, 0.052), 0.9)
+	_add_room_box(sv, Vector3(3.2, 0.08, 2.0), Vector3(0.0, -0.05, 0.2), Color(0.145, 0.095, 0.065), 0.86)
 	var key: DirectionalLight3D = DirectionalLight3D.new()
 	key.light_color = Color(1.0, 0.9, 0.78)
 	key.light_energy = 1.2
@@ -616,6 +749,36 @@ func _setup_tool_world(sv: SubViewport) -> void:
 	sv.add_child(cam)
 	cam.environment = env
 	cam.look_at_from_position(cam.position, Vector3(0.0, 0.25, 0.0))
+	_tool_cam = cam
+
+
+func _frame_tool_camera() -> void:
+	if _tool_cam == null or _tool_holder == null or not is_instance_valid(_tool_cam) or not is_instance_valid(_tool_holder):
+		return
+	var box: AABB = AABB()
+	var have: bool = false
+	var inv: Transform3D = _tool_holder.global_transform.affine_inverse()
+	for node: Node in _tool_holder.find_children("*", "MeshInstance3D", true, false):
+		var mi: MeshInstance3D = node as MeshInstance3D
+		if mi == null or mi.mesh == null:
+			continue
+		var xf: Transform3D = inv * mi.global_transform
+		var ab: AABB = xf * mi.get_aabb()
+		if not have:
+			box = ab
+			have = true
+		else:
+			box = box.merge(ab)
+	if not have:
+		return
+	var center: Vector3 = _tool_holder.global_transform * box.get_center()
+	var max_dim: float = maxf(box.size.x, maxf(box.size.y, box.size.z))
+	max_dim = maxf(max_dim, 0.15)
+	var fov: float = deg_to_rad(_tool_cam.fov)
+	var dist: float = (max_dim * 0.5) / tan(fov * 0.5) * 1.25
+	var pos: Vector3 = center + Vector3(0.0, max_dim * 0.18, dist)
+	_tool_cam.position = pos
+	_tool_cam.look_at_from_position(pos, center)
 
 
 func _on_preview_gui_input(event: InputEvent) -> void:
@@ -714,6 +877,7 @@ func _refresh_tool_ui() -> void:
 		if node != null:
 			_tool_holder.add_child(node)
 			_bind_preview_materials(node, _glb_to_ue_mesh(mesh_path))
+			call_deferred("_frame_tool_camera")
 	var entry_var2: Variant = TOOLS[_active_tool]
 	var entry2: Dictionary = entry_var2 as Dictionary
 	if _tool_name_lbl != null:
@@ -841,6 +1005,38 @@ func _rebuild_figure() -> void:
 				prop.scale = Vector3(0.6, 0.6, 0.6)
 			_turntable.add_child(card_node)
 			_bind_preview_materials(card_node, _glb_to_ue_mesh(card_path))
+	call_deferred("_frame_preview_camera")
+
+
+## Auto-frames the preview camera from the composed body+head+card bounds in
+## turntable space, so the thief fills the tall centre stage instead of sitting
+## small in a wide letterbox. Height-fit uses the camera's vertical FOV.
+func _frame_preview_camera() -> void:
+	if _preview_cam == null or _turntable == null or not is_instance_valid(_preview_cam) or not is_instance_valid(_turntable):
+		return
+	var box: AABB = AABB()
+	var have: bool = false
+	var inv: Transform3D = _turntable.global_transform.affine_inverse()
+	for node: Node in _turntable.find_children("*", "MeshInstance3D", true, false):
+		var mi: MeshInstance3D = node as MeshInstance3D
+		if mi == null or mi.mesh == null:
+			continue
+		var xf: Transform3D = inv * mi.global_transform
+		var ab: AABB = xf * mi.get_aabb()
+		if not have:
+			box = ab
+			have = true
+		else:
+			box = box.merge(ab)
+	if not have:
+		return
+	var center: Vector3 = box.get_center()
+	var height: float = maxf(box.size.y, 0.5)
+	var fov: float = deg_to_rad(_preview_cam.fov)
+	var dist: float = (height * 0.5) / tan(fov * 0.5) * 1.12
+	dist = clampf(dist, 1.8, 7.0)
+	_preview_cam.position = Vector3(center.x, center.y + height * 0.06, center.z + dist)
+	_preview_cam.look_at_from_position(_preview_cam.position, Vector3(center.x, center.y - height * 0.02, center.z))
 
 
 func _apply_preview_idle(root: Node) -> void:

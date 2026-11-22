@@ -19,7 +19,21 @@ const FP_TOOL_BONES: Array[String] = ["weapon_r_1p", "hand_r_1p", "hand_r"]
 # Skeleton joints marking the UE first-person camera, in preference order.
 const FP_CAM_BONES: Array[String] = ["camera_position", "game_camera"]
 const FP_ANIM_BLEND: float = 0.2 # crossfade window 0.15-0.25 s per deliverable
-const FP_VM_FOV_DEG: float = 85.0 # OSECameraComponent.FirstPersonFieldOfView lock
+# P1 FOV deferred (do NOT change the default yet): UE
+# OSECameraComponent.FirstPersonFieldOfView = 85.0 is a HORIZONTAL angle; at
+# 16:9 that is 54.54 deg vertical. This port feeds 85.0 to the VM shader as a
+# vertical FOV, so tools/arms are framed tighter than the authored view. The
+# switch to UE_FP_FOV_VERTICAL_16X9_DEG waits for a native KF16/KF17/KF24
+# capture to confirm the framing.
+const UE_FP_FOV_HORIZONTAL_DEG: float = 85.0
+const UE_FP_FOV_VERTICAL_16X9_DEG: float = 54.54
+const FP_VM_FOV_DEG: float = 85.0 # OSECameraComponent.FirstPersonFieldOfView lock (unchanged pending capture)
+# UE first-person view-space scale applied in the VM shader; the mesh itself
+# stays at scale 1.0 (tool roll and socket net transform unchanged).
+const FP_VM_SCALE: float = 0.5
+# UE OSECableComponent normal traversal cable: authored steel, no emission.
+# MI_Zipwire is the launcher and M_Hotwire_Glow only the shock helper.
+const ZIPWIRE_CABLE_MAT: String = "/Game/Art/Environment/Props/WiringKit/MI_WiredCableSmall"
 
 const STAND_HEAD_HEIGHT: float = 1.66875
 const CROUCH_HEAD_HEIGHT: float = 0.88875
@@ -1284,7 +1298,6 @@ func _end_wire_crank() -> void:
 
 
 func _update_zipwire_cable() -> void:
-	const ZIPWIRE_CABLE_ENERGY_CAP := 0.65
 	if not is_grappling:
 		if _zipwire_cable_mesh != null and is_instance_valid(_zipwire_cable_mesh):
 			_zipwire_cable_mesh.visible = false
@@ -1296,16 +1309,22 @@ func _update_zipwire_cable() -> void:
 		cyl.top_radius = 0.022 # BP_Hotwire_Cable CableWidth 5cm (~0.044m diameter)
 		cyl.bottom_radius = 0.022
 		cyl.height = 1.0
-		cyl.radial_segments = 8
-		cyl.rings = 1
-		var cmat := StandardMaterial3D.new()
-		cmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		cmat.albedo_color = Color(0.95, 0.96, 0.85, 0.95)
-		cmat.emission_enabled = true
-		cmat.emission = Color(0.85, 0.92, 0.72)
-		cmat.emission_energy_multiplier = ZIPWIRE_CABLE_ENERGY_CAP
-		assert(cmat.emission_energy_multiplier <= ZIPWIRE_CABLE_ENERGY_CAP + 0.001, "CableCap: zipwire cable energy exceeds cap")
-		print("CableCap: zipwire cable emission_energy=", cmat.emission_energy_multiplier, " cap=", ZIPWIRE_CABLE_ENERGY_CAP, " (UE MI_Zipwire Emissive Off; mission glow 0.65)")
+		# 12 radial x 8 rings keeps the cable round and taut up close (KF17)
+		# instead of the old 8-sided single-ring tube.
+		cyl.radial_segments = 12
+		cyl.rings = 8
+		var cmat: Material = null
+		var loader: Node = _get_fp_mat_loader()
+		if loader != null:
+			cmat = loader.call("get_material_for_ue", ZIPWIRE_CABLE_MAT) as Material
+		if cmat == null:
+			# Fallback only when the material DB is unavailable: authored steel,
+			# never emissive (UE OSECableComponent has no glow on traversal).
+			var fallback := StandardMaterial3D.new()
+			fallback.albedo_color = Color(0.06, 0.065, 0.07, 1.0)
+			fallback.roughness = 0.45
+			fallback.metallic = 0.35
+			cmat = fallback
 		cyl.material = cmat
 		_zipwire_cable_mesh = MeshInstance3D.new()
 		_zipwire_cable_mesh.name = "ZipwireCableMesh"
@@ -1315,7 +1334,8 @@ func _update_zipwire_cable() -> void:
 		add_child(_zipwire_cable_mesh)
 	var from_pos: Vector3 = global_position + Vector3.UP * 1.2
 	if fp_tool_root != null and is_instance_valid(fp_tool_root) and fp_tool_root.is_inside_tree():
-		from_pos = fp_tool_root.global_position
+		# SK_Zipwire muzzle (max x ~= 0.3377 m in tool space), not the hand.
+		from_pos = fp_tool_root.global_transform * Vector3(0.34, 0.0, 0.0)
 	var offset: Vector3 = grapple_target - from_pos
 	var dist: float = offset.length()
 	if dist < 0.05:
@@ -1327,7 +1347,9 @@ func _update_zipwire_cable() -> void:
 	var x_axis: Vector3 = up_hint.cross(y_axis).normalized()
 	var z_axis: Vector3 = x_axis.cross(y_axis).normalized()
 	_zipwire_cable_mesh.global_position = (from_pos + grapple_target) * 0.5
-	_zipwire_cable_mesh.basis = Basis(x_axis, y_axis, z_axis).scaled(Vector3(1.0, dist, 1.0))
+	# Stretch along the local Y column. Basis.scaled() scales rows, which
+	# sheared the tube off the muzzle-to-anchor line for diagonal cables.
+	_zipwire_cable_mesh.basis = Basis(x_axis, y_axis * dist, z_axis)
 
 
 func try_auto_mantle() -> bool:
@@ -2224,6 +2246,7 @@ static func _ensure_vm_shaders() -> void:
 render_mode depth_draw_opaque, specular_schlick_ggx;
 
 uniform float vm_fov_deg = 85.0;
+uniform float vm_scale = 0.5;
 uniform sampler2D albedo_tex : source_color, hint_default_white, filter_linear, repeat_enable;
 uniform sampler2D normal_tex : hint_normal, filter_linear, repeat_enable;
 uniform sampler2D orm_tex : hint_default_white, filter_linear, repeat_enable;
@@ -2242,6 +2265,10 @@ uniform bool use_emission_tex = false;
 
 void vertex() {
 	vec4 view_pos = MODELVIEW_MATRIX * vec4(VERTEX, 1.0);
+	// UE's first-person view-space scale: halving xyz leaves screen placement
+	// unchanged while pulling the VM into the near half of the depth range.
+	// The old z-only 0.996..0.78 remap is gone.
+	view_pos.xyz *= vm_scale;
 	float cur_fy = abs(PROJECTION_MATRIX[1][1]);
 	float vm_fy = 1.0 / tan(radians(vm_fov_deg) * 0.5);
 	float fov_scale = vm_fy / max(cur_fy, 0.0001);
@@ -2249,11 +2276,6 @@ void vertex() {
 	vm_proj[0][0] *= fov_scale;
 	vm_proj[1][1] *= fov_scale;
 	POSITION = vm_proj * view_pos;
-	float near_z = 0.02;
-	if (-view_pos.z >= near_z) {
-		float depth_t = clamp((-view_pos.z - near_z) / 1.25, 0.0, 1.0);
-		POSITION.z = mix(0.996, 0.78, depth_t) * POSITION.w;
-	}
 }
 
 void fragment() {
@@ -2294,6 +2316,7 @@ void fragment() {
 render_mode blend_mix, depth_draw_never, cull_disabled, specular_schlick_ggx;
 
 uniform float vm_fov_deg = 85.0;
+uniform float vm_scale = 0.5;
 uniform sampler2D albedo_tex : source_color, hint_default_white, filter_linear, repeat_enable;
 uniform sampler2D opacity_tex : hint_default_white, filter_linear, repeat_enable;
 uniform sampler2D normal_tex : hint_normal, filter_linear, repeat_enable;
@@ -2316,6 +2339,8 @@ uniform bool use_orm_tex = false;
 
 void vertex() {
 	vec4 view_pos = MODELVIEW_MATRIX * vec4(VERTEX, 1.0);
+	// Same UE view-space first-person scale as the opaque VM shader.
+	view_pos.xyz *= vm_scale;
 	float cur_fy = abs(PROJECTION_MATRIX[1][1]);
 	float vm_fy = 1.0 / tan(radians(vm_fov_deg) * 0.5);
 	float fov_scale = vm_fy / max(cur_fy, 0.0001);
@@ -2323,11 +2348,6 @@ void vertex() {
 	vm_proj[0][0] *= fov_scale;
 	vm_proj[1][1] *= fov_scale;
 	POSITION = vm_proj * view_pos;
-	float near_z = 0.02;
-	if (-view_pos.z >= near_z) {
-		float depth_t = clamp((-view_pos.z - near_z) / 1.25, 0.0, 1.0);
-		POSITION.z = mix(0.996, 0.78, depth_t) * POSITION.w;
-	}
 }
 
 void fragment() {
@@ -2363,6 +2383,7 @@ func _wrap_material_for_vm(src_mat: Material) -> ShaderMaterial:
 		var src_sh := src_mat as ShaderMaterial
 		smat.shader = _vm_glass_shader
 		smat.set_shader_parameter("vm_fov_deg", FP_VM_FOV_DEG)
+		smat.set_shader_parameter("vm_scale", FP_VM_SCALE)
 		for p_name: String in [
 			"albedo_tex", "opacity_tex", "normal_tex", "orm_tex",
 			"albedo_tint", "opacity_scale", "roughness_val", "metallic_val",
@@ -2377,6 +2398,7 @@ func _wrap_material_for_vm(src_mat: Material) -> ShaderMaterial:
 	if std == null:
 		smat.shader = _vm_opaque_shader
 		smat.set_shader_parameter("vm_fov_deg", FP_VM_FOV_DEG)
+		smat.set_shader_parameter("vm_scale", FP_VM_SCALE)
 		return smat
 	var is_trans: bool = std.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED
 	if is_trans:
@@ -2386,6 +2408,7 @@ func _wrap_material_for_vm(src_mat: Material) -> ShaderMaterial:
 	else:
 		smat.shader = _vm_opaque_cull_disabled_shader if std.cull_mode == BaseMaterial3D.CULL_DISABLED else _vm_opaque_shader
 	smat.set_shader_parameter("vm_fov_deg", FP_VM_FOV_DEG)
+	smat.set_shader_parameter("vm_scale", FP_VM_SCALE)
 	smat.set_shader_parameter("albedo_tint", std.albedo_color)
 	smat.set_shader_parameter("roughness_val", std.roughness)
 	var metal_v: float = 1.0 if (std.metallic_texture != null and std.metallic <= 0.001) else std.metallic
@@ -2439,9 +2462,10 @@ func _apply_viewmodel_isolation(root_node: Node) -> void:
 ## Real 1P viewmodel (BP_Player_Thief_Spider.Mesh1P_UpperBody):
 ## SK_ThiefNisha__BodyUpper attached under the camera with retargeted 1P clips.
 ## SK_ThiefNisha__BodyUpper faces +Z in glTF Y-up (like 3P meshes), so it is
-## rotated 180 deg around Y and shifted vertically by -cam_origin.y (instead of
-## inverting camera_position's +90 deg X root basis, which pitched the torso
-## onto its back). Identity scale is kept (mesh bounds already in meters).
+## rotated 180 deg around Y and shifted down by the authored 1P eye height
+## (instead of inverting camera_position's +90 deg X root basis, which pitched
+## the torso onto its back). Identity scale is kept (mesh bounds already in
+## meters).
 func _try_build_real_fp_arms() -> bool:
 	_fp_arm_skel = null
 	_fp_arm_holder = null
@@ -2479,13 +2503,11 @@ func _try_build_real_fp_arms() -> bool:
 	if inst3d == null:
 		holder.queue_free()
 		return false
-	var holder_from_skel := Transform3D.IDENTITY
-	var cursor: Node = sk
-	while cursor != null and cursor != holder:
-		if cursor is Node3D:
-			holder_from_skel = (cursor as Node3D).transform * holder_from_skel
-		cursor = cursor.get_parent()
-	var cam_origin: Vector3 = (holder_from_skel * sk.get_bone_global_rest(cam_bone)).origin
+	# 1P camera anchor: the authored UE eye height, not the GLB
+	# camera_position rest (1.61 m). Spider BaseEyeHeight 77.875 cm over the
+	# 89 cm capsule half-height = 1.66875 m, so arms/tool sit ~6 cm lower to
+	# match the authored framing (KU/KF16/KF17/KF24). Mesh scale stays 1.0.
+	var cam_origin := Vector3(0.0, STAND_HEAD_HEIGHT, 0.0)
 	inst3d.rotation_degrees = Vector3(0.0, 180.0, 0.0)
 	inst3d.position = Vector3(cam_origin.x, -cam_origin.y, cam_origin.z)
 	_bind_ue_mesh_materials(inst3d, "/Game/Art/Animation/ThiefNisha/Skin/Base/SK_ThiefNisha__BodyUpper")
@@ -2580,6 +2602,13 @@ func _select_fp_anim_role(moving: bool) -> String:
 			return "disguise_walk"
 		if is_crouching:
 			return "disguise_crouch_idle"
+	# Zipwire cast/aim/anchored pose: the 0.2 s LMB launch hold and a live
+	# zipwire action clip keep the authored CastIdle; the grapple travel branch
+	# above still owns the winch itself (order unchanged per audit), and a
+	# relaxed standing idle falls through to StandIdle below.
+	if fp_tool_id == "zipwire" and not is_crouching \
+			and (_wire_launch_arming or _fp_action_ttl > 0.0):
+		return "zipwire_cast_idle"
 	match fp_tool_id:
 		"zipwire":
 			if moving:

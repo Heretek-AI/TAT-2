@@ -96,6 +96,9 @@ const FP_ORDER: Array[String] = ["walk", "sprint", "crouch"]
 const FP_TOOL_CLIPS := {
 	"zipwire_idle": {"clip": "AN_ThiefNisha_Zipwire_StandIdle", "loop": true},
 	"zipwire_crouch_idle": {"clip": "AN_ThiefNisha_Zipwire_Crouch_Idle", "loop": true},
+	# Cast/aim/anchored pose (UE zipwire CastIdle); the relaxed idle above is
+	# only for standing with the tool equipped and no cast/aim in flight.
+	"zipwire_cast_idle": {"clip": "AN_ThiefNisha_Zipwire__CastIdle", "loop": true},
 	"zipwire_walk": {"clip": "AN_Zipwire_Walk_F_1P", "loop": true},
 	"zipwire_sprint": {"clip": "AN_Zipwire_Run_F_1P", "loop": true},
 	"zipwire_crank": {"clip": "AN_ThiefNisha_Zipwire__Reload_Loop", "loop": true},

@@ -120,6 +120,7 @@ func _setup_environment() -> void:
 	light_probe.register_light(moon)
 	_add_guildhall_gate_fills()
 	_add_guildhall_foyer_fills()
+	_add_guildhall_saferoom_fill()
 
 
 ## The extracted Guildhall gate/fence sublevel carries the iron gate, arch,
@@ -153,6 +154,25 @@ func _add_guildhall_gate_fills() -> void:
 	fence_lamp.shadow_enabled = false
 	add_child(fence_lamp)
 	light_probe.register_light(fence_lamp)
+
+
+## The safe room starts the mission; under the 0.20 skylight its wood/plaster
+## walls read as a black frame around the blue portal. A single neutral fill
+## at the authored spawn (127.27, 26.47, -5.33) keeps the portal mood while
+## making the room navigable.
+func _add_guildhall_saferoom_fill() -> void:
+	if GameState.active_map_id != "guildhall":
+		return
+	var fill := OmniLight3D.new()
+	fill.name = "GuildhallSafeRoomFill"
+	fill.position = Vector3(127.0, 29.0, -5.0)
+	fill.light_color = Color(0.72, 0.78, 0.95)
+	fill.light_energy = 1.1
+	fill.omni_range = 12.0
+	fill.omni_attenuation = 1.2
+	fill.shadow_enabled = false
+	add_child(fill)
+	light_probe.register_light(fill)
 
 
 ## The authored Guildhall foyer is a large checkered hall with a refill

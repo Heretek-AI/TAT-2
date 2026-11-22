@@ -54,6 +54,7 @@ func _ready() -> void:
 	add_to_group("interactables")
 	add_to_group("spawner_pickup")
 	add_to_group("thief_vision_highlight")
+	add_to_group("xray_target")
 	set_meta("collected", false)
 	collision_layer = 0
 	collision_mask = 0
@@ -156,7 +157,11 @@ func set_highlighted(on: bool) -> void:
 	var vis := get_node_or_null("Visual") as Node3D
 	if vis == null:
 		return
-	_apply_highlight_recursive(vis, on)
+	XrayOverlay.set_xray_highlight(vis, on, "loot")
+
+
+func set_xray_highlight(on: bool, _category: String = "") -> void:
+	set_highlighted(on)
 
 
 func _apply_highlight_recursive(node: Node, on: bool) -> void:

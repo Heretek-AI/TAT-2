@@ -224,6 +224,7 @@ var _guard_std_cache: Dictionary = {}
 func _ready() -> void:
 	add_to_group("guards")
 	add_to_group("thief_vision_highlight")
+	add_to_group("xray_target")
 	collision_layer = 4
 	collision_mask = 1 | 2
 	if name.to_lower().find("lantern") >= 0:
@@ -1433,9 +1434,14 @@ func _update_procedural_anim(delta: float) -> void:
 
 
 func set_highlighted(on: bool) -> void:
+	# C2: authored MI_XrayGuard silhouette (through walls, category red).
 	if visual_root == null:
 		return
-	_apply_highlight_recursive(visual_root, _highlight_mat if on else null)
+	XrayOverlay.set_xray_highlight(visual_root, on, "guard")
+
+
+func set_xray_highlight(on: bool, _category: String = "") -> void:
+	set_highlighted(on)
 
 
 func _apply_highlight_recursive(node: Node, mat: Material) -> void:

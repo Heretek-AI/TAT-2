@@ -16,6 +16,7 @@ var label: Label3D
 func _ready() -> void:
 	add_to_group('interactables')
 	add_to_group('thief_vision_highlight')
+	add_to_group('xray_target')
 
 	var col: CollisionShape3D = CollisionShape3D.new()
 	var box: BoxShape3D = BoxShape3D.new()
@@ -94,3 +95,11 @@ func get_interact_prompt() -> String:
 func set_highlighted(on: bool) -> void:
 	if label != null and not collected:
 		label.visible = on
+	# C2: authored MI_XrayClue green silhouette, including the mesh (the old
+	# path only toggled the label).
+	if visual_root != null and not collected:
+		XrayOverlay.set_xray_highlight(visual_root, on, "clue")
+
+
+func set_xray_highlight(on: bool, _category: String = "") -> void:
+	set_highlighted(on)

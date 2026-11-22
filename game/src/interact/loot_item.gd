@@ -105,6 +105,7 @@ func _ready() -> void:
 	add_to_group("interactables")
 	add_to_group("loot")
 	add_to_group("thief_vision_highlight")
+	add_to_group("xray_target")
 	set_meta("collected", false)
 
 	var col := CollisionShape3D.new()
@@ -220,7 +221,12 @@ func interact(_actor: Node) -> void:
 func set_highlighted(on: bool) -> void:
 	label.visible = on or is_quest_item
 	if visual_root != null:
-		_apply_highlight_recursive(visual_root, _highlight_mat if on else null)
+		# C2: authored MI_XrayLoot orange silhouette.
+		XrayOverlay.set_xray_highlight(visual_root, on, "loot")
+
+
+func set_xray_highlight(on: bool, _category: String = "") -> void:
+	set_highlighted(on)
 
 
 func _apply_highlight_recursive(node: Node, mat: Material) -> void:

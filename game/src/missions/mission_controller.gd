@@ -33,6 +33,7 @@ var player: CharacterBody3D
 var hud: CanvasLayer
 var smokes: Array[Dictionary] = []
 var rain_node: Node3D = null
+var lens_rain_node: CanvasLayer = null
 var contract_info: Dictionary = {}
 var level_stats: Dictionary = {}
 var spawner_meshes: Dictionary = {}
@@ -101,6 +102,15 @@ func _setup_environment() -> void:
 	WeatherProfile.apply_environment(e, moon, wpreset)
 	WeatherVisuals.apply_sky(e, wpreset, moon)
 	MobileProfile.apply_environment(e)
+	# C3 LocalVolumetric: the Guildhall sublevel carries authored fog boxes with
+	# MI_LocalVolumetricFog_Outside_Preset_A (Color .5, Global Multiplier .05,
+	# EdgeFalloff .75). FogVolume needs the world volumetric pass enabled; the
+	# global density stays 0 so only authored volumes contribute.
+	if GameState.active_map_id == "guildhall":
+		e.volumetric_fog_enabled = true
+		e.volumetric_fog_density = 0.0
+		e.volumetric_fog_albedo = Color(0.5, 0.5, 0.5, 1.0)
+		e.volumetric_fog_emission = Color(0.02, 0.018, 0.026, 1.0)
 	env.environment = e
 	add_child(env)
 	print("TAT-2 environment: bg=", e.background_mode, " ambient_src=", e.ambient_light_source, " ambient_energy=", e.ambient_light_energy, " ambient_color=", e.ambient_light_color, " sky=", e.sky != null, " fog=", e.fog_enabled, " fog_density=", e.fog_density)
@@ -197,7 +207,9 @@ func start_contract(order: int) -> void:
 	_setup_thieves_den_env(map_id)
 
 	_spawn_player(ue_level_data.get("player_spawns", []), ue_level_data.get("player_spawn_transforms", []), ue_level_data)
-	rain_node = WeatherVisuals.make_rain(self, WeatherProfile.preset_for_map(map_id))
+	var weather_preset: Dictionary = WeatherProfile.preset_for_map(map_id)
+	rain_node = WeatherVisuals.make_rain(self, weather_preset)
+	lens_rain_node = WeatherVisuals.make_lens_rain(self, weather_preset)
 	if player != null and hud != null:
 		if player.has_signal("thief_vision_toggled") and hud.has_method("set_thief_vision"):
 			player.thief_vision_toggled.connect(hud.set_thief_vision)
@@ -363,6 +375,7 @@ func _map_id_to_sublevels(map_id: String, order: int = 2) -> Array[String]:
 				"res://data/generated/levels/Guildhall/Guildhall_Geometry.tatlevel.json",
 				"res://data/generated/levels/Guildhall/Guildhall_Landscape.tatlevel.json",
 				"res://data/generated/levels/Guildhall/Guildhall_LightingNoGameplay.tatlevel.json",
+				"res://data/generated/levels/Guildhall/Guildhall_LocalVolumetric.tatlevel.json",
 				"res://data/generated/levels/Guildhall/Guildhall_PeripheryA.tatlevel.json",
 				"res://data/generated/levels/Guildhall/Guildhall_Loot.tatlevel.json",
 				"res://data/generated/levels/Guildhall/Guildhall_MissionClues.tatlevel.json",
@@ -2216,6 +2229,7 @@ func _process(delta: float) -> void:
 			# victory/failed panels. Frozen weather on end screens.
 		if rain_node != null:
 			WeatherVisuals.snap_rain_to(rain_node, player)
+			WeatherVisuals.update_rain_occlusion(rain_node, player)
 
 
 func _on_extracted() -> void:
@@ -2267,6 +2281,7 @@ func _exit_tree() -> void:
 	VfxManager.cleanup_static_caches()
 	GuardAnimationLibrary.cleanup_static_caches()
 	ArtNouveauTheme.cleanup_static_caches()
+	XrayOverlay.clear_static_caches()
 	(load("res://src/core/weather_profile.gd") as GDScript).cleanup_static_caches()
 	(load("res://src/core/weather_visuals.gd") as GDScript).cleanup_static_caches()
 	(load("res://src/ai/guard_ai.gd") as GDScript).cleanup_static_caches()

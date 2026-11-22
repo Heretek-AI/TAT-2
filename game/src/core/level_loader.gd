@@ -1432,6 +1432,7 @@ func _new_build_ctx(parent: Node3D, light_probe: Node, generate_collision: bool)
 		"blocking_volume_count": 0,
 		"volume_skipped": 0,
 		"niagara_placements": 0,
+		"fog_volumes_built": 0,
 		"spline_count": 0,
 		"sky_light": {},
 		"fog_volume": {},
@@ -2205,6 +2206,67 @@ static func check_collider_budget(stats: Dictionary) -> bool:
 
 ## Emits one chunked MultiMeshInstance3D (or plain MeshInstance3D) plus its
 ## colliders and occluders. Returns the number of mesh instances added.
+func _is_fog_volume_override(ov_arr: Array) -> bool:
+	for ov_var: Variant in ov_arr:
+		if str(ov_var).find("LocalVolumetricFog") >= 0:
+			return true
+	return false
+
+
+## Authored fog values from MI_LocalVolumetricFog_Outside_Preset_A:
+## Color 0.5, Global Multiplier 0.05, EdgeFalloff 0.75, Emissive Color
+## (0.4271, 0.3542, 0.5). UE's Global Multiplier is a material multiplier, not
+## a per-metre extinction; ×20 is calibrated against the Vulkan capture so the
+## authored 0.05 reads as FogMaterial density 1.0 instead of vanishing.
+func _build_fog_volumes(trs: Array, ov_arr: Array, parent: Node3D, ctx: Dictionary) -> int:
+	var ov_path: String = ""
+	for ov_var: Variant in ov_arr:
+		var ov: String = str(ov_var)
+		if ov.find("LocalVolumetricFog") >= 0:
+			ov_path = ov
+			break
+	var info: Dictionary = _materials_db.get(ov_path, _materials_db_lower.get(ov_path.to_lower(), {}))
+	var params: Dictionary = _ue_norm_map(info.get("params", {}))
+	var vectors: Dictionary = _ue_norm_map(info.get("vectors", {}))
+	var density_v: Variant = _ue_lookup(params, ["globalmultiplier"])
+	var density_base: float = float(density_v) if density_v != null else 0.05
+	var density: float = clampf(density_base * 20.0, 0.05, 1.5)
+	var edge_v: Variant = _ue_lookup(params, ["edgefalloff"])
+	var edge: float = clampf(float(edge_v) if edge_v != null else 0.75, 0.0, 1.0)
+	var color_v: Variant = _ue_lookup(vectors, ["color"])
+	var color := Color(0.5, 0.5, 0.5, 1.0)
+	if color_v is Array and (color_v as Array).size() >= 3:
+		var ca: Array = color_v as Array
+		color = Color(float(ca[0]), float(ca[1]), float(ca[2]), 1.0)
+	var emis_v: Variant = _ue_lookup(vectors, ["emissivecolor"])
+	var emis := Color(0.0, 0.0, 0.0, 1.0)
+	if emis_v is Array and (emis_v as Array).size() >= 3:
+		var ea: Array = emis_v as Array
+		emis = Color(float(ea[0]), float(ea[1]), float(ea[2]), 1.0) * 0.08
+	var built: int = 0
+	for tr_var: Variant in trs:
+		if not (tr_var is Transform3D):
+			continue
+		var tr: Transform3D = tr_var as Transform3D
+		var sc: Vector3 = tr.basis.get_scale().abs()
+		var fog := FogVolume.new()
+		fog.name = "LocalVolumetricFog_%d" % built
+		fog.shape = RenderingServer.FOG_VOLUME_SHAPE_BOX
+		fog.size = Vector3(maxf(sc.x, 0.5), maxf(sc.y, 0.5), maxf(sc.z, 0.5))
+		fog.transform = Transform3D(tr.basis.orthonormalized(), tr.origin)
+		var fm := FogMaterial.new()
+		fm.density = density
+		fm.albedo = color
+		fm.emission = emis
+		fm.edge_fade = clampf(1.0 - edge, 0.0, 1.0)
+		fog.material = fm
+		fog.set_meta("ue_material", ov_path)
+		parent.add_child(fog)
+		built += 1
+	ctx["fog_volumes_built"] = int(ctx.get("fog_volumes_built", 0)) + built
+	return built
+
+
 func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> int:
 	var mp: String = str(item.get("mp", ""))
 	var trs: Array = item.get("trs", [])
@@ -2228,6 +2290,11 @@ func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> 
 			miss_arr.append(mp)
 		return 0
 	var ov_arr: Array[String] = _extract_override_materials(item)
+	# C3 LocalVolumetric: the authored fog boxes are Engine Cubes with a
+	# MI_LocalVolumetricFog_* override. Build a FogVolume per instance; do not
+	# draw the cube or create collision for it.
+	if _is_fog_volume_override(ov_arr):
+		return _build_fog_volumes(trs, ov_arr, parent, ctx)
 	var cpds_raw: Variant = item.get("cpds", [])
 	var cpds: Array[Color] = []
 	if cpds_raw is Array:
@@ -2637,6 +2704,7 @@ func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dict
 	result["blocking_volume_count"] = int(ctx.get("blocking_volume_count", 0))
 	result["volume_skipped"] = int(ctx.get("volume_skipped", 0))
 	result["niagara_placements"] = int(ctx.get("niagara_placements", 0))
+	result["fog_volumes_built"] = int(ctx.get("fog_volumes_built", 0))
 	result["niagara_spawned"] = int(ctx.get("niagara_spawned", 0))
 	result["niagara_systems"] = int(ctx.get("niagara_systems", 0))
 	result["spline_count"] = int(ctx.get("spline_count", 0))

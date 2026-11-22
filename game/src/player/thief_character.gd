@@ -6,6 +6,7 @@ const VfxManager = preload("res://src/core/vfx_manager.gd")
 const MobileProfile := preload("res://src/core/mobile_profile.gd")
 const ThiefAnimLib = preload("res://src/core/animation_library.gd")
 const LevelLoaderScript := preload("res://src/core/level_loader.gd")
+const OSERendererScript := preload("res://src/core/ose_renderer.gd")
 const SmokeProjectileScript := preload("res://src/player/smoke_projectile.gd")
 
 # Real ThiefNisha meshes (BP_Player_Thief_Spider skeletal components -> GLB;
@@ -245,6 +246,9 @@ var _smoke_preview_accum: float = 0.0 # P2 smoke preview: 32-ray ballistic sweep
 
 var head: Node3D
 var cam: Camera3D
+var ose_renderer: Node3D
+var _npr_enabled: bool = false
+var _snn_enabled: bool = false
 var spring_arm: SpringArm3D
 var col_shape: CollisionShape3D
 var mesh_root: Node3D
@@ -534,6 +538,11 @@ func _build_body() -> void:
 	cam.current = true
 	spring_arm.add_child(cam)
 	_build_first_person_rig()
+	# C1 renderer: camera-child graph effect, off by default (authored
+	# MPC_Painterly EffectIntensity 0). F6/F7 toggle NPR/SNN.
+	ose_renderer = OSERendererScript.attach(cam)
+	if ose_renderer != null:
+		ose_renderer.name = "OSERenderer"
 
 
 func apply_saved_settings(sync_cam: bool = false) -> void:
@@ -562,6 +571,16 @@ func apply_saved_settings(sync_cam: bool = false) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	# C1 debug toggles (F6 NPR ink, F7 SNN painterly). Defaults stay off;
+	# the authored MPC_Painterly Effect Intensity is 0.0.
+	if event is InputEventKey and (event as InputEventKey).pressed and not (event as InputEventKey).echo:
+		match (event as InputEventKey).keycode:
+			KEY_F6:
+				set_npr_effect(not _npr_enabled)
+				return
+			KEY_F7:
+				set_snn_effect(not _snn_enabled)
+				return
 	if GameState.state != "playing":
 		return
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not MobileProfile.is_mobile():
@@ -659,6 +678,26 @@ func _sync_thief_vision() -> void:
 		thief_vision = next_on
 		thief_vision_toggled.emit(thief_vision_on)
 		_update_thief_vision()
+
+
+func set_npr_effect(enabled: bool) -> void:
+	_npr_enabled = enabled
+	if ose_renderer != null and ose_renderer.has_method("set_npr"):
+		ose_renderer.call("set_npr", enabled)
+
+
+func set_snn_effect(enabled: bool, intensity: float = 0.65) -> void:
+	_snn_enabled = enabled
+	if ose_renderer != null and ose_renderer.has_method("set_snn"):
+		ose_renderer.call("set_snn", enabled, intensity)
+
+
+func is_npr_effect_active() -> bool:
+	return _npr_enabled
+
+
+func is_snn_effect_active() -> bool:
+	return _snn_enabled
 
 
 func _audio_gait() -> String:
@@ -3237,7 +3276,9 @@ func _update_thief_vision() -> void:
 	if not is_inside_tree():
 		return
 	for n: Node in get_tree().get_nodes_in_group("thief_vision_highlight"):
-		if n.has_method("set_highlighted"):
+		if n.has_method("set_xray_highlight"):
+			n.call("set_xray_highlight", thief_vision_on, "")
+		elif n.has_method("set_highlighted"):
 			n.call("set_highlighted", thief_vision_on)
 		elif n.has_method("set_highlight"):
 			n.call("set_highlight", thief_vision_on)

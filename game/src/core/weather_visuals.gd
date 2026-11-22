@@ -64,6 +64,8 @@ extends RefCounted
 const WeatherProfile := preload("res://src/core/weather_profile.gd")
 const MobileProfile := preload("res://src/core/mobile_profile.gd")
 const SKY_SHADER := preload("res://src/core/tat_sky.gdshader")
+const LENS_RAIN_SHADER := preload("res://src/core/tat_lens_rain.gdshader")
+const LENS_DROP_TEXTURE := "res://assets/ue/Raw/Art/VFX/Environment/RainStorm/Textures/T_RainDropsPacked.png"
 const MOON_PANORAMA_PATH := "res://assets/ue/Raw/Art/Environment/City/Architecture/BeautifulCorner/Materials/T_Moon_D.png"
 
 # Moon disc: authored SM_Moon scale -> real angular diameter (see mapping).
@@ -93,6 +95,13 @@ const RAIN_AMOUNT_MIN := 100
 const RAIN_LIFETIME := 1.1
 const RAIN_GRAVITY := 30.0
 const RAIN_BOX_HALF := Vector3(30.0, 20.0, 30.0)
+## Roof occlusion: the volume is split into a 4x4 grid of rain columns. Each
+## column probes upward; a column under a roof is hidden. APPROXIMATE: a
+## 15 m cell can still show rain at a roof edge, but no drop is spawned below
+## a roof directly overhead (the old global box rained through ceilings).
+const RAIN_GRID := 4
+const RAIN_PROBE_INTERVAL_MS := 250
+const RAIN_PROBE_UP_M := 30.0
 
 const FALLBACK_HORIZON := Color(0.02, 0.03, 0.06)
 const FALLBACK_ZENITH := Color(0.005, 0.008, 0.02)
@@ -320,22 +329,14 @@ static func make_rain(parent: Node3D, preset: Dictionary) -> Node3D:
 	var intensity: float = clampf(float(raw), 0.0, 1.5)
 	var tier_scale: float = MobileProfile.rain_scale()
 	var scaled_max: int = maxi(int(float(RAIN_AMOUNT_MAX) * tier_scale), RAIN_AMOUNT_MIN)
-	var drops := GPUParticles3D.new()
-	drops.amount = clampi(int(RAIN_AMOUNT_AT_FULL * intensity * tier_scale), RAIN_AMOUNT_MIN, scaled_max)
+	var total: int = clampi(int(RAIN_AMOUNT_AT_FULL * intensity * tier_scale), RAIN_AMOUNT_MIN, scaled_max)
 	if tier_scale < 1.0:
 		print("RainTier: mobile scale=", tier_scale, " max=", scaled_max, " (preset intensity=", intensity, ")")
-	drops.lifetime = RAIN_LIFETIME
-	drops.local_coords = false
-	drops.visibility_aabb = AABB(-Vector3(35.0, 25.0, 35.0), Vector3(70.0, 50.0, 70.0))
-	var pm := ParticleProcessMaterial.new()
-	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	pm.emission_box_extents = RAIN_BOX_HALF
-	pm.direction = Vector3(0.0, -1.0, 0.0)
-	pm.spread = 4.0
-	pm.gravity = Vector3(0.0, -RAIN_GRAVITY, 0.0)
-	pm.initial_velocity_min = 2.0
-	pm.initial_velocity_max = 5.0
-	drops.process_material = pm
+	var root := Node3D.new()
+	root.name = "RainVolume"
+	var cell_w: float = (RAIN_BOX_HALF.x * 2.0) / float(RAIN_GRID)
+	var cell_d: float = (RAIN_BOX_HALF.z * 2.0) / float(RAIN_GRID)
+	var per_column: int = maxi(total / (RAIN_GRID * RAIN_GRID), 8)
 	var quad := QuadMesh.new()
 	quad.size = Vector2(0.035, 0.7)
 	var qmat := StandardMaterial3D.new()
@@ -344,9 +345,116 @@ static func make_rain(parent: Node3D, preset: Dictionary) -> Node3D:
 	qmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	qmat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
 	quad.material = qmat
-	drops.draw_pass_1 = quad
-	parent.add_child(drops)
-	return drops
+	for ix: int in range(RAIN_GRID):
+		for iz: int in range(RAIN_GRID):
+			var drops := GPUParticles3D.new()
+			drops.name = "RainColumn_%d_%d" % [ix, iz]
+			drops.amount = per_column
+			drops.lifetime = RAIN_LIFETIME
+			drops.local_coords = false
+			drops.visibility_aabb = AABB(-Vector3(cell_w * 0.75, 25.0, cell_d * 0.75), Vector3(cell_w * 1.5, 50.0, cell_d * 1.5))
+			var pm := ParticleProcessMaterial.new()
+			pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+			pm.emission_box_extents = Vector3(cell_w * 0.5, RAIN_BOX_HALF.y, cell_d * 0.5)
+			pm.direction = Vector3(0.0, -1.0, 0.0)
+			pm.spread = 4.0
+			pm.gravity = Vector3(0.0, -RAIN_GRAVITY, 0.0)
+			pm.initial_velocity_min = 2.0
+			pm.initial_velocity_max = 5.0
+			drops.process_material = pm
+			drops.draw_pass_1 = quad
+			drops.position = Vector3(
+				(-RAIN_BOX_HALF.x + cell_w * (float(ix) + 0.5)),
+				0.0,
+				(-RAIN_BOX_HALF.z + cell_d * (float(iz) + 0.5))
+			)
+			drops.set_meta("rain_column", true)
+			root.add_child(drops)
+	root.set_meta("rain_intensity", intensity)
+	root.set_meta("rain_grid", RAIN_GRID)
+	root.set_meta("_next_probe_ms", 0)
+	parent.add_child(root)
+	return root
+
+
+## Hides rain columns with a roof directly overhead. Called each frame from the
+## mission; the 250 ms throttle keeps the 16 upward rays off the hot path.
+static func update_rain_occlusion(rain: Node3D, target: Node3D) -> void:
+	if rain == null or target == null or not is_instance_valid(rain) or not is_instance_valid(target):
+		return
+	var now: int = Time.get_ticks_msec()
+	if now < int(rain.get_meta("_next_probe_ms", 0)):
+		return
+	rain.set_meta("_next_probe_ms", now + RAIN_PROBE_INTERVAL_MS)
+	var world: World3D = target.get_world_3d()
+	if world == null:
+		return
+	var space: PhysicsDirectSpaceState3D = world.direct_space_state
+	if space == null:
+		return
+	var base: Vector3 = rain.global_position
+	var from_y: float = target.global_position.y + 2.0
+	var to_y: float = from_y + RAIN_PROBE_UP_M + RAIN_BOX_HALF.y
+	var excluded: Array[RID] = []
+	if target is CollisionObject3D:
+		excluded.append((target as CollisionObject3D).get_rid())
+	var hidden: int = 0
+	var shown: int = 0
+	for child: Node in rain.get_children():
+		if not (child is GPUParticles3D):
+			continue
+		var drops: GPUParticles3D = child as GPUParticles3D
+		var col: Vector3 = base + drops.position
+		var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(
+			Vector3(col.x, from_y, col.z),
+			Vector3(col.x, to_y, col.z)
+		)
+		q.exclude = excluded
+		var hit: Dictionary = space.intersect_ray(q)
+		var clear_sky: bool = hit.is_empty()
+		drops.emitting = clear_sky
+		drops.visible = clear_sky
+		if clear_sky:
+			shown += 1
+		else:
+			hidden += 1
+	rain.set_meta("rain_columns_hidden", hidden)
+	rain.set_meta("rain_columns_shown", shown)
+
+
+## C3 lens drops: full-screen PPM_RainDropsOnLens overlay, gated by the same
+## rain preset that drives the 3D layer. Returns null for clear presets.
+static func make_lens_rain(parent: Node, preset: Dictionary) -> CanvasLayer:
+	if parent == null or preset.is_empty() or not WeatherProfile.enable_rain(preset):
+		return null
+	var raw: Variant = WeatherProfile.rain_intensity(preset)
+	if raw == null or float(raw) <= 0.1:
+		return null
+	if not ResourceLoader.exists(LENS_DROP_TEXTURE):
+		return null
+	var tex: Texture2D = load(LENS_DROP_TEXTURE) as Texture2D
+	if tex == null:
+		return null
+	var layer := CanvasLayer.new()
+	layer.name = "LensRain"
+	layer.layer = 20
+	var rect := ColorRect.new()
+	rect.name = "LensDrops"
+	rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var mat := ShaderMaterial.new()
+	mat.shader = LENS_RAIN_SHADER
+	mat.set_shader_parameter("drop_tex", tex)
+	mat.set_shader_parameter("intensity", clampf(float(raw), 0.0, 1.0))
+	mat.set_shader_parameter("tiling", 2.0)
+	mat.set_shader_parameter("animation_speed", 0.25)
+	mat.set_shader_parameter("mask_edge", 0.2)
+	mat.set_shader_parameter("mask_falloff", 0.1)
+	mat.set_shader_parameter("normal_strength", 0.05)
+	rect.material = mat
+	layer.add_child(rect)
+	parent.add_child(layer)
+	return layer
 
 
 ## Keeps the rain volume centered on the follow target (called each _process).

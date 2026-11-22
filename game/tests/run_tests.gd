@@ -3989,6 +3989,7 @@ func _initialize() -> void:
 	VfxManager.cleanup_static_caches()
 	GuardAnimationLibrary.cleanup_static_caches()
 	ArtNouveauTheme.cleanup_static_caches()
+	XrayOverlay.clear_static_caches()
 	(load("res://src/core/weather_profile.gd") as GDScript).cleanup_static_caches()
 	(load("res://src/core/weather_visuals.gd") as GDScript).cleanup_static_caches()
 	(load("res://src/ai/guard_ai.gd") as GDScript).cleanup_static_caches()

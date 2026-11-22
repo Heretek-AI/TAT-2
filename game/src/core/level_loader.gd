@@ -245,6 +245,10 @@ func _cap_image(img: Image, res_path: String) -> Image:
 	var nw: int = maxi(1, int(round(float(w) * scale)))
 	var nh: int = maxi(1, int(round(float(h) * scale)))
 	img.resize(nw, nh, Image.INTERPOLATE_BILINEAR)
+	# Resizing discards mip levels. PBR surfaces need them back or distant
+	# geometry aliases/shimmer; tiny UI icons stay mip-free by design.
+	if not img.is_compressed() and nw >= 64 and nh >= 64:
+		img.generate_mipmaps()
 	if not downscaled_textures.has(res_path):
 		downscaled_textures.append(res_path)
 	downscaled_count = downscaled_textures.size()
@@ -1037,6 +1041,7 @@ func _new_accumulator() -> Dictionary:
 			"player_spawns": [] as Array[Vector3],
 		"player_spawn_transforms": [] as Array,
 			"guard_spawns": [] as Array[Vector3],
+			"smart_objects": [] as Array,
 			"loot_spawns": [] as Array[Vector3],
 			"minor_loot_spawns": [] as Array,
 			"major_loot_spawns": [] as Array,
@@ -1313,6 +1318,18 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 		elif "MissionSpawner_Civilian" in cls:
 			var cs: Array = result["civilian_spawns"]
 			cs.append(p)
+		elif "SmartObject" in cls:
+			# 1,707 BP_SmartObject_GuardDefensiveLocation_C markers are posts a
+			# guard can occupy, not guard spawns. Keeping them in guard_spawns
+			# spawned 1,707 extra guards and starved the real spawn budget.
+			var so: Array = result["smart_objects"]
+			so.append({
+				"pos": p,
+				"rotation": _marker_euler_deg(mk),
+				"class": cls,
+				"name": str(mk.get("name", "")),
+				"source_file": json_path,
+			})
 		elif "MissionSpawner_Character" in cls or "Guard" in cls:
 			var gs: Array = result["guard_spawns"]
 			gs.append(p)
@@ -1702,6 +1719,7 @@ func _clip_den_window_visual(ctx: Dictionary, tr: Transform3D, soff: Vector3, me
 	if parent == null:
 		return
 	var visual: MeshInstance3D = null
+	var mm_visual: MultiMeshInstance3D = null
 	for i in range(parent.get_child_count() - 1, -1, -1):
 		var cand: Node = parent.get_child(i)
 		if cand is MeshInstance3D and not (cand as MeshInstance3D).has_meta("den_window_clipped"):
@@ -1709,7 +1727,16 @@ func _clip_den_window_visual(ctx: Dictionary, tr: Transform3D, soff: Vector3, me
 			if mi.transform.origin.distance_to(tr.origin) < 0.01:
 				visual = mi
 				break
-	if visual == null:
+		elif cand is MultiMeshInstance3D and not (cand as MultiMeshInstance3D).has_meta("den_window_clipped"):
+			# Batched window visuals were invisible to this lookup. Only a
+			# single-instance batch can be hidden safely (a many-instance batch
+			# may contain other windows); the ambiguous case stays counted.
+			var mmi: MultiMeshInstance3D = cand as MultiMeshInstance3D
+			if mmi.transform.origin.distance_to(tr.origin) < 0.01 \
+				and mmi.multimesh != null and mmi.multimesh.instance_count <= 1:
+				mm_visual = mmi
+				break
+	if visual == null and mm_visual == null:
 		# L3: the 1 cm sibling-visual lookup no-op'd silently, leaving the
 		# baked-opaque gray slab across the collider gap. Counted + warned
 		# (capped list) with the collider origin so a renamed mesh that
@@ -1721,8 +1748,12 @@ func _clip_den_window_visual(ctx: Dictionary, tr: Transform3D, soff: Vector3, me
 			push_warning("[level_loader] Den window visual clip missed: no sibling visual within 1 cm of ", tr.origin, " (misses=", ctx["den_window_clip_miss"], ")")
 		ctx["den_window_clip_miss_list"] = clip_miss
 		return
-	visual.visible = false
-	visual.set_meta("den_window_clipped", true)
+	if visual != null:
+		visual.visible = false
+		visual.set_meta("den_window_clipped", true)
+	if mm_visual != null:
+		mm_visual.visible = false
+		mm_visual.set_meta("den_window_clipped", true)
 	var sc: Vector3 = tr.basis.get_scale()
 	var sx: float = maxf(absf(sc.x), 0.05)
 	var sy: float = maxf(absf(sc.y), 0.05)
@@ -2536,6 +2567,21 @@ func _build_volumes(volumes: Array, parent: Node3D, ctx: Dictionary) -> void:
 		body.collision_layer = 1
 		body.collision_mask = 0
 		body.position = Vector3(float(p[0]), float(p[1]), float(p[2]))
+		# Authored volume rotation: a rotated blocking volume must block along its
+		# own axes, not the world axes (the old code ignored this entirely).
+		var vol_basis: Variant = v.get("basis", [])
+		if vol_basis is Array and (vol_basis as Array).size() == 9:
+			var vb: Array = vol_basis as Array
+			body.basis = Basis(
+				Vector3(float(vb[0]), float(vb[1]), float(vb[2])),
+				Vector3(float(vb[3]), float(vb[4]), float(vb[5])),
+				Vector3(float(vb[6]), float(vb[7]), float(vb[8])),
+			)
+		else:
+			var vol_rot: Variant = v.get("rotation", [])
+			if vol_rot is Array and (vol_rot as Array).size() >= 3:
+				var vr: Array = vol_rot as Array
+				body.rotation_degrees = Vector3(float(vr[0]), float(vr[1]), float(vr[2]))
 		var shape := BoxShape3D.new()
 		shape.size = Vector3(maxf(ex * 2.0, 0.1), maxf(ey * 2.0, 0.1), maxf(ez * 2.0, 0.1))
 		var cs := CollisionShape3D.new()

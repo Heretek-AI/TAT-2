@@ -219,10 +219,15 @@ def parse_variations() -> dict:
                         "end_s": s.get("EndTimeSeconds"),
                     }
                 )
+            var_dur = t.get("durationSeconds")
+            var_arc = t.get("TrackArcAngle")
             tracks.append(
                 {
-                    "duration_s": t.get("durationSeconds"),
-                    "arc_angle_deg": t.get("TrackArcAngle"),
+                    "duration_s": var_dur,
+                    # Authored value plus the harness alias, emitted at source so
+                    # a later normalizer cannot drop it.
+                    "arc_angle_deg": var_arc,
+                    "arc_deg": var_arc,
                     "default_section_type": str(
                         (t.get("DefaultSectionType") or {}).get("TagName", "")
                     ),
@@ -286,10 +291,16 @@ def main() -> None:
     quest_pool = spawn_pool(quest)
     # P2-3: a real Value-1 loot item must never vanish silently. Anything at
     # Value 1 that is not a known test key now enters the pool — warn loudly.
-    for tier_name, tier_entries in (("minor", minor), ("major", major), ("quest", quest)):
+    for tier_name, tier_entries in (
+        ("minor", minor),
+        ("major", major),
+        ("quest", quest),
+    ):
         for e in tier_entries:
             if e["value"] == 1 and e["key"] not in KNOWN_TEST_KEYS:
-                print(f"WARN: {tier_name} {e['key']} has Value 1 and is NOT a known test item; kept in spawn pool")
+                print(
+                    f"WARN: {tier_name} {e['key']} has Value 1 and is NOT a known test item; kept in spawn pool"
+                )
     minor_min, minor_max = minmax(minor_pool)
     major_min, major_max = minmax(major_pool)
     flagship_vals = [e["value"] for e in quest_pool if e["is_quest_related"]]

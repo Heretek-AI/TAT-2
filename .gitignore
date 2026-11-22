@@ -20,3 +20,7 @@ build/
 .claude/
 .claude-flow/
 .omo/
+extracted.bak/
+game/data/generated.bak/
+extracted.bak/*
+game/data/generated.bak/*

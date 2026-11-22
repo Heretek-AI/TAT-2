@@ -1884,6 +1884,31 @@ def extract_levels():
                         "name": e.get("Name", ""),
                         "class": et,
                         **ue_mat4_to_godot_trs(wmat2),
+                        **(
+                            {"tags": props.get("Tags")}
+                            if isinstance(props.get("Tags"), list) and props.get("Tags")
+                            else {}
+                        ),
+                        **(
+                            {
+                                "scene_requirement": (
+                                    (props.get("_sceneRequirement") or {})
+                                    .get("ElementTag", {})
+                                    .get("TagName", "")
+                                )
+                            }
+                            if isinstance(props.get("_sceneRequirement"), dict)
+                            else {}
+                        ),
+                        **(
+                            {
+                                "spawn_group": (
+                                    (props.get("SpawnGroup") or {}).get("TagName", "")
+                                )
+                            }
+                            if isinstance(props.get("SpawnGroup"), dict)
+                            else {}
+                        ),
                     }
                 )
 
@@ -2403,6 +2428,8 @@ def extract_levels():
                     "class": et,
                     "actor": e.get("Name", ""),
                     "pos": trs["pos"],
+                    "rotation": trs.get("rotation", [0.0, 0.0, 0.0]),
+                    "basis": trs.get("basis", []),
                     "extent": extent,
                 }
             )

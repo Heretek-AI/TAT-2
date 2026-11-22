@@ -33,6 +33,30 @@ REQUIRED_ENGINE_DEPS = [
     "Engine/Content/BasicShapes/Cylinder.uasset",
 ]
 
+# CUE4Parse's AnimationExporter has no BlendSpace support
+# (UBlendSpace / UBlendSpace1D / UAimOffsetBlendSpace). These 14 shipped assets
+# are an enumerated converter limitation, not a pipeline failure. The list is
+# exact: any new or differently-shaped error still fails --fail-on-errors.
+KNOWN_UNSUPPORTED_ANIM = frozenset(
+    {
+        "TAT/Content/Art/Animation/Base/Anim/Damage/BS_Crawl",
+        "TAT/Content/Art/Animation/Base/Anim/Damage/BS_HitReactAdd",
+        "TAT/Content/Art/Animation/Base/Anim/Lyra/AimOffset",
+        "TAT/Content/Art/Animation/Base/Anim/Lyra/BS_Lean",
+        "TAT/Content/Art/Animation/Base/Anim/Traversal/BS_Slide_In",
+        "TAT/Content/Art/Animation/Base/Anim/Traversal/BS_Slide_Out",
+        "TAT/Content/Art/Animation/Base/Anim/Traversal/BS_Slide_Loop",
+        "TAT/Content/Art/Animation/Base/Anim/Traversal/Ladder/BS_Ladder",
+        "TAT/Content/Art/Animation/Base/Anim/Traversal/Pipe/BS_Pipe",
+        "TAT/Content/Art/Animation/Thief/Anim/Gear/Zipwire/BS_Zipwire_Travel",
+        "TAT/Content/Art/Animation/Thief/Anim/Gear/Zipwire/BS_Zipwire_Travel_Start",
+        "TAT/Content/Art/Animation/Thief/Anim/Gear/Zipwire/BS_Zipwire_Cast",
+        "TAT/Content/Art/Animation/Thief/Anim/Gear/Zipwire/BS_Zipwire_WalkJog",
+        "TAT/Content/Art/Animation/ThiefNisha/Anim/Zipwire/Dangle/BS_Zipwire_Dangle",
+    }
+)
+UNSUPPORTED_ANIM_MARKER = "is not supported for conversion"
+
 DUMP_STAGES = ("raw", "json", "assets", "audio", "audio-meta")
 
 # (group, source dirs under extracted/, generated outputs). A group is stale
@@ -90,7 +114,11 @@ def _newest_mtime(root: Path) -> float:
     ignored_suffixes = {".import", ".uid"}
     for p in root.rglob("*"):
         try:
-            if p.is_file() and p.suffix not in ignored_suffixes:
+            if (
+                p.is_file()
+                and p.suffix not in ignored_suffixes
+                and not p.name.startswith(".")
+            ):
                 m = p.stat().st_mtime
                 if m > latest:
                     latest = m
@@ -190,9 +218,37 @@ def main():
             "%Y-%m-%d %H:%M", time.localtime(errors_log.stat().st_mtime)
         )
         if errors_log.stat().st_mtime >= filelist.stat().st_mtime:
-            print(f"errors.log ({age}, {errors_log.stat().st_size} bytes):")
-            print(errors_log.read_text()[:2000])
-            if args.fail_on_errors:
+            lines = [ln for ln in errors_log.read_text().splitlines() if ln.strip()]
+            known: list[str] = []
+            unexpected: list[str] = []
+            for line in lines:
+                parts = line.split(": ")
+                asset = parts[1].split(".")[0] if len(parts) > 1 else ""
+                if (
+                    UNSUPPORTED_ANIM_MARKER in line
+                    and any(
+                        t in line
+                        for t in (
+                            "UBlendSpace",
+                            "UBlendSpace1D",
+                            "UAimOffsetBlendSpace",
+                        )
+                    )
+                    and asset in KNOWN_UNSUPPORTED_ANIM
+                ):
+                    known.append(asset)
+                else:
+                    unexpected.append(line)
+            print(
+                f"errors.log ({age}): {len(known)} known-unsupported BlendSpace, "
+                f"{len(unexpected)} unexpected"
+            )
+            for line in unexpected[:20]:
+                print(line)
+            if unexpected:
+                if args.fail_on_errors:
+                    raise SystemExit("errors.log holds unexpected failures")
+            elif not known and args.fail_on_errors:
                 raise SystemExit("errors.log holds current-run failures")
         else:
             print(

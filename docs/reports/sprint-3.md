@@ -30,3 +30,26 @@ Started 2026-11-21. Decisions taken with the user:
 
 - `11.11` wipes `extracted/` and `game/data/generated/`; both are gitignored, so no commit risk.
 - The Niagara reconciliation starts from `game/data/generated/levels/**` record totals vs the audit's 3,695; the 107-map emission may have changed the accounting versus the audit's 70-map snapshot.
+
+## Regeneration gate evidence (11.11)
+
+Executed from a wiped tree (`extracted.bak` / `generated.bak` kept until green):
+
+| Step | Result |
+|---|---|
+| `make extract` | exit 0 — 107 maps, 995 anim USD dumps, 14 known BlendSpace skips |
+| `make normalize` | exit 0 — 107 levels, 673 waypoints, 222 variants, 4,118 devices |
+| `make anims` | exit 0 — **995/995** clips, manifest written |
+| `tools/reimport_assets.sh` | exit 0 |
+| `make audit` | exit 0 — 14 known-unsupported (0 unexpected), all 7 groups fresh |
+| `check_uid_duplicates` | 0 errors / 0 warnings |
+| `check_scripts_compile` | 46/46 |
+| `run_tests` | **fails=0**, 0 leaks, MESH HOLES 0 |
+| `test_m2_player` | **9/9** |
+
+Defects found and fixed by the gate:
+
+1. Audio generation was absent from the normalizer chain after a wipe — `extract_audio` + `convert_wwise` added to `make normalize`.
+2. `parse_interactables.py` ran after `parse_tables.py` and overwrote the `arc_deg` alias — alias now emitted at source.
+3. `.gdignore` counted as a material source — dotfiles excluded from freshness scans.
+4. 14 `UBlendSpace*` assets are a converter limitation — enumerated as known-unsupported; any other error still fails the audit.

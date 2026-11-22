@@ -974,7 +974,7 @@ func _get_mesh_and_shape(ue_path: String) -> Dictionary:
 				var sz := aabb.size
 				if not is_nonblocking and sz.length() > 0.45:
 					if is_door_aperture:
-						out["shape"] = _door_aperture_trimesh(m, mat_slots)
+						out["shape"] = m.create_trimesh_shape()
 						out["shape_offset"] = Vector3.ZERO
 					elif sz.length() < 12.0 and not is_stair_run and not is_walk_surface:
 						var bx := BoxShape3D.new()
@@ -989,56 +989,6 @@ func _get_mesh_and_shape(ue_path: String) -> Dictionary:
 		(out["shape"] as Shape3D).set_meta("ue_mesh", ue_path)
 	_mesh_res_cache[ue_path] = out
 	return out
-
-
-## Collision for a doorway frame: UE frames bake the closed leaf/glass into the
-## same render mesh (SM_Urban_ext_Door_4x6 slot 4 = MI_WindowDecoOpaque), so
-## the old full trimesh sealed every opened doorway even after the box→trimesh
-## fix. Build a collision-only trimesh that drops glass/window panel surfaces
-## and any triangle centred in the authored central opening. The visual mesh
-## is untouched.
-func _door_aperture_trimesh(m: Mesh, mat_slots: Array) -> ConcavePolygonShape3D:
-	var faces := PackedVector3Array()
-	var aabb: AABB = m.get_aabb()
-	var half_w: float = minf(1.0, aabb.size.x * 0.35)
-	var half_h: float = minf(2.0, aabb.size.y * 0.45)
-	var cx: float = aabb.get_center().x
-	var cz: float = aabb.get_center().z
-	var y0: float = aabb.position.y + 0.15
-	var y1: float = y0 + half_h * 2.0
-	for s: int in range(m.get_surface_count()):
-		var mat_path: String = str(mat_slots[s]) if s < mat_slots.size() else ""
-		var mlow: String = mat_path.to_lower()
-		if mlow.find("glass") >= 0 or mlow.find("windowdeco") >= 0 or mlow.find("doorpanel") >= 0:
-			continue
-		var arrays: Array = m.surface_get_arrays(s)
-		if arrays.is_empty():
-			continue
-		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array
-		if verts.is_empty():
-			continue
-		var idx_v: Variant = arrays[Mesh.ARRAY_INDEX]
-		var indices: PackedInt32Array = idx_v as PackedInt32Array if idx_v is PackedInt32Array else PackedInt32Array()
-		var tri_count: int = (indices.size() / 3) if not indices.is_empty() else (verts.size() / 3)
-		for t: int in range(tri_count):
-			var ia: int = indices[t * 3] if not indices.is_empty() else t * 3
-			var ib: int = indices[t * 3 + 1] if not indices.is_empty() else t * 3 + 1
-			var ic: int = indices[t * 3 + 2] if not indices.is_empty() else t * 3 + 2
-			if ia < 0 or ib < 0 or ic < 0 or ia >= verts.size() or ib >= verts.size() or ic >= verts.size():
-				continue
-			var a: Vector3 = verts[ia]
-			var b: Vector3 = verts[ib]
-			var c: Vector3 = verts[ic]
-			var mid: Vector3 = (a + b + c) / 3.0
-			if absf(mid.x - cx) <= half_w and absf(mid.z - cz) <= 0.75 and mid.y >= y0 and mid.y <= y1:
-				continue
-			faces.append(a)
-			faces.append(b)
-			faces.append(c)
-	var shape := ConcavePolygonShape3D.new()
-	shape.backface_collision = true
-	shape.set_faces(faces)
-	return shape
 
 
 ## L1 accounting: name the UE path + resolved file, count, cap the stored

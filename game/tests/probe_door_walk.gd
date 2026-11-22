@@ -18,6 +18,30 @@ func _query(space: PhysicsDirectSpaceState3D, x: float) -> Array:
 	return space.intersect_shape(q, 32)
 
 
+func _walk(parent: Node, start_z: float) -> float:
+	var body := CharacterBody3D.new()
+	body.name = "DoorWalkProbeBody"
+	body.collision_layer = 1
+	body.collision_mask = 1
+	var cap := CapsuleShape3D.new()
+	cap.radius = 0.28
+	cap.height = 1.75
+	var cs := CollisionShape3D.new()
+	cs.shape = cap
+	cs.position = Vector3(0.0, 0.875, 0.0)
+	body.add_child(cs)
+	parent.add_child(body)
+	body.global_position = Vector3(22.0, 20.52, start_z)
+	for _i: int in range(120):
+		body.velocity = Vector3(0.0, 0.0, -2.0)
+		body.move_and_slide()
+		await physics_frame
+	var z: float = body.global_position.z
+	body.queue_free()
+	await physics_frame
+	return z
+
+
 func _door_hits(hits: Array, door: Node3D) -> int:
 	var n: int = 0
 	for h: Dictionary in hits:
@@ -65,7 +89,10 @@ func _run() -> void:
 		return
 	print("DOORWALK nearest=", nearest.global_position, " dist=", best, " locked=", nearest.get("locked"), " open=", nearest.get("is_open"))
 	var space: PhysicsDirectSpaceState3D = nearest.get_world_3d().direct_space_state
-	var closed_hits: Array = _query(space, 20.0)
+	for xq: float in [19.0, 20.0, 21.0, 21.5, 22.0, 22.5, 23.0]:
+		var hs: Array = _query(space, xq)
+		print("DOORWALK capsule x=", xq, " hits=", hs.size(), " door=", _door_hits(hs, nearest))
+	var closed_hits: Array = _query(space, 22.0)
 	for yy: float in [20.75, 21.25, 22.0]:
 		var row: String = ""
 		for xx: float in [18.5, 19.0, 19.5, 20.0, 20.5, 21.0, 21.5, 22.0, 22.5, 23.0]:
@@ -76,12 +103,14 @@ func _run() -> void:
 		print("DOORWALK ray y=", yy, " ", row)
 	var closed_door: int = _door_hits(closed_hits, nearest)
 	print("DOORWALK closed hits=", closed_hits.size(), " door=", closed_door)
+	var closed_walk_z: float = await _walk(mission, 128.5)
+	print("DOORWALK closed walk z=", closed_walk_z)
 	nearest.call("set_locked", false, 0)
 	nearest.call("_start_swing_toggle")
 	for _i: int in range(45):
 		await physics_frame
 	var angle: float = float(nearest.call("open_angle_deg"))
-	var open_hits: Array = _query(space, 20.0)
+	var open_hits: Array = _query(space, 22.0)
 	var open_door: int = _door_hits(open_hits, nearest)
 	print("DOORWALK open angle=", angle, " hits=", open_hits.size(), " door=", open_door)
 	for h: Dictionary in open_hits:
@@ -90,7 +119,7 @@ func _run() -> void:
 			var b3: CollisionObject3D = col as CollisionObject3D
 			print("DOORWALK open collider=", (col as Node).get_path())
 			if b3 != null:
-				var qpt := Vector3(20.0, 21.25, 127.0)
+				var qpt := Vector3(22.0, 21.25, 127.0)
 				for ch: Node in b3.get_children():
 					if not (ch is CollisionShape3D):
 						continue
@@ -101,7 +130,10 @@ func _run() -> void:
 					var waabb: AABB = cs.global_transform * dbg.get_aabb()
 					if waabb.has_point(qpt):
 						print("DOORWALK cand=", str(cs.get_meta("ue_mesh", "?")), " aabb=", waabb)
-	var ok: bool = closed_door >= 1 and open_door == 0 and angle > 70.0
+	var open_walk_z: float = await _walk(mission, 128.5)
+	print("DOORWALK open walk z=", open_walk_z)
+	var ok: bool = closed_door >= 1 and open_door == 0 and angle > 70.0 \
+		and closed_walk_z > 126.8 and open_walk_z < 125.5
 	if player != null:
 		var p: Vector3 = player.global_position
 		print("DOORWALK player=", p)

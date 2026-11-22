@@ -79,6 +79,10 @@ const BLOOM_TO_GLOW := 0.02
 ## P3 companion: fog-energy compensation ceiling. Both density branches
 ## share one cap so the tuning lives in one place, not two literals.
 const FOG_ENERGY_COMP_MAX := 8.0
+## FIX_SPEC P0 #2: the indoor Den's near-black blue inscattering (lum ~0.0019)
+## divided up to 13.4x and hit the 8.0 ceiling, veiling the attic in flat blue.
+## Keep the 0.003 density but cap the Den compensation at 2.0.
+const DEN_FOG_ENERGY_COMP_MAX := 2.0
 ## P3 single-sample: the clamp fires once per preset per apply (9 loud lines
 ## in the reference log for 4 presets). Only the first clamp is loud; the
 ## rest are counted silently. fog_clamp_total() exposes the exact count.
@@ -100,6 +104,9 @@ const GLOW_BLOOM_NON_DEN := 0.015
 ## and whited out the fog. Capped at FOG_ENERGY_COMP_MAX; anything above
 ## logs the preset so the authored value stays visible, never silently cut.
 static func _clamped_fog_compensation(want_energy: float, is_low_density: bool, preset: Dictionary) -> float:
+	var preset_id: String = str(preset.get("preset", "")).to_lower()
+	if "thieves_den" in preset_id:
+		return clampf(want_energy, 1.0, DEN_FOG_ENERGY_COMP_MAX)
 	if want_energy <= FOG_ENERGY_COMP_MAX:
 		return maxf(want_energy, 1.0)
 	_fog_clamp_total += 1

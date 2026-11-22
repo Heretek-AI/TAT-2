@@ -345,8 +345,10 @@ static func spawn_window_godray(parent: Node, pos: Vector3, target_pos: Vector3,
 	var midpoint: Vector3 = (pos + target_pos) * 0.5
 
 	var cone: CylinderMesh = CylinderMesh.new()
-	cone.top_radius = 0.55
-	cone.bottom_radius = 1.65
+	# FIX_SPEC P0 #4: narrow the Den moon shaft (top 0.30 / bottom 0.85) so it
+	# reads as a focused volumetric beam, not a room-wide godray cone.
+	cone.top_radius = 0.30
+	cone.bottom_radius = 0.85
 	cone.height = dist
 	cone.radial_segments = 16
 	cone.rings = 1

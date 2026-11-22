@@ -147,6 +147,23 @@ const LIGHT_ENERGY_FLOOR: float = 0.01
 ## leaving the 15-lumen median at 1.0.
 const LIGHT_ENERGY_SOFT_CEIL: float = 3.5
 
+## Den-only authored practical pass-through (FIX_SPEC P0 #1). The five
+## ThievesDen_Geo spots keep their authored 0.75x intensity response,
+## inverse-square attenuation and true cones (including the 5 deg moon).
+## The global mapping above and the 18 deg floor stay untouched for every
+## other map (Suite 23 / T2-02 still exercise the global curve).
+const DEN_SPOT_ENERGY_SCALE: float = 0.75
+const DEN_SPOT_ATTENUATION: float = 2.0
+## Den LumenSkylightLeaking stand-in: 0.10 / 10 m / attenuation 1.5 replaces
+## the flat 0.27 / 17.5 m / 0.4 blue wash that veiled the whole attic.
+const DEN_GI_FILL_ENERGY: float = 0.10
+const DEN_GI_FILL_RANGE: float = 10.0
+const DEN_GI_FILL_ATTENUATION: float = 1.5
+const DEN_GI_FILL_COLOR: Color = Color(0.55, 0.70, 0.92)
+## Authored gold lamp glass (MI_LightSmGlassA_Gold): EmissiveTintB warm value
+## and the authored 2.2 multiplier instead of a white 16x clip.
+const DEN_GOLD_LAMP_EMISSION: float = 2.2
+
 
 ## Monotonic authored-intensity -> energy mapping. See the constants above.
 ## Median 15.0 -> 1.0 exactly; the curve is continuous and strictly increasing
@@ -585,8 +602,23 @@ func _apply_ue_emissive(mat: StandardMaterial3D, info: Dictionary) -> void:
 	if _ue_lookup(switches, ["disableemissivecontribution"]) == true:
 		return
 	var vectors: Dictionary = _ue_norm_map(info.get("vectors", {}))
-	var ecol: Variant = _ue_lookup(vectors, ["emissivecolor", "emissive", "emissivetint", "emiscolor"])
 	var params: Dictionary = _ue_norm_map(info.get("params", {}))
+	# FIX_SPEC P0 #6: MI_LightSmGlassA_Gold is a Two Tone Emissive glass whose
+	# authored warm tint lives in EmissiveTintB (1.0, 0.606, 0.193). The old
+	# generic lookup missed the A/B pair, fell back to white and multiplied the
+	# authored 50x strength into a clipped 16x white orb. Use the authored B
+	# tint with the authored 2.2 emission multiplier. Exact material only;
+	# Guildhall's Blue/Gold1 lamp variants keep their previous path.
+	var mat_stem: String = str(info.get("path", "")).get_file().split(".")[0].to_lower()
+	if mat_stem == "mi_lightsmglassa_gold":
+		var gold_tint: Variant = _ue_lookup(vectors, ["emissivetintb"])
+		if gold_tint is Array and (gold_tint as Array).size() >= 3:
+			var ga: Array = gold_tint as Array
+			mat.emission_enabled = true
+			mat.emission = Color(float(ga[0]), float(ga[1]), float(ga[2]))
+			mat.emission_energy_multiplier = DEN_GOLD_LAMP_EMISSION
+			return
+	var ecol: Variant = _ue_lookup(vectors, ["emissivecolor", "emissive", "emissivetint", "emiscolor"])
 	var estr: Variant = _ue_lookup(params, ["emissivestrength", "emissiveintensity", "emissivemultiplier", "emissivemultiply", "emismultiply", "emissivemult", "emissivepower", "emissivebrightness", "emissivebrillance"])
 	if ecol == null and estr == null:
 		return
@@ -1597,6 +1629,19 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 			}
 			den_exit_doors.append(rec)
 
+	# Den candelabras carry authored NS_Candelabras_Flame placements. When
+	# those exist, the loader must not also spawn its procedural candle quad
+	# on the same mesh (doubled flames, FIX_SPEC P0 #7). Scoped to the Den so
+	# other maps keep their current loader VFX.
+	var authored_candle_vfx: bool = false
+	if json_path.to_lower().find("thievesden") >= 0:
+		for n_v: Variant in data_dict.get("niagara", []):
+			if not (n_v is Dictionary):
+				continue
+			var n_asset: String = str((n_v as Dictionary).get("asset", "")).to_lower()
+			if "candelabras_flame" in n_asset and not n_asset.ends_with("_flame_out"):
+				authored_candle_vfx = true
+				break
 	for m in data_dict.get("meshes", []):
 		if not (m is Dictionary):
 			continue
@@ -1620,10 +1665,35 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 					break
 			if matched_exit:
 				continue
+		# FIX_SPEC P0 #5: the authored BP_MoonShape_C_5 window backlight is the
+		# one moonshape plane that must render. Unhide just this instance, nudge
+		# it to the outer face of the glass (x=5.75) and apply the authored
+		# 1.6 x 2.0 pane scale. Every other moonshape billboard stays hidden.
+		if _is_den_window_backlight(mp, m_dict):
+			m_dict = m_dict.duplicate(true)
+			m_dict["hidden_in_game"] = false
+			var bpos_v: Variant = m_dict.get("pos", [5.75, 41.2624, 266.8386])
+			var bpos: Array = (bpos_v as Array).duplicate()
+			if bpos.size() >= 3:
+				bpos[0] = 5.75
+			m_dict["pos"] = bpos
+			m_dict["scale"] = [1.6, 1.0, 2.0]
+			# Authored CPD EmisMultiply is 1.2 in UE-linear. At the Den AGX
+			# exposure 1.9 that clips the pane to a white rectangle and seeds
+			# a 4-mip bloom sheet, so cap the port multiplier at 0.4: below
+			# the 0.85 glow threshold it still reads as a luminous cool pane
+			# (authored colour 0.351, 0.797, 1.0) without the overexposed
+			# white slab or room-wide bloom spill.
+			var bcpd_v: Variant = m_dict.get("cpd", null)
+			if bcpd_v is Array and (bcpd_v as Array).size() >= 5:
+				var bcpd: Array = (bcpd_v as Array).duplicate()
+				bcpd[1] = minf(float(bcpd[1]), 0.4)
+				m_dict["cpd"] = bcpd
+			result["den_window_backlight"] = int(result.get("den_window_backlight", 0)) + 1
 		# Authored moon billboards render as gray quads now that the real sky
 		# carries the moon disc (texture stripped by cooking); hide them and
 		# count them, never spawning geometry/collision for them.
-		if _is_moonshape_mesh(mp):
+		elif _is_moonshape_mesh(mp):
 			result["moonshape_hidden"] = int(result.get("moonshape_hidden", 0)) + 1
 			continue
 		var low_mp: String = mp.to_lower()
@@ -1697,7 +1767,8 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 			elif "brazier" in low_mp or "torch" in low_mp:
 				wick_y = 0.55
 			wick_y *= tr.basis.get_scale().y
-			_VfxManager.spawn_candle_flame(parent, prop_pos + Vector3(0.0, wick_y, 0.0))
+			if not authored_candle_vfx:
+				_VfxManager.spawn_candle_flame(parent, prop_pos + Vector3(0.0, wick_y, 0.0))
 		if "wardrobe" in low_mp or "bureau" in low_mp or "armoire" in low_mp:
 			var ward_arr: Array = result["wardrobe_positions"]
 			ward_arr.append(prop_pos)
@@ -1728,6 +1799,14 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 		if seen_lights.has(lkey):
 			continue
 		seen_lights[lkey] = true
+		# Tag the five authored ThievesDen_Geo practicals so the light builder
+		# can apply the Den-only energy/attenuation/cone response without
+		# touching the global mapping. The moon spot (intensity 0.025) alone
+		# stays shadowless; the four warm practicals cast authored shadows.
+		if json_path.to_lower().find("thievesden/thievesden_geo") >= 0:
+			l_dict = l_dict.duplicate(true)
+			l_dict["_den_spot"] = true
+			l_dict["_den_shadow"] = _to_float(l_dict.get("intensity"), 0.0) > 1.0
 		var pending_lights: Array = acc["lights"]
 		pending_lights.append(l_dict)
 
@@ -1856,6 +1935,29 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 	for sd in data_dict.get("swinging_doors", []):
 		if sd is Dictionary:
 			(result["swinging_doors"] as Array).append(sd)
+
+
+## True only for the authored BP_MoonShape_C_5 window backlight plane. The
+## other seven moonshape billboards remain subject to _is_moonshape_mesh().
+## Exact authored placement: UE cm (571.09, 4126.24, 26683.86) -> port
+## (5.7109, 41.2624, 266.8386), SM_Shape_Plane + MI_MoonshapeEmissive.
+func _is_den_window_backlight(mp: String, m_dict: Dictionary) -> bool:
+	if not mp.to_lower().ends_with("/sm_shape_plane"):
+		return false
+	var has_moon_mat: bool = false
+	for ov: String in _extract_override_materials(m_dict):
+		if ov.to_lower().find("mi_moonshapeemissive") >= 0:
+			has_moon_mat = true
+			break
+	if not has_moon_mat:
+		return false
+	var pos_v: Variant = m_dict.get("pos", [])
+	if not (pos_v is Array) or (pos_v as Array).size() < 3:
+		return false
+	var pa: Array = pos_v as Array
+	return absf(float(pa[0]) - 5.7109) < 0.01 \
+		and absf(float(pa[1]) - 41.2624) < 0.01 \
+		and absf(float(pa[2]) - 266.8386) < 0.01
 
 
 ## Whether a mesh path is one of the authored moon billboards that the real
@@ -2726,11 +2828,14 @@ func _build_curbs_from_splines(splines: Array, parent: Node3D, ctx: Dictionary) 
 	ctx["curb_built"] = int(ctx.get("curb_built", 0)) + done
 
 
-func _add_one_light(linfo: Dictionary, parent: Node3D, light_probe: Node, hero_shadow: bool) -> bool:
-	var lnode: Light3D = _build_light(linfo, hero_shadow)
+func _add_one_light(linfo: Dictionary, parent: Node3D, light_probe: Node, hero_shadow: bool, map_hint: String = "") -> bool:
+	var cast_shadow: bool = hero_shadow
+	if map_hint == "thieves_den" and bool(linfo.get("_den_spot", false)):
+		cast_shadow = bool(linfo.get("_den_shadow", true))
+	var lnode: Light3D = _build_light(linfo, cast_shadow, map_hint)
 	if lnode == null:
 		return false
-	lnode.shadow_enabled = hero_shadow
+	lnode.shadow_enabled = cast_shadow
 	parent.add_child(lnode)
 	if light_probe != null and light_probe.has_method("register_light"):
 		light_probe.register_light(lnode)
@@ -2780,7 +2885,7 @@ func _add_lights(pending_lights: Array, parent: Node3D, light_probe: Node, max_l
 	var added: int = 0
 	for li in range(budget):
 		var linfo: Dictionary = ordered[li]
-		if _add_one_light(linfo, parent, light_probe, li < hero_shadows):
+		if _add_one_light(linfo, parent, light_probe, li < hero_shadows, str(ctx.get("map_hint", ""))):
 			added += 1
 	ctx["light_count"] = added
 
@@ -3168,12 +3273,22 @@ func _spawn_level_niagara(acc: Dictionary, ctx: Dictionary) -> void:
 	var parent: Node = ctx.get("parent") as Node
 	if parent == null:
 		return
+	var map_hint: String = str(ctx.get("map_hint", ""))
+	var is_den: bool = map_hint == "thieves_den"
 	var groups: Dictionary = {}
 	for r: Variant in (acc.get("niagara", []) as Array):
 		if not (r is Dictionary):
 			continue
 		var asset: String = str((r as Dictionary).get("asset", ""))
 		if asset == "":
+			continue
+		# FIX_SPEC P0 #7: `_Flame_Out` systems are authored bAutoActivate=false
+		# (the extinguish puff, not a live flame). The Den spawned all 20 and
+		# doubled every candelabra. Scoped to the Den for this pass so other
+		# maps' authored placements (and probe_niagara's 3,695 coverage) are
+		# untouched; a global skip is the correct follow-up (387 placements).
+		if is_den and asset.to_lower().ends_with("_flame_out"):
+			ctx["niagara_inactive_skipped"] = int(ctx.get("niagara_inactive_skipped", 0)) + 1
 			continue
 		if not groups.has(asset):
 			groups[asset] = []
@@ -3209,7 +3324,7 @@ func _spawn_level_niagara(acc: Dictionary, ctx: Dictionary) -> void:
 			mm.set_instance_transform(i, Transform3D(basis, p))
 		var mat := ShaderMaterial.new()
 		mat.shader = shader
-		mat.set_shader_parameter("tint", _niagara_tint(str(asset)))
+		mat.set_shader_parameter("tint", _niagara_tint(str(asset), map_hint))
 		mat.set_shader_parameter("base_size", _niagara_size(str(asset)))
 		var mmi := MultiMeshInstance3D.new()
 		mmi.name = "LevelNiagara_" + str(asset).get_file().replace(".", "_")
@@ -3223,8 +3338,13 @@ func _spawn_level_niagara(acc: Dictionary, ctx: Dictionary) -> void:
 	push_warning("[level_loader] level Niagara: %d placements across %d systems spawned" % [total, groups.size()])
 
 
-func _niagara_tint(asset: String) -> Color:
+func _niagara_tint(asset: String, map_hint: String = "") -> Color:
 	var a: String = asset.to_lower()
+	# FIX_SPEC P0 #7: Den candle flames carry the authored HDR warm value so
+	# they survive AGX and seed the 0.85-threshold glow instead of reading as
+	# flat LDR orange.
+	if map_hint == "thieves_den" and "candelabras_flame" in a and not a.ends_with("_flame_out"):
+		return Color(2.2, 1.0, 0.30, 0.85)
 	if "flame" in a or "candle" in a or "fire" in a:
 		return Color(1.0, 0.55, 0.18, 0.9)
 	if "lightbeam" in a or "beam" in a:
@@ -3249,9 +3369,10 @@ func _niagara_size(asset: String) -> float:
 	return 0.12
 
 
-func _build_post_process_gi_fills(post_processes: Array, parent: Node3D, _ctx: Dictionary) -> void:
+func _build_post_process_gi_fills(post_processes: Array, parent: Node3D, ctx: Dictionary) -> void:
 	if MobileProfile.is_mobile() or parent == null:
 		return
+	var is_den: bool = str(ctx.get("map_hint", "")) == "thieves_den"
 	var fill_idx: int = 0
 	var wenv: WorldEnvironment = null
 	for child: Node in parent.get_children():
@@ -3283,10 +3404,19 @@ func _build_post_process_gi_fills(post_processes: Array, parent: Node3D, _ctx: D
 				sx = absf(float(sa[0]))
 				sz = absf(float(sa[2]))
 			fill.shadow_enabled = false
-			fill.light_color = Color(0.55, 0.72, 0.95)
-			fill.light_energy = clampf(leak * 0.9, 0.1, 0.45)
-			fill.omni_range = clampf(maxf(sx, sz) * 1.5, 8.0, 30.0)
-			fill.omni_attenuation = 0.4
+			if is_den:
+				# FIX_SPEC P0 #2: the Den LumenSkylightLeaking stand-in was a
+				# flat 0.27 / 17.5 m / 0.4 blue omni that veiled the attic.
+				# Keep a small local bounce only.
+				fill.light_color = DEN_GI_FILL_COLOR
+				fill.light_energy = DEN_GI_FILL_ENERGY
+				fill.omni_range = DEN_GI_FILL_RANGE
+				fill.omni_attenuation = DEN_GI_FILL_ATTENUATION
+			else:
+				fill.light_color = Color(0.55, 0.72, 0.95)
+				fill.light_energy = clampf(leak * 0.9, 0.1, 0.45)
+				fill.omni_range = clampf(maxf(sx, sz) * 1.5, 8.0, 30.0)
+				fill.omni_attenuation = 0.4
 			parent.add_child(fill)
 		if (settings.has("LocalExposureShadowContrastScale") or settings.has("LocalExposureMiddleGreyBias")) and wenv != null and wenv.environment != null:
 			var sc: float = float(settings.get("LocalExposureShadowContrastScale", 0.6))
@@ -3386,7 +3516,7 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 	var hero_shadows: int = mini(MobileProfile.hero_shadows(), light_budget)
 	for li in range(light_budget):
 		var linfo: Dictionary = pending_lights[li]
-		if _add_one_light(linfo, parent, light_probe, li < hero_shadows):
+		if _add_one_light(linfo, parent, light_probe, li < hero_shadows, str(ctx.get("map_hint", ""))):
 			lights_added += 1
 		if li % 20 == 0 or li == light_budget - 1:
 			load_progress.emit(0.3 + 0.2 * float(li + 1) / float(maxi(light_budget, 1)), "Creating lights %d/%d..." % [li + 1, light_budget])
@@ -3486,10 +3616,15 @@ func _to_float(v: Variant, fallback: float) -> float:
 	return float(v)
 
 
-func _build_light(info: Dictionary, cast_shadow: bool = false) -> Light3D:
+func _build_light(info: Dictionary, cast_shadow: bool = false, map_hint: String = "") -> Light3D:
 	var ltype: String = str(info.get("type", ""))
 	var raw_i := _to_float(info.get("intensity"), 15.0)
 	var intensity := light_energy_for_intensity(raw_i)
+	var is_den_spot: bool = map_hint == "thieves_den" and bool(info.get("_den_spot", false))
+	if is_den_spot:
+		# Authored Den response: 0.75 x intensity (1.50 / 2.25 / 1.50 / 1.50 /
+		# 0.019), inverse-square attenuation, true authored cone (5 deg moon).
+		intensity = snappedf(maxf(raw_i * DEN_SPOT_ENERGY_SCALE, LIGHT_ENERGY_FLOOR), 0.001)
 	var col_dict: Variant = info.get("color")
 	var col := Color(1.0, 0.85, 0.62)
 	if col_dict is Dictionary:
@@ -3505,13 +3640,17 @@ func _build_light(info: Dictionary, cast_shadow: bool = false) -> Light3D:
 	elif "Spot" in ltype:
 		var sl := SpotLight3D.new()
 		sl.spot_range = clampf(maxf(_to_float(info.get("radius"), 6.0), 1.0), 1.0, LIGHT_RANGE_CEIL)
-		sl.spot_angle = clampf(_to_float(info.get("outer_cone"), 50.0), 18.0, 89.0)
-		# Godot's default attenuation. 2.0 would be the physically accurate
-		# inverse-square choice; the authored UE lights use inverse-squared
-		# falloff with lumen units, but 1.0 is kept as the art default. The
-		# previous 0.85 -> 1.0 raises the attenuation exponent, so falloff is
-		# FASTER, not slower.
-		sl.spot_attenuation = 1.0
+		if is_den_spot:
+			sl.spot_angle = clampf(_to_float(info.get("outer_cone"), 50.0), 0.5, 89.0)
+			sl.spot_attenuation = DEN_SPOT_ATTENUATION
+		else:
+			sl.spot_angle = clampf(_to_float(info.get("outer_cone"), 50.0), 18.0, 89.0)
+			# Godot's default attenuation. 2.0 would be the physically accurate
+			# inverse-square choice; the authored UE lights use inverse-squared
+			# falloff with lumen units, but 1.0 is kept as the art default. The
+			# previous 0.85 -> 1.0 raises the attenuation exponent, so falloff is
+			# FASTER, not slower.
+			sl.spot_attenuation = 1.0
 		sl.light_energy = intensity
 		light = sl
 	else:

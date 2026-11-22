@@ -337,10 +337,33 @@ func _setup_thieves_den_env(map_id: String) -> void:
 		if child is WorldEnvironment:
 			var wenv: WorldEnvironment = child as WorldEnvironment
 			if wenv.environment != null:
-				wenv.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-				wenv.environment.ambient_light_color = Color(0.06, 0.08, 0.12)
-				wenv.environment.ambient_light_energy = 0.12
-				wenv.environment.background_color = Color(0.012, 0.016, 0.032)
+				var den_env: Environment = wenv.environment
+				den_env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+				den_env.ambient_light_color = Color(0.06, 0.08, 0.12)
+				den_env.ambient_light_energy = 0.12
+				den_env.background_color = Color(0.012, 0.016, 0.032)
+				# Den P0 authored look (FIX_SPEC): the UE MidnightClear_ThievesDen
+				# preset is graded with AGX and a 1.9 exposure bias. Keep the
+				# room dark (ambient above stays <= 0.15 for Suite 34b) while
+				# the warm practicals carry the scene. Glow is a restrained
+				# 4-level stack (0-3) so the map-table lamp/gold glass bloom
+				# warm instead of clipping white. Vignette/GainHighlights stay
+				# at their inactive authored values (never forced on here).
+				den_env.tonemap_mode = Environment.TONE_MAPPER_AGX
+				den_env.tonemap_exposure = 1.9
+				den_env.adjustment_enabled = true
+				den_env.adjustment_brightness = 1.0
+				den_env.adjustment_saturation = 0.95
+				var glow_allowed: bool = not MobileProfile.is_mobile() or MobileProfile.glow_enabled()
+				den_env.glow_enabled = glow_allowed
+				if glow_allowed:
+					den_env.glow_intensity = 0.45
+					den_env.glow_bloom = 0.15
+					den_env.glow_hdr_threshold = 0.85
+					den_env.glow_hdr_scale = 1.25
+					for gl_i: int in range(4):
+						den_env.set_glow_level(gl_i, true)
+					den_env.set_glow_level(4, false)
 
 
 ## Applies level-authored atmosphere entries extracted from the UE maps.
@@ -497,15 +520,17 @@ func _den_probe_enabled() -> bool:
 
 
 func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> void:
-	# Subtle hand fill lights totaling <= 2.0 energy (0.35 + 0.65 + 0.35 + 0.25 + 0.30 = 1.90)
-	# so authored ThievesDen_Geo spots carry the room with no invented red.
+	# Authored Den practicals carry the room; the hand fills stay subtle:
+	# attic 0.15 + moon shaft 0.25 + wardrobe 0.20 + wisp 0.30 = 0.90 total
+	# (Suite 34b keeps the <= 2.0 contract). The old fake map-table candle +
+	# DenTableLight duplicated the authored desk spot and were removed.
 	var attic_fill := OmniLight3D.new()
 	attic_fill.name = "DenAtticFill"
 	attic_fill.position = anchor + Vector3(1.5, 2.6, -1.5)
 	attic_fill.light_color = Color(1.0, 0.78, 0.50)
-	attic_fill.light_energy = 0.35
-	attic_fill.omni_range = 13.0
-	attic_fill.omni_attenuation = 0.85
+	attic_fill.light_energy = 0.15
+	attic_fill.omni_range = 8.0
+	attic_fill.omni_attenuation = 1.2
 	attic_fill.add_to_group("den_hand_fills")
 	add_child(attic_fill)
 	light_probe.register_light(attic_fill)
@@ -526,9 +551,10 @@ func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> 
 	moon_beam.name = "DenMoonBeam"
 	moon_beam.position = win_pos
 	moon_beam.light_color = Color(0.55, 0.82, 0.96)
-	moon_beam.light_energy = 0.65
+	moon_beam.light_energy = 0.25
 	moon_beam.spot_range = 14.0
-	moon_beam.spot_angle = 26.0
+	moon_beam.spot_angle = 6.0
+	moon_beam.spot_attenuation = 2.0
 	moon_beam.shadow_enabled = true
 	moon_beam.add_to_group("den_hand_fills")
 	add_child(moon_beam)
@@ -537,6 +563,21 @@ func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> 
 	light_probe.register_light(moon_beam)
 	VfxManager.spawn_window_godray(self, win_pos, beam_target)
 	_spawn_den_window_vista(win_pos, beam_target)
+
+	# Authored window backlight assistant: a small shadowless cool omni just
+	# outside the glass so the frosted panes read like KF02/KF06 instead of a
+	# black hole. Deliberately NOT a hand fill: total stays 0.90. The authored
+	# BP_MoonShape_C_5 plane itself is unhidden by the loader.
+	var window_backlight := OmniLight3D.new()
+	window_backlight.name = "DenWindowBacklight"
+	window_backlight.position = Vector3(5.75, 41.1, 266.3)
+	window_backlight.light_color = Color(0.45, 0.78, 0.95)
+	window_backlight.light_energy = 1.2
+	window_backlight.omni_range = 4.0
+	window_backlight.omni_attenuation = 2.0
+	window_backlight.shadow_enabled = false
+	add_child(window_backlight)
+	light_probe.register_light(window_backlight)
 
 	# Single interior ReflectionProbe for Thieves' Den specular reflections.
 	# Godot 4.7.2 leaks the probe atlas color buffer + 6 views at exit
@@ -569,18 +610,6 @@ func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> 
 	if not desk_positions.is_empty() and desk_positions[0] is Vector3:
 		desk_pos = desk_positions[0] as Vector3
 	_den_map_table_pos = desk_pos
-	VfxManager.spawn_candle_flame(self, desk_pos + Vector3(0.35, 0.45, 0.0))
-
-	# Warm table pool light
-	var table_light := OmniLight3D.new()
-	table_light.name = "DenTableLight"
-	table_light.position = desk_pos + Vector3(0.0, 1.1, 0.0)
-	table_light.light_color = Color(1.0, 0.78, 0.48)
-	table_light.light_energy = 0.35
-	table_light.omni_range = 6.5
-	table_light.add_to_group("den_hand_fills")
-	add_child(table_light)
-	light_probe.register_light(table_light)
 
 	# Interactive Map Table -> opens ContractTableUI (diegetic HUD prompt, no giant Label3D billboard)
 	var desk_area := Area3D.new()
@@ -685,8 +714,8 @@ func interact(_actor: Node) -> void:
 	ward_light.name = "DenWardLight"
 	ward_light.position = wardrobe_pos + Vector3(0.0, 1.1, 0.4)
 	ward_light.light_color = Color(1.0, 0.82, 0.55)
-	ward_light.light_energy = 0.25
-	ward_light.omni_range = 5.5
+	ward_light.light_energy = 0.20
+	ward_light.omni_range = 5.0
 	ward_light.add_to_group("den_hand_fills")
 	add_child(ward_light)
 	light_probe.register_light(ward_light)

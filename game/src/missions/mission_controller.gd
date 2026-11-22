@@ -119,6 +119,7 @@ func _setup_environment() -> void:
 	add_child(moon)
 	light_probe.register_light(moon)
 	_add_guildhall_gate_fills()
+	_add_guildhall_foyer_fills()
 
 
 ## The extracted Guildhall gate/fence sublevel carries the iron gate, arch,
@@ -152,6 +153,29 @@ func _add_guildhall_gate_fills() -> void:
 	fence_lamp.shadow_enabled = false
 	add_child(fence_lamp)
 	light_probe.register_light(fence_lamp)
+
+
+## The authored Guildhall foyer is a large checkered hall with a refill
+## station; its practicals are sparse, so the 0.20 skylight leaves the stone
+## walls and busts near-black. Two warm, shadowless fills lift the hall
+## without touching the gate or the upper floors (range 16 m, y=31).
+func _add_guildhall_foyer_fills() -> void:
+	if GameState.active_map_id != "guildhall":
+		return
+	for spec: Array in [
+		[Vector3(27.0, 31.0, -53.0), 1.6],
+		[Vector3(27.0, 31.0, -64.0), 1.3],
+	]:
+		var fill := OmniLight3D.new()
+		fill.name = "GuildhallFoyerFill_%d" % int((spec[0] as Vector3).z)
+		fill.position = spec[0] as Vector3
+		fill.light_color = Color(1.0, 0.78, 0.55)
+		fill.light_energy = float(spec[1])
+		fill.omni_range = 16.0
+		fill.omni_attenuation = 1.2
+		fill.shadow_enabled = false
+		add_child(fill)
+		light_probe.register_light(fill)
 
 
 ## Previous hand-tuned night look. Used as the base under real weather data

@@ -17,6 +17,21 @@ Started 2026-11-21. Decisions taken with the user:
 4. `B1`–`B5` world loading/geometry.
 5. `C1`–`C5` rendering/weather/VFX/materials.
 
+## Track B status
+
+| Item | State | Evidence |
+|---|---|---|
+| B1 smart-object separation | done | `smart_objects` collection; 1,707 markers leave `guard_spawns` |
+| B2 contract sublevels + MissionClues | verified | 16 contracts, 0 missing sublevel refs, MissionClues present |
+| B3 FTUE collider budget | done | `probe_ftue`: 10 sublevels, 35,397 shapes, 0 dropped, safe-room start, PASS |
+| B4 deterministic SV selection | done (selection) | `probe_scene_variants`: 104 Guildhall variants, stable per seed, varies across seeds, PASS |
+| B4 override application | deferred | issue #11 (SceneElement -> SpawnGroup tag mapping) |
+| B5 loader geometry | done | mips regenerated after downscale; volume basis applied; single-instance MultiMesh windows clipped |
+
+### Track C (next)
+
+C1 NPR/SNN post-process, C2 OSEXray, C3 weather (roof occlusion, lens drops, volumetric/clouds), C4 Niagara placements (target: absolute 3,695; raw maps contain 3,710 NiagaraComponent exports and 37 systems, emitted level records 3,699), C5 material fallback warnings to 0.
+
 ## Baseline evidence
 
 - E2E run (unmasked): `/tmp/opencode/e2e_unmasked.log`.

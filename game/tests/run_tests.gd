@@ -607,7 +607,7 @@ func _initialize() -> void:
 				and is_equal_approx(wenv.adjustment_saturation, float(pp_src.get("saturation", 1.0))) \
 				and wenv.adjustment_brightness > 0.0 \
 				and is_equal_approx(wenv.adjustment_brightness, exp_bri) \
-				and is_equal_approx(wenv.glow_intensity, clampf(float(pp_src.get("bloom_intensity", 0.0)) * 0.08, 0.0, 0.8)) \
+				and is_equal_approx(wenv.glow_intensity, clampf(float(pp_src.get("bloom_intensity", 0.0)) * float(wp_scr.BLOOM_TO_GLOW), 0.0, 0.8)) \
 				and bool(wp_scr.enable_rain(wpreset)) \
 				and is_equal_approx(float(wp_scr.rain_intensity(wpreset)), float(wpreset.get("rain", {}).get("intensity", 0.0)))
 			var wden_ok := true
@@ -975,39 +975,50 @@ func _initialize() -> void:
 	var lux_e199: float = lux_l199.light_energy if lux_l199 != null else -1.0
 	var lux_e200: float = lux_l200.light_energy if lux_l200 != null else -1.0
 	var lux_ratio: float = lux_e45 / lux_e15 if absf(lux_e15) > 0.000001 else 0.0
-	if lux_l15 == null or lux_l45 == null or not is_equal_approx(lux_ratio, 3.0) or is_equal_approx(lux_e15, lux_e45):
-		printerr("FAIL: authored light ratio 15:45 (e15=", lux_e15, " e45=", lux_e45, " ratio=", lux_ratio, " expected 3.0 and distinct)")
+	# The sqrt/tanh mapping is intentionally compressive above the median:
+	# 45 lumens keeps a >1 ratio (hierarchy survives) but no longer reads as
+	# the old linear 3.0 because the shoulder starts before the 95th percentile.
+	if lux_l15 == null or lux_l45 == null or lux_ratio <= 1.0 or lux_ratio >= 3.0 or is_equal_approx(lux_e15, lux_e45):
+		printerr("FAIL: authored light ratio 15:45 (e15=", lux_e15, " e45=", lux_e45, " ratio=", lux_ratio, " expected 1<ratio<3 and distinct)")
 		fails += 1
 	else:
-		print("PASS: authored light ratio preserved (e15=", lux_e15, ", e45=", lux_e45, ", ratio=", lux_ratio, ")")
+		print("PASS: authored light ratio preserved with compression (e15=", lux_e15, ", e45=", lux_e45, ", ratio=", lux_ratio, ")")
 
-	# The old clamp returned exactly 4.2 for authored 15.0 and jumped 4.2 ->
-	# 1.6 at 20.0. The linear scale must not reproduce those constants and
-	# must stay continuous across the removed branch (19.9 vs 20.0 < 1%).
-	# Monotonicity (e15 < e20 < e45) is the real no-collapse guarantee; it
-	# does not depend on the truncated 0.0666667 constant the way an
-	# `absf(e15 - 1.0) > 1e-7` check did.
-	var lux_monotonic: bool = lux_l15 != null and lux_l200 != null and lux_l45 != null \
-		and lux_e15 < lux_e200 and lux_e200 < lux_e45
-	var lux_distinct: bool = absf(lux_e15 - 4.2) > 0.0001 \
+	# Monotonic across the whole authored range: 15 < 20 < 45 < 2500.
+	# The mapping has no branch, so 19.9 vs 20.0 stays continuous (<1%).
+	var lux_monotonic: bool = lux_l15 != null and lux_l45 != null and lux_l200 != null and lux_l2500 != null \
+		and lux_e15 < lux_e200 and lux_e200 < lux_e45 and lux_e45 < lux_e2500
+	var lux_distinct: bool = absf(lux_e45 - 4.2) > 0.0001 \
 		and absf(lux_e45 - 1.0) > 0.0001 \
-		and absf(lux_e45 - 4.2) > 0.0001
+		and absf(lux_e2500 - 4.0) > 0.0001
 	var lux_anchor_ok: bool = lux_l15 != null and absf(lux_e15 - 1.0) < 0.001
 	var lux_no_collapse: bool = lux_monotonic and lux_distinct and lux_anchor_ok \
 		and lux_l199 != null and lux_l200 != null \
 		and absf(lux_e200 - lux_e199) / lux_e200 < 0.01
 	if not lux_no_collapse:
-		printerr("FAIL: light energy collapse or 20.0 branch jump (e15=", lux_e15, " e20=", lux_e200, " e45=", lux_e45, " e19.9=", lux_e199, " e20.0=", lux_e200, " monotonic=", lux_monotonic, " distinct=", lux_distinct, " anchor=", lux_anchor_ok, ")")
+		printerr("FAIL: light energy collapse or 20.0 branch jump (e15=", lux_e15, " e20=", lux_e200, " e45=", lux_e45, " e2500=", lux_e2500, " e19.9=", lux_e199, " e20.0=", lux_e200, " monotonic=", lux_monotonic, " distinct=", lux_distinct, " anchor=", lux_anchor_ok, ")")
 		fails += 1
 	else:
-		print("PASS: monotonic light energy, no collapse or 20.0 branch jump (e15=", lux_e15, ", e20=", lux_e200, ", e45=", lux_e45, ", e19.9=", lux_e199, ")")
+		print("PASS: monotonic light energy, no collapse or 20.0 branch jump (e15=", lux_e15, ", e20=", lux_e200, ", e45=", lux_e45, ", e2500=", lux_e2500, ", e19.9=", lux_e199, ")")
 
-	var lux_ceil_ok: bool = lux_l2500 != null and absf(lux_e2500 - 4.0) < 0.0000001
+	# Smooth compression replaces the hard 4.0 ceiling: the 2500-lumen
+	# security spot stays below 4.0 but remains well above the median.
+	var lux_ceil_ok: bool = lux_l2500 != null and lux_e2500 > 3.0 and lux_e2500 < 4.0
 	if not lux_ceil_ok:
-		printerr("FAIL: light energy ceiling for authored 2500 (got ", lux_e2500, " expected 4.0)")
+		printerr("FAIL: light energy shoulder for authored 2500 (got ", lux_e2500, " expected 3.0..4.0)")
 		fails += 1
 	else:
-		print("PASS: light energy ceiling saturates at 4.0 (authored 2500 -> ", lux_e2500, ")")
+		print("PASS: light energy shoulder compresses authored 2500 -> ", lux_e2500, " (no hard clamp)")
+
+	# The compressive low end lifts the 0.01 floor instead of pinning it to
+	# a constant; the floor remains a bounded, non-zero minimum.
+	var lux_efloor: float = lux_lfloor.light_energy if lux_lfloor != null else -1.0
+	var lux_floor_ok: bool = lux_lfloor != null and lux_efloor >= 0.01 and lux_efloor <= 0.05
+	if not lux_floor_ok:
+		printerr("FAIL: light energy floor for authored 0.01 (got ", lux_efloor, " expected 0.01..0.05)")
+		fails += 1
+	else:
+		print("PASS: bounded light energy floor (authored 0.01 -> ", lux_efloor, ")")
 
 	var lux_range: float = -1.0
 	var lux_att: float = -1.0
@@ -1042,16 +1053,6 @@ func _initialize() -> void:
 		fails += 1
 	else:
 		print("PASS: PointLightComponent maps to OmniLight3D (energy=", lux_omni_energy, ", range=", lux_omni_range, ")")
-
-	# Authored-off 0.01 would map to 0.000667 without the floor; the floor must
-	# keep it at 0.01 instead of collapsing it to zero.
-	var lux_floor_energy: float = lux_lfloor.light_energy if lux_lfloor != null else -1.0
-	var lux_floor_ok: bool = lux_lfloor != null and absf(lux_floor_energy - 0.01) < 0.000001
-	if not lux_floor_ok:
-		printerr("FAIL: light energy floor for authored 0.01 (got ", lux_floor_energy, " expected 0.01)")
-		fails += 1
-	else:
-		print("PASS: light energy floor holds at 0.01 (authored 0.01 -> ", lux_floor_energy, ")")
 
 	var lux_rects: Array = [{"intensity": 15.0, "radius": 4.0, "color": [255.0, 215.0, 150.0], "width": 200.0, "height": 100.0}]
 	var lux_parent := Node3D.new()

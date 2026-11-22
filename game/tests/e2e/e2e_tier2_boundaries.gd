@@ -79,13 +79,19 @@ func _bVA_02_lighting() -> void:
 	h.root.add_child(ll)
 	await h.step_process(1)
 
-	# T2-02-B: Linear Light Energy Floor (0.01)
+	# T2-02-B: Bounded compressive floor (0.01 authored -> 0.01..0.05 energy)
 	var l_floor: Light3D = ll.call("_build_light", {"type": "PointLightComponent", "intensity": 0.01, "radius": 5.0}) as Light3D
-	h.require(l_floor != null and absf(l_floor.light_energy - 0.01) < 1e-5, "T2-02-B", "light floor 0.01 -> %.5f" % (l_floor.light_energy if l_floor != null else -1.0))
+	var exp_floor: float = float(ll.call("light_energy_for_intensity", 0.01))
+	h.require(l_floor != null and absf(l_floor.light_energy - exp_floor) < 1e-5 \
+		and l_floor.light_energy >= 0.01 and l_floor.light_energy <= 0.05,
+		"T2-02-B", "light floor 0.01 -> %.5f (mapping %.5f)" % [l_floor.light_energy if l_floor != null else -1.0, exp_floor])
 
-	# T2-02-C: Linear Light Energy Ceiling (4.0)
+	# T2-02-C: Smooth shoulder replaces the hard 4.0 ceiling
 	var l_ceil: Light3D = ll.call("_build_light", {"type": "SpotLightComponent", "intensity": 2500.0, "radius": 9.0, "outer_cone": 50.0}) as Light3D
-	h.require(l_ceil != null and absf(l_ceil.light_energy - 4.0) < 1e-5, "T2-02-C", "light ceiling 2500 -> %.3f" % (l_ceil.light_energy if l_ceil != null else -1.0))
+	var exp_ceil: float = float(ll.call("light_energy_for_intensity", 2500.0))
+	h.require(l_ceil != null and absf(l_ceil.light_energy - exp_ceil) < 1e-5 \
+		and l_ceil.light_energy > 3.0 and l_ceil.light_energy < 4.0,
+		"T2-02-C", "light shoulder 2500 -> %.3f (mapping %.3f, no hard clamp)" % [l_ceil.light_energy if l_ceil != null else -1.0, exp_ceil])
 
 	# T2-02-D: No Branch Jump Across 19.9 vs 20.0
 	var l_199: Light3D = ll.call("_build_light", {"type": "PointLightComponent", "intensity": 19.9, "radius": 5.0}) as Light3D

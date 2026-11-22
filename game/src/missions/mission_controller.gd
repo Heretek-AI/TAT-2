@@ -118,6 +118,40 @@ func _setup_environment() -> void:
 
 	add_child(moon)
 	light_probe.register_light(moon)
+	_add_guildhall_gate_fills()
+
+
+## The extracted Guildhall gate/fence sublevel carries the iron gate, arch,
+## star finials and fence, but no LightComponent on the gate pillars (the
+## reference KF16 gate is warm from its carriage lamps/headlights). With only
+## the cool skylight these meshes render as flat blue silhouettes. Two local,
+## shadowless warm practicals light the authored metal without raising global
+## ambient or flattening the rest of the map. Positions are the authored gate
+## tunnel (10, 20, 100 -> 10, 22, 88) and fence/finial run (10, 24, 62 ->
+## 10, 25.3, 48.7); ranges stop at 12 m, so the foyer and interior are untouched.
+func _add_guildhall_gate_fills() -> void:
+	if GameState.active_map_id != "guildhall":
+		return
+	var gate_lamp := OmniLight3D.new()
+	gate_lamp.name = "GuildhallGateLampFill"
+	gate_lamp.position = Vector3(11.5, 23.0, 92.0)
+	gate_lamp.light_color = Color(1.0, 0.74, 0.48)
+	gate_lamp.light_energy = 2.2
+	gate_lamp.omni_range = 12.0
+	gate_lamp.omni_attenuation = 1.2
+	gate_lamp.shadow_enabled = false
+	add_child(gate_lamp)
+	light_probe.register_light(gate_lamp)
+	var fence_lamp := OmniLight3D.new()
+	fence_lamp.name = "GuildhallFenceLampFill"
+	fence_lamp.position = Vector3(10.0, 28.0, 50.0)
+	fence_lamp.light_color = Color(1.0, 0.76, 0.52)
+	fence_lamp.light_energy = 3.5
+	fence_lamp.omni_range = 16.0
+	fence_lamp.omni_attenuation = 1.2
+	fence_lamp.shadow_enabled = false
+	add_child(fence_lamp)
+	light_probe.register_light(fence_lamp)
 
 
 ## Previous hand-tuned night look. Used as the base under real weather data

@@ -62,11 +62,20 @@ const AMBIENT_ENERGY_MIN := 0.05
 const AMBIENT_ENERGY_MAX := 0.35
 ## UE SkyLight intensity is an irradiance scale, not a Godot
 ## ambient_light_energy. The old 1:1 clamp pinned MidnightClear at 1.0 (flat
-## white wash, white-clipped statues) while the Den sat at 0.04. 0.06 keeps
-## the authored relative order and places MidnightClear at 0.15.
-const AMBIENT_UE_TO_GODOT := 0.06
-# UE BloomIntensity -> Godot glow_intensity (DenseFog 8.0 -> 0.64).
-const BLOOM_TO_GLOW := 0.08
+## white wash, white-clipped statues) while the Den sat at 0.04. 0.08 keeps
+## the authored relative order and places MidnightClear at 0.20: the gate and
+## lower-door frames lift out of crushed black without turning the foyer's
+## practicals into a daytime wash.
+const AMBIENT_UE_TO_GODOT := 0.08
+# The authored Guildhall night needs a small exposure lift under AGX; the
+# old ACES 1.0 path left the gate at p50 0.04-0.06 against the reference
+# 0.10-0.11. Applied to the MidnightClear preset only.
+const NIGHT_EXPOSURE := 1.15
+# UE BloomIntensity -> Godot glow_intensity (DenseFog 8.0 -> 0.16). The old
+# 0.08 factor put Guildhall at 0.51 and turned every ceiling practical and
+# the 2500-lumen security spot into a white halo. 0.02 keeps the practicals
+# warm but stops the bloom from filling the frame.
+const BLOOM_TO_GLOW := 0.02
 ## P3 companion: fog-energy compensation ceiling. Both density branches
 ## share one cap so the tuning lives in one place, not two literals.
 const FOG_ENERGY_COMP_MAX := 8.0
@@ -75,11 +84,16 @@ const FOG_ENERGY_COMP_MAX := 8.0
 ## rest are counted silently. fog_clamp_total() exposes the exact count.
 static var _fog_clamp_total: int = 0
 static var _fog_clamp_sample_logged: bool = false
-## P4 companion: off-Den glow uses 3 mip levels (0-2), not 5, and a 1.5x
+## P4 companion: off-Den glow uses 3 mip levels (0-2), not 5, and a 0.9x
 ## HDR scale instead of 2.0x. Levels 3-4 are explicitly disabled so a preset
 ## that leaves them on cannot stack 5 mips + 2x HDR outside the Den.
-const GLOW_LEVELS_NON_DEN := 5
-const GLOW_HDR_SCALE_NON_DEN := 1.8
+const GLOW_LEVELS_NON_DEN := 3
+const GLOW_HDR_SCALE_NON_DEN := 0.9
+## Practicals/security fixtures clip above this; keeping the threshold above
+## the old 1.0 stops the foyer lamps and 2500-lumen spots from seeding a
+## full-frame bloom sheet while the warm sub-threshold practicals still read.
+const GLOW_HDR_THRESHOLD_NON_DEN := 1.6
+const GLOW_BLOOM_NON_DEN := 0.015
 
 
 ## P3: the old compensation divided up to 24x on pre-exposed dark presets
@@ -532,7 +546,7 @@ static func apply_environment(env: Environment, moon: DirectionalLight3D, preset
 			# Desktop SSIL + shadow-toe LUT (R3 APPROXIMATE replacement for UE5 Lumen GI & Local Exposure).
 			env.ssil_enabled = true
 			env.ssil_radius = 4.5
-			env.ssil_intensity = 1.25
+			env.ssil_intensity = 0.8
 			env.ssil_sharpness = 0.98
 			env.ssil_normal_rejection = 1.0
 			var gs: Variant = shadow_gain(preset)
@@ -542,6 +556,14 @@ static func apply_environment(env: Environment, moon: DirectionalLight3D, preset
 		var expo: Variant = tonemap_exposure(preset)
 		if expo != null:
 			env.tonemap_exposure = float(expo)
+		# Guildhall's authored MidnightClear is the one preset where the
+		# ACES 1.0 path crushed the gate into black while the interior
+		# practicals clipped. AGX rolls the highlights off instead of
+		# clipping them, and the small exposure lift matches the reference
+		# gate/overlook medians. Other presets keep their authored path.
+		if str(preset.get("preset", "")).to_lower() == "midnight_clear":
+			env.tonemap_mode = Environment.TONE_MAPPER_AGX
+			env.tonemap_exposure = maxf(env.tonemap_exposure, NIGHT_EXPOSURE)
 		var glow: Variant = glow_intensity(preset)
 		if glow != null:
 			# Den RD cap: indoor Den preset keeps glow on for the warm look
@@ -552,9 +574,9 @@ static func apply_environment(env: Environment, moon: DirectionalLight3D, preset
 			env.glow_enabled = true
 			env.glow_intensity = float(glow) * 0.6 if is_den_glow else float(glow)
 			if is_desktop:
-				env.glow_hdr_threshold = 1.0
+				env.glow_hdr_threshold = 1.0 if is_den_glow else GLOW_HDR_THRESHOLD_NON_DEN
 				env.glow_hdr_scale = 1.0 if is_den_glow else GLOW_HDR_SCALE_NON_DEN
-				env.glow_bloom = 0.10 if is_den_glow else 0.08
+				env.glow_bloom = 0.10 if is_den_glow else GLOW_BLOOM_NON_DEN
 				env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
 				for gl_i: int in range(2 if is_den_glow else GLOW_LEVELS_NON_DEN):
 					env.set_glow_level(gl_i, true)

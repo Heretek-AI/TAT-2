@@ -127,25 +127,37 @@ const PROGRESS_YIELD_EVERY: int = 64
 
 ## Authored UE light intensity -> Godot light_energy.
 ## There is no faithful lumen/candela -> Godot `light_energy` conversion for
-## these stylized authored values (Guildhall spans 0.01..2500, median 15), so
-## this is a documented approximation: a single linear scale preserves the
-## authored RATIO inside the band and only compresses at the extremes. The
-## scale is anchored so the median authored intensity (15.0) becomes energy
-## 1.0.
+## these stylized authored values (Guildhall spans 0.01..2500, median 15).
+## The old linear-scale-plus-hard-ceiling mapping flattened every authored
+## value above 60 lumens to the same 4.0 energy: 90th percentile (50) still
+## read as 3.33, 95th (150) and the 2500-lumen security spots all read 4.0.
+## That erased the authored hierarchy exactly where the practicals and
+## security lights need to stay distinguishable.
 ##
-## The old two-branch mapping (raw < 20 -> raw * 0.95, else raw * 0.08,
-## clamped to [1.0, 4.2]) pinned 468 of the 682 lights in
-## `game/data/generated/levels/Guildhall/` (68.6%) to a constant: 142 at the
-## 1.0 floor and 326 at the 4.2 ceiling. Another 159 lights authored 20-52.5
-## escaped the clamp through the * 0.08 branch, so an "in band" count that
-## includes them overstates how much of the authored ratio the old mapping
-## kept. The 682 figure is that directory only; the loaded Guildhall map also
-## merges `Buildings/Guildhall/`, for 982 runtime lights. Under the new
-## mapping those 982 split into 778 in band, 70 at the ceiling and 134 at the
-## floor (the 682 directory alone: 486 in band, 62 ceiling, 134 floor).
-const LIGHT_INTENSITY_SCALE: float = 0.0666667 # 1/15: median authored intensity -> energy 1.0
+## Replacement: a monotonic sqrt response with a smooth (tanh) shoulder,
+## anchored so the median authored intensity (15.0) is energy 1.0. The sqrt
+## lifts the dark end (3 lumens -> 0.46 instead of 0.20, 0.5 -> 0.185 instead
+## of 0.033) while the shoulder compresses the top (150 -> 2.59, 300 -> 3.07,
+## 2500 -> 3.56 instead of a flat 4.0). No branch, no hard discontinuity; the
+## mapping is strictly increasing across the whole 0.01..2500 range.
+const LIGHT_MEDIAN_INTENSITY: float = 15.0
 const LIGHT_ENERGY_FLOOR: float = 0.01
-const LIGHT_ENERGY_CEIL: float = 4.0
+## Smooth asymptotic shoulder, not a clamp. 3.5 keeps the top practicals and
+## the 2500-lumen train/security spots from stacking into a white blob while
+## leaving the 15-lumen median at 1.0.
+const LIGHT_ENERGY_SOFT_CEIL: float = 3.5
+
+
+## Monotonic authored-intensity -> energy mapping. See the constants above.
+## Median 15.0 -> 1.0 exactly; the curve is continuous and strictly increasing
+## over the whole authored range (the tanh shoulder never reaches the ceiling).
+static func light_energy_for_intensity(raw: float) -> float:
+	if raw <= 0.0:
+		return LIGHT_ENERGY_FLOOR
+	var x: float = raw / LIGHT_MEDIAN_INTENSITY
+	var shaped: float = LIGHT_ENERGY_SOFT_CEIL * tanh(sqrt(x) / LIGHT_ENERGY_SOFT_CEIL)
+	var median: float = LIGHT_ENERGY_SOFT_CEIL * tanh(1.0 / LIGHT_ENERGY_SOFT_CEIL)
+	return maxf(shaped / median, LIGHT_ENERGY_FLOOR)
 ## Defensive guard only: authored AttenuationRadius values are 0.35-30 m, and
 ## the old 26 m clamp was clipping 24 legitimate 20-30 m lights. This ceiling
 ## exists so a corrupt authored radius cannot create an unbounded light.
@@ -1617,6 +1629,15 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 		var low_mp: String = mp.to_lower()
 		if "fogsheet" in low_mp or "fogsphere" in low_mp or "volumetric" in low_mp or "skysphere" in low_mp or "blocker" in low_mp:
 			continue
+		# SM_WardBox is the authored ward-zone trigger volume (8 instances at
+		# the foyer/upper-floor wards). It is not the visible ward VFX: the
+		# cooked material is an emissive white debug shell, and a camera inside
+		# one renders a fully clipped frame (p50/p95 = 1.0). The visible arcane
+		# ward is driven by the ward VFX/shader, so skip the debug shell and
+		# count it instead of spawning geometry.
+		if low_mp.ends_with("/sm_wardbox"):
+			result["ward_box_hidden"] = int(result.get("ward_box_hidden", 0)) + 1
+			continue
 		var tr: Transform3D = _dict_to_transform(m_dict)
 		# Per-component OverrideMaterials split the batch so each MultiMesh
 		# shares an identically overridden duplicated Mesh resource.
@@ -2981,9 +3002,8 @@ func _build_decals(decals: Array, parent: Node3D, ctx: Dictionary) -> void:
 
 ## Spawns an OmniLight3D approximation plus an emissive quad for each active
 ## RectLight. Entries at intensity <= 0.01 are authored off and skipped.
-## Energy uses the same linear authored-intensity scale as _build_light
-## (LIGHT_INTENSITY_SCALE, floored at LIGHT_ENERGY_FLOOR and capped at
-## LIGHT_ENERGY_CEIL); colour converts 0-255 -> 0-1.
+## Energy uses the same monotonic authored-intensity mapping as _build_light
+## (light_energy_for_intensity); colour converts 0-255 -> 0-1.
 ## The quad is sized from width x height (raw UU centimetres) and is
 ## double-sided because the UE emission axis is not recorded; the light
 ## itself is omnidirectional so gameplay lighting does not depend on it.
@@ -3012,7 +3032,7 @@ func _build_rect_lights(rects: Array, parent: Node3D, light_probe: Node, ctx: Di
 		# previous 0.9 -> 1.0 raises the attenuation exponent, so falloff is
 		# FASTER, not slower.
 		omni.omni_attenuation = 1.0
-		omni.light_energy = clampf(raw * LIGHT_INTENSITY_SCALE, LIGHT_ENERGY_FLOOR, LIGHT_ENERGY_CEIL)
+		omni.light_energy = light_energy_for_intensity(raw)
 		var col_arr: Array = [255.0, 215.0, 150.0]
 		var col_raw: Variant = r.get("color", [])
 		if col_raw is Array and (col_raw as Array).size() >= 3:
@@ -3409,18 +3429,16 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 
 
 ## Ranks authored lights into the fixed light budget. This score is used ONLY
-## for that ordering; it tracks the rendered energy (the same linear scale as
-## _build_light / _build_rect_lights) so the budget keeps the brightest lights
-## instead of the old non-monotonic heuristic. The type bonuses are expressed
-## against LIGHT_ENERGY_CEIL to keep their previous weight (Directional 10.0
-## and Spot 2.0 against the old ~4.2 maximum), which is why they are large
-## next to an energy term of at most LIGHT_ENERGY_CEIL.
+## for that ordering; it tracks the rendered energy (the same monotonic
+## mapping as _build_light / _build_rect_lights) so the budget keeps the
+## brightest lights instead of the old non-monotonic heuristic. The type bonus
+## is expressed against LIGHT_ENERGY_SOFT_CEIL to keep its previous weight.
 func _light_score(info: Dictionary) -> float:
 	var raw: float = _to_float(info.get("intensity"), 15.0)
-	var energy: float = clampf(raw * LIGHT_INTENSITY_SCALE, LIGHT_ENERGY_FLOOR, LIGHT_ENERGY_CEIL)
+	var energy: float = light_energy_for_intensity(raw)
 	var ltype: String = str(info.get("type", ""))
 	if "Directional" in ltype:
-		energy += LIGHT_ENERGY_CEIL * 2.5
+		energy += LIGHT_ENERGY_SOFT_CEIL * 2.5
 	# A flat +2.0 for every Spot made all 47 Guildhall slots spots and dropped
 	# every warm point lamp. Rank on authored energy only; the type tie-break
 	# is no longer needed with the 160-light desktop budget.
@@ -3471,7 +3489,7 @@ func _to_float(v: Variant, fallback: float) -> float:
 func _build_light(info: Dictionary, cast_shadow: bool = false) -> Light3D:
 	var ltype: String = str(info.get("type", ""))
 	var raw_i := _to_float(info.get("intensity"), 15.0)
-	var intensity := clampf(raw_i * LIGHT_INTENSITY_SCALE, LIGHT_ENERGY_FLOOR, LIGHT_ENERGY_CEIL)
+	var intensity := light_energy_for_intensity(raw_i)
 	var col_dict: Variant = info.get("color")
 	var col := Color(1.0, 0.85, 0.62)
 	if col_dict is Dictionary:

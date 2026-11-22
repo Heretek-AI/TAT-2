@@ -97,9 +97,16 @@ func _build_3d_backdrop() -> void:
 	_menu_moon = DirectionalLight3D.new()
 	_menu_moon.rotation_degrees = Vector3(-13.0, -3.0, 0.0)
 	_menu_moon.light_color = Color(0.6039, 0.702, 1.0)
-	_menu_moon.light_energy = 0.10
+	_menu_moon.light_energy = 0.18
 	_menu_moon.shadow_enabled = true
 	scene_root.add_child(_menu_moon)
+	# WeatherVisuals places the authored moon disc along the light's +Z axis.
+	# The authored lobby rotation points +Z behind the camera, so the disc
+	# never entered KF01's frame. Aim +Z toward the upper-right sky (the
+	# authored light still shines from that direction); the disc, stars and
+	# purple haze then share the reference's top-right composition.
+	var moon_dir := Vector3(0.82, 0.30, -0.29).normalized()
+	_menu_moon.look_at(_menu_moon.global_position - moon_dir, Vector3.UP)
 
 	_menu_cam = Camera3D.new()
 	_menu_cam.name = "StartscreenCineCamera"
@@ -163,6 +170,19 @@ func _build_3d_backdrop() -> void:
 	_shop_glow.shadow_enabled = false
 	scene_root.add_child(_shop_glow)
 
+	# KF01's storefront is washed magenta by the jeweller neon, not just the
+	# warm street lamps. One authored-hue fill (no shadows) puts that colour
+	# on the facade while the low ambient keeps the scaffold/street dark.
+	var shop_magenta := OmniLight3D.new()
+	shop_magenta.name = "StartscreenShopMagenta"
+	shop_magenta.position = Vector3(0.5, 4.0, 3.0)
+	shop_magenta.light_color = Color(1.0, 0.25, 0.85)
+	shop_magenta.light_energy = 3.0
+	shop_magenta.omni_range = 12.0
+	shop_magenta.omni_attenuation = 1.2
+	shop_magenta.shadow_enabled = false
+	scene_root.add_child(shop_magenta)
+
 	call_deferred("_bind_menu_env")
 	_spawn_startscreen_guard(scene_root, loader)
 
@@ -193,21 +213,35 @@ func _bind_menu_env() -> void:
 	e.background_mode = Environment.BG_COLOR
 	e.background_color = Color(0.012, 0.016, 0.036)
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	e.ambient_light_color = Color(0.55, 0.58, 0.85)
-	e.ambient_light_energy = 1.3
+	e.ambient_light_color = Color(0.45, 0.42, 0.72)
+	e.ambient_light_energy = 0.38
 	e.tonemap_mode = Environment.TONE_MAPPER_ACES
-	e.tonemap_exposure = 0.9
+	e.tonemap_exposure = 0.95
 	e.glow_enabled = true
-	e.glow_intensity = 0.6
-	e.glow_bloom = 0.1
-	e.glow_hdr_threshold = 0.9
-	e.glow_hdr_scale = 1.8
+	e.glow_intensity = 1.9
+	e.glow_bloom = 0.26
+	e.glow_hdr_threshold = 1.8
+	e.glow_hdr_scale = 3.2
 	e.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
 	for gl_i: int in range(5):
 		e.set_glow_level(gl_i, true)
 	if _menu_moon != null and not _menu_preset.is_empty():
 		WeatherVisuals.apply_sky(e, _menu_preset, _menu_moon)
 		e.ambient_light_sky_contribution = 0.0
+		# TAT's M_Sky multiplies the authored HDR gradient by OverallColor
+		# 0.001, which the shader's 25x night lift still leaves near-black.
+		# The reference KF01 sky/haze sits around 0.07-0.15, so lift the
+		# rendered sky radiance once here (authored colours stay untouched).
+		e.background_energy_multiplier = 1.2
+		# Authored night fog hue, tinted toward the reference's magenta
+		# storefront haze rather than a neutral blue. fog_sky_affect also
+		# tints the low sky band; the street remains readable at 0.0015.
+		e.fog_enabled = true
+		e.fog_light_color = Color(0.25, 0.08, 0.32)
+		e.fog_light_energy = 1.0
+		e.fog_density = 0.0015
+		e.fog_sky_affect = 0.5
+		e.fog_aerial_perspective = 0.4
 	_menu_cam.environment = e
 
 

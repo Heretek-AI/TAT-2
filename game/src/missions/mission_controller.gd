@@ -483,6 +483,19 @@ func _map_id_to_sublevels(map_id: String, order: int = 2) -> Array[String]:
 	return base
 
 
+## Godot 4.7.2 leaks the ReflectionProbe atlas (7 texture RIDs) at exit;
+## default ON for fidelity. CI/QA can pass --no-den-probe, set
+## TAT2_NO_DEN_PROBE=1, or set tat2/den_reflection_probe=false.
+func _den_probe_enabled() -> bool:
+	if OS.has_environment("TAT2_NO_DEN_PROBE"):
+		return false
+	for args: PackedStringArray in [OS.get_cmdline_user_args(), OS.get_cmdline_args()]:
+		for arg: String in args:
+			if arg == "--no-den-probe":
+				return false
+	return bool(ProjectSettings.get_setting("tat2/den_reflection_probe", true))
+
+
 func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> void:
 	# Subtle hand fill lights totaling <= 2.0 energy (0.35 + 0.65 + 0.35 + 0.25 + 0.30 = 1.90)
 	# so authored ThievesDen_Geo spots carry the room with no invented red.
@@ -526,6 +539,9 @@ func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> 
 	_spawn_den_window_vista(win_pos, beam_target)
 
 	# Single interior ReflectionProbe for Thieves' Den specular reflections.
+	# Godot 4.7.2 leaks the probe atlas color buffer + 6 views at exit
+	# (godot#122498, fixed in 4.8). Keep the node for the test contract, but
+	# skip the capture when the QA/CI opt-out is set.
 	var den_probe: ReflectionProbe = ReflectionProbe.new()
 	den_probe.name = "ThievesDenReflectionProbe"
 	den_probe.position = Vector3(1.5, 42.0, 271.5)
@@ -533,6 +549,11 @@ func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> 
 	den_probe.interior = true
 	den_probe.ambient_mode = ReflectionProbe.AMBIENT_DISABLED
 	den_probe.update_mode = ReflectionProbe.UPDATE_ONCE
+	if not _den_probe_enabled():
+		# Godot 4.7.2 has no UPDATE_DISABLED enum; hiding the probe prevents
+		# the one-shot atlas capture while keeping the test-visible node.
+		den_probe.visible = false
+		print("TAT-2 Den reflection probe: disabled (TAT2_NO_DEN_PROBE/--no-den-probe/setting)")
 	den_probe.intensity = 0.8
 	add_child(den_probe)
 

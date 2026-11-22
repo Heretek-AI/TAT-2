@@ -141,7 +141,7 @@ public sealed class Exporter
         // before the parsers ever see it and is counted as tables-filtered.
         // P1-2: Art/ThirdParty/Developers added (Art is 10k files; dumping them
         // is slow but silent loss is worse — parsers glob only known tables).
-        var roots = new[] { "TAT/Content/Gameplay/", "TAT/Content/AI/", "TAT/Content/Missions/", "TAT/Content/Character/", "TAT/Content/Core/", "TAT/Content/StringTables/", "TAT/Content/Maps/", "TAT/Content/UI/", "TAT/Content/Audio/", "TAT/Content/Art/", "TAT/Content/ThirdParty/", "TAT/Content/Developers/", "TAT/Content/WwiseAudio/" };
+        var roots = new[] { "TAT/Content/Gameplay/", "TAT/Content/AI/", "TAT/Content/Missions/", "TAT/Content/Character/", "TAT/Content/Core/", "TAT/Content/StringTables/", "TAT/Content/Maps/", "TAT/Content/UI/", "TAT/Content/Audio/", "TAT/Content/Art/", "TAT/Content/ThirdParty/", "TAT/Content/Developers/", "TAT/Content/WwiseAudio/", "TAT/Content/MaterialLibrary/" };
         var candidates = Packages(p => p.EndsWith(".uasset")).ToList();
         var queued = candidates.Where(f => roots.Any(f.Path.StartsWith)).ToList();
         CountSkip("tables-filtered", candidates.Count - queued.Count);

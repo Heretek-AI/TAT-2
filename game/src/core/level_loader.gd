@@ -108,6 +108,11 @@ const MAX_TOTAL_SHAPES: int = 32000
 ## CURB_MAX_SPLINES (64) splines and are capped at 4000. The partitions sum
 ## exactly to MAX_TOTAL_SHAPES, so the global cap still holds as a backstop.
 const MAX_BUILDING_SHAPES: int = 28000
+# FTUE is a whole-city tutorial map: 34,201 authored meshes against the 28,000
+# default. Raising the budget for this map (logged, never silent) keeps every
+# gameplay collider and the safe-room start instead of dropping 6,201 shapes.
+const MAX_BUILDING_SHAPES_FTUE: int = 40000
+const MAX_TOTAL_SHAPES_FTUE: int = 44000
 const MAX_CURB_SHAPES: int = 4000
 const LIGHT_DISTANCE_FADE_BEGIN: float = 28.0
 const LIGHT_DISTANCE_FADE_LENGTH: float = 12.0
@@ -1083,6 +1088,22 @@ func _new_accumulator() -> Dictionary:
 	}
 
 
+## FTUE is a whole-city tutorial map. Give it the larger budget explicitly so
+## the overflow is not silent, and leave every other map on the default.
+func _apply_collider_budget(ctx: Dictionary, json_paths: Array) -> void:
+	for jp: Variant in json_paths:
+		if str(jp).find("/FTUE/") >= 0:
+			ctx["building_cap"] = MAX_BUILDING_SHAPES_FTUE
+			ctx["total_cap"] = MAX_TOTAL_SHAPES_FTUE
+			push_warning(
+				"[level_loader] FTUE collider budget raised to %d building / %d total (authored city demand exceeds %d/%d; no gameplay colliders dropped)"
+				% [MAX_BUILDING_SHAPES_FTUE, MAX_TOTAL_SHAPES_FTUE, MAX_BUILDING_SHAPES, MAX_TOTAL_SHAPES]
+			)
+			return
+	ctx["building_cap"] = MAX_BUILDING_SHAPES
+	ctx["total_cap"] = MAX_TOTAL_SHAPES
+
+
 func _new_build_ctx(parent: Node3D, light_probe: Node, generate_collision: bool) -> Dictionary:
 	return {
 		"parent": parent,
@@ -1806,10 +1827,10 @@ func _clip_den_window_visual(ctx: Dictionary, tr: Transform3D, soff: Vector3, me
 ## buildings, ribbon/segment id for curbs).
 func _add_collider(ctx: Dictionary, cell: Vector2i, shape: Shape3D, tr: Transform3D, shape_offset: Vector3, kind: String = "building", label: String = "") -> void:
 	var is_curb: bool = kind == "curb"
-	var part_cap: int = MAX_CURB_SHAPES if is_curb else MAX_BUILDING_SHAPES
+	var part_cap: int = MAX_CURB_SHAPES if is_curb else int(ctx.get("building_cap", MAX_BUILDING_SHAPES))
 	var part_key: String = "curb_shapes" if is_curb else "building_shapes"
 	var part_count: int = int(ctx.get(part_key, 0))
-	if int(ctx.get("collision_shapes", 0)) >= MAX_TOTAL_SHAPES or part_count >= part_cap:
+	if int(ctx.get("collision_shapes", 0)) >= int(ctx.get("total_cap", MAX_TOTAL_SHAPES)) or part_count >= part_cap:
 		ctx["collision_dropped"] = int(ctx.get("collision_dropped", 0)) + 1
 		var drop_key: String = "curb_dropped" if is_curb else "building_dropped"
 		ctx[drop_key] = int(ctx.get(drop_key, 0)) + 1
@@ -1818,7 +1839,7 @@ func _add_collider(ctx: Dictionary, cell: Vector2i, shape: Shape3D, tr: Transfor
 		if drop_log.size() < 128 and not drop_log.has(item_name):
 			drop_log.append(item_name)
 		var part_name: String = "curb" if is_curb else "building"
-		push_warning("[level_loader] collider budget overflow: dropped ", part_name, " item '", item_name, "' (", part_name, " ", part_count, "/", part_cap, "; total ", int(ctx.get("collision_shapes", 0)), "/", MAX_TOTAL_SHAPES, ")")
+		push_warning("[level_loader] collider budget overflow: dropped ", part_name, " item '", item_name, "' (", part_name, " ", part_count, "/", part_cap, "; total ", int(ctx.get("collision_shapes", 0)), "/", int(ctx.get("total_cap", MAX_TOTAL_SHAPES)), ")")
 		return
 	var bodies: Dictionary = ctx["col_bodies"]
 	var counts: Dictionary = ctx["col_counts"]
@@ -1855,9 +1876,11 @@ func _add_collider(ctx: Dictionary, cell: Vector2i, shape: Shape3D, tr: Transfor
 static func check_collider_budget(stats: Dictionary) -> bool:
 	var dropped: int = int(stats.get("collision_dropped", 0))
 	var total: int = int(stats.get("collision_shapes", 0))
-	if dropped <= 0 and total <= MAX_TOTAL_SHAPES:
+	var total_cap: int = int(stats.get("total_cap", MAX_TOTAL_SHAPES))
+	var building_cap: int = int(stats.get("building_cap", MAX_BUILDING_SHAPES))
+	if dropped <= 0 and total <= total_cap:
 		return true
-	push_error("[level_loader] COLLIDER BUDGET EXCEEDED: dropped ", dropped, " colliders (building ", int(stats.get("building_dropped", 0)), " dropped, ", int(stats.get("building_shapes", 0)), "/", MAX_BUILDING_SHAPES, "; curb ", int(stats.get("curb_dropped", 0)), " dropped, ", int(stats.get("curb_shapes", 0)), "/", MAX_CURB_SHAPES, "; total ", total, "/", MAX_TOTAL_SHAPES, "). World geometry is missing collision — resize the partition, do not raise the cap silently.")
+	push_error("[level_loader] COLLIDER BUDGET EXCEEDED: dropped ", dropped, " colliders (building ", int(stats.get("building_dropped", 0)), " dropped, ", int(stats.get("building_shapes", 0)), "/", building_cap, "; curb ", int(stats.get("curb_dropped", 0)), " dropped, ", int(stats.get("curb_shapes", 0)), "/", MAX_CURB_SHAPES, "; total ", total, "/", total_cap, "). World geometry is missing collision — resize the partition, do not raise the cap silently.")
 	return false
 
 
@@ -2272,6 +2295,8 @@ func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dict
 	result["collision_dropped"] = int(ctx.get("collision_dropped", 0))
 	result["building_dropped"] = int(ctx.get("building_dropped", 0))
 	result["curb_dropped"] = int(ctx.get("curb_dropped", 0))
+	result["building_cap"] = int(ctx.get("building_cap", MAX_BUILDING_SHAPES))
+	result["total_cap"] = int(ctx.get("total_cap", MAX_TOTAL_SHAPES))
 	result["dropped_colliders"] = (ctx.get("dropped_colliders", [] as Array) as Array).duplicate()
 	# T6 fail-loud: any dropped collider (or total over cap) push_errors here
 	# so overflow can never pass silently; export gates on this flag.
@@ -2698,6 +2723,7 @@ func load_sublevels(json_paths: Array[String], parent: Node3D, light_probe: Node
 
 	var ctx: Dictionary = _new_build_ctx(parent, light_probe, generate_collision)
 	ctx["map_hint"] = _map_hint_from_paths(json_paths)
+	_apply_collider_budget(ctx, json_paths)
 	# Active RectLights are rare (one per mission map at most) and authored as
 	# area lights, so they claim budget slots before the generic point lights.
 	_build_rect_lights(acc["rect_lights"], parent, light_probe, ctx, max_lights)
@@ -2735,6 +2761,7 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 
 	var ctx: Dictionary = _new_build_ctx(parent, light_probe, generate_collision)
 	ctx["map_hint"] = _map_hint_from_paths(json_paths)
+	_apply_collider_budget(ctx, json_paths)
 	var pending_lights: Array = _prioritize_lights(acc["lights"], acc["result"]["player_spawns"])
 	load_progress.emit(0.3, "Sorting lights...")
 	# Active RectLights claim budget slots before the generic point lights.

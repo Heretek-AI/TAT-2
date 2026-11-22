@@ -1266,10 +1266,19 @@ def main():
         render = dict(base["render"])
         render.update(cur["render"])
         phys = cur["phys_material"] or base["phys_material"]
-        # P1-3: an albedo bound on the child wins with the child's source;
-        # otherwise the inherited source travels with the inherited bind.
+        # P1-3: an authored albedo on the child wins with the child's source.
+        # A child fallback-ranked guess must never replace an authored parent
+        # bind (MI_IvyNanite_Root_NoWPO: the guess picked the leaf atlas and
+        # turned the bark root into an opaque backlit leaf card).
         if "albedo" in cur["texs"]:
-            albedo_source = cur["albedo_source"]
+            if (
+                str(cur["albedo_source"]).startswith("fallback-")
+                and "albedo" in base["texs"]
+            ):
+                albedo_source = base["albedo_source"]
+                texs["albedo"] = base["texs"]["albedo"]
+            else:
+                albedo_source = cur["albedo_source"]
         else:
             albedo_source = base["albedo_source"]
         resolved[pkg] = {

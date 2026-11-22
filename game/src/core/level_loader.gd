@@ -435,14 +435,13 @@ func _apply_ue_pbr_params(mat: StandardMaterial3D, info: Dictionary) -> void:
 		texs = texs_v as Dictionary
 	var has_orm: bool = str(texs.get("orm", "")) != ""
 	var rough_map_switch: Variant = _ue_lookup(switches, ["roughnessmap?"])
-	var adjust_rough: bool = _ue_lookup(switches, ["adjustroughness?"]) == true
 	# FlatRoughness is a UE master-material fallback used only when the
 	# roughness map is off. It was being applied even when T_*_ORM was bound,
 	# multiplying the map by 0 and producing mirror-metal props (MI_Zipwire:
 	# FlatRoughness 0.0 + ORM mean 0.665 -> 0.04). Prefer an explicit
 	# Roughness scalar, otherwise let the ORM map drive (value 1.0).
 	var rough: Variant = _ue_lookup(params, ["roughness"])
-	if rough == null and not (has_orm and rough_map_switch != false and not adjust_rough):
+	if rough == null and not (has_orm and rough_map_switch != false):
 		rough = _ue_lookup(params, ["flatroughness"])
 	if rough == null:
 		var rlo: Variant = _ue_lookup(params, ["roughnesslow", "roughnessmin"])
@@ -3281,6 +3280,8 @@ static func _map_hint_from_paths(paths: Array) -> String:
 
 
 func load_sublevels(json_paths: Array[String], parent: Node3D, light_probe: Node, max_lights: int = 96, generate_collision: bool = true) -> Dictionary:
+	var _timing: bool = OS.has_environment("TAT_LOAD_TIMING")
+	var _t0: int = Time.get_ticks_msec()
 	if _materials_db.is_empty():
 		_load_material_dbs()
 	# V6 companion: bake the footprint alpha mask now (loading screen),
@@ -3290,6 +3291,8 @@ func load_sublevels(json_paths: Array[String], parent: Node3D, light_probe: Node
 	for jp: String in json_paths:
 		_parse_sublevel_file(jp, acc, parent)
 
+	if _timing:
+		print("LoadTiming parse_ms=", Time.get_ticks_msec() - _t0)
 	var ctx: Dictionary = _new_build_ctx(parent, light_probe, generate_collision)
 	ctx["map_hint"] = _map_hint_from_paths(json_paths)
 	_apply_collider_budget(ctx, json_paths)
@@ -3314,6 +3317,8 @@ func load_sublevels(json_paths: Array[String], parent: Node3D, light_probe: Node
 
 
 func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node = null, max_lights: int = 96, generate_collision: bool = true) -> Dictionary:
+	var _timing: bool = OS.has_environment("TAT_LOAD_TIMING")
+	var _t0: int = Time.get_ticks_msec()
 	if _materials_db.is_empty():
 		_load_material_dbs()
 	var acc: Dictionary = _new_accumulator()
@@ -3328,6 +3333,8 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 		if parent.get_tree() != null:
 			await parent.get_tree().process_frame
 
+	if _timing:
+		print("LoadTiming parse_ms=", Time.get_ticks_msec() - _t0)
 	var ctx: Dictionary = _new_build_ctx(parent, light_probe, generate_collision)
 	ctx["map_hint"] = _map_hint_from_paths(json_paths)
 	_apply_collider_budget(ctx, json_paths)
@@ -3347,6 +3354,8 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 			if parent.get_tree() != null:
 				await parent.get_tree().process_frame
 	ctx["light_count"] = lights_added + int(ctx.get("rect_light_count", 0))
+	if _timing:
+		print("LoadTiming lights_ms=", Time.get_ticks_msec() - _t0)
 	_build_decals(acc["decals"], parent, ctx)
 	_build_volumes(acc["volumes"], parent, ctx)
 	_store_level_extras(acc, ctx)
@@ -3360,6 +3369,8 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 			await parent.get_tree().process_frame
 	_build_curbs_from_splines(acc["splines"], parent, ctx)
 	_build_guildhall_saferoom_floor(parent, ctx)
+	if _timing:
+		print("LoadTiming terrain_ms=", Time.get_ticks_msec() - _t0)
 	load_progress.emit(0.52, "Building curbs...")
 
 	var items: Array = _collect_draw_items(acc)
@@ -3372,6 +3383,8 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 			load_progress.emit(0.52 + 0.46 * float(built) / float(maxi(items.size(), 1)), "Batching meshes %d/%d..." % [built, items.size()])
 			if parent.get_tree() != null:
 				await parent.get_tree().process_frame
+	if _timing:
+		print("LoadTiming draw_ms=", Time.get_ticks_msec() - _t0, " items=", items.size(), " instances=", total_inst)
 	load_progress.emit(1.0, "Done")
 	return _finalize(acc["result"], ctx, total_inst)
 

@@ -1038,11 +1038,263 @@ func _spawn_den_window_vista(win_pos: Vector3, beam_target: Vector3) -> void:
 	root.add_child(halo)
 
 
+## KF05 camera-space diorama framing. Everything below is authored in
+## DenTelescopeCam space (13 deg, 16:9) so the vista composition is fixed
+## regardless of where the tripod stands. Screen fractions are measured from
+## KF05 (00:20.80): moon (0.708, 0.150) r=0.055 W, cheese wheel centre
+## (0.470, 0.462) r=0.145 H, chunks to its left/right, distant rooftops from
+## the 0.66 line down, near roof band below 0.76. The KILCAIRN SKYLINE card
+## occupies top-centre 0.39..0.61 x 0.02..0.24, so moon and roofs stay clear.
+static var _ponder_sky_tex: ImageTexture = null
+static var _ponder_glow_tex: ImageTexture = null
+
+
+func _ponder_half_frame(depth: float) -> Vector2:
+	var vp: Vector2 = get_viewport().get_visible_rect().size
+	var aspect: float = vp.x / maxf(vp.y, 1.0)
+	var half_h: float = tan(deg_to_rad(_ponder_cam.fov * 0.5)) * depth
+	return Vector2(half_h * aspect, half_h)
+
+
+func _ponder_at(nx: float, ny: float, depth: float) -> Vector3:
+	var half: Vector2 = _ponder_half_frame(depth)
+	return Vector3((nx - 0.5) * 2.0 * half.x, (0.5 - ny) * 2.0 * half.y, -depth)
+
+
+func _ponder_wh(w_frac: float, h_frac: float, depth: float) -> Vector2:
+	var half: Vector2 = _ponder_half_frame(depth)
+	return Vector2(w_frac * 2.0 * half.x, h_frac * 2.0 * half.y)
+
+
+func _ponder_hash(ix: int, iy: int) -> float:
+	var n: int = ix * 374761393 + iy * 668265263
+	n = (n ^ (n >> 13)) * 1274126177
+	n = n ^ (n >> 16)
+	return float(n & 0x7FFFFFFF) / 2147483647.0
+
+
+func _ponder_vnoise(x: float, y: float) -> float:
+	var ix: int = int(floor(x))
+	var iy: int = int(floor(y))
+	var fx: float = x - float(ix)
+	var fy: float = y - float(iy)
+	var sx: float = fx * fx * (3.0 - 2.0 * fx)
+	var sy: float = fy * fy * (3.0 - 2.0 * fy)
+	var a: float = _ponder_hash(ix, iy)
+	var b: float = _ponder_hash(ix + 1, iy)
+	var c: float = _ponder_hash(ix, iy + 1)
+	var d: float = _ponder_hash(ix + 1, iy + 1)
+	return lerpf(lerpf(a, b, sx), lerpf(c, d, sx), sy)
+
+
+func _ponder_fbm(x: float, y: float) -> float:
+	var total: float = 0.0
+	var amp: float = 0.55
+	var freq: float = 1.0
+	for _i in range(4):
+		total += _ponder_vnoise(x * freq, y * freq) * amp
+		freq *= 2.0
+		amp *= 0.5
+	return total
+
+
+## Baked teal night sky: vertical gradient + two fbm cloud layers, plus a
+## sparse star field in the upper third. Cached across ponder enters.
+func _ponder_sky_texture() -> ImageTexture:
+	if _ponder_sky_tex != null:
+		return _ponder_sky_tex
+	var w: int = 384
+	var h: int = 216
+	var img: Image = Image.create(w, h, false, Image.FORMAT_RGB8)
+	var top := Color(0.100, 0.180, 0.230)
+	var mid := Color(0.120, 0.260, 0.320)
+	var low := Color(0.240, 0.470, 0.530)
+	var cloud_dark := Color(0.050, 0.120, 0.145)
+	var cloud_lit := Color(0.300, 0.550, 0.600)
+	for y in range(h):
+		var v: float = float(y) / float(h - 1)
+		var base: Color = top.lerp(mid, smoothstep(0.0, 0.55, v))
+		base = base.lerp(low, smoothstep(0.60, 1.0, v))
+		for x in range(w):
+			var u: float = float(x) / float(w - 1)
+			var n1: float = _ponder_fbm(u * 4.2 + 9.1, v * 6.2 + 3.7)
+			var n2: float = _ponder_fbm(u * 10.5 + 21.3, v * 14.0 + 7.9)
+			var cloud: float = smoothstep(0.38, 0.66, n1 * 0.78 + n2 * 0.22)
+			# Dark cloud tops, moonlit teal cloud bases near the horizon.
+			var ccol: Color = cloud_dark.lerp(cloud_lit, smoothstep(0.30, 0.90, v))
+			var col: Color = base.lerp(ccol, cloud * 0.80)
+			# Long dark cloud shelf across the upper third (KF05).
+			var shelf: float = smoothstep(0.085, 0.0, absf(v - 0.20 - 0.06 * sin(u * 5.2 + 1.3)))
+			col = col.lerp(cloud_dark, shelf * 0.25)
+			if v < 0.30 and _ponder_hash(int(u * 900.0), int(v * 520.0)) > 0.9992:
+				col = col.lerp(Color(0.80, 0.90, 0.92), 0.40)
+			img.set_pixel(x, y, col)
+	_ponder_sky_tex = ImageTexture.create_from_image(img)
+	return _ponder_sky_tex
+
+
+func _ponder_glow_texture() -> ImageTexture:
+	if _ponder_glow_tex != null:
+		return _ponder_glow_tex
+	var n: int = 96
+	var img: Image = Image.create(n, n, false, Image.FORMAT_RGBA8)
+	for y in range(n):
+		for x in range(n):
+			var d: float = Vector2(float(x), float(y)).distance_to(Vector2(n - 1, n - 1) * 0.5) / (float(n) * 0.5)
+			var a: float = pow(clampf(1.0 - d, 0.0, 1.0), 2.6) * 0.55
+			img.set_pixel(x, y, Color(0.74, 0.87, 0.93, a))
+	_ponder_glow_tex = ImageTexture.create_from_image(img)
+	return _ponder_glow_tex
+
+
+func _ponder_surface_tri(st: SurfaceTool, a: Vector3, ca: Color, b: Vector3, cb: Color, c: Vector3, cc: Color, n: Vector3) -> void:
+	st.set_normal(n)
+	st.set_color(ca)
+	st.add_vertex(a)
+	st.set_normal(n)
+	st.set_color(cb)
+	st.add_vertex(b)
+	st.set_normal(n)
+	st.set_color(cc)
+	st.add_vertex(c)
+	return
+
+
+## Godot treats clockwise winding as front-facing; the wheel fan is authored
+## CCW for readable maths, so emit it reversed.
+func _ponder_surface_tri_cw(st: SurfaceTool, a: Vector3, ca: Color, b: Vector3, cb: Color, c: Vector3, cc: Color, n: Vector3) -> void:
+	_ponder_surface_tri(st, a, ca, c, cc, b, cb, n)
+
+
+## Pac-man cheese wheel: a solid disc with a wedge cut facing -X, extruded
+## along Z with flat mouth faces. Vertex colours shade the front, rim and cut.
+func _ponder_cheese_wheel_mesh(radius: float, thickness: float, mouth_deg: float) -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var half_t: float = thickness * 0.5
+	var start_a: float = deg_to_rad(220.0)
+	var arc: float = deg_to_rad(360.0 - mouth_deg)
+	var segs: int = 56
+	var front_c := Vector3(0.0, 0.0, half_t)
+	var back_c := Vector3(0.0, 0.0, -half_t)
+	var bright := Color(1.0, 0.82, 0.10)
+	var rimc := Color(1.0, 0.74, 0.05)
+	var cutc := Color(0.58, 0.36, 0.02)
+	var dark := Color(0.42, 0.26, 0.02)
+	var front: Array[Vector3] = []
+	var back: Array[Vector3] = []
+	var fcols: Array[Color] = []
+	for i in range(segs + 1):
+		var a: float = start_a + arc * float(i) / float(segs)
+		var p := Vector3(cos(a) * radius, sin(a) * radius, 0.0)
+		front.append(p + Vector3(0.0, 0.0, half_t))
+		back.append(p + Vector3(0.0, 0.0, -half_t))
+		# Moonlight from the upper-right: bake a rind highlight into the rim.
+		var shade: float = 0.68 + 0.32 * (0.5 + 0.5 * cos(a - deg_to_rad(50.0)))
+		fcols.append(Color(rimc.r * shade, rimc.g * shade, rimc.b * shade))
+	for i in range(segs):
+		var f0: Vector3 = front[i]
+		var f1: Vector3 = front[i + 1]
+		var b0: Vector3 = back[i]
+		var b1: Vector3 = back[i + 1]
+		var c0: Color = fcols[i]
+		var c1: Color = fcols[i + 1]
+		_ponder_surface_tri_cw(st, front_c, bright, f0, c0, f1, c1, Vector3.BACK)
+		_ponder_surface_tri_cw(st, back_c, dark, b1, dark, b0, dark, Vector3.FORWARD)
+		var mid_a: float = start_a + arc * (float(i) + 0.5) / float(segs)
+		var rn := Vector3(cos(mid_a), sin(mid_a), 0.0)
+		_ponder_surface_tri_cw(st, f0, c0, b0, dark, b1, dark, rn)
+		_ponder_surface_tri_cw(st, f0, c0, b1, dark, f1, c1, rn)
+	# Mouth faces: lower jaw at start_a, upper jaw at start_a + arc.
+	var lo_f: Vector3 = front[0]
+	var lo_b: Vector3 = back[0]
+	var hi_f: Vector3 = front[segs]
+	var hi_b: Vector3 = back[segs]
+	var lo_a: float = start_a
+	var lo_n := Vector3(sin(lo_a), -cos(lo_a), 0.0)
+	_ponder_surface_tri_cw(st, front_c, cutc, lo_b, cutc, lo_f, cutc, lo_n)
+	_ponder_surface_tri_cw(st, front_c, cutc, back_c, cutc, lo_b, cutc, lo_n)
+	var hi_a: float = start_a + arc
+	var hi_n := Vector3(-sin(hi_a), cos(hi_a), 0.0)
+	_ponder_surface_tri_cw(st, front_c, cutc, hi_f, cutc, hi_b, cutc, hi_n)
+	_ponder_surface_tri_cw(st, front_c, cutc, hi_b, cutc, back_c, cutc, hi_n)
+	return st.commit()
+
+
+func _ponder_quad(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3, col: Color) -> void:
+	var n: Vector3 = (b - a).cross(c - a).normalized()
+	var centroid: Vector3 = (a + b + c + d) * 0.25
+	if n.dot(centroid) < 0.0:
+		var tmp: Vector3 = b
+		b = d
+		d = tmp
+		n = (b - a).cross(c - a).normalized()
+	_ponder_surface_tri_cw(st, a, col, b, col, c, col, n)
+	_ponder_surface_tri_cw(st, a, col, c, col, d, col, n)
+
+
+## Cheese wedge chunk: a trapezoid prism with the +X top edge cut down, so it
+## reads as a broken-off cheese block instead of a cube.
+func _ponder_cheese_chunk_mesh(size: Vector3) -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var hx: float = size.x * 0.5
+	var hy: float = size.y * 0.5
+	var hz: float = size.z * 0.5
+	var drop: float = hy * 1.15
+	var v0 := Vector3(-hx, -hy, hz)
+	var v1 := Vector3(hx, -hy, hz)
+	var v2 := Vector3(hx, hy - drop, hz)
+	var v3 := Vector3(-hx, hy, hz)
+	var v4 := Vector3(-hx, -hy, -hz)
+	var v5 := Vector3(hx, -hy, -hz)
+	var v6 := Vector3(hx, hy - drop, -hz)
+	var v7 := Vector3(-hx, hy, -hz)
+	var face := Color(0.95, 0.70, 0.06)
+	var topc := Color(1.0, 0.86, 0.14)
+	var sidec := Color(0.78, 0.48, 0.03)
+	var botc := Color(0.42, 0.26, 0.02)
+	_ponder_quad(st, v0, v1, v2, v3, face)
+	_ponder_quad(st, v5, v4, v7, v6, sidec)
+	_ponder_quad(st, v0, v4, v5, v1, botc)
+	_ponder_quad(st, v3, v2, v6, v7, topc)
+	_ponder_quad(st, v4, v0, v3, v7, sidec)
+	_ponder_quad(st, v1, v5, v6, v2, sidec)
+	return st.commit()
+
+
+func _ponder_roof_block(root: Node3D, name: String, mat: Material, nx: float, ny_top: float, w_frac: float, depth: float, ny_base: float = 1.16) -> void:
+	var wh: Vector2 = _ponder_wh(w_frac, ny_base - ny_top, depth)
+	var box := BoxMesh.new()
+	box.size = Vector3(wh.x, wh.y, 0.35 + depth * 0.03)
+	var mi := MeshInstance3D.new()
+	mi.name = name
+	mi.mesh = box
+	mi.set_surface_override_material(0, mat)
+	mi.position = _ponder_at(nx, (ny_top + ny_base) * 0.5, depth)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(mi)
+
+
+func _ponder_chimney(root: Node3D, name: String, mat: Material, nx: float, ny_top: float, w_frac: float, ny_bottom: float, depth: float) -> void:
+	var wh: Vector2 = _ponder_wh(w_frac, ny_bottom - ny_top, depth)
+	var box := BoxMesh.new()
+	box.size = Vector3(wh.x, wh.y, 0.30)
+	var mi := MeshInstance3D.new()
+	mi.name = name
+	mi.mesh = box
+	mi.set_surface_override_material(0, mat)
+	mi.position = _ponder_at(nx, (ny_top + ny_bottom) * 0.5, depth)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(mi)
+
+
 func _spawn_ponder_vista() -> void:
 	if _ponder_cam == null:
 		return
 	if _ponder_vista != null and is_instance_valid(_ponder_vista):
 		_ponder_vista.queue_free()
+		_ponder_cheese = null
 	var root := Node3D.new()
 	root.name = "PonderVista"
 	_ponder_cam.add_child(root)
@@ -1050,73 +1302,176 @@ func _spawn_ponder_vista() -> void:
 	# Render only the diorama while pondering: the room/ceiling is layer 1 and
 	# would otherwise occlude the camera-space vista at close range.
 	_ponder_cam.cull_mask = 2
-	var back := MeshInstance3D.new()
-	var bm := BoxMesh.new()
-	bm.size = Vector3(20.0, 12.0, 0.05)
-	back.mesh = bm
-	var bmat := StandardMaterial3D.new()
-	bmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	bmat.albedo_color = Color(0.025, 0.07, 0.12)
-	bmat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	back.set_surface_override_material(0, bmat)
-	back.position = Vector3(0.0, 0.0, -7.5)
-	back.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	root.add_child(back)
+
+	# Sky card: baked teal gradient + clouds far behind every silhouette.
+	var sky := MeshInstance3D.new()
+	sky.name = "VistaSky"
+	var sky_mesh := QuadMesh.new()
+	# Sized just past the 16:9 frame at 30 m so the baked gradient's dark top
+	# and bright horizon are both visible instead of only its middle band.
+	sky_mesh.size = Vector2(16.0, 7.6)
+	sky.mesh = sky_mesh
+	var sky_mat := StandardMaterial3D.new()
+	sky_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	sky_mat.albedo_texture = _ponder_sky_texture()
+	sky_mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
+	sky_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	sky_mat.disable_fog = true
+	sky.set_surface_override_material(0, sky_mat)
+	sky.position = Vector3(0.0, 0.0, -30.0)
+	sky.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(sky)
+
+	# Full moon: KF05 (0.708, 0.150), r = 0.055 W at 21 m.
+	var moon_pos: Vector3 = _ponder_at(0.708, 0.150, 21.0)
+	var moon_r: float = 0.055 * 2.0 * _ponder_half_frame(21.0).x
 	var moon := MeshInstance3D.new()
-	var sm := SphereMesh.new()
-	sm.radius = 0.35
-	sm.height = 0.70
-	moon.mesh = sm
+	moon.name = "VistaMoon"
+	var moon_mesh := SphereMesh.new()
+	moon_mesh.radius = moon_r
+	moon_mesh.height = moon_r * 2.0
+	moon_mesh.radial_segments = 48
+	moon_mesh.rings = 24
+	moon.mesh = moon_mesh
 	var mmat := StandardMaterial3D.new()
 	mmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mmat.albedo_color = Color(0.92, 0.95, 0.88)
 	mmat.emission_enabled = true
 	mmat.emission = Color(0.92, 0.95, 0.88)
-	mmat.emission_energy_multiplier = 1.6
+	mmat.emission_energy_multiplier = 2.6
+	mmat.disable_fog = true
 	var moon_tex: Texture2D = load("res://assets/ue/Raw/Art/Environment/City/Architecture/BeautifulCorner/Materials/T_Moon_D.png") as Texture2D
 	if moon_tex != null:
 		mmat.albedo_texture = moon_tex
 		mmat.emission_texture = moon_tex
 	moon.set_surface_override_material(0, mmat)
-	moon.position = Vector3(0.9, 0.45, -6.8)
+	moon.position = moon_pos
 	moon.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(moon)
-	var sil := StandardMaterial3D.new()
-	sil.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	sil.albedo_color = Color(0.012, 0.018, 0.035)
-	var heights: Array[float] = [0.5, 0.8, 0.4, 1.0, 0.6]
-	for i in range(heights.size()):
-		var h: float = heights[i]
-		var block := MeshInstance3D.new()
-		var bx := BoxMesh.new()
-		bx.size = Vector3(0.5, h, 0.8)
-		block.mesh = bx
-		block.set_surface_override_material(0, sil)
-		block.position = Vector3(-1.2 + float(i) * 0.6, -0.75 + h * 0.5, -6.4)
-		block.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		root.add_child(block)
+	var glow := MeshInstance3D.new()
+	glow.name = "VistaMoonGlow"
+	var glow_mesh := QuadMesh.new()
+	glow_mesh.size = Vector2(moon_r * 2.8, moon_r * 2.8)
+	glow.mesh = glow_mesh
+	var glow_mat := StandardMaterial3D.new()
+	glow_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	glow_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	glow_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	glow_mat.albedo_texture = _ponder_glow_texture()
+	glow_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	glow_mat.disable_fog = true
+	glow_mat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+	glow.set_surface_override_material(0, glow_mat)
+	glow.position = moon_pos + Vector3(0.0, 0.0, -0.15)
+	glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(glow)
+
+	var sil_near := StandardMaterial3D.new()
+	sil_near.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	sil_near.albedo_color = Color(0.006, 0.011, 0.016)
+	sil_near.disable_fog = true
+	var sil_mid := StandardMaterial3D.new()
+	sil_mid.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	sil_mid.albedo_color = Color(0.016, 0.032, 0.042)
+	sil_mid.disable_fog = true
+	var sil_far := StandardMaterial3D.new()
+	sil_far.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	sil_far.albedo_color = Color(0.030, 0.060, 0.070)
+	sil_far.disable_fog = true
+
+	# Far horizon row: narrow stepped blocks with sky gaps between them so the
+	# distant skyline stays serrated instead of merging into the near roofs.
+	var far_row: Array[Array] = [
+		[0.285, 0.712, 0.038], [0.330, 0.700, 0.030], [0.372, 0.706, 0.042],
+		[0.420, 0.692, 0.032], [0.462, 0.700, 0.040], [0.508, 0.686, 0.030],
+		[0.548, 0.696, 0.036], [0.588, 0.682, 0.032], [0.628, 0.700, 0.040],
+		[0.670, 0.676, 0.030], [0.706, 0.690, 0.042], [0.752, 0.684, 0.030],
+		[0.792, 0.700, 0.040], [0.836, 0.688, 0.032], [0.876, 0.696, 0.042],
+		[0.920, 0.684, 0.030], [0.958, 0.700, 0.040],
+	]
+	for i in range(far_row.size()):
+		var fr: Array = far_row[i]
+		_ponder_roof_block(root, "VistaFarRoof%d" % i, sil_far, float(fr[0]), float(fr[1]), float(fr[2]), 22.0, 1.20)
+	var far_pots: Array[Array] = [
+		[0.330, 0.666, 0.009], [0.462, 0.658, 0.010], [0.588, 0.650, 0.009],
+		[0.670, 0.648, 0.009], [0.792, 0.662, 0.010], [0.876, 0.652, 0.009],
+	]
+	for i in range(far_pots.size()):
+		var fp: Array = far_pots[i]
+		_ponder_chimney(root, "VistaFarPot%d" % i, sil_far, float(fp[0]), float(fp[1]), float(fp[2]), float(fp[1]) + 0.045, 22.0)
+
+	# Mid roofline: the long centre roof behind the cheese + its chimneys.
+	_ponder_roof_block(root, "VistaMidRoof0", sil_mid, 0.465, 0.635, 0.260, 15.0, 1.16)
+	_ponder_roof_block(root, "VistaMidRoof1", sil_mid, 0.355, 0.662, 0.100, 15.0, 1.16)
+	_ponder_roof_block(root, "VistaMidRoof2", sil_mid, 0.600, 0.655, 0.120, 15.0, 1.16)
+	_ponder_roof_block(root, "VistaMidRoof3", sil_mid, 0.800, 0.660, 0.080, 15.0, 1.16)
+	_ponder_chimney(root, "VistaMidPot0", sil_mid, 0.445, 0.592, 0.011, 0.635, 15.0)
+	_ponder_chimney(root, "VistaMidPot1", sil_mid, 0.492, 0.582, 0.013, 0.635, 15.0)
+	_ponder_chimney(root, "VistaMidPot2", sil_mid, 0.545, 0.596, 0.010, 0.635, 15.0)
+
+	# Near-left building mass + stepped roofline + chimney row (KF05 left).
+	_ponder_roof_block(root, "VistaLeftTower", sil_near, 0.018, 0.455, 0.045, 9.5, 1.16)
+	_ponder_roof_block(root, "VistaLeftStep", sil_near, 0.060, 0.555, 0.050, 9.5, 1.16)
+	_ponder_roof_block(root, "VistaLeftRoof", sil_near, 0.125, 0.615, 0.185, 9.5, 1.16)
+	_ponder_roof_block(root, "VistaLeftRoof2", sil_near, 0.230, 0.660, 0.060, 9.5, 1.16)
+	_ponder_roof_block(root, "VistaLeftParapet", sil_near, 0.125, 0.598, 0.200, 9.3, 0.616)
+	_ponder_chimney(root, "VistaLeftPot0", sil_near, 0.105, 0.505, 0.010, 0.615, 9.4)
+	_ponder_chimney(root, "VistaLeftPot1", sil_near, 0.128, 0.486, 0.012, 0.615, 9.4)
+	_ponder_chimney(root, "VistaLeftPot2", sil_near, 0.152, 0.518, 0.010, 0.615, 9.4)
+	_ponder_chimney(root, "VistaLeftPot3", sil_near, 0.175, 0.538, 0.009, 0.615, 9.4)
+	_ponder_chimney(root, "VistaLeftStack", sil_near, 0.140, 0.548, 0.022, 0.615, 9.4)
+
+	# Near-right chimney stack + far-right tall block (KF05 right edge).
+	_ponder_roof_block(root, "VistaRightStack", sil_near, 0.735, 0.405, 0.085, 9.2, 0.95)
+	_ponder_chimney(root, "VistaRightPot0", sil_near, 0.705, 0.368, 0.010, 0.405, 9.1)
+	_ponder_chimney(root, "VistaRightPot1", sil_near, 0.727, 0.358, 0.011, 0.405, 9.1)
+	_ponder_chimney(root, "VistaRightPot2", sil_near, 0.750, 0.370, 0.010, 0.405, 9.1)
+	_ponder_chimney(root, "VistaRightPot3", sil_near, 0.772, 0.380, 0.009, 0.405, 9.1)
+	_ponder_roof_block(root, "VistaRightLow", sil_near, 0.800, 0.550, 0.060, 9.2, 0.95)
+	_ponder_roof_block(root, "VistaRightTower", sil_mid, 0.965, 0.430, 0.100, 11.0, 1.12)
+	_ponder_roof_block(root, "VistaRightTowerStep", sil_mid, 0.925, 0.520, 0.050, 11.0, 1.12)
+
+	# Near foreground roof band across the bottom third (KF05 0.76 -> frame).
+	var lip_mat := StandardMaterial3D.new()
+	lip_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	lip_mat.albedo_color = Color(0.018, 0.030, 0.038)
+	lip_mat.disable_fog = true
+	_ponder_roof_block(root, "VistaNearRoof", sil_near, 0.500, 0.765, 1.300, 5.2, 1.20)
+	_ponder_roof_block(root, "VistaNearRoofLip", lip_mat, 0.500, 0.748, 1.300, 5.0, 0.768)
+
+	# Golden cheese wheel: pac-man bite facing left, centre-left of frame.
+	var cheese_mat := StandardMaterial3D.new()
+	cheese_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	cheese_mat.vertex_color_use_as_albedo = true
+	cheese_mat.vertex_color_is_srgb = true
+	cheese_mat.emission_enabled = true
+	cheese_mat.emission = Color(1.0, 0.58, 0.02)
+	cheese_mat.emission_energy_multiplier = 0.55
+	cheese_mat.disable_fog = true
 	var cheese := MeshInstance3D.new()
-	var cbox := BoxMesh.new()
-	cbox.size = Vector3(0.8, 0.4, 0.55)
-	cheese.mesh = cbox
-	var cmat := StandardMaterial3D.new()
-	cmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	cmat.albedo_color = Color(1.0, 0.78, 0.25)
-	cmat.emission_enabled = true
-	cmat.emission = Color(1.0, 0.72, 0.2)
-	cmat.emission_energy_multiplier = 0.9
-	cheese.set_surface_override_material(0, cmat)
-	cheese.position = Vector3(0.0, -0.25, -6.6)
-	cheese.rotation = Vector3(0.0, 0.6, 0.35)
+	cheese.name = "VistaCheese"
+	cheese.mesh = _ponder_cheese_wheel_mesh(0.334, 0.155, 78.0)
+	cheese.set_surface_override_material(0, cheese_mat)
+	cheese.position = _ponder_at(0.470, 0.462, 10.0)
+	cheese.rotation = Vector3(0.0, deg_to_rad(-8.0), deg_to_rad(2.0))
 	cheese.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(cheese)
-	for c in range(3):
+	_ponder_cheese = cheese
+	var chunk_specs: Array[Array] = [
+		[0.297, 0.397, 0.095, 0.120, 18.0, 20.0, 9.4],
+		[0.396, 0.423, 0.052, 0.042, 24.0, -12.0, 9.4],
+		[0.700, 0.515, 0.082, 0.072, -14.0, -20.0, 8.9],
+	]
+	for c in range(chunk_specs.size()):
+		var cs: Array = chunk_specs[c]
+		var chunk_depth: float = float(cs[6])
+		var wh: Vector2 = _ponder_wh(float(cs[2]), float(cs[3]), chunk_depth)
 		var chunk := MeshInstance3D.new()
-		var chm := BoxMesh.new()
-		chm.size = Vector3(0.14, 0.14, 0.14)
-		chunk.mesh = chm
-		chunk.set_surface_override_material(0, cmat)
-		chunk.position = cheese.position + Vector3(cos(float(c) * TAU / 3.0) * 0.7, 0.25 + 0.16 * float(c), sin(float(c) * TAU / 3.0) * 0.7)
+		chunk.name = "VistaCheeseChunk%d" % c
+		chunk.mesh = _ponder_cheese_chunk_mesh(Vector3(wh.x, wh.y, wh.y * 0.9))
+		chunk.set_surface_override_material(0, cheese_mat)
+		chunk.position = _ponder_at(float(cs[0]), float(cs[1]), chunk_depth)
+		chunk.rotation = Vector3(deg_to_rad(-12.0), deg_to_rad(float(cs[4])), deg_to_rad(float(cs[5])))
 		chunk.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		root.add_child(chunk)
 	for child: Node in root.get_children():
@@ -1183,6 +1538,7 @@ func toggle_telescope_ponder() -> void:
 		if _ponder_vista != null and is_instance_valid(_ponder_vista):
 			_ponder_vista.queue_free()
 			_ponder_vista = null
+			_ponder_cheese = null
 		if _ponder_cam != null and is_instance_valid(_ponder_cam):
 			_ponder_cam.current = false
 			_ponder_cam.cull_mask = 0xFFFFF

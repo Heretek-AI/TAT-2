@@ -535,6 +535,23 @@ func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> 
 	add_child(attic_fill)
 	light_probe.register_light(attic_fill)
 
+	# P0.1 balance: a short-range floor/room fill so the authored practicals do
+	# not leave the floor and lower walls crushed without washing out the
+	# window view. Warm-neutral 0.40 / 8 m / attenuation 2.0 at ~1 m above the
+	# floor. It joins den_hand_fills so the Suite 34b budget stays honest
+	# (0.15 + 0.40 + 0.25 + 0.20 + 0.30 = 1.30 <= 2.0).
+	var room_fill := OmniLight3D.new()
+	room_fill.name = "DenRoomFill"
+	room_fill.position = Vector3(1.3, anchor.y + 1.05, 271.4)
+	room_fill.light_color = Color(1.0, 0.85, 0.68)
+	room_fill.light_energy = 0.40
+	room_fill.omni_range = 8.0
+	room_fill.omni_attenuation = 2.0
+	room_fill.shadow_enabled = false
+	room_fill.add_to_group("den_hand_fills")
+	add_child(room_fill)
+	light_probe.register_light(room_fill)
+
 	# Arched east window moonlight shaft (authored geometry, not hand values).
 	# UE WindowBorder StaticMeshComponent0 at cm
 	# (523.73975, 26666.291, 4064.7085) -> port m
@@ -572,7 +589,7 @@ func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> 
 	window_backlight.name = "DenWindowBacklight"
 	window_backlight.position = Vector3(5.75, 41.1, 266.3)
 	window_backlight.light_color = Color(0.45, 0.78, 0.95)
-	window_backlight.light_energy = 1.2
+	window_backlight.light_energy = 0.6
 	window_backlight.omni_range = 4.0
 	window_backlight.omni_attenuation = 2.0
 	window_backlight.shadow_enabled = false
@@ -704,6 +721,11 @@ func interact(_actor: Node) -> void:
 
 	# Trunk Decoration Pedestal + Gramophone
 	_spawn_thieves_den_props(anchor)
+	# P0.1: the wardrobe shelf gear (knockout grenade + stun truncheon) carries
+	# authored emissive maps (strength 1.5/2.0) that clip white under AGX 1.9.
+	# Tone only those Den display instances down; shared pickup materials are
+	# duplicated and other maps are untouched.
+	_tone_down_den_shelf_gear()
 
 	# Interactive Bureau / Wardrobe -> opens WardrobeUI (diegetic HUD prompt, no giant Label3D billboard)
 	var wardrobe_positions: Array = ue_level_data.get("wardrobe_positions", [])
@@ -761,6 +783,32 @@ func interact(_actor: Node) -> void:
 			if rotated:
 				player.rotation = Vector3(0.0, atan2(-hub_dir.x, -hub_dir.z), 0.0)
 			print("TAT-2 den spawn hub-facing: misalign_before_deg=", snappedf(misalign_deg, 0.1), " rotated_to_face=", rotated, " table=", _den_map_table_pos)
+
+
+## P0.1: damp the Den wardrobe shelf gear emissive. The knockout grenade
+## (EmissiveStrength 1.5) and stun truncheon (2.0) clip to white when the
+## authored emissive maps meet AGX 1.9 + 0.85 glow. Materials are duplicated
+## per instance so pickups/other maps keep their authored emission.
+func _tone_down_den_shelf_gear() -> void:
+	for n: Node in find_children("*", "MeshInstance3D", true, false):
+		var mi: MeshInstance3D = n as MeshInstance3D
+		if mi == null or mi.mesh == null:
+			continue
+		var ue: String = str(mi.get_meta("ue_mesh", "")).to_lower()
+		if ue.find("knockoutgrenade") < 0 and ue.find("sm_truncheon") < 0:
+			continue
+		for s: int in range(mi.mesh.get_surface_count()):
+			var m: Material = mi.get_surface_override_material(s)
+			if m == null:
+				m = mi.mesh.surface_get_material(s)
+			if m is StandardMaterial3D:
+				var dup: StandardMaterial3D = (m as StandardMaterial3D).duplicate()
+				# Matte the display copies so the nearby wardrobe wall spot does
+				# not produce a clipped specular ball, and damp the emissive map.
+				dup.roughness = maxf(dup.roughness, 0.95)
+				dup.metallic_specular = minf(dup.metallic_specular, 0.10)
+				dup.emission_energy_multiplier = minf(dup.emission_energy_multiplier, 0.20)
+				mi.set_surface_override_material(s, dup)
 
 
 func open_wardrobe_ui() -> void:

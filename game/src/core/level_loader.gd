@@ -551,6 +551,12 @@ func _ue_emissive_allowed(info: Dictionary) -> bool:
 	var switches: Dictionary = _ue_norm_map(info.get("switches", {}))
 	if _ue_lookup(switches, ["emissiveon?"]) == false:
 		return false
+	# Third-party Stylized_Furniture masters use `Emissive_Switch` instead of
+	# `Emissive On?` (MI_TeleScope_Inst: false + black Emissive_Color). The
+	# old check missed it and bound T_FloorLamp_Glow to the telescope, making
+	# it a white self-lit prop under the Den AGX exposure.
+	if _ue_lookup(switches, ["emissiveswitch"]) == false:
+		return false
 	if _ue_lookup(switches, ["disableemissivecontribution"]) == true:
 		return false
 	# Do not reject on EmissiveStrength=0: UE window masters leave the scalar
@@ -1680,14 +1686,14 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 			m_dict["scale"] = [1.6, 1.0, 2.0]
 			# Authored CPD EmisMultiply is 1.2 in UE-linear. At the Den AGX
 			# exposure 1.9 that clips the pane to a white rectangle and seeds
-			# a 4-mip bloom sheet, so cap the port multiplier at 0.4: below
+			# a 4-mip bloom sheet, so cap the port multiplier at 0.25: below
 			# the 0.85 glow threshold it still reads as a luminous cool pane
 			# (authored colour 0.351, 0.797, 1.0) without the overexposed
 			# white slab or room-wide bloom spill.
 			var bcpd_v: Variant = m_dict.get("cpd", null)
 			if bcpd_v is Array and (bcpd_v as Array).size() >= 5:
 				var bcpd: Array = (bcpd_v as Array).duplicate()
-				bcpd[1] = minf(float(bcpd[1]), 0.4)
+				bcpd[1] = minf(float(bcpd[1]), 0.25)
 				m_dict["cpd"] = bcpd
 			result["den_window_backlight"] = int(result.get("den_window_backlight", 0)) + 1
 		# Authored moon billboards render as gray quads now that the real sky

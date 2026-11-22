@@ -8,7 +8,7 @@ MOBILE_ABI  ?= arm64
 QA_CONTRACT ?= 0
 KEYSTORE_PROPS := $(HOME)/.config/tat2/keystore.properties
 
-.PHONY: build-extractor extract anims normalize audit test run audio-tools linux-build linux-run android-prepare android-debug android-debug-gl android-release
+.PHONY: build-extractor extract anims normalize audit test run desktop-texture-cap audio-tools linux-build linux-run android-prepare android-debug android-debug-gl android-release
 
 build-extractor:
 	DOTNET_ROOT=$(HOME)/.dotnet10 PATH=$(HOME)/.dotnet10:$(PATH) $(DOTNET) build tools/tat-extract -c Release
@@ -57,6 +57,14 @@ test:
 
 run:
 	$(GODOT) --path game
+
+# Desktop texture pre-bake: writes the 1024 px long-edge cap + mipmaps into the
+# loader-managed PNG .import sidecars, deletes their .ctex/.md5 dest files, then
+# reimports. Preview with `python3 tools/prebake_texture_cap.py --dry-run`.
+# Required again after any clean extraction (which wipes extracted/).
+desktop-texture-cap:
+	python3 tools/prebake_texture_cap.py --cap 1024
+	tools/reimport_assets.sh
 
 # --- Linux x86_64 export (Tier-1 gate) ----------------------------------------
 # Requires the 4.7.2 Linux export templates (linux_debug.x86_64 /

@@ -57,6 +57,11 @@ make anims
 # Reimport changed GLBs/textures into Godot (~1-2 min)
 tools/reimport_assets.sh
 
+# Desktop texture pre-bake (~1-2 min): 1024 px long-edge cap + mipmaps in the
+# loader-managed PNG .import sidecars, then reimport. Preview with:
+#   python3 tools/prebake_texture_cap.py --dry-run
+make desktop-texture-cap
+
 # Freshness + coverage + error gates (must exit 0)
 make audit
 
@@ -181,6 +186,7 @@ A fresh clone must run `make extract && make normalize && make anims && tools/re
 
 ### Extraction
 - `make extract` runs `list raw tables levels materials audio meshes textures anims`. It does **not** produce the animation GLBs or `anims_manifest.json`; that is `make anims` (Blender, ~30 min, 995/995). A wipe of `game/data/generated` removes the manifest — always run `make anims` after a wipe.
+- **Texture pre-bake is not preserved by extraction.** `make desktop-texture-cap` edits the loader-managed `.png.import` sidecars that live under `extracted/`, so a clean extraction (which replaces `extracted/`) drops the `mipmaps/generate=true` + `process/size_limit=1024` edits. Rerun `make desktop-texture-cap` after every clean extraction and after `make normalize`; it is idempotent, `--dry-run` previews the 770 capped textures, and `--revert` restores the originals from `build/texture_cap_manifest.json`.
 - `Exporter.Tables()` has an explicit root allowlist. It now includes `WwiseAudio/` and `MaterialLibrary/`. Engine materials (`WorldGridMaterial`, `BasicShapeMaterial`) are still **not** dumped because only `Engine/Content/BasicShapes|EngineMaterials|EngineMeshes|MapTemplates|EngineSky` are mounted.
 - `extracted/errors.log` is truncated each run. It holds 14 `UBlendSpace*` converter failures. `manifest_audit --fail-on-errors` classifies them as **known-unsupported** (exact path list in the tool); any other line fails the audit.
 - The extractor writes two output shapes: meshes keep `assets/TAT/Content/...`; textures strip to `assets/Art/...`. This is why both `Content` and `Raw` symlinks exist.

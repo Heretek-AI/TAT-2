@@ -10,6 +10,12 @@
 **Standing user directive:** every item listed in this handoff is valid and should be pursued.
 
 > There is **no swarm plugin** in this environment any more (it was removed). Do not look for `save_plan`, `declare_scope`, coder lanes, or `update_task_status`. Implement directly with `read`/`edit`/`write`/`shell`, verify with real commands, and commit. Git history is the record.
+>
+> **2026-11-21 update:** Track C (C1/C2/C3/C5) and #11 are complete. See
+> `docs/reports/track-c.md` for the implementation evidence and residuals. The
+> Track C subsections below are retained as the record; they are no longer open
+> work. The next run starts at M3/M4/M6/E2E. Current HEAD includes `2d86930`,
+> `79820d6`, `b9ad345`, `e7390d2`.
 
 ---
 
@@ -22,12 +28,12 @@
 | Unit suite (`run_tests.gd`) | **fails=0**, 0 `ERROR:`/`SCRIPT ERROR`, **0 leaks** |
 | M2 player suite (`test_m2_player.gd`) | **9/9** |
 | Scripts | **49/49 compile** (46 project scripts + 3 probes) |
-| E2E (unmasked) | **210 pass / 46 fail / 0 BOOT / 0 SCRIPT ERROR** — failures classified by milestone |
+| E2E (unmasked) | **212 pass / 44 fail / 0 BOOT / 0 SCRIPT ERROR** — no new failure IDs vs baseline |
 | World data | **107/107 maps**, 16 contracts, 210 patrol paths / 673 waypoints, 222 scene variants, 4,118 device placements, **3,695 Niagara placements / 37 systems** |
-| Materials | 37 fallback warnings remain (Track C5) |
+| Materials | **0 fallback warnings** (Track C5 complete) |
 | Audio | 1,296 events / 1,205 resolved; 5,018 clips |
 
-The port is past the M1 foundation and most of M2. The immediate work is Track C (materials, NPR/SNN, X-ray, weather), then the milestone-owned gameplay work (M3/M4/M6) and the E2E backlog.
+The port is past M1, M2 and Track C. The next work is the milestone-owned gameplay work (M3/M4/M6) and the E2E backlog; Track C evidence and residuals are in `docs/reports/track-c.md`.
 
 ---
 
@@ -238,7 +244,7 @@ The E2E runner no longer patches expectations. All 24 alignments live in the tie
 
 ## 7. Open work — prioritized
 
-### Track C5 — materials fallback → 0 (next, data-driven)
+### Track C5 — materials fallback → 0 (**done**)
 37 warnings remain, 19 distinct UE paths:
 
 ```
@@ -269,7 +275,7 @@ Facts:
 - Several `SM_*` names in the list are **mesh paths**, not materials (`SM_OldManor_DrivewayA_x6`, sidewalks). The level data points the material slot at a mesh; map those to the actual material or a documented default. Do not add fake materials with those names.
 - Acceptance: `grep -c 'material fallback'` = 0 on a full `run_tests`; no visual regression in captures; `fallback_material_count` in loader stats is 0 on Guildhall/OldManor.
 
-### #11 — apply SV spawner overrides
+### #11 — apply SV spawner overrides (**done: exact tags + class map**)
 Selection is done. Applying overrides needs a documented mapping because the vocabularies differ:
 - SV overrides name `MapVariation.SceneElement.Locks.Doors`, `.Locks.Windows`, `.Lights`, `.Guards`, `.MajorLoot`, `.Quest`.
 - Level spawners carry `SpawnGroup.TagName` = `MapVariation.SpawnGroup.*`; some actors carry `_sceneRequirement.ElementTag` = `MapVariation.SceneElement.*` (Vault, Quest).
@@ -277,18 +283,18 @@ Selection is done. Applying overrides needs a documented mapping because the voc
 - Suggested mapping: doors → `MissionSpawner_Door`/swinging doors; windows → window actors/`BP_Civic_*Window*`; lights → light markers; guards → `MissionSpawner_Character`; loot → `MissionSpawner_Major/MinorLoot`; quest → actors with `scene_requirement == SceneElement.Quest`. Roll per actor with `seed + fnv1a(actor_name)`, chance from the override. Assert fixed-seed reproducibility in a probe.
 - Alternative: extend the extractor to dump the gameplay-tag registry that maps `SceneElement` to actor classes, if such an asset exists. Search `extracted/json` for `MapVariation.SceneElement` outside `SV_*` and `Guildhall_Gameplay` first.
 
-### C1 — `OSERenderer` NPR + SNN
+### C1 — `OSERenderer` NPR + SNN (**done**)
 - No post-process infrastructure exists yet. Godot 4.7 supports `CompositorEffect` (RenderingDevice) — that is the robust path for a screen-space pass; a camera-child full-screen quad is a simpler fallback.
 - Proposed files: `game/src/core/ose_renderer.gd` (effect/node + toggles), `game/src/core/tat_npr.gdshader` (ink: depth/normal edge detection via `hint_depth_texture` / `hint_normal_roughness_texture`), `game/src/core/tat_snn.gdshader` (painterly: edge-preserving blur + quantization).
 - Acceptance: 0 `SHADER ERROR` under Vulkan, toggles exposed, before/after captures under `build/qa/` + a short report.
 - Source of truth: audit Cluster B §2.3 (`OSE.NPR` ink outline + `OSE.SNN` painterly + `T_PaintStroke*`). Steam assets are in the reference install; do not invent parameters without naming the approximation.
 
-### C2 — `OSEXray`
+### C2 — `OSEXray` (**done**)
 - Depth-ignoring silhouettes for guards/loot/clues/players. Two viable implementations: (a) clone target meshes with an unshaded `depth_test_disabled` override in category colours (cheap, works per-instance); (b) a CompositorEffect with an ID/stencil buffer (higher fidelity, more work).
 - Acceptance: silhouette visible through a wall with X-ray on, absent with it off; category colours differ; capture pair.
 - Interface already reserved in the plan: group `"xray_target"`, `set_xray_highlight(enabled, category)`.
 
-### C3 — weather
+### C3 — weather (**done**)
 - **Roof rain occlusion:** the current rain is a global particle layer; it rains through ceilings. Approach: gate rain emitter positions by a downward raycast / roof volumes, or split rain into outdoor regions derived from level geometry. Acceptance: a roofed fixture shows no rain inside while outside rain renders.
 - **`PPM_RainDropsOnLens`:** full-screen lens-drop overlay driven by the weather preset (intensity/speed). Acceptance: appears in a rain preset, absent otherwise.
 - **`Guildhall_LocalVolumetric` + `Clouds`:** `Guildhall_LocalVolumetric.tatlevel.json` and `Guildhall_Clouds.tatlevel.json` now exist. Load/render them (fog volume + cloud meshes) and verify in a capture.

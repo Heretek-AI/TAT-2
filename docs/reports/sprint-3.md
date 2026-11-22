@@ -35,15 +35,16 @@ C1 NPR/SNN post-process, C2 OSEXray, C3 weather (roof occlusion, lens drops, vol
 | Item | State | Evidence |
 |---|---|---|
 | C4 level Niagara | **done** | clean re-extraction yields **3,695 placements / 37 systems** (matches the audit); `probe_niagara` spawns all 3,695 instances as 37 MultiMesh nodes, shader clean |
-| C1 NPR/SNN | pending | |
-| C2 OSEXray | pending | |
-| C3 weather | pending | |
-| C5 material fallbacks | pending | |
+| C5 material fallbacks | **done** | 37 warnings → 0; `fallback_material_count=0` on Guildhall; `track-c.md` |
+| C1 NPR/SNN | **done** | `ose_renderer.gd` + `tat_npr.gdshader`; F6/F7; `build/qa/c1_post_*.png`; 0 SHADER ERROR |
+| C2 OSEXray | **done** | `xray_overlay.gd` + `tat_xray.gdshader`; authored MI_Xray colours; `build/qa/c2_xray_*.png` |
+| C3 weather | **done** | roof rain columns, lens drops, Guildhall FogVolumes; `probe_weather` PASS; `build/qa/c3_*.png` |
+| B4 override application (#11) | **done (exact + class map)** | `probe_scene_variant_apply`; per-source building variants; Limits in `track-c.md` |
 
 ## Baseline evidence
 
-- E2E run (unmasked): `/tmp/opencode/e2e_unmasked.log`.
-- Unit suite: `run_tests` fails=0, 0 leaks, 0 `SCRIPT ERROR`.
+- E2E run (unmasked): `/tmp/opencode/e2e_unmasked.log`; Track C re-run 212 passed / 44 failed (baseline 210/46), no new failure IDs.
+- Unit suite: `run_tests` fails=0, 0 material fallbacks, 0 leaks, 0 `SCRIPT ERROR`.
 - M2 player suite: 9/9.
 - Compile: 46/46.
 - UID: 0/0.

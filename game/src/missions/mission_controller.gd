@@ -167,7 +167,9 @@ func start_contract(order: int) -> void:
 	_setup_mission_objectives(map_id, order)
 
 	var loading: Node = LoadingScreenScript.new()
-	add_child(loading)
+	# Root-level CanvasLayer: the menu/Den swap used to leave the loading UI
+	# anchored inside a stale SubViewport, producing the 967x640 top-left tile.
+	get_tree().root.add_child(loading)
 	if loading.has_method("start_loading"):
 		loading.call("start_loading", str(contract_info.get("title", "Contract")), _contract_clue_text(contract_info, ""), map_id)
 

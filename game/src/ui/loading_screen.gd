@@ -6,8 +6,11 @@ extends CanvasLayer
 
 const ThemeScript := preload("res://src/ui/art_nouveau_theme.gd")
 
-const LOADING_ART_PRIMARY: String = "res://assets/ue/Raw/Art/UI/Shell/SplashScreen/T_loadingScreen_1.png"
-const LOADING_ART_ALT: String = "res://assets/ue/Raw/Art/UI/Shell/SplashScreen/T_loadingScreen_2.png"
+# T_loadingScreen_2 is the authored 16:9 KF12 splash (6400x3600, bright
+# purple, bottom logo). T_loadingScreen_1 is a 2:1 dark variant whose centred
+# logo collided with the loading spinner.
+const LOADING_ART_PRIMARY: String = "res://assets/ue/Raw/Art/UI/Shell/SplashScreen/T_loadingScreen_2.png"
+const LOADING_ART_ALT: String = "res://assets/ue/Raw/Art/UI/Shell/SplashScreen/T_loadingScreen_1.png"
 const SPINNER_TEX_PATH: String = "res://assets/ue/Raw/Art/UI/Icons/T_Spinner_Full.png"
 const LOGO_TEX_PATH: String = "res://assets/ue/Raw/Art/UI/Branding/T_TaT_Logo_Primary_White.png"
 
@@ -31,7 +34,6 @@ var _root: Control
 var _spinner_rect: TextureRect
 var _spinner_atlas: AtlasTexture
 var _spinner_frame: float = 0.0
-var _logo_rect: TextureRect
 
 
 func _ready() -> void:
@@ -183,22 +185,7 @@ func _build_ui() -> void:
 		_status_lbl.add_theme_font_override("font", sans)
 	vb.add_child(_status_lbl)
 
-	# Bottom-center gold THICK AS THIEVES logo.
-	var logo_tex: Texture2D = _load_art(LOGO_TEX_PATH)
-	if logo_tex != null:
-		_logo_rect = TextureRect.new()
-		_logo_rect.name = "LoadingLogo"
-		_logo_rect.texture = logo_tex
-		_logo_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		_logo_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		_logo_rect.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-		_logo_rect.offset_left = -96.0
-		_logo_rect.offset_top = -124.0
-		_logo_rect.offset_right = 96.0
-		_logo_rect.offset_bottom = -16.0
-		_logo_rect.modulate = Color(0.92, 0.72, 0.22, 0.98)
-		_logo_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_root.add_child(_logo_rect)
+
 
 
 ## Show the overlay, reset progress to 5%, keep full-brightness T_loadingScreen_1 art.
@@ -216,20 +203,29 @@ func start_loading(title: String, clue: String, map_id: String) -> void:
 		var sub_txt: String = title.strip_edges()
 		if clue.strip_edges() != "":
 			sub_txt = (sub_txt + " — " + clue.strip_edges()) if sub_txt != "" else clue.strip_edges()
-		_subtitle_lbl.text = sub_txt
-		_subtitle_lbl.visible = sub_txt != ""
+		# The splash art carries the branding; a five-line mission blurb over
+		# the title was the KF12 mismatch. Keep the loading overlay quiet.
+		_subtitle_lbl.text = ""
+		_subtitle_lbl.visible = false
 	if _status_lbl != null:
 		_status_lbl.text = "Preparing sublevels..."
 	_update_splash(map_id)
 
 
 ## Update progress: pct_0_to_1 in [0, 1] maps to bar 0..100.
-func set_progress(pct_0_to_1: float, status_text: String) -> void:
+func set_progress(pct_0_to_1: float, _status_text: String) -> void:
 	var clamped: float = clampf(pct_0_to_1, 0.0, 1.0)
 	if _bar != null:
 		_bar.value = clamped * 100.0
 	if _status_lbl != null:
-		_status_lbl.text = status_text
+		# Never surface loader internals ("Parsing JSON 12/14", "Batching
+		# meshes 5769/5769") over the splash art. Keep the authored mood.
+		if clamped < 0.32:
+			_status_lbl.text = "Unlocking the doors..."
+		elif clamped < 0.72:
+			_status_lbl.text = "Raising the rooftops..."
+		else:
+			_status_lbl.text = "Lighting the lanterns..."
 
 
 ## Set 100%, hide and free so the level is revealed.

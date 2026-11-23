@@ -33,6 +33,8 @@ var _mesh_mats_db_lower: Dictionary = {}
 var _tex_cache: Dictionary = {}
 var _std_mat_cache: Dictionary = {}
 var _mesh_res_cache: Dictionary = {}
+## SM_Guildhall_Sign split-mesh cache (ue_path -> ArrayMesh).
+var _guildhall_sign_split_cache: Dictionary = {}
 var _prof_glb_ms: int = 0
 var _prof_mat_ms: int = 0
 var _prof_shape_ms: int = 0 # ue_path -> { "mesh": Mesh, "shape": Shape3D }
@@ -360,6 +362,7 @@ func _exit_tree() -> void:
 	_tex_cache.clear()
 	_std_mat_cache.clear()
 	_mesh_res_cache.clear()
+	_guildhall_sign_split_cache.clear()
 	_override_mesh_cache.clear()
 
 
@@ -1021,6 +1024,76 @@ func _ue_mesh_to_res(ue_path: String) -> String:
 	return ""
 
 
+## SM_Guildhall_Sign surface 0 (MI_TrimMetalA_brass_dark) mixes the +Z-facing
+## letter caps with the trim frame. UE's two-sided flag for that surface is
+## dropped on import, so the letters cull from the street and read as a dark
+## brass board. Partition surface 0's triangles by local-space centroid into a
+## letter band (y 2.30..4.50, z > 0.13) and keep that band on its own surface
+## with the authored gold material at CULL_DISABLED. Surfaces 1 (iron board)
+## and 2 (gold crest finials) are copied unchanged. Geometry is untouched, so
+## the collision shape is identical; the split mesh is cached per UE path.
+func _split_guildhall_sign_mesh(ue_path: String, m: Mesh) -> Mesh:
+	if _guildhall_sign_split_cache.has(ue_path):
+		return _guildhall_sign_split_cache[ue_path] as Mesh
+	if m == null or m.get_surface_count() < 1:
+		_guildhall_sign_split_cache[ue_path] = m
+		return m
+	var arr0: Array = m.surface_get_arrays(0)
+	var verts: PackedVector3Array = arr0[Mesh.ARRAY_VERTEX]
+	var idx0: PackedInt32Array = arr0[Mesh.ARRAY_INDEX]
+	if verts.is_empty() or idx0.is_empty():
+		_guildhall_sign_split_cache[ue_path] = m
+		return m
+	var letter_idx := PackedInt32Array()
+	var body_idx := PackedInt32Array()
+	for t: int in range(idx0.size() / 3):
+		var i0: int = idx0[t * 3]
+		var i1: int = idx0[t * 3 + 1]
+		var i2: int = idx0[t * 3 + 2]
+		var centroid: Vector3 = (verts[i0] + verts[i1] + verts[i2]) / 3.0
+		if centroid.y >= 2.30 and centroid.y <= 4.50 and centroid.z > 0.13:
+			letter_idx.append(i0)
+			letter_idx.append(i1)
+			letter_idx.append(i2)
+		else:
+			body_idx.append(i0)
+			body_idx.append(i1)
+			body_idx.append(i2)
+	if letter_idx.is_empty():
+		_guildhall_sign_split_cache[ue_path] = m
+		return m
+	var gold: Material = get_material_for_ue("/Game/MaterialLibrary/Environment/Metal/MI_TrimMetalSurfaceA_Brass")
+	if gold is BaseMaterial3D:
+		gold = (gold as BaseMaterial3D).duplicate()
+		(gold as BaseMaterial3D).cull_mode = BaseMaterial3D.CULL_DISABLED
+	if gold == null:
+		var fallback_gold := StandardMaterial3D.new()
+		fallback_gold.albedo_texture = _load_tex("res://assets/ue/Raw/MaterialLibrary/Environment/Metal/T_BasicMetalSurfaceTrimA_D.png")
+		fallback_gold.albedo_color = Color(1.0, 0.685, 0.273)
+		fallback_gold.metallic = 0.85
+		fallback_gold.roughness = 0.35
+		fallback_gold.cull_mode = BaseMaterial3D.CULL_DISABLED
+		gold = fallback_gold
+	var body_arrays: Array = arr0.duplicate()
+	body_arrays[Mesh.ARRAY_INDEX] = body_idx
+	var letter_arrays: Array = arr0.duplicate()
+	letter_arrays[Mesh.ARRAY_INDEX] = letter_idx
+	# The GLB carries custom float channels; surface_get_arrays() returns them
+	# as raw PackedFloat32Array, so add_surface_from_arrays() needs the source
+	# format flags to decode them instead of failing the surface.
+	var fmt0: int = m.surface_get_format(0)
+	var split := ArrayMesh.new()
+	split.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, body_arrays, [], {}, fmt0)
+	split.surface_set_material(0, m.surface_get_material(0))
+	split.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, letter_arrays, [], {}, fmt0)
+	split.surface_set_material(1, gold)
+	for s: int in range(1, m.get_surface_count()):
+		split.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, m.surface_get_arrays(s), [], {}, m.surface_get_format(s))
+		split.surface_set_material(split.get_surface_count() - 1, m.surface_get_material(s))
+	_guildhall_sign_split_cache[ue_path] = split
+	return split
+
+
 func _get_mesh_and_shape(ue_path: String) -> Dictionary:
 	if _mesh_res_cache.has(ue_path):
 		return _mesh_res_cache[ue_path]
@@ -1066,6 +1139,8 @@ func _get_mesh_and_shape(ue_path: String) -> Dictionary:
 				var _m0: int = Time.get_ticks_msec()
 				_bind_glb_materials(m, mat_slots)
 				_prof_mat_ms += Time.get_ticks_msec() - _m0
+				if "sm_guildhall_sign" in low_u:
+					m = _split_guildhall_sign_mesh(ue_path, m)
 				out["mesh"] = m
 				var is_nonblocking: bool = ("rug" in low_u or "carpet" in low_u or "placemat" in low_u or "paper" in low_u or "poster" in low_u or "scroll" in low_u or "curtain" in low_u or "cloth" in low_u or "drape" in low_u or "sheet" in low_u or "cable" in low_u or "wire" in low_u or "rope" in low_u or "ivy" in low_u or "vine" in low_u or "foliage" in low_u)
 				# Fast BoxShape3D for props; trimesh for walkable surfaces and large structural geometry.
@@ -3967,6 +4042,10 @@ func _landscape_weighted_material(lc: Dictionary, map_hint: String = "") -> Shad
 		if slot >= 5:
 			continue
 		var tex_path: String = str(LANDSCAPE_LAYER_TEX.get(lname, ""))
+		# The startscreen street is 95-100% GroundA; the authored surface there
+		# is road bricks, not the dirt layer used by the other maps.
+		if lname == "GroundA" and source.to_lower().contains("startscreen"):
+			tex_path = "res://assets/ue/Raw/MaterialLibrary/Environment/Stone/FloorExterior/T_RoadBricksA_D.png"
 		if tex_path == "":
 			continue
 		var tex: Texture2D = _load_tex(tex_path)
@@ -3988,6 +4067,12 @@ func _landscape_weighted_material(lc: Dictionary, map_hint: String = "") -> Shad
 		if fb_tex != null:
 			mat.set_shader_parameter("fallback_tex", fb_tex)
 			mat.set_shader_parameter("fallback_tex_on", 1.0)
+		# The same branch samples the fallback road bricks at UV * uv_scale;
+		# bind the matching normal so the street is not lit as flat grey.
+		var fb_norm: Texture2D = _load_tex("res://assets/ue/Raw/MaterialLibrary/Environment/Stone/FloorExterior/T_RoadBricksA_N.png")
+		if fb_norm != null:
+			mat.set_shader_parameter("fallback_normal", fb_norm)
+			mat.set_shader_parameter("fallback_normal_on", 1.0)
 	return mat
 
 
@@ -4139,8 +4224,18 @@ func _build_one_landscape(lc_var: Variant, parent: Node3D, ctx: Dictionary) -> v
 			faces.append(p00); faces.append(p11); faces.append(p10)
 			faces.append(p00); faces.append(p01); faces.append(p11)
 	st.generate_normals()
-	var arr_mesh: ArrayMesh = st.commit()
-	if arr_mesh == null:
+	# UE landscape heightfields wind downward in Godot's axes, so every
+	# generated normal is (0,-1,0): the street is lit from behind and reads
+	# ambient-only. Flip the generated normals (+Y-facing) once on the surface
+	# arrays instead of touching vertices per component.
+	var arrays: Array = st.commit_to_arrays()
+	var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+	for ni: int in range(normals.size()):
+		normals[ni] = -normals[ni]
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	var arr_mesh := ArrayMesh.new()
+	arr_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	if arr_mesh.get_surface_count() == 0:
 		return
 	arr_mesh.surface_set_material(0, mat)
 

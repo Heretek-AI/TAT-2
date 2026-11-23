@@ -39,8 +39,12 @@ uniform vec3 fallback_color : source_color = vec3(0.42, 0.42, 0.40);
 // gate approach is puddle-only, so total stays 0) used to render flat grey.
 // The loader opts a map into a real surface texture here; fallback_color stays
 // the grey/dirt default for every other map.
-uniform sampler2D fallback_tex : source_color, filter_linear, repeat_disable;
+uniform sampler2D fallback_tex : source_color, filter_linear, repeat_enable;
 uniform float fallback_tex_on = 0.0;
+// Optional normal for the fallback surface (Guildhall road bricks). Off for
+// every other map so its fallback_color path keeps the flat default.
+uniform sampler2D fallback_normal : hint_normal, repeat_enable;
+uniform float fallback_normal_on = 0.0;
 
 float channel_value(vec4 w, int channel) {
 	if (channel == 0) {
@@ -136,10 +140,20 @@ void fragment() {
 		ALBEDO = vec3(0.035, 0.045, 0.060);
 	} else if (fallback_tex_on > 0.5) {
 		ALBEDO = texture(fallback_tex, UV * uv_scale).rgb;
+		if (fallback_normal_on > 0.5) {
+			NORMAL_MAP = texture(fallback_normal, UV * uv_scale).rgb;
+			NORMAL_MAP_DEPTH = 0.7;
+		}
 	} else {
 		ALBEDO = fallback_color;
 	}
 	float base_rough = mix(0.9, 0.42, groundwet);
 	ROUGHNESS = mix(base_rough, 0.04, puddle);
 	SPECULAR = mix(0.5, 0.85, max(puddle, groundwet * 0.4));
+	// The authored road bricks are a rougher, less specular surface than the
+	// weighted landscape average; apply only to the zero-weight fallback.
+	if (total <= 0.001 && puddle <= 0.001 && fallback_tex_on > 0.5) {
+		ROUGHNESS = 0.52;
+		SPECULAR = 0.80;
+	}
 }

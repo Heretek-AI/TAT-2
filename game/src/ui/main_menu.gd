@@ -183,9 +183,9 @@ func _build_3d_backdrop() -> void:
 	# (z +0.30): two lower fills, one fascia fill, plus a deep interior fill
 	# that carries the warm shop through the glass.
 	var gold_fill_specs: Array[Dictionary] = [
-		{"name": "StorefrontGoldFillL", "pos": Vector3(-3.5, 2.05, 0.30), "energy": 0.9},
-		{"name": "StorefrontGoldFillR", "pos": Vector3(2.2, 2.05, 0.30), "energy": 0.9},
-		{"name": "StorefrontGoldFillMid", "pos": Vector3(-0.7, 4.45, 0.30), "energy": 0.7},
+		{"name": "StorefrontGoldFillL", "pos": Vector3(-3.5, 2.05, 0.30), "energy": 1.8},
+		{"name": "StorefrontGoldFillR", "pos": Vector3(2.2, 2.05, 0.30), "energy": 1.8},
+		{"name": "StorefrontGoldFillMid", "pos": Vector3(-0.7, 4.45, 0.30), "energy": 1.4},
 	]
 	for spec: Dictionary in gold_fill_specs:
 		var gold_fill := OmniLight3D.new()
@@ -201,7 +201,7 @@ func _build_3d_backdrop() -> void:
 	interior_fill.name = "StorefrontInteriorFill"
 	interior_fill.position = Vector3(-0.5, 2.6, -1.3)
 	interior_fill.light_color = Color(1.0, 0.68, 0.38)
-	interior_fill.light_energy = 1.4
+	interior_fill.light_energy = 1.8
 	interior_fill.omni_range = 3.5
 	interior_fill.omni_attenuation = 1.5
 	interior_fill.light_volumetric_fog_energy = 0.15
@@ -215,7 +215,7 @@ func _build_3d_backdrop() -> void:
 	shop_magenta.name = "StartscreenShopMagenta"
 	shop_magenta.position = Vector3(0.5, 4.0, 3.0)
 	shop_magenta.light_color = Color(1.0, 0.25, 0.85)
-	shop_magenta.light_energy = 3.0
+	shop_magenta.light_energy = 1.8
 	shop_magenta.omni_range = 12.0
 	shop_magenta.omni_attenuation = 1.2
 	shop_magenta.shadow_enabled = false

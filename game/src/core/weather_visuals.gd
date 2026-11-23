@@ -96,6 +96,9 @@ const MIDNIGHT_CLEAR_PRESET := "midnight_clear"
 const MIDNIGHT_CLEAR_FOG_SKY_AFFECT := 0.85
 const MIDNIGHT_CLEAR_BACKGROUND_ENERGY := 2.0
 const MIDNIGHT_CLEAR_STAR_SCALE := 0.12
+## Neutral haze floor approximating UE SkyAtmosphere-lit height fog (see apply_sky).
+const MIDNIGHT_CLEAR_HAZE_COLOR := Color(0.14, 0.135, 0.125)
+const MIDNIGHT_CLEAR_HAZE_ENERGY := 1.0
 const CLOUD_OPACITY_TO_HAZE := 0.18
 const CLOUD_HAZE_MAX := 0.55
 
@@ -339,6 +342,12 @@ static func apply_sky(env: Environment, preset: Dictionary, moon: DirectionalLig
 		# and lift the background so the gradient reaches the UE brightness.
 		env.fog_sky_affect = MIDNIGHT_CLEAR_FOG_SKY_AFFECT
 		env.background_energy_multiplier = maxf(env.background_energy_multiplier, MIDNIGHT_CLEAR_BACKGROUND_ENERGY)
+		# UE's SkyAtmosphere lights the height fog; the port's authored
+		# fog inscattering (0.0011,0.0016,0.004) is self-lit and much darker
+		# than the sky, so a raw blend dims the zenith. Use a neutral haze
+		# floor calibrated to the KF16/KF17 sky (p50 ~0.17 vs UE 0.23-0.26).
+		env.fog_light_color = MIDNIGHT_CLEAR_HAZE_COLOR
+		env.fog_light_energy = MIDNIGHT_CLEAR_HAZE_ENERGY
 	env.sky = make_sky(preset, moon)
 	env.background_mode = Environment.BG_SKY
 	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY

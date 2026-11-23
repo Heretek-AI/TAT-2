@@ -1003,7 +1003,7 @@ func interact(_actor: Node) -> void:
 ## cache, so the shared resource is never mutated) and multiply a warm
 ## emission by the albedo so the ink/crease detail survives.
 func _apply_den_parchment_emission() -> void:
-	const PARCHMENT_ENERGY: float = 0.018
+	const PARCHMENT_ENERGY: float = 0.20
 	for n: Node in find_children("*", "MeshInstance3D", true, false):
 		var mi: MeshInstance3D = n as MeshInstance3D
 		if mi == null or mi.mesh == null:

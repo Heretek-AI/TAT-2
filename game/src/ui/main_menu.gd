@@ -247,8 +247,11 @@ func _bind_menu_env() -> void:
 		# SSR and SSIL; these were lost in the 529b153 env refactor (E2E
 		# T1-03-C/T1-04-C/T2-03-D/T3-09/T4-01).
 		e.volumetric_fog_enabled = true
-		e.volumetric_fog_density = 0.016
-		e.volumetric_fog_albedo = Color(0.85, 0.82, 0.90)
+		# The authored startscreen haze is a thin purple veil, not a white sheet.
+		# 0.016 with the headlights turned the right side into a fog wall; 0.0012
+		# keeps the beams readable and matches KF01's magenta mist.
+		e.volumetric_fog_density = 0.0012
+		e.volumetric_fog_albedo = Color(0.55, 0.32, 0.62)
 		e.volumetric_fog_anisotropy = 0.45
 		e.volumetric_fog_length = 45.0
 		e.volumetric_fog_sky_affect = 0.0

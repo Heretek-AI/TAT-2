@@ -21,7 +21,7 @@ Regenerate data: `python3 tools/parse_gameplay.py` (writes gitignored
 | `CROUCH_HEAD_HEIGHT` | `CrouchedEyeHeight` 38.875 cm over 50 cm | 0.50 + 0.38875 = 0.88875 m | Spider CDO |
 | `floor_max_angle` | `WalkableFloorAngle` 60.0 | `deg_to_rad(60)` | CharMoveComp |
 | air control | `AirControl` 0.5 | 0.5 (scales airborne `steer`; ground 14.0 retained) | CharMoveComp |
-| `CAMERA_FOV` | `FirstPersonFieldOfView` 85.0 | 85.0 (sprint feedback 89 = 85 + retained +4) | BP_Player_Base OSECameraComponent |
+| `CAMERA_FOV` | `FirstPersonFieldOfView` 85.0 (horizontal) | 54.54 vertical at 16:9 = 85 horizontal (sprint feedback 58.54 = +4); VM keeps its own 85 deg lock | BP_Player_Base OSECameraComponent |
 | `INTERACT_RANGE` | `MaxInteractionRange` 175.0 | 1.75 m (`get_nearest_interactable`) | BP_Player_Base TATInteractionTargeterComponent |
 | sprint drain | `StaminaPerSecond.Sprint` −5.0 (curve kept, ×3.0 dropped) | 5/s | `extracted/json/Gameplay/Tuning/CT_StaminaSystem.json` |
 | `stamina_regen` | `BaseStaminaRegenRate` 2.0 × 0.25 coeff / 0.1 s period (curve kept, ×6.0 dropped) | 5/s | CT_PlayerStats × `GE_Stamina_Regen.json` |

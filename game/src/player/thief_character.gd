@@ -19,15 +19,15 @@ const FP_TOOL_BONES: Array[String] = ["weapon_r_1p", "hand_r_1p", "hand_r"]
 # Skeleton joints marking the UE first-person camera, in preference order.
 const FP_CAM_BONES: Array[String] = ["camera_position", "game_camera"]
 const FP_ANIM_BLEND: float = 0.2 # crossfade window 0.15-0.25 s per deliverable
-# P1 FOV deferred (do NOT change the default yet): UE
-# OSECameraComponent.FirstPersonFieldOfView = 85.0 is a HORIZONTAL angle; at
-# 16:9 that is 54.54 deg vertical. This port feeds 85.0 to the VM shader as a
-# vertical FOV, so tools/arms are framed tighter than the authored view. The
-# switch to UE_FP_FOV_VERTICAL_16X9_DEG waits for a native KF16/KF17/KF24
-# capture to confirm the framing.
+# UE OSECameraComponent.FirstPersonFieldOfView = 85.0 is a HORIZONTAL angle;
+# at 16:9 that is 54.54 deg vertical (2*atan(tan(85/2)*9/16) = 54.54). The
+# world/default camera now uses that authored vertical angle so the 3D view
+# matches the UE framing. The first-person viewmodel keeps its own 85 deg
+# projection lock (FP_VM_FOV_DEG) and 0.5 view-space scale: those frame the
+# tools/arms, not the world.
 const UE_FP_FOV_HORIZONTAL_DEG: float = 85.0
 const UE_FP_FOV_VERTICAL_16X9_DEG: float = 54.54
-const FP_VM_FOV_DEG: float = 85.0 # OSECameraComponent.FirstPersonFieldOfView lock (unchanged pending capture)
+const FP_VM_FOV_DEG: float = 85.0 # OSECameraComponent.FirstPersonFieldOfView lock (unchanged) for the VM only
 # UE first-person view-space scale applied in the VM shader; the mesh itself
 # stays at scale 1.0 (tool roll and socket net transform unchanged).
 const FP_VM_SCALE: float = 0.5
@@ -57,8 +57,10 @@ const INTERACT_RANGE: float = 1.75 # TATInteractionTargeterComponent.MaxInteract
 ## KF25/KF26: F taps the primary action (pick pocket / OPEN), holding F runs
 ## the stacked secondary ([HOLD] TAKEDOWN on a guard, [HOLD] LOCK on a door).
 const HOLD_INTERACT_SEC: float = 0.45
-const CAMERA_FOV: float = 85.0 # OSECameraComponent.FirstPersonFieldOfView
-const CAMERA_FOV_SPRINT: float = 89.0 # retained velocity-feedback shape rebased on 85
+const CAMERA_FOV: float = UE_FP_FOV_VERTICAL_16X9_DEG # UE 85 horizontal -> 54.54 vertical at 16:9
+const CAMERA_FOV_SPRINT: float = CAMERA_FOV + 4.0 # retained +4 velocity-feedback shape (58.54)
+const CAMERA_FOV_MIN: float = 50.0 # settings slider/user floor; explicit values clamp consistently
+const CAMERA_FOV_MAX: float = 105.0
 const WIRE_RANGE: float = 20.0 # DA_StandardToolSettings "Hotwire Range" 2000cm
 const WIRE_PULL_SPEED: float = 23.0 # DA_StandardToolSettings "Hotwire Speed" 2300cm/s
 const WIRE_CRANK_MIN_TIME: float = 0.5 # GA_Hotwire_Crank.MinimumCrankTime
@@ -160,6 +162,14 @@ const GRAPPLE_VAULT_Y: float = 6.5
 const GRAPPLE_MIN_RANGE: float = 3.0
 const GRAPPLE_MAX_RANGE: float = WIRE_RANGE
 const GRAPPLE_WINCH_TIME: float = 0.35
+## RMB attach window after the winch reaches GRAPPLE_ARRIVE_DIST: pressing
+## within this window still hangs instead of dropping the cable (RMB "at
+## arrival"). Also keeps the cable visible for that instant.
+const WIRE_ARRIVAL_GRACE_SEC: float = 0.25
+## Hanging crank pulls the body along the cable toward the anchor, stopping
+## this far short so the arrival vault has room (collision-safe, never a
+## teleport). The full crank still takes CT_WireCrank.CrankDuration (6 s).
+const WIRE_HANG_STANDOFF: float = 0.6
 const ASTRAL_DURATION: float = 8.0
 const PROP_SCAN_INTERVAL: float = 0.1
 var _bj_punch_tween: Tween = null
@@ -224,11 +234,19 @@ var is_lockpicking: bool = false
 var _viewcone_decay_handled: bool = false # retained: external viewcone decay is now queued (see _pending_viewcone_*); flag kept for save-compat, no longer gates the drain.
 var _pending_viewcone_delta: float = 0.0 # P1 viewcone call-order: guard calls queue here; _physics_process consumes before its own drain section so external-before-tick order no longer matters.
 var _pending_viewcone_in_cone: bool = false
+## Launch/winch travel only (LMB launch -> arrival). Attaching to the cable
+## with RMB switches to is_wire_hanging, which holds position and owns cranking.
 var is_grappling: bool = false
+## Attached to the fired cable. Position is held (no gravity/steering) while
+## the cable stays live; RMB cranks along it. Cleared on every exit path.
+var is_wire_hanging: bool = false
 var grapple_target: Vector3 = Vector3.ZERO
 var _is_cranking: bool = false
 var _crank_elapsed: float = 0.0
 var crank_progress: float = 0.0
+## RMB-at-arrival attach window and the hanging crank's along-cable speed.
+var _wire_arrival_grace: float = 0.0
+var _wire_hang_travel_speed: float = 0.0
 ## LMB launch hold (IA_Ability_Action_Primary_Hold 0.2 s). Armed on press,
 ## accumulated in physics, cleared on release/cancel.
 var _wire_launch_arming: bool = false
@@ -410,7 +428,7 @@ func _note_air_link_start() -> void:
 		_fall_immunity_revoked = true
 		push_warning("[thief] fall immunity revoked: ", _air_grapple_chains, " consecutive air links (UE path: none; retained tuning AIR_GRAPPLE_CHAIN_LIMIT=", AIR_GRAPPLE_CHAIN_LIMIT, ")")
 func _apply_fall_damage(drop_m: float) -> float:
-	if (is_grappling or astral_active) and not _fall_immunity_revoked:
+	if (is_grappling or is_wire_hanging or astral_active) and not _fall_immunity_revoked:
 		return 0.0
 	if _fall_immunity_revoked:
 		push_warning("[thief] fall immunity revoked after ", _air_grapple_chains, " chained air engagements (no UE immunity chain source; retained tuning AIR_GRAPPLE_CHAIN_LIMIT=", AIR_GRAPPLE_CHAIN_LIMIT, ")")
@@ -431,11 +449,11 @@ func _track_fall_state() -> void:
 		_fp_play_action("jump_land")
 	if on_floor_now:
 		_fall_peak_y = global_position.y
-		if not is_grappling and not astral_active:
+		if not is_grappling and not is_wire_hanging and not astral_active:
 			_air_grapple_chains = 0
 			_fall_immunity_revoked = false
 	else:
-		if is_grappling or astral_active:
+		if is_grappling or is_wire_hanging or astral_active:
 			_fall_peak_y = global_position.y
 		else:
 			_fall_peak_y = maxf(_fall_peak_y, global_position.y)
@@ -481,6 +499,7 @@ func _enter_downed() -> void:
 	_downed_fired = false
 	is_sprinting = false
 	is_grappling = false
+	_exit_wire_states()
 	_tp_takedown_stop() # P2: the attacker montage kept playing over the KO loop; stop it on downed.
 	downed_started.emit(_downed_duration)
 
@@ -604,7 +623,7 @@ func apply_saved_settings(sync_cam: bool = false) -> void:
 	if s.has("reduced_camera_bounce"):
 		reduced_camera_bounce = bool(s["reduced_camera_bounce"])
 	if s.has("fov"):
-		base_fov = clampf(float(s["fov"]), 60.0, 105.0)
+		base_fov = clampf(float(s["fov"]), CAMERA_FOV_MIN, CAMERA_FOV_MAX)
 	if sync_cam and cam != null:
 		cam.fov = base_fov
 
@@ -684,13 +703,20 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("primary_action"):
 		_use_equipped_primary()
 	elif event.is_action_pressed("secondary_action"):
-		if equipped_tool == "zipwire" and not is_grappling:
+		if equipped_tool == "zipwire":
+			# RMB during travel attaches to the cable (hang) and starts the
+			# crank; at arrival the grace window does the same. Grounded RMB
+			# keeps the legacy crank channel.
+			if is_grappling:
+				_begin_wire_hang()
 			_begin_wire_crank()
 		elif int(charges.get("bottle", 0)) > 0:
 			_throw_bottle()
 	elif event.is_action_released("secondary_action"):
 		if _is_cranking:
-			_end_wire_crank()
+			# Releasing while hanging keeps the attachment, height and crank
+			# progress; the next press resumes the same channel.
+			_end_wire_crank(is_wire_hanging)
 	elif event.is_action_pressed("thief_vision"):
 		_manual_vision_active = not _manual_vision_active
 		_sync_thief_vision()
@@ -806,8 +832,8 @@ func _refresh_light_sector() -> void:
 func equip_tool(tool_id: String) -> void:
 	if not (tool_id in ["zipwire", "smoke_bomb", "slithersap", "fairy", "vistara_diamond", "blackjack"]):
 		return
-	if tool_id != "zipwire" and _is_cranking:
-		_end_wire_crank()
+	if tool_id != "zipwire":
+		_exit_wire_states()
 	equipped_tool = tool_id
 	_fp_action_ttl = 0.0
 	if tool_id == "slithersap" or tool_id == "fairy":
@@ -904,7 +930,7 @@ func get_active_reticle_state() -> Dictionary:
 			var zw: Dictionary = validate_zipwire_target()
 			target_valid = zw.get("valid", false) == true
 			var can_launch: bool = target_valid and ability_cooldown <= 0.0 and int(charges.get("grapple", 0)) > 0
-			var can_crank: bool = not is_grappling and (ability_cooldown > 0.0 or int(charges.get("grapple", 0)) < GRAPPLE_MAX_CHARGES)
+			var can_crank: bool = is_wire_hanging or (not is_grappling and (ability_cooldown > 0.0 or int(charges.get("grapple", 0)) < GRAPPLE_MAX_CHARGES))
 			hints.append({"key": "LMB", "label": "LAUNCH", "enabled": can_launch})
 			hints.append({"key": "RMB", "label": "[HOLD] CRANK", "enabled": can_crank})
 		"smoke_bomb":
@@ -958,6 +984,7 @@ func _physics_process(delta: float) -> void:
 		return
 	ability_cooldown = maxf(0.0, ability_cooldown - delta)
 	pickpocket_cooldown = maxf(0.0, pickpocket_cooldown - delta)
+	_wire_arrival_grace = maxf(0.0, _wire_arrival_grace - delta)
 	_tick_astral(delta)
 	_tick_downed(delta)
 	_tick_post_revive(delta)
@@ -966,8 +993,7 @@ func _physics_process(delta: float) -> void:
 	# Downed: no input movement, sprint, abilities or tools; gravity still
 	# settles the body and the downed timer (above) runs to mission failure.
 	if is_downed:
-		if _is_cranking:
-			_end_wire_crank()
+		_exit_wire_states()
 		is_mantling = false
 		is_wall_climbing = false
 		is_grappling = false # P2 single-entry invariant: _enter_downed clears this too; both sites clear so neither can strand the winch.
@@ -999,6 +1025,17 @@ func _physics_process(delta: float) -> void:
 	_tick_wire_crank(delta, false)
 	# LMB 0.2 s hold -> GA_Hotwire_Child_Launch travel.
 	_tick_wire_launch(delta)
+
+	# Cable hang: hold the attach point with no gravity or steering. The crank
+	# tick above already performed any collision-safe along-cable movement and
+	# completion may have dropped the hang, so re-check the live state.
+	if is_wire_hanging:
+		if not _is_cranking:
+			velocity = Vector3.ZERO
+			_fall_peak_y = global_position.y
+		_tick_sustained_systems(delta)
+		_update_zipwire_cable()
+		return
 
 	# Auto-mantle interpolation (BP_Player_Base _mantleSettings + GE_Traversal_AutoMantle 0.3s).
 	# P1 mantle-skips-systems: stamina regen, disguise drain, light probe and
@@ -1034,7 +1071,17 @@ func _physics_process(delta: float) -> void:
 		var winch: float = clampf(grapple_time / GRAPPLE_WINCH_TIME, 0.3, 1.0)
 		var pull_dir: Vector3 = to_anchor.normalized() if anchor_dist > 0.05 else Vector3.ZERO
 		if anchor_dist < GRAPPLE_ARRIVE_DIST or released:
+			# RMB held/pressed at arrival attaches to the cable instead of
+			# dropping it: the winch becomes a hang and cranking starts.
+			if Input.is_action_pressed("secondary_action"):
+				_begin_wire_hang()
+				_begin_wire_crank()
+				_update_zipwire_cable()
+				return
 			is_grappling = false
+			# Keep the just-fired cable attachable for a short window so a
+			# near-simultaneous RMB press still hangs "at arrival".
+			_wire_arrival_grace = WIRE_ARRIVAL_GRACE_SEC
 			velocity = pull_dir * wire_speed * (0.45 + 0.15 * winch)
 			velocity.y = maxf(velocity.y, GRAPPLE_VAULT_Y * (0.7 + 0.3 * winch))
 			move_and_slide()
@@ -1224,15 +1271,48 @@ func _consume_pending_viewcone() -> bool:
 	return pending
 
 
+## Attaches to the live fired cable (RMB during travel, or within the arrival
+## grace window). Launch/travel remains is_grappling; the hang owns position
+## and cranking until completion or an explicit exit.
+func _begin_wire_hang() -> void:
+	if not can_act() or equipped_tool != "zipwire":
+		return
+	if is_wire_hanging:
+		return
+	if not is_grappling and _wire_arrival_grace <= 0.0:
+		return
+	is_grappling = false
+	is_wire_hanging = true
+	_wire_arrival_grace = 0.0
+	velocity = Vector3.ZERO
+	_fall_peak_y = global_position.y
+	_crank_elapsed = 0.0
+	crank_progress = 0.0
+	var dur: float = GameData.eval_curve("CT_WireCrank", "CrankDuration", 0.0, WIRE_CRANK_DURATION_FALLBACK)
+	if dur <= 0.0:
+		dur = WIRE_CRANK_DURATION_FALLBACK
+	var travel_room: float = maxf(0.0, global_position.distance_to(grapple_target) - WIRE_HANG_STANDOFF)
+	_wire_hang_travel_speed = travel_room / maxf(dur, WIRE_CRANK_MIN_TIME)
+	_update_zipwire_cable()
+
+
+## Starts/continues the [RMB] crank. While travelling (or inside the arrival
+## grace) the first press attaches to the cable; a connected hang preserves
+## crank progress across release/re-press. Grounded crank keeps the legacy
+## channel that restores a charge after a full hold.
 func _begin_wire_crank() -> void:
 	# P1 crank-on-wall-climb: GA_Hotwire_Crank never authorizes crank while
 	# climbing (UE crank is a grounded/channelled action); wall-climb excluded
 	# at both entry and tick so no charge accrues mid-climb.
-	if not can_act() or equipped_tool != "zipwire" or is_grappling or is_mantling or is_wall_climbing:
+	if not can_act() or equipped_tool != "zipwire" or is_mantling or is_wall_climbing:
 		return
+	if not is_wire_hanging and (is_grappling or _wire_arrival_grace > 0.0):
+		_begin_wire_hang()
+	if not is_wire_hanging:
+		# Grounded crank channel: a fresh press restarts the 6 s reward.
+		_crank_elapsed = 0.0
+		crank_progress = 0.0
 	_is_cranking = true
-	_crank_elapsed = 0.0
-	crank_progress = 0.0
 	_play_wire_crank_clip()
 	_start_gear_crank()
 
@@ -1264,14 +1344,18 @@ func _tick_wire_crank(delta: float, force_holding: bool = false) -> void:
 	if not _is_cranking:
 		return
 	var holding: bool = force_holding or Input.is_action_pressed("secondary_action")
-	if not holding or equipped_tool != "zipwire" or is_grappling or is_mantling or is_wall_climbing or not can_act():
-		_end_wire_crank()
+	if not holding or equipped_tool != "zipwire" or is_mantling or is_wall_climbing or not can_act():
+		# A connected hang pauses in place (progress/cable kept); anything
+		# else is a real cancel and resets the charge channel.
+		_end_wire_crank(is_wire_hanging)
 		return
 	_crank_elapsed += delta
 	var dur: float = GameData.eval_curve("CT_WireCrank", "CrankDuration", 0.0, WIRE_CRANK_DURATION_FALLBACK)
 	if dur <= 0.0:
 		dur = WIRE_CRANK_DURATION_FALLBACK
 	crank_progress = clampf(_crank_elapsed / maxf(dur, WIRE_CRANK_MIN_TIME), 0.0, 1.0)
+	if is_wire_hanging:
+		_move_along_cable(delta)
 	_tp_crank_tick()
 	_tick_gear_crank()
 	if _crank_elapsed >= dur:
@@ -1282,9 +1366,60 @@ func _tick_wire_crank(delta: float, force_holding: bool = false) -> void:
 		_is_cranking = false
 		_crank_elapsed = 0.0
 		crank_progress = 0.0
+		if is_wire_hanging:
+			_finish_wire_hang_arrival()
+		else:
+			_update_zipwire_cable()
 
 
-func _end_wire_crank() -> void:
+## Collision-safe along-cable pull during a hanging crank: move_and_collide
+## stops at the first contact, so the body can never tunnel or teleport. The
+## attach-time speed covers the remaining cable room over one full crank.
+func _move_along_cable(delta: float) -> void:
+	if _wire_hang_travel_speed <= 0.0:
+		return
+	var to_target: Vector3 = grapple_target - global_position
+	var dist: float = to_target.length()
+	var room: float = dist - WIRE_HANG_STANDOFF
+	if room <= 0.001:
+		return
+	var step: float = minf(_wire_hang_travel_speed * delta, room)
+	if step <= 0.0:
+		return
+	var dir: Vector3 = to_target / maxf(dist, 0.0001)
+	move_and_collide(dir * step)
+
+
+## Full hanging crank: grant the charge, drop the cable, reset gear/handle and
+## push a small collision-safe arrival hop toward the anchor.
+func _finish_wire_hang_arrival() -> void:
+	var to_target: Vector3 = grapple_target - global_position
+	var horiz: Vector3 = Vector3(to_target.x, 0.0, to_target.z)
+	if horiz.length() > 0.001:
+		horiz = horiz.normalized()
+	else:
+		horiz = -global_transform.basis.z
+	is_wire_hanging = false
+	_wire_arrival_grace = 0.0
+	_wire_hang_travel_speed = 0.0
+	velocity = horiz * 1.5 + Vector3.UP * 2.0
+	_fall_peak_y = global_position.y
+	_update_zipwire_cable()
+
+
+## Drops hang + crank + cable (tool switch, downed, astral, new grapple).
+func _exit_wire_states() -> void:
+	if _is_cranking:
+		_end_wire_crank()
+	is_wire_hanging = false
+	_wire_arrival_grace = 0.0
+	_wire_hang_travel_speed = 0.0
+	_crank_elapsed = 0.0
+	crank_progress = 0.0
+	_update_zipwire_cable()
+
+
+func _end_wire_crank(keep_hang: bool = false) -> void:
 	if not _is_cranking:
 		return
 	_tp_crank_stop()
@@ -1294,12 +1429,16 @@ func _end_wire_crank() -> void:
 	# repeated taps can no longer offset WireCooldownSecondary without
 	# completing (UE GA_Hotwire_Crank full-crank reward).
 	_is_cranking = false
+	if keep_hang and is_wire_hanging:
+		# Early RMB release while attached holds position and keeps progress;
+		# the next press resumes this same channel.
+		return
 	_crank_elapsed = 0.0
 	crank_progress = 0.0
 
 
 func _update_zipwire_cable() -> void:
-	if not is_grappling:
+	if not (is_grappling or is_wire_hanging or _wire_arrival_grace > 0.0):
 		if _zipwire_cable_mesh != null and is_instance_valid(_zipwire_cable_mesh):
 			_zipwire_cable_mesh.visible = false
 		return
@@ -1354,7 +1493,7 @@ func _update_zipwire_cable() -> void:
 
 
 func try_auto_mantle() -> bool:
-	if not can_act() or is_grappling or is_mantling or not is_inside_tree():
+	if not can_act() or is_grappling or is_wire_hanging or is_mantling or not is_inside_tree():
 		return false
 	var w3d := get_world_3d()
 	if w3d == null:
@@ -1424,7 +1563,7 @@ func try_auto_mantle() -> bool:
 
 func _tick_wall_climb(delta: float, wish: Vector3) -> bool:
 	var was_climbing: bool = is_wall_climbing
-	if is_on_floor() or is_crouching or is_grappling or is_mantling or stamina <= 2.0 or not is_inside_tree():
+	if is_on_floor() or is_crouching or is_grappling or is_wire_hanging or is_mantling or stamina <= 2.0 or not is_inside_tree():
 		is_wall_climbing = false
 		return false
 	var w3d := get_world_3d()
@@ -1724,8 +1863,7 @@ func _trigger_thief_ability() -> void:
 				is_grappling = false
 			is_mantling = false
 			is_wall_climbing = false
-			if _is_cranking:
-				_end_wire_crank()
+			_exit_wire_states()
 			astral_active = true
 			_note_air_link_start()
 			astral_ttl = ASTRAL_DURATION
@@ -1795,13 +1933,15 @@ func _try_spider_grapple() -> bool:
 	var check: Dictionary = validate_zipwire_target()
 	if check.get("valid", false) != true:
 		return false
+	# A new launch supersedes any cable hang/crank and its cable.
+	if is_wire_hanging or _is_cranking:
+		_exit_wire_states()
 	grapple_target = check["pos"] as Vector3
 	is_grappling = true
+	_wire_arrival_grace = 0.0
 	_note_air_link_start()
 	_wire_launch_arming = false
 	_wire_launch_hold_sec = 0.0
-	if _is_cranking:
-		_end_wire_crank()
 	grapple_time = 0.0
 	charges["grapple"] = int(charges.get("grapple", 0)) - 1
 	tool_used.emit("grapple", int(charges.get("grapple", 0)))
@@ -2588,12 +2728,12 @@ func _select_fp_anim_role(moving: bool) -> String:
 		return _mantle_clip_role
 	if is_wall_climbing:
 		return "climb_wall"
-	if is_grappling:
-		# KF17: keep the launcher/hands in frame through the winch. The
-		# AN_Zipwire_Travel_1P retarget dropped the 1P tool below the camera
-		# (muzzle y ~= -0.34), so it is no longer selected here; CastIdle is
-		# proven in-frame from the KF16/KF17 launch capture. Crank still wins
-		# if the crank state is ever held during the winch.
+	if is_grappling or is_wire_hanging:
+		# KF17: keep the launcher/hands in frame through the winch and cable
+		# hang. The AN_Zipwire_Travel_1P retarget dropped the 1P tool below the
+		# camera (muzzle y ~= -0.34), so it is never selected here; CastIdle is
+		# proven in-frame from the KF16/KF17 launch capture. Crank wins while
+		# the hands are on the handle.
 		return "zipwire_crank" if _is_cranking else "zipwire_cast_idle"
 	if _is_cranking:
 		return "zipwire_crank"

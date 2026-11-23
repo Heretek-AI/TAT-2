@@ -18,7 +18,7 @@ const ST_SETTINGS_PATH: String = "res://data/generated/tables/StringTables/ST_Se
 const SENS_MIN: float = 0.0005
 const SENS_MAX: float = 0.008
 const SENS_STEP: float = 0.0002
-const FOV_MIN: float = 60.0
+const FOV_MIN: float = 50.0
 const FOV_MAX: float = 105.0
 const VOL_MIN: float = 0.0
 const VOL_MAX: float = 1.0
@@ -183,7 +183,7 @@ func _ensure_settings() -> void:
 	if not s.has("reduced_camera_bounce"):
 		s["reduced_camera_bounce"] = false
 	if not s.has("fov"):
-		s["fov"] = 75.0
+		s["fov"] = 54.54
 	if not s.has("vsync"):
 		s["vsync"] = true
 	if not s.has("master_volume"):
@@ -214,7 +214,7 @@ func reset_defaults() -> void:
 	s["invert_y"] = false
 	s["sprint_toggle"] = false
 	s["reduced_camera_bounce"] = false
-	s["fov"] = 75.0
+	s["fov"] = 54.54
 	s["vsync"] = true
 	s["master_volume"] = 0.8
 	s["music_volume"] = 0.8
@@ -242,7 +242,7 @@ func _load_from_save() -> void:
 	if _bounce_check != null:
 		_bounce_check.button_pressed = bool(s.get("reduced_camera_bounce", false))
 	if _fov_slider != null:
-		_fov_slider.value = clampf(float(s.get("fov", 75.0)), FOV_MIN, FOV_MAX)
+		_fov_slider.value = clampf(float(s.get("fov", 54.54)), FOV_MIN, FOV_MAX)
 	if _vsync_check != null:
 		_vsync_check.button_pressed = bool(s.get("vsync", true))
 	if _vol_slider != null:

@@ -3332,7 +3332,22 @@ func _initialize() -> void:
 	if is_instance_valid(cr_p) and cr_p.has_method("_select_fp_anim_role") and cr_p.has_method("_begin_wire_crank") and cr_p.has_method("_play_wire_crank_clip"):
 		cr_p.set("_is_cranking", true)
 		cr_role_ok = str(cr_p.call("_select_fp_anim_role", false)) == "zipwire_crank"
+		# Attached hang reuses the same in-frame pair: crank while cranking,
+		# cast idle while holding. A winch + crank also returns the crank clip
+		# (the out-of-frame travel clip is never selected).
+		cr_p.set("is_grappling", true)
+		var cr_role_winch: String = str(cr_p.call("_select_fp_anim_role", false))
+		cr_p.set("is_grappling", false)
 		cr_p.set("_is_cranking", false)
+		cr_p.set("is_wire_hanging", true)
+		var cr_role_hang_idle: String = str(cr_p.call("_select_fp_anim_role", false))
+		cr_p.set("_is_cranking", true)
+		var cr_role_hang_crank: String = str(cr_p.call("_select_fp_anim_role", false))
+		cr_p.set("is_wire_hanging", false)
+		cr_p.set("_is_cranking", false)
+		cr_role_ok = cr_role_ok and cr_role_winch == "zipwire_crank" \
+			and cr_role_hang_idle == "zipwire_cast_idle" \
+			and cr_role_hang_crank == "zipwire_crank"
 		# Synthetic live playback: seed the resolve cache, attach a player
 		# carrying the crank clip, then crank; current_animation must follow.
 		(cr_li.get("applied") as Dictionary)["zipwire_crank"] = cr_want

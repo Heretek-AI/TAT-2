@@ -804,7 +804,13 @@ func _feat_10_zipwire_crank_mantle_climb() -> void:
 		p.call("equip_tool", "zipwire")
 		await h.step_process(1)
 		h.press_action("primary_action")
-		await h.step_physics(4)
+		# IA_Ability_Action_Primary_Hold is 0.2 s (~12 physics frames), so wait
+		# for the launch instead of assuming 4 frames; a fixed 4-frame sample
+		# could read the pre-launch arming state on a slow headless tick.
+		for _f: int in range(60):
+			await h.step_physics(1)
+			if h.is_true(p.get("is_grappling")):
+				break
 		var is_grapple: bool = h.is_true(p.get("is_grappling"))
 		var has_cable: bool = false
 		for ch: Node in h.find_all_of_class(arena, "MeshInstance3D"):
@@ -826,6 +832,83 @@ func _feat_10_zipwire_crank_mantle_climb() -> void:
 		crank_ok = h.is_true(rs_c.get("crank_active")) and float(rs_c.get("crank_progress", 0.0)) > 0.0
 		h.release_action("secondary_action")
 	h.require(crank_ok, "T1-10-C", "[RMB] crank_active & crank_progress > 0 (%s)" % str(crank_ok))
+
+	# T1-10-F: RMB during launch travel attaches to the cable (hang), not just
+	# an in-place crank; is_grappling ends and the cable stays visible.
+	var hang_ok: bool = false
+	var travel_seen: bool = false
+	if h.has_m(p, "get_equipped_tool") and h.has_m(p, "get_active_reticle_state"):
+		# Establish a clean launch state: C leaves a connected hang behind.
+		p.call("_exit_wire_states")
+		p.set("is_grappling", false)
+		p.set("ability_cooldown", 0.0)
+		p.set("_wire_launch_arming", false)
+		(p.get("charges") as Dictionary)["grapple"] = 4
+		p.call("equip_tool", "zipwire")
+		await h.step_process(1)
+		h.press_action("primary_action")
+		for _f: int in range(60):
+			await h.step_physics(1)
+			if h.is_true(p.get("is_grappling")):
+				travel_seen = true
+				break
+		h.press_action("secondary_action")
+		await h.step_physics(3)
+		var hanging: bool = h.is_true(p.get("is_wire_hanging"))
+		var grapple_cleared: bool = not h.is_true(p.get("is_grappling"))
+		var hang_cable: bool = false
+		for ch: Node in h.find_all_of_class(arena, "MeshInstance3D"):
+			if ch.name.to_lower().find("cable") >= 0 or ch.name.to_lower().find("wire") >= 0:
+				hang_cable = true
+		hang_ok = travel_seen and hanging and grapple_cleared and hang_cable
+		h.release_action("primary_action")
+	h.require(hang_ok, "T1-10-F", "RMB travel attach: travel=%s hang=%s grapple_cleared=%s cable=%s" % [str(travel_seen), str(h.is_true(p.get("is_wire_hanging"))), str(not h.is_true(p.get("is_grappling"))), str(hang_ok)])
+
+	# T1-10-G: hanging crank moves/progresses, early release holds position and
+	# keeps the cable, re-press resumes, completion grants a charge and hides it.
+	var hang_travel_ok: bool = false
+	var resume_ok: bool = false
+	var hang_complete_ok: bool = false
+	if h.is_true(p.get("is_wire_hanging")):
+		var start_y: float = (p as Node3D).global_position.y if p is Node3D else 0.0
+		var charge_before: int = int((p.get("charges") as Dictionary).get("grapple", 0))
+		await h.step_physics(24)
+		hang_travel_ok = h.is_true(p.get("is_wire_hanging")) \
+			and float(p.get("crank_progress")) > 0.0 \
+			and ((p as Node3D).global_position.y > start_y + 0.02 if p is Node3D else false)
+		h.release_action("secondary_action")
+		await h.step_physics(4)
+		var hold_pos: Vector3 = (p as Node3D).global_position if p is Node3D else Vector3.ZERO
+		var hold_prog: float = float(p.get("crank_progress"))
+		await h.step_physics(6)
+		var hold_ok: bool = h.is_true(p.get("is_wire_hanging")) \
+			and ((p as Node3D).global_position.distance_to(hold_pos) < 0.01 if p is Node3D else false) \
+			and float(p.get("crank_progress")) >= hold_prog
+		var cable_still: bool = false
+		for ch: Node in h.find_all_of_class(arena, "MeshInstance3D"):
+			if ch.name.to_lower().find("cable") >= 0 or ch.name.to_lower().find("wire") >= 0:
+				cable_still = (ch as MeshInstance3D).visible
+		h.press_action("secondary_action")
+		await h.step_physics(8)
+		resume_ok = hold_ok and cable_still and h.is_true(p.get("is_wire_hanging")) \
+			and h.is_true(p.get("_is_cranking")) \
+			and float(p.get("crank_progress")) >= hold_prog
+		p.call("_tick_wire_crank", 6.2, true)
+		await h.step_physics(2)
+		var cable_hidden: bool = true
+		for ch: Node in h.find_all_of_class(arena, "MeshInstance3D"):
+			if ch.name.to_lower().find("cable") >= 0 or ch.name.to_lower().find("wire") >= 0:
+				cable_hidden = cable_hidden and not (ch as MeshInstance3D).visible
+		var charge_after: int = int((p.get("charges") as Dictionary).get("grapple", 0))
+		hang_complete_ok = not h.is_true(p.get("is_wire_hanging")) \
+			and not h.is_true(p.get("_is_cranking")) \
+			and absf(float(p.get("ability_cooldown"))) < 0.001 \
+			and charge_after == mini(4, charge_before + 1) \
+			and cable_hidden
+		h.release_action("secondary_action")
+	h.require(hang_travel_ok, "T1-10-G", "hanging crank moves along cable / progress (%s)" % str(hang_travel_ok))
+	h.require(resume_ok, "T1-10-H", "early release holds position + cable, re-press resumes (%s)" % str(resume_ok))
+	h.require(hang_complete_ok, "T1-10-I", "hang completion grants charge, hides cable (%s)" % str(hang_complete_ok))
 
 	# T1-10-D: 4.0 m Auto-Mantle Traversal
 	var arena2_d: Dictionary = await h.make_arena(Vector3(9700.0, 500.0, 9500.0))

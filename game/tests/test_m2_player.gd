@@ -59,6 +59,20 @@ func _run() -> void:
 	_check(json_ok, "M2.0 parse_gameplay.py exports mantle/climb/crank/smoke_bomb constants",
 		"M2.0 parse_gameplay.py missing expected keys: cm=" + str(cm_p) + " zw=" + str(pt_zw) + " sb=" + str(pt_sb))
 
+	# 0b. World FOV is the authored UE 85 deg horizontal angle converted to the
+	# vertical angle at 16:9 (54.54 deg). Sprint feedback stays +4, and the
+	# first-person viewmodel lock stays 85 deg (vm-only, not the world).
+	var vfov_deg: float = float(ThiefScript.CAMERA_FOV)
+	var hfov_deg: float = rad_to_deg(2.0 * atan(tan(deg_to_rad(vfov_deg) * 0.5) * (16.0 / 9.0)))
+	var sprint_fov: float = float(ThiefScript.CAMERA_FOV_SPRINT)
+	var vm_fov: float = float(ThiefScript.FP_VM_FOV_DEG)
+	var fov_ok: bool = absf(vfov_deg - 54.54) < 0.01 \
+		and absf(hfov_deg - 85.0) < 0.1 \
+		and absf(sprint_fov - (vfov_deg + 4.0)) < 0.001 \
+		and absf(vm_fov - 85.0) < 0.001
+	_check(fov_ok, "M2.9 world FOV 54.54 vertical = 85 horizontal at 16:9 (h=" + str(snappedf(hfov_deg, 0.01)) + ", sprint=" + str(snappedf(sprint_fov, 0.01)) + ", vm=85)",
+		"M2.9 FOV failed: v=" + str(vfov_deg) + " h=" + str(hfov_deg) + " sprint=" + str(sprint_fov) + " vm=" + str(vm_fov))
+
 	# Create world arena for player tests
 	var arena := Node3D.new()
 	arena.name = "M2Arena"
@@ -228,6 +242,45 @@ func _run() -> void:
 	player.call("_tick_wire_crank", 6.1, true)
 	var ch_after: int = int((player.get("charges") as Dictionary).get("grapple", 0))
 	var crank_full_ok: bool = is_equal_approx(float(player.get("ability_cooldown")), 0.0) and ch_after == mini(4, ch_before + 1)
+	# Attached-crank chain: launch -> RMB attach (hang) -> crank progress and
+	# height -> release holds/cable stays -> re-press resumes -> completion
+	# grants the charge, hides the cable and resets the gear/crank state.
+	player.set("ability_cooldown", 0.0)
+	(player.get("charges") as Dictionary)["grapple"] = 2
+	var hang_launched: bool = player.call("_try_spider_grapple") == true
+	var travel_ok: bool = player.get("is_grappling") == true
+	player.call("_begin_wire_crank") # RMB during travel
+	var hang_ok: bool = player.get("is_wire_hanging") == true and player.get("is_grappling") == false
+	var hang_cable_ok: bool = cable_node != null and cable_node.visible
+	var hang_start_y: float = (player as Node3D).global_position.y
+	player.call("_tick_wire_crank", 1.0, true)
+	var hang_prog: float = float(player.get("crank_progress"))
+	var hang_height_ok: bool = (player as Node3D).global_position.y > hang_start_y + 0.05
+	var hang_progress_ok: bool = player.get("is_wire_hanging") == true and hang_prog > 0.1 and hang_height_ok
+	player.call("_end_wire_crank", true) # early RMB release
+	var hold_pos: Vector3 = (player as Node3D).global_position
+	var hold_prog: float = float(player.get("crank_progress"))
+	player.call("_physics_process", 0.1)
+	var release_ok: bool = player.get("is_wire_hanging") == true \
+		and (player as Node3D).global_position.distance_to(hold_pos) < 0.001 \
+		and is_equal_approx(float(player.get("crank_progress")), hold_prog) \
+		and cable_node != null and cable_node.visible
+	player.call("_begin_wire_crank") # re-press resumes the same channel
+	var resume_ok: bool = player.get("is_wire_hanging") == true and player.get("_is_cranking") == true \
+		and is_equal_approx(float(player.get("crank_progress")), hold_prog)
+	var ch_hang_before: int = int((player.get("charges") as Dictionary).get("grapple", 0))
+	player.set("ability_cooldown", 5.0)
+	player.call("_tick_wire_crank", 6.1, true)
+	var ch_hang_after: int = int((player.get("charges") as Dictionary).get("grapple", 0))
+	var complete_ok: bool = player.get("is_wire_hanging") == false and player.get("_is_cranking") == false \
+		and is_equal_approx(float(player.get("ability_cooldown")), 0.0) \
+		and ch_hang_after == mini(4, ch_hang_before + 1) \
+		and cable_node != null and not cable_node.visible \
+		and str(player.get("_gear_current_clip")) == "" \
+		and is_equal_approx(float(player.get("crank_progress")), 0.0)
+	_check(hang_launched and travel_ok and hang_ok and hang_cable_ok and hang_progress_ok and release_ok and resume_ok and complete_ok,
+		"M2.5b Zipwire attach -> hang (cable) -> crank height/progress -> release holds -> resume -> completion",
+		"M2.5b attach/hang failed: launch=" + str(hang_launched) + " travel=" + str(travel_ok) + " hang=" + str(hang_ok) + " cable=" + str(hang_cable_ok) + " progress=" + str(hang_progress_ok) + "/" + str(hang_prog) + "/" + str(hang_height_ok) + " release=" + str(release_ok) + " resume=" + str(resume_ok) + " complete=" + str(complete_ok) + " charges=" + str(ch_hang_before) + "->" + str(ch_hang_after))
 	zw_wall.queue_free()
 	if head_node != null:
 		head_node.rotation.x = 0.0

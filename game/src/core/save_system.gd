@@ -108,7 +108,7 @@ func _defaults() -> Dictionary:
 			"invert_y": false,
 			"sprint_toggle": false,
 			"reduced_camera_bounce": false,
-			"fov": 75.0,
+			"fov": 54.54,
 			"vsync": true,
 			"master_volume": 0.8,
 			"music_volume": 0.8,

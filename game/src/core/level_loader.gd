@@ -791,9 +791,10 @@ func get_material_for_ue(ue_mat_path: String) -> Material:
 			dmat.set_shader_parameter("gold_lin", Vector3(float(dt[0]), float(dt[1]), float(dt[2])))
 		else:
 			dmat.set_shader_parameter("gold_lin", Vector3(1.0, 0.327, 0.106))
-		dmat.set_shader_parameter("bg_gold", 0.12)
-		dmat.set_shader_parameter("em_floor", 0.03)
-		dmat.set_shader_parameter("em_scroll", 0.80)
+		dmat.set_shader_parameter("bg_color", Vector3(1.0, 0.97, 0.94))
+		dmat.set_shader_parameter("bg_gold", 0.008)
+		dmat.set_shader_parameter("em_floor", 0.0)
+		dmat.set_shader_parameter("em_scroll", 0.60)
 		dmat.set_shader_parameter("luma_lo", 0.55)
 		dmat.set_shader_parameter("luma_hi", 0.85)
 		_std_mat_cache[ue_mat_path] = dmat

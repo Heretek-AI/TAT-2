@@ -29,7 +29,7 @@
 | M2 player suite (`test_m2_player.gd`) | **9/9** |
 | Scripts | **49/49 compile** (46 project scripts + 3 probes) |
 | E2E (unmasked) | **212 pass / 44 fail / 0 BOOT / 0 SCRIPT ERROR** — no new failure IDs vs baseline |
-| World data | **107/107 maps**, 16 contracts, 210 patrol paths / 673 waypoints, 222 scene variants, 4,118 device placements, **3,695 Niagara placements / 37 systems** |
+| World data | **107/107 maps**, 16 contracts, 210 patrol paths / 673 waypoints, 222 scene variants, 4,118 device placements, **3,695 Niagara placements (3,308 active / 387 inactive `_Flame_Out`) / 36 systems** |
 | Materials | **0 fallback warnings** (Track C5 complete) |
 | Audio | 1,296 events / 1,205 resolved; 5,018 clips |
 
@@ -163,7 +163,7 @@ A fresh clone must run `make extract && make normalize && make anims && tools/re
 | `c5649b8` | explicit FTUE collider budget (40k building / 44k total) + `probe_ftue` |
 | `b2b0b3a` | deterministic SceneVariant selection + `probe_scene_variants` |
 | `0c65ca6` | sprint-3 doc with Track B + Niagara evidence |
-| `605de44` | all 3,695 Niagara placements spawned via 37 MultiMesh nodes + `probe_niagara` |
+| `605de44` | 3,695 authored Niagara placements; 3,308 active spawned via 36 MultiMesh nodes (387 inactive `_Flame_Out` skipped) + `probe_niagara` |
 | `ba020cf` | MaterialLibrary added to extractor table roots (C5 groundwork) |
 
 ---
@@ -220,7 +220,7 @@ A fresh clone must run `make extract && make normalize && make anims && tools/re
 - `_cap_image()` regenerates mipmaps after downscale for images ≥64 px; tiny UI icons stay mip-free.
 - Volumes apply authored `basis`/`rotation` (emitted by `parse_tables`).
 - Den window clipping handles `MeshInstance3D` and single-instance `MultiMeshInstance3D`; ambiguous multi-window batches are counted, never silently missed.
-- Niagara: `_spawn_level_niagara()` groups records by `asset` and creates one `MultiMeshInstance3D` per NS_* system (3,695 instances / 37 nodes). The shader is `game/src/core/level_niagara.gdshader`; Godot 4 has **no `billboard` render mode** — the shader builds the billboard basis manually from `INV_VIEW_MATRIX`.
+- Niagara: `_spawn_level_niagara()` groups records by `asset` and creates one `MultiMeshInstance3D` per active NS_* system (3,695 authored -> 3,308 active / 36 nodes; 387 `NS_Candelabras_Flame_Out` skipped globally via `NIAGARA_INACTIVE_ASSETS`). The shader is `game/src/core/level_niagara.gdshader`; Godot 4 has **no `billboard` render mode** — the shader builds the billboard basis manually from `INV_VIEW_MATRIX`.
 - Scene variants: `LevelLoader.select_scene_variants(map_id, seed, requested)` picks one record per state group with a version-stable FNV-1a hash. Overrides are **not** applied yet (#11).
 
 ### Audio
@@ -240,7 +240,7 @@ A fresh clone must run `make extract && make normalize && make anims && tools/re
 | `game/tests/e2e/run_e2e_tests.gd` | Tiers 1–4 unmasked | 210/256, 46 fail, 0 BOOT |
 | `game/tests/probe_ftue.gd` | FTUE collider budget | player=1, dropped=0, budget_ok, safe room |
 | `game/tests/probe_scene_variants.gd` | seeded SV selection | 104 Guildhall, stable, varies, requested |
-| `game/tests/probe_niagara.gd` | absolute Niagara coverage | records=3695, spawned=3695, systems=37, nodes=37 |
+| `game/tests/probe_niagara.gd` | absolute Niagara coverage | authored=3695, active=3308, skipped=387, systems=36, nodes=36 |
 
 The E2E runner no longer patches expectations. All 24 alignments live in the tier files. If you add a new expectation, edit the tier file — never reintroduce `_load_patched`.
 
@@ -329,7 +329,7 @@ Do not weaken assertions to go green; fix the game or classify with evidence.
 |---|---|---|
 | breakables 1,563 vs audit 1,897 | 4 breakable component classes; self-destruct components (342) are a different mechanic | issue #3; revisit in M4 |
 | secret switches 12 vs "9+" | toggle-switch components + secret-labelled switches | accepted, recorded in devices.json |
-| Niagara 3,695 vs earlier 3,699 | pre-wipe data had 4 extra records; clean extraction is exactly 3,695 across 37 systems, matching the audit | resolved |
+| Niagara 3,695 vs earlier 3,699 | pre-wipe data had 4 extra records; clean extraction is exactly 3,695 authored across 37 asset paths, of which 387 `NS_Candelabras_Flame_Out` are inactive (bAutoActivate=false), leaving 3,308 active across 36 spawned systems | resolved |
 | 9 same-basename `.scn` | distinct assets sharing a name (e.g. two `SM_Radiator`) | not duplicates; ignore detector noise, rely on UID checker |
 | 14 BlendSpace assets | CUE4Parse `AnimationExporter` limitation | enumerated known-unsupported in `manifest_audit`; do not silently allow other errors |
 

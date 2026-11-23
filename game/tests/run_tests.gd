@@ -400,6 +400,25 @@ func _initialize() -> void:
 	var col_shapes: int = int(gh_stats.get("collision_shapes", 0))
 	var occluders: int = int(gh_stats.get("occluder_count", 0))
 	var gh_fallback_materials: int = int(gh_stats.get("fallback_material_count", -1))
+	# PG-1: with the pre-baked 1024px imports the Guildhall load must not
+	# decode-and-resize any texture at runtime (downscaled=0). A non-zero
+	# count means a fresh extraction lost the .import caps.
+	var gh_downscaled: int = int(gh_stats.get("downscaled_count", -1))
+	var gh_downscaled_tex: Array = (gh_stats.get("downscaled_textures", []) as Array)
+	# Steady state is downscaled=0. One documented exception is allowed while
+	# a fresh extraction's .import caps are still pre-bake-pending: the road
+	# normal is the only new cap from `prebake_texture_cap.py --dry-run` and
+	# its sidecar still says size_limit=0. Once the pre-bake is applied, a
+	# runtime downscale of that same texture fails this gate.
+	var gh_downscaled_pending: Array[String] = []
+	var gh_downscaled_ok: bool = gh_downscaled == 0
+	if not gh_downscaled_ok and gh_downscaled == 1 and not gh_downscaled_tex.is_empty():
+		var gh_ds_path: String = str(gh_downscaled_tex[0])
+		if gh_ds_path.ends_with("Stone/FloorExterior/T_RoadBricksA_N.png"):
+			var gh_ds_import: String = FileAccess.get_file_as_string(gh_ds_path + ".import")
+			if gh_ds_import.contains("process/size_limit=0"):
+				gh_downscaled_ok = true
+				gh_downscaled_pending.append(gh_ds_path)
 	var multi_nodes: int = 0
 	var max_chunk_span: float = 0.0
 	var max_chunk_mesh: String = ""
@@ -416,11 +435,11 @@ func _initialize() -> void:
 					max_chunk_mesh = str(mmi.get_meta("ue_mesh", ""))
 			if mmi.visibility_range_end > 0.0:
 				culled_nodes += 1
-	if chunk_count < 500 or multi_nodes < 200 or col_bodies < 4 or col_shapes <= 0 or col_shapes >= 32000 or occluders <= 0 or max_chunk_span >= 140.0 or culled_nodes < 300 or gh_fallback_materials != 0:
-		printerr("FAIL: perf chunking invariants (chunks=", chunk_count, " multimeshes=", multi_nodes, " bodies=", col_bodies, " shapes=", col_shapes, " occluders=", occluders, " max_span=", max_chunk_span, " max_mesh=", max_chunk_mesh, " culled=", culled_nodes, " material_fallbacks=", gh_fallback_materials, ")")
+	if chunk_count < 500 or multi_nodes < 200 or col_bodies < 4 or col_shapes <= 0 or col_shapes >= 32000 or occluders <= 0 or max_chunk_span >= 140.0 or culled_nodes < 300 or gh_fallback_materials != 0 or not gh_downscaled_ok:
+		printerr("FAIL: perf chunking invariants (chunks=", chunk_count, " multimeshes=", multi_nodes, " bodies=", col_bodies, " shapes=", col_shapes, " occluders=", occluders, " max_span=", max_chunk_span, " max_mesh=", max_chunk_mesh, " culled=", culled_nodes, " material_fallbacks=", gh_fallback_materials, " downscaled=", gh_downscaled, " downscaled_tex=", gh_downscaled_tex.slice(0, 5), ")")
 		fails += 1
 	else:
-		print("PASS: Perf chunking (chunks=", chunk_count, ", multimeshes=", multi_nodes, ", collision_bodies=", col_bodies, ", shapes=", col_shapes, ", occluders=", occluders, ", max_chunk_span=", snappedf(max_chunk_span, 0.1), "m, distance-culled=", culled_nodes, ", material_fallbacks=0)")
+		print("PASS: Perf chunking (chunks=", chunk_count, ", multimeshes=", multi_nodes, ", collision_bodies=", col_bodies, ", shapes=", col_shapes, ", occluders=", occluders, ", max_chunk_span=", snappedf(max_chunk_span, 0.1), "m, distance-culled=", culled_nodes, ", material_fallbacks=0, downscaled=", gh_downscaled, ", prebake_pending=", gh_downscaled_pending, ")")
 	gh_scene.queue_free()
 	await process_frame
 
@@ -2814,6 +2833,34 @@ func _initialize() -> void:
 		fails += 1
 	else:
 		print("PASS: 35a Startscreen CineCamera eye=", mm_cam.position, " pitch=", snappedf(mm_pitch_deg, 0.01), " deg vFOV=", mm_cam.fov)
+	# 35a2. Startscreen headlights: taming must key off the authored UE intensity
+	# metadata (7000 lumens), not the mapped light_energy (~3.9 ceiling). Two
+	# authored car headlights sit at x < -10 and become 2.6 energy / 32 deg /
+	# attenuation 2.0; a mapped-energy test is unreachable for them.
+	var mm_hl_count: int = 0
+	var mm_hl_ok: bool = true
+	var mm_hl_desc: Array[String] = []
+	for mm_hl_node: Node in mm_node.find_children("*", "SpotLight3D", true, false):
+		var mm_hl: SpotLight3D = mm_hl_node as SpotLight3D
+		if mm_hl == null:
+			continue
+		var mm_hl_authored: float = float(mm_hl.get_meta("tat_ue_intensity", 0.0))
+		if mm_hl_authored < 2500.0:
+			continue
+		mm_hl_count += 1
+		var mm_hl_pos: Vector3 = mm_hl.position
+		var mm_hl_row_ok: bool = mm_hl_pos.x < -10.0 \
+			and absf(mm_hl.light_energy - 2.6) < 0.001 \
+			and absf(mm_hl.spot_angle - 32.0) < 0.01 \
+			and absf(mm_hl.spot_attenuation - 2.0) < 0.001
+		mm_hl_ok = mm_hl_ok and mm_hl_row_ok
+		mm_hl_desc.append("%s authored=%.0f x=%.2f energy=%.2f angle=%.1f atten=%.2f" % [
+			mm_hl.name, mm_hl_authored, mm_hl_pos.x, mm_hl.light_energy, mm_hl.spot_angle, mm_hl.spot_attenuation])
+	if mm_hl_count != 2 or not mm_hl_ok:
+		printerr("FAIL: 35a2 Startscreen headlight taming (count=", mm_hl_count, " ok=", mm_hl_ok, " ", mm_hl_desc, ")")
+		fails += 1
+	else:
+		print("PASS: 35a2 Startscreen headlight taming via tat_ue_intensity (", mm_hl_desc, ")")
 	mm_node.queue_free()
 	await process_frame
 
@@ -3133,6 +3180,32 @@ func _initialize() -> void:
 	else:
 		print("PASS: 39b tiny-texture ResourceLoader fallback (16x16 mips stripped, 256x256 untouched, skipped_tiny_count=", ttf_count_after, ")")
 	ttf_ll.queue_free()
+	await process_frame
+
+	# 39c. Storefront glass-decal alpha bypass through the level loader. The
+	# regression at 28 uses load(); this proves the PG-1 texture budget path
+	# keeps the only real 1-bit-alpha DXT1 source at its authored 4096² and
+	# never records it as downscaled. The import pre-bake already preserves it
+	# (ALPHA_CRITICAL_PATHS); this catches a runtime TAT2_TEX_CAP regression.
+	var ac_ll: Node = (load("res://src/core/level_loader.gd") as GDScript).new()
+	root.add_child(ac_ll)
+	await process_frame
+	ac_ll.set("texture_budget_max_dim", 1024)
+	var ac_path: String = "res://assets/ue/Raw/Art/Environment/Storefront/GlassDecals/T_Storefront_GlassDecalsA.png"
+	var ac_tex: Texture2D = ac_ll.call("_load_tex", ac_path) as Texture2D
+	var ac_img: Image = ac_tex.get_image() if ac_tex != null else null
+	var ac_alpha: float = ac_img.get_pixel(3, 3075).a if ac_img != null else 1.0
+	var ac_downscaled: Array = (ac_ll.get("downscaled_textures") as Array)
+	var ac_ok: bool = ac_img != null \
+		and ac_img.get_width() == 4096 and ac_img.get_height() == 4096 \
+		and ac_alpha <= 0.01 \
+		and not ac_downscaled.has(ac_path)
+	if not ac_ok:
+		printerr("FAIL: 39c storefront alpha bypass via _load_tex (size=", ac_img.get_width() if ac_img != null else -1, "x", ac_img.get_height() if ac_img != null else -1, " alpha(3,3075)=", ac_alpha, " downscaled=", ac_downscaled.has(ac_path), ")")
+		fails += 1
+	else:
+		print("PASS: 39c storefront alpha bypass via _load_tex (4096x4096, alpha(3,3075)=", snappedf(ac_alpha, 0.001), ", runtime cap=1024 ignored)")
+	ac_ll.queue_free()
 	await process_frame
 
 	# 40. E2E 4.4(a): interactables var/track bounds alias. T1-15-B reads

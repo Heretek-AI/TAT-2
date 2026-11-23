@@ -1,7 +1,9 @@
 extends SceneTree
-## Absolute Niagara coverage probe (task C4 / sprint target 3,695).
+## Absolute Niagara coverage probe (task C4 / sprint target 3,695 authored).
 ## Feeds every niagara record from all 107 level files through the real
-## LevelLoader spawner and asserts 3,695 instances across 37 systems.
+## LevelLoader spawner, which skips NIAGARA_INACTIVE_ASSETS globally.
+## Authored 3,695 -> active 3,308 -> 36 systems/36 MultiMesh nodes;
+## 387 NS_Candelabras_Flame_Out extinguish puffs are skipped.
 
 func _init() -> void:
 	call_deferred("_run")
@@ -45,10 +47,12 @@ func _run() -> void:
 	ll.call("_spawn_level_niagara", acc, ctx)
 	var spawned: int = int(ctx.get("niagara_spawned", -1))
 	var systems: int = int(ctx.get("niagara_systems", -1))
+	var skipped: int = int(ctx.get("niagara_inactive_skipped", -1))
 	var nodes: int = host.get_child_count()
-	print("NIAGARA_PROBE files=", files.size(), " records=", records.size(),
-		" spawned=", spawned, " systems=", systems, " nodes=", nodes)
-	var ok: bool = records.size() == 3695 and spawned == 3695 and systems == 37 and nodes == 37
+	print("NIAGARA_PROBE files=", files.size(), " authored=", records.size(),
+		" active=", spawned, " skipped=", skipped, " systems=", systems, " nodes=", nodes)
+	var ok: bool = records.size() == 3695 and spawned == 3308 and skipped == 387 \
+		and systems == 36 and nodes == 36
 	print("NIAGARA_PROBE ", "PASS" if ok else "FAIL")
 	ll.queue_free()
 	host.queue_free()

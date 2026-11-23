@@ -131,7 +131,7 @@ func _build_3d_backdrop() -> void:
 				sl.spot_range = 22.0
 				sl.light_volumetric_fog_energy = 2.4
 				sl.shadow_enabled = true
-			elif sl.light_energy >= 3.9 and sl.position.x < -10.0:
+			elif float(sl.get_meta("tat_ue_intensity", 0.0)) >= 2500.0 and sl.position.x < -10.0:
 				sl.light_color = Color(1.0, 0.80, 0.55)
 				sl.spot_angle = 32.0
 				sl.spot_attenuation = 2.0

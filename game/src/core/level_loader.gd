@@ -75,6 +75,20 @@ var skipped_tiny_count: int = 0
 ## The real long-term fix is the import pipeline (VRAM compression + size
 ## cap, as tools/prepare_mobile_project.py already does for Android).
 const TEX_BUDGET_MAX_DIM: int = 1024
+## The only DXT1 texture in the extracted tree with real punch-through alpha
+## (7,611 transparent pixels at 4096²). Import/runtime downscaling blends every
+## transparent pixel to alpha 1.0, so the storefront glass-decal cutout must
+## stay at authored resolution even when TAT2_TEX_CAP requests a smaller cap.
+## Mirrors tools/prebake_texture_cap.py ALPHA_CRITICAL_PATHS.
+const ALPHA_CRITICAL_TEXTURES: Array[String] = [
+	"res://assets/ue/Raw/Art/Environment/Storefront/GlassDecals/T_Storefront_GlassDecalsA.png",
+]
+## Authored Niagara systems with bAutoActivate=false. Candelabra extinguish
+## puffs are not live flames; spawning them doubles every candelabra. The
+## policy is global: 387 of the 3,695 authored placements are these systems.
+const NIAGARA_INACTIVE_ASSETS: Array[String] = [
+	"ns_candelabras_flame_out",
+]
 var texture_budget_max_dim: int = TEX_BUDGET_MAX_DIM
 var downscaled_textures: Array[String] = []
 var downscaled_count: int = 0
@@ -267,12 +281,20 @@ func _resolve_texture_budget() -> int:
 	return TEX_BUDGET_MAX_DIM
 
 
+## True for the authored textures whose 1-bit alpha must survive verbatim.
+## The storefront glass decals lose all 7,611 transparent pixels when resized.
+func _is_alpha_critical_texture(res_path: String) -> bool:
+	return ALPHA_CRITICAL_TEXTURES.has(res_path)
+
+
 ## PG-1: downscale an image whose long edge exceeds the budget. Returns the
 ## same image untouched when it already fits, else resizes it in place. The
 ## mip contract of the source is kept (imported .ctex ships no mip chain).
 func _cap_image(img: Image, res_path: String) -> Image:
 	var cap: int = texture_budget_max_dim
 	if cap <= 0 or img == null or img.is_empty():
+		return img
+	if _is_alpha_critical_texture(res_path):
 		return img
 	var w: int = img.get_width()
 	var h: int = img.get_height()
@@ -299,6 +321,8 @@ func _cap_image(img: Image, res_path: String) -> Image:
 ## PG-1: capped ImageTexture copy of a loaded texture, or the original when
 ## it already fits the budget (or cannot be read back).
 func _cap_texture(tex: Texture2D, res_path: String) -> Texture2D:
+	if _is_alpha_critical_texture(res_path):
+		return tex
 	var src: Image = tex.get_image()
 	if src == null or src.is_empty():
 		return tex
@@ -2933,6 +2957,7 @@ func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dict
 	result["fog_volumes_built"] = int(ctx.get("fog_volumes_built", 0))
 	result["niagara_spawned"] = int(ctx.get("niagara_spawned", 0))
 	result["niagara_systems"] = int(ctx.get("niagara_systems", 0))
+	result["niagara_inactive_skipped"] = int(ctx.get("niagara_inactive_skipped", 0))
 	result["spline_count"] = int(ctx.get("spline_count", 0))
 	result["curb_built"] = int(ctx.get("curb_built", 0))
 	result["missing_mesh_count"] = int(ctx.get("missing_mesh_count", 0))
@@ -2940,6 +2965,10 @@ func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dict
 	result["missing_meshes"] = (ctx.get("missing_meshes", [] as Array) as Array).duplicate()
 	result["corrupt_mesh_count"] = corrupt_mesh_count
 	result["corrupt_meshes"] = corrupt_meshes.duplicate()
+	# PG-1 budget accounting. With the pre-baked imports downscaled_count must
+	# be 0: any entry means the runtime decoded a full-res PNG this load.
+	result["downscaled_count"] = downscaled_count
+	result["downscaled_textures"] = downscaled_textures.duplicate()
 	result["fallback_material_count"] = fallback_material_count
 	result["fallback_materials"] = fallback_materials.duplicate()
 	result["den_window_splits"] = int(ctx.get("den_window_splits", 0))
@@ -3272,15 +3301,15 @@ func _store_level_extras(acc: Dictionary, ctx: Dictionary) -> void:
 ## Never registers bounce fills with light_probe (Suite 36/36b) or group
 ## "den_hand_fills" (Suite 34b), and never mutates ambient_light_energy or
 ## adjustment_brightness (Suites 17 & 34b).
-## Spawn every authored Niagara placement through one MultiMesh per NS_* system.
-## 3,695 placements become 37 nodes (37 draw calls) instead of 3,695 emitters.
+## Spawn every active authored Niagara placement through one MultiMesh per
+## NS_* system: 3,695 authored -> 3,308 active -> 36 nodes (36 draw calls).
+## NIAGARA_INACTIVE_ASSETS skips 387 bAutoActivate=false extinguish puffs.
 ## The tint/size encode the system family; the shader animates per-instance phase.
 func _spawn_level_niagara(acc: Dictionary, ctx: Dictionary) -> void:
 	var parent: Node = ctx.get("parent") as Node
 	if parent == null:
 		return
 	var map_hint: String = str(ctx.get("map_hint", ""))
-	var is_den: bool = map_hint == "thieves_den"
 	var groups: Dictionary = {}
 	for r: Variant in (acc.get("niagara", []) as Array):
 		if not (r is Dictionary):
@@ -3288,12 +3317,11 @@ func _spawn_level_niagara(acc: Dictionary, ctx: Dictionary) -> void:
 		var asset: String = str((r as Dictionary).get("asset", ""))
 		if asset == "":
 			continue
-		# FIX_SPEC P0 #7: `_Flame_Out` systems are authored bAutoActivate=false
-		# (the extinguish puff, not a live flame). The Den spawned all 20 and
-		# doubled every candelabra. Scoped to the Den for this pass so other
-		# maps' authored placements (and probe_niagara's 3,695 coverage) are
-		# untouched; a global skip is the correct follow-up (387 placements).
-		if is_den and asset.to_lower().ends_with("_flame_out"):
+		# FIX_SPEC P0 #7: skip authored bAutoActivate=false systems globally.
+		# `NS_Candelabras_Flame_Out` is the extinguish puff, not a live flame;
+		# spawning it doubles every candelabra on every map (387 placements).
+		var asset_name: String = asset.get_file().to_lower()
+		if NIAGARA_INACTIVE_ASSETS.has(asset_name):
 			ctx["niagara_inactive_skipped"] = int(ctx.get("niagara_inactive_skipped", 0)) + 1
 			continue
 		if not groups.has(asset):
@@ -3559,7 +3587,7 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 			if parent.get_tree() != null:
 				await parent.get_tree().process_frame
 	if _timing:
-		print("LoadTiming draw_ms=", Time.get_ticks_msec() - _t0, " items=", items.size(), " instances=", total_inst, " mesh_ms=", int(ctx.get("perf_mesh_ms", 0)), " build_ms=", int(ctx.get("perf_build_ms", 0)), " glb_ms=", _prof_glb_ms, " mat_ms=", _prof_mat_ms, " shape_ms=", _prof_shape_ms)
+		print("LoadTiming draw_ms=", Time.get_ticks_msec() - _t0, " items=", items.size(), " instances=", total_inst, " mesh_ms=", int(ctx.get("perf_mesh_ms", 0)), " build_ms=", int(ctx.get("perf_build_ms", 0)), " glb_ms=", _prof_glb_ms, " mat_ms=", _prof_mat_ms, " shape_ms=", _prof_shape_ms, " downscaled=", downscaled_count)
 	load_progress.emit(1.0, "Done")
 	return _finalize(acc["result"], ctx, total_inst)
 
@@ -3672,6 +3700,10 @@ func _build_light(info: Dictionary, cast_shadow: bool = false, map_hint: String 
 		light = ol
 	light.light_color = col
 	light.shadow_enabled = cast_shadow
+	# Authored UE intensity before light_energy_for_intensity mapping. UI
+	# passes (startscreen headlights) need the authored value because the
+	# mapped light_energy compresses everything above 20 into ~3.3-4.0.
+	light.set_meta("tat_ue_intensity", raw_i)
 	# P3: non-hero point/spot lights fade out with camera distance so the
 	# Forward+ clustered light list only uploads nearby lights.
 	if not cast_shadow and (light is OmniLight3D or light is SpotLight3D):
@@ -3839,17 +3871,19 @@ func _landscape_material(ctx: Dictionary, source: String = "") -> StandardMateri
 	# its street surface uses the matching road-brick D/N maps. Other maps keep
 	# the cobble fallback until their own landscape layer textures are resolved.
 	var use_road: bool = source.to_lower().contains("guildhall")
-	var road_dir: String = "res://assets/ue/Raw/MaterialLibrary/Environment/Stone/FloorExterior/"
-	var cobble_dir: String = "res://assets/ue/Raw/MaterialLibrary/Legacy/"
+	# Full res:// literals (no concatenation) so tools/prebake_texture_cap.py
+	# finds and pre-caps all four ground maps. The road normal is a 2048² map
+	# and used to decode/resize at every load because the tool only scans
+	# literals.
 	var ground_alb: Texture2D = null
 	var ground_norm: Texture2D = null
 	if use_road:
-		ground_alb = _load_tex(road_dir + "T_RoadBricksA_D.png")
-		ground_norm = _load_tex(road_dir + "T_RoadBricksA_N.png")
+		ground_alb = _load_tex("res://assets/ue/Raw/MaterialLibrary/Environment/Stone/FloorExterior/T_RoadBricksA_D.png")
+		ground_norm = _load_tex("res://assets/ue/Raw/MaterialLibrary/Environment/Stone/FloorExterior/T_RoadBricksA_N.png")
 	if ground_alb == null:
-		ground_alb = _load_tex(cobble_dir + "T_CobbleStoneA_D.png")
+		ground_alb = _load_tex("res://assets/ue/Raw/MaterialLibrary/Legacy/T_CobbleStoneA_D.png")
 	if ground_norm == null:
-		ground_norm = _load_tex(cobble_dir + "T_CobbleStoneA_N.png")
+		ground_norm = _load_tex("res://assets/ue/Raw/MaterialLibrary/Legacy/T_CobbleStoneA_N.png")
 	if ground_alb == null:
 		ground_alb = _load_tex("res://assets/ue/Raw/MaterialLibrary/Environment/Nature/Dirt/T_GroundDirtA_D.png")
 	if ground_alb != null:

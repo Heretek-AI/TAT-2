@@ -1635,6 +1635,18 @@ func _initialize() -> void:
 		var glass_panels_albedo: String = str(_entry_texs(_material_entry_ending_with(mats_doc, "M_GlassPanels")).get("albedo", ""))
 		if not glass_panels_albedo.contains("/Glass/") or not glass_panels_albedo.ends_with("WindowPanel_D.png"):
 			mat_fails.append("M_GlassPanels albedo=" + glass_panels_albedo)
+		# Storefront glass decals: the authored texture lives only in the stream
+		# list; the old fallback bound storefront wood and lost its 1-bit alpha.
+		for sd_suffix: String in ["M_Storefront_Decal", "MI_Storefront_Decal"]:
+			var sd_albedo: String = str(_entry_texs(_material_entry_ending_with(mats_doc, sd_suffix)).get("albedo", ""))
+			if not sd_albedo.ends_with("T_Storefront_GlassDecalsA.png"):
+				mat_fails.append(sd_suffix + " albedo=" + sd_albedo)
+		# The only DXT1 source with real punch-through alpha. It must stay
+		# full-res; the 1024 import cap blends its 7,611 transparent pixels away.
+		var sd_tex: Texture2D = load("res://assets/ue/Raw/Art/Environment/Storefront/GlassDecals/T_Storefront_GlassDecalsA.png") as Texture2D
+		var sd_img: Image = sd_tex.get_image() if sd_tex != null else null
+		if sd_img == null or sd_img.get_width() <= 1024 or sd_img.get_pixel(3, 3075).a > 0.01:
+			mat_fails.append("T_Storefront_GlassDecalsA alpha/size lost")
 		# C5: authored defaults from CachedExpressionData, explicit texture
 		# params, and the Engine carriers. These are the paths that used to emit
 		# "material fallback" warnings or render flat grey.

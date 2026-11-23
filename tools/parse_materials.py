@@ -1151,6 +1151,20 @@ def main():
                 if len(unique_stream) == 1:
                     stream_pick = unique_stream[0]
                     stream_single = True
+            # M/MI_Storefront_Decal carry their authored texture only in
+            # TextureStreamingData/ReferencedTextures. Its suffix-less stem is
+            # rejected by _is_albedo_stem, so the generic fallback binds
+            # T_StorefrontTrimA_D (wood) and loses the authored glass-decal
+            # art plus its preserved 1-bit alpha.
+            if pkg in (
+                "/Game/Art/Environment/Storefront/GlassDecals/M_Storefront_Decal",
+                "/Game/Art/Environment/Storefront/GlassDecals/MI_Storefront_Decal",
+            ) and stream_pick == "":
+                for rp in stream_paths + ref_paths:
+                    if Path(rp).stem.lower() == "t_storefront_glassdecalsa":
+                        stream_pick = rp
+                        stream_single = True
+                        break
             fb, fb_tier = _stem_fallback_albedo(name, pkg, parent, tex_by_stem)
             ref_pick: str = _best_albedo_candidate(
                 ref_paths,

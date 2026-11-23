@@ -58,6 +58,14 @@ from typing import Any, NoReturn
 
 ROOT = Path(__file__).resolve().parent.parent
 MATERIALS_REL = Path("game/data/generated/materials.json")
+## This is the only DXT1 texture in the extracted tree with real punch-through
+## alpha (7,611 transparent pixels at 4096²). Cubic import downscaling to 1024
+## blends every transparent pixel to alpha 1.0, so keeping it full-res is the
+## only way to preserve the storefront glass-decal cutout. Six startscreen
+## instances depend on it.
+ALPHA_CRITICAL_PATHS: set[str] = {
+    "res://assets/ue/Raw/Art/Environment/Storefront/GlassDecals/T_Storefront_GlassDecalsA.png",
+}
 LOADER_REL = Path("game/src/core/level_loader.gd")
 MANIFEST_REL = Path("build/texture_cap_manifest.json")
 
@@ -352,6 +360,11 @@ def _apply(root: Path, cap: int, dry_run: bool, verbose: bool) -> int:
         longest = max(size)
         if longest <= cap:
             counts["within_cap"] += 1
+            continue
+        if res_path in ALPHA_CRITICAL_PATHS:
+            counts["alpha_preserved"] += 1
+            if verbose:
+                print(f"skip (alpha-critical, keep full-res): {res_path}")
             continue
 
         import_path = Path(str(source) + ".import")

@@ -373,3 +373,13 @@ Capture procedure:
    It loads contract 4, sets `Environment.fog_sky_affect = 0.0` at runtime,
    places a free camera at the authored moon direction, and saves the
    diagnostic PNGs. It does not modify project files.
+
+## 2026-11-23 follow-up — fog_sky_affect alone dimmed the zenith
+
+The authored fog inscattering `(0.0011, 0.0016, 0.004)` is self-lit in the
+port and darker than the sky gradient, so blending it at 0.85 reduced the
+upper-sky median from 0.102 to 0.024. `apply_sky()` therefore also sets an
+indigo haze floor `(0.12, 0.13, 0.15)` at energy 1.0 for the exact
+`midnight_clear` preset. Measured KF17/KF18 sky p50 0.167 (UE 0.23-0.26) and
+18 star components; `dense_fog` remains 0.0 and the Den/lobby presets are
+unchanged.

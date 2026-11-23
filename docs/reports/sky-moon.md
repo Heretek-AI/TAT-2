@@ -383,3 +383,29 @@ indigo haze floor `(0.12, 0.13, 0.15)` at energy 1.0 for the exact
 `midnight_clear` preset. Measured KF17/KF18 sky p50 0.167 (UE 0.23-0.26) and
 18 star components; `dense_fog` remains 0.0 and the Den/lobby presets are
 unchanged.
+
+## 2026-11-23 follow-up — warm SkyAtmosphere veil inside the shader
+
+The indigo fog floor above fixes distance fog but not the sky itself: the
+authored 400 m sky sphere is lit by UE's SkyAtmosphere, which the port has no
+scattering for. The sky shader now carries an APPROXIMATE warm veil instead of
+more fog, so the indigo fog contract (`fog_sky_affect` 0.85, indigo
+`(0.12, 0.13, 0.15)`, fog energy 1.0) is untouched:
+
+- `MIDNIGHT_CLEAR_SKY_HAZE_COLOR := Color(0.0230, 0.0197, 0.0163)` — LINEAR
+  radiance, uploaded before `background_energy_multiplier` (2.0 for the
+  preset), and deliberately NOT multiplied by `sky_radiance_scale`; that scale
+  belongs to the authored M_Sky gradient only.
+- `MIDNIGHT_CLEAR_SKY_HAZE_AMOUNT := 0.97`, gated on the exact
+  `midnight_clear` preset id, so `dense_fog`, Den, lobby, startscreen and every
+  other weather preset keep `haze_amount == 0.0`.
+- `MIDNIGHT_CLEAR_SKY_HAZE_FALLOFF := 0.0` (veil is horizon-weighted only by
+  the shader's `smoothstep(-0.06, 0.02, up)`).
+
+Composition at `fog_sky_affect` 0.85: sky weight 1.405, fog weight 0.2975, so
+the warm sky dominates the blended zenith while the indigo fog keeps the
+horizon. Accepted target after this change: mean `~0.245 / 0.232 / 0.221`
+(R > G > B, warm), p50 `0.235-0.26`, and 8-25 star components. Stars remain at
+`MIDNIGHT_CLEAR_STAR_SCALE` 0.12 (the authored UE star colour is black).
+`T1-01-E` asserts the veil is present, warm (`r > b`), and exactly 0.0 for the
+Den preset; `dense_fog` still measures 0.0 in `run_tests.gd`.

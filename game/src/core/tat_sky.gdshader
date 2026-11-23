@@ -40,6 +40,12 @@ uniform float star_amount = 0.0;
 uniform vec3 cloud_color = vec3(0.2, 0.2, 0.25);
 uniform float cloud_haze = 0.0;
 uniform float cloud_coverage = 0.45;
+// APPROXIMATE warm SkyAtmosphere/fog veil. LINEAR radiance, uploaded before
+// Environment.background_energy_multiplier; deliberately NOT multiplied by
+// sky_radiance_scale (that scale belongs to the authored M_Sky gradient only).
+uniform vec3 haze_color = vec3(0.0230, 0.0197, 0.0163);
+uniform float haze_amount = 0.0;
+uniform float haze_height_falloff = 0.0;
 
 float _hash13(vec3 p) {
 	p = fract(p * 0.1031);
@@ -111,6 +117,12 @@ void sky() {
 	}
 	float band = pow(clamp(1.0 - abs(up), 0.0, 1.0), 3.0);
 	col = mix(col, cloud_color, band * cloud_haze * 0.35);
+
+	if (haze_amount > 0.001) {
+		float hz = haze_amount * smoothstep(-0.06, 0.02, up);
+		hz *= mix(1.0, 1.0 - clamp(up, 0.0, 1.0), clamp(haze_height_falloff, 0.0, 1.0));
+		col = mix(col, haze_color, clamp(hz, 0.0, 1.0));
+	}
 
 	float cos_r = cos(moon_angular_radius);
 	float cos_a = dot(dir, moon_fwd);

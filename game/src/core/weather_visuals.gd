@@ -99,6 +99,11 @@ const MIDNIGHT_CLEAR_STAR_SCALE := 0.12
 ## Neutral haze floor approximating UE SkyAtmosphere-lit height fog (see apply_sky).
 const MIDNIGHT_CLEAR_HAZE_COLOR := Color(0.12, 0.13, 0.15)
 const MIDNIGHT_CLEAR_HAZE_ENERGY := 1.0
+## APPROXIMATE warm SkyAtmosphere veil for the exact midnight_clear preset.
+## LINEAR radiance, before background_energy_multiplier; see tat_sky.gdshader.
+const MIDNIGHT_CLEAR_SKY_HAZE_COLOR := Color(0.0230, 0.0197, 0.0163)
+const MIDNIGHT_CLEAR_SKY_HAZE_AMOUNT := 0.97
+const MIDNIGHT_CLEAR_SKY_HAZE_FALLOFF := 0.0
 const CLOUD_OPACITY_TO_HAZE := 0.18
 const CLOUD_HAZE_MAX := 0.55
 
@@ -320,6 +325,13 @@ static func make_sky(preset: Dictionary, moon: DirectionalLight3D) -> Sky:
 	if cloud_op != null:
 		cloud_cov = clampf(cloud_cov * clampf(float(cloud_op) / 3.3, 0.3, 1.2), 0.12, 0.90)
 	mat.set_shader_parameter("cloud_coverage", cloud_cov)
+
+	var haze_amount: float = 0.0
+	if _is_midnight_clear(preset):
+		haze_amount = MIDNIGHT_CLEAR_SKY_HAZE_AMOUNT
+	mat.set_shader_parameter("haze_color", MIDNIGHT_CLEAR_SKY_HAZE_COLOR)
+	mat.set_shader_parameter("haze_amount", haze_amount)
+	mat.set_shader_parameter("haze_height_falloff", MIDNIGHT_CLEAR_SKY_HAZE_FALLOFF)
 
 	var sky := Sky.new()
 	sky.sky_material = mat

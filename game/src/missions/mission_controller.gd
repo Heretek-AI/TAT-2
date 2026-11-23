@@ -64,6 +64,12 @@ var _ponder_active: bool = false
 var _ponder_cam: Camera3D = null
 var _ponder_cheese: Node3D = null
 var _ponder_vista: Node3D = null
+## Den P1 shadow-toe: `_den_lut_p1` is the capture LUT (`black_lift` 0.014,
+## toe 0.03); `_den_lut_legacy` keeps the level-load LUT so the KF05 telescope
+## vista can be restored to its pre-P1 look while the ponder view is up.
+var _den_env: Environment = null
+var _den_lut_p1: GradientTexture1D = null
+var _den_lut_legacy: GradientTexture1D = null
 var _active_mission_row: Dictionary = {}
 
 
@@ -351,6 +357,21 @@ func _setup_thieves_den_env(map_id: String) -> void:
 				# at their inactive authored values (never forced on here).
 				den_env.tonemap_mode = Environment.TONE_MAPPER_AGX
 				den_env.tonemap_exposure = 1.9
+				# Den P1 shadow-toe: the level-load LUT (ThievesDenTest_P
+				# LocalExposure 1.2 / 0.6 / 0.25) crushes the attic blacks to
+				# 0 and bands the first 1% of the ramp. Keep its gain/contrast
+				# and open only a 1.4% black floor with a 3% toe, so the deep
+				# shadow detail survives while every value above 3% stays
+				# identity (no auto-exposure, no global mapping change). The
+				# pre-P1 LUT is kept for the KF05 scope view (see
+				# _set_ponder_shadow_toe).
+				_den_env = den_env
+				if _den_lut_legacy == null:
+					# First call: the level loader has already applied the
+					# authored LocalExposure LUT; keep that as the KF05 baseline.
+					_den_lut_legacy = den_env.adjustment_color_correction as GradientTexture1D
+				_den_lut_p1 = WeatherProfile.build_shadow_toe_lut(1.2, 0.6, 0.25, 0.014, 0.03)
+				den_env.adjustment_color_correction = _den_lut_p1
 				den_env.adjustment_enabled = true
 				den_env.adjustment_brightness = 1.0
 				den_env.adjustment_saturation = 0.95
@@ -627,6 +648,9 @@ func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> 
 	if not desk_positions.is_empty() and desk_positions[0] is Vector3:
 		desk_pos = desk_positions[0] as Vector3
 	_den_map_table_pos = desk_pos
+	# Den P1 KF10: re-aim + raise the authored desk spot onto the map table
+	# (authored lights are already built by the level loader at this point).
+	_aim_den_desk_spot(desk_pos)
 
 	# Interactive Map Table -> opens ContractTableUI (diegetic HUD prompt, no giant Label3D billboard)
 	var desk_area := Area3D.new()
@@ -1572,6 +1596,10 @@ func toggle_telescope_ponder() -> void:
 		return
 	set_meta("ponder_toggle_frame", frame_now)
 	_ponder_active = not _ponder_active
+	# KF05 safeguard: the P1 black lift would also wash the unshaded vista
+	# silhouettes, so the scope view runs on the level-load LUT and the P1 toe
+	# comes back on exit (see _set_ponder_shadow_toe).
+	_set_ponder_shadow_toe(_ponder_active)
 	if _ponder_active:
 		# F6: real zoom view against UE values. Authored rig is
 		# BP_HidingSpot_Telescope_C_1 in ThievesDenTest_P:PersistentLevel:
@@ -1627,6 +1655,60 @@ func toggle_telescope_ponder() -> void:
 			AudioManager.stop_bed("wind")
 		print("TAT-2 telescope ponder-exit")
 	_refresh_den_lookat_card(true)
+
+
+## Den P1 KF10: the authored desk spot (ThievesDen_Geo light #4) sits at
+## (3.6446, 41.803, 267.8289) with a 6.49 m range / 80 deg cone / 2.0
+## attenuation. Its authored intensity piped through the Den 0.75 scale left
+## it at 1.5 and aimed it off the table; the KF10 bank of warm light on the
+## KILCAIRN parchment and tokens needs the authored 2.0 energy aimed at the
+## map-table surface (+6 cm). Colour, range, cone, attenuation and shadow stay
+## authored, and no other authored light or hand fill is touched.
+const DEN_KF10_DESK_SPOT_POS: Vector3 = Vector3(3.6446, 41.803, 267.8289)
+const DEN_KF10_DESK_SPOT_TOL: float = 0.05
+
+func _aim_den_desk_spot(table_pos: Vector3) -> void:
+	var best: SpotLight3D = null
+	var best_d: float = DEN_KF10_DESK_SPOT_TOL
+	for node: Node in find_children("*", "SpotLight3D", true, false):
+		var spot: SpotLight3D = node as SpotLight3D
+		var d: float = spot.global_position.distance_to(DEN_KF10_DESK_SPOT_POS)
+		if d <= best_d:
+			best_d = d
+			best = spot
+	if best == null:
+		push_warning("[mission_controller] Den KF10 desk spot not found within %.2f m of %s; authored aim kept" % [DEN_KF10_DESK_SPOT_TOL, str(DEN_KF10_DESK_SPOT_POS)])
+		return
+	best.light_energy = 2.0
+	var aim: Vector3 = table_pos + Vector3(0.0, 0.06, 0.0)
+	best.look_at(aim, Vector3.UP)
+	print("TAT-2 Den KF10 desk spot: energy=", best.light_energy, " pos=", best.global_position, " range=", best.spot_range, " cone=", best.spot_angle, " aimed_at=", aim)
+
+
+## KF05 safeguard: ColorCorrection runs on the final sRGB frame, so the P1
+## shadow-toe also changes the unshaded vista silhouettes (roofs at ~0.03-0.09
+## sRGB) seen through the telescope. While `_ponder_active`, restore the
+## level-load LUT so the vista keeps its P0 capture baseline; the P1 toe comes
+## back on exit. Opt out with `--den-kf05-p1-lut` (or TAT2_DEN_KF05_P1_LUT=1 or
+## tat2/den_kf05_legacy_lut=false) to A/B the P1 LUT inside the scope view.
+func _den_kf05_legacy_lut_enabled() -> bool:
+	if OS.has_environment("TAT2_DEN_KF05_P1_LUT"):
+		return false
+	for args: PackedStringArray in [OS.get_cmdline_user_args(), OS.get_cmdline_args()]:
+		for arg: String in args:
+			if arg == "--den-kf05-p1-lut":
+				return false
+	return bool(ProjectSettings.get_setting("tat2/den_kf05_legacy_lut", true))
+
+
+func _set_ponder_shadow_toe(legacy: bool) -> void:
+	if _den_env == null or not is_instance_valid(_den_env) or _den_lut_p1 == null:
+		return
+	if legacy and _den_lut_legacy != null and _den_kf05_legacy_lut_enabled():
+		_den_env.adjustment_color_correction = _den_lut_legacy
+		print("TAT-2 Den KF05 scope: level-load shadow-toe LUT restored for vista baseline")
+	else:
+		_den_env.adjustment_color_correction = _den_lut_p1
 
 
 func _refresh_den_lookat_card(force_push: bool = false) -> void:

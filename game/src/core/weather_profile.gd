@@ -356,25 +356,52 @@ static func shadow_gain(preset: Dictionary) -> Variant:
 ## R3 APPROXIMATE 1D shadow-toe color-correction LUT lifting deep shadows
 ## according to authored `gain_shadows` and UE5 `LocalExposure*` scalars without
 ## mutating `env.adjustment_brightness` (Suite 17).
-static func build_shadow_toe_lut(gain_shadow: float, shadow_contrast: float = 1.0, mid_bias: float = 0.0) -> GradientTexture1D:
-	var key: String = "%d_%d_%d" % [
+## `black_lift` < 0 keeps the legacy lift-derived black point (0.008 * lift);
+## pass an explicit 0..1 value to pin the LUT's y(0) directly. `toe_end` < 0
+## keeps the legacy 0.55 toe; pass 0..1 to end the lift exactly there and hand
+## the rest of the ramp back to identity. Den P1 uses black_lift=0.014 /
+## toe_end=0.03 so only the deepest 3% opens up and every midtone/highlight
+## stays identical to identity.
+static func build_shadow_toe_lut(gain_shadow: float, shadow_contrast: float = 1.0, mid_bias: float = 0.0, black_lift: float = -1.0, toe_end: float = -1.0) -> GradientTexture1D:
+	var key: String = "%d_%d_%d_%d_%d" % [
 		int(round(gain_shadow * 100.0)),
 		int(round(shadow_contrast * 100.0)),
 		int(round(mid_bias * 100.0)),
+		int(round(black_lift * 1000.0)),
+		int(round(toe_end * 1000.0)),
 	]
 	if _lut_cache.has(key):
 		return _lut_cache[key] as GradientTexture1D
 	var lift: float = clampf((gain_shadow - 1.0) * 0.65 + (1.0 - shadow_contrast) * 0.35 + mid_bias * 0.25, 0.0, 0.42)
+	var black: float = 0.008 * clampf(lift * 3.0, 0.0, 1.0)
+	var toe: float = 0.55
+	if black_lift >= 0.0:
+		black = clampf(black_lift, 0.0, 1.0)
+	if toe_end >= 0.0:
+		toe = clampf(toe_end, 0.0, 1.0)
+	# Sample inputs: the legacy 17-point ramp, plus an exact knot at an
+	# explicit toe_end so the lift stops there instead of at the next 1/16.
+	var knots: Array[float] = []
+	for i: int in range(17):
+		knots.append(float(i) / 16.0)
+	if toe_end >= 0.0 and toe > 0.0 and toe < 1.0:
+		var has_toe: bool = false
+		for k: float in knots:
+			if is_equal_approx(k, toe):
+				has_toe = true
+				break
+		if not has_toe:
+			knots.append(toe)
+			knots.sort()
 	var grad := Gradient.new()
 	var offsets := PackedFloat32Array()
 	var colors := PackedColorArray()
-	for i: int in range(17):
-		var x: float = float(i) / 16.0
+	for x: float in knots:
 		var y: float = x
-		if i == 0:
-			y = 0.008 * clampf(lift * 3.0, 0.0, 1.0)
-		elif x < 0.55:
-			var t: float = smoothstep(0.0, 0.55, x)
+		if x <= 0.0:
+			y = black
+		elif x < toe:
+			var t: float = smoothstep(0.0, toe, x)
 			y = clampf(lerpf(pow(x, 1.0 - lift), x, t), 0.0, 1.0)
 		offsets.append(x)
 		colors.append(Color(y, y, y, 1.0))

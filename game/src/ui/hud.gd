@@ -172,6 +172,11 @@ var _compass_poi_layer: Control
 var _compass_poi_pool: Array[TextureRect] = []
 var _poi_gold_tex: AtlasTexture
 var _poi_teal_tex: AtlasTexture
+# Compass verticality arrows (authored T_compass_verticality_arrow): shown for
+# a PoI above/below the player's eye plane, flipped for below.
+var _compass_verticality_tex: Texture2D
+var _compass_verticality_pool: Array[TextureRect] = []
+const COMPASS_VERTICALITY_THRESHOLD_M: float = 0.75
 
 # Guard Pips & Offscreen Threat Arcs
 var _alert_layer: Control
@@ -740,6 +745,9 @@ func _build_compass_strip(root: Control) -> void:
 		_poi_teal_tex = AtlasTexture.new()
 		_poi_teal_tex.atlas = poi_sheet
 		_poi_teal_tex.region = Rect2(100, 0, 100, 100)
+	# Authored above/below chevron for compass PoIs (UE WBP_Compass verticality
+	# arrow). No invented art: a missing texture leaves the pool empty.
+	_compass_verticality_tex = ResourceLoader.load("res://assets/ue/Raw/Art/UI/HUD/T_compass_verticality_arrow.png") as Texture2D
 
 
 func _build_thief_plate(root: Control) -> void:
@@ -2390,6 +2398,7 @@ func _update_compass_pois(p: Node3D) -> void:
 		if node is Node3D and (node as Node3D).visible:
 			pois.append({"pos": (node as Node3D).global_position, "kind": "objective"})
 	var used: int = 0
+	var vert_used: int = 0
 	var strip_w: float = 500.0
 	var fwd: Vector3 = -p.global_transform.basis.z
 	fwd.y = 0.0
@@ -2416,9 +2425,32 @@ func _update_compass_pois(p: Node3D) -> void:
 		tr.texture = _poi_teal_tex if str(poi.get("kind", "")) == "ping" else _poi_gold_tex
 		tr.position = Vector2(px, 6.0)
 		tr.visible = tr.texture != null
+		var dy: float = pos.y - p.global_position.y
+		if absf(dy) > COMPASS_VERTICALITY_THRESHOLD_M and _compass_verticality_tex != null:
+			var va: TextureRect = _get_compass_verticality_node(vert_used)
+			vert_used += 1
+			va.texture = _compass_verticality_tex
+			va.flip_v = dy < 0.0
+			va.position = Vector2(px + 7.0, 14.0)
+			va.visible = true
 
 	for i: int in range(used, _compass_poi_pool.size()):
 		_compass_poi_pool[i].visible = false
+	for j: int in range(vert_used, _compass_verticality_pool.size()):
+		_compass_verticality_pool[j].visible = false
+
+
+func _get_compass_verticality_node(idx: int) -> TextureRect:
+	while _compass_verticality_pool.size() <= idx:
+		var tr: TextureRect = TextureRect.new()
+		tr.name = "CompassVerticalityArrow"
+		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		tr.size = Vector2(10, 10)
+		tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_compass_poi_layer.add_child(tr)
+		_compass_verticality_pool.append(tr)
+	return _compass_verticality_pool[idx]
 
 
 func _get_compass_poi_node(idx: int) -> TextureRect:

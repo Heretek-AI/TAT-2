@@ -131,17 +131,34 @@ func _bVA_03_startscreen() -> void:
 	var bc: Dictionary = bc_v as Dictionary if bc_v is Dictionary else {}
 	var mm: Control = h.new_script_node("res://src/ui/main_menu.gd") as Control
 	h.root.add_child(mm)
-	await h.step_process(3)
+	# The startscreen env binds to the CineCamera after 12 process frames
+	# (_bind_menu_env waits for the own-world SubViewport to render).
+	await h.step_process(20)
 	var dirs: Array[Node] = h.find_all_of_class(mm, "DirectionalLight3D")
 	var dir_e: float = (dirs[0] as DirectionalLight3D).light_energy if not dirs.is_empty() else -1.0
-	h.require(not dirs.is_empty() and dir_e >= 0.01 and dir_e <= 0.1, "T2-03-B", "Startscreen DirectionalLight energy=%.4f (>=0.01 floor)" % dir_e)
+	# The loader authors every DirectionalLight at 0.45 (level_loader
+	# _build_light); the old 0.1 ceiling was the pre-refactor raw value.
+	var ll_map: Node = h.new_script_node("res://src/core/level_loader.gd")
+	h.root.add_child(ll_map)
+	await h.step_process(1)
+	var authored_dir: Light3D = ll_map.call("_build_light", {"type": "DirectionalLightComponent", "intensity": 15.0}) as Light3D
+	var authored_e: float = authored_dir.light_energy if authored_dir != null else -1.0
+	if authored_dir != null:
+		authored_dir.free()
+	await h.free_node(ll_map)
+	h.require(not dirs.is_empty() and authored_e > 0.1 and absf(dir_e - authored_e) < 1e-5 and dir_e >= 0.01,
+		"T2-03-B", "Startscreen DirectionalLight energy=%.4f == loader authored %.4f (>=0.01 floor)" % [dir_e, authored_e])
 
 	var total_l: int = dirs.size() + h.find_all_of_class(mm, "OmniLight3D").size() + h.find_all_of_class(mm, "SpotLight3D").size()
 	h.require(total_l >= 22, "T2-03-C", "Startscreen active lights=%d (>=22)" % total_l)
 
-	var mm_env: Environment = h.find_env(mm)
+	var mm_env: Environment = h.find_camera_env(mm)
 	var fog_ok: bool = mm_env != null and not is_nan(mm_env.fog_density) and not is_nan(mm_env.volumetric_fog_density)
-	h.require(not bc.is_empty() and fog_ok, "T2-03-D", "Startscreen ExponentialHeightFog_0 zero-density edge NaN-free")
+	var desktop_ok: bool = mm_env != null and mm_env.volumetric_fog_enabled and mm_env.ssr_enabled and mm_env.ssil_enabled
+	h.require(not bc.is_empty() and fog_ok and desktop_ok,
+		"T2-03-D", "Startscreen camera env dense fog=%s vol_fog=%s ssr=%s ssil=%s" % [
+			str(fog_ok), str(mm_env != null and mm_env.volumetric_fog_enabled),
+			str(mm_env != null and mm_env.ssr_enabled), str(mm_env != null and mm_env.ssil_enabled)])
 	await h.free_node(mm)
 
 	# T2-03-E: R3 Startscreen Left-Trim Material Graph Boundary
@@ -202,29 +219,67 @@ func _bVA_05_mission_prep() -> void:
 	mp.call("open_prep", "guildhall", 1, "Solo", 0)
 	await h.step_process(1)
 
-	# T2-05-A: 4 Unauthored CDT_Missions Empty Icons (no placeholder invented)
+	# T2-05-A: only rows whose authored ObjectiveDisplayImage resolves to an
+	# empty icon_path hide the icon; authored rows must still show theirs.
 	var sel: OptionButton = mp.get("_mission_selector") as OptionButton
 	var ico: TextureRect = mp.get("_mission_icon") as TextureRect
 	var empty_ok: bool = true
+	var authored_ok: bool = true
 	var tested_empty: int = 0
-	if sel != null:
+	var tested_authored: int = 0
+	var gd: Node = h.game_data()
+	var rows: Array = gd.call("get_all_missions") as Array if (gd != null and h.has_m(gd, "get_all_missions")) else []
+	for row_v: Variant in rows:
+		if not (row_v is Dictionary):
+			continue
+		var row: Dictionary = row_v as Dictionary
+		var row_id: String = str(row.get("id", ""))
+		var icon_path: String = str(row.get("icon_path", ""))
+		if sel == null or row_id == "":
+			continue
+		var idx: int = -1
 		for i: int in range(sel.item_count):
-			var txt: String = sel.get_item_text(i).to_lower()
-			if txt.find("example") >= 0 or txt.find("thieves") >= 0 or txt.find("clue") >= 0:
-				sel.select(i)
-				sel.item_selected.emit(i)
-				await h.step_process(1)
-				tested_empty += 1
-				if ico != null and ico.visible and ico.texture != null:
-					empty_ok = false
-	h.require(tested_empty >= 3 and empty_ok, "T2-05-A", "Unauthored CDT_Missions hide icon cleanly without invented texture (checked=%d)" % tested_empty)
+			if sel.get_item_text(i).find(row_id) >= 0:
+				idx = i
+				break
+		if idx < 0:
+			continue
+		sel.select(idx)
+		sel.item_selected.emit(idx)
+		await h.step_process(1)
+		if icon_path == "":
+			tested_empty += 1
+			if ico != null and (ico.visible or ico.texture != null):
+				empty_ok = false
+		else:
+			tested_authored += 1
+			if ico == null or not ico.visible or ico.texture == null:
+				authored_ok = false
+	h.require(tested_empty >= 3 and tested_authored >= 1 and empty_ok and authored_ok,
+		"T2-05-A", "Empty icon_path rows hide (%d ok=%s); authored ObjectiveDisplayImage rows keep icon (%d ok=%s)" % [
+			tested_empty, str(empty_ok), tested_authored, str(authored_ok)])
 
 	# T2-05-B: CameraActor_0 Aspect & 720p Framing Clamp (authored FOV 20.0 is
 	# UE horizontal FOV, mapped via keep_aspect KEEP_WIDTH; see T1-05-B).
+	# Report the conjuncts separately so a regression names the broken one.
 	var stage_vp: SubViewport = h.find_all_of_class(mp, "SubViewport")[0] as SubViewport if not h.find_all_of_class(mp, "SubViewport").is_empty() else null
 	var stage_cam: Camera3D = h.find_all_of_class(stage_vp, "Camera3D")[0] as Camera3D if (stage_vp != null and not h.find_all_of_class(stage_vp, "Camera3D").is_empty()) else null
-	var no_clip: bool = mp.get_global_rect().size.y <= 720.0 + 1.0
-	h.require(stage_cam != null and absf(stage_cam.fov - 20.0) < 0.25 and stage_cam.keep_aspect == Camera3D.KEEP_WIDTH and no_clip, "T2-05-B", "MissionPrep 720p non-clipping & FOV 20.0 hFOV (fov=%.2f)" % (stage_cam.fov if stage_cam != null else -1.0))
+	var mp_scr: GDScript = h.load_script("res://src/ui/mission_prep_ui.gd")
+	var lobby_fov: float = float(mp_scr.get_script_constant_map().get("LOBBY_CAM_FOV", 20.0)) if mp_scr != null else 20.0
+	var stage_size: Vector2i = Vector2i(1280, 720)
+	if mp_scr != null:
+		var ss_v: Variant = mp_scr.get_script_constant_map().get("STAGE_VIEWPORT_SIZE", Vector2i(1280, 720))
+		if ss_v is Vector2i:
+			stage_size = ss_v as Vector2i
+	var fov_ok: bool = stage_cam != null and absf(stage_cam.fov - lobby_fov) < 0.25
+	var aspect_ok: bool = stage_cam != null and stage_cam.keep_aspect == Camera3D.KEEP_WIDTH
+	var clip_ok: bool = stage_vp != null and stage_vp.size == stage_size \
+		and mp.get_global_rect().size.y <= float(stage_size.y) + 1.0
+	h.require(fov_ok and aspect_ok and clip_ok, "T2-05-B",
+		"MissionPrep 720p: fov=%.2f (want %.2f) ok=%s, keep_aspect=%d ok=%s, stage=%s (want %s) ok=%s" % [
+			stage_cam.fov if stage_cam != null else -1.0, lobby_fov, str(fov_ok),
+			stage_cam.keep_aspect if stage_cam != null else -1, str(aspect_ok),
+			str(stage_vp.size if stage_vp != null else Vector2i.ZERO), str(stage_size), str(clip_ok)])
 
 	# T2-05-C: ThiefNisha Head-to-Body Offset (Vector3.ZERO)
 	var head_n: Node3D = mp.get("_thief_head_node") as Node3D
@@ -238,19 +293,23 @@ func _bVA_05_mission_prep() -> void:
 	h.require(m1 != null and m1 == m2, "T2-05-D", "Lazy material DB loader reused across open_prep switches")
 
 	# T2-05-E: FTUE Unlimited Duration (0.0) Edge
-	var gd: Node = h.game_data()
-	var dur_ftue: float = float(gd.call("get_match_duration", "jaspering_hall", 1)) if (gd != null and h.has_m(gd, "get_match_duration")) else -1.0
+	var dur_ftue: float = float(gd.call("get_match_duration", "ftue", 1)) if (gd != null and h.has_m(gd, "get_match_duration")) else -1.0
+	var unlimited_ok: bool = false
 	var no_zero_window: bool = true
 	if sel != null:
 		for i: int in range(sel.item_count):
-			if sel.get_item_text(i).to_lower().find("jaspering") >= 0 or sel.get_item_text(i).to_lower().find("tutorial") >= 0:
+			if sel.get_item_text(i).find("Mission.Tutorial.Single") >= 0:
 				sel.select(i)
 				sel.item_selected.emit(i)
 				await h.step_process(1)
 				var b_lbl: Label = mp.get("_mission_body") as Label
-				if b_lbl != null and b_lbl.text.find("0 minute") >= 0:
-					no_zero_window = false
-	h.require(dur_ftue == 0.0 and no_zero_window, "T2-05-E", "FTUE 0.0 duration does not display '0 minute window'")
+				if b_lbl != null:
+					unlimited_ok = b_lbl.text.find("Unlimited") >= 0
+					if b_lbl.text.find("0 minute") >= 0:
+						no_zero_window = false
+				break
+	h.require(dur_ftue == 0.0 and unlimited_ok and no_zero_window,
+		"T2-05-E", "FTUE duration=%.1f renders 'Unlimited'=%s and no '0 minute window'=%s" % [dur_ftue, str(unlimited_ok), str(no_zero_window)])
 	await h.free_node(mp)
 
 
@@ -370,39 +429,51 @@ func _bVA_08_1p_arms_anims() -> void:
 	var blend: float = float(tc_scr.get_script_constant_map().get("FP_ANIM_BLEND", -1.0))
 	h.require(absf(blend - 0.2) < 0.001, "T2-08-B", "FP_ANIM_BLEND=%.2fs" % blend)
 
-	# T2-08-C & D: Root Translation Stripped & Rotation Keys Preserved on 1P clips
+	# T2-08-C & D: Root Translation Stripped & Rotation Keys Preserved on the
+	# real 1P UE clip set (manifest names, not synthetic role strings).
 	var arena_d: Dictionary = await h.make_arena()
 	var arena: Node3D = arena_d["arena"] as Node3D
 	var p: Node = await h.spawn_test_player(arena, Vector3.ZERO, arena_d["light_probe"] as Node)
 	var ap: AnimationPlayer = p.get("fp_anim_player") as AnimationPlayer
 	var arm_skel: Skeleton3D = p.get("_fp_arm_skel") as Skeleton3D
-	var root_ok: bool = false
-	var rot_ok: bool = false
-	if ap != null and ap.has_animation("sprint"):
-		var anim: Animation = ap.get_animation("sprint")
-		root_ok = true
-		for ti: int in range(anim.get_track_count()):
-			var tp: String = str(anim.track_get_path(ti))
-			if tp.ends_with(":root") and anim.track_get_type(ti) == Animation.TYPE_POSITION_3D:
-				root_ok = false
-			if anim.track_get_type(ti) == Animation.TYPE_ROTATION_3D and anim.track_get_key_count(ti) >= 2:
-				rot_ok = true
-	h.require(root_ok, "T2-08-C", "1P locomotion root translation stripped (%s)" % str(root_ok))
-	h.require(rot_ok and arm_skel != null, "T2-08-D", "1P rotation-only sprint keys preserved (%s)" % str(rot_ok))
+	var fp_lib: Node = p.get("_fp_anim_lib") as Node
+	var sprint_clip: String = ""
+	if fp_lib != null and h.has_m(fp_lib, "fp_clip_for_role"):
+		sprint_clip = str(fp_lib.call("fp_clip_for_role", "sprint"))
+	if sprint_clip == "":
+		var al_scr: GDScript = h.load_script("res://src/core/animation_library.gd")
+		var fp_clips: Dictionary = al_scr.get_script_constant_map().get("FP_CLIPS", {}) as Dictionary if al_scr != null else {}
+		sprint_clip = str(fp_clips.get("sprint", ""))
+	var sprint_anim: Animation = ap.get_animation(sprint_clip) if (ap != null and sprint_clip != "" and ap.has_animation(sprint_clip)) else null
+	var root_pos_tracks: int = 0
+	var root_rot_keys: int = 0
+	var rot_tracks: int = 0
+	if sprint_anim != null:
+		for ti: int in range(sprint_anim.get_track_count()):
+			var sub: String = str(sprint_anim.track_get_path(ti).get_subname(0))
+			var tt: int = sprint_anim.track_get_type(ti)
+			if sub == "root" and tt == Animation.TYPE_POSITION_3D:
+				root_pos_tracks += 1
+			if sub == "root" and tt == Animation.TYPE_ROTATION_3D:
+				root_rot_keys = maxi(root_rot_keys, sprint_anim.track_get_key_count(ti))
+			if tt == Animation.TYPE_ROTATION_3D and sprint_anim.track_get_key_count(ti) >= 2:
+				rot_tracks += 1
+	var root_ok: bool = sprint_anim != null and sprint_clip.begins_with("AN_") and root_pos_tracks == 0
+	var rot_ok: bool = sprint_anim != null and arm_skel != null and rot_tracks >= 10
+	h.require(root_ok, "T2-08-C", "1P sprint clip '%s' root translation stripped (pos_tracks=%d)" % [sprint_clip, root_pos_tracks])
+	h.require(rot_ok, "T2-08-D", "1P sprint rotation keys preserved (rot_tracks=%d root_rot_keys=%d arm_skel=%s)" % [rot_tracks, root_rot_keys, str(arm_skel != null)])
 
-	# T2-08-E: 1P SubViewport Resize & FOV Sync
-	var sub_vps: Array[Node] = h.find_all_of_class(p, "SubViewport")
-	var cam: Camera3D = p.get("cam") as Camera3D
-	var vp_sync_ok: bool = false
-	if not sub_vps.is_empty() and cam != null:
-		var vp_cam_list: Array[Node] = h.find_all_of_class(sub_vps[0], "Camera3D")
-		if not vp_cam_list.is_empty():
-			var vp_cam: Camera3D = vp_cam_list[0] as Camera3D
-			p.set("base_fov", 95.0)
-			cam.fov = 95.0
-			await h.step_process(2)
-			vp_sync_ok = absf(vp_cam.fov - cam.fov) < 1.0
-	h.require(vp_sync_ok, "T2-08-E", "1P SubViewport FOV stays synced with main camera (%s)" % str(vp_sync_ok))
+	# T2-08-E: 1P viewmodel isolation is direct-to-camera + vm_fov_deg shader;
+	# there is no per-player SubViewport. Assert that real seam, including the
+	# authored viewmodel FOV lock from thief_character.
+	var tc_scr2: GDScript = h.load_script("res://src/player/thief_character.gd")
+	var vm_fov_const: float = float(tc_scr2.get_script_constant_map().get("FP_VM_FOV_DEG", -1.0)) if tc_scr2 != null else -1.0
+	var vm: Dictionary = h.viewmodel_contract(p)
+	var vm_fov_ok: bool = absf(float(vm.get("fov", -99.0)) - vm_fov_const) < 0.01
+	h.require(h.is_true(vm.get("ok")) and vm_fov_ok, "T2-08-E",
+		"1P VM direct-to-camera under_cam=%s sub_vp=%d shader_surfaces=%d/%d shadows_on=%d vm_fov=%.2f (authored %.2f)" % [
+			str(vm.get("under_cam")), int(vm.get("sub_viewports")), int(vm.get("shader_surfaces")),
+			int(vm.get("total_surfaces")), int(vm.get("shadows_on")), float(vm.get("fov", -1.0)), vm_fov_const])
 	await h.free_node(arena)
 
 
@@ -410,36 +481,43 @@ func _bVA_09_tool_equip() -> void:
 	var arena_d: Dictionary = await h.make_arena()
 	var arena: Node3D = arena_d["arena"] as Node3D
 	var p: Node = await h.spawn_test_player(arena, Vector3.ZERO, arena_d["light_probe"] as Node)
-	var has_api: bool = h.has_m(p, "get_equipped_tool") and h.has_m(p, "equip_tool_slot")
+	var has_api: bool = h.has_m(p, "get_equipped_tool") and h.has_m(p, "equip_tool")
 
-	# T2-09-A: Out-of-Range Slot Key Ignored
+	# T2-09-A: Out-of-Range / Unknown tool id ignored by the real API
 	var oob_ok: bool = false
 	if has_api:
+		p.call("equip_tool", "zipwire")
+		await h.step_process(1)
 		var before: String = str(p.call("get_equipped_tool"))
-		p.call("equip_tool_slot", -1)
-		p.call("equip_tool_slot", 99)
-		oob_ok = str(p.call("get_equipped_tool")) == before
-	h.require(has_api and oob_ok, "T2-09-A", "Out-of-range tool slot ignored safely (%s)" % str(oob_ok))
+		p.call("equip_tool", "nonexistent_slot_99")
+		p.call("equip_tool", "")
+		oob_ok = str(p.call("get_equipped_tool")) == before \
+			and int(p.call("_slot_for_tool", "nonexistent_slot_99")) == 0
+	h.require(has_api and oob_ok, "T2-09-A", "Unknown/out-of-range tool id ignored safely (%s)" % str(oob_ok))
 
-	# T2-09-B: Fire With 0 Charges Blocked
+	# T2-09-B: Fire With 0 Charges Blocked (real equip + primary path)
 	var zero_ok: bool = false
 	if has_api:
-		await h.tap_action("tool_2") # smoke_bomb (1)
-		await h.tap_action("primary_action")
+		p.call("equip_tool", "smoke_bomb")
+		await h.step_process(1)
+		(p.get("charges") as Dictionary)["smoke_bomb"] = 0
+		var proj_before: int = h.root.find_children("SmokeProjectile", "RigidBody3D", true, false).size()
+		p.call("_use_smoke_bomb")
 		await h.step_physics(2)
 		var c1: int = int((p.get("charges") as Dictionary).get("smoke_bomb", -9))
-		await h.tap_action("primary_action")
+		p.call("_use_equipped_primary")
 		await h.step_physics(2)
 		var c2: int = int((p.get("charges") as Dictionary).get("smoke_bomb", -9))
-		zero_ok = (c1 == 0 and c2 == 0)
+		var proj_after: int = h.root.find_children("SmokeProjectile", "RigidBody3D", true, false).size()
+		zero_ok = (c1 == 0 and c2 == 0 and proj_after == proj_before)
 	h.require(has_api and zero_ok, "T2-09-B", "0-charge smoke bomb fire blocked cleanly (%s)" % str(zero_ok))
 
 	# T2-09-C: Infinite Tool (-1) Never Decrements
 	var inf_ok: bool = false
 	if h.has_m(p, "get_tool_slots"):
-		await h.tap_action("tool_4")
+		p.call("equip_tool", "vistara_diamond")
 		for _i: int in range(5):
-			await h.tap_action("primary_action")
+			p.call("_use_equipped_primary")
 		var slots: Array = p.call("get_tool_slots") as Array
 		for s: Variant in slots:
 			if s is Dictionary and str((s as Dictionary).get("id")) == "vistara_diamond":
@@ -449,10 +527,13 @@ func _bVA_09_tool_equip() -> void:
 	# T2-09-D: Rapid Slot Swap Cancels Mid-Action Safely
 	var swap_ok: bool = false
 	if has_api:
-		await h.tap_action("tool_2")
-		await h.tap_action("tool_1")
-		await h.tap_action("tool_4")
-		swap_ok = str(p.call("get_equipped_tool")) == "vistara_diamond"
+		p.call("equip_tool", "smoke_bomb")
+		p.call("equip_tool", "zipwire")
+		p.call("_begin_wire_crank")
+		p.call("equip_tool", "vistara_diamond")
+		await h.step_process(1)
+		var crank_off: bool = not h.is_true(p.get("_is_cranking")) and float(p.get("crank_progress")) <= 0.001
+		swap_ok = str(p.call("get_equipped_tool")) == "vistara_diamond" and crank_off
 	h.require(swap_ok, "T2-09-D", "Rapid slot swap leaves clean active state (%s)" % str(swap_ok))
 
 	# T2-09-E: Tool Use While Downed Blocked
@@ -471,7 +552,7 @@ func _bVA_09_tool_equip() -> void:
 func _bVA_10_zipwire_mantle_climb() -> void:
 	var arena_d: Dictionary = await h.make_arena()
 	var arena: Node3D = arena_d["arena"] as Node3D
-	h.add_wall_box(arena, Vector3(0.0, 4.0, -20.5), Vector3(10.0, 8.0, 1.0), "FarWall205")
+	var far_wall: StaticBody3D = h.add_wall_box(arena, Vector3(0.0, 4.0, -20.5), Vector3(10.0, 8.0, 1.0), "FarWall205")
 	var p: Node = await h.spawn_test_player(arena, Vector3.ZERO, arena_d["light_probe"] as Node)
 	var cam: Camera3D = p.get("cam") as Camera3D
 	if cam != null:
@@ -480,14 +561,27 @@ func _bVA_10_zipwire_mantle_climb() -> void:
 
 	# T2-10-A: Zipwire Range Boundary (20.5 m rejected, 19.9 m accepted)
 	var range_ok: bool = false
-	if h.has_m(p, "get_active_reticle_state") and h.has_m(p, "equip_tool_slot"):
-		p.call("equip_tool_slot", 0)
+	var far_dist: float = -1.0
+	var near_dist: float = -1.0
+	var far_reason: String = ""
+	if h.has_m(p, "get_active_reticle_state") and h.has_m(p, "equip_tool"):
+		p.call("equip_tool", "zipwire")
+		await h.step_process(1)
+		var val_far: Dictionary = p.call("validate_zipwire_target") as Dictionary
 		var rs_far: Dictionary = p.call("get_active_reticle_state") as Dictionary
+		far_reason = str(val_far.get("reason", ""))
+		if cam != null:
+			far_dist = cam.global_position.distance_to(far_wall.global_position)
 		h.add_wall_box(arena, Vector3(0.0, 4.0, -19.0), Vector3(8.0, 8.0, 1.0), "NearWall19")
 		await h.step_physics(2)
+		var val_near: Dictionary = p.call("validate_zipwire_target") as Dictionary
 		var rs_near: Dictionary = p.call("get_active_reticle_state") as Dictionary
-		range_ok = (not h.is_true(rs_far.get("target_valid"))) and h.is_true(rs_near.get("target_valid"))
-	h.require(range_ok, "T2-10-A", "Zipwire 20.0 m range boundary enforced (%s)" % str(range_ok))
+		if val_near.get("pos") is Vector3:
+			near_dist = ((val_near.get("pos") as Vector3) - (p as Node3D).global_position).length()
+		range_ok = (not h.is_true(rs_far.get("target_valid"))) and far_reason == "no_hit" \
+			and far_dist > 20.0 and h.is_true(rs_near.get("target_valid")) and near_dist <= 20.0
+	h.require(range_ok, "T2-10-A", "Zipwire 20.0 m range: far wall %.2f m rejected (%s), near %.2f m valid (%s)" % [
+		far_dist, far_reason, near_dist, str(range_ok)])
 
 	# T2-10-B: Zipwire Cooldown (5.0 s) & Minimum Crank (0.5 s)
 	var tc_txt: String = h.read_text("res://src/player/thief_character.gd")
@@ -496,19 +590,27 @@ func _bVA_10_zipwire_mantle_climb() -> void:
 	var crank_min_ok: bool = tc_txt.find("0.5") >= 0 and (tc_txt.to_lower().find("minimum_crank") >= 0 or tc_txt.to_lower().find("min_crank") >= 0 or tc_txt.to_lower().find("crank") >= 0)
 	h.require(absf(cd_val - 5.0) < 0.01 and h.has_m(p, "get_active_reticle_state") and crank_min_ok, "T2-10-B", "Zipwire cooldown=%.1fs & min crank 0.5s" % cd_val)
 
-	# T2-10-C: Mantle Height (4.0 m) & Facing (25 deg) Limits
-	h.add_wall_box(arena, Vector3(12.0, 2.5, -2.5), Vector3(4.0, 5.0, 2.0), "TooTall5m")
+	# T2-10-C: Mantle Height (4.0 m) & Facing (25 deg) Limits.
+	# Drive try_auto_mantle directly: pressing jump would start wall-climb and
+	# solve the 5 m wall legitimately (the old test setup measured wall-climb,
+	# not the mantle limit). Walls are placed inside the 0.85 m probe reach.
+	h.add_wall_box(arena, Vector3(12.0, 2.5, -1.1), Vector3(4.0, 5.0, 2.0), "TooTall5m")
 	if p is Node3D:
 		(p as Node3D).position = Vector3(12.0, 0.0, 0.0)
-	await h.step_physics(2)
-	h.press_action("move_forward")
-	h.press_action("jump")
-	await h.step_physics(30)
-	h.release_action("jump")
-	h.release_action("move_forward")
+		(p as Node3D).rotation = Vector3.ZERO
+	await h.step_physics(3)
+	var tall_mantle: bool = h.is_true(p.call("try_auto_mantle"))
 	var tall_y: float = (p as Node3D).position.y if p is Node3D else 99.0
+	# Positive control: the same seam must accept a within-limit 2.0 m ledge.
+	h.add_wall_box(arena, Vector3(20.0, 1.0, -1.1), Vector3(4.0, 2.0, 2.0), "WithinMantle2m")
+	(p as Node3D).position = Vector3(20.0, 0.0, 0.0)
+	(p as Node3D).rotation = Vector3.ZERO
+	await h.step_physics(3)
+	var low_mantle: bool = h.is_true(p.call("try_auto_mantle"))
 	var mantle_const_ok: bool = tc_txt.to_lower().find("mantle") >= 0 and (tc_txt.find("4.0") >= 0 or tc_txt.find("400") >= 0)
-	h.require(mantle_const_ok and tall_y < 4.5, "T2-10-C", "4.0m mantle limit rejects 5.0m ledge (y=%.2f)" % tall_y)
+	h.require(mantle_const_ok and not tall_mantle and low_mantle and tall_y < 4.5, "T2-10-C",
+		"4.0 m mantle limit rejects 5.0 m ledge (accepted=%s, y=%.2f) and accepts 2.0 m (accepted=%s)" % [
+			str(tall_mantle), tall_y, str(low_mantle)])
 
 	# T2-10-D: Wall-Climb Surface Filter & Angle (45-135 deg)
 	var climb_filter_ok: bool = tc_txt.to_lower().find("wall_climb") >= 0 or tc_txt.to_lower().find("wallclimb") >= 0
@@ -534,7 +636,7 @@ func _bVA_11_smoke_and_sap() -> void:
 
 	# T2-11-B: Smoke Cloud Box Bounds (5 x 5 x 4 m, 25 s TTL)
 	var mc: Node = h.new_script_node("res://src/missions/mission_controller.gd")
-	var smokes: Array = []
+	var smokes: Array[Dictionary] = []
 	mc.set("smokes", smokes)
 	var center: Vector3 = Vector3(10.0, 2.0, 10.0)
 	smokes.append({"min": center - Vector3(2.5, 2.0, 2.5), "max": center + Vector3(2.5, 2.0, 2.5), "ttl": 25.0, "node": null})
@@ -654,12 +756,18 @@ func _bVA_13_hud_core() -> void:
 	arena.add_child(hud)
 	await h.step_process(1)
 
-	# T2-13-B: Zero-Loudness / Non-Player Noise SoundWave Bound
+	# T2-13-B: Zero-Loudness / Non-Player Noise SoundWave Bound.
+	# The arcs are a SoundWavesDraw whose energy (not the parent Control's
+	# visible flag) is the render gate.
 	var sw_node: Node = hud.find_child("*SoundWave*", true, false)
+	var sw_draw: Control = sw_node as Control
+	var energy_before: float = float(hud.call("get_soundwave_intensity")) if h.has_m(hud, "get_soundwave_intensity") else float(hud.get("_soundwave_energy"))
 	h.noise_bus().call("emit_noise", Vector3.ZERO, 0.0, p, "footstep")
 	await h.step_process(1)
-	var no_flash: bool = sw_node != null and (not (sw_node as CanvasItem).visible or (sw_node as CanvasItem).modulate.a < 0.1)
-	h.require(no_flash, "T2-13-B", "Zero-loudness noise does not flash SoundWaves (%s)" % str(no_flash))
+	var energy_zero: float = float(hud.call("get_soundwave_intensity")) if h.has_m(hud, "get_soundwave_intensity") else float(hud.get("_soundwave_energy"))
+	var draw_energy: float = float(sw_draw.get("energy")) if sw_draw != null and h.has_prop(sw_draw, "energy") else -1.0
+	var no_flash: bool = sw_draw != null and energy_zero <= 0.001 and draw_energy <= 0.001 and energy_before <= 0.001
+	h.require(no_flash, "T2-13-B", "Zero-loudness noise leaves SoundWaves energy=%.4f (draw=%.4f, before=%.4f)" % [energy_zero, draw_energy, energy_before])
 
 	# T2-13-C: Health Clamped [0.0, 300.0]
 	p.call("take_damage", 9999.0)
@@ -700,13 +808,36 @@ func _bVA_14_hud_widgets() -> void:
 	await h.free_node(hud_mob)
 	h.require(mob_slots.is_empty(), "T2-14-B", "MobileProfile suppresses desktop hotbar cleanly")
 
-	# T2-14-C: Compass Wrap-Around (0 / 359 / -180)
+	# T2-14-C: Compass Wrap-Around (0 / 359 / -180) via the real HUD mapping
+	var arena_cd: Dictionary = await h.make_arena()
+	var arena_c: Node3D = arena_cd["arena"] as Node3D
+	var p_c: Node = await h.spawn_test_player(arena_c, Vector3.ZERO, arena_cd["light_probe"] as Node)
 	var hud_d: CanvasLayer = h.new_script_node("res://src/ui/hud.gd") as CanvasLayer
-	h.root.add_child(hud_d)
-	await h.step_process(1)
+	arena_c.add_child(hud_d)
+	await h.step_process(2)
+	h.game_state().set("state", "playing")
 	var c_lbl: Label = hud_d.get("compass_lbl") as Label
-	var compass_ok: bool = c_lbl != null and hud_txt.find("T_compass_lines") >= 0 and hud_txt.find("wrapf") >= 0
-	h.require(compass_ok, "T2-14-C", "Compass T_compass_lines wraps seamlessly across 0/360 (%s)" % str(compass_ok))
+	var wraps: Array = [
+		{"yaw": 0.0, "want": "N"},
+		{"yaw": -359.0, "want": "N"},
+		{"yaw": -90.0, "want": "E"},
+		{"yaw": -180.0, "want": "S"},
+	]
+	var wrap_ok: bool = c_lbl != null
+	var got: Array[String] = []
+	for w_v: Variant in wraps:
+		var w: Dictionary = w_v as Dictionary
+		(p_c as Node3D).rotation_degrees = Vector3(0.0, float(w.get("yaw", 0.0)), 0.0)
+		await h.step_process(2)
+		var txt: String = c_lbl.text if c_lbl != null else ""
+		got.append(txt)
+		if txt != str(w.get("want", "")):
+			wrap_ok = false
+	# fposmod(359, 360) -> 359 -> round(7.98) % 8 = N, so no literal wrapf is
+	# required; the wrapped cardinal output is the contract.
+	h.require(wrap_ok and hud_txt.find("T_compass_lines") >= 0, "T2-14-C",
+		"Compass T_compass_lines wrapped cardinals: %s (want N,N,E,S)" % str(got))
+	await h.free_node(arena_c)
 
 	# T2-14-D: Offscreen Guard Arc Edge Clamping
 	var offscreen_ok: bool = hud_txt.find("T_DetectionMeter_Offscreen") >= 0 and hud_txt.find("clamp") >= 0
@@ -715,7 +846,6 @@ func _bVA_14_hud_widgets() -> void:
 	# T2-14-E: Crank Progress Ring Bounds [0.0, 1.0]
 	var crank_ring_ok: bool = hud_txt.find("crank_progress") >= 0 and hud_txt.find("crank_active") >= 0
 	h.require(crank_ring_ok, "T2-14-E", "HUD crank progress ring bounds & hide when inactive")
-	await h.free_node(hud_d)
 
 
 func _bVA_15_lockpick_overlays() -> void:
@@ -758,15 +888,43 @@ func _bVA_15_lockpick_overlays() -> void:
 
 
 func _bVA_16_shell_ui() -> void:
-	# T2-16-A: Empty intro_text (Contract 1) Handling
+	# T2-16-A: Contract 1 empty intro_text is handled by the mission-letter
+	# API: request_mission_letter always emits, and the controller supplies a
+	# non-empty fallback body instead of silently skipping the letter.
 	var c_v: Variant = h.read_json("res://data/generated/gameplay/contracts.json")
 	var c1_intro: String = "missing"
 	if c_v is Dictionary:
 		for c_item: Variant in ((c_v as Dictionary).get("contracts", []) as Array):
 			if c_item is Dictionary and int((c_item as Dictionary).get("order", 0)) == 1:
 				c1_intro = str((c_item as Dictionary).get("intro_text", ""))
-	var hud_txt: String = h.read_text("res://src/ui/hud.gd")
-	h.require(c1_intro == "" and hud_txt.find("contract_intro") >= 0, "T2-16-A", "Contract 1 empty intro_text skips Mission Start Letter")
+	var gs_l: Node = h.game_state()
+	var letter_intros: Array[String] = []
+	var letter_cb: Callable = func(_title: String, intro: String) -> void:
+		letter_intros.append(intro)
+	if gs_l != null and h.has_s(gs_l, "mission_letter_requested"):
+		gs_l.connect("mission_letter_requested", letter_cb)
+	var mc_l: Node = h.new_script_node("res://src/missions/mission_controller.gd")
+	mc_l.set("contract_info", {"title": "Contract 1"})
+	mc_l.set("_active_mission_row", {})
+	var api_ok: bool = h.has_m(mc_l, "_trigger_mission_start_letter")
+	if api_ok:
+		mc_l.call("_trigger_mission_start_letter")
+	if gs_l != null and h.has_s(gs_l, "mission_letter_requested") and gs_l.is_connected("mission_letter_requested", letter_cb):
+		gs_l.disconnect("mission_letter_requested", letter_cb)
+	var fallback_body: String = letter_intros[0] if not letter_intros.is_empty() else ""
+	var hud_l: CanvasLayer = h.new_script_node("res://src/ui/hud.gd") as CanvasLayer
+	h.root.add_child(hud_l)
+	await h.step_process(1)
+	var hud_ok: bool = h.has_m(hud_l, "show_mission_letter") and h.has_m(hud_l, "is_mission_letter_open")
+	if hud_ok:
+		hud_l.call("show_mission_letter", "Test Letter", "Letter body")
+		hud_ok = h.is_true(hud_l.call("is_mission_letter_open"))
+		hud_l.call("_close_mission_letter")
+	await h.free_node(hud_l)
+	if mc_l != null:
+		mc_l.queue_free()
+	h.require(c1_intro == "" and api_ok and letter_intros.size() == 1 and fallback_body.strip_edges() != "" and fallback_body.find("Esteemed") >= 0 and hud_ok,
+		"T2-16-A", "Contract 1 empty intro -> letter API emits non-empty fallback (%d, '%s'); HUD show/is_open=%s" % [letter_intros.size(), fallback_body.substr(0, 32), str(hud_ok)])
 
 	# T2-16-B: Loading Screen Clamps Progress [0, 100]
 	var ls: CanvasLayer = h.new_script_node("res://src/ui/loading_screen.gd") as CanvasLayer
@@ -788,19 +946,36 @@ func _bVA_16_shell_ui() -> void:
 	var c3_t: String = str(c3_d.get("title", ""))
 	h.require(c1_t != "" and c1_t.find("ST_") < 0 and c3_t.find("Elway") >= 0, "T2-16-C", "Contract titles clean: c1='%s' c3='%s'" % [c1_t, c3_t])
 
-	# T2-16-D: 720p Shell UI Safe-Area Non-Clipping
+	# T2-16-D: 720p Shell UI Safe-Area Non-Clipping. Gate only top-level modal
+	# panels: scroll/content children may legitimately extend past 720 px.
 	var ui_paths: Array[String] = ["res://src/ui/settings_ui.gd", "res://src/ui/mission_prep_ui.gd", "res://src/ui/wardrobe_ui.gd", "res://src/ui/contract_table_ui.gd", "res://src/ui/ledger_ui.gd"]
 	var safe_720: bool = true
+	var gated_panels: int = 0
+	var bad_panel: String = ""
 	for up: String in ui_paths:
 		var un: Node = h.new_script_node(up)
 		h.root.add_child(un)
 		await h.step_process(1)
 		for pn: Node in h.find_all_of_class(un, "PanelContainer"):
+			var modal_root: bool = true
+			var under_scroll: bool = false
+			var par: Node = pn.get_parent()
+			while par != null:
+				if par is PanelContainer:
+					modal_root = false
+				if par is ScrollContainer:
+					under_scroll = true
+				par = par.get_parent()
+			if not modal_root or under_scroll:
+				continue
+			gated_panels += 1
 			var r: Rect2 = (pn as Control).get_global_rect()
 			if r.position.y < -2.0 or r.position.y + r.size.y > 722.0:
 				safe_720 = false
+				bad_panel = "%s:%s %s" % [up.get_file(), str(pn.name), str(r)]
 		await h.free_node(un)
-	h.require(safe_720, "T2-16-D", "All 5 shell UIs fit within 1280x720 safe area (%s)" % str(safe_720))
+	h.require(safe_720 and gated_panels >= 5, "T2-16-D",
+		"All top-level shell modal panels fit 1280x720 (%d gated, bad=%s)" % [gated_panels, bad_panel])
 
 	# T2-16-E: ArtNouveauTheme Teal Palette Consistency
 	var teal_5: bool = true
@@ -825,11 +1000,21 @@ func _bVA_17_den_hub() -> void:
 	var den: Node = den_res["mission"] as Node
 	var p: Node = den_res["player"] as Node
 
-	# T2-17-A: Map Token 0.24 Scale & Seated Y=41.1337 Preserved
+	# T2-17-A: Map token bases: GuildHall 0.24, OldManor the authored UE
+	# SphereRadius ratio (45.56192 / 27.39531). Selection may grow the live
+	# node 1.15x, so the contract is asserted on the minis_base meta.
 	var om: MeshInstance3D = den.get_node_or_null("MapTokenOldManor") as MeshInstance3D if den != null else null
 	var gh: MeshInstance3D = den.get_node_or_null("MapTokenGuildHall") as MeshInstance3D if den != null else null
-	var tok_ok: bool = om != null and gh != null and absf(om.scale.x - 0.24) < 0.001 and absf(om.position.y - 41.1337) < 0.1 and absf(gh.scale.x - 0.24) < 0.001 and absf(gh.position.y - 41.1337) < 0.1
-	h.require(tok_ok, "T2-17-A", "MapTokenOldManor & GuildHall scale=0.24, y=41.1337 preserved")
+	var ue_ratio: float = 45.56192 / 27.39531
+	var om_base: float = float(om.get_meta("minis_base", -1.0)) if om != null else -1.0
+	var gh_base: float = float(gh.get_meta("minis_base", -1.0)) if gh != null else -1.0
+	var om_live_ok: bool = om != null and om.scale.x >= om_base - 1e-4 and om.scale.x <= om_base * 1.15 + 1e-3
+	var gh_live_ok: bool = gh != null and gh.scale.x >= gh_base - 1e-4 and gh.scale.x <= gh_base * 1.15 + 1e-3
+	var tok_ok: bool = om != null and gh != null and absf(gh_base - 0.24) < 1e-4 \
+		and absf(om_base - 0.24 * ue_ratio) < 1e-4 and om_live_ok and gh_live_ok \
+		and absf(om.position.y - 41.1337) < 0.1 and absf(gh.position.y - 41.1337) < 0.1
+	h.require(tok_ok, "T2-17-A", "MapToken GuildHall base=%.4f (0.24), OldManor base=%.6f (0.24*%.6f=%.6f), y=%.4f preserved" % [
+		gh_base, om_base, ue_ratio, 0.24 * ue_ratio, om.position.y if om != null else -1.0])
 
 	# T2-17-B: Den Exit Door Zero Static Duplicates
 	var exit_d: Node3D = den.get_node_or_null("ThievesDenExitDoor") as Node3D if den != null else null
@@ -887,24 +1072,71 @@ func _bVA_17_den_hub() -> void:
 
 func _bVA_18_objectives() -> void:
 	var gs: Node = h.game_state()
-	var has_objs: bool = h.has_prop(gs, "mission_objectives") and h.has_prop(gs, "loot_goal")
+	var has_objs: bool = h.has_prop(gs, "mission_objectives") and h.has_prop(gs, "loot_goal") \
+		and h.has_m(gs, "are_all_objectives_complete") and h.has_m(gs, "update_objective_progress") \
+		and h.has_m(gs, "mark_objective_done")
 
 	# T2-18-A: Partial Set Completion (2/3) Cannot Win Early
-	h.require(has_objs and h.has_m(gs, "can_extract"), "T2-18-A", "Partial Set (2/3) blocks early escape via GameState.can_extract()")
+	var partial_ok: bool = false
+	if has_objs:
+		gs.call("set_mission_objectives", [
+			{"id": "set_item_a", "label": "A", "target": 1},
+			{"id": "set_item_b", "label": "B", "target": 1},
+			{"id": "set_item_c", "label": "C", "target": 1},
+		], 0)
+		gs.call("mark_objective_done", "set_item_a")
+		gs.call("mark_objective_done", "set_item_b")
+		var partial: bool = h.is_true(gs.call("are_all_objectives_complete"))
+		gs.call("mark_objective_done", "set_item_c")
+		var complete: bool = h.is_true(gs.call("are_all_objectives_complete"))
+		partial_ok = (not partial) and complete
+	h.require(has_objs and partial_ok, "T2-18-A", "Partial Set (2/3) blocks early escape; 3/3 completes (%s)" % str(partial_ok))
 
-	# T2-18-B: Duplicate / Re-Triggered Set Tag Does Not Double-Count
-	h.require(has_objs and h.has_m(gs, "complete_objective"), "T2-18-B", "Set objective deduplicates repeated tag IDs")
+	# T2-18-B: Explicit set_item objective id never double-counts into set_main
+	var dedup_ok: bool = false
+	if has_objs:
+		gs.call("set_mission_objectives", [
+			{"id": "set_main", "label": "Set", "target": 3},
+			{"id": "set_item_a", "label": "A", "target": 1},
+			{"id": "set_item_b", "label": "B", "target": 1},
+			{"id": "set_item_c", "label": "C", "target": 1},
+		], 0)
+		gs.call("add_loot", 1, 0, true, "set_item_a")
+		gs.call("add_loot", 1, 0, true, "set_item_a")
+		var set_main_cur: int = -1
+		var item_a_done: bool = false
+		for e: Dictionary in (gs.get("mission_objectives") as Array):
+			if str(e.get("id", "")) == "set_main":
+				set_main_cur = int(e.get("current", -1))
+			if str(e.get("id", "")) == "set_item_a":
+				item_a_done = e.get("done") == true
+		# A generic pickup advances set_main; the repeats above must not have.
+		gs.call("add_loot", 1, 0, true, "")
+		var set_main_after: int = -1
+		for e2: Dictionary in (gs.get("mission_objectives") as Array):
+			if str(e2.get("id", "")) == "set_main":
+				set_main_after = int(e2.get("current", -1))
+		dedup_ok = set_main_cur == 0 and item_a_done and set_main_after == 1
+	h.require(has_objs and dedup_ok, "T2-18-B", "Set objective deduplicates repeated tag IDs (%s)" % str(dedup_ok))
 
 	# T2-18-C: Cleanout Heist (loot_goal - 1 vs == loot_goal)
 	var clean_ok: bool = false
-	if has_objs and h.has_m(gs, "can_extract"):
+	if has_objs:
 		gs.set("loot_goal", 500)
+		gs.set("loot_value", 0)
+		gs.call("set_mission_objectives", [{"id": "cleanout_loot", "label": "Loot", "target": 500}], 500)
 		gs.set("loot_value", 499)
-		var b_under: bool = h.is_true(gs.call("can_extract"))
+		gs.call("update_objective_progress", "cleanout_loot", 499, true)
+		var b_under: bool = h.is_true(gs.call("are_all_objectives_complete"))
 		gs.set("loot_value", 500)
-		var b_at: bool = h.is_true(gs.call("can_extract"))
+		gs.call("update_objective_progress", "cleanout_loot", 500, true)
+		var b_at: bool = h.is_true(gs.call("are_all_objectives_complete"))
 		clean_ok = (not b_under) and b_at
-	h.require(clean_ok, "T2-18-C", "Cleanout Heist loot_goal-1 vs >= loot_goal boundary")
+	h.require(clean_ok, "T2-18-C", "Cleanout Heist loot_goal-1 blocks, loot_goal completes (%s)" % str(clean_ok))
+	# Leave the legacy globals in a clean pre-mission state for later tiers.
+	gs.call("set_mission_objectives", [], 0)
+	gs.set("loot_value", 0)
+	gs.set("quest_item_acquired", false)
 
 	# T2-18-D: Match Timer Expiry (0.0 s) Fails Mission
 	var mc: Node = h.new_script_node("res://src/missions/mission_controller.gd")
@@ -995,15 +1227,19 @@ func _bVA_20_guard_lantern_pickpocket_decay() -> void:
 	var p: Node3D = await h.spawn_test_player(arena, Vector3(0.0, 0.0, 10.0), arena_d["light_probe"] as Node) as Node3D
 
 	# T2-20-A: Knocked-Out Guard Pocket & Alert State
+	if h.has_m(g, "set_carried_item"):
+		g.call("set_carried_item", {"name": "Guard Key", "kind": "key", "id": "e2e_guard_key", "value": 25})
 	g.call("knock_out", 10.0)
 	var ko_st_ok: bool = false
 	var ko_steal_ok: bool = false
+	var ko_state: String = ""
 	if h.has_m(g, "get_alert_state") and h.has_m(g, "steal_carried_item"):
 		var st_d: Dictionary = g.call("get_alert_state") as Dictionary
-		ko_st_ok = int(st_d.get("state", -1)) == 5
+		ko_state = str(st_d.get("state", ""))
+		ko_st_ok = ko_state == "KNOCKED_OUT"
 		var item: Variant = g.call("steal_carried_item")
-		ko_steal_ok = item != null
-	h.require(ko_st_ok and ko_steal_ok, "T2-20-A", "KO guard alert_state=KNOCKED_OUT & stealable (%s)" % str(ko_st_ok and ko_steal_ok))
+		ko_steal_ok = item is Dictionary and not (item as Dictionary).is_empty()
+	h.require(ko_st_ok and ko_steal_ok, "T2-20-A", "KO guard alert_state='%s' & stealable=%s" % [ko_state, str(ko_steal_ok)])
 
 	# T2-20-B: Pickpocket Cone (9.0 deg) & Facing Block (30.0 deg) Limits
 	var g_far: Node3D = Node3D.new()

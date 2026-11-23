@@ -31,9 +31,10 @@ func _t4_01_startscreen_settings_back() -> void:
 	var orig_s: Dictionary = (h.save_system().call("get_settings") as Dictionary).duplicate(true)
 	var mm: Control = h.new_script_node("res://src/ui/main_menu.gd") as Control
 	h.root.add_child(mm)
-	await h.step_process(3)
+	# Camera-bound startscreen env binds after the own-world SubViewport renders.
+	await h.step_process(20)
 	var cam: Camera3D = mm.get("_menu_cam") as Camera3D
-	var env: Environment = h.find_env(mm)
+	var env: Environment = h.find_camera_env(mm)
 	var cam_ok: bool = cam != null and cam.position.distance_to(Vector3(-12.7196, 0.4566, 14.6089)) < 0.25 and absf(cam.fov - 48.03) < 0.1
 	var vis_ok: bool = env != null and env.glow_enabled and env.ssr_enabled and env.volumetric_fog_enabled
 
@@ -74,7 +75,7 @@ func _t4_02_thieves_den_hub_journey() -> void:
 			ponder_ok = true
 			break
 	var mc_txt: String = h.read_text("res://src/missions/mission_controller.gd").to_lower()
-	var card_ok: bool = den != null and den.find_child("*MapTableCard*", true, false) != null and mc_txt.find("key_h") >= 0 and mc_txt.find("key_r") >= 0
+	var card_ok: bool = den != null and den.find_child("DenMapTableArea", true, false) != null and mc_txt.find("key_h") >= 0 and mc_txt.find("key_r") >= 0
 	var teal_5: bool = true
 	for up: String in ["res://src/ui/wardrobe_ui.gd", "res://src/ui/ledger_ui.gd", "res://src/ui/contract_table_ui.gd"]:
 		var un: Node = h.new_script_node(up)
@@ -87,11 +88,20 @@ func _t4_02_thieves_den_hub_journey() -> void:
 				break
 		if not any_t: teal_5 = false
 		await h.free_node(un)
+	var om_base: float = float(tok_om.get_meta("minis_base", -1.0)) if tok_om != null else -1.0
+	var ue_ratio: float = 45.56192 / 27.39531
+	var om_live_ok: bool = tok_om != null and tok_om.scale.x >= om_base - 1e-4 and tok_om.scale.x <= om_base * 1.15 + 1e-3
+	var had_p: bool = p != null
+	var had_den: bool = den != null
+	var exit_ok: bool = exit_d != null
+	var tok_ok: bool = tok_om != null
 	await h.free_node(den)
 	h.require(
-		den != null and p != null and billboards == 0 and exit_d != null and tok_om != null and absf(tok_om.scale.x - 0.24) < 0.001 and ponder_ok and card_ok and teal_5,
+		had_den and had_p and billboards == 0 and exit_ok and tok_ok and absf(om_base - 0.24 * ue_ratio) < 1e-4 and om_live_ok and ponder_ok and card_ok and teal_5,
 		"T4-02",
-		"Thieves' Den Hub journey (billboards=%d ponder=%s map_card=%s teal=%s)" % [billboards, str(ponder_ok), str(card_ok), str(teal_5)]
+		"Thieves' Den Hub journey (den=%s p=%s exit=%s tok=%s base=%.4f/%0.4f live=%s ponder=%s map=%s teal=%s billboards=%d)" % [
+			str(had_den), str(had_p), str(exit_ok), str(tok_ok), om_base, 0.24 * ue_ratio,
+			str(om_live_ok), str(ponder_ok), str(card_ok), str(teal_5), billboards]
 	)
 
 
@@ -104,7 +114,12 @@ func _t4_03_mission_prep_loading_letter_guildhall() -> void:
 	var vp: SubViewport = h.find_all_of_class(mp, "SubViewport")[0] as SubViewport if not h.find_all_of_class(mp, "SubViewport").is_empty() else null
 	var cam: Camera3D = h.find_all_of_class(vp, "Camera3D")[0] as Camera3D if (vp != null and not h.find_all_of_class(vp, "Camera3D").is_empty()) else null
 	var mp_src: String = h.read_text("res://src/ui/mission_prep_ui.gd")
-	var lobby_ok: bool = mp_src.find("MissionLobby_Geo3") >= 0 and cam != null and absf(cam.fov - 11.33) < 0.25
+	var mp_scr: GDScript = h.load_script("res://src/ui/mission_prep_ui.gd")
+	var lobby_fov: float = float(mp_scr.get_script_constant_map().get("LOBBY_CAM_FOV", 20.0)) if mp_scr != null else 20.0
+	# Authored CameraActor_0 is a 20.0 deg HORIZONTAL FOV mapped with
+	# keep_aspect KEEP_WIDTH (the rendered vertical is ~11.33 at 16:9).
+	var lobby_ok: bool = mp_src.find("MissionLobby_Geo3") >= 0 and cam != null \
+		and absf(cam.fov - lobby_fov) < 0.25 and cam.keep_aspect == Camera3D.KEEP_WIDTH
 	var b_txt: String = (mp.get("_mission_body") as Label).text if mp.get("_mission_body") != null else ""
 	var dur_ok: bool = b_txt.find("{MatchDurationInMinutes}") < 0 and (b_txt.find("120") >= 0 or b_txt.find("minute") >= 0)
 	await h.free_node(mp)
@@ -131,7 +146,8 @@ func _t4_04_guildhall_rooftop_zipwire_traversal() -> void:
 	var env: Environment = h.find_env(gh) if gh != null else null
 	var sky_txt: String = h.read_text("res://src/core/tat_sky.gdshader").to_lower()
 	var sky_ok: bool = env != null and env.background_mode == Environment.BG_SKY and env.fog_sky_affect == 0.0 and sky_txt.find("fbm") >= 0 and sky_txt.find("halo") >= 0
-	var iso_ok: bool = p != null and not h.find_all_of_class(p, "SubViewport").is_empty()
+	var vm: Dictionary = h.viewmodel_contract(p)
+	var iso_ok: bool = p != null and h.is_true(vm.get("ok"))
 	var zip_ok: bool = p != null and h.has_m(p, "get_equipped_tool") and h.has_m(p, "get_active_reticle_state")
 	var tc_txt: String = h.read_text("res://src/player/thief_character.gd").to_lower()
 	var trav_ok: bool = tc_txt.find("mantle") >= 0 and (tc_txt.find("wall_climb") >= 0 or tc_txt.find("wallclimb") >= 0)
@@ -143,26 +159,15 @@ func _t4_05_stealth_smoke_slithersap_lantern_guards() -> void:
 	var arena_d: Dictionary = await h.make_arena()
 	var arena: Node3D = arena_d["arena"] as Node3D
 	var lp: Node = arena_d["light_probe"] as Node
-	var host_scr: GDScript = GDScript.new()
-	host_scr.source_code = """extends Node3D
-var smokes: Array[Dictionary] = []
-func spawn_smoke(pos: Vector3, ttl: float = 25.0) -> void:
-	smokes.append({"min": pos - Vector3(2.5, 2.0, 2.5), "max": pos + Vector3(2.5, 2.0, 2.5), "ttl": ttl})
-func is_blocked_by_smoke(a: Vector3, b: Vector3) -> bool:
-	for s in smokes:
-		var mn: Vector3 = s["min"]
-		var mx: Vector3 = s["max"]
-		if (a.z <= mx.z and b.z >= mn.z) or (b.z <= mx.z and a.z >= mn.z):
-			return true
-	return false
-"""
-	host_scr.reload()
-	var host: Node3D = host_scr.new() as Node3D
+	var host: Node3D = h.make_level_host(lp)
 	arena.add_child(host)
 	var g1: Node3D = await h.spawn_test_guard(arena, Vector3(0.0, 0.0, -8.0)) as Node3D
-	if g1 != null and h.has_prop(g1, "has_lantern"):
-		g1.set("has_lantern", true)
-	g1.set("level_ctrl", host)
+	if g1 != null:
+		g1.set("level_ctrl", host)
+		if h.has_prop(g1, "carries_lantern"):
+			g1.set("carries_lantern", true)
+		if h.has_m(g1, "enable_lantern"):
+			g1.call("enable_lantern")
 	var p: Node = await h.spawn_test_player(arena, Vector3.ZERO, lp, host)
 	var hud: CanvasLayer = h.new_script_node("res://src/ui/hud.gd") as CanvasLayer
 	arena.add_child(hud)
@@ -170,14 +175,11 @@ func is_blocked_by_smoke(a: Vector3, b: Vector3) -> bool:
 
 	var lantern_ok: bool = not h.find_all_of_class(g1, "OmniLight3D").is_empty() and h.has_m(g1, "get_alert_state")
 	var smoke_ok: bool = false
-	if h.has_m(p, "equip_tool_slot"):
+	if h.has_m(p, "equip_tool"):
 		p.call("equip_tool", "smoke_bomb")
 		await h.step_process(1)
-		if h.has_m(p, "_use_smoke_bomb"):
-			p.call("_use_smoke_bomb")
-		else:
-			await h.tap_action("primary_action")
-		await h.step_physics(65)
+		p.call("_use_smoke_bomb")
+		await h.step_physics(80)
 		smoke_ok = not (host.get("smokes") as Array).is_empty()
 	var lamp: OmniLight3D = OmniLight3D.new()
 	lamp.position = Vector3(5.0, 1.0, -4.0)
@@ -205,15 +207,19 @@ func _t4_06_disguised_lockpicking_extraction() -> void:
 	if h.has_m(p, "apply_guard_viewcone_disguise_decay") and h.has_m(p, "set_lockpicking_active") and h.has_prop(lc, "locked"):
 		p.set("disguise_active", true)
 		p.set("disguise_integrity", 100.0)
+		# Real TTL: without it the disguise expires on the first tick and the
+		# journey measures a dead disguise.
+		p.set("disguise_ttl", 120.0)
 		p.call("apply_guard_viewcone_disguise_decay", 1.0, true)
 		p.call("_tick_sustained_systems", 1.0)
 		var after_vc: float = float(p.get("disguise_integrity"))
 		p.call("set_lockpicking_active", true)
 		await h.step_physics(60)
+		var still_disguised: bool = h.is_true(p.get("disguise_active"))
 		var after_lp: float = float(p.get("disguise_integrity"))
 		p.call("set_lockpicking_active", false)
 		var mult: float = float(gs.call("compute_stealth_bonus_multiplier"))
-		ok = after_vc < 95.0 and after_lp < after_vc and mult >= 1.0
+		ok = still_disguised and after_vc < 95.0 and after_lp < after_vc and mult >= 1.0
 	await h.free_node(arena)
 	h.require(ok, "T4-06", "Disguised Vault Safe Lockpicking & Extraction journey (%s)" % str(ok))
 
@@ -222,11 +228,26 @@ func _t4_07_guildhall_set_multi_part_objectives() -> void:
 	var gs: Node = h.game_state()
 	var hud_txt: String = h.read_text("res://src/ui/hud.gd")
 	var gai: Node = h.new_script_node("res://src/ai/guard_ai.gd")
-	var ok: bool = h.has_prop(gs, "mission_objectives") and h.has_m(gs, "complete_objective") \
+	var set_ok: bool = false
+	if h.has_prop(gs, "mission_objectives") and h.has_m(gs, "mark_objective_done") and h.has_m(gs, "are_all_objectives_complete"):
+		gs.call("set_mission_objectives", [
+			{"id": "set_item_a", "label": "Set A", "target": 1},
+			{"id": "set_item_b", "label": "Set B", "target": 1},
+			{"id": "set_item_c", "label": "Set C", "target": 1},
+		], 0)
+		var zero_ok: bool = not h.is_true(gs.call("are_all_objectives_complete"))
+		gs.call("mark_objective_done", "set_item_a")
+		gs.call("mark_objective_done", "set_item_b")
+		gs.call("mark_objective_done", "set_item_c")
+		var done_ok: bool = h.is_true(gs.call("are_all_objectives_complete"))
+		set_ok = zero_ok and done_ok
+		gs.call("set_mission_objectives", [], 0)
+		gs.set("quest_item_acquired", false)
+	var ok: bool = set_ok \
 		and h.has_action("map_toggle") and h.has_action("ping_menu") \
 		and h.has_m(gai, "steal_carried_item") and hud_txt.find("∞") >= 0
 	if gai != null: gai.queue_free()
-	h.require(ok, "T4-07", "Guildhall Set [0/3] objectives + Map + Ping + Fairy + Vistara (%s)" % str(ok))
+	h.require(ok, "T4-07", "Guildhall Set objectives [0/3]->[3/3] + Map + Ping + Fairy + Vistara (%s)" % str(ok))
 
 
 func _t4_08_old_manor_cleanout_terrain_puddles() -> void:

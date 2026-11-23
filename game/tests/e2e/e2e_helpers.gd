@@ -22,6 +22,45 @@ func _init(p_tree: SceneTree) -> void:
 	root = p_tree.get_root() if p_tree != null else null
 
 
+## One-shot environment guard. The suite reads the extracted UE capture and the
+## generated tables from read-only roots; when they are missing every data
+## check would fail for the same reason. Detect that once at startup so the
+## report is a single [BOOT] cause line instead of a wall of per-check fails.
+## Returns the missing roots (empty == bootable).
+func boot_problems() -> Array[String]:
+	var missing: Array[String] = []
+	var checks: Array[Dictionary] = [
+		{"label": "generated data", "path": "res://data/generated", "need_file": "res://data/generated/materials.json"},
+		{"label": "UE raw/content assets", "path": "res://assets/ue", "need_file": ""},
+		{"label": "extracted capture", "path": repo_path("extracted"), "need_file": repo_path("extracted/json")},
+	]
+	for c: Dictionary in checks:
+		var p: String = str(c.get("path", ""))
+		var ok_dir: bool = false
+		if p.begins_with("res://"):
+			ok_dir = DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(p))
+		else:
+			ok_dir = DirAccess.dir_exists_absolute(p)
+		if not ok_dir:
+			missing.append("%s: %s" % [str(c.get("label", "root")), p])
+			continue
+		var nf: String = str(c.get("need_file", ""))
+		if nf != "" and not FileAccess.file_exists(nf) and not DirAccess.dir_exists_absolute(nf):
+			missing.append("%s: %s" % [str(c.get("label", "root")), nf])
+	return missing
+
+
+## Force the authored 1280x720 target canvas for layout checks. Headless Godot
+## otherwise leaves the root window at a 64x64 window size while the visible
+## rect reports 1280x1280, which made every "fits in 720p" measurement test the
+## wrong height.
+func force_authored_viewport() -> void:
+	if root == null:
+		return
+	if root.size != Vector2i(1280, 720):
+		root.size = Vector2i(1280, 720)
+
+
 func require(cond: bool, id: String, detail: String = "") -> bool:
 	total += 1
 	if cond:
@@ -412,11 +451,154 @@ func find_world_environment(n: Node) -> WorldEnvironment:
 	return list[0] as WorldEnvironment
 
 
-func find_env(n: Node) -> Environment:
+## Environment discovery for the startscreen. Since the env refactor the
+## BeautifulCorner backdrop binds its Environment directly to the CineCamera
+## (Camera3D.environment) inside an own-world SubViewport; a WorldEnvironment
+## inside that SubViewport registers on the parent world and is not what the
+## camera renders. Prefer the camera-bound Environment anywhere in the subtree
+## (SubViewports included), then fall back to WorldEnvironment.
+func find_camera_env(n: Node) -> Environment:
+	if n == null:
+		return null
+	var hit: Environment = _find_camera_env_rec(n)
+	if hit != null:
+		return hit
+	return _find_world_env(n)
+
+
+func _find_camera_env_rec(n: Node) -> Environment:
+	if n is Camera3D:
+		var cen: Environment = (n as Camera3D).environment
+		if cen != null:
+			return cen
+	for ch: Node in n.get_children():
+		var found: Environment = _find_camera_env_rec(ch)
+		if found != null:
+			return found
+	return null
+
+
+func _find_world_env(n: Node) -> Environment:
 	var we: WorldEnvironment = find_world_environment(n)
 	if we != null:
 		return we.environment
 	return null
+
+
+## Kept for existing callers: startscreen checks now read the camera-bound
+## Environment first (T1/T2/T3/T4 startscreen checks share this helper).
+func find_env(n: Node) -> Environment:
+	return find_camera_env(n)
+
+
+## First-person viewmodel isolation contract (no SubViewport):
+## - the FP rig lives under the active camera,
+## - there is exactly one render path (no per-player SubViewport),
+## - every viewmodel surface resolves to the VM ShaderMaterial carrying the
+##   authored vm_fov_deg projection lock (the view-space isolation seam),
+## - viewmodel meshes cast no shadows (they are not visible to shadow/
+##   reflection/other viewports).
+## Returns a detail dictionary so callers can log the sub-values.
+func viewmodel_contract(p: Node) -> Dictionary:
+	var out: Dictionary = {
+		"cam": null, "fp_rig": null, "under_cam": false, "sub_viewports": 0,
+		"mesh_count": 0, "shader_surfaces": 0, "total_surfaces": 0,
+		"fov_values": [], "fov": -1.0, "shadows_on": 0,
+		"arm_skel": null, "ok": false,
+	}
+	if p == null:
+		return out
+	var cam: Camera3D = p.get("cam") as Camera3D
+	var fp_rig: Node = p.get("fp_rig") as Node
+	out["cam"] = cam
+	out["fp_rig"] = fp_rig
+	out["under_cam"] = cam != null and fp_rig != null and fp_rig.get_parent() == cam
+	out["sub_viewports"] = find_all_of_class(p, "SubViewport").size()
+	out["arm_skel"] = p.get("_fp_arm_skel")
+	var roots: Array[Node] = []
+	if fp_rig != null:
+		roots.append(fp_rig)
+	if roots.is_empty():
+		return out
+	var fov_values: Array[float] = []
+	var shader_surfaces: int = 0
+	var total_surfaces: int = 0
+	var mesh_count: int = 0
+	var shadows_on: int = 0
+	for r: Node in roots:
+		for n: Node in find_all_of_class(r, "MeshInstance3D"):
+			var mi: MeshInstance3D = n as MeshInstance3D
+			if mi == null or mi.mesh == null:
+				continue
+			mesh_count += 1
+			if mi.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF:
+				shadows_on += 1
+			for s: int in range(mi.mesh.get_surface_count()):
+				total_surfaces += 1
+				var mat: Material = mi.get_active_material(s)
+				if mat is ShaderMaterial:
+					var sm: ShaderMaterial = mat as ShaderMaterial
+					var fv: Variant = sm.get_shader_parameter("vm_fov_deg")
+					if fv is float or fv is int:
+						shader_surfaces += 1
+						var f: float = float(fv)
+						if not fov_values.has(f):
+							fov_values.append(f)
+	out["mesh_count"] = mesh_count
+	out["total_surfaces"] = total_surfaces
+	out["shader_surfaces"] = shader_surfaces
+	out["fov_values"] = fov_values
+	out["fov"] = fov_values[0] if fov_values.size() == 1 else -1.0
+	out["shadows_on"] = shadows_on
+	out["ok"] = bool(out["under_cam"]) and int(out["sub_viewports"]) == 0 \
+		and mesh_count > 0 and shader_surfaces > 0 and shader_surfaces == total_surfaces \
+		and shadows_on == 0 and fov_values.size() == 1
+	return out
+
+
+## Level-controller stand-in for stealth tests: exposes the same documented
+## contract the mission controller gives guards (light_probe, smoke AABB).
+func make_level_host(light_probe: Node = null) -> Node3D:
+	var scr: GDScript = GDScript.new()
+	scr.source_code = """extends Node3D
+var light_probe: Node = null
+var smokes: Array[Dictionary] = []
+func spawn_smoke(pos: Vector3, ttl: float = 25.0) -> void:
+	smokes.append({"min": pos - Vector3(2.5, 2.0, 2.5), "max": pos + Vector3(2.5, 2.0, 2.5), "ttl": ttl})
+func is_blocked_by_smoke(a: Vector3, b: Vector3) -> bool:
+	for s in smokes:
+		if _segment_hits_aabb(a, b, s["min"], s["max"]):
+			return true
+	return false
+func _segment_hits_aabb(a: Vector3, b: Vector3, mn: Vector3, mx: Vector3) -> bool:
+	var t_min: float = 0.0
+	var t_max: float = 1.0
+	var origins: Array[float] = [a.x, a.y, a.z]
+	var ends: Array[float] = [b.x, b.y, b.z]
+	var mins: Array[float] = [mn.x, mn.y, mn.z]
+	var maxs: Array[float] = [mx.x, mx.y, mx.z]
+	for i in range(3):
+		var d: float = ends[i] - origins[i]
+		if absf(d) < 0.000001:
+			if origins[i] < mins[i] or origins[i] > maxs[i]:
+				return false
+		else:
+			var t0: float = (mins[i] - origins[i]) / d
+			var t1: float = (maxs[i] - origins[i]) / d
+			if t0 > t1:
+				var tmp: float = t0
+				t0 = t1
+				t1 = tmp
+			t_min = maxf(t_min, t0)
+			t_max = minf(t_max, t1)
+			if t_min > t_max:
+				return false
+	return true
+"""
+	scr.reload()
+	var host: Node3D = scr.new() as Node3D
+	host.set("light_probe", light_probe)
+	return host
 
 
 func is_teal_style(box: StyleBoxFlat) -> bool:

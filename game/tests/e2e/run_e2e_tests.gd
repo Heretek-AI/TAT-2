@@ -41,6 +41,20 @@ func _initialize() -> void:
 
 	var h: RefCounted = helpers_scr.new(self)
 
+	# One clear environment cause instead of 200 per-check data failures.
+	var boot_missing: Array = h.call("boot_problems") as Array
+	if not boot_missing.is_empty():
+		for m: Variant in boot_missing:
+			printerr("[BOOT] missing ", str(m))
+		printerr("[BOOT] FATAL: E2E data roots incomplete; capture generated tables/extracted assets before running the suite")
+		print("SUMMARY: fails=1 passed=0 total=1")
+		quit(1)
+		return
+
+	# The authored target canvas is 1280x720; headless must be told explicitly.
+	h.call("force_authored_viewport")
+	await process_frame
+
 	if tier_filter == "all" or tier_filter == "1":
 		await _settle_harness()
 		var t1_scr: GDScript = load("res://tests/e2e/e2e_tier1_features.gd") as GDScript

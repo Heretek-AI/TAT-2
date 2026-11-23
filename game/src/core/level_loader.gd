@@ -4215,24 +4215,21 @@ func _build_one_landscape(lc_var: Variant, parent: Node3D, ctx: Dictionary) -> v
 			var u10 := Vector2(float(qx + 1) / float(quads), float(qy) / float(quads))
 			var u01 := Vector2(float(qx) / float(quads), float(qy + 1) / float(quads))
 			var u11 := Vector2(float(qx + 1) / float(quads), float(qy + 1) / float(quads))
+			# Godot treats this winding as clockwise-from-above, so the
+			# heightfield top was a backface and cull_back hid the whole
+			# terrain (the startscreen street showed sky/fog through it).
+			# Emit the opposite winding so the top faces +Y and generate_normals
+			# produces up-facing normals.
 			st.set_uv(u00); st.add_vertex(p00)
-			st.set_uv(u11); st.add_vertex(p11)
 			st.set_uv(u10); st.add_vertex(p10)
-			st.set_uv(u00); st.add_vertex(p00)
-			st.set_uv(u01); st.add_vertex(p01)
 			st.set_uv(u11); st.add_vertex(p11)
-			faces.append(p00); faces.append(p11); faces.append(p10)
-			faces.append(p00); faces.append(p01); faces.append(p11)
+			st.set_uv(u00); st.add_vertex(p00)
+			st.set_uv(u11); st.add_vertex(p11)
+			st.set_uv(u01); st.add_vertex(p01)
+			faces.append(p00); faces.append(p10); faces.append(p11)
+			faces.append(p00); faces.append(p11); faces.append(p01)
 	st.generate_normals()
-	# UE landscape heightfields wind downward in Godot's axes, so every
-	# generated normal is (0,-1,0): the street is lit from behind and reads
-	# ambient-only. Flip the generated normals (+Y-facing) once on the surface
-	# arrays instead of touching vertices per component.
 	var arrays: Array = st.commit_to_arrays()
-	var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
-	for ni: int in range(normals.size()):
-		normals[ni] = -normals[ni]
-	arrays[Mesh.ARRAY_NORMAL] = normals
 	var arr_mesh := ArrayMesh.new()
 	arr_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	if arr_mesh.get_surface_count() == 0:

@@ -64,7 +64,8 @@ func _feat_01_night_sky() -> void:
 	var zc_ok: bool = absf(zc.r - 3e-6) < 1e-6 and absf(zc.g - 9.6e-6) < 1e-6 and absf(zc.b - 2.6e-5) < 1e-6
 	h.require(hc_ok and zc_ok, "T1-01-B", "horizon=%s zenith=%s" % [str(hc), str(zc)])
 
-	# T1-01-C: Sky Shader Uniforms & fog_sky_affect
+	# T1-01-C: Sky Shader Uniforms & fog_sky_affect (midnight_clear restores
+	# authored fog over the sky: 0.85, not the 0.0 used by other presets)
 	var env: Environment = Environment.new()
 	var moon: DirectionalLight3D = DirectionalLight3D.new()
 	var env_ok: bool = h.is_true(wp_scr.call("apply_environment", env, moon, mc)) if wp_scr != null else false
@@ -73,8 +74,9 @@ func _feat_01_night_sky() -> void:
 	var mcol_v: Variant = sm.get_shader_parameter("moon_color") if sm != null else null
 	var mcol: Color = mcol_v as Color if mcol_v is Color else Color(-1, -1, -1)
 	var mvis: float = float(sm.get_shader_parameter("moon_visible")) if sm != null else 0.0
+	var fsa_ok: bool = env.fog_sky_affect >= 0.8 and env.fog_sky_affect <= 0.9
 	h.require(
-		env_ok and sky_ok and env.fog_sky_affect == 0.0 and env.background_mode == Environment.BG_SKY
+		env_ok and sky_ok and fsa_ok and env.background_mode == Environment.BG_SKY
 		and absf(mcol.r - 0.5137) < 0.01 and absf(mcol.g - 0.5216) < 0.01 and absf(mcol.b - 1.0) < 0.01 and mvis == 1.0,
 		"T1-01-C",
 		"fog_sky_affect=%s bg=%s moon_color=%s moon_visible=%s" % [str(env.fog_sky_affect), str(env.background_mode), str(mcol), str(mvis)]
@@ -94,7 +96,7 @@ func _feat_01_night_sky() -> void:
 	var has_sky_radiance: bool = (sm != null and (sm.get_shader_parameter("sky_radiance") != null or sm.get_shader_parameter("radiance_scale") != null or sm.get_shader_parameter("exposure_compensation") != null)) \
 		or sky_src.find("sky_radiance") >= 0 or sky_src.find("radiance_scale") >= 0 or sky_src.find("radiance_lift") >= 0
 	var fog_col: Color = env.fog_light_color
-	var indigo_fog: bool = env.fog_enabled and env.fog_sky_affect == 0.0 and fog_col.b > fog_col.r
+	var indigo_fog: bool = env.fog_enabled and env.fog_sky_affect >= 0.8 and env.fog_sky_affect <= 0.9 and fog_col.b > fog_col.r
 	h.require(
 		has_sky_radiance and indigo_fog,
 		"T1-01-E",

@@ -536,6 +536,8 @@ static func apply_environment(env: Environment, moon: DirectionalLight3D, preset
 		# UE's ExponentialHeightFog does not occlude the sky sphere. Godot's
 		# default of 1.0 lets the height fog fully replace the sky at infinite
 		# depth, so the authored gradient, stars and moon would render black.
+		# weather_visuals.apply_sky() later overrides this to 0.85 for the exact
+		# Guildhall `midnight_clear` preset only (authored fog over the sky).
 		env.fog_sky_affect = 0.0
 		var is_desktop: bool = not MobileProfile.is_mobile()
 		# P2: volumetric/SSIL/SSR are desktop-quality-gated, not unconditional.

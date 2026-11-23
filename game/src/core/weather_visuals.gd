@@ -46,8 +46,10 @@ extends RefCounted
 ##   0.15-50, so the compressive map is APPROXIMATE). The sky-light intensity
 ##   is an ambient term and deliberately does not scale the disc.
 ## - Stars: sky.stars_brightness drives a sparse procedural term only when it
-##   is > 0 (star_amount = clamp(brightness / 8, 0, 1); midnight_clear 10.0
-##   reads full, thieves_den 3.0 subtle, 0 disables). APPROXIMATE: hash
+##   is > 0 (star_amount = clamp(brightness / 8, 0, 1); thieves_den 3.0 reads
+##   0.375, 0 disables). Guildhall's midnight_clear (10.0 -> 1.0) is scaled by
+##   MIDNIGHT_CLEAR_STAR_SCALE (0.12 -> 0.15) because the authored UE star
+##   colour is black and the reference is starless. APPROXIMATE: hash
 ##   sparkle, no recovered star catalogue.
 ## - Clouds: sky.cloud_color tints a horizon haze band with strength
 ##   clamp(cloud_opacity * 0.18, 0, 0.55). This is an APPROXIMATE term, not the
@@ -84,6 +86,16 @@ const DEFAULT_MOON_DIAMETER_DEG := 6.0
 const MOON_ENERGY_MIN := 0.25
 const MOON_ENERGY_MAX := 2.0
 const STAR_NORMALIZER := 8.0
+## Guildhall's authored sky is a 400 m sphere inside `fog.density` 0.06 height
+## fog; the port renders the sphere only, so the upper sky reads 0.009-0.019
+## linear instead of UE's ~0.24 sRGB. These values restore the authored fog
+## over that sky. The guard is an EXACT preset-id match, so the Den and lobby
+## presets (`midnight_clear_thieves_den` / `midnight_clear_mission_lobby`)
+## keep their own fog/star treatment.
+const MIDNIGHT_CLEAR_PRESET := "midnight_clear"
+const MIDNIGHT_CLEAR_FOG_SKY_AFFECT := 0.85
+const MIDNIGHT_CLEAR_BACKGROUND_ENERGY := 2.0
+const MIDNIGHT_CLEAR_STAR_SCALE := 0.12
 const CLOUD_OPACITY_TO_HAZE := 0.18
 const CLOUD_HAZE_MAX := 0.55
 
@@ -203,6 +215,13 @@ static func _moon_panorama() -> Texture2D:
 	return _pano_cache
 
 
+## Exact preset-id guard for Guildhall's authored midnight_clear sky. String
+## equality (not a prefix/substring test) so `midnight_clear_thieves_den` and
+## `midnight_clear_mission_lobby` never match.
+static func _is_midnight_clear(preset: Dictionary) -> bool:
+	return str(preset.get("preset", "")) == MIDNIGHT_CLEAR_PRESET
+
+
 ## Builds the real-sky Sky resource for a preset. The moon disc sits along the
 ## moon light's +Z axis (requires apply_environment to have set its rotation).
 static func make_sky(preset: Dictionary, moon: DirectionalLight3D) -> Sky:
@@ -264,6 +283,10 @@ static func make_sky(preset: Dictionary, moon: DirectionalLight3D) -> Sky:
 	var stars: float = 0.0
 	if stars_raw != null and float(stars_raw) > 0.0:
 		stars = clampf(float(stars_raw) / STAR_NORMALIZER, 0.0, 1.0)
+	if _is_midnight_clear(preset):
+		# UE's authored star colour is black and the Guildhall reference is
+		# starless: dim the fully-on 1.0 term instead of disabling the term.
+		stars *= MIDNIGHT_CLEAR_STAR_SCALE
 	mat.set_shader_parameter("star_amount", stars)
 
 	var haze: float = 0.0
@@ -310,6 +333,12 @@ static func apply_sky(env: Environment, preset: Dictionary, moon: DirectionalLig
 		return false
 	if not preset.has("sky") and not preset.has("moon"):
 		return false
+	if _is_midnight_clear(preset):
+		# The authored 400 m sky sphere sits inside height fog; restore the
+		# authored fog over the sky (weather_profile pins 0.0 for other presets)
+		# and lift the background so the gradient reaches the UE brightness.
+		env.fog_sky_affect = MIDNIGHT_CLEAR_FOG_SKY_AFFECT
+		env.background_energy_multiplier = maxf(env.background_energy_multiplier, MIDNIGHT_CLEAR_BACKGROUND_ENERGY)
 	env.sky = make_sky(preset, moon)
 	env.background_mode = Environment.BG_SKY
 	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY

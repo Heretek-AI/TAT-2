@@ -202,7 +202,7 @@ Ancillary wave changes: `docs/FIDELITY_GAPS.md`,
 | In-game horizon | `(0.00198, 0.00259, 0.003)` | authored horizon × `overall_color` | extracted × authored multiplier |
 | In-game zenith | `(3e-06, 9.6e-06, 2.6e-05)` | authored zenith × `overall_color` | extracted × authored multiplier |
 | Fallback horizon (no `overall_color`) | max-channel normalised | `_tone_safe()` | approximate (cooked `M_Sky` curve unknown) |
-| `fog_sky_affect` | `0.0` | UE height fog does not occlude the sky sphere | engine-mapping assumption |
+| `fog_sky_affect` | `0.0` (other presets), `0.85` (`midnight_clear`) | UE height fog does not occlude the sky sphere; Guildhall's authored sky sphere sits inside the height fog | engine-mapping assumption |
 | Moon light | intensity `0.0333`, colour `[0.6039,0.702,1.0]`, pitch `-30`, yaw `40` | `BP_WeatherPreset_MidnightClear` | extracted |
 | Moon disc tint | `[0.5137, 0.5216, 1.0]` | `moon.emissive` (`MoonlightEmissiveColor`) | extracted value; disc-material binding inferred |
 | `MI_Moon_Base` `Emissive Color` default | `[0.122, 0.292, 1.0]` | `MI_Moon_Base` material | extracted (material default, not the preset tint) |
@@ -252,6 +252,20 @@ Ancillary wave changes: `docs/FIDELITY_GAPS.md`,
   `*_final.png` captures use shipped settings (fog ON, no runtime override) and
   show the near-black gradient, stars and moon. The earlier `*_fogoff.png`
   files remain as diagnostics of the shader/wiring before the fix.
+- **Guildhall sky-atmosphere follow-up.** `midnight_clear` authors its sky as a
+  400 m sphere inside `fog.density` 0.06 height fog. Pinning
+  `fog_sky_affect = 0.0` for every preset therefore rendered only the clear-sky
+  gradient (upper sky 0.009-0.019 linear vs UE ~0.24 sRGB), and the fully-on
+  `stars_brightness 10.0` term was visible even though the authored UE star
+  colour is black and the reference is starless. `weather_visuals.apply_sky()`
+  now sets `fog_sky_affect = 0.85` and
+  `background_energy_multiplier = max(current, 2.0)` for the exact
+  `midnight_clear` preset, and `make_sky()` scales that preset's star term by
+  `0.12` (`10.0 -> 1.0 -> 0.15`). `dense_fog` (and every other preset) still
+  gets `fog_sky_affect = 0.0` from `apply_environment()`. The Den
+  (`midnight_clear_thieves_den`, stars `3.0 -> 0.375`) and the lobby
+  (`midnight_clear_mission_lobby`) are untouched because the guard is an exact
+  preset-id equality test, not a prefix match.
 
 ## Visual QA screenshots (`build/qa/`)
 

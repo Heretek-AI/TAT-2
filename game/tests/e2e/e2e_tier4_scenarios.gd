@@ -145,7 +145,9 @@ func _t4_04_guildhall_rooftop_zipwire_traversal() -> void:
 	var p: Node = gh_res["player"] as Node
 	var env: Environment = h.find_env(gh) if gh != null else null
 	var sky_txt: String = h.read_text("res://src/core/tat_sky.gdshader").to_lower()
-	var sky_ok: bool = env != null and env.background_mode == Environment.BG_SKY and env.fog_sky_affect == 0.0 and sky_txt.find("fbm") >= 0 and sky_txt.find("halo") >= 0
+	# Guildhall uses the exact `midnight_clear` preset, which restores authored
+	# height fog over the sky (fog_sky_affect 0.85); dense_fog stays at 0.0.
+	var sky_ok: bool = env != null and env.background_mode == Environment.BG_SKY and env.fog_sky_affect >= 0.8 and env.fog_sky_affect <= 0.9 and sky_txt.find("fbm") >= 0 and sky_txt.find("halo") >= 0
 	var vm: Dictionary = h.viewmodel_contract(p)
 	var iso_ok: bool = p != null and h.is_true(vm.get("ok"))
 	var zip_ok: bool = p != null and h.has_m(p, "get_equipped_tool") and h.has_m(p, "get_active_reticle_state")

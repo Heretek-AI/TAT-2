@@ -987,7 +987,7 @@ func _update_map_token_highlights() -> void:
 				sm.emission_enabled = active
 				if active:
 					sm.emission = Color(1.0, 0.72, 0.24)
-					sm.emission_energy_multiplier = 1.2
+					sm.emission_energy_multiplier = 1.4
 				else:
 					sm.emission = Color.BLACK
 					sm.emission_energy_multiplier = 0.0

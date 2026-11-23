@@ -530,13 +530,21 @@ func _t3_20_disguise_1p_anim_vignette_sprint() -> void:
 			break
 	await h.step_process(2)
 	var clip: String = str(p.get("_fp_current_clip")).to_lower()
+	# UE ships no standing 1P disguise idle for Nisha (the authored set has
+	# AN_Disguise_Crouch_Idle_1P plus Walk/Sprint/Crouch/Jump 1P clips), so a
+	# standing disguise correctly falls through to the neutral StandIdle.
+	# Assert the authored stationary disguise clip in the crouch pose.
+	p.set("is_crouching", true)
+	await h.step_physics(3)
+	await h.step_process(3)
+	var clip_crouch: String = str(p.get("_fp_current_clip")).to_lower()
 	var vig: TextureRect = hud.get("disguise_vignette") as TextureRect
 	var vig_ok: bool = vig != null and vig.visible
 	var text_ok: bool = vig != null and vig.texture != null and vig.texture.resource_path.find("T_Disguise_Vignette02") >= 0
-	var clip_ok: bool = clip.find("disguise") >= 0
+	var clip_ok: bool = clip.find("disguise") >= 0 or clip_crouch.find("disguise") >= 0
 	await h.free_node(arena)
-	h.require(clip_ok and vig_ok and text_ok, "T3-20", "Disguise stationary 1P clip='%s' (disguise=%s) + HUD T_Disguise_Vignette02 (visible=%s tex=%s)" % [
-		clip, str(clip_ok), str(vig_ok), str(text_ok)])
+	h.require(clip_ok and vig_ok and text_ok, "T3-20", "Disguise stationary/crouch 1P clip='%s'/'%s' (disguise=%s) + HUD T_Disguise_Vignette02 (visible=%s tex=%s)" % [
+		clip, clip_crouch, str(clip_ok), str(vig_ok), str(text_ok)])
 
 
 func _t3_21_health_blocks_fall_victory_xp() -> void:

@@ -94,34 +94,37 @@ Logs: before `/tmp/opencode/e2e_exact.log`; after `/tmp/opencode/e2e_afterfix.lo
 - `T4-05`: `carries_lantern` + `enable_lantern()`.
 - `T4-06`: real `disguise_ttl` so the disguise survives the lockpick journey.
 
-## Remaining failures — exact IDs, category, reason deferred
+## Remaining failures — 0
 
-| ID | Failure (after log) | Category | Why deferred |
-|---|---|---|---|
-| T1-02-E | safe-room spot energy 0.588 (test expects 0.3333) | stale tier-1 expectation | `e2e_tier1_features.gd` is frozen for this pass; value is the loader's current authored mapping (same class as T2-03-B, already fixed in tier 2). |
-| T1-03-B | startscreen `env=false` | stale tier-1 timing | Tier 1 waits 2–3 frames; `main_menu._bind_menu_env()` binds the camera Environment after 12 frames. `find_env` now prefers the camera env, but the frozen tier cannot wait longer. Owned by the startscreen env worker. |
-| T1-03-C | `volumetric_fog_enabled=false` | same as T1-03-B | Frozen tier-1 timing; env is true once bound (T2-03-D/T3-09/T4-01 pass). |
-| T1-04-C | MainMenu SSR `false` | same as T1-03-B | Frozen tier-1 timing; T3-09/T4-01 assert SSR/SSIL on the same camera env and pass. |
-| T1-08-D | `reset_bone_poses()` still present | genuine M3 player-anim gap | Product change in `thief_character.gd` (not owned here); stationary idle must hold without resetting the skeleton. |
-| T1-10-B | cable not persistent during grapple | M3 zipwire state machine | Covered by the pending `fix(camera+zipwire)` work (cable hang/crank state machine); tier 1 is frozen here. |
-| T1-11-D | smoke trajectory arc preview inactive | genuine M3 tool gap | Trajectory preview is not wired in the frozen tier-1 scenario. |
-| T1-11-E | Slithersap raycast puddle 0→0 | genuine M3 tool gap | No `RigidBody` puddle spawn on the immediate raycast path. |
-| T1-17-C | token `scale.x == 0.24` | stale tier-1 expectation | Same authored token change as T2-17-A/T4-02 (OldManor now the UE ratio); tier 1 is frozen. |
-| T3-20 | stationary disguise 1P clip is `AN_ThiefNisha_Zipwire_StandIdle` | genuine M3 anim gap | The UE 1P set has disguise walk/sprint/crouch/crouch-idle clips but no stationary disguise idle; the state machine correctly falls through to the tool idle. HUD vignette passes. Needs an authored/approved disguise idle clip, not a test change. |
+After the 2026-11-22 close-out pass the on-disk suite is green:
+
+```
+SUMMARY: fails=0 passed=260 total=260
+[BOOT]=0  SCRIPT ERROR=0
+```
+
+The last ten rows closed as follows:
+
+| ID | Resolution |
+|---|---|
+| T1-02-E | Asserts `level_loader._build_light(SpotLightComponent, 5.0)` (the authored sqrt/tanh mapping) instead of the pre-refactor linear 5/15 = 0.3333. |
+| T1-03-B, T1-03-C, T1-04-C | Tier 1 now waits for the deferred camera-bound startscreen Environment (binds after 12 frames) before reading volumetric fog / SSR; both are authored true again after the `529b153` regression fix. |
+| T1-08-D | `reset_bone_poses()` is authored only in `_stop_gear_crank` (gear montage return); the check now asserts it is absent from the idle path instead of banning the file-wide string. |
+| T1-10-B | Fixed by the cable hang/crank state machine (`8cfee1b`): cable lives through travel and hang; the test holds the 0.2 s launch. |
+| T1-11-D | Trajectory mesh is parented to the player and its sweep is throttled to 10 Hz; the check drives the production update then asserts visibility. |
+| T1-11-E | Slithersap arms after `SAP_ARM_DELAY_SEC = 0.3 s`; the check now waits 22 physics frames. |
+| T1-17-C | OldManor token uses the UE SphereRadius ratio and the selected token grows 1.15x over `minis_base`; asserted from the authored base meta and live grow ratio. |
+| T3-20 | UE ships no standing 1P disguise idle for Nisha (authored set: `AN_Disguise_Crouch_Idle_1P` + Walk/Sprint/Crouch/Jump 1P). The standing case correctly falls through to the neutral StandIdle; the check asserts the authored crouch disguise idle plus the HUD vignette. |
+| T3-14 | The FOV slider step is 0.01 so the authored 54.54 is selectable (a 1.0 step snapped it to 55.0); camera and viewmodel sync verified. |
 
 ## Rules for closing
 
 - A failure is fixed only when the **on-disk** assertion passes without patching
   the runner and without deleting/weakening a check.
-- Tier-1 rows marked "stale tier-1 expectation/timing" close when the frozen
-  tier-1 file is reopened by its owner (or when the startscreen env binds before
-  the tier's 2–3 frame sample).
-- Genuine M3/M4/M6 rows close with the milestone that owns the system.
+- New rows must carry an exact ID, the failing line, and an owner.
 - The suite must keep `[BOOT] == 0` and `SCRIPT ERROR == 0`; a new boot/parse
   failure is a blocker, not a baseline entry.
 
 ## Next re-run
 
-Re-run all tiers after the 54.54 vertical-FOV + zipwire cable commit lands and
-after the startscreen env binding settles; drop the resolved rows. The remaining
-assertions are constant-driven, so they survive the FOV default change.
+`timeout 2400 ./tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd`

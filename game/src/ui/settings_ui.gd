@@ -409,7 +409,9 @@ func _build_ui() -> void:
 	var grp_disp: Dictionary = _make_group_card(_label("Settings.Display", "Display"))
 	video.add_child(grp_disp["card"] as PanelContainer)
 	var disp_vb: VBoxContainer = grp_disp["vbox"] as VBoxContainer
-	disp_vb.add_child(_make_slider_row("fov", _label("Settings.Camera.FOV", "Field of View"), FOV_MIN, FOV_MAX, 1.0))
+	# 0.01 step: the authored default is 54.54 (UE 85 hFOV at 16:9); a 1.0
+	# step forced it to 55 and could never select the authored value.
+	disp_vb.add_child(_make_slider_row("fov", _label("Settings.Camera.FOV", "Field of View"), FOV_MIN, FOV_MAX, 0.01))
 	disp_vb.add_child(_make_check_row("fullscreen", _label("Settings.Display.WindowMode.Fullscreen", "Fullscreen")))
 	disp_vb.add_child(_make_check_row("vsync", _label("Settings.Display.VSync", "V-Sync")))
 

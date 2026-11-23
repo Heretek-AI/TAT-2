@@ -24,6 +24,7 @@ func run() -> void:
 	await _t4_10_visual_parity_preconditions()
 	await _t4_11_clean_room_gate_verification()
 	await _t4_12_r3_cooked_data_adversarial_audit()
+	await _t4_13_free_play_contract_inactive()
 	h.restore_state()
 
 
@@ -335,3 +336,69 @@ func _t4_12_r3_cooked_data_adversarial_audit() -> void:
 	var r3_7: bool = h.read_text("res://src/core/audio_manager.gd").find("PLUG_IR_SYNTH") < 0
 	var r3_8: bool = h.read_text("res://src/core/level_loader.gd").find("SplineEditorMesh") >= 0
 	h.require(r3_1 and r3_2 and r3_3 and r3_4 and r3_5 and r3_6 and r3_7 and r3_8, "T4-12", "All 8 R3 cooked-data hard limits respected (zero fabricated params)")
+
+
+## T4-13: Free play ("Contract Inactive") is the Guildhall Cleanout Heist run
+## hosted on contract order 2: mission id + QG 4,000 loot goal + reference HUD
+## ("Mission: Steal 4,000 in loot value[0/4,000]", "£ 0"), the mission row's
+## 3300 s Novice timer, and no contract-completion write on extraction.
+func _t4_13_free_play_contract_inactive() -> void:
+	var gs: Node = h.game_state()
+	var ss: Node = h.save_system()
+	var save_data: Dictionary = ss.get("data") as Dictionary
+	var before_completed: Dictionary = (save_data.get("completed_contracts", {}) as Dictionary).duplicate(true)
+	var before_xp: int = int(save_data.get("xp", 0))
+	var before_level: int = int(save_data.get("level", 1))
+	var before_currency: int = int(save_data.get("currency", 0))
+
+	# Stage the mode exactly as the QA autostart / prep READY does; the mission
+	# scene's reset_run republishes the stash after clearing the map-change id.
+	gs.call("begin_free_play", "Mission.Guildhall.LootTheRoom")
+	var miss_res: Dictionary = await h.instantiate_mission(2, 400, 1)
+	var gh: Node = miss_res["mission"] as Node
+	var hud: Node = miss_res["hud"] as Node
+	await h.step_process(3)
+
+	var mid: String = str(gs.get("active_mission_id"))
+	var goal: int = int(gs.get("loot_goal"))
+	var timer: float = float(gs.get("run_time_limit"))
+	var label: String = ""
+	var objs_v: Variant = gs.get("mission_objectives")
+	if objs_v is Array:
+		for o_v: Variant in (objs_v as Array):
+			if o_v is Dictionary and str((o_v as Dictionary).get("id", "")) == "cleanout_loot":
+				label = str((o_v as Dictionary).get("label", ""))
+	var obj_text: String = ""
+	var loot_text: String = ""
+	if hud != null:
+		var ol: Label = hud.get("obj_lbl") as Label
+		var ll: Label = hud.get("_loot_lbl") as Label
+		if ol != null:
+			obj_text = ol.text
+		if ll != null:
+			loot_text = ll.text
+
+	# Extraction must bank currency but never record contract progress in the
+	# hosting order (order 2 is the "Into the Lion's Den" campaign contract).
+	var no_write: bool = false
+	if gh != null:
+		gh.call("_on_extracted")
+		await h.step_process(1)
+		no_write = (save_data.get("completed_contracts", {}) as Dictionary) == before_completed and int(save_data.get("xp", 0)) == before_xp
+		save_data["completed_contracts"] = before_completed
+		save_data["xp"] = before_xp
+		save_data["level"] = before_level
+		save_data["currency"] = before_currency
+		ss.call("write_save")
+
+	var ids_ok: bool = mid == "Mission.Guildhall.LootTheRoom" and goal == 4000 and label == "Steal 4,000 in loot value"
+	var timer_ok: bool = absf(timer - 3300.0) < 0.5
+	var hud_ok: bool = obj_text == "Mission: Steal 4,000 in loot value[0/4,000]" and loot_text == "£ 0"
+	h.require(
+		gh != null and ids_ok and timer_ok and hud_ok and no_write,
+		"T4-13",
+		"free play id=%s goal=%d label='%s' timer=%.0f hud='%s' loot='%s' no_contract_write=%s" % [
+			mid, goal, label, timer, obj_text, loot_text, str(no_write)
+		]
+	)
+	await h.free_node(gh)

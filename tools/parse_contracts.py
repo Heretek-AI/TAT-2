@@ -24,6 +24,22 @@ OUT = ROOT / "game" / "data" / "generated" / "gameplay" / "contracts.json"
 CONTRACTS_TABLE = TABLES / "DT_Contracts_1_to_16.json"
 CONTRACTS_FALLBACK = TABLES / "CDT_Contracts.json"
 
+# Free-play Cleanout Heist loot thresholds: the QG authors one objective node
+# per difficulty (TATQuestGraphObjectiveNode_21/22/23, Properties.objective
+# .amount = 4000/6000/8000). Parsed into "mission_loot_goals" so the runtime
+# accessor (GameData.get_mission_loot_goal) is data-driven; the loader keeps a
+# documented static fallback for generated data that predates this key.
+LOOT_GOAL_QUESTS = {
+    "Mission.Guildhall.LootTheRoom": (
+        ROOT
+        / "extracted"
+        / "json"
+        / "Maps"
+        / "Guildhall"
+        / "QG_Guildhall_LootTheRoom.json"
+    ),
+}
+
 # Canonical mission row per map: the Vault rows carry the shipped
 # 7200/2700/1800 limits; the LootTheRoom rows are side-mission variants and
 # are intentionally NOT used here.
@@ -93,6 +109,43 @@ def load_contract_rows() -> tuple[dict, str]:
     raise FileNotFoundError("no contract table found")
 
 
+def qg_loot_goals(path: Path) -> list[int]:
+    """Difficulty ladder from a quest graph's objective node amounts.
+
+    Nodes carry Properties.objective.amount; sort by the numeric N in
+    TATQuestGraphObjectiveNode_N so the ladder follows authored node order
+    (21/22/23 -> 4000/6000/8000) instead of JSON traversal order. Returns []
+    when the capture is absent so `make normalize` still runs on a machine
+    without extracted/ (the runtime fallback table covers it).
+    """
+    if not path.exists():
+        print(f"WARN: quest graph missing, loot goals fall back at runtime: {path}")
+        return []
+    data = json.loads(path.read_text())
+    found: list[tuple[int, int]] = []
+
+    def walk(node) -> None:
+        if isinstance(node, dict):
+            if str(node.get("Type", "")) == "TATQuestGraphObjectiveNode":
+                name = str(node.get("Name", ""))
+                props = node.get("Properties") or {}
+                objective = props.get("objective") if isinstance(props, dict) else {}
+                amount = (
+                    objective.get("amount") if isinstance(objective, dict) else None
+                )
+                m = re.search(r"_(\d+)$", name)
+                if m and isinstance(amount, (int, float)) and int(amount) > 0:
+                    found.append((int(m.group(1)), int(amount)))
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value)
+
+    walk(data)
+    return [amount for _, amount in sorted(set(found))]
+
+
 def main() -> None:
     rows, source_rel = load_contract_rows()
     contracts = []
@@ -151,9 +204,7 @@ def main() -> None:
         map_id = map_id_from_ue(map_ue)
         if not map_ue or (
             map_id == "thieves_den"
-            and not any(
-                s in map_ue for s in ("ThievesDen", "FTUE", "Tutorial")
-            )
+            and not any(s in map_ue for s in ("ThievesDen", "FTUE", "Tutorial"))
         ):
             defaulted_maps.append(f"{key} (order {order})")
         contracts.append(
@@ -201,6 +252,16 @@ def main() -> None:
         mission_durations[alias] = dict(mission_durations["ftue"])
         mission_durations[alias]["alias_of"] = "ftue"
 
+    mission_loot_goals: dict = {}
+    for mission_id, qg_path in LOOT_GOAL_QUESTS.items():
+        goals = qg_loot_goals(qg_path)
+        if len(goals) >= 3:
+            mission_loot_goals[mission_id] = goals
+        else:
+            print(
+                f"WARN: {mission_id} loot goal ladder incomplete ({goals}); runtime fallback applies"
+            )
+
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(
         json.dumps(
@@ -208,18 +269,23 @@ def main() -> None:
                 "source_table": source_rel,
                 "contracts": contracts,
                 "mission_durations": mission_durations,
+                "mission_loot_goals": mission_loot_goals,
             },
             indent=2,
         )
         + "\n"
     )
     print(
-        f"Wrote {len(contracts)} contracts + {len(mission_durations)} mission durations -> {OUT}"
+        f"Wrote {len(contracts)} contracts + {len(mission_durations)} mission durations"
+        f" + {len(mission_loot_goals)} loot goal ladders -> {OUT}"
     )
     # P2-2: every thieves_den default must be explainable. Today only
     # Contract.Main.1 (empty hub path) is expected; anything else is a gap.
     if defaulted_maps:
-        print(f"WARN: {len(defaulted_maps)} contract(s) defaulted to thieves_den: " + ", ".join(defaulted_maps))
+        print(
+            f"WARN: {len(defaulted_maps)} contract(s) defaulted to thieves_den: "
+            + ", ".join(defaulted_maps)
+        )
 
 
 if __name__ == "__main__":

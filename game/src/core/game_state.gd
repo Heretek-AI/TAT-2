@@ -18,6 +18,20 @@ var active_contract_order: int = 2
 var active_map_id: String = "old_manor"
 var active_mission_id: String = ""
 var active_mission_mode: String = "Solo"
+## Free-play ("Contract Inactive") mode: a Guildhall Cleanout run with no
+## active contract. Hosted on the existing Guildhall contract order (2) so the
+## shipped 16-contract tables and the Den hub's `order <= 1` semantics are
+## untouched; contract 2 is also the order the prep UI already resolves to the
+## LootTheRoom row for the Guildhall map (matching[2 % 3]).
+const FREE_PLAY_CONTRACT_ORDER: int = 2
+const FREE_PLAY_MISSION_ID: String = "Mission.Guildhall.LootTheRoom"
+var free_play: bool = false
+## reset_run() clears the live run fields (including free_play and
+## active_mission_id on a map change), so the mode choice is staged here and
+## republished by reset_run. Prep and the QA autostart set these; the deploy
+## closure re-stages them around its own reset_run call.
+var free_play_pending: bool = false
+var pending_mission_id: String = ""
 # Run-selection state used by SV_* scene variants and match modes.
 var active_map_seed: int = 0
 var active_scene_variants: Array[String] = []
@@ -53,6 +67,15 @@ func reset_run(contract_order: int, map_id: String) -> void:
 	if active_map_id != map_id:
 		active_mission_id = ""
 	active_map_id = map_id
+	# Free-play is a mode, not run progress: clear the live flag with the rest
+	# of the run and republish the staged choice (prep / QA autostart / deploy
+	# closure). The pending mission id also survives the map-change wipe of
+	# active_mission_id above.
+	free_play = false
+	if free_play_pending:
+		free_play = true
+		if pending_mission_id != "":
+			active_mission_id = pending_mission_id
 	elapsed_sec = 0.0
 	run_time_limit = 0.0
 	loot_collected = 0
@@ -72,6 +95,37 @@ func reset_run(contract_order: int, map_id: String) -> void:
 	state_changed.emit(state)
 	objectives_updated.emit()
 	loot_changed.emit(loot_collected, loot_needed, loot_value)
+
+
+## Enter free play: stage the mode so reset_run republishes it, and publish it
+## immediately for callers that are already past their reset (prep READY).
+func begin_free_play(mission_id: String = FREE_PLAY_MISSION_ID) -> void:
+	free_play = true
+	free_play_pending = true
+	pending_mission_id = mission_id
+	active_mission_id = mission_id
+
+
+## Leave free play (a normal contract deploy / normal READY). Clears both the
+## live flag and the stash so a later reset_run cannot resurrect it.
+func end_free_play() -> void:
+	free_play = false
+	free_play_pending = false
+	pending_mission_id = ""
+
+
+## Group digits with thousands separators (4000 -> "4,000") for HUD/objective
+## text that the reference prints in full (e.g. "Steal 4,000 in loot value").
+func format_thousands(value: int) -> String:
+	var digits: String = str(absi(value))
+	var out: String = ""
+	var count: int = 0
+	for i: int in range(digits.length() - 1, -1, -1):
+		out = digits[i] + out
+		count += 1
+		if count % 3 == 0 and i > 0:
+			out = "," + out
+	return ("-" if value < 0 else "") + out
 
 
 func set_mission_objectives(objs: Array, p_loot_goal: int = -1) -> void:

@@ -8,6 +8,16 @@ var contract_strings: Dictionary = {} # contract_order -> Dictionary[key -> text
 var mission_durations: Dictionary = {} # map_id -> { durations, quest_graph_ue_path, title/description, source_* }
 var missions: Array[Dictionary] = [] # all CDT_Missions / DT_Missions_* rows (11 authored rows)
 var missions_by_id: Dictionary = {}
+## Free-play Cleanout Heist loot thresholds, keyed by mission id. Populated
+## from contracts.json's "mission_loot_goals" (tools/parse_contracts.py reads
+## the QG objective node amounts); the documented fallback below keeps the
+## accessor honest when generated data predates that parser key.
+var mission_loot_goals: Dictionary = {}
+const FALLBACK_MISSION_LOOT_GOALS: Dictionary = {
+	# QG_Guildhall_LootTheRoom TATQuestGraphObjectiveNode_21/22/23
+	# Properties.objective.amount (extracted UE capture).
+	"Mission.Guildhall.LootTheRoom": [4000, 6000, 8000],
+}
 ## Provenance for the contracts.json overlay (which DT_/CDT_ table it was
 ## generated from). Written by _load_contracts_json; read via
 ## contracts_source() (P2-D5: the var was write-only).
@@ -354,6 +364,9 @@ func _load_contracts_json() -> void:
 	var md: Variant = d.get("mission_durations", {})
 	if md is Dictionary:
 		mission_durations = (md as Dictionary).duplicate(true)
+	var mlg: Variant = d.get("mission_loot_goals", {})
+	if mlg is Dictionary:
+		mission_loot_goals = (mlg as Dictionary).duplicate(true)
 	var jlist: Variant = d.get("contracts", [])
 	if not (jlist is Array):
 		return
@@ -427,6 +440,40 @@ func get_contract_sublevels(order: int) -> Array[String]:
 					out.append(res_path)
 		break
 	return out
+
+
+## Mission-row match time limit in seconds for a mission id + difficulty
+## (1 Novice, 2 Thief, 3 Master Thief), read from
+## missions_by_id[id].durations (DT_Missions_* MatchDurationsByDifficulty).
+## Free play uses the mission row's authored limit (LootTheRoom Novice = 3300,
+## i.e. 55:00) instead of the map row's contract window. Returns 0.0 for an
+## unknown id (unlimited), matching get_match_duration's safe default.
+func get_mission_duration(mission_id: String, difficulty: int) -> float:
+	var entry_v: Variant = missions_by_id.get(mission_id)
+	if not (entry_v is Dictionary):
+		return 0.0
+	var durs_v: Variant = (entry_v as Dictionary).get("durations", [])
+	if not (durs_v is Array) or (durs_v as Array).is_empty():
+		return 0.0
+	var durs: Array = durs_v as Array
+	var idx: int = clampi(difficulty - 1, 0, durs.size() - 1)
+	return float(durs[idx])
+
+
+## Free-play / Cleanout Heist loot threshold for a mission id + difficulty.
+## Values come from contracts.json's mission_loot_goals (QG objective node
+## amounts parsed by tools/parse_contracts.py) with a documented static
+## fallback for generated data that predates the parser key. Returns 0 when
+## the mission authors no loot target.
+func get_mission_loot_goal(mission_id: String, difficulty: int) -> int:
+	var goals_v: Variant = mission_loot_goals.get(mission_id, null)
+	if not (goals_v is Array):
+		goals_v = FALLBACK_MISSION_LOOT_GOALS.get(mission_id, null)
+	if not (goals_v is Array) or (goals_v as Array).is_empty():
+		return 0
+	var goals: Array = goals_v as Array
+	var idx: int = clampi(difficulty - 1, 0, goals.size() - 1)
+	return int(goals[idx])
 
 
 ## Match time limit in seconds for a map + difficulty (1 Novice, 2 Thief,

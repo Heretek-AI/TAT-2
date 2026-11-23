@@ -408,8 +408,25 @@ func start_contract(order: int) -> void:
 	if not sv_ids.is_empty():
 		print("TAT-2 scene variants selected=", sv_ids.size(), " seed=", GameState.active_map_seed)
 	# Real match timer from the extracted DT_Missions_* tables (0 = unlimited).
+	# Free play reads the selected mission row's authored limit instead (the
+	# LootTheRoom Cleanout Heist is 3300 s / 55:00 at Novice) rather than the
+	# hosting contract's map window, so set it after the mission id resolves.
 	GameState.run_time_limit = GameData.get_match_duration(map_id, GameState.difficulty)
 	_setup_mission_objectives(map_id, order)
+	if GameState.free_play:
+		GameState.run_time_limit = GameData.get_mission_duration(GameState.active_mission_id, GameState.difficulty)
+		# Free play is the side mission itself, not the hosting contract: the
+		# letter/loading screen carry the mission row title ("Cleanout Heist")
+		# and its description, while the Guildhall contract order only supplies
+		# map + sublevels.
+		var fp_title: String = str(_active_mission_row.get("title", contract_info.get("title", "Contract")))
+		var fp_desc: String = str(_active_mission_row.get("description", "")).strip_edges()
+		if fp_title != "":
+			contract_info["title"] = fp_title
+			contract_info["mission_title"] = fp_title
+		if fp_desc != "":
+			contract_info["intro"] = fp_desc
+			contract_info["description"] = fp_desc
 
 	var loading: Node = LoadingScreenScript.new()
 	# Root-level CanvasLayer: the menu/Den swap used to leave the loading UI
@@ -2170,11 +2187,18 @@ func open_contract_table_ui() -> void:
 			# always changes), which dropped the prep-table choice; the table-local
 			# coop_mode likewise never reached GameState. Stash both across the reset;
 			# _setup_mission_objectives validates the id against missions_by_id + map.
+			# Free play is stashed the same way: its live flag is cleared by reset_run,
+			# so the mode + mission id are re-staged for the mission scene to consume.
 			var pending_mission_id: String = GameState.active_mission_id
 			var pending_mode: String = GameState.active_mission_mode
+			var pending_free_play: bool = GameState.free_play
 			GameState.reset_run(order_id, map_id)
 			GameState.active_mission_id = pending_mission_id
 			GameState.active_mission_mode = pending_mode
+			if pending_free_play:
+				GameState.begin_free_play(pending_mission_id)
+			else:
+				GameState.end_free_play()
 			get_tree().reload_current_scene()
 		)
 	if ui.has_method("open_table"):
@@ -2232,10 +2256,20 @@ func _setup_mission_objectives(map_id: String, _order: int) -> void:
 				{"id": "set_item_2", "label": "Relic Piece III", "done": false, "current": 0, "target": 1},
 			]
 	elif mid.ends_with(".LootTheRoom"):
-		goal_val = 1000 * clampi(GameState.difficulty, 1, 3)
-		objs = [
-			{"id": "cleanout_loot", "label": "Steal £%d worth of loot" % goal_val, "done": false, "current": 0, "target": goal_val},
-		]
+		if GameState.free_play:
+			# Free-play Cleanout Heist: the authored QG loot thresholds
+			# (4000/6000/8000 by difficulty) and the reference objective label.
+			goal_val = GameData.get_mission_loot_goal(mid, GameState.difficulty)
+			if goal_val <= 0:
+				goal_val = 4000
+			objs = [
+				{"id": "cleanout_loot", "label": "Steal %s in loot value" % GameState.format_thousands(goal_val), "done": false, "current": 0, "target": goal_val},
+			]
+		else:
+			goal_val = 1000 * clampi(GameState.difficulty, 1, 3)
+			objs = [
+				{"id": "cleanout_loot", "label": "Steal £%d worth of loot" % goal_val, "done": false, "current": 0, "target": goal_val},
+			]
 	else:
 		var target_name: String = str(contract_info.get("quest_item", ""))
 		if target_name == "" or target_name == "Objective" or target_name.begins_with("Loot."):
@@ -3167,7 +3201,10 @@ func _on_extracted() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	var final_score := int(round(GameState.loot_value * GameState.compute_stealth_bonus_multiplier()))
 	SaveSystem.add_currency(final_score)
-	SaveSystem.record_contract_complete(GameState.active_contract_order, final_score, not GameState.ever_spotted)
+	# Free play has no active contract: banking a completion would corrupt the
+	# hosting order's campaign progress (order 2 is "Into the Lion's Den").
+	if not GameState.free_play:
+		SaveSystem.record_contract_complete(GameState.active_contract_order, final_score, not GameState.ever_spotted)
 	if hud.has_method("show_result"):
 		hud.show_result(true, final_score, contract_info)
 

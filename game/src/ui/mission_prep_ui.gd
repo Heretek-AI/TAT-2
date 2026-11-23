@@ -91,6 +91,9 @@ var map_id: String = "old_manor"
 var difficulty: int = 1
 var mode: String = "Solo"
 var contract_order: int = 1
+## Free-play ("Contract Inactive") prep: no contract card, the Guildhall
+## Cleanout row pre-selected by id, and READY stages the mode for reset_run.
+var free_play: bool = false
 
 var _location_body: Label
 var _location_title_lbl: Label
@@ -126,11 +129,12 @@ func _ready() -> void:
 
 
 ## Show the prep screen for the given settings and take mouse control.
-func open_prep(p_map_id: String, p_difficulty: int, p_mode: String, p_contract_order: int) -> void:
+func open_prep(p_map_id: String, p_difficulty: int, p_mode: String, p_contract_order: int, p_free_play: bool = false) -> void:
 	map_id = p_map_id
 	difficulty = clampi(p_difficulty, 1, 3)
 	mode = p_mode
 	contract_order = p_contract_order
+	free_play = p_free_play
 	visible = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if AudioManager != null and AudioManager.has_method("play_ui"):
@@ -177,12 +181,19 @@ func _emit_ready() -> void:
 	# T7: thread the OptionButton choice into the deploy handoff. _selected_mission_idx
 	# carries the player's override (_on_mission_selected) or the map default; without
 	# this, setup re-derived positionally and the override was silently discarded.
+	var picked_id: String = ""
 	if _selected_mission_idx >= 0 and _selected_mission_idx < _mission_rows.size():
 		var picked: Dictionary = _mission_rows[_selected_mission_idx]
 		if str(picked.get("map_id", "")) == map_id:
-			var picked_id: String = str(picked.get("id", ""))
-			if picked_id != "":
-				GameState.active_mission_id = picked_id
+			picked_id = str(picked.get("id", ""))
+	if picked_id != "":
+		GameState.active_mission_id = picked_id
+	# Free-play READY stages mode + mission id together: reset_run clears the
+	# live flag on the map-change reset and republishes this stash.
+	if free_play:
+		GameState.begin_free_play(picked_id if picked_id != "" else GameState.FREE_PLAY_MISSION_ID)
+	else:
+		GameState.end_free_play()
 	ready_pressed.emit(map_id, difficulty, mode, contract_order)
 	visible = false
 	queue_free()
@@ -825,6 +836,15 @@ func _refresh_all() -> void:
 
 
 func _select_default_mission_for_map() -> void:
+	if free_play:
+		# Free play selects the Cleanout row by id, not positionally: the
+		# authored thresholds/duration live on Mission.Guildhall.LootTheRoom.
+		for i: int in range(_mission_rows.size()):
+			if str(_mission_rows[i].get("id", "")) == GameState.FREE_PLAY_MISSION_ID:
+				_selected_mission_idx = i
+				if _mission_selector != null and i < _mission_selector.item_count:
+					_mission_selector.select(i)
+				return
 	var matching: Array[int] = []
 	for i: int in range(_mission_rows.size()):
 		if str(_mission_rows[i].get("map_id", "")) == map_id:
@@ -939,6 +959,8 @@ func _refresh_contract_card() -> void:
 
 
 func _contract_info() -> Array:
+	if free_play:
+		return [CONTRACT_INACTIVE, "Free play: clean out the location for a score. No contract progress is recorded."]
 	if contract_order <= 0:
 		return [CONTRACT_INACTIVE, "Your active contract is not available for the currently selected map."]
 	var disp: Dictionary = GameData.get_contract_display(contract_order)

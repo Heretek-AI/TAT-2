@@ -53,19 +53,56 @@ func _ready() -> void:
 ## QA hook: `tat2/debug_autostart_contract` is 0 in shipped builds. The mobile
 ## packaging tool can set it to a contract order to boot straight into a mission;
 ## `--qa-contract=N` overrides it for export-binary perf and capture runs.
+## `--qa-free-play` boots the Contract Inactive Cleanout run on the Guildhall
+## hosting order, and `--qa-mission=<id>` picks the mission row by id.
 func _maybe_autostart_contract() -> void:
 	var order: int = int(ProjectSettings.get_setting("tat2/debug_autostart_contract", 0))
+	var mission_id: String = ""
+	var free_play: bool = false
 	for args: PackedStringArray in [OS.get_cmdline_user_args(), OS.get_cmdline_args()]:
 		for arg: String in args:
 			if arg.begins_with("--qa-contract="):
 				order = int(arg.substr(14))
+			elif arg.begins_with("--qa-mission="):
+				mission_id = arg.substr(13).strip_edges()
+			elif arg == "--qa-free-play":
+				free_play = true
+	if free_play and order <= 0:
+		order = GameState.FREE_PLAY_CONTRACT_ORDER
+	if free_play and mission_id == "":
+		mission_id = GameState.FREE_PLAY_MISSION_ID
+	if order <= 0 and mission_id != "":
+		# No explicit order: host the id's mission on the first contract that
+		# ships its map (Guildhall LootTheRoom -> Contract 2).
+		var mrow_v: Variant = GameData.missions_by_id.get(mission_id, null)
+		var want_map: String = str((mrow_v as Dictionary).get("map_id", "")) if mrow_v is Dictionary else ""
+		if want_map != "":
+			var best: int = 0
+			for c_v: Variant in GameData.contracts:
+				if not (c_v is Dictionary):
+					continue
+				var co: int = int((c_v as Dictionary).get("order", 0))
+				if co <= 0:
+					continue
+				if str(GameData.get_contract_display(co).get("map_id", "")) == want_map and (best == 0 or co < best):
+					best = co
+			order = best
 	if order <= 0:
 		return
 	var info: Dictionary = GameData.get_contract_display(order)
 	var map_id: String = str(info.get("map_id", "old_manor"))
-	print("TAT-2 QA autostart contract=", order, " map=", map_id)
+	print("TAT-2 QA autostart contract=", order, " map=", map_id, " mission=", mission_id, " free_play=", free_play)
 	GameState.active_contract_order = order
 	GameState.active_map_id = map_id
+	# reset_run() clears active_mission_id on a map change and clears the live
+	# free_play flag, so stage both through the same stash the prep/deploy
+	# handoff uses; the mission scene republishes them in start_contract().
+	if free_play:
+		GameState.begin_free_play(mission_id)
+	else:
+		GameState.end_free_play()
+		if mission_id != "":
+			GameState.active_mission_id = mission_id
 	get_tree().call_deferred("change_scene_to_file", "res://scenes/mission.tscn")
 
 
@@ -564,6 +601,9 @@ func _on_settings_pressed() -> void:
 ## threads active_mission_id + active_mission_mode across reset_run (T7).
 func _launch() -> void:
 	GameState.active_contract_order = selected_order
+	# PLAY is the normal contract boot: drop any staged free-play mode so a
+	# previous QA Cleanout session cannot leak into this deploy.
+	GameState.end_free_play()
 	# Resolve the map here so the mission's weather preset comes from the
 	# selected contract, not the GameState default ("old_manor").
 	var info: Dictionary = GameData.get_contract_display(selected_order)

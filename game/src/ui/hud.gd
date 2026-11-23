@@ -2124,7 +2124,10 @@ func _update_objectives_and_loot(is_hub: bool) -> void:
 		_loot_lbl.visible = not is_hub
 		var goal_v: Variant = GameState.get("loot_goal")
 		var goal: int = int(goal_v) if (goal_v is int or goal_v is float) else 0
-		if goal > 0:
+		if GameState.free_play:
+			# Reference Contract Inactive counter: just the take, no "/ £ goal".
+			_loot_lbl.text = "£ %d" % GameState.loot_value
+		elif goal > 0:
 			_loot_lbl.text = "£ %d / £ %d" % [GameState.loot_value, goal]
 		else:
 			_loot_lbl.text = "£ %d" % GameState.loot_value
@@ -2135,12 +2138,31 @@ func _update_objectives_and_loot(is_hub: bool) -> void:
 		obj_lbl.text = ""
 		return
 
+	var objs_v: Variant = GameState.get("mission_objectives")
+	# Free play: the reference prints the objective inline with its progress in
+	# the same bracket ("Mission: Steal 4,000 in loot value[0/4,000]") and no
+	# timer suffix or ❧ sub-line. Normal contracts keep the formatter below.
+	if GameState.free_play:
+		var fp_label: String = "Steal %s in loot value" % GameState.format_thousands(maxi(GameState.loot_goal, 0))
+		var fp_cur: int = 0
+		var fp_tgt: int = maxi(GameState.loot_goal, 0)
+		if objs_v is Array:
+			for o_v: Variant in (objs_v as Array):
+				if o_v is Dictionary:
+					var od: Dictionary = o_v as Dictionary
+					if str(od.get("id", "")) == "cleanout_loot":
+						fp_label = str(od.get("label", fp_label))
+						fp_cur = int(od.get("current", 0))
+						fp_tgt = int(od.get("target", fp_tgt))
+						break
+		obj_lbl.text = "Mission: %s[%s/%s]" % [fp_label, GameState.format_thousands(fp_cur), GameState.format_thousands(fp_tgt)]
+		return
+
 	var timing: String = ""
 	if GameState.run_time_limit > 0.0:
 		var remain: float = maxf(0.0, GameState.run_time_limit - GameState.elapsed_sec)
 		timing = "  (%02d:%02d)" % [int(remain) / 60, int(remain) % 60]
 
-	var objs_v: Variant = GameState.get("mission_objectives")
 	if objs_v is Array and not (objs_v as Array).is_empty():
 		var objs: Array = objs_v as Array
 		var done_cnt: int = 0

@@ -21,6 +21,10 @@ const SPLASH_CANDIDATES: Array[String] = [
 var selected_order: int = 1
 var selected_map_id: String = ""
 var coop_mode: String = "Solo"
+## Free-play ("Contract Inactive") flag threaded into MissionPrepUI. Default
+## false: the Den table keeps normal contract flow unless a caller (QA/test or
+## a future free-play entry) opts in.
+var free_play: bool = false
 
 var _contracts: Array[Dictionary] = []
 var _main_root: Control
@@ -547,7 +551,7 @@ func _confirm_prepare() -> void:
 	if _main_root != null:
 		_main_root.visible = false
 	if prep.has_method("open_prep"):
-		prep.call("open_prep", selected_map_id, int(GameState.difficulty), coop_mode, selected_order)
+		prep.call("open_prep", selected_map_id, int(GameState.difficulty), coop_mode, selected_order, free_play)
 
 
 func _on_prep_ready(p_map_id: String, p_difficulty: int, p_mode: String, p_order: int) -> void:

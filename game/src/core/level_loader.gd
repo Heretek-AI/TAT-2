@@ -845,6 +845,11 @@ func get_material_for_ue(ue_mat_path: String) -> Material:
 				hdr_mat.set_shader_parameter("flicker_amp", 0.22)
 			_std_mat_cache[ue_mat_path] = hdr_mat
 			return hdr_mat
+		if low_mat.ends_with("mi_storefront_decal"):
+			# The authored UE tint is linear (1.0, 0.327, 0.106), but Godot
+			# treats albedo_color as sRGB, so the storefront glass arrived red
+			# instead of gold. Convert this one authored path only.
+			tint_col = tint_col.linear_to_srgb()
 		mat.albedo_color = tint_col
 	var vectors_raw: Dictionary = info.get("vectors", {})
 	var parent_low: String = str(info.get("parent", "")).to_lower()

@@ -12,6 +12,13 @@ const WeatherVisuals := preload("res://src/core/weather_visuals.gd")
 const STARTSCREEN_GUARD_GLB: String = "res://assets/ue/Content/Art/Animation/GuardEnforcer/Skin/Base/SK_GuardEnforcer__Preview.glb"
 const STARTSCREEN_GUARD_UE_MESH: String = "/Game/Art/Animation/GuardEnforcer/Skin/Base/SK_GuardEnforcer__Preview"
 
+## Title wordmark crop inside T_TaT_Logo_Primary_White.png (2048x2048).
+## The authored glyphs occupy x 19..2030, y 389..1657; the rest is transparent
+## padding. Keep the crop here so a re-exported texture can be re-fitted
+## without hunting for the bbox again.
+const STARTSCREEN_LOGO_REGION: Rect2 = Rect2(19, 389, 2012, 1269)
+const STARTSCREEN_LOGO_MIN_SIZE: Vector2 = Vector2(317, 200)
+
 ## Authored CineCameraActor_0 from MainMenu.json:
 ## RelativeLocation (-1271.964, 1460.8873, 45.659775) cm -> Godot metres
 ## RelativeRotation Pitch +13.8 deg, Yaw -46.335075 deg; FieldOfView 76.758446 (16:9) -> vFOV 48.03 deg.
@@ -169,6 +176,37 @@ func _build_3d_backdrop() -> void:
 	_shop_glow.light_volumetric_fog_energy = 1.2
 	_shop_glow.shadow_enabled = false
 	scene_root.add_child(_shop_glow)
+
+	# The storefront glass decal quads are nearly opaque at z -0.124, so the
+	# authored warm shopfront pool cannot light the facade from behind them.
+	# These short-range shadowless fills sit in front of the decal plane
+	# (z +0.30): two lower fills, one fascia fill, plus a deep interior fill
+	# that carries the warm shop through the glass.
+	var gold_fill_specs: Array[Dictionary] = [
+		{"name": "StorefrontGoldFillL", "pos": Vector3(-3.5, 2.05, 0.30), "energy": 0.9},
+		{"name": "StorefrontGoldFillR", "pos": Vector3(2.2, 2.05, 0.30), "energy": 0.9},
+		{"name": "StorefrontGoldFillMid", "pos": Vector3(-0.7, 4.45, 0.30), "energy": 0.7},
+	]
+	for spec: Dictionary in gold_fill_specs:
+		var gold_fill := OmniLight3D.new()
+		gold_fill.name = String(spec["name"])
+		gold_fill.position = spec["pos"] as Vector3
+		gold_fill.light_color = Color(1.0, 0.80, 0.48)
+		gold_fill.light_energy = float(spec["energy"])
+		gold_fill.omni_range = 2.4
+		gold_fill.light_volumetric_fog_energy = 0.15
+		gold_fill.shadow_enabled = false
+		scene_root.add_child(gold_fill)
+	var interior_fill := OmniLight3D.new()
+	interior_fill.name = "StorefrontInteriorFill"
+	interior_fill.position = Vector3(-0.5, 2.6, -1.3)
+	interior_fill.light_color = Color(1.0, 0.68, 0.38)
+	interior_fill.light_energy = 1.4
+	interior_fill.omni_range = 3.5
+	interior_fill.omni_attenuation = 1.5
+	interior_fill.light_volumetric_fog_energy = 0.15
+	interior_fill.shadow_enabled = false
+	scene_root.add_child(interior_fill)
 
 	# KF01's storefront is washed magenta by the jeweller neon, not just the
 	# warm street lamps. One authored-hue fill (no shadows) puts that colour
@@ -412,7 +450,7 @@ func _make_menu_btn(text: String, font: Font) -> Button:
 	b.text = text
 	b.flat = true
 	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	b.add_theme_font_size_override("font_size", 22)
+	b.add_theme_font_size_override("font_size", 18)
 	b.add_theme_color_override("font_color", ArtNouveauTheme.IVORY)
 	b.add_theme_color_override("font_hover_color", ArtNouveauTheme.GOLD)
 	b.add_theme_color_override("font_pressed_color", ArtNouveauTheme.GOLD_DIM)
@@ -429,7 +467,7 @@ func _build_ui() -> void:
 	# Right-aligned title & clean vertical menu matching shipped startscreen
 	var right_anchor := Control.new()
 	right_anchor.set_anchors_preset(Control.PRESET_RIGHT_WIDE)
-	right_anchor.offset_left = -460
+	right_anchor.offset_left = -406
 	right_anchor.offset_right = -64
 	right_anchor.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(right_anchor)
@@ -437,18 +475,26 @@ func _build_ui() -> void:
 	var menu_v := VBoxContainer.new()
 	menu_v.anchor_left = 0.0
 	menu_v.anchor_right = 1.0
-	menu_v.anchor_top = 0.28
+	menu_v.anchor_top = 0.26806
 	menu_v.anchor_bottom = 0.90
-	menu_v.add_theme_constant_override("separation", 10)
+	menu_v.add_theme_constant_override("separation", 5)
 	right_anchor.add_child(menu_v)
 
 	var logo_tex := ResourceLoader.load("res://assets/ue/Raw/Art/UI/Branding/T_TaT_Logo_Primary_White.png") as Texture2D
 	if logo_tex != null:
+		# Crop the 2048^2 sheet to the wordmark bbox before fitting, otherwise
+		# the transparent padding would shrink the glyphs (see
+		# STARTSCREEN_LOGO_REGION). EXPAND_IGNORE_SIZE + shrink-begin keeps
+		# the rect at its minimum size instead of stretching to the column.
+		var logo_atlas := AtlasTexture.new()
+		logo_atlas.atlas = logo_tex
+		logo_atlas.region = STARTSCREEN_LOGO_REGION
 		var logo := TextureRect.new()
-		logo.texture = logo_tex
-		logo.custom_minimum_size = Vector2(360, 170)
-		logo.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+		logo.texture = logo_atlas
+		logo.custom_minimum_size = STARTSCREEN_LOGO_MIN_SIZE
+		logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		logo.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 		menu_v.add_child(logo)
 	else:
 		var title := Label.new()
@@ -459,7 +505,7 @@ func _build_ui() -> void:
 		menu_v.add_child(title)
 
 	var spacer := Control.new()
-	spacer.custom_minimum_size = Vector2(0, 14)
+	spacer.custom_minimum_size = Vector2(0, 53)
 	menu_v.add_child(spacer)
 
 	var play_btn := _make_menu_btn("PLAY", sans)

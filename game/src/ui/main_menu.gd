@@ -92,6 +92,25 @@ func _build_3d_backdrop() -> void:
 	]
 	var load_res: Dictionary = loader.load_sublevels(sublevels, scene_root, null, 32, false)
 	_apply_startscreen_trim_specular(scene_root)
+	# The masked-discard decal cuts its black background, revealing the
+	# storefront interior. The port's interior glass/neon is much brighter than
+	# the UE reference, so put a dim brown backing just behind the decals
+	# (z -0.16, in front of the glass at -0.2) to keep the reference's dark
+	# window with the lit display case.
+	var backing := MeshInstance3D.new()
+	backing.name = "StartscreenInteriorBacking"
+	var bq := QuadMesh.new()
+	bq.size = Vector2(11.0, 9.0)
+	backing.mesh = bq
+	backing.position = Vector3(0.5, 5.0, -0.16)
+	var bmat := StandardMaterial3D.new()
+	bmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	bmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	bmat.albedo_color = Color(0.02, 0.012, 0.010, 0.92)
+	bmat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	backing.material_override = bmat
+	backing.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	scene_root.add_child(backing)
 
 	var fog_vol_v: Variant = load_res.get("fog_volume", {})
 	_menu_fog_vol = fog_vol_v as Dictionary if fog_vol_v is Dictionary else {}
@@ -256,10 +275,10 @@ func _bind_menu_env() -> void:
 	e.tonemap_mode = Environment.TONE_MAPPER_ACES
 	e.tonemap_exposure = 0.95
 	e.glow_enabled = true
-	e.glow_intensity = 1.9
-	e.glow_bloom = 0.26
+	e.glow_intensity = 1.2
+	e.glow_bloom = 0.18
 	e.glow_hdr_threshold = 1.8
-	e.glow_hdr_scale = 3.2
+	e.glow_hdr_scale = 3.0
 	e.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
 	for gl_i: int in range(5):
 		e.set_glow_level(gl_i, true)

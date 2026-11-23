@@ -125,6 +125,7 @@ func _setup_environment() -> void:
 	add_child(moon)
 	light_probe.register_light(moon)
 	_add_guildhall_gate_fills()
+	_add_guildhall_car_lights()
 	_add_guildhall_foyer_fills()
 	_add_guildhall_saferoom_fill()
 
@@ -152,7 +153,10 @@ func _add_guildhall_gate_fills() -> void:
 	light_probe.register_light(gate_lamp)
 	var fence_lamp := OmniLight3D.new()
 	fence_lamp.name = "GuildhallFenceLampFill"
-	fence_lamp.position = Vector3(10.0, 28.0, 50.0)
+	# KF16: the sign plane sits at z 48.35-49.02, so the old z 50.0 position put
+	# this fill behind the sign and backlit it. Street side (z 46.0) lights the
+	# fence/finial run from the audience like the reference gate.
+	fence_lamp.position = Vector3(10.0, 27.0, 46.0)
 	fence_lamp.light_color = Color(1.0, 0.76, 0.52)
 	fence_lamp.light_energy = 3.5
 	fence_lamp.omni_range = 16.0
@@ -160,6 +164,131 @@ func _add_guildhall_gate_fills() -> void:
 	fence_lamp.shadow_enabled = false
 	add_child(fence_lamp)
 	light_probe.register_light(fence_lamp)
+
+
+## KF16: the reference gate has the vintage car's headlights flashing on the wet
+## cobbles under the arch, and the authored car underpass sublevel carries no
+## LightComponent for them (only emissive lens geometry, which the loader's
+## material path drops). Two shadowless spots recreate the authored beam at the
+## car nose. They are deliberately NOT registered with light_probe: they are
+## scene dressing outside the stealth cone set, so guard/player visibility is
+## unchanged. Desktop only (the mobile budget stays on authored lights).
+## The lens glass emission is applied separately (_override_guildhall_car_lenses)
+## because it has to run after the authored sublevels are built.
+func _add_guildhall_car_lights() -> void:
+	if GameState.active_map_id != "guildhall":
+		return
+	if MobileProfile.is_mobile():
+		return
+	var beam_dir := Vector3(-0.9824, -0.1736, 0.0687)
+	var specs: Array = [
+		["GuildhallCarHeadlightL", Vector3(17.83, 19.96, 65.81)],
+		["GuildhallCarHeadlightR", Vector3(17.91, 19.96, 67.02)],
+	]
+	for spec: Array in specs:
+		var beam := SpotLight3D.new()
+		beam.name = str(spec[0])
+		beam.position = spec[1] as Vector3
+		beam.light_color = Color(1.0, 0.843, 0.651)
+		beam.light_energy = 3.3
+		beam.spot_range = 10.0
+		beam.spot_angle = 66.0
+		beam.spot_attenuation = 1.0
+		beam.shadow_enabled = false
+		beam.light_volumetric_fog_energy = 0.0
+		beam.distance_fade_enabled = true
+		beam.distance_fade_begin = 25.0
+		beam.distance_fade_length = 20.0
+		add_child(beam)
+		# Aim after add_child so look_at uses the global transform.
+		beam.look_at(beam.global_position + beam_dir, Vector3.UP)
+
+
+## KF16 lens cores: SM_Automobile_Lights_B's authored slot 1 is
+## MI_Automobile_Glass, and its authored emissive (MI_Glass_Automobile
+## EmissiveStrength 2.0 / EmissiveTint 1.0 0.6186 0.2552) is not carried by the
+## loader's material join, so the lenses render dead. Duplicate the surface
+## materials per instance (the mesh resource is shared across every car) and
+## enable the authored warm emission on the glass surface only. Runs after the
+## Guildhall sublevels build; skips cleanly when the node is absent.
+func _override_guildhall_car_lenses() -> void:
+	if GameState.active_map_id != "guildhall":
+		return
+	if MobileProfile.is_mobile():
+		return
+	const LENS_TARGET: Vector3 = Vector3(17.93, 19.88, 66.41)
+	var best: MeshInstance3D = null
+	var best_d: float = 4.0
+	for node: Node in find_children("*", "MeshInstance3D", true, false):
+		var mi: MeshInstance3D = node as MeshInstance3D
+		if mi.mesh == null:
+			continue
+		if not str(mi.get_meta("ue_mesh", "")).contains("SM_Automobile_Lights_B"):
+			continue
+		var d: float = mi.global_position.distance_to(LENS_TARGET)
+		if d <= best_d:
+			best_d = d
+			best = mi
+	if best == null:
+		print("TAT-2 KF16 car lenses: SM_Automobile_Lights_B node not found within 4 m of ", LENS_TARGET, "; lens emission skipped")
+		return
+	for s in range(best.mesh.get_surface_count()):
+		if not best.mesh.surface_get_name(s).to_lower().contains("glass"):
+			continue
+		var mat: Material = best.get_active_material(s)
+		if mat == null:
+			print("TAT-2 KF16 car lenses: glass surface ", s, " has no material; lens emission skipped")
+			return
+		var dup: Material = mat.duplicate()
+		if dup is StandardMaterial3D:
+			var smat: StandardMaterial3D = dup as StandardMaterial3D
+			smat.emission_enabled = true
+			smat.emission = Color(1.0, 0.6186, 0.2552)
+			smat.emission_energy_multiplier = 2.0
+		elif dup is ShaderMaterial:
+			var shmat: ShaderMaterial = dup as ShaderMaterial
+			shmat.set_shader_parameter("emission_color", Vector3(1.0, 0.6186, 0.2552))
+			shmat.set_shader_parameter("emission_energy", 2.0)
+		best.set_surface_override_material(s, dup)
+		print("TAT-2 KF16 car lenses: node=", best.name, " dist=", snappedf(best_d, 0.01), " glass_surface=", s, " emission=1.0,0.6186,0.2552 energy=2.0")
+		return
+	print("TAT-2 KF16 car lenses: no glass surface on ", best.name, "; lens emission skipped")
+
+
+## KF17: the reference rooftop-aim frame holds a damped clocktower silhouette in
+## the mist. The port has no Guildhall skyline tower, so place the authored
+## SM_DistantTowerA vista piece (same 50 m body, MI_DistantBuidingA slot) behind
+## the gate on the street axis. Decorative and shadowless: no collision, no
+## light_probe registration, desktop only. Needs the loaded material DB, so it
+## runs after the sublevels build.
+func _add_guildhall_skyline_clocktower() -> void:
+	if GameState.active_map_id != "guildhall":
+		return
+	if MobileProfile.is_mobile():
+		return
+	const TOWER_UE_MESH: String = "/Game/Art/Environment/Skybox/Buildings/SM_DistantTowerA"
+	# mesh_materials.json slot 0 keeps the authored material under the ML/
+	# subfolder (/Game/.../Buildings/ML/MI_DistantBuidingA), not the bare
+	# /Game/.../Buildings/MI_DistantBuidingA form; pass that authored path.
+	const TOWER_UE_MAT: String = "/Game/Art/Environment/Skybox/Buildings/ML/MI_DistantBuidingA"
+	var info: Dictionary = level_loader.call("_get_mesh_and_shape", TOWER_UE_MESH) as Dictionary
+	var mesh: Mesh = info.get("mesh") as Mesh
+	if mesh == null:
+		print("TAT-2 KF17 clocktower: mesh missing for ", TOWER_UE_MESH, "; skipped")
+		return
+	var mat: Material = level_loader.call("get_material_for_ue", TOWER_UE_MAT) as Material
+	if mat == null:
+		print("TAT-2 KF17 clocktower: material missing for ", TOWER_UE_MAT, "; skipped")
+		return
+	var mi := MeshInstance3D.new()
+	mi.name = "GuildhallSkylineClocktower"
+	mi.mesh = mesh
+	mi.position = Vector3(10.0, 20.0, -120.0)
+	mi.scale = Vector3(2.6, 2.6, 2.6)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.set_surface_override_material(0, mat)
+	add_child(mi)
+	print("TAT-2 KF17 clocktower: placed ", mi.name, " mat=", TOWER_UE_MAT)
 
 
 ## The safe room starts the mission; under the 0.20 skylight its wood/plaster
@@ -286,6 +415,11 @@ func start_contract(order: int) -> void:
 			print("TAT-2 scene variants: active=", sv_apply.get("active", 0), " applied=", sv_apply.get("applied", 0), " suppressed=", sv_apply.get("suppressed", 0), " locked=", sv_apply.get("locked", 0), " unmapped=", sv_apply.get("unmapped", 0))
 	level_stats = ue_level_data
 	_apply_level_atmosphere(ue_level_data)
+	# KF16/KF17 dressing needs the authored sublevels (the car lens node and the
+	# loaded material DB), so these run after the build, next to the gate fills.
+	if map_id == "guildhall":
+		_override_guildhall_car_lenses()
+		_add_guildhall_skyline_clocktower()
 	if int(ue_level_data.get("chunk_count", 0)) > 0:
 		print("TAT-2 Perf: chunks=", ue_level_data.get("chunk_count", 0), " collision_bodies=", ue_level_data.get("collision_bodies", 0), " collision_shapes=", ue_level_data.get("collision_shapes", 0), " occluders=", ue_level_data.get("occluder_count", 0))
 
@@ -651,6 +785,29 @@ func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> 
 	# Den P1 KF10: re-aim + raise the authored desk spot onto the map table
 	# (authored lights are already built by the level loader at this point).
 	_aim_den_desk_spot(desk_pos)
+
+	# KF10 bounce: the authored spot is a hard 80 deg cone from above, so the
+	# parchment leaves a shadow-side falloff. A short, shadowless warm spot
+	# 1.85 m above the table closes it without lifting the room. It joins
+	# den_hand_fills so Suite 34b stays honest (1.30 + 0.35 = 1.65 <= 2.0).
+	if not MobileProfile.is_mobile():
+		var bounce := SpotLight3D.new()
+		bounce.name = "DenMapTableBounce"
+		bounce.position = desk_pos + Vector3(0.0, 1.85, 0.0)
+		bounce.light_color = Color(1.0, 0.79, 0.55)
+		bounce.light_energy = 0.35
+		bounce.spot_range = 3.3
+		bounce.spot_angle = 45.0
+		bounce.spot_attenuation = 1.0
+		bounce.spot_angle_attenuation = 1.8
+		bounce.light_specular = 0.2
+		bounce.shadow_enabled = false
+		bounce.light_volumetric_fog_energy = 0.0
+		bounce.add_to_group("den_hand_fills")
+		add_child(bounce)
+		# Aim after add_child so look_at uses the global transform.
+		bounce.look_at(desk_pos + Vector3(0.0, 0.06, 0.0), Vector3.UP)
+		light_probe.register_light(bounce)
 
 	# Interactive Map Table -> opens ContractTableUI (diegetic HUD prompt, no giant Label3D billboard)
 	var desk_area := Area3D.new()

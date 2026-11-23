@@ -795,7 +795,7 @@ func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> 
 		bounce.name = "DenMapTableBounce"
 		bounce.position = desk_pos + Vector3(0.0, 1.85, 0.0)
 		bounce.light_color = Color(1.0, 0.79, 0.55)
-		bounce.light_energy = 0.35
+		bounce.light_energy = 2.0
 		bounce.spot_range = 3.3
 		bounce.spot_angle = 45.0
 		bounce.spot_attenuation = 1.0
@@ -803,7 +803,6 @@ func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> 
 		bounce.light_specular = 0.2
 		bounce.shadow_enabled = false
 		bounce.light_volumetric_fog_energy = 0.0
-		bounce.add_to_group("den_hand_fills")
 		add_child(bounce)
 		# Aim after add_child so look_at uses the global transform.
 		bounce.look_at(desk_pos + Vector3(0.0, 0.06, 0.0), Vector3.UP)

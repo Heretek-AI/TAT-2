@@ -2748,6 +2748,7 @@ func _select_fp_anim_role(moving: bool) -> String:
 			return "disguise_walk"
 		if is_crouching:
 			return "disguise_crouch_idle"
+		return "disguise_idle"
 	# Zipwire cast/aim/anchored pose: the 0.2 s LMB launch hold and a live
 	# zipwire action clip keep the authored CastIdle. The is_grappling branch
 	# above selects the same in-frame pose for the winch itself; a relaxed

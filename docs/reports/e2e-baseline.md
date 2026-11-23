@@ -114,7 +114,7 @@ The last ten rows closed as follows:
 | T1-11-D | Trajectory mesh is parented to the player and its sweep is throttled to 10 Hz; the check drives the production update then asserts visibility. |
 | T1-11-E | Slithersap arms after `SAP_ARM_DELAY_SEC = 0.3 s`; the check now waits 22 physics frames. |
 | T1-17-C | OldManor token uses the UE SphereRadius ratio and the selected token grows 1.15x over `minis_base`; asserted from the authored base meta and live grow ratio. |
-| T3-20 | UE ships no standing 1P disguise idle for Nisha (authored set: `AN_Disguise_Crouch_Idle_1P` + Walk/Sprint/Crouch/Jump 1P). The standing case correctly falls through to the neutral StandIdle; the check asserts the authored crouch disguise idle plus the HUD vignette. |
+| T3-20 | ABPL_Disguise (the Disguise tool's 1P layer) uses `AN_ThiefCotter_Disguise_StandIdle` standing and `AN_Disguise_Crouch_Idle_1P` crouched; the Nisha `AN_Disguise_*_1P` set belongs to `ABPL_AntiStealth` (Bolas/Firefly), not this tool. The check asserts both exact clips resolve on the 1P arm player plus the unchanged HUD `T_Disguise_Vignette02` vignette. |
 | T3-14 | The FOV slider step is 0.01 so the authored 54.54 is selectable (a 1.0 step snapped it to 55.0); camera and viewmodel sync verified. |
 
 ## Rules for closing

@@ -125,6 +125,7 @@ const FP_TOOL_CLIPS := {
 	"disguise_sprint": {"clip": "AN_Disguise_Sprint_1P", "loop": true},
 	"disguise_crouch": {"clip": "AN_Disguise_Crouch_F_1P", "loop": true},
 	"disguise_crouch_idle": {"clip": "AN_Disguise_Crouch_Idle_1P", "loop": true},
+	"disguise_idle": {"clip": "AN_ThiefCotter_Disguise_StandIdle", "loop": true},
 	"disguise_apply": {"clip": "AN_Disguise_ApplySelf", "loop": false},
 	"unarmed_idle": {"clip": "AN_ThiefNisha_Unarmed_StandIdle", "loop": true},
 	# Traversal clips exist in the 995-clip manifest and retarget onto the same

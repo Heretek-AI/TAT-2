@@ -380,8 +380,8 @@ The authored fog inscattering `(0.0011, 0.0016, 0.004)` is self-lit in the
 port and darker than the sky gradient, so blending it at 0.85 reduced the
 upper-sky median from 0.102 to 0.024. `apply_sky()` therefore also sets an
 indigo haze floor `(0.12, 0.13, 0.15)` at energy 1.0 for the exact
-`midnight_clear` preset. Measured KF17/KF18 sky p50 0.167 (UE 0.23-0.26) and
-18 star components; `dense_fog` remains 0.0 and the Den/lobby presets are
+`midnight_clear` preset. Measured KF18 sky p50 0.242 (UE 0.235-0.26) and
+22 star components, right-sky mean (0.252,0.241,0.238); `dense_fog` remains 0.0 and the Den/lobby presets are
 unchanged.
 
 ## 2026-11-23 follow-up — warm SkyAtmosphere veil inside the shader
@@ -409,3 +409,11 @@ horizon. Accepted target after this change: mean `~0.245 / 0.232 / 0.221`
 `MIDNIGHT_CLEAR_STAR_SCALE` 0.12 (the authored UE star colour is black).
 `T1-01-E` asserts the veil is present, warm (`r > b`), and exactly 0.0 for the
 Den preset; `dense_fog` still measures 0.0 in `run_tests.gd`.
+
+### Final tuning (2026-11-23)
+
+The veil is uploaded as a `Vector3`: passing a `Color` to a `vec3` uniform is
+sRGB-decoded by Godot, which made the first attempt near-black and left the sky
+blue. Final values: linear `(0.052, 0.040, 0.028)`, `haze_amount 1.0`,
+`fog_sky_affect 0.80`, stars `x0.10`. Measured KF18 sky p50 0.242, right-sky
+mean (0.252, 0.241, 0.238), 22 star components.

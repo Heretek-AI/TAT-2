@@ -102,7 +102,12 @@ func _feat_01_night_sky() -> void:
 	var haze_v: Variant = sm.get_shader_parameter("haze_amount") if sm != null else null
 	var haze_amt: float = float(haze_v) if haze_v != null else -1.0
 	var haze_col_v: Variant = sm.get_shader_parameter("haze_color") if sm != null else null
-	var haze_col: Color = haze_col_v as Color if haze_col_v is Color else Color(-1, -1, -1)
+	var haze_col := Vector3(-1, -1, -1)
+	if haze_col_v is Vector3:
+		haze_col = haze_col_v as Vector3
+	elif haze_col_v is Color:
+		var haze_c: Color = haze_col_v as Color
+		haze_col = Vector3(haze_c.r, haze_c.g, haze_c.b)
 	var den_v: Variant = h.read_json("res://data/generated/weather/midnight_clear_thieves_den.json")
 	var den: Dictionary = den_v as Dictionary if den_v is Dictionary else {}
 	var den_sky: Sky = wv_scr.call("make_sky", den, moon) if wv_scr != null else null
@@ -111,10 +116,10 @@ func _feat_01_night_sky() -> void:
 	var den_haze: float = float(den_haze_v) if den_haze_v != null else -1.0
 	h.require(
 		has_sky_radiance and indigo_fog
-		and haze_amt >= 0.8 and haze_amt <= 1.0 and haze_col.r > haze_col.b and den_haze == 0.0,
+		and haze_amt >= 0.8 and haze_amt <= 1.0 and haze_col.x > haze_col.z and den_haze == 0.0,
 		"T1-01-E",
 		"sky_radiance_decoupled=%s indigo_fog=%s fog_col=%s warm_sky_haze amount=%.3f color=%s warm_r_gt_b=%s den_amount=%.3f" % [
-			str(has_sky_radiance), str(indigo_fog), str(fog_col), haze_amt, str(haze_col), str(haze_col.r > haze_col.b), den_haze
+			str(has_sky_radiance), str(indigo_fog), str(fog_col), haze_amt, str(haze_col), str(haze_col.x > haze_col.z), den_haze
 		]
 	)
 

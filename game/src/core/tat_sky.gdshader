@@ -43,7 +43,7 @@ uniform float cloud_coverage = 0.45;
 // APPROXIMATE warm SkyAtmosphere/fog veil. LINEAR radiance, uploaded before
 // Environment.background_energy_multiplier; deliberately NOT multiplied by
 // sky_radiance_scale (that scale belongs to the authored M_Sky gradient only).
-uniform vec3 haze_color = vec3(0.0230, 0.0197, 0.0163);
+uniform vec3 haze_color = vec3(0.0520, 0.0400, 0.0280);
 uniform float haze_amount = 0.0;
 uniform float haze_height_falloff = 0.0;
 

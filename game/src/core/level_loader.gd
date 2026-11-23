@@ -11,6 +11,7 @@ const LANDSCAPE_SHADER: Shader = preload("res://src/core/tat_landscape.gdshader"
 const EMISSIVE_CPD_SHADER: Shader = preload("res://src/core/tat_emissive_cpd.gdshader")
 const GLASS_SHADER: Shader = preload("res://src/core/tat_glass.gdshader")
 const HDR_EMISSIVE_SHADER: Shader = preload("res://src/core/tat_hdr_emissive.gdshader")
+const STOREFRONT_DECAL_SHADER: Shader = preload("res://src/core/tat_storefront_decal.gdshader")
 
 ## Landscape layer name -> extracted albedo texture. Missing layers are skipped
 ## (the shader normalizes the remaining weights) instead of binding a guessed
@@ -496,7 +497,7 @@ func _apply_ue_pbr_params(mat: StandardMaterial3D, info: Dictionary) -> void:
 	# multiplying the map by 0 and producing mirror-metal props (MI_Zipwire:
 	# FlatRoughness 0.0 + ORM mean 0.665 -> 0.04). Prefer an explicit
 	# Roughness scalar, otherwise let the ORM map drive (value 1.0).
-	var rough: Variant = _ue_lookup(params, ["roughness"])
+	var rough: Variant = _ue_lookup(params, ["roughness", "rougness"])
 	if rough == null and not (has_orm and rough_map_switch != false):
 		rough = _ue_lookup(params, ["flatroughness"])
 	if rough == null:
@@ -775,6 +776,28 @@ func get_material_for_ue(ue_mat_path: String) -> Material:
 			var gmat: ShaderMaterial = _build_glass_material(info, glass_alb, glass_op)
 			_std_mat_cache[ue_mat_path] = gmat
 			return gmat
+	# Exact MI instance only: the storefront glass decal albedo is ~90% black
+	# texels (the magenta neon reads through it), so the StandardMaterial3D
+	# tint path turned the whole pane magenta. Recolor the black background to
+	# a dark gold and gate emission to the bright scrollwork luma instead.
+	if low_mat.ends_with("mi_storefront_decal"):
+		var dmat: ShaderMaterial = ShaderMaterial.new()
+		dmat.shader = STOREFRONT_DECAL_SHADER
+		dmat.set_shader_parameter("albedo_tex", _load_tex(str(texs_early.get("albedo", ""))))
+		var decal_tint: Variant = info.get("tint")
+		if decal_tint is Array and (decal_tint as Array).size() >= 3:
+			var dt: Array = decal_tint as Array
+			# Authored UE tint is already linear; do NOT sRGB-convert here.
+			dmat.set_shader_parameter("gold_lin", Vector3(float(dt[0]), float(dt[1]), float(dt[2])))
+		else:
+			dmat.set_shader_parameter("gold_lin", Vector3(1.0, 0.327, 0.106))
+		dmat.set_shader_parameter("bg_gold", 0.12)
+		dmat.set_shader_parameter("em_floor", 0.03)
+		dmat.set_shader_parameter("em_scroll", 0.80)
+		dmat.set_shader_parameter("luma_lo", 0.55)
+		dmat.set_shader_parameter("luma_hi", 0.85)
+		_std_mat_cache[ue_mat_path] = dmat
+		return dmat
 	var mat := StandardMaterial3D.new()
 	mat.roughness = 0.78
 	_apply_ue_pbr_params(mat, info)
@@ -845,11 +868,6 @@ func get_material_for_ue(ue_mat_path: String) -> Material:
 				hdr_mat.set_shader_parameter("flicker_amp", 0.22)
 			_std_mat_cache[ue_mat_path] = hdr_mat
 			return hdr_mat
-		if low_mat.ends_with("mi_storefront_decal"):
-			# The authored UE tint is linear (1.0, 0.327, 0.106), but Godot
-			# treats albedo_color as sRGB, so the storefront glass arrived red
-			# instead of gold. Convert this one authored path only.
-			tint_col = tint_col.linear_to_srgb()
 		mat.albedo_color = tint_col
 	var vectors_raw: Dictionary = info.get("vectors", {})
 	var parent_low: String = str(info.get("parent", "")).to_lower()

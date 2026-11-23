@@ -2673,6 +2673,26 @@ func _initialize() -> void:
 	else:
 		print("PASS: 33c opaque glass stays opaque StandardMaterial3D with authored albedo (3/3)")
 
+	# 33d. Exact MI_Storefront_Decal instance uses the dedicated decal shader
+	# (90.4% of the albedo texels are black; tinting that black magenta is the bug).
+	var sd_path: String = "/Game/Art/Environment/Storefront/GlassDecals/MI_Storefront_Decal"
+	var sd_m: Variant = gl_ll.call("get_material_for_ue", sd_path)
+	var sd_sh: ShaderMaterial = sd_m as ShaderMaterial
+	var sd_shader_ok: bool = sd_sh != null and sd_sh.shader != null \
+		and sd_sh.shader.resource_path.ends_with("tat_storefront_decal.gdshader")
+	var sd_alb: Variant = sd_sh.get_shader_parameter("albedo_tex") if sd_sh != null else null
+	var sd_alb_ok: bool = sd_alb is Texture2D
+	var sd_parent_m: Variant = gl_ll.call("get_material_for_ue", "/Game/Art/Environment/Storefront/GlassDecals/M_Storefront_Decal")
+	var sd_parent_ok: bool = sd_parent_m is StandardMaterial3D
+	var sd_src: String = sd_sh.shader.code if sd_sh != null and sd_sh.shader != null else ""
+	var sd_src_ok: bool = sd_src.find("smoothstep(luma_lo, luma_hi, luma)") >= 0 \
+		and sd_src.find("ALPHA_SCISSOR_THRESHOLD") >= 0
+	if not sd_shader_ok or not sd_alb_ok or not sd_parent_ok or not sd_src_ok:
+		printerr("FAIL: 33d storefront decal shader (shader=", sd_shader_ok, " albedo=", sd_alb_ok, " parent_std=", sd_parent_ok, " source=", sd_src_ok, ")")
+		fails += 1
+	else:
+		print("PASS: 33d MI_Storefront_Decal binds tat_storefront_decal.gdshader (albedo bound, parent M_ stays StandardMaterial3D, luma gate + scissor in source)")
+
 	gl_ll.queue_free()
 	await process_frame
 

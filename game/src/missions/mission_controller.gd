@@ -804,8 +804,12 @@ func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> 
 		bounce.shadow_enabled = false
 		bounce.light_volumetric_fog_energy = 0.0
 		add_child(bounce)
-		# Aim after add_child so look_at uses the global transform.
-		bounce.look_at(desk_pos + Vector3(0.0, 0.06, 0.0), Vector3.UP)
+		# Aim after add_child so look_at uses the global transform. The bounce
+		# sits directly above the desk, so Vector3.UP as the up vector is
+		# colinear with the target direction ("Target and up vectors are
+		# colinear"). FORWARD is perpendicular to the straight-down aim, so the
+		# basis stays non-degenerate and the light still points down.
+		bounce.look_at(desk_pos + Vector3(0.0, 0.06, 0.0), Vector3.FORWARD)
 		light_probe.register_light(bounce)
 
 	# Interactive Map Table -> opens ContractTableUI (diegetic HUD prompt, no giant Label3D billboard)

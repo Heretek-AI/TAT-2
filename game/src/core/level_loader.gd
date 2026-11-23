@@ -195,6 +195,16 @@ static func light_energy_for_intensity(raw: float) -> float:
 ## exists so a corrupt authored radius cannot create an unbounded light.
 const LIGHT_RANGE_CEIL: float = 200.0
 
+## KF16 gate hero-light allowlist. The Guildhall gate approach is lit by six
+## authored lights aimed away from the sign (two 20.0 uplights, two 4.1 omnis,
+## two 20.0 Gameplay lights). They survive spawn-area priority and dedupe but
+## rank ~243-702 on authored energy, so the 160-light cut evicted all of them
+## and the gate rendered dark. Surviving candidates within this radius of the
+## hero point are force-included after the six hero shadow slots and shadowless.
+const HERO_LIGHT_POINT: Vector3 = Vector3(10.0, 26.0, 49.8)
+const HERO_LIGHT_RADIUS_M: float = 10.0
+const HERO_LIGHT_MAP_HINT: String = "guildhall"
+
 ## Level-component runtime (decals / rect lights / volumes / splines) ---------
 ## UE decals project along their local +X (DecalActor arrow axis); Godot
 ## Decal nodes project along local -Y, so every decal basis is post-rotated
@@ -2934,14 +2944,76 @@ func _prioritize_lights(pending_lights: Array, focus_points: Array) -> Array:
 
 func _add_lights(pending_lights: Array, parent: Node3D, light_probe: Node, max_lights: int, ctx: Dictionary, focus_points: Array = []) -> void:
 	var ordered: Array = _prioritize_lights(pending_lights, focus_points)
-	var budget: int = mini(ordered.size(), max_lights)
-	var hero_shadows: int = mini(MobileProfile.hero_shadows(), budget)
+	var map_hint: String = str(ctx.get("map_hint", ""))
+	var selection: Array = _select_lights(ordered, max_lights, map_hint)
 	var added: int = 0
-	for li in range(budget):
-		var linfo: Dictionary = ordered[li]
-		if _add_one_light(linfo, parent, light_probe, li < hero_shadows, str(ctx.get("map_hint", ""))):
+	var forced_added: int = 0
+	for sel_var: Variant in selection:
+		var sel: Dictionary = sel_var as Dictionary
+		var linfo: Dictionary = sel["info"] as Dictionary
+		if _add_one_light(linfo, parent, light_probe, bool(sel.get("shadow", false)), map_hint):
 			added += 1
+			if bool(sel.get("forced", false)):
+				forced_added += 1
 	ctx["light_count"] = added
+	ctx["gate_light_count"] = forced_added
+	_report_gate_lights(added, max_lights, forced_added, map_hint, int(ctx.get("rect_light_count", 0)))
+
+
+## True when a candidate is one of the KF16 gate sign-facing lights: inside the
+## hero radius on the Guildhall load. Only Guildhall is allowlisted so other
+## maps keep their pure score ranking.
+static func _is_gate_hero_light(info: Dictionary, map_hint: String) -> bool:
+	if map_hint != HERO_LIGHT_MAP_HINT:
+		return false
+	var p_v: Variant = info.get("pos", null)
+	if not (p_v is Array) or (p_v as Array).size() < 3:
+		return false
+	var p: Array = p_v as Array
+	var dx: float = float(p[0]) - HERO_LIGHT_POINT.x
+	var dy: float = float(p[1]) - HERO_LIGHT_POINT.y
+	var dz: float = float(p[2]) - HERO_LIGHT_POINT.z
+	return dx * dx + dy * dy + dz * dz <= HERO_LIGHT_RADIUS_M * HERO_LIGHT_RADIUS_M
+
+
+## Cuts the ranked light list to the budget while force-including the gate
+## hero lights. Order is preserved: the ranked head first (its first
+## hero_shadows entries cast shadows), then the forced lights, which are
+## always shadowless and never take a hero shadow slot. The forced lights
+## replace the lowest-ranked tail entries, so the total stays at the budget.
+## Returns Array[Dictionary] of {info, shadow, forced}.
+func _select_lights(ordered: Array, max_lights: int, map_hint: String) -> Array:
+	var budget: int = mini(ordered.size(), max_lights)
+	var head: Array = []
+	var forced: Array = []
+	for l_var: Variant in ordered:
+		if not (l_var is Dictionary):
+			continue
+		var l: Dictionary = l_var as Dictionary
+		if _is_gate_hero_light(l, map_hint):
+			forced.append(l)
+			continue
+		if head.size() < budget:
+			head.append(l)
+	var hero_shadows: int = mini(MobileProfile.hero_shadows(), budget)
+	var keep: int = clampi(budget - forced.size(), 0, head.size())
+	var selected: Array = []
+	for i in range(keep):
+		selected.append({"info": head[i], "shadow": i < hero_shadows, "forced": false})
+	for f: Variant in forced:
+		if selected.size() >= budget:
+			break
+		selected.append({"info": f as Dictionary, "shadow": false, "forced": true})
+	return selected
+
+
+## Verification line for the KF16 gate pass: final selected count (generic +
+## rect lights) plus how many lights the allowlist forced in. Printed for
+## Guildhall only (the sole allowlisted map) so other loads stay quiet.
+static func _report_gate_lights(added: int, budget: int, forced: int, map_hint: String, rect_lights: int = 0) -> void:
+	if map_hint != HERO_LIGHT_MAP_HINT:
+		return
+	print("TAT-2 gate lights: total=%d (generic=%d rect=%d) budget=%d forced=%d hero_shadows=%d" % [added + rect_lights, added, rect_lights, budget, forced, mini(MobileProfile.hero_shadows(), budget)])
 
 
 func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dictionary:
@@ -3570,17 +3642,23 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 	# Active RectLights claim budget slots before the generic point lights.
 	_build_rect_lights(acc["rect_lights"], parent, light_probe, ctx, max_lights)
 	var light_budget: int = mini(pending_lights.size(), maxi(max_lights - int(ctx.get("rect_light_count", 0)), 0))
+	var selection: Array = _select_lights(pending_lights, light_budget, str(ctx.get("map_hint", "")))
 	var lights_added: int = 0
-	var hero_shadows: int = mini(MobileProfile.hero_shadows(), light_budget)
-	for li in range(light_budget):
-		var linfo: Dictionary = pending_lights[li]
-		if _add_one_light(linfo, parent, light_probe, li < hero_shadows, str(ctx.get("map_hint", ""))):
+	var forced_lights: int = 0
+	for li in range(selection.size()):
+		var sel: Dictionary = selection[li] as Dictionary
+		var linfo: Dictionary = sel["info"] as Dictionary
+		if _add_one_light(linfo, parent, light_probe, bool(sel.get("shadow", false)), str(ctx.get("map_hint", ""))):
 			lights_added += 1
-		if li % 20 == 0 or li == light_budget - 1:
-			load_progress.emit(0.3 + 0.2 * float(li + 1) / float(maxi(light_budget, 1)), "Creating lights %d/%d..." % [li + 1, light_budget])
+			if bool(sel.get("forced", false)):
+				forced_lights += 1
+		if li % 20 == 0 or li == selection.size() - 1:
+			load_progress.emit(0.3 + 0.2 * float(li + 1) / float(maxi(selection.size(), 1)), "Creating lights %d/%d..." % [li + 1, selection.size()])
 			if parent.get_tree() != null:
 				await parent.get_tree().process_frame
 	ctx["light_count"] = lights_added + int(ctx.get("rect_light_count", 0))
+	ctx["gate_light_count"] = forced_lights
+	_report_gate_lights(lights_added, light_budget, forced_lights, str(ctx.get("map_hint", "")), int(ctx.get("rect_light_count", 0)))
 	if _timing:
 		print("LoadTiming lights_ms=", Time.get_ticks_msec() - _t0)
 	_build_decals(acc["decals"], parent, ctx)
@@ -3634,7 +3712,25 @@ func _light_score(info: Dictionary) -> float:
 
 
 func _sort_lights_desc(a: Dictionary, b: Dictionary) -> bool:
-	return _light_score(a) > _light_score(b)
+	var sa: float = _light_score(a)
+	var sb: float = _light_score(b)
+	if not is_equal_approx(sa, sb):
+		return sa > sb
+	# Stable tie-break on authored position: equal-energy lights used to rank
+	# in whichever order the dictionary iteration produced, so the 160-light
+	# cut and the gate allowlist evictions were not reproducible between loads.
+	var pa_v: Variant = a.get("pos", null)
+	var pb_v: Variant = b.get("pos", null)
+	if not (pa_v is Array) or not (pb_v is Array):
+		return false
+	var pa: Array = pa_v as Array
+	var pb: Array = pb_v as Array
+	for i in range(3):
+		var va: float = float(pa[i]) if i < pa.size() else 0.0
+		var vb: float = float(pb[i]) if i < pb.size() else 0.0
+		if not is_equal_approx(va, vb):
+			return va > vb
+	return false
 
 
 func _dict_to_transform(d: Dictionary) -> Transform3D:
@@ -3883,6 +3979,15 @@ func _landscape_weighted_material(lc: Dictionary, map_hint: String = "") -> Shad
 	if slot == 0:
 		return null
 	mat.set_shader_parameter("uv_scale", 12.0)
+	# Guildhall's gate approach has no colour weight at all (puddle-only), so
+	# the shader's total==0 path used to flatten it to grey. Bind the authored
+	# road-brick albedo as that fallback; every other map keeps the grey/dirt
+	# fallback_color (fallback_tex_on stays 0.0).
+	if source.to_lower().contains("guildhall"):
+		var fb_tex: Texture2D = _load_tex("res://assets/ue/Raw/MaterialLibrary/Environment/Stone/FloorExterior/T_RoadBricksA_D.png")
+		if fb_tex != null:
+			mat.set_shader_parameter("fallback_tex", fb_tex)
+			mat.set_shader_parameter("fallback_tex_on", 1.0)
 	return mat
 
 

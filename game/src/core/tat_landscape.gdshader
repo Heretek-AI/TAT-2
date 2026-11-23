@@ -35,6 +35,12 @@ uniform sampler2D puddle_opacity : filter_linear, repeat_enable;
 uniform float discard_holes = 1.0;
 uniform float uv_scale = 12.0;
 uniform vec3 fallback_color : source_color = vec3(0.42, 0.42, 0.40);
+// Components whose authored weights never reach a colour layer (the Guildhall
+// gate approach is puddle-only, so total stays 0) used to render flat grey.
+// The loader opts a map into a real surface texture here; fallback_color stays
+// the grey/dirt default for every other map.
+uniform sampler2D fallback_tex : source_color, filter_linear, repeat_disable;
+uniform float fallback_tex_on = 0.0;
 
 float channel_value(vec4 w, int channel) {
 	if (channel == 0) {
@@ -122,7 +128,17 @@ void fragment() {
 		groundwet = channel_value(weight_at(groundwet_tex_idx, UV), groundwet_channel);
 		col *= (1.0 - groundwet * 0.18);
 	}
-	ALBEDO = total > 0.001 ? col / total : fallback_color;
+	if (total > 0.001) {
+		ALBEDO = col / total;
+	} else if (puddle > 0.001) {
+		// Zero-weight but puddled: keep the authored wet tint instead of the
+		// flat grey fallback.
+		ALBEDO = vec3(0.035, 0.045, 0.060);
+	} else if (fallback_tex_on > 0.5) {
+		ALBEDO = texture(fallback_tex, UV * uv_scale).rgb;
+	} else {
+		ALBEDO = fallback_color;
+	}
 	float base_rough = mix(0.9, 0.42, groundwet);
 	ROUGHNESS = mix(base_rough, 0.04, puddle);
 	SPECULAR = mix(0.5, 0.85, max(puddle, groundwet * 0.4));

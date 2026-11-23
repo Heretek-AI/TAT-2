@@ -357,20 +357,20 @@ func _setup_thieves_den_env(map_id: String) -> void:
 				# at their inactive authored values (never forced on here).
 				den_env.tonemap_mode = Environment.TONE_MAPPER_AGX
 				den_env.tonemap_exposure = 1.9
-				# Den P1 shadow-toe: the level-load LUT (ThievesDenTest_P
-				# LocalExposure 1.2 / 0.6 / 0.25) crushes the attic blacks to
-				# 0 and bands the first 1% of the ramp. Keep its gain/contrast
-				# and open only a 1.4% black floor with a 3% toe, so the deep
-				# shadow detail survives while every value above 3% stays
-				# identity (no auto-exposure, no global mapping change). The
-				# pre-P1 LUT is kept for the KF05 scope view (see
-				# _set_ponder_shadow_toe).
+				# Den P1 shadow-toe: layer an additive toe on the level-load LUT
+				# (ThievesDenTest_P LocalExposure 1.2 / 0.6 / 0.25) instead of
+				# replacing it. The bump is +2.2% at black and falls smoothly to
+				# zero at 3%, so the P0.1 midtones/highlights keep their base
+				# curve (measured LUT-only: p50 +0.1..+0.2, p95 +0.0) while the
+				# darkest-half shadow median lifts +1.3..+2.2 units. No
+				# auto-exposure, no global mapping change. The pre-P1 LUT is
+				# kept for the KF05 scope view (see _set_ponder_shadow_toe).
 				_den_env = den_env
 				if _den_lut_legacy == null:
 					# First call: the level loader has already applied the
 					# authored LocalExposure LUT; keep that as the KF05 baseline.
 					_den_lut_legacy = den_env.adjustment_color_correction as GradientTexture1D
-				_den_lut_p1 = WeatherProfile.build_shadow_toe_lut(1.2, 0.6, 0.25, 0.014, 0.03)
+				_den_lut_p1 = WeatherProfile.build_shadow_toe_lut(1.2, 0.6, 0.25, 0.022, 0.030)
 				den_env.adjustment_color_correction = _den_lut_p1
 				den_env.adjustment_enabled = true
 				den_env.adjustment_brightness = 1.0
@@ -1664,6 +1664,8 @@ func toggle_telescope_ponder() -> void:
 ## KILCAIRN parchment and tokens needs the authored 2.0 energy aimed at the
 ## map-table surface (+6 cm). Colour, range, cone, attenuation and shadow stay
 ## authored, and no other authored light or hand fill is touched.
+## Measured on the 2026-11-22 capture: energy 2.2 moved p95 by 0.0
+## (63.3 both) and lifted p50 +0.3, so 2.0 is kept.
 const DEN_KF10_DESK_SPOT_POS: Vector3 = Vector3(3.6446, 41.803, 267.8289)
 const DEN_KF10_DESK_SPOT_TOL: float = 0.05
 

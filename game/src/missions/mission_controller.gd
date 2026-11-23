@@ -70,6 +70,9 @@ var _ponder_vista: Node3D = null
 var _den_env: Environment = null
 var _den_lut_p1: GradientTexture1D = null
 var _den_lut_legacy: GradientTexture1D = null
+## Den reflection probe node, freed explicitly at mission exit (see _exit_tree):
+## Godot 4.7.2 retains the probe atlas (7 texture RIDs) until the node is freed.
+var _den_reflection_probe: ReflectionProbe = null
 var _active_mission_row: Dictionary = {}
 
 
@@ -126,6 +129,7 @@ func _setup_environment() -> void:
 	light_probe.register_light(moon)
 	_add_guildhall_gate_fills()
 	_add_guildhall_car_lights()
+	_add_guildhall_road_fills()
 	_add_guildhall_foyer_fills()
 	_add_guildhall_saferoom_fill()
 
@@ -166,6 +170,33 @@ func _add_guildhall_gate_fills() -> void:
 	light_probe.register_light(fence_lamp)
 
 
+## KF16 road lighting: the gate approach (z ~52-57) between the car and the
+## arch reads as a wet cobble black hole once the headlights are re-aimed at the
+## approach. Two shadowless warm omnis kiss the road surface either side of the
+## approach axis. Deliberately NOT registered with light_probe (scene dressing,
+## not a stealth influence) and added after the authored 160-light budget pass.
+func _add_guildhall_road_fills() -> void:
+	if GameState.active_map_id != "guildhall":
+		return
+	if MobileProfile.is_mobile():
+		return
+	var specs: Array = [
+		["GuildhallRoadFillL", Vector3(8.6, 21.2, 52.0)],
+		["GuildhallRoadFillR", Vector3(11.4, 21.2, 52.0)],
+	]
+	for spec: Array in specs:
+		var road_fill := OmniLight3D.new()
+		road_fill.name = str(spec[0])
+		road_fill.position = spec[1] as Vector3
+		road_fill.light_color = Color(1.0, 0.76, 0.52)
+		road_fill.light_energy = 0.7
+		road_fill.omni_range = 8.0
+		road_fill.omni_attenuation = 1.4
+		road_fill.shadow_enabled = false
+		road_fill.light_volumetric_fog_energy = 0.0
+		add_child(road_fill)
+
+
 ## KF16: the reference gate has the vintage car's headlights flashing on the wet
 ## cobbles under the arch, and the authored car underpass sublevel carries no
 ## LightComponent for them (only emissive lens geometry, which the loader's
@@ -180,19 +211,18 @@ func _add_guildhall_car_lights() -> void:
 		return
 	if MobileProfile.is_mobile():
 		return
-	var beam_dir := Vector3(-0.9824, -0.1736, 0.0687)
 	var specs: Array = [
-		["GuildhallCarHeadlightL", Vector3(17.83, 19.96, 65.81)],
-		["GuildhallCarHeadlightR", Vector3(17.91, 19.96, 67.02)],
+		["GuildhallCarHeadlightL", Vector3(17.83, 19.96, 65.81), Vector3(11.0, 18.6, 54.0)],
+		["GuildhallCarHeadlightR", Vector3(17.91, 19.96, 67.02), Vector3(9.0, 18.6, 57.0)],
 	]
 	for spec: Array in specs:
 		var beam := SpotLight3D.new()
 		beam.name = str(spec[0])
 		beam.position = spec[1] as Vector3
 		beam.light_color = Color(1.0, 0.843, 0.651)
-		beam.light_energy = 3.3
-		beam.spot_range = 10.0
-		beam.spot_angle = 66.0
+		beam.light_energy = 4.5
+		beam.spot_range = 16.0
+		beam.spot_angle = 55.0
 		beam.spot_attenuation = 1.0
 		beam.shadow_enabled = false
 		beam.light_volumetric_fog_energy = 0.0
@@ -200,8 +230,9 @@ func _add_guildhall_car_lights() -> void:
 		beam.distance_fade_begin = 25.0
 		beam.distance_fade_length = 20.0
 		add_child(beam)
-		# Aim after add_child so look_at uses the global transform.
-		beam.look_at(beam.global_position + beam_dir, Vector3.UP)
+		# Aim after add_child so look_at uses the global transform; per-light
+		# targets throw the beams down the gate approach instead of the kerb.
+		beam.look_at(spec[2] as Vector3, Vector3.UP)
 
 
 ## KF16 lens cores: SM_Automobile_Lights_B's authored slot 1 is
@@ -769,6 +800,7 @@ func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> 
 		print("TAT-2 Den reflection probe: disabled (TAT2_NO_DEN_PROBE/--no-den-probe/setting)")
 	den_probe.intensity = 0.8
 	add_child(den_probe)
+	_den_reflection_probe = den_probe
 
 	# F1 ground-placement rule: authored tatlevel positions are UE-grounded
 	# (ThievesDen_Geo, 348 exports — per-prop StaticMeshComponent AttachParent
@@ -786,31 +818,26 @@ func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> 
 	# (authored lights are already built by the level loader at this point).
 	_aim_den_desk_spot(desk_pos)
 
-	# KF10 bounce: the authored spot is a hard 80 deg cone from above, so the
-	# parchment leaves a shadow-side falloff. A short, shadowless warm spot
-	# 1.85 m above the table closes it without lifting the room. It joins
-	# den_hand_fills so Suite 34b stays honest (1.30 + 0.35 = 1.65 <= 2.0).
+	# Den paper P2: the old 2.0 downward DenMapTableBounce spot is gone. The
+	# parchment now self-lights (emission pass below) and a soft near-table
+	# shade fill closes the shadow side without a hard cone.
+	# den_hand_fills total: 1.30 + 0.60 = 1.90 <= 2.01 (Suite 34b).
 	if not MobileProfile.is_mobile():
-		var bounce := SpotLight3D.new()
-		bounce.name = "DenMapTableBounce"
-		bounce.position = desk_pos + Vector3(0.0, 1.85, 0.0)
-		bounce.light_color = Color(1.0, 0.79, 0.55)
-		bounce.light_energy = 2.0
-		bounce.spot_range = 3.3
-		bounce.spot_angle = 45.0
-		bounce.spot_attenuation = 1.0
-		bounce.spot_angle_attenuation = 1.8
-		bounce.light_specular = 0.2
-		bounce.shadow_enabled = false
-		bounce.light_volumetric_fog_energy = 0.0
-		add_child(bounce)
-		# Aim after add_child so look_at uses the global transform. The bounce
-		# sits directly above the desk, so Vector3.UP as the up vector is
-		# colinear with the target direction ("Target and up vectors are
-		# colinear"). FORWARD is perpendicular to the straight-down aim, so the
-		# basis stays non-degenerate and the light still points down.
-		bounce.look_at(desk_pos + Vector3(0.0, 0.06, 0.0), Vector3.FORWARD)
-		light_probe.register_light(bounce)
+		var shade_fill := OmniLight3D.new()
+		shade_fill.name = "DenShadeFill"
+		shade_fill.position = Vector3(4.011, 41.7004, 267.5435)
+		shade_fill.light_color = Color(1.0, 0.74, 0.42)
+		shade_fill.light_energy = 0.60
+		shade_fill.omni_range = 3.0
+		shade_fill.omni_attenuation = 1.5
+		shade_fill.light_specular = 0.0
+		shade_fill.shadow_enabled = false
+		shade_fill.light_volumetric_fog_energy = 0.0
+		shade_fill.add_to_group("den_hand_fills")
+		add_child(shade_fill)
+		light_probe.register_light(shade_fill)
+
+	_apply_den_parchment_emission()
 
 	# Interactive Map Table -> opens ContractTableUI (diegetic HUD prompt, no giant Label3D billboard)
 	var desk_area := Area3D.new()
@@ -967,6 +994,38 @@ func interact(_actor: Node) -> void:
 			if rotated:
 				player.rotation = Vector3(0.0, atan2(-hub_dir.x, -hub_dir.z), 0.0)
 			print("TAT-2 den spawn hub-facing: misalign_before_deg=", snappedf(misalign_deg, 0.1), " rotated_to_face=", rotated, " table=", _den_map_table_pos)
+
+
+## Den paper P2: the authored map parchment (SM_Map_ThievesDen, MI_Map_ThievesDen)
+## sits on the desk in deep shade now that the hard downward bounce is gone.
+## Give it a faint self-lit parchment wash instead: duplicate the instance
+## material (the mesh/material is shared with OldManor via the level loader's
+## cache, so the shared resource is never mutated) and multiply a warm
+## emission by the albedo so the ink/crease detail survives.
+func _apply_den_parchment_emission() -> void:
+	const PARCHMENT_ENERGY: float = 0.018
+	for n: Node in find_children("*", "MeshInstance3D", true, false):
+		var mi: MeshInstance3D = n as MeshInstance3D
+		if mi == null or mi.mesh == null:
+			continue
+		if not str(mi.get_meta("ue_mesh", "")).contains("SM_Map_ThievesDen"):
+			continue
+		var base: Material = mi.get_surface_override_material(0)
+		if base == null:
+			base = mi.mesh.surface_get_material(0)
+		if not base is StandardMaterial3D:
+			continue
+		var parchment: StandardMaterial3D = (base as StandardMaterial3D).duplicate() as StandardMaterial3D
+		if parchment == null:
+			continue
+		parchment.emission_enabled = true
+		parchment.emission_texture = parchment.albedo_texture
+		parchment.emission_operator = BaseMaterial3D.EMISSION_OP_MULTIPLY
+		parchment.emission = Color(1.0, 0.92, 0.82)
+		parchment.emission_energy_multiplier = PARCHMENT_ENERGY
+		mi.set_surface_override_material(0, parchment)
+		print("TAT-2 Den parchment emission: node=", mi.name, " energy=", PARCHMENT_ENERGY)
+		return
 
 
 ## P0.1: damp the Den wardrobe shelf gear emissive. The knockout grenade
@@ -3144,6 +3203,20 @@ func _on_time_expired() -> void:
 ## systems when a mission leaves the tree. Without this the last mission's
 ## textures, LUTs and retarget caches survive shutdown as leaked resources.
 func _exit_tree() -> void:
+	# Godot 4.7.2 holds the Den reflection probe atlas (7 texture RIDs) until the
+	# node itself is deleted; queue_free() alone leaves it to the tree teardown.
+	# Stop updates and free it now so the leak verifier sees a clean exit.
+	# 4.7.2 only exposes UPDATE_ONCE/UPDATE_ALWAYS (no UPDATE_NEVER), so the
+	# stop is "hide so no capture can start"; free() is what releases the atlas.
+	if _den_reflection_probe != null and is_instance_valid(_den_reflection_probe):
+		if ClassDB.class_has_integer_constant("ReflectionProbe", "UPDATE_NEVER"):
+			_den_reflection_probe.set("update_mode", ClassDB.class_get_integer_constant("ReflectionProbe", "UPDATE_NEVER"))
+		else:
+			_den_reflection_probe.visible = false
+		if _den_reflection_probe.get_parent() != null:
+			_den_reflection_probe.get_parent().remove_child(_den_reflection_probe)
+		_den_reflection_probe.free()
+	_den_reflection_probe = null
 	# Stop scene-owned beds/gramophone immediately. Their fade tweens otherwise
 	# survive the mission and hold the last rain/roomtone players through quit.
 	var am: Node = get_node_or_null("/root/AudioManager")

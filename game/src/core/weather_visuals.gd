@@ -97,7 +97,7 @@ const MIDNIGHT_CLEAR_FOG_SKY_AFFECT := 0.85
 const MIDNIGHT_CLEAR_BACKGROUND_ENERGY := 2.0
 const MIDNIGHT_CLEAR_STAR_SCALE := 0.12
 ## Neutral haze floor approximating UE SkyAtmosphere-lit height fog (see apply_sky).
-const MIDNIGHT_CLEAR_HAZE_COLOR := Color(0.14, 0.135, 0.125)
+const MIDNIGHT_CLEAR_HAZE_COLOR := Color(0.12, 0.13, 0.15)
 const MIDNIGHT_CLEAR_HAZE_ENERGY := 1.0
 const CLOUD_OPACITY_TO_HAZE := 0.18
 const CLOUD_HAZE_MAX := 0.55

@@ -214,7 +214,7 @@ func _bind_menu_env() -> void:
 	e.background_color = Color(0.012, 0.016, 0.036)
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	e.ambient_light_color = Color(0.45, 0.42, 0.72)
-	e.ambient_light_energy = 0.38
+	e.ambient_light_energy = 0.45
 	e.tonemap_mode = Environment.TONE_MAPPER_ACES
 	e.tonemap_exposure = 0.95
 	e.glow_enabled = true
@@ -227,12 +227,12 @@ func _bind_menu_env() -> void:
 		e.set_glow_level(gl_i, true)
 	if _menu_moon != null and not _menu_preset.is_empty():
 		WeatherVisuals.apply_sky(e, _menu_preset, _menu_moon)
-		e.ambient_light_sky_contribution = 0.0
+		e.ambient_light_sky_contribution = 0.35
 		# TAT's M_Sky multiplies the authored HDR gradient by OverallColor
 		# 0.001, which the shader's 25x night lift still leaves near-black.
 		# The reference KF01 sky/haze sits around 0.07-0.15, so lift the
 		# rendered sky radiance once here (authored colours stay untouched).
-		e.background_energy_multiplier = 1.2
+		e.background_energy_multiplier = 1.8
 		# Authored night fog hue, tinted toward the reference's magenta
 		# storefront haze rather than a neutral blue. fog_sky_affect also
 		# tints the low sky band; the street remains readable at 0.0015.

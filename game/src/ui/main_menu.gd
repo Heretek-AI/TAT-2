@@ -242,6 +242,24 @@ func _bind_menu_env() -> void:
 		e.fog_density = 0.0015
 		e.fog_sky_affect = 0.5
 		e.fog_aerial_perspective = 0.4
+	if not MobileProfile.is_mobile():
+		# The startscreen lighting explicitly authors desktop volumetric mist,
+		# SSR and SSIL; these were lost in the 529b153 env refactor (E2E
+		# T1-03-C/T1-04-C/T2-03-D/T3-09/T4-01).
+		e.volumetric_fog_enabled = true
+		e.volumetric_fog_density = 0.016
+		e.volumetric_fog_albedo = Color(0.85, 0.82, 0.90)
+		e.volumetric_fog_anisotropy = 0.45
+		e.volumetric_fog_length = 45.0
+		e.volumetric_fog_sky_affect = 0.0
+		e.ssr_enabled = true
+		e.ssr_max_steps = 48
+		e.ssr_fade_in = 0.15
+		e.ssr_fade_out = 2.0
+		e.ssr_depth_tolerance = 0.2
+		e.ssil_enabled = true
+		e.ssil_radius = 4.0
+		e.ssil_intensity = 1.1
 	_menu_cam.environment = e
 
 

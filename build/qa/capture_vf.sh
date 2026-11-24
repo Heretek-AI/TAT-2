@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -u
+ROOT=/home/john/Projects/TAT-2
+QA="$ROOT/build/qa"
+LOG="$QA/capture_vf.log"
+XVFBLOG="$QA/xvfb_capture_vf.log"
+cd "$ROOT" || exit 1
+mkdir -p "$QA"
+
+pkill -f "Xvfb :99" 2>/dev/null
+sleep 1
+rm -f /tmp/.X99-lock
+Xvfb :99 -screen 0 1280x720x24 -nolisten tcp -ac > "$XVFBLOG" 2>&1 &
+XPID=$!
+sleep 1
+
+cleanup() {
+  set +e
+  kill -TERM "$XPID" 2>/dev/null
+  wait "$XPID" 2>/dev/null
+  rm -f /tmp/.X99-lock
+}
+trap cleanup EXIT
+
+env -u WAYLAND_DISPLAY -u XAUTHORITY DISPLAY=:99 \
+  "$ROOT/tools/godot" --path game --rendering-driver vulkan \
+  --script "$QA/capture_vf.gd" > "$LOG" 2>&1
+ST=$?
+
+echo "EXIT=$ST"
+grep -E "Godot Engine|Vulkan|Forward|QA CAPTURE|SHADER ERROR|SCRIPT ERROR" "$LOG"
+exit "$ST"

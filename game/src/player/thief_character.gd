@@ -1492,6 +1492,21 @@ func _update_zipwire_cable() -> void:
 	_zipwire_cable_mesh.basis = Basis(x_axis, y_axis * dist, z_axis)
 
 
+## Designer blocking volumes are invisible collision proxies: they stop the
+## player walking through authored space, but they are not walls, ledges or
+## grapple anchors. Every traversal probe (mantle, wall climb, zipwire) must
+## treat a hit on one as no hit, while real walls, LevelCollision_* bodies and
+## landscape collision stay climbable.
+func _is_blocking_volume_hit(hit: Dictionary) -> bool:
+	if hit.is_empty():
+		return false
+	var collider_v: Variant = hit.get("collider")
+	if not (collider_v is Node):
+		return false
+	var collider: Node = collider_v as Node
+	return is_instance_valid(collider) and collider.is_in_group("blocking_volume")
+
+
 func try_auto_mantle() -> bool:
 	if not can_act() or is_grappling or is_wire_hanging or is_mantling or not is_inside_tree():
 		return false
@@ -1514,6 +1529,10 @@ func try_auto_mantle() -> bool:
 			break
 	if wall_hit.is_empty():
 		return false
+	# A blocking volume in front of a real wall hides it: do not mantle through
+	# (or off) the invisible proxy.
+	if _is_blocking_volume_hit(wall_hit):
+		return false
 	var wn: Vector3 = wall_hit.get("normal", Vector3.ZERO) as Vector3
 	if absf(wn.y) > 0.35:
 		return false
@@ -1527,6 +1546,9 @@ func try_auto_mantle() -> bool:
 	var top_to: Vector3 = Vector3(top_from.x, global_position.y + 0.45, top_from.z)
 	var top_hit: Dictionary = space.intersect_ray(PhysicsRayQueryParameters3D.create(top_from, top_to, 1, excl))
 	if top_hit.is_empty():
+		return false
+	# A real wall whose top is capped by an invisible blocker must not mantle.
+	if _is_blocking_volume_hit(top_hit):
 		return false
 	var ledge_n: Vector3 = top_hit.get("normal", Vector3.ZERO) as Vector3
 	if ledge_n.dot(Vector3.UP) < 0.7:
@@ -1578,6 +1600,10 @@ func _tick_wall_climb(delta: float, wish: Vector3) -> bool:
 	var from: Vector3 = global_position + Vector3.UP * 1.1
 	var hit: Dictionary = w3d.direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(from, from + fwd * 0.65, 1, [get_rid()]))
 	if hit.is_empty():
+		is_wall_climbing = false
+		return false
+	# Invisible designer blockers are not climbable surfaces (no handholds).
+	if _is_blocking_volume_hit(hit):
 		is_wall_climbing = false
 		return false
 	var wn: Vector3 = hit.get("normal", Vector3.ZERO) as Vector3
@@ -1905,6 +1931,10 @@ func validate_zipwire_target() -> Dictionary:
 	var hit: Dictionary = space.intersect_ray(query)
 	if hit.is_empty():
 		return {"valid": false, "pos": Vector3.ZERO, "reason": "no_hit"}
+	# Blocking volumes are not anchors: they are invisible, so hooking one would
+	# hang the player on nothing (and on a real anchor hidden behind it).
+	if _is_blocking_volume_hit(hit):
+		return {"valid": false, "pos": Vector3.ZERO, "reason": "blocking_volume"}
 	var hit_pos: Vector3 = hit["position"] as Vector3
 	var hit_normal: Vector3 = Vector3.UP
 	var normal_var: Variant = hit.get("normal", Vector3.UP)

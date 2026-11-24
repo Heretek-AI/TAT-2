@@ -15,6 +15,15 @@ const XP_PER_LEVEL_FALLBACK := 500
 const MAX_SAVE_LEVEL := 200
 const MAX_SAVE_XP := 1_000_000
 
+## Settings schema (v2) and the one-time FOV migration. Saves written before
+## the authored lens existed stored fov=75.0 (the old flat default), which
+## overrode the authored 54.54 vertical / 85 horizontal at 16:9. v2 records
+## `fov_migrated` so that exact legacy default is rewritten once, while an
+## explicit non-75 value (or a deliberate 75 chosen after migration) stays.
+const SETTINGS_SCHEMA_VERSION := 2
+const LEGACY_FOV_DEFAULT := 75.0
+const AUTHORED_FOV_DEG := 54.54
+
 ## Populated from _defaults() in _ready() so the schema has one source of truth.
 var data: Dictionary = {}
 
@@ -103,12 +112,14 @@ func _defaults() -> Dictionary:
 		"currency": 0,
 		"equipped_loadout": {"spider": _default_loadout(), "chameleon": _default_loadout()},
 		"active_decoration": "faberge_egg",
+		"settings_schema": SETTINGS_SCHEMA_VERSION,
 		"settings": {
 			"mouse_sensitivity": 0.0025,
 			"invert_y": false,
 			"sprint_toggle": false,
 			"reduced_camera_bounce": false,
-			"fov": 54.54,
+			"fov": AUTHORED_FOV_DEG,
+			"fov_migrated": false,
 			"vsync": true,
 			"master_volume": 0.8,
 			"music_volume": 0.8,
@@ -244,6 +255,23 @@ func _sync_level_from_xp() -> void:
 	data["level"] = level_for_xp(xp)
 
 
+## One-time FOV migration for settings schema v2 (see the constants above).
+## Runs after the defaults merge so a legacy save's `settings.fov` survives as
+## data (not the new default). Only the exact legacy default 75.0 is rewritten;
+## an explicit 65 stays 65. Returns true when the save should be persisted.
+func _migrate_settings_schema() -> bool:
+	var s: Dictionary = get_settings()
+	var schema: int = int(data.get("settings_schema", 1))
+	var migrated: bool = bool(s.get("fov_migrated", false))
+	if schema >= SETTINGS_SCHEMA_VERSION and migrated:
+		return false
+	if not migrated and s.has("fov") and is_equal_approx(float(s.get("fov", 0.0)), LEGACY_FOV_DEFAULT):
+		s["fov"] = AUTHORED_FOV_DEG
+	s["fov_migrated"] = true
+	data["settings_schema"] = SETTINGS_SCHEMA_VERSION
+	return true
+
+
 func load_save() -> void:
 	if not FileAccess.file_exists(SAVE_PATH):
 		_ensure_defaults()
@@ -259,6 +287,10 @@ func load_save() -> void:
 		_merge_validated(parsed as Dictionary)
 	_ensure_defaults()
 	_sync_level_from_xp()
+	# Persist the one-time settings migration (legacy fov 75 -> authored 54.54)
+	# so the next load sees fov_migrated and never re-runs it.
+	if _migrate_settings_schema():
+		write_save()
 
 
 func write_save() -> void:

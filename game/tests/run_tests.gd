@@ -4093,6 +4093,72 @@ func _initialize() -> void:
 	else:
 		print("PASS: 53 doors traversal (closed blocks / 70-deg gate / re-toggle re-blocks / F-spam single swing / occupied close no-teleport / count5 lockpick opens)")
 
+	# 54. Settings schema v2: a legacy fov=75 save migrates once to the authored
+	# 54.54, an explicit non-75 value is untouched, and a post-migration 75
+	# (the player deliberately choosing it) stays 75 on the next load.
+	var sv54_ok: bool = true
+	var sv54: Node = root.get_node_or_null("/root/SaveSystem")
+	var sv54_path: String = "user://tat2_save.json"
+	var sv54_had_file: bool = FileAccess.file_exists(sv54_path)
+	var sv54_backup: String = FileAccess.get_file_as_string(sv54_path) if sv54_had_file else ""
+	if sv54 == null:
+		printerr("FAIL: 54 SaveSystem missing")
+		sv54_ok = false
+	else:
+		# Simulate a fresh process boot: reset to schema defaults, then load the
+		# on-disk save. (A second load_save() in the same process keeps the
+		# in-memory migration flag, which is what we test for "once".)
+		var sv54_boot := func() -> void:
+			sv54.set("data", sv54.call("_defaults"))
+			sv54.call("load_save")
+		var sv54_write := func(payload: Dictionary) -> void:
+			var wf: FileAccess = FileAccess.open(sv54_path, FileAccess.WRITE)
+			if wf == null:
+				return
+			wf.store_string(JSON.stringify(payload, "\t"))
+			wf.close()
+		sv54_write.call({"settings": {"fov": 75.0}})
+		sv54_boot.call()
+		var sv54_s1: Dictionary = sv54.call("get_settings") as Dictionary
+		var sv54_fov1: float = float(sv54_s1.get("fov", -1.0))
+		var sv54_flag1: bool = bool(sv54_s1.get("fov_migrated", false))
+		var sv54_schema1: int = int((sv54.get("data") as Dictionary).get("settings_schema", 0))
+		if not is_equal_approx(sv54_fov1, 54.54) or not sv54_flag1 or sv54_schema1 != 2:
+			printerr("FAIL: 54 legacy fov 75 did not migrate (fov=", sv54_fov1, " flag=", sv54_flag1, " schema=", sv54_schema1, ")")
+			sv54_ok = false
+		# Second load of the now-migrated file must not touch the value.
+		sv54_boot.call()
+		var sv54_fov1b: float = float((sv54.call("get_settings") as Dictionary).get("fov", -1.0))
+		if not is_equal_approx(sv54_fov1b, 54.54):
+			printerr("FAIL: 54 second load re-migrated fov to ", sv54_fov1b)
+			sv54_ok = false
+		# Explicit non-75 user choice is preserved.
+		sv54_write.call({"settings": {"fov": 65.0}})
+		sv54_boot.call()
+		var sv54_fov2: float = float((sv54.call("get_settings") as Dictionary).get("fov", -1.0))
+		if not is_equal_approx(sv54_fov2, 65.0):
+			printerr("FAIL: 54 explicit fov 65 was changed to ", sv54_fov2)
+			sv54_ok = false
+		# A deliberate 75 chosen after migration (flag already set) stays 75.
+		sv54_write.call({"settings": {"fov": 75.0, "fov_migrated": true}})
+		sv54_boot.call()
+		var sv54_fov3: float = float((sv54.call("get_settings") as Dictionary).get("fov", -1.0))
+		if not is_equal_approx(sv54_fov3, 75.0):
+			printerr("FAIL: 54 post-migration fov 75 was re-migrated to ", sv54_fov3)
+			sv54_ok = false
+		if sv54_had_file:
+			var rf: FileAccess = FileAccess.open(sv54_path, FileAccess.WRITE)
+			if rf != null:
+				rf.store_string(sv54_backup)
+				rf.close()
+		else:
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(sv54_path))
+		sv54_boot.call()
+	if not sv54_ok:
+		fails += 1
+	else:
+		print("PASS: 54 settings schema v2 fov migration (75 -> 54.54 once, 65 kept, post-migration 75 kept)")
+
 	# P2-6 fixture restore (see boot snapshot): leave no mutated autoload
 	# state behind for the next run or embedding harness.
 	gs.thief_id = fx_thief_id

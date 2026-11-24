@@ -3436,6 +3436,10 @@ func _build_volumes(volumes: Array, parent: Node3D, ctx: Dictionary) -> void:
 		cs.shape = shape
 		body.add_child(cs)
 		body.name = "BlockingVolume_%d" % blocking
+		# Shared tag consumed by traversal probes (mantle/wall-climb/zipwire):
+		# an invisible designer blocker is solid to walk into, never a wall,
+		# ledge or anchor.
+		body.add_to_group("blocking_volume")
 		parent.add_child(body)
 		blocking += 1
 	ctx["blocking_volume_count"] = blocking

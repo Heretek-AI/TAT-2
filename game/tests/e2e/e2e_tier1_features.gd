@@ -1,5 +1,6 @@
 extends RefCounted
-## Tier 1: Isolated Feature Coverage (110 checks = 5 per feature across Features #1-#22).
+## Tier 1: Isolated Feature Coverage (115 checks = 5 per feature across Features #1-#22).
+## Feature #10 carries 11 checks (T1-10-A..J incl. blocking-volume traversal).
 ## Opaque-box, requirement-driven checks derived from PROJECT.md, ORIGINAL_REQUEST.md,
 ## extracted UE5.5 JSON/tables, and Steam reference parity specifications.
 
@@ -990,6 +991,120 @@ func _feat_10_zipwire_crank_mantle_climb() -> void:
 	var climb_y: float = (p2 as Node3D).position.y if p2 is Node3D else 0.0
 	var has_climb_logic: bool = tc_src.find("wall_climb") >= 0 or tc_src.find("wallclimb") >= 0
 	h.require(has_climb_logic and climb_y >= 1.5, "T1-10-E", "wall_climb logic=%s climb_y=%.2f" % [str(has_climb_logic), climb_y])
+
+	# T1-10-J: designer blocking volumes are solid but never traversal surfaces.
+	# Production _build_volumes authors two invisible blockers (a 20 m wall and
+	# a 3 m-top ledge); both stay solid and untagged by meshes, and neither may
+	# be climbed, mantled or used as a zipwire anchor. Visible walls of the same
+	# shape remain the positive controls.
+	var arena3_d: Dictionary = await h.make_arena(Vector3(9900.0, 500.0, 9900.0))
+	var arena3: Node3D = arena3_d["arena"] as Node3D
+	var ll3: Node = h.new_script_node("res://src/core/level_loader.gd")
+	if ll3 != null:
+		h.root.add_child(ll3)
+		await h.step_process(1)
+	var vols3: Array = [
+		# Tall 20 m blocker, front face 0.5 m in front of the climb probe.
+		{"class": "BlockingVolume", "pos": [0.0, 0.0, -2.0], "extent": [4.0, 10.0, 0.5]},
+		# Low blocker with a 3 m top: a mantle-height face that is not a ledge.
+		{"class": "BlockingVolume", "pos": [6.0, 1.5, -1.0], "extent": [3.0, 1.5, 0.5]},
+	]
+	var vctx3: Dictionary = {}
+	if ll3 != null:
+		ll3.call("_build_volumes", vols3, arena3, vctx3)
+	await h.step_physics(2)
+	var tall_v: StaticBody3D = arena3.get_node_or_null("BlockingVolume_0") as StaticBody3D
+	var low_v: StaticBody3D = arena3.get_node_or_null("BlockingVolume_1") as StaticBody3D
+	var bv_bodies_ok: bool = tall_v != null and low_v != null \
+		and tall_v.is_in_group("blocking_volume") and low_v.is_in_group("blocking_volume") \
+		and int(vctx3.get("blocking_volume_count", -1)) == 2
+	var bv_invisible_ok: bool = bv_bodies_ok \
+		and h.find_all_of_class(tall_v, "MeshInstance3D").is_empty() \
+		and h.find_all_of_class(low_v, "MeshInstance3D").is_empty()
+	# Solid: a downward layer-1 ray from above each blocker lands on it.
+	var bv_tall_solid: bool = false
+	var bv_low_solid: bool = false
+	var space3: PhysicsDirectSpaceState3D = arena3.get_world_3d().direct_space_state
+	if tall_v != null:
+		var tq3: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(
+			arena3.global_position + Vector3(0.0, 25.0, -2.0),
+			arena3.global_position + Vector3(0.0, -5.0, -2.0), 1)
+		var th3: Dictionary = space3.intersect_ray(tq3)
+		bv_tall_solid = not th3.is_empty() and th3.get("collider") == tall_v
+	if low_v != null:
+		var lq3: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(
+			arena3.global_position + Vector3(6.0, 12.0, -1.0),
+			arena3.global_position + Vector3(6.0, -5.0, -1.0), 1)
+		var lh3: Dictionary = space3.intersect_ray(lq3)
+		bv_low_solid = not lh3.is_empty() and lh3.get("collider") == low_v
+
+	# Tall blocker rejects the wall-climb probe (airborne, pressing into it).
+	var p3: Node = await h.spawn_test_player(arena3, Vector3(0.0, 0.0, -1.0), arena3_d["light_probe"] as Node)
+	var bv_climb_rejected: bool = false
+	if p3 is Node3D:
+		p3.set("rotation", Vector3.ZERO)
+		(p3 as Node3D).global_position = arena3.global_position + Vector3(0.0, 1.0, -1.0)
+		await h.step_physics(2)
+		bv_climb_rejected = not bool(p3.call("_tick_wall_climb", 0.016, Vector3(0.0, 0.0, -1.0))) \
+			and not h.is_true(p3.get("is_wall_climbing"))
+	# Low blocker rejects the auto-mantle probe.
+	var p4b: Node = await h.spawn_test_player(arena3, Vector3(6.0, 0.0, 0.0), arena3_d["light_probe"] as Node)
+	var bv_mantle_rejected: bool = false
+	if p4b != null:
+		p4b.set("rotation", Vector3.ZERO)
+		await h.step_physics(2)
+		bv_mantle_rejected = not bool(p4b.call("try_auto_mantle")) and not h.is_true(p4b.get("is_mantling"))
+	await h.step_physics(45)
+	var bv_soft_ok: bool = p3 != null and p4b != null \
+		and not h.is_true(p3.get("is_downed")) and not h.is_true(p4b.get("is_downed")) \
+		and bool(p3.call("can_act")) and bool(p4b.call("can_act")) \
+		and not h.is_true(p3.get("is_mantling")) and not h.is_true(p4b.get("is_mantling")) \
+		and not h.is_true(p3.get("is_wall_climbing")) and not h.is_true(p4b.get("is_wall_climbing")) \
+		and absf((p3 as Node3D).position.y) < 0.15 and absf((p4b as Node3D).position.y) < 0.15
+
+	# Positive controls: the same probes on visible architecture still work.
+	h.add_wall_box(arena3, Vector3(-20.0, 2.0, -1.0), Vector3(4.0, 4.0, 1.0), "VisibleMantle4m")
+	h.add_wall_box(arena3, Vector3(-32.0, 2.5, -1.0), Vector3(4.0, 5.0, 1.0), "VisibleMantle5m")
+	h.add_wall_box(arena3, Vector3(20.0, 5.0, -2.0), Vector3(4.0, 10.0, 1.0), "VisibleClimbWall", "SurfaceType12")
+	var pv4: Node = await h.spawn_test_player(arena3, Vector3(-20.0, 0.0, 0.0), arena3_d["light_probe"] as Node)
+	var pv5: Node = await h.spawn_test_player(arena3, Vector3(-32.0, 0.0, 0.0), arena3_d["light_probe"] as Node)
+	var pvc: Node = await h.spawn_test_player(arena3, Vector3(20.0, 0.0, -1.0), arena3_d["light_probe"] as Node)
+	var bv_vis4_ok: bool = pv4 != null and bool(pv4.call("try_auto_mantle"))
+	var bv_vis5_ok: bool = pv5 != null and not bool(pv5.call("try_auto_mantle"))
+	var bv_vis_climb_ok: bool = false
+	if pvc is Node3D:
+		pvc.set("rotation", Vector3.ZERO)
+		(pvc as Node3D).global_position = arena3.global_position + Vector3(20.0, 1.0, -1.0)
+		await h.step_physics(2)
+		bv_vis_climb_ok = bool(pvc.call("_tick_wall_climb", 0.016, Vector3(0.0, 0.0, -1.0))) \
+			and h.is_true(pvc.get("is_wall_climbing"))
+	# A real (visible) 3 m wall whose top is capped by a blocker must not mantle
+	# (the top ray is the blocking hit); the identical uncapped wall does.
+	var cap_ctx3: Dictionary = {}
+	if ll3 != null:
+		ll3.call("_build_volumes", [{"class": "BlockingVolume", "pos": [40.0, 3.45, -1.0], "extent": [2.0, 0.45, 0.5]}], arena3, cap_ctx3)
+	await h.step_physics(2)
+	h.add_wall_box(arena3, Vector3(40.0, 1.5, -1.0), Vector3(4.0, 3.0, 1.0), "VisibleCappedWall3m")
+	h.add_wall_box(arena3, Vector3(44.0, 1.5, -1.0), Vector3(4.0, 3.0, 1.0), "VisibleOpenWall3m")
+	var pcap: Node = await h.spawn_test_player(arena3, Vector3(40.0, 0.0, 0.0), arena3_d["light_probe"] as Node)
+	var popen: Node = await h.spawn_test_player(arena3, Vector3(44.0, 0.0, 0.0), arena3_d["light_probe"] as Node)
+	var bv_cap_rejected: bool = pcap != null and not bool(pcap.call("try_auto_mantle"))
+	var bv_open_ok: bool = popen != null and bool(popen.call("try_auto_mantle"))
+	h.require(
+		bv_bodies_ok and bv_invisible_ok and bv_tall_solid and bv_low_solid \
+		and bv_climb_rejected and bv_mantle_rejected and bv_soft_ok \
+		and bv_vis4_ok and bv_vis5_ok and bv_vis_climb_ok \
+		and bv_cap_rejected and bv_open_ok,
+		"T1-10-J",
+		"blocking volumes tagged/no-mesh/solid=%s climb_reject=%s mantle_reject=%s softlock_ok=%s visible(4m=%s 5m=%s climb=%s) top_cap_reject=%s open_ledge=%s" % [
+			str(bv_bodies_ok and bv_invisible_ok and bv_tall_solid and bv_low_solid),
+			str(bv_climb_rejected), str(bv_mantle_rejected), str(bv_soft_ok),
+			str(bv_vis4_ok), str(bv_vis5_ok), str(bv_vis_climb_ok),
+			str(bv_cap_rejected), str(bv_open_ok),
+		]
+	)
+	await h.free_node(ll3)
+	await h.free_node(arena3)
 
 	await h.free_node(arena2)
 	await h.free_node(arena)

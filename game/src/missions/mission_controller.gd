@@ -36,6 +36,14 @@ var rain_node: Node3D = null
 var lens_rain_node: CanvasLayer = null
 var contract_info: Dictionary = {}
 var level_stats: Dictionary = {}
+## Level names actually loaded this run ("Guildhall/Guildhall_Contracts").
+## Authored spawner records are filtered to these so a clue can never be
+## placed on a sublevel that was not loaded.
+var _loaded_level_names: Array[String] = []
+## Authored quest items spawned this run (record has node + spawner + facts).
+var _quest_item_spawns: Array[Dictionary] = []
+## Authored readable clues spawned this run (QA/tests read this).
+var _clue_spawn_records: Array[Dictionary] = []
 var spawner_meshes: Dictionary = {}
 var spawner_civilians: Array = []
 var loot_tables: Dictionary = {}
@@ -505,6 +513,7 @@ func start_contract(order: int) -> void:
 		loading.call("start_loading", str(contract_info.get("title", "Contract")), _contract_clue_text(contract_info, ""), map_id)
 
 	var sublevels: Array[String] = _map_id_to_sublevels(map_id, order)
+	_loaded_level_names = _levels_from_sublevel_paths(sublevels)
 	var ue_level_data: Dictionary = {}
 	var light_budget: int = MobileProfile.max_lights()
 	if level_loader.has_method("load_sublevels_async"):
@@ -741,6 +750,7 @@ func _map_id_to_sublevels(map_id: String, order: int = 2) -> Array[String]:
 				"res://data/generated/levels/OldManor/OldManor_Loot.tatlevel.json",
 				"res://data/generated/levels/OldManor/OldManor_PickUps.tatlevel.json",
 				"res://data/generated/levels/OldManor/OldManor_Clues.tatlevel.json",
+				"res://data/generated/levels/OldManor/OldManor_Contracts.tatlevel.json",
 				"res://data/generated/levels/OldManor/OldManor_SkyboxGeo.tatlevel.json",
 			]
 		"guildhall":
@@ -756,6 +766,8 @@ func _map_id_to_sublevels(map_id: String, order: int = 2) -> Array[String]:
 				"res://data/generated/levels/Guildhall/Guildhall_LocalVolumetric.tatlevel.json",
 				"res://data/generated/levels/Guildhall/Guildhall_PeripheryA.tatlevel.json",
 				"res://data/generated/levels/Guildhall/Guildhall_Loot.tatlevel.json",
+				"res://data/generated/levels/Guildhall/Guildhall_Contracts.tatlevel.json",
+				"res://data/generated/levels/Guildhall/Guildhall_SetSpawners.tatlevel.json",
 				"res://data/generated/levels/Guildhall/Guildhall_MissionClues.tatlevel.json",
 				"res://data/generated/levels/Guildhall/Guildhall_SkyboxGeo.tatlevel.json",
 			]
@@ -2309,58 +2321,102 @@ func _setup_mission_objectives(map_id: String, _order: int) -> void:
 	contract_info["mission_id"] = mid
 	contract_info["mission_title"] = str(chosen.get("title", ""))
 
+	var active: Dictionary = _active_quest_objective()
+	var objective: Dictionary = active.get("objective", {}) as Dictionary
+	var plan: Dictionary = active.get("plan", {}) as Dictionary
 	var objs: Array[Dictionary] = []
+	var goals: Array = plan.get("loot_goals", []) as Array
 	var goal_val: int = 0
-	if mid.ends_with(".Set") or mid.ends_with(".Multi"):
-		if map_id == "guildhall":
+	if not goals.is_empty():
+		goal_val = int(goals[clampi(GameState.difficulty - 1, 0, goals.size() - 1)])
+	var kind: String = str(objective.get("kind", ""))
+	if kind == "loot_amount" or (kind == "" and mid.ends_with(".LootTheRoom")):
+		if kind == "loot_amount" and objective.get("amount", null) != null:
+			goal_val = int(objective.get("amount"))
+		if goal_val <= 0:
+			push_error("[mission_controller] loot_amount objective for mission '", mid, "' has no authored amount; no goal invented")
+		# The HUD string "Steal 4,000 in loot value" is the shipped reference
+		# text (docs/REFERENCE_BASELINE.md UI3-02); the amount is authored.
+		var label: String = "Steal %s in loot value" % GameState.format_thousands(goal_val) if goal_val > 0 else str(objective.get("objective_text", ""))
+		if label != "":
 			objs = [
-				{"id": "set_main", "label": "Steal the components of the Staff of Edinburgh", "done": false, "current": 0, "target": 3},
-				{"id": "set_item_0", "label": "Sapphire of Edinburgh", "done": false, "current": 0, "target": 1},
-				{"id": "set_item_1", "label": "Ruby of Edinburgh", "done": false, "current": 0, "target": 1},
-				{"id": "set_item_2", "label": "Emerald of Edinburgh", "done": false, "current": 0, "target": 1},
+				{"id": "cleanout_loot", "label": label, "done": false, "current": 0, "target": goal_val},
 			]
-		elif map_id == "old_manor":
-			objs = [
-				{"id": "set_main", "label": "Retrieve the Claymur Urns", "done": false, "current": 0, "target": 3},
-				{"id": "set_item_0", "label": "Claymur Urn — North Wing", "done": false, "current": 0, "target": 1},
-				{"id": "set_item_1", "label": "Claymur Urn — Gallery", "done": false, "current": 0, "target": 1},
-				{"id": "set_item_2", "label": "Claymur Urn — Cellar", "done": false, "current": 0, "target": 1},
-			]
-		else:
-			objs = [
-				{"id": "set_main", "label": str(chosen.get("title", "Item Collection Heist")), "done": false, "current": 0, "target": 3},
-				{"id": "set_item_0", "label": "Relic Piece I", "done": false, "current": 0, "target": 1},
-				{"id": "set_item_1", "label": "Relic Piece II", "done": false, "current": 0, "target": 1},
-				{"id": "set_item_2", "label": "Relic Piece III", "done": false, "current": 0, "target": 1},
-			]
-	elif mid.ends_with(".LootTheRoom"):
-		if GameState.free_play:
-			# Free-play Cleanout Heist: the authored QG loot thresholds
-			# (4000/6000/8000 by difficulty) and the reference objective label.
-			goal_val = GameData.get_mission_loot_goal(mid, GameState.difficulty)
-			if goal_val <= 0:
-				goal_val = 4000
-			objs = [
-				{"id": "cleanout_loot", "label": "Steal %s in loot value" % GameState.format_thousands(goal_val), "done": false, "current": 0, "target": goal_val},
-			]
-		else:
-			goal_val = 1000 * clampi(GameState.difficulty, 1, 3)
-			objs = [
-				{"id": "cleanout_loot", "label": "Steal £%d worth of loot" % goal_val, "done": false, "current": 0, "target": goal_val},
-			]
-	else:
-		var target_name: String = str(contract_info.get("quest_item", ""))
+	elif kind == "set":
+		var items: Array = objective.get("items", []) as Array
+		var label: String = str(objective.get("objective_text", ""))
+		if label == "":
+			label = str(chosen.get("title", ""))
+		var set_target: int = items.size()
+		if objective.get("override_min_number_to_steal", false) == true and objective.get("min_number_to_steal", null) != null:
+			set_target = maxi(int(objective.get("min_number_to_steal")), 1)
+		objs.append({"id": "set_main", "label": label, "done": false, "current": 0, "target": maxi(set_target, 1)})
+		for i: int in range(items.size()):
+			var item: Dictionary = items[i] as Dictionary
+			objs.append({
+				"id": "set_item_%d" % i,
+				"label": str(item.get("display_name", item.get("loot_row", ""))),
+				"done": false,
+				"current": 0,
+				"target": 1,
+			})
+	elif kind == "single" or kind == "multiple":
+		var target_name: String = str(objective.get("objective_text", "")).strip_edges()
+		if target_name == "":
+			var items: Array = objective.get("items", []) as Array
+			var first_item: Dictionary = items[0] as Dictionary if not items.is_empty() and items[0] is Dictionary else {}
+			target_name = str(first_item.get("display_name", "")).strip_edges()
+		if target_name == "":
+			target_name = str(contract_info.get("quest_item", "")).strip_edges()
 		if target_name == "" or target_name == "Objective" or target_name.begins_with("Loot."):
-			if map_id == "guildhall":
-				target_name = "Warburg Effigy"
-			elif map_id == "old_manor":
-				target_name = "Book of Truth"
-			else:
-				target_name = "Contract Objective"
+			target_name = str(chosen.get("title", "Contract Objective"))
+		var target_count: int = 1
+		if kind == "multiple":
+			target_count = maxi(int(objective.get("min_number_to_steal", 0)), (objective.get("items", []) as Array).size())
+		objs = [
+			{"id": "vault_main", "label": "Steal the %s" % target_name, "done": false, "current": 0, "target": maxi(target_count, 1)},
+		]
+	else:
+		var target_name: String = str(contract_info.get("quest_item", "")).strip_edges()
+		if target_name == "" or target_name == "Objective" or target_name.begins_with("Loot."):
+			target_name = str(chosen.get("title", "Contract Objective"))
 		objs = [
 			{"id": "vault_main", "label": "Steal the %s" % target_name, "done": false, "current": 0, "target": 1},
 		]
 	GameState.set_mission_objectives(objs, goal_val)
+
+
+## Objective the live mode actually plays: free play reads the mission row's
+## reachable QG objective; a contract deploy reads the contract row's authored
+## objective (DT_LootInfo_Quest items). Returns {"objective", "plan"}.
+func _active_quest_objective() -> Dictionary:
+	if GameState.free_play and GameState.active_mission_id != "":
+		var plan: Dictionary = GameData.get_mission_plan(GameState.active_mission_id)
+		var plan_obj: Dictionary = _plan_objective_for_difficulty(plan)
+		if not plan_obj.is_empty():
+			return {"objective": plan_obj, "plan": plan}
+	var contract: Dictionary = GameData.get_quest_contract(GameState.active_contract_order)
+	var obj_v: Variant = contract.get("objective", {})
+	if obj_v is Dictionary and not (obj_v as Dictionary).is_empty():
+		return {"objective": GameData.enrich_quest_objective(obj_v as Dictionary), "plan": {}}
+	return {}
+
+
+## Pick the objective node for the current difficulty. Unconditional nodes
+## (difficulty 0, e.g. Mission.Guildhall.Set) always win; otherwise the
+## Difficulty.Novice/Thief/MasterThief-gated node is selected.
+func _plan_objective_for_difficulty(plan: Dictionary) -> Dictionary:
+	var objs_v: Variant = plan.get("objectives", [])
+	if not (objs_v is Array) or (objs_v as Array).is_empty():
+		return {}
+	var objs: Array = objs_v as Array
+	for node_v: Variant in objs:
+		if node_v is Dictionary and int((node_v as Dictionary).get("difficulty", 0)) == GameState.difficulty:
+			return node_v as Dictionary
+	for node_v: Variant in objs:
+		if node_v is Dictionary and int((node_v as Dictionary).get("difficulty", 0)) == 0:
+			return node_v as Dictionary
+	return objs[0] as Dictionary if objs[0] is Dictionary else {}
 
 
 func _trigger_mission_start_letter() -> void:
@@ -2405,21 +2461,319 @@ func _contract_clue_text(info: Dictionary, fallback: String) -> String:
 	return fallback
 
 
-func _spawn_clues(ue_spawns: Array, anchor: Vector3) -> void:
-	var clue_title: String = str(contract_info.get("title", "Contract Clue"))
-	var clue_body: String = _contract_clue_text(contract_info, "Locate the target vault and watch the Constabulary patrol timing.")
-	if clue_body == "":
-		clue_body = "Locate the target vault and watch the Constabulary patrol timing."
-	var pos: Vector3 = anchor + Vector3(2.5, 0.85, -3.5)
-	if not ue_spawns.is_empty() and ue_spawns[0] is Vector3:
-		pos = ue_spawns[0] + Vector3(0.0, 0.8, 0.0)
-	var clue: Area3D = ClueItemScript.new()
-	clue.set("clue_title", clue_title)
-	clue.set("clue_body", clue_body)
-	clue.position = pos
-	if clue.has_signal("clue_collected") and hud != null and hud.has_method("show_clue_toast"):
-		clue.connect("clue_collected", hud.show_clue_toast)
-	add_child(clue)
+## Data-driven clue pass. Contract deploys spawn every enabled clue in the
+## contract's authored CLS_Contract_NN; free-play/mission deploys follow the
+## mission QG's reachable clue nodes (a ClueSetNode spawns the whole set, a
+## ClueSetForSpawnNode contributes one clue tied to its loot tag). A missing
+## spawner is a loud error, never a generic parchment substitution.
+func _spawn_clues(_ue_spawns: Array, _anchor: Vector3) -> void:
+	var map_id: String = GameState.active_map_id
+	var requests: Array[Dictionary] = _active_clue_requests()
+	if requests.is_empty():
+		_clue_spawn_records = []
+		print("TAT-2 clues: no active authored clue set for map=", map_id, " mission=", GameState.active_mission_id, " free_play=", GameState.free_play)
+		return
+	var records: Array[Dictionary] = spawn_clue_requests(requests, map_id, GameState.active_map_seed, _loaded_level_names, _quest_item_spawns)
+	_clue_spawn_records = records
+	for rec: Dictionary in records:
+		var node: Node = rec.get("node", null) as Node
+		if node != null and node.has_signal("clue_collected") and hud != null and hud.has_method("show_clue_toast"):
+			node.connect("clue_collected", hud.show_clue_toast)
+	print("TAT-2 clues: spawned=", records.size(), " set(s)=", _request_set_names(requests), " map=", map_id)
+
+
+func _active_clue_requests() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if GameState.free_play and GameState.active_mission_id != "":
+		var plan: Dictionary = GameData.get_mission_plan(GameState.active_mission_id)
+		var refs_v: Variant = plan.get("clue_set_nodes", [])
+		if refs_v is Array:
+			var seen_all: Dictionary = {}
+			for ref_v: Variant in (refs_v as Array):
+				if not (ref_v is Dictionary):
+					continue
+				var ref: Dictionary = ref_v as Dictionary
+				var set_name: String = str(ref.get("clue_set", ""))
+				if set_name == "":
+					continue
+				var ntype: String = str(ref.get("node_type", ""))
+				if ntype.ends_with("ClueSetForSpawnNode"):
+					out.append({"set": set_name, "mode": "one", "loot_tag": str(ref.get("loot_tag", "")), "node": str(ref.get("node", ""))})
+				elif not seen_all.has(set_name):
+					seen_all[set_name] = true
+					out.append({"set": set_name, "mode": "all", "loot_tag": "", "node": str(ref.get("node", ""))})
+		return out
+	# Contract deploy: the authored CLS_Contract_NN from the contract row.
+	var set_name: String = ""
+	var clues_path: String = str(contract_info.get("clues_ue_path", ""))
+	if clues_path != "":
+		set_name = str(GameData.get_clue_set(clues_path).get("name", ""))
+	if set_name == "":
+		var contract: Dictionary = GameData.get_quest_contract(GameState.active_contract_order)
+		set_name = str(contract.get("clues_name", ""))
+	if set_name == "":
+		return out
+	out.append({"set": set_name, "mode": "all", "loot_tag": "", "node": ""})
+	return out
+
+
+func _request_set_names(requests: Array[Dictionary]) -> String:
+	var names: Array[String] = []
+	for req: Dictionary in requests:
+		var n: String = str(req.get("set", ""))
+		if n != "" and not names.has(n):
+			names.append(n)
+	return ",".join(names)
+
+
+## Spawn a list of clue requests. Public so the headless suite can exercise the
+## same pass the mission uses without loading a whole level.
+func spawn_clue_requests(requests: Array[Dictionary], map_id: String, seed_value: int, levels: Array = [], quest_items: Array = []) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var used_spawners: Dictionary = {}
+	for req: Dictionary in requests:
+		var set_name: String = str(req.get("set", ""))
+		var set_data: Dictionary = GameData.get_clue_set(set_name)
+		if set_data.is_empty():
+			push_error("[mission_controller] clue spawn: unknown clue set '", set_name, "' (map=", map_id, ")")
+			continue
+		var clues_v: Variant = set_data.get("clues", [])
+		if not (clues_v is Array):
+			continue
+		var enabled: Array[Dictionary] = []
+		for clue_v: Variant in (clues_v as Array):
+			if clue_v is Dictionary and (clue_v as Dictionary).get("enabled", false) == true:
+				enabled.append(clue_v as Dictionary)
+		if enabled.is_empty():
+			continue
+		var loot_tag: String = str(req.get("loot_tag", ""))
+		var params: Dictionary = _clue_params_for_loot(loot_tag, quest_items)
+		if str(req.get("mode", "all")) == "one":
+			var picked: Dictionary = _pick_spawnable_clue(set_name, enabled, map_id, levels, seed_value, loot_tag, used_spawners)
+			if picked.is_empty():
+				push_error("[mission_controller] clue spawn: no readable spawner for set '", set_name, "' node '", str(req.get("node", "")), "' loot_tag '", loot_tag, "' map '", map_id, "'")
+				continue
+			var rec: Dictionary = _spawn_clue_entry(picked.get("clue", {}) as Dictionary, set_name, picked.get("spawner", {}) as Dictionary, params)
+			if not rec.is_empty():
+				out.append(rec)
+			continue
+		for clue: Dictionary in enabled:
+			var placement: String = str(clue.get("placement_tag", ""))
+			if placement == "":
+				# Authored briefing facts (ObjectiveText/Intro) carry no
+				# placement tag: they are not world readables.
+				continue
+			var spawner: Dictionary = _find_distinct_spawner(map_id, placement, levels, used_spawners, seed_value, set_name, int(clue.get("index", 0)))
+			if spawner.is_empty():
+				push_error("[mission_controller] clue spawn: no readable spawner for placement tag '", placement, "' set '", set_name, "' map '", map_id, "'")
+				continue
+			var rec2: Dictionary = _spawn_clue_entry(clue, set_name, spawner, params)
+			if not rec2.is_empty():
+				out.append(rec2)
+	return out
+
+
+## One enabled clue for a ClueSetForSpawnNode, choosing the first authored
+## entry (seeded order) whose placement tag still has an unused spawner.
+func _pick_spawnable_clue(set_name: String, enabled: Array[Dictionary], map_id: String, levels: Array, seed_value: int, loot_tag: String, used_spawners: Dictionary) -> Dictionary:
+	if enabled.is_empty():
+		return {}
+	var start: int = posmod(LevelLoaderScript._sv_fnv1a("%d|%s|%s" % [seed_value, set_name, loot_tag]), enabled.size())
+	for offset: int in range(enabled.size()):
+		var clue: Dictionary = enabled[(start + offset) % enabled.size()]
+		var placement: String = str(clue.get("placement_tag", ""))
+		if placement == "":
+			continue
+		var spawner: Dictionary = _find_distinct_spawner(map_id, placement, levels, used_spawners, seed_value, set_name, int(clue.get("index", offset)))
+		if not spawner.is_empty():
+			return {"clue": clue, "spawner": spawner, "key": str(clue.get("index", offset))}
+	return {}
+
+
+func _spawn_clue_entry(clue: Dictionary, set_name: String, spawner: Dictionary, params: Dictionary) -> Dictionary:
+	if spawner.is_empty():
+		return {}
+	var placement: String = str(clue.get("placement_tag", ""))
+	var body: String = _format_authored_text(str(clue.get("text", "")), params)
+	var visual_key: String = str(clue.get("visuals", ""))
+	var visual: Dictionary = GameData.readable_visuals.get(visual_key, {}) as Dictionary
+	var authored_class: String = str(visual.get("actor_class_name", ""))
+	var visual_type: String = str(visual.get("type", ""))
+	var fact_ids: Array[String] = []
+	var facts_v: Variant = clue.get("fact_ids", [])
+	if facts_v is Array:
+		for fid_v: Variant in (facts_v as Array):
+			var fid: String = str(fid_v)
+			if fid != "" and not fact_ids.has(fid):
+				fact_ids.append(fid)
+	var clue_node: Area3D = ClueItemScript.new()
+	clue_node.set("clue_title", visual_type)
+	clue_node.set("clue_body", body)
+	clue_node.set("prompt_verb", "Read")
+	clue_node.set("authored_class", authored_class)
+	clue_node.set("visual_type", visual_type)
+	clue_node.set("fact_ids", fact_ids)
+	clue_node.set("fact_params", params)
+	clue_node.set("fact_source", "clue")
+	clue_node.set("fact_source_item_tag", str(params.get("loot_tag", "")))
+	clue_node.set("fact_source_index", int(clue.get("index", 0)))
+	clue_node.transform = _spawner_transform(spawner)
+	add_child(clue_node)
+	return {
+		"node": clue_node,
+		"body": body,
+		"set": set_name,
+		"index": int(clue.get("index", 0)),
+		"placement_tag": placement,
+		"spawner": spawner,
+		"visual_type": visual_type,
+		"authored_class": authored_class,
+		"fact_ids": fact_ids,
+		"params": params,
+		"fact_params": params,
+	}
+
+
+## Resolve a placement demand against the authored spawner tags. Mirrors
+## tools/parse_quests.py resolve_demand: exact, normalised (Common/Locations
+## removed), namespace alias, then parent prefix. The generated validation
+## uses the same rules, so a tag accepted there is accepted here.
+func _placement_candidate_tags(map_id: String, placement_tag: String, levels: Array) -> Array[String]:
+	var available: Dictionary = {}
+	for rec: Dictionary in GameData.readable_spawners:
+		if str(rec.get("map_id", "")) != map_id:
+			continue
+		if not levels.is_empty() and not levels.has(str(rec.get("level", ""))):
+			continue
+		var tag: String = str(rec.get("placement_tag", ""))
+		if tag == "":
+			continue
+		available[tag] = int(available.get(tag, 0)) + 1
+	if available.has(placement_tag):
+		return [placement_tag]
+	var demand_norm: Array[String] = _normalise_placement_tag(placement_tag)
+	var same: Array[String] = []
+	var alias: Array[String] = []
+	var prefix: Array[String] = []
+	for tag_v: Variant in available.keys():
+		var tag: String = str(tag_v)
+		var tag_norm: Array[String] = _normalise_placement_tag(tag)
+		if tag_norm == demand_norm:
+			same.append(tag)
+		elif tag_norm.size() == demand_norm.size() and tag_norm.size() >= 2 and tag_norm[0] == demand_norm[0] and tag_norm[1] != demand_norm[1] and tag_norm.slice(2) == demand_norm.slice(2):
+			alias.append(tag)
+		elif demand_norm.size() < tag_norm.size() and tag_norm.slice(0, demand_norm.size()) == demand_norm:
+			prefix.append(tag)
+	for group: Variant in [same, alias, prefix]:
+		var group_tags: Array = group as Array
+		if not group_tags.is_empty():
+			group_tags.sort()
+			var out_tags: Array[String] = []
+			for tag_v: Variant in group_tags:
+				out_tags.append(str(tag_v))
+			return out_tags
+	return []
+
+
+func _normalise_placement_tag(tag: String) -> Array[String]:
+	var out: Array[String] = []
+	for part: String in tag.split("."):
+		if part == "" or part == "Common" or part == "Locations":
+			continue
+		out.append(part)
+	return out
+
+
+## Deterministic distinct spawner pick (seed + set/node + clue index). Returns
+## {} when every candidate is already used.
+func _find_distinct_spawner(map_id: String, placement_tag: String, levels: Array, used: Dictionary, seed_value: int, key: String, index: int) -> Dictionary:
+	var tags: Array[String] = _placement_candidate_tags(map_id, placement_tag, levels)
+	if tags.is_empty():
+		return {}
+	var pool: Array[Dictionary] = []
+	for tag: String in tags:
+		pool.append_array(GameData.get_readable_spawners(map_id, tag, levels))
+	if pool.is_empty():
+		return {}
+	pool.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return _spawner_key(a) < _spawner_key(b))
+	var start: int = posmod(LevelLoaderScript._sv_fnv1a("%d|%s|%d" % [seed_value, key, index]), pool.size())
+	for offset: int in range(pool.size()):
+		var rec: Dictionary = pool[(start + offset) % pool.size()]
+		var skey: String = _spawner_key(rec)
+		if used.has(skey):
+			continue
+		used[skey] = true
+		return rec
+	return {}
+
+
+func _spawner_key(rec: Dictionary) -> String:
+	var pos_v: Variant = rec.get("pos", [])
+	var pos_key: String = ""
+	if pos_v is Array:
+		var pa: Array = pos_v as Array
+		pos_key = "%.3f,%.3f,%.3f" % [float(pa[0]), float(pa[1]), float(pa[2])]
+	return "%s|%s|%s" % [str(rec.get("level", "")), str(rec.get("actor", "")), pos_key]
+
+
+## Authored {item}/{Location} values for a loot tag: the display name and the
+## spawner's clue_location_text recorded by the quest-item pass. Empty when the
+## cooked data does not link them (never synthesised).
+func _clue_params_for_loot(loot_tag: String, quest_items: Array) -> Dictionary:
+	if loot_tag == "":
+		return {}
+	for rec_v: Variant in quest_items:
+		if not (rec_v is Dictionary):
+			continue
+		var rec: Dictionary = rec_v as Dictionary
+		if str(rec.get("loot_tag", "")) != loot_tag:
+			continue
+		return {
+			"item": str(rec.get("display_name", "")),
+			"Location": str(rec.get("location_text", "")),
+			"loot_tag": loot_tag,
+		}
+	return {}
+
+
+func _format_authored_text(text: String, params: Dictionary) -> String:
+	var out: String = text
+	for key_v: Variant in params.keys():
+		var key: String = str(key_v)
+		var value: String = str(params[key_v])
+		if key == "" or key == "loot_tag":
+			continue
+		out = out.replace("{%s}" % key, value)
+		out = out.replace("{%s}" % key.to_lower(), value)
+		out = out.replace("{%s}" % key.capitalize(), value)
+	return out
+
+
+func _levels_from_sublevel_paths(paths: Array[String]) -> Array[String]:
+	var out: Array[String] = []
+	for path: String in paths:
+		var level: String = path.trim_prefix("res://data/generated/levels/").trim_suffix(".tatlevel.json")
+		if level != "":
+			out.append(level)
+	return out
+
+
+## Authored spawner transform (same row-major basis -> Godot Basis conversion
+## as level_loader._dict_to_transform).
+func _spawner_transform(rec: Dictionary) -> Transform3D:
+	var p: Array = rec.get("pos", [0.0, 0.0, 0.0]) as Array
+	var b: Array = rec.get("basis", [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]) as Array
+	var s: Array = rec.get("scale", [1.0, 1.0, 1.0]) as Array
+	var basis: Basis = Basis(
+		Vector3(float(b[0]), float(b[3]), float(b[6])),
+		Vector3(float(b[1]), float(b[4]), float(b[7])),
+		Vector3(float(b[2]), float(b[5]), float(b[8]))
+	).scaled_local(Vector3(
+		clampf(float(s[0]), 0.05, 40.0),
+		clampf(float(s[1]), 0.05, 40.0),
+		clampf(float(s[2]), 0.05, 40.0)
+	))
+	return Transform3D(basis, Vector3(float(p[0]), float(p[1]), float(p[2])))
 
 
 func _add_safety_floor() -> void:
@@ -2953,10 +3307,10 @@ func _assign_authored_patrol(guard: Node, path: Dictionary) -> void:
 ## Real loot wave from loot_actors.json (tools/parse_loot.py): one LootScript
 ## per minor/major marker with the bucket actor class picked deterministically
 ## from the weighted bucket list, the real mesh + table name/value, and the
-## marker rotation. The contract quest item occupies the last minor marker
-## (last major when there are no minors), so the node count still matches the
-## marker count exactly and every position stays unique. Escape gating, groups
-## and the Thieves' Den skip in start_contract() are unchanged.
+## marker rotation. Quest items are added separately at their authored
+## BP_QuestSpawner_Item_C transform (see _spawn_quest_items); the regular
+## markers are never consumed for them. Escape gating, groups and the
+## Thieves' Den skip in start_contract() are unchanged.
 func _spawn_loot_and_quest(stats: Dictionary, anchor: Vector3) -> void:
 	_load_loot_tables()
 	var minor: Array = []
@@ -2974,27 +3328,146 @@ func _spawn_loot_and_quest(stats: Dictionary, anchor: Vector3) -> void:
 		for off in [Vector3(4, 0.8, -6), Vector3(-6, 0.8, -8), Vector3(10, 0.8, -14), Vector3(-10, 0.8, -16), Vector3(0, 0.8, -22), Vector3(8, 0.8, 4)]:
 			minor.append({"pos": anchor + (off as Vector3), "rotation": Vector3.ZERO, "class": "BP_MissionSpawner_MinorLoot_C", "source_file": ""})
 	var mid: String = str(_active_mission_row.get("id", ""))
-	var is_set_mission: bool = mid.ends_with(".Set") or mid.ends_with(".Multi")
-	var quest_count: int = 3 if is_set_mission else 1
-	var quest_entries: Array[Dictionary] = []
-	for _qi: int in range(quest_count):
-		if not minor.is_empty():
-			quest_entries.append(minor[minor.size() - 1] as Dictionary)
-			minor.remove_at(minor.size() - 1)
-		elif not major.is_empty():
-			quest_entries.append(major[major.size() - 1] as Dictionary)
-			major.remove_at(major.size() - 1)
-		else:
-			quest_entries.append({})
 	_spawn_loot_entries(minor, "minor")
 	_spawn_loot_entries(major, "major")
-	var set_labels: Array[String] = []
-	for obj_d: Dictionary in GameState.mission_objectives:
-		if str(obj_d.get("id", "")).begins_with("set_item_"):
-			set_labels.append(str(obj_d.get("label", "")))
-	for qi_idx: int in range(quest_entries.size()):
-		var override_name: String = set_labels[qi_idx] if qi_idx < set_labels.size() else ""
-		_spawn_quest_loot(quest_entries[qi_idx], anchor + Vector3(float(qi_idx) * 1.5, 0.0, 0.0), override_name)
+	var quest_count: int = _spawn_quest_items()
+	if quest_count > 0:
+		print("TAT-2 quest items: spawned=", quest_count, " mission=", mid, " free_play=", GameState.free_play)
+
+
+## Authored quest-item pass: the mission plan (free play) or contract row
+## (contract deploy) names the items, their NumberToSpawn and their
+## QuestLocation tag. Each item is placed on a distinct authored
+## BP_QuestSpawner_Item_C at the spawner transform; no loot marker is
+## substituted, and a missing tag is a loud error.
+func _spawn_quest_items() -> int:
+	var active: Dictionary = _active_quest_objective()
+	var objective: Dictionary = active.get("objective", {}) as Dictionary
+	if objective.is_empty():
+		return 0
+	var kind: String = str(objective.get("kind", ""))
+	if kind != "single" and kind != "multiple" and kind != "set":
+		return 0
+	var records: Array[Dictionary] = spawn_authored_quest_items(objective, GameState.active_map_id, GameState.active_map_seed, _loaded_level_names)
+	_quest_item_spawns = records
+	return records.size()
+
+
+## Public quest-item spawn pass used by the mission and the headless suite.
+## Returns one record per spawned actor (node, authored item, spawner, facts).
+func spawn_authored_quest_items(objective: Dictionary, map_id: String, seed_value: int, levels: Array = []) -> Array[Dictionary]:
+	_load_loot_tables()
+	var out: Array[Dictionary] = []
+	var items_v: Variant = objective.get("items", [])
+	if not (items_v is Array):
+		return out
+	var items: Array = items_v as Array
+	var kind: String = str(objective.get("kind", ""))
+	var used_spawners: Dictionary = {}
+	for item_index: int in range(items.size()):
+		if not (items[item_index] is Dictionary):
+			continue
+		var item: Dictionary = items[item_index] as Dictionary
+		var loot_tag: String = str(item.get("loot_tag", ""))
+		var location_tag: String = str(item.get("effective_quest_location", item.get("quest_spawn_location", "")))
+		if location_tag == "" or location_tag == "None":
+			var loot_row: Dictionary = GameData.get_loot_quest_row(loot_tag)
+			location_tag = str(loot_row.get("quest_location_tag", ""))
+		var count: int = 1
+		if item.get("number_to_spawn", null) != null:
+			count = maxi(int(item.get("number_to_spawn")), 1)
+		if location_tag == "" or location_tag == "None":
+			push_error("[mission_controller] quest item spawn: no authored QuestLocation for loot tag '", loot_tag, "' mission '", GameState.active_mission_id, "' map '", map_id, "'")
+			continue
+		var candidates: Array[Dictionary] = GameData.get_quest_spawners(map_id, location_tag, levels)
+		if candidates.is_empty():
+			push_error("[mission_controller] quest item spawn: no BP_QuestSpawner_Item_C for tag '", location_tag, "' loot '", loot_tag, "' mission '", GameState.active_mission_id, "' map '", map_id, "'")
+			continue
+		for n: int in range(count):
+			var spawner: Dictionary = _find_distinct_quest_spawner(candidates, used_spawners, seed_value, loot_tag, item_index * 8 + n)
+			if spawner.is_empty():
+				push_error("[mission_controller] quest item spawn: only ", n, " distinct spawner(s) for tag '", location_tag, "' loot '", loot_tag, "' mission '", GameState.active_mission_id, "' map '", map_id, "' (requested ", count, ")")
+				break
+			var objective_id: String = "set_item_%d" % item_index if kind == "set" else "vault_main"
+			var rec: Dictionary = _spawn_quest_loot_at(spawner, item, objective_id, item_index)
+			if not rec.is_empty():
+				out.append(rec)
+	return out
+
+
+func _find_distinct_quest_spawner(candidates: Array[Dictionary], used: Dictionary, seed_value: int, loot_tag: String, index: int) -> Dictionary:
+	var pool: Array[Dictionary] = candidates.duplicate()
+	pool.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return _spawner_key(a) < _spawner_key(b))
+	var start: int = posmod(LevelLoaderScript._sv_fnv1a("%d|%s|%d" % [seed_value, loot_tag, index]), pool.size())
+	for offset: int in range(pool.size()):
+		var rec: Dictionary = pool[(start + offset) % pool.size()]
+		var key: String = _spawner_key(rec)
+		if used.has(key):
+			continue
+		used[key] = true
+		return rec
+	return {}
+
+
+func _spawn_quest_loot_at(spawner: Dictionary, item: Dictionary, objective_id: String, item_index: int) -> Dictionary:
+	var display_name: String = str(item.get("display_name", ""))
+	var loot_tag: String = str(item.get("loot_tag", ""))
+	var actor_class: String = str(item.get("actor_class", ""))
+	var q := LootScript.new()
+	q.is_quest_item = true
+	q.loot_tier = "quest"
+	q.item_name = display_name
+	q.display_name = display_name
+	q.value = int(item.get("value", 0))
+	var qactors: Dictionary = loot_tables.get("quest_actors", {})
+	var qactor_v: Variant = qactors.get(actor_class)
+	if qactor_v is Dictionary:
+		q.mesh_path = str((qactor_v as Dictionary).get("mesh_res", ""))
+	elif actor_class != "":
+		push_error("[mission_controller] quest item spawn: authored actor class '", actor_class, "' has no mesh row in loot_actors.json (item '", display_name, "')")
+	q.set("authored_actor_class", actor_class)
+	q.set("clue_location_text", str(spawner.get("clue_location_text", "")))
+	q.set("objective_id", objective_id)
+	q.set("loot_tag", loot_tag)
+	var fact_ids: Array[String] = []
+	var actions_v: Variant = spawner.get("spawn_actions", [])
+	if actions_v is Array:
+		for action_v: Variant in (actions_v as Array):
+			if not (action_v is Dictionary):
+				continue
+			var action: Dictionary = action_v as Dictionary
+			for fid: String in GameData.get_fact_ids_for_tag(str(action.get("clue_fact_tag", ""))):
+				if not fact_ids.has(fid):
+					fact_ids.append(fid)
+	var pickup: Dictionary = GameData.get_pickup_clue(str(item.get("loot_row", "")))
+	var pickup_facts_v: Variant = pickup.get("fact_ids", [])
+	if pickup_facts_v is Array:
+		for fid_v: Variant in (pickup_facts_v as Array):
+			var fid2: String = str(fid_v)
+			if fid2 != "" and not fact_ids.has(fid2):
+				fact_ids.append(fid2)
+	q.set("fact_ids", fact_ids)
+	q.set("fact_params", {
+		"item": display_name,
+		"Location": str(spawner.get("clue_location_text", "")),
+		"loot_tag": loot_tag,
+	})
+	q.set("fact_source", "loot")
+	q.set("fact_source_item_tag", loot_tag)
+	q.set("fact_source_index", item_index)
+	q.transform = _spawner_transform(spawner)
+	add_child(q)
+	return {
+		"node": q,
+		"loot_tag": loot_tag,
+		"display_name": display_name,
+		"actor_class": actor_class,
+		"location_text": str(spawner.get("clue_location_text", "")),
+		"objective_id": objective_id,
+		"spawner": spawner,
+		"fact_ids": fact_ids,
+		"fact_params": q.get("fact_params"),
+	}
 
 
 ## Deterministic weighted pick from a bucket class list (duplicates carry the
@@ -3050,62 +3523,6 @@ func _spawn_loot_entries(entries: Array, tier: String) -> void:
 		add_child(l)
 		_ground_spawn_node(l, pos)
 		order += 1
-
-
-func _spawn_quest_loot(quest_entry: Dictionary, anchor: Vector3, override_name: String = "") -> void:
-	var q := LootScript.new()
-	q.is_quest_item = true
-	q.loot_tier = "quest"
-	var quest_tag: String = str(contract_info.get("loot_tag", ""))
-	var tag_to_actor: Dictionary = loot_tables.get("tag_to_actor", {})
-	var qactors: Dictionary = loot_tables.get("quest_actors", {})
-	var cls := str(tag_to_actor.get(quest_tag, ""))
-	if cls == "":
-		# Labelled fallback: generic quest actor (first quest-tier actor
-		# with an existing mesh, recorded in loot_actors.json).
-		cls = str(loot_tables.get("fallback_quest_actor", ""))
-	var qentry: Dictionary = LootScript.quest_entry_for_tag(quest_tag)
-	var qname := str(contract_info.get("quest_item", "Contract Objective"))
-	if not qentry.is_empty():
-		qname = str(qentry.get("name", qname))
-	if override_name != "":
-		qname = override_name
-	q.item_name = qname
-	q.display_name = qname
-	q.value = LootScript.quest_value_for_tag(quest_tag)
-	var qactor: Variant = qactors.get(cls, null)
-	if qactor is Dictionary and str((qactor as Dictionary).get("mesh_res", "")) != "":
-		q.mesh_path = str((qactor as Dictionary).get("mesh_res", ""))
-	# else mesh_path stays "": the legacy calling-card mesh (labelled
-	# fallback for tags with no dedicated actor / missing mesh).
-	var quest_marker: Vector3
-	if not quest_entry.is_empty():
-		quest_marker = quest_entry.get("pos", anchor) as Vector3
-		q.mesh_rotation_deg = quest_entry.get("rotation", Vector3.ZERO) as Vector3
-	else:
-		quest_marker = anchor + Vector3(2.0, 0.0, -2.0)
-	# P2 ground loot: same AABB-bottom + floor ray as minor/major loot. The
-	# uniqueness nudge runs after grounding (it only shifts on an exact clash).
-	q.position = quest_marker
-	add_child(q)
-	_ground_spawn_node(q, quest_marker)
-	_ensure_unique_loot_position(q)
-
-
-## Belt-and-braces: the quest node never shares an exact position with a
-## regular loot node (deterministic +Y nudges, capped).
-func _ensure_unique_loot_position(q: Area3D) -> void:
-	var guard := 0
-	while guard < 64:
-		var clash := false
-		for n in get_tree().get_nodes_in_group("loot"):
-			if n != q and n is Node3D and ((n as Node3D).position - q.position).length() < 0.01:
-				clash = true
-				break
-		if not clash:
-			return
-		q.position += Vector3(0, 0.25, 0)
-		guard += 1
 
 
 ## Real loot wave tables (loot_actors.json from tools/parse_loot.py): bucket

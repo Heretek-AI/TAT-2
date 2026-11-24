@@ -5,6 +5,18 @@ signal clue_collected(title: String, body: String)
 
 @export var clue_title: String = 'Contract Clue'
 @export var clue_body: String = 'Check the guard patrol schedule near the courtyard.'
+## Authored prompt verb. Authored clues pass "Read" so the prompt is [E] Read;
+## the legacy fallback keeps its descriptive prompt when this is empty.
+@export var prompt_verb: String = ""
+## Authored visual actor class (BP_ReadableClueActor_*_C) and readable type.
+@export var authored_class: String = ""
+@export var visual_type: String = ""
+## Authored fact ids granted on first read (GameData.get_fact).
+var fact_ids: Array[String] = []
+var fact_params: Dictionary = {}
+var fact_source: String = "clue"
+var fact_source_item_tag: String = ""
+var fact_source_index: int = -1
 
 var collected: bool = false
 var visual_root: Node3D
@@ -27,7 +39,14 @@ func _ready() -> void:
 	visual_root = Node3D.new()
 	add_child(visual_root)
 
-	var glb_path: String = 'res://assets/ue/Content/Art/Environment/Props/Paper/SM_NoteOpenA.glb'
+	var glb_path: String = "res://assets/ue/Content/Art/Gameplay/Clues/Notes/SM_NoteOpenA.glb"
+	match authored_class:
+		"BP_ReadableClueActor_Note_C":
+			glb_path = "res://assets/ue/Content/Art/Gameplay/Clues/Notes/SM_NoteOpenA.glb"
+		"BP_ReadableClueActor_Newspaper_C":
+			glb_path = "res://assets/ue/Content/Art/Gameplay/Loot/SM_ClueNewspaper.glb"
+		"BP_ReadableClueActor_Journal_C":
+			glb_path = "res://assets/ue/Content/Art/Gameplay/Loot/SM_ClueJournal.glb"
 	if ResourceLoader.exists(glb_path):
 		var packed: PackedScene = ResourceLoader.load(glb_path) as PackedScene
 		if packed != null:
@@ -47,7 +66,7 @@ func _ready() -> void:
 	label = Label3D.new()
 	label.position = Vector3(0.0, 0.6, 0.0)
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	label.text = clue_title
+	label.text = clue_title if clue_title != "" else prompt_verb
 	label.font_size = 28
 	label.visible = false
 	add_child(label)
@@ -74,6 +93,8 @@ func interact(actor: Node) -> void:
 	if collected:
 		return
 	collected = true
+	for fact_id: String in fact_ids:
+		GameState.grant_fact(fact_id, fact_params, fact_source, fact_source_item_tag, fact_source_index)
 	clue_collected.emit(clue_title, clue_body)
 	NoiseBus.emit_noise(global_position, 1.5, actor, 'clue')
 	if label != null:
@@ -87,6 +108,8 @@ func interact(actor: Node) -> void:
 
 
 func get_interact_prompt() -> String:
+	if prompt_verb != "":
+		return ("[%s]" % prompt_verb) if collected else ("[E] %s" % prompt_verb)
 	if collected:
 		return '[Read] ' + clue_title
 	return '[E] Read Clue: ' + clue_title

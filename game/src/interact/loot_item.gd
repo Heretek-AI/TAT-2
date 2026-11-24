@@ -12,6 +12,17 @@ extends Area3D
 @export var mesh_rotation_deg: Vector3 = Vector3.ZERO
 ## Shown on the name label (major/quest); defaults to item_name when empty.
 @export var display_name: String = ""
+## Authored quest-item metadata (DT_LootInfo_Quest / quest spawner).
+@export var authored_actor_class: String = ""
+var clue_location_text: String = ""
+var objective_id: String = ""
+var loot_tag: String = ""
+## Authored clue facts granted on pickup (spawner _spawnActions + pickup clue).
+var fact_ids: Array[String] = []
+var fact_params: Dictionary = {}
+var fact_source: String = "loot"
+var fact_source_item_tag: String = ""
+var fact_source_index: int = -1
 
 const INTERACTABLES_PATH := "res://data/generated/gameplay/interactables.json"
 
@@ -220,7 +231,11 @@ func interact(_actor: Node) -> void:
 	if get_meta("collected", false):
 		return
 	set_meta("collected", true)
-	GameState.add_loot(1, value, is_quest_item)
+	GameState.add_loot(1, value, is_quest_item, objective_id)
+	if objective_id.begins_with("set_item_"):
+		GameState.advance_set_objective()
+	for fact_id: String in fact_ids:
+		GameState.grant_fact(fact_id, fact_params, fact_source, fact_source_item_tag, fact_source_index)
 	queue_free()
 
 

@@ -6,6 +6,7 @@ signal objective_completed()
 signal state_changed(new_state: String)
 signal objectives_updated()
 signal mission_letter_requested(title: String, intro_text: String)
+signal clue_facts_changed()
 
 enum Difficulty { NOVICE = 1, THIEF = 2, MASTER_THIEF = 3 }
 
@@ -67,6 +68,11 @@ const STOLEN_KEY_NAMES: Dictionary = {
 	"key_secret_chest": "Secret Chest Key",
 	"key_small_chest": "Small Chest Key",
 }
+## Journal of authored clue facts learned this run (see GameData.clue_facts).
+## Ordinary facts dedupe by fact id; templated Set.Location facts dedupe by
+## fact id + the quest item that supplied {item}/{Location}. This is run state
+## only — the save schema is untouched.
+var clue_facts: Array[Dictionary] = []
 var quest_item_acquired: bool = false
 var ever_spotted: bool = false
 var ever_chased: bool = false
@@ -99,6 +105,12 @@ func reset_run(contract_order: int, map_id: String) -> void:
 	contract_intro = ""
 	stolen_keys = []
 	quest_item_acquired = false
+	# A new run starts a fresh journal. Returning to the Den hub (map_id
+	# "thieves_den") is not a mission reset, so the journal survives the hub
+	# transition and is only cleared when the next mission deploys.
+	if map_id != "thieves_den" and not clue_facts.is_empty():
+		clue_facts.clear()
+		clue_facts_changed.emit()
 	ever_spotted = false
 	ever_chased = false
 	takedowns = 0
@@ -258,6 +270,68 @@ func stolen_key_display_names() -> Array[String]:
 	return out
 
 
+## Learn an authored clue fact (GameData.get_fact). Ordinary facts dedupe by
+## fact id; the templated DT_ClueFacts_Quest_Guildhall:Set.Location fact dedupes
+## by fact id + source_item_tag so each gem's location can be recorded once.
+## Params only replace authored tokens such as {item}/{Location}; nothing is
+## invented when a value is missing.
+func grant_fact(fact_id: String, params: Dictionary = {}, source: String = "", source_item_tag: String = "", source_index: int = -1) -> bool:
+	var fact: Dictionary = GameData.get_fact(fact_id)
+	if fact.is_empty():
+		push_error("[game_state] grant_fact: unknown authored fact id '", fact_id, "' (source=", source, ")")
+		return false
+	var templated: bool = fact_id.ends_with(":Set.Location") or fact_id.ends_with(".Set.Location")
+	var dedupe_key: String = fact_id
+	if templated:
+		dedupe_key = fact_id + "|" + source_item_tag
+	for entry: Dictionary in clue_facts:
+		if str(entry.get("dedupe_key", entry.get("id", ""))) == dedupe_key:
+			return false
+	var journal_text: String = _format_fact_text(str(fact.get("journal_text", "")), params)
+	if journal_text.strip_edges() == "":
+		push_warning("[game_state] grant_fact: authored fact '", fact_id, "' has no journal text; not added")
+		return false
+	if templated and (str(params.get("item", "")) == "" or str(params.get("Location", "")) == ""):
+		push_warning("[game_state] grant_fact: Set.Location fact '", fact_id, "' received incomplete params (item='", str(params.get("item", "")), "', Location='", str(params.get("Location", "")), "'); journal keeps the authored placeholders")
+	clue_facts.append({
+		"id": fact_id,
+		"dedupe_key": dedupe_key,
+		"fact_tag": str(fact.get("fact_tag", "")),
+		"journal_text": journal_text,
+		"display_priority": int(fact.get("display_priority", 0)),
+		"category": str(fact.get("category", "")),
+		"source": source,
+		"source_item_tag": source_item_tag,
+		"source_index": source_index,
+		"learned_index": clue_facts.size(),
+		"params": params.duplicate(true),
+	})
+	clue_facts_changed.emit()
+	return true
+
+
+func has_clue_fact(fact_id: String, source_item_tag: String = "") -> bool:
+	for entry: Dictionary in clue_facts:
+		if str(entry.get("id", "")) != fact_id:
+			continue
+		if source_item_tag == "" or str(entry.get("source_item_tag", "")) == source_item_tag:
+			return true
+	return false
+
+
+func _format_fact_text(text: String, params: Dictionary) -> String:
+	var out: String = text
+	for key_v: Variant in params.keys():
+		var key: String = str(key_v)
+		var value: String = str(params[key_v])
+		if key == "":
+			continue
+		out = out.replace("{%s}" % key, value)
+		out = out.replace("{%s}" % key.to_lower(), value)
+		out = out.replace("{%s}" % key.capitalize(), value)
+	return out
+
+
 func add_loot(amount: int, value: int, is_quest_item: bool = false, objective_id: String = "") -> void:
 	loot_collected += amount
 	loot_value += value
@@ -336,6 +410,26 @@ func add_loot(amount: int, value: int, is_quest_item: bool = false, objective_id
 	if should_emit_complete:
 		objective_completed.emit()
 	loot_changed.emit(loot_collected, loot_needed, loot_value)
+
+
+## Authored Set quest-item pickup: advance set_main once for a specific
+## set_item_N objective. Kept out of add_loot() so the legacy dedupe contract
+## (T2-18-B: a repeated set_item id never advances set_main by itself) holds.
+func advance_set_objective() -> void:
+	for i: int in range(mission_objectives.size()):
+		var entry: Dictionary = mission_objectives[i]
+		if str(entry.get("id", "")) != "set_main":
+			continue
+		var target_val: int = maxi(int(entry.get("target", 1)), 1)
+		var next_cur: int = mini(int(entry.get("current", 0)) + 1, target_val)
+		entry["current"] = next_cur
+		entry["done"] = next_cur >= target_val
+		mission_objectives[i] = entry
+		if entry["done"] == true and are_all_objectives_complete():
+			quest_item_acquired = true
+			objective_completed.emit()
+		objectives_updated.emit()
+		return
 
 
 func difficulty_label() -> String:

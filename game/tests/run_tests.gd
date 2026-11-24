@@ -5158,6 +5158,200 @@ func _initialize() -> void:
 	w2_host.queue_free()
 	await process_frame
 
+	# 65. Authored clues, quest items and journal (W4). All expected strings are
+	# read from / asserted against the shipped generators (clues.json,
+	# quests.json); the only literal strings are the seven Contract 2 journal
+	# facts and the authored Set objective text.
+	var c65_ok: bool = true
+	var c65_mc: Node = (load("res://src/missions/mission_controller.gd") as GDScript).new()
+	# 65a. Fact totals: 96 authored, 90 reachable, 6 dead, 0 suppressed.
+	var c65_reachable: int = 0
+	for c65_fid_v: Variant in gd.clue_facts.keys():
+		var c65_f: Dictionary = gd.clue_facts[c65_fid_v] as Dictionary
+		if c65_f.get("reachable", false) == true:
+			c65_reachable += 1
+	if gd.clue_facts.size() != 96 or c65_reachable != 90 or gd.dead_fact_ids.size() != 6 or not gd.suppressed_fact_ids.is_empty():
+		printerr("FAIL: 65 clue facts totals: total=", gd.clue_facts.size(), " reachable=", c65_reachable, " dead=", gd.dead_fact_ids.size(), " suppressed=", gd.suppressed_fact_ids.size())
+		c65_ok = false
+	# 65b. Contract 2: exactly 7 facts, 3 priority-1 + 4 priority-2, exact text.
+	var c65_c2_texts: Array[String] = []
+	var c65_p1: int = 0
+	var c65_p2: int = 0
+	var c65_suppressed: int = 0
+	for c65_fid_v: Variant in gd.clue_facts.keys():
+		var c65_fid: String = str(c65_fid_v)
+		if not c65_fid.begins_with("DT_ClueFacts_Contracts_02:"):
+			continue
+		var c65_f: Dictionary = gd.clue_facts[c65_fid_v] as Dictionary
+		c65_c2_texts.append(str(c65_f.get("journal_text", "")))
+		var c65_prio: int = int(c65_f.get("display_priority", 0))
+		if c65_prio == 1:
+			c65_p1 += 1
+		elif c65_prio == 2:
+			c65_p2 += 1
+		var c65_sup_v: Variant = c65_f.get("suppressed_by", [])
+		if c65_sup_v is Array and not (c65_sup_v as Array).is_empty():
+			c65_suppressed += 1
+	var c65_c2_expect: Array[String] = [
+		"The Chief Constable has taken a personal interest in the theft of the Vistara Diamond.",
+		"The files are somewhere on the second floor",
+		"The files are on a desk in the bullpen",
+		"The files are on a constable's desk",
+		"The Vistara files are being processed on the second floor.",
+		"The officer named Sgt. Campbell has a desk in the middle of the bullpen",
+		"The Vistara Diamond was brought to Kilkairn by Mr. Hugh Montogomery, by irregular means.",
+	]
+	c65_c2_expect.sort()
+	c65_c2_texts.sort()
+	if c65_c2_texts.size() != 7 or c65_p1 != 3 or c65_p2 != 4 or c65_suppressed != 0 or c65_c2_texts != c65_c2_expect:
+		printerr("FAIL: 65 Contract 2 facts: count=", c65_c2_texts.size(), " p1=", c65_p1, " p2=", c65_p2, " suppressed=", c65_suppressed, " texts=", c65_c2_texts)
+		c65_ok = false
+	# 65c. CLS_Contract_02: 6 enabled / 0 disabled, authored placement demand.
+	var c65_set: Dictionary = gd.get_clue_set("CLS_Contract_02")
+	var c65_counts: Dictionary = c65_set.get("counts", {}) as Dictionary
+	var c65_demand: Dictionary = c65_set.get("placement_demand", {}) as Dictionary
+	if int(c65_counts.get("enabled", -1)) != 6 or int(c65_counts.get("disabled", -1)) != 0 \
+			or int(c65_demand.get("CluePlacement.Common.Guildhall.Contracts.Entrance", 0)) != 1 \
+			or int(c65_demand.get("CluePlacement.Common.Guildhall.Contracts.FirstFloor", 0)) != 3 \
+			or int(c65_demand.get("CluePlacement.Common.Guildhall.Contracts.SecondFloor", 0)) != 2:
+		printerr("FAIL: 65 CLS_Contract_02 counts/demand: ", c65_counts, " demand=", c65_demand)
+		c65_ok = false
+	# 65d. Guildhall_Contracts carries 28 authored readable spawners.
+	var c65_contract_levels: Array = ["Guildhall/Guildhall_Contracts"]
+	if gd.get_readable_spawners("guildhall", "", c65_contract_levels).size() != 28:
+		printerr("FAIL: 65 Guildhall_Contracts readable spawners=", gd.get_readable_spawners("guildhall", "", c65_contract_levels).size())
+		c65_ok = false
+	# 65e. Spawn pass: 6 distinct readable clues with the authored bodies.
+	var c65_reqs: Array[Dictionary] = [{"set": "CLS_Contract_02", "mode": "all", "loot_tag": "", "node": ""}]
+	var c65_recs: Array = c65_mc.call("spawn_clue_requests", c65_reqs, "guildhall", 424242, c65_contract_levels, [] as Array)
+	var c65_spawner_keys: Dictionary = {}
+	var c65_bodies: Array[String] = []
+	var c65_expect_bodies: Array[String] = []
+	var c65_clues_v: Variant = c65_set.get("clues", [])
+	if c65_clues_v is Array:
+		for c65_clue_v: Variant in (c65_clues_v as Array):
+			if c65_clue_v is Dictionary and (c65_clue_v as Dictionary).get("enabled", false) == true:
+				c65_expect_bodies.append(str((c65_clue_v as Dictionary).get("text", "")))
+	c65_expect_bodies.sort()
+	for c65_rec_v: Variant in c65_recs:
+		var c65_rec: Dictionary = c65_rec_v as Dictionary
+		c65_bodies.append(str(c65_rec.get("body", "")))
+		var c65_sp: Dictionary = c65_rec.get("spawner", {}) as Dictionary
+		c65_spawner_keys["%s|%s|%s" % [str(c65_sp.get("level", "")), str(c65_sp.get("actor", "")), str(c65_sp.get("pos", []))]] = true
+		var c65_node: Node = c65_rec.get("node", null) as Node
+		if c65_node == null or str(c65_node.get("clue_body")) != str(c65_rec.get("body", "")) or str(c65_node.call("get_interact_prompt")) != "[E] Read":
+			printerr("FAIL: 65 spawned clue node/body/prompt mismatch: ", c65_rec)
+			c65_ok = false
+	c65_bodies.sort()
+	if c65_recs.size() != 6 or c65_spawner_keys.size() != 6 or c65_bodies != c65_expect_bodies:
+		printerr("FAIL: 65 clue spawn pass: records=", c65_recs.size(), " distinct=", c65_spawner_keys.size(), " bodies=", c65_bodies)
+		c65_ok = false
+	# 65f. Guildhall Set plan: one reachable objective, authored text, 3 gems.
+	var c65_set_plan: Dictionary = gd.get_mission_plan("Mission.Guildhall.Set")
+	var c65_set_objs: Array = c65_set_plan.get("objectives", []) as Array
+	var c65_set_obj: Dictionary = c65_set_objs[0] as Dictionary if c65_set_objs.size() == 1 else {}
+	var c65_gem_names: Array[String] = []
+	var c65_set_items: Array = c65_set_obj.get("items", []) as Array
+	for c65_item_v: Variant in c65_set_items:
+		c65_gem_names.append(str((c65_item_v as Dictionary).get("display_name", "")))
+	c65_gem_names.sort()
+	var c65_gem_expect: Array[String] = ["Gem of Arcana", "Gem of Fire", "Gem of Strength"]
+	if c65_set_objs.size() != 1 \
+			or str(c65_set_obj.get("objective_text", "")) != "Steal the components of the Staff of Edinburgh" \
+			or c65_gem_names != c65_gem_expect \
+			or int(c65_set_obj.get("min_number_to_steal", 0)) != 1 \
+			or c65_set_obj.get("override_min_number_to_steal", true) != false \
+			or int(c65_set_plan.get("endgame_duration", 0)) != 480:
+		printerr("FAIL: 65 Guildhall Set plan: objs=", c65_set_objs.size(), " text='", c65_set_obj.get("objective_text", ""), "' gems=", c65_gem_names, " min=", c65_set_obj.get("min_number_to_steal"), " endgame=", c65_set_plan.get("endgame_duration"))
+		c65_ok = false
+	# 65g. Set quest items spawn on 3 distinct authored Office spawners.
+	var c65_guildhall_levels: Array = ["Guildhall/Guildhall_Gameplay", "Guildhall/Guildhall_Loot", "Guildhall/Guildhall_SetSpawners", "Guildhall/Guildhall_MissionClues"]
+	var c65_gem_recs: Array = c65_mc.call("spawn_authored_quest_items", c65_set_obj, "guildhall", 9090, c65_guildhall_levels)
+	var c65_gem_spawners: Dictionary = {}
+	var c65_gem_spawned_names: Array[String] = []
+	var c65_forbidden: Array[String] = ["Sapphire", "Ruby", "Emerald of Edinburgh", "Relic Piece", "Claymur"]
+	for c65_rec_v: Variant in c65_gem_recs:
+		var c65_rec: Dictionary = c65_rec_v as Dictionary
+		c65_gem_spawned_names.append(str(c65_rec.get("display_name", "")))
+		var c65_sp: Dictionary = c65_rec.get("spawner", {}) as Dictionary
+		c65_gem_spawners["%s|%s" % [str(c65_sp.get("level", "")), str(c65_sp.get("actor", ""))]] = true
+		if str(c65_sp.get("quest_location_tag", "")) != "QuestLocation.Office":
+			printerr("FAIL: 65 Set gem spawner tag: ", c65_sp.get("quest_location_tag"))
+			c65_ok = false
+		for c65_bad: String in c65_forbidden:
+			if str(c65_rec.get("display_name", "")).find(c65_bad) >= 0:
+				printerr("FAIL: 65 invented Set gem label: ", c65_rec.get("display_name"))
+				c65_ok = false
+	c65_gem_spawned_names.sort()
+	gs.clue_facts.clear()
+	for c65_rec_v: Variant in c65_gem_recs:
+		var c65_rec: Dictionary = c65_rec_v as Dictionary
+		var c65_fids: Array = c65_rec.get("fact_ids", []) as Array
+		for c65_fid_v: Variant in c65_fids:
+			gs.grant_fact(str(c65_fid_v), c65_rec.get("fact_params", {}) as Dictionary, "loot", str(c65_rec.get("loot_tag", "")), 0)
+	for c65_entry: Dictionary in gs.clue_facts:
+		for c65_bad: String in c65_forbidden:
+			if str(c65_entry.get("journal_text", "")).find(c65_bad) >= 0:
+				printerr("FAIL: 65 invented Set journal text: ", c65_entry.get("journal_text"))
+				c65_ok = false
+	if c65_gem_recs.size() != 3 or c65_gem_spawners.size() != 3 or c65_gem_spawned_names != c65_gem_expect:
+		printerr("FAIL: 65 Set gem spawn: records=", c65_gem_recs.size(), " distinct=", c65_gem_spawners.size(), " names=", c65_gem_spawned_names)
+		c65_ok = false
+	# 65h. LootTheRoom plan: authored goals/durations, no 1000*difficulty ladder.
+	var c65_lt: Dictionary = gd.get_mission_plan("Mission.Guildhall.LootTheRoom")
+	var c65_goals: Array = c65_lt.get("loot_goals", []) as Array
+	var c65_durs: Array = c65_lt.get("durations", []) as Array
+	if c65_goals.size() != 3 or int(c65_goals[0]) != 4000 or int(c65_goals[1]) != 6000 or int(c65_goals[2]) != 8000 \
+			or int(c65_lt.get("main_phase_duration", 0)) != 1320 \
+			or int(c65_lt.get("endgame_duration", 0)) != 480 \
+			or c65_durs.size() != 3 or int(c65_durs[0]) != 3300 or int(c65_durs[1]) != 1200 or int(c65_durs[2]) != 1200:
+		printerr("FAIL: 65 LootTheRoom plan: goals=", c65_goals, " main=", c65_lt.get("main_phase_duration"), " endgame=", c65_lt.get("endgame_duration"), " durs=", c65_durs)
+		c65_ok = false
+	# 65i. Journal dedupe: clue 1 twice + Vistara pickup = 2 facts.
+	gs.clue_facts.clear()
+	var c65_clue1: String = "DT_ClueFacts_Contracts_02:Clue01"
+	var c65_clue_node: Area3D = (load("res://src/interact/clue_item.gd") as GDScript).new()
+	var c65_clue_fids: Array[String] = [c65_clue1]
+	c65_clue_node.set("fact_ids", c65_clue_fids)
+	root.add_child(c65_clue_node)
+	await process_frame
+	c65_clue_node.call("interact", null)
+	c65_clue_node.call("interact", null)
+	c65_clue_node.queue_free()
+	await process_frame
+	var c65_contract2: Dictionary = gd.get_quest_contract(2)
+	var c65_vobj: Dictionary = gd.enrich_quest_objective(c65_contract2.get("objective", {}) as Dictionary)
+	var c65_vlevels: Array = ["Guildhall/Guildhall_Contract_02"]
+	var c65_vrecs: Array = c65_mc.call("spawn_authored_quest_items", c65_vobj, "guildhall", 111, c65_vlevels)
+	if c65_vrecs.size() == 1:
+		var c65_vrec: Dictionary = c65_vrecs[0] as Dictionary
+		for c65_fid_v: Variant in (c65_vrec.get("fact_ids", []) as Array):
+			gs.grant_fact(str(c65_fid_v), c65_vrec.get("fact_params", {}) as Dictionary, "loot", str(c65_vrec.get("loot_tag", "")), 0)
+	if c65_vrecs.size() != 1 or gs.clue_facts.size() != 2 or not gs.has_clue_fact(c65_clue1):
+		printerr("FAIL: 65 journal dedupe: vistara_recs=", c65_vrecs.size(), " facts=", gs.clue_facts.size())
+		c65_ok = false
+	# 65j. Set.Location formats from authored values only.
+	gs.clue_facts.clear()
+	var c65_setloc: Dictionary = gd.get_fact("DT_ClueFacts_Quest_Guildhall:Set.Location")
+	var c65_red: Dictionary = gd.get_loot_quest_row("RedGem")
+	var c65_office: Array = gd.get_quest_spawners("guildhall", "QuestLocation.Office", c65_guildhall_levels)
+	var c65_basement: String = ""
+	for c65_sp_v: Variant in c65_office:
+		if str((c65_sp_v as Dictionary).get("clue_location_text", "")) == "basement":
+			c65_basement = "basement"
+			break
+	gs.grant_fact(str(c65_setloc.get("id", "")), {"item": str(c65_red.get("display_name", "")), "Location": c65_basement}, "loot", str(c65_red.get("loot_tag", "")), 0)
+	var c65_setloc_text: String = str((gs.clue_facts[-1] as Dictionary).get("journal_text", "")) if not gs.clue_facts.is_empty() else ""
+	if str(c65_red.get("display_name", "")) != "Gem of Fire" or c65_basement == "" or c65_setloc_text != "The Gem of Fire is around the basement":
+		printerr("FAIL: 65 Set.Location format: item='", c65_red.get("display_name", ""), "' location='", c65_basement, "' text='", c65_setloc_text, "'")
+		c65_ok = false
+	gs.clue_facts.clear()
+	c65_mc.free()
+	if not c65_ok:
+		fails += 1
+	else:
+		print("PASS: 65 authored clues/journal (96 facts/90 reachable/6 dead, Contract 2 7 facts + 6 clues on 28 spawners, Guildhall Set gems on 3 Office spawners, LootTheRoom 4000/6000/8000 + 1320/480/3300, dedupe, Set.Location)")
+
 	# P2-6 fixture restore (see boot snapshot): leave no mutated autoload
 	# state behind for the next run or embedding harness.
 	gs.thief_id = fx_thief_id

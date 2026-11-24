@@ -22,6 +22,30 @@ const FALLBACK_MISSION_LOOT_GOALS: Dictionary = {
 ## generated from). Written by _load_contracts_json; read via
 ## contracts_source() (P2-D5: the var was write-only).
 var contracts_source_table: String = ""
+## Authored clue data (tools/parse_clues.py -> gameplay/clues.json). Facts are
+## keyed by their table:row id; clue sets keep every authored entry so the
+## mission controller never invents a clue body. All lookups fail soft with a
+## warning when the generated file is absent.
+var clue_facts: Dictionary = {} # fact id -> authored fact record
+var clue_fact_tags: Dictionary = {} # ClueFact.* tag -> Array[fact id]
+var clue_sets: Dictionary = {} # CLS_* -> authored set + clues
+var readable_visuals: Dictionary = {} # DA_ReadableVisuals_* -> actor class
+var readable_spawners: Array[Dictionary] = [] # authored readable-clue spawners
+var quest_spawners: Array[Dictionary] = [] # authored quest item spawners
+var pickup_clues: Dictionary = {} # loot row -> authored pickup clue
+var _pickup_clues_by_tag: Dictionary = {} # loot tag -> same record
+var clue_stats: Dictionary = {}
+var dead_fact_ids: Array[String] = []
+var suppressed_fact_ids: Array[String] = []
+var _clue_text_replacement: Dictionary = {}
+## Authored quest graph data (tools/parse_quests.py -> gameplay/quests.json).
+var quest_contracts: Dictionary = {} # Contract.Main.N -> authored row
+var quest_missions: Dictionary = {} # Mission.* -> authored row
+var quest_graphs: Dictionary = {} # QG_* -> authored graph
+var loot_quest: Dictionary = {} # DT_LootInfo_Quest row -> authored row
+var _loot_quest_by_tag: Dictionary = {} # Loot.Quest.* -> same record
+var _quest_text_replacement: Dictionary = {}
+var _mission_plan_cache: Dictionary = {}
 ## G1/G2 sentinels: every fallback routing decision is counted and named so
 ## a misspelled row or map can never route silently. Export gates on these.
 ## The 64-row list caps below are named constants so the bound is provable
@@ -39,6 +63,8 @@ func _ready() -> void:
 	_load_contracts_json()
 	_load_contract_strings()
 	_load_missions()
+	_load_clues()
+	_load_quests()
 
 
 func _load_json(path: String) -> Variant:
@@ -737,3 +763,434 @@ func get_missions_for_map(p_map_id: String) -> Array[Dictionary]:
 		if str(m.get("map_id", "")) == p_map_id:
 			out.append(m)
 	return out
+
+
+# --- Authored clues (gameplay/clues.json) ---------------------------------
+
+func _load_clues() -> void:
+	var data: Variant = _load_json("res://data/generated/gameplay/clues.json")
+	if not (data is Dictionary):
+		push_warning("[game_data] gameplay/clues.json missing or unreadable; authored clue data unavailable")
+		return
+	var d: Dictionary = data as Dictionary
+	var facts_v: Variant = d.get("facts", {})
+	if facts_v is Dictionary:
+		clue_facts = (facts_v as Dictionary).duplicate(true)
+	var tags_v: Variant = d.get("fact_tags", {})
+	if tags_v is Dictionary:
+		clue_fact_tags = (tags_v as Dictionary).duplicate(true)
+	var sets_v: Variant = d.get("clue_sets", {})
+	if sets_v is Dictionary:
+		clue_sets = (sets_v as Dictionary).duplicate(true)
+	var vis_v: Variant = d.get("readable_visuals", {})
+	if vis_v is Dictionary:
+		readable_visuals = (vis_v as Dictionary).duplicate(true)
+	readable_spawners = _dict_array(d.get("readable_spawners", []))
+	quest_spawners = _dict_array(d.get("quest_spawners", []))
+	var pickups_v: Variant = d.get("pickup_clues", [])
+	if pickups_v is Array:
+		for rec_v: Variant in (pickups_v as Array):
+			if not (rec_v is Dictionary):
+				continue
+			var rec: Dictionary = rec_v as Dictionary
+			var row: String = str(rec.get("loot_row", ""))
+			var tag: String = str(rec.get("loot_tag", ""))
+			if row != "":
+				pickup_clues[row] = rec
+			if tag != "":
+				_pickup_clues_by_tag[tag] = rec
+	var stats_v: Variant = d.get("stats", {})
+	if stats_v is Dictionary:
+		clue_stats = (stats_v as Dictionary).duplicate(true)
+	var tr_v: Variant = d.get("text_replacement", {})
+	if tr_v is Dictionary:
+		_clue_text_replacement = (tr_v as Dictionary).duplicate(true)
+	dead_fact_ids = _string_array(d.get("dead_fact_ids", []))
+	suppressed_fact_ids = _string_array(d.get("suppressed_fact_ids", []))
+	var validation: Variant = d.get("validation", {})
+	if validation is Dictionary and (validation as Dictionary).get("ok", false) != true:
+		push_error("[game_data] clues.json validation is not ok; see gameplay/clues.json")
+
+
+func _dict_array(value: Variant) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if value is Array:
+		for item: Variant in (value as Array):
+			if item is Dictionary:
+				out.append((item as Dictionary).duplicate(true))
+	return out
+
+
+func _string_array(value: Variant) -> Array[String]:
+	var out: Array[String] = []
+	if value is Array:
+		for item: Variant in (value as Array):
+			out.append(str(item))
+	return out
+
+
+## Authored clue fact by id ("DT_ClueFacts_Contracts_02:Clue01"). Returns the
+## record including journal_text, display_priority and fact_tag, or {}.
+func get_fact(id: String) -> Dictionary:
+	var row_v: Variant = clue_facts.get(id)
+	return (row_v as Dictionary).duplicate(true) if row_v is Dictionary else {}
+
+
+## Fact ids authored for a ClueFact.* tag. `tables` optionally limits the
+## answer to facts from those DT_ClueFacts_* tables.
+func get_fact_ids_for_tag(tag: String, tables: Array = []) -> Array[String]:
+	var out: Array[String] = []
+	var ids_v: Variant = clue_fact_tags.get(tag)
+	if ids_v is Array:
+		for id_v: Variant in (ids_v as Array):
+			var fid: String = str(id_v)
+			if tables.is_empty():
+				out.append(fid)
+				continue
+			var fact: Dictionary = get_fact(fid)
+			if tables.has(str(fact.get("table", ""))):
+				out.append(fid)
+	return out
+
+
+## Clue set by asset name ("CLS_Contract_02") or UE path
+## ("/Game/.../CLS_Contract_02.CLS_Contract_02").
+func get_clue_set(name_or_asset: String) -> Dictionary:
+	var key: String = _clue_set_key(name_or_asset)
+	if key == "":
+		return {}
+	return (clue_sets[key] as Dictionary).duplicate(true)
+
+
+func _clue_set_key(name_or_asset: String) -> String:
+	var key: String = name_or_asset.strip_edges()
+	if key == "":
+		return ""
+	if clue_sets.has(key):
+		return key
+	var dot: int = key.rfind(".")
+	if dot >= 0:
+		var short_name: String = key.substr(dot + 1)
+		if clue_sets.has(short_name):
+			return short_name
+	var slash: int = key.rfind("/")
+	if slash >= 0:
+		var leaf: String = key.substr(slash + 1)
+		if clue_sets.has(leaf):
+			return leaf
+	return ""
+
+
+## Authored readable-clue spawner records for a map (and optional exact
+## placement tag / loaded level filter). Never synthesises a position.
+func get_readable_spawners(map_id: String, placement_tag: String = "", levels: Array = []) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for rec: Dictionary in readable_spawners:
+		if str(rec.get("map_id", "")) != map_id:
+			continue
+		if placement_tag != "" and str(rec.get("placement_tag", "")) != placement_tag:
+			continue
+		if not levels.is_empty() and not levels.has(str(rec.get("level", ""))):
+			continue
+		out.append(rec.duplicate(true))
+	return out
+
+
+## Authored quest-item spawner records for a map + QuestLocation.* tag with
+## the full pos/basis transform (readable by mission_controller).
+func get_quest_spawners(map_id: String, quest_location_tag: String = "", levels: Array = []) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for rec: Dictionary in quest_spawners:
+		if str(rec.get("map_id", "")) != map_id:
+			continue
+		if quest_location_tag != "" and str(rec.get("quest_location_tag", "")) != quest_location_tag:
+			continue
+		if not levels.is_empty() and not levels.has(str(rec.get("level", ""))):
+			continue
+		out.append(rec.duplicate(true))
+	return out
+
+
+## Authored pickup clue for a DT_LootInfo_Quest row or loot tag.
+func get_pickup_clue(loot_row: String) -> Dictionary:
+	var row_v: Variant = pickup_clues.get(loot_row)
+	if row_v is Dictionary:
+		return (row_v as Dictionary).duplicate(true)
+	var tag_v: Variant = _pickup_clues_by_tag.get(loot_row)
+	if tag_v is Dictionary:
+		return (tag_v as Dictionary).duplicate(true)
+	return {}
+
+
+# --- Authored quests (gameplay/quests.json) --------------------------------
+
+func _load_quests() -> void:
+	var data: Variant = _load_json("res://data/generated/gameplay/quests.json")
+	if not (data is Dictionary):
+		push_warning("[game_data] gameplay/quests.json missing or unreadable; authored quest data unavailable")
+		return
+	var d: Dictionary = data as Dictionary
+	var c_v: Variant = d.get("contracts", {})
+	if c_v is Dictionary:
+		quest_contracts = (c_v as Dictionary).duplicate(true)
+	var m_v: Variant = d.get("missions", {})
+	if m_v is Dictionary:
+		quest_missions = (m_v as Dictionary).duplicate(true)
+	var g_v: Variant = d.get("quest_graphs", {})
+	if g_v is Dictionary:
+		quest_graphs = (g_v as Dictionary).duplicate(true)
+	var l_v: Variant = d.get("loot_quest", {})
+	if l_v is Dictionary:
+		loot_quest = (l_v as Dictionary).duplicate(true)
+		for row_key: Variant in loot_quest.keys():
+			var rec: Variant = loot_quest[row_key]
+			if rec is Dictionary:
+				var tag: String = str((rec as Dictionary).get("loot_tag", ""))
+				if tag != "":
+					_loot_quest_by_tag[tag] = rec
+	var tr_v: Variant = d.get("text_replacement", {})
+	if tr_v is Dictionary:
+		_quest_text_replacement = (tr_v as Dictionary).duplicate(true)
+	_mission_plan_cache.clear()
+	var validation: Variant = d.get("validation", {})
+	if validation is Dictionary and (validation as Dictionary).get("ok", false) != true:
+		push_error("[game_data] quests.json validation is not ok; see gameplay/quests.json")
+
+
+## Authored contract row from quests.json (quest objective, clue set, texts).
+func get_quest_contract(order_or_id: Variant) -> Dictionary:
+	for key_v: Variant in quest_contracts.keys():
+		var row_v: Variant = quest_contracts[key_v]
+		if not (row_v is Dictionary):
+			continue
+		var row: Dictionary = row_v as Dictionary
+		if (order_or_id is int or order_or_id is float) and int(row.get("order", -1)) == int(order_or_id):
+			return row.duplicate(true)
+		if str(key_v) == str(order_or_id):
+			return row.duplicate(true)
+	return {}
+
+
+## Authored DT_LootInfo_Quest row by row name ("RedGem") or loot tag
+## ("Loot.Quest.Set.RedGem").
+func get_loot_quest_row(row: String) -> Dictionary:
+	var by_row: Variant = loot_quest.get(row)
+	if by_row is Dictionary:
+		return (by_row as Dictionary).duplicate(true)
+	var by_tag: Variant = _loot_quest_by_tag.get(row)
+	if by_tag is Dictionary:
+		return (by_tag as Dictionary).duplicate(true)
+	return {}
+
+
+## Authored quest graph by name ("QG_Guildhall_Set") or UE asset path.
+func get_quest_graph(name: String) -> Dictionary:
+	var key: String = name.strip_edges()
+	if key == "":
+		return {}
+	if not quest_graphs.has(key):
+		var dot: int = key.rfind(".")
+		if dot >= 0:
+			key = key.substr(dot + 1)
+		var slash: int = key.rfind("/")
+		if slash >= 0 and not quest_graphs.has(key):
+			key = key.substr(slash + 1)
+	var graph_v: Variant = quest_graphs.get(key)
+	return (graph_v as Dictionary).duplicate(true) if graph_v is Dictionary else {}
+
+
+## Authored St_Clues_TextReplacement entry (e.g. "Missions.GH.Set").
+func get_text_replacement(key: String) -> String:
+	var rec_v: Variant = _quest_text_replacement.get(key)
+	if rec_v is Dictionary:
+		return str((rec_v as Dictionary).get("text", ""))
+	rec_v = _clue_text_replacement.get(key)
+	if rec_v is Dictionary:
+		return str((rec_v as Dictionary).get("text", ""))
+	return ""
+
+
+## Authored mission plan: DT mission row + reachable QG objectives (items
+## enriched from DT_LootInfo_Quest), reachable clue-set nodes, and the QG
+## MatchMainPhase/Endgame durations. Cached per mission id.
+func get_mission_plan(mission_id: String) -> Dictionary:
+	if _mission_plan_cache.has(mission_id):
+		return (_mission_plan_cache[mission_id] as Dictionary).duplicate(true)
+	var row_v: Variant = quest_missions.get(mission_id)
+	if not (row_v is Dictionary):
+		push_warning("[game_data] get_mission_plan: unknown mission id '", mission_id, "'")
+		return {}
+	var plan: Dictionary = (row_v as Dictionary).duplicate(true)
+	plan["mission_id"] = mission_id
+	if not plan.has("map_id") or str(plan.get("map_id", "")) == "":
+		plan["map_id"] = _mission_map_id(mission_id, {})
+	var graph_name: String = str(plan.get("quest_graph", ""))
+	var graph: Dictionary = {}
+	var graph_v: Variant = quest_graphs.get(graph_name)
+	if graph_v is Dictionary:
+		graph = graph_v as Dictionary
+	else:
+		push_warning("[game_data] get_mission_plan: mission '", mission_id, "' references missing quest graph '", graph_name, "'")
+	var objectives: Array[Dictionary] = []
+	var clue_refs: Array[Dictionary] = []
+	var main_phase: float = 0.0
+	var endgame: float = 0.0
+	var seen_sets: Dictionary = {}
+	if not graph.is_empty():
+		var nodes_v: Variant = graph.get("nodes", {})
+		if nodes_v is Dictionary:
+			var nodes: Dictionary = nodes_v as Dictionary
+			for node_key: Variant in nodes.keys():
+				var node_v: Variant = nodes[node_key]
+				if not (node_v is Dictionary):
+					continue
+				var node: Dictionary = node_v as Dictionary
+				if node.get("reachable", false) != true:
+					continue
+				var ntype: String = str(node.get("type", ""))
+				if ntype == "TATQuestGraphObjectiveNode":
+					objectives.append(_enrich_plan_objective(node, graph))
+				elif ntype == "TATQuestGraphClueSetNode" or ntype == "TATQuestGraphClueSetForSpawnNode":
+					var set_name: String = str(node.get("clue_set", ""))
+					if set_name != "":
+						clue_refs.append({
+							"graph": graph_name,
+							"node": str(node_key),
+							"node_type": ntype,
+							"clue_set": set_name,
+							"loot_tag": str(node.get("loot_tag", "")),
+						})
+						seen_sets[set_name] = true
+				elif ntype == "TATQuestGraphPropertyNode":
+					match str(node.get("property_type", "")):
+						"MatchMainPhaseDuration":
+							main_phase = maxf(main_phase, float(node.get("duration", 0.0)))
+						"EndgameDuration":
+							endgame = maxf(endgame, float(node.get("endgame_duration", 0.0)))
+	plan["objectives"] = objectives
+	plan["clue_set_nodes"] = clue_refs
+	plan["clue_sets"] = seen_sets.keys()
+	plan["main_phase_duration"] = main_phase
+	plan["endgame_duration"] = endgame
+	var loot_goals: Array[int] = []
+	var by_difficulty: Dictionary = {}
+	for obj: Dictionary in objectives:
+		var amount_v: Variant = obj.get("amount", null)
+		if amount_v == null:
+			continue
+		var difficulty: int = int(obj.get("difficulty", 0))
+		if difficulty <= 0:
+			loot_goals.append(int(amount_v))
+		else:
+			by_difficulty[difficulty] = int(amount_v)
+	if by_difficulty.is_empty():
+		pass
+	else:
+		loot_goals.clear()
+		for d_idx: int in range(1, 4):
+			if by_difficulty.has(d_idx):
+				loot_goals.append(int(by_difficulty[d_idx]))
+	plan["loot_goals"] = loot_goals
+	var text: String = ""
+	var min_steal: Variant = null
+	var override_min: Variant = null
+	for obj: Dictionary in objectives:
+		if text == "" and str(obj.get("objective_text", "")) != "":
+			text = str(obj.get("objective_text", ""))
+		if min_steal == null and obj.get("min_number_to_steal", null) != null:
+			min_steal = obj.get("min_number_to_steal")
+			override_min = obj.get("override_min_number_to_steal")
+	plan["objective_text"] = text
+	plan["min_number_to_steal"] = min_steal
+	plan["override_min_number_to_steal"] = override_min
+	_mission_plan_cache[mission_id] = plan
+	return plan.duplicate(true)
+
+
+## Enrich an authored objective dictionary: loot rows, display names, actor
+## classes and the effective QuestLocation tag. Shared by mission plans and
+## contract deploys so both read the shipped DT_LootInfo_Quest row.
+func enrich_quest_objective(objective_in: Dictionary) -> Dictionary:
+	var objective: Dictionary = objective_in.duplicate(true)
+	var items: Array[Dictionary] = []
+	var raw_items: Variant = objective.get("items", [])
+	if raw_items is Array:
+		for item_v: Variant in (raw_items as Array):
+			if not (item_v is Dictionary):
+				continue
+			var item: Dictionary = (item_v as Dictionary).duplicate(true)
+			var loot_tag: String = str(item.get("loot_tag", ""))
+			var loot_row: Dictionary = get_loot_quest_row(loot_tag)
+			item["loot_row"] = str(loot_row.get("row", ""))
+			item["display_name"] = str(loot_row.get("display_name", ""))
+			item["actor_class"] = str(loot_row.get("actor_class", ""))
+			item["actor_class_ue"] = str(loot_row.get("actor_class_ue", ""))
+			item["value"] = int(loot_row.get("value", 0))
+			var effective: String = str(item.get("quest_spawn_location", ""))
+			# The objective item's authored QuestSpawnLocation wins; the loot
+			# row's QuestLocationTag is the fallback only when the objective
+			# authors no location (e.g. a generic Item reference).
+			if effective == "" or effective == "None":
+				var row_loc: String = str(loot_row.get("quest_location_tag", ""))
+				if row_loc != "":
+					effective = row_loc
+			item["effective_quest_location"] = effective
+			items.append(item)
+	objective["items"] = items
+	var label: String = str(objective.get("objective_text", ""))
+	objective["label"] = label
+	return objective
+
+
+## Enrich one authored objective node: loot rows, display names, actor
+## classes and the effective QuestLocation tag.
+func _enrich_plan_objective(node: Dictionary, graph: Dictionary) -> Dictionary:
+	var obj_v: Variant = node.get("objective", {})
+	var objective: Dictionary = enrich_quest_objective(obj_v as Dictionary if obj_v is Dictionary else {})
+	objective["node"] = str(node.get("name", ""))
+	objective["difficulty"] = _objective_difficulty(graph, str(node.get("name", "")))
+	return objective
+
+
+## Difficulty gate on the edge that enters an objective node (world tag
+## query Difficulty.Novice / Thief / MasterThief). 0 = unconditional.
+func _objective_difficulty(graph: Dictionary, node_name: String) -> int:
+	var nodes_v: Variant = graph.get("nodes", {})
+	if not (nodes_v is Dictionary):
+		return 0
+	var nodes: Dictionary = nodes_v as Dictionary
+	var node_v: Variant = nodes.get(node_name)
+	if not (node_v is Dictionary):
+		return 0
+	var parents_v: Variant = (node_v as Dictionary).get("parents", [])
+	if not (parents_v is Array):
+		return 0
+	for parent_v: Variant in (parents_v as Array):
+		var parent_node_v: Variant = nodes.get(str(parent_v))
+		if not (parent_node_v is Dictionary):
+			continue
+		var edges_v: Variant = (parent_node_v as Dictionary).get("edges", [])
+		if not (edges_v is Array):
+			continue
+		for edge_v: Variant in (edges_v as Array):
+			if not (edge_v is Dictionary):
+				continue
+			var edge: Dictionary = edge_v as Dictionary
+			if str(edge.get("target", "")) != node_name:
+				continue
+			var query_v: Variant = edge.get("world_tag_query", null)
+			if not (query_v is Dictionary):
+				continue
+			var tags_v: Variant = (query_v as Dictionary).get("TagDictionary", [])
+			if not (tags_v is Array):
+				continue
+			for tag_v: Variant in (tags_v as Array):
+				var tag: String = str((tag_v as Dictionary).get("TagName", "")) if tag_v is Dictionary else ""
+				match tag:
+					"Difficulty.Novice":
+						return 1
+					"Difficulty.Thief":
+						return 2
+					"Difficulty.MasterThief":
+						return 3
+	return 0

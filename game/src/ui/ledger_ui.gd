@@ -92,6 +92,7 @@ var _thief_lbl: Label
 var _xp_bar: ProgressBar
 var _xp_lbl: Label
 var _contracts_box: HBoxContainer
+var _journal_clues_box: VBoxContainer
 var _assets_lbl: Label
 var _preview_title: Label
 var _preview_desc: Label
@@ -109,6 +110,8 @@ func _ready() -> void:
 	_build_ui()
 	if AudioManager != null and AudioManager.has_method("wire_hover_sfx"):
 		AudioManager.wire_hover_sfx(self)
+	if not GameState.clue_facts_changed.is_connected(_on_clue_facts_changed):
+		GameState.clue_facts_changed.connect(_on_clue_facts_changed)
 	_refresh_journal()
 	_refresh_market()
 	_show_tab(0)
@@ -248,6 +251,18 @@ func _build_ui() -> void:
 	_contracts_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_contracts_box.add_theme_constant_override("separation", 16)
 	scroll.add_child(_contracts_box)
+	# Clue journal: GameState.clue_facts in authored order (display_priority
+	# then learned order). The labels carry the exact journal_text; no
+	# invented section prefix or header.
+	var clue_scroll: ScrollContainer = ScrollContainer.new()
+	clue_scroll.custom_minimum_size = Vector2(0, 170)
+	clue_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	clue_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_journal_page.add_child(clue_scroll)
+	_journal_clues_box = VBoxContainer.new()
+	_journal_clues_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_journal_clues_box.add_theme_constant_override("separation", 6)
+	clue_scroll.add_child(_journal_clues_box)
 
 	_market_page = VBoxContainer.new()
 	_market_page.add_theme_constant_override("separation", 10)
@@ -427,6 +442,42 @@ func _refresh_journal() -> void:
 			d.add_theme_color_override("font_color", ThemeScript.TEAL_MUTED)
 			cv.add_child(d)
 		slot.add_child(card)
+	_refresh_journal_clues()
+
+
+func _on_clue_facts_changed() -> void:
+	if is_inside_tree():
+		_refresh_journal_clues()
+
+
+func _refresh_journal_clues() -> void:
+	if _journal_clues_box == null:
+		return
+	for child: Node in _journal_clues_box.get_children():
+		child.queue_free()
+	var facts: Array[Dictionary] = []
+	for entry: Dictionary in GameState.clue_facts:
+		facts.append(entry.duplicate(true))
+	facts.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var pa: int = int(a.get("display_priority", 0))
+		var pb: int = int(b.get("display_priority", 0))
+		if pa != pb:
+			return pa < pb
+		return int(a.get("learned_index", 0)) < int(b.get("learned_index", 0))
+	)
+	var sans: Font = ThemeScript.font_sans()
+	for entry: Dictionary in facts:
+		var text: String = str(entry.get("journal_text", ""))
+		if text == "":
+			continue
+		var label: Label = Label.new()
+		label.text = text
+		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		label.add_theme_font_size_override("font_size", 14)
+		label.add_theme_color_override("font_color", ThemeScript.TEAL_TEXT)
+		if sans != null:
+			label.add_theme_font_override("font", sans)
+		_journal_clues_box.add_child(label)
 
 
 func _sections() -> Array:

@@ -50,6 +50,21 @@ Thieves' Den: `chunks=156`, `collision_bodies=2`, `collision_shapes=95`, `occlud
   objects/primitives, node count, VRAM, player position, contract title). It is implemented
   in `game/src/ui/hud.gd` (`toggle_fps_overlay()`), updates at 4 Hz.
 
+## Measurement rig (2026-11-24)
+
+- `build/qa/run_perf_matrix.sh` is the only supported frame-time path: release
+  export, host compositor, vsync off, six fixed poses, one config per run.
+- The rig now defaults to the shipped lens (**54.54 vertical / 4000 m**), logs
+  FOV/far/occlusion/LOD/shadow flags and GPU clocks, and enforces a thermal
+  guard. `--max-temp` defaults to **92 °C**; `PERF_THERMAL` records the start,
+  pre-warm, peak and peak RSS. A package temperature at the limit kills the run
+  and exits 8. Do not rerun until the machine is cool.
+- On the reference i9-14900HX host, package temperature idles around 82 °C and
+  reaches the critical 100 °C under repeated Guildhall loads. Run **one** Godot
+  process at a time; never run the matrix beside a test suite or bake.
+- Xvfb is not a frame-time environment (same pose measured 66.55 ms vs 20.4 ms
+  on the host); Xvfb numbers are labelled and not comparable.
+
 ## Known caveats
 
 - Headless runs cannot read back `MultiMesh` instance transforms or `get_aabb()` (the dummy
@@ -59,5 +74,6 @@ Thieves' Den: `chunks=156`, `collision_bodies=2`, `collision_shapes=95`, `occlud
   mesh AABBs, so openings inside a wall mesh (doors, archways) are covered by the box. This
   is why doors/windows/arches/railings are excluded from occluder creation. A visual pass in
   `make run` is still required on Guildhall and Old Manor before shipping.
-- `rendering/occlusion_culling/use_occlusion_culling` is read at renderer startup, so a full
-  game restart (not a scene reload) is required after changing it.
+- Occlusion culling can be toggled at runtime with
+  `get_tree().root.use_occlusion_culling`; Godot 4.7 does not require a full
+  game restart for the viewport property.

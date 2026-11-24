@@ -14,6 +14,20 @@ const HDR_EMISSIVE_SHADER: Shader = preload("res://src/core/tat_hdr_emissive.gds
 const STOREFRONT_DECAL_SHADER: Shader = preload("res://src/core/tat_storefront_decal.gdshader")
 const BEAM_SHADER: Shader = preload("res://src/core/tat_beam.gdshader")
 
+## Authored security beam cards (Guildhall: 134 in Guildhall_Gameplay). The UE
+## StaticMesh bounds are X -0.1..10.1 cm (a 10.2 cm long axis on the mesh's
+## local X) and Y/Z +-50.04 cm (the 1 m additive cross width). The blueprint
+## scales LightBeam_Root X by 24.5..195.53 to reach the authored span, and the
+## producer emits that scale in the record's third slot with a basis whose
+## col0 is the actor-local Z beam direction. Record path is exact so no other
+## mesh changes scale/clamp behaviour.
+const BEAM_CARD_MESH: String = "/Game/Art/Effects/LightBeam/SM_LightBeam"
+const BEAM_CARD_LEN_M: float = 0.102
+## The generic per-axis scale ceiling (40 m) clipped 129 of the 134 Guildhall
+## cards. The authored maximum is 195.5291 (19.55 m), so the card gets its own
+## ceiling without touching any other mesh.
+const BEAM_SCALE_CEIL: float = 200.0
+
 ## Landscape layer name -> extracted albedo texture. Missing layers are skipped
 ## (the shader normalizes the remaining weights) instead of binding a guessed
 ## texture. Puddle/GroundWet have no recovered ground albedo yet.
@@ -49,6 +63,9 @@ var fallback_materials: Array[String] = []
 var fallback_material_count: int = 0
 var _override_mesh_cache: Dictionary = {} # ue_path + "||" + ov_key -> Mesh
 var _emissive_cpd_mat: ShaderMaterial = null
+## SM_LightBeam transform accounting: one BEAM_FIX line at settle.
+var _beam_fix_count: int = 0
+var _beam_fix_max_scale: float = 0.0
 
 ## TASK 4.2 tiny-texture mip guard: icon-size sprites (min dimension <32px,
 ## i.e. below TINY_TEX_MIN_SIZE) skip the mip chain — a full mip chain on a <32px
@@ -2073,6 +2090,10 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 				"hidden_in_game": hidden_in_game,
 			}
 		var batch_rec: Dictionary = batches[bkey] as Dictionary
+		if mp == BEAM_CARD_MESH:
+			# One MeshInstance3D per authored card so the device layer can
+			# drive its powered state (a MultiMesh hides instances together).
+			batch_rec["per_instance"] = true
 		var arr: Array[Transform3D] = batch_rec["trs"]
 		arr.append(tr)
 		var src_arr: Array[String] = batch_rec["sources"]
@@ -2377,10 +2398,12 @@ func _make_draw_items(batches: Dictionary, collide: bool, global_batch: bool = f
 		var cpds: Array[Color] = []
 		var sources: Array = []
 		var hidden_in_game: bool = false
+		var per_instance: bool = false
 		if bval is Dictionary:
 			var bdict: Dictionary = bval as Dictionary
 			mp = str(bdict.get("mp", ""))
 			ov_key = str(bdict.get("override_key", ""))
+			per_instance = bool(bdict.get("per_instance", false))
 			var bov_raw: Variant = bdict.get("override_materials", [])
 			if bov_raw is Array:
 				for s_var: Variant in (bov_raw as Array):
@@ -2428,6 +2451,30 @@ func _make_draw_items(batches: Dictionary, collide: bool, global_batch: bool = f
 				"source_sublevels": far_src["source_sublevels"],
 				"source_counts": far_src["source_counts"],
 			})
+			continue
+		if per_instance:
+			# Authored beam cards: one draw item (and later one MeshInstance3D)
+			# per card so powered state can be shown per detector.
+			for pi: int in range(trs.size()):
+				var tr_pi: Transform3D = trs[pi]
+				var pi_cpds: Array[Color] = []
+				if has_cpds:
+					pi_cpds.append(cpds[pi])
+				var pi_src: Dictionary = _source_summary([str(sources[pi])] if pi < sources.size() else [])
+				items.append({
+					"mp": mp,
+					"override_materials": ov_arr,
+					"override_key": ov_key,
+					"trs": [tr_pi],
+					"cpds": pi_cpds,
+					"hidden_in_game": hidden_in_game,
+					"collide": collide,
+					"cell": _cell_of(tr_pi),
+					"per_instance": true,
+					"source_sublevel": pi_src["source_sublevel"],
+					"source_sublevels": pi_src["source_sublevels"],
+					"source_counts": pi_src["source_counts"],
+				})
 			continue
 		if trs.size() == 1:
 			var single_tr: Transform3D = trs[0]
@@ -3032,6 +3079,14 @@ func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> 
 		node.set_meta("source_counts", source_counts)
 		if not ov_arr.is_empty():
 			node.set_meta("override_materials", ov_arr)
+		if mp == BEAM_CARD_MESH:
+			# Authored beam cards are per-instance so the device layer can bind
+			# one card to each detector and drive its powered visibility. They
+			# are additive/unlit: never a shadow caster.
+			node.name = "BeamCard"
+			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			node.add_to_group("lightbeam_cards")
+			node.set_meta("beam_card", true)
 		parent.add_child(node)
 		ctx["chunk_count"] = int(ctx.get("chunk_count", 0)) + 1
 	if ctx.has("perf_build_ms"):
@@ -4013,6 +4068,15 @@ func _log_perf_census(parent: Node3D, ctx: Dictionary, result: Dictionary, json_
 
 func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dictionary:
 	result["mesh_instances"] = mesh_instances
+	result["beam_cards_fixed"] = _beam_fix_count
+	result["beam_scale_max"] = _beam_fix_max_scale
+	if _beam_fix_count > 0:
+		# One line per load: applied count, authored max scale and the true
+		# applied world span (0.102 m card axis * max scale).
+		print("BEAM_FIX SM_LightBeam cards=", _beam_fix_count,
+			" axis=col0 scale_slot=2 clamp=", BEAM_SCALE_CEIL,
+			" max_scale=", snappedf(_beam_fix_max_scale, 0.0001),
+			" max_length_m=", snappedf(_beam_fix_max_scale * BEAM_CARD_LEN_M, 0.001))
 	result["player_spawn_transform_count"] = (result.get("player_spawn_transforms", []) as Array).size()
 	result["minor_loot_spawn_count"] = (result.get("minor_loot_spawns", []) as Array).size()
 	result["major_loot_spawn_count"] = (result.get("major_loot_spawns", []) as Array).size()
@@ -4599,6 +4663,8 @@ func load_sublevels(json_paths: Array[String], parent: Node3D, light_probe: Node
 	# not on the first wet footstep. Static cache makes repeats free.
 	_VfxManager.prewarm_footstep_mask()
 	var acc: Dictionary = _new_accumulator()
+	_beam_fix_count = 0
+	_beam_fix_max_scale = 0.0
 	for jp: String in json_paths:
 		_parse_sublevel_file(jp, acc, parent)
 
@@ -4642,6 +4708,8 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 	_VfxManager.prewarm_footstep_mask()
 	var total_files: int = maxi(json_paths.size(), 1)
 	var file_idx: int = 0
+	_beam_fix_count = 0
+	_beam_fix_max_scale = 0.0
 	load_progress.emit(0.0, "Parsing JSON...")
 	for jp in json_paths:
 		_parse_sublevel_file(str(jp), acc, parent)
@@ -4765,6 +4833,15 @@ func _sort_lights_desc(a: Dictionary, b: Dictionary) -> bool:
 
 
 func _dict_to_transform(d: Dictionary) -> Transform3D:
+	# Exact SM_LightBeam path only: the authored length scale belongs on the
+	# card's local X (record col0), not on col2 (a 1 m width axis). Scaling
+	# col2 drew a 42.5 m ribbon 90 deg off the beam and the 40 m ceiling then
+	# clipped 129/134 cards. See beam_card_transform().
+	if str(d.get("mesh", "")) == BEAM_CARD_MESH:
+		var beam_tr: Transform3D = beam_card_transform(d)
+		_beam_fix_count += 1
+		_beam_fix_max_scale = maxf(_beam_fix_max_scale, beam_tr.basis.get_scale().x)
+		return beam_tr
 	var p: Array = d.get("pos", [0, 0, 0])
 	var b: Array = d.get("basis", [1, 0, 0, 0, 1, 0, 0, 0, 1])
 	var s: Array = d.get("scale", [1, 1, 1])
@@ -4777,6 +4854,29 @@ func _dict_to_transform(d: Dictionary) -> Transform3D:
 		clampf(float(s[1]), 0.05, 40.0),
 		clampf(float(s[2]), 0.05, 40.0)
 	))
+	return Transform3D(basis, Vector3(float(p[0]), float(p[1]), float(p[2])))
+
+
+## Pure SM_LightBeam record -> world transform (also used by
+## tests/test_beam_geometry.gd). The record basis is authored and kept as-is;
+## its col0 is the actor-local Z beam direction and the mesh's 10.2 cm long
+## axis. The length scale (record scale slot 2, or slot 0 if a future producer
+## moves it back to the authored axis) is applied on X and clamped only by
+## BEAM_SCALE_CEIL. Y/Z stay 1 so the authored 1 m cross width is preserved.
+static func beam_card_transform(d: Dictionary) -> Transform3D:
+	var p: Array = d.get("pos", [0, 0, 0])
+	var b: Array = d.get("basis", [1, 0, 0, 0, 1, 0, 0, 0, 1])
+	var s: Array = d.get("scale", [1, 1, 1])
+	var s_authored: float = maxf(
+		float(s[0]) if s.size() > 0 else 1.0,
+		float(s[2]) if s.size() > 2 else 1.0
+	)
+	var s_len: float = clampf(s_authored, 0.05, BEAM_SCALE_CEIL)
+	var basis: Basis = Basis(
+		Vector3(float(b[0]), float(b[3]), float(b[6])),
+		Vector3(float(b[1]), float(b[4]), float(b[7])),
+		Vector3(float(b[2]), float(b[5]), float(b[8]))
+	).scaled_local(Vector3(s_len, 1.0, 1.0))
 	return Transform3D(basis, Vector3(float(p[0]), float(p[1]), float(p[2])))
 
 

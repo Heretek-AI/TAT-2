@@ -49,6 +49,8 @@ var family_counts: Dictionary = {}
 var unresolved_power: Array[String] = []
 var unresolved_actions: Array[String] = []
 var spawn_count: int = 0
+## Authored SM_LightBeam cards paired to their detector (one visual per beam).
+var beam_cards_adopted: int = 0
 
 var _accum: float = 0.0
 var _tick_enabled: bool = true
@@ -137,6 +139,7 @@ func spawn_for_map(map_id_value: String, player_value: Node3D = null, difficulty
 		index += 1
 	spawn_count = device_order.size()
 	_resolve_graph()
+	_adopt_beam_cards()
 	_apply_player()
 	_update_awake(false)
 	layer_spawned.emit(map_id, spawn_count)
@@ -148,11 +151,14 @@ func clear_spawned() -> void:
 	for id: String in device_order:
 		var node: Node = devices.get(id) as Node
 		if node != null and is_instance_valid(node):
+			if node.has_method("release_beam_card"):
+				node.call("release_beam_card")
 			node.free()
 	devices.clear()
 	device_order.clear()
 	family_counts.clear()
 	_record_by_id.clear()
+	beam_cards_adopted = 0
 	spawn_count = 0
 
 
@@ -236,6 +242,41 @@ func _apply_player() -> void:
 		var node: Node = devices.get(id) as Node
 		if node != null and node.has_method("set_player"):
 			node.call("set_player", player)
+
+
+## Pair each light-beam detector with the loader's authored SM_LightBeam card
+## at the same authored position (both records carry the same pos). The card
+## becomes the detector's only visual; a detector without one keeps the cheap
+## stand-in cylinder. Positions are exact (same record), so 0.02 m is a safe
+## pairing radius and a card is never shared by two detectors.
+func _adopt_beam_cards() -> void:
+	beam_cards_adopted = 0
+	if not is_inside_tree():
+		return
+	var cards: Array = get_tree().get_nodes_in_group("lightbeam_cards")
+	if cards.is_empty():
+		return
+	var used: Dictionary = {}
+	for id: String in device_order:
+		var node: Node = devices.get(id) as Node
+		if node == null or not node.has_method("adopt_beam_card"):
+			continue
+		var best: Node3D = null
+		var best_d: float = 0.02
+		for c_var: Variant in cards:
+			if not (c_var is Node3D):
+				continue
+			var card: Node3D = c_var as Node3D
+			if used.has(card) or not card.is_inside_tree():
+				continue
+			var d: float = card.global_position.distance_to(node.global_position)
+			if d <= best_d:
+				best_d = d
+				best = card
+		if best != null:
+			node.call("adopt_beam_card", best)
+			used[best] = true
+			beam_cards_adopted += 1
 
 
 func _physics_process(delta: float) -> void:

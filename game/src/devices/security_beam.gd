@@ -2,10 +2,20 @@ extends Area3D
 ## Authored security light beam (BP_Detector_LightBeam_C).
 ##
 ## Geometry comes from devices_runtime.json: BeamLength is the authored cooked
-## centimetre clear span, emitted as a capsule along the component's local +X
-## with the authored 0.10 m radius. Trigger/reset timings and the radius come
-## from family_defaults.light_beam.metric; per-instance BaseRotation is applied
+## centimetre clear span, emitted as a capsule along the detector's authored
+## actor-local +Z with the authored 0.10 m radius. (The static SM_LightBeam
+## card's record basis col0 is that same actor-local +Z direction, 90 deg from
+## the actor-local +X used by the old code, so both now point the same way.)
+## Trigger/reset timings and the radius come from
+## family_defaults.light_beam.metric; per-instance BaseRotation is applied
 ## to the component pivot, never to the actor transform.
+##
+## Visual ownership: the level loader now spawns the authored additive
+## SM_LightBeam card per detector (group "lightbeam_cards"). When the device
+## layer can pair one of those cards with this detector it calls
+## adopt_beam_card(): the card becomes the single visual and follows power
+## state; the cheap stand-in cylinder is only used when no authored card
+## exists (other maps/tests).
 ##
 ## The beam is repeatable: a continuous intrusion re-fires after
 ## trigger_seconds + reset_seconds. The authoritative test is the distance
@@ -44,6 +54,9 @@ var _powered: bool = true
 var _pivot: Node3D = null
 var _shape_node: CollisionShape3D = null
 var _visual: MeshInstance3D = null
+## Authored loader card adopted as the single visual (null when absent).
+var _card: Node3D = null
+var _card_base_basis: Basis = Basis.IDENTITY
 var _dwell: float = 0.0
 var _cooldown: float = 0.0
 var _inside: bool = false
@@ -104,8 +117,8 @@ func _build() -> void:
 	cap.radius = beam_radius_m
 	cap.height = maxf(beam_length_m, beam_radius_m * 2.0)
 	_shape_node.shape = cap
-	_shape_node.position = Vector3(beam_length_m * 0.5, 0.0, 0.0)
-	_shape_node.rotation = Vector3(0.0, 0.0, -PI * 0.5)
+	_shape_node.position = Vector3(0.0, 0.0, beam_length_m * 0.5)
+	_shape_node.rotation = Vector3(PI * 0.5, 0.0, 0.0)
 	_pivot.add_child(_shape_node)
 
 	# Cheap additive stand-in for the authored UE beam card. The cooked
@@ -125,11 +138,10 @@ func _build() -> void:
 	_visual.name = "BeamVisual"
 	_visual.mesh = cyl
 	_visual.material_override = mat
-	_visual.position = Vector3(beam_length_m * 0.5, 0.0, 0.0)
-	_visual.rotation = Vector3(0.0, 0.0, -PI * 0.5)
+	_visual.position = Vector3(0.0, 0.0, beam_length_m * 0.5)
+	_visual.rotation = Vector3(PI * 0.5, 0.0, 0.0)
 	_visual.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_pivot.add_child(_visual)
-	_visual.visible = awake
 	_apply_geometry()
 
 
@@ -141,13 +153,65 @@ func _apply_geometry() -> void:
 	if cap != null:
 		cap.radius = beam_radius_m
 		cap.height = maxf(beam_length_m, beam_radius_m * 2.0)
-	_shape_node.position = Vector3(beam_length_m * 0.5, 0.0, 0.0)
-	_shape_node.rotation = Vector3(0.0, 0.0, -PI * 0.5)
+	_shape_node.position = Vector3(0.0, 0.0, beam_length_m * 0.5)
+	_shape_node.rotation = Vector3(PI * 0.5, 0.0, 0.0)
 	if _visual != null and _visual.mesh is CylinderMesh:
 		var cyl: CylinderMesh = _visual.mesh as CylinderMesh
 		cyl.height = beam_length_m
-		_visual.position = Vector3(beam_length_m * 0.5, 0.0, 0.0)
-		_visual.rotation = Vector3(0.0, 0.0, -PI * 0.5)
+		_visual.position = Vector3(0.0, 0.0, beam_length_m * 0.5)
+		_visual.rotation = Vector3(PI * 0.5, 0.0, 0.0)
+	_sync_card()
+	_update_visual()
+
+
+## Adopt an authored loader SM_LightBeam card as this detector's only visual.
+## The card record is authored unrotated for BaseRotation, so apply the same
+## pivot rotation the beam uses: card_world = A*pivot * A^-1 * card_basis.
+func adopt_beam_card(card: Node3D) -> void:
+	if card == null or not is_instance_valid(card):
+		return
+	if _card != null and is_instance_valid(_card) and _card != card:
+		release_beam_card()
+	_card = card
+	_card_base_basis = card.global_transform.basis
+	_sync_card()
+	_update_visual()
+
+
+## Drop the adopted card and restore its authored transform/visibility.
+func release_beam_card() -> void:
+	if _card != null and is_instance_valid(_card):
+		_card.global_transform = Transform3D(_card_base_basis, _card.global_transform.origin)
+		_card.visible = true
+	_card = null
+	_card_base_basis = Basis.IDENTITY
+	_update_visual()
+
+
+func has_beam_card() -> bool:
+	return _card != null and is_instance_valid(_card)
+
+
+func _sync_card() -> void:
+	if _card == null or not is_instance_valid(_card) or _pivot == null:
+		return
+	if not _card.is_inside_tree() or not is_inside_tree():
+		return
+	var actor_basis: Basis = global_transform.basis
+	var actor_inv: Basis = actor_basis.inverse()
+	var rotated: Basis = _pivot.global_transform.basis * actor_inv * _card_base_basis
+	_card.global_transform = Transform3D(rotated, _card.global_transform.origin)
+
+
+## Exactly one visual: the authored card when adopted, else the cheap stand-in
+## cylinder. Both follow power; only the stand-in is distance-culled with the
+## device (the authored card is level geometry and stays visible at range).
+func _update_visual() -> void:
+	var dark: bool = (not alive) or (power_required and not _powered)
+	if _visual != null:
+		_visual.visible = awake and not dark and not has_beam_card()
+	if _card != null and is_instance_valid(_card):
+		_card.visible = not dark
 
 
 func set_player(p: Node3D) -> void:
@@ -166,6 +230,7 @@ func set_power_source(src: Node) -> void:
 		_powered = bool(src.call("is_powered")) if src.has_method("is_powered") else true
 	else:
 		_powered = true
+	_update_visual()
 
 
 func _on_power_changed(on: bool) -> void:
@@ -174,6 +239,7 @@ func _on_power_changed(on: bool) -> void:
 	if power_required and not on:
 		_dwell = 0.0
 		_inside = false
+	_update_visual()
 
 
 func can_trigger() -> bool:
@@ -183,8 +249,7 @@ func can_trigger() -> bool:
 func set_awake(value: bool) -> void:
 	awake = value
 	monitoring = value
-	if _visual != null:
-		_visual.visible = value
+	_update_visual()
 	if not value:
 		_dwell = 0.0
 		_inside = false
@@ -240,9 +305,10 @@ func _player_in_beam(target: Node3D) -> bool:
 	if _pivot == null:
 		return false
 	var origin: Vector3 = _pivot.global_position
-	var dir: Vector3 = _pivot.global_transform.basis.x.normalized()
+	# Authored beam axis: actor-local +Z (record col0), not actor-local +X.
+	var dir: Vector3 = _pivot.global_transform.basis.z.normalized()
 	if dir.length_squared() < 0.5:
-		dir = Vector3.RIGHT
+		dir = Vector3.FORWARD
 	var end: Vector3 = origin + dir * beam_length_m
 	var body: PackedVector3Array = Geometry.body_segment(target)
 	if body.size() < 2:

@@ -26,11 +26,17 @@ extends Node
 ## input. The player camera is used deliberately so the 1P viewmodel remains in
 ## the measured frame.
 ##
+## The lens is the shipped one unless `--perf-fov`/`--perf-far` say otherwise:
+## 54.54 vertical (UE 85 horizontal at 16:9) and a 4000 m far plane. The matrix
+## used to force 60/500, which measured a wider, shallower frustum than any
+## shipped frame (docs/reports/w0p-perf-rig.md).
+##
 ## Usage:
 ##   build/qa/run_perf_matrix.sh --quality=...   (see the wrapper)
 ##   or: tools/godot --path game --script res://tests/perf/perf_matrix.gd -- \
 ##     --perf-quality=high --perf-scale=1.0 --perf-scaling=bilinear \
 ##     --perf-lights=160 --perf-shadows=6 --perf-vsync=off \
+##     --perf-fov=54.54 --perf-far=4000 \
 ##     --res=1920x1080 --contract=4
 ##
 ## Short validation:
@@ -97,6 +103,8 @@ var _lights: int = 0
 var _devices: int = 0
 var _chunks: int = 0
 var _deadline_ms: int = 0
+var _fov: float = PerfProfile.DEFAULT_FOV
+var _far: float = PerfProfile.DEFAULT_FAR
 
 
 func _ready() -> void:
@@ -121,6 +129,8 @@ func _run() -> void:
 
 	var res: Vector2i = _parse_res(_arg("--res=", "1920x1080"))
 	var contract: int = int(_arg("--contract=", "4"))
+	_fov = PerfProfile.resolved_fov(cfg)
+	_far = PerfProfile.resolved_far(cfg)
 	var warmup: int = int(_arg("--warmup=", str(DEFAULT_WARMUP)))
 	var settle: int = int(_arg("--settle=", str(DEFAULT_SETTLE)))
 	var frames: int = int(_arg("--frames=", "0"))
@@ -152,6 +162,8 @@ func _run() -> void:
 		"map": expected_map,
 		"contract": contract,
 		"poses": pose_ids,
+		"fov": _fov,
+		"far": _far,
 		"warmup_frames": warmup,
 		"settle_frames": settle,
 		"measure_mode": "frames" if frames > 0 else "time",
@@ -210,7 +222,7 @@ func _run() -> void:
 			get_tree().quit(4)
 			return
 
-	var mismatches: Array[String] = PerfProfile.config_mismatches(get_tree(), cfg)
+	var mismatches: Array[String] = PerfProfile.config_mismatches(get_tree(), cfg, _cam)
 	if not mismatches.is_empty():
 		for mismatch: String in mismatches:
 			printerr("PERF_ERROR config mismatch: ", mismatch)
@@ -280,14 +292,21 @@ func _freeze_player() -> void:
 	if _head != null:
 		_eye_offset = maxf(0.1, _head.position.y)
 	if _cam != null:
-		_cam.fov = 60.0
-		_cam.far = 500.0
+		_cam.fov = _fov
+		_cam.far = _far
 		_cam.current = true
 
 
 func _apply_pose(pose: Dictionary) -> void:
 	if _player == null:
 		return
+	# Re-assert the configured lens every pose: the player's camera controller
+	# (disabled here) is the only other writer, but a pose must never measure a
+	# silently inherited FOV/far plane.
+	if _cam != null:
+		_cam.fov = _fov
+		_cam.far = _far
+		_cam.current = true
 	var pos: Vector3
 	if pose.has("eye"):
 		pos = (pose["eye"] as Vector3) - Vector3(0.0, _eye_offset, 0.0)
@@ -367,6 +386,8 @@ func _measure_pose(pose_id: String, frame_limit: int) -> Dictionary:
 		"event": "pose",
 		"pose": pose_id,
 		"mode": "frames" if use_frames else "time",
+		"fov": snappedf(_cam.fov, 0.001) if _cam != null else _fov,
+		"far": snappedf(_cam.far, 0.1) if _cam != null else _far,
 		"samples": frame_ms.size(),
 		"frame_ms": _stats(frame_ms),
 		"fps": _fps_stats(frame_ms),

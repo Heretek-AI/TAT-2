@@ -23,6 +23,7 @@ const EscapeScript := preload("res://src/interact/escape_gate.gd")
 const LightProbeScript := preload("res://src/stealth/light_probe.gd")
 const LevelLoaderScript := preload("res://src/core/level_loader.gd")
 const MobileProfile := preload("res://src/core/mobile_profile.gd")
+const PerfProfile := preload("res://src/core/perf_profile.gd")
 const WeatherProfile := preload("res://src/core/weather_profile.gd")
 const WeatherVisuals := preload("res://src/core/weather_visuals.gd")
 const VfxManager := preload("res://src/core/vfx_manager.gd")
@@ -146,6 +147,10 @@ func _setup_environment() -> void:
 	var e := Environment.new()
 	_apply_fallback_environment(e)
 	var moon := DirectionalLight3D.new()
+	# Stable name so QA provenance (perf_profile.config_mismatches) can find the
+	# same moonlight the weather preset configured, not an authored directional
+	# light from the extracted level.
+	moon.name = "MissionMoon"
 	_apply_fallback_moon(moon)
 	# Real TAT weather first; hand-tuned values above survive any field the
 	# preset does not define, and fully survive when no preset maps the map.
@@ -155,6 +160,11 @@ func _setup_environment() -> void:
 	WeatherProfile.apply_environment(e, moon, wpreset)
 	WeatherVisuals.apply_sky(e, wpreset, moon)
 	MobileProfile.apply_environment(e)
+	# QA only: --perf-dir-shadow / --perf-shadow-splits /
+	# --perf-shadow-max-distance. The moon exists only here (after the weather
+	# preset), so perf_profile applies these last and logs the measured values
+	# as PERF_SHADOW. No-op without perf flags.
+	PerfProfile.apply_directional_shadow(moon, PerfProfile.collect_cli_config())
 	# C3 LocalVolumetric: the Guildhall sublevel carries authored fog boxes with
 	# MI_LocalVolumetricFog_Outside_Preset_A (Color .5, Global Multiplier .05,
 	# EdgeFalloff .75). FogVolume needs the world volumetric pass enabled; the

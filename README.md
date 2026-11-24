@@ -20,14 +20,14 @@ ENet co-op and all four E2E tiers.
 | M2 traversal/tools (`tests/test_m2_player.gd`) | **fails=0** |
 | E2E (`tests/e2e/run_e2e_tests.gd`, tiers 1–4) | **262/262** (tier 1: 115) |
 | Door walk · viewmodel truth · Niagara | **PASS** |
-| Steam manifest audit (`make audit`) | exit 0, 99.4 % coverage |
+| Steam manifest + content audit (`make audit`) | exit 0, mount/path 100.0 % (exact-case 99.4 %), 13/13 content groups |
 
 ## Quick start
 
 ```bash
 make run        # launch the game (native tools/godot, Flatpak fallback)
 make test       # headless unit/integration suite
-make audit      # Steam manifest coverage + freshness gate
+make audit      # mount/path consistency + generated-content + producer-stamp gate
 ```
 
 A fresh clone needs the private assets first:
@@ -50,7 +50,8 @@ builds are documented in [`docs/ANDROID.md`](docs/ANDROID.md).
 |---|---|
 | `make run` | Launch the desktop client (`F3` = FPS/draw-call overlay) |
 | `make test` | 54-suite headless integration run |
-| `make audit` | Manifest coverage, freshness and `errors.log` gate |
+| `make audit` | Content gate: mount/path consistency, 13 generated domains, producer stamps, freshness and `errors.log` |
+| `make audit-refresh-stamps` | Escape hatch after an intentional producer change + regeneration |
 | `make normalize` | Run all 14 generated-data producers |
 | `make linux-build` / `make linux-run` | Linux x86_64 export / run |
 | `make android-debug` / `make android-release` | Signed internal APK |

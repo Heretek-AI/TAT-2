@@ -8,7 +8,7 @@ MOBILE_ABI  ?= arm64
 QA_CONTRACT ?= 0
 KEYSTORE_PROPS := $(HOME)/.config/tat2/keystore.properties
 
-.PHONY: build-extractor extract anims normalize audit test run desktop-texture-cap audio-tools linux-build linux-run android-prepare android-debug android-debug-gl android-release
+.PHONY: build-extractor extract anims normalize audit audit-refresh-stamps test run desktop-texture-cap audio-tools linux-build linux-run android-prepare android-debug android-debug-gl android-release
 
 build-extractor:
 	DOTNET_ROOT=$(HOME)/.dotnet10 PATH=$(HOME)/.dotnet10:$(PATH) $(DOTNET) build tools/tat-extract -c Release
@@ -51,6 +51,12 @@ audio-tools:
 
 audit:
 	python3 tools/manifest_audit.py --min-coverage 0.90 --fail-on-stale --fail-on-errors
+
+# Escape hatch: after intentionally changing a producer and regenerating its
+# outputs (make normalize / make anims), refresh the sha256 stamps. The content
+# assertions and errors.log gates still run.
+audit-refresh-stamps:
+	python3 tools/manifest_audit.py --min-coverage 0.90 --fail-on-stale --fail-on-errors --refresh-stamps
 
 test:
 	$(GODOT) --headless --path game --script res://tests/run_tests.gd

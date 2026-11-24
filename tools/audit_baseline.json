@@ -44,7 +44,7 @@
   "infrastructure": {
     "root:Makefile": {
       "command": "make extract / make normalize",
-      "sha256": "40e75c3c4b27a5daba77e01af4eb342ad6ddfb419e0212b01ac090cad0e3eb9a"
+      "sha256": "e8b6dc5731bb1d8bdd2ef1677f590029bcee61f1233a87909acd9c14e5ac81f9"
     },
     "root:tools/audit_allowlists.json": {
       "command": "reviewed coverage allowlist",
@@ -449,8 +449,8 @@
     "blender": "Blender 5.3.0",
     "dotnet": "10.0.404",
     "ffmpeg": "ffmpeg version 9.0.2",
-    "vgmstream": "missing"
+    "vgmstream": "vgmstream CLI decoder r2168 (Oct 25 2026)"
   },
   "version": 2,
-  "written_utc": "2026-11-24T19:04:45Z"
+  "written_utc": "2026-11-24T19:11:11Z"
 }

@@ -107,7 +107,7 @@ public sealed class Opts
                 case "--game": o.Game = a[++i]; break;
                 case "--out": o.Out = a[++i]; break;
                 case "--usmap": o.Usmap = a[++i]; break;
-                case "--filter": o.Filter = new Regex(a[++i], RegexOptions.IgnoreCase | RegexOptions.Compiled); break;
+                case "--filter": o.Filter = new Regex(a[++i], RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromSeconds(2)); break;
                 case "--threads": o.Threads = int.Parse(a[++i]); break;
                 case "--overwrite": o.Overwrite = true; break;
             }

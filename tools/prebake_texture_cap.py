@@ -558,12 +558,12 @@ def _check(root: Path, cap: int, verbose: bool) -> int:
     return 0
 
 
-def _revert(root: Path, dry_run: bool, verbose: bool) -> int:
+def _revert(root: Path, dry_run: bool, verbose: bool) -> None:
     manifest = _load_manifest(root)
     entries: dict[str, Any] = manifest["entries"]
     if not entries:
         print("revert: manifest has no entries; nothing to do")
-        return 0
+        return
 
     counts: Counter[str] = Counter()
     dest_ctex = 0
@@ -650,7 +650,6 @@ def _revert(root: Path, dry_run: bool, verbose: bool) -> int:
         print("dry-run: no .import, PNG, manifest or dest file was written")
     else:
         print(f"manifest: {root / MANIFEST_REL}")
-    return 0
 
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:
@@ -708,7 +707,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.check:
         return _check(ROOT, args.cap, args.verbose)
     if args.revert:
-        return _revert(ROOT, args.dry_run, args.verbose)
+        _revert(ROOT, args.dry_run, args.verbose)
+        return 0
     return _apply(ROOT, args.cap, args.dry_run, args.verbose)
 
 

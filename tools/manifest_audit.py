@@ -1513,7 +1513,7 @@ def _print_freshness(paths: Paths, allow_stale: bool) -> list[str]:
         newest_src = 0.0
         for token in src_tokens:
             newest_src = max(newest_src, _newest_mtime(_resolve_token(token, paths)))
-        oldest_out = 0.0
+        oldest_out: float | None = None
         n_out = 0
         for token in out_tokens:
             root = _resolve_token(token, paths)
@@ -1524,9 +1524,9 @@ def _print_freshness(paths: Paths, allow_stale: bool) -> list[str]:
                 except OSError:
                     continue
                 n_out += 1
-                if oldest_out == 0.0 or mtime < oldest_out:
+                if oldest_out is None or mtime < oldest_out:
                     oldest_out = mtime
-        if n_out == 0:
+        if n_out == 0 or oldest_out is None:
             print(f"freshness {name}: NO GENERATED OUTPUTS (stale by absence)")
             if not allow_stale:
                 failures.append(f"stale generated group {name}: no outputs")

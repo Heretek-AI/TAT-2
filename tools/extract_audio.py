@@ -402,7 +402,7 @@ def synth(tag: str, sr: int = SAMPLE_RATE) -> list:
             if cf == 0.0:
                 out.append(0.0)
                 continue
-            edge = min(1.0, lt / 0.008, (0.30 - (lt if t < 0.30 else lt)) / 0.008 + 1.0)
+            edge = min(1.0, lt / 0.008, (0.30 - lt) / 0.008 + 1.0)
             edge = max(0.0, min(1.0, edge))
             tone = math.sin(math.tau * cf * lt) * 0.7
             tone += (1.0 if tone >= 0.0 else -1.0) * 0.12

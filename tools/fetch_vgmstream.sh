@@ -26,7 +26,7 @@ TMP_ZIP="$(mktemp)"
 trap 'rm -f "${TMP_ZIP}"' EXIT
 
 echo "Downloading vgmstream ${VERSION} ..."
-curl -fSL --retry 3 -o "${TMP_ZIP}" "${URL}"
+curl -fSL --proto '=https' --retry 3 -o "${TMP_ZIP}" "${URL}"
 unzip -o -j "${TMP_ZIP}" "vgmstream-cli" -d "${DEST_DIR}"
 chmod +x "${BIN}"
 echo "Installed: ${BIN}"

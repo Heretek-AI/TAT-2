@@ -1,8 +1,10 @@
 # Handoff — Thick As Thieves Godot 4.7.2 port (next run)
 
 **Repo:** `/home/john/Projects/TAT-2`
-**HEAD at handoff:** `fix(review): treat mixed fog/mesh counts as informational in the baker` on top of the W0a/W0b/W1p review integrations (run `git log -1 --oneline`).
-**Working tree:** clean; `main` in sync with `origin/main`
+**HEAD at handoff:** `eb55bc1` — `fix(perf): guarded pre-warm, 1s thermal sampler and RSS limit`,
+on top of the Spider chain integration (`7aa2a67`..`3e26c7a`) and the
+codebase-memory hardening (`9f8f36a`, `877d6ad`).
+**Working tree:** clean; code HEAD `eb55bc1`, docs commit on top is local (not pushed)
 **Godot:** `4.7.2.stable` via **native `tools/godot`** (Flatpak fallback inside the
 wrapper). `godot` is **not** on `$PATH`.
 **Renderer:** Forward+ · Jolt Physics 60 Hz · 1280×720 reference
@@ -33,11 +35,13 @@ be pursued.
 |---|---|
 | Extraction pipeline | reproducible from a wiped tree; `make extract` + `make normalize` + `make anims` exit 0 |
 | Asset integrity | 0 duplicate UIDs, 0 missing/corrupt meshes, `MESH HOLES=0`, 0 missing textures |
-| Scripts | **82/82 compile**, 0 broken |
-| Unit suite (`run_tests.gd`) | **fails=0** (includes review-baker and perf suites) |
-| M2 player suite | **fails=0** |
-| Probes | door walk **PASS**, viewmodel truth **PASS**, Niagara **PASS** |
-| E2E (unmasked) | **264/264**, 0 BOOT, 0 `SCRIPT ERROR` (tier 1: 115) |
+| Scripts | **96 checked, 0 broken** (`eb55bc1`) |
+| Unit suite (`run_tests.gd`) | last full run **fails=0**; 59 suites registered; on `eb55bc1` only `--spider-only` was re-run (**87 + 88, fails=0**) |
+| M2 player suite | **fails=0** (last full set; not re-run on `eb55bc1`) |
+| Probes | door walk **PASS**, viewmodel truth **PASS**, Niagara **PASS**; `probe_leak` **PASS** (integration run) |
+| E2E (unmasked) | **264/264** (last full set; not re-run on `eb55bc1`; tier 1: 115) |
+| Spider chain | **live** — note → electrotype → Owl → courier → informant, `stage=complete`, 7 facts; subset real-map probe **90/90** |
+| Perf/thermal guard | **W4P**: `--start-temp` 78 / `--max-temp` 95, 1 s sampler, `VmHWM` 8 GiB; `test_perf_guard.sh` **42/42**; **no real matrix run** |
 | Texture cap | `make texture-cap-check` **OK**, 0 offenders, 1 alpha exception |
 | World review | Guildhall bake **371 MB / 18.76 s**, master loads headless 9.1 s |
 | World data | 107/107 maps, 16 contracts, 210 patrols / 673 waypoints, 222 scene variants, 4,118 devices, 3,695 Niagara placements (3,308 active) / 36 systems |
@@ -89,6 +93,14 @@ tools/godot --headless --path game \
 make test
 # or: tools/godot --headless --path game --script res://tests/run_tests.gd
 
+# Thermal shortcut: Spider suites 87 + 88 only (never loads a mission)
+tools/godot --headless --path game --script res://tests/run_tests.gd -- --spider-only
+# Spider placement policy only (no map, no GPU)
+tools/godot --headless --path game --script res://tests/test_personal_quest_spawner.gd
+# Spider real-map placements + full chain (one Godot, isolated save home)
+XDG_DATA_HOME=/tmp/opencode/w2p-data tools/godot --headless --path game \
+  --script res://tests/probe_personal_quest_subset.gd
+
 # M2 traversal/tools suite (~1-2 min)
 tools/godot --headless --path game --script res://tests/test_m2_player.gd
 
@@ -105,6 +117,10 @@ tools/godot --headless --path game --script res://tests/probe_viewmodel_truth.gd
 tools/godot --headless --path game --script res://tests/probe_niagara.gd
 tools/godot --headless --path game --script res://tests/probe_ftue.gd
 tools/godot --headless --path game --script res://tests/probe_scene_variants.gd
+
+# Thermal/perf guard, no game launched (safe on a hot host)
+build/qa/test_perf_guard.sh                    # 42/42
+build/qa/run_perf_matrix.sh --guard-check=79   # exit 8, refuse_start
 
 # World review (see docs/reports/review-map-baker.md)
 make bake-review MAP=guildhall   # per-sublevel .scn + world.scn/review.tscn + manifest
@@ -200,11 +216,14 @@ tools/reimport_assets.sh && make desktop-texture-cap` before the game/tests work
 
 ---
 
-## 4. What changed recently (waves, newest last)
+## 4. What changed recently (waves, newest first)
 
 | Commit | Wave / change |
 |---|---|
-| W0a HEAD | **Identity / keys / texture-cap correction** — removed the capture Steam persona (`player_display_name()` → The Spider/The Chameleon, one-shot migration); shipped key names (`Guildhall Key`, `Elway Manor Key`, `Vault Key`); `--check` + `make texture-cap-check` in `make audit`; restored both SafeBlackFaction caps. Evidence: [`reports/gameplay-truth-wave.md`](reports/gameplay-truth-wave.md) §“Corrections (W0a)” |
+| `eb55bc1` | **W4P perf guard** — `--start-temp` 78 / `--max-temp` 95, independent 1 s sampler, guarded pre-warm, `VmHWM` 8 GiB, 12 GiB / 0 swap scope; `test_perf_guard.sh` 42/42. **No real matrix run.** Evidence: [`reports/w4p-thermal-guard.md`](reports/w4p-thermal-guard.md) |
+| `7aa2a67`..`3e26c7a` | **Spider personal chain (01 → 04) integrated** — spawn-pass seam, per-kind placement, global settle + thief binding, authored yaw, Owl pedestal, probe mission/stand-point fixes, suite 88. Real-map probe **90/90**, `stage=complete`. Evidence: [`reports/spider-chain-integration.md`](reports/spider-chain-integration.md) |
+| `9f8f36a` / `877d6ad` | **codebase-memory hardening** — 4 GiB / 3 GiB / 0 swap, `CBM_MEM_BUDGET_MB=3072`, index caps 20,000 files / 512 MB source, marketplace patch, `.cbmignore` + `tools/check_cbmignore.sh` 26/26 |
+| W0a | **Identity / keys / texture-cap correction** — removed the capture Steam persona (`player_display_name()` → The Spider/The Chameleon, one-shot migration); shipped key names (`Guildhall Key`, `Elway Manor Key`, `Vault Key`); `--check` + `make texture-cap-check` in `make audit`; restored both SafeBlackFaction caps. Evidence: [`reports/gameplay-truth-wave.md`](reports/gameplay-truth-wave.md) §“Corrections (W0a)” |
 | `3202283` | **Gameplay truth wave** — hard audit gate; guard sight/save/mirror/FOV blockers; authored devices, patrols, loudness, clues/quests, animation notifies; UI/locales/countdown; co-op transport. Evidence: [`reports/gameplay-truth-wave.md`](reports/gameplay-truth-wave.md) |
 | `a410adc` | Track `build/qa` capture/probe **sources** so the E2E harness checks are reproducible from a clone |
 | `1373bb9` | Docs: record the review remediation wave |
@@ -220,7 +239,8 @@ tools/reimport_assets.sh && make desktop-texture-cap` before the game/tests work
 | earlier | Startscreen decal/neon tuning, sky veil, KF16/KF17 follow-ups, Track C, world/free-play wave |
 
 Per-wave evidence: `docs/reports/` (latest:
-[`gameplay-truth-wave.md`](reports/gameplay-truth-wave.md)).
+[`spider-chain-integration.md`](reports/spider-chain-integration.md),
+[`w4p-thermal-guard.md`](reports/w4p-thermal-guard.md)).
 
 ---
 
@@ -274,6 +294,22 @@ Per-wave evidence: `docs/reports/` (latest:
 - `GameState.active_thief_id` is a computed property over `thief_id`; `active_map_seed`, `active_scene_variants`, `active_match_mode` exist.
 - `GameData` loads all **31** CurveTables (four roots + nine extra directories) and exposes `get_player_stat_def`, `get_xp_def`, `get_upgrade_curve`, `get_contracts`, `get_ftue_sublevels`.
 
+### Personal quest (Spider 01 → 04)
+- The chain is data, not code: `game/data/expansion/personal_spider.json` (8 beats, 7 grantable facts, exact 03/04 lines/follow-ups, journal text, pins, TAT-2 `yaw_deg`). `game/src/quests/personal_quest.gd` is the pure state machine; `personal_quest_spawner.gd` is the shipping spawn pass used by both `mission_controller` and the subset probe.
+- Save state is per thief: `personal_quest.<thief>` with `personal_quest_schema: 1`, guarded by `_ensure_personal_quest()` and a one-shot migration. Personal facts persist across deploys; **contract facts remain run-only** and are wiped by `GameState.reset_run()`.
+- Placement is per kind: `readable`/`quest_item` keep the authored pin (letter on a table, Owl on `SM_Manor_BookcasePedestal` top `~36.4645`); NPCs use the floor ray + 0.02 m and only the NPC kinds get the authored yaw (courier 90°, informant 0°). No pin may be moved to make a probe pass.
+- The Owl is a quest item, not loot: no `loot`/`xray_target` group, no value/currency/objective/contract mutation. The chain is Spider-only; Chameleon spawns nothing and mutates no save.
+- Interaction radius is the authored player value **1.75 m** (`TATInteractionTargeterComponent.MaxInteractionRange`), not a per-spawner radius. Prompts are shipped strings (`[E] Read`, `[E] Take Theban Owl`, `[E] Talk`).
+
+### Thermal guard / perf host
+- The laptop idles near 82 °C; package temperature, not test time, is the gate. Run **one** Godot at a time (the launcher refuses a second), `taskset -c 0-3`, and the 12 GiB / 0 swap cgroup.
+- `build/qa/run_perf_matrix.sh` refuses a sustained run above `--start-temp` **78 °C**, kills at `--max-temp` **95 °C**, samples every **1 s** (independent sampler), enforces `VmHWM` **8192 MB** and fails closed on `?`. `--guard-check=<C>` proves the decision without launching.
+- Probe/compile runs in the Spider integration used a 90 °C start gate and a 95 °C kill; peaks were 92 °C (compile), 90 °C (spider-only), 90 °C (subset). Earlier 95–98 °C kills are why the full gates are deferred.
+
+### codebase-memory
+- Local index service is capped at **4 GiB max / 3 GiB high / 0 swap** (`CBM_MEM_BUDGET_MB=3072`); index limits are **20,000 files / 512 MB source**. The marketplace package is patched to honour them.
+- `.cbmignore` is a **source whitelist** (`game/src`, `game/tests`, `game/addons`, `game/scenes`, `game/data/expansion`, `tools/`, `docs/`, root files) and explicitly excludes `extracted/`, `build/`, `game/.godot/`, `game/data/generated/`, `game/scenes/review/`, tool `bin`/`obj`/cache and `__pycache__`. `tools/check_cbmignore.sh` is the 26-check guard; do not broaden the index to generated trees.
+
 ### Level loader
 - `smart_objects` is a separate collection from `guard_spawns` (1,707 defensive posts).
 - `_cap_image()` regenerates mipmaps after downscale for images ≥64 px; tiny UI icons stay mip-free.
@@ -293,7 +329,10 @@ Per-wave evidence: `docs/reports/` (latest:
 
 | File | Purpose | Expected |
 |---|---|---|
-| `game/tests/run_tests.gd` | **59 suites** — data, loader, materials, doors, FOV schema, audio, VFX, UI, identity/cap | `SUMMARY: fails=0`, 0 `SCRIPT ERROR` |
+| `game/tests/run_tests.gd` | **59 suites** — data, loader, materials, doors, FOV schema, audio, VFX, UI, identity/cap, Spider chain (86–88) | `SUMMARY: fails=0`, 0 `SCRIPT ERROR` |
+| `game/tests/run_tests.gd -- --spider-only` | Spider suites 87 + 88 only; no mission load (thermal shortcut) | `PASS: 87`, `PASS: 88`, `SUMMARY: fails=0` |
+| `game/tests/test_personal_quest_spawner.gd` | standalone placement policy (no map, no GPU) | `PQ-PLACE SUMMARY: fails=0 checks=26` |
+| `game/tests/probe_personal_quest_subset.gd` | real Guildhall + Old Manor placements and full 01→04 chain | `PERSONAL QUEST SUBSET PASS checks=90 fails=0`, `stage=complete` |
 | `game/tests/test_m2_player.gd` | traversal/tools checks | `M2_SUMMARY: fails=0` |
 | `game/tests/probe_door_walk.gd` | closed blocks / 70° gate / re-toggle / F-spam / occupied close / lockpick | `DOORWALK PASS` |
 | `game/tests/probe_viewmodel_truth.gd` | 1P viewmodel pose/reset, crank bone | `VIEWMODEL_TRUTH PASS` |
@@ -301,6 +340,8 @@ Per-wave evidence: `docs/reports/` (latest:
 | `game/tests/probe_ftue.gd` | FTUE collider budget + safe room | player=1, dropped=0, budget_ok |
 | `game/tests/probe_scene_variants.gd` | seeded SV selection | 104 Guildhall, stable, varies |
 | `game/probe_leak.gd` | Den + Guildhall load/free leak check | 0/0/0; 7 texture RIDs warn unless `TAT2_NO_DEN_PROBE=1` |
+| `build/qa/test_perf_guard.sh` | thermal/RSS guard source + decision checks, launches no game | `PERF_GUARD_TEST PASS checks=42 fails=0` |
+| `tools/check_cbmignore.sh` | codebase-memory index whitelist | `CBMIGNORE CHECK PASS` (26/26) |
 | `game/tests/e2e/run_e2e_tests.gd` | Tiers 1–4 unmasked | **264/264** |
 
 The E2E runner no longer patches expectations. All alignments live in the tier
@@ -330,21 +371,29 @@ Recent additions to know about:
    cameras and wards run from `devices_runtime.json`. Breakables/shards, goo
    pipes, vault doors, sliding windows, magnetic locks, acoustic portals and
    junctions are authored data-only markers.
-3. **Clues/quests are authored; the NPC quest is the next wave.** 96 facts /
+3. **Clues/quests are authored; the Spider NPC chain is now live.** 96 facts /
    90 reachable / 6 dead are wired, readable spawners and quest items spawn at
-   authored transforms, and the journal is live. Two orphaned Spider personal
-   lines remain (`DT_ClueFacts_Personal_Spider_01:Intro`,
-   `DT_ClueFacts_Personal_Spider_04:Renegade`; no consumers, `reachable=false`);
-   the quest using them is planned for the next wave (W2). Spawner interaction
-   radii are absent; do not invent dialogue or radii.
+   authored transforms, and the journal is live. The Spider 01→04 chain runs
+   first Guildhall deploy → Library letter → Den/next deploy electrotype → Vault
+   Owl → Lounge courier → Old Manor informant and ends at `stage=complete` with
+   7 persistent facts (subset probe 90/90). `03:Reminder` is withheld and
+   `04:Renegade` excluded by design; the producer census still reports 6 dead
+   rows. Interaction uses the authored 1.75 m player range and shipped prompts —
+   there is no per-spawner radius, and no dialogue should be invented.
+   **Residuals:** no authored pointer to the 04 informant, so the chain can idle
+   at `delivered` (Old Manor is contract-only); no VO/nameplate; the letter sinks
+   2.84 mm into the table (accepted); co-op is local-only for this chain. Details:
+   [`reports/spider-chain-integration.md`](reports/spider-chain-integration.md).
 4. **Performance:** honest six-pose 1080p/high p50 is **51.0–55.4 FPS**
    (two identical controls; run-to-run variance is larger than every lever
    delta). The low/64-light/2-shadow "performance" configuration measures
    p50 58.8 / p95 28.7 ms / 1 % low 27.5, so it is **not** a 60 FPS preset.
    PeripheryA 100 m cuts draws but is not a proven win; same-material cell
    merge is a measured regression (p50 48.8). Details and artefacts:
-   `reports/perf-structural-wave.md`. Next: repeated clock-controlled runs,
-   then light/shadow budget and occlusion/HLOD (not naive merge).
+   `reports/perf-structural-wave.md`. The W4P guard now refuses a sustained run
+   above **78 °C** and kills at **95 °C**; no real matrix has been re-run on
+   `eb55bc1`. Next: repeated clock-controlled runs on a cool host, then
+   light/shadow budget and occlusion/HLOD (not naive merge).
 5. **Den GI:** still a Lumen/real-GI gap. VoxelGI was reverted for room spill;
    run the VoxelGI-vs-SSRT bake-off before adding another approximation.
 6. **UI localization is partial:** `Loc.t()` works over the 8 shipped
@@ -413,6 +462,27 @@ Recent additions to know about:
   lens drops, volumetric/clouds — done; `reports/track-c.md`.
 - **E2E backlog**: 264/264 unmasked.
 
+### 7.5 Next step (do this first on a cool host)
+
+The Spider integration on `eb55bc1` verified only the compile, `make audit`,
+`--spider-only` (87 + 88), the pure placement test (26/26) and the subset
+real-map probe (90/90). These are **not yet re-measured on this HEAD** and must
+be run before the next feature wave:
+
+```bash
+make test                                       # 59 suites, expect fails=0
+tools/godot --headless --path game --script res://tests/test_m2_player.gd
+tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd  # 264/264
+build/qa/run_perf_matrix.sh --quality=high --scale=1.0 --scaling=bilinear --tag=post_spider
+make editor                                     # full editor / Review dock on the 8 GB laptop
+```
+
+The perf matrix must start at or below 78 °C; the host idles near 82 °C, so
+cool it first. The full editor open previously failed Vulkan device creation on
+the 8 GB GPU — record the result, do not add another approximation to hide it.
+Do not quote a gate as green until its command has actually completed on
+`eb55bc1` (or a later HEAD).
+
 ---
 
 ## 8. Known data deltas and how to treat them
@@ -439,6 +509,8 @@ Recent additions to know about:
 8. **Audio pipeline needs `extract_audio` + `convert_wwise`.** They are normalizers now; skipping them makes `audio` freshness fail.
 9. **Godot has no `billboard` spatial render mode** (4.x). Use the manual `INV_VIEW_MATRIX` basis as in `level_niagara.gdshader`.
 10. **The swarm plan/ledger is gone.** Ignore `.swarm/` prose except the archived blocker file; the authoritative record is `git log` plus this handoff and `docs/reports/`.
+11. **Thermal state is a gate, not a nuisance.** One Godot at a time; the perf wrapper refuses >78 °C and kills at 95 °C. A truncated probe/run is not a result. Record the start/peak/end temperatures with every long run.
+12. **Do not index generated or extracted trees.** `.cbmignore` is a source whitelist; the codebase-memory service is capped at 3 GiB working / 4 GiB max with 0 swap. Run `tools/check_cbmignore.sh` after changing it.
 
 ---
 
@@ -448,7 +520,7 @@ Recent additions to know about:
 git status --short                                  # clean
 make audit                                          # exit 0, all groups fresh, 0 unexpected errors
 python3 tools/check_uid_duplicates.py game --json   # 0/0
-tools/godot --headless --path game --script "$PWD/tools/check_scripts_compile.gd"   # 82/0
+tools/godot --headless --path game --script "$PWD/tools/check_scripts_compile.gd"   # 96/0
 tools/godot --headless --path game --script res://tests/run_tests.gd         # fails=0
 tools/godot --headless --path game --script res://tests/test_m2_player.gd    # fails=0
 tools/godot --headless --path game --script res://tests/probe_door_walk.gd   # PASS
@@ -458,6 +530,12 @@ tools/godot --headless --path game --script res://probe_leak.gd              # a
 tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd # 264/264
 git push origin main
 ```
+
+The 2026-11-24 Spider integration (`eb55bc1`) ran the compile (96/0),
+`make audit` (PASS), `--spider-only` (fails=0), the placement test (26/26) and
+the subset probe (90/90). The full `make test`, `test_m2_player`, E2E and perf
+matrix in the block above were **deferred**; run them on a cool host before
+quoting the wave as fully green.
 
 Any wave that changes rendering, materials, traversal or mission flow also needs:
 

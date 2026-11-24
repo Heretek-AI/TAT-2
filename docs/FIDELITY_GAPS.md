@@ -32,7 +32,7 @@ Re-run the census with the commands at the bottom.
 | **Spawners** | 689 markers + 546 loot markers + 254 containers | all spawned: real meshes/pickups/civilians (7172096), real loot actors (1c5225f), openable containers (`5bc2d83`) | **done** |
 | **Devices** | 4,118 / 21 families | 2,095 loaded-map records, 6,005 trigger edges, 1,475 power edges; **5 families run** (beams, plates, noise alarms, power, turrets, cameras, wards) | **partial** |
 | **Patrols** | 210 paths / 673 waypoints | 120 Guildhall / 350 points merged; guards use authored waits/yaw/PingPong | **done** |
-| **Clues / quests** | 96 fact rows / 18 QGs | 90 reachable / 6 dead (two orphaned Spider personal lines; NPC quest planned W2); authored readable clues, quest items, journal, Set/LootTheRoom objectives | **done; NPC quest next wave** |
+| **Clues / quests** | 96 fact rows / 18 QGs | 90 reachable / 6 dead (Spider `03:Reminder` withheld, `04:Renegade` excluded; the producer-dead `01:Intro` is granted at runtime); authored readable clues, quest items, journal, Set/LootTheRoom objectives; **Spider 01→04 personal chain live** (note → electrotype → Owl → courier → informant, 7 facts, 90/90 real-map probe) | **done (`eb55bc1`); residuals in the 2026-11-24 integration entry** |
 | **Player identity** | `PlayerState.GetPlayerName` | explicit handle, else authored `The Spider` / `The Chameleon`; no capture Steam persona | **done (W0a)** |
 | **Localization** | 8 locales | 8 `.translation` registered; 2,946 source→key entries; `Loc.t()` in main menu/pause/prep | **partial** |
 | Skeletal meshes / skins | 156 `SK_` | 156 GLB | guards play 10 real retargeted clips (a29a06f); player uses real 1P arms (9ef3bdc) |
@@ -290,10 +290,14 @@ find extracted/json -name 'NS_*.json' | wc -l
     `make texture-cap-check` is a prerequisite of `make audit` and treats
     `size_limit=0` as over-cap; the alpha-critical 4096 px storefront decal
     stays uncapped. Suite 82 covers the sidecars and the exception.
-  - **NPC clue status**: the residual is two orphaned Spider personal lines
-    (`DT_ClueFacts_Personal_Spider_01:Intro`,
-    `DT_ClueFacts_Personal_Spider_04:Renegade`), not “absent/cut”; the quest
-    using them is planned for the next wave (W2).
+  - **NPC clue status (superseded by the Spider integration)**: the Spider
+    personal chain is live; see the 2026-11-24 integration entry below and
+    [`reports/spider-chain-integration.md`](reports/spider-chain-integration.md).
+    The old note ("two orphaned lines, NPC quest planned W2") described the
+    pre-runtime state and is no longer the live status. The producer census still
+    reports 6 dead fact rows; `03:Reminder` is withheld and `04:Renegade`
+    excluded by design, while `01:Intro` is granted as the chain's first journal
+    line.
   - Gates: compile 69/0, 59 suites fails=0, M2 fails=0, E2E 264/264, probes
     PASS, `make audit` PASS (with the new cap check).
 
@@ -352,3 +356,39 @@ find extracted/json -name 'NS_*.json' | wc -l
     (`make review`) and six-bookmark captures (`make review-capture`) are
     verified; `--hide=Beams` confirms the long lines are the 312 beam-tagged
     meshes (vault crop RMSE 3.2 % vs 0 % in beam-free views).
+
+- 2026-11-24: **Spider personal chain integrated (01 → 04, `7aa2a67`..`eb55bc1`)**;
+  full detail and probe output in
+  [`reports/spider-chain-integration.md`](reports/spider-chain-integration.md).
+  - **Chain live**: first Guildhall deploy → Library letter → Den/next deploy
+    electrotype → Vault Owl → Lounge courier → Old Manor Courtyard informant;
+    `stage=complete`, 7 persistent facts, exact shipped 03/04 lines and
+    follow-ups, `[E] Talk`, `[E] Take Theban Owl`. No `03:Reminder`,
+    `04:Renegade` or `ObjectiveComplete_*`; no loot/currency/contract/objective
+    mutation; Chameleon no-op. Save schema `personal_quest_schema:1`, per thief.
+  - **Placements**: letter pin `y=28.0021` on the table (`28.0000`), Owl pin
+    `36.4655` on the authored `SM_Manor_BookcasePedestal` top (`~36.4645`;
+    1.0 mm offset), courier `[floor]` at `27.0019` with authored yaw **90°**,
+    informant `[floor]` at `10.1096` with authored yaw **0°**. No pin was moved
+    and no TAT-2 shelf was added. The probe stands the player on the walk floor
+    inside the authored 1.75 m interaction range, so no radius is invented.
+  - **Verification actually run** on `eb55bc1`: full compile **96/0**;
+    `run_tests.gd -- --spider-only` **fails=0** (suites 87 + 88); pure placement
+    test **26/26**; subset real-map probe **90/90** with `stage=complete`;
+    `probe_leak` **PASS**; `make audit` **PASS**. Thermal peaks: compile 92 °C,
+    `--spider-only` 90 °C, probe 90 °C (hard kill 95 °C).
+  - **Deferred, not claimed**: full `make test` (all 59 suites),
+    `test_m2_player`, E2E 264/264, the real six-pose perf matrix and a full
+    editor open on the 8 GB laptop. The host idles near 82 °C.
+  - **Perf guard (W4P, `eb55bc1`)**: `--start-temp` 78 / `--max-temp` 95,
+    independent 1 s sampler, guarded pre-warm, `VmHWM` 8 GiB cap and a 12 GiB / 0
+    swap cgroup; `test_perf_guard.sh` **42/42**. No real matrix run.
+  - **codebase-memory** (`9f8f36a`, `877d6ad`): 4 GiB max / 3 GiB high / swap 0,
+    `CBM_MEM_BUDGET_MB=3072`, `index_max_files=20000`,
+    `index_max_source_mb=512`, marketplace patched, `.cbmignore` +
+    `tools/check_cbmignore.sh` **26/26**.
+  - **Residuals**: no authored pointer to the 04 informant (the chain can idle
+    at `delivered`; Old Manor is contract-only), no VO/nameplate, the letter
+    sinks 2.84 mm into the table (accepted), run vs persistent fact semantics
+    (personal persisted, contract run-only) and co-op is local-only for this
+    chain.

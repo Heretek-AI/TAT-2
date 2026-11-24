@@ -57,7 +57,7 @@ TAT-2 expansion content belong in git.
 
 ```bash
 make run         # native 4.7.2 client, F3 overlay
-make test        # tests/run_tests.gd — 58 suites
+make test        # tests/run_tests.gd — 59 suites (re-measure; see gate table)
 make audit       # fail-closed content + producer/output baseline gate
 
 tools/godot --headless --path game --script "$PWD/tools/check_scripts_compile.gd"
@@ -67,14 +67,20 @@ tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd
 tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd -- --tier=1
 ```
 
-| Gate | Passing value (2026-11-23) |
+| Gate | Passing value (last full set 2026-11-23; compile re-measured at `eb55bc1`) |
 |---|---|
-| compile | 69 checked, 0 broken |
-| `run_tests.gd` | `SUMMARY: fails=0` (58 suites) |
+| compile | 96 checked, 0 broken (`eb55bc1`) |
+| `run_tests.gd` | `SUMMARY: fails=0` (last full run; 59 suites now registered, suite 88 added since) |
 | `test_m2_player.gd` | `M2_SUMMARY: fails=0` |
 | door walk / viewmodel / Niagara probes | `DOORWALK PASS` / `VIEWMODEL_TRUTH PASS` / `NIAGARA_PROBE PASS` |
 | E2E | `fails=0 passed=264 total=264` (tier 1: 115) |
 | `make audit` | exit 0, tracked baseline matches, mount/path 100.0 % (exact-case 99.4 %), 13/13 content groups |
+
+The 2026-11-24 Spider integration (`eb55bc1`) re-ran only the compile (96/0),
+`make audit`, `--spider-only` (suites 87 + 88, fails=0), the placement test
+(26/26), `probe_leak` and the subset probe (90/90). **Re-measure the full suite,
+M2 and E2E on the current HEAD** before quoting or gating on their counts;
+nothing here has been re-baselined.
 
 Anything below these numbers is a regression. Do not re-baseline silently; find
 the cause or record it.

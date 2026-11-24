@@ -39,6 +39,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -159,6 +160,21 @@ PRODUCERS = (
         ("contracts", "contracts_loot_goals"),
     ),
     Producer(
+        "tools/parse_clues.py",
+        "python3 tools/parse_clues.py",
+        ("gen:gameplay/clues.json",),
+    ),
+    Producer(
+        "tools/parse_quests.py",
+        "python3 tools/parse_quests.py",
+        ("gen:gameplay/quests.json",),
+    ),
+    Producer(
+        "tools/parse_devices.py",
+        "python3 tools/parse_devices.py",
+        ("gen:gameplay/devices_runtime.json",),
+    ),
+    Producer(
         "tools/parse_loot.py",
         "python3 tools/parse_loot.py",
         ("gen:gameplay/loot_actors.json",),
@@ -244,10 +260,18 @@ INFRASTRUCTURE = (
 
 # External tools whose version change invalidates generated binary outputs.
 TOOL_COMMANDS = (
-    ("blender", ("blender", "--version")),
-    ("ffmpeg", ("ffmpeg", "-version")),
-    ("vgmstream", ("tools/bin/vgmstream/vgmstream-cli", "--version")),
-    ("dotnet", (str(Path.home() / ".dotnet10" / "dotnet"), "--version")),
+    ("blender", ("blender", "--version"), re.compile(r"^Blender\s+\S+")),
+    ("ffmpeg", ("ffmpeg", "-version"), re.compile(r"^ffmpeg version \S+")),
+    (
+        "vgmstream",
+        ("tools/bin/vgmstream/vgmstream-cli", "-h"),
+        re.compile(r"^vgmstream CLI decoder [^\r\n]+"),
+    ),
+    (
+        "dotnet",
+        (str(Path.home() / ".dotnet10" / "dotnet"), "--version"),
+        re.compile(r"^\d+\.\d+\.\d+\S*"),
+    ),
 )
 
 # Freshness groups use the same path tokens as producers. The producer baseline
@@ -1024,12 +1048,28 @@ def _producer_coverage_failures() -> list[str]:
     return failures
 
 
+def _resolve_executable(command: str) -> str | None:
+    """Resolve a PATH name or repo-relative binary without invoking it."""
+    found = shutil.which(command)
+    if found:
+        return found
+    candidate = Path(command)
+    if not candidate.is_absolute():
+        candidate = ROOT / candidate
+    if candidate.is_file() and os.access(candidate, os.X_OK):
+        return str(candidate)
+    return None
+
+
 def _probe_tool_versions() -> dict:
     versions = {}
-    for name, command in TOOL_COMMANDS:
-        resolved = shutil.which(command[0]) or str(ROOT / command[0])
-        if not Path(resolved).exists():
-            resolved = command[0]
+    for name, command, pattern in TOOL_COMMANDS:
+        resolved = _resolve_executable(command[0])
+        if resolved is None:
+            # Never invoke a missing tool: some binaries print usage text for
+            # unknown flags, which made the recorded version unstable.
+            versions[name] = "missing"
+            continue
         try:
             result = subprocess.run(
                 [resolved, *command[1:]],
@@ -1039,8 +1079,12 @@ def _probe_tool_versions() -> dict:
                 timeout=15,
                 check=False,
             )
-            line = (result.stdout or result.stderr).strip().splitlines()
-            versions[name] = line[0].strip() if line else f"exit {result.returncode}"
+            text = "\n".join(part for part in (result.stdout, result.stderr) if part)
+            match = pattern.search(text)
+            if match:
+                versions[name] = match.group(0).strip()
+            else:
+                versions[name] = f"unparsed (exit {result.returncode})"
         except FileNotFoundError:
             versions[name] = "missing"
         except subprocess.TimeoutExpired:

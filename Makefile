@@ -35,9 +35,10 @@ anims: build-extractor
 # Every generated-data producer. `normalize` fails if any is missing or errors,
 # so a silently dropped parser cannot pass the gate.
 NORMALIZERS := parse_tables parse_materials parse_gameplay parse_contracts \
-               parse_containers parse_interactables parse_loot parse_spawners \
-               parse_vfx parse_weather extract_audio convert_wwise \
-               parse_locres convert_videos
+               parse_clues parse_quests parse_devices parse_containers \
+               parse_interactables parse_loot parse_spawners parse_vfx \
+               parse_weather extract_audio convert_wwise parse_locres \
+               convert_videos
 
 normalize:
 	@for t in $(NORMALIZERS); do \

@@ -55,7 +55,7 @@ builds are documented in [`docs/ANDROID.md`](docs/ANDROID.md).
 | `make audit-bootstrap` | Explicit first run; writes the tracked `tools/audit_baseline.json` |
 | `make audit-refresh-stamps` | Escape hatch after regeneration; missing/decreased outputs still fail |
 | `make audit-imports` | Separate Godot import gate (`.import` sidecars + `.translation`) |
-| `make normalize` | Run all 14 generated-data producers |
+| `make normalize` | Run all 17 generated-data producers |
 | `make linux-build` / `make linux-run` | Linux x86_64 export / run |
 | `make android-debug` / `make android-release` | Signed internal APK |
 | `make desktop-texture-cap` | Re-bake the 1024 px texture cap |
@@ -94,7 +94,7 @@ tools/godot --headless --path game --script res://probe_leak.gd
 
 ```
 game/                 Godot project (src/, scenes/, tests/, assets/ue -> extracted)
-tools/                extractor (.NET/CUE4Parse), 14 normalizers, audit + guards
+tools/                extractor (.NET/CUE4Parse), 17 normalizers, audit + guards
 build/qa/             tracked capture/probe harness sources (captures ignored)
 docs/                 architecture, performance, fidelity tracker, wave reports, handoffs
 extracted/            private extraction cache (gitignored)

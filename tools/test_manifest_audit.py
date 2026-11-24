@@ -210,6 +210,9 @@ def _build_fixture(base: Path) -> None:
             "mission_loot_goals": {"Mission.Guildhall.LootTheRoom": [4000, 6000, 8000]},
         },
     )
+    _json(gameplay / "clues.json", {"facts": {"clue": 1}})
+    _json(gameplay / "quests.json", {"contracts": {"contract": 1}})
+    _json(gameplay / "devices_runtime.json", {"devices": [1]})
     counts = [196] * 21
     counts[0] += 4118 - sum(counts)
     _json(
@@ -340,6 +343,9 @@ def main() -> int:
         for rel in (
             "game/data/generated/gameplay/spawners.json",
             "game/data/generated/gameplay/interactables.json",
+            "game/data/generated/gameplay/clues.json",
+            "game/data/generated/gameplay/quests.json",
+            "game/data/generated/gameplay/devices_runtime.json",
             "game/data/generated/audio_events.json",
             "game/data/generated/mesh_materials.json",
             "game/data/generated/mesh_materials_provenance.json",

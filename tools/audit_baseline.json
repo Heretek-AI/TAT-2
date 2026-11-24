@@ -44,7 +44,7 @@
   "infrastructure": {
     "root:Makefile": {
       "command": "make extract / make normalize",
-      "sha256": "d801a5a823d1c9a4c960e66f8f19f5d10efecb034b3a036720f26298d9ac80b3"
+      "sha256": "7d0a49f31631d2613e66ee88f9602e5aa7babcd24153e6d0df4e8b2607f02209"
     },
     "root:tools/audit_allowlists.json": {
       "command": "reviewed coverage allowlist",
@@ -154,6 +154,20 @@
       },
       "sha256": "2212587ffbf869787a9f583b786f0f7300f181c93aaf373052275867100cfa76"
     },
+    "tools/parse_clues.py": {
+      "command": "python3 tools/parse_clues.py",
+      "metrics": {},
+      "outputs": {
+        "gen:gameplay/clues.json": {
+          "bytes": 1233863,
+          "exists": true,
+          "files": 1,
+          "newest_mtime": 1795499134.3770382,
+          "sha256": "9fb06a89b645429b4f2e4c42747f0240c981a61f9167b00b6fa34590c6a1e04a"
+        }
+      },
+      "sha256": "5694756bec971303903f6c1a19f883e5f08a800bbc60884c25e5899fe6a13297"
+    },
     "tools/parse_containers.py": {
       "command": "python3 tools/parse_containers.py",
       "metrics": {
@@ -187,16 +201,30 @@
       },
       "sha256": "75f7103457a6426d4eea817109096b72ea82e792da02fb1217cfdd96edf2c0e7"
     },
+    "tools/parse_devices.py": {
+      "command": "python3 tools/parse_devices.py",
+      "metrics": {},
+      "outputs": {
+        "gen:gameplay/devices_runtime.json": {
+          "bytes": 2115363,
+          "exists": true,
+          "files": 1,
+          "newest_mtime": 1795499187.3375788,
+          "sha256": "64ba7beb9c1e2383b8bad6d19e618ab174f84352c3d83306e76b4e3d0ba095da"
+        }
+      },
+      "sha256": "1f0652a2755ba621e0f8c89194700b632431fcc5f440c1e71977c62e7477ac72"
+    },
     "tools/parse_gameplay.py": {
       "command": "python3 tools/parse_gameplay.py",
       "metrics": {},
       "outputs": {
         "gen:gameplay": {
-          "bytes": 1818278,
+          "bytes": 3933641,
           "exists": true,
-          "files": 16,
-          "newest_mtime": 1795498901.1765954,
-          "sha256": "072cd70159dc8727df1abe1c4a25a6856ba912d7bce61f89abcb7aa26686789d"
+          "files": 17,
+          "newest_mtime": 1795499187.3375788,
+          "sha256": "d4a4148f55c7f1223c66cbf824a102b222314bd94e9627115f8b53f309795a3a"
         }
       },
       "sha256": "45b95ca488948315bac5c9167500d2b5c7b1ef24fc722a4241ffb6779cf2eae0"
@@ -277,6 +305,20 @@
       },
       "sha256": "44b341d3cc5a2d1eae2d17065fb8be9f359382f19570145a865546935a89a6ca"
     },
+    "tools/parse_quests.py": {
+      "command": "python3 tools/parse_quests.py",
+      "metrics": {},
+      "outputs": {
+        "gen:gameplay/quests.json": {
+          "bytes": 421806,
+          "exists": true,
+          "files": 1,
+          "newest_mtime": 1795499137.534096,
+          "sha256": "a8eb501056a70c3d825ad64017266779804d0eb9d16e53cb32f003f34a6bb182"
+        }
+      },
+      "sha256": "0fb6e82efc9ec6767cba6d54c7d471b9976d412bdc00cd7c5489d5eab6459d2f"
+    },
     "tools/parse_spawners.py": {
       "command": "python3 tools/parse_spawners.py",
       "metrics": {},
@@ -302,11 +344,11 @@
       },
       "outputs": {
         "gen:gameplay": {
-          "bytes": 1818278,
+          "bytes": 3933641,
           "exists": true,
-          "files": 16,
-          "newest_mtime": 1795498901.1765954,
-          "sha256": "072cd70159dc8727df1abe1c4a25a6856ba912d7bce61f89abcb7aa26686789d"
+          "files": 17,
+          "newest_mtime": 1795499187.3375788,
+          "sha256": "d4a4148f55c7f1223c66cbf824a102b222314bd94e9627115f8b53f309795a3a"
         },
         "gen:levels": {
           "bytes": 45795222,
@@ -392,9 +434,9 @@
   "tool_versions": {
     "blender": "Blender 5.3.0",
     "dotnet": "10.0.404",
-    "ffmpeg": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
-    "vgmstream": "missing"
+    "ffmpeg": "ffmpeg version 9.0.2",
+    "vgmstream": "vgmstream CLI decoder r2168 (Oct 25 2026)"
   },
   "version": 2,
-  "written_utc": "2026-11-24T05:42:57Z"
+  "written_utc": "2026-11-24T05:47:32Z"
 }

@@ -47,6 +47,15 @@ did not bind `errors.log` to the extraction run.
   `--allow-unexpected-errors`, `--allow-tool-drift`.
 - **Negative-control suite.** `python3 tools/test_manifest_audit.py` builds a
   complete temporary tree and exercises 14 control groups.
+- **Clue/quest/device producers.** `parse_clues.py` (`gameplay/clues.json`),
+  `parse_quests.py` (`gameplay/quests.json`) and `parse_devices.py`
+  (`gameplay/devices_runtime.json`) are registered in `NORMALIZERS` and in the
+  baseline with their output bytes/counts/hashes. Removing any of those files
+  fails the gate; `tools/check_devices_runtime.py` reports 58,512 checks.
+- **Stable tool probes.** A missing executable records `"missing"` without being
+  invoked. Present tools are reduced to a stable version line (`Blender 5.3.0`,
+  `ffmpeg version 9.0.2`, `vgmstream CLI decoder r2168 (Oct 25 2026)`,
+  `10.0.404`); usage text is never recorded.
 
 ## Evidence
 

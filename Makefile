@@ -39,7 +39,8 @@ anims: build-extractor
 NORMALIZERS := parse_tables parse_materials parse_gameplay parse_contracts \
                parse_clues parse_quests parse_devices parse_containers \
                parse_interactables parse_loot parse_spawners parse_vfx \
-               parse_weather extract_audio convert_wwise parse_locres \
+               parse_unlocks parse_hearing parse_state_tree parse_weather \
+               extract_audio convert_wwise parse_locres \
                convert_videos parse_anim_meta
 
 normalize:

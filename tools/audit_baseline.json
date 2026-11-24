@@ -44,7 +44,7 @@
   "infrastructure": {
     "root:Makefile": {
       "command": "make extract / make normalize",
-      "sha256": "e8b6dc5731bb1d8bdd2ef1677f590029bcee61f1233a87909acd9c14e5ac81f9"
+      "sha256": "335d3c2fa1802075e2326fd4653fcd5d205ccef20965aa9c710fa1f5040e5f01"
     },
     "root:tools/audit_allowlists.json": {
       "command": "reviewed coverage allowlist",
@@ -234,14 +234,35 @@
       "metrics": {},
       "outputs": {
         "gen:gameplay": {
-          "bytes": 4213797,
+          "bytes": 5337480,
           "exists": true,
-          "files": 17,
-          "newest_mtime": 1795546799.461059,
-          "sha256": "fc519027a0e20fa2e9de99fce276da642b5599b191b76c63fa5c6d31eed1539a"
+          "files": 21,
+          "newest_mtime": 1795562706.5752668,
+          "sha256": "9fb5f28450e3e7e5760374825083f8188b1dc158420bd98f55e064b7f3f6ac85"
         }
       },
       "sha256": "fb08beef0100ee52dadab6d2154a5e3d958a46f0f89311f56e145066bd69304a"
+    },
+    "tools/parse_hearing.py": {
+      "command": "python3 tools/parse_hearing.py",
+      "metrics": {},
+      "outputs": {
+        "gen:gameplay/hearing.json": {
+          "bytes": 242354,
+          "exists": true,
+          "files": 1,
+          "newest_mtime": 1795562706.4744124,
+          "sha256": "2f30d7af62b7d09e69848ef9938ab8a65c006f5111c9ae2f17de08b82a0b080b"
+        },
+        "gen:gameplay/perception.json": {
+          "bytes": 13314,
+          "exists": true,
+          "files": 1,
+          "newest_mtime": 1795562706.4751365,
+          "sha256": "a051f2b4a26796916e8d9cd9a8512707afe84c77b9c9a4f9ee790f4ab430d9f0"
+        }
+      },
+      "sha256": "923a6447b2cb7f84090b805087a69411e9c00dfe4a47f8c1a1d7457ea83cbf5a"
     },
     "tools/parse_interactables.py": {
       "command": "python3 tools/parse_interactables.py",
@@ -347,6 +368,27 @@
       },
       "sha256": "e62544ed5c09a696e6a3340f27d3c20d1655e77c31e06e46d9269734fb6f814e"
     },
+    "tools/parse_state_tree.py": {
+      "command": "python3 tools/parse_state_tree.py",
+      "metrics": {},
+      "outputs": {
+        "gen:gameplay/guard_behavior.json": {
+          "bytes": 784227,
+          "exists": true,
+          "files": 1,
+          "newest_mtime": 1795562706.5752668,
+          "sha256": "3f397005e37ebef7d7f5a8a924cdb9ee7ae9853fc1ffe6e6a9d93534fb26b006"
+        },
+        "root:docs/reports/w5e-guard-state-tree.md": {
+          "bytes": 17534,
+          "exists": true,
+          "files": 1,
+          "newest_mtime": 1795562706.5765085,
+          "sha256": "b6ee547fe145a921d49e90fecd4d619858818c9066400144862fb776e6f04d30"
+        }
+      },
+      "sha256": "63e2f417c8372ec52ac5881491541785240532773a45cbde5969bf63a2b2c627"
+    },
     "tools/parse_tables.py": {
       "command": "python3 tools/parse_tables.py",
       "metrics": {
@@ -358,11 +400,11 @@
       },
       "outputs": {
         "gen:gameplay": {
-          "bytes": 4213797,
+          "bytes": 5337480,
           "exists": true,
-          "files": 17,
-          "newest_mtime": 1795546799.461059,
-          "sha256": "fc519027a0e20fa2e9de99fce276da642b5599b191b76c63fa5c6d31eed1539a"
+          "files": 21,
+          "newest_mtime": 1795562706.5752668,
+          "sha256": "9fb5f28450e3e7e5760374825083f8188b1dc158420bd98f55e064b7f3f6ac85"
         },
         "gen:levels": {
           "bytes": 45795222,
@@ -387,6 +429,20 @@
         }
       },
       "sha256": "a19054709c423924dc0f9217665976a6c6ebe28bb9ce34d8ef1739b1778e26f7"
+    },
+    "tools/parse_unlocks.py": {
+      "command": "python3 tools/parse_unlocks.py",
+      "metrics": {},
+      "outputs": {
+        "gen:gameplay/unlocks.json": {
+          "bytes": 83788,
+          "exists": true,
+          "files": 1,
+          "newest_mtime": 1795562705.3486187,
+          "sha256": "ace129867f6291e50bf4fcb07e4444e9d1ea6c1f55252dda99251e3255863244"
+        }
+      },
+      "sha256": "bc8923ef4e06b67bab4a542161a8062849e26ac03a049f4cf75d333d2e3087fc"
     },
     "tools/parse_vfx.py": {
       "command": "python3 tools/parse_vfx.py",
@@ -452,5 +508,5 @@
     "vgmstream": "vgmstream CLI decoder r2168 (Oct 25 2026)"
   },
   "version": 2,
-  "written_utc": "2026-11-24T19:11:11Z"
+  "written_utc": "2026-11-24T23:25:22Z"
 }

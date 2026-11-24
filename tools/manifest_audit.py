@@ -196,6 +196,24 @@ PRODUCERS = (
         ("gen:gameplay/interactables.json",),
     ),
     Producer(
+        "tools/parse_unlocks.py",
+        "python3 tools/parse_unlocks.py",
+        ("gen:gameplay/unlocks.json",),
+    ),
+    Producer(
+        "tools/parse_hearing.py",
+        "python3 tools/parse_hearing.py",
+        ("gen:gameplay/hearing.json", "gen:gameplay/perception.json"),
+    ),
+    Producer(
+        "tools/parse_state_tree.py",
+        "python3 tools/parse_state_tree.py",
+        (
+            "gen:gameplay/guard_behavior.json",
+            "root:docs/reports/w5e-guard-state-tree.md",
+        ),
+    ),
+    Producer(
         "tools/parse_weather.py",
         "python3 tools/parse_weather.py",
         ("gen:weather",),

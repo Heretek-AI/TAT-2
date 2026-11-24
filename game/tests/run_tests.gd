@@ -5351,6 +5351,512 @@ func _initialize() -> void:
 		fails += 1
 	else:
 		print("PASS: 65 authored clues/journal (96 facts/90 reachable/6 dead, Contract 2 7 facts + 6 clues on 28 spawners, Guildhall Set gems on 3 Office spawners, LootTheRoom 4000/6000/8000 + 1320/480/3300, dedupe, Set.Location)")
+	# 70. W3: authored device runtime layer (detectors, power, turrets, cameras,
+	# wards). Data comes only from game/data/generated/gameplay/devices_runtime.json
+	# + family_defaults; the brief's "339 linked detectors" is not in the
+	# dataset (C_3 feeds 328 devices, 321 of them detectors), so the suite pins
+	# the authored numbers and prints the discrepancy rather than inventing one.
+	var w3_layer_scr: GDScript = load("res://src/devices/device_layer.gd") as GDScript
+	var w3_beam_scr: GDScript = load("res://src/devices/security_beam.gd") as GDScript
+	var w3_plate_scr: GDScript = load("res://src/devices/pressure_plate.gd") as GDScript
+	var w3_power_scr: GDScript = load("res://src/devices/power_source.gd") as GDScript
+	var w3_turret_scr: GDScript = load("res://src/devices/security_turret.gd") as GDScript
+	var w3_eye_scr: GDScript = load("res://src/devices/alarm_eye.gd") as GDScript
+	var w3_ward_scr: GDScript = load("res://src/devices/ward_zone.gd") as GDScript
+	var w3_noise_scr: GDScript = load("res://src/devices/noise_alarm.gd") as GDScript
+	var w3_doc: Dictionary = w3_layer_scr.call("runtime_document") as Dictionary
+	var w3_scripts_ok: bool = w3_layer_scr != null and w3_beam_scr != null and w3_plate_scr != null and w3_power_scr != null and w3_turret_scr != null and w3_eye_scr != null and w3_ward_scr != null and w3_noise_scr != null
+	if not w3_scripts_ok or w3_doc.is_empty():
+		printerr("FAIL: 70 device runtime scripts or devices_runtime.json missing")
+		fails += 1
+	else:
+		var w3_stats: Dictionary = w3_doc.get("stats", {}) as Dictionary
+		var w3_maps: Dictionary = w3_doc.get("maps", {}) as Dictionary
+		var w3_by_map: Dictionary = w3_stats.get("by_map", {}) as Dictionary
+		var w3_fam_stats: Dictionary = w3_stats.get("families", {}) as Dictionary
+		var w3_counted: Dictionary = {}
+		for w3_map_v: Variant in w3_maps.keys():
+			var w3_map_id: String = str(w3_map_v)
+			var w3_map_data: Dictionary = w3_maps[w3_map_v] as Dictionary
+			for w3_rec_v: Variant in (w3_map_data.get("devices", []) as Array):
+				if w3_rec_v is Dictionary:
+					var w3_fam: String = str((w3_rec_v as Dictionary).get("family", ""))
+					w3_counted[w3_fam] = int(w3_counted.get(w3_fam, 0)) + 1
+		var w3_total: int = int(w3_stats.get("devices_total", -1))
+		var w3_counts_ok: bool = w3_total == 2095 and int(w3_by_map.get("guildhall", -1)) == 903 and int(w3_by_map.get("old_manor", -1)) == 1164 and int(w3_by_map.get("ftue", -1)) == 26 and int(w3_by_map.get("thieves_den", -1)) == 2
+		for w3_fam_key: Variant in w3_fam_stats.keys():
+			var w3_meta: Dictionary = w3_fam_stats[w3_fam_key] as Dictionary
+			# magnetic_lock is component-only: 12 components live on vault
+			# doors and are not separate device records (producer stats says
+			# component_only=true), so it is not part of the record census.
+			if bool(w3_meta.get("component_only", false)):
+				continue
+			if int(w3_meta.get("loaded", -1)) != int(w3_counted.get(str(w3_fam_key), -2)):
+				w3_counts_ok = false
+		fails += _w3_check(w3_counts_ok and str(w3_doc.get("schema", "")) == "tat2.devices_runtime/1",
+			"70.0 devices_runtime: 2,095 loaded (guildhall 903, old_manor 1164, ftue 26, den 2); 13 device-record family counts match (magnetic_lock is component-only)",
+			"70.0 devices_runtime census mismatch: total=%d by_map=%s counted=%s" % [w3_total, w3_by_map, w3_counted])
+
+		# Spawn pass: Guildhall 903 nodes in id order, authored transforms, no scale.
+		var w3_layer: Node3D = w3_layer_scr.new() as Node3D
+		root.add_child(w3_layer)
+		w3_layer.call("set_tick_enabled", false)
+		var w3_spawn: int = int(w3_layer.call("spawn_for_map", "guildhall", null, 1))
+		var w3_nodes: Dictionary = w3_layer.get("devices") as Dictionary
+		var w3_order: Array = (w3_layer.get("device_order") as Array).duplicate()
+		var w3_sample_ids: Array[String] = [
+			"guildhall/Building_Guildhall_POI:BP_PowerSupply_LightSwitch_C_0",
+			"guildhall/Guildhall_Gameplay:BP_Detector_LightBeam_C_1",
+			"guildhall/Guildhall_Gameplay:BP_Detector_PressurePlate_C_107",
+			"guildhall/Guildhall_Gameplay:BP_SecurityTurret_180_C_1",
+			"guildhall/Guildhall_Gameplay:BP_WardZone_Blocker_C_47",
+		]
+		var w3_rec_by_id: Dictionary = {}
+		for w3_map_v2: Variant in w3_maps.keys():
+			for w3_rec_v2: Variant in (((w3_maps[w3_map_v2] as Dictionary).get("devices", [])) as Array):
+				if w3_rec_v2 is Dictionary:
+					var w3_rid: String = str((w3_rec_v2 as Dictionary).get("id", ""))
+					if not w3_rid.is_empty():
+						w3_rec_by_id[w3_rid] = w3_rec_v2
+		var w3_spawn_ok: bool = w3_spawn == 903 and w3_nodes.size() == 903 and w3_order.size() == 903
+		w3_spawn_ok = w3_spawn_ok and int(w3_layer.call("family_count", "turret")) == 229 and int(w3_layer.call("family_count", "pressure_plate")) == 162 and int(w3_layer.call("family_count", "light_beam")) == 134 and int(w3_layer.call("family_count", "ward_blocker")) == 36 and int(w3_layer.call("family_count", "ward_slow")) == 41
+		var w3_sample_lines: Array[String] = []
+		for w3_sid: String in w3_sample_ids:
+			var w3_rec: Dictionary = w3_rec_by_id.get(w3_sid, {}) as Dictionary
+			var w3_node: Node3D = w3_nodes.get(w3_sid) as Node3D
+			if w3_node == null or w3_rec.is_empty():
+				w3_spawn_ok = false
+				w3_sample_lines.append(w3_sid + ":missing")
+				continue
+			var w3_p: Array = w3_rec.get("pos", []) as Array
+			var w3_expected := Vector3(float(w3_p[0]), float(w3_p[1]), float(w3_p[2]))
+			var w3_basis_ok: bool = w3_node.global_transform.basis.is_equal_approx(_w3_basis_from_rec(w3_rec))
+			var w3_no_scale: bool = w3_node.global_transform.basis.get_scale().is_equal_approx(Vector3.ONE)
+			if w3_node.global_position.distance_to(w3_expected) > 0.0005 or not w3_basis_ok or not w3_no_scale:
+				w3_spawn_ok = false
+			w3_sample_lines.append("%s pos=%s scale=%.3f" % [w3_sid.get_file(), w3_node.global_position, w3_node.global_transform.basis.get_scale().x])
+		fails += _w3_check(w3_spawn_ok,
+			"70.1 spawn pass: Guildhall 903 devices, id-sorted, 5 authored transforms match (basis exact, scale 1.0); " + str(w3_sample_lines),
+			"70.1 spawn pass mismatch: count=%d nodes=%d order=%d lines=%s" % [w3_spawn, w3_nodes.size(), w3_order.size(), w3_sample_lines])
+
+		# Determinism: a second pass gives the identical id order.
+		var w3_layer2: Node3D = w3_layer_scr.new() as Node3D
+		root.add_child(w3_layer2)
+		w3_layer2.call("set_tick_enabled", false)
+		var w3_spawn2: int = int(w3_layer2.call("spawn_for_map", "guildhall", null, 1))
+		var w3_order2: Array = (w3_layer2.get("device_order") as Array).duplicate()
+		var w3_det_ok: bool = w3_spawn2 == w3_spawn and w3_order.size() == w3_order2.size()
+		if w3_det_ok:
+			for w3_oi: int in range(w3_order.size()):
+				if str(w3_order[w3_oi]) != str(w3_order2[w3_oi]):
+					w3_det_ok = false
+					break
+		fails += _w3_check(w3_det_ok,
+			"70.2 determinism: two Guildhall spawn passes produce the identical 903-id order",
+			"70.2 determinism failed: n1=%d n2=%d" % [w3_order.size(), w3_order2.size()])
+		w3_layer2.queue_free()
+		await process_frame
+		var w3_group_ok: bool = get_nodes_in_group("devices").size() == 903 and get_nodes_in_group("device_detector").size() == 356 and get_nodes_in_group("device_action").size() == 509 and get_nodes_in_group("ward_zone").size() == 77 and get_nodes_in_group("power_source").size() == 38
+		fails += _w3_check(w3_group_ok,
+			"70.2b groups: devices=903, device_detector=356, device_action=509, ward_zone=77, power_source=38",
+			"70.2b group census mismatch: devices=%d detector=%d action=%d ward=%d power=%d" % [get_nodes_in_group("devices").size(), get_nodes_in_group("device_detector").size(), get_nodes_in_group("device_action").size(), get_nodes_in_group("ward_zone").size(), get_nodes_in_group("power_source").size()])
+
+		# 70.3 beam: authored 7.748 m sample, capsule geometry, endpoints,
+		# standing/crouch at the authored 1.75 m height, linked action.
+		var w3_beam_rec: Dictionary = w3_rec_by_id.get("guildhall/Guildhall_Gameplay:BP_Detector_LightBeam_C_1", {}) as Dictionary
+		var w3_defaults: Dictionary = w3_stats.get("family_defaults", {}) as Dictionary
+		var w3_beam: Area3D = w3_beam_scr.new() as Area3D
+		root.add_child(w3_beam)
+		w3_beam.call("configure", w3_beam_rec, w3_defaults, 2)
+		w3_beam.global_position = Vector3.ZERO
+		var w3_player: W3MockPlayer = W3MockPlayer.new()
+		w3_player.add_to_group("player")
+		root.add_child(w3_player)
+		w3_beam.call("set_player", w3_player)
+		var w3_action: W3MockAction = W3MockAction.new()
+		root.add_child(w3_action)
+		w3_beam.call("set_action_targets", [w3_action])
+		var w3_shape: CollisionShape3D = w3_beam.get_node_or_null("BeamPivot/BeamShape") as CollisionShape3D
+		var w3_capsule_ok: bool = w3_shape != null and w3_shape.shape is CapsuleShape3D
+		if w3_capsule_ok:
+			var w3_cap: CapsuleShape3D = w3_shape.shape as CapsuleShape3D
+			w3_capsule_ok = absf(float(w3_beam.get("beam_length_m")) - 7.7482395) < 0.0001 and absf(w3_cap.radius - 0.1) < 0.0001 and absf(w3_cap.height - 7.7482395) < 0.001 and absf(w3_shape.position.x - 3.8741198) < 0.001 and absf(w3_shape.rotation.z + PI * 0.5) < 0.0001
+		var w3_beam_ok: bool = w3_capsule_ok
+		w3_player.global_position = Vector3(7.9, 0.0, 0.0)
+		for w3_i: int in range(10):
+			w3_beam.call("tick", 0.1)
+		w3_beam_ok = w3_beam_ok and int(w3_beam.get("actions_fired")) == 0
+		w3_player.global_position = Vector3(7.5, 0.0, 0.0)
+		for w3_i: int in range(4):
+			w3_beam.call("tick", 0.1)
+		var w3_before_half: int = int(w3_beam.get("actions_fired"))
+		w3_beam.call("tick", 0.1)
+		w3_beam_ok = w3_beam_ok and w3_before_half == 0 and int(w3_beam.get("actions_fired")) == 1 and w3_action.hits == 1
+		w3_beam.global_position = Vector3(0.0, 1.75, 0.0)
+		w3_player.global_position = Vector3(1.5, 0.0, 0.0)
+		w3_player.is_crouching = true
+		for w3_i: int in range(10):
+			w3_beam.call("tick", 0.1)
+		var w3_crouch_fired: int = int(w3_beam.get("actions_fired"))
+		w3_player.is_crouching = false
+		for w3_i: int in range(5):
+			w3_beam.call("tick", 0.1)
+		w3_beam_ok = w3_beam_ok and w3_crouch_fired == 1 and int(w3_beam.get("actions_fired")) == 2
+		fails += _w3_check(w3_beam_ok,
+			"70.3 beam: 7.748 m capsule (r=0.10, centre 3.874); 7.9 m no, 7.5 m fires at 0.5 s; crouched 1.0 m no, standing 1.78 m yes at 1.75 m; linked action fired",
+			"70.3 beam failed: capsule=%s fired=%d crouch=%d hits=%d" % [w3_capsule_ok, int(w3_beam.get("actions_fired")), w3_crouch_fired, w3_action.hits])
+		w3_beam.queue_free()
+		w3_player.queue_free()
+		w3_action.queue_free()
+		await process_frame
+
+		# 70.4 plate: 1.5 s trigger, 0.2 s reset, damage once per crossing,
+		# a second crossing re-triggers.
+		var w3_plate_rec: Dictionary = w3_rec_by_id.get("guildhall/Guildhall_Gameplay:BP_Detector_PressurePlate_C_107", {}) as Dictionary
+		var w3_plate: Area3D = w3_plate_scr.new() as Area3D
+		root.add_child(w3_plate)
+		w3_plate.call("configure", w3_plate_rec, w3_defaults, 2)
+		w3_plate.global_position = Vector3.ZERO
+		var w3_plate_player: W3MockPlayer = W3MockPlayer.new()
+		root.add_child(w3_plate_player)
+		w3_plate_player.global_position = Vector3.ZERO
+		w3_plate.call("set_player", w3_plate_player)
+		w3_plate.call("tick", 1.4)
+		var w3_p1: int = int(w3_plate.get("actions_fired"))
+		w3_plate.call("tick", 0.11)
+		var w3_p2: int = int(w3_plate.get("actions_fired"))
+		var w3_hp1: float = w3_plate_player.health
+		w3_plate.call("tick", 2.0)
+		var w3_p3: int = int(w3_plate.get("actions_fired"))
+		w3_plate_player.global_position = Vector3(1.5, 0.0, 0.0)
+		w3_plate.call("tick", 0.3)
+		w3_plate_player.global_position = Vector3.ZERO
+		w3_plate.call("tick", 1.6)
+		var w3_p4: int = int(w3_plate.get("actions_fired"))
+		var w3_plate_ok: bool = w3_p1 == 0 and w3_p2 == 1 and w3_p3 == 1 and w3_p4 == 2 and is_equal_approx(w3_hp1, 290.0) and is_equal_approx(w3_plate_player.health, 280.0) and is_equal_approx(float(w3_plate.get("reset_seconds")), 0.2)
+		fails += _w3_check(w3_plate_ok,
+			"70.4 plate: 1.5 s trigger, 0.2 s reset, 10 Physical once per crossing, second crossing re-triggers (hp 300->290->280)",
+			"70.4 plate failed: fires=%d/%d/%d/%d hp=%.1f/%.1f" % [w3_p1, w3_p2, w3_p3, w3_p4, w3_hp1, w3_plate_player.health])
+		w3_plate.queue_free()
+		w3_plate_player.queue_free()
+		await process_frame
+
+		# 70.4b noise alarm: null _triggeringDuration uses the authored 0.5 s
+		# fallback, then emits the 15 m Heavy trap stimulus once.
+		var w3_noise_rec: Dictionary = w3_rec_by_id.get("guildhall/Guildhall_Gameplay:BP_Trap_Action_NoiseAlarm_C_0", {}) as Dictionary
+		var w3_noise: Node3D = w3_noise_scr.new() as Node3D
+		root.add_child(w3_noise)
+		w3_noise.call("configure", w3_noise_rec, w3_defaults, 2)
+		w3_noise.global_position = Vector3(0.0, 0.0, 300.0)
+		var w3_noise_hits: Array = []
+		var w3_alarm_cb := func(_o: Vector3, loud: float, _s: Node, tag: String) -> void:
+			if tag == "noise_alarm":
+				w3_noise_hits.append(loud)
+		if nb != null:
+			nb.connect("noise_emitted", w3_alarm_cb)
+		w3_noise.call("trigger_from", null)
+		w3_noise.call("tick", 0.4)
+		var w3_noise_before: int = w3_noise_hits.size()
+		w3_noise.call("tick", 0.11)
+		var w3_noise_after: int = w3_noise_hits.size()
+		if nb != null and nb.is_connected("noise_emitted", w3_alarm_cb):
+			nb.disconnect("noise_emitted", w3_alarm_cb)
+		var w3_noise_ok: bool = is_equal_approx(float(w3_noise.get("trigger_seconds")), 0.5) and w3_noise_before == 0 and w3_noise_after == 1 and is_equal_approx(float(w3_noise_hits[0]), 15.0)
+		fails += _w3_check(w3_noise_ok,
+			"70.4b noise alarm: null trigger duration -> authored 0.5 s fallback, one 15 m noise_alarm stimulus",
+			"70.4b noise alarm failed: trigger=%.2f before=%d after=%d hits=%s" % [float(w3_noise.get("trigger_seconds")), w3_noise_before, w3_noise_after, w3_noise_hits])
+		w3_noise.queue_free()
+		await process_frame
+
+		# 70.5 power: Guildhall C_3 cuts its authored 328-device graph (321
+		# detectors), 30 s auto-reset restores it; breakable health 20.
+		var w3_src: Node = w3_layer.call("get_device", "guildhall/Guildhall_Gameplay:BP_PowerSupply_Wall_C_3") as Node
+		var w3_power_ok: bool = w3_src != null and bool(w3_src.call("is_powered"))
+		var w3_power_lines: Array[String] = []
+		if w3_src != null:
+			var w3_consumers: Array = w3_src.get_meta("device_consumers", []) as Array
+			var w3_auto: float = float(w3_src.get("auto_reset_seconds"))
+			w3_power_ok = w3_power_ok and w3_consumers.size() == 328 and is_equal_approx(w3_auto, 30.0) and str(w3_src.call("get_interact_prompt")).begins_with("[F]")
+			w3_src.call("set_power_state", false)
+			var w3_off: int = 0
+			for w3_c_v: Variant in w3_consumers:
+				var w3_c: Node = w3_c_v as Node
+				if w3_c != null and w3_c.has_method("can_trigger") and not bool(w3_c.call("can_trigger")):
+					w3_off += 1
+			w3_src.call("tick", 29.9)
+			var w3_still_off: bool = not bool(w3_src.call("is_powered"))
+			w3_src.call("tick", 0.11)
+			var w3_back_on: bool = bool(w3_src.call("is_powered"))
+			var w3_reenabled: int = 0
+			for w3_c_v2: Variant in w3_consumers:
+				var w3_c2: Node = w3_c_v2 as Node
+				if w3_c2 != null and w3_c2.has_method("can_trigger") and bool(w3_c2.call("can_trigger")):
+					w3_reenabled += 1
+			w3_power_lines.append("C_3 consumers=328 detectors_off=%d auto=%.0fs still_off=%.0f reenabled=%d" % [w3_off, w3_auto, 1.0 if w3_still_off else 0.0, w3_reenabled])
+			w3_power_ok = w3_power_ok and w3_off == 321 and w3_still_off and w3_back_on and w3_reenabled == 321
+		var w3_src_b_rec: Dictionary = w3_rec_by_id.get("guildhall/Guildhall_Gameplay:BP_PowerSupply_Wall_C_1", {}) as Dictionary
+		var w3_src_b: Node3D = w3_power_scr.new() as Node3D
+		root.add_child(w3_src_b)
+		w3_src_b.call("configure", w3_src_b_rec, w3_defaults, 1)
+		var w3_break_ok: bool = is_equal_approx(float(w3_src_b.get("health")), 20.0)
+		w3_src_b.call("take_damage", 20.0)
+		w3_break_ok = w3_break_ok and not bool(w3_src_b.call("is_powered")) and bool(w3_src_b.get("broken"))
+		w3_src_b.queue_free()
+		fails += _w3_check(w3_power_ok and w3_break_ok,
+			"70.5 power: C_3 disables its 321 authored detectors (328 linked devices; brief said 339, data has 328), 30 s auto-reset re-enables, breakable 20 toggles off; " + str(w3_power_lines),
+			"70.5 power failed: %s break=%s" % [w3_power_lines, w3_break_ok])
+
+		# 70.6 turret: 12 m / +/-15 deg, 0.5 s Normal interval, 40 m/s
+		# 10-damage 30 s projectile, 150 health; linked plate turns on the
+		# _180_Triggered variant.
+		var w3_turret_rec: Dictionary = w3_rec_by_id.get("guildhall/Guildhall_Gameplay:BP_SecurityTurret_180_C_1", {}) as Dictionary
+		var w3_turret: Node3D = w3_turret_scr.new() as Node3D
+		root.add_child(w3_turret)
+		w3_turret.call("configure", w3_turret_rec, w3_defaults, 2)
+		w3_turret.global_position = Vector3.ZERO
+		var w3_t_player: W3MockPlayer = W3MockPlayer.new()
+		w3_t_player.add_to_group("player")
+		root.add_child(w3_t_player)
+		w3_turret.call("set_player", w3_t_player)
+		var w3_far_ok: bool = not bool(w3_turret.call("can_see", _w3_at(w3_t_player, Vector3(12.1, 0.0, 0.0))))
+		var w3_near_ok: bool = bool(w3_turret.call("can_see", _w3_at(w3_t_player, Vector3(11.9, 0.0, 0.0))))
+		var w3_in_fov: bool = bool(w3_turret.call("can_see", _w3_at(w3_t_player, Vector3(11.0, 0.0, 2.8))))
+		var w3_out_fov: bool = not bool(w3_turret.call("can_see", _w3_at(w3_t_player, Vector3(11.0, 0.0, 3.0))))
+		_w3_at(w3_t_player, Vector3(11.0, 0.0, 0.0))
+		w3_turret.call("tick", 0.01)
+		var w3_shots1: int = int(w3_turret.get("shots_fired"))
+		var w3_proj: Node = w3_turret.get("last_projectile") as Node
+		var w3_proj_ok: bool = w3_proj != null and is_equal_approx(float(w3_proj.get("speed_m_s")), 40.0) and is_equal_approx(float(w3_proj.get("damage_amount")), 10.0) and is_equal_approx(float(w3_proj.get("life_seconds")), 30.0)
+		if w3_proj != null:
+			w3_t_player.health = 300.0
+			w3_proj.call("_impact", w3_t_player)
+			w3_proj_ok = w3_proj_ok and is_equal_approx(w3_t_player.health, 290.0)
+		w3_turret.call("tick", 0.4)
+		var w3_shots2: int = int(w3_turret.get("shots_fired"))
+		w3_turret.call("tick", 0.11)
+		var w3_shots3: int = int(w3_turret.get("shots_fired"))
+		var w3_interval_ok: bool = is_equal_approx(float(w3_turret.get("fire_interval_s")), 0.5) and w3_shots1 == 1 and w3_shots2 == 1 and w3_shots3 == 2
+		w3_turret.call("take_damage", 150.0)
+		w3_turret.call("tick", 0.1)
+		var w3_dead_ok: bool = not bool(w3_turret.get("alive")) and int(w3_turret.get("shots_fired")) == w3_shots3
+		var w3_trig_rec: Dictionary = w3_rec_by_id.get("guildhall/Guildhall_Gameplay:BP_SecurityTurret_C_50", {}) as Dictionary
+		var w3_trig: Node3D = w3_turret_scr.new() as Node3D
+		root.add_child(w3_trig)
+		w3_trig.call("configure", w3_trig_rec, w3_defaults, 2)
+		var w3_trig_off: bool = not bool(w3_trig.get("starts_on")) and not bool(w3_trig.get("is_on"))
+		var w3_act_plate: Area3D = w3_plate_scr.new() as Area3D
+		root.add_child(w3_act_plate)
+		w3_act_plate.call("configure", w3_plate_rec, w3_defaults, 2)
+		w3_act_plate.global_position = Vector3(100.0, 0.0, 0.0)
+		var w3_act_player: W3MockPlayer = W3MockPlayer.new()
+		root.add_child(w3_act_player)
+		w3_act_player.global_position = Vector3(100.0, 0.0, 0.0)
+		w3_act_plate.call("set_player", w3_act_player)
+		w3_act_plate.call("set_action_targets", [w3_trig])
+		w3_act_plate.call("tick", 1.6)
+		var w3_trig_on: bool = bool(w3_trig.get("is_on"))
+		var w3_sw90_rec: Dictionary = w3_rec_by_id.get("guildhall/Guildhall_Gameplay:BP_SecurityTurret_90_C_1", {}) as Dictionary
+		var w3_sw90: Node3D = w3_turret_scr.new() as Node3D
+		w3_sw90.call("configure", w3_sw90_rec, w3_defaults, 2)
+		var w3_sw360_rec: Dictionary = w3_rec_by_id.get("old_manor/OldManor_Gameplay:BP_SecurityTurret_180_C_101", {}) as Dictionary
+		var w3_sw360: Node3D = w3_turret_scr.new() as Node3D
+		w3_sw360.call("configure", w3_sw360_rec, w3_defaults, 2)
+		var w3_swivel_ok: bool = is_equal_approx(float(w3_sw90.get("swivel_angle_deg")), 45.0) and is_equal_approx(float(w3_sw90.get("swivel_seconds")), 1.0) and is_equal_approx(float(w3_sw360.get("swivel_seconds")), 10.0) and str(w3_sw360.get("swivel_type")).find("ThreeSixty") >= 0
+		w3_sw90.free()
+		w3_sw360.free()
+		fails += _w3_check(w3_far_ok and w3_near_ok and w3_in_fov and w3_out_fov and w3_interval_ok and w3_proj_ok and w3_dead_ok and w3_trig_off and w3_trig_on and w3_swivel_ok,
+			"70.6 turret: 12 m/15 deg (11.9 yes, 12.1 no; 2.8 m in, 3.0 m out), 0.5 s interval, 40 m/s 10 dmg 30 s projectile, 150 hp stops firing; _180_Triggered off -> linked plate on",
+			"70.6 turret failed: far=%s near=%s fov=%s/%s interval=%s proj=%s dead=%s trig=%s/%s" % [w3_far_ok, w3_near_ok, w3_in_fov, w3_out_fov, w3_interval_ok, w3_proj_ok, w3_dead_ok, w3_trig_off, w3_trig_on])
+		w3_turret.queue_free()
+		w3_t_player.queue_free()
+		w3_trig.queue_free()
+		w3_act_plate.queue_free()
+		w3_act_player.queue_free()
+		if w3_proj != null and is_instance_valid(w3_proj):
+			w3_proj.queue_free()
+		await process_frame
+
+		# 70.7 camera: 2.0 s alarm (FTUE 0.25 s), 25 m guard_alert noise;
+		# a guard at 20 m reacts, one at 26 m does not.
+		var w3_eye_rec: Dictionary = w3_rec_by_id.get("guildhall/Guildhall_Gameplay:BP_MagicAlarm_LongRange_Narrow_C_0", {}) as Dictionary
+		var w3_eye: Node3D = w3_eye_scr.new() as Node3D
+		root.add_child(w3_eye)
+		w3_eye.call("configure", w3_eye_rec, w3_defaults, 1)
+		w3_eye.global_position = Vector3(0.0, 0.0, 500.0)
+		w3_eye.set("swivel_seconds", 0.0) # isolate the authored alarm delay from the authored sweep
+		var w3_c_player: W3MockPlayer = W3MockPlayer.new()
+		root.add_child(w3_c_player)
+		w3_c_player.global_position = Vector3(5.0, 0.0, 500.0)
+		w3_eye.call("set_player", w3_c_player)
+		var w3_noises: Array = []
+		var w3_noise_cb := func(_o: Vector3, loud: float, _s: Node, tag: String) -> void:
+			if tag == "guard_alert":
+				w3_noises.append(loud)
+		if nb != null:
+			nb.connect("noise_emitted", w3_noise_cb)
+		w3_eye.call("tick", 1.9)
+		var w3_eye_before: int = int(w3_eye.get("alarms"))
+		w3_eye.call("tick", 0.11)
+		var w3_eye_after: int = int(w3_eye.get("alarms"))
+		if nb != null and nb.is_connected("noise_emitted", w3_noise_cb):
+			nb.disconnect("noise_emitted", w3_noise_cb)
+		var w3_eye_ok: bool = w3_eye_before == 0 and w3_eye_after == 1 and is_equal_approx(float(w3_eye.get("alarm_delay_s")), 2.0) and w3_noises.size() == 1 and is_equal_approx(float(w3_noises[0]), 25.0)
+		var w3_eye_n: Node3D = w3_eye_scr.new() as Node3D
+		w3_eye_n.call("configure", w3_eye_rec, w3_defaults, 2)
+		var w3_eye_h: Node3D = w3_eye_scr.new() as Node3D
+		w3_eye_h.call("configure", w3_eye_rec, w3_defaults, 3)
+		var w3_eye_diff_ok: bool = is_equal_approx(float(w3_eye_n.get("alarm_delay_s")), 1.0) and is_equal_approx(float(w3_eye_h.get("alarm_delay_s")), 0.2)
+		w3_eye_n.free()
+		w3_eye_h.free()
+		w3_eye_ok = w3_eye_ok and w3_eye_diff_ok
+		var w3_ftue_rec: Dictionary = {}
+		for w3_fr: Variant in (((w3_maps.get("ftue", {}) as Dictionary).get("devices", [])) as Array):
+			if w3_fr is Dictionary and str((w3_fr as Dictionary).get("family", "")) == "alarm_eye":
+				w3_ftue_rec = w3_fr
+				break
+		var w3_ftue: Node3D = w3_eye_scr.new() as Node3D
+		root.add_child(w3_ftue)
+		w3_ftue.call("configure", w3_ftue_rec, w3_defaults, 1)
+		w3_ftue.global_position = Vector3(0.0, 0.0, 1000.0)
+		w3_ftue.set("swivel_seconds", 0.0)
+		var w3_f_player: W3MockPlayer = W3MockPlayer.new()
+		root.add_child(w3_f_player)
+		w3_f_player.global_position = Vector3(5.0, 0.0, 1000.0)
+		w3_ftue.call("set_player", w3_f_player)
+		w3_ftue.call("tick", 0.2)
+		var w3_ftue_before: int = int(w3_ftue.get("alarms"))
+		w3_ftue.call("tick", 0.06)
+		var w3_ftue_ok: bool = w3_ftue_before == 0 and int(w3_ftue.get("alarms")) == 1 and is_equal_approx(float(w3_ftue.get("alarm_delay_s")), 0.25)
+		# Guards on the existing NoiseBus hearing path.
+		var w3_guard_scr: GDScript = load("res://src/ai/guard_ai.gd") as GDScript
+		var w3_g20: CharacterBody3D = w3_guard_scr.new() as CharacterBody3D
+		root.add_child(w3_g20)
+		w3_g20.global_position = Vector3(20.0, 0.0, 500.0)
+		await process_frame
+		var w3_guard_mask: int = int(w3_g20.collision_mask)
+		w3_eye.call("reset_alarm")
+		w3_eye.call("tick", 2.1)
+		var w3_g20_state: int = int(w3_g20.get("state"))
+		w3_g20.queue_free()
+		await process_frame
+		var w3_g26: CharacterBody3D = w3_guard_scr.new() as CharacterBody3D
+		root.add_child(w3_g26)
+		w3_g26.global_position = Vector3(26.0, 0.0, 500.0)
+		await process_frame
+		w3_eye.call("reset_alarm")
+		w3_eye.call("tick", 2.1)
+		var w3_g26_state: int = int(w3_g26.get("state"))
+		w3_g26.queue_free()
+		await process_frame
+		var w3_camera_ok: bool = w3_eye_ok and w3_ftue_ok and w3_g20_state == 2 and w3_g26_state == 0
+		fails += _w3_check(w3_camera_ok,
+			"70.7 camera: 2.0 s alarm (FTUE 0.25 s), 25 m guard_alert; guard 20 m -> ALERTED, guard 26 m -> NEUTRAL; guard mask has no ward bit (%d)" % w3_guard_mask,
+			"70.7 camera failed: eye=%s ftue=%s g20=%d g26=%d" % [w3_eye_ok, w3_ftue_ok, w3_g20_state, w3_g26_state])
+		w3_eye.queue_free()
+		w3_c_player.queue_free()
+		w3_ftue.queue_free()
+		w3_f_player.queue_free()
+		await process_frame
+
+		# 70.8 wards: blocker on bit 4 blocks the player but not a guard;
+		# slow applies 0.25x/6 s and 50 magic once with 1 s immunity.
+		var w3_block_rec: Dictionary = w3_rec_by_id.get("guildhall/Guildhall_Gameplay:BP_WardZone_Blocker_C_47", {}) as Dictionary
+		var w3_slow_rec: Dictionary = w3_rec_by_id.get("guildhall/Guildhall_Gameplay:BP_WardZone_Slow_C_12", {}) as Dictionary
+		var w3_block: Node3D = w3_ward_scr.new() as Node3D
+		var w3_slow: Node3D = w3_ward_scr.new() as Node3D
+		root.add_child(w3_block)
+		root.add_child(w3_slow)
+		w3_block.call("configure", w3_block_rec, w3_defaults, 2)
+		w3_slow.call("configure", w3_slow_rec, w3_defaults, 2)
+		w3_block.global_position = Vector3(200.0, 0.0, 0.0)
+		w3_slow.global_position = Vector3(300.0, 0.0, 0.0)
+		var w3_ward_init_ok: bool = not bool(w3_block.get("active")) and not bool(w3_slow.get("active"))
+		var w3_act_plate2: Area3D = w3_plate_scr.new() as Area3D
+		root.add_child(w3_act_plate2)
+		w3_act_plate2.call("configure", w3_plate_rec, w3_defaults, 2)
+		w3_act_plate2.global_position = Vector3(400.0, 0.0, 0.0)
+		var w3_w_player: W3MockPlayer = W3MockPlayer.new()
+		root.add_child(w3_w_player)
+		w3_w_player.global_position = Vector3(400.0, 0.0, 0.0)
+		w3_act_plate2.call("set_player", w3_w_player)
+		w3_act_plate2.call("set_action_targets", [w3_block, w3_slow])
+		w3_act_plate2.call("tick", 1.6)
+		var w3_ward_active_ok: bool = bool(w3_block.get("active")) and bool(w3_slow.get("active"))
+		var w3_block_body: StaticBody3D = w3_block.get("blocker_body") as StaticBody3D
+		var w3_block_shape: CollisionShape3D = w3_block_body.get_node_or_null("WardBox") as CollisionShape3D
+		var w3_block_geo_ok: bool = w3_block_body != null and w3_block_shape != null and w3_block_body.collision_layer == 16 and (w3_block_shape.shape as BoxShape3D).size.is_equal_approx(Vector3(0.3, 4.5, 3.0)) and (w3_block_shape as CollisionShape3D).position.is_equal_approx(Vector3(0.0, 2.25, 0.0))
+		await physics_frame
+		await physics_frame
+		var w3_pmover: CharacterBody3D = CharacterBody3D.new()
+		w3_pmover.collision_layer = 2
+		w3_pmover.collision_mask = 1 | 4 | 16
+		var w3_pcap := CollisionShape3D.new()
+		var w3_pcap_shape := CapsuleShape3D.new()
+		w3_pcap_shape.radius = 0.3
+		w3_pcap_shape.height = 1.78
+		w3_pcap.shape = w3_pcap_shape
+		w3_pcap.position = Vector3(0.0, 0.89, 0.0)
+		w3_pmover.add_child(w3_pcap)
+		root.add_child(w3_pmover)
+		w3_pmover.global_position = Vector3(200.0, 0.2, 1.8)
+		await physics_frame
+		var w3_p_hit: KinematicCollision3D = w3_pmover.move_and_collide(Vector3(0.0, 0.0, -3.6), true)
+		w3_pmover.queue_free()
+		await process_frame
+		var w3_gmover: CharacterBody3D = CharacterBody3D.new()
+		w3_gmover.collision_layer = 4
+		w3_gmover.collision_mask = 1 | 2
+		var w3_gcap := CollisionShape3D.new()
+		var w3_gcap_shape := CapsuleShape3D.new()
+		w3_gcap_shape.radius = 0.3
+		w3_gcap_shape.height = 1.78
+		w3_gcap.shape = w3_gcap_shape
+		w3_gcap.position = Vector3(0.0, 0.89, 0.0)
+		w3_gmover.add_child(w3_gcap)
+		root.add_child(w3_gmover)
+		w3_gmover.global_position = Vector3(200.0, 0.2, 1.8)
+		await physics_frame
+		var w3_g_hit: KinematicCollision3D = w3_gmover.move_and_collide(Vector3(0.0, 0.0, -3.6), true)
+		w3_gmover.queue_free()
+		await process_frame
+		var w3_block_ok: bool = w3_ward_init_ok and w3_ward_active_ok and w3_block_geo_ok and w3_p_hit != null and w3_g_hit == null
+		# Slow ward: enter once, damage 50, multiplier 0.25/6 s, immunity.
+		w3_w_player.global_position = Vector3(300.0, 0.0, 0.0)
+		w3_w_player.health = 300.0
+		w3_slow.call("set_player", w3_w_player)
+		w3_slow.call("tick", 0.1)
+		var w3_slow_applied1: int = int(w3_slow.get("applied_count"))
+		var w3_slow_damage: int = int(w3_slow.get("damage_applied"))
+		var w3_slow_hp: float = w3_w_player.health
+		w3_slow.call("tick", 0.5)
+		var w3_slow_applied2: int = int(w3_slow.get("applied_count"))
+		var w3_slow_calls_ok: bool = w3_w_player.slow_calls.size() == 1 and is_equal_approx(float(w3_w_player.slow_calls[0][0]), 0.25) and is_equal_approx(float(w3_w_player.slow_calls[0][1]), 6.0)
+		var w3_thief_scr: GDScript = load("res://src/player/thief_character.gd") as GDScript
+		var w3_thief: CharacterBody3D = w3_thief_scr.new() as CharacterBody3D
+		var w3_thief_base: float = float(w3_thief.call("effective_speed", 3.6))
+		w3_thief.call("apply_ward_slow", 0.25, 6.0)
+		var w3_thief_slow: float = float(w3_thief.call("effective_speed", 3.6))
+		w3_thief.call("_tick_ward_slow", 6.1)
+		var w3_thief_back: float = float(w3_thief.call("effective_speed", 3.6))
+		w3_thief.free()
+		var w3_slow_ok: bool = w3_slow_applied1 == 1 and w3_slow_damage == 1 and is_equal_approx(w3_slow_hp, 250.0) and w3_slow_applied2 == 1 and w3_slow_calls_ok and is_equal_approx(w3_thief_base, 3.6) and is_equal_approx(w3_thief_slow, 0.9) and is_equal_approx(w3_thief_back, 3.6) and int((w3_thief_scr.get_script_constant_map() as Dictionary).get("WARD_BLOCKER_LAYER", -1)) == 16 and (w3_guard_mask & 16) == 0
+		fails += _w3_check(w3_block_ok and w3_slow_ok,
+			"70.8 wards: initially inactive; linked plate activates; blocker layer bit4/16 size (0.3,4.5,3.0) centre y=2.25 blocks player mask, guard passes; slow 0.25x for 6 s + 50 magic once (hp 300->250), 1 s immunity; thief hook 3.6->0.9->3.6",
+			"70.8 wards failed: init=%s active=%s geo=%s block=%s/%s slow=%d/%d hp=%.1f calls=%s thief=%.2f/%.2f/%.2f" % [w3_ward_init_ok, w3_ward_active_ok, w3_block_geo_ok, w3_p_hit != null, w3_g_hit == null, w3_slow_applied1, w3_slow_damage, w3_slow_hp, w3_w_player.slow_calls, w3_thief_base, w3_thief_slow, w3_thief_back])
+		w3_block.queue_free()
+		w3_slow.queue_free()
+		w3_act_plate2.queue_free()
+		w3_w_player.queue_free()
+		await process_frame
+
+		# Deferred families stay authored markers, never deleted or faked.
+		var w3_deferred: Array = w3_layer.call("deferred_families") as Array
+		var w3_deferred_ok: bool = w3_deferred.has("goo_pipe") and w3_deferred.has("vault_door") and w3_deferred.has("junction")
+		fails += _w3_check(w3_deferred_ok,
+			"70.9 deferred families remain authored data-only markers: " + str(w3_deferred),
+			"70.9 deferred family marker list unexpected: " + str(w3_deferred))
+		w3_layer.queue_free()
+		await process_frame
 
 	# P2-6 fixture restore (see boot snapshot): leave no mutated autoload
 	# state behind for the next run or embedding harness.
@@ -5512,6 +6018,32 @@ func _entry_texs(entry: Dictionary) -> Dictionary:
 	return {}
 
 
+## W3 suite helper: count a check and print a PASS/FAIL line.
+func _w3_check(cond: bool, ok_msg: String, fail_msg: String) -> int:
+	if cond:
+		print("PASS: ", ok_msg)
+		return 0
+	printerr("FAIL: ", fail_msg)
+	return 1
+
+
+## W3 suite helper: authored column-major basis from a devices_runtime record.
+func _w3_basis_from_rec(rec: Dictionary) -> Basis:
+	var b_v: Variant = rec.get("basis", [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0])
+	var b: Array = b_v as Array if b_v is Array else [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+	return Basis(
+		Vector3(float(b[0]), float(b[3]), float(b[6])),
+		Vector3(float(b[1]), float(b[4]), float(b[7])),
+		Vector3(float(b[2]), float(b[5]), float(b[8]))
+	)
+
+
+## W3 suite helper: place a mock and return it for can_see() calls.
+func _w3_at(node: Node3D, pos: Vector3) -> Node3D:
+	node.global_position = pos
+	return node
+
+
 ## P1-9(e) helper: collect every *.tatlevel.json under a res:// dir.
 func _p1_collect_json(dir_path: String, out: Array) -> void:
 	var dir: DirAccess = DirAccess.open(dir_path)
@@ -5530,6 +6062,28 @@ func _p1_collect_json(dir_path: String, out: Array) -> void:
 			out.append(full)
 		fname = dir.get_next()
 	dir.list_dir_end()
+
+
+## W3 device suite mocks: a body with the authored standing/crouch heights and
+## the damage/slow methods detectors and wards call.
+class W3MockPlayer extends CharacterBody3D:
+	var is_crouching: bool = false
+	var health: float = 300.0
+	var slow_calls: Array = []
+	func body_height_m() -> float:
+		return 1.0 if is_crouching else 1.78
+	func take_damage(amount: float, _source: String = "") -> void:
+		health = maxf(0.0, health - amount)
+	func apply_ward_slow(multiplier: float, seconds: float) -> void:
+		slow_calls.append([multiplier, seconds])
+		set_meta("speed_multiplier", multiplier)
+
+
+## W3 linked-action mock.
+class W3MockAction extends Node:
+	var hits: int = 0
+	func activate_from(_source: Node = null) -> void:
+		hits += 1
 
 
 ## P1-7 mock pickup interactor: exposes the health/max_health/charges

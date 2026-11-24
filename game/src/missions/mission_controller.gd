@@ -9,6 +9,7 @@ const GuardScript := preload("res://src/ai/guard_ai.gd")
 const LootScript := preload("res://src/interact/loot_item.gd")
 const LootContainerScript := preload("res://src/interact/loot_container.gd")
 const SwingingDoorScript := preload("res://src/interact/swinging_door.gd")
+const DeviceLayerScript := preload("res://src/devices/device_layer.gd")
 const WorldPickupScript := preload("res://src/interact/world_pickup.gd")
 const CivilianScript := preload("res://src/ai/civilian_npc.gd")
 const DoorScript := preload("res://src/interact/lockable_door.gd")
@@ -575,6 +576,7 @@ func start_contract(order: int) -> void:
 		_spawn_escape(ue_level_data.get("escape_points", []), anchor)
 	_spawn_spawner_content(ue_level_data)
 	_spawn_swinging_doors(ue_level_data)
+	_spawn_devices()
 
 	if hud.has_method("set_contract_info"):
 		hud.set_contract_info(contract_info)
@@ -3648,6 +3650,27 @@ func _spawn_swinging_doors(stats: Dictionary) -> void:
 		count += 1
 	if count > 0:
 		print("TAT-2 swinging doors: ", count)
+
+
+## Authored device runtime layer (tools/parse_devices.py output). Spawns one
+## node per device of the active map after the real doors; the layer owns its
+## own 10 Hz tick and power/action graph resolution. Data-only families stay
+## deterministic markers until their wave lands.
+func _spawn_devices() -> void:
+	var layer: Node3D = DeviceLayerScript.new() as Node3D
+	layer.name = "DeviceLayer"
+	add_child(layer)
+	var count: int = int(layer.call("spawn_for_map", GameState.active_map_id, player, GameState.difficulty))
+	if count > 0:
+		var parts: Array[String] = []
+		var counts_v: Variant = layer.get("family_counts")
+		if counts_v is Dictionary:
+			var counts: Dictionary = counts_v as Dictionary
+			var keys: Array = counts.keys()
+			keys.sort()
+			for key: Variant in keys:
+				parts.append("%s=%d" % [str(key), int(counts[key])])
+		print("TAT-2 authored devices: ", count, " (", ", ".join(parts), ")")
 
 
 ## P2 escape grounding: explicit floor raycast with a hit flag (unlike

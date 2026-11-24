@@ -37,6 +37,14 @@ const ZIPWIRE_CABLE_MAT: String = "/Game/Art/Environment/Props/WiringKit/MI_Wire
 
 const STAND_HEAD_HEIGHT: float = 1.66875
 const CROUCH_HEAD_HEIGHT: float = 0.88875
+## Authored capsule heights used by crouch and by the device body-segment
+## checks (security_beam.gd / ward_zone.gd). Standing is the built capsule
+## height; crouch is the authored 1.0 m crouched capsule.
+const BODY_HEIGHT_STANDING: float = 1.78
+const BODY_HEIGHT_CROUCH: float = 1.0
+## Ward blocker collision bit (bit 4, value 16). Only the thief's mask gains
+## it; guards (4) and civilians (8) keep their authored masks and walk through.
+const WARD_BLOCKER_LAYER: int = 16
 # UE eye heights are relative to the capsule centre (Spider CDO BaseEyeHeight
 # 77.875 cm over capsule half-height 89 cm; crouched 38.875 cm over 50 cm):
 # stand = 0.89 + 0.77875, crouch = 0.50 + 0.38875.
@@ -110,6 +118,7 @@ signal interacted(target: Node)
 signal downed_started(seconds: float)
 signal downed()
 signal revived() # P2 hygiene: revive previously emitted only health_changed; co-op help-up now has a downed-cleared counterpart.
+signal speed_multiplier_changed(multiplier: float)
 
 @export var walk_speed: float = 3.6
 @export var sprint_speed: float = 5.4
@@ -123,6 +132,11 @@ var health: float = 300.0
 var max_stamina: float = 260.0
 var stamina: float = 260.0
 var stamina_regen: float = 12.0
+## Ward slow hook: every locomotion speed assignment is multiplied by this
+## value. 1.0 is the untouched authored behaviour; BP_WardZone_Slow sets 0.25
+## for 6 s through apply_ward_slow().
+var speed_multiplier: float = 1.0
+var _ward_slow_seconds: float = 0.0
 
 # Real combat/health tuning (game/data/generated/gameplay/*.json; fallbacks are
 # the extracted values and apply only when the JSON is unreadable).
@@ -322,7 +336,7 @@ var _light_sector_refresh: float = 0.0
 func _ready() -> void:
 	add_to_group("player")
 	collision_layer = 2
-	collision_mask = 1 | 4
+	collision_mask = 1 | 4 | WARD_BLOCKER_LAYER
 	_apply_tuning()
 	_build_body()
 	if not OS.has_feature("headless") and DisplayServer.get_name() != "headless" and not MobileProfile.is_mobile():
@@ -664,7 +678,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		is_crouching = not is_crouching
 		var cap: CapsuleShape3D = col_shape.shape as CapsuleShape3D
 		if cap != null:
-			cap.height = 1.0 if is_crouching else 1.78
+			cap.height = BODY_HEIGHT_CROUCH if is_crouching else BODY_HEIGHT_STANDING
 			col_shape.position.y = cap.height * 0.5
 	elif event.is_action_pressed("interact"):
 		# Defer when a hold-secondary is offered; otherwise interact on press.
@@ -986,6 +1000,7 @@ func _physics_process(delta: float) -> void:
 	if GameState.state != "playing":
 		_update_zipwire_cable()
 		return
+	_tick_ward_slow(delta)
 	ability_cooldown = maxf(0.0, ability_cooldown - delta)
 	pickpocket_cooldown = maxf(0.0, pickpocket_cooldown - delta)
 	_wire_arrival_grace = maxf(0.0, _wire_arrival_grace - delta)
@@ -1123,6 +1138,8 @@ func _physics_process(delta: float) -> void:
 		speed = crouch_speed
 	elif is_sprinting:
 		speed = sprint_speed
+	speed *= clampf(speed_multiplier, 0.0, 4.0)
+	if is_sprinting:
 		# P2 absf sign check: CT_StaminaSystem.Sprint stores a drain (<= 0).
 		# absf would silently turn a future positive regen row into a drain.
 		var raw_drain: float = GameData.eval_curve("CT_StaminaSystem", "StaminaPerSecond.Sprint", 1.0, -5.0)
@@ -1256,6 +1273,39 @@ func _emit_stamina_if_changed() -> void:
 	if absf(stamina - _last_stamina_emitted) > 0.01:
 		_last_stamina_emitted = stamina
 		stamina_changed.emit(stamina, max_stamina)
+
+
+## BP_WardZone_Slow: 0.25x locomotion for 6 s. The multiplier is applied once
+## per tick where the controller picks walk/crouch/sprint speed, so the hook
+## cannot be bypassed by a later speed assignment. 1.0 keeps the authored
+## behaviour untouched.
+func apply_ward_slow(multiplier: float, seconds: float) -> void:
+	speed_multiplier = clampf(multiplier, 0.0, 4.0)
+	_ward_slow_seconds = maxf(_ward_slow_seconds, seconds)
+	speed_multiplier_changed.emit(speed_multiplier)
+
+
+func _tick_ward_slow(delta: float) -> void:
+	if _ward_slow_seconds <= 0.0:
+		return
+	_ward_slow_seconds = maxf(0.0, _ward_slow_seconds - delta)
+	if _ward_slow_seconds <= 0.0 and not is_equal_approx(speed_multiplier, 1.0):
+		speed_multiplier = 1.0
+		speed_multiplier_changed.emit(speed_multiplier)
+
+
+## Authored body height used by the device layer's detector/ward geometry.
+func body_height_m() -> float:
+	return BODY_HEIGHT_CROUCH if is_crouching else BODY_HEIGHT_STANDING
+
+
+## Test/QA seam: effective locomotion speed after the ward multiplier.
+func effective_speed(base_speed: float) -> float:
+	return base_speed * clampf(speed_multiplier, 0.0, 4.0)
+
+
+func ward_slow_remaining() -> float:
+	return _ward_slow_seconds
 
 
 ## P2 per-tick signal spam: disguise_changed fires only when integrity or state moved.

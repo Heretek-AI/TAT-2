@@ -2604,8 +2604,9 @@ func _request_set_names(requests: Array[Dictionary]) -> String:
 # subset real-map probe run the same code. Pins come from
 # game/data/expansion/personal_spider.json through PersonalQuest.spawn_plan();
 # grounding, authored fallbacks, dedupe and the letter/Owl callbacks are owned
-# there. This controller only supplies the mission host/HUD and republishes the
-# records as `personal_quest_actors` for QA.
+# there. This controller only supplies the mission host/HUD, the live
+# `GameState.thief_id` binding (a Chameleon deploy spawns nothing) and republishes
+# the records as `personal_quest_actors` for QA.
 
 var _personal_quest_spawner: Node = null
 
@@ -2621,7 +2622,7 @@ func _personal_spawner() -> Node:
 
 func _spawn_personal_quest_actors() -> void:
 	var spawner: Node = _personal_spawner()
-	spawner.call("spawn_for_map", GameState.active_map_id)
+	spawner.call("spawn_for_map", GameState.active_map_id, GameState.thief_id)
 	_sync_personal_actors(spawner)
 
 
@@ -2629,7 +2630,7 @@ func _spawn_personal_quest_actors() -> void:
 ## instead of waiting for the next deploy.
 func on_personal_quest_owl_taken() -> void:
 	var spawner: Node = _personal_spawner()
-	spawner.call("on_owl_taken")
+	spawner.call("on_owl_taken", GameState.thief_id)
 	_sync_personal_actors(spawner)
 
 

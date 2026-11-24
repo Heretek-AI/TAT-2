@@ -9,12 +9,13 @@ extends SceneTree
 ##   readable / quest_item keep the authored pin y (no floor drop);
 ##   npc / info_npc feet go to floor + 0.02 m;
 ##   XZ always comes from the pin;
-##   a quest-item floor fallback only happens when it is explicitly allowed
-##   AND the pin has no authored surface.
+##   a quest item never falls back to the floor (W4O removed the invented y).
 ##
 ## The floor constants below are the W2P static-scan surface tops
-## (`docs/reports/w2p-subset-probe.md`), not invented values. The real-map
-## subset probe is still the authority for collision and the Owl AABB support.
+## (`docs/reports/w2p-subset-probe.md`), not invented values. The Owl's authored
+## support is the Vault `SM_Manor_BookcasePedestal` (W4O RE evidence, world top
+## 36.4645, pin 36.4655). The real-map subset probe is still the authority for
+## collision and that pedestal surface.
 ##
 ## Run alone (no GPU, thermal rule still applies):
 ##
@@ -33,6 +34,11 @@ const FLOOR_COURIER: float = 26.000
 const FLOOR_INFORMANT: float = 10.050
 const CLEARANCE: float = 0.02
 const TOL: float = 0.0001
+## W4O RE evidence: `SM_Manor_BookcasePedestal` (Guildhall_Gameplay) world top
+## under the Owl pin (~36.4645). The pin is 1 mm above it; the walk floor is
+## 0.965 m below. The real-map subset probe gates the same value.
+const PEDESTAL_TOP_Y: float = 36.4645
+const PEDESTAL_TOL_M: float = 0.10
 
 var fails: int = 0
 var checks: int = 0
@@ -52,13 +58,17 @@ func _check(cond: bool, ok: String, fail: String = "") -> void:
 
 
 func _anchor_pin(anchors: Array, anchor_id: String) -> Vector3:
+	return SpawnerScript.vec3_from(_anchor_record(anchors, anchor_id).get("pos", []))
+
+
+func _anchor_record(anchors: Array, anchor_id: String) -> Dictionary:
 	for rec_v: Variant in anchors:
 		if not (rec_v is Dictionary):
 			continue
 		var rec: Dictionary = rec_v as Dictionary
 		if str(rec.get("id", "")) == anchor_id:
-			return SpawnerScript.vec3_from(rec.get("pos", []))
-	return Vector3.ZERO
+			return rec
+	return {}
 
 
 func _placed(result: Dictionary) -> Vector3:
@@ -110,26 +120,33 @@ func _run() -> void:
 		"Owl is not floor-grounded at floor+0.02",
 		"Owl y=%.4f is floor+0.02" % _placed(owl_r).y)
 	_check(_same_xz(owl_r, owl), "Owl keeps the authored XZ")
-	# An explicit fallback allowance never overrides an authored surface.
-	var owl_forced: Dictionary = SpawnerScript.placement_position("quest_item", owl, FLOOR_OWL, true)
-	_check(_source(owl_forced) == SpawnerScript.PLACE_PIN and absf(_placed(owl_forced).y - owl.y) <= TOL,
-		"quest_item with the fallback allowed still keeps its authored pin")
+	# The authored surface is the Vault bookcase pedestal, not the walk floor.
+	_check(absf(owl.y - PEDESTAL_TOP_Y) <= PEDESTAL_TOL_M,
+		"Owl pin rests on the SM_Manor_BookcasePedestal top (%.4f +/- %.2f m)" % [PEDESTAL_TOP_Y, PEDESTAL_TOL_M],
+		"Owl pin y=%.4f vs pedestal top %.4f (tolerance %.2f)" % [owl.y, PEDESTAL_TOP_Y, PEDESTAL_TOL_M])
 
-	# --- quest_item floor fallback is explicit only -----------------------
+	# --- quest_item has no invented floor fallback (W4O) ------------------
 	var owl_no_surface := Vector3(owl.x, NAN, owl.z)
 	var owl_quiet: Dictionary = SpawnerScript.placement_position("quest_item", owl_no_surface, FLOOR_OWL)
-	_check(owl_quiet.is_empty(), "quest_item with no authored surface does not invent a floor position by default",
-		"quest_item fell back silently: %s" % str(owl_quiet))
-	var owl_fb: Dictionary = SpawnerScript.placement_position("quest_item", owl_no_surface, FLOOR_OWL, true)
-	_check(not owl_fb.is_empty() and _source(owl_fb) == SpawnerScript.PLACE_FLOOR_FALLBACK,
-		"quest_item floor fallback is explicit (y_source=floor_fallback)",
-		"quest_item explicit fallback=%s" % str(owl_fb))
-	_check(absf(_placed(owl_fb).y - (FLOOR_OWL + CLEARANCE)) <= TOL and _same_xz(owl_fb, owl),
-		"explicit quest_item fallback is floor+0.02 with the authored XZ",
-		"fallback pos=%s" % _placed(owl_fb))
-	var owl_no_floor: Dictionary = SpawnerScript.placement_position("quest_item", owl_no_surface, NAN, true)
-	_check(owl_no_floor.is_empty(), "quest_item fallback needs a floor hit as well",
+	_check(owl_quiet.is_empty(), "quest_item with no authored surface is refused (no floor fallback)",
+		"quest_item invented a position: %s" % str(owl_quiet))
+	var owl_no_floor: Dictionary = SpawnerScript.placement_position("quest_item", owl_no_surface, NAN)
+	_check(owl_no_floor.is_empty(), "quest_item with neither surface nor floor is refused",
 		"quest_item invented a position with neither surface nor floor: %s" % str(owl_no_floor))
+	_check(not (SpawnerScript.get_script_constant_map() as Dictionary).has("PLACE_FLOOR_FALLBACK"),
+		"the dead floor-fallback source is gone", "PLACE_FLOOR_FALLBACK still exists")
+
+	# --- authored yaw is data, applied only to NPCs by the settle path ----
+	var courier_yaw: Variant = _anchor_record(anchors, "courier").get("yaw_deg", null)
+	var informant_yaw: Variant = _anchor_record(anchors, "informant").get("yaw_deg", null)
+	_check(courier_yaw is float or courier_yaw is int, "courier carries a TAT-2 authored yaw",
+		"courier yaw_deg=%s" % str(courier_yaw))
+	_check(informant_yaw is float or informant_yaw is int, "04 informant carries a TAT-2 authored yaw",
+		"informant yaw_deg=%s" % str(informant_yaw))
+	_check(_anchor_record(anchors, "owl").get("yaw_deg", null) == null,
+		"Owl anchor has no yaw (its visual root spins)")
+	_check(_anchor_record(anchors, "library_note").get("yaw_deg", null) == null,
+		"Library note anchor has no yaw (flat on the table)")
 
 	# --- readable (Library note): authored pin, no vertical drop ----------
 	var note_r: Dictionary = SpawnerScript.placement_position("readable", note, FLOOR_LETTER)
@@ -139,7 +156,7 @@ func _run() -> void:
 	_check(absf(_placed(note_r).y - note.y) <= TOL and _same_xz(note_r, note),
 		"letter y == authored pin y (%.4f) with the authored XZ" % note.y,
 		"letter pos=%s expected pin=%s" % [_placed(note_r), note])
-	var note_no_surface: Dictionary = SpawnerScript.placement_position("readable", Vector3(note.x, NAN, note.z), FLOOR_LETTER, true)
+	var note_no_surface: Dictionary = SpawnerScript.placement_position("readable", Vector3(note.x, NAN, note.z), FLOOR_LETTER)
 	_check(note_no_surface.is_empty(), "readable never falls back to the floor",
 		"readable invented a floor position: %s" % str(note_no_surface))
 

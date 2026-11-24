@@ -6811,6 +6811,17 @@ func _initialize() -> void:
 	else:
 		print("PASS: 87 Spider personal chain runtime (deploy/hub/plan, 03/04 lines and facts, Owl not loot, dialogue modal, save persistence)")
 
+	# 88. W4O Spider settle path: the real spawn_anchor()/_settle_node() applied
+	# to synthetic readable/quest-item/NPC records on one transformed host, plus
+	# the authored yaw and the Chameleon zero-actor/no-record-mutation guard.
+	# No map load: the real-map floor/pedestal gate is the subset probe.
+	var c88_problems: Array[String] = _run_suite88(root)
+	if not c88_problems.is_empty():
+		printerr("FAIL: 88 Spider personal chain settle path: ", c88_problems)
+		fails += 1
+	else:
+		print("PASS: 88 Spider personal chain settle path (world-pin settle, mesh-bottom feet, authored yaw, guards, Chameleon no-op)")
+
 	# 12.6/12.7 process-lifetime caches must not outlive the run.
 	var am_node: Node = root.get_node_or_null("/root/AudioManager")
 	if am_node != null and am_node.has_method("cleanup_on_exit"):
@@ -6858,6 +6869,26 @@ func _run_suite87(host: Node) -> Array[String]:
 			problems.append(str(problem_v))
 	else:
 		problems.append("test_spider_runtime.run(host) returned no problem list")
+	return problems
+
+
+## Suite 88 helper: the settle-path/binding suite (W4O). Same contract as 87.
+func _run_suite88(host: Node) -> Array[String]:
+	var problems: Array[String] = []
+	var script: GDScript = load("res://tests/test_personal_quest_settle.gd") as GDScript
+	if script == null:
+		problems.append("test_personal_quest_settle.gd did not load")
+		return problems
+	var runner: RefCounted = script.new() as RefCounted
+	if runner == null or not runner.has_method("run"):
+		problems.append("test_personal_quest_settle.gd has no run(host)")
+		return problems
+	var out: Variant = runner.call("run", host)
+	if out is Array:
+		for problem_v: Variant in (out as Array):
+			problems.append(str(problem_v))
+	else:
+		problems.append("test_personal_quest_settle.run(host) returned no problem list")
 	return problems
 ## W0a suite helper: long edge from a PNG IHDR (no decode).
 func _w82_png_long_edge(res_path: String) -> int:

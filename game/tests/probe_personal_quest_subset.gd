@@ -27,10 +27,14 @@ extends SceneTree
 ## capsule (r 0.30 / h 1.75) does not overlap world geometry, and a player-eye
 ## LOS ray to the interaction point is clear. Placement is per kind (W3O): the
 ## Library note and the Vault Owl keep the authored pin y (the pin is their
-## authored table/shelf surface, no floor drop), while the courier/informant
-## feet rest on the floor with the shipping 0.02 m clearance. The authored
-## pin-to-surface offset and the mesh AABB bottom are printed as evidence, and
-## a `PQ_PLACE kind=<k> y=<pin|floor>` line is printed for every pin.
+## authored surface: the Library table and the `SM_Manor_BookcasePedestal` top
+## at ~36.4645), while the courier/informant feet rest on the floor with the
+## shipping 0.02 m clearance. `y_source` is asserted from the spawner record,
+## never inferred from the kind. The Owl is gated on its pedestal surface: a pin
+## with no surface within 36.4645 +/- 0.1 fails. NPC feet are accepted anywhere
+## in [floor, floor + clearance + tol] because the body settles with gravity
+## after it is spawned. Authored `yaw_deg` (courier/04 informant) is printed and
+## checked against the node's global facing.
 ##
 ## QA only: run alone under the thermal rule (one Godot process, never beside
 ## another), with an isolated save home so the developer save is untouched:
@@ -85,12 +89,19 @@ const PIN_INFORMANT := Vector3(1.5, 10.1096, 13.0)
 const PIN_XZ_TOL_M: float = 0.001
 ## Authored-pin placement (readable/quest_item) keeps y to this tolerance.
 const PIN_Y_TOL_M: float = 0.01
-## The authored support (table/shelf) must be this close to the pin or the mesh
-## bottom when one is found at the pin.
+## The authored support (table/pedestal) must be this close to the pin or the
+## mesh bottom when one is found at the pin.
 const AUTHORED_SURFACE_TOL_M: float = 0.10
 ## Local authored-surface search window around the pin (the Vault floor sits
 ## 0.965 m below the Owl pin, so it is deliberately outside this window).
 const AUTHORED_SURFACE_WINDOW_M: float = 0.35
+## Vault Owl support: `SM_Manor_BookcasePedestal` in Guildhall_Gameplay sits at
+## (-32, 35.5, -43.997) with a measured world top of ~36.4645 m (RE evidence).
+## The pin (36.4655) rests 1 mm over it. The probe gates the Owl on a surface in
+## this band at the pin XZ; if it is absent the placement is a failure, not a
+## "none passes" notice.
+const PEDESTAL_TOP_Y: float = 36.4645
+const PEDESTAL_TOL_M: float = 0.10
 const SURFACE_FLAT_TOL_M: float = 0.02
 const SURFACE_SAMPLE_M: float = 0.05
 const GROUND_CLEARANCE_M: float = 0.02
@@ -252,16 +263,16 @@ func _los_from_open_side(world: Node3D, surface: Vector3, target: Vector3) -> Di
 	return {"ok": false, "dir": Vector3.ZERO, "reason": ",".join(tried)}
 
 
-## Local authored support at the pin itself (the table/shelf a readable or
-## quest item is authored on), searched only +/-0.35 m around the pin so the
+## Local authored support at the pin itself (the table/pedestal a readable or
+## quest item is authored on), searched only +/- `window` around the pin so the
 ## walk floor far below cannot masquerade as the item's surface.
-func _authored_surface_at(world: Node3D, pin: Vector3) -> Dictionary:
+func _authored_surface_at(world: Node3D, pin: Vector3, window: float) -> Dictionary:
 	var space: PhysicsDirectSpaceState3D = world.get_world_3d().direct_space_state
 	if space == null:
 		return {}
 	var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(
-		pin + Vector3.UP * AUTHORED_SURFACE_WINDOW_M,
-		pin + Vector3.DOWN * AUTHORED_SURFACE_WINDOW_M, 1)
+		pin + Vector3.UP * window,
+		pin + Vector3.DOWN * window, 1)
 	return space.intersect_ray(q)
 
 
@@ -308,37 +319,65 @@ func _check_pin(label: String, rec: Dictionary, expect: Vector3, world: Node3D, 
 		label + " surface flat within +/-%.2f m (max delta %.3f)" % [SURFACE_SAMPLE_M, float(surf.get("delta", 0.0))],
 		"%s surface not flat: delta %.3f" % [label, float(surf.get("delta", 0.0))])
 	# The authored pin is the spawner origin, not the floor (the Library note
-	# sits on a table at its pin; the Owl pin is 0.965 m over the Vault floor).
+	# sits on a table at its pin; the Owl pin rests on the Vault pedestal).
 	print("PQ-SUBSET pin ", label, " authored_y=%.4f surface_y=%.4f offset=%.3f" % [expect.y, hy, expect.y - hy])
 	var kind: String = str(rec.get("kind", ""))
-	var foot: float = pos.y + PersonalQuestSpawnerScript.mesh_bottom(node)
+	var y_source: String = str(rec.get("y_source", ""))
+	var foot: float = pos.y + node.global_transform.basis.y.y * PersonalQuestSpawnerScript.mesh_bottom(node)
+	var yaw_v: Variant = rec.get("yaw_deg", null)
+	var yaw_text: String = ("%.1f" % float(yaw_v)) if (yaw_v is float or yaw_v is int) and is_finite(float(yaw_v)) else "none"
+	print("PQ_PLACE kind=", kind, " y=", y_source, " label=", label, " yaw=", yaw_text,
+		" pin_y=%.4f floor_y=%.4f pos_y=%.4f foot_y=%.4f" % [expect.y, hy, pos.y, foot])
 	if kind == "npc" or kind == "info_npc":
-		print("PQ_PLACE kind=", kind, " y=floor label=", label,
-			" pin_y=%.4f floor_y=%.4f pos_y=%.4f" % [expect.y, hy, pos.y])
-		_check(absf(foot - hy - GROUND_CLEARANCE_M) <= GROUND_TOL_M,
-			label + " mesh rests on the surface (clearance %.2f m)" % GROUND_CLEARANCE_M,
+		_check(y_source == "floor", label + " records y_source=floor",
+			"%s y_source=%s (expected floor)" % [label, y_source])
+		# The NPC settles with gravity after spawn, so its feet may sit
+		# anywhere between the floor and the shipping clearance.
+		_check(foot >= hy - GROUND_TOL_M and foot <= hy + GROUND_CLEARANCE_M + GROUND_TOL_M,
+			label + " mesh rests on the surface (foot in [floor, floor + %.2f m])" % GROUND_CLEARANCE_M,
 			"%s foot=%.4f surface=%.4f clearance=%.4f" % [label, foot, hy, foot - hy])
+		if yaw_v is float or yaw_v is int:
+			var want_yaw: float = deg_to_rad(float(yaw_v))
+			var got_yaw: float = node.global_rotation.y
+			_check(absf(angle_difference(got_yaw, want_yaw)) <= 0.01,
+				label + " node yaw matches the authored record (%.1f deg)" % float(yaw_v),
+				"%s yaw=%.1f deg expected %.1f deg" % [label, rad_to_deg(got_yaw), float(yaw_v)])
+		else:
+			_check(true, label + " has no authored yaw (left at 0)")
 	else:
-		# W3O: readables and quest items keep the authored pin exactly.
-		print("PQ_PLACE kind=", kind, " y=pin label=", label,
-			" pin_y=%.4f floor_y=%.4f pos_y=%.4f" % [expect.y, hy, pos.y])
+		# W3O/W4O: readables and quest items keep the authored pin exactly.
+		_check(y_source == "pin", label + " records y_source=pin",
+			"%s y_source=%s (expected pin)" % [label, y_source])
 		_check(absf(pos.y - expect.y) <= PIN_Y_TOL_M,
 			label + " keeps the authored pin y (%.4f, no floor drop)" % expect.y,
 			"%s y=%.4f expected authored pin y=%.4f (walk floor is %.4f)" % [label, pos.y, expect.y, hy])
 		_check(foot >= hy - GROUND_TOL_M,
 			label + " mesh bottom is not sunk into the walk surface (foot %.4f >= floor %.4f)" % [foot, hy],
 			"%s foot=%.4f is below the walk surface %.4f" % [label, foot, hy])
-		var authored: Dictionary = _authored_surface_at(world, expect)
-		if authored.is_empty():
-			print("PQ-SUBSET authored surface ", label, ": none within +/-%.2f m of the pin (pin %.3f m over the walk surface, foot offset %.3f m)" % [
-				AUTHORED_SURFACE_WINDOW_M, expect.y - hy, foot - hy])
-		else:
-			var ay: float = float((authored.get("position", Vector3.ZERO) as Vector3).y)
-			print("PQ-SUBSET authored surface ", label, " y=%.4f pin_offset=%.4f foot_offset=%.4f" % [
-				ay, expect.y - ay, foot - ay])
-			_check(absf(pos.y - ay) <= AUTHORED_SURFACE_TOL_M or absf(foot - ay) <= AUTHORED_SURFACE_TOL_M,
-				label + " rests on its authored surface y=%.4f" % ay,
-				"%s pin=%.4f foot=%.4f authored surface=%.4f" % [label, pos.y, foot, ay])
+		_check(not is_finite(float(yaw_v)) if (yaw_v is float or yaw_v is int) else true,
+			label + " is not rotated by an authored yaw",
+			"%s yaw_deg=%s but props keep their authored orientation" % [label, str(yaw_v)])
+		# The authored support is required, never optional.
+		var window: float = PEDESTAL_TOL_M if kind == "quest_item" else AUTHORED_SURFACE_WINDOW_M
+		var authored: Dictionary = _authored_surface_at(world, expect, window)
+		if not _check(not authored.is_empty(),
+				label + " has authored support within +/-%.2f m of its pin" % window,
+				label + " has NO authored surface within +/-%.2f m of the pin (pin %.3f m over the walk surface)" % [
+					window, expect.y - hy]):
+			return node
+		var ay: float = float((authored.get("position", Vector3.ZERO) as Vector3).y)
+		var ap: Vector3 = authored.get("position", Vector3.ZERO) as Vector3
+		print("PQ-SUBSET authored surface ", label, " y=%.4f lateral=%.3f pin_offset=%.4f foot_offset=%.4f" % [
+			ay, Vector2(ap.x, ap.z).distance_to(Vector2(expect.x, expect.z)),
+			expect.y - ay, foot - ay])
+		_check(absf(pos.y - ay) <= AUTHORED_SURFACE_TOL_M or absf(foot - ay) <= AUTHORED_SURFACE_TOL_M,
+			label + " rests on its authored surface y=%.4f" % ay,
+			"%s pin=%.4f foot=%.4f authored surface=%.4f" % [label, pos.y, foot, ay])
+		if kind == "quest_item":
+			_check(absf(ay - PEDESTAL_TOP_Y) <= PEDESTAL_TOL_M,
+				label + " support is the BookcasePedestal top (%.4f +/- %.2f m)" % [PEDESTAL_TOP_Y, PEDESTAL_TOL_M],
+				"%s authored support y=%.4f, expected %.4f +/- %.2f (SM_Manor_BookcasePedestal)" % [
+					label, ay, PEDESTAL_TOP_Y, PEDESTAL_TOL_M])
 	var overlaps: int = _standing_overlap(world, Vector3(expect.x, hy + GROUND_CLEARANCE_M, expect.z))
 	_check(overlaps == 0, label + " standing capsule (r0.30/h1.75) free",
 		"%s standing capsule overlaps %d shape(s)" % [label, overlaps])
@@ -396,7 +435,7 @@ func _run() -> void:
 	var gh_world: Node3D = guildhall.get("world") as Node3D
 	var gh_hud: Node = guildhall.get("hud") as Node
 	var gh_spawner: Node = _make_spawner(gh_world, gh_hud)
-	gh_spawner.call("spawn_for_map", "guildhall")
+	gh_spawner.call("spawn_for_map", "guildhall", "spider")
 	var note_rec: Dictionary = gh_spawner.call("find", "library_note") as Dictionary
 	var note: Node = _check_pin("letter", note_rec, PIN_NOTE, gh_world, "[E] Read")
 	_check(note != null and note.is_in_group("interactables"), "letter is interactable")
@@ -412,7 +451,7 @@ func _run() -> void:
 	_check(str(PersonalQuestScript.stage_for("spider")) == "electrotype", "Den return delivers the pending messages", str(hub))
 	var deploy_located: Dictionary = PersonalQuestScript.on_deploy("guildhall")
 	_check(str(PersonalQuestScript.stage_for("spider")) == "located", "next Guildhall deploy locates the Owl", str(deploy_located))
-	gh_spawner.call("spawn_for_map", "guildhall")
+	gh_spawner.call("spawn_for_map", "guildhall", "spider")
 	var owl_rec: Dictionary = gh_spawner.call("find", "owl") as Dictionary
 	var owl: Node = _check_pin("Owl", owl_rec, PIN_OWL, gh_world, "[E] Take Theban Owl")
 	_check(owl != null and not owl.is_in_group("loot"), "Owl is not in the loot group")
@@ -451,7 +490,7 @@ func _run() -> void:
 	var om_world: Node3D = manor.get("world") as Node3D
 	var om_hud: Node = manor.get("hud") as Node
 	var om_spawner: Node = _make_spawner(om_world, om_hud)
-	om_spawner.call("spawn_for_map", "old_manor")
+	om_spawner.call("spawn_for_map", "old_manor", "spider")
 	var inf_rec: Dictionary = om_spawner.call("find", "informant") as Dictionary
 	var informant: Node = _check_pin("informant", inf_rec, PIN_INFORMANT, om_world, "[E] Talk")
 	if informant != null:

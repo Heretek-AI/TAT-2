@@ -361,13 +361,17 @@ static func close_info(thief_id: String = "") -> Dictionary:
 
 # --- Spawn pins ------------------------------------------------------------
 
-## Anchors active for a map at the current stage. Each record is the authored
-## anchor plus `active` (true) and `current_stage`; the runtime is expected to
-## ground the pin the same way loot/civilians are grounded, and to use
-## `fallbacks` only when the primary actor is absent from the loaded scene.
+## Anchors active for a map at the current stage **for one thief**. A
+## non-Spider thief always gets an empty plan, even if its record somehow holds
+## a stage (the record is per thief, the chain is Spider's). Each record is the
+## authored anchor plus `active` (true) and `current_stage`; the runtime grounds
+## the pin and uses `fallbacks` only when the primary actor is absent/occupied.
 ## No position is invented here: every pos is a producer pin.
 static func spawn_plan(map_id: String, thief_id: String = "") -> Array:
-	var current: String = stage_for(thief_id)
+	var thief: String = runtime_thief(thief_id)
+	if thief != character_id():
+		return []
+	var current: String = stage_for(thief)
 	var out: Array = []
 	for anchor_v: Variant in chain().get("anchors", []) as Array:
 		if not (anchor_v is Dictionary):
@@ -375,7 +379,8 @@ static func spawn_plan(map_id: String, thief_id: String = "") -> Array:
 		var anchor: Dictionary = (anchor_v as Dictionary).duplicate(true)
 		if str(anchor.get("map_id", "")) != map_id:
 			continue
-		if not (anchor.get("stages", []) as Array).has(current):
+		var stages_v: Variant = anchor.get("stages", [])
+		if not (stages_v is Array) or not (stages_v as Array).has(current):
 			continue
 		anchor["active"] = true
 		anchor["current_stage"] = current
@@ -383,8 +388,8 @@ static func spawn_plan(map_id: String, thief_id: String = "") -> Array:
 	return out
 
 
-## Convenience: the active pin with a given id, or {} when the beat/map is
-## wrong (e.g. the informant on the Guildhall map).
+## Convenience: the active pin with a given id for a thief, or {} when the
+## beat/map is wrong (e.g. the informant on the Guildhall map, or a non-Spider).
 static func anchor(map_id: String, anchor_id: String, thief_id: String = "") -> Dictionary:
 	for rec_v: Variant in spawn_plan(map_id, thief_id):
 		if str((rec_v as Dictionary).get("id", "")) == anchor_id:

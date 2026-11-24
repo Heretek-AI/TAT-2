@@ -1,5 +1,12 @@
 # W3O — per-kind placement for the Owl, readables and NPCs
 
+> **Superseded by W4O** (`docs/reports/w4o-w3o-remediation.md`). The claim below
+> that "rotation is never touched, so authored yaw/facing survives" was false:
+> the expansion record carried no yaw at all, and `_settle_node()` wrote local
+> positions. W4O adds authored `yaw_deg` for the two NPC anchors, applies it to
+> NPCs only, and settles in world space. The W3O policy itself (pin vs floor)
+> stands.
+
 Wave: W3O (Spider personal-chain placement fix).
 Worktree: `/tmp/opencode/tat2-w2p`. Date: 2026-11-24.
 Base HEAD: `828e6ef` (`test(spider): subset real-map probe for placements and chain`).

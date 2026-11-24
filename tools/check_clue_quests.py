@@ -129,11 +129,15 @@ SPIDER_ANCHORS = {
         "map_id": "guildhall",
         "actor": "BP_Readable_ClueSpawner_Guildhall_C_1",
         "pos": [35.9, 27.0019, -22.728],
+        # W4O: TAT-2 authored facing (UE pins carry no yaw). Applied to NPCs only.
+        "yaw_deg": 90.0,
     },
     "informant": {
         "map_id": "old_manor",
         "actor": "OldManor.Courtyard.C1",
         "pos": [1.5, 10.1096, 13.0],
+        # W4O: TAT-2 authored facing (UE pins carry no yaw). Applied to NPCs only.
+        "yaw_deg": 0.0,
     },
 }
 
@@ -561,6 +565,24 @@ def main() -> int:
             f"anchor {anchor_id} actor", anchor.get("actor"), expected["actor"]
         )
         checker.equal(f"anchor {anchor_id} pos", anchor.get("pos"), expected["pos"])
+        # W4O: authored facing is TAT-2 content and only NPC anchors carry it.
+        if "yaw_deg" in expected:
+            checker.equal(
+                f"anchor {anchor_id} TAT-2 yaw",
+                anchor.get("yaw_deg"),
+                expected["yaw_deg"],
+            )
+            checker.check(
+                f"anchor {anchor_id} yaw note is marked TAT-2",
+                "TAT-2" in str(anchor.get("yaw_note", "")),
+                str(anchor.get("yaw_note", "")),
+            )
+        else:
+            checker.check(
+                f"anchor {anchor_id} has no authored yaw",
+                "yaw_deg" not in anchor,
+                str(anchor.get("yaw_deg")),
+            )
     checker.equal(
         "Owl anchor falls back to the authored Tower spawner",
         [f["actor"] for f in anchors["owl"].get("fallbacks", [])],

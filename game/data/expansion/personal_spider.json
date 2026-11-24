@@ -238,6 +238,8 @@
         -22.728
       ],
       "placement_tag": "CluePlacement.Common.Guildhall.Locations.Lounge",
+      "yaw_deg": 90.0,
+      "yaw_note": "TAT-2 authored facing: yaw 90 turns the courier to face -X, back into the Lounge from its east-edge pin (x 35.9) where the player approaches. UE pins carry no yaw; verify against the loaded interior.",
       "stages": [
         "carrying"
       ],
@@ -268,6 +270,8 @@
         13.0
       ],
       "grounded": true,
+      "yaw_deg": 0.0,
+      "yaw_note": "TAT-2 authored facing: yaw 0 keeps the default -Z forward, toward the Courtyard C1 approach side (the authored fallback guard spots sit at z 12.4-14.0). UE pins carry no yaw; verify against the loaded courtyard.",
       "stages": [
         "delivered"
       ],

@@ -602,8 +602,9 @@ func _t3_24_full_preservation_gate() -> void:
 ## T3-25: guard eye ray must exclude the player's own body. The endpoint sits
 ## inside the player capsule, so without the player RID in the exclude list the
 ## ray self-occludes on layer 2 and every guard is blind (positive acquisition
-## fails). The walled second phase is the negative control: an authored
-## occluder must still hold detection at 0.
+## fails to reach the authored SUSPICIOUS threshold). Negative controls: a wall
+## between them and a second guard's body (non-target layer) must both hold
+## detection at 0, so the ray still respects authored body blocking.
 func _t3_25_guard_sight_self_exclusion() -> void:
 	var arena_d: Dictionary = await h.make_arena()
 	var arena: Node3D = arena_d["arena"] as Node3D
@@ -620,13 +621,15 @@ func _t3_25_guard_sight_self_exclusion() -> void:
 	g.set("patrol_points", [(p as Node3D).global_position])
 	g.look_at((p as Node3D).global_position, Vector3.UP)
 	await h.step_physics(2)
-	await h.step_physics(90)
+	await h.step_physics(240)
 	var det_pos: float = float(g.get("detection"))
 	var state_pos: int = int(g.get("state"))
-	var acquired: bool = det_pos > 0.0 or state_pos != 0
+	# Alertness.SUSPICIOUS == 1; the authored threshold is 15. Long enough to
+	# cross 15, short of the 45 ALERTED gate at this range/light level.
+	var acquired: bool = det_pos >= 15.0 and state_pos == 1
 
-	# Negative occlusion control: a real wall between them must hold 0.
-	h.add_wall_box(arena, Vector3(0.0, 1.5, -6.0), Vector3(8.0, 4.0, 0.5), "T3SightOccluder")
+	# Negative occlusion control 1: a real wall between them must hold 0.
+	var wall: StaticBody3D = h.add_wall_box(arena, Vector3(0.0, 1.5, -6.0), Vector3(8.0, 4.0, 0.5), "T3SightOccluder")
 	g.set("detection", 0.0)
 	g.set("state", 0)
 	g.set("state_timer", 0.0)
@@ -637,11 +640,35 @@ func _t3_25_guard_sight_self_exclusion() -> void:
 	var det_occ: float = float(g.get("detection"))
 	var state_occ: int = int(g.get("state"))
 	var occluded: bool = det_occ == 0.0 and state_occ == 0
+	wall.queue_free()
+	await h.step_physics(2)
+
+	# Negative occlusion control 2: a non-target body on layer 4 (a second
+	# guard standing between them) must still block the ray.
+	var body_block: Node3D = await h.spawn_test_guard(arena, Vector3(0.0, 0.0, -6.0)) as Node3D
+	body_block.set("patrol_speed", 0.0)
+	body_block.set("suspicious_speed", 0.0)
+	body_block.set("chase_speed", 0.0)
+	body_block.set("detection", 0.0)
+	body_block.set("sight_range", 0.0)
+	body_block.set("lose_sight_range", 0.0)
+	body_block.set("patrol_points", [body_block.global_position])
+	g.set("detection", 0.0)
+	g.set("state", 0)
+	g.set("state_timer", 0.0)
+	g.set("_seconds_in_state", 10.0)
+	g.set("_seconds_since_visible", 10.0)
+	await h.step_physics(2)
+	await h.step_physics(40)
+	var det_body: float = float(g.get("detection"))
+	var state_body: int = int(g.get("state"))
+	var body_blocked: bool = det_body == 0.0 and state_body == 0
 	h.require(
-		acquired and occluded,
+		acquired and occluded and body_blocked,
 		"T3-25",
-		"guard sight excludes player RID (det=%.1f state=%d) + wall occludes (det=%.1f state=%d)" % [
-			det_pos, state_pos, det_occ, state_occ
+		"guard sight excludes player RID (det=%.1f state=%d), wall blocks (det=%.1f state=%d), body blocks (det=%.1f state=%d)" % [
+			det_pos, state_pos, det_occ, state_occ, det_body, state_body
 		]
 	)
+	await h.free_node(body_block)
 	await h.free_node(arena)

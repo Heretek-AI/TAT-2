@@ -3859,7 +3859,10 @@ func _initialize() -> void:
 	else:
 		print("PASS: 48 spawner approximations pinned (throw 12.0/noise 10.0/walk 1.4, ammo refill-all, full-heal) & alerted=", st48_fallback, "m/s derived from BP ", bp48_walk)
 
-	# 49. P1-9(b): save write/reload round-trip + corrupt-save fail-closed.
+	# 49. P1-9(b): save write/reload round-trip, corrupt-save fail-closed, and
+	# schema-based nested merge. The real developer save is backed up first and
+	# restored BEFORE every assertion, so a failed check cannot leave test
+	# payload rows (or the nested-currency sentinel) in user://.
 	var sv49_ok: bool = true
 	var sv49: Node = root.get_node_or_null("/root/SaveSystem")
 	var sv49_path: String = "user://tat2_save.json"
@@ -3867,73 +3870,147 @@ func _initialize() -> void:
 		printerr("FAIL: 49 SaveSystem missing")
 		sv49_ok = false
 	else:
+		var sv49_had_file: bool = FileAccess.file_exists(sv49_path)
+		var sv49_backup: String = FileAccess.get_file_as_string(sv49_path) if sv49_had_file else ""
+		var sv49_backup_data: Dictionary = {}
+		if sv49_had_file:
+			var sv49_bp: Variant = JSON.parse_string(sv49_backup)
+			if sv49_bp is Dictionary:
+				sv49_backup_data = sv49_bp as Dictionary
+		var sv49_backup_cc: Dictionary = (sv49_backup_data.get("completed_contracts", {}) as Dictionary).duplicate(true)
+		print("INFO: 49 developer save before: completed_contracts=", sv49_backup_cc, " xp=", sv49_backup_data.get("xp", 0), " level=", sv49_backup_data.get("level", 1), " currency=", sv49_backup_data.get("currency", 0))
+		var sv49_write_raw := func(text: String) -> bool:
+			var f: FileAccess = FileAccess.open(sv49_path, FileAccess.WRITE)
+			if f == null:
+				return false
+			f.store_string(text)
+			f.close()
+			return true
+		# Reset the live dictionary before loading the real backup: loading on
+		# top of a temporary payload kept its sentinel keys and persisted them.
+		var sv49_restore := func() -> bool:
+			sv49.set("data", sv49.call("_defaults"))
+			if sv49_had_file:
+				if not bool(sv49_write_raw.call(sv49_backup)):
+					return false
+			else:
+				DirAccess.remove_absolute(ProjectSettings.globalize_path(sv49_path))
+			sv49.call("load_save")
+			return true
 		var sv49_orig: int = int(sv49.call("get_currency"))
 		sv49.call("add_currency", 7)
 		sv49.call("load_save")
 		if int(sv49.call("get_currency")) != sv49_orig + 7:
 			printerr("FAIL: 49 currency did not survive write/reload")
 			sv49_ok = false
-		var sv49_backup: String = FileAccess.get_file_as_string(sv49_path)
-		var sv49_w: FileAccess = FileAccess.open(sv49_path, FileAccess.WRITE)
-		sv49_w.store_string("{broken json,,")
-		sv49_w.close()
+		var sv49_post_add: String = FileAccess.get_file_as_string(sv49_path)
+		if not bool(sv49_write_raw.call("{broken json,,")):
+			printerr("FAIL: 49 could not write corrupt save")
+			sv49_ok = false
 		sv49.call("load_save")
 		if int(sv49.call("get_currency")) < 0:
 			printerr("FAIL: 49 corrupt save produced negative currency")
 			sv49_ok = false
-		var sv49_r: FileAccess = FileAccess.open(sv49_path, FileAccess.WRITE)
-		sv49_r.store_string(sv49_backup)
-		sv49_r.close()
+		if not bool(sv49_write_raw.call(sv49_post_add)):
+			printerr("FAIL: 49 could not restore post-add save")
+			sv49_ok = false
 		sv49.call("load_save")
 		if int(sv49.call("get_currency")) != sv49_orig + 7:
 			printerr("FAIL: 49 save backup restore mismatch")
 			sv49_ok = false
-		# 49b. Free-form nested dictionaries (completed_contracts defaults to {})
-		# must merge their keys into the nested dict, never into the root.
+		# 49b. Free-form nested dictionaries (completed_contracts schema {}):
+		# keys merge into the nested dict and never into the root.
 		var sv49_case_a: Dictionary = sv49.call("_defaults") as Dictionary
 		sv49_case_a["xp"] = 1200
 		sv49_case_a["completed_contracts"] = {"3": {"best_score": 900, "ghost": true}}
-		var sv49_wa: FileAccess = FileAccess.open(sv49_path, FileAccess.WRITE)
-		if sv49_wa != null:
-			sv49_wa.store_string(JSON.stringify(sv49_case_a, "\t"))
-			sv49_wa.close()
+		if not bool(sv49_write_raw.call(JSON.stringify(sv49_case_a, "\t"))):
+			printerr("FAIL: 49 could not write case A save")
+			sv49_ok = false
 		sv49.set("data", sv49.call("_defaults"))
 		sv49.call("load_save")
-		var sv49_cc: Dictionary = (sv49.get("data") as Dictionary).get("completed_contracts", {}) as Dictionary
-		var sv49_e3_v: Variant = sv49_cc.get("3", {})
-		var sv49_e3: Dictionary = sv49_e3_v as Dictionary if sv49_e3_v is Dictionary else {}
-		if int(sv49_e3.get("best_score", -1)) != 900 or not bool(sv49_e3.get("ghost", false)) \
-				or int((sv49.get("data") as Dictionary).get("xp", 0)) != 1200:
-			printerr("FAIL: 49 completed_contracts/xp dropped by load: cc=", sv49_cc, " xp=", (sv49.get("data") as Dictionary).get("xp", 0))
+		var sv49_data_a: Dictionary = sv49.get("data") as Dictionary
+		var sv49_cc_a: Dictionary = (sv49_data_a.get("completed_contracts", {}) as Dictionary).duplicate(true)
+		var sv49_xp_a: int = int(sv49_data_a.get("xp", 0))
+		var sv49_level_a: int = int(sv49_data_a.get("level", 0))
+		var sv49_currency_a: int = int(sv49_data_a.get("currency", -1))
+		if not bool(sv49_restore.call()):
+			printerr("FAIL: 49 could not restore the developer save after case A")
+			sv49_ok = false
+		var sv49_expected_cc: Dictionary = {"3": {"best_score": 900.0, "ghost": true}}
+		if sv49_cc_a != sv49_expected_cc or sv49_xp_a != 1200 or sv49_level_a != 3 or sv49_currency_a != 0:
+			printerr("FAIL: 49 completed_contracts/xp/level/currency wrong after load: cc=", sv49_cc_a, " xp=", sv49_xp_a, " level=", sv49_level_a, " currency=", sv49_currency_a)
 			sv49_ok = false
 		# 49c. A nested key with the same name as a root key must not leak up.
 		var sv49_case_b: Dictionary = sv49.call("_defaults") as Dictionary
 		sv49_case_b["completed_contracts"] = {"currency": 5}
-		var sv49_wb: FileAccess = FileAccess.open(sv49_path, FileAccess.WRITE)
-		if sv49_wb != null:
-			sv49_wb.store_string(JSON.stringify(sv49_case_b, "\t"))
-			sv49_wb.close()
+		if not bool(sv49_write_raw.call(JSON.stringify(sv49_case_b, "\t"))):
+			printerr("FAIL: 49 could not write case B save")
+			sv49_ok = false
 		sv49.set("data", sv49.call("_defaults"))
 		sv49.call("load_save")
-		if int(sv49.call("get_currency")) != 0:
-			printerr("FAIL: 49 nested completed_contracts.currency leaked to root currency=", sv49.call("get_currency"))
+		var sv49_data_b: Dictionary = sv49.get("data") as Dictionary
+		var sv49_currency_b: int = int(sv49_data_b.get("currency", -1))
+		var sv49_cc_b: Dictionary = (sv49_data_b.get("completed_contracts", {}) as Dictionary).duplicate(true)
+		if not bool(sv49_restore.call()):
+			printerr("FAIL: 49 could not restore the developer save after case B")
 			sv49_ok = false
-		# Re-read the original save before the pre-existing currency restore.
-		var sv49_r2: FileAccess = FileAccess.open(sv49_path, FileAccess.WRITE)
-		sv49_r2.store_string(sv49_backup)
-		sv49_r2.close()
+		if sv49_currency_b != 0 or sv49_cc_b != {"currency": 5.0}:
+			printerr("FAIL: 49 nested completed_contracts.currency leaked or was dropped: currency=", sv49_currency_b, " cc=", sv49_cc_b)
+			sv49_ok = false
+		# 49d. Regression: a second load_save() into populated data still
+		# accepts new completion keys and keeps the existing row.
+		var sv49_twice_a: Dictionary = sv49.call("_defaults") as Dictionary
+		sv49_twice_a["completed_contracts"] = {"3": {"best_score": 900, "ghost": true}}
+		if not bool(sv49_write_raw.call(JSON.stringify(sv49_twice_a, "\t"))):
+			printerr("FAIL: 49 could not write two-load save A")
+			sv49_ok = false
+		sv49.set("data", sv49.call("_defaults"))
 		sv49.call("load_save")
-		var sv49_data: Dictionary = sv49.get("data") as Dictionary
-		sv49_data["currency"] = sv49_orig
-		sv49.call("write_save")
+		var sv49_twice_b: Dictionary = sv49.call("_defaults") as Dictionary
+		sv49_twice_b["completed_contracts"] = {"4": {"best_score": 700, "ghost": false}}
+		if not bool(sv49_write_raw.call(JSON.stringify(sv49_twice_b, "\t"))):
+			printerr("FAIL: 49 could not write two-load save B")
+			sv49_ok = false
 		sv49.call("load_save")
-		if int(sv49.call("get_currency")) != sv49_orig:
-			printerr("FAIL: 49 original currency not restored")
+		var sv49_cc_twice: Dictionary = ((sv49.get("data") as Dictionary).get("completed_contracts", {}) as Dictionary).duplicate(true)
+		if not bool(sv49_restore.call()):
+			printerr("FAIL: 49 could not restore the developer save after two-load regression")
+			sv49_ok = false
+		var sv49_expected_twice: Dictionary = {
+			"3": {"best_score": 900.0, "ghost": true},
+			"4": {"best_score": 700.0, "ghost": false},
+		}
+		if sv49_cc_twice != sv49_expected_twice:
+			printerr("FAIL: 49 second load dropped rows: cc=", sv49_cc_twice, " expected=", sv49_expected_twice)
+			sv49_ok = false
+		# Final restore verification: the developer save's real rows and root
+		# progression values must match the backup exactly (no sentinel leak).
+		if not bool(sv49_restore.call()):
+			printerr("FAIL: 49 could not restore the developer save at exit")
+			sv49_ok = false
+		var sv49_final_data: Dictionary = sv49.get("data") as Dictionary
+		var sv49_final_cc: Dictionary = (sv49_final_data.get("completed_contracts", {}) as Dictionary).duplicate(true)
+		var sv49_file_cc: Dictionary = {}
+		if sv49_had_file:
+			var sv49_file_v: Variant = JSON.parse_string(FileAccess.get_file_as_string(sv49_path))
+			if sv49_file_v is Dictionary:
+				sv49_file_cc = ((sv49_file_v as Dictionary).get("completed_contracts", {}) as Dictionary).duplicate(true)
+		print("INFO: 49 developer save after restore: completed_contracts=", sv49_final_cc, " file=", sv49_file_cc)
+		if sv49_final_cc != sv49_backup_cc or sv49_file_cc != sv49_backup_cc:
+			printerr("FAIL: 49 developer completed_contracts not restored: live=", sv49_final_cc, " file=", sv49_file_cc, " backup=", sv49_backup_cc)
+			sv49_ok = false
+		if int(sv49_final_data.get("xp", 0)) != int(sv49_backup_data.get("xp", 0)) \
+				or int(sv49_final_data.get("level", 1)) != int(sv49_backup_data.get("level", 1)) \
+				or int(sv49_final_data.get("currency", 0)) != int(sv49_backup_data.get("currency", 0)):
+			printerr("FAIL: 49 developer xp/level/currency not restored: ", sv49_final_data.get("xp", 0), "/", sv49_final_data.get("level", 1), "/", sv49_final_data.get("currency", 0))
+			sv49_ok = false
+		if sv49_final_cc.has("currency") and not sv49_backup_cc.has("currency"):
+			printerr("FAIL: 49 sentinel completed_contracts.currency leaked into the developer save")
 			sv49_ok = false
 	if not sv49_ok:
 		fails += 1
 	else:
-		print("PASS: 49 save round-trip (+7 persisted, corrupt load fail-closed, completed_contracts/xp merged, nested key kept out of root, original restored)")
+		print("PASS: 49 save round-trip (+7 persisted, corrupt load fail-closed, full completed_contracts/xp/level kept, second load accepts new rows, developer save restored before assertions)")
 
 	# 50. P1-9(c): audio audibility smoke. Block #1 only pins the autoload;
 	# this pins that the gameplay one-shots resolve to real clips on disk.
@@ -4336,12 +4413,55 @@ func _initialize() -> void:
 		if not is_equal_approx(sv54_fov4, 75.0) or not sv54_flag4:
 			printerr("FAIL: 54 fresh-install fov 75 was rewritten to ", sv54_fov4, " flag=", sv54_flag4)
 			sv54_ok = false
-		# The live settings write is the producer of that flag; a fresh install
-		# never sees the legacy migration, so the UI must persist it itself.
-		var sv54_ui_src: String = FileAccess.get_file_as_string("res://src/ui/settings_ui.gd")
-		if sv54_ui_src.find("fov_migrated") < 0:
-			printerr("FAIL: 54 settings_ui does not mark settings.fov_migrated on a player FOV change")
+		# Real SettingsUI: opening/closing must not mark the authored default as
+		# an explicit FOV choice. Start from in-memory schema defaults (flag
+		# false) so no boot migration has run.
+		var sv54_read_settings := func() -> Dictionary:
+			var rf: FileAccess = FileAccess.open(sv54_path, FileAccess.READ)
+			if rf == null:
+				return {}
+			var parsed: Variant = JSON.parse_string(rf.get_as_text())
+			rf.close()
+			if parsed is Dictionary:
+				return ((parsed as Dictionary).get("settings", {}) as Dictionary).duplicate(true)
+			return {}
+		sv54.set("data", sv54.call("_defaults"))
+		var sv54_ui1: CanvasLayer = (load("res://src/ui/settings_ui.gd") as GDScript).new() as CanvasLayer
+		root.add_child(sv54_ui1)
+		await process_frame
+		sv54_ui1.call("open_settings")
+		sv54_ui1.call("close_settings")
+		await process_frame
+		await process_frame
+		var sv54_closed_s: Dictionary = sv54_read_settings.call()
+		if bool(sv54_closed_s.get("fov_migrated", true)) or not is_equal_approx(float(sv54_closed_s.get("fov", -1.0)), 54.54):
+			printerr("FAIL: 54 settings open/close changed fov/flag: fov=", sv54_closed_s.get("fov", -1.0), " flag=", sv54_closed_s.get("fov_migrated", true))
 			sv54_ok = false
+		# A real slider move is an explicit choice: persist it with the flag.
+		sv54.set("data", sv54.call("_defaults"))
+		var sv54_ui2: CanvasLayer = (load("res://src/ui/settings_ui.gd") as GDScript).new() as CanvasLayer
+		root.add_child(sv54_ui2)
+		await process_frame
+		var sv54_slider: HSlider = sv54_ui2.get("_fov_slider") as HSlider
+		if sv54_slider == null:
+			printerr("FAIL: 54 settings_ui has no FOV slider")
+			sv54_ok = false
+		else:
+			sv54_slider.value = 75.0
+			await process_frame
+			sv54_ui2.call("open_settings")
+			sv54_ui2.call("close_settings")
+			await process_frame
+			await process_frame
+			var sv54_ui_s: Dictionary = sv54_read_settings.call()
+			if not is_equal_approx(float(sv54_ui_s.get("fov", -1.0)), 75.0) or not bool(sv54_ui_s.get("fov_migrated", false)):
+				printerr("FAIL: 54 slider fov 75 was not persisted with fov_migrated (fov=", sv54_ui_s.get("fov", -1.0), " flag=", sv54_ui_s.get("fov_migrated", false), ")")
+				sv54_ok = false
+			sv54_boot.call()
+			var sv54_fov5: float = float((sv54.call("get_settings") as Dictionary).get("fov", -1.0))
+			if not is_equal_approx(sv54_fov5, 75.0):
+				printerr("FAIL: 54 slider fov 75 was re-migrated to ", sv54_fov5)
+				sv54_ok = false
 		if sv54_had_file:
 			var rf: FileAccess = FileAccess.open(sv54_path, FileAccess.WRITE)
 			if rf != null:
@@ -4353,7 +4473,7 @@ func _initialize() -> void:
 	if not sv54_ok:
 		fails += 1
 	else:
-		print("PASS: 54 settings schema v2 fov migration (75 -> 54.54 once, 65 kept, post-migration 75 kept, fresh-install 75 + UI flag kept)")
+		print("PASS: 54 settings schema v2 fov migration (75 -> 54.54 once, 65 kept, post-migration 75 kept, UI open/close leaves flag false, slider 75 persists + reloads)")
 
 	# P2-6 fixture restore (see boot snapshot): leave no mutated autoload
 	# state behind for the next run or embedding harness.

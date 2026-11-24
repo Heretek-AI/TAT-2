@@ -63,6 +63,9 @@ var _pages: Array[Control] = []
 var _group_cards: Array[PanelContainer] = []
 var _modal_panel: PanelContainer = null
 var _loading_ui: bool = false
+## True only when the player moves the FOV slider themselves (not when
+## _load_from_save repopulates it). Gates the one-time fov_migrated write.
+var _fov_touched: bool = false
 
 
 func _ready() -> void:
@@ -280,8 +283,11 @@ func _apply_live(persist: bool) -> void:
 	s["fov"] = float(_fov_slider.value)
 	# A deliberate FOV choice (including a fresh-install 75) must not be read
 	# as the pre-v2 legacy 75 on the next boot: mark the one-time migration as
-	# consumed in the same save write. Schema-v2 itself is unchanged.
-	s["fov_migrated"] = true
+	# consumed in the same save write. Only a real slider move counts; merely
+	# opening/closing settings must not turn the authored default into an
+	# "explicit" value. Schema-v2 itself is unchanged.
+	if _fov_touched or bool(s.get("fov_migrated", false)):
+		s["fov_migrated"] = true
 	s["vsync"] = _vsync_check.button_pressed if _vsync_check != null else true
 	s["master_volume"] = float(_vol_slider.value)
 	if _music_slider != null:
@@ -547,6 +553,10 @@ func _make_slider_row(setting_key: String, label_text: String, min_v: float, max
 	val.add_theme_color_override("font_color", ThemeScript.TEAL_ACCENT)
 	row.add_child(val)
 	slider.value_changed.connect(func(_v: float) -> void:
+		# Programmatic _load_from_save writes run under _loading_ui; only a
+		# player drag may mark FOV as deliberately chosen.
+		if setting_key == "fov" and not _loading_ui:
+			_fov_touched = true
 		_refresh_value_labels()
 		_apply_live(false)
 	)

@@ -162,26 +162,32 @@ func set_loadout(thief_id: String, loadout: Dictionary) -> void:
 ## accepted; a wrong-typed value (e.g. "currency": "bad") leaves the default
 ## intact instead of crashing the first caller that casts it.
 func _merge_validated(incoming: Dictionary) -> void:
-	_merge_into(incoming, data, false)
+	_merge_into(incoming, data, _defaults())
 
 
-## One merge level. `freeform` is true only for a nested dictionary whose
-## default is empty (e.g. completed_contracts): that map has no key schema, so
-## incoming entries are copied instead of dropped. It is never true at the
-## root, so unknown root keys stay ignored. The earlier form aliased an empty
-## nested target to the root (`target = data`), which treated every
-## completed_contracts order key as an unknown root key and discarded it.
-func _merge_into(incoming: Dictionary, target: Dictionary, freeform: bool) -> void:
+## One merge level. `schema` is the matching default dictionary for `target`.
+## A dictionary whose schema default is an empty Dictionary is free-form
+## (today only completed_contracts): its unknown keys are accepted whether the
+## live target is empty or already populated, so a second load_save() keeps
+## accepting new completion rows. Unknown keys anywhere else (root, settings,
+## loadout) stay ignored. Deriving this from the live target's emptiness made
+## a populated map reject new rows; aliasing an empty target to the root made
+## every completion row look like an unknown root key.
+func _merge_into(incoming: Dictionary, target: Dictionary, schema: Dictionary) -> void:
 	for key_v: Variant in incoming.keys():
 		var key: String = str(key_v)
 		if not target.has(key):
-			if freeform:
+			if schema.is_empty():
 				target[key] = _duplicate_freeform(incoming[key_v])
 			continue
 		var base: Variant = target[key]
 		var inc: Variant = incoming[key_v]
 		if base is Dictionary and inc is Dictionary:
-			_merge_into(inc as Dictionary, base as Dictionary, (base as Dictionary).is_empty())
+			var child_schema: Dictionary = {}
+			var schema_v: Variant = schema.get(key, null)
+			if schema_v is Dictionary:
+				child_schema = schema_v as Dictionary
+			_merge_into(inc as Dictionary, base as Dictionary, child_schema)
 		elif key == "equipped_loadout" and (inc is Array or inc is Dictionary):
 			target[key] = inc  # normalized by _ensure_defaults
 		elif base is Array:

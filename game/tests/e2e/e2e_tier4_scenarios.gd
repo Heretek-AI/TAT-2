@@ -426,6 +426,7 @@ func _t4_14_free_play_banking_control() -> void:
 	var before_level: int = int(save_data.get("level", 1))
 	var before_currency: int = int(save_data.get("currency", 0))
 	var before_loot_value: int = int(gs.get("loot_value"))
+	var before_ever_spotted: bool = h.is_true(gs.get("ever_spotted"))
 
 	# Normal deploy: no free-play stash may survive into reset_run.
 	gs.call("end_free_play")
@@ -434,20 +435,30 @@ func _t4_14_free_play_banking_control() -> void:
 	var gh: Node = miss_res["mission"] as Node
 	await h.step_process(3)
 	var order: int = int(gs.get("active_contract_order"))
+	# Isolate the order row so best_score is exactly the staged 625 even when
+	# an earlier tier already banked this order; the row set is restored below.
+	var cc_stage: Dictionary = save_data.get("completed_contracts", {}) as Dictionary
+	cc_stage.erase(str(order))
 	gs.set("loot_value", 500)
-	var expected: int = int(round(500.0 * float(gs.call("compute_stealth_bonus_multiplier"))))
+	# Authored ghost payout: 500 x (1.0 base + 0.25 Ghost bonus) = 625. Pin the
+	# constant instead of re-deriving it with the production multiplier.
+	gs.set("ever_spotted", false)
+	var expected: int = 625
+	var ghost_run: bool = not h.is_true(gs.get("ever_spotted"))
 	var after_currency: int = before_currency
 	var after_entry: Dictionary = {}
 	var recorded: bool = false
 	if gh != null:
 		gh.call("_on_extracted")
 		await h.step_process(1)
+		ghost_run = ghost_run and not h.is_true(gs.get("ever_spotted"))
 		after_currency = int(save_data.get("currency", 0))
 		var cc: Dictionary = save_data.get("completed_contracts", {}) as Dictionary
 		var entry_v: Variant = cc.get(str(order), {})
 		if entry_v is Dictionary:
 			after_entry = entry_v as Dictionary
-		recorded = after_entry.has("best_score") and int(after_entry.get("best_score", -1)) >= expected
+		recorded = after_entry.has("best_score") and int(after_entry.get("best_score", -1)) == expected \
+			and h.is_true(after_entry.get("ghost"))
 	# Restore the real save row set; record_contract_complete also bumped xp.
 	save_data["completed_contracts"] = before_completed
 	save_data["xp"] = before_xp
@@ -455,12 +466,13 @@ func _t4_14_free_play_banking_control() -> void:
 	save_data["currency"] = before_currency
 	ss.call("write_save")
 	gs.set("loot_value", before_loot_value)
+	gs.set("ever_spotted", before_ever_spotted)
 	var banked: bool = after_currency == before_currency + expected
 	h.require(
-		gh != null and expected > 0 and banked and recorded,
+		gh != null and ghost_run and banked and recorded,
 		"T4-14",
-		"normal deploy banks score (currency %d -> %d, expected +%d, order %d recorded=%s best=%d)" % [
-			before_currency, after_currency, expected, order, str(recorded), int(after_entry.get("best_score", -1))
+		"normal ghost deploy banks 625 (currency %d -> %d, order %d recorded=%s best=%d ghost_run=%s)" % [
+			before_currency, after_currency, order, str(recorded), int(after_entry.get("best_score", -1)), str(ghost_run)
 		]
 	)
 	await h.free_node(gh)

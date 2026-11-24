@@ -361,8 +361,9 @@ func _consistency_checks(res: Dictionary, stats: Dictionary) -> Dictionary:
 	checks["collision_bodies"] = _check_at_least("loader collision_bodies", bodies_expected, int(stats["collision_bodies"]))
 	checks["collision_shapes"] = _check_at_least("loader collision_shapes", shapes_expected, int(stats["collision_shapes"]))
 	# mesh_instances counts fog instances and procedural extras that carry no
-	# ue_mesh; the tagged draw instances are a lower bound.
-	checks["mesh_instances"] = _check_at_least("loader mesh_instances (tagged ue_mesh draws)", mesh_instances, int(stats["draw_instances"]))
+	# ue_mesh, while tagged draws include loader-added doors/loot and can exceed
+	# it. Neither direction is a contract, so this is informational only.
+	checks["mesh_instances"] = _check_info("loader mesh_instances vs tagged ue_mesh draws", mesh_instances, int(stats["draw_instances"]))
 	return checks
 
 
@@ -372,6 +373,12 @@ func _check_exact(label: String, expected: int, actual: int) -> Dictionary:
 
 func _check_at_least(label: String, expected: int, actual: int) -> Dictionary:
 	return {"label": label, "expected": expected, "actual": actual, "ok": expected >= 0 and actual >= expected, "exact": expected == actual}
+
+
+## Counts from mixed sources (fog extras vs tagged geometry) that must be
+## recorded but cannot fail closed in either direction.
+func _check_info(label: String, expected: int, actual: int) -> Dictionary:
+	return {"label": label, "expected": expected, "actual": actual, "ok": true, "exact": expected == actual, "informational": true}
 
 
 func _pick_loader_counts(res: Dictionary) -> Dictionary:

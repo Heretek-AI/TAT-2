@@ -70,6 +70,15 @@ func _build_ui() -> void:
 	bake_btn.pressed.connect(_on_bake_pressed)
 	bake_row.add_child(bake_btn)
 
+	var core_row: HBoxContainer = HBoxContainer.new()
+	add_child(core_row)
+	var core_btn: Button = Button.new()
+	core_btn.text = "Bake core-min (single call)"
+	core_btn.tooltip_text = "POI + 3rd floor + Gameplay + Lighting in one loader call, 160 lights"
+	core_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	core_btn.pressed.connect(_on_bake_core_pressed)
+	core_row.add_child(core_btn)
+
 	var toggles_label: Label = Label.new()
 	toggles_label.text = "Show:"
 	toggles_label.add_theme_font_size_override("font_size", 12)
@@ -142,6 +151,15 @@ func _on_open_pressed() -> void:
 
 func _on_bake_pressed() -> void:
 	var map_id: String = _selected_map()
+	_bake_and_open(map_id, [] as Array[String], "res://scenes/review/%s" % map_id, "review.tscn")
+
+
+func _on_bake_core_pressed() -> void:
+	var map_id: String = _selected_map()
+	_bake_and_open(map_id, ["--mode=single", "--sublevels=core"] as Array[String], "res://scenes/review/%s_core" % map_id, "review_core.tscn")
+
+
+func _bake_and_open(map_id: String, extra: Array[String], out_dir: String, scene_name: String) -> void:
 	var project_dir: String = ProjectSettings.globalize_path("res://")
 	var repo_dir: String = project_dir.path_join("..").simplify_path()
 	var script_path: String = repo_dir.path_join("tools/bake_review_map.gd")
@@ -154,8 +172,10 @@ func _on_bake_pressed() -> void:
 		"--script", script_path,
 		"--",
 		"--map=" + map_id,
-		"--out=res://scenes/review/" + map_id,
+		"--out=" + out_dir,
 	]
+	for e: String in extra:
+		args.append(e)
 	_set_status("Baking %s (headless; the editor waits for the process)..." % map_id)
 	var output: Array = []
 	var started: int = Time.get_ticks_msec()
@@ -167,7 +187,7 @@ func _on_bake_pressed() -> void:
 	if _log != null:
 		_log.text = text
 	_set_status("Bake %s exit=%d in %.1fs" % [map_id, code, elapsed])
-	var review_path: String = "res://scenes/review/%s/review.tscn" % map_id
+	var review_path: String = out_dir.path_join(scene_name)
 	if code == 0 and ResourceLoader.exists(review_path):
 		var ei: Object = _ei()
 		if ei != null:
@@ -261,7 +281,8 @@ func _read_state(root: Node) -> Dictionary:
 		state = (root.get_meta("review_toggles") as Dictionary).duplicate()
 	for toggle: String in _checks.keys():
 		if not state.has(toggle):
-			state[toggle] = true
+			# Authored-hidden fixtures stay hidden unless explicitly revealed.
+			state[toggle] = false if toggle == Filters.AUTHORED_HIDDEN_TOGGLE else true
 	return state
 
 
@@ -274,14 +295,9 @@ func _apply_to_scene(root: Node) -> void:
 			stack.push_back(c)
 		if not (n is Node3D) or n == root:
 			continue
-		var hidden: bool = false
-		for toggle: String in state.keys():
-			if bool(state[toggle]):
-				continue
-			if Filters.matches(n, toggle):
-				hidden = true
-				break
-		(n as Node3D).visible = not hidden
+		# Same rule as in-game review: authored visibility is preserved, and
+		# the "Hidden in game" checkbox is the only way to reveal it.
+		(n as Node3D).visible = Filters.visible_after_toggles(n, state)
 
 
 func _update_counts(root: Node) -> void:
@@ -289,6 +305,8 @@ func _update_counts(root: Node) -> void:
 	var kinds: Dictionary = {}
 	var issues: Dictionary = {}
 	var subs: Dictionary = {}
+	var hidden_nodes: int = 0
+	var hidden_records: int = 0
 	var stack: Array[Node] = [root]
 	while not stack.is_empty():
 		var n: Node = stack.pop_back()
@@ -301,14 +319,22 @@ func _update_counts(root: Node) -> void:
 		if n.has_meta("review_issue"):
 			var i: String = str(n.get_meta("review_issue"))
 			issues[i] = int(issues.get(i, 0)) + 1
+		if n.has_meta("review_authored_visible") and not bool(n.get_meta("review_authored_visible")):
+			hidden_nodes += 1
+			if n is MultiMeshInstance3D:
+				var mmi: MultiMeshInstance3D = n as MultiMeshInstance3D
+				hidden_records += mmi.multimesh.instance_count if mmi.multimesh != null else 1
+			elif n is GeometryInstance3D:
+				hidden_records += 1
 		var sub: String = str(n.get_meta("review_sublevel", ""))
 		if sub != "":
 			subs[sub] = true
-	_counts.text = "sublevels=%d nodes=%d mesh=%d multimesh=%d lights=%d decals=%d collision=%d\nbeams=%d labels=%d emissive=%d" % [
+	_counts.text = "sublevels=%d nodes=%d mesh=%d multimesh=%d lights=%d decals=%d collision=%d\nhidden=%d records=%d\nbeams=%d labels=%d emissive=%d" % [
 		subs.size(), nodes,
 		int(kinds.get("mesh", 0)), int(kinds.get("multimesh", 0)),
 		int(kinds.get("light", 0)), int(kinds.get("decal", 0)),
 		int(kinds.get("collision", 0)),
+		hidden_nodes, hidden_records,
 		int(issues.get("beam_lines", 0)), int(issues.get("world_label", 0)),
 		int(issues.get("emissive_plate", 0)),
 	]

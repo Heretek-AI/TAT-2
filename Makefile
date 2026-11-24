@@ -8,7 +8,7 @@ MOBILE_ABI  ?= arm64
 QA_CONTRACT ?= 0
 KEYSTORE_PROPS := $(HOME)/.config/tat2/keystore.properties
 
-.PHONY: build-extractor extract anims normalize audit audit-bootstrap audit-refresh-stamps audit-imports test run editor review review-capture bake-review desktop-texture-cap texture-cap-check audio-tools linux-build linux-run android-prepare android-debug android-debug-gl android-release
+.PHONY: build-extractor extract anims normalize audit audit-bootstrap audit-refresh-stamps audit-imports test run editor review review-capture bake-review bake-review-core desktop-texture-cap texture-cap-check audio-tools linux-build linux-run android-prepare android-debug android-debug-gl android-release
 
 build-extractor:
 	DOTNET_ROOT=$(HOME)/.dotnet10 PATH=$(HOME)/.dotnet10:$(PATH) $(DOTNET) build tools/tat-extract -c Release
@@ -84,6 +84,13 @@ OUT ?= res://scenes/review/$(MAP)
 # world.scn + review.tscn + review_manifest.json. Output is gitignored.
 bake-review:
 	$(GODOT) --headless --path game --script $(CURDIR)/tools/bake_review_map.gd -- --map=$(MAP) --out=$(OUT)
+
+# Core-min single-call bake: POI + 3rd floor + Gameplay + Lighting in one
+# load_sublevels_async() call with a 160-light budget. Writes <map>_core.scn +
+# review_core.tscn + review_manifest.json under res://scenes/review/<map>_core.
+# This is the scene a low-memory desktop can open; the full assembly is not.
+bake-review-core:
+	$(GODOT) --headless --path game --script $(CURDIR)/tools/bake_review_map.gd -- --map=$(MAP) --mode=single --sublevels=core --out=res://scenes/review/$(MAP)_core
 
 # In-game free-camera review of the same static world (no mission/player).
 review:

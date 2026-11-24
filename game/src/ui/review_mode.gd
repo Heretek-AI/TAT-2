@@ -10,9 +10,23 @@ extends Node3D
 ##   Shift       fast, Q/E down/up
 ##   1..9, 0     Periphery / POI / Gameplay / Lighting / Decals / Collision /
 ##               Niagara / Beams / World labels / Emissive plates
+##   H           Hidden in game: reveal authored bHiddenInGame fixtures
 ##   F1..F6      bookmarks (KF16 gate, foyer, library, POI lounge, safe room, ..)
 ##   P           save a PNG to user://review_captures/
 ##   Esc         quit
+##
+## Options
+##   --map=<id>                  guildhall (default), thieves_den, old_manor, ..
+##   --review-env=auto|none      build the review-only environment (default auto)
+##   --gameplay-fills            add the mission's Guildhall hand fills
+##   --hide=<toggle,...>         start with a show-toggle off
+##   --quit-after-load           exit after the load (headless CI smoke)
+##   --capture=<png>|--capture-dir=<dir> [--capture-quit]
+##
+## Authored `bHiddenInGame` fixtures load visible=false and stay hidden unless
+## the `H` toggle is on. Review captures are labelled review_only=1: review has
+## its own environment (fallback + the map's weather preset + moon), not the
+## shipped mission's lighting.
 ##
 ## Sublevel membership is the load-container ancestry (one Loader call per
 ## .tatlevel.json) so the number-key filters can hide whole sublevels. The
@@ -24,12 +38,14 @@ const LevelLoaderScript: GDScript = preload("res://src/core/level_loader.gd")
 const MapData: GDScript = preload("res://addons/tat2_review/review_map_data.gd")
 const Tagger: GDScript = preload("res://addons/tat2_review/review_tagger.gd")
 const Filters: GDScript = preload("res://addons/tat2_review/review_filters.gd")
+const ReviewEnvironment: GDScript = preload("res://addons/tat2_review/review_environment.gd")
 
 const MOVE_SPEED: float = 12.0
 const FAST_MULT: float = 4.0
 const LOOK_SENSITIVITY: float = 0.0022
 const MAX_LIGHTS_TOTAL: int = 160
 const CAPTURE_DIR: String = "user://review_captures"
+const HIDDEN_TOGGLE: String = Filters.AUTHORED_HIDDEN_TOGGLE
 const NUMBER_TOGGLES: Array[String] = [
 	"Periphery", "POI", "Gameplay", "Lighting", "Decals",
 	"Collision", "Niagara", "Beams", "World labels", "Emissive plates",
@@ -39,6 +55,9 @@ var map_id: String = "guildhall"
 var capture_path: String = ""
 var capture_dir: String = ""
 var capture_quit: bool = false
+var quit_after_load: bool = false
+var review_env_mode: String = "auto"
+var gameplay_fills: bool = false
 var hide_toggles: Array[String] = []
 var _world_root: Node3D
 var _camera: Camera3D
@@ -55,12 +74,16 @@ var _hud_hint: Label
 var _hud_status: Label
 var _loading: bool = true
 var _stats: Dictionary = {}
+var _env_report: Dictionary = {}
 
 
 func _ready() -> void:
 	_parse_args()
 	for t: String in NUMBER_TOGGLES:
 		_toggles[t] = true
+	# Authored-hidden fixtures stay hidden by default. `H` is the only path
+	# that may reveal them.
+	_toggles[HIDDEN_TOGGLE] = false
 	for t: String in hide_toggles:
 		if _toggles.has(t):
 			_toggles[t] = false
@@ -80,9 +103,18 @@ func _parse_args() -> void:
 			capture_dir = arg.substr("--capture-dir=".length())
 		elif arg == "--capture-quit":
 			capture_quit = true
+		elif arg == "--quit-after-load":
+			quit_after_load = true
+		elif arg.begins_with("--review-env="):
+			review_env_mode = arg.substr("--review-env=".length()).strip_edges().to_lower()
+		elif arg == "--gameplay-fills":
+			gameplay_fills = true
 		elif arg.begins_with("--hide="):
 			for t: String in arg.substr("--hide=".length()).split(",", false):
 				hide_toggles.append(t.strip_edges())
+	if review_env_mode != "auto" and review_env_mode != "none":
+		push_warning("[review] unknown --review-env=%s (want auto|none); using auto" % review_env_mode)
+		review_env_mode = "auto"
 
 
 func _load_world() -> void:
@@ -133,13 +165,22 @@ func _load_world() -> void:
 	_containers.append(container)
 
 	_stats = Tagger.collect_stats(_world_root)
-	print("REVIEW stats nodes=", int(_stats.get("nodes", 0)), " draws=", int((_stats.get("kinds", {}) as Dictionary).get("mesh", 0)) + int((_stats.get("kinds", {}) as Dictionary).get("multimesh", 0)), " lights=", int(_stats.get("lights", 0)))
+	print("REVIEW stats nodes=", int(_stats.get("nodes", 0)), " draws=", int((_stats.get("kinds", {}) as Dictionary).get("mesh", 0)) + int((_stats.get("kinds", {}) as Dictionary).get("multimesh", 0)), " lights=", int(_stats.get("lights", 0)), " hidden_nodes=", int(_stats.get("hidden_nodes", 0)), " hidden_records=", int(_stats.get("hidden_records", 0)))
+	set_meta("review_authored_hidden_nodes", int(_stats.get("hidden_nodes", 0)))
+	set_meta("review_authored_hidden_records", int(_stats.get("hidden_records", 0)))
+	_setup_review_environment()
 	_bookmarks = MapData.bookmarks_for(map_id)
 	_spawn_camera()
 	_loading = false
 	_apply_toggles()
 	_update_hud()
-	print("REVIEW ready map=", map_id, " bookmarks=", _bookmarks.size())
+	var leaked: int = _visible_authored_hidden_count()
+	set_meta("review_hidden_visible", leaked)
+	print("REVIEW ready map=", map_id, " bookmarks=", _bookmarks.size(), " review_only=1 env=", review_env_mode, " hidden_visible=", leaked)
+	if quit_after_load:
+		await get_tree().process_frame
+		get_tree().quit()
+		return
 	if capture_dir != "":
 		DirAccess.make_dir_recursive_absolute(capture_dir)
 		for i: int in range(_bookmarks.size()):
@@ -156,6 +197,24 @@ func _load_world() -> void:
 		await _capture(capture_path)
 		if capture_quit:
 			get_tree().quit()
+
+
+func _setup_review_environment() -> void:
+	# The mission controller owns the shipped environment; review has none, so
+	# without this the Foyer/Library render on Godot's blank default. This is a
+	# review-only fallback + the map's authored weather preset, never shipped.
+	set_meta("review_only", true)
+	set_meta("review_env_mode", review_env_mode)
+	if review_env_mode == "none":
+		print("REVIEW env=review_only skipped (--review-env=none)")
+		return
+	_env_report = ReviewEnvironment.build(self, map_id, gameplay_fills)
+	print("REVIEW env=review_only preset=", str(_env_report.get("preset", "")),
+		" sky=", bool(_env_report.get("sky", false)),
+		" ambient=", str(_env_report.get("ambient_source", "")),
+		" bg=", int(_env_report.get("background_mode", -1)),
+		" fills=", int(_env_report.get("gameplay_fills", 0)))
+	_update_hud()
 
 
 func _spawn_camera() -> void:
@@ -234,6 +293,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	if code == KEY_P:
 		_save_capture()
 		return
+	if code == KEY_H:
+		_toggles[HIDDEN_TOGGLE] = not bool(_toggles.get(HIDDEN_TOGGLE, false))
+		_apply_toggles()
+		_update_hud()
+		return
 	if code >= KEY_F1 and code <= KEY_F6:
 		_go_bookmark(int(code - KEY_F1))
 		_update_hud()
@@ -264,7 +328,32 @@ func _capture(path: String) -> void:
 		print("REVIEW capture failed empty path=", path)
 		return
 	var err: int = img.save_png(path)
-	print("REVIEW capture path=", path, " size=", img.get_size(), " err=", err)
+	print("REVIEW capture path=", path, " size=", img.get_size(), " err=", err, " review_only=1 env=", review_env_mode)
+	_write_capture_label(path)
+
+
+## Captures from review mode are review-only: they use the review environment,
+## not the shipped mission's lighting. Keep a sidecar so a PNG can never be
+## mistaken for a shipped-lighting reference.
+func _write_capture_label(png_path: String) -> void:
+	var label: Dictionary = {
+		"review_only": true,
+		"map": map_id,
+		"env_mode": review_env_mode,
+		"env_preset": str(_env_report.get("preset", "")),
+		"gameplay_fills": gameplay_fills,
+		"hidden_nodes": int(_stats.get("hidden_nodes", 0)),
+		"hidden_records": int(_stats.get("hidden_records", 0)),
+		"hidden_in_game_toggle": bool(_toggles.get(HIDDEN_TOGGLE, false)),
+		"captured_at": Time.get_datetime_string_from_system(),
+	}
+	var sidecar: String = png_path + ".review.json"
+	var f: FileAccess = FileAccess.open(sidecar, FileAccess.WRITE)
+	if f == null:
+		push_warning("[review] could not write capture label %s" % sidecar)
+		return
+	f.store_string(JSON.stringify(label, "  ") + "\n")
+	f.close()
 
 
 func _save_capture() -> void:
@@ -277,7 +366,8 @@ func _save_capture() -> void:
 	var stamp: String = Time.get_datetime_string_from_system().replace(":", "-")
 	var path: String = CAPTURE_DIR.path_join("review_%s_%s.png" % [map_id, stamp])
 	var err: int = img.save_png(path)
-	_status("Saved %s (err=%d)" % [path, err])
+	_status("Saved %s (err=%d, review-only)" % [path, err])
+	_write_capture_label(path)
 
 
 func _apply_toggles() -> void:
@@ -287,14 +377,21 @@ func _apply_toggles() -> void:
 		if not (node is Node3D) or node == _world_root:
 			continue
 		var n3: Node3D = node as Node3D
-		var hidden: bool = false
-		for toggle: String in NUMBER_TOGGLES:
-			if bool(_toggles.get(toggle, true)):
-				continue
-			if Filters.matches(node, toggle):
-				hidden = true
-				break
-		n3.visible = not hidden
+		# Authored bHiddenInGame nodes stay hidden unless H is on; show-toggles
+		# can only ever hide further. Never `visible = not hidden` alone.
+		n3.visible = Filters.visible_after_toggles(node, _toggles)
+
+
+## Diagnostic: authored-hidden nodes that review left visible. Must be 0 unless
+## the Hidden in game toggle (H) is on. Printed on load for gate evidence.
+func _visible_authored_hidden_count() -> int:
+	if _world_root == null:
+		return 0
+	var count: int = 0
+	for node: Node in _iter_nodes(_world_root):
+		if node is Node3D and node.has_meta("review_authored_visible") and not bool(node.get_meta("review_authored_visible")) and (node as Node3D).visible:
+			count += 1
+	return count
 
 
 func _iter_nodes(root: Node) -> Array[Node]:
@@ -331,7 +428,7 @@ func _build_hud() -> void:
 	_hud_toggles = _label(box, 12, Color(0.7, 0.85, 0.75))
 	_hud_hint = _label(box, 12, Color(0.72, 0.72, 0.78))
 	_hud_status = _label(box, 12, Color(0.95, 0.75, 0.45))
-	_hud_hint.text = "WASD move  LMB mouse  Shift fast  Q/E down/up  1-0 toggles  F1-F6 bookmarks  P capture  Esc quit"
+	_hud_hint.text = "WASD move  LMB mouse  Shift fast  Q/E down/up  1-0 toggles  H hidden-in-game  F1-F6 bookmarks  P capture  Esc quit"
 	_update_hud()
 
 
@@ -359,23 +456,32 @@ func _update_hud() -> void:
 		return
 	var kinds: Dictionary = _stats.get("kinds", {})
 	var issues: Dictionary = _stats.get("issues", {})
-	_hud_counts.text = "sublevels=%d  nodes=%d  draws=%d  instances=%d  lights=%d  surfaces=%d\nissues: beams=%d labels=%d emissive=%d collision-only=%d" % [
+	var env_label: String = "review-only" if review_env_mode == "auto" else "none"
+	var env_preset: String = str(_env_report.get("preset", "")) if not _env_report.is_empty() else ""
+	if env_preset != "":
+		env_label += " (preset=%s)" % env_preset
+	_hud_counts.text = "sublevels=%d  nodes=%d  draws=%d  instances=%d  lights=%d  surfaces=%d\nhidden: nodes=%d records=%d (authored bHiddenInGame; H reveals)\nissues: beams=%d labels=%d emissive=%d collision-only=%d\nenv: %s" % [
 		_containers.size(),
 		int(_stats.get("nodes", 0)),
 		int((kinds as Dictionary).get("mesh", 0)) + int((kinds as Dictionary).get("multimesh", 0)),
 		int(_stats.get("instances", 0)),
 		int(_stats.get("lights", 0)),
 		int(_stats.get("surfaces", 0)),
+		int(_stats.get("hidden_nodes", 0)),
+		int(_stats.get("hidden_records", 0)),
 		int((issues as Dictionary).get("beam_lines", 0)),
 		int((issues as Dictionary).get("world_label", 0)),
 		int((issues as Dictionary).get("emissive_plate", 0)),
 		int((issues as Dictionary).get("collision_only", 0)),
+		env_label,
 	]
+	var all_toggles: Array[String] = NUMBER_TOGGLES.duplicate()
+	all_toggles.append(HIDDEN_TOGGLE)
 	var active: Array[String] = []
 	var hidden: Array[String] = []
-	for i: int in range(NUMBER_TOGGLES.size()):
-		var t: String = NUMBER_TOGGLES[i]
-		var key: String = "0" if i == 9 else str(i + 1)
+	for i: int in range(all_toggles.size()):
+		var t: String = all_toggles[i]
+		var key: String = "0" if i == 9 else (str(i + 1) if i < 9 else "H")
 		var line: String = "%s %s" % [key, t]
 		if bool(_toggles.get(t, true)):
 			active.append(line)

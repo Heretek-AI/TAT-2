@@ -9,6 +9,13 @@ extends RefCounted
 ## per-sublevel load is the only honest way to attribute geometry without
 ## editing the loader (owned by another worker).
 ##
+## `mode = "single"` (`--mode=single --sublevels=core`) is the core-min bake:
+## POI + 3rd floor + Gameplay + Lighting through ONE `load_sublevels_async()`
+## call with one 160-light budget, cross-sublevel dedupe and provenance tags
+## (`source_sublevel`) from the loader. It writes `<map>_core.scn` +
+## `review_core.tscn` and aggregates the manifest by `review_sublevel`. The
+## full per-sublevel assembly remains the default (`mode = "assembly"`).
+##
 ## Outputs, under `<out>/`:
 ##   <Sublevel>.scn   binary PackedScene per sublevel (required path)
 ##   world.scn        assembly of the per-sublevel scenes (no bookmarks)
@@ -23,8 +30,13 @@ extends RefCounted
 const LevelLoaderScript: GDScript = preload("res://src/core/level_loader.gd")
 const Tagger: GDScript = preload("res://addons/tat2_review/review_tagger.gd")
 const MapData: GDScript = preload("res://addons/tat2_review/review_map_data.gd")
+const ReviewEnvironment: GDScript = preload("res://addons/tat2_review/review_environment.gd")
 
 const WORLD_SKIP_BYTES: int = 150 * 1024 * 1024
+## Core-min is a single scene with every draw node in one file, so it needs a
+## larger guard than the per-sublevel assembly. 256 MB is the ceiling; above it
+## the bake fails closed instead of leaving a scene no 8 GB laptop can open.
+const CORE_SCENE_MAX_BYTES: int = 256 * 1024 * 1024
 const MAX_LIGHTS: int = 160
 const REVIEW_FOV: float = 54.54
 
@@ -74,6 +86,17 @@ func bake(tree: SceneTree, map_id: String, out_dir: String, opts: Dictionary = {
 	if mk_err != OK and not DirAccess.dir_exists_absolute(abs_out):
 		report["errors"] = ["cannot create out dir %s (err=%d)" % [abs_out, mk_err]]
 		return report
+
+	var mode: String = str(opts.get("mode", "assembly")).to_lower()
+	report["mode"] = mode
+	report["bake_options"] = {
+		"mode": mode,
+		"sublevels": str(opts.get("sublevels", "all")),
+		"max_lights": int(opts.get("max_lights", MAX_LIGHTS)),
+	}
+	if mode == "single":
+		return await _bake_single(tree, map_id, out_dir, paths, opts, report, started)
+
 
 	var staging: Node3D = Node3D.new()
 	staging.name = "ReviewBakeStaging"
@@ -196,6 +219,238 @@ func bake(tree: SceneTree, map_id: String, out_dir: String, opts: Dictionary = {
 	report["ok"] = all_errors.is_empty() and not pack_failed and bool(world_res.get("ok", false)) and bool(master_res.get("ok", false))
 	staging.queue_free()
 	return report
+
+
+## Core-min single-call bake. See the file header. `paths` are the resolved
+## sublevels; `opts.sublevels == "core"` (default here) narrows them through
+## MapData.core_sublevels().
+func _bake_single(tree: SceneTree, map_id: String, out_dir: String, paths: Array, opts: Dictionary, report: Dictionary, started: int) -> Dictionary:
+	var sublevel_mode: String = str(opts.get("sublevels", "core")).to_lower()
+	var selected: Array[String] = []
+	if sublevel_mode == "core":
+		selected = MapData.core_sublevels(map_id, paths)
+	else:
+		for p: Variant in paths:
+			selected.append(str(p))
+	var existing: Array[String] = []
+	for json_path: String in selected:
+		if not FileAccess.file_exists(json_path):
+			(report["errors"] as Array).append("missing sublevel: %s" % json_path)
+		else:
+			existing.append(json_path)
+	if existing.is_empty():
+		(report["errors"] as Array).append("no readable core sublevels for map '%s'" % map_id)
+		report["bake_ms"] = Time.get_ticks_msec() - started
+		return report
+
+	var light_budget: int = int(opts.get("max_lights", MAX_LIGHTS))
+	var staging: Node3D = Node3D.new()
+	staging.name = "ReviewCoreStaging"
+	tree.root.add_child(staging)
+	var loader: Node = LevelLoaderScript.new()
+	loader.name = "ReviewCoreLevelLoader"
+	staging.add_child(loader)
+	await tree.process_frame
+	var container: Node3D = Node3D.new()
+	container.name = "%s_core" % map_id
+	container.set_meta("review_map", map_id)
+	container.set_meta("review_kind", "group")
+	staging.add_child(container)
+	_append_log("Load core single-call sublevels=%d budget=%d" % [existing.size(), light_budget])
+	var load_started: int = Time.get_ticks_msec()
+	var res_v: Variant = await loader.call("load_sublevels_async", existing, container, null, light_budget, true)
+	var res: Dictionary = res_v if res_v is Dictionary else {}
+	var loader_ms: int = Time.get_ticks_msec() - load_started
+	# No explicit sublevel argument: every node is tagged from its own loader
+	# provenance (`source_sublevel`), which is what makes a single-call bake
+	# attributable without editing level_loader.gd.
+	Tagger.apply_tags(container)
+	_name_review_nodes(container)
+	var stats: Dictionary = Tagger.collect_stats(container)
+	var by_sublevel: Dictionary = (stats.get("sublevels", {}) as Dictionary).duplicate(true)
+
+	report["core"] = {
+		"sublevels": existing,
+		"sublevel_mode": sublevel_mode,
+		"light_budget": light_budget,
+		"loader_ms": loader_ms,
+		"loader_counts": _pick_loader_counts(res),
+		"by_sublevel": by_sublevel,
+		"hidden_nodes": int(stats.get("hidden_nodes", 0)),
+		"hidden_records": int(stats.get("hidden_records", 0)),
+		"mixed_nodes": int(stats.get("mixed_nodes", 0)),
+	}
+	report["totals"] = _totals_from_stats(stats, res)
+	report["issues"] = (stats.get("issues", {}) as Dictionary).duplicate(true)
+	report["by_sublevel"] = by_sublevel
+	report["bookmarks"] = _bookmarks_for_manifest(map_id)
+	report["checks"]["_aggregate"] = _consistency_checks(res, stats)
+	for sub: String in by_sublevel.keys():
+		report["checks"][sub] = _sublevel_check(sub, by_sublevel[sub] as Dictionary, stats)
+	# The per-sublevel list keeps the assembly schema: one entry per provenance
+	# stem, with aggregate node counts. `json` is filled when the stem was in
+	# the selected set.
+	var json_by_stem: Dictionary = {}
+	for json_path2: String in existing:
+		json_by_stem[json_path2.get_file().trim_suffix(".tatlevel.json")] = json_path2
+	for sub2: String in by_sublevel.keys():
+		var counts: Dictionary = by_sublevel[sub2] as Dictionary
+		report["sublevels"].append({
+			"sublevel": sub2,
+			"json": str(json_by_stem.get(sub2, "")),
+			"node_counts": {
+				"nodes": int(counts.get("nodes", 0)),
+				"draw_instances": int(counts.get("draws", 0)),
+				"lights": int(counts.get("lights", 0)),
+				"hidden_nodes": int(counts.get("hidden_nodes", 0)),
+				"hidden_records": int(counts.get("hidden_records", 0)),
+			},
+			"scene": "",
+			"scene_bytes": 0,
+		})
+
+	var all_errors: Array[String] = []
+	for prev: Variant in report["errors"] as Array:
+		all_errors.append(str(prev))
+	for check_name: String in (report["checks"]["_aggregate"] as Dictionary).keys():
+		var c: Dictionary = (report["checks"]["_aggregate"] as Dictionary)[check_name] as Dictionary
+		if not bool(c.get("ok", false)):
+			all_errors.append("aggregate consistency %s: %s" % [check_name, str(c)])
+	for check_name2: String in by_sublevel.keys():
+		var sc: Dictionary = report["checks"][check_name2] as Dictionary
+		if not bool(sc.get("ok", false)):
+			all_errors.append("sublevel check %s: %s" % [check_name2, str(sc)])
+	for err: String in all_errors:
+		_append_log("error=" + err)
+
+	var core_path: String = out_dir.path_join("%s_core.scn" % map_id)
+	var save_ok: bool = false
+	if all_errors.is_empty():
+		_set_owner_recursive(container, container)
+		var packed: PackedScene = PackedScene.new()
+		var pack_err: int = packed.pack(container)
+		if pack_err != OK:
+			all_errors.append("pack failed for %s_core (err=%d)" % [map_id, pack_err])
+		else:
+			var save_err: int = ResourceSaver.save(packed, core_path)
+			if save_err != OK:
+				all_errors.append("save failed for %s (err=%d)" % [core_path, save_err])
+			else:
+				var bytes: int = _file_size(core_path)
+				report["core"]["scene_bytes"] = bytes
+				if bytes > CORE_SCENE_MAX_BYTES:
+					DirAccess.remove_absolute(_globalize(core_path))
+					all_errors.append("%s exceeded %d bytes (%.1f MB) and was removed" % [core_path, CORE_SCENE_MAX_BYTES, bytes / 1048576.0])
+				else:
+					save_ok = true
+					report["scenes"].append({"path": core_path, "bytes": bytes, "kind": "core"})
+					_append_log("  built %s in %d ms (%d bytes)" % [core_path.get_file(), loader_ms, bytes])
+	report["errors"] = all_errors
+	if save_ok:
+		var master: Dictionary = _save_core_master(tree, out_dir, core_path, map_id, opts)
+		if bool(master.get("ok", false)):
+			report["scenes"].append({"path": master["path"], "bytes": master["bytes"], "kind": "review_core_master"})
+			report["world_mode"] = "single_call"
+		else:
+			all_errors.append(str(master.get("error", "review_core master failed")))
+			report["errors"] = all_errors
+	report["warnings"] = (report.get("warnings", []) as Array)
+	report["bake_ms"] = Time.get_ticks_msec() - started
+	report["ok"] = (report["errors"] as Array).is_empty() and save_ok and report["world_mode"] == "single_call"
+	staging.queue_free()
+	return report
+
+
+## Per-sublevel checks in a single call: the loader only reports aggregate
+## counts, so these verify the provenance split is internally consistent
+## (draws/lights/hidden stay within the tagged total) and every sublevel has
+## reviewable content. No fabricated per-sublevel loader expectation.
+func _sublevel_check(sub: String, counts: Dictionary, stats: Dictionary) -> Dictionary:
+	var draws: int = int(counts.get("draws", 0))
+	var lights: int = int(counts.get("lights", 0))
+	var hidden_records: int = int(counts.get("hidden_records", 0))
+	var total_draws: int = int(stats.get("draw_instances", 0))
+	var ok: bool = draws >= 0 and hidden_records <= draws and (draws + lights > 0)
+	return {
+		"label": "review_sublevel %s provenance (draws+lights>0, hidden<=draws)" % sub,
+		"draws": draws,
+		"lights": lights,
+		"hidden_nodes": int(counts.get("hidden_nodes", 0)),
+		"hidden_records": hidden_records,
+		"total_draws": total_draws,
+		"ok": ok,
+	}
+
+
+func _totals_from_stats(stats: Dictionary, res: Dictionary) -> Dictionary:
+	var kinds: Dictionary = stats.get("kinds", {})
+	return {
+		"chunks": int(res.get("chunk_count", 0)),
+		"mesh_instances": int(res.get("mesh_instances", 0)),
+		"lights": int(stats.get("lights", 0)),
+		"occluders": int(stats.get("occluders", 0)),
+		"collision_bodies": int(stats.get("collision_bodies", 0)),
+		"collision_shapes": int(stats.get("collision_shapes", 0)),
+		"decals": int(stats.get("decals", 0)),
+		"niagara_nodes": int(stats.get("niagara_nodes", 0)),
+		"niagara_instances": int(stats.get("niagara_instances", 0)),
+		"nodes": int(stats.get("nodes", 0)),
+		"surfaces": int(stats.get("surfaces", 0)),
+		"instances": int(stats.get("instances", 0)),
+		"landscapes": int((kinds as Dictionary).get("landscape", 0)),
+		"hidden_nodes": int(stats.get("hidden_nodes", 0)),
+		"hidden_records": int(stats.get("hidden_records", 0)),
+	}
+
+
+## `review_core.tscn`: one instance of the core scene + the review-only
+## environment, bookmarks and camera. Instancing keeps geometry in a single
+## `<map>_core.scn` instead of duplicating it into the master.
+func _save_core_master(tree: SceneTree, out_dir: String, core_path: String, map_id: String, opts: Dictionary) -> Dictionary:
+	var ps: PackedScene = load(core_path) as PackedScene
+	if ps == null:
+		return {"ok": false, "error": "cannot reload core scene %s" % core_path}
+	var root: Node3D = Node3D.new()
+	root.name = "ReviewCore"
+	root.set_meta("review_map", map_id)
+	root.set_meta("review_kind", "group")
+	root.set_meta("review_generated_by", "tools/bake_review_map.gd --mode=single")
+	root.set_meta("review_only", true)
+	root.set_meta("review_toggles", _default_toggles())
+	tree.root.add_child(root)
+	var inst: Node3D = ps.instantiate() as Node3D
+	if inst == null:
+		root.free()
+		return {"ok": false, "error": "core scene %s is not Node3D" % core_path}
+	inst.name = "%s_core" % map_id
+	root.add_child(inst)
+	inst.owner = root
+	var env_report: Dictionary = ReviewEnvironment.build(root, map_id, bool(opts.get("gameplay_fills", true)))
+	root.set_meta("review_env", env_report)
+	_add_bookmarks(root, map_id)
+	_add_camera(root, map_id)
+	# ReviewEnvironment adds its nodes at runtime (no owner); without ownership
+	# PackedScene.pack() drops them and review_core.tscn would have no light.
+	# The instanced core keeps its own scene ownership (do not recurse into it).
+	for c: Node in root.get_children():
+		c.owner = root
+		if c != inst:
+			_set_owner_recursive(c, root)
+	var packed: PackedScene = PackedScene.new()
+	var pack_err: int = packed.pack(root)
+	if pack_err != OK:
+		root.free()
+		return {"ok": false, "error": "pack failed for review_core (err=%d)" % pack_err}
+	var path: String = out_dir.path_join("review_core.tscn")
+	var save_err: int = ResourceSaver.save(packed, path)
+	var bytes: int = _file_size(path) if save_err == OK else 0
+	root.free()
+	if save_err != OK:
+		return {"ok": false, "error": "save failed for %s (err=%d)" % [path, save_err]}
+	if bytes > CORE_SCENE_MAX_BYTES:
+		DirAccess.remove_absolute(_globalize(path))
+		return {"ok": false, "error": "%s exceeded %d bytes (%.1f MB) and was removed" % [path, CORE_SCENE_MAX_BYTES, bytes / 1048576.0]}
+	return {"ok": true, "path": path, "bytes": bytes}
 
 
 func write_manifest(report: Dictionary, out_dir: String) -> int:
@@ -340,6 +595,7 @@ func _default_toggles() -> Dictionary:
 		"Doors": true,
 		"Loot": true,
 		"Devices": true,
+		"Hidden in game": false,
 	}
 
 

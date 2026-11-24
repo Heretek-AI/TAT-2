@@ -162,6 +162,42 @@ static func bookmarks_for(map_id: String) -> Array:
 	return (BOOKMARKS.get(map_id, []) as Array).duplicate(true)
 
 
+## Core-min set for the single-call bake: the smallest sublevel set that still
+## shows the building the review is about. Guildhall is explicit (POI + 3rd
+## floor + Gameplay + Lighting); every other map drops the periphery/skybox
+## shells from its resolved list. Order follows the input list.
+const CORE_GUILDHALL_STEMS: Array[String] = [
+	"Building_Guildhall_POI",
+	"Building_Guildhall_POI_3rdFloor",
+	"Guildhall_Gameplay",
+	"Guildhall_LightingNoGameplay",
+]
+const CORE_EXCLUDE_TOKENS: Array[String] = ["periphery", "skyboxgeo", "clouds", "_audio"]
+
+
+static func core_sublevels(map_id: String, paths: Array) -> Array[String]:
+	var out: Array[String] = []
+	if map_id == "guildhall":
+		for stem: String in CORE_GUILDHALL_STEMS:
+			for p: Variant in paths:
+				var path: String = str(p)
+				if path.get_file().trim_suffix(".tatlevel.json") == stem:
+					out.append(path)
+					break
+		return out
+	for p2: Variant in paths:
+		var path2: String = str(p2)
+		var low: String = path2.get_file().to_lower()
+		var excluded: bool = false
+		for token: String in CORE_EXCLUDE_TOKENS:
+			if low.find(token) >= 0:
+				excluded = true
+				break
+		if not excluded:
+			out.append(path2)
+	return out
+
+
 static func _first_contract_order_for(map_id: String) -> int:
 	var tree: SceneTree = Engine.get_main_loop() as SceneTree
 	if tree == null:

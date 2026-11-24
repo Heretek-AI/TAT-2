@@ -11,6 +11,11 @@ extends RefCounted
 ##                     group
 ##   review_issue    : beam_lines | world_label | emissive_plate | collision_only
 ##   review_role     : door | loot | device (dock convenience filter)
+##   review_authored_visible : bool  the node's `visible` as the loader built it,
+##                     captured before any review toggle runs. Authored
+##                     `bHiddenInGame` fixtures are loaded visible=false; review
+##                     must never reveal them unless the "Hidden in game"
+##                     toggle is explicitly on. See review_filters.gd.
 ##
 ## Tags are written on every node, not inherited, so an instanced per-sublevel
 ## scene keeps its identity when assembled into `review.tscn`.
@@ -78,6 +83,13 @@ static func apply_tags(node: Node, sublevel: String = "") -> void:
 	var tags: Dictionary = classify_node(node, own)
 	node.set_meta("review_sublevel", tags["review_sublevel"])
 	node.set_meta("review_kind", tags["review_kind"])
+	# Capture authored visibility once, at tagging time (right after the loader
+	# built the node and before any review toggle). `bHiddenInGame` fixtures
+	# arrive visible=false; the review UI must preserve that unless asked.
+	if node is Node3D:
+		node.set_meta("review_authored_visible", (node as Node3D).visible)
+	elif node is CanvasItem:
+		node.set_meta("review_authored_visible", (node as CanvasItem).visible)
 	if str(tags["review_issue"]) != "":
 		node.set_meta("review_issue", tags["review_issue"])
 	else:
@@ -104,6 +116,9 @@ static func collect_stats(root: Node) -> Dictionary:
 		"surfaces": 0,
 		"lights": 0,
 		"loader_lights": 0,     # excludes loader GI fills (SkylightLeakingFill_*)
+		"hidden_nodes": 0,      # authored bHiddenInGame nodes (visible=false)
+		"hidden_records": 0,    # ...weighted by MultiMesh instance_count
+		"mixed_nodes": 0,       # loader provenance "mixed"/"unknown" (single-call merges)
 		"occluders": 0,
 		"collision_bodies": 0,
 		"collision_shapes": 0,
@@ -113,12 +128,32 @@ static func collect_stats(root: Node) -> Dictionary:
 		"niagara_instances": 0,
 		"aabb": AABB(),
 		"has_aabb": false,
+		"sublevels": {},        # review_sublevel -> per-sublevel counts
 	}
 	var stack: Array[Node] = [root]
 	while not stack.is_empty():
 		var n: Node = stack.pop_back()
 		stats["nodes"] = int(stats["nodes"]) + 1
 		var kind: String = str(n.get_meta("review_kind", "")) if n.has_meta("review_kind") else ""
+		var sub: String = str(n.get_meta("review_sublevel", "")) if n.has_meta("review_sublevel") else ""
+		var sub_stats: Dictionary = {}
+		if sub != "":
+			var subs: Dictionary = stats["sublevels"]
+			if not subs.has(sub):
+				subs[sub] = {"nodes": 0, "draws": 0, "lights": 0, "hidden_nodes": 0, "hidden_records": 0}
+			sub_stats = subs[sub] as Dictionary
+			sub_stats["nodes"] = int(sub_stats["nodes"]) + 1
+		var authored_visible: bool = true
+		if n.has_meta("review_authored_visible"):
+			authored_visible = bool(n.get_meta("review_authored_visible"))
+		if n.has_meta("source_sublevel"):
+			var src: String = str(n.get_meta("source_sublevel"))
+			if src == "mixed" or src == "unknown":
+				stats["mixed_nodes"] = int(stats["mixed_nodes"]) + 1
+		if not authored_visible:
+			stats["hidden_nodes"] = int(stats["hidden_nodes"]) + 1
+			if not sub_stats.is_empty():
+				sub_stats["hidden_nodes"] = int(sub_stats["hidden_nodes"]) + 1
 		if kind != "":
 			var kinds: Dictionary = stats["kinds"]
 			kinds[kind] = int(kinds.get(kind, 0)) + 1
@@ -134,6 +169,8 @@ static func collect_stats(root: Node) -> Dictionary:
 		match kind:
 			"light":
 				stats["lights"] = int(stats["lights"]) + 1
+				if not sub_stats.is_empty():
+					sub_stats["lights"] = int(sub_stats["lights"]) + 1
 				# The loader adds post-process GI fills outside the light budget
 				# (SkylightLeakingFill_*). They are real review light nodes but
 				# not part of loader `light_count`.
@@ -170,6 +207,12 @@ static func collect_stats(root: Node) -> Dictionary:
 				stats["instances"] = int(stats["instances"]) + 1
 			if mesh != null:
 				stats["surfaces"] = int(stats["surfaces"]) + mesh.get_surface_count()
+				if not sub_stats.is_empty():
+					sub_stats["draws"] = int(sub_stats["draws"]) + count
+				if not authored_visible:
+					stats["hidden_records"] = int(stats["hidden_records"]) + count
+					if not sub_stats.is_empty():
+						sub_stats["hidden_records"] = int(sub_stats["hidden_records"]) + count
 				if n.has_meta("ue_mesh"):
 					stats["draw_instances"] = int(stats["draw_instances"]) + count
 				stats["has_aabb"] = _merge_aabb(stats, gi, mesh)

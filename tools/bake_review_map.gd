@@ -3,10 +3,17 @@ extends SceneTree
 ##
 ##   tools/godot --headless --path game --script tools/bake_review_map.gd \
 ##       -- --map=guildhall --out=res://scenes/review/guildhall
+##   tools/godot --headless --path game --script tools/bake_review_map.gd \
+##       -- --map=guildhall --mode=single --sublevels=core \
+##          --out=res://scenes/review/guildhall_core
 ##
 ## Builds one scene per Guildhall/OldManor/Den/MissionLobby sublevel through the
 ## real LevelLoader, tags it for the tat2_review editor dock, and writes
 ## world.scn + review.tscn + review_manifest.json under --out.
+##
+## `--mode=single --sublevels=core` is the core-min bake: POI + 3rd floor +
+## Gameplay + Lighting in ONE loader call with one 160-light budget, saved as
+## `<map>_core.scn` + `review_core.tscn`.
 ##
 ## Exit codes: 0 = every scene packed and saved, 1 = resolution/pack/save
 ## failure or a failed loader/plugin consistency check. The JSON manifest is
@@ -27,6 +34,9 @@ func _run(args: Dictionary) -> void:
 	var report: Dictionary = await baker.call("bake", self, map_id, out_dir, {
 		"seed": int(args.get("seed", 0)),
 		"max_lights": int(args.get("max_lights", 160)),
+		"mode": str(args.get("mode", "assembly")),
+		"sublevels": str(args.get("sublevels", "all")),
+		"gameplay_fills": bool(args.get("gameplay_fills", true)),
 	})
 	var write_err: int = int(baker.call("write_manifest", report, out_dir))
 	if write_err != OK:
@@ -38,6 +48,7 @@ func _run(args: Dictionary) -> void:
 	var issues: Dictionary = report.get("issues", {})
 	var status: String = "ok" if bool(report.get("ok", false)) else "failed"
 	print("REVIEW_BAKE summary map=", map_id,
+		" mode=", str(report.get("mode", "assembly")),
 		" status=", status,
 		" sublevels=", (report.get("sublevels", []) as Array).size(),
 		" scenes=", scenes.size(),
@@ -45,6 +56,8 @@ func _run(args: Dictionary) -> void:
 		" beams=", int(issues.get("beam_lines", 0)),
 		" labels=", int(issues.get("world_label", 0)),
 		" emissive=", int(issues.get("emissive_plate", 0)),
+		" hidden_nodes=", int((report.get("totals", {}) as Dictionary).get("hidden_nodes", 0)),
+		" hidden_records=", int((report.get("totals", {}) as Dictionary).get("hidden_records", 0)),
 		" bake_ms=", int(report.get("bake_ms", 0)),
 		" out=", out_dir)
 	if status != "ok":
@@ -61,6 +74,9 @@ func _parse_args(raw: PackedStringArray) -> Dictionary:
 		"out": "",
 		"seed": 0,
 		"max_lights": 160,
+		"mode": "assembly",
+		"sublevels": "all",
+		"gameplay_fills": true,
 	}
 	for arg: String in raw:
 		if arg.begins_with("--map="):
@@ -71,8 +87,20 @@ func _parse_args(raw: PackedStringArray) -> Dictionary:
 			out["seed"] = int(arg.substr("--seed=".length()))
 		elif arg.begins_with("--max-lights="):
 			out["max_lights"] = int(arg.substr("--max-lights=".length()))
+		elif arg.begins_with("--mode="):
+			out["mode"] = arg.substr("--mode=".length()).to_lower()
+		elif arg.begins_with("--sublevels="):
+			out["sublevels"] = arg.substr("--sublevels=".length()).to_lower()
+		elif arg == "--gameplay-fills":
+			out["gameplay_fills"] = true
+		elif arg == "--no-gameplay-fills":
+			out["gameplay_fills"] = false
 		else:
 			printerr("REVIEW_BAKE ignore unknown arg: ", arg)
+	if str(out["mode"]) != "single" and str(out["mode"]) != "assembly":
+		printerr("REVIEW_BAKE unknown --mode=", str(out["mode"]), "; using assembly")
+		out["mode"] = "assembly"
 	if str(out["out"]) == "":
-		out["out"] = "res://scenes/review/" + str(out["map"])
+		var suffix: String = "_core" if str(out["mode"]) == "single" else ""
+		out["out"] = "res://scenes/review/" + str(out["map"]) + suffix
 	return out

@@ -234,3 +234,19 @@ find extracted/json -name 'NS_*.json' | wc -l
   - **Free-play / Contract Inactive**: order-2-hosted mode, mission `Mission.Guildhall.LootTheRoom`, 4000/6000/8000 goals, `Steal {Amount} in loot value`, 3300 s, HUD `Mission: Steal 4,000 in loot value[0/4,000]` and `£ 0`, no contract-completion write; `--qa-free-play`/`--qa-mission`. New E2E T4-13; suite 261/261.
   - **Probe shutdown**: attempted `visible=false` + `free()` before exit; the 7-texture RID warning still appears at finalization, so the `TAT2_NO_DEN_PROBE` switch remains the clean-exit path.
   - **QA**: compile 58/0, run_tests 0, M2 0, door/VM/Niagara, E2E 261/261.
+
+- **Review remediation wave (2026-11-23, fifth pass)** — `3ed80c0`, `4b9fa03`, `0e89d2c`, `e7fcb7d`:
+  - **Security beams**: `MI_LightBeam_SM` now uses `tat_beam.gdshader` (warm additive, alpha 0.55, energy 1.7) instead of an opaque white lit material; generic additive/textured-unlit mapping added. The 134 Guildhall beams no longer render as solid white bars.
+  - **Two-sided flags**: the parser reads `BasePropertyOverrides.TwoSided`; 24 materials gained the flag (gates, fences, brass doors, vault panels, sign). Gates/fences no longer vanish from one side.
+  - **Paint-stroke albedo**: the parser prefers the child MI's companion `_D` over the parent master; 15 materials recovered, including `MI_BrickNewClean_XYZ` (gate frame) and `MI_FloorTileA_AlignXYZ`.
+  - **Mirrored doors**: negative-determinant leaves get per-surface `CULL_DISABLED` duplicates (36 POI + 4 vault pivots).
+  - **WorldGrid doors**: fully-grid `SM_OldManor_Gate_FrontDoor` / `SM_OldManor_Gallery_Door_Glass` get referenced metal/glass substitutions; partial-grid door surfaces copy the main door material.
+  - **Blocking volumes**: tagged `blocking_volume`; mantle/wall-climb/zipwire reject them. New T1-10-J covers tall/low blockers, 4 m/5 m mantles, real walls and no soft-lock. Invisible designer ledges are no longer climbable.
+  - **FOV**: schema-v2 migration rewrites only the legacy saved `fov:75` to 54.54; the KF16 capture pins 54.54. Gate/street framing now matches the authored lens.
+  - **Loot grounding**: 253 Guildhall loot items and 3 civilians now sit 0.03 m above the floor ray (0 floating, 0 sunk); the blanket +0.5 m offset is gone.
+  - **Ornate gate fill**: unregistered warm omni at `(80,20,18)`.
+  - **Sign letters**: per-instance s1 emission `(1.0,0.62,0.20)` energy 0.10. The letters are gold and front-facing at 54.54; at the 27 m capture they remain low-contrast in the frame, so legibility is still a residual.
+  - **Free-play**: autostart `_bind_menu_env` no longer throws; `_on_extracted` skips currency in free play; a real Den map-table entry (`FREE PLAY: GUILDHALL CLEANOUT [G]`) reaches the Contract Inactive prep card. Captures show `CONSTABLES' GUILDHALL / Contract Inactive / Cleanout Heist / 55 minutes` and HUD `Mission: Steal 4,000 in loot value[0/4,000]`, `£ 0`. The prep body text clips at the card edge (minor UI polish).
+  - **Den**: KF10 core p50 remains 43.5 with the new material flags; KF02 10.3, KF06 8.2, KF09 30.5, zero clip.
+  - **QA**: compile 58/0, run_tests 0, M2 0, door/VM/Niagara, E2E **262/262** (T1-10-J added; T2-04-C accepts the intentional beam shader). The 7-texture probe leak still warns at exit; `TAT2_NO_DEN_PROBE=1` remains the clean gate.
+  - **Documented residuals**: Guildhall POI graybox floors/floating furniture, white glass/emissive plates, mirrored `PICK LOCK` reflection, sign legibility at 27 m.

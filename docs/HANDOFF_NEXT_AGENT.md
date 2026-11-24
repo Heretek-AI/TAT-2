@@ -357,11 +357,14 @@ Recent additions to know about:
 8. **World review is built and the Guildhall is baked.** `make bake-review
    MAP=guildhall` writes 18 scenes / 371 MB under the gitignored
    `game/scenes/review/guildhall/` in 18.76 s (33,356 tagged nodes, 312 beam
-   lines, 481 emissive plates); the master loads headless in 9.1 s / 3.4 GB.
-   `make editor` exposes the TAT-2 Review dock and `make review MAP=guildhall`
-   the live free camera. Remaining: manual dock/toggle and windowed checks.
-   The baked scenes are snapshots with no gameplay authority. See
-   `reports/review-map-baker.md`.
+   lines, 481 emissive plates). In-game review (`make review MAP=guildhall`)
+   loads the real world in one call: 31,734 nodes, 5,923 draws, 160 lights,
+   10,826 surfaces, ready in ~30 s; `make review-capture` writes six bookmark
+   PNGs and `--hide=Beams` confirms the long lines are beam meshes (vault crop
+   RMSE 3.2 %). The full editor master exceeds the 8 GB laptop GPU (Vulkan
+   device creation failed) and the per-sublevel editor scene was still loading
+   after 2.5 min; editor/dock interaction remains unverified. Baked scenes are
+   snapshots with no gameplay authority. See `reports/review-map-baker.md`.
 
 ### 7.2 Fidelity residuals (visible, bounded)
 

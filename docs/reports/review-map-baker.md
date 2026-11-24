@@ -1,10 +1,12 @@
 # Review-map baker and in-game review mode (2026-11-24)
 
-Status: **pipeline implemented and verified on `thieves_den`, `mission_lobby`
-and the full Guildhall**. The Guildhall bake is 371 MB across 18 scenes; it
-loads headless in 9.1 s at 3.4 GB RSS. The editor master instances 16
-sublevel scenes (33,356 nodes) and is heavy but usable; manual GUI interaction
-is the only unverified part.
+Status: **pipeline implemented; the in-game review and offscreen captures are
+verified on the full Guildhall.** The baked editor master could not create a
+Vulkan device in a visible editor session on the reference 8 GB laptop GPU
+(full master: 562 lights, 33k nodes, 3.4 GB headless RSS); opening an
+87 MB per-sublevel POI scene was still on the splash after 2.5 min and was
+aborted. Treat the baked scenes as an editor archive on a larger GPU, and use
+the in-game capture sweep for review on this machine.
 
 ## What it is
 
@@ -203,8 +205,13 @@ in a normal session; this is called out as unverified rather than claimed.
 
 ## In-game review mode (`game/scenes/review_mode.tscn`)
 
-Loads the selected map with the real `LevelLoader` (one call per sublevel, no
-mission, player, AI or gameplay), then:
+Loads the selected map with the real `LevelLoader` in **one call** (the shipped
+path: all sublevels, one 160-light budget, cross-sublevel dedupe), then tags
+draw nodes from the loader's `source_sublevel` provenance. No mission, player,
+AI or gameplay. Measured: 31,734 tagged nodes, 5,923 draw nodes, 160 lights,
+10,826 surfaces; `REVIEW ready` after ~30 s on a warm cache. An earlier
+per-sublevel loop multiplied the budget to 562 lights and shader variants and
+never left the splash; the single call is the only supported path.
 
 | Input | Action |
 |---|---|
@@ -217,10 +224,40 @@ mission, player, AI or gameplay), then:
 | Esc | Quit |
 
 The HUD is built in `review_mode.gd` (never `hud.gd`) and shows counts, active
-toggles and the last action. Per-sublevel loads each get the loader's 160-light
-budget; the shipped game loads all sublevels in one call with a single budget,
-so the review harness can show more lights than a real run. This is a review
-convenience, not gameplay authority.
+toggles and the last action. The review harness now matches the shipped single
+budget, so it no longer over-lights the world.
+
+**Capture without window presentation:** `make review-capture MAP=guildhall`
+runs the same scene offscreen in six bookmark steps and writes PNGs to
+`build/qa/review/guildhall/`. This is also the fix for a black-looking window:
+the viewport is rendering (verified captures show the night exterior, library
+and vault), but an occluded/minimized Wayland window can present black. Click
+the window or use the capture target. The `Foyer` bookmark currently renders
+black (camera inside the dark shell); the Library and Vault bookmarks are
+usable.
+
+### First Guildhall captures (2026-11-24)
+
+Six bookmark captures at 1280×720 (`make review-capture MAP=guildhall`):
+`KF16_Gate` (night exterior, HUD), `Foyer` (black — camera inside the dark
+shell), `Library` (dark interior, staircase), `POI_Lounge`, `Safe_Room`,
+`Vault` (vault geometry plus floating cyan/blue billboard sprites). The world
+renders; the window presentation is the only black-window failure mode.
+
+A paired sweep with `--hide=Beams` isolates the long thin lines:
+
+| View | Cropped RMSE (normal vs no beams) | Reading |
+|---|---:|---|
+| Vault | 3.20 % | beam cards clearly visible |
+| Library | 0.90 % | beams in view |
+| KF16 gate | 0.64 % | distant beams |
+| Foyer / POI lounge | 0.00 % | no beams in frame |
+
+This confirms the long white/gold dashed lines are the 312 beam-tagged meshes
+(authored security/device beams plus the `tat_beam` shader), not a loader
+artifact. The cyan/blue blobs remain with beams hidden; they are Niagara or
+billboard props and belong to a separate rendering/placement fix. The beam
+orientation/placement fix is **not** part of this tool.
 
 ## Honest limits
 

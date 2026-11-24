@@ -344,7 +344,11 @@ find extracted/json -name 'NS_*.json' | wc -l
     static snapshots: no player, AI, doors, loot, devices, missions, weather or
     streaming, so they cannot validate gameplay or lighting parity.
   - **Residual**: per-sublevel loads each receive the loader's 160-light
-    budget, so the editor master shows 562 lights and 1,479 occluders versus
-    the shipped single-call 160/768; the Lighting toggle hides them but this is
-    not a performance measurement. Editor-dock clicking and the windowed
-    in-game mode were not manually exercised (GUI deferred).
+    budget in the editor master, so it shows 562 lights and 1,479 occluders
+    versus the shipped 160/768; the Lighting toggle hides them. The full
+    editor master failed Vulkan device creation on the 8 GB laptop GPU, and a
+    visible 87 MB per-sublevel scene was still loading after 2.5 min, so the
+    editor path is unverified on this machine. The in-game review
+    (`make review`) and six-bookmark captures (`make review-capture`) are
+    verified; `--hide=Beams` confirms the long lines are the 312 beam-tagged
+    meshes (vault crop RMSE 3.2 % vs 0 % in beam-free views).

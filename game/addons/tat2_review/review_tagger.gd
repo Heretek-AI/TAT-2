@@ -65,10 +65,17 @@ static func classify_node(node: Node, sublevel: String = "") -> Dictionary:
 
 
 ## Writes the tags from `classify_node` on `node` (only non-empty optional
-## keys), then recurses. `sublevel` is threaded down so every node records the
-## sublevel it was built from.
+## keys), then recurses. An explicit `sublevel` is threaded down; when it is
+## empty (single-call review load) each draw item's own loader provenance
+## (`source_sublevel`) is used instead, so chunk groups with mixed sources stay
+## untagged while their draw children keep the right sublevel.
 static func apply_tags(node: Node, sublevel: String = "") -> void:
-	var tags: Dictionary = classify_node(node, sublevel)
+	var own: String = sublevel
+	if own == "" and node.has_meta("source_sublevel"):
+		own = str(node.get_meta("source_sublevel"))
+		if own == "mixed" or own == "unknown":
+			own = ""
+	var tags: Dictionary = classify_node(node, own)
 	node.set_meta("review_sublevel", tags["review_sublevel"])
 	node.set_meta("review_kind", tags["review_kind"])
 	if str(tags["review_issue"]) != "":
@@ -80,7 +87,7 @@ static func apply_tags(node: Node, sublevel: String = "") -> void:
 	else:
 		node.remove_meta("review_role")
 	for child: Node in node.get_children():
-		apply_tags(child, sublevel)
+		apply_tags(child, own)
 
 
 ## Walks a tagged subtree and returns manifest-safe counts (no Node refs).

@@ -28,7 +28,7 @@ const Filters: GDScript = preload("res://addons/tat2_review/review_filters.gd")
 const MOVE_SPEED: float = 12.0
 const FAST_MULT: float = 4.0
 const LOOK_SENSITIVITY: float = 0.0022
-const MAX_LIGHTS_PER_SUBLEVEL: int = 160
+const MAX_LIGHTS_TOTAL: int = 160
 const CAPTURE_DIR: String = "user://review_captures"
 const NUMBER_TOGGLES: Array[String] = [
 	"Periphery", "POI", "Gameplay", "Lighting", "Decals",
@@ -36,6 +36,10 @@ const NUMBER_TOGGLES: Array[String] = [
 ]
 
 var map_id: String = "guildhall"
+var capture_path: String = ""
+var capture_dir: String = ""
+var capture_quit: bool = false
+var hide_toggles: Array[String] = []
 var _world_root: Node3D
 var _camera: Camera3D
 var _yaw: float = 0.0
@@ -57,6 +61,11 @@ func _ready() -> void:
 	_parse_args()
 	for t: String in NUMBER_TOGGLES:
 		_toggles[t] = true
+	for t: String in hide_toggles:
+		if _toggles.has(t):
+			_toggles[t] = false
+		else:
+			push_warning("[review] unknown --hide toggle: %s" % t)
 	_build_hud()
 	call_deferred("_load_world")
 
@@ -65,6 +74,15 @@ func _parse_args() -> void:
 	for arg: String in OS.get_cmdline_user_args():
 		if arg.begins_with("--map="):
 			map_id = arg.substr("--map=".length())
+		elif arg.begins_with("--capture="):
+			capture_path = arg.substr("--capture=".length())
+		elif arg.begins_with("--capture-dir="):
+			capture_dir = arg.substr("--capture-dir=".length())
+		elif arg == "--capture-quit":
+			capture_quit = true
+		elif arg.begins_with("--hide="):
+			for t: String in arg.substr("--hide=".length()).split(",", false):
+				hide_toggles.append(t.strip_edges())
 
 
 func _load_world() -> void:
@@ -87,29 +105,57 @@ func _load_world() -> void:
 	await get_tree().process_frame
 
 	var index: int = 0
+	var existing: Array[String] = []
 	for path_v: Variant in paths:
 		var json_path: String = str(path_v)
 		index += 1
 		if not FileAccess.file_exists(json_path):
 			_status("Missing sublevel: %s" % json_path)
 			continue
-		var stem: String = json_path.get_file().trim_suffix(".tatlevel.json")
-		var container: Node3D = Node3D.new()
-		container.name = stem
-		_world_root.add_child(container)
-		_status("Loading %d/%d %s" % [index, paths.size(), stem])
+		existing.append(json_path)
+	if existing.is_empty():
+		_loading = false
+		_status("No readable sublevels for map '%s'." % map_id)
 		_update_hud()
-		await loader.call("load_sublevels_async", [json_path], container, null, MAX_LIGHTS_PER_SUBLEVEL, true)
-		Tagger.apply_tags(container, stem)
-		_containers.append(container)
-		await get_tree().process_frame
+		return
+	# One call, like the shipped game: a single 160-light budget and the
+	# loader's cross-sublevel dedupe. Per-sublevel calls multiplied the light
+	# count (562) and shader variants until the window never left the splash.
+	var container: Node3D = Node3D.new()
+	container.name = map_id
+	_world_root.add_child(container)
+	_status("Loading %d sublevels in one LevelLoader call..." % existing.size())
+	_update_hud()
+	await loader.call("load_sublevels_async", existing, container, null, MAX_LIGHTS_TOTAL, true)
+	print("REVIEW loader done nodes=", container.get_child_count())
+	Tagger.apply_tags(container)
+	print("REVIEW tagged")
+	_containers.append(container)
 
 	_stats = Tagger.collect_stats(_world_root)
+	print("REVIEW stats nodes=", int(_stats.get("nodes", 0)), " draws=", int((_stats.get("kinds", {}) as Dictionary).get("mesh", 0)) + int((_stats.get("kinds", {}) as Dictionary).get("multimesh", 0)), " lights=", int(_stats.get("lights", 0)))
 	_bookmarks = MapData.bookmarks_for(map_id)
 	_spawn_camera()
 	_loading = false
 	_apply_toggles()
 	_update_hud()
+	print("REVIEW ready map=", map_id, " bookmarks=", _bookmarks.size())
+	if capture_dir != "":
+		DirAccess.make_dir_recursive_absolute(capture_dir)
+		for i: int in range(_bookmarks.size()):
+			_go_bookmark(i)
+			await get_tree().process_frame
+			await get_tree().process_frame
+			var bm: Dictionary = _bookmarks[i]
+			var label: String = str(bm.get("name", "bm%d" % i)).to_lower().replace(" ", "_")
+			var out: String = capture_dir.path_join("review_%s_%02d_%s.png" % [map_id, i + 1, label])
+			await _capture(out)
+		if capture_quit:
+			get_tree().quit()
+	elif capture_path != "":
+		await _capture(capture_path)
+		if capture_quit:
+			get_tree().quit()
 
 
 func _spawn_camera() -> void:
@@ -206,6 +252,19 @@ func _number_toggle_index(code: Key) -> int:
 	if code == KEY_0:
 		return 9
 	return -1
+
+
+func _capture(path: String) -> void:
+	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+	for _i: int in range(3):
+		await get_tree().process_frame
+	await RenderingServer.frame_post_draw
+	var img: Image = get_viewport().get_texture().get_image()
+	if img == null or img.is_empty():
+		print("REVIEW capture failed empty path=", path)
+		return
+	var err: int = img.save_png(path)
+	print("REVIEW capture path=", path, " size=", img.get_size(), " err=", err)
 
 
 func _save_capture() -> void:

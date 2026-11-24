@@ -8,7 +8,7 @@ MOBILE_ABI  ?= arm64
 QA_CONTRACT ?= 0
 KEYSTORE_PROPS := $(HOME)/.config/tat2/keystore.properties
 
-.PHONY: build-extractor extract anims normalize audit audit-bootstrap audit-refresh-stamps audit-imports test run editor review bake-review desktop-texture-cap texture-cap-check audio-tools linux-build linux-run android-prepare android-debug android-debug-gl android-release
+.PHONY: build-extractor extract anims normalize audit audit-bootstrap audit-refresh-stamps audit-imports test run editor review review-capture bake-review desktop-texture-cap texture-cap-check audio-tools linux-build linux-run android-prepare android-debug android-debug-gl android-release
 
 build-extractor:
 	DOTNET_ROOT=$(HOME)/.dotnet10 PATH=$(HOME)/.dotnet10:$(PATH) $(DOTNET) build tools/tat-extract -c Release
@@ -88,6 +88,10 @@ bake-review:
 # In-game free-camera review of the same static world (no mission/player).
 review:
 	$(GODOT) --path game res://scenes/review_mode.tscn -- --map=$(MAP)
+
+# Offscreen six-bookmark capture sweep (writes build/qa/review/<map>/*.png).
+review-capture:
+	$(GODOT) --path game --resolution 1280x720 res://scenes/review_mode.tscn -- --map=$(MAP) --capture-dir=$(CURDIR)/build/qa/review/$(MAP) --capture-quit
 
 # Editor with the TAT-2 Review dock (Project > Plugins if it is not visible).
 editor:

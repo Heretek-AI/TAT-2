@@ -88,6 +88,7 @@ mission, with the same `LevelLoader` the game uses:
 make bake-review MAP=guildhall   # per-sublevel .scn + world.scn + review.tscn + manifest
 make editor                      # TAT-2 Review dock: bake/open, sublevel+kind toggles, bookmarks
 make review MAP=guildhall        # in-game free camera (WASD/QE, 1-0 toggles, F1-F6 bookmarks, P capture)
+make review-capture MAP=guildhall # offscreen six-bookmark PNG sweep (no window presentation needed)
 ```
 
 Generated scenes land in `game/scenes/review/<map>/` and are git-ignored

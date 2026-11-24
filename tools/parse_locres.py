@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import struct
 import sys
 from pathlib import Path
@@ -160,6 +161,14 @@ def main() -> int:
             continue
         entries = parse_locres(source.read_bytes())
         write_csv(out_dir / f"{locale}.csv", locale, entries)
+        if locale == "en":
+            # Runtime reverse-map source: CSV imports are remapped in exported
+            # builds, so Loc reads this JSON (key -> English source) instead of
+            # the raw CSV. It is a normal runtime data file.
+            (out_dir / "sources.json").write_text(
+                json.dumps(entries, ensure_ascii=False, sort_keys=True),
+                encoding="utf-8",
+            )
         written += 1
         if not args.quiet:
             print(f"  {locale}: {len(entries)} keys -> {out_dir / (locale + '.csv')}")

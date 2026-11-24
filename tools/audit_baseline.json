@@ -264,14 +264,14 @@
       },
       "outputs": {
         "gen:localization": {
-          "bytes": 1865840,
+          "bytes": 2181168,
           "exists": true,
-          "files": 8,
-          "newest_mtime": 1795317574.3234313,
-          "sha256": "f43b1781759e8dc68ffdd7a897543c986b896f145f6a6e61ff4a5249ab8d14b3"
+          "files": 9,
+          "newest_mtime": 1795506683.518355,
+          "sha256": "ea1767ad076aae99c03299e0fb1aaab2de2724c822113006f7799b8e61ef032c"
         }
       },
-      "sha256": "5285809efc33fc3d8b7ebf8dae65a58e7ed0115e63c333d4e6cd8ea7b54eace6"
+      "sha256": "c7f3f368b1ece55f2b547951d927cc927a7597f94bbf2c331b037a499282a947"
     },
     "tools/parse_loot.py": {
       "command": "python3 tools/parse_loot.py",
@@ -452,5 +452,5 @@
     "vgmstream": "vgmstream CLI decoder r2168 (Oct 25 2026)"
   },
   "version": 2,
-  "written_utc": "2026-11-24T07:05:48Z"
+  "written_utc": "2026-11-24T07:51:26Z"
 }

@@ -45,8 +45,11 @@ var _current_code: String = "en"
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	_load_reverse_map()
+	# Translations first: exported builds can load the .translation resources
+	# even when the imported CSV is not addressable, so the English object is
+	# the reliable source for the reverse map.
 	_load_translations()
+	_load_reverse_map()
 	var saved_code: String = FALLBACK_LOCALE
 	var ss: Node = get_node_or_null("/root/SaveSystem")
 	if ss != null and ss.has_method("get_settings"):
@@ -127,15 +130,28 @@ func t(source: String) -> String:
 func _load_reverse_map() -> void:
 	_source_to_key.clear()
 	_en_key_count = 0
+	# Preferred source: the generator's JSON map. CSV imports are remapped in
+	# exported builds, so the raw en.csv is not reliably addressable there.
+	if _load_reverse_map_from_json():
+		return
 	if not FileAccess.file_exists(EN_CSV_PATH):
-		push_warning("[loc] missing English source table: ", EN_CSV_PATH, " (all strings pass through)")
+		# Exported builds remap imported CSVs to their .translation resource;
+		# the raw source may be present in the PCK but not addressable as a
+		# FileAccess path. Build the same reverse map from the English resource.
+		if _load_reverse_map_from_translation():
+			return
+		push_warning("[loc] missing English source table: ", EN_CSV_PATH, " and no en.en.translation fallback (all strings pass through)")
 		return
 	var f: FileAccess = FileAccess.open(EN_CSV_PATH, FileAccess.READ)
 	if f == null:
+		if _load_reverse_map_from_translation():
+			return
 		push_warning("[loc] cannot open English source table: ", EN_CSV_PATH)
 		return
 	var header: PackedStringArray = f.get_csv_line()
 	if header.size() < 2:
+		if _load_reverse_map_from_translation():
+			return
 		push_warning("[loc] English source table has no key/value columns: ", EN_CSV_PATH)
 		return
 	while not f.eof_reached():
@@ -151,6 +167,54 @@ func _load_reverse_map() -> void:
 		# not by Dictionary iteration order.
 		if not _source_to_key.has(src):
 			_source_to_key[src] = key
+
+
+## Primary runtime source: parse_locres.py writes {guid: English} so Loc works
+## identically in the editor and in an exported PCK (CSV imports are remapped).
+func _load_reverse_map_from_json() -> bool:
+	var path: String = LOCALE_DIR + "/sources.json"
+	if not FileAccess.file_exists(path):
+		return false
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+	if not (parsed is Dictionary):
+		push_warning("[loc] sources.json is not a JSON object: ", path)
+		return false
+	for key_v: Variant in (parsed as Dictionary).keys():
+		var key: String = str(key_v)
+		var src: String = str((parsed as Dictionary)[key_v])
+		if key == "" or src.strip_edges() == "":
+			continue
+		_en_key_count += 1
+		if not _source_to_key.has(src):
+			_source_to_key[src] = key
+	if _en_key_count > 0:
+		print("TAT-2 Loc: reverse map built from sources.json (", _en_key_count, " keys)")
+		return true
+	return false
+
+
+## Exported-build fallback: the English .translation resource carries the same
+## GUID -> English mapping as en.csv, and is a real imported resource. Build the
+## reverse map from it so Loc works inside a PCK without the raw CSV.
+func _load_reverse_map_from_translation() -> bool:
+	var tr: Translation = TranslationServer.get_translation_object("en") as Translation
+	if tr == null:
+		var path: String = LOCALE_DIR + "/en.en.translation"
+		var res: Resource = ResourceLoader.load(path) as Resource
+		if not (res is Translation):
+			return false
+		tr = res as Translation
+	for key: String in tr.get_message_list():
+		var src: String = str(tr.get_message(key))
+		if key == "" or src.strip_edges() == "":
+			continue
+		_en_key_count += 1
+		if not _source_to_key.has(src):
+			_source_to_key[src] = key
+	if _en_key_count > 0:
+		print("TAT-2 Loc: reverse map built from en.en.translation (", _en_key_count, " keys)")
+		return true
+	return false
 
 
 func _load_translations() -> void:

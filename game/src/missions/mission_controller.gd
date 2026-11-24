@@ -86,6 +86,28 @@ var _is_thieves_den: bool = false
 var _letter_grace_sec: float = 0.0 # P1 timer-during-letter: run-clock hold after the start letter (see _process).
 var _den_map_table_pos: Vector3 = Vector3.ZERO
 var _den_telescope_pos: Vector3 = Vector3(-4.9202, 41.0, 270.7337)
+## W5C Den backdrop staging. The authored telescope rig is
+## BP_HidingSpot_Telescope_C_1 in ThievesDenTest_P: its CameraComponent sits at
+## the tripod root + (0.1, 1.7, 0) m with yaw 148 deg / pitch 0, i.e. it looks
+## WEST-north through the attic's framed west window at the authored
+## BP_CoolThing_C_1 (cheese + moon kit at UE (-1668.9495, 27900.438, 5110.168)
+## cm -> (-16.69, 51.10, 279.00) m). It is NOT the 0.87 x 1.15 m
+## SM_ThievesDen_WindowBorder hatch on the south wall (UE (523.74, 26666.29,
+## 4064.71) cm), which the previous hard-coded win_pos used.
+## DEN_WEST_WINDOW_ANCHOR is measured from the loaded Den shell (W5C ray scan
+## through the real LevelLoader colliders): the west opening spans z
+## 270.4..272.4 and y 41.0..45.1 m at the shell wall plane x = -6.06 m with a
+## horizontal mullion at y ~43.6; anchor = opening centre on that plane.
+const DEN_TELESCOPE_CAM_YAW_DEG := 148.0
+const DEN_WEST_WINDOW_ANCHOR := Vector3(-6.06, 43.05, 271.4)
+## Inward shaft length: window plane to mid-room (shell centre x 1.3275 m, z
+## 271.355 m) along the authored view axis.
+const DEN_WINDOW_SHAFT_LENGTH := 6.5
+## A parsed `window_positions` entry only counts as the framed window when it
+## lies within this many degrees of the authored view axis and this many metres
+## of lateral offset from it (the window opening is ~2 m wide).
+const DEN_WINDOW_MAX_OFF_AXIS_DEG := 55.0
+const DEN_WINDOW_MAX_LATERAL_M := 2.5
 var _den_selected_map_id: String = "old_manor"
 var _den_lookat_card: Dictionary = {}
 var _den_tokens: Dictionary = {}
@@ -907,18 +929,16 @@ func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> 
 	add_child(room_fill)
 	light_probe.register_light(room_fill)
 
-	# Arched east window moonlight shaft (authored geometry, not hand values).
-	# UE WindowBorder StaticMeshComponent0 at cm
-	# (523.73975, 26666.291, 4064.7085) -> port m
-	# (5.2374, 40.6471, 266.6629). The shaft lands mid-room on the
-	# scope->window sightline: L = 6.1076 m is the horizontal
-	# WindowBorder->floor-shell-center distance (UE SM_ThievesDen shell/floor
-	# at cm (132.74524, 27135.502, 3957.8376) -> port
-	# (1.3275, 39.5784, 271.355)), stepped back from the window along the
-	# sightline axis with Y on the floor plane (F1 rule). outward
-	# (= win_pos - beam_target) therefore extends the scope->window axis past
-	# the wall, so the ponder ray threads the collider gap onto the vista.
-	var win_pos: Vector3 = Vector3(5.2374, 40.6471, 266.6629)
+	# Arched WEST window moonlight shaft (authored geometry, not hand values).
+	# The telescope camera faces west-north (authored CameraComponent yaw
+	# 148 deg), out the framed west opening at x = -6.06 m. W5C: the anchor and
+	# the outward axis come from the parsed `window_positions` when one lies on
+	# the sightline, else from the measured authored west opening (see the
+	# constants at the top of this file). The shaft lands mid-room along the
+	# same axis, so the ponder ray and the world vista stay collinear.
+	var staging: Dictionary = _den_window_staging(ue_level_data)
+	var win_pos: Vector3 = staging.get("anchor", DEN_WEST_WINDOW_ANCHOR) as Vector3
+	var outward: Vector3 = staging.get("outward", Vector3(-0.848, 0.0, 0.530)) as Vector3
 	var moon_beam := SpotLight3D.new()
 	moon_beam.name = "DenMoonBeam"
 	moon_beam.position = win_pos
@@ -930,11 +950,12 @@ func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> 
 	moon_beam.shadow_enabled = true
 	moon_beam.add_to_group("den_hand_fills")
 	add_child(moon_beam)
-	var beam_target: Vector3 = Vector3(-0.4317, anchor.y + 0.1, 268.9349)
+	var beam_target: Vector3 = win_pos - outward * DEN_WINDOW_SHAFT_LENGTH
+	beam_target.y = anchor.y + 0.1
 	moon_beam.look_at(beam_target, Vector3.UP)
 	light_probe.register_light(moon_beam)
 	VfxManager.spawn_window_godray(self, win_pos, beam_target)
-	_spawn_den_window_vista(win_pos, beam_target)
+	_spawn_den_window_vista(win_pos, outward)
 
 	# Authored window backlight assistant: a small shadowless cool omni just
 	# outside the glass so the frosted panes read like KF02/KF06 instead of a
@@ -942,7 +963,7 @@ func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> 
 	# BP_MoonShape_C_5 plane itself is unhidden by the loader.
 	var window_backlight := OmniLight3D.new()
 	window_backlight.name = "DenWindowBacklight"
-	window_backlight.position = Vector3(5.75, 41.1, 266.3)
+	window_backlight.position = win_pos + outward * 0.6
 	window_backlight.light_color = Color(0.45, 0.78, 0.95)
 	window_backlight.light_energy = 0.6
 	window_backlight.omni_range = 4.0
@@ -1418,41 +1439,135 @@ func get_den_lookat_card() -> Dictionary:
 	return _den_lookat_card.duplicate(true)
 
 
+## W5C: the authored telescope view axis in world space (UE yaw 148 deg, pitch
+## 0 -> port (cos(yaw), 0, sin(yaw))). Pure, so the structural test can pin it.
+static func den_telescope_facing() -> Vector3:
+	var yaw: float = deg_to_rad(DEN_TELESCOPE_CAM_YAW_DEG)
+	return Vector3(cos(yaw), 0.0, sin(yaw)).normalized()
+
+
+## W5C: choose the parsed `window_positions` entry the authored telescope
+## actually looks through. `windows` is the loader's Array[Vector3] parsed from
+## meshes named WindowBorder / ThievesDen_Window. An entry qualifies when it is
+## on the facing side of the eye, within DEN_WINDOW_MAX_OFF_AXIS_DEG of the view
+## axis and within DEN_WINDOW_MAX_LATERAL_M of it; the smallest lateral offset
+## wins. Returns {} when nothing qualifies (the numbered WindowBorder hatch is
+## on the south wall, so the Den normally falls through to the measured west
+## opening).
+static func select_den_window_anchor(telescope_pos: Vector3, windows: Array, facing: Vector3) -> Dictionary:
+	var axis: Vector3 = Vector3(facing.x, 0.0, facing.z)
+	if axis.length() < 0.001:
+		return {}
+	axis = axis.normalized()
+	var cos_limit: float = cos(deg_to_rad(DEN_WINDOW_MAX_OFF_AXIS_DEG))
+	var best: Dictionary = {}
+	var best_lateral: float = INF
+	for w: Variant in windows:
+		if not (w is Vector3):
+			continue
+		var to: Vector3 = (w as Vector3) - telescope_pos
+		to.y = 0.0
+		var dist: float = to.length()
+		if dist < 0.5:
+			continue
+		var along: float = to.dot(axis)
+		if along <= 0.0 or along / dist < cos_limit:
+			continue
+		var lateral: float = (to - axis * along).length()
+		if lateral > DEN_WINDOW_MAX_LATERAL_M or lateral >= best_lateral:
+			continue
+		best_lateral = lateral
+		best = {
+			"anchor": w as Vector3,
+			"outward": axis,
+			"source": "window_positions",
+			"lateral_m": lateral,
+			"distance_m": dist,
+		}
+	return best
+
+
+## W5C: resolve the Den window staging. Consumes the parsed window_positions
+## (previously unused) and otherwise falls back to the measured authored west
+## opening. Logged once per hub build so a renamed mesh is visible in the run.
+func _den_window_staging(ue_level_data: Dictionary) -> Dictionary:
+	var facing: Vector3 = den_telescope_facing()
+	var windows: Variant = ue_level_data.get("window_positions", [])
+	var parsed: Array = windows as Array if windows is Array else []
+	var eye: Vector3 = _den_telescope_pos + Vector3(0.1, 1.7, 0.0)
+	var picked: Dictionary = select_den_window_anchor(eye, parsed, facing)
+	if picked.is_empty():
+		picked = {
+			"anchor": DEN_WEST_WINDOW_ANCHOR,
+			"outward": facing,
+			"source": "authored-west-opening",
+		}
+	print("TAT-2 Den window staging: source=", picked.get("source", "?"), " anchor=", picked.get("anchor", Vector3.ZERO), " parsed_windows=", parsed.size(), " facing=", facing)
+	return picked
+
+
+## W5C: backdrop silhouette colour for the world-space Den vista. Uses the Den
+## preset's authored sky cloud hue at a low backdrop luminance (0.05-0.07
+## linear) instead of the old hard 0.03/0.045/0.09 cut-out, so rooftops read as
+## hazy night silhouettes through the frosted pane. Falls back to a neutral
+## teal when the preset/JSON is unavailable. Pure + static for the test.
+static func den_vista_silhouette_color(cloud: Variant) -> Color:
+	var target := Color(0.06, 0.07, 0.085)
+	if cloud is Color:
+		var c: Color = cloud as Color
+		var lum: float = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
+		if lum > 0.001:
+			var scale: float = 0.065 / lum
+			target = Color(
+				clampf(c.r * scale, 0.02, 0.12),
+				clampf(c.g * scale, 0.02, 0.12),
+				clampf(c.b * scale, 0.02, 0.14)
+			)
+	return target
+
+
+## Resolves the silhouette colour from the live Den preset (den_vista_silhouette_color).
+func _den_vista_silhouette_color() -> Color:
+	var preset: Dictionary = WeatherProfile.preset_for_map("thieves_den")
+	var cloud: Variant = WeatherProfile.sky_cloud_color(preset)
+	return den_vista_silhouette_color(cloud)
+
+
 ## F5 window vista (procedural replica). The loader hides authored moonshape
 ## billboards (they cook to gray quads; the real sky carries the moon disc)
-## and the Den wall keeps only the collision split + moonbeam shaft, so the
-## arched east window showed no exterior. This stages the exterior the UE
-## level authors in the same PersistentLevel (ThievesDen_Geo, 348 exports):
-## full moon BP_MoonShape_C_1 (SM_Shape_Sphere at UE cm
-## (750.6698, 27377.701, 4185.192)), seven companion glow discs
-## (BP_MoonShape_C_0/C_2..C_7), glass shell SM_ThievesDen_Glass + frame
-## SM_ThievesDen_WindowBorder (UE cm (523.73975, 26666.291, 4064.7085)).
-## The replica is laid along the scope->window axis: the hub seats
-## beam_target on that sightline (telescope UE Root cm
-## (-492.02435, 27073.371, 4011.2234)), so outward extends the axis past the
-## wall and the ponder ray threads the collider gap.
+## and the authored Den wall keeps only the collision split + moonbeam shaft.
+## W5C: the replica is anchored to the WEST opening the authored telescope
+## camera faces (yaw 148 deg), not the 0.87 x 1.15 m WindowBorder hatch on the
+## south wall; the anchor/axis arrive from _den_window_staging() so the parsed
+## window_positions drive placement whenever they contain the framed window.
+## The authored exterior in the same PersistentLevel: full moon
+## BP_MoonShape_C_1 (SM_Shape_Sphere at UE cm (750.6698, 27377.701,
+## 4185.192)), seven companion glow discs, and the BP_CoolThing_C_1 cheese kit
+## the telescope looks at (UE (-1668.9495, 27900.438, 5110.168) cm).
 ## Staging matches KF05 (00:20.80): Kilcairn rooftop/chimney silhouettes,
-## bright full moon, giant golden cheese wedge with 3 orbiting chunks.
+## bright full moon, golden cheese wedge with 3 orbiting chunks.
 ## Sizes are framed from KF05 for the 13 deg ponder zoom (frame half-width
 ## ~3.9 m at the 34 m focus): moon 2.2 m radius, rooftop row inside +/-4.5 m,
 ## cheese center-frame below the moon.
+## W5C softness: the silhouettes/cheese use the authored Den sky hue scaled to
+## a low backdrop luminance and reduced emission, so the replica reads as a
+## hazy night silhouette through glass rather than a hard black cut-out.
 ## Decorative only: no collision, no occluder, unshaded materials.
-func _spawn_den_window_vista(win_pos: Vector3, beam_target: Vector3) -> void:
+func _spawn_den_window_vista(win_pos: Vector3, outward: Vector3) -> void:
 	var old: Node = get_node_or_null("DenWindowVista")
 	if old != null:
 		old.queue_free()
-	var outward: Vector3 = win_pos - beam_target
-	# UE-fed axis: win_pos is the WindowBorder port and beam_target sits on
-	# the scope->window sightline, so outward extends that axis past the wall
-	# (the ponder ray threads the collider gap onto the focus below).
+	# The window axis arrives from the staging helper (parsed or authored).
 	outward.y = 0.0
 	if outward.length() < 0.01:
 		outward = Vector3(-1.0, 0.0, 0.0)
 	outward = outward.normalized()
 	var side: Vector3 = outward.cross(Vector3.UP).normalized()
+	var soft: Color = _den_vista_silhouette_color()
 	var root := Node3D.new()
 	root.name = "DenWindowVista"
-	root.position = win_pos
+	# Seated just past the glass so the opening frames it instead of clipping it.
+	root.position = win_pos + outward * 0.35
 	add_child(root)
 	var moon := MeshInstance3D.new()
 	moon.name = "VistaMoon"
@@ -1467,7 +1582,8 @@ func _spawn_den_window_vista(win_pos: Vector3, beam_target: Vector3) -> void:
 	moon_mat.albedo_color = Color(0.92, 0.95, 0.88)
 	moon_mat.emission_enabled = true
 	moon_mat.emission = Color(0.92, 0.95, 0.88)
-	moon_mat.emission_energy_multiplier = 1.6
+	# Softened from 1.6: the moon is a backdrop, not a light source in the room.
+	moon_mat.emission_energy_multiplier = 1.15
 	moon.set_surface_override_material(0, moon_mat)
 	# Moon rides low on the axis (+3 m over the window) so the sightline
 	# through the opening lands it inside the ponder frame (KF05).
@@ -1475,7 +1591,9 @@ func _spawn_den_window_vista(win_pos: Vector3, beam_target: Vector3) -> void:
 	root.add_child(moon)
 	var sil_mat := StandardMaterial3D.new()
 	sil_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	sil_mat.albedo_color = Color(0.03, 0.045, 0.09)
+	# W5C soft silhouette: authored Den sky hue at backdrop luminance, not a
+	# hard near-black cut-out (the replica sits right behind the glass).
+	sil_mat.albedo_color = soft
 	# KF05-framed row: +/-3.2 m lateral + 1.3 m half-width fits the 13 deg
 	# frame (~3.9 m half-width at the 30 m roof line).
 	var roof_heights: Array[float] = [3.0, 5.5, 2.2, 7.0, 4.2]
@@ -1494,7 +1612,8 @@ func _spawn_den_window_vista(win_pos: Vector3, beam_target: Vector3) -> void:
 	cheese_mat.albedo_color = Color(1.0, 0.78, 0.25)
 	cheese_mat.emission_enabled = true
 	cheese_mat.emission = Color(1.0, 0.72, 0.2)
-	cheese_mat.emission_energy_multiplier = 0.9
+	# Softened from 0.9 with the moon: a backdrop glow, not a spotlight.
+	cheese_mat.emission_energy_multiplier = 0.55
 	var wedge := MeshInstance3D.new()
 	wedge.name = "VistaCheese"
 	var wedge_mesh := BoxMesh.new()
@@ -1998,8 +2117,11 @@ func toggle_telescope_ponder() -> void:
 		# F6: real zoom view against UE values. Authored rig is
 		# BP_HidingSpot_Telescope_C_1 in ThievesDenTest_P:PersistentLevel:
 		# MainMesh yaw 60.08 deg, Camera rel (10, 0, 170) cm yaw 148 deg —
-		# eye 1.7 m above the tripod base, aimed out the east window at the
-		# KF05 vista (rooftops, full moon, golden cheese, [F] EXIT).
+		# eye 1.7 m above the tripod base, aimed WEST-north through the attic's
+		# framed west window at the KF05 vista (rooftops, full moon, golden
+		# cheese, [F] EXIT). W5C: the previous fallback aimed east at the small
+		# WindowBorder hatch (delta (10.16, -4.07)), i.e. 180 deg away from the
+		# authored camera; the fallback now follows the authored yaw.
 		# No cooked FOV exists on the UE CameraComponent, so the zoom
 		# (13 deg) is framed from KF05 (moon + rooftops in one frame).
 		if _ponder_cam == null or not is_instance_valid(_ponder_cam):
@@ -2015,9 +2137,9 @@ func toggle_telescope_ponder() -> void:
 		if tele_area is Node3D:
 			tele_global = (tele_area as Node3D).global_position
 		_ponder_cam.global_position = tele_global + Vector3(0.1, 1.7, 0.0)
-		# On-axis fallback focus (3x the UE scope->window port delta) when
-		# the replica is absent; the vista focus meta wins when present.
-		var focus: Vector3 = _den_telescope_pos + Vector3(10.1576, 0.55, -4.0708) * 3.0
+		# On-axis fallback focus 20 m down the authored view axis; the vista
+		# focus meta (now the west window schematic) wins when present.
+		var focus: Vector3 = _ponder_cam.global_position + den_telescope_facing() * 20.0 + Vector3(0.0, 0.6, 0.0)
 		var vista: Node = get_node_or_null("DenWindowVista")
 		if vista != null and vista.has_meta("focus"):
 			var focus_v: Variant = vista.get_meta("focus")

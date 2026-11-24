@@ -56,6 +56,15 @@ extends RefCounted
 ##   cooked volumetric cloud material, and its tint follows the authored
 ##   `Overall Color` multiplier (cloud_color * sky.overall_color when present),
 ##   matching UE M_Sky's whole-sky multiply. No cloud texture is invented.
+##   tat_sky.gdshader uses ONE moonlit cloud colour for both the FBM wisps and
+##   the horizon band (no raw cloud_color mix), with coverage driving the FBM
+##   threshold and cloud_haze driving alpha only.
+## - Horizon haze floor: the authored sky sphere sits inside height fog, so a
+##   fogged horizon that blends toward the pre-exposed inscattering turns
+##   black. Outdoor presets get `horizon_haze` (0.55, horizon-weighted) tinted
+##   by the authored cloud colour around the KF16/KF17-calibrated neutral
+##   (0.12/0.13/0.15); indoor presets (thieves_den) keep 0. ZERO exposure
+##   change: the term is a colour mix limited to the horizon band.
 ## - Rain: GPUParticles3D box 60x40x60 m around the emitter, amount =
 ##   1800 * clamp(intensity, 0, 1.5) clamped to [100, 2700] (APPROXIMATE;
 ##   Niagara ratios were not recovered, only the on/off + intensity scalar),
@@ -86,12 +95,13 @@ const DEFAULT_MOON_DIAMETER_DEG := 6.0
 const MOON_ENERGY_MIN := 0.25
 const MOON_ENERGY_MAX := 2.0
 const STAR_NORMALIZER := 8.0
-## Guildhall's authored sky is a 400 m sphere inside `fog.density` 0.06 height
-## fog; the port renders the sphere only, so the upper sky reads 0.009-0.019
-## linear instead of UE's ~0.24 sRGB. These values restore the authored fog
-## over that sky. The guard is an EXACT preset-id match, so the Den and lobby
-## presets (`midnight_clear_thieves_den` / `midnight_clear_mission_lobby`)
-## keep their own fog/star treatment.
+## The port renders the authored sky sphere only, so the upper sky reads
+## 0.009-0.019 linear instead of UE's ~0.24 sRGB. These values restore the
+## authored fog over that sky for the exact `midnight_clear` preset (the
+## mission-lobby and other outdoor presets use the generic haze floor in
+## weather_profile.gd + `horizon_haze` below). The guard is an EXACT preset-id
+## match, so the Den and lobby presets (`midnight_clear_thieves_den` /
+## `midnight_clear_mission_lobby`) keep their own fog/star treatment.
 const MIDNIGHT_CLEAR_PRESET := "midnight_clear"
 const MIDNIGHT_CLEAR_FOG_SKY_AFFECT := 0.80
 const MIDNIGHT_CLEAR_BACKGROUND_ENERGY := 2.0
@@ -106,6 +116,16 @@ const MIDNIGHT_CLEAR_SKY_HAZE_AMOUNT := 1.0
 const MIDNIGHT_CLEAR_SKY_HAZE_FALLOFF := 0.0
 const CLOUD_OPACITY_TO_HAZE := 0.18
 const CLOUD_HAZE_MAX := 0.55
+## Outdoor horizon haze floor (tat_sky.gdshader `horizon_haze`). The authored
+## sky sphere sits inside the height fog, so the fogged horizon must be a haze
+## band rather than black; this is horizon-weighted and never touches exposure
+## or the zenith gradient. Strength 0 for indoor presets (the Den sky is a
+## window pane). The colour reuses the KF16/KF17-calibrated neutral floor
+## (0.12/0.13/0.15, luminance ~0.13) tinted by the preset's authored cloud
+## colour, so each overcast preset keeps its own hue.
+const OUTDOOR_HORIZON_HAZE := 0.55
+const HORIZON_HAZE_NEUTRAL := Color(0.12, 0.13, 0.15)
+const HORIZON_HAZE_CLOUD_TINT := 0.35
 
 # Rain volume (documented approximations, see mapping above).
 const RAIN_MIN_INTENSITY := 0.05
@@ -230,6 +250,36 @@ static func _is_midnight_clear(preset: Dictionary) -> bool:
 	return str(preset.get("preset", "")) == MIDNIGHT_CLEAR_PRESET
 
 
+## Horizon haze strength: 0 indoors (the Den sky is a window pane), a constant
+## outdoor floor otherwise. Static so the invariant test can pin both cases.
+static func horizon_haze_strength(preset: Dictionary) -> float:
+	if WeatherProfile.is_indoor_preset(preset):
+		return 0.0
+	return OUTDOOR_HORIZON_HAZE
+
+
+## Horizon haze colour: the calibrated neutral floor tinted by the authored
+## cloud colour (fallback: authored horizon colour) and rescaled back to the
+## neutral's luminance, so a saturated authored cloud tint cannot glow.
+## Null when the preset authors neither, so the shader default is used.
+static func horizon_haze_color(preset: Dictionary) -> Variant:
+	var tint: Variant = WeatherProfile.sky_cloud_color(preset)
+	if tint == null:
+		var sky_v: Variant = preset.get("sky", {})
+		var sky: Dictionary = sky_v as Dictionary if sky_v is Dictionary else {}
+		tint = _color3(sky.get("horizon_color"))
+	if tint == null:
+		return null
+	var t: Color = tint as Color
+	var haze: Color = HORIZON_HAZE_NEUTRAL.lerp(t, HORIZON_HAZE_CLOUD_TINT)
+	var target: float = HORIZON_HAZE_NEUTRAL.get_luminance()
+	var lum: float = haze.get_luminance()
+	if lum > target and lum > 0.0:
+		var s: float = target / lum
+		haze = Color(haze.r * s, haze.g * s, haze.b * s, 1.0)
+	return haze
+
+
 ## Builds the real-sky Sky resource for a preset. The moon disc sits along the
 ## moon light's +Z axis (requires apply_environment to have set its rotation).
 static func make_sky(preset: Dictionary, moon: DirectionalLight3D) -> Sky:
@@ -332,6 +382,13 @@ static func make_sky(preset: Dictionary, moon: DirectionalLight3D) -> Sky:
 	mat.set_shader_parameter("haze_color", Vector3(MIDNIGHT_CLEAR_SKY_HAZE_COLOR.r, MIDNIGHT_CLEAR_SKY_HAZE_COLOR.g, MIDNIGHT_CLEAR_SKY_HAZE_COLOR.b))
 	mat.set_shader_parameter("haze_amount", haze_amount)
 	mat.set_shader_parameter("haze_height_falloff", MIDNIGHT_CLEAR_SKY_HAZE_FALLOFF)
+
+	# Horizon haze floor (fogged horizon must not read black). Indoor presets
+	# get strength 0; outdoor presets keep a hue-tinted haze band.
+	mat.set_shader_parameter("horizon_haze", horizon_haze_strength(preset))
+	var shore_v: Variant = horizon_haze_color(preset)
+	var shore: Color = shore_v as Color if shore_v is Color else HORIZON_HAZE_NEUTRAL
+	mat.set_shader_parameter("horizon_haze_color", Vector3(shore.r, shore.g, shore.b))
 
 	var sky := Sky.new()
 	sky.sky_material = mat

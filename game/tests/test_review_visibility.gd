@@ -26,6 +26,7 @@ const Tagger: GDScript = preload("res://addons/tat2_review/review_tagger.gd")
 const Filters: GDScript = preload("res://addons/tat2_review/review_filters.gd")
 const MapData: GDScript = preload("res://addons/tat2_review/review_map_data.gd")
 const ReviewEnvironment: GDScript = preload("res://addons/tat2_review/review_environment.gd")
+const WeatherProfile: GDScript = preload("res://src/core/weather_profile.gd")
 const POI_JSON: String = "res://data/generated/levels/Buildings/Guildhall/Building_Guildhall_POI.tatlevel.json"
 const THIRD_JSON: String = "res://data/generated/levels/Buildings/Guildhall/Building_Guildhall_POI_3rdFloor.tatlevel.json"
 
@@ -235,7 +236,7 @@ func _test_review_environment() -> void:
 			we = c as WorldEnvironment
 		elif c is DirectionalLight3D and str(c.name) == "ReviewMoon":
 			moon = c as DirectionalLight3D
-	_check(str(report.get("preset", "")) == "midnight_clear", "5.1 guildhall review uses the authored midnight_clear preset (%s)" % str(report.get("preset", "")), "preset=" + str(report.get("preset", "")))
+	_check(str(report.get("preset", "")) == str(WeatherProfile.preset_name_for_map("guildhall")), "5.1 guildhall review uses the map's authored weather preset (%s)" % str(report.get("preset", "")), "preset=" + str(report.get("preset", "")))
 	_check(we != null and we.environment != null, "5.2 review mode builds a WorldEnvironment", "no WorldEnvironment")
 	if we != null and we.environment != null:
 		var env: Environment = we.environment

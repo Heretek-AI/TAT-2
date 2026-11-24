@@ -407,14 +407,14 @@
       "metrics": {},
       "outputs": {
         "gen:weather": {
-          "bytes": 38494,
+          "bytes": 38638,
           "exists": true,
           "files": 17,
-          "newest_mtime": 1795317428.2666023,
-          "sha256": "8f626ccf5d5509f5ec203679666fe923e99930054adf0b12da3da4b8a932e579"
+          "newest_mtime": 1795562428.6561484,
+          "sha256": "c7fe1b2d17a54ad16e29db54641f0f65807631ac8b9c8fddf48d6b34f7e5232d"
         }
       },
-      "sha256": "21bf74b51093fe0d12e9bb4e83ed46e6055860031dc12068aa6330a97ef88aba"
+      "sha256": "fb6dfecec7ba865d3d322cbc7c08996104c9bdaa55e501bcd146123ad2015544"
     },
     "tools/usd_to_gltf.py": {
       "command": "make anims  # blender --background --python tools/usd_to_gltf.py ...",

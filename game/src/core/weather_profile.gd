@@ -8,9 +8,24 @@ extends RefCounted
 ## untouched on the live environment (never invented).
 ##
 ## Unit conversions (documented, applied in one place so they stay honest):
-## - FOG_DENSITY_SCALE = 0.01: UE works in centimetres, Godot in metres. UE
-##   FogDensity 0.4 (DenseFog) -> Godot fog_density 0.004. Same 0.01 convention
-##   already used for level geometry in tools/parse_tables.py.
+## - FOG_DENSITY_SCALE = 0.03: UE works in centimetres, Godot in metres. The
+##   plain 0.01 cm->m convention made the near field far too clear: the authored
+##   Guildhall fog (0.06-0.16) reached only ~1.8 % obscuration at 30 m, so the
+##   rainy streets, the parade square and the skyline read like a clear night.
+##   0.03 keeps the authored preset ratios and puts the 20-120 m band where the
+##   reference reads it (transmittance exp(-density*S*d)):
+##     gloomy      FogDensity 0.16 -> 0.0048/m:  9 % @20 m, 13 % @30 m,
+##                                               25 % @60 m, 44 % @120 m
+##     midnight_clear       0.06  -> 0.0018/m: 12 % @60 m, 19 % @120 m
+##     dense_fog            0.40  -> 0.012 /m: 21 % @20 m, 30 % @30 m,
+##                                               51 % @60 m, 76 % @120 m
+##   The sky veil is NOT part of this factor: it is pinned by the
+##   FOG_SKY_AFFECT_FLOOR / haze colour below.
+## - FOG_HAZE_LUMA_FLOOR: the presets' authored FogInscatteringLuminance is
+##   pre-exposed (0.0003-0.001 per channel). Blending that colour into the sky
+##   at any weight darkens it to black (the "black horizon" defect). Outdoor
+##   presets therefore keep the authored HUE but floor its luminance; the Den
+##   keeps the exact authored inscattering (indoor, closed sky).
 ## - MOON_ENERGY_SCALE = 10.0, clamped to [0.05, 1.0]: UE night directional
 ##   intensities sit at 0.01-0.05 lux, roughly two orders of magnitude below a
 ##   Godot light_energy unit. x10 preserves the inter-preset ratios (Gloomy
@@ -51,8 +66,21 @@ static var _preset_cache: Dictionary = {}
 # Cache for desktop shadow-toe lift 1D LUTs (R3 APPROXIMATE Local Exposure / gain_shadows).
 static var _lut_cache: Dictionary = {}
 
-# UE centimetres -> Godot metres (matches tools/parse_tables.py).
-const FOG_DENSITY_SCALE := 0.01
+# UE centimetres -> Godot metres, calibrated for the 20-120 m readability band
+# (see the header table); NOT the plain 0.01 geometry convention.
+const FOG_DENSITY_SCALE := 0.03
+# Outdoor horizon floor. Godot's fog_sky_affect blends fog_light_color into the
+# sky; at 0.0 the fogged horizon is the authored (pre-exposed, near-black) sky
+# sphere, which is the reported black horizon. 0.80 lets the floored haze colour
+# veil the horizon without replacing the authored gradient (the zenith term is
+# independent, tat_sky.gdshader). The Den keeps 0.0: its sky is a window.
+const FOG_SKY_AFFECT_FLOOR := 0.80
+# The volumetric pass got the same treatment: 0.0 cut the authored local fog
+# boxes off at the sky. A small floor keeps the aerial glow without flattening
+# the gradient (the albedo is already hue-lifted toward 0.65/0.78/1.0 below).
+const VOLUMETRIC_FOG_SKY_AFFECT_FLOOR := 0.15
+# Minimum outdoor fog-light luminance: authored hue, floored brightness.
+const FOG_HAZE_LUMA_FLOOR := 0.05
 # UE night lux (~0.01-0.05) -> Godot light_energy unit.
 const MOON_ENERGY_SCALE := 10.0
 const MOON_ENERGY_MIN := 0.05
@@ -253,6 +281,41 @@ static func fog_sun_scatter(preset: Dictionary) -> Variant:
 		var lum := 0.2126 * float(c[0]) + 0.7152 * float(c[1]) + 0.0722 * float(c[2])
 		return clampf(lum, 0.0, 1.0)
 	return null
+
+
+## Indoor presets keep the exact authored fog/inscattering: the Den sky is a
+## window pane, not a horizon. Substring match only on the preset id, matching
+## the two existing Den branches in apply_environment.
+static func is_indoor_preset(preset: Dictionary) -> bool:
+	return "thieves_den" in str(preset.get("preset", "")).to_lower()
+
+
+## Outdoor fog/sky colour: the authored overcast-dome hue (sky.cloud_color,
+## falling back to the authored FogInscatteringLuminance hue) at exactly
+## FOG_HAZE_LUMA_FLOOR luminance. The authored fog channels are pre-exposed
+## (midnight_clear 0.0011/0.0016/0.004) and gloomy's are a near-zero mint, so
+## using them as-is turns the fogged horizon black or green; the cloud tint is
+## the authored overcast colour the sky is actually painted with. Returns null
+## when the preset authors no colour (caller leaves fog untouched).
+static func fog_haze_color(preset: Dictionary) -> Variant:
+	var hue_v: Variant = sky_cloud_color(preset)
+	if hue_v == null:
+		hue_v = fog_light_color(preset)
+	if hue_v == null:
+		return null
+	var hue: Color = hue_v as Color
+	var lum: float = 0.2126 * hue.r + 0.7152 * hue.g + 0.0722 * hue.b
+	if lum <= 0.0:
+		# Hue-less authored colour (all zero = authored black): no hue to keep,
+		# so the neutral floor is the only honest value.
+		return Color(0.05, 0.054, 0.062, 1.0)
+	var scale: float = FOG_HAZE_LUMA_FLOOR / lum
+	return Color(
+		clampf(hue.r * scale, 0.0, 1.0),
+		clampf(hue.g * scale, 0.0, 1.0),
+		clampf(hue.b * scale, 0.0, 1.0),
+		hue.a
+	)
 
 
 static func moon_energy(preset: Dictionary) -> Variant:
@@ -518,12 +581,18 @@ static func apply_environment(env: Environment, moon: DirectionalLight3D, preset
 			env.fog_enabled = true
 			env.fog_density = float(fog_d) * FOG_DENSITY_SCALE
 		var fog_c: Variant = fog_light_color(preset)
-		if fog_c != null:
+		var is_indoor: bool = is_indoor_preset(preset)
+		if fog_c != null and not is_indoor:
+			# Outdoor presets: authored hue, floored luminance (see header).
+			env.fog_light_color = fog_haze_color(preset)
+		elif fog_c != null:
 			env.fog_light_color = fog_c
 		# Compensate UE5 pre-exposed fog inscattering (0.001..0.004) via energy
 		# and aerial perspective while keeping fog_density & fog_light_color exact
-		# for Suites 10 & 17 (R3 APPROXIMATE Eye Adaptation replacement).
-		if fog_d != null and fog_c != null:
+		# for Suites 10 & 17 (R3 APPROXIMATE Eye Adaptation replacement). Indoor
+		# presets keep the authored colour, so this only runs for the Den now;
+		# the outdoor haze floor replaces the divide-up path.
+		if fog_d != null and fog_c != null and is_indoor:
 			var fc: Color = fog_c as Color
 			var fog_lum: float = 0.2126 * fc.r + 0.7152 * fc.g + 0.0722 * fc.b
 			var is_low_density: bool = float(fog_d) <= 0.1
@@ -536,9 +605,9 @@ static func apply_environment(env: Environment, moon: DirectionalLight3D, preset
 		# UE's ExponentialHeightFog does not occlude the sky sphere. Godot's
 		# default of 1.0 lets the height fog fully replace the sky at infinite
 		# depth, so the authored gradient, stars and moon would render black.
-		# weather_visuals.apply_sky() later overrides this to 0.85 for the exact
-		# Guildhall `midnight_clear` preset only (authored fog over the sky).
-		env.fog_sky_affect = 0.0
+		# Outdoor presets get the calibrated haze floor over the horizon (0.80,
+		# see FOG_SKY_AFFECT_FLOOR); the Den keeps 0.0 because its sky is a pane.
+		env.fog_sky_affect = 0.0 if is_indoor else FOG_SKY_AFFECT_FLOOR
 		var is_desktop: bool = not MobileProfile.is_mobile()
 		# P2: volumetric/SSIL/SSR are desktop-quality-gated, not unconditional.
 		# High (2) keeps shipped behaviour; medium (1) halves SSR steps and
@@ -557,7 +626,9 @@ static func apply_environment(env: Environment, moon: DirectionalLight3D, preset
 			var preset_id: String = str(preset.get("preset", "")).to_lower()
 			var is_indoor_den: bool = "thieves_den" in preset_id
 			env.volumetric_fog_enabled = true
-			env.volumetric_fog_sky_affect = 0.0
+			# Same horizon rule as fog_sky_affect: outdoor presets keep a small
+			# volumetric term over the sky, the Den keeps its pane clear.
+			env.volumetric_fog_sky_affect = 0.0 if is_indoor_den else VOLUMETRIC_FOG_SKY_AFFECT_FLOOR
 			env.volumetric_fog_gi_inject = 0.0
 			env.volumetric_fog_anisotropy = 0.35
 			env.volumetric_fog_length = 60.0 if is_indoor_den else maxf(vol_dist_m * 2.5, 120.0)
@@ -607,14 +678,17 @@ static func apply_environment(env: Environment, moon: DirectionalLight3D, preset
 		var expo: Variant = tonemap_exposure(preset)
 		if expo != null:
 			env.tonemap_exposure = float(expo)
-		# Guildhall's authored MidnightClear is the one preset where the
-		# ACES 1.0 path crushed the gate into black while the interior
-		# practicals clipped. AGX rolls the highlights off instead of
-		# clipping them, and the small exposure lift matches the reference
-		# gate/overlook medians. Other presets keep their authored path.
-		if str(preset.get("preset", "")).to_lower() == "midnight_clear":
+		# Guildhall's authored night is the one place the ACES 1.0 path crushed
+		# the gate into black while the interior practicals clipped. AGX rolls
+		# the highlights off instead of clipping them. W5C: the hub's preset is
+		# now the evidenced `gloomy` (rainy streets), so it keeps the same AGX
+		# path; its authored AutoExposureBias is 0.0, so no exposure lift is
+		# added there (the 1.15 lift stays the midnight_clear calibration).
+		var night_id: String = str(preset.get("preset", "")).to_lower()
+		if night_id == "midnight_clear" or night_id == "gloomy":
 			env.tonemap_mode = Environment.TONE_MAPPER_AGX
-			env.tonemap_exposure = maxf(env.tonemap_exposure, NIGHT_EXPOSURE)
+			if night_id == "midnight_clear":
+				env.tonemap_exposure = maxf(env.tonemap_exposure, NIGHT_EXPOSURE)
 		var glow: Variant = glow_intensity(preset)
 		if glow != null:
 			# Den RD cap: indoor Den preset keeps glow on for the warm look

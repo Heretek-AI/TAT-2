@@ -313,11 +313,18 @@ func _initialize() -> void:
 			gh_env = (gh_env_node as WorldEnvironment).environment
 			break
 	var gh_fog_density: float = gh_env.fog_density if gh_env != null else -1.0
-	if absf(gh_fog_density - 0.0006) >= 0.0001:
-		printerr("FAIL: Guildhall must use its map weather preset, not the stale default (fog_density=", gh_fog_density, " expected guildhall/midnight_clear 0.0006, old_manor 0.004)")
+	# W5C: guildhall resolves to the authored `gloomy` preset (level dressing
+	# evidence), and fog is scaled by FOG_DENSITY_SCALE (0.03, 20-120 m band).
+	# Assert against the producer output + the constant, never the old literal.
+	var gh_wp: GDScript = load("res://src/core/weather_profile.gd") as GDScript
+	var gh_preset_name: String = str(gh_wp.preset_name_for_map("guildhall")) if gh_wp != null else ""
+	var gh_preset: Dictionary = gh_wp.preset_for_map("guildhall") if gh_wp != null else {}
+	var gh_exp_fog: float = float((gh_preset.get("fog", {}) as Dictionary).get("density", 0.0)) * float(gh_wp.FOG_DENSITY_SCALE) if gh_wp != null else -1.0
+	if gh_preset_name != "gloomy" or gh_exp_fog <= 0.0 or absf(gh_fog_density - gh_exp_fog) >= 0.0002:
+		printerr("FAIL: Guildhall must use its authored map weather preset, not the stale default (preset=", gh_preset_name, " fog_density=", gh_fog_density, " expected ", gh_exp_fog, " from that preset x FOG_DENSITY_SCALE; old_manor would be 0.012)")
 		fails += 1
 	else:
-		print("PASS: Guildhall map preset wins over stale default map (fog_density=", gh_fog_density, ")")
+		print("PASS: Guildhall map preset wins over stale default map (preset=", gh_preset_name, " fog_density=", gh_fog_density, ")")
 	var gh_wait: int = 0
 	while get_nodes_in_group("guards").size() == 0 and gh_wait < 240:
 		await process_frame
@@ -658,7 +665,7 @@ func _initialize() -> void:
 		else:
 			var wpreset: Variant = JSON.parse_string(wfile.get_as_text())
 			var wok := wpreset is Dictionary and str(wpreset.get("preset", "")) == "dense_fog" and str(wpreset.get("source", "")).ends_with("BP_WeatherPreset_DenseFog.json")
-			var wmap_ok := str(wp_scr.preset_name_for_map("old_manor")) == "dense_fog_old_manor" and str(wp_scr.preset_name_for_map("thieves_den")) == "midnight_clear_thieves_den" and str(wp_scr.preset_name_for_map("jaspering_hall")) == "heavy_rain" and str(wp_scr.preset_name_for_map("main_menu")) == "midnight_clear_mission_lobby" and str(wp_scr.preset_name_for_map("guildhall")) == "midnight_clear" and str(wp_scr.preset_name_for_map("no_such_map")) == ""
+			var wmap_ok := str(wp_scr.preset_name_for_map("old_manor")) == "dense_fog_old_manor" and str(wp_scr.preset_name_for_map("thieves_den")) == "midnight_clear_thieves_den" and str(wp_scr.preset_name_for_map("jaspering_hall")) == "heavy_rain" and str(wp_scr.preset_name_for_map("main_menu")) == "midnight_clear_mission_lobby" and str(wp_scr.preset_name_for_map("guildhall")) == "gloomy" and str(wp_scr.preset_name_for_map("no_such_map")) == ""
 			var wenv := Environment.new()
 			var wmoon := DirectionalLight3D.new()
 			var applied: bool = bool(wp_scr.apply_environment(wenv, wmoon, wpreset))
@@ -666,7 +673,9 @@ func _initialize() -> void:
 			var ml_src: Dictionary = wpreset.get("moon_light", {})
 			var pp_src: Dictionary = wpreset.get("postprocess", {})
 			var sky_src: Dictionary = wpreset.get("sky", {})
-			var exp_fog := float(fog_src.get("density", 0.0)) * 0.01
+			var exp_fog := float(fog_src.get("density", 0.0)) * float(wp_scr.FOG_DENSITY_SCALE)
+			var exp_haze: Color = wp_scr.fog_haze_color(wpreset)
+			var exp_haze_lum: float = 0.2126 * exp_haze.r + 0.7152 * exp_haze.g + 0.0722 * exp_haze.b
 			var exp_energy: float = clampf(float(ml_src.get("intensity", 0.0)) * 10.0, 0.05, 1.0)
 			var exp_basis: Basis = wp_scr.moon_basis(wpreset)
 			var wb: Basis = wmoon.basis
@@ -677,7 +686,6 @@ func _initialize() -> void:
 				and absf(wb.x.dot(wb.z)) < 1e-4 \
 				and absf(wb.y.dot(wb.z)) < 1e-4
 			var exp_mc: Array = ml_src.get("color", [1, 1, 1])
-			var exp_fogc: Array = fog_src.get("inscattering", [0, 0, 0])
 			var exp_skyc: Array = sky_src.get("light_color", [1, 1, 1])
 			var exp_gain: Array = pp_src.get("gain_midtones", [1.0, 1.0, 1.0])
 			var exp_bri := float(exp_gain[0])
@@ -689,7 +697,11 @@ func _initialize() -> void:
 				and is_equal_approx(wmoon.light_color.r, float(exp_mc[0])) \
 				and is_equal_approx(wmoon.light_color.g, float(exp_mc[1])) \
 				and is_equal_approx(wmoon.light_color.b, float(exp_mc[2])) \
-				and is_equal_approx(wenv.fog_light_color.r, float(exp_fogc[0])) \
+				and is_equal_approx(wenv.fog_light_color.r, exp_haze.r) \
+				and is_equal_approx(wenv.fog_light_color.g, exp_haze.g) \
+				and is_equal_approx(wenv.fog_light_color.b, exp_haze.b) \
+				and exp_haze_lum >= float(wp_scr.FOG_HAZE_LUMA_FLOOR) - 1e-4 \
+				and is_equal_approx(wenv.fog_sky_affect, float(wp_scr.FOG_SKY_AFFECT_FLOOR)) \
 				and is_equal_approx(wenv.ambient_light_color.r, float(exp_skyc[0])) \
 				and is_equal_approx(wenv.ambient_light_energy, float(wp_scr.ambient_energy(wpreset))) \
 				and is_equal_approx(wenv.adjustment_saturation, float(pp_src.get("saturation", 1.0))) \
@@ -736,6 +748,136 @@ func _initialize() -> void:
 			wmoon.free()
 			wmoon2.free()
 			wmoon3.free()
+
+	# 17b. W5C weather mapping + near-field fog + horizon haze + sky cloud tint.
+	# Guildhall_P authors no PresetOverrides, so the hub's weather comes from
+	# the authored level dressing (puddles, 27 named local fog volumes, cloud
+	# masks, moon cards) -> gloomy. The fog scale is calibrated for 20-120 m
+	# and the sky now carries a horizon haze term instead of a black horizon.
+	var w5_gh_wp: GDScript = load("res://src/core/weather_profile.gd") as GDScript
+	var w5_gh_wv: GDScript = load("res://src/core/weather_visuals.gd") as GDScript
+	var w5_gh_preset: Dictionary = w5_gh_wp.preset_for_map("guildhall") if w5_gh_wp != null else {}
+	var w5_gh_name: String = str(w5_gh_preset.get("preset", ""))
+	var w5_gh_rain: Dictionary = w5_gh_preset.get("rain", {})
+	var w5_gh_fog_sec: Dictionary = w5_gh_preset.get("fog", {})
+	var w5_gh_map_file: FileAccess = FileAccess.open("res://data/generated/weather/map_weather.json", FileAccess.READ)
+	var w5_gh_evidence: Dictionary = {}
+	if w5_gh_map_file != null:
+		var gh_map_v: Variant = JSON.parse_string(w5_gh_map_file.get_as_text())
+		if gh_map_v is Dictionary:
+			var gh_maps: Dictionary = (gh_map_v as Dictionary).get("maps", {})
+			w5_gh_evidence = (gh_maps.get("guildhall", {}) as Dictionary).get("authored_evidence", {})
+	var w5_gh_map_ok: bool = w5_gh_name == "gloomy" \
+		and bool(w5_gh_rain.get("enabled", false)) \
+		and is_equal_approx(float(w5_gh_rain.get("intensity", 0.0)), 1.0) \
+		and is_equal_approx(float(w5_gh_rain.get("ground_wetness", 0.0)), 1.0) \
+		and is_equal_approx(float(w5_gh_fog_sec.get("density", 0.0)), 0.16) \
+		and int(w5_gh_evidence.get("wet_ground", 0)) > 0 \
+		and int(w5_gh_evidence.get("haze_volumes", 0)) > 0 \
+		and int(w5_gh_evidence.get("cloud_masks", 0)) > 0 \
+		and int(w5_gh_evidence.get("moon_actors", 0)) > 0
+	if not w5_gh_map_ok:
+		printerr("FAIL: W5C Guildhall weather mapping (preset=", w5_gh_name, " rain=", w5_gh_rain, " fog=", w5_gh_fog_sec.get("density", null), " evidence=", w5_gh_evidence, ")")
+		fails += 1
+	else:
+		print("PASS: W5C Guildhall weather = authored gloomy (rain=", w5_gh_rain.get("intensity", 0.0), " wet=", w5_gh_rain.get("ground_wetness", 0.0), " fog=", w5_gh_fog_sec.get("density", 0.0), " evidence=", w5_gh_evidence, ")")
+
+	var w5_gh_density: float = float(w5_gh_wp.fog_density(w5_gh_preset)) * float(w5_gh_wp.FOG_DENSITY_SCALE) if w5_gh_wp != null else -1.0
+	var w5_t20: float = exp(-w5_gh_density * 20.0)
+	var w5_t30: float = exp(-w5_gh_density * 30.0)
+	var w5_t120: float = exp(-w5_gh_density * 120.0)
+	var w5_near_ok: bool = w5_gh_density > 0.0 and w5_t30 < 0.93 and w5_t30 > 0.80 and w5_t120 < 0.70 and w5_t120 > 0.45 and w5_t20 > w5_t30 and w5_t30 > w5_t120
+	if not w5_near_ok:
+		printerr("FAIL: W5C near-field fog (density=", w5_gh_density, " w5_t20=", w5_t20, " w5_t30=", w5_t30, " w5_t120=", w5_t120, " expected ~13% at 30 m and ~44% at 120 m)")
+		fails += 1
+	else:
+		print("PASS: W5C near-field fog calibrated (density=", snappedf(w5_gh_density, 0.0001), " transmittance 20/30/120 m=", snappedf(w5_t20, 0.01), "/", snappedf(w5_t30, 0.01), "/", snappedf(w5_t120, 0.01), ")")
+
+	var w5_hz_moon := DirectionalLight3D.new()
+	var w5_hz_sky: Sky = w5_gh_wv.make_sky(w5_gh_preset, w5_hz_moon) if w5_gh_wv != null else null
+	var w5_hz_sm: ShaderMaterial = w5_hz_sky.sky_material as ShaderMaterial if w5_hz_sky != null else null
+	var w5_hz_strength: float = float(w5_hz_sm.get_shader_parameter("horizon_haze")) if w5_hz_sm != null and w5_hz_sm.get_shader_parameter("horizon_haze") != null else -1.0
+	var w5_hz_col_v: Variant = w5_hz_sm.get_shader_parameter("horizon_haze_color") if w5_hz_sm != null else null
+	var w5_hz_lum: float = -1.0
+	if w5_hz_col_v is Vector3:
+		var hzc: Vector3 = w5_hz_col_v
+		w5_hz_lum = 0.2126 * hzc.x + 0.7152 * hzc.y + 0.0722 * hzc.z
+	var w5_den_sky_preset: Dictionary = w5_gh_wp.load_preset("midnight_clear_thieves_den") if w5_gh_wp != null else {}
+	var w5_den_sky: Sky = w5_gh_wv.make_sky(w5_den_sky_preset, w5_hz_moon) if w5_gh_wv != null else null
+	var w5_den_sm: ShaderMaterial = w5_den_sky.sky_material as ShaderMaterial if w5_den_sky != null else null
+	var w5_den_hz: float = float(w5_den_sm.get_shader_parameter("horizon_haze")) if w5_den_sm != null and w5_den_sm.get_shader_parameter("horizon_haze") != null else -1.0
+	var w5_haze_ok: bool = is_equal_approx(w5_hz_strength, float(w5_gh_wv.OUTDOOR_HORIZON_HAZE)) and w5_hz_lum > 0.05 and w5_hz_lum < 0.30 and w5_den_hz == 0.0
+	if not w5_haze_ok:
+		printerr("FAIL: W5C horizon haze floor (outdoor=", w5_hz_strength, " lum=", w5_hz_lum, " den=", w5_den_hz, " expected outdoor ", w5_gh_wv.OUTDOOR_HORIZON_HAZE, " and den 0)")
+		fails += 1
+	else:
+		print("PASS: W5C horizon haze floor (outdoor=", w5_hz_strength, " lum=", snappedf(w5_hz_lum, 0.001), " den=0, exposure untouched)")
+	w5_hz_moon.free()
+
+	var w5_sky_src: String = ""
+	var w5_sky_file: FileAccess = FileAccess.open("res://src/core/tat_sky.gdshader", FileAccess.READ)
+	if w5_sky_file != null:
+		w5_sky_src = w5_sky_file.get_as_text()
+	var w5_tint_uses: int = w5_sky_src.count("cloud_tint")
+	var w5_tint_ok: bool = w5_tint_uses >= 3 \
+		and w5_sky_src.find("vec3 cloud_tint") >= 0 \
+		and w5_sky_src.find("mix(col, cloud_color") < 0 \
+		and w5_sky_src.find("lit_cloud") < 0 \
+		and w5_sky_src.find("cloud_alpha = coverage * cloud_opacity") >= 0 \
+		and w5_sky_src.find("uniform float horizon_haze") >= 0 \
+		and w5_sky_src.find("horizon_haze_color") >= 0 \
+		and w5_sky_src.find("smoothstep(lo, hi, n)") >= 0
+	if not w5_tint_ok:
+		printerr("FAIL: W5C sky cloud-tint invariants (cloud_tint uses=", w5_tint_uses, " raw_cloud_mix=", w5_sky_src.find("mix(col, cloud_color") >= 0, " lit_cloud=", w5_sky_src.find("lit_cloud") >= 0, " coverage_opacity=", w5_sky_src.find("cloud_alpha = coverage * cloud_opacity") >= 0, ")")
+		fails += 1
+	else:
+		print("PASS: W5C sky shader one moonlit cloud tint + coverage/opacity split (cloud_tint uses=", w5_tint_uses, ")")
+
+	# 17c. W5C Den staging: the parsed window list selects the framed window on
+	# the authored telescope axis; the south-wall WindowBorder hatch does not.
+	var w5_mc_scr: Script = load("res://src/missions/mission_controller.gd") as Script
+	var w5_den_facing: Vector3 = Vector3.ZERO
+	var w5_den_pick: Dictionary = {}
+	var w5_den_miss: Dictionary = {}
+	var w5_den_east: Dictionary = {}
+	var w5_den_anchor_v: Variant = null
+	var w5_den_sil: Color = Color(0, 0, 0)
+	var w5_den_pick_anchor: Vector3 = Vector3.ZERO
+	if w5_mc_scr != null:
+		var w5_facing_v: Variant = w5_mc_scr.call("den_telescope_facing")
+		if w5_facing_v is Vector3:
+			w5_den_facing = w5_facing_v
+		var w5_den_eye: Vector3 = Vector3(-4.82, 41.8, 270.73)
+		var w5_den_west: Vector3 = Vector3(-6.06, 43.05, 271.4)
+		var w5_den_hatch: Vector3 = Vector3(5.2374, 40.6471, 266.6629)
+		w5_den_pick = w5_mc_scr.call("select_den_window_anchor", w5_den_eye, [w5_den_west, w5_den_hatch], w5_den_facing)
+		w5_den_miss = w5_mc_scr.call("select_den_window_anchor", w5_den_eye, [w5_den_hatch], w5_den_facing)
+		w5_den_east = w5_mc_scr.call("select_den_window_anchor", w5_den_eye, [w5_den_hatch], -w5_den_facing)
+		var w5_den_consts: Dictionary = w5_mc_scr.get_script_constant_map()
+		w5_den_anchor_v = w5_den_consts.get("DEN_WEST_WINDOW_ANCHOR", null)
+		var w5_sil_v: Variant = w5_mc_scr.call("den_vista_silhouette_color", Color(0.1277, 0.7238, 1.0))
+		if w5_sil_v is Color:
+			w5_den_sil = w5_sil_v
+		var w5_pick_anchor_v: Variant = w5_den_pick.get("anchor", null)
+		if w5_pick_anchor_v is Vector3:
+			w5_den_pick_anchor = w5_pick_anchor_v
+	var w5_den_anchor: Vector3 = Vector3.ZERO
+	if w5_den_anchor_v is Vector3:
+		w5_den_anchor = w5_den_anchor_v
+	var w5_den_sil_lum: float = 0.2126 * w5_den_sil.r + 0.7152 * w5_den_sil.g + 0.0722 * w5_den_sil.b
+	var w5_den_win_ok: bool = w5_den_facing.is_equal_approx(Vector3(-0.848048, 0.0, 0.529919)) \
+		and int(w5_den_pick.size()) > 0 \
+		and str(w5_den_pick.get("source", "")) == "window_positions" \
+		and w5_den_pick_anchor.is_equal_approx(Vector3(-6.06, 43.05, 271.4)) \
+		and w5_den_miss.is_empty() \
+		and int(w5_den_east.size()) > 0 \
+		and w5_den_anchor.x < -5.5 and w5_den_anchor.y > 40.0 and w5_den_anchor.z > 270.0 and w5_den_anchor.z < 273.0 \
+		and w5_den_sil_lum > 0.03 and w5_den_sil_lum < 0.09
+	if not w5_den_win_ok:
+		printerr("FAIL: W5C Den window anchor (facing=", w5_den_facing, " picked=", w5_den_pick, " hatch_miss=", w5_den_miss.is_empty(), " east=", w5_den_east.size(), " west_anchor=", w5_den_anchor, " sil_lum=", w5_den_sil_lum, ")")
+		fails += 1
+	else:
+		print("PASS: W5C Den window staging anchors the west framed window (facing=", w5_den_facing, " source=", w5_den_pick.get("source", ""), " anchor=", w5_den_anchor, " sil_lum=", snappedf(w5_den_sil_lum, 0.001), ")")
 
 	# 18. Swinging-door extraction: every pivot resolves to a real leaf mesh.
 	# The 111 doorway-BP pivots carry their leaf StaticMesh on the pivot
@@ -997,13 +1139,18 @@ func _initialize() -> void:
 
 	# Godot's fog_sky_affect defaults to 1.0, which fully replaces the sky at
 	# infinite depth. UE height fog does not occlude the sky sphere, so
-	# apply_environment must pin it to 0.0 for any applied preset.
-	var fsa_ok: bool = df_applied and df_env.fog_sky_affect == 0.0
+	# apply_environment pins a calibrated haze floor for outdoor presets (the
+	# horizon must read hazy, not black) and 0.0 for the indoor Den, whose sky
+	# is a window pane.
+	var fsa_ok: bool = df_applied \
+		and is_equal_approx(df_env.fog_sky_affect, float(wp_scr.FOG_SKY_AFFECT_FLOOR)) \
+		and is_equal_approx(df_env.volumetric_fog_sky_affect, float(wp_scr.VOLUMETRIC_FOG_SKY_AFFECT_FLOOR)) \
+		and df_env.fog_sky_affect > 0.0
 	if not fsa_ok:
-		printerr("FAIL: DenseFog apply_environment fog_sky_affect (applied=", df_applied, " got=", df_env.fog_sky_affect, " expected 0.0)")
+		printerr("FAIL: DenseFog apply_environment fog_sky_affect (applied=", df_applied, " got=", df_env.fog_sky_affect, " volumetric=", df_env.volumetric_fog_sky_affect, " expected outdoor floors ", wp_scr.FOG_SKY_AFFECT_FLOOR, "/", wp_scr.VOLUMETRIC_FOG_SKY_AFFECT_FLOOR, ")")
 		fails += 1
 	else:
-		print("PASS: DenseFog apply_environment leaves fog_sky_affect=0.0 (sky stays visible)")
+		print("PASS: DenseFog apply_environment outdoor haze floors (fog_sky_affect=", df_env.fog_sky_affect, " volumetric=", df_env.volumetric_fog_sky_affect, ")")
 	df_moon.free()
 
 	var den_file: FileAccess = FileAccess.open("res://data/generated/weather/midnight_clear_thieves_den.json", FileAccess.READ)
@@ -1022,7 +1169,9 @@ func _initialize() -> void:
 	var den_ok: bool = den_applied \
 		and absf(den_aim.x - den_expected.x) < 0.001 \
 		and absf(den_aim.y - den_expected.y) < 0.001 \
-		and absf(den_aim.z - den_expected.z) < 0.001
+		and absf(den_aim.z - den_expected.z) < 0.001 \
+		and den_env.fog_sky_affect == 0.0 \
+		and den_env.volumetric_fog_sky_affect == 0.0
 	if not den_ok:
 		printerr("FAIL: ThievesDen moon light direction (applied=", den_applied, " actual=", den_aim, " expected=", den_expected, ")")
 		fails += 1

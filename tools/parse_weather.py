@@ -56,6 +56,38 @@ MANAGER_BY_MAP = {
     "main_menu": "MissionLobby/MissionLobby_P.json",
 }
 
+# Hub maps whose TATWeatherManager authors no PresetOverrides. The weather type
+# is then whatever the level's own dressing says it is, so count the authored
+# actors that only exist for one weather state. Guildhall_P's streets carry
+# curated puddles + a landscape puddle layer (wet ground), 27 named local fog
+# volumes (haze on the main entrance / parade square / roofs / periphery), a
+# cloud-mask generator with four composited masks (overcast) and authored
+# BP_MoonShape cards + BP_Light_SpotFakeMoonFills spots (a visible moon).
+# That combination is BP_WeatherPreset_Gloomy: EnableRain implicitly on
+# (RainIntensity 1.0), GroundWetness 1.0, FogDensity 0.16, Stars 0 and the
+# MI_Sky_HeavyRain overcast dome with the moon still visible. HeavyRain is
+# excluded by its own authored `Moon visibility = False`; Stormy is excluded by
+# its near-black zenith (0.068) and GroundWetness 0.5.
+EVIDENCE_DUMPS = {
+    "wet_ground": ("Guildhall/Guildhall_PeripheryA.json", "BP_Puddle_C"),
+    "haze_volumes": (
+        "Guildhall/Guildhall_LocalVolumetric.json",
+        "BP_LocalFog_Volume_C",
+    ),
+    "cloud_masks": ("Guildhall/Guildhall_Clouds.json", "BP_CloudMask_Object_C"),
+    "moon_actors": (
+        "Guildhall/Guildhall_LightingNoGameplay.json",
+        "BP_MoonShape_C",
+    ),
+}
+EVIDENCE_PRESET_BY_MAP = {
+    "guildhall": {
+        "preset": "gloomy",
+        "weather_tag": "Weather.Type.Gloomy",
+        "requires": ("wet_ground", "haze_volumes", "cloud_masks", "moon_actors"),
+    },
+}
+
 
 def camel_to_snake(name: str) -> str:
     s = re.sub(r"(.)([A-Z][a-z]+)", r"\1_\2", name)
@@ -433,7 +465,38 @@ def manager_overrides(map_dump: Path) -> dict:
     return {}
 
 
-def choose_preset(map_id: str, overrides: dict) -> tuple[str, str, str]:
+def count_exports(dump: Path, type_name: str) -> int:
+    """Exports of `type_name` in a level dump (0 when it is missing/unreadable)."""
+    try:
+        exports = json.loads(dump.read_text())
+    except (OSError, json.JSONDecodeError):
+        return 0
+    return sum(1 for e in exports if e.get("Type") == type_name)
+
+
+def authored_evidence(map_id: str) -> dict:
+    """Count the weather-only actors the hub level authors (see EVIDENCE_DUMPS)."""
+    if map_id != "guildhall":
+        return {}
+    return {
+        key: count_exports(EX_MAPS / rel, type_name)
+        for key, (rel, type_name) in EVIDENCE_DUMPS.items()
+    }
+
+
+def evidence_preset(map_id: str, evidence: dict) -> str | None:
+    """Preset implied by authored level dressing, or None when it is absent."""
+    rule = EVIDENCE_PRESET_BY_MAP.get(map_id)
+    if rule is None:
+        return None
+    if all(int(evidence.get(key, 0)) > 0 for key in rule["requires"]):
+        return rule["preset"]
+    return None
+
+
+def choose_preset(
+    map_id: str, overrides: dict, evidence: dict | None = None
+) -> tuple[str, str, str]:
     """Return (preset_id, weather_tag, reason) for a playable map id."""
     if map_id == "old_manor" and "Weather.Type.DenseFog" in overrides:
         return (
@@ -458,14 +521,33 @@ def choose_preset(map_id: str, overrides: dict) -> tuple[str, str, str]:
                 "Weather.Type.MidnightClear",
                 "map TATWeatherManager PresetOverrides entry for Weather.Type.MidnightClear",
             )
-    # No usable overrides: fall back to the preset that names the map.
+    # No usable overrides: read the authored dressing before falling back.
+    authored = evidence or {}
+    implied = evidence_preset(map_id, authored)
+    if implied is not None:
+        rule = EVIDENCE_PRESET_BY_MAP[map_id]
+        return (
+            implied,
+            rule["weather_tag"],
+            "map manager defines no PresetOverrides; authored level dressing "
+            "implies %s (%s)"
+            % (
+                implied,
+                ", ".join(
+                    "%s=%d" % (key, int(authored.get(key, 0)))
+                    for key in rule["requires"]
+                ),
+            ),
+        )
+    # No usable overrides and no authored dressing: fall back to the preset
+    # that names the map.
     named = {"guildhall": "midnight_clear"}
     if map_id in named:
         return (
             named[map_id],
             TAG_BY_PRESET.get(named[map_id]),
-            "map manager defines no PresetOverrides, so class default applies; "
-            "MidnightClear is the canonical night-clear weather",
+            "map manager defines no PresetOverrides and the level authors no "
+            "weather dressing; MidnightClear is the canonical night-clear weather",
         )
     raise ValueError("no preset choice for map %s" % map_id)
 
@@ -487,7 +569,8 @@ def main() -> None:
     maps = {}
     for map_id, rel in MANAGER_BY_MAP.items():
         overrides = manager_overrides(EX_MAPS / rel)
-        preset_id, tag, reason = choose_preset(map_id, overrides)
+        evidence = authored_evidence(map_id)
+        preset_id, tag, reason = choose_preset(map_id, overrides, evidence)
         if preset_id not in known_ids:
             raise SystemExit(
                 "chosen preset '%s' for map '%s' has no parsed JSON"
@@ -500,6 +583,8 @@ def main() -> None:
             "reason": reason,
             "manager_overrides": overrides,
         }
+        if evidence:
+            maps[map_id]["authored_evidence"] = evidence
         print("map %-14s -> preset %-32s tag %s" % (map_id, preset_id, tag))
         print("    reason: %s" % reason)
 

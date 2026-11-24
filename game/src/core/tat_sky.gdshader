@@ -5,8 +5,10 @@ shader_type sky;
 //
 // APPROXIMATIONS (labelled, no fake art): the star field is a procedural hash
 // sparkle (no star catalogue was recovered from cooking); the cloud term is a
-// horizon haze tinted by sky.cloud_color (the volumetric cloud materials were
-// not recovered, only their color/opacity scalars); the moon disc projects the
+// horizon haze band tinted by ONE moonlit cloud colour derived from
+// sky.cloud_color (the volumetric cloud materials were not recovered, only
+// their color/opacity scalars); coverage and opacity are separate terms
+// (coverage -> FBM threshold, opacity -> alpha); the moon disc projects the
 // real T_Moon_D lunar panorama onto the visible hemisphere (equirectangular
 // atan/acos UV with nz >= 0, which keeps atan inside [-pi/2, pi/2] so there is
 // no seam), and anti-aliases the disc edge over about 2% of the disc radius
@@ -40,6 +42,11 @@ uniform float star_amount = 0.0;
 uniform vec3 cloud_color = vec3(0.2, 0.2, 0.25);
 uniform float cloud_haze = 0.0;
 uniform float cloud_coverage = 0.45;
+// Outdoor horizon haze floor (weather_visuals.gd). One moonlit haze colour
+// shared by the horizon band; strength is 0 for indoor presets (the Den sky is
+// a window pane). Horizon-weighted, so the authored zenith gradient survives.
+uniform vec3 horizon_haze_color = vec3(0.12, 0.13, 0.15);
+uniform float horizon_haze = 0.0;
 // APPROXIMATE warm SkyAtmosphere/fog veil. LINEAR radiance, uploaded before
 // Environment.background_energy_multiplier; deliberately NOT multiplied by
 // sky_radiance_scale (that scale belongs to the authored M_Sky gradient only).
@@ -102,21 +109,35 @@ void sky() {
 
 	// R3 APPROXIMATE procedural 4-octave FBM cloud wisps + horizon haze band
 	// (cooked MI_VolumetricCloud_* materials have no recoverable shader graph).
+	// ONE moonlit cloud colour serves both the wisps and the horizon band; the
+	// authored `cloud_color` is never mixed raw, so a moonlit cloud edge and the
+	// horizon cannot disagree. coverage moves the FBM threshold only; opacity
+	// (cloud_haze) scales alpha only. See weather_visuals.gd for the mapping.
+	float moon_scatter = (moon_visible > 0.5) ? pow(max(dot(dir, moon_fwd), 0.0), 4.0) * 1.4 : 0.0;
+	vec3 cloud_tint = cloud_color * (1.0 + moon_color * moon_scatter);
+	float cloud_opacity = clamp(cloud_haze, 0.0, 0.85);
 	float cloud_alpha = 0.0;
-	if (cloud_haze > 0.001 && up > -0.05) {
+	if (cloud_opacity > 0.001 && up > -0.05) {
 		vec2 cuv = dir.xz / (max(up, 0.0) + 0.18) * 0.45 + vec2(TIME * 0.003, TIME * 0.0015);
 		vec2 warp = vec2(_fbm4(cuv * 0.7 + vec2(3.1, 7.4)), _fbm4(cuv * 0.7 + vec2(11.3, 2.9)));
 		float n = _fbm4(cuv + (warp - 0.5) * 0.65);
 		float lo = clamp(1.0 - cloud_coverage, 0.05, 0.92);
 		float hi = clamp(1.05 - cloud_coverage * 0.5, lo + 0.08, 1.05);
 		float horizon_fade = smoothstep(-0.02, 0.14, up);
-		cloud_alpha = smoothstep(lo, hi, n) * horizon_fade * clamp(cloud_haze * 1.35, 0.0, 0.85);
-		float moon_scatter = (moon_visible > 0.5) ? pow(max(dot(dir, moon_fwd), 0.0), 4.0) * 1.4 : 0.0;
-		vec3 lit_cloud = cloud_color * (1.0 + moon_color * moon_scatter);
-		col = mix(col, lit_cloud, cloud_alpha);
+		float coverage = smoothstep(lo, hi, n) * horizon_fade;
+		cloud_alpha = coverage * cloud_opacity;
+		col = mix(col, cloud_tint, cloud_alpha);
 	}
 	float band = pow(clamp(1.0 - abs(up), 0.0, 1.0), 3.0);
-	col = mix(col, cloud_color, band * cloud_haze * 0.35);
+	col = mix(col, cloud_tint, band * cloud_opacity * 0.35);
+
+	// Horizon haze floor: keeps the fogged horizon from reading black without
+	// touching exposure or the zenith gradient. Haze is horizon-weighted and
+	// applied before the moon disc/halo so the disc stays crisp.
+	if (horizon_haze > 0.001) {
+		float hz = pow(clamp(1.0 - abs(up), 0.0, 1.0), 4.0) * horizon_haze;
+		col = mix(col, horizon_haze_color, clamp(hz, 0.0, 0.92));
+	}
 
 	if (haze_amount > 0.001) {
 		float hz = haze_amount * smoothstep(-0.06, 0.02, up);

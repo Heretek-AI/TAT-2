@@ -73,7 +73,7 @@ tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd -- 
 | `run_tests.gd` | `SUMMARY: fails=0` (54 suites) |
 | `test_m2_player.gd` | `M2_SUMMARY: fails=0` |
 | door walk / viewmodel / Niagara probes | `DOORWALK PASS` / `VIEWMODEL_TRUTH PASS` / `NIAGARA_PROBE PASS` |
-| E2E | `fails=0 passed=262 total=262` (tier 1: 115) |
+| E2E | `fails=0 passed=264 total=264` (tier 1: 115) |
 | `make audit` | exit 0, tracked baseline matches, mount/path 100.0 % (exact-case 99.4 %), 13/13 content groups |
 
 Anything below these numbers is a regression. Do not re-baseline silently; find

@@ -1,11 +1,27 @@
 extends Node
 ## 2-player online/LAN co-op transport using Godot ENetMultiplayerPeer.
+##
+## Authority split (W6b):
+## - Player transforms are client-owned: each peer broadcasts its own state at
+##   <= 20 Hz and the receiver only updates a cosmetic remote visual.
+## - World events are host-authoritative: a peer asks the server, the server
+##   validates sender / kind / target / distance / cooldown and then applies the
+##   event locally and broadcasts the validated result to every peer. Gameplay
+##   code listens to `world_event_applied`; the transport never dispatches to
+##   arbitrary methods chosen by the network.
+## - Loot, AI and mission progression are NOT replicated here (see docs).
 
 signal peer_connected(id: int)
 signal peer_disconnected(id: int)
 signal connection_failed()
 signal remote_state_updated(peer_id: int)
+## Legacy raw notification, emitted only after host validation (or after the
+## authoritative broadcast reaches a client). Local listeners that need the
+## resolved node should use world_event_applied instead.
 signal world_event_received(kind: String, target_name: String, from_peer: int)
+## Validated world event for local gameplay listeners. `target` is resolved in
+## this peer's own scene tree; `from_peer` is the originating player.
+signal world_event_applied(kind: String, target: Node, from_peer: int)
 
 const DEFAULT_PORT: int = 7742
 const REMOTE_GLB_CANDIDATES: Array[String] = [
@@ -15,20 +31,34 @@ const REMOTE_GLB_CANDIDATES: Array[String] = [
 	"res://assets/models/SK_ThiefCotter_Dyn__Body_NoPostProcABP.glb",
 ]
 
-## T4 hardening: world events are a closed allowlist; anything else is dropped.
-## "trigger" is the only kind allowed to emit the "triggered" signal.
-const ALLOWED_WORLD_EVENT_KINDS: Array[String] = ["interact", "collect", "open", "trigger"]
+## Closed allowlist: the transport never resolves a gameplay method from an
+## arbitrary string. Listeners decide what each validated kind means.
+const ALLOWED_WORLD_EVENT_KINDS: Array[String] = ["interact", "collect", "open", "close", "trigger"]
 const MAX_TARGET_NAME_LEN: int = 64
 ## Player-state rate limit (20 Hz): send-side gate + per-sender receive gate.
 const PLAYER_STATE_MIN_INTERVAL_MSEC: int = 50
 const MAX_SYNC_POS_ABS: float = 5000.0
 const MAX_THIEF_ID_LEN: int = 32
+## Host world-event authority gates.
+const WORLD_EVENT_COOLDOWN_MSEC: int = 250
+const MAX_WORLD_EVENT_DISTANCE_M: float = 3.0
 
 var peer: ENetMultiplayerPeer
 var is_coop: bool = false
 var remote_visuals: Dictionary = {} # peer_id -> Node3D
+## Peer position from its last validated player-state packet, and the source of
+## truth for the host's world-event range check. Never used for gameplay.
+var _last_known_pos: Dictionary = {} # peer_id -> Vector3
 var _last_broadcast_msec: int = -100000
 var _last_remote_state_msec: Dictionary = {} # peer_id -> int msec
+var _last_world_event_msec: Dictionary = {} # peer_id -> int msec
+## Test/embedding seam: 0 uses the live MultiplayerAPI. A positive id lets a
+## headless suite exercise host/client routing without opening a socket.
+var _peer_id_override: int = 0
+## Observable send counters (also used by the gate suite).
+var broadcast_send_count: int = 0
+var world_event_accept_count: int = 0
+var world_event_reject_count: int = 0
 
 
 func _ready() -> void:
@@ -82,6 +112,8 @@ func disconnect_net() -> void:
 			(n as Node).queue_free()
 	remote_visuals.clear()
 	_last_remote_state_msec.clear()
+	_last_known_pos.clear()
+	_last_world_event_msec.clear()
 	_last_broadcast_msec = -100000
 	if peer != null:
 		peer.close()
@@ -90,26 +122,96 @@ func disconnect_net() -> void:
 	is_coop = false
 
 
-func broadcast_player_state(pos: Vector3, yaw: float, crouching: bool, thief_id: String) -> void:
+## Local peer id: 1 is the ENet server. 0 means "no readable peer".
+func local_peer_id() -> int:
+	if _peer_id_override > 0:
+		return _peer_id_override
+	if multiplayer.multiplayer_peer == null:
+		return 0
+	return multiplayer.get_unique_id()
+
+
+## True only in a real co-op session where this peer is the ENet server (id 1).
+## Solo/offline is neither host nor client, so gameplay never treats it as one.
+func is_host() -> bool:
+	return is_coop and local_peer_id() == 1
+
+
+func is_client() -> bool:
+	return is_coop and local_peer_id() > 1
+
+
+## Headless-test seam: force the local peer id without a live MultiplayerPeer.
+## Passing 0 restores live MultiplayerAPI behaviour.
+func set_test_peer_id(id: int) -> void:
+	_peer_id_override = maxi(id, 0)
+
+
+## Send this peer's transform/pose. Returns true only when a packet was
+## attempted (call rate-limited at 20 Hz, state validated first). The receiver
+## side is cosmetic: it updates the RemotePeer_* visual only.
+func broadcast_player_state(pos: Vector3, yaw: float, crouching: bool, thief_id: String) -> bool:
 	if not is_coop or multiplayer.multiplayer_peer == null:
-		return
+		return false
+	if not _valid_player_state(pos, yaw):
+		return false
 	var now: int = Time.get_ticks_msec()
 	if now - _last_broadcast_msec < PLAYER_STATE_MIN_INTERVAL_MSEC:
-		return
+		return false
 	_last_broadcast_msec = now
-	sync_player_state.rpc(pos, yaw, crouching, thief_id)
+	var safe_id: String = _sanitize_thief_id(thief_id)
+	# The host's own player is never an RPC sender, so cache its position here
+	# for the host-side world-event range check.
+	if is_host():
+		_last_known_pos[local_peer_id()] = pos
+	broadcast_send_count += 1
+	sync_player_state.rpc(pos, yaw, crouching, safe_id)
+	return true
 
 
+## Compatibility API. Host applies directly; client asks the server; solo and
+## malformed requests are silent no-ops.
 func send_world_event(kind: String, target_name: String) -> void:
-	if not is_coop or multiplayer.multiplayer_peer == null:
+	request_world_event(kind, target_name)
+
+
+## Public request entry point AND the client→server RPC. A local client call is
+## forwarded to peer 1; a local host call is validated exactly like a remote one.
+@rpc("any_peer", "reliable")
+func request_world_event(kind: String, target_name: String) -> void:
+	var sender: int = multiplayer.get_remote_sender_id()
+	if sender == 0:
+		if not is_coop or multiplayer.multiplayer_peer == null:
+			return
+		if is_client():
+			request_world_event.rpc_id(1, kind, target_name)
+			return
+		_host_accept_world_event(kind, target_name, local_peer_id())
+		return
+	# Only the server accepts peer requests. A stray client-to-client copy of
+	# this RPC is ignored (2-player sessions still allow Godot's broadcast form).
+	if not is_host():
+		return
+	_host_accept_world_event(kind, target_name, sender)
+
+
+## Server→all validated broadcast. Clients resolve the same target locally and
+## emit world_event_applied exactly once; the RPC carries strings only.
+@rpc("authority", "reliable")
+func apply_world_event(kind: String, target_name: String, from_peer: int) -> void:
+	# A local direct call has no remote sender; only peer 1's RPC is authority.
+	if multiplayer.get_remote_sender_id() <= 0:
 		return
 	if not ALLOWED_WORLD_EVENT_KINDS.has(kind):
 		return
-	if target_name == "" or target_name.length() > MAX_TARGET_NAME_LEN:
+	var target: Node = _resolve_world_event_target(target_name)
+	if target == null:
 		return
-	sync_world_event.rpc(kind, target_name)
+	_emit_world_event_applied(kind, target, from_peer)
 
 
+## Client-owned movement, server-observed. Validation drops non-finite or
+## far-away transforms; the handler never mutates health, loot or mission state.
 @rpc("any_peer", "unreliable_ordered")
 func sync_player_state(pos: Vector3, yaw: float, crouching: bool, thief_id: String) -> void:
 	var sender: int = multiplayer.get_remote_sender_id()
@@ -120,31 +222,15 @@ func sync_player_state(pos: Vector3, yaw: float, crouching: bool, thief_id: Stri
 	if now - last < PLAYER_STATE_MIN_INTERVAL_MSEC:
 		return
 	_last_remote_state_msec[sender] = now
-	if not pos.is_finite() or not is_finite(yaw):
+	if not _valid_player_state(pos, yaw):
 		return
-	if absf(pos.x) > MAX_SYNC_POS_ABS or absf(pos.y) > MAX_SYNC_POS_ABS or absf(pos.z) > MAX_SYNC_POS_ABS:
-		return
-	var visual: Node3D = _ensure_remote_visual(sender, thief_id.left(MAX_THIEF_ID_LEN))
+	_last_known_pos[sender] = pos
+	var visual: Node3D = _ensure_remote_visual(sender, _sanitize_thief_id(thief_id))
 	visual.position = pos
 	visual.rotation = Vector3(0.0, yaw, 0.0)
 	var target_scale: float = 0.72 if crouching else 1.0
 	visual.scale = Vector3(1.0, target_scale, 1.0)
 	remote_state_updated.emit(sender)
-
-
-@rpc("any_peer", "reliable")
-func sync_world_event(kind: String, target_name: String) -> void:
-	var sender: int = multiplayer.get_remote_sender_id()
-	if sender <= 0:
-		return
-	if not ALLOWED_WORLD_EVENT_KINDS.has(kind):
-		return
-	if target_name == "" or target_name.length() > MAX_TARGET_NAME_LEN:
-		return
-	if target_name.contains("/") or target_name.contains(".") or target_name.contains(":"):
-		return
-	world_event_received.emit(kind, target_name, sender)
-	_apply_world_event(kind, target_name, sender)
 
 
 func get_remote_visual(peer_id: int) -> Node3D:
@@ -161,10 +247,115 @@ func _get_mission_root() -> Node:
 	return self
 
 
+func _valid_player_state(pos: Vector3, yaw: float) -> bool:
+	if not pos.is_finite() or not is_finite(yaw):
+		return false
+	if absf(pos.x) > MAX_SYNC_POS_ABS or absf(pos.y) > MAX_SYNC_POS_ABS or absf(pos.z) > MAX_SYNC_POS_ABS:
+		return false
+	return true
+
+
+func _is_safe_token(token: String, max_len: int, allow_at: bool) -> bool:
+	if token.is_empty() or token.length() > max_len:
+		return false
+	for i: int in range(token.length()):
+		var c: int = token.unicode_at(i)
+		var ok: bool = (c >= 48 and c <= 57) or (c >= 65 and c <= 90) or (c >= 97 and c <= 122) or c == 95 or c == 45
+		if not ok and allow_at and c == 64: # '@': Godot auto-generated node names
+			ok = true
+		if not ok:
+			return false
+	return true
+
+
+func _sanitize_thief_id(thief_id: String) -> String:
+	var t: String = thief_id.left(MAX_THIEF_ID_LEN)
+	if not _is_safe_token(t, MAX_THIEF_ID_LEN, false):
+		return ""
+	return t
+
+
+func _resolve_world_event_target(target_name: String) -> Node:
+	if not _is_safe_token(target_name, MAX_TARGET_NAME_LEN, true):
+		return null
+	var root: Node = _get_mission_root()
+	if root == null:
+		return null
+	var target: Node = root.find_child(target_name, true, false)
+	if target == null or target == root:
+		return null
+	# The target must belong to this peer's mission subtree and must never be
+	# one of the transport's own RemotePeer_* visuals.
+	if not root.is_ancestor_of(target):
+		return null
+	if remote_visuals.values().has(target):
+		return null
+	return target
+
+
+## Position the sender is allowed to act from. The host's own player is read
+## live; remote peers use their last validated player-state position.
+func _sender_position(sender: int) -> Variant:
+	if sender == local_peer_id() and is_inside_tree():
+		var p: Node = get_tree().get_first_node_in_group("player")
+		if p is Node3D and is_instance_valid(p):
+			var live: Vector3 = (p as Node3D).global_position
+			if live.is_finite():
+				return live
+	var cached: Variant = _last_known_pos.get(sender)
+	if cached is Vector3 and (cached as Vector3).is_finite():
+		return cached as Vector3
+	return null
+
+
+## Full host-side gate. Returns the resolved target on acceptance, null when
+## any check fails. This is intentionally callable from the gate suite.
+func _validate_world_event(kind: String, target_name: String, sender: int) -> Node:
+	if sender <= 0:
+		return null
+	if not ALLOWED_WORLD_EVENT_KINDS.has(kind):
+		return null
+	if not _is_safe_token(target_name, MAX_TARGET_NAME_LEN, true):
+		return null
+	var now: int = Time.get_ticks_msec()
+	if now - int(_last_world_event_msec.get(sender, -100000)) < WORLD_EVENT_COOLDOWN_MSEC:
+		return null
+	var sender_pos_v: Variant = _sender_position(sender)
+	if not (sender_pos_v is Vector3):
+		return null
+	var target: Node = _resolve_world_event_target(target_name)
+	if not (target is Node3D):
+		return null
+	var target_pos: Vector3 = (target as Node3D).global_position
+	var sender_pos: Vector3 = sender_pos_v as Vector3
+	if sender_pos.distance_to(target_pos) > MAX_WORLD_EVENT_DISTANCE_M:
+		return null
+	return target
+
+
+func _host_accept_world_event(kind: String, target_name: String, sender: int) -> bool:
+	var target: Node = _validate_world_event(kind, target_name, sender)
+	if target == null:
+		world_event_reject_count += 1
+		return false
+	_last_world_event_msec[sender] = Time.get_ticks_msec()
+	world_event_accept_count += 1
+	_emit_world_event_applied(kind, target, sender)
+	apply_world_event.rpc(kind, target_name, sender)
+	return true
+
+
+func _emit_world_event_applied(kind: String, target: Node, from_peer: int) -> void:
+	if target == null or not is_instance_valid(target):
+		return
+	world_event_received.emit(kind, String(target.name), from_peer)
+	world_event_applied.emit(kind, target, from_peer)
+
+
 func _on_peer_connected_spawn(id: int) -> void:
 	# N2: no spawn-before-handshake. The visual is created lazily on the
-	# first authenticated sync_player_state / sync_world_event for that
-	# peer (see _ensure_remote_visual), so stray connects never accumulate
+	# first authenticated sync_player_state for that peer (see
+	# _ensure_remote_visual), so stray connects never accumulate
 	# RemotePeer_* nodes and disconnects leave nothing behind.
 	if not is_coop:
 		return
@@ -176,6 +367,8 @@ func _on_peer_disconnected_despawn(id: int) -> void:
 		(n as Node).queue_free()
 	remote_visuals.erase(id)
 	_last_remote_state_msec.erase(id)
+	_last_known_pos.erase(id)
+	_last_world_event_msec.erase(id)
 
 
 func _ensure_remote_visual(peer_id: int, thief_id: String) -> Node3D:
@@ -221,38 +414,3 @@ func _find_remote_packed() -> PackedScene:
 			if loaded is PackedScene:
 				return loaded as PackedScene
 	return null
-
-
-func _apply_world_event(kind: String, target_name: String, from_peer: int = 0) -> void:
-	# Closed allowlist: unknown kinds never reach find_child + call.
-	if not ALLOWED_WORLD_EVENT_KINDS.has(kind):
-		return
-	if target_name == "" or target_name.length() > MAX_TARGET_NAME_LEN:
-		return
-	var root: Node = _get_mission_root()
-	if root == null:
-		return
-	var target: Node = root.find_child(target_name, true, false)
-	if target == null or target == root:
-		return
-	# Ownership: the target must be a node of the mission scene subtree.
-	# The transport's own remote visuals are never valid event targets.
-	if not root.is_ancestor_of(target):
-		return
-	if remote_visuals.values().has(target):
-		return
-	# The interactor passed to gameplay is the sender's remote player node,
-	# never the NetManager itself.
-	var interactor: Node3D = _ensure_remote_visual(from_peer, "")
-	if interactor == null or not is_instance_valid(interactor):
-		return
-	match kind:
-		"interact", "collect":
-			if target.has_method("interact"):
-				target.call("interact", interactor)
-		"open":
-			if target.has_method("open"):
-				target.call("open")
-		"trigger":
-			if target.has_signal("triggered"):
-				target.emit_signal("triggered")

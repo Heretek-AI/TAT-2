@@ -68,6 +68,9 @@ const INTERACT_LOS_STANDOFF_M: float = 0.25
 ## KF25/KF26: F taps the primary action (pick pocket / OPEN), holding F runs
 ## the stacked secondary ([HOLD] TAKEDOWN on a guard, [HOLD] LOCK on a door).
 const HOLD_INTERACT_SEC: float = 0.45
+## W6b: co-op transform cadence (20 Hz). NetManager also rate-limits the RPC,
+## so this local accumulator only avoids touching the transport every tick.
+const COOP_BROADCAST_INTERVAL_SEC: float = 0.05
 const CAMERA_FOV: float = UE_FP_FOV_VERTICAL_16X9_DEG # UE 85 horizontal -> 54.54 vertical at 16:9
 const CAMERA_FOV_SPRINT: float = CAMERA_FOV + 4.0 # retained +4 velocity-feedback shape (58.54)
 const CAMERA_FOV_MIN: float = 50.0 # settings slider/user floor; explicit values clamp consistently
@@ -164,6 +167,7 @@ var _downed_data: Dictionary = {}
 var _health_block_data: Dictionary = {}
 
 var is_crouching: bool = false
+var _coop_broadcast_accum: float = 0.0
 var is_sprinting: bool = false
 var _sprint_toggled: bool = false
 var invert_y: bool = false
@@ -996,10 +1000,23 @@ func add_look_pixel_delta(delta_px: Vector2) -> void:
 		head.rotation.x = clampf(head.rotation.x + delta_px.y * mouse_sens * y_dir, deg_to_rad(-80), deg_to_rad(80))
 
 
+## W6b co-op transport: publish this thief's pose so the other peer's cosmetic
+## RemotePeer_* visual follows. Solo play is one bool check per physics tick.
+func _tick_coop_broadcast(delta: float) -> void:
+	if NetManager == null or not NetManager.is_coop:
+		return
+	_coop_broadcast_accum += delta
+	if _coop_broadcast_accum < COOP_BROADCAST_INTERVAL_SEC:
+		return
+	_coop_broadcast_accum = 0.0
+	NetManager.broadcast_player_state(global_position, rotation.y, is_crouching, str(GameState.thief_id))
+
+
 func _physics_process(delta: float) -> void:
 	if GameState.state != "playing":
 		_update_zipwire_cable()
 		return
+	_tick_coop_broadcast(delta)
 	_tick_ward_slow(delta)
 	ability_cooldown = maxf(0.0, ability_cooldown - delta)
 	pickpocket_cooldown = maxf(0.0, pickpocket_cooldown - delta)

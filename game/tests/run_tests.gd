@@ -5858,6 +5858,151 @@ func _initialize() -> void:
 		w3_layer.queue_free()
 		await process_frame
 
+	# 80. W6b: co-op transport. No live ENet peer: host/client routing uses the
+	# _peer_id_override test seam, the default OfflineMultiplayerPeer makes RPC
+	# sends harmless, and the world-event gate is exercised directly.
+	var w6_nm: Node = root.get_node_or_null("NetManager")
+	if w6_nm == null:
+		printerr("FAIL: 80 NetManager autoload missing")
+		fails += 1
+	else:
+		var w6_prev_coop: bool = bool(w6_nm.get("is_coop"))
+		var w6_prev_peer: MultiplayerPeer = w6_nm.multiplayer.multiplayer_peer
+		var w6_prev_broadcast_msec: int = int(w6_nm.get("_last_broadcast_msec"))
+		var w6_known: Dictionary = w6_nm.get("_last_known_pos") as Dictionary
+		var w6_last_event: Dictionary = w6_nm.get("_last_world_event_msec") as Dictionary
+		w6_known.clear()
+		w6_last_event.clear()
+		var w6_root: Node = w6_nm.call("_get_mission_root") as Node
+
+		# 80.0 host/client identity is explicit; solo is neither.
+		w6_nm.set("is_coop", false)
+		w6_nm.call("set_test_peer_id", 0)
+		var w6_offline_ok: bool = not bool(w6_nm.call("is_host")) and not bool(w6_nm.call("is_client"))
+		w6_nm.set("is_coop", true)
+		w6_nm.call("set_test_peer_id", 1)
+		var w6_host_ok: bool = bool(w6_nm.call("is_host")) and not bool(w6_nm.call("is_client"))
+		w6_nm.call("set_test_peer_id", 2)
+		var w6_client_ok: bool = not bool(w6_nm.call("is_host")) and bool(w6_nm.call("is_client"))
+		w6_nm.call("set_test_peer_id", 1)
+		fails += _w3_check(w6_offline_ok and w6_host_ok and w6_client_ok,
+			"80.0 is_host/is_client: solo neither, host id 1, client id 2",
+			"80.0 identity mismatch: offline=%s host=%s client=%s" % [w6_offline_ok, w6_host_ok, w6_client_ok])
+
+		# Mock mission target for the host gate.
+		var w6_target: Node3D = Node3D.new()
+		w6_target.name = "W6bDoor"
+		w6_target.position = Vector3(0.0, 0.0, 0.0)
+		w6_root.add_child(w6_target)
+		w6_target.global_position = Vector3.ZERO
+		var w6_outside: Node3D = Node3D.new()
+		w6_outside.name = "W6bOutside"
+		root.add_child(w6_outside)
+		w6_outside.global_position = Vector3.ZERO
+		var w6_events: Array = []
+		var w6_cb := func(kind: String, target: Node, from_peer: int) -> void:
+			w6_events.append([kind, target, from_peer])
+		w6_nm.connect("world_event_applied", w6_cb)
+
+		# 80.1 host gate: unknown kind / overlong / non-alphanumeric / missing /
+		# outside-scene / no known position / out-of-range all reject.
+		w6_known[2] = Vector3(1.0, 0.0, 0.0)
+		var w6_bad_kind: Node = w6_nm.call("_validate_world_event", "explode", "W6bDoor", 2) as Node
+		var w6_bad_long: Node = w6_nm.call("_validate_world_event", "open", "A".repeat(65), 2) as Node
+		var w6_bad_chars: Node = w6_nm.call("_validate_world_event", "open", "W6b Door!", 2) as Node
+		var w6_bad_missing: Node = w6_nm.call("_validate_world_event", "open", "NoSuchDoor", 2) as Node
+		var w6_bad_outside: Node = w6_nm.call("_validate_world_event", "open", "W6bOutside", 2) as Node
+		w6_known.erase(2)
+		var w6_bad_unknown_pos: Node = w6_nm.call("_validate_world_event", "open", "W6bDoor", 2) as Node
+		w6_known[2] = Vector3(10.0, 0.0, 0.0)
+		var w6_bad_far: Node = w6_nm.call("_validate_world_event", "open", "W6bDoor", 2) as Node
+		w6_known[2] = Vector3(2.9, 0.0, 0.0)
+		var w6_good: Node = w6_nm.call("_validate_world_event", "open", "W6bDoor", 2) as Node
+		var w6_accept_ok: bool = bool(w6_nm.call("_host_accept_world_event", "open", "W6bDoor", 2))
+		var w6_events_ok: bool = w6_events.size() == 1 and w6_events[0][0] == "open" and w6_events[0][1] == w6_target and int(w6_events[0][2]) == 2
+		fails += _w3_check(w6_bad_kind == null and w6_bad_long == null and w6_bad_chars == null and w6_bad_missing == null and w6_bad_outside == null and w6_bad_unknown_pos == null and w6_bad_far == null and w6_good == w6_target and w6_accept_ok and w6_events_ok,
+			"80.1 host gate rejects unknown kind/long/non-alnum/missing/outside/no-pos/10 m; accepts 2.9 m and emits world_event_applied(open, target, 2)",
+			"80.1 gate mismatch: kind=%s long=%s chars=%s missing=%s outside=%s nopos=%s far=%s good=%s accept=%s events=%s" % [w6_bad_kind, w6_bad_long, w6_bad_chars, w6_bad_missing, w6_bad_outside, w6_bad_unknown_pos, w6_bad_far, w6_good, w6_accept_ok, w6_events])
+
+		# 80.2 cooldown spam is rejected; elapsed cooldown and the compatibility
+		# alias both route to the host path.
+		var w6_spam_ok: bool = not bool(w6_nm.call("_host_accept_world_event", "close", "W6bDoor", 2))
+		w6_last_event[2] = Time.get_ticks_msec() - 300
+		var w6_after_cooldown_ok: bool = bool(w6_nm.call("_host_accept_world_event", "close", "W6bDoor", 2))
+		w6_events.clear()
+		var w6_player: Node = w6_nm.get_tree().get_first_node_in_group("player")
+		if w6_player is Node3D:
+			w6_target.global_position = (w6_player as Node3D).global_position
+		else:
+			w6_target.global_position = Vector3.ZERO
+			w6_known[1] = Vector3.ZERO
+		w6_last_event.erase(1)
+		w6_nm.call("send_world_event", "open", "W6bDoor")
+		var w6_alias_ok: bool = w6_events.size() == 1 and w6_events[0][0] == "open"
+		fails += _w3_check(w6_spam_ok and w6_after_cooldown_ok and w6_alias_ok,
+			"80.2 host cooldown: same-250 ms close rejected, elapsed close accepted, send_world_event alias applies locally on the host",
+			"80.2 cooldown/alias mismatch: spam=%s after=%s alias=%s events=%s" % [w6_spam_ok, w6_after_cooldown_ok, w6_alias_ok, w6_events])
+
+		# 80.3 player-state send is 20 Hz and rejects non-finite/far transforms;
+		# the thief controller actually calls it.
+		w6_nm.set("_last_broadcast_msec", -100000)
+		var w6_count0: int = int(w6_nm.get("broadcast_send_count"))
+		var w6_send1: bool = bool(w6_nm.call("broadcast_player_state", Vector3.ZERO, 0.0, false, "chameleon"))
+		var w6_send2: bool = bool(w6_nm.call("broadcast_player_state", Vector3.ZERO, 0.0, false, "chameleon"))
+		var w6_bad_send: bool = bool(w6_nm.call("broadcast_player_state", Vector3(INF, 0.0, 0.0), 0.0, false, "chameleon"))
+		var w6_bad_yaw: bool = bool(w6_nm.call("broadcast_player_state", Vector3.ZERO, NAN, false, "chameleon"))
+		var w6_far_send: bool = bool(w6_nm.call("broadcast_player_state", Vector3(6000.0, 0.0, 0.0), 0.0, false, "chameleon"))
+		var w6_send_delta: int = int(w6_nm.get("broadcast_send_count")) - w6_count0
+		var w6_thief_src: String = FileAccess.get_file_as_string("res://src/player/thief_character.gd")
+		var w6_thief_call_ok: bool = w6_thief_src.contains("NetManager.broadcast_player_state(") and w6_thief_src.contains("NetManager.is_coop")
+		fails += _w3_check(w6_send1 and not w6_send2 and not w6_bad_send and not w6_bad_yaw and not w6_far_send and w6_send_delta == 1 and w6_thief_call_ok,
+			"80.3 broadcast_player_state: 2 calls in one 50 ms window -> 1 send, INF/NAN/6000 m rejected, thief_character call site guarded by is_coop",
+			"80.3 player-state mismatch: send=%s/%s bad=%s/%s/%s delta=%d thief=%s" % [w6_send1, w6_send2, w6_bad_send, w6_bad_yaw, w6_far_send, w6_send_delta, w6_thief_call_ok])
+
+		# 80.4 cosmetic remote visual create/free, door remote toggle, and the
+		# mission listener wiring (source shape; no live mission instance).
+		w6_nm.set("_last_broadcast_msec", w6_prev_broadcast_msec)
+		var w6_visual: Node3D = w6_nm.call("_ensure_remote_visual", 42, "chameleon") as Node3D
+		var w6_visual_ok: bool = w6_visual != null and w6_nm.call("get_remote_visual", 42) == w6_visual
+		w6_nm.call("_on_peer_disconnected_despawn", 42)
+		await process_frame
+		var w6_visual_freed: bool = not is_instance_valid(w6_visual) and w6_nm.call("get_remote_visual", 42) == null
+		var w6_door_scr: GDScript = load("res://src/interact/swinging_door.gd") as GDScript
+		var w6_door: Node3D = w6_door_scr.new() as Node3D
+		w6_door.name = "W6bSwingDoor"
+		w6_door.call("configure", {
+			"pos": [0.0, 0.0, 0.0],
+			"basis": [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+			"leaves": [],
+		}, null)
+		w6_root.add_child(w6_door)
+		await process_frame
+		w6_door.call("apply_remote_toggle", true)
+		var w6_door_open_ok: bool = bool(w6_door.get("is_open")) and bool(w6_door.get("_tweening"))
+		w6_door.call("apply_remote_toggle", true)
+		var w6_door_idem_ok: bool = bool(w6_door.get("is_open"))
+		w6_door.call("apply_remote_toggle", false)
+		var w6_door_close_ok: bool = not bool(w6_door.get("is_open"))
+		var w6_door_src: String = FileAccess.get_file_as_string("res://src/interact/swinging_door.gd")
+		var w6_mc_src: String = FileAccess.get_file_as_string("res://src/missions/mission_controller.gd")
+		var w6_wiring_ok: bool = w6_door_src.contains("send_world_event") and w6_door_src.contains("func apply_remote_toggle") and w6_mc_src.contains("world_event_applied") and w6_mc_src.contains("apply_remote_toggle")
+		fails += _w3_check(w6_visual_ok and w6_visual_freed and w6_door_open_ok and w6_door_idem_ok and w6_door_close_ok and w6_wiring_ok,
+			"80.4 remote visual create/free without a peer; door apply_remote_toggle open/idempotent/close; door+mission listener wiring present",
+			"80.4 visual/door mismatch: visual=%s freed=%s open=%s idem=%s close=%s wiring=%s" % [w6_visual_ok, w6_visual_freed, w6_door_open_ok, w6_door_idem_ok, w6_door_close_ok, w6_wiring_ok])
+
+		# Restore transport state for the rest of the run.
+		if w6_nm.is_connected("world_event_applied", w6_cb):
+			w6_nm.disconnect("world_event_applied", w6_cb)
+		w6_door.queue_free()
+		w6_target.queue_free()
+		w6_outside.queue_free()
+		await process_frame
+		w6_known.clear()
+		w6_last_event.clear()
+		w6_nm.call("set_test_peer_id", 0)
+		w6_nm.multiplayer.multiplayer_peer = w6_prev_peer
+		w6_nm.set("is_coop", w6_prev_coop)
+
 	# P2-6 fixture restore (see boot snapshot): leave no mutated autoload
 	# state behind for the next run or embedding harness.
 	gs.thief_id = fx_thief_id

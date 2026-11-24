@@ -332,6 +332,13 @@ func _start_swing_toggle() -> void:
 	if pivot == null or _tweening:
 		return
 	is_open = not is_open
+	_begin_swing()
+	_announce_world_state()
+
+
+## Starts the authored swing toward the current is_open state. Shared by local
+## interaction and host-authoritative remote application (which never echoes).
+func _begin_swing() -> void:
 	_tweening = true
 	if _tween != null and _tween.is_valid():
 		_tween.kill()
@@ -339,6 +346,29 @@ func _start_swing_toggle() -> void:
 	var target: float = OPEN_YAW_RAD if is_open else 0.0
 	_tween.tween_property(pivot, "rotation:y", target, SWING_SEC).set_trans(Tween.TRANS_SINE)
 	_tween.tween_callback(_on_swing_finished)
+
+
+## W6b: a successful local interaction announces the new swing state. Solo play
+## is a no-op; the transport decides whether this peer requests or applies.
+func _announce_world_state() -> void:
+	if NetManager == null or not NetManager.is_coop:
+		return
+	NetManager.send_world_event("open" if is_open else "close", name)
+
+
+## W6b: apply the host-validated swing state on a peer. Idempotent, never
+## announces, and retargets a local tween when the two peers disagree.
+func apply_remote_toggle(p_open: bool) -> void:
+	if pivot == null:
+		return
+	if is_open == p_open:
+		return
+	if _tweening:
+		if _tween != null and _tween.is_valid():
+			_tween.kill()
+		_tweening = false
+	is_open = p_open
+	_begin_swing()
 
 
 func _on_lockpick_finished(success: bool, actor: Node) -> void:

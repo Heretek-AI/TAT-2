@@ -111,7 +111,26 @@ func _ready() -> void:
 	var map_id: String = str(GameData.get_contract_display(GameState.active_contract_order).get("map_id", "old_manor"))
 	GameState.active_map_id = map_id
 	_setup_environment()
+	_connect_coop_listener()
 	start_contract(GameState.active_contract_order)
+
+
+## W6b: the only replicated mission interaction is the swinging-door state.
+## Loot, AI and mission progression stay local (documented in the wave report).
+func _connect_coop_listener() -> void:
+	if NetManager == null or not NetManager.has_signal("world_event_applied"):
+		return
+	if not NetManager.world_event_applied.is_connected(_on_world_event_applied):
+		NetManager.world_event_applied.connect(_on_world_event_applied)
+
+
+func _on_world_event_applied(kind: String, target: Node, _from_peer: int) -> void:
+	if kind != "open" and kind != "close":
+		return
+	if target == null or not is_instance_valid(target):
+		return
+	if target.is_in_group("swinging_doors") and target.has_method("apply_remote_toggle"):
+		target.call("apply_remote_toggle", kind == "open")
 
 
 func _setup_environment() -> void:
@@ -3607,6 +3626,9 @@ func _spawn_swinging_doors(stats: Dictionary) -> void:
 			continue
 		var dd: Dictionary = d_var as Dictionary
 		var door := SwingingDoorScript.new()
+		# W6b: stable authored-order name so host and client resolve the same
+		# world-event target (auto names depend on tree history, not the map).
+		door.name = "SwingingDoor_%d" % count
 		door.configure(dd, level_loader)
 		# Lock high-security/vault/prison swinging doors on missions (never index 0 or Thieves' Den).
 		# A SceneVariant Locks.Doors override with an exact authored tag wins.

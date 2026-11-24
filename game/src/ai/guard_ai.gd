@@ -36,6 +36,11 @@ const FOV_DEG: float = 80.0 # PeripheralVisionAngleDegrees 40 (UE half-angle) x 
 const MELEE_DAMAGE: float = 10.0 # CT_Melee_RangedAttackDamage close key
 const MELEE_COOLDOWN: float = 2.0 # GE_Melee_RangedAttack_Cooldown
 const MELEE_RADIUS: float = 1.0 # GA_MeleeRangedAttack DamageRadius 100cm
+## Direct pickpocket reach (TATInteractionTargeterComponent.MaxInteractionRange
+## 175 cm, same value the player uses) plus eye/torso ray heights.
+const PICKPOCKET_RANGE_M: float = 1.75
+const PICKPOCKET_PLAYER_EYE_M: float = 1.3
+const PICKPOCKET_GUARD_TORSO_M: float = 1.1
 # Real UE values (game/data/generated/gameplay/downed.json + CT_AIStats;
 # fallbacks are the extracted numbers and apply only when sources are missing).
 const DOWNED_PATH := "res://data/generated/gameplay/downed.json"
@@ -124,6 +129,15 @@ const SPRINT_RAMP_MULTIPLIER: float = 8.0
 const HEIGHT_STRENGTH_ZERO_M: float = 3.0
 
 @export var patrol_points: Array[Vector3] = []
+## Authored patrol timing/orientation, parallel to patrol_points (mission
+## controller fills these from APatrolPath points). Empty arrays keep the
+## legacy behaviour: no dwell, no authored facing, wrap-around loop.
+@export var patrol_waits: Array[float] = []
+@export var patrol_yaws: Array[float] = []
+@export var patrol_facing: Array[bool] = []
+## APatrolPath.LoopType, e.g. "EPatrolLoopType::PingPong". Any value containing
+## "pingpong" reverses at both ends instead of wrapping.
+@export var patrol_loop_mode: String = ""
 @export var patrol_speed: float = PATROL_SPEED
 @export var suspicious_speed: float = SUSPICIOUS_SPEED
 @export var chase_speed: float = ALERTED_SPEED
@@ -137,6 +151,11 @@ var health: float = 30.0
 var detection: float = 0.0 # 0..100
 var ko_timer: float = 0.0
 var wp_index: int = 0
+## Authored waypoint dwell/patrol direction. _patrol_wait_left > 0 means the
+## guard is standing at patrol_points[wp_index] until the authored WaitSeconds
+## elapses; _patrol_dir is +1/-1 for PingPong reversal.
+var _patrol_wait_left: float = 0.0
+var _patrol_dir: int = 1
 var investigate_pos: Vector3 = Vector3.ZERO
 var state_timer: float = 0.0
 var _seconds_in_state: float = 0.0
@@ -1124,9 +1143,15 @@ func _move_ai(delta: float, player: CharacterBody3D) -> void:
 	var spd: float = patrol_speed
 	match state:
 		Alertness.NEUTRAL:
-			target = patrol_points[wp_index]
-			if global_position.distance_to(target) < 1.0:
-				wp_index = (wp_index + 1) % patrol_points.size()
+			# Authored patrol: stand at a waypoint for its WaitSeconds, face the
+			# authored yaw when the point carries facing, and reverse at the
+			# ends of a PingPong path. Without authored data this is the same
+			# walk-then-advance loop as before.
+			if _patrol_service_waypoint(delta):
+				target = global_position
+				spd = 0.0
+			else:
+				target = patrol_points[wp_index]
 		Alertness.SUSPICIOUS:
 			target = investigate_pos
 			spd = suspicious_speed
@@ -1172,6 +1197,66 @@ func _move_ai(delta: float, player: CharacterBody3D) -> void:
 	if not is_on_floor():
 		velocity.y -= gravity * delta
 	move_and_slide()
+
+
+## One frame of authored waypoint handling. Returns true while the guard must
+## stand still (dwelling at the current point); false when it may walk on.
+## Waits come from APatrolPath FPatrolPoint.WaitSeconds; the yaw is applied only
+## for points whose HasFacing was authored. Authored positions keep their y, so
+## the guard never floats: _move_ai is planar and gravity/floor contact own y.
+func _patrol_service_waypoint(delta: float) -> bool:
+	if patrol_points.is_empty():
+		return false
+	if _patrol_wait_left > 0.0:
+		_patrol_wait_left = maxf(0.0, _patrol_wait_left - delta)
+		_apply_patrol_yaw(delta, wp_index)
+		if _patrol_wait_left <= 0.0:
+			_advance_patrol_index()
+		return true
+	if global_position.distance_to(patrol_points[wp_index]) < 1.0:
+		var wait_s: float = _patrol_wait_for(wp_index)
+		_apply_patrol_yaw(delta, wp_index)
+		if wait_s > 0.0:
+			_patrol_wait_left = wait_s
+			return true
+		_advance_patrol_index()
+	return false
+
+
+## Authored WaitSeconds for a waypoint (0.0 when the index has no record).
+func _patrol_wait_for(index: int) -> float:
+	if index < 0 or index >= patrol_waits.size():
+		return 0.0
+	return maxf(0.0, patrol_waits[index])
+
+
+## Authored facing yaw for a waypoint, in Godot radians. UE yaw 0 faces +X and
+## positive yaw turns toward +Y (Godot +Z); Godot rotation.y 0 faces -Z, so
+## rot.y = -(yaw + 90 deg). Applied only when HasFacing was authored.
+func _apply_patrol_yaw(delta: float, index: int) -> void:
+	if index < 0 or index >= patrol_yaws.size() or index >= patrol_facing.size():
+		return
+	if not patrol_facing[index]:
+		return
+	var target_yaw: float = deg_to_rad(-(patrol_yaws[index] + 90.0))
+	rotation.y = lerp_angle(rotation.y, target_yaw, clampf(delta * 4.0, 0.0, 1.0))
+
+
+## Advance to the next waypoint: wrap for Loop, reverse at both ends for
+## PingPong (APatrolPath.LoopType). No-op for a single-point path.
+func _advance_patrol_index() -> void:
+	var count: int = patrol_points.size()
+	if count <= 1:
+		wp_index = 0
+		return
+	if patrol_loop_mode.to_lower().find("pingpong") >= 0:
+		if wp_index + _patrol_dir >= count:
+			_patrol_dir = -1
+		elif wp_index + _patrol_dir < 0:
+			_patrol_dir = 1
+		wp_index = clampi(wp_index + _patrol_dir, 0, count - 1)
+	else:
+		wp_index = (wp_index + 1) % count
 
 
 func _can_see_player(player: CharacterBody3D) -> bool:
@@ -1651,6 +1736,12 @@ func get_interact_prompt() -> String:
 \tif owner_guard != null and owner_guard.has_method("get_interact_prompt"):
 \t\treturn str(owner_guard.call("get_interact_prompt"))
 \treturn "[F] PICK POCKET"
+func get_interact_point() -> Vector3:
+\t# W2: LOS targets the guard torso (not the belt prop), matching the
+\t# direct interact() gate in guard_ai.
+\tif owner_guard is Node3D:
+\t\treturn (owner_guard as Node3D).global_position + Vector3.UP * 1.1
+\treturn global_position + Vector3.UP * 0.5
 func interact(actor: Node) -> void:
 \t# P1 pickpocket gate bypass: this proxy used to call steal_carried_item
 \t# directly, skipping the owner's alert-state gate. Route through
@@ -1690,6 +1781,13 @@ func get_interact_prompt() -> String:
 func interact(_actor: Node) -> void:
 	if carried_item.is_empty():
 		return
+	# Direct pickpocket gate: reach <= 1.75 m and clear world LOS from the
+	# player eye to the guard torso. No facing cone: lifting from behind is
+	# intended. A blocked attempt refuses silently and never escalates, so the
+	# prompt and the outcome agree (get_nearest_interactable applies the same
+	# world LOS for the carried-item prompt).
+	if not _pickpocket_reachable(_actor):
+		return
 	# P1 pickpocket free/silent on alert victims: SUSPICIOUS/ALERTED/SEARCH
 	# victims used to pay out with no check, cooldown, detection bump, noise
 	# or state change. Only calm (NEUTRAL) victims can be lifted and knocked
@@ -1708,6 +1806,23 @@ func interact(_actor: Node) -> void:
 		NoiseBus.emit_noise(global_position, 6.0, self, "pickpocket_spotted")
 		return
 	steal_carried_item()
+
+
+## Reach + world-geometry LOS for a direct pickpocket (layer 1 only; both the
+## player and this guard are excluded so capsules can never self-occlude).
+func _pickpocket_reachable(actor: Node) -> bool:
+	if not (actor is Node3D):
+		return false
+	var actor3d: Node3D = actor as Node3D
+	if actor3d.global_position.distance_to(global_position) > PICKPOCKET_RANGE_M:
+		return false
+	var w3d: World3D = get_world_3d()
+	if w3d == null or w3d.direct_space_state == null:
+		return false
+	var from: Vector3 = actor3d.global_position + Vector3.UP * PICKPOCKET_PLAYER_EYE_M
+	var to: Vector3 = global_position + Vector3.UP * PICKPOCKET_GUARD_TORSO_M
+	var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(from, to, 1, [get_rid(), actor3d.get_rid()])
+	return w3d.direct_space_state.intersect_ray(q).is_empty()
 
 
 ## DT_DisguiseV3IntegrityReduction GuardViewCone row: drains Chameleon disguise

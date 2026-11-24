@@ -1416,6 +1416,10 @@ func _new_accumulator() -> Dictionary:
 			"player_spawns": [] as Array[Vector3],
 		"player_spawn_transforms": [] as Array,
 			"guard_spawns": [] as Array[Vector3],
+			# Authored APatrolPath records (actor/class/loop_type/points[]) in
+			# world metres, merged verbatim from each sublevel so the mission
+			# controller can assign real patrols instead of the 6x6 m square.
+			"patrol_paths": [] as Array,
 			# Authored-tag index for SceneElement overrides (#11). Kept parallel
 			# to the legacy Vector3 arrays so no consumer changes shape.
 			"scene_element_spawns": [] as Array,
@@ -2151,6 +2155,13 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 	for sd in data_dict.get("swinging_doors", []):
 		if sd is Dictionary:
 			(result["swinging_doors"] as Array).append(sd)
+
+	# Authored patrol paths: tools/parse_tables.py already converts point
+	# positions to Godot metres/axes, so these records are merged verbatim
+	# (actor, class, loop_type, points[] with pos/wait/facing/yaw/type).
+	for pp in data_dict.get("patrol_paths", []):
+		if pp is Dictionary:
+			(result["patrol_paths"] as Array).append(pp)
 
 
 ## True only for the authored BP_MoonShape_C_5 window backlight plane. The
@@ -3230,6 +3241,8 @@ func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dict
 		push_error("[level_loader] MESH HOLES: missing=", int(ctx.get("missing_mesh_count", 0)), " corrupt=", corrupt_mesh_count, " (see missing_meshes/corrupt_meshes). Geometry, colliders and occluders are absent for these UE paths.")
 	result["swinging_doors"] = result.get("swinging_doors", [])
 	result["swinging_door_count"] = (result["swinging_doors"] as Array).size()
+	result["patrol_paths"] = result.get("patrol_paths", [])
+	result["patrol_path_count"] = (result["patrol_paths"] as Array).size()
 	result["sky_light"] = ctx.get("sky_light", {})
 	result["fog_volume"] = ctx.get("fog_volume", {})
 	result["post_process"] = ctx.get("post_process", {})

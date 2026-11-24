@@ -3,13 +3,14 @@ extends Node
 ## AudioManager mirrors these stimuli as 3D positional audio on the SFX bus;
 ## guard VO and footstep variation are layered there (PG-6 full audio runtime).
 ##
-## Footstep-surface vocabulary (AU3). NOTE (P2-D7): the surface does NOT
-## travel on this bus — emit_noise has no surface argument. The player
-## controller resolves its surface listener-side and calls
-## AudioManager.play_footstep(surface, ...) directly; AI hearing stays
-## surface-agnostic by design (listeners use distance <= loudness only).
-## is_known_surface() lets emitters fail loud on typos instead of silently
-## falling back to the "wood" default pool.
+## Footstep-surface loudness (AU3 + DA_LoudnessModifiers). The surface now
+## travels with an emitted noise: emit_noise(..., surface) multiplies the
+## emitted loudness by GameData.get_surface_loudness(surface) from the authored
+## AI/Data/DA_LoudnessModifiers table (Carpet/Foliage/Dirt 0.0, Glass/Stone/
+## Metal 1.5, ...). Listeners (guards, HUD arcs) receive the already-modified
+## value, so nobody applies the multiplier twice. Existing callers without a
+## surface keep 1.0 (unmodified). is_known_surface() lets emitters fail loud on
+## typos instead of silently falling back to the "wood" default pool.
 
 signal noise_emitted(origin: Vector3, loudness_meters: float, source: Node, tag: String)
 
@@ -29,7 +30,11 @@ static func is_known_surface(surface: String) -> bool:
 	return SURFACES.has(surface.to_lower().strip_edges())
 
 
-func emit_noise(origin: Vector3, loudness_meters: float, source: Node = null, tag: String = "generic") -> void:
+func emit_noise(origin: Vector3, loudness_meters: float, source: Node = null, tag: String = "generic", surface: String = "") -> void:
 	if tag.strip_edges() == "":
 		push_warning("[noise_bus] emit_noise called with empty tag; emitting unchanged (listeners resolve it as before)")
-	noise_emitted.emit(origin, loudness_meters, source, tag)
+	var emitted: float = loudness_meters
+	if surface.strip_edges() != "":
+		# Authored surface modifier: the value listeners receive is final.
+		emitted *= GameData.get_surface_loudness(surface)
+	noise_emitted.emit(origin, emitted, source, tag)

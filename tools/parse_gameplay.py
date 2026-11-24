@@ -145,11 +145,19 @@ def build_character_movement() -> dict:
             "stamina_regen_rate": regen_rate,
             "stamina_regen_per_s": round(regen_rate * 0.25 / 0.1, 6),
             "mantle_max_height_m": cm(req(mantle, "MaxHeight", "_mantleSettings")),
-            "mantle_max_angle_deg": float(req(mantle, "MaxAngleFacing", "_mantleSettings")),
+            "mantle_max_angle_deg": float(
+                req(mantle, "MaxAngleFacing", "_mantleSettings")
+            ),
             "allow_mantle_from_crouch": allow_mantle_from_crouch,
-            "wall_climb_speed_m_s": cm(req(wall_climb, "WallClimbDashSpeed", "_wallClimbSettings")),
-            "wall_climb_accel_m_s2": cm(req(wall_climb, "WallClimbDashAcceleration", "_wallClimbSettings")),
-            "wall_climb_dash_duration_s": float(req(wall_climb, "WallClimbDashDuration", "_wallClimbSettings")),
+            "wall_climb_speed_m_s": cm(
+                req(wall_climb, "WallClimbDashSpeed", "_wallClimbSettings")
+            ),
+            "wall_climb_accel_m_s2": cm(
+                req(wall_climb, "WallClimbDashAcceleration", "_wallClimbSettings")
+            ),
+            "wall_climb_dash_duration_s": float(
+                req(wall_climb, "WallClimbDashDuration", "_wallClimbSettings")
+            ),
         },
         "guard": {
             "max_walk_m_s": cm(float(req(gmove, "MaxWalkSpeed", "guard CharMoveComp"))),
@@ -325,6 +333,43 @@ def sight_table(rel: str) -> dict:
     return out
 
 
+## Footstep loudness multipliers authored per physical surface
+## (DA_LoudnessModifiers._PhysicalMaterialToLoudnessModifier). Keys are the raw
+## surface names from the asset paths
+## (/Game/MaterialLibrary/Surface/Physics/Carpet.Carpet -> "Carpet"); the
+## runtime GameData.get_surface_loudness() matches them case-insensitively.
+def build_surface_loudness() -> dict:
+    data = load("AI/Data/DA_LoudnessModifiers.json")
+    props = find(data, {"Type": "TATHearingStimLoudnessModifiers"})
+    rows = req(
+        props,
+        "_PhysicalMaterialToLoudnessModifier",
+        "DA_LoudnessModifiers._PhysicalMaterialToLoudnessModifier",
+    )
+    out = {}
+    for entry in rows:
+        if not isinstance(entry, dict):
+            raise Fail("DA_LoudnessModifiers row is not a dictionary")
+        key = str(entry.get("Key", ""))
+        surface = key.split("/")[-1].split(".")[-1].strip()
+        value = entry.get("Value") or {}
+        if not surface or "Multiplier" not in value:
+            raise Fail(f"DA_LoudnessModifiers malformed row: {entry!r}")
+        if surface in out:
+            raise Fail(f"DA_LoudnessModifiers duplicate surface {surface!r}")
+        out[surface] = float(value["Multiplier"])
+    # The shipped asset carries 22 surfaces; a change must be re-read, never
+    # silently pass with a partial table.
+    if len(out) != 22:
+        raise Fail(f"DA_LoudnessModifiers: expected 22 surfaces, got {len(out)}")
+    if out.get("Carpet") != 0.0 or out.get("Glass") != 1.5 or out.get("Dirt") != 0.0:
+        raise Fail(
+            "DA_LoudnessModifiers anchor rows changed: "
+            f"Carpet={out.get('Carpet')} Glass={out.get('Glass')} Dirt={out.get('Dirt')}"
+        )
+    return out
+
+
 def build_guard_ai() -> dict:
     gb = load("AI/Controllers/AIC_GuardBase.json")
     hearing = find(gb, {"Type": "TATAISenseConfig_Hearing"})
@@ -347,12 +392,14 @@ def build_guard_ai() -> dict:
         "hearing_range_m": cm(float(req(hearing, "HearingRange", "GuardBase hearing"))),
         "capsule_radius_m": 0.45,
         "capsule_half_height_m": 1.18,
+        "surface_loudness": build_surface_loudness(),
         "escalation_tables": {"guardbase": guard_tbl, "bouncer": bouncer_tbl},
         "sources": {
             "sight": "extracted/json/AI/Controllers/AIC_GuardBase.json (TATAISenseConfig_Sight Fresh: 2000/40deg)",
             "lose_sight": "extracted/json/AI/Controllers/AIC_Bouncer.json (Fresh LoseSightRadius 3000); GuardBase Fresh Lose=2500 noted",
             "hearing": "extracted/json/AI/Controllers/AIC_GuardBase.json (TATAISenseConfig_Hearing.HearingRange 2500)",
             "capsule": "extracted/json/Character/Guards/BP_Guard_Base.json (CollisionOverlayCapsuleComponent 118/45)",
+            "surface_loudness": "extracted/json/AI/Data/DA_LoudnessModifiers.json (_PhysicalMaterialToLoudnessModifier, 22 surfaces)",
         },
     }
 
@@ -375,7 +422,9 @@ def build_state_speeds() -> dict:
     move = find(guard, {"Type": "TATCharacterAIMovement", "Name": "CharMoveComp"})
     max_walk = req(move, "MaxWalkSpeed", "BP_Guard_Base CharMoveComp")
     fallback_m_s = cm(max_walk)
-    print(f"alerted_combat_fallback_m_s derived from BP_Guard_Base MaxWalkSpeed {max_walk} -> {fallback_m_s}")
+    print(
+        f"alerted_combat_fallback_m_s derived from BP_Guard_Base MaxWalkSpeed {max_walk} -> {fallback_m_s}"
+    )
     return {
         "neutral_m_s": speeds["neutral"],
         "suspicious_m_s": speeds["suspicious"],
@@ -461,7 +510,9 @@ def build_player_tools() -> dict:
         load("Gameplay/Tools/Bombs/SmokeBomb/BP_SmokeBomb_Bomb_Tool.json"),
         {"Type": "BP_SmokeBomb_Bomb_Tool_C"},
     )
-    smoke_proj_data = load("Gameplay/Tools/Bombs/SmokeBomb/BP_Projectile_SmokeBomb.json")
+    smoke_proj_data = load(
+        "Gameplay/Tools/Bombs/SmokeBomb/BP_Projectile_SmokeBomb.json"
+    )
     smoke_proj_cdo = find(smoke_proj_data, {"Type": "BP_Projectile_SmokeBomb_C"})
     smoke_proj_comp = find(
         smoke_proj_data,

@@ -52,6 +52,13 @@ var fallback_spawn_headroom_clear: bool = true
 ## loot centroid). Authored starts report true; the legacy last-resort and
 ## the floor/headroom-only fallbacks report false. Logged for QA.
 var fallback_spawn_forward_clear: bool = true
+## W2 patrol QA: guards that fell back to the synthetic 6x6 m square (no
+## authored APatrolPath point within PATROL_MATCH_RADIUS_M) and their exact
+## logged lines, plus how many guards adopted an authored path.
+var patrol_fallback_count: int = 0
+var patrol_fallback_log: Array[String] = []
+var patrol_paths_assigned: int = 0
+const PATROL_MATCH_RADIUS_M: float = 30.0
 
 var _is_thieves_den: bool = false
 var _letter_grace_sec: float = 0.0 # P1 timer-during-letter: run-clock hold after the start letter (see _process).
@@ -551,7 +558,7 @@ func start_contract(order: int) -> void:
 	if map_id == "thieves_den":
 		_setup_thieves_den_hub(anchor, ue_level_data)
 	else:
-		_spawn_guards(ue_level_data.get("guard_spawns", []), anchor)
+		_spawn_guards(ue_level_data.get("guard_spawns", []), anchor, ue_level_data.get("patrol_paths", []))
 		_spawn_loot_and_quest(ue_level_data, anchor)
 		_spawn_loot_containers(ue_level_data)
 		_audit_loot_economy()
@@ -924,6 +931,9 @@ func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> 
 	desk_area.name = "DenMapTableArea"
 	desk_area.position = desk_pos
 	desk_area.add_to_group("interactables")
+	# W2 interaction LOS target: just above the authored map-table surface, not
+	# the desk origin (which sits inside the tabletop mesh).
+	desk_area.set_meta("interaction_point", desk_pos + Vector3.UP * 0.35)
 	var dcol := CollisionShape3D.new()
 	var dsph := SphereShape3D.new()
 	dsph.radius = 2.2
@@ -960,6 +970,7 @@ func interact(_actor: Node) -> void:
 	ledger_area.name = "DenLedgerArea"
 	ledger_area.position = ledger_pos
 	ledger_area.add_to_group("interactables")
+	ledger_area.set_meta("interaction_point", ledger_pos + Vector3.UP * 0.7)
 	var lcol := CollisionShape3D.new()
 	var lsph := SphereShape3D.new()
 	lsph.radius = 1.6
@@ -989,6 +1000,7 @@ func interact(_actor: Node) -> void:
 	tele_area.name = "DenTelescopeArea"
 	tele_area.position = _den_telescope_pos
 	tele_area.add_to_group("interactables")
+	tele_area.set_meta("interaction_point", _den_telescope_pos + Vector3.UP * 1.4)
 	var tcol := CollisionShape3D.new()
 	var tsph := SphereShape3D.new()
 	tsph.radius = 1.8
@@ -1037,6 +1049,7 @@ func interact(_actor: Node) -> void:
 	ward_area.name = "DenWardrobeArea"
 	ward_area.position = wardrobe_pos
 	ward_area.add_to_group("interactables")
+	ward_area.set_meta("interaction_point", wardrobe_pos + Vector3.UP * 1.2)
 	var wcol := CollisionShape3D.new()
 	var wsph := SphereShape3D.new()
 	wsph.radius = 2.2
@@ -2144,6 +2157,7 @@ func _spawn_thieves_den_props(anchor: Vector3) -> void:
 	deco_area.name = "DenDecorationPedestal"
 	deco_area.position = deco_pos
 	deco_area.add_to_group("interactables")
+	deco_area.set_meta("interaction_point", deco_pos + Vector3.UP * 1.0)
 	var dcol := CollisionShape3D.new()
 	var dsph := SphereShape3D.new()
 	dsph.radius = 1.4
@@ -2211,6 +2225,7 @@ func _rebuild_visual() -> void:
 	var gram_area := Area3D.new()
 	gram_area.position = deco_pos + Vector3(-0.55, 0.0, 0.0)
 	gram_area.add_to_group("interactables")
+	gram_area.set_meta("interaction_point", deco_pos + Vector3(-0.55, 0.8, 0.0))
 	var gcol := CollisionShape3D.new()
 	var gsph := SphereShape3D.new()
 	gsph.radius = 1.3
@@ -2711,6 +2726,11 @@ func _snap_player_to_ground() -> void:
 
 
 func _ground_position(pos: Vector3, up_m: float = 8.0, down_m: float = 30.0, offset_y: float = 0.15) -> Vector3:
+	# Off-tree callers (unit probes / spawn previews) have no world; the engine
+	# would log "!is_inside_world()" for get_world_3d(), so return the same
+	# clearance the no-hit path below uses.
+	if not is_inside_tree():
+		return pos + Vector3(0.0, offset_y, 0.0)
 	var w3d: World3D = get_world_3d()
 	if w3d == null:
 		return pos + Vector3(0.0, offset_y, 0.0)
@@ -2777,7 +2797,7 @@ func _collect_spawn_mesh_boxes(n: Node, parent_tr: Transform3D, boxes: Array[AAB
 		_collect_spawn_mesh_boxes(c, tr, boxes)
 
 
-func _spawn_guards(ue_spawns: Array, anchor: Vector3) -> void:
+func _spawn_guards(ue_spawns: Array, anchor: Vector3, patrol_paths: Array = []) -> void:
 	# P1 flat Novice-to-Thief guard count: the old limit ignored the first two
 	# difficulties (identical patrol density Novice/Thief). Novice 4 / Thief 6 /
 	# Master Thief 8 (UE path: none authored per difficulty; retained tuning,
@@ -2804,6 +2824,7 @@ func _spawn_guards(ue_spawns: Array, anchor: Vector3) -> void:
 		{"id": "key_small_chest", "name": "Small Chest Key", "kind": "key", "value": 90, "mesh_path": "res://assets/ue/Content/Art/Gameplay/KeyCabinets/SM_LootableKeys_SmallChestKey.glb"},
 	]
 
+	var used_paths: Dictionary = {}
 	for idx: int in range(chosen.size()):
 		var pos: Vector3 = chosen[idx]
 		var g := GuardScript.new()
@@ -2814,17 +2835,119 @@ func _spawn_guards(ue_spawns: Array, anchor: Vector3) -> void:
 		else:
 			g.name = "Guard_%d" % idx
 		var grounded_pos: Vector3 = _ground_position(pos, 8.0, 30.0, 0.15)
-		var pts: Array[Vector3] = [
-			grounded_pos,
-			_ground_position(pos + Vector3(6, 0, 0), 8.0, 30.0, 0.15),
-			_ground_position(pos + Vector3(6, 0, 6), 8.0, 30.0, 0.15),
-			_ground_position(pos + Vector3(0, 0, 6), 8.0, 30.0, 0.15),
-		]
-		g.patrol_points = pts
+		var path_index: int = _authored_patrol_index_for(pos, patrol_paths, used_paths)
+		if path_index >= 0:
+			used_paths[path_index] = true
+			_assign_authored_patrol(g, patrol_paths[path_index] as Dictionary)
+			patrol_paths_assigned += 1
+		else:
+			# Synthetic 6x6 m square is the documented fallback; say which guard
+			# and how far the nearest real path was, once per guard.
+			var nearest_m: float = _nearest_patrol_point_distance(pos, patrol_paths)
+			patrol_fallback_count += 1
+			var line: String = "patrol fallback: guard %d spawn (%.1f, %.1f, %.1f) has no authored path within %.0f m (nearest %.2f m); using synthetic 6x6 m square" % [
+				idx, pos.x, pos.y, pos.z, PATROL_MATCH_RADIUS_M, nearest_m,
+			]
+			patrol_fallback_log.append(line)
+			print("[mission_controller] ", line)
+			g.patrol_points = [
+				grounded_pos,
+				_ground_position(pos + Vector3(6, 0, 0), 8.0, 30.0, 0.15),
+				_ground_position(pos + Vector3(6, 0, 6), 8.0, 30.0, 0.15),
+				_ground_position(pos + Vector3(0, 0, 6), 8.0, 30.0, 0.15),
+			] as Array[Vector3]
 		g.position = grounded_pos
 		if idx % 2 == 0 or idx == 1:
 			g.set_carried_item(key_pool[idx % key_pool.size()])
 		add_child(g)
+
+
+## Index of the authored APatrolPath to give a guard spawned at `pos`, or -1.
+## First pass searches unused paths (one path is never handed to two guards
+## while another is available); the second pass may reuse a path better than
+## inventing a square. The nearest point of the candidate path must be within
+## PATROL_MATCH_RADIUS_M. `used` is index -> true and is updated by the caller.
+func _authored_patrol_index_for(pos: Vector3, patrol_paths: Array, used: Dictionary) -> int:
+	var best_used: int = -1
+	var best_used_d: float = PATROL_MATCH_RADIUS_M
+	var best_any: int = -1
+	var best_any_d: float = PATROL_MATCH_RADIUS_M
+	for i: int in range(patrol_paths.size()):
+		if not (patrol_paths[i] is Dictionary):
+			continue
+		var d: float = _patrol_path_point_distance(pos, patrol_paths[i] as Dictionary)
+		if d > PATROL_MATCH_RADIUS_M:
+			continue
+		if d < best_any_d:
+			best_any_d = d
+			best_any = i
+		if not used.has(i) and d < best_used_d:
+			best_used_d = d
+			best_used = i
+	if best_used >= 0:
+		return best_used
+	return best_any
+
+
+## Nearest authored waypoint distance (metres) for one path record; INF when
+## the record has no readable points.
+func _patrol_path_point_distance(pos: Vector3, path: Dictionary) -> float:
+	var best: float = INF
+	for p_var: Variant in path.get("points", []) as Array:
+		if not (p_var is Dictionary):
+			continue
+		var point: Vector3 = _patrol_point_position(p_var as Dictionary)
+		if point.is_finite():
+			best = minf(best, pos.distance_to(point))
+	return best
+
+
+## Nearest authored waypoint distance across every path; INF when none parse.
+func _nearest_patrol_point_distance(pos: Vector3, patrol_paths: Array) -> float:
+	var best: float = INF
+	for path_var: Variant in patrol_paths:
+		if path_var is Dictionary:
+			best = minf(best, _patrol_path_point_distance(pos, path_var as Dictionary))
+	return best
+
+
+## Reads a parser point record (pos is a 3-element Godot-metres Array; the
+## parser already converted UE axes) into a Vector3. INF marks a malformed row.
+func _patrol_point_position(point: Dictionary) -> Vector3:
+	var pos_v: Variant = point.get("pos", null)
+	if not (pos_v is Array) or (pos_v as Array).size() < 3:
+		return Vector3(INF, INF, INF)
+	return Vector3(float((pos_v as Array)[0]), float((pos_v as Array)[1]), float((pos_v as Array)[2]))
+
+
+## Copies APatrolPath points onto the guard: positions (authored y kept; the
+## guard's movement is planar and floor contact owns y), per-point dwell in
+## seconds, facing yaw in UE degrees (applied only when facing was authored)
+## and the loop type (PingPong reverses). Records are not transformed again:
+## the parser already wrote Godot metres/axes.
+func _assign_authored_patrol(guard: Node, path: Dictionary) -> void:
+	var points: Array[Vector3] = []
+	var waits: Array[float] = []
+	var yaws: Array[float] = []
+	var facings: Array[bool] = []
+	for p_var: Variant in path.get("points", []) as Array:
+		if not (p_var is Dictionary):
+			continue
+		var pt: Dictionary = p_var as Dictionary
+		var point: Vector3 = _patrol_point_position(pt)
+		if not point.is_finite():
+			continue
+		points.append(point)
+		waits.append(maxf(0.0, float(pt.get("wait", 0.0))))
+		yaws.append(float(pt.get("yaw", 0.0)))
+		facings.append(bool(pt.get("facing", false)))
+	if points.is_empty():
+		return
+	guard.set("patrol_points", points)
+	guard.set("patrol_waits", waits)
+	guard.set("patrol_yaws", yaws)
+	guard.set("patrol_facing", facings)
+	guard.set("patrol_loop_mode", str(path.get("loop_type", "")))
 
 
 ## Real loot wave from loot_actors.json (tools/parse_loot.py): one LootScript

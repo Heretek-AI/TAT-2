@@ -210,6 +210,12 @@ func get_interact_prompt() -> String:
 	return "[E] Steal %s" % label
 
 
+## Interaction LOS point (W2): named loot is grounded on its mesh AABB, so the
+## origin can be inside the item; +0.4 m targets the readable top of the prop.
+func get_interact_point() -> Vector3:
+	return global_position + Vector3.UP * 0.4
+
+
 func interact(_actor: Node) -> void:
 	if get_meta("collected", false):
 		return

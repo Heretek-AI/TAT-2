@@ -205,6 +205,13 @@ func get_interact_prompt() -> String:
 	return "[F] OPEN"
 
 
+## Interaction LOS point (W2): the marker origin sits on the floor, so the
+## generic origin + 0.5 m lands inside the chest/wardrobe mesh. +1.4 m clears
+## every authored container lid and stays inside the 1.75 m player reach.
+func get_interact_point() -> Vector3:
+	return global_position + Vector3.UP * 1.4
+
+
 func _exit_tree() -> void:
 	_clear_actor_lockpicking()
 

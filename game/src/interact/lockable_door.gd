@@ -317,6 +317,12 @@ func get_interact_prompt() -> String:
 	return "[E] Open Door"
 
 
+## Interaction LOS point (W2): door handle height above the node origin, so a
+## closed leaf at the origin plane does not read as an occluder.
+func get_interact_point() -> Vector3:
+	return global_position + Vector3.UP * 1.1
+
+
 ## KF24: closed unlocked doors stack [F] [HOLD] LOCK under the primary OPEN.
 func get_interact_secondary_prompt() -> String:
 	if locked or is_open:

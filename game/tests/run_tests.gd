@@ -4759,6 +4759,405 @@ func _initialize() -> void:
 	else:
 		print("PASS: 60 W5 UI (prep 6 s countdown/UNREADY + card wrap, player_name, (£) currency, key row, PRICE UNKNOWN, pause seed, portal, menu rain, localization)")
 
+	# 55. W2: authored patrols, surface loudness, interaction LOS/takedown gates,
+	# civilian collision.
+	# 55a. level_loader merges APatrolPath records and the mission controller
+	# hands each guard a real path (PingPong loop, waits, authored facing).
+	var w2_ll: Node = (load("res://src/core/level_loader.gd") as GDScript).new()
+	var w2_host: Node3D = Node3D.new()
+	root.add_child(w2_ll)
+	root.add_child(w2_host)
+	await process_frame
+	var w2_acc: Dictionary = w2_ll.call("_new_accumulator") as Dictionary
+	w2_ll.call("_parse_sublevel_file", "res://data/generated/levels/Guildhall/Guildhall_Gameplay.tatlevel.json", w2_acc, w2_host)
+	var w2_merged_res: Dictionary = w2_acc.get("result", {}) as Dictionary
+	var w2_paths: Array = w2_merged_res.get("patrol_paths", []) as Array
+	var w2_wp_total: int = 0
+	for w2_pv: Variant in w2_paths:
+		w2_wp_total += ((w2_pv as Dictionary).get("points", []) as Array).size()
+	var w2_raw_v: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://data/generated/levels/Guildhall/Guildhall_Gameplay.tatlevel.json"))
+	var w2_raw_paths: Array = (w2_raw_v as Dictionary).get("patrol_paths", []) as Array if w2_raw_v is Dictionary else []
+	var w2_preserved: bool = w2_paths.size() == w2_raw_paths.size() and not w2_paths.is_empty()
+	if w2_preserved:
+		var w2_rp: Dictionary = w2_raw_paths[0] as Dictionary
+		var w2_mp: Dictionary = w2_paths[0] as Dictionary
+		w2_preserved = str(w2_mp.get("actor", "")) == str(w2_rp.get("actor", "")) \
+			and str(w2_mp.get("class", "")) == str(w2_rp.get("class", "")) \
+			and str(w2_mp.get("loop_type", "")) == str(w2_rp.get("loop_type", "")) \
+			and (w2_mp.get("points", []) as Array).size() == (w2_rp.get("points", []) as Array).size()
+		if w2_preserved:
+			var w2_rpts: Array = w2_rp.get("points", []) as Array
+			var w2_mpts: Array = w2_mp.get("points", []) as Array
+			for w2_pi: int in range(w2_rpts.size()):
+				var w2_rpt: Dictionary = w2_rpts[w2_pi] as Dictionary
+				var w2_mpt: Dictionary = w2_mpts[w2_pi] as Dictionary
+				var w2_rp_arr: Array = w2_rpt.get("pos", []) as Array
+				var w2_mp_arr: Array = w2_mpt.get("pos", []) as Array
+				if w2_rp_arr.size() != 3 or w2_mp_arr.size() != 3 \
+					or not is_equal_approx(float(w2_rp_arr[0]), float(w2_mp_arr[0])) \
+					or not is_equal_approx(float(w2_rp_arr[1]), float(w2_mp_arr[1])) \
+					or not is_equal_approx(float(w2_rp_arr[2]), float(w2_mp_arr[2])) \
+					or not is_equal_approx(float(w2_rpt.get("wait", -1.0)), float(w2_mpt.get("wait", -2.0))) \
+					or bool(w2_rpt.get("facing", false)) != bool(w2_mpt.get("facing", false)) \
+					or not is_equal_approx(float(w2_rpt.get("yaw", 0.0)), float(w2_mpt.get("yaw", 0.0))) \
+					or str(w2_rpt.get("type", "")) != str(w2_mpt.get("type", "")):
+					w2_preserved = false
+					break
+
+	# Pick one PingPong path with >= 4 points and a second path close to it so a
+	# second guard has an available alternative (no path reused while another
+	# is available).
+	var w2_a_idx: int = -1
+	var w2_b_idx: int = -1
+	for w2_i: int in range(w2_paths.size()):
+		var w2_cand: Dictionary = w2_paths[w2_i] as Dictionary
+		if str(w2_cand.get("loop_type", "")).find("PingPong") < 0 or (w2_cand.get("points", []) as Array).size() < 4:
+			continue
+		var w2_cp: Array = w2_cand.get("points", []) as Array
+		var w2_cp0: Array = (w2_cp[0] as Dictionary).get("pos", []) as Array
+		if w2_cp0.size() < 3:
+			continue
+		var w2_cpos := Vector3(float(w2_cp0[0]), float(w2_cp0[1]), float(w2_cp0[2]))
+		for w2_j: int in range(w2_paths.size()):
+			if w2_j == w2_i:
+				continue
+			var w2_other: Dictionary = w2_paths[w2_j] as Dictionary
+			var w2_op: Array = w2_other.get("points", []) as Array
+			if w2_op.is_empty():
+				continue
+			var w2_op0: Array = (w2_op[0] as Dictionary).get("pos", []) as Array
+			if w2_op0.size() < 3:
+				continue
+			if w2_cpos.distance_to(Vector3(float(w2_op0[0]), float(w2_op0[1]), float(w2_op0[2]))) <= 15.0:
+				w2_a_idx = w2_i
+				w2_b_idx = w2_j
+				break
+		if w2_a_idx >= 0:
+			break
+
+	var w2_spawn_ok: bool = false
+	var w2_fallback_ok: bool = false
+	if w2_a_idx >= 0 and w2_b_idx >= 0:
+		var w2_path_a: Dictionary = w2_paths[w2_a_idx] as Dictionary
+		var w2_apts: Array = w2_path_a.get("points", []) as Array
+		var w2_ap0: Array = (w2_apts[0] as Dictionary).get("pos", []) as Array
+		var w2_spawn_a := Vector3(float(w2_ap0[0]), float(w2_ap0[1]), float(w2_ap0[2]))
+		var w2_path_b: Dictionary = w2_paths[w2_b_idx] as Dictionary
+		var w2_bpts: Array = w2_path_b.get("points", []) as Array
+		var w2_bp0: Array = (w2_bpts[0] as Dictionary).get("pos", []) as Array
+		var w2_spawn_b := Vector3(float(w2_bp0[0]), float(w2_bp0[1]), float(w2_bp0[2])) + Vector3(1.0, 0.0, 0.0)
+		var w2_anchor: Vector3 = w2_spawn_a + Vector3(20.0, 0.0, 20.0)
+		var w2_mc: Node = (load("res://src/missions/mission_controller.gd") as GDScript).new()
+		w2_mc.call("_spawn_guards", [w2_spawn_a, w2_spawn_b], w2_anchor, w2_paths)
+		var w2_mc_children: Array[Node] = w2_mc.get_children()
+		var w2_g0: Node = w2_mc_children[0] if w2_mc_children.size() > 0 else null
+		var w2_g1: Node = w2_mc_children[1] if w2_mc_children.size() > 1 else null
+		if w2_g0 != null and w2_g1 != null:
+			var w2_got_pts: Array = w2_g0.get("patrol_points") as Array
+			var w2_got_waits: Array = w2_g0.get("patrol_waits") as Array
+			var w2_got_yaws: Array = w2_g0.get("patrol_yaws") as Array
+			var w2_got_facing: Array = w2_g0.get("patrol_facing") as Array
+			var w2_g1_pts: Array = w2_g1.get("patrol_points") as Array
+			# Which authored path did each guard adopt? Several paths can share
+			# a first waypoint, so match the whole point list, not one position.
+			var w2_assigned_a: int = _w2_match_patrol_path(w2_got_pts, w2_paths)
+			var w2_assigned_b: int = _w2_match_patrol_path(w2_g1_pts, w2_paths)
+			w2_spawn_ok = w2_assigned_a >= 0 and w2_assigned_b >= 0 \
+				and w2_assigned_a != w2_assigned_b \
+				and int(w2_mc.get("patrol_paths_assigned")) == 2
+			var w2_used_path: Dictionary = {}
+			var w2_used_pts: Array = []
+			if w2_assigned_a >= 0:
+				w2_used_path = w2_paths[w2_assigned_a] as Dictionary
+				w2_used_pts = w2_used_path.get("points", []) as Array
+				w2_spawn_ok = w2_spawn_ok \
+					and w2_got_waits.size() == w2_used_pts.size() \
+					and w2_got_yaws.size() == w2_used_pts.size() \
+					and w2_got_facing.size() == w2_used_pts.size() \
+					and str(w2_g0.get("patrol_loop_mode")) == str(w2_used_path.get("loop_type", ""))
+				if w2_spawn_ok:
+					for w2_k: int in range(w2_used_pts.size()):
+						var w2_apt: Dictionary = w2_used_pts[w2_k] as Dictionary
+						var w2_ap_ar: Array = w2_apt.get("pos", []) as Array
+						var w2_expect := Vector3(float(w2_ap_ar[0]), float(w2_ap_ar[1]), float(w2_ap_ar[2]))
+						if not (w2_got_pts[w2_k] is Vector3) or (w2_got_pts[w2_k] as Vector3).distance_to(w2_expect) > 0.05 \
+							or not is_equal_approx(float(w2_got_waits[w2_k]), float(w2_apt.get("wait", 0.0))) \
+							or not is_equal_approx(float(w2_got_yaws[w2_k]), float(w2_apt.get("yaw", 0.0))) \
+							or bool(w2_got_facing[w2_k]) != bool(w2_apt.get("facing", false)):
+							w2_spawn_ok = false
+							break
+			# WaitSeconds dwell + authored facing yaw on the real guard. The
+			# guard joins the tree for this check (global_position needs a
+			# world); authored patrol data is already assigned, so _ready keeps
+			# it instead of installing the legacy square.
+			w2_mc.remove_child(w2_g0)
+			root.add_child(w2_g0)
+			w2_g0.set_physics_process(false)
+			await physics_frame
+			if w2_assigned_a >= 0:
+				var w2_wait_i: int = -1
+				for w2_wi: int in range(w2_used_pts.size()):
+					if float((w2_used_pts[w2_wi] as Dictionary).get("wait", 0.0)) > 0.0 and w2_wi < w2_used_pts.size() - 1:
+						w2_wait_i = w2_wi
+						break
+				if w2_wait_i >= 0:
+					w2_g0.set("wp_index", w2_wait_i)
+					w2_g0.set("_patrol_wait_left", 0.0)
+					w2_g0.global_position = w2_got_pts[w2_wait_i] as Vector3
+					var w2_wait_s: float = float((w2_used_pts[w2_wait_i] as Dictionary).get("wait", 0.0))
+					var w2_waiting: bool = bool(w2_g0.call("_patrol_service_waypoint", 0.0))
+					var w2_wait_held: bool = is_equal_approx(float(w2_g0.get("_patrol_wait_left")), w2_wait_s)
+					var w2_index_before: int = int(w2_g0.get("wp_index"))
+					w2_g0.call("_patrol_service_waypoint", w2_wait_s + 0.1)
+					var w2_advanced: bool = int(w2_g0.get("wp_index")) != w2_index_before
+					w2_spawn_ok = w2_spawn_ok and w2_waiting and w2_wait_held and w2_advanced
+				var w2_facing_i: int = -1
+				for w2_fi: int in range(w2_used_pts.size()):
+					if bool((w2_used_pts[w2_fi] as Dictionary).get("facing", false)):
+						w2_facing_i = w2_fi
+						break
+				if w2_facing_i >= 0:
+					var w2_yaw_deg: float = float((w2_used_pts[w2_facing_i] as Dictionary).get("yaw", 0.0))
+					w2_g0.set("rotation", Vector3.ZERO)
+					w2_g0.call("_apply_patrol_yaw", 1.0, w2_facing_i)
+					var w2_expect_yaw: float = deg_to_rad(-(w2_yaw_deg + 90.0))
+					w2_spawn_ok = w2_spawn_ok and absf(angle_difference((w2_g0 as Node3D).rotation.y, w2_expect_yaw)) < 0.001
+			# PingPong reversal: synthetic three-point path at both ends.
+			var w2_pp: Node3D = (load("res://src/ai/guard_ai.gd") as GDScript).new() as Node3D
+			w2_pp.set("patrol_points", [Vector3.ZERO, Vector3(2.0, 0.0, 0.0), Vector3(4.0, 0.0, 0.0)] as Array[Vector3])
+			w2_pp.set("patrol_loop_mode", "EPatrolLoopType::PingPong")
+			w2_pp.set("wp_index", 0)
+			w2_pp.set("_patrol_dir", 1)
+			w2_pp.call("_advance_patrol_index")
+			w2_pp.call("_advance_patrol_index")
+			var w2_at_end: bool = int(w2_pp.get("wp_index")) == 2
+			w2_pp.call("_advance_patrol_index")
+			var w2_pp_back: bool = int(w2_pp.get("wp_index")) == 1 and int(w2_pp.get("_patrol_dir")) == -1
+			w2_pp.call("_advance_patrol_index")
+			var w2_pp_back2: bool = int(w2_pp.get("wp_index")) == 0
+			w2_pp.call("_advance_patrol_index")
+			var w2_pp_turn: bool = int(w2_pp.get("wp_index")) == 1 and int(w2_pp.get("_patrol_dir")) == 1
+			w2_pp.free()
+			w2_spawn_ok = w2_spawn_ok and w2_at_end and w2_pp_back and w2_pp_back2 and w2_pp_turn
+		if w2_g0 != null and w2_g0.is_inside_tree():
+			w2_g0.queue_free()
+			await process_frame
+		w2_mc.free()
+		# No authored path within 30 m -> synthetic square + one logged line.
+		var w2_mc2: Node = (load("res://src/missions/mission_controller.gd") as GDScript).new()
+		var w2_far := Vector3(9000.0, 0.0, 9000.0)
+		w2_mc2.call("_spawn_guards", [w2_far], w2_far + Vector3(20.0, 0.0, 20.0), w2_paths)
+		var w2_far_children: Array[Node] = w2_mc2.get_children()
+		var w2_fg: Node = w2_far_children[0] if w2_far_children.size() > 0 else null
+		var w2_fg_pts: Array = w2_fg.get("patrol_points") as Array if w2_fg != null else []
+		var w2_fb_log: Array = w2_mc2.get("patrol_fallback_log") as Array
+		var w2_fb_line: String = str(w2_fb_log[0]) if w2_fb_log.size() > 0 else ""
+		w2_fallback_ok = w2_fg != null and w2_fg_pts.size() == 4 \
+			and int(w2_mc2.get("patrol_fallback_count")) == 1 \
+			and w2_fb_line.find("patrol fallback") >= 0 and w2_fb_line.find("nearest") >= 0
+		w2_mc2.free()
+	if w2_paths.size() >= 100 and w2_wp_total >= 300 and w2_preserved and w2_spawn_ok and w2_fallback_ok:
+		print("PASS: 55a authored patrols merged (", w2_paths.size(), " paths / ", w2_wp_total, " waypoints) and assigned (waits/yaws/PingPong/fallback log)")
+	else:
+		printerr("FAIL: 55a authored patrols (paths=", w2_paths.size(), " waypoints=", w2_wp_total, " preserved=", w2_preserved, " spawn=", w2_spawn_ok, " fallback=", w2_fallback_ok, ")")
+		fails += 1
+
+	# 55b. DA_LoudnessModifiers surface loudness: generated data, GameData
+	# accessor, NoiseBus multiplier and guard hearing.
+	var w2_ga_v: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://data/generated/gameplay/guard_ai.json"))
+	var w2_surface: Dictionary = ((w2_ga_v as Dictionary).get("surface_loudness", {}) as Dictionary) if w2_ga_v is Dictionary else {}
+	var w2_surface_ok: bool = w2_surface.size() == 22 \
+		and is_equal_approx(float(w2_surface.get("Carpet", -1.0)), 0.0) \
+		and is_equal_approx(float(w2_surface.get("Foliage", -1.0)), 0.0) \
+		and is_equal_approx(float(w2_surface.get("Grass", -1.0)), 0.0) \
+		and is_equal_approx(float(w2_surface.get("Dirt", -1.0)), 0.0) \
+		and is_equal_approx(float(w2_surface.get("Ivy", -1.0)), 0.0) \
+		and is_equal_approx(float(w2_surface.get("Glass", -1.0)), 1.5) \
+		and is_equal_approx(float(w2_surface.get("Stone", -1.0)), 1.5) \
+		and is_equal_approx(float(w2_surface.get("MetalThick", -1.0)), 1.5) \
+		and is_equal_approx(float(w2_surface.get("Lattice", -1.0)), 1.0) \
+		and is_equal_approx(float(w2_surface.get("Tile", -1.0)), 1.0)
+	var w2_gd_ok: bool = is_equal_approx(gd.get_surface_loudness("Carpet"), 0.0) \
+		and is_equal_approx(gd.get_surface_loudness("glass"), 1.5) \
+		and is_equal_approx(gd.get_surface_loudness("Stone"), 1.5) \
+		and is_equal_approx(gd.get_surface_loudness(""), 1.0) \
+		and is_equal_approx(gd.get_surface_loudness("not_a_surface"), 1.0)
+	var w2_radii: Array[float] = []
+	var w2_nb_cb: Callable = func(_o: Vector3, l: float, _s: Node, _t: String) -> void:
+		w2_radii.append(l)
+	nb.connect("noise_emitted", w2_nb_cb)
+	nb.call("emit_noise", Vector3.ZERO, 4.0, null, "footstep", "Carpet")
+	nb.call("emit_noise", Vector3.ZERO, 4.0, null, "footstep", "Glass")
+	nb.call("emit_noise", Vector3.ZERO, 4.0, null, "footstep")
+	nb.disconnect("noise_emitted", w2_nb_cb)
+	var w2_ratio_ok: bool = w2_radii.size() == 3 \
+		and is_equal_approx(w2_radii[0], 0.0) and is_equal_approx(w2_radii[1], 6.0) and is_equal_approx(w2_radii[2], 4.0)
+	# Guard hearing receives the modified radius exactly once.
+	var w2_ear_guard: Node3D = (load("res://src/ai/guard_ai.gd") as GDScript).new() as Node3D
+	w2_ear_guard.name = "Guard_W2Ear"
+	w2_ear_guard.position = Vector3(6000.0, 0.0, 6000.0)
+	root.add_child(w2_ear_guard)
+	await process_frame
+	w2_ear_guard.set_physics_process(false)
+	nb.call("emit_noise", w2_ear_guard.global_position + Vector3(3.0, 0.0, 0.0), 8.0, null, "footstep", "carpet")
+	var w2_carpet_silent: bool = is_equal_approx(float(w2_ear_guard.get("detection")), 0.0) and int(w2_ear_guard.get("state")) == 0
+	nb.call("emit_noise", w2_ear_guard.global_position + Vector3(5.0, 0.0, 0.0), 3.5, null, "footstep", "glass")
+	var w2_glass_walk: bool = int(w2_ear_guard.get("state")) != 0 and float(w2_ear_guard.get("detection")) > 0.0
+	w2_ear_guard.set("state", 0)
+	w2_ear_guard.set("detection", 0.0)
+	nb.call("emit_noise", w2_ear_guard.global_position + Vector3(8.0, 0.0, 0.0), 8.0, null, "footstep", "glass")
+	var w2_glass_sprint8: bool = int(w2_ear_guard.get("state")) != 0 and float(w2_ear_guard.get("detection")) > 0.0
+	w2_ear_guard.queue_free()
+	await process_frame
+	if w2_surface_ok and w2_gd_ok and w2_ratio_ok and w2_carpet_silent and w2_glass_walk and w2_glass_sprint8:
+		print("PASS: 55b surface loudness (22 authored rows, Carpet 0.0/Glass 1.5, radii 0/6/4, carpet sprint silent @3m, glass walk heard @5m, glass run heard @8m)")
+	else:
+		printerr("FAIL: 55b surface loudness (json=", w2_surface_ok, " api=", w2_gd_ok, " ratio=", w2_ratio_ok, " carpet=", w2_carpet_silent, " glass_walk=", w2_glass_walk, " glass_run8=", w2_glass_sprint8, " radii=", w2_radii, ")")
+		fails += 1
+
+	# 55c. Interaction LOS and takedown gates: world geometry blocks the
+	# nearest-interactable prompt, direct guard pickpocket and blackjack, while
+	# open-floor pickpocket and behind-guard takedown still work.
+	var w2_base := Vector3(5000.0, 0.0, 5000.0)
+	var w2_target_scr: GDScript = load("res://src/interact/loot_container.gd") as GDScript
+	var w2_target: Area3D = w2_target_scr.new() as Area3D
+	w2_target.name = "W2Container"
+	w2_target.call("configure", "BP_MissionSpawner_MinorLoot_C", {"pos": w2_base + Vector3(0.0, 0.0, 1.2), "basis": [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]}, 0)
+	root.add_child(w2_target)
+	var w2_wall_a: StaticBody3D = _w2_make_wall(root, w2_base + Vector3(0.0, 1.0, 0.6))
+	var w2_player: Node3D = (load("res://src/player/thief_character.gd") as GDScript).new() as Node3D
+	w2_player.name = "W2Thief"
+	w2_player.position = w2_base
+	root.add_child(w2_player)
+	w2_player.set_physics_process(false)
+	await process_frame
+	var w2_blocked: bool = w2_player.call("get_nearest_interactable") == null \
+		and str(w2_player.call("get_look_interact_prompt")) == ""
+	w2_wall_a.queue_free()
+	await process_frame
+	await physics_frame
+	var w2_open: bool = w2_player.call("get_nearest_interactable") == w2_target \
+		and str(w2_player.call("get_look_interact_prompt")) == "[F] OPEN"
+
+	# Direct guard pickpocket: open floor steals, wall refuses without escalation.
+	var w2_pick_guard: Node3D = (load("res://src/ai/guard_ai.gd") as GDScript).new() as Node3D
+	w2_pick_guard.name = "Guard_W2Pick"
+	w2_pick_guard.position = w2_base + Vector3(10.0, 0.0, 10.0)
+	root.add_child(w2_pick_guard)
+	w2_pick_guard.set_physics_process(false)
+	await process_frame
+	w2_pick_guard.call("set_carried_item", {"name": "W2 Key", "kind": "key", "id": "w2_key", "value": 10})
+	w2_player.position = w2_pick_guard.global_position + Vector3(0.0, 0.0, 1.2)
+	w2_player.set_physics_process(false)
+	await physics_frame
+	var w2_pick_prompt: bool = w2_player.call("get_nearest_interactable") != null \
+		and str(w2_player.call("get_look_interact_prompt")) == "[F] PICK POCKET"
+	w2_pick_guard.call("interact", w2_player)
+	var w2_pick_open: bool = not bool(w2_pick_guard.call("has_carried_item"))
+	w2_pick_guard.call("set_carried_item", {"name": "W2 Key", "kind": "key", "id": "w2_key", "value": 10})
+	w2_pick_guard.set("state", 0)
+	var w2_wall_pick: StaticBody3D = _w2_make_wall(root, w2_pick_guard.global_position + Vector3(0.0, 1.0, 0.6))
+	await physics_frame
+	var w2_pick_blocked_prompt: bool = w2_player.call("get_nearest_interactable") == null \
+		and str(w2_player.call("get_look_interact_prompt")) == ""
+	w2_pick_guard.call("interact", w2_player)
+	var w2_pick_wall: bool = bool(w2_pick_guard.call("has_carried_item")) and int(w2_pick_guard.get("state")) == 0
+	w2_wall_pick.queue_free()
+	await physics_frame
+
+	# Blackjack: behind works; in front or behind a wall is refused.
+	var w2_take_guard: Node3D = (load("res://src/ai/guard_ai.gd") as GDScript).new() as Node3D
+	w2_take_guard.name = "Guard_W2Take"
+	w2_take_guard.position = Vector3(5300.0, 0.0, 5300.0)
+	w2_take_guard.rotation = Vector3.ZERO
+	root.add_child(w2_take_guard)
+	w2_take_guard.set_physics_process(false)
+	await process_frame
+	w2_take_guard.rotation = Vector3.ZERO
+	w2_player.position = w2_take_guard.global_position + Vector3(0.0, 0.0, 1.5)
+	await physics_frame
+	var w2_behind_prompt: bool = str(w2_player.call("get_look_secondary_prompt")) == "[F] [HOLD] TAKEDOWN"
+	w2_player.call("_try_blackjack", w2_take_guard)
+	var w2_behind_ko: bool = int(w2_take_guard.get("state")) == 5
+	var w2_front_guard: Node3D = (load("res://src/ai/guard_ai.gd") as GDScript).new() as Node3D
+	w2_front_guard.name = "Guard_W2Front"
+	w2_front_guard.position = Vector3(5600.0, 0.0, 5600.0)
+	w2_front_guard.rotation = Vector3.ZERO
+	root.add_child(w2_front_guard)
+	w2_front_guard.set_physics_process(false)
+	await process_frame
+	w2_front_guard.rotation = Vector3.ZERO
+	w2_player.position = w2_front_guard.global_position + Vector3(0.0, 0.0, -1.5)
+	await physics_frame
+	var w2_front_refused: bool = w2_player.call("_find_nearest_guard", 2.4) == null \
+		and str(w2_player.call("get_look_secondary_prompt")) != "[F] [HOLD] TAKEDOWN"
+	w2_player.call("_try_blackjack", w2_front_guard)
+	w2_front_refused = w2_front_refused and int(w2_front_guard.get("state")) != 5
+	var w2_wall_guard: Node3D = (load("res://src/ai/guard_ai.gd") as GDScript).new() as Node3D
+	w2_wall_guard.name = "Guard_W2Wall"
+	w2_wall_guard.position = Vector3(5900.0, 0.0, 5900.0)
+	w2_wall_guard.rotation = Vector3.ZERO
+	root.add_child(w2_wall_guard)
+	w2_wall_guard.set_physics_process(false)
+	await process_frame
+	w2_wall_guard.rotation = Vector3.ZERO
+	w2_player.position = w2_wall_guard.global_position + Vector3(0.0, 0.0, 1.5)
+	var w2_wall_take: StaticBody3D = _w2_make_wall(root, w2_wall_guard.global_position + Vector3(0.0, 1.0, 0.75))
+	await physics_frame
+	var w2_take_wall_refused: bool = w2_player.call("_find_nearest_guard", 2.4) == null \
+		and str(w2_player.call("get_look_secondary_prompt")) != "[F] [HOLD] TAKEDOWN"
+	w2_player.call("_try_blackjack", w2_wall_guard)
+	w2_take_wall_refused = w2_take_wall_refused and int(w2_wall_guard.get("state")) != 5
+	w2_wall_take.queue_free()
+	await physics_frame
+	if w2_blocked and w2_open and w2_pick_prompt and w2_pick_open and w2_pick_blocked_prompt and w2_pick_wall and w2_behind_prompt and w2_behind_ko and w2_front_refused and w2_take_wall_refused:
+		print("PASS: 55c interaction LOS (wall blocks container/prompt), pickpocket (open steals, wall refuses without escalation), takedown (behind works, front/wall refuse)")
+	else:
+		printerr("FAIL: 55c interaction LOS (container_blocked=", w2_blocked, " open=", w2_open, " pick_prompt=", w2_pick_prompt, " pick_open=", w2_pick_open, " pick_blocked_prompt=", w2_pick_blocked_prompt, " pick_wall=", w2_pick_wall, " behind_prompt=", w2_behind_prompt, " behind_ko=", w2_behind_ko, " front_refused=", w2_front_refused, " wall_refused=", w2_take_wall_refused, ")")
+		fails += 1
+	w2_player.queue_free()
+	w2_target.queue_free()
+	w2_pick_guard.queue_free()
+	w2_take_guard.queue_free()
+	w2_front_guard.queue_free()
+	w2_wall_guard.queue_free()
+	await process_frame
+
+	# 55d. Civilian capsule: layer 4 (bit 8), radius 0.35 / height 1.7 /
+	# centre 0.85, settles on the floor with < 0.05 m y drift over 5 s.
+	var w2_floor: StaticBody3D = _w2_make_floor(root, Vector3(7000.0, -0.5, 7000.0))
+	var w2_civ_scr: GDScript = load("res://src/ai/civilian_npc.gd") as GDScript
+	var w2_civ: Node3D = w2_civ_scr.new() as Node3D
+	w2_civ.name = "W2Civilian"
+	w2_civ.call("setup", "", "", Vector3(7000.0, 0.02, 7000.0))
+	w2_civ.position = Vector3(7000.0, 0.02, 7000.0)
+	root.add_child(w2_civ)
+	await process_frame
+	var w2_civ_col: CollisionShape3D = w2_civ.get_node_or_null("CivilianCollision") as CollisionShape3D
+	var w2_civ_cap: CapsuleShape3D = w2_civ_col.shape as CapsuleShape3D if w2_civ_col != null else null
+	var w2_civ_shape_ok: bool = w2_civ_col != null and w2_civ_cap != null \
+		and is_equal_approx(w2_civ_cap.radius, 0.35) and is_equal_approx(w2_civ_cap.height, 1.7) \
+		and is_equal_approx(w2_civ_col.position.y, 0.85) \
+		and int(w2_civ.get("collision_layer")) == 8 and int(w2_civ.get("collision_mask")) == 1
+	var w2_civ_y0: float = w2_civ.global_position.y
+	await physics_frame
+	await physics_frame
+	for w2_step: int in range(300):
+		await physics_frame
+	var w2_civ_drift: float = absf(w2_civ.global_position.y - w2_civ_y0)
+	var w2_civ_floor: bool = bool(w2_civ.call("is_on_floor")) and w2_civ.global_position.y >= -0.01
+	if w2_civ_shape_ok and w2_civ_drift < 0.05 and w2_civ_floor:
+		print("PASS: 55d civilian capsule (layer 4, r=0.35 h=1.7 y=0.85) settles on floor, y drift=", snappedf(w2_civ_drift, 0.0001), " m over 5 s")
+	else:
+		printerr("FAIL: 55d civilian capsule (shape=", w2_civ_shape_ok, " drift=", w2_civ_drift, " on_floor=", w2_civ_floor, " y=", w2_civ.global_position.y, ")")
+		fails += 1
+	w2_civ.queue_free()
+	w2_floor.queue_free()
+	await process_frame
+	w2_ll.queue_free()
+	w2_host.queue_free()
+	await process_frame
+
 	# P2-6 fixture restore (see boot snapshot): leave no mutated autoload
 	# state behind for the next run or embedding harness.
 	gs.thief_id = fx_thief_id
@@ -4792,6 +5191,61 @@ func _initialize() -> void:
 func _w60_assert(cond: bool, msg: String, problems: Array) -> void:
 	if not cond:
 		problems.append(msg)
+## W2: index of the authored patrol path whose points equal `points` (0.05 m
+## per waypoint), or -1. Guards are matched by their whole assigned list
+## because several authored paths share a first waypoint.
+func _w2_match_patrol_path(points: Array, paths: Array) -> int:
+	for i: int in range(paths.size()):
+		if not (paths[i] is Dictionary):
+			continue
+		var authored: Array = (paths[i] as Dictionary).get("points", []) as Array
+		if authored.size() != points.size() or points.is_empty():
+			continue
+		var matched: bool = true
+		for k: int in range(authored.size()):
+			var pos_v: Array = (authored[k] as Dictionary).get("pos", []) as Array
+			if pos_v.size() < 3 or not (points[k] is Vector3):
+				matched = false
+				break
+			var expect := Vector3(float(pos_v[0]), float(pos_v[1]), float(pos_v[2]))
+			if (points[k] as Vector3).distance_to(expect) > 0.05:
+				matched = false
+				break
+		if matched:
+			return i
+	return -1
+
+
+## W2 test helpers: a layer-1 wall box and a layer-1 floor slab so interaction
+## LOS and civilian grounding run against real collision.
+func _w2_make_wall(parent: Node, at: Vector3) -> StaticBody3D:
+	var body := StaticBody3D.new()
+	body.name = "W2Wall"
+	body.collision_layer = 1
+	body.collision_mask = 0
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(3.0, 3.0, 0.2)
+	shape.shape = box
+	body.add_child(shape)
+	body.position = at
+	parent.add_child(body)
+	return body
+
+
+func _w2_make_floor(parent: Node, at: Vector3) -> StaticBody3D:
+	var body := StaticBody3D.new()
+	body.name = "W2Floor"
+	body.collision_layer = 1
+	body.collision_mask = 0
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(20.0, 1.0, 20.0)
+	shape.shape = box
+	body.add_child(shape)
+	body.position = at
+	parent.add_child(body)
+	return body
 
 
 ## Returns the first MeshInstance3D at or below `node` (null when absent).

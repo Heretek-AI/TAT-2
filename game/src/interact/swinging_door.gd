@@ -247,6 +247,27 @@ func get_interact_prompt() -> String:
 	return "[F] OPEN"
 
 
+## Interaction LOS point (W2): the door root is the hinge at the jamb, which
+## sits inside the frame; target the average leaf centre instead.
+func get_interact_point() -> Vector3:
+	var acc: Vector3 = Vector3.ZERO
+	var n: int = 0
+	for body_var: Variant in _leaf_bodies:
+		var body: Node3D = body_var as Node3D
+		if body == null or not is_instance_valid(body):
+			continue
+		var local_center: Vector3 = Vector3.ZERO
+		for child: Node in body.get_children():
+			if child is CollisionShape3D:
+				local_center = (child as CollisionShape3D).position
+				break
+		acc += body.global_transform * local_center
+		n += 1
+	if n == 0:
+		return global_position + Vector3.UP * 1.1
+	return acc / float(n)
+
+
 ## KF24: closed unlocked doors stack [F] [HOLD] LOCK under the primary OPEN.
 func get_interact_secondary_prompt() -> String:
 	if locked or is_open or _tweening:

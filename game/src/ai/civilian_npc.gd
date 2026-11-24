@@ -5,9 +5,10 @@ extends CharacterBody3D
 ## MM_Unarmed_* locomotion retargeted by bone name through
 ## animation_library.gd, simple wander around the spawn point.
 ##
-## Non-behaviours by design: no detection, no interaction, and no collision
-## with the player (layer 8 / mask 1: the player mask 1|4 never touches
-## layer 8, while the world on layer 1 still grounds the civilian).
+## Non-behaviours by design: no detection and no interaction. Physics: a
+## capsule on Godot layer 4 (bit 8) means AI sight/hurt queries can hit them,
+## while the player mask 1|4 never touches layer 8 and the world on layer 1
+## still grounds the civilian.
 ##
 ## Documented approximations (nothing survives cooking here):
 ##   WALK_SPEED_M_S  = 1.4 m/s wander speed.
@@ -65,8 +66,22 @@ func setup(p_body: String, p_head: String, p_spawn: Vector3) -> void:
 
 func _ready() -> void:
 	add_to_group("civilians")
+	# Godot layer 4 (bit value 8): civilians occupy space for AI sight/hearing
+	# ray masks that include layer 8, while the player mask (1|4) still walks
+	# through them and their own mask (1) keeps the world grounding them. The
+	# capsule was missing entirely, so civilians were ghosts for every physics
+	# query. Authored art is ~1.7 m tall; radius 0.35 m, centred at 0.85 m puts
+	# the capsule bottom exactly on the civilian origin (floor).
 	collision_layer = 8
 	collision_mask = 1
+	var col := CollisionShape3D.new()
+	col.name = "CivilianCollision"
+	var cap := CapsuleShape3D.new()
+	cap.radius = 0.35
+	cap.height = 1.7
+	col.shape = cap
+	col.position = Vector3(0.0, 0.85, 0.0)
+	add_child(col)
 	_build_meshes()
 	_pick_new_target()
 	_idle_ttl = randf_range(0.5, 2.0)

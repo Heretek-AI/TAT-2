@@ -120,6 +120,12 @@ func get_interact_prompt() -> String:
 	return "[E] Take"
 
 
+## Interaction LOS point (W2): grounded pickups can have their origin inside
+## the prop; +0.4 m is the readable top of a bottle/toolbox/health pack.
+func get_interact_point() -> Vector3:
+	return global_position + Vector3.UP * 0.4
+
+
 ## Applies the kind effect to the interacting actor. Single-use: the node
 ## frees itself after a successful pickup.
 func interact(actor: Node) -> void:

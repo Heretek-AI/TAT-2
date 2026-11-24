@@ -157,6 +157,52 @@ func eval_curve(table_name: String, row_name: String, x: float, fallback: float 
 	return float(last.get("Value", fallback))
 
 
+## Authored footstep-surface loudness multipliers
+## (tools/parse_gameplay.py -> gameplay/guard_ai.json surface_loudness). Raw
+## keys are the DA_LoudnessModifiers surface names (Carpet 0.0, Glass 1.5,
+## Stone 1.5, ...); matching is case-insensitive. The seven AudioManager
+## surface tokens the game emits are aliased to their authored physical row
+## when the raw token is not itself a surface name. Unknown surfaces default
+## to 1.0 (unmodified), never a guessed multiplier.
+const SURFACE_LOUDNESS_PATH := "res://data/generated/gameplay/guard_ai.json"
+const SURFACE_LOUDNESS_ALIASES: Dictionary = {
+	"wood": "WoodFloor", # AU3 "wood" = Den timber floors (WoodFloor 1.5)
+	"metal": "MetalThick", # every authored Metal* row is 1.5
+	"wet": "Puddle", # Puddle/GroundWet both 1.5
+	"earth": "Dirt", # Dirt 0.0
+}
+var _surface_loudness: Dictionary = {}
+var _surface_loudness_loaded: bool = false
+
+
+func _load_surface_loudness() -> void:
+	_surface_loudness_loaded = true
+	var data: Variant = _load_json(SURFACE_LOUDNESS_PATH)
+	if not (data is Dictionary):
+		return
+	var rows: Variant = (data as Dictionary).get("surface_loudness", {})
+	if not (rows is Dictionary):
+		return
+	for k: Variant in (rows as Dictionary).keys():
+		_surface_loudness[str(k).to_lower()] = float((rows as Dictionary)[k])
+
+
+## Authored loudness multiplier for a footstep surface. "" / unknown -> 1.0.
+func get_surface_loudness(surface: String) -> float:
+	var key: String = surface.strip_edges()
+	if key == "":
+		return 1.0
+	if not _surface_loudness_loaded:
+		_load_surface_loudness()
+	key = key.split("/")[-1].split(".")[-1].to_lower()
+	if _surface_loudness.has(key):
+		return float(_surface_loudness[key])
+	var alias: String = str(SURFACE_LOUDNESS_ALIASES.get(key, ""))
+	if alias != "" and _surface_loudness.has(alias.to_lower()):
+		return float(_surface_loudness[alias.to_lower()])
+	return 1.0
+
+
 ## Tolerant table lookup by name hint: the converter keys tables by their asset
 ## name, which is stable, but a suffix match keeps this resilient.
 func _table_by_hint(hint: String) -> Dictionary:

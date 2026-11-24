@@ -92,6 +92,12 @@ func get_interact_prompt() -> String:
 	return '[E] Read Clue: ' + clue_title
 
 
+## Interaction LOS point (W2): the note lies flat on its surface; +0.35 m puts
+## the LOS target just above the paper instead of inside it.
+func get_interact_point() -> Vector3:
+	return global_position + Vector3.UP * 0.35
+
+
 func set_highlighted(on: bool) -> void:
 	if label != null and not collected:
 		label.visible = on

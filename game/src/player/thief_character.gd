@@ -54,6 +54,9 @@ const STEP_UP_MAX_M: float = 0.3 # stair assist bound: 0.18-0.2 m risers climb, 
 const STEP_UP_FORWARD_M: float = 0.35 # forward probe after the lift: clears one tread, not a room
 const STEP_UP_SKIN_M: float = 0.02 # headroom probe skin above the lift
 const INTERACT_RANGE: float = 1.75 # TATInteractionTargeterComponent.MaxInteractionRange 175cm
+## LOS endpoints stop this far in front of the interaction point so the prop's
+## own surface never reads as an occluder. A wall between still blocks.
+const INTERACT_LOS_STANDOFF_M: float = 0.25
 ## KF25/KF26: F taps the primary action (pick pocket / OPEN), holding F runs
 ## the stacked secondary ([HOLD] TAKEDOWN on a guard, [HOLD] LOCK on a door).
 const HOLD_INTERACT_SEC: float = 0.45
@@ -773,7 +776,8 @@ func _audio_gait() -> String:
 	return "walk"
 
 
-## AU3 footstep surface for AudioManager variation pools (PG-6): the Den hub
+## AU3 footstep surface for AudioManager variation pools (PG-6) and the
+## authored loudness modifier (DA_LoudnessModifiers via NoiseBus): the Den hub
 ## (contract 1) is timber; Guildhall stone. Kept to existing GameState data.
 func _audio_surface() -> String:
 	if GameState.active_contract_order == 1:
@@ -1181,7 +1185,7 @@ func _physics_process(delta: float) -> void:
 				loudness = 1.5
 			elif is_sprinting:
 				loudness = 8.0
-			NoiseBus.emit_noise(global_position, loudness, self, "footstep")
+			NoiseBus.emit_noise(global_position, loudness, self, "footstep", _audio_surface())
 			if AudioManager != null and AudioManager.has_method("play_footstep"):
 				AudioManager.play_footstep(_audio_surface(), _audio_gait(), global_position)
 			fp_step_left = not fp_step_left
@@ -1755,10 +1759,57 @@ func get_nearest_interactable() -> Node:
 			continue
 		var node3d: Node3D = node as Node3D
 		var d: float = global_position.distance_to(node3d.global_position)
-		if d < best_d:
-			best_d = d
-			best = node
+		if d >= best_d:
+			continue
+		# World-geometry LOS (layer 1), no facing cone: the reference lets the
+		# player interact from the side. The interactable's own interaction
+		# point is used when it exposes one (method or meta), else +0.5 m; the
+		# ray stops just short of that point so the prop itself cannot occlude.
+		var eye: Vector3 = _player_eye_position()
+		var point: Vector3 = _interactable_point(node3d)
+		var back: Vector3 = eye - point
+		var standoff: float = minf(INTERACT_LOS_STANDOFF_M, back.length() * 0.5)
+		if not _los_clear(eye, point + back.normalized() * standoff, [get_rid()]):
+			continue
+		best_d = d
+		best = node
 	return best
+
+
+## Eye used by interaction / pickpocket / takedown LOS. The live camera is the
+## authored 1P eye when present; a headless or detached body falls back to the
+## chest height so the checks stay meaningful.
+func _player_eye_position() -> Vector3:
+	if cam != null and is_instance_valid(cam) and cam.is_inside_tree():
+		return cam.global_position
+	return global_position + Vector3.UP * 1.2
+
+
+## True when nothing on the given physics layers blocks the segment. A missing
+## world (off-tree fixture) fails open so spawn/UI code never hard-locks.
+func _los_clear(from: Vector3, to: Vector3, exclude: Array[RID], mask: int = 1) -> bool:
+	if not is_inside_tree():
+		return true
+	var w3d: World3D = get_world_3d()
+	if w3d == null or w3d.direct_space_state == null:
+		return true
+	var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(from, to, mask, exclude)
+	return w3d.direct_space_state.intersect_ray(q).is_empty()
+
+
+## Interaction point a node exposes: get_interact_point()/interaction point
+## method first, then the "interaction_point" meta (global position), else the
+## node origin + 0.5 m (a readable torso/chest target for containers/doors).
+func _interactable_point(node3d: Node3D) -> Vector3:
+	if node3d.has_method("get_interact_point"):
+		var p: Variant = node3d.call("get_interact_point")
+		if p is Vector3:
+			return p as Vector3
+	if node3d.has_meta("interaction_point"):
+		var m: Variant = node3d.get_meta("interaction_point")
+		if m is Vector3:
+			return m as Vector3
+	return node3d.global_position + Vector3.UP * 0.5
 
 
 func get_look_interact_prompt() -> String:
@@ -2216,10 +2267,34 @@ func _find_nearest_guard(max_dist: float) -> Node3D:
 			continue
 		var guard_node: Node3D = g as Node3D
 		var d: float = global_position.distance_to(guard_node.global_position)
-		if d < best_d:
+		if d < best_d and _takedown_geometry_ok(guard_node):
 			best_d = d
 			best = guard_node
 	return best
+
+
+## Takedown/blackjack geometry gate: clear world LOS from the player eye to the
+## guard torso, and the player must not be in front of the guard. Guard forward
+## is -Z (same convention as guard_ai._can_see_player); a forward dot above
+## 0.35 means the player is in front -> refuse. Behind and side are allowed,
+## and no facing cone is imposed on pickpocketing.
+func _takedown_geometry_ok(guard_node: Node3D) -> bool:
+	if guard_node == null or not is_instance_valid(guard_node):
+		return false
+	var to_player: Vector3 = global_position - guard_node.global_position
+	to_player.y = 0.0
+	if to_player.length() < 0.05:
+		# Point-blank overlap: no side to strike from.
+		return false
+	var fwd: Vector3 = -guard_node.global_transform.basis.z
+	fwd.y = 0.0
+	if fwd.length() > 0.05 and fwd.normalized().dot(to_player.normalized()) > 0.35:
+		return false
+	var exclude: Array[RID] = [get_rid()]
+	var body: PhysicsBody3D = guard_node as PhysicsBody3D
+	if body != null:
+		exclude.append(body.get_rid())
+	return _los_clear(_player_eye_position(), guard_node.global_position + Vector3.UP * 1.2, exclude)
 
 
 func _try_blackjack(preferred: Node3D = null) -> void:
@@ -2252,6 +2327,10 @@ func _try_blackjack(preferred: Node3D = null) -> void:
 			continue
 		var guard_state: int = int(g.get("state"))
 		if guard_state == 5: # Alertness.KNOCKED_OUT: already down, not a target
+			continue
+		if not _takedown_geometry_ok(guard_node):
+			# Wall between player and guard, or the player is in front of the
+			# guard: refuse without knocking the guard out.
 			continue
 		var final_dmg: float = base_dmg
 		if guard_state == 0 or guard_state == 1:

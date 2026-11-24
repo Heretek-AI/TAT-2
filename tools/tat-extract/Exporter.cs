@@ -526,16 +526,12 @@ public sealed class Exporter
     {
         foreach (var k in _ok.Keys.Union(_fail.Keys).Union(_skip.Keys).OrderBy(x => x))
             Console.Error.WriteLine($"[{k}] ok={_ok.GetValueOrDefault(k)} skip={_skip.GetValueOrDefault(k)} fail={_fail.GetValueOrDefault(k)}");
-        // Per-run log: truncated on open (never appended), so stale errors
-        // from prior runs cannot pass as current-run signal. Deleted when the
-        // run is clean so an old errors.log never lingers.
+        // Per-run log: always created/truncated (never appended), empty on a
+        // clean run. The audit gate treats an absent log as a failed run, so
+        // never delete it.
         var log = Path.Combine(_o.Out, "errors.log");
-        if (!_errors.IsEmpty)
-        {
-            Directory.CreateDirectory(_o.Out);
-            File.WriteAllLines(log, _errors);
-            Console.Error.WriteLine($"errors -> {log} ({_errors.Count} entries, this run only)");
-        }
-        else if (File.Exists(log)) File.Delete(log);
+        Directory.CreateDirectory(_o.Out);
+        File.WriteAllLines(log, _errors);
+        Console.Error.WriteLine($"errors -> {log} ({_errors.Count} entries, this run only)");
     }
 }

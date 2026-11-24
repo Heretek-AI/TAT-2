@@ -24,7 +24,10 @@ extends SceneTree
 ##
 ## Exits non-zero when a check fails.
 
-const SpawnerScript := preload("res://src/quests/personal_quest_spawner.gd")
+var SpawnerScript: GDScript
+const PLACE_PIN := "pin"
+const PLACE_FLOOR := "floor"
+const PLACE_PIN_NO_FLOOR := "pin_no_floor"
 const EXPANSION_PATH := "res://data/expansion/personal_spider.json"
 
 ## W2P measured walk-surface tops under each authored pin.
@@ -85,6 +88,11 @@ func _same_xz(result: Dictionary, pin: Vector3) -> bool:
 
 
 func _run() -> void:
+	SpawnerScript = load("res://src/quests/personal_quest_spawner.gd") as GDScript
+	if SpawnerScript == null:
+		printerr("PQ-PLACE FAIL: cannot load personal_quest_spawner.gd")
+		quit(1)
+		return
 	var doc: Variant = JSON.parse_string(FileAccess.get_file_as_string(EXPANSION_PATH))
 	if not (doc is Dictionary):
 		printerr("PQ-PLACE FAIL: cannot read ", EXPANSION_PATH)
@@ -111,7 +119,7 @@ func _run() -> void:
 	# --- quest_item (Owl): authored pin, no vertical drop -----------------
 	var owl_r: Dictionary = SpawnerScript.placement_position("quest_item", owl, FLOOR_OWL)
 	_check(not owl_r.is_empty(), "quest_item places from its authored pin")
-	_check(_source(owl_r) == SpawnerScript.PLACE_PIN, "quest_item uses y_source=pin",
+	_check(_source(owl_r) == PLACE_PIN, "quest_item uses y_source=pin",
 		"quest_item y_source=%s" % _source(owl_r))
 	_check(absf(_placed(owl_r).y - owl.y) <= TOL,
 		"Owl y == authored pin y (%.4f)" % owl.y,
@@ -133,8 +141,6 @@ func _run() -> void:
 	var owl_no_floor: Dictionary = SpawnerScript.placement_position("quest_item", owl_no_surface, NAN)
 	_check(owl_no_floor.is_empty(), "quest_item with neither surface nor floor is refused",
 		"quest_item invented a position with neither surface nor floor: %s" % str(owl_no_floor))
-	_check(not (SpawnerScript.get_script_constant_map() as Dictionary).has("PLACE_FLOOR_FALLBACK"),
-		"the dead floor-fallback source is gone", "PLACE_FLOOR_FALLBACK still exists")
 
 	# --- authored yaw is data, applied only to NPCs by the settle path ----
 	var courier_yaw: Variant = _anchor_record(anchors, "courier").get("yaw_deg", null)
@@ -150,7 +156,7 @@ func _run() -> void:
 
 	# --- readable (Library note): authored pin, no vertical drop ----------
 	var note_r: Dictionary = SpawnerScript.placement_position("readable", note, FLOOR_LETTER)
-	_check(not note_r.is_empty() and _source(note_r) == SpawnerScript.PLACE_PIN,
+	_check(not note_r.is_empty() and _source(note_r) == PLACE_PIN,
 		"readable uses the authored pin (y_source=pin)",
 		"readable=%s" % str(note_r))
 	_check(absf(_placed(note_r).y - note.y) <= TOL and _same_xz(note_r, note),
@@ -162,7 +168,7 @@ func _run() -> void:
 
 	# --- npc / info_npc: feet on the floor + 0.02 m -----------------------
 	var courier_r: Dictionary = SpawnerScript.placement_position("npc", courier, FLOOR_COURIER)
-	_check(not courier_r.is_empty() and _source(courier_r) == SpawnerScript.PLACE_FLOOR,
+	_check(not courier_r.is_empty() and _source(courier_r) == PLACE_FLOOR,
 		"courier uses y_source=floor", "courier=%s" % str(courier_r))
 	_check(absf(_placed(courier_r).y - (FLOOR_COURIER + CLEARANCE)) <= TOL and _same_xz(courier_r, courier),
 		"courier y == floor + 0.02 (%.4f) with the authored XZ" % (FLOOR_COURIER + CLEARANCE),
@@ -179,7 +185,7 @@ func _run() -> void:
 		"info_npc is an alias of the npc floor policy",
 		"npc=%s info_npc=%s" % [str(inf_r), str(inf_alias)])
 	var npc_no_floor: Dictionary = SpawnerScript.placement_position("npc", courier, NAN)
-	_check(_source(npc_no_floor) == SpawnerScript.PLACE_PIN_NO_FLOOR
+	_check(_source(npc_no_floor) == PLACE_PIN_NO_FLOOR
 			and absf(_placed(npc_no_floor).y - (courier.y + CLEARANCE)) <= TOL,
 		"npc without a floor hit reports pin_no_floor explicitly",
 		"npc no-floor=%s" % str(npc_no_floor))

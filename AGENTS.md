@@ -60,7 +60,7 @@ make run         # native 4.7.2 client, F3 overlay
 make test        # tests/run_tests.gd — 58 suites
 make audit       # fail-closed content + producer/output baseline gate
 
-tools/godot --headless --path game --script tools/check_scripts_compile.gd
+tools/godot --headless --path game --script "$PWD/tools/check_scripts_compile.gd"
 tools/godot --headless --path game --script res://tests/test_m2_player.gd
 tools/godot --headless --path game --script res://probe_leak.gd
 tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd

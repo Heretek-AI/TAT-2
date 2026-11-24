@@ -67,10 +67,14 @@ The audit found that the green suite certified a build where:
 | medium | 1920×1080 | **39.5** | 18 | 42 | 25.3 | 26 |
 | low | 1920×1080 | **39** | 37 | 42 | 25.6 | 74 |
 
-The medium/high/low 1080p spread is within noise (37–39.5), so the quality-gated
-SSIL/fog/SSR toggles are not the 1080p limiter; the 720p result (52 FPS, 19.2 ms)
-is close to the CPU ceiling estimated in the ecosystem review. This points at
-draw calls / CPU work and the 160-light budget, not a single GPU effect.
+The medium/high/low 1080p spread is within noise (37–39.5). **This spread is
+not a quality measurement:** the W0b audit found that all four runs logged
+`WeatherQuality: desktop level=2`, there was no desktop quality control in the
+save or Settings, and vsync was on. The "quality toggles are not the limiter"
+conclusion below is therefore unsupported and is superseded by the honest
+six-pose matrix; only the resolution observation (720p faster) survives as a
+hypothesis. The 720p result (52 FPS, 19.2 ms) is still close to the CPU ceiling
+estimated in the ecosystem review.
 
 The 1080p/high steady state is ~39 FPS (p10 36, p90 41, mspf median 25.6),
 improved from the 27 FPS recorded on 19 Nov but still below 60. This is a

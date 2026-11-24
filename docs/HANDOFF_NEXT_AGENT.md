@@ -1,7 +1,7 @@
 # Handoff — Thick As Thieves Godot 4.7.2 port (next run)
 
 **Repo:** `/home/john/Projects/TAT-2`
-**HEAD at handoff:** the W0a identity commit — `fix(identity): remove Steam persona, use shipped key names, gate texture cap` (run `git log -1 --oneline`; it sits on top of `3202283`)
+**HEAD at handoff:** `fix(review): treat mixed fog/mesh counts as informational in the baker` on top of the W0a/W0b/W1p review integrations (run `git log -1 --oneline`).
 **Working tree:** clean; `main` in sync with `origin/main`
 **Godot:** `4.7.2.stable` via **native `tools/godot`** (Flatpak fallback inside the
 wrapper). `godot` is **not** on `$PATH`.
@@ -20,8 +20,10 @@ be pursued.
 >
 > **Read first:** [`AGENTS.md`](../AGENTS.md) (operating rules and traps),
 > [`docs/FIDELITY_GAPS.md`](FIDELITY_GAPS.md) (live coverage + every residual),
-> [`docs/reports/gameplay-truth-wave.md`](reports/gameplay-truth-wave.md)
-> (latest wave evidence).
+> [`docs/reports/perf-structural-wave.md`](reports/perf-structural-wave.md)
+> (performance truth and structural measurements),
+> [`docs/reports/review-map-baker.md`](reports/review-map-baker.md) (world
+> review pipeline).
 
 ---
 
@@ -31,11 +33,13 @@ be pursued.
 |---|---|
 | Extraction pipeline | reproducible from a wiped tree; `make extract` + `make normalize` + `make anims` exit 0 |
 | Asset integrity | 0 duplicate UIDs, 0 missing/corrupt meshes, `MESH HOLES=0`, 0 missing textures |
-| Scripts | **69/69 compile**, 0 broken |
-| Unit suite (`run_tests.gd`) | **59 suites, fails=0**, 0 `SCRIPT ERROR` |
+| Scripts | **82/82 compile**, 0 broken |
+| Unit suite (`run_tests.gd`) | **fails=0** (includes review-baker and perf suites) |
 | M2 player suite | **fails=0** |
 | Probes | door walk **PASS**, viewmodel truth **PASS**, Niagara **PASS** |
 | E2E (unmasked) | **264/264**, 0 BOOT, 0 `SCRIPT ERROR` (tier 1: 115) |
+| Texture cap | `make texture-cap-check` **OK**, 0 offenders, 1 alpha exception |
+| World review | Guildhall bake **371 MB / 18.76 s**, master loads headless 9.1 s |
 | World data | 107/107 maps, 16 contracts, 210 patrols / 673 waypoints, 222 scene variants, 4,118 devices, 3,695 Niagara placements (3,308 active) / 36 systems |
 | Materials | 1,629 resolved; two-sided and paint-stroke albedo read from `BasePropertyOverrides` and child `_D` companions |
 | Runtime | startscreen → Den → prep → Guildhall → scoring, free-play cleanout, authored devices/clues/patrols; co-op player pose + host-validated door events (loot/AI not replicated) |
@@ -333,9 +337,14 @@ Recent additions to know about:
    `DT_ClueFacts_Personal_Spider_04:Renegade`; no consumers, `reachable=false`);
    the quest using them is planned for the next wave (W2). Spawner interaction
    radii are absent; do not invent dialogue or radii.
-4. **Performance:** current export is ~39 FPS median at 1080p/high (post-load
-   p10 36 / p90 41, mspf 25.6) and needs the quality-ladder + merge/HLOD
-   experiments in `reports/ecosystem-reuse-review.md` to reach 60.
+4. **Performance:** honest six-pose 1080p/high p50 is **51.0–55.4 FPS**
+   (two identical controls; run-to-run variance is larger than every lever
+   delta). The low/64-light/2-shadow "performance" configuration measures
+   p50 58.8 / p95 28.7 ms / 1 % low 27.5, so it is **not** a 60 FPS preset.
+   PeripheryA 100 m cuts draws but is not a proven win; same-material cell
+   merge is a measured regression (p50 48.8). Details and artefacts:
+   `reports/perf-structural-wave.md`. Next: repeated clock-controlled runs,
+   then light/shadow budget and occlusion/HLOD (not naive merge).
 5. **Den GI:** still a Lumen/real-GI gap. VoxelGI was reverted for room spill;
    run the VoxelGI-vs-SSRT bake-off before adding another approximation.
 6. **UI localization is partial:** `Loc.t()` works over the 8 shipped
@@ -345,13 +354,14 @@ Recent additions to know about:
 7. **Animation notifies are data-only:** `anims_meta.json` and `notify_at()` are
    available; footstep/Ak/hit-window consumers are not wired yet. 1,734
    name-only notifies have no class payload.
-8. **World review is built but the Guildhall bake is deferred.** `make
-   bake-review MAP=guildhall` writes per-sublevel scenes under the gitignored
-   `game/scenes/review/guildhall/`; `make editor` exposes the TAT-2 Review dock
-   and `make review MAP=guildhall` the live free camera. Run the full Guildhall
-   bake and the visual/toggle checks on a quiet machine; report the measured
-   per-sublevel sizes. The baked scenes are snapshots with no gameplay
-   authority. See `reports/review-map-baker.md`.
+8. **World review is built and the Guildhall is baked.** `make bake-review
+   MAP=guildhall` writes 18 scenes / 371 MB under the gitignored
+   `game/scenes/review/guildhall/` in 18.76 s (33,356 tagged nodes, 312 beam
+   lines, 481 emissive plates); the master loads headless in 9.1 s / 3.4 GB.
+   `make editor` exposes the TAT-2 Review dock and `make review MAP=guildhall`
+   the live free camera. Remaining: manual dock/toggle and windowed checks.
+   The baked scenes are snapshots with no gameplay authority. See
+   `reports/review-map-baker.md`.
 
 ### 7.2 Fidelity residuals (visible, bounded)
 
@@ -435,8 +445,8 @@ Recent additions to know about:
 git status --short                                  # clean
 make audit                                          # exit 0, all groups fresh, 0 unexpected errors
 python3 tools/check_uid_duplicates.py game --json   # 0/0
-tools/godot --headless --path game --script tools/check_scripts_compile.gd   # 69/0
-tools/godot --headless --path game --script res://tests/run_tests.gd         # fails=0 (59 suites)
+tools/godot --headless --path game --script "$PWD/tools/check_scripts_compile.gd"   # 82/0
+tools/godot --headless --path game --script res://tests/run_tests.gd         # fails=0
 tools/godot --headless --path game --script res://tests/test_m2_player.gd    # fails=0
 tools/godot --headless --path game --script res://tests/probe_door_walk.gd   # PASS
 tools/godot --headless --path game --script res://tests/probe_viewmodel_truth.gd  # PASS

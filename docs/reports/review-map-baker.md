@@ -1,8 +1,10 @@
 # Review-map baker and in-game review mode (2026-11-24)
 
-Status: **pipeline implemented and verified on `thieves_den` + `mission_lobby`**.
-The full Guildhall bake is deliberately deferred to a quiet machine (the
-measurement worker owned the GPU this hour); the integrator runs it next.
+Status: **pipeline implemented and verified on `thieves_den`, `mission_lobby`
+and the full Guildhall**. The Guildhall bake is 371 MB across 18 scenes; it
+loads headless in 9.1 s at 3.4 GB RSS. The editor master instances 16
+sublevel scenes (33,356 nodes) and is heavy but usable; manual GUI interaction
+is the only unverified part.
 
 ## What it is
 
@@ -103,7 +105,7 @@ Godot 4.7.2 headless, `XDG_DATA_HOME=/tmp/opencode/r1-data`.
 | `ThievesDenTest_Periphery.scn` | **4,414,565 B** (4.2 MiB) |
 | `world.scn` / `review.tscn` | 1,389 B / 3,475 B |
 | Total output | 28,208,855 B (26.9 MiB) |
-| Manifest consistency checks | all pass (lights, occluders, decals, Niagara systems exact; collision/mesh counts ≥ loader) |
+| Manifest consistency checks | lights/occluders/decals/Niagara exact; collision ≥ loader; mesh counts informational (fog extras vs loader-added doors/loot make both directions legal) |
 
 ### Measured — `mission_lobby` (menu map, discovery fallback)
 
@@ -113,15 +115,35 @@ Godot 4.7.2 headless, `XDG_DATA_HOME=/tmp/opencode/r1-data`.
 15 emissive plates. In-game review mode loaded it headless in 20 frames with
 3,560 nodes.
 
-### Guildhall expectation (not run)
+### Measured — `guildhall` (full bake)
 
-The thirteen Guildhall sublevels are built from the same loader; unique-mesh
-counts are 57 (Geometry), 59 (Gameplay), 162 (SkyboxGeo), 194 (POI 3rd floor),
-487 (POI), 560 (PeripheryA), so scenes are expected in the tens of MB each and
-the sum will be large but the instancing masters stay tiny. `PeripheryA`
-(12,461 instances) and `SkyboxGeo` (33,547) are mostly MultiMesh batches; the
-packed size scales with unique meshes, not instances. The full bake and the
-Guildhall visual checks are the integrator's step.
+**18.76 s**, **371 MB** across 18 scenes (16 sublevels + `world.scn` +
+`review.tscn`). Loader: 62,952 mesh instances, 64,748 draw instances, 11,350
+surfaces, 6,076 chunks, 330 collision bodies, 24,326 shapes, 1,479 occluders,
+1,599 Niagara placements. Tagged: 33,356 nodes, 312 `beam_lines`, 481
+`emissive_plate`, 330 `collision_only`, 0 `world_label`.
+
+Largest scenes: `Building_Guildhall_POI.scn` 87 MB, `Guildhall_PeripheryA.scn`
+130 MB, `Guildhall_SkyboxGeo.scn` 46 MB, `Building_Guildhall_POI_3rdFloor.scn`
+40 MB. `world.scn` (4 KB) instances the per-sublevel scenes; `review.tscn`
+(9 KB) adds the environment, 562 lights and six bookmarks. Headless master
+load: **9.1 s**, **3.4 GB RSS**, 0 script errors with `--quit-after 5`.
+
+`Guildhall_LocalVolumetric` exposed a false consistency failure: its 27 loader
+`mesh_instances` are fog/extras without a `ue_mesh`, and the tagger correctly
+records 0 draw instances. The mesh-instance check is now informational in both
+directions; exact lights/decals/Niagara and ≥ collision checks still gate the
+bake. After that fix the bake exits 0 with `status=ok`.
+
+### Guildhall review caveats
+
+The master instances every sublevel, so it carries **562 lights** and **1,479
+occluders** versus the shipped single-call 160/768. That is a review
+convenience, not a performance measurement. The Lighting toggle hides them.
+`Guildhall_SkyboxGeo` is 33,547 MultiMesh instances (208 batch nodes), so the
+node count stays at 33k; the editor can open the master but will be sluggish
+on a cold cache. Prefer toggling whole sublevels off rather than editing
+individual chunk nodes.
 
 ## Tagging vocabulary
 
@@ -212,8 +234,9 @@ convenience, not gameplay authority.
 - **Cross-sublevel duplicates reappear in the editor assembly.** The single-call
   loader dedupes repeated meshes across sublevels; separate scenes cannot see
   each other. Review mode (live, one call per sublevel) has the same split.
-- **The full Guildhall bake and all rendered/visual checks are deferred.** This
-  report claims only the measured Den/lobby numbers above.
+- **The full Guildhall bake is verified; rendered/visual checks are not.** The
+  master loads headless at 9.1 s / 3.4 GB; opening it in a visible editor and
+  toggling layers is the remaining manual step.
 - **Manual dock interaction and the in-game window are not verified** on this
   shared-machine hour (no Xvfb, no windowed Godot, no GPU capture).
 - **`world.scn` is an assembly of per-sublevel scenes**, not a second

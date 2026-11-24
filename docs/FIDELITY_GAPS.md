@@ -338,13 +338,13 @@ find extracted/json -name 'NS_*.json' | wc -l
     (285 mesh instances, 4.08 s, 26.9 MiB across 3 sublevel scenes) and
     `mission_lobby` (66.3 MB, 4.21 s); see
     [`reports/review-map-baker.md`](reports/review-map-baker.md).
-  - **Residual**: the full Guildhall bake (13 sublevels, incl. 12,461-instance
-    PeripheryA and 33,547-instance SkyboxGeo) and every rendered/visual check
-    are deferred to a quiet machine. The review scenes are static snapshots:
-    no player, AI, doors, loot, devices, missions, weather or streaming, so
-    they cannot be used to validate gameplay or lighting parity.
+  - **Measured**: the full Guildhall bake is 18.76 s / 371 MB across 18 scenes
+    (16 sublevels), 33,356 tagged nodes, 312 `beam_lines`, 481 emissive plates;
+    the master loads headless in 9.1 s / 3.4 GB RSS. The review scenes are
+    static snapshots: no player, AI, doors, loot, devices, missions, weather or
+    streaming, so they cannot validate gameplay or lighting parity.
   - **Residual**: per-sublevel loads each receive the loader's 160-light
-    budget, so the editor master can show more lights than the shipped
-    single-call load; the Lighting toggle hides them but this is not a
-    performance measurement. Editor-dock clicking and the windowed in-game
-    mode were not manually exercised this wave (GUI/Xvfb deferred).
+    budget, so the editor master shows 562 lights and 1,479 occluders versus
+    the shipped single-call 160/768; the Lighting toggle hides them but this is
+    not a performance measurement. Editor-dock clicking and the windowed
+    in-game mode were not manually exercised (GUI deferred).

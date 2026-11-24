@@ -73,7 +73,7 @@ baseline fails; `make audit-bootstrap` is the explicit first-run path.
 Headless gates that are not Make aliases:
 
 ```bash
-tools/godot --headless --path game --script tools/check_scripts_compile.gd
+tools/godot --headless --path game --script "$PWD/tools/check_scripts_compile.gd"
 tools/godot --headless --path game --script res://tests/test_m2_player.gd
 tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd
 tools/godot --headless --path game --script res://probe_leak.gd

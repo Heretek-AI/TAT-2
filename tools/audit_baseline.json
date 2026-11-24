@@ -44,7 +44,7 @@
   "infrastructure": {
     "root:Makefile": {
       "command": "make extract / make normalize",
-      "sha256": "d2317cd5dfa9c0ac11f8bb11a6a836b47c625e0cfa93d1a5b68746893d442794"
+      "sha256": "01c10416dd64feaaa1b31c66b1ba1d3680d14815b990ea9d1a663337954dc3e2"
     },
     "root:tools/audit_allowlists.json": {
       "command": "reviewed coverage allowlist",
@@ -452,5 +452,5 @@
     "vgmstream": "vgmstream CLI decoder r2168 (Oct 25 2026)"
   },
   "version": 2,
-  "written_utc": "2026-11-24T13:15:06Z"
+  "written_utc": "2026-11-24T15:16:41Z"
 }

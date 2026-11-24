@@ -33,12 +33,14 @@ anims: build-extractor
 	/usr/bin/blender --background --python tools/usd_to_gltf.py -- extracted/anims/usd game/assets/ue/Anims --manifest game/data/generated/anims_manifest.json
 
 # Every generated-data producer. `normalize` fails if any is missing or errors,
-# so a silently dropped parser cannot pass the gate.
+# so a silently dropped parser cannot pass the gate. parse_anim_meta consumes
+# the raw AnimSequence/AnimMontage dumps written by `make extract`/`make anims`;
+# it runs last so a failed earlier producer cannot leave stale metadata.
 NORMALIZERS := parse_tables parse_materials parse_gameplay parse_contracts \
                parse_clues parse_quests parse_devices parse_containers \
                parse_interactables parse_loot parse_spawners parse_vfx \
                parse_weather extract_audio convert_wwise parse_locres \
-               convert_videos
+               convert_videos parse_anim_meta
 
 normalize:
 	@for t in $(NORMALIZERS); do \

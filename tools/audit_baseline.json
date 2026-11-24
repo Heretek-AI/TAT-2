@@ -44,7 +44,7 @@
   "infrastructure": {
     "root:Makefile": {
       "command": "make extract / make normalize",
-      "sha256": "7d0a49f31631d2613e66ee88f9602e5aa7babcd24153e6d0df4e8b2607f02209"
+      "sha256": "bd1d12aa1d914e44099676095b44d56146484ff31e1a5da5d8326c9e830ad099"
     },
     "root:tools/audit_allowlists.json": {
       "command": "reviewed coverage allowlist",
@@ -153,6 +153,20 @@
         }
       },
       "sha256": "2212587ffbf869787a9f583b786f0f7300f181c93aaf373052275867100cfa76"
+    },
+    "tools/parse_anim_meta.py": {
+      "command": "python3 tools/parse_anim_meta.py",
+      "metrics": {},
+      "outputs": {
+        "gen:anims_meta.json": {
+          "bytes": 1058776,
+          "exists": true,
+          "files": 1,
+          "newest_mtime": 1795503936.208484,
+          "sha256": "70b6c2358b3bd80194a4dfaa23764033a39b9ad45f009a7bebe54e55dc4d6975"
+        }
+      },
+      "sha256": "6cd5c78aed0689e98e00286fa020815af62e835bdfdacfd12b2eefd010e4904a"
     },
     "tools/parse_clues.py": {
       "command": "python3 tools/parse_clues.py",
@@ -438,5 +452,5 @@
     "vgmstream": "vgmstream CLI decoder r2168 (Oct 25 2026)"
   },
   "version": 2,
-  "written_utc": "2026-11-24T06:34:00Z"
+  "written_utc": "2026-11-24T07:05:48Z"
 }

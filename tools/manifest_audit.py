@@ -238,6 +238,11 @@ PRODUCERS = (
         ("assets:ue/Anims", "gen:anims_manifest.json"),
         ("anims_ok", "anims_fail", "anims_entries", "anims_total", "anims_glb"),
     ),
+    Producer(
+        "tools/parse_anim_meta.py",
+        "python3 tools/parse_anim_meta.py",
+        ("gen:anims_meta.json",),
+    ),
 )
 
 # Pipeline infrastructure that changes extraction semantics even though it is

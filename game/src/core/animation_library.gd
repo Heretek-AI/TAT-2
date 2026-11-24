@@ -19,6 +19,8 @@ extends RefCounted
 ## guard keeps its procedural fallback.
 
 const MANIFEST_PATH := "res://data/generated/anims_manifest.json"
+const META_PATH := "res://data/generated/anims_meta.json"
+const META_SCHEMA := "tat2.anims_meta/1"
 const ANIM_BASE := "res://assets/ue/Anims/"
 
 # Explicit clip names per weapon set, in priority order. Regex patterns in
@@ -158,6 +160,11 @@ static var _manifest_loaded: bool = false
 static var _manifest_ok: bool = false
 static var _manifest_by_name: Dictionary = {}
 static var _manifest_entries: Array = []
+# Authored UE metadata: clip basename -> notify/section/slot record from
+# res://data/generated/anims_meta.json (produced by tools/parse_anim_meta.py).
+static var _meta_loaded: bool = false
+static var _meta_ok: bool = false
+static var _meta_clips: Dictionary = {}
 # clip_name -> {"anim": Animation, "bones": PackedStringArray}
 static var _source_cache: Dictionary = {}
 # clip_name + "|" + skeleton node name -> Animation (retargeted)
@@ -206,6 +213,95 @@ static func load_manifest() -> bool:
 
 static func manifest_clip_count() -> int:
 	return _manifest_by_name.size()
+
+
+## Loads the authored notify/section metadata lazily. This is a separate file
+## from the GLB manifest: the manifest carries sampled clip lengths and takes,
+## while anims_meta.json carries UE's AnimNotify events, montage sections and
+## slots. A missing or stale-schema file is a soft failure (accessors return
+## empty) so gameplay keeps its clip retargeting and procedural fallbacks.
+static func load_meta() -> bool:
+	if _meta_loaded:
+		return _meta_ok
+	_meta_loaded = true
+	_meta_ok = false
+	if not FileAccess.file_exists(META_PATH):
+		push_warning("GuardAnimationLibrary: animation metadata missing: " + META_PATH)
+		return false
+	var f := FileAccess.open(META_PATH, FileAccess.READ)
+	if f == null:
+		push_warning("GuardAnimationLibrary: cannot open animation metadata")
+		return false
+	var parsed = JSON.parse_string(f.get_as_text())
+	f.close()
+	if not (parsed is Dictionary):
+		push_warning("GuardAnimationLibrary: animation metadata JSON is not a dictionary")
+		return false
+	var root := parsed as Dictionary
+	if str(root.get("schema", "")) != META_SCHEMA:
+		push_warning("GuardAnimationLibrary: animation metadata schema mismatch: " + str(root.get("schema", "")))
+		return false
+	var clips = root.get("clips", null)
+	if not (clips is Dictionary):
+		push_warning("GuardAnimationLibrary: animation metadata has no clips dictionary")
+		return false
+	_meta_clips = clips as Dictionary
+	_meta_ok = not _meta_clips.is_empty()
+	return _meta_ok
+
+
+static func meta_clip_count() -> int:
+	return _meta_clips.size() if load_meta() else 0
+
+
+## Authored metadata for one clip basename, or {} when the clip has no dump
+## entry. The dictionary mirrors anims_meta.json's clip object:
+## {asset, kind, length, notifies, sections, slots, source_file}.
+static func get_clip_meta(clip_name: String) -> Dictionary:
+	if not load_meta():
+		return {}
+	var clip = _meta_clips.get(clip_name, null)
+	return clip as Dictionary if clip is Dictionary else {}
+
+
+## Authored FAnimNotifyEvent entries for a clip (name, class, time, duration,
+## payload), in the order the dumps list them. Empty when no metadata.
+static func get_notifies(clip_name: String) -> Array:
+	var clip := get_clip_meta(clip_name)
+	var notifies = clip.get("notifies", [])
+	return notifies as Array if notifies is Array else []
+
+
+## Authored montage sections (name, start, end); empty for sequences and for
+## clips without metadata.
+static func get_sections(clip_name: String) -> Array:
+	var clip := get_clip_meta(clip_name)
+	var sections = clip.get("sections", [])
+	return sections as Array if sections is Array else []
+
+
+## Nearest authored notify to `time` (seconds from clip start) within
+## `tolerance`, or null when none is close enough. This is the query point for
+## gameplay wiring; these accessors stay data-only because there is no single
+## playback clock in the port: AnimationPlayers are created per rig by
+## build_player / build_fp_player / ensure_*_clip and advanced by their owning
+## AI or UI node. A future notifier should poll from that owner:
+##   var n = GuardAnimationLibrary.notify_at(player.current_animation,
+##       player.current_animation_position)
+## and fire once when `n` changes across a frame boundary.
+static func notify_at(clip_name: String, time: float, tolerance: float = 0.05) -> Variant:
+	var best = null
+	var best_delta: float = 0.0
+	for n in get_notifies(clip_name):
+		if not (n is Dictionary):
+			continue
+		var notify := n as Dictionary
+		var notify_time: float = float(notify.get("time", 0.0))
+		var delta: float = absf(notify_time - time)
+		if delta <= tolerance and (best == null or delta < best_delta):
+			best = notify
+			best_delta = delta
+	return best
 
 
 func _role_table() -> Dictionary:
@@ -924,5 +1020,8 @@ static func cleanup_static_caches() -> void:
 	_manifest_ok = false
 	_manifest_by_name.clear()
 	_manifest_entries.clear()
+	_meta_loaded = false
+	_meta_ok = false
+	_meta_clips.clear()
 	_source_cache.clear()
 	_retarget_cache.clear()

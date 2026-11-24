@@ -5865,6 +5865,134 @@ func _initialize() -> void:
 	gs.active_contract_order = fx_order
 	gs.active_map_id = fx_map_id
 
+	# 75. Authored animation metadata: UE AnimNotify events and montage
+	# sections exported by tools/parse_anim_meta.py (stats measured 2026-11-24:
+	# 995 clips / 782 sequences / 213 montages / 3594 notifies). The accessor
+	# is data-only by design; animation_library.gd documents the per-owner
+	# polling point that would emit a notify signal.
+	var c75_ok := true
+	var c75_path := "res://data/generated/anims_meta.json"
+	var c75_meta: Dictionary = {}
+	if not FileAccess.file_exists(c75_path):
+		printerr("FAIL: 75 missing authored animation metadata: ", c75_path)
+		c75_ok = false
+	else:
+		var c75_file := FileAccess.open(c75_path, FileAccess.READ)
+		var c75_parsed = JSON.parse_string(c75_file.get_as_text()) if c75_file != null else null
+		if c75_file != null:
+			c75_file.close()
+		if c75_parsed is Dictionary:
+			c75_meta = c75_parsed as Dictionary
+		else:
+			printerr("FAIL: 75 animation metadata is not a JSON object")
+			c75_ok = false
+	var c75_clips: Dictionary = {}
+	if c75_ok:
+		if str(c75_meta.get("schema", "")) != "tat2.anims_meta/1":
+			printerr("FAIL: 75 animation metadata schema: ", c75_meta.get("schema"))
+			c75_ok = false
+		var c75_clips_v = c75_meta.get("clips", null)
+		if c75_clips_v is Dictionary:
+			c75_clips = c75_clips_v as Dictionary
+		else:
+			printerr("FAIL: 75 animation metadata has no clips dictionary")
+			c75_ok = false
+	var c75_stats_v = c75_meta.get("stats", null)
+	var c75_stats: Dictionary = c75_stats_v as Dictionary if c75_stats_v is Dictionary else {}
+	if c75_ok and (c75_clips.size() != 995 \
+			or GuardAnimationLibrary.manifest_clip_count() != 995 \
+			or GuardAnimationLibrary.meta_clip_count() != c75_clips.size() \
+			or int(c75_stats.get("sequences", 0)) != 782 \
+			or int(c75_stats.get("montages", 0)) != 213 \
+			or int(c75_stats.get("notifies", 0)) != 3594):
+		printerr("FAIL: 75 metadata census: clips=", c75_clips.size(), " manifest=", GuardAnimationLibrary.manifest_clip_count(), " accessor=", GuardAnimationLibrary.meta_clip_count(), " stats=", c75_stats)
+		c75_ok = false
+	# 75a. Known authored montage notify classes, times and serialized payloads.
+	var c75_known := [
+		{"clip": "AN_Disguise_Equip_Montage", "class": "AnimNotify_AkPlayerEvent", "time": 0.012435, "key": "BlueprintEvent", "value": "Play_Ability_Disguise_Equip"},
+		{"clip": "AN_Zipwire_Crank_Montage", "class": "AnimNotifyState_ToolAnimationEvent_C", "time": 0.0, "key": "FinishMontageSectionName", "value": "Finish"},
+		{"clip": "AN_ThiefSign_Decal_Montage", "class": "AnimNotify_GameplayEvent_C", "time": 0.667208, "key": "EventTag", "value": "Animation.Event.Thiefsign.TriggerSymbol"},
+		{"clip": "AN_BlackJack_Attack_Light__Slash_L_03_Montage", "class": "AnimNotify_CombatAnimationEnd", "time": 0.501738, "key": "", "value": ""},
+	]
+	var c75_known_found := 0
+	for c75_spec_v: Variant in c75_known:
+		var c75_spec: Dictionary = c75_spec_v as Dictionary
+		var c75_clip_name := str(c75_spec.get("clip", ""))
+		var c75_matched := false
+		for c75_n_v: Variant in GuardAnimationLibrary.get_notifies(c75_clip_name):
+			if not (c75_n_v is Dictionary):
+				continue
+			var c75_n: Dictionary = c75_n_v as Dictionary
+			if str(c75_n.get("class", "")) != str(c75_spec.get("class", "")):
+				continue
+			if absf(float(c75_n.get("time", -1.0)) - float(c75_spec.get("time", 0.0))) > 0.0001:
+				continue
+			var c75_key := str(c75_spec.get("key", ""))
+			if c75_key != "":
+				var c75_payload: Dictionary = c75_n.get("payload", {}) as Dictionary
+				if str(c75_payload.get(c75_key, "")) != str(c75_spec.get("value", "")):
+					continue
+			c75_matched = true
+			break
+		if c75_matched:
+			c75_known_found += 1
+		else:
+			printerr("FAIL: 75 authored notify not found: ", c75_spec)
+			c75_ok = false
+	if c75_known_found < 3:
+		printerr("FAIL: 75 known notify classes found=", c75_known_found)
+		c75_ok = false
+	# 75b. AN_Zipwire_Crank_Montage's authored sections (CrankStart/Loop/Finish).
+	var c75_sec_names: Array[String] = []
+	var c75_sec_starts: Array[float] = []
+	var c75_sec_ends: Array[float] = []
+	for c75_sec_v: Variant in GuardAnimationLibrary.get_sections("AN_Zipwire_Crank_Montage"):
+		if c75_sec_v is Dictionary:
+			var c75_sec: Dictionary = c75_sec_v as Dictionary
+			c75_sec_names.append(str(c75_sec.get("name", "")))
+			c75_sec_starts.append(float(c75_sec.get("start", -1.0)))
+			c75_sec_ends.append(float(c75_sec.get("end", -1.0)))
+	var c75_sec_expect: Array[String] = ["CrankStart", "CrankLoop", "CrankFinish"]
+	if c75_sec_names != c75_sec_expect \
+			or c75_sec_starts.size() != 3 or absf(c75_sec_starts[1] - 2.240913) > 0.0001 \
+			or absf(c75_sec_starts[2] - 3.6) > 0.0001 \
+			or absf(c75_sec_ends[0] - 2.240913) > 0.0001 \
+			or absf(c75_sec_ends[2] - 4.666666) > 0.0001:
+		printerr("FAIL: 75 crank montage sections: names=", c75_sec_names, " starts=", c75_sec_starts, " ends=", c75_sec_ends)
+		c75_ok = false
+	# 75c. notify_at nearest-match inside tolerance, null outside.
+	var c75_near = GuardAnimationLibrary.notify_at("AN_BlackJack_Attack_Light__Slash_L_03_Montage", 0.0626, 0.002)
+	if not (c75_near is Dictionary) or absf(float((c75_near as Dictionary).get("time", -1.0)) - 0.062471) > 0.0001:
+		printerr("FAIL: 75 notify_at nearest: ", c75_near)
+		c75_ok = false
+	if GuardAnimationLibrary.notify_at("AN_Disguise_Equip_Montage", 0.5, 0.05) != null:
+		printerr("FAIL: 75 notify_at should be null outside tolerance")
+		c75_ok = false
+	# 75d. Every authored notify time is inside its clip and durations >= 0.
+	var c75_bad_notifies: Array[String] = []
+	for c75_clip_key_v: Variant in c75_clips:
+		var c75_clip_key := str(c75_clip_key_v)
+		var c75_clip_v = c75_clips[c75_clip_key_v]
+		if not (c75_clip_v is Dictionary):
+			continue
+		var c75_clip: Dictionary = c75_clip_v as Dictionary
+		var c75_len := float(c75_clip.get("length", -1.0))
+		for c75_d_v: Variant in c75_clip.get("notifies", []) as Array:
+			if not (c75_d_v is Dictionary):
+				continue
+			var c75_dn: Dictionary = c75_d_v as Dictionary
+			var c75_t := float(c75_dn.get("time", -1.0))
+			if c75_t < -0.0001 or c75_t > c75_len + 0.0001 or c75_len <= 0.0 \
+					or float(c75_dn.get("duration", 0.0)) < 0.0:
+				c75_bad_notifies.append("%s %.6f/%.6f" % [c75_clip_key, c75_t, c75_len])
+	if not c75_bad_notifies.is_empty():
+		printerr("FAIL: 75 out-of-range notifies: ", c75_bad_notifies.slice(0, 5))
+		c75_ok = false
+	if not c75_ok:
+		fails += 1
+	else:
+		print("PASS: 75 authored animation metadata (995 clips, 213 montages, 3594 notifies, 4 known notify classes, CrankStart/Loop/Finish sections, notify_at nearest/null)")
+
 	# 12.6/12.7 process-lifetime caches must not outlive the run.
 	var am_node: Node = root.get_node_or_null("/root/AudioManager")
 	if am_node != null and am_node.has_method("cleanup_on_exit"):

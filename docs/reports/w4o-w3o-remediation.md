@@ -105,13 +105,16 @@ the pin is unchanged and no per-prop offset is introduced. Documented in
   yaw-carrying anchors. Run alone on a cool host.
 - **Suite 88** `game/tests/test_personal_quest_settle.gd` (new, registered):
   drives the real `spawn_anchor()`/`_settle_node()` with the real expansion
-  anchors and synthetic nodes on one **transformed, off-tree host**:
+  anchors and synthetic nodes on one **transformed host inside an isolated,
+  empty `World3D`** (a `SubViewport` under the suite's root, so no map is loaded
+  and no level body can answer a floor ray):
   - readable and quest item land on the authored **world** pin (and their local
     position is *not* the pin — proving global settle);
   - the note uses `BP_ReadableClueActor_Note_C` and `[E] Read`;
   - the Owl is `is_quest_item`, `[E] Take Theban Owl`, not rotated;
-  - the courier's `y_source` is `pin_no_floor` off-tree, its talk chain binds
-    `thief_id=spider`, and its yaw equals the record;
+  - the courier's `y_source` is `floor` (thin synthetic support slabs under
+    every candidate pin), its talk chain binds `thief_id=spider`, and its yaw
+    equals the record;
   - a synthetic 1 m box on a 0.9 m offset: `_settle_node("npc", …)` puts the
     **mesh bottom** on the requested world y, at the requested XZ, with the
     authored yaw;
@@ -123,6 +126,23 @@ the pin is unchanged and no per-prop offset is introduced. Documented in
 
   The suite restores the save dictionary and `GameState.thief_id` before
   returning.
+
+  **Correction (W4P).** Suite 88 was written for an *off-tree* host and never
+  executed in W4O. Its first real run (`run_tests.gd -- --spider-only`, once the
+  shortcut included it) failed every world-space assertion with
+  `Condition "!is_inside_tree()" is true. Returning: Transform3D()` from
+  `spawn_anchor()`: an off-tree `Node3D` reports identity for
+  `global_transform`/`global_position`, so each pin measured `(0, 0, 0)` and the
+  "occupied primary falls back" case saw no occupancy. The production code is
+  right (in play the actors live under the mission root); the harness was wrong.
+  The host now lives under a `SubViewport` with `own_world_3d`, which keeps it
+  in-tree (real global transforms) and isolated from the root world's physics.
+  Because `_resolve_anchor()` requires a floor hit once the host is in-tree,
+  each candidate pin gets a thin synthetic support slab whose top is at the
+  authored y; the NPC therefore records `y_source=floor` at `pin.y` instead of
+  the off-tree `pin_no_floor` (which the standalone
+  `test_personal_quest_spawner.gd` still covers). No assertion was relaxed and
+  no expected value moved.
 - Suite count for the next full `make test` is **59** (was 58). The gate table
   in `AGENTS.md`/handoff still says 58 and must be updated by the owner on the
   merged tree; this wave does not edit shared docs.
@@ -163,7 +183,7 @@ the subset probe.
    make test        # expect SUMMARY: fails=0, 59 suites
    ```
 
-   or the thermal shortcut for 87 only: `-- --spider-only`.
+   or the thermal shortcut for 87 + 88: `-- --spider-only`.
 4. **Subset real-map probe** (one Godot, isolated save home):
 
    ```bash

@@ -49,7 +49,14 @@ extends SceneTree
 const LevelLoaderScript := preload("res://src/core/level_loader.gd")
 const LightProbeScript := preload("res://src/stealth/light_probe.gd")
 const PersonalQuestScript := preload("res://src/quests/personal_quest.gd")
-const PersonalQuestSpawnerScript := preload("res://src/quests/personal_quest_spawner.gd")
+## Loaded at runtime after boot: the spawner and the classes it preloads
+## (clue_item / loot_item) name the `GameState` autoload directly, and a
+## `--script` SceneTree script is parsed before the autoloads exist. A
+## `preload()` here fails to resolve `GameState`; `load()` in `_run()` does not
+## (same pattern as tests/test_personal_quest_spawner.gd, commit 8018a83).
+## level_loader / light_probe / personal_quest are preload-safe: none of them
+## name an autoload at parse time (personal_quest resolves it at runtime).
+var PersonalQuestSpawnerScript: GDScript
 
 ## Named pins + the floor-bearing support sublevel. The support entries are
 ## required for a real floor under every pin (static AABB scan, see report).
@@ -392,6 +399,11 @@ func _check_pin(label: String, rec: Dictionary, expect: Vector3, world: Node3D, 
 
 
 func _run() -> void:
+	PersonalQuestSpawnerScript = load("res://src/quests/personal_quest_spawner.gd") as GDScript
+	if PersonalQuestSpawnerScript == null:
+		printerr("PERSONAL QUEST SUBSET FAIL: cannot load personal_quest_spawner.gd")
+		quit(1)
+		return
 	var gs: Node = root.get_node_or_null("/root/GameState")
 	var ss: Node = root.get_node_or_null("/root/SaveSystem")
 	if gs == null or ss == null:

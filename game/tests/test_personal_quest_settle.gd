@@ -10,8 +10,8 @@ extends RefCounted
 ## fallback invented a y; nothing bound the pass to the Spider thief; and the
 ## authored facing claim was false. This suite exercises the real
 ## `spawn_anchor()` / `_settle_node()` code with synthetic records on one
-## deliberately transformed host (off-tree, so no map or physics tick is
-## needed — the floor-ray gate is the subset probe's job on a real map):
+## deliberately transformed host inside an isolated, empty `World3D` (a
+## `SubViewport`), so no map is loaded:
 ##
 ##   * a readable keeps the authored world pin y and gets the authored readable
 ##     class, even under a translated + rotated host;
@@ -21,6 +21,19 @@ extends RefCounted
 ##   * a pin without `pos` is skipped (never Vector3.ZERO), non-Array fallbacks
 ##     are ignored, and an occupied primary pin uses the authored fallback;
 ##   * a Chameleon pass spawns zero actors and mutates no save record.
+##
+## The host must be inside the tree: `_settle_node()` writes `global_position`
+## (authored pins are world coordinates, as in play), and an off-tree `Node3D`
+## reports identity for `global_transform`/`global_position`, which would make
+## every assertion here measure nothing. `_resolve_anchor()` also requires a
+## floor hit once the host is in-tree, so each candidate pin gets a thin
+## synthetic support slab in the host's own `World3D`, top at the authored y,
+## and `run()` awaits one physics frame so those slabs reach the broadphase.
+## The slabs are scaffolding, not the content check: the real Library table,
+## pedestal and landscape are the subset probe's job on a real map.
+##
+## `run(host)` is a coroutine (it awaits that physics frame), so callers must
+## `await` it: `var problems: Array[String] = await runner.call("run", host)`.
 ##
 ## Every shared autoload field is restored before returning.
 
@@ -65,9 +78,38 @@ func run(host: Node) -> Array[String]:
 		"the Owl and the Library note carry no yaw (spin / flat sheet)")
 
 	# --- one transformed host: world pins must not shift -------------------
+	# In-tree (global transforms are only meaningful in-tree) but under a fresh
+	# World3D, so the root world's physics cannot answer the floor rays.
+	var viewport := SubViewport.new()
+	viewport.name = "PersonalQuestSettleViewport"
+	viewport.own_world_3d = true
+	host.add_child(viewport)
 	var world := Node3D.new()
 	world.name = "PersonalQuestSettleHost"
 	world.transform = Transform3D(Basis(Vector3.UP, deg_to_rad(35.0)), Vector3(120.0, 8.0, -60.0))
+	viewport.add_child(world)
+	# Supports live under the host (same World3D the floor ray queries) but at
+	# authored world positions, so the transformed host cannot move them.
+	var support_pins: Array[Vector3] = [
+		note_pin, owl_pin, courier_pin, informant_pin,
+		Vector3(note_pin.x + 40.0, note_pin.y, note_pin.z),
+		Vector3(note_pin.x + 30.0, note_pin.y + 0.5, note_pin.z - 12.0),
+	]
+	_add_supports(world, support_pins)
+	# Runtime static bodies reach the broadphase on the next physics tick; a ray
+	# cast on the creation frame would find the empty space and skip every pin.
+	await host.get_tree().physics_frame
+	var worst_support: float = 0.0
+	var missed_supports: int = 0
+	for pin: Vector3 in support_pins:
+		var py: float = _floor_under(world, pin)
+		if is_finite(py):
+			worst_support = maxf(worst_support, absf(py - pin.y))
+		else:
+			missed_supports += 1
+	_check(problems, missed_supports == 0 and worst_support <= TOL,
+		"synthetic supports ground every candidate pin at its authored y (worst %.6f m)" % worst_support,
+		"%d support rays missed, worst y error %.6f m" % [missed_supports, worst_support])
 	var spawner: Node = SpawnerScript.new()
 	spawner.set("name", "PersonalQuestSettleSpawner")
 	spawner.call("setup", world)
@@ -122,15 +164,25 @@ func run(host: Node) -> Array[String]:
 	_check(problems, not npc_rec.is_empty(), "npc spawn_anchor() places the Lounge courier")
 	if not npc_rec.is_empty():
 		var npc: Node3D = npc_rec.get("node", null) as Node3D
-		_check(problems, str(npc_rec.get("y_source", "")) == SpawnerScript.PLACE_PIN_NO_FLOOR,
-			"off-tree NPC records y_source=pin_no_floor",
+		_check(problems, str(npc_rec.get("y_source", "")) == SpawnerScript.PLACE_FLOOR,
+			"NPC records y_source=floor",
 			"courier y_source=%s" % str(npc_rec.get("y_source", "")))
 		_check(problems, str(npc_rec.get("thief", "")) == "spider",
 			"NPC record is bound to the Spider", "NPC thief=%s" % str(npc_rec.get("thief", "")))
 		if npc != null:
-			_check(problems, absf(npc.global_position.y - (courier_pin.y + NPC_CLEARANCE)) <= TOL,
-				"off-tree NPC sits at pin y + clearance",
-				"courier y=%.4f expected %.4f" % [npc.global_position.y, courier_pin.y + NPC_CLEARANCE])
+			# The settle contract is about the mesh bottom, not the node origin:
+			# these actors carry a sub-millimetre AABB offset, so the origin sits
+			# slightly above the requested y by design (same rule the real-map
+			# subset probe measures).
+			var npc_bottom: float = SpawnerScript.mesh_bottom(npc)
+			var npc_foot: float = npc.global_position.y + npc.global_transform.basis.y.y * npc_bottom
+			print("PQ-SETTLE npc=courier origin_y=%.6f foot_y=%.6f mesh_bottom=%.6f pin_y=%.4f floor_y=%.6f" % [
+				npc.global_position.y, npc_foot, npc_bottom, courier_pin.y,
+				_floor_under(world, courier_pin)])
+			_check(problems, absf(npc_foot - (courier_pin.y + NPC_CLEARANCE)) <= TOL,
+				"NPC mesh bottom sits at pin y + clearance (support at the authored y)",
+				"courier foot=%.6f expected %.6f (origin=%.6f)" % [
+					npc_foot, courier_pin.y + NPC_CLEARANCE, npc.global_position.y])
 			_check(problems, str(npc.get("thief_id")) == "spider",
 				"NPC talk chain is bound to the Spider", "NPC thief_id=%s" % str(npc.get("thief_id")))
 			_check(problems, str(npc.get("anchor_id")) == "courier",
@@ -148,11 +200,16 @@ func run(host: Node) -> Array[String]:
 		var inf: Node3D = inf_rec.get("node", null) as Node3D
 		_check(problems, str(inf_rec.get("thief", "")) == "spider",
 			"04 informant record is bound to the Spider", "informant thief=%s" % str(inf_rec.get("thief", "")))
-		_check(problems, absf((inf_rec.get("pos", Vector3.ZERO) as Vector3).y - (informant_pin.y + NPC_CLEARANCE)) <= TOL,
-			"04 informant sits at pin y + clearance",
-			"informant y=%.4f expected %.4f" % [
-				(inf_rec.get("pos", Vector3.ZERO) as Vector3).y, informant_pin.y + NPC_CLEARANCE])
 		if inf != null:
+			var inf_bottom: float = SpawnerScript.mesh_bottom(inf)
+			var inf_foot: float = inf.global_position.y + inf.global_transform.basis.y.y * inf_bottom
+			print("PQ-SETTLE npc=informant origin_y=%.6f foot_y=%.6f mesh_bottom=%.6f pin_y=%.4f floor_y=%.6f" % [
+				inf.global_position.y, inf_foot, inf_bottom, informant_pin.y,
+				_floor_under(world, informant_pin)])
+			_check(problems, absf(inf_foot - (informant_pin.y + NPC_CLEARANCE)) <= TOL,
+				"04 informant mesh bottom sits at pin y + clearance",
+				"informant foot=%.6f expected %.6f (origin=%.6f)" % [
+					inf_foot, informant_pin.y + NPC_CLEARANCE, inf.global_position.y])
 			_check(problems, absf(angle_difference(inf.global_rotation.y, deg_to_rad(float(informant_a.get("yaw_deg", 0.0))))) <= 0.01,
 				"04 informant node yaw matches the authored record (0 deg)",
 				"informant yaw=%.1f deg" % rad_to_deg(inf.global_rotation.y))
@@ -252,7 +309,33 @@ func run(host: Node) -> Array[String]:
 	spawner.call("_release_actors")
 	spawner.free()
 	world.free()
+	viewport.free()
 	return problems
+
+
+## Thin synthetic supports, one per candidate pin, added under the host at
+## authored world positions with the slab top at `pin.y`, so the floor ray under
+## an authored pin reports the authored y (asserted in `run()`).
+static func _add_supports(parent: Node3D, pins: Array) -> void:
+	for i: int in range(pins.size()):
+		var pin: Vector3 = pins[i]
+		var body := StaticBody3D.new()
+		body.name = "SettleSupport%d" % i
+		var shape := CollisionShape3D.new()
+		var box := BoxShape3D.new()
+		box.size = Vector3(4.0, 0.2, 4.0)
+		shape.shape = box
+		body.add_child(shape)
+		parent.add_child(body)
+		body.global_position = Vector3(pin.x, pin.y - 0.1, pin.z)
+
+
+## World y of the floor ray under a pin (NAN when nothing is hit).
+static func _floor_under(world: Node3D, pin: Vector3) -> float:
+	var hit: Dictionary = SpawnerScript.floor_hit(world, pin)
+	if hit.is_empty():
+		return NAN
+	return (hit.get("position", Vector3.ZERO) as Vector3).y
 
 
 static func _finite_num(v: Variant) -> bool:

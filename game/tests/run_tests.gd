@@ -15,19 +15,26 @@ func _initialize() -> void:
 		quit(1)
 		return
 
-	# Thermal-safe QA shortcut: only the in-process Spider runtime mock (suite
-	# 87), no mission load and no child engine. The full `make test` remains the
-	# ship gate; this exists so a hot host can still verify the runtime chain.
+	# Thermal-safe QA shortcut: only the in-process Spider suites (87 runtime
+	# mock, 88 settle path), no mission load and no child engine. The full
+	# `make test` remains the ship gate; this exists so a hot host can still
+	# verify the runtime chain.
 	if OS.get_cmdline_user_args().has("--spider-only"):
-		var only_problems: Array[String] = _run_suite87(root)
-		if only_problems.is_empty():
+		var only_fails: int = 0
+		var c87_only: Array[String] = _run_suite87(root)
+		if c87_only.is_empty():
 			print("PASS: 87 Spider personal chain runtime (mock only)")
-			print("SUMMARY: fails=0")
-			quit(0)
 		else:
-			printerr("FAIL: 87 Spider personal chain runtime: ", only_problems)
-			print("SUMMARY: fails=", only_problems.size())
-			quit(1)
+			printerr("FAIL: 87 Spider personal chain runtime: ", c87_only)
+			only_fails += 1
+		var c88_only: Array[String] = await _run_suite88(root)
+		if c88_only.is_empty():
+			print("PASS: 88 Spider personal chain settle path (mock only)")
+		else:
+			printerr("FAIL: 88 Spider personal chain settle path: ", c88_only)
+			only_fails += 1
+		print("SUMMARY: fails=", only_fails)
+		quit(0 if only_fails == 0 else 1)
 		return
 
 	# P2-7: res://assets/ue/Content + Raw are symlinks into extracted/;
@@ -6802,7 +6809,7 @@ func _initialize() -> void:
 	# The real-map walkthrough is tests/probe_personal_quest.gd and is run as
 	# its own single engine process (never a child engine from here).
 	#
-	# `--spider-only` runs just this suite for a thermal-safe QA pass:
+	# `--spider-only` runs just suites 87 + 88 for a thermal-safe QA pass:
 	#   tools/godot --headless --path game --script res://tests/run_tests.gd -- --spider-only
 	var c87_problems: Array[String] = _run_suite87(root)
 	if not c87_problems.is_empty():
@@ -6815,7 +6822,7 @@ func _initialize() -> void:
 	# to synthetic readable/quest-item/NPC records on one transformed host, plus
 	# the authored yaw and the Chameleon zero-actor/no-record-mutation guard.
 	# No map load: the real-map floor/pedestal gate is the subset probe.
-	var c88_problems: Array[String] = _run_suite88(root)
+	var c88_problems: Array[String] = await _run_suite88(root)
 	if not c88_problems.is_empty():
 		printerr("FAIL: 88 Spider personal chain settle path: ", c88_problems)
 		fails += 1
@@ -6850,7 +6857,7 @@ func _w60_assert(cond: bool, msg: String, problems: Array) -> void:
 		problems.append(msg)
 
 
-## Suite 87 helper (also the `--spider-only` entry): run the in-process Spider
+## Suite 87 helper (also a `--spider-only` entry): run the in-process Spider
 ## runtime mock and return its problems. Kept out of the main flow so the
 ## thermal shortcut and the full suite exercise exactly the same code.
 func _run_suite87(host: Node) -> Array[String]:
@@ -6872,7 +6879,10 @@ func _run_suite87(host: Node) -> Array[String]:
 	return problems
 
 
-## Suite 88 helper: the settle-path/binding suite (W4O). Same contract as 87.
+## Suite 88 helper: the settle-path/binding suite (W4O). Same contract as 87,
+## except `run(host)` is a coroutine (it awaits the physics frame that puts its
+## synthetic supports into the broadphase), so this helper is one too and every
+## caller must `await` it.
 func _run_suite88(host: Node) -> Array[String]:
 	var problems: Array[String] = []
 	var script: GDScript = load("res://tests/test_personal_quest_settle.gd") as GDScript
@@ -6883,7 +6893,7 @@ func _run_suite88(host: Node) -> Array[String]:
 	if runner == null or not runner.has_method("run"):
 		problems.append("test_personal_quest_settle.gd has no run(host)")
 		return problems
-	var out: Variant = runner.call("run", host)
+	var out: Variant = await runner.call("run", host)
 	if out is Array:
 		for problem_v: Variant in (out as Array):
 			problems.append(str(problem_v))

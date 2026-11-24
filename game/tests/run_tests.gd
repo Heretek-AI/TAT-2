@@ -6434,6 +6434,353 @@ func _initialize() -> void:
 	else:
 		print("PASS: 83 review baker (tagger + thieves_den bake, exit=0, ", w83_ms, " ms)")
 
+	# 86. W0S: Spider personal chain data/save foundation. This suite owns the
+	# persisted record, its normalization and the pure beat controller only —
+	# the NPC/dialogue/mission runtime is a later wave, so there are no actor
+	# assertions here.
+	var c86_problems: Array[String] = []
+	var c86_pq: GDScript = load("res://src/quests/personal_quest.gd") as GDScript
+	if c86_pq == null:
+		c86_problems.append("personal_quest.gd did not load")
+	var c86_save_path := "user://tat2_save.json"
+	var c86_had_file: bool = FileAccess.file_exists(c86_save_path)
+	var c86_file_backup: String = FileAccess.get_file_as_string(c86_save_path) if c86_had_file else ""
+	var c86_live_backup: Dictionary = (ss.get("data") as Dictionary).duplicate(true)
+	var c86_gs_thief: String = str(gs.thief_id)
+	var c86_gs_free: bool = bool(gs.free_play)
+	var c86_gs_free_pending: bool = bool(gs.free_play_pending)
+	var c86_gs_facts: Array = (gs.get("clue_facts") as Array).duplicate(true)
+	var c86_gs_order: int = int(gs.active_contract_order)
+	var c86_gs_map: String = str(gs.active_map_id)
+	var c86_gs_mission: String = str(gs.active_mission_id)
+	var c86_gs_state: String = str(gs.state)
+
+	# 86a. Defaults: schema 1, migration flag false, one empty record per thief.
+	var c86_defaults: Dictionary = ss.call("_defaults") as Dictionary
+	var c86_default_record: Dictionary = c86_defaults.get("personal_quest", {}) as Dictionary
+	var c86_default_spider: Dictionary = c86_default_record.get("spider", {}) as Dictionary
+	if int(c86_defaults.get("personal_quest_schema", 0)) != 1:
+		c86_problems.append("default personal_quest_schema != 1")
+	if c86_defaults.get("personal_quest_migrated", true) != false:
+		c86_problems.append("default personal_quest_migrated should be false")
+	if str(c86_default_spider.get("stage", "x")) != "" \
+			or str(c86_default_spider.get("owl", "x")) != "none" \
+			or not (c86_default_spider.get("facts", null) is Array) \
+			or not (c86_default_spider.get("facts", [null]) as Array).is_empty():
+		c86_problems.append("default spider personal record is not empty: %s" % str(c86_default_spider))
+	if not (c86_default_record.get("chameleon", null) is Dictionary):
+		c86_problems.append("default chameleon personal record missing")
+
+	# 86b. Migration is one-shot and stamps the schema.
+	var c86_mig: Dictionary = (ss.call("_defaults") as Dictionary).duplicate(true)
+	c86_mig["personal_quest_migrated"] = false
+	ss.set("data", c86_mig)
+	var c86_mig_first: bool = bool(ss.call("_migrate_personal_quest"))
+	var c86_mig_second: bool = bool(ss.call("_migrate_personal_quest"))
+	var c86_mig_live: Dictionary = ss.get("data") as Dictionary
+	if not c86_mig_first or c86_mig_second:
+		c86_problems.append("personal-quest migration is not one-shot: first=%s second=%s" % [c86_mig_first, c86_mig_second])
+	if c86_mig_live.get("personal_quest_migrated", false) != true \
+			or int(c86_mig_live.get("personal_quest_schema", 0)) != 1:
+		c86_problems.append("migration did not persist flags: %s" % str(c86_mig_live.get("personal_quest")))
+
+	# 86c. Normalization: unknown keys/thieves survive; bad domain values reset;
+	# facts are ids-only, deduped and filtered to the seven authored rows; facts
+	# raise the stage; stage/owl stay consistent.
+	var c86_norm: Dictionary = (ss.call("_defaults") as Dictionary).duplicate(true)
+	c86_norm["personal_quest"] = {
+		"spider": {
+			"stage": "bogus",
+			"owl": "bogus",
+			"facts": [
+				"DT_ClueFacts_Personal_Spider_01:FoundLetter",
+				"DT_ClueFacts_Personal_Spider_01:FoundLetter",
+				"DT_ClueFacts_Contracts_02:Clue01",
+				"DT_ClueFacts_Personal_Spider_03:Reminder",
+				"DT_ClueFacts_Personal_Spider_04:Renegade",
+				"DT_ClueFacts_Personal_Spider_01:ObjectiveComplete_Clue",
+				"",
+				42,
+			],
+			"custom_entry": {"keep": true},
+		},
+		"chameleon": {"stage": "intro", "owl": "none", "facts": [], "custom_thief": 7},
+		"custom_thief": {"stage": "intro", "owl": "none", "facts": []},
+	}
+	ss.set("data", c86_norm)
+	ss.call("_ensure_defaults")
+	var c86_norm_live: Dictionary = ss.get("data") as Dictionary
+	var c86_norm_root: Dictionary = c86_norm_live.get("personal_quest", {}) as Dictionary
+	var c86_norm_spider: Dictionary = c86_norm_root.get("spider", {}) as Dictionary
+	if str(c86_norm_spider.get("stage", "")) != "letter":
+		c86_problems.append("normalization did not raise stage from facts: %s" % str(c86_norm_spider.get("stage")))
+	if str(c86_norm_spider.get("owl", "")) != "none":
+		c86_problems.append("normalization left owl %s at a pre-carry stage" % str(c86_norm_spider.get("owl")))
+	if (c86_norm_spider.get("facts", []) as Array) != ["DT_ClueFacts_Personal_Spider_01:FoundLetter"]:
+		c86_problems.append("normalization fact filter wrong: %s" % str(c86_norm_spider.get("facts")))
+	if not ((c86_norm_spider.get("custom_entry", {}) as Dictionary).get("keep", false)):
+		c86_problems.append("normalization dropped an unknown entry key")
+	var c86_norm_cham: Dictionary = c86_norm_root.get("chameleon", {}) as Dictionary
+	if int(c86_norm_cham.get("custom_thief", 0)) != 7:
+		c86_problems.append("normalization dropped an unknown chameleon key")
+	if not (c86_norm_root.get("custom_thief", null) is Dictionary):
+		c86_problems.append("normalization dropped an unknown thief record")
+
+	# The real load merge must keep unknown entry/thief keys: personal_quest is
+	# replaced free-form, not walked with the default schema.
+	ss.set("data", (ss.call("_defaults") as Dictionary).duplicate(true))
+	ss.call("_merge_validated", {
+		"personal_quest": {
+			"spider": {"stage": "intro", "owl": "none", "facts": [], "custom_merge": 123},
+			"custom_thief": {"stage": "intro"},
+		},
+	})
+	ss.call("_ensure_defaults")
+	var c86_merged_entry: Dictionary = ss.call("get_personal_quest", "spider") as Dictionary
+	if int(c86_merged_entry.get("custom_merge", 0)) != 123:
+		c86_problems.append("load merge dropped an unknown personal-quest entry key")
+	var c86_merged_root: Dictionary = (ss.get("data") as Dictionary).get("personal_quest", {}) as Dictionary
+	if not (c86_merged_root.get("custom_thief", null) is Dictionary):
+		c86_problems.append("load merge dropped an unknown thief record")
+	if str(c86_merged_entry.get("stage", "")) != "intro":
+		c86_problems.append("load merge did not keep the known stage")
+
+	# 86d. 04 clamps: info/complete need GotInfo; delivered needs HandedOff.
+	var c86_clamp_cases: Array = [
+		["info", ["DT_ClueFacts_Personal_Spider_03:HandedOff"], "delivered"],
+		["complete", ["DT_ClueFacts_Personal_Spider_03:HandedOff"], "delivered"],
+		["delivered", [], "carrying"],
+		["info", ["DT_ClueFacts_Personal_Spider_03:HandedOff", "DT_ClueFacts_Personal_Spider_04:GotInfo"], "info"],
+	]
+	for c86_case_v: Variant in c86_clamp_cases:
+		var c86_case: Array = c86_case_v as Array
+		var c86_clamp: Dictionary = (ss.call("_defaults") as Dictionary).duplicate(true)
+		c86_clamp["personal_quest"] = {
+			"spider": {"stage": str(c86_case[0]), "owl": "delivered", "facts": (c86_case[1] as Array).duplicate()},
+		}
+		ss.set("data", c86_clamp)
+		ss.call("_ensure_defaults")
+		var c86_clamp_entry: Dictionary = ss.call("get_personal_quest", "spider") as Dictionary
+		if str(c86_clamp_entry.get("stage", "")) != str(c86_case[2]):
+			c86_problems.append("04 clamp %s/%s -> %s expected %s" % [str(c86_case[0]), str(c86_case[1]), str(c86_clamp_entry.get("stage")), str(c86_case[2])])
+		var c86_clamp_owl: String = str(c86_clamp_entry.get("owl", ""))
+		if str(c86_case[2]) == "carrying":
+			if c86_clamp_owl != "held":
+				c86_problems.append("04 clamp carrying owl=%s expected held" % c86_clamp_owl)
+		elif c86_clamp_owl != "delivered":
+			c86_problems.append("04 clamp %s owl=%s expected delivered" % [str(c86_case[2]), c86_clamp_owl])
+
+	# 86e. Public save API: only authored chain facts persist.
+	ss.set("data", (ss.call("_defaults") as Dictionary).duplicate(true))
+	ss.call("_ensure_defaults")
+	ss.call("reset_all_personal_quests")
+	if bool(ss.call("set_personal_quest_stage", "spider", "bogus")):
+		c86_problems.append("set_personal_quest_stage accepted an unknown stage")
+	var c86_added: int = int(ss.call("add_personal_quest_facts", "spider", [
+		"DT_ClueFacts_Personal_Spider_01:FoundLetter",
+		"DT_ClueFacts_Personal_Spider_01:FoundLetter",
+		"DT_ClueFacts_Contracts_02:Clue01",
+		"DT_ClueFacts_Personal_Spider_03:Reminder",
+		"DT_ClueFacts_Personal_Spider_04:Renegade",
+	]))
+	if c86_added != 1:
+		c86_problems.append("add_personal_quest_facts stored %d ids, expected 1" % c86_added)
+	var c86_api_entry: Dictionary = ss.call("get_personal_quest", "spider") as Dictionary
+	if (c86_api_entry.get("facts", []) as Array) != ["DT_ClueFacts_Personal_Spider_01:FoundLetter"]:
+		c86_problems.append("public fact API kept invalid ids: %s" % str(c86_api_entry.get("facts")))
+	if str(c86_api_entry.get("stage", "")) != "letter":
+		c86_problems.append("public fact API did not raise the stage: %s" % str(c86_api_entry.get("stage")))
+	if not bool(ss.call("has_personal_quest_fact", "spider", "DT_ClueFacts_Personal_Spider_01:FoundLetter")):
+		c86_problems.append("has_personal_quest_fact false for a stored fact")
+	if bool(ss.call("has_personal_quest_fact", "spider", "DT_ClueFacts_Contracts_02:Clue01")):
+		c86_problems.append("has_personal_quest_fact true for a contract fact")
+	if not bool(ss.call("set_personal_quest_stage", "spider", "electrotype")):
+		c86_problems.append("set_personal_quest_stage rejected a valid stage")
+	if not bool(ss.call("set_personal_quest_owl", "spider", "held")):
+		c86_problems.append("set_personal_quest_owl rejected held")
+	if str((ss.call("get_personal_quest", "spider") as Dictionary).get("owl", "")) != "none":
+		c86_problems.append("owl held persisted before the carrying stage (clamp expected)")
+	if not bool(ss.call("set_personal_quest_stage", "spider", "carrying")):
+		c86_problems.append("set_personal_quest_stage rejected carrying")
+	if str((ss.call("get_personal_quest", "spider") as Dictionary).get("owl", "")) != "held":
+		c86_problems.append("carrying stage did not clamp the owl to held")
+
+	# 86f. Full chain transitions, per thief, and the free-play start.
+	ss.set("data", (ss.call("_defaults") as Dictionary).duplicate(true))
+	ss.call("_ensure_defaults")
+	ss.call("reset_all_personal_quests")
+	gs.thief_id = "spider"
+	gs.clue_facts.clear()
+	var c86_has_fact := func(fid: String) -> bool:
+		for c86_fact_v: Variant in gs.get("clue_facts") as Array:
+			if str((c86_fact_v as Dictionary).get("id", "")) == fid:
+				return true
+		return false
+	if not bool(c86_pq.should_start("guildhall")) or bool(c86_pq.should_start("old_manor")):
+		c86_problems.append("should_start must be true only on the first Guildhall deploy")
+	if bool((c86_pq.record("letter") as Dictionary).get("ok", true)):
+		c86_problems.append("record accepted an out-of-order stage")
+	var c86_r_intro: Dictionary = c86_pq.record("intro") as Dictionary
+	if not bool(c86_r_intro.get("ok", false)) or str(c86_r_intro.get("stage", "")) != "intro":
+		c86_problems.append("record intro failed: %s" % str(c86_r_intro))
+	var c86_intro_sets: Array = c86_pq.suppressed_clue_sets("intro") as Array
+	if c86_intro_sets.has("CLS_Personal_Spider_01") or c86_intro_sets.size() != 3:
+		c86_problems.append("intro must release CLS_01 and suppress the other three: %s" % str(c86_intro_sets))
+	if not c86_has_fact.call("DT_ClueFacts_Personal_Spider_01:Intro"):
+		c86_problems.append("intro did not journal the Intro fact")
+	if bool((c86_pq.deliver_pending_messages() as Dictionary).get("ok", true)):
+		c86_problems.append("pending messages delivered before the letter was read")
+	var c86_r_letter: Dictionary = c86_pq.record("letter") as Dictionary
+	if str(c86_r_letter.get("stage", "")) != "letter" \
+			or not c86_has_fact.call("DT_ClueFacts_Personal_Spider_01:FoundLetter"):
+		c86_problems.append("letter beat wrong: %s" % str(c86_r_letter))
+	var c86_r_pending: Dictionary = c86_pq.deliver_pending_messages() as Dictionary
+	if str(c86_r_pending.get("stage", "")) != "electrotype" \
+			or not c86_has_fact.call("DT_ClueFacts_Personal_Spider_01:MallickSlip") \
+			or not c86_has_fact.call("DT_ClueFacts_Personal_Spider_01:StatuePet"):
+		c86_problems.append("pending electrotype messages wrong: %s" % str(c86_r_pending))
+	if str(c86_pq.stage_for()) != "electrotype":
+		c86_problems.append("stage_for did not follow the pending messages")
+	if (c86_pq.spawn_plan("guildhall") as Array).is_empty():
+		c86_problems.append("Owl pin missing at electrotype on the Guildhall")
+	if bool((c86_pq.acquire_owl() as Dictionary).get("ok", true)):
+		c86_problems.append("acquire_owl succeeded before the Owl was located")
+	var c86_r_located: Dictionary = c86_pq.record("located") as Dictionary
+	if str(c86_r_located.get("stage", "")) != "located" \
+			or not c86_has_fact.call("DT_ClueFacts_Personal_Spider_02:OwlLocation"):
+		c86_problems.append("located beat wrong: %s" % str(c86_r_located))
+	var c86_r_owl: Dictionary = c86_pq.acquire_owl() as Dictionary
+	if str(c86_r_owl.get("stage", "")) != "carrying" or str(c86_pq.owl_for()) != "held":
+		c86_problems.append("acquire_owl wrong: %s / %s" % [str(c86_r_owl), str(c86_pq.owl_for())])
+	var c86_courier: Array = c86_pq.spawn_plan("guildhall") as Array
+	if c86_courier.size() != 1 or str((c86_courier[0] as Dictionary).get("id", "")) != "courier":
+		c86_problems.append("courier pin missing while carrying: %s" % str(c86_courier))
+	var c86_r_owl_done: Dictionary = c86_pq.deliver_owl() as Dictionary
+	if str(c86_r_owl_done.get("stage", "")) != "delivered" \
+			or str(c86_pq.owl_for()) != "delivered" \
+			or not c86_has_fact.call("DT_ClueFacts_Personal_Spider_03:HandedOff"):
+		c86_problems.append("deliver_owl wrong: %s / %s" % [str(c86_r_owl_done), str(c86_pq.owl_for())])
+	var c86_informant: Array = c86_pq.spawn_plan("old_manor") as Array
+	if c86_informant.size() != 1 or str((c86_informant[0] as Dictionary).get("id", "")) != "informant":
+		c86_problems.append("informant pin missing at delivered: %s" % str(c86_informant))
+	if not (c86_pq.spawn_plan("guildhall") as Array).is_empty():
+		c86_problems.append("Guildhall pins must be empty at delivered")
+	if bool((c86_pq.close_info() as Dictionary).get("ok", true)):
+		c86_problems.append("close_info succeeded before the informant talk")
+	var c86_r_info: Dictionary = c86_pq.deliver_info() as Dictionary
+	if str(c86_r_info.get("stage", "")) != "info" \
+			or not c86_has_fact.call("DT_ClueFacts_Personal_Spider_04:GotInfo"):
+		c86_problems.append("deliver_info wrong: %s" % str(c86_r_info))
+	var c86_r_close: Dictionary = c86_pq.close_info() as Dictionary
+	if str(c86_r_close.get("stage", "")) != "complete" or str(c86_pq.owl_for()) != "delivered":
+		c86_problems.append("close_info wrong: %s" % str(c86_r_close))
+	if not bool((c86_pq.close_info() as Dictionary).get("ok", false)):
+		c86_problems.append("close_info is not idempotent")
+	var c86_final_facts: Array = c86_pq.facts_for() as Array
+	if c86_final_facts.size() != 7:
+		c86_problems.append("final chain stored %d facts, expected 7" % c86_final_facts.size())
+	for c86_bad_fact: String in [
+		"DT_ClueFacts_Personal_Spider_03:Reminder",
+		"DT_ClueFacts_Personal_Spider_04:Renegade",
+		"DT_ClueFacts_Personal_Spider_01:ObjectiveComplete_Clue",
+		"DT_ClueFacts_Personal_Spider_01:ObjectiveComplete_Electrogram",
+	]:
+		if c86_final_facts.has(c86_bad_fact) or c86_has_fact.call(c86_bad_fact):
+			c86_problems.append("suppressed fact persisted/granted: " + c86_bad_fact)
+	if c86_pq.is_grantable("DT_ClueFacts_Personal_Spider_03:Reminder"):
+		c86_problems.append("is_grantable accepted the dropped Reminder row")
+	if not (c86_pq.suppressed_clue_sets("complete") as Array).is_empty():
+		c86_problems.append("complete chain still suppresses clue sets")
+	if (c86_pq.suppressed_clue_sets("") as Array).size() != 4:
+		c86_problems.append("empty stage must suppress all four Spider clue sets")
+	# Per-thief: the Chameleon record is independent of the finished Spider one.
+	var c86_cham_record: Dictionary = c86_pq.entry_for("chameleon") as Dictionary
+	if str(c86_cham_record.get("stage", "x")) != "" or not (c86_cham_record.get("facts", [null]) as Array).is_empty():
+		c86_problems.append("Spider chain leaked into the Chameleon record: %s" % str(c86_cham_record))
+	if str((c86_pq.record("intro", "chameleon") as Dictionary).get("stage", "")) != "intro":
+		c86_problems.append("chameleon chain did not start independently")
+	if str(c86_pq.stage_for("spider")) != "complete":
+		c86_problems.append("chameleon start mutated the Spider record")
+
+	# 86g. Free play starts the chain without banking contract progression.
+	ss.call("reset_personal_quest", "spider")
+	gs.clue_facts.clear()
+	var c86_cc_before: Dictionary = ((ss.get("data") as Dictionary).get("completed_contracts", {}) as Dictionary).duplicate(true)
+	var c86_currency_before: int = int((ss.get("data") as Dictionary).get("currency", 0))
+	var c86_xp_before: int = int((ss.get("data") as Dictionary).get("xp", 0))
+	gs.free_play = true
+	gs.free_play_pending = true
+	if not bool(c86_pq.should_start("guildhall", "spider")):
+		c86_problems.append("free play did not qualify for the first Guildhall start")
+	var c86_free_intro: Dictionary = c86_pq.record("intro") as Dictionary
+	var c86_after: Dictionary = ss.get("data") as Dictionary
+	if not bool(c86_free_intro.get("ok", false)):
+		c86_problems.append("free-play intro failed: %s" % str(c86_free_intro))
+	if str(c86_pq.stage_for("spider")) != "intro":
+		c86_problems.append("free-play intro did not persist the stage")
+	if (c86_after.get("completed_contracts", {}) as Dictionary) != c86_cc_before \
+			or int(c86_after.get("currency", -1)) != c86_currency_before \
+			or int(c86_after.get("xp", -1)) != c86_xp_before:
+		c86_problems.append("free-play chain start banked contract progression")
+
+	# 86h. Save restore: stage/owl/facts survive a real write + fresh load.
+	c86_pq.record("letter", "spider")
+	ss.call("write_save")
+	var c86_fresh: Node = (load("res://src/core/save_system.gd") as GDScript).new()
+	c86_fresh.set("data", c86_fresh.call("_defaults"))
+	c86_fresh.call("load_save")
+	var c86_restored: Dictionary = c86_fresh.call("get_personal_quest", "spider") as Dictionary
+	if str(c86_restored.get("stage", "")) != "letter" \
+			or str(c86_restored.get("owl", "")) != "none" \
+			or (c86_restored.get("facts", []) as Array) != [
+				"DT_ClueFacts_Personal_Spider_01:Intro",
+				"DT_ClueFacts_Personal_Spider_01:FoundLetter",
+			]:
+		c86_problems.append("personal record did not round-trip: %s" % str(c86_restored))
+	c86_fresh.free()
+
+	# 86i. Contract facts never persist: a deploy wipes them and rehydrates the
+	# personal ones only.
+	gs.grant_fact("DT_ClueFacts_Contracts_02:Clue01", {}, "test")
+	gs.reset_run(2, "guildhall")
+	var c86_journal_ids: Array = []
+	for c86_j_v: Variant in gs.get("clue_facts") as Array:
+		c86_journal_ids.append(str((c86_j_v as Dictionary).get("id", "")))
+	if c86_journal_ids.has("DT_ClueFacts_Contracts_02:Clue01"):
+		c86_problems.append("contract fact survived a deploy")
+	if not c86_journal_ids.has("DT_ClueFacts_Personal_Spider_01:Intro") \
+			or not c86_journal_ids.has("DT_ClueFacts_Personal_Spider_01:FoundLetter"):
+		c86_problems.append("personal facts did not survive a deploy: %s" % str(c86_journal_ids))
+	if c86_journal_ids.size() != 2:
+		c86_problems.append("deploy journal has %d facts, expected the 2 personal ones" % c86_journal_ids.size())
+
+	# Restore the process state this suite borrowed (save data + user:// file,
+	# GameState run fields) so later suites and the developer save are intact.
+	ss.set("data", c86_live_backup)
+	if c86_had_file:
+		var c86_restore_file: FileAccess = FileAccess.open(c86_save_path, FileAccess.WRITE)
+		if c86_restore_file != null:
+			c86_restore_file.store_string(c86_file_backup)
+			c86_restore_file.close()
+	else:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(c86_save_path))
+	gs.thief_id = c86_gs_thief
+	gs.free_play = c86_gs_free
+	gs.free_play_pending = c86_gs_free_pending
+	gs.clue_facts.clear()
+	for c86_restore_fact_v: Variant in c86_gs_facts:
+		if c86_restore_fact_v is Dictionary:
+			gs.clue_facts.append(c86_restore_fact_v as Dictionary)
+	gs.active_contract_order = c86_gs_order
+	gs.active_map_id = c86_gs_map
+	gs.active_mission_id = c86_gs_mission
+	gs.state = c86_gs_state
+	if not c86_problems.is_empty():
+		printerr("FAIL: 86 Spider personal chain foundation: ", c86_problems)
+		fails += 1
+	else:
+		print("PASS: 86 Spider personal chain (schema/migration/normalization, 8-beat chain, per-thief, free-play, save restore, contract-fact wipe)")
+
 	# 12.6/12.7 process-lifetime caches must not outlive the run.
 	var am_node: Node = root.get_node_or_null("/root/AudioManager")
 	if am_node != null and am_node.has_method("cleanup_on_exit"):

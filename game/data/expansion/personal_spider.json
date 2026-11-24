@@ -1,0 +1,306 @@
+{
+  "schema": 1,
+  "id": "personal_spider",
+  "character": "spider",
+  "title": "The Theban Owl",
+  "save_key": "personal_quest",
+  "save_thief_key": "spider",
+  "grant_reminder": false,
+  "start_when_completed_contract": 0,
+  "start_map_id": "guildhall",
+  "stages": [
+    "",
+    "intro",
+    "letter",
+    "electrotype",
+    "located",
+    "carrying",
+    "delivered",
+    "info",
+    "complete"
+  ],
+  "owl_states": [
+    "none",
+    "held",
+    "delivered"
+  ],
+  "clue_sets": {
+    "intro": "CLS_Personal_Spider_01",
+    "letter": "CLS_Personal_Spider_01",
+    "electrotype": "CLS_Personal_Spider_01",
+    "located": "CLS_Personal_Spider_02",
+    "delivered": "CLS_Personal_Spider_03",
+    "info": "CLS_Personal_Spider_04"
+  },
+  "fact_order": [
+    "DT_ClueFacts_Personal_Spider_01:Intro",
+    "DT_ClueFacts_Personal_Spider_01:FoundLetter",
+    "DT_ClueFacts_Personal_Spider_01:MallickSlip",
+    "DT_ClueFacts_Personal_Spider_01:StatuePet",
+    "DT_ClueFacts_Personal_Spider_02:OwlLocation",
+    "DT_ClueFacts_Personal_Spider_03:HandedOff",
+    "DT_ClueFacts_Personal_Spider_04:GotInfo"
+  ],
+  "never_grant_fact_ids": [
+    "DT_ClueFacts_Personal_Spider_01:ObjectiveComplete_Clue",
+    "DT_ClueFacts_Personal_Spider_01:ObjectiveComplete_Electrogram",
+    "DT_ClueFacts_Personal_Spider_03:Reminder",
+    "DT_ClueFacts_Personal_Spider_04:Renegade"
+  ],
+  "beats": [
+    {
+      "stage": "intro",
+      "label": "First Guildhall deploy",
+      "trigger": "first_guildhall_deploy",
+      "grants": [
+        "DT_ClueFacts_Personal_Spider_01:Intro"
+      ],
+      "clue_set": "CLS_Personal_Spider_01",
+      "owl": "none",
+      "on_complete": "letter",
+      "journal": [
+        "I need to find info on the Theban Owl."
+      ]
+    },
+    {
+      "stage": "letter",
+      "label": "Read the Library note",
+      "trigger": "read:BP_Readable_ClueSpawner_Guildhall_C_28",
+      "grants": [
+        "DT_ClueFacts_Personal_Spider_01:FoundLetter"
+      ],
+      "clue_set": "CLS_Personal_Spider_01",
+      "owl": "none",
+      "on_complete": "electrotype",
+      "pending": "messages",
+      "journal": [
+        "The Theban Owl will be on the move soon. Someone could lift it once it's settled in a new location."
+      ]
+    },
+    {
+      "stage": "electrotype",
+      "label": "Pending electrotype messages arrive",
+      "trigger": "den_or_next_deploy_pending_messages",
+      "grants": [
+        "DT_ClueFacts_Personal_Spider_01:MallickSlip",
+        "DT_ClueFacts_Personal_Spider_01:StatuePet"
+      ],
+      "clue_set": "CLS_Personal_Spider_01",
+      "owl": "none",
+      "on_complete": "located",
+      "journal": [
+        "Mallick can slip the Theban Owl. ",
+        "The Theban Owl is a golden statue of Lord Kemet's favorite pet. Someone on Larkin Street might know more."
+      ]
+    },
+    {
+      "stage": "located",
+      "label": "The Owl in the Guildhall Vault",
+      "trigger": "enter:BP_QuestSpawner_Item_C_2",
+      "grants": [
+        "DT_ClueFacts_Personal_Spider_02:OwlLocation"
+      ],
+      "clue_set": "CLS_Personal_Spider_02",
+      "owl": "none",
+      "on_complete": "carrying",
+      "journal": [
+        "Dorian has the Theban Owl. He lives somewhere on Larkin Street in Abbessford Park."
+      ]
+    },
+    {
+      "stage": "carrying",
+      "label": "Take the Owl",
+      "trigger": "take:ThebanOwl",
+      "grants": [],
+      "clue_set": "",
+      "owl": "held",
+      "on_complete": "delivered"
+    },
+    {
+      "stage": "delivered",
+      "label": "Courier in the Guildhall Lounge",
+      "trigger": "talk:BP_Readable_ClueSpawner_Guildhall_C_1",
+      "grants": [
+        "DT_ClueFacts_Personal_Spider_03:HandedOff"
+      ],
+      "clue_set": "CLS_Personal_Spider_03",
+      "owl": "delivered",
+      "on_complete": "info",
+      "dialogue": {
+        "line": "Aye, it's a Langnacht night tonight. I'll take the goods.",
+        "follow_up": "We're done here. Skedaddle aff."
+      },
+      "journal": [
+        "I delivered the goods"
+      ]
+    },
+    {
+      "stage": "info",
+      "label": "Informant in the Old Manor Courtyard",
+      "trigger": "talk:OldManor.Courtyard.C1",
+      "grants": [
+        "DT_ClueFacts_Personal_Spider_04:GotInfo"
+      ],
+      "clue_set": "CLS_Personal_Spider_04",
+      "owl": "delivered",
+      "on_complete": "complete",
+      "dialogue": {
+        "line": "I heard you're looking for dirt on Mallick. This might help. If anyone asks, you didn't get it from me.",
+        "follow_up": "We're done here. I have nothing else for you."
+      },
+      "journal": [
+        "Chisholm gave me a copy of Mallick's police records. I'll review them later."
+      ]
+    },
+    {
+      "stage": "complete",
+      "label": "Chain closed",
+      "trigger": "close_follow_up",
+      "grants": [],
+      "clue_set": "",
+      "owl": "delivered",
+      "on_complete": "",
+      "journal": []
+    }
+  ],
+  "owl": {
+    "loot_row": "ThebanOwl",
+    "loot_tag": "Loot.Quest.Personal.Spider.ThebanOwl",
+    "display_name": "Theban Owl",
+    "value": 2500,
+    "mesh_name": "SM_StatueOwlA",
+    "mesh_res": "res://assets/ue/Content/Art/Gameplay/Loot/LootMajor/FigurineOwl/SM_StatueOwlA.glb",
+    "quest_location_tag": "QuestLocation.Personal.Spider.02"
+  },
+  "anchors": [
+    {
+      "id": "library_note",
+      "kind": "readable",
+      "map_id": "guildhall",
+      "level": "Guildhall/Guildhall_MissionClues",
+      "actor": "BP_Readable_ClueSpawner_Guildhall_C_28",
+      "actor_class": "BP_Readable_ClueSpawner_Guildhall_C",
+      "pos": [
+        -26.8541,
+        28.0021,
+        -9.4431
+      ],
+      "placement_tag": "CluePlacement.Common.Guildhall.Locations.Library",
+      "stages": [
+        "intro"
+      ],
+      "fact": "DT_ClueFacts_Personal_Spider_01:FoundLetter",
+      "fallbacks": []
+    },
+    {
+      "id": "owl",
+      "kind": "quest_item",
+      "map_id": "guildhall",
+      "level": "Guildhall/Guildhall_Gameplay",
+      "actor": "BP_QuestSpawner_Item_C_2",
+      "actor_class": "BP_QuestSpawner_Item_C",
+      "pos": [
+        -31.6286,
+        36.4655,
+        -43.9759
+      ],
+      "quest_location_tag": "QuestLocation.Vault",
+      "clue_location_text": "Archives",
+      "loot_row": "ThebanOwl",
+      "stages": [
+        "electrotype",
+        "located"
+      ],
+      "fact": "DT_ClueFacts_Personal_Spider_02:OwlLocation",
+      "fallbacks": [
+        {
+          "actor": "BP_QuestSpawner_Item_C_0",
+          "level": "Guildhall/Guildhall_Gameplay",
+          "pos": [
+            10.9846,
+            54.5118,
+            -54.9085
+          ],
+          "clue_location_text": "Tower"
+        }
+      ]
+    },
+    {
+      "id": "courier",
+      "kind": "npc",
+      "map_id": "guildhall",
+      "level": "Guildhall/Guildhall_MissionClues",
+      "actor": "BP_Readable_ClueSpawner_Guildhall_C_1",
+      "actor_class": "BP_Readable_ClueSpawner_Guildhall_C",
+      "pos": [
+        35.9,
+        27.0019,
+        -22.728
+      ],
+      "placement_tag": "CluePlacement.Common.Guildhall.Locations.Lounge",
+      "stages": [
+        "carrying"
+      ],
+      "fact": "DT_ClueFacts_Personal_Spider_03:HandedOff",
+      "fallbacks": [
+        {
+          "actor": "BP_Readable_ClueSpawner_Guildhall_C_33",
+          "level": "Guildhall/Guildhall_MissionClues",
+          "pos": [
+            8.2,
+            28.4942,
+            -66.1
+          ],
+          "placement_tag": "CluePlacement.Common.Guildhall.Locations.DiningHall"
+        }
+      ]
+    },
+    {
+      "id": "informant",
+      "kind": "npc",
+      "map_id": "old_manor",
+      "level": "OldManor/OldManor_Gameplay",
+      "actor": "OldManor.Courtyard.C1",
+      "actor_class": "",
+      "pos": [
+        1.5,
+        10.1096,
+        13.0
+      ],
+      "grounded": true,
+      "stages": [
+        "delivered"
+      ],
+      "fact": "DT_ClueFacts_Personal_Spider_04:GotInfo",
+      "fallbacks": [
+        {
+          "actor": "BP_SmartObject_GuardDefensiveLocation_C_839",
+          "level": "OldManor/OldManor_Gameplay",
+          "pos": [
+            2.0244,
+            10.1542,
+            14.0431
+          ]
+        },
+        {
+          "actor": "BP_SmartObject_GuardDefensiveLocation_C_838",
+          "level": "OldManor/OldManor_Gameplay",
+          "pos": [
+            1.1091,
+            10.1542,
+            14.0431
+          ]
+        },
+        {
+          "actor": "BP_SmartObject_GuardDefensiveLocation_C_840",
+          "level": "OldManor/OldManor_Gameplay",
+          "pos": [
+            2.3118,
+            10.1542,
+            12.4127
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -128,6 +128,9 @@ func reset_run(contract_order: int, map_id: String) -> void:
 	if map_id != "thieves_den" and not clue_facts.is_empty():
 		clue_facts.clear()
 		clue_facts_changed.emit()
+	# Personal-quest facts are the exception: they are save state, so they are
+	# re-journaled after the wipe. Contract facts only live for the run.
+	hydrate_personal_facts()
 	ever_spotted = false
 	ever_chased = false
 	takedowns = 0
@@ -334,6 +337,36 @@ func has_clue_fact(fact_id: String, source_item_tag: String = "") -> bool:
 		if source_item_tag == "" or str(entry.get("source_item_tag", "")) == source_item_tag:
 			return true
 	return false
+
+
+## Re-journal the active thief's persisted personal-quest facts. Called by
+## reset_run() after the contract journal is wiped, so the Spider chain's
+## facts survive a deploy while contract facts (which are never in the save
+## record) do not. Returns how many facts were added this call; already
+## journaled facts are skipped, so calling it on the Den transition is cheap.
+## Facts are authored rows only (SaveSystem already filtered the record), and
+## each one is re-read from GameData.grant_fact so the journal text stays
+## authoritative.
+func hydrate_personal_facts() -> int:
+	var ss: Node = get_node_or_null("/root/SaveSystem")
+	if ss == null or not ss.has_method("get_personal_quest"):
+		return 0
+	var entry: Dictionary = ss.call("get_personal_quest", thief_id) as Dictionary
+	if entry.is_empty():
+		return 0
+	var facts_v: Variant = entry.get("facts", [])
+	if not (facts_v is Array):
+		return 0
+	var added: int = 0
+	for fact_v: Variant in facts_v as Array:
+		if not (fact_v is String):
+			continue
+		var fact_id: String = str(fact_v).strip_edges()
+		if fact_id == "" or has_clue_fact(fact_id):
+			continue
+		if grant_fact(fact_id, {}, "personal_quest"):
+			added += 1
+	return added
 
 
 func _format_fact_text(text: String, params: Dictionary) -> String:

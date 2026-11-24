@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Acceptance checks for the authored clue/quest data producers.
 
-Reads the generated JSON only (no UE files) and asserts the facts that the
-port's invented clue/quest text was replaced with shipped data.  Every check
-is data-backed; failures exit 1.
+Reads the generated JSON (plus the tracked Spider expansion record) only and
+asserts the facts that the port's invented clue/quest text was replaced with
+shipped data.  Every check is data-backed; failures exit 1.
 
 Usage:
     python3 tools/check_clue_quests.py
@@ -18,6 +18,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CLUES = ROOT / "game" / "data" / "generated" / "gameplay" / "clues.json"
 QUESTS = ROOT / "game" / "data" / "generated" / "gameplay" / "quests.json"
+LOOT_ACTORS = ROOT / "game" / "data" / "generated" / "gameplay" / "loot_actors.json"
+EXPANSION = ROOT / "game" / "data" / "expansion" / "personal_spider.json"
 
 CONTRACT2_TABLE = "DT_ClueFacts_Contracts_02"
 CONTRACT2_TEXTS = [
@@ -58,6 +60,81 @@ GEM_NAMES = {
     "GreenGem": "Gem of Arcana",
     "OrangeGem": "Gem of Strength",
     "RedGem": "Gem of Fire",
+}
+
+# ------------------------------------------------ Spider personal quest chain
+SPIDER_SETS = {
+    "CLS_Personal_Spider_01": 3,
+    "CLS_Personal_Spider_02": 1,
+    "CLS_Personal_Spider_03": 2,
+    "CLS_Personal_Spider_04": 2,
+}
+SPIDER_TABLES = [
+    "DT_ClueFacts_Personal_Spider_01",
+    "DT_ClueFacts_Personal_Spider_02",
+    "DT_ClueFacts_Personal_Spider_03",
+    "DT_ClueFacts_Personal_Spider_04",
+]
+SPIDER_FACTS = {
+    "DT_ClueFacts_Personal_Spider_01:Intro",
+    "DT_ClueFacts_Personal_Spider_01:FoundLetter",
+    "DT_ClueFacts_Personal_Spider_01:MallickSlip",
+    "DT_ClueFacts_Personal_Spider_01:StatuePet",
+    "DT_ClueFacts_Personal_Spider_01:ObjectiveComplete_Clue",
+    "DT_ClueFacts_Personal_Spider_01:ObjectiveComplete_Electrogram",
+    "DT_ClueFacts_Personal_Spider_02:OwlLocation",
+    "DT_ClueFacts_Personal_Spider_03:HandedOff",
+    "DT_ClueFacts_Personal_Spider_03:Reminder",
+    "DT_ClueFacts_Personal_Spider_04:GotInfo",
+    "DT_ClueFacts_Personal_Spider_04:Renegade",
+}
+SPIDER_GRANTABLE = {
+    "DT_ClueFacts_Personal_Spider_01:Intro",
+    "DT_ClueFacts_Personal_Spider_01:FoundLetter",
+    "DT_ClueFacts_Personal_Spider_01:MallickSlip",
+    "DT_ClueFacts_Personal_Spider_01:StatuePet",
+    "DT_ClueFacts_Personal_Spider_02:OwlLocation",
+    "DT_ClueFacts_Personal_Spider_03:HandedOff",
+    "DT_ClueFacts_Personal_Spider_04:GotInfo",
+}
+SPIDER_NEVER_GRANT = {
+    "DT_ClueFacts_Personal_Spider_01:ObjectiveComplete_Clue",
+    "DT_ClueFacts_Personal_Spider_01:ObjectiveComplete_Electrogram",
+    "DT_ClueFacts_Personal_Spider_03:Reminder",
+    "DT_ClueFacts_Personal_Spider_04:Renegade",
+}
+SPIDER_STAGES = [
+    "",
+    "intro",
+    "letter",
+    "electrotype",
+    "located",
+    "carrying",
+    "delivered",
+    "info",
+    "complete",
+]
+SPIDER_ANCHORS = {
+    "library_note": {
+        "map_id": "guildhall",
+        "actor": "BP_Readable_ClueSpawner_Guildhall_C_28",
+        "pos": [-26.8541, 28.0021, -9.4431],
+    },
+    "owl": {
+        "map_id": "guildhall",
+        "actor": "BP_QuestSpawner_Item_C_2",
+        "pos": [-31.6286, 36.4655, -43.9759],
+    },
+    "courier": {
+        "map_id": "guildhall",
+        "actor": "BP_Readable_ClueSpawner_Guildhall_C_1",
+        "pos": [35.9, 27.0019, -22.728],
+    },
+    "informant": {
+        "map_id": "old_manor",
+        "actor": "OldManor.Courtyard.C1",
+        "pos": [1.5, 10.1096, 13.0],
+    },
 }
 
 
@@ -102,6 +179,15 @@ def main() -> int:
 
     clues = json.loads(CLUES.read_text(encoding="utf-8"))
     quests = json.loads(QUESTS.read_text(encoding="utf-8"))
+    missing: list[str] = []
+    for path in (LOOT_ACTORS, EXPANSION):
+        if not path.is_file():
+            missing.append(str(path))
+    if missing:
+        print("FAIL missing authored/generated data: " + " / ".join(missing))
+        return 1
+    loot_actors = json.loads(LOOT_ACTORS.read_text(encoding="utf-8"))
+    expansion = json.loads(EXPANSION.read_text(encoding="utf-8"))
     facts = clues["facts"]
     stats = clues["stats"]
     qstats = quests["stats"]
@@ -286,6 +372,226 @@ def main() -> int:
             and not reachable(loot_room, "TATQuestGraphClueSetNode_15")
             and "TATQuestGraphClueSetNode_15" in loot_room["dead_nodes"],
         )
+
+    # ------------------------------------------------ Spider personal quest
+    spider_rows = [f for f in facts.values() if f["table"] in SPIDER_TABLES]
+    checker.equal("Spider personal clue facts == 11", len(spider_rows), 11)
+    checker.check(
+        "Spider personal fact ids are exactly the four tables",
+        {f["id"] for f in spider_rows} == SPIDER_FACTS,
+        f"extra={sorted({f['id'] for f in spider_rows} - SPIDER_FACTS)}, "
+        f"missing={sorted(SPIDER_FACTS - {f['id'] for f in spider_rows})}",
+    )
+    for set_name, total in SPIDER_SETS.items():
+        entry = clues["clue_sets"].get(set_name)
+        checker.check(f"{set_name} exists", entry is not None)
+        if entry:
+            checker.equal(f"{set_name} clue count", entry["counts"]["total"], total)
+            checker.equal(
+                f"{set_name} enabled clue count",
+                entry["counts"]["enabled"],
+                total,
+            )
+    for set_name in SPIDER_SETS:
+        entry = clues["clue_sets"].get(set_name) or {}
+        checker.check(
+            f"{set_name} consumes only Spider personal facts",
+            all(fid in SPIDER_FACTS for fid in entry.get("fact_ids", [])),
+        )
+    checker.check(
+        "Spider personal dead facts are Intro + Renegade",
+        {fid for fid in clues.get("dead_fact_ids", []) if "Personal_Spider" in fid}
+        == {
+            "DT_ClueFacts_Personal_Spider_01:Intro",
+            "DT_ClueFacts_Personal_Spider_04:Renegade",
+        },
+    )
+    checker.equal(
+        "Spider journal text HandedOff",
+        facts["DT_ClueFacts_Personal_Spider_03:HandedOff"]["journal_text"],
+        "I delivered the goods",
+    )
+    checker.equal(
+        "Spider journal text GotInfo",
+        facts["DT_ClueFacts_Personal_Spider_04:GotInfo"]["journal_text"],
+        "Chisholm gave me a copy of Mallick's police records. I'll review them later.",
+    )
+    check_03 = clues["clue_sets"]["CLS_Personal_Spider_03"]["clues"][1]
+    check_04 = clues["clue_sets"]["CLS_Personal_Spider_04"]["clues"][1]
+    checker.check(
+        "Spider 03 courier line + follow-up",
+        check_03["text"] == "Aye, it's a Langnacht night tonight. I'll take the goods."
+        and check_03["allow_follow_up_dialogue"] is True
+        and check_03["follow_up_dialogue"]["text"] == "We're done here. Skedaddle aff.",
+    )
+    checker.check(
+        "Spider 04 informant line + follow-up",
+        check_04["text"]
+        == "I heard you're looking for dirt on Mallick. This might help. If anyone asks, you didn't get it from me."
+        and check_04["allow_follow_up_dialogue"] is True
+        and check_04["follow_up_dialogue"]["text"]
+        == "We're done here. I have nothing else for you.",
+    )
+    checker.check(
+        "Spider 03 message distribution is Global",
+        clues["clue_sets"]["CLS_Personal_Spider_03"]["clues"][0]["distribution"]
+        == "ETATElectrotypeClueDistribution::Global",
+    )
+    checker.check(
+        "Spider 04 warning distribution is Local",
+        clues["clue_sets"]["CLS_Personal_Spider_04"]["clues"][0]["distribution"]
+        == "ETATElectrotypeClueDistribution::Local",
+    )
+    checker.equal(
+        "clues with follow-up dialogue == 2", stats["clues_with_follow_up_dialogue"], 2
+    )
+    checker.equal(
+        "clues with override interaction prompt == 0",
+        stats["clues_with_override_interaction_prompt"],
+        0,
+    )
+    checker.check(
+        "no clue uses an override interaction prompt",
+        all(
+            clue["use_override_interaction_prompt"] is False
+            and clue["override_interaction_prompt"]["present"] is False
+            for entry in clues["clue_sets"].values()
+            for clue in entry["clues"]
+        ),
+    )
+
+    # Theban Owl loot row + authored mesh (grounds the vault pin).
+    owl_row = quests["loot_quest"].get("ThebanOwl") or {}
+    checker.check("ThebanOwl loot row exists", owl_row.get("row") == "ThebanOwl")
+    checker.equal("ThebanOwl value", owl_row.get("value"), 2500)
+    checker.equal(
+        "ThebanOwl quest location tag",
+        owl_row.get("quest_location_tag"),
+        "QuestLocation.Personal.Spider.02",
+    )
+    owl_actor = (
+        loot_actors["quest_actors"].get("BP_LootActor_Quest_Personal_ThebanOwl_C") or {}
+    )
+    owl_mesh = str(
+        owl_actor.get("mesh_name")
+        or Path(str(owl_actor.get("mesh_ue_path", ""))).stem
+        or Path(str(owl_actor.get("mesh_res", ""))).stem
+    )
+    checker.equal("ThebanOwl actor mesh", owl_mesh, "SM_StatueOwlA")
+    checker.check(
+        "ThebanOwl actor mesh path",
+        "SM_StatueOwlA" in str(owl_actor.get("mesh_ue_path", ""))
+        or "SM_StatueOwlA" in str(owl_actor.get("mesh_res", "")),
+    )
+    checker.equal("ThebanOwl actor value", owl_actor.get("value"), 2500)
+
+    # Expansion record: chain order, grants, suppression, anchors.
+    checker.equal("personal expansion schema", expansion.get("schema"), 1)
+    checker.equal("personal expansion character", expansion.get("character"), "spider")
+    checker.equal(
+        "personal expansion grant_reminder",
+        expansion.get("grant_reminder"),
+        False,
+    )
+    checker.equal(
+        "personal expansion start_when_completed_contract",
+        expansion.get("start_when_completed_contract"),
+        0,
+    )
+    checker.equal(
+        "personal expansion start map", expansion.get("start_map_id"), "guildhall"
+    )
+    checker.equal("personal expansion stages", expansion.get("stages"), SPIDER_STAGES)
+    checker.check(
+        "personal expansion fact_order is the 7 grantable ids",
+        set(expansion.get("fact_order", [])) == SPIDER_GRANTABLE,
+    )
+    checker.check(
+        "personal expansion never_grant ids",
+        set(expansion.get("never_grant_fact_ids", [])) == SPIDER_NEVER_GRANT,
+    )
+    beats = {b["stage"]: b for b in expansion.get("beats", [])}
+    checker.equal("personal expansion beat stages", list(beats), SPIDER_STAGES[1:])
+    granted_by_beats = [
+        fid for beat in beats.values() for fid in beat.get("grants", [])
+    ]
+    checker.check(
+        "no beat grants Reminder, Renegade or ObjectiveComplete",
+        not (set(granted_by_beats) & SPIDER_NEVER_GRANT),
+        f"offenders={sorted(set(granted_by_beats) & SPIDER_NEVER_GRANT)}",
+    )
+    checker.check(
+        "every beat grant is a grantable Spider fact",
+        all(fid in SPIDER_GRANTABLE for fid in granted_by_beats),
+    )
+    checker.check(
+        "all 7 grantable facts have a beat",
+        set(granted_by_beats) == SPIDER_GRANTABLE,
+        f"missing={sorted(SPIDER_GRANTABLE - set(granted_by_beats))}",
+    )
+    checker.equal(
+        "personal expansion starts empty and ends complete",
+        (expansion["stages"][0], beats["complete"]["on_complete"]),
+        ("", ""),
+    )
+    checker.equal(
+        "03 courier beat dialogue",
+        beats["delivered"]["dialogue"],
+        {
+            "line": "Aye, it's a Langnacht night tonight. I'll take the goods.",
+            "follow_up": "We're done here. Skedaddle aff.",
+        },
+    )
+    checker.equal(
+        "04 informant beat dialogue",
+        beats["info"]["dialogue"],
+        {
+            "line": "I heard you're looking for dirt on Mallick. This might help. If anyone asks, you didn't get it from me.",
+            "follow_up": "We're done here. I have nothing else for you.",
+        },
+    )
+    anchors = {a["id"]: a for a in expansion.get("anchors", [])}
+    checker.equal("personal expansion anchors", sorted(anchors), sorted(SPIDER_ANCHORS))
+    for anchor_id, expected in SPIDER_ANCHORS.items():
+        anchor = anchors.get(anchor_id) or {}
+        checker.equal(
+            f"anchor {anchor_id} map", anchor.get("map_id"), expected["map_id"]
+        )
+        checker.equal(
+            f"anchor {anchor_id} actor", anchor.get("actor"), expected["actor"]
+        )
+        checker.equal(f"anchor {anchor_id} pos", anchor.get("pos"), expected["pos"])
+    checker.equal(
+        "Owl anchor falls back to the authored Tower spawner",
+        [f["actor"] for f in anchors["owl"].get("fallbacks", [])],
+        ["BP_QuestSpawner_Item_C_0"],
+    )
+    checker.equal(
+        "courier anchor falls back to the Dining Hall spawner",
+        [f["actor"] for f in anchors["courier"].get("fallbacks", [])],
+        ["BP_Readable_ClueSpawner_Guildhall_C_33"],
+    )
+    checker.equal(
+        "informant anchor fallbacks are the three Courtyard C1 smart objects",
+        [f["actor"] for f in anchors["informant"].get("fallbacks", [])],
+        [
+            "BP_SmartObject_GuardDefensiveLocation_C_839",
+            "BP_SmartObject_GuardDefensiveLocation_C_838",
+            "BP_SmartObject_GuardDefensiveLocation_C_840",
+        ],
+    )
+    checker.check(
+        "no Guildhall fallback exists for the 04 informant",
+        all(
+            f.get("level", "").startswith("OldManor/")
+            for f in anchors["informant"].get("fallbacks", [])
+        ),
+    )
+    checker.equal(
+        "Owl anchor loot row matches the authored loot row",
+        anchors["owl"].get("loot_row"),
+        owl_row.get("row"),
+    )
 
     # ------------------------------------------------ producer validation
     checker.check(

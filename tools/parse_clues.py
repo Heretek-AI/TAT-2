@@ -58,6 +58,8 @@ STAT_KEYS = (
     "clue_entries",
     "enabled_clues",
     "disabled_clues",
+    "clues_with_follow_up_dialogue",
+    "clues_with_override_interaction_prompt",
     "readable_visuals",
     "readable_spawners",
     "readable_spawners_tagged",
@@ -399,12 +401,15 @@ def load_clue_sets(loc: LocTable, facts: dict[str, dict], failures: list[str]):
                 for t in (clue.get("AlternateClueText") or [])
                 if isinstance(t, dict)
             ]
+            follow_up = text_record(clue.get("FollowUpDialogue"), loc)
+            override_prompt = text_record(clue.get("OverrideInteractionPrompt"), loc)
             clues.append(
                 {
                     "index": index,
                     "enabled": bool(entry.get("Enabled", True)),
                     "visuals": visuals,
                     "placement_tag": tag_of(clue.get("PlacementTag")),
+                    "distribution": str(clue.get("Distribution") or ""),
                     "text": text["text"],
                     "text_key": text["key"],
                     "text_table": text["table"],
@@ -414,6 +419,14 @@ def load_clue_sets(loc: LocTable, facts: dict[str, dict], failures: list[str]):
                     "allow_text_replacement": bool(
                         clue.get("AllowTextReplacement", False)
                     ),
+                    "allow_follow_up_dialogue": bool(
+                        clue.get("AllowFollowUpDialogue", False)
+                    ),
+                    "follow_up_dialogue": follow_up,
+                    "use_override_interaction_prompt": bool(
+                        clue.get("UseOverrideInteractionPrompt", False)
+                    ),
+                    "override_interaction_prompt": override_prompt,
                     "facts": fact_refs,
                     "fact_ids": fact_ids,
                     "fact_tags": fact_tags,
@@ -1028,6 +1041,18 @@ def main() -> None:
         "clue_entries": sum(e["counts"]["total"] for e in clue_sets.values()),
         "enabled_clues": sum(e["counts"]["enabled"] for e in clue_sets.values()),
         "disabled_clues": sum(e["counts"]["disabled"] for e in clue_sets.values()),
+        "clues_with_follow_up_dialogue": sum(
+            1
+            for e in clue_sets.values()
+            for c in e["clues"]
+            if c["allow_follow_up_dialogue"]
+        ),
+        "clues_with_override_interaction_prompt": sum(
+            1
+            for e in clue_sets.values()
+            for c in e["clues"]
+            if c["use_override_interaction_prompt"]
+        ),
         "readable_visuals": len(readable_visuals),
         "readable_spawners": len(readable_spawners),
         "readable_spawners_tagged": sum(

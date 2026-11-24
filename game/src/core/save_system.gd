@@ -37,6 +37,52 @@ const MAX_PLAYER_NAME_CHARS := 48
 ## rewrites exactly that value to blank (guarded by player_name_migrated).
 const CAPTURE_PERSONA_NAME := "Johnny Cipher"
 
+## Personal quest (Spider "The Theban Owl") save schema. The chain itself is
+## authored in game/data/expansion/personal_spider.json; this module owns only
+## the persisted per-thief record so it can normalize a hand-edited or corrupt
+## save without loading the expansion data. Facts are stored as ids, never as
+## journal records: the journal is rehydrated from GameData on deploy and
+## contract clue facts never reach this record.
+const PERSONAL_QUEST_SCHEMA_VERSION := 1
+const PERSONAL_QUEST_KEY := "personal_quest"
+const PERSONAL_QUEST_STAGES: Array[String] = [
+	"", "intro", "letter", "electrotype", "located", "carrying", "delivered",
+	"info", "complete",
+]
+const PERSONAL_QUEST_OWL_STATES: Array[String] = ["none", "held", "delivered"]
+const PERSONAL_QUEST_THIEVES: Array[String] = ["spider", "chameleon"]
+## The only fact ids the chain may persist. ObjectiveComplete_* rows carry no
+## journal text, Reminder is only the dropped 03 electrotype and Renegade is
+## the dropped 04 warning, so none of those are ever stored.
+const PERSONAL_QUEST_FACT_INTRO := "DT_ClueFacts_Personal_Spider_01:Intro"
+const PERSONAL_QUEST_FACT_LETTER := "DT_ClueFacts_Personal_Spider_01:FoundLetter"
+const PERSONAL_QUEST_FACT_MALLICK := "DT_ClueFacts_Personal_Spider_01:MallickSlip"
+const PERSONAL_QUEST_FACT_STATUE := "DT_ClueFacts_Personal_Spider_01:StatuePet"
+const PERSONAL_QUEST_FACT_OWL_LOCATION := "DT_ClueFacts_Personal_Spider_02:OwlLocation"
+const PERSONAL_QUEST_FACT_HANDED_OFF := "DT_ClueFacts_Personal_Spider_03:HandedOff"
+const PERSONAL_QUEST_FACT_GOT_INFO := "DT_ClueFacts_Personal_Spider_04:GotInfo"
+const PERSONAL_QUEST_PERSISTED_FACTS: Array[String] = [
+	PERSONAL_QUEST_FACT_INTRO,
+	PERSONAL_QUEST_FACT_LETTER,
+	PERSONAL_QUEST_FACT_MALLICK,
+	PERSONAL_QUEST_FACT_STATUE,
+	PERSONAL_QUEST_FACT_OWL_LOCATION,
+	PERSONAL_QUEST_FACT_HANDED_OFF,
+	PERSONAL_QUEST_FACT_GOT_INFO,
+]
+## Fact id -> earliest stage it proves. Normalization raises a stage when the
+## saved facts already prove a later beat (e.g. a crash between the fact grant
+## and the stage write cannot strand a delivered Owl at "carrying").
+const PERSONAL_QUEST_FACT_STAGES: Dictionary = {
+	PERSONAL_QUEST_FACT_INTRO: "intro",
+	PERSONAL_QUEST_FACT_LETTER: "letter",
+	PERSONAL_QUEST_FACT_MALLICK: "electrotype",
+	PERSONAL_QUEST_FACT_STATUE: "electrotype",
+	PERSONAL_QUEST_FACT_OWL_LOCATION: "located",
+	PERSONAL_QUEST_FACT_HANDED_OFF: "delivered",
+	PERSONAL_QUEST_FACT_GOT_INFO: "info",
+}
+
 ## Populated from _defaults() in _ready() so the schema has one source of truth.
 var data: Dictionary = {}
 
@@ -142,9 +188,15 @@ func _default_loadout() -> Dictionary:
 	}
 
 
+func _default_personal_quest_entry() -> Dictionary:
+	return {"stage": "", "owl": "none", "facts": []}
+
+
 ## Canonical schema. `equipped_loadout` is keyed by thief id so Spider and
 ## Chameleon keep independent cosmetics/tools (the old flat "loadout" key and
-## the array form are migrated in _ensure_defaults).
+## the array form are migrated in _ensure_defaults). `personal_quest` is keyed
+## the same way: a thief's chain record holds {stage, owl, facts} and unknown
+## keys inside it are preserved by _ensure_personal_quest.
 func _defaults() -> Dictionary:
 	return {
 		"xp": 0,
@@ -158,6 +210,12 @@ func _defaults() -> Dictionary:
 		"player_name_migrated": false,
 		"equipped_loadout": {"spider": _default_loadout(), "chameleon": _default_loadout()},
 		"active_decoration": "faberge_egg",
+		"personal_quest_schema": PERSONAL_QUEST_SCHEMA_VERSION,
+		"personal_quest_migrated": false,
+		"personal_quest": {
+			"spider": _default_personal_quest_entry(),
+			"chameleon": _default_personal_quest_entry(),
+		},
 		"settings_schema": SETTINGS_SCHEMA_VERSION,
 		"settings": {
 			"mouse_sensitivity": 0.0025,
@@ -230,6 +288,13 @@ func _merge_into(incoming: Dictionary, target: Dictionary, schema: Dictionary) -
 			continue
 		var base: Variant = target[key]
 		var inc: Variant = incoming[key_v]
+		# Per-thief chain records are free-form on purpose: replacement keeps
+		# unknown entry keys, which _ensure_personal_quest then normalizes in
+		# place. This must run before the generic dict merge, or the schema
+		# walk drops keys it does not know.
+		if key == PERSONAL_QUEST_KEY and inc is Dictionary:
+			target[key] = (inc as Dictionary).duplicate(true)
+			continue
 		if base is Dictionary and inc is Dictionary:
 			var child_schema: Dictionary = {}
 			var schema_v: Variant = schema.get(key, null)
@@ -334,6 +399,93 @@ func _ensure_defaults() -> void:
 	for thief: String in ["spider", "chameleon"]:
 		if not (eq.get(thief) is Dictionary):
 			eq[thief] = _default_loadout()
+	_ensure_personal_quest()
+
+
+## Stage ordering index (invalid -> -1) for the personal-quest record.
+func _personal_stage_index(stage: String) -> int:
+	return PERSONAL_QUEST_STAGES.find(stage)
+
+
+## Normalize the persisted personal-quest subtree in place. Known keys are
+## type/domain-checked, facts are filtered to the seven authored ids and
+## deduped, and the stage/owl pair is made self-consistent:
+##   * facts raise the stage to the earliest beat they prove;
+##   * "info"/"complete" need GotInfo and a delivered Owl (the 04 clamp);
+##   * "delivered"+ needs HandedOff, otherwise the stage holds at "carrying";
+##   * "carrying" needs the Owl held, "delivered"+ needs it delivered, and
+##     anything earlier resets the Owl to "none".
+## Unknown keys (entry-level and thief-level) are preserved untouched.
+func _ensure_personal_quest() -> void:
+	var root_v: Variant = data.get(PERSONAL_QUEST_KEY, {})
+	if not (root_v is Dictionary):
+		root_v = {}
+	var root: Dictionary = root_v as Dictionary
+	# Schema marker: keep a newer integer schema intact (forward-compatible),
+	# but never leave a missing/corrupt value below the known version.
+	var schema_v: Variant = data.get("personal_quest_schema", 0)
+	if not (schema_v is int) or int(schema_v) < PERSONAL_QUEST_SCHEMA_VERSION:
+		data["personal_quest_schema"] = PERSONAL_QUEST_SCHEMA_VERSION
+	for thief: String in PERSONAL_QUEST_THIEVES:
+		var entry_v: Variant = root.get(thief, null)
+		if not (entry_v is Dictionary):
+			entry_v = _default_personal_quest_entry()
+		var entry: Dictionary = entry_v as Dictionary
+		var stage: String = str(entry.get("stage", ""))
+		if _personal_stage_index(stage) < 0:
+			stage = ""
+		var owl: String = str(entry.get("owl", "none"))
+		if not PERSONAL_QUEST_OWL_STATES.has(owl):
+			owl = "none"
+		var facts: Array = []
+		var facts_v: Variant = entry.get("facts", [])
+		if facts_v is Array:
+			for fact_v: Variant in facts_v as Array:
+				if not (fact_v is String):
+					continue
+				var fact_id: String = str(fact_v).strip_edges()
+				if fact_id == "" or not PERSONAL_QUEST_PERSISTED_FACTS.has(fact_id):
+					continue
+				if not facts.has(fact_id):
+					facts.append(fact_id)
+		# Facts prove a minimum stage even if the stage write was lost.
+		for fact_id: String in facts:
+			var implied: String = str(PERSONAL_QUEST_FACT_STAGES.get(fact_id, ""))
+			if _personal_stage_index(implied) > _personal_stage_index(stage):
+				stage = implied
+		# 04 clamps: never claim info/complete without the informant fact.
+		if _personal_stage_index(stage) >= _personal_stage_index("info") \
+				and not facts.has(PERSONAL_QUEST_FACT_GOT_INFO):
+			stage = "delivered"
+		# The drop needs the courier hand-off; without its fact hold at carrying.
+		if _personal_stage_index(stage) >= _personal_stage_index("delivered") \
+				and not facts.has(PERSONAL_QUEST_FACT_HANDED_OFF):
+			stage = "carrying"
+		# Owl consistency mirrors the stage beats.
+		var stage_idx: int = _personal_stage_index(stage)
+		if stage_idx >= _personal_stage_index("delivered"):
+			owl = "delivered"
+		elif stage_idx >= _personal_stage_index("carrying"):
+			owl = "held"
+		else:
+			owl = "none"
+		entry["stage"] = stage
+		entry["owl"] = owl
+		entry["facts"] = facts
+		root[thief] = entry
+	data[PERSONAL_QUEST_KEY] = root
+
+
+## One-time personal-quest migration. No shipped build wrote this record, so
+## the migration only backfills the per-thief entries and stamps the flag;
+## it exists so a later schema bump rewrites an old save exactly once.
+## Returns true when the save should be persisted.
+func _migrate_personal_quest() -> bool:
+	if bool(data.get("personal_quest_migrated", false)):
+		return false
+	data["personal_quest_schema"] = PERSONAL_QUEST_SCHEMA_VERSION
+	data["personal_quest_migrated"] = true
+	return true
 
 
 ## Stored levels are legacy: old saves used `xp / 500 + 1`, which is higher
@@ -397,9 +549,12 @@ func load_save() -> void:
 	_ensure_defaults()
 	_sync_level_from_xp()
 	# Persist the one-time migrations (settings schema v2 FOV, capture persona
-	# -> blank) so the next load sees their flags and never re-runs them.
+	# -> blank, personal-quest record) so the next load sees their flags and
+	# never re-runs them.
 	var migrated: bool = _migrate_settings_schema()
 	if _migrate_player_name():
+		migrated = true
+	if _migrate_personal_quest():
 		migrated = true
 	if migrated:
 		write_save()
@@ -535,3 +690,129 @@ func get_level_progress() -> Dictionary:
 	var spent: int = xp_total_for_level(level)
 	var in_level: int = clampi(xp - spent, 0, maxi(0, needed - 1))
 	return {"level": level, "xp_in_level": in_level, "xp_needed": needed}
+
+
+# --- Personal quest record (Spider personal chain) -------------------------
+
+## Active thief resolution for the default-argument API: GameState is the live
+## source during a run, with "spider" as the schema default outside a run.
+func _personal_quest_thief(thief_id: String) -> String:
+	var clean: String = thief_id.strip_edges().to_lower()
+	if clean != "":
+		return clean
+	var gs: Node = get_node_or_null("/root/GameState")
+	if gs != null:
+		clean = str(gs.get("thief_id")).strip_edges().to_lower()
+		if clean != "":
+			return clean
+	return "spider"
+
+
+## Copy of one thief's chain record {stage, owl, facts} (unknown keys kept).
+func get_personal_quest(thief_id: String = "") -> Dictionary:
+	_ensure_personal_quest()
+	var thief: String = _personal_quest_thief(thief_id)
+	var root: Dictionary = data[PERSONAL_QUEST_KEY] as Dictionary
+	var entry_v: Variant = root.get(thief, null)
+	if entry_v is Dictionary:
+		return (entry_v as Dictionary).duplicate(true)
+	return _default_personal_quest_entry()
+
+
+func has_personal_quest_fact(thief_id: String, fact_id: String) -> bool:
+	var entry: Dictionary = get_personal_quest(thief_id)
+	var facts_v: Variant = entry.get("facts", [])
+	return facts_v is Array and (facts_v as Array).has(fact_id.strip_edges())
+
+
+## Set a valid stage. Ordering is the controller's contract; storage only
+## rejects unknown domain values, then normalizes stage/owl/facts consistency.
+func set_personal_quest_stage(thief_id: String, stage: String) -> bool:
+	var clean: String = stage.strip_edges()
+	if _personal_stage_index(clean) < 0:
+		return false
+	var thief: String = _personal_quest_thief(thief_id)
+	_ensure_personal_quest()
+	var root: Dictionary = data[PERSONAL_QUEST_KEY] as Dictionary
+	var entry: Dictionary = (root.get(thief, _default_personal_quest_entry()) as Dictionary)
+	if str(entry.get("stage", "")) == clean:
+		return false
+	entry["stage"] = clean
+	root[thief] = entry
+	data[PERSONAL_QUEST_KEY] = root
+	_ensure_personal_quest()
+	write_save()
+	return true
+
+
+func set_personal_quest_owl(thief_id: String, owl: String) -> bool:
+	var clean: String = owl.strip_edges()
+	if not PERSONAL_QUEST_OWL_STATES.has(clean):
+		return false
+	var thief: String = _personal_quest_thief(thief_id)
+	_ensure_personal_quest()
+	var root: Dictionary = data[PERSONAL_QUEST_KEY] as Dictionary
+	var entry: Dictionary = (root.get(thief, _default_personal_quest_entry()) as Dictionary)
+	if str(entry.get("owl", "none")) == clean:
+		return false
+	entry["owl"] = clean
+	root[thief] = entry
+	data[PERSONAL_QUEST_KEY] = root
+	_ensure_personal_quest()
+	write_save()
+	return true
+
+
+## Persist authored chain facts. Unknown/never-grant ids are ignored by
+## normalization (contract facts, Reminder, Renegade, ObjectiveComplete_*);
+## returns the number of new ids actually stored.
+func add_personal_quest_facts(thief_id: String, fact_ids: Array) -> int:
+	var thief: String = _personal_quest_thief(thief_id)
+	_ensure_personal_quest()
+	var root: Dictionary = data[PERSONAL_QUEST_KEY] as Dictionary
+	var entry: Dictionary = (root.get(thief, _default_personal_quest_entry()) as Dictionary)
+	var facts: Array = entry.get("facts", []) as Array
+	if not (entry.get("facts", []) is Array):
+		facts = []
+	var added: int = 0
+	for fact_v: Variant in fact_ids:
+		if not (fact_v is String):
+			continue
+		var fact_id: String = str(fact_v).strip_edges()
+		if fact_id == "" or not PERSONAL_QUEST_PERSISTED_FACTS.has(fact_id):
+			continue
+		if facts.has(fact_id):
+			continue
+		facts.append(fact_id)
+		added += 1
+	if added == 0:
+		return 0
+	entry["facts"] = facts
+	root[thief] = entry
+	data[PERSONAL_QUEST_KEY] = root
+	_ensure_personal_quest()
+	write_save()
+	return added
+
+
+## Clear one thief's chain record (blank = the active thief). The chain can
+## start again on the next Guildhall deploy.
+func reset_personal_quest(thief_id: String = "") -> void:
+	var thief: String = _personal_quest_thief(thief_id)
+	_ensure_personal_quest()
+	var root: Dictionary = data[PERSONAL_QUEST_KEY] as Dictionary
+	root[thief] = _default_personal_quest_entry()
+	data[PERSONAL_QUEST_KEY] = root
+	_ensure_personal_quest()
+	write_save()
+
+
+## Clear every thief's chain record (new profile / QA reset).
+func reset_all_personal_quests() -> void:
+	_ensure_personal_quest()
+	var root: Dictionary = data[PERSONAL_QUEST_KEY] as Dictionary
+	for thief: String in PERSONAL_QUEST_THIEVES:
+		root[thief] = _default_personal_quest_entry()
+	data[PERSONAL_QUEST_KEY] = root
+	_ensure_personal_quest()
+	write_save()

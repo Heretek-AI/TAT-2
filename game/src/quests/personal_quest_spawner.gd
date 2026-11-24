@@ -2,8 +2,8 @@ extends Node
 ## Reusable Spider personal-chain actor pass (W2P seam).
 ##
 ## The mission controller and the subset real-map QA probe both run this exact
-## code: one spawn plan, one grounding rule, one dedupe rule and one letter/
-## Owl callback. Keeping it out of `mission_controller` removes the mission-
+## code: one spawn plan, one per-kind placement policy, one dedupe rule and one
+## letter/Owl callback. Keeping it out of `mission_controller` removes the mission-
 ## only dependencies (`spawner_civilians`, HUD, player) that used to make the
 ## pass impossible to exercise without loading a whole map.
 ##
@@ -13,6 +13,14 @@ extends Node
 ## `fallbacks` entry is only tried when the primary cannot be grounded. No
 ## position is invented; a pin with no usable authored candidate is skipped
 ## with a warning.
+##
+## Placement is per kind (W3O). The authored pin is a spawner origin, not a
+## floor point: the Library note is on a table and the Vault Owl's pin is
+## 0.965 m over the vault floor, so `readable` and `quest_item` keep the
+## authored pin exactly and get no vertical drop. NPCs are actors, not props:
+## their feet go to the floor ray plus the 0.02 m clearance. A quest item only
+## falls back to the floor when the pin has no authored surface AND the caller
+## explicitly allows it, and that fallback is logged.
 ##
 ## The Owl is not loot: it is a personal item that advances the chain and asks
 ## this pass to spawn the courier immediately.
@@ -27,9 +35,17 @@ const ClueItemScript := preload("res://src/interact/clue_item.gd")
 const LootScript := preload("res://src/interact/loot_item.gd")
 const PersonalQuestNpcScript := preload("res://src/quests/npc_clue_actor.gd")
 
-## Quest pins sit on authored interior floors, so they use the tighter W1S
-## 0.02 m clearance (the general spawner path uses 0.03).
+## NPC feet sit on the authored interior floor with the tighter W1S 0.02 m
+## clearance (the general spawner path uses 0.03). Readables/quest items do not
+## use it: they keep their authored pin.
 const GROUND_CLEARANCE: float = 0.02
+## `placement_position()` y sources, printed as `PQ_PLACE kind=<k> y=<source>`.
+const PLACE_PIN: String = "pin"
+const PLACE_FLOOR: String = "floor"
+const PLACE_FLOOR_FALLBACK: String = "floor_fallback"
+const PLACE_PIN_NO_FLOOR: String = "pin_no_floor"
+## Kinds whose feet are grounded on the floor ray (actors, not props).
+const NPC_KINDS: Array[String] = ["npc", "info_npc"]
 ## Two personal actors must never share one pin (plan overlap, or the courier
 ## spawned by the pickup callback after the deploy pass).
 const OCCUPY_FLAT_M: float = 0.5
@@ -37,7 +53,7 @@ const OCCUPY_VERTICAL_M: float = 2.0
 
 var host: Node3D = null
 var hud: Node = null
-## {anchor_id, kind, node, pos, source, actor} for every actor spawned this run.
+## {anchor_id, kind, node, pos, source, actor, y_source} per actor spawned this run.
 var actors: Array[Dictionary] = []
 
 
@@ -79,7 +95,12 @@ func spawn_anchor(rec: Dictionary) -> Dictionary:
 	if placed.is_empty():
 		push_warning("[personal_quest_spawner] anchor '", anchor_id, "' has no grounded authored position; skipped (no invented fallback)")
 		return {}
+	var kind: String = str(rec.get("kind", ""))
+	var y_source: String = str(placed.get("y_source", ""))
 	var pos: Vector3 = placed.get("pos", Vector3.ZERO)
+	if y_source == PLACE_FLOOR_FALLBACK:
+		push_warning("[personal_quest_spawner] anchor '", anchor_id,
+			"' quest item has no authored surface; explicit floor fallback at y=", pos.y)
 	if _anchor_occupied(pos):
 		push_warning("[personal_quest_spawner] anchor '", anchor_id, "' resolves to an occupied point ", pos, "; skipped")
 		return {}
@@ -88,14 +109,20 @@ func spawn_anchor(rec: Dictionary) -> Dictionary:
 		return {}
 	node.name = "PersonalQuest_" + anchor_id
 	host.add_child(node)
-	_ground_node(node, pos)
+	_settle_node(kind, node, pos)
+	print("PQ_PLACE kind=", kind, " y=", y_source, " anchor=", anchor_id,
+		" pin_y=%.4f floor_y=%.4f pos=(%.4f, %.4f, %.4f)" % [
+			(placed.get("pin", pos) as Vector3).y,
+			float(placed.get("floor_y", NAN)),
+			node.global_position.x, node.global_position.y, node.global_position.z])
 	var record: Dictionary = {
 		"anchor_id": anchor_id,
-		"kind": str(rec.get("kind", "")),
+		"kind": kind,
 		"node": node,
 		"pos": node.global_position,
 		"source": str(placed.get("source", "primary")),
 		"actor": str(placed.get("actor", "")),
+		"y_source": y_source,
 	}
 	actors.append(record)
 	return record
@@ -126,10 +153,62 @@ func find(anchor_id: String) -> Dictionary:
 	return {}
 
 
+## Pure per-kind placement policy (W3O). `pin` is the authored spawner origin,
+## `floor_y` the world floor under the pin's XZ (NAN when the ray missed).
+## Returns {"pos", "y_source"} or {} when the kind cannot be placed from this
+## pin. XZ always comes from the pin and rotation is never touched, so authored
+## yaw/facing survives the placement.
+##
+##   readable    the authored pin is a table/shelf point: no vertical drop.
+##   quest_item  the authored spawner origin is the item surface: no vertical
+##               drop. The floor is used only when the pin has no authored
+##               surface (NAN component) and the caller asked for the fallback
+##               explicitly; that is the only invented y in this policy.
+##   npc/info_npc  feet: floor ray + GROUND_CLEARANCE.
+static func placement_position(kind: String, pin: Vector3, floor_y: float,
+		allow_floor_fallback: bool = false) -> Dictionary:
+	var authored: bool = is_finite(pin.x) and is_finite(pin.y) and is_finite(pin.z)
+	var floor_ok: bool = is_finite(floor_y)
+	match kind:
+		"readable":
+			if authored:
+				return {"pos": pin, "y_source": PLACE_PIN}
+			return {}
+		"quest_item":
+			if authored:
+				return {"pos": pin, "y_source": PLACE_PIN}
+			if floor_ok and allow_floor_fallback:
+				return {
+					"pos": Vector3(pin.x, floor_y + GROUND_CLEARANCE, pin.z),
+					"y_source": PLACE_FLOOR_FALLBACK,
+				}
+			return {}
+		"npc", "info_npc":
+			if floor_ok:
+				return {
+					"pos": Vector3(pin.x, floor_y + GROUND_CLEARANCE, pin.z),
+					"y_source": PLACE_FLOOR,
+				}
+			if authored:
+				# Off-tree preview only: no world to ray, so keep the pin and
+				# say so instead of silently pretending it was grounded.
+				return {
+					"pos": Vector3(pin.x, pin.y + GROUND_CLEARANCE, pin.z),
+					"y_source": PLACE_PIN_NO_FLOOR,
+				}
+			return {}
+	return {}
+
+
 ## Primary pin first, then the authored fallback actors. A candidate only wins
-## when the world floor ray under it hits; off-tree previews/tests keep the
-## primary pin. Empty means no authored candidate was usable.
+## when the world floor ray under it hits (that ray proves the authored point
+## is not in a void); the candidate's y then comes from `placement_position()`,
+## so a readable/quest item keeps its authored pin y. Off-tree previews/tests
+## keep the primary pin and the same per-kind policy. Empty means no authored
+## candidate was usable.
 func _resolve_anchor(rec: Dictionary) -> Dictionary:
+	var kind: String = str(rec.get("kind", ""))
+	var allow_fb: bool = bool(rec.get("allow_floor_fallback", false))
 	var candidates: Array[Dictionary] = [{
 		"actor": str(rec.get("actor", "")),
 		"pos": vec3_from(rec.get("pos", [])),
@@ -144,17 +223,26 @@ func _resolve_anchor(rec: Dictionary) -> Dictionary:
 			"pos": vec3_from(fb.get("pos", [])),
 			"source": "fallback",
 		})
+	var on_tree: bool = host != null and host.is_inside_tree()
 	for cand: Dictionary in candidates:
-		var p: Vector3 = cand.get("pos", Vector3.ZERO)
-		var hit: Dictionary = floor_hit(host, p)
-		if hit.is_empty():
+		var pin: Vector3 = cand.get("pos", Vector3.ZERO)
+		var floor_y: float = NAN
+		if on_tree:
+			var hit: Dictionary = floor_hit(host, pin)
+			if hit.is_empty():
+				continue
+			var hp: Variant = hit.get("position", null)
+			if not (hp is Vector3):
+				continue
+			floor_y = (hp as Vector3).y
+		var placed: Dictionary = placement_position(kind, pin, floor_y, allow_fb)
+		if placed.is_empty():
 			continue
-		var hp: Variant = hit.get("position", null)
-		if hp is Vector3:
-			cand["pos"] = Vector3(p.x, (hp as Vector3).y, p.z)
-			return cand
-	if host == null or not host.is_inside_tree():
-		return candidates[0]
+		cand["pin"] = pin
+		cand["floor_y"] = floor_y
+		cand["pos"] = placed.get("pos", pin)
+		cand["y_source"] = str(placed.get("y_source", ""))
+		return cand
 	return {}
 
 
@@ -193,7 +281,7 @@ func _make_node(rec: Dictionary, pos: Vector3) -> Node3D:
 			return _make_note(rec, pos)
 		"quest_item":
 			return _make_owl(rec, pos)
-		"npc":
+		"npc", "info_npc":
 			return _make_npc(rec, pos)
 	return null
 
@@ -264,17 +352,15 @@ static func civilian_variants() -> Array[Dictionary]:
 	return out
 
 
-## Ground the spawned actor's real mesh AABB onto the floor hit with the W1S
-## 0.02 m clearance (the general spawner path uses 0.03).
-func _ground_node(node: Node3D, marker: Vector3) -> void:
-	var bottom: float = mesh_bottom(node)
-	var hit: Dictionary = floor_hit(host, marker)
-	if not hit.is_empty():
-		var hp: Variant = hit.get("position", null)
-		if hp is Vector3:
-			node.position = Vector3(marker.x, (hp as Vector3).y + GROUND_CLEARANCE - bottom, marker.z)
-			return
-	node.position = marker + Vector3(0.0, GROUND_CLEARANCE - bottom, 0.0)
+## Kind-aware settle (W3O). NPC feet rest on the floor: `pos.y` already carries
+## the 0.02 m clearance, so subtract the real mesh AABB bottom. Props
+## (`readable`, `quest_item`) keep the authored pin exactly: no vertical drop
+## and no AABB compensation, because the pin is the authored surface.
+func _settle_node(kind: String, node: Node3D, pos: Vector3) -> void:
+	if NPC_KINDS.has(kind):
+		node.position = Vector3(pos.x, pos.y - mesh_bottom(node), pos.z)
+		return
+	node.position = pos
 
 
 ## Lowest mesh point of a spawned node in its own local space (loot visual

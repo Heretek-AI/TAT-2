@@ -468,7 +468,7 @@ func _build_all() -> void:
 	_readiness_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ready_box.add_child(_readiness_lbl)
 	_thief_name_lbl = Label.new()
-	_thief_name_lbl.text = "The Spider"
+	_thief_name_lbl.text = GameState.player_display_name()
 	_thief_name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_thief_name_lbl.add_theme_font_size_override("font_size", 16)
 	_thief_name_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_TEXT)
@@ -1115,10 +1115,10 @@ func _loc_fmt(source: String, values: Dictionary) -> String:
 	return out
 
 
+## Nameplate: the explicit player handle, else the authored thief title. The
+## 3D thief and its card always match because both read GameState.
 func _thief_label() -> String:
-	if str(GameState.thief_id) == "chameleon":
-		return _loc("The Chameleon")
-	return _loc("The Spider")
+	return GameState.player_display_name()
 
 
 func _difficulty_label() -> String:

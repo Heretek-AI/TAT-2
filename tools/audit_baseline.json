@@ -44,7 +44,7 @@
   "infrastructure": {
     "root:Makefile": {
       "command": "make extract / make normalize",
-      "sha256": "bd1d12aa1d914e44099676095b44d56146484ff31e1a5da5d8326c9e830ad099"
+      "sha256": "d2317cd5dfa9c0ac11f8bb11a6a836b47c625e0cfa93d1a5b68746893d442794"
     },
     "root:tools/audit_allowlists.json": {
       "command": "reviewed coverage allowlist",
@@ -60,7 +60,7 @@
     },
     "root:tools/prebake_texture_cap.py": {
       "command": "make desktop-texture-cap",
-      "sha256": "fe68a5ea9fd9faa54f5e4d2754eb1d05a36222a6e64b67b2b66bfdcfcf8a3f12"
+      "sha256": "715d71e3ac9d595fab40749fbe6aafc567e3b051f63a46fe2f8162e302dfd4c1"
     },
     "root:tools/reimport_assets.sh": {
       "command": "tools/reimport_assets.sh",
@@ -452,5 +452,5 @@
     "vgmstream": "vgmstream CLI decoder r2168 (Oct 25 2026)"
   },
   "version": 2,
-  "written_utc": "2026-11-24T07:51:26Z"
+  "written_utc": "2026-11-24T13:15:06Z"
 }

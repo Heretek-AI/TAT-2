@@ -12,7 +12,7 @@ Re-run the census with the commands at the bottom.
 |---|---|---|---|
 | Packages (`.uasset` + `.umap`) | 13,162 (12,547 TAT) | 12,541 JSON dumps; 12,439/12,547 TAT packages = 99.1 % | **done** |
 | Static/skeletal meshes | 1,852 `SM_` + 156 `SK_` | 2,065 GLB (`2,047` GLB-ordered + `18` sidecar `mesh_materials.json`) | **done (`6783c2d`)** |
-| Textures | 2,211 `T_` packages | 2,529 PNG; all 3,817 material texture refs exist; 1,059 exceed 1024 px (771 capped, 2 uncapped) | **done, with a documented 1024 px cap** |
+| Textures | 2,211 `T_` packages | 2,529 PNG; all 3,817 material texture refs exist; 1,059 exceed 1024 px (773 loader-managed capped; 1 alpha-critical decal kept full-res by design) | **done, with a documented 1024 px cap and a stale-cap gate** |
 | Levels | 107 `.umap` | 107 `.tatlevel.json` (`159,941` orthonormal bases, `OverrideMaterials`, `bVisible:false`/`SplineEditorMesh` filtered, `1,293` emissive CPD shapes) | **done (`7458198`, `24cac7e`, `d0f895a`)** |
 | DataTables / CurveTables / StringTables | 58 `DT_` / 79 `ST_` / curves | 144 normalized tables | **done** |
 | **Animations** | **879 `AN_`** | **995 GLB clips** + **3,594 authored notifies** / 235 montage sections; 14 blend-space graphs unsupported | **export done; ~90 clip names wired, notifies data-only** |
@@ -32,7 +32,8 @@ Re-run the census with the commands at the bottom.
 | **Spawners** | 689 markers + 546 loot markers + 254 containers | all spawned: real meshes/pickups/civilians (7172096), real loot actors (1c5225f), openable containers (`5bc2d83`) | **done** |
 | **Devices** | 4,118 / 21 families | 2,095 loaded-map records, 6,005 trigger edges, 1,475 power edges; **5 families run** (beams, plates, noise alarms, power, turrets, cameras, wards) | **partial** |
 | **Patrols** | 210 paths / 673 waypoints | 120 Guildhall / 350 points merged; guards use authored waits/yaw/PingPong | **done** |
-| **Clues / quests** | 96 fact rows / 18 QGs | 90 reachable / 6 dead; authored readable clues, quest items, journal, Set/LootTheRoom objectives | **done** |
+| **Clues / quests** | 96 fact rows / 18 QGs | 90 reachable / 6 dead (two orphaned Spider personal lines; NPC quest planned W2); authored readable clues, quest items, journal, Set/LootTheRoom objectives | **done; NPC quest next wave** |
+| **Player identity** | `PlayerState.GetPlayerName` | explicit handle, else authored `The Spider` / `The Chameleon`; no capture Steam persona | **done (W0a)** |
 | **Localization** | 8 locales | 8 `.translation` registered; 2,946 source→key entries; `Loc.t()` in main menu/pause/prep | **partial** |
 | Skeletal meshes / skins | 156 `SK_` | 156 GLB | guards play 10 real retargeted clips (a29a06f); player uses real 1P arms (9ef3bdc) |
 | Player model | `Mesh1P_UpperBody/LowerBody`, `Mesh3P_Body/Head` = ThiefNisha meshes | real ThiefNisha 3P body/head + 1P upper-body arms with Walk/Sprint/Crouch 1P clips | **done (9ef3bdc)** |
@@ -269,4 +270,29 @@ find extracted/json -name 'NS_*.json' | wc -l
   Gates: compile 69/0, 58 suites fails=0, M2 fails=0, E2E 264/264, probes PASS,
   audit PASS. Current Guildhall steady state ~39 FPS @1080p/high (p10 36, p90 41).
   Residuals: device breakables/goo/vault/windows/portals, co-op loot/AI
-  authority, NPC clue dialogue, 60 FPS, Den GI, partial UI `tr()`.
+  authority, 60 FPS, Den GI, partial UI `tr()`.
+
+- 2026-11-24: **Identity / key-name / texture-cap correction (W0a)**:
+  - **Player identity**: the HUD/ledger card no longer ships the capture
+    machine's Steam persona. `GameState.player_name` defaults to blank;
+    `player_display_name()` returns an explicit handle or the authored title
+    (`The Spider` / `The Chameleon`). `SaveSystem.set_player_name()` is the API
+    (no Settings field, owned by W0b); a one-shot `player_name_migrated` flag
+    rewrites only the exact legacy persona and preserves any other name.
+  - **Key names**: `STOLEN_KEY_NAMES` is `Guildhall Key` / `Elway Manor Key` /
+    `Vault Key`; the mission key pool maps Guildhall → `key_guildhall`,
+    Old Manor → `key_manor`, vault rows → `key_vault`. The previous
+    `Manor Key`/`Locked Room Key`/`Secret Chest Key`/`Small Chest Key` labels
+    were the Den wardrobe mesh/icon names.
+  - **Texture cap**: the two 2048 px `T_SafeBlackFaction_*_D.png` sidecars had
+    reverted to `process/size_limit=0` + no mips; `make desktop-texture-cap`
+    restored 1024 + mips. `tools/prebake_texture_cap.py --check` /
+    `make texture-cap-check` is a prerequisite of `make audit` and treats
+    `size_limit=0` as over-cap; the alpha-critical 4096 px storefront decal
+    stays uncapped. Suite 82 covers the sidecars and the exception.
+  - **NPC clue status**: the residual is two orphaned Spider personal lines
+    (`DT_ClueFacts_Personal_Spider_01:Intro`,
+    `DT_ClueFacts_Personal_Spider_04:Renegade`), not “absent/cut”; the quest
+    using them is planned for the next wave (W2).
+  - Gates: compile 69/0, 59 suites fails=0, M2 fails=0, E2E 264/264, probes
+    PASS, `make audit` PASS (with the new cap check).

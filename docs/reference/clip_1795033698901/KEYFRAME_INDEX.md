@@ -2,6 +2,12 @@
 
 This document is the canonical M1 baseline catalog for `/home/john/Videos/clip_1,795,033,698,901.mp4`. All timestamps, stream metrics, pixel verifications, verbatim UI strings, and audio/VO cues are directly verified from the native `3840x2160` source video and its PTS-aligned `48 kHz` audio stream (`first_pts=0`).
 
+> **Provenance note (W0a, 2026-11-24):** `Johnny Cipher` in the observed frames
+> is the capture machine's Steam account persona, not shipped game copy. The
+> shipped card/ledger bind `PlayerState.GetPlayerName`; the authored thief
+> titles are `The Spider` and `The Chameleon`. Observed frame quotes below are
+> unchanged; the port must never hard-code the persona.
+
 ---
 
 ## 1. Clip Metadata Header (`ffprobe` & `ebur128` Verified)

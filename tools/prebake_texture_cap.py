@@ -28,6 +28,9 @@ rebuilds them at the capped size.
 Safety / behaviour:
 
 * ``--dry-run`` is read-only: no sidecar, manifest, PNG or dest file changes.
+* ``--check`` is read-only and fails when an over-cap, non-alpha-critical target
+  lacks the cap + mipmaps in its sidecar (``process/size_limit=0`` counts as
+  uncapped). ``make audit`` runs it so a stale cap cannot pass the gate.
 * A second apply is idempotent: already-capped files report ``already`` and
   their dest files are left alone.
 * ``--revert`` restores the original values recorded in
@@ -467,6 +470,94 @@ def _apply(root: Path, cap: int, dry_run: bool, verbose: bool) -> int:
     return 0
 
 
+def _check(root: Path, cap: int, verbose: bool) -> int:
+    """Read-only gate: every over-cap loader target must carry cap + mipmaps.
+
+    A shorter size limit (0 < limit <= cap) is accepted because ``_apply``
+    deliberately keeps a tighter authored limit. ``size_limit`` absent or 0
+    means uncapped in Godot and is reported as over-cap.
+    """
+    targets, material_pngs, loader_pngs = _collect_targets(root)
+    counts: Counter[str] = Counter()
+    offenders: list[str] = []
+
+    for res_path in targets:
+        source = _res_to_path(root, res_path)
+        size = _png_size(source)
+        if size is None:
+            counts["missing_or_unreadable_png"] += 1
+            if verbose:
+                print(f"skip (not a readable PNG): {res_path}")
+            continue
+        longest = max(size)
+        if longest <= cap:
+            counts["within_cap"] += 1
+            continue
+        if res_path in ALPHA_CRITICAL_PATHS:
+            counts["alpha_preserved"] += 1
+            if verbose:
+                print(f"skip (alpha-critical, keep full-res): {res_path}")
+            continue
+
+        import_path = Path(str(source) + ".import")
+        if not import_path.is_file():
+            offenders.append(f"{res_path}: no .import sidecar ({longest}px > {cap})")
+            continue
+
+        text = _read_text(import_path)
+        raw_limit = _get_param(text, "process/size_limit")
+        if raw_limit is None:
+            limit_value = 0
+        else:
+            try:
+                limit_value = int(raw_limit)
+            except ValueError:
+                offenders.append(
+                    f"{res_path}: invalid process/size_limit={raw_limit!r}"
+                )
+                continue
+        mips_on = (_get_param(text, "mipmaps/generate") or "").lower() == "true"
+
+        problems: list[str] = []
+        if limit_value == 0:
+            problems.append(f"process/size_limit=0 (uncapped, {longest}px)")
+        elif limit_value > cap:
+            problems.append(
+                f"process/size_limit={limit_value} > cap {cap} ({longest}px)"
+            )
+        if not mips_on:
+            problems.append("mipmaps/generate is not true")
+        if problems:
+            offenders.append(f"{res_path}: " + "; ".join(problems))
+            if verbose:
+                print(f"stale cap: {res_path} ({size[0]}x{size[1]})")
+        else:
+            counts["capped"] += 1
+
+    overlap = material_pngs + loader_pngs - len(targets)
+    print(
+        f"targets: {len(targets)} "
+        f"(materials.json {material_pngs}, level_loader.gd {loader_pngs}, "
+        f"overlap {overlap})"
+    )
+    print(f"mode: CHECK (cap {cap} px long edge)")
+    print(f"capped: {counts['capped']}")
+    print(f"alpha-critical (kept full-res): {counts['alpha_preserved']}")
+    print(f"within cap: {counts['within_cap']}")
+    print(f"offenders: {len(offenders)}")
+    if offenders:
+        for line in offenders:
+            print(f"  STALE: {line}")
+        print(
+            "prebake_texture_cap: error: texture cap is stale; "
+            "run `make desktop-texture-cap`",
+            file=sys.stderr,
+        )
+        return 1
+    print("texture cap check: OK")
+    return 0
+
+
 def _revert(root: Path, dry_run: bool, verbose: bool) -> int:
     manifest = _load_manifest(root)
     entries: dict[str, Any] = manifest["entries"]
@@ -582,6 +673,14 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         help=f"maximum long edge in pixels (default {DEFAULT_CAP})",
     )
     parser.add_argument(
+        "--check",
+        action="store_true",
+        help=(
+            "read-only gate: fail when an over-cap target lacks "
+            "process/size_limit<=cap and mipmaps/generate=true"
+        ),
+    )
+    parser.add_argument(
         "--revert",
         action="store_true",
         help="restore original import values from the manifest",
@@ -596,12 +695,18 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         parser.error(f"--cap must be between {MIN_CAP} and {MAX_CAP}")
     if args.revert and args.cap != DEFAULT_CAP:
         parser.error("--cap cannot be combined with --revert")
+    if args.check and args.revert:
+        parser.error("--check cannot be combined with --revert")
+    if args.check and args.dry_run:
+        parser.error("--check is already read-only; drop --dry-run")
     return args
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(sys.argv[1:] if argv is None else argv)
     print(f"repo: {ROOT}")
+    if args.check:
+        return _check(ROOT, args.cap, args.verbose)
     if args.revert:
         return _revert(ROOT, args.dry_run, args.verbose)
     return _apply(ROOT, args.cap, args.dry_run, args.verbose)

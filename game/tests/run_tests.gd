@@ -4568,10 +4568,11 @@ func _initialize() -> void:
 	w60_hud.call("_update_key_row", false)
 	_w60_assert(w60_keys_lbl != null and not w60_keys_lbl.visible, "empty key row hidden", w60)
 	gs.call("add_stolen_key", "key_manor")
-	gs.call("add_stolen_key", "key_small_chest")
+	gs.call("add_stolen_key", "key_vault")
 	w60_hud.call("_update_key_row", false)
-	_w60_assert(w60_keys_lbl != null and w60_keys_lbl.visible and w60_keys_lbl.text.find("Manor Key") >= 0 and w60_keys_lbl.text.find("Small Chest Key") >= 0,
+	_w60_assert(w60_keys_lbl != null and w60_keys_lbl.visible and w60_keys_lbl.text.find("Elway Manor Key") >= 0 and w60_keys_lbl.text.find("Vault Key") >= 0,
 		"key row shows shipped names (%s)" % (w60_keys_lbl.text if w60_keys_lbl != null else "?"), w60)
+	_w60_assert(str(gs.call("stolen_key_display_name", "key_guildhall")) == "Guildhall Key", "Guildhall Key display name", w60)
 	_w60_assert(str(gs.call("stolen_key_display_name", "weird_key")) == "Weird Key", "unknown key id title-cased", w60)
 	gs.set("active_map_seed", 424242)
 	var w60_footer: String = str(w60_hud.call("_pause_footer_text"))
@@ -4758,6 +4759,132 @@ func _initialize() -> void:
 		fails += 1
 	else:
 		print("PASS: 60 W5 UI (prep 6 s countdown/UNREADY + card wrap, player_name, (£) currency, key row, PRICE UNKNOWN, pause seed, portal, menu rain, localization)")
+
+	# 82. W0a: shipped identity (no capture persona), shipped key names, and the
+	# texture-cap sidecars. The persona is the capture machine's Steam account;
+	# the shipped card/ledger read PlayerState.GetPlayerName and fall back to
+	# the authored thief title when the player has no handle.
+	var w82: Array[String] = []
+	var w82_locale: String = str(ss.get_settings().get("locale", "en"))
+	var w82_save_path: String = "user://tat2_save.json"
+	var w82_had_save: bool = FileAccess.file_exists(w82_save_path)
+	var w82_save_backup: String = FileAccess.get_file_as_string(w82_save_path) if w82_had_save else ""
+	var w82_thief: String = str(gs.thief_id)
+	var w82_keys: Array = (gs.get("stolen_keys") as Array).duplicate()
+	var w82_loc: Node = root.get_node_or_null("Loc")
+	if w82_loc != null:
+		w82_loc.call("set_locale", "en")
+
+	# 82a. The two SafeBlackFaction albedo sidecars carry the cap + mipmaps, and
+	# the alpha-critical storefront decal stays full-res (its punch-through
+	# alpha is destroyed by downscaling).
+	var w82_cap_textures: Array[String] = [
+		"res://assets/ue/Raw/Art/Gameplay/MajorLootSafe/SafeBlackFaction/T_SafeBlackFaction_Base_D.png",
+		"res://assets/ue/Raw/Art/Gameplay/MajorLootSafe/SafeBlackFaction/T_SafeBlackFaction_Ornaments_D.png",
+	]
+	for w82_tex: String in w82_cap_textures:
+		var w82_sidecar: String = FileAccess.get_file_as_string(w82_tex + ".import")
+		var w82_long: int = _w82_png_long_edge(w82_tex)
+		var w82_imported: Vector2i = _w82_imported_texture_size(w82_tex)
+		_w60_assert(w82_long > 1024 and w82_sidecar.find("process/size_limit=1024") >= 0 and w82_sidecar.find("mipmaps/generate=true") >= 0 and maxi(w82_imported.x, w82_imported.y) == 1024,
+			"cap sidecar %s long=%d limit=%s mips=%s ctex=%s" % [w82_tex.get_file(), w82_long,
+				str(w82_sidecar.find("process/size_limit=1024") >= 0), str(w82_sidecar.find("mipmaps/generate=true") >= 0), str(w82_imported)], w82)
+	var w82_alpha_tex: String = "res://assets/ue/Raw/Art/Environment/Storefront/GlassDecals/T_Storefront_GlassDecalsA.png"
+	var w82_alpha_sidecar: String = FileAccess.get_file_as_string(w82_alpha_tex + ".import")
+	var w82_alpha_long: int = _w82_png_long_edge(w82_alpha_tex)
+	var w82_alpha_imported: Vector2i = _w82_imported_texture_size(w82_alpha_tex)
+	_w60_assert(w82_alpha_long >= 4096 and w82_alpha_sidecar.find("process/size_limit=1024") < 0 and w82_alpha_imported == Vector2i(4096, 4096),
+		"alpha-critical storefront decal stays 4096 (source long=%d ctex=%s)" % [w82_alpha_long, str(w82_alpha_imported)], w82)
+
+	# 82b. Identity: blank shows the authored title, an explicit handle wins.
+	gs.set("thief_id", "spider")
+	gs.set("player_name", "")
+	_w60_assert(str(gs.call("player_display_name")) == "The Spider", "blank handle -> The Spider (%s)" % str(gs.call("player_display_name")), w82)
+	gs.set("thief_id", "chameleon")
+	_w60_assert(str(gs.call("player_display_name")) == "The Chameleon", "chameleon -> The Chameleon (%s)" % str(gs.call("player_display_name")), w82)
+	gs.set("player_name", "Test Handle")
+	_w60_assert(str(gs.call("player_display_name")) == "Test Handle", "explicit handle preserved (%s)" % str(gs.call("player_display_name")), w82)
+	gs.set("player_name", "")
+	gs.set("thief_id", "spider")
+
+	# 82c. Migration: legacy persona -> blank once; explicit name kept; a second
+	# boot with Alice keeps Alice; a flagged save is never re-migrated.
+	_w82_write_save({"player_name": "Johnny Cipher"})
+	ss.set("data", ss.call("_defaults"))
+	ss.call("load_save")
+	var w82_data: Dictionary = ss.get("data") as Dictionary
+	_w60_assert(str(w82_data.get("player_name", "?")) == "" and bool(w82_data.get("player_name_migrated", false)),
+		"legacy persona migrates to blank + flag (name=%s flag=%s)" % [str(w82_data.get("player_name", "?")), str(w82_data.get("player_name_migrated", false))], w82)
+	var w82_disk: Variant = JSON.parse_string(FileAccess.get_file_as_string(w82_save_path))
+	_w60_assert(w82_disk is Dictionary and str((w82_disk as Dictionary).get("player_name", "?")) == "" and bool((w82_disk as Dictionary).get("player_name_migrated", false)),
+		"migration is persisted to disk", w82)
+	_w82_write_save({"player_name": "Alice"})
+	ss.set("data", ss.call("_defaults"))
+	ss.call("load_save")
+	_w60_assert(str((ss.get("data") as Dictionary).get("player_name", "?")) == "Alice", "second boot keeps Alice", w82)
+	_w82_write_save({"player_name": "Johnny Cipher", "player_name_migrated": true})
+	ss.set("data", ss.call("_defaults"))
+	ss.call("load_save")
+	_w60_assert(str((ss.get("data") as Dictionary).get("player_name", "?")) == "Johnny Cipher", "flagged save is never re-migrated", w82)
+	ss.call("set_player_name", "")
+	_w60_assert(str((ss.get("data") as Dictionary).get("player_name", "?")) == "" and bool((ss.get("data") as Dictionary).get("player_name_migrated", false)),
+		"set_player_name(blank) stays blank", w82)
+
+	# 82d. Source scan: no capture-persona literal outside the migration
+	# tombstone constant in save_system.gd.
+	var w82_hits: Array[String] = []
+	_w82_scan_gd("res://src", "Johnny Cipher", w82_hits)
+	_w60_assert(w82_hits.size() == 1 and w82_hits[0].begins_with("res://src/core/save_system.gd:"),
+		"only the migration tombstone names the persona (%s)" % str(w82_hits), w82)
+	var w82_save_src: String = FileAccess.get_file_as_string("res://src/core/save_system.gd")
+	_w60_assert(w82_save_src.find("const CAPTURE_PERSONA_NAME := \"Johnny Cipher\"") >= 0,
+		"migration tombstone constant present", w82)
+
+	# 82e. Shipped key names, not mesh/icon names.
+	_w60_assert(str(gs.call("stolen_key_display_name", "key_guildhall")) == "Guildhall Key", "key_guildhall display name", w82)
+	_w60_assert(str(gs.call("stolen_key_display_name", "key_manor")) == "Elway Manor Key", "key_manor display name", w82)
+	_w60_assert(str(gs.call("stolen_key_display_name", "key_vault")) == "Vault Key", "key_vault display name", w82)
+	var w82_mc: Node = (load("res://src/missions/mission_controller.gd") as GDScript).new() as Node
+	var w82_g: Array = w82_mc.call("_key_pool_for_map", "guildhall") as Array
+	var w82_o: Array = w82_mc.call("_key_pool_for_map", "old_manor") as Array
+	var w82_g0: Dictionary = w82_g[0] as Dictionary
+	var w82_o0: Dictionary = w82_o[0] as Dictionary
+	var w82_vault_rows_ok: bool = true
+	for w82_i: int in range(1, w82_g.size()):
+		if str((w82_g[w82_i] as Dictionary).get("id", "")) != "key_vault":
+			w82_vault_rows_ok = false
+	_w60_assert(str(w82_g0.get("id", "")) == "key_guildhall" and str(w82_g0.get("name", "")) == "Guildhall Key" and str(w82_g0.get("mesh_path", "")).ends_with("SM_LootableKeys_ManorKey.glb"),
+		"Guildhall guard key is Guildhall Key with the shipped mesh (%s)" % str(w82_g0), w82)
+	_w60_assert(str(w82_o0.get("id", "")) == "key_manor" and str(w82_o0.get("name", "")) == "Elway Manor Key",
+		"Old Manor guard key is Elway Manor Key (%s)" % str(w82_o0), w82)
+	_w60_assert(w82_vault_rows_ok, "remaining guard key rows are Vault Keys", w82)
+	w82_mc.free()
+
+	if w82_had_save:
+		var w82_rf: FileAccess = FileAccess.open(w82_save_path, FileAccess.WRITE)
+		if w82_rf != null:
+			w82_rf.store_string(w82_save_backup)
+			w82_rf.close()
+	else:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(w82_save_path))
+	ss.set("data", ss.call("_defaults"))
+	ss.call("load_save")
+	ss.call("apply_saved_settings")
+	ss.call("_sync_player_name")
+	if w82_loc != null:
+		w82_loc.call("set_locale", w82_locale)
+	else:
+		TranslationServer.set_locale(w82_locale)
+	gs.set("thief_id", w82_thief)
+	var w82_restore_keys: Array = gs.get("stolen_keys") as Array
+	w82_restore_keys.clear()
+	for w82_rk: Variant in w82_keys:
+		w82_restore_keys.append(str(w82_rk))
+	if not w82.is_empty():
+		printerr("FAIL: 82 W0a identity/keys/texture cap: ", "; ".join(w82))
+		fails += 1
+	else:
+		print("PASS: 82 W0a identity (persona migrated once, authored titles), shipped key names (Guildhall/Elway Manor/Vault), texture cap sidecars + alpha-critical exception")
 
 	# 55. W2: authored patrols, surface loudness, interaction LOS/takedown gates,
 	# civilian collision.
@@ -6164,6 +6291,67 @@ func _initialize() -> void:
 func _w60_assert(cond: bool, msg: String, problems: Array) -> void:
 	if not cond:
 		problems.append(msg)
+## W0a suite helper: long edge from a PNG IHDR (no decode).
+func _w82_png_long_edge(res_path: String) -> int:
+	var f: FileAccess = FileAccess.open(res_path, FileAccess.READ)
+	if f == null:
+		return 0
+	f.get_buffer(16)
+	var w: int = f.get_32()
+	var h: int = f.get_32()
+	f.close()
+	return maxi(w, h)
+## W0a suite helper: imported .ctex dimensions from the sidecar's dest path.
+## The header is `GST2`, u32 version, u32 width, u32 height (little-endian).
+func _w82_imported_texture_size(res_path: String) -> Vector2i:
+	var sidecar: String = FileAccess.get_file_as_string(res_path + ".import")
+	var marker: String = "path=\"res://.godot/imported/"
+	var at: int = sidecar.find(marker)
+	if at < 0:
+		return Vector2i.ZERO
+	var rest: String = sidecar.substr(at + 6)
+	var endq: int = rest.find("\"")
+	if endq <= 0:
+		return Vector2i.ZERO
+	var f: FileAccess = FileAccess.open(rest.substr(0, endq), FileAccess.READ)
+	if f == null:
+		return Vector2i.ZERO
+	var magic: PackedByteArray = f.get_buffer(4)
+	f.get_buffer(4)
+	var wb: PackedByteArray = f.get_buffer(4)
+	var hb: PackedByteArray = f.get_buffer(4)
+	f.close()
+	if wb.size() != 4 or hb.size() != 4 or magic.get_string_from_ascii() != "GST2":
+		return Vector2i.ZERO
+	return Vector2i(int(wb.decode_u32(0)), int(hb.decode_u32(0)))
+## W0a suite helper: every occurrence of `needle` in .gd files under dir_path.
+func _w82_scan_gd(dir_path: String, needle: String, hits: Array[String]) -> void:
+	var dir: DirAccess = DirAccess.open(dir_path)
+	if dir == null:
+		return
+	dir.list_dir_begin()
+	var entry: String = dir.get_next()
+	while entry != "":
+		if not entry.begins_with("."):
+			var full: String = dir_path.path_join(entry)
+			if dir.current_is_dir():
+				_w82_scan_gd(full, needle, hits)
+			elif entry.ends_with(".gd"):
+				var text: String = FileAccess.get_file_as_string(full)
+				var at: int = text.find(needle)
+				while at >= 0:
+					hits.append("%s:%d" % [full, text.substr(0, at).count("\n") + 1])
+					at = text.find(needle, at + needle.length())
+		entry = dir.get_next()
+	dir.list_dir_end()
+## W0a suite helper: minimal save file for migration boot tests.
+func _w82_write_save(fields: Dictionary) -> void:
+	var d: Dictionary = {"settings": {}, "completed_contracts": {}}
+	d.merge(fields, true)
+	var f: FileAccess = FileAccess.open("user://tat2_save.json", FileAccess.WRITE)
+	if f != null:
+		f.store_string(JSON.stringify(d, "\t"))
+		f.close()
 ## W2: index of the authored patrol path whose points equal `points` (0.05 m
 ## per waypoint), or -1. Guards are matched by their whole assigned list
 ## because several authored paths share a first waypoint.

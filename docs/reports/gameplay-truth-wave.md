@@ -49,7 +49,8 @@ The audit found that the green suite certified a build where:
 | Devices | `parse_devices.py` → `devices_runtime.json`; runtime layer for beams, plates, noise alarms, power, turrets, cameras, ward slow/blocker; 10 Hz tick, 60 m cull, authored action/power graph | 2,095 loaded devices (G 903 / O 1,164 / F 26 / D 2), 6,005 edges, 1,475 power edges; suite 70 |
 | Patrols / loudness / LOS | Loader merges 120 Guildhall paths / 350 points; guards use authored waits/yaw/PingPong; 22 surface-loudness rows; interaction/pickpocket/takedown LOS; civilian capsule | suite 55a–55d; carpet 0.0, glass 1.5 |
 | Clues / quests | `parse_clues.py` + `parse_quests.py`; authored readable clues, quest items and journal; Guildhall Set = Gem of Fire/Arcana/Strength; LootTheRoom 4000/6000/8000 | 96 facts / 90 reachable / 6 dead; contract 2 = 7 facts, 6 clues, 28 spawners; suite 65 |
-| UI / locale | Real 6→1 countdown + UNREADY; Johnny Cipher; `(£)`; key row; `PRICE UNKNOWN`; deterministic pause seed; wall-outline portal; menu rain; `Loc.t()` over 8 shipped translations, CJK fallbacks | de: PLAY→Spielen; 2,946 source strings; suite 60 |
+| UI / locale | Real 6→1 countdown + UNREADY; player-name card (authored thief title when blank); `(£)`; key row; `PRICE UNKNOWN`; deterministic pause seed; wall-outline portal; menu rain; `Loc.t()` over 8 shipped translations, CJK fallbacks | de: PLAY→Spielen; 2,946 source strings; suite 60 |
+| Identity / keys / cap (W0a) | Capture persona removed (`player_display_name()` → The Spider/The Chameleon); shipped key names; texture cap check in `make audit` | suites 60/82, `make audit` |
 | Animation metadata | `parse_anim_meta.py` → 995/995 clips, 3,594 notifies, 235 montage sections; `notify_at()` accessor | 197 AkPlayerEvent montages, 17 CombatMontage, 5 MotionWarping; suite 75 |
 | Co-op transport | Player pose broadcast (20 Hz), host-validated world events (kind/target/LOS distance/cooldown), remote visuals, door apply; suite 80 | rejects 10 m, 65-char, unknown kind; accepts 2.9 m |
 
@@ -76,6 +77,51 @@ improved from the 27 FPS recorded on 19 Nov but still below 60. This is a
 budget measurement, not a fix: the CPU/GPU split and the merge/HLOD experiment
 in `docs/reports/ecosystem-reuse-review.md` remain the next performance work.
 
+## Corrections (W0a, 2026-11-24)
+
+Three P0 corrections landed after the wave above. They change shipped behaviour,
+so the earlier claims are superseded here rather than rewritten in place.
+
+1. **Identity — the capture Steam persona is no longer shipped copy.**
+   `Johnny Cipher` has zero hits in cooked data; the shipped card/ledger bind
+   `PlayerState.GetPlayerName`, and the authored thief titles are `The Spider`
+   and `The Chameleon`. The handle is now blank by default and
+   `GameState.player_display_name()` returns an explicit non-empty handle or
+   the authored title (HUD, ledger, mission prep). `SaveSystem.set_player_name()`
+   is the profile API; there is no Settings field. A one-time
+   `player_name_migrated` migration rewrites exactly the legacy persona to blank
+   and preserves any other explicit name. The three reference docs plus
+   `REFERENCE_BASELINE.md` now carry the provenance note.
+   Evidence: the only `game/src` occurrence is the migration tombstone
+   constant; suites 60/82 cover blank → The Spider, chameleon → The Chameleon,
+   explicit “Test Handle”, persona migration + persisted flag, second boot with
+   “Alice”, and never re-migrate.
+2. **Key names — shipped item text, not mesh filenames.** The old
+   `Manor Key` / `Locked Room Key` / `Secret Chest Key` / `Small Chest Key`
+   labels were the Den wardrobe props' mesh/icon names. `STOLEN_KEY_NAMES` is
+   now `Guildhall Key` / `Elway Manor Key` / `Vault Key`, and the guard key pool
+   maps Guildhall → `key_guildhall`, Old Manor → `key_manor`, vault rows →
+   `key_vault`, keeping the extracted KeyCabinets meshes.
+3. **Texture cap — live regression fixed and gated.** The two 2048 px
+   `T_SafeBlackFaction_*_D.png` sidecars had reverted to `process/size_limit=0`
+   + `mipmaps/generate=false`. `make desktop-texture-cap` restored
+   `size_limit=1024` + mips; the alpha-critical 4096 px storefront decal remains
+   uncapped by design. `tools/prebake_texture_cap.py --check` (also
+   `make texture-cap-check`, a prerequisite of `make audit`) fails with
+   “run make desktop-texture-cap” for a stale target and treats
+   `size_limit=0` as over-cap. Suite 82a asserts both sidecars and the
+   alpha-critical exception. Red-proof: check before the rerun reported exactly
+   those two textures as stale (771 capped / 1 alpha-preserved / 2 offenders);
+   after, 773 capped / 1 alpha-preserved / 0 offenders.
+
+**Red-proofs (pre-fix code, tests kept):** the focused identity/key probe
+reported 5 failures against the pre-fix tree — `player_display_name` absent,
+`key_guildhall` → “Key Guildhall”, `key_manor` → “Manor Key”, `key_vault` →
+“Key Vault”, and default `player_name` → “Johnny Cipher” — then PASS after the
+fix. The committed UI suite failed against the same tree with
+`key row shows shipped names (Manor Key · Key Vault); Guildhall Key display
+name`; it passes on the fixed tree.
+
 ## Residuals (honest)
 
 - **Devices:** breakables/shards (the runtime export has `breakable: null`),
@@ -85,14 +131,19 @@ in `docs/reports/ecosystem-reuse-review.md` remain the next performance work.
 - **Co-op:** movement/pose is client-authoritative; loot, AI, mission state and
   devices are not replicated. Door prediction has no rollback. No live
   two-process ENet gate yet (tier 5).
-- **Clues/quests:** NPC clue dialogue and spawner interaction radii are not in
-  the cooked data; they are not invented. Briefing-only clue sets are skipped.
+- **Clues/quests:** the NPC path has two orphaned Spider personal lines
+  (`DT_ClueFacts_Personal_Spider_01:Intro`,
+  `DT_ClueFacts_Personal_Spider_04:Renegade`; no consumers, `reachable=false`)
+  and no serialized NPC dialogue; the quest using them is planned for the next
+  wave (W2). Spawner interaction radii remain absent. Briefing-only clue sets
+  are skipped.
 - **Patrols:** routes are planar; a path spanning floors does not climb.
   Surface loudness is exercised by API/tests; real floors still approximate
   wood/stone rather than resolving physical materials.
-- **UI:** the `Guildhall Key` name remains the shipped `Manor Key` family;
-  localization is registered and working in the export, but only a subset of
-  labels were converted to `Loc.t()`.
+- **UI:** key labels now use the shipped item names (`Guildhall Key`,
+  `Elway Manor Key`, `Vault Key`); the earlier “Manor Key family” residual was
+  a W5 label defect, corrected in W0a. Localization is registered and working
+  in the export, but only a subset of labels were converted to `Loc.t()`.
 - **Rendering:** Den GI (VoxelGI/SSRT bake-off), sign legibility at 27 m,
   POI graybox floors, white glass/emissive plates and Niagara VM rates remain.
 - **Performance:** 60 FPS at native 1080p is not achieved; see the ladder.

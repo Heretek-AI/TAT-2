@@ -8,7 +8,7 @@ MOBILE_ABI  ?= arm64
 QA_CONTRACT ?= 0
 KEYSTORE_PROPS := $(HOME)/.config/tat2/keystore.properties
 
-.PHONY: build-extractor extract anims normalize audit audit-bootstrap audit-refresh-stamps audit-imports test run desktop-texture-cap audio-tools linux-build linux-run android-prepare android-debug android-debug-gl android-release
+.PHONY: build-extractor extract anims normalize audit audit-bootstrap audit-refresh-stamps audit-imports test run desktop-texture-cap texture-cap-check audio-tools linux-build linux-run android-prepare android-debug android-debug-gl android-release
 
 build-extractor:
 	DOTNET_ROOT=$(HOME)/.dotnet10 PATH=$(HOME)/.dotnet10:$(PATH) $(DOTNET) build tools/tat-extract -c Release
@@ -52,7 +52,9 @@ normalize:
 audio-tools:
 	bash tools/fetch_vgmstream.sh
 
-audit:
+# The texture cap is derived from the extracted `.import` sidecars, so a stale
+# cap must fail the content gate (see the check target below).
+audit: texture-cap-check
 	python3 tools/manifest_audit.py --min-coverage 0.99 --min-exact-coverage 0.99
 
 # Explicit first run: writes tools/audit_baseline.json after every gate passes.
@@ -81,6 +83,12 @@ run:
 desktop-texture-cap:
 	python3 tools/prebake_texture_cap.py --cap 1024
 	tools/reimport_assets.sh
+
+# Read-only cap gate (part of `make audit`): fails when an over-cap loader
+# texture lacks process/size_limit<=1024 + mipmaps, with the fix command.
+# The alpha-critical storefront decal is exempt by design.
+texture-cap-check:
+	python3 tools/prebake_texture_cap.py --check --cap 1024
 
 # --- Linux x86_64 export (Tier-1 gate) ----------------------------------------
 # Requires the 4.7.2 Linux export templates (linux_debug.x86_64 /

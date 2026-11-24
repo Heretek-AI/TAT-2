@@ -3172,6 +3172,29 @@ func _collect_spawn_mesh_boxes(n: Node, parent_tr: Transform3D, boxes: Array[AAB
 		_collect_spawn_mesh_boxes(c, tr, boxes)
 
 
+## Guard-carried keys use the shipped item names (authored text tables), not
+## the extracted mesh/icon names. The Guildhall constable carries the
+## Guildhall Key (S22/KF25 pickpocket); Old Manor carries the Elway Manor Key;
+## the remaining safe/lock meshes are Vault Keys. Mesh paths stay the
+## extracted KeyCabinets assets so the belt visual is unchanged.
+func _key_pool_for_map(map_id: String) -> Array[Dictionary]:
+	var primary_id: String = "key_vault"
+	var primary_name: String = "Vault Key"
+	match map_id:
+		"guildhall":
+			primary_id = "key_guildhall"
+			primary_name = "Guildhall Key"
+		"old_manor":
+			primary_id = "key_manor"
+			primary_name = "Elway Manor Key"
+	return [
+		{"id": primary_id, "name": primary_name, "kind": "key", "value": 150, "mesh_path": "res://assets/ue/Content/Art/Gameplay/KeyCabinets/SM_LootableKeys_ManorKey.glb"},
+		{"id": "key_vault", "name": "Vault Key", "kind": "key", "value": 120, "mesh_path": "res://assets/ue/Content/Art/Gameplay/KeyCabinets/SM_LootableKeys_LockedRoomKey.glb"},
+		{"id": "key_vault", "name": "Vault Key", "kind": "key", "value": 180, "mesh_path": "res://assets/ue/Content/Art/Gameplay/KeyCabinets/SM_LootableKeys_SecretChestKey.glb"},
+		{"id": "key_vault", "name": "Vault Key", "kind": "key", "value": 90, "mesh_path": "res://assets/ue/Content/Art/Gameplay/KeyCabinets/SM_LootableKeys_SmallChestKey.glb"},
+	]
+
+
 func _spawn_guards(ue_spawns: Array, anchor: Vector3, patrol_paths: Array = []) -> void:
 	# P1 flat Novice-to-Thief guard count: the old limit ignored the first two
 	# difficulties (identical patrol density Novice/Thief). Novice 4 / Thief 6 /
@@ -3192,12 +3215,7 @@ func _spawn_guards(ue_spawns: Array, anchor: Vector3, patrol_paths: Array = []) 
 	if chosen.is_empty():
 		chosen = [anchor + Vector3(12, 0, 0), anchor + Vector3(-12, 0, -10), anchor + Vector3(0, 0, -18), anchor + Vector3(16, 0, -16)]
 
-	var key_pool: Array[Dictionary] = [
-		{"id": "key_manor", "name": "Manor Key", "kind": "key", "value": 150, "mesh_path": "res://assets/ue/Content/Art/Gameplay/KeyCabinets/SM_LootableKeys_ManorKey.glb"},
-		{"id": "key_locked_room", "name": "Locked Room Key", "kind": "key", "value": 120, "mesh_path": "res://assets/ue/Content/Art/Gameplay/KeyCabinets/SM_LootableKeys_LockedRoomKey.glb"},
-		{"id": "key_secret_chest", "name": "Secret Chest Key", "kind": "key", "value": 180, "mesh_path": "res://assets/ue/Content/Art/Gameplay/KeyCabinets/SM_LootableKeys_SecretChestKey.glb"},
-		{"id": "key_small_chest", "name": "Small Chest Key", "kind": "key", "value": 90, "mesh_path": "res://assets/ue/Content/Art/Gameplay/KeyCabinets/SM_LootableKeys_SmallChestKey.glb"},
-	]
+	var key_pool: Array[Dictionary] = _key_pool_for_map(str(GameState.active_map_id))
 
 	var used_paths: Dictionary = {}
 	for idx: int in range(chosen.size()):

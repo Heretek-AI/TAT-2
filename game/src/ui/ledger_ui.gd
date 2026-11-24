@@ -205,10 +205,12 @@ func _build_ui() -> void:
 	if serif != null:
 		_level_lbl.add_theme_font_override("font", serif)
 	_journal_page.add_child(_level_lbl)
-	# KF07 cite: portrait card reads "Johnny Cipher" below the Level/XP header.
+	# KF07 cite: the portrait card shows the player's handle below the Level/XP
+	# header. The capture machine's Steam persona is not shipped copy; an
+	# unnamed player sees the authored thief title (The Spider/The Chameleon).
 	# Portrait art path unrecovered (HARD_LIMIT 5.1): name label only, no invented art.
 	_thief_lbl = Label.new()
-	_thief_lbl.text = str(GameState.player_name)
+	_thief_lbl.text = GameState.player_display_name()
 	_thief_lbl.add_theme_font_size_override("font_size", 15)
 	_thief_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_TEXT)
 	if sans != null:
@@ -375,10 +377,7 @@ func _refresh_journal() -> void:
 	var needed: int = int(prog.get("xp_needed", 500))
 	_level_lbl.text = "Level %d" % level
 	if _thief_lbl != null:
-		var player_name: String = str(GameState.player_name).strip_edges()
-		if player_name == "":
-			player_name = str(SaveSystem.data.get("player_name", "Johnny Cipher")).strip_edges()
-		_thief_lbl.text = player_name
+		_thief_lbl.text = GameState.player_display_name()
 	_xp_bar.min_value = 0.0
 	_xp_bar.max_value = float(maxi(1, needed))
 	_xp_bar.value = float(in_level)

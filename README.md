@@ -50,8 +50,8 @@ builds are documented in [`docs/ANDROID.md`](docs/ANDROID.md).
 | Command | Purpose |
 |---|---|
 | `make run` | Launch the desktop client (`F3` = FPS/draw-call overlay) |
-| `make test` | 54-suite headless integration run |
-| `make audit` | Fail-closed gate: mount/disk coverage, 13 content domains, producer output hashes, `errors.log` marker, freshness |
+| `make test` | 59-suite headless integration run |
+| `make audit` | Fail-closed gate: texture cap, mount/disk coverage, 13 content domains, producer output hashes, `errors.log` marker, freshness |
 | `make audit-bootstrap` | Explicit first run; writes the tracked `tools/audit_baseline.json` |
 | `make audit-refresh-stamps` | Escape hatch after regeneration; missing/decreased outputs still fail |
 | `make audit-imports` | Separate Godot import gate (`.import` sidecars + `.translation`) |
@@ -59,6 +59,7 @@ builds are documented in [`docs/ANDROID.md`](docs/ANDROID.md).
 | `make linux-build` / `make linux-run` | Linux x86_64 export / run |
 | `make android-debug` / `make android-release` | Signed internal APK |
 | `make desktop-texture-cap` | Re-bake the 1024 px texture cap |
+| `make texture-cap-check` | Read-only: fail if any over-cap loader texture lacks the cap + mipmaps |
 
 `tools/audit_baseline.json` is tracked and records every producer/infrastructure
 hash, external tool version and per-output content digest. A normal run with no

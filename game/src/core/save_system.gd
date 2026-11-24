@@ -23,10 +23,15 @@ const MAX_SAVE_XP := 1_000_000
 const SETTINGS_SCHEMA_VERSION := 2
 const LEGACY_FOV_DEFAULT := 75.0
 const AUTHORED_FOV_DEG := 54.54
-## Shipped player handle (KF07 journal portrait). Persisted at the save root;
-## GameState exposes the live copy the HUD/ledger read.
-const DEFAULT_PLAYER_NAME := "Johnny Cipher"
+## Default handle: blank means "no explicit handle", so the UI shows the
+## authored thief title (GameState.player_display_name). Persisted at the save
+## root; GameState exposes the live copy the HUD/ledger read.
+const DEFAULT_PLAYER_NAME := ""
 const MAX_PLAYER_NAME_CHARS := 48
+## The capture machine's Steam persona, never shipped game copy. Saves written
+## before the identity correction persisted it as the default, so one boot
+## rewrites exactly that value to blank (guarded by player_name_migrated).
+const CAPTURE_PERSONA_NAME := "Johnny Cipher"
 
 ## Populated from _defaults() in _ready() so the schema has one source of truth.
 var data: Dictionary = {}
@@ -46,13 +51,15 @@ func _sync_player_name() -> void:
 		gs.set("player_name", str(data.get("player_name", DEFAULT_PLAYER_NAME)))
 
 
-## Persist a new handle. Empty/oversized input is normalised, never rejected
-## into an un-nameable HUD.
+## Persist a new handle. Blank is valid and means "show the authored thief
+## title"; oversized input is truncated. This is the profile-name API (there
+## is no Settings field; the UI reads GameState.player_display_name()).
 func set_player_name(new_name: String) -> void:
 	var clean: String = new_name.strip_edges()
-	if clean == "":
-		clean = DEFAULT_PLAYER_NAME
 	data["player_name"] = clean.substr(0, MAX_PLAYER_NAME_CHARS)
+	# An explicit choice is never migrated again, even if it happens to match
+	# the legacy capture persona.
+	data["player_name_migrated"] = true
 	_sync_player_name()
 	write_save()
 
@@ -144,6 +151,7 @@ func _defaults() -> Dictionary:
 		"unlocked_cosmetics": ["bowler_hat"],
 		"currency": 0,
 		"player_name": DEFAULT_PLAYER_NAME,
+		"player_name_migrated": false,
 		"equipped_loadout": {"spider": _default_loadout(), "chameleon": _default_loadout()},
 		"active_decoration": "faberge_egg",
 		"settings_schema": SETTINGS_SCHEMA_VERSION,
@@ -261,10 +269,11 @@ func _ensure_defaults() -> void:
 		var k: String = str(key)
 		if not data.has(k):
 			data[k] = (defaults[k] as Variant)
-	# Validated player handle: type, blank and length are checked here so every
+	# Validated player handle: type and length are checked here so every
 	# consumer can trust GameState.player_name/SaveSystem.data["player_name"].
+	# Blank stays blank (the UI then shows the authored thief title).
 	var pn_v: Variant = data.get("player_name", "")
-	if not (pn_v is String) or str(pn_v).strip_edges() == "":
+	if not (pn_v is String):
 		data["player_name"] = DEFAULT_PLAYER_NAME
 	else:
 		data["player_name"] = str(pn_v).strip_edges().substr(0, MAX_PLAYER_NAME_CHARS)
@@ -344,6 +353,21 @@ func _migrate_settings_schema() -> bool:
 	return true
 
 
+## One-time identity migration: early saves defaulted the handle to the
+## capture machine's Steam persona. Only that exact value is rewritten to
+## blank; any other explicit handle is preserved. `player_name_migrated`
+## records the decision so a later explicit persona name (or the game writing
+## new saves) never re-runs it. Returns true when the save should be persisted.
+func _migrate_player_name() -> bool:
+	if bool(data.get("player_name_migrated", false)):
+		return false
+	var current: String = str(data.get("player_name", "")).strip_edges()
+	if current == CAPTURE_PERSONA_NAME:
+		data["player_name"] = ""
+	data["player_name_migrated"] = true
+	return true
+
+
 func load_save() -> void:
 	if not FileAccess.file_exists(SAVE_PATH):
 		_ensure_defaults()
@@ -359,9 +383,12 @@ func load_save() -> void:
 		_merge_validated(parsed as Dictionary)
 	_ensure_defaults()
 	_sync_level_from_xp()
-	# Persist the one-time settings migration (legacy fov 75 -> authored 54.54)
-	# so the next load sees fov_migrated and never re-runs it.
-	if _migrate_settings_schema():
+	# Persist the one-time migrations (settings schema v2 FOV, capture persona
+	# -> blank) so the next load sees their flags and never re-runs them.
+	var migrated: bool = _migrate_settings_schema()
+	if _migrate_player_name():
+		migrated = true
+	if migrated:
 		write_save()
 
 

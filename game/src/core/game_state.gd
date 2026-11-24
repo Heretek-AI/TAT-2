@@ -11,10 +11,11 @@ signal clue_facts_changed()
 enum Difficulty { NOVICE = 1, THIEF = 2, MASTER_THIEF = 3 }
 
 var thief_id: String = "spider" # spider (Nisha) | chameleon (Cotter)
-## Player-facing handle shown by the HUD portrait plate and the ledger. The
-## shipped build's journal reads "Johnny Cipher" (KF07 cite); SaveSystem owns
-## the persisted, type-validated copy.
-var player_name: String = "Johnny Cipher"
+## Optional player-chosen handle. Blank means "no explicit handle": the HUD
+## portrait plate, ledger and prep screen then show the authored thief title
+## ("The Spider" / "The Chameleon"). SaveSystem owns the persisted,
+## type-validated copy (SaveSystem.set_player_name() is the API).
+var player_name: String = ""
 var outfit_body: String = "Default"
 var outfit_head: String = "Default"
 var calling_card: String = "Default"
@@ -60,13 +61,14 @@ var mission_objectives: Array[Dictionary] = []
 var contract_title: String = ""
 var contract_intro: String = ""
 var stolen_keys: Array[String] = []
-## Readable names for the shipped key-cabinet items (mission_controller
-## key_pool ids). Unknown ids still render, title-cased, instead of vanishing.
+## Shipped item names (authored text tables), not the extracted mesh/icon
+## family: the pickpocketed constable key reads "Guildhall Key" (S22/KF25),
+## the Old Manor key "Elway Manor Key", and the safe/lock keys "Vault Key".
+## Unknown ids still render, title-cased, instead of vanishing.
 const STOLEN_KEY_NAMES: Dictionary = {
-	"key_manor": "Manor Key",
-	"key_locked_room": "Locked Room Key",
-	"key_secret_chest": "Secret Chest Key",
-	"key_small_chest": "Small Chest Key",
+	"key_guildhall": "Guildhall Key",
+	"key_manor": "Elway Manor Key",
+	"key_vault": "Vault Key",
 }
 ## Journal of authored clue facts learned this run (see GameData.clue_facts).
 ## Ordinary facts dedupe by fact id; templated Set.Location facts dedupe by
@@ -78,6 +80,21 @@ var ever_spotted: bool = false
 var ever_chased: bool = false
 var takedowns: int = 0
 var player_light_visibility: float = 0.2 # 0.0 shadow .. 1.0 bright
+
+
+## Player-facing handle used by the HUD portrait plate, the ledger and the
+## mission-prep nameplate. An explicit non-empty saved handle wins; otherwise
+## the authored title for the active thief is shown. The shipped footage's
+## audience is a named player, never the capture machine's Steam persona.
+func player_display_name() -> String:
+	var explicit: String = player_name.strip_edges()
+	if explicit != "":
+		return explicit
+	var source: String = "The Chameleon" if thief_id == "chameleon" else "The Spider"
+	var loc: Node = get_node_or_null("/root/Loc")
+	if loc != null and loc.has_method("t"):
+		return str(loc.call("t", source))
+	return source
 
 
 func reset_run(contract_order: int, map_id: String) -> void:

@@ -1,7 +1,7 @@
 # Handoff — Thick As Thieves Godot 4.7.2 port (next run)
 
 **Repo:** `/home/john/Projects/TAT-2`
-**HEAD at handoff:** `3202283` — `feat(coop): transmit player state and validate world events on the host` (plus the export localization fix and this docs commit)
+**HEAD at handoff:** the W0a identity commit — `fix(identity): remove Steam persona, use shipped key names, gate texture cap` (run `git log -1 --oneline`; it sits on top of `3202283`)
 **Working tree:** clean; `main` in sync with `origin/main`
 **Godot:** `4.7.2.stable` via **native `tools/godot`** (Flatpak fallback inside the
 wrapper). `godot` is **not** on `$PATH`.
@@ -32,7 +32,7 @@ be pursued.
 | Extraction pipeline | reproducible from a wiped tree; `make extract` + `make normalize` + `make anims` exit 0 |
 | Asset integrity | 0 duplicate UIDs, 0 missing/corrupt meshes, `MESH HOLES=0`, 0 missing textures |
 | Scripts | **69/69 compile**, 0 broken |
-| Unit suite (`run_tests.gd`) | **58 suites, fails=0**, 0 `SCRIPT ERROR` |
+| Unit suite (`run_tests.gd`) | **59 suites, fails=0**, 0 `SCRIPT ERROR` |
 | M2 player suite | **fails=0** |
 | Probes | door walk **PASS**, viewmodel truth **PASS**, Niagara **PASS** |
 | E2E (unmasked) | **264/264**, 0 BOOT, 0 `SCRIPT ERROR` (tier 1: 115) |
@@ -81,7 +81,7 @@ python3 tools/check_uid_duplicates.py game --json     # error_count 0, warning_c
 tools/godot --headless --path game \
   --script /home/john/Projects/TAT-2/tools/check_scripts_compile.gd
 
-# Unit/integration suite (~2-4 min, 58 suites)
+# Unit/integration suite (~2-4 min, 59 suites)
 make test
 # or: tools/godot --headless --path game --script res://tests/run_tests.gd
 
@@ -162,7 +162,7 @@ game/src/stealth/                light_probe, noise_bus
 game/src/interact/               doors, loot, clues, escape gates, puddles, bottles
 game/src/missions/               mission_controller (spawns, fills, sign, free play, extraction)
 game/src/ui/                     hud, main_menu, wardrobe, mission_prep, contract_table, ledger, settings, theme
-game/tests/                      run_tests.gd (58 suites), test_m2_player.gd, probe_*.gd
+game/tests/                      run_tests.gd (59 suites), test_m2_player.gd, probe_*.gd
 game/tests/e2e/                  run_e2e_tests.gd + tiers 1-4 + helpers (264 checks)
 game/probe_leak.gd               shutdown leak verifier
 game/data/generated/             all generated JSON (gitignored): levels/, gameplay/, tables/, weather/, vfx/, localization/
@@ -191,6 +191,7 @@ tools/reimport_assets.sh && make desktop-texture-cap` before the game/tests work
 
 | Commit | Wave / change |
 |---|---|
+| W0a HEAD | **Identity / keys / texture-cap correction** — removed the capture Steam persona (`player_display_name()` → The Spider/The Chameleon, one-shot migration); shipped key names (`Guildhall Key`, `Elway Manor Key`, `Vault Key`); `--check` + `make texture-cap-check` in `make audit`; restored both SafeBlackFaction caps. Evidence: [`reports/gameplay-truth-wave.md`](reports/gameplay-truth-wave.md) §“Corrections (W0a)” |
 | `3202283` | **Gameplay truth wave** — hard audit gate; guard sight/save/mirror/FOV blockers; authored devices, patrols, loudness, clues/quests, animation notifies; UI/locales/countdown; co-op transport. Evidence: [`reports/gameplay-truth-wave.md`](reports/gameplay-truth-wave.md) |
 | `a410adc` | Track `build/qa` capture/probe **sources** so the E2E harness checks are reproducible from a clone |
 | `1373bb9` | Docs: record the review remediation wave |
@@ -228,7 +229,7 @@ Per-wave evidence: `docs/reports/` (latest:
 
 ### Extraction
 - `make extract` runs `list raw tables levels materials audio meshes textures anims`. It does **not** produce the animation GLBs or `anims_manifest.json`; that is `make anims` (Blender, ~30 min, 995/995). A wipe of `game/data/generated` removes the manifest — always run `make anims` after a wipe.
-- **Texture pre-bake is not preserved by extraction.** `make desktop-texture-cap` edits the loader-managed `.png.import` sidecars that live under `extracted/`, so a clean extraction (which replaces `extracted/`) drops the `mipmaps/generate=true` + `process/size_limit=1024` edits. Rerun `make desktop-texture-cap` after every clean extraction and after `make normalize`; it is idempotent, `--dry-run` previews the 770 capped textures, and `--revert` restores the originals from `build/texture_cap_manifest.json`.
+- **Texture pre-bake is not preserved by extraction.** `make desktop-texture-cap` edits the loader-managed `.png.import` sidecars that live under `extracted/`, so a clean extraction (which replaces `extracted/`) drops the `mipmaps/generate=true` + `process/size_limit=1024` edits. Rerun `make desktop-texture-cap` after every clean extraction and after `make normalize`; it is idempotent, `--dry-run` previews the capped textures, and `--revert` restores the originals from `build/texture_cap_manifest.json`. `python3 tools/prebake_texture_cap.py --check` (or `make texture-cap-check`, a prerequisite of `make audit`) fails on a stale target with “run make desktop-texture-cap”; `size_limit=0` counts as uncapped, and the alpha-critical storefront decal is exempt. The checked-in gate caught a real regression on 2026-11-24: both `T_SafeBlackFaction_*_D.png` (2048 px) had reverted to `size_limit=0` / no mips.
 - `Exporter.Tables()` has an explicit root allowlist. It now includes `WwiseAudio/` and `MaterialLibrary/`. Engine materials (`WorldGridMaterial`, `BasicShapeMaterial`) are still **not** dumped because only `Engine/Content/BasicShapes|EngineMaterials|EngineMeshes|MapTemplates|EngineSky` are mounted.
 - `extracted/errors.log` is truncated each run. It holds 14 `UBlendSpace*` converter failures. `manifest_audit --fail-on-errors` classifies them as **known-unsupported** (exact path list in the tool); any other line fails the audit.
 - The extractor writes two output shapes: meshes keep `assets/TAT/Content/...`; textures strip to `assets/Art/...`. This is why both `Content` and `Raw` symlinks exist.
@@ -279,7 +280,7 @@ Per-wave evidence: `docs/reports/` (latest:
 
 | File | Purpose | Expected |
 |---|---|---|
-| `game/tests/run_tests.gd` | **58 suites** — data, loader, materials, doors, FOV schema, audio, VFX, UI | `SUMMARY: fails=0`, 0 `SCRIPT ERROR` |
+| `game/tests/run_tests.gd` | **59 suites** — data, loader, materials, doors, FOV schema, audio, VFX, UI, identity/cap | `SUMMARY: fails=0`, 0 `SCRIPT ERROR` |
 | `game/tests/test_m2_player.gd` | traversal/tools checks | `M2_SUMMARY: fails=0` |
 | `game/tests/probe_door_walk.gd` | closed blocks / 70° gate / re-toggle / F-spam / occupied close / lockpick | `DOORWALK PASS` |
 | `game/tests/probe_viewmodel_truth.gd` | 1P viewmodel pose/reset, crank bone | `VIEWMODEL_TRUTH PASS` |
@@ -316,11 +317,13 @@ Recent additions to know about:
    cameras and wards run from `devices_runtime.json`. Breakables/shards, goo
    pipes, vault doors, sliding windows, magnetic locks, acoustic portals and
    junctions are authored data-only markers.
-3. **Clues/quests are authored; NPC clue dialogue is not.** 96 facts / 90
-   reachable / 6 dead are wired, readable spawners and quest items spawn at
-   authored transforms, and the journal is live. `TATNPCClueSpawnerComponent`
-   carries no serialized dialogue, and spawner interaction radii are absent; do
-   not invent them.
+3. **Clues/quests are authored; the NPC quest is the next wave.** 96 facts /
+   90 reachable / 6 dead are wired, readable spawners and quest items spawn at
+   authored transforms, and the journal is live. Two orphaned Spider personal
+   lines remain (`DT_ClueFacts_Personal_Spider_01:Intro`,
+   `DT_ClueFacts_Personal_Spider_04:Renegade`; no consumers, `reachable=false`);
+   the quest using them is planned for the next wave (W2). Spawner interaction
+   radii are absent; do not invent dialogue or radii.
 4. **Performance:** current export is ~39 FPS median at 1080p/high (post-load
    p10 36 / p90 41, mspf 25.6) and needs the quality-ladder + merge/HLOD
    experiments in `reports/ecosystem-reuse-review.md` to reach 60.
@@ -417,7 +420,7 @@ git status --short                                  # clean
 make audit                                          # exit 0, all groups fresh, 0 unexpected errors
 python3 tools/check_uid_duplicates.py game --json   # 0/0
 tools/godot --headless --path game --script tools/check_scripts_compile.gd   # 69/0
-tools/godot --headless --path game --script res://tests/run_tests.gd         # fails=0 (58 suites)
+tools/godot --headless --path game --script res://tests/run_tests.gd         # fails=0 (59 suites)
 tools/godot --headless --path game --script res://tests/test_m2_player.gd    # fails=0
 tools/godot --headless --path game --script res://tests/probe_door_walk.gd   # PASS
 tools/godot --headless --path game --script res://tests/probe_viewmodel_truth.gd  # PASS

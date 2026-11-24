@@ -2287,15 +2287,10 @@ func _update_portrait_plate() -> void:
 			_level_badge_lbl.text = "%d" % int(saved_lvl)
 
 
-## Persisted player handle (SaveSystem -> GameState.player_name). Falls back to
-## the shipped default rather than an empty portrait label.
+## Player handle (explicit save name, else the authored thief title). The
+## portrait plate never shows an empty label or the capture persona.
 func _player_display_name() -> String:
-	var n: String = str(GameState.player_name).strip_edges()
-	if n == "":
-		n = str(SaveSystem.data.get("player_name", "Johnny Cipher")).strip_edges()
-	if n == "":
-		n = "Johnny Cipher"
-	return n
+	return GameState.player_display_name()
 
 
 func _loc(source: String) -> String:

@@ -5,6 +5,12 @@ segments `S01`-`S27` in `KEYFRAME_INDEX.md` section 2 (same ids and boundaries).
 Every claim below is visible in a frame or audible in the clip; the video wins
 over any doc where they disagree.
 
+> **Provenance note (W0a, 2026-11-24):** `Johnny Cipher` is the capture
+> machine's Steam account persona, not shipped game copy. The shipped
+> card/ledger bind `PlayerState.GetPlayerName`; the authored thief titles are
+> `The Spider` and `The Chameleon`. Observed frame quotes below are unchanged;
+> the port must never hard-code the persona.
+
 ## Clip metadata (from KEYFRAME_INDEX section 1)
 
 | Property | Value |

@@ -4,6 +4,12 @@ Numbered legend tables for every annotated keyframe.
 Badge IDs [1]..[N] match the badges rendered on
 annotated/<same filename as clean/> exactly.
 
+> **Provenance note (W0a, 2026-11-24):** `Johnny Cipher` in these legends is
+> the capture machine's Steam account persona, not shipped game copy. The
+> shipped card/ledger bind `PlayerState.GetPlayerName`; the authored thief
+> titles are `The Spider` and `The Chameleon`. Legend text below is unchanged
+> observed-frame copy; the port must never hard-code the persona.
+
 Badge colour key: Amber #FFB300 = Visual (V*);
 Cyan #00E5FF = HUD/UI (UI*); Magenta #FF4081 = Gameplay/Audio.
 

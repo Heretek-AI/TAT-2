@@ -10,6 +10,14 @@ Authority order when sources disagree (highest wins): the 4K source video → `K
 `docs/FIDELITY_GAPS.md`, `docs/reports/*.md`). Evidence rule: only what is visible in a frame or backed by
 measured audio evidence is claimed; anything unclear is marked `UNCERTAIN:`.
 
+> **Provenance note (W0a, 2026-11-24):** `Johnny Cipher`, wherever it appears in
+> this corpus, is the Steam account persona of the machine that recorded the
+> reference clip. It is not shipped game copy: the shipped card/ledger bind
+> `PlayerState.GetPlayerName`, and the authored thief titles are `The Spider`
+> and `The Chameleon`. The observed frame quotes in this file and its linked
+> corpus are left unchanged; the port reads the live player handle and falls
+> back to the authored title, never the capture persona.
+
 ---
 
 ## 1. Purpose and how to use it

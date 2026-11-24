@@ -1,0 +1,23 @@
+# codebase-memory index whitelist (gitignore syntax).
+# Index hand-written source only; never the extracted/generated trees.
+/*
+!/.gitignore
+!/.cbmignore
+!/.gitattributes
+!/AGENTS.md
+!/README.md
+!/Makefile
+
+!/game/
+/game/*
+!/game/src/
+!/game/tests/
+!/game/addons/
+!/game/scenes/
+/game/scenes/review/
+!/game/data/
+/game/data/*
+!/game/data/expansion/
+
+!/tools/
+!/docs/

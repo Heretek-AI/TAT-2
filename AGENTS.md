@@ -58,7 +58,7 @@ TAT-2 expansion content belong in git.
 ```bash
 make run         # native 4.7.2 client, F3 overlay
 make test        # tests/run_tests.gd — 54 suites
-make audit       # manifest coverage + freshness + errors.log
+make audit       # fail-closed content + producer/output baseline gate
 
 tools/godot --headless --path game --script tools/check_scripts_compile.gd
 tools/godot --headless --path game --script res://tests/test_m2_player.gd
@@ -74,7 +74,7 @@ tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd -- 
 | `test_m2_player.gd` | `M2_SUMMARY: fails=0` |
 | door walk / viewmodel / Niagara probes | `DOORWALK PASS` / `VIEWMODEL_TRUTH PASS` / `NIAGARA_PROBE PASS` |
 | E2E | `fails=0 passed=262 total=262` (tier 1: 115) |
-| `make audit` | exit 0, 99.4 % manifest coverage |
+| `make audit` | exit 0, tracked baseline matches, mount/path 100.0 % (exact-case 99.4 %), 13/13 content groups |
 
 Anything below these numbers is a regression. Do not re-baseline silently; find
 the cause or record it.

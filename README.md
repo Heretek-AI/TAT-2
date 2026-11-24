@@ -20,14 +20,15 @@ ENet co-op and all four E2E tiers.
 | M2 traversal/tools (`tests/test_m2_player.gd`) | **fails=0** |
 | E2E (`tests/e2e/run_e2e_tests.gd`, tiers 1–4) | **262/262** (tier 1: 115) |
 | Door walk · viewmodel truth · Niagara | **PASS** |
-| Steam manifest + content audit (`make audit`) | exit 0, mount/path 100.0 % (exact-case 99.4 %), 13/13 content groups |
+| Steam manifest + content audit (`make audit`) | exit 0, fail-closed tracked baseline, mount/path 100.0 % (exact-case 99.4 %), 13/13 content groups |
 
 ## Quick start
 
 ```bash
 make run        # launch the game (native tools/godot, Flatpak fallback)
 make test       # headless unit/integration suite
-make audit      # mount/path consistency + generated-content + producer-stamp gate
+make audit      # fail-closed content + producer-baseline gate
+python3 tools/test_manifest_audit.py  # negative controls for the audit
 ```
 
 A fresh clone needs the private assets first:
@@ -50,12 +51,20 @@ builds are documented in [`docs/ANDROID.md`](docs/ANDROID.md).
 |---|---|
 | `make run` | Launch the desktop client (`F3` = FPS/draw-call overlay) |
 | `make test` | 54-suite headless integration run |
-| `make audit` | Content gate: mount/path consistency, 13 generated domains, producer stamps, freshness and `errors.log` |
-| `make audit-refresh-stamps` | Escape hatch after an intentional producer change + regeneration |
+| `make audit` | Fail-closed gate: mount/disk coverage, 13 content domains, producer output hashes, `errors.log` marker, freshness |
+| `make audit-bootstrap` | Explicit first run; writes the tracked `tools/audit_baseline.json` |
+| `make audit-refresh-stamps` | Escape hatch after regeneration; missing/decreased outputs still fail |
+| `make audit-imports` | Separate Godot import gate (`.import` sidecars + `.translation`) |
 | `make normalize` | Run all 14 generated-data producers |
 | `make linux-build` / `make linux-run` | Linux x86_64 export / run |
 | `make android-debug` / `make android-release` | Signed internal APK |
 | `make desktop-texture-cap` | Re-bake the 1024 px texture cap |
+
+`tools/audit_baseline.json` is tracked and records every producer/infrastructure
+hash, external tool version and per-output content digest. A normal run with no
+baseline fails; `make audit-bootstrap` is the explicit first-run path.
+`tools/audit_allowlists.json` holds the 73 known case-only path normalizations,
+33 case-only `.ubulk` companions and 46 known-undumped manifest paths.
 
 Headless gates that are not Make aliases:
 

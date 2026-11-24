@@ -1,5 +1,12 @@
 # Audit content gate (W0)
 
+> **Follow-up:** [`audit-fail-closed.md`](audit-fail-closed.md) supersedes the
+> baseline/import/marker details below. The baseline is now tracked
+> (`tools/audit_baseline.json`), normal first runs fail without it, producer
+> output counts and hashes are compared, `.import` sidecars no longer count as
+> extracted assets, and `errors.log` carries a run marker bound to
+> `filelist.txt`.
+
 **Date:** 2026-11-24
 **Scope:** `tools/manifest_audit.py`, `Makefile`, `README.md`
 **Command:** `make audit`

@@ -8,7 +8,7 @@ MOBILE_ABI  ?= arm64
 QA_CONTRACT ?= 0
 KEYSTORE_PROPS := $(HOME)/.config/tat2/keystore.properties
 
-.PHONY: build-extractor extract anims normalize audit audit-refresh-stamps test run desktop-texture-cap audio-tools linux-build linux-run android-prepare android-debug android-debug-gl android-release
+.PHONY: build-extractor extract anims normalize audit audit-bootstrap audit-refresh-stamps audit-imports test run desktop-texture-cap audio-tools linux-build linux-run android-prepare android-debug android-debug-gl android-release
 
 build-extractor:
 	DOTNET_ROOT=$(HOME)/.dotnet10 PATH=$(HOME)/.dotnet10:$(PATH) $(DOTNET) build tools/tat-extract -c Release
@@ -50,13 +50,20 @@ audio-tools:
 	bash tools/fetch_vgmstream.sh
 
 audit:
-	python3 tools/manifest_audit.py --min-coverage 0.90 --fail-on-stale --fail-on-errors
+	python3 tools/manifest_audit.py --min-coverage 0.99 --min-exact-coverage 0.99
 
-# Escape hatch: after intentionally changing a producer and regenerating its
-# outputs (make normalize / make anims), refresh the sha256 stamps. The content
-# assertions and errors.log gates still run.
+# Explicit first run: writes tools/audit_baseline.json after every gate passes.
+audit-bootstrap:
+	python3 tools/manifest_audit.py --min-coverage 0.99 --min-exact-coverage 0.99 --bootstrap-stamps
+
+# Escape hatch after intentionally changing a producer and regenerating its
+# outputs (make normalize / make anims). Missing/decreased outputs still fail.
 audit-refresh-stamps:
-	python3 tools/manifest_audit.py --min-coverage 0.90 --fail-on-stale --fail-on-errors --refresh-stamps
+	python3 tools/manifest_audit.py --min-coverage 0.99 --min-exact-coverage 0.99 --refresh-stamps
+
+# Separate Godot import gate; extraction-only trees do not need it.
+audit-imports:
+	python3 tools/manifest_audit.py --min-coverage 0.99 --min-exact-coverage 0.99 --require-imports
 
 test:
 	$(GODOT) --headless --path game --script res://tests/run_tests.gd

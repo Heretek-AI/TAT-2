@@ -1,0 +1,400 @@
+{
+  "content": {
+    "anims_entries": 995,
+    "anims_fail": 0,
+    "anims_glb": 995,
+    "anims_ok": 995,
+    "anims_total": 995,
+    "audio_clips": 5018,
+    "audio_failed": 0,
+    "audio_failure_records": 0,
+    "audio_ogg": 5018,
+    "container_classes": 5,
+    "containers": 254,
+    "contracts": 16,
+    "contracts_loot_goals": 1,
+    "decals": 675,
+    "devices_families": 21,
+    "devices_family_sum": 4118,
+    "devices_total": 4118,
+    "levels": 107,
+    "levels_invalid": 0,
+    "loc_csv": 8,
+    "materials_albedo": 1379,
+    "materials_entries": 1629,
+    "niagara": 3695,
+    "scene_variants": 222,
+    "scene_variants_records": 222,
+    "tables": 144,
+    "tables_invalid": 0,
+    "texture_refs": 1507,
+    "videos_manifest": 15,
+    "videos_ogv": 15
+  },
+  "coverage": {
+    "case_allowlisted": 73,
+    "covered": 12703,
+    "disk_missing_allowlisted": 46,
+    "exact_raw": 12630,
+    "manifest_tat": 16792,
+    "resolved": 12703,
+    "ubulk": 4088
+  },
+  "generator": "tools/manifest_audit.py",
+  "infrastructure": {
+    "root:Makefile": {
+      "command": "make extract / make normalize",
+      "sha256": "d801a5a823d1c9a4c960e66f8f19f5d10efecb034b3a036720f26298d9ac80b3"
+    },
+    "root:tools/audit_allowlists.json": {
+      "command": "reviewed coverage allowlist",
+      "sha256": "a225e6de8285c779de93682410f60ee216c2fa7ee3b1b72da8a5bd946e0897aa"
+    },
+    "root:tools/fetch_vgmstream.sh": {
+      "command": "make audio-tools",
+      "sha256": "1ad00f3a64257e2e253dcdedf462f5adaee892ce41890ca2e09eeb66d82494c4"
+    },
+    "root:tools/godot": {
+      "command": "native engine wrapper",
+      "sha256": "c3f53c47752975e487fc508d01ba1708e1032f7380f45a79fc806d7f7c6fc6b5"
+    },
+    "root:tools/prebake_texture_cap.py": {
+      "command": "make desktop-texture-cap",
+      "sha256": "fe68a5ea9fd9faa54f5e4d2754eb1d05a36222a6e64b67b2b66bfdcfcf8a3f12"
+    },
+    "root:tools/reimport_assets.sh": {
+      "command": "tools/reimport_assets.sh",
+      "sha256": "3410567eba1d4facf8ac66baa7d9d914f8d46f9be689c0193494672c40e9520d"
+    },
+    "root:tools/tat-extract/Exporter.cs": {
+      "command": "make build-extractor",
+      "sha256": "46131c781f4ceefa14f3f5b51bac06016538ce17a48056ee15727c76d446eb73"
+    },
+    "root:tools/tat-extract/Program.cs": {
+      "command": "make build-extractor",
+      "sha256": "b3c29a4b59da512adaaf33eb39155d94dbc5aca4730ecc18e8d3dd5dd5f1e131"
+    },
+    "root:tools/tat-extract/native/linux-x64/CUE4Parse-Natives.so": {
+      "command": "make build-extractor",
+      "sha256": "6e8b84dade7d95e1f08076d1f0e79119b763594540743f4cc9c368c5bcc54d8d"
+    },
+    "root:tools/tat-extract/tat-extract.csproj": {
+      "command": "make build-extractor",
+      "sha256": "1cf3a41bd7cd00879173d28b368885b7d9cfd42b69ae76642610589fe46a9f42"
+    }
+  },
+  "producers": {
+    "tools/convert_videos.py": {
+      "command": "python3 tools/convert_videos.py",
+      "metrics": {
+        "videos_manifest": 15,
+        "videos_ogv": 15
+      },
+      "outputs": {
+        "assets:ue/videos": {
+          "bytes": 160302487,
+          "exists": true,
+          "files": 15,
+          "newest_mtime": 1795300935.1368759,
+          "sha256": "a03f4e2261737745ef43c93804ded37e28d2dde27464969f832af7e529023fb3"
+        },
+        "gen:videos.json": {
+          "bytes": 3532,
+          "exists": true,
+          "files": 1,
+          "newest_mtime": 1795317577.9442291,
+          "sha256": "86fdefcf12e121de815a3dc05e1889aac230fc41fed452f99e36e01689ad7f08"
+        }
+      },
+      "sha256": "feacef75bad172f4baca03a8ca30a719ecd1a50e6c85a62b1ca8bca24509144d"
+    },
+    "tools/convert_wwise.py": {
+      "command": "python3 tools/convert_wwise.py",
+      "metrics": {
+        "audio_clips": 5018,
+        "audio_failed": 0,
+        "audio_ogg": 5018
+      },
+      "outputs": {
+        "assets:ue/audio/wwise": {
+          "bytes": 581494198,
+          "exists": true,
+          "files": 5018,
+          "newest_mtime": 1795230971.3745968,
+          "sha256": "c1a523abaa133823a0f856546213ef11a8c0506195c646ac9c258ed5f151e863"
+        },
+        "gen:audio_events.json": {
+          "bytes": 1463161,
+          "exists": true,
+          "files": 1,
+          "newest_mtime": 1795317574.1034276,
+          "sha256": "17d852347531c34e3d42545584cd914a3dba6f8a34901d9874be755a3b3c36ff"
+        },
+        "gen:audio_library.json": {
+          "bytes": 1423393,
+          "exists": true,
+          "files": 1,
+          "newest_mtime": 1795317573.2694142,
+          "sha256": "27337aac0f53643e58c76d201b1ba30f45f7815750a2a57f1fcc887c96fc3241"
+        }
+      },
+      "sha256": "e28c21bbe4aaa3fd83531c5f0188ad4e6fab638c50c93c33b268d4bbfcd6b5e4"
+    },
+    "tools/extract_audio.py": {
+      "command": "python3 tools/extract_audio.py",
+      "metrics": {},
+      "outputs": {
+        "assets:ue/audio": {
+          "bytes": 581725232,
+          "exists": true,
+          "files": 5027,
+          "newest_mtime": 1795317429.683781,
+          "sha256": "bef0f231b03ec1cc9ab013f35e022df1bbce63311bdd77982703e6ef4279e3ac"
+        }
+      },
+      "sha256": "2212587ffbf869787a9f583b786f0f7300f181c93aaf373052275867100cfa76"
+    },
+    "tools/parse_containers.py": {
+      "command": "python3 tools/parse_containers.py",
+      "metrics": {
+        "containers": 254
+      },
+      "outputs": {
+        "gen:gameplay/containers.json": {
+          "bytes": 4177,
+          "exists": true,
+          "files": 1,
+          "newest_mtime": 1795317425.259022,
+          "sha256": "06d0c4c28e73254867c862bb29f64c9241676e924b97401b621dccdcb84420f9"
+        }
+      },
+      "sha256": "ef69695ad4b4d23e14ef7ca9f6373710e8295ef37c7e716f4bb33a5e47aa3ee3"
+    },
+    "tools/parse_contracts.py": {
+      "command": "python3 tools/parse_contracts.py",
+      "metrics": {
+        "contracts": 16,
+        "contracts_loot_goals": 1
+      },
+      "outputs": {
+        "gen:gameplay/contracts.json": {
+          "bytes": 25124,
+          "exists": true,
+          "files": 1,
+          "newest_mtime": 1795498901.1765954,
+          "sha256": "6dd338fdb5c3f7eb6770cf3d06706a97127441ac2d0e033026f228806f189852"
+        }
+      },
+      "sha256": "75f7103457a6426d4eea817109096b72ea82e792da02fb1217cfdd96edf2c0e7"
+    },
+    "tools/parse_gameplay.py": {
+      "command": "python3 tools/parse_gameplay.py",
+      "metrics": {},
+      "outputs": {
+        "gen:gameplay": {
+          "bytes": 1818278,
+          "exists": true,
+          "files": 16,
+          "newest_mtime": 1795498901.1765954,
+          "sha256": "072cd70159dc8727df1abe1c4a25a6856ba912d7bce61f89abcb7aa26686789d"
+        }
+      },
+      "sha256": "45b95ca488948315bac5c9167500d2b5c7b1ef24fc722a4241ffb6779cf2eae0"
+    },
+    "tools/parse_interactables.py": {
+      "command": "python3 tools/parse_interactables.py",
+      "metrics": {},
+      "outputs": {
+        "gen:gameplay/interactables.json": {
+          "bytes": 60362,
+          "exists": true,
+          "files": 1,
+          "newest_mtime": 1795317425.312023,
+          "sha256": "8bf683e0a8c08e5f83a4114a32ff261b67b393dcb7c92c4244b7b814234acc3f"
+        }
+      },
+      "sha256": "979ed144c4734916c411da20b40be235dc581846cf46a88dde8ccaa279865ed8"
+    },
+    "tools/parse_locres.py": {
+      "command": "python3 tools/parse_locres.py",
+      "metrics": {
+        "loc_csv": 8
+      },
+      "outputs": {
+        "gen:localization": {
+          "bytes": 1865840,
+          "exists": true,
+          "files": 8,
+          "newest_mtime": 1795317574.3234313,
+          "sha256": "f43b1781759e8dc68ffdd7a897543c986b896f145f6a6e61ff4a5249ab8d14b3"
+        }
+      },
+      "sha256": "5285809efc33fc3d8b7ebf8dae65a58e7ed0115e63c333d4e6cd8ea7b54eace6"
+    },
+    "tools/parse_loot.py": {
+      "command": "python3 tools/parse_loot.py",
+      "metrics": {},
+      "outputs": {
+        "gen:gameplay/loot_actors.json": {
+          "bytes": 45407,
+          "exists": true,
+          "files": 1,
+          "newest_mtime": 1795498892.0143704,
+          "sha256": "90022086d21f5c22eeba20c5faa8475b8d3406485690952b423a6fb0200a7d78"
+        }
+      },
+      "sha256": "b4b2f6b5466bc78f134f05fa091ca2d6056935b12acddc134cc041597f92448f"
+    },
+    "tools/parse_materials.py": {
+      "command": "python3 tools/parse_materials.py",
+      "metrics": {
+        "materials_albedo": 1379,
+        "materials_entries": 1629,
+        "texture_refs": 1507
+      },
+      "outputs": {
+        "gen:materials.json": {
+          "bytes": 2781543,
+          "exists": true,
+          "files": 1,
+          "newest_mtime": 1795492525.2882917,
+          "sha256": "fe8b267416a7f9de2f70ab061570f7d0083128f8ade939791b92b61876530284"
+        },
+        "gen:mesh_materials.json": {
+          "bytes": 443572,
+          "exists": true,
+          "files": 1,
+          "newest_mtime": 1795492525.691379,
+          "sha256": "74476419aa47e966fdf56fae30315f81073b04504daccc8c0bce8f9329d04bea"
+        },
+        "gen:mesh_materials_provenance.json": {
+          "bytes": 435741,
+          "exists": true,
+          "files": 1,
+          "newest_mtime": 1795492525.6967816,
+          "sha256": "e805cb29630a6593c9b5b844a14eabcaf0f654633af52ea9268d7aef8cfd7dca"
+        }
+      },
+      "sha256": "44b341d3cc5a2d1eae2d17065fb8be9f359382f19570145a865546935a89a6ca"
+    },
+    "tools/parse_spawners.py": {
+      "command": "python3 tools/parse_spawners.py",
+      "metrics": {},
+      "outputs": {
+        "gen:gameplay/spawners.json": {
+          "bytes": 10623,
+          "exists": true,
+          "files": 1,
+          "newest_mtime": 1795317426.99105,
+          "sha256": "379dc3de638656dc51f3a22b1659d22c19f213095b9bf9e3c116dcdfc1cd7158"
+        }
+      },
+      "sha256": "e62544ed5c09a696e6a3340f27d3c20d1655e77c31e06e46d9269734fb6f814e"
+    },
+    "tools/parse_tables.py": {
+      "command": "python3 tools/parse_tables.py",
+      "metrics": {
+        "devices_families": 21,
+        "devices_total": 4118,
+        "levels": 107,
+        "scene_variants": 222,
+        "tables": 144
+      },
+      "outputs": {
+        "gen:gameplay": {
+          "bytes": 1818278,
+          "exists": true,
+          "files": 16,
+          "newest_mtime": 1795498901.1765954,
+          "sha256": "072cd70159dc8727df1abe1c4a25a6856ba912d7bce61f89abcb7aa26686789d"
+        },
+        "gen:levels": {
+          "bytes": 45795222,
+          "exists": true,
+          "files": 108,
+          "newest_mtime": 1795318482.740624,
+          "sha256": "2402e6210d14fc235a1e79a205be8c838a4861da4d7e06e8d2571dd6b2b75e0b"
+        },
+        "gen:scene_variants.json": {
+          "bytes": 44415,
+          "exists": true,
+          "files": 1,
+          "newest_mtime": 1795318482.8386133,
+          "sha256": "424e9fe4d92846e74e7e801084718009afb2a94461ca3ab2cfab544c40e39151"
+        },
+        "gen:tables": {
+          "bytes": 1842945,
+          "exists": true,
+          "files": 144,
+          "newest_mtime": 1795498896.7646744,
+          "sha256": "c08a537228a6297f078bbf72172df5030af5c8bdfa02532fccec16c25c0661e2"
+        }
+      },
+      "sha256": "a19054709c423924dc0f9217665976a6c6ebe28bb9ce34d8ef1739b1778e26f7"
+    },
+    "tools/parse_vfx.py": {
+      "command": "python3 tools/parse_vfx.py",
+      "metrics": {},
+      "outputs": {
+        "gen:vfx": {
+          "bytes": 1390631,
+          "exists": true,
+          "files": 2,
+          "newest_mtime": 1795317427.997824,
+          "sha256": "946ee804cbf5ee2125b6c2236bd0862b0f5f372c4cdd3c2a108b59d7c8ef822a"
+        }
+      },
+      "sha256": "cb9faaac63c7a4f65f0d6fc00d341b42e2d1a173a6eb3720266e9c4d358f4849"
+    },
+    "tools/parse_weather.py": {
+      "command": "python3 tools/parse_weather.py",
+      "metrics": {},
+      "outputs": {
+        "gen:weather": {
+          "bytes": 38494,
+          "exists": true,
+          "files": 17,
+          "newest_mtime": 1795317428.2666023,
+          "sha256": "8f626ccf5d5509f5ec203679666fe923e99930054adf0b12da3da4b8a932e579"
+        }
+      },
+      "sha256": "21bf74b51093fe0d12e9bb4e83ed46e6055860031dc12068aa6330a97ef88aba"
+    },
+    "tools/usd_to_gltf.py": {
+      "command": "make anims  # blender --background --python tools/usd_to_gltf.py ...",
+      "metrics": {
+        "anims_entries": 995,
+        "anims_fail": 0,
+        "anims_glb": 995,
+        "anims_ok": 995,
+        "anims_total": 995
+      },
+      "outputs": {
+        "assets:ue/Anims": {
+          "bytes": 508286432,
+          "exists": true,
+          "files": 995,
+          "newest_mtime": 1795310916.4263463,
+          "sha256": "f786f97fdc9dd68498a7fab3eb26cf018f3254d52efaf085666632922445aa76"
+        },
+        "gen:anims_manifest.json": {
+          "bytes": 529087,
+          "exists": true,
+          "files": 1,
+          "newest_mtime": 1795310917.9653742,
+          "sha256": "3429b2be7c7123e781bbf6dcd5b4bcd24192534c7d65f3200e778b6c58c375f8"
+        }
+      },
+      "sha256": "5b56060181660e72dfbc925d61f189677133c64084d2531847f539bd25627266"
+    }
+  },
+  "python": "3.10+",
+  "tool_versions": {
+    "blender": "Blender 5.3.0",
+    "dotnet": "10.0.404",
+    "ffmpeg": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+    "vgmstream": "missing"
+  },
+  "version": 2,
+  "written_utc": "2026-11-24T05:42:57Z"
+}

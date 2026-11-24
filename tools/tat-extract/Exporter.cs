@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Security.Cryptography;
 using CUE4Parse.FileProvider;
 using CUE4Parse.FileProvider.Objects;
 using CUE4Parse.UE4.Assets;
@@ -526,12 +527,21 @@ public sealed class Exporter
     {
         foreach (var k in _ok.Keys.Union(_fail.Keys).Union(_skip.Keys).OrderBy(x => x))
             Console.Error.WriteLine($"[{k}] ok={_ok.GetValueOrDefault(k)} skip={_skip.GetValueOrDefault(k)} fail={_fail.GetValueOrDefault(k)}");
-        // Per-run log: always created/truncated (never appended), empty on a
-        // clean run. The audit gate treats an absent log as a failed run, so
-        // never delete it.
+        // Per-run log: always created/truncated (never appended), headed by a
+        // marker binding it to this filelist. The audit gate rejects a missing
+        // log, a bare zero-byte log, and a marker whose filelist hash differs.
         var log = Path.Combine(_o.Out, "errors.log");
         Directory.CreateDirectory(_o.Out);
-        File.WriteAllLines(log, _errors);
+        var filelistPath = Path.Combine(_o.Out, "filelist.txt");
+        var filelistSha = File.Exists(filelistPath)
+            ? Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(filelistPath))).ToLowerInvariant()
+            : "none";
+        var lines = new List<string>
+        {
+            $"# run {DateTime.UtcNow:yyyy-MM-ddTHH:mm:ssZ} filelist {filelistSha} errors {_errors.Count}"
+        };
+        lines.AddRange(_errors);
+        File.WriteAllLines(log, lines);
         Console.Error.WriteLine($"errors -> {log} ({_errors.Count} entries, this run only)");
     }
 }

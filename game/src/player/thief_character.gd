@@ -37,6 +37,13 @@ const ZIPWIRE_CABLE_MAT: String = "/Game/Art/Environment/Props/WiringKit/MI_Wire
 
 const STAND_HEAD_HEIGHT: float = 1.66875
 const CROUCH_HEAD_HEIGHT: float = 0.88875
+## W5A: authored UE capsule (ACharacter default 91 cm half-height, 32 cm
+## radius = 1.82 m total). The port shipped 1.78 m; the geometry audit measured
+## the authored 91 cm half-height, so the built shape (and the crouch toggle
+## that rebuilds it) now match. The origin stays at the feet, so the authored
+## eye height above the floor is unchanged.
+const CAPSULE_HALF_HEIGHT_M: float = 0.91
+const CAPSULE_RADIUS_M: float = 0.32
 ## Authored capsule heights used by crouch and by the device body-segment
 ## checks (security_beam.gd / ward_zone.gd). Standing is the built capsule
 ## height; crouch is the authored 1.0 m crouched capsule.
@@ -56,15 +63,37 @@ const LEAN_WALL_CHECK_DIST: float = 0.6
 # game/data/generated/gameplay/*.json "sources"). Curve-table overrides via
 # GameData.eval_curve are kept only for rows the real data defines.
 const AIR_CONTROL: float = 0.5 # TATCharacterMovement CharMoveComp.AirControl
-const FLOOR_MAX_ANGLE_DEG: float = 50.0 # CharMoveComp.WalkableFloorAngle 60.0 retuned to 50.0 for stair stick (no mantle)
+## CharMoveComp.WalkableFloorAngle is authored 60.0. The port had retuned it to
+## 50.0 to hide the missing step-up on the 37 deg civic flight; with the real
+## step-up in place the authored 60 is safe again (W5A: 55 deg rally slopes stay
+## walkable, >60 deg faces still refuse).
+const FLOOR_MAX_ANGLE_DEG: float = 60.0
 const FLOOR_SNAP_LENGTH: float = 0.3 # stairs snap fix: 0.25-0.3 window keeps body grounded on 0.18-0.2 m risers
-const STEP_UP_MAX_M: float = 0.3 # stair assist bound: 0.18-0.2 m risers climb, 0.6 m walls block
-const STEP_UP_FORWARD_M: float = 0.35 # forward probe after the lift: clears one tread, not a room
+## UE CharMoveComp.MaxStepHeight is authored 45 cm (the engine default). The
+## civic flight measures 0.25 m risers on 0.33 m treads, the industrial and city
+## runs the same riser, so 0.45 covers the authored traversal with margin.
+const STEP_UP_MAX_M: float = 0.45
+## Forward reach of the step probe, measured past the capsule surface (see
+## _try_step_up). 0.20 m lands inside the 0.33 m tread; the old 0.35 m probe
+## measured from the capsule axis overshot the tread onto the next riser.
+const STEP_UP_FORWARD_M: float = 0.20
+const STEP_UP_DOWN_M: float = 0.55 # down-ray past the lift: catches the tread, not the room
 const STEP_UP_SKIN_M: float = 0.02 # headroom probe skin above the lift
+## W5A mantle gate: a ledge within step height is a walk, not a climb. Mantle
+## needs the authored jump press unless the obstacle is above this band.
+const MANTLE_STEP_GUARD_M: float = 0.05
+## W5A camera smoothing for a committed step-up: the body snaps, the eye eases
+## back up so a 0.25 m riser no longer reads as a hitch.
+const STEP_CAMERA_SMOOTH_MAX_M: float = 0.20
+const STEP_CAMERA_SMOOTH_RATE: float = 9.0
 const INTERACT_RANGE: float = 1.75 # TATInteractionTargeterComponent.MaxInteractionRange 175cm
 ## LOS endpoints stop this far in front of the interaction point so the prop's
 ## own surface never reads as an occluder. A wall between still blocks.
-const INTERACT_LOS_STANDOFF_M: float = 0.25
+## W5A: 0.25 left the Den wardrobe ray inside the cabinet — its authored
+## interaction point sits 0.48 m behind the front face, so the endpoint has to
+## clear ~0.5 m. The half-distance cap that used to shorten this again for a
+## close player was the actual blocker and is gone (see get_nearest_interactable).
+const INTERACT_LOS_STANDOFF_M: float = 0.6
 ## KF25/KF26: F taps the primary action (pick pocket / OPEN), holding F runs
 ## the stacked secondary ([HOLD] TAKEDOWN on a guard, [HOLD] LOCK on a door).
 const HOLD_INTERACT_SEC: float = 0.45
@@ -279,6 +308,12 @@ var _mantle_start: Vector3 = Vector3.ZERO
 var _mantle_end: Vector3 = Vector3.ZERO
 var _mantle_t: float = 0.0
 var _mantle_clip_role: String = "mantle_100"
+## W5A step-up: rise committed this frame (0 when none) and the pending camera
+## offset the eye still owes (eased out so a riser does not jolt the view).
+var _step_rise_this_frame: float = 0.0
+var _step_camera_offset: float = 0.0
+## Head-height lerp target without the step offset (crouch/stand base).
+var _head_base_y: float = STAND_HEAD_HEIGHT
 var _was_wall_climbing: bool = false
 var is_wall_climbing: bool = false
 var astral_active: bool = false
@@ -557,11 +592,12 @@ func revive() -> void:
 func _build_body() -> void:
 	col_shape = CollisionShape3D.new()
 	var cap: CapsuleShape3D = CapsuleShape3D.new()
-	# Spider capsule: half-height 89 cm, radius 32 cm (centre y = 0.89).
-	cap.radius = 0.32
-	cap.height = 1.78
+	# Authored UE capsule: half-height 91 cm, radius 32 cm (centre y = 0.91,
+	# origin at the feet). W5A replaced the port's 1.78 m / 0.89 m shape.
+	cap.radius = CAPSULE_RADIUS_M
+	cap.height = CAPSULE_HALF_HEIGHT_M * 2.0
 	col_shape.shape = cap
-	col_shape.position = Vector3(0, 0.89, 0)
+	col_shape.position = Vector3(0, CAPSULE_HALF_HEIGHT_M, 0)
 	add_child(col_shape)
 	floor_max_angle = deg_to_rad(FLOOR_MAX_ANGLE_DEG)
 	floor_snap_length = FLOOR_SNAP_LENGTH
@@ -682,7 +718,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		is_crouching = not is_crouching
 		var cap: CapsuleShape3D = col_shape.shape as CapsuleShape3D
 		if cap != null:
-			cap.height = BODY_HEIGHT_CROUCH if is_crouching else BODY_HEIGHT_STANDING
+			cap.height = BODY_HEIGHT_CROUCH if is_crouching else CAPSULE_HALF_HEIGHT_M * 2.0
 			col_shape.position.y = cap.height * 0.5
 	elif event.is_action_pressed("interact"):
 		# Defer when a hold-secondary is offered; otherwise interact on press.
@@ -1041,9 +1077,16 @@ func _physics_process(delta: float) -> void:
 		_update_zipwire_cable()
 		return
 
-	# Smooth crouch camera height interpolation.
+	# Smooth crouch camera height interpolation. W5A: the pending step-up rise is
+	# eased out through the head height, so a committed riser lifts the body at
+	# once but the eye follows over ~0.2 s instead of snapping. The lerp target
+	# is tracked separately (_head_base_y) because feeding the offset back into
+	# the same lerped value compounded it into a view sink; the camera itself
+	# cannot carry it because SpringArm3D rewrites the child camera's position.
+	_step_camera_offset = lerpf(_step_camera_offset, 0.0, clampf(delta * STEP_CAMERA_SMOOTH_RATE, 0.0, 1.0))
 	var target_head_h: float = CROUCH_HEAD_HEIGHT if is_crouching else STAND_HEAD_HEIGHT
-	head.position.y = lerpf(head.position.y, target_head_h, delta * 10.0)
+	_head_base_y = lerpf(_head_base_y, target_head_h, delta * 10.0)
+	head.position.y = _head_base_y - _step_camera_offset
 
 	# Wall-raycast-clamped Q/R lean.
 	var target_lean: float = 0.0
@@ -1183,29 +1226,20 @@ func _physics_process(delta: float) -> void:
 		var steer: float = 14.0 if is_on_floor() else 14.0 * AIR_CONTROL
 		velocity.x = lerpf(velocity.x, wish.x * speed, delta * steer)
 		velocity.z = lerpf(velocity.z, wish.z * speed, delta * steer)
+	# W5A UE-shaped step-up (CharMoveComp.MaxStepHeight 45 cm), evaluated before
+	# the slide so the horizontal move runs from the raised pose. This is the
+	# traversal the authored stair flights were built for; auto-mantle must not
+	# be the thing that lifts the player over a 25 cm riser.
+	_step_rise_this_frame = 0.0
+	if is_on_floor() and not climbing_now and not is_mantling:
+		_step_rise_this_frame = _try_step_up(Vector3(velocity.x, 0.0, velocity.z))
 	move_and_slide()
-
-	# Stair step-up assist, bounded by the 0.3 m snap philosophy. When the body
-	# is grounded but a riser face blocked horizontal motion, test a lift ->
-	# forward -> down sequence and commit only if all three fit: headroom must
-	# be free, the lifted pose must advance one tread, and a floor must catch
-	# the drop. 0.18 m risers climb; 0.6 m walls still block, and
-	# floor_block_on_wall keeps true walls solid. One assist per frame at most.
-	if not climbing_now and not is_mantling and is_on_floor() and is_on_wall():
-		var push_dir := Vector3(wish.x, 0.0, wish.z)
-		if push_dir.length() > 0.05:
-			push_dir = push_dir.normalized()
-			if not test_move(global_transform, Vector3.UP * (STEP_UP_MAX_M + STEP_UP_SKIN_M)):
-				var stepped := global_transform
-				stepped.origin += Vector3.UP * STEP_UP_MAX_M
-				if not test_move(stepped, push_dir * STEP_UP_FORWARD_M):
-					stepped.origin += push_dir * STEP_UP_FORWARD_M
-					if test_move(stepped, Vector3.DOWN * (STEP_UP_MAX_M + FLOOR_SNAP_LENGTH)):
-						global_position = stepped.origin
 
 	# Grounded mantle: walking into a 0.5-1.2 m ledge used to do nothing until
 	# the player jumped. is_on_wall() is populated by the move_and_slide above.
-	if not is_mantling and (not is_on_floor() or is_on_wall()) 			and (Input.is_action_pressed("jump") or wish.length() > 0.1):
+	# W5A: a committed step-up already answered this obstacle, so mantle is not
+	# allowed to cancel it on the same frame.
+	if not _step_rise_this_frame and not is_mantling and (not is_on_floor() or is_on_wall()) 			and (Input.is_action_pressed("jump") or wish.length() > 0.1):
 		try_auto_mantle()
 
 	# Footstep cadence timer while moving on floor. Astral form makes no noise.
@@ -1563,6 +1597,66 @@ func _update_zipwire_cable() -> void:
 	_zipwire_cable_mesh.basis = Basis(x_axis, y_axis * dist, z_axis)
 
 
+## W5A UE-shaped step-up, run before move_and_slide on the normal locomotion
+## path. UCharacterMovementComponent::StepUp is: horizontal move blocked at body
+## height, lift by MaxStepHeight, probe forward, drop onto the floor, commit.
+## Here the blocked test and the floor probe are both frame-local (test_move +
+## a ray) so nothing depends on the previous slide's is_on_wall() flag.
+##
+## The probe origin is measured from the capsule SURFACE, not the axis:
+## UCharacterMovementComponent sweeps the capsule, so its 0.20 m of remaining
+## travel starts at the shape. With a 0.32 m radius a ray cast from the axis
+## lands on the tread the body already stands on (the W5A audit bug); from the
+## surface it lands 0.20 m inside the authored 0.33 m tread.
+##
+## Returns the committed rise in metres (0.0 = no step committed).
+## A blocked horizontal sweep whose normal is walkable is a slope, not a riser,
+## so ramps are left to move_and_slide (a horizontal sweep reports a "blocked"
+## collision on a 35 deg ramp too; without this filter the lift fired every
+## frame and a ramp became an elevator).
+func _try_step_up(planar_velocity: Vector3) -> float:
+	if planar_velocity.length() < 0.05:
+		return 0.0
+	var dir: Vector3 = Vector3(planar_velocity.x, 0.0, planar_velocity.z).normalized()
+	# Walkable-normal threshold: a surface within the authored floor angle is a
+	# slope that move_and_slide already climbs along, not a riser.
+	var walkable_ny: float = cos(deg_to_rad(FLOOR_MAX_ANGLE_DEG))
+	# "The move was blocked at body height" test. A slope reports a blocked
+	# horizontal sweep too (its normal is walkable), so the normal must be
+	# checked or every ramp would be teleported up once per frame.
+	var col := KinematicCollision3D.new()
+	if not test_move(global_transform, dir * STEP_UP_FORWARD_M, col):
+		return 0.0
+	if col.get_normal().y >= walkable_ny:
+		return 0.0
+	# Headroom for the lift (a low ceiling must not be punched through).
+	if test_move(global_transform, Vector3.UP * (STEP_UP_MAX_M + STEP_UP_SKIN_M)):
+		return 0.0
+	var w3d: World3D = get_world_3d()
+	if w3d == null or w3d.direct_space_state == null:
+		return 0.0
+	var reach: float = CAPSULE_RADIUS_M + STEP_UP_FORWARD_M
+	var probe_top: Vector3 = global_position + dir * reach + Vector3.UP * STEP_UP_MAX_M
+	var probe_bottom: Vector3 = probe_top - Vector3.UP * (STEP_UP_MAX_M + STEP_UP_DOWN_M)
+	var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(probe_top, probe_bottom, 1, [get_rid()])
+	var hit: Dictionary = w3d.direct_space_state.intersect_ray(q)
+	if hit.is_empty():
+		return 0.0
+	# UCharacterMovementComponent only commits a step onto a walkable floor.
+	if (hit.get("normal", Vector3.UP) as Vector3).y < walkable_ny:
+		return 0.0
+	var floor_y: float = (hit["position"] as Vector3).y
+	var rise: float = floor_y - global_position.y
+	# (0.02, 0.45]: below the floor is not a step, above MaxStepHeight is a wall
+	# (0.6 m walls still block, floor_block_on_wall stays true).
+	if rise <= 0.02 or rise > STEP_UP_MAX_M:
+		return 0.0
+	global_position.y = floor_y
+	velocity.y = 0.0
+	_step_camera_offset = clampf(_step_camera_offset + rise, 0.0, STEP_CAMERA_SMOOTH_MAX_M)
+	return rise
+
+
 ## Designer blocking volumes are invisible collision proxies: they stop the
 ## player walking through authored space, but they are not walls, ledges or
 ## grapple anchors. Every traversal probe (mantle, wall climb, zipwire) must
@@ -1613,7 +1707,22 @@ func try_auto_mantle() -> bool:
 	if rad_to_deg(wall_in.normalized().angle_to(fwd)) > MANTLE_MAX_ANGLE_DEG:
 		return false
 	var wp: Vector3 = wall_hit["position"] as Vector3
-	var top_from: Vector3 = Vector3(wp.x + fwd.x * 0.45, global_position.y + MANTLE_MAX_HEIGHT_M + 0.25, wp.z + fwd.z * 0.45)
+	# W5A: only mantle a wall the body is actually against. The 0.85 m wall probe
+	# reaches the third riser of a stair run while the body stands on the first
+	# tread, so an untouched riser 0.5 m ahead read as a mantleable wall and the
+	# 0.3 s animation fired mid-climb. A quarter metre past the capsule surface
+	# keeps the authored ledge seams (E2E seam at 0.18 m) and rejects stairs.
+	var wall_dist_m: float = Vector2(wp.x - global_position.x, wp.z - global_position.z).length()
+	if wall_dist_m > CAPSULE_RADIUS_M + 0.25:
+		return false
+	# W5A: probe the ledge just past the wall face (half the capsule radius)
+	# instead of 0.45 m out. On a stair flight the wall hit is the next riser,
+	# and 0.45 m forward overshoots the 0.33 m tread onto a tread two or three
+	# steps up, which read as a 0.5-0.75 m "ledge" and started a mantle in the
+	# middle of the climb. Half a radius stays on any ledge a 0.32 m capsule
+	# can actually stand on, and a 0.25 m riser now fails the 0.45 m floor.
+	var ledge_probe_m: float = CAPSULE_RADIUS_M * 0.5
+	var top_from: Vector3 = Vector3(wp.x + fwd.x * ledge_probe_m, global_position.y + MANTLE_MAX_HEIGHT_M + 0.25, wp.z + fwd.z * ledge_probe_m)
 	var top_to: Vector3 = Vector3(top_from.x, global_position.y + 0.45, top_from.z)
 	var top_hit: Dictionary = space.intersect_ray(PhysicsRayQueryParameters3D.create(top_from, top_to, 1, excl))
 	if top_hit.is_empty():
@@ -1628,7 +1737,13 @@ func try_auto_mantle() -> bool:
 	var ledge_h: float = ledge_pos.y - global_position.y
 	if ledge_h < 0.45 or ledge_h > MANTLE_MAX_HEIGHT_M:
 		return false
-	var need_h: float = 1.05 if is_crouching else 1.8
+	# W5A mantle gate: an obstacle inside step height is a walk. Without this a
+	# 25 cm riser started the 0.3 s auto-mantle, which cancelled the step assist
+	# and read as a hitch at every flight. Require the authored jump press in
+	# that band (GE_Traversal_AutoMantle is a jump-triggered montage).
+	if ledge_h <= STEP_UP_MAX_M + MANTLE_STEP_GUARD_M and not Input.is_action_pressed("jump"):
+		return false
+	var need_h: float = 1.05 if is_crouching else CAPSULE_HALF_HEIGHT_M * 2.0
 	var head_hit: Dictionary = space.intersect_ray(PhysicsRayQueryParameters3D.create(ledge_pos + Vector3.UP * 0.1, ledge_pos + Vector3.UP * need_h, 1, excl))
 	if not head_hit.is_empty():
 		return false
@@ -1831,11 +1946,17 @@ func get_nearest_interactable() -> Node:
 		# World-geometry LOS (layer 1), no facing cone: the reference lets the
 		# player interact from the side. The interactable's own interaction
 		# point is used when it exposes one (method or meta), else +0.5 m; the
-		# ray stops just short of that point so the prop itself cannot occlude.
+		# ray stops short of that point so the prop itself cannot occlude.
+		# W5A: the standoff used to be capped at half the eye-to-point distance,
+		# which for a close player put the endpoint *inside* the prop again. The
+		# Den wardrobe's authored point sits 0.48 m behind its front face, so the
+		# cap (not the 0.25 constant alone) was what kept the prompt unresolved.
+		# The cap is gone: the endpoint is always INTERACT_LOS_STANDOFF_M before
+		# the point, or 0.05 m before it for a point closer than the standoff.
 		var eye: Vector3 = _player_eye_position()
 		var point: Vector3 = _interactable_point(node3d)
 		var back: Vector3 = eye - point
-		var standoff: float = minf(INTERACT_LOS_STANDOFF_M, back.length() * 0.5)
+		var standoff: float = minf(INTERACT_LOS_STANDOFF_M, maxf(0.0, back.length() - 0.05))
 		if not _los_clear(eye, point + back.normalized() * standoff, [get_rid()]):
 			continue
 		best_d = d

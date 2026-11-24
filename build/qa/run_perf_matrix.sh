@@ -25,6 +25,21 @@
 # pre-warm the "before" sample is an idle clock and any before/after delta is
 # GPU boost, not throttling.
 #
+# Thermal/memory guard (fail closed; see docs/reports/w4p-thermal-guard.md):
+#   --start-temp=<C>   refuse to start when the package is above this (78)
+#   --max-temp=<C>     kill the launch at or above this (95)
+#   --max-rss-mb=<MB>  fail the run when VmHWM exceeds this (8192)
+#   --sample-sec=<s>   independent sampler cadence in seconds (1)
+# Both the pre-warm and the measured run are covered by their own 1 s sampler
+# process, not by the wait loop: PERF_THERMAL_SAMPLE is logged every tick, the
+# peak is reported as PERF_THERMAL_PREWARM_PEAK / peak_cpu_c, and the sampled
+# PID is killed at >= --max-temp. A `?` (unknown) temperature is never treated
+# as safe: the wrapper aborts before launch and mid-run. Each launch runs in a
+# user systemd scope with MemoryMax=12G / MemorySwapMax=0 when systemd-run
+# works; otherwise the direct launch is used and PERF_WARNING says so.
+# --guard-check=<C> runs only the temperature decision on a synthetic reading
+# (no game, no lock) and exits 0/8; build/qa/test_perf_guard.sh uses it.
+#
 # Display: the host compositor by default. Xvfb is only a fallback for a
 # headless machine; its presentation path adds ~25 ms/frame at 720p on the
 # reference RTX 4070, so Xvfb numbers are labelled and are not comparable to a
@@ -68,7 +83,13 @@ WARMUP="180"
 SETTLE="30"
 TIMEOUT="1800"
 DEADLINE=""
-MAX_TEMP="${PERF_MAX_TEMP:-92}"
+MAX_TEMP="${PERF_MAX_TEMP:-95}"
+START_TEMP="${PERF_START_TEMP:-78}"
+MAX_RSS_MB="${PERF_MAX_RSS_MB:-8192}"
+SAMPLE_SEC="${PERF_THERMAL_SAMPLE_SEC:-1}"
+MEM_MAX="${PERF_SCOPE_MEMORY_MAX:-12G}"
+GUARD_CHECK=0
+GUARD_CHECK_TEMP=""
 HOST_DISPLAY="${PERF_HOST_DISPLAY:-1}"
 FOV="54.54"
 FAR="4000"
@@ -99,6 +120,10 @@ for arg in "$@"; do
     --timeout=*)  TIMEOUT="${arg#*=}" ;;
     --deadline=*) DEADLINE="${arg#*=}" ;;
     --max-temp=*) MAX_TEMP="${arg#*=}" ;;
+    --start-temp=*) START_TEMP="${arg#*=}" ;;
+    --max-rss-mb=*) MAX_RSS_MB="${arg#*=}" ;;
+    --sample-sec=*) SAMPLE_SEC="${arg#*=}" ;;
+    --guard-check=*) GUARD_CHECK=1; GUARD_CHECK_TEMP="${arg#*=}" ;;
     --fov=*)      FOV="${arg#*=}" ;;
     --far=*)      FAR="${arg#*=}" ;;
     --occlusion=*) OCCLUSION="${arg#*=}" ;;
@@ -150,6 +175,46 @@ case "$PREWARM" in 0|1) ;; *) echo "ABORT: --prewarm must be 0|1" >&2; exit 2 ;;
 if ! [[ "$MAX_TEMP" =~ ^[0-9]+$ ]] || [ "$MAX_TEMP" -lt 60 ] || [ "$MAX_TEMP" -gt 105 ]; then
   echo "ABORT: --max-temp must be an integer 60..105, got '$MAX_TEMP'" >&2
   exit 2
+fi
+if ! [[ "$START_TEMP" =~ ^[0-9]+$ ]] || [ "$START_TEMP" -lt 60 ] || [ "$START_TEMP" -gt 105 ]; then
+  echo "ABORT: --start-temp must be an integer 60..105, got '$START_TEMP'" >&2
+  exit 2
+fi
+if [ "$START_TEMP" -ge "$MAX_TEMP" ]; then
+  echo "ABORT: --start-temp ($START_TEMP) must be lower than --max-temp ($MAX_TEMP); a start headroom of 0 C lets a 91 C machine start with max 92 C" >&2
+  exit 2
+fi
+if ! [[ "$MAX_RSS_MB" =~ ^[0-9]+$ ]] || [ "$MAX_RSS_MB" -lt 256 ] || [ "$MAX_RSS_MB" -gt 262144 ]; then
+  echo "ABORT: --max-rss-mb must be an integer 256..262144, got '$MAX_RSS_MB'" >&2
+  exit 2
+fi
+if ! [[ "$SAMPLE_SEC" =~ ^[0-9]+$ ]] || [ "$SAMPLE_SEC" -lt 1 ] || [ "$SAMPLE_SEC" -gt 60 ]; then
+  echo "ABORT: --sample-sec must be an integer 1..60, got '$SAMPLE_SEC'" >&2
+  exit 2
+fi
+
+# Single source of truth for the thermal decision. `?` (or any non-numeric
+# reading) is `unknown`, never `ok`: this is the fail-closed path. A reading
+# exactly at --start-temp is allowed; only a strictly hotter idle refuses.
+thermal_decision() {
+  local t="$1" start_max="$2" max="$3"
+  case "$t" in
+    ''|*[!0-9]*) printf 'unknown'; return 0 ;;
+  esac
+  if [ "$t" -ge "$max" ]; then printf 'refuse_max'; return 0; fi
+  if [ "$t" -gt "$start_max" ]; then printf 'refuse_start'; return 0; fi
+  printf 'ok'
+}
+
+# Synthetic self-check: exercise the exact runtime decision with a supplied
+# temperature, before any lock, log, display or game process is touched.
+if [ "$GUARD_CHECK" = "1" ]; then
+  DECISION="$(thermal_decision "$GUARD_CHECK_TEMP" "$START_TEMP" "$MAX_TEMP")"
+  echo "GUARD_CHECK temp=${GUARD_CHECK_TEMP:-?} start_max=$START_TEMP max=$MAX_TEMP decision=$DECISION"
+  case "$DECISION" in
+    ok) exit 0 ;;
+    *) exit 8 ;;
+  esac
 fi
 
 if [ -z "$TAG" ]; then
@@ -283,8 +348,9 @@ loadavg_sample() {
 }
 
 # CPU package temperature for the thermal guard. Prefer the kernel thermal
-# zones (millidegrees) and fall back to `sensors -u`. `?` means unknown; the
-# guard then only logs, it cannot enforce a limit.
+# zones (millidegrees) and fall back to `sensors -u`. `?` means unknown and is
+# a hard failure: the wrapper refuses to run without a readable package sensor
+# (the guard cannot protect a machine it cannot see).
 cpu_package_temp() {
   local z t best=""
   for z in /sys/class/thermal/thermal_zone*; do
@@ -305,9 +371,214 @@ cpu_package_temp() {
 }
 
 game_rss_mb() {
-  local pid="$1"
+  local pid="$1" v
   [ -r "/proc/${pid}/status" ] || { printf '0'; return; }
-  awk '/^VmRSS:/{printf "%d",$2/1024}' "/proc/${pid}/status" 2>/dev/null || printf '0'
+  v="$(awk '/^VmRSS:/{printf "%d",$2/1024}' "/proc/${pid}/status" 2>/dev/null)"
+  printf '%s' "${v:-0}"
+}
+
+# Kernel high-water mark: the peak resident set the process ever reached. It is
+# cumulative and therefore survives a later drop in VmRSS, which is why the
+# --max-rss-mb gate uses it (VmRSS samples are kept for the curve only).
+game_vmhwm_mb() {
+  local pid="$1" v
+  [ -r "/proc/${pid}/status" ] || { printf '0'; return; }
+  v="$(awk '/^VmHWM:/{printf "%d",$2/1024}' "/proc/${pid}/status" 2>/dev/null)"
+  printf '%s' "${v:-0}"
+}
+
+# Read the key=value summary a stopped sampler wrote. Sets TH_PEAK/TH_RSS/
+# TH_HWM/TH_ABORT (0 when absent, so a failed write fails closed on "abort").
+read_thermal_out() {
+  local f="$1"
+  TH_PEAK=0; TH_RSS=0; TH_HWM=0; TH_ABORT="none"
+  [ -r "$f" ] || { TH_ABORT="missing_summary"; return; }
+  TH_PEAK="$(awk -F= '/^peak_temp=/{print $2}' "$f" 2>/dev/null)"
+  TH_RSS="$(awk -F= '/^rss_peak_mb=/{print $2}' "$f" 2>/dev/null)"
+  TH_HWM="$(awk -F= '/^vmhwm_mb=/{print $2}' "$f" 2>/dev/null)"
+  TH_ABORT="$(awk -F= '/^abort=/{print $2}' "$f" 2>/dev/null)"
+  TH_PEAK="${TH_PEAK:-0}"; TH_RSS="${TH_RSS:-0}"; TH_HWM="${TH_HWM:-0}"; TH_ABORT="${TH_ABORT:-none}"
+}
+
+# Kill a launch through its scope when one exists (the scope owns the whole
+# process group), then the sampled PID directly. TERM first, KILL after 2 s.
+kill_guarded() {
+  local pid="$1" unit="$2" why="$3"
+  echo "PERF_THERMAL_KILL reason=${why:-manual} pid=$pid unit=${unit:-none} ts=$(date -Is)" >> "$LOG"
+  if [ -n "$unit" ] && command -v systemctl >/dev/null 2>&1; then
+    systemctl --user stop "$unit" >/dev/null 2>&1 || true
+  fi
+  [ -n "$pid" ] || return 0
+  kill -TERM "$pid" 2>/dev/null
+  sleep 2
+  kill -KILL "$pid" 2>/dev/null
+}
+
+# A process is alive only if it is not a zombie: `kill -0` still succeeds for
+# an unreaped child, which would keep the wait loop spinning until the timeout.
+process_alive() {
+  local pid="$1" st
+  [ -n "$pid" ] || return 1
+  [ -r "/proc/${pid}/stat" ] || return 1
+  st="$(sed -n 's/^[0-9]* (.*) \(.\).*/\1/p' "/proc/${pid}/stat" 2>/dev/null | head -1)"
+  [ -n "$st" ] && [ "$st" != "Z" ]
+}
+
+# --- memory scope ----------------------------------------------------------
+# MemoryMax is a hard cgroup cap the kernel enforces even if the sampler is
+# starved; MemorySwapMax=0 stops the run from silently paging instead of
+# failing. systemd-run --scope runs the command as a child of systemd-run and
+# waits synchronously, so stdio redirection is inherited unchanged.
+SCOPE_MODE="direct"
+detect_scope() {
+  if ! command -v systemd-run >/dev/null 2>&1; then
+    SCOPE_MODE="direct"
+    echo "PERF_WARNING systemd-run unavailable; launching directly (no MemoryMax, no MemorySwapMax=0)" >> "$LOG"
+    return
+  fi
+  if timeout 5 systemd-run --user --scope --quiet --collect \
+      --property="MemoryMax=$MEM_MAX" --property=MemorySwapMax=0 true >/dev/null 2>&1; then
+    SCOPE_MODE="systemd"
+  else
+    SCOPE_MODE="direct"
+    echo "PERF_WARNING systemd-run --user --scope failed; launching directly (no MemoryMax, no MemorySwapMax=0)" >> "$LOG"
+  fi
+}
+
+# Start one guarded launch in the background. In scope mode the game is a child
+# of systemd-run, so its real PID is written by `bash -c '... exec "$@"'` into
+# a pidfile before exec — that PID is what the sampler watches and kills.
+LAUNCH_PID=""
+GAME_PID=""
+LAUNCH_UNIT=""
+start_launch() { # phase logfile
+  local phase="$1" logfile="$2" unit_suffix pidfile prefix=() i=0
+  LAUNCH_UNIT=""
+  GAME_PID=""
+  [ "$logfile" = "$LOG" ] || : > "$logfile"
+  if [ "$SCOPE_MODE" = "systemd" ]; then
+    unit_suffix="$(printf '%s' "$SAFE_TAG" | cut -c1-48)"
+    LAUNCH_UNIT="tat2-perf-${unit_suffix}-${phase}"
+    pidfile="$OUT/.launch_${phase}_${SAFE_TAG}.pid"
+    rm -f "$pidfile"
+    prefix=(systemd-run --user --scope --quiet --collect
+      --expand-environment=no
+      --unit="$LAUNCH_UNIT"
+      --property="MemoryMax=$MEM_MAX"
+      --property=MemorySwapMax=0)
+    "${prefix[@]}" "${STDBUF_CMD[@]}" "${RUN_ENV[@]}" \
+      bash -c 'printf "%s\n" "$$" > "$1"; shift; exec "$@"' _ \
+      "$pidfile" "$BIN" "${GAME_ARGS[@]}" >> "$logfile" 2>&1 &
+    LAUNCH_PID=$!
+    while [ ! -s "$pidfile" ] && [ "$i" -lt 50 ]; do sleep 0.1; i=$((i + 1)); done
+    if [ ! -s "$pidfile" ]; then
+      echo "ABORT: $phase launch did not report its PID; refusing to run unsampled" >&2
+      echo "PERF_THERMAL_FAIL reason=pid_unknown phase=$phase" >> "$LOG"
+      kill_guarded "$LAUNCH_PID" "$LAUNCH_UNIT" pid_unknown
+      exit 8
+    fi
+    GAME_PID="$(cat "$pidfile")"
+  else
+    "${STDBUF_CMD[@]}" "${RUN_ENV[@]}" "$BIN" "${GAME_ARGS[@]}" >> "$logfile" 2>&1 &
+    LAUNCH_PID=$!
+    GAME_PID=$LAUNCH_PID
+  fi
+}
+
+# Independent thermal sampler: its own process, its own 1 s cadence, no
+# dependency on the wait loop. It writes PERF_THERMAL_SAMPLE every tick,
+# rewrites the peak summary each tick (so a kill cannot lose it), and kills the
+# sampled PID at >= --max-temp or on an unknown (`?`) reading. Fail closed: if
+# it never starts, the caller aborts instead of running unguarded.
+THERMAL_SAMPLER_PID=""
+start_thermal_sampler() { # pid phase summary_file
+  local pid="$1" phase="$2" out="$3" i=0
+  rm -f "$out" "$out.ready"
+  (
+    peak=0; rss_peak=0; hwm=0; elapsed=0; reason=""
+    printf 'peak_temp=0\nrss_peak_mb=0\nvmhwm_mb=0\nabort=none\n' > "$out"
+    printf 'ready\n' > "$out.ready"
+    while process_alive "$pid"; do
+      t="$(cpu_package_temp)"
+      rss="$(game_rss_mb "$pid")"
+      hwm_now="$(game_vmhwm_mb "$pid")"
+      [ "$hwm_now" -gt "$hwm" ] && hwm="$hwm_now"
+      [ "$rss" -gt "$rss_peak" ] && rss_peak="$rss"
+      if [ "$t" = "?" ] || ! [[ "$t" =~ ^[0-9]+$ ]]; then
+        reason="unknown_temp"
+      else
+        [ "$t" -gt "$peak" ] && peak="$t"
+        if [ "$t" -ge "$MAX_TEMP" ]; then reason="temp"; fi
+      fi
+      printf 'peak_temp=%s\nrss_peak_mb=%s\nvmhwm_mb=%s\nabort=%s\n' \
+        "$peak" "$rss_peak" "$hwm" "${reason:-none}" > "$out"
+      echo "PERF_THERMAL_SAMPLE phase=$phase pid=$pid t=$t rss_mb=$rss vmhwm_mb=$hwm_now elapsed=${elapsed}s max_c=$MAX_TEMP ts=$(date -Is)" >> "$LOG"
+      [ -z "$reason" ] || break
+      sleep "$SAMPLE_SEC"
+      elapsed=$((elapsed + SAMPLE_SEC))
+    done
+    if [ -n "$reason" ]; then
+      echo "PERF_THERMAL_ABORT phase=$phase reason=$reason peak_c=$peak max_c=$MAX_TEMP" >> "$LOG"
+      kill_guarded "$pid" "$LAUNCH_UNIT" "$reason"
+    fi
+  ) &
+  THERMAL_SAMPLER_PID=$!
+  while [ ! -f "$out.ready" ] && [ "$i" -lt 50 ]; do sleep 0.1; i=$((i + 1)); done
+  if [ ! -f "$out.ready" ]; then
+    echo "ABORT: thermal sampler did not start; refusing to run unguarded" >&2
+    echo "PERF_THERMAL_FAIL reason=sampler_missing phase=$phase" >> "$LOG"
+    kill_guarded "$GAME_PID" "$LAUNCH_UNIT" sampler_missing
+    exit 8
+  fi
+}
+
+stop_thermal_sampler() {
+  local pid="$THERMAL_SAMPLER_PID" i=0
+  THERMAL_SAMPLER_PID=""
+  [ -n "$pid" ] || return 0
+  while process_alive "$pid" && [ "$i" -lt 20 ]; do sleep 0.1; i=$((i + 1)); done
+  kill -TERM "$pid" 2>/dev/null
+  wait "$pid" 2>/dev/null
+  return 0
+}
+
+# Wait for one launch without sampling (the sampler is independent). `PERF_DONE`
+# is the completion marker; a windowed export may linger 10 s in teardown after
+# it. A missing marker before the wall clock is a truncation/timeout.
+LAUNCH_ST=0
+WAIT_FORCED_KILL=0
+VMHWM_MB=0
+wait_launch() { # phase logfile timeout expect_done
+  local phase="$1" logfile="$2" timeout_s="$3" expect_done="$4"
+  local started now grace_start done_seen
+  started=$(date +%s); done_seen=0; grace_start=0
+  WAIT_FORCED_KILL=0; VMHWM_MB=0
+  while process_alive "$GAME_PID"; do
+    now=$(date +%s)
+    if [ "$expect_done" = "1" ] && [ "$done_seen" -eq 0 ] && grep -q "^PERF_DONE " "$logfile" 2>/dev/null; then
+      done_seen=1
+      grace_start=$now
+    fi
+    if [ "$done_seen" -eq 1 ] && [ $((now - grace_start)) -ge 10 ]; then
+      echo "PERF_TEARDOWN phase=$phase forced_kill=1 after PERF_DONE" >> "$LOG"
+      kill_guarded "$GAME_PID" "$LAUNCH_UNIT" teardown
+      WAIT_FORCED_KILL=1
+      break
+    fi
+    if [ $((now - started)) -ge "$timeout_s" ]; then
+      echo "PERF_TIMEOUT phase=$phase wall=${timeout_s}s no PERF_DONE" >> "$LOG"
+      kill_guarded "$GAME_PID" "$LAUNCH_UNIT" timeout
+      break
+    fi
+    sleep 1
+  done
+  # VmHWM at exit, before the process is reaped and /proc disappears.
+  VMHWM_MB="$(game_vmhwm_mb "$GAME_PID")"
+  wait "$LAUNCH_PID" 2>/dev/null
+  LAUNCH_ST=$?
+  if [ "$WAIT_FORCED_KILL" -eq 1 ] && grep -q "^PERF_DONE " "$logfile"; then
+    LAUNCH_ST=0
+  fi
 }
 
 XVFB_PID=""
@@ -315,6 +586,16 @@ DISPLAY_NUM=""
 RUN_ENV=()
 cleanup() {
   set +e
+  if [ -n "${THERMAL_SAMPLER_PID:-}" ]; then
+    kill -TERM "$THERMAL_SAMPLER_PID" 2>/dev/null
+    wait "$THERMAL_SAMPLER_PID" 2>/dev/null
+  fi
+  if [ -n "${GAME_PID:-}" ] && process_alive "$GAME_PID"; then
+    if [ -n "${LAUNCH_UNIT:-}" ] && command -v systemctl >/dev/null 2>&1; then
+      systemctl --user stop "$LAUNCH_UNIT" >/dev/null 2>&1
+    fi
+    kill -TERM "$GAME_PID" 2>/dev/null
+  fi
   if [ -n "$XVFB_PID" ]; then
     kill -TERM "$XVFB_PID" 2>/dev/null
     wait "$XVFB_PID" 2>/dev/null
@@ -371,19 +652,40 @@ if [ -n "$OTHER_GODOT" ]; then
 fi
 
 start_display
+STDBUF_CMD=()
+if command -v stdbuf >/dev/null 2>&1; then STDBUF_CMD=(stdbuf -oL -eL); fi
+detect_scope
+echo "PERF_MEM_SCOPE mode=${SCOPE_MODE} memory_max=${MEM_MAX} swap_max=0 pid=${BASHPID}" >> "$LOG"
 
 # Pre-warm: a real run of the same scene raises clocks and temperature to the
 # steady state the measured run will see. Without it "GPU before" is an idle
 # clock and the before/after delta looks like throttling when it is boost.
+# Like the measured run it is wrapped in a memory scope and covered by its own
+# 1 s sampler; it is never launched unguarded.
 TEMP_PEAK=0
-RSS_PEAK=0
-THERMAL_ABORT=0
 TEMP_START="$(cpu_package_temp)"
-if [ "$TEMP_START" != "?" ] && [ "$TEMP_START" -ge "$MAX_TEMP" ]; then
-  echo "ABORT: CPU package ${TEMP_START}C >= --max-temp ${MAX_TEMP}C; cool the machine before measuring" >&2
-  exit 8
-fi
-echo "PERF_THERMAL before=${TEMP_START}C max_c=${MAX_TEMP}" >> "$LOG"
+PREWARM_PEAK=0
+PREWARM_HWM=0
+THERMAL_ABORT="none"
+echo "PERF_THERMAL start=${TEMP_START} start_max=${START_TEMP} max=${MAX_TEMP} rss_max_mb=${MAX_RSS_MB} sample_sec=${SAMPLE_SEC} scope=${SCOPE_MODE} memory_max=${MEM_MAX} swap_max=0" >> "$LOG"
+echo "PERF_THERMAL before=${TEMP_START}C start_c=${START_TEMP}C max_c=${MAX_TEMP}C" >> "$LOG"
+DECISION="$(thermal_decision "$TEMP_START" "$START_TEMP" "$MAX_TEMP")"
+case "$DECISION" in
+  unknown)
+    echo "ABORT: CPU package temperature is unknown (?); refusing to run unguarded (fail closed)" >&2
+    echo "PERF_THERMAL_FAIL reason=unknown_temp phase=precheck" >> "$LOG"
+    exit 8
+    ;;
+  refuse_max)
+    echo "ABORT: CPU package ${TEMP_START}C >= --max-temp ${MAX_TEMP}C; cool the machine before measuring" >&2
+    exit 8
+    ;;
+  refuse_start)
+    echo "ABORT: CPU package ${TEMP_START}C > --start-temp ${START_TEMP}C (max ${MAX_TEMP}C); refusing to start a sustained run, let the machine idle down first" >&2
+    exit 8
+    ;;
+esac
+
 PREWARM_STATUS="skipped"
 if [ "$PREWARM" = "1" ]; then
   SAVED_FRAMES="$FRAMES"; SAVED_POSE="$POSE"; SAVED_WARMUP="$WARMUP"; SAVED_DEADLINE="$DEADLINE"
@@ -392,11 +694,17 @@ if [ "$PREWARM" = "1" ]; then
   WARMUP="30"
   DEADLINE="$PREWARM_TIMEOUT"
   build_game_args
-  STDBUF_PW=()
-  if command -v stdbuf >/dev/null 2>&1; then STDBUF_PW=(stdbuf -oL -eL); fi
-  timeout --signal=TERM --kill-after=10 "$PREWARM_TIMEOUT" \
-    "${STDBUF_PW[@]}" "${RUN_ENV[@]}" "$BIN" "${GAME_ARGS[@]}" > "$PREWARM_LOG" 2>&1
-  PW_ST=$?
+  PW_OUT="$OUT/.thermal_prewarm_${SAFE_TAG}.summary"
+  start_launch prewarm "$PREWARM_LOG"
+  start_thermal_sampler "$GAME_PID" prewarm "$PW_OUT"
+  wait_launch prewarm "$PREWARM_LOG" "$PREWARM_TIMEOUT" 1
+  PW_ST=$LAUNCH_ST
+  stop_thermal_sampler
+  read_thermal_out "$PW_OUT"
+  PREWARM_PEAK=$TH_PEAK
+  PREWARM_HWM=$TH_HWM
+  [ "$TH_RSS" -gt "$PREWARM_HWM" ] && PREWARM_HWM=$TH_RSS
+  echo "PERF_THERMAL_PREWARM_PEAK peak_c=${PREWARM_PEAK} peak_rss_mb=${TH_RSS} vmhwm_mb=${PREWARM_HWM} max_c=${MAX_TEMP} abort=${TH_ABORT}" >> "$LOG"
   if grep -q "^PERF_DONE " "$PREWARM_LOG"; then
     PREWARM_STATUS="ok exit=$PW_ST"
   else
@@ -405,94 +713,60 @@ if [ "$PREWARM" = "1" ]; then
   fi
   FRAMES="$SAVED_FRAMES"; POSE="$SAVED_POSE"; WARMUP="$SAVED_WARMUP"; DEADLINE="$SAVED_DEADLINE"
   build_game_args
+  case "$TH_ABORT" in
+    none) ;;
+    *)
+      THERMAL_ABORT="$TH_ABORT"
+      echo "PERF_THERMAL_FAIL reason=${TH_ABORT} phase=prewarm peak_c=${PREWARM_PEAK}" >> "$LOG"
+      echo "FAIL: pre-warm thermal abort (${TH_ABORT} at ${PREWARM_PEAK}C, max ${MAX_TEMP}C); measured run not started (see $PREWARM_LOG)" >&2
+      exit 8
+      ;;
+  esac
+  if [ "$PREWARM_HWM" -gt "$MAX_RSS_MB" ]; then
+    echo "PERF_RSS_FAIL phase=prewarm vmhwm_mb=${PREWARM_HWM} max_rss_mb=${MAX_RSS_MB}" >> "$LOG"
+    echo "FAIL: pre-warm VmHWM ${PREWARM_HWM} MB > --max-rss-mb ${MAX_RSS_MB} MB (see $PREWARM_LOG)" >&2
+    exit 9
+  fi
 fi
 echo "PERF_THERMAL prewarm_after=$(cpu_package_temp)C" >> "$LOG"
-echo "PERF_PREWARM status=$PREWARM_STATUS frames=120 pose=spawn_overlook log=$PREWARM_LOG" >> "$LOG"
+echo "PERF_PREWARM status=$PREWARM_STATUS frames=120 pose=spawn_overlook peak_c=${PREWARM_PEAK} vmhwm_mb=${PREWARM_HWM} log=$PREWARM_LOG" >> "$LOG"
 
 echo "PERF_GPU_BEFORE $(smi_gpu_sample) ts=$(date -Is)" >> "$LOG"
 echo "PERF_LOAD_BEFORE $(loadavg_sample) ts=$(date -Is)" >> "$LOG"
 
-GAME_PID=""
-TEARDOWN_KILLED=0
-STDBUF_CMD=()
-if command -v stdbuf >/dev/null 2>&1; then STDBUF_CMD=(stdbuf -oL -eL); fi
-
-# Wait for the run to finish. `PERF_DONE` is the completion marker; a windowed
-# export can linger in teardown on some compositors, so after the marker the
-# wrapper gives 10 s and then terminates it. A missing marker is a truncation.
-wait_game() {
-  local started now grace_start done_seen sample_tick t rss
-  started=$(date +%s)
-  done_seen=0
-  sample_tick=0
-  while kill -0 "$GAME_PID" 2>/dev/null; do
-    if [ "$done_seen" -eq 0 ] && grep -q "^PERF_DONE " "$LOG"; then
-      done_seen=1
-      grace_start=$(date +%s)
-    fi
-    now=$(date +%s)
-    if [ "$done_seen" -eq 1 ]; then
-      if [ $((now - grace_start)) -ge 10 ]; then
-        echo "PERF_TEARDOWN forced_kill=1 after PERF_DONE" >> "$LOG"
-        kill -TERM "$GAME_PID" 2>/dev/null
-        sleep 1
-        kill -KILL "$GAME_PID" 2>/dev/null
-        TEARDOWN_KILLED=1
-        break
-      fi
-    elif [ $((now - started)) -ge "$TIMEOUT" ]; then
-      echo "PERF_TIMEOUT wall=${TIMEOUT}s no PERF_DONE" >> "$LOG"
-      kill -TERM "$GAME_PID" 2>/dev/null
-      sleep 1
-      kill -KILL "$GAME_PID" 2>/dev/null
-      TEARDOWN_KILLED=1
-      break
-    fi
-    # Thermal/RSS guard: sample every ~5 s. A package temperature at or above
-    # the limit kills the run instead of taking the box down.
-    if [ $((sample_tick % 10)) -eq 0 ]; then
-      t="$(cpu_package_temp)"
-      if [ "$t" != "?" ]; then
-        if [ "$t" -gt "$TEMP_PEAK" ]; then TEMP_PEAK="$t"; fi
-        if [ "$t" -ge "$MAX_TEMP" ]; then
-          echo "PERF_THERMAL_ABORT cpu_c=$t max_c=$MAX_TEMP" >> "$LOG"
-          THERMAL_ABORT=1
-          kill -TERM "$GAME_PID" 2>/dev/null
-          sleep 1
-          kill -KILL "$GAME_PID" 2>/dev/null
-          TEARDOWN_KILLED=1
-          break
-        fi
-      fi
-      rss="$(game_rss_mb "$GAME_PID")"
-      if [ "$rss" -gt "$RSS_PEAK" ]; then RSS_PEAK="$rss"; fi
-    fi
-    sample_tick=$((sample_tick + 1))
-    sleep 0.5
-  done
-  wait "$GAME_PID" 2>/dev/null
-  ST=$?
-  if [ "$TEARDOWN_KILLED" -eq 1 ] && grep -q "^PERF_DONE " "$LOG"; then
-    ST=0
-  fi
-}
-
+# Measured run. The sampler owns the temperature and RSS cadence; this block
+# only starts the launch, waits on process liveness/timeout, and enforces the
+# recorded peak afterwards.
 MEASURE_START=$(date +%s)
-"${STDBUF_CMD[@]}" "${RUN_ENV[@]}" "$BIN" "${GAME_ARGS[@]}" >> "$LOG" 2>&1 &
-GAME_PID=$!
-wait_game
+RUN_OUT="$OUT/.thermal_run_${SAFE_TAG}.summary"
+start_launch run "$LOG"
+start_thermal_sampler "$GAME_PID" run "$RUN_OUT"
+wait_launch run "$LOG" "$TIMEOUT" 1
+ST=$LAUNCH_ST
+stop_thermal_sampler
+read_thermal_out "$RUN_OUT"
+TEMP_PEAK=$TH_PEAK
+RSS_SAMPLES=$TH_RSS
+RSS_HWM=$TH_HWM
+THERMAL_ABORT=$TH_ABORT
+[ "$VMHWM_MB" -gt "$RSS_HWM" ] && RSS_HWM=$VMHWM_MB
 MEASURE_SEC=$(( $(date +%s) - MEASURE_START ))
 
 echo "PERF_GPU_AFTER $(smi_gpu_sample) ts=$(date -Is) measure_sec=$MEASURE_SEC" >> "$LOG"
 echo "PERF_LOAD_AFTER $(loadavg_sample) ts=$(date -Is)" >> "$LOG"
-echo "PERF_THERMAL peak_cpu_c=$TEMP_PEAK peak_rss_mb=$RSS_PEAK max_c=$MAX_TEMP abort=$THERMAL_ABORT" >> "$LOG"
+echo "PERF_THERMAL peak_cpu_c=$TEMP_PEAK prewarm_peak_c=$PREWARM_PEAK peak_rss_mb=$RSS_SAMPLES vmhwm_mb=$RSS_HWM max_c=$MAX_TEMP start_max_c=$START_TEMP rss_max_mb=$MAX_RSS_MB sample_sec=$SAMPLE_SEC scope=$SCOPE_MODE abort=$THERMAL_ABORT" >> "$LOG"
 
 echo "EXIT=$ST LOG=$LOG"
 grep -E "^PERF_|^[{]|SCRIPT ERROR|SHADER ERROR|Too many mipmaps|double free" "$LOG" | tail -100
 
-if [ "$THERMAL_ABORT" -eq 1 ]; then
-  echo "FAIL: thermal abort at ${TEMP_PEAK}C (max ${MAX_TEMP}C); let the machine cool and rerun (see $LOG)" >&2
+if [ "$THERMAL_ABORT" != "none" ]; then
+  echo "FAIL: thermal guard (${THERMAL_ABORT}) at peak ${TEMP_PEAK}C (max ${MAX_TEMP}C); let the machine cool and rerun (see $LOG)" >&2
   exit 8
+fi
+if [ "$RSS_HWM" -gt "$MAX_RSS_MB" ]; then
+  echo "PERF_RSS_FAIL phase=run vmhwm_mb=${RSS_HWM} max_rss_mb=${MAX_RSS_MB}" >> "$LOG"
+  echo "FAIL: VmHWM ${RSS_HWM} MB > --max-rss-mb ${MAX_RSS_MB} MB (see $LOG)" >&2
+  exit 9
 fi
 
 for marker in "PERF_CONFIG " "PERF_SUMMARY " "PERF_DONE "; do

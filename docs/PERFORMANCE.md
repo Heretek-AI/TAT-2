@@ -54,14 +54,41 @@ Thieves' Den: `chunks=156`, `collision_bodies=2`, `collision_shapes=95`, `occlud
 
 - `build/qa/run_perf_matrix.sh` is the only supported frame-time path: release
   export, host compositor, vsync off, six fixed poses, one config per run.
-- The rig now defaults to the shipped lens (**54.54 vertical / 4000 m**), logs
+- The rig defaults to the shipped lens (**54.54 vertical / 4000 m**), logs
   FOV/far/occlusion/LOD/shadow flags and GPU clocks, and enforces a thermal
-  guard. `--max-temp` defaults to **92 °C**; `PERF_THERMAL` records the start,
-  pre-warm, peak and peak RSS. A package temperature at the limit kills the run
-  and exits 8. Do not rerun until the machine is cool.
+  guard (**W4P**, full detail in
+  [`reports/w4p-thermal-guard.md`](reports/w4p-thermal-guard.md)); `--max-temp`
+  defaults to **95 °C**; `PERF_THERMAL` records the start, pre-warm, peak and
+  peak RSS. A package temperature at the limit kills the run and exits 8. Do not
+  rerun until the machine is cool.
+- Thermal/memory gate (fail closed):
+  - `--start-temp=<C>` (default **78**) — refuse a sustained run when the
+    package is above this. A 91 °C machine may no longer start with
+    `--max-temp=92`; the old guard had no headroom.
+  - `--max-temp=<C>` (default **95**) — kill the launch at or above this.
+  - `--max-rss-mb=<MB>` (default **8192**) — fail the run when `VmHWM`
+    (`/proc/<pid>/status`) exceeds it. `VmRSS` samples are still logged as the
+    curve. Each launch also gets a user scope with `MemoryMax=12G` /
+    `MemorySwapMax=0` when `systemd-run --user --scope` works, with a logged
+    fallback to a direct launch.
+  - `--sample-sec=<s>` (default **1**) — an **independent** sampler process
+    (not the wait loop) logs `PERF_THERMAL_SAMPLE` every tick for the pre-warm
+    and the measured run, records `PERF_THERMAL_PREWARM_PEAK`, and kills the
+    sampled PID at `>= --max-temp`. Both validation bounds are 60..105 with
+    `start < max`. An unknown (`?`) package temperature, a sampler that does
+    not start, or a missing sampler summary aborts instead of running.
+- Proof without a GPU (safe on a hot host):
+  `bash -n build/qa/run_perf_matrix.sh`,
+  `build/qa/test_perf_guard.sh` (42 checks: decisions, argument bounds,
+  machinery), and `build/qa/run_perf_matrix.sh --guard-check=79` → exit 8.
+  A real measurement must still run on a cool host:
+  `build/qa/run_perf_matrix.sh --quality=high --scale=1.0 --scaling=bilinear --tag=w4p_gate`.
 - On the reference i9-14900HX host, package temperature idles around 82 °C and
-  reaches the critical 100 °C under repeated Guildhall loads. Run **one** Godot
-  process at a time; never run the matrix beside a test suite or bake.
+  reaches the critical 100 °C under repeated Guildhall loads. With the 78 °C
+  start gate that host refuses a sustained run until it idles down; raising
+  `--start-temp` without cooling is not a substitute for headroom. Run **one**
+  Godot process at a time; never run the matrix beside a test suite or bake.
+
 - Xvfb is not a frame-time environment (same pose measured 66.55 ms vs 20.4 ms
   on the host); Xvfb numbers are labelled and not comparable.
 

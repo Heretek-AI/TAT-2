@@ -300,7 +300,16 @@ func _bind_menu_env() -> void:
 	# environment after the first frames and assign it to the camera, which is
 	# the only binding that renders here.
 	for _i: int in range(12):
-		await get_tree().process_frame
+		# The QA autostart (`--qa-free-play`) can change the scene while these
+		# frames run; a detached node must not call get_tree() (engine ERROR).
+		if not is_inside_tree():
+			return
+		var tree: SceneTree = get_tree()
+		if tree == null:
+			return
+		await tree.process_frame
+	if not is_inside_tree() or get_tree() == null:
+		return
 	if _menu_cam == null:
 		return
 	var e := Environment.new()

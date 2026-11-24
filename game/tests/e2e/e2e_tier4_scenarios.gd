@@ -378,13 +378,16 @@ func _t4_13_free_play_contract_inactive() -> void:
 		if ll != null:
 			loot_text = ll.text
 
-	# Extraction must bank currency but never record contract progress in the
-	# hosting order (order 2 is the "Into the Lion's Den" campaign contract).
+	# Extraction must not bank currency and never record contract progress in
+	# the hosting order (order 2 is the "Into the Lion's Den" campaign contract):
+	# free play is not a currency farm.
 	var no_write: bool = false
+	var no_currency: bool = false
 	if gh != null:
 		gh.call("_on_extracted")
 		await h.step_process(1)
 		no_write = (save_data.get("completed_contracts", {}) as Dictionary) == before_completed and int(save_data.get("xp", 0)) == before_xp
+		no_currency = int(save_data.get("currency", 0)) == before_currency
 		save_data["completed_contracts"] = before_completed
 		save_data["xp"] = before_xp
 		save_data["level"] = before_level
@@ -395,10 +398,10 @@ func _t4_13_free_play_contract_inactive() -> void:
 	var timer_ok: bool = absf(timer - 3300.0) < 0.5
 	var hud_ok: bool = obj_text == "Mission: Steal 4,000 in loot value[0/4,000]" and loot_text == "£ 0"
 	h.require(
-		gh != null and ids_ok and timer_ok and hud_ok and no_write,
+		gh != null and ids_ok and timer_ok and hud_ok and no_write and no_currency,
 		"T4-13",
-		"free play id=%s goal=%d label='%s' timer=%.0f hud='%s' loot='%s' no_contract_write=%s" % [
-			mid, goal, label, timer, obj_text, loot_text, str(no_write)
+		"free play id=%s goal=%d label='%s' timer=%.0f hud='%s' loot='%s' no_contract_write=%s no_currency_bank=%s" % [
+			mid, goal, label, timer, obj_text, loot_text, str(no_write), str(no_currency)
 		]
 	)
 	await h.free_node(gh)

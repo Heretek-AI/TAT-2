@@ -83,6 +83,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event is InputEventKey:
 		var kev: InputEventKey = event as InputEventKey
+		if kev.pressed and not kev.echo and kev.keycode == KEY_G:
+			_start_free_play()
+			get_viewport().set_input_as_handled()
+			return
 		if kev.pressed and not kev.echo and kev.keycode == KEY_ESCAPE:
 			_close_ui()
 			get_viewport().set_input_as_handled()
@@ -241,6 +245,15 @@ func _build_ui() -> void:
 	bottom.alignment = BoxContainer.ALIGNMENT_END
 	bottom.add_theme_constant_override("separation", 12)
 	vb.add_child(bottom)
+	# Shipped free-play entry (not QA-only): a Contract Inactive Cleanout on the
+	# Guildhall. It is a separate button/[G] key, so the normal list selection and
+	# its PREPARE/DEPLOY flow are unchanged.
+	var free_btn: Button = Button.new()
+	free_btn.text = "FREE PLAY: GUILDHALL CLEANOUT [G]"
+	free_btn.custom_minimum_size = Vector2(300, 44)
+	ThemeScript.style_teal_button(free_btn, false)
+	free_btn.pressed.connect(_start_free_play)
+	bottom.add_child(free_btn)
 	var deploy_btn: Button = Button.new()
 	deploy_btn.text = "DEPLOY CONTRACT"
 	deploy_btn.custom_minimum_size = Vector2(220, 44)
@@ -296,6 +309,9 @@ func _on_contract_selected(idx: int, play_sfx: bool = true) -> void:
 		return
 	if play_sfx:
 		_ui_sfx("click")
+	# A normal contract selection is a normal deploy: drop any free-play mode
+	# left over from a cancelled Cleanout prep.
+	free_play = false
 	var c: Dictionary = _contracts[idx]
 	selected_order = int(c.get("order", 1))
 	selected_map_id = str(c.get("map_id", ""))
@@ -530,6 +546,36 @@ func _confirm_prepare() -> void:
 	_hide_confirm(false)
 	_ui_sfx("confirm")
 	mission_selected.emit(selected_order, selected_map_id, int(GameState.difficulty), coop_mode)
+	_open_prep()
+
+
+## Free play ("Contract Inactive") entry point: Guildhall Cleanout Heist hosted
+## on the Guildhall contract order, with no campaign progress. It selects the
+## authored Mission.Guildhall.LootTheRoom row (MissionPrepUI's free-play path
+## does that by id) and opens prep with free_play = true; the normal list /
+## DEPLOY path above is untouched.
+func _start_free_play() -> void:
+	if _confirm_visible:
+		return
+	_ui_sfx("confirm")
+	free_play = true
+	selected_order = int(GameState.FREE_PLAY_CONTRACT_ORDER)
+	selected_map_id = "guildhall"
+	var sel: Dictionary = {}
+	for c: Dictionary in _contracts:
+		if int(c.get("order", 0)) == selected_order:
+			sel = c
+			break
+	if not sel.is_empty():
+		_refresh_details(sel)
+	else:
+		_update_splash(selected_map_id)
+	mission_selected.emit(selected_order, selected_map_id, int(GameState.difficulty), coop_mode)
+	_open_prep()
+
+
+## Open MissionPrepUI for the current selection, threading the free-play flag.
+func _open_prep() -> void:
 	var prep: Control = MissionPrepUIScript.new() as Control
 	_prep = prep
 	add_child(prep)
@@ -573,6 +619,9 @@ func _on_prep_ready(p_map_id: String, p_difficulty: int, p_mode: String, p_order
 
 func _on_prep_closed() -> void:
 	_prep = null
+	# Back out of prep (including a cancelled free-play Cleanout): the table
+	# returns to the normal contract flow.
+	free_play = false
 	if _main_root != null:
 		_main_root.visible = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE

@@ -168,6 +168,20 @@ func _add_guildhall_gate_fills() -> void:
 	fence_lamp.shadow_enabled = false
 	add_child(fence_lamp)
 	light_probe.register_light(fence_lamp)
+	# KF16 ornate gate fill: the arch/finial ironwork between the carriage lamps
+	# reads as a blue silhouette at night. A soft warm omni under the arch
+	# (80, 20, 18 — the approach side) lifts the ornament without touching the
+	# stealth cone set: deliberately NOT registered with light_probe.
+	var ornate_fill := OmniLight3D.new()
+	ornate_fill.name = "GuildhallOrnateGateFill"
+	ornate_fill.position = Vector3(80.0, 20.0, 18.0)
+	ornate_fill.light_color = Color(1.0, 0.76, 0.52)
+	ornate_fill.light_energy = 1.5
+	ornate_fill.omni_range = 11.0
+	ornate_fill.omni_attenuation = 1.3
+	ornate_fill.light_volumetric_fog_energy = 0.0
+	ornate_fill.shadow_enabled = false
+	add_child(ornate_fill)
 
 
 ## KF16 road lighting: the gate approach (z ~52-57) between the car and the
@@ -284,6 +298,54 @@ func _override_guildhall_car_lenses() -> void:
 		print("TAT-2 KF16 car lenses: node=", best.name, " dist=", snappedf(best_d, 0.01), " glass_surface=", s, " emission=1.0,0.6186,0.2552 energy=2.0")
 		return
 	print("TAT-2 KF16 car lenses: no glass surface on ", best.name, "; lens emission skipped")
+
+
+## KF16 sign letters: the split SM_Guildhall_Sign mesh keeps the 268-tri
+## letter band on surface 1 with the authored gold material. Under the night
+## skylight the raised caps read flat, so give only that surface a faint warm
+## self-illumination (energy 0.10 — a lift, not a lamp). The surface material is
+## duplicated per instance so the shared/cached sign mesh and the crest surface
+## (surface 3) stay untouched. Runs after the Guildhall sublevels build.
+func _add_guildhall_sign_letter_emission() -> void:
+	if GameState.active_map_id != "guildhall":
+		return
+	if MobileProfile.is_mobile():
+		return
+	var found: MeshInstance3D = null
+	for node: Node in find_children("*", "MeshInstance3D", true, false):
+		var mi: MeshInstance3D = node as MeshInstance3D
+		if mi.mesh == null or mi.mesh.get_surface_count() != 4:
+			continue
+		if str(mi.get_meta("ue_mesh", "")).contains("SM_Guildhall_Sign"):
+			found = mi
+			break
+	if found == null:
+		print("TAT-2 KF16 sign letters: SM_Guildhall_Sign (4 surfaces) not found; letter emission skipped")
+		return
+	var src: Material = found.get_active_material(1)
+	var dup: StandardMaterial3D = null
+	if src is StandardMaterial3D:
+		dup = (src as StandardMaterial3D).duplicate() as StandardMaterial3D
+	else:
+		dup = StandardMaterial3D.new()
+		if src is BaseMaterial3D:
+			var base: BaseMaterial3D = src as BaseMaterial3D
+			dup.albedo_color = base.albedo_color
+			dup.albedo_texture = base.albedo_texture
+			dup.metallic = base.metallic
+			dup.roughness = base.roughness
+		else:
+			# No usable surface material: keep the authored gold albedo.
+			dup.albedo_color = Color(1.0, 0.685, 0.273)
+			dup.metallic = 0.85
+			dup.roughness = 0.35
+	dup.emission_enabled = true
+	dup.emission_texture = null
+	dup.emission = Color(1.0, 0.62, 0.20)
+	dup.emission_energy_multiplier = 0.10
+	dup.cull_mode = BaseMaterial3D.CULL_DISABLED
+	found.set_surface_override_material(1, dup)
+	print("TAT-2 KF16 sign letters: node=", found.name, " surface=1 emission=", dup.emission, " energy=", dup.emission_energy_multiplier, " albedo=", dup.albedo_color)
 
 
 ## KF17: the reference rooftop-aim frame holds a damped clocktower silhouette in
@@ -468,6 +530,7 @@ func start_contract(order: int) -> void:
 	if map_id == "guildhall":
 		_override_guildhall_car_lenses()
 		_add_guildhall_skyline_clocktower()
+		_add_guildhall_sign_letter_emission()
 	if int(ue_level_data.get("chunk_count", 0)) > 0:
 		print("TAT-2 Perf: chunks=", ue_level_data.get("chunk_count", 0), " collision_bodies=", ue_level_data.get("collision_bodies", 0), " collision_shapes=", ue_level_data.get("collision_shapes", 0), " occluders=", ue_level_data.get("occluder_count", 0))
 
@@ -2661,6 +2724,59 @@ func _ground_position(pos: Vector3, up_m: float = 8.0, down_m: float = 30.0, off
 	return pos + Vector3(0.0, 0.5, 0.0)
 
 
+## P2 ground loot/civilians: marker positions are authored points on the floor
+## or shelf, but loot actors are centred on their origin, so the old blanket
+## +0.5 left some items floating (763 loot items) and sank outliers (the
+## Fabergé egg AABB min is -0.155 m). Rest the spawned node's real mesh AABB
+## bottom on the floor under the marker: ray from +2 m to -6 m on the world
+## layer (1) and place the origin so the lowest mesh point sits `clearance`
+## above the hit. Meshes are gathered after add_child because LootScript and
+## CivilianNPC build their visuals in _ready. Falls back to the marker plus a
+## small clearance (still AABB-adjusted) when there is no world/floor.
+const SPAWN_GROUND_CLEARANCE: float = 0.03
+
+
+func _ground_spawn_node(node: Node3D, marker: Vector3, clearance: float = SPAWN_GROUND_CLEARANCE) -> void:
+	var bottom: float = _spawned_mesh_bottom(node)
+	var w3d: World3D = get_world_3d()
+	if w3d != null:
+		var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(marker + Vector3(0.0, 2.0, 0.0), marker + Vector3(0.0, -6.0, 0.0), 1)
+		var hit: Dictionary = w3d.direct_space_state.intersect_ray(q)
+		if not hit.is_empty():
+			var hp: Variant = hit.get("position", null)
+			if hp is Vector3:
+				node.position = Vector3(marker.x, (hp as Vector3).y + clearance - bottom, marker.z)
+				return
+	node.position = marker + Vector3(0.0, clearance - bottom, 0.0)
+
+
+## Lowest mesh point of a spawned node in its own local space (loot visual
+## root, civilian mesh root). Includes each MeshInstance3D's authored scale and
+## rotation so the AABB bottom is the real resting point; 0.0 when the node
+## carries no mesh (small clearance only).
+func _spawned_mesh_bottom(node: Node3D) -> float:
+	var boxes: Array[AABB] = []
+	_collect_spawn_mesh_boxes(node, Transform3D.IDENTITY, boxes)
+	if boxes.is_empty():
+		return 0.0
+	var box: AABB = boxes[0]
+	for i: int in range(1, boxes.size()):
+		box = box.merge(boxes[i])
+	return box.position.y
+
+
+func _collect_spawn_mesh_boxes(n: Node, parent_tr: Transform3D, boxes: Array[AABB]) -> void:
+	for c: Node in n.get_children():
+		var tr: Transform3D = parent_tr
+		if c is Node3D:
+			tr = parent_tr * (c as Node3D).transform
+		if c is MeshInstance3D:
+			var mi: MeshInstance3D = c as MeshInstance3D
+			if mi.mesh != null:
+				boxes.append(tr * mi.mesh.get_aabb())
+		_collect_spawn_mesh_boxes(c, tr, boxes)
+
+
 func _spawn_guards(ue_spawns: Array, anchor: Vector3) -> void:
 	# P1 flat Novice-to-Thief guard count: the old limit ignored the first two
 	# difficulties (identical patrol density Novice/Thief). Novice 4 / Thief 6 /
@@ -2805,8 +2921,11 @@ func _spawn_loot_entries(entries: Array, tier: String) -> void:
 			l.display_name = l.item_name
 			l.value = int(entry.get("value", 75))
 		l.mesh_rotation_deg = e.get("rotation", Vector3.ZERO) as Vector3
-		l.position = pos + Vector3(0, 0.5, 0)
+		# P2 ground loot: the authored marker is a floor/shelf point; the mesh
+		# AABB bottom (built in LootScript._ready) rests on the raycast floor.
+		l.position = pos
 		add_child(l)
+		_ground_spawn_node(l, pos)
 		order += 1
 
 
@@ -2836,13 +2955,18 @@ func _spawn_quest_loot(quest_entry: Dictionary, anchor: Vector3, override_name: 
 		q.mesh_path = str((qactor as Dictionary).get("mesh_res", ""))
 	# else mesh_path stays "": the legacy calling-card mesh (labelled
 	# fallback for tags with no dedicated actor / missing mesh).
+	var quest_marker: Vector3
 	if not quest_entry.is_empty():
-		q.position = (quest_entry.get("pos", anchor) as Vector3) + Vector3(0, 0.5, 0)
+		quest_marker = quest_entry.get("pos", anchor) as Vector3
 		q.mesh_rotation_deg = quest_entry.get("rotation", Vector3.ZERO) as Vector3
 	else:
-		q.position = anchor + Vector3(2.0, 0.85, -2.0)
-	_ensure_unique_loot_position(q)
+		quest_marker = anchor + Vector3(2.0, 0.0, -2.0)
+	# P2 ground loot: same AABB-bottom + floor ray as minor/major loot. The
+	# uniqueness nudge runs after grounding (it only shifts on an exact clash).
+	q.position = quest_marker
 	add_child(q)
+	_ground_spawn_node(q, quest_marker)
+	_ensure_unique_loot_position(q)
 
 
 ## Belt-and-braces: the quest node never shares an exact position with a
@@ -3102,8 +3226,9 @@ func _spawn_civilians(spawns: Array) -> int:
 		var variant: Dictionary = spawner_civilians[count % spawner_civilians.size()] if not spawner_civilians.is_empty() else {}
 		var c := CivilianScript.new()
 		c.setup(str(variant.get("body", "")), str(variant.get("head", "")), pos_var as Vector3)
-		c.position = (pos_var as Vector3) + Vector3(0.0, 0.5, 0.0)
+		c.position = pos_var as Vector3
 		add_child(c)
+		_ground_spawn_node(c, pos_var as Vector3)
 		count += 1
 	return count
 
@@ -3200,10 +3325,12 @@ func _on_extracted() -> void:
 	GameState.state = "victory"
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	var final_score := int(round(GameState.loot_value * GameState.compute_stealth_bonus_multiplier()))
-	SaveSystem.add_currency(final_score)
-	# Free play has no active contract: banking a completion would corrupt the
-	# hosting order's campaign progress (order 2 is "Into the Lion's Den").
+	# Free play has no active contract and is not a currency farm: neither the
+	# completion record (it would corrupt the hosting order's campaign, order 2
+	# is "Into the Lion's Den") nor the payout is banked. The result panel still
+	# shows the run score.
 	if not GameState.free_play:
+		SaveSystem.add_currency(final_score)
 		SaveSystem.record_contract_complete(GameState.active_contract_order, final_score, not GameState.ever_spotted)
 	if hud.has_method("show_result"):
 		hud.show_result(true, final_score, contract_info)

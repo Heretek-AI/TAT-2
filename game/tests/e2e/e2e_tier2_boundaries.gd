@@ -191,10 +191,16 @@ func _bVA_04_neon_landscape() -> void:
 	var m_knife: Variant = ll.call("get_material_for_ue", "/Game/Art/Gameplay/Loot/LootMinor/JeweledKnife/MI_JeweledKnife")
 	var m_cat: Variant = ll.call("get_material_for_ue", "/Game/Art/Gameplay/Loot/LootMajor/StatueCat/MI_CatStatueA")
 	var m_beam: Variant = ll.call("get_material_for_ue", "/Game/Gameplay/Traps/Detectors/LightBeam/MI_LightBeam_SM")
+	# MI_LightBeam_SM is now the intentional exception: it uses the additive
+	# tat_beam shader instead of the HDR neon path. The other textured
+	# materials must still stay StandardMaterial3D.
+	var beam_ok: bool = m_beam is ShaderMaterial \
+		and (m_beam as ShaderMaterial).shader != null \
+		and (m_beam as ShaderMaterial).shader.resource_path.ends_with("tat_beam.gdshader")
 	h.require(
-		m_head is StandardMaterial3D and m_knife is StandardMaterial3D and m_cat is StandardMaterial3D and m_beam is StandardMaterial3D,
+		m_head is StandardMaterial3D and m_knife is StandardMaterial3D and m_cat is StandardMaterial3D and beam_ok,
 		"T2-04-C",
-		"4 textured materials stay StandardMaterial3D (not hijacked by HDR shader)"
+		"3 textured negative controls stay StandardMaterial3D; MI_LightBeam_SM uses the beam shader"
 	)
 
 	# T2-04-D: Landscape weight_at() Unknown Index >=2 or <0

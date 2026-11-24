@@ -15,6 +15,21 @@ func _initialize() -> void:
 		quit(1)
 		return
 
+	# Thermal-safe QA shortcut: only the in-process Spider runtime mock (suite
+	# 87), no mission load and no child engine. The full `make test` remains the
+	# ship gate; this exists so a hot host can still verify the runtime chain.
+	if OS.get_cmdline_user_args().has("--spider-only"):
+		var only_problems: Array[String] = _run_suite87(root)
+		if only_problems.is_empty():
+			print("PASS: 87 Spider personal chain runtime (mock only)")
+			print("SUMMARY: fails=0")
+			quit(0)
+		else:
+			printerr("FAIL: 87 Spider personal chain runtime: ", only_problems)
+			print("SUMMARY: fails=", only_problems.size())
+			quit(1)
+		return
+
 	# P2-7: res://assets/ue/Content + Raw are symlinks into extracted/;
 	# deleting/regenerating extracted/ orphans every GLB/PNG/OGG path.
 	if DirAccess.open("res://assets/ue/Content") == null or DirAccess.open("res://assets/ue/Raw") == null:
@@ -6781,6 +6796,21 @@ func _initialize() -> void:
 	else:
 		print("PASS: 86 Spider personal chain (schema/migration/normalization, 8-beat chain, per-thief, free-play, save restore, contract-fact wipe)")
 
+	# 87. W1S Spider runtime: in-process mock only. Suite 86 owns the record;
+	# this suite drives the same PersonalQuest runtime API the NPCs, dialogue
+	# and mission hook call, plus the real dialogue/loot classes in isolation.
+	# The real-map walkthrough is tests/probe_personal_quest.gd and is run as
+	# its own single engine process (never a child engine from here).
+	#
+	# `--spider-only` runs just this suite for a thermal-safe QA pass:
+	#   tools/godot --headless --path game --script res://tests/run_tests.gd -- --spider-only
+	var c87_problems: Array[String] = _run_suite87(root)
+	if not c87_problems.is_empty():
+		printerr("FAIL: 87 Spider personal chain runtime: ", c87_problems)
+		fails += 1
+	else:
+		print("PASS: 87 Spider personal chain runtime (deploy/hub/plan, 03/04 lines and facts, Owl not loot, dialogue modal, save persistence)")
+
 	# 12.6/12.7 process-lifetime caches must not outlive the run.
 	var am_node: Node = root.get_node_or_null("/root/AudioManager")
 	if am_node != null and am_node.has_method("cleanup_on_exit"):
@@ -6807,6 +6837,28 @@ func _initialize() -> void:
 func _w60_assert(cond: bool, msg: String, problems: Array) -> void:
 	if not cond:
 		problems.append(msg)
+
+
+## Suite 87 helper (also the `--spider-only` entry): run the in-process Spider
+## runtime mock and return its problems. Kept out of the main flow so the
+## thermal shortcut and the full suite exercise exactly the same code.
+func _run_suite87(host: Node) -> Array[String]:
+	var problems: Array[String] = []
+	var script: GDScript = load("res://tests/test_spider_runtime.gd") as GDScript
+	if script == null:
+		problems.append("test_spider_runtime.gd did not load")
+		return problems
+	var runner: RefCounted = script.new() as RefCounted
+	if runner == null or not runner.has_method("run"):
+		problems.append("test_spider_runtime.gd has no run(host)")
+		return problems
+	var out: Variant = runner.call("run", host)
+	if out is Array:
+		for problem_v: Variant in (out as Array):
+			problems.append(str(problem_v))
+	else:
+		problems.append("test_spider_runtime.run(host) returned no problem list")
+	return problems
 ## W0a suite helper: long edge from a PNG IHDR (no decode).
 func _w82_png_long_edge(res_path: String) -> int:
 	var f: FileAccess = FileAccess.open(res_path, FileAccess.READ)

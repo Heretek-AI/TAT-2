@@ -14,6 +14,10 @@ extends Area3D
 @export var display_name: String = ""
 ## Authored quest-item metadata (DT_LootInfo_Quest / quest spawner).
 @export var authored_actor_class: String = ""
+## W1S personal-chain pickup (empty for ordinary loot). When set, the item is
+## a personal quest item: `interact` calls PersonalQuest.acquire_owl(), never
+## GameState.add_loot, and it carries no value/objective/fact of its own.
+@export var personal_quest_id: String = ""
 var clue_location_text: String = ""
 var objective_id: String = ""
 var loot_tag: String = ""
@@ -25,6 +29,7 @@ var fact_source_item_tag: String = ""
 var fact_source_index: int = -1
 
 const INTERACTABLES_PATH := "res://data/generated/gameplay/interactables.json"
+const PersonalQuestScript := preload("res://src/quests/personal_quest.gd")
 
 static var _interactables: Dictionary = {}
 
@@ -114,9 +119,13 @@ var label: Label3D
 
 func _ready() -> void:
 	add_to_group("interactables")
-	add_to_group("loot")
+	# A personal-chain item is not loot: joining "loot" would feed the loot
+	# economy audit, the tactical map and the pickpocket fairy. Keep it
+	# interactable and thief-vision highlightable only.
+	if personal_quest_id == "":
+		add_to_group("loot")
+		add_to_group("xray_target")
 	add_to_group("thief_vision_highlight")
-	add_to_group("xray_target")
 	set_meta("collected", false)
 
 	var col := CollisionShape3D.new()
@@ -165,7 +174,7 @@ func _ready() -> void:
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	label.text = display_name if display_name != "" else item_name
 	label.font_size = 28
-	label.visible = is_quest_item or loot_tier == "major"
+	label.visible = is_quest_item or loot_tier == "major" or personal_quest_id != ""
 	add_child(label)
 
 
@@ -216,6 +225,8 @@ func _process(delta: float) -> void:
 ## keeps Steal.
 func get_interact_prompt() -> String:
 	var label: String = display_name if display_name != "" else item_name
+	if personal_quest_id != "":
+		return "[E] Take %s" % label
 	if is_quest_item:
 		return "[E] Take %s" % label
 	return "[E] Steal %s" % label
@@ -230,12 +241,30 @@ func get_interact_point() -> Vector3:
 func interact(_actor: Node) -> void:
 	if get_meta("collected", false):
 		return
+	if personal_quest_id != "":
+		_interact_personal_quest()
+		return
 	set_meta("collected", true)
 	GameState.add_loot(1, value, is_quest_item, objective_id)
 	if objective_id.begins_with("set_item_"):
 		GameState.advance_set_objective()
 	for fact_id: String in fact_ids:
 		GameState.grant_fact(fact_id, fact_params, fact_source, fact_source_item_tag, fact_source_index)
+	queue_free()
+
+
+## Theban Owl path: a personal item, not loot. Advance the chain through the
+## controller only, then let the mission spawn the courier right away. No
+## GameState.add_loot, no value, no quest_item_acquired, no objective/fact.
+func _interact_personal_quest() -> void:
+	var result: Dictionary = PersonalQuestScript.acquire_owl()
+	if not bool(result.get("ok", false)) or str(result.get("stage", "")) != "carrying":
+		return
+	set_meta("collected", true)
+	if is_inside_tree():
+		var mission: Node = get_tree().get_first_node_in_group("mission")
+		if mission != null and mission.has_method("on_personal_quest_owl_taken"):
+			mission.call("on_personal_quest_owl_taken")
 	queue_free()
 
 

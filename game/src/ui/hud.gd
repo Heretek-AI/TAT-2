@@ -130,6 +130,13 @@ var _fps_refresh: float = 0.0
 var _run_seed: int = 0
 
 var _pause_root: Control
+## NPC conversation modal (Spider personal chain). The dialogue node registers
+## itself here so HUD input, the pause key and the interaction prompt can yield.
+var _npc_dialogue: Node = null
+## Frame the dialogue closed itself (Escape/interact consumed in its _input).
+## The pause key is polled in _process after _input, so this keeps the same
+## Escape press from also pausing the mission.
+var _npc_dialogue_closed_frame: int = -1
 var _prompt_keycap: PanelContainer
 var _prompt_keycap_lbl: Label
 var _thief_name_lbl: Label
@@ -1897,6 +1904,23 @@ func is_mission_letter_open() -> bool:
 	return _letter_open
 
 
+## W1S: register/clear the NPC conversation modal. The dialogue node calls this
+## on open/close; null clears. Kept as a reference (not a bool) so a stale
+## freed dialogue can never keep the HUD thinking a modal is open.
+func set_npc_dialogue(node: Node) -> void:
+	if node == null and _npc_dialogue != null:
+		_npc_dialogue_closed_frame = Engine.get_process_frames()
+	_npc_dialogue = node
+
+
+func is_npc_dialogue_open() -> bool:
+	if _npc_dialogue == null or not is_instance_valid(_npc_dialogue):
+		return false
+	if not _npc_dialogue.has_method("is_open"):
+		return false
+	return bool(_npc_dialogue.call("is_open"))
+
+
 ## M4 Contract: Render Thieves' Den diegetic Map Table / Telescope look-at card.
 func set_den_lookat_card(card: Dictionary) -> void:
 	if _den_card_panel == null or _den_card_lines_box == null:
@@ -1935,7 +1959,7 @@ func set_den_lookat_card(card: Dictionary) -> void:
 func toggle_map_overlay() -> void:
 	if _map_root == null:
 		return
-	if not _map_open and (get_tree().paused or _lockpick_active or _letter_open):
+	if not _map_open and (get_tree().paused or _lockpick_active or _letter_open or is_npc_dialogue_open()):
 		return
 	_map_open = not _map_open
 	_map_root.visible = _map_open
@@ -1952,7 +1976,7 @@ func is_map_open() -> bool:
 
 
 func open_ping_radial() -> void:
-	if _ping_root == null or get_tree().paused or _lockpick_active or _letter_open or _map_open:
+	if _ping_root == null or get_tree().paused or _lockpick_active or _letter_open or _map_open or is_npc_dialogue_open():
 		return
 	if AudioManager != null and AudioManager.has_method("play_ui"):
 		AudioManager.play_ui("open")
@@ -2031,7 +2055,7 @@ func _input(event: InputEvent) -> void:
 					_mark_input_handled()
 					return
 			# Map toggle via TAB or map_toggle action
-			if GameState.state == "playing" and not get_tree().paused:
+			if GameState.state == "playing" and not get_tree().paused and not is_npc_dialogue_open():
 				if (InputMap.has_action("map_toggle") and event.is_action_pressed("map_toggle")) or kev.keycode == KEY_TAB:
 					toggle_map_overlay()
 					_mark_input_handled()
@@ -2043,7 +2067,7 @@ func _input(event: InputEvent) -> void:
 			_attempt_lockpick_strike()
 			_mark_input_handled()
 			return
-		if GameState.state == "playing" and not get_tree().paused and not _lockpick_active and not _letter_open and not _map_open:
+		if GameState.state == "playing" and not get_tree().paused and not _lockpick_active and not _letter_open and not _map_open and not is_npc_dialogue_open():
 			var is_ping_btn: bool = mb.button_index == MOUSE_BUTTON_MIDDLE or (InputMap.has_action("ping_menu") and (event.is_action_pressed("ping_menu") or event.is_action_released("ping_menu")))
 			if is_ping_btn:
 				if mb.pressed:
@@ -2105,7 +2129,14 @@ func _process(delta: float) -> void:
 			_update_fps_overlay()
 
 	if InputMap.has_action("pause") and Input.is_action_just_pressed("pause"):
-		if _letter_open:
+		if Engine.get_process_frames() == _npc_dialogue_closed_frame:
+			# The dialogue consumed this Escape in its own _input.
+			pass
+		elif is_npc_dialogue_open():
+			# Escape is the pause key: while a conversation is open it closes
+			# the conversation instead of pausing the mission.
+			_npc_dialogue.call("close")
+		elif _letter_open:
 			_close_mission_letter()
 		elif _lockpick_active:
 			_finish_lockpick(false)
@@ -2157,12 +2188,16 @@ func _process(delta: float) -> void:
 		if p.has_method("downed_remaining") and downed_lbl != null:
 			var downed_now: bool = p.get("is_downed") == true
 			set_downed_display(downed_now, float(p.call("downed_remaining")))
-		if p.has_method("get_look_interact_prompt"):
-			_set_prompt(str(p.call("get_look_interact_prompt")))
-		if p.has_method("get_look_secondary_prompt"):
-			_set_secondary_prompt(str(p.call("get_look_secondary_prompt")))
-		else:
+		if is_npc_dialogue_open():
+			# The conversation panel owns the frame; no world prompt behind it.
+			_set_prompt("")
 			_set_secondary_prompt("")
+		elif p.has_method("get_look_interact_prompt"):
+			_set_prompt(str(p.call("get_look_interact_prompt")))
+			if p.has_method("get_look_secondary_prompt"):
+				_set_secondary_prompt(str(p.call("get_look_secondary_prompt")))
+			else:
+				_set_secondary_prompt("")
 
 		_update_compass_pois(p)
 		_update_guard_pips_and_offscreen(p, is_hub)

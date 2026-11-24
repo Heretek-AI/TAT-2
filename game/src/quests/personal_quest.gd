@@ -3,9 +3,9 @@ extends RefCounted
 ##
 ## Static, scene-free controller over the authored expansion record
 ## `game/data/expansion/personal_spider.json` plus the SaveSystem record and
-## GameState journal. The mission/NPC/dialogue runtime is a later wave: this
-## module only decides which beat is current, which facts that beat grants,
-## where the next interaction is pinned, and how the persisted record moves.
+## GameState journal. `on_deploy` / `on_hub_enter` are the W1S runtime hooks the
+## mission controller calls; the NPC actors and the modal line live in
+## `npc_clue_actor.gd` / `npc_clue_dialogue.gd` and only call this API.
 ##
 ## Invariants (checked by tools/check_clue_quests.py and suite 86):
 ##   * stages only move forward one beat at a time;
@@ -159,6 +159,81 @@ static func should_start(map_id: String, thief_id: String = "") -> bool:
 	if map_id != str(chain().get("start_map_id", "guildhall")):
 		return false
 	return stage_for(thief_id) == ""
+
+
+## Authored owner of this chain ("spider"). Drives the runtime guard below.
+static func character_id() -> String:
+	return str(chain().get("save_thief_key", THIEF_ID))
+
+
+## Thief used by the runtime hooks: an explicit id wins (QA/tests), then the
+## live GameState thief, then the schema default. Never mutates the record.
+static func runtime_thief(thief_id: String = "") -> String:
+	if thief_id.strip_edges() != "":
+		return _thief_id(thief_id)
+	var gs: Node = _state()
+	if gs != null:
+		var live: String = str(gs.get("thief_id")).strip_edges().to_lower()
+		if live != "":
+			return live
+	return THIEF_ID
+
+
+## Deploy hook (mission_controller calls this before the level load).
+##
+##   first Guildhall deploy (contract or free play) -> intro
+##   pending electrotype messages -> delivered by the Den or the next deploy
+##   Guildhall deploy while `electrotype` -> located (the Owl is pinned)
+##
+## Other maps only flush pending messages; the chain never starts there. The
+## Spider-only guard means a Chameleon deploy is a no-op. Every transition is
+## the existing one-beat `record()` call, so re-running a deploy is idempotent.
+## Returns {ok, reason, map_id, previous, stage, transitions[], plan[]}.
+static func on_deploy(map_id: String, thief_id: String = "") -> Dictionary:
+	var thief: String = runtime_thief(thief_id)
+	var out: Dictionary = {
+		"ok": true,
+		"reason": "ok",
+		"map_id": map_id,
+		"previous": stage_for(thief),
+		"stage": stage_for(thief),
+		"transitions": [] as Array,
+		"plan": [] as Array,
+	}
+	if thief != character_id():
+		out["reason"] = "not_spider"
+		return out
+	var transitions: Array = []
+	var start_map: String = str(chain().get("start_map_id", "guildhall"))
+	if map_id == start_map and stage_for(thief) == "":
+		transitions.append(record("intro", thief))
+	if stage_for(thief) == "letter":
+		transitions.append(deliver_pending_messages(thief))
+	if map_id == start_map and stage_for(thief) == "electrotype":
+		transitions.append(record("located", thief))
+	out["stage"] = stage_for(thief)
+	out["transitions"] = transitions
+	out["plan"] = spawn_plan(map_id, thief)
+	return out
+
+
+## Hub hook (mission_controller calls this when the Den is set up): pending
+## electrotype messages arrive at the Den. Safe to call on every hub entry and
+## after the same deploy already flushed them.
+## Returns {ok, reason, previous, stage, granted[]}.
+static func on_hub_enter(thief_id: String = "") -> Dictionary:
+	var thief: String = runtime_thief(thief_id)
+	var previous: String = stage_for(thief)
+	if thief != character_id():
+		return {"ok": true, "reason": "not_spider", "previous": previous, "stage": previous, "granted": []}
+	var result: Dictionary = deliver_pending_messages(thief)
+	return {
+		"ok": bool(result.get("ok", false)),
+		"reason": str(result.get("reason", "")),
+		"previous": previous,
+		"stage": stage_for(thief),
+		"granted": result.get("granted", []) as Array,
+	}
 
 
 ## Grant one beat's facts to the journal and the save record. Returns the new

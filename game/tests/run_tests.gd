@@ -1727,6 +1727,24 @@ func _initialize() -> void:
 					brass_ok = false
 		if not brass_ok:
 			mat_fails.append("MI_TrimMetalA_brass vectors.Overlay=" + str(brass_overlay))
+		# BasePropertyOverrides.TwoSided must reach render.two_sided (the old
+		# parser read only the top-level flag; MI_TrimMetalC_Rusty gates/fences
+		# and MI_TrimMetalA_brass doors/chandeliers were single-sided).
+		var rusty_entry: Dictionary = _material_entry_ending_with(mats_doc, "MI_TrimMetalC_Rusty")
+		var rusty_render_v: Variant = rusty_entry.get("render", null)
+		if not (
+			rusty_render_v is Dictionary
+			and (rusty_render_v as Dictionary).get("two_sided", false) == true
+		):
+			mat_fails.append("MI_TrimMetalC_Rusty render.two_sided missing (BasePropertyOverrides)")
+		# Paint-stroke albedo recovery: the gate frame and aligned floor bind
+		# their own _D, not the master's inherited T_PaintStrokesD.
+		var gate_frame_albedo: String = str(_entry_texs(_material_entry_ending_with(mats_doc, "MI_BrickNewClean_XYZ")).get("albedo", ""))
+		if not gate_frame_albedo.ends_with("T_BrickNewClean_D.png"):
+			mat_fails.append("MI_BrickNewClean_XYZ albedo=" + gate_frame_albedo)
+		var floor_tile_albedo: String = str(_entry_texs(_material_entry_ending_with(mats_doc, "MI_FloorTileA_AlignXYZ")).get("albedo", ""))
+		if not floor_tile_albedo.ends_with("T_FloorTileA_D.png"):
+			mat_fails.append("MI_FloorTileA_AlignXYZ albedo=" + floor_tile_albedo)
 		var mats_total: int = mats_doc.size()
 		var albedo_count: int = 0
 		var map_albedo_bad: Array[String] = []
@@ -1813,6 +1831,47 @@ func _initialize() -> void:
 		fails += 1
 	else:
 		print("PASS: UE Overlay/Multiply darken metals (brass ", brass_mat29.albedo_color, ", iron ", iron_mat29.albedo_color, ") and BlackUnlit is unshaded black")
+	# 29b. MI_LightBeam_SM uses the additive/unlit beam shader with the
+	# authored warm-white colour, not an opaque lit StandardMaterial3D.
+	var beam_mat29: Variant = vec_ll.call("get_material_for_ue", "/Game/Gameplay/Traps/Detectors/LightBeam/MI_LightBeam_SM")
+	var beam_sm29 := beam_mat29 as ShaderMaterial
+	var beam_ok29: bool = beam_sm29 != null and beam_sm29.shader != null and beam_sm29.shader.resource_path.ends_with("tat_beam.gdshader")
+	if beam_ok29:
+		var beam_col29: Variant = beam_sm29.get_shader_parameter("beam_color")
+		var beam_energy29: Variant = beam_sm29.get_shader_parameter("energy")
+		beam_ok29 = beam_col29 is Color \
+			and is_equal_approx((beam_col29 as Color).a, 0.55) \
+			and absf(float((beam_col29 as Color).r) - 1.0) < 0.002 \
+			and absf(float((beam_col29 as Color).g) - 0.93) < 0.002 \
+			and absf(float((beam_col29 as Color).b) - 0.82) < 0.002 \
+			and is_equal_approx(float(beam_energy29), 1.7)
+	if not beam_ok29:
+		printerr("FAIL: 29b MI_LightBeam_SM not the additive beam shader (mat=", beam_mat29, ")")
+		fails += 1
+	else:
+		print("PASS: 29b MI_LightBeam_SM binds tat_beam.gdshader (warm white a=0.55, energy 1.7)")
+	# 29c. _build_volumes tags designer blockers for traversal rejection while
+	# leaving the body solid on layer 1.
+	var vol_parent29 := Node3D.new()
+	root.add_child(vol_parent29)
+	var vol_ctx29: Dictionary = {}
+	vec_ll.call("_build_volumes", [{
+		"class": "BlockingVolume",
+		"extent": [1.0, 1.0, 1.0],
+		"pos": [0.0, 0.0, 0.0],
+		"basis": [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+	}], vol_parent29, vol_ctx29)
+	var vol_body29 := vol_parent29.get_child(0) as StaticBody3D if vol_parent29.get_child_count() == 1 else null
+	var vol_ok29: bool = vol_body29 != null \
+		and vol_body29.is_in_group("blocking_volume") \
+		and vol_body29.collision_layer == 1 \
+		and int(vol_ctx29.get("blocking_volume_count", 0)) == 1
+	if not vol_ok29:
+		printerr("FAIL: 29c blocking volume group/layer missing (body=", vol_body29, " ctx=", vol_ctx29, ")")
+		fails += 1
+	else:
+		print("PASS: 29c blocking volumes tagged 'blocking_volume', solid on layer 1")
+	vol_parent29.queue_free()
 	vec_ll.queue_free()
 	await process_frame
 
@@ -3030,7 +3089,7 @@ func _initialize() -> void:
 	var neon_head: StandardMaterial3D = neon_ll.call("get_material_for_ue", "/Game/Art/Character/ThiefNisha/Base/MI_ThiefNisha_Head") as StandardMaterial3D
 	var neon_knife: StandardMaterial3D = neon_ll.call("get_material_for_ue", "/Game/Art/Gameplay/Loot/LootMinor/JeweledKnife/MI_JeweledKnife") as StandardMaterial3D
 	var neon_cat: StandardMaterial3D = neon_ll.call("get_material_for_ue", "/Game/Art/Gameplay/Loot/LootMajor/StatueCat/MI_CatStatueA") as StandardMaterial3D
-	var neon_beam: StandardMaterial3D = neon_ll.call("get_material_for_ue", "/Game/Gameplay/Traps/Detectors/LightBeam/MI_LightBeam_SM") as StandardMaterial3D
+	var neon_beam: ShaderMaterial = neon_ll.call("get_material_for_ue", "/Game/Gameplay/Traps/Detectors/LightBeam/MI_LightBeam_SM") as ShaderMaterial
 	var neon_col_v: Variant = neon_mat.get_shader_parameter("hdr_color") if neon_mat != null else null
 	var neon_col: Vector3 = neon_col_v if neon_col_v is Vector3 else Vector3.ZERO
 	var neon_mac_col_v: Variant = neon_mac.get_shader_parameter("hdr_color") if neon_mac != null else null
@@ -3055,7 +3114,8 @@ func _initialize() -> void:
 	var neon_knife_ok: bool = neon_knife != null and neon_knife.albedo_texture != null \
 		and neon_knife.albedo_color.r > 1.0
 	var neon_cat_ok: bool = neon_cat != null and neon_cat.albedo_texture != null and neon_cat.albedo_color.r > 1.0
-	var neon_beam_ok: bool = neon_beam != null and neon_beam.albedo_texture != null and neon_beam.cull_mode == BaseMaterial3D.CULL_DISABLED
+	var neon_beam_ok: bool = neon_beam != null and neon_beam.shader != null \
+		and neon_beam.shader.resource_path.ends_with("tat_beam.gdshader")
 	if not neon_ok or not neon_mac_ok or not neon_head_ok or not neon_knife_ok or not neon_cat_ok or not neon_beam_ok:
 		printerr("FAIL: 37 neon HDR shader (neon=", neon_ok, " mac=", neon_mac_ok, " head_tex_control=", neon_head_ok, " hdr_tex_control=", neon_knife_ok, " hdr_tex_cat=", neon_cat_ok, " two_sided_beam=", neon_beam_ok, ")")
 		fails += 1

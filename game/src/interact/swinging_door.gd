@@ -149,6 +149,24 @@ func _build_leaf(leaf: Dictionary) -> void:
 	var mi := MeshInstance3D.new()
 	mi.mesh = mesh
 	mi.transform = Transform3D(ltr.basis.scaled(leaf_scale), ltr.origin)
+	# Mirrored leaves: 36 POI + 4 vault pivots carry a negative-determinant
+	# basis. UE draws those two-sided; a single-sided Godot surface culls the
+	# face the player sees and the leaf disappears. Duplicate only the
+	# BaseMaterial3D surfaces with culling disabled — multi-slot doors must
+	# keep per-surface materials, so never use one material_override.
+	if mi.transform.basis.determinant() < 0.0:
+		for s: int in range(mesh.get_surface_count()):
+			var src: Material = mi.get_surface_override_material(s)
+			if src == null:
+				src = mesh.surface_get_material(s)
+			var bm := src as BaseMaterial3D
+			if bm == null:
+				continue
+			var mirrored := bm.duplicate() as BaseMaterial3D
+			if mirrored == null:
+				continue
+			mirrored.cull_mode = BaseMaterial3D.CULL_DISABLED
+			mi.set_surface_override_material(s, mirrored)
 	pivot.add_child(mi)
 	var aabb: AABB = mesh.get_aabb()
 	var body := AnimatableBody3D.new()

@@ -21,7 +21,13 @@ UE -> Godot (StandardMaterial3D) parameter mapping used here and in
   ``EmissiveMultiplier``, ``EmissiveMultiply``, ``EmisMultiply``,
   ``EmissiveMult``, ``EmissivePower``, ``EmissiveBrightness``,
   ``EmissiveBrillance``).
-- ``TwoSided`` -> ``cull_mode = CULL_DISABLED``.
+- ``TwoSided`` (top level or ``BasePropertyOverrides.TwoSided``) ->
+  ``cull_mode = CULL_DISABLED``.
+- Albedo: an MI that would inherit the master's painterly ``T_PaintStrokesD``
+  fallback instead binds its own authored ``Diffuse`` cache reference (when the
+  cached Normal agrees) or the ``_D`` companion of its normal/ORM family
+  (``T_BrickNewClean_N`` -> ``T_BrickNewClean_D``). Carpet/rug brush-layer
+  materials and ``MI_AppleInterior`` are allowlisted as genuinely painterly.
 - ``BlendMode`` containing ``Translucent`` or ``AlphaComposite`` ->
   ``TRANSPARENCY_ALPHA``; ``BLEND_Masked`` -> ``TRANSPARENCY_ALPHA_SCISSOR``
   with ``alpha_scissor_threshold`` from ``BasePropertyOverrides`` /
@@ -577,7 +583,17 @@ def _extract_real_params(props: dict) -> tuple:
     render: dict = {}
     if "BlendMode" in props and props["BlendMode"]:
         render["blend_mode"] = str(props["BlendMode"])
-    if props.get("TwoSided") is True:
+    # Two-sided can be authored either on the material itself or in the
+    # instance's BasePropertyOverrides (21 shipped MIs use the latter:
+    # MI_TrimMetalC_Rusty gates/fences, MI_TrimMetalA_brass doors/chandeliers,
+    # MI_TrimMetalSurfaceA vaults, MI_TrimMetalA_brass_dark signs). Reading
+    # only the top-level flag dropped them and single-sided leaves vanished.
+    two_sided: bool = props.get("TwoSided") is True
+    if not two_sided:
+        overrides = props.get("BasePropertyOverrides") or {}
+        if isinstance(overrides, dict) and overrides.get("TwoSided") is True:
+            two_sided = True
+    if two_sided:
         render["two_sided"] = True
     if "ShadingModel" in props and props["ShadingModel"]:
         render["shading_model"] = str(props["ShadingModel"])
@@ -819,6 +835,99 @@ def _diffuse_tokens(mat_name: str) -> list:
             continue
         tokens.append(tok)
     return tokens
+
+
+# Materials where the master's T_PaintStrokesD albedo is genuinely the authored
+# look, not an un-overridden master fallback. Carpet/rug instances use the
+# paint-stroke layer as their dye texture (their normal is T_CarpetDetail_N and
+# no sibling _D map exists); the masters themselves are the brush-layer art.
+PAINTERLY_ALBEDO_ALLOWLIST = (
+    "mi_patterncarpet",
+    "mi_manor_rug",
+    # No same-family diffuse sibling exists; the inherited brush layer is no
+    # worse than the master metal fallback (MI_AppleInterior's normal is the
+    # M_EnvBasic TrimMetalB_N default, not an apple-flesh map).
+    "mi_apple",
+    "m_envbasic",
+    "m_envcarpet",
+    "m_envalphamask",
+    "m_envtrim",
+    "m_basicworldaligned",
+    "mi_envbasic_worldaligned",
+)
+
+PAINTERLY_ALBEDO_MARKERS = ("paintstroke", "paint_stroke")
+
+
+def _is_painterly_albedo(res_path: str) -> bool:
+    """True when an albedo is a master brush/painterly fallback texture."""
+    low: str = Path(str(res_path)).stem.lower()
+    return any(m in low for m in PAINTERLY_ALBEDO_MARKERS)
+
+
+def _painterly_albedo_allowed(pkg: str) -> bool:
+    name: str = str(pkg).rsplit("/", 1)[-1].lower()
+    return any(name.startswith(prefix) for prefix in PAINTERLY_ALBEDO_ALLOWLIST)
+
+
+def _texture_family(stem: str) -> str:
+    """Family stem of a texture: suffix and trailing variant number removed.
+
+    ``t_bricknewclean_d`` and ``t_bricknewclean_n`` share ``t_bricknewclean``;
+    ``t_plaster_d04`` maps to ``t_plaster``.
+    """
+    base: str = str(stem).lower()
+    for suffix in (
+        "_ormm",
+        "_basecolor",
+        "_diffuse",
+        "_opacity",
+        "_orm",
+        "_arm",
+        "_alb",
+        "_da",
+        "_bc",
+        "_bco",
+        "_nm",
+        "_n",
+        "_d",
+        "_c",
+        "_e",
+        "_o",
+    ):
+        if base.endswith(suffix):
+            base = base[: -len(suffix)]
+            break
+    base = re.sub(r"\d+$", "", base)
+    return base
+
+
+def _companion_diffuse(res_path: str, tex_by_stem: dict) -> str:
+    """Sibling albedo for a normal/ORM map family (T_X_N -> T_X_D).
+
+    Only same-family companion maps count, so a material whose normal has no
+    authored diffuse sibling (T_NormalFlat_N, T_CarpetDetail_N) keeps its
+    painterly/dyed albedo instead of borrowing an unrelated surface.
+    """
+    if not res_path:
+        return ""
+    stem: str = Path(str(res_path)).stem.lower()
+    base: str = ""
+    for suffix in ("_nm", "_n", "_ormm", "_orm", "_arm"):
+        if stem.endswith(suffix):
+            base = stem[: -len(suffix)]
+            break
+    if base == "":
+        return ""
+    for suffix in ("_d", "_da", "_bc", "_bco", "_c", "_alb"):
+        for prefix in ("", "t_"):
+            if prefix + base + suffix in tex_by_stem:
+                return tex_by_stem[prefix + base + suffix]
+    numbered = re.compile(r"^(t_)?" + re.escape(base) + r"_(d|da|bc|bco|c)\d+$")
+    for cand_stem, cand_res in tex_by_stem.items():
+        if numbered.match(cand_stem):
+            return cand_res
+    return ""
 
 
 def _stem_fallback_albedo(
@@ -1109,7 +1218,10 @@ def main():
         # UE window/storefront masters carry their emissive E map only in
         # TextureStreamingData/ReferencedTextures (MI_WindowDecoOpaque has
         # T_WindowDecoOpaque_E, Emissive On?=true, but no explicit parameter).
-        if "emissive" not in texs and _static_switch(props, "Emissive On?") is not False:
+        if (
+            "emissive" not in texs
+            and _static_switch(props, "Emissive On?") is not False
+        ):
             emissive_pick: str = _best_texture_candidate(
                 extra_paths,
                 ("_e",),
@@ -1121,6 +1233,56 @@ def main():
             )
             if emissive_pick != "":
                 texs["emissive"] = emissive_pick
+        # Paint-stroke albedo recovery (P1-4): many MIs inherit the master
+        # M_EnvBasic* albedo T_PaintStrokesD even though their own
+        # CachedExpressionData names the real Diffuse (MI_BrickNewClean_XYZ ->
+        # T_BrickNewClean_D) and/or their normal/ORM family has a sibling _D
+        # (T_FloorTileA_N -> T_FloorTileA_D). Record that child-authored
+        # albedo; resolve() only uses it when the inherited master albedo is
+        # the painterly fallback, so authored parent binds still win.
+        albedo_recovery: str = ""
+        albedo_recovery_source: str = ""
+        if exp.get("Type") != "Material" and "albedo" not in texs:
+            # The group-3 slot order is only trustworthy for master-material
+            # layers: a "Diffuse" cached value is the child's real override
+            # only when the same record's "Normal" slot matches the normal we
+            # bound from the instance's own references. Without that guard,
+            # non-layer masters mis-map the slot and bind unrelated art
+            # (MI_Apartment_StoneTrim's Diffuse slot held T_Aluminum_01_BC).
+            cached_normal: str = ""
+            for nname, npath in cached_textures.items():
+                if re.sub(r"[^a-z0-9]", "", nname.lower()) == "normal":
+                    cached_normal = ue_to_res_png(str(npath))
+                    break
+            bound_normal: str = str(texs.get("normal", ""))
+            diffuse_trusted: bool = bound_normal == "" or cached_normal == bound_normal
+            if diffuse_trusted:
+                for cname, cpath in cached_textures.items():
+                    norm_name = re.sub(r"[^a-z0-9]", "", cname.lower())
+                    if not any(
+                        k in norm_name for k in ("diffuse", "albedo", "basecolor")
+                    ):
+                        continue
+                    tp = ue_to_res_png(str(cpath))
+                    if (
+                        tp
+                        and _is_albedo_stem(Path(tp).stem.lower(), allow_ui_map)
+                        and not _is_painterly_albedo(tp)
+                        and _texture_family(Path(tp).stem)
+                        == _texture_family(
+                            Path(bound_normal).stem if bound_normal else ""
+                        )
+                    ):
+                        albedo_recovery = tp
+                        albedo_recovery_source = "instance-diffuse"
+                        break
+            if albedo_recovery == "":
+                for slot in ("normal", "orm"):
+                    cand = _companion_diffuse(str(texs.get(slot, "")), tex_by_stem)
+                    if cand and not _is_painterly_albedo(cand):
+                        albedo_recovery = cand
+                        albedo_recovery_source = "companion-diffuse"
+                        break
         # Albedo: TextureStreamingData is a used-texture list, not array-first.
         # Rank every candidate by family anchor, path category, tokens and stem
         # specificity. A signal-less stream pick is ignored (F4) except for
@@ -1156,10 +1318,14 @@ def main():
             # rejected by _is_albedo_stem, so the generic fallback binds
             # T_StorefrontTrimA_D (wood) and loses the authored glass-decal
             # art plus its preserved 1-bit alpha.
-            if pkg in (
-                "/Game/Art/Environment/Storefront/GlassDecals/M_Storefront_Decal",
-                "/Game/Art/Environment/Storefront/GlassDecals/MI_Storefront_Decal",
-            ) and stream_pick == "":
+            if (
+                pkg
+                in (
+                    "/Game/Art/Environment/Storefront/GlassDecals/M_Storefront_Decal",
+                    "/Game/Art/Environment/Storefront/GlassDecals/MI_Storefront_Decal",
+                )
+                and stream_pick == ""
+            ):
                 for rp in stream_paths + ref_paths:
                     if Path(rp).stem.lower() == "t_storefront_glassdecalsa":
                         stream_pick = rp
@@ -1228,6 +1394,8 @@ def main():
             "render": p_render,
             "phys_material": p_phys,
             "albedo_source": albedo_source,
+            "albedo_recovery": albedo_recovery,
+            "albedo_recovery_source": albedo_recovery_source,
         }
 
     # Resolve parent inheritance
@@ -1283,12 +1451,47 @@ def main():
         # P1-3: an authored albedo on the child wins with the child's source.
         # A child fallback-ranked guess must never replace an authored parent
         # bind (MI_IvyNanite_Root_NoWPO: the guess picked the leaf atlas and
-        # turned the bark root into an opaque backlit leaf card).
-        if "albedo" in cur["texs"]:
-            if (
-                str(cur["albedo_source"]).startswith("fallback-")
-                and "albedo" in base["texs"]
-            ):
+        # turned the bark root into an opaque backlit leaf card). P1-4: when
+        # the parent bind is only the painterly T_PaintStrokesD fallback, the
+        # child's own Diffuse reference / normal-family companion _D wins.
+        inherited_albedo: str = str(base["texs"].get("albedo", ""))
+        recovery: str = str(cur.get("albedo_recovery", ""))
+        if (
+            recovery == ""
+            and _is_painterly_albedo(inherited_albedo)
+            and not _painterly_albedo_allowed(pkg)
+        ):
+            # No instance cache: the normal may itself be inherited from the
+            # master (MI_Turret_DetectTrap -> TrimMetalB_N). Resolve the
+            # companion _D from the merged normal/ORM instead.
+            inherited_normal: str = str(texs.get("normal", "") or texs.get("orm", ""))
+            recovery = _companion_diffuse(inherited_normal, tex_by_stem)
+            if recovery != "":
+                cur["albedo_recovery"] = recovery
+                cur["albedo_recovery_source"] = "companion-diffuse"
+        recovery_wins: bool = (
+            recovery != ""
+            and _is_painterly_albedo(inherited_albedo)
+            and not _painterly_albedo_allowed(pkg)
+            and (
+                "albedo" not in cur["texs"]
+                or str(cur["albedo_source"]).startswith("fallback-")
+                or _is_painterly_albedo(str(cur["texs"].get("albedo", "")))
+            )
+        )
+        if (
+            "albedo" in cur["texs"]
+            and not recovery_wins
+            and not _is_painterly_albedo(str(cur["texs"].get("albedo", "")))
+            and not str(cur["albedo_source"]).startswith("fallback-")
+        ):
+            # A real authored/stream child bind is the child's appearance.
+            albedo_source = cur["albedo_source"]
+        elif recovery_wins:
+            texs["albedo"] = recovery
+            albedo_source = str(cur.get("albedo_recovery_source", "instance-diffuse"))
+        elif "albedo" in cur["texs"]:
+            if "albedo" in base["texs"]:
                 albedo_source = base["albedo_source"]
                 texs["albedo"] = base["texs"]["albedo"]
             else:

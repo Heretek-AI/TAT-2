@@ -12,6 +12,7 @@ const EMISSIVE_CPD_SHADER: Shader = preload("res://src/core/tat_emissive_cpd.gds
 const GLASS_SHADER: Shader = preload("res://src/core/tat_glass.gdshader")
 const HDR_EMISSIVE_SHADER: Shader = preload("res://src/core/tat_hdr_emissive.gdshader")
 const STOREFRONT_DECAL_SHADER: Shader = preload("res://src/core/tat_storefront_decal.gdshader")
+const BEAM_SHADER: Shader = preload("res://src/core/tat_beam.gdshader")
 
 ## Landscape layer name -> extracted albedo texture. Missing layers are skipped
 ## (the shader normalizes the remaining weights) instead of binding a guessed
@@ -548,7 +549,12 @@ func _apply_ue_render_flags(mat: StandardMaterial3D, info: Dictionary) -> void:
 	var texs_rf: Dictionary = texs_rf_v as Dictionary if texs_rf_v is Dictionary else {}
 	var is_bark: bool = "bark" in str(texs_rf.get("albedo", "")).to_lower()
 	var is_foliage_shading: bool = ("TwoSidedFoliage" in shading or ("Subsurface" in shading and not ("SubsurfaceProfile" in shading))) and not is_bark
-	if blend.find("translucent") >= 0 or blend.find("alphacomposite") >= 0:
+	# Authored EBlendMode::BLEND_Additive is a real additive pass, not opaque.
+	# M_ParticleAdd_Niagara/MI_ThiefWriting_* and friends sat as opaque cards.
+	if blend.find("additive") >= 0:
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	elif blend.find("translucent") >= 0 or blend.find("alphacomposite") >= 0:
 		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	elif blend.find("masked") >= 0:
 		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
@@ -568,6 +574,11 @@ func _apply_ue_render_flags(mat: StandardMaterial3D, info: Dictionary) -> void:
 			mat.backlight = Color(float(sa[0]), float(sa[1]), float(sa[2])).clamp(Color(0.18, 0.14, 0.08), Color(0.75, 0.75, 0.75))
 		else:
 			mat.backlight = Color(0.35, 0.28, 0.16)
+	elif shading.ends_with("MSM_Unlit") and str(texs_rf.get("albedo", "")) != "":
+		# Authored unlit masters (M_EnvUnlit, M_LF_CandlesFlickerA) must not
+		# receive scene lighting. Untextured unlit materials already return an
+		# unshaded black material in get_material_for_ue().
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 
 
 ## Applies real UE emissive vectors/scalars from materials.json. Merges with an
@@ -781,6 +792,18 @@ func get_material_for_ue(ue_mat_path: String) -> Material:
 		return black
 	var blend_early: String = str(render_early.get("blend_mode", "")).to_lower()
 	var is_translucent_early: bool = blend_early.find("translucent") >= 0 or blend_early.find("alphacomposite") >= 0
+	# Exact MI only: MI_LightBeam_SM (134 Guildhall SM_LightBeam meshes) is
+	# authored Additive + Unlit + TwoSided with an HDR warm-white alpha 0.5.
+	# The StandardMaterial3D path turned it into an opaque white lit slab.
+	# The volumetric card shader keeps the authored additive, unshaded,
+	# cull-disabled, depth-write-off look (no bloom pass is added).
+	if low_mat.ends_with("mi_lightbeam_sm"):
+		var beam_m: ShaderMaterial = ShaderMaterial.new()
+		beam_m.shader = BEAM_SHADER
+		beam_m.set_shader_parameter("beam_color", Color(1.0, 0.93, 0.82, 0.55))
+		beam_m.set_shader_parameter("energy", 1.7)
+		_std_mat_cache[ue_mat_path] = beam_m
+		return beam_m
 	if is_translucent_early and ("glass" in low_mat or "window" in low_mat):
 		var glass_alb_path: String = str(texs_early.get("albedo", ""))
 		var glass_alb: Texture2D = null if (glass_alb_path.to_lower().find("mapbuilding") >= 0 and low_mat.find("mapbuilding") < 0) else _load_tex(glass_alb_path)
@@ -1138,6 +1161,7 @@ func _get_mesh_and_shape(ue_path: String) -> Dictionary:
 				var mat_slots: Array = _mesh_mats_db.get(mesh_key, _mesh_mats_db_lower.get(mesh_key.to_lower(), []))
 				var _m0: int = Time.get_ticks_msec()
 				_bind_glb_materials(m, mat_slots)
+				_fix_worldgrid_door_surfaces(ue_path, m)
 				_prof_mat_ms += Time.get_ticks_msec() - _m0
 				if "sm_guildhall_sign" in low_u:
 					m = _split_guildhall_sign_mesh(ue_path, m)
@@ -1229,6 +1253,59 @@ func _bind_glb_materials(m: Mesh, mat_slots: Array) -> void:
 			var mp2 := str(mat_slots[matched])
 			if mp2 != "":
 				m.surface_set_material(s, get_material_for_ue(mp2))
+
+
+## WorldGridMaterial is the UE checkerboard placeholder, not authored art. On
+## door/gate/fence meshes it means the shipped asset never assigned that
+## surface (SM_OldManor_Gate_FrontDoor is 4/4 grid, SM_OldManor_Gallery_Door_
+## Glass 1/1, SM_Manor_Door_Single and SM_Store_Int_WallDoor_Closed_4x6 carry a
+## stray grid panel). Substitute a referenced material; never hide WorldGrid
+## globally (spheres/emitters use it intentionally).
+const WORLDGRID_GATE_MATERIAL: String = "/Game/MaterialLibrary/Environment/Metal/MI_TrimMetalSurfaceA"
+const WORLDGRID_GLASS_MATERIAL: String = "/Game/MaterialLibrary/Environment/Glass/WIndowPanels/MI_Glass_Display"
+
+
+func _is_worldgrid_material(mat: Material) -> bool:
+	if mat == null:
+		return false
+	if "worldgrid" in mat.resource_path.to_lower():
+		return true
+	var sm := mat as StandardMaterial3D
+	if sm != null and sm.albedo_texture != null:
+		return "grid" in sm.albedo_texture.resource_path.to_lower()
+	return false
+
+
+func _fix_worldgrid_door_surfaces(ue_path: String, m: Mesh) -> void:
+	if m == null:
+		return
+	var low: String = ue_path.to_lower()
+	if low.find("door") < 0 and low.find("gate") < 0 and low.find("fence") < 0:
+		return
+	var count: int = m.get_surface_count()
+	var grid_slots: Array[int] = []
+	for s: int in range(count):
+		if _is_worldgrid_material(m.surface_get_material(s)):
+			grid_slots.append(s)
+	if grid_slots.is_empty():
+		return
+	var replacement: Material = null
+	if grid_slots.size() == count:
+		# Fully-gridded asset: substitute a referenced metal (gate/fence) or
+		# glass (glass door) material instead of a checkerboard door.
+		replacement = get_material_for_ue(
+			WORLDGRID_GLASS_MATERIAL if low.find("glass") >= 0 else WORLDGRID_GATE_MATERIAL
+		)
+	else:
+		# Partial grid panel: reuse the mesh's own main door material (slot 0)
+		# so the leaf matches its frame and handle.
+		replacement = m.surface_get_material(0)
+		if replacement == null or _is_worldgrid_material(replacement):
+			replacement = get_material_for_ue(WORLDGRID_GATE_MATERIAL)
+	if replacement == null:
+		return
+	for s2: int in grid_slots:
+		m.surface_set_material(s2, replacement)
 
 
 func _extract_override_materials(entry: Dictionary) -> Array[String]:
@@ -3438,7 +3515,7 @@ func _build_volumes(volumes: Array, parent: Node3D, ctx: Dictionary) -> void:
 		body.name = "BlockingVolume_%d" % blocking
 		# Shared tag consumed by traversal probes (mantle/wall-climb/zipwire):
 		# an invisible designer blocker is solid to walk into, never a wall,
-		# ledge or anchor.
+		# ledge or anchor. Tag only; the body stays solid on layer 1.
 		body.add_to_group("blocking_volume")
 		parent.add_child(body)
 		blocking += 1

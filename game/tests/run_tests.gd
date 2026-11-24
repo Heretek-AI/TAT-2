@@ -5654,20 +5654,20 @@ func _initialize() -> void:
 		var w3_capsule_ok: bool = w3_shape != null and w3_shape.shape is CapsuleShape3D
 		if w3_capsule_ok:
 			var w3_cap: CapsuleShape3D = w3_shape.shape as CapsuleShape3D
-			w3_capsule_ok = absf(float(w3_beam.get("beam_length_m")) - 7.7482395) < 0.0001 and absf(w3_cap.radius - 0.1) < 0.0001 and absf(w3_cap.height - 7.7482395) < 0.001 and absf(w3_shape.position.x - 3.8741198) < 0.001 and absf(w3_shape.rotation.z + PI * 0.5) < 0.0001
+			w3_capsule_ok = absf(float(w3_beam.get("beam_length_m")) - 7.7482395) < 0.0001 and absf(w3_cap.radius - 0.1) < 0.0001 and absf(w3_cap.height - 7.7482395) < 0.001 and absf(w3_shape.position.z - 3.8741198) < 0.001 and absf(w3_shape.rotation.x - PI * 0.5) < 0.0001
 		var w3_beam_ok: bool = w3_capsule_ok
-		w3_player.global_position = Vector3(7.9, 0.0, 0.0)
+		w3_player.global_position = Vector3(0.0, 0.0, 7.9)
 		for w3_i: int in range(10):
 			w3_beam.call("tick", 0.1)
 		w3_beam_ok = w3_beam_ok and int(w3_beam.get("actions_fired")) == 0
-		w3_player.global_position = Vector3(7.5, 0.0, 0.0)
+		w3_player.global_position = Vector3(0.0, 0.0, 7.5)
 		for w3_i: int in range(4):
 			w3_beam.call("tick", 0.1)
 		var w3_before_half: int = int(w3_beam.get("actions_fired"))
 		w3_beam.call("tick", 0.1)
 		w3_beam_ok = w3_beam_ok and w3_before_half == 0 and int(w3_beam.get("actions_fired")) == 1 and w3_action.hits == 1
 		w3_beam.global_position = Vector3(0.0, 1.75, 0.0)
-		w3_player.global_position = Vector3(1.5, 0.0, 0.0)
+		w3_player.global_position = Vector3(0.0, 0.0, 1.5)
 		w3_player.is_crouching = true
 		for w3_i: int in range(10):
 			w3_beam.call("tick", 0.1)

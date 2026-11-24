@@ -6414,6 +6414,26 @@ func _initialize() -> void:
 	else:
 		print("PASS: 85 graphics_quality default/validation, --perf-* parser accept/reject, mission_ready emitted (old_manor)")
 
+	# 83. Review-map baker: the tagger unit tests plus a real thieves_den bake
+	# run in a child engine (test_review_baker.gd). The child exits 0 only when
+	# every tag assertion, manifest key, consistency check and scene-load test
+	# passed, so this suite forwards that verdict. ~6 s, headless, no GPU.
+	var w83_out: Array = []
+	var w83_args: PackedStringArray = [
+		"--headless",
+		"--path", ProjectSettings.globalize_path("res://"),
+		"--script", "res://tests/test_review_baker.gd",
+	]
+	var w83_t0: int = Time.get_ticks_msec()
+	var w83_code: int = OS.execute(OS.get_executable_path(), w83_args, w83_out, true)
+	var w83_ms: int = Time.get_ticks_msec() - w83_t0
+	var w83_text: String = "\n".join(PackedStringArray(w83_out))
+	if w83_code != 0 or w83_text.find("REVIEW_TEST SUMMARY: fails=0") < 0:
+		printerr("FAIL: 83 review baker exit=", w83_code, " ms=", w83_ms, "\n", w83_text.right(2000))
+		fails += 1
+	else:
+		print("PASS: 83 review baker (tagger + thieves_den bake, exit=0, ", w83_ms, " ms)")
+
 	# 12.6/12.7 process-lifetime caches must not outlive the run.
 	var am_node: Node = root.get_node_or_null("/root/AudioManager")
 	if am_node != null and am_node.has_method("cleanup_on_exit"):

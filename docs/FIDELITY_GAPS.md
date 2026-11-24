@@ -297,7 +297,6 @@ find extracted/json -name 'NS_*.json' | wc -l
   - Gates: compile 69/0, 59 suites fails=0, M2 fails=0, E2E 264/264, probes
     PASS, `make audit` PASS (with the new cap check).
 
-
 - 2026-11-24: **W0b measurement truth** (this wave): `settings.graphics_quality`
   (low/medium/high, default high) is now persisted, validated and exposed as a
   desktop Settings control; `--perf-*` CLI overrides set
@@ -330,3 +329,22 @@ find extracted/json -name 'NS_*.json' | wc -l
   surfaces, draws 10,642 -> 9,994 (-6.1 %), collision/occluders unchanged.
   **Not GPU-verified**: visuals, popping and frame time still need the honest
   harness / integrator capture.
+
+- 2026-11-24: **World review pipeline — snapshot, not gameplay truth**:
+  - `tools/bake_review_map.gd` + `game/addons/tat2_review/` build one tagged
+    binary `LevelLoader` scene per `.tatlevel.json` (plus instancing
+    `world.scn`/`review.tscn` and a manifest), and `review_mode.tscn` provides a
+    no-mission free camera through the same loader. Verified on `thieves_den`
+    (285 mesh instances, 4.08 s, 26.9 MiB across 3 sublevel scenes) and
+    `mission_lobby` (66.3 MB, 4.21 s); see
+    [`reports/review-map-baker.md`](reports/review-map-baker.md).
+  - **Residual**: the full Guildhall bake (13 sublevels, incl. 12,461-instance
+    PeripheryA and 33,547-instance SkyboxGeo) and every rendered/visual check
+    are deferred to a quiet machine. The review scenes are static snapshots:
+    no player, AI, doors, loot, devices, missions, weather or streaming, so
+    they cannot be used to validate gameplay or lighting parity.
+  - **Residual**: per-sublevel loads each receive the loader's 160-light
+    budget, so the editor master can show more lights than the shipped
+    single-call load; the Lighting toggle hides them but this is not a
+    performance measurement. Editor-dock clicking and the windowed in-game
+    mode were not manually exercised this wave (GUI/Xvfb deferred).

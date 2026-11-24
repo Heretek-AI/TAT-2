@@ -102,6 +102,15 @@ tools/godot --headless --path game --script res://tests/probe_niagara.gd
 tools/godot --headless --path game --script res://tests/probe_ftue.gd
 tools/godot --headless --path game --script res://tests/probe_scene_variants.gd
 
+# World review (see docs/reports/review-map-baker.md)
+make bake-review MAP=guildhall   # per-sublevel .scn + world.scn/review.tscn + manifest
+make editor                      # TAT-2 Review dock
+make review MAP=guildhall        # live free camera, no mission
+# The CLI needs an absolute script path (Godot resolves --script under res://):
+tools/godot --headless --path game \
+  --script /home/john/Projects/TAT-2/tools/bake_review_map.gd \
+  -- --map=thieves_den --out=res://scenes/review/thieves_den
+
 # Linux export
 make linux-build     # -> build/tat2-linux-x86_64
 ```
@@ -336,6 +345,13 @@ Recent additions to know about:
 7. **Animation notifies are data-only:** `anims_meta.json` and `notify_at()` are
    available; footstep/Ak/hit-window consumers are not wired yet. 1,734
    name-only notifies have no class payload.
+8. **World review is built but the Guildhall bake is deferred.** `make
+   bake-review MAP=guildhall` writes per-sublevel scenes under the gitignored
+   `game/scenes/review/guildhall/`; `make editor` exposes the TAT-2 Review dock
+   and `make review MAP=guildhall` the live free camera. Run the full Guildhall
+   bake and the visual/toggle checks on a quiet machine; report the measured
+   per-sublevel sizes. The baked scenes are snapshots with no gameplay
+   authority. See `reports/review-map-baker.md`.
 
 ### 7.2 Fidelity residuals (visible, bounded)
 

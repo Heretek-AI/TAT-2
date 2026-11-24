@@ -8,7 +8,7 @@ MOBILE_ABI  ?= arm64
 QA_CONTRACT ?= 0
 KEYSTORE_PROPS := $(HOME)/.config/tat2/keystore.properties
 
-.PHONY: build-extractor extract anims normalize audit audit-bootstrap audit-refresh-stamps audit-imports test run desktop-texture-cap texture-cap-check audio-tools linux-build linux-run android-prepare android-debug android-debug-gl android-release
+.PHONY: build-extractor extract anims normalize audit audit-bootstrap audit-refresh-stamps audit-imports test run editor review bake-review desktop-texture-cap texture-cap-check audio-tools linux-build linux-run android-prepare android-debug android-debug-gl android-release
 
 build-extractor:
 	DOTNET_ROOT=$(HOME)/.dotnet10 PATH=$(HOME)/.dotnet10:$(PATH) $(DOTNET) build tools/tat-extract -c Release
@@ -75,6 +75,23 @@ test:
 
 run:
 	$(GODOT) --path game
+
+# --- World review (editor-openable baked scenes + in-game free camera) ------
+MAP ?= guildhall
+OUT ?= res://scenes/review/$(MAP)
+
+# Bake one binary scene per sublevel through the real LevelLoader and write
+# world.scn + review.tscn + review_manifest.json. Output is gitignored.
+bake-review:
+	$(GODOT) --headless --path game --script $(CURDIR)/tools/bake_review_map.gd -- --map=$(MAP) --out=$(OUT)
+
+# In-game free-camera review of the same static world (no mission/player).
+review:
+	$(GODOT) --path game res://scenes/review_mode.tscn -- --map=$(MAP)
+
+# Editor with the TAT-2 Review dock (Project > Plugins if it is not visible).
+editor:
+	$(GODOT) --editor --path game
 
 # Desktop texture pre-bake: writes the 1024 px long-edge cap + mipmaps into the
 # loader-managed PNG .import sidecars, deletes their .ctex/.md5 dest files, then

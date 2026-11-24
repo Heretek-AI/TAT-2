@@ -166,6 +166,10 @@ ping_menu={
 ]
 }
 
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/tat2_review/plugin.cfg")
+
 [tat2]
 
 den_reflection_probe=true

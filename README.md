@@ -60,6 +60,9 @@ builds are documented in [`docs/ANDROID.md`](docs/ANDROID.md).
 | `make android-debug` / `make android-release` | Signed internal APK |
 | `make desktop-texture-cap` | Re-bake the 1024 px texture cap |
 | `make texture-cap-check` | Read-only: fail if any over-cap loader texture lacks the cap + mipmaps |
+| `make editor` | Open the Godot editor with the **TAT-2 Review** dock |
+| `make bake-review MAP=guildhall` | Headless bake of one binary `LevelLoader` scene per sublevel (+ manifest) |
+| `make review MAP=guildhall` | In-game free-camera review of the static world (no mission) |
 
 `tools/audit_baseline.json` is tracked and records every producer/infrastructure
 hash, external tool version and per-output content digest. A normal run with no
@@ -75,6 +78,23 @@ tools/godot --headless --path game --script res://tests/test_m2_player.gd
 tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd
 tools/godot --headless --path game --script res://probe_leak.gd
 ```
+
+## World review
+
+The real Guildhall/Den/Old-Manor world can be inspected without starting a
+mission, with the same `LevelLoader` the game uses:
+
+```bash
+make bake-review MAP=guildhall   # per-sublevel .scn + world.scn + review.tscn + manifest
+make editor                      # TAT-2 Review dock: bake/open, sublevel+kind toggles, bookmarks
+make review MAP=guildhall        # in-game free camera (WASD/QE, 1-0 toggles, F1-F6 bookmarks, P capture)
+```
+
+Generated scenes land in `game/scenes/review/<map>/` and are git-ignored
+(extracted-content derivatives). The in-game camera loads the live world, not
+the baked scenes; `P` saves PNGs to `user://review_captures/`. Architecture,
+tagging vocabulary, measured Den/lobby numbers and limits are in
+[`docs/reports/review-map-baker.md`](docs/reports/review-map-baker.md).
 
 ## Playing
 

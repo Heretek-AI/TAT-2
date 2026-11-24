@@ -3,6 +3,9 @@ extracted/
 game/assets/ue/
 game/data/generated/
 game/i18n/generated/
+# Review baker output is derived from extracted content: never commit it.
+# The review_mode scene/script and addon sources stay tracked.
+game/scenes/review/
 # Godot
 game/.godot/
 *.import.bak

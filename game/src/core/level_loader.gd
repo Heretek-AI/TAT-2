@@ -305,8 +305,14 @@ const STRUCTURAL_NO_FADE_TOKENS: Array[String] = [
 ]
 ## Occlusion occluders are opt-in: only obviously solid structural piece names
 ## (never see-through pieces like windows, doors, rails, frames or light fixtures).
+## W5B: "roof" was in this list, and Guildhall_PeripheryA emitted 398 roof
+## BoxOccluder3Ds. A pitched roof module's AABB is mostly air: the 44-46 deg
+## SM_RoofUrban_Ext_Mid_4x4 covers 12.9 % of its box (measured from the GLB
+## triangles), so the occluder culled the city behind a solid volume that does
+## not exist and popped geometry in and out as the camera moved. Roof pieces
+## are excluded by name now (below); walls/floors/ceilings keep their boxes.
 const OCCLUDER_INCLUDE_TOKENS: Array[String] = [
-	"wall", "floor", "ceiling", "roof", "building", "pillar", "column", "stair", "block",
+	"wall", "floor", "ceiling", "building", "pillar", "column", "stair", "block",
 ]
 const OCCLUDER_EXCLUDE_TOKENS: Array[String] = [
 	"window", "door", "glass", "gate", "archway", "arch_", "frame", "rail", "beam",
@@ -314,10 +320,29 @@ const OCCLUDER_EXCLUDE_TOKENS: Array[String] = [
 	"sky", "cloud", "fog", "smoke", "water", "carpet", "rug", "paper", "poster",
 	"scroll", "cable", "wire", "rope", "ladder", "light", "lamp", "vent", "pipe",
 	"trim", "deco", "panel",
+	# W5B: pitched roof shells are 12.9 % filled AABBs (see above) and the
+	# flat roof decks (GB_RoofFloor_*) are horizontal slabs a camera never
+	# looks past, so no /roofs/ surface is an occluder. Walls still are.
+	"roof",
 	# Interior wall classes were the 768-occluder set in Guildhall (prison and
 	# civic interior walls). Their AABBs span baked doorways, so rooms popped
 	# in/out as the camera moved. Exterior walls remain valid occluders.
 	"prison", "_int_", "interior",
+]
+## W5B roof collision policy. Roof modules under /roofs/ are pitched shells, so
+## their AABB is not their shape: the box top of SM_RoofUrban_Ext_Mid_4x4
+## (4.07 x 4.18 m footprint, 4.22 m rise, ~46 deg, the audit's 44 deg hip)
+## stands 4.08 m above the eave, which put an invisible flat platform in the
+## air above every roof and let the player stand on nothing. ConvexPolygonShape3D
+## follows the authored pitch and is cached per unique mesh: 13 of the 46 roof
+## meshes (334 of the 733 PeripheryA roof instances) take it.
+## Flat pieces keep the exact box - trim/fascia bands, end and side panels,
+## roof floor decks, and the roof props (chimney, vent, pipe, gutter, rail,
+## water tank) are convex boxes or props whose hull would only cost more.
+const ROOF_PATH_TOKEN: String = "/roofs/"
+const ROOF_BOX_TOKENS: Array[String] = [
+	"trim", "chimney", "vent", "side", "end", "pipe", "gutter", "rail",
+	"floor", "watertower", "tank",
 ]
 ## Den west attic window wall: the single wall/window collider is split into
 ## two side boxes leaving DEN_WINDOW_GAP_M for the moonbeam opening, plus a
@@ -637,6 +662,32 @@ func _apply_ue_pbr_params(mat: StandardMaterial3D, info: Dictionary) -> void:
 		mat.metallic_specular = clampf(float(spec), 0.0, 1.0)
 
 
+## W5B: UE's M_Env* masters multiply the diffuse by `DiffuseMaskTint` only when
+## the `DiffuseColorMask?` static switch is on. Every MI inherits the master's
+## vector (MI_PosterWanted carries [0.5331,0.5645,0.6979]) but keeps the switch
+## off (0 materials in materials.json have it true), so applying the vector
+## unconditionally tints sepia WANTED posters to a cold cyan-grey. Read the
+## switch first, then convert the authored linear vector once for
+## albedo_color (Godot treats albedo_color as sRGB).
+func _apply_diffuse_mask_tint(mat: StandardMaterial3D, info: Dictionary) -> void:
+	var switches: Dictionary = _ue_norm_map(info.get("switches", {}))
+	if _ue_lookup(switches, ["diffusecolormask?"]) != true:
+		return
+	var vectors: Dictionary = _ue_norm_map(info.get("vectors", {}))
+	var t: Variant = _ue_lookup(vectors, ["diffusemasktint", "diffusemaskcolor"])
+	if not (t is Array) or (t as Array).size() < 3:
+		return
+	var ta: Array = t as Array
+	var lin: Color = Color(float(ta[0]), float(ta[1]), float(ta[2]), 1.0)
+	var srgb: Color = lin.linear_to_srgb()
+	mat.albedo_color = Color(
+		mat.albedo_color.r * srgb.r,
+		mat.albedo_color.g * srgb.g,
+		mat.albedo_color.b * srgb.b,
+		mat.albedo_color.a
+	)
+
+
 ## Applies real UE render flags from materials.json "render": TwoSided ->
 ## double-sided, translucent/AlphaComposite blend -> alpha transparency, masked
 ## blend -> alpha scissor. Glass art overrides below still take precedence.
@@ -876,6 +927,91 @@ func _build_glass_material(info: Dictionary, alb: Texture2D, op: Texture2D) -> S
 	return smat
 
 
+## W5B masked opacity. A UE masked master can keep the silhouette in a separate
+## Opacity map (M_UnlitOpacityMask + T_HorizonA_BCO) while Godot's alpha scissor
+## only reads the albedo texture's alpha. MI_HorizonA bound T_TrimMetalB_DA
+## (alpha 255 everywhere), so the 558 x 140 m horizon card rendered as a solid
+## black wall instead of a skyline cut-out. Two authored packings are handled:
+##   * "..._BCO" (BaseColor+Opacity): RGB is the authored base colour and alpha
+##     is the mask, so the map is used verbatim - no resample, no pixel copy;
+##   * grayscale "_O"/"_OPACITY": the mask lives in the red channel, so it is
+##     copied into the albedo alpha at the mask's own resolution.
+## Null leaves the previous albedo bound (never silently drops authored colour).
+func _masked_opacity_albedo(albedo: Texture2D, opacity: Texture2D, op_res_path: String) -> Texture2D:
+	if opacity == null:
+		return null
+	var key: String = "masked:" + op_res_path + "|" + (albedo.resource_path if albedo != null else "")
+	if _tex_cache.has(key):
+		return _tex_cache[key] as Texture2D
+	var mask_img: Image = opacity.get_image()
+	if mask_img == null:
+		return null
+	mask_img = (mask_img.duplicate() as Image)
+	if mask_img.is_compressed():
+		mask_img.decompress()
+	mask_img.convert(Image.FORMAT_RGBA8)
+	var mask_from_alpha: bool = _mask_uses_alpha(mask_img)
+	var out_tex: Texture2D = null
+	if mask_from_alpha and op_res_path.to_lower().ends_with("_bco.png"):
+		out_tex = opacity
+	else:
+		var out_img: Image = null
+		var alb_img: Image = albedo.get_image() if albedo != null else null
+		if alb_img != null:
+			alb_img = (alb_img.duplicate() as Image)
+			if alb_img.is_compressed():
+				alb_img.decompress()
+			alb_img.convert(Image.FORMAT_RGBA8)
+			# The mask defines the cut-out, so it keeps its own resolution and
+			# aspect; only the colour is resampled into it.
+			if alb_img.get_size() != mask_img.get_size():
+				alb_img.resize(mask_img.get_width(), mask_img.get_height(), Image.INTERPOLATE_BILINEAR)
+			out_img = alb_img
+		else:
+			# No albedo to keep: the mask map's own RGB is the authored base
+			# colour (a grayscale _O is neutral, a _BCO is base colour).
+			out_img = (mask_img.duplicate() as Image)
+		out_img.clear_mipmaps()
+		_copy_mask_to_alpha(out_img, mask_img, mask_from_alpha)
+		# Both inputs already went through _load_tex/_cap_texture, so the
+		# composed image is inside the texture budget; capping it again would
+		# double-count the downscale against the opacity path.
+		if not out_img.has_mipmaps():
+			out_img.generate_mipmaps()
+		out_tex = ImageTexture.create_from_image(out_img)
+	if out_tex != null:
+		_tex_cache[key] = out_tex
+	return out_tex
+
+
+## Authored opacity maps are packed two ways in this project: a genuine alpha
+## mask (T_HorizonA_BCO, 22 % of texels below 0.5) or a grayscale map in RGB
+## (T_GooBubble01, T_Hauntstable_*_O - alpha 255 everywhere). A 64x64 probe
+## decides which without scanning millions of texels per material.
+static func _mask_uses_alpha(img: Image) -> bool:
+	var probe: Image = (img.duplicate() as Image)
+	probe.resize(64, 64, Image.INTERPOLATE_BILINEAR)
+	probe.convert(Image.FORMAT_RGBA8)
+	var d: PackedByteArray = probe.get_data()
+	var i: int = 3
+	while i < d.size():
+		if d[i] < 250:
+			return true
+		i += 4
+	return false
+
+
+static func _copy_mask_to_alpha(out_img: Image, mask_img: Image, from_alpha: bool) -> void:
+	var md: PackedByteArray = mask_img.get_data()
+	var od: PackedByteArray = out_img.get_data()
+	var i: int = 3 if from_alpha else 0
+	var n: int = mini(md.size(), od.size())
+	while i < n:
+		od[i] = md[i]
+		i += 4
+	out_img.set_data(out_img.get_width(), out_img.get_height(), false, Image.FORMAT_RGBA8, od)
+
+
 func get_material_for_ue(ue_mat_path: String) -> Material:
 	if _std_mat_cache.has(ue_mat_path):
 		return _std_mat_cache[ue_mat_path] as Material
@@ -953,6 +1089,18 @@ func get_material_for_ue(ue_mat_path: String) -> Material:
 		mat.albedo_color = Color(0.65, 0.55, 0.48)
 	if alb != null:
 		mat.albedo_texture = alb
+	# W5B: a masked material keeps its silhouette in `texs.opacity` when the
+	# albedo has none (MI_HorizonA's skyline). Only the authored masked blend
+	# takes this path; stippled/translucent and the foliage stand-in keep the
+	# albedo alpha they were tuned against.
+	if alb != null and blend_early.find("masked") >= 0:
+		var op_path: String = str(texs.get("opacity", ""))
+		if op_path != "":
+			var op_tex: Texture2D = _load_tex(op_path)
+			var masked_alb: Texture2D = _masked_opacity_albedo(alb, op_tex, op_path)
+			if masked_alb != null:
+				mat.albedo_texture = masked_alb
+				mat.set_meta("masked_opacity", op_path)
 	var norm := _load_tex(str(texs.get("normal", "")))
 	if norm != null:
 		mat.normal_enabled = true
@@ -1037,6 +1185,7 @@ func get_material_for_ue(ue_mat_path: String) -> Material:
 				vc.g = lerpf(vc.g, lum, amt)
 				vc.b = lerpf(vc.b, lum, amt)
 		mat.albedo_color = vc
+	_apply_diffuse_mask_tint(mat, info)
 	if _ue_emissive_allowed(info):
 		var em := _load_tex(str(texs.get("emissive", "")))
 		if em != null:
@@ -1263,6 +1412,7 @@ func _get_mesh_and_shape(ue_path: String) -> Dictionary:
 				var _m0: int = Time.get_ticks_msec()
 				_bind_glb_materials(m, mat_slots)
 				_fix_worldgrid_door_surfaces(ue_path, m)
+				_fix_worldgrid_mountain_surfaces(ue_path, m)
 				_prof_mat_ms += Time.get_ticks_msec() - _m0
 				if "sm_guildhall_sign" in low_u:
 					m = _split_guildhall_sign_mesh(ue_path, m)
@@ -1284,12 +1434,21 @@ func _get_mesh_and_shape(ue_path: String) -> Dictionary:
 				# an invisible wall 0.5-0.9 m in front of the leaf. A trimesh
 				# follows the modelled hole and is cheap for ~200 frames.
 				var is_door_aperture: bool = "door" in low_u or "archway" in low_u
+				# W5B: pitched /roofs/ modules must not box. See ROOF_BOX_TOKENS.
+				var is_roof_surface: bool = _is_roof_convex_surface(low_u)
 				var _s0: int = Time.get_ticks_msec()
 				var aabb := m.get_aabb()
 				var sz := aabb.size
 				if not is_nonblocking and sz.length() > 0.45:
 					if is_door_aperture:
 						out["shape"] = m.create_trimesh_shape()
+						out["shape_offset"] = Vector3.ZERO
+					elif is_roof_surface and sz.length() < 12.0:
+						# Convex hull: the authored pitch (ridge, hips, dormer
+						# cheeks) becomes walkable collision instead of a flat
+						# plateau at AABB top. Points are mesh-local, so no
+						# centre offset (boxes are centred, hulls are not).
+						out["shape"] = m.create_convex_shape()
 						out["shape_offset"] = Vector3.ZERO
 					elif sz.length() < 12.0 and not is_stair_run and not is_walk_surface:
 						var bx := BoxShape3D.new()
@@ -1364,6 +1523,13 @@ func _bind_glb_materials(m: Mesh, mat_slots: Array) -> void:
 ## globally (spheres/emitters use it intentionally).
 const WORLDGRID_GATE_MATERIAL: String = "/Game/MaterialLibrary/Environment/Metal/MI_TrimMetalSurfaceA"
 const WORLDGRID_GLASS_MATERIAL: String = "/Game/MaterialLibrary/Environment/Glass/WIndowPanels/MI_Glass_Display"
+## W5B: SkyboxGeo's distant mountain cards (SM_Mountain02/07/16/18_Grass) bind
+## the engine placeholder WorldGridMaterial, so the horizon rendered as the grey
+## checkerboard. The authored grass mountain material already exists and is
+## bound by SM_Mountain17_Grass; substitution is scoped to /skybox/mountains/
+## and an "sm_mountain" file stem (never global: WorldGrid is intentional for
+## spheres/emitters and the gate/door path above keeps its own targets).
+const WORLDGRID_MOUNTAIN_MATERIAL: String = "/Game/Art/Environment/Materials/MI_Mountain17"
 
 
 func _is_worldgrid_material(mat: Material) -> bool:
@@ -1403,6 +1569,32 @@ func _fix_worldgrid_door_surfaces(ue_path: String, m: Mesh) -> void:
 		replacement = m.surface_get_material(0)
 		if replacement == null or _is_worldgrid_material(replacement):
 			replacement = get_material_for_ue(WORLDGRID_GATE_MATERIAL)
+	if replacement == null:
+		return
+	for s2: int in grid_slots:
+		m.surface_set_material(s2, replacement)
+
+
+## W5B: skybox mountain substitution. Scoped by name only - the mesh must live
+## under /skybox/mountains/ and its stem must start with "sm_mountain" - so the
+## placeholder stays untouched for every other WorldGrid surface (spheres,
+## emitters, the door/gate path above).
+func _is_skybox_mountain_mesh(low_path: String) -> bool:
+	if low_path.find("/skybox/mountains/") < 0:
+		return false
+	return low_path.get_file().split(".")[0].begins_with("sm_mountain")
+
+
+func _fix_worldgrid_mountain_surfaces(ue_path: String, m: Mesh) -> void:
+	if m == null or not _is_skybox_mountain_mesh(ue_path.to_lower()):
+		return
+	var grid_slots: Array[int] = []
+	for s: int in range(m.get_surface_count()):
+		if _is_worldgrid_material(m.surface_get_material(s)):
+			grid_slots.append(s)
+	if grid_slots.is_empty():
+		return
+	var replacement: Material = get_material_for_ue(WORLDGRID_MOUNTAIN_MATERIAL)
 	if replacement == null:
 		return
 	for s2: int in grid_slots:
@@ -2575,6 +2767,20 @@ func _culling_policy_signature(low_mp: String, mesh: Mesh) -> String:
 	if aabb_len < SMALL_PROP_LEN:
 		return "small"
 	return "default"
+
+
+## W5B roof collision policy, also the gate/test surface: "convex" for a
+## pitched /roofs/ shell, "box" for the flat roof pieces and roof props that
+## keep the exact AABB, "none" for anything outside /roofs/.
+func roof_collision_kind(ue_path: String) -> String:
+	var low: String = ue_path.to_lower()
+	if low.find(ROOF_PATH_TOKEN) < 0:
+		return "none"
+	return "box" if _has_token(low, ROOF_BOX_TOKENS) else "convex"
+
+
+func _is_roof_convex_surface(low_path: String) -> bool:
+	return roof_collision_kind(low_path) == "convex"
 
 
 func _qualifies_as_occluder(low_mp: String, mesh: Mesh) -> bool:

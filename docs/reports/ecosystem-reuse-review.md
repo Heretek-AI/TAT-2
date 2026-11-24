@@ -143,7 +143,24 @@ extracted UE kit, paid kits, or commissioned art remain the realistic paths.
 | Pipeline | **Export montage notifies + DataTables now**; selective BP/ Niagara templates later; no graph/VM decompiler. |
 | Streaming | **Do not adopt a streaming plugin** in this phase; revisit only after the FPS budget work. |
 
-## 8. Unverified / risks
+## 8. Measured baseline (2026-11-24, current export)
+
+Guildhall contract 2, Wayland, RTX 4070 laptop, 3,000-frame runs, post-load
+samples only:
+
+| Quality | Resolution | Median FPS | p10 | p90 | mspf |
+|---|---|---:|---:|---:|---:|
+| high | 1920×1080 | 37 | 32 | 41 | 27.0 |
+| high | 1280×720 | 52 | 40 | 56 | 19.2 |
+| medium | 1920×1080 | 39.5 | 18 | 42 | 25.3 |
+| low | 1920×1080 | 39 | 37 | 42 | 25.6 |
+
+High/medium/low at 1080p are within noise, so the quality-gated SSIL/fog/SSR
+toggles are not the limiter. The 720p median (52 FPS, 19.2 ms) is close to the
+CPU ceiling estimated above; the next work is draw-call/CPU reduction (merge
+plain meshes, district HLOD), not another GI/post effect.
+
+## 9. Unverified / risks
 
 - Godot 4.7.2 compatibility is explicitly verified only for Terrain3D and
   GodotSteam; SSRT/Sky3D/O1S/impostor/G.U.I.D.E/netfox need a branch spike.

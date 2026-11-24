@@ -57,7 +57,7 @@ TAT-2 expansion content belong in git.
 
 ```bash
 make run         # native 4.7.2 client, F3 overlay
-make test        # tests/run_tests.gd — 54 suites
+make test        # tests/run_tests.gd — 58 suites
 make audit       # fail-closed content + producer/output baseline gate
 
 tools/godot --headless --path game --script tools/check_scripts_compile.gd
@@ -69,8 +69,8 @@ tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd -- 
 
 | Gate | Passing value (2026-11-23) |
 |---|---|
-| compile | 58 checked, 0 broken |
-| `run_tests.gd` | `SUMMARY: fails=0` (54 suites) |
+| compile | 69 checked, 0 broken |
+| `run_tests.gd` | `SUMMARY: fails=0` (58 suites) |
 | `test_m2_player.gd` | `M2_SUMMARY: fails=0` |
 | door walk / viewmodel / Niagara probes | `DOORWALK PASS` / `VIEWMODEL_TRUTH PASS` / `NIAGARA_PROBE PASS` |
 | E2E | `fails=0 passed=264 total=264` (tier 1: 115) |
@@ -142,7 +142,7 @@ tools/godot … check_scripts_compile.gd  # 0 broken
 make test                               # fails=0
 tools/godot … test_m2_player.gd         # fails=0
 tools/godot … probe_leak.gd             # expected result or documented warning
-tools/godot … run_e2e_tests.gd          # 262/262, no new failures
+tools/godot … run_e2e_tests.gd          # 264/264, no new failures
 git push origin main
 ```
 

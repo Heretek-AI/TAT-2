@@ -10,16 +10,16 @@ Re-run the census with the commands at the bottom.
 
 | Area | In install | Extracted / parsed | Status |
 |---|---|---|---|
-| Packages (`.uasset` + `.umap`) | 13,162 | 5,805 JSON dumps (44 %) | partial |
-| Static/skeletal meshes | 1,852 `SM_` + 156 `SK_` | 2,045 GLB (`2,027` GLB-ordered + `18` sidecar `mesh_materials.json`) | **done (`6783c2d`)** |
-| Textures | 2,211 `T_` packages | 2,416 PNG (+24 startscreen landscape/OldManor window +10 WindowPanel/wood/fabric +155 OldManor_P landscape) | **done (`8f07b7d`, `754bbb6`, `24abf18`)** |
-| Levels | 107 `.umap` | 107 JSON dumps, 73 clean `.tatlevel.json` (`146,563` orthonormal bases, `OverrideMaterials`, `bVisible:false`/`SplineEditorMesh` filtered, `1,293` emissive CPD shapes) | **done (`7458198`, `24cac7e`, `d0f895a`)** |
-| DataTables / CurveTables / StringTables | 58 `DT_` / 79 `ST_` / curves | 141 normalized tables | good |
-| **Animations** | **879 `AN_`** | **995 GLB clips** (357 ACL-decoded, exact durations, manifest); 14 blend-space graphs unsupported | **done (acd368a); runtime wiring in progress** |
+| Packages (`.uasset` + `.umap`) | 13,162 (12,547 TAT) | 12,541 JSON dumps; 12,439/12,547 TAT packages = 99.1 % | **done** |
+| Static/skeletal meshes | 1,852 `SM_` + 156 `SK_` | 2,065 GLB (`2,047` GLB-ordered + `18` sidecar `mesh_materials.json`) | **done (`6783c2d`)** |
+| Textures | 2,211 `T_` packages | 2,529 PNG; all 3,817 material texture refs exist; 1,059 exceed 1024 px (771 capped, 2 uncapped) | **done, with a documented 1024 px cap** |
+| Levels | 107 `.umap` | 107 `.tatlevel.json` (`159,941` orthonormal bases, `OverrideMaterials`, `bVisible:false`/`SplineEditorMesh` filtered, `1,293` emissive CPD shapes) | **done (`7458198`, `24cac7e`, `d0f895a`)** |
+| DataTables / CurveTables / StringTables | 58 `DT_` / 79 `ST_` / curves | 144 normalized tables | **done** |
+| **Animations** | **879 `AN_`** | **995 GLB clips** + **3,594 authored notifies** / 235 montage sections; 14 blend-space graphs unsupported | **export done; ~90 clip names wired, notifies data-only** |
 | **Weather / atmosphere** | 16 presets + `TATWeatherManager` in 103 levels | **applied** (`tools/parse_weather.py` -> `game/data/generated/weather/`, `weather_profile.gd`, mission wiring, suite 17) | **done (7aa34db)** |
-| **Niagara VFX** | 120 `NS_` systems + 3,692 level placements | catalogue: 29 sprite-only / 70 mesh-ribbon / 21 graph-heavy; 139/148 materials resolved but 91/139 carry no texture; 129/456 renderer entries textured | **catalogue done (26f9838); runtime blocked by compiled graphs** |
-| **Materials** | 1,247 `MI_` + 386 `M_` + 167 `MF_` + 289 material layers | 1,571 resolved (`1,367` albedo, `123` opacity): authored families, Overlay/Multiply vectors, `BlackUnlitMaterial`, GLB primitive slot order, `tat_glass.gdshader` + `tat_emissive_cpd.gdshader` | **done (`754bbb6`..`32d6a52`)** |
-| **Decals** | 667 placements (16 files) | **347 spawned / 112 skipped** after material validation (OldManor 203/89, Guildhall 135/23, Den 9/0) | **wired (9b1a22a)** |
+| **Niagara VFX** | 120 `NS_` systems + 3,695 placements | 3,303 unique records; 3,308 active / 36 systems; one additive billboard per placement (not authored rates) | **catalogue + placement stand-in; VM rates blocked** |
+| **Materials** | 1,247 `MI_` + 386 `M_` + 167 `MF_` + 289 material layers | 1,629 resolved (`1,379` albedo, `149` opacity); **307 albedos are heuristic fallback guesses**, 250 have none | **done for parameters; graphs unrecoverable** |
+| **Decals** | 675 records (17 files) | 347 spawned / 112 skipped in 3 maps; 216 in other maps are not accounted for | **partial** |
 | **Rect / sky lights** | 31 rect placements, 1 sky light, 1 atmosphere | 1 active rect light wired (26 authored off), sky/atmosphere applied | **wired (9b1a22a)** |
 | **Light intensity / range** | 682 Guildhall lights, authored intensity `0.01–2500` (median `15`) | linear `1/15` scale (median -> `1.0`, floor `0.01`, ceiling `4.0`); radius 1:1 in metres (200 m guard); attenuation `1.0`; budget ranking uses the same scale | **done (cd3590a; `docs/reports/lighting-intensity.md`)** |
 | **Post-process / fog** | 2 `PostProcessVolume`, 1 `ExponentialHeightFog` | fog + Godot-mappable post-process applied; Lumen-only fields logged as unmappable | **wired (9b1a22a)** |
@@ -28,8 +28,12 @@ Re-run the census with the commands at the bottom.
 | **Audio** | 5,018 Wwise media chunks + 1,296 event assets | **5,018/5,018 decoded to Ogg** (39,222.2 s, 581,494,198 bytes); 5,862/5,868 event media entries resolved; all 9 gameplay tags wired to verified event/media pairs (`docs/reports/audio-wwise.md`) | **done (2ec9138)** |
 | **Tools** | MagicSlime 4 charges / 2 m puddle / 30 s / 10 s slip; smoke 1 ch / 5x5x4 m / 25 s; pickpocket 25 m/9°/0.5 s/4.5 m/s | **implemented** (`50252b5`); projectile flight and player-slip are documented simplifications | **done** |
 | **Combat/health** | fall 6.5→23.25 m curve, 10 s downed, 5 s revive, 15/s guard regen | **implemented** (`16edb4e`) with curve-verified damage and a downed countdown | **done** |
-| **Blueprints (logic)** | 981 `BP_` + 225 `BPUI_` | all 1,437 dumped; movement/detection/tools/fall/downed/contracts wired | BP graphs still not translatable; **contract sublevels + timers done (1b8db68)** |
-| **Spawners** | 689 markers + 546 loot markers + 234 containers | all spawned: real meshes/pickups/civilians (7172096), real loot actors (1c5225f), openable containers (`5bc2d83`) | **done** |
+| **Blueprints (logic)** | 979 `BP_` + 225 `BPUI_` | 963 `BP_` + 225 `BPUI_` dumped; 18 `BP_` missing (Test/ClothSimulation); movement/detection/tools/contracts wired | **graphs not translatable; selective transpiler only** |
+| **Spawners** | 689 markers + 546 loot markers + 254 containers | all spawned: real meshes/pickups/civilians (7172096), real loot actors (1c5225f), openable containers (`5bc2d83`) | **done** |
+| **Devices** | 4,118 / 21 families | 2,095 loaded-map records, 6,005 trigger edges, 1,475 power edges; **5 families run** (beams, plates, noise alarms, power, turrets, cameras, wards) | **partial** |
+| **Patrols** | 210 paths / 673 waypoints | 120 Guildhall / 350 points merged; guards use authored waits/yaw/PingPong | **done** |
+| **Clues / quests** | 96 fact rows / 18 QGs | 90 reachable / 6 dead; authored readable clues, quest items, journal, Set/LootTheRoom objectives | **done** |
+| **Localization** | 8 locales | 8 `.translation` registered; 2,946 source→key entries; `Loc.t()` in main menu/pause/prep | **partial** |
 | Skeletal meshes / skins | 156 `SK_` | 156 GLB | guards play 10 real retargeted clips (a29a06f); player uses real 1P arms (9ef3bdc) |
 | Player model | `Mesh1P_UpperBody/LowerBody`, `Mesh3P_Body/Head` = ThiefNisha meshes | real ThiefNisha 3P body/head + 1P upper-body arms with Walk/Sprint/Crouch 1P clips | **done (9ef3bdc)** |
 
@@ -250,3 +254,19 @@ find extracted/json -name 'NS_*.json' | wc -l
   - **Den**: KF10 core p50 remains 43.5 with the new material flags; KF02 10.3, KF06 8.2, KF09 30.5, zero clip.
   - **QA**: compile 58/0, run_tests 0, M2 0, door/VM/Niagara, E2E **262/262** (T1-10-J added; T2-04-C accepts the intentional beam shader). The 7-texture probe leak still warns at exit; `TAT2_NO_DEN_PROBE=1` remains the clean gate.
   - **Documented residuals**: Guildhall POI graybox floors/floating furniture, white glass/emissive plates, mirrored `PICK LOCK` reflection, sign legibility at 27 m.
+
+- 2026-11-24: **Gameplay truth wave** (`886eff1`..`3202283`): fail-closed audit
+  (18 producers, tracked baseline, 14 negative-control groups); guard sight
+  restored; schema-based save merge + restore-safe suite 49; composed mirrored
+  door determinant; non-vacuous free-play test + normal-mode control; FOV flag
+  only on a real slider change; authored patrols (120 Guildhall paths / 350
+  points), surface loudness (22 rows), interaction LOS, civilian capsule;
+  authored devices (2,095 loaded, 6,005 edges; beams/plates/noise/power/turrets/
+  cameras/wards); authored clues/quests (96/90/6, Contract 2's 7 facts and 6
+  clues, Guildhall gems on 3 Office spawners, LootTheRoom 4000/6000/8000);
+  995/995 animation metadata with 3,594 notifies; UI countdown/identity/portal/
+  rain and 8-locale `Loc.t()`; co-op pose + host-validated door events.
+  Gates: compile 69/0, 58 suites fails=0, M2 fails=0, E2E 264/264, probes PASS,
+  audit PASS. Current Guildhall steady state ~39 FPS @1080p/high (p10 36, p90 41).
+  Residuals: device breakables/goo/vault/windows/portals, co-op loot/AI
+  authority, NPC clue dialogue, 60 FPS, Den GI, partial UI `tr()`.

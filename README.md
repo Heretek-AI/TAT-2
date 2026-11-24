@@ -9,16 +9,16 @@ the TAT-2 expansion adds **The Moth** thief, **Jaspering Hall** and co-op.
 > `extracted/` and `game/assets/ue/`, both git-ignored. Only original code, tools
 > and expansion content are committed. Do not redistribute extracted content.
 
-**Status (2026-11-23, `a410adc`)** — playable end-to-end: startscreen → Den →
+**Status (2026-11-24, `3202283`)** — playable end-to-end: startscreen → Den →
 contract prep → Guildhall run → scoring, plus free-play cleanout, two-player
 ENet co-op and all four E2E tiers.
 
 | Gate | Result |
 |---|---|
-| GDScript compile (`tools/check_scripts_compile.gd`) | **58 scripts, 0 broken** |
-| Unit/integration (`tests/run_tests.gd`) | **54 suites, fails=0** |
+| GDScript compile (`tools/check_scripts_compile.gd`) | **69 scripts, 0 broken** |
+| Unit/integration (`tests/run_tests.gd`) | **58 suites, fails=0** |
 | M2 traversal/tools (`tests/test_m2_player.gd`) | **fails=0** |
-| E2E (`tests/e2e/run_e2e_tests.gd`, tiers 1–4) | **262/262** (tier 1: 115) |
+| E2E (`tests/e2e/run_e2e_tests.gd`, tiers 1–4) | **264/264** (tier 1: 115) |
 | Door walk · viewmodel truth · Niagara | **PASS** |
 | Steam manifest + content audit (`make audit`) | exit 0, fail-closed tracked baseline, mount/path 100.0 % (exact-case 99.4 %), 13/13 content groups |
 

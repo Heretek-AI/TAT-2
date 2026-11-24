@@ -1,5 +1,5 @@
 extends RefCounted
-## Tier 3: Cross-Feature Pairwise Interactions (24 checks: T3-01..T3-24).
+## Tier 3: Cross-Feature Pairwise Interactions (25 checks: T3-01..T3-25).
 ## Exercises cross-milestone contracts (M1<->M2, M2<->M3, M2<->M4, M3<->M4, M1<->M3, M1<->M4).
 
 var h: RefCounted
@@ -35,6 +35,7 @@ func run() -> void:
 	await _t3_22_old_manor_puddle_ssr_sky()
 	await _t3_23_wall_climb_height_curve_detection()
 	await _t3_24_full_preservation_gate()
+	await _t3_25_guard_sight_self_exclusion()
 	h.restore_state()
 
 
@@ -596,3 +597,51 @@ func _t3_24_full_preservation_gate() -> void:
 	var audit_ok: bool = h.repo_file_exists("tools/manifest_audit.py")
 	var e2e_ok: bool = ResourceLoader.exists("res://tests/e2e/run_e2e_tests.gd")
 	h.require(rt_ok and audit_ok and e2e_ok, "T3-24", "run_tests.gd 38 suites + manifest_audit.py + standalone E2E suite preserved")
+
+
+## T3-25: guard eye ray must exclude the player's own body. The endpoint sits
+## inside the player capsule, so without the player RID in the exclude list the
+## ray self-occludes on layer 2 and every guard is blind (positive acquisition
+## fails). The walled second phase is the negative control: an authored
+## occluder must still hold detection at 0.
+func _t3_25_guard_sight_self_exclusion() -> void:
+	var arena_d: Dictionary = await h.make_arena()
+	var arena: Node3D = arena_d["arena"] as Node3D
+	h.game_state().set("active_contract_order", 2)
+	var p: Node = await h.spawn_test_player(arena, Vector3.ZERO, arena_d["light_probe"] as Node)
+	var g: Node3D = await h.spawn_test_guard(arena, Vector3(0.0, 0.0, -12.0)) as Node3D
+	g.set("patrol_speed", 0.0)
+	g.set("suspicious_speed", 0.0)
+	g.set("chase_speed", 0.0)
+	g.set("detection", 0.0)
+	g.set("sight_range", 200.0)
+	g.set("lose_sight_range", 200.0)
+	# Keep the idle guard aimed at the player for the whole positive phase.
+	g.set("patrol_points", [(p as Node3D).global_position])
+	g.look_at((p as Node3D).global_position, Vector3.UP)
+	await h.step_physics(2)
+	await h.step_physics(90)
+	var det_pos: float = float(g.get("detection"))
+	var state_pos: int = int(g.get("state"))
+	var acquired: bool = det_pos > 0.0 or state_pos != 0
+
+	# Negative occlusion control: a real wall between them must hold 0.
+	h.add_wall_box(arena, Vector3(0.0, 1.5, -6.0), Vector3(8.0, 4.0, 0.5), "T3SightOccluder")
+	g.set("detection", 0.0)
+	g.set("state", 0)
+	g.set("state_timer", 0.0)
+	g.set("_seconds_in_state", 10.0)
+	g.set("_seconds_since_visible", 10.0)
+	await h.step_physics(2)
+	await h.step_physics(40)
+	var det_occ: float = float(g.get("detection"))
+	var state_occ: int = int(g.get("state"))
+	var occluded: bool = det_occ == 0.0 and state_occ == 0
+	h.require(
+		acquired and occluded,
+		"T3-25",
+		"guard sight excludes player RID (det=%.1f state=%d) + wall occludes (det=%.1f state=%d)" % [
+			det_pos, state_pos, det_occ, state_occ
+		]
+	)
+	await h.free_node(arena)

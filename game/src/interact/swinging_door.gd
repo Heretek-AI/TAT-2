@@ -151,10 +151,13 @@ func _build_leaf(leaf: Dictionary) -> void:
 	mi.transform = Transform3D(ltr.basis.scaled(leaf_scale), ltr.origin)
 	# Mirrored leaves: 36 POI + 4 vault pivots carry a negative-determinant
 	# basis. UE draws those two-sided; a single-sided Godot surface culls the
-	# face the player sees and the leaf disappears. Duplicate only the
-	# BaseMaterial3D surfaces with culling disabled — multi-slot doors must
-	# keep per-surface materials, so never use one material_override.
-	if mi.transform.basis.determinant() < 0.0:
+	# face the player sees and the leaf disappears. The leaf-local mi basis is
+	# always +1 for an identity leaf stub, so test the composed door-root x
+	# leaf basis the pivot actually renders. Duplicate only the BaseMaterial3D
+	# surfaces with culling disabled — multi-slot doors must keep per-surface
+	# materials, so never use one material_override.
+	var leaf_basis: Basis = mi.transform.basis
+	if transform.basis.determinant() * leaf_basis.determinant() < 0.0:
 		for s: int in range(mesh.get_surface_count()):
 			var src: Material = mi.get_surface_override_material(s)
 			if src == null:

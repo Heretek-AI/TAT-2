@@ -161,17 +161,27 @@ func set_loadout(thief_id: String, loadout: Dictionary) -> void:
 ## Recursive type-checked merge. Only known keys with compatible types are
 ## accepted; a wrong-typed value (e.g. "currency": "bad") leaves the default
 ## intact instead of crashing the first caller that casts it.
-func _merge_validated(incoming: Dictionary, target: Dictionary = {}) -> void:
-	if target.is_empty():
-		target = data
+func _merge_validated(incoming: Dictionary) -> void:
+	_merge_into(incoming, data, false)
+
+
+## One merge level. `freeform` is true only for a nested dictionary whose
+## default is empty (e.g. completed_contracts): that map has no key schema, so
+## incoming entries are copied instead of dropped. It is never true at the
+## root, so unknown root keys stay ignored. The earlier form aliased an empty
+## nested target to the root (`target = data`), which treated every
+## completed_contracts order key as an unknown root key and discarded it.
+func _merge_into(incoming: Dictionary, target: Dictionary, freeform: bool) -> void:
 	for key_v: Variant in incoming.keys():
 		var key: String = str(key_v)
 		if not target.has(key):
+			if freeform:
+				target[key] = _duplicate_freeform(incoming[key_v])
 			continue
 		var base: Variant = target[key]
 		var inc: Variant = incoming[key_v]
 		if base is Dictionary and inc is Dictionary:
-			_merge_validated(inc as Dictionary, base as Dictionary)
+			_merge_into(inc as Dictionary, base as Dictionary, (base as Dictionary).is_empty())
 		elif key == "equipped_loadout" and (inc is Array or inc is Dictionary):
 			target[key] = inc  # normalized by _ensure_defaults
 		elif base is Array:
@@ -181,6 +191,16 @@ func _merge_validated(incoming: Dictionary, target: Dictionary = {}) -> void:
 				or (base is int and inc is float) \
 				or (base is float and inc is int):
 			target[key] = inc
+
+
+## Free-form values have no schema to validate against, but they are still
+## duplicated so a parsed JSON tree never aliases the live save map.
+func _duplicate_freeform(value: Variant) -> Variant:
+	if value is Dictionary:
+		return (value as Dictionary).duplicate(true)
+	if value is Array:
+		return (value as Array).duplicate(true)
+	return value
 
 
 func _ensure_defaults() -> void:

@@ -3613,14 +3613,93 @@ func _initialize() -> void:
 	var dd_before: int = int(dd_ctx.get("collision_shapes", 0))
 	dd_ll2.call("_add_den_window_split", dd_ctx, Vector2i.ZERO, Transform3D.IDENTITY, dd_box, Vector3.ZERO)
 	var dd_split_ok: bool = int(dd_ctx.get("collision_shapes", 0)) - dd_before == 4
+	# 46b. Mirrored door leaves: the mirror branch must test the composed
+	# door-root x leaf basis. A negative determinant there means the authored
+	# pairing mirrors the mesh, so every BaseMaterial3D surface gets a
+	# CULL_DISABLED duplicate; the identity control stays single-sided.
+	var dd_mirror_ok: bool = false
+	var dd_ctrl_ok: bool = false
+	# Old Manor interior door: 3 authored single-sided StandardMaterial3D
+	# surfaces, so the identity control is a meaningful negative.
+	var dd_mirror_ue: String = "/Game/Art/Environment/OldManor/SM_OldManor_Door_1x3"
+	var dd_mirror_info: Dictionary = dd_ll2.call("_get_mesh_and_shape", dd_mirror_ue) as Dictionary
+	var dd_mirror_mesh: Mesh = dd_mirror_info.get("mesh") as Mesh
+	if dd_mirror_mesh != null:
+		var dd_mirror_scr: GDScript = load("res://src/interact/swinging_door.gd") as GDScript
+		var dd_mirror_leaf: Dictionary = {
+			"mesh": dd_mirror_ue,
+			"rel_pos": [0.0, 0.0, 0.0],
+			"rel_basis": [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+			"rel_scale": [1.0, 1.0, 1.0],
+		}
+		var dd_mirror_door: Node = dd_mirror_scr.new() as Node
+		dd_mirror_door.call("configure", {
+			"pos": [7000.0, 0.0, 7000.0],
+			"basis": [-1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+			"leaves": [dd_mirror_leaf],
+		}, dd_ll2)
+		root.add_child(dd_mirror_door)
+		await process_frame
+		var dd_mirror_piv: Node3D = dd_mirror_door.get_node_or_null("DoorPivot") as Node3D
+		var dd_mirror_mi: MeshInstance3D = null
+		if dd_mirror_piv != null:
+			for ch_v: Variant in dd_mirror_piv.get_children():
+				if ch_v is MeshInstance3D:
+					dd_mirror_mi = ch_v as MeshInstance3D
+					break
+		if dd_mirror_mi != null and dd_mirror_mi.mesh != null:
+			var dd_mirror_composed: float = (dd_mirror_door as Node3D).transform.basis.determinant() * dd_mirror_mi.transform.basis.determinant()
+			var dd_mirror_surfaces: int = 0
+			var dd_mirror_culled: int = 0
+			for s_dm: int in range(dd_mirror_mi.mesh.get_surface_count()):
+				var dd_mirror_src: Material = dd_mirror_mi.mesh.surface_get_material(s_dm)
+				if dd_mirror_src is BaseMaterial3D:
+					dd_mirror_surfaces += 1
+					var dd_mirror_ov: Material = dd_mirror_mi.get_surface_override_material(s_dm)
+					if dd_mirror_ov is BaseMaterial3D and (dd_mirror_ov as BaseMaterial3D).cull_mode == BaseMaterial3D.CULL_DISABLED:
+						dd_mirror_culled += 1
+			dd_mirror_ok = dd_mirror_composed < 0.0 and dd_mirror_surfaces > 0 and dd_mirror_culled == dd_mirror_surfaces
+		# Non-mirrored control: same mesh/materials, identity door basis.
+		var dd_ctrl_door: Node = dd_mirror_scr.new() as Node
+		dd_ctrl_door.call("configure", {
+			"pos": [7200.0, 0.0, 7000.0],
+			"basis": [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+			"leaves": [dd_mirror_leaf],
+		}, dd_ll2)
+		root.add_child(dd_ctrl_door)
+		await process_frame
+		var dd_ctrl_piv: Node3D = dd_ctrl_door.get_node_or_null("DoorPivot") as Node3D
+		var dd_ctrl_mi: MeshInstance3D = null
+		if dd_ctrl_piv != null:
+			for ch2_v: Variant in dd_ctrl_piv.get_children():
+				if ch2_v is MeshInstance3D:
+					dd_ctrl_mi = ch2_v as MeshInstance3D
+					break
+		if dd_ctrl_mi != null and dd_ctrl_mi.mesh != null:
+			var dd_ctrl_composed: float = (dd_ctrl_door as Node3D).transform.basis.determinant() * dd_ctrl_mi.transform.basis.determinant()
+			var dd_ctrl_surfaces: int = 0
+			var dd_ctrl_two_sided: int = 0
+			for s_dc: int in range(dd_ctrl_mi.mesh.get_surface_count()):
+				var dd_ctrl_src: Material = dd_ctrl_mi.mesh.surface_get_material(s_dc)
+				if dd_ctrl_src is BaseMaterial3D:
+					dd_ctrl_surfaces += 1
+					var dd_ctrl_eff: Material = dd_ctrl_mi.get_surface_override_material(s_dc)
+					if dd_ctrl_eff == null:
+						dd_ctrl_eff = dd_ctrl_src
+					if dd_ctrl_eff is BaseMaterial3D and (dd_ctrl_eff as BaseMaterial3D).cull_mode == BaseMaterial3D.CULL_DISABLED:
+						dd_ctrl_two_sided += 1
+			dd_ctrl_ok = dd_ctrl_composed > 0.0 and dd_ctrl_surfaces > 0 and dd_ctrl_two_sided == 0
+		dd_mirror_door.queue_free()
+		dd_ctrl_door.queue_free()
+		await process_frame
 	dd_host.queue_free()
 	dd_ll2.queue_free()
 	await process_frame
-	if not dd_leaf_ok or not dd_open_ok or not dd_close_ok or not dd_gate_ok or not dd_sd_gate or not dd_sd_leafcode or not dd_gap_ok or not dd_is_den or not dd_split_ok:
-		printerr("FAIL: 46 Den doors/window (leaf_anim=", dd_leaf_ok, " open_dis=", dd_open_ok, " close_re=", dd_close_ok, " gate=", dd_gate_ok, " swing_gate=", dd_sd_gate, " swing_code=", dd_sd_leafcode, " gap=", dd_gap_ok, " gap_m=", dd_gap, " is_den=", dd_is_den, " split4=", dd_split_ok, ")")
+	if not dd_leaf_ok or not dd_open_ok or not dd_close_ok or not dd_gate_ok or not dd_sd_gate or not dd_sd_leafcode or not dd_gap_ok or not dd_is_den or not dd_split_ok or not dd_mirror_ok or not dd_ctrl_ok:
+		printerr("FAIL: 46 Den doors/window (leaf_anim=", dd_leaf_ok, " open_dis=", dd_open_ok, " close_re=", dd_close_ok, " gate=", dd_gate_ok, " swing_gate=", dd_sd_gate, " swing_code=", dd_sd_leafcode, " gap=", dd_gap_ok, " gap_m=", dd_gap, " is_den=", dd_is_den, " split4=", dd_split_ok, " mirrored=", dd_mirror_ok, " ctrl=", dd_ctrl_ok, ")")
 		fails += 1
 	else:
-		print("PASS: 46 Den doors leaf disabled past 70 deg (layer 0 + disabled, re-enabled on close) & window wall split gap=", dd_gap, "m + sill + lintel (2m marker gate kept)")
+		print("PASS: 46 Den doors leaf disabled past 70 deg (layer 0 + disabled, re-enabled on close) & window wall split gap=", dd_gap, "m + sill + lintel (2m marker gate kept) & mirrored leaf CULL_DISABLED (control single-sided)")
 
 	# 47. P1-9(a): every contract (not just the booted 3/1/4) resolves
 	# title/map/loot at data level. Runtime boot of all 18 is suite-cost
@@ -3809,6 +3888,41 @@ func _initialize() -> void:
 		if int(sv49.call("get_currency")) != sv49_orig + 7:
 			printerr("FAIL: 49 save backup restore mismatch")
 			sv49_ok = false
+		# 49b. Free-form nested dictionaries (completed_contracts defaults to {})
+		# must merge their keys into the nested dict, never into the root.
+		var sv49_case_a: Dictionary = sv49.call("_defaults") as Dictionary
+		sv49_case_a["xp"] = 1200
+		sv49_case_a["completed_contracts"] = {"3": {"best_score": 900, "ghost": true}}
+		var sv49_wa: FileAccess = FileAccess.open(sv49_path, FileAccess.WRITE)
+		if sv49_wa != null:
+			sv49_wa.store_string(JSON.stringify(sv49_case_a, "\t"))
+			sv49_wa.close()
+		sv49.set("data", sv49.call("_defaults"))
+		sv49.call("load_save")
+		var sv49_cc: Dictionary = (sv49.get("data") as Dictionary).get("completed_contracts", {}) as Dictionary
+		var sv49_e3_v: Variant = sv49_cc.get("3", {})
+		var sv49_e3: Dictionary = sv49_e3_v as Dictionary if sv49_e3_v is Dictionary else {}
+		if int(sv49_e3.get("best_score", -1)) != 900 or not bool(sv49_e3.get("ghost", false)) \
+				or int((sv49.get("data") as Dictionary).get("xp", 0)) != 1200:
+			printerr("FAIL: 49 completed_contracts/xp dropped by load: cc=", sv49_cc, " xp=", (sv49.get("data") as Dictionary).get("xp", 0))
+			sv49_ok = false
+		# 49c. A nested key with the same name as a root key must not leak up.
+		var sv49_case_b: Dictionary = sv49.call("_defaults") as Dictionary
+		sv49_case_b["completed_contracts"] = {"currency": 5}
+		var sv49_wb: FileAccess = FileAccess.open(sv49_path, FileAccess.WRITE)
+		if sv49_wb != null:
+			sv49_wb.store_string(JSON.stringify(sv49_case_b, "\t"))
+			sv49_wb.close()
+		sv49.set("data", sv49.call("_defaults"))
+		sv49.call("load_save")
+		if int(sv49.call("get_currency")) != 0:
+			printerr("FAIL: 49 nested completed_contracts.currency leaked to root currency=", sv49.call("get_currency"))
+			sv49_ok = false
+		# Re-read the original save before the pre-existing currency restore.
+		var sv49_r2: FileAccess = FileAccess.open(sv49_path, FileAccess.WRITE)
+		sv49_r2.store_string(sv49_backup)
+		sv49_r2.close()
+		sv49.call("load_save")
 		var sv49_data: Dictionary = sv49.get("data") as Dictionary
 		sv49_data["currency"] = sv49_orig
 		sv49.call("write_save")
@@ -3819,7 +3933,7 @@ func _initialize() -> void:
 	if not sv49_ok:
 		fails += 1
 	else:
-		print("PASS: 49 save round-trip (+7 persisted, corrupt load fail-closed, original restored)")
+		print("PASS: 49 save round-trip (+7 persisted, corrupt load fail-closed, completed_contracts/xp merged, nested key kept out of root, original restored)")
 
 	# 50. P1-9(c): audio audibility smoke. Block #1 only pins the autoload;
 	# this pins that the gameplay one-shots resolve to real clips on disk.
@@ -4155,7 +4269,9 @@ func _initialize() -> void:
 
 	# 54. Settings schema v2: a legacy fov=75 save migrates once to the authored
 	# 54.54, an explicit non-75 value is untouched, and a post-migration 75
-	# (the player deliberately choosing it) stays 75 on the next load.
+	# (the player deliberately choosing it) stays 75 on the next load. The
+	# settings write itself must mark fov_migrated, otherwise a fresh install
+	# that deliberately picks 75 is rewritten to 54.54 on the next boot.
 	var sv54_ok: bool = true
 	var sv54: Node = root.get_node_or_null("/root/SaveSystem")
 	var sv54_path: String = "user://tat2_save.json"
@@ -4206,6 +4322,26 @@ func _initialize() -> void:
 		if not is_equal_approx(sv54_fov3, 75.0):
 			printerr("FAIL: 54 post-migration fov 75 was re-migrated to ", sv54_fov3)
 			sv54_ok = false
+		# Fresh install: defaults -> settings screen writes a deliberate 75 and
+		# marks the migration flag in the same save. A full-schema reload must
+		# keep 75 (the bug rewrote it to 54.54 because the UI never set the flag).
+		var sv54_fresh: Dictionary = sv54.call("_defaults") as Dictionary
+		var sv54_fresh_s: Dictionary = sv54_fresh["settings"] as Dictionary
+		sv54_fresh_s["fov"] = 75.0
+		sv54_fresh_s["fov_migrated"] = true
+		sv54_write.call(sv54_fresh)
+		sv54_boot.call()
+		var sv54_fov4: float = float((sv54.call("get_settings") as Dictionary).get("fov", -1.0))
+		var sv54_flag4: bool = bool((sv54.call("get_settings") as Dictionary).get("fov_migrated", false))
+		if not is_equal_approx(sv54_fov4, 75.0) or not sv54_flag4:
+			printerr("FAIL: 54 fresh-install fov 75 was rewritten to ", sv54_fov4, " flag=", sv54_flag4)
+			sv54_ok = false
+		# The live settings write is the producer of that flag; a fresh install
+		# never sees the legacy migration, so the UI must persist it itself.
+		var sv54_ui_src: String = FileAccess.get_file_as_string("res://src/ui/settings_ui.gd")
+		if sv54_ui_src.find("fov_migrated") < 0:
+			printerr("FAIL: 54 settings_ui does not mark settings.fov_migrated on a player FOV change")
+			sv54_ok = false
 		if sv54_had_file:
 			var rf: FileAccess = FileAccess.open(sv54_path, FileAccess.WRITE)
 			if rf != null:
@@ -4217,7 +4353,7 @@ func _initialize() -> void:
 	if not sv54_ok:
 		fails += 1
 	else:
-		print("PASS: 54 settings schema v2 fov migration (75 -> 54.54 once, 65 kept, post-migration 75 kept)")
+		print("PASS: 54 settings schema v2 fov migration (75 -> 54.54 once, 65 kept, post-migration 75 kept, fresh-install 75 + UI flag kept)")
 
 	# P2-6 fixture restore (see boot snapshot): leave no mutated autoload
 	# state behind for the next run or embedding harness.

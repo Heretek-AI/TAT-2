@@ -278,6 +278,10 @@ func _apply_live(persist: bool) -> void:
 	s["sprint_toggle"] = _sprint_check.button_pressed if _sprint_check != null else false
 	s["reduced_camera_bounce"] = _bounce_check.button_pressed if _bounce_check != null else false
 	s["fov"] = float(_fov_slider.value)
+	# A deliberate FOV choice (including a fresh-install 75) must not be read
+	# as the pre-v2 legacy 75 on the next boot: mark the one-time migration as
+	# consumed in the same save write. Schema-v2 itself is unchanged.
+	s["fov_migrated"] = true
 	s["vsync"] = _vsync_check.button_pressed if _vsync_check != null else true
 	s["master_volume"] = float(_vol_slider.value)
 	if _music_slider != null:

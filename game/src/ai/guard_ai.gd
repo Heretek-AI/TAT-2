@@ -1220,9 +1220,13 @@ func _can_see_player(player: CharacterBody3D) -> bool:
 			return false
 	# P1 body-transparent sight: the world-only mask let a line of guards
 	# screen the player (UE sight is body-blocked). World + player + guard +
-	# civilian layers; self excluded by RID (player RID excluded too).
+	# civilian layers. Both the guard and the player are excluded by RID: the
+	# eye ray starts inside the guard capsule, and its endpoint (player + 1.0 m)
+	# sits inside the player capsule on layer 2, so without the player RID every
+	# ray self-occludes on the target and no guard can ever see the player.
+	# Mask and endpoint are authored; only the exclusions are self-occlusion.
 	var space: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
-	var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(global_position + Vector3.UP * 1.5, player.global_position + Vector3.UP * 1.0, 1 | 2 | 4 | 8, [get_rid()])
+	var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(global_position + Vector3.UP * 1.5, player.global_position + Vector3.UP * 1.0, 1 | 2 | 4 | 8, [get_rid(), player.get_rid()])
 	var hit: Dictionary = space.intersect_ray(q)
 	return hit.is_empty()
 

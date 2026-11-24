@@ -1,5 +1,5 @@
 extends RefCounted
-## Tier 4: Real-World Application & Parity Scenarios (12 journeys: T4-01..T4-12).
+## Tier 4: Real-World Application & Parity Scenarios (14 journeys: T4-01..T4-14).
 ## Exercises full multi-step gameplay & visual/shader/camera/capture preconditions
 ## without invoking nested Vulkan processes.
 
@@ -25,6 +25,7 @@ func run() -> void:
 	await _t4_11_clean_room_gate_verification()
 	await _t4_12_r3_cooked_data_adversarial_audit()
 	await _t4_13_free_play_contract_inactive()
+	await _t4_14_free_play_banking_control()
 	h.restore_state()
 
 
@@ -350,6 +351,7 @@ func _t4_13_free_play_contract_inactive() -> void:
 	var before_xp: int = int(save_data.get("xp", 0))
 	var before_level: int = int(save_data.get("level", 1))
 	var before_currency: int = int(save_data.get("currency", 0))
+	var before_loot_value: int = int(gs.get("loot_value"))
 
 	# Stage the mode exactly as the QA autostart / prep READY does; the mission
 	# scene's reset_run republishes the stash after clearing the map-change id.
@@ -380,10 +382,13 @@ func _t4_13_free_play_contract_inactive() -> void:
 
 	# Extraction must not bank currency and never record contract progress in
 	# the hosting order (order 2 is the "Into the Lion's Den" campaign contract):
-	# free play is not a currency farm.
+	# free play is not a currency farm. A zero loot_value made the old negative
+	# currency assertion vacuous (final_score 0 -> add_currency(0) is a no-op),
+	# so stage a real score first.
 	var no_write: bool = false
 	var no_currency: bool = false
 	if gh != null:
+		gs.set("loot_value", 500)
 		gh.call("_on_extracted")
 		await h.step_process(1)
 		no_write = (save_data.get("completed_contracts", {}) as Dictionary) == before_completed and int(save_data.get("xp", 0)) == before_xp
@@ -393,6 +398,7 @@ func _t4_13_free_play_contract_inactive() -> void:
 		save_data["level"] = before_level
 		save_data["currency"] = before_currency
 		ss.call("write_save")
+	gs.set("loot_value", before_loot_value)
 
 	var ids_ok: bool = mid == "Mission.Guildhall.LootTheRoom" and goal == 4000 and label == "Steal 4,000 in loot value"
 	var timer_ok: bool = absf(timer - 3300.0) < 0.5
@@ -402,6 +408,59 @@ func _t4_13_free_play_contract_inactive() -> void:
 		"T4-13",
 		"free play id=%s goal=%d label='%s' timer=%.0f hud='%s' loot='%s' no_contract_write=%s no_currency_bank=%s" % [
 			mid, goal, label, timer, obj_text, loot_text, str(no_write), str(no_currency)
+		]
+	)
+	await h.free_node(gh)
+
+
+## T4-14: positive control for T4-13. A normal contract deploy with the same
+## staged score must bank exactly the computed final score and record the
+## active order, proving the free-play negative case exercises a live path
+## (not a mission whose extraction was already a no-op for another reason).
+func _t4_14_free_play_banking_control() -> void:
+	var gs: Node = h.game_state()
+	var ss: Node = h.save_system()
+	var save_data: Dictionary = ss.get("data") as Dictionary
+	var before_completed: Dictionary = (save_data.get("completed_contracts", {}) as Dictionary).duplicate(true)
+	var before_xp: int = int(save_data.get("xp", 0))
+	var before_level: int = int(save_data.get("level", 1))
+	var before_currency: int = int(save_data.get("currency", 0))
+	var before_loot_value: int = int(gs.get("loot_value"))
+
+	# Normal deploy: no free-play stash may survive into reset_run.
+	gs.call("end_free_play")
+	gs.set("state", "playing")
+	var miss_res: Dictionary = await h.instantiate_mission(2, 400, 1)
+	var gh: Node = miss_res["mission"] as Node
+	await h.step_process(3)
+	var order: int = int(gs.get("active_contract_order"))
+	gs.set("loot_value", 500)
+	var expected: int = int(round(500.0 * float(gs.call("compute_stealth_bonus_multiplier"))))
+	var after_currency: int = before_currency
+	var after_entry: Dictionary = {}
+	var recorded: bool = false
+	if gh != null:
+		gh.call("_on_extracted")
+		await h.step_process(1)
+		after_currency = int(save_data.get("currency", 0))
+		var cc: Dictionary = save_data.get("completed_contracts", {}) as Dictionary
+		var entry_v: Variant = cc.get(str(order), {})
+		if entry_v is Dictionary:
+			after_entry = entry_v as Dictionary
+		recorded = after_entry.has("best_score") and int(after_entry.get("best_score", -1)) >= expected
+	# Restore the real save row set; record_contract_complete also bumped xp.
+	save_data["completed_contracts"] = before_completed
+	save_data["xp"] = before_xp
+	save_data["level"] = before_level
+	save_data["currency"] = before_currency
+	ss.call("write_save")
+	gs.set("loot_value", before_loot_value)
+	var banked: bool = after_currency == before_currency + expected
+	h.require(
+		gh != null and expected > 0 and banked and recorded,
+		"T4-14",
+		"normal deploy banks score (currency %d -> %d, expected +%d, order %d recorded=%s best=%d)" % [
+			before_currency, after_currency, expected, order, str(recorded), int(after_entry.get("best_score", -1))
 		]
 	)
 	await h.free_node(gh)

@@ -24,8 +24,12 @@ extends SceneTree
 ##
 ## Every pin is checked on the loaded world: the floor ray under the authored
 ## point hits, the surface is flat within +/-0.05 m around the pin, a standing
-## capsule (r 0.30 / h 1.75) does not overlap world geometry, and a player-eye
-## LOS ray to the interaction point is clear. Placement is per kind (W3O): the
+## capsule (r 0.30 / h 1.75) fits, and a player-eye LOS ray to the interaction
+## point is clear. For an NPC that capsule stands at the pin on its floor. For
+## a prop (`readable`, `quest_item`) the ray under the pin hits the table /
+## pedestal the prop rests on, so the capsule is stood on the walk floor found
+## on a short XZ ring around the pin instead (never on the furniture top); LOS
+## still targets the pinned interaction point. Placement is per kind (W3O): the
 ## Library note and the Vault Owl keep the authored pin y (the pin is their
 ## authored surface: the Library table and the `SM_Manor_BookcasePedestal` top
 ## at ~36.4645), while the courier/informant feet rest on the floor with the
@@ -117,6 +121,15 @@ const STAND_RADIUS_M: float = 0.30
 const STAND_HEIGHT_M: float = 1.75
 const PLAYER_EYE_M: float = 1.6
 const LOS_STANDOFF_M: float = 1.4
+## Prop capsule ring (m): a player stands beside a table/pedestal, never on it.
+## Radii stay inside the shipped 1.75 m interaction range.
+const STAND_RING_M := [0.6, 0.9, 1.2]
+## A surface this far below the prop's support is a walk level, not the
+## furniture top (Library table 28.000 over floor 27.000; Vault pedestal 36.4645
+## over floor 35.500). The upper bound keeps a ray that fell through a decorative
+## floor tile from calling the ground floor 15 m down a "walk floor".
+const WALK_FLOOR_MIN_DROP_M: float = 0.5
+const WALK_FLOOR_MAX_DROP_M: float = 1.5
 
 ## Authored lines (expansion record, not code literals).
 const LINE_COURIER := "Aye, it's a Langnacht night tonight. I'll take the goods."
@@ -147,6 +160,37 @@ class StubHud extends CanvasLayer:
 
 	func show_clue_toast(title: String, body: String) -> void:
 		toasts.append({"title": title, "body": body})
+
+
+## Minimal mission host: `loot_item.gd` (Owl take) and `npc_clue_actor.gd`
+## (HUD lookup) both go through the first node in the "mission" group. In play
+## that node is `MissionController`: it owns `hud`, and its
+## `on_personal_quest_owl_taken()` forwards to the spawner's
+## `on_owl_taken(GameState.thief_id)`. The probe reproduces exactly that seam.
+##
+## The spawner is deliberately NOT the group member: it has `hud` but no Owl
+## hook, so a group lookup landing on it silently drops the courier (the W4P
+## probe failure). One node owns both, as in play.
+##
+## The thief id is read at runtime through the tree, so this nested class never
+## names the `GameState` autoload at parse time (the probe is a `--script`
+## SceneTree entry parsed before the autoloads exist).
+class StubMission extends Node:
+	var hud: Node = null
+	var spawner: Node = null
+
+	func _ready() -> void:
+		name = "ProbeMission"
+		add_to_group("mission")
+
+	func on_personal_quest_owl_taken() -> void:
+		if spawner == null or not is_instance_valid(spawner):
+			return
+		if not spawner.has_method("on_owl_taken"):
+			return
+		var gs: Node = get_node_or_null("/root/GameState")
+		var thief: String = str(gs.get("thief_id")) if gs != null else ""
+		spawner.call("on_owl_taken", thief)
 
 
 var fails: int = 0
@@ -226,15 +270,19 @@ func _load_subset(map_id: String) -> Dictionary:
 	return {"world": world, "loader": loader, "probe": light_probe, "stats": stats, "hud": hud}
 
 
-## The shipping spawn seam, hosted by the subset world. Added to the "mission"
-## group so LootItem's personal-branch pick-up callback finds it exactly as it
-## finds the mission controller in play.
+## The shipping spawn seam, hosted by the subset world. A `StubMission` in the
+## "mission" group stands in for the mission controller (HUD + Owl hook); the
+## spawner itself is not in the group, so the lookup can only find the host.
 func _make_spawner(world: Node3D, hud: Node) -> Node:
+	var mission := StubMission.new()
+	mission.name = "ProbeMission"
+	world.add_child(mission)
+	mission.hud = hud
 	var spawner: Node = PersonalQuestSpawnerScript.new()
 	spawner.name = "PersonalQuestSpawner"
 	world.add_child(spawner)
 	spawner.call("setup", world, hud)
-	spawner.add_to_group("mission")
+	mission.spawner = spawner
 	return spawner
 
 
@@ -247,6 +295,53 @@ func _standing_overlap(world: Node3D, surface: Vector3) -> int:
 	q.transform = Transform3D(Basis.IDENTITY, surface + Vector3(0.0, STAND_HEIGHT_M * 0.5 + 0.05, 0.0))
 	q.collision_mask = 1
 	return world.get_world_3d().direct_space_state.intersect_shape(q, 16).size()
+
+
+## Standing point beside a prop: the walk floor **near** the authored pin, never
+## the support (`readable` / `quest_item` pins rest on a table or pedestal, and
+## the ray straight down hits that top). A short XZ ring is sampled and the first
+## point whose floor ray lands in the walk band right below the support and
+## whose capsule is free wins. Returns {ok, y, point, overlaps, radius,
+## angle_deg, reason}; on failure it carries the candidate with the fewest
+## overlaps plus a list of everything sampled, so the failure line is evidence
+## rather than a bare count.
+func _walk_floor_stand(world: Node3D, pin: Vector3, support_y: float) -> Dictionary:
+	var best: Dictionary = {}
+	var tried: Array[String] = []
+	for radius_v: Variant in STAND_RING_M:
+		var radius: float = float(radius_v)
+		for i: int in range(8):
+			var ang: float = TAU * float(i) / 8.0
+			var off := Vector3(cos(ang) * radius, 0.0, sin(ang) * radius)
+			var xz := Vector3(pin.x + off.x, pin.y, pin.z + off.z)
+			var hit: Dictionary = PersonalQuestSpawnerScript.floor_hit(world, xz)
+			if hit.is_empty():
+				tried.append("%.1fm/%.0fdeg:miss" % [radius, rad_to_deg(ang)])
+				continue
+			var hy: float = (hit.get("position", Vector3.ZERO) as Vector3).y
+			var drop: float = support_y - hy
+			if drop < WALK_FLOOR_MIN_DROP_M or drop > WALK_FLOOR_MAX_DROP_M:
+				# The table / pedestal top, or a level too far down to be the
+				# floor the player stands on next to this prop.
+				tried.append("%.1fm/%.0fdeg:support" % [radius, rad_to_deg(ang)])
+				continue
+			var point := Vector3(xz.x, hy, xz.z)
+			var overlaps: int = _standing_overlap(world, point + Vector3.UP * GROUND_CLEARANCE_M)
+			if overlaps == 0:
+				return {"ok": true, "y": hy, "point": point, "overlaps": 0,
+					"radius": radius, "angle_deg": rad_to_deg(ang), "reason": ""}
+			tried.append("%.1fm/%.0fdeg:%d" % [radius, rad_to_deg(ang), overlaps])
+			if best.is_empty() or overlaps < int(best.get("overlaps", 99)):
+				best = {"ok": false, "y": hy, "point": point, "overlaps": overlaps,
+					"radius": radius, "angle_deg": rad_to_deg(ang)}
+	if best.is_empty():
+		return {"ok": false, "y": pin.y, "point": pin, "overlaps": 1,
+			"radius": 0.0, "angle_deg": 0.0,
+			"reason": "no walk floor %.1f-%.1f m below the support within %.1f m: %s" % [
+				WALK_FLOOR_MIN_DROP_M, WALK_FLOOR_MAX_DROP_M,
+				float(STAND_RING_M[STAND_RING_M.size() - 1]), ",".join(tried)]}
+	best["reason"] = ",".join(tried)
+	return best
 
 
 ## Player-eye LOS to the interaction point, from the first of eight directions
@@ -385,11 +480,28 @@ func _check_pin(label: String, rec: Dictionary, expect: Vector3, world: Node3D, 
 				label + " support is the BookcasePedestal top (%.4f +/- %.2f m)" % [PEDESTAL_TOP_Y, PEDESTAL_TOL_M],
 				"%s authored support y=%.4f, expected %.4f +/- %.2f (SM_Manor_BookcasePedestal)" % [
 					label, ay, PEDESTAL_TOP_Y, PEDESTAL_TOL_M])
-	var overlaps: int = _standing_overlap(world, Vector3(expect.x, hy + GROUND_CLEARANCE_M, expect.z))
-	_check(overlaps == 0, label + " standing capsule (r0.30/h1.75) free",
-		"%s standing capsule overlaps %d shape(s)" % [label, overlaps])
+	var stand_y: float = hy
+	var stand_overlaps: int = 0
+	var stand_note: String = "at the pin"
+	var stand_reason: String = ""
+	if kind == "npc" or kind == "info_npc":
+		stand_overlaps = _standing_overlap(world, Vector3(expect.x, hy + GROUND_CLEARANCE_M, expect.z))
+	else:
+		# A prop pin is a table/pedestal top. Stand the capsule where a player
+		# would: the walk floor on a short ring around the pin.
+		var walk: Dictionary = _walk_floor_stand(world, expect, hy)
+		stand_y = float(walk.get("y", hy))
+		stand_overlaps = int(walk.get("overlaps", 1))
+		stand_note = "on the walk floor (offset %.1f m @ %.0f deg)" % [
+			float(walk.get("radius", 0.0)), float(walk.get("angle_deg", 0.0))]
+		stand_reason = str(walk.get("reason", ""))
+		print("PQ-SUBSET stand ", label, " walk_floor_y=%.4f overlaps=%d %s" % [
+			stand_y, stand_overlaps, stand_note])
+	_check(stand_overlaps == 0, label + " standing capsule (r0.30/h1.75) free " + stand_note,
+		"%s standing capsule overlaps %d shape(s) %s" % [
+			label, stand_overlaps, stand_reason if stand_reason != "" else stand_note])
 	if node.has_method("get_interact_point"):
-		var los: Dictionary = _los_from_open_side(world, Vector3(expect.x, hy, expect.z), node.call("get_interact_point") as Vector3)
+		var los: Dictionary = _los_from_open_side(world, Vector3(expect.x, stand_y, expect.z), node.call("get_interact_point") as Vector3)
 		_check(bool(los.get("ok", false)), label + " interaction LOS clear",
 			"%s LOS blocked: %s" % [label, str(los.get("reason", ""))])
 	if node.has_method("get_interact_prompt"):
@@ -515,6 +627,10 @@ func _run() -> void:
 		"informant line=%s" % (str(dlg2.call("body_text")) if dlg2 != null else "<no modal>"))
 	if dlg2 != null:
 		dlg2.call("close")
+	# The closing press and the next talk are never in one frame in play
+	# (npc_clue_actor ignores the frame that closed the panel), so wait a frame
+	# before the follow-up interaction.
+	await _wait_tree(2)
 	if informant != null:
 		informant.call("interact", null)
 		await _wait_tree(2)

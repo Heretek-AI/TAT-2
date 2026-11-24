@@ -23,13 +23,16 @@ extends SceneTree
 ## (see docs/reports/w2p-subset-probe.md).
 ##
 ## Every pin is checked on the loaded world: the floor ray under the authored
-## point hits, the surface is flat within +/-0.05 m around the pin, a standing
-## capsule (r 0.30 / h 1.75) fits, and a player-eye LOS ray to the interaction
-## point is clear. For an NPC that capsule stands at the pin on its floor. For
-## a prop (`readable`, `quest_item`) the ray under the pin hits the table /
-## pedestal the prop rests on, so the capsule is stood on the walk floor found
-## on a short XZ ring around the pin instead (never on the furniture top); LOS
-## still targets the pinned interaction point. Placement is per kind (W3O): the
+## point hits, the surface is flat within +/-0.05 m around the pin, and one
+## standing point (r 0.30 / h 1.75) inside the shipped 1.75 m interaction reach
+## is free with a clear player-eye LOS ray to the interaction point. For an NPC
+## that capsule stands at the pin on its floor. For a prop (`readable`,
+## `quest_item`) the ray under the pin hits the table / pedestal the prop rests
+## on, so the stand point is searched on the walk floor around the pin
+## (0.6-1.5 m ring, never on the furniture top): the Library table is ringed by
+## chairs, so requiring a free capsule at every ring sample would be wrong -
+## one reachable, capsule-free sample with LOS is the gameplay requirement.
+## Placement is per kind (W3O): the
 ## Library note and the Vault Owl keep the authored pin y (the pin is their
 ## authored surface: the Library table and the `SM_Manor_BookcasePedestal` top
 ## at ~36.4645), while the courier/informant feet rest on the floor with the
@@ -37,8 +40,10 @@ extends SceneTree
 ## never inferred from the kind. The Owl is gated on its pedestal surface: a pin
 ## with no surface within 36.4645 +/- 0.1 fails. NPC feet are accepted anywhere
 ## in [floor, floor + clearance + tol] because the body settles with gravity
-## after it is spawned. Authored `yaw_deg` (courier/04 informant) is printed and
-## checked against the node's global facing.
+## after it is spawned, and its XZ may drift by a few centimetres as the
+## `CharacterBody3D` resolves against the floor (props are pinned to 1 mm; NPCs
+## get a 5 cm settle tolerance). Authored `yaw_deg` (courier/04 informant) is
+## printed and checked against the node's global facing.
 ##
 ## QA only: run alone under the thermal rule (one Godot process, never beside
 ## another), with an isolated save home so the developer save is untouched:
@@ -96,8 +101,12 @@ const PIN_NOTE := Vector3(-26.8541, 28.0021, -9.4431)
 const PIN_OWL := Vector3(-31.6286, 36.4655, -43.9759)
 const PIN_COURIER := Vector3(35.9, 27.0019, -22.728)
 const PIN_INFORMANT := Vector3(1.5, 10.1096, 13.0)
-## Probe tolerances.
+## Probe tolerances. Props keep the authored XZ to 1 mm; an NPC is a
+## `CharacterBody3D` that settles against the floor after spawn, so its XZ may
+## move a few centimetres (the courier moves 1.4 cm). The vertical settle stays
+## bounded by the floor/clearance check below.
 const PIN_XZ_TOL_M: float = 0.001
+const NPC_XZ_TOL_M: float = 0.05
 ## Authored-pin placement (readable/quest_item) keeps y to this tolerance.
 const PIN_Y_TOL_M: float = 0.01
 ## The authored support (table/pedestal) must be this close to the pin or the
@@ -121,9 +130,12 @@ const STAND_RADIUS_M: float = 0.30
 const STAND_HEIGHT_M: float = 1.75
 const PLAYER_EYE_M: float = 1.6
 const LOS_STANDOFF_M: float = 1.4
-## Prop capsule ring (m): a player stands beside a table/pedestal, never on it.
-## Radii stay inside the shipped 1.75 m interaction range.
-const STAND_RING_M := [0.6, 0.9, 1.2]
+## Prop stand points (m): a player stands beside a table/pedestal, never on it.
+## Every radius stays inside the shipped 1.75 m interaction reach; the Library
+## table is ringed by chairs, so the search reaches 1.5 m to find one free,
+## reachable sample rather than demanding the whole ring be clear.
+const STAND_RING_M := [0.6, 0.9, 1.2, 1.5]
+const INTERACT_REACH_M: float = 1.75
 ## A surface this far below the prop's support is a walk level, not the
 ## furniture top (Library table 28.000 over floor 27.000; Vault pedestal 36.4645
 ## over floor 35.500). The upper bound keeps a ray that fell through a decorative
@@ -297,19 +309,37 @@ func _standing_overlap(world: Node3D, surface: Vector3) -> int:
 	return world.get_world_3d().direct_space_state.intersect_shape(q, 16).size()
 
 
+## Player-eye LOS from one exact standing point (ground) to the interaction
+## target. Used by the prop stand search: a capsule-free point the player cannot
+## see the prop from is not a valid stand point.
+func _los_clear(world: Node3D, stand: Vector3, target: Vector3) -> bool:
+	var space: PhysicsDirectSpaceState3D = world.get_world_3d().direct_space_state
+	if space == null:
+		return false
+	var eye: Vector3 = stand + Vector3.UP * PLAYER_EYE_M
+	var q := PhysicsRayQueryParameters3D.create(eye, target, 1)
+	return space.intersect_ray(q).is_empty()
+
+
 ## Standing point beside a prop: the walk floor **near** the authored pin, never
 ## the support (`readable` / `quest_item` pins rest on a table or pedestal, and
-## the ray straight down hits that top). A short XZ ring is sampled and the first
-## point whose floor ray lands in the walk band right below the support and
-## whose capsule is free wins. Returns {ok, y, point, overlaps, radius,
-## angle_deg, reason}; on failure it carries the candidate with the fewest
-## overlaps plus a list of everything sampled, so the failure line is evidence
-## rather than a bare count.
-func _walk_floor_stand(world: Node3D, pin: Vector3, support_y: float) -> Dictionary:
+## the ray straight down hits that top). A short XZ ring (0.6-1.5 m, inside the
+## 1.75 m interaction reach) is sampled and the first point whose floor ray
+## lands in the walk band right below the support, whose capsule is free and
+## from which the interaction point is visible wins. One such point is enough:
+## the Library table's chair ring blocks most of the ring, not the gameplay.
+## Returns {ok, y, point, overlaps, radius, angle_deg, los, reason}; on failure
+## it carries a capsule-free-but-blocked candidate if one exists, else the
+## candidate with the fewest overlaps, plus a list of everything sampled, so the
+## failure line is evidence rather than a bare count.
+func _walk_floor_stand(world: Node3D, pin: Vector3, support_y: float, target: Vector3) -> Dictionary:
 	var best: Dictionary = {}
+	var best_free: Dictionary = {}
 	var tried: Array[String] = []
 	for radius_v: Variant in STAND_RING_M:
 		var radius: float = float(radius_v)
+		if radius > INTERACT_REACH_M:
+			continue
 		for i: int in range(8):
 			var ang: float = TAU * float(i) / 8.0
 			var off := Vector3(cos(ang) * radius, 0.0, sin(ang) * radius)
@@ -327,15 +357,26 @@ func _walk_floor_stand(world: Node3D, pin: Vector3, support_y: float) -> Diction
 				continue
 			var point := Vector3(xz.x, hy, xz.z)
 			var overlaps: int = _standing_overlap(world, point + Vector3.UP * GROUND_CLEARANCE_M)
+			var los: bool = false
 			if overlaps == 0:
-				return {"ok": true, "y": hy, "point": point, "overlaps": 0,
-					"radius": radius, "angle_deg": rad_to_deg(ang), "reason": ""}
-			tried.append("%.1fm/%.0fdeg:%d" % [radius, rad_to_deg(ang), overlaps])
-			if best.is_empty() or overlaps < int(best.get("overlaps", 99)):
+				los = _los_clear(world, point, target)
+				if los:
+					return {"ok": true, "y": hy, "point": point, "overlaps": 0,
+						"radius": radius, "angle_deg": rad_to_deg(ang), "los": true, "reason": ""}
+				if best_free.is_empty():
+					best_free = {"ok": false, "y": hy, "point": point, "overlaps": 0,
+						"radius": radius, "angle_deg": rad_to_deg(ang), "los": false}
+				tried.append("%.1fm/%.0fdeg:los" % [radius, rad_to_deg(ang)])
+			else:
+				tried.append("%.1fm/%.0fdeg:%d" % [radius, rad_to_deg(ang), overlaps])
+			if overlaps > 0 and (best.is_empty() or overlaps < int(best.get("overlaps", 99))):
 				best = {"ok": false, "y": hy, "point": point, "overlaps": overlaps,
-					"radius": radius, "angle_deg": rad_to_deg(ang)}
+					"radius": radius, "angle_deg": rad_to_deg(ang), "los": los}
+	if not best_free.is_empty():
+		best_free["reason"] = ",".join(tried)
+		return best_free
 	if best.is_empty():
-		return {"ok": false, "y": pin.y, "point": pin, "overlaps": 1,
+		return {"ok": false, "y": pin.y, "point": pin, "overlaps": 1, "los": false,
 			"radius": 0.0, "angle_deg": 0.0,
 			"reason": "no walk floor %.1f-%.1f m below the support within %.1f m: %s" % [
 				WALK_FLOOR_MIN_DROP_M, WALK_FLOOR_MAX_DROP_M,
@@ -407,10 +448,18 @@ func _check_pin(label: String, rec: Dictionary, expect: Vector3, world: Node3D, 
 		return null
 	_check(str(rec.get("source", "")) == "primary", label + " uses the primary authored pin",
 		"%s used source=%s (a fallback means the authored pin did not ground)" % [label, str(rec.get("source", ""))])
+	var kind: String = str(rec.get("kind", ""))
+	var is_npc: bool = kind == "npc" or kind == "info_npc"
 	var pos: Vector3 = node.global_position
-	_check(absf(pos.x - expect.x) <= PIN_XZ_TOL_M and absf(pos.z - expect.z) <= PIN_XZ_TOL_M,
-		label + " at authored XZ (%.4f, %.4f)" % [expect.x, expect.z],
-		"%s XZ=(%.4f, %.4f) expected (%.4f, %.4f)" % [label, pos.x, pos.z, expect.x, expect.z])
+	# Props keep the authored XZ to 1 mm; an NPC body settles after spawn and may
+	# drift a few centimetres (the courier moves ~1.4 cm). The vertical settle is
+	# still bounded by the foot [floor, floor + clearance] check below.
+	var xz_tol: float = NPC_XZ_TOL_M if is_npc else PIN_XZ_TOL_M
+	_check(absf(pos.x - expect.x) <= xz_tol and absf(pos.z - expect.z) <= xz_tol,
+		label + " at authored XZ +/-%.3f m (%.4f, %.4f)%s" % [xz_tol, expect.x, expect.z,
+			" (NPC settle)" if is_npc else ""],
+		"%s XZ=(%.4f, %.4f) expected (%.4f, %.4f) tol=%.3f m" % [
+			label, pos.x, pos.z, expect.x, expect.z, xz_tol])
 	var surf: Dictionary = _surface_under(world, expect)
 	if not _check((not surf.is_empty()) and float(surf.get("delta", 999.0)) < 999.0,
 			label + " floor ray hits under the authored pin",
@@ -423,7 +472,6 @@ func _check_pin(label: String, rec: Dictionary, expect: Vector3, world: Node3D, 
 	# The authored pin is the spawner origin, not the floor (the Library note
 	# sits on a table at its pin; the Owl pin rests on the Vault pedestal).
 	print("PQ-SUBSET pin ", label, " authored_y=%.4f surface_y=%.4f offset=%.3f" % [expect.y, hy, expect.y - hy])
-	var kind: String = str(rec.get("kind", ""))
 	var y_source: String = str(rec.get("y_source", ""))
 	var foot: float = pos.y + node.global_transform.basis.y.y * PersonalQuestSpawnerScript.mesh_bottom(node)
 	var yaw_v: Variant = rec.get("yaw_deg", null)
@@ -482,28 +530,47 @@ func _check_pin(label: String, rec: Dictionary, expect: Vector3, world: Node3D, 
 					label, ay, PEDESTAL_TOP_Y, PEDESTAL_TOL_M])
 	var stand_y: float = hy
 	var stand_overlaps: int = 0
+	var stand_point: Vector3 = Vector3(expect.x, hy, expect.z)
+	var stand_ok: bool = false
 	var stand_note: String = "at the pin"
 	var stand_reason: String = ""
-	if kind == "npc" or kind == "info_npc":
+	var stand_los: bool = false
+	if is_npc:
 		stand_overlaps = _standing_overlap(world, Vector3(expect.x, hy + GROUND_CLEARANCE_M, expect.z))
+		stand_ok = stand_overlaps == 0
 	else:
 		# A prop pin is a table/pedestal top. Stand the capsule where a player
-		# would: the walk floor on a short ring around the pin.
-		var walk: Dictionary = _walk_floor_stand(world, expect, hy)
+		# would: one walk-floor point on the ring around the pin that is inside
+		# the interaction reach, capsule-free and has LOS to the interaction
+		# point. The Library table's chair ring blocks most samples; one valid
+		# stand point is the gameplay requirement.
+		var target: Vector3 = expect
+		if node.has_method("get_interact_point"):
+			target = node.call("get_interact_point") as Vector3
+		var walk: Dictionary = _walk_floor_stand(world, expect, hy, target)
 		stand_y = float(walk.get("y", hy))
 		stand_overlaps = int(walk.get("overlaps", 1))
-		stand_note = "on the walk floor (offset %.1f m @ %.0f deg)" % [
-			float(walk.get("radius", 0.0)), float(walk.get("angle_deg", 0.0))]
+		stand_point = walk.get("point", Vector3(expect.x, stand_y, expect.z)) as Vector3
+		stand_ok = bool(walk.get("ok", false))
+		stand_los = bool(walk.get("los", false))
+		stand_note = "on the walk floor (offset %.1f m @ %.0f deg, within %.2f m reach)" % [
+			float(walk.get("radius", 0.0)), float(walk.get("angle_deg", 0.0)), INTERACT_REACH_M]
 		stand_reason = str(walk.get("reason", ""))
-		print("PQ-SUBSET stand ", label, " walk_floor_y=%.4f overlaps=%d %s" % [
-			stand_y, stand_overlaps, stand_note])
-	_check(stand_overlaps == 0, label + " standing capsule (r0.30/h1.75) free " + stand_note,
-		"%s standing capsule overlaps %d shape(s) %s" % [
+		print("PQ-SUBSET stand ", label, " walk_floor_y=%.4f overlaps=%d los=%s %s" % [
+			stand_y, stand_overlaps, str(stand_los), stand_note])
+	_check(stand_ok, label + " has one free standing capsule (r0.30/h1.75) " + stand_note,
+		"%s has no reachable free stand point (overlaps=%d): %s" % [
 			label, stand_overlaps, stand_reason if stand_reason != "" else stand_note])
 	if node.has_method("get_interact_point"):
-		var los: Dictionary = _los_from_open_side(world, Vector3(expect.x, stand_y, expect.z), node.call("get_interact_point") as Vector3)
-		_check(bool(los.get("ok", false)), label + " interaction LOS clear",
-			"%s LOS blocked: %s" % [label, str(los.get("reason", ""))])
+		var interact_point: Vector3 = node.call("get_interact_point") as Vector3
+		if is_npc:
+			var los: Dictionary = _los_from_open_side(world, Vector3(expect.x, stand_y, expect.z), interact_point)
+			_check(bool(los.get("ok", false)), label + " interaction LOS clear",
+				"%s LOS blocked: %s" % [label, str(los.get("reason", ""))])
+		else:
+			# Proven from the exact stand point the capsule check chose.
+			_check(stand_los and _los_clear(world, stand_point, interact_point), label + " interaction LOS clear from the stand point",
+				"%s LOS blocked from the stand point %s: %s" % [label, str(stand_point), stand_reason])
 	if node.has_method("get_interact_prompt"):
 		_check(str(node.call("get_interact_prompt")) == prompt, label + " prompt '" + prompt + "'",
 			"%s prompt=%s" % [label, str(node.call("get_interact_prompt"))])

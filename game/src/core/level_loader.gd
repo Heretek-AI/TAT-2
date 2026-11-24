@@ -138,6 +138,36 @@ const MAX_CURB_SHAPES: int = 4000
 const LIGHT_DISTANCE_FADE_BEGIN: float = 28.0
 const LIGHT_DISTANCE_FADE_LENGTH: float = 12.0
 const PROGRESS_YIELD_EVERY: int = 64
+
+## W1p structural perf prototypes. Every lever is off unless the named
+## environment variable asks for it, so the shipped look/behaviour is unchanged.
+## The QA harness owns the A/B runs; these are not quality presets.
+const ENV_PERIPH_RANGE: String = "TAT2_PERIPH_RANGE"
+const ENV_MERGE_CELLS: String = "TAT2_MERGE_CELLS"
+const ENV_PERF_CENSUS: String = "TAT2_PERF_CENSUS"
+const PERIPH_RANGE_CHOICES: Array[int] = [0, 100, 120, 150]
+## Same 32 m cell radius pad used by the prop culling policy: visibility_range
+## is measured from the merged chunk AABB centre, so a cell corner may be half
+## a cell farther away than the authored range.
+const PERIPH_RANGE_PAD: float = CHUNK_SIZE * 0.5
+## Merge-cell prototype exclusions. These meshes are addressed individually by
+## gameplay/cutscene code (door leaves, loot containers, devices, landmarks and
+## the authored mission props below), so folding them into a cell mesh would
+## make their MeshInstance3D lookups fail. Plain static masonry/props are the
+## only merge candidates.
+const MERGE_EXCLUDE_TOKENS: Array[String] = [
+	"door", "gate", "loot", "chest", "displaycase", "lockbox", "clue",
+	"device", "landmark", "interactable", "spawner", "marker", "portal",
+	"switch", "lever", "button", "hatch", "elevator",
+	"guildhall_sign", "map_thievesden", "automobile_lights",
+	"knockoutgrenade", "sm_truncheon",
+]
+## ShaderMaterial is only mergeable when its shader is certified opaque here.
+## The loader's transparent/additive shaders (tat_glass, tat_beam, decals,
+## neon/HDR emission) are intentionally absent; StandardMaterial3D surfaces
+## carry the static city. Adding a shader to this list is a visual review.
+const MERGE_OPAQUE_SHADERS: Array[String] = []
+
 ## L6: rect-light quad emission shares constants with its omni. The quad
 ## used a disconnected 2.0 energy while its omni faded with distance — glow
 ## without light at range. Energy stays 2.0 (authored look) but the quad now
@@ -293,6 +323,60 @@ func _resolve_texture_budget() -> int:
 	if env_cap.is_valid_int():
 		return maxi(0, int(env_cap))
 	return TEX_BUDGET_MAX_DIM
+
+
+## W1p: PeripheryA HLOD test range. 0/absent keeps the current draw distance;
+## only the authored 100/120/150 choices are accepted so a typo cannot silently
+## turn into an arbitrary cull plane.
+func _resolve_periph_range() -> int:
+	var raw: String = OS.get_environment(ENV_PERIPH_RANGE).strip_edges()
+	if raw == "":
+		return 0
+	if not raw.is_valid_int():
+		push_warning("[level_loader] %s=%s is not an integer; PeripheryA range stays off" % [ENV_PERIPH_RANGE, raw])
+		return 0
+	var value: int = int(raw)
+	if not PERIPH_RANGE_CHOICES.has(value):
+		push_warning("[level_loader] %s=%d is not one of %s; PeripheryA range stays off" % [ENV_PERIPH_RANGE, value, str(PERIPH_RANGE_CHOICES)])
+		return 0
+	return value
+
+
+## W1p: accepts exactly "plain" (case-insensitive). Anything else is off, with a
+## warning for unknown non-empty values, so a typo can never enable a merge.
+func _resolve_merge_mode() -> String:
+	var raw: String = OS.get_environment(ENV_MERGE_CELLS).strip_edges().to_lower()
+	if raw == "" or raw == "off" or raw == "0":
+		return "off"
+	if raw == "plain":
+		return "plain"
+	push_warning("[level_loader] %s=%s is not a known merge mode; merge stays off" % [ENV_MERGE_CELLS, raw])
+	return "off"
+
+
+## Draw-item provenance: "Guildhall_PeripheryA.tatlevel.json" ->
+## "Guildhall_PeripheryA". Used for the census and the PeripheryA range lever.
+static func _sublevel_tag(json_path: String) -> String:
+	var file_name: String = json_path.get_file()
+	var suffix: String = ".tatlevel.json"
+	if file_name.to_lower().ends_with(suffix):
+		return file_name.substr(0, file_name.length() - suffix.length())
+	return file_name.get_basename()
+
+
+static func _is_periphery_a_source(source: String) -> bool:
+	var low: String = source.to_lower()
+	return low == "peripherya" or low.ends_with("_peripherya") or low.ends_with("_periphery_a")
+
+
+## Single source of truth for the loader's applied budget/shadow values. The
+## env overrides live in MobileProfile; this helper keeps the two load paths and
+## the log line from disagreeing.
+func _effective_light_budget(requested: int) -> int:
+	var applied: int = MobileProfile.light_budget(requested)
+	if applied != requested or MobileProfile.shadow_heroes_override() >= 0:
+		print("TAT-2 perf light env: requested=%d applied=%d hero_shadows=%d" % [requested, applied, MobileProfile.hero_shadows()])
+	return applied
 
 
 ## True for the authored textures whose 1-bit alpha must survive verbatim.
@@ -1782,6 +1866,21 @@ func _new_build_ctx(parent: Node3D, light_probe: Node, generate_collision: bool)
 		"sky_light": {},
 		"fog_volume": {},
 		"post_process": {},
+		# W1p prototypes: resolved once per build so repeated env lookups are not
+		# on the hot draw-item path. Both are off by default.
+		"periph_range": _resolve_periph_range(),
+		"periph_range_applied": 0,
+		"periph_range_kept_smaller": 0,
+		"periph_range_skipped_mixed": 0,
+		"periph_range_skipped_other": 0,
+		"merge_mode": _resolve_merge_mode(),
+		"merge_candidates": 0,
+		"merge_cells": 0,
+		"merge_nodes": 0,
+		"merge_surfaces_before": 0,
+		"merge_surfaces_after": 0,
+		"merge_skipped_visuals": 0,
+		"merge_skipped": {} as Dictionary,
 	}
 
 
@@ -1814,6 +1913,7 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 	if not (data is Dictionary):
 		return
 	var data_dict: Dictionary = data
+	var sublevel_tag: String = _sublevel_tag(json_path)
 	var result: Dictionary = acc["result"]
 	var landscapes: Array = acc["landscapes"]
 	for lc in data_dict.get("landscapes", []):
@@ -1967,11 +2067,18 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 				"override_key": ov_key,
 				"trs": [] as Array[Transform3D],
 				"cpds": [] as Array[Color],
+				"sources": [] as Array[String],
+				"source_sublevel": sublevel_tag,
+				"source_sublevels": {} as Dictionary,
 				"hidden_in_game": hidden_in_game,
 			}
 		var batch_rec: Dictionary = batches[bkey] as Dictionary
 		var arr: Array[Transform3D] = batch_rec["trs"]
 		arr.append(tr)
+		var src_arr: Array[String] = batch_rec["sources"]
+		src_arr.append(sublevel_tag)
+		var src_counts: Dictionary = batch_rec["source_sublevels"]
+		src_counts[sublevel_tag] = int(src_counts.get(sublevel_tag, 0)) + 1
 		if has_cpd:
 			var carr: Array[Color] = batch_rec["cpds"]
 			carr.append(cpd_color)
@@ -2149,7 +2256,9 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 			(acc["niagara"] as Array).append(n)
 	for sp in data_dict.get("landscape_splines", []):
 		if sp is Dictionary:
-			(acc["splines"] as Array).append(sp)
+			var sp_rec: Dictionary = (sp as Dictionary).duplicate()
+			sp_rec["_source_sublevel"] = sublevel_tag
+			(acc["splines"] as Array).append(sp_rec)
 
 	# Swinging-door entries: passed through verbatim for the door wave.
 	for sd in data_dict.get("swinging_doors", []):
@@ -2224,6 +2333,32 @@ func _cell_of(tr: Transform3D) -> Vector2i:
 	return Vector2i(floori(tr.origin.x / CHUNK_SIZE), floori(tr.origin.z / CHUNK_SIZE))
 
 
+## Provenance summary for one draw item. A batch can combine instances from
+## several sublevels (PeripheryA shares mesh paths with the POI), so per-cell
+## source tags are kept instead of trusting the first batch contributor.
+static func _source_summary(sources: Array) -> Dictionary:
+	var counts: Dictionary = {}
+	for s_var: Variant in sources:
+		var tag: String = str(s_var)
+		if tag == "":
+			continue
+		counts[tag] = int(counts.get(tag, 0)) + 1
+	var tags: Array[String] = []
+	for k: Variant in counts.keys():
+		tags.append(str(k))
+	tags.sort()
+	var single: String = "unknown"
+	if tags.size() == 1:
+		single = tags[0]
+	elif tags.size() > 1:
+		single = "mixed"
+	return {
+		"source_sublevel": single,
+		"source_sublevels": tags,
+		"source_counts": counts,
+	}
+
+
 ## Splits one mesh-path batch into per-cell draw items. Single instances (or
 ## batches that fit in one cell) stay as a single tight-AABB node. Decorative
 ## horizon sublevels pass global_batch=true and keep one node per mesh path:
@@ -2240,6 +2375,7 @@ func _make_draw_items(batches: Dictionary, collide: bool, global_batch: bool = f
 		var ov_arr: Array[String] = []
 		var trs: Array = []
 		var cpds: Array[Color] = []
+		var sources: Array = []
 		var hidden_in_game: bool = false
 		if bval is Dictionary:
 			var bdict: Dictionary = bval as Dictionary
@@ -2252,6 +2388,9 @@ func _make_draw_items(batches: Dictionary, collide: bool, global_batch: bool = f
 			var trs_raw: Variant = bdict.get("trs", [])
 			if trs_raw is Array:
 				trs = trs_raw as Array
+			var sources_raw: Variant = bdict.get("sources", [])
+			if sources_raw is Array:
+				sources = sources_raw as Array
 			var cpds_raw: Variant = bdict.get("cpds", [])
 			if cpds_raw is Array:
 				for c_var: Variant in (cpds_raw as Array):
@@ -2274,6 +2413,7 @@ func _make_draw_items(batches: Dictionary, collide: bool, global_batch: bool = f
 			continue
 		var has_cpds: bool = not cpds.is_empty() and cpds.size() == trs.size()
 		if global_batch:
+			var far_src: Dictionary = _source_summary(sources)
 			items.append({
 				"mp": mp,
 				"override_materials": ov_arr,
@@ -2284,11 +2424,15 @@ func _make_draw_items(batches: Dictionary, collide: bool, global_batch: bool = f
 				"collide": collide,
 				"cell": Vector2i.ZERO,
 				"far": true,
+				"source_sublevel": far_src["source_sublevel"],
+				"source_sublevels": far_src["source_sublevels"],
+				"source_counts": far_src["source_counts"],
 			})
 			continue
 		if trs.size() == 1:
 			var single_tr: Transform3D = trs[0]
 			var single_cpds: Array[Color] = cpds if has_cpds else ([] as Array[Color])
+			var single_src: Dictionary = _source_summary([sources[0]] if sources.size() == 1 else [])
 			items.append({
 				"mp": mp,
 				"override_materials": ov_arr,
@@ -2298,19 +2442,26 @@ func _make_draw_items(batches: Dictionary, collide: bool, global_batch: bool = f
 				"hidden_in_game": hidden_in_game,
 				"collide": collide,
 				"cell": _cell_of(single_tr),
+				"source_sublevel": single_src["source_sublevel"],
+				"source_sublevels": single_src["source_sublevels"],
+				"source_counts": single_src["source_counts"],
 			})
 			continue
 		var cells: Dictionary = {}
 		var cell_cpds_map: Dictionary = {}
+		var cell_sources_map: Dictionary = {}
 		for idx: int in range(trs.size()):
 			var tr: Transform3D = trs[idx]
 			var ck: String = "%d_%d" % [floori(tr.origin.x / CHUNK_SIZE), floori(tr.origin.z / CHUNK_SIZE)]
 			if not cells.has(ck):
 				cells[ck] = [] as Array
+				cell_sources_map[ck] = [] as Array
 				if has_cpds:
 					cell_cpds_map[ck] = [] as Array[Color]
 			var cell_arr: Array = cells[ck]
 			cell_arr.append(tr)
+			var cell_src_arr: Array = cell_sources_map[ck]
+			cell_src_arr.append(str(sources[idx]) if idx < sources.size() else "unknown")
 			if has_cpds:
 				var cell_carr: Array[Color] = cell_cpds_map[ck]
 				cell_carr.append(cpds[idx])
@@ -2319,6 +2470,7 @@ func _make_draw_items(batches: Dictionary, collide: bool, global_batch: bool = f
 			var parts: PackedStringArray = ck_str.split("_")
 			var cell: Vector2i = Vector2i(int(parts[0]), int(parts[1]))
 			var item_cpds: Array[Color] = cell_cpds_map[ck_var] if has_cpds else ([] as Array[Color])
+			var cell_src: Dictionary = _source_summary(cell_sources_map[ck_var])
 			items.append({
 				"mp": mp,
 				"override_materials": ov_arr,
@@ -2328,6 +2480,9 @@ func _make_draw_items(batches: Dictionary, collide: bool, global_batch: bool = f
 				"hidden_in_game": hidden_in_game,
 				"collide": collide,
 				"cell": cell,
+				"source_sublevel": cell_src["source_sublevel"],
+				"source_sublevels": cell_src["source_sublevels"],
+				"source_counts": cell_src["source_counts"],
 			})
 	return items
 
@@ -2356,6 +2511,23 @@ func _apply_culling_policy(node: GeometryInstance3D, low_mp: String, mesh: Mesh)
 	elif aabb_len < SMALL_PROP_LEN:
 		node.visibility_range_end = SMALL_PROP_VIS_RANGE + CHUNK_RADIUS_PAD
 		node.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
+
+
+## The merge prototype may only fold instances whose culling outcome is the
+## same "shadow on, no distance fade" default. Anything the policy would cull,
+## dither or shadow-disable keeps its own node (the cell mesh cannot carry
+## per-source ranges without changing the authored look).
+func _culling_policy_signature(low_mp: String, mesh: Mesh) -> String:
+	var aabb_len: float = mesh.get_aabb().size.length()
+	if _has_token(low_mp, STRUCTURAL_NO_FADE_TOKENS):
+		return "structural"
+	if _has_token(low_mp, CLUTTER_TOKENS) and aabb_len < 2.0:
+		return "clutter"
+	if aabb_len < TINY_PROP_LEN:
+		return "tiny"
+	if aabb_len < SMALL_PROP_LEN:
+		return "small"
+	return "default"
 
 
 func _qualifies_as_occluder(low_mp: String, mesh: Mesh) -> bool:
@@ -2706,6 +2878,42 @@ func _build_fog_volumes(trs: Array, ov_arr: Array, parent: Node3D, ctx: Dictiona
 	return built
 
 
+## W1p: the cheapest HLOD test. PeripheryA is the packed city ring around the
+## guildhall; fading its chunks at the requested range removes step-in draws
+## without touching the interior sublevels. Mixed batches (PeripheryA shares
+## mesh paths with the POI) are deliberately skipped because the cell node may
+## contain interior instances; the census reports how many.
+func _apply_periph_range(node: GeometryInstance3D, item: Dictionary, ctx: Dictionary) -> void:
+	var requested: int = int(ctx.get("periph_range", 0))
+	if requested <= 0 or node == null:
+		return
+	var source: String = str(item.get("source_sublevel", "unknown"))
+	if not _is_periphery_a_source(source):
+		var source_tags: Variant = item.get("source_sublevels", [])
+		var has_periph: bool = false
+		if source_tags is Array:
+			for tag: Variant in (source_tags as Array):
+				if _is_periphery_a_source(str(tag)):
+					has_periph = true
+					break
+		if source == "mixed" and has_periph:
+			ctx["periph_range_skipped_mixed"] = int(ctx.get("periph_range_skipped_mixed", 0)) + 1
+		else:
+			ctx["periph_range_skipped_other"] = int(ctx.get("periph_range_skipped_other", 0)) + 1
+		return
+	if bool(item.get("far", false)):
+		ctx["periph_range_skipped_other"] = int(ctx.get("periph_range_skipped_other", 0)) + 1
+		return
+	var target: float = float(requested) + PERIPH_RANGE_PAD
+	if node.visibility_range_end > 0.0 and node.visibility_range_end <= target:
+		ctx["periph_range_kept_smaller"] = int(ctx.get("periph_range_kept_smaller", 0)) + 1
+		return
+	node.visibility_range_end = target
+	node.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_DISABLED
+	node.set_meta("periph_range_end", target)
+	ctx["periph_range_applied"] = int(ctx.get("periph_range_applied", 0)) + 1
+
+
 func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> int:
 	var mp: String = str(item.get("mp", ""))
 	var trs: Array = item.get("trs", [])
@@ -2755,61 +2963,77 @@ func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> 
 			ov_key = "|".join(ov_arr)
 		mesh = _get_overridden_mesh(mp, mesh, ov_arr, ov_key)
 	var low_mp: String = mp.to_lower()
-	var node: GeometryInstance3D
-	if count >= 2 or use_cpd:
-		var mm: MultiMesh = MultiMesh.new()
-		mm.transform_format = MultiMesh.TRANSFORM_3D
-		if use_cpd:
-			mm.use_custom_data = true
-		mm.mesh = mesh
-		mm.instance_count = count
-		# Explicit tight bounds: Godot only frustum-culls a MultiMesh against
-		# its AABB, so each 32m chunk gets the real merged instance bounds.
-		var mesh_aabb: AABB = mesh.get_aabb()
-		var chunk_aabb: AABB = AABB()
-		var have_bounds: bool = false
-		for i in range(count):
-			var tr_i: Transform3D = trs[i]
-			mm.set_instance_transform(i, tr_i)
+	var source_sublevel: String = str(item.get("source_sublevel", "unknown"))
+	var source_sublevels_raw: Variant = item.get("source_sublevels", [])
+	var source_sublevels: Array[String] = []
+	if source_sublevels_raw is Array:
+		for sv: Variant in (source_sublevels_raw as Array):
+			source_sublevels.append(str(sv))
+	var source_counts_raw: Variant = item.get("source_counts", {})
+	var source_counts: Dictionary = source_counts_raw as Dictionary if source_counts_raw is Dictionary else {}
+	if source_counts.is_empty() and source_sublevel != "" and source_sublevel != "unknown" and source_sublevel != "mixed":
+		source_counts = {source_sublevel: count}
+	var skip_visual: bool = bool(item.get("_merge_skip_visual", false))
+	if not skip_visual:
+		var node: GeometryInstance3D
+		if count >= 2 or use_cpd:
+			var mm: MultiMesh = MultiMesh.new()
+			mm.transform_format = MultiMesh.TRANSFORM_3D
 			if use_cpd:
-				mm.set_instance_custom_data(i, cpds[i])
-			var world_aabb: AABB = tr_i * mesh_aabb
-			if not have_bounds:
-				chunk_aabb = world_aabb
-				have_bounds = true
-			else:
-				chunk_aabb = chunk_aabb.merge(world_aabb)
-		if have_bounds:
-			mm.custom_aabb = chunk_aabb
-		var mmi: MultiMeshInstance3D = MultiMeshInstance3D.new()
-		mmi.multimesh = mm
-		if use_cpd:
-			mmi.material_override = _get_emissive_cpd_material()
-		node = mmi
-	else:
-		var tr_one: Transform3D = trs[0]
-		var mi: MeshInstance3D = MeshInstance3D.new()
-		mi.mesh = mesh
-		mi.transform = tr_one
-		node = mi
-	_apply_culling_policy(node, low_mp, mesh)
-	if far_item:
-		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		node.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
-		node.visibility_range_end = 0.0
-	if use_cpd or hidden_in_game:
-		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	if hidden_in_game:
-		node.visible = false
-		node.gi_mode = GeometryInstance3D.GI_MODE_STATIC
-	if MobileProfile.is_mobile():
-		node.lod_bias = MobileProfile.lod_bias()
-	node.set_meta("ue_mesh", mp)
-	node.set_meta("decorative", not bool(item.get("collide", false)))
-	if not ov_arr.is_empty():
-		node.set_meta("override_materials", ov_arr)
-	parent.add_child(node)
-	ctx["chunk_count"] = int(ctx.get("chunk_count", 0)) + 1
+				mm.use_custom_data = true
+			mm.mesh = mesh
+			mm.instance_count = count
+			# Explicit tight bounds: Godot only frustum-culls a MultiMesh against
+			# its AABB, so each 32m chunk gets the real merged instance bounds.
+			var mesh_aabb: AABB = mesh.get_aabb()
+			var chunk_aabb: AABB = AABB()
+			var have_bounds: bool = false
+			for i in range(count):
+				var tr_i: Transform3D = trs[i]
+				mm.set_instance_transform(i, tr_i)
+				if use_cpd:
+					mm.set_instance_custom_data(i, cpds[i])
+				var world_aabb: AABB = tr_i * mesh_aabb
+				if not have_bounds:
+					chunk_aabb = world_aabb
+					have_bounds = true
+				else:
+					chunk_aabb = chunk_aabb.merge(world_aabb)
+			if have_bounds:
+				mm.custom_aabb = chunk_aabb
+			var mmi: MultiMeshInstance3D = MultiMeshInstance3D.new()
+			mmi.multimesh = mm
+			if use_cpd:
+				mmi.material_override = _get_emissive_cpd_material()
+			node = mmi
+		else:
+			var tr_one: Transform3D = trs[0]
+			var mi: MeshInstance3D = MeshInstance3D.new()
+			mi.mesh = mesh
+			mi.transform = tr_one
+			node = mi
+		_apply_culling_policy(node, low_mp, mesh)
+		if far_item:
+			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			node.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+			node.visibility_range_end = 0.0
+		if use_cpd or hidden_in_game:
+			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		if hidden_in_game:
+			node.visible = false
+			node.gi_mode = GeometryInstance3D.GI_MODE_STATIC
+		if MobileProfile.is_mobile():
+			node.lod_bias = MobileProfile.lod_bias()
+		_apply_periph_range(node, item, ctx)
+		node.set_meta("ue_mesh", mp)
+		node.set_meta("decorative", not bool(item.get("collide", false)))
+		node.set_meta("source_sublevel", source_sublevel)
+		node.set_meta("source_sublevels", source_sublevels)
+		node.set_meta("source_counts", source_counts)
+		if not ov_arr.is_empty():
+			node.set_meta("override_materials", ov_arr)
+		parent.add_child(node)
+		ctx["chunk_count"] = int(ctx.get("chunk_count", 0)) + 1
 	if ctx.has("perf_build_ms"):
 		ctx["perf_build_ms"] = int(ctx["perf_build_ms"]) + (Time.get_ticks_msec() - _pm0)
 
@@ -2838,7 +3062,454 @@ func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> 
 				break
 			var tr_o: Transform3D = trs[i3]
 			_add_occluder(ctx, mesh, tr_o)
-	return count
+	return 0 if skip_visual else count
+
+
+## W1p cell-merge prototype ("plain" mode only). Folds single-instance plain
+## MeshInstance3D draw items that share a 32 m cell into one ArrayMesh with one
+## surface per material. Collision and occluders are emitted per original item
+## through the normal draw path (visuals skipped), so physics/occlusion are
+## untouched. Every rejection is counted; any surface that cannot be
+## reproduced rejects the whole cell and leaves its originals visible.
+func _merge_skip_reason(ctx: Dictionary, reason: String) -> void:
+	var skipped: Dictionary = ctx.get("merge_skipped", {}) as Dictionary
+	skipped[reason] = int(skipped.get(reason, 0)) + 1
+
+
+func _merge_material_reason(mat: Material) -> String:
+	if mat == null:
+		return "null_material"
+	var std_mat: StandardMaterial3D = mat as StandardMaterial3D
+	if std_mat != null:
+		if std_mat.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED:
+			return "transparent"
+		if std_mat.blend_mode != BaseMaterial3D.BLEND_MODE_MIX:
+			return "blend_mode"
+		if std_mat.emission_enabled:
+			return "emission"
+		return ""
+	var shader_mat: ShaderMaterial = mat as ShaderMaterial
+	if shader_mat != null:
+		if shader_mat.shader == null:
+			return "shader_null"
+		if not MERGE_OPAQUE_SHADERS.has(shader_mat.shader.resource_path):
+			return "shader_not_allowlisted"
+		return ""
+	return "material_type"
+
+
+## Returns an empty dictionary when the item is not a candidate. Candidate
+## checks are the fail-closed gate: static, single-instance, no CPD, opaque
+## materials only, no gameplay-addressed mesh, and a culling outcome the cell
+## mesh can reproduce (shadow on, no distance fade).
+func _merge_candidate(item: Dictionary, ctx: Dictionary) -> Dictionary:
+	var trs: Variant = item.get("trs", [])
+	if not (trs is Array) or (trs as Array).size() != 1:
+		_merge_skip_reason(ctx, "not_plain")
+		return {}
+	var cpds: Variant = item.get("cpds", [])
+	if cpds is Array and not (cpds as Array).is_empty():
+		_merge_skip_reason(ctx, "cpd")
+		return {}
+	if bool(item.get("hidden_in_game", false)):
+		_merge_skip_reason(ctx, "hidden")
+		return {}
+	if bool(item.get("far", false)):
+		_merge_skip_reason(ctx, "far")
+		return {}
+	var mp: String = str(item.get("mp", ""))
+	if mp == "":
+		_merge_skip_reason(ctx, "no_mp")
+		return {}
+	var low_mp: String = mp.to_lower()
+	if _has_token(low_mp, MERGE_EXCLUDE_TOKENS):
+		_merge_skip_reason(ctx, "gameplay_addressed")
+		return {}
+	var info: Dictionary = _get_mesh_and_shape(mp)
+	var mesh: Mesh = info.get("mesh") as Mesh
+	if mesh == null:
+		_merge_skip_reason(ctx, "missing_mesh")
+		return {}
+	var ov_arr: Array[String] = _extract_override_materials(item)
+	if not ov_arr.is_empty():
+		var ov_key: String = str(item.get("override_key", ""))
+		if ov_key == "":
+			ov_key = "|".join(ov_arr)
+		mesh = _get_overridden_mesh(mp, mesh, ov_arr, ov_key)
+		if mesh == null:
+			_merge_skip_reason(ctx, "override_mesh")
+			return {}
+	var tr: Transform3D = (trs as Array)[0]
+	if tr.basis.determinant() <= 0.0001:
+		_merge_skip_reason(ctx, "degenerate_transform")
+		return {}
+	var surface_count: int = mesh.get_surface_count()
+	if surface_count <= 0:
+		_merge_skip_reason(ctx, "no_surfaces")
+		return {}
+	for s: int in range(surface_count):
+		if mesh is ArrayMesh and (mesh as ArrayMesh).surface_get_primitive_type(s) != Mesh.PRIMITIVE_TRIANGLES:
+			_merge_skip_reason(ctx, "non_triangles")
+			return {}
+		var mat: Material = mesh.surface_get_material(s)
+		var mat_reason: String = _merge_material_reason(mat)
+		if mat_reason != "":
+			_merge_skip_reason(ctx, mat_reason)
+			return {}
+		var arrays: Array = mesh.surface_get_arrays(s)
+		if not _merge_arrays_supported(arrays):
+			_merge_skip_reason(ctx, "unsupported_arrays")
+			return {}
+	var cull_sig: String = _culling_policy_signature(low_mp, mesh)
+	if cull_sig != "structural" and cull_sig != "default":
+		_merge_skip_reason(ctx, "culling_" + cull_sig)
+		return {}
+	return {
+		"item": item,
+		"mesh": mesh,
+		"mp": mp,
+		"tr": tr,
+		"surface_count": surface_count,
+	}
+
+
+func _merge_arrays_supported(arrays: Array) -> bool:
+	if arrays.size() < Mesh.ARRAY_MAX:
+		return false
+	var verts: Variant = arrays[Mesh.ARRAY_VERTEX]
+	if not (verts is PackedVector3Array) or (verts as PackedVector3Array).is_empty():
+		return false
+	if arrays[Mesh.ARRAY_NORMAL] != null and not (arrays[Mesh.ARRAY_NORMAL] is PackedVector3Array):
+		return false
+	if arrays[Mesh.ARRAY_TANGENT] != null and not (arrays[Mesh.ARRAY_TANGENT] is PackedFloat32Array):
+		return false
+	if arrays[Mesh.ARRAY_COLOR] != null and not (arrays[Mesh.ARRAY_COLOR] is PackedColorArray):
+		return false
+	if arrays[Mesh.ARRAY_TEX_UV] != null and not (arrays[Mesh.ARRAY_TEX_UV] is PackedVector2Array):
+		return false
+	if arrays[Mesh.ARRAY_TEX_UV2] != null and not (arrays[Mesh.ARRAY_TEX_UV2] is PackedVector2Array):
+		return false
+	if arrays[Mesh.ARRAY_INDEX] != null and not (arrays[Mesh.ARRAY_INDEX] is PackedInt32Array):
+		return false
+	for attr: int in range(Mesh.ARRAY_CUSTOM0, Mesh.ARRAY_CUSTOM3 + 1):
+		if arrays[attr] != null and not (arrays[attr] is PackedFloat32Array):
+			return false
+	for attr2: int in range(Mesh.ARRAY_BONES, Mesh.ARRAY_WEIGHTS + 1):
+		if arrays[attr2] != null:
+			return false
+	return true
+
+
+static func _merge_empty_like(src: Variant) -> Variant:
+	match typeof(src):
+		TYPE_PACKED_VECTOR3_ARRAY:
+			return PackedVector3Array()
+		TYPE_PACKED_VECTOR2_ARRAY:
+			return PackedVector2Array()
+		TYPE_PACKED_COLOR_ARRAY:
+			return PackedColorArray()
+		TYPE_PACKED_FLOAT32_ARRAY:
+			return PackedFloat32Array()
+		TYPE_PACKED_INT32_ARRAY:
+			return PackedInt32Array()
+	return null
+
+
+## Keep the authored custom-channel format (RGBA8/UV etc.) but drop flags that
+## describe storage we do not reproduce: compression, 16-bit indices, 8-bone
+## weights and dynamic update. The merged index array is int32.
+static func _merge_normalize_format(fmt: int) -> int:
+	return fmt & ~((1 << 2) | (1 << 3) | (1 << 4) | (1 << 5))
+
+
+static func _merge_append_packed(existing: Variant, incoming: Variant) -> Variant:
+	if existing == null:
+		existing = _merge_empty_like(incoming)
+	match typeof(incoming):
+		TYPE_PACKED_VECTOR3_ARRAY:
+			var v3: PackedVector3Array = existing as PackedVector3Array
+			v3.append_array(incoming as PackedVector3Array)
+			return v3
+		TYPE_PACKED_VECTOR2_ARRAY:
+			var v2: PackedVector2Array = existing as PackedVector2Array
+			v2.append_array(incoming as PackedVector2Array)
+			return v2
+		TYPE_PACKED_COLOR_ARRAY:
+			var col: PackedColorArray = existing as PackedColorArray
+			col.append_array(incoming as PackedColorArray)
+			return col
+		TYPE_PACKED_FLOAT32_ARRAY:
+			var f32: PackedFloat32Array = existing as PackedFloat32Array
+			f32.append_array(incoming as PackedFloat32Array)
+			return f32
+		TYPE_PACKED_INT32_ARRAY:
+			var i32: PackedInt32Array = existing as PackedInt32Array
+			i32.append_array(incoming as PackedInt32Array)
+			return i32
+	return null
+
+
+## Combine candidates into one ArrayMesh. Surface order is first-seen material
+## order, so a two-material cell produces exactly two surfaces in authored
+## order. Returns {ok, ...} or {ok=false, reason}; the caller leaves originals
+## visible on failure.
+func _build_merge_cell_mesh(candidates: Array, ctx: Dictionary) -> Dictionary:
+	var groups: Array = []
+	var group_by_mat: Dictionary = {}
+	var aabb: AABB = AABB()
+	var have_aabb: bool = false
+	var ue_paths: Array[String] = []
+	var instances: int = 0
+	var sources: Array = []
+	var collide: bool = false
+	for cand_var: Variant in candidates:
+		var cand: Dictionary = cand_var as Dictionary
+		var item: Dictionary = cand["item"] as Dictionary
+		var mesh: Mesh = cand["mesh"] as Mesh
+		var tr: Transform3D = cand["tr"] as Transform3D
+		var mp: String = str(cand["mp"])
+		instances += 1
+		collide = collide or bool(item.get("collide", false))
+		sources.append(str(item.get("source_sublevel", "unknown")))
+		if ue_paths.size() < 64 and not ue_paths.has(mp):
+			ue_paths.append(mp)
+		var world_aabb: AABB = tr * mesh.get_aabb()
+		if not have_aabb:
+			aabb = world_aabb
+			have_aabb = true
+		else:
+			aabb = aabb.merge(world_aabb)
+		var normal_basis: Basis = tr.basis.inverse().transposed()
+		for s: int in range(mesh.get_surface_count()):
+			var mat: Material = mesh.surface_get_material(s)
+			if mat == null:
+				return {"ok": false, "reason": "null_material"}
+			var mat_id: int = mat.get_instance_id()
+			var group_index: int = int(group_by_mat.get(mat_id, -1))
+			var surface_format: int = 0
+			if mesh is ArrayMesh:
+				surface_format = _merge_normalize_format((mesh as ArrayMesh).surface_get_format(s))
+			if group_index < 0:
+				var new_arrays: Array = []
+				new_arrays.resize(Mesh.ARRAY_MAX)
+				groups.append({
+					"material": mat,
+					"arrays": new_arrays,
+					"vertex_count": 0,
+					"index": PackedInt32Array(),
+					"format": surface_format,
+				})
+				group_index = groups.size() - 1
+				group_by_mat[mat_id] = group_index
+			var group: Dictionary = groups[group_index]
+			if int(group["format"]) != surface_format:
+				return {"ok": false, "reason": "format_mismatch"}
+			var group_arrays: Array = group["arrays"] as Array
+			var surface_arrays: Array = mesh.surface_get_arrays(s)
+			if not _merge_arrays_supported(surface_arrays):
+				return {"ok": false, "reason": "unsupported_arrays"}
+			var verts: PackedVector3Array = surface_arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array
+			var vcount: int = verts.size()
+			var offset: int = int(group["vertex_count"])
+			# Attribute set must match across every surface in the same material
+			# bucket; a mismatch would silently drop UVs/normals/custom data from
+			# one mesh.
+			if offset > 0:
+				for attr: int in range(0, Mesh.ARRAY_CUSTOM3 + 1):
+					var has_attr: bool = surface_arrays[attr] != null
+					var group_has_attr: bool = group_arrays[attr] != null
+					if has_attr != group_has_attr:
+						return {"ok": false, "reason": "attribute_mismatch"}
+			for i: int in range(vcount):
+				verts[i] = tr * verts[i]
+			group_arrays[Mesh.ARRAY_VERTEX] = _merge_append_packed(group_arrays[Mesh.ARRAY_VERTEX], verts)
+			var normals_v: Variant = surface_arrays[Mesh.ARRAY_NORMAL]
+			if normals_v is PackedVector3Array:
+				var normals: PackedVector3Array = (normals_v as PackedVector3Array).duplicate()
+				for i2: int in range(normals.size()):
+					var n: Vector3 = normal_basis * normals[i2]
+					normals[i2] = n.normalized() if n.length_squared() > 0.0000001 else Vector3.UP
+				group_arrays[Mesh.ARRAY_NORMAL] = _merge_append_packed(group_arrays[Mesh.ARRAY_NORMAL], normals)
+			var tangents_v: Variant = surface_arrays[Mesh.ARRAY_TANGENT]
+			if tangents_v is PackedFloat32Array:
+				var tangents: PackedFloat32Array = (tangents_v as PackedFloat32Array).duplicate()
+				if tangents.size() % 4 != 0:
+					return {"ok": false, "reason": "bad_tangents"}
+				for i3: int in range(0, tangents.size(), 4):
+					var t: Vector3 = normal_basis * Vector3(tangents[i3], tangents[i3 + 1], tangents[i3 + 2])
+					if t.length_squared() > 0.0000001:
+						t = t.normalized()
+					tangents[i3] = t.x
+					tangents[i3 + 1] = t.y
+					tangents[i3 + 2] = t.z
+				group_arrays[Mesh.ARRAY_TANGENT] = _merge_append_packed(group_arrays[Mesh.ARRAY_TANGENT], tangents)
+			var colors_v: Variant = surface_arrays[Mesh.ARRAY_COLOR]
+			if colors_v is PackedColorArray:
+				group_arrays[Mesh.ARRAY_COLOR] = _merge_append_packed(group_arrays[Mesh.ARRAY_COLOR], colors_v)
+			var uv_v: Variant = surface_arrays[Mesh.ARRAY_TEX_UV]
+			if uv_v is PackedVector2Array:
+				group_arrays[Mesh.ARRAY_TEX_UV] = _merge_append_packed(group_arrays[Mesh.ARRAY_TEX_UV], uv_v)
+			var uv2_v: Variant = surface_arrays[Mesh.ARRAY_TEX_UV2]
+			if uv2_v is PackedVector2Array:
+				group_arrays[Mesh.ARRAY_TEX_UV2] = _merge_append_packed(group_arrays[Mesh.ARRAY_TEX_UV2], uv2_v)
+			for custom_attr: int in range(Mesh.ARRAY_CUSTOM0, Mesh.ARRAY_CUSTOM3 + 1):
+				var custom_v: Variant = surface_arrays[custom_attr]
+				if custom_v is PackedFloat32Array:
+					group_arrays[custom_attr] = _merge_append_packed(group_arrays[custom_attr], custom_v)
+			var indices: PackedInt32Array = group["index"] as PackedInt32Array
+			var src_idx_v: Variant = surface_arrays[Mesh.ARRAY_INDEX]
+			if src_idx_v is PackedInt32Array and not (src_idx_v as PackedInt32Array).is_empty():
+				var src_idx: PackedInt32Array = src_idx_v as PackedInt32Array
+				for idx: int in range(src_idx.size()):
+					indices.append(src_idx[idx] + offset)
+			else:
+				for idx2: int in range(vcount):
+					indices.append(offset + idx2)
+			group["index"] = indices
+			group["vertex_count"] = offset + vcount
+	if groups.is_empty():
+		return {"ok": false, "reason": "no_surfaces"}
+	var merged := ArrayMesh.new()
+	for group_var: Variant in groups:
+		var group: Dictionary = group_var as Dictionary
+		var arrays: Array = group["arrays"] as Array
+		arrays[Mesh.ARRAY_INDEX] = group["index"]
+		var material: Material = group["material"] as Material
+		merged.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [], {}, int(group["format"]))
+		merged.surface_set_material(merged.get_surface_count() - 1, material)
+	if merged.get_surface_count() == 0:
+		return {"ok": false, "reason": "array_mesh_empty"}
+	var src_summary: Dictionary = _source_summary(sources)
+	var first_item: Dictionary = ((candidates[0] as Dictionary)["item"] as Dictionary)
+	return {
+		"ok": true,
+		"cell": first_item.get("cell", Vector2i.ZERO),
+		"mesh": merged,
+		"aabb": aabb,
+		"instances": instances,
+		"surface_count": merged.get_surface_count(),
+		"materials": groups.size(),
+		"ue_paths": ue_paths,
+		"decorative": not collide,
+		"source_sublevel": src_summary["source_sublevel"],
+		"source_sublevels": src_summary["source_sublevels"],
+		"source_counts": src_summary["source_counts"],
+	}
+
+
+func _prepare_merge_plan(items: Array, ctx: Dictionary) -> Array:
+	ctx["merge_skipped"] = {} as Dictionary
+	ctx["merge_candidates"] = 0
+	ctx["merge_cells"] = 0
+	ctx["merge_nodes"] = 0
+	ctx["merge_surfaces_before"] = 0
+	ctx["merge_surfaces_after"] = 0
+	ctx["merge_skipped_visuals"] = 0
+	if str(ctx.get("merge_mode", "off")) != "plain":
+		return []
+	var by_cell: Dictionary = {}
+	for item_var: Variant in items:
+		if not (item_var is Dictionary):
+			continue
+		var item: Dictionary = item_var as Dictionary
+		var cand: Dictionary = _merge_candidate(item, ctx)
+		if cand.is_empty():
+			continue
+		ctx["merge_candidates"] = int(ctx.get("merge_candidates", 0)) + 1
+		var cell: Vector2i = item.get("cell", Vector2i.ZERO)
+		var cell_key: String = "%d_%d" % [cell.x, cell.y]
+		if not by_cell.has(cell_key):
+			by_cell[cell_key] = [] as Array
+		(by_cell[cell_key] as Array).append(cand)
+	var plan: Array = []
+	for cell_key_var: Variant in by_cell.keys():
+		var cands: Array = by_cell[cell_key_var] as Array
+		if cands.size() < 2:
+			_merge_skip_reason(ctx, "single_cell")
+			continue
+		var built: Dictionary = _build_merge_cell_mesh(cands, ctx)
+		if not bool(built.get("ok", false)):
+			_merge_skip_reason(ctx, str(built.get("reason", "cell_failed")))
+			continue
+		var surface_before: int = 0
+		for cand_var: Variant in cands:
+			surface_before += int((cand_var as Dictionary).get("surface_count", 0))
+		built["items"] = cands
+		built["surface_before"] = surface_before
+		plan.append(built)
+		ctx["merge_cells"] = int(ctx.get("merge_cells", 0)) + 1
+		ctx["merge_nodes"] = int(ctx.get("merge_nodes", 0)) + 1
+		ctx["merge_surfaces_before"] = int(ctx.get("merge_surfaces_before", 0)) + surface_before
+		ctx["merge_surfaces_after"] = int(ctx.get("merge_surfaces_after", 0)) + int(built["surface_count"])
+		ctx["merge_skipped_visuals"] = int(ctx.get("merge_skipped_visuals", 0)) + cands.size()
+		for cand_var2: Variant in cands:
+			var cand_item: Dictionary = (cand_var2 as Dictionary)["item"] as Dictionary
+			cand_item["_merge_skip_visual"] = true
+	if str(ctx.get("merge_mode", "off")) == "plain":
+		print("PERF_MERGE mode=plain candidates=%d cells=%d nodes=%d surfaces_before=%d surfaces_after=%d skipped=%d reasons=%s" % [
+			int(ctx.get("merge_candidates", 0)),
+			int(ctx.get("merge_cells", 0)),
+			int(ctx.get("merge_nodes", 0)),
+			int(ctx.get("merge_surfaces_before", 0)),
+			int(ctx.get("merge_surfaces_after", 0)),
+			int(ctx.get("merge_skipped_visuals", 0)),
+			str(ctx.get("merge_skipped", {})),
+		])
+	return plan
+
+
+func _build_merged_cell_node(entry: Dictionary, parent: Node3D, ctx: Dictionary) -> int:
+	var mesh: Mesh = entry.get("mesh") as Mesh
+	if mesh == null or parent == null:
+		return -1
+	var cell: Vector2i = entry.get("cell", Vector2i.ZERO)
+	var cell_text: String = "%d_%d" % [cell.x, cell.y]
+	var mi := MeshInstance3D.new()
+	mi.name = "MergedCell_%s" % cell_text
+	mi.mesh = mesh
+	var aabb: AABB = entry.get("aabb", AABB())
+	if aabb.size.length_squared() > 0.0:
+		mi.custom_aabb = aabb
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	if MobileProfile.is_mobile():
+		mi.lod_bias = MobileProfile.lod_bias()
+	mi.set_meta("ue_mesh", "MERGED_CELL_%s" % cell_text)
+	mi.set_meta("merged_cell", cell)
+	mi.set_meta("merged_source_count", int(entry.get("instances", 0)))
+	mi.set_meta("merged_material_count", int(entry.get("materials", 0)))
+	mi.set_meta("merged_ue_meshes", entry.get("ue_paths", []))
+	mi.set_meta("decorative", bool(entry.get("decorative", false)))
+	mi.set_meta("source_sublevel", str(entry.get("source_sublevel", "unknown")))
+	mi.set_meta("source_sublevels", entry.get("source_sublevels", []))
+	mi.set_meta("source_counts", entry.get("source_counts", {}))
+	_apply_periph_range(mi, entry, ctx)
+	parent.add_child(mi)
+	ctx["chunk_count"] = int(ctx.get("chunk_count", 0)) + 1
+	return int(entry.get("instances", 0))
+
+
+## Shared build path for tests: plan merges first (so a failed cell leaves its
+## originals untouched), build merged nodes, then every original item. Items
+## folded into a cell only emit collision/occluders here.
+func _build_draw_items(items: Array, parent: Node3D, ctx: Dictionary) -> int:
+	var plan: Array = _prepare_merge_plan(items, ctx)
+	var total: int = 0
+	for entry_var: Variant in plan:
+		var entry: Dictionary = entry_var as Dictionary
+		var merged_instances: int = _build_merged_cell_node(entry, parent, ctx)
+		if merged_instances < 0:
+			for cand_var: Variant in (entry.get("items", []) as Array):
+				var cand_item: Dictionary = (cand_var as Dictionary)["item"] as Dictionary
+				cand_item.erase("_merge_skip_visual")
+			ctx["merge_nodes"] = maxi(int(ctx.get("merge_nodes", 0)) - 1, 0)
+			ctx["merge_cells"] = maxi(int(ctx.get("merge_cells", 0)) - 1, 0)
+			_merge_skip_reason(ctx, "merged_node_failed")
+		else:
+			total += merged_instances
+	for item_var: Variant in items:
+		if item_var is Dictionary:
+			total += _build_one_draw_item(item_var as Dictionary, parent, ctx)
+	return total
 
 
 func _build_landscapes_sync(landscapes: Array, parent: Node3D, ctx: Dictionary) -> void:
@@ -2898,7 +3569,7 @@ func _curb_tri(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, want: Vector
 ## The cross-section profile, swept from outer-left-bottom around to
 ## outer-right-bottom, is clockwise in (offset, height), so each profile
 ## segment's outward normal is the left of its travel direction.
-func _build_one_curb_ribbon(pts: Array[Vector3], width: float, sp_mesh: String, sp_mat: String, parent: Node3D, ctx: Dictionary) -> void:
+func _build_one_curb_ribbon(pts: Array[Vector3], width: float, sp_mesh: String, sp_mat: String, parent: Node3D, ctx: Dictionary, source_sublevel: String = "unknown") -> void:
 	var count: int = pts.size()
 	var half: float = width * 0.5
 	var lip: float = minf(CURB_LIP_W_M, half * 0.5)
@@ -2989,6 +3660,9 @@ func _build_one_curb_ribbon(pts: Array[Vector3], width: float, sp_mesh: String, 
 	# _apply_culling_policy.
 	mi.set_meta("ue_mesh", sp_mesh)
 	mi.set_meta("decorative", false)
+	mi.set_meta("source_sublevel", source_sublevel)
+	mi.set_meta("source_sublevels", [source_sublevel])
+	mi.set_meta("source_counts", {source_sublevel: 1} if source_sublevel != "unknown" else {})
 	parent.add_child(mi)
 	if not bool(ctx.get("generate_collision", false)):
 		return
@@ -3050,7 +3724,7 @@ func _build_curbs_from_splines(splines: Array, parent: Node3D, ctx: Dictionary) 
 				gpts.append(Vector3(float(parr[0]), float(parr[1]), float(parr[2])))
 		if gpts.size() < 2:
 			continue
-		_build_one_curb_ribbon(gpts, width, str(sp.get("mesh", "")), str(sp.get("material", "")), parent, ctx)
+		_build_one_curb_ribbon(gpts, width, str(sp.get("mesh", "")), str(sp.get("material", "")), parent, ctx, str(sp.get("_source_sublevel", "unknown")))
 		done += 1
 	ctx["curb_built"] = int(ctx.get("curb_built", 0)) + done
 
@@ -3120,6 +3794,7 @@ func _add_lights(pending_lights: Array, parent: Node3D, light_probe: Node, max_l
 				forced_added += 1
 	ctx["light_count"] = added
 	ctx["gate_light_count"] = forced_added
+	ctx["hero_shadows"] = MobileProfile.hero_shadows()
 	_report_gate_lights(added, max_lights, forced_added, map_hint, int(ctx.get("rect_light_count", 0)))
 
 
@@ -3177,6 +3852,163 @@ static func _report_gate_lights(added: int, budget: int, forced: int, map_hint: 
 	if map_hint != HERO_LIGHT_MAP_HINT:
 		return
 	print("TAT-2 gate lights: total=%d (generic=%d rect=%d) budget=%d forced=%d hero_shadows=%d" % [added + rect_lights, added, rect_lights, budget, forced, mini(MobileProfile.hero_shadows(), budget)])
+
+
+## W1p headless census. Counts the real nodes the loader emitted (not the JSON
+## input): draw call surfaces, lights, shadows, occluders and collision. The
+## PeripheryA columns are what the range lever can affect; source counts show
+## which sublevel owns each instance.
+func _perf_census(parent: Node3D, ctx: Dictionary, result: Dictionary) -> Dictionary:
+	var out: Dictionary = {
+		"meshes": 0,
+		"mesh_instances": 0,
+		"chunk_nodes": int(ctx.get("chunk_count", 0)),
+		"plain_mesh_instances": 0,
+		"multimesh_instances": 0,
+		"surface_draws": 0,
+		"lights": 0,
+		"shadow_lights": 0,
+		"occluders": 0,
+		"collision_bodies": int(ctx.get("collision_bodies", 0)),
+		"collision_shapes": int(ctx.get("collision_shapes", 0)),
+		"periph_nodes": 0,
+		"periph_instances": 0,
+		"periph_surface_draws": 0,
+		"periph_plain": 0,
+		"periph_multimesh": 0,
+		"source_sublevels": {} as Dictionary,
+		"light_budget": int(ctx.get("light_budget", 0)),
+		"hero_shadows": int(ctx.get("hero_shadows", MobileProfile.hero_shadows())),
+		"periph_range": int(ctx.get("periph_range", 0)),
+		"merge_mode": str(ctx.get("merge_mode", "off")),
+		"merge_candidates": int(ctx.get("merge_candidates", 0)),
+		"merge_nodes": int(ctx.get("merge_nodes", 0)),
+		"merge_surfaces_before": int(ctx.get("merge_surfaces_before", 0)),
+		"merge_surfaces_after": int(ctx.get("merge_surfaces_after", 0)),
+	}
+	var body_scan: int = 0
+	var shape_scan: int = 0
+	var source_counts: Dictionary = out["source_sublevels"]
+	if parent != null:
+		for child: Node in parent.get_children():
+			var node_instances: int = 0
+			var node_surfaces: int = 0
+			var is_plain: bool = false
+			var is_multi: bool = false
+			if child is MultiMeshInstance3D:
+				var mmi: MultiMeshInstance3D = child as MultiMeshInstance3D
+				is_multi = true
+				out["multimesh_instances"] = int(out["multimesh_instances"]) + 1
+				if mmi.multimesh != null:
+					node_instances = mmi.multimesh.instance_count
+					if mmi.multimesh.mesh != null:
+						node_surfaces = mmi.multimesh.mesh.get_surface_count()
+			elif child is MeshInstance3D:
+				var mi: MeshInstance3D = child as MeshInstance3D
+				is_plain = true
+				out["plain_mesh_instances"] = int(out["plain_mesh_instances"]) + 1
+				node_instances = 1
+				if mi.mesh != null:
+					node_surfaces = mi.mesh.get_surface_count()
+			if is_plain or is_multi:
+				out["meshes"] = int(out["meshes"]) + 1
+				out["mesh_instances"] = int(out["mesh_instances"]) + node_instances
+				out["surface_draws"] = int(out["surface_draws"]) + node_surfaces
+				var src_counts_v: Variant = null
+				if child.has_meta("source_counts"):
+					src_counts_v = child.get_meta("source_counts")
+				if src_counts_v is Dictionary and not (src_counts_v as Dictionary).is_empty():
+					for k: Variant in (src_counts_v as Dictionary).keys():
+						source_counts[str(k)] = int(source_counts.get(str(k), 0)) + int((src_counts_v as Dictionary)[k])
+				else:
+					var src: String = ""
+					if child.has_meta("source_sublevel"):
+						src = str(child.get_meta("source_sublevel"))
+					if src != "" and src != "unknown" and src != "mixed":
+						source_counts[src] = int(source_counts.get(src, 0)) + node_instances
+				if _node_is_periphery_a(child):
+					out["periph_nodes"] = int(out["periph_nodes"]) + 1
+					out["periph_instances"] = int(out["periph_instances"]) + node_instances
+					out["periph_surface_draws"] = int(out["periph_surface_draws"]) + node_surfaces
+					if is_plain:
+						out["periph_plain"] = int(out["periph_plain"]) + 1
+					else:
+						out["periph_multimesh"] = int(out["periph_multimesh"]) + 1
+			elif child is Light3D:
+				out["lights"] = int(out["lights"]) + 1
+				if (child as Light3D).shadow_enabled:
+					out["shadow_lights"] = int(out["shadow_lights"]) + 1
+			elif child is OccluderInstance3D:
+				out["occluders"] = int(out["occluders"]) + 1
+			elif child is StaticBody3D:
+				body_scan += 1
+				for shape_child: Node in child.get_children():
+					if shape_child is CollisionShape3D:
+						shape_scan += 1
+	out["collision_bodies"] = maxi(int(out["collision_bodies"]), body_scan)
+	out["collision_shapes"] = maxi(int(out["collision_shapes"]), shape_scan)
+	out["source_sublevels"] = source_counts
+	return out
+
+
+func _node_is_periphery_a(node: Node) -> bool:
+	if node.has_meta("source_sublevel") and _is_periphery_a_source(str(node.get_meta("source_sublevel"))):
+		return true
+	if not node.has_meta("source_sublevels"):
+		return false
+	var tags_v: Variant = node.get_meta("source_sublevels")
+	if tags_v is Array:
+		for tag: Variant in (tags_v as Array):
+			if _is_periphery_a_source(str(tag)):
+				return true
+	return false
+
+
+## Emits PERF_CENSUS once per Guildhall load (or any load when TAT2_PERF_CENSUS
+## is set). Headless-safe: no rendering/GPU work is performed.
+func _log_perf_census(parent: Node3D, ctx: Dictionary, result: Dictionary, json_paths: Array) -> void:
+	var map_hint: String = _map_hint_from_paths(json_paths)
+	if map_hint != "guildhall" and not OS.has_environment(ENV_PERF_CENSUS):
+		return
+	var census: Dictionary = _perf_census(parent, ctx, result)
+	result["perf_census"] = census
+	print("PERF_CENSUS meshes=%d instances=%d chunk_nodes=%d plain=%d multimesh=%d surface_draws=%d lights=%d shadow_lights=%d occluders=%d collision_bodies=%d collision_shapes=%d periph_nodes=%d periph_instances=%d periph_surface_draws=%d periph_plain=%d periph_multimesh=%d periph_range=%d merge_mode=%s merge_candidates=%d merge_nodes=%d merge_surfaces_before=%d merge_surfaces_after=%d light_budget=%d hero_shadows=%d source_sublevels=%s" % [
+		int(census["meshes"]),
+		int(census["mesh_instances"]),
+		int(census["chunk_nodes"]),
+		int(census["plain_mesh_instances"]),
+		int(census["multimesh_instances"]),
+		int(census["surface_draws"]),
+		int(census["lights"]),
+		int(census["shadow_lights"]),
+		int(census["occluders"]),
+		int(census["collision_bodies"]),
+		int(census["collision_shapes"]),
+		int(census["periph_nodes"]),
+		int(census["periph_instances"]),
+		int(census["periph_surface_draws"]),
+		int(census["periph_plain"]),
+		int(census["periph_multimesh"]),
+		int(census["periph_range"]),
+		str(census["merge_mode"]),
+		int(census["merge_candidates"]),
+		int(census["merge_nodes"]),
+		int(census["merge_surfaces_before"]),
+		int(census["merge_surfaces_after"]),
+		int(census["light_budget"]),
+		int(census["hero_shadows"]),
+		str(census["source_sublevels"]),
+	])
+	var requested: int = int(ctx.get("periph_range", 0))
+	if requested > 0:
+		print("PERF_PERIPH_RANGE requested=%d applied=%d kept_smaller=%d skipped_mixed=%d skipped_other=%d pad=%.1f" % [
+			requested,
+			int(ctx.get("periph_range_applied", 0)),
+			int(ctx.get("periph_range_kept_smaller", 0)),
+			int(ctx.get("periph_range_skipped_mixed", 0)),
+			int(ctx.get("periph_range_skipped_other", 0)),
+			PERIPH_RANGE_PAD,
+		])
 
 
 func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dictionary:
@@ -3246,6 +4078,23 @@ func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dict
 	result["sky_light"] = ctx.get("sky_light", {})
 	result["fog_volume"] = ctx.get("fog_volume", {})
 	result["post_process"] = ctx.get("post_process", {})
+	# W1p structural prototype accounting. Defaults are zero/off; the census
+	# line is the only always-on artifact.
+	result["light_budget"] = int(ctx.get("light_budget", 0))
+	result["hero_shadows"] = int(ctx.get("hero_shadows", MobileProfile.hero_shadows()))
+	result["periph_range"] = int(ctx.get("periph_range", 0))
+	result["periph_range_applied"] = int(ctx.get("periph_range_applied", 0))
+	result["periph_range_kept_smaller"] = int(ctx.get("periph_range_kept_smaller", 0))
+	result["periph_range_skipped_mixed"] = int(ctx.get("periph_range_skipped_mixed", 0))
+	result["periph_range_skipped_other"] = int(ctx.get("periph_range_skipped_other", 0))
+	result["merge_mode"] = str(ctx.get("merge_mode", "off"))
+	result["merge_candidates"] = int(ctx.get("merge_candidates", 0))
+	result["merge_cells"] = int(ctx.get("merge_cells", 0))
+	result["merge_nodes"] = int(ctx.get("merge_nodes", 0))
+	result["merge_surfaces_before"] = int(ctx.get("merge_surfaces_before", 0))
+	result["merge_surfaces_after"] = int(ctx.get("merge_surfaces_after", 0))
+	result["merge_skipped_visuals"] = int(ctx.get("merge_skipped_visuals", 0))
+	result["merge_skipped"] = (ctx.get("merge_skipped", {}) as Dictionary).duplicate()
 	return result
 
 
@@ -3757,11 +4606,14 @@ func load_sublevels(json_paths: Array[String], parent: Node3D, light_probe: Node
 		print("LoadTiming parse_ms=", Time.get_ticks_msec() - _t0)
 	var ctx: Dictionary = _new_build_ctx(parent, light_probe, generate_collision)
 	ctx["map_hint"] = _map_hint_from_paths(json_paths)
+	var effective_budget: int = _effective_light_budget(max_lights)
+	ctx["light_budget"] = effective_budget
+	ctx["hero_shadows"] = MobileProfile.hero_shadows()
 	_apply_collider_budget(ctx, json_paths)
 	# Active RectLights are rare (one per mission map at most) and authored as
 	# area lights, so they claim budget slots before the generic point lights.
-	_build_rect_lights(acc["rect_lights"], parent, light_probe, ctx, max_lights)
-	_add_lights(acc["lights"], parent, light_probe, maxi(max_lights - int(ctx.get("rect_light_count", 0)), 0), ctx, acc["result"]["player_spawns"])
+	_build_rect_lights(acc["rect_lights"], parent, light_probe, ctx, effective_budget)
+	_add_lights(acc["lights"], parent, light_probe, maxi(effective_budget - int(ctx.get("rect_light_count", 0)), 0), ctx, acc["result"]["player_spawns"])
 	ctx["light_count"] = int(ctx.get("light_count", 0)) + int(ctx.get("rect_light_count", 0))
 	_build_decals(acc["decals"], parent, ctx)
 	_build_volumes(acc["volumes"], parent, ctx)
@@ -3772,10 +4624,10 @@ func load_sublevels(json_paths: Array[String], parent: Node3D, light_probe: Node
 	_build_guildhall_saferoom_floor(parent, ctx)
 
 	var items: Array = _collect_draw_items(acc)
-	var total_inst: int = 0
-	for item: Dictionary in items:
-		total_inst += _build_one_draw_item(item, parent, ctx)
-	return _finalize(acc["result"], ctx, total_inst)
+	var total_inst: int = _build_draw_items(items, parent, ctx)
+	_finalize(acc["result"], ctx, total_inst)
+	_log_perf_census(parent, ctx, acc["result"], json_paths)
+	return acc["result"]
 
 
 func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node = null, max_lights: int = 96, generate_collision: bool = true) -> Dictionary:
@@ -3805,12 +4657,15 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 	if _timing:
 		ctx["perf_mesh_ms"] = 0
 		ctx["perf_build_ms"] = 0
+	var effective_budget: int = _effective_light_budget(max_lights)
+	ctx["light_budget"] = effective_budget
+	ctx["hero_shadows"] = MobileProfile.hero_shadows()
 	_apply_collider_budget(ctx, json_paths)
 	var pending_lights: Array = _prioritize_lights(acc["lights"], acc["result"]["player_spawns"])
 	load_progress.emit(0.3, "Sorting lights...")
 	# Active RectLights claim budget slots before the generic point lights.
-	_build_rect_lights(acc["rect_lights"], parent, light_probe, ctx, max_lights)
-	var light_budget: int = mini(pending_lights.size(), maxi(max_lights - int(ctx.get("rect_light_count", 0)), 0))
+	_build_rect_lights(acc["rect_lights"], parent, light_probe, ctx, effective_budget)
+	var light_budget: int = mini(pending_lights.size(), maxi(effective_budget - int(ctx.get("rect_light_count", 0)), 0))
 	var selection: Array = _select_lights(pending_lights, light_budget, str(ctx.get("map_hint", "")))
 	var lights_added: int = 0
 	var forced_lights: int = 0
@@ -3848,8 +4703,13 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 	load_progress.emit(0.52, "Building curbs...")
 
 	var items: Array = _collect_draw_items(acc)
-	var built: int = 0
+	var merge_plan: Array = _prepare_merge_plan(items, ctx)
 	var total_inst: int = 0
+	for entry_var: Variant in merge_plan:
+		var merged_instances: int = _build_merged_cell_node(entry_var as Dictionary, parent, ctx)
+		if merged_instances > 0:
+			total_inst += merged_instances
+	var built: int = 0
 	for item: Dictionary in items:
 		total_inst += _build_one_draw_item(item, parent, ctx)
 		built += 1
@@ -3860,7 +4720,9 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 	if _timing:
 		print("LoadTiming draw_ms=", Time.get_ticks_msec() - _t0, " items=", items.size(), " instances=", total_inst, " mesh_ms=", int(ctx.get("perf_mesh_ms", 0)), " build_ms=", int(ctx.get("perf_build_ms", 0)), " glb_ms=", _prof_glb_ms, " mat_ms=", _prof_mat_ms, " shape_ms=", _prof_shape_ms, " downscaled=", downscaled_count)
 	load_progress.emit(1.0, "Done")
-	return _finalize(acc["result"], ctx, total_inst)
+	_finalize(acc["result"], ctx, total_inst)
+	_log_perf_census(parent, ctx, acc["result"], json_paths)
+	return acc["result"]
 
 
 ## Ranks authored lights into the fixed light budget. This score is used ONLY

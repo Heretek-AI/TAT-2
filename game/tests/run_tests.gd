@@ -452,6 +452,41 @@ func _initialize() -> void:
 		fails += 1
 	else:
 		print("PASS: Perf chunking (chunks=", chunk_count, ", multimeshes=", multi_nodes, ", collision_bodies=", col_bodies, ", shapes=", col_shapes, ", occluders=", occluders, ", max_chunk_span=", snappedf(max_chunk_span, 0.1), "m, distance-culled=", culled_nodes, ", material_fallbacks=0, downscaled=", gh_downscaled, ", prebake_pending=", gh_downscaled_pending, ")")
+
+	# 11b. W1p structural census: source_sublevel provenance on every draw item
+	# and the PERF_CENSUS counters the perf harness consumes. Headless only.
+	var gh_census: Dictionary = gh_stats.get("perf_census", {}) as Dictionary
+	var gh_src_totals: Dictionary = gh_census.get("source_sublevels", {}) as Dictionary
+	var gh_census_ok: bool = int(gh_census.get("meshes", 0)) > 0 \
+		and int(gh_census.get("surface_draws", 0)) > 0 \
+		and int(gh_census.get("lights", 0)) > 0 \
+		and int(gh_census.get("collision_shapes", 0)) > 0 \
+		and int(gh_census.get("periph_nodes", 0)) > 0 \
+		and int(gh_census.get("hero_shadows", -1)) == 6 \
+		and int(gh_census.get("light_budget", -1)) == 160 \
+		and int(gh_src_totals.get("Guildhall_PeripheryA", 0)) > 0
+	var gh_draw_nodes: int = 0
+	var gh_draw_src_missing: int = 0
+	var gh_draw_periph: int = 0
+	var gh_missing_names: Array[String] = []
+	for gh_n: Node in gh_scene.get_children():
+		if not (gh_n is MeshInstance3D or gh_n is MultiMeshInstance3D):
+			continue
+		var gh_ue: String = str(gh_n.get_meta("ue_mesh", ""))
+		if gh_ue == "" or gh_ue.begins_with("MERGED_CELL_"):
+			continue
+		gh_draw_nodes += 1
+		if not gh_n.has_meta("source_sublevel") or str(gh_n.get_meta("source_sublevel", "")) == "":
+			gh_draw_src_missing += 1
+			if gh_missing_names.size() < 5:
+				gh_missing_names.append("%s/%s" % [gh_n.name, gh_ue])
+		elif str(gh_n.get_meta("source_sublevel", "")).to_lower().find("peripherya") >= 0:
+			gh_draw_periph += 1
+	if not gh_census_ok or gh_draw_nodes < 3000 or gh_draw_src_missing != 0 or gh_draw_periph == 0:
+		printerr("FAIL: 11b W1p census/source metadata (census_ok=", gh_census_ok, " draw_nodes=", gh_draw_nodes, " missing_source=", gh_draw_src_missing, " missing_names=", gh_missing_names, " periph=", gh_draw_periph, " census=", gh_census, ")")
+		fails += 1
+	else:
+		print("PASS: 11b W1p PERF_CENSUS (meshes=", int(gh_census.get("meshes", 0)), ", surface_draws=", int(gh_census.get("surface_draws", 0)), ", lights=", int(gh_census.get("lights", 0)), ", shadows=", int(gh_census.get("shadow_lights", 0)), ", periph_nodes=", int(gh_census.get("periph_nodes", 0)), ", source-tagged draw nodes=", gh_draw_nodes, " missing=", gh_draw_src_missing, ")")
 	gh_scene.queue_free()
 	await process_frame
 

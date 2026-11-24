@@ -317,3 +317,16 @@ find extracted/json -name 'NS_*.json' | wc -l
   conclusion: one exterior pose only; the full six-pose matrix remains for the
   integrator. 60 FPS is still not achieved and no FPS improvement is claimed.
   Details: `docs/reports/perf-measurement-w0b.md`.
+
+- **W1p structural perf prototype (2026-11-24, worker branch)** — off by default,
+  no FPS claim; evidence: [`docs/reports/w1p-structural-perf-prototype.md`](reports/w1p-structural-perf-prototype.md).
+  Every loader draw item now carries `source_sublevel`/`source_counts`;
+  `PERF_CENSUS` measures Guildhall 5,782 mesh nodes / 64,547 instances / 10,642
+  surface draws / 171 lights (7 shadow-casting) / 768 occluders / 24,311
+  collision shapes, PeripheryA 3,104 nodes / 5,945 surface draws. Env levers
+  (`TAT2_PERIPH_RANGE=100|120|150`, `TAT2_SHADOW_HEROES`, `TAT2_LIGHT_BUDGET`,
+  `TAT2_MERGE_CELLS=plain`) are QA-only; defaults stay 6/160 and no range/merge.
+  Headless merge probe: 639 plain candidates -> 47 cell nodes, 1,370 -> 722
+  surfaces, draws 10,642 -> 9,994 (-6.1 %), collision/occluders unchanged.
+  **Not GPU-verified**: visuals, popping and frame time still need the honest
+  harness / integrator capture.

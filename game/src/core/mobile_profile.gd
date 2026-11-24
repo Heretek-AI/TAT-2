@@ -13,6 +13,12 @@ const TIER_KEYS: Array[String] = ["performance", "balanced", "quality"]
 const TIER_LABELS: Array[String] = ["Performance", "Balanced", "Quality"]
 const DESKTOP_MAX_LIGHTS: int = 160
 const DESKTOP_HERO_SHADOWS: int = 6
+## W1p perf-prototype overrides. Unset in normal play, so every default above
+## still governs. Both values are QA-only levers for the future Performance
+## preset; they never change the shipped desktop/mobile defaults unless the
+## environment explicitly asks for it.
+const ENV_LIGHT_BUDGET: String = "TAT2_LIGHT_BUDGET"
+const ENV_SHADOW_HEROES: String = "TAT2_SHADOW_HEROES"
 
 static var _force_mobile: bool = false
 ## QA perf overrides (`--perf-lights=N`, `--perf-shadows=N`). -1 keeps the
@@ -110,11 +116,44 @@ static func set_tier(tier: int, save_system: Node) -> void:
 		save_system.call("write_save")
 
 
+## Environment override parser shared by the light budget and shadow count.
+## Returns -1 when the variable is absent or not a valid non-negative integer,
+## so callers can tell "no override" apart from an explicit 0.
+static func _env_int_override(name: String, minimum: int) -> int:
+	var raw: String = OS.get_environment(name)
+	if raw.strip_edges() == "":
+		return -1
+	if not raw.strip_edges().is_valid_int():
+		push_warning("[mobile_profile] %s=%s is not an integer; override ignored" % [name, raw])
+		return -1
+	var value: int = int(raw)
+	if value < minimum:
+		push_warning("[mobile_profile] %s=%d is below the minimum %d; override ignored" % [name, value, minimum])
+		return -1
+	return value
+
+
+## W1p: the loader passes its caller-requested budget here (mission_controller
+## asks for 160, menu previews ask for less). TAT2_LIGHT_BUDGET=0 means "off"
+## for the perf harness, not "zero lights", so only positive values override.
+static func light_budget(fallback: int) -> int:
+	var override: int = _env_int_override(ENV_LIGHT_BUDGET, 1)
+	return fallback if override < 0 else override
+
+
+static func shadow_heroes_override() -> int:
+	return _env_int_override(ENV_SHADOW_HEROES, 0)
+
+
 static func max_lights() -> int:
 	if _lights_override >= 0:
 		return _lights_override
 	if not is_mobile():
-		return DESKTOP_MAX_LIGHTS
+		return light_budget(DESKTOP_MAX_LIGHTS)
+	return light_budget(_mobile_max_lights())
+
+
+static func _mobile_max_lights() -> int:
 	match current_tier():
 		Tier.PERFORMANCE:
 			return 12
@@ -127,6 +166,9 @@ static func max_lights() -> int:
 static func hero_shadows() -> int:
 	if _shadows_override >= 0:
 		return _shadows_override
+	var override: int = shadow_heroes_override()
+	if override >= 0:
+		return override
 	if not is_mobile():
 		return DESKTOP_HERO_SHADOWS
 	match current_tier():

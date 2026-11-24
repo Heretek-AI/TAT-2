@@ -911,6 +911,40 @@ func get_quest_spawners(map_id: String, quest_location_tag: String = "", levels:
 	return out
 
 
+## Authored civilian body/head variants (spawners.json civilian_meshes) for
+## runtime NPC actors that are not mission spawners (e.g. the Spider courier /
+## 04 informant). The hardcoded pair is the same extracted values and applies
+## only when the generated file is absent; it is existence-checked at parse
+## time, never invented here.
+const CIVILIAN_MESH_FALLBACK := [
+	{"body": "res://assets/ue/Content/Art/Animation/CivMale/Skin/Common/SK_CivMale_Common_01.glb", "head": "res://assets/ue/Content/Art/Animation/CivMale/Skin/Heads/SK_CivMale_Head_Adam_Fade01.glb"},
+	{"body": "res://assets/ue/Content/Art/Animation/CivFemale/Skin/Common/SK_CivFemale_Common_01C.glb", "head": "res://assets/ue/Content/Art/Animation/CivFemale/Skin/Heads/SK_CivFemale_Head_Abby_Short01.glb"},
+]
+var _civilian_meshes: Array[Dictionary] = []
+
+
+func get_civilian_meshes() -> Array[Dictionary]:
+	if not _civilian_meshes.is_empty():
+		return _civilian_meshes
+	var data: Variant = _load_json("res://data/generated/gameplay/spawners.json")
+	if data is Dictionary:
+		var civs_v: Variant = (data as Dictionary).get("civilian_meshes", {})
+		if civs_v is Dictionary:
+			for ckey: Variant in (civs_v as Dictionary).keys():
+				var c_v: Variant = (civs_v as Dictionary)[ckey]
+				if not (c_v is Dictionary):
+					continue
+				var c: Dictionary = c_v as Dictionary
+				var body: String = str(c.get("body_res_path", ""))
+				var head: String = str(c.get("head_res_path", ""))
+				if body != "" and head != "":
+					_civilian_meshes.append({"body": body, "head": head})
+	if _civilian_meshes.is_empty():
+		for rec: Dictionary in CIVILIAN_MESH_FALLBACK:
+			_civilian_meshes.append(rec.duplicate(true))
+	return _civilian_meshes
+
+
 ## Authored pickup clue for a DT_LootInfo_Quest row or loot tag.
 func get_pickup_clue(loot_row: String) -> Dictionary:
 	var row_v: Variant = pickup_clues.get(loot_row)

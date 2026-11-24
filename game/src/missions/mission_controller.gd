@@ -32,7 +32,7 @@ const WardrobeUIScript := preload("res://src/ui/wardrobe_ui.gd")
 const ContractTableUIScript := preload("res://src/ui/contract_table_ui.gd")
 const ClueItemScript := preload("res://src/interact/clue_item.gd")
 const PersonalQuestScript := preload("res://src/quests/personal_quest.gd")
-const PersonalQuestNpcScript := preload("res://src/quests/npc_clue_actor.gd")
+const PersonalQuestSpawnerScript := preload("res://src/quests/personal_quest_spawner.gd")
 const LoadingScreenScript := preload("res://src/ui/loading_screen.gd")
 const LedgerUIScript := preload("res://src/ui/ledger_ui.gd")
 const MobileTouchUIScript := preload("res://src/ui/mobile_touch_ui.gd")
@@ -2597,236 +2597,49 @@ func _request_set_names(requests: Array[Dictionary]) -> String:
 
 
 # =============================================================================
-# W1S Spider personal-chain actors
+# W1S/W2P Spider personal-chain actors
 # =============================================================================
 #
-# Spawn pins come from game/data/expansion/personal_spider.json through
-# PersonalQuest.spawn_plan(). Every position is a producer-recorded actor/point:
-# the primary pin is used when it grounds, and an authored `fallbacks` entry is
-# only tried when the primary cannot be grounded. No position is invented; a
-# pin with no usable authored candidate is skipped with a warning.
-#
-# The Owl is not loot: it is a personal item that advances the chain and asks
-# this controller to spawn the courier immediately.
+# The spawn pass lives in `personal_quest_spawner.gd` so the mission and the
+# subset real-map probe run the same code. Pins come from
+# game/data/expansion/personal_spider.json through PersonalQuest.spawn_plan();
+# grounding, authored fallbacks, dedupe and the letter/Owl callbacks are owned
+# there. This controller only supplies the mission host/HUD and republishes the
+# records as `personal_quest_actors` for QA.
 
-const PERSONAL_QUEST_GROUND_CLEARANCE: float = 0.02
+var _personal_quest_spawner: Node = null
+
+
+func _personal_spawner() -> Node:
+	if _personal_quest_spawner == null or not is_instance_valid(_personal_quest_spawner):
+		_personal_quest_spawner = PersonalQuestSpawnerScript.new()
+		_personal_quest_spawner.name = "PersonalQuestSpawner"
+		add_child(_personal_quest_spawner)
+	_personal_quest_spawner.call("setup", self, hud)
+	return _personal_quest_spawner
 
 
 func _spawn_personal_quest_actors() -> void:
-	personal_quest_actors.clear()
-	var map_id: String = GameState.active_map_id
-	var plan: Array = PersonalQuestScript.spawn_plan(map_id)
-	var ids: Array[String] = []
-	for rec_v: Variant in plan:
-		if not (rec_v is Dictionary):
-			continue
-		var spawned: Dictionary = _spawn_personal_quest_actor(rec_v as Dictionary)
-		if not spawned.is_empty():
-			ids.append(str(spawned.get("anchor_id", "")))
-	if not plan.is_empty() or not personal_quest_actors.is_empty():
-		print("TAT-2 personal quest: map=", map_id, " stage=", PersonalQuestScript.stage_for(), " plan=", plan.size(), " spawned=", personal_quest_actors.size(), " anchors=", ",".join(ids))
-
-
-## Spawn one pin. Idempotent per anchor id and per occupied point; returns the
-## record stored in `personal_quest_actors` ({} when the pin is not spawnable).
-func _spawn_personal_quest_actor(rec: Dictionary) -> Dictionary:
-	var anchor_id: String = str(rec.get("id", ""))
-	if anchor_id == "":
-		return {}
-	for existing: Dictionary in personal_quest_actors:
-		if str(existing.get("anchor_id", "")) == anchor_id:
-			return existing
-	var placed: Dictionary = _resolve_personal_anchor(rec)
-	if placed.is_empty():
-		push_warning("[mission_controller] personal quest anchor '", anchor_id, "' has no grounded authored position; skipped (no invented fallback)")
-		return {}
-	var pos: Vector3 = placed.get("pos", Vector3.ZERO)
-	if _personal_anchor_occupied(pos):
-		push_warning("[mission_controller] personal quest anchor '", anchor_id, "' resolves to an occupied point ", pos, "; skipped")
-		return {}
-	var node: Node3D = _make_personal_quest_node(rec, pos)
-	if node == null:
-		return {}
-	node.name = "PersonalQuest_" + anchor_id
-	add_child(node)
-	_ground_personal_quest_node(node, pos)
-	var record: Dictionary = {
-		"anchor_id": anchor_id,
-		"kind": str(rec.get("kind", "")),
-		"node": node,
-		"pos": node.global_position,
-		"source": str(placed.get("source", "primary")),
-		"actor": str(placed.get("actor", "")),
-	}
-	personal_quest_actors.append(record)
-	return record
-
-
-## Primary pin first, then the authored fallback actors. A candidate only wins
-## when the world floor ray under it hits; off-tree previews/tests keep the
-## primary pin. Empty means no authored candidate was usable.
-func _resolve_personal_anchor(rec: Dictionary) -> Dictionary:
-	var candidates: Array[Dictionary] = [{
-		"actor": str(rec.get("actor", "")),
-		"pos": _vec3_from(rec.get("pos", [])),
-		"source": "primary",
-	}]
-	for fb_v: Variant in rec.get("fallbacks", []) as Array:
-		if not (fb_v is Dictionary):
-			continue
-		var fb: Dictionary = fb_v as Dictionary
-		candidates.append({
-			"actor": str(fb.get("actor", "")),
-			"pos": _vec3_from(fb.get("pos", [])),
-			"source": "fallback",
-		})
-	for cand: Dictionary in candidates:
-		var p: Vector3 = cand.get("pos", Vector3.ZERO)
-		var hit: Dictionary = _personal_floor_hit(p)
-		if hit.is_empty():
-			continue
-		var hp: Variant = hit.get("position", null)
-		if hp is Vector3:
-			cand["pos"] = Vector3(p.x, (hp as Vector3).y, p.z)
-			return cand
-	if not is_inside_tree():
-		return candidates[0]
-	return {}
-
-
-func _personal_floor_hit(pos: Vector3) -> Dictionary:
-	if not is_inside_tree():
-		return {}
-	var w3d: World3D = get_world_3d()
-	if w3d == null or w3d.direct_space_state == null:
-		return {}
-	var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(
-		pos + Vector3.UP * 2.0, pos + Vector3.DOWN * 6.0, 1)
-	return w3d.direct_space_state.intersect_ray(q)
-
-
-## Two personal actors must never share one pin (plan overlap, or the courier
-## spawned by the pickup callback after the deploy pass).
-func _personal_anchor_occupied(pos: Vector3) -> bool:
-	for e: Dictionary in personal_quest_actors:
-		var ep: Vector3 = e.get("pos", Vector3.ZERO)
-		var flat := Vector2(ep.x - pos.x, ep.z - pos.z)
-		if flat.length() < 0.5 and absf(ep.y - pos.y) < 2.0:
-			return true
-	return false
-
-
-func _vec3_from(v: Variant) -> Vector3:
-	if v is Array and (v as Array).size() >= 3:
-		var a: Array = v as Array
-		return Vector3(float(a[0]), float(a[1]), float(a[2]))
-	return Vector3.ZERO
-
-
-func _make_personal_quest_node(rec: Dictionary, pos: Vector3) -> Node3D:
-	match str(rec.get("kind", "")):
-		"readable":
-			return _make_personal_note(rec, pos)
-		"quest_item":
-			return _make_personal_owl(rec, pos)
-		"npc":
-			return _make_personal_npc(rec, pos)
-	return null
-
-
-## Library note: a normal authored readable (ClueItem) whose read transitions
-## intro -> letter. The note carries no clue_set facts; PersonalQuest owns the
-## grant, and the toast text is the authored `letter` journal line.
-func _make_personal_note(rec: Dictionary, pos: Vector3) -> Node3D:
-	var chain: Dictionary = PersonalQuestScript.chain()
-	var note: Node = ClueItemScript.new()
-	var beat: Dictionary = PersonalQuestScript.beat_for("letter")
-	var lines: PackedStringArray = PackedStringArray()
-	for line_v: Variant in beat.get("journal", []) as Array:
-		var line: String = str(line_v).strip_edges()
-		if line != "":
-			lines.append(line)
-	note.set("clue_title", str(chain.get("title", "The Theban Owl")))
-	note.set("clue_body", "\n".join(lines))
-	note.set("prompt_verb", "Read")
-	note.set("authored_class", str(rec.get("actor_class", "BP_ReadableClueActor_Note_C")))
-	note.connect("clue_collected", Callable(self, "_on_personal_letter_read"))
-	(note as Node3D).position = pos
-	return note as Node3D
-
-
-## Vault Owl: a personal item through LootItem's personal branch (no loot
-## value/objective). The authored mesh comes from the expansion record.
-func _make_personal_owl(rec: Dictionary, pos: Vector3) -> Node3D:
-	var chain: Dictionary = PersonalQuestScript.chain()
-	var owl_data: Dictionary = chain.get("owl", {}) as Dictionary
-	var owl: Node = LootScript.new()
-	var display_name: String = str(owl_data.get("display_name", "Theban Owl"))
-	owl.set("item_name", display_name)
-	owl.set("display_name", display_name)
-	owl.set("value", 0)
-	owl.set("loot_tier", "quest")
-	owl.set("mesh_path", str(owl_data.get("mesh_res", "")))
-	owl.set("personal_quest_id", str(chain.get("id", "personal_spider")))
-	owl.set("authored_actor_class", str(rec.get("actor_class", "")))
-	(owl as Node3D).position = pos
-	return owl as Node3D
-
-
-## Courier (Guildhall Lounge) / 04 informant (Old Manor Courtyard C1): the
-## authored civilian rig, standing still at the pin. Couriers use variant 0 and
-## the informant variant 1 when available (visual variety only, no authorship).
-func _make_personal_npc(rec: Dictionary, pos: Vector3) -> Node3D:
-	_load_spawner_tables()
-	var idx: int = 1 if str(rec.get("id", "")) == "informant" else 0
-	if idx >= spawner_civilians.size():
-		idx = 0
-	var variant: Dictionary = {}
-	if not spawner_civilians.is_empty():
-		var variant_v: Variant = spawner_civilians[idx]
-		if variant_v is Dictionary:
-			variant = variant_v as Dictionary
-	var npc: Node = PersonalQuestNpcScript.new()
-	npc.call("setup_npc", str(rec.get("id", "")), PersonalQuestScript.runtime_thief(),
-		str(variant.get("body", "")), str(variant.get("head", "")), pos)
-	(npc as Node3D).position = pos
-	return npc as Node3D
-
-
-## Ground the spawned actor's real mesh AABB onto the floor hit with the W1S
-## 0.02 m clearance (the general spawner path uses 0.03; quest pins are tighter
-## because they sit on authored interior floors).
-func _ground_personal_quest_node(node: Node3D, marker: Vector3) -> void:
-	var bottom: float = _spawned_mesh_bottom(node)
-	var hit: Dictionary = _personal_floor_hit(marker)
-	if not hit.is_empty():
-		var hp: Variant = hit.get("position", null)
-		if hp is Vector3:
-			node.position = Vector3(marker.x, (hp as Vector3).y + PERSONAL_QUEST_GROUND_CLEARANCE - bottom, marker.z)
-			return
-	node.position = marker + Vector3(0.0, PERSONAL_QUEST_GROUND_CLEARANCE - bottom, 0.0)
-
-
-func _on_personal_letter_read(title: String, body: String) -> void:
-	var advance: Dictionary = PersonalQuestScript.record("letter")
-	if not bool(advance.get("ok", false)):
-		return
-	if hud != null and hud.has_method("show_clue_toast"):
-		hud.show_clue_toast(title, body)
-	print("TAT-2 personal quest: letter read stage=", PersonalQuestScript.stage_for())
+	var spawner: Node = _personal_spawner()
+	spawner.call("spawn_for_map", GameState.active_map_id)
+	_sync_personal_actors(spawner)
 
 
 ## Called by loot_item after acquire_owl(): the Lounge courier appears at once
 ## instead of waiting for the next deploy.
 func on_personal_quest_owl_taken() -> void:
-	if GameState.active_map_id != "guildhall":
-		return
-	var anchor_rec: Dictionary = PersonalQuestScript.anchor("guildhall", "courier")
-	if anchor_rec.is_empty():
-		return
-	var spawned: Dictionary = _spawn_personal_quest_actor(anchor_rec)
-	if not spawned.is_empty():
-		print("TAT-2 personal quest: courier spawned after Owl pickup at ", spawned.get("pos", Vector3.ZERO))
+	var spawner: Node = _personal_spawner()
+	spawner.call("on_owl_taken")
+	_sync_personal_actors(spawner)
+
+
+## Copy the seam's records into the QA-facing list (same Dictionary objects,
+## never a second truth).
+func _sync_personal_actors(spawner: Node) -> void:
+	personal_quest_actors.clear()
+	for rec_v: Variant in spawner.get("actors") as Array:
+		if rec_v is Dictionary:
+			personal_quest_actors.append(rec_v as Dictionary)
 
 
 ## Spawn a list of clue requests. Public so the headless suite can exercise the
@@ -3432,26 +3245,7 @@ func _ground_spawn_node(node: Node3D, marker: Vector3, clearance: float = SPAWN_
 ## rotation so the AABB bottom is the real resting point; 0.0 when the node
 ## carries no mesh (small clearance only).
 func _spawned_mesh_bottom(node: Node3D) -> float:
-	var boxes: Array[AABB] = []
-	_collect_spawn_mesh_boxes(node, Transform3D.IDENTITY, boxes)
-	if boxes.is_empty():
-		return 0.0
-	var box: AABB = boxes[0]
-	for i: int in range(1, boxes.size()):
-		box = box.merge(boxes[i])
-	return box.position.y
-
-
-func _collect_spawn_mesh_boxes(n: Node, parent_tr: Transform3D, boxes: Array[AABB]) -> void:
-	for c: Node in n.get_children():
-		var tr: Transform3D = parent_tr
-		if c is Node3D:
-			tr = parent_tr * (c as Node3D).transform
-		if c is MeshInstance3D:
-			var mi: MeshInstance3D = c as MeshInstance3D
-			if mi.mesh != null:
-				boxes.append(tr * mi.mesh.get_aabb())
-		_collect_spawn_mesh_boxes(c, tr, boxes)
+	return PersonalQuestSpawnerScript.mesh_bottom(node)
 
 
 ## Guard-carried keys use the shipped item names (authored text tables), not
@@ -4047,10 +3841,9 @@ func _load_spawner_tables() -> void:
 		"ammo": ["res://assets/ue/Content/Art/Environment/Props/Containers/Toolbox/SM_Toolbox.glb"],
 		"health": ["res://assets/ue/Content/Art/Gameplay/Health/SM_HealthPackA.glb"],
 	}
-	spawner_civilians = [
-		{"body": "res://assets/ue/Content/Art/Animation/CivMale/Skin/Common/SK_CivMale_Common_01.glb", "head": "res://assets/ue/Content/Art/Animation/CivMale/Skin/Heads/SK_CivMale_Head_Adam_Fade01.glb"},
-		{"body": "res://assets/ue/Content/Art/Animation/CivFemale/Skin/Common/SK_CivFemale_Common_01C.glb", "head": "res://assets/ue/Content/Art/Animation/CivFemale/Skin/Heads/SK_CivFemale_Head_Abby_Short01.glb"},
-	]
+	# One source for civilian body/head meshes: GameData reads the generated
+	# spawners.json (and keeps the parse-time fallback pair).
+	spawner_civilians = GameData.get_civilian_meshes()
 	if not FileAccess.file_exists("res://data/generated/gameplay/spawners.json"):
 		return
 	var f := FileAccess.open("res://data/generated/gameplay/spawners.json", FileAccess.READ)
@@ -4070,13 +3863,6 @@ func _load_spawner_tables() -> void:
 	for k2 in by_kind.keys():
 		if not (by_kind[k2] as Array).is_empty():
 			spawner_meshes[k2] = by_kind[k2]
-	var civs: Array = []
-	for ckey in (data as Dictionary).get("civilian_meshes", {}).keys():
-		var c: Dictionary = (data as Dictionary)["civilian_meshes"][ckey]
-		if str(c.get("body_res_path", "")) != "" and str(c.get("head_res_path", "")) != "":
-			civs.append({"body": str(c["body_res_path"]), "head": str(c["head_res_path"])})
-	if not civs.is_empty():
-		spawner_civilians = civs
 
 
 func _spawn_spawner_content(stats: Dictionary) -> void:

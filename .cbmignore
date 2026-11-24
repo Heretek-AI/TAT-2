@@ -21,3 +21,16 @@
 
 !/tools/
 !/docs/
+
+# Explicit heavy-tree defenses. Belt and braces: these are already covered (or
+# should be) above, but keep them after the whitelist so later ignore rules
+# win. Nothing here may ever be indexed.
+/game/scenes/review/
+/game/data/generated/
+/game/.godot/
+/extracted/
+/build/
+/tools/**/bin/
+/tools/**/obj/
+/tools/ue4ss/cache/
+/tools/__pycache__/

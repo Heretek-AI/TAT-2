@@ -49,6 +49,15 @@ const DOOR_SFX: AudioStream = preload("res://assets/ue/audio/door.wav")
 
 const MAX_VOICES: int = 16
 const MAX_DISTANCE_M: float = 60.0
+## W5D: duplicate-cue guard. Several fan-outs (button pressed + menu confirm,
+## NoiseBus stimulus + explicit cue, cast + impact) fire the same cue twice in
+## the same frame. A 120 ms cue|position window drops the repeat. Footsteps are
+## cadence-gated by the player controller already and are exempt.
+const CUE_DEDUPE_MS: int = 120
+## W5D: sustained cues. These must replace, never stack, and keep a stop handle
+## (alarm reset, smoke cloud end). They are looped on a private duplicate of the
+## shared Ogg so one-shot players of the same clip keep their finished signal.
+const LOOP_CUES: Array[String] = ["alarm_loop", "smoke_cloud", "lightbeam_hum"]
 ## Honest event->clip map produced by tools/convert_wwise.py. When the audit
 ## recovers no confirmed mapping, every tag keeps its synthesized fallback
 ## and has_real_clip() returns false.
@@ -193,6 +202,17 @@ var _event_clips: Dictionary = {}
 var _foot_pools: Dictionary = {}
 var _foot_idx: Dictionary = {}
 var _beds: Dictionary = {}
+## W5D: beds currently fading out, key -> {player, tween}. A re-entry for the
+## same bed (play_bed_scene / start_bed) cancels the fade and frees the old
+## player immediately, so two players never overlap on one bed key.
+var _fading_beds: Dictionary = {}
+## W5D: cue|position -> Time.get_ticks_msec() of the last accepted play.
+var _cue_last_msec: Dictionary = {}
+## W5D: live sustained-cue handles (LOOP_CUES), keyed cue|position ->
+## {player, token}. A TTL duration bumps the token so a replaced handle is
+## never stopped by the previous handle's timer.
+var _loop_players: Dictionary = {}
+var _loop_generation: int = 0
 var _gramophone_player: AudioStreamPlayer = null
 ## U3: scene-safe countdown. The old fire-and-forget loop held
 ## _countdown_running = true across scene changes forever (blocking every
@@ -290,6 +310,9 @@ func cleanup_on_exit() -> void:
 			(bed as Node).set("stream", null)
 			(bed as Node).free()
 	_beds.clear()
+	_fading_beds.clear()
+	_loop_players.clear()
+	_cue_last_msec.clear()
 	_bed_loop_cache.clear()
 	_event_clips.clear()
 	_named_clips.clear()
@@ -667,6 +690,9 @@ func play_ui(cue: String = "click") -> bool:
 		key = "ui_click"
 	else:
 		return false
+	# W5D: duplicate UI fan-out (button pressed + menu confirm in one frame).
+	if _cue_duplicate(key, null):
+		return false
 	_play_stream_2d(_sfx[key] as AudioStream, BUS_UI, UI_DB)
 	return true
 
@@ -763,12 +789,57 @@ func _track_bed_tween(tw: Tween) -> Tween:
 	return tw
 
 
+## W5D: cancel a bed already fading out on [param key]. Called by start_bed
+## before creating the replacement player: without this the old player kept
+## sounding (and stayed a child) for the whole 0.2-0.35 s fade.
+func _cancel_fading_bed(key: String) -> void:
+	var entry_v: Variant = _fading_beds.get(key)
+	if not (entry_v is Dictionary):
+		return
+	_fading_beds.erase(key)
+	var entry: Dictionary = entry_v
+	var tw: Tween = entry.get("tween") as Tween
+	if tw != null and tw.is_valid():
+		tw.kill()
+	var player: Node = entry.get("player") as Node
+	if player != null and is_instance_valid(player):
+		player.call("stop")
+		player.set("stream", null)
+		# free(), not queue_free(): the deferred queue would leave the old
+		# player in the tree for a frame, which is the overlap being fixed.
+		player.free()
+
+
+## W5D: shared fade-out path. The fade is registered per bed key so a same-key
+## re-entry can cancel it (see _cancel_fading_bed) instead of overlapping.
+func _fade_out_bed(key: String, player: AudioStreamPlayer, fade_s: float) -> void:
+	if not is_instance_valid(player):
+		return
+	if fade_s <= 0.0:
+		player.stop()
+		player.stream = null
+		player.queue_free()
+		return
+	var tw: Tween = _track_bed_tween(create_tween())
+	_fading_beds[key] = {"player": player, "tween": tw}
+	tw.tween_property(player, "volume_db", -60.0, fade_s)
+	tw.tween_callback(func() -> void:
+		_fading_beds.erase(key)
+		if is_instance_valid(player):
+			player.stop()
+			player.stream = null
+			player.queue_free()
+	)
+
+
 func start_bed(bed: String, fade_s: float = 0.6) -> bool:
 	if _shutdown:
 		return false
 	var key := bed.to_lower().strip_edges()
 	if not BED_PINS.has(key):
 		return false
+	# W5D: never let a fading player for this key overlap its replacement.
+	_cancel_fading_bed(key)
 	if _beds.has(key):
 		return true
 	var pin: Array = BED_PINS[key] as Array
@@ -797,14 +868,7 @@ func stop_bed(bed: String, fade_s: float = 0.25) -> void:
 	_beds.erase(key)
 	if not is_instance_valid(player):
 		return
-	if fade_s > 0.0:
-		var tw: Tween = _track_bed_tween(create_tween())
-		tw.tween_property(player, "volume_db", -60.0, fade_s)
-		tw.tween_callback(player.queue_free)
-	else:
-		player.stop()
-		player.stream = null
-		player.queue_free()
+	_fade_out_bed(key, player, fade_s)
 
 
 func stop_all_beds(fade_s: float = 0.0) -> void:
@@ -812,14 +876,7 @@ func stop_all_beds(fade_s: float = 0.0) -> void:
 		var player: AudioStreamPlayer = _beds[key] as AudioStreamPlayer
 		if not is_instance_valid(player):
 			continue
-		if fade_s > 0.0:
-			var tw: Tween = _track_bed_tween(create_tween())
-			tw.tween_property(player, "volume_db", -60.0, fade_s)
-			tw.tween_callback(player.queue_free)
-		else:
-			player.stop()
-			player.stream = null
-			player.queue_free()
+		_fade_out_bed(str(key), player, fade_s)
 	_beds.clear()
 	stop_gramophone()
 
@@ -1081,13 +1138,20 @@ func _on_noise_emitted(origin: Vector3, loudness_meters: float, _source: Node, t
 
 ## AU5 contextual cue resolved from CUE_PINS (3D on the SFX bus when a
 ## position is supplied, otherwise 2D). Returns false when the pin did not
-## resolve through the events join.
-func play_cue(cue: String, pos: Variant = null) -> bool:
+## resolve through the events join, or when the same cue|position already
+## fired inside CUE_DEDUPE_MS. Sustained cues (LOOP_CUES) replace the previous
+## handle instead of stacking and can be stopped by name/position.
+func play_cue(cue: String, pos: Variant = null, duration_s: float = 0.0) -> bool:
 	var key: String = cue.to_lower().strip_edges()
 	if not _named_clips.has(key):
 		return false
 	var stream: AudioStream = _named_clips[key] as AudioStream
 	if stream == null:
+		return false
+	if LOOP_CUES.has(key):
+		_replace_loop_cue(key, stream, pos, duration_s)
+		return true
+	if _cue_duplicate(key, pos):
 		return false
 	if pos is Vector3:
 		_play_stream_3d(stream, pos, 0.0, BUS_SFX)
@@ -1096,8 +1160,132 @@ func play_cue(cue: String, pos: Variant = null) -> bool:
 	return true
 
 
+## W5D: stable cue key component. 2D cues share one bucket; 3D cues are
+## distinguished at centimetre granularity (two guards at the same spot should
+## not double a cue, two different emitters should).
+func _position_key(pos: Variant) -> String:
+	if pos is Vector3:
+		var v: Vector3 = pos
+		return "%.2f,%.2f,%.2f" % [v.x, v.y, v.z]
+	return "2d"
+
+
+## W5D: true when [param cue] at [param pos] already fired inside the window.
+## Records the accepted time otherwise. The map is pruned opportunistically so
+## position-keyed gameplay cues cannot grow it without bound.
+func _cue_duplicate(cue: String, pos: Variant) -> bool:
+	var now: int = Time.get_ticks_msec()
+	if _cue_last_msec.size() > 256:
+		for stale: Variant in _cue_last_msec.keys():
+			if now - int(_cue_last_msec[stale]) > CUE_DEDUPE_MS * 8:
+				_cue_last_msec.erase(stale)
+	var key: String = cue + "|" + _position_key(pos)
+	if _cue_last_msec.has(key) and now - int(_cue_last_msec[key]) < CUE_DEDUPE_MS:
+		return true
+	_cue_last_msec[key] = now
+	return false
+
+
+## W5D: a looped duplicate of a shared Ogg (cached like the beds) so the
+## one-shot players of the same clip still emit finished.
+func _loop_variant(stream: AudioStream) -> AudioStream:
+	if not (stream is AudioStreamOggVorbis):
+		return stream
+	var path: String = stream.resource_path
+	var cache_key: String = path if not path.is_empty() else "loop:%d" % stream.get_instance_id()
+	var cached: AudioStream = _bed_loop_cache.get(cache_key) as AudioStream
+	if cached != null:
+		return cached
+	var looped: AudioStream = stream.duplicate() as AudioStream
+	if looped is AudioStreamOggVorbis:
+		(looped as AudioStreamOggVorbis).loop = true
+	_bed_loop_cache[cache_key] = looped
+	return looped
+
+
+## W5D: start (or restart) the single sustained-cue player for cue|position.
+## [param duration_s] > 0 auto-stops this handle after that many seconds (smoke
+## cloud lifetime); 0 keeps it until stop_cue / the owner's teardown.
+func _replace_loop_cue(cue: String, stream: AudioStream, pos: Variant, duration_s: float = 0.0) -> void:
+	if _shutdown:
+		return
+	var loop_stream: AudioStream = _loop_variant(stream)
+	if loop_stream == null:
+		return
+	var key: String = cue + "|" + _position_key(pos)
+	_stop_loop_key(key)
+	var player: Node
+	if pos is Vector3:
+		var p3: AudioStreamPlayer3D = AudioStreamPlayer3D.new()
+		p3.stream = loop_stream
+		p3.position = pos
+		p3.bus = BUS_SFX
+		p3.max_distance = MAX_DISTANCE_M
+		p3.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE
+		player = p3
+	else:
+		var p2: AudioStreamPlayer = AudioStreamPlayer.new()
+		p2.stream = loop_stream
+		p2.bus = BUS_SFX
+		player = p2
+	add_child(player)
+	player.call("play")
+	_loop_generation += 1
+	var token: int = _loop_generation
+	_loop_players[key] = {"player": player, "token": token}
+	if duration_s > 0.0 and is_inside_tree():
+		var timer: SceneTreeTimer = get_tree().create_timer(duration_s)
+		timer.timeout.connect(func() -> void:
+			var held: Variant = _loop_players.get(key)
+			if held is Dictionary and int((held as Dictionary).get("token", -1)) == token:
+				_stop_loop_key(key)
+		)
+
+
+func _stop_loop_key(key: String) -> void:
+	if not _loop_players.has(key):
+		return
+	var held: Variant = _loop_players[key]
+	_loop_players.erase(key)
+	var player: Node = null
+	if held is Dictionary:
+		player = (held as Dictionary).get("player") as Node
+	elif held is Node:
+		player = held as Node
+	if player != null and is_instance_valid(player):
+		player.call("stop")
+		player.set("stream", null)
+		player.queue_free()
+
+
+## W5D: stop sustained cue handles. With [param pos] only that position stops
+## (one alarm eye's loop); without it every live handle for the cue stops.
+func stop_cue(cue: String, pos: Variant = null) -> void:
+	var key: String = cue.to_lower().strip_edges()
+	if _loop_players.is_empty():
+		return
+	if pos is Vector3:
+		_stop_loop_key(key + "|" + _position_key(pos))
+		return
+	for held: Variant in _loop_players.keys():
+		if str(held).begins_with(key + "|"):
+			_stop_loop_key(str(held))
+
+
+## W5D: sorted handle keys for QA/tests (cue|position).
+func active_loop_cues() -> Array[String]:
+	var out: Array[String] = []
+	for held: Variant in _loop_players.keys():
+		out.append(str(held))
+	out.sort()
+	return out
+
+
 func _play_at(key: String, pos: Vector3, volume_db: float) -> void:
 	if not _sfx.has(key):
+		return
+	# W5D: one-shot tag fan-out guard; footsteps keep their own cadence.
+	if key != "footstep" and _cue_duplicate(key, pos):
 		return
 	var stream: AudioStream = _sfx[key] as AudioStream
 	if stream == null:

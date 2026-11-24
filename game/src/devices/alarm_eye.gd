@@ -54,6 +54,10 @@ var _alarmed: bool = false
 var _flash: MeshInstance3D = null
 var _flash_mat: StandardMaterial3D = null
 var _built: bool = false
+## W5D: this eye's sustained alarm_loop handle (cue|position), so a reset or
+## teardown stops only its own loop and not another camera's.
+var _alarm_loop_pos: Vector3 = Vector3.ZERO
+var _alarm_loop_started: bool = false
 
 
 func configure(rec: Dictionary, family_defaults: Dictionary, difficulty_value: int = -1) -> void:
@@ -164,6 +168,8 @@ func tick(delta: float) -> void:
 	else:
 		_seen_seconds = maxf(0.0, _seen_seconds - delta)
 		if _seen_seconds <= 0.0:
+			if _alarmed:
+				_stop_alarm_loop()
 			_alarmed = false
 
 
@@ -232,7 +238,23 @@ func _trigger_alarm() -> void:
 			target.call("activate")
 	if AudioManager != null and AudioManager.has_method("play_cue"):
 		AudioManager.call("play_cue", "alarm_loop", global_position)
+		_alarm_loop_pos = global_position
+		_alarm_loop_started = true
 	_flash_alarm()
+
+
+## W5D: stop this eye's sustained alarm loop (reset, sight lost, death or
+## teardown). Position-keyed so another alarmed camera keeps its own loop.
+func _stop_alarm_loop() -> void:
+	if not _alarm_loop_started:
+		return
+	_alarm_loop_started = false
+	if AudioManager != null and AudioManager.has_method("stop_cue"):
+		AudioManager.call("stop_cue", "alarm_loop", _alarm_loop_pos)
+
+
+func _exit_tree() -> void:
+	_stop_alarm_loop()
 
 
 func _flash_alarm() -> void:
@@ -259,8 +281,11 @@ func _flash_alarm() -> void:
 
 
 func reset_alarm() -> void:
+	var was_alarmed: bool = _alarmed
 	_seen_seconds = 0.0
 	_alarmed = false
+	if was_alarmed:
+		_stop_alarm_loop()
 	if _flash != null and is_instance_valid(_flash):
 		_flash.queue_free()
 
@@ -272,6 +297,7 @@ func take_damage(amount: float, _source: String = "") -> void:
 	if health <= 0.0:
 		alive = false
 		_seen_seconds = 0.0
+		_stop_alarm_loop()
 		if _flash != null and is_instance_valid(_flash):
 			_flash.visible = false
 

@@ -22,6 +22,10 @@ const ThemeScript := preload("res://src/ui/art_nouveau_theme.gd")
 const MobileProfile := preload("res://src/core/mobile_profile.gd")
 
 const VERSION_STRING: String = "v1.5.148559"
+## W5D: one heading at the centre tick, matching the reference HUD. The old
+## 580 px scrolling cardinal ribbon is gone (compass_lbl still owns the public
+## contract and the E2E wrap-around mapping).
+const COMPASS_DIRECTIONS: Array[String] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
 const INTERACTABLES_JSON_PATH: String = "res://data/generated/gameplay/interactables.json"
 const HP_BAR_MAX_W: float = 204.0
 const STAM_BAR_MAX_W: float = 176.0
@@ -53,9 +57,11 @@ uniform float sector_angle = 0.0;
 uniform float sector_strength : hint_range(0.0, 1.0) = 0.0;
 void fragment() {
 	vec2 p = UV * 2.0 - 1.0;
-	// UI3: the Light Gem is a bottom-centre cut diamond, not a sphere.
-	float d = abs(p.x) + abs(p.y);
-	float mask = 1.0 - smoothstep(0.82, 0.94, d);
+	// UI3/W5D: the Light Gem is a glazed sphere (reference art), not a cut
+	// diamond. length(p) gives the circular mask; the normals below already
+	// assume the unit sphere.
+	float d = length(p);
+	float mask = 1.0 - smoothstep(0.90, 1.0, d);
 	float z = sqrt(max(0.0, 1.0 - dot(p, p)));
 	vec3 n = normalize(vec3(p.x, p.y, z));
 	vec3 light_dir = normalize(vec3(-0.38, -0.45, 0.80));
@@ -683,6 +689,21 @@ func _exit_tree() -> void:
 # HUD Layout Builders
 # =============================================================================
 
+## W5D: nearest of the eight authored headings to a compass angle in degrees
+## (0 = north, clockwise). The centre tick is the only heading shown now.
+static func compass_heading_name(deg: float) -> String:
+	return COMPASS_DIRECTIONS[int(round(fposmod(deg, 360.0) / 45.0)) % COMPASS_DIRECTIONS.size()]
+
+
+## W5D: write the single centre heading (kept separate so a structural test
+## can exercise the mapping without a live player).
+func update_compass_heading(deg: float) -> String:
+	var name: String = compass_heading_name(deg)
+	if compass_lbl != null:
+		compass_lbl.text = name
+	return name
+
+
 func _build_compass_strip(root: Control) -> void:
 	var compass_box: Control = Control.new()
 	compass_box.name = "CompassStrip"
@@ -695,11 +716,15 @@ func _build_compass_strip(root: Control) -> void:
 	compass_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(compass_box)
 
-	var c_lines: TextureRect = _tex_rect("res://assets/ue/Raw/Art/UI/HUD/T_compass_lines.png", Vector2(580, 18))
+	# W5D: subtle centre line. The authored T_compass_lines strip is kept (the
+	# E2E contract names it) but at native 100x30 centred on the tick, not
+	# stretched across 580 px with every cardinal in between.
+	var c_lines: TextureRect = _tex_rect("res://assets/ue/Raw/Art/UI/HUD/T_compass_lines.png", Vector2(100, 30))
 	if c_lines != null:
-		c_lines.stretch_mode = TextureRect.STRETCH_SCALE
-		c_lines.position = Vector2(0, 6)
-		c_lines.modulate = Color(0.55, 0.72, 1.0, 0.50)
+		c_lines.name = "CompassCenterLine"
+		c_lines.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		c_lines.position = Vector2(240, 0)
+		c_lines.modulate = Color(0.55, 0.72, 1.0, 0.42)
 		compass_box.add_child(c_lines)
 
 	# Subtle center '+' tick matching UE5 compass strip.
@@ -710,36 +735,42 @@ func _build_compass_strip(root: Control) -> void:
 	tick_v.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	compass_box.add_child(tick_v)
 
-	# Scrolling compass ribbon.
+	# W5D: the full scrolling cardinal ribbon is retired. ribbon_clip/ribbon_lbl
+	# stay as preserved public properties (callers and E2E read them), but are
+	# hidden and empty so only the centre heading is shown.
 	ribbon_clip = Control.new()
+	ribbon_clip.name = "CompassRibbonRetired"
 	ribbon_clip.position = Vector2(40, 2)
 	ribbon_clip.custom_minimum_size = Vector2(500, 24)
 	ribbon_clip.size = Vector2(500, 24)
 	ribbon_clip.clip_contents = true
 	ribbon_clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ribbon_clip.visible = false
 	compass_box.add_child(ribbon_clip)
 
 	ribbon_lbl = Label.new()
-	ribbon_lbl.text = "W      ·      NW      ·      N      ·      NE      ·      E      ·      SE      ·      S      ·      SW      ·      W      ·      NW      ·      N      ·      NE      ·      E"
+	ribbon_lbl.name = "CompassRibbonLabelRetired"
+	ribbon_lbl.text = ""
 	ribbon_lbl.position = Vector2(0, 0)
 	ribbon_lbl.custom_minimum_size = Vector2(1600, 24)
 	ribbon_lbl.size = Vector2(1600, 24)
 	ribbon_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	ribbon_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	ribbon_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ribbon_lbl.visible = false
 	ribbon_lbl.add_theme_font_size_override("font_size", 13)
 	ribbon_lbl.add_theme_color_override("font_color", Color(0.76, 0.84, 0.96, 0.62))
 	if _sans != null:
 		ribbon_lbl.add_theme_font_override("font", _sans)
 	ribbon_clip.add_child(ribbon_lbl)
 
-	# Preserved compass_lbl (subtle cardinal readout centered on the strip).
+	# The single heading nearest the centre tick (W5D reference HUD).
 	compass_lbl = Label.new()
 	compass_lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
 	compass_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	compass_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	compass_lbl.add_theme_font_size_override("font_size", 12)
-	compass_lbl.add_theme_color_override("font_color", Color(0.82, 0.90, 1.0, 0.85))
+	compass_lbl.add_theme_font_size_override("font_size", 15)
+	compass_lbl.add_theme_color_override("font_color", Color(0.86, 0.93, 1.0, 0.92))
 	compass_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
 	compass_lbl.add_theme_constant_override("shadow_offset_x", 1)
 	compass_lbl.add_theme_constant_override("shadow_offset_y", 1)
@@ -2170,13 +2201,7 @@ func _process(delta: float) -> void:
 
 	if p != null:
 		var deg: float = fposmod(-p.rotation_degrees.y, 360.0)
-		var dirs: Array[String] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
-		if compass_lbl != null:
-			compass_lbl.text = dirs[int(round(deg / 45.0)) % 8]
-		if ribbon_lbl != null and ribbon_clip != null:
-			var frac: float = deg / 360.0
-			var max_scroll: float = maxf(0.0, ribbon_lbl.size.x - ribbon_clip.size.x)
-			ribbon_lbl.position.x = -frac * max_scroll
+		update_compass_heading(deg)
 
 		_update_health_and_stamina(p, is_hub)
 		_update_tool_hotbar_and_reticle(p, is_hub)

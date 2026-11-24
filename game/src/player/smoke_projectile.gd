@@ -155,8 +155,10 @@ func _detonate() -> void:
 	if nb != null and nb.has_method("emit_noise"):
 		var src: Node = thrower if (thrower != null and is_instance_valid(thrower)) else self
 		nb.call("emit_noise", global_position, 7.0, src, "smoke")
-	# S18: sustained pressurized hiss layer over the detonation pop.
+	# S18: sustained pressurized hiss layer over the detonation pop. W5D: the
+	# pin is an Alive_Loop; give it the cloud's TTL so the handle ends with the
+	# smoke instead of hissing forever.
 	var am: Node = get_node_or_null("/root/AudioManager")
 	if am != null and am.has_method("play_cue"):
-		am.call("play_cue", "smoke_cloud", global_position)
+		am.call("play_cue", "smoke_cloud", global_position, SMOKE_TTL_S)
 	queue_free()

@@ -125,7 +125,8 @@ var _italic: Font
 var _serif: Font
 var _typewriter: Font
 var _fps_refresh: float = 0.0
-## KF30 footer seed: generated once per HUD session (no authored seed exists).
+## KF30 footer seed: the deterministic run seed published by GameState, so the
+## pause footer and the mission share one value (no wall-clock randomness).
 var _run_seed: int = 0
 
 var _pause_root: Control
@@ -157,6 +158,12 @@ var _slot_borders: Array[TextureRect] = []
 var _slot_bgs: Array[TextureRect] = []
 var _slot_key_lbls: Array[Label] = []
 var _slot_last_ids: Array[String] = ["", "", "", ""]
+
+# Bottom-left stolen-key row (above the tool hotbar)
+var _keys_anchor: Control
+var _keys_lbl: Label
+var _keys_sig: String = ""
+var _keys_shown: bool = false
 
 # Bottom-right Action Hints
 var _action_hints_box: VBoxContainer
@@ -539,9 +546,9 @@ func _ready() -> void:
 	_serif = ThemeScript.font_serif()
 	_typewriter = ThemeScript.font_typewriter()
 	_load_lockpick_db()
-	_run_seed = int(Time.get_unix_time_from_system()) & 0x3FFFFFFF
-	if _run_seed == 0:
-		_run_seed = 1
+	# Deterministic pause-footer seed: the mission's published map seed. The
+	# old wall-clock seed changed every HUD session for the same run.
+	_run_seed = int(GameState.active_map_seed)
 
 	_root = Control.new()
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -638,6 +645,7 @@ func _ready() -> void:
 	var is_hub: bool = GameState.active_contract_order <= 1
 	if not is_hub and not MobileProfile.is_mobile():
 		_build_tool_hotbar(_root)
+	_build_key_row(_root)
 
 	_build_lockpick_minigame(_root)
 	_build_map_overlay(_root)
@@ -817,7 +825,7 @@ func _build_thief_plate(root: Control) -> void:
 	lvl_box.add_child(_level_badge_lbl)
 
 	_thief_name_lbl = Label.new()
-	_thief_name_lbl.text = str(GameState.thief_id).capitalize()
+	_thief_name_lbl.text = _player_display_name()
 	_thief_name_lbl.position = Vector2(-180, 4)
 	_thief_name_lbl.custom_minimum_size = Vector2(170, 24)
 	_thief_name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -911,10 +919,10 @@ func _build_top_left_health_and_objectives(root: Control) -> void:
 	stam_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_hp_container.add_child(stam_fill)
 
-	# Loot counter (£ 0) directly below Health Bar.
+	# Loot counter ((£) 0) directly below Health Bar.
 	_loot_lbl = Label.new()
 	_loot_lbl.name = "LootCounterLabel"
-	_loot_lbl.text = "£ 0"
+	_loot_lbl.text = "(£) 0"
 	_loot_lbl.add_theme_font_size_override("font_size", 16)
 	_loot_lbl.add_theme_color_override("font_color", Color(0.78, 0.86, 0.98, 0.96))
 	_loot_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
@@ -1222,6 +1230,49 @@ func _build_tool_hotbar(root: Control) -> void:
 	if _sans != null:
 		ping_lbl.add_theme_font_override("font", _sans)
 	hint_row.add_child(ping_lbl)
+
+
+## Bottom-left stolen-key row, sitting just above the tool hotbar. Hidden when
+## no keys are carried; names come from the shipped key-cabinet ids.
+func _build_key_row(root: Control) -> void:
+	_keys_anchor = Control.new()
+	_keys_anchor.name = "BottomLeftKeyRow"
+	_keys_anchor.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	_keys_anchor.offset_left = 20.0
+	_keys_anchor.offset_top = -136.0
+	_keys_anchor.offset_right = 330.0
+	_keys_anchor.offset_bottom = -110.0
+	_keys_anchor.custom_minimum_size = Vector2(310, 26)
+	_keys_anchor.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(_keys_anchor)
+
+	_keys_lbl = Label.new()
+	_keys_lbl.name = "StolenKeysLabel"
+	_keys_lbl.custom_minimum_size = Vector2(310, 26)
+	_keys_lbl.add_theme_font_size_override("font_size", 13)
+	_keys_lbl.add_theme_color_override("font_color", Color(0.95, 0.84, 0.55, 0.96))
+	_keys_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.88))
+	_keys_lbl.add_theme_constant_override("shadow_offset_x", 1)
+	_keys_lbl.add_theme_constant_override("shadow_offset_y", 1)
+	if _sans != null:
+		_keys_lbl.add_theme_font_override("font", _sans)
+	_keys_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_keys_lbl.visible = false
+	_keys_anchor.add_child(_keys_lbl)
+
+
+func _update_key_row(is_hub: bool) -> void:
+	if _keys_lbl == null:
+		return
+	var names: Array[String] = GameState.stolen_key_display_names()
+	var show: bool = (not is_hub) and not names.is_empty()
+	var sig: String = "|".join(names)
+	if sig == _keys_sig and show == _keys_shown:
+		return
+	_keys_sig = sig
+	_keys_shown = show
+	_keys_lbl.text = "  ·  ".join(names)
+	_keys_lbl.visible = show
 
 
 func _build_action_hints(root: Control) -> void:
@@ -1600,12 +1651,12 @@ func _build_pause_menu(root: Control) -> void:
 	vb.add_theme_constant_override("separation", 10)
 	margin.add_child(vb)
 	var resume_btn: Button = Button.new()
-	resume_btn.text = "RESUME"
+	resume_btn.text = _loc_upper("Resume")
 	ThemeScript.style_teal_button(resume_btn, true)
 	resume_btn.pressed.connect(func() -> void: _set_paused(false))
 	vb.add_child(resume_btn)
 	var settings_btn: Button = Button.new()
-	settings_btn.text = "SETTINGS"
+	settings_btn.text = _loc_upper("Settings")
 	ThemeScript.style_teal_button(settings_btn, false)
 	settings_btn.pressed.connect(func() -> void:
 		var sui: CanvasLayer = SettingsUIScript.new()
@@ -1615,7 +1666,7 @@ func _build_pause_menu(root: Control) -> void:
 	)
 	vb.add_child(settings_btn)
 	var menu_btn: Button = Button.new()
-	menu_btn.text = "RETURN TO THIEF'S DEN"
+	menu_btn.text = _loc_upper("Return to Thief's Den")
 	ThemeScript.style_teal_button(menu_btn, false)
 	menu_btn.pressed.connect(func() -> void:
 		_set_paused(false)
@@ -1623,7 +1674,7 @@ func _build_pause_menu(root: Control) -> void:
 	)
 	vb.add_child(menu_btn)
 	var quit_btn: Button = Button.new()
-	quit_btn.text = "QUIT TO DESKTOP"
+	quit_btn.text = _loc_upper("Quit To Desktop")
 	ThemeScript.style_teal_button(quit_btn, false)
 	quit_btn.pressed.connect(func() -> void: get_tree().quit())
 	vb.add_child(quit_btn)
@@ -1635,7 +1686,7 @@ func _build_pause_menu(root: Control) -> void:
 	var esc_badge: PanelContainer = ThemeScript.keycap("[ESC]", 12)
 	esc_row.add_child(esc_badge)
 	var esc_lbl: Label = Label.new()
-	esc_lbl.text = "RESUME"
+	esc_lbl.text = _loc_upper("Resume")
 	esc_lbl.add_theme_font_size_override("font_size", 12)
 	esc_lbl.add_theme_color_override("font_color", Color(0.65, 0.75, 0.78))
 	esc_row.add_child(esc_lbl)
@@ -1650,7 +1701,7 @@ func _build_pause_menu(root: Control) -> void:
 
 
 ## KF30-exact pause footer: build number (no "v" prefix), difficulty label
-## and the per-session run seed.
+## and the deterministic run seed published by GameState.
 func _pause_footer_text() -> String:
 	var build: String = VERSION_STRING
 	if build.begins_with("v"):
@@ -1661,7 +1712,7 @@ func _pause_footer_text() -> String:
 		diff_lbl = "Thief"
 	elif d >= 3:
 		diff_lbl = "Master Thief"
-	return "%s   %s   %d" % [build, diff_lbl, _run_seed]
+	return "%s   %s   %d" % [build, diff_lbl, int(GameState.active_map_seed)]
 
 
 # =============================================================================
@@ -1692,11 +1743,11 @@ func set_contract_info(info: Dictionary) -> void:
 
 func update_loot(collected: int, needed: int, value: int) -> void:
 	if _loot_lbl != null:
-		_loot_lbl.text = "£ %d" % value
+		_loot_lbl.text = "(£) %d" % value
 	if obj_lbl == null:
 		return
 	var title: String = str(contract_data.get("title", "Contract"))
-	obj_lbl.text = "Mission: %s [%d/%d]\n  £ %d" % [title, collected, needed, value]
+	obj_lbl.text = "Mission: %s [%d/%d]\n  (£) %d" % [title, collected, needed, value]
 
 
 func set_steal_prompt(text: String) -> void:
@@ -2082,6 +2133,7 @@ func _process(delta: float) -> void:
 	var p: Node3D = _get_player()
 
 	_update_objectives_and_loot(is_hub)
+	_update_key_row(is_hub)
 	_update_stealth_ball_and_soundwaves(p, delta, is_hub)
 	_update_portrait_plate()
 
@@ -2126,11 +2178,11 @@ func _update_objectives_and_loot(is_hub: bool) -> void:
 		var goal: int = int(goal_v) if (goal_v is int or goal_v is float) else 0
 		if GameState.free_play:
 			# Reference Contract Inactive counter: just the take, no "/ £ goal".
-			_loot_lbl.text = "£ %d" % GameState.loot_value
+			_loot_lbl.text = "(£) %d" % GameState.loot_value
 		elif goal > 0:
-			_loot_lbl.text = "£ %d / £ %d" % [GameState.loot_value, goal]
+			_loot_lbl.text = "(£) %d / £ %d" % [GameState.loot_value, goal]
 		else:
-			_loot_lbl.text = "£ %d" % GameState.loot_value
+			_loot_lbl.text = "(£) %d" % GameState.loot_value
 
 	if obj_lbl == null:
 		return
@@ -2182,7 +2234,7 @@ func _update_objectives_and_loot(is_hub: bool) -> void:
 	var title: String = str(contract_data.get("title", "Contract #%d" % GameState.active_contract_order))
 	var item: String = str(contract_data.get("quest_item", "Objective"))
 	var _loot_goal: int = maxi(GameState.loot_goal, 0)
-	var _loot_status: String = "❧ %s  (£ %d / £ %d)" % [item, GameState.loot_value, _loot_goal] if _loot_goal > 0 else "❧ %s" % item
+	var _loot_status: String = "❧ %s  (£) %d / £ %d" % [item, GameState.loot_value, _loot_goal] if _loot_goal > 0 else "❧ %s" % item
 	var status: String = "Reach Escape Gate" if GameState.are_all_objectives_complete() else _loot_status
 	obj_lbl.text = "Mission: %s%s\n   %s" % [title, timing, status]
 
@@ -2228,11 +2280,33 @@ func _update_stealth_ball_and_soundwaves(p: Node3D, delta: float, is_hub: bool) 
 
 func _update_portrait_plate() -> void:
 	if _thief_name_lbl != null:
-		_thief_name_lbl.text = str(GameState.thief_id).capitalize()
+		_thief_name_lbl.text = _player_display_name()
 	if _level_badge_lbl != null:
 		var saved_lvl: Variant = SaveSystem.data.get("level", 1)
 		if saved_lvl is float or saved_lvl is int:
 			_level_badge_lbl.text = "%d" % int(saved_lvl)
+
+
+## Persisted player handle (SaveSystem -> GameState.player_name). Falls back to
+## the shipped default rather than an empty portrait label.
+func _player_display_name() -> String:
+	var n: String = str(GameState.player_name).strip_edges()
+	if n == "":
+		n = str(SaveSystem.data.get("player_name", "Johnny Cipher")).strip_edges()
+	if n == "":
+		n = "Johnny Cipher"
+	return n
+
+
+func _loc(source: String) -> String:
+	var loc: Node = get_node_or_null("/root/Loc")
+	if loc != null and loc.has_method("t"):
+		return str(loc.call("t", source))
+	return source
+
+
+func _loc_upper(source: String) -> String:
+	return _loc(source).to_upper()
 
 
 func _update_health_and_stamina(p: Node3D, is_hub: bool) -> void:

@@ -4475,6 +4475,290 @@ func _initialize() -> void:
 	else:
 		print("PASS: 54 settings schema v2 fov migration (75 -> 54.54 once, 65 kept, post-migration 75 kept, UI open/close leaves flag false, slider 75 persists + reloads)")
 
+	# 60. W5 player-facing UI: mission-prep countdown + card wrap, HUD identity/
+	# currency/key row, Black Market unknown prices, deterministic pause seed,
+	# escape-portal visual, startscreen rain and working localization.
+	var w60: Array[String] = []
+	var w60_save_path: String = "user://tat2_save.json"
+	var w60_had_save: bool = FileAccess.file_exists(w60_save_path)
+	var w60_save_backup: String = FileAccess.get_file_as_string(w60_save_path) if w60_had_save else ""
+	var w60_player: String = str(gs.player_name)
+	var w60_keys: Array = (gs.get("stolen_keys") as Array).duplicate()
+	var w60_loot_value: int = int(gs.loot_value)
+	var w60_loot_goal: int = int(gs.loot_goal)
+	var w60_free: bool = bool(gs.free_play)
+	var w60_free_pending: bool = bool(gs.free_play_pending)
+	var w60_pending_mission: String = str(gs.pending_mission_id)
+	var w60_state: String = str(gs.state)
+	var w60_map_seed: int = int(gs.active_map_seed)
+	var w60_order: int = int(gs.active_contract_order)
+	var w60_difficulty: int = int(gs.difficulty)
+	var w60_locale: String = str(ss.get_settings().get("locale", "en"))
+	var w60_quest_item: bool = bool(gs.quest_item_acquired)
+	var w60_objectives: Array = (gs.get("mission_objectives") as Array).duplicate(true)
+
+	# 60a. Mission prep: card body wrap insets and the 6 s READY/UNREADY flow.
+	var w60_mp: Control = (load("res://src/ui/mission_prep_ui.gd") as GDScript).new() as Control
+	w60_mp.size = Vector2(1280, 720)
+	root.add_child(w60_mp)
+	await process_frame
+	await process_frame
+	w60_mp.call("open_prep", "guildhall", 1, "Solo", 2, true)
+	await process_frame
+	await process_frame
+	for w60_key: String in ["_location_body", "_mission_body", "_contract_body"]:
+		var w60_body: Label = w60_mp.get(w60_key) as Label
+		var w60_card: Control = w60_body.get_parent().get_parent() as Control if w60_body != null else null
+		var w60_gap: float = (w60_card.global_position.x + w60_card.size.x) - (w60_body.global_position.x + w60_body.size.x) if (w60_card != null and w60_body != null) else -1.0
+		_w60_assert(w60_body != null and w60_body.autowrap_mode == TextServer.AUTOWRAP_WORD_SMART and w60_body.size.x > 0.0 and w60_gap >= 12.0,
+			"prep %s wrap=%s width=%.1f gap=%.1f" % [w60_key, str(w60_body.autowrap_mode if w60_body != null else -1), w60_body.size.x if w60_body != null else -1.0, w60_gap], w60)
+	var w60_contract_body: Label = w60_mp.get("_contract_body") as Label
+	_w60_assert(w60_contract_body != null and w60_contract_body.text.begins_with("Free play:") and w60_contract_body.text.ends_with("."),
+		"free-play prep body text complete", w60)
+
+	var w60_cd: Label = w60_mp.get("_countdown_lbl") as Label
+	var w60_ready_btn: Button = w60_mp.get("_ready_btn") as Button
+	var w60_ready_lbl: Label = w60_mp.get("_readiness_lbl") as Label
+	var w60_emits: Array = []
+	w60_mp.connect("ready_pressed", func(_m: String, _d: int, _mo: String, _c: int) -> void: w60_emits.append(1))
+	_w60_assert(w60_cd != null and w60_cd.text == "MISSION STARTING IN 6..." and w60_ready_btn != null and w60_ready_btn.text.find("UNREADY") < 0,
+		"prep idle countdown/READY label", w60)
+	w60_mp.call("_on_ready_action")
+	_w60_assert(bool(w60_mp.get("_countdown_running")) and w60_cd.text == "MISSION STARTING IN 6..." and w60_ready_btn.text.find("UNREADY") >= 0 and w60_ready_lbl.text == "UNREADY" and w60_emits.is_empty(),
+		"first READY starts 6 s countdown in UNREADY state", w60)
+	w60_mp.call("_process", 2.0)
+	_w60_assert(w60_cd.text == "MISSION STARTING IN 4...", "countdown ticks with _process delta (%s)" % w60_cd.text, w60)
+	w60_mp.call("_on_ready_action")
+	_w60_assert(not bool(w60_mp.get("_countdown_running")) and w60_ready_btn.text.find("UNREADY") < 0 and w60_ready_lbl.text == "READY" and w60_cd.text == "MISSION STARTING IN 6..." and w60_emits.is_empty(),
+		"second READY cancels and restores READY", w60)
+	w60_mp.call("_on_ready_action")
+	for _w60_i: int in range(5):
+		w60_mp.call("_process", 1.0)
+	_w60_assert(w60_cd.text == "MISSION STARTING IN 1...", "countdown reaches 1... (%s)" % w60_cd.text, w60)
+	w60_mp.call("_process", 1.0)
+	_w60_assert(w60_emits.size() == 1 and bool(gs.free_play), "countdown deploys exactly once at zero (emits=%d free_play=%s)" % [w60_emits.size(), str(gs.free_play)], w60)
+	w60_mp.call("_process", 1.0)
+	_w60_assert(w60_emits.size() == 1, "deploy signal not repeated", w60)
+	w60_mp.queue_free()
+	await process_frame
+	gs.call("end_free_play")
+
+	# 60b. HUD identity/currency/key row + deterministic pause seed.
+	gs.set("state", "playing")
+	gs.set("active_contract_order", 2)
+	gs.set("difficulty", 1)
+	gs.set("player_name", "Test Handle")
+	var w60_keys_now: Array = gs.get("stolen_keys") as Array
+	w60_keys_now.clear()
+	var w60_hud: CanvasLayer = (load("res://src/ui/hud.gd") as GDScript).new() as CanvasLayer
+	root.add_child(w60_hud)
+	await process_frame
+	w60_hud.call("_update_portrait_plate")
+	var w60_name_lbl: Label = w60_hud.get("_thief_name_lbl") as Label
+	_w60_assert(w60_name_lbl != null and w60_name_lbl.text == "Test Handle", "HUD uses GameState.player_name (%s)" % (w60_name_lbl.text if w60_name_lbl != null else "?"), w60)
+	w60_hud.call("update_loot", 0, 0, 1234)
+	var w60_loot_lbl: Label = w60_hud.get("_loot_lbl") as Label
+	_w60_assert(w60_loot_lbl != null and w60_loot_lbl.text == "(£) 1234", "HUD currency format (%s)" % (w60_loot_lbl.text if w60_loot_lbl != null else "?"), w60)
+	gs.set("loot_value", 1234)
+	gs.set("loot_goal", 4000)
+	gs.set("free_play", false)
+	w60_hud.call("_update_objectives_and_loot", false)
+	_w60_assert(w60_loot_lbl != null and w60_loot_lbl.text == "(£) 1234 / £ 4000", "HUD currency cap format (%s)" % (w60_loot_lbl.text if w60_loot_lbl != null else "?"), w60)
+	var w60_keys_lbl: Label = w60_hud.get("_keys_lbl") as Label
+	w60_hud.call("_update_key_row", false)
+	_w60_assert(w60_keys_lbl != null and not w60_keys_lbl.visible, "empty key row hidden", w60)
+	gs.call("add_stolen_key", "key_manor")
+	gs.call("add_stolen_key", "key_small_chest")
+	w60_hud.call("_update_key_row", false)
+	_w60_assert(w60_keys_lbl != null and w60_keys_lbl.visible and w60_keys_lbl.text.find("Manor Key") >= 0 and w60_keys_lbl.text.find("Small Chest Key") >= 0,
+		"key row shows shipped names (%s)" % (w60_keys_lbl.text if w60_keys_lbl != null else "?"), w60)
+	_w60_assert(str(gs.call("stolen_key_display_name", "weird_key")) == "Weird Key", "unknown key id title-cased", w60)
+	gs.set("active_map_seed", 424242)
+	var w60_footer: String = str(w60_hud.call("_pause_footer_text"))
+	_w60_assert(w60_footer == "1.5.148559   Novice   424242", "pause footer deterministic seed (%s)" % w60_footer, w60)
+
+	# 60c. Ledger player name + no player-facing placeholder price strings.
+	var w60_ledger: Control = (load("res://src/ui/ledger_ui.gd") as GDScript).new() as Control
+	root.add_child(w60_ledger)
+	await process_frame
+	var w60_thief_lbl: Label = w60_ledger.get("_thief_lbl") as Label
+	_w60_assert(w60_thief_lbl != null and w60_thief_lbl.text == "Test Handle", "ledger uses GameState.player_name (%s)" % (w60_thief_lbl.text if w60_thief_lbl != null else "?"), w60)
+	var w60_unknown_item: Dictionary = {"id": "insult_fairy", "name": "Insult Fairy", "cat": "tools", "cost": 2000, "desc": "test"}
+	w60_ledger.call("_on_item_pressed", w60_unknown_item)
+	var w60_status: Label = w60_ledger.get("_preview_status") as Label
+	var w60_buy: Button = w60_ledger.get("_buy_btn") as Button
+	_w60_assert(w60_status != null and w60_status.text == "PRICE UNKNOWN" and w60_buy != null and not w60_buy.visible,
+		"unauthored price shows PRICE UNKNOWN and hides BUY", w60)
+	var w60_unknown_btn: String = str(w60_ledger.call("_item_button_text", w60_unknown_item))
+	_w60_assert(w60_unknown_btn.find("TBD") < 0 and w60_unknown_btn.find("DO NOT SHIP") < 0 and w60_unknown_btn.find("PRICE UNKNOWN") >= 0,
+		"unknown-price button has no placeholder marker (%s)" % w60_unknown_btn, w60)
+	var w60_bob: Dictionary = {"id": "bob_hair", "name": "Bob Hair Style", "cat": "cosmetics", "cost": 7500, "desc": "test"}
+	w60_ledger.call("_on_item_pressed", w60_bob)
+	_w60_assert(w60_status != null and w60_status.text == "£ 7500" and w60_buy != null and w60_buy.visible,
+		"KF08 price still bought (%s)" % (w60_status.text if w60_status != null else "?"), w60)
+	var w60_owned: String = str(w60_ledger.call("_item_button_text", {"id": "bowler_hat", "name": "Bowler Hat", "cat": "cosmetics", "cost": 750, "desc": "test"}))
+	_w60_assert(w60_owned.find("✓ PURCHASED") >= 0, "owned item shows PURCHASED (%s)" % w60_owned, w60)
+	var w60_ledger_src: String = FileAccess.get_file_as_string("res://src/ui/ledger_ui.gd")
+	_w60_assert(w60_ledger_src.find("TBD PRICE") < 0 and w60_ledger_src.find("DO NOT SHIP") < 0, "ledger source has no placeholder price strings", w60)
+	var w60_bad_btn: bool = false
+	var w60_sections: Array = w60_ledger.call("_sections") as Array
+	for w60_s_v: Variant in w60_sections:
+		var w60_sd: Dictionary = w60_s_v as Dictionary
+		for w60_it_v: Variant in (w60_sd.get("items", []) as Array):
+			var w60_txt: String = str(w60_ledger.call("_item_button_text", w60_it_v as Dictionary))
+			if w60_txt.find("TBD") >= 0 or w60_txt.find("DO NOT SHIP") >= 0:
+				w60_bad_btn = true
+	_w60_assert(not w60_bad_btn, "no shop button carries TBD/DO NOT SHIP", w60)
+	w60_ledger.queue_free()
+	await process_frame
+
+	# 60d. Escape portal: wall outline mesh/shader, 3x3x3 trigger, extracted signal.
+	var w60_gate: Area3D = (load("res://src/interact/escape_gate.gd") as GDScript).new() as Area3D
+	root.add_child(w60_gate)
+	await process_frame
+	var w60_portal: MeshInstance3D = w60_gate.get("portal_visual") as MeshInstance3D
+	var w60_portal_mat: ShaderMaterial = w60_portal.material_override as ShaderMaterial if w60_portal != null else null
+	var w60_shape: BoxShape3D = null
+	for w60_c: Node in w60_gate.get_children():
+		if w60_c is CollisionShape3D and (w60_c as CollisionShape3D).shape is BoxShape3D:
+			w60_shape = (w60_c as CollisionShape3D).shape as BoxShape3D
+	_w60_assert(w60_portal != null and w60_portal.mesh is QuadMesh and w60_portal_mat != null and w60_portal_mat.shader != null and w60_portal_mat.shader.resource_path.find("tat_escape_portal") >= 0,
+		"portal uses QuadMesh + portal ShaderMaterial", w60)
+	_w60_assert(w60_gate.find_children("*", "Label3D", true, false).is_empty(), "portal has no floating Label3D", w60)
+	_w60_assert(w60_shape != null and w60_shape.size.is_equal_approx(Vector3(3.0, 3.0, 3.0)), "portal 3x3x3 trigger kept", w60)
+	var w60_gate_emits: Array = []
+	w60_gate.connect("extracted", func() -> void: w60_gate_emits.append(1))
+	var w60_body: CharacterBody3D = CharacterBody3D.new()
+	w60_body.add_to_group("player")
+	root.add_child(w60_body)
+	gs.set("state", "playing")
+	gs.set("quest_item_acquired", true)
+	gs.set("mission_objectives", [])
+	gs.set("loot_goal", 0)
+	w60_gate.call("_on_body_entered", w60_body)
+	_w60_assert(w60_gate_emits.size() == 1, "portal extracted signal fires", w60)
+	w60_body.queue_free()
+	w60_gate.queue_free()
+	await process_frame
+
+	# 60e. Startscreen rain layer spawns with the menu and is freed with it.
+	var w60_menu: Control = (load("res://src/ui/main_menu.gd") as GDScript).new() as Control
+	root.add_child(w60_menu)
+	await process_frame
+	await process_frame
+	var w60_rain: Node3D = w60_menu.get("_menu_rain") as Node3D
+	var w60_rain_ref: WeakRef = weakref(w60_rain) if w60_rain != null else null
+	_w60_assert(w60_rain != null and w60_rain.name == "RainVolume" and w60_rain.is_inside_tree() and w60_rain.get_child_count() > 0,
+		"menu rain layer spawned (%s)" % (w60_rain.name if w60_rain != null else "none"), w60)
+	w60_menu.queue_free()
+	await process_frame
+	await process_frame
+	_w60_assert(w60_rain_ref == null or w60_rain_ref.get_ref() == null, "menu rain freed with the menu", w60)
+
+	# 60f. Localization: reverse map, de translation, fallback, no GUID, restore.
+	var w60_loc: Node = root.get_node_or_null("Loc")
+	_w60_assert(w60_loc != null and (w60_loc.call("languages") as Array).size() == 8, "Loc autoload with 8 shipped locales", w60)
+	var w60_sans: Font = ArtNouveauTheme.font_sans()
+	var w60_fallback_paths: Array[String] = []
+	if w60_sans != null:
+		for w60_fb: Font in w60_sans.fallbacks:
+			w60_fallback_paths.append(w60_fb.resource_path)
+	var w60_hk_ok: bool = false
+	var w60_sc_ok: bool = false
+	var w60_jp_ok: bool = false
+	for w60_fp: String in w60_fallback_paths:
+		if w60_fp.find("NotoSerifHK-Regular") >= 0:
+			w60_hk_ok = true
+		elif w60_fp.find("NotoSerifSC-Regular") >= 0:
+			w60_sc_ok = true
+		elif w60_fp.find("NotoSerifJP-Regular") >= 0:
+			w60_jp_ok = true
+	_w60_assert(w60_hk_ok and w60_sc_ok and w60_jp_ok, "CJK font fallbacks attached to the UI theme (%s)" % str(w60_fallback_paths), w60)
+	if w60_loc != null:
+		w60_loc.call("set_locale", "en")
+		var w60_en_play: String = str(w60_loc.call("t", "Play"))
+		w60_loc.call("set_locale", "de")
+		var w60_de_play: String = str(w60_loc.call("t", "PLAY"))
+		var w60_de_resume: String = str(w60_loc.call("t", "Resume"))
+		var w60_de_credits: String = str(w60_loc.call("t", "Credits"))
+		var w60_unknown: String = str(w60_loc.call("t", "W5 UNKNOWN STRING"))
+		var w60_guid_re: RegEx = RegEx.new()
+		w60_guid_re.compile("^[0-9A-F]{32}$")
+		_w60_assert(w60_en_play == "Play", "en Play stays English (%s)" % w60_en_play, w60)
+		_w60_assert(w60_de_play != "PLAY" and w60_de_play != "Play", "de PLAY translates (%s)" % w60_de_play, w60)
+		_w60_assert(w60_de_resume != "Resume", "de Resume translates (%s)" % w60_de_resume, w60)
+		_w60_assert(w60_de_credits == "Credits", "de miss falls back to English source (%s)" % w60_de_credits, w60)
+		_w60_assert(w60_unknown == "W5 UNKNOWN STRING", "unknown source falls through", w60)
+		_w60_assert(w60_guid_re.search(w60_de_resume) == null and w60_guid_re.search(w60_de_credits) == null, "Loc never returns a raw GUID", w60)
+		w60_loc.call("set_locale", "en")
+		_w60_assert(str(w60_loc.call("t", "Play")) == "Play", "en restores English", w60)
+
+	# 60g. Settings language option persists the shipped code.
+	var w60_settings: CanvasLayer = (load("res://src/ui/settings_ui.gd") as GDScript).new() as CanvasLayer
+	root.add_child(w60_settings)
+	await process_frame
+	await process_frame
+	var w60_lang_opt: OptionButton = w60_settings.get("_language_option") as OptionButton
+	_w60_assert(w60_lang_opt != null and w60_lang_opt.item_count == 8, "settings language option has 8 locales", w60)
+	if w60_lang_opt != null and w60_lang_opt.item_count == 8:
+		var w60_de_idx: int = -1
+		var w60_en_idx: int = -1
+		for w60_li: int in range(w60_lang_opt.item_count):
+			var w60_code: String = str(w60_lang_opt.get_item_metadata(w60_li))
+			if w60_code == "de_DE":
+				w60_de_idx = w60_li
+			elif w60_code == "en":
+				w60_en_idx = w60_li
+		w60_lang_opt.select(w60_de_idx)
+		w60_settings.call("_on_language_selected", w60_de_idx)
+		var w60_saved: Variant = JSON.parse_string(FileAccess.get_file_as_string(w60_save_path))
+		var w60_saved_locale: String = str((w60_saved as Dictionary).get("settings", {}).get("locale", "")) if w60_saved is Dictionary else ""
+		_w60_assert(str(ss.get_settings().get("locale", "")) == "de_DE" and str(w60_loc.call("get_locale")) == "de_DE" and w60_saved_locale == "de_DE",
+			"language option applies + persists de_DE (memory=%s saved=%s)" % [str(ss.get_settings().get("locale", "")), w60_saved_locale], w60)
+		w60_lang_opt.select(w60_en_idx)
+		w60_settings.call("_on_language_selected", w60_en_idx)
+		_w60_assert(str(ss.get_settings().get("locale", "")) == "en" and str(w60_loc.call("get_locale")) == "en", "language option restores en", w60)
+	w60_settings.queue_free()
+	await process_frame
+
+	# Restore shared state and the on-disk save exactly as suite 49/54 expect.
+	gs.set("loot_value", w60_loot_value)
+	gs.set("loot_goal", w60_loot_goal)
+	gs.set("free_play", w60_free)
+	gs.set("free_play_pending", w60_free_pending)
+	gs.set("pending_mission_id", w60_pending_mission)
+	gs.set("state", w60_state)
+	gs.set("active_map_seed", w60_map_seed)
+	gs.set("active_contract_order", w60_order)
+	gs.set("difficulty", w60_difficulty)
+	gs.set("player_name", w60_player)
+	gs.set("quest_item_acquired", w60_quest_item)
+	gs.set("mission_objectives", w60_objectives)
+	var w60_restore_keys: Array = gs.get("stolen_keys") as Array
+	w60_restore_keys.clear()
+	for w60_rk: Variant in w60_keys:
+		w60_restore_keys.append(str(w60_rk))
+	if w60_had_save:
+		var w60_rf: FileAccess = FileAccess.open(w60_save_path, FileAccess.WRITE)
+		if w60_rf != null:
+			w60_rf.store_string(w60_save_backup)
+			w60_rf.close()
+	else:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(w60_save_path))
+	ss.set("data", ss.call("_defaults"))
+	ss.call("load_save")
+	ss.call("apply_saved_settings")
+	ss.call("_sync_player_name")
+	if w60_loc != null:
+		w60_loc.call("set_locale", w60_locale)
+	else:
+		TranslationServer.set_locale(w60_locale)
+	if not w60.is_empty():
+		printerr("FAIL: 60 W5 UI: ", "; ".join(w60))
+		fails += 1
+	else:
+		print("PASS: 60 W5 UI (prep 6 s countdown/UNREADY + card wrap, player_name, (£) currency, key row, PRICE UNKNOWN, pause seed, portal, menu rain, localization)")
+
 	# P2-6 fixture restore (see boot snapshot): leave no mutated autoload
 	# state behind for the next run or embedding harness.
 	gs.thief_id = fx_thief_id
@@ -4502,6 +4786,12 @@ func _initialize() -> void:
 
 	print("SUMMARY: fails=", fails)
 	quit(0 if fails == 0 else 1)
+
+
+## W5 suite helper: collects failure detail without aborting the whole gate.
+func _w60_assert(cond: bool, msg: String, problems: Array) -> void:
+	if not cond:
+		problems.append(msg)
 
 
 ## Returns the first MeshInstance3D at or below `node` (null when absent).

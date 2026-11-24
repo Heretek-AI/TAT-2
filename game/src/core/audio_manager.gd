@@ -692,6 +692,13 @@ func start_countdown() -> void:
 	_countdown_async()
 
 
+## Cancels the in-flight tick loop (prep UNREADY / BACK). Bumping the token
+## makes the suspended coroutine stop at its next 1 s boundary.
+func stop_countdown() -> void:
+	_countdown_token += 1
+	_countdown_running = false
+
+
 func _countdown_async() -> void:
 	_countdown_token += 1
 	var token: int = _countdown_token

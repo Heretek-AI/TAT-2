@@ -18,6 +18,7 @@ NoiseBus="*res://src/stealth/noise_bus.gd"
 AudioManager="*res://src/core/audio_manager.gd"
 NetManager="*res://src/core/net_manager.gd"
 SaveSystem="*res://src/core/save_system.gd"
+Loc="*res://src/core/localization.gd"
 
 [display]
 
@@ -27,6 +28,10 @@ window/size/resizable=true
 window/dpi/allow_hidpi=false
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
+
+[internationalization]
+
+locale/fallback="en"
 
 [physics]
 

@@ -12,6 +12,12 @@ const WeatherVisuals := preload("res://src/core/weather_visuals.gd")
 const STARTSCREEN_GUARD_GLB: String = "res://assets/ue/Content/Art/Animation/GuardEnforcer/Skin/Base/SK_GuardEnforcer__Preview.glb"
 const STARTSCREEN_GUARD_UE_MESH: String = "/Game/Art/Animation/GuardEnforcer/Skin/Base/SK_GuardEnforcer__Preview"
 
+## The startscreen authors its own rain layer (NiagaraActor_8 / NS_Rain_BC in
+## BeautifulCorner_Startscreen_P) independent of the lobby weather preset, so
+## the shared mission rain builder runs at full intensity. The Niagara spawn
+## scalar itself is not recoverable from the cooked actor; APPROXIMATE.
+const MENU_RAIN_INTENSITY: float = 1.0
+
 ## Title wordmark crop inside T_TaT_Logo_Primary_White.png (2048x2048).
 ## The authored glyphs occupy x 19..2030, y 389..1657; the rest is transparent
 ## padding. Keep the crop here so a re-exported texture can be re-fitted
@@ -34,6 +40,7 @@ var _menu_fog_vol: Dictionary
 var _menu_preset: Dictionary
 var _menu_moon: DirectionalLight3D
 var _shop_glow: OmniLight3D
+var _menu_rain: Node3D = null
 var _sway_t: float = 0.0
 var selected_order: int = 1
 
@@ -279,6 +286,36 @@ func _build_3d_backdrop() -> void:
 
 	call_deferred("_bind_menu_env")
 	_spawn_startscreen_guard(scene_root, loader)
+	_spawn_menu_rain(scene_root)
+
+
+## Authored startscreen rain layer. The lobby weather preset is clear (rain
+## disabled), but BeautifulCorner_Startscreen_P places NS_Rain_BC directly, so
+## the rain section is enabled for the shared builder only; everything else in
+## the preset (sky/fog/moon) is left untouched. The volume is a child of the
+## menu SubViewport scene root, so it is freed with the menu and cannot follow
+## the player into the Den.
+func _spawn_menu_rain(scene_root: Node3D) -> void:
+	if scene_root == null or _menu_preset.is_empty():
+		return
+	var rain_preset: Dictionary = _menu_preset.duplicate(true)
+	var rain_section: Variant = rain_preset.get("rain", {})
+	var rain: Dictionary = rain_section as Dictionary if rain_section is Dictionary else {}
+	rain["enabled"] = true
+	rain["intensity"] = MENU_RAIN_INTENSITY
+	rain_preset["rain"] = rain
+	_menu_rain = WeatherVisuals.make_rain(scene_root, rain_preset)
+
+
+func _exit_tree() -> void:
+	# Defensive: scene changes free the whole menu, but stop the emitter first
+	# so no particle system can outlive the Den transition.
+	if _menu_rain != null and is_instance_valid(_menu_rain):
+		for child: Node in _menu_rain.get_children():
+			if child is GPUParticles3D:
+				(child as GPUParticles3D).emitting = false
+		_menu_rain.queue_free()
+	_menu_rain = null
 
 
 ## T1-03-E: Left-corner trim specular fix (KF01 shopfront scrollwork).
@@ -507,6 +544,13 @@ func _process(delta: float) -> void:
 		_shop_glow.light_energy = 1.55 + sin(_sway_t * 7.5) * 0.10 + cos(_sway_t * 17.0) * 0.05
 
 
+func _loc_upper(source: String) -> String:
+	var loc: Node = get_node_or_null("/root/Loc")
+	if loc != null and loc.has_method("t"):
+		return str(loc.call("t", source)).to_upper()
+	return source.to_upper()
+
+
 func _make_menu_btn(text: String, font: Font) -> Button:
 	# P1 chrome route (audit-ui P1-4): flat left-aligned KF01 menu text keeps its
 	# look but reads tokens — IVORY idle / GOLD hover / GOLD_DIM pressed — from
@@ -573,7 +617,7 @@ func _build_ui() -> void:
 	spacer.custom_minimum_size = Vector2(0, 53)
 	menu_v.add_child(spacer)
 
-	var play_btn := _make_menu_btn("PLAY", sans)
+	var play_btn := _make_menu_btn(_loc_upper("Play"), sans)
 	play_btn.pressed.connect(func():
 		selected_order = 1
 		if AudioManager != null and AudioManager.has_method("play_ui"):
@@ -582,15 +626,15 @@ func _build_ui() -> void:
 	)
 	menu_v.add_child(play_btn)
 
-	var settings_btn := _make_menu_btn("SETTINGS", sans)
+	var settings_btn := _make_menu_btn(_loc_upper("Settings"), sans)
 	settings_btn.pressed.connect(_on_settings_pressed)
 	menu_v.add_child(settings_btn)
 
-	var credits_btn := _make_menu_btn("CREDITS", sans)
+	var credits_btn := _make_menu_btn(_loc_upper("Credits"), sans)
 	credits_btn.pressed.connect(_on_credits_pressed)
 	menu_v.add_child(credits_btn)
 
-	var quit_btn := _make_menu_btn("QUIT", sans)
+	var quit_btn := _make_menu_btn(_loc_upper("Quit"), sans)
 	quit_btn.pressed.connect(func(): get_tree().quit())
 	menu_v.add_child(quit_btn)
 

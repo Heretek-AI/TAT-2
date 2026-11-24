@@ -10,6 +10,10 @@ signal mission_letter_requested(title: String, intro_text: String)
 enum Difficulty { NOVICE = 1, THIEF = 2, MASTER_THIEF = 3 }
 
 var thief_id: String = "spider" # spider (Nisha) | chameleon (Cotter)
+## Player-facing handle shown by the HUD portrait plate and the ledger. The
+## shipped build's journal reads "Johnny Cipher" (KF07 cite); SaveSystem owns
+## the persisted, type-validated copy.
+var player_name: String = "Johnny Cipher"
 var outfit_body: String = "Default"
 var outfit_head: String = "Default"
 var calling_card: String = "Default"
@@ -55,6 +59,14 @@ var mission_objectives: Array[Dictionary] = []
 var contract_title: String = ""
 var contract_intro: String = ""
 var stolen_keys: Array[String] = []
+## Readable names for the shipped key-cabinet items (mission_controller
+## key_pool ids). Unknown ids still render, title-cased, instead of vanishing.
+const STOLEN_KEY_NAMES: Dictionary = {
+	"key_manor": "Manor Key",
+	"key_locked_room": "Locked Room Key",
+	"key_secret_chest": "Secret Chest Key",
+	"key_small_chest": "Small Chest Key",
+}
 var quest_item_acquired: bool = false
 var ever_spotted: bool = false
 var ever_chased: bool = false
@@ -218,6 +230,32 @@ func add_stolen_key(key_id: String) -> void:
 
 func has_stolen_key(key_id: String) -> bool:
 	return stolen_keys.has(key_id)
+
+
+## Shipped key display name; unknown ids fall back to title case ("key_foo"
+## -> "Key Foo") so a new key is still readable rather than hidden.
+func stolen_key_display_name(key_id: String) -> String:
+	var clean: String = key_id.strip_edges()
+	if clean == "":
+		return ""
+	if STOLEN_KEY_NAMES.has(clean):
+		return str(STOLEN_KEY_NAMES[clean])
+	var out: String = ""
+	for part: String in clean.replace("-", "_").split("_", false):
+		if out != "":
+			out += " "
+		out += part.substr(0, 1).to_upper() + part.substr(1).to_lower()
+	return out
+
+
+## Display names for the HUD key row, in acquisition order.
+func stolen_key_display_names() -> Array[String]:
+	var out: Array[String] = []
+	for key_id: String in stolen_keys:
+		var label: String = stolen_key_display_name(key_id)
+		if label != "" and not out.has(label):
+			out.append(label)
+	return out
 
 
 func add_loot(amount: int, value: int, is_quest_item: bool = false, objective_id: String = "") -> void:

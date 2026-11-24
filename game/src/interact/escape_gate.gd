@@ -5,9 +5,17 @@ signal extracted()
 
 
 const INTERACTABLES_PATH := "res://data/generated/gameplay/interactables.json"
+const PORTAL_SHADER_PATH := "res://src/core/tat_escape_portal.gdshader"
 ## Fallbacks mirror BP_EscapePoint (_escapeOpenDuration 240,
 ## _canBeUsedMultipleTimes true); the JSON above is authoritative.
 const FALLBACK_OPEN_DURATION_SEC := 240.0
+
+## Visual portal slot (wall outline). Kept as a named child so QA/tests can
+## identify the marker without a floating Label3D.
+const PORTAL_NODE_NAME := "EscapePortalVisual"
+const PORTAL_SIZE: Vector2 = Vector2(2.6, 3.0)
+
+var portal_visual: MeshInstance3D = null
 
 ## Seconds the escape stays usable once opened (BP_EscapePoint).
 var open_duration_sec: float = FALLBACK_OPEN_DURATION_SEC
@@ -48,26 +56,23 @@ func _ready() -> void:
 	col.position = Vector3(0, 1.5, 0)
 	add_child(col)
 
+	# Wall-outline portal: a thin vertical ring on a QuadMesh in the gate's
+	# local XY plane (green core + violet rim shader), so the marker reads as a
+	# doorway on the wall instead of the flat green floor cylinder + floating
+	# "ESCAPE GATE" label the first port shipped.
 	var mi := MeshInstance3D.new()
-	var cm := CylinderMesh.new()
-	cm.top_radius = 1.4
-	cm.bottom_radius = 1.4
-	cm.height = 0.15
-	mi.mesh = cm
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.15, 0.85, 0.35, 0.7)
-	mat.emission_enabled = true
-	mat.emission = Color(0.15, 0.9, 0.4)
+	mi.name = PORTAL_NODE_NAME
+	var quad := QuadMesh.new()
+	quad.size = PORTAL_SIZE
+	mi.mesh = quad
+	var mat := ShaderMaterial.new()
+	if ResourceLoader.exists(PORTAL_SHADER_PATH):
+		mat.shader = ResourceLoader.load(PORTAL_SHADER_PATH) as Shader
 	mi.material_override = mat
+	mi.position = Vector3(0, 1.5, 0)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(mi)
-
-	var lbl := Label3D.new()
-	lbl.position = Vector3(0, 2.3, 0)
-	lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	lbl.text = "ESCAPE GATE"
-	lbl.font_size = 36
-	lbl.modulate = Color(0.4, 1.0, 0.5)
-	add_child(lbl)
+	portal_visual = mi
 
 
 func _on_body_entered(body: Node) -> void:

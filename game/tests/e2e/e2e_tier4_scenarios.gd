@@ -341,7 +341,7 @@ func _t4_12_r3_cooked_data_adversarial_audit() -> void:
 
 ## T4-13: Free play ("Contract Inactive") is the Guildhall Cleanout Heist run
 ## hosted on contract order 2: mission id + QG 4,000 loot goal + reference HUD
-## ("Mission: Steal 4,000 in loot value[0/4,000]", "£ 0"), the mission row's
+## ("Mission: Steal 4,000 in loot value[0/4,000]", "(£) 0"), the mission row's
 ## 3300 s Novice timer, and no contract-completion write on extraction.
 func _t4_13_free_play_contract_inactive() -> void:
 	var gs: Node = h.game_state()
@@ -402,7 +402,7 @@ func _t4_13_free_play_contract_inactive() -> void:
 
 	var ids_ok: bool = mid == "Mission.Guildhall.LootTheRoom" and goal == 4000 and label == "Steal 4,000 in loot value"
 	var timer_ok: bool = absf(timer - 3300.0) < 0.5
-	var hud_ok: bool = obj_text == "Mission: Steal 4,000 in loot value[0/4,000]" and loot_text == "£ 0"
+	var hud_ok: bool = obj_text == "Mission: Steal 4,000 in loot value[0/4,000]" and loot_text == "(£) 0"
 	h.require(
 		gh != null and ids_ok and timer_ok and hud_ok and no_write and no_currency,
 		"T4-13",

@@ -23,6 +23,10 @@ const MAX_SAVE_XP := 1_000_000
 const SETTINGS_SCHEMA_VERSION := 2
 const LEGACY_FOV_DEFAULT := 75.0
 const AUTHORED_FOV_DEG := 54.54
+## Shipped player handle (KF07 journal portrait). Persisted at the save root;
+## GameState exposes the live copy the HUD/ledger read.
+const DEFAULT_PLAYER_NAME := "Johnny Cipher"
+const MAX_PLAYER_NAME_CHARS := 48
 
 ## Populated from _defaults() in _ready() so the schema has one source of truth.
 var data: Dictionary = {}
@@ -32,6 +36,25 @@ func _ready() -> void:
 	data = _defaults()
 	load_save()
 	apply_saved_settings()
+	_sync_player_name()
+
+
+## Push the validated saved handle into GameState (the HUD/ledger source).
+func _sync_player_name() -> void:
+	var gs: Node = get_node_or_null("/root/GameState")
+	if gs != null:
+		gs.set("player_name", str(data.get("player_name", DEFAULT_PLAYER_NAME)))
+
+
+## Persist a new handle. Empty/oversized input is normalised, never rejected
+## into an un-nameable HUD.
+func set_player_name(new_name: String) -> void:
+	var clean: String = new_name.strip_edges()
+	if clean == "":
+		clean = DEFAULT_PLAYER_NAME
+	data["player_name"] = clean.substr(0, MAX_PLAYER_NAME_CHARS)
+	_sync_player_name()
+	write_save()
 
 
 func get_settings() -> Dictionary:
@@ -76,6 +99,16 @@ func apply_saved_settings() -> void:
 		var vp: Viewport = get_viewport()
 		if vp != null:
 			vp.scaling_3d_scale = clampf(float(s.get("render_scale", 1.0)), 0.6, 1.0)
+	# Locale is save data, not a display-server setting: apply on headless too so
+	# tests/export scripts see the same UI language as a client boot.
+	var locale_code: String = str(s.get("locale", "en")).strip_edges()
+	if locale_code == "":
+		locale_code = "en"
+	var loc: Node = get_node_or_null("/root/Loc")
+	if loc != null and loc.has_method("set_locale"):
+		loc.call("set_locale", locale_code)
+	else:
+		TranslationServer.set_locale(locale_code)
 
 
 func _apply_bus_direct(bus_name: String, bus_vol: float) -> void:
@@ -110,6 +143,7 @@ func _defaults() -> Dictionary:
 		"unlocked_perks": ["novice_difficulty", "guildhall", "old_manor", "spider"],
 		"unlocked_cosmetics": ["bowler_hat"],
 		"currency": 0,
+		"player_name": DEFAULT_PLAYER_NAME,
 		"equipped_loadout": {"spider": _default_loadout(), "chameleon": _default_loadout()},
 		"active_decoration": "faberge_egg",
 		"settings_schema": SETTINGS_SCHEMA_VERSION,
@@ -134,6 +168,7 @@ func _defaults() -> Dictionary:
 			"render_scale": 1.0,
 			"touch_sensitivity": 2.5,
 			"mobile_quality": "balanced",
+			"locale": "en",
 		},
 	}
 
@@ -218,10 +253,21 @@ func _ensure_defaults() -> void:
 		for bus_key: String in ["ambience_volume", "ui_volume", "dialogue_volume"]:
 			if not s.has(bus_key):
 				s[bus_key] = fallback_vol
+		# Locale is a short shipped code; a missing/wrong-typed/blank value
+		# falls back to the authored English table (Loc still validates it).
+		if not s.has("locale") or not (s["locale"] is String) or str(s["locale"]).strip_edges() == "":
+			s["locale"] = "en"
 	for key: Variant in defaults.keys():
 		var k: String = str(key)
 		if not data.has(k):
 			data[k] = (defaults[k] as Variant)
+	# Validated player handle: type, blank and length are checked here so every
+	# consumer can trust GameState.player_name/SaveSystem.data["player_name"].
+	var pn_v: Variant = data.get("player_name", "")
+	if not (pn_v is String) or str(pn_v).strip_edges() == "":
+		data["player_name"] = DEFAULT_PLAYER_NAME
+	else:
+		data["player_name"] = str(pn_v).strip_edges().substr(0, MAX_PLAYER_NAME_CHARS)
 	# Legacy saves may use "slithersap" without underscore; normalize it.
 	if data.has("unlocked_tools") and data["unlocked_tools"] is Array:
 		var tools: Array = data["unlocked_tools"] as Array

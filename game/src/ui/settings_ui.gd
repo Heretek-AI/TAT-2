@@ -57,6 +57,7 @@ var _scale_val: Label
 var _touch_slider: HSlider
 var _touch_val: Label
 var _quality_btn: Button
+var _language_option: OptionButton
 var _tab_idx: int = 0
 var _tab_btns: Array[Button] = []
 var _pages: Array[Control] = []
@@ -209,6 +210,8 @@ func _ensure_settings() -> void:
 		s["touch_sensitivity"] = 2.5
 	if not s.has("mobile_quality"):
 		s["mobile_quality"] = "balanced"
+	if not s.has("locale"):
+		s["locale"] = "en"
 
 
 func reset_defaults() -> void:
@@ -229,6 +232,7 @@ func reset_defaults() -> void:
 	s["render_scale"] = 1.0
 	s["touch_sensitivity"] = 2.5
 	s["mobile_quality"] = "balanced"
+	s["locale"] = "en"
 	_load_from_save()
 	_apply_live(true)
 
@@ -268,6 +272,7 @@ func _load_from_save() -> void:
 		_touch_slider.value = clampf(float(s.get("touch_sensitivity", 2.5)), 0.5, 5.0)
 	if _quality_btn != null:
 		_quality_btn.text = "MOBILE QUALITY: " + MobileProfile.tier_label(MobileProfile.current_tier()).to_upper()
+	_sync_language_option(str(s.get("locale", "en")))
 	_loading_ui = false
 	_refresh_value_labels()
 
@@ -317,6 +322,15 @@ func _apply_live(persist: bool) -> void:
 		for pnode: Node in get_tree().get_nodes_in_group("player"):
 			if pnode.has_method("apply_saved_settings"):
 				pnode.call("apply_saved_settings", true)
+	# Keep the locale in the same live-settings write: reset_defaults() changes
+	# the selector without emitting item_selected.
+	if _language_option != null and _language_option.item_count > 0:
+		var lang_idx: int = clampi(_language_option.selected, 0, _language_option.item_count - 1)
+		var lang_code: String = str(_language_option.get_item_metadata(lang_idx))
+		s["locale"] = lang_code
+		var loc: Node = _loc_node()
+		if loc != null and loc.has_method("set_locale"):
+			loc.call("set_locale", lang_code)
 	if persist:
 		SaveSystem.write_save()
 
@@ -413,6 +427,7 @@ func _build_ui() -> void:
 	var gp_vb: VBoxContainer = grp_gameplay["vbox"] as VBoxContainer
 	gp_vb.add_child(_make_check_row("sprint_toggle", _label("Settings.Gameplay.SprintToggle", "Sprint Toggle")))
 	gp_vb.add_child(_make_check_row("reduced_camera_bounce", _label("Settings.Gameplay.ReducedCameraBounce", "Reduced Camera Bounce")))
+	gp_vb.add_child(_make_language_row())
 
 	# VIDEO tab: grouped into Display + Graphics Quality cards.
 	var video: VBoxContainer = _pages[1] as VBoxContainer
@@ -511,6 +526,79 @@ func _cycle_quality() -> void:
 	MobileProfile.apply_runtime(get_tree())
 	if _quality_btn != null:
 		_quality_btn.text = "MOBILE QUALITY: " + MobileProfile.tier_label(next_tier).to_upper()
+
+
+## Language selector for the 8 shipped localization bundles. Loc owns the
+## catalogue and the canonical code -> Translation-resource mapping; the save
+## keeps the stable code so a later boot re-applies it.
+func _make_language_row() -> HBoxContainer:
+	var row: HBoxContainer = HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	var lab: Label = Label.new()
+	lab.text = "Language"
+	lab.custom_minimum_size = Vector2(210, 0)
+	lab.add_theme_font_size_override("font_size", 15)
+	lab.add_theme_color_override("font_color", ThemeScript.TEAL_TEXT)
+	row.add_child(lab)
+	_language_option = OptionButton.new()
+	_language_option.name = "LanguageOption"
+	_language_option.custom_minimum_size = Vector2(260, 34)
+	_language_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ThemeScript.style_teal_option(_language_option)
+	# The selector shows each language in its own script; use the theme's sans
+	# face, which carries the shipped Noto CJK fallbacks (ja/zh).
+	var ui_font: Font = ThemeScript.font_sans()
+	if ui_font != null:
+		_language_option.add_theme_font_override("font", ui_font)
+	var languages: Array = _loc_languages()
+	for i: int in range(languages.size()):
+		var entry: Dictionary = languages[i] as Dictionary
+		_language_option.add_item(str(entry.get("label", entry.get("code", "?"))), i)
+		_language_option.set_item_metadata(i, str(entry.get("code", "en")))
+	_language_option.item_selected.connect(_on_language_selected)
+	row.add_child(_language_option)
+	return row
+
+
+func _loc_node() -> Node:
+	return get_node_or_null("/root/Loc")
+
+
+func _loc_languages() -> Array:
+	var loc: Node = _loc_node()
+	if loc != null and loc.has_method("languages"):
+		var raw: Variant = loc.call("languages")
+		if raw is Array:
+			return raw as Array
+	return []
+
+
+func _sync_language_option(code: String) -> void:
+	if _language_option == null:
+		return
+	var resolved: String = code
+	var loc: Node = _loc_node()
+	if loc != null and loc.has_method("resolve_code"):
+		resolved = str(loc.call("resolve_code", code))
+	for i: int in range(_language_option.item_count):
+		if str(_language_option.get_item_metadata(i)) == resolved:
+			_language_option.select(i)
+			return
+
+
+func _on_language_selected(idx: int) -> void:
+	if _language_option == null or idx < 0 or idx >= _language_option.item_count:
+		return
+	if _loading_ui:
+		return
+	var code: String = str(_language_option.get_item_metadata(idx))
+	var loc: Node = _loc_node()
+	if loc != null and loc.has_method("set_locale"):
+		loc.call("set_locale", code)
+	else:
+		TranslationServer.set_locale(code)
+	_settings()["locale"] = code
+	SaveSystem.write_save()
 
 
 func _make_binding_row(key_text: String, action_text: String) -> HBoxContainer:

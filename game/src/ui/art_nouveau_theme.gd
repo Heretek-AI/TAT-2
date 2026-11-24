@@ -69,7 +69,29 @@ const FONT_SERIF_PATH: String = "res://assets/ue/fonts/SourceSerifPro-Bold.ttf"
 const FONT_TYPEWRITER_PATH: String = "res://assets/ue/fonts/SpecialElite-Regular.ttf"
 const DIVIDER_TEX_PATH: String = "res://assets/ue/Raw/Art/UI/Components/T_Divider.png"
 
+## Shipped CJK faces used as fallbacks for the Latin display fonts so the
+## ja/zh-Hans/zh-Hant locales render rather than showing tofu. Korean is not
+## shipped in the extract (no folder), so it is deliberately absent.
+const CJK_FALLBACK_PATHS: Array[String] = [
+	"res://assets/ue/fonts/Traditional_Chinese/Noto_Serif_HK/NotoSerifHK-Regular.ttf",
+	"res://assets/ue/fonts/Simplified_Chinese/NotoSerif/NotoSerifSC-Regular.ttf",
+	"res://assets/ue/fonts/Japanese/NotoSerif/NotoSerifJP-Regular.ttf",
+]
+
 static var _font_cache: Dictionary = {}
+static var _cjk_fallback_cache: Array[Font] = []
+
+
+static func _cjk_fallbacks() -> Array[Font]:
+	if not _cjk_fallback_cache.is_empty():
+		return _cjk_fallback_cache
+	for path: String in CJK_FALLBACK_PATHS:
+		if not ResourceLoader.exists(path):
+			continue
+		var f: Font = ResourceLoader.load(path) as Font
+		if f != null:
+			_cjk_fallback_cache.append(f)
+	return _cjk_fallback_cache
 
 
 static func _load_font(path: String) -> Font:
@@ -78,6 +100,12 @@ static func _load_font(path: String) -> Font:
 	var f: Font = null
 	if ResourceLoader.exists(path):
 		f = ResourceLoader.load(path) as Font
+	# Font.fallbacks is the engine fallback chain, used when the primary face
+	# lacks a glyph (CJK locales). Latin glyphs still come from the display font.
+	if f != null:
+		var fallbacks: Array[Font] = _cjk_fallbacks()
+		if not fallbacks.is_empty():
+			f.fallbacks = fallbacks
 	_font_cache[path] = f
 	return f
 
@@ -502,3 +530,4 @@ static func make_modal(parent: CanvasLayer, min_size: Vector2, title_text: Strin
 ## Drops cached FontFile resources so fonts do not survive shutdown.
 static func cleanup_static_caches() -> void:
 	_font_cache.clear()
+	_cjk_fallback_cache.clear()

@@ -87,6 +87,13 @@ const STAGE_MOON_DISC_ENERGY: float = 2.4
 ## and _ensure_stage_size treat this as a floor that is never shrunk.
 const STAGE_VIEWPORT_SIZE: Vector2i = Vector2i(1280, 720)
 
+## Authored 6-tick lobby countdown (AU4 plays exactly 6 one-second ticks).
+const COUNTDOWN_SECONDS: float = 6.0
+## Body copy wrap width. The card's content box is ~500 px at 1280x720; this
+## inset keeps the final glyph off the right border (the pre-W5 value wrapped
+## exactly at the content edge and clipped the last character).
+const CARD_BODY_WRAP_WIDTH: float = 468.0
+
 var map_id: String = "old_manor"
 var difficulty: int = 1
 var mode: String = "Solo"
@@ -111,10 +118,18 @@ var _mode_sub_lbl: Label
 var _diff_sub_lbl: Label
 var _countdown_lbl: Label
 var _readiness_lbl: Label
+var _ready_btn: Button
 var _thief_name_lbl: Label
 var _thief_body_node: Node = null
 var _thief_head_node: Node = null
 var _mat_loader: Node = null
+
+## Player-paced READY/UNREADY countdown state. The first press starts a real
+## 6 s countdown; a second press cancels it; reaching zero deploys exactly once.
+var _countdown_running: bool = false
+var _countdown_remaining: float = 0.0
+var _countdown_last_int: int = int(COUNTDOWN_SECONDS)
+var _deploy_emitted: bool = false
 
 
 func _ready() -> void:
@@ -135,6 +150,9 @@ func open_prep(p_map_id: String, p_difficulty: int, p_mode: String, p_contract_o
 	mode = p_mode
 	contract_order = p_contract_order
 	free_play = p_free_play
+	# A re-opened prep is a fresh decision: never carry a running countdown
+	# (or its audio ticks) across open_prep calls.
+	_cancel_countdown(false)
 	visible = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if AudioManager != null and AudioManager.has_method("play_ui"):
@@ -148,6 +166,7 @@ func open_prep(p_map_id: String, p_difficulty: int, p_mode: String, p_contract_o
 
 ## Hide, restore mouse, emit closed and free.
 func close_prep() -> void:
+	_cancel_countdown(true)
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	if AudioManager != null and AudioManager.has_method("play_ui"):
 		AudioManager.play_ui("back")
@@ -166,7 +185,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			if kev.keycode == KEY_F or kev.keycode == KEY_SPACE:
 				if vp != null:
 					vp.set_input_as_handled()
-				_emit_ready()
+				_on_ready_action()
 				return
 			if kev.keycode == KEY_ESCAPE:
 				if vp != null:
@@ -175,7 +194,68 @@ func _unhandled_input(event: InputEvent) -> void:
 				return
 
 
+## READY is now a two-state action: first press starts the authored 6 s
+## countdown, a second press cancels it. The deploy itself happens at zero.
+func _on_ready_action() -> void:
+	if _deploy_emitted:
+		return
+	if _countdown_running:
+		_cancel_countdown(true)
+		if AudioManager != null and AudioManager.has_method("play_ui"):
+			AudioManager.play_ui("back")
+		return
+	_start_countdown()
+
+
+func _start_countdown() -> void:
+	_countdown_running = true
+	_countdown_remaining = COUNTDOWN_SECONDS
+	_countdown_last_int = int(COUNTDOWN_SECONDS)
+	if AudioManager != null and AudioManager.has_method("play_ui"):
+		AudioManager.play_ui("confirm")
+	# AU4: the shipped countdown is exactly 6 x 1.00 s ticks; starting it with
+	# the UI countdown keeps label and audio aligned tick-for-tick.
+	if AudioManager != null and AudioManager.has_method("start_countdown"):
+		AudioManager.start_countdown()
+	_refresh_countdown()
+	_refresh_ready_controls()
+
+
+## `stop_audio` is false for open_prep resets (nothing is playing yet).
+func _cancel_countdown(stop_audio: bool) -> void:
+	if stop_audio and _countdown_running:
+		if AudioManager != null and AudioManager.has_method("stop_countdown"):
+			AudioManager.stop_countdown()
+	_countdown_running = false
+	_countdown_remaining = 0.0
+	_countdown_last_int = int(COUNTDOWN_SECONDS)
+	_refresh_countdown()
+	_refresh_ready_controls()
+
+
+func _process(delta: float) -> void:
+	if not _countdown_running or _deploy_emitted:
+		return
+	_countdown_remaining = maxf(0.0, _countdown_remaining - delta)
+	var shown: int = int(ceil(_countdown_remaining))
+	if shown >= 1 and shown != _countdown_last_int:
+		_countdown_last_int = shown
+		_refresh_countdown()
+	if _countdown_remaining <= 0.0:
+		_countdown_running = false
+		_refresh_ready_controls()
+		_emit_ready()
+
+
+## Final deploy. Guarded so a countdown that reaches zero while another path
+## (BACK, queue_free) races it can never emit `ready_pressed` twice.
 func _emit_ready() -> void:
+	if _deploy_emitted:
+		return
+	_deploy_emitted = true
+	_countdown_running = false
+	if AudioManager != null and AudioManager.has_method("stop_countdown"):
+		AudioManager.stop_countdown()
 	if AudioManager != null and AudioManager.has_method("play_ui"):
 		AudioManager.play_ui("confirm")
 	# T7: thread the OptionButton choice into the deploy handoff. _selected_mission_idx
@@ -202,6 +282,8 @@ func _emit_ready() -> void:
 ## Leaving the prep screen (READY, BACK, or table teardown) ends the S09 bed;
 ## mission_controller then starts the destination scene beds.
 func _exit_tree() -> void:
+	if _countdown_running and AudioManager != null and AudioManager.has_method("stop_countdown"):
+		AudioManager.stop_countdown()
 	if AudioManager != null and AudioManager.has_method("stop_bed"):
 		AudioManager.stop_bed("wind_prep", 0.25)
 
@@ -316,6 +398,7 @@ func _build_all() -> void:
 	_location_title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_location_body = loc_card.get_meta("body_lbl") as Label
 	_location_body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_location_body.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	if italic != null:
 		_location_body.add_theme_font_override("font", italic)
 	var loc_vb: VBoxContainer = loc_card.get_meta("vbox") as VBoxContainer
@@ -419,8 +502,9 @@ func _build_all() -> void:
 	ready_btn.text = "[F]  READY"
 	ready_btn.custom_minimum_size = Vector2(150, 42)
 	ThemeScript.style_teal_button(ready_btn, true)
-	ready_btn.pressed.connect(_emit_ready)
+	ready_btn.pressed.connect(_on_ready_action)
 	btn_row.add_child(ready_btn)
+	_ready_btn = ready_btn
 	var back_btn: Button = Button.new()
 	back_btn.text = "[ESC]  BACK"
 	back_btn.custom_minimum_size = Vector2(146, 42)
@@ -495,6 +579,10 @@ func _make_card(header: String, title_text: String, body_text: String) -> PanelC
 	var body_lbl: Label = Label.new()
 	body_lbl.text = body_text
 	body_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	# Fixed wrap width inside the card content box: autowrap alone wrapped at
+	# the exact content edge, clipping the last glyph at 1280x720.
+	body_lbl.custom_minimum_size = Vector2(CARD_BODY_WRAP_WIDTH, 0)
+	body_lbl.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	body_lbl.add_theme_font_size_override("font_size", 14)
 	body_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_TEXT)
 	if sans != null:
@@ -960,13 +1048,13 @@ func _refresh_contract_card() -> void:
 
 func _contract_info() -> Array:
 	if free_play:
-		return [CONTRACT_INACTIVE, "Free play: clean out the location for a score. No contract progress is recorded."]
+		return [_loc(CONTRACT_INACTIVE), "Free play: clean out the location for a score. No contract progress is recorded."]
 	if contract_order <= 0:
-		return [CONTRACT_INACTIVE, "Your active contract is not available for the currently selected map."]
+		return [_loc(CONTRACT_INACTIVE), "Your active contract is not available for the currently selected map."]
 	var disp: Dictionary = GameData.get_contract_display(contract_order)
 	var title_text: String = str(disp.get("title", ""))
 	if title_text == "":
-		return [CONTRACT_INACTIVE, "Your active contract is not available for the currently selected map."]
+		return [_loc(CONTRACT_INACTIVE), "Your active contract is not available for the currently selected map."]
 	var quest_text: String = str(disp.get("quest_item", ""))
 	var loc_text: String = str(disp.get("location", ""))
 	var body_text: String = "Active contract: %s" % title_text
@@ -979,35 +1067,63 @@ func _contract_info() -> Array:
 
 func _refresh_controls() -> void:
 	if _mode_sub_lbl != null:
-		_mode_sub_lbl.text = "Mode: %s" % mode
+		_mode_sub_lbl.text = _loc_fmt("Mode: {mode}", {"mode": mode})
 	if _diff_sub_lbl != null:
-		_diff_sub_lbl.text = "Difficulty: %s" % _difficulty_label()
+		_diff_sub_lbl.text = _loc_fmt("Difficulty: {difficulty}", {"difficulty": _difficulty_label()})
 	_refresh_countdown()
 	if _thief_name_lbl != null:
 		_thief_name_lbl.text = _thief_label()
-	if _controls_lbl == null:
-		return
-	_controls_lbl.text = "[F] READY  ·  [ESC] BACK"
+	_refresh_ready_controls()
 
 
-## KF11 header line. The port's prep screen is player-paced (no lobby timer),
-## so the copy stays at the reference's 5-second line rather than inventing a
-## deadline; READY remains the [F] action.
+## READY/UNREADY wording shared by the header label, the [F] button and the
+## controls hint, so all three can never disagree about countdown state.
+func _refresh_ready_controls() -> void:
+	var word: String = _loc("Unready") if _countdown_running else _loc("Ready")
+	var upper: String = word.to_upper()
+	if _readiness_lbl != null:
+		_readiness_lbl.text = upper
+	if _ready_btn != null:
+		_ready_btn.text = "[F]  %s" % upper
+	if _controls_lbl != null:
+		_controls_lbl.text = "[F] %s  ·  [ESC] BACK" % upper
+
+
+## Header line: the authored MissionLobby countdown template with its number
+## substituted ("MISSION STARTING IN 6..." down to "1..."). At rest it shows
+## the full countdown so the player knows what READY starts.
 func _refresh_countdown() -> void:
 	if _countdown_lbl == null:
 		return
-	_countdown_lbl.text = "MISSION STARTING IN 5..."
+	var shown: int = _countdown_last_int if _countdown_running else int(COUNTDOWN_SECONDS)
+	var tmpl: String = _loc("Mission Starting in <Num>{number}</>...")
+	tmpl = tmpl.replace("<Num>", "").replace("</>", "")
+	_countdown_lbl.text = tmpl.replace("{number}", str(shown)).to_upper()
+
+
+func _loc(source: String) -> String:
+	var loc: Node = get_node_or_null("/root/Loc")
+	if loc != null and loc.has_method("t"):
+		return str(loc.call("t", source))
+	return source
+
+
+func _loc_fmt(source: String, values: Dictionary) -> String:
+	var out: String = _loc(source)
+	for key: Variant in values.keys():
+		out = out.replace("{%s}" % str(key), str(values[key]))
+	return out
 
 
 func _thief_label() -> String:
 	if str(GameState.thief_id) == "chameleon":
-		return "The Chameleon"
-	return "The Spider"
+		return _loc("The Chameleon")
+	return _loc("The Spider")
 
 
 func _difficulty_label() -> String:
 	if difficulty == 1:
-		return "Novice"
+		return _loc("Novice")
 	if difficulty == 2:
-		return "Thief"
-	return "Master Thief"
+		return _loc("Thief")
+	return _loc("Master Thief")

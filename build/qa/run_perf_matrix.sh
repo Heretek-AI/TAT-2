@@ -68,6 +68,7 @@ WARMUP="180"
 SETTLE="30"
 TIMEOUT="1800"
 DEADLINE=""
+MAX_TEMP="${PERF_MAX_TEMP:-92}"
 HOST_DISPLAY="${PERF_HOST_DISPLAY:-1}"
 FOV="54.54"
 FAR="4000"
@@ -97,6 +98,7 @@ for arg in "$@"; do
     --settle=*)   SETTLE="${arg#*=}" ;;
     --timeout=*)  TIMEOUT="${arg#*=}" ;;
     --deadline=*) DEADLINE="${arg#*=}" ;;
+    --max-temp=*) MAX_TEMP="${arg#*=}" ;;
     --fov=*)      FOV="${arg#*=}" ;;
     --far=*)      FAR="${arg#*=}" ;;
     --occlusion=*) OCCLUSION="${arg#*=}" ;;
@@ -145,6 +147,10 @@ if [ -n "$SHADOW_MAX_DISTANCE" ] && { ! [[ "$SHADOW_MAX_DISTANCE" =~ ^[0-9]+$ ]]
   exit 2
 fi
 case "$PREWARM" in 0|1) ;; *) echo "ABORT: --prewarm must be 0|1" >&2; exit 2 ;; esac
+if ! [[ "$MAX_TEMP" =~ ^[0-9]+$ ]] || [ "$MAX_TEMP" -lt 60 ] || [ "$MAX_TEMP" -gt 105 ]; then
+  echo "ABORT: --max-temp must be an integer 60..105, got '$MAX_TEMP'" >&2
+  exit 2
+fi
 
 if [ -z "$TAG" ]; then
   TAG="q${QUALITY}_s${SCALE}_${SCALING}_l${LIGHTS}_sh${SHADOWS}_${RES}_f${FOV}_far${FAR}"
@@ -276,6 +282,34 @@ loadavg_sample() {
   awk '{ printf "%s %s %s %s\n", $1, $2, $3, $4 }' /proc/loadavg 2>/dev/null || printf 'unavailable\n'
 }
 
+# CPU package temperature for the thermal guard. Prefer the kernel thermal
+# zones (millidegrees) and fall back to `sensors -u`. `?` means unknown; the
+# guard then only logs, it cannot enforce a limit.
+cpu_package_temp() {
+  local z t best=""
+  for z in /sys/class/thermal/thermal_zone*; do
+    [ -r "$z/type" ] || continue
+    case "$(cat "$z/type" 2>/dev/null || true)" in
+      x86_pkg_temp|TCPU|TCPU_PCI) ;;
+      *) continue ;;
+    esac
+    t="$(cat "$z/temp" 2>/dev/null || true)"
+    [ -n "$t" ] || continue
+    t=$((t / 1000))
+    if [ -z "$best" ] || [ "$t" -gt "$best" ]; then best="$t"; fi
+  done
+  if [ -z "$best" ] && command -v sensors >/dev/null 2>&1; then
+    best="$(sensors -u 2>/dev/null | awk '/Package id 0:/{f=1;next} f&&/temp1_input/{printf "%d",$2;exit}')"
+  fi
+  printf '%s' "${best:-?}"
+}
+
+game_rss_mb() {
+  local pid="$1"
+  [ -r "/proc/${pid}/status" ] || { printf '0'; return; }
+  awk '/^VmRSS:/{printf "%d",$2/1024}' "/proc/${pid}/status" 2>/dev/null || printf '0'
+}
+
 XVFB_PID=""
 DISPLAY_NUM=""
 RUN_ENV=()
@@ -341,6 +375,15 @@ start_display
 # Pre-warm: a real run of the same scene raises clocks and temperature to the
 # steady state the measured run will see. Without it "GPU before" is an idle
 # clock and the before/after delta looks like throttling when it is boost.
+TEMP_PEAK=0
+RSS_PEAK=0
+THERMAL_ABORT=0
+TEMP_START="$(cpu_package_temp)"
+if [ "$TEMP_START" != "?" ] && [ "$TEMP_START" -ge "$MAX_TEMP" ]; then
+  echo "ABORT: CPU package ${TEMP_START}C >= --max-temp ${MAX_TEMP}C; cool the machine before measuring" >&2
+  exit 8
+fi
+echo "PERF_THERMAL before=${TEMP_START}C max_c=${MAX_TEMP}" >> "$LOG"
 PREWARM_STATUS="skipped"
 if [ "$PREWARM" = "1" ]; then
   SAVED_FRAMES="$FRAMES"; SAVED_POSE="$POSE"; SAVED_WARMUP="$WARMUP"; SAVED_DEADLINE="$DEADLINE"
@@ -363,6 +406,7 @@ if [ "$PREWARM" = "1" ]; then
   FRAMES="$SAVED_FRAMES"; POSE="$SAVED_POSE"; WARMUP="$SAVED_WARMUP"; DEADLINE="$SAVED_DEADLINE"
   build_game_args
 fi
+echo "PERF_THERMAL prewarm_after=$(cpu_package_temp)C" >> "$LOG"
 echo "PERF_PREWARM status=$PREWARM_STATUS frames=120 pose=spawn_overlook log=$PREWARM_LOG" >> "$LOG"
 
 echo "PERF_GPU_BEFORE $(smi_gpu_sample) ts=$(date -Is)" >> "$LOG"
@@ -377,9 +421,10 @@ if command -v stdbuf >/dev/null 2>&1; then STDBUF_CMD=(stdbuf -oL -eL); fi
 # export can linger in teardown on some compositors, so after the marker the
 # wrapper gives 10 s and then terminates it. A missing marker is a truncation.
 wait_game() {
-  local started now grace_start done_seen
+  local started now grace_start done_seen sample_tick t rss
   started=$(date +%s)
   done_seen=0
+  sample_tick=0
   while kill -0 "$GAME_PID" 2>/dev/null; do
     if [ "$done_seen" -eq 0 ] && grep -q "^PERF_DONE " "$LOG"; then
       done_seen=1
@@ -403,6 +448,26 @@ wait_game() {
       TEARDOWN_KILLED=1
       break
     fi
+    # Thermal/RSS guard: sample every ~5 s. A package temperature at or above
+    # the limit kills the run instead of taking the box down.
+    if [ $((sample_tick % 10)) -eq 0 ]; then
+      t="$(cpu_package_temp)"
+      if [ "$t" != "?" ]; then
+        if [ "$t" -gt "$TEMP_PEAK" ]; then TEMP_PEAK="$t"; fi
+        if [ "$t" -ge "$MAX_TEMP" ]; then
+          echo "PERF_THERMAL_ABORT cpu_c=$t max_c=$MAX_TEMP" >> "$LOG"
+          THERMAL_ABORT=1
+          kill -TERM "$GAME_PID" 2>/dev/null
+          sleep 1
+          kill -KILL "$GAME_PID" 2>/dev/null
+          TEARDOWN_KILLED=1
+          break
+        fi
+      fi
+      rss="$(game_rss_mb "$GAME_PID")"
+      if [ "$rss" -gt "$RSS_PEAK" ]; then RSS_PEAK="$rss"; fi
+    fi
+    sample_tick=$((sample_tick + 1))
     sleep 0.5
   done
   wait "$GAME_PID" 2>/dev/null
@@ -420,9 +485,15 @@ MEASURE_SEC=$(( $(date +%s) - MEASURE_START ))
 
 echo "PERF_GPU_AFTER $(smi_gpu_sample) ts=$(date -Is) measure_sec=$MEASURE_SEC" >> "$LOG"
 echo "PERF_LOAD_AFTER $(loadavg_sample) ts=$(date -Is)" >> "$LOG"
+echo "PERF_THERMAL peak_cpu_c=$TEMP_PEAK peak_rss_mb=$RSS_PEAK max_c=$MAX_TEMP abort=$THERMAL_ABORT" >> "$LOG"
 
 echo "EXIT=$ST LOG=$LOG"
 grep -E "^PERF_|^[{]|SCRIPT ERROR|SHADER ERROR|Too many mipmaps|double free" "$LOG" | tail -100
+
+if [ "$THERMAL_ABORT" -eq 1 ]; then
+  echo "FAIL: thermal abort at ${TEMP_PEAK}C (max ${MAX_TEMP}C); let the machine cool and rerun (see $LOG)" >&2
+  exit 8
+fi
 
 for marker in "PERF_CONFIG " "PERF_SUMMARY " "PERF_DONE "; do
   if ! grep -q "^${marker}" "$LOG"; then

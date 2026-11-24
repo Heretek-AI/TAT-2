@@ -296,3 +296,24 @@ find extracted/json -name 'NS_*.json' | wc -l
     using them is planned for the next wave (W2).
   - Gates: compile 69/0, 59 suites fails=0, M2 fails=0, E2E 264/264, probes
     PASS, `make audit` PASS (with the new cap check).
+
+
+- 2026-11-24: **W0b measurement truth** (this wave): `settings.graphics_quality`
+  (low/medium/high, default high) is now persisted, validated and exposed as a
+  desktop Settings control; `--perf-*` CLI overrides set
+  `WeatherProfile.set_quality_level`, viewport scale/mode and light/shadow caps
+  before the mission builds and log one `PERF_CONFIG` line; `mission_controller`
+  emits `mission_ready(map_id, stats)` after the load/spawn pass; the fixed
+  six-pose Guildhall matrix (`game/tests/perf/`, `build/qa/run_perf_matrix.sh`)
+  records wall frame time, `TIME_PROCESS`/`TIME_PHYSICS_PROCESS`, render
+  CPU/GPU, draw calls, objects, primitives, VRAM, lights/devices/chunks and
+  fails closed on truncation. Validation (release export, host Wayland,
+  1920×1080, pose `spawn_overlook`, 300 frames): p50 **20.40 ms**, GPU
+  **19.67 ms**, 9,738 draw calls; 1280×720 p50 **21.18 ms** (geometry-bound
+  pose; run-to-run/world-state variance is larger than the resolution delta,
+  so this is not a ladder result). Low/medium/high now log `WeatherQuality`
+  levels 0/1/2 (previously all 2). Xvfb measured 66.55 ms for the same 1080p
+  pose, so the wrapper defaults to the host compositor. Not a ladder
+  conclusion: one exterior pose only; the full six-pose matrix remains for the
+  integrator. 60 FPS is still not achieved and no FPS improvement is claimed.
+  Details: `docs/reports/perf-measurement-w0b.md`.

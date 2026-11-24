@@ -15,6 +15,11 @@ const DESKTOP_MAX_LIGHTS: int = 160
 const DESKTOP_HERO_SHADOWS: int = 6
 
 static var _force_mobile: bool = false
+## QA perf overrides (`--perf-lights=N`, `--perf-shadows=N`). -1 keeps the
+## authored policy above; the perf matrix sets exact caps so a run can isolate
+## the light/shadow budget without editing source.
+static var _lights_override: int = -1
+static var _shadows_override: int = -1
 ## M1: tier cache. Every cap query funnels through current_tier(); without
 ## this the tree lookup + dict walk in _settings() runs per call (per-frame
 ## callers pay node lookup + string hash). Invalidated by set_tier() and
@@ -38,6 +43,28 @@ static func set_force_mobile(value: bool) -> void:
 static func reset_test_state() -> void:
 	_force_mobile = false
 	_tier_dirty = true
+	clear_override_limits()
+
+
+## QA-only runtime caps. Pass -1 for either value to leave that cap authored.
+## The perf matrix applies these before the mission loads; `reset_test_state()`
+## is the test-isolation path that clears them again.
+static func set_override_limits(lights: int, shadows: int) -> void:
+	_lights_override = lights if lights >= 0 else -1
+	_shadows_override = shadows if shadows >= 0 else -1
+
+
+static func clear_override_limits() -> void:
+	_lights_override = -1
+	_shadows_override = -1
+
+
+static func lights_override() -> int:
+	return _lights_override
+
+
+static func shadows_override() -> int:
+	return _shadows_override
 
 
 static func tier_from_key(key: String) -> int:
@@ -84,6 +111,8 @@ static func set_tier(tier: int, save_system: Node) -> void:
 
 
 static func max_lights() -> int:
+	if _lights_override >= 0:
+		return _lights_override
 	if not is_mobile():
 		return DESKTOP_MAX_LIGHTS
 	match current_tier():
@@ -96,6 +125,8 @@ static func max_lights() -> int:
 
 
 static func hero_shadows() -> int:
+	if _shadows_override >= 0:
+		return _shadows_override
 	if not is_mobile():
 		return DESKTOP_HERO_SHADOWS
 	match current_tier():

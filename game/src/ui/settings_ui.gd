@@ -8,6 +8,12 @@ signal closed()
 
 const ThemeScript := preload("res://src/ui/art_nouveau_theme.gd")
 const MobileProfile := preload("res://src/core/mobile_profile.gd")
+const WeatherProfile := preload("res://src/core/weather_profile.gd")
+
+## Desktop quality ladder (WeatherProfile.quality_level). Kept separate from
+## mobile_quality: a desktop choice must never rewrite the Android tier.
+const DESKTOP_QUALITY_KEYS: Array[String] = ["low", "medium", "high"]
+const DESKTOP_QUALITY_LABELS: Array[String] = ["Low", "Medium", "High"]
 
 const ST_SETTINGS_PATH: String = "res://data/generated/tables/StringTables/ST_Settings.json"
 
@@ -57,6 +63,7 @@ var _scale_val: Label
 var _touch_slider: HSlider
 var _touch_val: Label
 var _quality_btn: Button
+var _graphics_quality_option: OptionButton
 var _language_option: OptionButton
 var _tab_idx: int = 0
 var _tab_btns: Array[Button] = []
@@ -206,6 +213,8 @@ func _ensure_settings() -> void:
 		s["fullscreen"] = false
 	if not s.has("render_scale"):
 		s["render_scale"] = 1.0
+	if not s.has("graphics_quality"):
+		s["graphics_quality"] = "high"
 	if not s.has("touch_sensitivity"):
 		s["touch_sensitivity"] = 2.5
 	if not s.has("mobile_quality"):
@@ -230,9 +239,11 @@ func reset_defaults() -> void:
 	s["dialogue_volume"] = 0.8
 	s["fullscreen"] = false
 	s["render_scale"] = 1.0
+	s["graphics_quality"] = "high"
 	s["touch_sensitivity"] = 2.5
 	s["mobile_quality"] = "balanced"
 	s["locale"] = "en"
+	WeatherProfile.set_quality_level(2)
 	_load_from_save()
 	_apply_live(true)
 
@@ -270,6 +281,9 @@ func _load_from_save() -> void:
 		_scale_slider.value = clampf(float(s.get("render_scale", 1.0)), SCALE_MIN, SCALE_MAX)
 	if _touch_slider != null:
 		_touch_slider.value = clampf(float(s.get("touch_sensitivity", 2.5)), 0.5, 5.0)
+	if _graphics_quality_option != null:
+		var gq_idx: int = DESKTOP_QUALITY_KEYS.find(str(s.get("graphics_quality", "high")).to_lower())
+		_graphics_quality_option.select(maxi(0, gq_idx))
 	if _quality_btn != null:
 		_quality_btn.text = "MOBILE QUALITY: " + MobileProfile.tier_label(MobileProfile.current_tier()).to_upper()
 	_sync_language_option(str(s.get("locale", "en")))
@@ -307,6 +321,9 @@ func _apply_live(persist: bool) -> void:
 		s["dialogue_volume"] = float(_dlg_slider.value)
 	s["fullscreen"] = _fullscreen_check.button_pressed if _fullscreen_check != null else false
 	s["render_scale"] = float(_scale_slider.value)
+	if _graphics_quality_option != null:
+		var gq_sel: int = clampi(_graphics_quality_option.selected, 0, DESKTOP_QUALITY_KEYS.size() - 1)
+		s["graphics_quality"] = DESKTOP_QUALITY_KEYS[gq_sel]
 	if _touch_slider != null:
 		s["touch_sensitivity"] = float(_touch_slider.value)
 	if SaveSystem.has_method("apply_saved_settings"):
@@ -444,6 +461,8 @@ func _build_ui() -> void:
 	video.add_child(grp_qual["card"] as PanelContainer)
 	var qual_vb: VBoxContainer = grp_qual["vbox"] as VBoxContainer
 	qual_vb.add_child(_make_slider_row("render_scale", _label("Settings.GraphicsQuality.ResolutionScale", "Resolution Scale"), SCALE_MIN, SCALE_MAX, SCALE_STEP))
+	if not MobileProfile.is_mobile():
+		qual_vb.add_child(_make_graphics_quality_row())
 
 	# AUDIO tab: grouped into Volume card.
 	var audio: VBoxContainer = _pages[2] as VBoxContainer
@@ -526,6 +545,41 @@ func _cycle_quality() -> void:
 	MobileProfile.apply_runtime(get_tree())
 	if _quality_btn != null:
 		_quality_btn.text = "MOBILE QUALITY: " + MobileProfile.tier_label(next_tier).to_upper()
+
+
+## Desktop-only quality selector. It writes `graphics_quality` (never
+## `mobile_quality`) and applies the WeatherProfile override immediately; the
+## next mission load rebuilds its Environment with the selected post effects.
+func _make_graphics_quality_row() -> HBoxContainer:
+	var row: HBoxContainer = HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	var lab: Label = Label.new()
+	lab.text = _label("Settings.GraphicsQuality.DesktopQuality", "Graphics Quality")
+	lab.custom_minimum_size = Vector2(210, 0)
+	lab.add_theme_font_size_override("font_size", 15)
+	lab.add_theme_color_override("font_color", ThemeScript.TEAL_TEXT)
+	row.add_child(lab)
+	_graphics_quality_option = OptionButton.new()
+	_graphics_quality_option.name = "GraphicsQualityOption"
+	_graphics_quality_option.custom_minimum_size = Vector2(260, 34)
+	_graphics_quality_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ThemeScript.style_teal_option(_graphics_quality_option)
+	for i: int in range(DESKTOP_QUALITY_LABELS.size()):
+		_graphics_quality_option.add_item(DESKTOP_QUALITY_LABELS[i], i)
+	_graphics_quality_option.item_selected.connect(_on_graphics_quality_selected)
+	row.add_child(_graphics_quality_option)
+	return row
+
+
+func _on_graphics_quality_selected(idx: int) -> void:
+	if _loading_ui or _graphics_quality_option == null:
+		return
+	var quality_idx: int = clampi(idx, 0, DESKTOP_QUALITY_KEYS.size() - 1)
+	# Runtime override so a capture/bench immediately after closing Settings
+	# matches the saved value; persistence stays in SaveSystem settings.
+	WeatherProfile.set_quality_level(quality_idx)
+	_apply_live(false)
+	SaveSystem.write_save()
 
 
 ## Language selector for the 8 shipped localization bundles. Loc owns the

@@ -23,6 +23,10 @@ const MAX_SAVE_XP := 1_000_000
 const SETTINGS_SCHEMA_VERSION := 2
 const LEGACY_FOV_DEFAULT := 75.0
 const AUTHORED_FOV_DEG := 54.54
+## Desktop quality ladder consumed by WeatherProfile.quality_level(). The value
+## is perf policy, not extracted data; "high" is the shipped desktop behaviour.
+const GRAPHICS_QUALITY_KEYS: Array[String] = ["low", "medium", "high"]
+const GRAPHICS_QUALITY_DEFAULT := "high"
 ## Default handle: blank means "no explicit handle", so the UI shows the
 ## authored thief title (GameState.player_display_name). Persisted at the save
 ## root; GameState exposes the live copy the HUD/ledger read.
@@ -174,6 +178,7 @@ func _defaults() -> Dictionary:
 			"gamepad_sensitivity": 0.0025,
 			"gamepad_invert_y": false,
 			"render_scale": 1.0,
+			"graphics_quality": GRAPHICS_QUALITY_DEFAULT,
 			"touch_sensitivity": 2.5,
 			"mobile_quality": "balanced",
 			"locale": "en",
@@ -265,6 +270,14 @@ func _ensure_defaults() -> void:
 		# falls back to the authored English table (Loc still validates it).
 		if not s.has("locale") or not (s["locale"] is String) or str(s["locale"]).strip_edges() == "":
 			s["locale"] = "en"
+		# Desktop quality ladder: a hand-edited or legacy save may carry an
+		# unknown value; WeatherProfile would silently fall back to high, but
+		# the settings UI needs a canonical stored key. Normalise in place.
+		var gq: Variant = s.get("graphics_quality", GRAPHICS_QUALITY_DEFAULT)
+		if not (gq is String) or not GRAPHICS_QUALITY_KEYS.has(str(gq).to_lower()):
+			s["graphics_quality"] = GRAPHICS_QUALITY_DEFAULT
+		else:
+			s["graphics_quality"] = str(gq).to_lower()
 	for key: Variant in defaults.keys():
 		var k: String = str(key)
 		if not data.has(k):

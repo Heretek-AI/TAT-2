@@ -8,6 +8,7 @@ const MobileProfile: GDScript = preload("res://src/core/mobile_profile.gd")
 const GuardAnimLibScript: GDScript = preload("res://src/core/animation_library.gd")
 const WeatherProfile := preload("res://src/core/weather_profile.gd")
 const WeatherVisuals := preload("res://src/core/weather_visuals.gd")
+const PerfProfile := preload("res://src/core/perf_profile.gd")
 
 const STARTSCREEN_GUARD_GLB: String = "res://assets/ue/Content/Art/Animation/GuardEnforcer/Skin/Base/SK_GuardEnforcer__Preview.glb"
 const STARTSCREEN_GUARD_UE_MESH: String = "/Game/Art/Animation/GuardEnforcer/Skin/Base/SK_GuardEnforcer__Preview"
@@ -46,15 +47,44 @@ var selected_order: int = 1
 
 
 func _ready() -> void:
+	# QA perf matrix: release export templates do not honour `--script`, so the
+	# exported client enters the same runner through this flag. The menu
+	# backdrop/UI is skipped entirely; the runner owns the mission and quits.
+	if _has_cmdline_arg("--perf-matrix"):
+		var perf_script: GDScript = load("res://tests/perf/perf_matrix_runner.gd") as GDScript
+		if perf_script == null:
+			push_error("[perf] cannot load res://tests/perf/perf_matrix_runner.gd")
+			return
+		var perf_runner: Node = perf_script.new()
+		perf_runner.name = "PerfMatrixRunner"
+		add_child(perf_runner)
+		return
 	# Sentinel: menu chrome routes through res://src/ui/art_nouveau_theme.gd —
 	# log it, refuse silent drift. (T9: journal drawer deleted; contract
 	# selection lives in the Den map table only — no second deploy path here.)
 	print("TAT-2 UI main-menu: theme=res://src/ui/art_nouveau_theme.gd; journal drawer removed (T9)")
+	# QA perf envelope: apply before the backdrop/mission builds so the very
+	# first Environment sees the requested quality and the viewport the
+	# requested scale. Invalid flags stay loud and measure nothing.
+	var perf_cfg: Dictionary = PerfProfile.apply_cli(get_tree())
+	if not bool(perf_cfg.get("ok", true)):
+		for perf_err: Variant in perf_cfg.get("errors", []):
+			push_error("[perf] " + str(perf_err))
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_build_3d_backdrop()
 	_build_ui()
 	_maybe_autostart_contract()
+
+
+## True when `want` appears verbatim in user args (after `--`) or engine args.
+## Shared by the QA perf matrix entry point; no gameplay path calls it.
+func _has_cmdline_arg(want: String) -> bool:
+	for args: PackedStringArray in [OS.get_cmdline_user_args(), OS.get_cmdline_args()]:
+		for arg: String in args:
+			if arg == want:
+				return true
+	return false
 
 
 ## QA hook: `tat2/debug_autostart_contract` is 0 in shipped builds. The mobile

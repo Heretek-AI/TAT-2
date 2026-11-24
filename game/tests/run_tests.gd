@@ -102,13 +102,25 @@ func _initialize() -> void:
 	gs.thief_id = "spider"
 	gs.difficulty = 2
 	gs.active_contract_order = 3
+	# W0b: suite 85 reuses this mission instance for the mission_ready smoke.
+	# Dictionary capture keeps the lambda's writes visible after the signal.
+	var c4_ready: Dictionary = {"fired": false, "map": "", "stats": {}}
 	var mission_scene: Node = (load("res://scenes/mission.tscn") as PackedScene).instantiate()
+	mission_scene.connect("mission_ready", func(map_id: String, stats: Dictionary) -> void:
+		c4_ready["fired"] = true
+		c4_ready["map"] = map_id
+		c4_ready["stats"] = stats
+	)
 	root.add_child(mission_scene)
 	var wait_frames: int = 0
 	while (get_nodes_in_group("player").is_empty() or get_nodes_in_group("swinging_doors").is_empty()) and wait_frames < 240:
 		await process_frame
 		wait_frames += 1
 	await process_frame
+	var c4_ready_wait: int = 0
+	while not bool(c4_ready["fired"]) and c4_ready_wait < 240:
+		await process_frame
+		c4_ready_wait += 1
 	var guards := get_nodes_in_group("guards")
 	var loots := get_nodes_in_group("loot")
 	var om_doors := get_nodes_in_group("swinging_doors")
@@ -6264,6 +6276,108 @@ func _initialize() -> void:
 		fails += 1
 	else:
 		print("PASS: 75 authored animation metadata (995 clips, 213 montages, 3594 notifies, 4 known notify classes, CrankStart/Loop/Finish sections, notify_at nearest/null)")
+
+	# 85. W0b performance measurement truth: desktop graphics_quality schema +
+	# CLI parser + mission_ready emission. The mission emission is observed on
+	# the Contract 3 instance loaded in suite 4 (no extra 3D load).
+	var c85_problems: Array[String] = []
+	var c85_ss: Node = (load("res://src/core/save_system.gd") as GDScript).new()
+	var c85_defaults: Dictionary = c85_ss.call("_defaults") as Dictionary
+	var c85_default_settings: Dictionary = c85_defaults.get("settings", {}) as Dictionary
+	if str(c85_default_settings.get("graphics_quality", "")) != "high":
+		c85_problems.append("default graphics_quality=%s expected high" % str(c85_default_settings.get("graphics_quality", "")))
+	if not c85_default_settings.has("render_scale"):
+		c85_problems.append("default settings lost render_scale")
+	for c85_key: String in ["low", "medium", "high"]:
+		var c85_data: Dictionary = c85_defaults.duplicate(true)
+		var c85_data_s: Dictionary = c85_data["settings"] as Dictionary
+		c85_data_s["graphics_quality"] = c85_key
+		c85_ss.set("data", c85_data)
+		c85_ss.call("_ensure_defaults")
+		var c85_live: Dictionary = c85_ss.get("data") as Dictionary
+		var c85_live_s: Dictionary = c85_live.get("settings", {}) as Dictionary
+		var c85_got: String = str(c85_live_s.get("graphics_quality", ""))
+		if c85_got != c85_key:
+			c85_problems.append("valid graphics_quality '%s' normalised to '%s'" % [c85_key, c85_got])
+	var c85_bad_data: Dictionary = c85_defaults.duplicate(true)
+	var c85_bad_data_s: Dictionary = c85_bad_data["settings"] as Dictionary
+	c85_bad_data_s["graphics_quality"] = "ultra"
+	c85_ss.set("data", c85_bad_data)
+	c85_ss.call("_ensure_defaults")
+	var c85_bad_live: Dictionary = c85_ss.get("data") as Dictionary
+	var c85_bad_live_s: Dictionary = c85_bad_live.get("settings", {}) as Dictionary
+	var c85_bad_norm: String = str(c85_bad_live_s.get("graphics_quality", ""))
+	if c85_bad_norm != "high":
+		c85_problems.append("invalid graphics_quality not normalised to high (got '%s')" % c85_bad_norm)
+	var c85_wrong_type: Dictionary = c85_defaults.duplicate(true)
+	var c85_wrong_s: Dictionary = c85_wrong_type["settings"] as Dictionary
+	c85_wrong_s["graphics_quality"] = 2
+	c85_ss.set("data", c85_wrong_type)
+	c85_ss.call("_ensure_defaults")
+	var c85_wrong_live: Dictionary = c85_ss.get("data") as Dictionary
+	var c85_wrong_live_s: Dictionary = c85_wrong_live.get("settings", {}) as Dictionary
+	if str(c85_wrong_live_s.get("graphics_quality", "")) != "high":
+		c85_problems.append("non-string graphics_quality not normalised to high")
+	c85_ss.free()
+
+	var c85_pp: GDScript = load("res://src/core/perf_profile.gd") as GDScript
+	var c85_cfg: Dictionary = c85_pp.parse_args(PackedStringArray([
+		"--perf-quality=low", "--perf-scale=0.85", "--perf-scaling=fsr1",
+		"--perf-lights=80", "--perf-shadows=3", "--perf-vsync=off",
+	]))
+	if not bool(c85_cfg.get("ok", false)):
+		c85_problems.append("valid perf args rejected: %s" % str(c85_cfg.get("errors", [])))
+	else:
+		if str(c85_cfg.get("quality", "")) != "low" or int(c85_cfg.get("quality_index", -1)) != 0:
+			c85_problems.append("perf quality parse mismatch: %s" % str(c85_cfg))
+		if not is_equal_approx(float(c85_cfg.get("scale", -1.0)), 0.85):
+			c85_problems.append("perf scale parse mismatch: %s" % str(c85_cfg.get("scale", null)))
+		if str(c85_cfg.get("scaling", "")) != "fsr1":
+			c85_problems.append("perf scaling parse mismatch: %s" % str(c85_cfg.get("scaling", null)))
+		if int(c85_cfg.get("lights", -1)) != 80 or int(c85_cfg.get("shadows", -1)) != 3:
+			c85_problems.append("perf light/shadow parse mismatch: %s" % str(c85_cfg))
+		if int(c85_cfg.get("vsync", -1)) != 0:
+			c85_problems.append("perf vsync=off did not parse to 0")
+	var c85_bad_args: Array = [
+		PackedStringArray(["--perf-quality=ultra"]),
+		PackedStringArray(["--perf-scale=0.5"]),
+		PackedStringArray(["--perf-scaling=dlss"]),
+		PackedStringArray(["--perf-lights=-1"]),
+		PackedStringArray(["--perf-shadows=abc"]),
+		PackedStringArray(["--perf-vsync=maybe"]),
+		PackedStringArray(["--perf-nope=1"]),
+	]
+	for c85_bad: PackedStringArray in c85_bad_args:
+		var c85_bad_cfg: Dictionary = c85_pp.parse_args(c85_bad)
+		if bool(c85_bad_cfg.get("ok", true)):
+			c85_problems.append("invalid perf args accepted: " + str(c85_bad))
+	var c85_no_args: Dictionary = c85_pp.parse_args(PackedStringArray())
+	if not bool(c85_no_args.get("ok", false)) or bool(c85_no_args.get("requested", true)):
+		c85_problems.append("empty perf args should be ok and not requested")
+	var c85_matrix_only: Dictionary = c85_pp.parse_args(PackedStringArray(["--perf-matrix"]))
+	if not bool(c85_matrix_only.get("ok", false)) or bool(c85_matrix_only.get("requested", true)):
+		c85_problems.append("--perf-matrix selector should be ignored by the value parser")
+
+	var c85_mc: GDScript = load("res://src/missions/mission_controller.gd") as GDScript
+	var c85_signal_found: bool = false
+	for c85_sig: Dictionary in c85_mc.get_script_signal_list():
+		if str(c85_sig.get("name", "")) == "mission_ready":
+			c85_signal_found = true
+			break
+	if not c85_signal_found:
+		c85_problems.append("mission_controller has no mission_ready signal")
+	if not bool(c4_ready.get("fired", false)):
+		c85_problems.append("mission_ready never emitted for the suite-4 mission")
+	elif str(c4_ready.get("map", "")) != "old_manor":
+		c85_problems.append("mission_ready map=%s expected old_manor" % str(c4_ready.get("map", "")))
+	elif not (c4_ready.get("stats", {}) is Dictionary) or (c4_ready.get("stats", {}) as Dictionary).is_empty():
+		c85_problems.append("mission_ready stats missing/empty")
+	var c85_ok: bool = c85_problems.is_empty()
+	if not c85_ok:
+		printerr("FAIL: 85 perf measurement contract: ", c85_problems)
+		fails += 1
+	else:
+		print("PASS: 85 graphics_quality default/validation, --perf-* parser accept/reject, mission_ready emitted (old_manor)")
 
 	# 12.6/12.7 process-lifetime caches must not outlive the run.
 	var am_node: Node = root.get_node_or_null("/root/AudioManager")

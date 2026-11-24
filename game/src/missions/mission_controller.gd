@@ -4,6 +4,12 @@ extends Node3D
 ## ThievesDen_Geo, or FTUE_Geometry for Jaspering Hall expansion),
 ## spawns real Guard & Thief models, loot spawners, lights, and escape gates.
 
+## Emitted exactly once per start_contract(), after the level build, all
+## spawns/devices and the loading-screen teardown have completed. QA harnesses
+## wait on this instead of polling player/doors, so a truncated load cannot be
+## mistaken for a completed one.
+signal mission_ready(map_id: String, stats: Dictionary)
+
 const ThiefScript := preload("res://src/player/thief_character.gd")
 const GuardScript := preload("res://src/ai/guard_ai.gd")
 const LootScript := preload("res://src/interact/loot_item.gd")
@@ -90,6 +96,8 @@ var _den_lut_legacy: GradientTexture1D = null
 ## Godot 4.7.2 retains the probe atlas (7 texture RIDs) until the node is freed.
 var _den_reflection_probe: ReflectionProbe = null
 var _active_mission_row: Dictionary = {}
+## One-shot guard for mission_ready (start_contract resets it).
+var _mission_ready_emitted: bool = false
 
 
 func _ready() -> void:
@@ -490,6 +498,7 @@ func start_contract(order: int) -> void:
 	contract_info = GameData.get_contract_display(order)
 	var map_id: String = str(contract_info.get("map_id", "old_manor"))
 	_is_thieves_den = (map_id == "thieves_den")
+	_mission_ready_emitted = false
 	GameState.reset_run(order, map_id)
 	# Deterministic per-contract scene-variant seed. active_map_seed is the
 	# single source of truth; a zero seed is initialised from map+contract so
@@ -616,6 +625,13 @@ func start_contract(order: int) -> void:
 
 	if not _is_thieves_den:
 		_trigger_mission_start_letter()
+
+	# Load completion is the signal boundary: everything above (level build,
+	# player, AI, loot/clues/doors/devices, loading-screen finish) is done.
+	if not _mission_ready_emitted:
+		_mission_ready_emitted = true
+		print("TAT-2 mission_ready map=", map_id, " meshes=", int(level_stats.get("mesh_instances", 0)), " lights=", int(level_stats.get("light_count", 0)), " chunks=", int(level_stats.get("chunk_count", 0)))
+		mission_ready.emit(map_id, level_stats)
 
 
 func _setup_thieves_den_env(map_id: String) -> void:

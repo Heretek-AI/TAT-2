@@ -1,21 +1,27 @@
 # Handoff — Thick As Thieves Godot 4.7.2 port (next run)
 
 **Repo:** `/home/john/Projects/TAT-2`
-**HEAD at handoff:** `ba020cf` — `feat(extract): dump TAT/Content/MaterialLibrary tables (C5 groundwork)`
-**Working tree:** clean (`git status --short` empty)
-**Godot:** `4.7.2.stable.flathub.ed1daf0bf` via Flatpak (`godot` is **not** on `$PATH`)
-**Renderer:** Forward+ · Jolt Physics 60 Hz · 1280×720
-**Steam reference:** `/home/john/.local/share/Steam/steamapps/common/Thick As Thieves/` (`1.5.193.148559`, UE 5.5+, Win64 Shipping)
-**Platform scope:** Linux desktop `x86_64` only. Mobile is out of scope (issue #2).
-**Standing user directive:** every item listed in this handoff is valid and should be pursued.
+**HEAD at handoff:** `a410adc` — `chore(qa): track capture/probe harness sources`
+**Working tree:** clean; `main` in sync with `origin/main`
+**Godot:** `4.7.2.stable` via **native `tools/godot`** (Flatpak fallback inside the
+wrapper). `godot` is **not** on `$PATH`.
+**Renderer:** Forward+ · Jolt Physics 60 Hz · 1280×720 reference
+**Steam reference:** `/home/john/.local/share/Steam/steamapps/common/Thick As Thieves/`
+(`1.5.193.148559`, UE 5.5+, Win64 Shipping)
+**Platform scope:** Linux desktop `x86_64`. Android internal builds are in
+[`docs/ANDROID.md`](ANDROID.md); mobile gameplay is out of scope (issue #2).
+**Standing user directive:** every item listed in this handoff is valid and should
+be pursued.
 
-> There is **no swarm plugin** in this environment any more (it was removed). Do not look for `save_plan`, `declare_scope`, coder lanes, or `update_task_status`. Implement directly with `read`/`edit`/`write`/`shell`, verify with real commands, and commit. Git history is the record.
+> There is **no swarm plugin** in this environment. Do not look for `save_plan`,
+> `declare_scope`, coder lanes or `update_task_status`. Implement directly with
+> `read`/`edit`/`write`/`shell`, verify with real commands, and commit. Git history
+> is the record.
 >
-> **2026-11-21 update:** Track C (C1/C2/C3/C5) and #11 are complete. See
-> `docs/reports/track-c.md` for the implementation evidence and residuals. The
-> Track C subsections below are retained as the record; they are no longer open
-> work. The next run starts at M3/M4/M6/E2E. Current HEAD includes `2d86930`,
-> `79820d6`, `b9ad345`, `e7390d2`.
+> **Read first:** [`AGENTS.md`](../AGENTS.md) (operating rules and traps),
+> [`docs/FIDELITY_GAPS.md`](FIDELITY_GAPS.md) (live coverage + every residual),
+> [`docs/reports/review-remediation-wave.md`](reports/review-remediation-wave.md)
+> (latest wave evidence).
 
 ---
 
@@ -23,17 +29,20 @@
 
 | Area | State |
 |---|---|
-| Extraction pipeline | reproducible from a wiped tree; `make extract` + `make normalize` + `make anims` all exit 0 |
-| Asset integrity | 0 duplicate UIDs, 0 missing/corrupt meshes, `MESH HOLES=0` |
-| Unit suite (`run_tests.gd`) | **fails=0**, 0 `ERROR:`/`SCRIPT ERROR`, **0 leaks** |
-| M2 player suite (`test_m2_player.gd`) | **9/9** |
-| Scripts | **49/49 compile** (46 project scripts + 3 probes) |
-| E2E (unmasked) | **212 pass / 44 fail / 0 BOOT / 0 SCRIPT ERROR** — no new failure IDs vs baseline |
-| World data | **107/107 maps**, 16 contracts, 210 patrol paths / 673 waypoints, 222 scene variants, 4,118 device placements, **3,695 Niagara placements (3,308 active / 387 inactive `_Flame_Out`) / 36 systems** |
-| Materials | **0 fallback warnings** (Track C5 complete) |
-| Audio | 1,296 events / 1,205 resolved; 5,018 clips |
+| Extraction pipeline | reproducible from a wiped tree; `make extract` + `make normalize` + `make anims` exit 0 |
+| Asset integrity | 0 duplicate UIDs, 0 missing/corrupt meshes, `MESH HOLES=0`, 0 missing textures |
+| Scripts | **58/58 compile**, 0 broken |
+| Unit suite (`run_tests.gd`) | **54 suites, fails=0**, 0 `SCRIPT ERROR` |
+| M2 player suite | **fails=0** |
+| Probes | door walk **PASS**, viewmodel truth **PASS**, Niagara **PASS** |
+| E2E (unmasked) | **262/262**, 0 BOOT, 0 `SCRIPT ERROR` (tier 1: 115) |
+| World data | 107/107 maps, 16 contracts, 210 patrols / 673 waypoints, 222 scene variants, 4,118 devices, 3,695 Niagara placements (3,308 active) / 36 systems |
+| Materials | 1,571 resolved; two-sided and paint-stroke albedo now read from `BasePropertyOverrides` and child `_D` companions |
+| Runtime | startscreen → Den → prep → Guildhall → scoring, free-play cleanout, 2-player ENet co-op |
+| Captures | serialized Vulkan under Xvfb; sources tracked in `build/qa/` |
 
-The port is past M1, M2 and Track C. The next work is the milestone-owned gameplay work (M3/M4/M6) and the E2E backlog; Track C evidence and residuals are in `docs/reports/track-c.md`.
+The port is past M1, M2 and Track C. Gameplay milestones M3–M6 are substantially
+implemented; what remains is fidelity polish and the residuals in §7.
 
 ---
 
@@ -69,31 +78,58 @@ make audit
 python3 tools/check_uid_duplicates.py game --json     # error_count 0, warning_count 0
 
 # GDScript compile gate
-flatpak run org.godotengine.Godot --headless --path game \
+tools/godot --headless --path game \
   --script /home/john/Projects/TAT-2/tools/check_scripts_compile.gd
 
-# Unit/integration suite (~2-4 min)
-flatpak run org.godotengine.Godot --headless --path game --script res://tests/run_tests.gd
+# Unit/integration suite (~2-4 min, 54 suites)
+make test
+# or: tools/godot --headless --path game --script res://tests/run_tests.gd
 
 # M2 traversal/tools suite (~1-2 min)
-flatpak run org.godotengine.Godot --headless --path game --script res://tests/test_m2_player.gd
+tools/godot --headless --path game --script res://tests/test_m2_player.gd
 
 # Leak verifier
-flatpak run org.godotengine.Godot --headless --path game --script res://probe_leak.gd
+tools/godot --headless --path game --script res://probe_leak.gd
 
-# Unmasked E2E baseline (~10-15 min)
-flatpak run org.godotengine.Godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd
+# Unmasked E2E baseline (~10-15 min, 262 checks)
+tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd
+tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd -- --tier=1
 
-# Targeted probes added this run
-flatpak run org.godotengine.Godot --headless --path game --script res://tests/probe_ftue.gd
-flatpak run org.godotengine.Godot --headless --path game --script res://tests/probe_scene_variants.gd
-flatpak run org.godotengine.Godot --headless --path game --script res://tests/probe_niagara.gd
+# Targeted probes
+tools/godot --headless --path game --script res://tests/probe_door_walk.gd
+tools/godot --headless --path game --script res://tests/probe_viewmodel_truth.gd
+tools/godot --headless --path game --script res://tests/probe_niagara.gd
+tools/godot --headless --path game --script res://tests/probe_ftue.gd
+tools/godot --headless --path game --script res://tests/probe_scene_variants.gd
 
 # Linux export
 make linux-build     # -> build/tat2-linux-x86_64
 ```
 
-**Do not edit `game/` scripts while a Godot test run is in progress.** Godot loads scripts lazily; editing mid-run produced an invalid 12-minute verbose run earlier. Edit between runs only.
+### Live Vulkan captures (serialize: one Godot at a time)
+
+`build/qa/` sources are tracked; PNG output is gitignored. Every capture must run
+with a real display; on this machine that is Xvfb + native Vulkan:
+
+```bash
+Xvfb :99 -screen 0 1920x1080x24 -nolisten tcp -ac &
+DISPLAY=:99 TAT2_TEX_CAP=1024 tools/godot --path game --rendering-driver vulkan \
+  --script build/qa/capture_zipwire_hang.gd        # KF16/KF17: sign, gate, door, beams
+DISPLAY=:99 tools/godot --path game --rendering-driver vulkan \
+  --script build/qa/capture_ui.gd                  # startscreen / prep / wardrobe
+DISPLAY=:99 tools/godot --path game --rendering-driver vulkan \
+  --script build/qa/capture_freeplay.gd            # free-play prep + HUD
+DISPLAY=:99 TAT2_DEN_CAPTURE_DIR=/tmp/den \
+  tools/godot --path game --rendering-driver vulkan \
+  --script build/qa/denfix_capture.gd              # KF02/KF06/KF09/KF10
+```
+
+Free-play QA without the menu: `tools/godot --path game -- --qa-free-play`
+(autostart now runs clean; the old `main_menu.gd:303` `SCRIPT ERROR` is fixed).
+
+**Do not edit `game/` scripts while a Godot test run is in progress.** Godot loads
+scripts lazily; editing mid-run produced an invalid 12-minute verbose run earlier.
+Edit between runs only.
 
 ---
 
@@ -103,7 +139,7 @@ make linux-build     # -> build/tat2-linux-x86_64
 tools/
   tat-extract/Exporter.cs        CUE4Parse extractor (list/raw/tables/levels/materials/audio/meshes/textures/anims)
   parse_tables.py                levels, actors, markers, patrols, volumes, scene variants, devices, tables, fonts
-  parse_materials.py             materials.json + mesh_materials.json (slot order)
+  parse_materials.py             materials.json + mesh_materials.json (slot order, BasePropertyOverrides, albedo companions)
   parse_interactables.py         lockpick tracks (emits arc_deg + arc_angle_deg), doors/escapes
   parse_contracts.py             contracts.json (Contract.Main.1..16; repairs order 15)
   parse_gameplay.py / parse_weather.py / parse_vfx.py / parse_loot.py / parse_spawners.py / parse_containers.py
@@ -115,18 +151,19 @@ tools/
   reimport_assets.sh             Godot --import; --check guards .gdignore + find -L
   check_uid_duplicates.py        vendored project health checker (UID graph)
   check_scripts_compile.gd       vendored compile gate
+  godot                          native 4.7.2 launcher (Flatpak fallback)
 
 game/src/core/                   game_data, game_state, save_system, audio_manager, net_manager,
                                  level_loader, vfx_manager, weather_profile, weather_visuals,
-                                 animation_library, level_niagara.gdshader, *.gdshader
+                                 animation_library, level_niagara.gdshader, tat_beam.gdshader, *.gdshader
 game/src/player/                 thief_character, smoke_projectile
 game/src/ai/                     guard_ai, civilian_npc
 game/src/stealth/                light_probe, noise_bus
 game/src/interact/               doors, loot, clues, escape gates, puddles, bottles
-game/src/missions/               mission_controller
+game/src/missions/               mission_controller (spawns, fills, sign, free play, extraction)
 game/src/ui/                     hud, main_menu, wardrobe, mission_prep, contract_table, ledger, settings, theme
-game/tests/                      run_tests.gd, test_m2_player.gd, probe_*.gd
-game/tests/e2e/                  run_e2e_tests.gd + tiers 1-4 + helpers
+game/tests/                      run_tests.gd (54 suites), test_m2_player.gd, probe_*.gd
+game/tests/e2e/                  run_e2e_tests.gd + tiers 1-4 + helpers (262 checks)
 game/probe_leak.gd               shutdown leak verifier
 game/data/generated/             all generated JSON (gitignored): levels/, gameplay/, tables/, weather/, vfx/, localization/
 game/assets/ue/
@@ -137,34 +174,38 @@ game/assets/ue/
   fonts/ 64 TTF
   videos/ 15 OGV
 extracted/                       7.3 GB, gitignored, regenerable
-docs/reports/                    per-area findings; e2e-baseline.md; sprint-3.md; tables-coverage.md
+build/qa/                        tracked capture/probe sources; captures, logs and exports ignored
+docs/reports/                    per-area findings + one report per wave; e2e-baseline.md; track-c.md
 docs/HANDOFF_NEXT_AGENT.md       this file
 ```
 
-**Gitignored:** `extracted/`, `game/assets/ue/`, `game/data/generated/`, `game/.godot/`, `build/`, `.agents/`.
-A fresh clone must run `make extract && make normalize && make anims && tools/reimport_assets.sh` before the game/tests work.
+**Gitignored:** `extracted/`, `game/assets/ue/`, `game/data/generated/`,
+`game/.godot/`, `build/` (except `build/qa/**/*.{gd,sh,py}`), `.agents/`.
+
+A fresh clone must run `make extract && make normalize && make anims &&
+tools/reimport_assets.sh && make desktop-texture-cap` before the game/tests work.
 
 ---
 
-## 4. What changed in this run (commits, newest last)
+## 4. What changed recently (waves, newest last)
 
-| Commit | Change |
+| Commit | Wave / change |
 |---|---|
-| `f00e835` | baseline ignore of agent dirs + skills lock |
-| `ba76a31` | Raw/TAT `.gdignore` emitted by extractor + reimport; vendored UID and compile gates; `--check` guard + `find -L` |
-| `3075b63` | removed 2,058 stale Raw-route `.scn`; retired 3 unreferenced UDS brushes; deleted `glb51_known` allowlist |
-| `8d94145` | WwiseAudio tables; locres CSVs (8 locales); 15 OGV; audit ignores `.import`/`.uid`, splits Maps; Makefile normalizer chain + both gates |
-| `dbad647` | 107/107 maps; generic actor capture; 673 patrol points; 222 SV configs; devices.json |
-| `b0f5c29` | Engine map templates mounted; Suite 31f expectations (107 levels, authored Audio sublevels) |
-| `d589169` | Phase 12: unmasked Suites 42/44 + `_load_patched`; AudioManager + static-cache teardown (0 leaks); 16 contracts; ftue route; all 31 CurveTables; GameState fields; SaveSystem schema + type-safe merge; wardrobe unify |
-| `e7c01f3` | M2 test alignments (partial crank grants nothing; queued viewcone decay) 9/9 |
-| `f18c3a2` | E2E baseline on disk: 24 patches ported, typed-array lambda fixed, fall damage exempt from disguise |
-| `44cd21c` | clean-regeneration fixes (audio producers, arc_deg at source, `.gdignore` freshness, BlendSpace allowlist) + B1 smart objects + B5 mips/volume basis/MultiMesh windows |
-| `c5649b8` | explicit FTUE collider budget (40k building / 44k total) + `probe_ftue` |
-| `b2b0b3a` | deterministic SceneVariant selection + `probe_scene_variants` |
-| `0c65ca6` | sprint-3 doc with Track B + Niagara evidence |
-| `605de44` | 3,695 authored Niagara placements; 3,308 active spawned via 36 MultiMesh nodes (387 inactive `_Flame_Out` skipped) + `probe_niagara` |
-| `ba020cf` | MaterialLibrary added to extractor table roots (C5 groundwork) |
+| `a410adc` | Track `build/qa` capture/probe **sources** so the E2E harness checks are reproducible from a clone |
+| `1373bb9` | Docs: record the review remediation wave |
+| `e7fcb7d` | T2-04-C accepts the intentional beam shader (3 `StandardMaterial3D` negative controls kept) |
+| `0e89d2c` | Ground loot/civilians by AABB + floor ray; ornate gate fill; sign letter emission; free-play crash/currency/entry |
+| `4b9fa03` | Additive beams, `BasePropertyOverrides.TwoSided`, paint-stroke albedo recovery, mirrored leaves, WorldGrid doors, blocker tag |
+| `3ed80c0` | Mantle/climb/zipwire reject `blocking_volume`; T1-10-J; schema-v2 FOV 75→54.54 migration |
+| `6fb3475` | Free-play Contract Inactive Guildhall Cleanout run with reference HUD |
+| `f5b90ff` | Reverse landscape heightfield winding so terrain tops render (startscreen floor) |
+| `3d010f7` / `c7735e5` | Den parchment emission 0.20 + shade fill; Guildhall road fills; probe exit |
+| `e5e31f7` | Landscape normals, startscreen road bricks, Guildhall fallback normal, sign letter split |
+| `665246a` | KF16 gate fill/headlights, KF17 skyline tower, Den map-table bounce |
+| earlier | Startscreen decal/neon tuning, sky veil, KF16/KF17 follow-ups, Track C, world/free-play wave |
+
+Per-wave evidence: `docs/reports/` (latest:
+[`review-remediation-wave.md`](reports/review-remediation-wave.md)).
 
 ---
 
@@ -234,92 +275,76 @@ A fresh clone must run `make extract && make normalize && make anims && tools/re
 
 | File | Purpose | Expected |
 |---|---|---|
-| `game/tests/run_tests.gd` | 36 suites (42/44 removed as masking) | fails=0, 0 `ERROR:`, 0 leaks |
-| `game/tests/test_m2_player.gd` | 9 traversal/tool checks | 9/9 |
-| `game/probe_leak.gd` | Den + Guildhall load/free leak check | 0/0/0 |
-| `game/tests/e2e/run_e2e_tests.gd` | Tiers 1–4 unmasked | 210/256, 46 fail, 0 BOOT |
-| `game/tests/probe_ftue.gd` | FTUE collider budget | player=1, dropped=0, budget_ok, safe room |
-| `game/tests/probe_scene_variants.gd` | seeded SV selection | 104 Guildhall, stable, varies, requested |
-| `game/tests/probe_niagara.gd` | absolute Niagara coverage | authored=3695, active=3308, skipped=387, systems=36, nodes=36 |
+| `game/tests/run_tests.gd` | **54 suites** — data, loader, materials, doors, FOV schema, audio, VFX, UI | `SUMMARY: fails=0`, 0 `SCRIPT ERROR` |
+| `game/tests/test_m2_player.gd` | traversal/tools checks | `M2_SUMMARY: fails=0` |
+| `game/tests/probe_door_walk.gd` | closed blocks / 70° gate / re-toggle / F-spam / occupied close / lockpick | `DOORWALK PASS` |
+| `game/tests/probe_viewmodel_truth.gd` | 1P viewmodel pose/reset, crank bone | `VIEWMODEL_TRUTH PASS` |
+| `game/tests/probe_niagara.gd` | absolute Niagara coverage (authored/active/skipped/systems/nodes) | `NIAGARA_PROBE PASS` |
+| `game/tests/probe_ftue.gd` | FTUE collider budget + safe room | player=1, dropped=0, budget_ok |
+| `game/tests/probe_scene_variants.gd` | seeded SV selection | 104 Guildhall, stable, varies |
+| `game/probe_leak.gd` | Den + Guildhall load/free leak check | 0/0/0; 7 texture RIDs warn unless `TAT2_NO_DEN_PROBE=1` |
+| `game/tests/e2e/run_e2e_tests.gd` | Tiers 1–4 unmasked | **262/262** |
 
-The E2E runner no longer patches expectations. All 24 alignments live in the tier files. If you add a new expectation, edit the tier file — never reintroduce `_load_patched`.
+The E2E runner no longer patches expectations. All alignments live in the tier
+files (`T1-10-J` blocking volumes, `T4-13` free-play no-currency). If you add an
+expectation, edit the tier file — never reintroduce `_load_patched`, and never
+delete an assertion to go green.
 
-`docs/reports/e2e-baseline.md` holds the 46 remaining failures with owner milestones. Issue #5 is the umbrella; #7 M2, #8 M3, #9 M6, #10 M4.
+Recent additions to know about:
+
+- **T1-10-J** — tall and low `blocking_volume` bodies reject climb/mantle; real
+  walls still climb; 4 m mantles, 5 m refuses; no soft-lock. Tier 1 is now 115.
+- **T4-13** — free-play extraction writes no contract and banks no currency.
+- **T2-04-C** — `MI_LightBeam_SM` is an intentional `tat_beam.gdshader` exception;
+  the three other textured materials must stay `StandardMaterial3D`.
 
 ---
 
 ## 7. Open work — prioritized
 
-### Track C5 — materials fallback → 0 (**done**)
-37 warnings remain, 19 distinct UE paths:
+### 7.1 Fidelity residuals (visible, bounded)
 
-```
-8  /Engine/EngineMaterials/WorldGridMaterial
-4  /Game/MaterialLibrary/Utility/M_DarkGrey
-3  /Game/ThirdParty/PipePoleAnimationPack/Demo/LevelPrototyping/Materials/MI_Solid_Blue
-2  /Game/ThirdParty/Stylized_Furniture/Materials/MI_TeleScope_Inst
-2  /Game/ThirdParty/CobwebPack/Materials/CobwebFogy2sided
-2  /Game/ThirdParty/CobwebPack/Materials/CobwebFogy
-2  /Game/Gameplay/Interactables/ElectricPower/MI_PowerLight_On
-2  /Game/Art/Gameplay/Gear/BlackJack/Mi_Blackjack
-2  /Game/Art/Environment/Lights/LightModules/T_LightSm_SconceA_Brass
-2  /Engine/BasicShapes/BasicShapeMaterial
-1  /Game/ThirdParty/CobwebPack/Materials/SimpleCobweb2
-1  /Game/ThirdParty/CobwebPack/Materials/BaseMaterial2Sided
-1  /Game/ThirdParty/CobwebPack/Materials/BaseMaterial
-1  /Game/MaterialLibrary/Debug/M_DefaultEmissive_Blinking
-1  /Game/Developers/gjasp/Chrome
-1  /Game/Art/Environment/OldManor/SM_OldManor_DrivewayA_x6
-1  /Game/Art/Environment/City/Streets/Sidewalks/SM_SidewalkCityA_6m
-1  /Game/Art/Environment/City/Architecture/BeautifulCorner/SM_SidewalkCityStone_6m
-```
+1. **Guildhall POI graybox floors + floating furniture** — 1,637 `GB_Floor_2x2`
+   at mismatched heights. This is a **content project**: re-place the POI floors
+   and furniture at authored heights, not a loader tweak.
+2. **KF16 sign legibility at 27 m** — letters are gold, front-facing, emission
+   `(1.0, 0.62, 0.20) × 0.10`. Options: bring the reference framing closer, widen
+   the letter surface, or accept the reference's own contrast. Do not fake it
+   with a spot light (tried, reverted).
+3. **White glass/emissive plates** and the mirrored `PICK LOCK` reflection — repro
+   under Vulkan first; no guessed material change.
+4. **Den 43.5 vs UE 52.6** — Lumen/real-GI gap. VoxelGI was attempted twice and
+   reverted (room spill). Only revisit with a real GI technique.
+5. **Free-play prep body text** clips at the card edge — minor UI polish in
+   `mission_prep_ui.gd` (`_make_card` autowrap width).
+6. **`CivilianNPC` has no `CollisionShape3D`** — spawn origin is grounded, but the
+   body still drifts under gravity. Add a capsule and re-run the civilian probe.
+7. **Shipped sliding gate** — capture-only closed leaves remain correct until a
+   route crosses it.
+8. **Probe exit warning** — 7 texture RIDs at finalization;
+   `TAT2_NO_DEN_PROBE=1` is the clean gate. Not a script error.
 
-Facts:
-- `MaterialLibrary/` is now dumped (`ba020cf`), but `M_DarkGrey` and `Mi_Blackjack` still do not appear in `materials.json` — `parse_materials.py` filters materials without a resolvable albedo texture. These are untextured (constant PBR) materials; the parser must emit them from their authored `BaseColor`/`Roughness`/`Metallic`.
-- `MI_Solid_Blue` and `MI_PowerLight_On` **are** in `materials.json` yet still fall back at load. Check `LevelLoader.get_material_for_ue()` key normalization (`/Game/...` vs stripped path, case, `.MI_...` suffix).
-- `WorldGridMaterial` and `BasicShapeMaterial` are Engine materials with no dump. Add an explicit authored system-material map (documented values, not a tier-3 guess) for at least these two; the checkerboard/debug look is wrong on shipped Engine primitives.
-- Several `SM_*` names in the list are **mesh paths**, not materials (`SM_OldManor_DrivewayA_x6`, sidewalks). The level data points the material slot at a mesh; map those to the actual material or a documented default. Do not add fake materials with those names.
-- Acceptance: `grep -c 'material fallback'` = 0 on a full `run_tests`; no visual regression in captures; `fallback_material_count` in loader stats is 0 on Guildhall/OldManor.
+### 7.2 Product/UX
 
-### #11 — apply SV spawner overrides (**done: exact tags + class map**)
-Selection is done. Applying overrides needs a documented mapping because the vocabularies differ:
-- SV overrides name `MapVariation.SceneElement.Locks.Doors`, `.Locks.Windows`, `.Lights`, `.Guards`, `.MajorLoot`, `.Quest`.
-- Level spawners carry `SpawnGroup.TagName` = `MapVariation.SpawnGroup.*`; some actors carry `_sceneRequirement.ElementTag` = `MapVariation.SceneElement.*` (Vault, Quest).
-- Raw maps contain 3,710 `NiagaraComponent`s, 819 actors with tags (mostly `WithSmartObject`).
-- Suggested mapping: doors → `MissionSpawner_Door`/swinging doors; windows → window actors/`BP_Civic_*Window*`; lights → light markers; guards → `MissionSpawner_Character`; loot → `MissionSpawner_Major/MinorLoot`; quest → actors with `scene_requirement == SceneElement.Quest`. Roll per actor with `seed + fnv1a(actor_name)`, chance from the override. Assert fixed-seed reproducibility in a probe.
-- Alternative: extend the extractor to dump the gameplay-tag registry that maps `SceneElement` to actor classes, if such an asset exists. Search `extracted/json` for `MapVariation.SceneElement` outside `SV_*` and `Guildhall_Gameplay` first.
+- **Free-play entry polish** — the Den button works (`G`); consider promoting it
+  from a debug-styled button to an authored map-table interaction.
+- **Settings**: 54.54 is authored; keep the 50–105 user clamp. Any new settings
+  key must join the schema-v2 migration path in `save_system.gd`.
+- **Co-op**: two-instance ENet smoke exists; add a scripted two-client run to E2E
+  when it can be made deterministic (Tier 5).
 
-### C1 — `OSERenderer` NPR + SNN (**done**)
-- No post-process infrastructure exists yet. Godot 4.7 supports `CompositorEffect` (RenderingDevice) — that is the robust path for a screen-space pass; a camera-child full-screen quad is a simpler fallback.
-- Proposed files: `game/src/core/ose_renderer.gd` (effect/node + toggles), `game/src/core/tat_npr.gdshader` (ink: depth/normal edge detection via `hint_depth_texture` / `hint_normal_roughness_texture`), `game/src/core/tat_snn.gdshader` (painterly: edge-preserving blur + quantization).
-- Acceptance: 0 `SHADER ERROR` under Vulkan, toggles exposed, before/after captures under `build/qa/` + a short report.
-- Source of truth: audit Cluster B §2.3 (`OSE.NPR` ink outline + `OSE.SNN` painterly + `T_PaintStroke*`). Steam assets are in the reference install; do not invent parameters without naming the approximation.
+### 7.3 Milestone record (what is already implemented)
 
-### C2 — `OSEXray` (**done**)
-- Depth-ignoring silhouettes for guards/loot/clues/players. Two viable implementations: (a) clone target meshes with an unshaded `depth_test_disabled` override in category colours (cheap, works per-instance); (b) a CompositorEffect with an ID/stencil buffer (higher fidelity, more work).
-- Acceptance: silhouette visible through a wall with X-ray on, absent with it off; category colours differ; capture pair.
-- Interface already reserved in the plan: group `"xray_target"`, `set_xray_highlight(enabled, category)`.
-
-### C3 — weather (**done**)
-- **Roof rain occlusion:** the current rain is a global particle layer; it rains through ceilings. Approach: gate rain emitter positions by a downward raycast / roof volumes, or split rain into outdoor regions derived from level geometry. Acceptance: a roofed fixture shows no rain inside while outside rain renders.
-- **`PPM_RainDropsOnLens`:** full-screen lens-drop overlay driven by the weather preset (intensity/speed). Acceptance: appears in a rain preset, absent otherwise.
-- **`Guildhall_LocalVolumetric` + `Clouds`:** `Guildhall_LocalVolumetric.tatlevel.json` and `Guildhall_Clouds.tatlevel.json` now exist. Load/render them (fog volume + cloud meshes) and verify in a capture.
-- Existing code: `weather_visuals.gd` (rain layer, pano cache), `weather_profile.gd` (presets, LUTs, `fog_sky_affect`).
-
-### E2E backlog (46 failures)
-Classified in `docs/reports/e2e-baseline.md`, tracked as #7 (M2), #8 (M3), #9 (M6), #10 (M4). Policy agreed with the user: fix harness/genuine-now; system-dependent failures close with their milestone. Re-run tiers after each milestone:
-```bash
-flatpak run org.godotengine.Godot --headless --path game \
-  --script res://tests/e2e/run_e2e_tests.gd -- --tier=1   # or 2/3/4
-```
-Do not weaken assertions to go green; fix the game or classify with evidence.
-
-### Then the milestone work
-- **M3:** Chameleon/Cotter binding (28 GLBs), 54 cosmetics, revive (co-op/self/totem), combat (blackjack charge/cooldown/block/parry/takedowns/carry), traversal (dodge/slide/manual mantle/ladders), 5 ProceduralCamera configs, 3P locomotion, 28 tools + 6 potions, 3-mode 10-glyph Thiefsign, 1P anim fixes.
-- **M4:** navmesh pathfinding + authored patrol playback (data ready), AI sensing fixes, archetypes, StateTree/escalation/lockdown, acoustic portals, power grid, security/turrets/traps, breakables, vault doors/windows/combo locks, stashes/electrotype/clues.
-- **M5:** Wwise wiring expansion (events/VO/music/switches/RTPCs/reverbs/states), LAN ENet co-op (state/world/revive/Thiefsign), joypad bindings.
-- **M6:** missions/Den hub/FTUE runner+videos+infographics, UI defects and missing screens, 64 fonts + CJK, 8 locales via `TranslationServer`, gamepad focus/glyphs.
-- **E2E/final:** 350+ assertions, 2-instance ENet co-op, Tier 5 adversarial, Linux export + rubric.
+- **M3**: Chameleon/Cotter binding, cosmetics, revive, blackjack combat, traversal
+  (dodge/slide/mantle/ladders), 3P locomotion, tools/potions, thiefsign.
+- **M4**: navmesh + authored patrols, AI sensing, archetypes, power grid,
+  security/turrets/traps, breakables, vault doors/windows/locks, clues.
+- **M5**: Wwise events/VO/music/RTPCs, LAN ENet co-op, joypad.
+- **M6**: mission/Den/FTUE runner, UI defects, fonts/CJK, 8 locales, gamepad focus.
+- **Track C**: materials fallback → 0, NPR/SNN, X-ray, weather/roof occlusion,
+  lens drops, volumetric/clouds — all done; evidence in `docs/reports/track-c.md`.
+- **E2E backlog**: closed from 46 failures to 0 unmasked; `docs/reports/e2e-baseline.md`
+  is historical.
 
 ---
 
@@ -353,23 +378,27 @@ Do not weaken assertions to go green; fix the game or classify with evidence.
 ## 10. Definition of done for the next run
 
 ```bash
-git status --short                      # clean
-make audit                              # exit 0, all groups fresh, 0 unexpected errors
+git status --short                                  # clean
+make audit                                          # exit 0, all groups fresh, 0 unexpected errors
 python3 tools/check_uid_duplicates.py game --json   # 0/0
-flatpak run ... --script tools/check_scripts_compile.gd   # 0 broken
-flatpak run ... --script res://tests/run_tests.gd          # fails=0, 0 leaks
-flatpak run ... --script res://tests/test_m2_player.gd     # 9/9
-flatpak run ... --script res://probe_leak.gd               # 0/0/0
-flatpak run ... --script res://tests/probe_ftue.gd         # PASS
-flatpak run ... --script res://tests/probe_scene_variants.gd  # PASS
-flatpak run ... --script res://tests/probe_niagara.gd      # PASS
-flatpak run ... --script res://tests/e2e/run_e2e_tests.gd  # no new failures vs baseline
+tools/godot --headless --path game --script tools/check_scripts_compile.gd   # 58/0
+tools/godot --headless --path game --script res://tests/run_tests.gd         # fails=0 (54 suites)
+tools/godot --headless --path game --script res://tests/test_m2_player.gd    # fails=0
+tools/godot --headless --path game --script res://tests/probe_door_walk.gd   # PASS
+tools/godot --headless --path game --script res://tests/probe_viewmodel_truth.gd  # PASS
+tools/godot --headless --path game --script res://tests/probe_niagara.gd     # PASS
+tools/godot --headless --path game --script res://probe_leak.gd              # as documented
+tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd # 262/262
+git push origin main
 ```
 
-Track C is done when:
-- material fallback warnings = 0;
-- NPR/SNN and X-ray have captures + a report;
-- rain does not fall through a roofed fixture, lens drops appear in rain, volumetric/Clouds render;
-- no gate regresses.
+Any wave that changes rendering, materials, traversal or mission flow also needs:
 
-Start with C5. It is bounded, data-driven, and removes noise from every later capture.
+- a serialized Vulkan capture proving the visual change (startscreen, Guildhall
+  KF16/KF17, Den KF10, free play);
+- a `docs/reports/<wave>.md` with measured evidence (ROI stats, logs, gates);
+- `docs/FIDELITY_GAPS.md` updated with what remains;
+- this handoff refreshed (HEAD, gates, open work).
+
+If a gate fails, find the cause. Do not lower the expectation, skip the test or
+re-baseline the numbers without recording the defect and its owner.

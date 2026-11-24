@@ -235,7 +235,7 @@ find extracted/json -name 'NS_*.json' | wc -l
   - **Probe shutdown**: attempted `visible=false` + `free()` before exit; the 7-texture RID warning still appears at finalization, so the `TAT2_NO_DEN_PROBE` switch remains the clean-exit path.
   - **QA**: compile 58/0, run_tests 0, M2 0, door/VM/Niagara, E2E 261/261.
 
-- **Review remediation wave (2026-11-23, fifth pass)** — `3ed80c0`, `4b9fa03`, `0e89d2c`, `e7fcb7d`:
+- **Review remediation wave (2026-11-23, fifth pass)** — `3ed80c0`, `4b9fa03`, `0e89d2c`, `e7fcb7d`; evidence and residuals in [`docs/reports/review-remediation-wave.md`](reports/review-remediation-wave.md):
   - **Security beams**: `MI_LightBeam_SM` now uses `tat_beam.gdshader` (warm additive, alpha 0.55, energy 1.7) instead of an opaque white lit material; generic additive/textured-unlit mapping added. The 134 Guildhall beams no longer render as solid white bars.
   - **Two-sided flags**: the parser reads `BasePropertyOverrides.TwoSided`; 24 materials gained the flag (gates, fences, brass doors, vault panels, sign). Gates/fences no longer vanish from one side.
   - **Paint-stroke albedo**: the parser prefers the child MI's companion `_D` over the parent master; 15 materials recovered, including `MI_BrickNewClean_XYZ` (gate frame) and `MI_FloorTileA_AlignXYZ`.

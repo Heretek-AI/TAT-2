@@ -111,7 +111,6 @@ var _called_help: bool = false
 var _flee_from: Vector3 = Vector3.ZERO
 var _nav: NavSteering = NavSteering.new()
 var yelps: int = 0
-var heals: int = 0
 var last_sight_distance_m: float = -1.0
 
 
@@ -329,6 +328,9 @@ func _physics_process(delta: float) -> void:
 		velocity.y -= 9.8 * delta
 	else:
 		velocity.y = 0.0
+	# CT_AIStats CivilianBaseHealthRegenRate 5: an unhurt-again civilian recovers.
+	if health < CIVILIAN_MAX_HP and mode != Mode.DOWNED:
+		health = minf(CIVILIAN_MAX_HP, health + CIVILIAN_REGEN_PER_S * delta)
 	_calm_cooldown = maxf(0.0, _calm_cooldown - delta)
 	_sight_timer -= delta
 	if _sight_timer <= 0.0:

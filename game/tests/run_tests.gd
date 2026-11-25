@@ -7419,12 +7419,13 @@ func _initialize() -> void:
 	# approach is already BELOW its KF16/KF18 reference (p50 10 vs 26) and loses
 	# black floor for every step of exposure removed (gate %<8: 23.9 at 1.15 ->
 	# 38.0 at 1.00 -> 51.9 at 0.85 -> 62.2 at 0.75). A global exposure/ambient
-	# cut is therefore a regression, and the interior band is BLOCKED-ON P2: the
-	# two shadowless foyer fills (mission_controller.gd:564-580, 1.6 at 3.3 m and
-	# 1.3 at 14.1 m from the upper-foyer eye) dominate that pose -- freeing them
-	# moves upper_foyer mean 28.8 -> 22.7 and %<8 8.0 -> 32.2 at one exposure.
-	# This suite pins today's contract and fails if the night grade is lowered
-	# globally without a room-scoped lever landing first.
+	# cut is therefore a regression, and the interior band was BLOCKED-ON P2:
+	# the two shadowless foyer fills (mission_controller.gd, 1.6 at 3.3 m and
+	# 1.3 at 14.1 m from the upper-foyer eye) dominated that pose -- freeing
+	# them moves upper_foyer mean 28.8 -> 22.7 and %<8 8.0 -> 32.2 at one
+	# exposure. W9-P2 removed the near fill and the band is still NOT met
+	# (upper 29 / 1.1 %); a camera-scoped room grade failed its pre-registered
+	# sweep and was reverted. This suite stays the guard against a global cut.
 	var w9_problems: Array[String] = []
 	var w9_wp: GDScript = load("res://src/core/weather_profile.gd") as GDScript
 	if w9_wp == null:
@@ -7519,6 +7520,34 @@ func _initialize() -> void:
 		fails += 1
 	else:
 		print("PASS: 99 W9-P1 authored progression (level cap 25 with XP kept, authored XP award, KF13>ladder>QG endgame, FTUE 5,000, 48 level gates, map order; ", w9p_ms, " ms)")
+
+	# 101-105. W9-P2 B2/B3 behaviour suites (standalone SceneTree children, the
+	# same pattern as suite 99: exit 0 AND the PASS marker are both required).
+	# These pin the authored-lock rule, the ESC-while-lockpicking guard, the
+	# labelled lockpick stand-in, the jam-damage decision and the magic-door
+	# continuity decision. They are headless and do not load a full mission.
+	for w9p2_suite: Array in [
+		["101", "W9-P2 B2 authored locks (cap-as-level, key-only/window exclusions, no invented level)", "res://tests/test_w9p2_locks.gd", "LOCKS PASS checks="],
+		["102", "W9-P2 B2 lockpick ESC cancel does not open pause (LV4 path)", "res://tests/test_lockpick_cancel.gd", "LOCKPICK_CANCEL PASS checks="],
+		["103", "W9-P2 B2 labelled lockpick hands stand-in (no authored mesh/animation)", "res://tests/test_lockpick_hands.gd", "LOCKPICK_HANDS PASS checks="],
+		["104", "W9-P2 B3 jam damage is the authored value (no balance change)", "res://tests/test_jam_damage.gd", "JAM_DAMAGE PASS checks="],
+		["105", "W9-P2 B3 magic-door continuity during the endgame (dormant never extracts)", "res://tests/test_w9p2_endgame_continuity.gd", "ENDGAME_CONTINUITY PASS checks="],
+	]:
+		var w9p2_out: Array = []
+		var w9p2_args: PackedStringArray = [
+			"--headless",
+			"--path", ProjectSettings.globalize_path("res://"),
+			"--script", str(w9p2_suite[2]),
+		]
+		var w9p2_t0: int = Time.get_ticks_msec()
+		var w9p2_code: int = OS.execute(OS.get_executable_path(), w9p2_args, w9p2_out, true)
+		var w9p2_ms: int = Time.get_ticks_msec() - w9p2_t0
+		var w9p2_text: String = "\n".join(PackedStringArray(w9p2_out))
+		if w9p2_code != 0 or w9p2_text.find(str(w9p2_suite[3])) < 0:
+			printerr("FAIL: ", w9p2_suite[0], " ", w9p2_suite[1], " exit=", w9p2_code, " ms=", w9p2_ms, "\n", w9p2_text.right(3000))
+			fails += 1
+		else:
+			print("PASS: ", w9p2_suite[0], " ", w9p2_suite[1], " (", w9p2_ms, " ms)")
 
 	# 12.6/12.7 process-lifetime caches must not outlive the run.
 	var am_node: Node = root.get_node_or_null("/root/AudioManager")

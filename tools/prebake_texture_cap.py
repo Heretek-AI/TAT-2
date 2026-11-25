@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pre-bake the 1024 px long-edge cap into loader-managed PNG imports.
+"""Pre-bake the 1024 px long-edge cap into referenced PNG imports.
 
 `level_loader.gd` (PG-1) currently caps oversized textures at load time in
 `_cap_image()`: every texture is decoded at full resolution and then resized
@@ -8,11 +8,25 @@ in RAM. That avoids 8 GB of VRAM on an 8 GB card, but it still decodes
 import settings so the `.ctex` is stored at the capped size and the runtime
 resize becomes a no-op.
 
-Scope is deliberately narrow -- only PNGs the level loader manages:
+Scope is every PNG referenced by a path literal the runtime can load:
 
 * every ``res://...png`` value in a ``texs`` dict of
-  ``game/data/generated/materials.json``; and
-* every ``res://assets/...png`` literal in ``game/src/core/level_loader.gd``.
+  ``game/data/generated/materials.json``;
+* every ``res://assets/**/*.png`` literal in ``game/src/**/*.gd`` (which
+  includes ``level_loader.gd``); and
+* every ``res://assets/**/*.png`` literal in ``game/scenes/**/*.tscn``.
+
+The code/scene scan exists because textures loaded directly (``load()``,
+``preload()``, ``_load_raw_tex()``) never pass through the loader's
+``_cap_image()``, so their sidecars used to keep ``process/size_limit=0``.
+Literals whose file is not on disk (format strings such as
+``T_portrait_%s.png``, dead paths) are skipped and counted as "dangling";
+they are never written to the manifest.
+
+``--check`` also prints an honest inventory of over-cap PNGs that are outside
+this target set (``extracted/assets/**`` minus the targets). Capping files
+nothing references has no runtime benefit, so that line is informational and
+never fails the gate.
 
 For each target whose source long edge exceeds ``--cap`` (default 1024), the
 matching ``.png.import`` sidecar gets exactly two settings:
@@ -31,6 +45,11 @@ Safety / behaviour:
 * ``--check`` is read-only and fails when an over-cap, non-alpha-critical target
   lacks the cap + mipmaps in its sidecar (``process/size_limit=0`` counts as
   uncapped). ``make audit`` runs it so a stale cap cannot pass the gate.
+* The alpha-critical allowlist is a ``{path: reason}`` mapping. ``--check`` and
+  ``--apply`` abort when an entry has no non-empty reason, so an exemption
+  cannot be added without recording the measurement that justifies it. An
+  entry is exported only for a mask the cap would materially destroy; at the
+  time of writing that is exactly one binary punch-through cut-out.
 * A second apply is idempotent: already-capped files report ``already`` and
   their dest files are left alone.
 * ``--revert`` restores the original values recorded in
@@ -57,20 +76,41 @@ import tempfile
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import Any, NamedTuple, NoReturn
 
 ROOT = Path(__file__).resolve().parent.parent
 MATERIALS_REL = Path("game/data/generated/materials.json")
+## Exemptions from the cap, each with the measurement that justifies it.
+##
 ## This is the only DXT1 texture in the extracted tree with real punch-through
-## alpha (7,611 transparent pixels at 4096²). Cubic import downscaling to 1024
-## blends every transparent pixel to alpha 1.0, so keeping it full-res is the
-## only way to preserve the storefront glass-decal cutout. Six startscreen
-## instances depend on it.
-ALPHA_CRITICAL_PATHS: set[str] = {
-    "res://assets/ue/Raw/Art/Environment/Storefront/GlassDecals/T_Storefront_GlassDecalsA.png",
+## alpha: a *binary* 0/255 mask with 7,611 transparent texels at 4096²
+## (0.0454 %). Resampling to 1024 blends every one of them to opaque (measured:
+## 0.0000 % masked, 17 alpha levels instead of 2), which erases the storefront
+## glass-decal cut-out that six startscreen instances use. The ten soft-alpha
+## masked albedos measured on 2026-11-25 (T_HorizonA_BCO, T_Grate_D,
+## T_PosterA/B/C_DA, T_MixedAds_D, T_Map_FTUE_D, T_SlimeBomb_DA, Brazier_DA,
+## T_WindowDecoOpaque_D) lose <= 0.21 pp of mask area at the cap and stay soft,
+## so none of them is exempt.
+##
+## Add an entry only with the same measurement; ``--check``/``--apply`` abort
+## on an entry whose reason is empty.
+ALPHA_CRITICAL_PATHS: dict[str, str] = {
+    "res://assets/ue/Raw/Art/Environment/Storefront/GlassDecals/T_Storefront_GlassDecalsA.png": (
+        "only binary 0/255 punch-through cut-out in the tree: 7,611 of "
+        "16,777,216 texels (0.0454 %) transparent at 4096²; a 1024 cap "
+        "resamples all of them opaque (measured 0.0000 % masked, 17 alpha "
+        "levels vs 2). Six startscreen instances use the cut-out."
+    ),
 }
-LOADER_REL = Path("game/src/core/level_loader.gd")
 MANIFEST_REL = Path("build/texture_cap_manifest.json")
+## Code and scene trees scanned for res://assets PNG literals, with the file
+## types that carry them.
+CODE_SCAN_RELS: tuple[tuple[Path, tuple[str, ...]], ...] = (
+    (Path("game/src"), (".gd",)),
+    (Path("game/scenes"), (".tscn",)),
+)
+## The extracted asset root, used only for the read-only out-of-scope inventory.
+EXTRACTED_ASSETS_REL = Path("extracted/assets")
 
 PNG_SIG = b"\x89PNG\r\n\x1a\n"
 CAP_KEYS = ("process/size_limit", "mipmaps/generate")
@@ -82,7 +122,7 @@ MAX_CAP = 16384
 # quoted values under other sections. This map is used to prove that a rewrite
 # touched nothing except the two cap keys.
 _PARAM_LINE = re.compile(r"(?m)^([A-Za-z0-9_./]+)=(.*)$")
-_LOADER_LITERAL = re.compile(r'res://assets/[^"\'\s]+?\.png', re.IGNORECASE)
+_ASSET_LITERAL = re.compile(r'res://assets/[^"\'\s]+?\.png', re.IGNORECASE)
 
 
 def _error(message: str) -> NoReturn:
@@ -240,15 +280,63 @@ def _delete_dests(root: Path, text: str, dry_run: bool) -> tuple[int, int]:
     return ctex, md5
 
 
-def _collect_targets(root: Path) -> tuple[list[str], int, int]:
+class TargetSet(NamedTuple):
+    """Resolved scan result: disk-backed targets plus the raw scan breakdown."""
+
+    targets: list[str]
+    material_pngs: int
+    code_pngs: int
+    scene_pngs: int
+    dangling: list[str]
+
+    def summary(self) -> str:
+        return (
+            f"targets: {len(self.targets)} "
+            f"(materials.json {self.material_pngs}, code {self.code_pngs}, "
+            f"scenes {self.scene_pngs}, unique {len(self.targets)}, "
+            f"dangling literals skipped {len(self.dangling)})"
+        )
+
+
+def _validate_allowlist() -> None:
+    """Fail closed when an alpha exemption has no recorded measurement."""
+    for res_path, reason in ALPHA_CRITICAL_PATHS.items():
+        if not isinstance(reason, str) or not reason.strip():
+            _error(
+                f"alpha-critical allowlist entry {res_path} has no reason; "
+                "record the measured mask loss (see ALPHA_CRITICAL_PATHS) or "
+                "drop the exemption"
+            )
+        if not res_path.startswith("res://assets/") or not res_path.lower().endswith(
+            ".png"
+        ):
+            _error(
+                f"alpha-critical allowlist entry {res_path!r} is not a "
+                "res://assets/...png path"
+            )
+
+
+def _scan_literals(root: Path, rel: Path, suffixes: tuple[str, ...]) -> set[str]:
+    tree = root / rel
+    if not tree.is_dir():
+        return set()
+    found: set[str] = set()
+    for path in tree.rglob("*"):
+        if not path.is_file() or path.suffix.lower() not in suffixes:
+            continue
+        try:
+            found.update(_ASSET_LITERAL.findall(path.read_text(encoding="utf-8")))
+        except (OSError, UnicodeDecodeError):
+            continue
+    return found
+
+
+def _collect_targets(root: Path) -> TargetSet:
     materials_path = root / MATERIALS_REL
-    loader_path = root / LOADER_REL
     if not materials_path.is_file():
         _error(
             f"missing {materials_path}; run `make normalize` (or `make extract`) first"
         )
-    if not loader_path.is_file():
-        _error(f"missing {loader_path}; is this the repo root?")
 
     try:
         materials = json.loads(materials_path.read_text(encoding="utf-8"))
@@ -256,6 +344,8 @@ def _collect_targets(root: Path) -> tuple[list[str], int, int]:
         _error(f"cannot read {materials_path}: {exc}")
     if not isinstance(materials, dict):
         _error(f"{materials_path} is not a JSON object")
+    if not (root / "game/src").is_dir():
+        _error(f"missing {root / 'game/src'}; is this the repo root?")
 
     material_pngs: set[str] = set()
     for info in materials.values():
@@ -272,9 +362,55 @@ def _collect_targets(root: Path) -> tuple[list[str], int, int]:
             ):
                 material_pngs.add(value)
 
-    loader_pngs = set(_LOADER_LITERAL.findall(loader_path.read_text(encoding="utf-8")))
-    targets = sorted(material_pngs | loader_pngs)
-    return targets, len(material_pngs), len(loader_pngs)
+    code_pngs: set[str] = set()
+    scene_pngs: set[str] = set()
+    for rel, suffixes in CODE_SCAN_RELS:
+        found = _scan_literals(root, rel, suffixes)
+        if rel.name == "src":
+            code_pngs |= found
+        else:
+            scene_pngs |= found
+
+    scanned = sorted(material_pngs | code_pngs | scene_pngs)
+    targets: list[str] = []
+    dangling: list[str] = []
+    for res_path in scanned:
+        if _res_to_path(root, res_path).is_file():
+            targets.append(res_path)
+        else:
+            dangling.append(res_path)
+    return TargetSet(
+        targets=targets,
+        material_pngs=len(material_pngs),
+        code_pngs=len(code_pngs),
+        scene_pngs=len(scene_pngs),
+        dangling=dangling,
+    )
+
+
+def _out_of_scope_over_cap(root: Path, targets: list[str], cap: int) -> str:
+    """Count over-cap PNGs under extracted/assets that the gate cannot see.
+
+    Informational only: capping unreferenced files has no runtime benefit, so
+    this never fails the gate. Returns a printable line.
+    """
+    assets = root / EXTRACTED_ASSETS_REL
+    if not assets.is_dir():
+        return f"out-of-scope over-cap: not measured ({EXTRACTED_ASSETS_REL} absent)"
+    target_real = {os.path.realpath(_res_to_path(root, item)) for item in targets}
+    total = 0
+    ui = 0
+    for path in assets.rglob("*.png"):
+        size = _png_size(path)
+        if size is None or max(size) <= cap:
+            continue
+        if os.path.realpath(path) in target_real:
+            continue
+        total += 1
+        rel = path.relative_to(assets).as_posix()
+        if rel.startswith("Art/UI/") or "/Art/UI/" in rel:
+            ui += 1
+    return f"out-of-scope over-cap: {total} (ui {ui}, other {total - ui})"
 
 
 def _load_manifest(root: Path) -> dict[str, Any]:
@@ -308,23 +444,20 @@ def _mode_label(dry_run: bool) -> str:
 
 def _report(
     counts: Counter[str],
-    targets: int,
-    material_pngs: int,
-    loader_pngs: int,
+    scan: TargetSet,
     cap: int,
     capped_bytes: int,
     already_bytes: int,
     dest_ctex: int,
     dest_md5: int,
     dry_run: bool,
+    verbose: bool,
 ) -> None:
     skipped = sum(counts.values()) - counts["capped"] - counts["already"]
-    overlap = material_pngs + loader_pngs - targets
-    print(
-        f"targets: {targets} "
-        f"(materials.json {material_pngs}, level_loader.gd {loader_pngs}, "
-        f"overlap {overlap})"
-    )
+    print(scan.summary())
+    if verbose:
+        for res_path in scan.dangling:
+            print(f"skip (literal not on disk): {res_path}")
     print(f"mode: {_mode_label(dry_run)} (cap {cap} px long edge)")
     print(f"capped: {counts['capped']} ({capped_bytes / 1_000_000:.1f} MB source)")
     print(f"already: {counts['already']} ({already_bytes / 1_000_000:.1f} MB source)")
@@ -340,7 +473,8 @@ def _report(
 
 
 def _apply(root: Path, cap: int, dry_run: bool, verbose: bool) -> int:
-    targets, material_pngs, loader_pngs = _collect_targets(root)
+    _validate_allowlist()
+    scan = _collect_targets(root)
     manifest = _load_manifest(root)
     entries: dict[str, Any] = manifest["entries"]
     manifest["cap"] = cap
@@ -352,7 +486,7 @@ def _apply(root: Path, cap: int, dry_run: bool, verbose: bool) -> int:
     dest_md5 = 0
     entries_changed = False
 
-    for res_path in targets:
+    for res_path in scan.targets:
         source = _res_to_path(root, res_path)
         size = _png_size(source)
         if size is None:
@@ -450,15 +584,14 @@ def _apply(root: Path, cap: int, dry_run: bool, verbose: bool) -> int:
 
     _report(
         counts,
-        len(targets),
-        material_pngs,
-        loader_pngs,
+        scan,
         cap,
         capped_bytes,
         already_bytes,
         dest_ctex,
         dest_md5,
         dry_run,
+        verbose,
     )
     if not dry_run:
         print(f"manifest: {root / MANIFEST_REL}")
@@ -471,17 +604,25 @@ def _apply(root: Path, cap: int, dry_run: bool, verbose: bool) -> int:
 
 
 def _check(root: Path, cap: int, verbose: bool) -> int:
-    """Read-only gate: every over-cap loader target must carry cap + mipmaps.
+    """Read-only gate: every over-cap target must carry cap + mipmaps.
 
-    A shorter size limit (0 < limit <= cap) is accepted because ``_apply``
+    Targets are the materials.json textures plus every ``res://assets/**.png``
+    literal in ``game/src/**/*.gd`` and ``game/scenes/**/*.tscn`` that exists on
+    disk. A shorter size limit (0 < limit <= cap) is accepted because ``_apply``
     deliberately keeps a tighter authored limit. ``size_limit`` absent or 0
     means uncapped in Godot and is reported as over-cap.
     """
-    targets, material_pngs, loader_pngs = _collect_targets(root)
+    _validate_allowlist()
+    scan = _collect_targets(root)
+    if not scan.targets:
+        _error(
+            "no texture targets resolved on disk; is this the repo root with "
+            "`extracted/` present? run `make extract` (and `make normalize`) first"
+        )
     counts: Counter[str] = Counter()
     offenders: list[str] = []
 
-    for res_path in targets:
+    for res_path in scan.targets:
         source = _res_to_path(root, res_path)
         size = _png_size(source)
         if size is None:
@@ -534,23 +675,30 @@ def _check(root: Path, cap: int, verbose: bool) -> int:
         else:
             counts["capped"] += 1
 
-    overlap = material_pngs + loader_pngs - len(targets)
-    print(
-        f"targets: {len(targets)} "
-        f"(materials.json {material_pngs}, level_loader.gd {loader_pngs}, "
-        f"overlap {overlap})"
-    )
+    print(scan.summary())
+    if verbose:
+        for res_path in scan.dangling:
+            print(f"skip (literal not on disk): {res_path}")
+    unreached = sorted(set(ALPHA_CRITICAL_PATHS) - set(scan.targets))
+    for res_path in unreached:
+        print(f"note: alpha-critical entry is not a target: {res_path}")
     print(f"mode: CHECK (cap {cap} px long edge)")
     print(f"capped: {counts['capped']}")
     print(f"alpha-critical (kept full-res): {counts['alpha_preserved']}")
     print(f"within cap: {counts['within_cap']}")
+    if counts["missing_or_unreadable_png"]:
+        print(f"unreadable targets skipped: {counts['missing_or_unreadable_png']}")
     print(f"offenders: {len(offenders)}")
+    # Honest inventory, never a gate condition: capping files nothing loads has
+    # no runtime benefit and would churn the manifest.
+    print(_out_of_scope_over_cap(root, scan.targets, cap))
     if offenders:
         for line in offenders:
             print(f"  STALE: {line}")
+        sys.stdout.flush()
         print(
             "prebake_texture_cap: error: texture cap is stale; "
-            "run `make desktop-texture-cap`",
+            "run: make desktop-texture-cap",
             file=sys.stderr,
         )
         return 1
@@ -656,7 +804,8 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Write the long-edge texture cap and mipmap generation into the "
-            ".png.import sidecars of loader-managed textures."
+            ".png.import sidecars of textures referenced by materials.json or "
+            "by a res://assets path literal in game/src or game/scenes."
         )
     )
     parser.add_argument(

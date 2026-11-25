@@ -1561,7 +1561,14 @@ func _feat_16_shell_ui_letter_loading() -> void:
 	h.root.add_child(st_ui)
 	await h.step_process(1)
 	# RE-H-08: drive the authored sensitivity ladder (the free rad/px slider was
-	# the finding). Fast = 1.5x = 0.00375 rad/px.
+	# the finding). Fast = step 3 of 5. W9-P1: the step multiplier now samples the
+	# authored MouseLookSensitivityCurve (0 -> 0.2, 1 -> 1.125, 2 -> 2.0 over the
+	# curve's time range; step 3 = 1.5625x), not the OSE DefaultGame.ini ladder
+	# (1.5x), so the expected rad/px is 0.00390625. The old 0.00375 literal pinned
+	# the ladder the port replaced; the authored curve is the source of truth
+	# (game/data/generated/tables/Gameplay/Input/Character/MouseLookSensitivityCurve.json,
+	# indexed by curves.json, read by InputActions.mouse_rad_per_px()).
+	var fast_rad_per_px: float = 0.0025 * 1.5625
 	var cb_inv: CheckBox = st_ui.get("_invert_check") as CheckBox
 	var cb_spr: CheckBox = st_ui.get("_sprint_check") as CheckBox
 	var sl_fov: HSlider = st_ui.get("_fov_slider") as HSlider
@@ -1575,7 +1582,7 @@ func _feat_16_shell_ui_letter_loading() -> void:
 	var p_test: Node = h.new_script_node("res://src/player/thief_character.gd")
 	h.root.add_child(p_test)
 	await h.step_process(1)
-	var persist_ok: bool = absf(float(p_test.get("mouse_sens")) - 0.00375) < 0.0001 and h.is_true(p_test.get("invert_y")) and h.is_true(p_test.get("sprint_toggle_mode")) and absf(float(p_test.get("base_fov")) - 92.0) < 0.1
+	var persist_ok: bool = absf(float(p_test.get("mouse_sens")) - fast_rad_per_px) < 0.0001 and h.is_true(p_test.get("invert_y")) and h.is_true(p_test.get("sprint_toggle_mode")) and absf(float(p_test.get("base_fov")) - 92.0) < 0.1
 	await h.free_node(p_test)
 	if ss != null and not orig_s.is_empty():
 		var sd: Dictionary = ss.get("data") as Dictionary

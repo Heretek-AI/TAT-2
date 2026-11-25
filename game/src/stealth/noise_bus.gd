@@ -50,6 +50,22 @@ const SURFACES: Array[String] = ["wood", "stone", "carpet", "metal", "wet", "ear
 const FOOTSTEP_SPRINT_MIN_M: float = 6.0
 const FOOTSTEP_CROUCH_MAX_M: float = 2.0
 
+## W8: every record carries a monotonic `event_id` so listeners can tell "the
+## same stimulus" from "another footstep" and share the authored reaction-role
+## caps (AI.Stim.Hearing.* registrations, DT_ReactionEvents). The counter lives
+## here (not in the AI) so a record built by a test and a record emitted by the
+## bus share one id space.
+static var _event_counter: int = 0
+
+
+static func reset_event_counter() -> void:
+	_event_counter = 0
+
+
+static func next_event_id() -> int:
+	_event_counter += 1
+	return _event_counter
+
 
 static func is_known_surface(surface: String) -> bool:
 	return SURFACES.has(surface.to_lower().strip_edges())
@@ -77,8 +93,9 @@ static func _typed_flag(obj: Object, prop: String) -> bool:
 	return value is bool and value == true
 
 
-## Builds the rich record without emitting it (tests and AI reuse). No state is
-## kept on the bus, so a record is always a pure function of its inputs.
+## Builds the rich record without emitting it (tests and AI reuse). The bus keeps
+## no state about the stimulus beyond the monotonic `event_id`, so two listeners
+## receiving the same record agree on which event they are reacting to.
 func build_record(origin: Vector3, loudness_meters: float, source: Node, tag: String, surface: String) -> Dictionary:
 	var gait: String = resolve_gait(source, loudness_meters)
 	var surface_mult: float = 1.0
@@ -87,6 +104,7 @@ func build_record(origin: Vector3, loudness_meters: float, source: Node, tag: St
 		surface_mult = GameData.get_surface_loudness(surface)
 	var stim: Dictionary = HearingData.resolve_stim(tag, gait)
 	return {
+		"event_id": next_event_id(),
 		"origin": origin,
 		"base_loudness_m": loudness_meters,
 		"loudness_m": loudness_meters * surface_mult,

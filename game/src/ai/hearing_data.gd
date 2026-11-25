@@ -33,8 +33,11 @@ extends RefCounted
 ## SoundCarry tag + multiplier. Both are exposed here as multipliers; the
 ## listener applies them once (see guard_ai.hearing_sense_multiplier).
 ##
-## The 285 authored acoustic portals are exposed read-only. Their runtime
-## occlusion layer is W6.3 and is deliberately NOT implemented here.
+## The 285 authored acoustic portals are exposed read-only here; the runtime
+## occlusion consumer is `game/src/ai/hearing_occlusion.gd` (W8): a segment that
+## crosses world geometry is heard only through a portal box with no closed
+## swinging door in it. No attenuation value is recoverable from the dump, so the
+## rule is binary (see RE-I-05).
 ##
 ## Everything fails closed on a missing/corrupt table: an unknown stim resolves
 ## to {}, an unknown weather tag to 1.0, an unknown surface to 1.0. No value is
@@ -69,6 +72,13 @@ const SENSE_VISION_GUARD := "vision_guard"
 ##   lockpick_jammed   pick failure / jam                 -> LockPicking.Jammed 10 m
 ##   noise_alarm       BP_Trap_Action_NoiseAlarm_C        -> Trap.NoiseAlarm 15 m
 ##   footstep          gait resolved below                -> Footstep.Walking/Running
+## W8 additions (RE-I-05: 8 of 54 rows were reachable):
+##   combat_hit        a landed non-lethal hit (guard ranged / chaser melee)
+##                                                        -> Combat.Hit 10 m Heavy Long
+##   npc_yelp          civilian sees the thief            -> NPC.Yelp 25 m Heavy Long
+##   npc_call_help     civilian flees calling for help    -> NPC.CallForHelp 30 m Heavy Long
+## A blackjack is NOT a Combat.Hit: the shipped takedown is a synced ability with
+## its own Takedown stim, and a one-shot KO would otherwise be heard at 10 m.
 const PORT_TAG_TO_STIM: Dictionary = {
 	"takedown": "AI.Stim.Hearing.Takedown",
 	"bottle": "AI.Stim.Hearing.ImpactGeo",
@@ -77,6 +87,9 @@ const PORT_TAG_TO_STIM: Dictionary = {
 	"lockpick": "AI.Stim.Hearing.LockPicking.Picked",
 	"lockpick_jammed": "AI.Stim.Hearing.LockPicking.Jammed",
 	"noise_alarm": "AI.Stim.Hearing.Trap.NoiseAlarm",
+	"combat_hit": "AI.Stim.Hearing.Combat.Hit",
+	"npc_yelp": "AI.Stim.Hearing.NPC.Yelp",
+	"npc_call_help": "AI.Stim.Hearing.NPC.CallForHelp",
 }
 
 ## One port tag, two authored rows. Crouch has no authored row of its own, so it
@@ -549,6 +562,47 @@ static func acoustic_portals() -> Array:
 		return []
 	var rows_v: Variant = (portals_v as Dictionary).get("portals", [])
 	return (rows_v as Array).duplicate(true) if rows_v is Array else []
+
+
+## Every stim tag this build can actually reach, given the tags the port emits.
+## RE-I-15 corrected `docs/FIDELITY_GAPS.md`'s "all 54 authored hearing stims are
+## wired": the registry holds all 54 rows, but a row is reachable only when an
+## emitter in `game/src` produces a tag that resolves to it. This function makes
+## that measurable instead of a claim, and `test_ai_perception.gd` pins the count
+## so a new emitter (or a lost one) is a gate result, not a doc drift.
+static func reachable_stim_tags(emitter_tags: Array) -> Array[String]:
+	ensure_loaded()
+	var out: Array[String] = []
+	for tag_v: Variant in emitter_tags:
+		var tag: String = str(tag_v)
+		if tag.strip_edges() == "":
+			continue
+		if tag.to_lower() == "footstep":
+			# One emitter tag, one authored row per gait (Walking / Running).
+			for gait: Variant in FOOTSTEP_STIM_BY_GAIT.keys():
+				var gait_row: Dictionary = resolve_stim(tag, str(gait))
+				var gait_tag: String = str(gait_row.get("tag", ""))
+				if gait_tag != "" and not out.has(gait_tag):
+					out.append(gait_tag)
+			continue
+		var row: Dictionary = resolve_stim(tag)
+		var authored: String = str(row.get("tag", ""))
+		if authored != "" and not out.has(authored):
+			out.append(authored)
+	out.sort()
+	return out
+
+
+## Authored rows with no reachable emitter (the complement of the above).
+static func unreachable_stim_tags(emitter_tags: Array) -> Array[String]:
+	ensure_loaded()
+	var reachable: Array[String] = reachable_stim_tags(emitter_tags)
+	var out: Array[String] = []
+	for tag: Variant in _stimuli.keys():
+		if not reachable.has(str(tag)):
+			out.append(str(tag))
+	out.sort()
+	return out
 
 
 ## Escalation rows authored in guard_ai.json (`escalation_tables`). Kept here so

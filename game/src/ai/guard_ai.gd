@@ -6,6 +6,9 @@ enum Alertness { NEUTRAL, SUSPICIOUS, ALERTED, COMBAT, SEARCH, KNOCKED_OUT }
 
 signal alert_state_changed(state_info: Dictionary)
 signal carried_item_stolen(item: Dictionary)
+## W8: one authored ranged attack landed. `result` = RangedAttack.deliver()
+## output ({damage, shock_seconds, shock_applied, damage_type, hud_icon}).
+signal ranged_attack_fired(result: Dictionary)
 
 const GuardAnimLib = preload("res://src/core/animation_library.gd")
 const LightProbeScript = preload("res://src/stealth/light_probe.gd")
@@ -13,6 +16,14 @@ const LightProbeScript = preload("res://src/stealth/light_probe.gd")
 ## weather SoundCarry accessor (map weather tag -> range row).
 const HearingData = preload("res://src/ai/hearing_data.gd")
 const WeatherProfile = preload("res://src/core/weather_profile.gd")
+## W8 authored AI consumers (RE-I): the five dropped sight fields, the roster,
+## the reaction-role caps, the ranged attack and binary acoustic occlusion.
+const SightModel = preload("res://src/ai/sight_model.gd")
+const GuardRoster = preload("res://src/ai/guard_roster.gd")
+const ReactionRoles = preload("res://src/ai/reaction_roles.gd")
+const RangedAttack = preload("res://src/ai/ranged_attack.gd")
+const HearingOcclusion = preload("res://src/ai/hearing_occlusion.gd")
+const NavSteering = preload("res://src/ai/nav_steering.gd")
 const LANTERN_GLB_PRIMARY := "res://assets/ue/Content/Art/Environment/Lights/Mobile/SM_LanternGuardA.glb"
 const LANTERN_GLB_FALLBACK := "res://assets/ue/Content/Art/Gameplay/Gear/Lantern/SK_Lantern.glb"
 const DEFAULT_KEY_GLB := "res://assets/ue/Content/Art/Gameplay/KeyCabinets/SM_LootableKeys_LockedRoomKey.glb"
@@ -75,7 +86,21 @@ const ESCALATION_STATE_ROWS: Dictionary = {
 }
 const MELEE_DAMAGE: float = 10.0 # CT_Melee_RangedAttackDamage close key
 const MELEE_COOLDOWN: float = 2.0 # GE_Melee_RangedAttack_Cooldown
-const MELEE_RADIUS: float = 1.0 # GA_MeleeRangedAttack DamageRadius 100cm
+## Close-engagement distance reused from the ranged attack's authored splash
+## radius (GA_MeleeRangedAttack DamageRadius 100 cm); the dump authors no melee
+## reach, so the chaser's 1 m is this value, not a separate invention.
+const MELEE_RADIUS: float = 1.0
+## W8 ranged attack (RE-I-11). The authored guard attack is a 20 m falloff
+## weapon, not a 1 m melee: the Chaser role closes (melee above) while every
+## other combatant holds the authored EQS band 2..10 m and fires for
+## 10 dmg @ 0 m -> 2 dmg @ 20 m on a 2 s cooldown. See src/ai/ranged_attack.gd.
+const COMBAT_ROLE_CHASER: String = ReactionRoles.ROLE_CHASER
+const COMBAT_ROLE_RANGED: String = ReactionRoles.ROLE_RANGED
+## Downed-guard witnesses (RE-I-12 `DT_StimProperties.GuardDowned`, Heavy). A
+## body is noticed through the same authored sight geometry, throttled so eight
+## guards do not scan eight bodies every physics frame.
+const BODY_SCAN_INTERVAL_S: float = 0.5
+const GUARD_BODY_GROUP: String = "guard_bodies"
 ## Direct pickpocket reach (TATInteractionTargeterComponent.MaxInteractionRange
 ## 175 cm, same value the player uses) plus eye/torso ray heights.
 const PICKPOCKET_RANGE_M: float = 1.75
@@ -178,6 +203,17 @@ const HEIGHT_STRENGTH_ZERO_M: float = 3.0
 ## APatrolPath.LoopType, e.g. "EPatrolLoopType::PingPong". Any value containing
 ## "pingpong" reverses at both ends instead of wrapping.
 @export var patrol_loop_mode: String = ""
+## Authored roster bucket or bucket class (`BP_GuardEnforcer_Club_C`,
+## `DA_SpawnBucket_KeyHolder`, ...). guard_roster.gd resolves it to the authored
+## sense profile, animation set, body model, lantern and carried key. Empty =
+## no bucket was supplied (today's spawner passes none); the name heuristic below
+## then keeps the legacy behaviour and `roster_source()` reports "unbound" so the
+## gap is visible instead of silent (RE-I-07).
+@export var roster_bucket: String = ""
+## Per-instance switch for the authored vertical frustum gate (SightModel). On by
+## default; a designer or test can isolate the pitch on one guard. The
+## `--sight-frustum=off` diagnostic is global.
+@export var sight_frustum_enabled: bool = true
 @export var patrol_speed: float = PATROL_SPEED
 @export var suspicious_speed: float = SUSPICIOUS_SPEED
 @export var chase_speed: float = ALERTED_SPEED
@@ -245,6 +281,27 @@ var _revive_target: Node = null
 var _revive_progress: float = 0.0
 var _regen_blackout: float = 0.0 # P1 in-combat regen: damage starts a blackout window; regen is gated on it (see _tick_regen).
 var _ally_scan_timer: float = 0.0
+## W8 authored sight row for the current alertness (SightModel.row output) plus
+## the resolved roster row. Rebuilt on every escalation write.
+var _sight_row: Dictionary = {}
+var _sight_key: String = ""
+var _roster_row: Dictionary = {}
+## W8 ranged attack: authored accuracy stacks (GE limit 3, 10 s window) and the
+## last combat role this guard registered for (DT_ReactionEvents.Combat).
+var ranged_accuracy_stacks: int = 0
+var _accuracy_age_s: float = 0.0
+var combat_role: String = ""
+var last_ranged_damage: float = 0.0
+var _ranged_hits: int = 0
+var _body_scan_timer: float = 0.0
+var bodies_seen: int = 0
+var _roster_cache_key: String = ""
+## W8 navigation: NavigationAgent3D consumer with documented degradation.
+var _nav: NavSteering = NavSteering.new()
+var _nav_bound: bool = false
+## Hearing diagnostics: stimuli refused by occlusion / by the role cap.
+var heard_blocked_by_wall: int = 0
+var heard_as_standby: int = 0
 # Real-clip animation state (animation_library.gd). When _use_real_anims is
 # false the guard falls back to the procedural bob in _update_procedural_anim.
 var anim_player: AnimationPlayer
@@ -341,7 +398,25 @@ func _ready() -> void:
 	sight_range *= _sense_diff_scale
 	lose_sight_range *= _sense_diff_scale
 	_apply_authored_escalation(state)
+	_nav.setup(self)
 	refresh_weather_sound_carry()
+	# W8 authored roster (RE-I-07): a supplied bucket decides the lantern and the
+	# class patrol speed (DA_AIStatesToSpeed_Hauntstable authors 75 cm/s). An
+	# unbound spawn keeps today's index/name behaviour and says so.
+	if roster_source() != "unbound":
+		carries_lantern = roster().get("lantern", carries_lantern) == true
+		patrol_speed = GuardRoster.patrol_speed_m_s(roster()) * _speed_scale
+		# The authored KeyHolder carries the map's key from spawn; steal_carried_item
+		# is then the only way it reaches GameState.stolen_keys.
+		var key_id: String = GuardRoster.carried_key_id(roster(), str(GameState.active_map_id))
+		if key_id != "" and carried_item.is_empty():
+			carried_item = {
+				"id": key_id,
+				"name": GuardRoster.carried_key_name(key_id),
+				"kind": "key",
+				"value": 150,
+				"mesh_path": DEFAULT_KEY_GLB,
+			}
 	_build_visuals()
 	if carries_lantern:
 		_build_lantern()
@@ -352,12 +427,36 @@ func _ready() -> void:
 		patrol_points = [global_position, global_position + Vector3(6, 0, 0), global_position + Vector3(6, 0, 6)]
 
 
-## Authored sense profile: AIC_Bouncer (Hauntstable guards) or AIC_GuardBase.
+## Authored sense profile for this guard (RE-I-07). The roster bucket wins when
+## the spawner supplies one; the legacy node-name heuristic is kept as the
+## documented fallback so an unbound spawn behaves exactly as before. The old
+## heuristic conflated Bouncer and Hauntstable -- they are different assets
+## (Bouncer 2500/3000/40, aspect 1.2, pitch -21; Hauntstable 3000/3500/40).
 func escalation_profile() -> String:
+	var profile: String = str(roster().get("profile", ""))
+	if profile != "":
+		return profile
 	var lname: String = name.to_lower()
-	if lname.find("bouncer") >= 0 or lname.find("haunt") >= 0:
+	if lname.find("haunt") >= 0:
+		return GuardRoster.PROFILE_HAUNTSTABLE
+	if lname.find("bouncer") >= 0:
 		return ESCALATION_PROFILE_BOUNCER
 	return ESCALATION_PROFILE_GUARD
+
+
+## Roster row backing this guard, with `source` = authored/contract/unbound.
+## Re-resolved whenever `roster_bucket` changes, so a spawner that assigns the
+## bucket after add_child() still wins.
+func roster() -> Dictionary:
+	if _roster_row.is_empty() or _roster_cache_key != roster_bucket:
+		_roster_cache_key = roster_bucket
+		_roster_row = GuardRoster.roster_for(roster_bucket)
+	return _roster_row
+
+
+## Where the roster row came from ("unbound" when no spawner bucket was passed).
+func roster_source() -> String:
+	return str(roster().get("source", "unbound"))
 
 
 ## Authored escalation row name ("Fresh"/"Mindful"/"Vigilant"/"Drowsy") for an
@@ -366,10 +465,34 @@ static func escalation_row_name(alertness: int) -> String:
 	return str(ESCALATION_STATE_ROWS.get(alertness, "Fresh"))
 
 
-## Authored escalation row for this guard + alertness. {} when the profile has no
-## row for that state (the Bouncer table authors no Drowsy row).
+## Authored escalation row for this guard + alertness (producer JSON, else the
+## documented asset fallback in SightModel.AUTHORED_FALLBACK).
 func escalation_row(alertness: int) -> Dictionary:
-	return HearingData.escalation_row(escalation_profile(), escalation_row_name(alertness))
+	return SightModel.row(escalation_profile(), escalation_row_name(alertness))
+
+
+## Authored full sight row for the current alertness: the five fields the
+## producer drops are included (RE-I-02). Rebuilt when the alertness level or a
+## pinned export changes, so a test/pose override takes effect immediately while
+## an unpinned guard reads the authored row without per-frame work.
+func sight_row() -> Dictionary:
+	var key: String = "%d|%.3f|%.3f" % [state, sight_range, fov_deg]
+	if _sight_row.is_empty() or key != _sight_key:
+		_sight_key = key
+		_rebuild_sight_row()
+	return _sight_row
+
+
+func _rebuild_sight_row() -> void:
+	_sight_row = escalation_row(state)
+	# The exported fov/range stay authoritative when a caller pins them: the
+	# horizontal half-angle the geometry test uses is the export, not a second
+	# copy of the authored number (a pinned pose must stay pinned).
+	var row: Dictionary = _sight_row.duplicate(true)
+	row["peripheral_half_angle_deg"] = fov_deg * 0.5
+	row["sight_radius_m"] = sight_range
+	row["lose_sight_radius_m"] = lose_sight_range
+	_sight_row = row
 
 
 ## Writes the authored sense values for an alertness level (scaled by the
@@ -520,7 +643,12 @@ func _build_visuals() -> void:
 ## Lantern locomotion rows (AN_GuardEnforcer_Lantern_* in anims_manifest.json)
 ## and the Security SK has no Security-specific anims, so both reuse the Club
 ## table until a lantern/security clip table is authored.
+## W8: the authored roster bucket decides the set when one was supplied
+## (RE-I-07); the name heuristic stays for unbound spawns.
 func _guard_weapon_set() -> String:
+	var roster_weapon: String = str(roster().get("weapon", ""))
+	if roster_source() != "unbound" and roster_weapon != "":
+		return roster_weapon
 	var lname: String = name.to_lower()
 	if lname.find("haunt") >= 0:
 		return "hauntstable"
@@ -642,6 +770,9 @@ func _apply_guard_melee_hit() -> void:
 		return
 	if player.has_method("take_damage"):
 		player.take_damage(MELEE_DAMAGE)
+		# A landed chaser melee is the authored non-lethal Combat.Hit stim
+		# (10 m Heavy Long); the blackjack path emits its own Takedown row.
+		NoiseBus.emit_noise(player.global_position, 10.0, self, "combat_hit")
 
 
 func _tick_attack_hit_window() -> void:
@@ -798,6 +929,9 @@ func _update_guard_loco_playback(role: String, moving: bool, delta: float) -> vo
 
 
 func _resolve_guard_glb_path() -> String:
+	var roster_model: String = str(roster().get("model", ""))
+	if roster_source() != "unbound" and roster_model != "":
+		return roster_model
 	var lname: String = name.to_lower()
 	if lname.find("haunt") >= 0:
 		return "res://assets/ue/Content/Art/Animation/GuardEnforcer/Skin/Hauntstable/SK_Hauntstable__Body.glb"
@@ -1383,6 +1517,7 @@ func _physics_process(delta: float) -> void:
 	_update_indicator()
 	_emit_alert_state_if_needed(false)
 	_update_ally_wakeup(delta)
+	_scan_downed_guards(delta)
 	_move_ai(delta, player)
 	_update_guard_anim(delta)
 
@@ -1434,19 +1569,23 @@ func _move_ai(delta: float, player: CharacterBody3D) -> void:
 			target = _search_goal
 			spd = patrol_speed * 1.15 # retained search-hustle factor on the real Neutral base
 		Alertness.COMBAT:
+			# W8 authored ranged combat + the DT_ReactionEvents.Combat pair
+			# (RE-I-11/12): one Chaser closes and melees, everyone else is the
+			# default Combat.RangedAttack role and holds the authored EQS band
+			# 2..10 m with line of sight, firing the CT_Melee_RangedAttackDamage
+			# curve (10 dmg @ 0 m -> 2 @ 20 m) on the 2 s cooldown.
 			if player != null:
-				target = player.global_position
-				spd = get_state_speed()
-				if global_position.distance_to(player.global_position) <= MELEE_RADIUS and attack_cooldown <= 0.0:
-					# RE-F-12: the swing starts here; damage is applied by
-					# _tick_attack_hit_window inside the authored 0.92-1.17 s
-					# CombatHitbox window, not on this frame.
-					_play_guard_attack()
-					attack_cooldown = MELEE_COOLDOWN
+				var combat: Dictionary = _service_combat(player, delta)
+				target = combat.get("target", global_position) as Vector3
+				spd = float(combat.get("speed", 0.0))
 
 	var flat: Vector3 = Vector3(target.x - global_position.x, 0, target.z - global_position.z)
-	if flat.length() > 0.25:
-		var dir: Vector3 = flat.normalized()
+	if flat.length() > 0.25 and spd > 0.0:
+		# RE-I-10: route through the navigation map when one exists; the helper
+		# falls back to this same straight-line vector (loudly, once) when no
+		# NavigationRegion3D has been baked. Arrival stays the caller's test.
+		var steer: Vector3 = _nav.step_towards(target)
+		var dir: Vector3 = steer if steer.length() > 0.0001 else flat.normalized()
 		velocity.x = dir.x * spd
 		velocity.z = dir.z * spd
 		if state == Alertness.SEARCH:
@@ -1464,6 +1603,155 @@ func _move_ai(delta: float, player: CharacterBody3D) -> void:
 	if not is_on_floor():
 		velocity.y -= gravity * delta
 	move_and_slide()
+
+
+## One combat frame for this guard. Returns {"target": Vector3, "speed": float}.
+## Chaser: close on the target and melee inside the authored damage radius.
+## Ranged (default role): hold the authored 2..10 m EQS band, fire when the
+## target is inside the damage curve's 20 m extent with line of sight, and back
+## off when the player closes inside the band minimum.
+func _service_combat(player: CharacterBody3D, _delta: float) -> Dictionary:
+	var to_player: Vector3 = player.global_position - global_position
+	var dist: float = to_player.length()
+	# "Melee up close" (ST_Subtree_Combat Chaser branch) applies to every role:
+	# nobody fires a ranged weapon at 1 m.
+	if dist <= MELEE_RADIUS:
+		if attack_cooldown <= 0.0:
+			# RE-F-12: the swing starts here; _apply_guard_melee_hit lands the
+			# damage inside the authored CombatHitbox window (0.92-1.17 s of a
+			# 2.13 s club swing), never on this frame. The Combat.Hit stim is
+			# emitted at contact, not at swing start.
+			_play_guard_attack()
+			attack_cooldown = MELEE_COOLDOWN
+		combat_role = _combat_role(player, true)
+		return {"target": player.global_position, "speed": get_state_speed()}
+	var role: String = _combat_role(player, false)
+	if role == COMBAT_ROLE_CHASER:
+		return {"target": player.global_position, "speed": get_state_speed()}
+	var los: bool = _los_to_player(player)
+	var band: Vector2 = RangedAttack.ideal_band_m()
+	if RangedAttack.can_fire(dist, attack_cooldown, los):
+		_fire_ranged_at(player, dist)
+		return {"target": global_position, "speed": 0.0}
+	if dist < band.x:
+		# Too close for the authored firing position: step back to the band.
+		var away: Vector3 = -to_player
+		away.y = 0.0
+		if away.length() < 0.001:
+			away = global_transform.basis.z
+		return {"target": global_position + away.normalized() * 2.0, "speed": suspicious_speed}
+	if not los or dist > band.y:
+		return {"target": player.global_position, "speed": get_state_speed()}
+	# Inside the band with LOS but on cooldown: hold position and keep facing.
+	_face_towards(player.global_position)
+	return {"target": global_position, "speed": 0.0}
+
+
+## The authored combat role for this guard (DT_ReactionEvents.Combat: one Chaser
+## with a 5 s registration grace, RangedAttack as the default role).
+func _combat_role(player: CharacterBody3D, wants_chaser: bool) -> String:
+	var key: String = "combat:%d" % player.get_instance_id()
+	combat_role = ReactionRoles.claim_combat(key, get_instance_id(), Time.get_ticks_msec(), wants_chaser)
+	return combat_role
+
+
+## Fire one authored ranged attack: damage from the distance curve, accuracy
+## stack bookkeeping, 2 s cooldown, shock contract on the victim and the authored
+## Combat.Hit hearing stimulus.
+func _fire_ranged_at(player: CharacterBody3D, dist_m: float) -> void:
+	var result: Dictionary = RangedAttack.deliver(player, dist_m, "guard_ranged")
+	last_ranged_damage = float(result.get("damage", 0.0))
+	_ranged_hits += 1
+	ranged_accuracy_stacks = RangedAttack.stacks_after_shot(ranged_accuracy_stacks)
+	_accuracy_age_s = 0.0
+	attack_cooldown = RangedAttack.COOLDOWN_S
+	_play_guard_attack()
+	_face_towards(player.global_position)
+	ranged_attack_fired.emit(result)
+	NoiseBus.emit_noise(player.global_position, 10.0, self, "combat_hit")
+
+
+func _face_towards(point: Vector3) -> void:
+	var dir: Vector3 = point - global_position
+	dir.y = 0.0
+	if dir.length() > 0.25:
+		look_at(global_position + dir.normalized(), Vector3.UP)
+
+
+## World LOS from the guard eye to the player's torso, same mask/exclusions as
+## the sight ray (layer 1 world + player/guard bodies).
+func _los_to_player(player: CharacterBody3D) -> bool:
+	if player == null or not is_inside_tree() or get_world_3d() == null:
+		return false
+	var space: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
+	if space == null:
+		return false
+	var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(
+		global_position + Vector3.UP * 1.5,
+		player.global_position + Vector3.UP * 1.0,
+		1 | 2 | 4, [get_rid(), player.get_rid()])
+	return space.intersect_ray(q).is_empty()
+
+
+## `GuardDowned` (RE-I-12): look for downed guards inside the authored sight
+## geometry and react. Heavy severity, so the first two witnesses (the same
+## authored investigator cap as a heavy stimulus) walk to the body; everyone who
+## sees it is at least raised to SUSPICIOUS. Throttled: eight guards do not scan
+## eight bodies every physics frame.
+func _scan_downed_guards(delta: float) -> void:
+	if not is_inside_tree():
+		return
+	_body_scan_timer -= delta
+	if _body_scan_timer > 0.0:
+		return
+	_body_scan_timer = BODY_SCAN_INTERVAL_S
+	var seen: int = 0
+	var row: Dictionary = sight_row()
+	var eye: Vector3 = SightModel.eye_position(self, row)
+	var fwd: Vector3 = -global_transform.basis.z
+	var max_range: float = effective_vision_range(true)
+	var world: World3D = get_world_3d()
+	var space: PhysicsDirectSpaceState3D = world.direct_space_state if world != null else null
+	for node: Node in get_tree().get_nodes_in_group(GUARD_BODY_GROUP):
+		var body: Node3D = node as Node3D
+		if body == null or body == self or not is_instance_valid(body):
+			continue
+		var to_body: Vector3 = body.global_position - global_position
+		if to_body.length() > max_range:
+			continue
+		var to_target: Vector3 = SightModel.target_point(body) - eye
+		if not SightModel.frustum_admits(row, to_target, fwd, -1.0, sight_frustum_enabled):
+			continue
+		if space != null:
+			var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(eye, SightModel.target_point(body), 1, [get_rid(), body.get_rid()])
+			if not space.intersect_ray(q).is_empty():
+				continue
+		seen += 1
+		_on_downed_guard_noticed(body)
+	bodies_seen = seen
+
+
+## One witness reaction to a downed colleague. Every witness of the same body
+## shares one stimulus id, so the authored investigator cap applies once for the
+## body rather than once per witness.
+func _on_downed_guard_noticed(body: Node3D) -> void:
+	if state == Alertness.KNOCKED_OUT or state == Alertness.COMBAT:
+		return
+	var event_id: int = 0x40000000 + (body.get_instance_id() % 0x3FFFFFFF)
+	var role: String = ReactionRoles.claim_hearing(event_id, "vision.guard_downed", "Heavy", get_instance_id(), Time.get_ticks_msec())
+	if role == ReactionRoles.ROLE_INVESTIGATOR:
+		investigate_pos = body.global_position
+		detection = maxf(detection, DETECTION_ALERTED_AT)
+		state_timer = 6.0
+		_enter_alerted()
+		last_investigation_kind = HearingData.BEHAVIOUR_LONG
+		investigation_search_seconds = 8.0
+	else:
+		# Standby witnesses still register the body: suspicion, no walk.
+		detection = maxf(detection, DETECTION_SUSPICIOUS_AT)
+		if state == Alertness.NEUTRAL:
+			_set_state(Alertness.SUSPICIOUS)
+			state_timer = 5.0
 
 
 ## One frame of authored waypoint handling. Returns true while the guard must
@@ -1557,28 +1845,42 @@ func _can_see_player(player: CharacterBody3D) -> bool:
 	effective_range *= LightProbeScript.light_intensity_range_multiplier(_player_light_value(player))
 	var to_player: Vector3 = player.global_position - global_position
 	var dist: float = to_player.length()
-	# No point-blank blind spot: inside the 2 m critical range the authored
-	# ramp (get_detection_rate) already resolves to an instant spot, so a
-	# near-zero distance must still count as seen.
 	if dist > effective_range:
 		return false
+	# W8 authored sight geometry (RE-I-02). Before this the cone was bypassed
+	# for *every* target inside 3.5 m -- 3.5x the authored MinimumSightRadius
+	# (100 cm) -- so a guard saw a player anywhere in the 2.4 m blackjack reach
+	# and the 0.45 s takedown hold lost the race against the detection ramp.
+	# The frustum now applies the authored horizontal half-angle, the vertical
+	# band (FrustumPitch -22 deg + FrustumAspectRatio 2.0 => -44.7..+0.7 deg of
+	# elevation) and the authored near plane, with the authored minimum radius
+	# as the only cone-free zone. The POV backward offset orients the frustum;
+	# the occlusion ray still leaves the model head (a POV pushed 1.2 m behind a
+	# guard backed against a wall would start inside geometry and blind it).
+	var row: Dictionary = sight_row()
+	var eye: Vector3 = SightModel.eye_position(self, row)
+	var to_target: Vector3 = SightModel.target_point(player) - eye
 	var fwd: Vector3 = -global_transform.basis.z
-	var angle: float = rad_to_deg(fwd.angle_to(to_player.normalized()))
-	if angle > fov_deg * 0.5 and dist > 3.5:
+	# `sight_frustum_enabled` is the per-instance diagnostic: it drops only the
+	# vertical band (the authored pitch), never the horizontal cone or the
+	# minimum radius.
+	if not SightModel.frustum_admits(row, to_target, fwd, -1.0, sight_frustum_enabled):
 		return false
 	# Smoke bomb LOS check
 	if level_ctrl != null and level_ctrl.has_method("is_blocked_by_smoke"):
 		if level_ctrl.is_blocked_by_smoke(global_position + Vector3.UP * 1.5, player.global_position + Vector3.UP * 1.0):
 			return false
 	# P1 body-transparent sight: the world-only mask let a line of guards
-	# screen the player (UE sight is body-blocked). World + player + guard +
-	# civilian layers. Both the guard and the player are excluded by RID: the
-	# eye ray starts inside the guard capsule, and its endpoint (player + 1.0 m)
-	# sits inside the player capsule on layer 2, so without the player RID every
-	# ray self-occludes on the target and no guard can ever see the player.
-	# Mask and endpoint are authored; only the exclusions are self-occlusion.
+	# screen the player (UE sight is body-blocked). World + player + guard
+	# layers. Both the guard and the player are excluded by RID: the eye ray
+	# starts inside the guard capsule, and its endpoint (player + 1.0 m) sits
+	# inside the player capsule on layer 2, so without the player RID every ray
+	# self-occludes on the target and no guard can ever see the player.
+	# W8 (RE-I-09): civilian layer 8 is NOT in the mask. A civilian standing in
+	# a corridor used to make a guard blind to the player, but the shipped AI
+	# treats civilians as detectable actors, not cover.
 	var space: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
-	var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(global_position + Vector3.UP * 1.5, player.global_position + Vector3.UP * 1.0, 1 | 2 | 4 | 8, [get_rid(), player.get_rid()])
+	var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(global_position + Vector3.UP * 1.5, player.global_position + Vector3.UP * 1.0, 1 | 2 | 4, [get_rid(), player.get_rid()])
 	var hit: Dictionary = space.intersect_ray(q)
 	return hit.is_empty()
 
@@ -1645,6 +1947,16 @@ func _hear(record: Dictionary) -> void:
 		radius_m = HearingData.unknown_fallback_range(loudness, hearing_range) * sense_mult
 	if dist_m > radius_m:
 		return
+	# W8 binary acoustic occlusion (RE-I-05): all 54 authored rows declare
+	# PropogateThroughOpenPortals, so a segment that crosses world geometry is
+	# heard only when the crossing lies inside an authored AkAcousticPortal box
+	# with no closed swinging door in it. Fail-open when the space is unusable.
+	var space: PhysicsDirectSpaceState3D = null
+	if is_inside_tree() and get_world_3d() != null:
+		space = get_world_3d().direct_space_state
+	if not HearingOcclusion.clear(space, HearingOcclusion.listener_eye(self), HearingOcclusion.source_point(origin), [get_rid()]):
+		heard_blocked_by_wall += 1
+		return
 	last_heard_tag = tag
 	last_heard_stim_tag = stim_tag
 	last_heard_distance_m = dist_m
@@ -1669,6 +1981,21 @@ func _hear(record: Dictionary) -> void:
 			_enter_alerted()
 		if hearing_marks_spotted(source):
 			GameState.ever_spotted = true
+		return
+	# W8 reaction-role cap (RE-I-12, DT_ReactionEvents): only two listeners
+	# investigate one stimulus (HeavyStim row, 0.5 s registration grace; the four
+	# light rows cap at two with no grace; Phonograph caps at zero). Everyone
+	# else takes the authored default role -- Standby -- which means "heard it,
+	# hold post": the guard keeps the memory of the sound but does not walk.
+	# Before this, one footstep pulled every guard in radius to the same spot.
+	var event_id: int = int(record.get("event_id", 0))
+	if event_id == 0:
+		event_id = ReactionRoles.next_event_id()
+	ReactionRoles.prune(Time.get_ticks_msec())
+	var severity: String = str(stim.get("severity", "")) if not stim.is_empty() else "Light"
+	var role: String = ReactionRoles.claim_hearing(event_id, stim_tag if stim_tag != "" else tag, severity, get_instance_id(), Time.get_ticks_msec())
+	if role != ReactionRoles.ROLE_INVESTIGATOR:
+		heard_as_standby += 1
 		return
 	# Every other stimulus raises alertness through the existing transition and
 	# leaves the meter to the sight ramp. Promotion only from NEUTRAL, so hearing
@@ -1701,6 +2028,19 @@ static func hearing_marks_spotted(source: Node) -> bool:
 func take_knockout(dmg: float) -> void:
 	health -= dmg
 	_regen_blackout = 4.0 # P1: chip damage must stick; regen resumes 4 s after the last hit.
+	# W8 `React to Damage` (RE-I-08): the port lowered HP with no alertness
+	# change, so a guard that survived a hit kept patrolling. The authored
+	# transition raises alertness on damage; a lethal hit falls through to the KO
+	# below and never writes it. A *non-lethal* hit is also the authored
+	# Combat.Hit hearing stimulus (10 m Heavy Long) -- a blackjack one-shot is
+	# the Takedown row instead, which is why this is gated on surviving.
+	if health > 0.0 and state != Alertness.KNOCKED_OUT:
+		investigate_pos = global_position
+		detection = maxf(detection, DETECTION_ALERTED_AT)
+		if state != Alertness.ALERTED and state != Alertness.COMBAT:
+			state_timer = 6.0
+			_enter_alerted()
+		NoiseBus.emit_noise(global_position, 10.0, self, "combat_hit")
 	if health <= 0.0:
 		knock_out()
 
@@ -1713,6 +2053,9 @@ func knock_out(duration_override: float = -1.0) -> void:
 	if state == Alertness.KNOCKED_OUT:
 		return
 	_set_state(Alertness.KNOCKED_OUT)
+	# W8 `GuardDowned` (RE-I-12): a downed guard is a Heavy *visual* stimulus
+	# (DT_StimProperties), so the body joins the group other guards scan.
+	add_to_group(GUARD_BODY_GROUP)
 	if duration_override > 0.0:
 		ko_timer = duration_override
 	else:
@@ -1756,6 +2099,7 @@ func wake_up_from_ko() -> void:
 func _recover_from_ko() -> void:
 	health = _guard_max_hp()
 	alert_indicator.text = ""
+	remove_from_group(GUARD_BODY_GROUP)
 	if lantern_light != null and is_instance_valid(lantern_light):
 		lantern_light.visible = true
 	# P1 KO wake searches own feet + keeps pre-KO 100: clamp the meter to the

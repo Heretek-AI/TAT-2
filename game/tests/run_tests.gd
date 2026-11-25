@@ -5641,11 +5641,26 @@ func _initialize() -> void:
 	w2_take_wall_refused = w2_take_wall_refused and int(w2_wall_guard.get("state")) != 5
 	w2_wall_take.queue_free()
 	await physics_frame
-	if w2_blocked and w2_open and w2_pick_prompt and w2_pick_open and w2_pick_blocked_prompt and w2_pick_wall and w2_behind_prompt and w2_behind_ko and w2_front_refused and w2_take_wall_refused:
-		print("PASS: 55c interaction LOS (wall blocks container/prompt), pickpocket (open steals, wall refuses without escalation), takedown (behind works, front/wall refuse)")
+	# 55c-live (RE-I-14): every check above froze physics and called
+	# `_try_blackjack` directly, so no AI tick and no hold race ran. The same
+	# takedown now runs with a real ticking guard, the real 0.45 s hold clock and
+	# `_perform_hold_action`: inside the authored 1.0 m MinimumSightRadius cone
+	# bypass the old 3.5 m bypass lost this race (detection 61.25 at release,
+	# ever_spotted set, guard awake). See tests/probe_blackjack_race.gd.
+	var w2_live_floor: StaticBody3D = _w2_make_floor(root, Vector3(6200.0, -0.55, 6200.0))
+	await physics_frame
+	var w2_live: Dictionary = await _ai_blackjack_hold(root, Vector3(6200.0, 0.0, 6200.0), 2.2)
+	var w2_live_ok: bool = str(w2_live.get("prompt", "")) == "[F] [HOLD] TAKEDOWN" \
+		and float(w2_live.get("held", 0.0)) >= 0.45 \
+		and bool(w2_live.get("ko", false)) \
+		and not bool(w2_live.get("spot", true)) \
+		and float(w2_live.get("detection", 1.0)) <= 0.0
+	if w2_blocked and w2_open and w2_pick_prompt and w2_pick_open and w2_pick_blocked_prompt and w2_pick_wall and w2_behind_prompt and w2_behind_ko and w2_front_refused and w2_take_wall_refused and w2_live_ok:
+		print("PASS: 55c interaction LOS (wall blocks container/prompt), pickpocket (open steals, wall refuses without escalation), takedown (behind works, front/wall refuse, live 0.45 s hold wins)")
 	else:
-		printerr("FAIL: 55c interaction LOS (container_blocked=", w2_blocked, " open=", w2_open, " pick_prompt=", w2_pick_prompt, " pick_open=", w2_pick_open, " pick_blocked_prompt=", w2_pick_blocked_prompt, " pick_wall=", w2_pick_wall, " behind_prompt=", w2_behind_prompt, " behind_ko=", w2_behind_ko, " front_refused=", w2_front_refused, " wall_refused=", w2_take_wall_refused, ")")
+		printerr("FAIL: 55c interaction LOS (container_blocked=", w2_blocked, " open=", w2_open, " pick_prompt=", w2_pick_prompt, " pick_open=", w2_pick_open, " pick_blocked_prompt=", w2_pick_blocked_prompt, " pick_wall=", w2_pick_wall, " behind_prompt=", w2_behind_prompt, " behind_ko=", w2_behind_ko, " front_refused=", w2_front_refused, " wall_refused=", w2_take_wall_refused, " live=", w2_live, ")")
 		fails += 1
+	w2_live_floor.queue_free()
 	w2_player.queue_free()
 	w2_target.queue_free()
 	w2_pick_guard.queue_free()
@@ -7376,6 +7391,16 @@ func _initialize() -> void:
 		fails += 1
 	else:
 		print("PASS: 96 T08 materials (tint sRGB contract, authored slot index, prop GLB binding, flat-colour census)")
+	# 97. W8 AI (T11-AI): the authored perception/roster/reaction/hearing model.
+	# Behavioural, not constant mirrors: live physics for the blackjack hold,
+	# authored rows compared against the raw extract, reaction caps across four
+	# listening guards, a downed-guard witness, the rosters and the ranged curve.
+	var c91_problems: Array[String] = await _run_suite97(root)
+	if not c91_problems.is_empty():
+		printerr("FAIL: 97 W8 AI authored perception: ", c91_problems)
+		fails += 1
+	else:
+		print("PASS: 97 W8 AI (sight frustum vs authored rows, blackjack hold race, investigator cap, GuardDowned, roster buckets, ranged curve, hearing occlusion, nav degradation)")
 
 	# 12.6/12.7 process-lifetime caches must not outlive the run.
 	var am_node: Node = root.get_node_or_null("/root/AudioManager")
@@ -8016,3 +8041,485 @@ func _run_suite95(host: Node) -> Array[String]:
 
 	ll.queue_free()
 	return problems
+# --- W8 AI suite (T11-AI) ----------------------------------------------------
+# Authored consumers from the RE-I lane. Everything here is behavioural or a
+# comparison against the raw extract; no constant is asserted against itself.
+
+
+## A player-shaped body with the properties guard_ai reads. Cheaper than the real
+## thief (no GLB loads) and enough for perception geometry.
+func _ai_stub_player(host: Node, at: Vector3, with_shock: bool = false) -> CharacterBody3D:
+	var body: CharacterBody3D = CharacterBody3D.new()
+	body.name = "AIPlayerStub"
+	body.collision_layer = 2
+	body.collision_mask = 1
+	var col := CollisionShape3D.new()
+	var cap := CapsuleShape3D.new()
+	cap.radius = 0.4
+	cap.height = 1.8
+	col.shape = cap
+	col.position = Vector3(0.0, 0.9, 0.0)
+	body.add_child(col)
+	body.position = at
+	host.add_child(body)
+	return body
+
+
+## The authored 0.45 s blackjack hold with live physics: the real thief, the real
+## guard, the real hold accumulation and the real `_perform_hold_action`. Suite
+## 55c froze every actor and called `_try_blackjack` directly, so neither the AI
+## tick nor the hold race ever ran (RE-I-14).
+func _ai_blackjack_hold(host: Node, at: Vector3, reach_m: float) -> Dictionary:
+	var gs: Node = host.get_node_or_null("GameState")
+	var state_before: String = str(gs.get("state"))
+	var spotted_before: bool = bool(gs.get("ever_spotted"))
+	var takedowns_before: int = int(gs.get("takedowns"))
+	gs.set("state", "playing")
+	gs.set("ever_spotted", false)
+	var guard: CharacterBody3D = (load("res://src/ai/guard_ai.gd") as GDScript).new() as CharacterBody3D
+	guard.name = "AIHoldGuard"
+	guard.position = at
+	guard.rotation = Vector3.ZERO
+	guard.set("patrol_points", [at])
+	guard.set("patrol_speed", 0.0)
+	guard.set("suspicious_speed", 0.0)
+	guard.set("chase_speed", 0.0)
+	host.add_child(guard)
+	var player: Node3D = (load("res://src/player/thief_character.gd") as GDScript).new() as Node3D
+	player.name = "AIHoldThief"
+	player.position = at + Vector3(0.0, 0.0, reach_m)
+	host.add_child(player)
+	await process_frame
+	await physics_frame
+	guard.set("detection", 0.0)
+	guard.set("state", 0)
+	var prompt: String = str(player.call("get_look_secondary_prompt"))
+	player.set("_interact_hold_ms", Time.get_ticks_msec())
+	player.set("_interact_hold_sec", 0.0)
+	var frames: int = 0
+	while float(player.get("_interact_hold_sec")) < 0.45 and frames < 240:
+		await physics_frame
+		frames += 1
+	var held: float = float(player.get("_interact_hold_sec"))
+	var seen: bool = bool(guard.call("_can_see_player", player))
+	var detection: float = float(guard.get("detection"))
+	player.set("_interact_hold_ms", -1)
+	player.set("_interact_hold_sec", -1.0)
+	player.call("_perform_hold_action")
+	var out: Dictionary = {
+		"prompt": prompt,
+		"held": held,
+		"seen": seen,
+		"detection": detection,
+		"ko": int(guard.get("state")) == 5,
+		"spot": bool(gs.get("ever_spotted")),
+		"takedowns": int(gs.get("takedowns")) - takedowns_before,
+	}
+	gs.set("ever_spotted", spotted_before)
+	gs.set("state", state_before)
+	player.queue_free()
+	guard.queue_free()
+	await process_frame
+	return out
+
+
+## Suite 91. Returns human-readable problems (empty = pass).
+func _run_suite97(host: Node) -> Array[String]:
+	var problems: Array[String] = []
+	var SightModel: GDScript = load("res://src/ai/sight_model.gd") as GDScript
+	var GuardRoster: GDScript = load("res://src/ai/guard_roster.gd") as GDScript
+	var ReactionRoles: GDScript = load("res://src/ai/reaction_roles.gd") as GDScript
+	var RangedAttack: GDScript = load("res://src/ai/ranged_attack.gd") as GDScript
+	var NavSteering: GDScript = load("res://src/ai/nav_steering.gd") as GDScript
+	var hearing: GDScript = load("res://src/ai/hearing_data.gd") as GDScript
+	var occlusion: GDScript = load("res://src/ai/hearing_occlusion.gd") as GDScript
+	var gs: Node = host.get_node_or_null("GameState")
+	var noise_bus: Node = host.get_node_or_null("NoiseBus")
+
+	# 91a. The five dropped sight fields: every fallback value equals the raw
+	# authored asset, and the derived frustum is the audit's arithmetic.
+	var raw: Variant = _repo_json("extracted/json/AI/Controllers/AIC_GuardBase.json")
+	if raw is Array:
+		var raw_rows: Array = []
+		for obj_v: Variant in (raw as Array):
+			var obj: Dictionary = obj_v as Dictionary
+			var props: Dictionary = obj.get("Properties", {}) as Dictionary
+			if props.has("_EscalationStateToSettings"):
+				raw_rows = props["_EscalationStateToSettings"] as Array
+				break
+		var names: Array[String] = ["Drowsy", "Fresh", "Mindful", "Vigilant"]
+		var mismatches: Array[String] = []
+		for i: int in range(mini(names.size(), raw_rows.size())):
+			var v: Dictionary = ((raw_rows[i] as Dictionary).get("Value", {}) as Dictionary)
+			var row: Dictionary = SightModel.call("row", "guardbase", names[i])
+			var pairs: Array = [
+				["sight_radius_m", "SightRadius"],
+				["lose_sight_radius_m", "LoseSightRadius"],
+				["peripheral_half_angle_deg", "PeripheralVisionAngleDegrees"],
+				["minimum_sight_radius_m", "MinimumSightRadius"],
+				["point_of_view_backward_offset_m", "PointOfViewBackwardOffset"],
+				["near_clipping_radius_m", "NearClippingRadius"],
+				["frustum_aspect_ratio", "FrustumAspectRatio"],
+				["frustum_pitch_deg", "FrustumPitch"],
+			]
+			for pair: Array in pairs:
+				var ours: float = float(row.get(str(pair[0]), -9999.0))
+				var authored_cm: float = float(v.get(str(pair[1]), -9999.0))
+				var expect: float = authored_cm
+				if str(pair[0]).ends_with("_m"):
+					expect = authored_cm / 100.0
+				if absf(ours - expect) > 0.0001:
+					mismatches.append("%s.%s=%s want %s" % [names[i], str(pair[0]), str(ours), str(expect)])
+		var band: Vector2 = SightModel.call("elevation_band_deg", SightModel.call("row", "guardbase", "Fresh"))
+		if not mismatches.is_empty():
+			problems.append("91a sight rows differ from the authored asset: " + ", ".join(mismatches))
+		elif absf(band.x - -44.75) > 0.1 or absf(band.y - 0.75) > 0.1:
+			problems.append("91a Fresh elevation band %s want [-44.75, 0.75]" % str(band))
+	else:
+		print("[91a] SKIP: extracted/ absent, authored sight rows not compared")
+
+	# 91b. The frustum matrix: behind = outside, in front = inside, a balcony
+	# above the horizon = outside, point blank = inside (near clip).
+	var fresh: Dictionary = SightModel.call("row", "guardbase", "Fresh")
+	var fwd := Vector3(0.0, 0.0, -1.0)
+	var cases: Array = [
+		[Vector3(0.0, 0.0, 2.2), false, "rear 2.2 m"],
+		[Vector3(0.0, 0.0, -5.0), true, "front 5 m"],
+		[Vector3(0.0, 2.0, -5.0), false, "balcony +2 m at 5 m"],
+		[Vector3(0.0, 0.0, 0.9), true, "point blank 0.9 m behind"],
+		[Vector3(2.0, 0.0, -5.0), true, "front 28 deg"],
+		[Vector3(4.0, 0.0, -4.0), false, "front 55 deg off the POV axis"],
+		[Vector3(7.0, 0.0, -3.0), false, "front 76 deg outside the cone"],
+	]
+	for case_v: Array in cases:
+		var dir: Vector3 = (case_v[0] as Vector3)
+		var got: bool = bool(SightModel.call("frustum_admits", fresh, dir, fwd))
+		if got != bool(case_v[1]):
+			problems.append("91b frustum case '%s' got %s want %s" % [str(case_v[2]), str(got), str(case_v[1])])
+
+	# 91c. Detection ramps are a mirror of detection.json, not a free constant.
+	var det_json: Variant = _repo_json("game/data/generated/gameplay/detection.json")
+	if det_json is Dictionary:
+		var gconsts: Dictionary = (load("res://src/ai/guard_ai.gd") as GDScript).get_script_constant_map()
+		var ramps: Dictionary = gconsts.get("DETECTION_RAMPS", {}) as Dictionary
+		for state_name: String in ["neutral", "suspicious", "alerted", "combat"]:
+			var idx: int = {"neutral": 0, "suspicious": 1, "alerted": 2, "combat": 3}[state_name]
+			var json_rows: Variant = (det_json as Dictionary).get(state_name, [])
+			if not (json_rows is Array) or (json_rows as Array).is_empty():
+				continue
+			var row: Dictionary = (json_rows as Array)[0] as Dictionary
+			var ours: Dictionary = ramps.get(idx, {}) as Dictionary
+			if not is_equal_approx(float(ours.get("agnostic", -1.0)), float(row.get("agnostic_seconds_per_meter", row.get("agnostic", -1.0)))):
+				problems.append("91c ramp %s agnostic %s != %s" % [state_name, str(ours.get("agnostic")), str(row.get("agnostic_seconds_per_meter", row.get("agnostic")))])
+	else:
+		print("[91c] SKIP: detection.json absent")
+
+	# 91d. Live blackjack hold: winnable, no ever_spotted, no detection ramp.
+	var arena := Vector3(8100.0, 0.0, 8100.0)
+	var floor_a: StaticBody3D = _w2_make_floor(host, arena + Vector3(0.0, -0.55, 0.0))
+	await physics_frame
+	var hold: Dictionary = await _ai_blackjack_hold(host, arena, 2.2)
+	if str(hold.get("prompt", "")) != "[F] [HOLD] TAKEDOWN":
+		problems.append("91d live hold prompt=%s" % str(hold.get("prompt")))
+	if float(hold.get("held", 0.0)) + 0.0001 < 0.45:
+		problems.append("91d hold never reached 0.45 s (held=%s)" % str(hold.get("held")))
+	if bool(hold.get("seen", true)):
+		problems.append("91d guard saw the thief during the hold")
+	if float(hold.get("detection", 1.0)) > 0.0:
+		problems.append("91d detection ramp ran during the hold (%s)" % str(hold.get("detection")))
+	if not bool(hold.get("ko", false)):
+		problems.append("91d takedown did not knock the guard out")
+	if bool(hold.get("spot", true)):
+		problems.append("91d ever_spotted set by the takedown")
+	if int(hold.get("takedowns", 0)) != 1:
+		problems.append("91d takedown counter did not move")
+
+	# 91e. Reaction-role cap: one heavy stimulus, four listeners, two
+	# investigators (DT_ReactionEvents HeaviestStim Investigator max 2).
+	ReactionRoles.call("reset")
+	noise_bus.call("reset_event_counter")
+	var listeners: Array[Node] = []
+	for i: int in range(4):
+		var g: CharacterBody3D = (load("res://src/ai/guard_ai.gd") as GDScript).new() as CharacterBody3D
+		g.name = "AICapGuard%d" % i
+		g.position = arena + Vector3(20.0 + float(i) * 2.0, 0.0, 0.0)
+		g.set("patrol_points", [g.position])
+		host.add_child(g)
+		listeners.append(g)
+	await process_frame
+	for g2: Node in listeners:
+		g2.set_physics_process(false)
+	var record: Dictionary = noise_bus.call("build_record", arena + Vector3(22.0, 0.0, 3.0), 10.0, null, "bottle", "")
+	for g3: Node in listeners:
+		g3.call("_on_noise_record", record)
+	var investigators: int = 0
+	var standby: int = 0
+	for g4: Node in listeners:
+		if int(g4.get("state")) == 1:
+			investigators += 1
+		elif int(g4.get("state")) == 0 and int(g4.get("heard_as_standby")) > 0:
+			standby += 1
+	if investigators != 2 or standby != 2:
+		problems.append("91e investigator cap: investigators=%d standby=%d want 2/2" % [investigators, standby])
+	if int(ReactionRoles.call("claim_count", int(record.get("event_id", 0)))) != 2:
+		problems.append("91e registry records %d investigators" % int(ReactionRoles.call("claim_count", int(record.get("event_id", 0)))))
+	for g5: Node in listeners:
+		g5.queue_free()
+	await process_frame
+
+	# 91f. GuardDowned: a body in front of a live guard raises the witness.
+	var body_arena := arena + Vector3(0.0, 0.0, 30.0)
+	var floor_b: StaticBody3D = _w2_make_floor(host, body_arena + Vector3(0.0, -0.55, 0.0))
+	await physics_frame
+	var victim: CharacterBody3D = (load("res://src/ai/guard_ai.gd") as GDScript).new() as CharacterBody3D
+	victim.name = "AIBody"
+	victim.position = body_arena + Vector3(0.0, 0.0, -5.0)
+	host.add_child(victim)
+	var witness: CharacterBody3D = (load("res://src/ai/guard_ai.gd") as GDScript).new() as CharacterBody3D
+	witness.name = "AIWitness"
+	witness.position = body_arena
+	witness.rotation = Vector3.ZERO
+	witness.set("patrol_points", [body_arena])
+	host.add_child(witness)
+	await process_frame
+	await physics_frame
+	victim.call("knock_out", 5.0)
+	witness.set("detection", 0.0)
+	witness.set("state", 0)
+	await physics_frame
+	for _f: int in range(60):
+		await physics_frame
+	var witness_ok: bool = int(witness.get("bodies_seen")) >= 1 and int(witness.get("state")) != 0
+	var investigate_near: bool = (witness.get("investigate_pos") as Vector3).distance_to(victim.global_position) < 2.0
+	if not witness_ok:
+		problems.append("91f GuardDowned not noticed (bodies_seen=%d state=%d)" % [int(witness.get("bodies_seen")), int(witness.get("state"))])
+	elif not investigate_near:
+		problems.append("91f GuardDowned witness investigate_pos is not the body")
+	victim.queue_free()
+	witness.queue_free()
+	floor_b.queue_free()
+	await process_frame
+
+	# 91g. Roster buckets: all seven authored buckets resolve, the Bouncer row
+	# and the Hauntstable's own 30 m row are reachable, KeyHolder carries a key.
+	var bucket_names: Array = ["DA_SpawnBucket_KeyHolder", "DA_SpawnBucket_Hauntstable", "DA_SpawnBucket_PrivateSecurity", "DA_SpawnBucket_PrivateSecurity_Lanterns", "DA_SpawnBucket_StandardGuards_Bouncers", "DA_SpawnBucket_StandardGuards_Lanterns", "DA_SpawnBucket_StandardGuards_PrivateSecurity_JasperingHall_Lantern"]
+	for bucket: String in bucket_names:
+		var row: Dictionary = GuardRoster.call("roster_for", bucket)
+		if str(row.get("source", "unbound")) == "unbound":
+			problems.append("91g roster bucket %s unresolved" % bucket)
+	var bouncer_row: Dictionary = GuardRoster.call("roster_for", "BP_GuardEnforcer_Club_C")
+	var haunt_row: Dictionary = GuardRoster.call("roster_for", "BP_Hauntstable_C")
+	var key_row: Dictionary = GuardRoster.call("roster_for", "BP_GuardSecurity_KeyHolder_C")
+	if str(bouncer_row.get("profile", "")) != "bouncer":
+		problems.append("91g BP_GuardEnforcer_Club_C profile=%s" % str(bouncer_row.get("profile")))
+	if str(haunt_row.get("profile", "")) != "hauntstable" or str(haunt_row.get("weapon", "")) != "hauntstable":
+		problems.append("91g BP_Hauntstable_C row=%s" % JSON.stringify(haunt_row))
+	if key_row.get("carries_key", false) != true or GuardRoster.call("carried_key_id", key_row, "guildhall") != "key_guildhall":
+		problems.append("91g KeyHolder does not carry the Guildhall Key")
+	var haunt_sight: Dictionary = SightModel.call("row", "hauntstable", "Fresh")
+	if absf(float(haunt_sight.get("sight_radius_m", 0.0)) - 30.0) > 0.0001:
+		problems.append("91g Hauntstable sight %s want 30 m" % str(haunt_sight.get("sight_radius_m")))
+
+	# 91h. The stolen key reaches GameState through a real pickpocket, so the
+	# KeyHolder loop has a source end even though the lock consumer is T10's.
+	var key_guard: CharacterBody3D = (load("res://src/ai/guard_ai.gd") as GDScript).new() as CharacterBody3D
+	key_guard.name = "AIKeyGuard"
+	key_guard.position = arena + Vector3(0.0, 0.0, 60.0)
+	key_guard.set("roster_bucket", "BP_GuardSecurity_KeyHolder_C")
+	host.add_child(key_guard)
+	var thief_stub: CharacterBody3D = _ai_stub_player(host, key_guard.position + Vector3(0.0, 0.0, 1.2))
+	await process_frame
+	await physics_frame
+	var keys_before: int = (gs.get("stolen_keys") as Array).size()
+	key_guard.set("carried_item", {"id": "key_guildhall", "name": "Guildhall Key", "kind": "key", "value": 150})
+	key_guard.call("interact", thief_stub)
+	if not bool(gs.call("has_stolen_key", "key_guildhall")):
+		problems.append("91h pickpocket did not grant the Guildhall Key (keys %d -> %d)" % [keys_before, (gs.get("stolen_keys") as Array).size()])
+	if str(key_guard.call("escalation_profile")) != "guardbase":
+		problems.append("91h KeyHolder profile=%s" % str(key_guard.call("escalation_profile")))
+	key_guard.queue_free()
+	thief_stub.queue_free()
+	await process_frame
+
+	# 91i. Ranged combat: the authored damage curve, the 20 m extent, the 2 s
+	# cooldown and the shock contract; and the DT_ReactionEvents combat pair.
+	if absf(float(RangedAttack.call("damage_at_m", 0.0)) - 10.0) > 0.0001 \
+		or absf(float(RangedAttack.call("damage_at_m", 10.0)) - 6.0) > 0.0001 \
+		or absf(float(RangedAttack.call("damage_at_m", 20.0)) - 2.0) > 0.0001 \
+		or absf(float(RangedAttack.call("damage_at_m", 35.0)) - 2.0) > 0.0001:
+		problems.append("91i ranged damage curve is not 10@0 -> 2@20 m")
+	var shock_holder: Dictionary = {"damage": -1.0, "shock": -1.0}
+	var victim_stub: Node = _ranged_victim_stub(shock_holder)
+	var delivered: Dictionary = RangedAttack.call("deliver", victim_stub, 10.0, "guard_ranged") as Dictionary
+	if absf(float(shock_holder["damage"]) - 6.0) > 0.0001 or absf(float(shock_holder["shock"]) - 3.0) > 0.0001:
+		problems.append("91i deliver at 10 m: damage=%s shock=%s" % [str(shock_holder["damage"]), str(shock_holder["shock"])])
+	if delivered.get("shock_applied", false) != true or absf(float(delivered.get("shock_seconds", 0.0)) - 3.0) > 0.0001:
+		problems.append("91i shock contract not delivered")
+	victim_stub.free()
+	ReactionRoles.call("reset")
+	var chaser_a: String = str(ReactionRoles.call("claim_combat", "target:1", 11, 1000, true))
+	var chaser_b: String = str(ReactionRoles.call("claim_combat", "target:1", 22, 1000, true))
+	var ranged_c: String = str(ReactionRoles.call("claim_combat", "target:1", 33, 1000, false))
+	if chaser_a != "chaser" or chaser_b != "ranged" or ranged_c != "ranged":
+		problems.append("91i combat pair a=%s b=%s c=%s want chaser/ranged/ranged" % [chaser_a, chaser_b, ranged_c])
+	# Live: a COMBAT guard at 8 m with LOS fires the authored curve instead of
+	# walking into 1 m melee (RE-I-11). The old port damaged only inside 1 m.
+	ReactionRoles.call("reset")
+	var ranged_arena := arena + Vector3(0.0, 0.0, 120.0)
+	var floor_r: StaticBody3D = _w2_make_floor(host, ranged_arena + Vector3(0.0, -0.55, 0.0))
+	await physics_frame
+	var shooter: CharacterBody3D = (load("res://src/ai/guard_ai.gd") as GDScript).new() as CharacterBody3D
+	shooter.name = "AIRangedGuard"
+	shooter.position = ranged_arena
+	shooter.rotation = Vector3.ZERO
+	shooter.set("patrol_points", [ranged_arena])
+	host.add_child(shooter)
+	var target_stub: CharacterBody3D = _ai_damage_stub(host, ranged_arena + Vector3(0.0, 0.0, -8.0))
+	target_stub.add_to_group("player")
+	await process_frame
+	await physics_frame
+	shooter.set("state", 3)  # Alertness.COMBAT
+	shooter.set("attack_cooldown", 0.0)
+	shooter.set("detection", 100.0)
+	for _rf: int in range(30):
+		await physics_frame
+	var dealt: float = float(target_stub.get("damage_taken"))
+	var expected: float = float(RangedAttack.call("damage_at_m", shooter.global_position.distance_to(target_stub.global_position)))
+	if dealt <= 0.0:
+		problems.append("91i COMBAT guard at 8 m never fired (damage_taken=%s)" % str(dealt))
+	elif absf(dealt - expected) > 0.75:
+		problems.append("91i ranged damage %s != curve %s" % [str(dealt), str(expected)])
+	if absf(float(shooter.get("last_ranged_damage")) - expected) > 0.75:
+		problems.append("91i last_ranged_damage %s != %s" % [str(shooter.get("last_ranged_damage")), str(expected)])
+	if int(shooter.get("ranged_accuracy_stacks")) < 1:
+		problems.append("91i accuracy stack did not increment")
+	shooter.queue_free()
+	target_stub.queue_free()
+	floor_r.queue_free()
+	await process_frame
+
+	# 91j. Hearing: 11 of the 54 authored rows are reachable from the port's
+	# emitter tags (8 before W8), walls block, and the authored portal rule is
+	# what admits a sound through a doorway.
+	var emitter_tags: Array = ["takedown", "bottle", "door", "lock", "lockpick", "lockpick_jammed", "noise_alarm", "combat_hit", "npc_yelp", "npc_call_help", "footstep"]
+	var reachable: Array = hearing.call("reachable_stim_tags", emitter_tags)
+	var unreachable: Array = hearing.call("unreachable_stim_tags", emitter_tags)
+	if reachable.size() != 11:
+		problems.append("91j reachable hearing rows=%d want 11 (%s)" % [reachable.size(), ", ".join(reachable)])
+	if int(hearing.call("stim_count")) != 54 or reachable.size() + unreachable.size() != 54:
+		problems.append("91j stim registry/reachability do not partition 54 rows")
+	var occ_arena := arena + Vector3(60.0, 0.0, 0.0)
+	var floor_c: StaticBody3D = _w2_make_floor(host, occ_arena + Vector3(0.0, -0.55, 0.0))
+	await physics_frame
+	var ear: CharacterBody3D = (load("res://src/ai/guard_ai.gd") as GDScript).new() as CharacterBody3D
+	ear.name = "AIEar"
+	ear.position = occ_arena
+	ear.set("patrol_points", [occ_arena])
+	host.add_child(ear)
+	await process_frame
+	ear.set_physics_process(false)
+	occlusion.call("reset_stats")
+	var open_record: Dictionary = noise_bus.call("build_record", occ_arena + Vector3(0.0, 0.0, 3.0), 10.0, null, "bottle", "")
+	ear.call("_on_noise_record", open_record)
+	var heard_open: bool = int(ear.get("state")) != 0
+	var wall: StaticBody3D = _w2_make_wall(host, occ_arena + Vector3(0.0, 1.0, 1.5))
+	await physics_frame
+	ear.set("state", 0)
+	var occh: Dictionary = occlusion.call("stats") as Dictionary
+	var blocked_before: int = int(occh.get("blocks", 0))
+	var wall_record: Dictionary = noise_bus.call("build_record", occ_arena + Vector3(0.0, 0.0, 3.0), 10.0, null, "bottle", "")
+	ear.call("_on_noise_record", wall_record)
+	var heard_wall: bool = int(ear.get("state")) != 0
+	var occh2: Dictionary = occlusion.call("stats") as Dictionary
+	if not heard_open:
+		problems.append("91j open-floor stimulus was not heard")
+	if heard_wall or int(occh2.get("blocks", 0)) <= blocked_before:
+		problems.append("91j wall did not block the stimulus (heard=%s blocks %d->%d)" % [str(heard_wall), blocked_before, int(occh2.get("blocks", 0))])
+	if int(occlusion.call("portal_count")) != 285:
+		problems.append("91j acoustic portal registry=%d want 285" % int(occlusion.call("portal_count")))
+	wall.queue_free()
+	ear.queue_free()
+	floor_c.queue_free()
+	await process_frame
+
+	# 91k. Navigation: no baked map => explicit degradation, straight-line fall.
+	NavSteering.call("reset_stats")
+	var nav_body: Node3D = Node3D.new()
+	nav_body.position = Vector3.ZERO
+	host.add_child(nav_body)
+	var nav = NavSteering.new()
+	nav.call("setup", nav_body)
+	var dir: Vector3 = nav.call("step_towards", Vector3(5.0, 0.0, 0.0)) as Vector3
+	if str(nav.call("state")) != "no_map" or int(nav.call("degraded_frames")) < 1:
+		problems.append("91k nav did not report the documented degradation (state=%s)" % str(nav.call("state")))
+	if dir.distance_to(Vector3.RIGHT) > 0.01:
+		problems.append("91k degraded steering is not straight-line: %s" % str(dir))
+	if int(NavSteering.call("degraded_frames_total")) < 1:
+		problems.append("91k global degraded-frame counter did not move")
+	nav_body.queue_free()
+	await process_frame
+
+	# 91l. Civilian: authored 40 HP / 60 s KO and the yelp+call-for-help chain.
+	var civ_scr: GDScript = load("res://src/ai/civilian_npc.gd") as GDScript
+	if absf(float(civ_scr.get_script_constant_map().get("CIVILIAN_MAX_HP", 0.0)) - 40.0) > 0.0001 \
+		or absf(float(civ_scr.get_script_constant_map().get("CIVILIAN_KNOCKOUT_S", 0.0)) - 60.0) > 0.0001:
+		problems.append("91l civilian HP/KO constants are not 40/60")
+	var civ_arena := arena + Vector3(0.0, 0.0, 90.0)
+	var floor_d: StaticBody3D = _w2_make_floor(host, civ_arena + Vector3(0.0, -0.55, 0.0))
+	var civ: Node3D = civ_scr.new() as Node3D
+	civ.name = "AICivilian"
+	civ.call("setup", "", "", civ_arena)
+	civ.position = civ_arena
+	host.add_child(civ)
+	var threat: CharacterBody3D = _ai_stub_player(host, civ_arena + Vector3(0.0, 0.0, -4.0))
+	threat.add_to_group("player")
+	await process_frame
+	for _cf: int in range(40):
+		await physics_frame
+	var fled: bool = str(civ.call("state_name")) == "flee" or str(civ.call("state_name")) == "cower"
+	if not fled:
+		problems.append("91l civilian did not react to a visible thief (state=%s)" % str(civ.call("state_name")))
+	if int(civ.get("yelps")) < 1:
+		problems.append("91l civilian did not yelp")
+	civ.call("take_knockout", 40.0)
+	if str(civ.call("state_name")) != "downed":
+		problems.append("91l civilian did not go down at 40 damage")
+	floor_d.queue_free()
+	civ.queue_free()
+	threat.queue_free()
+	await process_frame
+	return problems
+
+
+## Minimal victim for RangedAttack.deliver: records damage and the shock contract.
+func _ranged_victim_stub(sink: Dictionary) -> Node:
+	var script := GDScript.new()
+	script.source_code = "extends Node\nvar sink: Dictionary = {}\nfunc take_damage(amount: float, _src: String = \"\") -> void:\n\tsink[\"damage\"] = amount\nfunc apply_shock(seconds: float, _mult: float) -> void:\n\tsink[\"shock\"] = seconds\n"
+	script.reload()
+	var node: Node = Node.new()
+	node.set_script(script)
+	node.set("sink", sink)
+	return node
+
+
+## A body that records ranged damage, so the live COMBAT case can assert the
+## authored curve value rather than "something happened".
+func _ai_damage_stub(host: Node, at: Vector3) -> CharacterBody3D:
+	var script := GDScript.new()
+	script.source_code = "extends CharacterBody3D\nvar damage_taken: float = 0.0\nvar last_source: String = \"\"\nfunc take_damage(amount: float, src: String = \"\") -> void:\n\tdamage_taken += amount\n\tlast_source = src\nfunc apply_shock(_seconds: float, _mult: float) -> void:\n\tpass\n"
+	script.reload()
+	var body := CharacterBody3D.new()
+	body.set_script(script)
+	body.name = "AIDamageStub"
+	body.collision_layer = 2
+	body.collision_mask = 1
+	var col := CollisionShape3D.new()
+	var cap := CapsuleShape3D.new()
+	cap.radius = 0.4
+	cap.height = 1.8
+	col.shape = cap
+	col.position = Vector3(0.0, 0.9, 0.0)
+	body.add_child(col)
+	body.position = at
+	host.add_child(body)
+	return body

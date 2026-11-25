@@ -92,6 +92,11 @@ var _roughness_cache_hits: int = 0
 ## SM_LightBeam transform accounting: one BEAM_FIX line at settle.
 var _beam_fix_count: int = 0
 var _beam_fix_max_scale: float = 0.0
+# RE-P-10/08 accounting: the [0.05, 40] scale clamp and the reflected
+# (det < 0) bases used to be silent. Counted, never silently rewritten.
+var _scale_clamp_count: int = 0
+var _scale_clamp_worst: float = 1.0
+var _mirrored_basis_count: int = 0
 
 ## TASK 4.2 tiny-texture mip guard: icon-size sprites (min dimension <32px,
 ## i.e. below TINY_TEX_MIN_SIZE) skip the mip chain — a full mip chain on a <32px
@@ -605,6 +610,7 @@ func _exit_tree() -> void:
 	_mesh_res_cache.clear()
 	_guildhall_sign_split_cache.clear()
 	_override_mesh_cache.clear()
+	_spline_mesh_cache.clear()
 	_roof_geom_cache.clear()
 	_roughness_live_loaders = maxi(_roughness_live_loaders - 1, 0)
 	if _roughness_live_loaders == 0:
@@ -2021,6 +2027,242 @@ func _get_overridden_mesh(ue_path: String, base_mesh: Mesh, ov_arr: Array[String
 	return ov_mesh
 
 
+## ----- SplineMeshComponent deformation (RE-B-04) ---------------------------
+## A UE `SplineMeshComponent` lofts its static mesh along an authored cubic
+## Hermite spline: the mesh's local X axis is the splice axis (its bounds map
+## to t = 0…1), and the cross-section (local Y = height, local Z = width after
+## the UE→Godot axis swap) is stamped at each slice with the authored 2D
+## scale, 2D offset and roll. tools/parse_tables.py:extract_levels() emits the
+## authored params as `spline` on the mesh entry, already converted to
+## component-local Godot metres/radians:
+##   p0/t0/p1/t1        Vector3 (m)   spline endpoints + tangents
+##   scale0/scale1      [a, b]        a = width (local Z), b = height (local Y)
+##   offset0/offset1    Vector3 (m)   cross-section offset, local X always 0
+##   roll0/roll1        float (rad)   roll about the tangent
+## Without this the 469 authored spline pieces collapse onto their parent
+## transform (1,080 exact duplicates the dedupe below then drops), so fences,
+## railings, chains, driveways and the monorail render as one straight piece.
+const SPLINE_AXIS_EPS: float = 1.0e-5
+
+var _spline_mesh_cache: Dictionary = {} # ue_path + "||" + spline key -> Mesh
+
+
+static func _spline_vec3(raw: Variant, fallback: Vector3) -> Vector3:
+	# Already normalised: normalize_spline() is applied at the parse boundary
+	# AND again inside spline_deform_mesh(), so it must be idempotent.
+	if raw is Vector3:
+		return raw as Vector3
+	if raw is Array and (raw as Array).size() >= 3:
+		var a: Array = raw as Array
+		return Vector3(float(a[0]), float(a[1]), float(a[2]))
+	return fallback
+
+
+static func _spline_vec2(raw: Variant, fallback: Vector2) -> Vector2:
+	if raw is Vector2:
+		return raw as Vector2
+	if raw is Array and (raw as Array).size() >= 2:
+		var a: Array = raw as Array
+		return Vector2(float(a[0]), float(a[1]))
+	return fallback
+
+
+static func _spline_float(raw: Variant, fallback: float) -> float:
+	if raw is float or raw is int:
+		return float(raw)
+	return fallback
+
+
+## Authored spline record, normalised once per batch. Keeping this in one
+## place means the batch key, the cached mesh and the collider all use the
+## identical parameter set.
+func normalize_spline(sp: Dictionary) -> Dictionary:
+	return {
+		"p0": _spline_vec3(sp.get("p0"), Vector3.ZERO),
+		"t0": _spline_vec3(sp.get("t0"), Vector3.ZERO),
+		"p1": _spline_vec3(sp.get("p1"), Vector3.FORWARD),
+		"t1": _spline_vec3(sp.get("t1"), Vector3.ZERO),
+		"s0": _spline_vec2(sp.get("scale0"), Vector2.ONE),
+		"s1": _spline_vec2(sp.get("scale1"), Vector2.ONE),
+		"o0": _spline_vec3(sp.get("offset0"), Vector3.ZERO),
+		"o1": _spline_vec3(sp.get("offset1"), Vector3.ZERO),
+		"r0": _spline_float(sp.get("roll0"), 0.0),
+		"r1": _spline_float(sp.get("roll1"), 0.0),
+	}
+
+
+## Cubic Hermite position at t (USplineMeshComponent::BuildSplineMesh).
+func spline_point(sp: Dictionary, t: float) -> Vector3:
+	var p0: Vector3 = sp["p0"]
+	var t0: Vector3 = sp["t0"]
+	var p1: Vector3 = sp["p1"]
+	var t1: Vector3 = sp["t1"]
+	var t2: float = t * t
+	var t3: float = t2 * t
+	return p0 * (2.0 * t3 - 3.0 * t2 + 1.0) \
+		+ t0 * (t3 - 2.0 * t2 + t) \
+		+ p1 * (-2.0 * t3 + 3.0 * t2) \
+		+ t1 * (t3 - t2)
+
+
+## d/dt of spline_point().
+func spline_tangent(sp: Dictionary, t: float) -> Vector3:
+	var p0: Vector3 = sp["p0"]
+	var t0: Vector3 = sp["t0"]
+	var p1: Vector3 = sp["p1"]
+	var t1: Vector3 = sp["t1"]
+	var t2: float = t * t
+	return p0 * (6.0 * t2 - 6.0 * t) \
+		+ t0 * (3.0 * t2 - 4.0 * t + 1.0) \
+		+ p1 * (-6.0 * t2 + 6.0 * t) \
+		+ t1 * (3.0 * t2 - 2.0 * t)
+
+
+## Local-space slice frame at t: X = tangent, Y = cross-section height,
+## Z = cross-section width, origin shifted by the authored 2D offset.
+func spline_frame(sp: Dictionary, t: float) -> Transform3D:
+	var origin: Vector3 = spline_point(sp, t)
+	var dir: Vector3 = spline_tangent(sp, t)
+	var x_axis: Vector3 = dir.normalized()
+	if x_axis.length() < 0.5:
+		# Degenerate tangents (a zero-length authored segment) fall back to the
+		# chord so the piece still has a usable orientation.
+		x_axis = ((sp["p1"] as Vector3) - (sp["p0"] as Vector3)).normalized()
+	if x_axis.length() < 0.5:
+		x_axis = Vector3.RIGHT
+	var up: Vector3 = Vector3.UP
+	if absf(x_axis.dot(up)) > 0.999:
+		up = Vector3.FORWARD
+	var z_axis: Vector3 = x_axis.cross(up).normalized()
+	var y_axis: Vector3 = z_axis.cross(x_axis).normalized()
+	var roll: float = lerpf(float(sp["r0"]), float(sp["r1"]), t)
+	if absf(roll) > SPLINE_AXIS_EPS:
+		var rot := Basis(x_axis, roll)
+		y_axis = (rot * y_axis).normalized()
+		z_axis = (rot * z_axis).normalized()
+	var basis := Basis(x_axis, y_axis, z_axis)
+	var off: Vector3 = (sp["o0"] as Vector3).lerp(sp["o1"] as Vector3, t)
+	return Transform3D(basis, origin + basis * off)
+
+
+## Lofts `base` along the authored spline. Every vertex of every surface is
+## re-placed, so multi-surface meshes keep their surfaces, materials and UVs.
+##
+## Rebuilt through SurfaceTool on purpose: the imported GLB surfaces carry a
+## compressed/custom attribute format, and `ArrayMesh.add_surface_from_arrays`
+## rejects the arrays `surface_get_arrays` hands back (the custom-channel format
+## flags are not part of that array). SurfaceTool re-emits the standard
+## attributes (position, normal, tangent, UV, UV2, colour) in a clean format,
+## which is exactly what a loft needs.
+func spline_deform_mesh(base: Mesh, sp_in: Dictionary) -> ArrayMesh:
+	if base == null:
+		return null
+	var sp: Dictionary = normalize_spline(sp_in)
+	var aabb: AABB = base.get_aabb()
+	var x_min: float = aabb.position.x
+	var span: float = aabb.size.x
+	var inv_span: float = 0.0 if absf(span) < SPLINE_AXIS_EPS else 1.0 / span
+	var w0: float = (sp["s0"] as Vector2).x
+	var h0: float = (sp["s0"] as Vector2).y
+	var w1: float = (sp["s1"] as Vector2).x
+	var h1: float = (sp["s1"] as Vector2).y
+	var out := ArrayMesh.new()
+	for s: int in range(base.get_surface_count()):
+		var arrays: Array = base.surface_get_arrays(s)
+		if arrays.is_empty():
+			continue
+		var verts_v: Variant = arrays[Mesh.ARRAY_VERTEX]
+		if not (verts_v is PackedVector3Array):
+			continue
+		var verts: PackedVector3Array = verts_v as PackedVector3Array
+		var count: int = verts.size()
+		if count == 0:
+			continue
+		var new_verts := PackedVector3Array()
+		new_verts.resize(count)
+		var normals_v: Variant = arrays[Mesh.ARRAY_NORMAL]
+		var has_normals: bool = normals_v is PackedVector3Array and (normals_v as PackedVector3Array).size() == count
+		var normals: PackedVector3Array = normals_v as PackedVector3Array if has_normals else PackedVector3Array()
+		var new_norms := PackedVector3Array()
+		if has_normals:
+			new_norms.resize(count)
+		for i: int in range(count):
+			var v: Vector3 = verts[i]
+			var t: float = clampf((v.x - x_min) * inv_span, 0.0, 1.0)
+			var frame: Transform3D = spline_frame(sp, t)
+			new_verts[i] = frame * Vector3(0.0, v.y * lerpf(h0, h1, t), v.z * lerpf(w0, w1, t))
+			if has_normals:
+				new_norms[i] = (frame.basis * normals[i]).normalized()
+		var index_v: Variant = arrays[Mesh.ARRAY_INDEX]
+		var indices: PackedInt32Array = index_v as PackedInt32Array if index_v is PackedInt32Array else PackedInt32Array()
+		var uv_v: Variant = arrays[Mesh.ARRAY_TEX_UV]
+		var uvs: PackedVector2Array = uv_v as PackedVector2Array if uv_v is PackedVector2Array else PackedVector2Array()
+		var uv2_v: Variant = arrays[Mesh.ARRAY_TEX_UV2]
+		var uvs2: PackedVector2Array = uv2_v as PackedVector2Array if uv2_v is PackedVector2Array else PackedVector2Array()
+		var col_v: Variant = arrays[Mesh.ARRAY_COLOR]
+		var cols: PackedColorArray = col_v as PackedColorArray if col_v is PackedColorArray else PackedColorArray()
+		var tan_v: Variant = arrays[Mesh.ARRAY_TANGENT]
+		var tans: PackedFloat32Array = tan_v as PackedFloat32Array if tan_v is PackedFloat32Array else PackedFloat32Array()
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		var emit: int = indices.size() if indices.size() > 0 else count
+		for k: int in range(emit):
+			var vi: int = indices[k] if indices.size() > 0 else k
+			if vi < 0 or vi >= count:
+				continue
+			if uvs.size() == count:
+				st.set_uv(uvs[vi])
+			if uvs2.size() == count:
+				st.set_uv2(uvs2[vi])
+			if cols.size() == count:
+				st.set_color(cols[vi])
+			if tans.size() >= (vi + 1) * 4:
+				var t3: float = clampf((verts[vi].x - x_min) * inv_span, 0.0, 1.0)
+				var tb: Basis = spline_frame(sp, t3).basis
+				var tv: Vector3 = tb * Vector3(tans[vi * 4], tans[vi * 4 + 1], tans[vi * 4 + 2])
+				if tv.length() > 0.5:
+					st.set_tangent(Plane(tv.x, tv.y, tv.z, tans[vi * 4 + 3]))
+			if has_normals:
+				st.set_normal(new_norms[vi])
+			st.add_vertex(new_verts[vi])
+		var before: int = out.get_surface_count()
+		st.commit(out)
+		if out.get_surface_count() > before:
+			var src_mat: Material = base.surface_get_material(s)
+			if src_mat != null:
+				out.surface_set_material(out.get_surface_count() - 1, src_mat)
+	return out
+
+
+## Deformed spline mesh for one authored record, cached per UE path + params.
+func _get_spline_mesh(ue_path: String, base_mesh: Mesh, spline_rec: Dictionary, variant_key: String = "") -> Mesh:
+	if base_mesh == null:
+		return base_mesh
+	var key: String = ue_path + "||" + variant_key + "||spline||" + str(normalize_spline(spline_rec))
+	if _spline_mesh_cache.has(key):
+		return _spline_mesh_cache[key] as Mesh
+	var deformed: ArrayMesh = spline_deform_mesh(base_mesh, spline_rec)
+	if deformed == null:
+		return base_mesh
+	_spline_mesh_cache[key] = deformed
+	return deformed
+
+
+## Collider for a deformed spline piece. The authored collision is a swept
+## hull, so a trimesh of the deformed surface is the closest authored answer;
+## the static-mesh box heuristic would seal the arc the loft describes.
+func spline_shape_for(mesh: Mesh) -> Dictionary:
+	var out: Dictionary = {"shape": null, "shape_offset": Vector3.ZERO}
+	if mesh == null:
+		return out
+	var aabb: AABB = mesh.get_aabb()
+	if aabb.size.length() <= 0.45:
+		return out
+	out["shape"] = mesh.create_trimesh_shape()
+	out["shape_offset"] = Vector3.ZERO
+	return out
+
+
 func _get_emissive_cpd_material() -> ShaderMaterial:
 	if _emissive_cpd_mat == null:
 		var mat: ShaderMaterial = ShaderMaterial.new()
@@ -2070,6 +2312,11 @@ func _new_accumulator() -> Dictionary:
 		# baked SplineMeshComponents contained 424 instances / 276 surplus
 		# draws at identical transforms (z-fighting / wall flicker).
 		"mesh_dedupe": {},
+		# Authored sublevel graph (RE-B-01). Keyed by the level key
+		# ("OldManor/OldManor_PathBlockers"), not the res:// path.
+		"sublevel_keys": {},
+		"level_instance_targets": {},
+		"streaming_levels": [] as Array,
 		"lights": [] as Array,
 		"landscapes": [] as Array,
 		"decals": [] as Array,
@@ -2469,6 +2716,20 @@ func _new_build_ctx(parent: Node3D, light_probe: Node, generate_collision: bool)
 	}
 
 
+## RE-P-15: TAT-2 additions that are not shipped art must be machine-identifiable
+## (AGENTS rule 7). Tags the most recently added child of `parent` with the
+## `expansion` meta + the shared group and counts it, exactly like prep_skyline.
+func _note_expansion_placement(parent: Node, kind_name: String, result: Dictionary) -> void:
+	if parent == null or parent.get_child_count() == 0:
+		return
+	var node: Node = parent.get_child(parent.get_child_count() - 1)
+	node.set_meta("expansion", true)
+	node.set_meta("expansion_kind", kind_name)
+	if not node.is_in_group("expansion_placements"):
+		node.add_to_group("expansion_placements")
+	result["expansion_placements"] = int(result.get("expansion_placements", 0)) + 1
+
+
 ## Records one authored spawner against its SceneElement tag. The legacy
 ## position arrays stay Vector3; this parallel index is what #11 matches.
 func _note_scene_element(result: Dictionary, kind: String, mk: Dictionary, p: Vector3) -> void:
@@ -2523,6 +2784,18 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 	var data_dict: Dictionary = data
 	var sublevel_tag: String = _sublevel_tag(json_path)
 	var result: Dictionary = acc["result"]
+	result["authored_meshes"] = int(result.get("authored_meshes", 0)) + (data_dict.get("meshes", []) as Array).size()
+	# Authored sublevel bookkeeping (RE-B-01/03): the key lets the loader
+	# reconcile the supplied list against the persistent map's own
+	# LevelStreaming graph and against LevelInstance merges.
+	var sublevel_key: String = _level_key_from_res(json_path)
+	if sublevel_key != "":
+		(acc["sublevel_keys"] as Dictionary)[sublevel_key] = true
+	for li_var: Variant in (data_dict.get("level_instances", []) as Array):
+		(acc["level_instance_targets"] as Dictionary)[str(li_var)] = sublevel_key
+	for sl_var: Variant in (data_dict.get("streaming_levels", []) as Array):
+		if sl_var is Dictionary:
+			(acc["streaming_levels"] as Array).append(sl_var)
 	var landscapes: Array = acc["landscapes"]
 	for lc in data_dict.get("landscapes", []):
 		if lc is Dictionary:
@@ -2626,6 +2899,10 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 			continue
 		var low_mp: String = mp.to_lower()
 		if "fogsheet" in low_mp or "fogsphere" in low_mp or "volumetric" in low_mp or "skysphere" in low_mp or "blocker" in low_mp:
+			# RE-B-14: 392 authored instances (376 SM_BlockerWard_*, 15
+			# SM_FogSphere, 1 SM_SkySphere) are intentionally invisible, but the
+			# drop used to be uncounted.
+			result["name_skipped"] = int(result.get("name_skipped", 0)) + 1
 			continue
 		# SM_WardBox is the authored ward-zone trigger volume (8 instances at
 		# the foyer/upper-floor wards). It is not the visible ward VFX: the
@@ -2657,11 +2934,21 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 				has_cpd = true
 		var hidden_raw: Variant = m_dict.get("hidden_in_game", false)
 		var hidden_in_game: bool = hidden_raw is bool and (hidden_raw as bool)
+		# Authored SplineMeshComponent params: each distinct spline is its own
+		# loft, so it must be its own batch (and its own collider shape).
+		var spline_raw: Variant = m_dict.get("spline", null)
+		var spline_rec: Dictionary = {}
+		var spline_key: String = ""
+		if spline_raw is Dictionary:
+			spline_rec = normalize_spline(spline_raw as Dictionary)
+			spline_key = str(spline_rec)
 		var bkey: String = mp if ov_key == "" else mp + "||" + ov_key
 		if has_cpd:
 			bkey += "||cpd"
 		if hidden_in_game:
 			bkey += "||hidden"
+		if spline_key != "":
+			bkey += "||spline||" + spline_key
 		var dedupe_key: String = bkey + "||" + str(tr)
 		var seen_meshes: Dictionary = acc.get("mesh_dedupe", {}) as Dictionary
 		if seen_meshes.has(dedupe_key):
@@ -2680,6 +2967,8 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 				"source_sublevels": {} as Dictionary,
 				"hidden_in_game": hidden_in_game,
 			}
+			if spline_key != "":
+				(batches[bkey] as Dictionary)["spline"] = spline_rec
 		var batch_rec: Dictionary = batches[bkey] as Dictionary
 		if mp == BEAM_CARD_MESH:
 			# One MeshInstance3D per authored card so the device layer can
@@ -2698,6 +2987,9 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 		if "candelabra" in low_mp or "candle" in low_mp or "brazier" in low_mp or "torch" in low_mp:
 			var candle_arr: Array = result["candelabra_positions"]
 			candle_arr.append(prop_pos)
+			# TAT2_CANDLE_FLAMES: the wick heights below are PORT CONSTANTS, not
+			# authored data (the cooked candle meshes carry no wick socket). The
+			# quad is TAT-2 expansion content and is labelled as such.
 			var wick_y: float = 0.16
 			if "candelabrafloor" in low_mp:
 				wick_y = 1.35
@@ -2708,6 +3000,7 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 			wick_y *= tr.basis.get_scale().y
 			if not authored_candle_vfx:
 				_VfxManager.spawn_candle_flame(parent, prop_pos + Vector3(0.0, wick_y, 0.0))
+				_note_expansion_placement(parent, "candle_flame", result)
 		if "wardrobe" in low_mp or "bureau" in low_mp or "armoire" in low_mp:
 			var ward_arr: Array = result["wardrobe_positions"]
 			ward_arr.append(prop_pos)
@@ -2817,6 +3110,14 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 			var es: Array = result["escape_points"]
 			es.append(p)
 		elif "Door" in cls:
+			# RE-P-05: 309 authored component markers carried no
+			# RelativeLocation, so they arrived at exactly (0, 0, 0). No
+			# consumer reads door_spawns today, but the next one would have
+			# spawned ~307 doors on the world origin. Refuse the origin and
+			# count it; the producer now emits the parent transform instead.
+			if p == Vector3.ZERO:
+				result["origin_markers_skipped"] = int(result.get("origin_markers_skipped", 0)) + 1
+				continue
 			var ds: Array = result["door_spawns"]
 			ds.append(p)
 			_note_scene_element(result, "door", mk, p)
@@ -2987,6 +3288,7 @@ func _make_draw_items(batches: Dictionary, collide: bool, global_batch: bool = f
 		var sources: Array = []
 		var hidden_in_game: bool = false
 		var per_instance: bool = false
+		var spline_rec: Dictionary = {}
 		if bval is Dictionary:
 			var bdict: Dictionary = bval as Dictionary
 			mp = str(bdict.get("mp", ""))
@@ -3009,6 +3311,9 @@ func _make_draw_items(batches: Dictionary, collide: bool, global_batch: bool = f
 						cpds.append(c_var as Color)
 			var hid_raw: Variant = bdict.get("hidden_in_game", false)
 			hidden_in_game = hid_raw is bool and (hid_raw as bool)
+			var spl_raw: Variant = bdict.get("spline", null)
+			if spl_raw is Dictionary:
+				spline_rec = spl_raw as Dictionary
 		elif bval is Array:
 			var mp_key: String = str(mp_var)
 			mp = mp_key
@@ -3034,6 +3339,7 @@ func _make_draw_items(batches: Dictionary, collide: bool, global_batch: bool = f
 				"hidden_in_game": hidden_in_game,
 				"collide": collide,
 				"cell": Vector2i.ZERO,
+				"spline": spline_rec,
 				"far": true,
 				"source_sublevel": far_src["source_sublevel"],
 				"source_sublevels": far_src["source_sublevels"],
@@ -3058,6 +3364,7 @@ func _make_draw_items(batches: Dictionary, collide: bool, global_batch: bool = f
 					"hidden_in_game": hidden_in_game,
 					"collide": collide,
 					"cell": _cell_of(tr_pi),
+					"spline": spline_rec,
 					"per_instance": true,
 					"source_sublevel": pi_src["source_sublevel"],
 					"source_sublevels": pi_src["source_sublevels"],
@@ -3077,6 +3384,7 @@ func _make_draw_items(batches: Dictionary, collide: bool, global_batch: bool = f
 				"hidden_in_game": hidden_in_game,
 				"collide": collide,
 				"cell": _cell_of(single_tr),
+				"spline": spline_rec,
 				"source_sublevel": single_src["source_sublevel"],
 				"source_sublevels": single_src["source_sublevels"],
 				"source_counts": single_src["source_counts"],
@@ -3115,6 +3423,7 @@ func _make_draw_items(batches: Dictionary, collide: bool, global_batch: bool = f
 				"hidden_in_game": hidden_in_game,
 				"collide": collide,
 				"cell": cell,
+				"spline": spline_rec,
 				"source_sublevel": cell_src["source_sublevel"],
 				"source_sublevels": cell_src["source_sublevels"],
 				"source_counts": cell_src["source_counts"],
@@ -3704,11 +4013,20 @@ func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> 
 	var hidden_in_game: bool = hidden_raw is bool and (hidden_raw as bool)
 	var far_raw: Variant = item.get("far", false)
 	var far_item: bool = far_raw is bool and (far_raw as bool)
+	var ov_key_eff: String = str(item.get("override_key", ""))
+	if ov_key_eff == "":
+		ov_key_eff = "|".join(ov_arr)
 	if not use_cpd and not ov_arr.is_empty():
-		var ov_key: String = str(item.get("override_key", ""))
-		if ov_key == "":
-			ov_key = "|".join(ov_arr)
-		mesh = _get_overridden_mesh(mp, mesh, ov_arr, ov_key)
+		mesh = _get_overridden_mesh(mp, mesh, ov_arr, ov_key_eff)
+	# Authored spline deformation: the piece is lofted along its own authored
+	# curve, so it cannot share the rigid mesh/collider of the same UE path.
+	var spline_item_raw: Variant = item.get("spline", null)
+	var spline_item: Dictionary = {}
+	if spline_item_raw is Dictionary and not (spline_item_raw as Dictionary).is_empty():
+		spline_item = spline_item_raw as Dictionary
+		mesh = _get_spline_mesh(mp, mesh, spline_item, ov_key_eff)
+		if mesh == null:
+			return 0
 	var low_mp: String = mp.to_lower()
 	var source_sublevel: String = str(item.get("source_sublevel", "unknown"))
 	var source_sublevels_raw: Variant = item.get("source_sublevels", [])
@@ -3795,6 +4113,10 @@ func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> 
 	var is_clutter: bool = _has_token(low_mp, CLUTTER_TOKENS)
 	if not use_cpd and not hidden_in_game and bool(item.get("collide", false)) and bool(ctx.get("generate_collision", false)) and not is_clutter:
 		var shape: Shape3D = info["shape"] as Shape3D
+		if not spline_item.is_empty():
+			var spline_shape: Dictionary = spline_shape_for(mesh)
+			shape = spline_shape["shape"] as Shape3D
+			info = {"shape": shape, "shape_offset": spline_shape["shape_offset"]}
 		if shape != null:
 			var soff: Vector3 = info.get("shape_offset", Vector3.ZERO)
 			var cell: Vector2i = item.get("cell", Vector2i.ZERO)
@@ -4924,6 +5246,35 @@ func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dict
 	result["curb_built"] = int(ctx.get("curb_built", 0))
 	result["missing_mesh_count"] = int(ctx.get("missing_mesh_count", 0))
 	result["duplicate_meshes"] = int(result.get("duplicate_meshes", 0))
+	result["name_skipped"] = int(result.get("name_skipped", 0))
+	result["ward_box_hidden"] = int(result.get("ward_box_hidden", 0))
+	result["moonshape_hidden"] = int(result.get("moonshape_hidden", 0))
+	result["clamped_scales"] = _scale_clamp_count
+	result["scale_clamp_worst_ratio"] = snappedf(_scale_clamp_worst, 0.0001)
+	result["mirrored_bases"] = _mirrored_basis_count
+	result["authored_meshes"] = int(result.get("authored_meshes", 0))
+	result["sublevels_skipped_merged"] = int(result.get("sublevels_skipped_merged", 0))
+	result["sublevels_from_graph"] = int(result.get("sublevels_from_graph", 0))
+	result["sublevels_graph_missing"] = int(result.get("sublevels_graph_missing", 0))
+	result["expansion_placements"] = int(result.get("expansion_placements", 0))
+	# RE-P-09/RE-P-16: the mesh reconciliation used to live only in `result`,
+	# so no run log could prove a filter had not eaten authored geometry. One
+	# deterministic line per load, always on.
+	print("MESH_RECON authored=%d applied=%d duplicate=%d name_skipped=%d wardbox=%d moonshape=%d clamp=%d clamp_worst=%.2fx mirrored=%d origin_markers_skipped=%d skipped_merged=%d from_graph=%d graph_missing=%d" % [
+		int(result["authored_meshes"]),
+		mesh_instances,
+		int(result["duplicate_meshes"]),
+		int(result["name_skipped"]),
+		int(result["ward_box_hidden"]),
+		int(result["moonshape_hidden"]),
+		_scale_clamp_count,
+		_scale_clamp_worst,
+		_mirrored_basis_count,
+		int(result.get("origin_markers_skipped", 0)),
+		int(result["sublevels_skipped_merged"]),
+		int(result["sublevels_from_graph"]),
+		int(result["sublevels_graph_missing"]),
+	])
 	result["missing_meshes"] = (ctx.get("missing_meshes", [] as Array) as Array).duplicate()
 	result["corrupt_mesh_count"] = corrupt_mesh_count
 	result["corrupt_meshes"] = corrupt_meshes.duplicate()
@@ -5461,6 +5812,107 @@ static func _map_hint_from_paths(paths: Array) -> String:
 	return ""
 
 
+## ----- Authored sublevel graph (RE-B-01 / RE-B-03) --------------------------
+## The shipped persistent maps declare their sublevels as
+## `LevelStreamingAlwaysLoaded` / `LevelStreamingDynamic` actors. The port
+## never consumed that graph (hardcoded lists in mission_controller.gd), which
+## dropped OldManor_PathBlockers (156 meshes of authored route gating),
+## ThievesDenTest_Contracts (the Den's contract booth/journal props) and
+## ThievesDen_LoadoutCapture, and let FTUE load Building_JewelryStore twice
+## (once as the authored LevelInstance inside FTUE_Geometry, once standalone).
+const LEVELS_RES_ROOT: String = "res://data/generated/levels/"
+const LEVELS_RES_SUFFIX: String = ".tatlevel.json"
+
+
+## "res://data/generated/levels/A/B.tatlevel.json" -> "A/B". Anything outside
+## the generated levels root keeps the pre-graph behaviour (key "").
+static func _level_key_from_res(json_path: String) -> String:
+	if not json_path.begins_with(LEVELS_RES_ROOT) or not json_path.ends_with(LEVELS_RES_SUFFIX):
+		return ""
+	var tail: String = json_path.substr(LEVELS_RES_ROOT.length())
+	return tail.substr(0, tail.length() - LEVELS_RES_SUFFIX.length())
+
+
+## Level keys that a supplied sublevel already contributes through the
+## LevelInstance merge pass. Those must never also be parsed standalone: the
+## merged copies sit at the authored instance transform, the standalone payload
+## sits at the level's own origin (~220 m away for the FTUE jewelry store), and
+## the mesh dedupe cannot collapse them because the transforms differ.
+## The empty case is detected without a JSON parse so ordinary maps pay nothing.
+func _prescan_merged_sublevels(json_paths: Array) -> Dictionary:
+	var merged: Dictionary = {}
+	for jp_var: Variant in json_paths:
+		var jp: String = str(jp_var)
+		if not FileAccess.file_exists(jp):
+			continue
+		var txt: String = FileAccess.get_file_as_string(jp)
+		if txt == "" or txt.find("\"level_instances\": []") >= 0:
+			continue
+		var parsed: Variant = JSON.parse_string(txt)
+		if not (parsed is Dictionary):
+			continue
+		for li_var: Variant in ((parsed as Dictionary).get("level_instances", []) as Array):
+			merged[str(li_var)] = true
+	return merged
+
+
+## Authoried always-loaded sublevels missing from the supplied set, as res://
+## paths. Dynamic levels are deliberately not added (the contract row owns
+## those), and a level already merged as a LevelInstance is skipped because its
+## geometry is present.
+func _resolve_authored_streaming(acc: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	var seen: Dictionary = (acc["sublevel_keys"] as Dictionary).duplicate()
+	var merged: Dictionary = acc["level_instance_targets"] as Dictionary
+	var result: Dictionary = acc["result"]
+	var wanted: Array[String] = []
+	for sl_var: Variant in (acc["streaming_levels"] as Array):
+		if not (sl_var is Dictionary):
+			continue
+		var rec: Dictionary = sl_var as Dictionary
+		if str(rec.get("type", "")) != "always":
+			continue
+		var key: String = str(rec.get("level", ""))
+		if key == "" or seen.has(key):
+			continue
+		seen[key] = true
+		wanted.append(key)
+	for key: String in wanted:
+		if merged.has(key):
+			result["sublevels_skipped_merged"] = int(result.get("sublevels_skipped_merged", 0)) + 1
+			continue
+		var res_path: String = LEVELS_RES_ROOT + key + LEVELS_RES_SUFFIX
+		if not FileAccess.file_exists(res_path):
+			result["sublevels_graph_missing"] = int(result.get("sublevels_graph_missing", 0)) + 1
+			continue
+		result["sublevels_from_graph"] = int(result.get("sublevels_from_graph", 0)) + 1
+		out.append(res_path)
+	return out
+
+
+## Parses the supplied sublevels plus the authored always-loaded graph, minus
+## sublevels that another supplied payload already merged. Both load paths use
+## this so sync and async stay identical.
+func _parse_sublevels_with_graph(json_paths: Array, acc: Dictionary, parent: Node3D, on_file: Callable = Callable()) -> void:
+	var merged: Dictionary = _prescan_merged_sublevels(json_paths)
+	for jp_var: Variant in json_paths:
+		var jp: String = str(jp_var)
+		var key: String = _level_key_from_res(jp)
+		if key != "" and merged.has(key):
+			var result: Dictionary = acc["result"]
+			result["sublevels_skipped_merged"] = int(result.get("sublevels_skipped_merged", 0)) + 1
+			if on_file.is_valid():
+				on_file.call(jp, true)
+			continue
+		_parse_sublevel_file(jp, acc, parent)
+		if on_file.is_valid():
+			on_file.call(jp, false)
+	for extra: String in _resolve_authored_streaming(acc):
+		_parse_sublevel_file(extra, acc, parent)
+		if on_file.is_valid():
+			on_file.call(extra, false)
+
+
 func load_sublevels(json_paths: Array[String], parent: Node3D, light_probe: Node, max_lights: int = 96, generate_collision: bool = true) -> Dictionary:
 	var _timing: bool = OS.has_environment("TAT_LOAD_TIMING")
 	var _t0: int = Time.get_ticks_msec()
@@ -5477,8 +5929,10 @@ func load_sublevels(json_paths: Array[String], parent: Node3D, light_probe: Node
 	_roughness_cache_hits = 0
 	_beam_fix_count = 0
 	_beam_fix_max_scale = 0.0
-	for jp: String in json_paths:
-		_parse_sublevel_file(jp, acc, parent)
+	_scale_clamp_count = 0
+	_scale_clamp_worst = 1.0
+	_mirrored_basis_count = 0
+	_parse_sublevels_with_graph(json_paths, acc, parent)
 
 	if _timing:
 		print("LoadTiming parse_ms=", Time.get_ticks_msec() - _t0)
@@ -5519,21 +5973,29 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 	_prof_shape_ms = 0
 	_VfxManager.prewarm_footstep_mask()
 	var total_files: int = maxi(json_paths.size(), 1)
-	var file_idx: int = 0
 	_beam_fix_count = 0
 	_beam_fix_max_scale = 0.0
+	_scale_clamp_count = 0
+	_scale_clamp_worst = 1.0
+	_mirrored_basis_count = 0
 	_roughness_bake_count = 0
 	_roughness_bake_px = 0
 	_roughness_bake_ms = 0
 	_roughness_bake_bytes = 0
 	_roughness_cache_hits = 0
 	load_progress.emit(0.0, "Parsing JSON...")
-	for jp in json_paths:
-		_parse_sublevel_file(str(jp), acc, parent)
-		file_idx += 1
-		load_progress.emit(0.3 * float(file_idx) / float(total_files), "Parsing JSON %d/%d..." % [file_idx, json_paths.size()])
-		if parent.get_tree() != null:
-			await parent.get_tree().process_frame
+	# The graph resolver can add always-loaded sublevels, so the progress
+	# denominator is the supplied count and the extra files land in the tail
+	# of the parse budget instead of overrunning 0.3. The counter lives in a
+	# Dictionary because GDScript lambdas capture scalars by value.
+	var progress_state: Dictionary = {"idx": 0}
+	var parse_tick: Callable = func(_jp: String, _skipped: bool) -> void:
+		progress_state["idx"] = int(progress_state["idx"]) + 1
+		var frac: float = minf(0.29, 0.3 * float(int(progress_state["idx"])) / float(total_files))
+		load_progress.emit(frac, "Parsing JSON %d/%d..." % [int(progress_state["idx"]), json_paths.size()])
+	_parse_sublevels_with_graph(json_paths, acc, parent, parse_tick)
+	if parent.get_tree() != null:
+		await parent.get_tree().process_frame
 
 	if _timing:
 		print("LoadTiming parse_ms=", Time.get_ticks_msec() - _t0)
@@ -5669,11 +6131,33 @@ func _dict_to_transform(d: Dictionary) -> Transform3D:
 		Vector3(float(b[0]), float(b[3]), float(b[6])),
 		Vector3(float(b[1]), float(b[4]), float(b[7])),
 		Vector3(float(b[2]), float(b[5]), float(b[8]))
-	).scaled_local(Vector3(
-		clampf(float(s[0]), 0.05, 40.0),
-		clampf(float(s[1]), 0.05, 40.0),
-		clampf(float(s[2]), 0.05, 40.0)
-	))
+	)
+	# RE-P-10: the authored [0.05, 40] clamp used to rewrite thin slabs and
+	# oversized volumes with no trace. Keep the clamp (it is load-bearing: a
+	# 0.0021 m slab degenerates the collider) but count every instance and the
+	# worst ratio so a producer regression is visible in every run log.
+	var s_raw := Vector3(float(s[0]), float(s[1]), float(s[2]))
+	var s_clamped := Vector3(
+		clampf(s_raw.x, 0.05, 40.0),
+		clampf(s_raw.y, 0.05, 40.0),
+		clampf(s_raw.z, 0.05, 40.0)
+	)
+	if s_clamped != s_raw:
+		_scale_clamp_count += 1
+		for ax: int in range(3):
+			var authored_ax: float = s_raw[ax]
+			if authored_ax <= 0.0:
+				continue
+			var ratio: float = s_clamped[ax] / authored_ax
+			if ratio > _scale_clamp_worst:
+				_scale_clamp_worst = ratio
+	basis = basis.scaled_local(s_clamped)
+	# RE-P-08: reflected bases (det < 0) are authored mirrors. Whether Godot
+	# compensates the winding for a negative-determinant instance is NOT
+	# verified in this lane (it needs a capture), so the count is exported on
+	# every load and the winding question stays open in the report.
+	if basis.determinant() < 0.0:
+		_mirrored_basis_count += 1
 	return Transform3D(basis, Vector3(float(p[0]), float(p[1]), float(p[2])))
 
 

@@ -1496,6 +1496,87 @@ def apply_content_overrides(level_key: str, meshes: list, table: dict, mesh_mats
     return {"schema": "tat2.content_overrides.applied/1", "rules": applied}
 
 
+def _mat4_is_identity(m) -> bool:
+    """True when a UE-space 4x4 carries no authored transform."""
+    ident = mat4_identity()
+    return all(
+        abs(float(m[i][j]) - ident[i][j]) <= 1e-6 for i in range(4) for j in range(4)
+    )
+
+
+def _level_asset_rel_key(asset_path: str, self_key: str | None = None):
+    """UE world-asset path -> `level_payloads` key, or None when it is not a level.
+
+    The extractor strips `TAT/Content/` from every cooked `.umap`, so payload
+    keys are built from the path below `Content/` (see the `rel_key` branch in
+    `extract_levels`): `/Game/Maps/OldManor/OldManor_Geo` -> `OldManor/OldManor_Geo`
+    and `/Game/Art/Environment/.../FacadeA` -> `Art/Environment/.../FacadeA`.
+    LevelInstance `CookedWorldAsset` and `WorldAsset` both carry the `/Game/`
+    form, so both prefixes normalise to the same key. A path that is not a
+    `/Game/` asset, is empty, or points at `self_key` (a level instancing
+    itself) is rejected, and the caller counts it as unresolved.
+    """
+    if not isinstance(asset_path, str):
+        return None
+    path = asset_path.split(".")[0].strip()
+    for prefix in ("/Game/Maps/", "/Game/"):
+        if path.startswith(prefix):
+            rel = path[len(prefix) :]
+            break
+    else:
+        return None
+    if not rel or rel == self_key:
+        return None
+    return rel
+
+
+def ue_spline_params_to_godot(sp):
+    """`FSplineMeshParams` (UE component-local cm / radians) -> Godot local metres.
+
+    The loader deforms the spline mesh in the mesh's own Godot local space, so
+    the axis permutation happens here once: Godot = (UE.x, UE.z, UE.y) * 0.01.
+    That permutation has det = -1, so the roll sign flips. Spline offsets are
+    authored in the component's (Y, Z) plane, i.e. UE (0, Offset.X, Offset.Y),
+    which becomes Godot (0, Offset.Y, Offset.X) in metres. Scales are authored
+    multipliers (width -> Godot Z, height -> Godot Y), not lengths, so they are
+    copied unscaled. Missing optional fields fall back to the UE defaults.
+    Returns None unless both `StartPos` and `EndPos` are authored.
+    """
+    if not isinstance(sp, dict):
+        return None
+    if not isinstance(sp.get("StartPos"), dict) or not isinstance(
+        sp.get("EndPos"), dict
+    ):
+        return None
+
+    def _scale(v):
+        if not isinstance(v, dict):
+            return [1.0, 1.0]
+        return [round(float(v.get("X", 1.0)), 5), round(float(v.get("Y", 1.0)), 5)]
+
+    def _offset(v):
+        if not isinstance(v, dict):
+            return [0.0, 0.0, 0.0]
+        return [
+            0.0,
+            round(float(v.get("Y", 0.0)) * 0.01, 5),
+            round(float(v.get("X", 0.0)) * 0.01, 5),
+        ]
+
+    return {
+        "p0": _uu_vec_to_godot_m(sp["StartPos"]),
+        "t0": _uu_vec_to_godot_m(sp.get("StartTangent")) or [0.0, 0.0, 0.0],
+        "p1": _uu_vec_to_godot_m(sp["EndPos"]),
+        "t1": _uu_vec_to_godot_m(sp.get("EndTangent")) or [0.0, 0.0, 0.0],
+        "scale0": _scale(sp.get("StartScale")),
+        "scale1": _scale(sp.get("EndScale")),
+        "offset0": _offset(sp.get("StartOffset")),
+        "offset1": _offset(sp.get("EndOffset")),
+        "roll0": round(-float(sp.get("StartRoll", 0.0)), 5),
+        "roll1": round(-float(sp.get("EndRoll", 0.0)), 5),
+    }
+
+
 def extract_levels():
     levels_dir = OUT_DATA / "levels"
     levels_dir.mkdir(parents=True, exist_ok=True)
@@ -1515,6 +1596,13 @@ def extract_levels():
     total_level_instances_loaded = 0
     total_level_instance_meshes = 0
     total_level_instances_unresolved = 0
+    total_level_instances_actors = 0
+    total_streaming_levels = 0
+    total_streaming_maps = 0
+    total_streaming_unresolved = 0
+    total_splines_emitted = 0
+    total_splines_rigid = 0
+    total_markers_origin_fixed = 0
     mid_stats = {"resolved": 0, "unresolved": 0, "samples": [], "records": []}
     level_payloads = {}
     content_overrides = load_content_overrides()
@@ -1634,6 +1722,33 @@ def extract_levels():
         game_map_key = raw_map_ue_path.lower()
         level_mat = level_transforms.get(game_map_key)
 
+        # RE-B-01: the authored streaming graph. Persistent maps declare their
+        # sublevels as LevelStreamingAlwaysLoaded / LevelStreamingDynamic actors;
+        # only their LevelTransform was read before (build_level_transforms).
+        streaming_levels = []
+        for se in exps:
+            stype = se.get("Type", "")
+            if stype not in ("LevelStreamingAlwaysLoaded", "LevelStreamingDynamic"):
+                continue
+            world_asset = (se.get("Properties") or {}).get("WorldAsset") or {}
+            level_key = _level_asset_rel_key(
+                world_asset.get("AssetPathName", "")
+                if isinstance(world_asset, dict)
+                else ""
+            )
+            if level_key is None:
+                total_streaming_unresolved += 1
+                continue
+            streaming_levels.append(
+                {
+                    "level": level_key,
+                    "type": "always" if stype.endswith("AlwaysLoaded") else "dynamic",
+                }
+            )
+        if streaming_levels:
+            total_streaming_maps += 1
+            total_streaming_levels += len(streaming_levels)
+
         meshes = []
         lights = []
         markers = []
@@ -1655,6 +1770,7 @@ def extract_levels():
         niagara_resolved = 0
         decals_unresolved = 0
         splines_skipped = 0
+        markers_origin_fixed = 0
 
         actor_by_name = {}
         for aidx, ae in enumerate(exps):
@@ -1986,6 +2102,17 @@ def extract_levels():
                         entry["cpd"] = cpd_vals
                     if mprops.get("bHiddenInGame") is True:
                         entry["hidden_in_game"] = True
+                    if et == "SplineMeshComponent":
+                        # RE-B-04: SplineParams was never read, so every piece of
+                        # a spline actor collapsed onto its parent transform.
+                        # The loader deforms in mesh-local space; the conversion
+                        # to Godot metres/axes happens in the helper.
+                        spline = ue_spline_params_to_godot(props.get("SplineParams"))
+                        if spline is not None:
+                            entry["spline"] = spline
+                            total_splines_emitted += 1
+                        else:
+                            total_splines_rigid += 1
                     meshes.append(entry)
                     continue
 
@@ -2130,15 +2257,54 @@ def extract_levels():
                 )
             ):
                 rc = props.get("RootComponent")
-                wmat = mat4_identity()
+                wmat = None
                 if isinstance(rc, dict):
                     rc_name = rc.get("ObjectName", "")
                     ridx = comp_by_full_objname.get(rc_name)
                     if ridx is not None:
                         wmat = get_world_mat(ridx)
+                fixed_origin = False
+                if wmat is None:
+                    # Component-style marker (SwingingDoorNavLinkComponent,
+                    # TATSwingingDoorPivotComponent, TATCupboardDoorComponent,
+                    # TATSecretDoorNavLinkComponent, ...): the export *is* the
+                    # component, so it carries no actor RootComponent and used to
+                    # land at (0,0,0). Its world matrix is its own RelativeTRS
+                    # composed with the AttachParent chain; a BP default
+                    # subobject exported against its owner has neither, so the
+                    # owning actor's root is the authored parent transform.
+                    wmat = get_world_mat(idx)
+                    if _mat4_is_identity(wmat):
+                        outer_name = (
+                            (e.get("Outer") or {}).get("ObjectName", "")
+                            if isinstance(e.get("Outer"), dict)
+                            else ""
+                        )
+                        owner = (
+                            outer_name.split("PersistentLevel.")[-1].rstrip("'")
+                            if "PersistentLevel." in outer_name
+                            else ""
+                        )
+                        oidx = actor_by_name.get(owner) if owner else None
+                        if oidx is not None and oidx != idx:
+                            orc = (exps[oidx].get("Properties") or {}).get(
+                                "RootComponent"
+                            )
+                            if isinstance(orc, dict):
+                                oridx = comp_by_full_objname.get(
+                                    orc.get("ObjectName", "")
+                                )
+                                if oridx is not None:
+                                    wmat = get_world_mat(oridx)
+                    fixed_origin = True
                 if level_mat is not None:
                     wmat = mat4_mul(level_mat, wmat)
                 trs = ue_mat4_to_godot_trs(wmat)
+                # A marker that fell back to a parent transform is only "fixed"
+                # when that transform actually places it off the origin; a
+                # component genuinely authored at (0,0,0) stays exactly as is.
+                if fixed_origin and trs["pos"] != [0.0, 0.0, 0.0]:
+                    markers_origin_fixed += 1
                 scene_tag = _scene_requirement_tag(props)
                 spawn_group = (
                     (props.get("SpawnGroup") or {}).get("TagName", "")
@@ -2859,16 +3025,16 @@ def extract_levels():
         for e in exps:
             if e.get("Type") != "LevelInstance":
                 continue
+            total_level_instances_actors += 1
             props = e.get("Properties") or {}
             asset = (props.get("CookedWorldAsset") or {}).get("AssetPathName", "")
-            if not asset:
-                continue
-            rel_asset = asset.split(".")[0]
-            prefix = "/Game/Maps/"
-            if not rel_asset.startswith(prefix):
-                continue
-            rel_asset = rel_asset[len(prefix) :]
-            if rel_asset == rel_key:
+            # RE-B-02: 52 of 190 authored instances point outside /Game/Maps/
+            # (FacadeA/FacadeB under Art/..., ApartmentE under Developers/...).
+            # Both prefixes normalise to the key rel_key is built from, and every
+            # genuine skip is counted instead of a bare continue.
+            rel_asset = _level_asset_rel_key(asset, self_key=rel_key)
+            if rel_asset is None:
+                total_level_instances_unresolved += 1
                 continue
             comp_ref = (props.get("LevelInstanceComponent") or {}).get("ObjectName", "")
             ridx = comp_by_full_objname.get(comp_ref)
@@ -2917,6 +3083,8 @@ def extract_levels():
                     "swinging_doors": swinging_doors,
                     "door_leaves_excluded": door_leaves_excluded,
                     "swinging_doors_unresolved": swinging_unresolved,
+                    "markers_origin_fixed": markers_origin_fixed,
+                    "streaming_levels": streaming_levels,
                     "level_instances": [],
                 },
             }
@@ -3017,6 +3185,7 @@ def extract_levels():
             total_patrol_points += sum(
                 len(p.get("points") or []) for p in (pdata.get("patrol_paths") or [])
             )
+            total_markers_origin_fixed += int(pdata.get("markers_origin_fixed") or 0)
             if pdata["swinging_doors"] or pdata["swinging_doors_unresolved"]:
                 print(
                     f"  {prel}: swinging_doors={len(pdata['swinging_doors'])} "
@@ -3069,10 +3238,21 @@ def extract_levels():
         f"{total_patrol_points} waypoints"
     )
     print(
-        f"Level instances: {total_level_instances_loaded} loaded "
-        f"({total_level_instance_meshes} meshes), "
-        f"{total_level_instances_unresolved} unresolved"
+        f"Level instances: actors={total_level_instances_actors} "
+        f"merged={total_level_instances_loaded} "
+        f"meshes={total_level_instance_meshes} "
+        f"unresolved={total_level_instances_unresolved}"
     )
+    print(
+        f"Streaming levels: maps={total_streaming_maps} "
+        f"records={total_streaming_levels} "
+        f"unresolved={total_streaming_unresolved}"
+    )
+    print(
+        f"Spline meshes: emitted={total_splines_emitted} "
+        f"rigid_no_params={total_splines_rigid}"
+    )
+    print(f"Marker transforms: origin_fixed={total_markers_origin_fixed}")
 
     # W6T content overrides: every declared rule must have found its level, and
     # every rule/cap must be accounted for exactly once in the applied report.

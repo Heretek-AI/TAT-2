@@ -7322,6 +7322,17 @@ func _initialize() -> void:
 		fails += 1
 	else:
 		print("PASS: 94 T10 gameplay (objective markers, capacity signal, authored locks, container classes, carry speed, steal time, cancel distance)")
+	# 95. T09 geometry/placement contract: authored SplineMeshComponent loft,
+	# the authored LevelStreaming graph + LevelInstance double-load guard, the
+	# previously silent [0.05, 40] scale clamp / mirrored-basis accounting, the
+	# world-origin door-marker refusal, and the authored mantle clip length the
+	# movement curve must follow (RE-B-01/03/04, RE-P-05/08/09/10, RE-F-16).
+	var c95_problems: Array[String] = await _run_suite95(root)
+	if not c95_problems.is_empty():
+		printerr("FAIL: 95 T09 geometry/placement contract: ", c95_problems)
+		fails += 1
+	else:
+		print("PASS: 95 T09 geometry/placement contract (spline loft, streaming graph, LevelInstance dedupe, clamp/mirror accounting, origin doors, mantle duration)")
 
 	# 12.6/12.7 process-lifetime caches must not outlive the run.
 	var am_node: Node = root.get_node_or_null("/root/AudioManager")
@@ -7800,3 +7811,148 @@ func _door53_cast(space: PhysicsDirectSpaceState3D, cap: CapsuleShape3D, base: V
 	if r.size() < 1:
 		return -1.0
 	return float(r[0])
+
+
+## 91. T09 geometry/placement contract. Pure functions plus two payload reads;
+## no map load, so it costs the suite ~0.3 s.
+func _run_suite95(host: Node) -> Array[String]:
+	var problems: Array[String] = []
+	var ll_scr: GDScript = load("res://src/core/level_loader.gd") as GDScript
+	if ll_scr == null:
+		problems.append("level_loader.gd did not load")
+		return problems
+	var ll: Node = ll_scr.new() as Node
+	host.add_child(ll)
+	var levels_root: String = "res://data/generated/levels/"
+
+	# 91a. Spline record conversion: the producer's documented schema is
+	# Godot-local metres with the UE (x, z, y) swap and the negated roll.
+	var raw := {
+		"p0": [-2.0, 0.0, 0.0], "t0": [6.0, 0.0, 0.0],
+		"p1": [2.0, 1.0, 0.0], "t1": [6.0, 0.0, 0.0],
+		"scale0": [2.0, 3.0], "scale1": [2.0, 3.0],
+		"offset0": [0.0, 0.5, 0.25], "offset1": [0.0, 0.5, 0.25],
+		"roll0": 0.0, "roll1": 0.0,
+	}
+	var rec: Dictionary = ll.call("normalize_spline", raw) as Dictionary
+	if rec.is_empty() or not (rec.get("p0") is Vector3):
+		problems.append("normalize_spline did not produce Vector3 params")
+	else:
+		# 91b. The loft must place the mesh ends on the authored endpoints and
+		# bend through the tangents (a straight lerp would put t=0.5 at y=0.5).
+		var p0: Vector3 = ll.call("spline_point", rec, 0.0) as Vector3
+		var p1: Vector3 = ll.call("spline_point", rec, 1.0) as Vector3
+		var mid: Vector3 = ll.call("spline_point", rec, 0.5) as Vector3
+		if p0.distance_to(Vector3(-2.0, 0.0, 0.0)) > 1e-4:
+			problems.append("spline t=0 is %s, expected (-2, 0, 0)" % str(p0))
+		if p1.distance_to(Vector3(2.0, 1.0, 0.0)) > 1e-4:
+			problems.append("spline t=1 is %s, expected (2, 1, 0)" % str(p1))
+		if mid.y <= 0.1 or absf(mid.x) > 1.0:
+			problems.append("spline t=0.5 is %s: not a bent Hermite" % str(mid))
+		# 91c. The slice frame carries the authored 2D cross-section offset.
+		var frame: Transform3D = ll.call("spline_frame", rec, 0.5) as Transform3D
+		if (frame.origin - mid).length() < 0.4:
+			problems.append("spline frame origin %s does not apply the authored offset" % str(frame.origin))
+		# 91d. A real deformed mesh must span the spline, not the rigid AABB.
+		var box := BoxMesh.new()
+		box.size = Vector3(1.0, 0.2, 0.2)
+		var deformed: Mesh = ll.call("spline_deform_mesh", box, rec) as Mesh
+		if deformed == null:
+			problems.append("spline_deform_mesh returned null")
+		else:
+			var aabb: AABB = deformed.get_aabb()
+			if aabb.size.x < 3.5:
+				problems.append("deformed spline spans %.2f m in X, expected >= 3.5" % aabb.size.x)
+
+	# 91e. Level keys: only generated-level paths qualify, and both producer
+	# normalisations (/Game/Maps/... and /Game/...) land on the same key.
+	if str(ll.call("_level_key_from_res", levels_root + "OldManor/OldManor_P.tatlevel.json")) != "OldManor/OldManor_P":
+		problems.append("_level_key_from_res mis-keys a generated level path")
+	if str(ll.call("_level_key_from_res", "res://scenes/mission.tscn")) != "":
+		problems.append("_level_key_from_res accepted a non-level path")
+
+	# 91f. The authored always-loaded graph must add the two levels the
+	# hardcoded lists dropped, and must never add a dynamic one.
+	var acc: Dictionary = ll.call("_new_accumulator") as Dictionary
+	for sl: Dictionary in [
+		{"level": "OldManor/OldManor_PathBlockers", "type": "always"},
+		{"level": "ThievesDenTest/ThievesDenTest_Contracts", "type": "always"},
+		{"level": "Guildhall/Guildhall_SkyboxGeo", "type": "dynamic"},
+		{"level": "Guildhall/Guildhall_P", "type": "always"},
+	]:
+		(acc["streaming_levels"] as Array).append(sl)
+	(acc["sublevel_keys"] as Dictionary)["Guildhall/Guildhall_P"] = true
+	var added: Array = ll.call("_resolve_authored_streaming", acc) as Array
+	var added_paths: Array[String] = []
+	for a_var: Variant in added:
+		added_paths.append(str(a_var))
+	if not added_paths.has(levels_root + "OldManor/OldManor_PathBlockers.tatlevel.json"):
+		problems.append("graph resolver dropped OldManor_PathBlockers")
+	if not added_paths.has(levels_root + "ThievesDenTest/ThievesDenTest_Contracts.tatlevel.json"):
+		problems.append("graph resolver dropped ThievesDenTest_Contracts")
+	if added_paths.has(levels_root + "Guildhall/Guildhall_SkyboxGeo.tatlevel.json"):
+		problems.append("graph resolver added a dynamic sublevel")
+	if added_paths.size() != 2:
+		problems.append("graph resolver added %d sublevels, expected 2" % added_paths.size())
+
+	# 91g. A sublevel already merged as a LevelInstance must be recognised so
+	# it is never parsed standalone (the 1,693-mesh FTUE jewelry-store copy).
+	var ftue_parent: String = levels_root + "FTUE/FTUE_Geometry.tatlevel.json"
+	if FileAccess.file_exists(ftue_parent):
+		var merged: Dictionary = ll.call("_prescan_merged_sublevels", [ftue_parent]) as Dictionary
+		if not merged.has("FTUE/FTUE_Building_JewelryStore"):
+			problems.append("_prescan_merged_sublevels missed the FTUE jewelry-store LevelInstance")
+	else:
+		problems.append("FTUE_Geometry payload missing")
+
+	# 91h. The [0.05, 40] clamp and mirrored bases are counted, not silent.
+	ll.set("_scale_clamp_count", 0)
+	ll.set("_scale_clamp_worst", 1.0)
+	ll.set("_mirrored_basis_count", 0)
+	ll.call("_dict_to_transform", {"pos": [0, 0, 0], "basis": [1, 0, 0, 0, 1, 0, 0, 0, 1], "scale": [0.0021, 1.0, 42.55]})
+	if int(ll.get("_scale_clamp_count")) != 1:
+		problems.append("clamped scale not counted")
+	# 0.05/0.0021 = 23.81x is the worst of the two clamped axes for this record
+	# (42.55/40 = 1.06x); the payload's true worst is 500x (a 0.0001 m sliver).
+	if absf(float(ll.get("_scale_clamp_worst")) - (0.05 / 0.0021)) > 0.01:
+		problems.append("clamp worst ratio %f, expected %.3f" % [
+			float(ll.get("_scale_clamp_worst")), 0.05 / 0.0021])
+	ll.call("_dict_to_transform", {"pos": [0, 0, 0], "basis": [-1, 0, 0, 0, 1, 0, 0, 0, 1], "scale": [1, 1, 1]})
+	if int(ll.get("_mirrored_basis_count")) != 1:
+		problems.append("mirrored basis not counted")
+
+	# 91i. The auto-mantle duration follows the authored clip, not 0.3 s.
+	var tc_src: String = FileAccess.get_file_as_string("res://src/player/thief_character.gd")
+	if tc_src.find("delta / 0.3") >= 0:
+		problems.append("thief_character.gd still divides the mantle by 0.3 s")
+	if tc_src.find("MANTLE_MOVE_SEC_BY_BAND") < 0:
+		problems.append("thief_character.gd lost the authored mantle duration table")
+	var meta_path: String = "res://data/generated/anims_meta.json"
+	if FileAccess.file_exists(meta_path):
+		var meta: Variant = JSON.parse_string(FileAccess.get_file_as_string(meta_path))
+		if meta is Dictionary:
+			var clips: Dictionary = (meta as Dictionary).get("clips", {}) as Dictionary
+			var bands := {
+				"mantle_050": "AN_Mantle_050CM",
+				"mantle_100": "AN_Mantle_100CM",
+				"mantle_150": "AN_Mantle_150CM",
+				"mantle_200": "AN_Mantle_200CM",
+				"mantle_250": "AN_Mantle_250CM",
+				"mantle_300": "AN_Mantle_300CM",
+			}
+			var tc_scr: GDScript = load("res://src/player/thief_character.gd") as GDScript
+			var table: Dictionary = tc_scr.get_script_constant_map().get("MANTLE_MOVE_SEC_BY_BAND", {}) as Dictionary
+			for band: String in bands.keys():
+				var clip_name: String = bands[band]
+				if not clips.has(clip_name) or not table.has(band):
+					problems.append("mantle band %s missing from data or table" % band)
+					continue
+				var authored: float = float((clips[clip_name] as Dictionary).get("length", 0.0))
+				var used: float = float(table[band])
+				if absf(authored - used) > 0.01:
+					problems.append("mantle band %s uses %.3fs, authored %.3fs" % [band, used, authored])
+	else:
+		problems.append("anims_meta.json missing; mantle duration cannot be checked")
+
+	ll.queue_free()
+	return problems

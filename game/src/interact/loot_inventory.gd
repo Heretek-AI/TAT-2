@@ -7,11 +7,16 @@ extends RefCounted
 ## only ever sees the payout summary (SaveSystem v8).
 ##
 ## Port decisions (no authored value exists for these):
-##   * a major item occupies 3 of the 12 slots, minor/quest 1 each
-##     (the authored rows carry SlotSizeOverride 1 / UseSlotSizeOverride false,
-##     so the 3-slot cost is an explicit port capacity decision, recorded in
-##     loot_settings.json "port_decisions.major_slot_cost");
-##   * the cap is enforced at pickup with the authored "INVENTORY FULL" line;
+##   * a major item occupies 3 of the 12 slots, minor/quest 1 each. The authored
+##     row cost is 1/1/1 (`DT_LootInfo_*.SlotSizeOverride` = 1 with
+##     `UseSlotSizeOverride=false` everywhere), so `major = 3` is an explicit
+##     port capacity decision (recorded in loot_settings.json
+##     "port_decisions.major_slot_cost") and `minor`/`quest` follow the authored
+##     row. `DefaultGame.ini DefaultLootSlotSize = 1/1/3` exists but no producer
+##     reads it and no shipped call site is proven (RE-K-02); it is not the
+##     provenance of the 3. Capacity refusals are therefore a port-tuned
+##     timing, not authored.
+##   * the cap (12, BP_TATPlayerState.InventorySlotMaxCapacity) IS authored.
 ##   * a picked-up actor stays visible for the authored 1.0 s loot-bag pickup
 ##     beat (BP_LootBagActor._minInteractDuration) instead of vanishing in the
 ##     same frame;
@@ -34,10 +39,21 @@ const INVENTORY_FULL_FALLBACK := "INVENTORY FULL"
 const SETTINGS_PATH := "res://data/generated/gameplay/loot_settings.json"
 
 ## Groups a picked-up loot actor leaves immediately (economy audits, tactical
-## map, thief vision and the interaction targeter must not see it again).
+## map, thief vision and the interaction targeter must not see it again). A
+## contract quest item also leaves the compass/TAB-map "objectives" group, so
+## the marker disappears the moment the objective is taken.
 const PICKUP_GROUPS: Array[String] = [
-	"loot", "interactables", "xray_target", "thief_vision_highlight",
+	"loot", "interactables", "xray_target", "thief_vision_highlight", "objectives",
 ]
+
+## Authored large-carry movement penalties. `GE_CarryingLargeCarryLoot` sets
+## MovementMaxSpeedMultiplier 0.6 (walk) and `GE_CarryingLargeCarryLoot_Climbing`
+## 0.3 (wall climb) on the 8 DT_LootInfo rows with `IsLargeCarry`. They are not
+## in loot_settings.json yet (the GE assets are not parsed); these constants are
+## the authored values and the settings keys override them when a producer lands
+## them. Carrying ANY large-carry entry applies the single authored multiplier.
+const LARGE_CARRY_WALK_MULTIPLIER := 0.6
+const LARGE_CARRY_CLIMB_MULTIPLIER := 0.3
 
 static var _settings: Dictionary = {}
 static var _settings_loaded: bool = false
@@ -155,6 +171,70 @@ static func has_depositable(items: Array = []) -> bool:
 	return false
 
 
+## True when any carried entry is an authored large carry (IsLargeCarry).
+static func carries_large_carry(items: Array = []) -> bool:
+	var source: Array = items
+	if source.is_empty() and GameState != null:
+		source = GameState.carried_loot
+	for entry_v: Variant in source:
+		if entry_v is Dictionary and bool((entry_v as Dictionary).get("is_large_carry", false)):
+			return true
+	return false
+
+
+## Authored walk-speed multiplier while carrying a large relic
+## (GE_CarryingLargeCarryLoot.MovementMaxSpeedMultiplier 0.6, Multiplicitive).
+static func large_carry_walk_multiplier() -> float:
+	var v: Variant = settings().get("large_carry_walk_multiplier", LARGE_CARRY_WALK_MULTIPLIER)
+	var m: float = float(v) if v is int or v is float else LARGE_CARRY_WALK_MULTIPLIER
+	return clampf(m, 0.05, 1.0)
+
+
+## Authored wall-climb multiplier while carrying a large relic
+## (GE_CarryingLargeCarryLoot_Climbing 0.3).
+static func large_carry_climb_multiplier() -> float:
+	var v: Variant = settings().get("large_carry_climb_multiplier", LARGE_CARRY_CLIMB_MULTIPLIER)
+	var m: float = float(v) if v is int or v is float else LARGE_CARRY_CLIMB_MULTIPLIER
+	return clampf(m, 0.05, 1.0)
+
+
+## Combined locomotion multiplier from the carried haul (1.0 when the bag holds
+## no large carry). The player controller multiplies its authoritative
+## ward/difficulty speed by this.
+static func carry_speed_multiplier(items: Array = []) -> float:
+	return large_carry_walk_multiplier() if carries_large_carry(items) else 1.0
+
+
+## Combined wall-climb multiplier from the carried haul.
+static func carry_climb_multiplier(items: Array = []) -> float:
+	return large_carry_climb_multiplier() if carries_large_carry(items) else 1.0
+
+
+## HUD capacity contract (T05 owns the widget). Returns the numbers a capacity
+## readout needs; the HUD draws `used/max` plus the full-state cue.
+static func capacity_snapshot() -> Dictionary:
+	var used: int = used_slots()
+	var slots: int = max_slots()
+	return {
+		"used": used,
+		"slots": slots,
+		"free": maxi(slots - used, 0),
+		"full": used >= slots,
+	}
+
+
+## Publish the capacity state to the HUD. The HUD owns the widget; this is the
+## only producer of the numbers, so a pickup, a refusal and a payout all agree.
+## `hud.show_loot_capacity(used_slots, max_slots, full)` is the contract T05
+## implements; a HUD without it is a no-op (never a crash, never a clue toast).
+static func broadcast_capacity(actor: Node = null) -> Dictionary:
+	var snap: Dictionary = capacity_snapshot()
+	var hud: Node = _find_hud(actor)
+	if hud != null and hud.has_method("show_loot_capacity"):
+		hud.call("show_loot_capacity", int(snap["used"]), int(snap["slots"]), bool(snap["full"]))
+	return snap
+
+
 ## Capacity check for one pickup. Returns
 ## {ok, reason, used, cost, slots, prompt} — never mutates state.
 static func can_carry(tier: String, is_quest_item: bool = false) -> Dictionary:
@@ -183,12 +263,19 @@ static func can_carry_item(item: Node) -> Dictionary:
 	return can_carry(str(item.get("loot_tier")), bool(item.get("is_quest_item")))
 
 
-## Authored refusal text shown when a pickup does not fit.
+## Authored refusal text shown when a pickup does not fit. The HUD owns the
+## channel: `hud.show_inventory_full_toast(text)` when it exists (a dedicated
+## capacity cue, T05), else the legacy toast. The capacity broadcast runs either
+## way so the bag readout shows WHY the pickup failed.
 static func show_inventory_full(actor: Node = null) -> String:
 	var text: String = refusal_text()
 	var hud: Node = _find_hud(actor)
-	if hud != null and hud.has_method("show_toast"):
-		hud.call("show_toast", text)
+	if hud != null:
+		if hud.has_method("show_inventory_full_toast"):
+			hud.call("show_inventory_full_toast", text)
+		elif hud.has_method("show_toast"):
+			hud.call("show_toast", text)
+	broadcast_capacity(actor)
 	return text
 
 
@@ -222,6 +309,9 @@ static func carry(item: Node, actor: Node = null) -> Dictionary:
 	GameState.carried_loot.append(entry)
 	GameState.add_loot(1, value, is_quest_item, str(item.get("objective_id")))
 	GameState.notify_carried_loot_changed()
+	# T05 capacity widget contract: every accepted pickup publishes used/max so
+	# the bag gauge and the refusal share one source of truth.
+	broadcast_capacity(actor)
 	check["entry"] = entry
 	check["used"] = used_slots()
 	return check

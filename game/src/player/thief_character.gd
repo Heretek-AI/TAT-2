@@ -10,6 +10,7 @@ const OSERendererScript := preload("res://src/core/ose_renderer.gd")
 const SmokeProjectileScript := preload("res://src/player/smoke_projectile.gd")
 const SurfaceResolver := preload("res://src/stealth/surface_resolver.gd")
 const AnimNotify = preload("res://src/player/anim_notify.gd")
+const LootInventoryScript := preload("res://src/interact/loot_inventory.gd")
 
 # Real ThiefNisha meshes (BP_Player_Thief_Spider skeletal components -> GLB;
 # sources in extracted/json/Character/Player/BP_Player_Thief_Spider.json).
@@ -335,6 +336,10 @@ var _vistara_vision_active: bool = false
 var _manual_vision_active: bool = false
 ## Press timestamp for the KF25/KF26 hold-secondary interact; -1 = not armed.
 var _interact_hold_ms: int = -1
+## R10 hold-to-steal: the loot actor the press is charging and the authored
+## DT_LootInfo TimeTakenToSteal it needs (0 = no primary hold armed).
+var _hold_target: Node = null
+var _hold_required_sec: float = 0.0
 ## 0..1 hold progress published to the HUD reticle's active takedown arc.
 var interact_hold_progress: float = 0.0
 var _fp_action_ttl: float = 0.0
@@ -868,10 +873,32 @@ func _unhandled_input(event: InputEvent) -> void:
 			_interact_hold_ms = Time.get_ticks_msec()
 			_interact_hold_sec = 0.0 # P2 two-clock hold: physics accumulates from here.
 		else:
-			_interact_hold_ms = -1
-			_try_interact()
+			# R10: a loot actor that authors TimeTakenToSteal (up to 4 s) charges
+			# on the same two-clock hold; everything else interacts on press.
+			var steal_target: Node = get_hold_interactable()
+			if steal_target != null:
+				_hold_target = steal_target
+				_hold_required_sec = maxf(float(steal_target.call("get_interact_hold_seconds")), 0.0)
+				_interact_hold_ms = Time.get_ticks_msec()
+				_interact_hold_sec = 0.0
+			else:
+				_interact_hold_ms = -1
+				_try_interact()
 	elif event.is_action_released("interact"):
-		if _interact_hold_ms >= 0:
+		if _hold_target != null:
+			var target: Node = _hold_target
+			var required: float = _hold_required_sec
+			var held_steal: float = maxf(_interact_hold_sec, 0.0)
+			_hold_target = null
+			_hold_required_sec = 0.0
+			_interact_hold_ms = -1
+			_interact_hold_sec = -1.0
+			interact_hold_progress = 0.0
+			if can_act() and held_steal + 0.000001 >= required and is_instance_valid(target) \
+					and _hold_target_reachable(target) and target.has_method("interact"):
+				target.call("interact", self)
+				interacted.emit(target)
+		elif _interact_hold_ms >= 0:
 			# P2 two-clock hold: release reads the physics-accumulated seconds
 			# (pause/slow-mo safe), not a wall-clock diff.
 			var held_sec: float = maxf(_interact_hold_sec, 0.0)
@@ -1423,7 +1450,9 @@ func _physics_process(delta: float) -> void:
 		speed = crouch_speed
 	elif is_sprinting:
 		speed = sprint_speed
-	speed *= clampf(speed_multiplier, 0.0, 4.0)
+	# R10 authored large-carry penalty: GE_CarryingLargeCarryLoot multiplies
+	# MovementMaxSpeedMultiplier by 0.6 while any IsLargeCarry relic is carried.
+	speed *= clampf(speed_multiplier, 0.0, 4.0) * LootInventoryScript.carry_speed_multiplier()
 	if is_sprinting:
 		# P2 absf sign check: CT_StaminaSystem.Sprint stores a drain (<= 0).
 		# absf would silently turn a future positive regen row into a drain.
@@ -1552,7 +1581,10 @@ func _tick_sustained_systems(delta: float) -> void:
 			_refresh_light_sector()
 	if _interact_hold_ms >= 0:
 		_interact_hold_sec += delta
-		interact_hold_progress = clampf(_interact_hold_sec / HOLD_INTERACT_SEC, 0.0, 1.0)
+		# R10: a hold-to-steal charges over its authored TimeTakenToSteal; the
+		# secondary takedown/lock hold keeps the fixed 0.45 s.
+		var needed: float = _hold_required_sec if _hold_target != null else HOLD_INTERACT_SEC
+		interact_hold_progress = clampf(_interact_hold_sec / maxf(needed, 0.001), 0.0, 1.0)
 	else:
 		_interact_hold_sec = -1.0
 		interact_hold_progress = 0.0
@@ -1589,9 +1621,9 @@ func body_height_m() -> float:
 	return BODY_HEIGHT_CROUCH if is_crouching else BODY_HEIGHT_STANDING
 
 
-## Test/QA seam: effective locomotion speed after the ward multiplier.
+## Test/QA seam: effective locomotion speed after the ward and carry multipliers.
 func effective_speed(base_speed: float) -> float:
-	return base_speed * clampf(speed_multiplier, 0.0, 4.0)
+	return base_speed * clampf(speed_multiplier, 0.0, 4.0) * LootInventoryScript.carry_speed_multiplier()
 
 
 func ward_slow_remaining() -> float:
@@ -2157,7 +2189,9 @@ func _tick_wall_climb(delta: float, wish: Vector3) -> bool:
 	is_wall_climbing = true
 	if not was_climbing:
 		_fp_play_action("climb_wall")
-	velocity.y = move_toward(velocity.y, WALL_CLIMB_SPEED, WALL_CLIMB_ACCEL * delta)
+	# R10: GE_CarryingLargeCarryLoot_Climbing multiplies the authored climb
+	# speed by 0.3 while a large-carry relic is on the shoulder.
+	velocity.y = move_toward(velocity.y, WALL_CLIMB_SPEED * LootInventoryScript.carry_climb_multiplier(), WALL_CLIMB_ACCEL * delta)
 	velocity.x = -wn.x * 0.5
 	velocity.z = -wn.z * 0.5
 	var climb_curve: float = absf(GameData.eval_curve("CT_StaminaSystem", "StaminaPerSecond.Climb.Base", 1.0, 0.0))
@@ -2451,6 +2485,27 @@ func _try_interact() -> void:
 	if best != null and best.has_method("interact"):
 		best.interact(self)
 		interacted.emit(best)
+
+
+## R10: the aimed interactable when it authors a hold-to-steal beat
+## (DT_LootInfo TimeTakenToSteal > one frame). null keeps the tap contract.
+func get_hold_interactable() -> Node:
+	var n: Node = get_nearest_interactable()
+	if n == null or not n.has_method("get_interact_hold_seconds"):
+		return null
+	if bool(n.get_meta("collected", false)):
+		return null
+	var sec: float = float(n.call("get_interact_hold_seconds"))
+	return n if sec > 0.05 else null
+
+
+## The authored steal hold needs the player to stay on the prop: the same
+## 1.75 m authored interaction reach decides whether the release lands.
+func _hold_target_reachable(target: Node) -> bool:
+	if not (target is Node3D):
+		return false
+	var point: Vector3 = _interactable_point(target as Node3D)
+	return global_position.distance_to(point) <= INTERACT_RANGE
 
 
 func _trigger_thief_ability() -> void:

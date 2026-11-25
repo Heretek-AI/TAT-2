@@ -22,6 +22,12 @@ var trigger_seconds: float = 1.5
 var reset_seconds: float = 0.2
 var damage_amount: float = 10.0
 var damage_type: String = "DamageType.Physical"
+## Authored hearing stimulus
+## (family_defaults.pressure_plate.hearing_stim, AI.Stim.Hearing.Tool.JawTrapTrigger
+## 10 m Heavy). A jaw trap snapping on the player is audible to guards; the
+## plate used to fire the damage graph in silence.
+var hearing_stim_tag: String = ""
+var hearing_stim_range_m: float = 10.0
 
 var player: Node3D = null
 var action_targets: Array = []
@@ -54,6 +60,11 @@ func configure(rec: Dictionary, family_defaults: Dictionary, difficulty_value: i
 	var damage: Dictionary = metric.get("damage", {}) as Dictionary
 	damage_amount = float(damage.get("amount", 10.0))
 	damage_type = str(damage.get("type", "DamageType.Physical"))
+	var stim_v: Variant = defaults.get("hearing_stim", {})
+	if stim_v is Dictionary:
+		var stim: Dictionary = stim_v as Dictionary
+		hearing_stim_tag = str(stim.get("tag", ""))
+		hearing_stim_range_m = float(stim.get("max_range_cm", 1000.0)) / 100.0
 	var power_v: Variant = rec.get("power", {})
 	var power: Dictionary = power_v as Dictionary if power_v is Dictionary else {}
 	var req_v: Variant = power.get("require", null)
@@ -174,6 +185,11 @@ func _fire(target: Node3D) -> void:
 	if damage_amount > 0.0 and target.has_method("take_damage"):
 		target.call("take_damage", damage_amount)
 		damage_applied += 1
+	# Authored JawTrapTrigger stim (10 m, Heavy, inner 0.5 / outer 1.5 m): the
+	# tag is the authored row, so HearingData resolves it directly and the
+	# emitter loudness is only the legacy-path mirror.
+	if hearing_stim_tag != "":
+		NoiseBus.emit_noise(global_position, hearing_stim_range_m, self, hearing_stim_tag)
 	for target_v: Variant in action_targets:
 		if not (target_v is Node) or not is_instance_valid(target_v as Node):
 			continue

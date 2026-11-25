@@ -4,10 +4,20 @@ extends Area3D
 ## activated: an authored BP_EscapePoint stands dormant during the main window,
 ## opens for the endgame window (BP_EscapePoint open lifetime 240 s) and can be
 ## used multiple times while it is open.
+##
+## R10 re-arm contract: `BP_EscapePoint._escapeOpenDuration` (240 s) is the
+## portal's open cycle, not the endgame window. `expire()` closes one cycle and
+## the summoner re-arms it while the endgame is still live, so a 1200 s endgame
+## never runs out of exits after four minutes. `collapse()` is the terminal
+## state (the endgame window closed / "MAGIC DOOR COLLAPSED") and no activation
+## can revive a collapsed marker. Dormancy is unchanged: only `activate()`
+## clears `activated`, and only the endgame phase may extract.
 
 signal extracted()
 signal gate_activated()
 signal gate_expired()
+signal gate_rearmed(rearm_count: int)
+signal gate_collapsed()
 
 const INTERACTABLES_PATH := "res://data/generated/gameplay/interactables.json"
 const PORTAL_SHADER_PATH := "res://src/core/tat_escape_portal.gdshader"
@@ -29,10 +39,15 @@ var can_be_used_multiple_times: bool = true
 var use_count: int = 0
 
 ## W7E phase activation. `activated` is the one-way "summoned" latch; `active`
-## is false again after `expired` (the 240 s open window closed).
+## is false again after `expired` (one 240 s open cycle closed) and is cleared
+## for good by `collapsed` (the endgame window closed).
 var activated: bool = false
 var active: bool = false
 var expired: bool = false
+## Terminal state: the endgame window closed. `activate()` refuses forever.
+var collapsed: bool = false
+## QA/provenance: how many authored 240 s cycles ran in this endgame.
+var rearm_count: int = 0
 var open_elapsed: float = 0.0
 ## Index into the map's authored BP_EscapePoint array (QA provenance).
 var marker_index: int = -1
@@ -92,13 +107,18 @@ func _ready() -> void:
 
 
 ## Summon this door for the endgame window. `duration_sec` <= 0 keeps the
-## authored BP_EscapePoint lifetime (240 s). A previously expired marker stays
-## closed (the magic door collapsed).
+## authored BP_EscapePoint lifetime (240 s). A marker whose 240 s cycle closed
+## re-arms (the door re-forms while the endgame is still live); a collapsed
+## marker (the endgame window closed) refuses forever.
 func activate(duration_sec: float = -1.0) -> bool:
-	if expired:
+	if collapsed:
 		return false
 	if duration_sec > 0.0:
 		open_duration_sec = duration_sec
+	if expired:
+		expired = false
+		rearm_count += 1
+		gate_rearmed.emit(rearm_count)
 	if not activated:
 		activated = true
 		gate_activated.emit()
@@ -110,9 +130,10 @@ func activate(duration_sec: float = -1.0) -> bool:
 	return true
 
 
-## Close the door (endgame window over, or the run resolved elsewhere).
+## Close one authored 240 s open cycle. Not terminal: the endgame summoner
+## re-arms it while the endgame window is live (see the R10 contract above).
 func expire() -> void:
-	if expired:
+	if expired or collapsed:
 		return
 	active = false
 	expired = true
@@ -122,8 +143,23 @@ func expire() -> void:
 	gate_expired.emit()
 
 
+## Terminal close: the endgame window closed and the magic door is gone for
+## the rest of the run. Only this state can never be re-armed.
+func collapse() -> void:
+	if collapsed:
+		return
+	collapsed = true
+	active = false
+	expired = true
+	activated = false
+	if portal_visual != null:
+		portal_visual.visible = false
+	set_process(false)
+	gate_collapsed.emit()
+
+
 func is_available() -> bool:
-	return activated and active and not expired
+	return activated and active and not expired and not collapsed
 
 
 func _process(delta: float) -> void:

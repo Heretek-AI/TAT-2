@@ -860,8 +860,40 @@ func _bVA_15_lockpick_overlays() -> void:
 	var hud_txt: String = h.read_text("res://src/ui/hud.gd")
 
 	# T2-15-A: Lockpick Cancel Distance (200.0 cm = 2.0 m)
+	# Behavioural: build the real lock owners and drive the authored radius.
+	# The old check grepped hud.gd for the string "2.0", which matched the
+	# embedded shader (`UV * 2.0 - 1.0`) and passed with no feature at all.
 	var cancel_cm: float = float(lp_d.get("distance_before_cancel", 0.0))
-	h.require(absf(cancel_cm - 200.0) < 0.1 and (hud_txt.find("2.0") >= 0 or hud_txt.find("cancel_lockpick") >= 0), "T2-15-A", "Lockpick cancel distance 2.0m (%.1f cm) wired in HUD" % cancel_cm)
+	var cancel_ok: bool = absf(cancel_cm - 200.0) < 0.1
+	var cancel_behaviour: String = ""
+	if cancel_ok:
+		var near_ok: bool = true
+		var far_ok: bool = true
+		var cancel_scripts: Array = [
+			"res://src/interact/swinging_door.gd",
+			"res://src/interact/loot_container.gd",
+		]
+		for cs_path_v: Variant in cancel_scripts:
+			var owner: Node = h.new_script_node(str(cs_path_v))
+			if owner == null or not (owner is Node3D):
+				near_ok = false
+				continue
+			(owner as Node3D).global_position = Vector3(9100.0, 400.0, 9100.0)
+			var actor := LockpickProbeActor.new()
+			h.root.add_child(actor)
+			actor.global_position = (owner as Node3D).global_position + Vector3(0.5, 0.0, 0.0)
+			owner.set("is_lockpicking", true)
+			owner.set("_lockpick_actor", actor)
+			if bool(owner.call("check_lockpick_distance")):
+				near_ok = false
+			actor.global_position = (owner as Node3D).global_position + Vector3(3.0, 0.0, 0.0)
+			if not bool(owner.call("check_lockpick_distance")) or bool(owner.get("is_lockpicking")):
+				far_ok = false
+			await h.free_node(owner)
+			await h.free_node(actor)
+		cancel_behaviour = "near=%s far=%s" % [str(near_ok), str(far_ok)]
+		cancel_ok = cancel_ok and near_ok and far_ok
+	h.require(cancel_ok, "T2-15-A", "Lockpick cancel distance 2.0 m (%.1f cm) cancels beyond the authored radius [%s]" % [cancel_cm, cancel_behaviour])
 
 	# T2-15-B: Early Unlock Threshold (0.1 s) & Jam Delay (0.5 s)
 	var early_s: float = float(lp_d.get("early_unlock_threshold_s", 0.0))
@@ -1362,3 +1394,12 @@ func _bVA_22_qa_integrity() -> void:
 	# T2-22-E: Explicit Documentation of Missing Steam Refs
 	var ti: String = h.repo_read_text("docs/reports/visual-fidelity.md")
 	h.require(ti.find("Old Manor") >= 0 or h.repo_file_exists("build/qa/capture_e2e_parity.gd"), "T2-22-E", "Missing Steam reference scenes explicitly documented without false pixel-diff")
+
+
+## T2-15-A fixture: an actor that exposes the lockpick driver flag the cancel
+## path clears. A bare Node3D so the distance gate sees a real position.
+class LockpickProbeActor extends Node3D:
+	var lockpicking_active: bool = false
+
+	func set_lockpicking_active(value: bool) -> void:
+		lockpicking_active = value

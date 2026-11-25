@@ -237,8 +237,41 @@ func _update_leaf_collision() -> void:
 
 
 func _process(_delta: float) -> void:
+	if is_lockpicking and check_lockpick_distance():
+		return
 	if pivot != null and not _leaf_bodies.is_empty():
 		_update_leaf_collision()
+
+
+## R10 authored lockpick cancel radius (GA_Lockpick distance_before_cancel
+## 200 cm): walking away ends the pick instead of letting it run from the
+## corridor. Returns true when this call cancelled the session.
+func check_lockpick_distance() -> bool:
+	if not is_lockpicking:
+		return false
+	if _lockpick_actor == null or not is_instance_valid(_lockpick_actor) or not (_lockpick_actor is Node3D):
+		return false
+	var d: float = global_position.distance_to((_lockpick_actor as Node3D).global_position)
+	if d <= LockableDoorScript.lockpick_cancel_distance_m():
+		return false
+	_cancel_lockpick()
+	return true
+
+
+## End the minigame as a failure through the HUD (which owns the dialog and the
+## completion callback), so the cancel path is exactly one failure, never two.
+func _cancel_lockpick() -> void:
+	var actor: Node = _lockpick_actor
+	var hud_node: Node = _find_hud()
+	if hud_node != null:
+		if hud_node.has_method("cancel_lockpick"):
+			hud_node.call("cancel_lockpick")
+			return
+		if hud_node.has_method("_finish_lockpick") and hud_node.has_method("is_lockpicking") \
+				and bool(hud_node.call("is_lockpicking")):
+			hud_node.call("_finish_lockpick", false)
+			return
+	_on_lockpick_finished(false, actor)
 
 
 func get_interact_prompt() -> String:
@@ -428,7 +461,7 @@ func interact(actor: Node) -> void:
 			is_lockpicking = true
 			lockpick_updated.emit(true, lockpick_progress, lvl)
 			NoiseBus.emit_noise(global_position, 4.0, _noise_source(), "lockpick")
-			hud_node.call("start_lockpick_minigame", lvl, "Door Lock (Lv %d)" % lvl, func(success: bool = true) -> void:
+			hud_node.call("start_lockpick_minigame", lvl, "Door Lock", func(success: bool = true) -> void:
 				_on_lockpick_finished(success, actor)
 			)
 			return

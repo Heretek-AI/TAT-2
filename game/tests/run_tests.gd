@@ -4498,9 +4498,10 @@ func _initialize() -> void:
 	# 53. Doors traversal (todo 6): closed leaf blocks the player capsule,
 	# past-70-deg shapes-off + layer-0 lets it through, re-toggle returns to
 	# 0 and re-enables, close-while-occupied never teleports the occupant,
-	# and a count%12==5 auto-locked door opens through the lockpick path.
-	# Lock level 1+(count%3) mirrors mission_controller _spawn_swinging_doors
-	# (read-only here); capsule dims match the Spider body (thief_character
+	# and an authored locked door (scene-variant `Locks.Doors`, level 3) opens
+	# through the lockpick path. R10 deleted the spawn-index auto-lock
+	# heuristics: the lock below is set explicitly, not derived from `count`.
+	# Capsule dims match the Spider body (thief_character
 	# _build_body: radius 0.32, height 1.78, centre 0.89). The rig sits at a
 	# remote origin so no other test body can join the sweep query.
 	var dr53_ok := true
@@ -4649,8 +4650,8 @@ func _initialize() -> void:
 		dr53_occ.queue_free()
 	dr53_door.queue_free()
 	await process_frame
-	# 53g. count%12==5 auto-locked door opens through the lockpick path.
-	# Level 1+(5%3)=3 mirrors _spawn_swinging_doors for count=5.
+	# 53g. An authored locked door (level 3, inside the authored 4 cap) opens
+	# through the lockpick path. No spawn index participates any more.
 	var dr53_lock: Node = dr53_swing.new() as Node
 	var dr53_lbase := dr53_base + Vector3(10.0, 0.0, 0.0)
 	dr53_lock.call("configure", {"pos": [dr53_lbase.x, dr53_lbase.y, dr53_lbase.z], "basis": [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0], "leaves": []}, null)
@@ -7304,6 +7305,23 @@ func _initialize() -> void:
 	fails += _w3_check(t02_tags_ok and t02_legacy_ok and t02_meshes_ok and t02_per_thief_ok and t02_prov_ok,
 		"93 T02 identity contracts: authored Outfit.<Thief>.* tags, per-thief Nisha/Cotter base meshes present, legacy mirror inert, co-op provenance expansion=false against the authored XP.Cooperative row",
 		"93 identity mismatch: tags=%s legacy=%s meshes=%s per_thief=%s provenance=%s (xp='%s')" % [t02_tags_ok, t02_legacy_ok, t02_meshes_ok, t02_per_thief_ok, t02_prov_ok, t02_xp_display])
+	# 94. T10 remediation: the objectives group producer (C4-14), the capacity
+	# signal contract (C4-07), authored-only door/container locks (C4-04 /
+	# RE-K-07/17), the dropped authored container classes (RE-K-06), the
+	# large-carry movement penalty (RE-K-04), the authored steal time (RE-K-05)
+	# and the authored 200 cm lockpick cancel distance (C4-06).
+	var c94_raw: Variant = await _run_suite94(root)
+	var c94_problems: Array[String] = []
+	if c94_raw is Array:
+		for problem_v: Variant in (c94_raw as Array):
+			c94_problems.append(str(problem_v))
+	else:
+		c94_problems.append("suite 94 returned no problem list (script error; fail closed)")
+	if not c94_problems.is_empty():
+		printerr("FAIL: 94 T10 gameplay remediation: ", c94_problems)
+		fails += 1
+	else:
+		print("PASS: 94 T10 gameplay (objective markers, capacity signal, authored locks, container classes, carry speed, steal time, cancel distance)")
 
 	# 12.6/12.7 process-lifetime caches must not outlive the run.
 	var am_node: Node = root.get_node_or_null("/root/AudioManager")
@@ -7472,6 +7490,29 @@ func _run_suite90(host: Node) -> Array[String]:
 			problems.append(str(problem_v))
 	else:
 		problems.append("test_w7s_loot_save.run(host) returned no problem list")
+	return problems
+
+
+## Suite 91 helper (T10 remediation): objective markers, authored locks,
+## container classes, carry speed, steal time, lockpick cancel distance.
+## Coroutine: the marker/container/door fixtures await a frame between builds.
+func _run_suite94(host: Node) -> Array[String]:
+	var problems: Array[String] = []
+	var loaded: Variant = load("res://tests/test_t10_gameplay.gd")
+	if not (loaded is GDScript):
+		problems.append("test_t10_gameplay.gd did not load (parse error)")
+		return problems
+	var script: GDScript = loaded as GDScript
+	var runner: RefCounted = script.new() as RefCounted
+	if runner == null or not runner.has_method("run"):
+		problems.append("test_t10_gameplay.gd has no run(host)")
+		return problems
+	var out: Variant = await runner.call("run", host)
+	if out is Array:
+		for problem_v: Variant in (out as Array):
+			problems.append(str(problem_v))
+	else:
+		problems.append("test_t10_gameplay.run(host) returned no problem list")
 	return problems
 ## W0a suite helper: long edge from a PNG IHDR (no decode).
 func _w82_png_long_edge(res_path: String) -> int:

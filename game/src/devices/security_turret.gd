@@ -15,6 +15,7 @@ extends Node3D
 
 signal turret_fired(source: Node, projectile: Node)
 signal turret_activated(source: Node)
+signal turret_alarmed(source: Node)
 signal power_state_changed(on: bool)
 
 const Geometry := preload("res://src/devices/device_geometry.gd")
@@ -41,6 +42,21 @@ var swivel_type: String = ""
 var starts_on: bool = true
 var health: float = FALLBACK_HEALTH
 var max_health: float = FALLBACK_HEALTH
+## Authored alarm (BP_SecurityTurret `_difficultyToSwivelSettingsMap[*].Value
+## .SecondsUntilAlarmTriggers` = 2.0/1.0/0.25 s) and reset (10 s without a
+## target). The turret used to shoot in silence: guards never heard it and the
+## alarm state never re-armed.
+var alarm_delay_s: float = 2.0
+var reset_seconds: float = 10.0
+var alarm_raised: bool = false
+var alarm_count: int = 0
+var _alarm_hold: float = 0.0
+var _no_target_sec: float = 0.0
+## The authored security-device alarm stim (hearing.json
+## SecurityDevice.Alarm.Triggered, 25 m Heavy). No turret-specific hearing row
+## is authored, so the security alarm row is the honest stimulus.
+const ALARM_STIM_TAG: String = "AI.Stim.Hearing.SecurityDevice.Alarm.Triggered"
+const ALARM_STIM_RANGE_M: float = 25.0
 
 var player: Node3D = null
 var action_targets: Array = []
@@ -75,6 +91,8 @@ func configure(rec: Dictionary, family_defaults: Dictionary, difficulty_value: i
 	half_fov_deg = float(metric.get("half_fov_deg", 15.0))
 	sight_origin_height_m = float(metric.get("pov_backward_m", 0.5))
 	fire_interval_s = _difficulty_interval(metric, difficulty_value)
+	alarm_delay_s = _difficulty_alarm_delay(defaults, difficulty_value)
+	reset_seconds = float(defaults.get("reset_seconds", 10.0))
 	var projectile: Dictionary = metric.get("projectile", {}) as Dictionary
 	projectile_speed_m_s = float(projectile.get("speed_m_s", 40.0))
 	projectile_damage = float(projectile.get("damage", 10.0))
@@ -133,6 +151,19 @@ func _param_or_metric(param_key: String, metric_key: String, variant_metric: Dic
 		if v is float or v is int:
 			return float(v)
 	return float(variant_metric.get(metric_key, fallback))
+
+
+## Authored per-difficulty `SecondsUntilAlarmTriggers`
+## (family_defaults.turret.alarm_delay_seconds_by_difficulty 2.0/1.0/0.25).
+func _difficulty_alarm_delay(defaults: Dictionary, difficulty_value: int) -> float:
+	var diff: int = difficulty_value
+	if diff < 0:
+		diff = int(GameState.difficulty)
+	var steps_v: Variant = defaults.get("alarm_delay_seconds_by_difficulty", [2.0, 1.0, 0.25])
+	var steps: Array = steps_v as Array if steps_v is Array else [2.0, 1.0, 0.25]
+	if steps.is_empty():
+		return 2.0
+	return maxf(float(steps[clampi(diff - 1, 0, steps.size() - 1)]), 0.0)
 
 
 func _ready() -> void:
@@ -199,10 +230,35 @@ func tick(delta: float) -> void:
 	if target == null:
 		return
 	if not can_see(target):
+		# Authored reset_seconds (10 s): the alarm state re-arms after the
+		# turret has had no target for that long.
+		_no_target_sec += delta
+		if _no_target_sec >= reset_seconds:
+			_alarm_hold = 0.0
+			alarm_raised = false
 		return
+	_no_target_sec = 0.0
+	# Authored SecondsUntilAlarmTriggers: detection must persist before the
+	# security alarm is raised (guards then investigate the authored 25 m stim).
+	if not alarm_raised:
+		_alarm_hold += delta
+		if _alarm_hold + 0.000001 >= alarm_delay_s:
+			_raise_alarm()
 	if _fire_cooldown <= 0.0:
 		_fire()
 		_fire_cooldown = fire_interval_s
+
+
+## Raise the authored security alarm once per detection streak.
+func _raise_alarm() -> void:
+	alarm_raised = true
+	alarm_count += 1
+	NoiseBus.emit_noise(global_position, ALARM_STIM_RANGE_M, self, ALARM_STIM_TAG)
+	turret_alarmed.emit(self)
+
+
+func alarm_active() -> bool:
+	return alarm_raised
 
 
 ## Public detection seam used by the suite (and by tick): range, half-FOV and

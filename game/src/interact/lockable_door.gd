@@ -17,6 +17,8 @@ const INTERACTABLES_PATH := "res://data/generated/gameplay/interactables.json"
 ## authoritative.
 const FALLBACK_JAM_DAMAGE := {1: 5.0, 2: 10.0, 3: 20.0, 4: 40.0, 5: 80.0, 6: 160.0}
 const FALLBACK_MAX_LOCK_LEVEL := 4
+## GA_Lockpick.distance_before_cancel fallback (200 cm).
+const FALLBACK_CANCEL_DISTANCE_CM := 200.0
 ## Past this pivot yaw the open leaf must not block the doorway.
 const OPEN_DISABLE_DEG: float = 70.0
 
@@ -38,6 +40,16 @@ static func lockpick_table() -> Dictionary:
 static func table_max_lock_level() -> int:
 	var doors: Variant = _doors_section()
 	return int(doors.get("max_lock_level", FALLBACK_MAX_LOCK_LEVEL))
+
+
+## Authored lockpick cancel radius in metres (GA_Lockpick
+## `distance_before_cancel` = 200 cm). Walking further than this from the lock
+## cancels the minigame; the shipped rule is absent from the HUD, so the lock
+## owner enforces it (swinging_door / loot_container `_process`).
+static func lockpick_cancel_distance_m() -> float:
+	var cm_v: Variant = lockpick_table().get("distance_before_cancel", FALLBACK_CANCEL_DISTANCE_CM)
+	var cm: float = float(cm_v) if cm_v is int or cm_v is float else FALLBACK_CANCEL_DISTANCE_CM
+	return maxf(cm, 1.0) / 100.0
 
 
 static func _doors_section() -> Dictionary:
@@ -270,7 +282,7 @@ func interact(actor: Node) -> void:
 			is_lockpicking = true
 			lockpick_updated.emit(true, lockpick_progress, lock_level)
 			NoiseBus.emit_noise(global_position, 4.0, _noise_source(), "lockpick")
-			hud_node.call("start_lockpick_minigame", lock_level, "Door Lock (Lv %d)" % lock_level, func(success: bool = true) -> void:
+			hud_node.call("start_lockpick_minigame", lock_level, "Door Lock", func(success: bool = true) -> void:
 				_on_minigame_finished(success, actor)
 			)
 			return

@@ -119,6 +119,15 @@ var opened: bool = false
 var lockpick_progress: float = 0.0
 var is_lockpicking: bool = false
 var _lockpick_actor: Node = null
+## One warning per authored container class missing from containers.json.
+static var _missing_class_warned: Dictionary = {}
+
+
+func _warn_missing_container_class(p_class: String) -> void:
+	if _missing_class_warned.has(p_class):
+		return
+	_missing_class_warned[p_class] = true
+	push_warning("[loot_container] authored container class '", p_class, "' has no containers.json row; opening via the authored *_MajorLoot/*_MinorLoot tier bucket (producer gap: tools/parse_containers.py CLASSES)")
 
 
 func set_locked(p_locked: bool, p_lock_level: int = 1) -> void:
@@ -171,26 +180,37 @@ func configure(p_class: String, entry: Dictionary, p_index: int) -> void:
 					slot_offset_cm = Vector3(float(off[0]), float(off[1]), float(off[2]))
 				if rot.size() >= 3:
 					slot_rotation_deg = Vector3(float(rot[0]), float(rot[1]), float(rot[2]))
-	# Name-based fallback when containers.json is unreadable: tier only, the
-	# loot itself still resolves from loot_actors.json (or its tier pool).
-	if loot_tier == "" and (p_class.find("MajorLoot") >= 0):
+	# Name-based fallback when containers.json is unreadable OR missing an
+	# authored container class: the authored Blueprint name carries the bucket
+	# tier (`*_MajorLoot_C` / `*_MinorLoot_C`) and the per-tier authored spawn
+	# bucket supplies the actors, so the marker still opens with authored loot.
+	# The dropped classes this restores (8 BP_SmallSafe_MajorLoot_C + 8
+	# BP_Manor_Bookcase_Cabinet_MinorLoot_C in loaded Guildhall sublevels) need
+	# the producer (T01) to emit their containers.json rows and the level loader
+	# (T07/T09) to stop filtering them; this fallback makes the consumer half
+	# right the moment either lands. Slot offsets are unknown for such a class,
+	# so the loot spawns at the marker (labelled fallback, never invented).
+	if loot_tier == "" and p_class.find("MajorLoot") >= 0:
 		loot_tier = "major"
-	elif loot_tier == "" and (p_class.find("MinorLoot") >= 0):
+		_warn_missing_container_class(p_class)
+	elif loot_tier == "" and p_class.find("MinorLoot") >= 0:
 		loot_tier = "minor"
+		_warn_missing_container_class(p_class)
 	# The secret stash class keeps working (deposit trigger) when containers.json
 	# is unreadable, with the one-use port default.
 	if p_class.find("LootStashInteractable") >= 0:
 		is_stash = true
 		if stash_uses <= 0:
 			stash_uses = LootStashScript.default_uses()
-	# Wire lock levels on vault/safe/major containers using DA_LockpickMinigameVariations.
+	# R10 authored locks only. The level records author no `locked`/`lock_level`
+	# (tools/parse_tables.py keeps class/pos/basis only) and the container
+	# Blueprints author `_lockConfig.MaxLockLevel` (a cap) with `_locked=false`
+	# on BP_SmallSafe_MajorLoot: the old `2 + index % 2` / `1 + index % 3`
+	# formulas invented a pick on every major container. Deleted: a container is
+	# locked only when a level/scene record says so and at its authored level.
 	var entry_lvl: int = int(entry.get("lock_level", 0))
 	if entry.get("locked") == true or entry_lvl > 0:
 		set_locked(true, maxi(entry_lvl, 1))
-	elif p_class.find("Safe") >= 0 or p_class.find("Vault") >= 0 or p_class.find("DisplayCaseA_MajorLoot") >= 0:
-		set_locked(true, 2 + (p_index % 2))
-	elif loot_tier == "major":
-		set_locked(true, 1 + (p_index % 3))
 
 
 func _ready() -> void:
@@ -206,8 +226,44 @@ func _ready() -> void:
 	sph.radius = 1.0
 	col.shape = sph
 	add_child(col)
-	# No meshes: container visuals are level geometry. No _process: Area3D
-	# triggers cost nothing per frame.
+	# No meshes: container visuals are level geometry. The per-frame distance
+	# gate is off until a lockpick session starts (R10 authored cancel radius).
+	set_process(false)
+
+
+## R10 authored lockpick cancel radius (GA_Lockpick distance_before_cancel
+## 200 cm): walking away ends the pick instead of letting it run from the
+## corridor. Returns true when this call cancelled the session.
+func check_lockpick_distance() -> bool:
+	if not is_lockpicking:
+		return false
+	if _lockpick_actor == null or not is_instance_valid(_lockpick_actor) or not (_lockpick_actor is Node3D):
+		return false
+	var d: float = global_position.distance_to((_lockpick_actor as Node3D).global_position)
+	if d <= LockableDoorScript.lockpick_cancel_distance_m():
+		return false
+	_cancel_lockpick()
+	return true
+
+
+func _process(_delta: float) -> void:
+	check_lockpick_distance()
+
+
+## End the minigame as a failure through the HUD (which owns the dialog and the
+## completion callback), so the cancel path is exactly one failure, never two.
+func _cancel_lockpick() -> void:
+	var actor: Node = _lockpick_actor
+	var hud_node: Node = _find_hud()
+	if hud_node != null:
+		if hud_node.has_method("cancel_lockpick"):
+			hud_node.call("cancel_lockpick")
+			return
+		if hud_node.has_method("_finish_lockpick") and hud_node.has_method("is_lockpicking") \
+				and bool(hud_node.call("is_lockpicking")):
+			hud_node.call("_finish_lockpick", false)
+			return
+	_on_lockpick_finished(false, actor)
 
 
 func get_interact_prompt() -> String:
@@ -235,6 +291,7 @@ func _exit_tree() -> void:
 
 func _clear_actor_lockpicking() -> void:
 	is_lockpicking = false
+	set_process(false)
 	if _lockpick_actor != null and is_instance_valid(_lockpick_actor) and _lockpick_actor.has_method("set_lockpicking_active"):
 		_lockpick_actor.call("set_lockpicking_active", false)
 	_lockpick_actor = null
@@ -256,11 +313,13 @@ func _find_hud() -> Node:
 
 
 func _container_label() -> String:
+	# The HUD appends "— LV n" itself (hud.start_lockpick_minigame); embedding
+	# the level here produced "DOOR LOCK (LV 3) — LV 3" (C4-05).
 	if container_class.find("DisplayCase") >= 0:
-		return "Display Safe (Lv %d)" % maxi(lock_level, 1)
+		return "Display Safe"
 	if container_class.find("Chest") >= 0:
-		return "Locked Chest (Lv %d)" % maxi(lock_level, 1)
-	return "Safe Lock (Lv %d)" % maxi(lock_level, 1)
+		return "Locked Chest"
+	return "Safe Lock"
 
 
 ## P1 container noise sourced self: same HUD-arcs gap as the doors (guards
@@ -274,6 +333,7 @@ func _noise_source() -> Node:
 
 func _on_lockpick_finished(success: bool, actor: Node) -> void:
 	is_lockpicking = false
+	set_process(false)
 	if actor != null and is_instance_valid(actor) and actor.has_method("set_lockpicking_active"):
 		actor.call("set_lockpicking_active", false)
 	if _lockpick_actor == actor:
@@ -313,6 +373,7 @@ func interact(actor: Node) -> void:
 		var hud_node: Node = _find_hud()
 		if actor != null and hud_node != null and hud_node.has_method("start_lockpick_minigame"):
 			is_lockpicking = true
+			set_process(true)
 			lockpick_updated.emit(true, lockpick_progress, lvl)
 			NoiseBus.emit_noise(global_position, 4.0, _noise_source(), "lockpick")
 			hud_node.call("start_lockpick_minigame", lvl, _container_label(), func(success: bool = true) -> void:
@@ -322,6 +383,7 @@ func interact(actor: Node) -> void:
 		if actor != null and is_inside_tree():
 			# Headless fallback: timed unlock so Status.Lockpicking (5.0/s) ticks.
 			is_lockpicking = true
+			set_process(true)
 			lockpick_updated.emit(true, lockpick_progress, lvl)
 			_VfxManager.spawn_lockpick_sparks(get_parent(), global_position + Vector3(0.0, 0.5, 0.0))
 			NoiseBus.emit_noise(global_position, 4.0, _noise_source(), "lockpick")

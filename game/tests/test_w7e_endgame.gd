@@ -119,7 +119,11 @@ func _initialize() -> void:
 	var mc: Node = _new_mission()
 
 	# --- S5.1 main clock: mission row beats the hosting map window -----------
+	# R10: the LootTheRoom row is the free-play side mission. A contract deploy
+	# is required to run the authored per-map contract row instead (S5.1c), so
+	# this fixture states the free-play mode it is testing.
 	_reset_run()
+	gs.set("free_play", true)
 	gs.set("active_mission_id", OUT_MISSION)
 	var clock: Dictionary = mc.call("_apply_run_clock", "guildhall") as Dictionary
 	_check(absf(float(gs.get("run_time_limit")) - 3300.0) < 0.5 and str(clock.get("main_source", "")) == "mission_row",
@@ -130,6 +134,28 @@ func _initialize() -> void:
 	_check(absf(float(gs.get("run_time_limit")) - 7200.0) < 0.5 and str(clock.get("main_source", "")) == "map_row",
 		"S5.1b legacy path with no mission id falls back to the map row (7200)",
 		"S5.1b main clock=%s source=%s (want 7200 map_row)" % [str(gs.get("run_time_limit")), str(clock.get("main_source", ""))])
+	# S5.1c: a contract deploy never runs the side-mission row. Contract 2's
+	# prep default lands on LootTheRoom positionally; the clock must resolve the
+	# authored per-map contract row (VaultHeist, contract-flow.md §3).
+	_reset_run()
+	gs.set("free_play", false)
+	gs.set("active_mission_id", OUT_MISSION)
+	clock = mc.call("_apply_run_clock", "guildhall") as Dictionary
+	_check(absf(float(gs.get("run_time_limit")) - 7200.0) < 0.5
+		and str(clock.get("main_source", "")) == "mission_row"
+		and absf(float(gs.get("endgame_time_limit")) - 300.0) < 0.5,
+		"S5.1c contract deploy resolves the authored per-map contract row (7200 s main + 300 s QG endgame)",
+		"S5.1c main=%s endgame=%s (want 7200 mission_row + 300)" % [str(gs.get("run_time_limit")), str(gs.get("endgame_time_limit"))])
+	# S5.1d: the OldManor Cleanout row is a side mission too (its plan authors
+	# three loot_amount objectives); contract 5 must run the OldManor Vault row.
+	_reset_run("old_manor")
+	gs.set("free_play", false)
+	gs.set("active_mission_id", "Mission.OldManor.LootTheRoom")
+	clock = mc.call("_apply_run_clock", "old_manor") as Dictionary
+	_check(absf(float(gs.get("run_time_limit")) - 7200.0) < 0.5
+		and absf(float(gs.get("endgame_time_limit")) - 480.0) < 0.5,
+		"S5.1d OldManor contract deploy resolves Mission.OldManor.Vault (7200 s main + 480 s QG endgame)",
+		"S5.1d main=%s endgame=%s (want 7200 + 480)" % [str(gs.get("run_time_limit")), str(gs.get("endgame_time_limit"))])
 
 	# --- S5.2 endgame window: KF13 override 1200, authored QG plan 480 ------
 	var plan: Dictionary = gd.call("get_mission_plan", OUT_MISSION) as Dictionary
@@ -141,11 +167,13 @@ func _initialize() -> void:
 		"S5.2b runtime endgame=1200 s from the KF13 override",
 		"S5.2b runtime endgame=%s source=%s" % [str(gd.call("get_mission_endgame_seconds", OUT_MISSION)), str(gd.call("get_mission_endgame_source", OUT_MISSION))])
 	gs.set("active_mission_id", OUT_MISSION)
+	gs.set("free_play", true) # the KF13 override belongs to the LootTheRoom row
 	clock = mc.call("_apply_run_clock", "guildhall") as Dictionary
 	_check(absf(float(gs.get("endgame_time_limit")) - 1200.0) < 0.5 and str(clock.get("endgame_source", "")) == "KF13",
 		"S5.2c run clock applies the 1200 s endgame (source KF13)",
 		"S5.2c endgame limit=%s source=%s" % [str(gs.get("endgame_time_limit")), str(clock.get("endgame_source", ""))])
 	gs.set("active_mission_id", VAULT_MISSION)
+	gs.set("free_play", false)
 	clock = mc.call("_apply_run_clock", "guildhall") as Dictionary
 	_check(absf(float(gs.get("endgame_time_limit")) - 300.0) < 0.5 and str(clock.get("endgame_source", "")) == "quest_graph",
 		"S5.2d VaultHeist uses its authored 300 s endgame",
@@ -264,6 +292,74 @@ func _initialize() -> void:
 	life_gate.queue_free()
 	life_arena.queue_free()
 	await _wait(2)
+
+	# --- S5.11 R10: the authored 240 s cycle re-arms inside the endgame ------
+	# The 1200 s endgame must have exits for the whole window: a gate whose
+	# 240 s BP_EscapePoint cycle closes is re-summoned while the endgame is
+	# live, and the terminal collapse at 1200 s can never be undone.
+	var rearm_arena := Node3D.new()
+	rearm_arena.name = "W7ERearmArena"
+	root.add_child(rearm_arena)
+	await _wait(2)
+	var rearm_gate: Area3D = (load(ESCAPE_SCRIPT) as GDScript).new() as Area3D
+	rearm_arena.add_child(rearm_gate)
+	await _wait(2)
+	var rearm_emits: Array = []
+	rearm_gate.connect("extracted", func() -> void: rearm_emits.append(1))
+	_reset_run()
+	gs.set("free_play", true)
+	gs.set("active_mission_id", OUT_MISSION)
+	gs.set("quest_item_acquired", true)
+	gs.set("mission_objectives", [])
+	gs.set("loot_goal", 0)
+	mc.call("_apply_run_clock", "guildhall")
+	gs.call("set_escape_markers", [{"gate": rearm_gate, "activated": false, "expired": false, "index": 0}])
+	mc.call("_start_endgame", "suite_rearm")
+	_check(bool(rearm_gate.get("active")) and bool(rearm_gate.get("activated")),
+		"S5.11a the endgame summons the marker",
+		"S5.11a active=%s activated=%s" % [str(rearm_gate.get("active")), str(rearm_gate.get("activated"))])
+	rearm_gate.call("_process", 240.1)
+	_check(bool(rearm_gate.get("expired")) and not bool(rearm_gate.get("active")),
+		"S5.11b the authored 240 s cycle closes the portal",
+		"S5.11b expired=%s active=%s" % [str(rearm_gate.get("expired")), str(rearm_gate.get("active"))])
+	mc.call("_process", 1.0)
+	var rearm_rec: Dictionary = (gs.get("escape_markers") as Array)[0] as Dictionary
+	_check(bool(rearm_gate.get("active")) and not bool(rearm_gate.get("expired"))
+		and int(rearm_gate.get("rearm_count")) == 1 and rearm_rec.get("expired", true) == false,
+		"S5.11c the live endgame re-arms the portal (240 s cycle, rearm=1)",
+		"S5.11c active=%s expired=%s rearm=%d rec_expired=%s" % [str(rearm_gate.get("active")), str(rearm_gate.get("expired")), int(rearm_gate.get("rearm_count")), str(rearm_rec.get("expired", true))])
+	# 16 minutes into a 20 minute endgame the door still extracts.
+	gs.set("endgame_elapsed", 1000.0)
+	rearm_gate.call("_process", 240.1)
+	mc.call("_process", 1.0)
+	var body_r := CharacterBody3D.new()
+	body_r.add_to_group("player")
+	root.add_child(body_r)
+	rearm_gate.call("_on_body_entered", body_r)
+	_check(rearm_emits.size() == 1 and int(rearm_gate.get("rearm_count")) == 2,
+		"S5.11d an extraction at endgame t=1001 s still fires (no 240 s dead window)",
+		"S5.11d emits=%d rearm=%d" % [rearm_emits.size(), int(rearm_gate.get("rearm_count"))])
+	# Terminal collapse: the endgame window closes, and nothing revives it.
+	_reset_run()
+	gs.set("free_play", true)
+	gs.set("active_mission_id", OUT_MISSION)
+	gs.set("quest_item_acquired", true)
+	mc.call("_apply_run_clock", "guildhall")
+	gs.set("endgame_time_limit", 0.1)
+	gs.call("set_escape_markers", [{"gate": rearm_gate, "activated": false, "expired": false, "index": 0}])
+	mc.call("_start_endgame", "suite_collapse")
+	mc.call("_process", 0.2)
+	var revive: bool = bool(rearm_gate.call("activate"))
+	rearm_gate.call("_on_body_entered", body_r)
+	_check(bool(rearm_gate.get("collapsed")) and not revive and not bool(rearm_gate.call("is_available"))
+		and rearm_emits.size() == 1,
+		"S5.11e MAGIC DOOR COLLAPSED is terminal: collapse blocks re-arm and extraction",
+		"S5.11e collapsed=%s revive=%s available=%s emits=%d" % [str(rearm_gate.get("collapsed")), str(revive), str(rearm_gate.call("is_available")), rearm_emits.size()])
+	body_r.queue_free()
+	rearm_gate.queue_free()
+	rearm_arena.queue_free()
+	await _wait(2)
+	gs.set("escape_markers", [])
 
 	# --- S5.8 all 25 authored escape markers --------------------------------
 	var gh_markers: Array[Vector3] = _markers_for_map("guildhall")

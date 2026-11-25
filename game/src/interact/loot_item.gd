@@ -108,6 +108,24 @@ static func quest_entry_for_tag(tag: String) -> Dictionary:
 	return {}
 
 
+## Authored DT_LootInfo `TimeTakenToSteal` for this actor
+## (interactables.json loot.<tier>.entries). Quest rows resolve by loot_tag,
+## bucket rows by their authored display name (the loot_actors name IS the
+## DT_LootInfo row name). 0.0 = no authored row (unparsed row / synthetic test
+## item) and the pickup stays instant.
+static func authored_steal_time_s(tier: String, tag: String, item_label: String) -> float:
+	var entries: Array = _loot_section(tier).get("entries", [])
+	if tag != "":
+		for e: Variant in entries:
+			if e is Dictionary and str((e as Dictionary).get("loot_tag", "")) == tag:
+				return maxf(float((e as Dictionary).get("steal_time_s", 0.0)), 0.0)
+	if item_label != "":
+		for e: Variant in entries:
+			if e is Dictionary and str((e as Dictionary).get("name", "")) == item_label:
+				return maxf(float((e as Dictionary).get("steal_time_s", 0.0)), 0.0)
+	return 0.0
+
+
 ## Real quest value for a contract loot tag (e.g. "Loot.Quest.Diamond").
 ## Falls back to the quest flagship value (2500) when the tag is unknown.
 static func quest_value_for_tag(tag: String, fallback: int = -1) -> int:
@@ -134,6 +152,12 @@ func _ready() -> void:
 		add_to_group("loot")
 		add_to_group("xray_target")
 	add_to_group("thief_vision_highlight")
+	# C4-14: the compass and TAB map read the "objectives" group; nothing else
+	# produced it, so a contract item 90 m away had no marker. A contract quest
+	# item is the objective marker; it leaves the group on pickup
+	# (loot_inventory.PICKUP_GROUPS).
+	if is_quest_item and personal_quest_id == "":
+		add_to_group("objectives")
 	set_meta("collected", false)
 
 	var col := CollisionShape3D.new()
@@ -244,6 +268,19 @@ func get_interact_prompt() -> String:
 ## origin can be inside the item; +0.4 m targets the readable top of the prop.
 func get_interact_point() -> Vector3:
 	return global_position + Vector3.UP * 0.4
+
+
+## Authored hold-to-steal beat in seconds (DT_LootInfo TimeTakenToSteal; up to
+## 4 s on the big relics). The player controller gates its tap->hold on this;
+## `interact()` itself stays the instant apply so scripted/QA callers keep the
+## documented synchronous contract.
+func get_interact_hold_seconds() -> float:
+	if personal_quest_id != "":
+		return 0.0
+	if get_meta("collected", false):
+		return 0.0
+	var label: String = display_name if display_name != "" else item_name
+	return authored_steal_time_s(loot_tier, loot_tag, label)
 
 
 func interact(actor: Node) -> void:

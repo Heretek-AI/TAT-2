@@ -788,7 +788,7 @@ func _apply_run_clock(map_id: String) -> Dictionary:
 		}
 	var difficulty: int = GameState.difficulty
 	var map_limit: float = GameData.get_match_duration(map_id, difficulty)
-	var mid: String = GameState.active_mission_id
+	var mid: String = _resolve_deploy_mission_id(map_id, GameState.active_mission_id)
 	var mission_limit: float = 0.0
 	var mission_row_valid: bool = false
 	if mid != "":
@@ -2657,6 +2657,74 @@ func open_contract_table_ui() -> void:
 		ui.call("open_table")
 
 
+## R10 authored per-map contract mission row (contracts.json mission_durations,
+## tools/parse_contracts.py MISSIONS). The id is the row's `source_row`; the
+## record comes from the mission table so durations, title and the QG endgame
+## stay one source. {} when the generated file has no row for this map.
+func _authored_contract_mission_row(map_id: String) -> Dictionary:
+	var entry_v: Variant = GameData.mission_durations.get(map_id)
+	if not (entry_v is Dictionary):
+		return {}
+	var row_id: String = str((entry_v as Dictionary).get("source_row", ""))
+	if row_id == "":
+		return {}
+	var row_v: Variant = GameData.missions_by_id.get(row_id)
+	if not (row_v is Dictionary):
+		return {}
+	var row: Dictionary = (row_v as Dictionary).duplicate(true)
+	if str(row.get("map_id", "")) != map_id:
+		return {}
+	return row
+
+
+## A side-mission (Cleanout) row authors a loot-value objective; a contract
+## deploy's single/set item objective is a different shape, so such a row cannot
+## host it. `contracts.json mission_loot_goals` only carries the Guildhall row,
+## so the plan shape is the general test (OldManor's Cleanout row authors three
+## `loot_amount` nodes and no Set/Vault row does).
+func _is_side_mission_row(mission_id: String) -> bool:
+	if mission_id == "":
+		return false
+	if GameData.mission_loot_goals.has(mission_id):
+		return true
+	var plan: Dictionary = GameData.get_mission_plan(mission_id)
+	var objs_v: Variant = plan.get("objectives", [])
+	if objs_v is Array:
+		for node_v: Variant in (objs_v as Array):
+			if node_v is Dictionary and str((node_v as Dictionary).get("kind", "")) == "loot_amount":
+				return true
+	return false
+
+
+## R10: substitute the authored contract row for a side-mission pick on a
+## contract deploy. Free play (and a deploy with no mission id) is unchanged.
+func _resolve_deploy_mission_row(map_id: String, row: Dictionary) -> Dictionary:
+	if GameState.free_play or row.is_empty():
+		return row
+	var mid: String = str(row.get("id", ""))
+	if not _is_side_mission_row(mid):
+		return row
+	var canon: Dictionary = _authored_contract_mission_row(map_id)
+	if canon.is_empty() or str(canon.get("id", "")) == mid:
+		return row
+	print(
+		"TAT-2 mission row: contract deploy replaces side-mission row '", mid,
+		"' with the authored per-map contract row '", str(canon.get("id", "")),
+		"' (docs/reports/contract-flow.md §3)"
+	)
+	return canon
+
+
+## Id-only twin of _resolve_deploy_mission_row for the run clock.
+func _resolve_deploy_mission_id(map_id: String, mission_id: String) -> String:
+	if GameState.free_play or mission_id == "" or not _is_side_mission_row(mission_id):
+		return mission_id
+	var canon: Dictionary = _authored_contract_mission_row(map_id)
+	if canon.is_empty():
+		return mission_id
+	return str(canon.get("id", mission_id))
+
+
 func _setup_mission_objectives(map_id: String, _order: int) -> void:
 	_active_mission_row = {}
 	if map_id == "thieves_den":
@@ -2676,6 +2744,17 @@ func _setup_mission_objectives(map_id: String, _order: int) -> void:
 		var matching: Array[Dictionary] = GameData.get_missions_for_map(map_id)
 		if not matching.is_empty():
 			chosen = matching[0].duplicate(true)
+	# R10 contract timers: a contract deploy runs the map's authored contract
+	# mission row, never a side-mission row. Contract objectives are single/set
+	# items (never a loot-value goal), while the Cleanout (`*.LootTheRoom`) rows
+	# are the side missions whose only authored objective is a loot goal and
+	# whose `MatchDurationsByDifficulty` is shorter (Guildhall 3300/1200/1200).
+	# contracts.json `mission_durations` is the parsed canonical per-map row
+	# (tools/parse_contracts.py MISSIONS, docs/reports/contract-flow.md §3:
+	# "the LootTheRoom rows are side-mission variants and are intentionally NOT
+	# used"). Free play keeps the player's pick.
+	if not chosen.is_empty():
+		chosen = _resolve_deploy_mission_row(map_id, chosen)
 	_active_mission_row = chosen
 	var mid: String = str(chosen.get("id", ""))
 	if mid != "":
@@ -4032,6 +4111,7 @@ func _spawn_swinging_doors(stats: Dictionary) -> void:
 	var doors: Array = stats.get("swinging_doors", [])
 	var door_records: Array = stats.get("door_spawn_records", [])
 	var count := 0
+	var locked_count := 0
 	for d_var in doors:
 		if not (d_var is Dictionary):
 			continue
@@ -4041,24 +4121,22 @@ func _spawn_swinging_doors(stats: Dictionary) -> void:
 		# world-event target (auto names depend on tree history, not the map).
 		door.name = "SwingingDoor_%d" % count
 		door.configure(dd, level_loader)
-		# Lock high-security/vault/prison swinging doors on missions (never index 0 or Thieves' Den).
-		# A SceneVariant Locks.Doors override with an exact authored tag wins.
-		if not _is_thieves_den and count > 0:
-			var sv_locked: Variant = dd.get("scene_locked", null)
-			if sv_locked is bool:
-				door.set_locked(bool(sv_locked), 3 if bool(sv_locked) else 0)
-			elif not door.locked:
-				var hi_sec: bool = false
-				for lf_v: Variant in (dd.get("leaves", []) as Array):
-					if lf_v is Dictionary:
-						var m_file: String = str((lf_v as Dictionary).get("mesh", "")).get_file().to_lower()
-						if m_file.find("prison") >= 0 or m_file.find("vault") >= 0 or m_file.find("cell") >= 0 or m_file.find("security") >= 0 or m_file.find("safe") >= 0:
-							hi_sec = true
-							break
-				if hi_sec:
-					door.set_locked(true, 3 + (count % 2))
-				elif count % 12 == 5:
-					door.set_locked(true, 1 + (count % 3))
+		# R10 authored locks only. The shipped swinging-door records author no
+		# `locked`/`lock_level` (tools/parse_tables.py emits
+		# name/actor/class/pos/basis/leaves/source) and BP_SwingingDoor authors
+		# only the cap `_lockConfig.MaxLockLevel` (4, = interactables.json
+		# doors.max_lock_level, which set_locked clamps to). The old
+		# `3 + count % 2` / `count % 12 == 5` formulas invented locks from the
+		# spawn index and from leaf-mesh filename tokens; they are deleted, so a
+		# door the shipped map leaves unlocked stays unlocked. The authored
+		# SceneVariant `Locks.Doors` override is the only lock source (on every
+		# map, Den included); its records carry no level, so the documented port
+		# default 3 (inside the authored 4 cap) is used.
+		var sv_locked: Variant = dd.get("scene_locked", null)
+		if sv_locked is bool and bool(sv_locked):
+			door.set_locked(true, 3)
+		if door.locked:
+			locked_count += 1
 		add_child(door)
 		count += 1
 	for rec_var in door_records:
@@ -4082,7 +4160,7 @@ func _spawn_swinging_doors(stats: Dictionary) -> void:
 		add_child(exit_door)
 		count += 1
 	if count > 0:
-		print("TAT-2 swinging doors: ", count)
+		print("TAT-2 swinging doors: ", count, " locked=", locked_count)
 
 
 ## Authored device runtime layer (tools/parse_devices.py output). Spawns one
@@ -4355,6 +4433,11 @@ func _process(delta: float) -> void:
 			if GameState.endgame_time_limit > 0.0 and GameState.endgame_elapsed >= GameState.endgame_time_limit:
 				_on_door_collapsed()
 				return
+			# R10: the authored 240 s BP_EscapePoint open cycle is not the
+			# 1200 s endgame window. Re-arm any marker whose cycle closed while
+			# the endgame is still live, so the exit exists for the whole window
+			# (a collapsed marker is terminal and never re-arms).
+			_rearm_escape_gates()
 		if light_probe != null:
 			light_probe.tick(GameState.total_elapsed())
 		for i in range(smokes.size() - 1, -1, -1):
@@ -4375,6 +4458,40 @@ func _process(delta: float) -> void:
 func _on_objective_completed() -> void:
 	if GameState.phase == GameState.PHASE_MAIN:
 		_start_endgame("objective_complete")
+
+
+## R10: re-arm every gate whose authored 240 s open cycle closed while the
+## endgame window is still live. Records stay `expired=false` so
+## GameState.active_escape_count() agrees with the gates. Returns the number of
+## markers re-armed this tick (0 is the steady state: once re-armed the gate
+## stays open for another 240 s cycle).
+func _rearm_escape_gates() -> int:
+	if GameState.phase != GameState.PHASE_ENDGAME:
+		return 0
+	var rearmed: int = 0
+	for rec: Dictionary in GameState.escape_markers:
+		var gate_v: Variant = rec.get("gate", null)
+		if not (gate_v is Node) or not is_instance_valid(gate_v as Node):
+			continue
+		var gate: Node = gate_v as Node
+		if bool(gate.get("collapsed")):
+			rec["expired"] = true
+			continue
+		if bool(gate.get("active")):
+			continue
+		if not gate.has_method("activate"):
+			continue
+		gate.call("activate")
+		rec["activated"] = true
+		rec["expired"] = false
+		rearmed += 1
+	if rearmed > 0:
+		print(
+			"TAT-2 endgame: re-armed ", rearmed, "/", GameState.escape_markers.size(),
+			" escape markers (authored 240 s open cycle, endgame remaining_s=",
+			GameState.phase_time_remaining(), ")"
+		)
+	return rearmed
 
 
 func _start_endgame(reason: String = "") -> bool:
@@ -4490,8 +4607,13 @@ func _on_door_collapsed() -> void:
 		return
 	for rec: Dictionary in GameState.escape_markers:
 		var gate_v: Variant = rec.get("gate", null)
-		if gate_v is Node and is_instance_valid(gate_v) and (gate_v as Node).has_method("expire"):
-			(gate_v as Node).call("expire")
+		if gate_v is Node and is_instance_valid(gate_v):
+			# R10: collapse() is the terminal close; expire() only ends one
+			# authored 240 s cycle and is re-armed while the endgame is live.
+			if (gate_v as Node).has_method("collapse"):
+				(gate_v as Node).call("collapse")
+			elif (gate_v as Node).has_method("expire"):
+				(gate_v as Node).call("expire")
 		rec["expired"] = true
 	# W7S-S2: a collapsed door is a failed getaway, not a capture. RE-N-08 folds
 	# it into the one guarded finisher: stashed kept, carried lost, no reward.

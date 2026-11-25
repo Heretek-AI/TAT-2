@@ -167,6 +167,13 @@ func _prep_checks() -> void:
 		"inside=%d (the pre-fix reframe saw 13)" % inside)
 
 	# Expansion skyline composition band (real spawned meshes, authored camera).
+	# W9-P1 re-derived the band from KF11: the city is the MID-GROUND roofline
+	# (official silhouette tops p50 sy 0.372), so each piece's projected top has
+	# to land in [0.28, 0.46]. The old band [0.65, 0.98] was the pre-T05 310-500 m
+	# standoff at base_y 0, which projects to 0.746-0.954 — KF11's NEAR-roof band
+	# — and at the authored camera that placement rendered zero visible pixels
+	# (prep vs prep_nosky identical: build/qa/w9/p0-report.md §A1). Measured after
+	# the re-author: 0.300 / 0.330 / 0.340 / 0.360 / 0.380 / 0.400 / 0.420 / 0.440.
 	var max_w: float = float(prep_script.PREP_SKYLINE_MAX_WIDTH_FRAC)
 	var top_min: float = float(prep_script.PREP_SKYLINE_TOP_MIN)
 	var top_max: float = float(prep_script.PREP_SKYLINE_TOP_MAX)
@@ -182,6 +189,10 @@ func _prep_checks() -> void:
 		var w: float = mx.x - mn.x
 		var overlap: float = minf(mx.x, 1.0) - maxf(mn.x, 0.0)
 		var ok: bool = w <= max_w + 0.001 and mn.y >= top_min - 0.001 and mn.y <= top_max + 0.001 and overlap > 0.0
+		# Always print the measured band: the numbers, not just the verdict, are
+		# the evidence a report cites (KF11 city tops p50 sy 0.372).
+		print("T05.P14 %s x=%.3f..%.3f top=%.3f bottom=%.3f w=%.3f overlap=%.3f ok=%s" % [
+			mi.name, mn.x, mx.x, mn.y, mx.y, w, overlap, str(ok)])
 		if not ok:
 			bad.append("%s w=%.2f top=%.3f overlap=%.2f" % [mi.name, w, mn.y, overlap])
 	_check(bad.is_empty(), "T05.P14 every skyline piece is inside the tracked band (w <= %.2f, top in [%.2f, %.2f])" % [max_w, top_min, top_max],

@@ -78,12 +78,20 @@ const LOBBY_CAM_ROLL_DEG: float = -14.780165
 ## inside KF11's 0.70-0.84 band without any dummy offset.
 const LOBBY_THIEF_POS: Vector3 = Vector3(-1.5871, 0.82, -0.7868)
 const LOBBY_THIEF_YAW_DEG: float = 45.0
-## KF11 stage exposure lift. The weather preset is authored for a
-## multiplayer-lobby camera and lands at 0.5 tonemap exposure / 0.3 ambient,
-## which renders the rooftop as near-black behind the opaque UI cards.
-const STAGE_EXPOSURE: float = 2.6
-const STAGE_AMBIENT_ENERGY: float = 1.8
-const STAGE_GLOW_INTENSITY: float = 1.0
+## W9-P1: the stage grade is the AUTHORED gameplay grade, not four stage
+## constants. `WeatherProfile.stage_grade_values(preset)` (T07's hand-off, dead
+## code until W9-P1) returns the numbers `apply_environment` itself applies to a
+## night preset: AGX, exposure 1.15 (NIGHT_EXPOSURE), ambient 0.35
+## (sky.intensity 5.0 x 0.08), glow 0.12672 (bloom_intensity 6.336 x 0.02),
+## background_energy_multiplier 1.0. The stage used to override to
+## ACES/2.6/1.8/1.0/0.18 (the "ACES" label was stale: the preset apply already
+## forced AGX, so the live mode was AGX at 2.6). One grade, one product.
+const STAGE_AMBIENT_COLOR: Color = Color(0.42, 0.50, 0.72)
+## The two glow-shape values the grade dictionary does not carry (it carries
+## intensity only). Unchanged from the pre-W9 stage, named so the grade has no
+## unnamed literals left.
+const STAGE_GLOW_BLOOM: float = 0.12
+const STAGE_GLOW_HDR_THRESHOLD: float = 0.95
 ## The authored weather preset points the moon off-frame. W6U1 decoupled the
 ## visible disc from the key light:
 ##  * MOON_DISC_SCREEN is the sky disc only (KF13/KF11 upper-right composition).
@@ -96,9 +104,9 @@ const KEY_SCREEN_X: float = 0.30
 const KEY_SCREEN_Y: float = 0.28
 const STAGE_MOON_ENERGY: float = 0.85
 ## KF11 night sky is deep navy; the pre-W6U1 3.0 sky multiplier blew it to
-## daylight. Surfaces keep their own exposure/ambient (unchanged); only the
-## sky background is re-graded, still on midnight_clear_mission_lobby.
-const STAGE_SKY_ENERGY: float = 0.18
+## daylight. The sky background is the one grade value W9-P1 keeps a stage say
+## over (see _apply_stage_grade); it starts at the authored 1.0.
+const STAGE_SKY_ENERGY: float = 1.0
 const STAGE_MOON_DISC_ENERGY: float = 2.4
 ## Local character rig on the prep stage (KF11 keys the thief separately from
 ## the sky). Key = cool moonlight from the camera side, fill = warm neutral,
@@ -110,18 +118,44 @@ const STAGE_RIM_ENERGY: float = 1.4
 ## W7V KF11 distant skyline: tracked TAT-2 expansion layout over the shipped
 ## Skybox distant-building kit. Stage-relative (azimuth/distance/base_y) so a
 ## reframe keeps the composition. See game/data/expansion/prep_skyline.json.
-## T05: base_y is an ABSOLUTE world Y (the code's contract); the layout note now
-## says so. The composition band below is the numeric contract the headless test
+## T05: base_y is an ABSOLUTE world Y (the code's contract); the layout note says
+## so. The composition band below is the numeric contract the headless test
 ## enforces against the REAL spawned MeshInstance AABBs under the authored
-## camera: under the authored pitch (+6.685 deg) the horizon sits at screen
-## y 1.09, so the far city is a low layer whose tops must stay inside
-## [TOP_MIN, TOP_MAX] and whose projected width may not exceed MAX_WIDTH_FRAC.
+## camera, and W9-P1 re-measured it: KF11's city is the MID-GROUND roofline
+## (silhouette tops p50 sy 0.372), not the near roof. The band is now
+## [0.28, 0.46] against a measured 0.300 / p50 0.380 / 0.440, replacing
+## [0.65, 0.98] which had encoded the pre-T05 310-500 m standoff at base_y 0 —
+## that projection puts the tops at 0.746-0.954, i.e. where KF11 has the near
+## roof, and it left every piece below the visible sky (measured: zero pixels,
+## prep vs prep_nosky identical). Do not widen this band without a capture.
 const PREP_SKYLINE_PATH: String = "res://data/expansion/prep_skyline.json"
 const PREP_SKYLINE_SCHEMA: String = "tat2.prep_skyline/1"
 const PREP_SKYLINE_GROUP: String = "prep_skyline"
 const PREP_SKYLINE_MAX_WIDTH_FRAC: float = 0.60
-const PREP_SKYLINE_TOP_MIN: float = 0.65
-const PREP_SKYLINE_TOP_MAX: float = 0.98
+const PREP_SKYLINE_TOP_MIN: float = 0.28
+const PREP_SKYLINE_TOP_MAX: float = 0.46
+
+## W9-P1 stage composition. The authored frame's occluder is the NEAR lobby
+## facade 14-22 m behind the thief, not the far city and not the Periphery:
+## freeing all 306 Periphery nodes leaves the frame statistically identical
+## (mean 37.21 -> 36.91, build/qa/w9/captures/p1_before_prep.png), while hiding
+## the lobby geometry beyond LOBBY_STAGE_KEEP_RADIUS_M from the authored thief
+## slot reveals the already-built sky, the authored moon disc at (0.76, 0.09)
+## and the distant silhouettes without touching the camera
+## (build/qa/w9/captures/p1_diag_ledge.png: mean 55.55, 0.7 % of samples < 8).
+## So the composition is a data-driven cull rule, NOT a reframe: the camera
+## transform, the thief slot, the 8 expansion skyline pieces and every node
+## within the radius stay exactly as authored.
+##
+## TAT2_PREP_STAGE=legacy reproduces the pre-W9 full-lobby frame for A/B; any
+## other value (default authored) applies the rule.
+const LOBBY_STAGE_ENV: String = "TAT2_PREP_STAGE"
+const LOBBY_STAGE_KEEP_RADIUS_M: float = 9.0
+## Named exclusions for nodes the radius keeps but that do not belong to the
+## authored ledge (matched case-insensitively against a node's `ue_mesh` meta or
+## its name). Deliberately narrow: "hide anything ugly" is not a rule. Empty
+## means the radius alone reproduces the authored ledge.
+const LOBBY_STAGE_EXCLUDE_TOKENS: Array[String] = []
 
 ## Authored backdrop size for the 3D rooftop stage. The stage container must
 ## deliver at least this size at runtime: anything smaller (in particular the
@@ -686,19 +720,9 @@ func _build_stage(viewport: SubViewport) -> void:
 	# SSIL on this own-world SubViewport is unstable in 4.7 (the static/RGB
 	# cascade). The lobby is lit by the practical rig; keep SSR/glow only.
 	env.ssil_enabled = false
-	# KF11 lift: keep the authored midnight sky and practicals, but raise the
-	# camera-bound environment's exposure/ambient so the rooftop reads behind
-	# the UI. The CanvasLayer UI is unaffected (no WorldEnvironment on it).
-	env.tonemap_exposure = maxf(env.tonemap_exposure, STAGE_EXPOSURE)
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.42, 0.50, 0.72)
-	env.ambient_light_sky_contribution = 0.0
-	env.ambient_light_energy = STAGE_AMBIENT_ENERGY
-	env.glow_enabled = true
-	env.glow_intensity = STAGE_GLOW_INTENSITY
-	env.glow_bloom = 0.12
-	env.glow_hdr_threshold = 0.95
-	env.background_energy_multiplier = STAGE_SKY_ENERGY
+	# W9-P1: one grade for the product — the authored night grade the gameplay
+	# path applies (see the STAGE_* note above), not four stage constants.
+	_apply_stage_grade(env, preset)
 
 	var loader: Node = _get_preview_mat_loader()
 	if loader != null:
@@ -729,6 +753,9 @@ func _build_stage(viewport: SubViewport) -> void:
 	cam.rotate_object_local(Vector3.FORWARD, deg_to_rad(LOBBY_CAM_ROLL_DEG))
 	_aim_stage_moon_and_key(env, cam, viewport, moonlight)
 	_add_prep_skyline(stage_root, cam)
+	# Composition after the level AND the skyline exist: the rule measures what
+	# is actually spawned, and skips the expansion skyline by group.
+	_apply_stage_composition(stage_root)
 
 	var thief_anchor: Node3D = Node3D.new()
 	thief_anchor.name = "MissionLobbyThiefAnchor"
@@ -737,6 +764,99 @@ func _build_stage(viewport: SubViewport) -> void:
 	stage_root.add_child(thief_anchor)
 	_add_thief(thief_anchor)
 	_build_stage_character_lights(stage_root)
+
+
+## W9-P1 stage grade: the authored gameplay night grade, values from
+## `WeatherProfile.stage_grade_values` (T07's C1-09 hand-off). Nothing here is
+## invented: exposure / ambient energy / glow intensity / background energy come
+## from the preset, and the two glow shape values are the stage's own named
+## constants. `background_energy_multiplier` is the one value the stage may
+## refine (STAGE_SKY_ENERGY, see its comment).
+func _apply_stage_grade(env: Environment, preset: Dictionary) -> void:
+	if env == null:
+		return
+	var grade: Dictionary = WeatherProfile.stage_grade_values(preset)
+	env.tonemap_mode = int(grade.get("tonemap_mode", Environment.TONE_MAPPER_AGX))
+	env.tonemap_exposure = float(grade.get("tonemap_exposure", 1.15))
+	# The preset authors no sky.light_color, so the dictionary's ambient colour
+	# is null there; the stage keeps the moonlit blue it has always used.
+	var amb: Variant = grade.get("ambient_light_color")
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.ambient_light_color = amb if amb is Color else STAGE_AMBIENT_COLOR
+	env.ambient_light_sky_contribution = 0.0
+	env.ambient_light_energy = float(grade.get("ambient_light_energy", 0.35))
+	env.glow_enabled = true
+	env.glow_intensity = float(grade.get("glow_intensity", 0.12672))
+	env.glow_bloom = STAGE_GLOW_BLOOM
+	env.glow_hdr_threshold = STAGE_GLOW_HDR_THRESHOLD
+	env.background_energy_multiplier = STAGE_SKY_ENERGY * float(grade.get("background_energy_multiplier", 1.0))
+	print("TAT-2 prep grade: tonemap=%d exposure=%.3f ambient=%.3f glow=%.4f sky=%.3f" % [
+		env.tonemap_mode, env.tonemap_exposure, env.ambient_light_energy,
+		env.glow_intensity, env.background_energy_multiplier])
+
+
+## W9-P1 stage composition rule (see LOBBY_STAGE_* above). Keeps every draw node
+## whose world AABB comes within LOBBY_STAGE_KEEP_RADIUS_M of the authored thief
+## slot — the slate ledge, the roof it stands on and the near props — and hides
+## the rest of the lobby, which is what fills the sky sector in the authored
+## frame. The expansion skyline is skipped by group (it is the far layer the rule
+## exists to reveal, and `_grade_skyline_material` already excludes it from fog).
+## One summary line is printed so a capture log proves which rule ran.
+func _apply_stage_composition(stage_root: Node3D) -> void:
+	var mode: String = OS.get_environment(LOBBY_STAGE_ENV).strip_edges().to_lower()
+	if mode == "legacy":
+		var all_n: int = 0
+		for n: Node in _stage_draw_nodes(stage_root):
+			if (n as GeometryInstance3D).is_visible_in_tree():
+				all_n += 1
+		print("TAT-2 prep stage: kept=%d hid=0 radius=%.1f legacy=1" % [all_n, LOBBY_STAGE_KEEP_RADIUS_M])
+		return
+	var kept: int = 0
+	var hid: int = 0
+	var excluded: int = 0
+	for n: Node in _stage_draw_nodes(stage_root):
+		var gi: GeometryInstance3D = n as GeometryInstance3D
+		if gi.is_in_group(PREP_SKYLINE_GROUP):
+			continue
+		var token: String = _stage_exclusion_token(gi)
+		if token != "":
+			gi.visible = false
+			excluded += 1
+			continue
+		var world: AABB = gi.global_transform * gi.get_aabb()
+		var nearest: Vector3 = world.get_center().clamp(world.position, world.end)
+		if LOBBY_THIEF_POS.distance_to(nearest) <= LOBBY_STAGE_KEEP_RADIUS_M:
+			kept += 1
+		else:
+			gi.visible = false
+			hid += 1
+	print("TAT-2 prep stage: kept=%d hid=%d radius=%.1f" % [kept, hid, LOBBY_STAGE_KEEP_RADIUS_M])
+	if excluded > 0:
+		print("TAT-2 prep stage exclusions: %d node(s) matched %s" % [excluded, str(LOBBY_STAGE_EXCLUDE_TOKENS)])
+
+
+## Every GeometryInstance3D the loader spawned under the stage, in tree order.
+func _stage_draw_nodes(root_node: Node) -> Array[Node]:
+	var out: Array[Node] = []
+	if root_node == null:
+		return out
+	for child: Node in root_node.get_children():
+		if child is GeometryInstance3D:
+			out.append(child)
+		out.append_array(_stage_draw_nodes(child))
+	return out
+
+
+## Named exclusion match for one draw node: the first LOBBY_STAGE_EXCLUDE_TOKENS
+## entry contained in its `ue_mesh` meta or node name, else "".
+func _stage_exclusion_token(gi: GeometryInstance3D) -> String:
+	if gi == null or LOBBY_STAGE_EXCLUDE_TOKENS.is_empty():
+		return ""
+	var hay: String = (str(gi.get_meta("ue_mesh", "")) + " " + str(gi.name)).to_lower()
+	for tok: String in LOBBY_STAGE_EXCLUDE_TOKENS:
+		if tok != "" and hay.find(tok.to_lower()) >= 0:
+			return tok
+	return ""
 
 
 ## KF11 character rig: the authored weather preset gives the rooftop one cool

@@ -5,7 +5,12 @@ extends SceneTree
 ##   tools/godot --path game --rendering-driver vulkan \
 ##     --script build/qa/w9_capture.gd -- --mode=prep --tag=prep_ao_on
 ##
-## Modes: prep | upper_foyer | foyer | saferoom
+## Modes: prep | prep_nosky | prep_noui | prep_noperiph | prep_ledge | prep_report
+##        | upper_foyer | foyer | saferoom | foyer_sweep
+## Diagnostics (prep_nosky/prep_noui/prep_noperiph/prep_ledge/prep_report) are
+## not required captures: they attribute a composition defect to one layer.
+## TAT2_PREP_STAGE=legacy|authored selects the stage composition rule
+## (mission_prep_ui.gd) and is echoed in W9_CAPTURE_START.
 ##
 ## The output directory comes from W9_QA_OUT (set by build/qa/w9_capture.sh),
 ## defaulting to <repo>/build/qa/w9/captures so a git worktree never writes
@@ -52,6 +57,90 @@ func _out_dir() -> String:
 func _wait(n: int) -> void:
 	for _i: int in range(maxi(n, 1)):
 		await process_frame
+
+
+func _all_nodes(node: Node) -> Array:
+	var out: Array = []
+	for c: Node in node.get_children():
+		out.append(c)
+		out.append_array(_all_nodes(c))
+	return out
+
+
+## Projected screen box (0..1, top-left) of a world AABB through the authored
+## stage camera. Corners behind the eye are dropped; returns x0/y0/x1/y1 with
+## x0>x1 when nothing projects.
+func _screen_box(cam: Camera3D, box: AABB) -> Array:
+	var mn: Vector2 = Vector2(9.0, 9.0)
+	var mx: Vector2 = Vector2(-9.0, -9.0)
+	var vp: Vector2 = Vector2(cam.get_viewport().size) if cam.get_viewport() != null else Vector2(1920, 1080)
+	for i: int in 8:
+		var p: Vector3 = box.get_endpoint(i)
+		if (-cam.global_transform.basis.z).dot(p - cam.global_position) <= 0.01:
+			continue
+		var s: Vector2 = cam.unproject_position(p) / vp
+		mn = Vector2(minf(mn.x, s.x), minf(mn.y, s.y))
+		mx = Vector2(maxf(mx.x, s.x), maxf(mx.y, s.y))
+	return [mn.x, mn.y, mx.x, mx.y]
+
+
+## Read-only census for authoring the prep stage composition rule: every draw
+## node's distance to the thief anchor, world AABB, projected screen box, and
+## every skyline piece's mesh AABB. Writes nothing; the frame is not saved.
+func _prep_report(cam: Camera3D) -> void:
+	var anchor: Node3D = root.find_child("MissionLobbyThiefAnchor", true, false) as Node3D
+	var feet: Vector3 = anchor.global_position if anchor != null else Vector3.ZERO
+	print("W9_REPORT anchor=%s cam=%s" % [str(feet), str(cam.global_position) if cam != null else "missing"])
+	if cam == null:
+		return
+	var cb: Basis = cam.global_transform.basis
+	var vps: Vector2 = Vector2(cam.get_viewport().size) if cam.get_viewport() != null else Vector2(1920, 1080)
+	print("W9_REPORT cam_basis x=%s y=%s z=%s vp=%s tanh=%.6f tanv=%.6f" % [
+		str(cb.x), str(cb.y), str(cb.z), str(vps),
+		tan(deg_to_rad(cam.fov * 0.5)),
+		tan(atan(tan(deg_to_rad(cam.fov * 0.5)) / (vps.x / vps.y))),
+	])
+	var rows: Array = []
+	var hidden: int = 0
+	for n: Node in _all_nodes(root):
+		if not (n is GeometryInstance3D):
+			continue
+		var gi: GeometryInstance3D = n as GeometryInstance3D
+		var w: AABB = gi.global_transform * gi.get_aabb()
+		var nearest: Vector3 = w.get_center().clamp(w.position, w.end)
+		var d: float = feet.distance_to(nearest)
+		var sb: Array = _screen_box(cam, w)
+		var on_screen: bool = float(sb[2]) > 0.0 and float(sb[0]) < 1.0 \
+			and float(sb[3]) > 0.0 and float(sb[1]) < 1.0
+		if gi.is_visible_in_tree() and not on_screen:
+			continue
+		if not gi.is_visible_in_tree():
+			hidden += 1
+		rows.append([d, n, w, sb, on_screen])
+	rows.sort_custom(func(a: Array, b: Array) -> bool: return float(a[0]) < float(b[0]))
+	for r: Array in rows:
+		var n: Node = r[1] as Node
+		var w: AABB = r[2] as AABB
+		var sb: Array = r[3] as Array
+		var gi: GeometryInstance3D = n as GeometryInstance3D
+		print("W9_GEO node=%s cls=%s dist=%.2f pos=%s size=%s screen=(%.3f,%.3f)..(%.3f,%.3f) on=%s vis=%s sky=%s src=%s" % [
+			n.name, n.get_class(), float(r[0]), str(w.position), str(w.size),
+			float(sb[0]), float(sb[1]), float(sb[2]), float(sb[3]),
+			str(bool(r[4])), str(gi.is_visible_in_tree()), str(n.is_in_group("prep_skyline")),
+			str(n.get_meta("source_sublevel", "")),
+		])
+	print("W9_REPORT rows=%d hidden_of_total=%d" % [rows.size(), hidden])
+	for n: Node in get_nodes_in_group("prep_skyline"):
+		var mi: MeshInstance3D = n as MeshInstance3D
+		if mi == null or mi.mesh == null:
+			continue
+		var local: AABB = mi.mesh.get_aabb()
+		var world: AABB = mi.global_transform * local
+		var sb2: Array = _screen_box(cam, world)
+		print("W9_SKY node=%s local_pos=%s local_size=%s world_pos=%s screen=(%.3f,%.3f)..(%.3f,%.3f)" % [
+			mi.name, str(local.position), str(local.size), str(world.position),
+			float(sb2[0]), float(sb2[1]), float(sb2[2]), float(sb2[3]),
+		])
 
 
 func _find_env(node: Node) -> WorldEnvironment:
@@ -147,6 +236,46 @@ func _prep() -> bool:
 				(child as CanvasItem).visible = false
 		await _wait(6)
 		print("W9_DIAG prep_noui hid_ui=1")
+	elif _mode == "prep_report":
+		# Read-only census for the composition rule (see _prep_report).
+		_prep_report(cam)
+	elif _mode == "prep_noperiph":
+		# A/B for the composition question: is the frame's background the
+		# authored Periphery sublevel (31-42 m courtyard) or Geo3 (14-22 m)?
+		# Frees the nodes the loader tagged with that source sublevel.
+		var freed: int = 0
+		for n: Node in _all_nodes(root):
+			var src: Variant = n.get_meta("source_sublevel", "")
+			if str(src).to_lower().find("periph") >= 0:
+				n.queue_free()
+				freed += 1
+		await _wait(12)
+		print("W9_DIAG prep_noperiph freed=%d" % freed)
+	elif _mode == "prep_ledge":
+		# Diagnostic: keep only the geometry within 8 m of the thief's feet
+		# (the slate ledge) plus the expansion skyline ring. Tests whether the
+		# shipped KF11 composition (ledge + city + sky) is reachable at the
+		# authored camera without moving it.
+		var anchor: Node3D = root.find_child("MissionLobbyThiefAnchor", true, false) as Node3D
+		var feet: Vector3 = anchor.global_position if anchor != null else Vector3.ZERO
+		var kept: int = 0
+		var dropped: int = 0
+		for n2: Node in _all_nodes(root):
+			if not (n2 is GeometryInstance3D):
+				continue
+			if n2.is_in_group("prep_skyline"):
+				continue
+			var gi := n2 as GeometryInstance3D
+			var ab: AABB = gi.get_aabb()
+			var world: AABB = gi.global_transform * ab
+			var nearest: Vector3 = world.get_center().clamp(world.position, world.end)
+			if feet.distance_to(nearest) <= 9.0:
+				kept += 1
+			else:
+				gi.visible = false
+				dropped += 1
+		await _wait(12)
+		print("W9_DIAG prep_ledge kept=%d hid=%d" % [kept, dropped])
 	print("W9_STAGE skyline=%d thief_anchor=%s waited=%d" % [
 		get_nodes_in_group("prep_skyline").size(),
 		str(root.find_child("MissionLobbyThiefAnchor", true, false) != null),
@@ -249,11 +378,13 @@ func _run() -> void:
 	_tag = _arg("--tag=", _mode)
 	_size = _parse_size(_arg("--size=", "1920x1080"))
 	DirAccess.make_dir_recursive_absolute(_out_dir())
-	print("W9_CAPTURE_START mode=%s tag=%s size=%s ao=%s out=%s" % [
-		_mode, _tag, str(_size), OS.get_environment("TAT2_AO"), _out_dir(),
+	print("W9_CAPTURE_START mode=%s tag=%s size=%s ao=%s prep_stage=%s out=%s" % [
+		_mode, _tag, str(_size), OS.get_environment("TAT2_AO"),
+		OS.get_environment("TAT2_PREP_STAGE").strip_edges() if OS.get_environment("TAT2_PREP_STAGE") != "" else "authored",
+		_out_dir(),
 	])
 	var ok: bool = false
-	if _mode in ["prep", "prep_nosky", "prep_noui"]:
+	if _mode in ["prep", "prep_nosky", "prep_noui", "prep_noperiph", "prep_ledge", "prep_report"]:
 		ok = await _prep()
 	elif _mode in ["upper_foyer", "foyer", "saferoom", "foyer_sweep"]:
 		ok = await _mission_interior()

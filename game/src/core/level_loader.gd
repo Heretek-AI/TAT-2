@@ -293,12 +293,48 @@ static func light_energy_for_intensity(raw: float) -> float:
 ## exists so a corrupt authored radius cannot create an unbounded light.
 const LIGHT_RANGE_CEIL: float = 200.0
 
-## KF16 gate hero-light allowlist. The Guildhall gate approach is lit by six
-## authored lights aimed away from the sign (two 20.0 uplights, two 4.1 omnis,
-## two 20.0 Gameplay lights). They survive spawn-area priority and dedupe but
-## rank ~243-702 on authored energy, so the 160-light cut evicted all of them
-## and the gate rendered dark. Surviving candidates within this radius of the
-## hero point are force-included after the six hero shadow slots and shadowless.
+## --- T07 P0: fair per-room light allocation --------------------------------
+##
+## The desktop budget is a hard node cap (MobileProfile.DESKTOP_MAX_LIGHTS = 160;
+## the Guildhall already runs ~37 FPS at 1080p/high per
+## docs/reports/w1p-structural-perf-prototype.md, so the cap is NOT raised here).
+## What changes is *how* the cap is spent.
+##
+## The old policy ranked every deduped authored light by authored energy and cut
+## at rank 159. On the Guildhall's 15-file load set that is 976 authored records
+## -> 914 after the integer-position dedupe, cut at energy 1.2689 (authored
+## 25.0 lm): it kept the 137 lights brighter than the median and evicted every
+## ordinary room lamp. Result: 94 of 189 16 m room bubbles had NO light at all,
+## even though 77 % of those bubbles author a 6-12 m practical that loses only
+## because a 50-2500 lm fixture elsewhere on the map outranks it.
+##
+## The budget is now water-filled per room bubble: every occupied 16 m cell gets
+## its own best authored light before any cell gets a second. Cells are served
+## densest-first, so a 58-light hall is not starved by a one-candle closet while
+## the map is over-subscribed (189 bubbles > 153 generic slots), and a map with
+## fewer bubbles than slots (the Den, unit fixtures) simply takes more per cell.
+const LIGHT_ROOM_CELL_M: float = 16.0
+
+## Authored lights the budget must never evict, because a runtime contract (or
+## the suite that pins it) requires the light node to exist.
+##
+## - **KF16 gate** (radius 10 m at `HERO_LIGHT_POINT`): the gate approach is lit
+##   by six authored lights aimed away from the sign (two 20.0 uplights, two 4.1
+##   omnis, two 20.0 Gameplay lights). They rank ~243-702 on authored energy, so
+##   the old 160-light cut evicted all of them and the gate rendered dark.
+## - **Contract-2 safe room** (radius 2 m): `Guildhall_PeripheryA` authors the
+##   room's only fixture, an 88 deg wall spot (intensity 5.0, radius 9 m) at
+##   (126.28, 27.14, -2.47). run_tests suite 10 requires that spot to be
+##   instantiated, aimed -Z with its authored 88 deg cone; under per-room
+##   allocation it lost its 16 m bubble to a brighter neighbour.
+##
+## Surviving candidates inside any radius are force-included after the hero
+## shadow slots and are always shadowless.
+const PROTECTED_LIGHT_POINTS: Array[Vector3] = [
+	Vector3(10.0, 26.0, 49.8),
+	Vector3(126.2758, 27.1426, -2.4736),
+]
+const PROTECTED_LIGHT_RADII: Array[float] = [10.0, 2.0]
 const HERO_LIGHT_POINT: Vector3 = Vector3(10.0, 26.0, 49.8)
 const HERO_LIGHT_RADIUS_M: float = 10.0
 const HERO_LIGHT_MAP_HINT: String = "guildhall"
@@ -2452,6 +2488,29 @@ func _note_scene_element(result: Dictionary, kind: String, mk: Dictionary, p: Ve
 
 ## Parses one .tatlevel.json into the accumulator. Meshes from skybox/periphery
 ## sublevels go into the non-colliding batch table so they never spawn physics.
+## Authored-light acceptance rule, shared by the loader and the T07 render probe
+## (game/tests/probe_render_t07.gd) so the count can never drift from the build.
+## TATShadowFade* components are authored-off shadow proxies (intensity 0.0 in
+## the CDO); intensity <= 0 and visible=false are authored-off too.
+static func light_record_accepted(l: Dictionary) -> bool:
+	if "TATShadowFade" in str(l.get("type", "")):
+		return false
+	var i_v: Variant = l.get("intensity")
+	var intensity: float = 10.0 if i_v == null else float(i_v)
+	if intensity <= 0.0:
+		return false
+	return l.get("visible") != false
+
+
+## Integer-metre position key for the loader's cross-sublevel light dedupe.
+static func light_record_key(l: Dictionary) -> String:
+	var p_v: Variant = l.get("pos", null)
+	if not (p_v is Array) or (p_v as Array).size() < 3:
+		return "0,0,0"
+	var p: Array = p_v as Array
+	return "%d,%d,%d" % [roundi(float(p[0])), roundi(float(p[1])), roundi(float(p[2]))]
+
+
 func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) -> void:
 	if not FileAccess.file_exists(json_path):
 		return
@@ -2669,12 +2728,9 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 		if not (l is Dictionary):
 			continue
 		var l_dict: Dictionary = l
-		if "TATShadowFade" in str(l_dict.get("type", "")):
+		if not light_record_accepted(l_dict):
 			continue
-		if _to_float(l_dict.get("intensity"), 10.0) <= 0.0 or l_dict.get("visible") == false:
-			continue
-		var lpos: Array = l_dict.get("pos", [0, 0, 0])
-		var lkey: String = "%d,%d,%d" % [roundi(float(lpos[0])), roundi(float(lpos[1])), roundi(float(lpos[2]))]
+		var lkey: String = light_record_key(l_dict)
 		var seen_lights: Dictionary = acc["seen_lights"]
 		if seen_lights.has(lkey):
 			continue
@@ -4481,7 +4537,9 @@ func _prioritize_lights(pending_lights: Array, focus_points: Array) -> Array:
 func _add_lights(pending_lights: Array, parent: Node3D, light_probe: Node, max_lights: int, ctx: Dictionary, focus_points: Array = []) -> void:
 	var ordered: Array = _prioritize_lights(pending_lights, focus_points)
 	var map_hint: String = str(ctx.get("map_hint", ""))
-	var selection: Array = _select_lights(ordered, max_lights, map_hint)
+	var plan: Dictionary = plan_light_selection(ordered, max_lights, map_hint)
+	var selection: Array = plan["selection"] as Array
+	var stats: Dictionary = plan["stats"] as Dictionary
 	var added: int = 0
 	var forced_added: int = 0
 	for sel_var: Variant in selection:
@@ -4494,12 +4552,14 @@ func _add_lights(pending_lights: Array, parent: Node3D, light_probe: Node, max_l
 	ctx["light_count"] = added
 	ctx["gate_light_count"] = forced_added
 	ctx["hero_shadows"] = MobileProfile.hero_shadows()
+	ctx["light_allocation"] = stats
+	_report_light_allocation(stats, map_hint)
 	_report_gate_lights(added, max_lights, forced_added, map_hint, int(ctx.get("rect_light_count", 0)))
 
 
-## True when a candidate is one of the KF16 gate sign-facing lights: inside the
-## hero radius on the Guildhall load. Only Guildhall is allowlisted so other
-## maps keep their pure score ranking.
+## True when a candidate is one of the authored lights the budget must never
+## evict (see PROTECTED_LIGHT_POINTS). Only Guildhall is allowlisted so every
+## other map keeps its pure per-room ranking.
 static func _is_gate_hero_light(info: Dictionary, map_hint: String) -> bool:
 	if map_hint != HERO_LIGHT_MAP_HINT:
 		return false
@@ -4507,41 +4567,137 @@ static func _is_gate_hero_light(info: Dictionary, map_hint: String) -> bool:
 	if not (p_v is Array) or (p_v as Array).size() < 3:
 		return false
 	var p: Array = p_v as Array
-	var dx: float = float(p[0]) - HERO_LIGHT_POINT.x
-	var dy: float = float(p[1]) - HERO_LIGHT_POINT.y
-	var dz: float = float(p[2]) - HERO_LIGHT_POINT.z
-	return dx * dx + dy * dy + dz * dz <= HERO_LIGHT_RADIUS_M * HERO_LIGHT_RADIUS_M
+	for i: int in range(PROTECTED_LIGHT_POINTS.size()):
+		var centre: Vector3 = PROTECTED_LIGHT_POINTS[i]
+		var radius: float = PROTECTED_LIGHT_RADII[i] if i < PROTECTED_LIGHT_RADII.size() else HERO_LIGHT_RADIUS_M
+		var dx: float = float(p[0]) - centre.x
+		var dy: float = float(p[1]) - centre.y
+		var dz: float = float(p[2]) - centre.z
+		if dx * dx + dy * dy + dz * dz <= radius * radius:
+			return true
+	return false
 
 
-## Cuts the ranked light list to the budget while force-including the gate
-## hero lights. Order is preserved: the ranked head first (its first
-## hero_shadows entries cast shadows), then the forced lights, which are
-## always shadowless and never take a hero shadow slot. The forced lights
-## replace the lowest-ranked tail entries, so the total stays at the budget.
-## Returns Array[Dictionary] of {info, shadow, forced}.
-func _select_lights(ordered: Array, max_lights: int, map_hint: String) -> Array:
+## Spatial bucket for the fair allocation ("room bubble"). The same floor() grid
+## is applied to authored and selected lights, so a bubble is stable per load.
+static func light_room_cell(info: Dictionary, cell: float = LIGHT_ROOM_CELL_M) -> Vector3i:
+	var p_v: Variant = info.get("pos", null)
+	if not (p_v is Array) or (p_v as Array).size() < 3:
+		return Vector3i.ZERO
+	var p: Array = p_v as Array
+	return Vector3i(
+		int(floor(float(p[0]) / cell)),
+		int(floor(float(p[1]) / cell)),
+		int(floor(float(p[2]) / cell))
+	)
+
+
+## Fair allocation plan. `ordered` is the preference order produced by
+## _prioritize_lights (spawn-area first, then authored energy desc); it is used
+## only *within* a room bubble, never as a global cut. Returns
+## {"selection": Array[{info, shadow, forced}], "stats": Dictionary}.
+##
+## Rule (see the LIGHT_ROOM_CELL_M block above for the measured defect):
+##   1. gate hero lights are force-included (shadowless) as before;
+##   2. the remaining slots are handed out one round at a time to room bubbles in
+##      densest-first order, each bubble taking its next light in preference
+##      order. An over-subscribed map therefore gives every served bubble exactly
+##      one authored light (instead of zero), and an under-subscribed map keeps
+##      filling round by round;
+##   3. shadows go to the first N selected lights in global preference order, so
+##      the hero-shadow contract (6 desktop) is unchanged.
+func plan_light_selection(ordered: Array, max_lights: int, map_hint: String) -> Dictionary:
 	var budget: int = mini(ordered.size(), max_lights)
-	var head: Array = []
-	var forced: Array = []
-	for l_var: Variant in ordered:
-		if not (l_var is Dictionary):
+	var forced: Array[int] = []
+	var cell_ranks: Dictionary = {}
+	var cell_order: Array = []
+	for i: int in range(ordered.size()):
+		var l_v: Variant = ordered[i]
+		if not (l_v is Dictionary):
 			continue
-		var l: Dictionary = l_var as Dictionary
+		var l: Dictionary = l_v as Dictionary
 		if _is_gate_hero_light(l, map_hint):
-			forced.append(l)
+			forced.append(i)
 			continue
-		if head.size() < budget:
-			head.append(l)
-	var hero_shadows: int = mini(MobileProfile.hero_shadows(), budget)
-	var keep: int = clampi(budget - forced.size(), 0, head.size())
-	var selected: Array = []
-	for i in range(keep):
-		selected.append({"info": head[i], "shadow": i < hero_shadows, "forced": false})
-	for f: Variant in forced:
-		if selected.size() >= budget:
+		var key: Vector3i = light_room_cell(l)
+		if not cell_ranks.has(key):
+			cell_ranks[key] = [] as Array[int]
+			cell_order.append(key)
+		(cell_ranks[key] as Array[int]).append(i)
+	# Densest bubble first: it holds the most authored fixtures, so its loss is
+	# the most visible. Ties keep the brighter bubble first, then a stable
+	# cell-key order so two loads of the same map pick the same lights.
+	cell_order.sort_custom(func(a: Vector3i, b: Vector3i) -> bool:
+		var ca: int = (cell_ranks[a] as Array[int]).size()
+		var cb: int = (cell_ranks[b] as Array[int]).size()
+		if ca != cb:
+			return ca > cb
+		var ra: int = (cell_ranks[a] as Array[int])[0]
+		var rb: int = (cell_ranks[b] as Array[int])[0]
+		var sa: float = _light_score(ordered[ra] as Dictionary)
+		var sb: float = _light_score(ordered[rb] as Dictionary)
+		if not is_equal_approx(sa, sb):
+			return sa > sb
+		if a.x != b.x:
+			return a.x < b.x
+		if a.y != b.y:
+			return a.y < b.y
+		return a.z < b.z
+	)
+	var keep_target: int = clampi(budget - forced.size(), 0, ordered.size())
+	var depth: Dictionary = {}
+	var picked: Array[int] = []
+	var covered: Dictionary = {}
+	while picked.size() < keep_target:
+		var progressed: bool = false
+		for key: Vector3i in cell_order:
+			if picked.size() >= keep_target:
+				break
+			var ranks: Array[int] = cell_ranks[key] as Array[int]
+			var d: int = int(depth.get(key, 0))
+			if d >= ranks.size():
+				continue
+			picked.append(ranks[d])
+			depth[key] = d + 1
+			covered[key] = true
+			progressed = true
+		if not progressed:
 			break
-		selected.append({"info": f as Dictionary, "shadow": false, "forced": true})
-	return selected
+	picked.sort()
+	var selection: Array = []
+	var hero_shadows: int = mini(MobileProfile.hero_shadows(), budget)
+	for i: int in range(picked.size()):
+		selection.append({"info": ordered[picked[i]] as Dictionary, "shadow": i < hero_shadows, "forced": false})
+	for fi: int in forced:
+		if selection.size() >= budget:
+			break
+		selection.append({"info": ordered[fi] as Dictionary, "shadow": false, "forced": true})
+	var stats: Dictionary = {
+		"authored": ordered.size(),
+		"budget": budget,
+		"kept": selection.size(),
+		"forced": mini(forced.size(), budget),
+		"cells": cell_order.size(),
+		"covered": covered.size(),
+		"cell_m": LIGHT_ROOM_CELL_M,
+		"hero_shadows": hero_shadows,
+	}
+	return {"selection": selection, "stats": stats}
+
+
+## Budget cut used by _add_lights and the perf tests. Thin wrapper over
+## plan_light_selection so the policy has exactly one implementation.
+func _select_lights(ordered: Array, max_lights: int, map_hint: String) -> Array:
+	return plan_light_selection(ordered, max_lights, map_hint)["selection"] as Array
+
+
+## One line per load, printed only when the cap actually bites (the Guildhall),
+## so every other map stays quiet. `rooms=covered/cells` is the room-bubble
+## coverage the fair allocation exists to report.
+static func _report_light_allocation(stats: Dictionary, map_hint: String) -> void:
+	if int(stats.get("authored", 0)) <= int(stats.get("budget", 0)):
+		return
+	print("TAT-2 light allocation: map=", map_hint, " authored=", stats.get("authored"), " kept=", stats.get("kept"), " budget=", stats.get("budget"), " forced=", stats.get("forced"), " rooms=", stats.get("covered"), "/", stats.get("cells"), " cell_m=", stats.get("cell_m"))
 
 
 ## Verification line for the KF16 gate pass: final selected count (generic +
@@ -4577,6 +4733,7 @@ func _perf_census(parent: Node3D, ctx: Dictionary, result: Dictionary) -> Dictio
 		"periph_multimesh": 0,
 		"source_sublevels": {} as Dictionary,
 		"light_budget": int(ctx.get("light_budget", 0)),
+		"light_allocation": (ctx.get("light_allocation", {}) as Dictionary).duplicate(),
 		"hero_shadows": int(ctx.get("hero_shadows", MobileProfile.hero_shadows())),
 		"periph_range": int(ctx.get("periph_range", 0)),
 		"merge_mode": str(ctx.get("merge_mode", "off")),
@@ -4735,6 +4892,7 @@ func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dict
 	result["health_spawn_count"] = (result.get("health_spawns", []) as Array).size()
 	result["civilian_spawn_count"] = (result.get("civilian_spawns", []) as Array).size()
 	result["light_count"] = int(ctx.get("light_count", 0))
+	result["light_allocation"] = (ctx.get("light_allocation", {}) as Dictionary).duplicate()
 	result["chunk_count"] = int(ctx.get("chunk_count", 0))
 	result["collision_bodies"] = int(ctx.get("collision_bodies", 0))
 	result["collision_shapes"] = int(ctx.get("collision_shapes", 0))
@@ -5393,7 +5551,8 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 	# Active RectLights claim budget slots before the generic point lights.
 	_build_rect_lights(acc["rect_lights"], parent, light_probe, ctx, effective_budget)
 	var light_budget: int = mini(pending_lights.size(), maxi(effective_budget - int(ctx.get("rect_light_count", 0)), 0))
-	var selection: Array = _select_lights(pending_lights, light_budget, str(ctx.get("map_hint", "")))
+	var plan: Dictionary = plan_light_selection(pending_lights, light_budget, str(ctx.get("map_hint", "")))
+	var selection: Array = plan["selection"] as Array
 	var lights_added: int = 0
 	var forced_lights: int = 0
 	for li in range(selection.size()):
@@ -5409,6 +5568,8 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 				await parent.get_tree().process_frame
 	ctx["light_count"] = lights_added + int(ctx.get("rect_light_count", 0))
 	ctx["gate_light_count"] = forced_lights
+	ctx["light_allocation"] = plan["stats"] as Dictionary
+	_report_light_allocation(plan["stats"] as Dictionary, str(ctx.get("map_hint", "")))
 	_report_gate_lights(lights_added, light_budget, forced_lights, str(ctx.get("map_hint", "")), int(ctx.get("rect_light_count", 0)))
 	if _timing:
 		print("LoadTiming lights_ms=", Time.get_ticks_msec() - _t0)

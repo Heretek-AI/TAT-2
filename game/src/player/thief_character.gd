@@ -8,6 +8,7 @@ const ThiefAnimLib = preload("res://src/core/animation_library.gd")
 const LevelLoaderScript := preload("res://src/core/level_loader.gd")
 const OSERendererScript := preload("res://src/core/ose_renderer.gd")
 const SmokeProjectileScript := preload("res://src/player/smoke_projectile.gd")
+const SurfaceResolver := preload("res://src/stealth/surface_resolver.gd")
 
 # Real ThiefNisha meshes (BP_Player_Thief_Spider skeletal components -> GLB;
 # sources in extracted/json/Character/Player/BP_Player_Thief_Spider.json).
@@ -90,6 +91,39 @@ const STEP_UP_SKIN_M: float = 0.02 # headroom probe skin above the lift
 ## post-move re-seat restores UE's FindFloor behaviour. A 0.45 m ledge is
 ## outside FLOOR_SNAP_LENGTH, so ledges still produce one real airborne arc.
 const STEP_DOWN_GRACE_SEC: float = 0.2
+## W7H D1: the step-down ray must SEE the next tread, not just reach it. W6M
+## cast 0.30 m and accepted whatever it found, so a 0.30 m riser sat on the
+## limit and a 0.33 m shipped tread was missed whenever the capsule had started
+## to fall. Cast 0.40 m and accept the re-seat only when the floor is <= 0.30 m
+## below the origin: the extra 0.10 m is reach, not permission, so a 0.45 m
+## ledge still produces one real airborne interval.
+const STEP_DOWN_CAST_M: float = 0.40
+const STEP_DOWN_ACCEPT_M: float = 0.30
+## W7H D2 gate: only the first STEP_DOWN_SHRINK_WINDOW_SEC of a walked drop may
+## use a shrunken destination query (see _try_step_down).
+const STEP_DOWN_SHRINK_WINDOW_SEC: float = 0.06
+## W7H D2 guard: no shrunken step-down query for this long after a step-up, so a
+## descent re-seat can never undo the climb it just made.
+const STEP_UP_GUARD_SEC: float = 0.25
+## W7H D2 (default OFF — the shipped descent path is D1 + D5). Shrinking the
+## destination query capsule lets a stepped-down body re-seat while its rear
+## still grazes the riser behind: on a single walked riser it takes T3-T6 from
+## 8-12 air frames down to 1-2 with a 0.000-0.001 m solver shove-back and no
+## regression on the authored stair ascents (guarded by STEP_UP_GUARD_SEC).
+## Measured and safe, but D1 + D5 already deliver the shipped contract (1
+## interval, 0 landings, grounded), so the default stays off: see
+## test_traversal_routes "D2 opt-in" for the measured experiment.
+const STEP_DOWN_QUERY_SHRINK_M: float = 0.0
+## QA value for that opt-in experiment (0.06 m clears the riser graze; larger
+## values measure identically).
+const STEP_DOWN_QUERY_SHRINK_EXPERIMENT_M: float = 0.06
+## W7H D5: a drop at or below this is a walked descent, not a jump. The
+## air->floor transition it produces must not play the jump_land pose or the
+## airborne viewmodel state (one step-down frame used to read as a hop).
+const LANDING_COALESCE_M: float = 0.30
+## W7H surface resolver: down-ray length under the foot point. The capsule
+## origin is the foot, so 0.45 m covers the contact skin plus a tread edge.
+const SURFACE_PROBE_DOWN_M: float = 0.45
 ## W5A mantle gate: a ledge within step height is a walk, not a climb. Mantle
 ## needs the authored jump press unless the obstacle is above this band.
 const MANTLE_STEP_GUARD_M: float = 0.05
@@ -325,6 +359,25 @@ var _step_rise_this_frame: float = 0.0
 var _step_camera_offset: float = 0.0
 ## W6M step-down: grounded grace while a walked descent may re-seat.
 var _step_down_grace: float = 0.0
+## W7H surface resolver: authored surface under the feet (cache from the last
+## downward ray) and its AudioManager pool token. A ray miss keeps the previous
+## answer instead of flipping the surface under the player.
+var _surface_name: String = ""
+var _surface_audio: String = ""
+## W7H D2 experiment knob: 0.0 ships. test_traversal_routes measures the
+## shove-back of a shrunken destination query before this may ever be > 0.
+var step_down_query_shrink_m: float = STEP_DOWN_QUERY_SHRINK_M
+## W7H D2: a step-down must never undo a step-up. For STEP_UP_GUARD_SEC after a
+## committed step-up the body can still sit a riser above the tread it came from
+## (the slide has not settled), so a shrunken destination query would re-seat it
+## back down and stall a climb after one step. Measured on the authored civic
+## flight: without this guard the shrink stops the ascent at 0.32 m.
+var _step_up_guard: float = 0.0
+## W7H D5 telemetry: real landings (drop above LANDING_COALESCE_M) since spawn,
+## with the drop that caused the last one. Step-down re-seats are silent and are
+## never counted, so a debug overlay or a test can tell a hop from a walk.
+var landing_events: int = 0
+var last_landing_drop_m: float = 0.0
 ## Head-height lerp target without the step offset (crouch/stand base).
 var _head_base_y: float = STAND_HEAD_HEIGHT
 var _was_wall_climbing: bool = false
@@ -510,12 +563,23 @@ func _apply_fall_damage(drop_m: float) -> float:
 ## Tracks the airborne peak and converts the air->floor transition into a
 ## fall-damage event. Call at the top of _physics_process (is_on_floor
 ## reflects the previous frame's move_and_slide).
+## W7H D5: a drop at or below LANDING_COALESCE_M is a walked descent (a walked
+## riser re-seats one frame late, because is_on_floor() still reflects the
+## pre-seat move_and_slide). Those transitions stay silent — no jump_land pose,
+## no airborne viewmodel — while a real fall still plays the landing and takes
+## fall damage.
 func _track_fall_state() -> void:
 	var on_floor_now: bool = is_on_floor()
 	_fp_airborne = not on_floor_now
 	if on_floor_now and not _was_on_floor:
-		_apply_fall_damage(_fall_peak_y - global_position.y)
-		_fp_play_action("jump_land")
+		var drop_m: float = _fall_peak_y - global_position.y
+		if drop_m > LANDING_COALESCE_M:
+			landing_events += 1
+			last_landing_drop_m = drop_m
+			_apply_fall_damage(drop_m)
+			_fp_play_action("jump_land")
+		else:
+			_fp_airborne = false
 	if on_floor_now:
 		_fall_peak_y = global_position.y
 		if not is_grappling and not is_wire_hanging and not astral_active:
@@ -843,13 +907,33 @@ func _audio_gait() -> String:
 	return "walk"
 
 
-## AU3 footstep surface for AudioManager variation pools (PG-6) and the
-## authored loudness modifier (DA_LoudnessModifiers via NoiseBus): the Den hub
-## (contract 1) is timber; Guildhall stone. Kept to existing GameState data.
+## W7H: authored physical surface under the feet (DA_LoudnessModifiers name) and
+## the AudioManager pool token derived from it. One down-ray per footstep feed
+## both the authored loudness multiplier (NoiseBus) and the audio variation
+## pool, so they can never disagree. Replaces the old map rule (contract 1 =
+## wood, everything else = stone) that left 20 of the 22 authored surfaces
+## unreachable.
+func _refresh_audio_surface() -> void:
+	var r: Dictionary = SurfaceResolver.surface_under(self, SURFACE_PROBE_DOWN_M, [get_rid()])
+	if (r.get("hit", {}) as Dictionary).is_empty() and _surface_name != "":
+		return # airborne/edge miss: keep the last authored surface
+	_surface_name = str(r.get("surface", SurfaceResolver.SURFACE_FALLBACK))
+	_surface_audio = str(r.get("audio_token", NoiseBus.SURFACE_STONE))
+
+
+## AU3 footstep surface for AudioManager variation pools (PG-6): the authored
+## surface resolved by the down-ray, mapped onto the seven pool tokens.
 func _audio_surface() -> String:
-	if GameState.active_contract_order == 1:
-		return NoiseBus.SURFACE_WOOD
-	return NoiseBus.SURFACE_STONE
+	if _surface_audio == "":
+		_refresh_audio_surface()
+	return _surface_audio if _surface_audio != "" else NoiseBus.SURFACE_STONE
+
+
+## W7H: authored surface name for the hearing stimulus (exact row, not a token).
+func footstep_surface() -> String:
+	if _surface_name == "":
+		_refresh_audio_surface()
+	return _surface_name if _surface_name != "" else SurfaceResolver.SURFACE_FALLBACK
 
 
 ## UI3: strongest local light direction for the HUD light-gem warm sector.
@@ -1246,6 +1330,10 @@ func _physics_process(delta: float) -> void:
 	_step_rise_this_frame = 0.0
 	if is_on_floor() and not climbing_now and not is_mantling:
 		_step_rise_this_frame = _try_step_up(Vector3(velocity.x, 0.0, velocity.z))
+	if _step_rise_this_frame > 0.0:
+		_step_up_guard = STEP_UP_GUARD_SEC
+	else:
+		_step_up_guard = maxf(0.0, _step_up_guard - delta)
 	move_and_slide()
 	# W6M post-move step-down (see STEP_DOWN_GRACE_SEC): a walked descent must
 	# re-seat on the tread below instead of free-falling through a riser. Skipped
@@ -1275,7 +1363,8 @@ func _physics_process(delta: float) -> void:
 				loudness = 1.5
 			elif is_sprinting:
 				loudness = 8.0
-			NoiseBus.emit_noise(global_position, loudness, self, "footstep", _audio_surface())
+			_refresh_audio_surface()
+			NoiseBus.emit_noise(global_position, loudness, self, "footstep", footstep_surface())
 			if AudioManager != null and AudioManager.has_method("play_footstep"):
 				AudioManager.play_footstep(_audio_surface(), _audio_gait(), global_position)
 			fp_step_left = not fp_step_left
@@ -1721,8 +1810,10 @@ func _try_step_up(planar_velocity: Vector3) -> float:
 ## rear of the capsule into the solid step behind, and the solver would shove
 ## the body back up a whole riser (measured 0.248 m).
 ##
-## A 0.45 m ledge is untouched: the ray reaches FLOOR_SNAP_LENGTH (0.30 m) and
-## misses, so the ledge still produces one genuine airborne interval.
+## W7H D1: the ray casts STEP_DOWN_CAST_M (0.40 m) but only commits a floor at
+## or above origin - STEP_DOWN_ACCEPT_M (0.30 m), so the next tread is seen
+## before the capsule has cleared the edge while a 0.45 m ledge still produces
+## one genuine airborne interval.
 func _try_step_down() -> void:
 	# Never cancel a jump: a positive vertical speed is a deliberate rise, and
 	# a fall that has accelerated past -0.8 m/s is a real drop, not a step.
@@ -1733,7 +1824,7 @@ func _try_step_down() -> void:
 		return
 	var space: PhysicsDirectSpaceState3D = w3d.direct_space_state
 	var from: Vector3 = global_position + Vector3.UP * 0.05
-	var to: Vector3 = global_position - Vector3.UP * (FLOOR_SNAP_LENGTH - 0.05)
+	var to: Vector3 = global_position - Vector3.UP * (STEP_DOWN_CAST_M - 0.05)
 	var hit: Dictionary = space.intersect_ray(
 		PhysicsRayQueryParameters3D.create(from, to, 1, [get_rid()]))
 	if hit.is_empty():
@@ -1741,6 +1832,10 @@ func _try_step_down() -> void:
 	if (hit.get("normal", Vector3.UP) as Vector3).y < cos(deg_to_rad(FLOOR_MAX_ANGLE_DEG)):
 		return
 	var floor_y: float = (hit["position"] as Vector3).y
+	# Reach is not permission: the accepted re-seat band stays 0.30 m.
+	var drop_m: float = global_position.y - floor_y
+	if drop_m > STEP_DOWN_ACCEPT_M or drop_m < -0.02:
+		return
 	# Only commit when the body fits there. Shape-cast the real capsule at the
 	# destination; any overlap (typically the step behind) means wait a frame
 	# and slide forward until the capsule has cleared it.
@@ -1749,7 +1844,19 @@ func _try_step_down() -> void:
 	var dest := global_transform
 	dest.origin.y = floor_y
 	var q: PhysicsShapeQueryParameters3D = PhysicsShapeQueryParameters3D.new()
-	q.shape = col_shape.shape
+	var query_shape: Shape3D = col_shape.shape
+	# W7H D2 gate: the shrink is only meaningful in the first frames of a walked
+	# drop (the rear of the capsule still grazing the riser). Gating on a fresh
+	# step-down grace keeps a long fall (and a mid-ascent airborne frame) on the
+	# full capsule, which is what the authored stair flights need.
+	if step_down_query_shrink_m > 0.0 and _step_up_guard <= 0.0 \
+			and _step_down_grace > STEP_DOWN_GRACE_SEC - STEP_DOWN_SHRINK_WINDOW_SEC:
+		# W7H D2 experiment: shrink the query capsule, not the body.
+		var cap: CapsuleShape3D = (col_shape.shape as CapsuleShape3D).duplicate() as CapsuleShape3D
+		cap.radius = maxf(cap.radius - step_down_query_shrink_m, 0.05)
+		cap.height = maxf(cap.height - step_down_query_shrink_m * 2.0, 0.1)
+		query_shape = cap
+	q.shape = query_shape
 	q.transform = dest * Transform3D(Basis(), col_shape.position)
 	q.collision_mask = 1
 	q.exclude = [get_rid()]

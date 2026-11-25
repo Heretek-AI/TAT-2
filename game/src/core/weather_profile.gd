@@ -283,6 +283,49 @@ static func map_is_indoor(map_id: String) -> bool:
 	return is_indoor_preset(preset_for_map(map_id))
 
 
+# --- W7H indoor scope -------------------------------------------------------
+#
+# The authored SoundCarry row has two sides (indoors / outdoors). The map preset
+# only answers that question for the Den: Old Manor (DenseFog, outdoor 0.9) and
+# Jaspering Hall (HeavyRain, outdoor 0.8) are outdoor presets that also cover
+# interiors, so treating them as "outdoors everywhere" attenuated every indoor
+# footstep at the street multiplier. The room question is answered with a
+# straight-up ceiling probe instead: anything solid above the listener within
+# INDOOR_CEILING_PROBE_M is a roof/soffit, and that listener uses the authored
+# indoors row (1.0).
+#
+# This is a geometric heuristic, not a room volume list: an outdoor archway or a
+# bridge deck also reads as covered. It is the conservative direction (the
+# authored indoors row is the un-attenuated one), and every caller that already
+# knows it is indoors (the Den preset) short-circuits before the probe.
+
+## Straight-up probe reach. 15 m clears a three-storey interior, a tower stair
+## well and a guildhall hall; it is deliberately shorter than a cathedral nave so
+## a leaky roof does not silence the street outside it.
+const INDOOR_CEILING_PROBE_M: float = 15.0
+
+
+## True when a ceiling/soffit is above `world_pos`. A missing world fails closed
+## to the map preset (handled by the callers).
+static func is_indoors_at(space: PhysicsDirectSpaceState3D, world_pos: Vector3, exclude: Array[RID] = [], mask: int = 1) -> bool:
+	if space == null:
+		return false
+	var from: Vector3 = world_pos
+	var to: Vector3 = world_pos + Vector3.UP * INDOOR_CEILING_PROBE_M
+	var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(from, to, mask, exclude)
+	var hit: Dictionary = space.intersect_ray(q)
+	return not hit.is_empty()
+
+
+## Sound-carry multiplier for a listener at `world_pos`: the preset indoor side
+## wins when the map itself is indoor (the Den), otherwise the ceiling probe
+## decides. 1.0 for unknown maps/weather (fail closed).
+static func sound_carry_multiplier_at(map_id: String, space: PhysicsDirectSpaceState3D, world_pos: Vector3, exclude: Array[RID] = []) -> float:
+	if map_is_indoor(map_id):
+		return sound_carry_multiplier_for_map(map_id, true)
+	return sound_carry_multiplier_for_map(map_id, is_indoors_at(space, world_pos, exclude))
+
+
 static func _section(preset: Dictionary, key: String) -> Dictionary:
 	var s: Variant = preset.get(key)
 	if s is Dictionary:

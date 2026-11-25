@@ -62,18 +62,20 @@ const SENSE_VISION_GUARD := "vision_guard"
 ## Port emitter tag -> authored stim tag. Only entries the shipped rows support
 ## semantically are listed; the authored range replaces the emitter's hand
 ## tuned metre value for these tags.
-##   takedown      player blackjack takedown          -> Takedown 2.5 m
-##   bottle        thrown-bottle impact (APPROX 10 m) -> ImpactGeo 10 m
-##   door/lock     door swing / lock mechanism        -> OpeningCreak 5 m
-##   lockpick      lock-picking tick                  -> LockPicking.Picked 3 m
-##   noise_alarm   BP_Trap_Action_NoiseAlarm_C        -> Trap.NoiseAlarm 15 m
-##   footstep      gait resolved below                -> Footstep.Walking/Running
+##   takedown          player blackjack takedown          -> Takedown 2.5 m
+##   bottle            thrown-bottle impact (APPROX 10 m) -> ImpactGeo 10 m
+##   door/lock         door swing / lock mechanism        -> OpeningCreak 5 m
+##   lockpick          working pick tick                  -> LockPicking.Picked 3 m
+##   lockpick_jammed   pick failure / jam                 -> LockPicking.Jammed 10 m
+##   noise_alarm       BP_Trap_Action_NoiseAlarm_C        -> Trap.NoiseAlarm 15 m
+##   footstep          gait resolved below                -> Footstep.Walking/Running
 const PORT_TAG_TO_STIM: Dictionary = {
 	"takedown": "AI.Stim.Hearing.Takedown",
 	"bottle": "AI.Stim.Hearing.ImpactGeo",
 	"door": "AI.Stim.Hearing.OpeningCreak",
 	"lock": "AI.Stim.Hearing.OpeningCreak",
 	"lockpick": "AI.Stim.Hearing.LockPicking.Picked",
+	"lockpick_jammed": "AI.Stim.Hearing.LockPicking.Jammed",
 	"noise_alarm": "AI.Stim.Hearing.Trap.NoiseAlarm",
 }
 

@@ -588,3 +588,48 @@ find extracted/json -name 'NS_*.json' | wc -l
     regenerates and re-stamps at the merged HEAD. Audit floors unchanged.
   - **Not run:** perf matrix (explicitly), Vulkan capture (no rendering change),
     Sonar scan.
+
+- 2026-11-24: **W7H — surface-resolved hearing, swing-door creak, indoor weather
+  scope, stair descent** (report
+  [`reports/w7h-hearing-descent.md`](reports/w7h-hearing-descent.md)).
+  - **Surface resolver** (`src/stealth/surface_resolver.gd`): the old map rule
+    (`contract 1 = wood`, everything else `stone`) is gone. A down-ray resolves
+    the authored collider per shape (`CollisionShape3D` `ue_mesh` from
+    `_add_collider`, explicit `surface_type`/`ue_surface`/`surface` overrides,
+    `override_materials`, mesh/material name rules) onto one of the 22 authored
+    `DA_LoudnessModifiers` rows, and the same decision feeds the AudioManager
+    pool token. Unknown/empty -> stone (authored 1.5), never a crash and never a
+    silent 1.0. Matched on the file name first, so UE folder words
+    ("/Game/Art/Environment/...") cannot decide a surface.
+  - **Hearing matrix**: 22 surfaces x 3 gaits x 3 weather rows = **198 cases**
+    assert `radius = min(stim x surface, 25 m x weather)` exactly, heard at the
+    radius and silent 0.01 m past it. Silent faces 0.0 (carpet, foliage, ivy,
+    grass, dirt), hard 1.5 (15 rows), medium 1.0 (lattice, tile); 3D distance
+    with no floor occlusion; astral and knocked-out negative controls.
+  - **SEARCH timer refresh**: a repeated stimulus now refreshes the authored
+    fan-out window (4 s short / 8 s long) instead of letting the search expire
+    mid-investigation. `lockpick` (Picked 3 m) and `lockpick_jammed` (Jammed
+    10 m) are split so a jam is the loud outcome.
+  - **Swinging doors** emit exactly one authored `OpeningCreak` (5 m) per open
+    and per close, with the lock path no longer double-firing (the unlock emits
+    only when it does not start a swing).
+  - **Indoor weather scope**: `WeatherProfile.is_indoors_at()` (ceiling probe)
+    and `sound_carry_multiplier_at()` decide the authored indoors/outdoors side
+    per listener, so Old Manor interiors use 1.0 (exterior 0.9) and Jaspering
+    interiors 1.0 (exterior 0.8); the Den stays indoor everywhere.
+  - **Descent D1 + D5**: the step-down ray casts 0.40 m but accepts only a floor
+    <= 0.30 m below the origin; air->floor transitions at or below 0.30 m no
+    longer play `jump_land` or the airborne viewmodel (T1-T6: 1 interval,
+    0 landing events, grounded; the 0.45 m control stays one real fall).
+  - **Residual — walked descents are still not glued**: with D2 default-off a
+    0.18-0.30 m walk-off takes 4-12 airborne frames (D1 sees the tread, but the
+    destination capsule still grazes the riser behind). The measured D2 opt-in
+    (0.06 m destination-query shrink, guarded by `STEP_UP_GUARD_SEC`) reaches
+    1-2 air frames with a **0.001 m** shove-back and a full 3-riser stair ascent,
+    and stays behind `STEP_DOWN_QUERY_SHRINK_M = 0.0` by decision.
+  - **Roof routes are now asserted** (W6L had deferred them): the shipped 45.2°
+    hip walks up 3.37 m with no step-up or mantle, the 67.6° module is refused,
+    EndA/EndB eave bands sit 3.40 m below the AABB top the old box floated and a
+    dropped body falls off the shell, the hip's four faces fall 2.70 m below the
+    ridge, and the non-uniform POI instance (scale 0.8 on the slope axis)
+    measures 51.1° vs the expected 51.5° and stays walkable.

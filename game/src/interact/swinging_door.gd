@@ -31,6 +31,10 @@ const OPEN_YAW_RAD: float = PI * 0.5
 const SWING_SEC: float = 0.4
 ## Past this pivot yaw the open leaf must not block the doorway.
 const OPEN_DISABLE_DEG: float = 70.0
+## W7H: authored AI.Stim.Hearing.OpeningCreak MaxRange (5 m, hearing.json). A
+## swing is the noise; the base value is only the mirror for the legacy path,
+## the authored row supplies the radius the guard actually gets.
+const OPENING_CREAK_M: float = 5.0
 
 var door_entry: Dictionary = {}
 var level_loader: Node = null
@@ -334,6 +338,15 @@ func _start_swing_toggle() -> void:
 	is_open = not is_open
 	_begin_swing()
 	_announce_world_state()
+	_emit_swing_creak()
+
+
+## W7H: one authored OpeningCreak (5 m) per swing, open or close. Emitted by the
+## local toggle only — a peer applying a host swing must not re-emit it — and
+## never by the lock path, which has its own stimulus (see _on_lockpick_finished,
+## which only emits here when the unlock does not start a swing).
+func _emit_swing_creak() -> void:
+	NoiseBus.emit_noise(global_position, OPENING_CREAK_M, _noise_source(), "door")
 
 
 ## Starts the authored swing toward the current is_open state. Shared by local
@@ -383,12 +396,19 @@ func _on_lockpick_finished(success: bool, actor: Node) -> void:
 		locked = false
 		lockpick_progress = 1.0
 		lockpick_updated.emit(false, 1.0, maxi(lock_level, 1))
-		NoiseBus.emit_noise(global_position, 5.5, _noise_source(), "door")
+		# W7H: exactly one creak per unlock. A successful pick on a closed door
+		# swings it, and the swing emits; an already-open door has no swing, so
+		# the unlock emits the authored OpeningCreak itself. The old path emitted
+		# a 5.5 m "door" here AND the swing emitted again.
 		if not is_open:
 			_start_swing_toggle()
+		else:
+			_emit_swing_creak()
 	else:
 		_VfxManager.spawn_lockpick_sparks(get_parent(), global_position + Vector3(0.0, 1.1, 0.0))
-		NoiseBus.emit_noise(global_position, 5.0, _noise_source(), "lockpick")
+		# W7H: a jam is the loud outcome (authored LockPicking.Jammed 10 m); the
+		# working pick ticks stay on the quiet Picked row (3 m).
+		NoiseBus.emit_noise(global_position, 10.0, _noise_source(), "lockpick_jammed")
 		lockpick_updated.emit(false, lockpick_progress, maxi(lock_level, 1))
 
 

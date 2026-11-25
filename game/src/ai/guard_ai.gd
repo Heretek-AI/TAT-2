@@ -37,6 +37,11 @@ const SIGHT_RANGE: float = 20.0 # AIC_GuardBase Fresh SightRadius 2000cm
 const LOSE_SIGHT_RANGE: float = 30.0 # Bouncer/Hauntstable Fresh LoseSightRadius 3000cm (GuardBase Fresh=2500, see report)
 const HEARING_RANGE: float = 25.0 # AIC_GuardBase TATAISenseConfig_Hearing.HearingRange 2500cm
 const FOV_DEG: float = 80.0 # PeripheralVisionAngleDegrees 40 (UE half-angle) x 2
+## W7H indoor weather scope: a listener's authored sound-carry side is decided by
+## a straight-up ceiling probe, throttled to one probe per second and re-run when
+## the guard has moved 2 m (see _update_weather_scope).
+const WEATHER_SCOPE_PROBE_SEC: float = 1.0
+const WEATHER_SCOPE_MOVE_M: float = 2.0
 ## W6G escalation profiles (game/data/generated/gameplay/guard_ai.json
 ## escalation_tables). AIC_Bouncer drives the Hauntstable guards, so the same
 ## name hint guard_ai already uses for the Hauntstable skeleton selects the
@@ -189,6 +194,12 @@ var investigation_search_seconds: float = 4.0
 ## one; the plumbing is asserted by test_hearing_ranges.
 var perception_tags: Array[String] = []
 var _weather_sound_carry: float = 1.0
+## W7H: the guard's own indoor/outdoor side. Probed at most every
+## WEATHER_SCOPE_PROBE_SEC so a guard walking a corridor into a courtyard
+## crosses the authored row instead of keeping its spawn-side multiplier.
+var _weather_indoors: bool = false
+var _weather_scope_next_ms: int = 0
+var _weather_scope_pos: Vector3 = Vector3.ZERO
 ## Authored escalation writes the sense exports only while they still hold the
 ## value this script last wrote. A caller/test that pins sight_range (E2E LOS
 ## probes do) disables the authored writes for that instance instead of being
@@ -377,11 +388,39 @@ func effective_vision_range(use_lose_range: bool = false) -> float:
 
 
 ## Weather sound carry for this guard's map (authored Weather.SoundCarry row).
-## Weather is fixed per mission, so this is refreshed once at spawn and exposed
-## for tests/mission reloads.
+## W7H: the outdoor side is chosen by the guard's own ceiling probe, not only by
+## the map's preset. Old Manor (DenseFog) and Jaspering (HeavyRain) are outdoor
+## presets that also cover interiors, so a guard standing in a room used to
+## attenuate every footstep with the street multiplier (0.9 / 0.8) instead of the
+## authored indoors row (1.0). The probe is throttled (WEATHER_SCOPE_PROBE_SEC)
+## and re-runs when the guard moves; `refresh_weather_sound_carry()` still forces
+## a fresh classification at spawn and for tests/mission reloads.
 func refresh_weather_sound_carry() -> void:
+	_update_weather_scope(true)
+
+
+func _update_weather_scope(force: bool = false) -> void:
+	var now_ms: int = Time.get_ticks_msec()
+	var moved: bool = global_position.distance_squared_to(_weather_scope_pos) >= WEATHER_SCOPE_MOVE_M * WEATHER_SCOPE_MOVE_M
+	if not force and not moved and now_ms < _weather_scope_next_ms:
+		return
+	_weather_scope_next_ms = now_ms + int(WEATHER_SCOPE_PROBE_SEC * 1000.0)
+	_weather_scope_pos = global_position
 	var map_id: String = GameState.active_map_id
-	_weather_sound_carry = WeatherProfile.sound_carry_multiplier_for_map(map_id, WeatherProfile.map_is_indoor(map_id))
+	var preset_indoor: bool = WeatherProfile.map_is_indoor(map_id)
+	if preset_indoor or not is_inside_tree() or get_world_3d() == null:
+		_weather_indoors = preset_indoor
+	else:
+		_weather_indoors = WeatherProfile.is_indoors_at(
+			get_world_3d().direct_space_state,
+			global_position + Vector3.UP * 1.2,
+			[get_rid()])
+	_weather_sound_carry = WeatherProfile.sound_carry_multiplier_for_map(map_id, _weather_indoors)
+
+
+## W7H: the listener side actually used for the current sound-carry row.
+func weather_indoors() -> bool:
+	return _weather_indoors
 
 
 func hearing_weather_multiplier() -> float:
@@ -1491,6 +1530,9 @@ func _hear(record: Dictionary) -> void:
 	var origin: Vector3 = record.get("origin", global_position)
 	var tag: String = str(record.get("tag", ""))
 	var dist_m: float = global_position.distance_to(origin)
+	# W7H: the listener-side weather scope (indoor/outdoor) can change as the
+	# guard walks, so refresh it before the multiplier is read.
+	_update_weather_scope()
 	var sense_mult: float = hearing_sense_multiplier()
 	var stim: Dictionary = record.get("stim", {}) as Dictionary
 	var radius_m: float = 0.0
@@ -1543,6 +1585,13 @@ func _hear(record: Dictionary) -> void:
 	# Every other stimulus raises alertness through the existing transition and
 	# leaves the meter to the sight ramp. Promotion only from NEUTRAL, so hearing
 	# can never de-escalate an alerted guard.
+	# W7H: a repeated noise while SEARCH is already running refreshes the
+	# authored fan-out window (4 s short / 8 s long) instead of letting the
+	# search expire mid-investigation; the detection meter is still untouched.
+	if state == Alertness.SEARCH:
+		state_timer = maxf(state_timer, investigation_search_seconds)
+		if _search_goal_timer <= 0.0:
+			_search_goal_timer = 2.5
 	if state == Alertness.NEUTRAL:
 		_set_state(Alertness.SUSPICIOUS)
 		state_timer = 5.0

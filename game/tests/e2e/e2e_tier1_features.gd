@@ -35,6 +35,7 @@ func run() -> void:
 	await _feat_20_guard_lanterns_steal_alert()
 	await _feat_21_old_manor_walk_collision()
 	await _feat_22_verification_gates()
+	await _feat_23_surface_hearing_sprint()
 	h.restore_state()
 
 
@@ -1871,8 +1872,7 @@ func _feat_21_old_manor_walk_collision() -> void:
 
 
 # --- Feature #22: E2E Requirement-Driven & Visual Parity Test Suite ---
-func _feat_22_verification_gates() -> void:
-	# T1-22-A: Existing 38 Regression Suites Preserved
+func _feat_22_verification_gates() -> void:	# T1-22-A: Existing 38 Regression Suites Preserved
 	var rt_src: String = h.read_text("res://tests/run_tests.gd")
 	var has_38: bool = rt_src.find("# 38.") >= 0 and rt_src.find("SUMMARY: fails=") >= 0
 	h.require(has_38, "T1-22-A", "run_tests.gd preserves 38 suites & SUMMARY: fails= contract")
@@ -1918,3 +1918,47 @@ func _feat_22_verification_gates() -> void:
 		da.list_dir_end()
 	var cap_gd_txt: String = h.repo_read_text("build/qa/capture_e2e_parity.gd")
 	h.require(jpg_cnt >= 56 and cap_gd_txt != "", "T1-22-E", "Steam refs=%d (>=56) & capture_e2e_parity.gd present=%s" % [jpg_cnt, str(cap_gd_txt != "")])
+
+
+# --- Feature #23: W7H surface-resolved hearing (sprint heard, never seen) ---
+## The player sprints 20 m from a guard with a clear line of sight but outside
+## the guard's sight range. The authored Footstep.Running stim (20 m) must reach
+## the guard through the surface-resolved surface multiplier, raise SEARCH, and
+## leave the 0..100 detection meter at 0 (hearing never writes it).
+func _feat_23_surface_hearing_sprint() -> void:
+	var arena_d: Dictionary = await h.make_arena()
+	var arena: Node3D = arena_d["arena"] as Node3D
+	var g: Node3D = await h.spawn_test_guard(arena, Vector3(0.0, 0.0, 0.0)) as Node3D
+	# Behind the guard's facing (+Z, the guard looks down -Z) and beyond a pinned
+	# 12 m sight range: LOS is clear, sight is not possible.
+	var p: Node = await h.spawn_test_player(arena, Vector3(0.0, 0.0, 20.0), arena_d["light_probe"] as Node, arena)
+	if g == null or p == null:
+		h.require(false, "T1-23-A", "guard/player spawn failed for the sprint hearing case")
+		return
+	g.set("sight_range", 12.0)
+	await h.step_process(2)
+	var dist: float = (g as Node3D).global_position.distance_to((p as Node3D).global_position)
+	# Sprint in place-adjacent: hold forward+shift so the real footstep cadence
+	# fires (sprint noise_timer 0.28 s) while the guard is out of sight.
+	Input.action_press("move_forward")
+	Input.action_press("sprint")
+	var saw_player: bool = false
+	for _i: int in range(24):
+		await h.tree.physics_frame
+		if h.has_m(g, "can_see_player") and bool(g.call("can_see_player", p)):
+			saw_player = true
+	Input.action_release("sprint")
+	Input.action_release("move_forward")
+	await h.step_physics(4)
+	var stim: String = str(g.get("last_heard_stim_tag"))
+	var radius: float = float(g.get("last_heard_radius_m"))
+	h.require(stim == "AI.Stim.Hearing.Footstep.Running" and radius >= dist,
+		"T1-23-A",
+		"20 m sprint heard as Footstep.Running (stim=%s, radius=%.1f m, dist=%.1f m, clear LOS, sight=%.0f m)" % [stim, radius, dist, float(g.get("sight_range"))])
+	var st: int = int(g.get("state"))
+	h.require(st == 4 and is_zero_approx(float(g.get("detection"))) and not saw_player,
+		"T1-23-B",
+		"heard sprint -> SEARCH (state=%d) with detection %.1f and never seen" % [st, float(g.get("detection"))])
+	# The guard/player belong to this arena: leaving them alive leaks a second
+	# player and guard into every later tier (all arenas share one origin).
+	await h.free_node(arena)

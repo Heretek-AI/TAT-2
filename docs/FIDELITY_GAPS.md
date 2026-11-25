@@ -6,6 +6,58 @@ extracted through `tools/tat-extract` (CUE4Parse, `EGame.GAME_UE5_5`).
 Generated from `extracted/filelist.txt` (22,005 entries) and the current `extracted/` tree.
 Re-run the census with the commands at the bottom.
 
+## R8 remediation status — 2026-11-25
+
+The tables below predate the R8 wave and are **not** authoritative for the areas it
+touched. Twelve remediation teams audited and then fixed the port against the shipped
+build; the measured detail is in
+[`docs/reports/r8-remediation-20261125.md`](reports/r8-remediation-20261125.md), the
+audit that motivated it in [`docs/reports/re-audit-20261124.md`](reports/re-audit-20261124.md),
+and the recorded-run evidence in
+[`docs/reference/clip_1795033698901/COMPARISON_PORT_20261124.md`](../reference/clip_1795033698901/COMPARISON_PORT_20261124.md).
+
+**Closed by R8** (each with a red proof and a regression test):
+
+- Guildhall lighting: 976 authored lights were reduced to 159 by a global energy rank;
+  now 154 of 189 room bubbles are covered (was 95) and 63 of 64 gameplay interiors are lit
+  (was 31). Exposure applies to the preset maps actually use, with the authored EV curve.
+- Mission-prep stage: the authored `CameraActor_0` is restored (13 → 387 mesh pivots inside
+  the authored 10° cone) and the skyline is re-authored to ≤0.54 frame widths.
+- Materials: 110,396 binds carried tints in the wrong colour space (447 materials) — now
+  zero; 776 instances bound the wrong slot by name — now zero; `M_sf2_birch_bark` and
+  `M_BlockerWard` bind their own art.
+- Collision: the authored `AggGeom` is extracted (8,601 elements) and is the collision
+  source instead of render-AABB heuristics.
+- Animation: clips were `(N−1)/N` of their authored length; damage fired at swing frame 0;
+  the takedown played on the wrong rig — all three fixed and proved.
+- AI: the blackjack is winnable (detection 61.25 → 0.00 at the same 0.45 s hold), the sight
+  model is the authored one, ranged combat exists, and hearing occlusion uses 285 portals.
+- Input: the authored IMC table drives 39 InputMap blocks; right-stick look, rebinding and
+  rebind-aware prompt glyphs work.
+- State: corrupt saves are quarantined instead of overwritten, the payout outbox has real
+  callers, and co-op resolves host-authoritatively.
+- Audio: the Wwise control plane is produced and consumed (130 buses, per-event attenuation,
+  occlusion, music, 645 VO lines, emitted from 90 emitters).
+- VFX: activation flags are honoured (3,308 → 1,048 instances), 810 placements carry
+  decoded parameters, sprites sample for 5 systems, and culling exists.
+- Geometry: splines loft, LevelInstance coverage is 190/190, the authored streaming graph is
+  consumed, and 307 misplaced origin markers are fixed.
+
+**Still open after R8** (deliberate, documented, or blocked):
+
+- Candle **lights** remain 0/135 by design (sconce glows; a slot costs a room its practical).
+- The authored SkyLight **cubemap export** is not produced yet (T01 contract), so IBL is a
+  documented approximation.
+- Lockpick has 41 assets and **0 animations**; the dial minigame has no hand animation.
+- VFX sprite resolution is wrong-token for most systems (6 of 29 textures pass the soft-mask
+  gate); the authored "footstep" texture is a crate decal used as a thief-vision mask.
+- Texture streaming/eviction is deferred; the roughness bake is ~54 % of the Guildhall
+  scene build.
+- The authored `FrustumPitch −22°` caps a guard's view at +0.75° elevation — faithful, but
+  it changes stealth and needs a playtest (`--sight-frustum=off` isolates it).
+- The prep composition and the new interior lighting still need one capture to confirm the
+  pixels, not just the numbers.
+
 ## Summary
 
 | Area | In install | Extracted / parsed | Status |

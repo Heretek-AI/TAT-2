@@ -233,12 +233,12 @@ Status is a curated read of the port source, not a runtime measurement. `grep hi
 | branch | authored anchor | status | evidence (grep) | note |
 |---|---|---|---|---|
 | Alertness ladder (Set Alertness / escalation) | `React To Stims, Intruder, Broken Object and Conversation Event` | **implemented** | `enum Alertness` → 1 in `game/src/ai/guard_ai.gd` | enum Alertness { NEUTRAL, SUSPICIOUS, ALERTED, COMBAT, SEARCH, KNOCKED_OUT } |
-| Sight cone, light visibility and smoke occlusion | `React to Intruder (Almost Spotted) / (Spotted)` | **implemented** | `SIGHT_RANGE|LightProbeScript|smoke` → 27 in `game/src/ai/guard_ai.gd` | sight constants + light probe + smoke LOS in the perception pass |
-| Hearing via the project noise bus | `Try Find Intruder` | **implemented** | `NoiseBus|noise` → 13 in `game/src/ai/guard_ai.gd` | NoiseBus + HearingData (W6G: 54 authored stim rows gated by heard_by/query, MaxRange x surface x weather, Short/Long investigation; portals read-only) |
-| Patrolling (ST_Patrol) | `Patrolling` | **partial** | `patrol_speed|patrol_path` → 7 in `game/src/ai/guard_ai.gd` | patrol_speed + patrol path points; no smart-object patrol points |
-| Investigate a stim location (ST_Subtree_GeneralInvestigateStim) | `Move to intruder / Move To Last Known Position` | **partial** | `_search_goal` → 7 in `game/src/ai/guard_ai.gd` | one search goal + timer; no EQS defensive-spot query, no smart-object claim |
+| Sight cone, light visibility and smoke occlusion | `React to Intruder (Almost Spotted) / (Spotted)` | **implemented** | `SIGHT_RANGE|LightProbeScript|smoke` → 30 in `game/src/ai/guard_ai.gd` | sight constants + light probe + smoke LOS in the perception pass |
+| Hearing via the project noise bus | `Try Find Intruder` | **implemented** | `NoiseBus|noise` → 17 in `game/src/ai/guard_ai.gd` | NoiseBus + HearingData (W6G: 54 authored stim rows gated by heard_by/query, MaxRange x surface x weather, Short/Long investigation; portals read-only) |
+| Patrolling (ST_Patrol) | `Patrolling` | **partial** | `patrol_speed|patrol_path` → 8 in `game/src/ai/guard_ai.gd` | patrol_speed + patrol path points; no smart-object patrol points |
+| Investigate a stim location (ST_Subtree_GeneralInvestigateStim) | `Move to intruder / Move To Last Known Position` | **partial** | `_search_goal` → 9 in `game/src/ai/guard_ai.gd` | one search goal + timer; no EQS defensive-spot query, no smart-object claim |
 | Revive a downed guard (ST_Subtree_ReviveNPC) | `React to Downed NPC` | **implemented** | `revive_hold_s|_revive_target` → 15 in `game/src/ai/guard_ai.gd` | revive_hold_s + nearest-first ally revive |
-| Melee combat loop (ST_Subtree_Combat, 52 states) | `Combat` | **partial** | `MELEE_|_play_guard_attack` → 8 in `game/src/ai/guard_ai.gd` | one melee attack + cooldown; none of the combat subtree states |
+| Melee combat loop (ST_Subtree_Combat, 52 states) | `Combat` | **partial** | `MELEE_|_play_guard_attack` → 16 in `game/src/ai/guard_ai.gd` | one melee attack + cooldown; none of the combat subtree states |
 | First-time greeting (VO + focus) | `Greet Player for the first time` | **missing** | `focus|voice|vo_` → 0 in `game/src/ai/guard_ai.gd` | no focus/VO system in the port guard |
 | Conversation + shared-target handoff | `React To Conversation Event / React To Shared Target` | **missing** | `conversation|share_target` → 0 in `game/src/ai/guard_ai.gd` | no conversation event or share-target plumbing |
 | Broken / incorrect object knowledge reactions | `React to Incorrect or Broken Object` | **missing** | `knowledge` → 0 in `game/src/ai/guard_ai.gd` | no individual-knowledge model, so no repeat-suppression branches |
@@ -250,12 +250,12 @@ Status is a curated read of the port source, not a runtime measurement. `grep hi
 | Forced states: cower / unconscious / in smoke | `Forced States` | **partial** | `cower|in smoke` → 0 in `game/src/ai/guard_ai.gd` | KNOCKED_OUT exists; cower and the in-smoke ability do not |
 | Forced agro | `Forced Agro` | **missing** | `forced.?agro` → 0 in `game/src/ai/guard_ai.gd` | no forced-target branch |
 | Post-revival / post-smoke search | `Post-Revival Behavior / Post-Smoke Behavior` | **missing** | `Post-Revival|Post-Smoke` → 0 in `game/src/ai/guard_ai.gd` | no behaviour hook after a revive or after smoke clears |
-| Civilian clue giving (ST_ClueGiving) | `Clue Giving` | **missing** | `clue` → 0 in `game/src/ai/civilian_npc.gd` | civilian only idles/wanders |
-| Civilian cower / flee (ST_TriggerFlee_Civilian, ST_Subtree_Flee) | `Trigger Flee / Flee Behavior` | **missing** | `flee|cower` → 0 in `game/src/ai/civilian_npc.gd` | no cower or flee path in the civilian |
+| Civilian clue giving (ST_ClueGiving) | `Clue Giving` | **missing** | `clue` → 2 in `game/src/ai/civilian_npc.gd` | civilian only idles/wanders |
+| Civilian cower / flee (ST_TriggerFlee_Civilian, ST_Subtree_Flee) | `Trigger Flee / Flee Behavior` | **missing** | `flee|cower` → 40 in `game/src/ai/civilian_npc.gd` | no cower or flee path in the civilian |
 
 ## Missing branches
 
-11 of the 20 authored branches have no port counterpart and no matching source line in the owning file:
+9 of the 20 authored branches have no port counterpart and no matching source line in the owning file:
 
 - **First-time greeting (VO + focus)** — authored as `Greet Player for the first time`.
 - **Conversation + shared-target handoff** — authored as `React To Conversation Event / React To Shared Target`.
@@ -266,8 +266,6 @@ Status is a curated read of the port source, not a runtime measurement. `grep hi
 - **Lockdown (ST_Subtree_Lockdown)** — authored as `Locked Down`.
 - **Forced agro** — authored as `Forced Agro`.
 - **Post-revival / post-smoke search** — authored as `Post-Revival Behavior / Post-Smoke Behavior`.
-- **Civilian clue giving (ST_ClueGiving)** — authored as `Clue Giving`.
-- **Civilian cower / flee (ST_TriggerFlee_Civilian, ST_Subtree_Flee)** — authored as `Trigger Flee / Flee Behavior`.
 
 1 authored branch(es) are disabled in the shipped data and therefore not port work:
 

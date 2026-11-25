@@ -1,11 +1,23 @@
 # Handoff — Thick As Thieves Godot 4.7.2 port (next run)
 
 **Repo:** `/home/john/Projects/TAT-2`
-**HEAD at handoff:** `6760dd0` — the **W7 integration** tip: five lanes
-(S2 loot/save v8, S5 endgame, gates/Sonar, hearing/descent, visual/KF11) merged
-and re-gated on the merged tree. Pushed to `origin/main`.
-**Working tree:** clean apart from private/derived data. The five lane
-worktrees are removed.
+**HEAD at handoff:** the **R8 remediation** tip (12 teams, 43 commits, merged and
+re-gated on the merged tree — see
+[`reports/r8-remediation-20261125.md`](reports/r8-remediation-20261125.md)). It sits on
+top of `38e7b03` (W7) plus the two audits at `fb93f84`
+([`reports/re-audit-20261124.md`](reports/re-audit-20261124.md),
+[`reports/r8-live-run-review-20261124.md`](reports/r8-live-run-review-20261124.md)).
+**Working tree:** clean apart from private/derived data. The twelve team worktrees
+live at `/home/john/Projects/TAT-2-rem-<team>` and can be removed once their branches
+are no longer needed (`rem/T01-pipeline` … `rem/T12-vfx`).
+**Gates:** compile 152/0 · `run_tests` 301 PASS fails=0 (suites to 97) · M2 fails=0 ·
+E2E 278/278 (tier 1 117) · door/viewmodel/Niagara/blackjack/render/geometry probes PASS ·
+`make audit` PASS (12,657/12,703, reason recorded) · texture cap 0 offenders ·
+perf guard 78/78 · `make gate-ratchet` PASS.
+**Not verified:** no Vulkan capture has been taken since the lighting/prep work. The
+prep composition, the per-room light plan and the new SSAO are numerically correct and
+pixel-unconfirmed; the capture plan is
+[`../build/qa/review_20261124/INTEGRATION_RUNBOOK.md`](../build/qa/review_20261124/INTEGRATION_RUNBOOK.md) §4.
 **Godot:** `4.7.2.stable` via **native `tools/godot`** (Flatpak fallback inside the
 wrapper). `godot` is **not** on `$PATH`.
 **Renderer:** Forward+ · Jolt Physics 60 Hz · 1280×720 reference

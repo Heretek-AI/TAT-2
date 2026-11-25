@@ -9,16 +9,16 @@ the TAT-2 expansion adds **The Moth** thief, **Jaspering Hall** and co-op.
 > `extracted/` and `game/assets/ue/`, both git-ignored. Only original code, tools
 > and expansion content are committed. Do not redistribute extracted content.
 
-**Status (2026-11-24, `bc063d2`)** — playable end-to-end: startscreen → Den →
+**Status (2026-11-25, R8 remediation tip)** — playable end-to-end: startscreen → Den →
 contract prep → Guildhall run → two-phase escape → scoring, plus free-play
 cleanout, carried-loot capacity and stashing, two-player ENet co-op and all five
 E2E tiers.
 
 | Gate | Result |
 |---|---|
-| GDScript compile (`tools/check_scripts_compile.gd`) | **120 scripts, 0 broken** |
-| Unit/integration (`tests/run_tests.gd`) | **278 checks, fails=0** (suites numbered to 90) |
-| M2 traversal/tools (`tests/test_m2_player.gd`) | **fails=0** (11) |
+| GDScript compile (`tools/check_scripts_compile.gd`) | **152 scripts, 0 broken** |
+| Unit/integration (`tests/run_tests.gd`) | **301 checks, fails=0** (suites numbered to 97) |
+| M2 traversal/tools (`tests/test_m2_player.gd`) | **fails=0** (12) |
 | E2E (`tests/e2e/run_e2e_tests.gd`, tiers 1–4 + `s2`) | **278/278** (tier 1: 117) |
 | Door walk · viewmodel truth · Niagara · leak probe | **PASS** |
 | Steam manifest + content audit (`make audit`) | exit 0, fail-closed tracked baseline, disk-backed coverage 99.6 % (12657/12703), 13/13 content groups |
@@ -55,7 +55,7 @@ builds are documented in [`docs/ANDROID.md`](docs/ANDROID.md).
 | Command | Purpose |
 |---|---|
 | `make run` | Launch the desktop client (`F3` = FPS/draw-call overlay) |
-| `make test` | Headless integration run (278 checks) |
+| `make test` | Headless integration run (301 checks) |
 | `make audit` | Fail-closed gate: texture cap, mount/disk coverage, 13 content domains, producer output hashes, `errors.log` marker, freshness |
 | `make gate-ratchet` | Assert the gate floors in `tools/gate_ratchet.json` against the committed logs in `docs/reports/logs/` |
 | `make audit-bootstrap` | Explicit first run; writes the tracked `tools/audit_baseline.json` |
@@ -148,6 +148,13 @@ data under `game/data/generated/` (gitignored, produced by `make normalize`).
   pipeline gotchas and open work.
 - [`docs/FIDELITY_GAPS.md`](docs/FIDELITY_GAPS.md) — live 1:1 coverage tracker and
   every documented residual.
+- [`docs/reports/r8-remediation-20261125.md`](docs/reports/r8-remediation-20261125.md) —
+  latest: twelve remediation teams, the measured before/after per system, and what is
+  deliberately still open.
+- [`docs/reports/re-audit-20261124.md`](docs/reports/re-audit-20261124.md) — the
+  shipped-build audit that motivated it (17 domains, extraction vs consumption).
+- [`docs/reference/clip_1795033698901/COMPARISON_PORT_20261124.md`](docs/reference/clip_1795033698901/COMPARISON_PORT_20261124.md)
+  — the filled 120-row scorecard for the recorded run.
 - [`docs/reports/w7-integration.md`](docs/reports/w7-integration.md) — latest
   wave: loot capacity/stash/payout and save v8, two-phase run clock and 25 escape
   markers, surface-resolved hearing, stair descent, KF11 backdrop and Cotter

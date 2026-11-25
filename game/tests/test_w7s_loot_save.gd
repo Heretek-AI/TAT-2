@@ -77,8 +77,13 @@ func _payout(match_id: String, money: int, free_play: bool = false) -> Dictionar
 func _check_defaults(problems: Array[String]) -> void:
 	var sv: Node = _new_save()
 	var data: Dictionary = sv.get("data") as Dictionary
-	_expect(problems, int(data.get("save_schema", 0)) == SaveScript.SAVE_SCHEMA_VERSION, "90.1 save_schema != 8")
-	_expect(problems, int(data.get("loot_schema", 0)) == SaveScript.LOOT_SCHEMA_VERSION, "90.2 loot_schema != 1")
+	# RE-N-03: assert the *persisted number*, not the constant it is stamped
+	# from — comparing against SaveScript.SAVE_SCHEMA_VERSION cannot catch a
+	# schema bump. This literal must be updated deliberately with the bump.
+	var persisted_save_schema: int = int(data.get("save_schema", 0))
+	_expect(problems, persisted_save_schema == 8, "90.1 save_schema != 8 (persisted %d)" % persisted_save_schema)
+	var persisted_loot_schema: int = int(data.get("loot_schema", 0))
+	_expect(problems, persisted_loot_schema == 1, "90.2 loot_schema != 1 (persisted %d)" % persisted_loot_schema)
 	_expect(problems, data.get("last_match") is Dictionary, "90.3 last_match missing")
 	_expect(problems, data.get("pending_payout") is Dictionary, "90.4 pending_payout missing")
 	var blank: Dictionary = sv.call("_normalise_payout", {})

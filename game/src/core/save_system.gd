@@ -155,6 +155,46 @@ const PERSONAL_QUEST_FACT_STAGES: Dictionary = {
 ## Populated from _defaults() in _ready() so the schema has one source of truth.
 var data: Dictionary = {}
 
+## RE-N-03 load-failure state. A save file that exists but cannot be read or
+## parsed is quarantined, never overwritten, and this boot keeps defaults in
+## memory without writing them back. `load_failure` is
+## {reason, path, backup_path, error}; T05 renders it and offers the backup.
+## GDScript rejects a signal and a variable with the same name, so the flag is
+## private and `load_failed` is the signal (the documented read API is
+## has_load_failure() / get_load_failure()).
+var _load_failed: bool = false
+var load_failure: Dictionary = {}
+signal load_failed(reason: String, backup_path: String)
+
+## Test seam: when non-empty, every read/write/rename/quarantine path uses this
+## path instead of SAVE_PATH, so a suite can exercise load, write and the payout
+## outbox on a throwaway file without touching the developer save. Production
+## leaves it "" (the consts apply, and tmp_path() == TMP_PATH).
+var path_override: String = ""
+
+
+## Path this instance reads/writes. The only place SAVE_PATH is resolved.
+func save_path() -> String:
+	return path_override if path_override != "" else SAVE_PATH
+
+
+## Atomic-write scratch path next to save_path(); equals TMP_PATH with no
+## override, so the shipped file names are unchanged.
+func tmp_path() -> String:
+	return (path_override + ".tmp") if path_override != "" else TMP_PATH
+
+
+## True when the last load_save() could not use the file on disk (it was
+## quarantined and defaults are live for this boot).
+func has_load_failure() -> bool:
+	return _load_failed
+
+
+## Copy of the last load failure ({reason, path, backup_path, error}); empty
+## when the last load was clean.
+func get_load_failure() -> Dictionary:
+	return load_failure.duplicate(true)
+
 
 func _ready() -> void:
 	data = _defaults()
@@ -347,11 +387,14 @@ func _defaults() -> Dictionary:
 
 
 ## Loadout accessors used by the wardrobe and gameplay identity code.
+## RE-N-04: the returned entry is a deep copy so a caller appending to
+## `tools` (or mutating a nested value) cannot change persisted state without
+## going through set_loadout() + write_save().
 func get_loadout(thief_id: String) -> Dictionary:
 	var eq: Variant = data.get("equipped_loadout", {})
 	if eq is Dictionary and (eq as Dictionary).get(thief_id) is Dictionary:
 		var out: Dictionary = _default_loadout()
-		out.merge((eq as Dictionary)[thief_id] as Dictionary, true)
+		out.merge(((eq as Dictionary)[thief_id] as Dictionary).duplicate(true), true)
 		return out
 	return _default_loadout()
 
@@ -842,6 +885,7 @@ func _migrate_save_schema() -> bool:
 
 ## A pending payout left by a crash between staging and banking is settled once
 ## on load. bank_payout is idempotent (match_id), so a clean save is a no-op.
+## The public settle API is used (no duplicated logic).
 func _settle_pending_on_load() -> void:
 	var pending: Dictionary = _normalise_payout(data.get("pending_payout"))
 	if str(pending.get("match_id", "")) == "":
@@ -850,26 +894,55 @@ func _settle_pending_on_load() -> void:
 		return
 	if bool(pending.get("applied", false)):
 		return
-	bank_payout(pending)
+	settle_pending_payout()
 
 
+## Read the save. A file that exists but cannot be opened or whose JSON root is
+## not an object (null, array, string — an empty `{}` is valid) is quarantined
+## to `<path>.corrupt-<unix_ts>` and reported through `load_failed` +
+## has_load_failure(). That boot keeps the in-memory defaults and **does not
+## write them back**, so the player's bytes are never replaced by a fresh
+## profile; a later explicit write_save() (a settings change) is allowed
+## because the original is already preserved.
 func load_save() -> void:
-	if not FileAccess.file_exists(SAVE_PATH):
+	_load_failed = false
+	load_failure = {}
+	var path: String = save_path()
+	if not FileAccess.file_exists(path):
 		_ensure_defaults()
 		_sync_level_from_xp()
 		_migrate_unlock_ids()
 		_migrate_save_schema()
 		return
-	var f: FileAccess = FileAccess.open(SAVE_PATH, FileAccess.READ)
+	var text: String = ""
+	var problem: String = ""
+	var opened: bool = false
+	var f: FileAccess = FileAccess.open(path, FileAccess.READ)
 	if f == null:
-		_ensure_defaults()
-		_sync_level_from_xp()
-		_migrate_unlock_ids()
-		_migrate_save_schema()
+		problem = "cannot open file (error %d)" % int(FileAccess.get_open_error())
+	else:
+		text = f.get_as_text()
+		f.close()
+		opened = true
+	var parsed: Variant = null
+	if opened:
+		var json: JSON = JSON.new()
+		var parse_err: Error = json.parse(text)
+		if parse_err != OK:
+			problem = "%s (line %d)" % [json.get_error_message(), json.get_error_line()]
+		else:
+			parsed = json.data
+	if not (parsed is Dictionary):
+		var reason: String = "not_an_object"
+		if not opened:
+			reason = "unreadable"
+		elif problem != "":
+			reason = "parse_error"
+		else:
+			problem = "JSON root is %s, expected an object" % type_string(typeof(parsed))
+		_report_load_failure(path, reason, problem)
 		return
-	var parsed: Variant = JSON.parse_string(f.get_as_text())
-	if parsed is Dictionary:
-		_merge_validated(parsed as Dictionary)
+	_merge_validated(parsed as Dictionary)
 	_ensure_defaults()
 	_sync_level_from_xp()
 	# Persist the one-time migrations (settings schema v2 FOV, capture persona
@@ -889,25 +962,122 @@ func load_save() -> void:
 	_settle_pending_on_load()
 
 
-func write_save() -> void:
-	var f: FileAccess = FileAccess.open(TMP_PATH, FileAccess.WRITE)
+## Quarantine a save that cannot be used, then publish the failure. The
+## original bytes are preserved under a new name before anything else happens.
+func _report_load_failure(path: String, reason: String, error_text: String) -> void:
+	var backup: String = _quarantine_bad_save(path)
+	_load_failed = true
+	load_failure = {
+		"reason": reason,
+		"path": path,
+		"backup_path": backup,
+		"error": error_text,
+	}
+	if backup == "":
+		push_error("[save_system] save at %s is unusable (%s: %s) and could not be quarantined; leaving the file in place. Defaults are live for this boot and will not be written." % [path, reason, error_text])
+	else:
+		push_error("[save_system] save at %s is unusable (%s: %s); preserved as %s. Defaults are live for this boot and will not be written." % [path, reason, error_text, backup])
+	# Defaults are what _ready() already installed; normalize them so every
+	# caller sees a complete map. No migration write and no payout settle: the
+	# player's profile is unknown, so this boot must not mint one on disk.
+	_ensure_defaults()
+	_sync_level_from_xp()
+	load_failed.emit(reason, backup)
+
+
+## Move a bad save to `<path>.corrupt-<unix_ts>[-n]` (rename, else verified
+## copy + remove). Returns the backup path in the same path space as `path`
+## (user:// for the shipped save), or "" when nothing could be preserved — in
+## which case the original is kept where it is.
+func _quarantine_bad_save(path: String) -> String:
+	if not FileAccess.file_exists(path):
+		return ""
+	var stamp: int = int(Time.get_unix_time_from_system())
+	var base: String = "%s.corrupt-%d" % [path, stamp]
+	var target: String = base
+	var counter: int = 1
+	while FileAccess.file_exists(target):
+		if counter > 99:
+			return ""
+		target = "%s-%d" % [base, counter]
+		counter += 1
+	var source_abs: String = ProjectSettings.globalize_path(path)
+	var target_abs: String = ProjectSettings.globalize_path(target)
+	var err: Error = DirAccess.rename_absolute(source_abs, target_abs)
+	if err != OK:
+		# Cross-device or a locked directory: copy the bytes, verify the copy,
+		# then drop the original only once the quarantine is proven to exist.
+		err = DirAccess.copy_absolute(source_abs, target_abs)
+		if err != OK:
+			push_warning("[save_system] could not quarantine save: ", error_string(err))
+			return ""
+		if not FileAccess.file_exists(target):
+			return ""
+		DirAccess.remove_absolute(source_abs)
+	if not FileAccess.file_exists(target):
+		return ""
+	return target
+
+
+## Persist `data` atomically: write <save>.tmp, read it back, require the
+## read-back text to match what was written and to parse as a JSON object, then
+## rename it into place. Returns the first failure; nothing is renamed on a bad
+## write, so a truncated or short (ENOSPC) write can never become the save.
+func write_save() -> Error:
+	var tmp: String = tmp_path()
+	var target: String = save_path()
+	var f: FileAccess = FileAccess.open(tmp, FileAccess.WRITE)
 	if f == null:
-		# C2 (partial): the tmp-open failure was silent while callers report
-		# success. Warn here; full type-checked merge validation stays
-		# HARD_LIMIT (needs a save-migration design).
-		push_warning("[save_system] cannot open tmp save for write: ", TMP_PATH)
-		return
-	f.store_string(JSON.stringify(data, "\t"))
+		var open_err: Error = FileAccess.get_open_error()
+		if open_err == OK:
+			open_err = ERR_FILE_CANT_WRITE
+		push_warning("[save_system] cannot open tmp save for write: ", tmp, " (", error_string(open_err), ")")
+		_remove_file(tmp)
+		return open_err
+	var payload: String = JSON.stringify(data, "\t")
+	f.store_string(payload)
+	f.flush()
+	var write_err: Error = f.get_error()
 	f.close()
-	var dir: DirAccess = DirAccess.open("user://")
-	if dir == null:
-		push_warning("[save_system] cannot open user://; save not persisted")
-		return
-	# D8: check the atomic-rename result; a failed rename used to be silent
-	# while callers report success unconditionally.
-	var rename_err: Error = dir.rename("tat2_save.json.tmp", "tat2_save.json")
+	if write_err != OK:
+		push_warning("[save_system] tmp save write failed: ", tmp, " (", error_string(write_err), ")")
+		_remove_file(tmp)
+		return write_err
+	var readback: FileAccess = FileAccess.open(tmp, FileAccess.READ)
+	if readback == null:
+		var rb_err: Error = FileAccess.get_open_error()
+		if rb_err == OK:
+			rb_err = ERR_FILE_CANT_READ
+		push_warning("[save_system] tmp save is unreadable after write: ", tmp, " (", error_string(rb_err), ")")
+		_remove_file(tmp)
+		return rb_err
+	var written: String = readback.get_as_text()
+	readback.close()
+	if written != payload:
+		push_warning("[save_system] tmp save read-back differs (short write?): ", tmp, " (", written.length(), " of ", payload.length(), " chars)")
+		_remove_file(tmp)
+		return ERR_FILE_CORRUPT
+	if not (JSON.parse_string(written) is Dictionary):
+		push_warning("[save_system] tmp save read-back does not parse as an object: ", tmp)
+		_remove_file(tmp)
+		return ERR_FILE_CORRUPT
+	var rename_err: Error = DirAccess.rename_absolute(
+		ProjectSettings.globalize_path(tmp), ProjectSettings.globalize_path(target)
+	)
 	if rename_err != OK:
 		push_warning("[save_system] atomic save rename failed: ", error_string(rename_err))
+		_remove_file(tmp)
+		return rename_err
+	return OK
+
+
+## Best-effort removal of a scratch file (never touches the save itself).
+func _remove_file(path: String) -> void:
+	if not FileAccess.file_exists(path):
+		return
+	var err: Error = DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	if err != OK and FileAccess.file_exists(path):
+		push_warning("[save_system] could not remove scratch file: ", path, " (", error_string(err), ")")
 
 
 func record_contract_complete(order: int, score: int, ghost: bool) -> void:
@@ -972,47 +1142,65 @@ func add_currency(amount: int) -> void:
 ## W7S-S2 payout API ---------------------------------------------------------
 ## A completed match hands its payout record here exactly once. Idempotency is
 ## keyed on match_id: a second call for the same run never adds currency twice.
-## Free play records the numbers but banks 0 (not a currency farm). Returns
-## {applied, match_id, money_taken, banked, reason}.
+## Free play records the numbers but banks 0 (not a currency farm).
+##
+## RE-N-06: the record is staged to disk first (pending_payout, applied:false)
+## and only then applied and written, so a crash or a failed second write is
+## settled by _settle_pending_on_load() instead of losing the payout. Returns
+## {applied, reason, match_id, money_taken, banked, persisted, write_error,
+## outbox_error}; `persisted` is false whenever the final write did not land,
+## and the in-memory profile is authoritative for the rest of the process.
 func bank_payout(payout: Dictionary) -> Dictionary:
 	var p: Dictionary = _normalise_payout(payout)
 	var match_id: String = str(p.get("match_id", ""))
 	var last: Dictionary = _normalise_payout(data.get("last_match"))
 	if match_id != "" and str(last.get("match_id", "")) == match_id and bool(last.get("applied", false)):
-		return {
-			"applied": false,
-			"reason": "duplicate",
-			"match_id": match_id,
-			"money_taken": int(p.get("money_taken", 0)),
-			"banked": 0,
-		}
+		return _bank_result(false, "duplicate", match_id, int(p.get("money_taken", 0)), 0, true, OK, OK)
 	var bank: int = 0
 	if not bool(p.get("free_play", false)):
 		bank = maxi(int(p.get("money_taken", 0)), 0)
+	# Write #1: stage the record (applied:false, banked:0). A crash between this
+	# write and the next one leaves a pending_payout the next load settles.
+	var staged: Dictionary = stage_pending_payout(p)
+	var outbox_err: int = int(staged.get("outbox_error", OK))
 	p["banked"] = bank
 	p["applied"] = true
 	data["currency"] = maxi(int(data.get("currency", 0)), 0) + bank
 	data["last_match"] = p
 	data["pending_payout"] = _default_payout_record()
-	write_save()
+	# Write #2: the applied profile. If it fails, the staged record is still on
+	# disk and settles on the next load; the profile is already updated here.
+	var write_err: Error = write_save()
+	return _bank_result(true, "banked", match_id, int(p.get("money_taken", 0)), bank, write_err == OK, write_err, outbox_err)
+
+
+## Shared report shape so every bank_payout outcome carries the same keys.
+func _bank_result(applied: bool, reason: String, match_id: String, money_taken: int, banked: int, persisted: bool, write_err: int, outbox_err: int) -> Dictionary:
 	return {
-		"applied": true,
-		"reason": "banked",
+		"applied": applied,
+		"reason": reason,
 		"match_id": match_id,
-		"money_taken": int(p.get("money_taken", 0)),
-		"banked": bank,
+		"money_taken": money_taken,
+		"banked": banked,
+		"persisted": persisted,
+		"write_error": write_err,
+		"outbox_error": outbox_err,
 	}
 
 
 ## Stage a payout before banking (crash recovery). The next load settles it via
-## _settle_pending_on_load(); a normal match calls bank_payout directly.
+## settle_pending_payout(); bank_payout calls this before its first apply, so
+## the outbox has a production caller. The returned copy carries a transient
+## `outbox_error` (the stored record does not).
 func stage_pending_payout(payout: Dictionary) -> Dictionary:
 	var p: Dictionary = _normalise_payout(payout)
 	p["applied"] = false
 	p["banked"] = 0
-	data["pending_payout"] = p
-	write_save()
-	return p
+	data["pending_payout"] = p.duplicate(true)
+	var err: Error = write_save()
+	var out: Dictionary = p.duplicate(true)
+	out["outbox_error"] = int(err)
+	return out
 
 
 func settle_pending_payout() -> Dictionary:

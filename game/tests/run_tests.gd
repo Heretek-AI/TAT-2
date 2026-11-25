@@ -250,6 +250,28 @@ func _initialize() -> void:
 		root.add_child(lsc)
 		root.add_child(clue)
 		await process_frame
+		# W6U2: KF03/KF04 wardrobe is a true three-column panel with authored
+		# loadout slots, signature padlocks and no APPLY button.
+		var w8_slots: Array = wui.get("_slots") as Array
+		var w8_three_col: bool = false
+		for w8_c: Node in wui.find_children("*", "HBoxContainer", true, false):
+			var w8_hb: HBoxContainer = w8_c as HBoxContainer
+			if w8_hb.get_child_count() == 3 and w8_hb.get_child(0) is VBoxContainer \
+					and w8_hb.get_child(1) is VBoxContainer and w8_hb.get_child(2) is PanelContainer:
+				w8_three_col = true
+				break
+		var w8_apply: int = 0
+		for w8_b: Node in wui.find_children("*", "Button", true, false):
+			if (w8_b as Button).text.strip_edges().to_upper() == "APPLY":
+				w8_apply += 1
+		var w8_first: String = str(w8_slots[0]) if w8_slots.size() == 4 else ""
+		var w8_ok: bool = w8_slots.size() == 4 and (w8_first == "zipwire" or w8_first == "glamour") \
+			and str(w8_slots[3]) == "vistara_diamond" and w8_apply == 0 and w8_three_col
+		if not w8_ok:
+			printerr("FAIL: Wardrobe W6U2 layout slots=", w8_slots, " apply=", w8_apply, " three_col=", w8_three_col)
+			fails += 1
+		else:
+			print("PASS: Wardrobe 3-column KF03/KF04 layout, authored slots, no APPLY")
 		clue.interact(null)
 		vfx_scr.spawn_lockpick_sparks(root, Vector3.ZERO)
 		vfx_scr.spawn_blackjack_swing(root, Vector3.ZERO, Vector3.FORWARD)
@@ -4885,38 +4907,49 @@ func _initialize() -> void:
 	var w60_footer: String = str(w60_hud.call("_pause_footer_text"))
 	_w60_assert(w60_footer == "1.5.148559   Novice   424242", "pause footer deterministic seed (%s)" % w60_footer, w60)
 
-	# 60c. Ledger player name + no player-facing placeholder price strings.
+	# 60c. Ledger player name + catalog-driven KF08 states (W6U2). The Black
+	# Market reads the authored unlock catalog: a row is purchased / price /
+	# locked, never "PRICE UNKNOWN", and a gate is enforced on BUY.
 	var w60_ledger: Control = (load("res://src/ui/ledger_ui.gd") as GDScript).new() as Control
 	root.add_child(w60_ledger)
 	await process_frame
 	var w60_thief_lbl: Label = w60_ledger.get("_thief_lbl") as Label
 	_w60_assert(w60_thief_lbl != null and w60_thief_lbl.text == "Test Handle", "ledger uses GameState.player_name (%s)" % (w60_thief_lbl.text if w60_thief_lbl != null else "?"), w60)
-	var w60_unknown_item: Dictionary = {"id": "insult_fairy", "name": "Insult Fairy", "cat": "tools", "cost": 2000, "desc": "test"}
-	w60_ledger.call("_on_item_pressed", w60_unknown_item)
+	var w60_data: Dictionary = save_sys.get("data") as Dictionary
+	var w60_ledger_backup: Dictionary = w60_data.duplicate(true)
 	var w60_status: Label = w60_ledger.get("_preview_status") as Label
 	var w60_buy: Button = w60_ledger.get("_buy_btn") as Button
-	_w60_assert(w60_status != null and w60_status.text == "PRICE UNKNOWN" and w60_buy != null and not w60_buy.visible,
-		"unauthored price shows PRICE UNKNOWN and hides BUY", w60)
-	var w60_unknown_btn: String = str(w60_ledger.call("_item_button_text", w60_unknown_item))
-	_w60_assert(w60_unknown_btn.find("TBD") < 0 and w60_unknown_btn.find("DO NOT SHIP") < 0 and w60_unknown_btn.find("PRICE UNKNOWN") >= 0,
-		"unknown-price button has no placeholder marker (%s)" % w60_unknown_btn, w60)
-	var w60_bob: Dictionary = {"id": "bob_hair", "name": "Bob Hair Style", "cat": "cosmetics", "cost": 7500, "desc": "test"}
-	w60_ledger.call("_on_item_pressed", w60_bob)
-	_w60_assert(w60_status != null and w60_status.text == "£ 7500" and w60_buy != null and w60_buy.visible,
-		"KF08 price still bought (%s)" % (w60_status.text if w60_status != null else "?"), w60)
-	var w60_owned: String = str(w60_ledger.call("_item_button_text", {"id": "bowler_hat", "name": "Bowler Hat", "cat": "cosmetics", "cost": 750, "desc": "test"}))
+	# Locked row at the test profile's level (Contract 3 tool).
+	w60_ledger.call("_on_item_pressed", "pickpocket_fairy")
+	_w60_assert(w60_status != null and w60_status.text == "Requires Contract 3" and w60_buy != null and not w60_buy.visible,
+		"gated row shows its authored gate and hides BUY (%s)" % (w60_status.text if w60_status != null else "?"), w60)
+	var w60_locked_btn: String = str(w60_ledger.call("_item_button_text", {"save_id": "pickpocket_fairy", "name": "Pickpocket Fairy", "cat": "tools", "cost": 5000, "desc": "test"}))
+	_w60_assert(w60_locked_btn.find("LOCKED") >= 0 and w60_locked_btn.find("PRICE UNKNOWN") < 0,
+		"locked row reads LOCKED, never PRICE UNKNOWN (%s)" % w60_locked_btn, w60)
+	# KF08 profile: Level 4 with £26,275 shows Bob Hair's authored £7,500 + BUY.
+	w60_data["xp"] = 1500
+	w60_data["level"] = 4
+	w60_data["currency"] = 26275
+	w60_ledger.call("_on_item_pressed", "Outfit.Spider.Head.Hair.Bob")
+	_w60_assert(w60_status != null and w60_status.text == "£ 7,500" and w60_buy != null and w60_buy.visible,
+		"KF08 Bob Hair shows the authored £ 7,500 + BUY (%s)" % (w60_status.text if w60_status != null else "?"), w60)
+	var w60_owned: String = str(w60_ledger.call("_item_button_text", {"save_id": "Outfit.Spider.Head.BowlerA", "name": "Bowler Hat", "cat": "cosmetics", "cost": 2500, "desc": "test"}))
 	_w60_assert(w60_owned.find("✓ PURCHASED") >= 0, "owned item shows PURCHASED (%s)" % w60_owned, w60)
 	var w60_ledger_src: String = FileAccess.get_file_as_string("res://src/ui/ledger_ui.gd")
-	_w60_assert(w60_ledger_src.find("TBD PRICE") < 0 and w60_ledger_src.find("DO NOT SHIP") < 0, "ledger source has no placeholder price strings", w60)
+	_w60_assert(w60_ledger_src.find("TBD PRICE") < 0 and w60_ledger_src.find("DO NOT SHIP") < 0 and w60_ledger_src.find("PRICE UNKNOWN") < 0,
+		"ledger source has no placeholder/unknown price strings", w60)
 	var w60_bad_btn: bool = false
+	var w60_rows: int = 0
 	var w60_sections: Array = w60_ledger.call("_sections") as Array
 	for w60_s_v: Variant in w60_sections:
 		var w60_sd: Dictionary = w60_s_v as Dictionary
 		for w60_it_v: Variant in (w60_sd.get("items", []) as Array):
+			w60_rows += 1
 			var w60_txt: String = str(w60_ledger.call("_item_button_text", w60_it_v as Dictionary))
-			if w60_txt.find("TBD") >= 0 or w60_txt.find("DO NOT SHIP") >= 0:
+			if w60_txt.find("TBD") >= 0 or w60_txt.find("DO NOT SHIP") >= 0 or w60_txt.find("PRICE UNKNOWN") >= 0:
 				w60_bad_btn = true
-	_w60_assert(not w60_bad_btn, "no shop button carries TBD/DO NOT SHIP", w60)
+	_w60_assert(not w60_bad_btn and w60_rows == 68, "all %d shop rows carry an authored state" % w60_rows, w60)
+	save_sys.set("data", w60_ledger_backup)
 	w60_ledger.queue_free()
 	await process_frame
 

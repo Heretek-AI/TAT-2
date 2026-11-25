@@ -32,13 +32,32 @@ What this producer does and does not claim:
   ``RequiredContract`` 10 conditions) plus the level and contract tag; a
   ``None`` contract tag means "no contract gate".
 
-The game does not read this file yet; ``ledger_ui.gd`` still carries its own
-hard-coded rows. This is the authoritative replacement source, not a wire-up.
+* ``save_id`` is the stable id SaveSystem stores. Tools and guild perks reuse
+  the ids the port already persists (``zipwire`` ... ``vistara_diamond``);
+  cosmetics use the authored outfit tag verbatim (``Outfit.Spider.Head.BowlerA``),
+  which is also what the wardrobe already saves for an equipped head/body/card.
+  Every id is asserted unique, and the tool/perk sets are pinned to the
+  SaveSystem ids so a renamed tag fails the producer instead of silently
+  orphaning a player's purchase.
+
+* ``condition.text`` is derived from the structured unlock requirement (the
+  field the shipped game gates on) in the shipped tooltip voice:
+  "Unlocked at Level N." / "Unlocked in Contract N." The authored description
+  copy carries its own "Unlocked ..." sentence; where the two disagree the
+  producer records both (``condition.copy`` + ``condition.copy_agrees``) rather
+  than picking a winner, because the data asset itself is inconsistent
+  (Master Thief gates on Contract.Main.5 while its copy says Contract 8).
+
+``game/src/ui/unlock_catalog.gd`` reads this file for the Ledger Black Market
+and the Wardrobe; no UI row is hard-coded any more. ``blackjack`` is a built-in
+tool, not one of the 68 rows, and is emitted separately under
+``catalog.built_ins``.
 """
 
 from __future__ import annotations
 
 import json
+import re
 import sys
 from collections import Counter
 from pathlib import Path
@@ -48,10 +67,63 @@ JSON_ROOT = ROOT / "extracted" / "json"
 ENTRY_JSON = JSON_ROOT / "UI" / "Progression" / "DA_UnlockableContentEntries.json"
 STRING_TABLE_DIR = JSON_ROOT / "StringTables"
 OUT_PATH = ROOT / "game" / "data" / "generated" / "gameplay" / "unlocks.json"
+## Imported texture root (game/assets/ue/Raw mirrors /Game/). Only consulted
+## when it exists: a fresh clone runs `make normalize` before the Godot import,
+## so a missing tree is "not measured", never "missing icon".
+RAW_UE_ROOT = ROOT / "game" / "assets" / "ue" / "Raw"
 SCHEMA = "tat2.unlocks/1"
+CATALOG_SCHEMA = "tat2.unlock_catalog/1"
 GAME_VERSION = "Steam 1.5.193.148559"
 
 EXPECTED_ENTRIES = 68
+EXPECTED_PRICED = 55
+## KF08 shows exactly four authored Black Market columns. The counts are
+## asserted because a new/renamed content type must land in a deliberate column.
+EXPECTED_COLUMNS = {
+    "tools": 7,
+    "guild_perks": 7,
+    "spider_cosmetics": 28,
+    "chameleon_cosmetics": 26,
+}
+
+## SaveSystem ids these rows must resolve to. Tools/perks keep the ids the port
+## already persists; a rename here without a SaveSystem migration silently
+## orphans a purchase, so the sets are pinned.
+TOOL_SAVE_IDS = {
+    "Tool.Type.Zipwire": "zipwire",
+    "Tool.Type.SmokeBomb": "smoke_bomb",
+    "Tool.Type.Pickpocket": "pickpocket_fairy",
+    "Tool.Type.CuckooClock": "insult_fairy",
+    "Tool.Type.MagicSlime": "slither_sap",
+    "Tool.Type.Glamour": "glamour",
+    "Tool.Type.VistaraDiamond": "vistara_diamond",
+}
+PERK_SAVE_IDS = {
+    "Difficulty.Novice": "novice_difficulty",
+    "Difficulty.Thief": "thief_difficulty",
+    "Difficulty.MasterThief": "master_thief_difficulty",
+    "Map.Guildhall": "guildhall",
+    "Map.OldManor": "old_manor",
+    "Thief.Spider": "spider",
+    "Thief.Chameleon": "chameleon",
+}
+## blackjack is the starting reticle tool: shipped from the start, never a
+## Black Market row, so it is emitted as a built-in for the Wardrobe candidates.
+BUILT_IN_TOOLS = [
+    {
+        "save_id": "blackjack",
+        "title": "Blackjack",
+        "reason": "Built-in starting tool; not one of the 68 Black Market rows.",
+    }
+]
+
+## Contract gates are only real when the tag names a main contract. The
+## level-gated cosmetic rows carry the parent tag "Contract", which the shipped
+## copy treats as "no contract gate" ("Unlocked at Level 2."), so it is not a
+## requirement.
+CONTRACT_TAG_RE = re.compile(r"^Contract\.Main\.(\d+)$")
+CONDITION_COPY_RE = re.compile(r"Unlocked (?:in Contract|at level|at Level) (\d+)\.")
+LEVEL_ANY_RE = re.compile(r"level (\d+)", re.IGNORECASE)
 
 # The only prices verified from a shipped frame (KF08, 00:28.50 of the capture
 # clip). Tag -> authored price in the data asset. Both thieves' cosmetics were
@@ -133,6 +205,98 @@ def shop_category(content_type: str, tag: str) -> str:
         raise Fail(f"unknown content type {content_type!r}") from None
 
 
+def save_category(content_type: str) -> str:
+    if content_type == "Cosmetic":
+        return "cosmetics"
+    if content_type == "Gear":
+        return "tools"
+    return "perks"
+
+
+def save_id_for(tag: str, content_type: str) -> str:
+    if content_type == "Gear":
+        try:
+            return TOOL_SAVE_IDS[tag]
+        except KeyError:
+            raise Fail(f"unmapped tool {tag!r}; pin its SaveSystem id") from None
+    if content_type == "Cosmetic":
+        return tag
+    try:
+        return PERK_SAVE_IDS[tag]
+    except KeyError:
+        raise Fail(f"unmapped guild perk {tag!r}; pin its SaveSystem id") from None
+
+
+def icon_res(asset_path: str) -> str:
+    """Map a cooked texture object path to its imported res:// PNG.
+
+    The asset name repeats the package name
+    (``/Game/Art/UI/Icons/.../T_X.T_X``); the port drops everything after the
+    last dot and appends ``.png`` (``game/assets/ue/Raw`` mirrors ``/Game/``).
+    """
+    text = str(asset_path or "")
+    if not text.startswith("/Game/"):
+        return ""
+    base = text.rsplit(".", 1)[0]
+    return "res://assets/ue/Raw/" + base[len("/Game/") :] + ".png"
+
+
+def condition_of(row_desc: str, conditions: list[dict], tag: str) -> dict:
+    levels = sorted({int(c["level"]) for c in conditions if int(c["level"]) > 0})
+    contracts: list[int] = []
+    for cond in conditions:
+        raw = str(cond.get("contract_tag_raw") or "")
+        match = CONTRACT_TAG_RE.match(raw)
+        if match:
+            order = int(match.group(1))
+            if order not in contracts:
+                contracts.append(order)
+        elif raw not in ("", "None", "Contract"):
+            raise Fail(f"{tag}: unrecognised contract tag {raw!r}")
+    contracts.sort()
+    if len(levels) > 1 or len(contracts) > 1:
+        raise Fail(
+            f"{tag}: multiple level/contract conditions are not modelled "
+            f"({levels}, {contracts})"
+        )
+    requires_level = levels[0] if levels else None
+    requires_contract = contracts[0] if contracts else None
+    parts: list[str] = []
+    if requires_level is not None:
+        parts.append(f"at Level {requires_level}")
+    if requires_contract is not None:
+        parts.append(f"in Contract {requires_contract}")
+    text = ""
+    if len(parts) == 1:
+        text = "Unlocked " + parts[0] + "."
+    elif len(parts) == 2:
+        text = "Unlocked " + " and ".join(parts) + "."
+
+    # Authored copy: the description usually closes with its own claim.
+    copy_match = CONDITION_COPY_RE.search(row_desc)
+    copy_text = copy_match.group(0) if copy_match else None
+    copy_number = int(copy_match.group(1)) if copy_match else None
+    copy_is_contract = bool(copy_text) and "in Contract" in str(copy_text)
+    if copy_text is None:
+        any_level = LEVEL_ANY_RE.search(row_desc)
+        copy_number = int(any_level.group(1)) if any_level else None
+        copy_is_contract = False
+    agrees = True
+    if copy_match is not None:
+        if copy_is_contract:
+            agrees = requires_contract is not None and copy_number == requires_contract
+        else:
+            agrees = requires_level is not None and copy_number == requires_level
+    return {
+        "text": text,
+        "requires_level": requires_level,
+        "requires_contract": requires_contract,
+        "copy": copy_text,
+        "copy_number": copy_number,
+        "copy_agrees": agrees,
+    }
+
+
 def load_string_tables(entries: list[dict]) -> dict[str, dict[str, str]]:
     """Load every string table an entry points at, keyed by table id."""
     tables: dict[str, dict[str, str]] = {}
@@ -209,20 +373,25 @@ def build_entry(entry: dict, tables, known_tags: set[str]) -> dict:
         )
 
     texture = entry.get("Texture") or {}
+    title = resolve_string(entry["DisplayName"], tables, f"{tag} title")
+    description = resolve_string(entry["Description"], tables, f"{tag} description")
+    icon_asset = str(texture.get("AssetPathName", ""))
     return {
         "tag": tag,
+        "save_id": save_id_for(tag, content_type),
+        "save_category": save_category(content_type),
         "content_type": content_type,
         "price": price,
         "display": {
-            "title": resolve_string(entry["DisplayName"], tables, f"{tag} title"),
-            "description": resolve_string(
-                entry["Description"], tables, f"{tag} description"
-            ),
+            "title": title,
+            "description": description,
         },
         "icon": {
-            "asset": str(texture.get("AssetPathName", "")),
+            "asset": icon_asset,
             "sub_path": str(texture.get("SubPathString", "")),
+            "res": icon_res(icon_asset),
         },
+        "condition": condition_of(str(description["text"]), conditions, tag),
         "unlock": {
             "must_meet_all_conditions": bool(
                 requirement.get("MustMeetAllConditions", False)
@@ -271,6 +440,7 @@ def main() -> int:
 
         content_types = Counter(row["content_type"] for row in rows)
         categories = Counter(row["shop_category"] for row in rows)
+        save_categories = Counter(row["save_category"] for row in rows)
         unlock_types = Counter(
             cond["type"] for row in rows for cond in row["unlock"]["conditions"]
         )
@@ -278,6 +448,88 @@ def main() -> int:
         free = [row for row in rows if row["price"] == 0]
         free_with_conditions = [
             row["tag"] for row in free if row["unlock"]["conditions"]
+        ]
+
+        # --- catalog contract -------------------------------------------------
+        if categories != Counter(EXPECTED_COLUMNS):
+            raise Fail(
+                f"Black Market columns drifted: have {dict(categories)}, "
+                f"want {EXPECTED_COLUMNS}"
+            )
+        if len(priced) != EXPECTED_PRICED:
+            raise Fail(f"{len(priced)} priced rows, expected {EXPECTED_PRICED}")
+        save_ids = [row["save_id"] for row in rows]
+        if len(set(save_ids)) != len(save_ids):
+            dupes = sorted({s for s in save_ids if save_ids.count(s) > 1})
+            raise Fail(f"duplicate save_id(s): {dupes}")
+        if any(not str(s).strip() for s in save_ids):
+            raise Fail("empty save_id")
+        tool_rows = [r for r in rows if r["save_category"] == "tools"]
+        perk_rows = [r for r in rows if r["save_category"] == "perks"]
+        if {r["save_id"] for r in tool_rows} != set(TOOL_SAVE_IDS.values()):
+            raise Fail("tool save_id set does not match the pinned SaveSystem ids")
+        if {r["save_id"] for r in perk_rows} != set(PERK_SAVE_IDS.values()):
+            raise Fail("perk save_id set does not match the pinned SaveSystem ids")
+        for row in rows:
+            if not str(row["icon"]["asset"]).strip() or not row["icon"]["res"]:
+                raise Fail(f"{row['tag']}: no icon asset/res path")
+
+        icons_on_disk = 0
+        if RAW_UE_ROOT.is_dir():
+            for row in rows:
+                rel = row["icon"]["res"].replace("res://assets/ue/Raw/", "")
+                if not (RAW_UE_ROOT / rel).is_file():
+                    raise Fail(f"{row['tag']}: icon not imported on disk: {rel}")
+                icons_on_disk += 1
+
+        mismatched_copy = [
+            {
+                "tag": row["tag"],
+                "gates": row["condition"]["text"],
+                "copy": row["condition"]["copy"],
+            }
+            for row in rows
+            if not row["condition"]["copy_agrees"]
+        ]
+        conditions_without_text = [
+            row["tag"]
+            for row in rows
+            if row["unlock"]["conditions"] and not row["condition"]["text"]
+        ]
+        if conditions_without_text:
+            raise Fail(
+                f"gated rows without derived condition text: {conditions_without_text}"
+            )
+
+        columns_meta = [
+            {
+                "key": "tools",
+                "title": "TOOLS",
+                "save_category": "tools",
+                "thief": None,
+                "count": categories.get("tools", 0),
+            },
+            {
+                "key": "guild_perks",
+                "title": "GUILD PERKS",
+                "save_category": "perks",
+                "thief": None,
+                "count": categories.get("guild_perks", 0),
+            },
+            {
+                "key": "spider_cosmetics",
+                "title": "SPIDER COSMETICS",
+                "save_category": "cosmetics",
+                "thief": "spider",
+                "count": categories.get("spider_cosmetics", 0),
+            },
+            {
+                "key": "chameleon_cosmetics",
+                "title": "CHAMELEON COSMETICS",
+                "save_category": "cosmetics",
+                "thief": "chameleon",
+                "count": categories.get("chameleon_cosmetics", 0),
+            },
         ]
 
         used_pairs = {
@@ -318,7 +570,40 @@ def main() -> int:
                 "price": "authored in-game currency units (no scaling applied)",
                 "level": "authored player level (1-based as shown in the Ledger)",
             },
-            "derivation": {"shop_category": SHOP_CATEGORY_DERIVATION},
+            "derivation": {
+                "shop_category": SHOP_CATEGORY_DERIVATION,
+                "save_id": (
+                    "Tools/guild perks reuse the SaveSystem ids the port already "
+                    "persists; cosmetics use the authored outfit tag (the same "
+                    "form the Wardrobe stores for an equipped slot)."
+                ),
+                "condition_text": (
+                    "Derived from the structured UnlockConditions (the gate the "
+                    "shipped game applies), not from the description copy."
+                ),
+            },
+            "catalog": {
+                "schema": CATALOG_SCHEMA,
+                "consumer": "game/src/ui/unlock_catalog.gd",
+                "columns": columns_meta,
+                "built_ins": BUILT_IN_TOOLS,
+                "save_ids": {
+                    "tools": sorted(r["save_id"] for r in tool_rows),
+                    "perks": sorted(r["save_id"] for r in perk_rows),
+                    "cosmetics": sorted(
+                        r["save_id"] for r in rows if r["save_category"] == "cosmetics"
+                    ),
+                },
+                "icons": {
+                    "with_asset": len(rows),
+                    "on_disk": icons_on_disk,
+                    "root": "res://assets/ue/Raw/ (mirrors /Game/)",
+                    "note": (
+                        "on_disk is 0 when the extracted texture tree is absent "
+                        "(normalize can run before the Godot asset import)."
+                    ),
+                },
+            },
             "price_provenance": {
                 "kf08": {
                     "frame": "KF08 00:28.50 — Black Market, YOUR TOTAL ASSETS GBP 26,275",
@@ -334,29 +619,50 @@ def main() -> int:
                         }
                         for tag in KF08_PRICES
                     ],
+                    "state_explains_lock": (
+                        "The four visible prices are exactly the Spider cosmetic "
+                        "rows whose structured level gate is <= 4 (Bob 4, Mustache "
+                        "3, Full Beard 4, Eyepatch 2); every other row in the frame "
+                        "shows a padlock, so the padlock is the unmet level/contract "
+                        "gate and the price is the purchasable state."
+                    ),
                 },
                 "authored_prices": (
                     "Every row's price is copied from the DataAsset; rows with "
                     "price 0 are free unlocks in the shipped table."
                 ),
                 "port_note": (
-                    "game/src/ui/ledger_ui.gd still carries hard-coded placeholder "
-                    "prices for unverified rows and shows PRICE UNKNOWN for them."
+                    "ledger_ui.gd reads this file through unlock_catalog.gd; the "
+                    "port no longer carries hard-coded show rows or an unknown "
+                    "price state."
                 ),
             },
             "stats": {
                 "entries": len(rows),
                 "by_content_type": dict(sorted(content_types.items())),
                 "by_shop_category": dict(sorted(categories.items())),
+                "by_save_category": dict(sorted(save_categories.items())),
                 "by_unlock_type": dict(sorted(unlock_types.items())),
                 "priced_entries": len(priced),
                 "free_entries": len(free),
                 "free_entries_with_conditions": len(free_with_conditions),
                 "min_price": min(row["price"] for row in rows),
                 "max_price": max(row["price"] for row in rows),
+                "unique_save_ids": len(set(save_ids)),
+                "icons_with_asset": len(rows),
+                "icons_on_disk": icons_on_disk,
+                "condition_copy_mismatches": len(mismatched_copy),
                 "string_keys_used": len(used_pairs),
                 "string_keys_unreferenced": len(bm_unreferenced),
                 "conditions": sum(len(row["unlock"]["conditions"]) for row in rows),
+            },
+            "condition_copy_audit": {
+                "reason": (
+                    "The data asset's structured gate and its description copy "
+                    "disagree on these rows; both are kept and the UI gates on the "
+                    "structured requirement."
+                ),
+                "mismatches": mismatched_copy,
             },
             "string_tables": {
                 table_id.split(".")[-1]: {
@@ -404,6 +710,15 @@ def main() -> int:
             stats["max_price"],
         )
     )
+    print(
+        "  catalog: {} unique save ids, {} icons ({} on disk), {} condition-copy "
+        "mismatches".format(
+            stats["unique_save_ids"],
+            stats["icons_with_asset"],
+            stats["icons_on_disk"],
+            stats["condition_copy_mismatches"],
+        )
+    )
     for tag in KF08_PRICES:
         row = by_tag[tag]
         print(
@@ -411,6 +726,8 @@ def main() -> int:
                 tag, row["display"]["title"]["text"], row["price"]
             )
         )
+    for row in mismatched_copy:
+        print(f"  copy/gate disagreement {row['tag']}: {row['gates']} vs {row['copy']}")
     return 0
 
 

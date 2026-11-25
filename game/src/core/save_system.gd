@@ -37,6 +37,65 @@ const MAX_PLAYER_NAME_CHARS := 48
 ## rewrites exactly that value to blank (guarded by player_name_migrated).
 const CAPTURE_PERSONA_NAME := "Johnny Cipher"
 
+## Unlock-catalog migration (W6U2). The Black Market is data-driven from
+## game/data/generated/gameplay/unlocks.json (see src/ui/unlock_catalog.gd),
+## whose stable save ids are snake_case for tools/perks and the authored outfit
+## tag for cosmetics. Saves written by the old hard-coded ledger stored short
+## UI ids; they are rewritten exactly once and unknown ids are preserved.
+const UNLOCK_IDS_SCHEMA_VERSION := 1
+## Catalog save category -> persisted array. Keep this the only mapping: the
+## catalog test validates every authored row against it.
+const UNLOCK_CATEGORY_KEYS: Dictionary = {
+	"tools": "unlocked_tools",
+	"perks": "unlocked_perks",
+	"cosmetics": "unlocked_cosmetics",
+}
+## Tool ids the gameplay layer uses that predate the catalog ids.
+const LEGACY_TOOL_IDS: Dictionary = {
+	"slithersap": "slither_sap",
+	"fairy": "pickpocket_fairy",
+}
+## Old ledger/Wardrobe cosmetic ids -> authored outfit tags. A short id shared
+## by both thieves (bowler_hat, top_hat, ...) maps to both authored rows: a
+## migration must never take a cosmetic away, so the ambiguous id is granted on
+## both sides instead of guessing which thief the player meant. Fresh saves own
+## only the Spider starter set (KF08 shows the Chameleon rows locked).
+const LEGACY_COSMETIC_TAGS: Dictionary = {
+	"no_hat": ["Outfit.Spider.Head.NoCap"],
+	"bob_hair": ["Outfit.Spider.Head.Hair.Bob"],
+	"bob_hair_eyepatch": ["Outfit.Spider.Head.Hair.Bob.EyepatchA"],
+	"parted_hair": ["Outfit.Chameleon.Head.HairB"],
+	"cap": ["Outfit.Chameleon.Head.CapA"],
+	"bowler_hat": ["Outfit.Spider.Head.BowlerA", "Outfit.Chameleon.Head.BowlerA"],
+	"top_hat": ["Outfit.Spider.Head.TopHatA", "Outfit.Chameleon.Head.TopHatA"],
+	"mustache": ["Outfit.Spider.Head.MustacheA", "Outfit.Chameleon.Head.MustacheA"],
+	"full_beard": ["Outfit.Spider.Head.BeardA", "Outfit.Chameleon.Head.BeardA"],
+	"glasses": ["Outfit.Spider.Head.GlassesA", "Outfit.Chameleon.Head.GlassesA"],
+	"thief_mask": ["Outfit.Spider.Head.ThiefMaskA", "Outfit.Chameleon.Head.ThiefMaskA"],
+	"monocle": ["Outfit.Spider.Head.MonocleA", "Outfit.Chameleon.Head.MonocleA"],
+	"eyepatch": ["Outfit.Spider.Head.EyepatchA", "Outfit.Chameleon.Head.EyepatchA"],
+	"tarantula": ["Outfit.Spider.Body.AltA"],
+	"tarantula_patternb": ["Outfit.Spider.Body.AltA.PatternB"],
+}
+## Cosmetic rows the shipped profile already owned: the three Spider defaults
+## plus the Bowler Hat worn in KF03 and checked in KF08.
+const STARTER_COSMETICS: Array[String] = [
+	"Outfit.Spider.Head.Default",
+	"Outfit.Spider.Body.Default",
+	"Outfit.Spider.CallingCard.Default",
+	"Outfit.Spider.Head.BowlerA",
+]
+## Tools the shipped profile owns (KF08: Zipwire and Smoke Bomb checked). The
+## other catalog tools are gate-locked; blackjack is a built-in, not a row.
+const STARTER_TOOLS: Array[String] = ["zipwire", "smoke_bomb"]
+const STARTER_PERKS: Array[String] = [
+	"novice_difficulty", "guildhall", "old_manor", "spider",
+]
+## The Chameleon is the Contract 3 reward (Thief.Chameleon, £10,000). Any
+## completed contract used to unlock it, which let contract 1 hand over a
+## 10,000-unit disguise; the authored gate is contract order 3.
+const CHAMELEON_CONTRACT_ORDER := 3
+
 ## Personal quest (Spider "The Theban Owl") save schema. The chain itself is
 ## authored in game/data/expansion/personal_spider.json; this module owns only
 ## the persisted per-thief record so it can normalize a hand-edited or corrupt
@@ -178,10 +237,12 @@ func _apply_bus_direct(bus_name: String, bus_vol: float) -> void:
 
 func _default_loadout() -> Dictionary:
 	return {
-		"head": "bowler_hat",
+		"head": "",
 		"body": "",
 		"calling_card": "",
-		"tools": ["blackjack", "smoke_bomb", "zipwire", "slither_sap"],
+		# KF03 slots: 1 Zipwire (signature), 2 Smoke Bomb, 3 empty/swappable,
+		# 4 Vistara Diamond (signature). Active indices are UI state only.
+		"tools": ["zipwire", "smoke_bomb", "", "vistara_diamond"],
 		"perks": [],
 		"active_tool": 0,
 		"active_tool_id": "zipwire",
@@ -202,9 +263,11 @@ func _defaults() -> Dictionary:
 		"xp": 0,
 		"level": 1,
 		"completed_contracts": {},
-		"unlocked_tools": ["blackjack", "slither_sap", "smoke_bomb", "pickpocket_fairy", "zipwire"],
+		"unlocked_tools": ["blackjack", "smoke_bomb", "zipwire"],
 		"unlocked_perks": ["novice_difficulty", "guildhall", "old_manor", "spider"],
-		"unlocked_cosmetics": ["bowler_hat"],
+		"unlocked_cosmetics": STARTER_COSMETICS.duplicate(),
+		"unlock_ids_schema": UNLOCK_IDS_SCHEMA_VERSION,
+		"unlock_ids_migrated": false,
 		"currency": 0,
 		"player_name": DEFAULT_PLAYER_NAME,
 		"player_name_migrated": false,
@@ -361,20 +424,21 @@ func _ensure_defaults() -> void:
 		if tools.has("slithersap") and not tools.has("slither_sap"):
 			tools.append("slither_sap")
 	# Guarantee the two starter tools even if an old save overwrote the list.
-	for starter: String in ["zipwire", "smoke_bomb"]:
+	for starter: String in STARTER_TOOLS:
 		var arr: Array = data["unlocked_tools"] as Array
 		if not arr.has(starter):
 			arr.append(starter)
 	# Guarantee starter perks / cosmetics on old saves.
 	if data.has("unlocked_perks") and data["unlocked_perks"] is Array:
 		var perks: Array = data["unlocked_perks"] as Array
-		for pid: String in ["novice_difficulty", "guildhall", "old_manor", "spider"]:
+		for pid: String in STARTER_PERKS:
 			if not perks.has(pid):
 				perks.append(pid)
 	if data.has("unlocked_cosmetics") and data["unlocked_cosmetics"] is Array:
 		var cosmetics: Array = data["unlocked_cosmetics"] as Array
-		if not cosmetics.has("bowler_hat"):
-			cosmetics.append("bowler_hat")
+		for cid: String in STARTER_COSMETICS:
+			if not cosmetics.has(cid):
+				cosmetics.append(cid)
 	# Normalize every legacy loadout shape into the per-thief canonical dict.
 	var eq_v: Variant = data.get("equipped_loadout", null)
 	if eq_v is Array:
@@ -533,15 +597,105 @@ func _migrate_player_name() -> bool:
 	return true
 
 
+## One-time catalog-id migration. Rewrites only ids the old UI shipped:
+##   * tools:       "slithersap" -> "slither_sap", "fairy" -> "pickpocket_fairy"
+##   * cosmetics:   short ledger ids -> authored outfit tags (see
+##                  LEGACY_COSMETIC_TAGS; shared ids map to both thieves)
+##   * loadout:     a short head/body/card id -> the authored tag for that thief
+## Unknown ids (a newer build's, a hand-edited one) are copied through
+## untouched, list order is preserved, and duplicates collapse to the first
+## occurrence. `unlock_ids_migrated` makes this run exactly once.
+## Returns true when the save should be persisted.
+func _migrate_unlock_ids() -> bool:
+	if bool(data.get("unlock_ids_migrated", false)):
+		return false
+	data["unlocked_tools"] = _migrate_id_list(
+		data.get("unlocked_tools", []), LEGACY_TOOL_IDS, {}
+	)
+	data["unlocked_cosmetics"] = _migrate_id_list(
+		data.get("unlocked_cosmetics", []), {}, LEGACY_COSMETIC_TAGS
+	)
+	var eq_v: Variant = data.get("equipped_loadout", {})
+	if eq_v is Dictionary:
+		var eq: Dictionary = eq_v as Dictionary
+		for thief: String in eq.keys():
+			var entry_v: Variant = eq[thief]
+			if not (entry_v is Dictionary):
+				continue
+			var entry: Dictionary = entry_v as Dictionary
+			for field: String in ["head", "body", "calling_card"]:
+				var current: String = str(entry.get(field, "")).strip_edges()
+				if current == "" or current.contains("."):
+					continue
+				entry[field] = _legacy_cosmetic_tag(current, str(thief), field)
+			# Slot tool ids too, or the Wardrobe cannot resolve a legacy
+			# "slithersap" against the authored catalog and drops the slot.
+			entry["tools"] = _migrate_id_list(
+				entry.get("tools", []), LEGACY_TOOL_IDS, {}
+			)
+			eq[thief] = entry
+		data["equipped_loadout"] = eq
+	data["unlock_ids_schema"] = UNLOCK_IDS_SCHEMA_VERSION
+	data["unlock_ids_migrated"] = true
+	return true
+
+
+## Map one legacy id through `direct` (id -> id) then through `multi`
+## (id -> Array of ids); anything unknown is kept verbatim.
+func _migrate_id_list(value: Variant, direct: Dictionary, multi: Dictionary) -> Array:
+	var out: Array = []
+	if value is Array:
+		for id_v: Variant in value as Array:
+			if not (id_v is String):
+				continue
+			var raw: String = str(id_v).strip_edges()
+			if raw == "":
+				continue
+			if direct.has(raw):
+				raw = str(direct[raw])
+			if multi.has(raw):
+				for mapped_v: Variant in multi[raw] as Array:
+					var mapped: String = str(mapped_v)
+					if mapped != "" and not out.has(mapped):
+						out.append(mapped)
+				continue
+			if not out.has(raw):
+				out.append(raw)
+	return out
+
+
+## Thief-scoped tag for a legacy loadout field. A shared short id resolves to
+## that thief's authored row (the loadout always names its thief), falling back
+## to the Spider row when the thief has no such cosmetic.
+func _legacy_cosmetic_tag(short_id: String, thief: String, field: String) -> String:
+	var candidates: Array = []
+	if LEGACY_COSMETIC_TAGS.has(short_id):
+		candidates = (LEGACY_COSMETIC_TAGS[short_id] as Array).duplicate()
+	if candidates.is_empty():
+		return short_id
+	var slot: String = "Head"
+	if field == "body":
+		slot = "Body"
+	elif field == "calling_card":
+		slot = "CallingCard"
+	for mapped_v: Variant in candidates:
+		var mapped: String = str(mapped_v)
+		if mapped.begins_with("Outfit." + thief.capitalize() + "." + slot + "."):
+			return mapped
+	return str(candidates[0])
+
+
 func load_save() -> void:
 	if not FileAccess.file_exists(SAVE_PATH):
 		_ensure_defaults()
 		_sync_level_from_xp()
+		_migrate_unlock_ids()
 		return
 	var f: FileAccess = FileAccess.open(SAVE_PATH, FileAccess.READ)
 	if f == null:
 		_ensure_defaults()
 		_sync_level_from_xp()
+		_migrate_unlock_ids()
 		return
 	var parsed: Variant = JSON.parse_string(f.get_as_text())
 	if parsed is Dictionary:
@@ -549,12 +703,14 @@ func load_save() -> void:
 	_ensure_defaults()
 	_sync_level_from_xp()
 	# Persist the one-time migrations (settings schema v2 FOV, capture persona
-	# -> blank, personal-quest record) so the next load sees their flags and
-	# never re-runs them.
+	# -> blank, personal-quest record, catalog save ids) so the next load sees
+	# their flags and never re-runs them.
 	var migrated: bool = _migrate_settings_schema()
 	if _migrate_player_name():
 		migrated = true
 	if _migrate_personal_quest():
+		migrated = true
+	if _migrate_unlock_ids():
 		migrated = true
 	if migrated:
 		write_save()
@@ -640,46 +796,97 @@ func add_currency(amount: int) -> void:
 	write_save()
 
 
-func _unlock_list_for(category: String) -> Array:
+## Persisted array for a catalog category ("tools" / "perks" / "cosmetics"),
+## with the historical aliases the UI and tests used. Returns [] for an unknown
+## category.
+func unlock_list_for(category: String) -> Array:
 	var key: String = category.strip_edges().to_lower()
-	if key in ["tools", "tool", "unlocked_tools"]:
-		return data["unlocked_tools"] as Array
-	if key in ["perks", "perk", "guild_perks", "unlocked_perks"]:
-		return data["unlocked_perks"] as Array
-	if key in ["cosmetics", "cosmetic", "unlocked_cosmetics"]:
-		return data["unlocked_cosmetics"] as Array
-	return []
+	if key in ["tool", "unlocked_tools"]:
+		key = "tools"
+	elif key in ["perk", "guild_perks", "unlocked_perks"]:
+		key = "perks"
+	elif key in ["cosmetic", "unlocked_cosmetics"]:
+		key = "cosmetics"
+	var list_key: String = str(UNLOCK_CATEGORY_KEYS.get(key, ""))
+	if list_key == "":
+		return []
+	if not (data.get(list_key) is Array):
+		data[list_key] = []
+	return data[list_key] as Array
+
+
+func _unlock_list_for(category: String) -> Array:
+	return unlock_list_for(category)
 
 
 func is_unlocked(category: String, item_id: String) -> bool:
 	var key: String = category.strip_edges().to_lower()
-	if key in ["tools", "tool", "unlocked_tools"]:
-		return (data["unlocked_tools"] as Array).has(item_id)
-	if key in ["perks", "perk", "guild_perks", "unlocked_perks"]:
-		return (data["unlocked_perks"] as Array).has(item_id)
-	if key in ["cosmetics", "cosmetic", "unlocked_cosmetics"]:
-		return (data["unlocked_cosmetics"] as Array).has(item_id)
-	return false
+	if key in ["tool", "unlocked_tools"]:
+		key = "tools"
+	elif key in ["perk", "guild_perks", "unlocked_perks"]:
+		key = "perks"
+	elif key in ["cosmetic", "unlocked_cosmetics"]:
+		key = "cosmetics"
+	if not UNLOCK_CATEGORY_KEYS.has(key):
+		return false
+	return unlock_list_for(key).has(item_id.strip_edges())
 
 
+## Purchase a Black Market row by its stable catalog save id. `cost` must be
+## the authored price the catalog read from unlocks.json: SaveSystem never
+## derives or repairs a price. Fails closed for an unknown category, a blank
+## id, an owned row, a negative/zero-cost mismatch caller or short funds.
 func purchase_item(category: String, item_id: String, cost: int) -> bool:
 	# C1: validate the category BEFORE deducting — the old order kept the
 	# deduction in memory for unknown categories (no write_save, but the
 	# autoload balance was already reduced until reload).
-	var lst: Array = _unlock_list_for(category)
-	if lst.is_empty():
+	var key: String = category.strip_edges().to_lower()
+	if key in ["tool", "unlocked_tools"]:
+		key = "tools"
+	elif key in ["perk", "guild_perks", "unlocked_perks"]:
+		key = "perks"
+	elif key in ["cosmetic", "unlocked_cosmetics"]:
+		key = "cosmetics"
+	if not UNLOCK_CATEGORY_KEYS.has(key):
 		return false
 	var clean_id: String = item_id.strip_edges()
-	if clean_id == "":
+	if clean_id == "" or cost < 0:
 		return false
-	if is_unlocked(category, clean_id):
+	if is_unlocked(key, clean_id):
 		return false
 	if int(data.get("currency", 0)) < cost:
 		return false
+	var lst: Array = unlock_list_for(key)
 	data["currency"] = int(data.get("currency", 0)) - cost
-	lst.append(clean_id)
+	if not lst.has(clean_id):
+		lst.append(clean_id)
 	write_save()
 	return true
+
+
+## Named wrapper for the catalog call site: the id is the save id.
+func purchase_by_save_id(category: String, save_id: String, cost: int) -> bool:
+	return purchase_item(category, save_id, cost)
+
+
+## Chameleon gate, shared by the Wardrobe and any other consumer: the authored
+## Thief.Chameleon row (Contract 3) is the only contract that unlocks the
+## disguise. Legacy explicit flags are honoured for old saves; completing *any*
+## contract is not a unlock condition.
+func is_thief_unlocked(thief_id: String) -> bool:
+	var thief: String = thief_id.strip_edges().to_lower()
+	if thief == "" or thief == "spider":
+		return true
+	if is_unlocked("perks", thief):
+		return true
+	var completed_v: Variant = data.get("completed_contracts", {})
+	if completed_v is Dictionary:
+		if (completed_v as Dictionary).has(str(CHAMELEON_CONTRACT_ORDER)):
+			return true
+	var unlocked_v: Variant = data.get("unlocked_thieves", [])
+	if unlocked_v is Array and (unlocked_v as Array).has(thief):
+		return true
+	return bool(data.get("chameleon_unlocked", false))
 
 
 func get_level_progress() -> Dictionary:

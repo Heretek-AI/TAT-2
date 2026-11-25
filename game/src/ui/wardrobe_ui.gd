@@ -1,11 +1,17 @@
 extends CanvasLayer
 class_name WardrobeUI
 ## Wardrobe / Bureau Character Customizer for the Thieves' Den hub.
-## Workstream 3: 3D full-body thief preview (SubViewport turntable with warm
-## wardrobe lighting), Q/E thief switcher (Spider unlocked / Chameleon locked
-## unless unlocked in SaveSystem), Edit Loadout 4-slot tool bar with large tool
-## preview card, and Head / Body / Calling Card slots parsed from
-## DT_CharacterOutfitsMetadata.json. Persists to GameState + SaveSystem.
+## Workstream 3 + W6U2: 3D full-body thief preview (SubViewport turntable with
+## warm wardrobe lighting), Q/E thief switcher (Chameleon locked until the
+## authored Thief.Chameleon / Contract 3 gate), a three-column KF03/KF04 layout
+## (loadout + tool card | 3D thief | Head / Body / Calling Card), and loadout
+## slots sourced from the authored Black Market catalog:
+##   slot 1 + slot 4 hold the thief's signature tools (grey padlock, KF03),
+##   slots 2-3 are swappable; selecting one reveals the KF04 candidate row of
+##   the remaining authored tools with pink padlocks when not owned.
+## Head / Body / Calling Card slot cards show the authored reward icon and
+## cycle the DT_CharacterOutfitsMetadata rows. There is no APPLY button: BACK
+## (bottom-right, KF03) persists and closes. Persists to GameState + SaveSystem.
 ##
 ## All mesh paths below were verified to exist on disk. No inferred types are
 ## used on Variant / Dictionary values anywhere in this file.
@@ -13,10 +19,12 @@ class_name WardrobeUI
 signal closed()
 
 const ThemeScript: GDScript = preload("res://src/ui/art_nouveau_theme.gd")
+const CatalogScript: GDScript = preload("res://src/ui/unlock_catalog.gd")
 const LevelLoaderScript: GDScript = preload("res://src/core/level_loader.gd")
 const GuardAnimLibScript: GDScript = preload("res://src/core/animation_library.gd")
 
 const OUTFITS_JSON_PATH: String = "res://data/generated/tables/Character/Player/DT_CharacterOutfitsMetadata.json"
+const LOCK_ICON_PATH: String = "res://assets/ue/Raw/Art/UI/Icons/T_Icon_Locked.png"
 
 const BODY_BASE_PATH: String = "res://assets/ue/Content/Art/Animation/ThiefNisha/Skin/Base/SK_ThiefNisha__Body.glb"
 const BODY_TARANTULA_PATH: String = "res://assets/ue/Content/Art/Animation/ThiefNisha/Skin/Base/Dyn/SK_ThiefNisha_Dyn__Body_Tarantula.glb"
@@ -35,10 +43,28 @@ const CARD_CHAMELEON_GOLD: String = "res://assets/ue/Content/Art/Gameplay/Callin
 const CARD_CHAMELEON_MAGIC: String = "res://assets/ue/Content/Art/Gameplay/CallingCards/Chameleon/SM_CallingCard_Chameleon_Magic.glb"
 const CARD_CHAMELEON_SHIP: String = "res://assets/ue/Content/Art/Gameplay/CallingCards/Ship/SM_CallingCard_Ship_Chameleon.glb"
 
-const TOOL_ZIPWIRE_MESH: String = "res://assets/ue/Content/Art/Gameplay/Gear/Zipwire/SM_Zipwire.glb"
-const TOOL_SMOKE_MESH: String = "res://assets/ue/Content/Art/Gameplay/Gear/SmokeBomb/SK_SmokeBomb.glb"
-const TOOL_BLACKJACK_MESH: String = "res://assets/ue/Content/Art/Gameplay/Gear/BlackJack/SM_Blackjack.glb"
-const TOOL_SLITHERSAP_MESH: String = "res://assets/ue/Content/Art/Gameplay/Gear/Slithersap/SK_SlimeBomb.glb"
+## Catalog save id -> authored gear mesh (all verified on disk). Every tool the
+## Black Market sells has a 3D preview; blackjack is the built-in.
+const TOOL_MESHES: Dictionary = {
+	"zipwire": "res://assets/ue/Content/Art/Gameplay/Gear/Zipwire/SM_Zipwire.glb",
+	"smoke_bomb": "res://assets/ue/Content/Art/Gameplay/Gear/SmokeBomb/SK_SmokeBomb.glb",
+	"pickpocket_fairy": "res://assets/ue/Content/Art/Gameplay/Gear/PickpocketFairy/SK_PickpocketFairy.glb",
+	"insult_fairy": "res://assets/ue/Content/Art/Gameplay/Gear/InsultFairy/SK_InsultFairy.glb",
+	"slither_sap": "res://assets/ue/Content/Art/Gameplay/Gear/Slithersap/SK_SlimeBomb.glb",
+	"glamour": "res://assets/ue/Content/Art/Gameplay/Gear/Disguise/SK_DisguiseMask.glb",
+	"vistara_diamond": "res://assets/ue/Content/Art/Gameplay/Gear/VistaraDiamond/SM_VistaraDiamond_Gem.glb",
+	"blackjack": "res://assets/ue/Content/Art/Gameplay/Gear/BlackJack/SM_Blackjack.glb",
+}
+
+## KF03: slot 1 and slot 4 are the thief's signature tools (grey padlock,
+## "Signature Tools cannot be swapped out"). The other two slots swap from the
+## KF04 candidate row. Spider's disguise counterpart is the Chameleon's Glamour.
+const SIGNATURES_BY_THIEF: Dictionary = {
+	"spider": ["zipwire", "vistara_diamond"],
+	"chameleon": ["glamour", "vistara_diamond"],
+}
+const SIGNATURE_SLOTS: Array[int] = [0, 3]
+const SLOT_COUNT: int = 4
 
 ## KF03/KF04 cite: pink/magenta LOCKED badges (thief portrait overlay, slot-3
 ## expanded-row tool locks). P2-1 token pass: routed to ThemeScript.PINK_LOCKED;
@@ -48,14 +74,12 @@ const LOCKED_PINK: Color = Color(1.0, 0.38, 0.72)
 const THIEF_IDS: Array[String] = ["spider", "chameleon"]
 const THIEF_LABELS: Array[String] = ["The Spider", "The Chameleon"]
 
-const TOOLS: Array = [
-	{"id": "zipwire", "name": "Zipwire", "mesh": TOOL_ZIPWIRE_MESH, "desc": "A spring-loaded grapple gun that launches out, connects to a surface and then quickly recoils its cable, yanking both the gun and its wielder along for the ride."},
-	{"id": "smoke_bomb", "name": "Smoke Bomb", "mesh": TOOL_SMOKE_MESH, "desc": "Burst of cover. Break line of sight and vanish mid-hunt."},
-	{"id": "blackjack", "name": "Blackjack", "mesh": TOOL_BLACKJACK_MESH, "desc": "Quiet takedown tool. Drop an isolated guard up close."},
-	{"id": "slithersap", "name": "Slithersap", "mesh": TOOL_SLITHERSAP_MESH, "desc": "Sticky slowing agent. Gums up patrols and devices."},
-]
-
 var _thief_id: String = "spider"
+var _catalog: RefCounted = null
+var _tools: Array[Dictionary] = []
+var _slots: Array[String] = []
+var _slots_by_thief: Dictionary = {}
+var _slot_index: int = 0
 var _rows: Dictionary = {}
 var _body_keys: Array[String] = []
 var _head_keys: Array[String] = []
@@ -63,7 +87,6 @@ var _card_keys: Array[String] = []
 var _body: String = ""
 var _head: String = ""
 var _card: String = ""
-var _active_tool: int = 0
 
 var _yaw: float = 0.6
 var _pitch: float = 0.0
@@ -78,13 +101,17 @@ var _spider_frame_btn: Button
 var _cham_frame_btn: Button
 var _spider_lock_lbl: Label
 var _cham_lock_lbl: Label
-var _slot_lock_lbls: Array[Label] = []
+var _slot_btns: Array[Button] = []
+var _slot_icons: Array[TextureRect] = []
+var _slot_locks: Array[TextureRect] = []
 var _cell_btns: Array[Button] = []
-var _cell_lock_lbls: Array[Label] = []
+var _cell_locks: Array[TextureRect] = []
+var _cells_row: HBoxContainer
+var _slot_row: HBoxContainer
 var _desc_lbl: Label
-var _tool_btns: Array[Button] = []
 var _tool_name_lbl: Label
 var _tool_desc_lbl: Label
+var _tool_cond_lbl: Label
 
 var _turntable: Node3D
 var _preview_cam: Camera3D
@@ -100,6 +127,8 @@ func _ready() -> void:
 	_thief_id = str(GameState.thief_id) if str(GameState.thief_id) != "" else "spider"
 	if not THIEF_IDS.has(_thief_id):
 		_thief_id = "spider"
+	_catalog = CatalogScript.new()
+	_build_tools()
 	_rows = _load_outfit_rows()
 	_build_ui()
 	if AudioManager != null and AudioManager.has_method("wire_hover_sfx"):
@@ -122,6 +151,120 @@ func close_customizer() -> void:
 	if AudioManager != null and AudioManager.has_method("play_ui"):
 		AudioManager.play_ui("back")
 	_apply_and_close(true)
+
+
+## Build the tool list the Wardrobe offers: the authored Black Market tools
+## (catalog order) plus the built-in blackjack, each with its authored title,
+## description, reward icon, condition text and gear mesh. A missing catalog
+## still yields the built-in so the panel renders; ownership then fails closed.
+func _build_tools() -> void:
+	_tools.clear()
+	if _catalog != null and _catalog.is_available():
+		for entry: Dictionary in _catalog.entries_for_column("tools"):
+			var save_id: String = CatalogScript.save_id_of(entry)
+			_tools.append({
+				"id": save_id,
+				"name": CatalogScript.title_of(entry),
+				"desc": CatalogScript.description_of(entry),
+				"icon": CatalogScript.icon_res_of(entry),
+				"mesh": str(TOOL_MESHES.get(save_id, "")),
+				"condition": CatalogScript.condition_text(entry),
+				"entry": entry,
+				"built_in": false,
+			})
+	if _catalog != null:
+		for built: Dictionary in _catalog.built_in_tools():
+			var built_id: String = str(built.get("save_id", ""))
+			if built_id == "" or _tool(built_id).size() > 0:
+				continue
+			_tools.append({
+				"id": built_id,
+				"name": str(built.get("title", built_id.capitalize())),
+				"desc": str(built.get("reason", "")),
+				"icon": "",
+				"mesh": str(TOOL_MESHES.get(built_id, "")),
+				"condition": "",
+				"entry": {},
+				"built_in": true,
+			})
+
+
+func _tool(save_id: String) -> Dictionary:
+	for tool: Dictionary in _tools:
+		if str(tool.get("id", "")) == save_id:
+			return tool
+	return {}
+
+
+func _signatures() -> Array[String]:
+	var out: Array[String] = []
+	var raw: Variant = SIGNATURES_BY_THIEF.get(_thief_id, [])
+	if raw is Array:
+		for id_v: Variant in raw as Array:
+			out.append(str(id_v))
+	return out
+
+
+func _default_slots() -> Array[String]:
+	var sigs: Array[String] = _signatures()
+	var out: Array[String] = ["", "", "", ""]
+	if sigs.size() >= 1:
+		out[0] = sigs[0]
+	if sigs.size() >= 2:
+		out[3] = sigs[sigs.size() - 1]
+	out[1] = "smoke_bomb"
+	return out
+
+
+func _is_signature_slot(idx: int) -> bool:
+	return SIGNATURE_SLOTS.has(idx)
+
+
+func _is_tool_owned(tool: Dictionary) -> bool:
+	if tool.is_empty():
+		return false
+	if bool(tool.get("built_in", false)):
+		return true
+	var entry_v: Variant = tool.get("entry", {})
+	if not (entry_v is Dictionary):
+		return false
+	var entry: Dictionary = entry_v as Dictionary
+	if entry.is_empty():
+		return false
+	if _catalog == null or not _catalog.is_available():
+		return false
+	return _catalog.state_of(entry) == CatalogScript.STATE_PURCHASED
+
+
+## Every thief's signature tools. Glamour is the Chameleon's disguise and the
+## Vistara Diamond is shared, so neither belongs in the Spider's swap row.
+func _all_signature_ids() -> Array[String]:
+	var out: Array[String] = []
+	for thief_v: Variant in SIGNATURES_BY_THIEF.keys():
+		var list_v: Variant = SIGNATURES_BY_THIEF[thief_v]
+		if not (list_v is Array):
+			continue
+		for id_v: Variant in list_v as Array:
+			var id: String = str(id_v)
+			if id != "" and not out.has(id):
+				out.append(id)
+	return out
+
+
+## Candidate tools: the authored tools that are nobody's signature and are not
+## the built-in blackjack, in catalog order. Spider gets exactly the four KF04
+## tiles (Smoke Bomb, Pickpocket Fairy, Insult Fairy, Slither Sap); the
+## Chameleon gets the same four with Glamour as its own signature.
+func _candidate_tools() -> Array[Dictionary]:
+	var sigs: Array[String] = _all_signature_ids()
+	var out: Array[Dictionary] = []
+	for tool: Dictionary in _tools:
+		if bool(tool.get("built_in", false)):
+			continue
+		if sigs.has(str(tool.get("id", ""))):
+			continue
+		out.append(tool)
+	return out
 
 
 func _process(delta: float) -> void:
@@ -158,7 +301,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			_cycle_thief(1)
 			get_viewport().set_input_as_handled()
 		elif kev.keycode >= KEY_1 and kev.keycode <= KEY_4:
-			_on_tool_selected(int(kev.keycode - KEY_1))
+			_on_slot_pressed(int(kev.keycode - KEY_1))
 			get_viewport().set_input_as_handled()
 
 
@@ -193,13 +336,21 @@ func _build_ui() -> void:
 		ward_hdr.add_theme_font_override("font", _serif)
 	vb.add_child(ward_hdr)
 	vb.add_child(_build_top_bar())
+	# True KF03/KF04 three columns: loadout + tool card (fixed), the tall 3D
+	# thief stage (expands), and the Head/Body/Calling Card stack (fixed).
 	var main: HBoxContainer = HBoxContainer.new()
 	main.add_theme_constant_override("separation", 12)
 	main.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vb.add_child(main)
-	main.add_child(_build_left_panel())
-	main.add_child(_build_preview_panel())
-	main.add_child(_build_right_panel())
+	var left_col: VBoxContainer = _build_left_panel()
+	left_col.size_flags_stretch_ratio = 1.0
+	main.add_child(left_col)
+	var center_col: VBoxContainer = _build_preview_panel()
+	center_col.size_flags_stretch_ratio = 1.45
+	main.add_child(center_col)
+	var right_col: PanelContainer = _build_right_panel()
+	right_col.size_flags_stretch_ratio = 0.95
+	main.add_child(right_col)
 	vb.add_child(_build_bottom_bar())
 
 
@@ -306,8 +457,9 @@ func _on_portrait_pressed(thief: String) -> void:
 	if AudioManager != null and AudioManager.has_method("play_ui"):
 		AudioManager.play_ui("click")
 	if not _is_thief_unlocked(thief):
-		_set_hint("The Chameleon is locked. Finish a contract to earn this disguise.")
+		_set_hint("The Chameleon is locked. Unlock it in the Black Market (£10,000, Contract 3).")
 		return
+	_stash_slots()
 	_thief_id = thief
 	_set_hint("")
 	_refresh_thief_ui()
@@ -326,46 +478,107 @@ func _build_bottom_bar() -> HBoxContainer:
 	return hb
 
 
-## KF03 (slot row: numbered squares + grey locks) / KF04 (candidate row:
-## full names + pink locks) cite. The two rows are intentionally different
-## shapes so the numbered equipped slots never read as a duplicate list.
-func _add_tool_slot(parent: Container, idx: int, is_slot: bool, lock_color: Color, btns: Array[Button], locks: Array[Label]) -> void:
-	var entry: Dictionary = TOOLS[idx] as Dictionary
-	var cell: VBoxContainer = VBoxContainer.new()
-	cell.custom_minimum_size = Vector2(84, 0)
-	cell.add_theme_constant_override("separation", 2)
-	cell.alignment = BoxContainer.ALIGNMENT_CENTER
+## KF03 slot tile: authored tool icon, a white number keycap at top-left and a
+## padlock at bottom-left (grey for a signature tool, pink for an unowned one).
+func _add_slot_cell(parent: Container, idx: int) -> void:
+	var cell: Control = Control.new()
+	cell.custom_minimum_size = Vector2(78, 78)
+	cell.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	parent.add_child(cell)
 	var b: Button = Button.new()
+	b.set_anchors_preset(Control.PRESET_FULL_RECT)
 	b.toggle_mode = true
-	if is_slot:
-		b.text = str(idx + 1)
-		b.custom_minimum_size = Vector2(80, 66)
-		b.add_theme_font_size_override("font_size", 30)
-	else:
-		b.text = str(entry.get("name", "?"))
-		b.custom_minimum_size = Vector2(84, 32)
-		b.add_theme_font_size_override("font_size", 12)
-	ThemeScript.style_teal_tab(b, idx == _active_tool)
-	b.pressed.connect(_on_tool_selected.bind(idx))
+	b.text = ""
+	b.custom_minimum_size = Vector2(78, 78)
+	b.expand_icon = true
+	b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ThemeScript.style_teal_tab(b, idx == _slot_index)
+	b.pressed.connect(_on_slot_pressed.bind(idx))
 	cell.add_child(b)
-	btns.append(b)
-	if is_slot:
-		var nm: Label = Label.new()
-		nm.text = str(entry.get("name", "?"))
-		nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		nm.add_theme_font_size_override("font_size", 10)
-		nm.add_theme_color_override("font_color", ThemeScript.TEAL_MUTED)
-		nm.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		cell.add_child(nm)
-	var lock_lbl: Label = Label.new()
-	lock_lbl.text = "LOCKED"
-	lock_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	lock_lbl.add_theme_font_size_override("font_size", 11)
-	lock_lbl.add_theme_color_override("font_color", lock_color)
-	lock_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	cell.add_child(lock_lbl)
-	locks.append(lock_lbl)
+	_slot_btns.append(b)
+	var icon: TextureRect = TextureRect.new()
+	icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+	icon.offset_left = 14.0
+	icon.offset_top = 12.0
+	icon.offset_right = -14.0
+	icon.offset_bottom = -12.0
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cell.add_child(icon)
+	_slot_icons.append(icon)
+	var num: PanelContainer = ThemeScript.white_keycap(str(idx + 1), 11)
+	num.custom_minimum_size = Vector2(18, 18)
+	num.position = Vector2(2, 2)
+	num.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cell.add_child(num)
+	var lock: TextureRect = _lock_badge()
+	lock.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	lock.offset_left = 3.0
+	lock.offset_top = -21.0
+	lock.offset_right = 21.0
+	lock.offset_bottom = -3.0
+	cell.add_child(lock)
+	_slot_locks.append(lock)
+
+
+## KF04 candidate tile: authored tool icon in a framed square with the pink
+## padlock at bottom-right (the frame shows Smoke Bomb unlocked, the rest
+## locked).
+func _add_candidate_cell(parent: Container, tool: Dictionary) -> void:
+	var cell: Control = Control.new()
+	cell.custom_minimum_size = Vector2(78, 62)
+	cell.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	parent.add_child(cell)
+	var b: Button = Button.new()
+	b.set_anchors_preset(Control.PRESET_FULL_RECT)
+	b.toggle_mode = true
+	b.text = ""
+	b.custom_minimum_size = Vector2(78, 62)
+	b.expand_icon = true
+	b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ThemeScript.style_teal_tab(b, false)
+	var save_id: String = str(tool.get("id", ""))
+	b.pressed.connect(_on_candidate_pressed.bind(save_id))
+	b.tooltip_text = str(tool.get("name", ""))
+	cell.add_child(b)
+	_cell_btns.append(b)
+	var icon: TextureRect = TextureRect.new()
+	icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+	icon.offset_left = 12.0
+	icon.offset_top = 8.0
+	icon.offset_right = -12.0
+	icon.offset_bottom = -8.0
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cell.add_child(icon)
+	var tool_icon: String = str(tool.get("icon", ""))
+	if tool_icon != "" and ResourceLoader.exists(tool_icon):
+		var res: Resource = ResourceLoader.load(tool_icon)
+		if res is Texture2D:
+			icon.texture = res as Texture2D
+	var lock: TextureRect = _lock_badge()
+	lock.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	lock.offset_left = -23.0
+	lock.offset_top = -23.0
+	lock.offset_right = -5.0
+	lock.offset_bottom = -5.0
+	cell.add_child(lock)
+	_cell_locks.append(lock)
+
+
+func _lock_badge() -> TextureRect:
+	var lock: TextureRect = TextureRect.new()
+	if ResourceLoader.exists(LOCK_ICON_PATH):
+		var res: Resource = ResourceLoader.load(LOCK_ICON_PATH)
+		if res is Texture2D:
+			lock.texture = res as Texture2D
+	lock.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	lock.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	lock.modulate = ThemeScript.PINK_LOCKED
+	lock.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return lock
 
 
 func _small_header(text: String, color: Color) -> Label:
@@ -381,16 +594,18 @@ func _small_header(text: String, color: Color) -> Label:
 
 
 ## KF03: loadout is the left column (numbers 1-4, candidate row below, tool
-## detail card under that); the 3D preview is the tall centre column.
+## detail card under that); the 3D preview is the tall centre column and the
+## Head/Body/Card cards are the right column (a true three-column layout).
 func _build_left_panel() -> VBoxContainer:
 	var serif: Font = ThemeScript.font_serif()
 	var sans: Font = ThemeScript.font_sans()
 	var left: VBoxContainer = VBoxContainer.new()
-	left.custom_minimum_size = Vector2(380, 0)
+	left.custom_minimum_size = Vector2(392, 0)
+	left.size_flags_horizontal = Control.SIZE_FILL
 	left.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	left.add_theme_constant_override("separation", 6)
 	var load_hdr: Label = Label.new()
-	load_hdr.text = "EDIT LOADOUT"
+	load_hdr.text = "Edit Loadout"
 	load_hdr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	load_hdr.add_theme_font_size_override("font_size", 18)
 	load_hdr.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
@@ -399,23 +614,23 @@ func _build_left_panel() -> VBoxContainer:
 	left.add_child(load_hdr)
 	left.add_child(ThemeScript.teal_divider())
 	left.add_child(_small_header("LOADOUT SLOTS", ThemeScript.TEAL_ACCENT))
-	# KF03: numbered loadout slots 1-4 (the equipped tool takes the slot).
+	# KF03: numbered loadout slots 1-4; slot 1 and 4 are signature tools.
 	var toolbar: HBoxContainer = HBoxContainer.new()
 	toolbar.add_theme_constant_override("separation", 6)
+	toolbar.alignment = BoxContainer.ALIGNMENT_CENTER
 	left.add_child(toolbar)
-	_tool_btns.clear()
-	_slot_lock_lbls.clear()
-	for i: int in range(TOOLS.size()):
-		_add_tool_slot(toolbar, i, true, ThemeScript.TEAL_MUTED, _tool_btns, _slot_lock_lbls)
-	left.add_child(_small_header("CANDIDATES", ThemeScript.TEAL_MUTED))
-	# KF04: expanded candidate row with full tool names + pink locks.
-	var expanded: HBoxContainer = HBoxContainer.new()
-	expanded.add_theme_constant_override("separation", 6)
-	left.add_child(expanded)
-	_cell_btns.clear()
-	_cell_lock_lbls.clear()
-	for i: int in range(TOOLS.size()):
-		_add_tool_slot(expanded, i, false, ThemeScript.PINK_LOCKED, _cell_btns, _cell_lock_lbls)
+	_slot_row = toolbar
+	_slot_btns.clear()
+	_slot_icons.clear()
+	_slot_locks.clear()
+	for i: int in range(SLOT_COUNT):
+		_add_slot_cell(toolbar, i)
+	# KF04: the candidate row only appears for a swappable slot.
+	_cells_row = HBoxContainer.new()
+	_cells_row.add_theme_constant_override("separation", 6)
+	_cells_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	_cells_row.visible = false
+	left.add_child(_cells_row)
 	# KF03 cite: hint below the loadout slots (verified on-screen text).
 	var load_hint: Label = Label.new()
 	load_hint.text = "Select a loadout slot to equip or swap out tools"
@@ -447,15 +662,22 @@ func _build_left_panel() -> VBoxContainer:
 	_setup_tool_world(tool_sv)
 	var tool_vb: VBoxContainer = VBoxContainer.new()
 	tool_vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	tool_vb.add_theme_constant_override("separation", 4)
+	tool_vb.add_theme_constant_override("separation", 3)
 	card_hb.add_child(tool_vb)
 	_tool_name_lbl = Label.new()
-	_tool_name_lbl.text = "Zipwire"
+	_tool_name_lbl.text = ""
 	_tool_name_lbl.add_theme_font_size_override("font_size", 18)
 	_tool_name_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
 	if serif != null:
 		_tool_name_lbl.add_theme_font_override("font", serif)
 	tool_vb.add_child(_tool_name_lbl)
+	_tool_cond_lbl = Label.new()
+	_tool_cond_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_tool_cond_lbl.add_theme_font_size_override("font_size", 11)
+	_tool_cond_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_ACCENT)
+	if sans != null:
+		_tool_cond_lbl.add_theme_font_override("font", sans)
+	tool_vb.add_child(_tool_cond_lbl)
 	_tool_desc_lbl = Label.new()
 	_tool_desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_tool_desc_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -520,41 +742,34 @@ func _build_right_panel() -> PanelContainer:
 	right.add_child(cust_hdr)
 	right.add_child(ThemeScript.teal_divider())
 	var head_hdr: Label = Label.new()
-	head_hdr.text = "HEAD"
-	head_hdr.add_theme_color_override("font_color", ThemeScript.TEAL_ACCENT)
+	head_hdr.text = "Head"
+	head_hdr.add_theme_font_size_override("font_size", 17)
+	head_hdr.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
+	if serif != null:
+		head_hdr.add_theme_font_override("font", serif)
 	right.add_child(head_hdr)
-	# KF03/KF04 cite: framed thumbnail portrait card for the equipped Head.
-	# No thumbnail bytes in scope (standing HARD_LIMIT 5.9): name + DT
-	# level-tag card; click cycles outfits. Replaces the OptionButton dropdown.
-	_head_card = Button.new()
-	_head_card.custom_minimum_size = Vector2(0, 40)
-	_head_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	ThemeScript.style_teal_tab(_head_card, true)
-	_head_card.pressed.connect(_on_head_card_pressed)
+	# KF03/KF04 cite: framed thumbnail card for the equipped Head. The art is
+	# the authored Black Market reward icon for that outfit row (the same
+	# texture the shipped table draws); click cycles the DT outfit rows.
+	_head_card = _build_outfit_card(_on_head_card_pressed)
 	right.add_child(_head_card)
 	var body_hdr: Label = Label.new()
-	body_hdr.text = "BODY"
-	body_hdr.add_theme_color_override("font_color", ThemeScript.TEAL_ACCENT)
+	body_hdr.text = "Body"
+	body_hdr.add_theme_font_size_override("font_size", 17)
+	body_hdr.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
+	if serif != null:
+		body_hdr.add_theme_font_override("font", serif)
 	right.add_child(body_hdr)
-	# KF03/KF04 cite: framed thumbnail portrait card for the equipped Body
-	# (standing HARD_LIMIT 5.9, as HEAD).
-	_body_card = Button.new()
-	_body_card.custom_minimum_size = Vector2(0, 40)
-	_body_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	ThemeScript.style_teal_tab(_body_card, true)
-	_body_card.pressed.connect(_on_body_card_pressed)
+	_body_card = _build_outfit_card(_on_body_card_pressed)
 	right.add_child(_body_card)
 	var card_hdr: Label = Label.new()
-	card_hdr.text = "CALLING CARD"
-	card_hdr.add_theme_color_override("font_color", ThemeScript.TEAL_ACCENT)
+	card_hdr.text = "Calling Card"
+	card_hdr.add_theme_font_size_override("font_size", 17)
+	card_hdr.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
+	if serif != null:
+		card_hdr.add_theme_font_override("font", serif)
 	right.add_child(card_hdr)
-	# KF03/KF04 cite: framed thumbnail portrait card for the Calling Card
-	# (standing HARD_LIMIT 5.9, as HEAD).
-	_card_card = Button.new()
-	_card_card.custom_minimum_size = Vector2(0, 40)
-	_card_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	ThemeScript.style_teal_tab(_card_card, true)
-	_card_card.pressed.connect(_on_card_card_pressed)
+	_card_card = _build_outfit_card(_on_card_card_pressed)
 	right.add_child(_card_card)
 	_desc_lbl = Label.new()
 	_desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -571,13 +786,24 @@ func _build_right_panel() -> PanelContainer:
 	_hint_lbl.add_theme_font_size_override("font_size", 11)
 	_hint_lbl.add_theme_color_override("font_color", ThemeScript.PINK_HINT)
 	right.add_child(_hint_lbl)
-	var apply_btn: Button = Button.new()
-	apply_btn.text = "APPLY"
-	apply_btn.custom_minimum_size = Vector2(160, 32)
-	ThemeScript.style_teal_button(apply_btn, true)
-	apply_btn.pressed.connect(func() -> void: _apply_and_close(true))
-	right.add_child(apply_btn)
+	# KF03 cite: BACK [ESC] is the only action (bottom-right). A dedicated APPLY
+	# button is not in the shipped frame; BACK commits the selection.
 	return right_card
+
+
+## Framed outfit card: authored reward icon + DT display name + level tag.
+func _build_outfit_card(on_pressed: Callable) -> Button:
+	var btn: Button = Button.new()
+	btn.custom_minimum_size = Vector2(0, 54)
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn.expand_icon = true
+	btn.icon_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	btn.add_theme_font_size_override("font_size", 12)
+	btn.clip_text = true
+	ThemeScript.style_teal_tab(btn, true)
+	btn.pressed.connect(on_pressed)
+	return btn
 
 
 ## P2-8: removed dead _panel_style helper (all call sites use
@@ -755,6 +981,10 @@ func _setup_tool_world(sv: SubViewport) -> void:
 func _frame_tool_camera() -> void:
 	if _tool_cam == null or _tool_holder == null or not is_instance_valid(_tool_cam) or not is_instance_valid(_tool_holder):
 		return
+	# The gallery is deferred: a close in the same frame removes the SubViewport
+	# before this runs, and global transforms are invalid outside the tree.
+	if not _tool_holder.is_inside_tree() or not _tool_cam.is_inside_tree():
+		return
 	var box: AABB = AABB()
 	var have: bool = false
 	var inv: Transform3D = _tool_holder.global_transform.affine_inverse()
@@ -807,31 +1037,18 @@ func _cycle_thief(dir: int) -> void:
 	var next: int = (idx + dir + THIEF_IDS.size()) % THIEF_IDS.size()
 	var target: String = THIEF_IDS[next]
 	if not _is_thief_unlocked(target):
-		_set_hint("The Chameleon is locked. Finish a contract to earn this disguise.")
+		_set_hint("The Chameleon is locked. Unlock it in the Black Market (£10,000, Contract 3).")
 		return
+	_stash_slots()
 	_thief_id = target
 	_set_hint("")
 	_refresh_thief_ui()
 
 
+## The authored Thief.Chameleon gate lives in SaveSystem (Contract 3, not any
+## completed contract).
 func _is_thief_unlocked(thief: String) -> bool:
-	if thief == "spider":
-		return true
-	var data: Dictionary = SaveSystem.data
-	var unlocked_var: Variant = data.get("unlocked_thieves", [])
-	if unlocked_var is Array:
-		var unlocked: Array = unlocked_var as Array
-		if unlocked.has(thief):
-			return true
-	var flag_var: Variant = data.get("chameleon_unlocked", false)
-	if flag_var is bool and bool(flag_var):
-		return true
-	var completed_var: Variant = data.get("completed_contracts", {})
-	if completed_var is Dictionary:
-		var completed: Dictionary = completed_var as Dictionary
-		if not completed.is_empty():
-			return true
-	return false
+	return SaveSystem.is_thief_unlocked(thief)
 
 
 func _set_hint(text: String) -> void:
@@ -839,63 +1056,122 @@ func _set_hint(text: String) -> void:
 		_hint_lbl.text = text
 
 
-func _on_tool_selected(idx: int) -> void:
-	if idx < 0 or idx >= TOOLS.size():
+func _on_slot_pressed(idx: int) -> void:
+	if idx < 0 or idx >= SLOT_COUNT:
 		return
 	if AudioManager != null and AudioManager.has_method("play_ui"):
 		AudioManager.play_ui("click")
-	_active_tool = idx
+	_slot_index = idx
+	if _is_signature_slot(idx):
+		_set_hint("Signature Tools cannot be swapped out")
+	else:
+		_set_hint("")
 	_refresh_tool_ui()
 
 
+func _on_candidate_pressed(save_id: String) -> void:
+	var tool: Dictionary = _tool(save_id)
+	if tool.is_empty():
+		return
+	if AudioManager != null and AudioManager.has_method("play_ui"):
+		AudioManager.play_ui("click")
+	_slot_index = _current_slot_for_preview()
+	var target: int = _slot_index
+	if _is_signature_slot(target):
+		# A signature slot cannot be overwritten: the shipped frame keeps the
+		# candidate row closed for it, so a click is a hint only.
+		_set_hint("Signature Tools cannot be swapped out")
+		_refresh_tool_ui()
+		return
+	if not _is_tool_owned(tool):
+		var reason: String = str(tool.get("condition", ""))
+		_set_hint(("Locked - %s" % reason) if reason != "" else "Locked - not owned")
+		_refresh_tool_ui()
+		return
+	# Equipping a tool that already lives in the other swappable slot swaps the
+	# two, so a loadout never holds the same tool twice.
+	for i: int in range(SLOT_COUNT):
+		if i == target or _is_signature_slot(i):
+			continue
+		if _slots[i] == save_id:
+			_slots[i] = _slots[target]
+			break
+	_slots[target] = save_id
+	_set_hint("")
+	_refresh_tool_ui()
+
+
+## The slot whose tool the preview card shows. Once a swappable slot is
+## selected it stays selected; otherwise the first non-empty slot.
+func _current_slot_for_preview() -> int:
+	return clampi(_slot_index, 0, SLOT_COUNT - 1)
+
+
 func _refresh_tool_ui() -> void:
-	for i: int in range(_tool_btns.size()):
-		var b: Button = _tool_btns[i]
-		b.button_pressed = (i == _active_tool)
-		ThemeScript.style_teal_tab(b, i == _active_tool)
+	if _slots.size() != SLOT_COUNT:
+		_slots = _default_slots()
+	# Slot tiles: authored icon, signature grey lock, unowned pink lock.
+	for i: int in range(_slot_btns.size()):
+		var b: Button = _slot_btns[i]
+		b.button_pressed = (i == _slot_index)
+		ThemeScript.style_teal_tab(b, i == _slot_index)
+		var tool: Dictionary = _tool(_slots[i]) if i < _slots.size() else {}
+		if i < _slot_icons.size():
+			var icon_path: String = str(tool.get("icon", ""))
+			var tex: Texture2D = null
+			if icon_path != "" and ResourceLoader.exists(icon_path):
+				var res: Resource = ResourceLoader.load(icon_path)
+				if res is Texture2D:
+					tex = res as Texture2D
+			_slot_icons[i].texture = tex
+			_slot_icons[i].visible = tex != null
+		if i < _slot_locks.size():
+			if _is_signature_slot(i):
+				_slot_locks[i].visible = true
+				_slot_locks[i].modulate = ThemeScript.TEAL_MUTED
+			else:
+				_slot_locks[i].visible = not _is_tool_owned(tool)
+				_slot_locks[i].modulate = ThemeScript.PINK_LOCKED
+	# Candidate row: only for a swappable slot (KF04 expands slot 3).
+	var candidates: Array[Dictionary] = _candidate_tools()
+	_cells_row.visible = not _is_signature_slot(_slot_index)
+	for child: Node in _cells_row.get_children():
+		child.queue_free()
+	_cell_btns.clear()
+	_cell_locks.clear()
+	for tool: Dictionary in candidates:
+		_add_candidate_cell(_cells_row, tool)
 	for i: int in range(_cell_btns.size()):
-		var cb: Button = _cell_btns[i]
-		cb.button_pressed = (i == _active_tool)
-		ThemeScript.style_teal_tab(cb, i == _active_tool)
-	# KF03 (slots, grey) / KF04 (expanded row, pink) lock badges from SaveSystem
-	# unlock state; no invented gating (unlock keys pre-date this change).
-	for i: int in range(TOOLS.size()):
-		var entry: Dictionary = TOOLS[i] as Dictionary
-		var locked: bool = not _is_tool_unlocked(str(entry.get("id", "")))
-		if i < _slot_lock_lbls.size():
-			_slot_lock_lbls[i].visible = locked
-		if i < _cell_lock_lbls.size():
-			_cell_lock_lbls[i].visible = locked
+		if i < _cell_locks.size():
+			_cell_locks[i].visible = not _is_tool_owned(candidates[i])
+		_cell_btns[i].button_pressed = str(candidates[i].get("id", "")) == _slots[_slot_index]
+		ThemeScript.style_teal_tab(_cell_btns[i], str(candidates[i].get("id", "")) == _slots[_slot_index])
+	# 3D tool preview + authored name/description/condition.
+	var shown: Dictionary = _tool(_slots[_current_slot_for_preview()])
+	if shown.is_empty() and not _is_signature_slot(_slot_index) and not candidates.is_empty():
+		shown = candidates[0]
 	if _tool_holder != null and is_instance_valid(_tool_holder):
 		for c: Node in _tool_holder.get_children():
 			_tool_holder.remove_child(c)
 			c.queue_free()
-		var entry_var: Variant = TOOLS[_active_tool]
-		var entry: Dictionary = entry_var as Dictionary
-		var mesh_path: String = str(entry.get("mesh", ""))
+		var mesh_path: String = str(shown.get("mesh", ""))
 		var node: Node = _load_model(mesh_path)
 		if node != null:
 			_tool_holder.add_child(node)
 			_bind_preview_materials(node, _glb_to_ue_mesh(mesh_path))
 			call_deferred("_frame_tool_camera")
-	var entry_var2: Variant = TOOLS[_active_tool]
-	var entry2: Dictionary = entry_var2 as Dictionary
 	if _tool_name_lbl != null:
-		_tool_name_lbl.text = str(entry2.get("name", "Tool"))
+		_tool_name_lbl.text = str(shown.get("name", "Empty slot"))
+	if _tool_cond_lbl != null:
+		var cond: String = str(shown.get("condition", ""))
+		if shown.is_empty():
+			_tool_cond_lbl.text = "Select a tool below to fill this slot"
+		elif _is_tool_owned(shown):
+			_tool_cond_lbl.text = cond
+		else:
+			_tool_cond_lbl.text = ("Locked - %s" % cond) if cond != "" else "Locked - not owned"
 	if _tool_desc_lbl != null:
-		var lock_note: String = ""
-		if not _is_tool_unlocked(str(entry2.get("id", ""))):
-			lock_note = "\n[Locked - preview only]"
-		_tool_desc_lbl.text = str(entry2.get("desc", "")) + lock_note
-
-
-func _is_tool_unlocked(tool_id: String) -> bool:
-	var data: Dictionary = SaveSystem.data
-	var unlocked_var: Variant = data.get("unlocked_tools", [])
-	if unlocked_var is Array:
-		var unlocked: Array = unlocked_var as Array
-		return unlocked.has(tool_id)
-	return false
+		_tool_desc_lbl.text = str(shown.get("desc", ""))
 
 
 func _on_body_card_pressed() -> void:
@@ -950,16 +1226,24 @@ func _outfit_level_tag(key: String) -> String:
 	return ""
 
 
-## KF03/KF04 cite: one framed thumbnail portrait card per Head / Body /
-## CallingCard slot. No thumbnail bytes in scope (standing HARD_LIMIT 5.9):
-## name + DT level-tag card until IconSprite textures resolve.
+## KF03/KF04 cite: one framed thumbnail card per Head / Body / CallingCard
+## slot. The icon is the authored Black Market reward art for that outfit row
+## when the row is in the catalog (same texture the shipped table draws);
+## otherwise the card is name-only.
 func _update_outfit_cards() -> void:
-	if _head_card != null:
-		_head_card.text = _display_name(_head) + _outfit_level_tag(_head)
-	if _body_card != null:
-		_body_card.text = _display_name(_body) + _outfit_level_tag(_body)
-	if _card_card != null:
-		_card_card.text = _display_name(_card) + _outfit_level_tag(_card)
+	_update_outfit_card(_head_card, _head)
+	_update_outfit_card(_body_card, _body)
+	_update_outfit_card(_card_card, _card)
+
+
+func _update_outfit_card(btn: Button, key: String) -> void:
+	if btn == null:
+		return
+	btn.text = _display_name(key) + _outfit_level_tag(key)
+	var entry: Dictionary = {}
+	if _catalog != null and _catalog.is_available() and key != "":
+		entry = _catalog.entry(key)
+	btn.icon = CatalogScript.icon_texture(entry) if not entry.is_empty() else null
 
 
 func _refresh_thief_ui() -> void:
@@ -970,6 +1254,7 @@ func _refresh_thief_ui() -> void:
 		_head = _head_keys[0]
 	if not _card_keys.is_empty() and not _card_keys.has(_card):
 		_card = _card_keys[0]
+	_sync_slots_for_thief()
 	_refresh_portraits()
 	_update_outfit_cards()
 	_update_desc()
@@ -1013,6 +1298,8 @@ func _rebuild_figure() -> void:
 ## small in a wide letterbox. Height-fit uses the camera's vertical FOV.
 func _frame_preview_camera() -> void:
 	if _preview_cam == null or _turntable == null or not is_instance_valid(_preview_cam) or not is_instance_valid(_turntable):
+		return
+	if not _turntable.is_inside_tree() or not _preview_cam.is_inside_tree():
 		return
 	var box: AABB = AABB()
 	var have: bool = false
@@ -1327,8 +1614,53 @@ func _load_saved_loadout() -> void:
 	_body = str(loadout.get("body", ""))
 	_head = str(loadout.get("head", ""))
 	_card = str(loadout.get("calling_card", ""))
-	var tool_var: Variant = loadout.get("active_tool", 0)
-	_active_tool = clampi(int(tool_var), 0, TOOLS.size() - 1)
+	_slots = _normalize_slots(loadout.get("tools", []))
+	_slot_index = 0
+	_slots_by_thief[_thief_id] = _slots.duplicate()
+
+
+## Normalize a persisted 4-entry tool array to KF03 semantics: the signature
+## slots are fixed to this thief's signature tools, and the swappable slots take
+## the saved non-signature tools in order (a legacy loadout's arbitrary four
+## tools therefore keep at most two swappable ones), defaulting to Smoke Bomb.
+func _normalize_slots(saved: Variant) -> Array[String]:
+	var defaults: Array[String] = _default_slots()
+	var sigs: Array[String] = _signatures()
+	var swappable: Array[String] = []
+	if saved is Array:
+		for id_v: Variant in saved as Array:
+			var id: String = str(id_v).strip_edges()
+			if id == "" or sigs.has(id) or swappable.has(id):
+				continue
+			if _tool(id).is_empty():
+				continue
+			swappable.append(id)
+	var out: Array[String] = defaults.duplicate()
+	if swappable.size() >= 1:
+		out[1] = swappable[0]
+	if swappable.size() >= 2:
+		out[2] = swappable[1]
+	return out
+
+
+## Remember the working slots before the panel switches thief.
+func _stash_slots() -> void:
+	if _slots.size() == SLOT_COUNT:
+		_slots_by_thief[_thief_id] = _slots.duplicate()
+
+
+## Keep per-thief slot edits while the panel is open; switching thieves swaps
+## the working set instead of losing the other thief's changes.
+func _sync_slots_for_thief() -> void:
+	if _slots_by_thief.is_empty():
+		_slots_by_thief[_thief_id] = _slots.duplicate() if _slots.size() == SLOT_COUNT else _default_slots()
+		return
+	var saved_v: Variant = _slots_by_thief.get(_thief_id, null)
+	if saved_v is Array:
+		_slots = _normalize_slots(saved_v)
+	else:
+		_slots = _default_slots()
+	_slot_index = 0
 
 
 func _apply_and_close(should_emit: bool) -> void:
@@ -1336,14 +1668,21 @@ func _apply_and_close(should_emit: bool) -> void:
 	GameState.outfit_body = _short_name(_body)
 	GameState.outfit_head = _short_name(_head)
 	GameState.calling_card = _short_name(_card)
-	var entry_var: Variant = TOOLS[_active_tool]
-	var entry: Dictionary = entry_var as Dictionary
+	_slots_by_thief[_thief_id] = _slots.duplicate()
+	var active_id: String = ""
+	var active_idx: int = 0
+	for i: int in range(_slots.size()):
+		if _slots[i] != "":
+			active_id = _slots[i]
+			active_idx = i
+			break
 	var loadout: Dictionary = {
 		"head": _head,
 		"body": _body,
 		"calling_card": _card,
-		"active_tool": _active_tool,
-		"active_tool_id": str(entry.get("id", "zipwire")),
+		"tools": _slots.duplicate(),
+		"active_tool": active_idx,
+		"active_tool_id": active_id if active_id != "" else "zipwire",
 	}
 	SaveSystem.set_loadout(_thief_id, loadout)
 	SaveSystem.data.erase("loadout")

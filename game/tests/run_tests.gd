@@ -3382,9 +3382,26 @@ func _initialize() -> void:
 		and absf(neon_mac_scale - 1.0) < 0.001
 	var neon_head_ok: bool = neon_head != null and neon_head.albedo_texture != null \
 		and (not neon_head.emission_enabled or neon_head.emission.r <= 1.0)
+	# RE-C-08/T08: the two textured controls assert the TINT-SPACE CONTRACT, not
+	# "the HDR value survives into albedo_color". The old expectation
+	# (albedo_color.r > 1.0) pinned C2-02: a 600x shine colour multiplied onto
+	# the albedo map, which tonal-maps to flat cream. The contract is now: the
+	# albedo colour is sRGB(encode) of the authored linear tint when the tint is
+	# <= 1, and the legacy pass-through when it is an HDR carry. This holds for
+	# the pre-T08 data (tint 600/2.0) and the post-T08 data (Flat Color
+	# 0.948/0.9479) without weakening either.
+	var neon_db: Variant = _repo_json("game/data/generated/materials.json")
+	var knife_expect: Color = _t08_expected_albedo_tint(neon_db, "/Game/Art/Gameplay/Loot/LootMinor/JeweledKnife/MI_JeweledKnife")
+	var cat_expect: Color = _t08_expected_albedo_tint(neon_db, "/Game/Art/Gameplay/Loot/LootMajor/StatueCat/MI_CatStatueA")
+	# The expectation is version-agnostic: HDR-authored tints pass through
+	# (pre-T08 data: 2.0 / 600), <=1 authored tints are sRGB-encoded (post-T08
+	# Flat Color 0.9479 / 0.948). Either way albedo_color must equal the
+	# contract value, so an encode on an HDR carry (or a raw linear value)
+	# fails here.
 	var neon_knife_ok: bool = neon_knife != null and neon_knife.albedo_texture != null \
-		and neon_knife.albedo_color.r > 1.0
-	var neon_cat_ok: bool = neon_cat != null and neon_cat.albedo_texture != null and neon_cat.albedo_color.r > 1.0
+		and neon_knife.albedo_color.is_equal_approx(knife_expect)
+	var neon_cat_ok: bool = neon_cat != null and neon_cat.albedo_texture != null \
+		and neon_cat.albedo_color.is_equal_approx(cat_expect)
 	var neon_beam_ok: bool = neon_beam != null and neon_beam.shader != null \
 		and neon_beam.shader.resource_path.ends_with("tat_beam.gdshader")
 	if not neon_ok or not neon_mac_ok or not neon_head_ok or not neon_knife_ok or not neon_cat_ok or not neon_beam_ok:
@@ -7333,6 +7350,32 @@ func _initialize() -> void:
 		fails += 1
 	else:
 		print("PASS: 95 T09 geometry/placement contract (spline loft, streaming graph, LevelInstance dedupe, clamp/mirror accounting, origin doors, mantle duration)")
+	# 96. T08 material/texture remediation: authored linear tints reach
+	# albedo_color through the sRGB encode (and HDR carries pass through),
+	# GLB slots bind by authored index instead of a name-substring override,
+	# props instantiated outside the level build get their authored material,
+	# and untextured debug geometry / flat colours are counted + named. The
+	# producer-dependent half SKIPs loudly when materials.json predates the
+	# T08 producer (integrator runs `make normalize`, then it is enforced).
+	var t08_checks: GDScript = load("res://tests/t08_material_checks.gd") as GDScript
+	var t08_ll: Node = (load("res://src/core/level_loader.gd") as GDScript).new()
+	root.add_child(t08_ll)
+	await process_frame
+	t08_ll.call("_load_material_dbs")
+	var t08_db_v: Variant = _repo_json("game/data/generated/materials.json")
+	var t08_raw: Variant = t08_checks.call(
+		"run", t08_ll, t08_db_v if t08_db_v is Dictionary else {})
+	var t08_problems: Array[String] = []
+	if t08_raw is Array:
+		for t08_s: Variant in (t08_raw as Array):
+			t08_problems.append(str(t08_s))
+	t08_ll.queue_free()
+	await process_frame
+	if not t08_problems.is_empty():
+		printerr("FAIL: 96 T08 materials: ", t08_problems)
+		fails += 1
+	else:
+		print("PASS: 96 T08 materials (tint sRGB contract, authored slot index, prop GLB binding, flat-colour census)")
 
 	# 12.6/12.7 process-lifetime caches must not outlive the run.
 	var am_node: Node = root.get_node_or_null("/root/AudioManager")
@@ -7673,6 +7716,23 @@ func _authored_row_value(rows: Dictionary, row: String, field_path: Array[String
 func _repo_json(rel_path: String) -> Variant:
 	var repo_dir: String = ProjectSettings.globalize_path("res://").path_join("..").simplify_path()
 	return JSON.parse_string(FileAccess.get_file_as_string(repo_dir.path_join(rel_path)))
+
+
+## T08: expected Godot albedo_color for an authored UE (linear) tint. Mirrors
+## LevelLoader._srgb_encode_albedo_tint so suite 37 asserts the contract rather
+## than a per-data-version literal. White when the row or tint is absent.
+func _t08_expected_albedo_tint(db: Variant, mat_path: String) -> Color:
+	if not (db is Dictionary):
+		return Color(1.0, 1.0, 1.0, 1.0)
+	var rec: Variant = (db as Dictionary).get(mat_path, null)
+	if not (rec is Dictionary):
+		return Color(1.0, 1.0, 1.0, 1.0)
+	var t: Variant = (rec as Dictionary).get("tint", null)
+	if not (t is Array) or (t as Array).size() < 3:
+		return Color(1.0, 1.0, 1.0, 1.0)
+	var a: Array = t as Array
+	var lin := Color(float(a[0]), float(a[1]), float(a[2]), 1.0)
+	return (load("res://src/core/level_loader.gd") as GDScript).call("_srgb_encode_albedo_tint", lin) as Color
 
 
 ## Returns FloatCurve.Keys from a UE CurveFloat JSON dump.

@@ -226,10 +226,12 @@ func _prep() -> bool:
 	# expansion skyline from the level geometry, and the stage from the UI, so
 	# a composition defect can be attributed to the right layer.
 	if _mode == "prep_nosky":
+		var freed: int = 0
 		for node: Node in get_nodes_in_group("prep_skyline"):
 			node.queue_free()
+			freed += 1
 		await _wait(12)
-		print("W9_DIAG prep_nosky freed=%d" % get_nodes_in_group("prep_skyline").size())
+		print("W9_DIAG prep_nosky freed=%d remaining=%d" % [freed, get_nodes_in_group("prep_skyline").size()])
 	elif _mode == "prep_noui":
 		for child: Node in mp.get_children():
 			if child is CanvasItem and not (child is SubViewportContainer):

@@ -86,6 +86,10 @@ const LOBBY_THIEF_YAW_DEG: float = 45.0
 ## background_energy_multiplier 1.0. The stage used to override to
 ## ACES/2.6/1.8/1.0/0.18 (the "ACES" label was stale: the preset apply already
 ## forced AGX, so the live mode was AGX at 2.6). One grade, one product.
+## Measured at the authored composition: 37.1 mean / p50 19 / 18.8 % < 8; the
+## same grade on the legacy full-lobby frame is 27.2 / 12 / 16.6 % — the old
+## 2.6 exposure + 1.8 ambient was compensating for the occluded backdrop, so
+## dropping it makes the composition rule the thing that carries the frame.
 const STAGE_AMBIENT_COLOR: Color = Color(0.42, 0.50, 0.72)
 ## The two glow-shape values the grade dictionary does not carry (it carries
 ## intensity only). Unchanged from the pre-W9 stage, named so the grade has no
@@ -103,9 +107,12 @@ const MOON_DISC_SCREEN_Y: float = 0.09
 const KEY_SCREEN_X: float = 0.30
 const KEY_SCREEN_Y: float = 0.28
 const STAGE_MOON_ENERGY: float = 0.85
-## KF11 night sky is deep navy; the pre-W6U1 3.0 sky multiplier blew it to
-## daylight. The sky background is the one grade value W9-P1 keeps a stage say
-## over (see _apply_stage_grade); it starts at the authored 1.0.
+## The sky background is the one grade value W9-P1 keeps a stage say over:
+## `apply_sky` escalates night presets to 2.0 and the pre-W9 stage crushed it to
+## 0.18 while exposure sat at 2.6 (a hack for the occluded composition). At the
+## authored 1.15 exposure the authored 1.0 measures mean 37.1 / p50 19 / 18.8 %
+## < 8 with the sky reading deep navy above the silhouette (p1_after_prep.png);
+## higher washes the city out, so the refinement stays at the authored 1.0.
 const STAGE_SKY_ENERGY: float = 1.0
 const STAGE_MOON_DISC_ENERGY: float = 2.4
 ## Local character rig on the prep stage (KF11 keys the thief separately from
@@ -141,11 +148,22 @@ const PREP_SKYLINE_TOP_MAX: float = 0.46
 ## (mean 37.21 -> 36.91, build/qa/w9/captures/p1_before_prep.png), while hiding
 ## the lobby geometry beyond LOBBY_STAGE_KEEP_RADIUS_M from the authored thief
 ## slot reveals the already-built sky, the authored moon disc at (0.76, 0.09)
-## and the distant silhouettes without touching the camera
-## (build/qa/w9/captures/p1_diag_ledge.png: mean 55.55, 0.7 % of samples < 8).
-## So the composition is a data-driven cull rule, NOT a reframe: the camera
-## transform, the thief slot, the 8 expansion skyline pieces and every node
-## within the radius stay exactly as authored.
+## and the distant silhouettes without touching the camera. So the composition
+## is a data-driven cull rule, NOT a reframe: the camera transform, the thief
+## slot, the 8 expansion skyline pieces and every node within the radius stay
+## exactly as authored.
+##
+## Measured at 1920x1080, TAT2_AO=on, grade = the authored night grade
+## (build/qa/w9/captures/p1_after_prep.png, log build/qa/w9/logs/cap_p1_after_prep.log):
+##   kept=19 hid=397 radius=9.0  ->  mean 37.1 / p50 19 / p95 125 / 18.8 % < 8
+##   same grade + TAT2_PREP_STAGE=legacy (p1_after_legacy.png): kept=422
+##     ->  mean 27.2 / p50 12 / p95 117 / 16.6 % < 8, no sky, no moon
+##   same grade + prep_nosky (p1_after_nosky.png): mean 43.9 / p50 29 / 8.8 % < 8
+##     -> the skyline alone darkens the mid-ground by 6.8 mean / 10 p50 points,
+##        so the far city is provably in frame.
+## The pre-W9 composition at the old 2.6/1.8 grade measured 37.2 / 25 / 7.1 %
+## < 8 — the same global mean with the wrong distribution (7.1 % black floor
+## versus 18.8 %, because the frame was a rain-streaked wall, not a night city).
 ##
 ## TAT2_PREP_STAGE=legacy reproduces the pre-W9 full-lobby frame for A/B; any
 ## other value (default authored) applies the rule.
@@ -153,8 +171,12 @@ const LOBBY_STAGE_ENV: String = "TAT2_PREP_STAGE"
 const LOBBY_STAGE_KEEP_RADIUS_M: float = 9.0
 ## Named exclusions for nodes the radius keeps but that do not belong to the
 ## authored ledge (matched case-insensitively against a node's `ue_mesh` meta or
-## its name). Deliberately narrow: "hide anything ugly" is not a rule. Empty
-## means the radius alone reproduces the authored ledge.
+## its name). Deliberately narrow: "hide anything ugly" is not a rule. Empty is
+## the measured answer: at 9.0 m the kept set is the ledge, the roof under it and
+## the lobby towers that KF11 also frames beside the subject (the pale 7 m
+## columns at 6-8 m are authored lobby geometry, not floating props), and the
+## captured frame reads as the authored ledge without a hole. Add a token only
+## with a capture that shows the artefact.
 const LOBBY_STAGE_EXCLUDE_TOKENS: Array[String] = []
 
 ## Authored backdrop size for the 3D rooftop stage. The stage container must
@@ -694,6 +716,10 @@ func _build_stage(viewport: SubViewport) -> void:
 
 	var wenv: WorldEnvironment = WorldEnvironment.new()
 	var env: Environment = Environment.new()
+	# Construction-time fallback only. The preset apply below selects AGX for
+	# this night preset and _apply_stage_grade re-applies it: the live tonemap has
+	# always been AGX once midnight_clear_mission_lobby loads, so the pre-W9
+	# "ACES" label on the stage was stale (W9 audit: W9_ENV tonemap=4).
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
 	env.glow_enabled = true
 	env.glow_intensity = 0.65
@@ -772,14 +798,21 @@ func _build_stage(viewport: SubViewport) -> void:
 ## from the preset, and the two glow shape values are the stage's own named
 ## constants. `background_energy_multiplier` is the one value the stage may
 ## refine (STAGE_SKY_ENERGY, see its comment).
+## A missing preset is a broken data tree (the weather presets are an audit
+## gate), so this leaves the environment exactly as constructed and says so in
+## the log instead of inventing a grade for it.
 func _apply_stage_grade(env: Environment, preset: Dictionary) -> void:
 	if env == null:
+		return
+	if preset.is_empty():
+		push_warning("TAT-2 prep stage: midnight_clear_mission_lobby preset missing; authored grade not applied")
 		return
 	var grade: Dictionary = WeatherProfile.stage_grade_values(preset)
 	env.tonemap_mode = int(grade.get("tonemap_mode", Environment.TONE_MAPPER_AGX))
 	env.tonemap_exposure = float(grade.get("tonemap_exposure", 1.15))
-	# The preset authors no sky.light_color, so the dictionary's ambient colour
-	# is null there; the stage keeps the moonlit blue it has always used.
+	# The authored ambient colour wins when the preset carries one (this preset's
+	# sky.light_color is (0.443, 0.498, 1.0)); STAGE_AMBIENT_COLOR is only the
+	# fallback for a preset that authors none.
 	var amb: Variant = grade.get("ambient_light_color")
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = amb if amb is Color else STAGE_AMBIENT_COLOR

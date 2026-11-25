@@ -26,6 +26,16 @@ extends SceneTree
 ##   W9_GRADE_EXPOSURES        comma list, default "0.30,0.40,0.50,0.60"
 ##   W9_GRADE_AMBIENT_SCALES   comma list of multipliers on the authored ambient,
 ##                             default "1.0,0.5"
+##   W9_GRADE_FILL_SCALES      comma list of energy multipliers on ONLY the two
+##                             `GuildhallFoyerFill_*` nodes (W9-P2 B1), default 1.0
+##   W9_GRADE_FILL_RANGE_SCALES comma list of range multipliers on the same two
+##                             fills (W9-P2 B1), default 1.0
+##   W9_GRADE_CAM_MULTS        comma list of `CameraAttributes.exposure_multiplier`
+##                             values applied to the probe camera. The 0.49 room
+##                             grader this axis was built for was REVERTED after
+##                             the W9-P2 pre-registered FAIL; `TAT2_ROOM_GRADE`
+##                             no longer exists (the env line in older docs is a
+##                             no-op). Kept for a future pre-registered attempt.
 ##   W9_GRADE_FILLS=off        free the two mission_controller foyer fills before
 ##                             the bracket (P2-owned fill attribution)
 ##   TAT2_AO                   inherited (on|off), echoed for provenance
@@ -133,7 +143,7 @@ func _float_list(raw: String, fallback: Array) -> Array:
 	return out if not out.is_empty() else fallback
 
 
-func _free_foyer_fills(mission: Node) -> int:
+func _free_foyer_fills(mission: Node, which: String = "both") -> int:
 	var freed: int = 0
 	var stack: Array = [mission]
 	while not stack.is_empty():
@@ -141,9 +151,39 @@ func _free_foyer_fills(mission: Node) -> int:
 		for c: Node in n.get_children():
 			stack.append(c)
 		if str(n.name).begins_with("GuildhallFoyerFill_"):
-			n.queue_free()
-			freed += 1
+			var z: float = (n as Node3D).position.z
+			var free_it: bool = which == "both" or (which == "near" and z > -58.0) or (which == "far" and z <= -58.0)
+			if free_it:
+				n.queue_free()
+				freed += 1
 	return freed
+
+
+## W9-P2 B1 calibration: the two P2-owned foyer fills are the measured cause
+## of the upper-foyer overshoot (p1-report §0.2). This axis scales their
+## energy and/or range in the live scene so one launch can bracket the pair
+## instead of one launch per guess. Only nodes named `GuildhallFoyerFill_*`
+## are touched; the safe-room fill, authored lights and the preset grade are
+## untouched by design (a preset-wide cut is forbidden by the W9-P1 guard).
+func _foyer_fill_base(mission: Node) -> Array:
+	var out: Array = []
+	var stack: Array = [mission]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back() as Node
+		for c: Node in n.get_children():
+			stack.append(c)
+		if n is OmniLight3D and str(n.name).begins_with("GuildhallFoyerFill_"):
+			var o: OmniLight3D = n as OmniLight3D
+			out.append([o, o.light_energy, o.omni_range])
+	return out
+
+
+func _apply_fill_scale(base: Array, energy_scale: float, range_scale: float) -> void:
+	for row: Array in base:
+		var l: OmniLight3D = row[0] as OmniLight3D
+		if is_instance_valid(l):
+			l.light_energy = float(row[1]) * energy_scale
+			l.omni_range = maxf(0.1, float(row[2]) * range_scale)
 
 
 ## Authored-light energies: every light level_loader built carries the
@@ -182,6 +222,14 @@ func _run() -> void:
 	var amb_scales: Array = _float_list(OS.get_environment("W9_GRADE_AMBIENT_SCALES"), [1.0, 0.5])
 	var poses_raw: String = OS.get_environment("W9_GRADE_POSES").strip_edges()
 	var light_scales: Array = _float_list(OS.get_environment("W9_GRADE_LIGHT_SCALES"), [1.0])
+	## B1 (W9-P2): axes for the two hand-placed foyer fills only.
+	var fill_scales: Array = _float_list(OS.get_environment("W9_GRADE_FILL_SCALES"), [1.0])
+	var fill_range_scales: Array = _float_list(OS.get_environment("W9_GRADE_FILL_RANGE_SCALES"), [1.0])
+	## W9-P2 B1: the implemented lever is `CameraAttributes.exposure_multiplier`
+	## on the active camera (mission_controller room grade). Run the probe with
+	## TAT2_ROOM_GRADE=off so the mission does not also apply it, then this axis
+	## measures the exact render path the game uses. 1.0 = no attributes.
+	var cam_mults: Array = _float_list(OS.get_environment("W9_GRADE_CAM_MULTS"), [1.0])
 	var poses: Array = []
 	for pp: String in (poses_raw if poses_raw != "" else "upper_foyer,yaw180").split(",", false):
 		var pname: String = pp.strip_edges()
@@ -191,9 +239,15 @@ func _run() -> void:
 			printerr("W9_GRADE unknown pose=%s (known: %s)" % [pname, str(POSES.keys())])
 	if poses.is_empty():
 		poses = ["upper_foyer", "yaw180"]
-	var fills_off: bool = OS.get_environment("W9_GRADE_FILLS").strip_edges().to_lower() == "off"
-	print("W9_GRADE_START tag=%s size=%s exposures=%s ambient_scales=%s light_scales=%s poses=%s fills=%s ao=%s out=%s" % [
-		_tag, str(_size), str(exposures), str(amb_scales), str(light_scales), str(poses),
+	var fills_raw: String = OS.get_environment("W9_GRADE_FILLS").strip_edges().to_lower()
+	## "off"/"both" = free both fills; "near"/"far" = free only that one (B1).
+	var fills_mode: String = ""
+	if fills_raw in ["off", "both", "near", "far"]:
+		fills_mode = "both" if fills_raw == "off" else fills_raw
+	var fills_off: bool = fills_mode != ""
+	print("W9_GRADE_START tag=%s size=%s exposures=%s ambient_scales=%s light_scales=%s fill_scales=%s fill_range_scales=%s cam_mults=%s poses=%s fills=%s ao=%s out=%s" % [
+		_tag, str(_size), str(exposures), str(amb_scales), str(light_scales),
+		str(fill_scales), str(fill_range_scales), str(cam_mults), str(poses),
 		"off" if fills_off else "on",
 		OS.get_environment("TAT2_AO"), _out_dir(),
 	])
@@ -230,11 +284,12 @@ func _run() -> void:
 		str(env.ssil_enabled), str(env.ssao_enabled),
 	])
 	if fills_off:
-		var freed: int = _free_foyer_fills(mission)
+		var freed: int = _free_foyer_fills(mission, fills_mode)
 		await _wait(12)
-		print("W9_GRADE fills freed=%d" % freed)
+		print("W9_GRADE fills freed=%d mode=%s" % [freed, fills_mode])
 	var authored_lights: Array = _authored_light_base(mission)
-	print("W9_GRADE authored_lights=%d (tat_ue_intensity meta, the set level_loader scales)" % authored_lights.size())
+	var foyer_fills: Array = _foyer_fill_base(mission)
+	print("W9_GRADE authored_lights=%d (tat_ue_intensity meta, the set level_loader scales) foyer_fills=%d" % [authored_lights.size(), foyer_fills.size()])
 
 	var cam: Camera3D = Camera3D.new()
 	cam.name = "W9GradeCamera"
@@ -243,6 +298,7 @@ func _run() -> void:
 	cam.keep_aspect = Camera3D.KEEP_HEIGHT
 	mission.add_child(cam)
 	cam.current = true
+	var cam_attrs: CameraAttributesPractical = null
 
 	var ok_all: bool = true
 	for pose: String in poses:
@@ -251,21 +307,40 @@ func _run() -> void:
 		cam.look_at(pair[1] as Vector3, Vector3.UP)
 		for scale: float in amb_scales:
 			for lscale: float in light_scales:
-				for expo: float in exposures:
-					env.tonemap_exposure = expo
-					env.ambient_light_energy = base_ambient * scale
-					_apply_light_scale(authored_lights, lscale)
-					await _wait(10)
-					print("W9_GRADE shot pose=%s exposure=%.3f ambient=%.3f (ambient_scale=%.2f) light_scale=%.2f" % [
-						pose, env.tonemap_exposure, env.ambient_light_energy, scale, lscale,
-					])
-					ok_all = await _save("%s_%s_e%03d_a%03d_l%03d%s" % [
-						_tag, pose, int(round(expo * 100.0)), int(round(scale * 100.0)),
-						int(round(lscale * 100.0)), "_nofill" if fills_off else "",
-					]) and ok_all
+				for fscale: float in fill_scales:
+					for rscale: float in fill_range_scales:
+						for cm: float in cam_mults:
+							if is_equal_approx(cm, 1.0):
+								cam.attributes = null
+							else:
+								if cam_attrs == null:
+									cam_attrs = CameraAttributesPractical.new()
+									cam_attrs.auto_exposure_enabled = false
+								cam_attrs.exposure_multiplier = cm
+								cam.attributes = cam_attrs
+							for expo: float in exposures:
+								env.tonemap_exposure = expo
+								env.ambient_light_energy = base_ambient * scale
+								_apply_light_scale(authored_lights, lscale)
+								_apply_fill_scale(foyer_fills, fscale, rscale)
+								await _wait(10)
+								print("W9_GRADE shot pose=%s exposure=%.3f ambient=%.3f (ambient_scale=%.2f) light_scale=%.2f fill_scale=%.2f fill_range_scale=%.2f cam_mult=%.3f" % [
+									pose, env.tonemap_exposure, env.ambient_light_energy, scale, lscale, fscale, rscale, cm,
+								])
+								var fill_tag: String = ""
+								if not is_equal_approx(fscale, 1.0) or not is_equal_approx(rscale, 1.0):
+									fill_tag = "_f%03d_r%03d" % [int(round(fscale * 100.0)), int(round(rscale * 100.0))]
+								var cam_tag: String = "" if is_equal_approx(cm, 1.0) else "_c%03d" % int(round(cm * 100.0))
+								ok_all = await _save("%s_%s_e%03d_a%03d_l%03d%s%s%s" % [
+									_tag, pose, int(round(expo * 100.0)), int(round(scale * 100.0)),
+									int(round(lscale * 100.0)), fill_tag, cam_tag,
+									("_nofill_" + fills_mode) if fills_off else "",
+								]) and ok_all
 	# Restore the live grade so a later diagnostic in the same run is not polluted.
+	cam.attributes = null
 	env.tonemap_exposure = base_exposure
 	env.ambient_light_energy = base_ambient
 	_apply_light_scale(authored_lights, 1.0)
+	_apply_fill_scale(foyer_fills, 1.0, 1.0)
 	print("W9_GRADE_DONE tag=%s ok=%s" % [_tag, str(ok_all)])
 	quit(0 if ok_all else 1)

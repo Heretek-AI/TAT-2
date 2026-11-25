@@ -559,13 +559,22 @@ func _add_guildhall_saferoom_fill() -> void:
 
 ## The authored Guildhall foyer is a large checkered hall with a refill
 ## station; its practicals are sparse, so the 0.20 skylight leaves the stone
-## walls and busts near-black. Two warm, shadowless fills lift the hall
+## walls and busts near-black. One warm, shadowless fill lifts the hall
 ## without touching the gate or the upper floors (range 16 m, y=31).
+##
+## W9-P2 B1: the second (near, z=-53) fill was removed after measurement. It
+## dates from the pre-R8 crushed exposure; with the R8 light plan and the AGX
+## 1.15 preset it double-lit the upper-foyer pose (measured at 1.15: both
+## fills present upper_foyer p50 34 / 0.8 % < 8; near fill removed p50 29 /
+## 1.1 %). The far fill stays: it is the room's practical for gameplay light
+## detection. A camera-scoped room grade (0.49) was implemented and then
+## reverted: it reached the KF27 band but failed its pre-registered threshold
+## sweep (p2-report §0.3), so it did not land. The remaining interior delta is
+## recorded in `build/qa/w9/p2-report.md` §B1.
 func _add_guildhall_foyer_fills() -> void:
 	if GameState.active_map_id != "guildhall":
 		return
 	for spec: Array in [
-		[Vector3(27.0, 31.0, -53.0), 1.6],
 		[Vector3(27.0, 31.0, -64.0), 1.3],
 	]:
 		var fill := OmniLight3D.new()

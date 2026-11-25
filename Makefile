@@ -8,7 +8,7 @@ MOBILE_ABI  ?= arm64
 QA_CONTRACT ?= 0
 KEYSTORE_PROPS := $(HOME)/.config/tat2/keystore.properties
 
-.PHONY: build-extractor extract anims normalize audit audit-bootstrap audit-refresh-stamps audit-imports content-overrides check-logic check-consumers gate-ratchet test run editor review review-capture bake-review bake-review-core desktop-texture-cap texture-cap-check audio-tools linux-build linux-stamp-verify linux-run android-prepare android-debug android-debug-gl android-release
+.PHONY: build-extractor extract anims normalize audit audit-bootstrap audit-refresh-stamps audit-imports content-overrides check-logic check-consumers gate-ratchet test test-producers run editor review review-capture bake-review bake-review-core desktop-texture-cap texture-cap-check audio-tools linux-build linux-stamp-verify linux-run android-prepare android-debug android-debug-gl android-release
 
 build-extractor:
 	DOTNET_ROOT=$(HOME)/.dotnet10 PATH=$(HOME)/.dotnet10:$(PATH) $(DOTNET) build tools/tat-extract -c Release
@@ -36,11 +36,12 @@ anims: build-extractor
 # so a silently dropped parser cannot pass the gate. parse_anim_meta consumes
 # the raw AnimSequence/AnimMontage dumps written by `make extract`/`make anims`;
 # it runs last so a failed earlier producer cannot leave stale metadata.
-NORMALIZERS := parse_tables parse_materials parse_gameplay parse_contracts \
-               parse_settings parse_clues parse_quests parse_devices parse_containers \
-               parse_interactables parse_loot parse_spawners parse_vfx \
-               parse_unlocks parse_hearing parse_state_tree parse_weather \
-               extract_audio convert_wwise parse_locres \
+NORMALIZERS := parse_tables parse_curves parse_materials parse_gameplay \
+               parse_contracts parse_settings parse_clues parse_quests \
+               parse_devices parse_containers parse_interactables parse_loot \
+               parse_spawners parse_vfx parse_unlocks parse_hearing \
+               parse_state_tree parse_weather parse_project_ini parse_input \
+               parse_collision extract_audio convert_wwise parse_locres \
                convert_videos parse_anim_meta
 
 normalize:
@@ -88,9 +89,20 @@ audit-bootstrap:
 	python3 tools/manifest_audit.py --min-coverage 0.99 --min-exact-coverage 0.99 --bootstrap-stamps
 
 # Escape hatch after intentionally changing a producer and regenerating its
-# outputs (make normalize / make anims). Missing/decreased outputs still fail.
+# outputs (make normalize / make anims). Missing/decreased outputs still fail,
+# and REASON is mandatory: the baseline records why the drift was accepted.
 audit-refresh-stamps:
-	python3 tools/manifest_audit.py --min-coverage 0.99 --min-exact-coverage 0.99 --refresh-stamps
+	@if [ -z "$(REASON)" ]; then \
+		echo "ERROR: audit-refresh-stamps needs REASON='why this drift is accepted'" >&2; \
+		echo "  e.g. make audit-refresh-stamps REASON='parse_curves added; regenerated after make normalize'" >&2; \
+		exit 1; \
+	fi
+	python3 tools/manifest_audit.py --min-coverage 0.99 --min-exact-coverage 0.99 --refresh-stamps --refresh-reason "$(REASON)"
+
+# Producer + audit unit tests (stdlib only, no Godot, no GPU). Every tools/test_*.py
+# is run so a new suite is picked up automatically.
+test-producers:
+	@for t in tools/test_*.py; do echo "== $$t"; python3 "$$t" || exit 1; done
 
 # Separate Godot import gate; extraction-only trees do not need it.
 audit-imports:

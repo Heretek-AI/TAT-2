@@ -162,13 +162,25 @@ def _build_fixture(base: Path) -> None:
         _write(extracted / "json" / (path.rsplit("/", 1)[-1] + ".json"), b"x")
     _write(extracted / "filelist.txt", "\n".join(filelist) + "\n")
     # Physical disk artifacts for the payload stems (M3 disk-backed coverage).
+    # They must be content-bearing dumps (a JSON object containing an exported
+    # "Type"), because a content-free stub is not coverage.
     for rel in (
         "Gameplay/Quests/DT_Contracts_1_to_16",
         "Art/Texture/T_Test",
         "Audio/WwiseSharedAssetLibrary",
         "Art/Env/SM_Test",
     ):
-        _json(extracted / "json" / (rel + ".json"), {"x": 1})
+        _json(
+            extracted / "json" / (rel + ".json"),
+            [
+                {
+                    "Type": "DataTable",
+                    "Name": rel.rsplit("/", 1)[-1],
+                    "Package": "/Game/" + rel,
+                    "Properties": {},
+                }
+            ],
+        )
     _write(extracted / "assets" / "one.png", b"x")
 
     _json(
@@ -283,11 +295,64 @@ def _build_fixture(base: Path) -> None:
         f"# run 2026-11-24T00:00:00Z filelist {filelist_sha} errors 0\n",
     )
 
+    # Every producer output the audit stamps must exist in the fixture, or the
+    # suite fails for a reason that has nothing to do with the control under
+    # test. The list is derived from manifest_audit.PRODUCERS, so adding a
+    # producer can never silently break this suite again (it did: six outputs
+    # were missing on main at 38e7b03).
+    _satisfy_producer_outputs(generated, assets)
+
+
+def _satisfy_producer_outputs(generated: Path, assets: Path) -> None:
+    """Create a minimal file for every declared producer output that is absent.
+
+    Only *absent* tokens are filled, so the fixture's specific content counts
+    (144 tables, 17 weather presets, ...) are never disturbed.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "manifest_audit_for_fixture", ROOT / "tools" / "manifest_audit.py"
+    )
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    roots = {"gen": generated, "assets": assets}
+    for producer in module.PRODUCERS:
+        for token in producer.outputs:
+            kind, _, rel = token.partition(":")
+            root = roots.get(kind)
+            if root is None:  # steam:/root: outputs are not part of this fixture
+                continue
+            target = root / rel
+            if target.exists():
+                continue
+            if target.suffix == ".json":
+                _json(target, {"schema": "fixture", "producer": producer.script})
+            elif "." in target.name:
+                _write(target, b"x")
+            else:
+                _write(target / "placeholder.bin", b"x")
+
 
 def _reset_weather_mtimes(base: Path, value: float | None = None) -> None:
     now = time.time() if value is None else value
     for path in (base / "game/data/generated/weather").rglob("*.json"):
         os.utime(path, (now, now))
+
+
+def _rewrite_errors_marker(base: Path) -> None:
+    """Re-bind the errors.log run marker to the current filelist.
+
+    Any control that edits ``extracted/filelist.txt`` changes its hash, so it
+    must also re-write the marker: that is exactly what the extractor does, and
+    the gate refuses a log bound to a different filelist.
+    """
+    filelist = base / "extracted/filelist.txt"
+    _write(
+        base / "extracted/errors.log",
+        f"# run 2026-11-24T00:00:00Z filelist {_sha(filelist)} errors 0\n",
+    )
 
 
 def _touch_errors(base: Path) -> None:
@@ -300,6 +365,16 @@ def _touch_weather_vfx(base: Path) -> None:
     now = time.time()
     for rel in ("weather", "vfx"):
         for path in (base / "game/data/generated" / rel).rglob("*.json"):
+            os.utime(path, (now, now))
+
+
+def _touch_generated(base: Path) -> None:
+    """Re-stamp every generated file so a control that mutated `extracted/`
+    cannot leave the fixture mtime-stale (the freshness groups are a real gate
+    and must not fire for a fixture artefact)."""
+    now = time.time()
+    for path in (base / "game/data/generated").rglob("*"):
+        if path.is_file():
             os.utime(path, (now, now))
 
 
@@ -497,7 +572,7 @@ def main() -> int:
 
         corrupt = base / "corrupt.json"
         _write(corrupt, "{not json")
-        _run(base, ["--refresh-stamps"], baseline=corrupt)
+        _run(base, ["--refresh-stamps", "--refresh-reason", "test: corrupt baseline"], baseline=corrupt)
         _run(base, baseline=corrupt)
         print("ok corrupt baseline + refresh")
         passed += 1
@@ -509,7 +584,7 @@ def main() -> int:
         weather_file.unlink()
         _run(
             base,
-            ["--refresh-stamps"],
+            ["--refresh-stamps", "--refresh-reason", "test: missing output"],
             baseline=refresh_missing,
             expect=1,
             contains="output gen:weather decreased",
@@ -527,7 +602,7 @@ def main() -> int:
         _reset_weather_mtimes(base, 1.0)
         _run(
             base,
-            ["--refresh-stamps"],
+            ["--refresh-stamps", "--refresh-reason", "test: unregenerated"],
             baseline=refresh_old,
             expect=1,
             contains="outputs were not regenerated",
@@ -579,6 +654,7 @@ def main() -> int:
         _run(base, expect=1, contains="exact-case misses")
         _write(manifest, manifest_bytes)
         _write(filelist, filelist_bytes)
+        _touch_generated(base)
         _touch_errors(base)
         disk.unlink()
         _run(base)
@@ -591,6 +667,7 @@ def main() -> int:
         )
         _run(base, expect=1, contains=".ubulk companions missing")
         _write(filelist, filelist_bytes)
+        _touch_generated(base)
         _touch_errors(base)
         _run(base)
         print("ok case-only loss and .ubulk loss")
@@ -602,9 +679,139 @@ def main() -> int:
         disk.unlink()
         _run(base, expect=1, contains="no disk artifact")
         _write(disk, disk_bytes)
-        _touch_weather_vfx(base)
+        _touch_generated(base)
         _run(base)
         print("ok disk-backed coverage")
+        passed += 1
+
+        # Coverage must test content, not a filename. A stub dump (no exported
+        # "Type") is not coverage, and the exported-name rename (SK_ -> SKM_)
+        # must resolve without hiding a real loss.
+        _write(disk, "{}\n")
+        _run(base, expect=1, contains="content-free stub")
+        _write(disk, disk_bytes)
+        _touch_generated(base)
+        _run(base)
+
+        _write(
+            manifest,
+            manifest_bytes.decode() + "TAT/Content/Cloth/SK_Foo.uasset\n",
+        )
+        _write(
+            filelist,
+            filelist_bytes.decode() + "TAT/Content/Cloth/SK_Foo.uasset\t1\n",
+        )
+        _write(base / "extracted/assets/Cloth/SKM_Foo.glb", b"x")
+        _rewrite_errors_marker(base)
+        _touch_generated(base)
+        rename_run = _run(base, contains="resolved by exported-name rename 1")
+        assert "SKM_Foo" in rename_run.stdout or "SK_Foo" in rename_run.stdout
+        _write(manifest, manifest_bytes)
+        _write(filelist, filelist_bytes)
+        (base / "extracted/assets/Cloth/SKM_Foo.glb").unlink()
+        _rewrite_errors_marker(base)
+        _touch_generated(base)
+        _run(base)
+        print("ok content coverage + exported-name rename")
+        passed += 1
+
+        # Allowlist hygiene: a disk_missing entry that resolves is stale, and
+        # every allowlisted missing path must carry a kind.
+        allows = base / "allowlists.json"
+        allows_bytes = allows.read_bytes()
+        stale_data = json.loads(allows_bytes)
+        stale_data["disk_missing"] = ["TAT/Content/Art/Env/SM_Test.uasset"]
+        stale_data["disk_missing_kinds"] = {
+            "TAT/Content/Art/Env/SM_Test.uasset": "other"
+        }
+        _json(allows, stale_data)
+        _run(base, expect=1, contains="stale disk_missing allowlist")
+        stale_data["disk_missing"] = ["TAT/Content/Art/Env/SM_Gone.uasset"]
+        stale_data["disk_missing_kinds"] = {}
+        _json(allows, stale_data)
+        _run(base, expect=1, contains="no kind in disk_missing_kinds")
+        _write(manifest, manifest_bytes)
+        _write(filelist, filelist_bytes)
+        _write(allows, allows_bytes)
+        _touch_generated(base)
+        _touch_errors(base)
+        _run(base)
+        print("ok allowlist staleness and kind labels")
+        passed += 1
+
+        # --refresh-stamps must state why: no reason fails, a reason is recorded.
+        refresh_rel = base / "refresh-reason.json"
+        refresh_rel.write_bytes(baseline.read_bytes())
+        reason_data = json.loads(refresh_rel.read_text())
+        reason_data["producers"]["tools/parse_weather.py"]["sha256"] = "2" * 64
+        _json(refresh_rel, reason_data)
+        _reset_weather_mtimes(base, time.time() + 5)
+        _run(
+            base,
+            ["--refresh-stamps"],
+            baseline=refresh_rel,
+            expect=1,
+            contains="refresh-reason",
+        )
+        refresh_run = _run(
+            base,
+            ["--refresh-stamps", "--refresh-reason", "producer changed on purpose"],
+            baseline=refresh_rel,
+        )
+        assert "refresh reason recorded" in refresh_run.stdout
+        recorded = json.loads(refresh_rel.read_text())
+        assert recorded["refresh_log"][-1]["reason"] == "producer changed on purpose"
+        _reset_weather_mtimes(base)
+        _run(base)
+        print("ok refresh requires and records a reason")
+        passed += 1
+
+        # Provenance: a changed .usmap hash fails, --require-usmap turns absence
+        # into a failure, and a stale extractor binary is caught.
+        usmap_dir = base / "ue4ss"
+        usmap = usmap_dir / "TAT.usmap"
+        _write(usmap, b"m" * 64)
+        prov = base / "provenance.json"
+        _run(base, ["--bootstrap-stamps", "--usmap", str(usmap)], baseline=prov)
+        _write(usmap, b"n" * 64)
+        _run(
+            base,
+            ["--usmap", str(usmap)],
+            baseline=prov,
+            expect=1,
+            contains="changed since the baseline",
+        )
+        _run(
+            base,
+            [
+                "--usmap",
+                str(usmap),
+                "--refresh-stamps",
+                "--refresh-reason",
+                "usmap rebuilt",
+            ],
+            baseline=prov,
+        )
+        _run(base, ["--require-usmap"], expect=1, contains="no .usmap")
+        # Pure-function freshness check: binary older than its source.
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(
+            "manifest_audit_unit", ROOT / "tools" / "manifest_audit.py"
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        source = base / "Exporter.cs"
+        binary = base / "tat-extract"
+        _write(source, "x")
+        _write(binary, "x")
+        os.utime(source, (time.time(), time.time()))
+        os.utime(binary, (time.time() - 600, time.time() - 600))
+        stale = module._extractor_freshness(binary, [source])
+        assert stale and "older than" in stale, stale
+        os.utime(binary, (time.time() + 5, time.time() + 5))
+        assert module._extractor_freshness(binary, [source]) is None
+        print("ok provenance pinning (usmap hash, absence, binary freshness)")
         passed += 1
 
     print(f"PASS: {passed} control groups")

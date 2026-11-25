@@ -3,14 +3,19 @@
 
 Requires Python 3.10+.
 
-The gate has five independent layers:
+The gate has six independent layers:
 
 1. **Mount / path consistency** -- manifest paths are compared to
    ``extracted/filelist.txt`` case-insensitively, the pak container is excluded,
    case-sensitive parity is gated with ``tools/audit_allowlists.json`` (73 known
    case normalizations), and 33 case-only ``.ubulk`` companion differences are
    allowlisted separately. Every manifest payload path must also resolve to a
-   physical extraction artifact (46 known-undumped paths are allowlisted).
+   physical extraction artifact that *carries content*: a JSON dump must contain
+   an exported ``Type`` (a truncated/placeholder stub is not coverage), binary
+   payloads count directly, an export that UE renamed (``SK_TarpA`` ->
+   ``SKM_TarpA.glb``) resolves through a counted rename rule, and every
+   allowlisted missing path must be labelled by kind in ``disk_missing_kinds``
+   so content-bearing gaps are visible (43 known-undumped paths).
 2. **Content assertions** -- levels, contracts, tables, materials, textures,
    containers, decals, devices, animation GLBs, audio OGGs, localisation CSVs,
    videos, scene variants and Niagara placements are measured from the files on
@@ -26,12 +31,20 @@ The gate has five independent layers:
    producer sha256s, infrastructure hashes, external tool versions, and a
    content hash/count for every producer output path. Normal runs compare all of
    them. A missing baseline fails; ``--bootstrap-stamps`` creates it explicitly.
-   ``--refresh-stamps`` refuses missing/empty/decreased outputs and only accepts
-   a changed producer when every output is newer than the producer or its
-   hash/count changed.
+   ``--refresh-stamps`` refuses missing/empty/decreased outputs, only accepts a
+   changed producer when every output is newer than the producer or its
+   hash/count changed, **requires ``--refresh-reason TEXT``**, and records that
+   reason (plus the accepted drift notes) in the baseline's ``refresh_log`` so a
+   refresh can never be a silent re-baseline.
+6. **Provenance inputs** -- the ``.usmap`` mapping file (every unversioned
+   property name in ``extracted/json`` comes from it) is hashed into the
+   baseline when present: a changed hash always fails, absence is a loud note
+   and ``--require-usmap`` turns it into a failure. The built extractor binary
+   must be newer than its ``.cs``/``.csproj`` sources, so a stale ``bin/Release``
+   build cannot pass on source hashes alone (RE-A-10).
 
-Fail-closed by default. Debug opt-outs are explicit: ``--allow-stale`` and
-``--allow-unexpected-errors``.
+Fail-closed by default. Debug opt-outs are explicit: ``--allow-stale``,
+``--allow-unexpected-errors`` and ``--allow-tool-drift``.
 """
 
 from __future__ import annotations
@@ -137,6 +150,32 @@ PRODUCERS = (
             "gen:scene_variants.json",
         ),
         ("levels", "tables", "scene_variants", "devices_total", "devices_families"),
+    ),
+    # Curve assets share the tables/ tree with parse_tables.py: it owns the
+    # DataTable/CurveTable/CompositeDataTable/StringTable exports and
+    # parse_curves.py owns the UCurveFloat/Vector/LinearColor *assets*, so the
+    # `gen:tables` digest appears on both producers and a change to either
+    # requires one refresh. That coupling is deliberate: neither may write a
+    # file the other owns (parse_curves refuses to overwrite a CurveTable).
+    Producer(
+        "tools/parse_curves.py",
+        "python3 tools/parse_curves.py",
+        ("gen:tables", "gen:curves.json"),
+    ),
+    Producer(
+        "tools/parse_project_ini.py",
+        "python3 tools/parse_project_ini.py",
+        ("gen:project_settings.json",),
+    ),
+    Producer(
+        "tools/parse_input.py",
+        "python3 tools/parse_input.py",
+        ("gen:gameplay/input_actions.json",),
+    ),
+    Producer(
+        "tools/parse_collision.py",
+        "python3 tools/parse_collision.py",
+        ("gen:mesh_collision.json",),
     ),
     Producer(
         "tools/parse_gameplay.py",
@@ -286,6 +325,22 @@ INFRASTRUCTURE = (
     ("root:tools/godot", "native engine wrapper"),
 )
 
+# Inputs that change the *meaning* of every extracted property name, or of the
+# dump itself, but that are not repo sources. The .usmap is the mapping file
+# Program.cs auto-discovers (Program.cs:30, FindUsmap :119-124): every
+# unversioned property NAME in all 12 541 JSON dumps comes from it, so a new
+# mapping file silently renames properties while the output digests only say
+# "changed" (RE-A-10). It lives in a git-ignored directory
+# (tools/ue4ss/output/), so the pin is presence-conditional: a hash mismatch is
+# always a failure, absence is a loud note (a checkout without it cannot run
+# `make extract` anyway).
+USMAP_GLOBS = ("tools/ue4ss/output/*.usmap",)
+EXTRACTOR_BUILD = "bin/Release/net10.0/tat-extract"
+EXTRACTOR_SOURCE_GLOBS = (
+    "tools/tat-extract/*.cs",
+    "tools/tat-extract/*.csproj",
+)
+
 # External tools whose version change invalidates generated binary outputs.
 TOOL_COMMANDS = (
     ("blender", ("blender", "--version"), re.compile(r"^Blender\s+\S+")),
@@ -327,8 +382,28 @@ FRESHNESS_GROUPS = (
             "extracted:json/StringTables",
             "extracted:json/UI",
             "extracted:json/Audio",
+            "extracted:json/Art/Environment/Weather",
+            "extracted:json/Gameplay/Carry",
+            "extracted:json/Gameplay/Input",
+            "extracted:json/Gameplay/Traversal",
+            "extracted:json/MaterialLibrary",
         ),
-        ("gen:tables",),
+        ("gen:tables", "gen:curves.json"),
+    ),
+    (
+        "project_ini",
+        ("extracted:raw/TAT/Config",),
+        ("gen:project_settings.json",),
+    ),
+    (
+        "input_actions",
+        ("extracted:json/Gameplay/Input",),
+        ("gen:gameplay/input_actions.json",),
+    ),
+    (
+        "mesh_collision",
+        ("extracted:json",),
+        ("gen:mesh_collision.json",),
     ),
     (
         "materials",
@@ -466,19 +541,84 @@ def _resolve_token(token: str, paths: Paths) -> Path:
 
 
 def _stem(path: str) -> str:
-    text = path.replace("\\", "/").removeprefix("TAT/Content/")
+    text = path.replace("\\", "/")
+    for prefix in ("TAT/Content/", "Engine/Content/"):
+        if text.lower().startswith(prefix.lower()):
+            text = text[len(prefix) :]
+            break
     return str(PurePosixPath(text).with_suffix("")).lower()
 
 
-def _build_disk_index(extracted: Path) -> set[str]:
-    index: set[str] = set()
+#: UE renames some exports away from the authored package stem: a skeletal mesh
+#: authored ``SK_TarpA`` is exported as ``SKM_TarpA.glb``. Coverage must resolve
+#: both spellings or it reports a present asset as missing (RE-A-08).
+RENAME_PREFIXES = (("skm_", "sk_"),)
+
+
+def _canonical_stem(stem: str) -> str:
+    head, _, tail = stem.rpartition("/")
+    lowered = tail.lower()
+    for exported, authored in RENAME_PREFIXES:
+        if lowered.startswith(exported):
+            canonical = authored + tail[len(exported) :]
+            return f"{head}/{canonical}" if head else canonical
+    return stem
+
+
+def _json_is_content(path: Path) -> bool:
+    """True when a property dump actually carries an extracted export.
+
+    Measured on the W7 tree: all 12 541 dumps are >= 200 B and start with a
+    ``"Type"`` key. A truncated stub is not coverage.
+    """
+    try:
+        if path.stat().st_size < 32:
+            return False
+        with path.open("rb") as handle:
+            head = handle.read(2048)
+    except OSError:
+        return False
+    return b'"Type"' in head
+
+
+def _build_disk_index(
+    extracted: Path,
+) -> tuple[dict[str, dict[str, str]], dict[str, dict[str, str]]]:
+    """Return ``(index, alias)`` for every extracted artifact.
+
+    ``index`` is keyed by the artifact's own stem. ``alias`` maps the *authored*
+    stem of a renamed export (``SK_TarpA`` -> exported ``SKM_TarpA.glb``) to the
+    artifact, but only for names that do not already exist in ``index``, so a
+    rename can never shadow a real file and the count of rename-resolved paths
+    stays honest (RE-A-08).
+
+    The per-suffix value is ``content`` when the file carries exported data
+    (any binary payload, or a JSON dump with a ``Type`` key) and ``stub`` for an
+    empty JSON placeholder, which must never be accepted as coverage.
+    """
+    index: dict[str, dict[str, str]] = {}
+    alias: dict[str, dict[str, str]] = {}
     for stage in DUMP_STAGES:
         root = extracted / stage
         if not root.is_dir():
             continue
         for file in _payload_files(root):
-            index.add(_stem(str(file.relative_to(root))))
-    return index
+            suffix = file.suffix.lower()
+            stem = _stem(str(file.relative_to(root)))
+            if suffix == ".json" and not _json_is_content(file):
+                kind = "stub"
+            else:
+                kind = "content"
+            entry = index.setdefault(stem, {})
+            # content wins over stub for the same stem/suffix pair.
+            if entry.get(suffix) != "content":
+                entry[suffix] = kind
+    for stem in sorted(index):
+        canonical = _canonical_stem(stem)
+        if canonical == stem or canonical in index:
+            continue
+        alias[canonical] = index[stem]
+    return index, alias
 
 
 def _newest_mtime(root: Path) -> float:
@@ -1031,14 +1171,18 @@ def _load_allowlists(path: Path) -> dict:
     case_only = data.get("case_only")
     case_ubulk = data.get("case_only_ubulk")
     disk_missing = data.get("disk_missing")
+    disk_kinds = data.get("disk_missing_kinds", {})
     if not isinstance(case_only, list) or not isinstance(case_ubulk, list):
         raise TypeError(f"{path} needs case_only and case_only_ubulk lists")
     if not isinstance(disk_missing, list):
         raise TypeError(f"{path} needs a disk_missing list")
+    if not isinstance(disk_kinds, dict):
+        raise TypeError(f"{path} disk_missing_kinds must be an object")
     return {
         "case_only": {str(x) for x in case_only},
         "case_only_ubulk": {str(x) for x in case_ubulk},
         "disk_missing": {str(x) for x in disk_missing},
+        "disk_missing_kinds": {str(k): str(v) for k, v in disk_kinds.items()},
     }
 
 
@@ -1122,6 +1266,115 @@ def _probe_tool_versions() -> dict:
     return versions
 
 
+def _extractor_freshness(binary: Path, sources: list[Path]) -> str | None:
+    """Return a failure message when the built extractor predates its sources."""
+    if not binary.is_file() or not sources:
+        return None
+    newest = max(sources, key=lambda p: p.stat().st_mtime)
+    if binary.stat().st_mtime < newest.stat().st_mtime:
+        return (
+            "provenance: the built extractor %s is older than %s; a stale binary "
+            "passes every source-hash check. Run `make build-extractor` (or "
+            "`make extract`) and re-extract" % (binary, newest.name)
+        )
+    return None
+
+
+def _pin_provenance_inputs(
+    previous: dict | None,
+    refresh: bool,
+    require_usmap: bool,
+    usmap_override: str | None = None,
+) -> tuple[dict, list[str], list[str]]:
+    """Pin the .usmap mapping file and check the extractor binary is current.
+
+    Returns ``(payload, failures, notes)``. The payload is recorded in the
+    baseline under ``provenance`` so a future run can prove which mapping file
+    produced the tree.
+    """
+    failures: list[str] = []
+    notes: list[str] = []
+    payload: dict = {}
+
+    if usmap_override:
+        usmaps = [Path(usmap_override)]
+        if not usmaps[0].is_file():
+            failures.append(f"provenance: --usmap {usmap_override} does not exist")
+    else:
+        usmaps = sorted(path for pattern in USMAP_GLOBS for path in ROOT.glob(pattern))
+    if len(usmaps) > 1:
+        failures.append(
+            "provenance: %d .usmap files under tools/ue4ss/output; Program.cs "
+            "auto-discovers any *.usmap, so the mapping input is ambiguous: %s"
+            % (len(usmaps), [p.name for p in usmaps])
+        )
+    if usmaps:
+        usmap = usmaps[0]
+        sha = _sha256_file(usmap)
+        try:
+            shown = str(usmap.resolve().relative_to(ROOT))
+        except ValueError:
+            # An explicit --usmap outside the checkout (a worktree pointing at
+            # the main checkout's mapping file) is still pinned by hash.
+            shown = str(usmap)
+        payload["usmap"] = {
+            "path": shown,
+            "bytes": usmap.stat().st_size,
+            "sha256": sha,
+        }
+        previous_usmap = ((previous or {}).get("provenance") or {}).get("usmap") or {}
+        old_sha = previous_usmap.get("sha256")
+        if old_sha and old_sha != sha and not refresh:
+            failures.append(
+                "provenance: %s changed since the baseline (sha256 %s -> %s); "
+                "every unversioned property name in extracted/json comes from this "
+                "file, so the whole tree must be re-extracted and the baseline "
+                "refreshed with a reason" % (usmap.name, str(old_sha)[:12], sha[:12])
+            )
+        elif old_sha and old_sha != sha:
+            notes.append(f"provenance: usmap change accepted by refresh ({usmap.name})")
+    elif require_usmap:
+        failures.append(
+            "provenance: no .usmap under tools/ue4ss/output and --require-usmap is "
+            "set; run tools/ue4ss/install.sh, launch the game once, then "
+            "tools/ue4ss/uninstall.sh"
+        )
+    else:
+        notes.append(
+            "provenance: no .usmap under tools/ue4ss/output in this checkout, so "
+            "the property-name mapping is UNPINNED here (pass --require-usmap to "
+            "fail instead)"
+        )
+
+    binary = ROOT / "tools" / "tat-extract" / EXTRACTOR_BUILD
+    sources = sorted(
+        path for pattern in EXTRACTOR_SOURCE_GLOBS for path in ROOT.glob(pattern)
+    )
+    if binary.is_file() and sources:
+        payload["extractor_binary"] = {
+            "path": str(binary.relative_to(ROOT)),
+            "bytes": binary.stat().st_size,
+            "sha256": _sha256_file(binary),
+            "binary_mtime": binary.stat().st_mtime,
+            "newest_source_mtime": max(p.stat().st_mtime for p in sources),
+        }
+        stale = _extractor_freshness(binary, sources)
+        if stale:
+            failures.append(stale)
+        else:
+            newest = max(sources, key=lambda p: p.stat().st_mtime)
+            notes.append(
+                "provenance: extractor binary is newer than its sources (%s)"
+                % newest.name
+            )
+    else:
+        notes.append(
+            "provenance: extractor binary not built in this checkout "
+            "(bin/Release/net10.0/tat-extract absent); `make extract` rebuilds it"
+        )
+    return payload, failures, notes
+
+
 def _load_baseline(path: Path) -> tuple[dict | None, str]:
     if not path.exists():
         return None, f"baseline {path} is missing"
@@ -1162,6 +1415,7 @@ def _compare_baseline(
     bootstrap: bool,
     refresh: bool,
     allow_tool_drift: bool,
+    refresh_reason: str | None = None,
 ) -> tuple[dict | None, list[str], list[str]]:
     """Return (new_baseline, failures, notes)."""
     failures: list[str] = []
@@ -1396,6 +1650,22 @@ def _compare_baseline(
         "tool_versions": current_tools,
         "content": metrics,
     }
+    refresh_log = (previous or {}).get("refresh_log")
+    history = (
+        [entry for entry in refresh_log if isinstance(entry, dict)]
+        if isinstance(refresh_log, list)
+        else []
+    )
+    if refresh and refresh_reason and not failures:
+        history.append(
+            {
+                "utc": payload["written_utc"],
+                "reason": refresh_reason.strip(),
+                "notes": list(notes),
+            }
+        )
+    if history:
+        payload["refresh_log"] = history[-20:]
     return payload, failures, notes
 
 
@@ -1532,8 +1802,17 @@ def _print_freshness(paths: Paths, allow_stale: bool) -> list[str]:
                 if oldest_out is None or mtime < oldest_out:
                     oldest_out = mtime
         if n_out == 0 or oldest_out is None:
-            print(f"freshness {name}: NO GENERATED OUTPUTS (stale by absence)")
-            if not allow_stale:
+            # A missing output tree is already a hard failure from
+            # _collect_outputs (producer output is missing), so do not add a
+            # second, less specific failure for the same absence.
+            absent = all(
+                not _resolve_token(token, paths).exists() for token in out_tokens
+            )
+            print(
+                f"freshness {name}: NO GENERATED OUTPUTS (stale by absence)"
+                + (" — producer baseline reports the missing output" if absent else "")
+            )
+            if not allow_stale and not absent:
                 failures.append(f"stale generated group {name}: no outputs")
             continue
         stale = oldest_out < newest_src
@@ -1577,7 +1856,14 @@ def main() -> int:
     ap.add_argument(
         "--refresh-stamps",
         action="store_true",
-        help="Explicit maintenance: accept regenerated producer/output drift.",
+        help="Explicit maintenance: accept regenerated producer/output drift. "
+        "Requires --refresh-reason.",
+    )
+    ap.add_argument(
+        "--refresh-reason",
+        default=None,
+        metavar="TEXT",
+        help="Why the baseline drift is being accepted (recorded in the baseline).",
     )
     ap.add_argument("--min-coverage", type=float, default=0.99)
     ap.add_argument("--min-exact-coverage", type=float, default=0.99)
@@ -1610,10 +1896,29 @@ def main() -> int:
         action="store_true",
         help="Explicit debug opt-out: do not fail external tool version drift.",
     )
+    ap.add_argument(
+        "--require-usmap",
+        action="store_true",
+        help="Fail when tools/ue4ss/output has no .usmap (full-tree gate; a fresh "
+        "worktree without the mapping file cannot produce dumps anyway).",
+    )
+    ap.add_argument(
+        "--usmap",
+        default=None,
+        metavar="PATH",
+        help="Explicit .usmap to pin instead of auto-discovering tools/ue4ss/output/*.usmap.",
+    )
     args = ap.parse_args()
     if args.bootstrap_stamps and args.refresh_stamps:
         raise SystemExit(
             "--bootstrap-stamps and --refresh-stamps are mutually exclusive"
+        )
+    if args.refresh_stamps and not (args.refresh_reason or "").strip():
+        raise SystemExit(
+            "--refresh-stamps requires --refresh-reason TEXT: the baseline records "
+            "why detected drift was accepted, so a refresh cannot be a silent "
+            "re-baseline. Example: --refresh-reason 'parse_curves added; "
+            "regenerated game/data/generated after make normalize'"
         )
 
     paths = Paths(
@@ -1671,9 +1976,29 @@ def main() -> int:
         p for p in missing_ubulk_exact if p not in allowlists["case_only_ubulk"]
     ]
 
-    disk_index = _build_disk_index(paths.extracted)
-    disk_missing = [p for p in covered if _stem(p) not in disk_index]
+    disk_index, disk_alias = _build_disk_index(paths.extracted)
+    disk_missing = []
+    disk_by_rename = []
+    disk_stubs = []
+    for path in covered:
+        stem = _stem(path)
+        artifacts = disk_index.get(stem)
+        if artifacts and "content" in artifacts.values():
+            continue
+        if artifacts:
+            disk_stubs.append(path)
+            continue
+        renamed = disk_alias.get(stem)
+        if renamed and "content" in renamed.values():
+            disk_by_rename.append(path)
+            continue
+        disk_missing.append(path)
     unexpected_disk = [p for p in disk_missing if p not in allowlists["disk_missing"]]
+    stale_disk_allowlist = [
+        p
+        for p in allowlists["disk_missing"]
+        if p not in disk_missing and p not in disk_by_rename
+    ]
 
     print(
         f"Manifest TAT entries: {len(all_tat)} ({len(covered)} payload, "
@@ -1694,11 +2019,37 @@ def main() -> int:
         f"effective {exact_effective:.1%}"
     )
     print(
-        f"Disk-backed coverage: {len(covered) - len(disk_missing)}/{len(covered)} "
+        f"Disk-backed content coverage: {len(covered) - len(disk_missing)}/"
+        f"{len(covered)} "
         f"({(len(covered) - len(disk_missing)) / max(1, len(covered)):.1%}), "
+        f"resolved by exported-name rename {len(disk_by_rename)}, "
         f"allowlisted missing {len(allowlists['disk_missing'])}, "
         f"unexpected {len(unexpected_disk)}"
     )
+    if disk_by_rename:
+        print(
+            "  renamed exports (SK_ authored -> SKM_ exported): "
+            + ", ".join(p.rsplit("/", 1)[-1] for p in disk_by_rename[:8])
+        )
+    if disk_stubs:
+        print(f"  content-free artifacts (stub JSON): {len(disk_stubs)}")
+    if stale_disk_allowlist:
+        print(
+            f"  stale disk_missing allowlist entries: {len(stale_disk_allowlist)} "
+            "(the path now resolves; delete the entry)"
+        )
+    disk_kinds = allowlists["disk_missing_kinds"]
+    unlabelled = [p for p in allowlists["disk_missing"] if p not in disk_kinds]
+    spare_labels = [p for p in disk_kinds if p not in allowlists["disk_missing"]]
+    if disk_kinds:
+        by_kind: dict[str, int] = {}
+        for path in allowlists["disk_missing"]:
+            kind = disk_kinds.get(path, "unlabelled")
+            by_kind[kind] = by_kind.get(kind, 0) + 1
+        print(
+            "  allowlisted missing by kind: "
+            + ", ".join(f"{k} {v}" for k, v in sorted(by_kind.items()))
+        )
     print(
         f"UBULK companions: {len(ubulk_entries)} manifest, "
         f"{len(missing_ubulk_ci)} case-insensitive missing, "
@@ -1733,6 +2084,29 @@ def main() -> int:
         failures.append(
             f"coverage: {len(unexpected_disk)} manifest paths have no disk artifact "
             f"and are not allowlisted, e.g. {unexpected_disk[:3]}"
+        )
+    if disk_stubs:
+        failures.append(
+            f"coverage: {len(disk_stubs)} manifest paths are covered only by a "
+            f"content-free stub (empty JSON/index file), e.g. {disk_stubs[:3]}"
+        )
+    if stale_disk_allowlist:
+        failures.append(
+            f"coverage: {len(stale_disk_allowlist)} disk_missing allowlist entries "
+            f"now resolve and must be deleted, e.g. {stale_disk_allowlist[:3]}"
+        )
+    if unlabelled:
+        failures.append(
+            f"coverage: {len(unlabelled)} allowlisted disk_missing paths have no "
+            f"kind in disk_missing_kinds, e.g. {unlabelled[:3]} (label every path "
+            "movie_wrapper / graybox_template / geometry_collection / editor_copy / "
+            "shader_cache / perf_harness / artsource / other so a reviewer can see "
+            "how much missing content is content-bearing)"
+        )
+    if spare_labels:
+        failures.append(
+            f"coverage: disk_missing_kinds labels {len(spare_labels)} paths that are "
+            f"not in disk_missing, e.g. {spare_labels[:3]}"
         )
     if missing_ubulk_ci:
         failures.append(
@@ -1854,10 +2228,21 @@ def main() -> int:
         args.bootstrap_stamps,
         args.refresh_stamps,
         args.allow_tool_drift,
+        args.refresh_reason,
     )
     for note in baseline_notes:
         print(note)
     failures.extend(baseline_failures)
+
+    previous_for_pin, _pin_error = _load_baseline(paths.baseline)
+    provenance_payload, provenance_failures, provenance_notes = _pin_provenance_inputs(
+        previous_for_pin, args.refresh_stamps, args.require_usmap, args.usmap
+    )
+    for note in provenance_notes:
+        print(note)
+    failures.extend(provenance_failures)
+    if baseline_payload is not None:
+        baseline_payload["provenance"] = provenance_payload
 
     if failures:
         print(f"AUDIT FAILED: {len(failures)} failure(s)")
@@ -1873,10 +2258,17 @@ def main() -> int:
             "exact_raw": len(covered) - len(missing_exact),
             "case_allowlisted": len(allowlisted_case),
             "disk_missing_allowlisted": len(disk_missing),
+            "disk_missing_resolved_by_rename": len(disk_by_rename),
             "ubulk": len(ubulk_entries),
         }
         _write_json_atomic(paths.baseline, baseline_payload)
         print(f"baseline -> {paths.baseline}")
+        if args.refresh_reason and baseline_payload.get("refresh_log"):
+            print(
+                "baseline: refresh reason recorded: "
+                f"{baseline_payload['refresh_log'][-1]['utc']} "
+                f"{args.refresh_reason.strip()!r}"
+            )
     elif args.bootstrap_stamps or args.refresh_stamps:
         print("baseline: not written because the audit failed")
     else:

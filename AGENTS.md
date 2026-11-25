@@ -43,9 +43,13 @@ TAT-2 expansion content belong in git.
    54.54; never clamp explicit user values.
 7. **Respect runtime contracts.** Groups and flags other code depends on:
    `blocking_volume` (invisible designer blockers must stay solid but unclimbable),
-   `swinging_doors`, `loot`, `xray_target`, `GameState.free_play` /
-   `free_play_pending`, `MissionPrepUI.open_prep(..., free_play)`. Do not rename
-   or repurpose them without updating every consumer and test.
+   `swinging_doors`, `loot`, `xray_target`, `prep_skyline`, `GameState.free_play` /
+   `free_play_pending`, `MissionPrepUI.open_prep(..., free_play)`. The W7 run
+   clock and loot economy add more: `GameState.phase` / `phase_changed`
+   (`main` → `endgame` → `resolved`), `escape_markers`,
+   `GameState.loot_run_id`, `last_payout`, and the `bank_payout(match_id)`
+   idempotency key. Do not rename or repurpose any of them without updating every
+   consumer and test.
 8. **Native engine binary first.** Use `tools/godot` (falls back to Flatpak).
    `godot` is not on `$PATH`.
 9. **One coherent commit per change**, with gate evidence in the message or the
@@ -57,15 +61,22 @@ TAT-2 expansion content belong in git.
 
 ```bash
 make run         # native 4.7.2 client, F3 overlay
-make test        # tests/run_tests.gd — 59 suites (re-measure; see gate table)
+make test        # tests/run_tests.gd — 278 checks, suites numbered to 90
 make audit       # fail-closed content + producer/output baseline gate
+make gate-ratchet # floors + committed docs/reports/logs evidence agree
+build/qa/test_perf_guard.sh  # perf-wrapper contract, no GPU, no launch
 
 tools/godot --headless --path game --script "$PWD/tools/check_scripts_compile.gd"
 tools/godot --headless --path game --script res://tests/test_m2_player.gd
 tools/godot --headless --path game --script res://probe_leak.gd
 tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd
 tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd -- --tier=1
+tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd -- --tier=s2
 ```
+
+If a headless run reports missing textures (`T1-01-C`, `moon_visible=0.0`), the
+import cache is incomplete — run `tools/godot --headless --path game --import`
+first.
 
 | Gate | Passing value (W7 merged tree, `6760dd0`, logs in `docs/reports/logs/w7-merged/`) |
 |---|---|
@@ -101,16 +112,25 @@ the cause or record it.
 
 ```
 game/src/core/        level_loader (UE→Godot world), game_data, game_state,
-                      save_system, audio_manager, shaders (tat_*.gdshader)
-game/src/player/      thief_character (movement, mantle, wall climb, zipwire)
-game/src/ai/          guard_ai, civilian_npc
-game/src/stealth/     light_probe, noise_bus
-game/src/interact/    swinging_door, loot, clues, escape gates
-game/src/missions/    mission_controller (spawns, Den/Guildhall fills, sign, free play)
-game/src/ui/          main_menu, contract_table, mission_prep, hud, wardrobe, settings
-game/tests/           run_tests.gd, test_m2_player.gd, probe_*.gd, e2e/tiers 1-4
-tools/                tat-extract (.NET), parse_*.py producers, manifest_audit
-build/qa/             tracked capture/probe scripts; PNG output ignored
+                      save_system (save v8 + payout outbox), audio_manager,
+                      shaders (tat_*.gdshader)
+game/src/player/      thief_character (movement, mantle, wall climb, zipwire,
+                      step-up/step-down)
+game/src/ai/          guard_ai, civilian_npc, hearing_data
+game/src/stealth/     light_probe, noise_bus, surface_resolver (ray → authored surface)
+game/src/interact/    swinging_door, loot, loot_inventory (12-slot bag),
+                      loot_stash, clues, escape_gate
+game/src/missions/    mission_controller (spawns, Den/Guildhall fills, sign,
+                      free play, two-phase run clock)
+game/src/ui/          main_menu, contract_table, mission_prep, hud, wardrobe,
+                      ledger, tool_preview, settings
+game/data/expansion/  tracked TAT-2 content (briefing overrides, graybox rules,
+                      prep_skyline backdrop)
+game/tests/           run_tests.gd, test_m2_player.gd, probe_*.gd,
+                      e2e tiers 1-4 + s2
+tools/                tat-extract (.NET), parse_*.py producers, manifest_audit,
+                      check_gate_ratchet
+build/qa/             tracked capture/probe/export-stamp scripts; PNG output ignored
 ```
 
 ## Known traps
@@ -161,6 +181,30 @@ build/qa/             tracked capture/probe scripts; PNG output ignored
   Security A + duplication <= 3 %; coverage and maintainability are not gate
   conditions. The GDScript floors live in `tools/gate_ratchet.json` and are
   checked against the committed logs in `docs/reports/logs/`.
+- **Loot capacity is authored, retention is binary.** 12 slots
+  (`BP_TATPlayerState.InventorySlotMaxCapacity`), `minor 1 / major 3 / quest 1`
+  (`DefaultLootSlotSize`), so a full bag is four majors. `kept_on_escape = 1.0`,
+  `kept_on_capture = 0.0`, stashed value is always kept — there is **no**
+  authored kept/lost fraction, so do not invent one.
+  `DifficultyToLootMultiplier` is authored but unproven at its call site; it is
+  stored and **not applied** (`DIFFICULTY_MULTIPLIER_APPLIED = false`).
+- **The run clock has two phases.** `main` ends when the objectives complete and
+  the escape doors are summoned; only the active phase ticks, main expiry is
+  `TIME EXPIRED`, endgame expiry is `MAGIC DOOR COLLAPSED`, and **an endgame
+  timeout still banks the stashed haul** (carried is lost, no reward). A
+  dormant escape gate must never extract. The main window is the **mission**
+  row (LootTheRoom 3300 s), not the 7200 s map row.
+- **Every failure path owes a payout.** Escape, capture, main timeout and door
+  collapse must each call `build_payout` + `bank_payout`, guarded by
+  `_payout_applied`, or a run silently loses (or double-banks) currency.
+- **`prep_skyline` is TAT-2 expansion content, not shipped art.** It is built
+  from shipped `Skybox/` meshes and labelled `expansion: true` in the JSON, in
+  the runtime constant and in the report. Never describe its silhouette as
+  authored Kilcairn content.
+- **The step-down query capsule is off by default** (`STEP_DOWN_QUERY_SHRINK_M =
+  0.0`). D1 (0.40 m ray, ≤0.30 m accept) + D5 (landing coalescing) are the
+  shipped path; the D2 shrink is a measured experiment (1–2 air frames,
+  0.001 m shove-back). Do not enable it without re-measuring the shove-back.
 - **Maps with authored placeholders** (`Mission.Example.*` fallbacks, Niagara
   placement notices, fog clamp, deferred navmesh) log expected warnings; do not
   “clean up” the logs by suppressing the messages.

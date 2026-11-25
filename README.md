@@ -9,18 +9,23 @@ the TAT-2 expansion adds **The Moth** thief, **Jaspering Hall** and co-op.
 > `extracted/` and `game/assets/ue/`, both git-ignored. Only original code, tools
 > and expansion content are committed. Do not redistribute extracted content.
 
-**Status (2026-11-24, `3202283`)** — playable end-to-end: startscreen → Den →
-contract prep → Guildhall run → scoring, plus free-play cleanout, two-player
-ENet co-op and all four E2E tiers.
+**Status (2026-11-24, `bc063d2`)** — playable end-to-end: startscreen → Den →
+contract prep → Guildhall run → two-phase escape → scoring, plus free-play
+cleanout, carried-loot capacity and stashing, two-player ENet co-op and all five
+E2E tiers.
 
 | Gate | Result |
 |---|---|
-| GDScript compile (`tools/check_scripts_compile.gd`) | **69 scripts, 0 broken** |
-| Unit/integration (`tests/run_tests.gd`) | **58 suites, fails=0** |
-| M2 traversal/tools (`tests/test_m2_player.gd`) | **fails=0** |
-| E2E (`tests/e2e/run_e2e_tests.gd`, tiers 1–4) | **264/264** (tier 1: 115) |
-| Door walk · viewmodel truth · Niagara | **PASS** |
-| Steam manifest + content audit (`make audit`) | exit 0, fail-closed tracked baseline, mount/path 100.0 % (exact-case 99.4 %), 13/13 content groups |
+| GDScript compile (`tools/check_scripts_compile.gd`) | **120 scripts, 0 broken** |
+| Unit/integration (`tests/run_tests.gd`) | **278 checks, fails=0** (suites numbered to 90) |
+| M2 traversal/tools (`tests/test_m2_player.gd`) | **fails=0** (11) |
+| E2E (`tests/e2e/run_e2e_tests.gd`, tiers 1–4 + `s2`) | **278/278** (tier 1: 117) |
+| Door walk · viewmodel truth · Niagara · leak probe | **PASS** |
+| Steam manifest + content audit (`make audit`) | exit 0, fail-closed tracked baseline, disk-backed coverage 99.6 % (12657/12703), 13/13 content groups |
+| Gate ratchet (`make gate-ratchet`) | **PASS** — floors verified against committed logs |
+
+Not yet measured: the perf matrix (no publishable FPS run) and the editor's
+per-process VRAM. Do not quote frame rates from any older run.
 
 ## Quick start
 
@@ -50,19 +55,22 @@ builds are documented in [`docs/ANDROID.md`](docs/ANDROID.md).
 | Command | Purpose |
 |---|---|
 | `make run` | Launch the desktop client (`F3` = FPS/draw-call overlay) |
-| `make test` | 59-suite headless integration run |
+| `make test` | Headless integration run (278 checks) |
 | `make audit` | Fail-closed gate: texture cap, mount/disk coverage, 13 content domains, producer output hashes, `errors.log` marker, freshness |
+| `make gate-ratchet` | Assert the gate floors in `tools/gate_ratchet.json` against the committed logs in `docs/reports/logs/` |
 | `make audit-bootstrap` | Explicit first run; writes the tracked `tools/audit_baseline.json` |
 | `make audit-refresh-stamps` | Escape hatch after regeneration; missing/decreased outputs still fail |
 | `make audit-imports` | Separate Godot import gate (`.import` sidecars + `.translation`) |
-| `make normalize` | Run all 17 generated-data producers |
-| `make linux-build` / `make linux-run` | Linux x86_64 export / run |
+| `make normalize` | Run all 21 generated-data producers |
+| `make linux-build` / `make linux-stamp-verify` / `make linux-run` | Linux x86_64 export, its HEAD/PCK provenance stamp, and a run |
 | `make android-debug` / `make android-release` | Signed internal APK |
 | `make desktop-texture-cap` | Re-bake the 1024 px texture cap |
 | `make texture-cap-check` | Read-only: fail if any over-cap loader texture lacks the cap + mipmaps |
 | `make editor` | Open the Godot editor with the **TAT-2 Review** dock |
 | `make bake-review MAP=guildhall` | Headless bake of one binary `LevelLoader` scene per sublevel (+ manifest) |
+| `make bake-review-core` | Bake the single-file core map used for load/VRAM checks |
 | `make review MAP=guildhall` | In-game free-camera review of the static world (no mission) |
+| `build/qa/test_perf_guard.sh` | Exercise the perf wrapper's stamp/temperature/RSS contracts without launching a game |
 
 `tools/audit_baseline.json` is tracked and records every producer/infrastructure
 hash, external tool version and per-output content digest. A normal run with no
@@ -110,13 +118,21 @@ tagging vocabulary, measured Den/lobby numbers and limits are in
   `FREE PLAY: GUILDHALL CLEANOUT [G]` button) for a score-only Contract Inactive
   run of `Mission.Guildhall.LootTheRoom`. No contract progress or currency is
   banked.
+- **Run clock:** 55:00 on the main window (the mission's authored duration).
+  Completing the objectives summons the escape doors and starts a separate
+  20:00 endgame window; the doors stay open for 4 minutes each, then collapse.
+- **Loot:** 12 authored inventory slots — minor loot takes 1, major loot 3, so
+  four majors fill the bag. A full bag refuses the pickup with the authored
+  `INVENTORY FULL` line. Deposit everything at a stash to free slots; stashed
+  value is banked even if you are caught, while carried loot is only kept if you
+  escape.
 - **QA autostart:** `--qa-free-play`, `--qa-mission`, `--qa-contract <n>`.
 
 ## Repository layout
 
 ```
 game/                 Godot project (src/, scenes/, tests/, assets/ue -> extracted)
-tools/                extractor (.NET/CUE4Parse), 17 normalizers, audit + guards
+tools/                extractor (.NET/CUE4Parse), 21 normalizers, audit + gates
 build/qa/             tracked capture/probe harness sources (captures ignored)
 docs/                 architecture, performance, fidelity tracker, wave reports, handoffs
 extracted/            private extraction cache (gitignored)
@@ -132,8 +148,12 @@ data under `game/data/generated/` (gitignored, produced by `make normalize`).
   pipeline gotchas and open work.
 - [`docs/FIDELITY_GAPS.md`](docs/FIDELITY_GAPS.md) — live 1:1 coverage tracker and
   every documented residual.
+- [`docs/reports/w7-integration.md`](docs/reports/w7-integration.md) — latest
+  wave: loot capacity/stash/payout and save v8, two-phase run clock and 25 escape
+  markers, surface-resolved hearing, stair descent, KF11 backdrop and Cotter
+  wardrobe, export provenance and the Sonar plan.
 - [`docs/reports/review-remediation-wave.md`](docs/reports/review-remediation-wave.md)
-  — latest wave: beams, two-sided materials, albedo recovery, doors, traversal
+  — earlier wave: beams, two-sided materials, albedo recovery, doors, traversal
   blockers, FOV, loot grounding, sign, free play.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md),
   [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md),
@@ -145,3 +165,10 @@ See [`docs/FIDELITY_GAPS.md`](docs/FIDELITY_GAPS.md). The visible ones: Guildhal
 POI graybox floors/floating furniture, sign lettering low-contrast at 27 m, some
 white glass/emissive plates, the Den's 43.5 vs UE 52.6 Lumen GI gap, and a
 7-texture probe-exit warning (`TAT2_NO_DEN_PROBE=1` is the clean path).
+
+Behavioural residuals: walked descents of 0.18–0.30 m still take 4–12 airborne
+frames, the two-phase timer banks local-only in co-op, the post-match haul screen
+is not built, and XP still uses the port's invented rule rather than the authored
+`DefaultGame.ini` curve — which brings the 48 level-gated market items far
+earlier than authored. Hearing is range-based: walls and closed doors do not
+block sound yet.

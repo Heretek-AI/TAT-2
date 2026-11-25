@@ -965,6 +965,9 @@ func _feat_10_zipwire_crank_mantle_climb() -> void:
 	h.require(hang_complete_ok, "T1-10-I", "hang completion grants charge, hides cable (%s)" % str(hang_complete_ok))
 
 	# T1-10-D: 4.0 m Auto-Mantle Traversal
+	# The mantle now runs for the authored clip length (1.75 s for the
+	# 1.75-2.25 m band, AN_Mantle_200CM), not the old flat 0.30 s: advance past
+	# the clip before asserting the body arrived (RE-F-16 / T04 contract).
 	var arena2_d: Dictionary = await h.make_arena(Vector3(9700.0, 500.0, 9500.0))
 	var arena2: Node3D = arena2_d["arena"] as Node3D
 	h.add_wall_box(arena2, Vector3(0.0, 1.0, -2.5), Vector3(6.0, 2.0, 2.0), "MantleLedge2m")
@@ -972,12 +975,19 @@ func _feat_10_zipwire_crank_mantle_climb() -> void:
 	var tc_src: String = h.read_text("res://src/player/thief_character.gd").to_lower()
 	h.press_action("move_forward")
 	h.press_action("jump")
+	# 45 frames (0.75 s) proves the mantle STARTED at the authored pace: at
+	# 1.75 s the player is only ~1.7 m up here, not teleported. Release the
+	# inputs then, so the body does not walk off the far edge while the mantle
+	# finishes, and advance past the 1.75 s clip (2.0 s total) before asserting.
 	await h.step_physics(45)
-	h.release_action("jump")
+	var mantle_partial_y: float = (p2 as Node3D).position.y if p2 is Node3D else 0.0
 	h.release_action("move_forward")
+	h.release_action("jump")
+	await h.step_physics(75)
 	var mantled_y: float = (p2 as Node3D).position.y if p2 is Node3D else 0.0
 	var has_mantle_logic: bool = tc_src.find("mantle") >= 0
-	h.require(has_mantle_logic and mantled_y >= 1.8, "T1-10-D", "auto-mantle logic=%s y=%.2f (expected >= 1.8)" % [str(has_mantle_logic), mantled_y])
+	h.require(has_mantle_logic and mantled_y >= 1.8 and mantle_partial_y < 1.8,
+		"T1-10-D", "auto-mantle logic=%s y=%.2f at 0.75s / %.2f at 2.0s (expected <1.8 then >= 1.8)" % [str(has_mantle_logic), mantle_partial_y, mantled_y])
 
 	# T1-10-E: 2.5 m/s (250 cm/s) Wall-Climb
 	h.add_wall_box(arena2, Vector3(0.0, 5.0, -10.0), Vector3(6.0, 10.0, 1.0), "ClimbWall", "SurfaceType12")

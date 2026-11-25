@@ -181,6 +181,23 @@ const TAKEDOWN_ATK_ROLE: String = "takedown_atk_stealth_3p"
 ## contact, not on frame 0.
 const BLACKJACK_SWING_CLIP: String = "AN_BlackJack_Attack_Light__Slash_R_01"
 const BLACKJACK_REACH_M: float = 2.4 # same reach _try_blackjack validates at swing start
+# Authored auto-mantle clip lengths, `anims_meta.json` `length` for
+# AN_Mantle_050CM..AN_Mantle_300CM (plus the two traversal variants the FP layer
+# selects). The movement curve must finish with the arms: the port used a flat
+# 0.30 s (a mis-reading of the GE_Traversal_AutoMantle note) while the authored
+# clips run 0.75-2.58 s, so the body arrived 2.5-8.6x early and the arms played
+# the reach/plant after the player had already stood up (RE-F-16).
+const MANTLE_MOVE_SEC_BY_BAND: Dictionary = {
+	"mantle_050": 0.75,
+	"mantle_100": 1.0,
+	"mantle_150": 1.166667,
+	"mantle_200": 1.75,
+	"mantle_250": 2.25,
+	"mantle_300": 2.583333,
+	"climb_to_mantle": 2.066667,
+	"vault": 0.9,
+}
+const MANTLE_MOVE_SEC_LEGACY: float = 0.3
 const WALL_CLIMB_SPEED: float = 2.5 # BP_Player_Base._wallClimbSettings.WallClimbDashSpeed 250cm/s
 const WALL_CLIMB_ACCEL: float = 12.0 # BP_Player_Base._wallClimbSettings.WallClimbDashAcceleration 1200cm/s2
 ## Frames-after-crest window in which a finished wall climb may hand off to the
@@ -401,6 +418,9 @@ var _tp_takedown_ttl: float = 0.0
 var _tp_takedown_presenting: bool = false
 var _tp_takedown_cam: Camera3D = null
 var _mesh_root_prev_visible: bool = false
+# Duration of the current auto-mantle, in seconds (RE-F-16). Resolved from the
+# clip that is actually playing, so it can never drift from the animation.
+var _mantle_move_sec: float = 1.0
 ## W5A step-up: rise committed this frame (0 when none) and the pending camera
 ## offset the eye still owes (eased out so a riser does not jolt the view).
 var _step_rise_this_frame: float = 0.0
@@ -1363,7 +1383,7 @@ func _physics_process(delta: float) -> void:
 	# hold progress tick here too (via _tick_sustained_systems) so the 0.3 s
 	# traversal no longer freezes them (disguise-TTL pause exploit + hold freeze).
 	if is_mantling:
-		_mantle_t = minf(1.0, _mantle_t + delta / 0.3)
+		_mantle_t = minf(1.0, _mantle_t + delta / maxf(_mantle_move_sec, 0.05))
 		var smooth_t: float = _mantle_t * _mantle_t * (3.0 - 2.0 * _mantle_t)
 		global_position = _mantle_start.lerp(_mantle_end, smooth_t)
 		velocity = Vector3.ZERO
@@ -2151,8 +2171,23 @@ func try_auto_mantle() -> bool:
 	elif is_crouching:
 		_mantle_clip_role = "vault" # AN_CrouchMantle_100
 	_climb_crest_grace = 0.0
+	# Order matters: _fp_play_action sets _fp_current_clip, and the duration is
+	# read from the clip that is actually playing.
 	_fp_play_action(_mantle_clip_role)
+	_mantle_move_sec = _mantle_move_duration(_mantle_clip_role)
 	return true
+
+
+## Seconds one auto-mantle takes: the length of the clip the FP layer is about
+## to play (so a re-timed GLB drives the movement automatically), else the
+## authored anims_meta length for the band, else the legacy 0.3 s constant.
+func _mantle_move_duration(role: String) -> float:
+	if _fp_use_real_arms and fp_anim_player != null and _fp_current_clip != "" \
+			and fp_anim_player.has_animation(_fp_current_clip):
+		var clip_len: float = fp_anim_player.get_animation(_fp_current_clip).length
+		if clip_len > 0.05:
+			return clip_len
+	return float(MANTLE_MOVE_SEC_BY_BAND.get(role, MANTLE_MOVE_SEC_LEGACY))
 
 
 func _tick_wall_climb(delta: float, wish: Vector3) -> bool:

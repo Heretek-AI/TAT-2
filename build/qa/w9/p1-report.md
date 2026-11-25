@@ -441,10 +441,18 @@ integrator steps rather than fixed here.
 4. **Re-run the complete gate set serially** at the merged HEAD. The numbers in
    §"Golden gate set" are the floors for this wave; `run_tests` grew 301 → 339 `^PASS`
    (suites 98/99 + child-engine output) and compile 152 → 157, so a silent drop is a regression.
-5. **`make gate-ratchet` passes on the R8 logs**; raising it to 157/303/30,901 is
+5. **`make gate-ratchet` passes on the R8 logs**; raising it to 157/339/30,905 is
    P0's job and needs the re-stamped logs. Do not lower a floor.
 6. Expect **~30 s of extra level load** in every perf run (authored collision) and
    re-measure the 60 FPS gate on a cool host before quoting any FPS.
 7. The two stale consumer-allowlist rules (`project_settings.json`,
    `mesh_collision.json`) are removed in this branch; `make audit` passes with 22
    rules and both files counted as runtime-read.
+8. **Repo docs owed at integration (not P1-owned):** `docs/FIDELITY_GAPS.md`
+   needs the four one-line entries (authored collision + its load cost and the
+   `test_roof_collision` owner action; authored progression with the ladder
+   override; the input/curves consumers with the sensitivity change; prep
+   composition/grade and the interior BLOCKED-ON P2), and
+   `docs/HANDOFF_NEXT_AGENT.md` needs the new HEAD, the gate numbers and the
+   blocked list from §"Blocked / deferred". Those files are outside P1's file
+   ownership (P0 owns the reports), so this branch does not touch them.

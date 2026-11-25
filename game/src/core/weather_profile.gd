@@ -43,9 +43,18 @@ extends RefCounted
 ##   ColorGainMidtones.X -> adjustment_brightness (Godot multiplier, default 1.0,
 ##   range 0..2; NOT an offset — assigning gain-1 renders the view black),
 ##   AutoExposureBias + 1.0 -> tonemap_exposure (Godot default 1.0),
-##   BloomIntensity * 0.08 -> glow_intensity (DenseFog 8.0 -> 0.64, matching the
-##   previous hand-tuned 0.65). Godot has no vignette/white-temp/film-curve
-##   slots, so those parsed values are exposed via getters only.
+##   BloomIntensity * 0.02 -> glow_intensity (DenseFog 8.0 -> 0.16; the old
+##   0.08 factor turned every ceiling practical into a white halo). Godot has no
+##   vignette/white-temp/film-curve slots, so those parsed values are exposed via
+##   getters only; `white_temp` / `vignette_intensity` / `film_*` need a
+##   screen-space pass and a capture to settle their convention (T07 report).
+## - FogHeightFalloff -> fog_height_density with the same 0.03 cm->m calibration
+##   (outdoor presets only; a room has no height gradient).
+## - moon_light.source_angle -> DirectionalLight3D.light_angular_distance (1:1
+##   degrees). sky.volumetric_cloud_visible gates the procedural cloud stand-in.
+## - Night presets (`gloomy`, `midnight_clear*`) take AGX + NIGHT_EXPOSURE; the
+##   authored AutoExposureBiasCurve (V3) is transcribed for the exposure decision
+##   only, never multiplied into tonemap_exposure (EV100 space != a linear gain).
 ## - Fog DirectionalInscattering luminance -> fog_sun_scatter (0..1).
 ## - enable_rain / rain_intensity are exposed for later particle wiring; this
 ##   module never spawns rain.
@@ -68,6 +77,9 @@ static var _preset_cache: Dictionary = {}
 
 # Cache for desktop shadow-toe lift 1D LUTs (R3 APPROXIMATE Local Exposure / gain_shadows).
 static var _lut_cache: Dictionary = {}
+## One loud line per session for the IBL/GI state (authored cubemap reachable?
+## which approximation is active?). Repeated applies stay quiet.
+static var _ibl_state_logged: bool = false
 
 # UE centimetres -> Godot metres, calibrated for the 20-120 m readability band
 # (see the header table); NOT the plain 0.01 geometry convention.
@@ -100,8 +112,32 @@ const AMBIENT_ENERGY_MAX := 0.35
 const AMBIENT_UE_TO_GODOT := 0.08
 # The authored Guildhall night needs a small exposure lift under AGX; the
 # old ACES 1.0 path left the gate at p50 0.04-0.06 against the reference
-# 0.10-0.11. Applied to the MidnightClear preset only.
+# 0.10-0.11. W5C scoped this to the bare preset id "midnight_clear", which NO
+# map resolves to (`map_weather.json`: guildhall -> gloomy), so the Guildhall --
+# the map this calibration was measured on (KF16/KF17/KF18 are Guildhall frames)
+# -- ran at 1.0, i.e. exactly the configuration the sentence above says crushes
+# the gate. T07 applies it to every authored night preset through
+# is_night_preset() instead of an exact-id match.
 const NIGHT_EXPOSURE := 1.15
+## Authored AutoExposureBiasCurve (`Curve_Exposure_Compensation_Float_V3`, the
+## curve the Gloomy -> Base_Skybox -> Base weather chain selects): x is the
+## auto-exposure average brightness in EV100, y the extra bias in EV. The shipped
+## night deliberately pulls the image DOWN by up to 4 EV as the scene darkens, on
+## top of AutoExposureBias 0.0.
+## `tools/parse_weather.py` emits neither this curve nor
+## AutoExposureMin/MaxBrightness (T01 producer gap, see the T07 report's
+## BLOCKED-ON T01 contract). Consumed by ev_curve_bias() for the *exposure
+## decision only*: UE's EV100 space is luminance-calibrated and Godot's
+## tonemap_exposure is a linear multiplier, so applying -4 EV literally would
+## divide the frame by 16. Godot has no auto exposure at all.
+const EV_CURVE_POINTS: Array[Vector2] = [
+	Vector2(-12.1, -0.5), Vector2(-11.1, -1.5), Vector2(-10.1, -2.0),
+	Vector2(-9.1, -2.25), Vector2(-8.1, -2.5), Vector2(-6.1, -3.0),
+	Vector2(-3.0, -4.0), Vector2(0.2, -4.0),
+]
+## EV100 the shipped night rows meter at (AEM_Basic over a 0.01-0.033 lux moon
+## plus practicals). At or below this the authored curve is saturated at -4 EV.
+const EV_CURVE_NIGHT_EV100 := -3.0
 # UE BloomIntensity -> Godot glow_intensity (DenseFog 8.0 -> 0.16). The old
 # 0.08 factor put Guildhall at 0.51 and turned every ceiling practical and
 # the 2500-lumen security spot into a white halo. 0.02 keeps the practicals
@@ -278,6 +314,70 @@ static func sound_carry_multiplier_for_map(map_id: String, indoors: bool) -> flo
 	return HearingData.weather_sound_carry_multiplier(tag, indoors)
 
 
+## Desktop GI/AO lever (T07 P1). Authored = Lumen diffuse GI + hardware RT with
+## VSM (`r.DynamicGlobalIlluminationMethod=1`, `r.Lumen.HardwareRayTracing=True`)
+## and `r.AllowStaticLighting=False`, so there is no lightmass bake to import —
+## an "import the bake" fix is not available. Godot's approximations, cheapest
+## first:
+##   off   : no indirect pass (perf-ladder last resort)
+##   ssil  : screen-space indirect, the shipped desktop default
+##   sdfgi : voxel GI, the closest analogue to Lumen diffuse, but it re-voxelises
+##           the 63 k-instance Guildhall every frame and has NOT been measured on
+##           the 60 FPS desktop gate, so it is an opt-in capture lever, not a
+##           default. The authored `LumenDiffuseColorBoost 2.0` is the tuning
+##           target for its energy (T01 does not emit the field yet).
+## `TAT2_GI` overrides the mode; `TAT2_AO=off` removes SSAO for an A/B capture.
+const ENV_GI_MODE := "TAT2_GI"
+const ENV_AO_MODE := "TAT2_AO"
+
+
+static func gi_mode() -> String:
+	var mode: String = OS.get_environment(ENV_GI_MODE).strip_edges().to_lower()
+	if mode == "off" or mode == "ssil" or mode == "sdfgi":
+		return mode
+	return "ssil"
+
+
+static func ao_enabled() -> bool:
+	return OS.get_environment(ENV_AO_MODE).strip_edges().to_lower() != "off"
+
+
+## Applies the desktop indirect/occlusion passes. Called from apply_environment
+## so the QA levers live in exactly one place.
+static func apply_gi_and_ao(env: Environment, desktop_quality: int) -> void:
+	if env == null or desktop_quality < 2:
+		return
+	var mode: String = gi_mode()
+	env.ssil_enabled = mode == "ssil"
+	if mode == "ssil":
+		env.ssil_radius = 4.5
+		env.ssil_intensity = 0.8
+		env.ssil_sharpness = 0.98
+		env.ssil_normal_rejection = 1.0
+	if mode == "sdfgi":
+		env.sdfgi_enabled = true
+		# 3 cascades / 0.5 m cells covers ~100 m of interior; the port has no
+		# measured cost for this, hence the opt-in gate above.
+		env.sdfgi_cascades = 3
+		env.sdfgi_min_cell_size = 0.5
+		env.sdfgi_use_occlusion = true
+		env.sdfgi_read_sky_light = true
+		env.sdfgi_energy = 1.0
+		env.sdfgi_max_distance = 200.0
+	if ao_enabled():
+		# APPROXIMATE contact shadow (Lumen's screen-probe occlusion has no Godot
+		# slot). Conservative intensity: the defect being fixed is a light
+		# deficit, so AO must add depth without deepening the crush.
+		env.ssao_enabled = true
+		env.ssao_radius = 1.5
+		env.ssao_intensity = 1.2
+		env.ssao_power = 1.5
+		env.ssao_detail = 0.5
+		env.ssao_horizon = 0.06
+		env.ssao_sharpness = 0.98
+		env.ssao_light_affect = 0.0
+
+
 ## True when the map's authored preset is the indoor (Den style) environment.
 static func map_is_indoor(map_id: String) -> bool:
 	return is_indoor_preset(preset_for_map(map_id))
@@ -369,6 +469,125 @@ static func fog_sun_scatter(preset: Dictionary) -> Variant:
 ## the two existing Den branches in apply_environment.
 static func is_indoor_preset(preset: Dictionary) -> bool:
 	return "thieves_den" in str(preset.get("preset", "")).to_lower()
+
+
+## Authored night rows (see NIGHT_EXPOSURE). A preset is a night preset when it
+## is `gloomy` or a `midnight_clear*` row, or when its authored weather tag says
+## so. `dense_fog`/`heavy_rain` are deliberately excluded: the Old Manor and
+## Jaspering night grading has no reference calibration in this repo, and
+## changing their exposure would be an unmeasured edit.
+static func is_night_preset(preset: Dictionary) -> bool:
+	var pid: String = str(preset.get("preset", "")).to_lower()
+	if pid == "gloomy" or pid.begins_with("midnight_clear"):
+		return true
+	var tag: String = str(preset.get("weather_tag", "")).to_lower()
+	return tag == "weather.type.gloomy" or tag == "weather.type.midnightclear"
+
+
+## Piecewise-linear read of the authored V3 exposure-compensation curve.
+static func ev_curve_bias(ev100: float) -> float:
+	if EV_CURVE_POINTS.is_empty():
+		return 0.0
+	if ev100 <= EV_CURVE_POINTS[0].x:
+		return EV_CURVE_POINTS[0].y
+	for i: int in range(1, EV_CURVE_POINTS.size()):
+		var a: Vector2 = EV_CURVE_POINTS[i - 1]
+		var b: Vector2 = EV_CURVE_POINTS[i]
+		if ev100 <= b.x:
+			var span: float = b.x - a.x
+			var t: float = 0.0 if is_zero_approx(span) else (ev100 - a.x) / span
+			return lerpf(a.y, b.y, t)
+	return EV_CURVE_POINTS[EV_CURVE_POINTS.size() - 1].y
+
+
+## Authored UE LightSourceAngle -> Godot DirectionalLight3D.light_angular_distance
+## (both degrees, 1:1). The soft night-sky moon is part of the authored look; the
+## port left the angular distance at 0 (hard-edged shadows).
+static func moon_source_angle(preset: Dictionary) -> Variant:
+	var raw: Variant = _section(preset, "moon_light").get("source_angle")
+	if raw == null:
+		return null
+	return clampf(float(raw), 0.0, 90.0)
+
+
+## Authored FogHeightFalloff -> Godot `fog_height_density`, using the same
+## 0.03 cm->m calibration as FogDensity (see FOG_DENSITY_SCALE). Godot measures
+## the height fog from world y=0 and attenuates by exp(-fog_height_density * y),
+## so gloomy's 1.070813 becomes 0.0321 /m: ~55 % of the authored density at the
+## Guildhall's y=18.5 street floor and ~6 % at its y=87 tower top, which is the
+## ground-hugging haze the uniform density could not express.
+## APPROXIMATE: UE's exact height integral and its fog-base offset are not
+## recovered (the base is assumed 0); indoor presets keep a uniform fog because
+## the Den is a room, not a street.
+static func fog_height_density(preset: Dictionary) -> Variant:
+	var raw: Variant = _section(preset, "fog").get("height_falloff")
+	if raw == null:
+		return null
+	return clampf(float(raw) * FOG_DENSITY_SCALE, 0.0, 1.0)
+
+
+## Authored volumetric-cloud visibility. False means the preset authors no
+## volumetric cloud pass for that sky (the Den and midnight_clear); the port's
+## procedural FBM stand-in used to draw clouds on every preset regardless.
+static func sky_clouds_visible(preset: Dictionary) -> bool:
+	return _section(preset, "sky").get("volumetric_cloud_visible", true) != false
+
+
+## Authored SkyLight specified cubemap (UE path). Every shipped night preset
+## points at `/Game/MaterialLibrary/Utility/Cubemap_GroundFloor_01`; the extractor
+## does not export TextureCube faces (no .hdr/.exr/.ktx2 in extracted/assets), so
+## the port cannot build the authored IBL yet. Resolved and reported here, with
+## the loader in sky_ibl_state() below, so the day the producer emits the faces
+## the consumer already exists. Returns "" when the preset authors none.
+static func sky_cubemap_path(preset: Dictionary) -> String:
+	return str(_section(preset, "sky").get("cubemap", ""))
+
+
+## Godot resource path the converted authored cubemap would live at: the UE path
+## with `/Game/` swapped for the extracted asset root and an HDR extension. Only
+## `/Game/` content is mirrored under `res://assets/ue/Raw` (an `/Engine/` or
+## plugin path has no converted equivalent), so anything else returns "".
+static func sky_cubemap_res_path(preset: Dictionary) -> String:
+	var ue_path: String = sky_cubemap_path(preset)
+	if not ue_path.begins_with("/Game/"):
+		return ""
+	var rel: String = ue_path.trim_prefix("/Game/")
+	return "res://assets/ue/Raw/%s.exr" % rel
+
+
+## What the ambient/IBL path can do with the authored SkyLight right now.
+## `available=false` means the converted cubemap is not on disk; the caller keeps
+## `ambient_light_sky_contribution = 0` (a flat authored colour) rather than
+## mixing the display-space sky shader into ambient, which would darken it.
+static func sky_ibl_state(preset: Dictionary) -> Dictionary:
+	var res_path: String = sky_cubemap_res_path(preset)
+	var available: bool = res_path != "" and ResourceLoader.exists(res_path)
+	return {
+		"cubemap_ue_path": sky_cubemap_path(preset),
+		"cubemap_res_path": res_path,
+		"available": available,
+		"sky_contribution": 1.0 if available else 0.0,
+	}
+
+
+## Prep-stage grade values for T05 (mission_prep_ui.gd owns the call site and
+## T07 owns the grade). The stage still hard-codes ACES 2.6 / ambient 1.8 /
+## glow 1.0 / sky 0.18 while gameplay runs AGX at the authored night anchor with
+## ambient 0.16-0.35 (measurable 2.6x exposure and 11x ambient gap, finding
+## C1-09). These are the same authored numbers the gameplay path applies, so T05
+## can replace its constants with this dictionary and keep one grade.
+static func stage_grade_values(preset: Dictionary) -> Dictionary:
+	var amb: Variant = ambient_energy(preset)
+	var glow: Variant = glow_intensity(preset)
+	var night: bool = is_night_preset(preset)
+	return {
+		"tonemap_mode": Environment.TONE_MAPPER_AGX if night else Environment.TONE_MAPPER_ACES,
+		"tonemap_exposure": NIGHT_EXPOSURE if night else 1.0,
+		"ambient_light_color": ambient_color(preset),
+		"ambient_light_energy": float(amb) if amb != null else AMBIENT_ENERGY_MIN,
+		"glow_intensity": float(glow) if glow != null else 0.0,
+		"background_energy_multiplier": 1.0,
+	}
 
 
 ## Outdoor fog/sky colour: the authored overcast-dome hue (sky.cloud_color,
@@ -683,6 +902,12 @@ static func apply_environment(env: Environment, moon: DirectionalLight3D, preset
 		var scatter: Variant = fog_sun_scatter(preset)
 		if scatter != null:
 			env.fog_sun_scatter = float(scatter)
+		# Authored FogHeightFalloff (previously dead data). Outdoor presets only:
+		# the Den authors 1.0 as well, but a room has no height gradient.
+		var hf: Variant = fog_height_density(preset)
+		if hf != null and not is_indoor:
+			env.fog_height_density = float(hf)
+			env.fog_height = 0.0
 		# UE's ExponentialHeightFog does not occlude the sky sphere. Godot's
 		# default of 1.0 lets the height fog fully replace the sky at infinite
 		# depth, so the authored gradient, stars and moon would render black.
@@ -724,11 +949,19 @@ static func apply_environment(env: Environment, moon: DirectionalLight3D, preset
 		if amb_c != null:
 			env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 			env.ambient_light_color = amb_c
-			# The authored SkyLight is a specified cubemap at intensity 2.5, not
+			# The authored SkyLight is a specified cubemap at intensity 2.0-2.5, not
 			# the near-black M_Sky sphere. Godot's default 1.0 sky contribution
-			# blends that black sphere into ambient and erases the authored
-			# color, which is why Guildhall/Den crushed to black.
+			# blends that dark display-space sphere into ambient and erases the
+			# authored color, which is why Guildhall/Den crushed to black. Keep 0
+			# until the authored cubemap can actually be loaded (sky_ibl_state);
+			# mixing the sky shader in instead would *reduce* ambient.
 			env.ambient_light_sky_contribution = 0.0
+			var ibl: Dictionary = sky_ibl_state(preset)
+			if bool(ibl.get("available", false)):
+				env.ambient_light_sky_contribution = float(ibl.get("sky_contribution", 1.0))
+			if not _ibl_state_logged:
+				_ibl_state_logged = true
+				print("TAT-2 IBL: skylight_cubemap=", str(ibl.get("cubemap_ue_path", "")), " converted=", str(ibl.get("cubemap_res_path", "")), " available=", str(ibl.get("available", false)), " sky_contribution=", str(ibl.get("sky_contribution", 0.0)), " gi=", gi_mode(), " ao=", ao_enabled())
 		var amb_e: Variant = ambient_energy(preset)
 		if amb_e != null:
 			env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
@@ -746,12 +979,10 @@ static func apply_environment(env: Environment, moon: DirectionalLight3D, preset
 			if bri != null:
 				env.adjustment_brightness = clampf(float(bri), 0.0, 2.0)
 		if is_desktop and desktop_quality >= 2:
-			# Desktop SSIL + shadow-toe LUT (R3 APPROXIMATE replacement for UE5 Lumen GI & Local Exposure).
-			env.ssil_enabled = true
-			env.ssil_radius = 4.5
-			env.ssil_intensity = 0.8
-			env.ssil_sharpness = 0.98
-			env.ssil_normal_rejection = 1.0
+			# Desktop GI stand-ins + shadow-toe LUT (R3 APPROXIMATE replacement
+			# for UE5 Lumen GI & Local Exposure). The GI/AO mode is one place so
+			# the QA levers (TAT2_GI / TAT2_AO) cannot drift from the default.
+			apply_gi_and_ao(env, desktop_quality)
 			var gs: Variant = shadow_gain(preset)
 			if gs != null and float(gs) > 1.02:
 				env.adjustment_enabled = true
@@ -761,15 +992,21 @@ static func apply_environment(env: Environment, moon: DirectionalLight3D, preset
 			env.tonemap_exposure = float(expo)
 		# Guildhall's authored night is the one place the ACES 1.0 path crushed
 		# the gate into black while the interior practicals clipped. AGX rolls
-		# the highlights off instead of clipping them. W5C: the hub's preset is
-		# now the evidenced `gloomy` (rainy streets), so it keeps the same AGX
-		# path; its authored AutoExposureBias is 0.0, so no exposure lift is
-		# added there (the 1.15 lift stays the midnight_clear calibration).
-		var night_id: String = str(preset.get("preset", "")).to_lower()
-		if night_id == "midnight_clear" or night_id == "gloomy":
+		# the highlights off instead of clipping them. Both authored night
+		# families take it, and both take the measured 1.15 anchor (see
+		# NIGHT_EXPOSURE: the lift used to be scoped to a preset no map uses).
+		if is_night_preset(preset):
 			env.tonemap_mode = Environment.TONE_MAPPER_AGX
-			if night_id == "midnight_clear":
-				env.tonemap_exposure = maxf(env.tonemap_exposure, NIGHT_EXPOSURE)
+			env.tonemap_exposure = maxf(env.tonemap_exposure, NIGHT_EXPOSURE)
+			# Evidence line: the authored exposure path is recorded even where
+			# Godot cannot apply it (no auto exposure; EV curve is EV-space).
+			print("TAT-2 exposure: preset=%s mode=AGX exposure=%.3f authored_bias=%s ev100_night=%.1f authored_curve_bias=%.2f (curve recorded, not applied)" % [
+				str(preset.get("preset", "?")),
+				env.tonemap_exposure,
+				str(_section(preset, "postprocess").get("auto_exposure_bias")),
+				EV_CURVE_NIGHT_EV100,
+				ev_curve_bias(EV_CURVE_NIGHT_EV100),
+			])
 		var glow: Variant = glow_intensity(preset)
 		if glow != null:
 			# Den RD cap: indoor Den preset keeps glow on for the warm look
@@ -816,6 +1053,11 @@ static func apply_environment(env: Environment, moon: DirectionalLight3D, preset
 		var mbasis: Variant = moon_basis(preset)
 		if mbasis != null:
 			moon.basis = mbasis
+		# Authored LightSourceAngle (previously dead data): the soft night-sky
+		# moon. 1:1 degrees into Godot's directional light angular distance.
+		var mangle: Variant = moon_source_angle(preset)
+		if mangle != null:
+			moon.light_angular_distance = float(mangle)
 	return true
 
 
@@ -834,3 +1076,4 @@ static func cleanup_static_caches() -> void:
 	_map_table_ready = false
 	_preset_cache.clear()
 	_lut_cache.clear()
+	_ibl_state_logged = false

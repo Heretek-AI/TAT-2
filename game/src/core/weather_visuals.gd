@@ -97,12 +97,11 @@ const MOON_ENERGY_MAX := 2.0
 const STAR_NORMALIZER := 8.0
 ## The port renders the authored sky sphere only, so the upper sky reads
 ## 0.009-0.019 linear instead of UE's ~0.24 sRGB. These values restore the
-## authored fog over that sky for the exact `midnight_clear` preset (the
-## mission-lobby and other outdoor presets use the generic haze floor in
-## weather_profile.gd + `horizon_haze` below). The guard is an EXACT preset-id
-## match, so the Den and lobby presets (`midnight_clear_thieves_den` /
-## `midnight_clear_mission_lobby`) keep their own fog/star treatment.
-const MIDNIGHT_CLEAR_PRESET := "midnight_clear"
+## authored fog over that sky for every authored night preset (`gloomy` and the
+## `midnight_clear*` rows -- the calibration was measured on Guildhall KF16-KF18
+## frames, so `gloomy` is the row it belongs to; the guard used to be an exact
+## match on `midnight_clear`, which no map resolves to). Indoor rows keep their
+## own fog/star treatment via WeatherProfile.is_indoor_preset.
 const MIDNIGHT_CLEAR_FOG_SKY_AFFECT := 0.80
 const MIDNIGHT_CLEAR_BACKGROUND_ENERGY := 2.0
 const MIDNIGHT_CLEAR_STAR_SCALE := 0.10
@@ -243,11 +242,17 @@ static func _moon_panorama() -> Texture2D:
 	return _pano_cache
 
 
-## Exact preset-id guard for Guildhall's authored midnight_clear sky. String
-## equality (not a prefix/substring test) so `midnight_clear_thieves_den` and
-## `midnight_clear_mission_lobby` never match.
-static func _is_midnight_clear(preset: Dictionary) -> bool:
-	return str(preset.get("preset", "")) == MIDNIGHT_CLEAR_PRESET
+## Authored night sky calibration. The guard used to be an EXACT match on the
+## bare preset id "midnight_clear", which no map resolves to: `map_weather.json`
+## maps guildhall -> gloomy and the Den/lobby -> midnight_clear_*. The constants
+## below were measured on KF16/KF17/KF18, which are Guildhall frames, so the
+## whole calibration was scoped away from the map it was calibrated on (C1-04).
+## T07 matches the authored night presets instead (WeatherProfile.is_night_preset)
+## and keeps the indoor Den out of the outdoor sky treatment.
+static func _uses_night_sky_calibration(preset: Dictionary) -> bool:
+	if WeatherProfile.is_indoor_preset(preset):
+		return false
+	return WeatherProfile.is_night_preset(preset)
 
 
 ## Horizon haze strength: 0 indoors (the Den sky is a window pane), a constant
@@ -341,9 +346,9 @@ static func make_sky(preset: Dictionary, moon: DirectionalLight3D) -> Sky:
 	var stars: float = 0.0
 	if stars_raw != null and float(stars_raw) > 0.0:
 		stars = clampf(float(stars_raw) / STAR_NORMALIZER, 0.0, 1.0)
-	if _is_midnight_clear(preset):
-		# UE's authored star colour is black and the Guildhall reference is
-		# starless: dim the fully-on 1.0 term instead of disabling the term.
+	if _uses_night_sky_calibration(preset):
+		# UE's authored star colour is black and the reference is starless: dim
+		# the fully-on 1.0 term instead of disabling the term.
 		stars *= MIDNIGHT_CLEAR_STAR_SCALE
 	mat.set_shader_parameter("star_amount", stars)
 
@@ -364,7 +369,6 @@ static func make_sky(preset: Dictionary, moon: DirectionalLight3D) -> Sky:
 			else:
 				haze_col *= oc2
 		mat.set_shader_parameter("cloud_color", haze_col)
-	mat.set_shader_parameter("cloud_haze", haze)
 
 	var vc_mat: String = str(sky_sec.get("volumetric_cloud_material", "")).to_lower()
 	var cloud_cov: float = 0.42
@@ -374,10 +378,17 @@ static func make_sky(preset: Dictionary, moon: DirectionalLight3D) -> Sky:
 		cloud_cov = 0.68
 	if cloud_op != null:
 		cloud_cov = clampf(cloud_cov * clampf(float(cloud_op) / 3.3, 0.3, 1.2), 0.12, 0.90)
+	# Authored volumetric-cloud visibility (previously dead data): the Den and
+	# midnight_clear author `volumetric_cloud_visible: false`, so the procedural
+	# FBM stand-in must not draw clouds on them.
+	if not WeatherProfile.sky_clouds_visible(preset):
+		haze = 0.0
+		cloud_cov = 0.0
+	mat.set_shader_parameter("cloud_haze", haze)
 	mat.set_shader_parameter("cloud_coverage", cloud_cov)
 
 	var haze_amount: float = 0.0
-	if _is_midnight_clear(preset):
+	if _uses_night_sky_calibration(preset):
 		haze_amount = MIDNIGHT_CLEAR_SKY_HAZE_AMOUNT
 	mat.set_shader_parameter("haze_color", Vector3(MIDNIGHT_CLEAR_SKY_HAZE_COLOR.r, MIDNIGHT_CLEAR_SKY_HAZE_COLOR.g, MIDNIGHT_CLEAR_SKY_HAZE_COLOR.b))
 	mat.set_shader_parameter("haze_amount", haze_amount)
@@ -405,7 +416,7 @@ static func apply_sky(env: Environment, preset: Dictionary, moon: DirectionalLig
 		return false
 	if not preset.has("sky") and not preset.has("moon"):
 		return false
-	if _is_midnight_clear(preset):
+	if _uses_night_sky_calibration(preset):
 		# The authored 400 m sky sphere sits inside height fog; restore the
 		# authored fog over the sky (weather_profile pins 0.0 for other presets)
 		# and lift the background so the gradient reaches the UE brightness.

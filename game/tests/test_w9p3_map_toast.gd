@@ -136,10 +136,19 @@ func _map_checks() -> void:
 		"W9P3-C4.2 guildhall maps to the persistent Guildhall_P payload")
 	_check(str(MapBoundariesScript.level_path("thieves_den")).ends_with("ThievesDenTest/ThievesDenTest_P.tatlevel.json"),
 		"W9P3-C4.3 thieves_den maps to ThievesDenTest_P")
-	# The produced level JSON has no map_boundaries today: the HUD must report
-	# its fallback rather than pretending the authored set exists.
-	_check(str(MapBoundariesScript.source_for_map("guildhall")) == "fallback",
-		"W9P3-C4.4 the generated level has no boundaries yet -> fallback is reported")
+	# Before the producer patch the level JSON carried no map_boundaries and the
+	# HUD had to report its fallback; with the patch applied and regenerated the
+	# same call must report `authored`. Both states are pinned, and a fresh clone
+	# with no generated data exercises the fallback branch.
+	var gh_source: String = str(MapBoundariesScript.source_for_map("guildhall"))
+	var gh_rows: int = MapBoundariesScript.for_map("guildhall").size()
+	if gh_rows == 0:
+		_check(gh_source == "fallback",
+			"W9P3-C4.4 no boundaries -> fallback is reported (%s)" % gh_source)
+	else:
+		_check(gh_source == "authored",
+			"W9P3-C4.4 authored boundaries -> source=authored (%d rows)" % gh_rows,
+			gh_source)
 	var prim: Dictionary = MapBoundariesScript.primary_for(rows)
 	_check(str(prim.get("name", "")) == "TATWorldMapBoundary_0", "W9P3-C4.5 primary is boundary_0",
 		str(prim.get("name", "")))
@@ -166,13 +175,23 @@ func _map_checks() -> void:
 	_check(str(MapBoundariesScript.boundary_at(rows, outside).get("name", "")) == "TATWorldMapBoundary_0",
 		"W9P3-C4.13 outside every floor box falls back to the primary capture volume")
 	_check(MapBoundariesScript.parse({}).is_empty(), "W9P3-C4.14 an absent array parses to empty")
-	# 13 authored actors total across the four maps (extracted count).
+	# 13 authored actors total across the four maps (extracted count). Before the
+	# producer patch landed these four payloads carried nothing and this check
+	# asserted that blocked state; the patch is now applied and regenerated, so
+	# the assertion is the authored distribution, with a skip on a fresh clone
+	# that has no generated data.
 	var counts: Dictionary = {}
+	var boundary_total: int = 0
 	for map_id: String in ["guildhall", "old_manor", "ftue", "thieves_den"]:
 		counts[map_id] = MapBoundariesScript.for_map(map_id).size()
-	_check(counts["guildhall"] == 0 and counts["old_manor"] == 0 and counts["ftue"] == 0 and counts["thieves_den"] == 0,
-		"W9P3-C4.15 all four generated payloads carry 0 boundaries today (producer patch owed)",
-		str(counts))
+		boundary_total += int(counts[map_id])
+	if boundary_total == 0:
+		print("SKIP: W9P3-C4.15 TAB-map boundaries absent (run make normalize; producer patch is in tools/parse_tables.py)")
+	else:
+		_check(int(counts["guildhall"]) == 5 and int(counts["old_manor"]) == 6
+				and int(counts["ftue"]) == 1 and int(counts["thieves_den"]) == 1,
+			"W9P3-C4.15 the four payloads carry the 13 authored TATWorldMapBoundary actors (5/6/1/1)",
+			str(counts))
 
 
 func _toast_checks() -> void:

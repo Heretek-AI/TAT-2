@@ -1781,6 +1781,7 @@ def extract_levels():
         meshes = []
         lights = []
         markers = []
+        boundaries = []
         actors = []
         spawn_elements = []
         patrol_paths = []
@@ -2369,6 +2370,75 @@ def extract_levels():
                             "source": str(rel),
                         }
                     )
+
+            # 4a. Authored world-map boundaries (W9-P3 C4). TATWorldMapBoundary
+            # is a C++ actor (TATWorldMapBoundary_0..8) whose BoxComponent root
+            # defines a floor's map rect; MapLabel names it ("First Floor",
+            # "Basement", "Constables' Guildhall"), MapType marks the primary
+            # one, and MapTextureAnchorTopLeft/BottomRight place the render
+            # texture inside the map widget. 13 ship: Guildhall_P 5,
+            # OldManor_P 6, FTUE_P 1, ThievesDenTest_P 1. Without this pass the
+            # TAB map has no authored floor set and falls back to a
+            # player-centred 64 m window (the invented floor this wave labels).
+            if et == "TATWorldMapBoundary":
+                rc = props.get("RootComponent")
+                wmat = None
+                if isinstance(rc, dict):
+                    ridx = comp_by_full_objname.get(rc.get("ObjectName", ""))
+                    if ridx is not None:
+                        wmat = get_world_mat(ridx)
+                if wmat is None:
+                    wmat = get_world_mat(idx)
+                if level_mat is not None:
+                    wmat = mat4_mul(level_mat, wmat)
+                trs = ue_mat4_to_godot_trs(wmat)
+                label = props.get("MapLabel") or {}
+                if not isinstance(label, dict):
+                    label = {}
+                # BoxExtent is not serialized on the boundary actors. The class
+                # default is 100 cm (verified against the map extent: the
+                # Guildhall mesh AABB is 228 x 113 m and boundary_0 with
+                # extent 100 x scale 117.5 is 235 m full — a 32 cm UE default
+                # would be 3x too small). Override per actor if serialized.
+                extent = props.get("BoxExtent") or {}
+                ex = float((extent or {}).get("X", 100.0))
+                ey = float((extent or {}).get("Y", 100.0))
+                ez = float((extent or {}).get("Z", 100.0))
+                scl = trs.get("scale") or [1.0, 1.0, 1.0]
+                anchor_tl = props.get("MapTextureAnchorTopLeft") or {}
+                anchor_br = props.get("MapTextureAnchorBottomRight") or {}
+                map_type = str(props.get("MapType") or "")
+                boundaries.append(
+                    {
+                        "name": e.get("Name", ""),
+                        "class": et,
+                        **trs,
+                        # Full extent in Godot metres (x, z, y): 2 * cm * scale.
+                        "size": [
+                            round(2.0 * ex * float(scl[0]) * 0.01, 3),
+                            round(2.0 * ez * float(scl[1]) * 0.01, 3),
+                            round(2.0 * ey * float(scl[2]) * 0.01, 3),
+                        ],
+                        "label_source": str(label.get("SourceString") or ""),
+                        "label_key": str(label.get("Key") or ""),
+                        "label_table": str(label.get("TableId") or ""),
+                        "map_type": map_type,
+                        "primary": map_type == "" or map_type.endswith("Primary"),
+                        "anchor_top_left": [
+                            float((anchor_tl or {}).get("X", 0.0)),
+                            float((anchor_tl or {}).get("Y", 0.0)),
+                        ],
+                        "anchor_bottom_right": [
+                            float((anchor_br or {}).get("X", 0.0)),
+                            float((anchor_br or {}).get("Y", 0.0)),
+                        ],
+                        "texture_height_offset": float(
+                            props.get("MapRenderTextureHeightOffset") or 0.0
+                        ),
+                        "source": str(rel),
+                    }
+                )
+                continue
 
             # 4b. Generic actor capture. Blueprint actors and gameplay components
             # without a dedicated payload still define a level: clue-only and
@@ -3104,6 +3174,7 @@ def extract_levels():
                     "meshes": meshes,
                     "lights": lights,
                     "markers": markers,
+                    "map_boundaries": boundaries,
                     "actors": actors,
                     "spawn_elements": spawn_elements,
                     "patrol_paths": patrol_paths,

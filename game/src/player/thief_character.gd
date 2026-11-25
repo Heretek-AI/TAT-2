@@ -267,6 +267,16 @@ var invert_y: bool = false
 var sprint_toggle_mode: bool = false
 var reduced_camera_bounce: bool = false
 var base_fov: float = CAMERA_FOV
+## Authored gamepad look (IA_LookGamepad): 0.12 axial deadzone / 0.98 upper,
+## OSEInputModifierGamepadLookSpeed 90 deg/s horizontal and 52 deg/s vertical,
+## scaled by the authored 5-step GamepadLookSensitivity ladder. The stick is read
+## raw because Godot's action API cannot return a 2D vector from one action; the
+## `look_gamepad` InputMap action is the declaration of the binding (and the
+## rebind/glyph source), the axis read is the consumer.
+var gamepad_look_scale: float = 1.0
+var gamepad_look_invert: bool = false
+var gamepad_move_scale: float = 1.0
+var _input_ctx: Node = null
 var lean_dir: float = 0.0
 var thief_vision_on: bool = false
 var thief_vision: bool = false
@@ -475,6 +485,7 @@ func _ready() -> void:
 	add_to_group("player")
 	collision_layer = 2
 	collision_mask = 1 | 4 | WARD_BLOCKER_LAYER
+	_input_ctx = get_node_or_null("/root/InputContext")
 	_apply_tuning()
 	_build_body()
 	if not OS.has_feature("headless") and DisplayServer.get_name() != "headless" and not MobileProfile.is_mobile():
@@ -626,10 +637,17 @@ func _track_fall_state() -> void:
 	_was_on_floor = on_floor_now
 
 
-## False while downed: movement, sprint, abilities, tools and interact are
-## blocked, but camera look stays live (handled in _unhandled_input).
+## False while downed or while a modal owns input (lockpick, map, letter, ping):
+## movement, sprint, abilities, tools and interact are blocked, but camera look
+## stays live unless the modal also disables look (ThiefCharacter._unhandled_input).
+## The authored GA_Lockpick disables Movement/Look/Interaction/ToolEquipping via
+## four Status.* tags; InputContext carries that set (RE-H-11).
 func can_act() -> bool:
-	return not is_downed
+	if is_downed:
+		return false
+	if _input_ctx != null and _input_ctx.has_method("blocks_gameplay") and bool(_input_ctx.call("blocks_gameplay")):
+		return false
+	return true
 
 
 func downed_remaining() -> float:
@@ -782,8 +800,19 @@ func apply_saved_settings(sync_cam: bool = false) -> void:
 	if not (settings_v is Dictionary):
 		return
 	var s: Dictionary = settings_v as Dictionary
-	if s.has("mouse_sensitivity"):
-		mouse_sens = clampf(float(s["mouse_sensitivity"]), 0.0005, 0.008)
+	# Authored 5-step sensitivity ladder x 2 devices (RE-H-08 / InputActions).
+	# `mouse_sensitivity` stays the *effective* rad/px value so every existing
+	# reader keeps working; the step name is the persisted source of truth, and a
+	# legacy free-slider value migrates to its nearest authored step.
+	var mouse_step: String = str(s.get("mouse_look_sensitivity", ""))
+	if mouse_step == "":
+		mouse_step = InputActions.nearest_mouse_step(float(s.get("mouse_sensitivity", InputActions.MOUSE_RAD_PER_PX_BASE)))
+	mouse_sens = InputActions.mouse_rad_per_px(mouse_step)
+	gamepad_look_scale = InputActions.pad_look_scale(str(s.get("gamepad_look_sensitivity", "Normal")))
+	gamepad_move_scale = InputActions.pad_move_scale(str(s.get("gamepad_move_sensitivity", "Normal")))
+	# `gamepad_invert_y` was written by save_system.gd:339 and read by nothing
+	# (RE-H-17). It is a live per-device setting now, not a dead key.
+	gamepad_look_invert = bool(s.get("gamepad_invert_y", false))
 	if s.has("invert_y"):
 		invert_y = bool(s["invert_y"])
 	if s.has("sprint_toggle"):
@@ -810,6 +839,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	if GameState.state != "playing":
 		return
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not MobileProfile.is_mobile():
+		if _input_ctx != null and _input_ctx.has_method("blocks_look") and bool(_input_ctx.call("blocks_look")):
+			return
 		apply_saved_settings()
 		var y_dir: float = 1.0 if invert_y else -1.0
 		rotate_y(-event.relative.x * mouse_sens)
@@ -885,9 +916,47 @@ func _unhandled_input(event: InputEvent) -> void:
 			# Releasing while hanging keeps the attachment, height and crank
 			# progress; the next press resumes the same channel.
 			_end_wire_crank(is_wire_hanging)
-	elif event.is_action_pressed("thief_vision"):
+	elif InputMap.has_action("thief_vision") and event.is_action_pressed("thief_vision"):
+		# Port-only manual vision toggle, unbound by default: the authored build
+		# has no manual vision key (vision comes from equipping the Vistara
+		# Diamond, tool_4). Kept as a hook for accessibility/debug.
 		_manual_vision_active = not _manual_vision_active
 		_sync_thief_vision()
+
+
+## Authored gamepad camera look (RE-H-03). IA_LookGamepad = Gamepad_Right2D with
+## InputModifierDeadZone(Lower=0.12, Upper=0.98, Type=Axial),
+## OSEInputModifierGamepadLookSpeed(90 / 52 deg per s) and the authored
+## GamepadLookSensitivity step. Delta-based (not per-event) so a 60 Hz physics
+## tick and a 144 Hz display turn at the same authored degrees-per-second.
+func _tick_gamepad_look(delta: float) -> void:
+	if head == null:
+		return
+	if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+		return
+	if _input_ctx != null and _input_ctx.has_method("blocks_look") and bool(_input_ctx.call("blocks_look")):
+		return
+	var raw := Vector2(
+		Input.get_joy_axis(0, JOY_AXIS_RIGHT_X),
+		Input.get_joy_axis(0, JOY_AXIS_RIGHT_Y))
+	var stick := Vector2(_axi_deadzone(raw.x), _axi_deadzone(raw.y))
+	if is_zero_approx(stick.x) and is_zero_approx(stick.y):
+		return
+	var y_dir: float = 1.0 if gamepad_look_invert else -1.0
+	rotate_y(-stick.x * deg_to_rad(InputActions.PAD_TURN_H_DEG_S) * gamepad_look_scale * delta)
+	head.rotation.x = clampf(
+		head.rotation.x + stick.y * deg_to_rad(InputActions.PAD_TURN_V_DEG_S) * gamepad_look_scale * y_dir * delta,
+		deg_to_rad(-80), deg_to_rad(80))
+
+
+## Authored axial deadzone: rescale each axis independently from the 0.12 floor
+## to the 0.98 ceiling (EDeadZoneType::Axial), so the centre is a square, not a disc.
+static func _axi_deadzone(value: float) -> float:
+	var a: float = absf(value)
+	if a <= InputActions.DEADZONE_LOOK:
+		return 0.0
+	var norm: float = clampf((a - InputActions.DEADZONE_LOOK) / (InputActions.LOOK_UPPER - InputActions.DEADZONE_LOOK), 0.0, 1.0)
+	return signf(value) * norm
 
 
 func _slot_for_tool(tool_id: String) -> int:
@@ -1192,6 +1261,21 @@ func _physics_process(delta: float) -> void:
 	_tick_downed(delta)
 	_tick_post_revive(delta)
 	_track_fall_state()
+	_tick_gamepad_look(delta)
+
+	# Modal gate (lockpick / map / mission letter / ping radial): the authored
+	# GA_Lockpick disables Movement, Look, Interaction and ToolEquipping through
+	# four Status.* tags; MAP/LETTER/PING have no authored tag set, so InputContext
+	# mirrors the shipped effect (nothing runs under the overlay). Look is handled
+	# above so a modal that keeps look (none today) still turns the camera.
+	if _input_ctx != null and _input_ctx.has_method("blocks_gameplay") and bool(_input_ctx.call("blocks_gameplay")):
+		velocity.x = move_toward(velocity.x, 0.0, 40.0 * delta)
+		velocity.z = move_toward(velocity.z, 0.0, 40.0 * delta)
+		if not is_on_floor():
+			velocity.y -= gravity * delta
+		move_and_slide()
+		_update_zipwire_cable()
+		return
 
 	# Downed: no input movement, sprint, abilities or tools; gravity still
 	# settles the body and the downed timer (above) runs to mission failure.
@@ -1309,6 +1393,10 @@ func _physics_process(delta: float) -> void:
 	# Movement & Stamina
 	apply_saved_settings()
 	var inp: Vector2 = Input.get_vector("move_left", "move_right", "move_forward", "move_backward")
+	# Authored OSEEnhancedInputModifierGamepadMoveSensitivity: the 5-step
+	# GamepadMoveSensitivity ladder scales the stick, never the keyboard.
+	if _input_ctx != null and _input_ctx.has_method("device") and str(_input_ctx.call("device")) == InputActions.DEVICE_PAD:
+		inp = (inp * gamepad_move_scale).limit_length(1.0)
 	var wish: Vector3 = (transform.basis * Vector3(inp.x, 0.0, inp.y)).normalized()
 	if sprint_toggle_mode:
 		# P2 hysteresis: dropping the toggle needs the stop floor; re-enabling

@@ -709,8 +709,20 @@ func _occluded(pos: Vector3) -> bool:
 	if tree != null:
 		var body: CollisionObject3D = tree.get_first_node_in_group("player") as CollisionObject3D
 		if body != null:
-			var excluded: Array[RID] = body.get_collision_exceptions()
-			excluded.append(body.get_rid())
+			# The player's own capsule sits between the camera and its feet, so
+			# excluding it keeps a footstep from being occluded by its emitter.
+			# `get_collision_exceptions()` returns physics bodies, not RIDs, in
+			# this engine build: assigning it straight to Array[RID] raised a
+			# SCRIPT ERROR on every footstep AND left the list empty, so the ray
+			# hit the player capsule and occlusion never applied. Convert by
+			# type, defensively, and always exclude the body itself.
+			var excluded: Array[RID] = [body.get_rid()]
+			if body.has_method("get_collision_exceptions"):
+				for exc: Variant in body.call("get_collision_exceptions"):
+					if exc is RID:
+						excluded.append(exc)
+					elif exc is CollisionObject3D:
+						excluded.append((exc as CollisionObject3D).get_rid())
 			q.exclude = excluded
 	var hit: Dictionary = world.direct_space_state.intersect_ray(q)
 	if hit.is_empty():

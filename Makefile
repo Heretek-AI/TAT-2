@@ -8,7 +8,7 @@ MOBILE_ABI  ?= arm64
 QA_CONTRACT ?= 0
 KEYSTORE_PROPS := $(HOME)/.config/tat2/keystore.properties
 
-.PHONY: build-extractor extract anims normalize audit audit-bootstrap audit-refresh-stamps audit-imports test run editor review review-capture bake-review bake-review-core desktop-texture-cap texture-cap-check audio-tools linux-build linux-run android-prepare android-debug android-debug-gl android-release
+.PHONY: build-extractor extract anims normalize audit audit-bootstrap audit-refresh-stamps audit-imports content-overrides gate-ratchet test run editor review review-capture bake-review bake-review-core desktop-texture-cap texture-cap-check audio-tools linux-build linux-run android-prepare android-debug android-debug-gl android-release
 
 build-extractor:
 	DOTNET_ROOT=$(HOME)/.dotnet10 PATH=$(HOME)/.dotnet10:$(PATH) $(DOTNET) build tools/tat-extract -c Release
@@ -55,8 +55,22 @@ audio-tools:
 
 # The texture cap is derived from the extracted `.import` sidecars, so a stale
 # cap must fail the content gate (see the check target below).
-audit: texture-cap-check
+audit: content-overrides texture-cap-check
 	python3 tools/manifest_audit.py --min-coverage 0.99 --min-exact-coverage 0.99
+
+# W6T graybox P0/3rd-floor gate: validates the tracked override table against
+# the applied .tatlevel.json output (counts, overlap, coverage regions,
+# graybox-only, authored materials). `--table-only` needs no private data.
+content-overrides:
+	python3 tools/check_content_overrides.py
+
+# Non-Sonar GDScript ratchet: the hosted part validates the tracked baseline,
+# the content table and Python sources. The Godot gates themselves need the
+# private extract and run locally (see docs/reports/w6t-graybox-sonar.md).
+gate-ratchet:
+	python3 -m py_compile tools/*.py
+	python3 tools/check_content_overrides.py --table-only
+	python3 tools/check_gate_ratchet.py
 
 # Explicit first run: writes tools/audit_baseline.json after every gate passes.
 audit-bootstrap:

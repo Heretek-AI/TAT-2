@@ -1,0 +1,14 @@
+{
+  "schema": "tat2.gate_ratchet/1",
+  "measured_on": "94a75e3",
+  "source": "AGENTS.md gate table, W5 integration (full serial gate set). W6T did not re-run the Godot gates.",
+  "note": "Floors, not exact counts: a wave may add tests/files but must never lower a floor or introduce a failure. Counts are measured, not estimated; update only with a real gate log.",
+  "gates": {
+    "compile": { "checked": 101, "broken": 0 },
+    "run_tests": { "passes": 261, "fails": 0 },
+    "m2": { "passes": 11, "fails": 0 },
+    "e2e": { "passed": 264, "total": 264, "fails": 0 },
+    "audit": { "coverage_num": 12657, "coverage_den": 12703, "unexpected": 0 },
+    "texture_cap": { "capped": 773, "alpha_kept": 1, "offenders": 0 }
+  }
+}

@@ -1,0 +1,78 @@
+name: sonar
+
+# Path A: SonarCloud scans the analyzable surface (Python/Shell/C# in tools/)
+# on push/PR, and a non-Sonar ratchet job pins the GDScript gate numbers that
+# Sonar cannot see. See docs/reports/w6t-graybox-sonar.md.
+#
+# Manual prerequisites (one-time, in SonarCloud/GitHub settings):
+#   * turn OFF Automatic Analysis for Heretek-AI_TAT-2 (CI scan + autoscan
+#     conflict and autoscan ignores this properties file);
+#   * add the SONAR_TOKEN repository secret (a project analysis token);
+#   * bind the quality gate "TAT-2 New Code" to the project;
+#   * set the new-code period to "Previous version" (or 30 days) so the gate
+#     only judges new code.
+# Without the secret (e.g. fork PRs) the scan step is skipped, not failed.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sonarcloud:
+    name: SonarCloud scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Detect SONAR_TOKEN
+        id: token
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          if [ -z "${SONAR_TOKEN}" ]; then
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::SONAR_TOKEN is not set; skipping SonarCloud (fork or fork-like PR)."
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: SonarCloud scan
+        if: steps.token.outputs.present == 'true'
+        uses: SonarSource/sonarqube-scan-action@v5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io
+
+  gdscript-ratchet:
+    name: GDScript ratchet (non-Sonar)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Hosted tooling checks
+        run: |
+          python3 -m py_compile tools/*.py
+          python3 tools/check_content_overrides.py --table-only
+          python3 tools/check_gate_ratchet.py
+      - name: Explain the local-only gates
+        run: |
+          echo "The Godot gates need the private extract (extracted/, game/assets/),"
+          echo "which is not in git, so they run locally, not on hosted runners:"
+          echo ""
+          echo "  make test"
+          echo "  tools/godot --headless --path game --script \"\$PWD/tools/check_scripts_compile.gd\""
+          echo "  tools/godot --headless --path game --script res://tests/test_m2_player.gd"
+          echo "  tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd"
+          echo "  make audit"
+          echo ""
+          echo "tools/gate_ratchet.json holds the measured floors (94a75e3):"
+          echo "compile 101/0, run_tests 261/0, M2 11/0, E2E 264/264."
+          echo "Update it only from a real gate log."

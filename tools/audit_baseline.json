@@ -44,7 +44,7 @@
   "infrastructure": {
     "root:Makefile": {
       "command": "make extract / make normalize",
-      "sha256": "335d3c2fa1802075e2326fd4653fcd5d205ccef20965aa9c710fa1f5040e5f01"
+      "sha256": "0bce051b9e0f8051c5b786429c8fd2073ad9f5f8a4945787dae216dae2fea059"
     },
     "root:tools/audit_allowlists.json": {
       "command": "reviewed coverage allowlist",
@@ -102,7 +102,7 @@
           "bytes": 3532,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795563466.2019558,
+          "newest_mtime": 1795563792.1434865,
           "sha256": "86fdefcf12e121de815a3dc05e1889aac230fc41fed452f99e36e01689ad7f08"
         }
       },
@@ -127,14 +127,14 @@
           "bytes": 1463161,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795563464.786635,
+          "newest_mtime": 1795563789.7124548,
           "sha256": "17d852347531c34e3d42545584cd914a3dba6f8a34901d9874be755a3b3c36ff"
         },
         "gen:audio_library.json": {
           "bytes": 1423393,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795563464.3666275,
+          "newest_mtime": 1795563789.046443,
           "sha256": "27337aac0f53643e58c76d201b1ba30f45f7815750a2a57f1fcc887c96fc3241"
         }
       },
@@ -148,7 +148,7 @@
           "bytes": 581725232,
           "exists": true,
           "files": 5027,
-          "newest_mtime": 1795563393.317367,
+          "newest_mtime": 1795563668.5047247,
           "sha256": "bef0f231b03ec1cc9ab013f35e022df1bbce63311bdd77982703e6ef4279e3ac"
         }
       },
@@ -162,7 +162,7 @@
           "bytes": 1058776,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795563469.7285647,
+          "newest_mtime": 1795563797.8378663,
           "sha256": "70b6c2358b3bd80194a4dfaa23764033a39b9ad45f009a7bebe54e55dc4d6975"
         }
       },
@@ -176,7 +176,7 @@
           "bytes": 1514019,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795563384.5901976,
+          "newest_mtime": 1795563655.196958,
           "sha256": "f147dc87fe6636a32ccb9854d91d07ebfbabb8c5b9baaaa40868f61c4e5c30d0"
         }
       },
@@ -192,7 +192,7 @@
           "bytes": 4177,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795563389.9159315,
+          "newest_mtime": 1795563664.0632043,
           "sha256": "06d0c4c28e73254867c862bb29f64c9241676e924b97401b621dccdcb84420f9"
         }
       },
@@ -209,7 +209,7 @@
           "bytes": 25124,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795563383.3179493,
+          "newest_mtime": 1795563653.1593003,
           "sha256": "6dd338fdb5c3f7eb6770cf3d06706a97127441ac2d0e033026f228806f189852"
         }
       },
@@ -223,7 +223,7 @@
           "bytes": 2115474,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795563389.828654,
+          "newest_mtime": 1795563663.8221998,
           "sha256": "39f060106ab1dd0c85752004166ba870548a5b72fa0621c2c6673a62ced9007e"
         }
       },
@@ -237,7 +237,7 @@
           "bytes": 5337591,
           "exists": true,
           "files": 21,
-          "newest_mtime": 1795563392.2333915,
+          "newest_mtime": 1795568149.2194219,
           "sha256": "e1d85f2b5c25ff8267863ccdbb652e515fb647ec0d103f3af1663edae2dc5ced"
         }
       },
@@ -251,14 +251,14 @@
           "bytes": 242354,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795563392.1458805,
+          "newest_mtime": 1795563666.9952567,
           "sha256": "2f30d7af62b7d09e69848ef9938ab8a65c006f5111c9ae2f17de08b82a0b080b"
         },
         "gen:gameplay/perception.json": {
           "bytes": 13314,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795563392.1465697,
+          "newest_mtime": 1795563666.9960601,
           "sha256": "a051f2b4a26796916e8d9cd9a8512707afe84c77b9c9a4f9ee790f4ab430d9f0"
         }
       },
@@ -272,7 +272,7 @@
           "bytes": 60362,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795563389.9372935,
+          "newest_mtime": 1795563664.1342056,
           "sha256": "8bf683e0a8c08e5f83a4114a32ff261b67b393dcb7c92c4244b7b814234acc3f"
         }
       },
@@ -288,7 +288,7 @@
           "bytes": 2181168,
           "exists": true,
           "files": 9,
-          "newest_mtime": 1795563464.8946369,
+          "newest_mtime": 1795563789.8514574,
           "sha256": "ea1767ad076aae99c03299e0fb1aaab2de2724c822113006f7799b8e61ef032c"
         }
       },
@@ -302,7 +302,7 @@
           "bytes": 45407,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795563390.3823016,
+          "newest_mtime": 1795563664.7080927,
           "sha256": "90022086d21f5c22eeba20c5faa8475b8d3406485690952b423a6fb0200a7d78"
         }
       },
@@ -320,21 +320,21 @@
           "bytes": 2781543,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795563382.4371588,
+          "newest_mtime": 1795563652.375995,
           "sha256": "fe8b267416a7f9de2f70ab061570f7d0083128f8ade939791b92b61876530284"
         },
         "gen:mesh_materials.json": {
           "bytes": 443572,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795563383.2555668,
+          "newest_mtime": 1795563653.08512,
           "sha256": "74476419aa47e966fdf56fae30315f81073b04504daccc8c0bce8f9329d04bea"
         },
         "gen:mesh_materials_provenance.json": {
           "bytes": 435741,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795563383.2572975,
+          "newest_mtime": 1795563653.0880911,
           "sha256": "e805cb29630a6593c9b5b844a14eabcaf0f654633af52ea9268d7aef8cfd7dca"
         }
       },
@@ -348,7 +348,7 @@
           "bytes": 421806,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795563387.185244,
+          "newest_mtime": 1795563659.3831205,
           "sha256": "a8eb501056a70c3d825ad64017266779804d0eb9d16e53cb32f003f34a6bb182"
         }
       },
@@ -362,7 +362,7 @@
           "bytes": 10623,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795563390.5732257,
+          "newest_mtime": 1795563664.9332771,
           "sha256": "379dc3de638656dc51f3a22b1659d22c19f213095b9bf9e3c116dcdfc1cd7158"
         }
       },
@@ -376,14 +376,14 @@
           "bytes": 784227,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795563392.2333915,
+          "newest_mtime": 1795563667.1261017,
           "sha256": "3f397005e37ebef7d7f5a8a924cdb9ee7ae9853fc1ffe6e6a9d93534fb26b006"
         },
         "root:docs/reports/w5e-guard-state-tree.md": {
           "bytes": 17534,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795563392.23445,
+          "newest_mtime": 1795567547.8685992,
           "sha256": "b6ee547fe145a921d49e90fecd4d619858818c9066400144862fb776e6f04d30"
         }
       },
@@ -403,32 +403,32 @@
           "bytes": 5337591,
           "exists": true,
           "files": 21,
-          "newest_mtime": 1795563392.2333915,
+          "newest_mtime": 1795568149.2194219,
           "sha256": "e1d85f2b5c25ff8267863ccdbb652e515fb647ec0d103f3af1663edae2dc5ced"
         },
         "gen:levels": {
-          "bytes": 45795222,
+          "bytes": 45834397,
           "exists": true,
           "files": 108,
-          "newest_mtime": 1795563372.032852,
-          "sha256": "2402e6210d14fc235a1e79a205be8c838a4861da4d7e06e8d2571dd6b2b75e0b"
+          "newest_mtime": 1795568148.061335,
+          "sha256": "bbcdce3cb9cc2d9837db51ec6b0c8a9ddf9573338d9619df6a3360e67a080880"
         },
         "gen:scene_variants.json": {
           "bytes": 44415,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795563372.0746937,
+          "newest_mtime": 1795568148.1098976,
           "sha256": "424e9fe4d92846e74e7e801084718009afb2a94461ca3ab2cfab544c40e39151"
         },
         "gen:tables": {
           "bytes": 1842945,
           "exists": true,
           "files": 144,
-          "newest_mtime": 1795563362.8147392,
+          "newest_mtime": 1795568135.7225397,
           "sha256": "c08a537228a6297f078bbf72172df5030af5c8bdfa02532fccec16c25c0661e2"
         }
       },
-      "sha256": "a19054709c423924dc0f9217665976a6c6ebe28bb9ce34d8ef1739b1778e26f7"
+      "sha256": "fe2f6a64dbd6b11a160e7b13c7e4839fa9f55ca9888e8e493faeed414d9ff781"
     },
     "tools/parse_unlocks.py": {
       "command": "python3 tools/parse_unlocks.py",
@@ -438,7 +438,7 @@
           "bytes": 83788,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795563391.0689225,
+          "newest_mtime": 1795563665.5229287,
           "sha256": "ace129867f6291e50bf4fcb07e4444e9d1ea6c1f55252dda99251e3255863244"
         }
       },
@@ -452,7 +452,7 @@
           "bytes": 1391652,
           "exists": true,
           "files": 2,
-          "newest_mtime": 1795563391.0449908,
+          "newest_mtime": 1795563665.4950986,
           "sha256": "85927d9634e7279e71bd0a30e12759f285b817494a0913e373c0c39470c30f9d"
         }
       },
@@ -466,7 +466,7 @@
           "bytes": 38638,
           "exists": true,
           "files": 17,
-          "newest_mtime": 1795563392.4160037,
+          "newest_mtime": 1795563667.3986235,
           "sha256": "c7fe1b2d17a54ad16e29db54641f0f65807631ac8b9c8fddf48d6b34f7e5232d"
         }
       },
@@ -508,5 +508,5 @@
     "vgmstream": "vgmstream CLI decoder r2168 (Oct 25 2026)"
   },
   "version": 2,
-  "written_utc": "2026-11-24T23:38:04Z"
+  "written_utc": "2026-11-25T00:56:06Z"
 }

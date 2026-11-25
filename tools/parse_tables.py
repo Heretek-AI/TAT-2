@@ -1265,6 +1265,237 @@ def map_dump_files() -> list:
     )
 
 
+# ---------------------------------------------------------------------------
+# W6T: tracked content overrides (graybox P0 + 3rd floor)
+# ---------------------------------------------------------------------------
+# game/data/expansion/content_overrides.json is the only place a graybox mesh
+# may be re-materialised. It is applied here, in the producer, so every
+# .tatlevel.json carries the same result and no loader/map special case is
+# added. Each rule is fail-closed: expect_count is the number of raw instances
+# the selector matches and expect_changed the number it rewrites. A drift, an
+# overlap, a non-graybox mesh or an unknown material aborts the normalize.
+CONTENT_OVERRIDES_FILE = ROOT / "game" / "data" / "expansion" / "content_overrides.json"
+MESH_MATERIALS_FILE = OUT_DATA / "mesh_materials.json"
+MATERIALS_FILE = OUT_DATA / "materials.json"
+CONTENT_OVERRIDES_REPORT = OUT_DATA / "content_overrides_applied.json"
+
+
+def load_content_overrides():
+    if not CONTENT_OVERRIDES_FILE.exists():
+        raise SystemExit(
+            f"parse_tables: missing tracked override table {CONTENT_OVERRIDES_FILE}"
+        )
+    table = json.loads(CONTENT_OVERRIDES_FILE.read_text())
+    if table.get("schema") != "tat2.content_overrides/1":
+        raise SystemExit(
+            "parse_tables: content_overrides.json schema is not tat2.content_overrides/1"
+        )
+    return table
+
+
+def _content_selector_match(entry: dict, rule: dict) -> bool:
+    mesh = str(entry.get("mesh") or "")
+    if not any(mesh.startswith(prefix) for prefix in rule["_mesh_prefixes"]):
+        return False
+    if not any(mesh == wanted for wanted in rule["_mesh_exact"]):
+        return False
+    bbox = rule.get("bbox")
+    if bbox:
+        pos = entry.get("pos") or [0.0, 0.0, 0.0]
+        if not (
+            float(bbox[0]) <= float(pos[0]) <= float(bbox[3])
+            and float(bbox[1]) <= float(pos[1]) <= float(bbox[4])
+            and float(bbox[2]) <= float(pos[2]) <= float(bbox[5])
+        ):
+            return False
+    return True
+
+
+def _content_material_slots(entry: dict, mesh_mats: dict) -> int:
+    slots = entry.get("override_materials")
+    if isinstance(slots, list) and slots:
+        return len(slots)
+    mesh_key = str(entry.get("mesh") or "").split(".")[0]
+    authored = mesh_mats.get(mesh_key)
+    if isinstance(authored, list) and authored:
+        return len(authored)
+    return 1
+
+
+def _validate_content_overrides(table: dict) -> None:
+    prefixes = tuple(table.get("graybox_prefixes") or ())
+    if not prefixes:
+        raise SystemExit("parse_tables: content_overrides.json has no graybox_prefixes")
+    material_db = (
+        json.loads(MATERIALS_FILE.read_text()) if MATERIALS_FILE.exists() else {}
+    )
+    if not isinstance(material_db, dict):
+        material_db = {}
+    seen = set()
+    for rule in table.get("rules") or []:
+        rid = str(rule.get("id") or "")
+        if not rid:
+            raise SystemExit("parse_tables: override rule without an id")
+        if rid in seen:
+            raise SystemExit(f"parse_tables: duplicate override rule id {rid}")
+        seen.add(rid)
+        if rule.get("op") != "set_material":
+            raise SystemExit(
+                f"parse_tables: rule {rid} op {rule.get('op')!r} is not set_material"
+            )
+        for mesh in rule.get("meshes") or []:
+            if not str(mesh).startswith(prefixes):
+                raise SystemExit(
+                    f"parse_tables: rule {rid} targets non-graybox mesh {mesh}"
+                )
+        if not rule.get("meshes"):
+            raise SystemExit(f"parse_tables: rule {rid} has no meshes")
+        material = str(rule.get("material") or "")
+        if not material.startswith("/Game/"):
+            raise SystemExit(f"parse_tables: rule {rid} has a malformed material")
+        if material_db and material not in material_db:
+            raise SystemExit(
+                f"parse_tables: rule {rid} material {material} is not in materials.json"
+            )
+        if int(rule.get("expect_count", -1)) <= 0:
+            raise SystemExit(f"parse_tables: rule {rid} needs a positive expect_count")
+        changed = int(rule.get("expect_changed", rule.get("expect_count", -1)))
+        if changed < 0 or changed > int(rule["expect_count"]):
+            raise SystemExit(f"parse_tables: rule {rid} expect_changed is out of range")
+        if changed == 0 and not rule.get("allow_noop"):
+            raise SystemExit(f"parse_tables: rule {rid} would be a no-op")
+        bbox = rule.get("bbox")
+        if bbox is not None and len(bbox) != 6:
+            raise SystemExit(
+                f"parse_tables: rule {rid} bbox must be [x0,y0,z0,x1,y1,z1]"
+            )
+    for cap in table.get("add_caps") or []:
+        cid = str(cap.get("id") or "")
+        if not cid:
+            raise SystemExit("parse_tables: add_cap without an id")
+        if not str(cap.get("mesh") or "").startswith(prefixes):
+            raise SystemExit(f"parse_tables: add_cap {cid} targets a non-graybox mesh")
+        if not cap.get("pos") or len(cap["pos"]) != 3:
+            raise SystemExit(f"parse_tables: add_cap {cid} needs a 3-component pos")
+        if int(cap.get("expect_count", 0)) <= 0:
+            raise SystemExit(
+                f"parse_tables: add_cap {cid} needs a positive expect_count"
+            )
+
+
+def apply_content_overrides(level_key: str, meshes: list, table: dict, mesh_mats: dict):
+    """Apply the tracked override table to one level's mesh list in place.
+
+    Returns the per-level applied block (rule -> matched/changed) that is
+    written next to the meshes, plus a list of global rows for the report.
+    Raises SystemExit on any count drift, overlap or non-graybox target.
+    """
+    prefixes = tuple(table.get("graybox_prefixes") or ())
+    rules = [
+        r for r in (table.get("rules") or []) if level_key in (r.get("levels") or [])
+    ]
+    if not rules:
+        return None
+    applied = []
+    claimed: dict[int, str] = {}
+    for rule in rules:
+        rid = str(rule["id"])
+        rule["_mesh_prefixes"] = prefixes
+        rule["_mesh_exact"] = [str(m) for m in (rule.get("meshes") or [])]
+        selected = [
+            idx
+            for idx, entry in enumerate(meshes)
+            if isinstance(entry, dict) and _content_selector_match(entry, rule)
+        ]
+        overlap = [idx for idx in selected if idx in claimed]
+        if overlap:
+            raise SystemExit(
+                f"parse_tables: override rules overlap in {level_key}: "
+                f"{rid} vs {claimed[overlap[0]]} at mesh index {overlap[0]}"
+            )
+        for idx in selected:
+            claimed[idx] = rid
+        material = str(rule["material"])
+        changed = 0
+        for idx in selected:
+            entry = meshes[idx]
+            if rule.get("only_unmaterialed", True) and (
+                entry.get("override_material") or ""
+            ):
+                continue
+            slots = _content_material_slots(entry, mesh_mats)
+            entry["override_materials"] = [material] * slots
+            entry["override_material"] = material
+            entry["content_rule"] = rid
+            changed += 1
+        expect_count = int(rule["expect_count"])
+        expect_changed = int(rule.get("expect_changed", expect_count))
+        if len(selected) != expect_count:
+            raise SystemExit(
+                f"parse_tables: override rule {rid} in {level_key} matched "
+                f"{len(selected)} instances, expected {expect_count}"
+            )
+        if changed != expect_changed:
+            raise SystemExit(
+                f"parse_tables: override rule {rid} in {level_key} changed "
+                f"{changed} instances, expected {expect_changed}"
+            )
+        applied.append(
+            {
+                "id": rid,
+                "matched": len(selected),
+                "changed": changed,
+                "level": level_key,
+            }
+        )
+
+    for cap in table.get("add_caps") or []:
+        if level_key not in (cap.get("levels") or []):
+            continue
+        cid = str(cap["id"])
+        if level_key in (table.get("roof_census_levels") or []):
+            raise SystemExit(
+                f"parse_tables: add_cap {cid} may not touch roof-census level {level_key}"
+            )
+        caps = cap.get("caps") or []
+        if len(caps) != int(cap["expect_count"]):
+            raise SystemExit(
+                f"parse_tables: add_cap {cid} declares {len(caps)} caps, "
+                f"expected {cap['expect_count']}"
+            )
+        for spec in caps:
+            mesh = str(spec["mesh"])
+            if any(
+                e.get("mesh") == mesh and e.get("pos") == spec["pos"] for e in meshes
+            ):
+                raise SystemExit(
+                    f"parse_tables: add_cap {cid} duplicates an existing {mesh} at {spec['pos']}"
+                )
+            material = str(spec["material"])
+            slots = len(spec.get("materials") or [material]) or 1
+            meshes.append(
+                {
+                    "mesh": mesh,
+                    "pos": [float(v) for v in spec["pos"]],
+                    "basis": [
+                        float(v)
+                        for v in spec.get(
+                            "basis", [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+                        )
+                    ],
+                    "scale": [float(v) for v in spec.get("scale", [1.0, 1.0, 1.0])],
+                    "override_materials": [material] * slots,
+                    "override_material": material,
+                    "content_rule": cid,
+                    "content_cap": True,
+                }
+            )
+        applied.append(
+            {"id": cid, "matched": len(caps), "changed": len(caps), "level": level_key}
+        )
+    return {"schema": "tat2.content_overrides.applied/1", "rules": applied}
+
+
 def extract_levels():
     levels_dir = OUT_DATA / "levels"
     levels_dir.mkdir(parents=True, exist_ok=True)
@@ -1286,6 +1517,16 @@ def extract_levels():
     total_level_instances_unresolved = 0
     mid_stats = {"resolved": 0, "unresolved": 0, "samples": [], "records": []}
     level_payloads = {}
+    content_overrides = load_content_overrides()
+    _validate_content_overrides(content_overrides)
+    mesh_mats = (
+        json.loads(MESH_MATERIALS_FILE.read_text())
+        if MESH_MATERIALS_FILE.exists()
+        else {}
+    )
+    if not isinstance(mesh_mats, dict):
+        mesh_mats = {}
+    content_applied: list = []
     # Fail-closed file gate (pipeline P0-4): every Maps/*.json that does not
     # become a level payload is recorded here. BPP_* skips are legitimate
     # (re-consumed as packed-actor templates); corrupt/empty files are fatal.
@@ -2760,6 +3001,12 @@ def extract_levels():
         pdata = meta["data"]
         if pdata is not None:
             prel = meta["rel"]
+            co_block = apply_content_overrides(
+                key, pdata["meshes"], content_overrides, mesh_mats
+            )
+            if co_block is not None:
+                pdata["content_overrides"] = co_block
+                content_applied.extend(co_block["rules"])
             dst = levels_dir / prel.with_suffix(".tatlevel.json")
             dst.parent.mkdir(parents=True, exist_ok=True)
             dst.write_text(json.dumps(pdata))
@@ -2826,6 +3073,56 @@ def extract_levels():
         f"({total_level_instance_meshes} meshes), "
         f"{total_level_instances_unresolved} unresolved"
     )
+
+    # W6T content overrides: every declared rule must have found its level, and
+    # every rule/cap must be accounted for exactly once in the applied report.
+    rule_levels = {
+        lvl
+        for rule in content_overrides.get("rules") or []
+        for lvl in rule.get("levels") or []
+    }
+    cap_levels = {
+        lvl
+        for cap in content_overrides.get("add_caps") or []
+        for lvl in cap.get("levels") or []
+    }
+    missing = sorted((rule_levels | cap_levels) - set(level_payloads.keys()))
+    if missing:
+        raise SystemExit(
+            "parse_tables: content_overrides.json names levels that were not "
+            f"normalized: {', '.join(missing)}"
+        )
+    expected_ids = {str(r["id"]) for r in content_overrides.get("rules") or []}
+    expected_ids |= {str(c["id"]) for c in content_overrides.get("add_caps") or []}
+    applied_ids = {row["id"] for row in content_applied}
+    if applied_ids != expected_ids:
+        raise SystemExit(
+            "parse_tables: override report mismatch, missing="
+            f"{sorted(expected_ids - applied_ids)} extra={sorted(applied_ids - expected_ids)}"
+        )
+    CONTENT_OVERRIDES_REPORT.write_text(
+        json.dumps(
+            {
+                "schema": "tat2.content_overrides.applied/1",
+                "source": str(CONTENT_OVERRIDES_FILE.relative_to(ROOT)),
+                "rules": content_applied,
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+    co_matched = sum(int(r["matched"]) for r in content_applied)
+    co_changed = sum(int(r["changed"]) for r in content_applied)
+    print(
+        f"Content overrides: {len(content_applied)} rules applied, "
+        f"{co_matched} matched, {co_changed} re-materialised "
+        f"({CONTENT_OVERRIDES_REPORT.relative_to(ROOT)})"
+    )
+    for row in content_applied:
+        print(
+            f"  {row['id']}: matched={row['matched']} changed={row['changed']} "
+            f"({row['level']})"
+        )
     print(
         f"MID overrides: mid_resolved={mid_stats['resolved']}, "
         f"mid_unresolved={mid_stats['unresolved']}"

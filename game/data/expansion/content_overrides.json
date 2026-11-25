@@ -1,0 +1,289 @@
+{
+  "schema": "tat2.content_overrides/1",
+  "note": "W6T graybox P0 content table. Applied by tools/parse_tables.py inside extract_levels() before each .tatlevel.json is written; validated by tools/check_content_overrides.py and game/tests/test_content_overrides.gd. Only graybox kit meshes (GB_*) may be targeted, and only with authored materials from materials.json. expect_count is the number of raw instances the selector matches; expect_changed is how many of them the rule rewrites (rules with only_unmaterialed preserve authored overrides). Both are fail-closed: a drift fails parse_tables and the checker. add_cap is supported for a measured hole but no rule enables one today (adding geometry without a capture is not justified).",
+  "graybox_prefixes": [
+    "/Game/Test/LevelKits/Graybox/GB_",
+    "/Game/Art/Environment/Urban/Roofs/GB_"
+  ],
+  "roof_census_levels": [
+    "Guildhall/Guildhall_PeripheryA"
+  ],
+  "coverage_regions": [
+    {
+      "id": "missionlobby-roof-decks",
+      "label": "MissionLobby roof decks",
+      "levels": [
+        "MissionLobby/MissionLobby_Geo3",
+        "MissionLobby/MissionLobby_Periphery"
+      ],
+      "meshes": [
+        "/Game/Art/Environment/Urban/Roofs/GB_RoofFloor_6x6"
+      ]
+    },
+    {
+      "id": "missionlobby-structure-decks",
+      "label": "MissionLobby 6x6/4x4 floor decks",
+      "levels": [
+        "MissionLobby/MissionLobby_Geo3",
+        "MissionLobby/MissionLobby_Periphery"
+      ],
+      "meshes": [
+        "/Game/Test/LevelKits/Graybox/GB_Floor_6x6",
+        "/Game/Test/LevelKits/Graybox/GB_Floor_4x4"
+      ]
+    },
+    {
+      "id": "poi-lounge-floor",
+      "label": "Guildhall POI ground-floor Lounge",
+      "levels": [
+        "Buildings/Guildhall/Building_Guildhall_POI"
+      ],
+      "bbox": [
+        20.0,
+        24.0,
+        -46.0,
+        52.0,
+        32.0,
+        -5.0
+      ],
+      "meshes": [
+        "/Game/Test/LevelKits/Graybox/GB_Floor_2x2"
+      ]
+    },
+    {
+      "id": "poi-entrance-hall-floor",
+      "label": "Guildhall POI Entrance Hall",
+      "levels": [
+        "Buildings/Guildhall/Building_Guildhall_POI"
+      ],
+      "bbox": [
+        0.0,
+        26.0,
+        -33.0,
+        19.5,
+        32.0,
+        -19.0
+      ],
+      "meshes": [
+        "/Game/Test/LevelKits/Graybox/GB_Floor_2x2"
+      ]
+    },
+    {
+      "id": "vault-chambers-floor",
+      "label": "Ceremonial Chambers / Prison vault floors",
+      "levels": [
+        "Buildings/Guildhall/Guildhall_Vault_CeremonialChambers"
+      ],
+      "meshes": [
+        "/Game/Test/LevelKits/Graybox/GB_Floor_2x2"
+      ]
+    },
+    {
+      "id": "poi-3rd-floor",
+      "label": "Guildhall POI 3rd floor",
+      "levels": [
+        "Buildings/Guildhall/Building_Guildhall_POI_3rdFloor"
+      ],
+      "meshes": [
+        "/Game/Test/LevelKits/Graybox/GB_Floor_2x2"
+      ]
+    }
+  ],
+  "rules": [
+    {
+      "id": "missionlobby-roof-decks-slate-geo3",
+      "label": "MissionLobby roof decks -> authored slate",
+      "levels": [
+        "MissionLobby/MissionLobby_Geo3"
+      ],
+      "meshes": [
+        "/Game/Art/Environment/Urban/Roofs/GB_RoofFloor_6x6"
+      ],
+      "op": "set_material",
+      "material": "/Game/MaterialLibrary/Environment/Roof/RoofSlate/ML/MI_RoofSlateA",
+      "only_unmaterialed": true,
+      "expect_count": 3,
+      "expect_changed": 3
+    },
+    {
+      "id": "missionlobby-roof-decks-slate-periph",
+      "label": "MissionLobby roof decks -> authored slate",
+      "levels": [
+        "MissionLobby/MissionLobby_Periphery"
+      ],
+      "meshes": [
+        "/Game/Art/Environment/Urban/Roofs/GB_RoofFloor_6x6"
+      ],
+      "op": "set_material",
+      "material": "/Game/MaterialLibrary/Environment/Roof/RoofSlate/ML/MI_RoofSlateA",
+      "only_unmaterialed": true,
+      "expect_count": 8,
+      "expect_changed": 8
+    },
+    {
+      "id": "missionlobby-structure-decks-concrete-geo3",
+      "label": "MissionLobby 6x6/4x4 floor decks -> authored concrete",
+      "levels": [
+        "MissionLobby/MissionLobby_Geo3"
+      ],
+      "meshes": [
+        "/Game/Test/LevelKits/Graybox/GB_Floor_6x6",
+        "/Game/Test/LevelKits/Graybox/GB_Floor_4x4"
+      ],
+      "op": "set_material",
+      "material": "/Game/MaterialLibrary/Environment/Concrete/MI_ConcreteB",
+      "only_unmaterialed": true,
+      "expect_count": 11,
+      "expect_changed": 10
+    },
+    {
+      "id": "missionlobby-structure-decks-concrete-periph",
+      "label": "MissionLobby 6x6/4x4 floor decks -> authored concrete",
+      "levels": [
+        "MissionLobby/MissionLobby_Periphery"
+      ],
+      "meshes": [
+        "/Game/Test/LevelKits/Graybox/GB_Floor_6x6",
+        "/Game/Test/LevelKits/Graybox/GB_Floor_4x4"
+      ],
+      "op": "set_material",
+      "material": "/Game/MaterialLibrary/Environment/Concrete/MI_ConcreteB",
+      "only_unmaterialed": true,
+      "expect_count": 44,
+      "expect_changed": 32
+    },
+    {
+      "id": "poi-lounge-floor-tile",
+      "label": "POI Lounge 2x2 graybox floors -> authored floor tile",
+      "levels": [
+        "Buildings/Guildhall/Building_Guildhall_POI"
+      ],
+      "meshes": [
+        "/Game/Test/LevelKits/Graybox/GB_Floor_2x2"
+      ],
+      "bbox": [
+        20.0,
+        24.0,
+        -46.0,
+        52.0,
+        32.0,
+        -5.0
+      ],
+      "op": "set_material",
+      "material": "/Game/MaterialLibrary/Environment/Stone/FloorInterior/ML/MI_FloorTileA_AlignXYZ",
+      "only_unmaterialed": true,
+      "expect_count": 130,
+      "expect_changed": 5
+    },
+    {
+      "id": "poi-lounge-floorstone",
+      "label": "POI Lounge 3x3/4x4 graybox floors -> authored concrete",
+      "levels": [
+        "Buildings/Guildhall/Building_Guildhall_POI"
+      ],
+      "meshes": [
+        "/Game/Test/LevelKits/Graybox/GB_Floor_3x3",
+        "/Game/Test/LevelKits/Graybox/GB_Floor_4x4"
+      ],
+      "bbox": [
+        20.0,
+        24.0,
+        -46.0,
+        52.0,
+        32.0,
+        -5.0
+      ],
+      "op": "set_material",
+      "material": "/Game/MaterialLibrary/Environment/Concrete/MI_ConcreteB",
+      "only_unmaterialed": true,
+      "expect_count": 4,
+      "expect_changed": 4
+    },
+    {
+      "id": "poi-entrance-hall-floor-tile",
+      "label": "POI Entrance Hall 2x2 graybox floor -> authored floor tile",
+      "levels": [
+        "Buildings/Guildhall/Building_Guildhall_POI"
+      ],
+      "meshes": [
+        "/Game/Test/LevelKits/Graybox/GB_Floor_2x2"
+      ],
+      "bbox": [
+        0.0,
+        26.0,
+        -33.0,
+        19.5,
+        32.0,
+        -19.0
+      ],
+      "op": "set_material",
+      "material": "/Game/MaterialLibrary/Environment/Stone/FloorInterior/ML/MI_FloorTileA_AlignXYZ",
+      "only_unmaterialed": true,
+      "expect_count": 26,
+      "expect_changed": 1
+    },
+    {
+      "id": "vault-chambers-floorstone",
+      "label": "Ceremonial Chambers / Prison vault graybox floors -> authored concrete",
+      "levels": [
+        "Buildings/Guildhall/Guildhall_Vault_CeremonialChambers"
+      ],
+      "meshes": [
+        "/Game/Test/LevelKits/Graybox/GB_Floor_2x2",
+        "/Game/Test/LevelKits/Graybox/GB_Floor_3x3",
+        "/Game/Test/LevelKits/Graybox/GB_Floor_4x4"
+      ],
+      "op": "set_material",
+      "material": "/Game/MaterialLibrary/Environment/Concrete/MI_ConcreteB",
+      "only_unmaterialed": true,
+      "expect_count": 36,
+      "expect_changed": 33
+    },
+    {
+      "id": "poi-3rd-floor-tile",
+      "label": "POI 3rd-floor GB_Floor_2x2 -> authored floor tile",
+      "levels": [
+        "Buildings/Guildhall/Building_Guildhall_POI_3rdFloor"
+      ],
+      "meshes": [
+        "/Game/Test/LevelKits/Graybox/GB_Floor_2x2"
+      ],
+      "op": "set_material",
+      "material": "/Game/MaterialLibrary/Environment/Stone/FloorInterior/ML/MI_FloorTileA_AlignXYZ",
+      "only_unmaterialed": true,
+      "expect_count": 229,
+      "expect_changed": 20
+    },
+    {
+      "id": "poi-3rd-floorstone",
+      "label": "POI 3rd-floor 4x4 graybox floors -> authored concrete",
+      "levels": [
+        "Buildings/Guildhall/Building_Guildhall_POI_3rdFloor"
+      ],
+      "meshes": [
+        "/Game/Test/LevelKits/Graybox/GB_Floor_4x4"
+      ],
+      "op": "set_material",
+      "material": "/Game/MaterialLibrary/Environment/Concrete/MI_ConcreteB",
+      "only_unmaterialed": true,
+      "expect_count": 16,
+      "expect_changed": 16
+    },
+    {
+      "id": "poi-3rd-roof-deck-slate",
+      "label": "POI 3rd-floor roof deck -> authored slate",
+      "levels": [
+        "Buildings/Guildhall/Building_Guildhall_POI_3rdFloor"
+      ],
+      "meshes": [
+        "/Game/Art/Environment/Urban/Roofs/GB_RoofFloor_6x6"
+      ],
+      "op": "set_material",
+      "material": "/Game/MaterialLibrary/Environment/Roof/RoofSlate/ML/MI_RoofSlateA",
+      "only_unmaterialed": true,
+      "expect_count": 1,
+      "expect_changed": 1
+    }
+  ],
+  "add_caps": []
+}

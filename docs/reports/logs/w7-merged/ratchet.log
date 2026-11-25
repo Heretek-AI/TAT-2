@@ -1,0 +1,52 @@
+python3 -m py_compile tools/*.py
+python3 tools/check_content_overrides.py --table-only
+Override rule table:
+  missionlobby-roof-decks-slate-geo3             3 /     3  MI_RoofSlateA
+  missionlobby-roof-decks-slate-periph           8 /     8  MI_RoofSlateA
+  missionlobby-structure-decks-concrete-geo3    11 /    10  MI_ConcreteB
+  missionlobby-structure-decks-concrete-periph    44 /    32  MI_ConcreteB
+  poi-lounge-floor-tile                        130 /     5  MI_FloorTileA_AlignXYZ
+  poi-lounge-floorstone                          4 /     4  MI_ConcreteB
+  poi-entrance-hall-floor-tile                  26 /     1  MI_FloorTileA_AlignXYZ
+  vault-chambers-floorstone                     36 /    33  MI_ConcreteB
+  poi-3rd-floor-tile                           229 /    20  MI_FloorTileA_AlignXYZ
+  poi-3rd-floorstone                            16 /    16  MI_ConcreteB
+  poi-3rd-roof-deck-slate                        1 /     1  MI_RoofSlateA
+Table-only mode: generated-data checks skipped.
+
+CONTENT_OVERRIDES: PASS
+python3 tools/check_gate_ratchet.py
+PASS: measured_on=74a43b8
+PASS: audit.coverage_den=12703
+PASS: audit.coverage_num=12657
+PASS: audit.unexpected=0
+PASS: compile.broken=0
+PASS: compile.checked=110
+PASS: e2e.fails=0
+PASS: e2e.passed=264
+PASS: e2e.total=264
+PASS: m2.fails=0
+PASS: m2.passes=11
+PASS: run_tests.fails=0
+PASS: run_tests.passes=263
+PASS: texture_cap.alpha_kept=1
+PASS: texture_cap.capped=773
+PASS: texture_cap.offenders=0
+PASS: audit coverage 12657/12703 (99.6 %)
+PASS: w7g-compile.log proves compile ('scripts checked: 110, broken: 0')
+PASS: w7g-run_tests.log proves run_tests ('SUMMARY: fails=0')
+PASS: w7g-run_tests.log records 263 PASS >= 263
+PASS: w7g-m2.log proves m2 ('M2_SUMMARY: fails=0')
+PASS: w7g-m2.log records 11 PASS >= 11
+PASS: w7g-e2e.log proves e2e ('SUMMARY: fails=0 passed=264 total=264')
+PASS: w7g-probe_leak.log clean
+NOTICE: audit has no committed log in this wave; its base floor is kept but NOT verified here — integration must re-measure and attach a log
+NOTICE: texture_cap has no committed log in this wave; its base floor is kept but NOT verified here — integration must re-measure and attach a log
+PASS: report records compile ('compile\\s*\\|\\s*110\\s*/\\s*0')
+PASS: report records run_tests ('run_tests\\s*\\|\\s*263')
+PASS: report records M2 ('M2\\s*\\|\\s*11')
+PASS: report records E2E ('E2E\\s*\\|\\s*264\\s*/\\s*264')
+PASS: report records coverage ('12657\\s*/\\s*12703')
+PASS: report names measured_on=74a43b8
+
+GATE_RATCHET: PASS (baseline and committed evidence agree; Godot gates run locally)

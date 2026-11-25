@@ -1,0 +1,88 @@
+== bash -n ==
+ok   run_perf_matrix.sh parses
+ok   test_perf_guard.sh parses
+ok   export_stamp.sh parses
+== temperature decision (defaults start=78 max=95) ==
+ok   77 C starts
+ok   guard-check reports the defaults
+ok   guard-check reports ok
+ok   78 C == --start-temp starts (exit 0)
+ok   79 C > --start-temp is refused (exit 8)
+ok   94 C (hot idle, below max) is refused (exit 8)
+ok   95 C == --max-temp is refused (exit 8)
+ok   unknown temperature is refused (fail closed) (exit 8)
+ok   non-numeric temperature is refused (exit 8)
+== explicit start/max headroom ==
+ok   start 90 / max 95, 90 C starts (exit 0)
+ok   start 90 / max 95, 91 C is refused (exit 8)
+ok   start 90 / max 95, 95 C is refused (exit 8)
+== argument validation ==
+ok   --start-temp below 60 (exit 2)
+ok   --start-temp above 105 (exit 2)
+ok   --max-temp above 105 (exit 2)
+ok   --max-temp below 60 (exit 2)
+ok   zero headroom (start == max) (exit 2)
+ok   inverted headroom (start > max) (exit 2)
+ok   non-numeric --max-rss-mb (exit 2)
+ok   --max-rss-mb below 1024 (exit 2)
+ok   --max-rss-mb above 262144 (exit 2)
+ok   invalid PERF_SCOPE_MEMORY_MAX is refused (exit 2)
+ok   --sample-sec 0 (exit 2)
+ok   --sample-sec above 60 (exit 2)
+== RSS decision (synthetic) ==
+ok   1024 MB fits a 8192 MB ceiling (exit 0)
+ok   8192 MB == ceiling is allowed (exit 0)
+ok   8193 MB > ceiling is refused (exit 9)
+ok   unknown RSS is refused (fail closed) (exit 9)
+ok   non-numeric RSS is refused (exit 9)
+ok   explicit scope override accepts a fitting cap (exit 0)
+ok   cap above an explicit 1G scope is refused (exit 2)
+== guard machinery in the wrapper ==
+ok   start-temp default is 78
+ok   max-temp default is 95
+ok   RSS cap default is 8192 MB
+ok   sampler cadence default is 1 s
+ok   MemoryMax is derived from RAM
+ok   memory scope honours an explicit override
+ok   sampler logs PERF_THERMAL_SAMPLE
+ok   pre-warm peak is recorded
+ok   pre-warm is sampled
+ok   measured run is sampled
+ok   VmHWM is read from /proc
+ok   VmRSS samples are kept
+ok   memory scope uses MemoryMax
+ok   memory scope disables swap
+ok   memory scope logs the RAM total
+ok   memory scope disables swap
+ok   scope fallback is logged
+ok   unknown temperature aborts the pre-check
+ok   missing sampler aborts the launch
+ok   RSS overrun fails the run
+ok   thermal abort fails the run
+ok   pre-check logs start/start_max/max
+ok   export stamp is verified
+ok   provenance is logged
+ok   PCK path/SHA/size is logged
+ok   stale stamp aborts the run
+ok   artifact mismatch aborts the run
+ok   publishable-only is enforced
+== export preset excludes review scenes ==
+ok   QA export excludes scenes/review/**
+== export provenance (stamp writer/verifier) ==
+ok   stamp write exits 0
+ok   stamp records HEAD
+ok   stamp records the PCK size
+ok   stamp file is written
+ok   stamp excludes review scenes
+ok   stamp stores the PCK SHA-256
+ok   wrapper accepts a current stamp (exit 0)
+ok   provenance check logs the PCK
+ok   stale stamp is refused (exit 3)
+ok   stale failure names the reason
+ok   PCK hash mismatch is refused (exit 4)
+ok   missing PCK is refused (exit 5)
+ok   missing stamp is refused (exit 5)
+ok   verify reports a clean stamp (exit 0)
+ok   verify prints the artifact digests
+
+PERF_GUARD_TEST PASS checks=78 fails=0

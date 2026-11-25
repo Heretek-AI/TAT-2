@@ -67,34 +67,32 @@ tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd
 tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd -- --tier=1
 ```
 
-| Gate | Passing value (W7G re-measured compile/run_tests/M2/probe_leak/E2E; the other rows are the W6 base) |
+| Gate | Passing value (W7 merged tree, `6760dd0`, logs in `docs/reports/logs/w7-merged/`) |
 |---|---|
-| compile | 110 checked, 0 broken |
-| `run_tests.gd` | `SUMMARY: fails=0` (263 PASS; suites numbered to 88) |
+| compile | 120 checked, 0 broken |
+| `run_tests.gd` | `SUMMARY: fails=0` (278 PASS; suites numbered to 90) |
 | `test_m2_player.gd` | `M2_SUMMARY: fails=0` (11 PASS) |
 | door walk / viewmodel / Niagara probes | `DOORWALK PASS` / `VIEWMODEL_TRUTH PASS` / `NIAGARA_PROBE PASS` (3695 authored / 3308 active / 36 systems) |
-| E2E | `fails=0 passed=264 total=264` (tier 1: 115) |
-| `make texture-cap-check` | OK — 773 capped, 1 alpha-critical kept, 0 offenders (base; not re-measured in W7G) |
-| `make audit` | exit 0, tracked baseline matches, disk-backed coverage 99.6 % (12657/12703), 0 unexpected, exact-case 0 unexpected, 13/13 content groups (base; not measurable in the W7G worktree — see below) |
+| E2E | `fails=0 passed=278 total=278` (tier 1: 117; includes `--tier=s2`) |
+| `make texture-cap-check` | OK — 773 capped, 1 alpha-critical kept, 0 offenders |
+| `make audit` | exit 0, tracked baseline matches, disk-backed coverage 99.6 % (12657/12703), 0 unexpected, exact-case 0 unexpected, 13/13 content groups |
 
-The 2026-11-24 W7G wave re-ran **compile, `run_tests`, M2, `probe_leak`
-(`TAT2_NO_DEN_PROBE=1`) and E2E 264/264** serially on `74a43b8` + the wave tree,
-plus `build/qa/test_perf_guard.sh` (78/78), the Linux export stamp and the core
-bake. Evidence: [`docs/reports/logs/`](docs/reports/logs/) and
-[`docs/reports/w7g-gates.md`](docs/reports/w7g-gates.md).
+The 2026-11-24 W7 wave (five lanes, cherry-picked) re-ran the **complete** set
+serially on `6760dd0` — compile, `run_tests`, M2, the three probes, `probe_leak`
+(`TAT2_NO_DEN_PROBE=1`), E2E 278/278, `test_perf_guard.sh` (78/78), `make audit`
+and `make texture-cap-check` — after regenerating and re-stamping the audit
+baseline. Evidence: [`docs/reports/logs/w7-merged/`](docs/reports/logs/w7-merged/)
+and [`docs/reports/w7-integration.md`](docs/reports/w7-integration.md). E2E moved
+264 → 278 (W7H guard-sprint pair + W7S 12-case loot tier); `run_tests` moved
+263 → 278 (S2 suites 89/90, W7E suite, W7H tests).
 
-**`make audit` was not run in W7G.** `game/data` is a symlink into the main
-checkout and the W7S lane's uncommitted loot producers changed 4 `gen:gameplay`
-files plus a directory hash; audit would fail on drift this wave does not own.
-Integration regenerates and re-stamps at the merged HEAD. The audit and
-texture-cap floors in `tools/gate_ratchet.json` are unchanged base values and
-are **not** evidence for W7G.
+If `.godot/imported` lacks the `.s3tc.ctex` variants, `T1-01-C` fails with
+`moon_visible=0.0`. Run `tools/godot --headless --path game --import` first; it
+repairs the cache and changes no tracked file.
 
 The perf matrix is **not run** (thermal gate waived, but no parallel Godot and
 the host idles near 80 °C); the editor core opened but its ≤2.5 GB VRAM
-threshold is unproven because `nvidia-smi memory.used` is device-wide. The
-merged tree will measure higher than these floors (S2 suites, W7E/W7H tests);
-integration raises them with fresh logs.
+threshold is unproven because `nvidia-smi memory.used` is device-wide.
 
 Anything below these numbers is a regression. Do not re-baseline silently; find
 the cause or record it.
@@ -176,6 +174,15 @@ cherry-pick the worker commit onto `main` after its gates pass. Resolve conflict
 by taking both intents (e.g. the `blocking_volume` tag comment), then rerun the
 full gate set on the merged tree — not just the worker's suite.
 
+**The symlinked data tree is read-only for workers.** `game/data` is a single
+shared directory, so a worker that runs `make normalize`, any `tools/parse_*.py`
+or `make audit-refresh-stamps` writes into the main checkout and rewrites the
+audit baseline for every other lane mid-run. In W7 that happened and produced a
+phantom `make audit` failure in four lanes. Only the integrator regenerates
+generated data, and only at the merged HEAD; a worker that needs new producer
+output must ask for it. If a lane genuinely must regenerate, give it a private
+copy of `game/data` instead of the symlink.
+
 ## Definition of done for any wave
 
 ```bash
@@ -185,7 +192,7 @@ tools/godot … check_scripts_compile.gd  # 0 broken
 make test                               # fails=0
 tools/godot … test_m2_player.gd         # fails=0
 tools/godot … probe_leak.gd             # expected result or documented warning
-tools/godot … run_e2e_tests.gd          # 264/264, no new failures
+tools/godot … run_e2e_tests.gd          # 278/278, no new failures
 build/qa/test_perf_guard.sh             # 78/78, no GPU
 make gate-ratchet                       # floors + committed logs agree
 git push origin main

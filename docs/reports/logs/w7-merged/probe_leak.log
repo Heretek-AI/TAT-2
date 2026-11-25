@@ -1,0 +1,116 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:691)
+         [1] _mission_map_id (res://src/core/game_data.gd:791)
+         [2] _load_missions (res://src/core/game_data.gd:848)
+         [3] _ready (res://src/core/game_data.gd:76)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:691)
+         [1] _mission_map_id (res://src/core/game_data.gd:791)
+         [2] _load_missions (res://src/core/game_data.gd:848)
+         [3] _ready (res://src/core/game_data.gd:76)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:691)
+         [1] _mission_map_id (res://src/core/game_data.gd:791)
+         [2] _load_missions (res://src/core/game_data.gd:848)
+         [3] _ready (res://src/core/game_data.gd:76)
+TAT-2 Loc: reverse map built from sources.json (3404 keys)
+TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
+PROBE start players=0
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'midnight_clear_thieves_den'
+MoonPanorama: cached res://assets/ue/Raw/Art/Environment/City/Architecture/BeautifulCorner/Materials/T_Moon_D.png (4096x2048, one decode per session)
+TAT-2 environment: bg=2 ambient_src=2 ambient_energy=0.07999999821186 ambient_color=(0.851, 0.9922, 1.0, 1.0) sky=true fog=true fog_density=0.00899999961257
+TAT-2 run clock: map=thieves_den mission=- main_s=5400.0 main_source=map_row endgame_s=480.0 endgame_source=fallback
+FootstepMask: downscaled 256x256 -> 128x128 for one-time alpha bake
+FootstepMask: baked one-time alpha mask (128x128) from res://assets/ue/Raw/Art/UI/Icons/T_Decal_Footstep.png)
+WARNING: [level_loader] level Niagara: 11 placements across 2 systems spawned
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:5199)
+         [1] _store_level_extras (res://src/core/level_loader.gd:5116)
+         [2] load_sublevels_async (res://src/core/level_loader.gd:5417)
+ROUGHNESS_BAKE_MODE on=1 resolution=full cache=process
+ROUGHNESS_BAKE count=31 pixels=23986176 ms=1360 bytes=31981555 hits=4 (L8 low+g*(high-low), full-res, process cache)
+TAT-2 Loaded thieves_den: meshes=285 lights=8
+TAT-2 post_process 'PostProcessVolume_1' carries only Lumen/UE-only settings (LumenSkylightLeaking, LumenFullSkylightLeakingDistance, LocalExposureHighlightContrastScale, LocalExposureShadowContrastScale, LocalExposureMiddleGreyBias); nothing Godot-mappable, environment unchanged
+TAT-2 Perf: chunks=180 collision_bodies=31 collision_shapes=207 occluders=0
+TAT-2 player spawn: source=authored pos=(5.6692, 42.1592, 270.6863) yaw=3.05529569165687 headroom_clear=true forward_clear=true
+TAT-2 Den window staging: source=authored-west-opening anchor=(-6.06, 43.05, 271.4) parsed_windows=1 facing=(-0.848048, 0.0, 0.529919)
+PersistentVfx: 'WindowGodray' caller-owned (ttl<=0); live=1 total=1 (freed with parent; live count via persistent_vfx_count())
+TAT-2 Den reflection probe: disabled (TAT2_NO_DEN_PROBE/--no-den-probe/setting)
+TAT-2 Den KF10 desk spot: energy=2.0 pos=(3.6446, 41.803, 267.8289) range=6.48999977111816 cone=80.0 aimed_at=(2.769, 41.1737, 268.0207)
+TAT-2 Den parchment emission: node=@MeshInstance3D@370 energy=0.2
+WispCap: wisp light energy=0.3 cap=0.65
+TAT-2 den spawn hub-facing: misalign_before_deg=127.6 rotated_to_face=true table=(2.769, 41.1137, 268.0207)
+TAT-2 spawners: throwable=0 ammo=0 health=0 civilian=0
+TAT-2 swinging doors: 1
+TAT-2 authored devices: 2 (acoustic_portal=2)
+TAT-2 mission_ready map=thieves_den meshes=285 lights=8 chunks=180
+PROBE after den players=1
+PROBE den player path=/root/Mission/@CharacterBody3D@573
+PROBE after den free players=0
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'gloomy'
+TAT-2 environment: bg=2 ambient_src=2 ambient_energy=0.15999999642372 ambient_color=(1.0, 1.0, 1.0, 1.0) sky=true fog=true fog_density=0.00480000022799
+TAT-2 scene variants selected=104 seed=275275524
+TAT-2 run clock: map=guildhall mission=Mission.Guildhall.VaultHeist main_s=7200.0 main_source=mission_row endgame_s=300.0 endgame_source=quest_graph
+FootstepMask: downscaled 256x256 -> 128x128 for one-time alpha bake
+FootstepMask: baked one-time alpha mask (128x128) from res://assets/ue/Raw/Art/UI/Icons/T_Decal_Footstep.png)
+TAT-2 gate lights: total=160 (generic=159 rect=1) budget=159 forced=6 hero_shadows=6
+WARNING: [level_loader] level Niagara: 1599 placements across 25 systems spawned
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:5199)
+         [1] _store_level_extras (res://src/core/level_loader.gd:5116)
+         [2] load_sublevels_async (res://src/core/level_loader.gd:5417)
+ROUGHNESS_BAKE count=86 pixels=73924608 ms=4400 bytes=98566111 hits=46 (L8 low+g*(high-low), full-res, process cache)
+BEAM_FIX SM_LightBeam cards=134 axis=col0 scale_slot=2 clamp=200.0 max_scale=195.5292 max_length_m=19.944
+PERF_CENSUS meshes=5910 instances=64544 chunk_nodes=5863 plain=2403 multimesh=3507 surface_draws=10776 lights=171 shadow_lights=7 occluders=768 collision_bodies=225 collision_shapes=24310 periph_nodes=3104 periph_instances=13325 periph_surface_draws=5945 periph_plain=1439 periph_multimesh=1665 periph_range=0 merge_mode=off merge_candidates=0 merge_nodes=0 merge_surfaces_before=0 merge_surfaces_after=0 light_budget=160 hero_shadows=6 source_sublevels={ "Guildhall_Landscape": 677, "Building_Guildhall_POI": 9771, "Guildhall_Geometry": 567, "Guildhall_Vault_CeremonialChambers": 743, "Guildhall_PeripheryA": 12251, "Building_Guildhall_POI_3rdFloor": 3613, "Guildhall_Gameplay": 1361, "Guildhall_P": 80, "Guildhall_LightingNoGameplay": 172, "Guildhall_Loot": 143, "Guildhall_SkyboxGeo": 33547 }
+TAT-2 Loaded guildhall: meshes=62950 lights=160
+TAT-2 KF16 car lenses: node=@MeshInstance3D@31037 dist=0.0 glass_surface=1 emission=1.0,0.6186,0.2552 energy=2.0
+TAT-2 KF17 clocktower: placed GuildhallSkylineClocktower mat=/Game/Art/Environment/Skybox/Buildings/ML/MI_DistantBuidingA
+TAT-2 KF16 sign letters: node=@MeshInstance3D@31387 surface=1 emission=(1.0, 0.62, 0.2, 1.0) energy=0.10000000149012 albedo=(1.0, 0.6848, 0.2726, 1.0)
+TAT-2 Perf: chunks=5863 collision_bodies=225 collision_shapes=24310 occluders=768
+TAT-2 player spawn: source=authored pos=(127.2747, 26.4694, -5.3296) yaw=-3.05432154567525 headroom_clear=true forward_clear=true
+WARNING: [hearing_data] 5 authored investigation-range anomalies clamped: AI.Stim.Hearing.LockPicking.Picked: outer 5.0 m > max 3.0 m (clamped); AI.Stim.Hearing.Alert.ShareKnowledge: outer 30.0 m > max 15.0 m (clamped); AI.Stim.Hearing.Tool.DartLaunch: inner 3.0 m > outer 2.0 m (clamped); AI.Stim.Hearing.EnterExitHedge: outer 8.0 m > max 7.5 m (clamped); AI.Stim.Hearing.Device.SecretSwitch: outer 8.0 m > max 7.5 m (clamped)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _log_anomalies_once (res://src/ai/hearing_data.gd:261)
+         [1] _build_stimuli (res://src/ai/hearing_data.gd:253)
+         [2] ensure_loaded (res://src/ai/hearing_data.gd:171)
+         [3] escalation_row (res://src/ai/hearing_data.gd:558)
+         [4] escalation_row (res://src/ai/guard_ai.gd:354)
+         [5] _apply_authored_escalation (res://src/ai/guard_ai.gd:369)
+         [6] _ready (res://src/ai/guard_ai.gd:325)
+         [7] _spawn_guards (res://src/missions/mission_controller.gd:3573)
+         [8] start_contract (res://src/missions/mission_controller.gd:667)
+         [9] load_sublevels_async (res://src/core/level_loader.gd:5452)
+TAT-2 quest items: spawned=1 mission=Mission.Guildhall.VaultHeist free_play=false
+TAT-2 loot containers: 107
+TAT-2 clues: spawned=6 set(s)=CLS_Contract_02 map=guildhall
+PQ_PLACE kind=readable y=pin anchor=library_note yaw=none pin_y=28.0021 floor_y=28.0000 pos=(-26.8541, 28.0021, -9.4431)
+TAT-2 personal quest: map=guildhall thief=spider stage=intro plan=1 spawned=1 anchors=library_note
+TAT-2 escape markers: authored=14 spawned=14 grounded=14 connected=14 phase=main
+WARNING: [civilian_npc] navmesh snap deferred: query landed before first map sync (deferred=1); target fails open until sync
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _is_target_valid (res://src/ai/civilian_npc.gd:318)
+         [1] _pick_new_target (res://src/ai/civilian_npc.gd:280)
+         [2] _ready (res://src/ai/civilian_npc.gd:86)
+         [3] _spawn_civilians (res://src/missions/mission_controller.gd:4195)
+         [4] _spawn_spawner_content (res://src/missions/mission_controller.gd:4167)
+         [5] start_contract (res://src/missions/mission_controller.gd:677)
+         [6] load_sublevels_async (res://src/core/level_loader.gd:5452)
+TAT-2 spawners: throwable=133 ammo=45 health=5 civilian=3
+TAT-2 swinging doors: 155
+TAT-2 authored devices: 903 (alarm_eye=60, goo_pipe=90, junction=11, light_beam=134, noise_alarm=96, power_switch=29, power_wall=9, pressure_plate=162, turret=229, vault_door=6, ward_blocker=36, ward_slow=41)
+TAT-2 mission_ready map=guildhall meshes=62950 lights=160 chunks=5863
+PROBE after gh players=1
+PROBE gh player path=/root/Mission/@CharacterBody3D@32157
+PROBE after gh free players=0

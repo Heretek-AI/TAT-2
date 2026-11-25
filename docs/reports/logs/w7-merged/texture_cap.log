@@ -1,0 +1,9 @@
+python3 tools/prebake_texture_cap.py --check --cap 1024
+repo: /home/john/Projects/TAT-2
+targets: 1512 (materials.json 1507, level_loader.gd 17, overlap 12)
+mode: CHECK (cap 1024 px long edge)
+capped: 773
+alpha-critical (kept full-res): 1
+within cap: 738
+offenders: 0
+texture cap check: OK

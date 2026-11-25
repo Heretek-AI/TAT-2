@@ -41,7 +41,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 RATCHET = ROOT / "tools" / "gate_ratchet.json"
-REPORT = ROOT / "docs" / "reports" / "w7g-gates.md"
+REPORT = ROOT / "docs" / "reports" / "w7-integration.md"
 
 # Non-numeric wiring only: which values form each log's summary and the exact
 # command that regenerates the log. All numbers come from the ratchet JSON.
@@ -68,10 +68,30 @@ LOG_GATES = {
         ),
         "passes_key": None,
     },
+    "audit": {
+        "command": "make audit",
+        # The coverage floor and the unexpected count share one summary line.
+        "summary": lambda g: (
+            rf"Disk-backed coverage: {g['coverage_num']}/{g['coverage_den']}"
+            rf"[^\n]*unexpected {g['unexpected']}"
+        ),
+        "passes_key": None,
+    },
+    "texture_cap": {
+        "command": "make texture-cap-check",
+        # Three values on separate lines; the file is scanned as a whole.
+        "summary": lambda g: (
+            rf"capped: {g['capped']}[\s\S]*"
+            rf"alpha-critical \(kept full-res\): {g['alpha_kept']}[\s\S]*"
+            rf"offenders: {g['offenders']}"
+        ),
+        "passes_key": None,
+    },
 }
-# Gates without an evidence log in this wave. Their values are validated for
-# internal consistency only; integration must add a log when it re-measures.
-NO_LOG_GATES = {"audit", "texture_cap"}
+# Gates without an evidence log. Empty now that integration committed audit and
+# texture-cap logs; keep the mechanism so a future wave can declare a gap
+# explicitly instead of silently leaving a floor unverified.
+NO_LOG_GATES: set[str] = set()
 
 fails: list[str] = []
 

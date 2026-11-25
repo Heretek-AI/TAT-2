@@ -1,0 +1,1065 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:691)
+         [1] _mission_map_id (res://src/core/game_data.gd:791)
+         [2] _load_missions (res://src/core/game_data.gd:848)
+         [3] _ready (res://src/core/game_data.gd:76)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:691)
+         [1] _mission_map_id (res://src/core/game_data.gd:791)
+         [2] _load_missions (res://src/core/game_data.gd:848)
+         [3] _ready (res://src/core/game_data.gd:76)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:691)
+         [1] _mission_map_id (res://src/core/game_data.gd:791)
+         [2] _load_missions (res://src/core/game_data.gd:848)
+         [3] _ready (res://src/core/game_data.gd:76)
+TAT-2 Loc: reverse map built from sources.json (3404 keys)
+TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
+PASS: [T1-01-A] moon diameter mc=8.2718 (exp 8.2718), df=11.7329 (exp 11.7329), visible=true
+PASS: [T1-01-B] horizon=(0.002, 0.0026, 0.003, 1.0) zenith=(0.0, 0.0, 0.0, 1.0)
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'midnight_clear'
+MoonPanorama: cached res://assets/ue/Raw/Art/Environment/City/Architecture/BeautifulCorner/Materials/T_Moon_D.png (4096x2048, one decode per session)
+PASS: [T1-01-C] fog_sky_affect=0.80000001192093 bg=2 moon_color=(0.5137, 0.5216, 1.0, 1.0) moon_visible=1.0
+PASS: [T1-01-D] tat_sky.gdshader fbm_clouds=true moon_halo=true
+PASS: [T1-01-E] sky_radiance_decoupled=true indigo_fog=true fog_col=(0.12, 0.13, 0.15, 1.0) warm_sky_haze amount=1.000 color=(0.052, 0.04, 0.028) warm_r_gt_b=true den_amount=0.000
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'midnight_clear_mission_lobby'
+PASS: [T1-02-B] gain_shadows applied: adj_enabled=true bright=1.200 ssil=true
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'midnight_clear_thieves_den'
+TAT-2 environment: bg=2 ambient_src=2 ambient_energy=0.07999999821186 ambient_color=(0.851, 0.9922, 1.0, 1.0) sky=true fog=true fog_density=0.00899999961257
+TAT-2 run clock: map=thieves_den mission=- main_s=5400.0 main_source=map_row endgame_s=480.0 endgame_source=fallback
+FootstepMask: downscaled 256x256 -> 128x128 for one-time alpha bake
+FootstepMask: baked one-time alpha mask (128x128) from res://assets/ue/Raw/Art/UI/Icons/T_Decal_Footstep.png)
+WARNING: [level_loader] level Niagara: 11 placements across 2 systems spawned
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:5199)
+         [1] _store_level_extras (res://src/core/level_loader.gd:5116)
+         [2] load_sublevels_async (res://src/core/level_loader.gd:5417)
+ROUGHNESS_BAKE_MODE on=1 resolution=full cache=process
+ROUGHNESS_BAKE count=31 pixels=23986176 ms=1439 bytes=31981555 hits=4 (L8 low+g*(high-low), full-res, process cache)
+TAT-2 Loaded thieves_den: meshes=285 lights=8
+TAT-2 post_process 'PostProcessVolume_1' carries only Lumen/UE-only settings (LumenSkylightLeaking, LumenFullSkylightLeakingDistance, LocalExposureHighlightContrastScale, LocalExposureShadowContrastScale, LocalExposureMiddleGreyBias); nothing Godot-mappable, environment unchanged
+TAT-2 Perf: chunks=180 collision_bodies=31 collision_shapes=207 occluders=0
+TAT-2 player spawn: source=authored pos=(5.6692, 42.1592, 270.6863) yaw=3.05529569165687 headroom_clear=true forward_clear=true
+TAT-2 Den window staging: source=authored-west-opening anchor=(-6.06, 43.05, 271.4) parsed_windows=1 facing=(-0.848048, 0.0, 0.529919)
+PersistentVfx: 'WindowGodray' caller-owned (ttl<=0); live=1 total=1 (freed with parent; live count via persistent_vfx_count())
+TAT-2 Den KF10 desk spot: energy=2.0 pos=(3.6446, 41.803, 267.8289) range=6.48999977111816 cone=80.0 aimed_at=(2.769, 41.1737, 268.0207)
+TAT-2 Den parchment emission: node=@MeshInstance3D@370 energy=0.2
+WispCap: wisp light energy=0.3 cap=0.65
+TAT-2 den spawn hub-facing: misalign_before_deg=127.6 rotated_to_face=true table=(2.769, 41.1137, 268.0207)
+TAT-2 spawners: throwable=0 ammo=0 health=0 civilian=0
+TAT-2 swinging doors: 1
+TAT-2 authored devices: 2 (acoustic_portal=2)
+TAT-2 mission_ready map=thieves_den meshes=285 lights=8 chunks=180
+PASS: [T1-02-C] den_hand_fills=2.00 red=false probes=1 dark_amb=true
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'gloomy'
+TAT-2 environment: bg=2 ambient_src=2 ambient_energy=0.15999999642372 ambient_color=(1.0, 1.0, 1.0, 1.0) sky=true fog=true fog_density=0.00480000022799
+TAT-2 scene variants selected=104 seed=275275524
+TAT-2 run clock: map=guildhall mission=Mission.Guildhall.VaultHeist main_s=7200.0 main_source=mission_row endgame_s=300.0 endgame_source=quest_graph
+FootstepMask: downscaled 256x256 -> 128x128 for one-time alpha bake
+FootstepMask: baked one-time alpha mask (128x128) from res://assets/ue/Raw/Art/UI/Icons/T_Decal_Footstep.png)
+TAT-2 gate lights: total=160 (generic=159 rect=1) budget=159 forced=6 hero_shadows=6
+WARNING: [level_loader] level Niagara: 1599 placements across 25 systems spawned
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:5199)
+         [1] _store_level_extras (res://src/core/level_loader.gd:5116)
+         [2] load_sublevels_async (res://src/core/level_loader.gd:5417)
+ROUGHNESS_BAKE count=86 pixels=73924608 ms=4159 bytes=98566111 hits=46 (L8 low+g*(high-low), full-res, process cache)
+BEAM_FIX SM_LightBeam cards=134 axis=col0 scale_slot=2 clamp=200.0 max_scale=195.5292 max_length_m=19.944
+PERF_CENSUS meshes=5910 instances=64544 chunk_nodes=5863 plain=2403 multimesh=3507 surface_draws=10776 lights=171 shadow_lights=7 occluders=768 collision_bodies=225 collision_shapes=24310 periph_nodes=3104 periph_instances=13325 periph_surface_draws=5945 periph_plain=1439 periph_multimesh=1665 periph_range=0 merge_mode=off merge_candidates=0 merge_nodes=0 merge_surfaces_before=0 merge_surfaces_after=0 light_budget=160 hero_shadows=6 source_sublevels={ "Guildhall_Landscape": 677, "Building_Guildhall_POI": 9771, "Guildhall_Geometry": 567, "Guildhall_Vault_CeremonialChambers": 743, "Guildhall_PeripheryA": 12251, "Building_Guildhall_POI_3rdFloor": 3613, "Guildhall_Gameplay": 1361, "Guildhall_P": 80, "Guildhall_LightingNoGameplay": 172, "Guildhall_Loot": 143, "Guildhall_SkyboxGeo": 33547 }
+TAT-2 Loaded guildhall: meshes=62950 lights=160
+TAT-2 KF16 car lenses: node=@MeshInstance3D@31037 dist=0.0 glass_surface=1 emission=1.0,0.6186,0.2552 energy=2.0
+TAT-2 KF17 clocktower: placed GuildhallSkylineClocktower mat=/Game/Art/Environment/Skybox/Buildings/ML/MI_DistantBuidingA
+TAT-2 KF16 sign letters: node=@MeshInstance3D@31387 surface=1 emission=(1.0, 0.62, 0.2, 1.0) energy=0.10000000149012 albedo=(1.0, 0.6848, 0.2726, 1.0)
+TAT-2 Perf: chunks=5863 collision_bodies=225 collision_shapes=24310 occluders=768
+TAT-2 player spawn: source=authored pos=(127.2747, 26.4694, -5.3296) yaw=-3.05432154567525 headroom_clear=true forward_clear=true
+WARNING: [hearing_data] 5 authored investigation-range anomalies clamped: AI.Stim.Hearing.LockPicking.Picked: outer 5.0 m > max 3.0 m (clamped); AI.Stim.Hearing.Alert.ShareKnowledge: outer 30.0 m > max 15.0 m (clamped); AI.Stim.Hearing.Tool.DartLaunch: inner 3.0 m > outer 2.0 m (clamped); AI.Stim.Hearing.EnterExitHedge: outer 8.0 m > max 7.5 m (clamped); AI.Stim.Hearing.Device.SecretSwitch: outer 8.0 m > max 7.5 m (clamped)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _log_anomalies_once (res://src/ai/hearing_data.gd:261)
+         [1] _build_stimuli (res://src/ai/hearing_data.gd:253)
+         [2] ensure_loaded (res://src/ai/hearing_data.gd:171)
+         [3] escalation_row (res://src/ai/hearing_data.gd:558)
+         [4] escalation_row (res://src/ai/guard_ai.gd:354)
+         [5] _apply_authored_escalation (res://src/ai/guard_ai.gd:369)
+         [6] _ready (res://src/ai/guard_ai.gd:325)
+         [7] _spawn_guards (res://src/missions/mission_controller.gd:3573)
+         [8] start_contract (res://src/missions/mission_controller.gd:667)
+         [9] load_sublevels_async (res://src/core/level_loader.gd:5452)
+TAT-2 quest items: spawned=1 mission=Mission.Guildhall.VaultHeist free_play=false
+TAT-2 loot containers: 107
+TAT-2 clues: spawned=6 set(s)=CLS_Contract_02 map=guildhall
+PQ_PLACE kind=readable y=pin anchor=library_note yaw=none pin_y=28.0021 floor_y=28.0000 pos=(-26.8541, 28.0021, -9.4431)
+TAT-2 personal quest: map=guildhall thief=spider stage=intro plan=1 spawned=1 anchors=library_note
+TAT-2 escape markers: authored=14 spawned=14 grounded=14 connected=14 phase=main
+WARNING: [civilian_npc] navmesh snap deferred: query landed before first map sync (deferred=1); target fails open until sync
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _is_target_valid (res://src/ai/civilian_npc.gd:318)
+         [1] _pick_new_target (res://src/ai/civilian_npc.gd:280)
+         [2] _ready (res://src/ai/civilian_npc.gd:86)
+         [3] _spawn_civilians (res://src/missions/mission_controller.gd:4195)
+         [4] _spawn_spawner_content (res://src/missions/mission_controller.gd:4167)
+         [5] start_contract (res://src/missions/mission_controller.gd:677)
+         [6] load_sublevels_async (res://src/core/level_loader.gd:5452)
+TAT-2 spawners: throwable=133 ammo=45 health=5 civilian=3
+TAT-2 swinging doors: 155
+TAT-2 authored devices: 903 (alarm_eye=60, goo_pipe=90, junction=11, light_beam=134, noise_alarm=96, power_switch=29, power_wall=9, pressure_plate=162, turret=229, vault_door=6, ward_blocker=36, ward_slow=41)
+TAT-2 mission_ready map=guildhall meshes=62950 lights=160 chunks=5863
+PASS: [T1-02-A] guildhall env.ssil_enabled=true
+PASS: [T1-02-D] shadow_lift ssil=true ssil_int=0.80 amb=0.160 adj=true
+PASS: [T1-02-E] safe_room_spot dist=0.19 energy=0.588 range=9.00
+TAT-2 UI main-menu: theme=res://src/ui/art_nouveau_theme.gd; journal drawer removed (T9)
+FootstepMask: downscaled 256x256 -> 128x128 for one-time alpha bake
+FootstepMask: baked one-time alpha mask (128x128) from res://assets/ue/Raw/Art/UI/Icons/T_Decal_Footstep.png)
+WARNING: [level_loader] level Niagara: 5 placements across 3 systems spawned
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:5199)
+         [1] _store_level_extras (res://src/core/level_loader.gd:5116)
+         [2] load_sublevels (res://src/core/level_loader.gd:5340)
+         [3] _build_3d_backdrop (res://src/ui/main_menu.gd:167)
+         [4] _ready (res://src/ui/main_menu.gd:75)
+         [5] _feat_03_startscreen (res://tests/e2e/e2e_tier1_features.gd:239)
+         [6] run (res://tests/e2e/e2e_tier1_features.gd:18)
+         [7] _feat_02_interior_shadow_gi (res://tests/e2e/e2e_tier1_features.gd:231)
+         [8] free_node (res://tests/e2e/e2e_helpers.gd:272)
+         [9] step_process (res://tests/e2e/e2e_helpers.gd:261)
+ROUGHNESS_BAKE count=31 pixels=22806528 ms=1204 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
+PASS: [T1-03-A] cam eye_ok=true fov=48.03 pitch=13.67
+PASS: [T1-03-B] startscreen dirs=2 total_lights=31 env=true
+PASS: [T1-03-C] volumetric_fog_enabled=true mist_node=false
+PASS: [T1-03-D] streetlamp emissive=true nodes=1
+PASS: [T1-03-E] left_corner_trim_fix code=true mat=false
+PASS: [T1-04-A] MI_Neon & MI_Neon_MacNeish shader vectors & cache identity
+PASS: [T1-04-B] tat_hdr_emissive core_desat/fresnel=true flicker=true
+TAT-2 UI main-menu: theme=res://src/ui/art_nouveau_theme.gd; journal drawer removed (T9)
+WARNING: [level_loader] level Niagara: 5 placements across 3 systems spawned
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:5199)
+         [1] _store_level_extras (res://src/core/level_loader.gd:5116)
+         [2] load_sublevels (res://src/core/level_loader.gd:5340)
+         [3] _build_3d_backdrop (res://src/ui/main_menu.gd:167)
+         [4] _ready (res://src/ui/main_menu.gd:75)
+         [5] _feat_04_neon_ssr (res://tests/e2e/e2e_tier1_features.gd:357)
+         [6] step_process (res://tests/e2e/e2e_helpers.gd:261)
+ROUGHNESS_BAKE count=31 pixels=22806528 ms=1196 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
+PASS: [T1-04-C] desktop ssr_enabled on MainMenu=true and Mission/Weather=true
+PASS: [T1-04-D] tat_landscape.gdshader wet puddle roughness ~0.04 (found_0.04=true)
+PASS: [T1-04-E] Guildhall dual-weightmap slot 4 & single-weightmap negative control
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'midnight_clear_mission_lobby'
+WARNING: [level_loader] level Niagara: 6 placements across 1 systems spawned
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:5199)
+         [1] _store_level_extras (res://src/core/level_loader.gd:5116)
+         [2] load_sublevels (res://src/core/level_loader.gd:5340)
+         [3] _build_stage (res://src/ui/mission_prep_ui.gd:700)
+         [4] _build_all (res://src/ui/mission_prep_ui.gd:376)
+         [5] _ready (res://src/ui/mission_prep_ui.gd:186)
+         [6] _feat_05_mission_lobby_stage (res://tests/e2e/e2e_tier1_features.gd:393)
+         [7] run (res://tests/e2e/e2e_tier1_features.gd:20)
+         [8] _feat_04_neon_ssr (res://tests/e2e/e2e_tier1_features.gd:385)
+         [9] free_node (res://tests/e2e/e2e_helpers.gd:272)
+         [10] step_process (res://tests/e2e/e2e_helpers.gd:261)
+ROUGHNESS_BAKE count=22 pixels=15728640 ms=815 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
+TAT-2 prep skyline: placed 8/8 expansion pieces (group=prep_skyline)
+PASS: [T1-05-A] MissionLobby sublevels=true no_fake_roof=true meshes=423
+PASS: [T1-05-B] MissionPrep stage camera FOV=20.00 (expected 20.0 hFOV, KEEP_WIDTH=true)
+PASS: [T1-05-C] midnight_clear_mission_lobby=true stage_bg_sky=true
+PASS: [T1-05-D] ThiefNisha PBR=true idle_playing=true
+PASS: [T1-05-E] 11 CDT_Missions rows + art (gh=true om=true)
+PASS: [T1-06-A] CandleFlame uses tapered quad/non-sphere mesh (true)
+PASS: [T1-06-B] tat_glass.gdshader bound & depth_draw updated (true)
+PASS: [T1-06-C] soft godray falloff shader/gradient (true)
+PASS: [T1-06-D] tree vis_range_end=0.0 backlight=true
+PASS: [T1-06-E] yellow outline=true restored=true
+ERROR: Parameter "material" is null.
+   at: material_get_instance_shader_parameters (servers/rendering/dummy/storage/material_storage.cpp:264)
+PASS: [T1-07-A] 1P Zipwire real GLB loaded from Art/Gameplay/Gear (true)
+TongCap: viewmodel emission_energy=0.65 cap=0.65 (loader PBR tongs/3P clamped to mission glow 0.65)
+TongCap: viewmodel emission_energy=0.65 cap=0.65 (loader PBR tongs/3P clamped to mission glow 0.65)
+PASS: [T1-07-B] 1P SmokeBomb=true Slithersap=true real GLBs
+FairyCap: fairy orb emission_energy=0.64999997615814 cap=0.65 (no UE orb authoring; mission glow 0.65)
+TongCap: viewmodel emission_energy=0.64999997615814 cap=0.65 (loader PBR tongs/3P clamped to mission glow 0.65)
+TongCap: viewmodel emission_energy=0.65 cap=0.65 (loader PBR tongs/3P clamped to mission glow 0.65)
+DiamondCap: vistara gem emission_energy=0.64999997615814 cap=0.65 (UE MI_VistaraDiamond Emissive Off; mission glow 0.65)
+TongCap: viewmodel emission_energy=0.64999997615814 cap=0.65 (loader PBR tongs/3P clamped to mission glow 0.65)
+PASS: [T1-07-C] 1P BlackJack=true Fairy=true VistaraDiamond=true
+PASS: [T1-07-D] 1P tool GLB binds authored PBR texture/material (true)
+DiamondCap: vistara gem emission_energy=0.64999997615814 cap=0.65 (UE MI_VistaraDiamond Emissive Off; mission glow 0.65)
+TongCap: viewmodel emission_energy=0.64999997615814 cap=0.65 (loader PBR tongs/3P clamped to mission glow 0.65)
+PASS: [T1-07-E] fp_tool_root child count after switches=1 (expected 1)
+PASS: [T1-08-A] 1P arms SK_ThiefNisha__BodyUpper PBR bound (true)
+PASS: [T1-08-B] 1P clips loco=true tool_clips=true count=5
+PASS: [T1-08-C] disguise_anim=true zipwire_anim=true
+PASS: [T1-08-D] stationary idle holds pose; reset_bone_poses() only in _stop_gear_crank (idle_reset=false)
+PASS: [T1-08-E] 1P viewmodel SubViewport/layer isolation (false)
+ERROR: Parameter "material" is null.
+   at: material_get_instance_shader_parameters (servers/rendering/dummy/storage/material_storage.cpp:264)
+SmokeTrajCap: smoke traj emission_energy=0.64999997615814 cap=0.65 (no UE traj authoring; mission glow 0.65)
+TongCap: viewmodel emission_energy=0.65 cap=0.65 (loader PBR tongs/3P clamped to mission glow 0.65)
+TongCap: viewmodel emission_energy=0.65 cap=0.65 (loader PBR tongs/3P clamped to mission glow 0.65)
+DiamondCap: vistara gem emission_energy=0.64999997615814 cap=0.65 (UE MI_VistaraDiamond Emissive Off; mission glow 0.65)
+TongCap: viewmodel emission_energy=0.64999997615814 cap=0.65 (loader PBR tongs/3P clamped to mission glow 0.65)
+PASS: [T1-09-A] equip [1]..[4] without firing (has_api=true eq_ok=true)
+PASS: [T1-09-B] get_tool_slots() returns structured Array[Dictionary] with 1 active
+PASS: [T1-09-C] LMB fires equipped Smoke Bomb & consumes charge 1->0 (true)
+DiamondCap: vistara gem emission_energy=0.64999997615814 cap=0.65 (UE MI_VistaraDiamond Emissive Off; mission glow 0.65)
+TongCap: viewmodel emission_energy=0.64999997615814 cap=0.65 (loader PBR tongs/3P clamped to mission glow 0.65)
+PASS: [T1-09-D] Vistara Diamond [4] + LMB toggles is_thief_vision_active() (true)
+PASS: [T1-09-E] get_active_reticle_state() returns required contract keys
+ERROR: Parameter "material" is null.
+   at: material_get_instance_shader_parameters (servers/rendering/dummy/storage/material_storage.cpp:264)
+PASS: [T1-10-A] Zipwire aim validation: wall=true sky_rejected=true
+PASS: [T1-10-B] Persistent Zipwire cable during grapple (true)
+PASS: [T1-10-C] [RMB] crank_active & crank_progress > 0 (true)
+PASS: [T1-10-F] RMB travel attach: travel=true hang=true grapple_cleared=true cable=true
+PASS: [T1-10-G] hanging crank moves along cable / progress (true)
+PASS: [T1-10-H] early release holds position + cable, re-press resumes (true)
+PASS: [T1-10-I] hang completion grants charge, hides cable (true)
+PASS: [T1-10-D] auto-mantle logic=true y=2.00 (expected >= 1.8)
+PASS: [T1-10-E] wall_climb logic=true climb_y=2.07
+PASS: [T1-10-J] blocking volumes tagged/no-mesh/solid=true climb_reject=true mantle_reject=true softlock_ok=true visible(4m=true 5m=true climb=true) top_cap_reject=true open_ledge=true
+SmokeTrajCap: smoke traj emission_energy=0.64999997615814 cap=0.65 (no UE traj authoring; mission glow 0.65)
+PASS: [T1-11-D] Smoke Bomb trajectory arc preview active (true)
+PASS: [T1-11-A] SmokeBomb RigidBody3D speed=29.95 m/s (exp ~30.0)
+SmokeFlashCap: ignition flash energy=0.64999997615814 cap=0.65 (no UE flash light; mission glow 0.65)
+PASS: [T1-11-B] SmokeBomb detonated into smoke AABB (1)
+SmokeFlashCap: ignition flash energy=0.64999997615814 cap=0.65 (no UE flash light; mission glow 0.65)
+PASS: [T1-11-C] Smoke box blocks guard LOS (true)
+TongCap: viewmodel emission_energy=0.65 cap=0.65 (loader PBR tongs/3P clamped to mission glow 0.65)
+TongCap: viewmodel emission_energy=0.65 cap=0.65 (loader PBR tongs/3P clamped to mission glow 0.65)
+TongCap: viewmodel emission_energy=0.65 cap=0.65 (loader PBR tongs/3P clamped to mission glow 0.65)
+TongCap: viewmodel emission_energy=0.65 cap=0.65 (loader PBR tongs/3P clamped to mission glow 0.65)
+SapSparkCap: sap spark emission_energy=0.64999997615814 cap=0.65 (UE MI_SlimeBomb EmissiveStrength unrecovered; mission glow 0.65)
+SapFlashCap: sap flash energy=0.64999997615814 cap=0.65 (no UE flash light; mission glow 0.65)
+PASS: [T1-11-E] Slithersap immediate raycast puddle (0->1), zero RigidBody
+PASS: [T1-12-A] disguise base=1.0 sprint=41.0 prox=6.0
+PASS: [T1-12-B] Status.Lockpicking 5.0/s + 1.0/s timer (integ=94.00)
+PASS: [T1-12-C] GuardViewCone 10.0/s decay hook (integ=89.00)
+PASS: [T1-12-D] DamageTaken 40/hit: hit1=10.0(active=true) hit2=0.0(active=false)
+PASS: [T1-12-E] DISGUISE_ACTIVE_TIME=60.0 expired=true
+PASS: [T1-13-A] StealthBall centered=true light_reactive=true
+PASS: [T1-13-B] Bilateral SoundWaves reacts to NoiseBus (true)
+PASS: [T1-13-C] HealthBar top-left=true T_healthBar_straight=true
+PASS: [T1-13-D] spider=[25, 25, 25, 25] chameleon=[30, 30, 20, 20] hud_segments=0
+PASS: [T1-13-E] hp_fill scaled=0.75 splatter=true
+PASS: [T1-14-A] bottom-left hotbar=true wide_icons=true
+PASS: [T1-14-B] HUD displays infinity glyph for -1 slots (true)
+PASS: [T1-14-C] HUD MAP/PING/LMB/RMB hints wired
+PASS: [T1-14-D] Portrait badge & slim T_compass_lines (true)
+PASS: [T1-14-E] Reticles, crank ring, GuardPip & OffscreenDetectionMeter wired (true)
+PASS: [T1-15-A] Lockpicking circular/arc UI & T_Lockpicking_* textures (true)
+PASS: [T1-15-B] DA_LockpickMinigameVariations vars=24 tracks=48 bounds=true
+PASS: [T1-15-C] [TAB] map_toggle action=true overlay=true
+PASS: [T1-15-D] [MMB] ping_menu action=true radial=true
+PASS: [T1-15-E] Thief Vision has zero flat cyan wash (overlay_vis=false alpha=0.00)
+TAT-2 UI settings: theme=res://src/ui/art_nouveau_theme.gd strings=res://data/generated/tables/StringTables/ST_Settings.json
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'midnight_clear_mission_lobby'
+WARNING: [level_loader] level Niagara: 6 placements across 1 systems spawned
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:5199)
+         [1] _store_level_extras (res://src/core/level_loader.gd:5116)
+         [2] load_sublevels (res://src/core/level_loader.gd:5340)
+         [3] _build_stage (res://src/ui/mission_prep_ui.gd:700)
+         [4] _build_all (res://src/ui/mission_prep_ui.gd:376)
+         [5] _ready (res://src/ui/mission_prep_ui.gd:186)
+         [6] _feat_16_shell_ui_letter_loading (res://tests/e2e/e2e_tier1_features.gd:1505)
+         [7] free_node (res://tests/e2e/e2e_helpers.gd:272)
+         [8] step_process (res://tests/e2e/e2e_helpers.gd:261)
+ROUGHNESS_BAKE count=22 pixels=15728640 ms=928 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
+TAT-2 prep skyline: placed 8/8 expansion pieces (group=prep_skyline)
+TAT-2 UI ledger: 68 authored catalog rows, 4 columns, 68 icons
+WARNING: Nodes with non-equal opposite anchors will have their size overridden after _ready(). 
+If you want to set size, change the anchors or consider using set_deferred().
+     at: _set_size (scene/gui/control.cpp:1519)
+     GDScript backtrace (most recent call first):
+         [0] _ready (res://src/ui/ledger_ui.gd:120)
+         [1] _feat_16_shell_ui_letter_loading (res://tests/e2e/e2e_tier1_features.gd:1505)
+         [2] free_node (res://tests/e2e/e2e_helpers.gd:272)
+         [3] step_process (res://tests/e2e/e2e_helpers.gd:261)
+PASS: [T1-16-A] 5 shell UIs teal ArtNouveau cohesion: settings_ui.gd=true, mission_prep_ui.gd=true, wardrobe_ui.gd=true, contract_table_ui.gd=true, ledger_ui.gd=true
+PASS: [T1-16-B] HUD Mission Start Letter (contract_intro + [SPACE]) wired (true)
+PASS: [T1-16-C] LoadingScreen art=true spinner=true bar=50.0
+TAT-2 UI settings: theme=res://src/ui/art_nouveau_theme.gd strings=res://data/generated/tables/StringTables/ST_Settings.json
+PASS: [T1-16-D] Settings persisted into ThiefCharacter (true)
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'midnight_clear_mission_lobby'
+WARNING: [level_loader] level Niagara: 6 placements across 1 systems spawned
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:5199)
+         [1] _store_level_extras (res://src/core/level_loader.gd:5116)
+         [2] load_sublevels (res://src/core/level_loader.gd:5340)
+         [3] _build_stage (res://src/ui/mission_prep_ui.gd:700)
+         [4] _build_all (res://src/ui/mission_prep_ui.gd:376)
+         [5] _ready (res://src/ui/mission_prep_ui.gd:186)
+         [6] _feat_16_shell_ui_letter_loading (res://tests/e2e/e2e_tier1_features.gd:1575)
+         [7] free_node (res://tests/e2e/e2e_helpers.gd:272)
+         [8] step_process (res://tests/e2e/e2e_helpers.gd:261)
+ROUGHNESS_BAKE count=22 pixels=15728640 ms=927 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
+TAT-2 prep skyline: placed 8/8 expansion pieces (group=prep_skyline)
+PASS: [T1-16-E] MissionPrepUI substituted {MatchDurationInMinutes} (text_len=237)
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'midnight_clear_thieves_den'
+TAT-2 environment: bg=2 ambient_src=2 ambient_energy=0.07999999821186 ambient_color=(0.851, 0.9922, 1.0, 1.0) sky=true fog=true fog_density=0.00899999961257
+TAT-2 run clock: map=thieves_den mission=Mission.Guildhall.VaultHeist main_s=5400.0 main_source=map_row endgame_s=480.0 endgame_source=fallback
+WARNING: [level_loader] level Niagara: 11 placements across 2 systems spawned
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:5199)
+         [1] _store_level_extras (res://src/core/level_loader.gd:5116)
+         [2] load_sublevels_async (res://src/core/level_loader.gd:5417)
+ROUGHNESS_BAKE count=31 pixels=23986176 ms=1419 bytes=31981555 hits=4 (L8 low+g*(high-low), full-res, process cache)
+TAT-2 Loaded thieves_den: meshes=285 lights=8
+TAT-2 post_process 'PostProcessVolume_1' carries only Lumen/UE-only settings (LumenSkylightLeaking, LumenFullSkylightLeakingDistance, LocalExposureHighlightContrastScale, LocalExposureShadowContrastScale, LocalExposureMiddleGreyBias); nothing Godot-mappable, environment unchanged
+TAT-2 Perf: chunks=180 collision_bodies=31 collision_shapes=207 occluders=0
+TAT-2 player spawn: source=authored pos=(5.6692, 42.1592, 270.6863) yaw=3.05529569165687 headroom_clear=true forward_clear=true
+TAT-2 Den window staging: source=authored-west-opening anchor=(-6.06, 43.05, 271.4) parsed_windows=1 facing=(-0.848048, 0.0, 0.529919)
+TAT-2 Den KF10 desk spot: energy=2.0 pos=(3.6446, 41.803, 267.8289) range=6.48999977111816 cone=80.0 aimed_at=(2.769, 41.1737, 268.0207)
+TAT-2 Den parchment emission: node=@MeshInstance3D@43024 energy=0.2
+WispCap: wisp light energy=0.3 cap=0.65
+TAT-2 den spawn hub-facing: misalign_before_deg=127.6 rotated_to_face=true table=(2.769, 41.1137, 268.0207)
+TAT-2 spawners: throwable=0 ammo=0 health=0 civilian=0
+TAT-2 swinging doors: 1
+TAT-2 authored devices: 2 (acoustic_portal=2)
+TAT-2 mission_ready map=thieves_den meshes=285 lights=8 chunks=180
+PASS: [T1-17-A] Den giant Label3D billboards=0 (expected 0)
+PASS: [T1-17-B] Den diegetic MapTableCard=true [H]/[R] cycling=true
+PASS: [T1-17-C] Den active miniature token highlight (seated=true)
+PASS: [T1-17-D] Map Table [F] opens MissionPrepUI modal (true)
+TAT-2 Den KF05 scope: level-load shadow-toe LUT restored for vista baseline
+TAT-2 telescope ponder-enter: cam=DenTelescopeCam current=true fov=13.0 eye=(-4.8202, 41.95511, 270.7337)
+PASS: [T1-17-E] Thieves' Den [F] PONDER telescope interactable (true)
+PASS: [T1-18-A] GameState.mission_objectives/Set [0/3] support (true)
+PASS: [T1-18-B] Cleanout Heist loot_goal threshold support (true)
+PASS: [T1-18-C] MissionPrepUI selected mode propagates to mission_controller
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'gloomy'
+TAT-2 environment: bg=2 ambient_src=2 ambient_energy=0.15999999642372 ambient_color=(1.0, 1.0, 1.0, 1.0) sky=true fog=true fog_density=0.00480000022799
+TAT-2 scene variants selected=104 seed=275275524
+TAT-2 run clock: map=guildhall mission=Mission.Guildhall.VaultHeist main_s=7200.0 main_source=mission_row endgame_s=300.0 endgame_source=quest_graph
+FootstepMask: downscaled 256x256 -> 128x128 for one-time alpha bake
+FootstepMask: baked one-time alpha mask (128x128) from res://assets/ue/Raw/Art/UI/Icons/T_Decal_Footstep.png)
+TAT-2 gate lights: total=160 (generic=159 rect=1) budget=159 forced=6 hero_shadows=6
+WARNING: [level_loader] level Niagara: 1599 placements across 25 systems spawned
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:5199)
+         [1] _store_level_extras (res://src/core/level_loader.gd:5116)
+         [2] load_sublevels_async (res://src/core/level_loader.gd:5417)
+ROUGHNESS_BAKE count=86 pixels=73924608 ms=4226 bytes=98566111 hits=46 (L8 low+g*(high-low), full-res, process cache)
+BEAM_FIX SM_LightBeam cards=134 axis=col0 scale_slot=2 clamp=200.0 max_scale=195.5292 max_length_m=19.944
+PERF_CENSUS meshes=5910 instances=64544 chunk_nodes=5863 plain=2403 multimesh=3507 surface_draws=10776 lights=171 shadow_lights=7 occluders=768 collision_bodies=225 collision_shapes=24310 periph_nodes=3104 periph_instances=13325 periph_surface_draws=5945 periph_plain=1439 periph_multimesh=1665 periph_range=0 merge_mode=off merge_candidates=0 merge_nodes=0 merge_surfaces_before=0 merge_surfaces_after=0 light_budget=160 hero_shadows=6 source_sublevels={ "Guildhall_Landscape": 677, "Building_Guildhall_POI": 9771, "Guildhall_Geometry": 567, "Guildhall_Vault_CeremonialChambers": 743, "Guildhall_PeripheryA": 12251, "Building_Guildhall_POI_3rdFloor": 3613, "Guildhall_Gameplay": 1361, "Guildhall_P": 80, "Guildhall_LightingNoGameplay": 172, "Guildhall_Loot": 143, "Guildhall_SkyboxGeo": 33547 }
+TAT-2 Loaded guildhall: meshes=62950 lights=160
+TAT-2 KF16 car lenses: node=@MeshInstance3D@73703 dist=0.0 glass_surface=1 emission=1.0,0.6186,0.2552 energy=2.0
+TAT-2 KF17 clocktower: placed GuildhallSkylineClocktower mat=/Game/Art/Environment/Skybox/Buildings/ML/MI_DistantBuidingA
+TAT-2 KF16 sign letters: node=@MeshInstance3D@74053 surface=1 emission=(1.0, 0.62, 0.2, 1.0) energy=0.10000000149012 albedo=(1.0, 0.6848, 0.2726, 1.0)
+TAT-2 Perf: chunks=5863 collision_bodies=225 collision_shapes=24310 occluders=768
+TAT-2 player spawn: source=authored pos=(127.2747, 26.4694, -5.3296) yaw=-3.05432154567525 headroom_clear=true forward_clear=true
+TAT-2 quest items: spawned=1 mission=Mission.Guildhall.VaultHeist free_play=false
+TAT-2 loot containers: 107
+TAT-2 clues: spawned=6 set(s)=CLS_Contract_02 map=guildhall
+TAT-2 escape markers: authored=14 spawned=14 grounded=14 connected=14 phase=main
+TAT-2 spawners: throwable=133 ammo=45 health=5 civilian=3
+TAT-2 swinging doors: 155
+TAT-2 authored devices: 903 (alarm_eye=60, goo_pipe=90, junction=11, light_beam=134, noise_alarm=96, power_switch=29, power_wall=9, pressure_plate=162, turret=229, vault_door=6, ward_blocker=36, ward_slow=41)
+TAT-2 mission_ready map=guildhall meshes=62950 lights=160 chunks=5863
+PASS: [T1-18-D] Contract 2 populates GameState.contract_intro (len=257)
+PASS: [T1-18-E] Escape multipliers ghost=1.25 shadow=1.10 loud=1.00 escapes=14
+PASS: [T1-19-A] LootContainer & SwingingDoor expose locked + lock_level (true)
+PASS: [T1-19-B] Locked containers/doors wire player.set_lockpicking_active (true)
+PASS: [T1-19-C] Locked safe unlocks & spawns MajorLoot (true, loot 0->1)
+PASS: [T1-19-D] High-security SwingingDoor lockpicking wired (true)
+PASS: [T1-19-E] CT_LockpickDamage 5/10/20/40 across lock levels 1..4 (true)
+PASS: [T1-20-A] ClubLantern guard has warm OmniLight3D & SK_Lantern (true)
+PASS: [T1-20-B] Guard lantern affects LightProbe visibility=0.537 (> 0.10)
+PASS: [T1-20-C] guard.steal_carried_item() yields carried item once (true)
+PASS: [T1-20-D] guard.get_alert_state() returns {state, suspicion, world_pos}
+PASS: [T1-20-E] HUD consumes guard.get_alert_state() for pips/offscreen arcs (true)
+PASS: [T1-21-A] OldManor_P landscapes=128 heightmaps=101 weightmaps=54 missing=0
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'dense_fog_old_manor'
+TAT-2 environment: bg=2 ambient_src=2 ambient_energy=0.05000000074506 ambient_color=(0.6157, 0.6118, 0.6, 1.0) sky=true fog=true fog_density=0.01200000010431
+TAT-2 scene variants selected=77 seed=275275524
+TAT-2 run clock: map=old_manor mission=Mission.OldManor.Vault main_s=7200.0 main_source=mission_row endgame_s=480.0 endgame_source=quest_graph
+FootstepMask: downscaled 256x256 -> 128x128 for one-time alpha bake
+FootstepMask: baked one-time alpha mask (128x128) from res://assets/ue/Raw/Art/UI/Icons/T_Decal_Footstep.png)
+WARNING: [level_loader] level Niagara: 1635 placements across 22 systems spawned
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:5199)
+         [1] _store_level_extras (res://src/core/level_loader.gd:5116)
+         [2] load_sublevels_async (res://src/core/level_loader.gd:5417)
+ROUGHNESS_BAKE count=85 pixels=70123520 ms=3992 bytes=93497994 hits=39 (L8 low+g*(high-low), full-res, process cache)
+BEAM_FIX SM_LightBeam cards=196 axis=col0 scale_slot=2 clamp=200.0 max_scale=200.0005 max_length_m=20.4
+TAT-2 Loaded old_manor: meshes=22494 lights=160
+TAT-2 Perf: chunks=4221 collision_bodies=459 collision_shapes=17648 occluders=768
+TAT-2 player spawn: source=authored pos=(5.9512, 9.5283, 126.025) yaw=1.5707963267949 headroom_clear=true forward_clear=true
+TAT-2 quest items: spawned=1 mission=Mission.OldManor.Vault free_play=false
+TAT-2 loot containers: 110
+TAT-2 clues: spawned=2 set(s)=CLS_Contract_03 map=old_manor
+TAT-2 escape markers: authored=10 spawned=10 grounded=10 connected=10 phase=main
+TAT-2 spawners: throwable=385 ammo=97 health=7 civilian=2
+TAT-2 swinging doors: 120
+TAT-2 authored devices: 1164 (alarm_eye=119, goo_pipe=45, light_beam=196, noise_alarm=40, power_switch=26, power_wall=2, pressure_plate=419, turret=247, vault_door=6, ward_blocker=25, ward_slow=39)
+TAT-2 mission_ready map=old_manor meshes=22494 lights=160 chunks=4221
+PASS: [T1-21-D] OldManor spawn headroom=true forward=true
+PASS: [T1-21-B] OldManor_P player walk & collision stable (true)
+PASS: [T1-21-C] OldManor_P guard collision stable (true, guards=4)
+PASS: [T1-21-E] OldManor_P dual-weightmap components=7 shader=true
+PASS: [T1-22-A] run_tests.gd preserves 38 suites & SUMMARY: fails= contract
+PASS: [T1-22-B] manifest_audit.py & anims_manifest.json intact
+PASS: [T1-22-C] Standalone E2E suite files present under res://tests/e2e/
+PASS: [T1-22-D] build/qa/capture_e2e_parity.{sh,gd} with SHADER/SCRIPT ERROR=0 gate (true)
+PASS: [T1-22-E] Steam refs=56 (>=56) & capture_e2e_parity.gd present=true
+FootstepMask: downscaled 256x256 -> 128x128 for one-time alpha bake
+FootstepMask: baked one-time alpha mask (128x128) from res://assets/ue/Raw/Art/UI/Icons/T_Decal_Footstep.png)
+PASS: [T1-23-A] 20 m sprint heard as Footstep.Running (stim=AI.Stim.Hearing.Footstep.Running, radius=22.5 m, dist=20.0 m, clear LOS, sight=12 m)
+PASS: [T1-23-B] heard sprint -> SEARCH (state=4) with detection 0.0 and never seen
+PASS: [T2-01-A] moon_diameter_deg clamped [0,20]: hi=20.00 lo=0.00
+PASS: [T2-01-B] overall_color unmultiplied: h=(0.001, 0.001, 0.001, 1.0) z=(0.001, 0.001, 0.001, 1.0)
+PASS: [T2-01-C] moon.visible=false -> moon_visible=0.0
+PASS: [T2-01-D] make_rain intensity 1e-6 returns null
+PASS: [T2-01-E] R3 M_Sky/VolumetricCloud approximations explicitly labelled, zero fabricated cloud textures
+PASS: [T2-02-A] R3 Lumen GI not fabricated as extracted bounce constant
+PASS: [T2-02-B] light floor 0.01 -> 0.02652 (mapping 0.02652)
+PASS: [T2-02-C] light shoulder 2500 -> 3.590 (mapping 3.590, no hard clamp)
+PASS: [T2-02-D] continuous 19.9 (1.1420) vs 20.0 (1.1447)
+PASS: [T2-02-E] light range clamped [1,200]: hi=200.0 lo=1.0
+PASS: [T2-03-A] rect_light intensity 0.01 allocates 0 lights
+TAT-2 UI main-menu: theme=res://src/ui/art_nouveau_theme.gd; journal drawer removed (T9)
+WARNING: [level_loader] level Niagara: 5 placements across 3 systems spawned
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:5199)
+         [1] _store_level_extras (res://src/core/level_loader.gd:5116)
+         [2] load_sublevels (res://src/core/level_loader.gd:5340)
+         [3] _build_3d_backdrop (res://src/ui/main_menu.gd:167)
+         [4] _ready (res://src/ui/main_menu.gd:75)
+         [5] _bVA_03_startscreen (res://tests/e2e/e2e_tier2_boundaries.gd:133)
+         [6] free_node (res://tests/e2e/e2e_helpers.gd:272)
+         [7] step_process (res://tests/e2e/e2e_helpers.gd:261)
+ROUGHNESS_BAKE count=31 pixels=22806528 ms=1295 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
+PASS: [T2-03-B] Startscreen DirectionalLight energy=0.4500 == loader authored 0.4500 (>=0.01 floor)
+PASS: [T2-03-C] Startscreen active lights=31 (>=22)
+PASS: [T2-03-D] Startscreen camera env dense fog=true vol_fog=true ssr=true ssil=true
+PASS: [T2-03-E] Startscreen left-trim PBR fix without inventing unextracted textures (true)
+PASS: [T2-04-A] Suite 37 MI_Neon & MI_Neon_MacNeish exact vectors preserved
+PASS: [T2-04-B] hdr_scale clamp [0.02, 1.0]: 1000->0.02 0.5->1.00
+PASS: [T2-04-C] 3 textured negative controls stay StandardMaterial3D; MI_LightBeam_SM uses the beam shader
+PASS: [T2-04-D] tat_landscape weight_at() fails safe to vec4(0.0) on unknown index
+PASS: [T2-04-E] Guildhall landscape discard_holes=1.0 (expected 1.0, UE hole mask)
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'midnight_clear_mission_lobby'
+WARNING: [level_loader] level Niagara: 6 placements across 1 systems spawned
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:5199)
+         [1] _store_level_extras (res://src/core/level_loader.gd:5116)
+         [2] load_sublevels (res://src/core/level_loader.gd:5340)
+         [3] _build_stage (res://src/ui/mission_prep_ui.gd:700)
+         [4] _build_all (res://src/ui/mission_prep_ui.gd:376)
+         [5] _ready (res://src/ui/mission_prep_ui.gd:186)
+         [6] _bVA_05_mission_prep (res://tests/e2e/e2e_tier2_boundaries.gd:223)
+         [7] run (res://tests/e2e/e2e_tier2_boundaries.gd:17)
+         [8] _bVA_04_neon_landscape (res://tests/e2e/e2e_tier2_boundaries.gd:218)
+         [9] free_node (res://tests/e2e/e2e_helpers.gd:272)
+         [10] step_process (res://tests/e2e/e2e_helpers.gd:261)
+ROUGHNESS_BAKE count=22 pixels=15728640 ms=923 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
+TAT-2 prep skyline: placed 8/8 expansion pieces (group=prep_skyline)
+PASS: [T2-05-A] Empty icon_path rows hide (3 ok=true); authored ObjectiveDisplayImage rows keep icon (8 ok=true)
+PASS: [T2-05-B] MissionPrep 720p: fov=20.00 (want 20.00) ok=true, keep_aspect=0 ok=true, stage=(1280, 720) (want (1280, 720)) ok=true
+PASS: [T2-05-C] ThiefNisha head position=(0.0, 0.0, 0.0) (expected ZERO)
+PASS: [T2-05-D] Lazy material DB loader reused across open_prep switches
+PASS: [T2-05-E] FTUE duration=0.0 renders 'Unlimited'=true and no '0 minute window'=true
+PASS: [T2-06-A] R3 Niagara VM bytecode parameters never fabricated
+PASS: [T2-06-B] Opaque glass stays opaque StandardMaterial3D (3/3)
+PASS: [T2-06-C] clutter leaf vis=38.0 vs tree>=2m vis=0.0
+PASS: [T2-06-D] VfxManager.set_prop_highlight safe on null/freed/cached targets
+PASS: [T2-06-E] M_Decal_Puddle rejected without generic fallback texture
+PASS: [T2-07-A] Missing tool falls back cleanly without script error
+PASS: [T2-07-B] Stale Art/Tools/ paths eliminated in favor of Art/Gameplay/Gear/
+PASS: [T2-07-C] 1P gear multi-surface material order wired from mesh_materials.json
+PASS: [T2-07-D] 3P mesh hidden=true 1P tool bone-attached=true
+PASS: [T2-07-E] 1P GLB AABB size within [0.05, 1.2]m (true)
+PASS: [T2-08-A] R3 missing 1P unarmed idle/jump clips not fabricated
+PASS: [T2-08-B] FP_ANIM_BLEND=0.20s
+PASS: [T2-08-C] 1P sprint clip 'AN_Sprint_F_1P' root translation stripped (pos_tracks=0)
+PASS: [T2-08-D] 1P sprint rotation keys preserved (rot_tracks=93 root_rot_keys=1 arm_skel=true)
+PASS: [T2-08-E] 1P VM direct-to-camera under_cam=true sub_vp=0 shader_surfaces=3/3 shadows_on=0 vm_fov=85.00 (authored 85.00)
+ERROR: Parameter "material" is null.
+   at: material_get_instance_shader_parameters (servers/rendering/dummy/storage/material_storage.cpp:264)
+PASS: [T2-09-A] Unknown/out-of-range tool id ignored safely (true)
+SmokeTrajCap: smoke traj emission_energy=0.64999997615814 cap=0.65 (no UE traj authoring; mission glow 0.65)
+PASS: [T2-09-B] 0-charge smoke bomb fire blocked cleanly (true)
+DiamondCap: vistara gem emission_energy=0.64999997615814 cap=0.65 (UE MI_VistaraDiamond Emissive Off; mission glow 0.65)
+TongCap: viewmodel emission_energy=0.64999997615814 cap=0.65 (loader PBR tongs/3P clamped to mission glow 0.65)
+PASS: [T2-09-C] Infinite (-1) slot never decrements after 5 uses
+DiamondCap: vistara gem emission_energy=0.64999997615814 cap=0.65 (UE MI_VistaraDiamond Emissive Off; mission glow 0.65)
+TongCap: viewmodel emission_energy=0.64999997615814 cap=0.65 (loader PBR tongs/3P clamped to mission glow 0.65)
+PASS: [T2-09-D] Rapid slot swap leaves clean active state (true)
+PASS: [T2-09-E] Tool use blocked while is_downed=true (true)
+ERROR: Parameter "material" is null.
+   at: material_get_instance_shader_parameters (servers/rendering/dummy/storage/material_storage.cpp:264)
+PASS: [T2-10-A] Zipwire 20.0 m range: far wall 20.63 m rejected (no_hit), near 18.88 m valid (true)
+PASS: [T2-10-B] Zipwire cooldown=5.0s & min crank 0.5s
+PASS: [T2-10-C] 4.0 m mantle limit rejects 5.0 m ledge (accepted=false, y=0.00) and accepts 2.0 m (accepted=true)
+PASS: [T2-10-D] Wall-climb surface filter & angle checks implemented (true)
+PASS: [T2-10-E] R3 GetHotwireTargetTypeForActor uncompiled Kismet not fabricated
+PASS: [T2-11-A] SmokeBomb physics constants 30 m/s, 0.064 bounce, 0.5s destroy (true)
+PASS: [T2-11-B] Smoke AABB 5x5x4m boundary: in=true out=false high=false
+PASS: [T2-11-C] R3 Slithersap has no fabricated projectile InitialSpeed
+PASS: [T2-11-D] Slithersap 1.5m inhibitor disabled 1.45m, kept 1.6m, restored at 30.1s
+PASS: [T2-11-E] Slithersap 5.0 damage fires once per body (hits=1)
+PASS: [T2-12-A] GuardViewCone 10.0 m boundary (true)
+PASS: [T2-12-B] GuardViewCone 65 deg boundary enforced
+PASS: [T2-12-C] Fall damage exempt from 40.0 disguise penalty (integ=100.0)
+PASS: [T2-12-D] Stacked disguise drain caps cleanly at 0.0 without wrap
+PASS: [T2-12-E] Disabled DT_DisguiseV3IntegrityReduction rows remain ignored
+PASS: [T2-13-A] LightProbe clamps [0.15,0.90] & ambient 0.08
+PASS: [T2-13-B] Zero-loudness noise leaves SoundWaves energy=0.0000 (draw=0.0000, before=0.0000)
+PASS: [T2-13-C] Health clamped [0,300]: min=0.0 max=300.0
+PASS: [T2-13-D] Downed 10s & post-revive 3s cooldown
+PASS: [T2-13-E] Preserved run_tests.gd HUD node contracts intact
+PASS: [T2-14-A] HUD octagonal hotbar avoids opaque white T_Ability_Background occlusion
+PASS: [T2-14-B] MobileProfile suppresses desktop hotbar cleanly
+PASS: [T2-14-C] Compass T_compass_lines wrapped cardinals: ["N", "N", "E", "S"] (want N,N,E,S)
+PASS: [T2-14-D] Offscreen guard arc clamps inside viewport [0..1280, 0..720]
+PASS: [T2-14-E] HUD crank progress ring bounds & hide when inactive
+PASS: [T2-15-A] Lockpick cancel distance 2.0m (200.0 cm) wired in HUD
+PASS: [T2-15-B] Early unlock 0.1s & jam delay 0.5s wired in lockpick UI
+PASS: [T2-15-C] Lockpick difficulty 0 & 99 clamp cleanly to valid tracks
+PASS: [T2-15-D] TAB map overlay & ESC close priority wired
+PASS: [T2-15-E] Thief Vision keeps flat cyan overlay hidden/alpha=0
+PASS: [T2-16-A] Contract 1 empty intro -> letter API emits non-empty fallback (1, 'Esteemed Colleague — Infiltrate '); HUD show/is_open=true
+PASS: [T2-16-B] LoadingScreen progress clamped [0,100]: lo=0.0 hi=100.0
+PASS: [T2-16-C] Contract titles clean: c1='Contract 1' c3='Contract 3 — Mary Elway's Papers'
+TAT-2 UI settings: theme=res://src/ui/art_nouveau_theme.gd strings=res://data/generated/tables/StringTables/ST_Settings.json
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'midnight_clear_mission_lobby'
+WARNING: [level_loader] level Niagara: 6 placements across 1 systems spawned
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:5199)
+         [1] _store_level_extras (res://src/core/level_loader.gd:5116)
+         [2] load_sublevels (res://src/core/level_loader.gd:5340)
+         [3] _build_stage (res://src/ui/mission_prep_ui.gd:700)
+         [4] _build_all (res://src/ui/mission_prep_ui.gd:376)
+         [5] _ready (res://src/ui/mission_prep_ui.gd:186)
+         [6] _bVA_16_shell_ui (res://tests/e2e/e2e_tier2_boundaries.gd:963)
+         [7] free_node (res://tests/e2e/e2e_helpers.gd:272)
+         [8] step_process (res://tests/e2e/e2e_helpers.gd:261)
+ROUGHNESS_BAKE count=22 pixels=15728640 ms=812 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
+TAT-2 prep skyline: placed 8/8 expansion pieces (group=prep_skyline)
+TAT-2 UI ledger: 68 authored catalog rows, 4 columns, 68 icons
+WARNING: Nodes with non-equal opposite anchors will have their size overridden after _ready(). 
+If you want to set size, change the anchors or consider using set_deferred().
+     at: _set_size (scene/gui/control.cpp:1519)
+     GDScript backtrace (most recent call first):
+         [0] _ready (res://src/ui/ledger_ui.gd:120)
+         [1] _bVA_16_shell_ui (res://tests/e2e/e2e_tier2_boundaries.gd:963)
+         [2] free_node (res://tests/e2e/e2e_helpers.gd:272)
+         [3] step_process (res://tests/e2e/e2e_helpers.gd:261)
+PASS: [T2-16-D] All top-level shell modal panels fit 1280x720 (13 gated, bad=)
+TAT-2 UI settings: theme=res://src/ui/art_nouveau_theme.gd strings=res://data/generated/tables/StringTables/ST_Settings.json
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'midnight_clear_mission_lobby'
+WARNING: [level_loader] level Niagara: 6 placements across 1 systems spawned
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:5199)
+         [1] _store_level_extras (res://src/core/level_loader.gd:5116)
+         [2] load_sublevels (res://src/core/level_loader.gd:5340)
+         [3] _build_stage (res://src/ui/mission_prep_ui.gd:700)
+         [4] _build_all (res://src/ui/mission_prep_ui.gd:376)
+         [5] _ready (res://src/ui/mission_prep_ui.gd:186)
+         [6] _bVA_16_shell_ui (res://tests/e2e/e2e_tier2_boundaries.gd:990)
+         [7] free_node (res://tests/e2e/e2e_helpers.gd:272)
+         [8] step_process (res://tests/e2e/e2e_helpers.gd:261)
+ROUGHNESS_BAKE count=22 pixels=15728640 ms=861 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
+TAT-2 prep skyline: placed 8/8 expansion pieces (group=prep_skyline)
+TAT-2 UI ledger: 68 authored catalog rows, 4 columns, 68 icons
+WARNING: Nodes with non-equal opposite anchors will have their size overridden after _ready(). 
+If you want to set size, change the anchors or consider using set_deferred().
+     at: _set_size (scene/gui/control.cpp:1519)
+     GDScript backtrace (most recent call first):
+         [0] _ready (res://src/ui/ledger_ui.gd:120)
+         [1] _bVA_16_shell_ui (res://tests/e2e/e2e_tier2_boundaries.gd:990)
+         [2] free_node (res://tests/e2e/e2e_helpers.gd:272)
+         [3] step_process (res://tests/e2e/e2e_helpers.gd:261)
+PASS: [T2-16-E] ArtNouveauTheme teal border/panel consistency across all 5 shell UIs
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'midnight_clear_thieves_den'
+TAT-2 environment: bg=2 ambient_src=2 ambient_energy=0.07999999821186 ambient_color=(0.851, 0.9922, 1.0, 1.0) sky=true fog=true fog_density=0.00899999961257
+TAT-2 run clock: map=thieves_den mission=- main_s=5400.0 main_source=map_row endgame_s=480.0 endgame_source=fallback
+WARNING: [level_loader] level Niagara: 11 placements across 2 systems spawned
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:5199)
+         [1] _store_level_extras (res://src/core/level_loader.gd:5116)
+         [2] load_sublevels_async (res://src/core/level_loader.gd:5417)
+ROUGHNESS_BAKE count=31 pixels=23986176 ms=1295 bytes=31981555 hits=4 (L8 low+g*(high-low), full-res, process cache)
+TAT-2 Loaded thieves_den: meshes=285 lights=8
+TAT-2 post_process 'PostProcessVolume_1' carries only Lumen/UE-only settings (LumenSkylightLeaking, LumenFullSkylightLeakingDistance, LocalExposureHighlightContrastScale, LocalExposureShadowContrastScale, LocalExposureMiddleGreyBias); nothing Godot-mappable, environment unchanged
+TAT-2 Perf: chunks=180 collision_bodies=31 collision_shapes=207 occluders=0
+TAT-2 player spawn: source=authored pos=(5.6692, 42.1592, 270.6863) yaw=3.05529569165687 headroom_clear=true forward_clear=true
+TAT-2 Den window staging: source=authored-west-opening anchor=(-6.06, 43.05, 271.4) parsed_windows=1 facing=(-0.848048, 0.0, 0.529919)
+TAT-2 Den KF10 desk spot: energy=2.0 pos=(3.6446, 41.803, 267.8289) range=6.48999977111816 cone=80.0 aimed_at=(2.769, 41.1737, 268.0207)
+TAT-2 Den parchment emission: node=@MeshInstance3D@112121 energy=0.2
+WispCap: wisp light energy=0.3 cap=0.65
+TAT-2 den spawn hub-facing: misalign_before_deg=127.6 rotated_to_face=true table=(2.769, 41.1137, 268.0207)
+TAT-2 spawners: throwable=0 ammo=0 health=0 civilian=0
+TAT-2 swinging doors: 1
+TAT-2 authored devices: 2 (acoustic_portal=2)
+TAT-2 mission_ready map=thieves_den meshes=285 lights=8 chunks=180
+PASS: [T2-17-A] MapToken GuildHall base=0.2400 (0.24), OldManor base=0.399151 (0.24*1.663128=0.399151), y=41.1337 preserved
+PASS: [T2-17-B] ThievesDenExitDoor wired with 0 static SM_DoorInaccessibleA duplicates
+PASS: [T2-17-C] [H]/[R] ignored away from Map Table (true)
+PASS: [T2-17-D] DenDecorationPedestal cycles 3 real GLBs & persists to SaveSystem
+PASS: [T2-17-E] Den timers 5400/3600/2700: 5400/3600/2700
+PASS: [T2-18-A] Partial Set (2/3) blocks early escape; 3/3 completes (true)
+PASS: [T2-18-B] Set objective deduplicates repeated tag IDs (true)
+PASS: [T2-18-C] Cleanout Heist loot_goal-1 blocks, loot_goal completes (true)
+PASS: [T2-18-D] Match timer expiry transitions GameState.state -> failed
+PASS: [T2-18-E] Guildhall Cleanout Heist durations 3300/1200/1200 verified
+PASS: [T2-19-A] Container spawns 1 loot item on double interact
+PASS: [T2-19-B] Secret wall stash spawns 0 duplicate loot
+PASS: [T2-19-C] SwingingDoor tween-locked during 0.4s swing to 90 deg
+PASS: [T2-19-D] Doorway swinging_doors extracted cleanly with 0 unresolved
+PASS: [T2-19-E] CT_LockpickDamage clamped [1..4]: 0->5.0 7->40.0
+PASS: [T2-20-A] KO guard alert_state='KNOCKED_OUT' & stealable=true
+PASS: [T2-20-B] Pickpocket 25m/9deg cone & 30deg facing block
+PASS: [T2-20-C] Guard decay 6s/4s gate: 5s->50.0 6s->40.0
+PASS: [T2-20-D] Height curve: 2m->1.00 3m->0.00
+PASS: [T2-20-E] Non-lantern guard has 0 OmniLight3D (0)
+PASS: [T2-21-A] OldManor_P 128 components / 155 PNGs
+PASS: [T2-21-B] R3 52 material-less splines skipped (SplineEditorMesh=0)
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'midnight_clear_thieves_den'
+TAT-2 environment: bg=2 ambient_src=2 ambient_energy=0.07999999821186 ambient_color=(0.851, 0.9922, 1.0, 1.0) sky=true fog=true fog_density=0.00899999961257
+TAT-2 run clock: map=thieves_den mission=- main_s=5400.0 main_source=map_row endgame_s=480.0 endgame_source=fallback
+FootstepMask: downscaled 256x256 -> 128x128 for one-time alpha bake
+FootstepMask: baked one-time alpha mask (128x128) from res://assets/ue/Raw/Art/UI/Icons/T_Decal_Footstep.png)
+PASS: [T2-21-C] OldManor fallback spawn 2.2m headroom & 1.5m forward clearance checks
+PASS: [T2-21-D] Vacuous forward clearance returns true on null centroid
+PASS: [T2-21-E] LevelLoader MAX_TOTAL_SHAPES=32000 MAX_SHAPES_PER_BODY=384
+PASS: [T2-22-A] QA harnesses enforce SHADER ERROR=0 & SCRIPT ERROR=0
+PASS: [T2-22-B] game/project.godot has no debug_autostart_contract leftover
+PASS: [T2-22-C] Generated tables & manifest_audit.py intact
+PASS: [T2-22-D] All 5 core .gdshader resources load cleanly
+PASS: [T2-22-E] Missing Steam reference scenes explicitly documented without false pixel-diff
+DiamondCap: vistara gem emission_energy=0.64999997615814 cap=0.65 (UE MI_VistaraDiamond Emissive Off; mission glow 0.65)
+TongCap: viewmodel emission_energy=0.64999997615814 cap=0.65 (loader PBR tongs/3P clamped to mission glow 0.65)
+PASS: [T3-01] Equip tool [1..4] syncs HUD hotbar, infinity glyph & hints (true)
+ERROR: Parameter "material" is null.
+   at: material_get_instance_shader_parameters (servers/rendering/dummy/storage/material_storage.cpp:264)
+PASS: [T3-02] Zipwire aim validity + crank progress synced to HUD ring (true)
+[T3-03] smoke_clouds=1 blocked=true noise_tags=["smoke", "smoke"] guard_state=SEARCH hud_wave_energy=0.000 min=(9498.283, 498.0633, 9471.01) max=(9503.283, 502.0633, 9476.01) guard=(9500.0, 501.5009, 9470.043) player=(9500.672, 501.3009, 9500.011)
+PASS: [T3-03] Smoke Bomb -> NoiseBus -> guard LOS block composition (true)
+PASS: [T3-04] Lockpicking drains disguise 5/s + 1/s and clears on finish (true)
+PASS: [T3-05] Den Map Table -> MissionPrepUI -> Loading -> Set Objectives contract (true)
+DiamondCap: vistara gem emission_energy=0.64999997615814 cap=0.65 (UE MI_VistaraDiamond Emissive Off; mission glow 0.65)
+TongCap: viewmodel emission_energy=0.64999997615814 cap=0.65 (loader PBR tongs/3P clamped to mission glow 0.65)
+PASS: [T3-06] Vistara Diamond clean Thief Vision + yellow prop outline (true)
+PASS: [T3-07] Guard lantern registered with level LightProbe: vis=0.258 (>0.10) light=true + viewcone drains disguise=true
+ERROR: Parameter "material" is null.
+   at: material_get_instance_shader_parameters (servers/rendering/dummy/storage/material_storage.cpp:264)
+PASS: [T3-08] Real 1P Zipwire GLB under camera (real=true, under_cam=true, sub_vp=0, vm_shader=3/3, shadows=0, vm_fov=85.00)
+TAT-2 UI main-menu: theme=res://src/ui/art_nouveau_theme.gd; journal drawer removed (T9)
+FootstepMask: downscaled 256x256 -> 128x128 for one-time alpha bake
+FootstepMask: baked one-time alpha mask (128x128) from res://assets/ue/Raw/Art/UI/Icons/T_Decal_Footstep.png)
+WARNING: [level_loader] level Niagara: 5 placements across 3 systems spawned
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:5199)
+         [1] _store_level_extras (res://src/core/level_loader.gd:5116)
+         [2] load_sublevels (res://src/core/level_loader.gd:5340)
+         [3] _build_3d_backdrop (res://src/ui/main_menu.gd:167)
+         [4] _ready (res://src/ui/main_menu.gd:75)
+         [5] _t3_09_startscreen_sky_neon_lighting (res://tests/e2e/e2e_tier3_pairwise.gd:273)
+         [6] run (res://tests/e2e/e2e_tier3_pairwise.gd:22)
+         [7] _t3_08_1p_zipwire_glb_anims_subviewport (res://tests/e2e/e2e_tier3_pairwise.gd:268)
+         [8] free_node (res://tests/e2e/e2e_helpers.gd:272)
+         [9] step_process (res://tests/e2e/e2e_helpers.gd:261)
+ROUGHNESS_BAKE count=31 pixels=22806528 ms=1221 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
+PASS: [T3-09] Startscreen sky + volumetric mist + neon HDR + SSR/SSIL coexist cleanly (env=true)
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'gloomy'
+TAT-2 environment: bg=2 ambient_src=2 ambient_energy=0.15999999642372 ambient_color=(1.0, 1.0, 1.0, 1.0) sky=true fog=true fog_density=0.00480000022799
+TAT-2 scene variants selected=104 seed=275275524
+TAT-2 run clock: map=guildhall mission=Mission.Guildhall.VaultHeist main_s=7200.0 main_source=mission_row endgame_s=300.0 endgame_source=quest_graph
+TAT-2 gate lights: total=160 (generic=159 rect=1) budget=159 forced=6 hero_shadows=6
+WARNING: [level_loader] level Niagara: 1599 placements across 25 systems spawned
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:5199)
+         [1] _store_level_extras (res://src/core/level_loader.gd:5116)
+         [2] load_sublevels_async (res://src/core/level_loader.gd:5417)
+ROUGHNESS_BAKE count=86 pixels=73924608 ms=3895 bytes=98566111 hits=46 (L8 low+g*(high-low), full-res, process cache)
+BEAM_FIX SM_LightBeam cards=134 axis=col0 scale_slot=2 clamp=200.0 max_scale=195.5292 max_length_m=19.944
+PERF_CENSUS meshes=5910 instances=64544 chunk_nodes=5863 plain=2403 multimesh=3507 surface_draws=10776 lights=171 shadow_lights=7 occluders=768 collision_bodies=225 collision_shapes=24310 periph_nodes=3104 periph_instances=13325 periph_surface_draws=5945 periph_plain=1439 periph_multimesh=1665 periph_range=0 merge_mode=off merge_candidates=0 merge_nodes=0 merge_surfaces_before=0 merge_surfaces_after=0 light_budget=160 hero_shadows=6 source_sublevels={ "Guildhall_Landscape": 677, "Building_Guildhall_POI": 9771, "Guildhall_Geometry": 567, "Guildhall_Vault_CeremonialChambers": 743, "Guildhall_PeripheryA": 12251, "Building_Guildhall_POI_3rdFloor": 3613, "Guildhall_Gameplay": 1361, "Guildhall_P": 80, "Guildhall_LightingNoGameplay": 172, "Guildhall_Loot": 143, "Guildhall_SkyboxGeo": 33547 }
+TAT-2 Loaded guildhall: meshes=62950 lights=160
+TAT-2 KF16 car lenses: node=@MeshInstance3D@144910 dist=0.0 glass_surface=1 emission=1.0,0.6186,0.2552 energy=2.0
+TAT-2 KF17 clocktower: placed GuildhallSkylineClocktower mat=/Game/Art/Environment/Skybox/Buildings/ML/MI_DistantBuidingA
+TAT-2 KF16 sign letters: node=@MeshInstance3D@145260 surface=1 emission=(1.0, 0.62, 0.2, 1.0) energy=0.10000000149012 albedo=(1.0, 0.6848, 0.2726, 1.0)
+TAT-2 Perf: chunks=5863 collision_bodies=225 collision_shapes=24310 occluders=768
+TAT-2 player spawn: source=authored pos=(127.2747, 26.4694, -5.3296) yaw=-3.05432154567525 headroom_clear=true forward_clear=true
+TAT-2 quest items: spawned=1 mission=Mission.Guildhall.VaultHeist free_play=false
+TAT-2 loot containers: 107
+TAT-2 clues: spawned=6 set(s)=CLS_Contract_02 map=guildhall
+TAT-2 escape markers: authored=14 spawned=14 grounded=14 connected=14 phase=main
+TAT-2 spawners: throwable=133 ammo=45 health=5 civilian=3
+TAT-2 swinging doors: 155
+TAT-2 authored devices: 903 (alarm_eye=60, goo_pipe=90, junction=11, light_beam=134, noise_alarm=96, power_switch=29, power_wall=9, pressure_plate=162, turret=229, vault_door=6, ward_blocker=36, ward_slow=41)
+TAT-2 mission_ready map=guildhall meshes=62950 lights=160 chunks=5863
+PASS: [T3-10] Guildhall SSIL + tat_glass depth + Stealth Ball active (true)
+PASS: [T3-11] Slithersap inhibits nearby light & knocks out guard 10s (true)
+[T3-12] selected=true blocked=false stolen=Guild Key carried_after=false
+PASS: [T3-12] Pickpocket Fairy steals seeded guard item (selected=true blocked=false stolen=Guild Key) + HUD alert pip (true)
+PASS: [T3-13] Lv4 jam curve=40.0 (authored 40.0) -> HP=260.0, Disguise=60.0; container minigame track=true
+TAT-2 UI settings: theme=res://src/ui/art_nouveau_theme.gd strings=res://data/generated/tables/StringTables/ST_Settings.json
+PASS: [T3-14] Settings FOV=54.54 syncs main camera=54.54; 1P VM lock vm_fov=85.00 (authored 85.00) surfaces=3/3
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'midnight_clear_thieves_den'
+TAT-2 environment: bg=2 ambient_src=2 ambient_energy=0.07999999821186 ambient_color=(0.851, 0.9922, 1.0, 1.0) sky=true fog=true fog_density=0.00899999961257
+TAT-2 run clock: map=thieves_den mission=Mission.Guildhall.VaultHeist main_s=5400.0 main_source=map_row endgame_s=480.0 endgame_source=fallback
+FootstepMask: downscaled 256x256 -> 128x128 for one-time alpha bake
+FootstepMask: baked one-time alpha mask (128x128) from res://assets/ue/Raw/Art/UI/Icons/T_Decal_Footstep.png)
+WARNING: [level_loader] level Niagara: 11 placements across 2 systems spawned
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:5199)
+         [1] _store_level_extras (res://src/core/level_loader.gd:5116)
+         [2] load_sublevels_async (res://src/core/level_loader.gd:5417)
+ROUGHNESS_BAKE count=31 pixels=23986176 ms=1235 bytes=31981555 hits=4 (L8 low+g*(high-low), full-res, process cache)
+TAT-2 Loaded thieves_den: meshes=285 lights=8
+TAT-2 post_process 'PostProcessVolume_1' carries only Lumen/UE-only settings (LumenSkylightLeaking, LumenFullSkylightLeakingDistance, LocalExposureHighlightContrastScale, LocalExposureShadowContrastScale, LocalExposureMiddleGreyBias); nothing Godot-mappable, environment unchanged
+TAT-2 Perf: chunks=180 collision_bodies=31 collision_shapes=207 occluders=0
+TAT-2 player spawn: source=authored pos=(5.6692, 42.1592, 270.6863) yaw=3.05529569165687 headroom_clear=true forward_clear=true
+TAT-2 Den window staging: source=authored-west-opening anchor=(-6.06, 43.05, 271.4) parsed_windows=1 facing=(-0.848048, 0.0, 0.529919)
+TAT-2 Den KF10 desk spot: energy=2.0 pos=(3.6446, 41.803, 267.8289) range=6.48999977111816 cone=80.0 aimed_at=(2.769, 41.1737, 268.0207)
+TAT-2 Den parchment emission: node=@MeshInstance3D@149102 energy=0.2
+WispCap: wisp light energy=0.3 cap=0.65
+TAT-2 den spawn hub-facing: misalign_before_deg=127.6 rotated_to_face=true table=(2.769, 41.1137, 268.0207)
+TAT-2 spawners: throwable=0 ammo=0 health=0 civilian=0
+TAT-2 swinging doors: 1
+TAT-2 authored devices: 2 (acoustic_portal=2)
+TAT-2 mission_ready map=thieves_den meshes=285 lights=8 chunks=180
+PASS: [T3-15] Den ExitDoor + Map Table -> MissionLobby Prep -> LoadingScreen (true)
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'dense_fog_old_manor'
+TAT-2 environment: bg=2 ambient_src=2 ambient_energy=0.05000000074506 ambient_color=(0.6157, 0.6118, 0.6, 1.0) sky=true fog=true fog_density=0.01200000010431
+TAT-2 scene variants selected=77 seed=275275524
+TAT-2 run clock: map=old_manor mission=Mission.OldManor.Vault main_s=7200.0 main_source=mission_row endgame_s=480.0 endgame_source=quest_graph
+FootstepMask: downscaled 256x256 -> 128x128 for one-time alpha bake
+FootstepMask: baked one-time alpha mask (128x128) from res://assets/ue/Raw/Art/UI/Icons/T_Decal_Footstep.png)
+WARNING: [level_loader] level Niagara: 1635 placements across 22 systems spawned
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:5199)
+         [1] _store_level_extras (res://src/core/level_loader.gd:5116)
+         [2] load_sublevels_async (res://src/core/level_loader.gd:5417)
+ROUGHNESS_BAKE count=85 pixels=70123520 ms=3585 bytes=93497994 hits=39 (L8 low+g*(high-low), full-res, process cache)
+BEAM_FIX SM_LightBeam cards=196 axis=col0 scale_slot=2 clamp=200.0 max_scale=200.0005 max_length_m=20.4
+TAT-2 Loaded old_manor: meshes=22494 lights=160
+TAT-2 Perf: chunks=4221 collision_bodies=459 collision_shapes=17648 occluders=768
+TAT-2 player spawn: source=authored pos=(5.9512, 9.5283, 126.025) yaw=1.5707963267949 headroom_clear=true forward_clear=true
+TAT-2 quest items: spawned=1 mission=Mission.OldManor.Vault free_play=false
+TAT-2 loot containers: 110
+TAT-2 clues: spawned=2 set(s)=CLS_Contract_03 map=old_manor
+TAT-2 escape markers: authored=10 spawned=10 grounded=10 connected=10 phase=main
+TAT-2 spawners: throwable=385 ammo=97 health=7 civilian=2
+TAT-2 swinging doors: 120
+TAT-2 authored devices: 1164 (alarm_eye=119, goo_pipe=45, light_beam=196, noise_alarm=40, power_switch=26, power_wall=2, pressure_plate=419, turret=247, vault_door=6, ward_blocker=25, ward_slow=39)
+TAT-2 mission_ready map=old_manor meshes=22494 lights=160 chunks=4221
+PASS: [T3-16] OldManor_P terrain + mantle + ballistic SmokeBomb (true)
+PASS: [T3-17] Locked vault minigame track -> objective -> are_all_objectives_complete escape (track=true)
+PASS: [T3-18] [MMB] ping radial -> compass PoI verticality arrows (visible=2 up=true down=true)
+PASS: [T3-19] Yellow prop highlight + locked safe prompt (true)
+PASS: [T3-20] ABPL_Disguise 1P idle: stand='an_thiefcotter_disguise_standidle' (want an_thiefcotter_disguise_standidle), crouch='an_disguise_crouch_idle_1p' (want an_disguise_crouch_idle_1p), both on fp_anim_player=true + HUD T_Disguise_Vignette02 (visible=true tex=true)
+PASS: [T3-21] Chameleon [30,30,20,20] blocks, 8m fall dmg=1.5, CT_XPToLevel L10=2500
+PASS: [T3-22] OldManor dual-weightmap (7) + wet puddle ~0.04 + SSR (true)
+PASS: [T3-23] Wall-climb +3.2m zeros Neutral height-difference detection multiplier (0.00)
+PASS: [T3-24] run_tests.gd 38 suites + manifest_audit.py + standalone E2E suite preserved
+PASS: [T3-25] guard sight excludes player RID (det=100.0 state=3), wall blocks (det=0.0 state=0), body blocks (det=0.0 state=0)
+TAT-2 UI main-menu: theme=res://src/ui/art_nouveau_theme.gd; journal drawer removed (T9)
+FootstepMask: downscaled 256x256 -> 128x128 for one-time alpha bake
+FootstepMask: baked one-time alpha mask (128x128) from res://assets/ue/Raw/Art/UI/Icons/T_Decal_Footstep.png)
+WARNING: [level_loader] level Niagara: 5 placements across 3 systems spawned
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:5199)
+         [1] _store_level_extras (res://src/core/level_loader.gd:5116)
+         [2] load_sublevels (res://src/core/level_loader.gd:5340)
+         [3] _build_3d_backdrop (res://src/ui/main_menu.gd:167)
+         [4] _ready (res://src/ui/main_menu.gd:75)
+         [5] _t4_01_startscreen_settings_back (res://tests/e2e/e2e_tier4_scenarios.gd:35)
+         [6] run (res://tests/e2e/e2e_tier4_scenarios.gd:15)
+         [7] _initialize (res://tests/e2e/run_e2e_tests.gd:93)
+         [8] _settle_harness (res://tests/e2e/run_e2e_tests.gd:24)
+ROUGHNESS_BAKE count=31 pixels=22806528 ms=1314 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
+TAT-2 UI settings: theme=res://src/ui/art_nouveau_theme.gd strings=res://data/generated/tables/StringTables/ST_Settings.json
+PASS: [T4-01] Startscreen->Settings->Back parity journey (cam=true vis=true teal=true persist=true)
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'midnight_clear_thieves_den'
+TAT-2 environment: bg=2 ambient_src=2 ambient_energy=0.07999999821186 ambient_color=(0.851, 0.9922, 1.0, 1.0) sky=true fog=true fog_density=0.00899999961257
+TAT-2 run clock: map=thieves_den mission=- main_s=5400.0 main_source=map_row endgame_s=480.0 endgame_source=fallback
+WARNING: [level_loader] level Niagara: 11 placements across 2 systems spawned
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:5199)
+         [1] _store_level_extras (res://src/core/level_loader.gd:5116)
+         [2] load_sublevels_async (res://src/core/level_loader.gd:5417)
+ROUGHNESS_BAKE count=31 pixels=23986176 ms=1379 bytes=31981555 hits=4 (L8 low+g*(high-low), full-res, process cache)
+TAT-2 Loaded thieves_den: meshes=285 lights=8
+TAT-2 post_process 'PostProcessVolume_1' carries only Lumen/UE-only settings (LumenSkylightLeaking, LumenFullSkylightLeakingDistance, LocalExposureHighlightContrastScale, LocalExposureShadowContrastScale, LocalExposureMiddleGreyBias); nothing Godot-mappable, environment unchanged
+TAT-2 Perf: chunks=180 collision_bodies=31 collision_shapes=207 occluders=0
+TAT-2 player spawn: source=authored pos=(5.6692, 42.1592, 270.6863) yaw=3.05529569165687 headroom_clear=true forward_clear=true
+TAT-2 Den window staging: source=authored-west-opening anchor=(-6.06, 43.05, 271.4) parsed_windows=1 facing=(-0.848048, 0.0, 0.529919)
+TAT-2 Den KF10 desk spot: energy=2.0 pos=(3.6446, 41.803, 267.8289) range=6.48999977111816 cone=80.0 aimed_at=(2.769, 41.1737, 268.0207)
+TAT-2 Den parchment emission: node=@MeshInstance3D@177614 energy=0.2
+WispCap: wisp light energy=0.3 cap=0.65
+TAT-2 den spawn hub-facing: misalign_before_deg=127.6 rotated_to_face=true table=(2.769, 41.1137, 268.0207)
+TAT-2 spawners: throwable=0 ammo=0 health=0 civilian=0
+TAT-2 swinging doors: 1
+TAT-2 authored devices: 2 (acoustic_portal=2)
+TAT-2 mission_ready map=thieves_den meshes=285 lights=8 chunks=180
+TAT-2 UI ledger: 68 authored catalog rows, 4 columns, 68 icons
+WARNING: Nodes with non-equal opposite anchors will have their size overridden after _ready(). 
+If you want to set size, change the anchors or consider using set_deferred().
+     at: _set_size (scene/gui/control.cpp:1519)
+     GDScript backtrace (most recent call first):
+         [0] _ready (res://src/ui/ledger_ui.gd:120)
+         [1] _t4_02_thieves_den_hub_journey (res://tests/e2e/e2e_tier4_scenarios.gd:84)
+         [2] free_node (res://tests/e2e/e2e_helpers.gd:272)
+         [3] step_process (res://tests/e2e/e2e_helpers.gd:261)
+PASS: [T4-02] Thieves' Den Hub journey (den=true p=true exit=true tok=true base=0.3992/0.3992 live=true ponder=true map=true teal=true billboards=0)
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'midnight_clear_mission_lobby'
+FootstepMask: downscaled 256x256 -> 128x128 for one-time alpha bake
+FootstepMask: baked one-time alpha mask (128x128) from res://assets/ue/Raw/Art/UI/Icons/T_Decal_Footstep.png)
+WARNING: [level_loader] level Niagara: 6 placements across 1 systems spawned
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:5199)
+         [1] _store_level_extras (res://src/core/level_loader.gd:5116)
+         [2] load_sublevels (res://src/core/level_loader.gd:5340)
+         [3] _build_stage (res://src/ui/mission_prep_ui.gd:700)
+         [4] _build_all (res://src/ui/mission_prep_ui.gd:376)
+         [5] _ready (res://src/ui/mission_prep_ui.gd:186)
+         [6] _t4_03_mission_prep_loading_letter_guildhall (res://tests/e2e/e2e_tier4_scenarios.gd:112)
+         [7] run (res://tests/e2e/e2e_tier4_scenarios.gd:17)
+         [8] _t4_02_thieves_den_hub_journey (res://tests/e2e/e2e_tier4_scenarios.gd:101)
+         [9] free_node (res://tests/e2e/e2e_helpers.gd:272)
+         [10] step_process (res://tests/e2e/e2e_helpers.gd:261)
+ROUGHNESS_BAKE count=22 pixels=15728640 ms=912 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
+TAT-2 prep skyline: placed 8/8 expansion pieces (group=prep_skyline)
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'gloomy'
+TAT-2 environment: bg=2 ambient_src=2 ambient_energy=0.15999999642372 ambient_color=(1.0, 1.0, 1.0, 1.0) sky=true fog=true fog_density=0.00480000022799
+TAT-2 scene variants selected=104 seed=275275524
+TAT-2 run clock: map=guildhall mission=Mission.Guildhall.VaultHeist main_s=7200.0 main_source=mission_row endgame_s=300.0 endgame_source=quest_graph
+TAT-2 gate lights: total=160 (generic=159 rect=1) budget=159 forced=6 hero_shadows=6
+WARNING: [level_loader] level Niagara: 1599 placements across 25 systems spawned
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:5199)
+         [1] _store_level_extras (res://src/core/level_loader.gd:5116)
+         [2] load_sublevels_async (res://src/core/level_loader.gd:5417)
+ROUGHNESS_BAKE count=86 pixels=73924608 ms=4283 bytes=98566111 hits=46 (L8 low+g*(high-low), full-res, process cache)
+BEAM_FIX SM_LightBeam cards=134 axis=col0 scale_slot=2 clamp=200.0 max_scale=195.5292 max_length_m=19.944
+PERF_CENSUS meshes=5910 instances=64544 chunk_nodes=5863 plain=2403 multimesh=3507 surface_draws=10776 lights=171 shadow_lights=7 occluders=768 collision_bodies=225 collision_shapes=24310 periph_nodes=3104 periph_instances=13325 periph_surface_draws=5945 periph_plain=1439 periph_multimesh=1665 periph_range=0 merge_mode=off merge_candidates=0 merge_nodes=0 merge_surfaces_before=0 merge_surfaces_after=0 light_budget=160 hero_shadows=6 source_sublevels={ "Guildhall_Landscape": 677, "Building_Guildhall_POI": 9771, "Guildhall_Geometry": 567, "Guildhall_Vault_CeremonialChambers": 743, "Guildhall_PeripheryA": 12251, "Building_Guildhall_POI_3rdFloor": 3613, "Guildhall_Gameplay": 1361, "Guildhall_P": 80, "Guildhall_LightingNoGameplay": 172, "Guildhall_Loot": 143, "Guildhall_SkyboxGeo": 33547 }
+TAT-2 Loaded guildhall: meshes=62950 lights=160
+TAT-2 KF16 car lenses: node=@MeshInstance3D@210541 dist=0.0 glass_surface=1 emission=1.0,0.6186,0.2552 energy=2.0
+TAT-2 KF17 clocktower: placed GuildhallSkylineClocktower mat=/Game/Art/Environment/Skybox/Buildings/ML/MI_DistantBuidingA
+TAT-2 KF16 sign letters: node=@MeshInstance3D@210891 surface=1 emission=(1.0, 0.62, 0.2, 1.0) energy=0.10000000149012 albedo=(1.0, 0.6848, 0.2726, 1.0)
+TAT-2 Perf: chunks=5863 collision_bodies=225 collision_shapes=24310 occluders=768
+TAT-2 player spawn: source=authored pos=(127.2747, 26.4694, -5.3296) yaw=-3.05432154567525 headroom_clear=true forward_clear=true
+TAT-2 quest items: spawned=1 mission=Mission.Guildhall.VaultHeist free_play=false
+TAT-2 loot containers: 107
+TAT-2 clues: spawned=6 set(s)=CLS_Contract_02 map=guildhall
+PQ_PLACE kind=readable y=pin anchor=library_note yaw=none pin_y=28.0021 floor_y=28.0000 pos=(-26.8541, 28.0021, -9.4431)
+TAT-2 personal quest: map=guildhall thief=spider stage=intro plan=1 spawned=1 anchors=library_note
+TAT-2 escape markers: authored=14 spawned=14 grounded=14 connected=14 phase=main
+TAT-2 spawners: throwable=133 ammo=45 health=5 civilian=3
+TAT-2 swinging doors: 155
+TAT-2 authored devices: 903 (alarm_eye=60, goo_pipe=90, junction=11, light_beam=134, noise_alarm=96, power_switch=29, power_wall=9, pressure_plate=162, turret=229, vault_door=6, ward_blocker=36, ward_slow=41)
+TAT-2 mission_ready map=guildhall meshes=62950 lights=160 chunks=5863
+PASS: [T4-03] MissionPrep->Loading->Letter->Guildhall entry (lobby=true ls=true intro=true spawn=true)
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'gloomy'
+TAT-2 environment: bg=2 ambient_src=2 ambient_energy=0.15999999642372 ambient_color=(1.0, 1.0, 1.0, 1.0) sky=true fog=true fog_density=0.00480000022799
+TAT-2 scene variants selected=104 seed=275275524
+TAT-2 run clock: map=guildhall mission=Mission.Guildhall.VaultHeist main_s=7200.0 main_source=mission_row endgame_s=300.0 endgame_source=quest_graph
+FootstepMask: downscaled 256x256 -> 128x128 for one-time alpha bake
+FootstepMask: baked one-time alpha mask (128x128) from res://assets/ue/Raw/Art/UI/Icons/T_Decal_Footstep.png)
+TAT-2 gate lights: total=160 (generic=159 rect=1) budget=159 forced=6 hero_shadows=6
+WARNING: [level_loader] level Niagara: 1599 placements across 25 systems spawned
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:5199)
+         [1] _store_level_extras (res://src/core/level_loader.gd:5116)
+         [2] load_sublevels_async (res://src/core/level_loader.gd:5417)
+ROUGHNESS_BAKE count=86 pixels=73924608 ms=4390 bytes=98566111 hits=46 (L8 low+g*(high-low), full-res, process cache)
+BEAM_FIX SM_LightBeam cards=134 axis=col0 scale_slot=2 clamp=200.0 max_scale=195.5292 max_length_m=19.944
+PERF_CENSUS meshes=5910 instances=64544 chunk_nodes=5863 plain=2403 multimesh=3507 surface_draws=10776 lights=171 shadow_lights=7 occluders=768 collision_bodies=225 collision_shapes=24310 periph_nodes=3104 periph_instances=13325 periph_surface_draws=5945 periph_plain=1439 periph_multimesh=1665 periph_range=0 merge_mode=off merge_candidates=0 merge_nodes=0 merge_surfaces_before=0 merge_surfaces_after=0 light_budget=160 hero_shadows=6 source_sublevels={ "Guildhall_Landscape": 677, "Building_Guildhall_POI": 9771, "Guildhall_Geometry": 567, "Guildhall_Vault_CeremonialChambers": 743, "Guildhall_PeripheryA": 12251, "Building_Guildhall_POI_3rdFloor": 3613, "Guildhall_Gameplay": 1361, "Guildhall_P": 80, "Guildhall_LightingNoGameplay": 172, "Guildhall_Loot": 143, "Guildhall_SkyboxGeo": 33547 }
+TAT-2 Loaded guildhall: meshes=62950 lights=160
+TAT-2 KF16 car lenses: node=@MeshInstance3D@244355 dist=0.0 glass_surface=1 emission=1.0,0.6186,0.2552 energy=2.0
+TAT-2 KF17 clocktower: placed GuildhallSkylineClocktower mat=/Game/Art/Environment/Skybox/Buildings/ML/MI_DistantBuidingA
+TAT-2 KF16 sign letters: node=@MeshInstance3D@244705 surface=1 emission=(1.0, 0.62, 0.2, 1.0) energy=0.10000000149012 albedo=(1.0, 0.6848, 0.2726, 1.0)
+TAT-2 Perf: chunks=5863 collision_bodies=225 collision_shapes=24310 occluders=768
+TAT-2 player spawn: source=authored pos=(127.2747, 26.4694, -5.3296) yaw=-3.05432154567525 headroom_clear=true forward_clear=true
+TAT-2 quest items: spawned=1 mission=Mission.Guildhall.VaultHeist free_play=false
+TAT-2 loot containers: 107
+TAT-2 clues: spawned=6 set(s)=CLS_Contract_02 map=guildhall
+PQ_PLACE kind=readable y=pin anchor=library_note yaw=none pin_y=28.0021 floor_y=28.0000 pos=(-26.8541, 28.0021, -9.4431)
+TAT-2 personal quest: map=guildhall thief=spider stage=intro plan=1 spawned=1 anchors=library_note
+TAT-2 escape markers: authored=14 spawned=14 grounded=14 connected=14 phase=main
+TAT-2 spawners: throwable=133 ammo=45 health=5 civilian=3
+TAT-2 swinging doors: 155
+TAT-2 authored devices: 903 (alarm_eye=60, goo_pipe=90, junction=11, light_beam=134, noise_alarm=96, power_switch=29, power_wall=9, pressure_plate=162, turret=229, vault_door=6, ward_blocker=36, ward_slow=41)
+TAT-2 mission_ready map=guildhall meshes=62950 lights=160 chunks=5863
+PASS: [T4-04] Guildhall Rooftop sky+1P+Zipwire+Mantle/Climb (sky=true iso=true zip=true trav=true)
+PASS: [T4-05] Infiltration: ClubLantern=true Smoke=true Slithersap=true
+PASS: [T4-06] Disguised Vault Safe Lockpicking & Extraction journey (true)
+PASS: [T4-07] Guildhall Set objectives [0/3]->[3/3] + Map + Ping + Fairy + Vistara (true)
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'dense_fog_old_manor'
+TAT-2 environment: bg=2 ambient_src=2 ambient_energy=0.05000000074506 ambient_color=(0.6157, 0.6118, 0.6, 1.0) sky=true fog=true fog_density=0.01200000010431
+TAT-2 scene variants selected=77 seed=275275524
+TAT-2 run clock: map=old_manor mission=Mission.OldManor.Vault main_s=7200.0 main_source=mission_row endgame_s=480.0 endgame_source=quest_graph
+FootstepMask: downscaled 256x256 -> 128x128 for one-time alpha bake
+FootstepMask: baked one-time alpha mask (128x128) from res://assets/ue/Raw/Art/UI/Icons/T_Decal_Footstep.png)
+WARNING: [level_loader] level Niagara: 1635 placements across 22 systems spawned
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:5199)
+         [1] _store_level_extras (res://src/core/level_loader.gd:5116)
+         [2] load_sublevels_async (res://src/core/level_loader.gd:5417)
+ROUGHNESS_BAKE count=85 pixels=70123520 ms=4008 bytes=93497994 hits=39 (L8 low+g*(high-low), full-res, process cache)
+BEAM_FIX SM_LightBeam cards=196 axis=col0 scale_slot=2 clamp=200.0 max_scale=200.0005 max_length_m=20.4
+TAT-2 Loaded old_manor: meshes=22494 lights=160
+TAT-2 Perf: chunks=4221 collision_bodies=459 collision_shapes=17648 occluders=768
+TAT-2 player spawn: source=authored pos=(5.9512, 9.5283, 126.025) yaw=1.5707963267949 headroom_clear=true forward_clear=true
+TAT-2 quest items: spawned=1 mission=Mission.OldManor.Vault free_play=false
+TAT-2 loot containers: 110
+TAT-2 clues: spawned=2 set(s)=CLS_Contract_03 map=old_manor
+TAT-2 escape markers: authored=10 spawned=10 grounded=10 connected=10 phase=main
+TAT-2 spawners: throwable=385 ammo=97 health=7 civilian=2
+TAT-2 swinging doors: 120
+TAT-2 authored devices: 1164 (alarm_eye=119, goo_pipe=45, light_beam=196, noise_alarm=40, power_switch=26, power_wall=2, pressure_plate=419, turret=247, vault_door=6, ward_blocker=25, ward_slow=39)
+TAT-2 mission_ready map=old_manor meshes=22494 lights=160 chunks=4221
+PASS: [T4-08] OldManor Cleanout terrain+puddles+SSR journey (spawn=true walk=true puddle=true goal=true)
+PASS: [T4-09] Combat/Fall/Downed/Disguise/GuardDecay journey passed
+PASS: [T4-10] Live Vulkan parity capture preconditions & error gates ready (true)
+PASS: [T4-11] Clean-room verification: project.godot clean, 38 suites + manifest_audit + E2E intact
+PASS: [T4-12] All 8 R3 cooked-data hard limits respected (zero fabricated params)
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'gloomy'
+TAT-2 environment: bg=2 ambient_src=2 ambient_energy=0.15999999642372 ambient_color=(1.0, 1.0, 1.0, 1.0) sky=true fog=true fog_density=0.00480000022799
+TAT-2 scene variants selected=104 seed=275275524
+TAT-2 run clock: map=guildhall mission=Mission.Guildhall.LootTheRoom main_s=3300.0 main_source=mission_row endgame_s=1200.0 endgame_source=KF13
+FootstepMask: downscaled 256x256 -> 128x128 for one-time alpha bake
+FootstepMask: baked one-time alpha mask (128x128) from res://assets/ue/Raw/Art/UI/Icons/T_Decal_Footstep.png)
+TAT-2 gate lights: total=160 (generic=159 rect=1) budget=159 forced=6 hero_shadows=6
+WARNING: [level_loader] level Niagara: 1599 placements across 25 systems spawned
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:5199)
+         [1] _store_level_extras (res://src/core/level_loader.gd:5116)
+         [2] load_sublevels_async (res://src/core/level_loader.gd:5417)
+ROUGHNESS_BAKE count=86 pixels=73924608 ms=4237 bytes=98566111 hits=46 (L8 low+g*(high-low), full-res, process cache)
+BEAM_FIX SM_LightBeam cards=134 axis=col0 scale_slot=2 clamp=200.0 max_scale=195.5292 max_length_m=19.944
+PERF_CENSUS meshes=5910 instances=64544 chunk_nodes=5863 plain=2403 multimesh=3507 surface_draws=10776 lights=171 shadow_lights=7 occluders=768 collision_bodies=225 collision_shapes=24310 periph_nodes=3104 periph_instances=13325 periph_surface_draws=5945 periph_plain=1439 periph_multimesh=1665 periph_range=0 merge_mode=off merge_candidates=0 merge_nodes=0 merge_surfaces_before=0 merge_surfaces_after=0 light_budget=160 hero_shadows=6 source_sublevels={ "Guildhall_Landscape": 677, "Building_Guildhall_POI": 9771, "Guildhall_Geometry": 567, "Guildhall_Vault_CeremonialChambers": 743, "Guildhall_PeripheryA": 12251, "Building_Guildhall_POI_3rdFloor": 3613, "Guildhall_Gameplay": 1361, "Guildhall_P": 80, "Guildhall_LightingNoGameplay": 172, "Guildhall_Loot": 143, "Guildhall_SkyboxGeo": 33547 }
+TAT-2 Loaded guildhall: meshes=62950 lights=160
+TAT-2 KF16 car lenses: node=@MeshInstance3D@304680 dist=0.0 glass_surface=1 emission=1.0,0.6186,0.2552 energy=2.0
+TAT-2 KF17 clocktower: placed GuildhallSkylineClocktower mat=/Game/Art/Environment/Skybox/Buildings/ML/MI_DistantBuidingA
+TAT-2 KF16 sign letters: node=@MeshInstance3D@305030 surface=1 emission=(1.0, 0.62, 0.2, 1.0) energy=0.10000000149012 albedo=(1.0, 0.6848, 0.2726, 1.0)
+TAT-2 Perf: chunks=5863 collision_bodies=225 collision_shapes=24310 occluders=768
+TAT-2 player spawn: source=authored pos=(127.2747, 26.4694, -5.3296) yaw=-3.05432154567525 headroom_clear=true forward_clear=true
+TAT-2 loot containers: 107
+TAT-2 loot economy: 20395 >= loot_goal 4000
+TAT-2 clues: spawned=0 set(s)=CLS_Guildhall_LootTheRoom map=guildhall
+TAT-2 escape markers: authored=14 spawned=14 grounded=14 connected=14 phase=main
+TAT-2 spawners: throwable=133 ammo=45 health=5 civilian=3
+TAT-2 swinging doors: 155
+TAT-2 authored devices: 903 (alarm_eye=60, goo_pipe=90, junction=11, light_beam=134, noise_alarm=96, power_switch=29, power_wall=9, pressure_plate=162, turret=229, vault_door=6, ward_blocker=36, ward_slow=41)
+TAT-2 briefing: mission=Mission.Guildhall.LootTheRoom table=ST_Missions_Guildhall_LootTheRoom key=Guildhall.LootTheRoom.Briefing match_s=3300.0 endgame_s=1200.0 endgame_source=KF13 lines=3
+TAT-2 mission_ready map=guildhall meshes=62950 lights=160 chunks=5863
+PASS: [T4-13] free play id=Mission.Guildhall.LootTheRoom goal=4000 label='Steal 4,000 in loot value' timer=3300 hud='Mission: Steal 4,000 in loot value[0/4,000]' loot='(£) 0' no_contract_write=true no_currency_bank=true
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'gloomy'
+TAT-2 environment: bg=2 ambient_src=2 ambient_energy=0.15999999642372 ambient_color=(1.0, 1.0, 1.0, 1.0) sky=true fog=true fog_density=0.00480000022799
+TAT-2 scene variants selected=104 seed=275275524
+TAT-2 run clock: map=guildhall mission=Mission.Guildhall.LootTheRoom main_s=3300.0 main_source=mission_row endgame_s=1200.0 endgame_source=KF13
+FootstepMask: downscaled 256x256 -> 128x128 for one-time alpha bake
+FootstepMask: baked one-time alpha mask (128x128) from res://assets/ue/Raw/Art/UI/Icons/T_Decal_Footstep.png)
+TAT-2 gate lights: total=160 (generic=159 rect=1) budget=159 forced=6 hero_shadows=6
+WARNING: [level_loader] level Niagara: 1599 placements across 25 systems spawned
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:5199)
+         [1] _store_level_extras (res://src/core/level_loader.gd:5116)
+         [2] load_sublevels_async (res://src/core/level_loader.gd:5417)
+ROUGHNESS_BAKE count=86 pixels=73924608 ms=3847 bytes=98566111 hits=46 (L8 low+g*(high-low), full-res, process cache)
+BEAM_FIX SM_LightBeam cards=134 axis=col0 scale_slot=2 clamp=200.0 max_scale=195.5292 max_length_m=19.944
+PERF_CENSUS meshes=5910 instances=64544 chunk_nodes=5863 plain=2403 multimesh=3507 surface_draws=10776 lights=171 shadow_lights=7 occluders=768 collision_bodies=225 collision_shapes=24310 periph_nodes=3104 periph_instances=13325 periph_surface_draws=5945 periph_plain=1439 periph_multimesh=1665 periph_range=0 merge_mode=off merge_candidates=0 merge_nodes=0 merge_surfaces_before=0 merge_surfaces_after=0 light_budget=160 hero_shadows=6 source_sublevels={ "Guildhall_Landscape": 677, "Building_Guildhall_POI": 9771, "Guildhall_Geometry": 567, "Guildhall_Vault_CeremonialChambers": 743, "Guildhall_PeripheryA": 12251, "Building_Guildhall_POI_3rdFloor": 3613, "Guildhall_Gameplay": 1361, "Guildhall_P": 80, "Guildhall_LightingNoGameplay": 172, "Guildhall_Loot": 143, "Guildhall_SkyboxGeo": 33547 }
+TAT-2 Loaded guildhall: meshes=62950 lights=160
+TAT-2 KF16 car lenses: node=@MeshInstance3D@338459 dist=0.0 glass_surface=1 emission=1.0,0.6186,0.2552 energy=2.0
+TAT-2 KF17 clocktower: placed GuildhallSkylineClocktower mat=/Game/Art/Environment/Skybox/Buildings/ML/MI_DistantBuidingA
+TAT-2 KF16 sign letters: node=@MeshInstance3D@338809 surface=1 emission=(1.0, 0.62, 0.2, 1.0) energy=0.10000000149012 albedo=(1.0, 0.6848, 0.2726, 1.0)
+TAT-2 Perf: chunks=5863 collision_bodies=225 collision_shapes=24310 occluders=768
+TAT-2 player spawn: source=authored pos=(127.2747, 26.4694, -5.3296) yaw=-3.05432154567525 headroom_clear=true forward_clear=true
+TAT-2 quest items: spawned=1 mission=Mission.Guildhall.LootTheRoom free_play=false
+TAT-2 loot containers: 107
+TAT-2 clues: spawned=6 set(s)=CLS_Contract_02 map=guildhall
+TAT-2 escape markers: authored=14 spawned=14 grounded=14 connected=14 phase=main
+TAT-2 spawners: throwable=133 ammo=45 health=5 civilian=3
+TAT-2 swinging doors: 155
+TAT-2 authored devices: 903 (alarm_eye=60, goo_pipe=90, junction=11, light_beam=134, noise_alarm=96, power_switch=29, power_wall=9, pressure_plate=162, turret=229, vault_door=6, ward_blocker=36, ward_slow=41)
+TAT-2 mission_ready map=guildhall meshes=62950 lights=160 chunks=5863
+PASS: [T4-14] normal ghost deploy banks 625 (currency 0 -> 625, order 2 recorded=true best=625 ghost_run=true)
+PASS: [S2-01] loot settings/producers resolve 12 slots, major 3, INVENTORY FULL, £1,000, stash kind
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'gloomy'
+TAT-2 environment: bg=2 ambient_src=2 ambient_energy=0.15999999642372 ambient_color=(1.0, 1.0, 1.0, 1.0) sky=true fog=true fog_density=0.00480000022799
+TAT-2 scene variants selected=104 seed=275275524
+TAT-2 run clock: map=guildhall mission=Mission.Guildhall.VaultHeist main_s=7200.0 main_source=mission_row endgame_s=300.0 endgame_source=quest_graph
+FootstepMask: downscaled 256x256 -> 128x128 for one-time alpha bake
+FootstepMask: baked one-time alpha mask (128x128) from res://assets/ue/Raw/Art/UI/Icons/T_Decal_Footstep.png)
+TAT-2 gate lights: total=160 (generic=159 rect=1) budget=159 forced=6 hero_shadows=6
+WARNING: [level_loader] level Niagara: 1599 placements across 25 systems spawned
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:5199)
+         [1] _store_level_extras (res://src/core/level_loader.gd:5116)
+         [2] load_sublevels_async (res://src/core/level_loader.gd:5417)
+ROUGHNESS_BAKE count=86 pixels=73924608 ms=4352 bytes=98566111 hits=46 (L8 low+g*(high-low), full-res, process cache)
+BEAM_FIX SM_LightBeam cards=134 axis=col0 scale_slot=2 clamp=200.0 max_scale=195.5292 max_length_m=19.944
+PERF_CENSUS meshes=5910 instances=64544 chunk_nodes=5863 plain=2403 multimesh=3507 surface_draws=10776 lights=171 shadow_lights=7 occluders=768 collision_bodies=225 collision_shapes=24310 periph_nodes=3104 periph_instances=13325 periph_surface_draws=5945 periph_plain=1439 periph_multimesh=1665 periph_range=0 merge_mode=off merge_candidates=0 merge_nodes=0 merge_surfaces_before=0 merge_surfaces_after=0 light_budget=160 hero_shadows=6 source_sublevels={ "Guildhall_Landscape": 677, "Building_Guildhall_POI": 9771, "Guildhall_Geometry": 567, "Guildhall_Vault_CeremonialChambers": 743, "Guildhall_PeripheryA": 12251, "Building_Guildhall_POI_3rdFloor": 3613, "Guildhall_Gameplay": 1361, "Guildhall_P": 80, "Guildhall_LightingNoGameplay": 172, "Guildhall_Loot": 143, "Guildhall_SkyboxGeo": 33547 }
+TAT-2 Loaded guildhall: meshes=62950 lights=160
+TAT-2 KF16 car lenses: node=@MeshInstance3D@372272 dist=0.0 glass_surface=1 emission=1.0,0.6186,0.2552 energy=2.0
+TAT-2 KF17 clocktower: placed GuildhallSkylineClocktower mat=/Game/Art/Environment/Skybox/Buildings/ML/MI_DistantBuidingA
+TAT-2 KF16 sign letters: node=@MeshInstance3D@372622 surface=1 emission=(1.0, 0.62, 0.2, 1.0) energy=0.10000000149012 albedo=(1.0, 0.6848, 0.2726, 1.0)
+TAT-2 Perf: chunks=5863 collision_bodies=225 collision_shapes=24310 occluders=768
+TAT-2 player spawn: source=authored pos=(127.2747, 26.4694, -5.3296) yaw=-3.05432154567525 headroom_clear=true forward_clear=true
+TAT-2 quest items: spawned=1 mission=Mission.Guildhall.VaultHeist free_play=false
+TAT-2 loot containers: 107
+TAT-2 clues: spawned=6 set(s)=CLS_Contract_02 map=guildhall
+PQ_PLACE kind=readable y=pin anchor=library_note yaw=none pin_y=28.0021 floor_y=28.0000 pos=(-26.8541, 28.0021, -9.4431)
+TAT-2 personal quest: map=guildhall thief=spider stage=intro plan=1 spawned=1 anchors=library_note
+TAT-2 escape markers: authored=14 spawned=14 grounded=14 connected=14 phase=main
+TAT-2 spawners: throwable=133 ammo=45 health=5 civilian=3
+TAT-2 swinging doors: 155
+TAT-2 authored devices: 903 (alarm_eye=60, goo_pipe=90, junction=11, light_beam=134, noise_alarm=96, power_switch=29, power_wall=9, pressure_plate=162, turret=229, vault_door=6, ward_blocker=36, ward_slow=41)
+TAT-2 mission_ready map=guildhall meshes=62950 lights=160 chunks=5863
+PASS: [S2-02] Guildhall contract mission loaded for the loot pass
+PASS: [S2-03] real Guildhall loot wave spawned (257 items)
+PASS: [S2-04] real major loot actor present
+PASS: [S2-05] major loot mesh: one visual root, 1 mesh node(s), 0 authored-off light(s)
+PASS: [S2-06] real major pickup: 3 slots, value 0 -> 225, actor lingers out of the loot group
+PASS: [S2-07] real secret stash deposit-all: 225 stashed, uses=0, gross value unchanged (225)
+PASS: [S2-08] 12-slot cap refuses a real pickup with the authored line (toast='CLUE — NOTICE: INVENTORY FULL')
+PASS: [S2-09] escape payout Original=1065 Kept=840 Stashed=225 Reward=1000 MoneyTaken=2275 banked=2275
+PASS: [S2-10] repeat escape bank is idempotent (currency stays 2275)
+PASS: [S2-11] capture keeps stashed only (225), no reward, no carried haul
+PASS: [S2-12] live payout mirrors the free-play mode (false)
+SUMMARY: fails=0 passed=278 total=278
+WARNING: 21 ObjectDB instances were leaked at exit (run with `--verbose` for details).
+   at: cleanup (core/object/object.cpp:2536)
+ERROR: 4 resources still in use at exit (run with --verbose for details).
+   at: clear (core/io/resource.cpp:822)
+ERROR: 3 RID allocations of type 'N17RendererSceneCull8InstanceE' were leaked at exit.

@@ -1,12 +1,11 @@
 # Handoff — Thick As Thieves Godot 4.7.2 port (next run)
 
 **Repo:** `/home/john/Projects/TAT-2`
-**HEAD at handoff:** `74a43b8` — the W6 integration docs commit, plus the local
-**W7G** wave (export provenance/stamp, roughness process cache, core bake,
-Sonar Path A config). W7G is not pushed.
-**Working tree:** W7G changes committed locally; the private data tree is
-symlinked and intentionally untracked in the wave worktree
-(`/tmp/opencode/tat2-w7g-gates`), main checkout untouched.
+**HEAD at handoff:** `6760dd0` — the **W7 integration** tip: five lanes
+(S2 loot/save v8, S5 endgame, gates/Sonar, hearing/descent, visual/KF11) merged
+and re-gated on the merged tree. Pushed to `origin/main`.
+**Working tree:** clean apart from private/derived data. The five lane
+worktrees are removed.
 **Godot:** `4.7.2.stable` via **native `tools/godot`** (Flatpak fallback inside the
 wrapper). `godot` is **not** on `$PATH`.
 **Renderer:** Forward+ · Jolt Physics 60 Hz · 1280×720 reference
@@ -24,7 +23,9 @@ be pursued.
 >
 > **Read first:** [`AGENTS.md`](../AGENTS.md) (operating rules and traps),
 > [`docs/FIDELITY_GAPS.md`](FIDELITY_GAPS.md) (live coverage + every residual),
-> [`docs/reports/w7g-gates.md`](reports/w7g-gates.md) (latest gates, export
+> [`docs/reports/w7-integration.md`](reports/w7-integration.md) (the W7 merged
+> gate set, the two integration defects it caught, and the wave decisions),
+> [`docs/reports/w7g-gates.md`](reports/w7g-gates.md) (export
 > stamp, roughness cache, core bake, Sonar plan),
 > [`docs/reports/w6-integration.md`](reports/w6-integration.md) (the W6 full
 > gate set and its evidence),
@@ -41,17 +42,17 @@ be pursued.
 |---|---|
 | Extraction pipeline | reproducible from a wiped tree; `make extract` + `make normalize` + `make anims` exit 0 |
 | Asset integrity | 0 duplicate UIDs, 0 missing/corrupt meshes, `MESH HOLES=0`, 0 missing textures |
-| Scripts | **110 checked, 0 broken** (W7G, `74a43b8` + wave) |
-| Unit suite (`run_tests.gd`) | **full run fails=0** (263 PASS, suites numbered to 88) on the W7G tree |
-| M2 player suite | **fails=0** (11 PASS) on the W7G tree |
-| Probes | door walk **PASS**, viewmodel truth **PASS**, Niagara **PASS** (3695/3308/36) from W6; `probe_leak` **PASS** (`TAT2_NO_DEN_PROBE=1`, 0 leaks) re-run in W7G |
-| E2E (unmasked) | **264/264 fails=0** (full tiers 1–4) on the W7G tree |
-| Standalone suites | W5B materials 71, roof collision 51 (census 733/46/426/307/0), W6L searchlight 16, hearing ranges 39, light-once 7, W6U1 briefing 37, W6U2 catalog 61, stair walk 19, traversal 18, content overrides 447 (static) — all fails=0 |
-| Audit | **base only, not re-measured in W7G**: 12657/12703 (99.6 %), 0 unexpected. W7S's uncommitted loot producers changed 4 `gen:gameplay` files + a directory hash; integration regenerates and re-stamps at the merged HEAD. No floor changed. |
+| Scripts | **120 checked, 0 broken** (`6760dd0`, merged tree) |
+| Unit suite (`run_tests.gd`) | **full run fails=0** (278 PASS, suites numbered to 90) on the merged tree |
+| M2 player suite | **fails=0** (11 PASS) on the merged tree |
+| Probes | door walk **PASS**, viewmodel truth **PASS**, Niagara **PASS** (3695/3308/36), `probe_leak` **PASS** (`TAT2_NO_DEN_PROBE=1`, exit 0, 0 ERROR lines) on the merged tree |
+| E2E (unmasked) | **278/278 fails=0** (tiers 1–4 + `--tier=s2`; tier 1: 117) on the merged tree |
+| Standalone suites | W5B materials 71, roof collision 51 (census 733/46/426/307/0), W6L searchlight 16, hearing ranges 39, light-once 7, W6U1 briefing 37, W6U2 catalog 61, stair walk 19, traversal 18, content overrides 447, W7H surface/hearing 108, W7V UI 49, W7S inventory/save, W7E endgame 31 — all fails=0 |
+| Audit | **re-measured and re-stamped at `6760dd0`**: 12657/12703 (99.6 %), 0 unexpected, 13/13 content groups, `AUDIT PASS`. Producers re-run byte-identically before stamping. |
 | Export | `make linux-build` writes a HEAD/PCK stamp; wrapper fails closed on stale/mismatch and logs `PERF_PCK`; PCK 2,574,092,822 B / `642fb055…`; dirty tree → not publishable |
 | Spider chain | **live** — note → electrotype → Owl → courier → informant, `stage=complete`, 7 facts; subset real-map probe **90/90** |
 | Perf/thermal guard | **W4P + W7G**: `--start-temp` 78 / `--max-temp` 95, 1 s sampler, `VmHWM` 8 GiB; RAM-derived `MemoryMax`; `test_perf_guard.sh` **78/78**; **no real matrix run** |
-| Texture cap | base `make texture-cap-check` **OK**, 0 offenders, 1 alpha exception (not re-measured in W7G) |
+| Texture cap | **re-measured at `6760dd0`**: capped 773, 1 alpha exception, 0 offenders |
 | World review | full Guildhall bake **371 MB / 18.76 s** (W5); W7G core bake **194.0 MiB** (52.6 MiB under the 256 MiB guard), headless load `VmHWM` 782 MB |
 | World data | 107/107 maps, 16 contracts, 210 patrols / 673 waypoints, 222 scene variants, 4,118 devices, 3,695 Niagara placements (3,308 active) / 36 systems |
 | Materials | 1,629 resolved; two-sided and paint-stroke albedo read from `BasePropertyOverrides` and child `_D` companions |
@@ -403,6 +404,46 @@ Recent additions to know about:
 ---
 
 ## 7. Open work — prioritized
+
+### 7.0 What W7 closed, and what it opened
+
+Closed: the loot economy core (12 authored slots, minor 1 / major 3 / quest 1,
+one-use stash, binary keep, £1,000 reward, save v8 with an idempotent payout
+outbox); the two-phase run clock (55:00 main from the mission row, 20:00 endgame,
+240 s gates, all 25 authored escape markers); surface-resolved hearing (198-case
+matrix, 22/22 surfaces reachable, swing-door creak, indoor weather scope); the
+stairs descent ray and landing coalescing; KF11 skyline + Cotter wardrobe + a
+live 3D market preview; export provenance, the roughness process cache and the
+Sonar Path A config.
+
+Opened (none of these are green yet):
+
+1. **Perf matrix still unrun.** The export is stamped and hashed but no
+   publishable matrix exists and the thermal gate is waived, not passed. Do not
+   quote FPS. Next: 3 same-binary controls + idle floor, then the quality ladder.
+2. **Editor ≤2.5 GB VRAM unproven.** `nvidia-smi memory.used` is device-wide.
+   Needs `nvidia-smi --query-compute-apps=pid,used_gpu_memory` or a Vulkan
+   heap-budget probe, plus a normal close (W7G's was SIGTERM'd by the harness).
+3. **SonarCloud gate still unbound.** Manual UI steps remain: autoscan off,
+   project token, "TAT-2 New Code" gate (Reliability A + Security A +
+   duplication ≤3 %), Previous-version new-code period, action SHA pin.
+4. **Live playtests owed** — 25 m sprint hearing indoors, silent-surface feel,
+   0.33 m civic descent camera, swing creak in a corridor, indoor/outdoor seam
+   under the Old Manor arches and Jaspering colonnade, roof eave feel.
+5. **Walked descents 0.18–0.30 m still take 4–12 airborne frames** with D2 off
+   (measured opt-in: 1–2 frames, 0.001 m shove-back). Decide whether to ship D2.
+6. **C8 Guildhall haze/wet ground and C9 horizon-vs-zenith captures** were not
+   taken; their staging is in the mission path.
+7. **XP/scoring is still the port's invented rule** (`max(100, score/2)`) while
+   `DefaultGame.ini` authors the real curve (major 6 / minor 2 XP, win 80,
+   level 25 at 500 XP). At authored rates the 48 level-gated cosmetics arrive at
+   level 25 in ~140 runs, not ~19. This is the Black Market reachability blocker.
+8. **Co-op** remains transport-only: the W7 host-once banking guard is local; a
+   client extraction does not RPC the host.
+9. **Post-match Haul screen** (major/minor tiles, `Loot Earned`/`Loot Lost`,
+   `Total Haul`) is authored data that S2's counters can now drive — not built.
+10. **Lanes must not regenerate shared data** — see the AGENTS.md parallel-wave
+    rule; W7 lost time to exactly that.
 
 ### 7.1 Functional gaps (the honest list)
 

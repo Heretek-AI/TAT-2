@@ -1,0 +1,32 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:691)
+         [1] _mission_map_id (res://src/core/game_data.gd:791)
+         [2] _load_missions (res://src/core/game_data.gd:848)
+         [3] _ready (res://src/core/game_data.gd:76)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:691)
+         [1] _mission_map_id (res://src/core/game_data.gd:791)
+         [2] _load_missions (res://src/core/game_data.gd:848)
+         [3] _ready (res://src/core/game_data.gd:76)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:691)
+         [1] _mission_map_id (res://src/core/game_data.gd:791)
+         [2] _load_missions (res://src/core/game_data.gd:848)
+         [3] _ready (res://src/core/game_data.gd:76)
+TAT-2 Loc: reverse map built from sources.json (3404 keys)
+TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
+WARNING: [level_loader] level Niagara: 3308 placements across 36 systems spawned
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:5199)
+         [1] _run (res://tests/probe_niagara.gd:47)
+NIAGARA_PROBE files=107 authored=3695 active=3308 skipped=387 systems=36 nodes=36
+NIAGARA_PROBE PASS

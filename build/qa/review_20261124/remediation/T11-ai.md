@@ -483,7 +483,7 @@ critical range the ramp returns `INF` and the guard goes straight to COMBAT).
 | **NOT REPRODUCED** | RE-A-13 |
 | **DEFERRED** | RE-I-03 ladder, RE-I-01 StateTree consumer |
 
-Gate set on `8607318` (serial, headless, no GPU):
+Gate set on the wave tip `0d98bb9` (serial, headless, no GPU):
 
 | gate | result |
 |---|---|
@@ -497,11 +497,17 @@ Gate set on `8607318` (serial, headless, no GPU):
 | `make gate-ratchet` | `GATE_RATCHET: PASS` |
 | `make audit` | 13/13 content groups OK; **fails on tool-version drift**: `vgmstream: '…r2168 (Oct 25 2026)' -> 'missing'` — the CLI is not on `PATH` in this container. Proven **pre-existing**: `git stash push -- game/src game/tests build/qa` leaves the tree at `fb93f84`+`8607318` and the audit prints the identical single failure, so no T11 change causes it. The integrator must install the tool or re-stamp at the merged HEAD; **do not** re-baseline silently. |
 
-One commit: `feat(ai): authored sight, ranged combat, roster, reaction caps and
-nav (RE-I wave)`. It is deliberately one commit: the findings share
-`guard_ai.gd` with interleaved hunks, and any file-level split would leave an
-intermediate commit that does not compile — AGENTS requires every commit to be
-green.
+Three commits on `rem/T11-ai`:
+
+| commit | content |
+|---|---|
+| `8607318` | `feat(ai): authored sight, ranged combat, roster, reaction caps and nav (RE-I wave)` — all source and test changes |
+| `3d55a0e` | `docs(ai): T11-AI remediation report` (this file) |
+| `0d98bb9` | `test(ai): drop the unused player-stub parameter` |
+
+The code is deliberately **one** commit: the findings share `guard_ai.gd` with
+interleaved hunks, and any file-level split would leave an intermediate commit
+that does not compile — AGENTS requires every commit to be green.
 
 ---
 

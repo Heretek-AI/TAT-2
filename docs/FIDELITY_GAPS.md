@@ -16,7 +16,7 @@ Re-run the census with the commands at the bottom.
 | Levels | 107 `.umap` | 107 `.tatlevel.json` (`159,941` orthonormal bases, `OverrideMaterials`, `bVisible:false`/`SplineEditorMesh` filtered, `1,293` emissive CPD shapes) | **done (`7458198`, `24cac7e`, `d0f895a`)** |
 | DataTables / CurveTables / StringTables | 58 `DT_` / 79 `ST_` / curves | 144 normalized tables | **done** |
 | **Animations** | **879 `AN_`** | **995 GLB clips** + **3,594 authored notifies** / 235 montage sections; 14 blend-space graphs unsupported | **export done; ~90 clip names wired, notifies data-only** |
-| **Weather / atmosphere** | 16 presets + `TATWeatherManager` in 103 levels | **applied** (`tools/parse_weather.py` -> `game/data/generated/weather/`, `weather_profile.gd`, mission wiring, suite 17) | **done (7aa34db)** |
+| **Weather / atmosphere** | 16 presets + `TATWeatherManager` in 103 levels | **applied** (`tools/parse_weather.py` -> `game/data/generated/weather/`, `weather_profile.gd`, mission wiring, suite 17); W5C: Guildhall resolves to the authored `gloomy` preset from level dressing, fog calibrated for 20–120 m, horizon haze floor | **done (7aa34db, W5C `34c2893`)** |
 | **Niagara VFX** | 120 `NS_` systems + 3,695 placements | 3,303 unique records; 3,308 active / 36 systems; one additive billboard per placement (not authored rates) | **catalogue + placement stand-in; VM rates blocked** |
 | **Materials** | 1,247 `MI_` + 386 `M_` + 167 `MF_` + 289 material layers | 1,629 resolved (`1,379` albedo, `149` opacity); **307 albedos are heuristic fallback guesses**, 250 have none | **done for parameters; graphs unrecoverable** |
 | **Decals** | 675 records (17 files) | 347 spawned / 112 skipped in 3 maps; 216 in other maps are not accounted for | **partial** |
@@ -392,3 +392,56 @@ find extracted/json -name 'NS_*.json' | wc -l
     sinks 2.84 mm into the table (accepted), run vs persistent fact semantics
     (personal persisted, contract run-only) and co-op is local-only for this
     chain.
+
+- 2026-11-24: **W5 integrated — movement, loader/render, weather, audio/HUD,
+  data producers, sonar P0** (`e6daa96`..`94a75e3`; six branches cut from
+  `950f7ca`). Full detail, conflicts and every measured gate in
+  [`reports/w5-integration.md`](reports/w5-integration.md).
+  - **Traversal (W5A)**: UE-authored `WalkableFloorAngle` 60° (was 50°),
+    `MaxStepHeight` 45 cm (was 30 cm), 1.82 m capsule (half-height 0.91, was
+    1.78/0.89), step probe 0.20 m forward from the capsule **surface** before
+    `move_and_slide`, a mantle gate in `(0.45, 0.50]` without a jump press, and
+    an interaction-LOS standoff (`0.6 m`) for the Den wardrobe. The civic flight
+    is walkable for the first time (0.25 m risers / 0.33 m treads = 37.1°).
+  - **Loader/render (W5B)**: roof meshes use convex shapes (733 boxes → 399
+    boxes + 334 convex, 13 unique meshes), roof occluders (398 candidates) are
+    no longer emitted, masked materials bind their authored opacity map
+    (`MI_HorizonA` no longer a black wall), `DiffuseMaskTint` gated on
+    `DiffuseColorMask?` so `MI_PosterWanted` keeps its sepia albedo.
+  - **Weather/backdrop (W5C)**: Guildhall = authored `gloomy` (rain 1.0,
+    wetness 1.0, fog 0.16; `wet_ground=5, haze_volumes=27, cloud_masks=4,
+    moon_actors=8`), `FOG_DENSITY_SCALE` calibrated for 20–120 m, an outdoor
+    horizon-haze floor (0.55 @ lum 0.129, Den 0) instead of a black horizon, one
+    moonlit cloud tint, and the Den vista staged on the authored **west** window
+    (`(-6.06, 43.05, 271.4)`, yaw 148°) instead of the south-wall hatch.
+  - **Audio/HUD (W5D)**: 120 ms `cue|position` dedupe, one handle per sustained
+    loop (`alarm_loop`/`smoke_cloud`/`lightbeam_hum`) with a stop path, single
+    bed on scene re-entry, spherical Light Gem mask, compass reduced to the
+    authored centre-line strip and one heading.
+  - **Data producers (W5E)**: `unlocks.json` (68 entries), `hearing.json` +
+    `perception.json` (54 stimuli / 22 surfaces / 285 portals), and
+    `guard_behavior.json` (21 StateTrees / 459 states / 467 transitions) are
+    produced, pinned and audited. Guards' runtime use of the tree remains
+    **partial** — the producer is data, not behaviour (see the W5E report's
+    "not implemented" table).
+  - **Verification actually run** on `94a75e3`, serial: compile **101/0**
+    (96 + 5 new tests), `run_tests` **fails=0** (261 PASS), `test_m2_player`
+    **fails=0**, door walk / viewmodel truth / Niagara **PASS**
+    (3695/3308/387/36), `probe_leak` clean (`TAT2_NO_DEN_PROBE=1`), E2E
+    **264/264**, `make texture-cap-check` **OK** (773/1/0), `make audit`
+    **PASS** (coverage 12657/12703, 0 unexpected) after `make normalize`
+    (idempotent) + `audit-refresh-stamps`.
+  - **Baseline re-stamp**: four content changes accepted — `gen:weather` (W5C),
+    `gen:gameplay` 17→21 files (W5E), plus `devices_runtime.json` and `gen:vfx`,
+    which are **pre-existing checkout drift** (no W5 commit touches those
+    producers or their inputs); both reproduce deterministically and pass their
+    content gates. Stamps only for W5F's `extract_audio.py` / `Program.cs` /
+    `prebake_texture_cap.py` / `fetch_vgmstream.sh`.
+  - **Deferred, not claimed**: the perf matrix, GI, Vulkan captures, `make run`
+    visual pass and a full editor open. Thermal gate was waived by the user;
+    still no parallel Godot. Not pushed.
+  - **Residuals**: step/floor feel is headless-verified only (0.45 m ledges and
+    45–60° slopes are now walkable, which changes routes); the 1.82 m capsule
+    needs 4 cm more headroom; `INTERACT_LOS_STANDOFF_M` is global; the Den
+    white-clip exact-material caps are still deferred (need captures); the
+    guard StateTree data is not yet driving `guard_ai.gd`.

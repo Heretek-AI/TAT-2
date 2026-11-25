@@ -1,10 +1,12 @@
 # Handoff — Thick As Thieves Godot 4.7.2 port (next run)
 
 **Repo:** `/home/john/Projects/TAT-2`
-**HEAD at handoff:** `eb55bc1` — `fix(perf): guarded pre-warm, 1s thermal sampler and RSS limit`,
-on top of the Spider chain integration (`7aa2a67`..`3e26c7a`) and the
-codebase-memory hardening (`9f8f36a`, `877d6ad`).
-**Working tree:** clean; code HEAD `eb55bc1`, docs commit on top is local (not pushed)
+**HEAD at handoff:** `94a75e3` — `chore(audit): re-stamp baseline after W5 normalize`,
+on top of the six-wave **W5 integration** (`e6daa96`..`b6e8cd5`: movement,
+loader/render, weather/backdrop, audio/HUD, data producers, sonar P0), the
+Spider chain integration (`7aa2a67`..`3e26c7a`) and the codebase-memory
+hardening (`9f8f36a`, `877d6ad`).
+**Working tree:** clean; code HEAD `94a75e3`, docs commit on top is local (not pushed)
 **Godot:** `4.7.2.stable` via **native `tools/godot`** (Flatpak fallback inside the
 wrapper). `godot` is **not** on `$PATH`.
 **Renderer:** Forward+ · Jolt Physics 60 Hz · 1280×720 reference
@@ -22,6 +24,8 @@ be pursued.
 >
 > **Read first:** [`AGENTS.md`](../AGENTS.md) (operating rules and traps),
 > [`docs/FIDELITY_GAPS.md`](FIDELITY_GAPS.md) (live coverage + every residual),
+> [`docs/reports/w5-integration.md`](reports/w5-integration.md) (the last full
+> gate set and its evidence),
 > [`docs/reports/perf-structural-wave.md`](reports/perf-structural-wave.md)
 > (performance truth and structural measurements),
 > [`docs/reports/review-map-baker.md`](reports/review-map-baker.md) (world
@@ -35,11 +39,13 @@ be pursued.
 |---|---|
 | Extraction pipeline | reproducible from a wiped tree; `make extract` + `make normalize` + `make anims` exit 0 |
 | Asset integrity | 0 duplicate UIDs, 0 missing/corrupt meshes, `MESH HOLES=0`, 0 missing textures |
-| Scripts | **96 checked, 0 broken** (`eb55bc1`) |
-| Unit suite (`run_tests.gd`) | last full run **fails=0**; 59 suites registered; on `eb55bc1` only `--spider-only` was re-run (**87 + 88, fails=0**) |
-| M2 player suite | **fails=0** (last full set; not re-run on `eb55bc1`) |
-| Probes | door walk **PASS**, viewmodel truth **PASS**, Niagara **PASS**; `probe_leak` **PASS** (integration run) |
-| E2E (unmasked) | **264/264** (last full set; not re-run on `eb55bc1`; tier 1: 115) |
+| Scripts | **101 checked, 0 broken** (`94a75e3`) |
+| Unit suite (`run_tests.gd`) | **full run fails=0** (261 PASS, suites numbered to 88) on `94a75e3` |
+| M2 player suite | **fails=0** (11 PASS) on `94a75e3` |
+| Probes | door walk **PASS**, viewmodel truth **PASS**, Niagara **PASS** (3695/3308/36); `probe_leak` **PASS** (`TAT2_NO_DEN_PROBE=1`, clean) |
+| E2E (unmasked) | **264/264 fails=0** (full tiers 1–4) on `94a75e3` |
+| W5 standalone tests | stair walk 7/7, roof collision 27/27, W5B materials 27/27, audio lifecycle 13/13, HUD gem/compass 11/11 |
+| Audit | `make audit` **PASS**, coverage 12657/12703 (99.6 %), 0 unexpected, baseline re-stamped after normalize (idempotent) |
 | Spider chain | **live** — note → electrotype → Owl → courier → informant, `stage=complete`, 7 facts; subset real-map probe **90/90** |
 | Perf/thermal guard | **W4P**: `--start-temp` 78 / `--max-temp` 95, 1 s sampler, `VmHWM` 8 GiB; `test_perf_guard.sh` **42/42**; **no real matrix run** |
 | Texture cap | `make texture-cap-check` **OK**, 0 offenders, 1 alpha exception |
@@ -220,6 +226,7 @@ tools/reimport_assets.sh && make desktop-texture-cap` before the game/tests work
 
 | Commit | Wave / change |
 |---|---|
+| `e6daa96`..`94a75e3` | **W5 integration (six parallel waves)** — W5A authored movement (60° floor, 0.45 m step, 1.82 m capsule, mantle gate, wardrobe LOS); W5B loader/render (roof convex collision, roof occluders off, masked opacity, mountain/poster materials); W5C weather/backdrop (Guildhall `gloomy`, near-field fog scale, horizon haze, one moonlit cloud tint, west Den window staging); W5D audio/HUD (120 ms cue dedupe, loop handles, single bed, spherical Light Gem, compass centre heading); W5E producers (unlocks, hearing/perception, guard StateTree); W5F sonar config + P0 fixes. Full gates green: compile 101/0, `run_tests` fails=0, M2 fails=0, probes PASS, E2E 264/264, audit PASS. Evidence: [`reports/w5-integration.md`](reports/w5-integration.md) |
 | `eb55bc1` | **W4P perf guard** — `--start-temp` 78 / `--max-temp` 95, independent 1 s sampler, guarded pre-warm, `VmHWM` 8 GiB, 12 GiB / 0 swap scope; `test_perf_guard.sh` 42/42. **No real matrix run.** Evidence: [`reports/w4p-thermal-guard.md`](reports/w4p-thermal-guard.md) |
 | `7aa2a67`..`3e26c7a` | **Spider personal chain (01 → 04) integrated** — spawn-pass seam, per-kind placement, global settle + thief binding, authored yaw, Owl pedestal, probe mission/stand-point fixes, suite 88. Real-map probe **90/90**, `stage=complete`. Evidence: [`reports/spider-chain-integration.md`](reports/spider-chain-integration.md) |
 | `9f8f36a` / `877d6ad` | **codebase-memory hardening** — 4 GiB / 3 GiB / 0 swap, `CBM_MEM_BUDGET_MB=3072`, index caps 20,000 files / 512 MB source, marketplace patch, `.cbmignore` + `tools/check_cbmignore.sh` 26/26 |
@@ -239,6 +246,13 @@ tools/reimport_assets.sh && make desktop-texture-cap` before the game/tests work
 | earlier | Startscreen decal/neon tuning, sky veil, KF16/KF17 follow-ups, Track C, world/free-play wave |
 
 Per-wave evidence: `docs/reports/` (latest:
+[`w5-integration.md`](reports/w5-integration.md),
+[`w5a-movement.md`](reports/w5a-movement.md) ·
+[`w5b-loader-render.md`](reports/w5b-loader-render.md) ·
+[`w5c-weather-backdrop.md`](reports/w5c-weather-backdrop.md) ·
+[`w5d-audio-hud.md`](reports/w5d-audio-hud.md) ·
+[`w5e-guard-state-tree.md`](reports/w5e-guard-state-tree.md) ·
+[`w5f-sonar-p0.md`](reports/w5f-sonar-p0.md),
 [`spider-chain-integration.md`](reports/spider-chain-integration.md),
 [`w4p-thermal-guard.md`](reports/w4p-thermal-guard.md)).
 
@@ -464,16 +478,16 @@ Recent additions to know about:
 
 ### 7.5 Next step (do this first on a cool host)
 
-The Spider integration on `eb55bc1` verified only the compile, `make audit`,
-`--spider-only` (87 + 88), the pure placement test (26/26) and the subset
-real-map probe (90/90). These are **not yet re-measured on this HEAD** and must
-be run before the next feature wave:
+The W5 integration on `94a75e3` re-measured the **full** gate set (compile
+101/0, `run_tests` fails=0, M2 fails=0, door/viewmodel/Niagara probes PASS,
+`probe_leak` clean, E2E 264/264, `make audit` PASS, `make texture-cap-check`
+OK) plus the five new W5 standalone tests. Evidence:
+[`reports/w5-integration.md`](reports/w5-integration.md).
+
+Still open, and the only gate not measured on this HEAD:
 
 ```bash
-make test                                       # 59 suites, expect fails=0
-tools/godot --headless --path game --script res://tests/test_m2_player.gd
-tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd  # 264/264
-build/qa/run_perf_matrix.sh --quality=high --scale=1.0 --scaling=bilinear --tag=post_spider
+build/qa/run_perf_matrix.sh --quality=high --scale=1.0 --scaling=bilinear --tag=post_w5
 make editor                                     # full editor / Review dock on the 8 GB laptop
 ```
 
@@ -481,7 +495,7 @@ The perf matrix must start at or below 78 °C; the host idles near 82 °C, so
 cool it first. The full editor open previously failed Vulkan device creation on
 the 8 GB GPU — record the result, do not add another approximation to hide it.
 Do not quote a gate as green until its command has actually completed on
-`eb55bc1` (or a later HEAD).
+`94a75e3` (or a later HEAD).
 
 ---
 
@@ -520,22 +534,24 @@ Do not quote a gate as green until its command has actually completed on
 git status --short                                  # clean
 make audit                                          # exit 0, all groups fresh, 0 unexpected errors
 python3 tools/check_uid_duplicates.py game --json   # 0/0
-tools/godot --headless --path game --script "$PWD/tools/check_scripts_compile.gd"   # 96/0
+tools/godot --headless --path game --script "$PWD/tools/check_scripts_compile.gd"   # 101/0
 tools/godot --headless --path game --script res://tests/run_tests.gd         # fails=0
 tools/godot --headless --path game --script res://tests/test_m2_player.gd    # fails=0
 tools/godot --headless --path game --script res://tests/probe_door_walk.gd   # PASS
 tools/godot --headless --path game --script res://tests/probe_viewmodel_truth.gd  # PASS
 tools/godot --headless --path game --script res://tests/probe_niagara.gd     # PASS
-tools/godot --headless --path game --script res://probe_leak.gd              # as documented
+TAT2_NO_DEN_PROBE=1 tools/godot --headless --path game --script res://probe_leak.gd  # clean path
 tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd # 264/264
+make texture-cap-check                                                      # OK, 0 offenders
 git push origin main
 ```
 
-The 2026-11-24 Spider integration (`eb55bc1`) ran the compile (96/0),
-`make audit` (PASS), `--spider-only` (fails=0), the placement test (26/26) and
-the subset probe (90/90). The full `make test`, `test_m2_player`, E2E and perf
-matrix in the block above were **deferred**; run them on a cool host before
-quoting the wave as fully green.
+The 2026-11-24 W5 integration (`94a75e3`) ran **every** gate in the block above
+serially on this HEAD: compile 101/0, `run_tests` fails=0, M2 fails=0, three
+probes PASS, `probe_leak` clean, E2E 264/264, `make audit` PASS and
+`make texture-cap-check` OK — see
+[`reports/w5-integration.md`](reports/w5-integration.md). The perf matrix and a
+full editor open remain deferred (thermal); everything else is measured.
 
 Any wave that changes rendering, materials, traversal or mission flow also needs:
 

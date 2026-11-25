@@ -67,20 +67,25 @@ tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd
 tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd -- --tier=1
 ```
 
-| Gate | Passing value (last full set 2026-11-23; compile re-measured at `eb55bc1`) |
+| Gate | Passing value (full set re-measured on the W5 integration, `94a75e3`) |
 |---|---|
-| compile | 96 checked, 0 broken (`eb55bc1`) |
-| `run_tests.gd` | `SUMMARY: fails=0` (last full run; 59 suites now registered, suite 88 added since) |
-| `test_m2_player.gd` | `M2_SUMMARY: fails=0` |
-| door walk / viewmodel / Niagara probes | `DOORWALK PASS` / `VIEWMODEL_TRUTH PASS` / `NIAGARA_PROBE PASS` |
+| compile | 101 checked, 0 broken (96 + the 5 W5 tests) |
+| `run_tests.gd` | `SUMMARY: fails=0` (261 PASS; suites numbered to 88) |
+| `test_m2_player.gd` | `M2_SUMMARY: fails=0` (11 PASS) |
+| door walk / viewmodel / Niagara probes | `DOORWALK PASS` / `VIEWMODEL_TRUTH PASS` / `NIAGARA_PROBE PASS` (3695 authored / 3308 active / 36 systems) |
 | E2E | `fails=0 passed=264 total=264` (tier 1: 115) |
-| `make audit` | exit 0, tracked baseline matches, mount/path 100.0 % (exact-case 99.4 %), 13/13 content groups |
+| `make texture-cap-check` | OK — 773 capped, 1 alpha-critical kept, 0 offenders |
+| `make audit` | exit 0, tracked baseline matches, disk-backed coverage 99.6 % (12657/12703), 0 unexpected, exact-case 0 unexpected, 13/13 content groups |
 
-The 2026-11-24 Spider integration (`eb55bc1`) re-ran only the compile (96/0),
-`make audit`, `--spider-only` (suites 87 + 88, fails=0), the placement test
-(26/26), `probe_leak` and the subset probe (90/90). **Re-measure the full suite,
-M2 and E2E on the current HEAD** before quoting or gating on their counts;
-nothing here has been re-baselined.
+The 2026-11-24 Six-wave W5 integration (`e6daa96`..`94a75e3`) re-ran the
+**complete** set serially on `94a75e3` — compile, `run_tests`, M2, the three
+probes, `probe_leak` (`TAT2_NO_DEN_PROBE=1`), E2E 264/264, `make audit` and
+`make texture-cap-check` — plus the five new W5 standalone tests
+(`test_stair_walk` 7/7, `test_roof_collision` 27/27, `test_w5b_materials` 27/27,
+`test_audio_lifecycle` 13/13, `test_hud_gem_compass` 11/11). Evidence:
+[`docs/reports/w5-integration.md`](docs/reports/w5-integration.md). The perf
+matrix and a full editor open are still unmeasured (thermal gate waived by the
+user, but no parallel Godot).
 
 Anything below these numbers is a regression. Do not re-baseline silently; find
 the cause or record it.

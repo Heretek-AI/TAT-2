@@ -371,6 +371,35 @@ func _run() -> void:
 		"M2.8 Disguise Lockpicking (5.0/s) & GuardViewCone (10.0/s) decay verified",
 		"M2.8 Disguise failed: rates=" + str([r_base, r_lock, r_cone, r_both]) + " lp=" + str(lp_flag_ok) + " no_cone=" + str(no_cone_ok) + "/" + str(no_cone_drained) + " cone=" + str(cone_drain_ok) + "/" + str(cone_drained))
 
+	# 9. RE-F-11: the authored synced takedown pair plays on the visible 3P rig.
+	# The attacker half must be the stealth Atk montage (the same pair as the
+	# guard's Vic half), the rig must become visible for the montage, a
+	# third-person camera must take over, and stopping must restore first person.
+	var td_skel: Skeleton3D = player.call("_tp_crank_body_skel") as Skeleton3D
+	var mesh_root: Node3D = player.get("mesh_root") as Node3D
+	var cam_node: Camera3D = player.get("cam") as Camera3D
+	var td_atk: String = str(ThiefScript.get_script_constant_map().get("TAKEDOWN_ATK_CLIP", ""))
+	var td_playing: bool = false
+	var td_visible: bool = false
+	var td_cam_ok: bool = false
+	var td_restored: bool = false
+	if td_skel != null and mesh_root != null:
+		player.call("_tp_takedown_atk_start", null)
+		var tp_player: AnimationPlayer = mesh_root.find_child("TPTakedownPlayer", true, false) as AnimationPlayer
+		td_playing = tp_player != null and tp_player.current_animation == td_atk
+
+		td_visible = mesh_root.visible and bool(player.get("_tp_takedown_presenting"))
+		var td_cam: Camera3D = player.get_node_or_null("TakedownCam") as Camera3D
+		td_cam_ok = td_cam != null and td_cam.current and cam_node != null and not cam_node.current
+		player.call("_tp_takedown_stop")
+		var leftover_cam: Camera3D = player.get_node_or_null("TakedownCam") as Camera3D
+		td_restored = not bool(player.get("_tp_takedown_presenting")) and not mesh_root.visible \
+			and cam_node != null and cam_node.current \
+			and (leftover_cam == null or not leftover_cam.current)
+	_check(td_skel != null and td_playing and td_visible and td_cam_ok and td_restored,
+		"M2.10 synced takedown plays on the visible 3P rig (" + td_atk + ") and restores first person",
+		"M2.10 takedown presentation failed: skel=" + str(td_skel) + " clip=" + str(td_playing) + " visible=" + str(td_visible) + " cam=" + str(td_cam_ok) + " restored=" + str(td_restored))
+
 	arena.queue_free()
 	await process_frame
 	# Same process-lifetime teardown as run_tests: audio playbacks, VFX/weather

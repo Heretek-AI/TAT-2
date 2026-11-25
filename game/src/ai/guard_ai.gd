@@ -33,6 +33,21 @@ const CLIP_GROUND_SPEED: Dictionary = {
 	"suspicious_walk": 2.5,
 	"alert_run": 7.6,
 }
+## Per-clip overrides where one role resolves to a different clip than the
+## measured club/Hauntstable set above (RE-F-13). Values are the authored root
+## travel / clip length x the 1.16 rig scale, measured from each GLB:
+## lantern run __F 673.4 cm / 1.450 s = 4.64 m/s -> 5.39 m/s world, so the
+## shared 7.6 constant clamped playback to 0.35 and the legs cycled at ~1.9 m/s
+## under a 2.5 m/s body. `..._Run_F` has a zero-length root track (in-place),
+## so it must never be rate-scaled.
+const CLIP_GROUND_SPEED_BY_CLIP: Dictionary = {
+	"AN_GuardEnforcer_Lantern_Alert_Run__F": 5.39,
+	"AN_GuardEnforcer_Lantern_Alert_Run_F": 0.0,
+}
+## Authored melee hit window source: the AnimSequence carries the 9 overlapping
+## CombatHitbox states (0.920-1.170 s of a 2.133 s swing) while the played
+## _Montage sibling repeats only the audio/VO events (RE-F-06/RE-F-12).
+const AnimNotifyScript = preload("res://src/player/anim_notify.gd")
 const SIGHT_RANGE: float = 20.0 # AIC_GuardBase Fresh SightRadius 2000cm
 const LOSE_SIGHT_RANGE: float = 30.0 # Bouncer/Hauntstable Fresh LoseSightRadius 3000cm (GuardBase Fresh=2500, see report)
 const HEARING_RANGE: float = 25.0 # AIC_GuardBase TATAISenseConfig_Hearing.HearingRange 2500cm
@@ -237,6 +252,9 @@ var _anim_lib: RefCounted
 var _anim_weapon: String = "club"
 var _use_real_anims: bool = false
 var _attack_anim_lock: float = 0.0
+## Authored hitbox clock for the swing in flight (null outside a swing).
+var _attack_clock = null
+var _attack_clip: String = ""
 var _slip_anim: bool = false
 var _takedown_vic_anim: bool = false
 
@@ -576,6 +594,67 @@ func _play_guard_attack() -> void:
 	_takedown_vic_anim = false
 	anim_player.speed_scale = 1.0
 	anim_player.play(key, 0.15)
+	# RE-F-12: the swing owns the damage window. Arm the authored CombatHitbox
+	# states (the _Montage sibling has none, so the clock resolves the sequence)
+	# and let _tick_attack_hit_window apply MELEE_DAMAGE when the club connects.
+	# build_player names the animation after the role ("attack"), so the source
+	# clip name for the notify lookup comes from the same weapon table.
+	_attack_clock = AnimNotifyScript.new()
+	_attack_clip = key
+	if int(_attack_clock.arm(_attack_source_clip())) == 0:
+		# No authored hitbox for this clip: keep the legacy instant hit rather
+		# than silently dropping damage, and say so (a manifest/meta drift bug).
+		push_warning("GuardMelee: no authored CombatHitbox for " + key + "; falling back to instant damage")
+		_attack_clock = null
+		_apply_guard_melee_hit()
+
+
+## Authored manifest clip for a role in this weapon set. The animation library
+## renames retargeted animations to role keys, so `player.current_animation`
+## cannot be used for anims_meta lookups (notify windows, per-clip speeds).
+func _source_clip_for_role(role: String) -> String:
+	var table: Dictionary = GuardAnimLib.CLUB_CLIPS
+	if _anim_weapon == "lantern":
+		table = GuardAnimLib.LANTERN_CLIPS
+	elif _anim_weapon == "hauntstable":
+		table = GuardAnimLib.HA_CLIPS
+	for nm: Variant in (table.get(role, []) as Array):
+		if AnimNotifyScript.authored_length(str(nm)) > 0.0:
+			return str(nm)
+	return ""
+
+
+## Authored manifest clip for the "attack" role (notify lookup).
+func _attack_source_clip() -> String:
+	return _source_clip_for_role("attack")
+
+
+## Applies the authored melee contact if the player is still inside the UE
+## DamageRadius (GA_MeleeRangedAttack 100 cm). Called from the notify poll, so
+## the hit lands at 0.92-1.17 s of the 2.13 s club swing instead of frame 0.
+func _apply_guard_melee_hit() -> void:
+	if not is_inside_tree():
+		return
+	var player := _nearest_player(get_tree().get_nodes_in_group("player"))
+	if player == null or not is_instance_valid(player):
+		return
+	if global_position.distance_to(player.global_position) > MELEE_RADIUS:
+		return
+	if player.has_method("take_damage"):
+		player.take_damage(MELEE_DAMAGE)
+
+
+func _tick_attack_hit_window() -> void:
+	if _attack_clock == null:
+		return
+	if not _anim_can_play() or anim_player.current_animation != _attack_clip:
+		_attack_clock = null
+		return
+	var window: Vector2 = _attack_clock.poll(anim_player.current_animation_position)
+	if window == Vector2.ZERO:
+		return
+	_apply_guard_melee_hit()
+	_attack_clock = null # one contact per swing, like the montage's single hitbox set
 
 
 ## Plays the MagicSlime slip montage once (UE role "slip":
@@ -593,6 +672,7 @@ func play_slip() -> void:
 	_slip_anim = true
 	_takedown_vic_anim = false
 	_attack_anim_lock = 0.0
+	_attack_clock = null # a cancelled swing must not land after the state changed
 	anim_player.speed_scale = 1.0
 	anim_player.play(key, 0.2)
 
@@ -615,6 +695,7 @@ func play_takedown_vic() -> void:
 	_takedown_vic_anim = true
 	_slip_anim = false
 	_attack_anim_lock = 0.0
+	_attack_clock = null # a cancelled swing must not land after the state changed
 	anim_player.speed_scale = 1.0
 	anim_player.play(key, 0.2)
 
@@ -627,6 +708,7 @@ func _on_guard_anim_finished(anim_name: StringName) -> void:
 		_slip_anim = false
 		_takedown_vic_anim = false
 		_attack_anim_lock = 0.0
+		_attack_clock = null # a cancelled swing must not land after the state changed
 		return
 	if _slip_anim:
 		_slip_anim = false
@@ -641,6 +723,7 @@ func _on_guard_anim_finished(anim_name: StringName) -> void:
 	var attack_key := String(_anim_lib.clip_for_role("attack"))
 	if attack_key != "" and String(anim_name) == attack_key:
 		_attack_anim_lock = 0.0
+		_attack_clock = null
 
 
 ## Alertness -> ST_Guard / clip_for_state state name. KNOCKED_OUT never
@@ -670,6 +753,7 @@ func _update_guard_anim(delta: float) -> void:
 	if not _use_real_anims or not _anim_can_play():
 		_update_procedural_anim(delta)
 		return
+	_tick_attack_hit_window()
 	if _slip_anim or _takedown_vic_anim:
 		return
 	if state == Alertness.KNOCKED_OUT:
@@ -701,7 +785,10 @@ func _update_guard_loco_playback(role: String, moving: bool, delta: float) -> vo
 	_play_guard_clip(role)
 	if not _anim_can_play():
 		return
-	var clip_speed: float = float(CLIP_GROUND_SPEED.get(role, 0.0))
+	# Per-clip override first: one role can resolve to different clips per weapon
+	# set (RE-F-13), and the measured speed belongs to the clip, not the role.
+	var source_clip: String = _source_clip_for_role(role)
+	var clip_speed: float = float(CLIP_GROUND_SPEED_BY_CLIP.get(source_clip, CLIP_GROUND_SPEED.get(role, 0.0)))
 	if not moving or clip_speed <= 0.0:
 		anim_player.speed_scale = 1.0
 		return
@@ -1351,8 +1438,9 @@ func _move_ai(delta: float, player: CharacterBody3D) -> void:
 				target = player.global_position
 				spd = get_state_speed()
 				if global_position.distance_to(player.global_position) <= MELEE_RADIUS and attack_cooldown <= 0.0:
-					if player.has_method("take_damage"):
-						player.take_damage(MELEE_DAMAGE)
+					# RE-F-12: the swing starts here; damage is applied by
+					# _tick_attack_hit_window inside the authored 0.92-1.17 s
+					# CombatHitbox window, not on this frame.
 					_play_guard_attack()
 					attack_cooldown = MELEE_COOLDOWN
 
@@ -1635,6 +1723,7 @@ func knock_out(duration_override: float = -1.0) -> void:
 	_slip_anim = false
 	_takedown_vic_anim = false
 	_attack_anim_lock = 0.0
+	_attack_clock = null # a cancelled swing must not land after the state changed
 	if visual_root == null:
 		return
 	if _use_real_anims and _anim_can_play():

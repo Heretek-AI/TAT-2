@@ -9,6 +9,7 @@ const LevelLoaderScript := preload("res://src/core/level_loader.gd")
 const OSERendererScript := preload("res://src/core/ose_renderer.gd")
 const SmokeProjectileScript := preload("res://src/player/smoke_projectile.gd")
 const SurfaceResolver := preload("res://src/stealth/surface_resolver.gd")
+const AnimNotify = preload("res://src/player/anim_notify.gd")
 
 # Real ThiefNisha meshes (BP_Player_Thief_Spider skeletal components -> GLB;
 # sources in extracted/json/Character/Player/BP_Player_Thief_Spider.json).
@@ -165,8 +166,26 @@ const FAIRY_FAIL_RADIUS_M: float = 8.0 # P2 dynamic fail radius: blocked-pickpoc
 const GRAPPLE_MAX_CHARGES: int = 4 # BP_Hotwire_Tool.MaxAmmo
 const MANTLE_MAX_HEIGHT_M: float = 4.0 # BP_Player_Base._mantleSettings.MaxHeight 400cm
 const MANTLE_MAX_ANGLE_DEG: float = 25.0 # BP_Player_Base._mantleSettings.MaxAngleFacing
+## Synced takedown pair (RE-F-11). Both halves are the same authored pair and
+## both are 3.500 s: AN_StealthTakedown_GuardEnforcer__Atk_Montage is the
+## thief half, __Vic_Montage the guard half (guard_ai.gd role "takedown_vic",
+## which already prefers it). The old attacker clip was the BlackJack
+## ..._GuardEnforcer_FromBehind_Montage (4.234 s), a different pair with no
+## victim half, so the two rigs never shared a choreography.
+const TAKEDOWN_ATK_CLIP: String = "AN_StealthTakedown_GuardEnforcer__Atk_Montage"
+const TAKEDOWN_VIC_CLIP: String = "AN_StealthTakedown_GuardEnforcer__Vic_Montage"
+const TAKEDOWN_ATK_ROLE: String = "takedown_atk_stealth_3p"
+## Authored blackjack light swing: CombatHitbox states 0.280-0.500 s of a
+## 0.667 s clip (anims_meta.json). The KO/knockdown is applied at the authored
+## contact, not on frame 0.
+const BLACKJACK_SWING_CLIP: String = "AN_BlackJack_Attack_Light__Slash_R_01"
+const BLACKJACK_REACH_M: float = 2.4 # same reach _try_blackjack validates at swing start
 const WALL_CLIMB_SPEED: float = 2.5 # BP_Player_Base._wallClimbSettings.WallClimbDashSpeed 250cm/s
 const WALL_CLIMB_ACCEL: float = 12.0 # BP_Player_Base._wallClimbSettings.WallClimbDashAcceleration 1200cm/s2
+## Frames-after-crest window in which a finished wall climb may hand off to the
+## authored ledge->mantle pose (AN_Climb_Ledge_ToMantle). One physics frame of
+## margin at 60 Hz plus the vertical rise of a crest; not an authored constant.
+const WALL_CLIMB_CREST_GRACE_SEC: float = 0.12
 # Documented gameplay fallback: CT_StaminaSystem.StaminaPerSecond.Climb.Base stores 0.0;
 # 5.0/s matches StaminaPerSecond.Sprint so wall-climb consumes stamina per M2 scope.
 const CLIMB_STAMINA_BURN_FALLBACK: float = 5.0
@@ -353,6 +372,20 @@ var _mantle_start: Vector3 = Vector3.ZERO
 var _mantle_end: Vector3 = Vector3.ZERO
 var _mantle_t: float = 0.0
 var _mantle_clip_role: String = "mantle_100"
+## Ledge->mantle handoff (RE-F-14): a wall climb that ends at the crest leaves
+## this short grace so try_auto_mantle can select the authored
+## AN_Climb_Ledge_ToMantle pose instead of the height-band mantle clip.
+var _climb_crest_grace: float = 0.0
+## Authored-hit-window state (RE-F-12). The blackjack KO waits for the swing's
+## CombatHitbox contact instead of landing on frame 0.
+var _bj_pending: Array[Dictionary] = []
+## 3P takedown presentation (RE-F-11): the authored grapple plays on the real
+## 3P body, which is otherwise hidden in first person, under a temporary
+## third-person camera for the montage length.
+var _tp_takedown_ttl: float = 0.0
+var _tp_takedown_presenting: bool = false
+var _tp_takedown_cam: Camera3D = null
+var _mesh_root_prev_visible: bool = false
 ## W5A step-up: rise committed this frame (0 when none) and the pending camera
 ## offset the eye still owes (eased out so a riser does not jolt the view).
 var _step_rise_this_frame: float = 0.0
@@ -633,6 +666,7 @@ func _enter_downed() -> void:
 	is_sprinting = false
 	is_grappling = false
 	_exit_wire_states()
+	_bj_pending.clear() # a queued KO must not land after the player is down/captured
 	_tp_takedown_stop() # P2: the attacker montage kept playing over the KO loop; stop it on downed.
 	downed_started.emit(_downed_duration)
 
@@ -1290,6 +1324,12 @@ func _physics_process(delta: float) -> void:
 		is_sprinting = want_sprint and stamina > SPRINT_STOP_STAMINA
 
 	var climbing_now: bool = _tick_wall_climb(delta, wish)
+	# RE-F-14: remember that the climb ended airborne (a crest, not a landing)
+	# so try_auto_mantle below can pick the authored ledge->mantle clip.
+	if _was_wall_climbing and not climbing_now and not is_on_floor():
+		_climb_crest_grace = WALL_CLIMB_CREST_GRACE_SEC
+	_was_wall_climbing = climbing_now
+	_climb_crest_grace = maxf(0.0, _climb_crest_grace - delta)
 	var speed: float = walk_speed
 	if is_crouching:
 		speed = crouch_speed
@@ -1983,6 +2023,14 @@ func try_auto_mantle() -> bool:
 		_mantle_clip_role = "mantle_250"
 	else:
 		_mantle_clip_role = "mantle_300"
+	# RE-F-14: the authored ledge->mantle handoff and the crouch mantle are
+	# real 1P clips that no code path could select. Prefer them when the state
+	# they were authored for is the one that triggered the mantle.
+	if _climb_crest_grace > 0.0:
+		_mantle_clip_role = "climb_to_mantle" # AN_Climb_Ledge_ToMantle
+	elif is_crouching:
+		_mantle_clip_role = "vault" # AN_CrouchMantle_100
+	_climb_crest_grace = 0.0
 	_fp_play_action(_mantle_clip_role)
 	return true
 
@@ -2718,7 +2766,6 @@ func _try_blackjack(preferred: Node3D = null) -> void:
 		var swing_pos: Vector3 = head.global_position + swing_dir * 0.7
 		VfxManager.spawn_blackjack_swing(get_parent(), swing_pos, swing_dir)
 	_play_blackjack_camera_punch()
-	_tp_takedown_atk_start()
 	var base_dmg: float = GameData.eval_curve("CT_Tool_Blackjack", "BlackjackDamageLight", 1.0, BLACKJACK_LIGHT_DMG)
 	var heavy_dmg: float = GameData.eval_curve("CT_Tool_Blackjack", "BlackjackDamageHeavy", 1.0, BLACKJACK_HEAVY_DMG)
 	if heavy_dmg <= 0.0:
@@ -2745,10 +2792,7 @@ func _try_blackjack(preferred: Node3D = null) -> void:
 			var behind_dot: float = guard_back.dot(to_player)
 			if behind_dot > 0.25:
 				final_dmg = heavy_dmg
-		g.take_knockout(final_dmg)
-		if int(g.get("state")) == 5: # count/noise only on transitions into KO
-			GameState.takedowns += 1
-			NoiseBus.emit_noise(global_position, 4.5, self, "takedown")
+		_queue_blackjack_hit(guard_node, final_dmg)
 		return
 
 
@@ -2777,14 +2821,17 @@ func _play_blackjack_camera_punch() -> void:
 	_bj_punch_tween.parallel().tween_property(cam, "rotation:z", base_roll, 0.14)
 
 
-## Takedown attacker handoff (thief 3P form): plays the BlackJack stealth
-## montage vs GuardEnforcer on the firing thief rig (mesh_root 3P skeleton),
-## synced with the guard victim montage (guard_ai play_takedown_vic).
-## Camera punch + takedown counter + noise are kept by the caller; this is
-## the animation half only. No-op (loud UE-path warning, never a crash) when
-## the 3P body failed to load, the manifest lacks the clip, or the skeletons
-## share no bones -- the instant-KO + punch path still applies.
-func _tp_takedown_atk_start() -> void:
+## Takedown attacker handoff (thief 3P form): plays the stealth-takedown
+## attacker montage on the firing thief rig (mesh_root 3P skeleton), synced
+## with the guard victim montage (guard_ai play_takedown_vic, role
+## "takedown_vic"). Both halves are AN_StealthTakedown_GuardEnforcer__Atk/_Vic
+## (3.500 s each, same authored pair -- RE-F-11). Camera punch + takedown
+## counter + noise are kept by the caller; this is the animation half only.
+## The 3P body is made visible for the montage under a temporary third-person
+## camera. No-op (loud UE-path warning, never a crash) when the 3P body failed
+## to load, the manifest lacks the clip, or the skeletons share no bones -- the
+## strike path still applies.
+func _tp_takedown_atk_start(target: Node3D = null) -> void:
 	_tp_takedown_stop() # P2: kill a stale attacker montage before replaying so swings never layer.
 	var skel := _tp_crank_body_skel()
 	if skel == null:
@@ -2799,22 +2846,28 @@ func _tp_takedown_atk_start() -> void:
 		host.add_child(player)
 		player.root_node = player.get_path_to(host)
 	var clip_name := ""
-	if player.has_animation("AN_BlackJack_StealthTakedown__GuardEnforcer_FromBehind_Montage"):
-		clip_name = "AN_BlackJack_StealthTakedown__GuardEnforcer_FromBehind_Montage"
+	if player.has_animation(TAKEDOWN_ATK_CLIP):
+		clip_name = TAKEDOWN_ATK_CLIP
 	else:
 		var lib = ThiefAnimLib.new()
 		if not lib.setup("club", skel):
-			push_warning("BlackjackTakedown3P: no 3P takedown player, skeleton bind failed (UE clip TAT/Content/Art/Animation/Thief/Anim/Gear/BlackJack/AN_BlackJack_StealthTakedown__GuardEnforcer_FromBehind_Montage)")
+			push_warning("BlackjackTakedown3P: no 3P takedown player, skeleton bind failed (UE clip TAT/Content/Art/Animation/Base/Anim/Synced/AN_StealthTakedown_GuardEnforcer__Atk_Montage)")
 			return
-		clip_name = str(lib.ensure_tp_takedown_atk_clip(player))
+		clip_name = str(lib.ensure_tp_takedown_atk_clip(player, TAKEDOWN_ATK_ROLE))
 	if clip_name == "" or not player.has_animation(clip_name):
-		push_warning("BlackjackTakedown3P: takedown Atk clip no-op on 3P rig, manifest lacks clip or zero shared bones (UE clip TAT/Content/Art/Animation/Thief/Anim/Gear/BlackJack/AN_BlackJack_StealthTakedown__GuardEnforcer_FromBehind_Montage)")
+		push_warning("BlackjackTakedown3P: takedown Atk clip no-op on 3P rig, manifest lacks clip or zero shared bones (UE clip TAT/Content/Art/Animation/Base/Anim/Synced/AN_StealthTakedown_GuardEnforcer__Atk_Montage)")
 		return
 	player.play(clip_name, FP_ANIM_BLEND)
+	_tp_takedown_present(player.get_animation(clip_name).length, target)
 
 
 func _process(delta: float) -> void:
 	_update_first_person(delta)
+	# Authored notify timing (RE-F-06/RE-F-12) and the takedown presentation
+	# (RE-F-11) are wall-clock/player-position driven, not physics driven, so
+	# they keep the authored seconds when the physics rate differs.
+	_tick_pending_melee(delta)
+	_tick_takedown_presentation(delta)
 	# P2 smoke preview: 32-ray ballistic sweep throttled to 10 Hz (was every
 	# rendered frame; same PROP_SCAN_INTERVAL discipline as prop highlight).
 	_smoke_preview_accum += delta
@@ -3547,7 +3600,7 @@ func _tp_crank_stop() -> void:
 	_tp_crank_reset_handle()
 	if mesh_root == null or not is_instance_valid(mesh_root):
 		return
-	for n in mesh_root.find_children("*", "TPCrankPlayer", true, false):
+	for n in mesh_root.find_children("TPCrankPlayer", "AnimationPlayer", true, false):
 		var player := n as AnimationPlayer
 		if player != null and player.is_playing():
 			player.stop()
@@ -3555,14 +3608,126 @@ func _tp_crank_stop() -> void:
 
 ## P2 TPTakedownPlayer never stopped: overlapping crank+takedown montages
 ## fought on the same rig. Stops the attacker montage (never a crash when the
-## rig failed to load; UE clip TAT/Content/Art/Animation/Thief/Anim/Gear/BlackJack/AN_BlackJack_StealthTakedown__GuardEnforcer_FromBehind_Montage).
+## rig failed to load) and restores the first-person presentation (RE-F-11).
 func _tp_takedown_stop() -> void:
+	_tp_takedown_restore()
 	if mesh_root == null or not is_instance_valid(mesh_root):
 		return
-	for n in mesh_root.find_children("*", "TPTakedownPlayer", true, false):
+	for n in mesh_root.find_children("TPTakedownPlayer", "AnimationPlayer", true, false):
 		var player := n as AnimationPlayer
 		if player != null and player.is_playing():
 			player.stop()
+
+
+## Presents the authored grapple: the 3P body becomes visible for the montage
+## and a temporary over-the-shoulder camera replaces the first-person view, so
+## the synced attacker/victim choreography is actually on screen (RE-F-11).
+func _tp_takedown_present(duration: float, target: Node3D = null) -> void:
+	_tp_takedown_ttl = maxf(duration, 0.5)
+	_tp_takedown_presenting = true
+	if mesh_root != null and is_instance_valid(mesh_root):
+		_mesh_root_prev_visible = mesh_root.visible
+		mesh_root.visible = true
+	if fp_rig != null and is_instance_valid(fp_rig):
+		fp_rig.visible = false
+	if _tp_takedown_cam == null or not is_instance_valid(_tp_takedown_cam):
+		_tp_takedown_cam = Camera3D.new()
+		_tp_takedown_cam.name = "TakedownCam"
+		_tp_takedown_cam.fov = 62.0
+		_tp_takedown_cam.top_level = true
+		add_child(_tp_takedown_cam)
+	# Frame the pair, not just the thief: behind-right of the player, aimed at
+	# the midpoint between attacker and victim. Both montage halves are
+	# retargeted in place (the authored closing travel is stripped, RE-F-08),
+	# so centring the shot is what keeps the grapple readable.
+	var focus: Vector3 = global_position + Vector3.UP * 1.0
+	if target != null and is_instance_valid(target):
+		focus = (global_position + target.global_position) * 0.5 + Vector3.UP * 1.0
+	var fwd: Vector3 = -global_transform.basis.z
+	fwd.y = 0.0
+	if fwd.length() < 0.05:
+		fwd = Vector3.FORWARD
+	fwd = fwd.normalized()
+	var side: Vector3 = global_transform.basis.x
+	_tp_takedown_cam.global_position = focus - fwd * 2.8 + side * 0.9 + Vector3.UP * 0.9
+	_tp_takedown_cam.look_at(focus)
+	if cam != null and is_instance_valid(cam):
+		cam.current = false
+	_tp_takedown_cam.current = true
+
+
+func _tp_takedown_restore() -> void:
+	if not _tp_takedown_presenting:
+		_tp_takedown_ttl = 0.0
+		return
+	_tp_takedown_presenting = false
+	_tp_takedown_ttl = 0.0
+	if _tp_takedown_cam != null and is_instance_valid(_tp_takedown_cam):
+		_tp_takedown_cam.current = false
+		_tp_takedown_cam.queue_free()
+		_tp_takedown_cam = null
+	if cam != null and is_instance_valid(cam):
+		cam.current = true
+	if mesh_root != null and is_instance_valid(mesh_root):
+		mesh_root.visible = _mesh_root_prev_visible
+	if fp_rig != null and is_instance_valid(fp_rig):
+		fp_rig.visible = true
+
+
+func _tick_takedown_presentation(delta: float) -> void:
+	if not _tp_takedown_presenting:
+		return
+	_tp_takedown_ttl = maxf(0.0, _tp_takedown_ttl - delta)
+	if _tp_takedown_ttl <= 0.0:
+		_tp_takedown_restore()
+
+
+## Authored blackjack contact (RE-F-12). Queues the KO for the swing's authored
+## CombatHitbox window instead of applying it the frame the key is pressed.
+func _queue_blackjack_hit(target: Node3D, dmg: float) -> void:
+	var at: float = AnimNotify.hit_time(BLACKJACK_SWING_CLIP)
+	if at <= 0.0:
+		# No authored window in the metadata: keep the legacy instant KO rather
+		# than silently dropping the takedown (a manifest/meta drift bug).
+		push_warning("Blackjack: no authored CombatHitbox for " + BLACKJACK_SWING_CLIP + "; applying damage on contact frame")
+		_apply_blackjack_hit(target, dmg)
+		return
+	_bj_pending.append({"guard": target, "dmg": dmg, "clip": BLACKJACK_SWING_CLIP, "at": at, "elapsed": 0.0})
+
+
+func _tick_pending_melee(delta: float) -> void:
+	if _bj_pending.is_empty():
+		return
+	var remaining: Array[Dictionary] = []
+	for entry: Dictionary in _bj_pending:
+		entry["elapsed"] = float(entry.get("elapsed", 0.0)) + delta
+		var clip_pos: float = -1.0
+		if fp_anim_player != null and fp_anim_player.is_inside_tree() \
+				and fp_anim_player.current_animation == str(entry.get("clip", "")):
+			clip_pos = fp_anim_player.current_animation_position
+		var at: float = float(entry.get("at", 0.0))
+		if clip_pos >= at or float(entry["elapsed"]) >= at:
+			var target: Variant = entry.get("guard", null)
+			if target is Node3D:
+				_apply_blackjack_hit(target as Node3D, float(entry.get("dmg", 0.0)))
+		else:
+			remaining.append(entry)
+	_bj_pending = remaining
+
+
+func _apply_blackjack_hit(target: Node3D, dmg: float) -> void:
+	if not is_instance_valid(target) or not target.has_method("take_knockout"):
+		return
+	if global_position.distance_to(target.global_position) > BLACKJACK_REACH_M:
+		return # the guard stepped out of reach during the wind-up: whiff
+	target.call("take_knockout", dmg)
+	if int(target.get("state")) == 5: # count/noise only on transitions into KO
+		# Start the attacker half on the same frame the victim's montage starts
+		# (take_knockout -> knock_out -> play_takedown_vic above), so both halves
+		# of the synced pair run from t=0 together (RE-F-11).
+		_tp_takedown_atk_start(target)
+		GameState.takedowns += 1
+		NoiseBus.emit_noise(global_position, 4.5, self, "takedown")
 
 
 ## Small procedural swing offset for the bone-attached tool when no real

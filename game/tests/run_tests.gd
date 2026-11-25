@@ -5582,6 +5582,11 @@ func _initialize() -> void:
 	await physics_frame
 	var w2_behind_prompt: bool = str(w2_player.call("get_look_secondary_prompt")) == "[F] [HOLD] TAKEDOWN"
 	w2_player.call("_try_blackjack", w2_take_guard)
+	# RE-F-12: the KO now lands at the authored blackjack contact (0.390 s into
+	# the 0.667 s swing, CombatHitbox 0.280-0.500 s), not on the key frame.
+	# Advance the notify clock deterministically instead of waiting wall-clock
+	# frames; the assertion (behind -> KO) is unchanged.
+	w2_player.call("_tick_pending_melee", 0.5)
 	var w2_behind_ko: bool = int(w2_take_guard.get("state")) == 5
 	var w2_front_guard: Node3D = (load("res://src/ai/guard_ai.gd") as GDScript).new() as Node3D
 	w2_front_guard.name = "Guard_W2Front"

@@ -8,6 +8,13 @@ extends Area3D
 ## Real loot-actor GLB (res://assets/ue/...glb from loot_actors.json). Empty
 ## keeps the legacy calling-card/note mesh (quest fallback path).
 @export var mesh_path: String = ""
+## Real carried-loot tool mesh (CarriedLootMeshData.ToolMesh from the loot
+## row); empty when the capture has no carried variant. The post-match/HUD
+## carried-loot art pass reads this, not the world mesh.
+@export var carry_mesh_path: String = ""
+## Authored DT_LootInfo row IsLargeCarry (large relics are visually carried
+## two-handed in the reference; the slot cost still follows loot_tier).
+@export var is_large_carry: bool = false
 ## Marker orientation, applied to the visual root.
 @export var mesh_rotation_deg: Vector3 = Vector3.ZERO
 ## Shown on the name label (major/quest); defaults to item_name when empty.
@@ -30,6 +37,7 @@ var fact_source_index: int = -1
 
 const INTERACTABLES_PATH := "res://data/generated/gameplay/interactables.json"
 const PersonalQuestScript := preload("res://src/quests/personal_quest.gd")
+const LootInventoryScript := preload("res://src/interact/loot_inventory.gd")
 
 static var _interactables: Dictionary = {}
 
@@ -215,6 +223,10 @@ func _collect_mesh_boxes(n: Node, parent_tr: Transform3D, boxes: Array) -> void:
 
 
 func _process(delta: float) -> void:
+	# A collected actor lingers for the authored pickup beat; freeze its idle
+	# spin so the beat reads as a pickup, not as a still-live world item.
+	if get_meta("collected", false):
+		return
 	if visual_root != null:
 		visual_root.rotate_y(delta * 1.4)
 
@@ -222,14 +234,10 @@ func _process(delta: float) -> void:
 ## P2 loot_item prompt fallback: quest loot used to fall through to the
 ## generic "[E] Steal %s" branch in thief_character (wrong verb for a
 ## contract relic the player must take). Quest items read Take; regular loot
-## keeps Steal.
+## keeps Steal. A full carried inventory reads the authored INVENTORY FULL
+## line (loot_inventory.gd) instead of an action that cannot complete.
 func get_interact_prompt() -> String:
-	var label: String = display_name if display_name != "" else item_name
-	if personal_quest_id != "":
-		return "[E] Take %s" % label
-	if is_quest_item:
-		return "[E] Take %s" % label
-	return "[E] Steal %s" % label
+	return LootInventoryScript.prompt_for(self)
 
 
 ## Interaction LOS point (W2): named loot is grounded on its mesh AABB, so the
@@ -238,19 +246,25 @@ func get_interact_point() -> Vector3:
 	return global_position + Vector3.UP * 0.4
 
 
-func interact(_actor: Node) -> void:
+func interact(actor: Node) -> void:
 	if get_meta("collected", false):
 		return
 	if personal_quest_id != "":
 		_interact_personal_quest()
 		return
-	set_meta("collected", true)
-	GameState.add_loot(1, value, is_quest_item, objective_id)
+	# Carried inventory (W7S-S2): capacity first, then the gross counter and the
+	# carried entry in one place (loot_inventory.carry). A refusal leaves the
+	# world actor untouched and shows the authored INVENTORY FULL line.
+	var carried: Dictionary = LootInventoryScript.carry(self, actor)
+	if not bool(carried.get("ok", false)):
+		return
 	if objective_id.begins_with("set_item_"):
 		GameState.advance_set_objective()
 	for fact_id: String in fact_ids:
 		GameState.grant_fact(fact_id, fact_params, fact_source, fact_source_item_tag, fact_source_index)
-	queue_free()
+	# The actor remains visible for the authored pickup beat, out of every
+	# gameplay group, then frees itself (loot_inventory.begin_linger).
+	LootInventoryScript.begin_linger(self)
 
 
 ## Theban Owl path: a personal item, not loot. Advance the chain through the

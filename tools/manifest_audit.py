@@ -144,6 +144,11 @@ PRODUCERS = (
         ("gen:gameplay",),
     ),
     Producer(
+        "tools/parse_settings.py",
+        "python3 tools/parse_settings.py",
+        ("gen:gameplay/loot_settings.json",),
+    ),
+    Producer(
         "tools/parse_materials.py",
         "python3 tools/parse_materials.py",
         (

@@ -99,6 +99,18 @@ def text_of(node) -> str:
     return ""
 
 
+def money_reward(row: dict) -> int:
+    """Sum authored TATQuestRewardType_Money Rewards entries."""
+    total = 0
+    for entry in row.get("Rewards") or []:
+        if not isinstance(entry, dict):
+            continue
+        rtype = str((entry.get("RewardType") or {}).get("ObjectName", ""))
+        if "RewardType_Money" in rtype:
+            total += int(entry.get("Quantity", 0))
+    return total
+
+
 def load_contract_rows() -> tuple[dict, str]:
     for cand in (CONTRACTS_TABLE, CONTRACTS_FALLBACK):
         if cand.exists():
@@ -228,6 +240,7 @@ def main() -> None:
     contracts.sort(key=lambda c: c["order"])
 
     mission_durations: dict = {}
+    mission_rewards: dict = {}
     for map_id, (path, row_key) in MISSIONS.items():
         data = json.loads(path.read_text())
         row = (data.get("rows") or {}).get(row_key, {})
@@ -237,6 +250,12 @@ def main() -> None:
             float(row.get("MatchDurationsByDifficulty[2]", 0.0)),
         ]
         qg = row.get("QuestGraph") or {}
+        reward = money_reward(row)
+        mission_rewards[map_id] = {
+            "money": reward,
+            "source_table": str(path.relative_to(ROOT)),
+            "source_row": row_key,
+        }
         mission_durations[map_id] = {
             "durations": durations,
             "quest_graph_ue_path": str(qg.get("AssetPathName", ""))
@@ -244,6 +263,7 @@ def main() -> None:
             else "",
             "title_text": text_of(row.get("Title")),
             "description_text": text_of(row.get("Description")),
+            "reward_money": reward,
             "source_table": str(path.relative_to(ROOT)),
             "source_row": row_key,
         }
@@ -251,6 +271,8 @@ def main() -> None:
     for alias in ("jaspering", "jaspering_hall"):
         mission_durations[alias] = dict(mission_durations["ftue"])
         mission_durations[alias]["alias_of"] = "ftue"
+        mission_rewards[alias] = dict(mission_rewards["ftue"])
+        mission_rewards[alias]["alias_of"] = "ftue"
 
     mission_loot_goals: dict = {}
     for mission_id, qg_path in LOOT_GOAL_QUESTS.items():
@@ -262,6 +284,15 @@ def main() -> None:
                 f"WARN: {mission_id} loot goal ladder incomplete ({goals}); runtime fallback applies"
             )
 
+    # Authored money reward per contract, resolved from the mission row of its
+    # map (the contract row itself carries no Rewards entries). A map with no
+    # authored reward (Thieves' Den tutorial) stays 0; the runtime falls back to
+    # the shared authored mission reward only for unknown maps.
+    for contract in contracts:
+        reward_rec = mission_rewards.get(str(contract.get("map_id", "")), {})
+        contract["reward_money"] = int(reward_rec.get("money", 0))
+        contract["reward_source"] = str(reward_rec.get("source_table", ""))
+
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(
         json.dumps(
@@ -269,6 +300,7 @@ def main() -> None:
                 "source_table": source_rel,
                 "contracts": contracts,
                 "mission_durations": mission_durations,
+                "mission_rewards": mission_rewards,
                 "mission_loot_goals": mission_loot_goals,
             },
             indent=2,

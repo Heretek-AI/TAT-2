@@ -9,12 +9,14 @@ extends Area3D
 ## Opening is one-shot and instant (no Interact duration is authored on the
 ## container Blueprints). Major/minor containers spawn exactly one loot item
 ## from their mapped bucket, picked deterministically from the marker
-## position; the secret stash (kind "none", no spawn bucket) opens with no
-## loot — its loot arrives as separately placed actors.
+## position; the secret stash (kind "stash", no spawn bucket) is a one-use
+## deposit-all — its own loot arrives as separately placed actors.
 
 signal lockpick_updated(active: bool, progress: float, lock_level: int)
 
 const LootScript := preload("res://src/interact/loot_item.gd")
+const LootInventoryScript := preload("res://src/interact/loot_inventory.gd")
+const LootStashScript := preload("res://src/interact/loot_stash.gd")
 const LockableDoorScript := preload("res://src/interact/lockable_door.gd")
 const _VfxManager := preload("res://src/core/vfx_manager.gd")
 
@@ -102,6 +104,10 @@ static func marker_transform(entry: Dictionary) -> Transform3D:
 
 var container_class: String = ""
 var loot_tier: String = ""
+## Authored secret stash (containers.json kind "stash"): the trigger is a
+## one-use deposit-all, never a loot spawner.
+var is_stash: bool = false
+var stash_uses: int = 0
 var marker_pos: Vector3 = Vector3.ZERO
 var marker_basis: Basis = Basis.IDENTITY
 var slot_offset_cm: Vector3 = Vector3.ZERO
@@ -141,7 +147,7 @@ func get_track_duration() -> float:
 ## Must be called before add_child (like world_pickup.setup). Resolves the
 ## loot tier and first slot entry from containers.json; unknown classes and
 ## unreadable JSON fail closed to kind "none" (openable, no loot, nothing
-## invented).
+## invented); the stash class name still resolves to the deposit trigger.
 func configure(p_class: String, entry: Dictionary, p_index: int) -> void:
 	container_class = p_class
 	spawn_index = p_index
@@ -152,7 +158,10 @@ func configure(p_class: String, entry: Dictionary, p_index: int) -> void:
 	var rec: Variant = containers().get(p_class, null)
 	if rec is Dictionary:
 		var kind := str((rec as Dictionary).get("kind", "none"))
-		if kind == "major" or kind == "minor":
+		if kind == "stash":
+			is_stash = true
+			stash_uses = maxi(int((rec as Dictionary).get("stash_uses", 1)), 0)
+		elif kind == "major" or kind == "minor":
 			loot_tier = kind
 			var slots: Array = (rec as Dictionary).get("slot_entries", [])
 			if not slots.is_empty() and slots[0] is Dictionary:
@@ -168,6 +177,12 @@ func configure(p_class: String, entry: Dictionary, p_index: int) -> void:
 		loot_tier = "major"
 	elif loot_tier == "" and (p_class.find("MinorLoot") >= 0):
 		loot_tier = "minor"
+	# The secret stash class keeps working (deposit trigger) when containers.json
+	# is unreadable, with the one-use port default.
+	if p_class.find("LootStashInteractable") >= 0:
+		is_stash = true
+		if stash_uses <= 0:
+			stash_uses = LootStashScript.default_uses()
 	# Wire lock levels on vault/safe/major containers using DA_LockpickMinigameVariations.
 	var entry_lvl: int = int(entry.get("lock_level", 0))
 	if entry.get("locked") == true or entry_lvl > 0:
@@ -196,6 +211,8 @@ func _ready() -> void:
 
 
 func get_interact_prompt() -> String:
+	if is_stash:
+		return LootStashScript.prompt_for(stash_uses, LootInventoryScript.has_depositable())
 	if opened:
 		return "[Opened]"
 	if locked:
@@ -275,9 +292,14 @@ func _on_lockpick_finished(success: bool, actor: Node) -> void:
 
 
 ## One-shot open (after unlocking if locked). Major/minor containers spawn
-## exactly one loot item at the marker position plus the slot offset; kind
-## "none" (secret stash) only marks itself opened.
+## exactly one loot item at the marker position plus the slot offset; a stash
+## marker deposits the carried haul (one use) and spawns nothing.
 func interact(actor: Node) -> void:
+	# Stash triggers are deposit-all points, not containers: they stay usable
+	# while a use remains and never spawn loot.
+	if is_stash:
+		_deposit_stash(actor)
+		return
 	if opened:
 		return
 	if locked:
@@ -315,6 +337,22 @@ func interact(actor: Node) -> void:
 	_open_container()
 
 
+func _deposit_stash(actor: Node) -> void:
+	var was_open: bool = opened
+	opened = true
+	set_meta("opened", true)
+	var result: Dictionary = LootStashScript.deposit_all(self, stash_uses)
+	if bool(result.get("ok", false)):
+		stash_uses = int(result.get("uses_left", stash_uses))
+		return
+	# An empty/spent stash still opens (T2-19-B contract) and shows the authored
+	# line instead of silently doing nothing. No use is consumed.
+	if not was_open:
+		var hud_node: Node = _find_hud()
+		if hud_node != null and hud_node.has_method("show_toast"):
+			hud_node.call("show_toast", str(result.get("prompt", "")))
+
+
 func _open_container() -> void:
 	if opened:
 		return
@@ -338,6 +376,8 @@ func _open_container() -> void:
 			l.display_name = l.item_name
 			l.value = int((a as Dictionary).get("value", 75))
 			l.mesh_path = str((a as Dictionary).get("mesh_res", ""))
+			l.carry_mesh_path = str((a as Dictionary).get("carry_mesh_res", ""))
+			l.is_large_carry = bool((a as Dictionary).get("is_large_carry", false))
 			resolved = true
 	if not resolved:
 		# Labelled fallback (same policy as the mission loot wave): the

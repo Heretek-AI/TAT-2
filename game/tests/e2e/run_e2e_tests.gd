@@ -95,6 +95,19 @@ func _initialize() -> void:
 			h.require(false, "T4-BOOT", "Failed to load e2e_tier4_scenarios.gd")
 		await _settle_harness()
 
+	# W7S-S2 loot tier: one real Guildhall mission covering the carried
+	# inventory, stash deposit, authored capacity refusal, major-loot mesh and
+	# the escape payout. Runs alone with `--tier=s2`.
+	if tier_filter == "all" or tier_filter == "s2":
+		await _settle_harness()
+		var s2_scr: GDScript = load("res://tests/e2e/e2e_s2_loot.gd") as GDScript
+		if s2_scr != null:
+			var s2: RefCounted = s2_scr.new(h)
+			await s2.call("run")
+		else:
+			h.require(false, "S2-BOOT", "Failed to load e2e_s2_loot.gd")
+		await _settle_harness()
+
 	var fails: int = int(h.get("fails"))
 	var passed: int = int(h.get("passed"))
 	var total: int = int(h.get("total"))

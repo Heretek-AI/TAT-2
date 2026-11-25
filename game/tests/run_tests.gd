@@ -7113,6 +7113,30 @@ func _initialize() -> void:
 	else:
 		print("PASS: 88 Spider personal chain settle path (world-pin settle, mesh-bottom feet, authored yaw, guards, Chameleon no-op)")
 
+	# 89. W7S-S2 carried loot inventory: 12 slots / major 3 / quest 1, authored
+	# INVENTORY FULL refusal, one-use deposit-all stash, monotonic loot_value,
+	# the 1.0 s pickup linger, and the payout model (Original/Kept/Stashed/
+	# MoneyTaken, binary keep, £1,000 contract reward, stealth untouched, no
+	# difficulty multiplier). Producer provenance is asserted against the live
+	# extract when present and SKIPs loudly when extracted/ is absent.
+	var c89_problems: Array[String] = await _run_suite89(root)
+	if not c89_problems.is_empty():
+		printerr("FAIL: 89 W7S-S2 loot inventory: ", c89_problems)
+		fails += 1
+	else:
+		print("PASS: 89 W7S-S2 loot inventory (capacity, stash, linger, payout, provenance)")
+
+	# 90. W7S-S2 loot save v8 + major-loot mesh: save_schema/loot_schema stamps,
+	# strict payout normaliser (no unknown-key minting), idempotent bank_payout,
+	# pending-payout crash recovery, one-shot migration, and exactly one major
+	# loot mesh instance with the authored-off point light still off.
+	var c90_problems: Array[String] = await _run_suite90(root)
+	if not c90_problems.is_empty():
+		printerr("FAIL: 90 W7S-S2 loot save v8: ", c90_problems)
+		fails += 1
+	else:
+		print("PASS: 90 W7S-S2 loot save v8 (payout idempotency, migration, major mesh)")
+
 	# 12.6/12.7 process-lifetime caches must not outlive the run.
 	var am_node: Node = root.get_node_or_null("/root/AudioManager")
 	if am_node != null and am_node.has_method("cleanup_on_exit"):
@@ -7183,6 +7207,48 @@ func _run_suite88(host: Node) -> Array[String]:
 			problems.append(str(problem_v))
 	else:
 		problems.append("test_personal_quest_settle.run(host) returned no problem list")
+	return problems
+
+
+## Suite 89 helper (W7S-S2): carried inventory/stash/payout. Coroutine because
+## the 1.0 s actor-linger beat is measured with a real SceneTreeTimer.
+func _run_suite89(host: Node) -> Array[String]:
+	var problems: Array[String] = []
+	var script: GDScript = load("res://tests/test_w7s_loot_inventory.gd") as GDScript
+	if script == null:
+		problems.append("test_w7s_loot_inventory.gd did not load")
+		return problems
+	var runner: RefCounted = script.new() as RefCounted
+	if runner == null or not runner.has_method("run"):
+		problems.append("test_w7s_loot_inventory.gd has no run(host)")
+		return problems
+	var out: Variant = await runner.call("run", host)
+	if out is Array:
+		for problem_v: Variant in (out as Array):
+			problems.append(str(problem_v))
+	else:
+		problems.append("test_w7s_loot_inventory.run(host) returned no problem list")
+	return problems
+
+
+## Suite 90 helper (W7S-S2): save v8 + major-loot mesh. Coroutine for the
+## one-frame GLB instantiation before counting mesh/light nodes.
+func _run_suite90(host: Node) -> Array[String]:
+	var problems: Array[String] = []
+	var script: GDScript = load("res://tests/test_w7s_loot_save.gd") as GDScript
+	if script == null:
+		problems.append("test_w7s_loot_save.gd did not load")
+		return problems
+	var runner: RefCounted = script.new() as RefCounted
+	if runner == null or not runner.has_method("run"):
+		problems.append("test_w7s_loot_save.gd has no run(host)")
+		return problems
+	var out: Variant = await runner.call("run", host)
+	if out is Array:
+		for problem_v: Variant in (out as Array):
+			problems.append(str(problem_v))
+	else:
+		problems.append("test_w7s_loot_save.run(host) returned no problem list")
 	return problems
 ## W0a suite helper: long edge from a PNG IHDR (no decode).
 func _w82_png_long_edge(res_path: String) -> int:

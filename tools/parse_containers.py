@@ -6,9 +6,9 @@ container Blueprints mapped to kind/bucket/slot entries.
 Classes (234 markers across the normalized levels):
   BP_ChestTrunk_MajorLoot_C               89  kind major (major bucket + minor bonus spawner)
   BP_DisplayCaseA_MajorLoot_C             68  kind major
-  BP_LootStashInteractable_Secret_ThinWall_C 57  kind none (no spawn bucket;
+  BP_LootStashInteractable_Secret_ThinWall_C 57  kind stash (no spawn bucket;
       real meshes SM_Stash_ThinWallA_Base/DoorLeft/DoorRight/Glow live in the
-      level geometry; its loot arrives as separately placed actors)
+      level geometry; one-use deposit-all, its loot arrives as separately placed actors)
   BP_Storefront_DisplayCaseB_MinorLoot_C   6  kind minor
   BP_Storefront_DisplayCaseD_MinorLoot_C  14  kind minor
 
@@ -32,7 +32,7 @@ OUT = ROOT / "game" / "data" / "generated" / "gameplay" / "containers.json"
 CLASSES = {
     "Art/Environment/Props/Furniture/Containers/Chest/BP_ChestTrunk_MajorLoot.json": "major",
     "Art/Gameplay/MajorLootSafe/BP_DisplayCaseA_MajorLoot.json": "major",
-    "Gameplay/Loot/Actors/Stash/BP_LootStashInteractable_Secret_ThinWall.json": "none",
+    "Gameplay/Loot/Actors/Stash/BP_LootStashInteractable_Secret_ThinWall.json": "stash",
     "Art/Environment/Storefront/Interior/BP_Storefront_DisplayCaseB_MinorLoot.json": "minor",
     "Art/Environment/Storefront/Interior/BP_Storefront_DisplayCaseD_MinorLoot.json": "minor",
 }
@@ -117,8 +117,13 @@ def main() -> None:
         stem = bp_file.stem
         if stem in known_stems:
             continue
-        if any(k in stem for k in ("Container", "Stash", "DisplayCase", "Chest", "LootStash")):
-            print(f"WARN: container-shaped Blueprint outside CLASSES (not emitted): {bp_file.relative_to(ROOT)}")
+        if any(
+            k in stem
+            for k in ("Container", "Stash", "DisplayCase", "Chest", "LootStash")
+        ):
+            print(
+                f"WARN: container-shaped Blueprint outside CLASSES (not emitted): {bp_file.relative_to(ROOT)}"
+            )
     for rel, kind in CLASSES.items():
         bp_file = EX / rel
         if not bp_file.is_file():
@@ -149,6 +154,12 @@ def main() -> None:
             "open_interact": open_interact,
             "source": str(bp_file.relative_to(ROOT)),
         }
+        if kind == "stash":
+            # Port policy (no count is authored on the Blueprint): each secret
+            # stash is a one-use deposit-all. See tools/parse_settings.py
+            # ("stash.uses_per_stash") for the matching runtime value.
+            classes_out[bp_file.stem + "_C"]["stash_uses"] = 1
+            classes_out[bp_file.stem + "_C"]["one_use"] = True
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:

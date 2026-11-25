@@ -2,6 +2,10 @@ extends Node
 ## Global run state: selected thief, contract, difficulty, loot, stealth ratings.
 
 signal loot_changed(collected: int, needed: int, value: int)
+## Carried inventory (W7S-S2). The HUD tickers are deferred; these signals are
+## the wiring point (used slots, capacity, carried face value) and stash change.
+signal carried_loot_changed(used_slots: int, max_slots: int, carried_value: int)
+signal stash_changed(stashed_value: int)
 signal objective_completed()
 signal state_changed(new_state: String)
 signal objectives_updated()
@@ -55,8 +59,25 @@ var elapsed_sec: float = 0.0
 var run_time_limit: float = 0.0 # match timer seconds; 0 = unlimited (FTUE/tutorial/expansion)
 var loot_collected: int = 0
 var loot_needed: int = 0 # LEGACY compat for loot_changed/snapshots only; the live threshold is loot_goal.
+## Gross authored loot value collected this run. It is the ORIGINAL haul and is
+## monotonically increasing: stashing moves carried entries to stashed_loot_value
+## but never subtracts from this counter (the post-match Original field).
 var loot_value: int = 0
 var loot_goal: int = 0
+## Carried loot (W7S-S2): one entry per carried item, written by
+## src/interact/loot_inventory.gd. Slots are 12 (authored
+## TATLootInventoryComponent.InventorySlotMaxCapacity); a major entry costs 3.
+var carried_loot: Array[Dictionary] = []
+## False until the first tracked pickup. Staged/legacy runs that only set
+## loot_value are paid from the gross counter (see LootInventory.build_payout).
+var carried_tracking_active: bool = false
+## Value already deposited in a stash; always kept at match end.
+var stashed_loot_value: int = 0
+## Payout id for this run (idempotent SaveSystem.bank_payout key).
+var loot_run_id: String = ""
+## Last built payout record (UI/read-only mirror of SaveSystem.last_match).
+var last_payout: Dictionary = {}
+static var _loot_run_serial: int = 0
 var mission_objectives: Array[Dictionary] = []
 var contract_title: String = ""
 var contract_intro: String = ""
@@ -117,6 +138,12 @@ func reset_run(contract_order: int, map_id: String) -> void:
 	loot_needed = 0
 	loot_value = 0
 	loot_goal = 0
+	carried_loot = []
+	carried_tracking_active = false
+	stashed_loot_value = 0
+	last_payout = {}
+	_loot_run_serial += 1
+	loot_run_id = "%s-%d-%d" % [map_id, int(Time.get_unix_time_from_system()), _loot_run_serial]
 	mission_objectives = []
 	contract_title = ""
 	contract_intro = ""
@@ -139,6 +166,32 @@ func reset_run(contract_order: int, map_id: String) -> void:
 	state_changed.emit(state)
 	objectives_updated.emit()
 	loot_changed.emit(loot_collected, loot_needed, loot_value)
+	carried_loot_changed.emit(carried_slots_used(), 12, carried_total_value())
+	stash_changed.emit(stashed_loot_value)
+
+
+## Carried inventory helpers (W7S-S2). Slots are per-entry slot_cost (a major
+## entry costs 3); the capacity constant lives in loot_inventory.gd.
+func carried_slots_used() -> int:
+	var used: int = 0
+	for entry: Dictionary in carried_loot:
+		used += maxi(int(entry.get("slot_cost", 1)), 0)
+	return used
+
+
+func carried_total_value() -> int:
+	var total: int = 0
+	for entry: Dictionary in carried_loot:
+		total += maxi(int(entry.get("value", 0)), 0)
+	return total
+
+
+func notify_carried_loot_changed() -> void:
+	carried_loot_changed.emit(carried_slots_used(), 12, carried_total_value())
+
+
+func notify_stash_changed() -> void:
+	stash_changed.emit(maxi(stashed_loot_value, 0))
 
 
 ## Enter free play: stage the mode so reset_run republishes it, and publish it

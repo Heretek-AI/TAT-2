@@ -5,6 +5,16 @@ extends Node
 const SAVE_PATH := "user://tat2_save.json"
 const TMP_PATH := "user://tat2_save.json.tmp"
 
+## Root save schema (W7S-S2 = v8): the loot/payout layer stamps its own
+## loot_schema and writes last_match + pending_payout. Older saves migrate in
+## one pass; unknown keys inside a payout record are dropped, never minted.
+const SAVE_SCHEMA_VERSION := 8
+const LOOT_SCHEMA_VERSION := 1
+## Payout records are bounded so a hand-edited save cannot smuggle an
+## oversized string into the UI or the log.
+const PAYOUT_MAX_ID_CHARS := 96
+const PAYOUT_MAX_CARRIED := 64
+
 const XP_CURVE_TABLE := "CT_XPToLevel"
 const XP_CURVE_ROW := "XPToLevel"
 # Fallback only if the authored curve is unreadable (its level 1-4 value).
@@ -253,6 +263,31 @@ func _default_personal_quest_entry() -> Dictionary:
 	return {"stage": "", "owl": "none", "facts": []}
 
 
+## Canonical payout record (last_match / pending_payout). Every field is
+## authored by src/interact/loot_inventory.build_payout; unknown keys are
+## dropped by _normalise_payout so a save cannot mint new state.
+func _default_payout_record() -> Dictionary:
+	return {
+		"match_id": "",
+		"mission_id": "",
+		"contract_order": 0,
+		"map_id": "",
+		"outcome": "none",
+		"original": 0,
+		"kept": 0,
+		"stashed": 0,
+		"reward": 0,
+		"score": 0,
+		"money_taken": 0,
+		"stealth_mult": 1.0,
+		"capture": false,
+		"free_play": false,
+		"applied": false,
+		"banked": 0,
+		"carried": [],
+	}
+
+
 ## Canonical schema. `equipped_loadout` is keyed by thief id so Spider and
 ## Chameleon keep independent cosmetics/tools (the old flat "loadout" key and
 ## the array form are migrated in _ensure_defaults). `personal_quest` is keyed
@@ -260,6 +295,10 @@ func _default_personal_quest_entry() -> Dictionary:
 ## keys inside it are preserved by _ensure_personal_quest.
 func _defaults() -> Dictionary:
 	return {
+		"save_schema": SAVE_SCHEMA_VERSION,
+		"loot_schema": LOOT_SCHEMA_VERSION,
+		"last_match": _default_payout_record(),
+		"pending_payout": _default_payout_record(),
 		"xp": 0,
 		"level": 1,
 		"completed_contracts": {},
@@ -358,6 +397,11 @@ func _merge_into(incoming: Dictionary, target: Dictionary, schema: Dictionary) -
 		if key == PERSONAL_QUEST_KEY and inc is Dictionary:
 			target[key] = (inc as Dictionary).duplicate(true)
 			continue
+		# Payout records are strict, normalised dictionaries: the authored field
+		# set is the schema, so a save can never mint a new payout key.
+		if key == "last_match" or key == "pending_payout":
+			target[key] = _normalise_payout(inc)
+			continue
 		if base is Dictionary and inc is Dictionary:
 			var child_schema: Dictionary = {}
 			var schema_v: Variant = schema.get(key, null)
@@ -385,8 +429,91 @@ func _duplicate_freeform(value: Variant) -> Variant:
 	return value
 
 
+## Strict payout normaliser (W7S-S2). Only the authored fields survive, each
+## coerced to its schema type and bounded; unknown keys are dropped. An array
+## of carried entries is normalised the same way (name/value/tier/slot cost/
+## quest flag), capped at PAYOUT_MAX_CARRIED.
+func _normalise_payout(incoming: Variant) -> Dictionary:
+	var out: Dictionary = _default_payout_record()
+	if not (incoming is Dictionary):
+		return out
+	var src: Dictionary = incoming as Dictionary
+	out["match_id"] = str(src.get("match_id", "")).substr(0, PAYOUT_MAX_ID_CHARS)
+	out["mission_id"] = str(src.get("mission_id", "")).substr(0, PAYOUT_MAX_ID_CHARS)
+	out["map_id"] = str(src.get("map_id", "")).substr(0, 64)
+	var outcome: String = str(src.get("outcome", "none"))
+	if not (outcome in ["none", "escape", "capture", "timeout"]):
+		outcome = "none"
+	out["outcome"] = outcome
+	out["contract_order"] = maxi(_payout_int(src.get("contract_order", 0)), 0)
+	for key: String in ["original", "kept", "stashed", "reward", "score", "money_taken", "banked"]:
+		out[key] = maxi(_payout_int(src.get(key, 0)), 0)
+	out["stealth_mult"] = clampf(_payout_float(src.get("stealth_mult", 1.0)), 0.0, 16.0)
+	out["capture"] = _payout_bool(src.get("capture", false))
+	out["free_play"] = _payout_bool(src.get("free_play", false))
+	out["applied"] = _payout_bool(src.get("applied", false))
+	var carried_in: Variant = src.get("carried", [])
+	var carried: Array = []
+	if carried_in is Array:
+		for entry_v: Variant in (carried_in as Array):
+			if carried.size() >= PAYOUT_MAX_CARRIED:
+				break
+			if not (entry_v is Dictionary):
+				continue
+			var entry: Dictionary = entry_v as Dictionary
+			var tier: String = str(entry.get("tier", "minor"))
+			if not (tier in ["minor", "major", "quest"]):
+				tier = "minor"
+			carried.append({
+				"name": str(entry.get("name", "")).substr(0, 96),
+				"display_name": str(entry.get("display_name", "")).substr(0, 96),
+				"value": maxi(_payout_int(entry.get("value", 0)), 0),
+				"tier": tier,
+				"slot_cost": clampi(_payout_int(entry.get("slot_cost", 1)), 0, 12),
+				"is_quest_item": _payout_bool(entry.get("is_quest_item", false)),
+				"is_large_carry": _payout_bool(entry.get("is_large_carry", false)),
+				"loot_tag": str(entry.get("loot_tag", "")).substr(0, 96),
+				"objective_id": str(entry.get("objective_id", "")).substr(0, 64),
+			})
+	out["carried"] = carried
+	return out
+
+
+func _payout_int(value: Variant) -> int:
+	if value is int:
+		return int(value)
+	if value is float:
+		if is_finite(float(value)):
+			return int(value)
+		return 0
+	return 0
+
+
+func _payout_float(value: Variant) -> float:
+	if value is float:
+		return float(value) if is_finite(float(value)) else 1.0
+	if value is int:
+		return float(value)
+	return 1.0
+
+
+func _payout_bool(value: Variant) -> bool:
+	if value is bool:
+		return bool(value)
+	return false
+
+
 func _ensure_defaults() -> void:
 	var defaults: Dictionary = _defaults()
+	# W7S-S2 loot/payout layer: old saves have no root schema stamp, no
+	# loot_schema and no payout records. Backfill the current shape in memory;
+	# _migrate_save_schema() persists the stamps.
+	if not data.has("save_schema"):
+		data["save_schema"] = int(defaults["save_schema"])
+	if not data.has("loot_schema"):
+		data["loot_schema"] = int(defaults["loot_schema"])
+	data["last_match"] = _normalise_payout(data.get("last_match"))
+	data["pending_payout"] = _normalise_payout(data.get("pending_payout"))
 	# Backfill the PG-6 bus volumes on old saves that predate them.
 	if data.has("settings") and data["settings"] is Dictionary:
 		var s: Dictionary = data["settings"] as Dictionary
@@ -685,17 +812,60 @@ func _legacy_cosmetic_tag(short_id: String, thief: String, field: String) -> Str
 	return str(candidates[0])
 
 
+## W7S-S2 root migration: stamp save_schema 8 + loot_schema 1, then normalise
+## both payout records. Returns true only when the persisted shape changed, so
+## load_save writes the migration exactly once. Unknown payout keys are removed
+## here (never minted).
+func _migrate_save_schema() -> bool:
+	var before: String = JSON.stringify({
+		"save_schema": data.get("save_schema", 0),
+		"loot_schema": data.get("loot_schema", 0),
+		"last_match": data.get("last_match", {}),
+		"pending_payout": data.get("pending_payout", {}),
+	})
+	var save_schema: int = int(data.get("save_schema", 0))
+	if save_schema < SAVE_SCHEMA_VERSION:
+		data["save_schema"] = SAVE_SCHEMA_VERSION
+	var loot_schema: int = int(data.get("loot_schema", 0))
+	if loot_schema < LOOT_SCHEMA_VERSION:
+		data["loot_schema"] = LOOT_SCHEMA_VERSION
+	data["last_match"] = _normalise_payout(data.get("last_match"))
+	data["pending_payout"] = _normalise_payout(data.get("pending_payout"))
+	var after: String = JSON.stringify({
+		"save_schema": data.get("save_schema", 0),
+		"loot_schema": data.get("loot_schema", 0),
+		"last_match": data.get("last_match", {}),
+		"pending_payout": data.get("pending_payout", {}),
+	})
+	return before != after
+
+
+## A pending payout left by a crash between staging and banking is settled once
+## on load. bank_payout is idempotent (match_id), so a clean save is a no-op.
+func _settle_pending_on_load() -> void:
+	var pending: Dictionary = _normalise_payout(data.get("pending_payout"))
+	if str(pending.get("match_id", "")) == "":
+		return
+	if int(pending.get("money_taken", 0)) <= 0:
+		return
+	if bool(pending.get("applied", false)):
+		return
+	bank_payout(pending)
+
+
 func load_save() -> void:
 	if not FileAccess.file_exists(SAVE_PATH):
 		_ensure_defaults()
 		_sync_level_from_xp()
 		_migrate_unlock_ids()
+		_migrate_save_schema()
 		return
 	var f: FileAccess = FileAccess.open(SAVE_PATH, FileAccess.READ)
 	if f == null:
 		_ensure_defaults()
 		_sync_level_from_xp()
 		_migrate_unlock_ids()
+		_migrate_save_schema()
 		return
 	var parsed: Variant = JSON.parse_string(f.get_as_text())
 	if parsed is Dictionary:
@@ -703,8 +873,8 @@ func load_save() -> void:
 	_ensure_defaults()
 	_sync_level_from_xp()
 	# Persist the one-time migrations (settings schema v2 FOV, capture persona
-	# -> blank, personal-quest record, catalog save ids) so the next load sees
-	# their flags and never re-runs them.
+	# -> blank, personal-quest record, catalog save ids, W7S-S2 root v8) so the
+	# next load sees their flags and never re-runs them.
 	var migrated: bool = _migrate_settings_schema()
 	if _migrate_player_name():
 		migrated = true
@@ -712,8 +882,11 @@ func load_save() -> void:
 		migrated = true
 	if _migrate_unlock_ids():
 		migrated = true
+	if _migrate_save_schema():
+		migrated = true
 	if migrated:
 		write_save()
+	_settle_pending_on_load()
 
 
 func write_save() -> void:
@@ -794,6 +967,67 @@ func get_currency() -> int:
 func add_currency(amount: int) -> void:
 	data["currency"] = int(data.get("currency", 0)) + amount
 	write_save()
+
+
+## W7S-S2 payout API ---------------------------------------------------------
+## A completed match hands its payout record here exactly once. Idempotency is
+## keyed on match_id: a second call for the same run never adds currency twice.
+## Free play records the numbers but banks 0 (not a currency farm). Returns
+## {applied, match_id, money_taken, banked, reason}.
+func bank_payout(payout: Dictionary) -> Dictionary:
+	var p: Dictionary = _normalise_payout(payout)
+	var match_id: String = str(p.get("match_id", ""))
+	var last: Dictionary = _normalise_payout(data.get("last_match"))
+	if match_id != "" and str(last.get("match_id", "")) == match_id and bool(last.get("applied", false)):
+		return {
+			"applied": false,
+			"reason": "duplicate",
+			"match_id": match_id,
+			"money_taken": int(p.get("money_taken", 0)),
+			"banked": 0,
+		}
+	var bank: int = 0
+	if not bool(p.get("free_play", false)):
+		bank = maxi(int(p.get("money_taken", 0)), 0)
+	p["banked"] = bank
+	p["applied"] = true
+	data["currency"] = maxi(int(data.get("currency", 0)), 0) + bank
+	data["last_match"] = p
+	data["pending_payout"] = _default_payout_record()
+	write_save()
+	return {
+		"applied": true,
+		"reason": "banked",
+		"match_id": match_id,
+		"money_taken": int(p.get("money_taken", 0)),
+		"banked": bank,
+	}
+
+
+## Stage a payout before banking (crash recovery). The next load settles it via
+## _settle_pending_on_load(); a normal match calls bank_payout directly.
+func stage_pending_payout(payout: Dictionary) -> Dictionary:
+	var p: Dictionary = _normalise_payout(payout)
+	p["applied"] = false
+	p["banked"] = 0
+	data["pending_payout"] = p
+	write_save()
+	return p
+
+
+func settle_pending_payout() -> Dictionary:
+	var pending: Dictionary = _normalise_payout(data.get("pending_payout"))
+	if str(pending.get("match_id", "")) == "" or int(pending.get("money_taken", 0)) <= 0:
+		return {"applied": false, "reason": "none", "banked": 0, "match_id": ""}
+	return bank_payout(pending)
+
+
+func get_last_match() -> Dictionary:
+	return _normalise_payout(data.get("last_match"))
+
+
+func get_pending_payout() -> Dictionary:
+	return _normalise_payout(data.get("pending_payout"))
 
 
 ## Persisted array for a catalog category ("tools" / "perks" / "cosmetics"),

@@ -37,7 +37,7 @@ anims: build-extractor
 # the raw AnimSequence/AnimMontage dumps written by `make extract`/`make anims`;
 # it runs last so a failed earlier producer cannot leave stale metadata.
 NORMALIZERS := parse_tables parse_materials parse_gameplay parse_contracts \
-               parse_clues parse_quests parse_devices parse_containers \
+               parse_settings parse_clues parse_quests parse_devices parse_containers \
                parse_interactables parse_loot parse_spawners parse_vfx \
                parse_unlocks parse_hearing parse_state_tree parse_weather \
                extract_audio convert_wwise parse_locres \

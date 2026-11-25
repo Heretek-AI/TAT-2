@@ -44,6 +44,16 @@ BUCKETS = {
     "major": "DA_SpawnBucket_MajorLoot",
 }
 
+# Loot-row tables carry the authored carry metadata the runtime inventory needs
+# (IsLargeCarry, slot-size override, the carried tool mesh). The values/names
+# still come from interactables.json (A7) so both producers read one source for
+# the economy numbers.
+LOOT_INFO_TABLES = {
+    "minor": EX / "Gameplay" / "Loot" / "Data" / "DT_LootInfo_Minor.json",
+    "major": EX / "Gameplay" / "Loot" / "Data" / "DT_LootInfo_Major.json",
+    "quest": EX / "Gameplay" / "Loot" / "Data" / "DT_LootInfo_Quest.json",
+}
+
 TABLE_TO_TIER = {
     "DT_LootInfo_Minor": "minor",
     "DT_LootInfo_Major": "major",
@@ -154,6 +164,50 @@ def instanced_interact_proxy(bp_data) -> str:
     return ""
 
 
+def loot_info_rows() -> dict[str, dict[str, dict]]:
+    """tier -> RowName -> authored DT_LootInfo row (fail closed)."""
+    out: dict[str, dict[str, dict]] = {}
+    for tier, path in LOOT_INFO_TABLES.items():
+        if not path.is_file():
+            raise SystemExit(f"missing loot info table: {path.relative_to(ROOT)}")
+        data = load_json(path)
+        rows = (data[0].get("Rows") if data else None) or {}
+        if not rows:
+            raise SystemExit(f"no rows in loot info table: {path.relative_to(ROOT)}")
+        out[tier] = {str(k): v for k, v in rows.items() if isinstance(v, dict)}
+    return out
+
+
+def carry_fields(row: dict | None) -> dict:
+    """Authored carry metadata for one loot row."""
+    if not isinstance(row, dict):
+        return {
+            "is_large_carry": False,
+            "slot_size_override": 1,
+            "use_slot_size_override": False,
+            "carry_mesh_res": "",
+            "carry_mesh_exists": False,
+            "carry_mesh_ue_path": "",
+        }
+    carried = row.get("CarriedLootMeshData") or {}
+    tool_mesh = (carried.get("ToolMesh") or {}) if isinstance(carried, dict) else {}
+    mesh_ue = (
+        str(tool_mesh.get("AssetPathName", "")) if isinstance(tool_mesh, dict) else ""
+    )
+    if mesh_ue:
+        res, exists = ue_pkg_to_res(mesh_ue)
+    else:
+        res, exists = "", False
+    return {
+        "is_large_carry": bool(row.get("IsLargeCarry", False)),
+        "slot_size_override": int(row.get("SlotSizeOverride", 1)),
+        "use_slot_size_override": bool(row.get("UseSlotSizeOverride", False)),
+        "carry_mesh_res": res if exists else "",
+        "carry_mesh_exists": exists,
+        "carry_mesh_ue_path": mesh_ue,
+    }
+
+
 def main() -> None:
     inter = load_json(INTERACTABLES)
     by_tier_row: dict[str, dict[str, dict]] = {}
@@ -161,6 +215,7 @@ def main() -> None:
         by_tier_row[tier] = {}
         for e in inter["loot"][tier]["entries"]:
             by_tier_row[tier][str(e["key"])] = e
+    info_rows = loot_info_rows()
 
     buckets_out: dict[str, dict] = {}
     actors: dict[str, dict] = {}
@@ -227,6 +282,7 @@ def main() -> None:
                 "bp_source": str(bp_file.relative_to(ROOT)),
                 "bucket_source": str(bucket_file.relative_to(ROOT)),
             }
+            actors[cls].update(carry_fields(info_rows.get(tier_of, {}).get(row)))
 
     # Quest actors: every Quest-named loot Blueprint carrying a LootRowHandle.
     quest_files = sorted(EX.rglob("BP_LootActor_Quest*.json")) + sorted(
@@ -264,6 +320,7 @@ def main() -> None:
             "value": row_entry.get("value", 0),
             "bp_source": str(bp_file.relative_to(ROOT)),
         }
+        quest_actors[cls].update(carry_fields(info_rows.get(tier_of, {}).get(row)))
 
     # loot_tag -> class wherever the RowName matches an interactables row.
     tag_to_row: dict[str, tuple[str, str]] = {}
@@ -326,7 +383,9 @@ def main() -> None:
     if not generic:
         raise SystemExit("no quest actor with a mesh on disk: generic fallback is NONE")
     for cname in sorted(c for c, a in quest_actors.items() if not a["mesh_exists"]):
-        print(f"[quest-mesh-missing] {cname}: keeps mesh_res '' (labelled box fallback in loot_item.gd)")
+        print(
+            f"[quest-mesh-missing] {cname}: keeps mesh_res '' (labelled box fallback in loot_item.gd)"
+        )
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
@@ -338,6 +397,10 @@ def main() -> None:
                         for n in BUCKETS.values()
                     ],
                     "interactables": str(INTERACTABLES.relative_to(ROOT)),
+                    "loot_info_tables": {
+                        tier: str(path.relative_to(ROOT))
+                        for tier, path in LOOT_INFO_TABLES.items()
+                    },
                     "loot_actor_glob": [
                         "extracted/json/Gameplay/Loot/Actors/**/*.json",
                         "extracted/json/Gameplay/Loot/Actors/*.json",

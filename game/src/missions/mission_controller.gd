@@ -13,6 +13,7 @@ signal mission_ready(map_id: String, stats: Dictionary)
 const ThiefScript := preload("res://src/player/thief_character.gd")
 const GuardScript := preload("res://src/ai/guard_ai.gd")
 const LootScript := preload("res://src/interact/loot_item.gd")
+const LootInventoryScript := preload("res://src/interact/loot_inventory.gd")
 const LootContainerScript := preload("res://src/interact/loot_container.gd")
 const SwingingDoorScript := preload("res://src/interact/swinging_door.gd")
 const DeviceLayerScript := preload("res://src/devices/device_layer.gd")
@@ -84,6 +85,8 @@ const PATROL_MATCH_RADIUS_M: float = 30.0
 
 var _is_thieves_den: bool = false
 var _letter_grace_sec: float = 0.0 # P1 timer-during-letter: run-clock hold after the start letter (see _process).
+## W7S-S2: one payout bank per match (a repeated escape/downed signal is a no-op).
+var _payout_applied: bool = false
 var _den_map_table_pos: Vector3 = Vector3.ZERO
 var _den_telescope_pos: Vector3 = Vector3(-4.9202, 41.0, 270.7337)
 ## W5C Den backdrop staging. The authored telescope rig is
@@ -3800,6 +3803,8 @@ func _spawn_loot_entries(entries: Array, tier: String) -> void:
 				l.display_name = l.item_name
 				l.value = int((a as Dictionary).get("value", 75))
 				l.mesh_path = str((a as Dictionary).get("mesh_res", ""))
+				l.carry_mesh_path = str((a as Dictionary).get("carry_mesh_res", ""))
+				l.is_large_carry = bool((a as Dictionary).get("is_large_carry", false))
 				resolved = true
 		if not resolved:
 			# Labelled fallback (JSON unreadable or class unmapped): same
@@ -4170,16 +4175,27 @@ func _process(delta: float) -> void:
 
 
 func _on_extracted() -> void:
+	if _payout_applied or GameState.state == "victory":
+		return
+	# W7S-S2 payout: the carried haul follows the binary keep rule (escape
+	# keeps it, capture does not); stashed value is always kept; a completed
+	# contract adds the authored mission reward once. The score keeps the
+	# shipped stealth multiplier on the kept value, so ghost/shadow bonuses are
+	# unchanged. Free play records the record but banks nothing.
+	var payout: Dictionary = LootInventoryScript.build_payout("escape", {
+		"objectives_complete": GameState.are_all_objectives_complete(),
+		"match_id": GameState.loot_run_id,
+	})
+	GameState.last_payout = payout
+	_payout_applied = true
+	var final_score: int = int(payout.get("score", 0))
+	# bank_payout is idempotent (match_id) and banks 0 for free play; the
+	# completion record stays contract-only (order 2 would corrupt the campaign).
+	SaveSystem.bank_payout(payout)
+	if not GameState.free_play:
+		SaveSystem.record_contract_complete(GameState.active_contract_order, final_score, not GameState.ever_spotted)
 	GameState.state = "victory"
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	var final_score := int(round(GameState.loot_value * GameState.compute_stealth_bonus_multiplier()))
-	# Free play has no active contract and is not a currency farm: neither the
-	# completion record (it would corrupt the hosting order's campaign, order 2
-	# is "Into the Lion's Den") nor the payout is banked. The result panel still
-	# shows the run score.
-	if not GameState.free_play:
-		SaveSystem.add_currency(final_score)
-		SaveSystem.record_contract_complete(GameState.active_contract_order, final_score, not GameState.ever_spotted)
 	if hud.has_method("show_result"):
 		hud.show_result(true, final_score, contract_info)
 
@@ -4192,10 +4208,19 @@ func _on_player_downed_started(seconds: float) -> void:
 
 
 func _on_player_downed() -> void:
+	# W7S-S2 capture payout: the carried haul is lost (kept 0), stashed value is
+	# always kept, no contract reward. Free play still banks nothing.
+	var payout: Dictionary = LootInventoryScript.build_payout("capture", {
+		"objectives_complete": false,
+		"match_id": GameState.loot_run_id,
+	})
+	GameState.last_payout = payout
+	_payout_applied = true
+	SaveSystem.bank_payout(payout)
 	GameState.state = "failed"
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if hud.has_method("show_result"):
-		hud.show_result(false, GameState.loot_value, contract_info)
+		hud.show_result(false, int(payout.get("score", 0)), contract_info)
 
 
 ## Match timer ran out: fail the run with a TIME EXPIRED reason, reusing the
@@ -4203,12 +4228,21 @@ func _on_player_downed() -> void:
 func _on_time_expired() -> void:
 	if GameState.state != "playing":
 		return
+	# W7S-S2: a timed-out getaway is a failure, not a capture — carried loot is
+	# not kept, stashed value still is, and no contract reward is paid.
+	var payout: Dictionary = LootInventoryScript.build_payout("timeout", {
+		"objectives_complete": false,
+		"match_id": GameState.loot_run_id,
+	})
+	GameState.last_payout = payout
+	_payout_applied = true
+	SaveSystem.bank_payout(payout)
 	GameState.state = "failed"
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	contract_info["timed_out"] = true
 	contract_info["timeout_reason"] = "TIME EXPIRED"
 	if hud != null and hud.has_method("show_result"):
-		hud.show_result(false, GameState.loot_value, contract_info)
+		hud.show_result(false, int(payout.get("score", 0)), contract_info)
 
 
 ## Releases the process-lifetime caches owned by level/weather/VFX/animation

@@ -1129,6 +1129,35 @@ def _scene_requirement_tag(props: dict) -> str:
     return ""
 
 
+def _authored_lock_fields(props: dict) -> dict:
+    """Authored lock state carried 1:1 from a placed actor's Properties.
+
+    W9-P2 producer contract. ``_locked`` is the only per-instance lock flag and
+    ``_lockConfig.MaxLockLevel`` / ``MinLockLevel`` are caps, not a concrete
+    level (no ``LockLevel`` key exists anywhere in the dump). Keys are emitted
+    only when the source actor authors them: absence means "this actor has no
+    authored lock data", never "unlocked at level 0". ``CanBeLockpicked`` is
+    read from ``_lockConfig`` only; ``KeyTag.TagName`` becomes ``key_tag``.
+    """
+    out = {}
+    if "_locked" in props:
+        out["locked"] = bool(props.get("_locked"))
+    cfg = props.get("_lockConfig")
+    if isinstance(cfg, dict):
+        if "MaxLockLevel" in cfg:
+            out["max_lock_level"] = int(cfg.get("MaxLockLevel") or 0)
+        if "MinLockLevel" in cfg:
+            out["min_lock_level"] = int(cfg.get("MinLockLevel") or 0)
+        if "CanBeLockpicked" in cfg:
+            out["can_lockpick"] = bool(cfg.get("CanBeLockpicked"))
+        key_tag = cfg.get("KeyTag")
+        if isinstance(key_tag, dict):
+            tag = key_tag.get("TagName") or ""
+            if tag and tag != "None":
+                out["key_tag"] = tag
+    return out
+
+
 def _scene_element_kind(cls: str) -> str:
     if "MissionSpawner_Character" in cls or "Guard" in cls:
         return "guard"
@@ -2023,6 +2052,11 @@ def extract_levels():
                     continue
             for q in pend_idx:
                 door_leaf_idx.add(q)
+            # W9-P2: the authored lock lives on the owning actor, not on the
+            # pivot component (aidx is resolved above for the scene tag/group).
+            door_actor_props = (
+                (exps[aidx].get("Properties") or {}) if aidx is not None else {}
+            )
             swinging_doors.append(
                 {
                     "name": f"{actor_name}.{pname}",
@@ -2031,6 +2065,7 @@ def extract_levels():
                     "pos": pgt["pos"],
                     "basis": pgt["basis"],
                     "leaves": leaves,
+                    **_authored_lock_fields(door_actor_props),
                     "source": dsrc,
                     **({"element_tag": door_tag} if door_tag else {}),
                     **({"spawn_group": door_group} if door_group else {}),
@@ -2315,6 +2350,7 @@ def extract_levels():
                     "name": e.get("Name", ""),
                     "class": et,
                     **trs,
+                    **_authored_lock_fields(props),
                     "source": str(rel),
                     **({"scene_requirement": scene_tag} if scene_tag else {}),
                     **({"spawn_group": spawn_group} if spawn_group else {}),
@@ -2371,6 +2407,7 @@ def extract_levels():
                         "name": e.get("Name", ""),
                         "class": et,
                         **ue_mat4_to_godot_trs(wmat2),
+                        **_authored_lock_fields(props),
                         **(
                             {"tags": props.get("Tags")}
                             if isinstance(props.get("Tags"), list) and props.get("Tags")

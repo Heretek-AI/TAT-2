@@ -11,8 +11,20 @@ signal state_changed(new_state: String)
 signal objectives_updated()
 signal mission_letter_requested(title: String, intro_text: String)
 signal clue_facts_changed()
+## Emitted when the two-phase run clock changes phase (main -> endgame ->
+## resolved). HUD/pause screens may poll GameState.phase instead; the signal is
+## for QA and future listeners.
+signal phase_changed(new_phase: String)
 
 enum Difficulty { NOVICE = 1, THIEF = 2, MASTER_THIEF = 3 }
+
+## Two-phase run clock (W7E). The main window is the mission row's authored
+## match duration (LootTheRoom 3300 s = 55:00); completing the objectives
+## summons the escape doors and starts the endgame window (KF13 override
+## 1200 s = 20:00 for LootTheRoom, authored QG values for other missions).
+const PHASE_MAIN: String = "main"
+const PHASE_ENDGAME: String = "endgame"
+const PHASE_RESOLVED: String = "resolved"
 
 var thief_id: String = "spider" # spider (Nisha) | chameleon (Cotter)
 ## Optional player-chosen handle. Blank means "no explicit handle": the HUD
@@ -56,7 +68,19 @@ var active_thief_id: String:
 
 var state: String = "menu" # menu | hub | playing | paused | victory | failed
 var elapsed_sec: float = 0.0
-var run_time_limit: float = 0.0 # match timer seconds; 0 = unlimited (FTUE/tutorial/expansion)
+var run_time_limit: float = 0.0 # main-phase match timer seconds; 0 = unlimited (FTUE/tutorial/expansion)
+## W7E two-phase clock. `phase` is main until the objectives complete, then
+## endgame while the summoned doors are open, then resolved once the run is
+## banked/failed. Each phase owns its own elapsed counter so only the active
+## phase ticks (the main clock freezes when the doors open).
+var phase: String = PHASE_MAIN
+var endgame_time_limit: float = 0.0 # endgame door window seconds; 0 = unlimited
+var endgame_elapsed: float = 0.0
+## Authored BP_EscapePoint markers spawned for this run, one record per marker:
+## {index, authored, position, grounded, connected, activated, expired, gate}.
+var escape_markers: Array[Dictionary] = []
+## Peer ids that have already extracted this run (host-once local transport).
+var extracted_players: Array[int] = []
 var loot_collected: int = 0
 var loot_needed: int = 0 # LEGACY compat for loot_changed/snapshots only; the live threshold is loot_goal.
 ## Gross authored loot value collected this run. It is the ORIGINAL haul and is
@@ -134,6 +158,11 @@ func reset_run(contract_order: int, map_id: String) -> void:
 			active_mission_id = pending_mission_id
 	elapsed_sec = 0.0
 	run_time_limit = 0.0
+	phase = PHASE_MAIN
+	endgame_time_limit = 0.0
+	endgame_elapsed = 0.0
+	escape_markers = []
+	extracted_players = []
 	loot_collected = 0
 	loot_needed = 0
 	loot_value = 0
@@ -192,6 +221,100 @@ func notify_carried_loot_changed() -> void:
 
 func notify_stash_changed() -> void:
 	stash_changed.emit(maxi(stashed_loot_value, 0))
+
+
+func is_main_phase() -> bool:
+	return phase == PHASE_MAIN
+
+
+func is_endgame_phase() -> bool:
+	return phase == PHASE_ENDGAME
+
+
+func is_resolved_phase() -> bool:
+	return phase == PHASE_RESOLVED
+
+
+## Start the endgame door window. Only a main-phase run can transition; a
+## repeated call (two objective completions, extraction races) is a no-op and
+## returns false so the caller can log an idempotent transition once.
+func begin_endgame(seconds_override: float = -1.0) -> bool:
+	if phase != PHASE_MAIN:
+		return false
+	if seconds_override > 0.0:
+		endgame_time_limit = seconds_override
+	if endgame_time_limit <= 0.0:
+		# No authored QG/override value: keep a bounded door window rather than
+		# an infinite one. MissionController logs the fallback explicitly.
+		endgame_time_limit = 480.0
+	endgame_elapsed = 0.0
+	phase = PHASE_ENDGAME
+	phase_changed.emit(phase)
+	return true
+
+
+## Mark the run resolved (victory or failure). Idempotent.
+func resolve_phase() -> void:
+	if phase == PHASE_RESOLVED:
+		return
+	phase = PHASE_RESOLVED
+	phase_changed.emit(phase)
+
+
+## Seconds budget of the phase that is actually ticking (main or endgame).
+func phase_time_limit() -> float:
+	if phase == PHASE_ENDGAME:
+		return endgame_time_limit
+	if phase == PHASE_RESOLVED:
+		return 0.0
+	return run_time_limit
+
+
+## Seconds already spent in the active phase.
+func phase_elapsed() -> float:
+	if phase == PHASE_ENDGAME:
+		return endgame_elapsed
+	if phase == PHASE_RESOLVED:
+		return 0.0
+	return elapsed_sec
+
+
+## Seconds left in the active phase; 0 when unlimited/resolved.
+func phase_time_remaining() -> float:
+	var limit: float = phase_time_limit()
+	if limit <= 0.0:
+		return 0.0
+	return maxf(0.0, limit - phase_elapsed())
+
+
+## Total run time (both phases) for result panels/logs.
+func total_elapsed() -> float:
+	return elapsed_sec + endgame_elapsed
+
+
+## Register a peer that extracted. Returns false when that peer already
+## completed the run (host-once guard for the local-only co-op transport).
+func register_extracted_player(peer_id: int) -> bool:
+	if extracted_players.has(peer_id):
+		return false
+	extracted_players.append(peer_id)
+	return true
+
+
+## Replace the run's authored escape-marker records (one per BP_EscapePoint).
+func set_escape_markers(records: Array) -> void:
+	escape_markers = []
+	for rec_v: Variant in records:
+		if rec_v is Dictionary:
+			escape_markers.append((rec_v as Dictionary).duplicate(true))
+
+
+func active_escape_count() -> int:
+	var count: int = 0
+	for rec: Dictionary in escape_markers:
+		if rec.get("activated", false) == true and rec.get("expired", false) != true:
+			count += 1
+	return count
 
 
 ## Enter free play: stage the mode so reset_run republishes it, and publish it

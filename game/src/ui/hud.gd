@@ -171,6 +171,8 @@ var disguise_vignette: TextureRect
 var thief_vision_overlay: ColorRect
 var clue_toast_lbl: Label
 var downed_lbl: Label
+## W7E two-phase HUD: gold door banner shown only during the endgame window.
+var door_lbl: Label
 var lockpick_bar: ProgressBar
 var pause_center: CenterContainer
 var pause_panel: PanelContainer
@@ -691,6 +693,24 @@ func _ready() -> void:
 	downed_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	downed_lbl.visible = false
 	_root.add_child(downed_lbl)
+
+	# W7E door banner (endgame only). Sits below the downed countdown so both
+	# can never overlap; the countdown in the objective strip stays the compact
+	# form while this spells out the collapsed-door rule.
+	door_lbl = Label.new()
+	door_lbl.name = "DoorWarningLabel"
+	door_lbl.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	door_lbl.position = Vector2(-360, 144)
+	door_lbl.custom_minimum_size = Vector2(720, 32)
+	door_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	door_lbl.add_theme_font_size_override("font_size", 17)
+	door_lbl.add_theme_color_override("font_color", Color(0.96, 0.78, 0.34))
+	door_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+	door_lbl.add_theme_constant_override("shadow_offset_x", 2)
+	door_lbl.add_theme_constant_override("shadow_offset_y", 2)
+	door_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	door_lbl.visible = false
+	_root.add_child(door_lbl)
 
 	# Legacy lockpick progress bar (preserved property name for backwards compatibility).
 	lockpick_bar = ProgressBar.new()
@@ -2370,6 +2390,7 @@ func _process(delta: float) -> void:
 	var p: Node3D = _get_player()
 
 	_update_objectives_and_loot(is_hub)
+	_update_phase_banner(is_hub)
 	_update_key_row(is_hub)
 	_update_stealth_ball_and_soundwaves(p, delta, is_hub)
 	_update_portrait_plate()
@@ -2446,9 +2467,10 @@ func _update_objectives_and_loot(is_hub: bool) -> void:
 		return
 
 	var timing: String = ""
-	if GameState.run_time_limit > 0.0:
-		var remain: float = maxf(0.0, GameState.run_time_limit - GameState.elapsed_sec)
-		timing = "  (%02d:%02d)" % [int(remain) / 60, int(remain) % 60]
+	if GameState.phase == GameState.PHASE_ENDGAME:
+		timing = "  (DOOR %s)" % phase_countdown_text()
+	elif GameState.run_time_limit > 0.0:
+		timing = "  (%s)" % phase_countdown_text()
 
 	if objs_v is Array and not (objs_v as Array).is_empty():
 		var objs: Array = objs_v as Array
@@ -2472,6 +2494,36 @@ func _update_objectives_and_loot(is_hub: bool) -> void:
 	var _loot_status: String = "❧ %s  (£) %d / £ %d" % [item, GameState.loot_value, _loot_goal] if _loot_goal > 0 else "❧ %s" % item
 	var status: String = "Reach Escape Gate" if GameState.are_all_objectives_complete() else _loot_status
 	obj_lbl.text = "Mission: %s%s\n   %s" % [title, timing, status]
+
+
+## W7E: active-phase countdown in the authored MM:SS form (3300 s -> "55:00",
+## 1200 s -> "20:00"). Empty when the active phase is unlimited/resolved.
+func phase_countdown_text() -> String:
+	var limit: float = GameState.phase_time_limit()
+	if limit <= 0.0:
+		return ""
+	var remain: float = maxf(0.0, GameState.phase_time_remaining())
+	return "%02d:%02d" % [int(remain) / 60, int(remain) % 60]
+
+
+## W7E: endgame door banner. Empty outside the endgame phase so the banner is
+## never shown over the main window or the result screen.
+func door_warning_text() -> String:
+	if GameState.phase != GameState.PHASE_ENDGAME:
+		return ""
+	var countdown: String = phase_countdown_text()
+	if countdown == "":
+		return "THE MAGIC DOOR IS OPEN"
+	return "THE MAGIC DOOR IS OPEN — %s BEFORE IT COLLAPSES" % countdown
+
+
+func _update_phase_banner(is_hub: bool) -> void:
+	if door_lbl == null:
+		return
+	var show: bool = not is_hub and GameState.state == "playing" and GameState.phase == GameState.PHASE_ENDGAME
+	door_lbl.visible = show
+	if show:
+		door_lbl.text = door_warning_text()
 
 
 func _update_stealth_ball_and_soundwaves(p: Node3D, delta: float, is_hub: bool) -> void:

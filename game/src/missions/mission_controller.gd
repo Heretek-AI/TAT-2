@@ -87,6 +87,14 @@ var _is_thieves_den: bool = false
 var _letter_grace_sec: float = 0.0 # P1 timer-during-letter: run-clock hold after the start letter (see _process).
 ## W7S-S2: one payout bank per match (a repeated escape/downed signal is a no-op).
 var _payout_applied: bool = false
+## W7E endgame: every authored escape marker spawned this run (gate nodes are
+## also mirrored in GameState.escape_markers for HUD/QA state).
+var _escape_gates: Array[Node] = []
+## Authored QG/override value is preferred; this bounded fallback only applies
+## when the mission authors no EndgameDuration node at all.
+const ENDGAME_FALLBACK_SEC: float = 480.0
+const TIME_EXPIRED_REASON: String = "TIME EXPIRED"
+const DOOR_COLLAPSED_REASON: String = "MAGIC DOOR COLLAPSED"
 var _den_map_table_pos: Vector3 = Vector3.ZERO
 var _den_telescope_pos: Vector3 = Vector3(-4.9202, 41.0, 270.7337)
 ## W5C Den backdrop staging. The authored telescope rig is
@@ -158,6 +166,11 @@ func _ready() -> void:
 	GameState.active_map_id = map_id
 	_setup_environment()
 	_connect_coop_listener()
+	# W7E: objective completion is the phase boundary (main -> endgame). The
+	# _process poll is a second safety net for completions that happen before
+	# this connection exists (the start letter loads after gameplay spawn).
+	if GameState.has_signal("objective_completed") and not GameState.objective_completed.is_connected(_on_objective_completed):
+		GameState.objective_completed.connect(_on_objective_completed)
 	start_contract(GameState.active_contract_order)
 
 
@@ -567,14 +580,15 @@ func start_contract(order: int) -> void:
 	GameState.active_scene_variants = sv_ids
 	if not sv_ids.is_empty():
 		print("TAT-2 scene variants selected=", sv_ids.size(), " seed=", GameState.active_map_seed)
-	# Real match timer from the extracted DT_Missions_* tables (0 = unlimited).
-	# Free play reads the selected mission row's authored limit instead (the
-	# LootTheRoom Cleanout Heist is 3300 s / 55:00 at Novice) rather than the
-	# hosting contract's map window, so set it after the mission id resolves.
-	GameState.run_time_limit = GameData.get_match_duration(map_id, GameState.difficulty)
+	# W7E two-phase clock: the main window comes from the resolved mission row
+	# (LootTheRoom Novice 3300 s = 55:00), not from the hosting contract's map
+	# window (Guildhall 7200 s). _setup_mission_objectives resolves
+	# active_mission_id first (including the legacy fallback), so the clock is
+	# applied after it. The endgame window comes from the tracked KF13 override
+	# (1200 s) or the authored QG EndgameDuration node (480 s / VaultHeist 300).
 	_setup_mission_objectives(map_id, order)
+	_apply_run_clock(map_id)
 	if GameState.free_play:
-		GameState.run_time_limit = GameData.get_mission_duration(GameState.active_mission_id, GameState.difficulty)
 		# Free play is the side mission itself, not the hosting contract: the
 		# letter/loading screen carry the mission row title ("Cleanout Heist")
 		# and its description, while the Guildhall contract order only supplies
@@ -690,6 +704,54 @@ func start_contract(order: int) -> void:
 		_mission_ready_emitted = true
 		print("TAT-2 mission_ready map=", map_id, " meshes=", int(level_stats.get("mesh_instances", 0)), " lights=", int(level_stats.get("light_count", 0)), " chunks=", int(level_stats.get("chunk_count", 0)))
 		mission_ready.emit(map_id, level_stats)
+
+
+## W7E: resolve and publish the two-phase run clock. The main window prefers
+## the resolved mission row's authored MatchDurationsByDifficulty (validated
+## against the map) and falls back to the map row for legacy paths that never
+## set a mission id. The endgame window is the tracked briefing override first
+## (KF13 1200 s) and the authored QG EndgameDuration node second (480 s for
+## LootTheRoom/OldManor, 300 s for the Guildhall vault heist).
+func _apply_run_clock(map_id: String) -> Dictionary:
+	var difficulty: int = GameState.difficulty
+	var map_limit: float = GameData.get_match_duration(map_id, difficulty)
+	var mid: String = GameState.active_mission_id
+	var mission_limit: float = 0.0
+	var mission_row_valid: bool = false
+	if mid != "":
+		var row_v: Variant = GameData.missions_by_id.get(mid)
+		if row_v is Dictionary and str((row_v as Dictionary).get("map_id", "")) == map_id:
+			mission_row_valid = true
+			mission_limit = GameData.get_mission_duration(mid, difficulty)
+	var main_limit: float = mission_limit if mission_limit > 0.0 else map_limit
+	var main_source: String = "mission_row" if mission_limit > 0.0 else "map_row"
+	var endgame_limit: float = 0.0
+	var endgame_source: String = "fallback"
+	if mission_row_valid:
+		endgame_limit = GameData.get_mission_endgame_seconds(mid)
+		endgame_source = GameData.get_mission_endgame_source(mid)
+		if endgame_source == "":
+			endgame_source = "quest_graph"
+	if endgame_limit <= 0.0:
+		endgame_limit = ENDGAME_FALLBACK_SEC
+		endgame_source = "fallback"
+	GameState.run_time_limit = main_limit
+	GameState.endgame_time_limit = endgame_limit
+	GameState.phase = GameState.PHASE_MAIN
+	GameState.endgame_elapsed = 0.0
+	GameState.escape_markers = []
+	print(
+		"TAT-2 run clock: map=", map_id, " mission=", mid if mid != "" else "-",
+		" main_s=", main_limit, " main_source=", main_source,
+		" endgame_s=", endgame_limit, " endgame_source=", endgame_source
+	)
+	return {
+		"main_s": main_limit,
+		"main_source": main_source,
+		"endgame_s": endgame_limit,
+		"endgame_source": endgame_source,
+		"mission_row": mission_row_valid,
+	}
 
 
 func _setup_thieves_den_env(map_id: String) -> void:
@@ -3973,37 +4035,87 @@ func _spawn_devices() -> void:
 
 ## P2 escape grounding: explicit floor raycast with a hit flag (unlike
 ## _ground_position's fail-soft fallback, which is indistinguishable from a hit).
-func _ground_escape_position(raw: Vector3) -> Vector3:
-	var w3d: World3D = get_world_3d()
+## W7E: `world_override` lets the focused suite ground the authored markers in
+## a synthetic physics world (a detached mission node has no World3D).
+func _ground_escape_position(raw: Vector3, world_override: World3D = null) -> Dictionary:
+	var w3d: World3D = world_override
+	if w3d == null:
+		w3d = get_world_3d()
 	if w3d == null:
 		push_warning("[mission_controller] escape grounding without a world; keeping authored marker (UE escape path)")
-		return raw
+		return {"position": raw, "grounded": false}
 	var phys: PhysicsDirectSpaceState3D = w3d.direct_space_state
 	var hit: Dictionary = phys.intersect_ray(PhysicsRayQueryParameters3D.create(raw + Vector3(0.0, 8.0, 0.0), raw + Vector3(0.0, -30.0, 0.0), 1))
 	if hit.is_empty():
 		push_warning("[mission_controller] escape marker has no floor below; keeping authored pos (UE escape marker): ", raw)
-		return raw
+		return {"position": raw, "grounded": false}
 	var hp: Variant = hit.get("position", null)
 	if hp is Vector3:
-		return (hp as Vector3) + Vector3(0.0, 0.15, 0.0)
+		return {"position": (hp as Vector3) + Vector3(0.0, 0.15, 0.0), "grounded": true}
 	push_warning("[mission_controller] escape raycast hit without a position; keeping authored marker (UE escape path)")
-	return raw
+	return {"position": raw, "grounded": false}
 
 
-func _spawn_escape(ue_escapes: Array, anchor: Vector3) -> void:
-	# P2 escape not floor-grounded: guards/loot raycast to the floor, the gate
-	# used the raw authored marker (a floating marker = a floating gate, UE
-	# escape marker path). Ground it; keep the authored pos with a loud warning
-	# when no floor is found instead of silently floating.
-	var eg := EscapeScript.new()
-	var epos := anchor + Vector3(0, 0.2, 6)
-	if not ue_escapes.is_empty():
-		var raw: Vector3 = ue_escapes[0]
-		epos = _ground_escape_position(raw)
-	eg.apply_escape_config(EscapeScript.escape_config())
-	eg.position = epos
-	eg.extracted.connect(_on_extracted)
-	add_child(eg)
+## W7E: spawn ALL authored BP_EscapePoint markers for the map, not just the
+## first. Shipped maps author 25 (Guildhall 14 = Gameplay 10 + P 4, OldManor
+## 10, FTUE 1); each is floor-grounded, connected to the host-once extraction
+## handler and recorded in GameState.escape_markers. They stay dormant until
+## the objectives complete and _start_endgame() summons them.
+func _spawn_escape(ue_escapes: Array, anchor: Vector3, world_override: World3D = null) -> int:
+	_escape_gates.clear()
+	GameState.escape_markers = []
+	var authored: Array = []
+	for raw_v: Variant in ue_escapes:
+		if raw_v is Vector3:
+			authored.append(raw_v)
+	if authored.is_empty():
+		# Legacy maps without an authored marker keep the old anchor fallback.
+		authored.append(anchor + Vector3(0, 0.2, 6))
+	var records: Array[Dictionary] = []
+	var grounded_count: int = 0
+	for i: int in range(authored.size()):
+		var raw: Vector3 = authored[i] as Vector3
+		var resolved: Dictionary = _ground_escape_position(raw, world_override)
+		var epos: Vector3 = resolved.get("position", raw) as Vector3
+		var grounded: bool = resolved.get("grounded", false) == true
+		if grounded:
+			grounded_count += 1
+		var eg = EscapeScript.new()
+		eg.name = "EscapeGate%d" % i
+		eg.set_meta("marker_index", i)
+		eg.set_meta("authored_marker", raw)
+		eg.set("marker_index", i)
+		eg.apply_escape_config(EscapeScript.escape_config())
+		eg.position = epos
+		eg.extracted.connect(_on_escape_gate_extracted.bind(eg))
+		add_child(eg)
+		_escape_gates.append(eg)
+		var connected: bool = eg.extracted.get_connections().size() > 0
+		# If the objectives completed before the markers existed (a very short
+		# QA run), the doors are already in the endgame window: summon on spawn.
+		var activated: bool = false
+		if GameState.phase == GameState.PHASE_ENDGAME and eg.has_method("activate"):
+			eg.call("activate")
+			activated = true
+		records.append({
+			"index": i,
+			"authored": raw,
+			"position": epos,
+			"grounded": grounded,
+			"connected": connected,
+			"activated": activated,
+			"expired": false,
+			"gate": eg,
+		})
+	GameState.set_escape_markers(records)
+	# set_escape_markers duplicating a Dictionary also duplicates the gate
+	# reference, which is fine (Objects are shared by reference).
+	print(
+		"TAT-2 escape markers: authored=", authored.size(), " spawned=", _escape_gates.size(),
+		" grounded=", grounded_count, " connected=", records.size(),
+		" phase=", GameState.phase
+	)
+	return _escape_gates.size()
 
 
 ## Real spawner content (BP_MissionSpawner_Throwable/AmmoRefill/Health/
@@ -4147,20 +4259,31 @@ func _segment_hits_aabb(a: Vector3, b: Vector3, mn: Vector3, mx: Vector3) -> boo
 
 func _process(delta: float) -> void:
 	if GameState.state == "playing":
-		# P1 timer-during-letter: the mission-start letter (HUD-side, read-only)
-		# never stopped elapsed_sec, so the run clock ate the read time and
-		# _on_time_expired could fire mid-letter. Hold the clock for a short
-		# grace after the letter is requested (retained tuning
-		# LETTER_GRACE_SEC; the lockpick minigame still runs the clock by
-		# design — that time is player action, not forced UI).
-		if _letter_grace_sec > 0.0:
-			_letter_grace_sec = maxf(0.0, _letter_grace_sec - delta)
-		else:
-			GameState.elapsed_sec += delta
-			if GameState.run_time_limit > 0.0 and GameState.elapsed_sec >= GameState.run_time_limit:
-				_on_time_expired()
+		# W7E: only the active phase ticks. Main keeps the P1 timer-during-letter
+		# grace (the start letter is read-only); the endgame never gets that
+		# grace — the magic door is already open and its 20 minutes run.
+		if GameState.phase == GameState.PHASE_MAIN:
+			if _letter_grace_sec > 0.0:
+				_letter_grace_sec = maxf(0.0, _letter_grace_sec - delta)
+			else:
+				GameState.elapsed_sec += delta
+				if GameState.run_time_limit > 0.0 and GameState.elapsed_sec >= GameState.run_time_limit:
+					_on_time_expired()
+					return
+			# Safety net for completions that fired before _ready connected the
+			# signal (and for objective lists mutated directly by QA/test code).
+			if not _is_thieves_den and GameState.are_all_objectives_complete():
+				_start_endgame("objective_complete")
+				if GameState.state != "playing":
+					return
+		elif GameState.phase == GameState.PHASE_ENDGAME:
+			_letter_grace_sec = 0.0
+			GameState.endgame_elapsed += delta
+			if GameState.endgame_time_limit > 0.0 and GameState.endgame_elapsed >= GameState.endgame_time_limit:
+				_on_door_collapsed()
 				return
-		light_probe.tick(GameState.elapsed_sec)
+		if light_probe != null:
+			light_probe.tick(GameState.total_elapsed())
 		for i in range(smokes.size() - 1, -1, -1):
 			smokes[i]["ttl"] -= delta
 			if smokes[i]["ttl"] <= 0.0:
@@ -4172,6 +4295,91 @@ func _process(delta: float) -> void:
 		if rain_node != null:
 			WeatherVisuals.snap_rain_to(rain_node, player)
 			WeatherVisuals.update_rain_occlusion(rain_node, player)
+
+
+## W7E phase boundary: objective completion summons every authored escape
+## door and starts the endgame window. Idempotent; only the main phase moves.
+func _on_objective_completed() -> void:
+	if GameState.phase == GameState.PHASE_MAIN:
+		_start_endgame("objective_complete")
+
+
+func _start_endgame(reason: String = "") -> bool:
+	if _is_thieves_den:
+		return false
+	if not GameState.begin_endgame():
+		return false
+	# No letter grace in the endgame: the player may complete the objectives
+	# while the briefing is still open (the letter is read-only UI).
+	_letter_grace_sec = 0.0
+	var activated: int = 0
+	for rec: Dictionary in GameState.escape_markers:
+		var gate_v: Variant = rec.get("gate", null)
+		if gate_v is Node and is_instance_valid(gate_v) and (gate_v as Node).has_method("activate"):
+			(gate_v as Node).call("activate")
+			rec["activated"] = true
+			activated += 1
+	print(
+		"TAT-2 endgame: phase=endgame reason=", reason if reason != "" else "objective_complete",
+		" window_s=", GameState.endgame_time_limit, " doors=", activated,
+		"/", GameState.escape_markers.size()
+	)
+	if hud != null and hud.has_method("show_toast"):
+		hud.call("show_toast", "THE MAGIC DOOR HAS BEEN SUMMONED")
+	return true
+
+
+## W7E co-op-safe extraction entry: every authored marker connects here, so a
+## second door (or the same door entered twice) cannot bank the run twice. The
+## local-only transport treats the host as the banking authority; client-side
+## host RPC replication is deferred (documented in docs/reports/w7e-endgame.md).
+func _on_escape_gate_extracted(source: Node = null) -> void:
+	if GameState.phase != GameState.PHASE_ENDGAME:
+		return
+	if source != null and bool(source.get("expired")):
+		return
+	if multiplayer != null and multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
+		print("TAT-2 extraction: client extraction observed; host banking replication deferred")
+		return
+	var peer_id: int = 1
+	if multiplayer != null and multiplayer.has_multiplayer_peer():
+		peer_id = multiplayer.get_unique_id()
+	if not GameState.register_extracted_player(peer_id):
+		return
+	GameState.resolve_phase()
+	_on_extracted()
+
+
+## Endgame window closed: the summoned doors collapse, the run fails, and the
+## standard result panel explains why (no new GameState.state value).
+func _on_door_collapsed() -> void:
+	if GameState.state != "playing":
+		return
+	for rec: Dictionary in GameState.escape_markers:
+		var gate_v: Variant = rec.get("gate", null)
+		if gate_v is Node and is_instance_valid(gate_v) and (gate_v as Node).has_method("expire"):
+			(gate_v as Node).call("expire")
+		rec["expired"] = true
+	# W7S-S2: a collapsed door is a failed getaway, not a capture. The carried
+	# haul is lost and no contract reward is paid, but the stashed value was
+	# banked at the vault and is always kept — the same rule as a main-clock
+	# timeout. Guarded so a payout can never be banked twice in one match.
+	if not _payout_applied:
+		var payout: Dictionary = LootInventoryScript.build_payout("timeout", {
+			"objectives_complete": false,
+			"match_id": GameState.loot_run_id,
+		})
+		GameState.last_payout = payout
+		_payout_applied = true
+		SaveSystem.bank_payout(payout)
+	GameState.resolve_phase()
+	GameState.state = "failed"
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	contract_info["timed_out"] = true
+	contract_info["timeout_reason"] = DOOR_COLLAPSED_REASON
+	if hud != null and hud.has_method("show_result"):
+		var shown: int = int((GameState.last_payout as Dictionary).get("score", GameState.loot_value))
+		hud.show_result(false, shown, contract_info)
 
 
 func _on_extracted() -> void:
@@ -4237,10 +4445,13 @@ func _on_time_expired() -> void:
 	GameState.last_payout = payout
 	_payout_applied = true
 	SaveSystem.bank_payout(payout)
+	# W7E: the run clock stops on either expiry; the phase is resolved so the
+	# HUD countdown cannot keep ticking behind the result panel.
+	GameState.resolve_phase()
 	GameState.state = "failed"
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	contract_info["timed_out"] = true
-	contract_info["timeout_reason"] = "TIME EXPIRED"
+	contract_info["timeout_reason"] = TIME_EXPIRED_REASON
 	if hud != null and hud.has_method("show_result"):
 		hud.show_result(false, int(payout.get("score", 0)), contract_info)
 

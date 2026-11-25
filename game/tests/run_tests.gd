@@ -4984,10 +4984,17 @@ func _initialize() -> void:
 	gs.set("quest_item_acquired", true)
 	gs.set("mission_objectives", [])
 	gs.set("loot_goal", 0)
+	# W7E: an authored escape marker is dormant during the main window and only
+	# extracts after the objectives complete (endgame) and the door is summoned.
+	# This suite owns the portal visual/trigger contract, so it activates the
+	# gate explicitly instead of relying on the pre-W7E always-open behaviour.
+	gs.set("phase", "endgame")
+	w60_gate.call("activate")
 	w60_gate.call("_on_body_entered", w60_body)
 	_w60_assert(w60_gate_emits.size() == 1, "portal extracted signal fires", w60)
 	w60_body.queue_free()
 	w60_gate.queue_free()
+	gs.set("phase", "main")
 	await process_frame
 
 	# 60e. Startscreen rain layer spawns with the menu and is freed with it.

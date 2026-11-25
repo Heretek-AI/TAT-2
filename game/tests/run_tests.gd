@@ -7396,9 +7396,9 @@ func _initialize() -> void:
 	# Behavioural, not constant mirrors: live physics for the blackjack hold,
 	# authored rows compared against the raw extract, reaction caps across four
 	# listening guards, a downed-guard witness, the rosters and the ranged curve.
-	var c91_problems: Array[String] = await _run_suite97(root)
-	if not c91_problems.is_empty():
-		printerr("FAIL: 97 W8 AI authored perception: ", c91_problems)
+	var c97_problems: Array[String] = await _run_suite97(root)
+	if not c97_problems.is_empty():
+		printerr("FAIL: 97 W8 AI authored perception: ", c97_problems)
 		fails += 1
 	else:
 		print("PASS: 97 W8 AI (sight frustum vs authored rows, blackjack hold race, investigator cap, GuardDowned, roster buckets, ranged curve, hearing occlusion, nav degradation)")

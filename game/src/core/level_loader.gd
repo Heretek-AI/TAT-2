@@ -3185,13 +3185,12 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 			elif "brazier" in low_mp or "torch" in low_mp:
 				wick_y = 0.55
 			wick_y *= tr.basis.get_scale().y
-			if not authored_candle_vfx:
-				var wick: Vector3 = prop_pos + Vector3(0.0, wick_y, 0.0)
-				if _authored_flame_near(authored_flame_positions, wick):
-					result["candle_flames_suppressed"] = int(result.get("candle_flames_suppressed", 0)) + 1
-				else:
-					_VfxManager.spawn_candle_flame(parent, wick)
-					_note_expansion_placement(parent, "candle_flame", result)
+			var wick: Vector3 = prop_pos + Vector3(0.0, wick_y, 0.0)
+			if _authored_flame_near(authored_flame_positions, wick):
+				result["candle_flames_suppressed"] = int(result.get("candle_flames_suppressed", 0)) + 1
+			else:
+				_VfxManager.spawn_candle_flame(parent, wick)
+				_note_expansion_placement(parent, "candle_flame", result)
 		if "wardrobe" in low_mp or "bureau" in low_mp or "armoire" in low_mp:
 			var ward_arr: Array = result["wardrobe_positions"]
 			ward_arr.append(prop_pos)

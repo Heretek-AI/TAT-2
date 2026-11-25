@@ -1,12 +1,13 @@
 # Handoff — Thick As Thieves Godot 4.7.2 port (next run)
 
 **Repo:** `/home/john/Projects/TAT-2`
-**HEAD at handoff:** `94a75e3` — `chore(audit): re-stamp baseline after W5 normalize`,
-on top of the six-wave **W5 integration** (`e6daa96`..`b6e8cd5`: movement,
-loader/render, weather/backdrop, audio/HUD, data producers, sonar P0), the
-Spider chain integration (`7aa2a67`..`3e26c7a`) and the codebase-memory
-hardening (`9f8f36a`, `877d6ad`).
-**Working tree:** clean; code HEAD `94a75e3`, docs commit on top is local (not pushed)
+**HEAD at handoff:** `96fae4f` — `fix(w6-integration): cross-wave test fixtures,
+loader meta guard and audit re-stamp`, the merged **W6 six-wave integration**
+(`a29b8fb`..`915373f`: loader/materials, movement, AI hearing/perception, authored
+briefing/prep, ledger/wardrobe catalog, graybox overrides + Sonar CI) on top of
+`f803c3b` (W5 integration).
+**Working tree:** clean; code HEAD `96fae4f`, the W6 docs commit on top is local
+(not pushed)
 **Godot:** `4.7.2.stable` via **native `tools/godot`** (Flatpak fallback inside the
 wrapper). `godot` is **not** on `$PATH`.
 **Renderer:** Forward+ · Jolt Physics 60 Hz · 1280×720 reference
@@ -24,7 +25,7 @@ be pursued.
 >
 > **Read first:** [`AGENTS.md`](../AGENTS.md) (operating rules and traps),
 > [`docs/FIDELITY_GAPS.md`](FIDELITY_GAPS.md) (live coverage + every residual),
-> [`docs/reports/w5-integration.md`](reports/w5-integration.md) (the last full
+> [`docs/reports/w6-integration.md`](reports/w6-integration.md) (the last full
 > gate set and its evidence),
 > [`docs/reports/perf-structural-wave.md`](reports/perf-structural-wave.md)
 > (performance truth and structural measurements),
@@ -39,12 +40,12 @@ be pursued.
 |---|---|
 | Extraction pipeline | reproducible from a wiped tree; `make extract` + `make normalize` + `make anims` exit 0 |
 | Asset integrity | 0 duplicate UIDs, 0 missing/corrupt meshes, `MESH HOLES=0`, 0 missing textures |
-| Scripts | **101 checked, 0 broken** (`94a75e3`) |
-| Unit suite (`run_tests.gd`) | **full run fails=0** (261 PASS, suites numbered to 88) on `94a75e3` |
-| M2 player suite | **fails=0** (11 PASS) on `94a75e3` |
+| Scripts | **110 checked, 0 broken** (`96fae4f`) |
+| Unit suite (`run_tests.gd`) | **full run fails=0** (263 PASS, suites numbered to 88) on `96fae4f` |
+| M2 player suite | **fails=0** (11 PASS) on `96fae4f` |
 | Probes | door walk **PASS**, viewmodel truth **PASS**, Niagara **PASS** (3695/3308/36); `probe_leak` **PASS** (`TAT2_NO_DEN_PROBE=1`, clean) |
-| E2E (unmasked) | **264/264 fails=0** (full tiers 1–4) on `94a75e3` |
-| W5 standalone tests | stair walk 7/7, roof collision 27/27, W5B materials 27/27, audio lifecycle 13/13, HUD gem/compass 11/11 |
+| E2E (unmasked) | **264/264 fails=0** (full tiers 1–4) on `96fae4f` |
+| Standalone suites | W5B materials 71, roof collision 51 (census 733/46/426/307/0), W6L searchlight 16, hearing ranges 39, light-once 7, W6U1 briefing 37, W6U2 catalog 61, stair walk 19, traversal 18, content overrides 447 (static) — all fails=0 |
 | Audit | `make audit` **PASS**, coverage 12657/12703 (99.6 %), 0 unexpected, baseline re-stamped after normalize (idempotent) |
 | Spider chain | **live** — note → electrotype → Owl → courier → informant, `stage=complete`, 7 facts; subset real-map probe **90/90** |
 | Perf/thermal guard | **W4P**: `--start-temp` 78 / `--max-temp` 95, 1 s sampler, `VmHWM` 8 GiB; `test_perf_guard.sh` **42/42**; **no real matrix run** |
@@ -226,6 +227,7 @@ tools/reimport_assets.sh && make desktop-texture-cap` before the game/tests work
 
 | Commit | Wave / change |
 |---|---|
+| `a29b8fb`..`96fae4f` | **W6 integration (six parallel waves)** — W6L loader (authored metallic/roughness/emissive, roughness L8 bake, roof classifier convex/box split, occluders, searchlights); W6M movement (blocker-safe step-up, landing headroom, step-down re-seat, 1.82 m `body_height_m`, 0.50 m mantle); W6G AI (54 authored hearing stims via `HearingData`, alertness-only hearing, light-independent detection gain, weather SoundCarry); W6U1 UI (authored briefings, 1200 s prep override, prep stage, Den poster light); W6U2 UI (68-row authored ledger/black market/wardrobe catalog + one-time save-id migration); W6T tooling (tracked graybox content overrides 508/133, Sonar CI + gate ratchet). Full gates green: compile 110/0, `run_tests` fails=0 (263), M2 fails=0, probes PASS, E2E 264/264, audit PASS, all standalone suites fails=0. Evidence: [`reports/w6-integration.md`](reports/w6-integration.md) |
 | `e6daa96`..`94a75e3` | **W5 integration (six parallel waves)** — W5A authored movement (60° floor, 0.45 m step, 1.82 m capsule, mantle gate, wardrobe LOS); W5B loader/render (roof convex collision, roof occluders off, masked opacity, mountain/poster materials); W5C weather/backdrop (Guildhall `gloomy`, near-field fog scale, horizon haze, one moonlit cloud tint, west Den window staging); W5D audio/HUD (120 ms cue dedupe, loop handles, single bed, spherical Light Gem, compass centre heading); W5E producers (unlocks, hearing/perception, guard StateTree); W5F sonar config + P0 fixes. Full gates green: compile 101/0, `run_tests` fails=0, M2 fails=0, probes PASS, E2E 264/264, audit PASS. Evidence: [`reports/w5-integration.md`](reports/w5-integration.md) |
 | `eb55bc1` | **W4P perf guard** — `--start-temp` 78 / `--max-temp` 95, independent 1 s sampler, guarded pre-warm, `VmHWM` 8 GiB, 12 GiB / 0 swap scope; `test_perf_guard.sh` 42/42. **No real matrix run.** Evidence: [`reports/w4p-thermal-guard.md`](reports/w4p-thermal-guard.md) |
 | `7aa2a67`..`3e26c7a` | **Spider personal chain (01 → 04) integrated** — spawn-pass seam, per-kind placement, global settle + thief binding, authored yaw, Owl pedestal, probe mission/stand-point fixes, suite 88. Real-map probe **90/90**, `stage=complete`. Evidence: [`reports/spider-chain-integration.md`](reports/spider-chain-integration.md) |
@@ -431,8 +433,12 @@ Recent additions to know about:
 
 ### 7.2 Fidelity residuals (visible, bounded)
 
-1. **Guildhall POI graybox floors + floating furniture** — 1,637 `GB_Floor_2x2`
-   at mismatched heights. Content project, not a loader tweak.
+1. **Guildhall POI graybox floors + floating furniture** — the *material* half is
+   done (W6T `content_overrides.json`: 508 matched / 133 re-materialised, 6/6
+   coverage regions with 0 un-materialed `GB_Floor_2x2`); the ~1,637 `GB_Floor_2x2`
+   at mismatched heights remain a content project, not a loader tweak. The
+   override material choices (roof slate, concrete, floor tile) are authored but
+   **not capture-verified**.
 2. **KF16 sign legibility at 27 m** — letters are gold, front-facing, emission
    `(1.0, 0.62, 0.20) × 0.10`; still low-contrast in the frame.
 3. **White glass/emissive plates** and the mirrored `PICK LOCK` reflection — repro
@@ -448,6 +454,19 @@ Recent additions to know about:
    exposure and the gold-mask G/R ratio remain approximations.
 8. **Reflection/probe state** — 7 texture RIDs may warn at finalization on the
    Den probe; not a script error.
+9. **Stair descent is re-seated, not glued (W6M)** — Godot snaps before
+   `move_and_slide`, so 0.33 m treads take short one-riser falls (civic rotated
+   run: 33 airborne frames / 100, ends grounded). Deep-tread 0.60 m fixtures
+   settle to an 11-frame interval. Not a soft-lock.
+10. **1.82 m capsule headroom (W6M)** — the authored body needs ~4 cm more
+    clearance in tight fits; `device_geometry.gd` and the W3 beam **mock** still
+    assume 1.78 m (owner: devices).
+11. **Roughness bake cost (W6L)** — ~3.85 s / ~98 MiB per Guildhall load
+    (`ROUGHNESS_BAKE count=86 pixels=73924608 ms=3848`). No gate timed out. If
+    rejected, the sanctioned fallback is `mat.roughness = rough_high` with no
+    `ue_roughness_remap` (a separate decision).
+12. **`add_cap` disabled (W6T)** — implemented and validated but no rule is
+    enabled: no capture proves a missing roof/ceiling slab.
 
 ### 7.3 Product/UX
 
@@ -534,8 +553,8 @@ Do not quote a gate as green until its command has actually completed on
 git status --short                                  # clean
 make audit                                          # exit 0, all groups fresh, 0 unexpected errors
 python3 tools/check_uid_duplicates.py game --json   # 0/0
-tools/godot --headless --path game --script "$PWD/tools/check_scripts_compile.gd"   # 101/0
-tools/godot --headless --path game --script res://tests/run_tests.gd         # fails=0
+tools/godot --headless --path game --script "$PWD/tools/check_scripts_compile.gd"   # 110/0
+tools/godot --headless --path game --script res://tests/run_tests.gd         # fails=0 (263 PASS)
 tools/godot --headless --path game --script res://tests/test_m2_player.gd    # fails=0
 tools/godot --headless --path game --script res://tests/probe_door_walk.gd   # PASS
 tools/godot --headless --path game --script res://tests/probe_viewmodel_truth.gd  # PASS
@@ -546,12 +565,13 @@ make texture-cap-check                                                      # OK
 git push origin main
 ```
 
-The 2026-11-24 W5 integration (`94a75e3`) ran **every** gate in the block above
-serially on this HEAD: compile 101/0, `run_tests` fails=0, M2 fails=0, three
-probes PASS, `probe_leak` clean, E2E 264/264, `make audit` PASS and
-`make texture-cap-check` OK — see
-[`reports/w5-integration.md`](reports/w5-integration.md). The perf matrix and a
-full editor open remain deferred (thermal); everything else is measured.
+The 2026-11-24 W6 integration (`96fae4f`) ran **every** gate in the block above
+serially on this HEAD: compile 110/0, `run_tests` fails=0 (263 PASS), M2 fails=0,
+three probes PASS, `probe_leak` clean, E2E 264/264, `make audit` PASS (coverage
+12657/12703, 0 unexpected) and `make texture-cap-check` OK (773/1/0), plus the
+ten standalone suites — see [`reports/w6-integration.md`](reports/w6-integration.md).
+The perf matrix, a full editor open and the Sonar scan remain deferred;
+everything else is measured.
 
 Any wave that changes rendering, materials, traversal or mission flow also needs:
 

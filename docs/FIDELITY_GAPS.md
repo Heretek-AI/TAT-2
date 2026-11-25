@@ -479,3 +479,60 @@ find extracted/json -name 'NS_*.json' | wc -l
     `test_stair_walk` **fails=0** (7 shipped routes incl. rotated/non-uniform and
     a descent), new `test_traversal_routes` **fails=0**, `test_m2_player`
     **fails=0**. E2E to be re-run by the integrating parent.
+
+- 2026-11-24: **W6 integration — six waves merged** (`91ce8db` W6L loader,
+  `d2a6d6c` W6M movement, `77a5c1a` W6G AI, `dc58f60` W6U1 UI, `9884082` W6U2
+  ledger/wardrobe, `e8052ef` W6T tooling; integration fixes `96fae4f`; report
+  [`reports/w6-integration.md`](reports/w6-integration.md)). All six applied
+  with **no file conflicts**; `run_tests.gd` auto-merged four times with every
+  hunk kept (33b, 45, 26/55b, 60c/8).
+  - **Loader/materials (W6L)**: authored metallic/roughness/emissive ranges are
+    mapped (218 materials bake a real roughness range, 0 keep the midpoint;
+    two-tone emissive tint with family ceilings), pitched roofs use convex hulls
+    and the roof classifier/occluders/searchlights are authored. W5B roof
+    census now **733 instances / 46 meshes, 426 convex / 19 + 307 box / 27**
+    (was 334/399), roof occluders **0**.
+  - **Movement (W6M)**: blocker-safe step-up (a `blocking_volume` is never a
+    tread), landing-headroom check, post-move `_try_step_down()`, `1.82 m`
+    `body_height_m()`, 0.3 m wall sample for the 0.50 m mantle.
+  - **AI (W6G)**: all 54 authored hearing stims are wired (`HearingData`:
+    MaxRange × surface × weather, `heard_by`/query gating, Short/Long
+    investigation, 285 portals read-only); hearing raises alertness only and
+    **never writes the 0..100 meter**; the port-only `vis_mult` light
+    multiplier is gone — light gates acquisition **range** only. 5 authored
+    range anomalies are clamped and logged once.
+  - **UI (W6U1/W6U2)**: authored briefings (3), 1200 s prep override, prep stage
+    and Den poster light; the Black Market and Wardrobe are driven by the
+    68-row authored unlock catalog with stable `save_id`s, a one-time legacy id
+    migration (tools `fairy`/`slithersap`, short cosmetic ids), no placeholder
+    prices, and KF03/KF04 three-column wardrobe panels.
+  - **Tooling (W6T)**: graybox P0 + 3rd-floor re-materialisation moved into
+    `game/data/expansion/content_overrides.json` (11 rules, **508 matched / 133
+    re-materialised**, 6/6 coverage regions clean, `add_cap` validated but
+    disabled), applied by `parse_tables` before each `.tatlevel.json`; Sonar CI
+    workflow + GDScript gate ratchet (`gate_ratchet.json`).
+  - Five merged-tree defects fixed (none weakened, none skipped):
+    `level_loader.get_meta(…, null)` engine-error spam → `has_meta()`;
+    `run_tests` 60c now pins the starter profile instead of trusting a live,
+    migrated save; E2E `T3-25` asserts the documented "reaches SUSPICIOUS"
+    contract (the old exact `state == 1` depended on the removed light
+    multiplier); `test_content_overrides.gd`'s `dict.get(k) or []` returned a
+    bool and made the whole static test vacuous (2 → **447** assertions);
+    `parse_state_tree.py` said the 54 hearing rows were unwired.
+  - Verified on `96fae4f`, serial: compile **110/0**, `run_tests` **fails=0**
+    (263 PASS), M2 **fails=0** (11), door walk / viewmodel / Niagara **PASS**,
+    `probe_leak` clean, E2E **264/264**, standalone W6 suites all fails=0
+    (W5B materials 71, roof 51, searchlight 16, hearing 39, light-once 7,
+    briefing 37, catalog 61, stair/traversal/content-overrides static 447),
+    `make audit` **PASS** (coverage 12657/12703, 0 unexpected), texture cap
+    **773/1/0**.
+  - **Residuals**: stair **descent is re-seated, not glued** (short one-riser
+    falls on 0.33 m treads; deep-tread fixtures settle); the 1.82 m capsule
+    needs ~4 cm more headroom in tight fits; `device_geometry.gd` and the W3
+    beam mock still assume 1.78 m (owner: devices); W6T graybox materials are
+    authored but not capture-verified and `add_cap` is disabled; the W6L
+    roughness bake costs **~3.85 s / ~98 MiB per Guildhall load** (sanctioned
+    fallback `roughness=high` not taken); guard StateTree data still does not
+    drive `guard_ai.gd`.
+  - **Not run**: perf matrix, Vulkan captures, `make run` visual pass, full
+    editor open, Sonar scan. Not pushed.

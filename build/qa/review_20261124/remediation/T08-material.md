@@ -27,7 +27,7 @@ Where a number could only be modelled, it says so.
 | 4 | GLB props ship zero textures; `MI_CatStatueA` 600× `Color` used as albedo | P1 | **FIXED** |
 | 5 | Ward shader: energy×facet collapses facet contrast, alpha makes a pane | P1 | **FIXED** (shader arithmetic; no capture, see S6) |
 | 6 | Name-substring matcher overrides the authored slot index | P1 | **FIXED** |
-| 7 | Texture-cap coverage (285 files unseen) + allowlist without reasons | P2 | **FIXED**; 14 newly gated targets need the integrator's `make desktop-texture-cap` |
+| 7 | Texture-cap coverage (285 files unseen) + allowlist without reasons | P2 | **FIXED**; 24 newly gated targets (14 code literals + 10 producer-bound) need the integrator's `make desktop-texture-cap` |
 | 8 | `SM_Shape_*` debug primitives + silent flat-colour path | P2 | **FIXED** as scoped; the finding's 58/171 count is **NOT REPRODUCED** (see §8) |
 | 9 | No texture streaming/eviction; roughness bake 3.7 s / 80 MB | P2 | **DEFERRED** (quantified, no safe change) |
 
@@ -45,8 +45,31 @@ parser; the integrator must run `make normalize` to put it in the shared tree):
 | `tests/probe_t08_level.gd` (new) | `debug_shape_hidden=8` on `OldManor_Geo`, `0` on the 11-override control |
 | E2E tier 1 | `fails=0 passed=117 total=117` |
 | E2E `--tier=s2` (loot) | `fails=0 passed=12 total=12` |
-| `make texture-cap-check` | **fails closed by design on this tree** (`offenders: 14`) until `make desktop-texture-cap` — integrator action |
+| `probe_leak.gd` (`TAT2_NO_DEN_PROBE=1`) | players 1 → 0 after each mission free, exit 0 (no leftover player nodes) |
+| `make texture-cap-check` | **fails closed by design on this tree**: `offenders: 14` on the base data, `24` with the regenerated data, until `make desktop-texture-cap` — integrator action |
 | `make audit` | **fails closed by design on this tree**: content-overrides PASS, the cap gate reports 24 offenders, and `manifest_audit` (run directly, all content OK — `entries=1629 with_albedo=1376 texture_refs=1523 missing_textures=0`) fails exactly 4 baseline stamps: `parse_materials.py` sha + `materials_albedo 1379→1376` + `gen:materials.json` content + `prebake_texture_cap.py` sha. `make audit-refresh-stamps` is integrator-only |
+
+---
+
+## Register — the four classes the brief asked to count, before/after
+
+Counted headless from the generated data + `mesh_materials.json` × every
+`.tatlevel.json` (284,305 mesh-slot binds). "Before" is the committed
+`materials.json`; "after" is the T08 producer output (byte-identical to a clean
+re-run of `tools/parse_materials.py`).
+
+| class | before | after | note |
+|---|---|---|---|
+| authored tints total | 541 | 541 | flat ≤1 / HDR: **530 / 11 → 534 / 7** |
+| **tint applied linear-as-sRGB** (≤1 + albedo) | **447 materials / 110,396 binds** | **0 / 0** | one encode at the single assignment point; 40-material applied sample mismatched=0 |
+| HDR tint carried through (by design) | 11 | 7 | loot family moved to the authored `Flat Color` |
+| dropped group-3 texture refs | 128 names / **315 refs** | 120 names / **280 refs** | 35 newly classified; 3 noise + 4 `T_white` deliberately unbound |
+| **mis-bound GLB slots** (legacy name rule) | **53 meshes / 776 instances** | **0 / 0** | index-first; empty-slot name rescue counted (0) |
+| albedo changed by the producer | — | 53 materials / 1,254 binds | 876 birch + 376 BlockerWard + 2 others |
+| render block changed (BPO) | — | 45 materials / 1,290 binds | 1,283 foliage + 5 stained glass |
+| materials with **no** albedo texture | 250 / 2,379 binds | 253 / 2,757 binds | +378 binds are `M_BlockerWard`'s 376 (the guessed wardrobe is gone: authored emissive now) |
+| …of those, flat-colour (tint, no map) | 85 / 2,141 | 95 / 2,143 | now counted + named (near-white 17 / 171) |
+| untextured near-white binds | 17 / 171 | 17 / 171 | all `MI_Default_White`; 8 of 171 instances spawn (rest overridden) |
 
 ---
 

@@ -296,6 +296,13 @@ func instantiate_mission(contract_order: int, max_frames: int = 240, difficulty:
 	await step_process(2)
 	var p: Node = m.get("player") as Node
 	var h: Node = m.get("hud") as Node
+	# The mission-start letter is an input modal (T06, RE-H-12): a player closes
+	# it before playing, so the harness does too. This is test setup, not an
+	# assertion change — the gameplay checks below assume gameplay input.
+	if h != null and h.has_method("is_mission_letter_open") and bool(h.call("is_mission_letter_open")):
+		if h.has_method("_close_mission_letter"):
+			h.call("_close_mission_letter")
+			await step_process(2)
 	return {"mission": m, "player": p, "hud": h, "timed_out": timed_out}
 
 

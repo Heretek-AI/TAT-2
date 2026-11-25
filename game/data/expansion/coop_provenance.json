@@ -1,0 +1,61 @@
+{
+  "schema": "tat2.coop_provenance/1",
+  "label": "TAT-2 co-op transport",
+  "feature": "co-op",
+  "expansion": false,
+  "transport_invented": true,
+  "statement": "Co-op is a shipped feature of the game. Only the Godot ENet transport (game/src/core/net_manager.gd) is TAT-2-invented content; the PvP/PvE game modes, the lobby and session flow, the session browser and the co-op XP row are authored content this port does not model. Co-op must never be described as a TAT-2 expansion feature.",
+  "evidence": {
+    "manifest": "extracted/filelist.txt (private dump; paths below are verbatim)",
+    "xp_table": "game/data/generated/tables/Gameplay/Tuning/DT_PlayerExperience.json",
+    "note": "The extractor emits no producer for session/lobby state or the BP replication graph, so the transport protocol is a port decision (see the team report)."
+  },
+  "shipped": {
+    "game_modes": [
+      { "asset": "/Game/Core/BP_TATPvEGameMode", "file": "TAT/Content/Core/BP_TATPvEGameMode.uasset" },
+      { "asset": "/Game/Core/BP_TATPvPGameMode", "file": "TAT/Content/Core/BP_TATPvPGameMode.uasset" },
+      { "asset": "/Game/Core/BP_TATServerStartGameMode", "file": "TAT/Content/Core/BP_TATServerStartGameMode.uasset" }
+    ],
+    "lobby": [
+      { "asset": "/Game/Core/Lobby/BP_LobbyGameMode", "file": "TAT/Content/Core/Lobby/BP_LobbyGameMode.uasset" },
+      { "asset": "/Game/Core/Lobby/BP_LobbyGameState", "file": "TAT/Content/Core/Lobby/BP_LobbyGameState.uasset" },
+      { "asset": "/Game/Character/Player/BP_MatchLobbyDummyPlayer", "file": "TAT/Content/Character/Player/BP_MatchLobbyDummyPlayer.uasset" },
+      { "asset": "/Game/Maps/MissionLobby/MissionLobby_P", "file": "TAT/Content/Maps/MissionLobby/MissionLobby_P.umap", "port_use": "main-menu/prep backdrop only (prep_skyline.json stage), never as a lobby" }
+    ],
+    "session_ui": [
+      { "asset": "/Game/UI/SessionSelect/BPUI_SessionSearch", "file": "TAT/Content/UI/SessionSelect/BPUI_SessionSearch.uasset" },
+      { "asset": "/Game/UI/SessionSelect/BPUI_SessionQuery", "file": "TAT/Content/UI/SessionSelect/BPUI_SessionQuery.uasset" },
+      { "asset": "/Game/UI/SessionSelect/BPUI_ServerListPanel", "file": "TAT/Content/UI/SessionSelect/BPUI_ServerListPanel.uasset" },
+      { "asset": "/Game/UI/SessionSelect/BPUI_ServerRow", "file": "TAT/Content/UI/SessionSelect/BPUI_ServerRow.uasset" },
+      { "asset": "/Game/UI/SessionSelect/BPUI_SessionButton", "file": "TAT/Content/UI/SessionSelect/BPUI_SessionButton.uasset" }
+    ],
+    "xp_row": {
+      "table": "DT_PlayerExperience",
+      "row": "XP.Cooperative",
+      "display": "Co-op Bonus",
+      "source_table": "/Game/StringTables/ST_PostMatch.ST_PostMatch",
+      "source_key": "XP.Breakdown.Coop"
+    }
+  },
+  "invented": {
+    "transport": "res://src/core/net_manager.gd",
+    "transport_label": "TAT-2 invented",
+    "replicated": [
+      "player pose (position/yaw/crouch/thief id, <= 20 Hz)",
+      "swinging-door open/close (host-validated world event)",
+      "run outcome escape/capture/timeout (host-authoritative, match_id-keyed payout record)"
+    ],
+    "local_only": [
+      "mission clock and objectives",
+      "loot, carried inventory and stash",
+      "clue facts, keys, stealth ratings",
+      "each peer's own save profile"
+    ]
+  },
+  "not_modelled": [
+    "PvP and PvE game-mode rules",
+    "matchmaking / session browser",
+    "lobby, ready state and seamless travel",
+    "the authored co-op XP bonus (XP.Cooperative is parsed but never awarded: total XP still uses the port's invented rule)"
+  ]
+}

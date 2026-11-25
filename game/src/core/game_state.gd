@@ -32,6 +32,10 @@ var thief_id: String = "spider" # spider (Nisha) | chameleon (Cotter)
 ## ("The Spider" / "The Chameleon"). SaveSystem owns the persisted,
 ## type-validated copy (SaveSystem.set_player_name() is the API).
 var player_name: String = ""
+## LEGACY lossy mirror (short names such as "BowlerA"), nothing reads it. The
+## authored tags live in SaveSystem.equipped_loadout and are exposed through
+## active_outfit()/outfit_tag() below (RE-N-10); wardrobe_ui still writes these
+## three and T05 should drop those writes (recorded as a doc correction).
 var outfit_body: String = "Default"
 var outfit_head: String = "Default"
 var calling_card: String = "Default"
@@ -54,10 +58,12 @@ var free_play: bool = false
 ## closure re-stages them around its own reset_run call.
 var free_play_pending: bool = false
 var pending_mission_id: String = ""
-# Run-selection state used by SV_* scene variants and match modes.
+# Run-selection state used by SV_* scene variants.
 var active_map_seed: int = 0
 var active_scene_variants: Array[String] = []
-var active_match_mode: String = "solo" # solo | coop_host | coop_client | ftue
+## RE-N-16: `active_match_mode` (a never-written "solo|coop_host|coop_client"
+## duplicate of active_mission_mode's "Solo|Co-op" UI label) was removed here.
+## The live mode label is active_mission_mode, owned by the contract table.
 
 ## Canonical identity accessor (contract name); keeps thief_id as the store.
 var active_thief_id: String:
@@ -142,11 +148,124 @@ func player_display_name() -> String:
 	return source
 
 
+## ---------------------------------------------------------------------------
+## Authored cosmetic + co-op provenance contracts (RE-N-10, RE-N-12).
+## ---------------------------------------------------------------------------
+
+## Equipped-cosmetic slots, in the save's equipped_loadout order.
+const OUTFIT_SLOTS: Array[String] = ["head", "body", "calling_card"]
+## Per-thief base skeletal meshes, each verified present on disk. The Cotter
+## (Chameleon) meshes live directly under Skin/Base/ — there is no Dyn/ folder,
+## and the transport's old "..._Dyn__Body_NoPostProcABP.glb" Cotter candidate
+## never existed (which is why the remote visual fell back to a capsule).
+const THIEF_BASE_MESHES: Dictionary = {
+	"spider": {
+		"body": "res://assets/ue/Content/Art/Animation/ThiefNisha/Skin/Base/Dyn/SK_ThiefNisha_Dyn__Body_NoPostProcABP.glb",
+		"head": "res://assets/ue/Content/Art/Animation/ThiefNisha/Skin/Base/Dyn/SK_ThiefNisha_Dyn__Head.glb",
+		"body_1p": "res://assets/ue/Content/Art/Animation/ThiefNisha/Skin/Base/SK_ThiefNisha__BodyUpper.glb",
+	},
+	"chameleon": {
+		"body": "res://assets/ue/Content/Art/Animation/ThiefCotter/Skin/Base/SK_ThiefCotter__Body.glb",
+		"head": "res://assets/ue/Content/Art/Animation/ThiefCotter/Skin/Base/SK_ThiefCotter__Head.glb",
+		"body_1p": "res://assets/ue/Content/Art/Animation/ThiefCotter/Skin/Base/SK_ThiefCotter__BodyUpper.glb",
+	},
+}
+## Thief ids with authored DT_CharacterOutfitsMetadata rows. "moth" (TAT-2) has
+## no authored row, so it renders on the Spider skeleton until it has one.
+const OUTFIT_THIEVES: Array[String] = ["spider", "chameleon"]
+
+
+## The active thief's equipped cosmetics as authored outfit tags. This is the
+## contract the world character (T04-ANIM) and the HUD must read; the legacy
+## outfit_* fields above are a short-name mirror with no reader.
+func active_outfit() -> Dictionary:
+	return {
+		"head": outfit_tag("head"),
+		"body": outfit_tag("body"),
+		"calling_card": outfit_tag("calling_card"),
+	}
+
+
+## One slot's authored outfit tag ("Outfit.<Thief>.<Slot>.<Row>"). A fresh save
+## stores "" per slot, so the authored Default row is returned rather than a
+## blank: every value is a real DT_CharacterOutfitsMetadata row, never a short
+## name. An unknown slot returns "".
+func outfit_tag(slot: String) -> String:
+	var clean: String = slot.strip_edges().to_lower()
+	if not OUTFIT_SLOTS.has(clean):
+		return ""
+	var tag: String = ""
+	var ss: Node = get_node_or_null("/root/SaveSystem")
+	if ss != null and ss.has_method("get_loadout"):
+		var lo: Dictionary = ss.call("get_loadout", _outfit_thief_id()) as Dictionary
+		tag = str(lo.get(clean, "")).strip_edges()
+	if tag != "":
+		return tag
+	return "Outfit.%s.%s.Default" % [_outfit_thief_id().capitalize(), _outfit_slot_name(clean)]
+
+
+func _outfit_thief_id() -> String:
+	return thief_id if OUTFIT_THIEVES.has(thief_id) else "spider"
+
+
+func _outfit_slot_name(slot: String) -> String:
+	match slot:
+		"body":
+			return "Body"
+		"calling_card":
+			return "CallingCard"
+	return "Head"
+
+
+## Base mesh for the active thief: "body" (3P), "head" or "body_1p" (viewmodel
+## torso). An unknown thief id falls back to the Spider skeleton so the world
+## never renders nothing.
+func thief_base_mesh(kind: String = "body") -> String:
+	var entry: Variant = THIEF_BASE_MESHES.get(_outfit_thief_id(), null)
+	if entry is Dictionary:
+		return str((entry as Dictionary).get(kind.strip_edges().to_lower(), ""))
+	return ""
+
+
+## Co-op provenance record (RE-N-12). The shipped build authors the multiplayer
+## stack — BP_TATPvEGameMode / BP_TATPvPGameMode, the lobby map, the session UI
+## and the DT_PlayerExperience row XP.Cooperative ("Co-op Bonus") — so co-op is
+## a shipped feature whose *transport* is the TAT-2-invented part. The record is
+## a tracked expansion file so UI copy and reports read one label source.
+const COOP_PROVENANCE_PATH := "res://data/expansion/coop_provenance.json"
+var _coop_provenance: Dictionary = {}
+
+
+func coop_provenance() -> Dictionary:
+	if _coop_provenance.is_empty():
+		if FileAccess.file_exists(COOP_PROVENANCE_PATH):
+			var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(COOP_PROVENANCE_PATH))
+			if parsed is Dictionary:
+				_coop_provenance = (parsed as Dictionary).duplicate(true)
+		if _coop_provenance.is_empty():
+			# Fail closed on the label: co-op is still not expansion content.
+			_coop_provenance = {"expansion": false, "transport_invented": true, "shipped": {}}
+	return _coop_provenance.duplicate(true)
+
+
+## True only when the provenance record says the feature is TAT-2 expansion.
+## Today it is always false: the transport is invented, the feature is shipped.
+func coop_is_expansion() -> bool:
+	return bool(coop_provenance().get("expansion", false))
+
+
 func reset_run(contract_order: int, map_id: String) -> void:
+	var prev_phase: String = phase
 	active_contract_order = contract_order
 	if active_map_id != map_id:
 		active_mission_id = ""
 	active_map_id = map_id
+	# RE-N-14: the scene-variant seed belongs to the run, not to the process.
+	# start_contract() re-derives it from map+contract on every deploy; leaving
+	# the previous value here made the Den's seed ("thieves_den|1") leak into
+	# every later mission in the same session.
+	active_map_seed = 0
+	active_scene_variants = []
 	# Free-play is a mode, not run progress: clear the live flag with the rest
 	# of the run and republish the staged choice (prep / QA autostart / deploy
 	# closure). The pending mission id also survives the map-change wipe of
@@ -193,6 +312,11 @@ func reset_run(contract_order: int, map_id: String) -> void:
 	player_light_visibility = 0.2
 	state = "playing"
 	state_changed.emit(state)
+	# RE-N-16: reset_run used to assign phase = PHASE_MAIN silently, so a
+	# listener connected before the mission desynced at every run start. Emit
+	# only on a real change (a fresh reset from main is not a transition).
+	if prev_phase != phase:
+		phase_changed.emit(phase)
 	objectives_updated.emit()
 	loot_changed.emit(loot_collected, loot_needed, loot_value)
 	carried_loot_changed.emit(carried_slots_used(), 12, carried_total_value())

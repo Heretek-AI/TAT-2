@@ -408,7 +408,7 @@ func _run() -> void:
 	#    markers at the origin. Opt-in (`--load-map`): it materialises 571 GLBs,
 	#    and AGENTS rule 4 forbids stacking that on another team's gate run.
 	var args: PackedStringArray = OS.get_cmdline_user_args()
-	if not args.has("--load-map") and not args.has("--load-spline-map"):
+	if not args.has("--load-map") and not args.has("--load-spline-map") and not args.has("--load-graph-map"):
 		print("GEOM_PROBE SKIP real-map section: RE-P-05 origin guard behaviour and")
 		print("GEOM_PROBE SKIP the exported reconciliation counters need --load-map (571 GLBs)")
 		_ll.queue_free()
@@ -495,6 +495,28 @@ func _run() -> void:
 			"RE-B-04 spline pieces keep their own placement",
 			"records=%d instances=%d nodes=%d missing=%d" % [want, got, got_nodes, int(vres.get("missing_mesh_count", -1))])
 		host2.queue_free()
+
+	# 9. RE-B-01 end-to-end: load a regeneration payload that carries the graph
+	#    and let the loader pull the always-loaded sublevels itself. The Den is
+	#    the cheap case (5 always-loaded: Contracts, Audio, Periphery,
+	#    LoadoutCapture, ThievesDen_Geo).
+	if args.has("--load-graph-map"):
+		var den_path: String = _levels_root + "ThievesDenTest/ThievesDenTest_P.tatlevel.json"
+		var den_payload: Dictionary = _read_json(den_path)
+		var host3 := Node3D.new()
+		root.add_child(host3)
+		var den_paths: Array[String] = [den_path]
+		var dres: Dictionary = _ll.call("load_sublevels", den_paths, host3, null, 8, false) as Dictionary
+		print("GEOM_PROBE graph_map payload_streaming=%d from_graph=%d graph_missing=%d skipped_merged=%d meshes=%d" % [
+			(den_payload.get("streaming_levels", []) as Array).size(),
+			int(dres.get("sublevels_from_graph", -1)), int(dres.get("sublevels_graph_missing", -1)),
+			int(dres.get("sublevels_skipped_merged", -1)), int(dres.get("mesh_instances", -1))])
+		_check(int(dres.get("sublevels_from_graph", 0)) == 5 and int(dres.get("sublevels_graph_missing", -1)) == 0,
+			"RE-B-01 loader pulls the authored always-loaded set",
+			"from_graph=%d missing=%d meshes=%d" % [
+				int(dres.get("sublevels_from_graph", -1)), int(dres.get("sublevels_graph_missing", -1)),
+				int(dres.get("mesh_instances", -1))])
+		host3.queue_free()
 
 	_ll.queue_free()
 	print("GEOM_PROBE checks=%d fails=%d pending_regeneration=%d" % [_checks, _fails, _pending])

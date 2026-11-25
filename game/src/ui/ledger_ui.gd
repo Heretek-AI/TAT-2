@@ -209,7 +209,7 @@ func _build_ui() -> void:
 	var back_btn: Button = Button.new()
 	back_btn.text = "BACK [ESC]"
 	back_btn.custom_minimum_size = Vector2(150, 40)
-	ThemeScript.style_teal_button(back_btn, false)
+	ThemeScript.style_teal_button(back_btn, false, 20)
 	back_btn.pressed.connect(_on_back_pressed)
 	header.add_child(back_btn)
 	vb.add_child(ThemeScript.teal_divider())
@@ -467,7 +467,7 @@ func _build_preview_card() -> PanelContainer:
 	_buy_btn = Button.new()
 	_buy_btn.text = "BUY"
 	_buy_btn.custom_minimum_size = Vector2(150, 32)
-	ThemeScript.style_teal_button(_buy_btn, true)
+	ThemeScript.style_teal_button(_buy_btn, true, 24)
 	_buy_btn.pressed.connect(_on_buy_pressed)
 	buy_row.add_child(_buy_btn)
 	return preview

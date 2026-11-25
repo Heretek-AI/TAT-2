@@ -4871,8 +4871,11 @@ func _initialize() -> void:
 	_w60_assert(w60_cd != null and w60_cd.text == "MISSION STARTING IN 6..." and w60_ready_btn != null and w60_ready_btn.text.find("UNREADY") < 0,
 		"prep idle countdown/READY label", w60)
 	w60_mp.call("_on_ready_action")
-	_w60_assert(bool(w60_mp.get("_countdown_running")) and w60_cd.text == "MISSION STARTING IN 6..." and w60_ready_btn.text.find("UNREADY") >= 0 and w60_ready_lbl.text == "UNREADY" and w60_emits.is_empty(),
-		"first READY starts 6 s countdown in UNREADY state", w60)
+	# KF11 at 01:00 (counting): nameplate READY + button [F] UNREADY + hint
+	# [F] UNREADY. T05 fixed the nameplate to stay on the readiness STATE; the
+	# old assertion pinned the pre-fix shared word (UNREADY on all three).
+	_w60_assert(bool(w60_mp.get("_countdown_running")) and w60_cd.text == "MISSION STARTING IN 6..." and w60_ready_btn.text.find("UNREADY") >= 0 and w60_ready_lbl.text == "READY" and w60_emits.is_empty(),
+		"first READY starts 6 s countdown in UNREADY button state with a READY nameplate", w60)
 	w60_mp.call("_process", 2.0)
 	_w60_assert(w60_cd.text == "MISSION STARTING IN 4...", "countdown ticks with _process delta (%s)" % w60_cd.text, w60)
 	w60_mp.call("_on_ready_action")

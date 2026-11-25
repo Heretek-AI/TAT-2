@@ -1345,7 +1345,9 @@ func _feat_13_hud_stealth_sound_health() -> void:
 	h.require(sw_node != null and sw_active, "T1-13-B", "Bilateral SoundWaves reacts to NoiseBus (%s)" % str(sw_active))
 
 	# T1-13-C: Top-Left Health Bar Position & Textures
-	var hp_fill: ColorRect = hud.get("hp_fill") as ColorRect
+	# T05: the fill is now the authored shaped texture (TextureRect), not a flat
+	# ColorRect; the assertion is about its position/size, so type it as Control.
+	var hp_fill: Control = hud.get("hp_fill") as Control
 	var hp_top_left: bool = false
 	if hp_fill != null:
 		var r: Rect2 = hp_fill.get_global_rect()

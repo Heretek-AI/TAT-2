@@ -19,6 +19,7 @@ extends CanvasLayer
 
 const SettingsUIScript := preload("res://src/ui/settings_ui.gd")
 const ThemeScript := preload("res://src/ui/art_nouveau_theme.gd")
+const UIStringsScript := preload("res://src/ui/ui_strings.gd")
 const MobileProfile := preload("res://src/core/mobile_profile.gd")
 
 const VERSION_STRING: String = "v1.5.148559"
@@ -27,8 +28,17 @@ const VERSION_STRING: String = "v1.5.148559"
 ## contract and the E2E wrap-around mapping).
 const COMPASS_DIRECTIONS: Array[String] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
 const INTERACTABLES_JSON_PATH: String = "res://data/generated/gameplay/interactables.json"
-const HP_BAR_MAX_W: float = 204.0
+## T_healthBar_straight_frame.png / _RGB.png / _splatter_red.png are all authored
+## at 1024x256 (4:1). The frame and the authored shaped fill must share one rect
+## at that aspect or the fill's corners cut across the frame's slanted border.
+const HP_BAR_MAX_W: float = 256.0
+const HP_BAR_H: float = 64.0
+## The authored red fill is the health bar; the splatter asset is a DAMAGE
+## overlay, not a permanent decoration (C3-08 / ADJUDICATIONS C-4).
+const HP_SPLATTER_THRESHOLD: float = 0.5
 const STAM_BAR_MAX_W: float = 176.0
+const DEN_SCENE_PATH: String = "res://scenes/mission.tscn"
+const LootInventoryScript := preload("res://src/interact/loot_inventory.gd")
 
 const TOOL_ICON_MAP: Dictionary = {
 	"zipwire": "res://assets/ue/Raw/Art/UI/Icons/Rewards/Gear/T_Zipwire_Wide.png",
@@ -163,7 +173,9 @@ var ribbon_lbl: Label
 var interact_lbl: Label
 var _prompt_secondary_lbl: Label
 var stealth_gem: TextureRect
-var hp_fill: ColorRect
+## T05: the authored shaped fill (T_healthBar_straight_RGB.png) is a TextureRect;
+## its size.x still scales with health (E2E T1-13-E) and it shares the frame rect.
+var hp_fill: TextureRect
 var stam_fill: ColorRect
 var hotbar_lbl: Label
 var slot_count_lbls: Array[Label] = []
@@ -178,6 +190,8 @@ var pause_center: CenterContainer
 var pause_panel: PanelContainer
 var result_panel: PanelContainer
 var result_lbl: Label
+var _result_lines: VBoxContainer
+var _result_continue_btn: Button
 var contract_data: Dictionary = {}
 var current_prompt: String = ""
 var fps_overlay: Label
@@ -195,6 +209,12 @@ var _fps_refresh: float = 0.0
 var _run_seed: int = 0
 
 var _pause_root: Control
+## KF30: the pause screen shows the modal over a darkened, blurred world with
+## NO live HUD. Visibility is snapshotted on pause and restored on resume.
+var _pause_visibility: Dictionary = {}
+var _pause_hud_hidden: bool = false
+## One-shot guard for the pause -> Den abandonment payout.
+var _payout_applied: bool = false
 ## NPC conversation modal (Spider personal chain). The dialogue node registers
 ## itself here so HUD input, the pause key and the interaction prompt can yield.
 var _npc_dialogue: Node = null
@@ -210,10 +230,18 @@ var _level_badge_lbl: Label
 # Top-left Health / Loot / Objectives
 var _hp_container: Control
 var _hp_clip: Control
+var _hp_splatter: TextureRect
 var _hp_ticks_box: Control
 var _hp_block_cache: Array = []
 var _stam_bg: ColorRect
 var _loot_lbl: Label
+## C-4 experiment: one HUD instance per mission; the recording showed the hp
+## frame's right cap and some labels drawn twice with only one HudScript, so the
+## build path now accounts for itself (printed once on _ready, exposed via
+## debug_hud_counts() and asserted by game/tests/test_t05_ui_contract.gd).
+static var _hud_build_serial: int = 0
+var hud_build_id: int = 0
+var _hp_frame_builds: int = 0
 
 # Bottom-center Stealth Ball & SoundWaves
 var _stealth_holder: Control
@@ -617,6 +645,10 @@ class PingRadialDraw extends Control:
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	# C-4 experiment: account for every HUD build (the recording showed duplicated
+	# hp-frame caps / labels with only one HudScript). One line per instance.
+	hud_build_id = _hud_build_serial + 1
+	_hud_build_serial = hud_build_id
 	_sans = ThemeScript.font_sans()
 	_italic = ThemeScript.font_italic()
 	_serif = ThemeScript.font_serif()
@@ -747,6 +779,10 @@ func _ready() -> void:
 	_build_mission_letter(_root)
 	_build_result_panel(_root)
 	_build_pause_menu(_root)
+
+	print("TAT-2 HUD build: id=%d root_children=%d hp_frame=%d hp_fill=%d objectives=%d" % [
+		hud_build_id, _root.get_child_count(), int(debug_hud_counts().get("hp_frames", 0)),
+		int(debug_hud_counts().get("hp_fills", 0)), int(debug_hud_counts().get("objectives", 0))])
 
 	# Wire global buses safely.
 	var nb: Node = get_node_or_null("/root/NoiseBus")
@@ -936,9 +972,13 @@ func _build_thief_plate(root: Control) -> void:
 	_level_badge_lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_level_badge_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_level_badge_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_level_badge_lbl.add_theme_font_size_override("font_size", 12)
+	# Authored numbers role (CF_FacultyGlyphic 32 -> 21 on the 720p canvas).
+	_level_badge_lbl.add_theme_font_size_override("font_size", ThemeScript.PX_NUMBERS)
 	_level_badge_lbl.add_theme_color_override("font_color", Color(0.95, 0.97, 1.0))
-	if _sans != null:
+	var num_font: Font = ThemeScript.font_numbers()
+	if num_font != null:
+		_level_badge_lbl.add_theme_font_override("font", num_font)
+	elif _sans != null:
 		_level_badge_lbl.add_theme_font_override("font", _sans)
 	_level_badge_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	lvl_box.add_child(_level_badge_lbl)
@@ -971,60 +1011,76 @@ func _build_top_left_health_and_objectives(root: Control) -> void:
 	root.add_child(tl_stack)
 
 	# Top-left ornate Health Bar using T_healthBar_straight_* + health_block_percentages().
+	# Authored composition (C3-08 / ADJUDICATIONS C-4): frame + authored SHAPED
+	# fill share one 4:1 rect; the splatter is a damage overlay gated on health.
 	_hp_container = Control.new()
 	_hp_container.name = "HealthBarContainer"
-	_hp_container.custom_minimum_size = Vector2(256, 54)
-	_hp_container.size = Vector2(256, 54)
+	_hp_container.custom_minimum_size = Vector2(HP_BAR_MAX_W, HP_BAR_H + 8.0)
+	_hp_container.size = Vector2(HP_BAR_MAX_W, HP_BAR_H + 8.0)
 	_hp_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_hp_container.visible = not is_hub
 	tl_stack.add_child(_hp_container)
 
 	var hp_back: ColorRect = ColorRect.new()
-	hp_back.position = Vector2(18, 12)
-	hp_back.size = Vector2(HP_BAR_MAX_W, 20)
+	hp_back.name = "HpBack"
+	hp_back.position = Vector2.ZERO
+	hp_back.size = Vector2(HP_BAR_MAX_W, HP_BAR_H)
 	hp_back.color = Color(0.06, 0.04, 0.08, 0.78)
 	hp_back.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_hp_container.add_child(hp_back)
 
 	_hp_clip = Control.new()
-	_hp_clip.position = Vector2(18, 12)
-	_hp_clip.size = Vector2(HP_BAR_MAX_W, 20)
+	_hp_clip.name = "HpClip"
+	_hp_clip.position = Vector2.ZERO
+	_hp_clip.size = Vector2(HP_BAR_MAX_W, HP_BAR_H)
 	_hp_clip.clip_contents = true
 	_hp_clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_hp_container.add_child(_hp_clip)
 
-	# Preserved hp_fill ColorRect inside the ornate frame.
-	hp_fill = ColorRect.new()
+	# The authored shaped red fill (never loaded before T05). Sized to the frame
+	# rect; size.x shrinks with health (the shaped left end stays put, the right
+	# end retracts instead of a rectangle cutting the frame).
+	hp_fill = TextureRect.new()
 	hp_fill.name = "HpFill"
-	hp_fill.position = Vector2(0, 0)
-	hp_fill.size = Vector2(HP_BAR_MAX_W, 20)
-	hp_fill.color = Color(0.64, 0.12, 0.12, 0.96)
+	hp_fill.position = Vector2.ZERO
+	hp_fill.size = Vector2(HP_BAR_MAX_W, HP_BAR_H)
+	hp_fill.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	hp_fill.stretch_mode = TextureRect.STRETCH_SCALE
+	var hp_fill_tex: Texture2D = ResourceLoader.load("res://assets/ue/Raw/Art/UI/HUD/HealthBar/hpBar_straight/T_healthBar_straight_RGB.png") as Texture2D
+	if hp_fill_tex != null:
+		hp_fill.texture = hp_fill_tex
 	hp_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_hp_clip.add_child(hp_fill)
 
-	var hp_splatter: TextureRect = _tex_rect("res://assets/ue/Raw/Art/UI/HUD/HealthBar/hpBar_straight/T_healthBar_splatter_red.png", Vector2(HP_BAR_MAX_W, 28))
-	if hp_splatter != null:
-		hp_splatter.stretch_mode = TextureRect.STRETCH_SCALE
-		hp_splatter.position = Vector2(0, -3)
-		hp_splatter.modulate = Color(0.45, 0.04, 0.06, 0.85)
-		_hp_clip.add_child(hp_splatter)
+	_hp_splatter = _tex_rect("res://assets/ue/Raw/Art/UI/HUD/HealthBar/hpBar_straight/T_healthBar_splatter_red.png", Vector2(HP_BAR_MAX_W, HP_BAR_H))
+	if _hp_splatter != null:
+		_hp_splatter.name = "HpSplatter"
+		_hp_splatter.stretch_mode = TextureRect.STRETCH_SCALE
+		_hp_splatter.position = Vector2.ZERO
+		_hp_splatter.modulate = Color(0.62, 0.06, 0.08, 0.92)
+		_hp_splatter.visible = false
+		_hp_clip.add_child(_hp_splatter)
 
 	_hp_ticks_box = Control.new()
-	_hp_ticks_box.position = Vector2(18, 12)
-	_hp_ticks_box.size = Vector2(HP_BAR_MAX_W, 20)
+	_hp_ticks_box.position = Vector2.ZERO
+	_hp_ticks_box.size = Vector2(HP_BAR_MAX_W, HP_BAR_H)
 	_hp_ticks_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_hp_container.add_child(_hp_ticks_box)
 	_rebuild_hp_block_ticks([25, 25, 25, 25])
 
-	var hp_frame: TextureRect = _tex_rect("res://assets/ue/Raw/Art/UI/HUD/HealthBar/hpBar_straight/T_healthBar_straight_frame.png", Vector2(256, 62))
+	var hp_frame: TextureRect = _tex_rect("res://assets/ue/Raw/Art/UI/HUD/HealthBar/hpBar_straight/T_healthBar_straight_frame.png", Vector2(HP_BAR_MAX_W, HP_BAR_H))
 	if hp_frame != null:
+		hp_frame.name = "HpFrame"
+		# The frame is authored 1024x256 and drawn at the same 4:1 aspect, so
+		# STRETCH_SCALE is aspect-exact (no ornament distortion).
 		hp_frame.stretch_mode = TextureRect.STRETCH_SCALE
-		hp_frame.position = Vector2(0, 0)
+		hp_frame.position = Vector2.ZERO
 		_hp_container.add_child(hp_frame)
+		_hp_frame_builds += 1
 
 	# Subtle Stamina bar right below the HP frame (preserved stam_fill property).
 	_stam_bg = ColorRect.new()
-	_stam_bg.position = Vector2(24, 42)
+	_stam_bg.position = Vector2(6, HP_BAR_H + 2.0)
 	_stam_bg.size = Vector2(STAM_BAR_MAX_W, 4)
 	_stam_bg.color = Color(0.06, 0.10, 0.16, 0.55)
 	_stam_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1032,7 +1088,7 @@ func _build_top_left_health_and_objectives(root: Control) -> void:
 
 	stam_fill = ColorRect.new()
 	stam_fill.name = "StamFill"
-	stam_fill.position = Vector2(24, 42)
+	stam_fill.position = Vector2(6, HP_BAR_H + 2.0)
 	stam_fill.size = Vector2(STAM_BAR_MAX_W, 4)
 	stam_fill.color = Color(0.42, 0.82, 0.94, 0.82)
 	stam_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1086,8 +1142,8 @@ func _rebuild_hp_block_ticks(blocks: Array) -> void:
 		var frac: float = clampf(accum / total, 0.0, 1.0)
 		var tick: ColorRect = ColorRect.new()
 		tick.color = Color(0.10, 0.14, 0.28, 0.82)
-		tick.position = Vector2(HP_BAR_MAX_W * frac - 1.0, 1.0)
-		tick.size = Vector2(2.0, 18.0)
+		tick.position = Vector2(HP_BAR_MAX_W * frac - 1.0, 2.0)
+		tick.size = Vector2(2.0, HP_BAR_H - 4.0)
 		tick.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_hp_ticks_box.add_child(tick)
 
@@ -1330,7 +1386,8 @@ func _build_tool_hotbar(root: Control) -> void:
 
 	hint_row.add_child(ThemeScript.white_keycap("TAB", 10))
 	var map_lbl: Label = Label.new()
-	map_lbl.text = "MAP"
+	# T05 l10n: authored ST_HUD rows (source -> Loc translation), literal fallback.
+	map_lbl.text = UIStringsScript.st_upper("ST_HUD", "MapButtonLabel", "MAP")
 	map_lbl.add_theme_font_size_override("font_size", 12)
 	map_lbl.add_theme_color_override("font_color", Color(0.82, 0.88, 0.98, 0.88))
 	if _sans != null:
@@ -1343,7 +1400,7 @@ func _build_tool_hotbar(root: Control) -> void:
 
 	hint_row.add_child(ThemeScript.white_keycap("MMB", 10))
 	var ping_lbl: Label = Label.new()
-	ping_lbl.text = "[HOLD] PING MENU"
+	ping_lbl.text = UIStringsScript.st_upper("ST_HUD", "PingButtonLabel", "[HOLD] PING MENU")
 	ping_lbl.add_theme_font_size_override("font_size", 12)
 	ping_lbl.add_theme_color_override("font_color", Color(0.62, 0.72, 0.94, 0.84))
 	if _sans != null:
@@ -1430,9 +1487,13 @@ func _build_den_lookat_card(root: Control) -> void:
 
 	_den_card_title_lbl = Label.new()
 	_den_card_title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_den_card_title_lbl.add_theme_font_size_override("font_size", 17)
+	_den_card_title_lbl.add_theme_font_size_override("font_size", 22)
 	_den_card_title_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
-	if _serif != null:
+	# Authored Heading_Handwritten role (CF_PermanentMarker).
+	var hand_font: Font = ThemeScript.font_handwritten()
+	if hand_font != null:
+		_den_card_title_lbl.add_theme_font_override("font", hand_font)
+	elif _serif != null:
 		_den_card_title_lbl.add_theme_font_override("font", _serif)
 	_den_card_title_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vb.add_child(_den_card_title_lbl)
@@ -1567,9 +1628,13 @@ func _build_map_overlay(root: Control) -> void:
 	_map_title_lbl = Label.new()
 	_map_title_lbl.text = "TACTICAL MAP"
 	_map_title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_map_title_lbl.add_theme_font_size_override("font_size", 22)
+	# Authored MapTool_Handwritten role (CF_Caveat 28 -> 19).
+	_map_title_lbl.add_theme_font_size_override("font_size", ThemeScript.PX_MAP_HAND + 7)
 	_map_title_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
-	if _serif != null:
+	var map_font: Font = ThemeScript.font_map_hand()
+	if map_font != null:
+		_map_title_lbl.add_theme_font_override("font", map_font)
+	elif _serif != null:
 		_map_title_lbl.add_theme_font_override("font", _serif)
 	vb.add_child(_map_title_lbl)
 
@@ -1757,35 +1822,50 @@ func _build_mission_letter(root: Control) -> void:
 	cont_btn.name = "MissionLetterContinueBtn"
 	cont_btn.text = "[SPACE]  CONTINUE"
 	cont_btn.custom_minimum_size = Vector2(210, 42)
-	ThemeScript.style_teal_button(cont_btn, false)
+	ThemeScript.style_teal_button(cont_btn, false, 24)
 	cont_btn.pressed.connect(_close_mission_letter)
 	btn_wrap.add_child(cont_btn)
 
 
+## Post-match rack-up, rebuilt from the authored ST_PostMatch (71 rows) and
+## ST_Screens.PostMatch rows (T05). The old panel invented "CONTRACT COMPLETE /
+## CAPTURED BY THE CONSTABULARY", "GHOST/SHADOW/BRAWLER" and a score line with
+## no authored counterpart (RE-L-09).
 func _build_result_panel(root: Control) -> void:
 	var cc: CenterContainer = CenterContainer.new()
 	cc.set_anchors_preset(Control.PRESET_FULL_RECT)
 	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(cc)
 	result_panel = PanelContainer.new()
+	result_panel.name = "PostMatchPanel"
 	result_panel.add_theme_stylebox_override("panel", ThemeScript.teal_panel_style(2, 8, ThemeScript.TEAL_PANEL_BG, 24))
 	result_panel.visible = false
 	cc.add_child(result_panel)
-	ThemeScript.add_teal_filigree(result_panel)
+	ThemeScript.add_authored_frame(result_panel, true, 0)
 	var vb: VBoxContainer = VBoxContainer.new()
-	vb.custom_minimum_size = Vector2(520, 0)
-	vb.add_theme_constant_override("separation", 12)
+	vb.custom_minimum_size = Vector2(560, 0)
+	vb.add_theme_constant_override("separation", 10)
 	result_panel.add_child(vb)
 	result_lbl = Label.new()
+	result_lbl.name = "PostMatchStatus"
+	result_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	result_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	result_lbl.add_theme_font_size_override("font_size", 19)
-	result_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_TEXT)
+	result_lbl.add_theme_font_size_override("font_size", ThemeScript.PX_HEADER)
+	result_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
+	var display: Font = ThemeScript.font_display()
+	if display != null:
+		result_lbl.add_theme_font_override("font", display)
 	vb.add_child(result_lbl)
-	var btn: Button = Button.new()
-	btn.text = "RETURN TO MAIN MENU"
-	ThemeScript.style_teal_button(btn, true)
-	btn.pressed.connect(func() -> void: get_tree().change_scene_to_file("res://scenes/main_menu.tscn"))
-	vb.add_child(btn)
+	vb.add_child(ThemeScript.teal_divider(0.55))
+	_result_lines = VBoxContainer.new()
+	_result_lines.name = "PostMatchLines"
+	_result_lines.add_theme_constant_override("separation", 6)
+	vb.add_child(_result_lines)
+	_result_continue_btn = Button.new()
+	_result_continue_btn.text = UIStringsScript.st_upper("ST_Screens", "Screen.Continue", "CONTINUE")
+	ThemeScript.style_teal_button(_result_continue_btn, true, 24)
+	_result_continue_btn.pressed.connect(func() -> void: _continue_to_den())
+	vb.add_child(_result_continue_btn)
 
 
 func _build_pause_menu(root: Control) -> void:
@@ -1794,8 +1874,11 @@ func _build_pause_menu(root: Control) -> void:
 	_pause_root.visible = false
 	root.add_child(_pause_root)
 	var dim: ColorRect = ColorRect.new()
+	dim.name = "PauseDim"
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	dim.color = Color(0.004, 0.006, 0.014, 0.72)
+	# KF30 measures the world band at mean luma 38.1 -> 5.2 (~86 % darkening).
+	# The old 0.72 alpha only reached ~72 %; 0.86 is the authored dim.
+	dim.color = Color(0.004, 0.006, 0.014, 0.86)
 	_pause_root.add_child(dim)
 	var tint: ColorRect = ColorRect.new()
 	tint.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -1807,10 +1890,12 @@ func _build_pause_menu(root: Control) -> void:
 	pause_center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_pause_root.add_child(pause_center)
 	pause_panel = PanelContainer.new()
-	pause_panel.custom_minimum_size = Vector2(420, 0)
+	# 520 px: the authored MenuButton size (48 -> 32) needs room for
+	# "RETURN TO THIEF'S DEN" on one line.
+	pause_panel.custom_minimum_size = Vector2(520, 0)
 	pause_panel.add_theme_stylebox_override("panel", ThemeScript.teal_panel_style())
 	pause_center.add_child(pause_panel)
-	ThemeScript.add_teal_filigree(pause_panel)
+	ThemeScript.add_authored_frame(pause_panel, false, 0)
 	var margin: MarginContainer = MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 6)
 	margin.add_theme_constant_override("margin_right", 6)
@@ -1818,7 +1903,7 @@ func _build_pause_menu(root: Control) -> void:
 	margin.add_theme_constant_override("margin_bottom", 6)
 	pause_panel.add_child(margin)
 	var vb: VBoxContainer = VBoxContainer.new()
-	vb.custom_minimum_size = Vector2(360, 0)
+	vb.custom_minimum_size = Vector2(440, 0)
 	vb.add_theme_constant_override("separation", 10)
 	margin.add_child(vb)
 	var resume_btn: Button = Button.new()
@@ -1839,10 +1924,10 @@ func _build_pause_menu(root: Control) -> void:
 	var menu_btn: Button = Button.new()
 	menu_btn.text = _loc_upper("Return to Thief's Den")
 	ThemeScript.style_teal_button(menu_btn, false)
-	menu_btn.pressed.connect(func() -> void:
-		_set_paused(false)
-		get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
-	)
+	# T05: this used to change_scene_to_file(main_menu.tscn) — the start screen,
+	# not the Den — and bypassed the payout outbox entirely (hud.gd:1839-1846).
+	# The Den is contract 1 (thieves_den), loaded through the mission scene.
+	menu_btn.pressed.connect(func() -> void: _pause_return_to_den())
 	vb.add_child(menu_btn)
 	var quit_btn: Button = Button.new()
 	quit_btn.text = _loc_upper("Quit To Desktop")
@@ -1865,8 +1950,12 @@ func _build_pause_menu(root: Control) -> void:
 	ver.text = _pause_footer_text()
 	ver.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	ver.position = Vector2(16, -30)
-	ver.add_theme_font_size_override("font_size", 12)
-	ver.add_theme_color_override("font_color", Color(0.55, 0.60, 0.65, 0.85))
+	# Authored Base_sessionlist role (Abel 24 -> 16).
+	ver.add_theme_font_size_override("font_size", ThemeScript.PX_SESSION)
+	var session_font: Font = ThemeScript.font_session()
+	if session_font != null:
+		ver.add_theme_font_override("font", session_font)
+	ver.add_theme_color_override("font_color", Color(0.55, 0.60, 0.65, 0.92))
 	ver.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_pause_root.add_child(ver)
 
@@ -1940,23 +2029,84 @@ func show_result(won: bool, score: int, info: Dictionary) -> void:
 	if _letter_open:
 		_close_mission_letter()
 	result_panel.visible = true
-	var rating: String = "GHOST (+25%)" if not GameState.ever_spotted else ("SHADOW (+10%)" if not GameState.ever_chased else "BRAWLER")
-	var outro: String = str(info.get("outro", ""))
-	if outro.length() > 260:
-		outro = outro.substr(0, 260) + "..."
-	var timed_out: bool = info.get("timed_out", false) == true
-	if not timed_out and not won and GameState.run_time_limit > 0.0 and GameState.elapsed_sec >= GameState.run_time_limit:
-		timed_out = true
-	var timeout_note: String = ""
-	if timed_out and not won:
-		var reason: String = str(info.get("timeout_reason", "TIME EXPIRED"))
-		if reason == "":
-			reason = "TIME EXPIRED"
-		timeout_note = "\n\nTime expired — the match window closed before you escaped. (%s)" % reason
-	result_lbl.text = "%s\n\nScore: %dg | Stealth Rating: %s\nTime: %.1fs | Takedowns: %d\n\n%s%s" % [
-		"CONTRACT COMPLETE" if won else "CAPTURED BY THE CONSTABULARY",
-		score, rating, GameState.elapsed_sec, GameState.takedowns, outro, timeout_note
-	]
+	var status_key: String = "PostMatch.Status.Escaped" if won else "PostMatch.Status.Caught"
+	result_lbl.text = UIStringsScript.st_text("ST_PostMatch", status_key, "Escaped" if won else "Caught").to_upper()
+	for c: Node in _result_lines.get_children():
+		_result_lines.remove_child(c)
+		c.queue_free()
+	# Payout: mission_controller banks before show_result, so SaveSystem's
+	# last_match is the authoritative record for this run.
+	var payout: Dictionary = SaveSystem.get_last_match()
+	if str(payout.get("match_id", "")) == "":
+		var score_only: int = maxi(0, score)
+		if score_only > 0:
+			payout = {"kept": score_only, "original": score_only, "money_taken": score_only, "stashed": 0}
+	var mission_line: String = _post_match_mission_line(won)
+	if mission_line != "":
+		_add_result_line(mission_line, ThemeScript.TEAL_TEXT, 18)
+	var contract_line: String = _post_match_contract_line(won)
+	if contract_line != "":
+		_add_result_line(contract_line, ThemeScript.TEAL_MUTED, 16)
+	var haul_header: String = UIStringsScript.st_text("ST_PostMatch", "PostMatch.Haul", "Ill-Gotten Gains")
+	_add_result_line(haul_header.to_upper(), ThemeScript.GOLD, 18)
+	var kept: int = int(payout.get("kept", 0))
+	var original: int = int(payout.get("original", kept))
+	var cash: int = int(payout.get("money_taken", kept))
+	_add_result_line(UIStringsScript.st_text("ST_Screens", "Screen.PostMatch.LootEarned", "Loot Earned: £{0}").replace("{0}", str(kept)),
+		ThemeScript.TEAL_TEXT, 16)
+	if original > kept:
+		_add_result_line(UIStringsScript.st_text("ST_Screens", "Screen.PostMatch.LootLost", "Loot Lost: £{0}").replace("{0}", str(original - kept)),
+			ThemeScript.RED_INSUFFICIENT, 16)
+	var cash_label: String = UIStringsScript.st_text("ST_Screens", "Screen.PostMatch.CashInHand", "Cash in Hand")
+	_add_result_line("%s   £ %d" % [cash_label, cash], ThemeScript.TEAL_TITLE, 16)
+
+
+func _add_result_line(text: String, color: Color, font_size: int) -> void:
+	if _result_lines == null or text.strip_edges() == "":
+		return
+	var lbl: Label = Label.new()
+	lbl.text = text
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lbl.add_theme_font_size_override("font_size", font_size)
+	lbl.add_theme_color_override("font_color", color)
+	_result_lines.add_child(lbl)
+
+
+## Authored mission outcome row: PostMatch.Mission.<Map>.<MissionType>.<Result>.
+## The key set is data (ST_PostMatch), so an unknown map/type simply shows no
+## line instead of inventing prose.
+func _post_match_mission_line(won: bool) -> String:
+	var map_tag: String = ""
+	match str(GameState.active_map_id):
+		"guildhall": map_tag = "GuildHall"
+		"old_manor": map_tag = "OldManor"
+		_: map_tag = ""
+	if map_tag == "":
+		return ""
+	var mission: String = str(GameState.active_mission_id)
+	var type_tag: String = ""
+	for candidate: String in ["LootTheRoom", "VaultHeist", "SetCollection", "FTUE"]:
+		if mission.find(candidate) >= 0:
+			type_tag = candidate
+			break
+	if type_tag == "":
+		return ""
+	var key: String = "PostMatch.Mission.%s.%s.%s" % [map_tag, type_tag, "Success" if won else "Failure"]
+	return UIStringsScript.st_text("ST_PostMatch", key, "")
+
+
+## Authored contract outcome row: PostMatch.Contract.<order>.<Result>.
+func _post_match_contract_line(won: bool) -> String:
+	var order: int = int(GameState.active_contract_order)
+	if order <= 0:
+		return ""
+	var key: String = "PostMatch.Contract.%d.%s" % [order, "Success" if won else "Failure"]
+	var row: String = UIStringsScript.st_text("ST_PostMatch", key, "")
+	if row == "":
+		return ""
+	var head: String = UIStringsScript.st_text("ST_PostMatch", "PostMatch.Contract", "Contract")
+	return "%s: %s" % [head, row]
 
 
 func set_thief_vision(enabled: bool) -> void:
@@ -2610,8 +2760,13 @@ func _update_health_and_stamina(p: Node3D, is_hub: bool) -> void:
 		_hp_container.visible = (not is_hub) and hp_frac < 0.999
 	if hp_fill != null:
 		hp_fill.size.x = HP_BAR_MAX_W * hp_frac
+		hp_fill.visible = hp_frac > 0.001
 	if _hp_clip != null:
-		_hp_clip.size.x = HP_BAR_MAX_W * hp_frac
+		_hp_clip.size.x = HP_BAR_MAX_W
+	# Damage overlay, never a permanent decoration: appears below half health
+	# (KF19 shows the bar clean at full; the authored splatter is a hurt state).
+	if _hp_splatter != null:
+		_hp_splatter.visible = hp_frac < HP_SPLATTER_THRESHOLD and hp_frac > 0.001
 	if p.has_method("health_block_percentages"):
 		var blocks_v: Variant = p.call("health_block_percentages")
 		if blocks_v is Array and (blocks_v as Array) != _hp_block_cache:
@@ -2715,6 +2870,10 @@ func _refresh_action_hints(hints: Array) -> void:
 		return
 	_last_hints_sig = sig
 	for c: Node in _action_hints_box.get_children():
+		# remove_child before queue_free: queue_free alone leaves the old rows
+		# drawing for one more frame beside the new ones (C3-12's same-frame
+		# double draw, the "LAUNCH / HOLD CRANK" overprint class).
+		_action_hints_box.remove_child(c)
 		c.queue_free()
 	for hv2: Variant in hints:
 		if not (hv2 is Dictionary):
@@ -2723,15 +2882,19 @@ func _refresh_action_hints(hints: Array) -> void:
 		var row: HBoxContainer = HBoxContainer.new()
 		row.alignment = BoxContainer.ALIGNMENT_END
 		row.add_theme_constant_override("separation", 8)
+		row.custom_minimum_size = Vector2(0, 20)
 		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var enabled: bool = hd2.get("enabled", true) == true
 		var lbl: Label = Label.new()
 		lbl.text = str(hd2.get("label", "")).to_upper()
 		lbl.add_theme_font_size_override("font_size", 14)
-		lbl.add_theme_color_override("font_color", Color(0.84, 0.90, 1.0, 0.94) if enabled else Color(0.55, 0.62, 0.76, 0.48))
-		lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
-		lbl.add_theme_constant_override("shadow_offset_x", 1)
-		lbl.add_theme_constant_override("shadow_offset_y", 1)
+		# Prompt contrast (L3-14): the disabled state used 48 % alpha over lit
+		# walls (measured ~2 % luminance separation). Both states now carry a
+		# near-white body and a 2 px black shadow; no type/colour restyle.
+		lbl.add_theme_color_override("font_color", Color(0.93, 0.96, 1.0, 1.0) if enabled else Color(0.80, 0.85, 0.94, 0.82))
+		lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
+		lbl.add_theme_constant_override("shadow_offset_x", 2)
+		lbl.add_theme_constant_override("shadow_offset_y", 2)
 		if _sans != null:
 			lbl.add_theme_font_override("font", _sans)
 		lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -3349,9 +3512,96 @@ func _set_paused(value: bool) -> void:
 	if pause_center != null and _pause_root == null:
 		pause_center.visible = value
 	if value:
+		_hide_live_hud_for_pause()
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	else:
+		_restore_live_hud_after_pause()
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+## KF30: the management screen hides the entire live HUD and shows only the
+## modal + footer over the darkened world. Snapshot visibility so a resume puts
+## every element back exactly as it was (including conditionally hidden ones).
+func _hide_live_hud_for_pause() -> void:
+	if _root == null or _pause_hud_hidden:
+		return
+	_pause_visibility.clear()
+	for c: Node in _root.get_children():
+		if c == _pause_root:
+			continue
+		if c is CanvasItem:
+			var ci: CanvasItem = c as CanvasItem
+			_pause_visibility[ci] = ci.visible
+			ci.visible = false
+	_pause_hud_hidden = true
+
+
+func _restore_live_hud_after_pause() -> void:
+	if _root == null or not _pause_hud_hidden:
+		return
+	for key: Variant in _pause_visibility.keys():
+		var ci: CanvasItem = key as CanvasItem
+		if ci != null and is_instance_valid(ci):
+			ci.visible = bool(_pause_visibility[key])
+	_pause_visibility.clear()
+	_pause_hud_hidden = false
+
+
+## Destination of the pause menu's "RETURN TO THIEF'S DEN". The Den hub is
+## contract 1 (map thieves_den) inside the mission scene; there is no separate
+## Den scene in this port (C3-10 / RE-L-03).
+func pause_return_scene_path() -> String:
+	return DEN_SCENE_PATH
+
+
+## Leaving a live run for the Den is an abandonment: carried loot is lost, the
+## stashed haul is kept (authored kept_on_capture = 0.0). Every failure path owes
+## a payout (AGENTS.md), so settle once through the shared payout outbox before
+## the scene change. save_system owns the bank; this only calls it.
+func _settle_run_for_exit() -> Dictionary:
+	# Hub exits (Den, contract order <= 1) have no run to settle; a live mission
+	# always owes exactly one payout.
+	if _payout_applied or GameState.state != "playing" or int(GameState.active_contract_order) <= 1:
+		return {"applied": false, "banked": 0}
+	var payout: Dictionary = LootInventoryScript.build_payout("capture", {"objectives_complete": false})
+	var res: Dictionary = SaveSystem.bank_payout(payout)
+	_payout_applied = true
+	GameState.resolve_phase()
+	return {"applied": bool(res.get("applied", false)), "banked": int(res.get("banked", 0))}
+
+
+func _pause_return_to_den() -> void:
+	_settle_run_for_exit()
+	_set_paused(false)
+	GameState.active_contract_order = 1
+	GameState.end_free_play()
+	get_tree().change_scene_to_file(pause_return_scene_path())
+
+
+## Post-match Continue: mission_controller has already banked the run, so this
+## only returns to the Den hub (contract 1) through the mission scene.
+func _continue_to_den() -> void:
+	GameState.active_contract_order = 1
+	GameState.end_free_play()
+	get_tree().change_scene_to_file(DEN_SCENE_PATH)
+
+
+## C-4 instrumentation: exact in-tree node counts for the elements the recorded
+## client drew twice. One HudScript/one hp_frame is the expected result; the
+## recording's doubling is then a render-path question, not a build-path one.
+func debug_hud_counts() -> Dictionary:
+	if _root == null:
+		return {}
+	return {
+		"hud_build_id": hud_build_id,
+		"root_children": _root.get_child_count(),
+		"hp_frames": find_children("HpFrame", "TextureRect", true, false).size(),
+		"hp_fills": find_children("HpFill", "TextureRect", true, false).size(),
+		"hp_splatters": find_children("HpSplatter", "TextureRect", true, false).size(),
+		"objectives": find_children("ObjectivesLabel", "Label", true, false).size(),
+		"map_ping_hints": find_children("MapPingHintBar", "HBoxContainer", true, false).size(),
+		"hp_frame_builds": _hp_frame_builds,
+	}
 
 
 func _set_prompt(raw: String) -> void:

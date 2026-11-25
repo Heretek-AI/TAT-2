@@ -45,53 +45,38 @@ const WeatherVisuals: GDScript = preload("res://src/core/weather_visuals.gd")
 const GuardAnimLibScript: GDScript = preload("res://src/core/animation_library.gd")
 const MobileProfile: GDScript = preload("res://src/core/mobile_profile.gd")
 const ThemeScript: GDScript = preload("res://src/ui/art_nouveau_theme.gd")
+const UIStringsScript: GDScript = preload("res://src/ui/ui_strings.gd")
 
-## Authored MissionLobby_Geo3 CameraActor_0 FieldOfView 20.0. UE FOV is the
-## horizontal field of view, so Godot maps it with keep_aspect KEEP_WIDTH:
-## fov reads 20.0 while the rendered vertical stays ~11.33 at 16:9.
+## Authored MissionLobby_Geo3 CameraActor_0. UE FOV is the horizontal field of
+## view, so Godot maps it with keep_aspect KEEP_WIDTH: fov reads 20.0 while the
+## rendered vertical stays ~11.33 at 16:9.
+##
+## The live stage camera IS the authored camera (T05 P0, 2026-11-25). It was
+## replaced in 7128d43 by a 14.06 m / 69.1 deg-off reframe; that reframe is the
+## mission-prep regression the user reported ("empty blue-violet void"): a
+## position-only cone test over the two generated lobby sublevels finds only
+## **13** mesh pivots inside the current 10 deg half-angle versus **387** from
+## the authored transform (2,107 meshes total). The void was the reframe, not
+## missing geometry. Do not re-introduce a stage reframe here: re-author the
+## level or the expansion data instead.
+##
 ## Authored CameraActor_0 in the level's (x, z, y) Godot mapping is
-## (12.6065, -0.16698, -1.05384) looking (-0.986184, 0.116419, +0.117848).
-## That slot sits tight against the foreground facade, so the prep stage
-## mirrors the Z position/look component across the dummy: same X/Y, FOV 20
-## and roll -14.78, but it looks back across the open rooftop instead of into
-## the wall. This is a deliberate stage reframe, not a coordinate fix.
-##
-## W6U1 re-capture: from that mirrored slot the full frame is the authored
-## Periphery storefront facade (SM_Storefront_Facade_1200 at x -33.5, 36 m
-## behind the thief), and the KF11 full moon is fully occluded. W6U1 stood the
-## stage NE of the ridge on the same authored rooftop: the slate ridge cap reads
-## along the bottom, the thief stays full-body and right of the info stack, and
-## the moon disc sits in the measured sky gap at (0.88, 0.12).
-##
-## W7V (KF11 full skyline): the authored lobby sublevels carry no skyline in the
-## framed sector (the nine Periphery DistantBuildingC blocks sit west, behind the
-## storefront wall), so the far side of the frame was empty sky. The stage now
-## yaws 4.2 deg left, which puts the thief at screen x ~0.77 (KF11: 0.70-0.84)
-## and opens the sky gap behind him; the tracked expansion backdrop
-## `game/data/expansion/prep_skyline.json` places the shipped Skybox
-## distant-building kit (Buildings / SkyboxUrban / SkyboxSmokestacks) into that
-## sector. FOV stays the authored 20.0 and the preset stays
-## midnight_clear_mission_lobby.
-const LOBBY_AUTHORED_CAM_POS: Vector3 = Vector3(12.6065, -0.16698, -1.05384)
-const LOBBY_AUTHORED_CAM_FWD: Vector3 = Vector3(-0.986184, 0.116419, 0.117848)
-const LOBBY_CAM_POS: Vector3 = Vector3(4.0, 1.0, 10.0)
-const LOBBY_CAM_FWD: Vector3 = Vector3(-0.458311, 0.083671, -0.884844)
+## (12.6065, -0.16698, -1.05384) looking (-0.986184, 0.116419, +0.117848);
+## pitch 6.68548 (the forward Y), yaw 173.18552, roll -14.780165, FOV 20.0
+## horizontal / 11.33 vertical at 16:9 (extracted/json/Maps/MissionLobby/
+## MissionLobby_Geo3.json, CameraActor_0 -> CameraComponent).
+const LOBBY_CAM_POS: Vector3 = Vector3(12.6065, -0.16698, -1.05384)
+const LOBBY_CAM_FWD: Vector3 = Vector3(-0.986184, 0.116419, 0.117848)
 const LOBBY_CAM_FOV: float = 20.0
 const LOBBY_CAM_ROLL_DEG: float = -14.780165
-## W7V: the KF11 subject placement is done by moving the authored lobby dummy
-## along the camera's screen-right axis (0.84 m), NOT by yawing the camera. A
-## left yaw also swings the near authored city block into the sky sector behind
-## the thief and hides the moon; a 0.84 m dummy offset moves only the subject.
-## Measured on the live stage: thief screen centre 0.77, inside KF11's 0.70-0.84,
-## with the ridge cap still in the lower third and the open sky sector intact.
-const LOBBY_CAM_YAW_DEG: float = 0.0
-## Authored BP_MatchLobbyDummyPlayer_C_1 (IsForLocalPlayer: True) rooftop slot.
-## The GLB's front is +Z, so the authored 45° faces the camera (world +X) and
-## screen-left (+Z): the KF11 three-quarter view. W7V offsets the dummy 1.26 m
-## along the camera's screen-right axis so KF11's right-of-stack subject
-## placement (measured subject centre 0.77) comes from the dummy, not from
-## yawing the camera into the facade.
-const LOBBY_THIEF_POS: Vector3 = Vector3(-0.4281, 0.82, -1.3868)
+## Authored BP_MatchLobbyDummyPlayer_C_1 (IsForLocalPlayer: True) rooftop slot,
+## (-1.5871, 0.9399, -0.7868) m with 45 deg yaw. The authored Y is the dummy
+## actor's pivot; the port keeps its measured feet-on-roof delta of 0.12 m
+## (0.82) because the pilgrim's GLB origin sits at the hips, not the soles.
+## The GLB's front is +Z, so 45 deg faces the authored camera: KF11's
+## three-quarter view. Measured chest screen x from the authored camera: 0.78,
+## inside KF11's 0.70-0.84 band without any dummy offset.
+const LOBBY_THIEF_POS: Vector3 = Vector3(-1.5871, 0.82, -0.7868)
 const LOBBY_THIEF_YAW_DEG: float = 45.0
 ## KF11 stage exposure lift. The weather preset is authored for a
 ## multiplayer-lobby camera and lands at 0.5 tonemap exposure / 0.3 ambient,
@@ -125,9 +110,18 @@ const STAGE_RIM_ENERGY: float = 1.4
 ## W7V KF11 distant skyline: tracked TAT-2 expansion layout over the shipped
 ## Skybox distant-building kit. Stage-relative (azimuth/distance/base_y) so a
 ## reframe keeps the composition. See game/data/expansion/prep_skyline.json.
+## T05: base_y is an ABSOLUTE world Y (the code's contract); the layout note now
+## says so. The composition band below is the numeric contract the headless test
+## enforces against the REAL spawned MeshInstance AABBs under the authored
+## camera: under the authored pitch (+6.685 deg) the horizon sits at screen
+## y 1.09, so the far city is a low layer whose tops must stay inside
+## [TOP_MIN, TOP_MAX] and whose projected width may not exceed MAX_WIDTH_FRAC.
 const PREP_SKYLINE_PATH: String = "res://data/expansion/prep_skyline.json"
 const PREP_SKYLINE_SCHEMA: String = "tat2.prep_skyline/1"
 const PREP_SKYLINE_GROUP: String = "prep_skyline"
+const PREP_SKYLINE_MAX_WIDTH_FRAC: float = 0.60
+const PREP_SKYLINE_TOP_MIN: float = 0.65
+const PREP_SKYLINE_TOP_MAX: float = 0.98
 
 ## Authored backdrop size for the 3D rooftop stage. The stage container must
 ## deliver at least this size at runtime: anything smaller (in particular the
@@ -451,14 +445,27 @@ func _build_all() -> void:
 	if italic != null:
 		_location_body.add_theme_font_override("font", italic)
 	var loc_vb: VBoxContainer = loc_card.get_meta("vbox") as VBoxContainer
+	# LOCATION art box. The splash is 3138x1765 (1.78:1); the old 382x108 box was
+	# a 3.54:1 STRETCH_KEEP_ASPECT_COVERED crop that kept only the middle ~50 %
+	# of rows (C3-05 / L3-09: the "Gate Entrance" fence band instead of the gate
+	# arch). An AspectRatioContainer pins the thumbnail to the source aspect at a
+	# height the 720p card stack can afford, so COVERED becomes an exact fit.
+	var art_box: AspectRatioContainer = AspectRatioContainer.new()
+	art_box.name = "LocationArtBox"
+	art_box.ratio = 1.7779773
+	art_box.stretch_mode = AspectRatioContainer.STRETCH_HEIGHT_CONTROLS_WIDTH
+	art_box.custom_minimum_size = Vector2(0, 152)
+	art_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	art_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	loc_vb.add_child(art_box)
 	_location_art = TextureRect.new()
 	_location_art.name = "LocationArt"
-	_location_art.custom_minimum_size = Vector2(382, 108)
+	_location_art.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_location_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_location_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	_location_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	loc_vb.add_child(_location_art)
-	loc_vb.move_child(_location_art, 2)
+	art_box.add_child(_location_art)
+	loc_vb.move_child(art_box, 2)
 
 	var mis_card: PanelContainer = _make_card("MISSION", "", "")
 	mis_card.mouse_filter = Control.MOUSE_FILTER_PASS
@@ -550,14 +557,14 @@ func _build_all() -> void:
 	var ready_btn: Button = Button.new()
 	ready_btn.text = "[F]  READY"
 	ready_btn.custom_minimum_size = Vector2(150, 42)
-	ThemeScript.style_teal_button(ready_btn, true)
+	ThemeScript.style_teal_button(ready_btn, true, 28)
 	ready_btn.pressed.connect(_on_ready_action)
 	btn_row.add_child(ready_btn)
 	_ready_btn = ready_btn
 	var back_btn: Button = Button.new()
 	back_btn.text = "[ESC]  BACK"
 	back_btn.custom_minimum_size = Vector2(146, 42)
-	ThemeScript.style_teal_button(back_btn, false)
+	ThemeScript.style_teal_button(back_btn, false, 28)
 	back_btn.pressed.connect(close_prep)
 	btn_row.add_child(back_btn)
 
@@ -602,8 +609,10 @@ func _make_card(header: String, title_text: String, body_text: String) -> PanelC
 	panel.custom_minimum_size = Vector2(400, 0)
 	panel.add_theme_stylebox_override("panel", ThemeScript.teal_card_style(1, 4, Color(0.024, 0.056, 0.075, 0.84), 12))
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	ThemeScript.add_teal_filigree(panel, 3.0, 16.0)
-	var serif: Font = ThemeScript.font_serif()
+	# Authored BP_BorderStyle_Frame_Ornate 9-slice (T05). Replaces the procedural
+	# filigree that C5-03 identified as the "corrupted ribbon" substitute.
+	ThemeScript.add_authored_frame(panel, true, 0)
+	var serif: Font = ThemeScript.font_display()
 	var sans: Font = ThemeScript.font_sans()
 	var vb: VBoxContainer = VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 5)
@@ -619,7 +628,7 @@ func _make_card(header: String, title_text: String, body_text: String) -> PanelC
 	vb.add_child(hdr)
 	var title_lbl: Label = Label.new()
 	title_lbl.text = title_text
-	title_lbl.add_theme_font_size_override("font_size", 20)
+	title_lbl.add_theme_font_size_override("font_size", ThemeScript.PX_BODY)
 	title_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
 	if serif != null:
 		title_lbl.add_theme_font_override("font", serif)
@@ -714,10 +723,9 @@ func _build_stage(viewport: SubViewport) -> void:
 	# The authored yaw already keeps the information stack left and the
 	# thief in the open right half; adding yaw here swings into the facade.
 	cam.look_at_from_position(cam.position, cam.position + LOBBY_CAM_FWD.normalized() * 15.0, Vector3.UP)
-	# W7V: KF11 subject placement. A camera-local left yaw moves the thief to
-	# screen x 0.77 without translating the stage; the roll stays authored.
-	if not is_zero_approx(LOBBY_CAM_YAW_DEG):
-		cam.rotate_object_local(Vector3.UP, deg_to_rad(LOBBY_CAM_YAW_DEG))
+	# Authored CameraActor_0 roll (-14.780165 deg). The authored pitch is already
+	# encoded in LOBBY_CAM_FWD.y, so look_at reproduces pitch/yaw and this adds
+	# only the roll component.
 	cam.rotate_object_local(Vector3.FORWARD, deg_to_rad(LOBBY_CAM_ROLL_DEG))
 	_aim_stage_moon_and_key(env, cam, viewport, moonlight)
 	_add_prep_skyline(stage_root, cam)
@@ -848,6 +856,9 @@ func _add_prep_skyline(stage_root: Node3D, cam: Camera3D) -> int:
 			-fwd.x * sin(az) + fwd.z * cos(az))
 		var distance: float = maxf(float(piece.get("distance_m", 100.0)), 1.0)
 		var pos: Vector3 = cam.global_position + dir * distance
+		# Absolute world Y (the mesh AABB bottom). The layout note used to claim a
+		# camera-relative Y while this line was always absolute; the data is now
+		# authored against the absolute contract.
 		pos.y = float(piece.get("base_y", 0.0))
 		var mi := MeshInstance3D.new()
 		var piece_id: String = str(piece.get("id", "piece"))
@@ -1254,18 +1265,32 @@ func _mission_minutes(mission_idx: int, diff: int) -> int:
 
 
 func _mission_description(mission_idx: int, minutes: int) -> String:
+	# Authored MissionLobby description rows (ST_Screens), with the port's literal
+	# as the last-resort fallback. The shipped rows use {MatchDurationInMinutes};
+	# their OldManor keys are authored with a lower-case "manor".
 	var mins: String = str(minutes)
+	var key: String = ""
+	var fallback: String = ""
 	if map_id == "old_manor":
 		if mission_idx == 0:
-			return "The Elway family has a magical tome they keep under the utmost protection in a vault. Tonight you will have a %s minute window when security is light. Find the book, steal it, and get out alive." % mins
-		if mission_idx == 1:
-			return "The Claymur Urns have been held by the Elway family for centuries. The Guild will pay handsomely if you retrieve the full set. You have a %s minute window to pilfer the Urns and make your escape." % mins
-		return "Though both the Elway family and their estate are a shadow of what they once were, there are still ample treasures to be found. Get in, steal everything you can, and get out before anyone is the wiser."
-	if mission_idx == 0:
-		return "A rare bust called the Warburg Effigy is being held at the Guildhall for safekeeping. Tonight there is a %s minute window when security will be light. Steal the bust, embarrass the police, and turn a tidy profit." % mins
-	if mission_idx == 1:
-		return "The precious gems needed to restore an artifact are hidden among the trinkets gathering dust in the Guildhall. You have a %s minute window to pilfer the gems from under the very noses of the police." % mins
-	return "The Constables' Guildhall is full of confiscated treasures. Infiltrate the building and reacquire some of the riches they have just left lying around, then slip away before anyone notices."
+			key = "Screen.MissionLobby.Oldmanor.VaultQuestDescription"
+			fallback = "The Elway family has a magical tome they keep under the utmost protection in a vault. Tonight you will have a {MatchDurationInMinutes} minute window when security is light. Find the book, steal it, and get out alive."
+		elif mission_idx == 1:
+			key = "Screen.MissionLobby.Oldmanor.SetQuestDescription"
+			fallback = "The Claymur Urns have been held by the Elway family for centuries. The Guild will pay handsomely if you retrieve the full set. You have a {MatchDurationInMinutes} minute window to pilfer the Urns and make your escape."
+		else:
+			key = "Screen.MissionLobby.OldManor.LootTheRoomDescription"
+			fallback = "Though both the Elway family and their estate are a shadow of what they once were, there are still ample treasures to be found. Get in, steal everything you can, and get out before anyone is the wiser."
+	elif mission_idx == 0:
+		key = "Screen.MissionLobby.VaultQuestDescription"
+		fallback = "A rare bust called the Warburg Effigy is being held at the Guildhall for safekeeping. Tonight there is a {MatchDurationInMinutes} minute window when security will be light. Steal the bust, embarrass the police, and turn a tidy profit."
+	elif mission_idx == 1:
+		key = "Screen.MissionLobby.SetQuestDescription"
+		fallback = "The precious gems needed to restore an artifact are hidden among the trinkets gathering dust in the Guildhall. You have a {MatchDurationInMinutes} minute window to pilfer the gems from under the very noses of the police."
+	else:
+		key = "Screen.MissionLobby.GuildHall.LootTheRoomDescription"
+		fallback = "The Constables' Guildhall is full of confiscated treasures. Infiltrate the building and reacquire some of the riches they have just left lying around, then slip away before anyone notices."
+	return UIStringsScript.st_text("ST_Screens", key, fallback).replace("{MatchDurationInMinutes}", mins)
 
 
 func _refresh_contract_card() -> void:
@@ -1280,11 +1305,13 @@ func _contract_info() -> Array:
 	if free_play:
 		return [_loc(CONTRACT_INACTIVE), "Free play: clean out the location for a score. No contract progress is recorded."]
 	if contract_order <= 0:
-		return [_loc(CONTRACT_INACTIVE), "Your active contract is not available for the currently selected map."]
+		return [_loc(CONTRACT_INACTIVE), UIStringsScript.st_text("ST_Screens", "Screen.MissionLobby.ContractWrongMap",
+			"Your active contract is not available for the currently selected map.")]
 	var disp: Dictionary = GameData.get_contract_display(contract_order)
 	var title_text: String = str(disp.get("title", ""))
 	if title_text == "":
-		return [_loc(CONTRACT_INACTIVE), "Your active contract is not available for the currently selected map."]
+		return [_loc(CONTRACT_INACTIVE), UIStringsScript.st_text("ST_Screens", "Screen.MissionLobby.ContractWrongMap",
+			"Your active contract is not available for the currently selected map.")]
 	var quest_text: String = str(disp.get("quest_item", ""))
 	var loc_text: String = str(disp.get("location", ""))
 	var body_text: String = "Active contract: %s" % title_text
@@ -1297,22 +1324,28 @@ func _contract_info() -> Array:
 
 func _refresh_controls() -> void:
 	if _mode_sub_lbl != null:
-		_mode_sub_lbl.text = _loc_fmt("Mode: {mode}", {"mode": mode})
+		var mode_tmpl: String = UIStringsScript.st_text("ST_Screens", "Screen.MissionLobby.Mode", "Mode: {mode}")
+		_mode_sub_lbl.text = mode_tmpl.replace("{mode}", mode)
 	if _diff_sub_lbl != null:
-		_diff_sub_lbl.text = _loc_fmt("Difficulty: {difficulty}", {"difficulty": _difficulty_label()})
+		var diff_tmpl: String = UIStringsScript.st_text("ST_Screens", "Screen.MissionLobby.Difficulty", "Difficulty: {difficulty}")
+		_diff_sub_lbl.text = diff_tmpl.replace("{difficulty}", _difficulty_label())
 	_refresh_countdown()
 	if _thief_name_lbl != null:
 		_thief_name_lbl.text = _thief_label()
 	_refresh_ready_controls()
 
 
-## READY/UNREADY wording shared by the header label, the [F] button and the
-## controls hint, so all three can never disagree about countdown state.
+## KF11: the nameplate above the thief is the player's readiness STATE and keeps
+## reading READY; only the [F] button and the controls hint flip to UNREADY while
+## a countdown runs. KF11 at 01:00 shows label READY + button [F] UNREADY + hint
+## [F] UNREADY / [ESC] BACK. (Before T05 all three shared one word, so the
+## nameplate read UNREADY during the countdown.)
 func _refresh_ready_controls() -> void:
-	var word: String = _loc("Unready") if _countdown_running else _loc("Ready")
-	var upper: String = word.to_upper()
 	if _readiness_lbl != null:
-		_readiness_lbl.text = upper
+		_readiness_lbl.text = UIStringsScript.st_upper("ST_Screens", "Screen.Lobby.Ready", "Ready")
+	var action: String = UIStringsScript.st_text("ST_Screens", "Screen.Lobby.Unready", "Unready") if _countdown_running \
+		else UIStringsScript.st_text("ST_Screens", "Screen.Lobby.Ready", "Ready")
+	var upper: String = action.to_upper()
 	if _ready_btn != null:
 		_ready_btn.text = "[F]  %s" % upper
 	if _controls_lbl != null:
@@ -1326,16 +1359,15 @@ func _refresh_countdown() -> void:
 	if _countdown_lbl == null:
 		return
 	var shown: int = _countdown_last_int if _countdown_running else int(COUNTDOWN_SECONDS)
-	var tmpl: String = _loc("Mission Starting in <Num>{number}</>...")
+	var tmpl: String = UIStringsScript.st_text("ST_Screens", "Screen.MissionLobby.Countdown", "Mission Starting in <Num>{number}</>...")
 	tmpl = tmpl.replace("<Num>", "").replace("</>", "")
 	_countdown_lbl.text = tmpl.replace("{number}", str(shown)).to_upper()
 
 
+## Every prep label that has an authored StringTable row goes through
+## UIStrings (T05 l10n): authored English -> Loc locale translation -> literal.
 func _loc(source: String) -> String:
-	var loc: Node = get_node_or_null("/root/Loc")
-	if loc != null and loc.has_method("t"):
-		return str(loc.call("t", source))
-	return source
+	return UIStringsScript.t(source)
 
 
 func _loc_fmt(source: String, values: Dictionary) -> String:

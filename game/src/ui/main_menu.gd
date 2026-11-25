@@ -9,6 +9,7 @@ const GuardAnimLibScript: GDScript = preload("res://src/core/animation_library.g
 const WeatherProfile := preload("res://src/core/weather_profile.gd")
 const WeatherVisuals := preload("res://src/core/weather_visuals.gd")
 const PerfProfile := preload("res://src/core/perf_profile.gd")
+const UIStringsScript := preload("res://src/ui/ui_strings.gd")
 
 const STARTSCREEN_GUARD_GLB: String = "res://assets/ue/Content/Art/Animation/GuardEnforcer/Skin/Base/SK_GuardEnforcer__Preview.glb"
 const STARTSCREEN_GUARD_UE_MESH: String = "/Game/Art/Animation/GuardEnforcer/Skin/Base/SK_GuardEnforcer__Preview"
@@ -589,7 +590,8 @@ func _make_menu_btn(text: String, font: Font) -> Button:
 	b.text = text
 	b.flat = true
 	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	b.add_theme_font_size_override("font_size", 18)
+	# Authored MenuButton role (CF_Balthazar 48) on the 1280x720 canvas -> 32.
+	b.add_theme_font_size_override("font_size", ArtNouveauTheme.PX_MENU_BUTTON)
 	b.add_theme_color_override("font_color", ArtNouveauTheme.IVORY)
 	b.add_theme_color_override("font_hover_color", ArtNouveauTheme.GOLD)
 	b.add_theme_color_override("font_pressed_color", ArtNouveauTheme.GOLD_DIM)
@@ -600,8 +602,12 @@ func _make_menu_btn(text: String, font: Font) -> Button:
 
 
 func _build_ui() -> void:
-	var sans := ResourceLoader.load("res://assets/ue/fonts/Raleway-Regular.ttf") as Font
+	var menu_font := ResourceLoader.load("res://assets/ue/fonts/Raleway-Regular.ttf") as Font
 	var serif := ResourceLoader.load("res://assets/ue/fonts/SourceSerifPro-Bold.ttf") as Font
+	# RE-L-18: the authored MenuButton face is CF_Balthazar, not Raleway.
+	var display := ArtNouveauTheme.font_display()
+	if display != null:
+		menu_font = display
 
 	# Right-aligned title & clean vertical menu matching shipped startscreen
 	var right_anchor := Control.new()
@@ -647,7 +653,7 @@ func _build_ui() -> void:
 	spacer.custom_minimum_size = Vector2(0, 53)
 	menu_v.add_child(spacer)
 
-	var play_btn := _make_menu_btn(_loc_upper("Play"), sans)
+	var play_btn := _make_menu_btn(UIStringsScript.st_upper("ST_Screens", "Screen.MainMenu.Play", "PLAY"), menu_font)
 	play_btn.pressed.connect(func():
 		selected_order = 1
 		if AudioManager != null and AudioManager.has_method("play_ui"):
@@ -656,15 +662,15 @@ func _build_ui() -> void:
 	)
 	menu_v.add_child(play_btn)
 
-	var settings_btn := _make_menu_btn(_loc_upper("Settings"), sans)
+	var settings_btn := _make_menu_btn(UIStringsScript.st_upper("ST_Screens", "Screen.MainMenu.Settings", "SETTINGS"), menu_font)
 	settings_btn.pressed.connect(_on_settings_pressed)
 	menu_v.add_child(settings_btn)
 
-	var credits_btn := _make_menu_btn(_loc_upper("Credits"), sans)
+	var credits_btn := _make_menu_btn(UIStringsScript.st_upper("ST_Screens", "Screen.MainMenu.Credits", "CREDITS"), menu_font)
 	credits_btn.pressed.connect(_on_credits_pressed)
 	menu_v.add_child(credits_btn)
 
-	var quit_btn := _make_menu_btn(_loc_upper("Quit"), sans)
+	var quit_btn := _make_menu_btn(UIStringsScript.st_upper("ST_Screens", "Screen.MainMenu.Quit", "QUIT"), menu_font)
 	quit_btn.pressed.connect(func(): get_tree().quit())
 	menu_v.add_child(quit_btn)
 

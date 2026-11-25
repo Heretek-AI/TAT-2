@@ -5,10 +5,11 @@
   "stage": "MissionLobby",
   "source": "TAT-2 expansion content built from the shipped Skybox distant-building kit",
   "notes": [
-    "KF11's mission-preparation frame stands the thief on a slate ridge with the Kilcairn skyline behind him. The two loaded lobby sublevels (MissionLobby_Geo3 + MissionLobby_Periphery) only carry nine DistantBuildingC blocks, all west of the framed stage and hidden by the Periphery storefront wall.",
-    "This file is original TAT-2 layout data, not extracted content: it places shipped Skybox meshes/materials (/Game/Art/Environment/Skybox/...) in a stage-relative ring. The runtime never rewrites the authored sublevels.",
-    "Placement is camera-relative so a reframe keeps the composition: azimuth_deg is measured from the prep camera's horizontal forward (+ = left, matching Godot's +Y rotation), distance_m is the horizontal metres, base_y is the world Y of the mesh AABB bottom (the shipped skyline meshes sit on y=0), yaw_deg is the node's Y rotation, scale is uniform.",
-    "The 11.33 deg vertical prep lens sees ~0.09 m of height per metre of distance; DistantBuildingC is 24.4 m tall at scale 1, so the roofline band needs ~300-500 m standoff and a >1 scale to read above the ridge without eating the frame.",
+    "KF11's mission-preparation frame stands the thief on a slate ridge with the Kilcairn skyline behind him. The two loaded lobby sublevels (MissionLobby_Geo3 + MissionLobby_Periphery) carry 2,107 meshes, 387 of which sit inside the authored CameraActor_0 10 deg half-angle; this file adds only the far-city layer the authored camera's sky sector does not already fill.",
+    "This file is original TAT-2 layout data, not extracted content: it places shipped Skybox meshes/materials (/Game/Art/Environment/Skybox/...) in a camera-relative ring. The runtime never rewrites the authored sublevels.",
+    "Placement contract (T05): azimuth_deg is measured from the prep camera's horizontal forward (+ = left, matching Godot's +Y rotation); distance_m is the horizontal metres; base_y is the ABSOLUTE world Y of the mesh AABB bottom (not camera-relative); yaw_deg is the node's Y rotation; scale is uniform.",
+    "Composition band (T05): under the authored camera (pitch +6.685 deg) the world horizon projects to screen y 1.09, so ground-level distant blocks appear as a low far-city layer. Each piece must satisfy, on its projected mesh AABB: width <= 0.60 frame widths, top edge in screen y [0.65, 0.98], and horizontal overlap with the 0..1 frame. game/tests/test_t05_ui_contract.gd enforces this against the real spawned meshes.",
+    "The previous authoring (scales 1.0-1.7 at the same standoffs) produced a near block 1.55 frame widths wide whose top cut through the mid-frame: 2-5x the stated distant-city contract. The pre-T05 standoff note ('DistantBuildingC is 24.4 m tall at scale 1, so the roofline band needs ~300-500 m standoff and a >1 scale') was fitted to a reframed camera and is retired.",
     "layer is documentation only: near = KF11 foreground mass, mid = the roofline band, far = the horizon row behind it."
   ],
   "pieces": [
@@ -20,9 +21,9 @@
       "distance_m": 310.0,
       "base_y": 0.0,
       "yaw_deg": 123.0,
-      "scale": 1.7,
+      "scale": 0.56,
       "layer": "mid",
-      "note": "Main KF11 roofline band behind the thief; the wide block carries the dormer/chimney jumble."
+      "note": "Main KF11 roofline band behind the thief; the wide block carries the dormer/chimney jumble. Projected width 0.42 frame widths, top 0.83 (T05 band)."
     },
     {
       "id": "mid_roofline_b",
@@ -32,9 +33,9 @@
       "distance_m": 380.0,
       "base_y": 0.0,
       "yaw_deg": 123.0,
-      "scale": 1.5,
+      "scale": 0.75,
       "layer": "mid",
-      "note": "Second roofline layer, offset right so the silhouettes step instead of merging."
+      "note": "Second roofline layer, offset right so the silhouettes step instead of merging. Width 0.49, top 0.90."
     },
     {
       "id": "far_row_west",
@@ -44,9 +45,9 @@
       "distance_m": 470.0,
       "base_y": -2.0,
       "yaw_deg": 123.0,
-      "scale": 1.2,
+      "scale": 0.60,
       "layer": "far",
-      "note": "Horizon row behind the info stack; only its roof silhouette clears the cards."
+      "note": "Horizon row behind the info stack; only its roof silhouette clears the near roof. Width 0.27, top 0.81."
     },
     {
       "id": "far_row_east",
@@ -54,11 +55,11 @@
       "material": "/Game/Art/Environment/Skybox/Buildings/M_DistantBuildingC",
       "azimuth_deg": -11.0,
       "distance_m": 480.0,
-      "base_y": -2.0,
+      "base_y": 18.0,
       "yaw_deg": 156.0,
-      "scale": 1.2,
+      "scale": 0.72,
       "layer": "far",
-      "note": "Right-edge horizon row; rotated so the long axis closes the frame at the right."
+      "note": "Right-edge horizon row on the city's rising ground behind the near roofs; rotated so the long axis closes the frame at the right. Width 0.43, top 0.92."
     },
     {
       "id": "clocktower_west",
@@ -68,9 +69,9 @@
       "distance_m": 420.0,
       "base_y": -2.0,
       "yaw_deg": 0.0,
-      "scale": 1.2,
+      "scale": 0.60,
       "layer": "mid",
-      "note": "KF11 skyline clocktower spire left of the moon, against the roofline."
+      "note": "KF11 skyline clocktower spire left of the moon, against the roofline. Width 0.08, top 0.75."
     },
     {
       "id": "clocktower_east",
@@ -80,9 +81,9 @@
       "distance_m": 430.0,
       "base_y": -2.0,
       "yaw_deg": 0.0,
-      "scale": 1.0,
+      "scale": 0.60,
       "layer": "mid",
-      "note": "Secondary tower right of the clocktower, between it and the moon."
+      "note": "Secondary tower right of the clocktower, between it and the moon. Width 0.06, top 0.95."
     },
     {
       "id": "smokestack_row",
@@ -92,9 +93,9 @@
       "distance_m": 500.0,
       "base_y": -2.0,
       "yaw_deg": 18.0,
-      "scale": 1.2,
+      "scale": 0.72,
       "layer": "far",
-      "note": "Kilcairn industrial stack breaking the far roofline."
+      "note": "Kilcairn industrial stack breaking the far roofline. Width 0.07, top 0.87."
     },
     {
       "id": "urban_tower_east",
@@ -102,11 +103,11 @@
       "material": "/Game/MaterialLibrary/Utility/M_DarkGrey",
       "azimuth_deg": -9.5,
       "distance_m": 470.0,
-      "base_y": -2.0,
+      "base_y": 6.0,
       "yaw_deg": -12.0,
-      "scale": 1.0,
+      "scale": 0.60,
       "layer": "far",
-      "note": "KF11 right-side tower silhouette under the moon."
+      "note": "KF11 right-side tower silhouette under the moon, on the rising ground. Width 0.07, top 0.95."
     }
   ]
 }

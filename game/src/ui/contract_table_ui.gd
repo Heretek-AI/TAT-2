@@ -220,7 +220,7 @@ func _build_ui() -> void:
 	right.add_child(coop_row)
 	var host_btn: Button = Button.new()
 	host_btn.text = "Host Co-op"
-	ThemeScript.style_teal_button(host_btn, false)
+	ThemeScript.style_teal_button(host_btn, false, 20)
 	host_btn.pressed.connect(_on_host_pressed)
 	coop_row.add_child(host_btn)
 	_ip_edit = LineEdit.new()
@@ -232,7 +232,7 @@ func _build_ui() -> void:
 	coop_row.add_child(_ip_edit)
 	var join_btn: Button = Button.new()
 	join_btn.text = "Join Co-op"
-	ThemeScript.style_teal_button(join_btn, false)
+	ThemeScript.style_teal_button(join_btn, false, 20)
 	join_btn.pressed.connect(_on_join_pressed)
 	coop_row.add_child(join_btn)
 	_net_status = Label.new()
@@ -251,19 +251,19 @@ func _build_ui() -> void:
 	var free_btn: Button = Button.new()
 	free_btn.text = "FREE PLAY: GUILDHALL CLEANOUT [G]"
 	free_btn.custom_minimum_size = Vector2(300, 44)
-	ThemeScript.style_teal_button(free_btn, false)
+	ThemeScript.style_teal_button(free_btn, false, 20)
 	free_btn.pressed.connect(_start_free_play)
 	bottom.add_child(free_btn)
 	var deploy_btn: Button = Button.new()
 	deploy_btn.text = "DEPLOY CONTRACT"
 	deploy_btn.custom_minimum_size = Vector2(220, 44)
-	ThemeScript.style_teal_button(deploy_btn, true)
+	ThemeScript.style_teal_button(deploy_btn, true, 20)
 	deploy_btn.pressed.connect(_on_deploy_pressed)
 	bottom.add_child(deploy_btn)
 	var close_btn: Button = Button.new()
 	close_btn.text = "CLOSE [ESC]"
 	close_btn.custom_minimum_size = Vector2(160, 44)
-	ThemeScript.style_teal_button(close_btn, false)
+	ThemeScript.style_teal_button(close_btn, false, 20)
 	close_btn.pressed.connect(_on_close_pressed)
 	bottom.add_child(close_btn)
 
@@ -507,13 +507,13 @@ func _build_confirm() -> void:
 	var go_btn: Button = Button.new()
 	go_btn.text = "[SPACE] PREPARE FOR MISSION"
 	go_btn.custom_minimum_size = Vector2(280, 44)
-	ThemeScript.style_teal_button(go_btn, true)
+	ThemeScript.style_teal_button(go_btn, true, 24)
 	go_btn.pressed.connect(_confirm_prepare)
 	row.add_child(go_btn)
 	var cancel_btn: Button = Button.new()
 	cancel_btn.text = "[ESC] CANCEL"
 	cancel_btn.custom_minimum_size = Vector2(160, 44)
-	ThemeScript.style_teal_button(cancel_btn, false)
+	ThemeScript.style_teal_button(cancel_btn, false, 24)
 	cancel_btn.pressed.connect(_hide_confirm)
 	row.add_child(cancel_btn)
 	dim.visible = false

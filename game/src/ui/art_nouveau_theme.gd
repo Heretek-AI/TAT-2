@@ -67,7 +67,45 @@ const FONT_SANS_PATH: String = "res://assets/ue/fonts/Raleway-Regular.ttf"
 const FONT_ITALIC_PATH: String = "res://assets/ue/fonts/Raleway-Italic.ttf"
 const FONT_SERIF_PATH: String = "res://assets/ue/fonts/SourceSerifPro-Bold.ttf"
 const FONT_TYPEWRITER_PATH: String = "res://assets/ue/fonts/SpecialElite-Regular.ttf"
+## T05: five shipped faces with authored text-style roles that the port never
+## loaded (RE-L-18). Paths are the extracted TTFs already on disk; roles from
+## the shipped BP_TextStyle_* assets:
+##   Balthazar      -> Header 54 / MenuButton 48 / MenuHeadings / PlayerReady
+##   FacultyGlyphic -> numbers 32 / numbers_White 55
+##   PermanentMarker-> Heading_Handwritten (letter-spacing 40)
+##   Caveat Bold    -> MapTool_Handwritten 28
+##   Abel           -> Base_sessionlist 24
+const FONT_DISPLAY_PATH: String = "res://assets/ue/fonts/Balthazar-Regular.ttf"
+const FONT_NUMBERS_PATH: String = "res://assets/ue/fonts/FacultyGlyphic-Regular.ttf"
+const FONT_HANDWRITTEN_PATH: String = "res://assets/ue/fonts/PermanentMarker-Regular.ttf"
+const FONT_MAP_HAND_PATH: String = "res://assets/ue/fonts/Caveat-Bold.ttf"
+const FONT_SESSION_PATH: String = "res://assets/ue/fonts/Abel-Regular.ttf"
 const DIVIDER_TEX_PATH: String = "res://assets/ue/Raw/Art/UI/Components/T_Divider.png"
+## Authored 9-slice frames (RE-L-20 / C5-03). Both are 1024x1024, drawn Box with
+## fractional margins; stretching them without the margins is exactly what turns
+## the painterly crown strips into a "corrupted ribbon".
+const FRAME_PRIMARY_PATH: String = "res://assets/ue/Raw/Art/UI/Shell/Background/T_PanelFrame_Primary.png"
+const FRAME_ORNATE_PATH: String = "res://assets/ue/Raw/Art/UI/Shell/Background/T_boxFrame_ornate_2.png"
+## BP_BorderStyle_Frame_Primary: 0.2 / 0.4 / 0.2 / 0.3 (L/T/R/B).
+const FRAME_PRIMARY_MARGINS: Vector4 = Vector4(0.2, 0.4, 0.2, 0.3)
+## BP_BorderStyle_Frame_Ornate: 0.22 / 0.32 / 0.22 / 0.22.
+const FRAME_ORNATE_MARGINS: Vector4 = Vector4(0.22, 0.32, 0.22, 0.22)
+
+## The port renders on a 1280x720 design canvas; the shipped UMG text styles are
+## authored against 1920x1080. A faithful design-space size is therefore
+## authored_px * 720/1080 = 2/3 (RE-L-19 measured the port at ~47 % because no
+## call site compensated at all). Use these role constants, never a bare literal,
+## for text whose authored role is known.
+const CANVAS_SCALE: float = 720.0 / 1080.0
+const PX_MENU_BUTTON: int = 32   # authored 48
+const PX_HEADER: int = 36        # authored 54
+const PX_BODY: int = 25          # authored 38
+const PX_NUMBERS: int = 21       # authored 32
+const PX_NUMBERS_LARGE: int = 37 # authored 55
+const PX_TYPEWRITER: int = 28    # authored 42
+const PX_MAP_HAND: int = 19      # authored 28
+const PX_SESSION: int = 16       # authored 24
+const PX_TINY: int = 9           # authored 14
 
 ## Shipped CJK faces used as fallbacks for the Latin display fonts so the
 ## ja/zh-Hans/zh-Hant locales render rather than showing tofu. Korean is not
@@ -124,6 +162,96 @@ static func font_serif() -> Font:
 
 static func font_typewriter() -> Font:
 	return _load_font(FONT_TYPEWRITER_PATH)
+
+
+static func font_display() -> Font:
+	return _load_font(FONT_DISPLAY_PATH)
+
+
+static func font_numbers() -> Font:
+	return _load_font(FONT_NUMBERS_PATH)
+
+
+static func font_handwritten() -> Font:
+	return _load_font(FONT_HANDWRITTEN_PATH)
+
+
+static func font_map_hand() -> Font:
+	return _load_font(FONT_MAP_HAND_PATH)
+
+
+static func font_session() -> Font:
+	return _load_font(FONT_SESSION_PATH)
+
+
+## Authored UMG pixel size -> design-canvas size (1920x1080 authored, 1280x720
+## rendered). Single scale rule; `font_size_px` is the only sanctioned way to
+## turn an authored TextStyle size into a Godot font size.
+static func font_size_px(authored_px: float) -> int:
+	return maxi(1, int(round(authored_px * CANVAS_SCALE)))
+
+
+## Adds the authored 9-slice frame as a NinePatchRect behind the panel's content
+## (index `anchor`, usually 0 so the VBox/children draw over it). The patch
+## margins come from the authored fractional Box margins; they are clamped per
+## axis so a small widget never gets margins larger than its own rect (that is
+## the other half of the "corrupted ribbon" failure), but they are never zero.
+static func add_authored_frame(panel: PanelContainer, ornate: bool = true, anchor: int = 0) -> NinePatchRect:
+	if panel == null:
+		return null
+	var path: String = FRAME_ORNATE_PATH if ornate else FRAME_PRIMARY_PATH
+	if not ResourceLoader.exists(path):
+		return null
+	var tex: Texture2D = ResourceLoader.load(path) as Texture2D
+	if tex == null:
+		return null
+	var np: NinePatchRect = NinePatchRect.new()
+	np.name = "AuthoredFrame"
+	np.texture = tex
+	np.set_anchors_preset(Control.PRESET_FULL_RECT)
+	np.offset_left = -4.0
+	np.offset_top = -4.0
+	np.offset_right = 4.0
+	np.offset_bottom = 4.0
+	np.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var tint: Color = Color(0.72, 0.92, 0.94, 0.85) if ornate else Color(0.80, 0.95, 0.96, 0.80)
+	np.modulate = tint
+	np.set_meta("authored_frame_margins", FRAME_ORNATE_MARGINS if ornate else FRAME_PRIMARY_MARGINS)
+	_fit_authored_frame(np)
+	np.resized.connect(func() -> void: _fit_authored_frame(np))
+	panel.add_child(np)
+	panel.move_child(np, clampi(anchor, 0, panel.get_child_count() - 1))
+	return np
+
+
+static func _fit_authored_frame(np: NinePatchRect) -> void:
+	if np == null or np.texture == null:
+		return
+	var m: Vector4 = np.get_meta("authored_frame_margins", FRAME_ORNATE_MARGINS) as Vector4
+	var tex_w: float = float(np.texture.get_width())
+	var tex_h: float = float(np.texture.get_height())
+	var l: float = tex_w * m.x
+	var t: float = tex_h * m.y
+	var r: float = tex_w * m.z
+	var b: float = tex_h * m.w
+	var size_now: Vector2 = np.size
+	if size_now.x > 1.0:
+		var cap_x: float = size_now.x * 0.42
+		l = minf(l, cap_x)
+		r = minf(r, cap_x)
+	if size_now.y > 1.0:
+		var cap_y: float = size_now.y * 0.42
+		t = minf(t, cap_y)
+		b = minf(b, cap_y)
+	np.patch_margin_left = maxi(1, int(round(l)))
+	np.patch_margin_top = maxi(1, int(round(t)))
+	np.patch_margin_right = maxi(1, int(round(r)))
+	np.patch_margin_bottom = maxi(1, int(round(b)))
+
+
+## Authored 9-slice frame read back for tests/callers that need the contract.
+static func authored_frame_margins(ornate: bool = true) -> Vector4:
+	return FRAME_ORNATE_MARGINS if ornate else FRAME_PRIMARY_MARGINS
 
 
 static func panel_style(border_width: int = 2, radius: int = 8, bg: Color = PANEL_BG) -> StyleBoxFlat:
@@ -205,13 +333,13 @@ static func style_button(btn: Button, primary: bool = false) -> void:
 	style_teal_button(btn, primary)
 
 
-static func style_teal_button(btn: Button, primary: bool = false) -> void:
+static func style_teal_button(btn: Button, primary: bool = false, font_size: int = PX_MENU_BUTTON) -> void:
 	if btn == null:
 		return
 	btn.focus_mode = Control.FOCUS_ALL
-	var sans: Font = font_sans()
-	if sans != null:
-		btn.add_theme_font_override("font", sans)
+	var display: Font = font_display()
+	if display != null:
+		btn.add_theme_font_override("font", display)
 	if primary:
 		btn.add_theme_color_override("font_color", Color(0.96, 1.0, 0.99))
 		btn.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 1.0))
@@ -248,12 +376,15 @@ static func style_teal_button(btn: Button, primary: bool = false) -> void:
 		var pressed2: StyleBoxFlat = normal2.duplicate() as StyleBoxFlat
 		pressed2.bg_color = Color(0.04, 0.09, 0.12, 0.98)
 		btn.add_theme_stylebox_override("pressed", pressed2)
-	btn.add_theme_font_size_override("font_size", 15)
+	btn.add_theme_font_size_override("font_size", font_size)
 
 
 static func style_teal_tab(btn: Button, active: bool) -> void:
 	if btn == null:
 		return
+	var display: Font = font_display()
+	if display != null:
+		btn.add_theme_font_override("font", display)
 	var st_box: StyleBoxFlat = StyleBoxFlat.new()
 	st_box.set_border_width_all(1)
 	st_box.set_corner_radius_all(4)
@@ -274,7 +405,7 @@ static func style_teal_tab(btn: Button, active: bool) -> void:
 	var hov: StyleBoxFlat = st_box.duplicate() as StyleBoxFlat
 	hov.border_color = TEAL_ACCENT
 	btn.add_theme_stylebox_override("hover", hov)
-	btn.add_theme_font_size_override("font_size", 15)
+	btn.add_theme_font_size_override("font_size", PX_BODY)
 
 
 static func style_teal_option(opt: OptionButton) -> void:
@@ -297,7 +428,7 @@ static func style_teal_option(opt: OptionButton) -> void:
 	opt.add_theme_stylebox_override("pressed", hover)
 	opt.add_theme_color_override("font_color", TEAL_TEXT)
 	opt.add_theme_color_override("font_hover_color", Color(0.96, 1.0, 1.0))
-	opt.add_theme_font_size_override("font_size", 14)
+	opt.add_theme_font_size_override("font_size", PX_NUMBERS)
 
 
 static func section_header(text: String, font_size: int = 18) -> Control:
@@ -489,7 +620,7 @@ static func make_modal(parent: CanvasLayer, min_size: Vector2, title_text: Strin
 	panel.custom_minimum_size = min_size
 	panel.add_theme_stylebox_override("panel", teal_panel_style())
 	center.add_child(panel)
-	add_teal_filigree(panel)
+	add_authored_frame(panel, true, 0)
 	var margin: MarginContainer = MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 6)
 	margin.add_theme_constant_override("margin_right", 6)
@@ -502,11 +633,12 @@ static func make_modal(parent: CanvasLayer, min_size: Vector2, title_text: Strin
 	var title: Label = Label.new()
 	title.text = title_text.to_upper()
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 28)
+	# Authored Header role (CF_Balthazar 54) scaled for the 1280x720 canvas.
+	title.add_theme_font_size_override("font_size", PX_HEADER)
 	title.add_theme_color_override("font_color", TEAL_TITLE)
-	var serif: Font = font_serif()
-	if serif != null:
-		title.add_theme_font_override("font", serif)
+	var display: Font = font_display()
+	if display != null:
+		title.add_theme_font_override("font", display)
 	vbox.add_child(title)
 	if subtitle != "":
 		var sub: Label = Label.new()

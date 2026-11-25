@@ -398,7 +398,7 @@ func _build_top_bar() -> PanelContainer:
 	var q_btn: Button = Button.new()
 	q_btn.text = "< Q"
 	q_btn.custom_minimum_size = Vector2(56, 34)
-	ThemeScript.style_teal_button(q_btn, false)
+	ThemeScript.style_teal_button(q_btn, false, 20)
 	q_btn.pressed.connect(_cycle_thief.bind(-1))
 	hb.add_child(q_btn)
 	hb.add_child(_build_thief_card("spider", THIEF_LABELS[0]))
@@ -406,7 +406,7 @@ func _build_top_bar() -> PanelContainer:
 	var e_btn: Button = Button.new()
 	e_btn.text = "E >"
 	e_btn.custom_minimum_size = Vector2(56, 34)
-	ThemeScript.style_teal_button(e_btn, false)
+	ThemeScript.style_teal_button(e_btn, false, 20)
 	e_btn.pressed.connect(_cycle_thief.bind(1))
 	hb.add_child(e_btn)
 	return bar
@@ -500,7 +500,7 @@ func _build_bottom_bar() -> HBoxContainer:
 	var back_btn: Button = Button.new()
 	back_btn.text = "BACK [ESC]"
 	back_btn.custom_minimum_size = Vector2(160, 34)
-	ThemeScript.style_teal_button(back_btn, false)
+	ThemeScript.style_teal_button(back_btn, false, 20)
 	back_btn.pressed.connect(func() -> void: _apply_and_close(true))
 	hb.add_child(back_btn)
 	return hb

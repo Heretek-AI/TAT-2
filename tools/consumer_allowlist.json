@@ -1,0 +1,190 @@
+{
+  "schema": "tat2.consumer_allowlist/1",
+  "note": "Every generated file that no game/src reader reaches must be named here with a reason. Kinds: text_via_locres, folded_into_aggregate, producer_intermediate, build_manifest, provenance, tests_only, placeholder, blocked_on_team (needs owner). A rule that names a consumer must also name the claim_token that proves the claim (a literal the consumer file contains); the checker fails when it is absent. A rule that matches nothing fails the gate unless marked optional:true — optional exists only for a producer whose output this environment has not regenerated yet (T01-PIPELINE staged the curve/ini/input/collision producers against a read-only shared data tree); drop the flag after `make normalize` proves the file exists. See tools/check_consumers.py.",
+  "rules": [
+    {
+      "glob": "tables/StringTables/**",
+      "kind": "text_via_locres",
+      "reason": "StringTable text reaches the runtime through the locres pipeline: parse_locres.py writes localization/*.csv + sources.json and Loc reads them. The normalised table is extraction provenance, not a second source of truth (RE-A-03).",
+      "consumer": "game/src/core/localization.gd",
+      "claim_token": "locres"
+    },
+    {
+      "glob": "tables/Gameplay/Clues/**",
+      "kind": "folded_into_aggregate",
+      "reason": "Clue facts are folded into gameplay/clues.json by parse_clues.py and read from there by game_data.gd; the per-set tables duplicate the same fact ids (RE-A-12).",
+      "consumer": "tools/parse_clues.py",
+      "claim_token": "ClueSets"
+    },
+    {
+      "glob": "tables/Audio/Audio_Data/**",
+      "kind": "blocked_on_team",
+      "owner": "T03",
+      "reason": "Wwise voice/priority tables are extracted but read by no producer and no runtime file (measured: `rg -l 'Audio_Data|DT_Audio_Voice' tools/*.py game/src` -> 0). T03-AUDIO owns the Wwise control plane."
+    },
+    {
+      "glob": "tables/WwiseAudio/**",
+      "kind": "blocked_on_team",
+      "owner": "T03",
+      "reason": "Wwise surface/reverb routing tables are extracted but read by no producer and no runtime file (measured: `rg -l 'WwiseAudio|DefaultGeometrySurfaceProperties' tools/*.py game/src` -> 0). T03-AUDIO owns the Wwise control plane."
+    },
+    {
+      "glob": "tables/Gameplay/Loot/Data/**",
+      "kind": "producer_intermediate",
+      "reason": "Loot info tables and the loot CDT are read by parse_loot.py to build gameplay/loot_actors.json; the runtime reads the aggregate.",
+      "consumer": "tools/parse_loot.py",
+      "claim_token": "Loot"
+    },
+    {
+      "glob": "tables/Gameplay/Quests/CDT_Contracts.json",
+      "kind": "producer_intermediate",
+      "reason": "Composite contract table is the authored source for gameplay/contracts.json (parse_contracts.py); the runtime reads the aggregate.",
+      "consumer": "tools/parse_contracts.py",
+      "claim_token": "Contracts"
+    },
+    {
+      "glob": "tables/Gameplay/Quests/DT_Missions_Example.json",
+      "kind": "placeholder",
+      "reason": "Authored Mission.Example.* fallback rows the map checker uses when a sublevel declares no mission record; not gameplay content."
+    },
+    {
+      "glob": "tables/Maps/**",
+      "kind": "folded_into_aggregate",
+      "reason": "Per-map quest graphs and fact tables are read by parse_quests.py and emitted as gameplay/quests.json; the runtime never opens the per-map copy.",
+      "consumer": "tools/parse_quests.py",
+      "claim_token": "QG_"
+    },
+    {
+      "glob": "tables/Gameplay/Weather/**",
+      "kind": "producer_intermediate",
+      "reason": "DT_WeatherTypes is read by parse_hearing.py (sound-carry per weather) and by parse_weather.py; the runtime reads weather/*.json.",
+      "consumer": "tools/parse_hearing.py",
+      "claim_token": "Weather"
+    },
+    {
+      "glob": "tables/Gameplay/Indicators/**",
+      "kind": "blocked_on_team",
+      "owner": "T05",
+      "reason": "Thief-vision indicator table and the major-loot glyph curve have no HUD reader; T05-UI owns the indicator layer (RE-A-01, RE-A-03)."
+    },
+    {
+      "glob": "tables/Gameplay/Interactables/Data/**",
+      "kind": "blocked_on_team",
+      "owner": "T05",
+      "reason": "DT_InteractPromptStyles drives the authored interact-prompt widget styles; the prompt UI is hand-built, so T05-UI owes the consumer."
+    },
+    {
+      "glob": "tables/Gameplay/MatchSettings/**",
+      "kind": "blocked_on_team",
+      "owner": "T10",
+      "reason": "Match-settings gameplay-tag groups have no runtime reader; T10-GAMEPLAY owns match settings and the run clock."
+    },
+    {
+      "glob": "tables/Art/UI/Icons/**",
+      "kind": "blocked_on_team",
+      "owner": "T06",
+      "reason": "DT_InputKeysToGlyphs is the authored key->glyph table; T06-INPUT owns input_glyphs.gd (RE-A-04)."
+    },
+    {
+      "glob": "tables/UI/**",
+      "kind": "blocked_on_team",
+      "owner": "T05",
+      "reason": "HUD/compass/toast/rich-text tables and the mouse+gamepad sensitivity curves have no runtime reader; the UI and the sensitivity model are T05/T06 deliverables."
+    },
+    {
+      "glob": "tables/MaterialLibrary/**",
+      "kind": "blocked_on_team",
+      "owner": "T08",
+      "reason": "C_EyeGlow (colour curve for the eye material) has no material reader; T08-MATERIAL owns the material graph port.",
+      "optional": true
+    },
+    {
+      "glob": "audio_library.json",
+      "kind": "build_manifest",
+      "reason": "Wwise decode manifest: the source->ogg mapping convert_wwise.py uses to rebuild assets/ue/audio/wwise. The runtime reads audio_events.json.",
+      "consumer": "tools/convert_wwise.py",
+      "claim_token": "audio_library"
+    },
+    {
+      "glob": "mesh_materials_provenance.json",
+      "kind": "provenance",
+      "reason": "Per-slot material provenance emitted for audit; parse_materials.py writes and checks it, no runtime reads it.",
+      "consumer": "tools/parse_materials.py",
+      "claim_token": "provenance"
+    },
+    {
+      "glob": "gameplay/devices.json",
+      "kind": "build_manifest",
+      "reason": "Device census used by the audit content check (families/expected counts). The runtime reads gameplay/devices_runtime.json.",
+      "consumer": "tools/manifest_audit.py",
+      "claim_token": "devices.json"
+    },
+    {
+      "glob": "videos.json",
+      "kind": "blocked_on_team",
+      "owner": "T05",
+      "reason": "15 transcoded .ogv clips (153 MB) have no VideoStreamPlayer; T05-UI owns the screens that must play them (RE-A-06)."
+    },
+    {
+      "glob": "gameplay/guard_behavior.json",
+      "kind": "blocked_on_team",
+      "owner": "T11",
+      "reason": "21 authored StateTrees (784 KB) have no runtime consumer; T11-AI owns the guard behaviour consumer (RE-A-02)."
+    },
+    {
+      "glob": "gameplay/character_movement.json",
+      "kind": "tests_only",
+      "reason": "Movement constants are asserted by game/tests/test_m2_player.gd; the runtime carries its own tuned constants.",
+      "consumer": "game/tests/test_m2_player.gd",
+      "claim_token": "character_movement"
+    },
+    {
+      "glob": "gameplay/state_speeds.json",
+      "kind": "tests_only",
+      "reason": "State-speed rows are asserted by game/tests/run_tests.gd; no game/src reader.",
+      "consumer": "game/tests/run_tests.gd",
+      "claim_token": "state_speeds"
+    },
+    {
+      "glob": "content_overrides_applied.json",
+      "kind": "tests_only",
+      "reason": "Applied override table is asserted by game/tests/test_content_overrides.gd; check_content_overrides.py re-derives it from the levels.",
+      "consumer": "game/tests/test_content_overrides.gd",
+      "claim_token": "content_overrides_applied"
+    },
+    {
+      "glob": "vfx/*.json",
+      "kind": "tests_only",
+      "reason": "Niagara system catalogue is asserted by the E2E tiers; the runtime spawns the systems directly and never reads the catalogue (RE-A-03).",
+      "consumer": "game/tests/run_tests.gd",
+      "claim_token": "systems.json"
+    },
+    {
+      "glob": "curves.json",
+      "kind": "provenance",
+      "reason": "Curve index: which standalone curve assets were emitted into tables/** and which curve objects are Blueprint sub-object defaults. The runtime reads the per-asset tables, not this index.",
+      "optional": true
+    },
+    {
+      "glob": "project_settings.json",
+      "kind": "blocked_on_team",
+      "owner": "T10",
+      "reason": "DefaultGame.ini producer (XP, MaximumLevel, endgame durations, authored map->mission lists). T10-GAMEPLAY owns the consumer; the producer exists to unblock it.",
+      "optional": true
+    },
+    {
+      "glob": "gameplay/input_actions.json",
+      "kind": "blocked_on_team",
+      "owner": "T06",
+      "reason": "Enhanced-Input ingest (91 shipping mappings / 52 actions). T06-INPUT owns the consumer and the rebinding model.",
+      "optional": true
+    },
+    {
+      "glob": "mesh_collision.json",
+      "kind": "blocked_on_team",
+      "owner": "T09",
+      "reason": "AggGeom simple-collision primitives per mesh. T09-GEOMETRY owns collision creation in the loader; T11 needs the hulls for nav.",
+      "optional": true
+    }
+  ]
+}

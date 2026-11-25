@@ -8,7 +8,7 @@ MOBILE_ABI  ?= arm64
 QA_CONTRACT ?= 0
 KEYSTORE_PROPS := $(HOME)/.config/tat2/keystore.properties
 
-.PHONY: build-extractor extract anims normalize audit audit-bootstrap audit-refresh-stamps audit-imports content-overrides gate-ratchet test run editor review review-capture bake-review bake-review-core desktop-texture-cap texture-cap-check audio-tools linux-build linux-stamp-verify linux-run android-prepare android-debug android-debug-gl android-release
+.PHONY: build-extractor extract anims normalize audit audit-bootstrap audit-refresh-stamps audit-imports content-overrides check-logic check-consumers gate-ratchet test run editor review review-capture bake-review bake-review-core desktop-texture-cap texture-cap-check audio-tools linux-build linux-stamp-verify linux-run android-prepare android-debug android-debug-gl android-release
 
 build-extractor:
 	DOTNET_ROOT=$(HOME)/.dotnet10 PATH=$(HOME)/.dotnet10:$(PATH) $(DOTNET) build tools/tat-extract -c Release
@@ -55,8 +55,19 @@ audio-tools:
 
 # The texture cap is derived from the extracted `.import` sidecars, so a stale
 # cap must fail the content gate (see the check target below).
-audit: content-overrides texture-cap-check
+# check-logic validates the W5E payloads (unlocks/hearing/perception/StateTrees)
+# with expectations kept outside the producers; check-consumers fails when a
+# generated file has no game/src reader and no allowlisted reason.
+audit: content-overrides texture-cap-check check-logic check-consumers
 	python3 tools/manifest_audit.py --min-coverage 0.99 --min-exact-coverage 0.99
+
+# Fail-closed validator for the logic-data payloads (was wired to no target).
+check-logic:
+	python3 tools/check_logic_data.py
+
+# Every normalised output needs a reader or an allowlisted reason.
+check-consumers:
+	python3 tools/check_consumers.py
 
 # W6T graybox P0/3rd-floor gate: validates the tracked override table against
 # the applied .tatlevel.json output (counts, overlap, coverage regions,

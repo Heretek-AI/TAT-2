@@ -10,6 +10,8 @@ signal closed()
 
 const MissionPrepUIScript: GDScript = preload("res://src/ui/mission_prep_ui.gd")
 const ThemeScript: GDScript = preload("res://src/ui/art_nouveau_theme.gd")
+const UIStringsScript: GDScript = preload("res://src/ui/ui_strings.gd")
+const FocusNavScript: GDScript = preload("res://src/ui/focus_nav.gd")
 
 const SPLASH_CANDIDATES: Array[String] = [
 	"res://assets/ue/Content/Art/UI/MapSplash_Guildhall.png",
@@ -29,6 +31,7 @@ var free_play: bool = false
 var _contracts: Array[Dictionary] = []
 var _main_root: Control
 var _confirm_root: Control
+var _panel: Control = null
 var _confirm_lbl: Label
 var _confirm_visible: bool = false
 var _prep: Control
@@ -64,6 +67,7 @@ func open_table() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_ui_sfx("open")
 	_refresh_list()
+	FocusNavScript.install_and_focus(_panel)
 
 
 ## Instance helper: restore mouse, emit closed, hide.
@@ -128,6 +132,7 @@ func _build_ui() -> void:
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.add_child(center)
 	var panel: PanelContainer = PanelContainer.new()
+	_panel = panel
 	panel.custom_minimum_size = Vector2(1020, 640)
 	panel.add_theme_stylebox_override("panel", ThemeScript.teal_panel_style(2, 6, ThemeScript.TEAL_PANEL_BG, 20))
 	center.add_child(panel)
@@ -137,16 +142,9 @@ func _build_ui() -> void:
 	var vb: VBoxContainer = VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 12)
 	panel.add_child(vb)
-	var title: Label = Label.new()
-	title.text = "MAP TABLE — CONTRACT SELECTOR"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 26)
-	title.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
-	if serif != null:
-		title.add_theme_font_override("font", serif)
-	vb.add_child(title)
-	vb.add_child(ThemeScript.teal_divider())
-
+	# W9-P3: the shipped Map Table has no title row (the authored screen opens
+	# straight on the contract list), so the port's "MAP TABLE — CONTRACT
+	# SELECTOR" banner is deleted rather than translated.
 	var split: HBoxContainer = HBoxContainer.new()
 	split.add_theme_constant_override("separation", 20)
 	split.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -203,14 +201,15 @@ func _build_ui() -> void:
 	diff_row.add_theme_constant_override("separation", 10)
 	right.add_child(diff_row)
 	var diff_lbl: Label = Label.new()
-	diff_lbl.text = "Difficulty:"
+	diff_lbl.text = UIStringsScript.st_text("ST_ThievesDen", "CityMap.DifficultyHeader", "Difficulty:")
 	diff_lbl.add_theme_font_size_override("font_size", 16)
 	diff_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_ACCENT)
 	diff_row.add_child(diff_lbl)
 	_diff_opt = OptionButton.new()
-	_diff_opt.add_item("Novice (1)", 1)
-	_diff_opt.add_item("Thief (2)", 2)
-	_diff_opt.add_item("Master Thief (3)", 3)
+	# Authored difficulty names; the port's "(n)" index suffix is unchanged text.
+	_diff_opt.add_item("%s (1)" % UIStringsScript.st_text("ST_GeneralUI", "Mission.Difficulty.Easy", "Novice"), 1)
+	_diff_opt.add_item("%s (2)" % UIStringsScript.st_text("ST_GeneralUI", "Mission.Difficulty.Normal", "Thief"), 2)
+	_diff_opt.add_item("%s (3)" % UIStringsScript.st_text("ST_GeneralUI", "Mission.Difficulty.Hard", "Master Thief"), 3)
 	ThemeScript.style_teal_option(_diff_opt)
 	_diff_opt.item_selected.connect(_on_difficulty_selected)
 	diff_row.add_child(_diff_opt)
@@ -219,7 +218,9 @@ func _build_ui() -> void:
 	coop_row.add_theme_constant_override("separation", 10)
 	right.add_child(coop_row)
 	var host_btn: Button = Button.new()
-	host_btn.text = "Host Co-op"
+	# PORT COPY (no authored row): the authored host rows are "Host Co-op (Friends
+	# Only)/(Public)"; the port's 2P listen host has neither restriction.
+	host_btn.text = UIStringsScript.loc("Host Co-op")
 	ThemeScript.style_teal_button(host_btn, false, 20)
 	host_btn.pressed.connect(_on_host_pressed)
 	coop_row.add_child(host_btn)
@@ -231,12 +232,12 @@ func _build_ui() -> void:
 	_ip_edit.add_theme_color_override("font_color", ThemeScript.TEAL_TEXT)
 	coop_row.add_child(_ip_edit)
 	var join_btn: Button = Button.new()
-	join_btn.text = "Join Co-op"
+	join_btn.text = UIStringsScript.loc("Join Co-op") ## PORT COPY (no authored row)
 	ThemeScript.style_teal_button(join_btn, false, 20)
 	join_btn.pressed.connect(_on_join_pressed)
 	coop_row.add_child(join_btn)
 	_net_status = Label.new()
-	_net_status.text = "Solo Mode"
+	_net_status.text = UIStringsScript.loc("Solo Mode") ## PORT COPY (no authored row)
 	_net_status.add_theme_font_size_override("font_size", 14)
 	_net_status.add_theme_color_override("font_color", ThemeScript.TEAL_MUTED)
 	coop_row.add_child(_net_status)
@@ -249,19 +250,25 @@ func _build_ui() -> void:
 	# Guildhall. It is a separate button/[G] key, so the normal list selection and
 	# its PREPARE/DEPLOY flow are unchanged.
 	var free_btn: Button = Button.new()
-	free_btn.text = "FREE PLAY: GUILDHALL CLEANOUT [G]"
+	# PORT COPY (no authored row): free play is the port's Cleanout entry, labelled
+	# with its own name; [G] is the live device glyph.
+	free_btn.text = "%s [%s]" % [UIStringsScript.loc("FREE PLAY: GUILDHALL CLEANOUT"), InputGlyphs.key_label("G")]
 	free_btn.custom_minimum_size = Vector2(300, 44)
 	ThemeScript.style_teal_button(free_btn, false, 20)
 	free_btn.pressed.connect(_start_free_play)
 	bottom.add_child(free_btn)
 	var deploy_btn: Button = Button.new()
-	deploy_btn.text = "DEPLOY CONTRACT"
+	# PORT COPY (no authored row): opens the port's own confirmation step, so it
+	# keeps a distinct name from the authored "Prepare for Mission" primary.
+	deploy_btn.text = UIStringsScript.loc("DEPLOY CONTRACT").to_upper()
 	deploy_btn.custom_minimum_size = Vector2(220, 44)
 	ThemeScript.style_teal_button(deploy_btn, true, 20)
 	deploy_btn.pressed.connect(_on_deploy_pressed)
 	bottom.add_child(deploy_btn)
 	var close_btn: Button = Button.new()
-	close_btn.text = "CLOSE [ESC]"
+	close_btn.text = "%s [%s]" % [
+		UIStringsScript.st_upper("ST_Interactables", "PromptClose", "Close"),
+		InputGlyphs.text("pause")]
 	close_btn.custom_minimum_size = Vector2(160, 44)
 	ThemeScript.style_teal_button(close_btn, false, 20)
 	close_btn.pressed.connect(_on_close_pressed)
@@ -325,7 +332,9 @@ func _refresh_details(c: Dictionary) -> void:
 	var map_text: String = str(disp.get("location", c.get("map_id", "")))
 	var desc_text: String = str(disp.get("description", ""))
 	var quest_text: String = str(disp.get("quest_item", ""))
-	_detail_lbl.text = "Target: %s\nLocation: %s\n\n%s" % [quest_text, map_text, desc_text]
+	# PORT COPY (no authored row): the authored contract details are a splash +
+	# description; this three-slot summary is the port's own layout.
+	_detail_lbl.text = UIStringsScript.loc("Target: %s\nLocation: %s\n\n%s") % [quest_text, map_text, desc_text]
 	var clue_text: String = "• Reconnoiter the landmark for clues."
 	var clues_var: Variant = disp.get("clue_facts", [])
 	if clues_var is Array and not (clues_var as Array).is_empty():
@@ -333,7 +342,7 @@ func _refresh_details(c: Dictionary) -> void:
 		for clue: Variant in (clues_var as Array):
 			parts.append("• " + str(clue))
 		clue_text = "\n".join(parts)
-	_intel_lbl.text = "Intel:\n" + clue_text
+	_intel_lbl.text = UIStringsScript.loc("Intel:\n") + clue_text ## PORT COPY (no authored row)
 	_update_splash(selected_map_id)
 
 
@@ -395,10 +404,10 @@ func _on_host_pressed() -> void:
 		err_code = int(NetManager.call("host"))
 	if err_code == OK:
 		coop_mode = "Co-op"
-		_net_status.text = "Hosting co-op"
+		_net_status.text = UIStringsScript.loc("Hosting co-op") ## PORT COPY (no authored row)
 		_ui_sfx("confirm")
 	else:
-		_net_status.text = "Host failed: %d" % err_code
+		_net_status.text = UIStringsScript.loc("Host failed: %d") % err_code ## PORT COPY (no authored row)
 		_ui_sfx("error")
 
 
@@ -413,10 +422,10 @@ func _on_join_pressed() -> void:
 		err_code = int(NetManager.call("join", addr))
 	if err_code == OK:
 		coop_mode = "Co-op"
-		_net_status.text = "Connecting to " + addr + "..."
+		_net_status.text = UIStringsScript.loc("Connecting to ") + addr + "..." ## PORT COPY (no authored row)
 		_ui_sfx("confirm")
 	else:
-		_net_status.text = "Join failed: %d" % err_code
+		_net_status.text = UIStringsScript.loc("Join failed: %d") % err_code ## PORT COPY (no authored row)
 		_ui_sfx("error")
 
 
@@ -439,7 +448,10 @@ func _difficulty_label() -> String:
 
 
 func _confirm_text() -> String:
-	return "Join Mission with these settings?\nDifficulty: %s\nMode: %s" % [_difficulty_label(), coop_mode]
+	# The authored row separates its lines with \r\n; Labels render \n only.
+	return UIStringsScript.st_template("ST_ThievesDen", "CityMap.ConfirmJoinLobby",
+		"Join Mission with these settings?\nDifficulty: {difficulty}\nMode: {mode}",
+		{"difficulty": _difficulty_label(), "mode": coop_mode}).replace("\r\n", "\n").replace("\r", "\n")
 
 
 func _show_confirm() -> void:
@@ -447,8 +459,11 @@ func _show_confirm() -> void:
 		_build_confirm()
 	_ui_sfx("confirm")
 	_refresh_confirm_text()
+	# Remember the table row that opened the modal and move focus into it.
+	FocusNavScript.remember()
 	_confirm_root.visible = true
 	_confirm_visible = true
+	FocusNavScript.install_and_focus(_confirm_root)
 
 
 func _hide_confirm(play_sfx: bool = true) -> void:
@@ -456,7 +471,12 @@ func _hide_confirm(play_sfx: bool = true) -> void:
 		_ui_sfx("back")
 	_confirm_visible = false
 	if _confirm_root != null:
+		# Never leave focus trapped in a hidden modal: release it, re-ring the
+		# table and put it back on the opener.
+		FocusNavScript.release_if_inside(_confirm_root)
 		_confirm_root.visible = false
+		FocusNavScript.install(_panel)
+		FocusNavScript.restore()
 
 
 func _refresh_confirm_text() -> void:
@@ -495,7 +515,9 @@ func _build_confirm() -> void:
 	vb.add_child(_confirm_lbl)
 	vb.add_child(ThemeScript.teal_divider())
 	var hint: Label = Label.new()
-	hint.text = "[H] Difficulty toggle   ·   [R] Mode toggle   ·   [SPACE/F] PREPARE"
+	# PORT COPY (no authored row): the port's own two-toggle confirm hint. [H]/[R]
+	# are raw keycodes (no InputMap action), so they stay fixed tokens.
+	hint.text = UIStringsScript.loc("[H] Difficulty toggle   ·   [R] Mode toggle   ·   [SPACE/F] PREPARE")
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.add_theme_font_size_override("font_size", 14)
 	hint.add_theme_color_override("font_color", ThemeScript.TEAL_MUTED)
@@ -505,13 +527,14 @@ func _build_confirm() -> void:
 	row.add_theme_constant_override("separation", 12)
 	vb.add_child(row)
 	var go_btn: Button = Button.new()
-	go_btn.text = "[SPACE] PREPARE FOR MISSION"
+	go_btn.text = InputGlyphs.prompt("jump", UIStringsScript.st_upper("ST_ThievesDen", "CityMap.JoinLobby", "Prepare for Mission"))
 	go_btn.custom_minimum_size = Vector2(280, 44)
 	ThemeScript.style_teal_button(go_btn, true, 24)
 	go_btn.pressed.connect(_confirm_prepare)
 	row.add_child(go_btn)
 	var cancel_btn: Button = Button.new()
-	cancel_btn.text = "[ESC] CANCEL"
+	# "Cancel" is an authored locres source (reverse-map ALL-CAPS normalisation).
+	cancel_btn.text = InputGlyphs.prompt("pause", UIStringsScript.loc("CANCEL"))
 	cancel_btn.custom_minimum_size = Vector2(160, 44)
 	ThemeScript.style_teal_button(cancel_btn, false, 24)
 	cancel_btn.pressed.connect(_hide_confirm)
@@ -537,7 +560,9 @@ func _toggle_mode() -> void:
 	else:
 		coop_mode = "Solo"
 	if _net_status != null:
-		_net_status.text = "Solo Mode" if coop_mode == "Solo" else "Co-op Mode (pending host/join)"
+		# PORT COPY (no authored row): the port's pending-host/join state line.
+		_net_status.text = UIStringsScript.loc("Solo Mode") if coop_mode == "Solo" \
+			else UIStringsScript.loc("Co-op Mode (pending host/join)")
 	_refresh_confirm_text()
 
 
@@ -633,6 +658,7 @@ func _on_close_pressed() -> void:
 
 
 func _close_ui() -> void:
+	FocusNavScript.release_if_inside(_panel)
 	_ui_sfx("back")
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	closed.emit()

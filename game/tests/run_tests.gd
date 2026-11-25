@@ -7549,6 +7549,33 @@ func _initialize() -> void:
 		else:
 			print("PASS: ", w9p2_suite[0], " ", w9p2_suite[1], " (", w9p2_ms, " ms)")
 
+	# 106-109. W9-P3 UI suites (standalone SceneTree children, the same pattern
+	# as 99/101-105: exit 0 AND the summary marker are both required).
+	# These pin the three authored screens (post-match/XP, progression,
+	# tutorial), the gamepad focus walk over all ten menus, the authored TAB-map
+	# boundary contract + loot toast, and the Loc fallback/reverse-map proof.
+	for w9p3_suite: Array in [
+		["106", "W9-P3 C1 post-match/XP + progression + tutorial from authored tables", "res://tests/test_w9p3_screens.gd", "W9P3_SCREENS_SUMMARY: fails=0"],
+		["107", "W9-P3 C3 gamepad focus walk + rebind glyph (10 menus, no dead end)", "res://tests/test_focus_walk.gd", "FOCUS_WALK_SUMMARY: fails=0"],
+		["108", "W9-P3 C4 authored TAB-map boundaries + major-loot toast", "res://tests/test_w9p3_map_toast.gd", "W9P3_MAP_TOAST_SUMMARY: fails=0"],
+		["109", "W9-P3 C2 Loc fallback (English, never a GUID) + reverse map", "res://tests/test_w9p3_localization.gd", "W9P3_LOC_SUMMARY: fails=0"],
+	]:
+		var w9p3_out: Array = []
+		var w9p3_args: PackedStringArray = [
+			"--headless",
+			"--path", ProjectSettings.globalize_path("res://"),
+			"--script", str(w9p3_suite[2]),
+		]
+		var w9p3_t0: int = Time.get_ticks_msec()
+		var w9p3_code: int = OS.execute(OS.get_executable_path(), w9p3_args, w9p3_out, true)
+		var w9p3_ms: int = Time.get_ticks_msec() - w9p3_t0
+		var w9p3_text: String = "\n".join(PackedStringArray(w9p3_out))
+		if w9p3_code != 0 or w9p3_text.find(str(w9p3_suite[3])) < 0:
+			printerr("FAIL: ", w9p3_suite[0], " ", w9p3_suite[1], " exit=", w9p3_code, " ms=", w9p3_ms, "\n", w9p3_text.right(3000))
+			fails += 1
+		else:
+			print("PASS: ", w9p3_suite[0], " ", w9p3_suite[1], " (", w9p3_ms, " ms)")
+
 	# 12.6/12.7 process-lifetime caches must not outlive the run.
 	var am_node: Node = root.get_node_or_null("/root/AudioManager")
 	if am_node != null and am_node.has_method("cleanup_on_exit"):

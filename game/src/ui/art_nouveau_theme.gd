@@ -333,6 +333,37 @@ static func style_button(btn: Button, primary: bool = false) -> void:
 	style_teal_button(btn, primary)
 
 
+## Authored focus treatment for the CommonUI focus model (RE-L-13): the
+## focused widget reads GOLD, so a pad user can see the cursor. Godot draws the
+## "focus" stylebox *over* the normal one; without an override the themed
+## buttons only show the engine's thin default outline (effectively invisible).
+## Values are the port's teal/gold palette (no cooked UE focus stylebox ships in
+## the dump), so this is the documented port reconstruction of the behaviour.
+static func focus_style(radius: int = 4, margin: int = 10) -> StyleBoxFlat:
+	var s: StyleBoxFlat = StyleBoxFlat.new()
+	s.draw_center = false
+	s.bg_color = Color(0.0, 0.0, 0.0, 0.0)
+	s.border_color = GOLD
+	s.set_border_width_all(2)
+	s.set_corner_radius_all(radius + 2)
+	s.content_margin_left = margin - 2
+	s.content_margin_right = margin - 2
+	s.content_margin_top = margin - 2
+	s.content_margin_bottom = margin - 2
+	s.expand_margin_left = 2
+	s.expand_margin_right = 2
+	s.expand_margin_top = 2
+	s.expand_margin_bottom = 2
+	return s
+
+
+static func _apply_focus_style(control: Control, radius: int = 4, margin: int = 10) -> void:
+	if control == null:
+		return
+	control.add_theme_stylebox_override("focus", focus_style(radius, margin))
+	control.add_theme_color_override("font_focus_color", GOLD)
+
+
 static func style_teal_button(btn: Button, primary: bool = false, font_size: int = PX_MENU_BUTTON) -> void:
 	if btn == null:
 		return
@@ -377,11 +408,13 @@ static func style_teal_button(btn: Button, primary: bool = false, font_size: int
 		pressed2.bg_color = Color(0.04, 0.09, 0.12, 0.98)
 		btn.add_theme_stylebox_override("pressed", pressed2)
 	btn.add_theme_font_size_override("font_size", font_size)
+	_apply_focus_style(btn, 4, 10)
 
 
 static func style_teal_tab(btn: Button, active: bool) -> void:
 	if btn == null:
 		return
+	btn.focus_mode = Control.FOCUS_ALL
 	var display: Font = font_display()
 	if display != null:
 		btn.add_theme_font_override("font", display)
@@ -406,6 +439,7 @@ static func style_teal_tab(btn: Button, active: bool) -> void:
 	hov.border_color = TEAL_ACCENT
 	btn.add_theme_stylebox_override("hover", hov)
 	btn.add_theme_font_size_override("font_size", PX_BODY)
+	_apply_focus_style(btn, 4, 10)
 
 
 static func style_teal_option(opt: OptionButton) -> void:
@@ -429,6 +463,8 @@ static func style_teal_option(opt: OptionButton) -> void:
 	opt.add_theme_color_override("font_color", TEAL_TEXT)
 	opt.add_theme_color_override("font_hover_color", Color(0.96, 1.0, 1.0))
 	opt.add_theme_font_size_override("font_size", PX_NUMBERS)
+	opt.focus_mode = Control.FOCUS_ALL
+	_apply_focus_style(opt, 4, 10)
 
 
 static func section_header(text: String, font_size: int = 18) -> Control:

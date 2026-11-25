@@ -1,0 +1,356 @@
+file	line	literal	kind	routed	table	key
+game/src/ui/hud.gd	29	N/NE/E/SE/S/SW/W/NW	label	no		
+game/src/ui/hud.gd	620	DANGER	label	no	ST_Social	Ping.Danger
+game/src/ui/hud.gd	620	LOOT	label	no	ST_Social	Ping.Loot
+game/src/ui/hud.gd	620	MOVE	label	no		
+game/src/ui/hud.gd	620	OBJECTIVE	label	no		
+game/src/ui/hud.gd	1221	[RMB] CRANK	prompt	no		
+game/src/ui/hud.gd	1397	MAP	button	yes	ST_HUD	MapButtonLabel
+game/src/ui/hud.gd	1410	[HOLD] PING MENU	button	yes	ST_HUD	PingButtonLabel
+game/src/ui/hud.gd	1562	LOCKPICKING	label	no		
+game/src/ui/hud.gd	1571	TUMBLER 1 / 1	label	no		
+game/src/ui/hud.gd	1602	[SPACE] / [LMB] STRIKE PIN   ·   [ESC] CANCEL	prompt	no		
+game/src/ui/hud.gd	1636	TACTICAL MAP	label	no		
+game/src/ui/hud.gd	1649	● YOU    ◆ OBJECTIVE    • LOOT    ▲ GUARD    ◎ WAYPOINT PING	label	no		
+game/src/ui/hud.gd	1665	[LMB] PLACE WAYPOINT   ·   [TAB] / [ESC] CLOSE MAP	prompt	no		
+game/src/ui/hud.gd	1805	Esteemed Colleague -	heading	no		
+game/src/ui/hud.gd	1830	[SPACE]  CONTINUE	button	no		
+game/src/ui/hud.gd	1872	CONTINUE	button	yes	ST_Screens	Screen.Continue
+game/src/ui/hud.gd	1917	Resume	button	yes	ST_GeneralUI	Escape.Resume
+game/src/ui/hud.gd	1922	Settings	button	yes	ST_GeneralUI	Escape.Settings
+game/src/ui/hud.gd	1932	Return to Thief's Den	button	yes	ST_GeneralUI	Escape.toThievesDen
+game/src/ui/hud.gd	1940	Quit To Desktop	button	yes	ST_GeneralUI	Escape.Quit
+game/src/ui/hud.gd	1952	Resume	label	yes	ST_GeneralUI	Escape.Resume
+game/src/ui/hud.gd	1976	Novice	label	no	ST_GeneralUI	Mission.Difficulty.Easy
+game/src/ui/hud.gd	1978	Thief	label	no	ST_GeneralUI	Mission.Difficulty.Normal
+game/src/ui/hud.gd	1980	Master Thief	label	no	ST_GeneralUI	Mission.Difficulty.Hard
+game/src/ui/hud.gd	2017	Mission: %s [%d/%d]\n  (£) %d	objective	no		
+game/src/ui/hud.gd	2025	NOTICE	toast	no		
+game/src/ui/hud.gd	2040	Caught	label	yes	ST_PostMatch	PostMatch.Status.Caught
+game/src/ui/hud.gd	2040	Escaped	label	yes	ST_PostMatch	PostMatch.Status.Escaped
+game/src/ui/hud.gd	2057	Ill-Gotten Gains	label	yes	ST_PostMatch	PostMatch.Haul
+game/src/ui/hud.gd	2062	Loot Earned: £{0}	label	yes	ST_Screens	Screen.PostMatch.LootEarned
+game/src/ui/hud.gd	2065	Loot Lost: £{0}	label	yes	ST_Screens	Screen.PostMatch.LootLost
+game/src/ui/hud.gd	2067	Cash in Hand	label	yes	ST_Screens	Screen.PostMatch.CashInHand
+game/src/ui/hud.gd	2115	Contract	label	yes	ST_PostMatch	PostMatch.Contract
+game/src/ui/hud.gd	2129	DOWNED — %ds	label	no		
+game/src/ui/hud.gd	2136	CLUE — %s: %s	toast	no		
+game/src/ui/hud.gd	2179	 — LV %d	label	no		
+game/src/ui/hud.gd	2179	LOCK	label	no	ST_Lockpicking	LockPicking.Lock.NoKeyLock
+game/src/ui/hud.gd	2322	Difficulty:	label	no	ST_ThievesDen	CityMap.DifficultyHeader
+game/src/ui/hud.gd	2323	Mode:	label	no	ST_ThievesDen	CityMap.GameModeHeader
+game/src/ui/hud.gd	2336	Prepare for Mission	label	no	ST_ThievesDen	CityMap.JoinLobby
+game/src/ui/hud.gd	2620	Steal %s in loot value	objective	no	sources.json	ST_Quests.LootValueObjective.Default
+game/src/ui/hud.gd	2632	Mission: %s[%s/%s]	objective	no		
+game/src/ui/hud.gd	2637	  (DOOR %s)	label	no		
+game/src/ui/hud.gd	2652	Objective	objective	no		
+game/src/ui/hud.gd	2653	Heist	objective	no		
+game/src/ui/hud.gd	2654	Mission: %s [%d/%d]%s\n%s	objective	no		
+game/src/ui/hud.gd	2657	Contract #%d	objective	no	ST_Screens	Screen.Contract.Number
+game/src/ui/hud.gd	2658	Objective	objective	no		
+game/src/ui/hud.gd	2661	Reach Escape Gate	objective	no		
+game/src/ui/hud.gd	2662	Mission: %s%s\n   %s	objective	no		
+game/src/ui/hud.gd	2682	THE MAGIC DOOR IS OPEN	label	no		
+game/src/ui/hud.gd	2683	THE MAGIC DOOR IS OPEN — %s BEFORE IT COLLAPSES	label	no		
+game/src/ui/hud.gd	3196	TUMBLER %d / %d	label	no		
+game/src/ui/hud.gd	3198	[SPACE] / [LMB] STRIKE PIN   ·   [ESC] CANCEL	prompt	no		
+game/src/ui/hud.gd	3265	PIN SET! HIT NEXT SWEET SPOT	label	no		
+game/src/ui/hud.gd	3272	LOCK JAMMED!	label	no		
+game/src/ui/hud.gd	3307	ELWAY MANOR	label	no	ST_OldManor_map	OldManor.MapName
+game/src/ui/hud.gd	3308	CONSTABLES' GUILDHALL	label	no	ST_MapTool	Guildhall.MapName
+game/src/ui/hud.gd	3309	THIEVES' DEN	label	no		
+game/src/ui/hud.gd	3313	TACTICAL MAP — 	label	no		
+game/src/ui/hud.gd	3345	WAYPOINT	label	no		
+game/src/ui/hud.gd	3416	PING	label	no	ST_Settings	Settings.Controls.Ping
+game/src/ui/hud.gd	3649	OPEN	prompt	no	ST_Interactables	PromptOpen
+game/src/ui/hud.gd	3651	CLOSE	prompt	no	ST_Interactables	PromptClose
+game/src/ui/hud.gd	3690	FPS %d | %.1f ms | draws %d | objs %d | prims %d\nnodes %d | VRAM %.0f MB | pos %s | %s	debug-overlay	no		
+game/src/ui/main_menu.gd	646	THICK AS THIEVES	title	no	ST_Credits	Game.Title
+game/src/ui/main_menu.gd	656	PLAY	button	yes	ST_Screens	Screen.MainMenu.Play
+game/src/ui/main_menu.gd	665	SETTINGS	button	yes	ST_Screens	Screen.MainMenu.Settings
+game/src/ui/main_menu.gd	669	CREDITS	button	yes	ST_Screens	Screen.MainMenu.Credits
+game/src/ui/main_menu.gd	673	QUIT	button	yes	ST_Screens	Screen.MainMenu.Quit
+game/src/ui/main_menu.gd	707	CREDITS	title	no	ST_Credits	Section.Credits
+game/src/ui/main_menu.gd	707	Thick As Thieves — OtherSide Entertainment / Megabit	subtitle	no		
+game/src/ui/main_menu.gd	737	Godot 4.7 Port — TAT-2	label	no		
+game/src/ui/main_menu.gd	737	OtherSide Entertainment	label	no	ST_Credits	Company.Otherside
+game/src/ui/main_menu.gd	737	Paul Neurath — Executive Producer	label	no		
+game/src/ui/main_menu.gd	737	Warren Spector — Studio Director	label	no		
+game/src/ui/main_menu.gd	747	CLOSE	button	no	ST_Interactables	PromptClose
+game/src/ui/settings_ui.gd	340	MOBILE QUALITY: 	button	no		
+game/src/ui/settings_ui.gd	460	GENERAL	tab	table	ST_Settings	Settings.General
+game/src/ui/settings_ui.gd	461	VIDEO	tab	table	ST_Settings	Settings.Display.Header
+game/src/ui/settings_ui.gd	462	AUDIO	tab	table	ST_Settings	Settings.Audio.Header
+game/src/ui/settings_ui.gd	463	CONTROLS	tab	table	ST_Settings	Settings.Controls.Header
+game/src/ui/settings_ui.gd	492	Mouse	group-header	table	ST_Settings	Settings.Mouse
+game/src/ui/settings_ui.gd	495	Mouse Sensitivity	label	table	ST_Settings	Settings.Mouse.MouseSensitivity
+game/src/ui/settings_ui.gd	496	Mouse Invert Y-Axis	label	table	ST_Settings	Settings.Mouse.MouseInvertYAxis
+game/src/ui/settings_ui.gd	498	Gameplay	group-header	table	ST_Settings	Settings.Gameplay
+game/src/ui/settings_ui.gd	501	Sprint Toggle	label	table	ST_Settings	Settings.Gameplay.SprintToggle
+game/src/ui/settings_ui.gd	502	Reduced Camera Bounce	label	table	ST_Settings	Settings.Gameplay.ReducedCameraBounce
+game/src/ui/settings_ui.gd	507	Display	group-header	table	ST_Settings	Settings.Display
+game/src/ui/settings_ui.gd	512	Field of View	label	table	ST_Settings	Settings.Camera.FOV
+game/src/ui/settings_ui.gd	513	Fullscreen	label	table	ST_Settings	Settings.Display.WindowMode.Fullscreen
+game/src/ui/settings_ui.gd	514	V-Sync	label	table	ST_Settings	Settings.Display.VSync
+game/src/ui/settings_ui.gd	516	Graphics Quality	group-header	table	ST_Settings	Settings.GraphicsQuality
+game/src/ui/settings_ui.gd	519	Resolution Scale	label	table	ST_Settings	Settings.GraphicsQuality.ResolutionScale
+game/src/ui/settings_ui.gd	525	Volume	group-header	table	ST_Settings	Settings.Volume
+game/src/ui/settings_ui.gd	528	Master Volume	label	table	ST_Settings	Settings.Volume.MasterVolume
+game/src/ui/settings_ui.gd	529	Music Volume	label	table	ST_Settings	Settings.Volume.MusicVolume
+game/src/ui/settings_ui.gd	530	SFX Volume	label	table	ST_Settings	Settings.Volume.SFXVolume
+game/src/ui/settings_ui.gd	531	Ambience Volume	label	no		
+game/src/ui/settings_ui.gd	532	UI Volume	label	no		
+game/src/ui/settings_ui.gd	533	Dialogue Volume	label	table	ST_Settings	Settings.Volume.DialogueVolume
+game/src/ui/settings_ui.gd	539	Controls	group-header	table	ST_Settings	Settings.Controls.Header
+game/src/ui/settings_ui.gd	543	STICK / MOVE	binding-row	no		
+game/src/ui/settings_ui.gd	544	DRAG / LOOK	binding-row	no		
+game/src/ui/settings_ui.gd	545	USE / INTERACT / STEAL	binding-row	no		
+game/src/ui/settings_ui.gd	546	HIT / WIRE / ATTACK / ABILITY	binding-row	no		
+game/src/ui/settings_ui.gd	547	1 2 3 / TOOLS	binding-row	no		
+game/src/ui/settings_ui.gd	548	EYE / THIEF VISION	binding-row	no		
+game/src/ui/settings_ui.gd	549	II / BACK / PAUSE	binding-row	no		
+game/src/ui/settings_ui.gd	551	Touch Look	label	no		
+game/src/ui/settings_ui.gd	572	RESET DEFAULTS	button	table	ST_Settings	Settings.Changes.Revert
+game/src/ui/settings_ui.gd	581	APPLY & BACK	button	table	ST_Settings	Settings.Changes.Apply
+game/src/ui/settings_ui.gd	605	Graphics Quality	label	no		
+game/src/ui/settings_ui.gd	616	Low/Medium/High	option	no		
+game/src/ui/settings_ui.gd	640	Language	label	no	ST_Settings	Settings.General.Language
+game/src/ui/settings_ui.gd	762	GAMEPAD	group-header	no	ST_Settings	Settings.Gamepad
+game/src/ui/settings_ui.gd	772	RESET BINDINGS	button	no		
+game/src/ui/settings_ui.gd	798	Reset this binding	tooltip	no		
+game/src/ui/settings_ui.gd	822	VeryLow/Low/Normal/Fast/VeryFast	option	no		
+game/src/ui/settings_ui.gd	875	  ·  [BACKSLASH] TO SWAP	label	no		
+game/src/ui/settings_ui.gd	875	DISPLAY: 	label	no		
+game/src/ui/settings_ui.gd	882	[ PRESS ANY KEY ]	label	no		
+game/src/ui/settings_ui.gd	886	[ UNBOUND ]	label	no		
+game/src/ui/settings_ui.gd	893	PRESS ANY KEY  ·  [ESC] CANCEL	status	no		
+game/src/ui/settings_ui.gd	922	BOUND: 	status	no		
+game/src/ui/settings_ui.gd	924	That input cannot be bound here.	status	no		
+game/src/ui/ledger_ui.gd	24	Constables' Guildhall	fallback-card-location	no	ST_Screens	Screen.MissionLobby.RandomQuestLocation
+game/src/ui/ledger_ui.gd	24	In the Eye of the Beholder	fallback-card-title	no	contracts.json	/contracts[2]/title_text
+game/src/ui/ledger_ui.gd	24	Steal the Beholder's Eye diamond from the Guildhall vault.	fallback-card-description	no		
+game/src/ui/ledger_ui.gd	25	Constables' Guildhall	fallback-card-location	no	ST_Screens	Screen.MissionLobby.RandomQuestLocation
+game/src/ui/ledger_ui.gd	25	Infiltrate the Guildhall under heightened watch.	fallback-card-description	no		
+game/src/ui/ledger_ui.gd	25	Into the Lion's Den	fallback-card-title	no	contracts.json	/contracts[1]/title_text
+game/src/ui/ledger_ui.gd	26	Burgle the Elway Manor gallery without waking the household.	fallback-card-description	no		
+game/src/ui/ledger_ui.gd	26	Elway Manor	fallback-card-location	no	ST_ThievesDen	CityMap.OldManor
+game/src/ui/ledger_ui.gd	26	Shadows over Old Manor	fallback-card-title	no		
+game/src/ui/ledger_ui.gd	27	A high-wire score across the rooftops of Kilcairn.	fallback-card-description	no		
+game/src/ui/ledger_ui.gd	27	Kilcairn Rooftops	fallback-card-location	no		
+game/src/ui/ledger_ui.gd	27	The Spider's Gambit	fallback-card-title	no		
+game/src/ui/ledger_ui.gd	28	Blend in at the masquerade and lift the guest of honour's seal.	fallback-card-description	no		
+game/src/ui/ledger_ui.gd	28	Jaspering Hall	fallback-card-location	no		
+game/src/ui/ledger_ui.gd	28	The Chameleon's Masquerade	fallback-card-title	no		
+game/src/ui/ledger_ui.gd	29	Constables' Guildhall	fallback-card-location	no	ST_Screens	Screen.MissionLobby.RandomQuestLocation
+game/src/ui/ledger_ui.gd	29	Reclaim impounded loot from the constabulary lockup.	fallback-card-description	no		
+game/src/ui/ledger_ui.gd	29	The Constable's Due	fallback-card-title	no		
+game/src/ui/ledger_ui.gd	195	[Q] JOURNAL	tab	no		
+game/src/ui/ledger_ui.gd	201	BLACK MARKET [E]	tab	no		
+game/src/ui/ledger_ui.gd	210	BACK [ESC]	button	no		
+game/src/ui/ledger_ui.gd	275	Level 1	label	no		
+game/src/ui/ledger_ui.gd	468	BUY	button	no		
+game/src/ui/ledger_ui.gd	551	Contract %d	fallback-card-title	no		
+game/src/ui/ledger_ui.gd	585	Level %d	label	no	sources.json	8B4C117444C09873AE6B93A479489972
+game/src/ui/ledger_ui.gd	613	Active	label	no	ST_Screens	Screen.Ledger.Contract.Status.InProgress
+game/src/ui/ledger_ui.gd	613	Completed	label	no	ST_Screens	Screen.Ledger.Contract.Status.Complete
+game/src/ui/ledger_ui.gd	632	Contract #%d	label	no	ST_Screens	Screen.Contract.Number
+game/src/ui/ledger_ui.gd	641	Contract	fallback-card-title	no	ST_MapTool	Legend.Contract
+game/src/ui/ledger_ui.gd	654	Location: %s\n	label	no		
+game/src/ui/ledger_ui.gd	734	YOUR TOTAL ASSETS: (£) %s	label	no		
+game/src/ui/ledger_ui.gd	738	The Black Market catalog could not be read (%s). Nothing can be purchased. Run python3 tools/parse_unlocks.py and reload.	label	no		
+game/src/ui/ledger_ui.gd	873	Black Market unavailable	label	no		
+game/src/ui/ledger_ui.gd	874	The authored catalog is missing. Nothing can be purchased.	label	no		
+game/src/ui/ledger_ui.gd	884	No item selected	label	no		
+game/src/ui/ledger_ui.gd	885	Select an item from a table.	label	no		
+game/src/ui/ledger_ui.gd	906	BUY	button	no		
+game/src/ui/ledger_ui.gd	909	✓ PURCHASED	label	no		
+game/src/ui/ledger_ui.gd	911	✓ PURCHASED	label	no		
+game/src/ui/ledger_ui.gd	914	LOCKED	label	no	ST_ThievesDen	CityMap.Locked
+game/src/ui/ledger_ui.gd	923	BUY — £ %s	button	no		
+game/src/ui/ledger_ui.gd	972	Insufficient funds (have (£) %s, need £ %s)	label	no		
+game/src/ui/wardrobe_ui.gd	102	The Chameleon	label	no	ST_BlackMarket	Thief.Chameleon.Title
+game/src/ui/wardrobe_ui.gd	102	The Spider	label	no	ST_BlackMarket	Thief.Spider.Title
+game/src/ui/wardrobe_ui.gd	358	WARDROBE	title	no	ST_ThievesDen	Wardrobe.Header
+game/src/ui/wardrobe_ui.gd	442	LOCKED	label	no	ST_ThievesDen	CityMap.Locked
+game/src/ui/wardrobe_ui.gd	488	The Chameleon is locked. Unlock it in the Black Market (£10,000, Contract 3).	hint	no		
+game/src/ui/wardrobe_ui.gd	501	BACK [ESC]	button	no		
+game/src/ui/wardrobe_ui.gd	636	Edit Loadout	heading	no	ST_ThievesDen	Wardrobe.Loadout
+game/src/ui/wardrobe_ui.gd	644	LOADOUT SLOTS	heading	no		
+game/src/ui/wardrobe_ui.gd	664	Select a loadout slot to equip or swap out tools	hint	no	ST_ThievesDen	Wardrobe.SelectLoadout
+game/src/ui/wardrobe_ui.gd	728	WARDROBE — DRAG TO ROTATE	heading	no		
+game/src/ui/wardrobe_ui.gd	765	CUSTOMIZATION	heading	no		
+game/src/ui/wardrobe_ui.gd	773	Head	heading	no	ST_ThievesDen	Wardrobe.OutfitHead
+game/src/ui/wardrobe_ui.gd	785	Body	heading	no	ST_ThievesDen	Wardrobe.OutfitBody
+game/src/ui/wardrobe_ui.gd	794	Calling Card	heading	no	ST_ThievesDen	Wardrobe.OutfitCallingCard
+game/src/ui/wardrobe_ui.gd	1017	The Chameleon is locked. Unlock it in the Black Market (£10,000, Contract 3).	hint	no		
+game/src/ui/wardrobe_ui.gd	1043	Signature Tools cannot be swapped out	hint	no	ST_ThievesDen	Wardrobe.DeclinePrimarySwap
+game/src/ui/wardrobe_ui.gd	1060	Signature Tools cannot be swapped out	hint	no	ST_ThievesDen	Wardrobe.DeclinePrimarySwap
+game/src/ui/wardrobe_ui.gd	1065	Locked - %s	hint	no		
+game/src/ui/wardrobe_ui.gd	1065	Locked - not owned	hint	no		
+game/src/ui/wardrobe_ui.gd	1146	Empty slot	label	no		
+game/src/ui/wardrobe_ui.gd	1150	Select a tool below to fill this slot	label	no		
+game/src/ui/wardrobe_ui.gd	1154	Locked - %s	label	no		
+game/src/ui/wardrobe_ui.gd	1154	Locked - not owned	label	no		
+game/src/ui/wardrobe_ui.gd	1207	 · Lv 	label	no		
+game/src/ui/wardrobe_ui.gd	1537	Body: 	label	no		
+game/src/ui/wardrobe_ui.gd	1539	Head: 	label	no		
+game/src/ui/wardrobe_ui.gd	1541	Calling Card: 	label	no		
+game/src/ui/wardrobe_ui.gd	1543	No outfits found for this thief.	label	no		
+game/src/ui/wardrobe_ui.gd	1613	(None)	label	no		
+game/src/ui/wardrobe_ui.gd	1734	Default	label	no		
+game/src/ui/contract_table_ui.gd	141	MAP TABLE — CONTRACT SELECTOR	title	no		
+game/src/ui/contract_table_ui.gd	206	Difficulty:	label	no	ST_ThievesDen	CityMap.DifficultyHeader
+game/src/ui/contract_table_ui.gd	211	Novice (1)	option	no		
+game/src/ui/contract_table_ui.gd	212	Thief (2)	option	no		
+game/src/ui/contract_table_ui.gd	213	Master Thief (3)	option	no		
+game/src/ui/contract_table_ui.gd	222	Host Co-op	button	no		
+game/src/ui/contract_table_ui.gd	234	Join Co-op	button	no		
+game/src/ui/contract_table_ui.gd	239	Solo Mode	label	no		
+game/src/ui/contract_table_ui.gd	252	FREE PLAY: GUILDHALL CLEANOUT [G]	button	no		
+game/src/ui/contract_table_ui.gd	258	DEPLOY CONTRACT	button	no		
+game/src/ui/contract_table_ui.gd	264	CLOSE [ESC]	button	no		
+game/src/ui/contract_table_ui.gd	328	Target: %s\nLocation: %s\n\n%s	label	no		
+game/src/ui/contract_table_ui.gd	329	• Reconnoiter the landmark for clues.	label	no		
+game/src/ui/contract_table_ui.gd	336	Intel:\n	label	no		
+game/src/ui/contract_table_ui.gd	398	Hosting co-op	label	no		
+game/src/ui/contract_table_ui.gd	401	Host failed: %d	label	no		
+game/src/ui/contract_table_ui.gd	416	Connecting to 	label	no		
+game/src/ui/contract_table_ui.gd	419	Join failed: %d	label	no		
+game/src/ui/contract_table_ui.gd	442	Join Mission with these settings?\nDifficulty: %s\nMode: %s	confirm	no	ST_ThievesDen	CityMap.ConfirmJoinLobby
+game/src/ui/contract_table_ui.gd	498	[H] Difficulty toggle   ·   [R] Mode toggle   ·   [SPACE/F] PREPARE	prompt	no		
+game/src/ui/contract_table_ui.gd	508	[SPACE] PREPARE FOR MISSION	button	no		
+game/src/ui/contract_table_ui.gd	514	[ESC] CANCEL	button	no		
+game/src/ui/contract_table_ui.gd	540	Co-op Mode (pending host/join)	label	no		
+game/src/ui/contract_table_ui.gd	540	Solo Mode	label	no		
+game/src/ui/mission_prep_ui.gd	29	ELWAY MANOR	label	no	ST_OldManor_map	OldManor.MapName
+game/src/ui/mission_prep_ui.gd	30	This is the estate of the three Elway sisters. Although it has fallen into disrepair, both the house and the family that holds it have a very long history in Kilcairn.	label	no	ST_OldManor_map	OldManor.MapFlavorText
+game/src/ui/mission_prep_ui.gd	31	CONSTABLES' GUILDHALL	label	no	ST_MapTool	Guildhall.MapName
+game/src/ui/mission_prep_ui.gd	32	This is the headquarters and operational base for the Constables, Kilcairn's police force.	label	no	ST_MapTool	Guildhall.MapFlavorText
+game/src/ui/mission_prep_ui.gd	33	Contract Inactive	label	yes	ST_Screens	Screen.MissionLobby.ContractInactive
+game/src/ui/mission_prep_ui.gd	449	MISSION STARTING IN 5...	countdown	no	ST_Screens	Screen.MissionLobby.Countdown
+game/src/ui/mission_prep_ui.gd	468	Mode: Solo	label	no	ST_Screens	Screen.MissionLobby.Mode
+game/src/ui/mission_prep_ui.gd	478	Difficulty: Novice	label	no	ST_Screens	Screen.MissionLobby.Difficulty
+game/src/ui/mission_prep_ui.gd	494	LOCATION	card-header	no		
+game/src/ui/mission_prep_ui.gd	526	MISSION	card-header	no	ST_PostMatch	PostMatch.Mission
+game/src/ui/mission_prep_ui.gd	557	CONTRACT	card-header	no	ST_MapTool	Legend.Contract
+game/src/ui/mission_prep_ui.gd	574	READY	label	no	ST_Screens	Screen.Lobby.Ready
+game/src/ui/mission_prep_ui.gd	614	[F]  READY	button	no		
+game/src/ui/mission_prep_ui.gd	621	[ESC]  BACK	button	no		
+game/src/ui/mission_prep_ui.gd	1359	A glittering jewelry house and private gallery in Kilcairn's merchant quarter, heavy with private security.	label	no		
+game/src/ui/mission_prep_ui.gd	1359	JASPERING HALL	label	no		
+game/src/ui/mission_prep_ui.gd	1364	A shadowed mark in Kilcairn, ripe for the taking.	label	no		
+game/src/ui/mission_prep_ui.gd	1374	Cleanout Heist	label	no	ST_Screens	Screen.MissionLobby.OldManor.LootTheRoomTitle
+game/src/ui/mission_prep_ui.gd	1374	Item Collection Heist	label	no	ST_Screens	Screen.MissionLobby.SetQuestTitle
+game/src/ui/mission_prep_ui.gd	1374	Vault Heist	label	no	ST_Screens	Screen.MissionLobby.VaultQuestTitle
+game/src/ui/mission_prep_ui.gd	1378	\nTime Limit: %d minutes	label	no	ST_Screens	Screen.MissionLobby.TimeLimit
+game/src/ui/mission_prep_ui.gd	1396	\nTime Limit: %d minutes	label	no	ST_Screens	Screen.MissionLobby.TimeLimit
+game/src/ui/mission_prep_ui.gd	1398	\nTime Limit: Unlimited	label	no		
+game/src/ui/mission_prep_ui.gd	1446	A rare bust called the Warburg Effigy is being held at the Guildhall for safekeeping. Tonight there is a {MatchDurationInMinutes} minute window when security will be light. Steal the bust, embarrass the police, and turn a tidy profit.	label	yes	ST_Screens	Screen.MissionLobby.VaultQuestDescription
+game/src/ui/mission_prep_ui.gd	1446	The Claymur Urns have been held by the Elway family for centuries. The Guild will pay handsomely if you retrieve the full set. You have a {MatchDurationInMinutes} minute window to pilfer the Urns and make your escape.	label	yes	ST_Screens	Screen.MissionLobby.Oldmanor.SetQuestDescription
+game/src/ui/mission_prep_ui.gd	1446	The Constables' Guildhall is full of confiscated treasures. Infiltrate the building and reacquire some of the riches they have just left lying around, then slip away before anyone notices.	label	yes	ST_Screens	Screen.MissionLobby.GuildHall.LootTheRoomDescription
+game/src/ui/mission_prep_ui.gd	1446	The Elway family has a magical tome they keep under the utmost protection in a vault. Tonight you will have a {MatchDurationInMinutes} minute window when security is light. Find the book, steal it, and get out alive.	label	yes	ST_Screens	Screen.MissionLobby.Oldmanor.VaultQuestDescription
+game/src/ui/mission_prep_ui.gd	1446	The precious gems needed to restore an artifact are hidden among the trinkets gathering dust in the Guildhall. You have a {MatchDurationInMinutes} minute window to pilfer the gems from under the very noses of the police.	label	yes	ST_Screens	Screen.MissionLobby.SetQuestDescription
+game/src/ui/mission_prep_ui.gd	1446	Though both the Elway family and their estate are a shadow of what they once were, there are still ample treasures to be found. Get in, steal everything you can, and get out before anyone is the wiser.	label	yes	ST_Screens	Screen.MissionLobby.OldManor.LootTheRoomDescription
+game/src/ui/mission_prep_ui.gd	1459	Free play: clean out the location for a score. No contract progress is recorded.	label	no		
+game/src/ui/mission_prep_ui.gd	1461	Your active contract is not available for the currently selected map.	label	yes	ST_Screens	Screen.MissionLobby.ContractWrongMap
+game/src/ui/mission_prep_ui.gd	1470	Active contract: %s	label	no		
+game/src/ui/mission_prep_ui.gd	1472	\nTarget: %s	label	no		
+game/src/ui/mission_prep_ui.gd	1480	Mode: {mode}	label	yes	ST_Screens	Screen.MissionLobby.Mode
+game/src/ui/mission_prep_ui.gd	1483	Difficulty: {difficulty}	label	yes	ST_Screens	Screen.MissionLobby.Difficulty
+game/src/ui/mission_prep_ui.gd	1498	Ready	label	yes	ST_Screens	Screen.Lobby.Ready
+game/src/ui/mission_prep_ui.gd	1499	Unready	label	yes	ST_Screens	Screen.Lobby.Unready
+game/src/ui/mission_prep_ui.gd	1505	[F] %s  ·  [ESC] BACK	prompt	no		
+game/src/ui/mission_prep_ui.gd	1515	Mission Starting in <Num>{number}</>...	countdown	yes	ST_Screens	Screen.MissionLobby.Countdown
+game/src/ui/mission_prep_ui.gd	1541	Novice	label	yes	ST_GeneralUI	Mission.Difficulty.Easy
+game/src/ui/mission_prep_ui.gd	1543	Thief	label	yes	ST_GeneralUI	Mission.Difficulty.Normal
+game/src/ui/mission_prep_ui.gd	1544	Master Thief	label	yes	ST_GeneralUI	Mission.Difficulty.Hard
+game/src/ui/loading_screen.gd	130	LOADING...	title	no	ST_GeneralUI	Loading
+game/src/ui/loading_screen.gd	211	Preparing sublevels...	status	no		
+game/src/ui/loading_screen.gd	224	Unlocking the doors...	status	no		
+game/src/ui/loading_screen.gd	226	Raising the rooftops...	status	no		
+game/src/ui/loading_screen.gd	228	Lighting the lanterns...	status	no		
+game/src/ui/loading_screen.gd	236	Ready.	status	no		
+game/src/ui/mobile_touch_ui.gd	106	HIT	button	no		
+game/src/ui/mobile_touch_ui.gd	107	JUMP	button	no	ST_Settings	Settings.Controls.Jump
+game/src/ui/mobile_touch_ui.gd	109	USE	button	no	ST_Tools	Tools_Deploy_Generic_Use
+game/src/ui/mobile_touch_ui.gd	110	SKILL	button	no		
+game/src/ui/mobile_touch_ui.gd	112	SAP	button	no		
+game/src/ui/mobile_touch_ui.gd	113	SMOKE	button	no		
+game/src/ui/mobile_touch_ui.gd	114	FAIRY	button	no		
+game/src/ui/mobile_touch_ui.gd	115	EYE	button	no		
+game/src/ui/mobile_touch_ui.gd	117	CROUCH	button	no	ST_Settings_Input	InputSetting.Movement.Crouch
+game/src/ui/mobile_touch_ui.gd	118	SPRINT	button	no	ST_Settings	Settings.Controls.KBM.Sprint
+game/src/ui/mobile_touch_ui.gd	119	LEAN L	button	no		
+game/src/ui/mobile_touch_ui.gd	120	LEAN R	button	no		
+game/src/ui/mobile_touch_ui.gd	122	II	button	no		
+game/src/ui/mobile_touch_ui.gd	548	WIRE	button	no		
+game/src/ui/mobile_touch_ui.gd	550	MASK	button	no		
+game/src/ui/mobile_touch_ui.gd	552	ASTRAL	button	no		
+game/src/ui/mobile_touch_ui.gd	554	SKILL	button	no		
+game/src/ui/review_mode.gd	50	Periphery/POI/Gameplay/Lighting/Decals/Collision/Niagara/Beams/World labels/Emissive plates	label	no		
+game/src/ui/review_mode.gd	125	No sublevels resolved for map '%s'.	status	no		
+game/src/ui/review_mode.gd	128	Loading %d sublevels through LevelLoader...	status	no		
+game/src/ui/review_mode.gd	145	Missing sublevel: %s	status	no		
+game/src/ui/review_mode.gd	150	No readable sublevels for map '%s'.	status	no		
+game/src/ui/review_mode.gd	159	Loading %d sublevels in one LevelLoader call...	status	no		
+game/src/ui/review_mode.gd	245	Bookmark F%d: %s	status	no		
+game/src/ui/review_mode.gd	364	Capture failed (empty image).	status	no		
+game/src/ui/review_mode.gd	369	Saved %s (err=%d, review-only)	status	no		
+game/src/ui/review_mode.gd	431	WASD move  LMB mouse  Shift fast  Q/E down/up  1-0 toggles  H hidden-in-game  F1-F6 bookmarks  P capture  Esc quit	hint	no		
+game/src/ui/review_mode.gd	452	TAT-2 review  |  map=%s  |  %s	title	no		
+game/src/ui/review_mode.gd	452	loading...	status	no	ST_GeneralUI	Loading
+game/src/ui/review_mode.gd	452	ready	status	no	ST_Screens	Screen.Lobby.Ready
+game/src/ui/review_mode.gd	459	none	label	no		
+game/src/ui/review_mode.gd	459	review-only	label	no		
+game/src/ui/review_mode.gd	462	 (preset=%s)	label	no		
+game/src/ui/review_mode.gd	463	sublevels=%d  nodes=%d  draws=%d  instances=%d  lights=%d  surfaces=%d\nhidden: nodes=%d records=%d (authored bHiddenInGame; H reveals)\nissues: beams=%d labels=%d emissive=%d collision-only=%d\nenv: %s	label	no		
+game/src/ui/review_mode.gd	490	(none)	label	no		
+game/src/ui/review_mode.gd	490	on:  %s\noff: %s	label	no		
+game/src/missions/mission_controller.gd	96	TIME EXPIRED	status	no		
+game/src/missions/mission_controller.gd	97	MAGIC DOOR COLLAPSED	status	no		
+game/src/missions/mission_controller.gd	656	Contract	objective	no	ST_MapTool	Legend.Contract
+game/src/missions/mission_controller.gd	670	Contract	label	no	ST_MapTool	Legend.Contract
+game/src/missions/mission_controller.gd	690	Loading sublevels...	status	no		
+game/src/missions/mission_controller.gd	1228	[F] ENTER MATCH	prompt	no		
+game/src/missions/mission_controller.gd	1265	[F] READ LEDGER	prompt	no		
+game/src/missions/mission_controller.gd	1296	[F] EXIT	prompt	no		
+game/src/missions/mission_controller.gd	1297	[F] PONDER	prompt	no		
+game/src/missions/mission_controller.gd	1348	[F] CUSTOMIZE LOADOUT	prompt	no		
+game/src/missions/mission_controller.gd	2478	KILCAIRN SKYLINE	title	no		
+game/src/missions/mission_controller.gd	2479	EXIT	prompt	no	ST_Interactables	PromptHidingSpotExit
+game/src/missions/mission_controller.gd	2480	EXIT	label	no	ST_Interactables	PromptHidingSpotExit
+game/src/missions/mission_controller.gd	2511	CONSTABLES' GUILDHALL	title	no	ST_Screens	Screen.MissionLobby.RandomQuestLocation
+game/src/missions/mission_controller.gd	2511	ELWAY MANOR	title	no	ST_ThievesDen	CityMap.OldManor
+game/src/missions/mission_controller.gd	2511	JASPERING HALL	title	no		
+game/src/missions/mission_controller.gd	2519	Prepare for Mission	prompt	no	ST_ThievesDen	CityMap.JoinLobby
+game/src/missions/mission_controller.gd	2521	Difficulty: %s	label	no	ST_Screens	Screen.MissionLobby.Difficulty
+game/src/missions/mission_controller.gd	2522	Mode: %s	label	no	ST_Screens	Screen.MissionLobby.Mode
+game/src/missions/mission_controller.gd	2523	Prepare for Mission	label	no	ST_ThievesDen	CityMap.JoinLobby
+game/src/missions/mission_controller.gd	2534	TELESCOPE	title	no		
+game/src/missions/mission_controller.gd	2535	PONDER	prompt	no	ST_Interactables	PromptLookAtHubSecret
+game/src/missions/mission_controller.gd	2536	PONDER	label	no	ST_Interactables	PromptLookAtHubSecret
+game/src/missions/mission_controller.gd	2616	[F] CHANGE DECORATION	prompt	no		
+game/src/missions/mission_controller.gd	2668	[F] TURN OFF	prompt	no		
+game/src/missions/mission_controller.gd	2668	[F] TURN ON	prompt	no		
+game/src/missions/mission_controller.gd	2837	Steal %s in loot value	objective	no	sources.json	ST_Quests.LootValueObjective.Default
+game/src/missions/mission_controller.gd	2874	Steal the %s	objective	no		
+game/src/missions/mission_controller.gd	2881	Steal the %s	objective	no		
+game/src/missions/mission_controller.gd	2950	Esteemed Colleague — Infiltrate the target site, secure the objective, and slip away unseen.	letter	no		
+game/src/missions/mission_controller.gd	3178	Read	prompt-verb	no	ST_Interactables	PromptRead
+game/src/missions/mission_controller.gd	3708	Vault Key	label	no	sources.json	17C527AE4CF0F1D3E991BEB4EC7D02F2
+game/src/missions/mission_controller.gd	3712	Guildhall Key	label	no	sources.json	05C7F6C4444DF32070196ABE94425CD7
+game/src/missions/mission_controller.gd	3715	Elway Manor Key	label	no	sources.json	B847A1B24015CF72A6DFD8AF63B85205
+game/src/missions/mission_controller.gd	4572	THE MAGIC DOOR HAS BEEN SUMMONED	toast	no		
+game/src/interact/loot_container.gd	304	[Opened]	prompt	no		
+game/src/interact/loot_container.gd	307	[Picking Lock...]	prompt	no		
+game/src/interact/loot_container.gd	308	[F] PICK LOCK (Lv %d)	prompt	no		
+game/src/interact/loot_container.gd	309	[F] OPEN	prompt	no		
+game/src/interact/loot_container.gd	350	Display Safe	label	no		
+game/src/interact/loot_container.gd	352	Locked Chest	label	no		
+game/src/interact/loot_container.gd	353	Safe Lock	label	no		
+game/src/interact/loot_container.gd	468	Noble Relic	label	no		
+game/src/interact/loot_container.gd	479	Noble Relic #%d	label	no		
+game/src/interact/loot_item.gd	4	Silver Candlestick	label	no		
+game/src/interact/clue_item.gd	8	Contract Clue	label	no		
+game/src/interact/clue_item.gd	9	Check the guard patrol schedule near the courtyard.	label	no		
+game/src/interact/clue_item.gd	126	[E] Read Clue: 	prompt	no		

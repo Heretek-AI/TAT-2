@@ -42,6 +42,17 @@ var _en_key_count: int = 0
 var _translation_count: int = 0
 var _current_code: String = "en"
 
+## W9-P3 coverage instrumentation. Every `t()` call records whether the source
+## resolved through the authored reverse map; `t_stats()` is what the string
+## audit and `tests/test_w9p3_localization.gd` report. Counters only — no
+## lookup behaviour changes, and the reverse map stays the pre-W9 3,404-key /
+## 2,946-source dictionary.
+var _t_calls: int = 0
+var _t_resolved: int = 0
+var _t_passthrough: int = 0
+var _t_missing: Dictionary = {}
+const MAX_MISSING_DIAGNOSTICS: int = 256
+
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -109,6 +120,7 @@ func set_locale(code: String) -> void:
 func t(source: String) -> String:
 	if source == "":
 		return ""
+	_t_calls += 1
 	var key: String = str(_source_to_key.get(source, ""))
 	# UI code keeps menu labels in caps ("PLAY"); the authored source is
 	# "Play". Normalise only for the reverse-map lookup, never for the result.
@@ -120,11 +132,50 @@ func t(source: String) -> String:
 			if cased != source:
 				key = str(_source_to_key.get(cased, ""))
 	if key == "":
+		_t_passthrough += 1
+		_note_missing(source)
 		return source
+	_t_resolved += 1
 	var out: String = str(TranslationServer.translate(key))
 	if out == "" or out == key:
 		return source
 	return out
+
+
+func _note_missing(source: String) -> void:
+	if _t_missing.size() >= MAX_MISSING_DIAGNOSTICS:
+		return
+	_t_missing[source] = int(_t_missing.get(source, 0)) + 1
+
+
+## Runtime coverage counters for the W9-P3 string audit:
+## {calls, resolved, passthrough, ratio, unique_missing, missing: [...]}.
+## `ratio` is resolved / (resolved + passthrough) — 1.0 when every consulted
+## source resolved. It is a *measurement*, not a gate: invented copy is expected
+## to pass through, and the static audit counts those separately.
+func t_stats() -> Dictionary:
+	var denom: int = _t_resolved + _t_passthrough
+	var missing: Array[String] = []
+	for k: Variant in _t_missing.keys():
+		missing.append(str(k))
+	missing.sort()
+	return {
+		"calls": _t_calls,
+		"resolved": _t_resolved,
+		"passthrough": _t_passthrough,
+		"ratio": (float(_t_resolved) / float(denom)) if denom > 0 else 0.0,
+		"unique_missing": _t_missing.size(),
+		"missing": missing,
+	}
+
+
+## Test/QA hook: reset the counters between screens so a per-screen ratio can be
+## measured without restarting the process.
+func reset_t_stats() -> void:
+	_t_calls = 0
+	_t_resolved = 0
+	_t_passthrough = 0
+	_t_missing.clear()
 
 
 func _load_reverse_map() -> void:

@@ -37,6 +37,7 @@ const PersonalQuestSpawnerScript := preload("res://src/quests/personal_quest_spa
 const LoadingScreenScript := preload("res://src/ui/loading_screen.gd")
 const LedgerUIScript := preload("res://src/ui/ledger_ui.gd")
 const MobileTouchUIScript := preload("res://src/ui/mobile_touch_ui.gd")
+const UIStringsScript := preload("res://src/ui/ui_strings.gd")
 
 var light_probe: Node
 var level_loader: Node
@@ -653,7 +654,7 @@ func start_contract(order: int) -> void:
 		# letter/loading screen carry the mission row title ("Cleanout Heist")
 		# and its description, while the Guildhall contract order only supplies
 		# map + sublevels.
-		var fp_title: String = str(_active_mission_row.get("title", contract_info.get("title", "Contract")))
+		var fp_title: String = str(_active_mission_row.get("title", contract_info.get("title", UIStringsScript.st_text("ST_MapTool", "Legend.Contract", "Contract"))))
 		var fp_desc: String = str(_active_mission_row.get("description", "")).strip_edges()
 		if fp_title != "":
 			contract_info["title"] = fp_title
@@ -667,7 +668,7 @@ func start_contract(order: int) -> void:
 	# anchored inside a stale SubViewport, producing the 967x640 top-left tile.
 	get_tree().root.add_child(loading)
 	if loading.has_method("start_loading"):
-		loading.call("start_loading", str(contract_info.get("title", "Contract")), _contract_clue_text(contract_info, ""), map_id)
+		loading.call("start_loading", str(contract_info.get("title", UIStringsScript.st_text("ST_MapTool", "Legend.Contract", "Contract"))), _contract_clue_text(contract_info, ""), map_id)
 
 	var sublevels: Array[String] = _map_id_to_sublevels(map_id, order)
 	_loaded_level_names = _levels_from_sublevel_paths(sublevels)
@@ -687,7 +688,8 @@ func start_contract(order: int) -> void:
 				level_loader.disconnect("load_progress", prog_cb2)
 	else:
 		if loading.has_method("set_progress"):
-			loading.call("set_progress", 0.4, "Loading sublevels...")
+			# The status text arg is unused: the loading screen prints real progress.
+			loading.call("set_progress", 0.4, "")
 		ue_level_data = level_loader.load_sublevels(sublevels, self, light_probe, light_budget)
 	print("TAT-2 Loaded ", map_id, ": meshes=", ue_level_data.get("mesh_instances", 0), " lights=", ue_level_data.get("light_count", 0))
 	# #11: apply only exact authored SceneElement tags. Untagged spawners stay
@@ -1222,10 +1224,12 @@ func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> 
 	dcol.shape = dsph
 	desk_area.add_child(dcol)
 	var desk_script := GDScript.new()
+	# PORT COPY (no authored row): the port's Den map-table prompt. The glyph is
+	# live (interact), so the keycap follows a rebind/device swap.
 	desk_script.source_code = """extends Area3D
 var mission_ctrl: Node = null
 func get_interact_prompt() -> String:
-\treturn "[F] ENTER MATCH"
+\treturn InputGlyphs.prompt("interact", UIStrings.loc("Enter Match").to_upper())
 func interact(_actor: Node) -> void:
 \tif mission_ctrl != null and mission_ctrl.has_method("open_contract_table_ui"):
 \t\tmission_ctrl.open_contract_table_ui()
@@ -1262,7 +1266,7 @@ func interact(_actor: Node) -> void:
 	l_script.source_code = """extends Area3D
 var mission_ctrl: Node = null
 func get_interact_prompt() -> String:
-\treturn "[F] READ LEDGER"
+\treturn InputGlyphs.prompt("interact", UIStrings.st_upper("ST_ThievesDen", "Ledger.Interact", "Read Ledger"))
 func interact(_actor: Node) -> void:
 \tif mission_ctrl != null and mission_ctrl.has_method("open_ledger_ui"):
 \t\tmission_ctrl.open_ledger_ui()
@@ -1293,8 +1297,8 @@ func interact(_actor: Node) -> void:
 var mission_ctrl: Node = null
 func get_interact_prompt() -> String:
 \tif mission_ctrl != null and mission_ctrl.get("_ponder_active") == true:
-\t\treturn "[F] EXIT"
-\treturn "[F] PONDER"
+\t\treturn InputGlyphs.prompt("interact", UIStrings.st_upper("ST_Interactables", "PromptHidingSpotExit", "Exit"))
+\treturn InputGlyphs.prompt("interact", UIStrings.st_upper("ST_Interactables", "PromptLookAtHubSecret", "Ponder"))
 func interact(_actor: Node) -> void:
 \tif mission_ctrl != null and mission_ctrl.has_method("toggle_telescope_ponder"):
 \t\tmission_ctrl.toggle_telescope_ponder()
@@ -1345,7 +1349,7 @@ func interact(_actor: Node) -> void:
 	ward_script.source_code = """extends Area3D
 var mission_ctrl: Node = null
 func get_interact_prompt() -> String:
-\treturn "[F] CUSTOMIZE LOADOUT"
+\treturn InputGlyphs.prompt("interact", UIStrings.loc("Customize Loadout").to_upper())
 func interact(_actor: Node) -> void:
 \tif mission_ctrl != null and mission_ctrl.has_method("open_wardrobe_ui"):
 \t\tmission_ctrl.open_wardrobe_ui()
@@ -2475,9 +2479,9 @@ func _refresh_den_lookat_card(force_push: bool = false) -> void:
 		card = {
 			"visible": true,
 			"target": "telescope",
-			"title": "KILCAIRN SKYLINE",
-			"prompt": "EXIT",
-			"bottom_hints": [{"key": "F", "label": "EXIT"}],
+			"title": UIStringsScript.loc("KILCAIRN SKYLINE"), ## PORT COPY (no authored row)
+			"prompt": UIStringsScript.st_upper("ST_Interactables", "PromptHidingSpotExit", "Exit"),
+			"bottom_hints": [{"key": "F", "label": UIStringsScript.st_upper("ST_Interactables", "PromptHidingSpotExit", "Exit")}],
 		}
 	else:
 		var to_table: Vector3 = _den_map_table_pos - eye
@@ -2508,7 +2512,9 @@ func _refresh_den_lookat_card(force_push: bool = false) -> void:
 				# it). Highlights converge on _update_map_token_highlights, one path.
 				_den_selected_map_id = best_mid
 				_update_map_token_highlights()
-			var loc_title: String = "ELWAY MANOR" if _den_selected_map_id == "old_manor" else ("JASPERING HALL" if _den_selected_map_id == "jaspering_hall" else "CONSTABLES' GUILDHALL")
+			var loc_title: String = UIStringsScript.st_upper("ST_ThievesDen", "CityMap.OldManor", "Elway Manor") if _den_selected_map_id == "old_manor" else (
+				UIStringsScript.loc("JASPERING HALL") if _den_selected_map_id == "jaspering_hall" ## PORT COPY (no authored row)
+				else UIStringsScript.st_upper("ST_MapTool", "Guildhall.MapName", "Constables' Guildhall"))
 			card = {
 				"visible": true,
 				"target": "map_table",
@@ -2516,11 +2522,11 @@ func _refresh_den_lookat_card(force_push: bool = false) -> void:
 				"title": loc_title,
 				"difficulty": GameState.difficulty_label(),
 				"mode": GameState.active_mission_mode,
-				"prompt": "Prepare for Mission",
+				"prompt": UIStringsScript.st_text("ST_ThievesDen", "CityMap.JoinLobby", "Prepare for Mission"),
 				"bottom_hints": [
-					{"key": "H", "label": "Difficulty: %s" % GameState.difficulty_label()},
-					{"key": "R", "label": "Mode: %s" % GameState.active_mission_mode},
-					{"key": "F", "label": "Prepare for Mission"},
+					{"key": "H", "label": UIStringsScript.st_template("ST_Screens", "Screen.MissionLobby.Difficulty", "Difficulty: {difficulty}", {"difficulty": GameState.difficulty_label()})},
+					{"key": "R", "label": UIStringsScript.st_template("ST_Screens", "Screen.MissionLobby.Mode", "Mode: {mode}", {"mode": GameState.active_mission_mode})},
+					{"key": "F", "label": UIStringsScript.st_text("ST_ThievesDen", "CityMap.JoinLobby", "Prepare for Mission")},
 				],
 			}
 		else:
@@ -2531,9 +2537,9 @@ func _refresh_den_lookat_card(force_push: bool = false) -> void:
 				card = {
 					"visible": true,
 					"target": "telescope",
-					"title": "TELESCOPE",
-					"prompt": "PONDER",
-					"bottom_hints": [{"key": "F", "label": "PONDER"}],
+					"title": UIStringsScript.loc("TELESCOPE"), ## PORT COPY (no authored row)
+					"prompt": UIStringsScript.st_upper("ST_Interactables", "PromptLookAtHubSecret", "Ponder"),
+					"bottom_hints": [{"key": "F", "label": UIStringsScript.st_upper("ST_Interactables", "PromptLookAtHubSecret", "Ponder")}],
 				}
 
 	var changed: bool = force_push \
@@ -2613,7 +2619,7 @@ func _ready() -> void:
 \t\tactive_idx = found
 \t_rebuild_visual()
 func get_interact_prompt() -> String:
-\treturn "[F] CHANGE DECORATION"
+\treturn InputGlyphs.prompt("interact", UIStrings.loc("Change Decoration").to_upper())
 func interact(_actor: Node) -> void:
 \tactive_idx = (active_idx + 1) % DECORATIONS.size()
 \tSaveSystem.data["active_decoration"] = DECORATIONS[active_idx]
@@ -2665,7 +2671,7 @@ func _rebuild_visual() -> void:
 	gram_script.source_code = """extends Area3D
 var playing: bool = false
 func get_interact_prompt() -> String:
-\treturn "[F] TURN OFF" if playing else "[F] TURN ON"
+\treturn InputGlyphs.prompt("interact", UIStrings.loc("Turn Off").to_upper()) if playing else InputGlyphs.prompt("interact", UIStrings.loc("Turn On").to_upper())
 func interact(_actor: Node) -> void:
 \tplaying = not playing
 \tif AudioManager == null:
@@ -2834,7 +2840,7 @@ func _setup_mission_objectives(map_id: String, _order: int) -> void:
 			push_error("[mission_controller] loot_amount objective for mission '", mid, "' has no authored amount; no goal invented")
 		# The HUD string "Steal 4,000 in loot value" is the shipped reference
 		# text (docs/REFERENCE_BASELINE.md UI3-02); the amount is authored.
-		var label: String = "Steal %s in loot value" % GameState.format_thousands(goal_val) if goal_val > 0 else str(objective.get("objective_text", ""))
+		var label: String = UIStringsScript.loc_template("Steal {Amount} in loot value", {"Amount": GameState.format_thousands(goal_val)}) if goal_val > 0 else str(objective.get("objective_text", ""))
 		if label != "":
 			objs = [
 				{"id": "cleanout_loot", "label": label, "done": false, "current": 0, "target": goal_val},
@@ -2871,14 +2877,15 @@ func _setup_mission_objectives(map_id: String, _order: int) -> void:
 		if kind == "multiple":
 			target_count = maxi(int(objective.get("min_number_to_steal", 0)), (objective.get("items", []) as Array).size())
 		objs = [
-			{"id": "vault_main", "label": "Steal the %s" % target_name, "done": false, "current": 0, "target": maxi(target_count, 1)},
+			# PORT COPY (no authored row): the port's vault objective line.
+			{"id": "vault_main", "label": UIStringsScript.loc("Steal the %s") % target_name, "done": false, "current": 0, "target": maxi(target_count, 1)},
 		]
 	else:
 		var target_name: String = str(contract_info.get("quest_item", "")).strip_edges()
 		if target_name == "" or target_name == "Objective" or target_name.begins_with("Loot."):
 			target_name = str(chosen.get("title", "Contract Objective"))
 		objs = [
-			{"id": "vault_main", "label": "Steal the %s" % target_name, "done": false, "current": 0, "target": 1},
+			{"id": "vault_main", "label": UIStringsScript.loc("Steal the %s") % target_name, "done": false, "current": 0, "target": 1},
 		]
 	GameState.set_mission_objectives(objs, goal_val)
 
@@ -2917,7 +2924,7 @@ func _plan_objective_for_difficulty(plan: Dictionary) -> Dictionary:
 
 
 func _trigger_mission_start_letter() -> void:
-	var title_s: String = str(contract_info.get("title", _active_mission_row.get("title", "Contract")))
+	var title_s: String = str(contract_info.get("title", _active_mission_row.get("title", UIStringsScript.st_text("ST_MapTool", "Legend.Contract", "Contract"))))
 	var intro_s: String = str(contract_info.get("intro", "")).strip_edges()
 	if intro_s == "":
 		intro_s = str(_active_mission_row.get("description", contract_info.get("description", ""))).strip_edges()
@@ -2947,7 +2954,7 @@ func _trigger_mission_start_letter() -> void:
 		var mins: int = int(round(GameState.run_time_limit / 60.0)) if GameState.run_time_limit > 0.0 else 120
 		intro_s = intro_s.replace("{MatchDurationInMinutes}", str(mins))
 	if intro_s == "":
-		intro_s = "Esteemed Colleague — Infiltrate the target site, secure the objective, and slip away unseen."
+		intro_s = UIStringsScript.loc("Esteemed Colleague — Infiltrate the target site, secure the objective, and slip away unseen.") ## PORT COPY (no authored row)
 	contract_info["intro"] = intro_s
 	GameState.request_mission_letter(title_s, intro_s)
 	_letter_grace_sec = LETTER_GRACE_SEC
@@ -3175,7 +3182,7 @@ func _spawn_clue_entry(clue: Dictionary, set_name: String, spawner: Dictionary, 
 	var clue_node: Area3D = ClueItemScript.new()
 	clue_node.set("clue_title", visual_type)
 	clue_node.set("clue_body", body)
-	clue_node.set("prompt_verb", "Read")
+	clue_node.set("prompt_verb", UIStringsScript.st_text("ST_Interactables", "PromptRead", "Read"))
 	clue_node.set("authored_class", authored_class)
 	clue_node.set("visual_type", visual_type)
 	clue_node.set("fact_ids", fact_ids)
@@ -3342,6 +3349,13 @@ func _spawner_transform(rec: Dictionary) -> Transform3D:
 	return Transform3D(basis, Vector3(float(p[0]), float(p[1]), float(p[2])))
 
 
+## PORT INVENTED — NOT AUTHORED (W9-P3 C4). No authored KillZ / KillZVolume
+## exists anywhere in the extract (`extracted/json/**` and `extracted/raw/**`
+## have zero hits; TATWorldSettings authors none), so UE's un-serialized default
+## is NOT EVIDENCE. This 600 x 600 x 1 m slab at y = -15 catches a player who
+## falls out of the level. The authored behaviour is UNKNOWN; the [TAB] map
+## labels the stand-in (`MapBoundaries` reports `fallback`). Do not describe
+## this floor as authored data.
 func _add_safety_floor() -> void:
 	var sb := StaticBody3D.new()
 	sb.position = Vector3(0, -15.0, 0)
@@ -3705,19 +3719,19 @@ func _spawned_mesh_bottom(node: Node3D) -> float:
 ## extracted KeyCabinets assets so the belt visual is unchanged.
 func _key_pool_for_map(map_id: String) -> Array[Dictionary]:
 	var primary_id: String = "key_vault"
-	var primary_name: String = "Vault Key"
+	var primary_name: String = UIStringsScript.loc("Vault Key")
 	match map_id:
 		"guildhall":
 			primary_id = "key_guildhall"
-			primary_name = "Guildhall Key"
+			primary_name = UIStringsScript.loc("Guildhall Key")
 		"old_manor":
 			primary_id = "key_manor"
-			primary_name = "Elway Manor Key"
+			primary_name = UIStringsScript.loc("Elway Manor Key")
 	return [
 		{"id": primary_id, "name": primary_name, "kind": "key", "value": 150, "mesh_path": "res://assets/ue/Content/Art/Gameplay/KeyCabinets/SM_LootableKeys_ManorKey.glb"},
-		{"id": "key_vault", "name": "Vault Key", "kind": "key", "value": 120, "mesh_path": "res://assets/ue/Content/Art/Gameplay/KeyCabinets/SM_LootableKeys_LockedRoomKey.glb"},
-		{"id": "key_vault", "name": "Vault Key", "kind": "key", "value": 180, "mesh_path": "res://assets/ue/Content/Art/Gameplay/KeyCabinets/SM_LootableKeys_SecretChestKey.glb"},
-		{"id": "key_vault", "name": "Vault Key", "kind": "key", "value": 90, "mesh_path": "res://assets/ue/Content/Art/Gameplay/KeyCabinets/SM_LootableKeys_SmallChestKey.glb"},
+		{"id": "key_vault", "name": UIStringsScript.loc("Vault Key"), "kind": "key", "value": 120, "mesh_path": "res://assets/ue/Content/Art/Gameplay/KeyCabinets/SM_LootableKeys_LockedRoomKey.glb"},
+		{"id": "key_vault", "name": UIStringsScript.loc("Vault Key"), "kind": "key", "value": 180, "mesh_path": "res://assets/ue/Content/Art/Gameplay/KeyCabinets/SM_LootableKeys_SecretChestKey.glb"},
+		{"id": "key_vault", "name": UIStringsScript.loc("Vault Key"), "kind": "key", "value": 90, "mesh_path": "res://assets/ue/Content/Art/Gameplay/KeyCabinets/SM_LootableKeys_SmallChestKey.glb"},
 	]
 
 
@@ -4569,7 +4583,7 @@ func _start_endgame(reason: String = "") -> bool:
 		"/", GameState.escape_markers.size()
 	)
 	if hud != null and hud.has_method("show_toast"):
-		hud.call("show_toast", "THE MAGIC DOOR HAS BEEN SUMMONED")
+		hud.call("show_toast", UIStringsScript.loc("THE MAGIC DOOR HAS BEEN SUMMONED")) ## PORT COPY (no authored row)
 	return true
 
 

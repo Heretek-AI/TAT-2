@@ -19,8 +19,16 @@ extends CanvasLayer
 
 const SettingsUIScript := preload("res://src/ui/settings_ui.gd")
 const ThemeScript := preload("res://src/ui/art_nouveau_theme.gd")
+const FocusNavScript := preload("res://src/ui/focus_nav.gd")
+const MapBoundariesScript := preload("res://src/ui/map_boundaries.gd")
+const UIToastScript := preload("res://src/ui/ui_toast.gd")
 const UIStringsScript := preload("res://src/ui/ui_strings.gd")
 const MobileProfile := preload("res://src/core/mobile_profile.gd")
+
+## W9-P3: legacy "[KEY]" tokens in the HUD's own prompt lines -> port action ids,
+## so `InputGlyphs.format_legend()` prints the live bound key on the active device.
+const LOCKPICK_LEGEND_ACTIONS: Dictionary = {"SPACE": "jump", "LMB": "primary_action", "ESC": "pause"}
+const MAP_LEGEND_ACTIONS: Dictionary = {"LMB": "primary_action", "TAB": "map_toggle", "ESC": "pause"}
 
 const VERSION_STRING: String = "v1.5.148559"
 ## W5D: one heading at the centre tick, matching the reference HUD. The old
@@ -188,6 +196,7 @@ var door_lbl: Label
 var lockpick_bar: ProgressBar
 var pause_center: CenterContainer
 var pause_panel: PanelContainer
+var _pause_panel_for_focus: Control = null
 var result_panel: PanelContainer
 var result_lbl: Label
 var _result_lines: VBoxContainer
@@ -321,6 +330,21 @@ var _pause_consumed_frame: int = -1
 
 # [TAB] Tactical Map Overlay
 var _map_root: Control
+var _map_panel: Control = null
+var _boundary_rows: Array[Dictionary] = []
+var _boundary_source: String = "fallback"
+var _toast: Control = null
+var _run_xp_start: int = -1
+var _result_xp_btn: Button = null
+var _hint_map_key_lbl: Label = null
+var _hint_ping_key_lbl: Label = null
+var _pause_esc_key_lbl: Label = null
+var _map_foot_lbl: Label = null
+var _carried_used_seen: int = -1
+var _thief_vision_was_on: bool = false
+var _last_won: bool = false
+var _last_score: int = 0
+var _last_info: Dictionary = {}
 var _map_title_lbl: Label
 var _map_draw: TacticalMapDraw
 var _map_open: bool = false
@@ -505,6 +529,11 @@ class TacticalMapDraw extends Control:
 	var ping_points: Array[Dictionary] = []
 	var _world_center: Vector2 = Vector2.ZERO
 	var _world_span: float = 64.0
+	## Authored TATWorldMapBoundary rows for the active map (empty until the
+	## producer emits `map_boundaries`; see MapBoundariesScript).
+	var boundaries: Array[Dictionary] = []
+	var active_boundary: Dictionary = {}
+	var boundary_source: String = "fallback"
 
 	func _gui_input(event: InputEvent) -> void:
 		if event is InputEventMouseButton:
@@ -515,6 +544,16 @@ class TacticalMapDraw extends Control:
 				accept_event()
 
 	func _compute_bounds() -> void:
+		# Authored map extent: the Primary boundary is the map capture volume
+		# (Guildhall _0 is a 235 m wide, 2 m tall capture slab), so its XZ box is the authored frame.
+		if not boundaries.is_empty():
+			var prim: Dictionary = MapBoundariesScript.primary_for(boundaries)
+			if not prim.is_empty():
+				var pc: Vector3 = prim.get("pos", Vector3.ZERO) as Vector3
+				var ps: Vector3 = prim.get("size", Vector3(64.0, 1.0, 64.0)) as Vector3
+				_world_center = Vector2(pc.x, pc.z)
+				_world_span = clampf(maxf(ps.x, ps.z), 36.0, 400.0)
+				return
 		var min_x: float = player_pos.x - 24.0
 		var max_x: float = player_pos.x + 24.0
 		var min_z: float = player_pos.z - 24.0
@@ -560,6 +599,49 @@ class TacticalMapDraw extends Control:
 			draw_line(Vector2(0.0, gy), Vector2(size.x, gy), grid_col, 1.0)
 			gy += step
 		draw_rect(Rect2(Vector2.ZERO, size), Color(0.28, 0.72, 0.74, 0.55), false, 1.5)
+
+		# Authored TATWorldMapBoundary floors (W9-P3-C4). The primary box is the
+		# map extent (already used by _compute_bounds); the secondaries are the
+		# floors, the active one highlighted with its authored label. When the
+		# generated payload has no boundaries, the HUD draws its labelled
+		# fallback window (port stand-in; not authored data).
+		var font: Font = ThemeDB.fallback_font
+		if not boundaries.is_empty():
+			for bv: Variant in boundaries:
+				if not (bv is Dictionary):
+					continue
+				var b: Dictionary = bv as Dictionary
+				var bp: Vector3 = b.get("pos", Vector3.ZERO) as Vector3
+				var bs: Vector3 = b.get("size", Vector3(16.0, 1.0, 16.0)) as Vector3
+				var tl: Vector2 = _world_to_screen(bp + Vector3(-bs.x * 0.5, 0.0, -bs.z * 0.5))
+				var br: Vector2 = _world_to_screen(bp + Vector3(bs.x * 0.5, 0.0, bs.z * 0.5))
+				var rect: Rect2 = Rect2(tl, br - tl)
+				var is_active: bool = str(b.get("name", "")) == str(active_boundary.get("name", ""))
+				if bool(b.get("primary", false)):
+					draw_rect(rect, Color(0.10, 0.24, 0.28, 0.18), true)
+				draw_rect(rect, Color(0.55, 0.92, 0.94, 0.86 if is_active else 0.26),
+					false, 2.0 if is_active else 1.0)
+			var ly: float = 18.0
+			for bv2: Variant in boundaries:
+				if not (bv2 is Dictionary):
+					continue
+				var b2: Dictionary = bv2 as Dictionary
+				var label: String = MapBoundariesScript.label_for(b2)
+				if label == "":
+					continue
+				var active2: bool = str(b2.get("name", "")) == str(active_boundary.get("name", ""))
+				var col: Color = Color(0.86, 0.97, 0.98, 0.95) if active2 else Color(0.55, 0.72, 0.75, 0.62)
+				draw_string(font, Vector2(12.0, ly), label, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 13, col)
+				ly += 17.0
+			var active_label: String = MapBoundariesScript.label_for(active_boundary)
+			if active_label != "":
+				draw_string(font, Vector2(0.0, 22.0), active_label, HORIZONTAL_ALIGNMENT_CENTER,
+					size.x, 15, Color(0.86, 0.97, 0.98, 0.95))
+		elif boundary_source == "fallback":
+			# PORT COPY (diagnostic, no authored row): names the invented window.
+			draw_string(font, Vector2(12.0, size.y - 14.0),
+				"FALLBACK BOUNDS - NO AUTHORED TATWorldMapBoundary",
+				HORIZONTAL_ALIGNMENT_LEFT, -1.0, 11, Color(0.72, 0.55, 0.36, 0.85))
 
 		# Loot dots.
 		for lv: Variant in loot_points:
@@ -617,7 +699,9 @@ class TacticalMapDraw extends Control:
 
 class PingRadialDraw extends Control:
 	var selected_idx: int = 0
-	const LABELS: Array[String] = ["LOOT", "DANGER", "MOVE", "OBJECTIVE"]
+	## Number of radial choices; the copy lives in HUD.ping_label_text() so the
+	## labels are Loc-routed (an inner-class const cannot call the Loc pipeline).
+	const LABEL_COUNT: int = 4
 	const COLORS: Array[Color] = [
 		Color(0.96, 0.82, 0.38, 0.96),
 		Color(0.96, 0.26, 0.24, 0.96),
@@ -798,6 +882,171 @@ func _ready() -> void:
 	var gs: Node = get_node_or_null("/root/GameState")
 	if gs != null and gs.has_signal("mission_letter_requested"):
 		gs.connect("mission_letter_requested", _on_mission_letter_requested)
+	_setup_authored_toast()
+	_capture_run_xp_start()
+	_suppress_invented_loot_labels()
+	# W9-P3-C3: a device swap re-texts the built-once glyph labels (InputGlyphs
+	# tracks the active device in InputContext.note_event).
+	var ic: Node = get_node_or_null("/root/InputContext")
+	if ic != null and ic.has_signal("device_changed"):
+		if not ic.is_connected("device_changed", _on_input_device_changed):
+			ic.connect("device_changed", _on_input_device_changed)
+
+
+## W9-P3-C4: authored loot toast (`BPUI_ToastWidget` / `Toasts.MajorLootTaken`).
+## GameState.carried_loot_changed fires once per accepted pickup; the toast is
+## the authored major-loot row, minor pickups keep the HUD counter only.
+func _setup_authored_toast() -> void:
+	if _toast != null:
+		return
+	_toast = UIToastScript.new()
+	_toast.name = "AuthoredToastStack"
+	_root.add_child(_toast)
+	var gs: Node = get_node_or_null("/root/GameState")
+	if gs != null and gs.has_method("carried_slots_used"):
+		_carried_used_seen = int(gs.call("carried_slots_used"))
+	if gs != null and gs.has_signal("carried_loot_changed"):
+		if not gs.is_connected("carried_loot_changed", _on_carried_loot_changed):
+			gs.connect("carried_loot_changed", _on_carried_loot_changed)
+
+
+func _on_carried_loot_changed(used: int, _maximum: int, _value: int) -> void:
+	if _toast == null:
+		return
+	# Only a GROWTH is a pickup: a stash deposit / run reset also emits this
+	# signal with fewer (or zero) slots. The baseline is ALWAYS updated, so the
+	# first major pickup after a stash/reset is not swallowed (audit-c4 5c).
+	var grew: bool = _carried_used_seen < 0 or used > _carried_used_seen
+	_carried_used_seen = used
+	if not grew:
+		return
+	var gs: Node = get_node_or_null("/root/GameState")
+	if gs == null:
+		return
+	var carried_v: Variant = gs.get("carried_loot")
+	if not (carried_v is Array) or (carried_v as Array).is_empty():
+		return
+	var last_v: Variant = (carried_v as Array)[(carried_v as Array).size() - 1]
+	if not (last_v is Dictionary):
+		return
+	var entry: Dictionary = last_v as Dictionary
+	# DT_ToastConfig NewRow_12 is Toast.Type.Gameplay.Loot.Taken: the authored
+	# template is ST_Toasts.MajorLootTaken. Minor loot has no authored toast row.
+	if str(entry.get("tier", "")) != "major":
+		return
+	var loot_name: String = str(entry.get("display_name", entry.get("name", ""))).strip_edges()
+	if loot_name == "":
+		return
+	_toast.call("show_major_loot", loot_name, "")
+
+
+## RE-L/C5-03: the world-space loot Label3D (font 28, no panel) is port
+## invented. The authored pickup is the HUD toast above, so the HUD suppresses
+## the label. The creation site (game/src/interact/loot_item.gd) is a P2-owned
+## file; deleting it there is recorded as BLOCKED-ON P2 in the W9-P3 report.
+func _hide_all_loot_labels() -> void:
+	var tree: SceneTree = get_tree()
+	if tree == null:
+		return
+	for n: Node in tree.get_nodes_in_group("loot"):
+		_hide_loot_label(n)
+
+
+func _suppress_invented_loot_labels() -> void:
+	var tree: SceneTree = get_tree()
+	if tree == null:
+		return
+	for n: Node in tree.get_nodes_in_group("loot"):
+		_hide_loot_label(n)
+	if not tree.node_added.is_connected(_on_hud_node_added):
+		tree.node_added.connect(_on_hud_node_added)
+
+
+func _on_hud_node_added(n: Node) -> void:
+	if n is Node3D:
+		call_deferred("_hide_loot_label_if_grouped", n)
+
+
+func _hide_loot_label_if_grouped(n: Node) -> void:
+	if n != null and is_instance_valid(n) and n.is_in_group("loot"):
+		_hide_loot_label(n)
+
+
+func _hide_loot_label(n: Node) -> void:
+	if n == null or not is_instance_valid(n):
+		return
+	if not (n.get("label") is Label3D):
+		return
+	# The property exists on the loot-item script; never poke an unrelated node.
+	if n.get("label") == null:
+		return
+	(n.get("label") as Label3D).visible = false
+
+
+## W9-P3-C1: the XP at HUD creation. mission_controller awards the run's XP
+## before show_result, so `now - run_start` is the measured award for the
+## post-match XP screen (0 on capture/free play, -1 when unreadable).
+func _capture_run_xp_start() -> void:
+	var ss: Node = get_node_or_null("/root/SaveSystem")
+	if ss == null or not ss.has_method("get_level_progress"):
+		_run_xp_start = -1
+		return
+	var prog: Variant = ss.call("get_level_progress")
+	if not (prog is Dictionary):
+		_run_xp_start = -1
+		return
+	var d: Dictionary = prog as Dictionary
+	var total: int = int(ss.call("xp_total_for_level", int(d.get("level", 1)))) + int(d.get("xp_in_level", 0))
+	_run_xp_start = total
+
+
+func run_xp_awarded() -> int:
+	if _run_xp_start < 0:
+		return -1
+	var ss: Node = get_node_or_null("/root/SaveSystem")
+	if ss == null or not ss.has_method("get_level_progress"):
+		return -1
+	var prog: Variant = ss.call("get_level_progress")
+	if not (prog is Dictionary):
+		return -1
+	var d: Dictionary = prog as Dictionary
+	var total: int = int(ss.call("xp_total_for_level", int(d.get("level", 1)))) + int(d.get("xp_in_level", 0))
+	return maxi(total - _run_xp_start, 0)
+
+
+## Test hooks (W9-P3): the authored-boundary source for the current map, the
+## pause panel and its first focusable control.
+func map_boundary_source() -> String:
+	return _boundary_source
+
+
+func map_boundary_rows() -> Array[Dictionary]:
+	return _boundary_rows
+
+
+func pause_panel_for_test() -> Control:
+	return _pause_panel_for_focus
+
+
+func pause_first_control_for_test() -> Control:
+	if _pause_panel_for_focus == null:
+		return null
+	var controls: Array[Control] = FocusNavScript.focusable_controls(_pause_panel_for_focus)
+	return controls[0] if not controls.is_empty() else null
+
+
+## W9-P3-C3: live glyph re-render on a device swap. The labels below are built
+## once at HUD construction, so without this a pad player keeps reading [TAB].
+func _on_input_device_changed(_device: String) -> void:
+	if _hint_map_key_lbl != null:
+		_hint_map_key_lbl.text = InputGlyphs.text("map_toggle").to_upper()
+	if _hint_ping_key_lbl != null:
+		_hint_ping_key_lbl.text = InputGlyphs.text("ping_menu").to_upper()
+	if _pause_esc_key_lbl != null:
+		_pause_esc_key_lbl.text = InputGlyphs.bracket("pause")
+	if _map_foot_lbl != null:
+		_map_foot_lbl.text = InputGlyphs.format_legend(
+			UIStringsScript.loc("[LMB] PLACE WAYPOINT   ·   [TAB] / [ESC] CLOSE MAP"), MAP_LEGEND_ACTIONS)
 
 
 func _exit_tree() -> void:
@@ -807,6 +1056,9 @@ func _exit_tree() -> void:
 	var gs: Node = get_node_or_null("/root/GameState")
 	if gs != null and gs.has_signal("mission_letter_requested") and gs.is_connected("mission_letter_requested", _on_mission_letter_requested):
 		gs.disconnect("mission_letter_requested", _on_mission_letter_requested)
+	var ic: Node = get_node_or_null("/root/InputContext")
+	if ic != null and ic.has_signal("device_changed") and ic.is_connected("device_changed", _on_input_device_changed):
+		ic.disconnect("device_changed", _on_input_device_changed)
 
 
 # =============================================================================
@@ -1218,7 +1470,9 @@ func _build_reticle_and_prompt(root: Control) -> void:
 	_crank_prompt_lbl.offset_right = 90.0
 	_crank_prompt_lbl.offset_bottom = 56.0
 	_crank_prompt_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_crank_prompt_lbl.text = "[RMB] CRANK"
+	# "Crank" is an authored source (ST_Tools Tools_Deploy_Crank / the locres);
+	# [RMB] is the live secondary-action glyph.
+	_crank_prompt_lbl.text = InputGlyphs.prompt("secondary_action", UIStringsScript.loc("Crank").to_upper())
 	_crank_prompt_lbl.add_theme_font_size_override("font_size", 12)
 	_crank_prompt_lbl.add_theme_color_override("font_color", Color(0.58, 0.92, 1.0, 0.96))
 	_crank_prompt_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
@@ -1391,7 +1645,10 @@ func _build_tool_hotbar(root: Control) -> void:
 	hint_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_hotbar_anchor.add_child(hint_row)
 
-	hint_row.add_child(ThemeScript.white_keycap("TAB", 10))
+	# W9-P3-C3: the keycap follows the active device/rebind (map_toggle).
+	var map_key: PanelContainer = ThemeScript.white_keycap(InputGlyphs.text("map_toggle").to_upper(), 10)
+	_hint_map_key_lbl = map_key.get_child(0) as Label
+	hint_row.add_child(map_key)
 	var map_lbl: Label = Label.new()
 	# T05 l10n: authored ST_HUD rows (source -> Loc translation), literal fallback.
 	map_lbl.text = UIStringsScript.st_upper("ST_HUD", "MapButtonLabel", "MAP")
@@ -1405,7 +1662,9 @@ func _build_tool_hotbar(root: Control) -> void:
 	gap.custom_minimum_size = Vector2(8, 1)
 	hint_row.add_child(gap)
 
-	hint_row.add_child(ThemeScript.white_keycap("MMB", 10))
+	var ping_key: PanelContainer = ThemeScript.white_keycap(InputGlyphs.text("ping_menu").to_upper(), 10)
+	_hint_ping_key_lbl = ping_key.get_child(0) as Label
+	hint_row.add_child(ping_key)
 	var ping_lbl: Label = Label.new()
 	ping_lbl.text = UIStringsScript.st_upper("ST_HUD", "PingButtonLabel", "[HOLD] PING MENU")
 	ping_lbl.add_theme_font_size_override("font_size", 12)
@@ -1559,7 +1818,7 @@ func _build_lockpick_minigame(root: Control) -> void:
 	panel.add_child(vb)
 
 	_lockpick_title_lbl = Label.new()
-	_lockpick_title_lbl.text = "LOCKPICKING"
+	_lockpick_title_lbl.text = UIStringsScript.loc("Lockpicking").to_upper() ## PORT COPY (no authored row)
 	_lockpick_title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_lockpick_title_lbl.add_theme_font_size_override("font_size", 20)
 	_lockpick_title_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
@@ -1568,7 +1827,7 @@ func _build_lockpick_minigame(root: Control) -> void:
 	vb.add_child(_lockpick_title_lbl)
 
 	_lockpick_track_lbl = Label.new()
-	_lockpick_track_lbl.text = "TUMBLER 1 / 1"
+	_lockpick_track_lbl.text = UIStringsScript.loc("TUMBLER %d / %d") % [1, 1] ## PORT COPY (no authored row)
 	_lockpick_track_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_lockpick_track_lbl.add_theme_font_size_override("font_size", 13)
 	_lockpick_track_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_ACCENT)
@@ -1599,7 +1858,10 @@ func _build_lockpick_minigame(root: Control) -> void:
 		dial_wrap.add_child(keyhole)
 
 	_lockpick_status_lbl = Label.new()
-	_lockpick_status_lbl.text = "[SPACE] / [LMB] STRIKE PIN   ·   [ESC] CANCEL"
+	# PORT COPY (no authored row): the port's minigame legend. The [KEY] tokens are
+	# re-keyed live by InputGlyphs (keyboard text is unchanged: SPACE / LMB / ESC).
+	_lockpick_status_lbl.text = InputGlyphs.format_legend(
+		UIStringsScript.loc("[SPACE] / [LMB] STRIKE PIN   ·   [ESC] CANCEL"), LOCKPICK_LEGEND_ACTIONS)
 	_lockpick_status_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_lockpick_status_lbl.add_theme_font_size_override("font_size", 13)
 	_lockpick_status_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_TEXT)
@@ -1623,6 +1885,7 @@ func _build_map_overlay(root: Control) -> void:
 	_map_root.add_child(center)
 
 	var panel: PanelContainer = PanelContainer.new()
+	_map_panel = panel
 	panel.custom_minimum_size = Vector2(760, 540)
 	panel.add_theme_stylebox_override("panel", ThemeScript.teal_panel_style(2, 6, ThemeScript.TEAL_PANEL_BG, 18))
 	center.add_child(panel)
@@ -1633,7 +1896,7 @@ func _build_map_overlay(root: Control) -> void:
 	panel.add_child(vb)
 
 	_map_title_lbl = Label.new()
-	_map_title_lbl.text = "TACTICAL MAP"
+	_map_title_lbl.text = UIStringsScript.loc("Tactical Map").to_upper() ## PORT COPY (no authored row)
 	_map_title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	# Authored MapTool_Handwritten role (CF_Caveat 28 -> 19).
 	_map_title_lbl.add_theme_font_size_override("font_size", ThemeScript.PX_MAP_HAND + 7)
@@ -1646,7 +1909,10 @@ func _build_map_overlay(root: Control) -> void:
 	vb.add_child(_map_title_lbl)
 
 	var legend: Label = Label.new()
-	legend.text = "● YOU    ◆ OBJECTIVE    • LOOT    ▲ GUARD    ◎ WAYPOINT PING"
+	# PORT COPY (no authored row): the shipped MapTool legend rows are a different
+	# set (Main Target / Loot Stash...). This is the port overlay's own legend and
+	# is not presented as an authored row.
+	legend.text = UIStringsScript.loc("● YOU    ◆ OBJECTIVE    • LOOT    ▲ GUARD    ◎ WAYPOINT PING")
 	legend.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	legend.add_theme_font_size_override("font_size", 12)
 	legend.add_theme_color_override("font_color", ThemeScript.TEAL_MUTED)
@@ -1662,7 +1928,10 @@ func _build_map_overlay(root: Control) -> void:
 	vb.add_child(_map_draw)
 
 	var foot: Label = Label.new()
-	foot.text = "[LMB] PLACE WAYPOINT   ·   [TAB] / [ESC] CLOSE MAP"
+	_map_foot_lbl = foot
+	# PORT COPY (no authored row): the overlay's footer legend, with live glyphs.
+	foot.text = InputGlyphs.format_legend(
+		UIStringsScript.loc("[LMB] PLACE WAYPOINT   ·   [TAB] / [ESC] CLOSE MAP"), MAP_LEGEND_ACTIONS)
 	foot.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	foot.add_theme_font_size_override("font_size", 13)
 	foot.add_theme_color_override("font_color", ThemeScript.TEAL_ACCENT)
@@ -1693,9 +1962,9 @@ func _build_ping_radial(root: Control) -> void:
 		Vector2(-48, 62),
 		Vector2(-116, -10),
 	]
-	for i: int in range(4):
+	for i: int in range(PingRadialDraw.LABEL_COUNT):
 		var lbl: Label = Label.new()
-		lbl.text = PingRadialDraw.LABELS[i]
+		lbl.text = ping_label_text(i)
 		lbl.position = Vector2(120, 120) + offsets[i]
 		lbl.custom_minimum_size = Vector2(96, 20)
 		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1802,7 +2071,7 @@ func _build_mission_letter(root: Control) -> void:
 
 	_letter_title_lbl = Label.new()
 	_letter_title_lbl.name = "MissionLetterTitle"
-	_letter_title_lbl.text = "Esteemed Colleague -"
+	_letter_title_lbl.text = UIStringsScript.loc("Esteemed Colleague -")
 	_letter_title_lbl.position = Vector2.ZERO
 	_letter_title_lbl.size = Vector2(BRIEFING_TEXT_WIDTH, 26.0)
 	_letter_title_lbl.add_theme_font_size_override("font_size", BRIEFING_FONT_SIZE)
@@ -1827,7 +2096,7 @@ func _build_mission_letter(root: Control) -> void:
 	vb.add_child(btn_wrap)
 	var cont_btn: Button = Button.new()
 	cont_btn.name = "MissionLetterContinueBtn"
-	cont_btn.text = "[SPACE]  CONTINUE"
+	cont_btn.text = ("[%s]  " + UIStringsScript.st_upper("ST_Screens", "Screen.Continue", "CONTINUE")) % InputGlyphs.text("jump")
 	cont_btn.custom_minimum_size = Vector2(210, 42)
 	ThemeScript.style_teal_button(cont_btn, false, 24)
 	cont_btn.pressed.connect(_close_mission_letter)
@@ -1868,6 +2137,16 @@ func _build_result_panel(root: Control) -> void:
 	_result_lines.name = "PostMatchLines"
 	_result_lines.add_theme_constant_override("separation", 6)
 	vb.add_child(_result_lines)
+	# W9-P3-C1: the authored rack-up/XP screen (BPUI_PostMatchRackup_AllPlayers +
+	# BPUI_EndMatchXPScreen) opens from the summary; the summary itself stays the
+	# authored status + haul block (T05) so its contract is unchanged.
+	_result_xp_btn = Button.new()
+	_result_xp_btn.name = "PostMatchXPButton"
+	_result_xp_btn.text = UIStringsScript.st_upper("ST_PostMatch", "XP.Breakdown", "XP BREAKDOWN")
+	ThemeScript.style_teal_button(_result_xp_btn, false, 20)
+	_result_xp_btn.pressed.connect(_open_post_match_xp)
+	_result_xp_btn.visible = false
+	vb.add_child(_result_xp_btn)
 	_result_continue_btn = Button.new()
 	_result_continue_btn.text = UIStringsScript.st_upper("ST_Screens", "Screen.Continue", "CONTINUE")
 	ThemeScript.style_teal_button(_result_continue_btn, true, 24)
@@ -1899,6 +2178,7 @@ func _build_pause_menu(root: Control) -> void:
 	pause_panel = PanelContainer.new()
 	# 520 px: the authored MenuButton size (48 -> 32) needs room for
 	# "RETURN TO THIEF'S DEN" on one line.
+	_pause_panel_for_focus = pause_panel
 	pause_panel.custom_minimum_size = Vector2(520, 0)
 	pause_panel.add_theme_stylebox_override("panel", ThemeScript.teal_panel_style())
 	pause_center.add_child(pause_panel)
@@ -1922,8 +2202,15 @@ func _build_pause_menu(root: Control) -> void:
 	settings_btn.text = _loc_upper("Settings")
 	ThemeScript.style_teal_button(settings_btn, false)
 	settings_btn.pressed.connect(func() -> void:
+		# Remember the pause control so closing settings returns focus to it
+		# (no focus trapped behind the freed modal).
+		FocusNavScript.remember()
 		var sui: CanvasLayer = SettingsUIScript.new()
 		add_child(sui)
+		if sui.has_signal("closed"):
+			sui.connect("closed", func() -> void:
+				FocusNavScript.install(_pause_panel_for_focus)
+				FocusNavScript.restore())
 		if sui.has_method("open_settings"):
 			sui.call("open_settings")
 	)
@@ -1946,7 +2233,8 @@ func _build_pause_menu(root: Control) -> void:
 	esc_row.add_theme_constant_override("separation", 6)
 	esc_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vb.add_child(esc_row)
-	var esc_badge: PanelContainer = ThemeScript.keycap("[ESC]", 12)
+	var esc_badge: PanelContainer = ThemeScript.keycap(InputGlyphs.bracket("pause"), 12)
+	_pause_esc_key_lbl = esc_badge.get_child(0) as Label
 	esc_row.add_child(esc_badge)
 	var esc_lbl: Label = Label.new()
 	esc_lbl.text = _loc_upper("Resume")
@@ -1973,12 +2261,12 @@ func _pause_footer_text() -> String:
 	var build: String = VERSION_STRING
 	if build.begins_with("v"):
 		build = build.substr(1)
-	var diff_lbl: String = "Novice"
+	var diff_lbl: String = UIStringsScript.st_text("ST_GeneralUI", "Mission.Difficulty.Easy", "Novice")
 	var d: int = int(GameState.difficulty)
 	if d == 2:
-		diff_lbl = "Thief"
+		diff_lbl = UIStringsScript.st_text("ST_GeneralUI", "Mission.Difficulty.Normal", "Thief")
 	elif d >= 3:
-		diff_lbl = "Master Thief"
+		diff_lbl = UIStringsScript.st_text("ST_GeneralUI", "Mission.Difficulty.Hard", "Master Thief")
 	return "%s   %s   %d" % [build, diff_lbl, int(GameState.active_map_seed)]
 
 
@@ -2014,7 +2302,10 @@ func update_loot(collected: int, needed: int, value: int) -> void:
 	if obj_lbl == null:
 		return
 	var title: String = str(contract_data.get("title", "Contract"))
-	obj_lbl.text = "Mission: %s [%d/%d]\n  (£) %d" % [title, collected, needed, value]
+	# PORT COPY (no authored row): the objective wrapper format; the head is authored.
+	obj_lbl.text = UIStringsScript.loc("%s: %s [%d/%d]\n  (£) %d") % [
+		UIStringsScript.st_text("ST_PostMatch", "PostMatch.Mission", "Mission"),
+		title, collected, needed, value]
 
 
 func set_steal_prompt(text: String) -> void:
@@ -2022,7 +2313,7 @@ func set_steal_prompt(text: String) -> void:
 
 
 func show_toast(text: String) -> void:
-	show_clue_toast("NOTICE", text)
+	show_clue_toast(UIStringsScript.loc("NOTICE"), text) ## PORT COPY (no authored row)
 
 
 func show_result(won: bool, score: int, info: Dictionary) -> void:
@@ -2036,6 +2327,11 @@ func show_result(won: bool, score: int, info: Dictionary) -> void:
 	if _letter_open:
 		_close_mission_letter()
 	result_panel.visible = true
+	_last_won = won
+	_last_score = maxi(score, 0)
+	_last_info = info.duplicate(true)
+	if _result_xp_btn != null:
+		_result_xp_btn.visible = true
 	var status_key: String = "PostMatch.Status.Escaped" if won else "PostMatch.Status.Caught"
 	result_lbl.text = UIStringsScript.st_text("ST_PostMatch", status_key, "Escaped" if won else "Caught").to_upper()
 	for c: Node in _result_lines.get_children():
@@ -2066,6 +2362,25 @@ func show_result(won: bool, score: int, info: Dictionary) -> void:
 			ThemeScript.RED_INSUFFICIENT, 16)
 	var cash_label: String = UIStringsScript.st_text("ST_Screens", "Screen.PostMatch.CashInHand", "Cash in Hand")
 	_add_result_line("%s   £ %d" % [cash_label, cash], ThemeScript.TEAL_TITLE, 16)
+
+
+## Open the authored post-match/XP screen with the *measured* award (the save
+## delta since HUD creation), so the screen never recomputes a banked number.
+func _open_post_match_xp() -> void:
+	var script: GDScript = load("res://src/ui/post_match_ui.gd") as GDScript
+	if script == null:
+		return
+	FocusNavScript.remember()
+	var ui: CanvasLayer = script.new() as CanvasLayer
+	# The HUD is a CanvasLayer; a same/default layer child has non-deterministic
+	# ordering (audit-c1 F2). 25 is above the HUD and the result panel.
+	ui.layer = 25
+	add_child(ui)
+	if ui.has_signal("closed"):
+		ui.connect("closed", func() -> void:
+			FocusNavScript.install(_root)
+			FocusNavScript.restore())
+	ui.call("open_result", _last_won, _last_score, _last_info, run_xp_awarded())
 
 
 func _add_result_line(text: String, color: Color, font_size: int) -> void:
@@ -2119,6 +2434,14 @@ func _post_match_contract_line(won: bool) -> String:
 func set_thief_vision(enabled: bool) -> void:
 	if thief_vision_overlay != null:
 		thief_vision_overlay.visible = enabled
+	# The authored thief-vision highlight (thief_character._update_thief_vision ->
+	# loot_item.set_xray_highlight) re-shows the port-invented world Label3D:
+	# `label.visible = on or is_quest_item`. Re-hide it after the blueprint
+	# toggle settles (deferred so it runs after every _process), so the authored
+	# toast stays the only pickup text (audit-c4 5d).
+	if enabled != _thief_vision_was_on:
+		_thief_vision_was_on = enabled
+		call_deferred("_hide_all_loot_labels")
 
 
 func set_downed_display(active: bool, seconds: float) -> void:
@@ -2126,14 +2449,14 @@ func set_downed_display(active: bool, seconds: float) -> void:
 		return
 	downed_lbl.visible = active
 	if active:
-		downed_lbl.text = "DOWNED — %ds" % maxi(0, int(ceil(seconds)))
+		downed_lbl.text = UIStringsScript.loc("DOWNED — %ds") % maxi(0, int(ceil(seconds))) ## PORT COPY (no authored row)
 
 
 func show_clue_toast(title: String, body: String) -> void:
 	if clue_toast_lbl == null:
 		return
 	var snippet: String = body if body.length() <= 110 else body.substr(0, 110) + "..."
-	clue_toast_lbl.text = "CLUE — %s: %s" % [title, snippet]
+	clue_toast_lbl.text = UIStringsScript.loc("CLUE — %s: %s") % [title, snippet] ## PORT COPY (no authored row)
 	clue_toast_lbl.visible = true
 	if is_inside_tree():
 		get_tree().create_timer(5.5).timeout.connect(func() -> void:
@@ -2176,7 +2499,7 @@ func start_lockpick_minigame(lock_level: int, target_label: String, on_complete:
 	_init_lockpick_track(0)
 	if _lockpick_title_lbl != null:
 		var lbl: String = target_label.strip_edges()
-		_lockpick_title_lbl.text = (lbl.to_upper() if lbl != "" else "LOCK") + " — LV %d" % maxi(1, _lockpick_level)
+		_lockpick_title_lbl.text = (lbl.to_upper() if lbl != "" else UIStringsScript.st_upper("ST_Lockpicking", "LockPicking.Lock.NoKeyLock", "Lock")) + UIStringsScript.loc(" — LV %d") % maxi(1, _lockpick_level)
 	if _lockpick_root != null:
 		_lockpick_root.visible = true
 	_lockpick_prev_mouse = Input.mouse_mode
@@ -2329,11 +2652,11 @@ func set_den_lookat_card(card: Dictionary) -> void:
 				_add_den_card_row("", str(item_v), "")
 	else:
 		if card.has("difficulty"):
-			_add_den_card_row("H", "Difficulty:", str(card.get("difficulty", "Novice")))
+			_add_den_card_row("H", UIStringsScript.st_text("ST_ThievesDen", "CityMap.DifficultyHeader", "Difficulty:"), str(card.get("difficulty", "Novice")))
 		if card.has("mode"):
-			_add_den_card_row("R", "Mode:", str(card.get("mode", "Solo")))
+			_add_den_card_row("R", UIStringsScript.st_text("ST_ThievesDen", "CityMap.GameModeHeader", "Mode:"), str(card.get("mode", "Solo")))
 		if card.has("prompt"):
-			_add_den_card_row("F", str(card.get("prompt", "Prepare for Mission")), "")
+			_add_den_card_row("F", str(card.get("prompt", UIStringsScript.st_text("ST_ThievesDen", "CityMap.JoinLobby", "Prepare for Mission"))), "")
 	var bh_v: Variant = card.get("bottom_hints", null)
 	if bh_v is Array:
 		_den_bottom_hints = (bh_v as Array).duplicate()
@@ -2617,7 +2940,7 @@ func _update_objectives_and_loot(is_hub: bool) -> void:
 	# the same bracket ("Mission: Steal 4,000 in loot value[0/4,000]") and no
 	# timer suffix or ❧ sub-line. Normal contracts keep the formatter below.
 	if GameState.free_play:
-		var fp_label: String = "Steal %s in loot value" % GameState.format_thousands(maxi(GameState.loot_goal, 0))
+		var fp_label: String = UIStringsScript.loc_template("Steal {Amount} in loot value", {"Amount": GameState.format_thousands(maxi(GameState.loot_goal, 0))})
 		var fp_cur: int = 0
 		var fp_tgt: int = maxi(GameState.loot_goal, 0)
 		if objs_v is Array:
@@ -2629,12 +2952,14 @@ func _update_objectives_and_loot(is_hub: bool) -> void:
 						fp_cur = int(od.get("current", 0))
 						fp_tgt = int(od.get("target", fp_tgt))
 						break
-		obj_lbl.text = "Mission: %s[%s/%s]" % [fp_label, GameState.format_thousands(fp_cur), GameState.format_thousands(fp_tgt)]
+		obj_lbl.text = UIStringsScript.loc("%s: %s[%s/%s]") % [
+			UIStringsScript.st_text("ST_PostMatch", "PostMatch.Mission", "Mission"),
+			fp_label, GameState.format_thousands(fp_cur), GameState.format_thousands(fp_tgt)]
 		return
 
 	var timing: String = ""
 	if GameState.phase == GameState.PHASE_ENDGAME:
-		timing = "  (DOOR %s)" % phase_countdown_text()
+		timing = "  (%s)" % (UIStringsScript.loc("DOOR ") + phase_countdown_text()) ## PORT COPY (no authored row)
 	elif GameState.run_time_limit > 0.0:
 		timing = "  (%s)" % phase_countdown_text()
 
@@ -2649,17 +2974,20 @@ func _update_objectives_and_loot(is_hub: bool) -> void:
 				if done:
 					done_cnt += 1
 				var mark: String = "✓" if done else "❧"
-				sub_lines.append("   %s %s" % [mark, str(od.get("label", "Objective"))])
-		var hdr_title: String = str(contract_data.get("title", "Heist"))
-		obj_lbl.text = "Mission: %s [%d/%d]%s\n%s" % [hdr_title, done_cnt, objs.size(), timing, "\n".join(sub_lines)]
+				sub_lines.append("   %s %s" % [mark, str(od.get("label", UIStringsScript.loc("Objective")))]) ## PORT COPY fallback
+		var hdr_title: String = str(contract_data.get("title", UIStringsScript.loc("Heist"))) ## PORT COPY fallback
+		obj_lbl.text = UIStringsScript.loc("%s: %s [%d/%d]%s\n%s") % [
+			UIStringsScript.st_text("ST_PostMatch", "PostMatch.Mission", "Mission"),
+			hdr_title, done_cnt, objs.size(), timing, "\n".join(sub_lines)]
 		return
 
-	var title: String = str(contract_data.get("title", "Contract #%d" % GameState.active_contract_order))
-	var item: String = str(contract_data.get("quest_item", "Objective"))
+	var title: String = str(contract_data.get("title", UIStringsScript.st_template("ST_Screens", "Screen.Contract.Number", "Contract #{number}", {"number": GameState.active_contract_order})))
+	var item: String = str(contract_data.get("quest_item", UIStringsScript.loc("Objective"))) ## PORT COPY fallback
 	var _loot_goal: int = maxi(GameState.loot_goal, 0)
 	var _loot_status: String = "❧ %s  (£) %d / £ %d" % [item, GameState.loot_value, _loot_goal] if _loot_goal > 0 else "❧ %s" % item
-	var status: String = "Reach Escape Gate" if GameState.are_all_objectives_complete() else _loot_status
-	obj_lbl.text = "Mission: %s%s\n   %s" % [title, timing, status]
+	var status: String = UIStringsScript.loc("Reach Escape Gate") if GameState.are_all_objectives_complete() else _loot_status ## PORT COPY (no authored row)
+	obj_lbl.text = UIStringsScript.loc("%s: %s%s\n   %s") % [
+		UIStringsScript.st_text("ST_PostMatch", "PostMatch.Mission", "Mission"), title, timing, status]
 
 
 ## W7E: active-phase countdown in the authored MM:SS form (3300 s -> "55:00",
@@ -2679,8 +3007,8 @@ func door_warning_text() -> String:
 		return ""
 	var countdown: String = phase_countdown_text()
 	if countdown == "":
-		return "THE MAGIC DOOR IS OPEN"
-	return "THE MAGIC DOOR IS OPEN — %s BEFORE IT COLLAPSES" % countdown
+		return UIStringsScript.loc("THE MAGIC DOOR IS OPEN") ## PORT COPY (no authored row)
+	return UIStringsScript.loc("THE MAGIC DOOR IS OPEN — %s BEFORE IT COLLAPSES") % countdown ## PORT COPY (no authored row)
 
 
 func _update_phase_banner(is_hub: bool) -> void:
@@ -3193,9 +3521,10 @@ func _init_lockpick_track(idx: int) -> void:
 		for _s: Variant in (secs_v as Array):
 			_lockpick_broken_flags.append(false)
 	if _lockpick_track_lbl != null:
-		_lockpick_track_lbl.text = "TUMBLER %d / %d" % [_lockpick_track_idx + 1, maxi(1, _lockpick_tracks.size())]
+		_lockpick_track_lbl.text = UIStringsScript.loc("TUMBLER %d / %d") % [_lockpick_track_idx + 1, maxi(1, _lockpick_tracks.size())] ## PORT COPY (no authored row)
 	if _lockpick_status_lbl != null:
-		_lockpick_status_lbl.text = "[SPACE] / [LMB] STRIKE PIN   ·   [ESC] CANCEL"
+		_lockpick_status_lbl.text = InputGlyphs.format_legend(
+			UIStringsScript.loc("[SPACE] / [LMB] STRIKE PIN   ·   [ESC] CANCEL"), LOCKPICK_LEGEND_ACTIONS)
 		_lockpick_status_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_TEXT)
 	_sync_lockpick_dial(tr)
 
@@ -3262,14 +3591,14 @@ func _attempt_lockpick_strike() -> void:
 				_finish_lockpick(true)
 		else:
 			if _lockpick_status_lbl != null:
-				_lockpick_status_lbl.text = "PIN SET! HIT NEXT SWEET SPOT"
+				_lockpick_status_lbl.text = UIStringsScript.loc("PIN SET! HIT NEXT SWEET SPOT") ## PORT COPY (no authored row)
 				_lockpick_status_lbl.add_theme_color_override("font_color", Color(0.40, 0.96, 0.68))
 			_sync_lockpick_dial(tr)
 	else:
 		# Jammed! Apply authored jam delay, emit noise, and apply jam damage if supported.
 		_lockpick_jam_timer = float(_lockpick_db.get("jam_damage_delay_s", 0.5))
 		if _lockpick_status_lbl != null:
-			_lockpick_status_lbl.text = "LOCK JAMMED!"
+			_lockpick_status_lbl.text = UIStringsScript.st_upper("ST_Lockpicking", "LockPicking.Lock.NoKeyLock", "LOCK") + " " + UIStringsScript.st_upper("ST_Lockpicking", "Lockpicking.Term.Jammed", "JAMMED!")
 			_lockpick_status_lbl.add_theme_color_override("font_color", Color(0.98, 0.34, 0.30))
 		var p: Node3D = _get_player()
 		if p != null:
@@ -3304,17 +3633,28 @@ func _finish_lockpick(success: bool) -> void:
 func _refresh_tactical_map() -> void:
 	if _map_draw == null:
 		return
-	var map_title: String = "ELWAY MANOR" if GameState.active_map_id == "old_manor" else (
-		"CONSTABLES' GUILDHALL" if GameState.active_map_id == "guildhall" else (
-			"THIEVES' DEN" if GameState.active_contract_order <= 1 else str(GameState.active_map_id).to_upper()
+	# Authored map-name rows (ST_ThievesDen CityMap.* / ST_MapTool *.MapName), so the
+	# overlay header follows the locale like the rest of the UI.
+	var map_title: String = UIStringsScript.st_upper("ST_ThievesDen", "CityMap.OldManor", "Elway Manor") if GameState.active_map_id == "old_manor" else (
+		UIStringsScript.st_upper("ST_MapTool", "Guildhall.MapName", "Constables' Guildhall") if GameState.active_map_id == "guildhall" else (
+			UIStringsScript.loc("Thieves' Den").to_upper() if GameState.active_contract_order <= 1 else str(GameState.active_map_id).to_upper() ## PORT COPY (no authored row)
 		)
 	)
 	if _map_title_lbl != null:
-		_map_title_lbl.text = "TACTICAL MAP — " + map_title
+		_map_title_lbl.text = UIStringsScript.loc("Tactical Map").to_upper() + " — " + map_title ## PORT COPY (no authored row)
 	var p: Node3D = _get_player()
 	if p != null:
 		_map_draw.player_pos = p.global_position
 		_map_draw.player_yaw = p.rotation.y
+	# Authored TATWorldMapBoundary floors (W9-P3-C4). Empty today: the generated
+	# level payloads do not carry `map_boundaries` yet (producer contract
+	# build/qa/w9/parse_tables-map-boundaries.patch). The fallback is labelled.
+	_boundary_rows = MapBoundariesScript.for_map(str(GameState.active_map_id))
+	_boundary_source = "authored" if not _boundary_rows.is_empty() else "fallback"
+	_map_draw.boundaries = _boundary_rows
+	_map_draw.boundary_source = _boundary_source
+	_map_draw.active_boundary = MapBoundariesScript.boundary_at(
+		_boundary_rows, p.global_position if p != null else Vector3.ZERO)
 	var guards: Array[Dictionary] = []
 	for g: Node in get_tree().get_nodes_in_group("guards"):
 		if g is Node3D:
@@ -3342,13 +3682,27 @@ func _refresh_tactical_map() -> void:
 
 
 func _on_map_clicked(world_pos: Vector3) -> void:
-	_add_ping(world_pos, "WAYPOINT", Color(0.45, 0.95, 0.92, 0.96))
+	_add_ping(world_pos, UIStringsScript.loc("Waypoint").to_upper(), Color(0.45, 0.95, 0.92, 0.96)) ## PORT COPY (no authored row)
 	_refresh_tactical_map()
 
 
+## Routed copy for the ping radial (PingRadialDraw.LABEL_COUNT, same order):
+## LOOT and DANGER are authored ST_Social rows; MOVE/OBJECTIVE are port copy.
+static func ping_label_text(idx: int) -> String:
+	match idx:
+		0:
+			return UIStringsScript.st_text("ST_Social", "Ping.Loot", "Loot").to_upper()
+		1:
+			return UIStringsScript.st_text("ST_Social", "Ping.Danger", "Danger").to_upper()
+		2:
+			return UIStringsScript.loc("Move").to_upper() ## PORT COPY (no authored row)
+		_:
+			return UIStringsScript.loc("Objective").to_upper() ## PORT COPY (no authored row)
+
+
 func _commit_radial_ping(idx: int) -> void:
-	var ci: int = clampi(idx, 0, PingRadialDraw.LABELS.size() - 1)
-	var label: String = PingRadialDraw.LABELS[ci]
+	var ci: int = clampi(idx, 0, PingRadialDraw.LABEL_COUNT - 1)
+	var label: String = ping_label_text(ci)
 	var col: Color = PingRadialDraw.COLORS[ci]
 	var target_pos: Vector3 = Vector3.ZERO
 	var vp: Viewport = get_viewport()
@@ -3413,7 +3767,9 @@ func _update_world_ping_markers(p: Node3D) -> void:
 			var col: Color = ping.get("color", Color(0.45, 0.95, 0.92, 0.96)) as Color
 			var dist_m: int = int(round(p.global_position.distance_to(pos)))
 			if lbl != null:
-				lbl.text = "◆ %s (%dm)" % [str(ping.get("label", "PING")), dist_m]
+				var dist_text: String = UIStringsScript.st_template("ST_GeneralUI", "Format.Distance", "{Distance} m", {"Distance": str(dist_m)})
+				lbl.text = "◆ %s (%s)" % [
+					str(ping.get("label", UIStringsScript.st_upper("ST_Settings", "Settings.Controls.Ping", "Ping"))), dist_text]
 				lbl.add_theme_color_override("font_color", col)
 			m.visible = true
 	for i: int in range(used, _ping_marker_pool.size()):
@@ -3530,7 +3886,13 @@ func _set_paused(value: bool) -> void:
 	if value:
 		_hide_live_hud_for_pause()
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		# W9-P3-C3: the pad enters the management panel on Resume and rings the
+		# four authored actions (BPUI_StartMenuOptions).
+		if _pause_panel_for_focus != null:
+			FocusNavScript.install_and_focus(_pause_panel_for_focus)
 	else:
+		# Never leave focus behind the hidden panel.
+		FocusNavScript.release_if_inside(_pause_panel_for_focus)
 		_restore_live_hud_after_pause()
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
@@ -3646,9 +4008,9 @@ func _set_prompt(raw: String) -> void:
 	# secondary is pushed separately by the door's secondary prompt so a pick
 	# lock action is never mislabelled as a hold action.
 	if rest == "Open Door":
-		rest = "OPEN"
+		rest = UIStringsScript.st_upper("ST_Interactables", "PromptOpen", "Open")
 	elif rest == "Close Door":
-		rest = "CLOSE"
+		rest = UIStringsScript.st_upper("ST_Interactables", "PromptClose", "Close")
 	if key != "" and _prompt_keycap != null and _prompt_keycap_lbl != null:
 		_prompt_keycap_lbl.text = key.to_upper()
 		_prompt_keycap.visible = true

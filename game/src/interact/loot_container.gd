@@ -19,6 +19,7 @@ const LootInventoryScript := preload("res://src/interact/loot_inventory.gd")
 const LootStashScript := preload("res://src/interact/loot_stash.gd")
 const LockableDoorScript := preload("res://src/interact/lockable_door.gd")
 const _VfxManager := preload("res://src/core/vfx_manager.gd")
+const UIStringsScript := preload("res://src/ui/ui_strings.gd")
 
 const CONTAINERS_PATH := "res://data/generated/gameplay/containers.json"
 const LOOT_ACTORS_PATH := "res://data/generated/gameplay/loot_actors.json"
@@ -301,12 +302,13 @@ func get_interact_prompt() -> String:
 	if is_stash:
 		return LootStashScript.prompt_for(stash_uses, LootInventoryScript.has_depositable())
 	if opened:
-		return "[Opened]"
+		return UIStringsScript.loc("[Opened]") ## PORT COPY (no authored row)
 	if locked:
 		if is_lockpicking:
-			return "[Picking Lock...]"
-		return "[F] PICK LOCK (Lv %d)" % maxi(lock_level, 1)
-	return "[F] OPEN"
+			return UIStringsScript.loc("[Picking Lock...]") ## PORT COPY (no authored row)
+		# Authored "Pick Lock" row + the port's lock-level suffix; the glyph is live.
+		return InputGlyphs.prompt("interact", UIStringsScript.st_upper("ST_Lockpicking", "Lockpicking.Pompt.Start", "Pick Lock")) + " (Lv %d)" % maxi(lock_level, 1)
+	return InputGlyphs.prompt("interact", UIStringsScript.st_upper("ST_Interactables", "PromptOpen", "Open"))
 
 
 ## Interaction LOS point (W2): the marker origin sits on the floor, so the
@@ -347,10 +349,10 @@ func _container_label() -> String:
 	# The HUD appends "— LV n" itself (hud.start_lockpick_minigame); embedding
 	# the level here produced "DOOR LOCK (LV 3) — LV 3" (C4-05).
 	if container_class.find("DisplayCase") >= 0:
-		return "Display Safe"
+		return UIStringsScript.loc("Display Safe") ## PORT COPY (no authored row)
 	if container_class.find("Chest") >= 0:
-		return "Locked Chest"
-	return "Safe Lock"
+		return UIStringsScript.loc("Locked Chest") ## PORT COPY (no authored row)
+	return UIStringsScript.loc("Safe Lock") ## PORT COPY (no authored row)
 
 
 ## P1 container noise sourced self: same HUD-arcs gap as the doors (guards
@@ -465,7 +467,7 @@ func _open_container() -> void:
 		var cls := str(bucket[bucket_index(marker_pos, spawn_index, bucket.size())])
 		var a: Variant = actors.get(cls, null)
 		if a is Dictionary:
-			l.item_name = str((a as Dictionary).get("name", "Noble Relic"))
+			l.item_name = str((a as Dictionary).get("name", UIStringsScript.loc("Noble Relic"))) ## PORT COPY (no authored row)
 			l.display_name = l.item_name
 			l.value = int((a as Dictionary).get("value", 75))
 			l.mesh_path = str((a as Dictionary).get("mesh_res", ""))
@@ -476,7 +478,7 @@ func _open_container() -> void:
 		# Labelled fallback (same policy as the mission loot wave): the
 		# tier-entry pool with the legacy note mesh, counts unchanged.
 		var entry: Dictionary = LootScript.tier_entry(loot_tier, spawn_index)
-		l.item_name = str(entry.get("name", "Noble Relic #%d" % (spawn_index + 1)))
+		l.item_name = str(entry.get("name", UIStringsScript.loc("Noble Relic #%d") % (spawn_index + 1))) ## PORT COPY (no authored row)
 		l.display_name = l.item_name
 		l.value = int(entry.get("value", 75))
 	l.mesh_rotation_deg = slot_world_rotation(marker_basis, slot_rotation_deg.x, slot_rotation_deg.y, slot_rotation_deg.z)

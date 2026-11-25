@@ -9,6 +9,7 @@ extends CanvasLayer
 
 const MobileProfile := preload("res://src/core/mobile_profile.gd")
 const ThemeScript := preload("res://src/ui/art_nouveau_theme.gd")
+const UIStringsScript := preload("res://src/ui/ui_strings.gd")
 
 # P1 theme routing (audit-ui P1-3): every fill/border/label below references a
 # ThemeScript.TOUCH_* token (the teal/gold/ivory aliases in
@@ -102,22 +103,23 @@ func _build_ui() -> void:
 	_stick_base.visible = false
 	_stick_knob.visible = false
 
-	# Primary / jump (right edge)
-	_add_button("primary", "primary_action", false, 54.0, "HIT", "")
-	_add_button("jump", "jump", false, 34.0, "JUMP", "")
+	# Primary / jump (right edge). Authored ST_Settings_Input/Tools verbs where a
+	# row exists; the rest are the port's short touch captions.
+	_add_button("primary", "primary_action", false, 54.0, UIStringsScript.loc("HIT").to_upper(), "") ## PORT COPY (no authored row)
+	_add_button("jump", "jump", false, 34.0, UIStringsScript.st_upper("ST_Settings", "Settings.Controls.Jump", "Jump"), "")
 	# Interact / ability
-	_add_button(_interact_btn_id, "interact", false, 40.0, "USE", "")
-	_add_button("ability", "ability", false, 36.0, "SKILL", "")
+	_add_button(_interact_btn_id, "interact", false, 40.0, UIStringsScript.st_upper("ST_Tools", "Tools_Deploy_Generic_Use", "Use"), "")
+	_add_button("ability", "ability", false, 36.0, UIStringsScript.loc("SKILL").to_upper(), "") ## PORT COPY (no authored row)
 	# Tools
-	_add_button("tool_1", "tool_1", false, 28.0, "SAP", "")
-	_add_button("tool_2", "tool_2", false, 28.0, "SMOKE", "")
-	_add_button("tool_3", "tool_3", false, 28.0, "FAIRY", "")
-	_add_button("vision", "thief_vision", false, 26.0, "EYE", "")
+	_add_button("tool_1", "tool_1", false, 28.0, UIStringsScript.loc("SAP").to_upper(), "") ## PORT COPY (no authored row)
+	_add_button("tool_2", "tool_2", false, 28.0, UIStringsScript.loc("SMOKE").to_upper(), "") ## PORT COPY (no authored row)
+	_add_button("tool_3", "tool_3", false, 28.0, UIStringsScript.loc("FAIRY").to_upper(), "") ## PORT COPY (no authored row)
+	_add_button("vision", "thief_vision", false, 26.0, UIStringsScript.loc("EYE").to_upper(), "") ## PORT COPY (no authored row)
 	# Utility row (bottom centre)
-	_add_button("crouch", "crouch", false, 28.0, "CROUCH", "")
-	_add_button("sprint", "sprint", true, 28.0, "SPRINT", "")
-	_add_button("lean_left", "lean_left", true, 26.0, "LEAN L", "")
-	_add_button("lean_right", "lean_right", true, 26.0, "LEAN R", "")
+	_add_button("crouch", "crouch", false, 28.0, UIStringsScript.st_upper("ST_Settings_Input", "InputSetting.Movement.Crouch", "Crouch"), "")
+	_add_button("sprint", "sprint", true, 28.0, UIStringsScript.st_upper("ST_Settings", "Settings.Controls.KBM.Sprint", "Sprint"), "")
+	_add_button("lean_left", "lean_left", true, 26.0, UIStringsScript.loc("LEAN L").to_upper(), "") ## PORT COPY (no authored row)
+	_add_button("lean_right", "lean_right", true, 26.0, UIStringsScript.loc("LEAN R").to_upper(), "") ## PORT COPY (no authored row)
 	# Pause
 	_add_button("pause", "", false, 24.0, "II", "")
 
@@ -530,7 +532,8 @@ func _set_badge(id: String, count: int) -> void:
 	var label: Label = entry["label"] as Label
 	if panel == null or label == null:
 		return
-	label.text = "%s\n%d" % [str(entry["text"]), count] if count > 0 else str(entry["text"])
+	# Badge = label + charge count; the newline is layout, not copy.
+	label.text = str(entry["text"]) + "\n" + str(count) if count > 0 else str(entry["text"])
 	label.modulate = ThemeScript.TOUCH_BADGE_FULL if count > 0 else ThemeScript.TOUCH_BADGE_EMPTY
 
 
@@ -545,10 +548,10 @@ func _refresh_ability_label() -> void:
 		return
 	match str(GameState.thief_id):
 		"spider":
-			label.text = "WIRE"
+			label.text = UIStringsScript.loc("Wire").to_upper() ## PORT COPY (no authored row)
 		"chameleon":
-			label.text = "MASK"
+			label.text = UIStringsScript.loc("Mask").to_upper() ## PORT COPY (no authored row)
 		"moth":
-			label.text = "ASTRAL"
+			label.text = UIStringsScript.loc("Astral").to_upper() ## PORT COPY (no authored row)
 		_:
-			label.text = "SKILL"
+			label.text = UIStringsScript.loc("Skill").to_upper() ## PORT COPY (no authored row)

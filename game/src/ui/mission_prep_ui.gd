@@ -26,9 +26,7 @@ const HEAD_CANDIDATES: Array[String] = [
 	"res://assets/ue/Content/Art/Gameplay/Thief/SK_ThiefNisha__Head.glb",
 ]
 
-const LOC_OLD_MANOR_TITLE: String = "ELWAY MANOR"
 const LOC_OLD_MANOR_DESC: String = "This is the estate of the three Elway sisters. Although it has fallen into disrepair, both the house and the family that holds it have a very long history in Kilcairn."
-const LOC_GUILDHALL_TITLE: String = "CONSTABLES' GUILDHALL"
 const LOC_GUILDHALL_DESC: String = "This is the headquarters and operational base for the Constables, Kilcairn's police force."
 const CONTRACT_INACTIVE: String = "Contract Inactive"
 
@@ -46,6 +44,7 @@ const GuardAnimLibScript: GDScript = preload("res://src/core/animation_library.g
 const MobileProfile: GDScript = preload("res://src/core/mobile_profile.gd")
 const ThemeScript: GDScript = preload("res://src/ui/art_nouveau_theme.gd")
 const UIStringsScript: GDScript = preload("res://src/ui/ui_strings.gd")
+const FocusNavScript: GDScript = preload("res://src/ui/focus_nav.gd")
 
 ## Authored MissionLobby_Geo3 CameraActor_0. UE FOV is the horizontal field of
 ## view, so Godot maps it with keep_aspect KEEP_WIDTH: fov reads 20.0 while the
@@ -261,10 +260,13 @@ func open_prep(p_map_id: String, p_difficulty: int, p_mode: String, p_contract_o
 	if AudioManager != null and AudioManager.has_method("start_bed"):
 		AudioManager.start_bed("wind_prep", 0.8)
 	_refresh_all()
+	# W9-P3-C3: pad focus enters on the first authored card action.
+	FocusNavScript.install_and_focus(self)
 
 
 ## Hide, restore mouse, emit closed and free.
 func close_prep() -> void:
+	FocusNavScript.release_if_inside(self)
 	_cancel_countdown(true)
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	if AudioManager != null and AudioManager.has_method("play_ui"):
@@ -401,29 +403,33 @@ func _build_all() -> void:
 	offset_bottom = 0.0
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	size_flags_vertical = Control.SIZE_EXPAND_FILL
-	var stage_box: SubViewportContainer = SubViewportContainer.new()
-	stage_box.name = "PrepBackdropContainer"
-	stage_box.set_anchors_preset(Control.PRESET_FULL_RECT, false)
-	stage_box.offset_left = 0.0
-	stage_box.offset_top = 0.0
-	stage_box.offset_right = 0.0
-	stage_box.offset_bottom = 0.0
-	stage_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	stage_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	# Floor, not a shrink target: the authored backdrop is 1280x720 and the
-	# container must never report smaller; it still stretches to fill the
-	# window via the full-rect anchors above.
-	stage_box.custom_minimum_size = Vector2(STAGE_VIEWPORT_SIZE)
-	stage_box.stretch = true
-	stage_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(stage_box)
-	var viewport: SubViewport = SubViewport.new()
-	viewport.name = "PrepBackdropViewport"
-	viewport.own_world_3d = true
-	viewport.size = STAGE_VIEWPORT_SIZE
-	viewport.render_target_update_mode = SubViewport.UPDATE_WHEN_VISIBLE
-	stage_box.add_child(viewport)
-	_build_stage(viewport)
+	# QA hook (W9-P3): the focus-walk test builds the prep chrome without the
+	# 2,107-mesh MissionLobby stage. Unset in every shipped/run path; only the
+	# SubViewport stage is skipped, never a Control.
+	if not OS.has_environment("TAT2_UI_NO_STAGE"):
+		var stage_box: SubViewportContainer = SubViewportContainer.new()
+		stage_box.name = "PrepBackdropContainer"
+		stage_box.set_anchors_preset(Control.PRESET_FULL_RECT, false)
+		stage_box.offset_left = 0.0
+		stage_box.offset_top = 0.0
+		stage_box.offset_right = 0.0
+		stage_box.offset_bottom = 0.0
+		stage_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		stage_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		# Floor, not a shrink target: the authored backdrop is 1280x720 and the
+		# container must never report smaller; it still stretches to fill the
+		# window via the full-rect anchors above.
+		stage_box.custom_minimum_size = Vector2(STAGE_VIEWPORT_SIZE)
+		stage_box.stretch = true
+		stage_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(stage_box)
+		var viewport: SubViewport = SubViewport.new()
+		viewport.name = "PrepBackdropViewport"
+		viewport.own_world_3d = true
+		viewport.size = STAGE_VIEWPORT_SIZE
+		viewport.render_target_update_mode = SubViewport.UPDATE_WHEN_VISIBLE
+		stage_box.add_child(viewport)
+		_build_stage(viewport)
 
 	var shade: ColorRect = ColorRect.new()
 	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -446,7 +452,7 @@ func _build_all() -> void:
 	add_child(top_hdr)
 
 	var title: Label = Label.new()
-	title.text = "MISSION STARTING IN 5..."
+	title.text = _countdown_text(int(COUNTDOWN_SECONDS))
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 24)
 	title.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
@@ -465,7 +471,7 @@ func _build_all() -> void:
 	top_hdr.add_child(underline)
 
 	_mode_sub_lbl = Label.new()
-	_mode_sub_lbl.text = "Mode: Solo"
+	_mode_sub_lbl.text = UIStringsScript.st_template("ST_Screens", "Screen.MissionLobby.Mode", "Mode: {mode}", {"mode": _loc("Solo")})
 	_mode_sub_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_mode_sub_lbl.add_theme_font_size_override("font_size", 14)
 	_mode_sub_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_TEXT)
@@ -475,7 +481,7 @@ func _build_all() -> void:
 	top_hdr.add_child(_mode_sub_lbl)
 
 	_diff_sub_lbl = Label.new()
-	_diff_sub_lbl.text = "Difficulty: Novice"
+	_diff_sub_lbl.text = UIStringsScript.st_template("ST_Screens", "Screen.MissionLobby.Difficulty", "Difficulty: {difficulty}", {"difficulty": _loc("Novice")})
 	_diff_sub_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_diff_sub_lbl.add_theme_font_size_override("font_size", 14)
 	_diff_sub_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_MUTED)
@@ -491,7 +497,7 @@ func _build_all() -> void:
 	left.add_theme_constant_override("separation", 10)
 	left.mouse_filter = Control.MOUSE_FILTER_PASS
 	add_child(left)
-	var loc_card: PanelContainer = _make_card("LOCATION", "", "")
+	var loc_card: PanelContainer = _make_card(UIStringsScript.loc("Location").to_upper(), "", "") ## PORT COPY (no authored row)
 	left.add_child(loc_card)
 	_location_title_lbl = loc_card.get_meta("title_lbl") as Label
 	_location_title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -523,7 +529,7 @@ func _build_all() -> void:
 	art_box.add_child(_location_art)
 	loc_vb.move_child(art_box, 2)
 
-	var mis_card: PanelContainer = _make_card("MISSION", "", "")
+	var mis_card: PanelContainer = _make_card(UIStringsScript.st_upper("ST_PostMatch", "PostMatch.Mission", "Mission"), "", "")
 	mis_card.mouse_filter = Control.MOUSE_FILTER_PASS
 	left.add_child(mis_card)
 	_mission_title_lbl = mis_card.get_meta("title_lbl") as Label
@@ -554,7 +560,7 @@ func _build_all() -> void:
 	mis_vb.add_child(_mission_selector)
 	_populate_mission_rows()
 
-	var con_card: PanelContainer = _make_card("CONTRACT", "", "")
+	var con_card: PanelContainer = _make_card(UIStringsScript.st_upper("ST_PostMatch", "PostMatch.Contract", "Contract"), "", "")
 	left.add_child(con_card)
 	_contract_title_lbl = con_card.get_meta("title_lbl") as Label
 	_contract_body = con_card.get_meta("body_lbl") as Label
@@ -571,7 +577,7 @@ func _build_all() -> void:
 	ready_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(ready_box)
 	_readiness_lbl = Label.new()
-	_readiness_lbl.text = "READY"
+	_readiness_lbl.text = UIStringsScript.st_upper("ST_Screens", "Screen.Lobby.Ready", "Ready")
 	_readiness_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_readiness_lbl.add_theme_font_size_override("font_size", 22)
 	_readiness_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_ACCENT)
@@ -611,14 +617,14 @@ func _build_all() -> void:
 	btn_row.add_theme_constant_override("separation", 10)
 	bottom.add_child(btn_row)
 	var ready_btn: Button = Button.new()
-	ready_btn.text = "[F]  READY"
+	ready_btn.text = ("[%s]  " + UIStringsScript.st_upper("ST_Screens", "Screen.Lobby.Ready", "Ready")) % InputGlyphs.text("interact")
 	ready_btn.custom_minimum_size = Vector2(150, 42)
 	ThemeScript.style_teal_button(ready_btn, true, 28)
 	ready_btn.pressed.connect(_on_ready_action)
 	btn_row.add_child(ready_btn)
 	_ready_btn = ready_btn
 	var back_btn: Button = Button.new()
-	back_btn.text = "[ESC]  BACK"
+	back_btn.text = ("[%s]  " + UIStringsScript.st_upper("ST_Screens", "Screen.Back", "Back")) % InputGlyphs.text("pause")
 	back_btn.custom_minimum_size = Vector2(146, 42)
 	ThemeScript.style_teal_button(back_btn, false, 28)
 	back_btn.pressed.connect(close_prep)
@@ -1354,14 +1360,22 @@ func _refresh_location_card() -> void:
 		_location_art.visible = tex != null
 
 
+## Authored location copy (ST_OldManor_map / ST_MapTool map rows). The old consts
+## held the same English but bypassed Loc; the routes below keep the identical
+## English and translate with the locale.
 func _location_info() -> Array:
 	if map_id == "old_manor":
-		return [LOC_OLD_MANOR_TITLE, LOC_OLD_MANOR_DESC]
+		return [
+			UIStringsScript.st_upper("ST_OldManor_map", "OldManor.MapName", "Elway Manor"),
+			UIStringsScript.st_text("ST_OldManor_map", "OldManor.MapFlavorText", LOC_OLD_MANOR_DESC)]
 	if map_id == "guildhall":
-		return [LOC_GUILDHALL_TITLE, LOC_GUILDHALL_DESC]
+		return [
+			UIStringsScript.st_upper("ST_MapTool", "Guildhall.MapName", "Constables' Guildhall"),
+			UIStringsScript.st_text("ST_MapTool", "Guildhall.MapFlavorText", LOC_GUILDHALL_DESC)]
 	if map_id == "jaspering_hall":
-		return ["JASPERING HALL", "A glittering jewelry house and private gallery in Kilcairn's merchant quarter, heavy with private security."]
-	return [map_id.to_upper(), "A shadowed mark in Kilcairn, ripe for the taking."]
+		return [UIStringsScript.loc("JASPERING HALL"), ## PORT COPY (no authored row)
+			UIStringsScript.loc("A glittering jewelry house and private gallery in Kilcairn's merchant quarter, heavy with private security.")] ## PORT COPY (no authored row)
+	return [map_id.to_upper(), UIStringsScript.loc("A shadowed mark in Kilcairn, ripe for the taking.")] ## PORT COPY (no authored row)
 
 
 func _refresh_mission_card() -> void:
@@ -1371,11 +1385,16 @@ func _refresh_mission_card() -> void:
 		_apply_selected_mission_row()
 		return
 	var idx: int = abs(contract_order) % 3
-	var titles: Array[String] = ["Vault Heist", "Item Collection Heist", "Cleanout Heist"]
+	# Authored heist titles (ST_Screens MissionLobby quest titles).
+	var titles: Array[String] = [
+		UIStringsScript.st_text("ST_Screens", "Screen.MissionLobby.VaultQuestTitle", "Vault Heist"),
+		UIStringsScript.st_text("ST_Screens", "Screen.MissionLobby.SetQuestTitle", "Item Collection Heist"),
+		UIStringsScript.st_text("ST_Screens", "Screen.MissionLobby.GuildHall.LootTheRoomTitle", "Cleanout Heist"),
+	]
 	_mission_title_lbl.text = titles[idx]
 	var minutes: int = _mission_minutes(idx, difficulty)
 	var desc: String = _mission_description(idx, minutes)
-	_mission_body.text = desc + "\nTime Limit: %d minutes" % minutes
+	_mission_body.text = desc + "\n" + UIStringsScript.st_template("ST_Screens", "Screen.MissionLobby.TimeLimit", "Time Limit: {matchDurationInMinutes} minutes", {"matchDurationInMinutes": minutes})
 	if _mission_icon != null:
 		_mission_icon.texture = null
 		_mission_icon.visible = false
@@ -1393,9 +1412,9 @@ func _apply_selected_mission_row() -> void:
 	if desc.find("{MatchDurationInMinutes}") >= 0:
 		desc = desc.replace("{MatchDurationInMinutes}", str(minutes))
 	if minutes > 0:
-		_mission_body.text = desc + "\nTime Limit: %d minutes" % minutes
+		_mission_body.text = desc + "\n" + UIStringsScript.st_template("ST_Screens", "Screen.MissionLobby.TimeLimit", "Time Limit: {matchDurationInMinutes} minutes", {"matchDurationInMinutes": minutes})
 	else:
-		_mission_body.text = desc + "\nTime Limit: Unlimited"
+		_mission_body.text = desc + "\n" + UIStringsScript.loc("Time Limit: Unlimited") ## PORT COPY (no authored row)
 	if _mission_icon != null:
 		var icon_tex: Texture2D = _load_ui_tex(str(row.get("icon_path", "")))
 		_mission_icon.texture = icon_tex
@@ -1456,7 +1475,7 @@ func _refresh_contract_card() -> void:
 
 func _contract_info() -> Array:
 	if free_play:
-		return [_loc(CONTRACT_INACTIVE), "Free play: clean out the location for a score. No contract progress is recorded."]
+		return [_loc(CONTRACT_INACTIVE), UIStringsScript.loc("Free play: clean out the location for a score. No contract progress is recorded.")] ## PORT COPY (no authored row)
 	if contract_order <= 0:
 		return [_loc(CONTRACT_INACTIVE), UIStringsScript.st_text("ST_Screens", "Screen.MissionLobby.ContractWrongMap",
 			"Your active contract is not available for the currently selected map.")]
@@ -1467,9 +1486,10 @@ func _contract_info() -> Array:
 			"Your active contract is not available for the currently selected map.")]
 	var quest_text: String = str(disp.get("quest_item", ""))
 	var loc_text: String = str(disp.get("location", ""))
-	var body_text: String = "Active contract: %s" % title_text
+	# PORT COPY (no authored row): the port's own contract summary sentence.
+	var body_text: String = UIStringsScript.loc("Active contract: %s") % title_text
 	if quest_text != "":
-		body_text += "\nTarget: %s" % quest_text
+		body_text += "\n" + UIStringsScript.loc("Target: %s") % quest_text
 	if loc_text != "":
 		body_text += "\n%s" % loc_text
 	return [title_text, body_text]
@@ -1500,9 +1520,10 @@ func _refresh_ready_controls() -> void:
 		else UIStringsScript.st_text("ST_Screens", "Screen.Lobby.Ready", "Ready")
 	var upper: String = action.to_upper()
 	if _ready_btn != null:
-		_ready_btn.text = "[F]  %s" % upper
+		_ready_btn.text = ("[%s]  " + upper) % InputGlyphs.text("interact")
 	if _controls_lbl != null:
-		_controls_lbl.text = "[F] %s  ·  [ESC] BACK" % upper
+		_controls_lbl.text = ("[%s] %s  ·  [%s] " + UIStringsScript.st_upper("ST_Screens", "Screen.Back", "Back")) % [
+			InputGlyphs.text("interact"), upper, InputGlyphs.text("pause")]
 
 
 ## Header line: the authored MissionLobby countdown template with its number
@@ -1512,9 +1533,15 @@ func _refresh_countdown() -> void:
 	if _countdown_lbl == null:
 		return
 	var shown: int = _countdown_last_int if _countdown_running else int(COUNTDOWN_SECONDS)
+	_countdown_lbl.text = _countdown_text(shown)
+
+
+## One countdown render shared by the build-time initial label and the ticker, so
+## the header never shows a hardcoded digit that differs from COUNTDOWN_SECONDS.
+func _countdown_text(seconds: int) -> String:
 	var tmpl: String = UIStringsScript.st_text("ST_Screens", "Screen.MissionLobby.Countdown", "Mission Starting in <Num>{number}</>...")
 	tmpl = tmpl.replace("<Num>", "").replace("</>", "")
-	_countdown_lbl.text = tmpl.replace("{number}", str(shown)).to_upper()
+	return tmpl.replace("{number}", str(seconds)).to_upper()
 
 
 ## Every prep label that has an authored StringTable row goes through

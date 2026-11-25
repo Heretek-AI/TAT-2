@@ -68,6 +68,57 @@ static func st_text(table_name: String, key: String, fallback: String = "") -> S
 	return t(raw(table_name, key, fallback))
 
 
+## Locres-only source string (no StringTable row shipped, but the English source
+## is in `sources.json`): `t("LEVEL UP!")`, `t("Level {CurrentLevel}")`. Use this
+## only when a grep of `game/data/generated/tables/StringTables/**` proves the
+## row has no table; `st_text` is preferred everywhere else.
+static func loc(source: String) -> String:
+	return t(source)
+
+
+## Authored template -> locale translation with `{name}` placeholder values.
+## Extra placeholders left in the string are kept verbatim (never blanked).
+static func st_template(table_name: String, key: String, fallback: String, values: Dictionary) -> String:
+	var out: String = st_text(table_name, key, fallback)
+	for k: Variant in values.keys():
+		out = out.replace("{" + str(k) + "}", str(values[k]))
+	return out
+
+
+## Locres template with `{name}` values (e.g. "Level {CurrentLevel}").
+static func loc_template(source: String, values: Dictionary) -> String:
+	var out: String = t(source)
+	for k: Variant in values.keys():
+		out = out.replace("{" + str(k) + "}", str(values[k]))
+	return out
+
+
+## Runtime coverage counters from the `Loc` autoload (W9-P3 audit).
+static func loc_stats() -> Dictionary:
+	var loop: MainLoop = Engine.get_main_loop()
+	if not (loop is SceneTree):
+		return {}
+	var tree: SceneTree = loop as SceneTree
+	if tree == null or tree.root == null:
+		return {}
+	var loc_node: Node = tree.root.get_node_or_null("Loc")
+	if loc_node != null and loc_node.has_method("t_stats"):
+		return loc_node.call("t_stats") as Dictionary
+	return {}
+
+
+static func reset_loc_stats() -> void:
+	var loop: MainLoop = Engine.get_main_loop()
+	if not (loop is SceneTree):
+		return
+	var tree: SceneTree = loop as SceneTree
+	if tree == null or tree.root == null:
+		return
+	var loc_node: Node = tree.root.get_node_or_null("Loc")
+	if loc_node != null and loc_node.has_method("reset_t_stats"):
+		loc_node.call("reset_t_stats")
+
+
 ## Upper-case authored row (the port's menu-style labels).
 static func st_upper(table_name: String, key: String, fallback: String = "") -> String:
 	return st_text(table_name, key, fallback).to_upper()

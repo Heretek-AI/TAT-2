@@ -5,6 +5,7 @@ extends CanvasLayer
 ## Preserves start_loading / set_progress / finish_loading API and internal _bar.
 
 const ThemeScript := preload("res://src/ui/art_nouveau_theme.gd")
+const UIStringsScript := preload("res://src/ui/ui_strings.gd")
 
 # T_loadingScreen_2 is the authored 16:9 KF12 splash (6400x3600, bright
 # purple, bottom logo). T_loadingScreen_1 is a 2:1 dark variant whose centred
@@ -127,7 +128,7 @@ func _build_ui() -> void:
 
 	_title_lbl = Label.new()
 	_title_lbl.name = "LoadingTitle"
-	_title_lbl.text = "LOADING..."
+	_title_lbl.text = UIStringsScript.st_upper("ST_GeneralUI", "Loading", "Loading...")
 	_title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_title_lbl.add_theme_font_size_override("font_size", 24)
 	_title_lbl.add_theme_color_override("font_color", Color(0.74, 0.88, 0.96, 0.98))
@@ -198,7 +199,7 @@ func start_loading(title: String, clue: String, map_id: String) -> void:
 	if _bar != null:
 		_bar.value = 5.0
 	if _title_lbl != null:
-		_title_lbl.text = "LOADING..."
+		_title_lbl.text = UIStringsScript.st_upper("ST_GeneralUI", "Loading", "Loading...")
 	if _subtitle_lbl != null:
 		var sub_txt: String = title.strip_edges()
 		if clue.strip_edges() != "":
@@ -208,7 +209,10 @@ func start_loading(title: String, clue: String, map_id: String) -> void:
 		_subtitle_lbl.text = ""
 		_subtitle_lbl.visible = false
 	if _status_lbl != null:
-		_status_lbl.text = "Preparing sublevels..."
+		# W9-P3: the authored BPUI_LoadingScreen has one row (ST_GeneralUI.Loading,
+		# shown above the spinner) and no flavour lines. The status line carries
+		# real progress only; the invented "Preparing sublevels..." set is gone.
+		_status_lbl.text = ""
 	_update_splash(map_id)
 
 
@@ -218,14 +222,8 @@ func set_progress(pct_0_to_1: float, _status_text: String) -> void:
 	if _bar != null:
 		_bar.value = clamped * 100.0
 	if _status_lbl != null:
-		# Never surface loader internals ("Parsing JSON 12/14", "Batching
-		# meshes 5769/5769") over the splash art. Keep the authored mood.
-		if clamped < 0.32:
-			_status_lbl.text = "Unlocking the doors..."
-		elif clamped < 0.72:
-			_status_lbl.text = "Raising the rooftops..."
-		else:
-			_status_lbl.text = "Lighting the lanterns..."
+		# Real loader progress, never the loader's internal step text.
+		_status_lbl.text = "%d%%" % int(round(clamped * 100.0))
 
 
 ## Set 100%, hide and free so the level is revealed.
@@ -233,7 +231,7 @@ func finish_loading() -> void:
 	if _bar != null:
 		_bar.value = 100.0
 	if _status_lbl != null:
-		_status_lbl.text = "Ready."
+		_status_lbl.text = "%d%%" % 100
 	visible = false
 	queue_free()
 

@@ -13,7 +13,10 @@ signal closed()
 
 const ThemeScript := preload("res://src/ui/art_nouveau_theme.gd")
 const CatalogScript := preload("res://src/ui/unlock_catalog.gd")
+const FocusNavScript := preload("res://src/ui/focus_nav.gd")
+const ProgressionUIScript := preload("res://src/ui/progression_ui.gd")
 const ToolPreviewScript := preload("res://src/ui/tool_preview.gd")
+const UIStringsScript := preload("res://src/ui/ui_strings.gd")
 
 const PORTRAIT_PATH: String = "res://assets/ue/Raw/Art/UI/Shell/CharacterSelect/T_portrait_%s.png"
 const CHECK_ICON_PATH: String = "res://assets/ue/Raw/Art/UI/Icons/T_CheckMark.png"
@@ -73,6 +76,8 @@ class XpBar extends Control:
 		draw_polyline(closed, border_color, 1.5, true)
 
 var _tab: int = 0
+var _panel: Control = null
+var _progression_btn: Button = null
 var _catalog: RefCounted = null
 var _journal_btn: Button
 var _market_btn: Button
@@ -128,6 +133,8 @@ func _ready() -> void:
 	_refresh_market()
 	_show_tab(0)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	# W9-P3-C3: pad focus enters the tab row and rings through the open page.
+	FocusNavScript.install_and_focus(_panel)
 
 
 ## Instance helper: show the ledger and take mouse control.
@@ -139,6 +146,7 @@ func open_ledger() -> void:
 	_refresh_journal()
 	_refresh_market()
 	_show_tab(_tab)
+	FocusNavScript.install_and_focus(_panel)
 
 
 ## Keeps the modal centred at the viewport's logical size under the
@@ -178,6 +186,7 @@ func _build_ui() -> void:
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
 	var panel: PanelContainer = PanelContainer.new()
+	_panel = panel
 	panel.custom_minimum_size = Vector2(1100, 660)
 	panel.add_theme_stylebox_override("panel", ThemeScript.teal_panel_style(2, 6, ThemeScript.TEAL_PANEL_BG, 20))
 	center.add_child(panel)
@@ -192,13 +201,18 @@ func _build_ui() -> void:
 	header.add_theme_constant_override("separation", 12)
 	vb.add_child(header)
 	_journal_btn = Button.new()
-	_journal_btn.text = "[Q] JOURNAL"
+	# Authored tab label + live key glyph (Q is the port's raw-key tab switch).
+	_journal_btn.text = "[%s] %s" % [
+		InputGlyphs.key_label("Q"),
+		UIStringsScript.st_upper("ST_Screens", "Screen.Ledger.Journal", "Journal")]
 	_journal_btn.custom_minimum_size = Vector2(200, 40)
 	ThemeScript.style_teal_tab(_journal_btn, true)
 	_journal_btn.pressed.connect(_show_tab.bind(0))
 	header.add_child(_journal_btn)
 	_market_btn = Button.new()
-	_market_btn.text = "BLACK MARKET [E]"
+	_market_btn.text = "%s [%s]" % [
+		UIStringsScript.st_upper("ST_Screens", "Screen.Ledger.BlackMarket", "Black Market"),
+		InputGlyphs.key_label("E")]
 	_market_btn.custom_minimum_size = Vector2(220, 40)
 	ThemeScript.style_teal_tab(_market_btn, false)
 	_market_btn.pressed.connect(_show_tab.bind(1))
@@ -207,7 +221,9 @@ func _build_ui() -> void:
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(spacer)
 	var back_btn: Button = Button.new()
-	back_btn.text = "BACK [ESC]"
+	back_btn.text = "%s [%s]" % [
+		UIStringsScript.st_upper("ST_Screens", "Screen.Back", "Back"),
+		InputGlyphs.text("pause")]
 	back_btn.custom_minimum_size = Vector2(150, 40)
 	ThemeScript.style_teal_button(back_btn, false, 20)
 	back_btn.pressed.connect(_on_back_pressed)
@@ -272,7 +288,7 @@ func _build_ui() -> void:
 	xp_col.add_theme_constant_override("separation", 2)
 	head_row.add_child(xp_col)
 	_level_lbl = Label.new()
-	_level_lbl.text = "Level 1"
+	_level_lbl.text = UIStringsScript.loc_template("Level {CurrentLevel}", {"CurrentLevel": 1})
 	_level_lbl.add_theme_font_size_override("font_size", 24)
 	_level_lbl.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
 	if serif != null:
@@ -289,6 +305,18 @@ func _build_ui() -> void:
 	if serif != null:
 		_xp_lbl.add_theme_font_override("font", serif)
 	xp_col.add_child(_xp_lbl)
+	# W9-P3-C1: the authored BPUI_Progression hub is reachable from the level
+	# block. The row label is authored (ST_Screens.Screen.Label.Stats); the
+	# screen itself shows level/XP, the current contract and the unlock ladder.
+	_progression_btn = Button.new()
+	_progression_btn.name = "ProgressionEntry"
+	_progression_btn.flat = true
+	_progression_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_progression_btn.text = UIStringsScript.st_upper("ST_Screens", "Screen.Label.Stats", "Stats")
+	_progression_btn.add_theme_font_size_override("font_size", 14)
+	_progression_btn.add_theme_color_override("font_color", ThemeScript.TEAL_ACCENT)
+	_progression_btn.pressed.connect(_open_progression)
+	xp_col.add_child(_progression_btn)
 
 	# KF07: contracts read as a horizontal carousel (Contract #1 clipped left,
 	# #2 Completed center, #3 Active right) with the status word floating ABOVE
@@ -465,7 +493,9 @@ func _build_preview_card() -> PanelContainer:
 		_preview_status.add_theme_font_override("font", sans)
 	buy_row.add_child(_preview_status)
 	_buy_btn = Button.new()
-	_buy_btn.text = "BUY"
+	# Authored Black Market purchase verb (ST_ThievesDen.Ledger.BlackMarket.Purchase
+	# is "Purchase"); the port used to invent a short "BUY".
+	_buy_btn.text = UIStringsScript.st_upper("ST_ThievesDen", "Ledger.BlackMarket.Purchase", "Purchase")
 	_buy_btn.custom_minimum_size = Vector2(150, 32)
 	ThemeScript.style_teal_button(_buy_btn, true, 24)
 	_buy_btn.pressed.connect(_on_buy_pressed)
@@ -535,6 +565,24 @@ func _show_tab(idx: int) -> void:
 	if _market_btn != null:
 		_market_btn.disabled = (_tab == 1)
 		ThemeScript.style_teal_tab(_market_btn, _tab == 1)
+	# Rows on the visible page were just shown/hidden: re-ring them.
+	FocusNavScript.install(_panel)
+
+
+## Open the authored progression screen above the ledger; closing it restores
+## the ledger focus (no focus trapped behind the closed panel).
+func _open_progression() -> void:
+	FocusNavScript.remember()
+	var ui: CanvasLayer = ProgressionUIScript.new() as CanvasLayer
+	# The Ledger is a layer-20 CanvasLayer; a default layer-1 child would sit
+	# behind its dim + opaque panel (audit-c1 F1). 25 puts the screen above it.
+	ui.layer = 25
+	add_child(ui)
+	ui.call("open_progression")
+	if ui.has_signal("closed"):
+		ui.connect("closed", func() -> void:
+			FocusNavScript.install(_panel)
+			FocusNavScript.restore())
 
 
 func _collect_contracts() -> Array:
@@ -582,7 +630,7 @@ func _refresh_journal() -> void:
 	var level: int = int(prog.get("level", 1))
 	var in_level: int = int(prog.get("xp_in_level", 0))
 	var needed: int = int(prog.get("xp_needed", 500))
-	_level_lbl.text = "Level %d" % level
+	_level_lbl.text = UIStringsScript.loc_template("Level {CurrentLevel}", {"CurrentLevel": level})
 	if _level_badge != null:
 		_level_badge.text = str(level)
 	if _thief_lbl != null:
@@ -610,7 +658,8 @@ func _refresh_journal() -> void:
 		slot.add_theme_constant_override("separation", 4)
 		_contracts_box.add_child(slot)
 		var status_above: Label = Label.new()
-		status_above.text = "Completed" if done else "Active"
+		status_above.text = UIStringsScript.st_text("ST_Screens", "Screen.Ledger.Contract.Status.Complete", "Completed") if done \
+			else UIStringsScript.st_text("ST_Screens", "Screen.Ledger.Contract.Status.InProgress", "Active")
 		status_above.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		status_above.add_theme_font_size_override("font_size", 14)
 		status_above.add_theme_color_override("font_color", ThemeScript.GREEN_COMPLETED if done else ThemeScript.TEAL_ACCENT)
@@ -629,7 +678,7 @@ func _refresh_journal() -> void:
 		cv.add_theme_constant_override("separation", 4)
 		card.add_child(cv)
 		var tab: Label = Label.new()
-		tab.text = "Contract #%d" % order
+		tab.text = UIStringsScript.st_template("ST_Screens", "Screen.Contract.Number", "Contract #{number}", {"number": order})
 		tab.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		tab.add_theme_font_size_override("font_size", 15)
 		tab.add_theme_color_override("font_color", ThemeScript.TEAL_ACCENT)
@@ -638,7 +687,7 @@ func _refresh_journal() -> void:
 		head.add_theme_constant_override("separation", 10)
 		cv.add_child(head)
 		var t: Label = Label.new()
-		t.text = str(cd.get("title", "Contract"))
+		t.text = str(cd.get("title", UIStringsScript.st_text("ST_MapTool", "Legend.Contract", "Contract")))
 		t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		t.add_theme_font_size_override("font_size", 18)
 		t.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE if not done else ThemeScript.TEAL_TEXT)
@@ -731,11 +780,13 @@ func _sections() -> Array:
 
 
 func _refresh_market() -> void:
-	_assets_lbl.text = "YOUR TOTAL ASSETS: (£) %s" % GameState.format_thousands(SaveSystem.get_currency())
+	_assets_lbl.text = (UIStringsScript.st_upper("ST_Screens", "Screen.Label.TotalAssets", "Your Total Assets") + ": (£) %s") % GameState.format_thousands(SaveSystem.get_currency())
 	var available: bool = _catalog != null and _catalog.is_available()
 	_market_notice.visible = not available
 	if not available:
-		_market_notice.text = "The Black Market catalog could not be read (%s). Nothing can be purchased. Run python3 tools/parse_unlocks.py and reload." % (
+		# PORT COPY (no authored row): the shipped build never shows a missing
+		# catalog; this diagnostic names the port's own producer.
+		_market_notice.text = UIStringsScript.loc("The Black Market catalog could not be read (%s). Nothing can be purchased. Run python3 tools/parse_unlocks.py and reload.") % (
 			", ".join(_catalog.errors()) if _catalog != null else "no catalog")
 	for child: Node in _tables_row.get_children():
 		child.queue_free()
@@ -846,13 +897,15 @@ func _state_icon(path: String, tint: Color) -> TextureRect:
 func _item_button_text(item: Dictionary) -> String:
 	var name_text: String = str(item.get("name", "?"))
 	var entry: Dictionary = _entry_for_item(item)
+	var locked_badge: String = UIStringsScript.st_upper("ST_ThievesDen", "CityMap.Locked", "LOCKED")
+	var purchased_badge: String = "✓ " + UIStringsScript.st_upper("ST_BlackMarket", "Availability.Purchased", "Purchased")
 	if entry.is_empty():
-		return "%s  LOCKED" % name_text
+		return "%s  %s" % [name_text, locked_badge]
 	var state: String = _catalog.state_of(entry)
 	if state == CatalogScript.STATE_PURCHASED:
-		return "%s  ✓ PURCHASED" % name_text
+		return "%s  %s" % [name_text, purchased_badge]
 	if state == CatalogScript.STATE_LOCKED:
-		return "%s  LOCKED" % name_text
+		return "%s  %s" % [name_text, locked_badge]
 	return "%s  (£ %s)" % [name_text, _catalog.price_text(entry)]
 
 
@@ -870,8 +923,8 @@ func _entry_for_item(item: Dictionary) -> Dictionary:
 
 func _refresh_preview() -> void:
 	if _catalog == null or not _catalog.is_available():
-		_preview_title.text = "Black Market unavailable"
-		_preview_desc.text = "The authored catalog is missing. Nothing can be purchased."
+		_preview_title.text = UIStringsScript.loc("Black Market unavailable") ## PORT COPY (no authored row)
+		_preview_desc.text = UIStringsScript.loc("The authored catalog is missing. Nothing can be purchased.") ## PORT COPY (no authored row)
 		_preview_condition.text = ""
 		_preview_status.text = ""
 		_preview_state.text = ""
@@ -881,8 +934,8 @@ func _refresh_preview() -> void:
 		return
 	var entry: Dictionary = _catalog.entry(_selected_id)
 	if entry.is_empty():
-		_preview_title.text = "No item selected"
-		_preview_desc.text = "Select an item from a table."
+		_preview_title.text = UIStringsScript.loc("No item selected") ## PORT COPY (no authored row)
+		_preview_desc.text = UIStringsScript.loc("Select an item from a table.") ## PORT COPY (no authored row)
 		_preview_condition.text = ""
 		_preview_status.text = ""
 		_preview_state.text = ""
@@ -903,15 +956,16 @@ func _refresh_preview() -> void:
 	_preview_condition.text = condition
 	var state: String = _catalog.state_of(entry)
 	_buy_btn.visible = false
-	_buy_btn.text = "BUY"
+	_buy_btn.text = UIStringsScript.st_upper("ST_ThievesDen", "Ledger.BlackMarket.Purchase", "Purchase")
 	_preview_status.text = ""
+	var purchased_badge: String = "✓ " + UIStringsScript.st_upper("ST_BlackMarket", "Availability.Purchased", "Purchased")
 	if state == CatalogScript.STATE_PURCHASED:
-		_preview_state.text = "✓ PURCHASED"
+		_preview_state.text = purchased_badge
 		_preview_state.add_theme_color_override("font_color", ThemeScript.GREEN_PURCHASED)
-		_preview_status.text = "✓ PURCHASED"
+		_preview_status.text = purchased_badge
 		_preview_status.add_theme_color_override("font_color", ThemeScript.GREEN_PURCHASED)
 	elif state == CatalogScript.STATE_LOCKED:
-		_preview_state.text = "LOCKED"
+		_preview_state.text = UIStringsScript.st_upper("ST_ThievesDen", "CityMap.Locked", "LOCKED")
 		_preview_state.add_theme_color_override("font_color", ThemeScript.PINK_LOCKED)
 		_preview_status.text = CatalogScript.lock_reason(entry)
 		_preview_status.add_theme_color_override("font_color", ThemeScript.PINK_LOCKED)
@@ -920,7 +974,9 @@ func _refresh_preview() -> void:
 		_preview_status.text = "£ %s" % _catalog.price_text(entry)
 		_preview_status.add_theme_color_override("font_color", ThemeScript.GOLD)
 		_buy_btn.visible = true
-		_buy_btn.text = "BUY — £ %s" % _catalog.price_text(entry)
+		_buy_btn.text = "%s — £ %s" % [
+			UIStringsScript.st_upper("ST_ThievesDen", "Ledger.BlackMarket.Purchase", "Purchase"),
+			_catalog.price_text(entry)]
 
 
 ## Toggles the live 3D gear preview. `save_id` empty or not a tool mesh falls
@@ -969,7 +1025,7 @@ func _on_buy_pressed() -> void:
 		_refresh_preview()
 		return
 	var funds: int = SaveSystem.get_currency()
-	_preview_status.text = "Insufficient funds (have (£) %s, need £ %s)" % [
+	_preview_status.text = UIStringsScript.loc("Insufficient funds (have (£) %s, need £ %s)") % [ ## PORT COPY (no authored row)
 		GameState.format_thousands(funds), GameState.format_thousands(price)]
 	_preview_status.add_theme_color_override("font_color", ThemeScript.RED_INSUFFICIENT)
 
@@ -981,6 +1037,7 @@ func _on_back_pressed() -> void:
 
 
 func _close_ui() -> void:
+	FocusNavScript.release_if_inside(_panel)
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	closed.emit()
 	visible = false

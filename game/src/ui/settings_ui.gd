@@ -9,6 +9,8 @@ signal closed()
 const ThemeScript := preload("res://src/ui/art_nouveau_theme.gd")
 const MobileProfile := preload("res://src/core/mobile_profile.gd")
 const WeatherProfile := preload("res://src/core/weather_profile.gd")
+const UIStringsScript := preload("res://src/ui/ui_strings.gd")
+const FocusNavScript := preload("res://src/ui/focus_nav.gd")
 
 ## Desktop quality ladder (WeatherProfile.quality_level). Kept separate from
 ## mobile_quality: a desktop choice must never rewrite the Android tier.
@@ -112,12 +114,13 @@ func _load_string_table() -> void:
 			_st = ent as Dictionary
 
 
+## Authored ST_Settings row -> Loc translation (W9-P3/RE-L-16). The old version
+## read ST_Settings.json directly, so the 24 table-only settings labels were
+## authored English but never translated. `UIStrings.st_text` reads the same row
+## and then routes it through `Loc`, keeping the literal fallback as last resort.
 func _label(key: String, fallback: String) -> String:
-	if _st.has(key):
-		var v: String = str(_st[key]).strip_edges()
-		if v != "":
-			return v
-	return fallback
+	var v: String = UIStringsScript.st_text("ST_Settings", key, fallback).strip_edges()
+	return v if v != "" else fallback
 
 
 func open_settings() -> void:
@@ -126,11 +129,16 @@ func open_settings() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if AudioManager != null and AudioManager.has_method("play_ui"):
 		AudioManager.play_ui("open")
+	# W9-P3-C3: pad focus enters on the first tab and rings through every row.
+	FocusNavScript.install_and_focus(_modal_panel)
 
 
 func close_settings() -> void:
 	if AudioManager != null and AudioManager.has_method("play_ui"):
 		AudioManager.play_ui("back")
+	# Release before the node is freed so focus is never trapped behind a
+	# hidden modal; the opener can take it back.
+	FocusNavScript.release_if_inside(_modal_panel)
 	_apply_live(true)
 	closed.emit()
 	Input.mouse_mode = _prev_mouse_mode
@@ -142,6 +150,7 @@ func switch_tab(idx: int) -> void:
 		AudioManager.play_ui("click")
 	_tab_idx = clampi(idx, 0, TABS.size() - 1)
 	_refresh_tabs()
+	FocusNavScript.install(_modal_panel)
 
 
 func _refresh_tabs() -> void:
@@ -337,7 +346,7 @@ func _load_from_save() -> void:
 		var gq_idx: int = DESKTOP_QUALITY_KEYS.find(str(s.get("graphics_quality", "high")).to_lower())
 		_graphics_quality_option.select(maxi(0, gq_idx))
 	if _quality_btn != null:
-		_quality_btn.text = "MOBILE QUALITY: " + MobileProfile.tier_label(MobileProfile.current_tier()).to_upper()
+		_quality_btn.text = UIStringsScript.loc("MOBILE QUALITY: ") + MobileProfile.tier_label(MobileProfile.current_tier()).to_upper() ## PORT COPY (no authored row)
 	_sync_language_option(str(s.get("locale", "en")))
 	_loading_ui = false
 	_refresh_value_labels()
@@ -428,7 +437,7 @@ func _refresh_value_labels() -> void:
 	if _scale_val != null and _scale_slider != null:
 		_scale_val.text = "%d%%" % int(round(float(_scale_slider.value) * 100.0))
 	if _touch_val != null and _touch_slider != null:
-		_touch_val.text = "x%.1f" % float(_touch_slider.value)
+		_touch_val.text = UIStringsScript.loc("x%.1f") % float(_touch_slider.value) ## PORT COPY (no authored row)
 
 
 # P1 dedup: local tab styler deleted — ThemeScript.style_teal_tab is the single
@@ -445,7 +454,13 @@ func _make_group_card(group_title: String) -> Dictionary:
 
 
 func _build_ui() -> void:
-	var modal: Dictionary = ThemeScript.make_modal(self, Vector2(680, 0), "SETTINGS", "[Q] / [E] SWITCH TAB   ·   [ESC] BACK")
+	# PORT COPY (no authored row): the keyboard tab/back shortcut line. The
+	# authored tab switch is Q/E on keyboard; on a pad the four tab buttons are
+	# focusable (FocusNav ring) and activated with the pad's accept button, so a
+	# controller has a path even though this shortcut text is keyboard-specific.
+	var modal: Dictionary = ThemeScript.make_modal(self, Vector2(680, 0),
+		UIStringsScript.st_upper("ST_Settings", "Settings.Header", "Settings"),
+		UIStringsScript.loc("[Q] / [E] SWITCH TAB   ·   [ESC] BACK"))
 	_modal_panel = modal["panel"] as PanelContainer
 	if _modal_panel != null:
 		var teal_panel: StyleBoxFlat = ThemeScript.panel_style(2, 8, ThemeScript.TEAL_PANEL_BG)
@@ -551,10 +566,10 @@ func _build_ui() -> void:
 		]
 		for entry: Array in rows:
 			ctrl_vb.add_child(_make_binding_row(str(entry[0]), str(entry[1])))
-		ctrl_vb.add_child(_make_slider_row("touch_sensitivity", "Touch Look", 0.5, 5.0, 0.1))
+			ctrl_vb.add_child(_make_slider_row("touch_sensitivity", UIStringsScript.loc("Touch Look"), 0.5, 5.0, 0.1))  # PORT COPY (no authored row)
 		var qrow: HBoxContainer = HBoxContainer.new()
 		_quality_btn = Button.new()
-		_quality_btn.text = "MOBILE QUALITY: " + MobileProfile.tier_label(MobileProfile.current_tier()).to_upper()
+		_quality_btn.text = UIStringsScript.loc("MOBILE QUALITY: ") + MobileProfile.tier_label(MobileProfile.current_tier()).to_upper() ## PORT COPY (no authored row)
 		_quality_btn.custom_minimum_size = Vector2(300, 42)
 		ThemeScript.style_button(_quality_btn, false)
 		_quality_btn.pressed.connect(_cycle_quality)
@@ -583,7 +598,7 @@ func _build_ui() -> void:
 	ThemeScript.style_button(back_btn, true)
 	back_btn.pressed.connect(close_settings)
 	back_row.add_child(back_btn)
-	var esc: PanelContainer = ThemeScript.keycap("[ESC]", 12)
+	var esc: PanelContainer = ThemeScript.keycap(InputGlyphs.bracket("pause"), 12)
 	back_row.add_child(esc)
 
 
@@ -592,7 +607,7 @@ func _cycle_quality() -> void:
 	MobileProfile.set_tier(next_tier, SaveSystem)
 	MobileProfile.apply_runtime(get_tree())
 	if _quality_btn != null:
-		_quality_btn.text = "MOBILE QUALITY: " + MobileProfile.tier_label(next_tier).to_upper()
+		_quality_btn.text = UIStringsScript.loc("MOBILE QUALITY: ") + MobileProfile.tier_label(next_tier).to_upper() ## PORT COPY (no authored row)
 
 
 ## Desktop-only quality selector. It writes `graphics_quality` (never
@@ -602,7 +617,7 @@ func _make_graphics_quality_row() -> HBoxContainer:
 	var row: HBoxContainer = HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
 	var lab: Label = Label.new()
-	lab.text = _label("Settings.GraphicsQuality.DesktopQuality", "Graphics Quality")
+	lab.text = _label("Settings.GraphicsQuality", "Graphics Quality")
 	lab.custom_minimum_size = Vector2(210, 0)
 	lab.add_theme_font_size_override("font_size", 15)
 	lab.add_theme_color_override("font_color", ThemeScript.TEAL_TEXT)
@@ -637,7 +652,7 @@ func _make_language_row() -> HBoxContainer:
 	var row: HBoxContainer = HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
 	var lab: Label = Label.new()
-	lab.text = "Language"
+	lab.text = UIStringsScript.st_text("ST_Settings", "Settings.General.Language", "Language")
 	lab.custom_minimum_size = Vector2(210, 0)
 	lab.add_theme_font_size_override("font_size", 15)
 	lab.add_theme_color_override("font_color", ThemeScript.TEAL_TEXT)
@@ -759,7 +774,7 @@ func _build_controls_tab(ctrl_vb: VBoxContainer) -> void:
 	ctrl_vb.add_child(_rebind_status)
 
 	var pad_hdr: Label = Label.new()
-	pad_hdr.text = "GAMEPAD"
+	pad_hdr.text = UIStringsScript.st_upper("ST_Settings", "Settings.Gamepad", "Gamepad")
 	pad_hdr.add_theme_font_size_override("font_size", 13)
 	pad_hdr.add_theme_color_override("font_color", ThemeScript.TEAL_ACCENT)
 	ctrl_vb.add_child(pad_hdr)
@@ -769,7 +784,7 @@ func _build_controls_tab(ctrl_vb: VBoxContainer) -> void:
 
 	var reset_bind_btn: Button = Button.new()
 	reset_bind_btn.name = "ResetBindingsButton"
-	reset_bind_btn.text = "RESET BINDINGS"
+	reset_bind_btn.text = UIStringsScript.loc("Reset Bindings").to_upper() ## PORT COPY (no authored row)
 	reset_bind_btn.custom_minimum_size = Vector2(190, 34)
 	ThemeScript.style_button(reset_bind_btn, false)
 	reset_bind_btn.pressed.connect(_reset_all_bindings)
@@ -795,7 +810,7 @@ func _make_rebind_row(action: String) -> HBoxContainer:
 	row.add_child(btn)
 	var clear_btn: Button = Button.new()
 	clear_btn.text = "↺"
-	clear_btn.tooltip_text = "Reset this binding"
+	clear_btn.tooltip_text = UIStringsScript.loc("Reset this binding") ## PORT COPY (no authored row)
 	clear_btn.custom_minimum_size = Vector2(34, 30)
 	ThemeScript.style_button(clear_btn, false)
 	clear_btn.pressed.connect(func() -> void: _reset_rebind(action))
@@ -872,14 +887,14 @@ func _toggle_controls_device() -> void:
 func _refresh_rebind_buttons() -> void:
 	if _device_btn != null:
 		var dev_label: String = str(InputGlyphs.DEVICE_LABELS.get(_controls_device, _controls_device))
-		_device_btn.text = "DISPLAY: " + dev_label.to_upper() + "  ·  [BACKSLASH] TO SWAP"
+		_device_btn.text = UIStringsScript.st_upper("ST_Settings", "Settings.Display", "Display") + ": " + dev_label.to_upper() + "  ·  [BACKSLASH] TO SWAP"
 	for action_v: Variant in _rebind_buttons.keys():
 		var action: String = str(action_v)
 		var btn: Button = _rebind_buttons[action_v] as Button
 		if btn == null:
 			continue
 		if _rebind_token == action + "|" + _controls_device:
-			btn.text = "[ PRESS ANY KEY ]"
+			btn.text = "[ " + UIStringsScript.st_text("ST_Settings_Input", "InputSetting.PressAnyKey", "Press Any Key").to_upper() + " ]"
 			continue
 		var text: String = InputGlyphs.text(action, _controls_device)
 		var overridden: bool = InputRebinder.is_overridden(action, _controls_device, _current_overrides())
@@ -890,7 +905,7 @@ func _refresh_rebind_buttons() -> void:
 
 func _begin_rebind(action: String) -> void:
 	_rebind_token = action + "|" + _controls_device
-	_status("PRESS ANY KEY  ·  [ESC] CANCEL")
+	_status(UIStringsScript.loc("PRESS ANY KEY  ·  [ESC] CANCEL")) ## PORT COPY (no authored row)
 	_refresh_rebind_buttons()
 
 
@@ -919,9 +934,9 @@ func _commit_rebind(event: InputEvent) -> void:
 			InputRebinder.apply(ov)
 	_rebind_token = ""
 	if bool(result.get("ok", false)):
-		_status("BOUND: " + InputGlyphs.action_label(action) + "  →  " + InputGlyphs.key_label(str(result.get("key_name", ""))))
+		_status(UIStringsScript.loc("BOUND: ") + InputGlyphs.action_label(action) + "  →  " + InputGlyphs.key_label(str(result.get("key_name", "")))) ## PORT COPY (no authored row)
 	else:
-		_status(str(result.get("message", "That input cannot be bound here.")))
+		_status(UIStringsScript.loc(str(result.get("message", "That input cannot be bound here.")))) ## PORT COPY (no authored row)
 	_refresh_rebind_buttons()
 	_save_quiet()
 

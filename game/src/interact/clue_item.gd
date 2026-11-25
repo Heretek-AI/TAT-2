@@ -2,6 +2,7 @@ extends Area3D
 ## Interactive Clue / Note / Electrotype item.
 
 const LevelLoaderScript := preload("res://src/core/level_loader.gd")
+const UIStringsScript := preload("res://src/ui/ui_strings.gd")
 
 signal clue_collected(title: String, body: String)
 
@@ -71,7 +72,7 @@ func _ready() -> void:
 	label = Label3D.new()
 	label.position = Vector3(0.0, 0.6, 0.0)
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	label.text = clue_title if clue_title != "" else prompt_verb
+	label.text = UIStringsScript.loc(clue_title) if clue_title != "" else prompt_verb
 	label.font_size = 28
 	label.visible = false
 	add_child(label)
@@ -114,10 +115,12 @@ func interact(actor: Node) -> void:
 
 func get_interact_prompt() -> String:
 	if prompt_verb != "":
-		return ("[%s]" % prompt_verb) if collected else ("[E] %s" % prompt_verb)
+		# The verb is authored (mission_controller passes ST_Interactables.PromptRead);
+		# the [E] alias is the legacy token the HUD maps to the live interact glyph.
+		return ("[%s]" % prompt_verb) if collected else (UIStringsScript.loc("[E] %s") % prompt_verb) ## PORT COPY format (no authored row)
 	if collected:
-		return '[Read] ' + clue_title
-	return '[E] Read Clue: ' + clue_title
+		return UIStringsScript.loc("[Read] ") + clue_title ## PORT COPY (no authored row)
+	return UIStringsScript.loc("[E] Read Clue: ") + clue_title ## PORT COPY (no authored row)
 
 
 ## Interaction LOS point (W2): the note lies flat on its surface; +0.35 m puts

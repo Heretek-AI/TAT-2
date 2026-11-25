@@ -114,12 +114,6 @@
       "claim_token": "devices.json"
     },
     {
-      "glob": "videos.json",
-      "kind": "blocked_on_team",
-      "owner": "T05",
-      "reason": "15 transcoded .ogv clips (153 MB) have no VideoStreamPlayer; T05-UI owns the screens that must play them (RE-A-06)."
-    },
-    {
       "glob": "gameplay/guard_behavior.json",
       "kind": "blocked_on_team",
       "owner": "T11",

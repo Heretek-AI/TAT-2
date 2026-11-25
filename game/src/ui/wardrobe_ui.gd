@@ -20,6 +20,8 @@ signal closed()
 
 const ThemeScript: GDScript = preload("res://src/ui/art_nouveau_theme.gd")
 const CatalogScript: GDScript = preload("res://src/ui/unlock_catalog.gd")
+const UIStringsScript: GDScript = preload("res://src/ui/ui_strings.gd")
+const FocusNavScript: GDScript = preload("res://src/ui/focus_nav.gd")
 const LevelLoaderScript: GDScript = preload("res://src/core/level_loader.gd")
 const GuardAnimLibScript: GDScript = preload("res://src/core/animation_library.gd")
 const ToolPreviewScript: GDScript = preload("res://src/ui/tool_preview.gd")
@@ -163,6 +165,8 @@ func _ready() -> void:
 		AudioManager.wire_hover_sfx(self)
 	_load_saved_loadout()
 	_refresh_thief_ui()
+	# W9-P3-C3: pad focus enters on the thief switcher and rings the wardrobe.
+	FocusNavScript.install_and_focus(self)
 
 
 ## Instance helper: show the customizer and take mouse control.
@@ -172,12 +176,14 @@ func open_customizer() -> void:
 	if AudioManager != null and AudioManager.has_method("play_ui"):
 		AudioManager.play_ui("wardrobe_open")
 	_refresh_thief_ui()
+	FocusNavScript.install_and_focus(self)
 
 
 ## Instance helper: persist selection, restore mouse, emit closed, hide.
 func close_customizer() -> void:
 	if AudioManager != null and AudioManager.has_method("play_ui"):
 		AudioManager.play_ui("back")
+	FocusNavScript.release_if_inside(self)
 	_apply_and_close(true)
 
 
@@ -355,7 +361,7 @@ func _build_ui() -> void:
 	margin.add_child(vb)
 	# KF03/KF04 cite: centered "WARDROBE" header above the thief switcher.
 	var ward_hdr: Label = Label.new()
-	ward_hdr.text = "WARDROBE"
+	ward_hdr.text = UIStringsScript.st_upper("ST_ThievesDen", "Wardrobe.Header", "Wardrobe")
 	ward_hdr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	ward_hdr.add_theme_font_size_override("font_size", 27)
 	ward_hdr.add_theme_color_override("font_color", ThemeScript.TEAL_ACCENT)
@@ -396,15 +402,15 @@ func _build_top_bar() -> PanelContainer:
 	hb.alignment = BoxContainer.ALIGNMENT_CENTER
 	bar.add_child(hb)
 	var q_btn: Button = Button.new()
-	q_btn.text = "< Q"
+	q_btn.text = "< " + InputGlyphs.key_label("Q")
 	q_btn.custom_minimum_size = Vector2(56, 34)
 	ThemeScript.style_teal_button(q_btn, false, 20)
 	q_btn.pressed.connect(_cycle_thief.bind(-1))
 	hb.add_child(q_btn)
-	hb.add_child(_build_thief_card("spider", THIEF_LABELS[0]))
-	hb.add_child(_build_thief_card("chameleon", THIEF_LABELS[1]))
+	hb.add_child(_build_thief_card("spider", UIStringsScript.st_text("ST_BlackMarket", "Thief.Spider.Title", "The Spider")))
+	hb.add_child(_build_thief_card("chameleon", UIStringsScript.st_text("ST_BlackMarket", "Thief.Chameleon.Title", "The Chameleon")))
 	var e_btn: Button = Button.new()
-	e_btn.text = "E >"
+	e_btn.text = InputGlyphs.key_label("E") + " >"
 	e_btn.custom_minimum_size = Vector2(56, 34)
 	ThemeScript.style_teal_button(e_btn, false, 20)
 	e_btn.pressed.connect(_cycle_thief.bind(1))
@@ -439,7 +445,7 @@ func _build_thief_card(thief: String, title: String) -> VBoxContainer:
 		portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		stack.add_child(portrait)
 	var lock_lbl: Label = Label.new()
-	lock_lbl.text = "LOCKED"
+	lock_lbl.text = UIStringsScript.st_upper("ST_ThievesDen", "CityMap.Locked", "LOCKED")
 	lock_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lock_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	lock_lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -485,7 +491,9 @@ func _on_portrait_pressed(thief: String) -> void:
 	if AudioManager != null and AudioManager.has_method("play_ui"):
 		AudioManager.play_ui("click")
 	if not _is_thief_unlocked(thief):
-		_set_hint("The Chameleon is locked. Unlock it in the Black Market (£10,000, Contract 3).")
+		# PORT COPY (no authored one-line hint): the condition is authored in
+		# unlocks.json (Contract 3 / 10,000); this sentence is the port's.
+		_set_hint(UIStringsScript.loc("The Chameleon is locked. Unlock it in the Black Market (£10,000, Contract 3)."))
 		return
 	_stash_slots()
 	_thief_id = thief
@@ -498,7 +506,9 @@ func _build_bottom_bar() -> HBoxContainer:
 	var hb: HBoxContainer = HBoxContainer.new()
 	hb.alignment = BoxContainer.ALIGNMENT_END
 	var back_btn: Button = Button.new()
-	back_btn.text = "BACK [ESC]"
+	back_btn.text = "%s [%s]" % [
+		UIStringsScript.st_upper("ST_Screens", "Screen.Back", "Back"),
+		InputGlyphs.text("pause")]
 	back_btn.custom_minimum_size = Vector2(160, 34)
 	ThemeScript.style_teal_button(back_btn, false, 20)
 	back_btn.pressed.connect(func() -> void: _apply_and_close(true))
@@ -633,7 +643,7 @@ func _build_left_panel() -> VBoxContainer:
 	left.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	left.add_theme_constant_override("separation", 6)
 	var load_hdr: Label = Label.new()
-	load_hdr.text = "Edit Loadout"
+	load_hdr.text = UIStringsScript.st_text("ST_ThievesDen", "Wardrobe.Loadout", "Edit Loadout")
 	load_hdr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	load_hdr.add_theme_font_size_override("font_size", 18)
 	load_hdr.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
@@ -641,7 +651,7 @@ func _build_left_panel() -> VBoxContainer:
 		load_hdr.add_theme_font_override("font", serif)
 	left.add_child(load_hdr)
 	left.add_child(ThemeScript.teal_divider())
-	left.add_child(_small_header("LOADOUT SLOTS", ThemeScript.TEAL_ACCENT))
+	left.add_child(_small_header(UIStringsScript.loc("Loadout Slots").to_upper(), ThemeScript.TEAL_ACCENT)) ## PORT COPY (no authored row)
 	# KF03: numbered loadout slots 1-4; slot 1 and 4 are signature tools.
 	var toolbar: HBoxContainer = HBoxContainer.new()
 	toolbar.add_theme_constant_override("separation", 6)
@@ -661,7 +671,7 @@ func _build_left_panel() -> VBoxContainer:
 	left.add_child(_cells_row)
 	# KF03 cite: hint below the loadout slots (verified on-screen text).
 	var load_hint: Label = Label.new()
-	load_hint.text = "Select a loadout slot to equip or swap out tools"
+	load_hint.text = UIStringsScript.st_text("ST_ThievesDen", "Wardrobe.SelectLoadout", "Select a loadout slot to equip or swap out tools")
 	load_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	load_hint.add_theme_font_size_override("font_size", 12)
 	load_hint.add_theme_color_override("font_color", ThemeScript.TEAL_MUTED)
@@ -725,7 +735,7 @@ func _build_preview_panel() -> VBoxContainer:
 	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	panel.add_theme_constant_override("separation", 4)
 	var prev_hdr: Label = Label.new()
-	prev_hdr.text = "WARDROBE — DRAG TO ROTATE"
+	prev_hdr.text = UIStringsScript.st_upper("ST_ThievesDen", "Wardrobe.Header", "Wardrobe") + " — " + UIStringsScript.loc("Drag to Rotate").to_upper() ## PORT COPY ("Drag to Rotate" has no authored row)
 	prev_hdr.add_theme_font_size_override("font_size", 13)
 	prev_hdr.add_theme_color_override("font_color", ThemeScript.TEAL_ACCENT)
 	var sans: Font = ThemeScript.font_sans()
@@ -762,7 +772,7 @@ func _build_right_panel() -> PanelContainer:
 	right.add_theme_constant_override("separation", 4)
 	right_card.add_child(right)
 	var cust_hdr: Label = Label.new()
-	cust_hdr.text = "CUSTOMIZATION"
+	cust_hdr.text = UIStringsScript.st_upper("ST_BlackMarket", "Category.Customizations", "Customizations")
 	cust_hdr.add_theme_font_size_override("font_size", 18)
 	cust_hdr.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
 	if serif != null:
@@ -770,7 +780,7 @@ func _build_right_panel() -> PanelContainer:
 	right.add_child(cust_hdr)
 	right.add_child(ThemeScript.teal_divider())
 	var head_hdr: Label = Label.new()
-	head_hdr.text = "Head"
+	head_hdr.text = UIStringsScript.st_text("ST_ThievesDen", "Wardrobe.OutfitHead", "Head")
 	head_hdr.add_theme_font_size_override("font_size", 17)
 	head_hdr.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
 	if serif != null:
@@ -782,7 +792,7 @@ func _build_right_panel() -> PanelContainer:
 	_head_card = _build_outfit_card(_on_head_card_pressed)
 	right.add_child(_head_card)
 	var body_hdr: Label = Label.new()
-	body_hdr.text = "Body"
+	body_hdr.text = UIStringsScript.st_text("ST_ThievesDen", "Wardrobe.OutfitBody", "Body")
 	body_hdr.add_theme_font_size_override("font_size", 17)
 	body_hdr.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
 	if serif != null:
@@ -791,7 +801,7 @@ func _build_right_panel() -> PanelContainer:
 	_body_card = _build_outfit_card(_on_body_card_pressed)
 	right.add_child(_body_card)
 	var card_hdr: Label = Label.new()
-	card_hdr.text = "Calling Card"
+	card_hdr.text = UIStringsScript.st_text("ST_ThievesDen", "Wardrobe.OutfitCallingCard", "Calling Card")
 	card_hdr.add_theme_font_size_override("font_size", 17)
 	card_hdr.add_theme_color_override("font_color", ThemeScript.TEAL_TITLE)
 	if serif != null:
@@ -1014,7 +1024,9 @@ func _cycle_thief(dir: int) -> void:
 	var next: int = (idx + dir + THIEF_IDS.size()) % THIEF_IDS.size()
 	var target: String = THIEF_IDS[next]
 	if not _is_thief_unlocked(target):
-		_set_hint("The Chameleon is locked. Unlock it in the Black Market (£10,000, Contract 3).")
+		# PORT COPY (no authored one-line hint): the condition is authored in
+		# unlocks.json (Contract 3 / 10,000); this sentence is the port's.
+		_set_hint(UIStringsScript.loc("The Chameleon is locked. Unlock it in the Black Market (£10,000, Contract 3)."))
 		return
 	_stash_slots()
 	_thief_id = target
@@ -1040,7 +1052,7 @@ func _on_slot_pressed(idx: int) -> void:
 		AudioManager.play_ui("click")
 	_slot_index = idx
 	if _is_signature_slot(idx):
-		_set_hint("Signature Tools cannot be swapped out")
+		_set_hint(UIStringsScript.st_text("ST_ThievesDen", "Wardrobe.DeclinePrimarySwap", "Signature Tools cannot be swapped out"))
 	else:
 		_set_hint("")
 	_refresh_tool_ui()
@@ -1057,12 +1069,12 @@ func _on_candidate_pressed(save_id: String) -> void:
 	if _is_signature_slot(target):
 		# A signature slot cannot be overwritten: the shipped frame keeps the
 		# candidate row closed for it, so a click is a hint only.
-		_set_hint("Signature Tools cannot be swapped out")
+		_set_hint(UIStringsScript.st_text("ST_ThievesDen", "Wardrobe.DeclinePrimarySwap", "Signature Tools cannot be swapped out"))
 		_refresh_tool_ui()
 		return
 	if not _is_tool_owned(tool):
 		var reason: String = str(tool.get("condition", ""))
-		_set_hint(("Locked - %s" % reason) if reason != "" else "Locked - not owned")
+		_set_hint((UIStringsScript.loc("Locked - ") + reason) if reason != "" else UIStringsScript.loc("Locked - not owned"))
 		_refresh_tool_ui()
 		return
 	# Equipping a tool that already lives in the other swappable slot swaps the
@@ -1143,15 +1155,17 @@ func _refresh_tool_ui() -> void:
 			_bind_preview_materials(node, _glb_to_ue_mesh(mesh_path_legacy))
 			call_deferred("_frame_tool_camera")
 	if _tool_name_lbl != null:
-		_tool_name_lbl.text = str(shown.get("name", "Empty slot"))
+		_tool_name_lbl.text = str(shown.get("name", UIStringsScript.loc("Empty slot"))) ## PORT COPY (no authored row)
 	if _tool_cond_lbl != null:
 		var cond: String = str(shown.get("condition", ""))
 		if shown.is_empty():
-			_tool_cond_lbl.text = "Select a tool below to fill this slot"
+			_tool_cond_lbl.text = UIStringsScript.loc("Select a tool below to fill this slot") ## PORT COPY (no authored row)
 		elif _is_tool_owned(shown):
 			_tool_cond_lbl.text = cond
 		else:
-			_tool_cond_lbl.text = ("Locked - %s" % cond) if cond != "" else "Locked - not owned"
+			# PORT COPY (no authored row): the port's own ownership suffix.
+			var locked_prefix: String = UIStringsScript.loc("Locked - ")
+			_tool_cond_lbl.text = (locked_prefix + cond) if cond != "" else (locked_prefix + UIStringsScript.loc("not owned"))
 	if _tool_desc_lbl != null:
 		_tool_desc_lbl.text = str(shown.get("desc", ""))
 
@@ -1534,13 +1548,13 @@ func _update_desc() -> void:
 	var hdesc: String = _display_desc(_head)
 	var cdesc: String = _display_desc(_card)
 	if bdesc != "":
-		lines.append("Body: " + bdesc)
+		lines.append(UIStringsScript.st_text("ST_ThievesDen", "Wardrobe.OutfitBody", "Body") + ": " + bdesc)
 	if hdesc != "":
-		lines.append("Head: " + hdesc)
+		lines.append(UIStringsScript.st_text("ST_ThievesDen", "Wardrobe.OutfitHead", "Head") + ": " + hdesc)
 	if cdesc != "":
-		lines.append("Calling Card: " + cdesc)
+		lines.append(UIStringsScript.st_text("ST_ThievesDen", "Wardrobe.OutfitCallingCard", "Calling Card") + ": " + cdesc)
 	if lines.is_empty():
-		lines.append("No outfits found for this thief.")
+		lines.append(UIStringsScript.loc("No outfits found for this thief.")) ## PORT COPY (no authored row)
 	_desc_lbl.text = "\n".join(lines)
 
 

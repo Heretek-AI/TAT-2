@@ -10,6 +10,8 @@ const WeatherProfile := preload("res://src/core/weather_profile.gd")
 const WeatherVisuals := preload("res://src/core/weather_visuals.gd")
 const PerfProfile := preload("res://src/core/perf_profile.gd")
 const UIStringsScript := preload("res://src/ui/ui_strings.gd")
+const FocusNavScript := preload("res://src/ui/focus_nav.gd")
+const TutorialUIScript := preload("res://src/ui/tutorial_ui.gd")
 
 const STARTSCREEN_GUARD_GLB: String = "res://assets/ue/Content/Art/Animation/GuardEnforcer/Skin/Base/SK_GuardEnforcer__Preview.glb"
 const STARTSCREEN_GUARD_UE_MESH: String = "/Game/Art/Animation/GuardEnforcer/Skin/Base/SK_GuardEnforcer__Preview"
@@ -73,7 +75,11 @@ func _ready() -> void:
 			push_error("[perf] " + str(perf_err))
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	_build_3d_backdrop()
+	# QA hook (W9-P3): the focus-walk test needs the menu chrome without the
+	# ~2.7k-mesh startscreen backdrop. Headless-only instrumentation: the env
+	# var is unset in every shipped/run path, and only the 3D layer is skipped.
+	if not OS.has_environment("TAT2_UI_NO_STAGE"):
+		_build_3d_backdrop()
 	_build_ui()
 	_maybe_autostart_contract()
 
@@ -643,7 +649,7 @@ func _build_ui() -> void:
 		menu_v.add_child(logo)
 	else:
 		var title := Label.new()
-		title.text = "THICK AS THIEVES"
+		title.text = UIStringsScript.st_upper("ST_Credits", "Game.Title", "Thick As Thieves")
 		title.add_theme_font_size_override("font_size", 44)
 		if serif != null:
 			title.add_theme_font_override("font", serif)
@@ -674,15 +680,49 @@ func _build_ui() -> void:
 	quit_btn.pressed.connect(func(): get_tree().quit())
 	menu_v.add_child(quit_btn)
 
+	# RE-L-02/RE-L-27: the authored startscreen has a PlayTutorial entry
+	# (ST_Screens.Screen.MainMenu.PlayTutorial) that the port dropped. It opens
+	# the authored FTUE browser; START TUTORIAL boots the FTUE map set.
+	var tutorial_btn := _make_menu_btn(
+		UIStringsScript.st_upper("ST_Screens", "Screen.MainMenu.PlayTutorial", "Play Tutorial"), menu_font)
+	tutorial_btn.pressed.connect(_on_tutorial_pressed)
+	menu_v.add_child(tutorial_btn)
+
+	# W9-P3-C3: the authored CommonUI focus model (BP_GetDesiredFocusTarget) has
+	# no extractable neighbour table; the port reconstructs it as a tree-order
+	# ring and focuses the first row so a pad can enter the menu at all.
+	FocusNavScript.install_and_focus(menu_v)
+
 	# T9: no journal drawer. Contract selection, difficulty, and co-op deploy live
 	# only in the Den map table (contract_table_ui -> mission_prep_ui -> the T7
 	# deploy closure); a menu drawer would be a second deploy path around it.
 
 
 func _on_settings_pressed() -> void:
+	FocusNavScript.remember()
 	var ui := SettingsUIScript.new()
 	add_child(ui)
 	ui.open_settings()
+
+
+## Authored FTUE entry: the browser lists every ST_Tutorial row; its
+## START TUTORIAL button boots the authored FTUE map set (GameData.get_ftue_sublevels,
+## which mission_controller loads as active_map_id "ftue").
+func _on_tutorial_pressed() -> void:
+	FocusNavScript.remember()
+	var ui: CanvasLayer = TutorialUIScript.new() as CanvasLayer
+	add_child(ui)
+	if ui.has_signal("start_tutorial_requested"):
+		ui.connect("start_tutorial_requested", _start_tutorial_mission)
+	ui.call("open_tutorial")
+
+
+func _start_tutorial_mission() -> void:
+	GameState.active_contract_order = 0
+	GameState.end_free_play()
+	GameState.active_map_id = "ftue"
+	GameState.active_mission_id = "Mission.Tutorial.Single"
+	get_tree().change_scene_to_file("res://scenes/mission.tscn")
 
 
 ## T9: PLAY is a quick boot into the default contract. Full contract selection,
@@ -704,7 +744,9 @@ func _on_credits_pressed() -> void:
 	var layer: CanvasLayer = CanvasLayer.new()
 	layer.layer = 30
 	add_child(layer)
-	var modal: Dictionary = ArtNouveauTheme.make_modal(layer, Vector2(640, 480), "CREDITS", "Thick As Thieves — OtherSide Entertainment / Megabit")
+	var modal: Dictionary = ArtNouveauTheme.make_modal(layer, Vector2(640, 480),
+		UIStringsScript.st_upper("ST_Credits", "Section.Credits", "Credits"),
+		UIStringsScript.st_text("ST_Credits", "Game.Title", "Thick As Thieves") + UIStringsScript.loc(" — OtherSide Entertainment / Megabit")) ## PORT COPY tail
 	var vb: VBoxContainer = modal["vbox"] as VBoxContainer
 	var scroll: ScrollContainer = ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -734,7 +776,13 @@ func _on_credits_pressed() -> void:
 							if entries.size() >= 80:
 								break
 	if entries.is_empty():
-		entries = ["OtherSide Entertainment", "Warren Spector — Studio Director", "Paul Neurath — Executive Producer", "Godot 4.7 Port — TAT-2"]
+		# Authored company row + the port's own credit lines (only shown when the
+		# authored DT_Credits table is unreadable).
+		entries = [
+			UIStringsScript.st_text("ST_Credits", "Company.Otherside", "Otherside Entertainment"),
+			UIStringsScript.loc("Warren Spector — Studio Director"), ## PORT COPY (no authored row)
+			UIStringsScript.loc("Paul Neurath — Executive Producer"), ## PORT COPY (no authored row)
+			UIStringsScript.loc("Godot 4.7 Port — TAT-2")] ## PORT COPY (no authored row)
 	for line: String in entries:
 		var lbl: Label = Label.new()
 		lbl.text = line
@@ -744,7 +792,7 @@ func _on_credits_pressed() -> void:
 		lbl.add_theme_color_override("font_color", ArtNouveauTheme.TEAL_TEXT)
 		list_vb.add_child(lbl)
 	var close_btn: Button = Button.new()
-	close_btn.text = "CLOSE"
+	close_btn.text = UIStringsScript.st_upper("ST_Interactables", "PromptClose", "Close")
 	ArtNouveauTheme.style_button(close_btn, true)
 	close_btn.pressed.connect(func() -> void:
 		if is_instance_valid(layer):

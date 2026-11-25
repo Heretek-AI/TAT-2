@@ -67,25 +67,34 @@ tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd
 tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd -- --tier=1
 ```
 
-| Gate | Passing value (full set re-measured on the W5 integration, `94a75e3`) |
+| Gate | Passing value (W7G re-measured compile/run_tests/M2/probe_leak/E2E; the other rows are the W6 base) |
 |---|---|
-| compile | 101 checked, 0 broken (96 + the 5 W5 tests) |
-| `run_tests.gd` | `SUMMARY: fails=0` (261 PASS; suites numbered to 88) |
+| compile | 110 checked, 0 broken |
+| `run_tests.gd` | `SUMMARY: fails=0` (263 PASS; suites numbered to 88) |
 | `test_m2_player.gd` | `M2_SUMMARY: fails=0` (11 PASS) |
 | door walk / viewmodel / Niagara probes | `DOORWALK PASS` / `VIEWMODEL_TRUTH PASS` / `NIAGARA_PROBE PASS` (3695 authored / 3308 active / 36 systems) |
 | E2E | `fails=0 passed=264 total=264` (tier 1: 115) |
-| `make texture-cap-check` | OK — 773 capped, 1 alpha-critical kept, 0 offenders |
-| `make audit` | exit 0, tracked baseline matches, disk-backed coverage 99.6 % (12657/12703), 0 unexpected, exact-case 0 unexpected, 13/13 content groups |
+| `make texture-cap-check` | OK — 773 capped, 1 alpha-critical kept, 0 offenders (base; not re-measured in W7G) |
+| `make audit` | exit 0, tracked baseline matches, disk-backed coverage 99.6 % (12657/12703), 0 unexpected, exact-case 0 unexpected, 13/13 content groups (base; not measurable in the W7G worktree — see below) |
 
-The 2026-11-24 Six-wave W5 integration (`e6daa96`..`94a75e3`) re-ran the
-**complete** set serially on `94a75e3` — compile, `run_tests`, M2, the three
-probes, `probe_leak` (`TAT2_NO_DEN_PROBE=1`), E2E 264/264, `make audit` and
-`make texture-cap-check` — plus the five new W5 standalone tests
-(`test_stair_walk` 7/7, `test_roof_collision` 27/27, `test_w5b_materials` 27/27,
-`test_audio_lifecycle` 13/13, `test_hud_gem_compass` 11/11). Evidence:
-[`docs/reports/w5-integration.md`](docs/reports/w5-integration.md). The perf
-matrix and a full editor open are still unmeasured (thermal gate waived by the
-user, but no parallel Godot).
+The 2026-11-24 W7G wave re-ran **compile, `run_tests`, M2, `probe_leak`
+(`TAT2_NO_DEN_PROBE=1`) and E2E 264/264** serially on `74a43b8` + the wave tree,
+plus `build/qa/test_perf_guard.sh` (78/78), the Linux export stamp and the core
+bake. Evidence: [`docs/reports/logs/`](docs/reports/logs/) and
+[`docs/reports/w7g-gates.md`](docs/reports/w7g-gates.md).
+
+**`make audit` was not run in W7G.** `game/data` is a symlink into the main
+checkout and the W7S lane's uncommitted loot producers changed 4 `gen:gameplay`
+files plus a directory hash; audit would fail on drift this wave does not own.
+Integration regenerates and re-stamps at the merged HEAD. The audit and
+texture-cap floors in `tools/gate_ratchet.json` are unchanged base values and
+are **not** evidence for W7G.
+
+The perf matrix is **not run** (thermal gate waived, but no parallel Godot and
+the host idles near 80 °C); the editor core opened but its ≤2.5 GB VRAM
+threshold is unproven because `nvidia-smi memory.used` is device-wide. The
+merged tree will measure higher than these floors (S2 suites, W7E/W7H tests);
+integration raises them with fresh logs.
 
 Anything below these numbers is a regression. Do not re-baseline silently; find
 the cause or record it.
@@ -131,6 +140,29 @@ build/qa/             tracked capture/probe scripts; PNG output ignored
   project, not a loader defect. Do not “fix” them by nudging the loader.
 - **Den probe leak:** 7 texture RIDs warn at exit; `TAT2_NO_DEN_PROBE=1` is the
   clean path. Not a script error.
+- **Roughness bake is full-resolution and process-cached.** The L8
+  `low + g*(high-low)` bake is keyed by ORM+range in a process-global cache and
+  released only when the last live loader leaves the tree. Do not add a
+  half-res path; `TAT2_ROUGH_BAKE=off` is a documented diagnostic fallback
+  (`roughness=high`, no texture), never the default.
+- **The QA export is stamped, not trusted.** `make linux-build` writes
+  `build/tat2-linux-x86_64.stamp.json`; the perf wrapper fails closed on a
+  missing, stale or hash-mismatched stamp, and a dirty build is not
+  publishable. `scenes/review/**` is excluded from the export. Do not hand-edit
+  or delete the stamp; rebuild.
+- **`export_presets.cfg` must not contain `#` comments.** Godot's `ConfigFile`
+  parser does not treat `#` as a comment: it merges the comment and the next
+  key into one malformed key, so `exclude_filter` silently disappears and the
+  export includes `scenes/review/**` with no error. Use `;` or keep the
+  rationale in the report. Prove it with
+  `ConfigFile.has_section_key("preset.0", "exclude_filter")` (must be true).
+- **Editor opens rewrite `project.godot`.** A visible editor run reorders the
+  file and drops the project's comments/settings. Never commit that rewrite;
+  `git checkout -- game/project.godot` after an editor check.
+- **Sonar does not see GDScript.** Its gate is new-code Reliability A +
+  Security A + duplication <= 3 %; coverage and maintainability are not gate
+  conditions. The GDScript floors live in `tools/gate_ratchet.json` and are
+  checked against the committed logs in `docs/reports/logs/`.
 - **Maps with authored placeholders** (`Mission.Example.*` fallbacks, Niagara
   placement notices, fog clamp, deferred navmesh) log expected warnings; do not
   “clean up” the logs by suppressing the messages.
@@ -154,8 +186,13 @@ make test                               # fails=0
 tools/godot … test_m2_player.gd         # fails=0
 tools/godot … probe_leak.gd             # expected result or documented warning
 tools/godot … run_e2e_tests.gd          # 264/264, no new failures
+build/qa/test_perf_guard.sh             # 78/78, no GPU
+make gate-ratchet                       # floors + committed logs agree
 git push origin main
 ```
+
+When a Linux export is part of the wave, add `make linux-build` +
+`make linux-stamp-verify` and record the `EXPORT_STAMP`/`PERF_PCK` lines.
 
 Then update, in the same wave:
 

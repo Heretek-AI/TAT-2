@@ -536,3 +536,55 @@ find extracted/json -name 'NS_*.json' | wc -l
     drive `guard_ai.gd`.
   - **Not run**: perf matrix, Vulkan captures, `make run` visual pass, full
     editor open, Sonar scan. Not pushed.
+- **W7G — export provenance, roughness cache, core bake, Sonar plan**
+  (`74a43b8` + wave, 2026-11-24):
+  - `make linux-build` writes `build/tat2-linux-x86_64.stamp.json` (HEAD short +
+    full, UTC time, Godot version, dirty flag, binary/PCK SHA-256 + bytes). The
+    perf wrapper verifies it and **fails closed** on a missing, stale
+    (`stamp HEAD != HEAD`) or hash-mismatched stamp, logs
+    `PERF_PROVENANCE`/`PERF_PCK`, marks a dirty build or an unverified
+    `PERF_BINARY` non-publishable, and `--publishable-only` refuses those runs.
+    Measured PCK: 2,574,092,822 B / `642fb055…`; binary 73,519,416 B /
+    `d9f79ab8…`; the worktree is dirty by design (private data symlinked), so
+    `publishable=0`.
+  - `MemoryMax` is derived from RAM at 75 % (2 GiB floor, override
+    `PERF_SCOPE_MEMORY_MAX`); RSS sanity is now 1024..262144 MB, ≤ total RAM and
+    ≤ the scope. `--rss-check=<MB>` proves the decision without a launch.
+    `test_perf_guard.sh` is **78/78**.
+  - `scenes/review/**` is excluded from the QA export. **Trap:** Godot's
+    `ConfigFile` does not accept `#` comments; an explanatory comment above
+    `exclude_filter` silently merged into the key and unset the exclusion with
+    no error. Comment removed; `has_section_key("preset.0","exclude_filter")` is
+    true; the second export has 0 `res://scenes/review/` lines and only +1.44 MB
+    PCK vs the pre-bake export.
+  - Roughness keeps **full authored resolution**. The L8 bake is now cached
+    process-wide by ORM+range and released when the last live loader leaves; the
+    first Guildhall load measured **86 bakes / 73,924,608 px / 4,089 ms /
+    98,566,111 B / 46 cache hits**. A two-loader probe confirms sharing, a
+    distinct range and teardown re-bake. `probe_leak` is clean (0 leaks) with the
+    cache active. `TAT2_ROUGH_BAKE=off` is a documented fallback only.
+  - Core bake at this HEAD: `guildhall_core.scn` **203,393,969 B = 194.0 MiB**,
+    **52.6 MiB (24.2 %) under** the 256 MiB guard; headless load `VmHWM`
+    **782 MB** (`/proc`), `load_ms=387`.
+  - Visible editor open: process `VmHWM` **3,934 MB** (within ≤5.6 GB), but
+    `nvidia-smi memory.used` is **device-wide**, so the 6,931 MB peak **cannot
+    be evaluated against the ≤2.5 GB process threshold** — not a pass. GPU
+    82.38 °C / CPU 97 °C recorded (thermal waived); the harness terminated the
+    session, so a per-process VRAM measurement and a normal close remain open.
+  - Sonar Path A config repaired: `.github` in `sonar.sources`, actions pinned
+    by SHA, gate = new-code Reliability A + Security A + duplication ≤3 %;
+    `qualitygate.wait` with 600 s timeout. **No scan run**; the gate stays
+    unbound until autoscan-off, `SONAR_TOKEN`, "TAT-2 New Code" and
+    Previous-version are set manually.
+  - Ratchet floors (**base measurements, not merged-tree numbers**):
+    compile 110/0, `run_tests` 263/0, M2 11/0, E2E 264/264, coverage_den 12703,
+    `measured_on: 74a43b8`. `check_gate_ratchet.py` derives every expectation
+    from `gate_ratchet.json` and verifies committed logs under
+    `docs/reports/logs/`; missing/stale logs fail with the command to re-run.
+    S2/W7E/W7H will measure higher at integration, which raises the floors with
+    fresh logs.
+  - **Not measurable here:** `make audit` — W7S's uncommitted loot producers
+    changed 4 `gen:gameplay` files plus a directory hash; integration
+    regenerates and re-stamps at the merged HEAD. Audit floors unchanged.
+  - **Not run:** perf matrix (explicitly), Vulkan capture (no rendering change),
+    Sonar scan.

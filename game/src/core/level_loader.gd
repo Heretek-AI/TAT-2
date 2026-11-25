@@ -67,15 +67,28 @@ var _emissive_cpd_mat: ShaderMaterial = null
 ## roof_collision_kind() one-arg form needs the measured geometry, and a mesh
 ## cannot be measured twice per load for free.
 var _roof_geom_cache: Dictionary = {}
-## W6L: roughness remap textures keyed by "orm_path|low|high". One L8 texture
-## per authored range, not one per material (several MIs bind the same ORM at
-## different ranges).
-var _roughness_remap_cache: Dictionary = {}
-## W6L bake accounting (one ROUGHNESS_BAKE line per map load): the exact
+## W7G: roughness remap textures are cached process-wide, keyed by
+## "orm_path|low|high". W6L keyed the same way per loader instance, so a second
+## live loader (or a mission reload while another loader still exists) re-baked
+## the same 0.15..1.0 ramp. One L8 texture per authored range, not one per
+## material: several MIs bind the same ORM at different ranges. The cache is
+## cleared by the teardown path once the last live loader leaves the tree.
+static var _roughness_global_cache: Dictionary = {}
+## Number of LevelLoader nodes currently in the tree. The process cache is
+## released only when this reaches 0, so a concurrent loader never loses a bake.
+static var _roughness_live_loaders: int = 0
+## One-time TAT2_ROUGH_BAKE resolution, so an invalid value is reported once per
+## process instead of once per material.
+static var _roughness_mode: String = ""
+## W6L/W7G bake accounting (one ROUGHNESS_BAKE line per map load): the exact
 ## low + g*(high-low) bake is a one-time cost, measured instead of guessed.
+## `bytes` counts the L8 texture + its mip chain, `hits` are process-cache
+## reuses (no rebake). Full resolution is retained: no half-res path exists.
 var _roughness_bake_count: int = 0
 var _roughness_bake_px: int = 0
 var _roughness_bake_ms: int = 0
+var _roughness_bake_bytes: int = 0
+var _roughness_cache_hits: int = 0
 ## SM_LightBeam transform accounting: one BEAM_FIX line at settle.
 var _beam_fix_count: int = 0
 var _beam_fix_max_scale: float = 0.0
@@ -534,18 +547,32 @@ func _cap_texture(tex: Texture2D, res_path: String) -> Texture2D:
 	return out
 
 
+func _enter_tree() -> void:
+	_roughness_live_loaders += 1
+
+
+## W7G: explicit teardown hook for probes/tests that hold a loader outside the
+## tree (they never get `_exit_tree`). Mirrors the other `cleanup_static_caches`.
+static func cleanup_roughness_cache() -> void:
+	_roughness_global_cache.clear()
+
+
 ## PG-1 teardown: release cached textures/materials/meshes when the loader
 ## leaves the tree (scene reload / quit-to-desktop) so their RIDs are freed
 ## in scene order instead of at global exit (exit-time RID-leak /
 ## PagedAllocator noise on live Vulkan). Every cache rebuilds on demand.
+## W7G: the process-global roughness cache is released only when the last live
+## loader leaves, so a concurrent load never loses its bakes.
 func _exit_tree() -> void:
 	_tex_cache.clear()
 	_std_mat_cache.clear()
 	_mesh_res_cache.clear()
 	_guildhall_sign_split_cache.clear()
 	_override_mesh_cache.clear()
-	_roughness_remap_cache.clear()
 	_roof_geom_cache.clear()
+	_roughness_live_loaders = maxi(_roughness_live_loaders - 1, 0)
+	if _roughness_live_loaders == 0:
+		_roughness_global_cache.clear()
 
 
 func _load_material_dbs() -> void:
@@ -730,8 +757,15 @@ func _apply_ue_pbr_params(mat: StandardMaterial3D, info: Dictionary) -> void:
 		else:
 			# low + g * (high - low) is baked into the roughness texture (see
 			# _roughness_remap_texture); the scalar multiplies it by 1.0.
-			mat.roughness = 1.0
-			mat.set_meta("ue_roughness_remap", Vector2(rough_low, rough_high))
+			# TAT2_ROUGH_BAKE=off is the documented fallback: keep the safe
+			# authored high end and never bind the ORM green channel, because
+			# scalar * g would re-introduce the retired midpoint.
+			if _roughness_bake_enabled():
+				mat.roughness = 1.0
+				mat.set_meta("ue_roughness_remap", Vector2(rough_low, rough_high))
+			else:
+				mat.roughness = clampf(rough_high, 0.0, 1.0)
+				mat.set_meta("ue_roughness_flat", rough_high)
 	elif has_orm and rlo != null and rhi != null:
 		mat.roughness = clampf(rough_high, 0.0, 1.0)
 	elif has_orm:
@@ -761,24 +795,47 @@ func _apply_ue_pbr_params(mat: StandardMaterial3D, info: Dictionary) -> void:
 		mat.metallic_specular = clampf(float(spec), 0.0, 1.0)
 
 
-## W6L: bakes `low + g * (high - low)` from the authored ORM green channel into
-## a single-channel (L8) texture, cached per texture + range. Godot multiplies
-## BaseMaterial3D.roughness by the sampled green, so an L8 texture whose
-## luminance is the remapped value keeps every texel's authored roughness
+## W7G: `TAT2_ROUGH_BAKE=off` is a sanctioned diagnostic fallback, never the
+## default. Resolved once per process so an invalid value is logged once.
+## Returns true when the L8 range bake should run (the shipped path).
+func _roughness_bake_enabled() -> bool:
+	if _roughness_mode == "":
+		var raw: String = OS.get_environment("TAT2_ROUGH_BAKE").strip_edges().to_lower()
+		match raw:
+			"", "on", "1", "true", "yes":
+				_roughness_mode = "on"
+			"off", "0", "false", "no":
+				_roughness_mode = "off"
+			_:
+				_roughness_mode = "on"
+				print("ROUGHNESS_BAKE_MODE invalid=", raw, " default=on")
+		if _roughness_mode == "off":
+			print("ROUGHNESS_BAKE_MODE off=1 fallback=rough_high source=TAT2_ROUGH_BAKE")
+		else:
+			print("ROUGHNESS_BAKE_MODE on=1 resolution=full cache=process")
+	return _roughness_mode != "off"
+
+
+## W6L/W7G: bakes `low + g * (high - low)` from the authored ORM green channel
+## into a single-channel (L8) texture, cached per texture + range. Godot
+## multiplies BaseMaterial3D.roughness by the sampled green, so an L8 texture
+## whose luminance is the remapped value keeps every texel's authored roughness
 ## without holding a second RGBA copy of the ORM (78.8 M px would be ~400 MiB
 ## at RGBA8; L8 is ~100 MiB and samples .g = luminance on 4.7.2, verified with
 ## a readback render). A null result means "no texture"; the caller falls back
-## to the high end so roughness is never left at the old average.
+## to the high end so roughness is never left at the old average. Full authored
+## resolution is always kept (there is deliberately no half-res path).
 func _roughness_remap_texture(orm: Texture2D, low: float, high: float, orm_path: String) -> Texture2D:
 	if orm == null:
 		return null
 	var key: String = "%s|%.4f|%.4f" % [orm_path if orm_path != "" else orm.resource_path, low, high]
-	if _roughness_remap_cache.has(key):
-		return _roughness_remap_cache[key] as Texture2D
+	if _roughness_global_cache.has(key):
+		_roughness_cache_hits += 1
+		return _roughness_global_cache[key] as Texture2D
 	var bake_t0: int = Time.get_ticks_msec()
 	var img: Image = orm.get_image()
 	if img == null:
-		_roughness_remap_cache[key] = null
+		_roughness_global_cache[key] = null
 		return null
 	img = (img.duplicate() as Image)
 	if img.is_compressed():
@@ -787,7 +844,7 @@ func _roughness_remap_texture(orm: Texture2D, low: float, high: float, orm_path:
 	var w: int = img.get_width()
 	var h: int = img.get_height()
 	if w <= 0 or h <= 0:
-		_roughness_remap_cache[key] = null
+		_roughness_global_cache[key] = null
 		return null
 	var lut := PackedByteArray()
 	lut.resize(256)
@@ -806,15 +863,17 @@ func _roughness_remap_texture(orm: Texture2D, low: float, high: float, orm_path:
 		di += 1
 	var out_img: Image = Image.create_from_data(w, h, false, Image.FORMAT_L8, dst)
 	if out_img == null:
-		_roughness_remap_cache[key] = null
+		_roughness_global_cache[key] = null
 		return null
 	if not out_img.has_mipmaps():
 		out_img.generate_mipmaps()
 	var tex: ImageTexture = ImageTexture.create_from_image(out_img)
-	_roughness_remap_cache[key] = tex
+	_roughness_global_cache[key] = tex
 	_roughness_bake_count += 1
 	_roughness_bake_px += w * h
 	_roughness_bake_ms += Time.get_ticks_msec() - bake_t0
+	# L8 + a full mip chain: 4/3 of the base plane.
+	_roughness_bake_bytes += (w * h * 4) / 3
 	return tex
 
 
@@ -1361,6 +1420,10 @@ func get_material_for_ue(ue_mat_path: String) -> Material:
 				mat.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
 			else:
 				mat.roughness = clampf(remap.y, 0.0, 1.0)
+		elif mat.has_meta("ue_roughness_flat"):
+			# TAT2_ROUGH_BAKE=off: the authored high end is the scalar value;
+			# do not bind the ORM green channel (scalar * g would be wrong).
+			pass
 		else:
 			mat.roughness_texture = orm
 			mat.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
@@ -4649,9 +4712,10 @@ func _log_perf_census(parent: Node3D, ctx: Dictionary, result: Dictionary, json_
 
 func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dictionary:
 	result["mesh_instances"] = mesh_instances
-	if _roughness_bake_count > 0:
-		print("ROUGHNESS_BAKE count=%d pixels=%d ms=%d (L8 low+g*(high-low), cached per ORM+range)" % [
+	if _roughness_bake_count > 0 or _roughness_cache_hits > 0:
+		print("ROUGHNESS_BAKE count=%d pixels=%d ms=%d bytes=%d hits=%d (L8 low+g*(high-low), full-res, process cache)" % [
 			_roughness_bake_count, _roughness_bake_px, _roughness_bake_ms,
+			_roughness_bake_bytes, _roughness_cache_hits,
 		])
 	result["beam_cards_fixed"] = _beam_fix_count
 	result["beam_scale_max"] = _beam_fix_max_scale
@@ -5248,6 +5312,11 @@ func load_sublevels(json_paths: Array[String], parent: Node3D, light_probe: Node
 	# not on the first wet footstep. Static cache makes repeats free.
 	_VfxManager.prewarm_footstep_mask()
 	var acc: Dictionary = _new_accumulator()
+	_roughness_bake_count = 0
+	_roughness_bake_px = 0
+	_roughness_bake_ms = 0
+	_roughness_bake_bytes = 0
+	_roughness_cache_hits = 0
 	_beam_fix_count = 0
 	_beam_fix_max_scale = 0.0
 	for jp: String in json_paths:
@@ -5295,6 +5364,11 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 	var file_idx: int = 0
 	_beam_fix_count = 0
 	_beam_fix_max_scale = 0.0
+	_roughness_bake_count = 0
+	_roughness_bake_px = 0
+	_roughness_bake_ms = 0
+	_roughness_bake_bytes = 0
+	_roughness_cache_hits = 0
 	load_progress.emit(0.0, "Parsing JSON...")
 	for jp in json_paths:
 		_parse_sublevel_file(str(jp), acc, parent)

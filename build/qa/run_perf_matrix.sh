@@ -28,8 +28,13 @@
 # Thermal/memory guard (fail closed; see docs/reports/w4p-thermal-guard.md):
 #   --start-temp=<C>   refuse to start when the package is above this (78)
 #   --max-temp=<C>     kill the launch at or above this (95)
-#   --max-rss-mb=<MB>  fail the run when VmHWM exceeds this (8192)
+#   --max-rss-mb=<MB>  fail the run when VmHWM exceeds this (8192, 1024..262144)
 #   --sample-sec=<s>   independent sampler cadence in seconds (1)
+# MemoryMax is derived from MemTotal at 75 % (2 GiB floor) instead of a fixed
+# 12G, so an 8 GB host gets a real cap and a 64 GB host is not killed early;
+# PERF_SCOPE_MEMORY_MAX overrides it. The RSS ceiling must fit inside that scope
+# and below total RAM, otherwise the wrapper refuses: a cap the cgroup or the
+# machine kills first can never be observed.
 # Both the pre-warm and the measured run are covered by their own 1 s sampler
 # process, not by the wait loop: PERF_THERMAL_SAMPLE is logged every tick, the
 # peak is reported as PERF_THERMAL_PREWARM_PEAK / peak_cpu_c, and the sampled
@@ -39,6 +44,14 @@
 # works; otherwise the direct launch is used and PERF_WARNING says so.
 # --guard-check=<C> runs only the temperature decision on a synthetic reading
 # (no game, no lock) and exits 0/8; build/qa/test_perf_guard.sh uses it.
+# --rss-check=<MB> runs only the RSS decision on a synthetic reading and exits
+# 0/9; --provenance-check=<bin> verifies an export stamp and exits 0/3/4/5.
+#
+# Export provenance (W7G): `make linux-build` writes <binary>.stamp.json
+# (HEAD + UTC time + PCK/binary SHA-256 and sizes). An exported measurement
+# without a matching, current stamp fails closed, and PERF_PROVENANCE records
+# publishable=1 only for a clean stamped build. --publishable-only aborts when
+# the run would not be publishable.
 #
 # Display: the host compositor by default. Xvfb is only a fallback for a
 # headless machine; its presentation path adds ~25 ms/frame at 720p on the
@@ -86,10 +99,20 @@ DEADLINE=""
 MAX_TEMP="${PERF_MAX_TEMP:-95}"
 START_TEMP="${PERF_START_TEMP:-78}"
 MAX_RSS_MB="${PERF_MAX_RSS_MB:-8192}"
+MAX_RSS_EXPLICIT=0
+[ -n "${PERF_MAX_RSS_MB:-}" ] && MAX_RSS_EXPLICIT=1
 SAMPLE_SEC="${PERF_THERMAL_SAMPLE_SEC:-1}"
-MEM_MAX="${PERF_SCOPE_MEMORY_MAX:-12G}"
+MEM_MAX_OVERRIDE="${PERF_SCOPE_MEMORY_MAX:-}"
+MEM_MAX=""
+MEM_MAX_MB=0
+RAM_TOTAL_MB=0
 GUARD_CHECK=0
 GUARD_CHECK_TEMP=""
+RSS_CHECK=0
+RSS_CHECK_MB=""
+PROV_CHECK=0
+PROV_CHECK_BIN=""
+PUBLISHABLE_ONLY=0
 HOST_DISPLAY="${PERF_HOST_DISPLAY:-1}"
 FOV="54.54"
 FAR="4000"
@@ -121,9 +144,12 @@ for arg in "$@"; do
     --deadline=*) DEADLINE="${arg#*=}" ;;
     --max-temp=*) MAX_TEMP="${arg#*=}" ;;
     --start-temp=*) START_TEMP="${arg#*=}" ;;
-    --max-rss-mb=*) MAX_RSS_MB="${arg#*=}" ;;
+    --max-rss-mb=*) MAX_RSS_MB="${arg#*=}"; MAX_RSS_EXPLICIT=1 ;;
     --sample-sec=*) SAMPLE_SEC="${arg#*=}" ;;
     --guard-check=*) GUARD_CHECK=1; GUARD_CHECK_TEMP="${arg#*=}" ;;
+    --rss-check=*) RSS_CHECK=1; RSS_CHECK_MB="${arg#*=}" ;;
+    --provenance-check=*) PROV_CHECK=1; PROV_CHECK_BIN="${arg#*=}" ;;
+    --publishable-only) PUBLISHABLE_ONLY=1 ;;
     --fov=*)      FOV="${arg#*=}" ;;
     --far=*)      FAR="${arg#*=}" ;;
     --occlusion=*) OCCLUSION="${arg#*=}" ;;
@@ -184,8 +210,50 @@ if [ "$START_TEMP" -ge "$MAX_TEMP" ]; then
   echo "ABORT: --start-temp ($START_TEMP) must be lower than --max-temp ($MAX_TEMP); a start headroom of 0 C lets a 91 C machine start with max 92 C" >&2
   exit 2
 fi
-if ! [[ "$MAX_RSS_MB" =~ ^[0-9]+$ ]] || [ "$MAX_RSS_MB" -lt 256 ] || [ "$MAX_RSS_MB" -gt 262144 ]; then
-  echo "ABORT: --max-rss-mb must be an integer 256..262144, got '$MAX_RSS_MB'" >&2
+# --- RAM-derived memory scope and RSS ceiling (W7G) ------------------------
+# MemoryMax used to be a hard-coded 12G: on an 8 GB host the cgroup cap was
+# larger than RAM (so it never bounded anything), and on a 64 GB host it could
+# kill a legitimate load. Derive it from MemTotal at 75 % (headroom for the
+# kernel, the sampler and the compositor) and keep PERF_SCOPE_MEMORY_MAX as an
+# explicit override. The RSS gate must fit inside the scope, otherwise the
+# cgroup kills the run before the gate can report it.
+ram_total_mb() { awk '/^MemTotal:/{printf "%d", $2/1024}' /proc/meminfo 2>/dev/null; }
+mem_max_to_mb() {
+  case "$1" in
+    *[Gg]) [[ "${1%?}" =~ ^[0-9]+$ ]] || return 1; printf '%d' $(( ${1%?} * 1024 )) ;;
+    *[Mm]) [[ "${1%?}" =~ ^[0-9]+$ ]] || return 1; printf '%d' "${1%?}" ;;
+    *) return 1 ;;
+  esac
+}
+RAM_TOTAL_MB="$(ram_total_mb)"
+case "$RAM_TOTAL_MB" in ''|*[!0-9]*|0) RAM_TOTAL_MB=0 ;; esac
+if [ -n "$MEM_MAX_OVERRIDE" ]; then
+  MEM_MAX="$MEM_MAX_OVERRIDE"
+elif [ "$RAM_TOTAL_MB" -ge 1024 ]; then
+  MEM_SCOPE_MB=$(( RAM_TOTAL_MB * 75 / 100 ))
+  MEM_SCOPE_GB=$(( MEM_SCOPE_MB / 1024 ))
+  [ "$MEM_SCOPE_GB" -lt 2 ] && MEM_SCOPE_GB=2
+  MEM_MAX="${MEM_SCOPE_GB}G"
+else
+  MEM_MAX="2G"
+fi
+if ! MEM_MAX_MB="$(mem_max_to_mb "$MEM_MAX")"; then
+  echo "ABORT: PERF_SCOPE_MEMORY_MAX must look like 12G or 12288M, got '$MEM_MAX'" >&2
+  exit 2
+fi
+if [ "$MAX_RSS_EXPLICIT" = "0" ] && [ "$MAX_RSS_MB" -gt "$MEM_MAX_MB" ]; then
+  MAX_RSS_MB="$MEM_MAX_MB"
+fi
+if ! [[ "$MAX_RSS_MB" =~ ^[0-9]+$ ]] || [ "$MAX_RSS_MB" -lt 1024 ] || [ "$MAX_RSS_MB" -gt 262144 ]; then
+  echo "ABORT: --max-rss-mb must be an integer 1024..262144, got '$MAX_RSS_MB'" >&2
+  exit 2
+fi
+if [ "$RAM_TOTAL_MB" -gt 0 ] && [ "$MAX_RSS_MB" -gt "$RAM_TOTAL_MB" ]; then
+  echo "ABORT: --max-rss-mb $MAX_RSS_MB is above total RAM (${RAM_TOTAL_MB} MB); a cap above RAM can never fire" >&2
+  exit 2
+fi
+if [ "$MAX_RSS_MB" -gt "$MEM_MAX_MB" ]; then
+  echo "ABORT: --max-rss-mb $MAX_RSS_MB exceeds the memory scope MemoryMax=${MEM_MAX} (${MEM_MAX_MB} MB); the cgroup would kill the run first" >&2
   exit 2
 fi
 if ! [[ "$SAMPLE_SEC" =~ ^[0-9]+$ ]] || [ "$SAMPLE_SEC" -lt 1 ] || [ "$SAMPLE_SEC" -gt 60 ]; then
@@ -215,6 +283,95 @@ if [ "$GUARD_CHECK" = "1" ]; then
     ok) exit 0 ;;
     *) exit 8 ;;
   esac
+fi
+
+# Synthetic self-check for the RSS ceiling, mirroring --guard-check: exits 0
+# (would pass) / 9 (would fail the run) without touching the lock or a launch.
+if [ "$RSS_CHECK" = "1" ]; then
+  case "$RSS_CHECK_MB" in
+    ''|*[!0-9]*) DECISION="unknown" ;;
+    *) if [ "$RSS_CHECK_MB" -gt "$MAX_RSS_MB" ]; then DECISION="refuse"; else DECISION="ok"; fi ;;
+  esac
+  echo "RSS_CHECK mb=${RSS_CHECK_MB:-?} max_rss_mb=$MAX_RSS_MB memory_max=$MEM_MAX ram_total_mb=$RAM_TOTAL_MB decision=$DECISION"
+  case "$DECISION" in
+    ok) exit 0 ;;
+    *) exit 9 ;;
+  esac
+fi
+
+# --- export provenance (W7G) -----------------------------------------------
+# A measured export must come from the tree it claims. The stamp is written by
+# `make linux-build` (HEAD + UTC time + PCK/binary SHA-256 and sizes); a stale
+# stamp, a missing stamp or a hash mismatch is fail-closed, so a publishable
+# number can never be attributed to a different HEAD. An explicit PERF_BINARY
+# override without a stamp still runs but is labelled non-publishable.
+json_field() {
+  python3 -c 'import json,sys
+d=json.load(open(sys.argv[1]))
+v=d.get(sys.argv[2],"")
+print("true" if v is True else "false" if v is False else v)' "$1" "$2" 2>/dev/null
+}
+PROV_STATUS="unverified"
+PROV_REASON=""
+PROV_PUBLISHABLE=0
+PROV_STAMP=""
+PROV_DETAIL=""
+PROV_LINE=""
+PCK_LINE=""
+verify_export_stamp() { # binary
+  local bin="$1" stamp="${1}.stamp.json" out rc
+  PROV_STAMP="$stamp"
+  PROV_STATUS="unverified"; PROV_REASON=""; PROV_PUBLISHABLE=0; PROV_DETAIL=""
+  if [ ! -f "$stamp" ]; then
+    PROV_STATUS="fail"; PROV_REASON="missing_stamp"
+    return 5
+  fi
+  out="$(bash "$ROOT/build/qa/export_stamp.sh" verify --root "$ROOT" --binary "$bin" --stamp "$stamp" 2>&1)"
+  rc=$?
+  PROV_DETAIL="$(printf '%s\n' "$out" | tail -1)"
+  case "$rc" in
+    0) PROV_STATUS="ok" ;;
+    3) PROV_STATUS="fail"; PROV_REASON="stale_stamp" ;;
+    4) PROV_STATUS="fail"; PROV_REASON="artifact_mismatch" ;;
+    *) PROV_STATUS="fail"; PROV_REASON="missing_artifact"; rc=5 ;;
+  esac
+  if [ "$rc" = "0" ]; then
+    PROV_PUBLISHABLE=1
+    if [ "$(json_field "$stamp" git_dirty)" = "true" ]; then
+      PROV_PUBLISHABLE=0
+      PROV_REASON="dirty_build"
+    fi
+    local stamp_git stamp_godot bin_sha bin_bytes pck_path pck_sha pck_bytes
+    stamp_git="$(json_field "$stamp" git_sha)"
+    stamp_godot="$(json_field "$stamp" godot)"
+    bin_sha="$(json_field "$stamp" binary_sha256)"
+    bin_bytes="$(json_field "$stamp" binary_bytes)"
+    pck_path="$(json_field "$stamp" pck)"
+    pck_sha="$(json_field "$stamp" pck_sha256)"
+    pck_bytes="$(json_field "$stamp" pck_bytes)"
+    PROV_LINE="PERF_PROVENANCE mode=export publishable=${PROV_PUBLISHABLE} reason=${PROV_REASON:-none} stamp_git=${stamp_git} godot=${stamp_godot} stamp=$stamp"
+    if [ -n "$pck_path" ]; then
+      PCK_LINE="PERF_PCK path=$(dirname "$bin")/$pck_path sha=$pck_sha bytes=$pck_bytes binary_sha=$bin_sha binary_bytes=$bin_bytes embedded=0"
+    else
+      PCK_LINE="PERF_PCK path=embedded sha=none bytes=$bin_bytes binary_sha=$bin_sha embedded=1"
+    fi
+  fi
+  return "$rc"
+}
+
+if [ "$PROV_CHECK" = "1" ]; then
+  if [ ! -f "$PROV_CHECK_BIN" ]; then
+    echo "PROVENANCE_CHECK FAIL result=missing_binary bin=$PROV_CHECK_BIN" >&2
+    exit 5
+  fi
+  verify_export_stamp "$PROV_CHECK_BIN"; PROV_RC=$?
+  if [ "$PROV_RC" = "0" ]; then
+    echo "PROVENANCE_CHECK OK publishable=$PROV_PUBLISHABLE reason=${PROV_REASON:-none} $PROV_DETAIL"
+    [ -n "$PCK_LINE" ] && echo "$PCK_LINE"
+    exit 0
+  fi
+  echo "PROVENANCE_CHECK FAIL reason=$PROV_REASON $PROV_DETAIL" >&2
+  exit "$PROV_RC"
 fi
 
 if [ -z "$TAG" ]; then
@@ -255,6 +412,7 @@ GIT_SHA="$(git -C "$ROOT" rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
 # debug mode and is not comparable to the shipped frame times. `PERF_BINARY`
 # forces a specific executable (fail closed if it does not exist).
 BINARY_MODE="editor"
+PERF_OVERRIDE=0
 BIN="$ROOT/tools/godot"
 if [ -n "${PERF_BINARY:-}" ]; then
   if [ ! -x "$PERF_BINARY" ]; then
@@ -262,12 +420,52 @@ if [ -n "${PERF_BINARY:-}" ]; then
     exit 2
   fi
   BINARY_MODE="export"
+  PERF_OVERRIDE=1
   BIN="$PERF_BINARY"
 elif [ -x "$ROOT/build/tat2-linux-x86_64" ]; then
   BINARY_MODE="export"
   BIN="$ROOT/build/tat2-linux-x86_64"
 fi
 BIN_SHA="$(stat -c '%y %s' "$BIN" 2>/dev/null || echo unknown)"
+
+# W7G: verify the export stamp before any measurement. The default export path
+# fails closed when the stamp is missing, stale (stamp HEAD != current HEAD) or
+# its artifact hashes do not match. An explicit PERF_BINARY override without a
+# stamp is allowed for stubs/A-B runs but is never publishable; a stale stamp
+# on an override still fails closed.
+if [ "$BINARY_MODE" = "export" ]; then
+  if [ "$PERF_OVERRIDE" = "1" ] && [ ! -f "$BIN.stamp.json" ]; then
+    PROV_STATUS="unverified"
+    PROV_REASON="unverified_override"
+    PROV_PUBLISHABLE=0
+    PROV_LINE="PERF_PROVENANCE mode=export publishable=0 reason=unverified_override bin=$BIN"
+    PCK_LINE="PERF_PCK path=unverified sha=none bytes=0 binary_sha=unknown embedded=0"
+  else
+    verify_export_stamp "$BIN"; PROV_RC=$?
+    case "$PROV_RC" in
+      0) ;;
+      3)
+        echo "ABORT: export stamp is stale (stamp HEAD != current HEAD); run make linux-build before measuring (see $BIN.stamp.json)" >&2
+        exit 2
+        ;;
+      4)
+        echo "ABORT: export artifact does not match its stamp (PCK/binary SHA or size changed); rerun make linux-build" >&2
+        exit 2
+        ;;
+      *)
+        echo "ABORT: export provenance missing or unreadable ($PROV_REASON); run make linux-build before measuring" >&2
+        exit 2
+        ;;
+    esac
+  fi
+else
+  PROV_LINE="PERF_PROVENANCE mode=editor publishable=0 reason=editor_binary"
+  PCK_LINE="PERF_PCK path=none sha=none bytes=0 binary_sha=$(sha256sum "$BIN" 2>/dev/null | awk '{print $1}') embedded=0"
+fi
+if [ "$PUBLISHABLE_ONLY" = "1" ] && [ "$PROV_PUBLISHABLE" != "1" ]; then
+  echo "ABORT: --publishable-only but this run is not publishable (${PROV_REASON:-unknown}); build a clean stamped export" >&2
+  exit 2
+fi
 
 BIN_ARGS=(
   --rendering-driver vulkan
@@ -646,6 +844,8 @@ start_display() {
   echo "PERF_HOST tag=$SAFE_TAG git=$GIT_SHA binary_mode=$BINARY_MODE binary=$BIN binary_stat=$BIN_SHA xdg_data_home=$DATA_HOME res=$RES contract=$CONTRACT"
   echo "PERF_ARGS quality=$QUALITY scale=$SCALE scaling=$SCALING lights=$LIGHTS shadows=$SHADOWS vsync=$VSYNC fov=$FOV far=$FAR occlusion=$OCCLUSION mesh_lod=${MESH_LOD:-unset} dir_shadow=${DIR_SHADOW:-unset} shadow_splits=${SHADOW_SPLITS:-unset} shadow_max_distance=${SHADOW_MAX_DISTANCE:-unset} pose=${POSE:-all} frames=$FRAMES warmup=$WARMUP timeout=$TIMEOUT deadline=$DEADLINE prewarm=$PREWARM"
 } > "$LOG"
+[ -n "$PROV_LINE" ] && echo "$PROV_LINE" >> "$LOG"
+[ -n "$PCK_LINE" ] && echo "$PCK_LINE" >> "$LOG"
 if [ -n "$OTHER_GODOT" ]; then
   echo "PERF_WARNING other headless Godot processes are running; frame times may be CPU-contended:" >> "$LOG"
   printf '%s\n' "$OTHER_GODOT" >> "$LOG"
@@ -655,7 +855,7 @@ start_display
 STDBUF_CMD=()
 if command -v stdbuf >/dev/null 2>&1; then STDBUF_CMD=(stdbuf -oL -eL); fi
 detect_scope
-echo "PERF_MEM_SCOPE mode=${SCOPE_MODE} memory_max=${MEM_MAX} swap_max=0 pid=${BASHPID}" >> "$LOG"
+echo "PERF_MEM_SCOPE mode=${SCOPE_MODE} memory_max=${MEM_MAX} memory_max_mb=${MEM_MAX_MB} swap_max=0 ram_total_mb=${RAM_TOTAL_MB:-unknown} max_rss_mb=${MAX_RSS_MB} pid=${BASHPID}" >> "$LOG"
 
 # Pre-warm: a real run of the same scene raises clocks and temperature to the
 # steady state the measured run will see. Without it "GPU before" is an idle

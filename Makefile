@@ -8,7 +8,7 @@ MOBILE_ABI  ?= arm64
 QA_CONTRACT ?= 0
 KEYSTORE_PROPS := $(HOME)/.config/tat2/keystore.properties
 
-.PHONY: build-extractor extract anims normalize audit audit-bootstrap audit-refresh-stamps audit-imports content-overrides gate-ratchet test run editor review review-capture bake-review bake-review-core desktop-texture-cap texture-cap-check audio-tools linux-build linux-run android-prepare android-debug android-debug-gl android-release
+.PHONY: build-extractor extract anims normalize audit audit-bootstrap audit-refresh-stamps audit-imports content-overrides gate-ratchet test run editor review review-capture bake-review bake-review-core desktop-texture-cap texture-cap-check audio-tools linux-build linux-stamp-verify linux-run android-prepare android-debug android-debug-gl android-release
 
 build-extractor:
 	DOTNET_ROOT=$(HOME)/.dotnet10 PATH=$(HOME)/.dotnet10:$(PATH) $(DOTNET) build tools/tat-extract -c Release
@@ -137,11 +137,24 @@ texture-cap-check:
 # Requires the 4.7.2 Linux export templates (linux_debug.x86_64 /
 # linux_release.x86_64) in the flatpak template dir; see game/export_presets.cfg.
 # Output lands under gitignored build/.
+#
+# W7G provenance: after a successful export, write build/tat2-linux-x86_64
+# .stamp.json with HEAD (short + full), the UTC build time, the Godot version,
+# a tracked-tree dirty flag and the SHA-256 + size of the binary and PCK. The
+# perf wrapper refuses to measure an export whose stamp is missing, stale or
+# does not match the artifacts, and marks a dirty build non-publishable.
+LINUX_OUT ?= $(CURDIR)/build/tat2-linux-x86_64
 linux-build:
-	$(GODOT) --headless --path game --export-release "Linux" $(CURDIR)/build/tat2-linux-x86_64
+	@mkdir -p $(CURDIR)/build
+	$(GODOT) --headless --path game --export-release "Linux" $(LINUX_OUT)
+	bash $(CURDIR)/build/qa/export_stamp.sh write --root $(CURDIR) --binary $(LINUX_OUT) --preset Linux
+
+# Re-check the stamp without exporting (exit 0 ok, 3 stale, 4 mismatch, 5 missing).
+linux-stamp-verify:
+	bash $(CURDIR)/build/qa/export_stamp.sh verify --root $(CURDIR) --binary $(LINUX_OUT)
 
 linux-run:
-	$(CURDIR)/build/tat2-linux-x86_64
+	$(LINUX_OUT)
 
 # --- Android (internal sideload build) --------------------------------------
 # Generates build/mobile_game/ (gitignored) with ETC2 textures, Mobile renderer

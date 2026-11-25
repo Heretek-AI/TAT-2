@@ -1,13 +1,12 @@
 # Handoff — Thick As Thieves Godot 4.7.2 port (next run)
 
 **Repo:** `/home/john/Projects/TAT-2`
-**HEAD at handoff:** `96fae4f` — `fix(w6-integration): cross-wave test fixtures,
-loader meta guard and audit re-stamp`, the merged **W6 six-wave integration**
-(`a29b8fb`..`915373f`: loader/materials, movement, AI hearing/perception, authored
-briefing/prep, ledger/wardrobe catalog, graybox overrides + Sonar CI) on top of
-`f803c3b` (W5 integration).
-**Working tree:** clean; code HEAD `96fae4f`, the W6 docs commit on top is local
-(not pushed)
+**HEAD at handoff:** `74a43b8` — the W6 integration docs commit, plus the local
+**W7G** wave (export provenance/stamp, roughness process cache, core bake,
+Sonar Path A config). W7G is not pushed.
+**Working tree:** W7G changes committed locally; the private data tree is
+symlinked and intentionally untracked in the wave worktree
+(`/tmp/opencode/tat2-w7g-gates`), main checkout untouched.
 **Godot:** `4.7.2.stable` via **native `tools/godot`** (Flatpak fallback inside the
 wrapper). `godot` is **not** on `$PATH`.
 **Renderer:** Forward+ · Jolt Physics 60 Hz · 1280×720 reference
@@ -25,7 +24,9 @@ be pursued.
 >
 > **Read first:** [`AGENTS.md`](../AGENTS.md) (operating rules and traps),
 > [`docs/FIDELITY_GAPS.md`](FIDELITY_GAPS.md) (live coverage + every residual),
-> [`docs/reports/w6-integration.md`](reports/w6-integration.md) (the last full
+> [`docs/reports/w7g-gates.md`](reports/w7g-gates.md) (latest gates, export
+> stamp, roughness cache, core bake, Sonar plan),
+> [`docs/reports/w6-integration.md`](reports/w6-integration.md) (the W6 full
 > gate set and its evidence),
 > [`docs/reports/perf-structural-wave.md`](reports/perf-structural-wave.md)
 > (performance truth and structural measurements),
@@ -40,17 +41,18 @@ be pursued.
 |---|---|
 | Extraction pipeline | reproducible from a wiped tree; `make extract` + `make normalize` + `make anims` exit 0 |
 | Asset integrity | 0 duplicate UIDs, 0 missing/corrupt meshes, `MESH HOLES=0`, 0 missing textures |
-| Scripts | **110 checked, 0 broken** (`96fae4f`) |
-| Unit suite (`run_tests.gd`) | **full run fails=0** (263 PASS, suites numbered to 88) on `96fae4f` |
-| M2 player suite | **fails=0** (11 PASS) on `96fae4f` |
-| Probes | door walk **PASS**, viewmodel truth **PASS**, Niagara **PASS** (3695/3308/36); `probe_leak` **PASS** (`TAT2_NO_DEN_PROBE=1`, clean) |
-| E2E (unmasked) | **264/264 fails=0** (full tiers 1–4) on `96fae4f` |
+| Scripts | **110 checked, 0 broken** (W7G, `74a43b8` + wave) |
+| Unit suite (`run_tests.gd`) | **full run fails=0** (263 PASS, suites numbered to 88) on the W7G tree |
+| M2 player suite | **fails=0** (11 PASS) on the W7G tree |
+| Probes | door walk **PASS**, viewmodel truth **PASS**, Niagara **PASS** (3695/3308/36) from W6; `probe_leak` **PASS** (`TAT2_NO_DEN_PROBE=1`, 0 leaks) re-run in W7G |
+| E2E (unmasked) | **264/264 fails=0** (full tiers 1–4) on the W7G tree |
 | Standalone suites | W5B materials 71, roof collision 51 (census 733/46/426/307/0), W6L searchlight 16, hearing ranges 39, light-once 7, W6U1 briefing 37, W6U2 catalog 61, stair walk 19, traversal 18, content overrides 447 (static) — all fails=0 |
-| Audit | `make audit` **PASS**, coverage 12657/12703 (99.6 %), 0 unexpected, baseline re-stamped after normalize (idempotent) |
+| Audit | **base only, not re-measured in W7G**: 12657/12703 (99.6 %), 0 unexpected. W7S's uncommitted loot producers changed 4 `gen:gameplay` files + a directory hash; integration regenerates and re-stamps at the merged HEAD. No floor changed. |
+| Export | `make linux-build` writes a HEAD/PCK stamp; wrapper fails closed on stale/mismatch and logs `PERF_PCK`; PCK 2,574,092,822 B / `642fb055…`; dirty tree → not publishable |
 | Spider chain | **live** — note → electrotype → Owl → courier → informant, `stage=complete`, 7 facts; subset real-map probe **90/90** |
-| Perf/thermal guard | **W4P**: `--start-temp` 78 / `--max-temp` 95, 1 s sampler, `VmHWM` 8 GiB; `test_perf_guard.sh` **42/42**; **no real matrix run** |
-| Texture cap | `make texture-cap-check` **OK**, 0 offenders, 1 alpha exception |
-| World review | Guildhall bake **371 MB / 18.76 s**, master loads headless 9.1 s |
+| Perf/thermal guard | **W4P + W7G**: `--start-temp` 78 / `--max-temp` 95, 1 s sampler, `VmHWM` 8 GiB; RAM-derived `MemoryMax`; `test_perf_guard.sh` **78/78**; **no real matrix run** |
+| Texture cap | base `make texture-cap-check` **OK**, 0 offenders, 1 alpha exception (not re-measured in W7G) |
+| World review | full Guildhall bake **371 MB / 18.76 s** (W5); W7G core bake **194.0 MiB** (52.6 MiB under the 256 MiB guard), headless load `VmHWM` 782 MB |
 | World data | 107/107 maps, 16 contracts, 210 patrols / 673 waypoints, 222 scene variants, 4,118 devices, 3,695 Niagara placements (3,308 active) / 36 systems |
 | Materials | 1,629 resolved; two-sided and paint-stroke albedo read from `BasePropertyOverrides` and child `_D` companions |
 | Runtime | startscreen → Den → prep → Guildhall → scoring, free-play cleanout, authored devices/clues/patrols; co-op player pose + host-validated door events (loot/AI not replicated) |
@@ -126,8 +128,10 @@ tools/godot --headless --path game --script res://tests/probe_ftue.gd
 tools/godot --headless --path game --script res://tests/probe_scene_variants.gd
 
 # Thermal/perf guard, no game launched (safe on a hot host)
-build/qa/test_perf_guard.sh                    # 42/42
+build/qa/test_perf_guard.sh                    # 78/78 (stamp + RSS + thermal)
 build/qa/run_perf_matrix.sh --guard-check=79   # exit 8, refuse_start
+build/qa/run_perf_matrix.sh --rss-check=8192   # exit 0 (synthetic ceiling)
+make linux-stamp-verify                        # export stamp: 0 ok / 3 stale / 4 mismatch / 5 missing
 
 # World review (see docs/reports/review-map-baker.md)
 make bake-review MAP=guildhall   # per-sublevel .scn + world.scn/review.tscn + manifest
@@ -570,8 +574,16 @@ serially on this HEAD: compile 110/0, `run_tests` fails=0 (263 PASS), M2 fails=0
 three probes PASS, `probe_leak` clean, E2E 264/264, `make audit` PASS (coverage
 12657/12703, 0 unexpected) and `make texture-cap-check` OK (773/1/0), plus the
 ten standalone suites — see [`reports/w6-integration.md`](reports/w6-integration.md).
-The perf matrix, a full editor open and the Sonar scan remain deferred;
-everything else is measured.
+The W6 integration (`96fae4f`) ran every gate above; W7G (`74a43b8` + wave)
+re-ran compile 110/0, `run_tests` 263/0, M2 11/0, `probe_leak` clean and E2E
+264/264, and added the export stamp, the roughness process cache, the 194.0 MiB
+core bake and the expanded 78-check perf guard — see
+[`reports/w7g-gates.md`](reports/w7g-gates.md) and
+[`reports/logs/`](reports/logs/). Still deferred: the perf matrix (**not run**),
+a per-process editor VRAM measurement (the visible open's `nvidia-smi
+memory.used` is device-wide and the threshold is not evaluable), the Sonar scan
+(gate unbound until the manual steps), and `make audit` at a merged HEAD (W7S
+producer drift makes it unmeasurable in the W7G worktree).
 
 Any wave that changes rendering, materials, traversal or mission flow also needs:
 

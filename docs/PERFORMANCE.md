@@ -66,11 +66,24 @@ Thieves' Den: `chunks=156`, `collision_bodies=2`, `collision_shapes=95`, `occlud
     package is above this. A 91 °C machine may no longer start with
     `--max-temp=92`; the old guard had no headroom.
   - `--max-temp=<C>` (default **95**) — kill the launch at or above this.
-  - `--max-rss-mb=<MB>` (default **8192**) — fail the run when `VmHWM`
-    (`/proc/<pid>/status`) exceeds it. `VmRSS` samples are still logged as the
-    curve. Each launch also gets a user scope with `MemoryMax=12G` /
-    `MemorySwapMax=0` when `systemd-run --user --scope` works, with a logged
-    fallback to a direct launch.
+  - `--max-rss-mb=<MB>` (default **8192**, bounds **1024..262144**) — fail the
+    run when `VmHWM` (`/proc/<pid>/status`) exceeds it. `VmRSS` samples are
+    still logged as the curve. The cap must fit inside the memory scope and
+    below total RAM, otherwise the wrapper refuses (a cap the cgroup or the
+    machine kills first can never be observed). Each launch also gets a user
+    scope with `MemoryMax` derived from `MemTotal` at **75 %** (2 GiB floor;
+    overridable with `PERF_SCOPE_MEMORY_MAX`) and `MemorySwapMax=0` when
+    `systemd-run --user --scope` works, with a logged fallback to a direct
+    launch. The fixed `12G` from W4P was above RAM on an 8 GB host and below a
+    large host's legitimate load.
+  - `--rss-check=<MB>` — the same decision on a synthetic reading (exit 0/9),
+    so the ceiling can be tested without launching a game.
+  - `--publishable-only` / `--provenance-check=<bin>` — export provenance. A
+    measurement of `build/tat2-linux-x86_64` requires the stamp written by
+    `make linux-build` (HEAD + UTC time + PCK/binary SHA-256 and sizes); a
+    missing, stale or mismatched stamp fails closed, and `PERF_PROVENANCE`
+    records `publishable=1` only for a clean stamped build. An explicit
+    `PERF_BINARY` override without a stamp runs but is labelled non-publishable.
   - `--sample-sec=<s>` (default **1**) — an **independent** sampler process
     (not the wait loop) logs `PERF_THERMAL_SAMPLE` every tick for the pre-warm
     and the measured run, records `PERF_THERMAL_PREWARM_PEAK`, and kills the
@@ -79,10 +92,11 @@ Thieves' Den: `chunks=156`, `collision_bodies=2`, `collision_shapes=95`, `occlud
     not start, or a missing sampler summary aborts instead of running.
 - Proof without a GPU (safe on a hot host):
   `bash -n build/qa/run_perf_matrix.sh`,
-  `build/qa/test_perf_guard.sh` (42 checks: decisions, argument bounds,
-  machinery), and `build/qa/run_perf_matrix.sh --guard-check=79` → exit 8.
+  `build/qa/test_perf_guard.sh` (78 checks: decisions, argument bounds,
+  machinery, export provenance), and
+  `build/qa/run_perf_matrix.sh --guard-check=79` → exit 8.
   A real measurement must still run on a cool host:
-  `build/qa/run_perf_matrix.sh --quality=high --scale=1.0 --scaling=bilinear --tag=w4p_gate`.
+  `build/qa/run_perf_matrix.sh --quality=high --scale=1.0 --scaling=bilinear --publishable-only --tag=w4p_gate`.
 - On the reference i9-14900HX host, package temperature idles around 82 °C and
   reaches the critical 100 °C under repeated Guildhall loads. With the 78 °C
   start gate that host refuses a sustained run until it idles down; raising

@@ -1,11 +1,19 @@
 {
   "schema": "tat2.gate_ratchet/1",
-  "measured_on": "94a75e3",
-  "source": "AGENTS.md gate table, W5 integration (full serial gate set). W6T did not re-run the Godot gates.",
-  "note": "Floors, not exact counts: a wave may add tests/files but must never lower a floor or introduce a failure. Counts are measured, not estimated; update only with a real gate log.",
+  "measured_on": "74a43b8",
+  "source": "Base measurements on 74a43b8, re-run by W7G and committed as docs/reports/logs/w7g-*.log. W7G changed no test files, so the counts equal the base. Integration raises these floors with fresh logs at the merged HEAD.",
+  "note": "Floors, not exact counts: a wave may add tests/files but must never lower a floor or introduce a failure. Counts are measured, not estimated; update only with a real gate log in docs/reports/logs/ (see tools/check_gate_ratchet.py for the evidence layout).",
+  "evidence": {
+    "dir": "docs/reports/logs",
+    "compile": "w7g-compile.log",
+    "run_tests": "w7g-run_tests.log",
+    "m2": "w7g-m2.log",
+    "e2e": "w7g-e2e.log",
+    "probe_leak": "w7g-probe_leak.log"
+  },
   "gates": {
-    "compile": { "checked": 101, "broken": 0 },
-    "run_tests": { "passes": 261, "fails": 0 },
+    "compile": { "checked": 110, "broken": 0 },
+    "run_tests": { "passes": 263, "fails": 0 },
     "m2": { "passes": 11, "fails": 0 },
     "e2e": { "passed": 264, "total": 264, "fails": 0 },
     "audit": { "coverage_num": 12657, "coverage_den": 12703, "unexpected": 0 },

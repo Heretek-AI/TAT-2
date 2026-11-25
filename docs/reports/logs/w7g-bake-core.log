@@ -1,0 +1,45 @@
+tools/godot --headless --path game --script /tmp/opencode/tat2-w7g-gates/tools/bake_review_map.gd -- --map=guildhall --mode=single --sublevels=core --out=res://scenes/review/guildhall_core
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:691)
+         [1] _mission_map_id (res://src/core/game_data.gd:791)
+         [2] _load_missions (res://src/core/game_data.gd:848)
+         [3] _ready (res://src/core/game_data.gd:76)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:691)
+         [1] _mission_map_id (res://src/core/game_data.gd:791)
+         [2] _load_missions (res://src/core/game_data.gd:848)
+         [3] _ready (res://src/core/game_data.gd:76)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:691)
+         [1] _mission_map_id (res://src/core/game_data.gd:791)
+         [2] _load_missions (res://src/core/game_data.gd:848)
+         [3] _ready (res://src/core/game_data.gd:76)
+TAT-2 Loc: reverse map built from sources.json (3404 keys)
+TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
+REVIEW_BAKE Load core single-call sublevels=4 budget=160
+FootstepMask: downscaled 256x256 -> 128x128 for one-time alpha bake
+FootstepMask: baked one-time alpha mask (128x128) from res://assets/ue/Raw/Art/UI/Icons/T_Decal_Footstep.png)
+TAT-2 gate lights: total=160 (generic=160 rect=0) budget=160 forced=6 hero_shadows=6
+WARNING: [level_loader] level Niagara: 1422 placements across 22 systems spawned
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:5199)
+         [1] _store_level_extras (res://src/core/level_loader.gd:5116)
+         [2] load_sublevels_async (res://src/core/level_loader.gd:5417)
+ROUGHNESS_BAKE_MODE on=1 resolution=full cache=process
+ROUGHNESS_BAKE count=71 pixels=60293120 ms=3708 bytes=80390799 hits=34 (L8 low+g*(high-low), full-res, process cache)
+BEAM_FIX SM_LightBeam cards=134 axis=col0 scale_slot=2 clamp=200.0 max_scale=195.5292 max_length_m=19.944
+PERF_CENSUS meshes=2396 instances=16340 chunk_nodes=2373 plain=885 multimesh=1511 surface_draws=3987 lights=160 shadow_lights=6 occluders=501 collision_bodies=88 collision_shapes=12267 periph_nodes=0 periph_instances=0 periph_surface_draws=0 periph_plain=0 periph_multimesh=0 periph_range=0 merge_mode=off merge_candidates=0 merge_nodes=0 merge_surfaces_before=0 merge_surfaces_after=0 light_budget=160 hero_shadows=6 source_sublevels={ "Building_Guildhall_POI": 9771, "Building_Guildhall_POI_3rdFloor": 3613, "Guildhall_Gameplay": 1361, "Guildhall_LightingNoGameplay": 172 }
+REVIEW_BAKE   built guildhall_core.scn in 6815 ms (203393969 bytes)
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'gloomy'
+MoonPanorama: cached res://assets/ue/Raw/Art/Environment/City/Architecture/BeautifulCorner/Materials/T_Moon_D.png (4096x2048, one decode per session)
+REVIEW_BAKE summary map=guildhall mode=single status=ok sublevels=4 scenes=2 bytes=203404687 beams=435 labels=0 emissive=266 hidden_nodes=92 hidden_records=488 bake_ms=8546 out=res://scenes/review/guildhall_core
+EXIT=0

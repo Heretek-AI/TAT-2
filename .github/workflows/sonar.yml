@@ -1,16 +1,27 @@
 name: sonar
 
-# Path A: SonarCloud scans the analyzable surface (Python/Shell/C# in tools/)
-# on push/PR, and a non-Sonar ratchet job pins the GDScript gate numbers that
-# Sonar cannot see. See docs/reports/w6t-graybox-sonar.md.
+# Path A: SonarCloud scans the analyzable surface (Python/Shell/C#/YAML in
+# tools/, .github/ and the tracked configs) on push/PR, and a non-Sonar ratchet
+# job pins the GDScript gate numbers that Sonar cannot see. See
+# docs/reports/w7g-gates.md §4 and docs/reports/w6t-graybox-sonar.md.
 #
-# Manual prerequisites (one-time, in SonarCloud/GitHub settings):
-#   * turn OFF Automatic Analysis for Heretek-AI_TAT-2 (CI scan + autoscan
-#     conflict and autoscan ignores this properties file);
-#   * add the SONAR_TOKEN repository secret (a project analysis token);
-#   * bind the quality gate "TAT-2 New Code" to the project;
-#   * set the new-code period to "Previous version" (or 30 days) so the gate
-#     only judges new code.
+# One-time manual prerequisites (SonarCloud/GitHub settings; this workflow
+# cannot turn them on):
+#   1. SonarCloud -> project Heretek-AI_TAT-2 -> Administration -> Analysis
+#      Method: turn OFF Automatic Analysis. Autoscan and this CI scan conflict
+#      and autoscan ignores .sonar-project.properties.
+#   2. GitHub -> repo Settings -> Secrets and variables -> Actions: add
+#      SONAR_TOKEN = a SonarCloud *project analysis token* for this project.
+#   3. SonarCloud -> Quality Gates: bind "TAT-2 New Code" to the project. The
+#      gate judges NEW code only, on three conditions: Reliability rating A,
+#      Security rating A, duplication on new code <= 3 %. Coverage and
+#      Maintainability are deliberately not gate conditions (there is no
+#      coverage report and GDScript is invisible to Sonar).
+#   4. Administration -> New Code: period = "Previous version" (or 30 days).
+#   5. Keep every action pinned to a commit SHA (see the `uses:` lines below);
+#      bump the SHA and its version comment together.
+#   6. .sonar-project.properties lists .github in sonar.sources so workflow
+#      changes are analyzed, not silently ignored.
 # Without the secret (e.g. fork PRs) the scan step is skipped, not failed.
 
 on:
@@ -28,7 +39,8 @@ jobs:
     name: SonarCloud scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # actions/checkout v4.4.0
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           fetch-depth: 0
       - name: Detect SONAR_TOKEN
@@ -42,9 +54,10 @@ jobs:
           else
             echo "present=true" >> "$GITHUB_OUTPUT"
           fi
+      # SonarSource/sonarqube-scan-action v5 (pinned commit, not a moving tag)
       - name: SonarCloud scan
         if: steps.token.outputs.present == 'true'
-        uses: SonarSource/sonarqube-scan-action@v5
+        uses: SonarSource/sonarqube-scan-action@2f77a1ec69fb1d595b06f35ab27e97605bdef703
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: https://sonarcloud.io
@@ -53,8 +66,10 @@ jobs:
     name: GDScript ratchet (non-Sonar)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      # actions/checkout v4.4.0
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      # actions/setup-python v5.6.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: "3.11"
       - name: Hosted tooling checks
@@ -73,6 +88,7 @@ jobs:
           echo "  tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd"
           echo "  make audit"
           echo ""
-          echo "tools/gate_ratchet.json holds the measured floors (94a75e3):"
-          echo "compile 101/0, run_tests 261/0, M2 11/0, E2E 264/264."
-          echo "Update it only from a real gate log."
+          echo "tools/gate_ratchet.json holds the measured floors (W7G, 74a43b8):"
+          echo "compile 110/0, run_tests 263/0, M2 11/0, E2E 264/264."
+          echo "Committed evidence: docs/reports/logs/w7g-*.log."
+          echo "Update the ratchet only from a real gate log."

@@ -1,0 +1,47 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+VISIBLE_SAMPLE t=0s rss_mb=9 vmhwm_mb=11 vram_mb=4931 gpu_c=61.98 gpu_util=43 cpu_c=91
+Vulkan 1.4.357 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 4070 Laptop GPU
+
+VISIBLE_SAMPLE t=2s rss_mb=1490 vmhwm_mb=1491 vram_mb=4273 gpu_c=62.62 gpu_util=4 cpu_c=87
+VISIBLE_SAMPLE t=4s rss_mb=2027 vmhwm_mb=2032 vram_mb=5214 gpu_c=62.51 gpu_util=11 cpu_c=93
+VISIBLE_SAMPLE t=6s rss_mb=2408 vmhwm_mb=2442 vram_mb=5214 gpu_c=62.45 gpu_util=12 cpu_c=92
+VISIBLE_SAMPLE t=8s rss_mb=2650 vmhwm_mb=2650 vram_mb=5800 gpu_c=61.46 gpu_util=14 cpu_c=88
+VISIBLE_SAMPLE t=10s rss_mb=2921 vmhwm_mb=2930 vram_mb=6057 gpu_c=71.52 gpu_util=63 cpu_c=87
+VISIBLE_SAMPLE t=12s rss_mb=2935 vmhwm_mb=2935 vram_mb=6057 gpu_c=72.57 gpu_util=63 cpu_c=88
+VISIBLE_SAMPLE t=14s rss_mb=2954 vmhwm_mb=2954 vram_mb=6057 gpu_c=73.30 gpu_util=60 cpu_c=90
+VISIBLE_SAMPLE t=16s rss_mb=2965 vmhwm_mb=2965 vram_mb=6057 gpu_c=73.95 gpu_util=63 cpu_c=88
+VISIBLE_SAMPLE t=18s rss_mb=2980 vmhwm_mb=2980 vram_mb=6057 gpu_c=74.64 gpu_util=62 cpu_c=89
+VISIBLE_SAMPLE t=20s rss_mb=3004 vmhwm_mb=3004 vram_mb=6156 gpu_c=74.27 gpu_util=65 cpu_c=92
+VISIBLE_SAMPLE t=22s rss_mb=3005 vmhwm_mb=3005 vram_mb=6237 gpu_c=74.91 gpu_util=67 cpu_c=87
+VISIBLE_SAMPLE t=24s rss_mb=3325 vmhwm_mb=3582 vram_mb=6365 gpu_c=74.61 gpu_util=62 cpu_c=87
+VISIBLE_SAMPLE t=26s rss_mb=3268 vmhwm_mb=3582 vram_mb=6931 gpu_c=77.47 gpu_util=71 cpu_c=87
+VISIBLE_SAMPLE t=28s rss_mb=3271 vmhwm_mb=3582 vram_mb=6058 gpu_c=77.15 gpu_util=62 cpu_c=94
+VISIBLE_SAMPLE t=30s rss_mb=3281 vmhwm_mb=3582 vram_mb=6058 gpu_c=76.80 gpu_util=63 cpu_c=87
+VISIBLE_SAMPLE t=32s rss_mb=3295 vmhwm_mb=3582 vram_mb=6058 gpu_c=75.90 gpu_util=62 cpu_c=89
+VISIBLE_SAMPLE t=34s rss_mb=3298 vmhwm_mb=3582 vram_mb=6058 gpu_c=76.92 gpu_util=63 cpu_c=88
+VISIBLE_WINDOW pid=1276137 wid=25165826 mode=editor
+VISIBLE_CAPTURE /tmp/opencode/w7g-core-visible.png
+VISIBLE_SAMPLE t=36s rss_mb=3306 vmhwm_mb=3582 vram_mb=6058 gpu_c=76.89 gpu_util=61 cpu_c=92
+VISIBLE_SAMPLE t=38s rss_mb=3306 vmhwm_mb=3582 vram_mb=6058 gpu_c=77.41 gpu_util=62 cpu_c=93
+VISIBLE_SAMPLE t=40s rss_mb=3323 vmhwm_mb=3582 vram_mb=6058 gpu_c=78.06 gpu_util=62 cpu_c=90
+VISIBLE_SAMPLE t=42s rss_mb=3323 vmhwm_mb=3582 vram_mb=6058 gpu_c=77.82 gpu_util=63 cpu_c=88
+VISIBLE_SAMPLE t=44s rss_mb=3323 vmhwm_mb=3582 vram_mb=6058 gpu_c=77.91 gpu_util=63 cpu_c=88
+VISIBLE_SAMPLE t=46s rss_mb=3323 vmhwm_mb=3582 vram_mb=6058 gpu_c=78.73 gpu_util=67 cpu_c=89
+VISIBLE_SAMPLE t=48s rss_mb=3323 vmhwm_mb=3582 vram_mb=6058 gpu_c=78.41 gpu_util=62 cpu_c=97
+VISIBLE_SAMPLE t=50s rss_mb=3339 vmhwm_mb=3582 vram_mb=6058 gpu_c=78.41 gpu_util=63 cpu_c=92
+VISIBLE_SAMPLE t=52s rss_mb=3339 vmhwm_mb=3934 vram_mb=6058 gpu_c=78.12 gpu_util=63 cpu_c=91
+VISIBLE_SAMPLE t=54s rss_mb=3339 vmhwm_mb=3934 vram_mb=6058 gpu_c=79.66 gpu_util=63 cpu_c=89
+VISIBLE_SAMPLE t=56s rss_mb=3343 vmhwm_mb=3934 vram_mb=6058 gpu_c=78.76 gpu_util=61 cpu_c=90
+VISIBLE_SAMPLE t=58s rss_mb=3343 vmhwm_mb=3934 vram_mb=6058 gpu_c=79.02 gpu_util=60 cpu_c=89
+VISIBLE_SAMPLE t=60s rss_mb=3343 vmhwm_mb=3934 vram_mb=6058 gpu_c=79.75 gpu_util=61 cpu_c=91
+VISIBLE_SAMPLE t=62s rss_mb=3343 vmhwm_mb=3934 vram_mb=6058 gpu_c=79.40 gpu_util=63 cpu_c=93
+VISIBLE_SAMPLE t=64s rss_mb=3343 vmhwm_mb=3934 vram_mb=6058 gpu_c=80.36 gpu_util=63 cpu_c=90
+VISIBLE_SAMPLE t=66s rss_mb=3355 vmhwm_mb=3934 vram_mb=6058 gpu_c=79.75 gpu_util=64 cpu_c=90
+VISIBLE_SAMPLE t=68s rss_mb=3367 vmhwm_mb=3934 vram_mb=6058 gpu_c=79.78 gpu_util=60 cpu_c=91
+VISIBLE_SAMPLE t=70s rss_mb=3392 vmhwm_mb=3934 vram_mb=6058 gpu_c=80.01 gpu_util=60 cpu_c=89
+VISIBLE_SAMPLE t=72s rss_mb=3409 vmhwm_mb=3934 vram_mb=6058 gpu_c=80.04 gpu_util=60 cpu_c=90
+VISIBLE_SAMPLE t=74s rss_mb=3424 vmhwm_mb=3934 vram_mb=6058 gpu_c=80.71 gpu_util=60 cpu_c=89
+VISIBLE_SAMPLE t=76s rss_mb=3437 vmhwm_mb=3934 vram_mb=6058 gpu_c=81.64 gpu_util=61 cpu_c=90
+VISIBLE_SAMPLE t=78s rss_mb=3456 vmhwm_mb=3934 vram_mb=6058 gpu_c=80.62 gpu_util=64 cpu_c=89
+VISIBLE_PEAK samples=40 rss_peak_mb=3456 vmhwm_mb=3934 vram_peak_mb=6931 gpu_peak_c=82 cpu_peak_c=97
+VISIBLE_EXIT terminated=1 mode=editor

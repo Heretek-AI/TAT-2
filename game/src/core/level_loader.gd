@@ -63,6 +63,19 @@ var fallback_materials: Array[String] = []
 var fallback_material_count: int = 0
 var _override_mesh_cache: Dictionary = {} # ue_path + "||" + ov_key -> Mesh
 var _emissive_cpd_mat: ShaderMaterial = null
+## W6L: roof top-coverage measurements, keyed by lower-case UE path. The public
+## roof_collision_kind() one-arg form needs the measured geometry, and a mesh
+## cannot be measured twice per load for free.
+var _roof_geom_cache: Dictionary = {}
+## W6L: roughness remap textures keyed by "orm_path|low|high". One L8 texture
+## per authored range, not one per material (several MIs bind the same ORM at
+## different ranges).
+var _roughness_remap_cache: Dictionary = {}
+## W6L bake accounting (one ROUGHNESS_BAKE line per map load): the exact
+## low + g*(high-low) bake is a one-time cost, measured instead of guessed.
+var _roughness_bake_count: int = 0
+var _roughness_bake_px: int = 0
+var _roughness_bake_ms: int = 0
 ## SM_LightBeam transform accounting: one BEAM_FIX line at settle.
 var _beam_fix_count: int = 0
 var _beam_fix_max_scale: float = 0.0
@@ -228,6 +241,28 @@ const DEN_GI_FILL_COLOR: Color = Color(0.55, 0.70, 0.92)
 ## Authored gold lamp glass (MI_LightSmGlassA_Gold): EmissiveTintB warm value
 ## and the authored 2.2 multiplier instead of a white 16x clip.
 const DEN_GOLD_LAMP_EMISSION: float = 2.2
+## W6L two-tone emissive policy. When a material has no EmissiveColor but does
+## carry the authored EmissiveTintA/B pair (Two Tone Emissive gradient), the
+## old lookup fell through to white and multiplied it by the authored
+## EmissiveStrength: a 50x clip for MI_LightSmGlassA_*, 11x for the guard
+## lantern, 110x+ for the large lamps. The lit tone is the brighter of the two
+## authored ends (B for the warm glass families, A where B is authored off),
+## and each family carries an energy ceiling so the lamp reads as a lamp and
+## never as a pure-white bloom sheet. No material may emit pure white above 4.
+const GLASS_EMISSION_CAP: float = 3.0
+const GUARD_LANTERN_EMISSION_CAP: float = 1.6
+const LARGE_LAMP_EMISSION_CAP: float = 2.5
+const EMISSIVE_ENERGY_CEIL: float = 4.0
+## W6L foliage gate. MSM_Subsurface is not proof of foliage: the WANTED
+## posters, decals, coins, scrolls, candles and slime bubbles all inherit it
+## from a masked/subsurface master, so backlight was standing in for a
+## translucent edge and painting those flat cards from behind. Only authored
+## foliage (TwoSidedFoliage shading, or a foliage/bark/leaf token in the
+## material path or its albedo) may take the backlight stand-in.
+const FOLIAGE_TOKENS: Array[String] = [
+	"leaves", "leaf", "needle", "foliage", "willow", "ivy", "vine", "moss",
+	"fern", "plants", "shrub", "bush", "canopy", "branch", "bark",
+]
 
 
 ## Monotonic authored-intensity -> energy mapping. See the constants above.
@@ -311,8 +346,14 @@ const STRUCTURAL_NO_FADE_TOKENS: Array[String] = [
 ## triangles), so the occluder culled the city behind a solid volume that does
 ## not exist and popped geometry in and out as the camera moved. Roof pieces
 ## are excluded by name now (below); walls/floors/ceilings keep their boxes.
+## W6L: "stair" was an occluder candidate. A flight's AABB is a long, mostly
+## empty ramp: SM_StairsCity4x2m boxes 4 x 2 m of air over the treads, so its
+## occluder culled whatever stood behind the open underside. With roofs already
+## excluded (W5B) those mostly-empty stair AABBs were the next class filling
+## the freed MAX_OCCLUDERS slots. Stairs are excluded by *removing* the token
+## here, so every remaining include token still has to prove a solid piece.
 const OCCLUDER_INCLUDE_TOKENS: Array[String] = [
-	"wall", "floor", "ceiling", "building", "pillar", "column", "stair", "block",
+	"wall", "floor", "ceiling", "building", "pillar", "column", "block",
 ]
 const OCCLUDER_EXCLUDE_TOKENS: Array[String] = [
 	"window", "door", "glass", "gate", "archway", "arch_", "frame", "rail", "beam",
@@ -333,17 +374,29 @@ const OCCLUDER_EXCLUDE_TOKENS: Array[String] = [
 ## their AABB is not their shape: the box top of SM_RoofUrban_Ext_Mid_4x4
 ## (4.07 x 4.18 m footprint, 4.22 m rise, ~46 deg, the audit's 44 deg hip)
 ## stands 4.08 m above the eave, which put an invisible flat platform in the
-## air above every roof and let the player stand on nothing. ConvexPolygonShape3D
-## follows the authored pitch and is cached per unique mesh: 13 of the 46 roof
-## meshes (334 of the 733 PeripheryA roof instances) take it.
-## Flat pieces keep the exact box - trim/fascia bands, end and side panels,
-## roof floor decks, and the roof props (chimney, vent, pipe, gutter, rail,
-## water tank) are convex boxes or props whose hull would only cost more.
+## air above every roof and let the player stand on nothing.
+##
+## W6L: the split is measured from the geometry, not from the `end` token. The
+## EndA/EndB gable caps are pitched shells too (92 instances in PeripheryA),
+## and three of the six End meshes measure 0.0000 top coverage - the name said
+## "end", so they kept BoxShape3D and floated a box at the ridge. A flat roof
+## surface is the one that presents a real horizontal top: the fraction of
+## upward-facing area inside ROOF_TOP_BAND_M of the AABB top, over the AABB
+## footprint. Measured on the shipped modules: GB_RoofFloor_6x6 = 1.00,
+## Side_* fascia = 1.90, EndA/EndB = 0.000-0.014, Mid_* = 0.07, Corner = 0.03,
+## so ROOF_FLAT_TOP_FRAC 0.5 separates decks/fascia from pitched shells with a
+## wide margin. Roof props and trim keep their exact box by ROOF_BOX_TOKENS
+## (a chimney's hull would only cost more, and its top is a real cap).
 const ROOF_PATH_TOKEN: String = "/roofs/"
 const ROOF_BOX_TOKENS: Array[String] = [
-	"trim", "chimney", "vent", "side", "end", "pipe", "gutter", "rail",
-	"floor", "watertower", "tank",
+	"trim", "chimney", "vent", "pipe", "gutter", "rail", "watertower", "tank",
+	"roofdetails", "spike",
 ]
+## Upward-facing area is counted only inside this band below the AABB top.
+const ROOF_TOP_BAND_M: float = 0.10
+## >= this top-area / footprint ratio is a flat, standable roof surface (box);
+## below it the module is a pitched shell (convex hull).
+const ROOF_FLAT_TOP_FRAC: float = 0.5
 ## Den west attic window wall: the single wall/window collider is split into
 ## two side boxes leaving DEN_WINDOW_GAP_M for the moonbeam opening, plus a
 ## low sill under the opening and a lintel above it. The 2 m marker gate
@@ -484,13 +537,15 @@ func _cap_texture(tex: Texture2D, res_path: String) -> Texture2D:
 ## PG-1 teardown: release cached textures/materials/meshes when the loader
 ## leaves the tree (scene reload / quit-to-desktop) so their RIDs are freed
 ## in scene order instead of at global exit (exit-time RID-leak /
-## PagedAllocator noise on live Vulkan). All four caches rebuild on demand.
+## PagedAllocator noise on live Vulkan). Every cache rebuilds on demand.
 func _exit_tree() -> void:
 	_tex_cache.clear()
 	_std_mat_cache.clear()
 	_mesh_res_cache.clear()
 	_guildhall_sign_split_cache.clear()
 	_override_mesh_cache.clear()
+	_roughness_remap_cache.clear()
+	_roof_geom_cache.clear()
 
 
 func _load_material_dbs() -> void:
@@ -623,6 +678,21 @@ func _ue_lookup(normed: Dictionary, names: Array) -> Variant:
 ## materials.json "params"). Runs before the art-direction overrides in
 ## get_material_for_ue() so those keep precedence; missing params keep current
 ## defaults (roughness 0.78, metallic/specular 0).
+##
+## W6L metallic precedence: the authored `Metallic Map?` / `Use Metallic Map`
+## switch is the authority. MI_TrimMetalA_brass and MI_Phonograph carry it true
+## next to the master's `FlatMetallic 0.0`, and the old chain read FlatMetallic
+## first, so 584 map-driven materials rendered as dielectrics. With the switch
+## on and an ORM bound, metallic must be 1.0 so the blue channel drives;
+## FlatMetallic is only the fallback for map-off materials (MI_Map_ThievesDen:
+## switch false, FlatMetallic 0.0 -> 0.0).
+##
+## W6L roughness range: UE's M_Env* masters expose `Roughness Low/High` and let
+## the map interpolate between them (low + g * (high - low)). Godot multiplies
+## `roughness` by the texture's green channel, so the old midpoint collapsed
+## the authored range to (low+high)/2 * g (parchment 0.50 * g, brass
+## 0.575 * g = mirror metal). The remap is baked once per (ORM, low, high) in
+## _roughness_remap_texture() and the scalar stays 1.0 so the map is the value.
 func _apply_ue_pbr_params(mat: StandardMaterial3D, info: Dictionary) -> void:
 	var params: Dictionary = _ue_norm_map(info.get("params", {}))
 	var switches: Dictionary = _ue_norm_map(info.get("switches", {}))
@@ -640,34 +710,124 @@ func _apply_ue_pbr_params(mat: StandardMaterial3D, info: Dictionary) -> void:
 	var rough: Variant = _ue_lookup(params, ["roughness", "rougness"])
 	if rough == null and not (has_orm and rough_map_switch != false):
 		rough = _ue_lookup(params, ["flatroughness"])
-	if rough == null:
-		var rlo: Variant = _ue_lookup(params, ["roughnesslow", "roughnessmin"])
-		var rhi: Variant = _ue_lookup(params, ["roughnesshigh", "roughnessmax"])
-		if rlo != null and rhi != null:
-			rough = (float(rlo) + float(rhi)) * 0.5
+	var rlo: Variant = _ue_lookup(params, ["roughnesslow", "roughnessmin"])
+	var rhi: Variant = _ue_lookup(params, ["roughnesshigh", "roughnessmax"])
+	var rough_low: float = float(rlo) if rlo != null else 0.0
+	var rough_high: float = float(rhi) if rhi != null else 1.0
 	if rough != null:
 		mat.roughness = clampf(float(rough), 0.0, 1.0)
+	elif has_orm and rlo != null and rhi != null and not is_equal_approx(rough_low, rough_high):
+		if is_zero_approx(rough_low) and is_equal_approx(rough_high, 1.0):
+			# low 0 / high 1 is the identity range: the ORM green channel already
+			# IS low + g * (high - low), so the authored map binds directly with
+			# scalar 1.0 and no baked copy is allocated.
+			mat.roughness = 1.0
+		elif rough_low < 0.0 or rough_high < 0.0:
+			# Negative authored values are data errors: use the safe matte end
+			# rather than a negative roughness. An inverted but non-negative
+			# range (low > high) is authored and bakes as a decreasing ramp.
+			mat.roughness = clampf(maxf(rough_low, rough_high), 0.0, 1.0)
+		else:
+			# low + g * (high - low) is baked into the roughness texture (see
+			# _roughness_remap_texture); the scalar multiplies it by 1.0.
+			mat.roughness = 1.0
+			mat.set_meta("ue_roughness_remap", Vector2(rough_low, rough_high))
+	elif has_orm and rlo != null and rhi != null:
+		mat.roughness = clampf(rough_high, 0.0, 1.0)
 	elif has_orm:
 		mat.roughness = 1.0
+	elif rlo != null and rhi != null:
+		# No map to interpolate along: the high end is the safe matte value.
+		mat.roughness = clampf(rough_high, 0.0, 1.0)
+	var metal_map_on: bool = _ue_lookup(switches, ["metallicmap?", "usemetallicmap"]) == true
 	var metal: Variant = _ue_lookup(params, ["metallic", "metalness", "flatmetallic"])
-	if metal == null:
-		var mlo: Variant = _ue_lookup(params, ["metallicmin"])
-		var mhi: Variant = _ue_lookup(params, ["metallicmax"])
-		if mlo != null and mhi != null:
-			metal = (float(mlo) + float(mhi)) * 0.5
-	if metal != null:
-		mat.metallic = clampf(float(metal), 0.0, 1.0)
+	if metal_map_on and has_orm:
+		# The map is the value; keep the authored flat value only as the
+		# fallback if the ORM texture fails to load at bind time.
+		mat.metallic = 1.0
+		mat.set_meta("ue_metallic_map", true)
+		if metal != null:
+			mat.set_meta("ue_flat_metallic", clampf(float(metal), 0.0, 1.0))
+	else:
+		if metal == null:
+			var mlo: Variant = _ue_lookup(params, ["metallicmin"])
+			var mhi: Variant = _ue_lookup(params, ["metallicmax"])
+			if mlo != null and mhi != null:
+				metal = (float(mlo) + float(mhi)) * 0.5
+		if metal != null:
+			mat.metallic = clampf(float(metal), 0.0, 1.0)
 	var spec: Variant = _ue_lookup(params, ["specular", "spec"])
 	if spec != null:
 		mat.metallic_specular = clampf(float(spec), 0.0, 1.0)
 
 
-## W5B: UE's M_Env* masters multiply the diffuse by `DiffuseMaskTint` only when
-## the `DiffuseColorMask?` static switch is on. Every MI inherits the master's
-## vector (MI_PosterWanted carries [0.5331,0.5645,0.6979]) but keeps the switch
-## off (0 materials in materials.json have it true), so applying the vector
-## unconditionally tints sepia WANTED posters to a cold cyan-grey. Read the
-## switch first, then convert the authored linear vector once for
+## W6L: bakes `low + g * (high - low)` from the authored ORM green channel into
+## a single-channel (L8) texture, cached per texture + range. Godot multiplies
+## BaseMaterial3D.roughness by the sampled green, so an L8 texture whose
+## luminance is the remapped value keeps every texel's authored roughness
+## without holding a second RGBA copy of the ORM (78.8 M px would be ~400 MiB
+## at RGBA8; L8 is ~100 MiB and samples .g = luminance on 4.7.2, verified with
+## a readback render). A null result means "no texture"; the caller falls back
+## to the high end so roughness is never left at the old average.
+func _roughness_remap_texture(orm: Texture2D, low: float, high: float, orm_path: String) -> Texture2D:
+	if orm == null:
+		return null
+	var key: String = "%s|%.4f|%.4f" % [orm_path if orm_path != "" else orm.resource_path, low, high]
+	if _roughness_remap_cache.has(key):
+		return _roughness_remap_cache[key] as Texture2D
+	var bake_t0: int = Time.get_ticks_msec()
+	var img: Image = orm.get_image()
+	if img == null:
+		_roughness_remap_cache[key] = null
+		return null
+	img = (img.duplicate() as Image)
+	if img.is_compressed():
+		img.decompress()
+	img.convert(Image.FORMAT_RGBA8)
+	var w: int = img.get_width()
+	var h: int = img.get_height()
+	if w <= 0 or h <= 0:
+		_roughness_remap_cache[key] = null
+		return null
+	var lut := PackedByteArray()
+	lut.resize(256)
+	for i: int in range(256):
+		var v: float = low + (float(i) / 255.0) * (high - low)
+		lut[i] = int(roundf(clampf(v, 0.0, 1.0) * 255.0))
+	var src: PackedByteArray = img.get_data()
+	var dst := PackedByteArray()
+	dst.resize(w * h)
+	var si: int = 1
+	var di: int = 0
+	var n: int = src.size()
+	while si < n and di < w * h:
+		dst[di] = lut[src[si]]
+		si += 4
+		di += 1
+	var out_img: Image = Image.create_from_data(w, h, false, Image.FORMAT_L8, dst)
+	if out_img == null:
+		_roughness_remap_cache[key] = null
+		return null
+	if not out_img.has_mipmaps():
+		out_img.generate_mipmaps()
+	var tex: ImageTexture = ImageTexture.create_from_image(out_img)
+	_roughness_remap_cache[key] = tex
+	_roughness_bake_count += 1
+	_roughness_bake_px += w * h
+	_roughness_bake_ms += Time.get_ticks_msec() - bake_t0
+	return tex
+
+
+## W5B/W6L: UE's M_Env* masters multiply the diffuse by `DiffuseMaskTint` only
+## when the `DiffuseColorMask?` static switch is on. Every MI inherits the
+## master's vector (MI_PosterWanted carries [0.5331,0.5645,0.6979]) but keeps
+## the switch off (0 materials in materials.json have it true), so the guard
+## stays. W6L correction: this tint path is inert on the shipped data and was
+## never the cyan-poster cause - applying the vector unconditionally only
+## changes WANTED posters if someone flips the switch. The poster was actually
+## lit from behind by the MSM_Subsurface backlight fallback (see
+## _is_authored_foliage), while the white emissive fallback is the lamp clip.
+## Keep the switch guard, then convert the authored linear vector once for
 ## albedo_color (Godot treats albedo_color as sRGB).
 func _apply_diffuse_mask_tint(mat: StandardMaterial3D, info: Dictionary) -> void:
 	var switches: Dictionary = _ue_norm_map(info.get("switches", {}))
@@ -700,7 +860,7 @@ func _apply_ue_render_flags(mat: StandardMaterial3D, info: Dictionary) -> void:
 	var texs_rf_v: Variant = info.get("texs", {})
 	var texs_rf: Dictionary = texs_rf_v as Dictionary if texs_rf_v is Dictionary else {}
 	var is_bark: bool = "bark" in str(texs_rf.get("albedo", "")).to_lower()
-	var is_foliage_shading: bool = ("TwoSidedFoliage" in shading or ("Subsurface" in shading and not ("SubsurfaceProfile" in shading))) and not is_bark
+	var is_foliage_shading: bool = _is_authored_foliage(info, shading) and not is_bark
 	# Authored EBlendMode::BLEND_Additive is a real additive pass, not opaque.
 	# M_ParticleAdd_Niagara/MI_ThiefWriting_* and friends sat as opaque cards.
 	if blend.find("additive") >= 0:
@@ -731,6 +891,27 @@ func _apply_ue_render_flags(mat: StandardMaterial3D, info: Dictionary) -> void:
 		# receive scene lighting. Untextured unlit materials already return an
 		# unshaded black material in get_material_for_ue().
 		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+
+
+## W6L: MSM_Subsurface is not a foliage token. M_EnvBasicAlphaDoubleSided is the
+## masked double-sided master shared by the WANTED posters, decal posters,
+## scrolls, coins, candles and slime bubbles, and they all inherit
+## MSM_Subsurface. The old gate read that shading as foliage, so every flat card
+## took backlight_enabled and was lit from behind. Only authored foliage
+## qualifies: MSM_TwoSidedFoliage, or a leaf/bark/foliage token in the material
+## path or its bound albedo. Bark keeps its own no-backlight rule below.
+func _is_authored_foliage(info: Dictionary, shading: String) -> bool:
+	if shading.find("TwoSidedFoliage") >= 0:
+		return true
+	if shading.find("Subsurface") < 0 or shading.find("SubsurfaceProfile") >= 0:
+		return false
+	var texs_v: Variant = info.get("texs", {})
+	var texs: Dictionary = texs_v as Dictionary if texs_v is Dictionary else {}
+	var haystack: String = str(info.get("path", "")).to_lower() + "|" \
+		+ str(info.get("parent", "")).to_lower() + "|" \
+		+ str(texs.get("albedo", "")).to_lower() + "|" \
+		+ str(texs.get("normal", "")).to_lower()
+	return _has_token(haystack, FOLIAGE_TOKENS)
 
 
 ## Applies real UE emissive vectors/scalars from materials.json. Merges with an
@@ -774,6 +955,8 @@ func _has_authored_emissive(info: Dictionary) -> bool:
 		return false
 	var vectors: Dictionary = _ue_norm_map(info.get("vectors", {}))
 	var ecol: Variant = _ue_lookup(vectors, ["emissivecolor", "emissive", "emissivetint", "emiscolor"])
+	if ecol == null:
+		ecol = _two_tone_emissive_tint(vectors)
 	if not (ecol is Array) or (ecol as Array).size() < 3:
 		return false
 	var ea: Array = ecol as Array
@@ -783,6 +966,48 @@ func _has_authored_emissive(info: Dictionary) -> bool:
 	var params: Dictionary = _ue_norm_map(info.get("params", {}))
 	var estr: Variant = _ue_lookup(params, ["emissivestrength", "emissiveintensity", "emissivemultiplier", "emissivemultiply", "emismultiply", "emissivemult", "emissivepower", "emissivebrightness", "emissivebrillance"])
 	return estr == null or peak * float(estr) > 0.005
+
+
+## W6L: resolves the authored two-tone emissive gradient to its lit end.
+## Two Tone Emissive materials expose EmissiveTintA/B and no EmissiveColor (the
+## authored gradient blends between the two), so the generic lookup returned
+## null and _apply_ue_emissive() fell back to white. Pick the brighter end by
+## luminance: B carries the warm lit tone for the glass lamp families, while
+## the angular/blue/red modules and the switched-off variants author that tone
+## in A with B dark, and choosing B there would emit nothing.
+func _two_tone_emissive_tint(vectors: Dictionary) -> Variant:
+	var a: Variant = _ue_lookup(vectors, ["emissivetinta"])
+	var b: Variant = _ue_lookup(vectors, ["emissivetintb"])
+	var a_ok: bool = a is Array and (a as Array).size() >= 3
+	var b_ok: bool = b is Array and (b as Array).size() >= 3
+	if not a_ok and not b_ok:
+		return null
+	if a_ok and not b_ok:
+		return a
+	if b_ok and not a_ok:
+		return b
+	var aa: Array = a as Array
+	var ba: Array = b as Array
+	var a_luma: float = float(aa[0]) * 0.2126 + float(aa[1]) * 0.7152 + float(aa[2]) * 0.0722
+	var b_luma: float = float(ba[0]) * 0.2126 + float(ba[1]) * 0.7152 + float(ba[2]) * 0.0722
+	return a if a_luma >= b_luma else b
+
+
+## W6L per-family emissive energy ceilings. The authored EmissiveStrength on
+## these authored lamps is calibrated for UE's physical exposure (50x glass,
+## 100x large lamps); carried 1:1 into Godot's emission it clips to white and
+## seeds a bloom sheet. Glass stays readable at 3.0, the guard's handheld
+## lantern at 1.6, large lamps at 2.5; everything else is bounded by the global
+## 4.0 so no material emits pure white above 4.
+func _emissive_energy_cap(low_path: String) -> float:
+	if low_path.find("lanternguard") >= 0 or (low_path.find("lantern") >= 0 and low_path.find("guard") >= 0):
+		return GUARD_LANTERN_EMISSION_CAP
+	if low_path.find("lightlrg") >= 0 or low_path.find("chandelier") >= 0 \
+		or low_path.find("industrialceiling") >= 0 or low_path.find("/lights/ceiling/") >= 0:
+		return LARGE_LAMP_EMISSION_CAP
+	if low_path.find("glass") >= 0 or low_path.find("window") >= 0:
+		return GLASS_EMISSION_CAP
+	return EMISSIVE_ENERGY_CEIL
 
 
 func _apply_ue_emissive(mat: StandardMaterial3D, info: Dictionary) -> void:
@@ -826,6 +1051,9 @@ func _apply_ue_emissive(mat: StandardMaterial3D, info: Dictionary) -> void:
 			mat.emission_energy_multiplier = DEN_GOLD_LAMP_EMISSION
 			return
 	var ecol: Variant = _ue_lookup(vectors, ["emissivecolor", "emissive", "emissivetint", "emiscolor"])
+	if ecol == null:
+		# W6L two-tone gradient: see _two_tone_emissive_tint().
+		ecol = _two_tone_emissive_tint(vectors)
 	var estr: Variant = _ue_lookup(params, ["emissivestrength", "emissiveintensity", "emissivemultiplier", "emissivemultiply", "emismultiply", "emissivemult", "emissivepower", "emissivebrightness", "emissivebrillance"])
 	if ecol == null and estr == null:
 		return
@@ -835,17 +1063,17 @@ func _apply_ue_emissive(mat: StandardMaterial3D, info: Dictionary) -> void:
 		col = Color(float(ea[0]), float(ea[1]), float(ea[2]))
 		if maxf(col.r, maxf(col.g, col.b)) <= 0.02 and estr == null:
 			return
+	var energy_cap: float = _emissive_energy_cap(str(info.get("path", "")).to_lower())
 	if mat.emission_enabled:
 		mat.emission = col
 		if estr != null:
-			mat.emission_energy_multiplier = clampf(float(mat.emission_energy_multiplier) * float(estr), 0.0, 16.0)
+			var e_tex: float = clampf(float(mat.emission_energy_multiplier) * float(estr), 0.0, 16.0)
+			mat.emission_energy_multiplier = minf(e_tex, energy_cap)
 	else:
 		mat.emission_enabled = true
 		mat.emission = col
-		if estr != null:
-			mat.emission_energy_multiplier = clampf(float(estr), 0.0, 8.0)
-		else:
-			mat.emission_energy_multiplier = 1.0
+		var e_base: float = clampf(float(estr), 0.0, 8.0) if estr != null else 1.0
+		mat.emission_energy_multiplier = minf(e_base, energy_cap)
 
 
 func _build_glass_material(info: Dictionary, alb: Texture2D, op: Texture2D) -> ShaderMaterial:
@@ -895,7 +1123,18 @@ func _build_glass_material(info: Dictionary, alb: Texture2D, op: Texture2D) -> S
 		var tca: Array = trans_c as Array
 		smat.set_shader_parameter("translucent_color", Vector3(float(tca[0]), float(tca[1]), float(tca[2])))
 	var op_val: Variant = _ue_lookup(params, ["opacity", "glassopacity", "opacitymultiply"])
-	var op_scale: float = clampf(float(op_val), 0.0, 8.0) if op_val != null else 1.0
+	# W6L Den pane: MI_GlassPanels_oldmanor (ThievesDen glass) authors Opacity 2.0
+	# and MI_GlassPanels authors 1.5. With the _O mask at 0.51 those multiplied
+	# the mask past 1.0, so the centre of the pane saturated opaque. A mask IS
+	# the opacity: cap the multiplier at 1.0 when an opacity map is bound, which
+	# puts the centre transmission back at the thin-glass floor
+	# (0.51 * 0.42 = 0.21) while the fresnel rim keeps its authored 0.51-0.90
+	# band. Glass with no mask keeps its authored scalar (bulbs, display cases).
+	var op_scale: float = 1.0
+	if op_val != null:
+		op_scale = clampf(float(op_val), 0.0, 1.0 if op != null else 8.0)
+	elif op != null:
+		op_scale = 1.0
 	smat.set_shader_parameter("opacity_scale", op_scale)
 	var rough_val: Variant = _ue_lookup(params, ["roughness", "glassroughness", "flatroughness"])
 	if rough_val != null:
@@ -1110,10 +1349,32 @@ func get_material_for_ue(ue_mat_path: String) -> Material:
 		mat.ao_enabled = true
 		mat.ao_texture = orm
 		mat.ao_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
-		mat.roughness_texture = orm
-		mat.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
+		# W6L: roughness is a baked low + g * (high - low) L8 map when the
+		# material authored a Roughness Low/High range; otherwise the ORM's own
+		# green channel (scalar 1.0, set in _apply_ue_pbr_params).
+		var remap_v: Variant = mat.get_meta("ue_roughness_remap", null)
+		if remap_v is Vector2:
+			var remap: Vector2 = remap_v as Vector2
+			var rough_tex: Texture2D = _roughness_remap_texture(orm, remap.x, remap.y, str(texs.get("orm", "")))
+			if rough_tex != null:
+				mat.roughness_texture = rough_tex
+				mat.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
+			else:
+				mat.roughness = clampf(remap.y, 0.0, 1.0)
+		else:
+			mat.roughness_texture = orm
+			mat.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
 		mat.metallic_texture = orm
 		mat.metallic_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_BLUE
+	elif mat.get_meta("ue_metallic_map", false) == true:
+		# The ORM never loaded: a metallic map with no map would read as solid
+		# metal, so fall back to the authored flat value (0.0 when absent).
+		mat.metallic = float(mat.get_meta("ue_flat_metallic", 0.0))
+	if orm == null and mat.has_meta("ue_roughness_remap"):
+		# Same for roughness: with no map the safe matte end of the range, never
+		# the retired midpoint.
+		var remap2: Vector2 = mat.get_meta("ue_roughness_remap") as Vector2
+		mat.roughness = clampf(remap2.y, 0.0, 1.0)
 	var tint: Variant = info.get("tint")
 	if tint is Array and tint.size() >= 3:
 		var tint_col: Color = Color(float(tint[0]), float(tint[1]), float(tint[2]), 1.0)
@@ -1367,6 +1628,21 @@ func _split_guildhall_sign_mesh(ue_path: String, m: Mesh) -> Mesh:
 	return split
 
 
+## W6L: the additive light-shaft path. Authored light shafts / god rays were
+## the only names routed here, so VFX_SkySearchLight_Mesh (the authored sky
+## searchlight cone under /Lights/Searchlight/) kept the engine placeholder
+## WorldGridMaterial and rendered as the grey checkerboard cone. The token is
+## scoped: `skysearchlight` by name, or `searchlight` only on a VFX_ / /vfx/
+## asset, so the hard-surface fixtures (SM_Searchlight, SM_SearchlightBase,
+## ...LensSmall) keep their authored MI_Searchlight materials.
+func _is_additive_light_shaft(low_path: String) -> bool:
+	if low_path.find("lightshaft") >= 0 or low_path.find("godray") >= 0:
+		return true
+	if low_path.find("skysearchlight") >= 0:
+		return true
+	return low_path.find("searchlight") >= 0 and (low_path.find("vfx_") >= 0 or low_path.find("/vfx/") >= 0)
+
+
 func _get_mesh_and_shape(ue_path: String) -> Dictionary:
 	if _mesh_res_cache.has(ue_path):
 		return _mesh_res_cache[ue_path]
@@ -1390,7 +1666,7 @@ func _get_mesh_and_shape(ue_path: String) -> Dictionary:
 		if mi != null and mi.mesh != null:
 			var m := mi.mesh.duplicate() as Mesh
 			var low_u := ue_path.to_lower()
-			if "lightshaft" in low_u or "godray" in low_u:
+			if _is_additive_light_shaft(low_u):
 				var beam_mat := StandardMaterial3D.new()
 				beam_mat.albedo_color = Color(0.55, 0.78, 0.95, 0.08)
 				beam_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -1434,8 +1710,9 @@ func _get_mesh_and_shape(ue_path: String) -> Dictionary:
 				# an invisible wall 0.5-0.9 m in front of the leaf. A trimesh
 				# follows the modelled hole and is cheap for ~200 frames.
 				var is_door_aperture: bool = "door" in low_u or "archway" in low_u
-				# W5B: pitched /roofs/ modules must not box. See ROOF_BOX_TOKENS.
-				var is_roof_surface: bool = _is_roof_convex_surface(low_u)
+				# W6L: pitched /roofs/ modules must not box. See ROOF_BOX_TOKENS /
+				# _measure_roof_top_coverage; the split is measured from this mesh.
+				var is_roof_surface: bool = _is_roof_convex_surface(low_u, m)
 				var _s0: int = Time.get_ticks_msec()
 				var aabb := m.get_aabb()
 				var sz := aabb.size
@@ -2769,18 +3046,116 @@ func _culling_policy_signature(low_mp: String, mesh: Mesh) -> String:
 	return "default"
 
 
-## W5B roof collision policy, also the gate/test surface: "convex" for a
-## pitched /roofs/ shell, "box" for the flat roof pieces and roof props that
-## keep the exact AABB, "none" for anything outside /roofs/.
-func roof_collision_kind(ue_path: String) -> String:
+## W6L roof collision policy, also the gate/test surface: "convex" for a pitched
+## /roofs/ shell, "box" for a flat roof surface and the roof props that keep the
+## exact AABB, "none" for anything outside /roofs/. The split is measured from
+## the mesh (see ROOF_TOP_BAND_M / ROOF_FLAT_TOP_FRAC), not from the file name:
+## the EndA/EndB gable caps are pitched shells whose top coverage measures
+## 0.000-0.014, while a deck measures 1.00 and the fascia band 1.90. Passing a
+## mesh avoids a second GLB load; without one the geometry is loaded once and
+## cached per path.
+func roof_collision_kind(ue_path: String, mesh: Mesh = null) -> String:
 	var low: String = ue_path.to_lower()
 	if low.find(ROOF_PATH_TOKEN) < 0:
 		return "none"
-	return "box" if _has_token(low, ROOF_BOX_TOKENS) else "convex"
+	if _has_token(low, ROOF_BOX_TOKENS):
+		return "box"
+	var top_frac: float = -1.0
+	if mesh != null:
+		top_frac = _measure_roof_top_coverage(mesh)
+		_roof_geom_cache[low] = top_frac
+	else:
+		top_frac = _roof_geometry_for_path(ue_path, low)
+	if top_frac < 0.0:
+		# Unreadable mesh: no shape is emitted anyway, and box is the safer
+		# answer than inventing a hull from geometry that failed to load.
+		return "box"
+	return "box" if top_frac >= ROOF_FLAT_TOP_FRAC else "convex"
 
 
-func _is_roof_convex_surface(low_path: String) -> bool:
-	return roof_collision_kind(low_path) == "convex"
+## Fraction of the AABB footprint covered by upward-facing area inside
+## ROOF_TOP_BAND_M of the AABB top. 1.0 (or more) is a flat, standable surface;
+## a pitched shell only touches the band along its ridge. A mesh with no
+## footprint (a vertical plane) reports 1.0 so a degenerate hull is never
+## requested for a flat card.
+func _measure_roof_top_coverage(mesh: Mesh) -> float:
+	var aabb: AABB = mesh.get_aabb()
+	var footprint: float = aabb.size.x * aabb.size.z
+	if footprint <= 0.0001:
+		return 1.0
+	var top_y: float = aabb.position.y + aabb.size.y - ROOF_TOP_BAND_M
+	var top_area: float = 0.0
+	for s: int in range(mesh.get_surface_count()):
+		var arrays: Array = mesh.surface_get_arrays(s)
+		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		if verts.is_empty():
+			continue
+		var idx: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+		var tri_count: int = idx.size() / 3
+		var sequential: bool = idx.is_empty()
+		if sequential:
+			tri_count = verts.size() / 3
+		for t: int in range(tri_count):
+			var ia: int = t * 3 if sequential else idx[t * 3]
+			var ib: int = t * 3 + 1 if sequential else idx[t * 3 + 1]
+			var ic: int = t * 3 + 2 if sequential else idx[t * 3 + 2]
+			if ia >= verts.size() or ib >= verts.size() or ic >= verts.size():
+				continue
+			var va: Vector3 = verts[ia]
+			var vb: Vector3 = verts[ib]
+			var vc: Vector3 = verts[ic]
+			var cross: Vector3 = (vb - va).cross(vc - va)
+			if cross.length_squared() <= 0.0:
+				continue
+			var ny: float = absf(cross.normalized().y)
+			if ny < 0.5:
+				continue
+			if (va.y + vb.y + vc.y) / 3.0 < top_y:
+				continue
+			top_area += 0.5 * cross.length() * ny
+	return top_area / footprint
+
+
+## One-time geometry load for the one-argument roof_collision_kind() form (the
+## tests and any caller that only has a path). Never routed through
+## _get_mesh_and_shape(): that is the caller of roof_collision_kind().
+func _roof_geometry_for_path(ue_path: String, low_key: String) -> float:
+	if _roof_geom_cache.has(low_key):
+		return float(_roof_geom_cache[low_key])
+	var top_frac: float = -1.0
+	var res_path: String = _mesh_res_any_case(ue_path)
+	if res_path != "":
+		var packed: Variant = load(res_path)
+		if packed is PackedScene:
+			var inst: Node = (packed as PackedScene).instantiate()
+			var mi: MeshInstance3D = _find_first_mesh(inst)
+			if mi != null and mi.mesh != null:
+				top_frac = _measure_roof_top_coverage(mi.mesh)
+			inst.free()
+	_roof_geom_cache[low_key] = top_frac
+	return top_frac
+
+
+## Case-insensitive mesh resolution for path-only callers (tests pass the
+## authored UE path; some call sites already lower-case it). Matched against the
+## exact mesh paths in mesh_materials.json, then resolved through the normal
+## exact-case resolver.
+func _mesh_res_any_case(ue_path: String) -> String:
+	var direct: String = _ue_mesh_to_res(ue_path)
+	if direct != "":
+		return direct
+	var low: String = ue_path.to_lower().split(".")[0]
+	for k: Variant in _mesh_mats_db.keys():
+		var cand: String = str(k)
+		if cand.to_lower().split(".")[0] == low:
+			var res: String = _ue_mesh_to_res(cand)
+			if res != "":
+				return res
+	return ""
+
+
+func _is_roof_convex_surface(low_path: String, mesh: Mesh = null) -> bool:
+	return roof_collision_kind(low_path, mesh) == "convex"
 
 
 func _qualifies_as_occluder(low_mp: String, mesh: Mesh) -> bool:
@@ -4274,6 +4649,10 @@ func _log_perf_census(parent: Node3D, ctx: Dictionary, result: Dictionary, json_
 
 func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dictionary:
 	result["mesh_instances"] = mesh_instances
+	if _roughness_bake_count > 0:
+		print("ROUGHNESS_BAKE count=%d pixels=%d ms=%d (L8 low+g*(high-low), cached per ORM+range)" % [
+			_roughness_bake_count, _roughness_bake_px, _roughness_bake_ms,
+		])
 	result["beam_cards_fixed"] = _beam_fix_count
 	result["beam_scale_max"] = _beam_fix_max_scale
 	if _beam_fix_count > 0:

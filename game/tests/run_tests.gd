@@ -2890,6 +2890,10 @@ func _initialize() -> void:
 		print("PASS: 33a materials.json opacity maps resolved (WindowPanel_O, WindowPanels_Oldmanor_O, T_StorefrontGlass_O)")
 
 	# 33b. Translucent glass binds tat_glass.gdshader with authored albedo + opacity map
+	# 33b (W6L): a mask IS the opacity. MI_GlassPanels authors Opacity 1.5 and
+	# _oldmanor 2.0; multiplying a 0.51 mask by either saturated the pane
+	# centre. Mask-based glass now caps opacity_scale at 1.0 (see
+	# _build_glass_material), so both panes assert 1.0, not the old scalars.
 	var gl_gp_m: Variant = gl_ll.call("get_material_for_ue", "/Game/MaterialLibrary/Environment/Glass/WIndowPanels/MI_GlassPanels")
 	var gl_gp_sh: ShaderMaterial = gl_gp_m as ShaderMaterial
 	var gl_gp_alb: Variant = gl_gp_sh.get_shader_parameter("albedo_tex") if gl_gp_sh != null else null
@@ -2901,7 +2905,7 @@ func _initialize() -> void:
 		and (gl_gp_alb is Texture2D) and (gl_gp_opt is Texture2D) \
 		and gl_gp_sh.get_shader_parameter("use_albedo_tex") == true \
 		and gl_gp_sh.get_shader_parameter("use_opacity_tex") == true \
-		and absf(gl_gp_opsc - 1.5) < 0.01 \
+		and absf(gl_gp_opsc - 1.0) < 0.01 \
 		and (gl_gp_tint is Color) and absf((gl_gp_tint as Color).r - 0.311) < 0.01
 
 	var gl_om_m: Variant = gl_ll.call("get_material_for_ue", "/Game/MaterialLibrary/Environment/Glass/WIndowPanels/MI_GlassPanels_oldmanor")
@@ -2911,7 +2915,7 @@ func _initialize() -> void:
 		and (gl_om_sh.get_shader_parameter("albedo_tex") is Texture2D) \
 		and (gl_om_sh.get_shader_parameter("opacity_tex") is Texture2D) \
 		and gl_om_sh.get_shader_parameter("use_opacity_tex") == true \
-		and absf(float(gl_om_sh.get_shader_parameter("opacity_scale")) - 2.0) < 0.01
+		and absf(float(gl_om_sh.get_shader_parameter("opacity_scale")) - 1.0) < 0.01
 
 	var gl_unlit_m: Variant = gl_ll.call("get_material_for_ue", "/Game/MaterialLibrary/Environment/MasterMaterials/M_EnvGlassUnlit")
 	var gl_unlit_sh: ShaderMaterial = gl_unlit_m as ShaderMaterial

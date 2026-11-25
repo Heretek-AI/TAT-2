@@ -4130,20 +4130,18 @@ func _spawn_swinging_doors(stats: Dictionary) -> void:
 		# world-event target (auto names depend on tree history, not the map).
 		door.name = "SwingingDoor_%d" % count
 		door.configure(dd, level_loader)
-		# R10 authored locks only. The shipped swinging-door records author no
-		# `locked`/`lock_level` (tools/parse_tables.py emits
-		# name/actor/class/pos/basis/leaves/source) and BP_SwingingDoor authors
-		# only the cap `_lockConfig.MaxLockLevel` (4, = interactables.json
-		# doors.max_lock_level, which set_locked clamps to). The old
-		# `3 + count % 2` / `count % 12 == 5` formulas invented locks from the
-		# spawn index and from leaf-mesh filename tokens; they are deleted, so a
-		# door the shipped map leaves unlocked stays unlocked. The authored
-		# SceneVariant `Locks.Doors` override is the only lock source (on every
-		# map, Den included); its records carry no level, so the documented port
-		# default 3 (inside the authored 4 cap) is used.
+		# R10/W9-P2 B2 authored locks only. The shipped swinging-door record now
+		# carries the actor's authored `locked` / `max_lock_level` /
+		# `can_lockpick` (tools/parse_tables.py; applied in door.configure). This
+		# branch is the other authored source: the SceneVariant `Locks.Doors`
+		# override. Its records carry no level either, so the PORT DECISION is
+		# the authored class cap BP_SwingingDoor._lockConfig.MaxLockLevel = 4
+		# (interactables.json doors.max_lock_level, which set_locked also clamps
+		# to) instead of the old invented literal 3. The old `3 + count % 2` /
+		# `count % 12 == 5` spawn-index and leaf-filename formulas stay deleted.
 		var sv_locked: Variant = dd.get("scene_locked", null)
 		if sv_locked is bool and bool(sv_locked):
-			door.set_locked(true, 3)
+			door.set_locked(true, DoorScript.table_max_lock_level())
 		if door.locked:
 			locked_count += 1
 		add_child(door)

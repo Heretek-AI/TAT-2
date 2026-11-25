@@ -263,18 +263,21 @@ func _check_authored_locks(host: Node, problems: Array[String]) -> void:
 			locked += 1
 	_expect(problems, spawned == 6 and locked == 0,
 		"91.3b the invented lock heuristics still fire (spawned=%d locked=%d, want 6/0)" % [spawned, locked])
-	# Authored record still locks, at its authored level.
+	# Authored record still locks, at its authored level. W9-P2 B2: the level
+	# comes from the authored `_lockConfig.MaxLockLevel` cap (`max_lock_level`);
+	# `lock_level` was never an authored field (0 occurrences in the dump) and
+	# the consumer no longer reads it.
 	var locked_door: Node = SwingingDoorScript.new() as Node
 	locked_door.call("configure", {
 		"pos": [200.0, 0.0, 200.0],
 		"basis": [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
 		"leaves": [],
 		"locked": true,
-		"lock_level": 2,
+		"max_lock_level": 2,
 	}, null)
 	host.add_child(locked_door)
 	_expect(problems, bool(locked_door.get("locked")) and int(locked_door.get("lock_level")) == 2,
-		"91.3c an authored locked/lock_level record was not honoured (locked=%s level=%s)" % [str(locked_door.get("locked")), str(locked_door.get("lock_level"))])
+		"91.3c an authored locked/max_lock_level record was not honoured (locked=%s level=%s)" % [str(locked_door.get("locked")), str(locked_door.get("lock_level"))])
 	# Lockpick panel title carries the level exactly once (hud appends it).
 	var cont: Node = LootContainerScript.new() as Node
 	cont.call("configure", "BP_DisplayCaseA_MajorLoot_C", {

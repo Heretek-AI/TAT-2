@@ -311,6 +311,13 @@ var _lockpick_broken_flags: Array[bool] = []
 var _lockpick_jam_timer: float = 0.0
 var _lockpick_callback: Callable = Callable()
 var _lockpick_prev_mouse: Input.MouseMode = Input.MOUSE_MODE_CAPTURED
+## W9-P2 C1: frame stamp for the ESC the lockpick already consumed in
+## `_input`. The same frame's `_process` still sees the `pause` action as
+## "just pressed" and used to open the pause menu over the cancelled dialog.
+## This is the same guard pattern as `_npc_dialogue_closed_frame`; the process
+## frame counter is monotonic, so a stale stamp can never match a later frame
+## and no explicit reset is needed.
+var _pause_consumed_frame: int = -1
 
 # [TAB] Tactical Map Overlay
 var _map_root: Control
@@ -2406,6 +2413,10 @@ func _input(event: InputEvent) -> void:
 			# Lockpicking minigame input
 			if _lockpick_active:
 				if kev.keycode == KEY_ESCAPE:
+					# W9-P2 C1: ESC is the pick's CANCEL. Stamp the frame
+					# before finishing so the `pause` action bound to the same
+					# key cannot also open the pause menu in `_process`.
+					_pause_consumed_frame = Engine.get_process_frames()
 					_finish_lockpick(false)
 					_mark_input_handled()
 					return
@@ -2505,7 +2516,12 @@ func _process(delta: float) -> void:
 			_update_fps_overlay()
 
 	if InputMap.has_action("pause") and Input.is_action_just_pressed("pause"):
-		if Engine.get_process_frames() == _npc_dialogue_closed_frame:
+		if Engine.get_process_frames() == _pause_consumed_frame:
+			# The lockpick's own `_input` consumed this Escape (W9-P2 C1);
+			# set_input_as_handled() does not clear the Input action state, so
+			# the pause action is still "just pressed" this frame.
+			pass
+		elif Engine.get_process_frames() == _npc_dialogue_closed_frame:
 			# The dialogue consumed this Escape in its own _input.
 			pass
 		elif is_npc_dialogue_open():

@@ -17,6 +17,14 @@ const INTERACTABLES_PATH := "res://data/generated/gameplay/interactables.json"
 ## at 4). The table above wins whenever it provides the row; the JSON is
 ## authoritative.
 const FALLBACK_JAM_DAMAGE := {1: 5.0, 2: 10.0, 3: 20.0, 4: 40.0, 5: 80.0, 6: 160.0}
+## Authored door cap: BP_SwingingDoor._lockConfig.MaxLockLevel (produced into
+## interactables.json doors.max_lock_level). W9-P2 B2 port decision: the dump
+## has no per-instance `LockLevel`, so a record's level is its authored
+## `_lockConfig.MaxLockLevel` cap clamped by this table (cap-as-level). The
+## key-only door class is excluded from authored locks entirely
+## (`CanBeLockpicked == false`: BP_VaultDoor_Sliding_C and the Res/FTUE
+## apartment doorway) because the port ships no key inventory; see
+## `swinging_door.configure` and build/qa/w9/b2-impl.md.
 const FALLBACK_MAX_LOCK_LEVEL := 4
 ## GA_Lockpick.distance_before_cancel fallback (200 cm).
 const FALLBACK_CANCEL_DISTANCE_CM := 200.0

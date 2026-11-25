@@ -337,6 +337,23 @@ var _fp_tool_on_bone: bool = false
 ## (test/probe) never calls move_and_slide, so is_on_floor() is false at rest
 ## and a stationary zipwire idle was misclassified as jump_inair (M2.3).
 var _fp_airborne: bool = false
+## W9-P2 D1 — PORT STAND-IN, NOT AUTHORED CONTENT. The extraction ships no
+## lockpick tool mesh and no lockpick animation (41 `lockpick` filelist entries =
+## 36 `.uasset` + 5 `.ubulk`, 0 animation assets, 0 `.glb`; anims_manifest.json
+## has 0 lockpick clips). So the "pick in hand" is a small procedural prop
+## (thin shaft + bent tip + grip) at a fixed right-hand offset on the 1P rig,
+## plus a modest static rig pose offset while picking. Replace it only if an
+## authored mesh/animation ever lands.
+var _lockpick_standin: Node3D = null
+var _lockpick_rig_pos_saved: bool = false
+var _lockpick_base_rig_pos: Vector3 = Vector3.ZERO
+## Fixed stand-in pose (metres / degrees, 1P rig space; the right glove sits at
+## (+0.28, -0.24, -0.55) in the procedural fallback).
+const LOCKPICK_STANDIN_OFFSET := Vector3(0.24, -0.20, -0.48)
+const LOCKPICK_STANDIN_ROT_DEG := Vector3(-16.0, -24.0, 8.0)
+## Static lean while picking, added to the bob base: `_update_first_person`
+## composes fp_base_rig_pos + bob, so the bob is never overwritten.
+const LOCKPICK_POSE_RIG_OFFSET := Vector3(0.0, -0.012, 0.02)
 ## Separate AnimationPlayer for the SK_Zipwire tool skeleton: the gear montage
 ## animates gear/arrow/spring/blade/hinge/trigger, a different skeleton from the
 ## 1P arms and 3P body (UE AN_ThiefNisha_Zipwire__Gear_Zipwire_Reload_*).
@@ -2290,6 +2307,89 @@ static func disguise_drain_rate(
 
 func set_lockpicking_active(active: bool) -> void:
 	is_lockpicking = active
+	# W9-P2 D1: show/clear the labelled procedural stand-in (no authored
+	# lockpick mesh or animation exists — see `_lockpick_standin`).
+	_set_lockpick_standin(active)
+
+
+## W9-P2 D1 — PORT STAND-IN. Builds the procedural pick prop on the 1P rig and
+## applies the static pose offset while picking; frees it and restores the rig
+## base when picking ends. Null-safe: with no 1P rig (third person, headless
+## rig build failure) it is a no-op. This is presentation stand-in only, never
+## authored TAT content.
+func _set_lockpick_standin(active: bool) -> void:
+	if not active:
+		if _lockpick_standin != null and is_instance_valid(_lockpick_standin):
+			_lockpick_standin.queue_free()
+		_lockpick_standin = null
+		if _lockpick_rig_pos_saved:
+			fp_base_rig_pos = _lockpick_base_rig_pos
+			_lockpick_rig_pos_saved = false
+		return
+	if _lockpick_standin != null and is_instance_valid(_lockpick_standin):
+		_lockpick_standin.visible = true
+		return
+	if fp_rig == null or not is_instance_valid(fp_rig):
+		return
+	var standin := Node3D.new()
+	standin.name = "LockpickStandIn"
+	standin.position = LOCKPICK_STANDIN_OFFSET
+	standin.rotation_degrees = LOCKPICK_STANDIN_ROT_DEG
+	standin.set_meta("authored", false)
+	standin.set_meta("port_standin",
+		"lockpick hands: no authored lockpick mesh/animation exists in the extraction")
+	var steel := StandardMaterial3D.new()
+	steel.albedo_color = Color(0.62, 0.63, 0.66)
+	steel.metallic = 0.85
+	steel.roughness = 0.35
+	var grip_mat := StandardMaterial3D.new()
+	grip_mat.albedo_color = Color(0.17, 0.12, 0.08)
+	grip_mat.roughness = 0.8
+	# Pick shaft: a thin 11 cm rod pointing forward (-Z) from the hand.
+	var shaft := MeshInstance3D.new()
+	shaft.name = "PickShaft"
+	var shaft_mesh := CylinderMesh.new()
+	shaft_mesh.top_radius = 0.0022
+	shaft_mesh.bottom_radius = 0.0022
+	shaft_mesh.height = 0.11
+	shaft_mesh.radial_segments = 6
+	shaft_mesh.material = steel
+	shaft.mesh = shaft_mesh
+	shaft.rotation_degrees = Vector3(90.0, 0.0, 0.0)
+	shaft.position = Vector3(0.0, 0.0, -0.055)
+	shaft.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	standin.add_child(shaft)
+	# Bent tip (the pick's hook).
+	var tip := MeshInstance3D.new()
+	tip.name = "PickTip"
+	var tip_mesh := BoxMesh.new()
+	tip_mesh.size = Vector3(0.0024, 0.0024, 0.018)
+	tip_mesh.material = steel
+	tip.mesh = tip_mesh
+	tip.position = Vector3(0.0, 0.007, -0.112)
+	tip.rotation_degrees = Vector3(-35.0, 0.0, 0.0)
+	tip.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	standin.add_child(tip)
+	# Handle: short brass-brown grip at the palm.
+	var grip := MeshInstance3D.new()
+	grip.name = "PickHandle"
+	var grip_mesh := CylinderMesh.new()
+	grip_mesh.top_radius = 0.008
+	grip_mesh.bottom_radius = 0.0095
+	grip_mesh.height = 0.045
+	grip_mesh.radial_segments = 8
+	grip_mesh.material = grip_mat
+	grip.mesh = grip_mesh
+	grip.rotation_degrees = Vector3(90.0, 0.0, 0.0)
+	grip.position = Vector3(0.0, 0.0, 0.012)
+	grip.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	standin.add_child(grip)
+	fp_rig.add_child(standin)
+	_lockpick_standin = standin
+	if not _lockpick_rig_pos_saved:
+		_lockpick_base_rig_pos = fp_base_rig_pos
+		_lockpick_rig_pos_saved = true
+	fp_base_rig_pos = _lockpick_base_rig_pos + LOCKPICK_POSE_RIG_OFFSET
 
 
 func apply_guard_viewcone_disguise_decay(delta: float, in_cone: bool) -> void:

@@ -407,6 +407,25 @@ const LOOT_CONTAINER_CLASSES: Array[String] = [
 	"BP_Storefront_DisplayCaseD_MinorLoot_C",
 ]
 
+## W9-P2 B2: authored lock keys carried 1:1 from a marker record into the
+## `loot_containers`/`swinging_doors` record. The producer emits them only when
+## the source actor authors them (`_locked`, `_lockConfig.MaxLockLevel` /
+## `MinLockLevel` / `CanBeLockpicked`, `KeyTag.TagName`); a marker without them
+## stays absent so the consumer default (unlocked) applies. No level is
+## invented here: `max_lock_level` is the authored cap and the consumers label
+## cap-as-level as a port decision.
+const MARKER_LOCK_KEYS: Array[String] = [
+	"locked", "max_lock_level", "min_lock_level", "can_lockpick", "key_tag",
+]
+
+
+static func marker_lock_fields(mk: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	for k: String in MARKER_LOCK_KEYS:
+		if mk.has(k):
+			out[k] = mk[k]
+	return out
+
 ## Foliage/debris/clutter: aggressively culled, never casts shadows or collides.
 const CLUTTER_TOKENS: Array[String] = [
 	"sm_leaf", "sm_grass", "sm_newgrass", "sm_newspaper", "sm_pebble", "sm_debris",
@@ -3455,18 +3474,22 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 		elif cls in LOOT_CONTAINER_CLASSES:
 			# Openable loot container marker: meshes already live in the level
 			# geometry, so only the marker transform is recorded (existing
-			# keys above are untouched).
+			# keys above are untouched). W9-P2 B2: the authored lock keys (when
+			# the marker has them) travel with the record unchanged — this is
+			# the only place the loader may drop them.
 			var lc_arr: Array = result["loot_containers"]
 			var sc_raw: Array = mk.get("scale", [1, 1, 1])
 			var sc := Vector3.ONE
 			if sc_raw.size() >= 3:
 				sc = Vector3(float(sc_raw[0]), float(sc_raw[1]), float(sc_raw[2]))
-			lc_arr.append({
+			var lc_rec := {
 				"class": cls,
 				"pos": p,
 				"basis": (mk.get("basis", [1, 0, 0, 0, 1, 0, 0, 0, 1]) as Array).duplicate(),
 				"scale": sc,
-			})
+			}
+			lc_rec.merge(marker_lock_fields(mk))
+			lc_arr.append(lc_rec)
 	for ex_rec2: Dictionary in den_exit_doors:
 		var clean_rec: Dictionary = ex_rec2.duplicate()
 		clean_rec.erase("_pivot_vec")

@@ -121,6 +121,23 @@ var is_lockpicking: bool = false
 var _lockpick_actor: Node = null
 ## One warning per authored container class missing from containers.json.
 static var _missing_class_warned: Dictionary = {}
+## W9-P2 B2: authored key-only locks ignored by this port (no key inventory),
+## counted per class so the exclusion is observable without per-instance spam.
+static var _key_only_excluded: Dictionary = {}
+
+
+## W9-P2 B2: record an authored key-only lock we deliberately do not honour.
+## Counts every instance but prints once per class; `key_only_exclusions()`
+## exposes the tally to tests/probes.
+func _note_key_only_exclusion(p_class: String) -> void:
+	var seen: int = int(_key_only_excluded.get(p_class, 0))
+	_key_only_excluded[p_class] = seen + 1
+	if seen == 0:
+		print("[loot_container] authored key-only lock not applied (port has no key inventory): ", p_class)
+
+
+static func key_only_exclusions() -> Dictionary:
+	return _key_only_excluded.duplicate()
 
 
 func _warn_missing_container_class(p_class: String) -> void:
@@ -202,15 +219,29 @@ func configure(p_class: String, entry: Dictionary, p_index: int) -> void:
 		is_stash = true
 		if stash_uses <= 0:
 			stash_uses = LootStashScript.default_uses()
-	# R10 authored locks only. The level records author no `locked`/`lock_level`
-	# (tools/parse_tables.py keeps class/pos/basis only) and the container
-	# Blueprints author `_lockConfig.MaxLockLevel` (a cap) with `_locked=false`
-	# on BP_SmallSafe_MajorLoot: the old `2 + index % 2` / `1 + index % 3`
-	# formulas invented a pick on every major container. Deleted: a container is
-	# locked only when a level/scene record says so and at its authored level.
-	var entry_lvl: int = int(entry.get("lock_level", 0))
-	if entry.get("locked") == true or entry_lvl > 0:
-		set_locked(true, maxi(entry_lvl, 1))
+	# W9-P2 B2 authored locks only; no level is invented from the spawn index.
+	# PORT DECISION (labelled, not authored data): the dump has **no**
+	# per-instance lock level (`LockLevel`/`lock_level` appear 0 times in
+	# 12,541 JSONs). The only numeric per-instance value is
+	# `_lockConfig.MaxLockLevel`, a cap, so the record's level = that cap,
+	# clamped to this consumer's 1..6 range; a record that is `locked` with no
+	# authored cap locks at 1 (the minimum, never a formula). Absence of
+	# `locked` means unlocked: class-default `_locked` values (BP_SmallSafe_C /
+	# BP_LargeFancySafe_C) are CDO defaults, not placed authoring.
+	#
+	# Key-only authored locks (`_lockConfig.CanBeLockpicked == false`) are
+	# excluded: the port has no key inventory, so honouring them would soft-lock
+	# the container. They stay open and are counted/labelled once per class (no
+	# per-instance spam). Unsupported container classes never reach this
+	# function at all (level_loader.LOOT_CONTAINER_CLASSES filters
+	# BP_SmallSafe_MajorLoot_C / BP_ChestTrunk_C / BP_BookcaseB_C before spawn).
+	if entry.get("locked") == true:
+		var can_pick: Variant = entry.get("can_lockpick", null)
+		if can_pick is bool and not bool(can_pick):
+			_note_key_only_exclusion(p_class)
+		else:
+			var cap_lvl: int = int(entry.get("max_lock_level", 1))
+			set_locked(true, clampi(cap_lvl, 1, 6))
 
 
 func _ready() -> void:

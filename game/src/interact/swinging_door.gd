@@ -52,6 +52,31 @@ var _lockpick_actor: Node = null
 ## Leaf movers toggled by open angle (frame/jamb stay static level bodies).
 var _leaf_bodies: Array = []
 var _leaf_disabled: bool = false
+## W9-P2 B2: authored locks this port deliberately does not apply, counted per
+## reason+class (printed once per class). Reasons: `key_only` (no key inventory
+## in the port) and `window` (no window interaction; the door prepass also
+## resolves swinging pivots on window actors).
+static var _lock_excluded: Dictionary = {}
+
+
+func _note_lock_exclusion(reason: String, p_class: String) -> void:
+	var key: String = reason + "|" + p_class
+	var seen: int = int(_lock_excluded.get(key, 0))
+	_lock_excluded[key] = seen + 1
+	if seen == 0:
+		print("[swinging_door] authored lock not applied (", reason, "): ", p_class)
+
+
+static func lock_exclusions() -> Dictionary:
+	return _lock_excluded.duplicate()
+
+
+static func key_only_exclusions() -> Dictionary:
+	var out: Dictionary = {}
+	for k: String in _lock_excluded:
+		if k.begins_with("key_only|"):
+			out[k.trim_prefix("key_only|")] = int(_lock_excluded[k])
+	return out
 
 
 func set_locked(p_locked: bool, p_lock_level: int = 1) -> void:
@@ -82,9 +107,34 @@ func get_track_duration() -> float:
 func configure(entry: Dictionary, loader: Node) -> void:
 	door_entry = entry
 	level_loader = loader
-	var entry_lvl: int = int(entry.get("lock_level", 0))
-	if entry.get("locked") == true or entry_lvl > 0:
-		set_locked(true, maxi(entry_lvl, 1))
+	# W9-P2 B2 authored locks only, same labelled port decision as
+	# loot_container.configure: a record's level = its authored
+	# `_lockConfig.MaxLockLevel` cap (no `LockLevel` exists anywhere in the
+	# dump), clamped by set_locked to the authored door cap
+	# (interactables.json doors.max_lock_level = 4); `locked` with no authored
+	# cap locks at 1. `locked` absent/false stays unlocked.
+	# Key-only doors (`CanBeLockpicked == false`: the 3 BP_VaultDoor_Sliding_C and
+	# the Res/FTUE apartment doorway) are excluded — the port has no key
+	# inventory and a key-only lock would soft-lock the route. Note the prison
+	# doorway (BP_Prison_WallA_DoorwayB2_6x6_C) authors a KeyTag but **no**
+	# CanBeLockpicked, so by the authored flag it is pickable and locks at the
+	# 1 fallback; see build/qa/w9/b2-impl.md.
+	# Window actors are excluded too: the swinging-door prepass also resolves
+	# pivots on window Blueprints (8 of the 8 authored-locked windows are in
+	# OldManor_Geo swinging_doors records), and the port has no window
+	# interaction, so an authored window lock would be dead state.
+	# `scene_locked` (SceneVariant Locks.Doors) is supplied by mission_controller
+	# and is a separate branch; it does not come through this dict.
+	if entry.get("locked") == true:
+		var cls_name: String = str(entry.get("class", ""))
+		var can_pick: Variant = entry.get("can_lockpick", null)
+		if cls_name.to_lower().find("window") >= 0:
+			_note_lock_exclusion("window", cls_name)
+		elif can_pick is bool and not bool(can_pick):
+			_note_lock_exclusion("key_only", cls_name)
+		else:
+			var cap_lvl: int = int(entry.get("max_lock_level", 1))
+			set_locked(true, clampi(cap_lvl, 1, LockableDoorScript.table_max_lock_level()))
 	var pos_arr: Array = entry.get("pos", [])
 	var basis_arr: Array = entry.get("basis", [])
 	if pos_arr.size() < 3 or basis_arr.size() < 9:

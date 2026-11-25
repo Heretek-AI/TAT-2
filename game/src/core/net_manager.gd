@@ -10,6 +10,11 @@ extends Node
 ##   code listens to `world_event_applied`; the transport never dispatches to
 ##   arbitrary methods chosen by the network.
 ## - Loot, AI and mission progression are NOT replicated here (see docs).
+## - RE-N-11: the run outcome (escape/capture/timeout) is host-authoritative.
+##   A client asks the host, the host validates sender/outcome/cooldown, banks
+##   the run once and broadcasts the banked payout record; clients only receive
+##   a signal and apply that record. The transport never dispatches to a method
+##   chosen by the network.
 
 signal peer_connected(id: int)
 signal peer_disconnected(id: int)
@@ -22,13 +27,23 @@ signal world_event_received(kind: String, target_name: String, from_peer: int)
 ## Validated world event for local gameplay listeners. `target` is resolved in
 ## this peer's own scene tree; `from_peer` is the originating player.
 signal world_event_applied(kind: String, target: Node, from_peer: int)
+## RE-N-11: a validated client run-outcome request, emitted on the host only.
+signal run_requested(outcome: String, from_peer: int)
+## RE-N-11: the host's banked payout record, emitted on every client. Clients
+## apply it verbatim; they never recompute the numbers.
+signal run_resolved(outcome: String, payout: Dictionary)
 
 const DEFAULT_PORT: int = 7742
+## RE-N-11: the Cotter (Chameleon) export has no Dyn/ folder — the authored body
+## lives directly under Skin/Base/. The old "..._Dyn_..." candidate never
+## existed on disk, so a Chameleon remote visual always fell back to the capsule.
+## The canonical per-thief table is GameState.THIEF_BASE_MESHES; this list is the
+## historical fallback and is consulted after it (see _find_remote_packed).
 const REMOTE_GLB_CANDIDATES: Array[String] = [
 	"res://assets/ue/Content/Art/Animation/ThiefNisha/Skin/Base/Dyn/SK_ThiefNisha_Dyn__Body_NoPostProcABP.glb",
-	"res://assets/ue/Content/Art/Animation/ThiefCotter/Skin/Base/Dyn/SK_ThiefCotter_Dyn__Body_NoPostProcABP.glb",
+	"res://assets/ue/Content/Art/Animation/ThiefCotter/Skin/Base/SK_ThiefCotter__Body.glb",
 	"res://assets/models/SK_ThiefNisha_Dyn__Body_NoPostProcABP.glb",
-	"res://assets/models/SK_ThiefCotter_Dyn__Body_NoPostProcABP.glb",
+	"res://assets/models/SK_ThiefCotter__Body.glb",
 ]
 
 ## Closed allowlist: the transport never resolves a gameplay method from an
@@ -42,6 +57,12 @@ const MAX_THIEF_ID_LEN: int = 32
 ## Host world-event authority gates.
 const WORLD_EVENT_COOLDOWN_MSEC: int = 250
 const MAX_WORLD_EVENT_DISTANCE_M: float = 3.0
+## RE-N-11 run-outcome authority gates. The outcome vocabulary is closed (the
+## winning option is never a network-chosen method name) and both directions are
+## bounded so a peer cannot push an oversized record through the RPC.
+const RUN_OUTCOMES: Array[String] = ["escape", "capture", "timeout"]
+const RUN_OUTCOME_COOLDOWN_MSEC: int = 1000
+const MAX_PAYOUT_JSON_LEN: int = 8192
 
 var peer: ENetMultiplayerPeer
 var is_coop: bool = false
@@ -52,6 +73,8 @@ var _last_known_pos: Dictionary = {} # peer_id -> Vector3
 var _last_broadcast_msec: int = -100000
 var _last_remote_state_msec: Dictionary = {} # peer_id -> int msec
 var _last_world_event_msec: Dictionary = {} # peer_id -> int msec
+## RE-N-11: per-sender run-request gate (one request per second per peer).
+var _last_run_request_msec: Dictionary = {} # peer_id -> int msec
 ## Test/embedding seam: 0 uses the live MultiplayerAPI. A positive id lets a
 ## headless suite exercise host/client routing without opening a socket.
 var _peer_id_override: int = 0
@@ -59,6 +82,12 @@ var _peer_id_override: int = 0
 var broadcast_send_count: int = 0
 var world_event_accept_count: int = 0
 var world_event_reject_count: int = 0
+## RE-N-11 run-outcome counters, read by the lifecycle suite so the routing can
+## be asserted without a live socket.
+var run_request_count: int = 0
+var run_resolved_send_count: int = 0
+var run_resolved_accept_count: int = 0
+var run_resolved_reject_count: int = 0
 
 
 func _ready() -> void:
@@ -114,6 +143,7 @@ func disconnect_net() -> void:
 	_last_remote_state_msec.clear()
 	_last_known_pos.clear()
 	_last_world_event_msec.clear()
+	_last_run_request_msec.clear()
 	_last_broadcast_msec = -100000
 	if peer != null:
 		peer.close()
@@ -208,6 +238,85 @@ func apply_world_event(kind: String, target_name: String, from_peer: int) -> voi
 	if target == null:
 		return
 	_emit_world_event_applied(kind, target, from_peer)
+
+
+## RE-N-11: client→server run-outcome request. Mirrors request_world_event: a
+## local client call is forwarded to peer 1; the host validates the remote
+## sender, the closed outcome allowlist and a per-sender cooldown, then emits
+## run_requested. The transport never resolves a run by itself.
+@rpc("any_peer", "reliable")
+func request_run_resolved(outcome: String) -> void:
+	var sender: int = multiplayer.get_remote_sender_id()
+	if sender == 0:
+		if not is_coop:
+			return
+		if is_client():
+			run_request_count += 1
+			if multiplayer.multiplayer_peer != null:
+				request_run_resolved.rpc_id(1, outcome)
+			else:
+				print("NetCoop: run request outcome=", outcome, " (test seam, no socket)")
+			return
+		# A local host call is validated exactly like a remote one.
+		_host_accept_run_request(outcome, local_peer_id())
+		return
+	# Only the server accepts peer requests; a stray client-to-client copy is
+	# ignored (same rule as the world-event RPC above).
+	if not is_host():
+		return
+	_host_accept_run_request(outcome, sender)
+
+
+## RE-N-11: host gate for a run-outcome request. Bounded outcome vocabulary, a
+## positive sender and a one-second per-peer cooldown. Returns true only when
+## run_requested was emitted; nothing is banked here.
+func _host_accept_run_request(outcome: String, sender: int) -> bool:
+	if sender <= 0 or not RUN_OUTCOMES.has(outcome):
+		run_resolved_reject_count += 1
+		return false
+	var now: int = Time.get_ticks_msec()
+	if now - int(_last_run_request_msec.get(sender, -100000)) < RUN_OUTCOME_COOLDOWN_MSEC:
+		run_resolved_reject_count += 1
+		return false
+	_last_run_request_msec[sender] = now
+	run_request_count += 1
+	run_requested.emit(outcome, sender)
+	return true
+
+
+## RE-N-11: host→all validated run outcome. The RPC carries a bounded JSON
+## string, never a network-chosen method; clients parse it and emit
+## run_resolved. A client caller gets false (the host is the only authority).
+func broadcast_run_resolved(outcome: String, payout: Dictionary) -> bool:
+	if not is_host():
+		return false
+	if not RUN_OUTCOMES.has(outcome):
+		return false
+	var payout_json: String = JSON.stringify(payout)
+	if payout_json.length() > MAX_PAYOUT_JSON_LEN:
+		return false
+	run_resolved_send_count += 1
+	if multiplayer.multiplayer_peer != null:
+		apply_run_resolved.rpc(outcome, payout_json)
+	return true
+
+
+## RE-N-11: server→all validated run outcome. A local direct call has no remote
+## sender, so only peer 1's RPC is authority. The payload is re-validated here
+## (closed allowlist, 8 KiB cap, a JSON object) before any listener sees it.
+@rpc("authority", "reliable")
+func apply_run_resolved(outcome: String, payout_json: String) -> void:
+	if multiplayer.get_remote_sender_id() <= 0:
+		return
+	if not RUN_OUTCOMES.has(outcome) or payout_json.length() > MAX_PAYOUT_JSON_LEN:
+		run_resolved_reject_count += 1
+		return
+	var parsed: Variant = JSON.parse_string(payout_json)
+	if not (parsed is Dictionary):
+		run_resolved_reject_count += 1
+		return
+	run_resolved_accept_count += 1
+	run_resolved.emit(outcome, parsed as Dictionary)
 
 
 ## Client-owned movement, server-observed. Validation drops non-finite or
@@ -385,7 +494,7 @@ func _ensure_remote_visual(peer_id: int, thief_id: String) -> Node3D:
 	visual.name = "RemotePeer_%d" % peer_id
 	visual.set_meta("thief_id", thief_id)
 	root.add_child(visual)
-	var packed: PackedScene = _find_remote_packed()
+	var packed: PackedScene = _find_remote_packed(thief_id)
 	if packed != null:
 		var inst: Node = packed.instantiate()
 		visual.add_child(inst)
@@ -407,10 +516,39 @@ func _ensure_remote_visual(peer_id: int, thief_id: String) -> Node3D:
 	return visual
 
 
-func _find_remote_packed() -> PackedScene:
+## RE-N-11: resolve the peer's body mesh. GameState.THIEF_BASE_MESHES is the
+## canonical per-thief path table (lead-owned), so a remote Chameleon resolves
+## the real `Skin/Base/SK_ThiefCotter__Body.glb` instead of the candidate list's
+## historical (non-existent) `Dyn/` path. `thief_base_mesh()` itself resolves the
+## *local* thief, so it cannot answer for a remote peer id; the table it reads is
+## the same source of truth. Falls back to the candidate list, skipping any path
+## that does not exist or is not an imported PackedScene.
+func _find_remote_packed(thief_id: String = "") -> PackedScene:
+	var key: String = thief_id.strip_edges().to_lower()
+	if key == "moth":
+		# TAT-2's Moth has no authored outfit row; it renders on the Spider rig.
+		key = "spider"
+	if key != "":
+		var entry_v: Variant = GameState.THIEF_BASE_MESHES.get(key, null)
+		if entry_v is Dictionary:
+			var canonical: String = str((entry_v as Dictionary).get("body", ""))
+			if canonical != "":
+				var canonical_scene: PackedScene = _load_packed_if_present(canonical)
+				if canonical_scene != null:
+					return canonical_scene
 	for path: String in REMOTE_GLB_CANDIDATES:
-		if ResourceLoader.exists(path):
-			var loaded: Resource = ResourceLoader.load(path)
-			if loaded is PackedScene:
-				return loaded as PackedScene
+		var scene: PackedScene = _load_packed_if_present(path)
+		if scene != null:
+			return scene
+	return null
+
+
+## One candidate: only an existing, imported scene is returned; a missing or
+## unimported path is skipped (never a half-loaded visual).
+func _load_packed_if_present(path: String) -> PackedScene:
+	if not ResourceLoader.exists(path):
+		return null
+	var loaded: Resource = ResourceLoader.load(path)
+	if loaded is PackedScene:
+		return loaded as PackedScene
 	return null

@@ -150,13 +150,18 @@ func run() -> void:
 		]
 	)
 
-	# A second escape signal is a no-op (idempotent bank).
-	mission.call("_on_extracted")
+	# RE-N-18 / S2-10: replay the same banked record through the public API. The
+	# old case called `_on_extracted` again, which returned at its own
+	# `_payout_applied` guard (4386), so the match_id key was never exercised.
+	var before_replay: int = int((SaveSystem.data as Dictionary).get("currency", 0))
+	var replay: Dictionary = SaveSystem.bank_payout(SaveSystem.get_last_match())
 	await h.step_process(1)
 	h.require(
-		int((SaveSystem.data as Dictionary).get("currency", 0)) == after_currency,
+		str(replay.get("reason", "")) == "duplicate"
+			and not bool(replay.get("applied", true))
+			and int((SaveSystem.data as Dictionary).get("currency", 0)) == before_replay,
 		"S2-10",
-		"repeat escape bank is idempotent (currency stays %d)" % after_currency
+		"repeat bank is idempotent through the API (reason=%s, currency stays %d)" % [str(replay.get("reason", "")), before_replay]
 	)
 
 	# Capture model keeps only the stashed value (unit-covered; asserted here
@@ -167,10 +172,38 @@ func run() -> void:
 		"S2-11",
 		"capture keeps stashed only (%d), no reward, no carried haul" % stashed
 	)
+
+	# RE-N-18 / S2-12: a second run staged as free play with its own loot_run_id
+	# must record the same haul arithmetic but bank 0, write no contract and
+	# leave currency/xp unchanged. The old case compared
+	# `last_payout.free_play` with `GameState.free_play` — the flag with itself.
+	var currency_before_free: int = int((SaveSystem.data as Dictionary).get("currency", 0))
+	var contracts_before_free: Dictionary = ((SaveSystem.data as Dictionary).get("completed_contracts", {}) as Dictionary).duplicate(true)
+	var xp_before_free: int = int((SaveSystem.data as Dictionary).get("xp", 0))
+	var free_run_id: String = "s2-free-%d" % int(Time.get_ticks_usec())
+	GameState.free_play = true
+	GameState.loot_run_id = free_run_id
+	GameState.state = "playing"
+	GameState.set_mission_objectives([], 0)
+	GameState.quest_item_acquired = true
+	mission.set("_payout_applied", false)
+	mission.call("_on_extracted")
+	await h.step_process(1)
+	var free_last: Dictionary = SaveSystem.call("get_last_match")
 	h.require(
-		bool(GameState.last_payout.get("free_play", false)) == bool(GameState.free_play),
+		bool(free_last.get("free_play", false))
+			and str(free_last.get("match_id", "")) == free_run_id
+			and int(free_last.get("kept", -1)) == carried_value
+			and int(free_last.get("stashed", -1)) == stashed
+			and int(free_last.get("score", -1)) == expected_score
+			and int(free_last.get("reward", -1)) == 0
+			and int(free_last.get("money_taken", -1)) == expected_score + stashed
+			and int(free_last.get("banked", -1)) == 0
+			and int((SaveSystem.data as Dictionary).get("currency", 0)) == currency_before_free
+			and int((SaveSystem.data as Dictionary).get("xp", 0)) == xp_before_free
+			and ((SaveSystem.data as Dictionary).get("completed_contracts", {}) as Dictionary) == contracts_before_free,
 		"S2-12",
-		"live payout mirrors the free-play mode (%s)" % str(GameState.free_play)
+		"free-play escape records the same haul (Kept=%d Stashed=%d Score=%d) but banks 0, writes no contract, keeps currency/xp" % [carried_value, stashed, expected_score]
 	)
 
 	await h.free_node(mission)

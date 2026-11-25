@@ -176,11 +176,18 @@ func _ready() -> void:
 
 ## W6b: the only replicated mission interaction is the swinging-door state.
 ## Loot, AI and mission progression stay local (documented in the wave report).
+## RE-N-11 adds the host-authoritative run outcome: the host listens for a
+## validated client request, clients listen for the host's banked record. Both
+## are signals — the transport never calls a method chosen by the network.
 func _connect_coop_listener() -> void:
 	if NetManager == null or not NetManager.has_signal("world_event_applied"):
 		return
 	if not NetManager.world_event_applied.is_connected(_on_world_event_applied):
 		NetManager.world_event_applied.connect(_on_world_event_applied)
+	if NetManager.has_signal("run_requested") and not NetManager.run_requested.is_connected(_on_coop_run_request):
+		NetManager.run_requested.connect(_on_coop_run_request)
+	if NetManager.has_signal("run_resolved") and not NetManager.run_resolved.is_connected(_on_coop_run_resolved):
+		NetManager.run_resolved.connect(_on_coop_run_resolved)
 
 
 func _on_world_event_applied(kind: String, target: Node, _from_peer: int) -> void:
@@ -190,6 +197,50 @@ func _on_world_event_applied(kind: String, target: Node, _from_peer: int) -> voi
 		return
 	if target.is_in_group("swinging_doors") and target.has_method("apply_remote_toggle"):
 		target.call("apply_remote_toggle", kind == "open")
+
+
+## RE-N-11 host side: a client reported an outcome. Only the host resolves it,
+## and only through the same once-per-run _finish_run the local escape uses, so
+## a request cannot bank a second time.
+func _on_coop_run_request(outcome: String, from_peer: int) -> void:
+	if NetManager == null or not NetManager.is_host():
+		return
+	if not NetManager.RUN_OUTCOMES.has(outcome):
+		return
+	_finish_run(outcome, TIME_EXPIRED_REASON if outcome == "timeout" else "", from_peer)
+
+
+## RE-N-11 client side: apply the host's *banked* record verbatim. The client
+## never recomputes Original/Kept/Stashed/MoneyTaken and never broadcasts:
+## bank_payout is keyed on the same match_id, so the client's own profile
+## records the host's numbers and the host's currency delta. The protocol does
+## not carry the timeout reason, so a host timeout renders as the default
+## TIME EXPIRED copy on the client (documented residual).
+func _on_coop_run_resolved(outcome: String, payout: Dictionary) -> void:
+	if _payout_applied or GameState.state != "playing":
+		return
+	if payout.is_empty() or not NetManager.RUN_OUTCOMES.has(outcome):
+		return
+	GameState.register_extracted_player(NetManager.local_peer_id())
+	_payout_applied = true
+	var bank_result: Dictionary = SaveSystem.bank_payout(payout)
+	if not bool(bank_result.get("persisted", true)):
+		push_error("[mission_controller] co-op payout not persisted for match ", str(payout.get("match_id", "")), ": ", str(bank_result.get("write_error", "")))
+	var banked_record: Dictionary = SaveSystem.get_last_match()
+	GameState.last_payout = banked_record if not banked_record.is_empty() else payout.duplicate(true)
+	var final_score: int = int((GameState.last_payout as Dictionary).get("score", payout.get("score", 0)))
+	if outcome == "escape":
+		if not GameState.free_play:
+			SaveSystem.record_contract_complete(GameState.active_contract_order, final_score, not GameState.ever_spotted)
+		GameState.state = "victory"
+	else:
+		GameState.state = "failed"
+		if outcome == "timeout":
+			contract_info["timed_out"] = true
+	GameState.resolve_phase()
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	if hud != null and hud.has_method("show_result"):
+		hud.show_result(outcome == "escape", final_score, contract_info)
 
 
 func _setup_environment() -> void:
@@ -712,7 +763,29 @@ func start_contract(order: int) -> void:
 ## set a mission id. The endgame window is the tracked briefing override first
 ## (KF13 1200 s) and the authored QG EndgameDuration node second (480 s for
 ## LootTheRoom/OldManor, 300 s for the Guildhall vault heist).
+##
+## RE-N-15: the Thieves' Den is the hub, not a mission. Its authored durations
+## ([5400, 3600, 2700] on Mission.Tutorial.ThievesDen) describe the tutorial
+## *mission*, not the hub, and running that clock here let 90 minutes of idling
+## fail the hub with TIME EXPIRED (the HUD hides the objective row, so nothing
+## was visible). A zero limit is the minimal honest fix: `GameState.state`'s
+## declared "hub" value is never written by any code path and 43 files read
+## `state`, so this deliberately mints no new state value.
 func _apply_run_clock(map_id: String) -> Dictionary:
+	if map_id == "thieves_den":
+		GameState.run_time_limit = 0.0
+		GameState.endgame_time_limit = 0.0
+		GameState.phase = GameState.PHASE_MAIN
+		GameState.endgame_elapsed = 0.0
+		GameState.escape_markers = []
+		print("TAT-2 run clock: map=thieves_den hub=no_mission_clock main_s=0.0 endgame_s=0.0")
+		return {
+			"main_s": 0.0,
+			"main_source": "hub",
+			"endgame_s": 0.0,
+			"endgame_source": "hub",
+			"mission_row": false,
+		}
 	var difficulty: int = GameState.difficulty
 	var map_limit: float = GameData.get_match_duration(map_id, difficulty)
 	var mid: String = GameState.active_mission_id
@@ -4330,24 +4403,84 @@ func _start_endgame(reason: String = "") -> bool:
 
 
 ## W7E co-op-safe extraction entry: every authored marker connects here, so a
-## second door (or the same door entered twice) cannot bank the run twice. The
-## local-only transport treats the host as the banking authority; client-side
-## host RPC replication is deferred (documented in docs/reports/w7e-endgame.md).
+## second door (or the same door entered twice) cannot bank the run twice.
+## RE-N-11: the host is the banking authority. A client reports the outcome to
+## the host and applies the host's banked record when it arrives; it never
+## resolves or banks locally — that used to leave the client to fail on its own
+## clock while the host kept the haul. is_client()/is_host() read the
+## set_test_peer_id seam, so the routing is drivable headless; both are false
+## solo, which keeps the single-player path identical. `is_coop` only becomes
+## true after the N1 connect handshake, never optimistically.
 func _on_escape_gate_extracted(source: Node = null) -> void:
 	if GameState.phase != GameState.PHASE_ENDGAME:
 		return
 	if source != null and bool(source.get("expired")):
 		return
-	if multiplayer != null and multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
-		print("TAT-2 extraction: client extraction observed; host banking replication deferred")
+	if NetManager != null and NetManager.is_client():
+		NetManager.request_run_resolved("escape")
 		return
-	var peer_id: int = 1
-	if multiplayer != null and multiplayer.has_multiplayer_peer():
-		peer_id = multiplayer.get_unique_id()
-	if not GameState.register_extracted_player(peer_id):
+	_finish_run("escape")
+
+
+## RE-N-08/RE-N-11: the single run finisher. Every outcome (escape, capture,
+## both timeout reasons, and a host-side client request) builds one payout,
+## registers the peer, banks once, mirrors the *banked* record into
+## GameState.last_payout and resolves the phase — so no path can skip the
+## `_payout_applied` guard or leave applied/banked stale. Free play records the
+## numbers but banks nothing; a contract completion record is escape-only.
+func _finish_run(outcome: String, reason: String = "", peer_id: int = -1) -> void:
+	# Guard split: `GameState.state` gates the RUN (a run resolves once) while
+	# `_payout_applied` gates the PAYOUT (a match banks once). They are not the
+	# same condition — the historical door-collapse order banked first and then
+	# resolved the run unconditionally, and a run must never stay "playing"
+	# behind a result the player already earned or lost.
+	if GameState.state != "playing":
 		return
+	var resolved_peer: int = peer_id
+	if resolved_peer <= 0 and NetManager != null:
+		resolved_peer = NetManager.local_peer_id()
+	# Escape is the only rewarding outcome and the only one that records the
+	# contract; the objective flag mirrors the pre-consolidation behaviour
+	# (escape asks the live completion check, every failure reports false).
+	var objectives_done: bool = outcome == "escape" and GameState.are_all_objectives_complete()
+	var payout: Dictionary = LootInventoryScript.build_payout(outcome, {
+		"objectives_complete": objectives_done,
+		"match_id": GameState.loot_run_id,
+	})
+	if not _payout_applied:
+		if resolved_peer > 0:
+			GameState.register_extracted_player(resolved_peer)
+		_payout_applied = true
+		var bank_result: Dictionary = SaveSystem.bank_payout(payout)
+		if not bool(bank_result.get("persisted", true)):
+			push_error("[mission_controller] payout not persisted for match ", str(payout.get("match_id", "")), ": ", str(bank_result.get("write_error", "")))
+		# Mirror the BANKED record (bank_payout stamps applied/banked), not the
+		# pre-bank dict: a reader must never see applied=false on a banked run.
+		var banked_record: Dictionary = SaveSystem.get_last_match()
+		GameState.last_payout = banked_record if not banked_record.is_empty() else payout.duplicate(true)
+	elif (GameState.last_payout as Dictionary).is_empty():
+		GameState.last_payout = payout
+	var final_score: int = int((GameState.last_payout as Dictionary).get("score", payout.get("score", 0)))
+	if outcome == "escape":
+		if not GameState.free_play:
+			SaveSystem.record_contract_complete(GameState.active_contract_order, final_score, not GameState.ever_spotted)
+		GameState.state = "victory"
+	else:
+		GameState.state = "failed"
+		if outcome == "timeout":
+			contract_info["timed_out"] = true
+			contract_info["timeout_reason"] = reason if reason != "" else TIME_EXPIRED_REASON
 	GameState.resolve_phase()
-	_on_extracted()
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	# Lead probe 2026-11-25: the pre-consolidation escape path called
+	# `hud.has_method` with no null check (the headless suites stage hud=null).
+	if hud != null and hud.has_method("show_result"):
+		hud.show_result(outcome == "escape", final_score, contract_info)
+	# Host/solo-coop broadcast. Solo is not a host (is_host() requires is_coop),
+	# and a client can never broadcast because broadcast_run_resolved rejects a
+	# non-host caller.
+	if NetManager != null and NetManager.has_method("broadcast_run_resolved") and NetManager.is_host():
+		NetManager.broadcast_run_resolved(outcome, GameState.last_payout)
 
 
 ## Endgame window closed: the summoned doors collapse, the run fails, and the
@@ -4360,100 +4493,33 @@ func _on_door_collapsed() -> void:
 		if gate_v is Node and is_instance_valid(gate_v) and (gate_v as Node).has_method("expire"):
 			(gate_v as Node).call("expire")
 		rec["expired"] = true
-	# W7S-S2: a collapsed door is a failed getaway, not a capture. The carried
-	# haul is lost and no contract reward is paid, but the stashed value was
-	# banked at the vault and is always kept — the same rule as a main-clock
-	# timeout. Guarded so a payout can never be banked twice in one match.
-	if not _payout_applied:
-		var payout: Dictionary = LootInventoryScript.build_payout("timeout", {
-			"objectives_complete": false,
-			"match_id": GameState.loot_run_id,
-		})
-		GameState.last_payout = payout
-		_payout_applied = true
-		SaveSystem.bank_payout(payout)
-	GameState.resolve_phase()
-	GameState.state = "failed"
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	contract_info["timed_out"] = true
-	contract_info["timeout_reason"] = DOOR_COLLAPSED_REASON
-	if hud != null and hud.has_method("show_result"):
-		var shown: int = int((GameState.last_payout as Dictionary).get("score", GameState.loot_value))
-		hud.show_result(false, shown, contract_info)
+	# W7S-S2: a collapsed door is a failed getaway, not a capture. RE-N-08 folds
+	# it into the one guarded finisher: stashed kept, carried lost, no reward.
+	_finish_run("timeout", DOOR_COLLAPSED_REASON)
 
 
+## RE-N-08 thin wrapper kept for the existing suites/E2E call sites.
 func _on_extracted() -> void:
-	if _payout_applied or GameState.state == "victory":
-		return
-	# W7S-S2 payout: the carried haul follows the binary keep rule (escape
-	# keeps it, capture does not); stashed value is always kept; a completed
-	# contract adds the authored mission reward once. The score keeps the
-	# shipped stealth multiplier on the kept value, so ghost/shadow bonuses are
-	# unchanged. Free play records the record but banks nothing.
-	var payout: Dictionary = LootInventoryScript.build_payout("escape", {
-		"objectives_complete": GameState.are_all_objectives_complete(),
-		"match_id": GameState.loot_run_id,
-	})
-	GameState.last_payout = payout
-	_payout_applied = true
-	var final_score: int = int(payout.get("score", 0))
-	# bank_payout is idempotent (match_id) and banks 0 for free play; the
-	# completion record stays contract-only (order 2 would corrupt the campaign).
-	SaveSystem.bank_payout(payout)
-	if not GameState.free_play:
-		SaveSystem.record_contract_complete(GameState.active_contract_order, final_score, not GameState.ever_spotted)
-	GameState.state = "victory"
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	if hud.has_method("show_result"):
-		hud.show_result(true, final_score, contract_info)
+	_finish_run("escape")
 
 
+## Downed is a 10 s bleed-out window (GE_GrantPlayerDowned_Duration), not
+## instant failure: show the countdown and fail only when `downed` fires.
 func _on_player_downed_started(seconds: float) -> void:
-	# Downed is a 10 s bleed-out window (GE_GrantPlayerDowned_Duration), not
-	# instant failure: show the countdown and fail only when `downed` fires.
 	if hud != null and hud.has_method("set_downed_display"):
 		hud.set_downed_display(true, seconds)
 
 
+## RE-N-08 thin wrapper: capture keeps only the stashed value, no reward, and
+## is now guarded exactly like every other failure path.
 func _on_player_downed() -> void:
-	# W7S-S2 capture payout: the carried haul is lost (kept 0), stashed value is
-	# always kept, no contract reward. Free play still banks nothing.
-	var payout: Dictionary = LootInventoryScript.build_payout("capture", {
-		"objectives_complete": false,
-		"match_id": GameState.loot_run_id,
-	})
-	GameState.last_payout = payout
-	_payout_applied = true
-	SaveSystem.bank_payout(payout)
-	GameState.state = "failed"
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	if hud.has_method("show_result"):
-		hud.show_result(false, int(payout.get("score", 0)), contract_info)
+	_finish_run("capture")
 
 
 ## Match timer ran out: fail the run with a TIME EXPIRED reason, reusing the
 ## standard result panel (no new GameState.state value).
 func _on_time_expired() -> void:
-	if GameState.state != "playing":
-		return
-	# W7S-S2: a timed-out getaway is a failure, not a capture — carried loot is
-	# not kept, stashed value still is, and no contract reward is paid.
-	var payout: Dictionary = LootInventoryScript.build_payout("timeout", {
-		"objectives_complete": false,
-		"match_id": GameState.loot_run_id,
-	})
-	GameState.last_payout = payout
-	_payout_applied = true
-	SaveSystem.bank_payout(payout)
-	# W7E: the run clock stops on either expiry; the phase is resolved so the
-	# HUD countdown cannot keep ticking behind the result panel.
-	GameState.resolve_phase()
-	GameState.state = "failed"
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	contract_info["timed_out"] = true
-	contract_info["timeout_reason"] = TIME_EXPIRED_REASON
-	if hud != null and hud.has_method("show_result"):
-		hud.show_result(false, int(payout.get("score", 0)), contract_info)
+	_finish_run("timeout", TIME_EXPIRED_REASON)
 
 
 ## Releases the process-lifetime caches owned by level/weather/VFX/animation

@@ -4237,9 +4237,26 @@ func _initialize() -> void:
 			printerr("FAIL: 49 could not write corrupt save")
 			sv49_ok = false
 		sv49.call("load_save")
-		if int(sv49.call("get_currency")) < 0:
-			printerr("FAIL: 49 corrupt save produced negative currency")
+		# RE-N-03: `currency >= 0` was vacuous (the defaults satisfy it). The
+		# real contract is that a corrupt file is quarantined whole and this boot
+		# does not mint a fresh profile over it: a failure is reported, the
+		# original bytes survive under .corrupt-<ts>, and SAVE_PATH is gone.
+		var sv49_quarantine: Array[String] = _t02_quarantine_files()
+		var sv49_failure: Dictionary = sv49.call("get_load_failure") as Dictionary
+		var sv49_quarantined_text: String = ""
+		if not sv49_quarantine.is_empty():
+			sv49_quarantined_text = FileAccess.get_file_as_string("user://" + sv49_quarantine[0])
+		if not bool(sv49.call("has_load_failure")) \
+				or str(sv49_failure.get("reason", "")) != "parse_error" \
+				or sv49_quarantine.is_empty() \
+				or not sv49_quarantined_text.contains("{broken json,,"):
+			printerr("FAIL: 49 corrupt save was not quarantined whole: failure=", sv49_failure, " quarantine=", sv49_quarantine, " bytes=", sv49_quarantined_text)
 			sv49_ok = false
+		if FileAccess.file_exists(sv49_path):
+			printerr("FAIL: 49 a corrupt load left/created a save at the live path (a fresh profile would overwrite the player's file)")
+			sv49_ok = false
+		for sv49_q: String in sv49_quarantine:
+			DirAccess.remove_absolute(ProjectSettings.globalize_path("user://" + sv49_q))
 		if not bool(sv49_write_raw.call(sv49_post_add)):
 			printerr("FAIL: 49 could not restore post-add save")
 			sv49_ok = false
@@ -6440,11 +6457,29 @@ func _initialize() -> void:
 		var w6_bad_yaw: bool = bool(w6_nm.call("broadcast_player_state", Vector3.ZERO, NAN, false, "chameleon"))
 		var w6_far_send: bool = bool(w6_nm.call("broadcast_player_state", Vector3(6000.0, 0.0, 0.0), 0.0, false, "chameleon"))
 		var w6_send_delta: int = int(w6_nm.get("broadcast_send_count")) - w6_count0
-		var w6_thief_src: String = FileAccess.get_file_as_string("res://src/player/thief_character.gd")
-		var w6_thief_call_ok: bool = w6_thief_src.contains("NetManager.broadcast_player_state(") and w6_thief_src.contains("NetManager.is_coop")
+		# RE-N-18: prove the controller publishes instead of reading its source
+		# text. A bare ThiefCharacter (never added to the tree, so `_ready` and
+		# the GLB load never run) is driven through its own 20 Hz tick and the
+		# transport's send counter is the observation.
+		w6_nm.set("_last_broadcast_msec", -100000)
+		var w6_tick0: int = int(w6_nm.get("broadcast_send_count"))
+		var w6_thief: Node = (load("res://src/player/thief_character.gd") as GDScript).new() as Node
+		w6_thief.call("_tick_coop_broadcast", 0.06)
+		var w6_tick_sent: bool = int(w6_nm.get("broadcast_send_count")) == w6_tick0 + 1
+		w6_thief.call("_tick_coop_broadcast", 0.01)
+		var w6_tick_gated: bool = int(w6_nm.get("broadcast_send_count")) == w6_tick0 + 1
+		w6_thief.free()
+		w6_nm.set("is_coop", false)
+		var w6_solo0: int = int(w6_nm.get("broadcast_send_count"))
+		var w6_solo_thief: Node = (load("res://src/player/thief_character.gd") as GDScript).new() as Node
+		w6_solo_thief.call("_tick_coop_broadcast", 0.06)
+		var w6_solo_quiet: bool = int(w6_nm.get("broadcast_send_count")) == w6_solo0
+		w6_solo_thief.free()
+		w6_nm.set("is_coop", true)
+		var w6_thief_call_ok: bool = w6_tick_sent and w6_tick_gated and w6_solo_quiet
 		fails += _w3_check(w6_send1 and not w6_send2 and not w6_bad_send and not w6_bad_yaw and not w6_far_send and w6_send_delta == 1 and w6_thief_call_ok,
-			"80.3 broadcast_player_state: 2 calls in one 50 ms window -> 1 send, INF/NAN/6000 m rejected, thief_character call site guarded by is_coop",
-			"80.3 player-state mismatch: send=%s/%s bad=%s/%s/%s delta=%d thief=%s" % [w6_send1, w6_send2, w6_bad_send, w6_bad_yaw, w6_far_send, w6_send_delta, w6_thief_call_ok])
+			"80.3 broadcast_player_state: 2 calls in one 50 ms window -> 1 send, INF/NAN/6000 m rejected, ThiefCharacter tick sends once then gates and stays silent solo",
+			"80.3 player-state mismatch: send=%s/%s bad=%s/%s/%s delta=%d tick=%s" % [w6_send1, w6_send2, w6_bad_send, w6_bad_yaw, w6_far_send, w6_send_delta, w6_thief_call_ok])
 
 		# 80.4 cosmetic remote visual create/free, door remote toggle, and the
 		# mission listener wiring (source shape; no live mission instance).
@@ -6470,11 +6505,32 @@ func _initialize() -> void:
 		var w6_door_idem_ok: bool = bool(w6_door.get("is_open"))
 		w6_door.call("apply_remote_toggle", false)
 		var w6_door_close_ok: bool = not bool(w6_door.get("is_open"))
-		var w6_door_src: String = FileAccess.get_file_as_string("res://src/interact/swinging_door.gd")
-		var w6_mc_src: String = FileAccess.get_file_as_string("res://src/missions/mission_controller.gd")
-		var w6_wiring_ok: bool = w6_door_src.contains("send_world_event") and w6_door_src.contains("func apply_remote_toggle") and w6_mc_src.contains("world_event_applied") and w6_mc_src.contains("apply_remote_toggle")
+		# RE-N-18: wiring is proved through the real signal, not source text.
+		# `_connect_coop_listener` is the exact method `_ready` calls; on a bare
+		# mission instance it binds the transport signals without loading a map.
+		var w6_mc: Node = (load("res://src/missions/mission_controller.gd") as GDScript).new() as Node
+		w6_mc.call("_connect_coop_listener")
+		var w6_listener_ok: bool = w6_nm.world_event_applied.is_connected(Callable(w6_mc, "_on_world_event_applied"))
+		w6_nm.world_event_applied.emit("open", w6_door, 2)
+		var w6_signal_open_ok: bool = bool(w6_door.get("is_open"))
+		w6_nm.world_event_applied.emit("close", w6_door, 2)
+		var w6_signal_close_ok: bool = not bool(w6_door.get("is_open"))
+		w6_nm.world_event_applied.emit("open", w6_outside, 2)
+		var w6_signal_guard_ok: bool = not bool(w6_door.get("is_open"))
+		# The door announces its own state through the host gate: a validated
+		# accept is the proof the send path exists (again, no source text).
+		w6_nm.set("_last_world_event_msec", {})
+		w6_known[1] = w6_door.global_position
+		var w6_accept0: int = int(w6_nm.get("world_event_accept_count"))
+		w6_door.set("is_open", true)
+		w6_door.call("_announce_world_state")
+		var w6_door_send_ok: bool = int(w6_nm.get("world_event_accept_count")) == w6_accept0 + 1
+		if w6_listener_ok:
+			w6_nm.world_event_applied.disconnect(Callable(w6_mc, "_on_world_event_applied"))
+		w6_mc.free()
+		var w6_wiring_ok: bool = w6_listener_ok and w6_signal_open_ok and w6_signal_close_ok and w6_signal_guard_ok and w6_door_send_ok
 		fails += _w3_check(w6_visual_ok and w6_visual_freed and w6_door_open_ok and w6_door_idem_ok and w6_door_close_ok and w6_wiring_ok,
-			"80.4 remote visual create/free without a peer; door apply_remote_toggle open/idempotent/close; door+mission listener wiring present",
+			"80.4 remote visual create/free without a peer; door apply_remote_toggle open/idempotent/close; the mission's coop listener opens/closes a real door from the transport signal and the door announces through the host gate",
 			"80.4 visual/door mismatch: visual=%s freed=%s open=%s idem=%s close=%s wiring=%s" % [w6_visual_ok, w6_visual_freed, w6_door_open_ok, w6_door_idem_ok, w6_door_close_ok, w6_wiring_ok])
 
 		# Restore transport state for the rest of the run.
@@ -7144,6 +7200,102 @@ func _initialize() -> void:
 	else:
 		print("PASS: 90 W7S-S2 loot save v8 (payout idempotency, migration, major mesh)")
 
+	# 91. T02-STATE run lifecycle (RE-N-08/11/14/15/16): the reset contract, the
+	# Thieves' Den without a mission clock, one banked payout per failure path,
+	# and the host-authoritative co-op run outcome (client resolves on the
+	# host's record, never on its own clock).
+	var c91_problems: Array[String] = _run_suite91(root)
+	if not c91_problems.is_empty():
+		printerr("FAIL: 91 T02 run lifecycle: ", c91_problems)
+		fails += 1
+	else:
+		print("PASS: 91 T02 run lifecycle (reset clears, hub clock, failure-path banking, co-op outcome)")
+
+	# 92. T02-STATE save integrity (RE-N-03/06): a corrupt save is quarantined
+	# whole and never replaced by a fresh profile, write_save reports its Error,
+	# and the payout outbox settles once through the production API.
+	var c92_problems: Array[String] = _run_suite92(root)
+	if not c92_problems.is_empty():
+		printerr("FAIL: 92 T02 save integrity: ", c92_problems)
+		fails += 1
+	else:
+		print("PASS: 92 T02 save integrity (corrupt quarantine, write errors, outbox settle, loadout copy)")
+
+	# 93. T02-STATE identity contracts. The authored cosmetic data path
+	# (RE-N-10) and the co-op provenance label (RE-N-12) are consumed by other
+	# lanes (T04-ANIM character bind, T05 UI copy), so their shape is pinned.
+	var t02_prev_thief: String = str(gs.thief_id)
+	var t02_prev_head: String = str(gs.get("outfit_head"))
+	var t02_tags_ok: bool = true
+	var t02_meshes_ok: bool = true
+	var t02_body_spider: String = ""
+	var t02_body_chameleon: String = ""
+	var t02_head_chameleon: String = ""
+	for t02_thief: String in ["spider", "chameleon"]:
+		gs.set("thief_id", t02_thief)
+		var t02_outfit: Dictionary = gs.call("active_outfit") as Dictionary
+		var t02_prefix: String = "Outfit.%s." % t02_thief.capitalize()
+		for t02_slot: String in ["head", "body", "calling_card"]:
+			var t02_tag: String = str(t02_outfit.get(t02_slot, ""))
+			if not t02_tag.begins_with(t02_prefix):
+				printerr("FAIL: 93 active_outfit.%s='%s' is not an authored '%s*' tag" % [t02_slot, t02_tag, t02_prefix])
+				t02_tags_ok = false
+		var t02_body: String = str(gs.call("thief_base_mesh", "body"))
+		var t02_head: String = str(gs.call("thief_base_mesh", "head"))
+		if not FileAccess.file_exists(t02_body) or not FileAccess.file_exists(t02_head):
+			printerr("FAIL: 93 base mesh missing for ", t02_thief, ": ", t02_body, " / ", t02_head)
+			t02_meshes_ok = false
+		if t02_thief == "spider":
+			t02_body_spider = t02_body
+		else:
+			t02_body_chameleon = t02_body
+			t02_head_chameleon = t02_head
+	# The legacy short-name mirror must not feed the new accessor: the save is
+	# the source of truth, so writing outfit_head changes nothing.
+	gs.set("thief_id", "chameleon")
+	gs.set("outfit_head", "bowler_hat")
+	var t02_after_legacy: String = str((gs.call("active_outfit") as Dictionary).get("head", ""))
+	gs.set("thief_id", t02_prev_thief)
+	gs.set("outfit_head", t02_prev_head)
+	var t02_legacy_ok: bool = t02_after_legacy.begins_with("Outfit.Chameleon.") and t02_after_legacy != "bowler_hat"
+	var t02_per_thief_ok: bool = t02_body_spider.find("ThiefNisha") >= 0 \
+		and t02_body_chameleon.find("ThiefCotter") >= 0 \
+		and t02_head_chameleon.find("ThiefCotter") >= 0 \
+		and t02_body_spider != t02_body_chameleon
+	# Provenance: co-op is a shipped feature; only the transport is invented.
+	var t02_prov: Dictionary = gs.call("coop_provenance") as Dictionary
+	var t02_shipped: Dictionary = t02_prov.get("shipped", {}) as Dictionary
+	var t02_xp_row: Dictionary = t02_shipped.get("xp_row", {}) as Dictionary
+	var t02_xp_def: Dictionary = gd.call("get_xp_def", "XP.Cooperative") as Dictionary
+	var t02_xp_display: String = str((t02_xp_def.get("DisplayName", {}) as Dictionary).get("SourceString", ""))
+	var t02_prov_ok: bool = bool(t02_prov.get("expansion", true)) == false \
+		and bool(t02_prov.get("transport_invented", false)) == true \
+		and not bool(gs.call("coop_is_expansion")) \
+		and str(t02_xp_row.get("row", "")) == "XP.Cooperative" \
+		and t02_xp_display == "Co-op Bonus"
+	# The recorded shipped assets are checked against the private dump when it
+	# is present; a missing dump is a loud SKIP, never a silent pass.
+	var t02_filelist_path: String = "res://../extracted/filelist.txt"
+	if FileAccess.file_exists(t02_filelist_path):
+		var t02_filelist: String = FileAccess.get_file_as_string(t02_filelist_path)
+		var t02_missing: int = 0
+		var t02_modes: Variant = t02_shipped.get("game_modes", [])
+		if t02_modes is Array:
+			for t02_mode_v: Variant in (t02_modes as Array):
+				if not (t02_mode_v is Dictionary):
+					continue
+				var t02_file: String = str((t02_mode_v as Dictionary).get("file", ""))
+				if t02_file != "" and not t02_filelist.contains(t02_file):
+					t02_missing += 1
+		if t02_missing > 0:
+			printerr("FAIL: 93 provenance names ", t02_missing, " shipped asset(s) absent from extracted/filelist.txt")
+			t02_prov_ok = false
+	else:
+		print("SKIP: 93 extracted/filelist.txt absent; shipped-asset names not re-verified")
+	fails += _w3_check(t02_tags_ok and t02_legacy_ok and t02_meshes_ok and t02_per_thief_ok and t02_prov_ok,
+		"93 T02 identity contracts: authored Outfit.<Thief>.* tags, per-thief Nisha/Cotter base meshes present, legacy mirror inert, co-op provenance expansion=false against the authored XP.Cooperative row",
+		"93 identity mismatch: tags=%s legacy=%s meshes=%s per_thief=%s provenance=%s (xp='%s')" % [t02_tags_ok, t02_legacy_ok, t02_meshes_ok, t02_per_thief_ok, t02_prov_ok, t02_xp_display])
+
 	# 12.6/12.7 process-lifetime caches must not outlive the run.
 	var am_node: Node = root.get_node_or_null("/root/AudioManager")
 	if am_node != null and am_node.has_method("cleanup_on_exit"):
@@ -7236,6 +7388,61 @@ func _run_suite89(host: Node) -> Array[String]:
 	else:
 		problems.append("test_w7s_loot_inventory.run(host) returned no problem list")
 	return problems
+
+
+## Suite 91 helper (T02-STATE): run lifecycle — reset contract, hub clock,
+## failure-path banking and the co-op run outcome. Synchronous: no map load.
+func _run_suite91(host: Node) -> Array[String]:
+	var problems: Array[String] = []
+	var script: GDScript = load("res://tests/test_t02_state_lifecycle.gd") as GDScript
+	if script == null:
+		problems.append("test_t02_state_lifecycle.gd did not load")
+		return problems
+	var runner: RefCounted = script.new() as RefCounted
+	if runner == null or not runner.has_method("run"):
+		problems.append("test_t02_state_lifecycle.gd has no run(host)")
+		return problems
+	var out: Variant = runner.call("run", host)
+	if out is Array:
+		for problem_v: Variant in (out as Array):
+			problems.append(str(problem_v))
+	else:
+		problems.append("test_t02_state_lifecycle.run(host) returned no problem list")
+	return problems
+
+
+## Suite 92 helper (T02-STATE): save integrity — corrupt quarantine, write
+## errors, outbox settle and loadout copying. Synchronous (path_override files).
+func _run_suite92(host: Node) -> Array[String]:
+	var problems: Array[String] = []
+	var script: GDScript = load("res://tests/test_t02_save_integrity.gd") as GDScript
+	if script == null:
+		problems.append("test_t02_save_integrity.gd did not load")
+		return problems
+	var runner: RefCounted = script.new() as RefCounted
+	if runner == null or not runner.has_method("run"):
+		problems.append("test_t02_save_integrity.gd has no run(host)")
+		return problems
+	var out: Variant = runner.call("run", host)
+	if out is Array:
+		for problem_v: Variant in (out as Array):
+			problems.append(str(problem_v))
+	else:
+		problems.append("test_t02_save_integrity.run(host) returned no problem list")
+	return problems
+
+
+## Quarantined-save names in user:// (.corrupt-<ts>), used by suite 49 to prove
+## the corrupt file was preserved and to clean the artefact up afterwards.
+func _t02_quarantine_files() -> Array[String]:
+	var out: Array[String] = []
+	var dir: DirAccess = DirAccess.open("user://")
+	if dir == null:
+		return out
+	for name: String in dir.get_files():
+		if name.contains(".corrupt-"):
+			out.append(name)
+	return out
 
 
 ## Suite 90 helper (W7S-S2): save v8 + major-loot mesh. Coroutine for the

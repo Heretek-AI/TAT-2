@@ -1548,11 +1548,13 @@ func _feat_16_shell_ui_letter_loading() -> void:
 	var st_ui: CanvasLayer = h.new_script_node("res://src/ui/settings_ui.gd") as CanvasLayer
 	h.root.add_child(st_ui)
 	await h.step_process(1)
-	var sl_sens: HSlider = st_ui.get("_sens_slider") as HSlider
+	# RE-H-08: drive the authored sensitivity ladder (the free rad/px slider was
+	# the finding). Fast = 1.5x = 0.00375 rad/px.
 	var cb_inv: CheckBox = st_ui.get("_invert_check") as CheckBox
 	var cb_spr: CheckBox = st_ui.get("_sprint_check") as CheckBox
 	var sl_fov: HSlider = st_ui.get("_fov_slider") as HSlider
-	if sl_sens != null: sl_sens.value = 0.0042
+	if h.has_m(st_ui, "set_look_sensitivity_step"):
+		st_ui.call("set_look_sensitivity_step", "kb", 3)
 	if cb_inv != null: cb_inv.button_pressed = true
 	if cb_spr != null: cb_spr.button_pressed = true
 	if sl_fov != null: sl_fov.value = 92.0
@@ -1561,7 +1563,7 @@ func _feat_16_shell_ui_letter_loading() -> void:
 	var p_test: Node = h.new_script_node("res://src/player/thief_character.gd")
 	h.root.add_child(p_test)
 	await h.step_process(1)
-	var persist_ok: bool = absf(float(p_test.get("mouse_sens")) - 0.0042) < 0.0005 and h.is_true(p_test.get("invert_y")) and h.is_true(p_test.get("sprint_toggle_mode")) and absf(float(p_test.get("base_fov")) - 92.0) < 0.1
+	var persist_ok: bool = absf(float(p_test.get("mouse_sens")) - 0.00375) < 0.0001 and h.is_true(p_test.get("invert_y")) and h.is_true(p_test.get("sprint_toggle_mode")) and absf(float(p_test.get("base_fov")) - 92.0) < 0.1
 	await h.free_node(p_test)
 	if ss != null and not orig_s.is_empty():
 		var sd: Dictionary = ss.get("data") as Dictionary

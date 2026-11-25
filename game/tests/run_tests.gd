@@ -3224,12 +3224,13 @@ func _initialize() -> void:
 	var st_groups_cnt: int = (st_groups_v as Array).size() if st_groups_v is Array else 0
 	var st_save: Node = root.get_node_or_null("/root/SaveSystem")
 	var st_orig: Dictionary = (st_save.call("get_settings") as Dictionary).duplicate(true) if st_save != null else {}
-	var st_sens_sl: HSlider = st_ui.get("_sens_slider") as HSlider
+	# RE-H-08: the invented rad/px slider is gone; the authored 5-step ladder is
+	# the mouse control, so the persistence probe drives it instead.
 	var st_inv_cb: CheckBox = st_ui.get("_invert_check") as CheckBox
 	var st_spr_cb: CheckBox = st_ui.get("_sprint_check") as CheckBox
 	var st_fov_sl: HSlider = st_ui.get("_fov_slider") as HSlider
-	if st_sens_sl != null:
-		st_sens_sl.value = 0.0042
+	if st_ui.has_method("set_look_sensitivity_step"):
+		st_ui.call("set_look_sensitivity_step", "kb", 3) # Fast = 1.5x = 0.00375 rad/px
 	if st_inv_cb != null:
 		st_inv_cb.button_pressed = true
 	if st_spr_cb != null:
@@ -3240,7 +3241,7 @@ func _initialize() -> void:
 	var st_thief: Node = (load("res://src/player/thief_character.gd") as GDScript).new()
 	root.add_child(st_thief)
 	await process_frame
-	var st_wire_ok: bool = absf(float(st_thief.get("mouse_sens")) - 0.0042) < 0.0005 \
+	var st_wire_ok: bool = absf(float(st_thief.get("mouse_sens")) - 0.00375) < 0.0001 \
 		and st_thief.get("invert_y") == true \
 		and st_thief.get("sprint_toggle_mode") == true \
 		and absf(float(st_thief.get("base_fov")) - 92.0) < 0.1

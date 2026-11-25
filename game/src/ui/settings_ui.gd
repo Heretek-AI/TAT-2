@@ -21,9 +21,7 @@ const ST_SETTINGS_PATH: String = "res://data/generated/tables/StringTables/ST_Se
 # is res://src/ui/art_nouveau_theme.gd (ThemeScript.TEAL_*). Any future accent/
 # radius/margin change lands in the theme file only — settings drifts no more.
 
-const SENS_MIN: float = 0.0005
-const SENS_MAX: float = 0.008
-const SENS_STEP: float = 0.0002
+const SENS_STEPS: Array[String] = InputActions.SENSITIVITY_STEPS
 const FOV_MIN: float = 50.0
 const FOV_MAX: float = 105.0
 const VOL_MIN: float = 0.0
@@ -37,11 +35,19 @@ const TABS: Array[String] = ["GENERAL", "VIDEO", "AUDIO", "CONTROLS"]
 
 var _st: Dictionary = {}
 var _prev_mouse_mode: Input.MouseMode = Input.MOUSE_MODE_VISIBLE
-var _sens_slider: HSlider
-var _sens_val: Label
+var _mouse_sens_option: OptionButton
+var _pad_look_option: OptionButton
+var _pad_move_option: OptionButton
+var _gamepad_invert_check: CheckBox
 var _invert_check: CheckBox
 var _sprint_check: CheckBox
 var _bounce_check: CheckBox
+## Rebind state: "" when idle, "<action>|<device>" while waiting for a key.
+var _rebind_token: String = ""
+var _rebind_buttons: Dictionary = {}
+var _rebind_status: Label
+var _device_btn: Button
+var _controls_device: String = InputActions.DEVICE_KB
 var _fov_slider: HSlider
 var _fov_val: Label
 var _vsync_check: CheckBox
@@ -153,6 +159,27 @@ func _refresh_tabs() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not visible:
 		return
+	# Rebind capture: the next key / mouse button / pad button is the binding.
+	# Motion and echoes are swallowed so a stick cannot rebind by accident.
+	if _rebind_token != "":
+		if event is InputEventKey:
+			var kcap: InputEventKey = event as InputEventKey
+			if kcap.pressed and not kcap.echo:
+				if kcap.keycode == KEY_ESCAPE or kcap.physical_keycode == KEY_ESCAPE:
+					_cancel_rebind()
+				else:
+					_commit_rebind(event)
+				get_viewport().set_input_as_handled()
+			return
+		if event is InputEventMouseButton and (event as InputEventMouseButton).pressed:
+			_commit_rebind(event)
+			get_viewport().set_input_as_handled()
+			return
+		if event is InputEventJoypadButton and (event as InputEventJoypadButton).pressed:
+			_commit_rebind(event)
+			get_viewport().set_input_as_handled()
+			return
+		return
 	if event.is_action_pressed("ui_cancel"):
 		close_settings()
 		get_viewport().set_input_as_handled()
@@ -161,15 +188,18 @@ func _unhandled_input(event: InputEvent) -> void:
 		var kev: InputEventKey = event as InputEventKey
 		if not kev.pressed or kev.echo:
 			return
-		if kev.keycode == KEY_ESCAPE:
+		# Physical first: the InputMap is physical (RE-H-15), so an AZERTY player
+		# must press the same physical key here as in game.
+		var code: int = kev.physical_keycode if kev.physical_keycode != 0 else kev.keycode
+		if code == KEY_ESCAPE:
 			close_settings()
 			get_viewport().set_input_as_handled()
 			return
-		if kev.keycode == KEY_Q:
+		if code == KEY_Q:
 			switch_tab((_tab_idx - 1 + TABS.size()) % TABS.size())
 			get_viewport().set_input_as_handled()
 			return
-		if kev.keycode == KEY_E:
+		if code == KEY_E:
 			switch_tab((_tab_idx + 1) % TABS.size())
 			get_viewport().set_input_as_handled()
 			return
@@ -185,10 +215,22 @@ func _settings() -> Dictionary:
 
 func _ensure_settings() -> void:
 	var s: Dictionary = _settings()
+	# RE-H-08: the invented rad/px slider is replaced by the authored 5-step
+	# ladder x 2 devices. A legacy save's free value migrates to its nearest step
+	# once; `mouse_sensitivity` stays written as the effective rad/px so every
+	# existing reader (thief_character.gd, mobile touch) keeps working.
+	if not s.has("mouse_look_sensitivity"):
+		s["mouse_look_sensitivity"] = InputActions.nearest_mouse_step(float(s.get("mouse_sensitivity", InputActions.MOUSE_RAD_PER_PX_BASE)))
+	if not s.has("gamepad_look_sensitivity"):
+		s["gamepad_look_sensitivity"] = "Normal"
+	if not s.has("gamepad_move_sensitivity"):
+		s["gamepad_move_sensitivity"] = "Normal"
 	if not s.has("mouse_sensitivity"):
-		s["mouse_sensitivity"] = 0.0025
+		s["mouse_sensitivity"] = InputActions.MOUSE_RAD_PER_PX_BASE
 	if not s.has("invert_y"):
 		s["invert_y"] = false
+	if not s.has("gamepad_invert_y"):
+		s["gamepad_invert_y"] = false
 	if not s.has("sprint_toggle"):
 		s["sprint_toggle"] = false
 	if not s.has("reduced_camera_bounce"):
@@ -225,8 +267,12 @@ func _ensure_settings() -> void:
 
 func reset_defaults() -> void:
 	var s: Dictionary = _settings()
-	s["mouse_sensitivity"] = 0.0025
+	s["mouse_look_sensitivity"] = "Normal"
+	s["gamepad_look_sensitivity"] = "Normal"
+	s["gamepad_move_sensitivity"] = "Normal"
+	s["mouse_sensitivity"] = InputActions.mouse_rad_per_px("Normal")
 	s["invert_y"] = false
+	s["gamepad_invert_y"] = false
 	s["sprint_toggle"] = false
 	s["reduced_camera_bounce"] = false
 	s["fov"] = 54.54
@@ -244,6 +290,9 @@ func reset_defaults() -> void:
 	s["mobile_quality"] = "balanced"
 	s["locale"] = "en"
 	WeatherProfile.set_quality_level(2)
+	var ctx: Node = _input_context()
+	if ctx != null and ctx.has_method("reset_bindings"):
+		ctx.call("reset_bindings")
 	_load_from_save()
 	_apply_live(true)
 
@@ -251,8 +300,11 @@ func reset_defaults() -> void:
 func _load_from_save() -> void:
 	_loading_ui = true
 	var s: Dictionary = _settings()
-	if _sens_slider != null:
-		_sens_slider.value = clampf(float(s.get("mouse_sensitivity", 0.0025)), SENS_MIN, SENS_MAX)
+	_select_step(_mouse_sens_option, str(s.get("mouse_look_sensitivity", "Normal")))
+	_select_step(_pad_look_option, str(s.get("gamepad_look_sensitivity", "Normal")))
+	_select_step(_pad_move_option, str(s.get("gamepad_move_sensitivity", "Normal")))
+	if _gamepad_invert_check != null:
+		_gamepad_invert_check.button_pressed = bool(s.get("gamepad_invert_y", false))
 	if _invert_check != null:
 		_invert_check.button_pressed = bool(s.get("invert_y", false))
 	if _sprint_check != null:
@@ -292,10 +344,16 @@ func _load_from_save() -> void:
 
 
 func _apply_live(persist: bool) -> void:
-	if _loading_ui or _sens_slider == null or _fov_slider == null or _vol_slider == null:
+	if _loading_ui or _fov_slider == null or _vol_slider == null:
 		return
 	var s: Dictionary = _settings()
-	s["mouse_sensitivity"] = float(_sens_slider.value)
+	# Ladder -> effective units. `mouse_sensitivity` is derived, never a slider.
+	var mouse_step: String = _selected_step(_mouse_sens_option, "Normal")
+	s["mouse_look_sensitivity"] = mouse_step
+	s["mouse_sensitivity"] = InputActions.mouse_rad_per_px(mouse_step)
+	s["gamepad_look_sensitivity"] = _selected_step(_pad_look_option, "Normal")
+	s["gamepad_move_sensitivity"] = _selected_step(_pad_move_option, "Normal")
+	s["gamepad_invert_y"] = _gamepad_invert_check.button_pressed if _gamepad_invert_check != null else false
 	s["invert_y"] = _invert_check.button_pressed if _invert_check != null else false
 	s["sprint_toggle"] = _sprint_check.button_pressed if _sprint_check != null else false
 	s["reduced_camera_bounce"] = _bounce_check.button_pressed if _bounce_check != null else false
@@ -353,8 +411,6 @@ func _apply_live(persist: bool) -> void:
 
 
 func _refresh_value_labels() -> void:
-	if _sens_val != null and _sens_slider != null:
-		_sens_val.text = "%.4f" % float(_sens_slider.value)
 	if _fov_val != null and _fov_slider != null:
 		_fov_val.text = "%d" % int(_fov_slider.value)
 	if _vol_val != null and _vol_slider != null:
@@ -436,7 +492,7 @@ func _build_ui() -> void:
 	var grp_mouse: Dictionary = _make_group_card(_label("Settings.Mouse", "Mouse"))
 	general.add_child(grp_mouse["card"] as PanelContainer)
 	var mouse_vb: VBoxContainer = grp_mouse["vbox"] as VBoxContainer
-	mouse_vb.add_child(_make_slider_row("mouse_sensitivity", _label("Settings.Mouse.MouseSensitivity", "Mouse Sensitivity"), SENS_MIN, SENS_MAX, SENS_STEP))
+	mouse_vb.add_child(_make_step_row("mouse_look_sensitivity", _label("Settings.Mouse.MouseSensitivity", "Mouse Sensitivity")))
 	mouse_vb.add_child(_make_check_row("invert_y", _label("Settings.Mouse.MouseInvertYAxis", "Mouse Invert Y-Axis")))
 
 	var grp_gameplay: Dictionary = _make_group_card(_label("Settings.Gameplay", "Gameplay"))
@@ -476,24 +532,15 @@ func _build_ui() -> void:
 	vol_vb.add_child(_make_slider_row("ui_volume", _label("Settings.Volume.UIVolume", "UI Volume"), VOL_MIN, VOL_MAX, VOL_STEP))
 	vol_vb.add_child(_make_slider_row("dialogue_volume", _label("Settings.Volume.DialogueVolume", "Dialogue Volume"), VOL_MIN, VOL_MAX, VOL_STEP))
 
-	# CONTROLS tab: grouped card.
+	# CONTROLS tab: authored 4 categories / 15 rebind cells (17 shipped rows,
+	# because Primary Fire and Move each repeat), the authored ladder, and the
+	# device toggle that IA_ChangeInputMapping (Backslash) also drives.
 	var controls: VBoxContainer = _pages[3] as VBoxContainer
 	var grp_ctrl: Dictionary = _make_group_card(_label("Settings.Controls.Header", "Controls"))
 	controls.add_child(grp_ctrl["card"] as PanelContainer)
 	var ctrl_vb: VBoxContainer = grp_ctrl["vbox"] as VBoxContainer
-	var rows: Array[Array] = [
-		["W A S D", _label("Settings.Controls.KBM.Movement", "Movement & Lean")],
-		["MOUSE", _label("Settings.Controls.Look", "Look")],
-		["F", _label("Settings.Controls.Interact", "Interact")],
-		["SHIFT", _label("Settings.Controls.KBM.Sprint", "Sprint")],
-		["C", _label("Settings.Controls.KBM.Crouch", "Crouch / Slide")],
-		["SPACE", _label("Settings.Controls.Jump", "Jump")],
-		["1 2 3", _label("Settings.Controls.ToolSlots", "Tool Slots")],
-		["H", _label("Settings.Controls.Slot4", "Vistara Diamond")],
-		["ESC", _label("Settings.Controls.GameMenu", "Game Menu")],
-	]
 	if MobileProfile.is_mobile():
-		rows = [
+		var rows: Array[Array] = [
 			["STICK", "MOVE"],
 			["DRAG", "LOOK"],
 			["USE", "INTERACT / STEAL"],
@@ -502,9 +549,8 @@ func _build_ui() -> void:
 			["EYE", "THIEF VISION"],
 			["II / BACK", "PAUSE"],
 		]
-	for entry: Array in rows:
-		ctrl_vb.add_child(_make_binding_row(str(entry[0]), str(entry[1])))
-	if MobileProfile.is_mobile():
+		for entry: Array in rows:
+			ctrl_vb.add_child(_make_binding_row(str(entry[0]), str(entry[1])))
 		ctrl_vb.add_child(_make_slider_row("touch_sensitivity", "Touch Look", 0.5, 5.0, 0.1))
 		var qrow: HBoxContainer = HBoxContainer.new()
 		_quality_btn = Button.new()
@@ -514,6 +560,8 @@ func _build_ui() -> void:
 		_quality_btn.pressed.connect(_cycle_quality)
 		qrow.add_child(_quality_btn)
 		ctrl_vb.add_child(qrow)
+	else:
+		_build_controls_tab(ctrl_vb)
 
 	vbox.add_child(ThemeScript.divider())
 	var btn_row: HBoxContainer = HBoxContainer.new()
@@ -669,6 +717,264 @@ func _make_binding_row(key_text: String, action_text: String) -> HBoxContainer:
 	return row
 
 
+# ---------------------------------------------------------------------------
+# Controls tab: device toggle, authored rebind cells, ladder (RE-H-05/08)
+# ---------------------------------------------------------------------------
+
+func _input_context() -> Node:
+	return get_node_or_null("/root/InputContext")
+
+
+func _build_controls_tab(ctrl_vb: VBoxContainer) -> void:
+	_rebind_buttons.clear()
+	var dev_row: HBoxContainer = HBoxContainer.new()
+	dev_row.add_theme_constant_override("separation", 10)
+	_device_btn = Button.new()
+	_device_btn.name = "ControlsDeviceButton"
+	_device_btn.custom_minimum_size = Vector2(300, 36)
+	_device_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ThemeScript.style_button(_device_btn, false)
+	_device_btn.pressed.connect(_toggle_controls_device)
+	dev_row.add_child(_device_btn)
+	ctrl_vb.add_child(dev_row)
+	# Authored display order; the shipped IMC categories are Movement,
+	# Interaction, Tools and Primary Fire.
+	var by_cat: Dictionary = InputGlyphs.rebindable_by_category()
+	for category: String in ["Movement", "Interaction", "Tools", "Primary Fire"]:
+		if not by_cat.has(category):
+			continue
+		var hdr: Label = Label.new()
+		hdr.text = category.to_upper()
+		hdr.add_theme_font_size_override("font_size", 13)
+		hdr.add_theme_color_override("font_color", ThemeScript.TEAL_ACCENT)
+		ctrl_vb.add_child(hdr)
+		for action: String in (by_cat[category] as Array[String]):
+			ctrl_vb.add_child(_make_rebind_row(action))
+	_rebind_status = Label.new()
+	_rebind_status.name = "RebindStatus"
+	_rebind_status.text = ""
+	_rebind_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_rebind_status.add_theme_font_size_override("font_size", 13)
+	_rebind_status.add_theme_color_override("font_color", ThemeScript.TEAL_TEXT)
+	ctrl_vb.add_child(_rebind_status)
+
+	var pad_hdr: Label = Label.new()
+	pad_hdr.text = "GAMEPAD"
+	pad_hdr.add_theme_font_size_override("font_size", 13)
+	pad_hdr.add_theme_color_override("font_color", ThemeScript.TEAL_ACCENT)
+	ctrl_vb.add_child(pad_hdr)
+	ctrl_vb.add_child(_make_step_row("gamepad_look_sensitivity", _label("Settings.Controls.Look", "Gamepad Look Sensitivity")))
+	ctrl_vb.add_child(_make_step_row("gamepad_move_sensitivity", _label("Settings.Controls.KBM.Movement", "Gamepad Move Sensitivity")))
+	ctrl_vb.add_child(_make_check_row("gamepad_invert_y", _label("Settings.Mouse.MouseInvertYAxis", "Gamepad Invert Y-Axis")))
+
+	var reset_bind_btn: Button = Button.new()
+	reset_bind_btn.name = "ResetBindingsButton"
+	reset_bind_btn.text = "RESET BINDINGS"
+	reset_bind_btn.custom_minimum_size = Vector2(190, 34)
+	ThemeScript.style_button(reset_bind_btn, false)
+	reset_bind_btn.pressed.connect(_reset_all_bindings)
+	ctrl_vb.add_child(reset_bind_btn)
+	_refresh_rebind_buttons()
+
+
+func _make_rebind_row(action: String) -> HBoxContainer:
+	var row: HBoxContainer = HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	var lab: Label = Label.new()
+	lab.text = InputGlyphs.action_label(action).to_upper()
+	lab.custom_minimum_size = Vector2(230, 0)
+	lab.add_theme_font_size_override("font_size", 14)
+	lab.add_theme_color_override("font_color", ThemeScript.TEAL_TEXT)
+	row.add_child(lab)
+	var btn: Button = Button.new()
+	btn.name = "Rebind_" + action
+	btn.custom_minimum_size = Vector2(150, 30)
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ThemeScript.style_button(btn, false)
+	btn.pressed.connect(func() -> void: _begin_rebind(action))
+	row.add_child(btn)
+	var clear_btn: Button = Button.new()
+	clear_btn.text = "↺"
+	clear_btn.tooltip_text = "Reset this binding"
+	clear_btn.custom_minimum_size = Vector2(34, 30)
+	ThemeScript.style_button(clear_btn, false)
+	clear_btn.pressed.connect(func() -> void: _reset_rebind(action))
+	row.add_child(clear_btn)
+	_rebind_buttons[action] = btn
+	return row
+
+
+func _make_step_row(setting_key: String, label_text: String) -> HBoxContainer:
+	var row: HBoxContainer = HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	var lab: Label = Label.new()
+	lab.text = label_text
+	lab.custom_minimum_size = Vector2(210, 0)
+	lab.add_theme_font_size_override("font_size", 15)
+	lab.add_theme_color_override("font_color", ThemeScript.TEAL_TEXT)
+	row.add_child(lab)
+	var opt: OptionButton = OptionButton.new()
+	opt.name = "Step_" + setting_key
+	opt.custom_minimum_size = Vector2(240, 34)
+	opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ThemeScript.style_teal_option(opt)
+	for i: int in range(SENS_STEPS.size()):
+		opt.add_item(SENS_STEPS[i], i)
+		opt.set_item_metadata(i, SENS_STEPS[i])
+	opt.item_selected.connect(func(_idx: int) -> void:
+		if _loading_ui:
+			return
+		_apply_live(false)
+	)
+	row.add_child(opt)
+	match setting_key:
+		"mouse_look_sensitivity":
+			_mouse_sens_option = opt
+		"gamepad_look_sensitivity":
+			_pad_look_option = opt
+		"gamepad_move_sensitivity":
+			_pad_move_option = opt
+	return row
+
+
+func _selected_step(opt: OptionButton, fallback: String) -> String:
+	if opt == null or opt.item_count == 0:
+		return fallback
+	var idx: int = clampi(opt.selected, 0, opt.item_count - 1)
+	var meta: Variant = opt.get_item_metadata(idx)
+	return str(meta) if meta != null else SENS_STEPS[idx]
+
+
+func _select_step(opt: OptionButton, step_name: String) -> void:
+	if opt == null:
+		return
+	var idx: int = SENS_STEPS.find(step_name)
+	opt.select(maxi(0, idx))
+
+
+## Test/debug hook: select a ladder step by index (0 VeryLow .. 4 VeryFast).
+func set_look_sensitivity_step(device: String, index: int) -> void:
+	match device:
+		InputActions.DEVICE_PAD:
+			_select_step(_pad_look_option, InputActions.sensitivity_step_name(index))
+		_:
+			_select_step(_mouse_sens_option, InputActions.sensitivity_step_name(index))
+	if not _loading_ui:
+		_apply_live(false)
+
+
+func _toggle_controls_device() -> void:
+	_controls_device = InputActions.DEVICE_PAD if _controls_device == InputActions.DEVICE_KB else InputActions.DEVICE_KB
+	InputGlyphs.set_device(_controls_device)
+	_refresh_rebind_buttons()
+
+
+func _refresh_rebind_buttons() -> void:
+	if _device_btn != null:
+		var dev_label: String = str(InputGlyphs.DEVICE_LABELS.get(_controls_device, _controls_device))
+		_device_btn.text = "DISPLAY: " + dev_label.to_upper() + "  ·  [BACKSLASH] TO SWAP"
+	for action_v: Variant in _rebind_buttons.keys():
+		var action: String = str(action_v)
+		var btn: Button = _rebind_buttons[action_v] as Button
+		if btn == null:
+			continue
+		if _rebind_token == action + "|" + _controls_device:
+			btn.text = "[ PRESS ANY KEY ]"
+			continue
+		var text: String = InputGlyphs.text(action, _controls_device)
+		var overridden: bool = InputRebinder.is_overridden(action, _controls_device, _current_overrides())
+		btn.text = "[" + text + "]" if text != "" else "[ UNBOUND ]"
+		if overridden:
+			btn.text += " *"
+
+
+func _begin_rebind(action: String) -> void:
+	_rebind_token = action + "|" + _controls_device
+	_status("PRESS ANY KEY  ·  [ESC] CANCEL")
+	_refresh_rebind_buttons()
+
+
+func _cancel_rebind() -> void:
+	_rebind_token = ""
+	_status("")
+	_refresh_rebind_buttons()
+
+
+func _commit_rebind(event: InputEvent) -> void:
+	var parts: PackedStringArray = _rebind_token.split("|")
+	if parts.size() != 2:
+		_cancel_rebind()
+		return
+	var action: String = parts[0]
+	var device: String = parts[1]
+	var result: Dictionary = {}
+	var ctx: Node = _input_context()
+	if ctx != null and ctx.has_method("rebind"):
+		result = ctx.call("rebind", action, device, event) as Dictionary
+	else:
+		var ov: Dictionary = _current_overrides()
+		result = InputRebinder.rebind(action, device, event, ov)
+		if bool(result.get("ok", false)):
+			InputRebinder.write_overrides(_settings(), ov)
+			InputRebinder.apply(ov)
+	_rebind_token = ""
+	if bool(result.get("ok", false)):
+		_status("BOUND: " + InputGlyphs.action_label(action) + "  →  " + InputGlyphs.key_label(str(result.get("key_name", ""))))
+	else:
+		_status(str(result.get("message", "That input cannot be bound here.")))
+	_refresh_rebind_buttons()
+	_save_quiet()
+
+
+func _reset_rebind(action: String) -> void:
+	var ctx: Node = _input_context()
+	if ctx != null and ctx.has_method("rebind") and ctx.has_method("overrides"):
+		var ov: Dictionary = (ctx.call("overrides") as Dictionary)
+		InputRebinder.reset_action(action, _controls_device, ov)
+		if ctx.has_method("set_overrides"):
+			ctx.call("set_overrides", ov, true)
+	elif ctx == null:
+		var ov2: Dictionary = _current_overrides()
+		InputRebinder.reset_action(action, _controls_device, ov2)
+		InputRebinder.write_overrides(_settings(), ov2)
+		InputRebinder.apply(ov2)
+	_rebind_token = ""
+	_status("")
+	_refresh_rebind_buttons()
+
+
+func _reset_all_bindings() -> void:
+	var ctx: Node = _input_context()
+	if ctx != null and ctx.has_method("reset_bindings"):
+		ctx.call("reset_bindings")
+	else:
+		var ov: Dictionary = _current_overrides()
+		InputRebinder.reset_all(ov)
+		InputRebinder.write_overrides(_settings(), ov)
+		InputRebinder.apply(ov)
+	_rebind_token = ""
+	_status("")
+	_refresh_rebind_buttons()
+	_save_quiet()
+
+
+func _current_overrides() -> Dictionary:
+	var ctx: Node = _input_context()
+	if ctx != null and ctx.has_method("overrides"):
+		return ctx.call("overrides") as Dictionary
+	return InputRebinder.overrides_from_settings(_settings())
+
+
+func _status(text: String) -> void:
+	if _rebind_status != null:
+		_rebind_status.text = text
+
+
+func _save_quiet() -> void:
+	if SaveSystem != null and SaveSystem.has_method("write_save"):
+		SaveSystem.write_save()
+
+
 func _make_slider_row(setting_key: String, label_text: String, min_v: float, max_v: float, step_v: float) -> HBoxContainer:
 	var row: HBoxContainer = HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
@@ -703,9 +1009,6 @@ func _make_slider_row(setting_key: String, label_text: String, min_v: float, max
 		_apply_live(false)
 	)
 	match setting_key:
-		"mouse_sensitivity":
-			_sens_slider = slider
-			_sens_val = val
 		"fov":
 			_fov_slider = slider
 			_fov_val = val
@@ -747,6 +1050,8 @@ func _make_check_row(setting_key: String, label_text: String) -> HBoxContainer:
 	match setting_key:
 		"invert_y":
 			_invert_check = check
+		"gamepad_invert_y":
+			_gamepad_invert_check = check
 		"sprint_toggle":
 			_sprint_check = check
 		"reduced_camera_bounce":

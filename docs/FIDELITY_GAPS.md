@@ -445,3 +445,37 @@ find extracted/json -name 'NS_*.json' | wc -l
     needs 4 cm more headroom; `INTERACT_LOS_STANDOFF_M` is global; the Den
     white-clip exact-material caps are still deferred (need captures); the
     guard StateTree data is not yet driving `guard_ai.gd`.
+
+- 2026-11-24: **W6M movement truth** (`fix(player): blocker-safe step-up,
+  traversal coverage and capsule contract`; report
+  [`reports/w6m-movement-truth.md`](reports/w6m-movement-truth.md)):
+  - `_try_step_up()` now refuses a `blocking_volume` on both the blocked sweep
+    and the floor probe (a 0.40 m designer blocker used to be a legal tread), and
+    evaluates headroom at the **landing** rather than the origin (2.25 m soffit
+    over a 0.45 m step refuses; 2.35 m commits). The walkable-normal ramp guard
+    only applies when the body is not actually walled, which fixes mid-flight
+    stalls caused by the capsule bottom catching the next tread's top (Old Manor
+    tower stalled at 2.39 m, POI 3x850 at 5.74 m).
+  - Added a post-move `_try_step_down()` (UE `FindFloor` shape) so a walked
+    descent re-seats onto the tread under the axis; the destination capsule pose
+    must be free, otherwise the rear of the capsule would be pushed into the
+    step behind (measured 0.248 m solver bounce).
+  - `body_height_m()` / `BODY_HEIGHT_STANDING` now report the built 1.82 m
+    capsule (W5A rebuilt the body but left 1.78 m). `device_geometry.gd`'s
+    fallback constant and the W3 beam **mock** fixture remain 1.78 m — follow-up
+    owner: devices.
+  - `try_auto_mantle()` gains a 0.3 m wall sample so a 0.50 m ledge can mantle
+    with the authored jump press (`mantle_050`); it previously had no probe
+    below a 0.50 m top.
+  - **Residual — stair descent is re-seated, not glued.** Godot snaps before
+    `move_and_slide`. On shipped 0.33 m treads with the 0.32 m capsule the
+    descent still takes short one-riser falls (civic rotated run: 33 airborne
+    frames over 100 frames, ends grounded). Deep-tread 0.60 m fixtures settle to
+    a max 11-frame interval. Not a soft-lock; recorded rather than hidden.
+  - **Deferred (W6L)**: roof `EndA`/`EndB` classifier and roof-hull tests. No
+    roof-dependent route assertion is claimed here.
+  - Verified in the worktree: compile **102/0**, `run_tests` **fails=0**
+    (261 PASS, suite 45 updated to the 1.82 m fixtures + blocker control),
+    `test_stair_walk` **fails=0** (7 shipped routes incl. rotated/non-uniform and
+    a descent), new `test_traversal_routes` **fails=0**, `test_m2_player`
+    **fails=0**. E2E to be re-run by the integrating parent.

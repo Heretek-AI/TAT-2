@@ -47,7 +47,12 @@ const CAPSULE_RADIUS_M: float = 0.32
 ## Authored capsule heights used by crouch and by the device body-segment
 ## checks (security_beam.gd / ward_zone.gd). Standing is the built capsule
 ## height; crouch is the authored 1.0 m crouched capsule.
-const BODY_HEIGHT_STANDING: float = 1.78
+## W6M: standing was left at the port's 1.78 m after W5A rebuilt the capsule at
+## the authored 1.82 m (91 cm half-height), so body_height_m() disagreed with
+## the body the devices were really testing. It now reports the built capsule;
+## device_geometry's own fallback constant (1.78 m, for mocks without this
+## method) and the W3 beam fixture remain the only 1.78 m values.
+const BODY_HEIGHT_STANDING: float = 1.82
 const BODY_HEIGHT_CROUCH: float = 1.0
 ## Ward blocker collision bit (bit 4, value 16). Only the thief's mask gains
 ## it; guards (4) and civilians (8) keep their authored masks and walk through.
@@ -79,6 +84,12 @@ const STEP_UP_MAX_M: float = 0.45
 const STEP_UP_FORWARD_M: float = 0.20
 const STEP_UP_DOWN_M: float = 0.55 # down-ray past the lift: catches the tread, not the room
 const STEP_UP_SKIN_M: float = 0.02 # headroom probe skin above the lift
+## W6M step-down: Godot's floor snap runs BEFORE move_and_slide, so walking off
+## a tread leaves the body in free fall until it clears the capsule's rounded
+## edge contact (a 0.28 m riser measured as a 14-frame fall). This grace +
+## post-move re-seat restores UE's FindFloor behaviour. A 0.45 m ledge is
+## outside FLOOR_SNAP_LENGTH, so ledges still produce one real airborne arc.
+const STEP_DOWN_GRACE_SEC: float = 0.2
 ## W5A mantle gate: a ledge within step height is a walk, not a climb. Mantle
 ## needs the authored jump press unless the obstacle is above this band.
 const MANTLE_STEP_GUARD_M: float = 0.05
@@ -312,6 +323,8 @@ var _mantle_clip_role: String = "mantle_100"
 ## offset the eye still owes (eased out so a riser does not jolt the view).
 var _step_rise_this_frame: float = 0.0
 var _step_camera_offset: float = 0.0
+## W6M step-down: grounded grace while a walked descent may re-seat.
+var _step_down_grace: float = 0.0
 ## Head-height lerp target without the step offset (crouch/stand base).
 var _head_base_y: float = STAND_HEAD_HEIGHT
 var _was_wall_climbing: bool = false
@@ -1234,6 +1247,15 @@ func _physics_process(delta: float) -> void:
 	if is_on_floor() and not climbing_now and not is_mantling:
 		_step_rise_this_frame = _try_step_up(Vector3(velocity.x, 0.0, velocity.z))
 	move_and_slide()
+	# W6M post-move step-down (see STEP_DOWN_GRACE_SEC): a walked descent must
+	# re-seat on the tread below instead of free-falling through a riser. Skipped
+	# on the frame a step-up committed (that rise is intentional).
+	if is_on_floor() or _step_rise_this_frame > 0.0:
+		_step_down_grace = STEP_DOWN_GRACE_SEC
+	elif _step_down_grace > 0.0:
+		_step_down_grace = maxf(0.0, _step_down_grace - delta)
+	if not is_on_floor() and velocity.y <= 0.0 and _step_rise_this_frame <= 0.0 and _step_down_grace > 0.0:
+		_try_step_down()
 
 	# Grounded mantle: walking into a 0.5-1.2 m ledge used to do nothing until
 	# the player jumped. is_on_wall() is populated by the move_and_slide above.
@@ -1614,6 +1636,16 @@ func _update_zipwire_cable() -> void:
 ## so ramps are left to move_and_slide (a horizontal sweep reports a "blocked"
 ## collision on a 35 deg ramp too; without this filter the lift fired every
 ## frame and a ramp became an elevator).
+##
+## W6M contracts:
+## - Invisible designer blockers (group "blocking_volume") are solid, never
+##   steps: neither the blocked sweep nor the floor probe may target one. This
+##   is the same contract as the mantle/wall-climb probes; a 0.40 m blocker used
+##   to be a legal tread because its top is inside MaxStepHeight.
+## - Headroom is measured at the LANDING (feet at the destination floor plus a
+##   forward reach), not at the origin. The old origin test demanded a
+##   MaxStepHeight lift in place, which both rejected legal landings under a
+##   high soffit and accepted a soffit only the landing would hit.
 func _try_step_up(planar_velocity: Vector3) -> float:
 	if planar_velocity.length() < 0.05:
 		return 0.0
@@ -1627,20 +1659,33 @@ func _try_step_up(planar_velocity: Vector3) -> float:
 	var col := KinematicCollision3D.new()
 	if not test_move(global_transform, dir * STEP_UP_FORWARD_M, col):
 		return 0.0
+	# A designer blocking volume is solid but never a traversal surface. The
+	# sweep reaches it before the floor probe would find its top.
+	if _is_blocking_volume_collider(col.get_collider()):
+		return 0.0
 	if col.get_normal().y >= walkable_ny:
-		return 0.0
-	# Headroom for the lift (a low ceiling must not be punched through).
-	if test_move(global_transform, Vector3.UP * (STEP_UP_MAX_M + STEP_UP_SKIN_M)):
-		return 0.0
+		# A walkable blocked normal is normally a ramp that move_and_slide
+		# already climbs; only lift when the body is genuinely walled. The
+		# rounded capsule bottom also catches the *top* of the next tread (a
+		# near-up normal) once the flight is steeper than the W5A fixtures, and
+		# without the live wall flag that catch read as a slope and stalled the
+		# walk at ~2.4 m (tower) / ~5.7 m (3x850 POI).
+		if not is_on_wall():
+			return 0.0
 	var w3d: World3D = get_world_3d()
 	if w3d == null or w3d.direct_space_state == null:
 		return 0.0
 	var reach: float = CAPSULE_RADIUS_M + STEP_UP_FORWARD_M
-	var probe_top: Vector3 = global_position + dir * reach + Vector3.UP * STEP_UP_MAX_M
+	var probe_xy: Vector3 = global_position + dir * reach
+	var probe_top: Vector3 = probe_xy + Vector3.UP * STEP_UP_MAX_M
 	var probe_bottom: Vector3 = probe_top - Vector3.UP * (STEP_UP_MAX_M + STEP_UP_DOWN_M)
 	var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(probe_top, probe_bottom, 1, [get_rid()])
 	var hit: Dictionary = w3d.direct_space_state.intersect_ray(q)
 	if hit.is_empty():
+		return 0.0
+	# A blocker top inside MaxStepHeight is still not a tread. Headroom is not
+	# exempt: a blocker at head height is solid space.
+	if _is_blocking_volume_hit(hit):
 		return 0.0
 	# UCharacterMovementComponent only commits a step onto a walkable floor.
 	if (hit.get("normal", Vector3.UP) as Vector3).y < walkable_ny:
@@ -1651,21 +1696,84 @@ func _try_step_up(planar_velocity: Vector3) -> float:
 	# (0.6 m walls still block, floor_block_on_wall stays true).
 	if rise <= 0.02 or rise > STEP_UP_MAX_M:
 		return 0.0
+	# W6M destination headroom: the capsule will stand with its feet at
+	# floor_y and its centre over the probe point, so clearance must exist for
+	# the body the controller actually builds (1.82 m standing, 1.0 m crouched).
+	var body_h: float = BODY_HEIGHT_CROUCH if is_crouching else CAPSULE_HALF_HEIGHT_M * 2.0
+	var head_from: Vector3 = Vector3(probe_xy.x, floor_y + STEP_UP_SKIN_M, probe_xy.z)
+	var head_to: Vector3 = head_from + Vector3.UP * (body_h - STEP_UP_SKIN_M)
+	var head_hit: Dictionary = w3d.direct_space_state.intersect_ray(
+		PhysicsRayQueryParameters3D.create(head_from, head_to, 1, [get_rid()]))
+	if not head_hit.is_empty():
+		return 0.0
 	global_position.y = floor_y
 	velocity.y = 0.0
 	_step_camera_offset = clampf(_step_camera_offset + rise, 0.0, STEP_CAMERA_SMOOTH_MAX_M)
 	return rise
 
 
+## W6M UE-shaped step-down, the descent counterpart to _try_step_up. Godot's
+## built-in snap runs before move_and_slide and follows the capsule's rounded
+## nosing contact, so a walked descent leaves the floor and free-falls until the
+## capsule clears the upper tread edge. Re-seat onto the tread under the axis
+## when the fall has just started (small downward speed) and the destination
+## capsule pose is free of geometry: snapping a frame too early would push the
+## rear of the capsule into the solid step behind, and the solver would shove
+## the body back up a whole riser (measured 0.248 m).
+##
+## A 0.45 m ledge is untouched: the ray reaches FLOOR_SNAP_LENGTH (0.30 m) and
+## misses, so the ledge still produces one genuine airborne interval.
+func _try_step_down() -> void:
+	# Never cancel a jump: a positive vertical speed is a deliberate rise, and
+	# a fall that has accelerated past -0.8 m/s is a real drop, not a step.
+	if velocity.y > 0.0 or velocity.y < -0.8:
+		return
+	var w3d: World3D = get_world_3d()
+	if w3d == null or w3d.direct_space_state == null:
+		return
+	var space: PhysicsDirectSpaceState3D = w3d.direct_space_state
+	var from: Vector3 = global_position + Vector3.UP * 0.05
+	var to: Vector3 = global_position - Vector3.UP * (FLOOR_SNAP_LENGTH - 0.05)
+	var hit: Dictionary = space.intersect_ray(
+		PhysicsRayQueryParameters3D.create(from, to, 1, [get_rid()]))
+	if hit.is_empty():
+		return
+	if (hit.get("normal", Vector3.UP) as Vector3).y < cos(deg_to_rad(FLOOR_MAX_ANGLE_DEG)):
+		return
+	var floor_y: float = (hit["position"] as Vector3).y
+	# Only commit when the body fits there. Shape-cast the real capsule at the
+	# destination; any overlap (typically the step behind) means wait a frame
+	# and slide forward until the capsule has cleared it.
+	if col_shape == null or not (col_shape.shape is CapsuleShape3D):
+		return
+	var dest := global_transform
+	dest.origin.y = floor_y
+	var q: PhysicsShapeQueryParameters3D = PhysicsShapeQueryParameters3D.new()
+	q.shape = col_shape.shape
+	q.transform = dest * Transform3D(Basis(), col_shape.position)
+	q.collision_mask = 1
+	q.exclude = [get_rid()]
+	if not space.intersect_shape(q, 1).is_empty():
+		return
+	global_position.y = floor_y
+	velocity.y = 0.0
+	_step_down_grace = STEP_DOWN_GRACE_SEC
+
+
 ## Designer blocking volumes are invisible collision proxies: they stop the
 ## player walking through authored space, but they are not walls, ledges or
-## grapple anchors. Every traversal probe (mantle, wall climb, zipwire) must
-## treat a hit on one as no hit, while real walls, LevelCollision_* bodies and
-## landscape collision stay climbable.
+## grapple anchors. Every traversal probe (mantle, wall climb, zipwire, step-up)
+## must treat a hit on one as no hit, while real walls, LevelCollision_* bodies
+## and landscape collision stay climbable.
 func _is_blocking_volume_hit(hit: Dictionary) -> bool:
 	if hit.is_empty():
 		return false
-	var collider_v: Variant = hit.get("collider")
+	return _is_blocking_volume_collider(hit.get("collider"))
+
+
+## Collider-only form of the blocking-volume contract, for KinematicCollision3D
+## results (test_move) which hand back a collider rather than a ray dictionary.
+func _is_blocking_volume_collider(collider_v: Variant) -> bool:
 	if not (collider_v is Node):
 		return false
 	var collider: Node = collider_v as Node
@@ -1685,7 +1793,10 @@ func try_auto_mantle() -> bool:
 	fwd = fwd.normalized()
 	var excl: Array[RID] = [get_rid()]
 	var wall_hit: Dictionary = {}
-	for h_off: float in [0.5, 1.1, 1.7]:
+	# W6M: find a 0.50 m ledge: the 0.5/1.1/1.7 wall probes sit at or above its
+	# top, so the lowest sample starts below step height to catch the short band
+	# that only the jump-mantle may cross.
+	for h_off: float in [0.3, 0.5, 1.1, 1.7]:
 		var from: Vector3 = global_position + Vector3.UP * h_off
 		var q := PhysicsRayQueryParameters3D.create(from, from + fwd * 0.85, 1, excl)
 		var hit: Dictionary = space.intersect_ray(q)

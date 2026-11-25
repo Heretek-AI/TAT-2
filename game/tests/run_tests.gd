@@ -3720,6 +3720,47 @@ func _initialize() -> void:
 		ss_cap = ss_cshape.shape as CapsuleShape3D
 	var ss_capsule_ok: bool = ss_cap != null and is_equal_approx(ss_cap.height, 1.82) and is_equal_approx(ss_cap.radius, 0.32) \
 		and ss_cshape != null and is_equal_approx(ss_cshape.position.y, 0.91)
+	# W6M body/capsule contract: body_height_m() feeds the device detector/beam
+	# segment, so it must report the built 1.82 m capsule (W5A rebuilt the body
+	# but left the constant at the port's 1.78 m).
+	var ss_body_h: float = float(ss_thief.call("body_height_m"))
+	var ss_body_ok: bool = is_equal_approx(float(ss_consts.get("BODY_HEIGHT_STANDING", -1.0)), 1.82) \
+		and is_equal_approx(ss_body_h, 1.82)
+	# W6M blocker contract (T1-10-J style, at the step-up): a 0.40 m designer
+	# blocking volume sits inside MaxStepHeight, so the floor probe used to find
+	# its top and step onto it. The same box without the group must still step.
+	var ss_bg := StaticBody3D.new()
+	ss_bg.collision_layer = 1
+	ss_bg.collision_mask = 0
+	var ss_bg_cs := CollisionShape3D.new()
+	var ss_bg_box := BoxShape3D.new()
+	ss_bg_box.size = Vector3(6.0, 0.4, 3.6)
+	ss_bg_cs.shape = ss_bg_box
+	ss_bg.add_child(ss_bg_cs)
+	root.add_child(ss_bg)
+	ss_bg.global_position = Vector3(70.0, -0.2, 72.2)
+	var ss_blk := StaticBody3D.new()
+	ss_blk.collision_layer = 1
+	ss_blk.collision_mask = 0
+	var ss_blk_cs := CollisionShape3D.new()
+	var ss_blk_box := BoxShape3D.new()
+	ss_blk_box.size = Vector3(6.0, 0.4, 4.4)
+	ss_blk_cs.shape = ss_blk_box
+	ss_blk.add_child(ss_blk_cs)
+	ss_blk.add_to_group("blocking_volume")
+	root.add_child(ss_blk)
+	ss_blk.global_position = Vector3(70.0, 0.2, 68.2)
+	ss_thief.global_position = Vector3(70.0, 0.02, 70.70)
+	await physics_frame
+	await physics_frame
+	var ss_blk_rise: float = float(ss_thief.call("_try_step_up", Vector3(0.0, 0.0, -3.6)))
+	ss_blk.remove_from_group("blocking_volume")
+	var ss_vis_rise: float = float(ss_thief.call("_try_step_up", Vector3(0.0, 0.0, -3.6)))
+	var ss_blocker_ok: bool = is_zero_approx(ss_blk_rise) and absf(ss_vis_rise - 0.40) <= 0.01
+	ss_bg.queue_free()
+	ss_blk.queue_free()
+	await physics_frame
+	ss_thief.global_position = Vector3(60, 0.02, 60)
 	var ss_stair_deg: float = rad_to_deg(atan2(0.25, 0.33))
 	var ss_stair_ok: bool = ss_stair_deg < ss_angle_const and ss_snap_const >= 0.2
 	var ss_base := Vector3(50, 0, 50)
@@ -3736,9 +3777,9 @@ func _initialize() -> void:
 	var ss_cap35 := CollisionShape3D.new()
 	var ss_sh35 := CapsuleShape3D.new()
 	ss_sh35.radius = 0.32
-	ss_sh35.height = 1.78
+	ss_sh35.height = 1.82
 	ss_cap35.shape = ss_sh35
-	ss_cap35.position = Vector3(0, 0.89, 0)
+	ss_cap35.position = Vector3(0, 0.91, 0)
 	ss_b35.add_child(ss_cap35)
 	root.add_child(ss_b35)
 	ss_b35.floor_max_angle = ss_thief.floor_max_angle
@@ -3768,9 +3809,9 @@ func _initialize() -> void:
 	var ss_cap70 := CollisionShape3D.new()
 	var ss_sh70 := CapsuleShape3D.new()
 	ss_sh70.radius = 0.32
-	ss_sh70.height = 1.78
+	ss_sh70.height = 1.82
 	ss_cap70.shape = ss_sh70
-	ss_cap70.position = Vector3(0, 0.89, 0)
+	ss_cap70.position = Vector3(0, 0.91, 0)
 	ss_b70.add_child(ss_cap70)
 	root.add_child(ss_b70)
 	ss_b70.floor_max_angle = ss_thief.floor_max_angle
@@ -3790,11 +3831,11 @@ func _initialize() -> void:
 	ss_slope70.queue_free()
 	ss_thief.queue_free()
 	await physics_frame
-	if not ss_angle_ok or not ss_snap_ok or not ss_flags_ok or not ss_mantle_ok or not ss_no_mantle_ok or not ss_stair_ok or not ss_walk_ok or not ss_steep_ok or not ss_step_ok or not ss_capsule_ok:
-		printerr("FAIL: 45 stairs (step_ok=", ss_step_ok, " capsule_ok=", ss_capsule_ok, " angle_const=", ss_angle_const, " live_deg=", ss_live_deg, " snap_const=", ss_snap_const, " live_snap=", ss_live_snap, " flags=", ss_flags_ok, " mantle4=", ss_mantle_ok, " no_new_mantle=", ss_no_mantle_ok, " stair_deg=", ss_stair_deg, " walk35=", ss_walk_ok, " y35=", ss_y35, " steep70_blocked=", ss_steep_ok, " y70=", ss_y70, ")")
+	if not ss_angle_ok or not ss_snap_ok or not ss_flags_ok or not ss_mantle_ok or not ss_no_mantle_ok or not ss_stair_ok or not ss_walk_ok or not ss_steep_ok or not ss_step_ok or not ss_capsule_ok or not ss_body_ok or not ss_blocker_ok:
+		printerr("FAIL: 45 stairs (step_ok=", ss_step_ok, " capsule_ok=", ss_capsule_ok, " body_ok=", ss_body_ok, " blocker_ok=", ss_blocker_ok, " blocker_rise=", ss_blk_rise, " visible_rise=", ss_vis_rise, " angle_const=", ss_angle_const, " live_deg=", ss_live_deg, " snap_const=", ss_snap_const, " live_snap=", ss_live_snap, " flags=", ss_flags_ok, " mantle4=", ss_mantle_ok, " no_new_mantle=", ss_no_mantle_ok, " stair_deg=", ss_stair_deg, " walk35=", ss_walk_ok, " y35=", ss_y35, " steep70_blocked=", ss_steep_ok, " y70=", ss_y70, ")")
 		fails += 1
 	else:
-		print("PASS: 45 stairs (max_angle ", ss_angle_const, " deg, snap ", ss_snap_const, " m, capsule ", snappedf(ss_cap.height, 0.01) if ss_cap != null else -1.0, " m, step ", ss_consts.get("STEP_UP_MAX_M", -1.0), " m + ", ss_consts.get("STEP_UP_FORWARD_M", -1.0), " m probe, civic flight ", snappedf(ss_stair_deg, 0.1), " deg walkable, 70 deg blocked, wall-block/constant-speed kept, no new mantle)")
+		print("PASS: 45 stairs (max_angle ", ss_angle_const, " deg, snap ", ss_snap_const, " m, capsule ", snappedf(ss_cap.height, 0.01) if ss_cap != null else -1.0, " m, body_height_m ", snappedf(ss_body_h, 0.01), " m, step ", ss_consts.get("STEP_UP_MAX_M", -1.0), " m + ", ss_consts.get("STEP_UP_FORWARD_M", -1.0), " m probe, blocker 0.40 m refused, visible 0.40 m steps ", snappedf(ss_vis_rise, 0.01), " m, civic flight ", snappedf(ss_stair_deg, 0.1), " deg walkable, 70 deg blocked, wall-block/constant-speed kept, no new mantle)")
 
 	# 46. Den doors collision (leaf disabled past 70 deg) + Den window-wall gap.
 	var dd_ld: Node = (load("res://src/interact/lockable_door.gd") as GDScript).new()

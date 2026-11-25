@@ -16,25 +16,21 @@ cannot, and which review claims survived adjudication. (Chain re-audit: `re-audi
 ## 1. What was captured
 
 One Novice, solo deployment of `Mission.Guildhall.LootTheRoom` hosting `Contract.Main.2`, *Into the
-Lion's Den*, `free_play=false`. The player starts at the front end, visits the Den, uses the telescope,
-ends up on the Den roof, recovers the hub through the startscreen, re-enters, selects the contract,
-prepares, loads into the Guildhall, crosses a street and a roofline, picks a door, opens a display safe,
-takes a `Cat Statue`, picks two more locks (the last aborted), crosses ten near-black seconds, and stops
-in the pause menu. The objective is never completed and nothing is banked.
+Lion's Den*, `free_play=false`. Route: front end → Den → telescope → Den roof → startscreen → Den →
+contract selector → prep → Guildhall: street, roofline, picked door, display safe, `Cat Statue`, two more
+locks (the last aborted), ten near-black seconds, pause. The objective is never completed and nothing is
+banked.
 
-The first segment map was wrong in ways that change scoring. The corrected map (W0b, cross-checked with
-L1/L3/L4) is:
+The corrected segment map (W0b, cross-checked with L1/L3/L4):
 
 | Port time | What is actually on screen | Proof |
 |---|---|---|
-| 00:00–00:01 | Godot boot splash, not the startscreen | f_0001 |
-| 00:01–00:08 | startscreen, `Mac Neish` neon, `PLAY/SETTINGS/CREDITS/QUIT` | f_0002 |
+| 00:00–00:08 | Godot boot splash (f_0001), then the startscreen from 00:01: `Mac Neish` neon, `PLAY/SETTINGS/CREDITS/QUIT` | f_0001, f_0002 |
 | 00:08–00:13 | loading #1 | f_0009 |
 | 00:13–00:24 | Den: map card 00:13, armoire 00:16–18, telescope 00:19–21, sky cut 00:22.1–23.2 | f_0014, f_0018, f_0020, f_0023 |
 | 00:24–00:41 | **outside on the Den's plank roof** (the hub escape) | f_0026, f_0036 |
 | 00:41–00:48 | pause over the roof; `RETURN TO THIEF'S DEN` selected at 00:48.6 | f_0043 |
-| 00:49–00:51 | startscreen — the return lands here, not in the Den | f_0050 |
-| 00:51–00:56 | loading #2 | f_0052 |
+| 00:49–00:56 | startscreen (the return lands here, not in the Den), then loading #2 | f_0050, f_0052 |
 | 00:56–01:02 | 3D map table + `CONSTABLES' GUILDHALL` card | f_0060 |
 | 01:02–01:10 | 2D `MAP TABLE — CONTRACT SELECTOR` + confirm modal | f_0063, f_0067 |
 | 01:10–01:20 | `MISSION PREPARATION`, countdown 6→1 | f_0072, f_0076, f_0079 |
@@ -59,14 +55,14 @@ keyframes (KF03/04/07/08/09) are unreachable. And 00:41–00:48 is the pause mod
 the mapped "45–48 s loading" does not exist.
 
 **Absent.** No NPC of any kind — guard, constable, civilian, patrol, turret, camera or beam — in 281 s.
-No smoke bomb, no vintage car, no Vistara Diamond, no escape portal, no endgame, no payout, no
-hearth/parlor, no foyer beam, no crimson alarm, no wardrobe/ledger overlay.
+No smoke bomb, car, Vistara Diamond, escape/endgame, payout, hearth/parlor, foyer beam, crimson alarm or
+wardrobe/ledger overlay.
 
 **Present, against the brief.** A ZipWire: equipped by 01:45, fired at 02:01 (f_0122: 1P arm raised,
 roofs below), cranked 02:12–02:19 (f_0136: segmented ring, `[RMB] CRANK`, hand on the line). L5's
 reconstruction says "no zipwire"; the frames and three lanes disagree. What is missing is the
-*traversal* — no taut cable, no cable crossing, no courtyard descent — which moves two audio rows
-(AU3-05, AU5-02) from "unreachable" to "unverified".
+*traversal* — no taut cable, no cable crossing, no courtyard descent — which makes two audio rows
+reachable (`AU3-05`, `AU5-02`).
 
 ---
 
@@ -80,41 +76,51 @@ authored level and does not in the Guildhall.
 
 **Text only from native crops.** A contact-sheet cell is 640×360 — a 6× downscale of a 4–5 px font —
 evidence for layout, never for text. Every string here was read at 1:1 from a `frames_client`/master
-crop, by this review or by an adjudicator who quoted the crop. Sheet labels carry a measured +0.9 s
-offset (`S+HH:MM:SS` shows master `S+HH:MM:SS+0.9`).
+crop, by this review or an adjudicator. Sheet labels carry a measured +0.9 s offset.
 
-**Audio verdicts are gain-invariant.** The capture is 27.4 dB hot against the official (−16.5 vs
-−43.9 LUFS) with compressed dynamics (LRA 5.5 vs 16.7 LU), so no absolute dB comparison is a mix verdict.
-Spectral content, silence, harmonic structure, transient census and within-file contrast carry the scores;
-level deltas are provisional. That is why no audio row is scored `MISSING` on level alone.
+**Audio: the capture cannot be scored.** T03-AUDIO's runs on its branch show the captured bed is
+**capture-borne, not in-engine**: it is audible during the engine boot splash, before the game's audio
+system exists; it continues through a loading screen on which every authored bed is stopped; it carries a
+constant **+10…+13 dB tilt across four different scenes** (a scene-independent gain no emitter produces);
+and it is not `Play_Mus_MainTitleScreen`, which the shipped front end does author. The suspect is the OBS
+filter chain, consistent with L5's +27.4 dB offset (−16.5 vs −43.9 LUFS). Every AU row that compared the
+capture's absolute loudness, bed identity, silence at a transition, indoor/outdoor step, pause duck or
+ducking is therefore `UNVERIFIED`; only an event with no runtime trigger at all is scored (`AU6-01`).
+What *is* known is the pipeline — the least-consumed system: **45 of 1,296 events (3.5 %)** and **330 of
+5,018 clips (6.6 %)** are reachable, through six invented buses, one 60 m attenuation model, no occlusion,
+no reverb, no music cues and 3 of 689 VO lines (RE-M-01/02/03/04/05/08/10). That is an authored-data
+finding, not a mix measurement.
+
+**Retracted — capture artefact (do not re-use).** L5-01 startscreen bed, L5-02 loading silence, L5-04 Den
+room tone, L5-05 indoor/outdoor step, L5-06 pause duck, L5-07 tick-train absence, L5-08 event-to-bed
+ratio, L5-09 per-surface footstep character, L5-12 Den dropouts. L5-03 (+27.4 dB), L5-10 (no clipping)
+and L5-11 (17 kHz codec ceiling) stand: they describe the capture, not the game. The one visual row
+scored from the retracted set (V2-05) is `UNVERIFIED`.
 
 **Three false readings this review carried and retracted.**
 
-1. **The frozen clock.** It ticks 1:1: Δ42 s over 42 s (f_0168→f_0210), Δ30 s over 30 s
-   (f_0210→f_0240), 50 s over 50 s (L4-04). The digits only *look* frozen because a second draw
-   overprints the row; the reading came from an italic 14 px glyph sampled at 1 fps.
-2. **`UNADVY`.** Does not exist. The prep label is clean `UNREADY` at 1:1 (f_0076/f_0077), the string
-   occurs zero times in the tree, and the code emits `UNREADY` while the countdown runs
-   (`mission_prep_ui.gd:1312`). It was a 4 px sheet mis-read.
+1. **The frozen clock.** It ticks 1:1: Δ42 s over 42 s (f_0168→f_0210), Δ30 s over 30 s, 50 s over 50 s
+   (L4-04). The digits only *look* frozen because a second draw overprints the row.
+2. **`UNADVY`.** Does not exist: the label is clean `UNREADY` at 1:1 (f_0076/f_0077), the string occurs
+   zero times in the tree, and the code emits it while the countdown runs (`mission_prep_ui.gd:1312`).
 3. **The missing-texture magenta.** The violet doorway plane was attributed in turn to a missing texture,
    to `SM_WardBox` with `WorldGridMaterial`, and to a fallback crate-stencil albedo. All three are wrong:
    it is `tat_ward.gdshader` on the ward-zone device's `WardVisual` box, `unshaded + blend_mix`, at both
-   sites (F1a C-2). Evidence: constant G/R 0.766 across a 1.4× brightness range; a 24.5 px facet pitch
-   converting to 0.12–0.18 m against the shader's `1/5.5 = 0.182 m` cell and the authored 3.5 m box; and
-   the elimination of `SM_WardBox` (skipped at `level_loader.gd:2577` since `32fe554`) and of the
-   WorldGrid albedo (red/cyan 2×2 checker, sd 0.393).
+   sites (F1a C-2). Evidence: constant G/R 0.766 over a 1.4× brightness range, a 24.5 px facet pitch that
+   converts to 0.12–0.18 m against the shader's 0.182 m cell, and the elimination of `SM_WardBox`
+   (skipped at `level_loader.gd:2577`) and of the WorldGrid albedo (sd 0.393).
 
-Two more corrections shaped the verdicts. **The contact sheets are not another build** (F1a C-1): a
+Two further corrections. **The contact sheets are not another build** (F1a C-1): a
 label-free re-extraction reproduces them at 0.55–0.81 % RMSE against a 0.28–0.61 % resampler floor, while
 the only other recording on disk scores 24.5 %. L4's "different build" finding is `NOT REPRODUCED`; the
 real defect behind it — two door classes printing `[E]` and `[F]` — is authored (`lockable_door.gd:316`,
 `swinging_door.gd:250`). And **the HUD bracket is `[0/1]`** (F1b C-1): contract 2 authors one objective
 row, the header prints `done/rows`, a localised NCC ranks `[0/1]` first (0.6145) and `[0/11]` last
-(0.5164), and my own crop of f_0250 shows `[0/` + a smeared `1]`. Three lanes read three different digits.
+(0.5164), and f_0250 shows `[0/` + a smeared `1]`.
 
-**What the method cannot do.** A 1 fps set cannot exclude sub-second flicker (V1-01), resolve a
-1.000 s tick train against a loud bed (AU4-04), or demonstrate an arc-size change (UI5-01): those are
-`UNVERIFIED`, with the experiment named. Frame rate is not measurable from a CFR capture.
+**What the method cannot do.** A 1 fps set cannot exclude sub-second flicker (V1-01) or demonstrate an
+arc-size change (UI5-01): those are `UNVERIFIED`, with the experiment named. Frame rate is not measurable
+from a CFR capture.
 
 ---
 
@@ -122,12 +128,11 @@ row, the header prints `done/rows`, a localised NCC ranks `[0/1]` first (0.6145)
 
 ### 3.1 The Guildhall is lit by 16 % of its authored lights, at a fixed exposure, with no GI or IBL
 
-The load set authors **976** point/spot records across the eight sublevels C1 counted, plus 17 RectLights;
-my own count over every `Guildhall*` level file is 982 + 17 = **999**, the six extra sitting in two facade
-sublevels outside the load set. The runtime instantiates `total=160 (generic=159 rect=1) budget=159` —
-**159 of 976 = 16.3 %**. Selection is by authored energy then spawn proximity, never by room: rank 159 is
-authored energy 25.0 (138 brighter, 50 at exactly 25.0 with 29 losing the tie-break; 659 below 20 lumens,
-138 below 1.0). Every sub-25-lumen practical dies unless it is within 25 m of a player spawn
+The load set authors **976** point/spot records plus 17 RectLights; my own count over every `Guildhall*`
+file is **999**, the six extra in two facade sublevels outside the load set. The runtime instantiates
+`total=160 (generic=159 rect=1) budget=159` — **159 of 976 = 16.3 %**. Selection is by authored energy
+then spawn proximity, never by room: rank 159 is energy 25.0 (138 brighter, 50 at 25.0; 659 below 20
+lumens, 138 below 1.0). Every sub-25-lumen practical dies unless it is within 25 m of a player spawn
 (`level_loader.gd:4445-4478`, `:5460-5469`).
 
 The exposure lift written for this map never runs. `weather_profile.gd:768-772` applies
@@ -141,17 +146,16 @@ specified cubemap at intensity 2.0 (C5-01) — the authored IBL is unused.
 
 Measured: interiors at `p50 2–8` with **47.7–78.4 %** of pixels below 8/255, against 9.4–23.5 % in
 official frames of the same room kinds; the darkest second (t=123) has 91.8 % of 8.03 M pixels at or below
-7/255. The Den, with hand fills and its own practicals, reaches the official median, so this is not a
-global exposure constant. One correction: L1-13 read a logged `ambient_energy=0.08` as the Guildhall
-inheriting the Den preset, but C1 §0(a) shows that line is a Den load; the Guildhall is `0.16 / fog
-0.0048`, i.e. `gloomy`. The preset is right; the exposure and the budget are not. **Owner: T07-RENDER**
-(C1-01/02 P0; C1-03/05 P1). Budget and exposure come before any material or grade work.
+7/255. The Den reaches the official median, so this is not a global exposure constant. L1-13's `0.08`
+reading is a Den load; the Guildhall is `gloomy` at `0.16 / fog 0.0048` (C1 §0a). The preset is right;
+the exposure and the budget are not. **Owner: T07-RENDER** (C1-01/02 P0; C1-03/05 P1). Budget and
+exposure come before any material or grade work.
 
 ### 3.2 The prep regression is one camera value
 
-The stage is the run's most visible regression: the thief stands against a flat blue-violet field with
-her soles cropped by the frame bottom, and one near-black mass fills the left two-thirds where the
-official shows a lit roof, a balustrade, a chimney jumble and a clocktower.
+The stage is the run's most visible regression: the thief stands against a flat blue-violet field, soles
+cropped by the frame bottom, one near-black mass filling the left two-thirds where the official shows a
+lit roof, balustrade, chimney jumble and clocktower.
 
 The authored `CameraActor_0` (`MissionLobby_Geo3`) is at `(12.6065, −0.16698, −1.05384)` m with pitch
 6.685°, yaw 173.186°, roll −14.780°, FOV 20.0 **horizontal** (11.33° vertical at 16:9). The port uses
@@ -165,10 +169,9 @@ The expansion skyline does not rescue it. All eight pieces are placed (`placed 8
 lies within ±11° of the lens centre (the frame is ±10°), their 310–500 m standoff and 1.0–1.7 scale make
 `mid_roofline_a` span ≈67 % of the frame height, and `_grade_skyline_material` sets
 `disable_ambient_light = true`, `emission_enabled = false` and a dark albedo while the only light that
-reaches them is aimed from behind.
-They can only render as black silhouettes against a black mass. The sky compounds it: `cloud_color
-(0.1277, 0.4162, 1.0)` at `cloud_opacity 3.299` gives the azure, `moon.color (0.2604, 0.4038, 1.0)` the
-violet disc, and the warm counter-term is gated on `_is_midnight_clear`, which no map resolves to.
+reaches them is aimed from behind — so they can only be black silhouettes. The sky compounds it:
+`cloud_color (0.1277, 0.4162, 1.0)` at `cloud_opacity 3.299` gives the azure, `moon.color` the violet
+disc, and the warm counter-term is gated on `_is_midnight_clear`, which no map resolves to.
 **Owner: T05-UI** for camera and placement, then **T07-RENDER** for the grade (F1b C-3's order).
 `build/qa/vf_mission_prep.png` is the pre-regression frame.
 
@@ -179,21 +182,19 @@ The framed top-left element is the health bar. The authored
 a flat `204×20` `ColorRect` (`0.64,0.12,0.12,0.96`) with `T_healthBar_splatter_red.png` bound
 **permanently** (`hud.gd:1005`, no fade logic). The authored shaped fill, `T_healthBar_straight_RGB.png`,
 is never loaded. The widget renders at ~30 native px — **37 %** of the authored height (10 px at 720p vs
-26.7 px in KF19) — so the filigree reads as a smear. The mission text below has no frame — C5 was right
-about that — and the two were never the same element.
+26.7 px in KF19) — so the filigree reads as a smear. The mission text below has no frame (C5 was right).
 
 The duplication is real: a horizontally compressed second copy of the frame sits left of the pointed
-right cap, the objective line is overprinted with itself, and `[HOLD] PIN MENU` has `MMB` through it. My
-own crop of f_0270 shows both. There is exactly one `HudScript` and one `hp_frame`
-(`mission_controller.gd:155-156`, `hud.gd:1023`), so this is a second *draw*, not a second HUD; the
-drawing node is unidentified. **Owner: T05-UI.** Composition is local (`hud.gd:997-1023`); the
-duplication needs F1a C-4's experiment — instrument `_ready`/`add_child` counts, plus a lossless
-in-engine crop so the 2.9× canvas upscale can be excluded.
+right cap, the objective line is overprinted with itself, and `[HOLD] PIN MENU` has `MMB` through it. One
+`HudScript` and one `hp_frame` exist (`mission_controller.gd:155-156`, `hud.gd:1023`), so this is a second
+*draw*, not a second HUD; the node is unidentified. **Owner: T05-UI.** Composition is local
+(`hud.gd:997-1023`); the duplication needs F1a C-4's experiment — instrument `_ready`/`add_child`
+counts, plus a lossless in-engine crop so the 2.9× canvas upscale can be excluded.
 
 ### 3.4 The blackjack/detection race (a chain finding this run cannot show)
 
-No NPC appears, so none of this is in the recording. It matters because it makes the stealth loop
-unwinnable, and a run that never meets a guard cannot refute it.
+No NPC appears, so none of this is in the recording; a run that never meets a guard cannot refute it, and
+the race makes the stealth loop unwinnable.
 
 The shipped `AIC_GuardBase` authors `MinimumSightRadius 1.0 m`: a guard sees a target inside 1 m
 regardless of facing. The port sees it inside **3.5 m** (`guard_ai.gd:1479`) and its ramp returns `INF`
@@ -205,11 +206,11 @@ needs a **0.45 s hold** (`HOLD_INTERACT_SEC`). The ramp wins, and `GameState.eve
 and code, not runtime-verified (RE-I-02, P2). It is in the five because it is the largest gap between
 "systems exist" and "loop is playable", and no gate sees it: the takedown suite freezes physics and calls
 `_try_blackjack` directly. **Owner: T11-AI**, with T04-ANIM for the rig and T10-GAMEPLAY for the hold.
-Experiment: a live-physics takedown at 2.0–2.4 m behind a guard, with the ramp logged.
+Experiment: a live-physics takedown at 2.0–2.4 m behind a guard.
 
 ### 3.5 What is not broken: the loot and objective core
 
-The run's most important negative result is that the suspected parts are correct.
+The run's most important negative result: the suspected parts are correct.
 
 - **`[0/1]` is right.** `Contract.Main.2` authors `kind: single` with one item;
   `mission_controller.gd:2665-2667` builds one row; `hud.gd:2488` prints `done/size` plus a `❧` sub-line.
@@ -217,7 +218,7 @@ The run's most important negative result is that the suspected parts are correct
   `[0/11]`, `[0/9]`, `[0/4]` are misreads. T10 must not "fix" it.
 - **The clock is 1:1 on the mission row.** 3300 s at Novice, measured 42 s/42 s and 30 s/30 s. The endgame
   window is **1200 s at every difficulty** by the KF13 override (authored QG 480 s); the shipped ini
-  ladder 1200/600/300 is real but unread. The 1200 is correct; the ladder is inert.
+  ladder 1200/600/300 is real but unread.
 - **The pickup works.** `DISPLAY SAFE (LV 2)` opens, the case reads `OPENED`, the statue carries
   `[F] STEAL CAT STATUE`, and `(£)` goes **0 → 225** at 220.5–221.5 s. 225 is authored; the 3-slot cost
   is the documented port decision (authored rows cost 1).
@@ -231,10 +232,9 @@ The run's most important negative result is that the suspected parts are correct
 
 ---
 
-## 4. Every P0/P1 across L1–L5 and C1–C5
+## 4. Every P0/P1 across L1–L5, C1–C5 and the audio chain lane
 
-Duplicates are merged, ids listed. Status is the review's adjudicated state, not a team's later fix
-status.
+Duplicates are merged; status is the adjudicated state, not a team's fix status.
 
 | ID | Sev | Finding | Evidence pointer | Team | Status |
 |---|---|---|---|---|---|
@@ -242,6 +242,7 @@ status.
 | C1-02 | P0 | AGX `NIGHT_EXPOSURE 1.15` scoped to `midnight_clear`, which no map resolves to; Guildhall runs `gloomy` at exposure 1.0 | `weather_profile.gd:768-772`; `map_weather.json` | T07-RENDER | CONFIRMED |
 | L3-01 / C3-01 | P0 | Prep thief floats, soles cropped, no rooftop | f_0072/f_0078; `vf_mission_prep.png` | T05-UI | MERGED, CONFIRMED |
 | L3-02 | P0 | Prep backdrop is one near-black mass + one spire; skyline cannot read | f_0072; C1-08 | T05-UI (+T07) | CONFIRMED |
+| RE-M-08 | P0 | 45 of 1,296 events (3.5 %) / 330 of 5,018 clips (6.6 %) reachable; `fire_event`/`play_sfx` have no call sites; guards, tools, doors, zipwire, pickpocket and 686 VO lines silent | RE-M-08 table; `grep play_sfx` definition-only | T03-AUDIO | CONFIRMED (authored data) |
 | L1-01 | P1 | Mission-wide underexposure: 47.7–78.4 % of pixels < 8/255 vs 9.4–23.5 % | L1 §2; f_0111/f_0242/f_0256 | T07-RENDER | CONFIRMED |
 | C1-03 | P1 | No GI; zero authored PP volumes in the load set, so no leak fill or exposure LUT | `level_loader.gd:5233-5286`; 16 files `post_process: []` | T07-RENDER | CONFIRMED |
 | C1-04 | P1 | `_is_midnight_clear` exact-matches an id no map resolves to; documented sky/fog calibration dead | `weather_visuals.gd:249-250, 403-423` | T07-RENDER | CONFIRMED |
@@ -260,14 +261,13 @@ status.
 | L4-08 | P1 cand. | No guard, civilian, turret, camera or beam visible in 6 min (4 guards, 3 civilians, nearest 48 m) | all frames; C4-08 | T10-GAMEPLAY + T11-AI | CONFIRMED visible; spawn open |
 | L4-13 | P1 | After `[F] EXIT` the player is outside on the Den roof; hub recovered only via the startscreen | master 26.0–38.5; f_0026/f_0036 | T10-GAMEPLAY | CONFIRMED (position) |
 | C3-10 | P1 | `RETURN TO THIEF'S DEN` is wired to `main_menu.tscn`; bypasses the payout | `hud.gd:1839-1846`; master 48.6→49.0 | T05-UI | CONFIRMED |
-| L5-01 | P1 | Startscreen bed is music-like, ≈+30 dB over the project's own rain target | L5-01; 69 % harmonic frames | T03-AUDIO | CONFIRMED (content) |
-| L5-02 | P1 | Loading has no digital silence: 0 exact-zero samples in 19 s | L5-02; `silencedetect` | T03-AUDIO | CONFIRMED |
+| RE-M-01/02/03/04/05/10 | P1 ×6 | Control plane has no producer/consumer: 130 buses→6, 1,978 attenuations→one 60 m model, 31 transmission-loss rows→0, 98 emitters→6 bed keys, 21 music plays→1, 689 VO lines→3 | RE-M-01..05/10 | T03-AUDIO | CONFIRMED (authored data); merged row |
 | L3-05 | P1 | Regression proof: the 11-23 capture shows the thief on a lit ledge | `vf_mission_prep.png` vs f_0072 | T05-UI | MERGED into L3-01 |
 
-Twenty-five P0/P1 rows, twenty-one distinct defects: four are duplicates (L3-01≡C3-01, L3-04≡C3-04,
-L3-13≡C3-08, L3-05≡L3-01) and two are reclassifications where adjudication changed the object, not the
-severity (L1-02, C2-03). Nothing P0/P1 was dropped; the closed "sheets from another build" claim was P2
-(`NOT REPRODUCED`, §2).
+Twenty-five rows, twenty-six distinct defects: the audio control-plane row merges six RE-M P1s, four rows
+are duplicates (L3-01≡C3-01, L3-04≡C3-04, L3-13≡C3-08, L3-05≡L3-01), and two are reclassifications
+(L1-02, C2-03). Nothing was dropped; L5-01/L5-02 are withdrawn as capture artefacts (§2), and the "sheets
+from another build" claim was P2 (`NOT REPRODUCED`).
 
 ---
 
@@ -285,26 +285,25 @@ severity (L1-02, C2-03). Nothing P0/P1 was dropped; the closed "sheets from anot
 - **Other unreached rooms and beats (24 rows).** Car, gate arch, `MACLEOD` facade, blue doors, hearth,
   slate stairs, smoke bomb, Vistara, beams, takedown camera.
 
-The scorecard records each absence with the `Snn`/`KFnn` needed, so a future scorer sees which keyframe
-makes the row live. The total is 57, not the matrix's 56: four rows it calls partly observable never show
-their subject (V3-02, AU3-03, G2-02, G2-05) while three it calls unreachable are reachable (V6-04, AU5-05,
-AU5-07). The reconciliation is in the scorecard's §5.
+The scorecard records each absence with the `Snn`/`KFnn` needed. The total is 57, not the matrix's 56:
+four rows it calls partly observable never show their subject (V3-02, AU3-03, G2-02, G2-05) while three
+it calls unreachable are reachable (V6-04, AU5-05, AU5-07).
 
 **The second capture.** One run on the same build that (a) stays inside the Den until the wardrobe, ledger
 and gramophone are opened, (b) follows the official gate/courtyard route rather than the rooftop cut,
 (c) meets a guard and performs one rear takedown with physics live, (d) throws the smoke bomb and uses the
 Vistara scan, (e) crosses the foyer beam to trigger the ward lockdown, and (f) completes the Vistara Files
 objective and escapes through a summoned door — with the clock allowed past 240 s in the endgame so
-C4-03's portal trap is confirmed or retired. Method: OBS audio filters off, fixed in-game master (L5-03);
-0.2 s or lossless HUD sampling (C3-15, C4-15); F3 plus a 5 s position log (C4-10, L2); one Vulkan run at
-a time under Xvfb. A capture at mission start would also settle whether the main window is 3300 s (mission
-row) or 1320 s (quest-graph `MatchMainPhaseDuration`) — the authored values disagree.
+C4-03's portal trap is confirmed or retired. Method: OBS audio filters off (T03); 0.2 s or lossless HUD
+sampling (C3-15, C4-15); F3 plus a 5 s position log (C4-10, L2); one Vulkan run at a time. A capture at
+mission start also settles whether the main window is 3300 s (row) or 1320 s (quest graph).
 
 ---
 
 ## 6. The one-paragraph version
 
-The port got the *systems* right and the *light* wrong. The loot pickup and its authored value, the
+The port got the *systems* right and the *light* wrong. Its audio pipeline is the least-consumed system —
+45 of 1,296 events — but this recording cannot score its sound. The loot pickup and its authored value, the
 `[0/1]` counter, the 1:1 clock, the 3300 s main window, the 1200 s endgame override, the telescope, the
 ZipWire and the front-end flow all behaved as authored; the counter that looked broken was a misread, the
 clock that looked frozen was not, and the violet panel that looked like a missing texture is the ward

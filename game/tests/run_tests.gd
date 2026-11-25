@@ -8107,6 +8107,14 @@ func _ai_blackjack_hold(host: Node, at: Vector3, reach_m: float) -> Dictionary:
 	player.set("_interact_hold_ms", -1)
 	player.set("_interact_hold_sec", -1.0)
 	player.call("_perform_hold_action")
+	# T04-ANIM (RE-F-12): the KO lands inside the authored CombatHitbox window
+	# (0.390 s of the 0.667 s light swing), not on the release frame. Wait for
+	# the contact — bounded so a genuine failure still fails fast — instead of
+	# asserting the pre-T04 frame-0 timing. Suite 55c and 91d share this helper.
+	var ko_frames: int = 0
+	while int(guard.get("state")) != 5 and ko_frames < 90:
+		await physics_frame
+		ko_frames += 1
 	var out: Dictionary = {
 		"prompt": prompt,
 		"held": held,

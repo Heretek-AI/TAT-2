@@ -2,6 +2,10 @@ extends Node
 ## Atomic JSON save system (mirrors TATAtomicSave): XP, level, completed contracts, settings.
 ## Workstream 2: progression state (currency, unlocks, loadouts, den decoration).
 
+## Authored progression data (W9-P1): level cap, XP weights, FTUE bankroll and
+## the endgame ladder all come from game/data/generated/project_settings.json.
+const Progression := preload("res://src/core/progression.gd")
+
 const SAVE_PATH := "user://tat2_save.json"
 const TMP_PATH := "user://tat2_save.json.tmp"
 
@@ -21,9 +25,17 @@ const XP_CURVE_ROW := "XPToLevel"
 const XP_PER_LEVEL_FALLBACK := 500
 # Defensive bounds for save-sourced values so a corrupt or hand-edited save
 # cannot drive the per-level loops for an absurd number of iterations.
-# These are not gameplay caps.
+# These are not gameplay caps: the gameplay cap is the authored 25
+# (Progression.maximum_level()), applied by level_for_xp()/xp_total_for_level().
 const MAX_SAVE_LEVEL := 200
 const MAX_SAVE_XP := 1_000_000
+
+## Authored-progression migration (W9-P1). Root keys `progression_schema` and
+## `progression_migrated` follow the _migrate_* precedent: an old save is
+## backfilled by _ensure_defaults(), migrated once, and stamped, so the 5,000
+## FTUE bankroll can never be re-granted after the player spends it. The root
+## save_schema stays 8: no existing key changed shape.
+const PROGRESSION_SCHEMA_VERSION := 1
 
 ## Settings schema (v2) and the one-time FOV migration. Saves written before
 ## the authored lens existed stored fov=75.0 (the old flat default), which
@@ -347,7 +359,12 @@ func _defaults() -> Dictionary:
 		"unlocked_cosmetics": STARTER_COSMETICS.duplicate(),
 		"unlock_ids_schema": UNLOCK_IDS_SCHEMA_VERSION,
 		"unlock_ids_migrated": false,
-		"currency": 0,
+		# Authored FTUE bankroll (project.ftue_min_thieves_den_money = 5000): a
+		# new profile starts with the Thieves' Den minimum, not 0. Existing
+		# profiles are raised once by _migrate_progression().
+		"currency": Progression.ftue_min_thieves_den_money(),
+		"progression_schema": PROGRESSION_SCHEMA_VERSION,
+		"progression_migrated": false,
 		"player_name": DEFAULT_PLAYER_NAME,
 		"player_name_migrated": false,
 		"equipped_loadout": {"spider": _default_loadout(), "chameleon": _default_loadout()},
@@ -722,9 +739,30 @@ func _migrate_personal_quest() -> bool:
 	return true
 
 
+## One-time authored-progression migration (W9-P1). The shipped profile starts
+## with the authored Thieves' Den bankroll (project.ftue_min_thieves_den_money
+## = 5000), but a save written before W9-P1 starts at 0. An existing profile is
+## raised to the floor exactly once — and only while it has never completed a
+## contract, so a veteran who spent everything is never handed free money.
+## `progression_migrated` records the decision so spending below the floor
+## afterwards is permanent. Returns true when the save should be persisted.
+func _migrate_progression() -> bool:
+	if bool(data.get("progression_migrated", false)):
+		return false
+	var cc_v: Variant = data.get("completed_contracts", {})
+	var has_contracts: bool = cc_v is Dictionary and not (cc_v as Dictionary).is_empty()
+	var floor_money: int = Progression.ftue_min_thieves_den_money()
+	if not has_contracts and int(data.get("currency", 0)) < floor_money:
+		data["currency"] = floor_money
+	data["progression_schema"] = PROGRESSION_SCHEMA_VERSION
+	data["progression_migrated"] = true
+	return true
+
+
 ## Stored levels are legacy: old saves used `xp / 500 + 1`, which is higher
 ## than the authored curve allows once XP passes 2500. The runtime level is
-## therefore always re-derived from XP; the stored value is never trusted.
+## therefore always re-derived from XP and never trusted; W9-P1 caps it at the
+## authored 25 (Progression.maximum_level) while keeping every XP point.
 func _sync_level_from_xp() -> void:
 	var raw: Variant = data.get("xp", 0)
 	var xp: int = clampi(int(raw), 0, MAX_SAVE_XP)
@@ -912,6 +950,7 @@ func load_save() -> void:
 		_ensure_defaults()
 		_sync_level_from_xp()
 		_migrate_unlock_ids()
+		_migrate_progression()
 		_migrate_save_schema()
 		return
 	var text: String = ""
@@ -946,14 +985,17 @@ func load_save() -> void:
 	_ensure_defaults()
 	_sync_level_from_xp()
 	# Persist the one-time migrations (settings schema v2 FOV, capture persona
-	# -> blank, personal-quest record, catalog save ids, W7S-S2 root v8) so the
-	# next load sees their flags and never re-runs them.
+	# -> blank, personal-quest record, catalog save ids, authored progression
+	# floor, W7S-S2 root v8) so the next load sees their flags and never
+	# re-runs them.
 	var migrated: bool = _migrate_settings_schema()
 	if _migrate_player_name():
 		migrated = true
 	if _migrate_personal_quest():
 		migrated = true
 	if _migrate_unlock_ids():
+		migrated = true
+	if _migrate_progression():
 		migrated = true
 	if _migrate_save_schema():
 		migrated = true
@@ -1080,15 +1122,59 @@ func _remove_file(path: String) -> void:
 		push_warning("[save_system] could not remove scratch file: ", path, " (", error_string(err), ")")
 
 
-func record_contract_complete(order: int, score: int, ghost: bool) -> void:
+## Record one completed contract and award the authored XP.
+##
+## W9-P1 replaces the port-invented `data["xp"] += maxi(100, score / 2)` (the
+## score argument is kept for the completion record, never for the award).
+## The weights are authored in project_settings.json, but the capture carries
+## no composition formula, so the composition below is a PORT DECISION:
+##   base   = contracts_xp + mission_xp + win_xp + time_xp
+##   time_xp = clamp(xp_per_minute * elapsed_minutes, 0, maximum_time_in_game_xp)
+##   award  = round(base * difficulty_xp_multiplier)  [+ FTUE credit]
+## At the authored weights a Novice escape with no time bonus is 20+20+80 =
+## 120 XP; Thief doubles it, Master triples it.
+##
+## Free play never banks progression (AGENTS rule 7): the award is skipped
+## before the completion row is written, mirroring the callers' `if not
+## GameState.free_play` guard so a direct call cannot farm XP either.
+##
+## `elapsed_sec` is a defaulted parameter exactly so mission_controller.gd keeps
+## its three-argument call sites untouched: when it is <= 0 the elapsed time is
+## read from the GameState autoload (guarded, because suite save objects can
+## live outside the tree). A run in FTUE (no completion row before this one)
+## also receives the authored FTUE level-up credit once when the file says it
+## is additive (progression.ftue_level_up_xp_is_on_top_of_regular_xp).
+func record_contract_complete(order: int, score: int, ghost: bool, elapsed_sec: float = 0.0) -> void:
+	var gs: Node = get_node_or_null("/root/GameState")
+	if gs != null and bool(gs.get("free_play")):
+		return
 	var k: String = str(order)
-	var prev_raw: Variant = data["completed_contracts"].get(k, {})
+	var cc_v: Variant = data.get("completed_contracts", {})
+	var cc: Dictionary = cc_v as Dictionary if cc_v is Dictionary else {}
+	var prev_raw: Variant = cc.get(k, {})
 	var prev: Dictionary = prev_raw as Dictionary if prev_raw is Dictionary else {}
-	data["completed_contracts"][k] = {
+	# FTUE is decided from the profile as it was *before* this completion row.
+	var is_ftue: bool = cc.is_empty()
+	cc[k] = {
 		"best_score": maxi(int(prev.get("best_score", 0)), score),
 		"ghost": bool(prev.get("ghost", false)) or ghost,
 	}
-	data["xp"] = clampi(int(data["xp"]) + maxi(100, score / 2), 0, MAX_SAVE_XP)
+	data["completed_contracts"] = cc
+	var elapsed: float = elapsed_sec
+	if elapsed <= 0.0 and gs != null:
+		elapsed = float(gs.get("elapsed_sec"))
+	var minutes: float = maxf(elapsed, 0.0) / 60.0
+	var base: int = Progression.xp_award("contracts") \
+		+ Progression.xp_award("mission") \
+		+ Progression.xp_award("win") \
+		+ Progression.xp_award("time", {"minutes": minutes})
+	var difficulty: int = 1
+	if gs != null:
+		difficulty = int(gs.get("difficulty"))
+	var awarded: int = int(roundf(float(base) * Progression.difficulty_xp_multiplier(difficulty)))
+	if is_ftue and Progression.ftue_level_up_xp_is_on_top_of_regular_xp():
+		awarded += Progression.ftue_level_up_xp()
+	data["xp"] = clampi(int(data["xp"]) + awarded, 0, MAX_SAVE_XP)
 	_sync_level_from_xp()
 	write_save()
 
@@ -1105,25 +1191,32 @@ func xp_threshold_for_level(level: int) -> int:
 	return int(roundf(value))
 
 
-## Cumulative XP needed to reach `level` (level 1 starts at 0 XP).
+## Cumulative XP needed to reach `level` (level 1 starts at 0 XP). The target
+## clamps to the authored gameplay cap (Progression.maximum_level = 25 →
+## 44,500 XP), so xp_total_for_level(26) is still 44,500: XP past the cap is
+## stored (never destroyed) but never consumed. MAX_SAVE_LEVEL (200) remains
+## only as the defensive loop bound for a hand-edited level argument.
 func xp_total_for_level(level: int) -> int:
 	var total: int = 0
 	var lvl: int = 1
-	# Defensive clamp for malformed saves, not a gameplay cap.
-	var target: int = clampi(level, 1, MAX_SAVE_LEVEL)
+	var cap: int = clampi(mini(MAX_SAVE_LEVEL, Progression.maximum_level()), 1, MAX_SAVE_LEVEL)
+	var target: int = clampi(level, 1, cap)
 	while lvl < target:
 		total += xp_threshold_for_level(lvl)
 		lvl += 1
 	return total
 
 
-## Level implied by a cumulative XP total under the authored per-level curve.
+## Level implied by a cumulative XP total under the authored per-level curve,
+## capped at the authored maximum level (25). XP past 44,500 is kept as-is: the
+## cap is a level, not a currency, so a profile with 500,000 XP stays level 25.
 func level_for_xp(xp: int) -> int:
 	# Defensive clamps for malformed saves, not gameplay caps.
 	var remaining: int = clampi(xp, 0, MAX_SAVE_XP)
 	var level: int = 1
+	var cap: int = clampi(mini(MAX_SAVE_LEVEL, Progression.maximum_level()), 1, MAX_SAVE_LEVEL)
 	var need: int = xp_threshold_for_level(level)
-	while remaining >= need and level < MAX_SAVE_LEVEL:
+	while remaining >= need and level < cap:
 		remaining -= need
 		level += 1
 		need = xp_threshold_for_level(level)
@@ -1313,7 +1406,8 @@ func is_thief_unlocked(thief_id: String) -> bool:
 
 func get_level_progress() -> Dictionary:
 	var xp: int = clampi(int(data.get("xp", 0)), 0, MAX_SAVE_XP)
-	# The stored level is legacy and may be inflated; derive it from XP.
+	# The stored level is legacy and may be inflated; derive it from XP (which
+	# also enforces the authored level-25 cap without touching the XP total).
 	var level: int = level_for_xp(xp)
 	var needed: int = xp_threshold_for_level(level)
 	var spent: int = xp_total_for_level(level)

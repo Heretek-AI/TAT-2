@@ -280,6 +280,15 @@ func reset_run(contract_order: int, map_id: String) -> void:
 	phase = PHASE_MAIN
 	endgame_time_limit = 0.0
 	endgame_elapsed = 0.0
+	# W9-P1: snapshot the 0-based difficulty index for the authored endgame
+	# ladder (project_settings.project.endgame_durations_by_difficulty =
+	# [1200, 600, 300]). GameData.get_mission_endgame_seconds(mission_id) reads
+	# it when its caller passes no index, which is exactly what
+	# mission_controller._apply_run_clock() does — so the ladder reaches the run
+	# clock without editing the controller. Prep picks GameState.difficulty
+	# before the deploy, so reset_run is the honest publication point; a
+	# mid-run difficulty change (QA cycle) does not move an already-open door.
+	GameData.current_difficulty_index = clampi(difficulty - 1, 0, 2)
 	escape_markers = []
 	extracted_players = []
 	loot_collected = 0

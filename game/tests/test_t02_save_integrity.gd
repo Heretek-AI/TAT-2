@@ -137,7 +137,11 @@ func _check_corrupt_bytes(problems: Array[String]) -> void:
 		var ev: Array = events[0] as Array
 		_expect(problems, str(ev[0]) == "parse_error" and str(ev[1]) == backup, "T02-01 load_failed payload=%s (want reason+backup)" % str(ev))
 	var recovered: Dictionary = sv.get("data") as Dictionary
-	_expect(problems, int(recovered.get("currency", -1)) == 0, "T02-01 recovered currency=%d (want defaults 0)" % int(recovered.get("currency", -1)))
+	# W9-P1: the authored FTUE bankroll (project_settings
+	# project.ftue_min_thieves_den_money = 5000) is the default profile's
+	# currency, so a corrupt load keeps the *default* profile's 5,000 rather
+	# than the pre-W9 0. Nothing is written back (the bytes stay quarantined).
+	_expect(problems, int(recovered.get("currency", -1)) == 5000, "T02-01 recovered currency=%d (want the default profile's 5000)" % int(recovered.get("currency", -1)))
 	_expect(problems, (recovered.get("unlocked_tools", []) as Array).has("zipwire"), "T02-01 recovered data is not the default profile")
 	sv.free()
 	print("PASS: T02 save integrity 1 (corrupt bytes quarantined whole, nothing overwritten, load_failed emitted once)")
@@ -249,15 +253,18 @@ func _check_outbox_recovery(problems: Array[String]) -> void:
 		var pending: Dictionary = (on_disk_v as Dictionary).get("pending_payout", {}) as Dictionary
 		pending_id = str(pending.get("match_id", ""))
 	_expect(problems, pending_id == "outbox-1", "T02-05 pending payout not on disk (got '%s')" % pending_id)
-	# A fresh boot settles the staged record exactly once.
+	# A fresh boot settles the staged record exactly once. W9-P1: the staged
+	# profile has no completed contract, so the authored FTUE floor (5,000)
+	# applies before the 500 payout: 5,000 + 500 = 5,500. The +500 delta is
+	# still the exact settle assertion (payout composition unchanged).
 	var reloaded: Node = _new_save(path)
 	reloaded.call("load_save")
 	_expect(problems, not bool(reloaded.call("has_load_failure")), "T02-05 the staged save was treated as corrupt")
-	_expect(problems, int(reloaded.call("get_currency")) == 600, "T02-05 reload banked %d (want 600)" % int(reloaded.call("get_currency")))
+	_expect(problems, int(reloaded.call("get_currency")) == 5500, "T02-05 reload banked %d (want 5000 FTUE floor + 500)" % int(reloaded.call("get_currency")))
 	_expect(problems, str(reloaded.call("get_last_match").get("match_id", "")) == "outbox-1", "T02-05 recovery did not record last_match")
 	_expect(problems, str(reloaded.call("get_pending_payout").get("match_id", "")) == "", "T02-05 recovery left the pending record")
 	reloaded.call("load_save")
-	_expect(problems, int(reloaded.call("get_currency")) == 600, "T02-05 second load double-banked (%d)" % int(reloaded.call("get_currency")))
+	_expect(problems, int(reloaded.call("get_currency")) == 5500, "T02-05 second load double-banked (%d)" % int(reloaded.call("get_currency")))
 	sv.free()
 	reloaded.free()
 	print("PASS: T02 save integrity 5 (staged payout settles exactly once through the override path)")
@@ -268,6 +275,8 @@ func _check_bank_persisted(problems: Array[String]) -> void:
 	_reset_dir()
 	var path: String = TEST_DIR + "/bank.json"
 	var sv: Node = _new_save(path)
+	# W9-P1: a new profile starts at the authored 5,000 FTUE floor
+	# (project.ftue_min_thieves_den_money); the payout still adds exactly 300.
 	var result: Dictionary = sv.call("bank_payout", _payout("bank-1", 300)) as Dictionary
 	_expect(problems, bool(result.get("applied", false)), "T02-06 bank_payout not applied")
 	_expect(problems, bool(result.get("persisted", false)), "T02-06 bank_payout persisted=false write_error=%d" % int(result.get("write_error", -1)))
@@ -285,12 +294,12 @@ func _check_bank_persisted(problems: Array[String]) -> void:
 		var last: Dictionary = disk.get("last_match", {}) as Dictionary
 		disk_ok = str(last.get("match_id", "")) == "bank-1" and bool(last.get("applied", false))
 	_expect(problems, disk_ok, "T02-06 the file on disk does not hold the applied last_match")
-	_expect(problems, disk_currency == 300, "T02-06 the file on disk holds currency=%d (want 300)" % disk_currency)
+	_expect(problems, disk_currency == 5300, "T02-06 the file on disk holds currency=%d (want 5000 + 300)" % disk_currency)
 	# The replay is still a no-op through the same API.
 	var replay: Dictionary = sv.call("bank_payout", _payout("bank-1", 300)) as Dictionary
 	_expect(problems, not bool(replay.get("applied", true)), "T02-06 replay was applied again")
 	_expect(problems, str(replay.get("reason", "")) == "duplicate", "T02-06 replay reason=%s (want duplicate)" % str(replay.get("reason", "")))
-	_expect(problems, int(sv.call("get_currency")) == 300, "T02-06 replay changed currency")
+	_expect(problems, int(sv.call("get_currency")) == 5300, "T02-06 replay changed currency")
 	# A bank whose writes cannot land must still report applied:true (the
 	# in-memory profile is updated) but never persisted:true.
 	var broken: Node = _new_save(TEST_DIR + "/no_such_dir/bank.json")

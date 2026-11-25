@@ -189,17 +189,20 @@ func _check_pending_recovery(problems: Array[String]) -> void:
 	_expect(problems, not bool(staged.get("applied", true)), "90.28 staged payout marked applied")
 	_expect(problems, int(sv.call("get_pending_payout").get("money_taken", 0)) == 700, "90.29 staged payout not pending")
 	# A fresh save object load_save()s the file staged above: the pending
-	# record is settled exactly once.
+	# record is settled exactly once. W9-P1: the staged profile has no completed
+	# contract, so the authored FTUE floor (5,000) applies before the 700 lands:
+	# 5,000 + 700 = 5,700. The +700 delta is the settle assertion; the payout
+	# composition is unchanged.
 	var reloaded: Node = SaveScript.new() as Node
 	reloaded.set("data", reloaded.call("_defaults"))
 	reloaded.call("load_save")
 	var rdata: Dictionary = reloaded.get("data") as Dictionary
-	_expect(problems, int(rdata.get("currency", -1)) == 800, "90.30 crash recovery banked %d != 800" % int(rdata.get("currency", -1)))
+	_expect(problems, int(rdata.get("currency", -1)) == 5700, "90.30 crash recovery banked %d != 5700 (5000 FTUE floor + 700)" % int(rdata.get("currency", -1)))
 	_expect(problems, str(reloaded.call("get_last_match").get("match_id", "")) == "crash-1", "90.31 recovery did not record last_match")
 	_expect(problems, str(reloaded.call("get_pending_payout").get("match_id", "")) == "", "90.32 recovery left the pending record")
 	reloaded.call("load_save")
 	var rdata2: Dictionary = reloaded.get("data") as Dictionary
-	_expect(problems, int(rdata2.get("currency", -1)) == 800, "90.33 second load double-banked the pending payout")
+	_expect(problems, int(rdata2.get("currency", -1)) == 5700, "90.33 second load double-banked the pending payout")
 	sv.free()
 	reloaded.free()
 	print("PASS: 90 pending payout recovery (settled once on reload)")

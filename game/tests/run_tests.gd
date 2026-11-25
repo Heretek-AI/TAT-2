@@ -3231,7 +3231,7 @@ func _initialize() -> void:
 	var st_spr_cb: CheckBox = st_ui.get("_sprint_check") as CheckBox
 	var st_fov_sl: HSlider = st_ui.get("_fov_slider") as HSlider
 	if st_ui.has_method("set_look_sensitivity_step"):
-		st_ui.call("set_look_sensitivity_step", "kb", 3) # Fast = 1.5x = 0.00375 rad/px
+		st_ui.call("set_look_sensitivity_step", "kb", 3) # Fast: shipped curve samples 1.5625x = 0.00390625 rad/px (W9-P1: was the ini ladder 1.5x)
 	if st_inv_cb != null:
 		st_inv_cb.button_pressed = true
 	if st_spr_cb != null:
@@ -3242,7 +3242,7 @@ func _initialize() -> void:
 	var st_thief: Node = (load("res://src/player/thief_character.gd") as GDScript).new()
 	root.add_child(st_thief)
 	await process_frame
-	var st_wire_ok: bool = absf(float(st_thief.get("mouse_sens")) - 0.00375) < 0.0001 \
+	var st_wire_ok: bool = absf(float(st_thief.get("mouse_sens")) - 0.00390625) < 0.0001 \
 		and st_thief.get("invert_y") == true \
 		and st_thief.get("sprint_toggle_mode") == true \
 		and absf(float(st_thief.get("base_fov")) - 92.0) < 0.1
@@ -4302,7 +4302,12 @@ func _initialize() -> void:
 			printerr("FAIL: 49 could not restore the developer save after case A")
 			sv49_ok = false
 		var sv49_expected_cc: Dictionary = {"3": {"best_score": 900.0, "ghost": true}}
-		if sv49_cc_a != sv49_expected_cc or sv49_xp_a != 1200 or sv49_level_a != 3 or sv49_currency_a != 0:
+		# W9-P1: a fresh profile now starts at the authored FTUE bankroll
+		# (project_settings project.ftue_min_thieves_den_money = 5000), so case A
+		# carries the default 5000. Case A has a completed contract, so the
+		# no-contract FTUE migration must not change it.
+		var sv49_expected_currency: int = 5000
+		if sv49_cc_a != sv49_expected_cc or sv49_xp_a != 1200 or sv49_level_a != 3 or sv49_currency_a != sv49_expected_currency:
 			printerr("FAIL: 49 completed_contracts/xp/level/currency wrong after load: cc=", sv49_cc_a, " xp=", sv49_xp_a, " level=", sv49_level_a, " currency=", sv49_currency_a)
 			sv49_ok = false
 		# 49c. A nested key with the same name as a root key must not leak up.
@@ -4319,7 +4324,10 @@ func _initialize() -> void:
 		if not bool(sv49_restore.call()):
 			printerr("FAIL: 49 could not restore the developer save after case B")
 			sv49_ok = false
-		if sv49_currency_b != 0 or sv49_cc_b != {"currency": 5.0}:
+		# W9-P1: same authored default — a fresh profile is worth 5,000, and the
+		# hand-written `completed_contracts.currency` row is non-empty, so the
+		# no-contract FTUE migration must not touch it either.
+		if sv49_currency_b != 5000 or sv49_cc_b != {"currency": 5.0}:
 			printerr("FAIL: 49 nested completed_contracts.currency leaked or was dropped: currency=", sv49_currency_b, " cc=", sv49_cc_b)
 			sv49_ok = false
 		# 49d. Regression: a second load_save() into populated data still
@@ -7402,6 +7410,107 @@ func _initialize() -> void:
 		fails += 1
 	else:
 		print("PASS: 97 W8 AI (sight frustum vs authored rows, blackjack hold race, investigator cap, GuardDowned, roster buckets, ranged curve, hearing occlusion, nav degradation)")
+
+	# 98. W9-P1-A4 night-grade guard (investigation outcome, NO code change made).
+	# The Guildhall's single `gloomy` environment cannot grade both of its rooms.
+	# Measured at 1920x1080 Vulkan through build/qa/w9_frame_stats.py (PNGs under
+	# build/qa/w9/captures/): the interior foyer is ~2x too bright against KF27
+	# (upper_foyer p50 34 vs 15; foyer_sweep_yaw180 p50 31 vs 15) while the gate
+	# approach is already BELOW its KF16/KF18 reference (p50 10 vs 26) and loses
+	# black floor for every step of exposure removed (gate %<8: 23.9 at 1.15 ->
+	# 38.0 at 1.00 -> 51.9 at 0.85 -> 62.2 at 0.75). A global exposure/ambient
+	# cut is therefore a regression, and the interior band is BLOCKED-ON P2: the
+	# two shadowless foyer fills (mission_controller.gd:564-580, 1.6 at 3.3 m and
+	# 1.3 at 14.1 m from the upper-foyer eye) dominate that pose -- freeing them
+	# moves upper_foyer mean 28.8 -> 22.7 and %<8 8.0 -> 32.2 at one exposure.
+	# This suite pins today's contract and fails if the night grade is lowered
+	# globally without a room-scoped lever landing first.
+	var w9_problems: Array[String] = []
+	var w9_wp: GDScript = load("res://src/core/weather_profile.gd") as GDScript
+	if w9_wp == null:
+		w9_problems.append("weather_profile.gd failed to load")
+	else:
+		var w9_floor: float = float(w9_wp.NIGHT_EXPOSURE)
+		# (a) Guildhall keeps the authored night floor and the authored ambient.
+		var w9_gh: Dictionary = w9_wp.preset_for_map("guildhall")
+		var e_gh := Environment.new()
+		var m_gh := DirectionalLight3D.new()
+		var ok_gh: bool = bool(w9_wp.apply_for_map(e_gh, m_gh, "guildhall"))
+		if not ok_gh or e_gh.tonemap_mode != Environment.TONE_MAPPER_AGX:
+			w9_problems.append("guildhall not graded AGX (applied=%s mode=%d)" % [str(ok_gh), e_gh.tonemap_mode])
+		if not is_equal_approx(e_gh.tonemap_exposure, w9_floor):
+			w9_problems.append("guildhall exposure=%.3f (must stay at the night floor %.2f; a global cut regresses the gate)" % [e_gh.tonemap_exposure, w9_floor])
+		if not is_equal_approx(e_gh.ambient_light_energy, 0.16):
+			w9_problems.append("guildhall ambient=%.4f (must stay the authored 0.16)" % e_gh.ambient_light_energy)
+		# (b) The other night preset (lobby/prep stage) keeps the same floor.
+		var w9_lob: Dictionary = w9_wp.preset_for_map("main_menu")
+		var e_lob := Environment.new()
+		var m_lob := DirectionalLight3D.new()
+		w9_wp.apply_environment(e_lob, m_lob, w9_lob)
+		if not is_equal_approx(e_lob.tonemap_exposure, w9_floor):
+			w9_problems.append("lobby night preset exposure=%.3f (expected %.2f)" % [e_lob.tonemap_exposure, w9_floor])
+		# (c) The Den keeps its authored bias + floor (its own hand grade runs
+		# later in mission_controller; this seam must not move).
+		var w9_den: Dictionary = w9_wp.preset_for_map("thieves_den")
+		var e_den := Environment.new()
+		var m_den := DirectionalLight3D.new()
+		w9_wp.apply_environment(e_den, m_den, w9_den)
+		var w9_den_bias: float = float((w9_den.get("postprocess", {}) as Dictionary).get("auto_exposure_bias", 0.0))
+		var w9_den_expected: float = maxf(1.0 + w9_den_bias, w9_floor)
+		if not is_equal_approx(e_den.tonemap_exposure, w9_den_expected):
+			w9_problems.append("Den exposure=%.3f (expected %.3f = authored bias + floor)" % [e_den.tonemap_exposure, w9_den_expected])
+		# (d) Old Manor is not re-graded (not a night preset).
+		if bool(w9_wp.is_night_preset(w9_wp.preset_for_map("old_manor"))):
+			w9_problems.append("old_manor became a night preset")
+		# (e) Scope guard: exactly one shipped map resolves to gloomy, so a future
+		# interior calibration stays a single-map decision instead of silently
+		# inheriting the Guildhall's treatment.
+		var w9_map_file: FileAccess = FileAccess.open("res://data/generated/weather/map_weather.json", FileAccess.READ)
+		if w9_map_file == null:
+			w9_problems.append("map_weather.json missing")
+		else:
+			var w9_maps_v: Variant = JSON.parse_string(w9_map_file.get_as_text())
+			var w9_maps: Dictionary = (w9_maps_v as Dictionary).get("maps", {}) if w9_maps_v is Dictionary else {}
+			var w9_gloomy: Array[String] = []
+			for w9_k: Variant in w9_maps.keys():
+				if str((w9_maps[w9_k] as Dictionary).get("preset", "")) == "gloomy":
+					w9_gloomy.append(str(w9_k))
+			if w9_gloomy.size() != 1 or w9_gloomy[0] != "guildhall":
+				w9_problems.append("gloomy is mapped from %s; the interior calibration is a one-map decision" % str(w9_gloomy))
+		# Environment is a Resource (RefCounted): it is released by scope, never
+		# free()d. Only the DirectionalLight3D nodes need an explicit free.
+		for w9_m in [m_gh, m_lob, m_den]:
+			(w9_m as DirectionalLight3D).free()
+	if not w9_problems.is_empty():
+		printerr("FAIL: 98 W9-P1-A4 night-grade guard: ", w9_problems)
+		fails += 1
+	else:
+		print("PASS: 98 W9-P1-A4 night-grade guard (guildhall keeps AGX %.2f / ambient 0.16, lobby floor held, Den bias+floor held, old_manor ungraded, gloomy preset is one-map scoped)" % float(w9_wp.NIGHT_EXPOSURE))
+
+	# 99. W9-P1 A2 authored progression: project_settings.json finally has a
+	# consumer. The suite is a standalone SceneTree gate (it owns its save
+	# fixtures under user://w9_progression/ and prints its own SUMMARY), so it
+	# runs in a child engine exactly like suite 83: exit 0 AND the summary line
+	# are both required, or the whole gate fails closed. It pins the level-25
+	# cap with XP preserved, the authored thresholds, the authored XP award
+	# (weights from the file, composition labelled), the KF13 > ladder > QG
+	# endgame precedence, the 5,000 FTUE bankroll migration, all 48 market
+	# level gates and the authored Guildhall mission order.
+	var w9p_out: Array = []
+	var w9p_args: PackedStringArray = [
+		"--headless",
+		"--path", ProjectSettings.globalize_path("res://"),
+		"--script", "res://tests/test_w9_progression.gd",
+	]
+	var w9p_t0: int = Time.get_ticks_msec()
+	var w9p_code: int = OS.execute(OS.get_executable_path(), w9p_args, w9p_out, true)
+	var w9p_ms: int = Time.get_ticks_msec() - w9p_t0
+	var w9p_text: String = "\n".join(PackedStringArray(w9p_out))
+	if w9p_code != 0 or w9p_text.find("W9_PROGRESSION SUMMARY: fails=0") < 0:
+		printerr("FAIL: 99 W9-P1 authored progression exit=", w9p_code, " ms=", w9p_ms, "\n", w9p_text.right(4000))
+		fails += 1
+	else:
+		print("PASS: 99 W9-P1 authored progression (level cap 25 with XP kept, authored XP award, KF13>ladder>QG endgame, FTUE 5,000, 48 level gates, map order; ", w9p_ms, " ms)")
 
 	# 12.6/12.7 process-lifetime caches must not outlive the run.
 	var am_node: Node = root.get_node_or_null("/root/AudioManager")

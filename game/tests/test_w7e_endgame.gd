@@ -137,25 +137,36 @@ func _initialize() -> void:
 	# S5.1c: a contract deploy never runs the side-mission row. Contract 2's
 	# prep default lands on LootTheRoom positionally; the clock must resolve the
 	# authored per-map contract row (VaultHeist, contract-flow.md §3).
+	# W9-P1: the endgame window is no longer the bare QG plan. The authored
+	# ladder (project_settings project.endgame_durations_by_difficulty =
+	# [1200, 600, 300]) is the second precedence level, and GameState.reset_run()
+	# publishes the 0-based Novice index 0, so VaultHeist gets 1200 s
+	# (source project_settings). The old 300 s assertion recorded the defect
+	# (the authored ladder was unread); the QG plan itself stays 300 (S5.2a).
 	_reset_run()
 	gs.set("free_play", false)
 	gs.set("active_mission_id", OUT_MISSION)
 	clock = mc.call("_apply_run_clock", "guildhall") as Dictionary
 	_check(absf(float(gs.get("run_time_limit")) - 7200.0) < 0.5
 		and str(clock.get("main_source", "")) == "mission_row"
-		and absf(float(gs.get("endgame_time_limit")) - 300.0) < 0.5,
-		"S5.1c contract deploy resolves the authored per-map contract row (7200 s main + 300 s QG endgame)",
-		"S5.1c main=%s endgame=%s (want 7200 mission_row + 300)" % [str(gs.get("run_time_limit")), str(gs.get("endgame_time_limit"))])
+		and absf(float(gs.get("endgame_time_limit")) - 1200.0) < 0.5
+		and str(clock.get("endgame_source", "")) == "project_settings",
+		"S5.1c contract deploy resolves the authored per-map contract row (7200 s main + authored 1200 s Novice endgame)",
+		"S5.1c main=%s endgame=%s source=%s (want 7200 mission_row + 1200 project_settings)" % [
+			str(gs.get("run_time_limit")), str(gs.get("endgame_time_limit")), str(clock.get("endgame_source", ""))])
 	# S5.1d: the OldManor Cleanout row is a side mission too (its plan authors
 	# three loot_amount objectives); contract 5 must run the OldManor Vault row.
+	# W9-P1: same authored ladder — Novice is 1200 s, not the QG plan's 480 s.
 	_reset_run("old_manor")
 	gs.set("free_play", false)
 	gs.set("active_mission_id", "Mission.OldManor.LootTheRoom")
 	clock = mc.call("_apply_run_clock", "old_manor") as Dictionary
 	_check(absf(float(gs.get("run_time_limit")) - 7200.0) < 0.5
-		and absf(float(gs.get("endgame_time_limit")) - 480.0) < 0.5,
-		"S5.1d OldManor contract deploy resolves Mission.OldManor.Vault (7200 s main + 480 s QG endgame)",
-		"S5.1d main=%s endgame=%s (want 7200 + 480)" % [str(gs.get("run_time_limit")), str(gs.get("endgame_time_limit"))])
+		and absf(float(gs.get("endgame_time_limit")) - 1200.0) < 0.5
+		and str(clock.get("endgame_source", "")) == "project_settings",
+		"S5.1d OldManor contract deploy resolves Mission.OldManor.Vault (7200 s main + authored 1200 s Novice endgame)",
+		"S5.1d main=%s endgame=%s source=%s (want 7200 + 1200 project_settings)" % [
+			str(gs.get("run_time_limit")), str(gs.get("endgame_time_limit")), str(clock.get("endgame_source", ""))])
 
 	# --- S5.2 endgame window: KF13 override 1200, authored QG plan 480 ------
 	var plan: Dictionary = gd.call("get_mission_plan", OUT_MISSION) as Dictionary
@@ -175,9 +186,14 @@ func _initialize() -> void:
 	gs.set("active_mission_id", VAULT_MISSION)
 	gs.set("free_play", false)
 	clock = mc.call("_apply_run_clock", "guildhall") as Dictionary
-	_check(absf(float(gs.get("endgame_time_limit")) - 300.0) < 0.5 and str(clock.get("endgame_source", "")) == "quest_graph",
-		"S5.2d VaultHeist uses its authored 300 s endgame",
-		"S5.2d VaultHeist endgame=%s source=%s (want 300 quest_graph)" % [str(gs.get("endgame_time_limit")), str(clock.get("endgame_source", ""))])
+	# W9-P1: VaultHeist's runtime window is the authored Novice ladder value
+	# (1200 s, source project_settings). The old 300 s / quest_graph assertion
+	# recorded the defect that project_settings.json had no consumer; the QG
+	# plan endgame_duration is still 300 (S5.2a) and the ladder never overrides
+	# the KF13 letter (S5.2b/c).
+	_check(absf(float(gs.get("endgame_time_limit")) - 1200.0) < 0.5 and str(clock.get("endgame_source", "")) == "project_settings",
+		"S5.2d VaultHeist uses the authored 1200 s Novice endgame ladder",
+		"S5.2d VaultHeist endgame=%s source=%s (want 1200 project_settings)" % [str(gs.get("endgame_time_limit")), str(clock.get("endgame_source", ""))])
 
 	# --- S5.3 phase transitions: only the active phase ticks ----------------
 	_reset_run()

@@ -233,8 +233,8 @@ Status is a curated read of the port source, not a runtime measurement. `grep hi
 | branch | authored anchor | status | evidence (grep) | note |
 |---|---|---|---|---|
 | Alertness ladder (Set Alertness / escalation) | `React To Stims, Intruder, Broken Object and Conversation Event` | **implemented** | `enum Alertness` → 1 in `game/src/ai/guard_ai.gd` | enum Alertness { NEUTRAL, SUSPICIOUS, ALERTED, COMBAT, SEARCH, KNOCKED_OUT } |
-| Sight cone, light visibility and smoke occlusion | `React to Intruder (Almost Spotted) / (Spotted)` | **implemented** | `SIGHT_RANGE|LightProbeScript|smoke` → 19 in `game/src/ai/guard_ai.gd` | sight constants + light probe + smoke LOS in the perception pass |
-| Hearing via the project noise bus | `Try Find Intruder` | **implemented** | `NoiseBus|noise` → 11 in `game/src/ai/guard_ai.gd` | NoiseBus hearing (the 54 authored stim rows in hearing.json are not wired) |
+| Sight cone, light visibility and smoke occlusion | `React to Intruder (Almost Spotted) / (Spotted)` | **implemented** | `SIGHT_RANGE|LightProbeScript|smoke` → 27 in `game/src/ai/guard_ai.gd` | sight constants + light probe + smoke LOS in the perception pass |
+| Hearing via the project noise bus | `Try Find Intruder` | **implemented** | `NoiseBus|noise` → 13 in `game/src/ai/guard_ai.gd` | NoiseBus + HearingData (W6G: 54 authored stim rows gated by heard_by/query, MaxRange x surface x weather, Short/Long investigation; portals read-only) |
 | Patrolling (ST_Patrol) | `Patrolling` | **partial** | `patrol_speed|patrol_path` → 7 in `game/src/ai/guard_ai.gd` | patrol_speed + patrol path points; no smart-object patrol points |
 | Investigate a stim location (ST_Subtree_GeneralInvestigateStim) | `Move to intruder / Move To Last Known Position` | **partial** | `_search_goal` → 7 in `game/src/ai/guard_ai.gd` | one search goal + timer; no EQS defensive-spot query, no smart-object claim |
 | Revive a downed guard (ST_Subtree_ReviveNPC) | `React to Downed NPC` | **implemented** | `revive_hold_s|_revive_target` → 15 in `game/src/ai/guard_ai.gd` | revive_hold_s + nearest-first ally revive |
@@ -245,7 +245,7 @@ Status is a curated read of the port source, not a runtime measurement. `grep hi
 | Spotting and returning world loot | `React to Spotting Loot / Return Loot` | **missing** | `Return Loot|Spotting Loot` → 0 in `game/src/ai/guard_ai.gd` | the port's loot code is the pickpocket carry/drop path only; the civilian's two loot branches ship disabled |
 | Smart-object claims (defensive spots, patrol points) | `Move To Smart Object / Claim / Move to and Use Smart Object` | **missing** | `smart_object|SmartObject` → 0 in `game/src/ai/guard_ai.gd` | no smart-object claims anywhere in the guard |
 | Vigilant escalation loop (EQS search + reset) | `Vigilant Escalation` | **missing** | `Vigilant Escalation|Run Env Query` → 0 in `game/src/ai/guard_ai.gd` | no EQS search loop or escalation reset task |
-| Alarm activation (ST_Subtree_TryActivateAlarm) | `Activate an alarm (from ST_Subtree_Combat)` | **disabled** | `alarm` → 0 in `game/src/ai/guard_ai.gd` | the only link ships with bEnabled=false, so the shipped AI never raises an alarm; the port has no alarm handling either |
+| Alarm activation (ST_Subtree_TryActivateAlarm) | `Activate an alarm (from ST_Subtree_Combat)` | **disabled** | `alarm` → 1 in `game/src/ai/guard_ai.gd` | the only link ships with bEnabled=false, so the shipped AI never raises an alarm; the port has no alarm handling either |
 | Lockdown (ST_Subtree_Lockdown) | `Locked Down` | **missing** | `lockdown` → 0 in `game/src/ai/guard_ai.gd` | no lockdown event handling |
 | Forced states: cower / unconscious / in smoke | `Forced States` | **partial** | `cower|in smoke` → 0 in `game/src/ai/guard_ai.gd` | KNOCKED_OUT exists; cower and the in-smoke ability do not |
 | Forced agro | `Forced Agro` | **missing** | `forced.?agro` → 0 in `game/src/ai/guard_ai.gd` | no forced-target branch |

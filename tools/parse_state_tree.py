@@ -92,7 +92,8 @@ PORT_COVERAGE = (
         "Hearing via the project noise bus",
         "Try Find Intruder",
         "implemented",
-        "NoiseBus hearing (the 54 authored stim rows in hearing.json are not wired)",
+        "NoiseBus + HearingData (W6G: 54 authored stim rows gated by heard_by/query, "
+        "MaxRange x surface x weather, Short/Long investigation; portals read-only)",
         r"NoiseBus|noise",
         GUARD_GD,
     ),

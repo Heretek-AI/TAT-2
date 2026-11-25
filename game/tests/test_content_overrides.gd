@@ -45,6 +45,13 @@ func _read_json(path: String) -> Variant:
 	return parsed
 
 
+## GDScript's `a or []` yields a bool (unlike Python), so a typed `Array = v or []`
+## is a runtime type error and `for x in (v or [])` iterates a bool. Read JSON
+## lists through this helper so the loops actually run.
+static func _arr(v: Variant) -> Array:
+	return v as Array if v is Array else []
+
+
 func _initialize() -> void:
 	var raw: Variant = _read_json(TABLE_PATH)
 	if not (raw is Dictionary):
@@ -66,14 +73,14 @@ func check_schema() -> void:
 	_check(str(table.get("schema", "")) == "tat2.content_overrides/1",
 		"schema is tat2.content_overrides/1",
 		"schema is %s" % str(table.get("schema", "")))
-	var prefixes: Array = table.get("graybox_prefixes") or []
+	var prefixes: Array = _arr(table.get("graybox_prefixes"))
 	_check(not prefixes.is_empty(), "graybox_prefixes declared", "no graybox_prefixes")
-	var rules: Array = table.get("rules") or []
+	var rules: Array = _arr(table.get("rules"))
 	_check(not rules.is_empty(), "%d override rules" % rules.size(), "no override rules")
 
 
 func _is_graybox(mesh: String) -> bool:
-	for prefix: Variant in (table.get("graybox_prefixes") or []):
+	for prefix: Variant in _arr(table.get("graybox_prefixes")):
 		if mesh.begins_with(str(prefix)):
 			return true
 	return false
@@ -85,7 +92,7 @@ func check_rules() -> void:
 	var ids := {}
 	var noop := 0
 	var compass := 0
-	for rv: Variant in (table.get("rules") or []):
+	for rv: Variant in _arr(table.get("rules")):
 		var r: Dictionary = rv as Dictionary
 		var rid: String = str(r.get("id", ""))
 		_check(not rid.is_empty(), "rule id present", "a rule has no id")
@@ -93,7 +100,7 @@ func check_rules() -> void:
 		ids[rid] = true
 		_check(str(r.get("op", "")) == "set_material",
 			"%s op is set_material" % rid, "%s has unsupported op %s" % [rid, str(r.get("op", ""))])
-		var meshes: Array = r.get("meshes") or []
+		var meshes: Array = _arr(r.get("meshes"))
 		_check(not meshes.is_empty(), "%s targets a mesh" % rid, "%s has no meshes" % rid)
 		for mv: Variant in meshes:
 			_check(_is_graybox(str(mv)), "%s graybox-only: %s" % [rid, str(mv).get_file()],
@@ -119,7 +126,7 @@ func check_rules() -> void:
 
 
 func check_caps() -> void:
-	var caps: Array = table.get("add_caps") or []
+	var caps: Array = _arr(table.get("add_caps"))
 	for cv: Variant in caps:
 		var cap: Dictionary = cv as Dictionary
 		var cid: String = str(cap.get("id", ""))
@@ -127,28 +134,28 @@ func check_caps() -> void:
 		_check(_is_graybox(str(cap.get("mesh", ""))), "%s add_cap graybox-only" % cid,
 			"%s add_cap targets a non-graybox mesh" % cid)
 		var declared: int = int(cap.get("expect_count", -1))
-		_check(declared == (cap.get("caps") or []).size(), "%s add_cap count %d" % [cid, declared],
-			"%s add_cap count %d != %d caps" % [cid, declared, (cap.get("caps") or []).size()])
-		for lv: Variant in (cap.get("levels") or []):
+		_check(declared == _arr(cap.get("caps")).size(), "%s add_cap count %d" % [cid, declared],
+			"%s add_cap count %d != %d caps" % [cid, declared, _arr(cap.get("caps")).size()])
+		for lv: Variant in _arr(cap.get("levels")):
 			_check(str(lv) != ROOF_CENSUS_LEVEL, "%s add_cap avoids the roof census level" % cid,
 				"%s add_cap touches roof-census level %s" % [cid, str(lv)])
 
 
 func check_coverage_regions() -> void:
-	var regions: Array = table.get("coverage_regions") or []
+	var regions: Array = _arr(table.get("coverage_regions"))
 	_check(not regions.is_empty(), "%d coverage regions declared" % regions.size(),
 		"no coverage_regions declared")
 	for rv: Variant in regions:
 		var region: Dictionary = rv as Dictionary
 		var rid: String = str(region.get("id", ""))
 		_check(not rid.is_empty(), "coverage region id present", "a coverage_region has no id")
-		_check(not (region.get("meshes") or []).is_empty(), "%s names its meshes" % rid,
+		_check(not _arr(region.get("meshes")).is_empty(), "%s names its meshes" % rid,
 			"%s has no meshes" % rid)
-		for mv: Variant in (region.get("meshes") or []):
+		for mv: Variant in _arr(region.get("meshes")):
 			_check(_is_graybox(str(mv)), "%s coverage mesh is graybox" % rid,
 				"%s coverage mesh is not graybox: %s" % [rid, str(mv)])
 		# The 2x2 floor is the P0 greybox check for every floor region.
-		var floors: Array = region.get("meshes") or []
+		var floors: Array = _arr(region.get("meshes"))
 		_check(floors.has("/Game/Test/LevelKits/Graybox/GB_Floor_2x2") or rid.begins_with("missionlobby"),
 			"%s tracks GB_Floor_2x2 coverage" % rid,
 			"%s does not track GB_Floor_2x2" % rid)
@@ -163,11 +170,11 @@ func check_applied_output() -> void:
 	if not (report_raw is Dictionary):
 		return
 	var rows := {}
-	for rv: Variant in ((report_raw as Dictionary).get("rules") or []):
+	for rv: Variant in _arr((report_raw as Dictionary).get("rules")):
 		var row: Dictionary = rv as Dictionary
 		rows[str(row.get("id", ""))] = row
 	var applied := 0
-	for rv: Variant in (table.get("rules") or []):
+	for rv: Variant in _arr(table.get("rules")):
 		var rule: Dictionary = rv as Dictionary
 		var rid: String = str(rule.get("id", ""))
 		var row: Variant = rows.get(rid)
@@ -189,7 +196,7 @@ func check_applied_output() -> void:
 			_check(false, "%s level present" % rid, "%s level payload missing: %s" % [rid, level_key])
 			continue
 		var tagged := 0
-		for mv: Variant in ((payload as Dictionary).get("meshes") or []):
+		for mv: Variant in _arr((payload as Dictionary).get("meshes")):
 			if not (mv is Dictionary):
 				continue
 			var entry: Dictionary = mv as Dictionary
@@ -204,6 +211,6 @@ func check_applied_output() -> void:
 				"%s rewrote non-graybox %s" % [rid, str(entry.get("mesh", ""))])
 		_check(tagged == changed, "%s tag count=%d" % [rid, tagged],
 			"%s tag count %d != changed %d" % [rid, tagged, changed])
-	_check(applied == (table.get("rules") or []).size(),
-		"%d/%d rules applied" % [applied, (table.get("rules") or []).size()],
-		"only %d/%d rules applied" % [applied, (table.get("rules") or []).size()])
+	_check(applied == _arr(table.get("rules")).size(),
+		"%d/%d rules applied" % [applied, _arr(table.get("rules")).size()],
+		"only %d/%d rules applied" % [applied, _arr(table.get("rules")).size()])

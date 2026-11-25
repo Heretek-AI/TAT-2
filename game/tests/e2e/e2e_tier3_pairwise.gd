@@ -605,6 +605,12 @@ func _t3_24_full_preservation_gate() -> void:
 ## fails to reach the authored SUSPICIOUS threshold). Negative controls: a wall
 ## between them and a second guard's body (non-target layer) must both hold
 ## detection at 0, so the ray still respects authored body blocking.
+##
+## W6G note: the positive phase asserts the documented contract (acquired past
+## the 15-point SUSPICIOUS threshold, i.e. the guard is no longer NEUTRAL). It
+## used to also pin state == SUSPICIOUS (1), which only held while the removed
+## port-only `vis_mult` light multiplier slowed the ramp; the authored 12 m ramp
+## is light-independent and reaches 100/COMBAT in the same 240 frames.
 func _t3_25_guard_sight_self_exclusion() -> void:
 	var arena_d: Dictionary = await h.make_arena()
 	var arena: Node3D = arena_d["arena"] as Node3D
@@ -624,9 +630,10 @@ func _t3_25_guard_sight_self_exclusion() -> void:
 	await h.step_physics(240)
 	var det_pos: float = float(g.get("detection"))
 	var state_pos: int = int(g.get("state"))
-	# Alertness.SUSPICIOUS == 1; the authored threshold is 15. Long enough to
-	# cross 15, short of the 45 ALERTED gate at this range/light level.
-	var acquired: bool = det_pos >= 15.0 and state_pos == 1
+	# Alertness.NEUTRAL == 0; the authored threshold is 15. The docstring's
+	# contract is "reaches the SUSPICIOUS threshold", not "stays below ALERTED":
+	# after W6G the light-independent ramp may legitimately reach COMBAT here.
+	var acquired: bool = det_pos >= 15.0 and state_pos != 0
 
 	# Negative occlusion control 1: a real wall between them must hold 0.
 	var wall: StaticBody3D = h.add_wall_box(arena, Vector3(0.0, 1.5, -6.0), Vector3(8.0, 4.0, 0.5), "T3SightOccluder")

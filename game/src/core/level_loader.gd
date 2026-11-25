@@ -1351,10 +1351,10 @@ func get_material_for_ue(ue_mat_path: String) -> Material:
 		mat.ao_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
 		# W6L: roughness is a baked low + g * (high - low) L8 map when the
 		# material authored a Roughness Low/High range; otherwise the ORM's own
-		# green channel (scalar 1.0, set in _apply_ue_pbr_params).
-		var remap_v: Variant = mat.get_meta("ue_roughness_remap", null)
-		if remap_v is Vector2:
-			var remap: Vector2 = remap_v as Vector2
+		# green channel (scalar 1.0, set in _apply_ue_pbr_params). Guard with
+		# has_meta: get_meta(key, null) is "no default" and logs an engine ERROR.
+		if mat.has_meta("ue_roughness_remap"):
+			var remap: Vector2 = mat.get_meta("ue_roughness_remap") as Vector2
 			var rough_tex: Texture2D = _roughness_remap_texture(orm, remap.x, remap.y, str(texs.get("orm", "")))
 			if rough_tex != null:
 				mat.roughness_texture = rough_tex

@@ -4917,6 +4917,14 @@ func _initialize() -> void:
 	_w60_assert(w60_thief_lbl != null and w60_thief_lbl.text == "Test Handle", "ledger uses GameState.player_name (%s)" % (w60_thief_lbl.text if w60_thief_lbl != null else "?"), w60)
 	var w60_data: Dictionary = save_sys.get("data") as Dictionary
 	var w60_ledger_backup: Dictionary = w60_data.duplicate(true)
+	# Owned rows come from the live profile, and a migrated save may already own
+	# pickpocket_fairy (W6U2 legacy "fairy" -> "pickpocket_fairy"). Pin the
+	# shipped starter profile so the gate assertions do not depend on what the
+	# player has bought; the whole dict is restored at the end of 60c.
+	w60_data["xp"] = 0
+	w60_data["currency"] = 0
+	w60_data["completed_contracts"] = {}
+	w60_data["unlocked_tools"] = (save_sys.STARTER_TOOLS as Array).duplicate()
 	var w60_status: Label = w60_ledger.get("_preview_status") as Label
 	var w60_buy: Button = w60_ledger.get("_buy_btn") as Button
 	# Locked row at the test profile's level (Contract 3 tool).

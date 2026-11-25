@@ -114,12 +114,6 @@
       "claim_token": "devices.json"
     },
     {
-      "glob": "gameplay/guard_behavior.json",
-      "kind": "blocked_on_team",
-      "owner": "T11",
-      "reason": "21 authored StateTrees (784 KB) have no runtime consumer; T11-AI owns the guard behaviour consumer (RE-A-02)."
-    },
-    {
       "glob": "gameplay/character_movement.json",
       "kind": "tests_only",
       "reason": "Movement constants are asserted by game/tests/test_m2_player.gd; the runtime carries its own tuned constants.",

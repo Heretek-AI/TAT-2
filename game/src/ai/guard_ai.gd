@@ -24,6 +24,9 @@ const ReactionRoles = preload("res://src/ai/reaction_roles.gd")
 const RangedAttack = preload("res://src/ai/ranged_attack.gd")
 const HearingOcclusion = preload("res://src/ai/hearing_occlusion.gd")
 const NavSteering = preload("res://src/ai/nav_steering.gd")
+## W9-P4 S1: the authored StateTree shadow interpreter (`TAT2_STATETREE=off|shadow`).
+## `off` is one null check per frame; nothing is loaded until a guard exists.
+const StateTreeShadow = preload("res://src/ai/statetree/shadow_runner.gd")
 const LANTERN_GLB_PRIMARY := "res://assets/ue/Content/Art/Environment/Lights/Mobile/SM_LanternGuardA.glb"
 const LANTERN_GLB_FALLBACK := "res://assets/ue/Content/Art/Gameplay/Gear/Lantern/SK_Lantern.glb"
 const DEFAULT_KEY_GLB := "res://assets/ue/Content/Art/Gameplay/KeyCabinets/SM_LootableKeys_LockedRoomKey.glb"
@@ -298,6 +301,8 @@ var bodies_seen: int = 0
 var _roster_cache_key: String = ""
 ## W8 navigation: NavigationAgent3D consumer with documented degradation.
 var _nav: NavSteering = NavSteering.new()
+## W9-P4 S1 shadow runner (null unless TAT2_STATETREE=shadow|patrol).
+var _st_shadow: RefCounted = null
 var _nav_bound: bool = false
 ## Hearing diagnostics: stimuli refused by occlusion / by the role cap.
 var heard_blocked_by_wall: int = 0
@@ -425,6 +430,10 @@ func _ready() -> void:
 	NoiseBus.noise_record_emitted.connect(_on_noise_record)
 	if patrol_points.is_empty():
 		patrol_points = [global_position, global_position + Vector3(6, 0, 0), global_position + Vector3(6, 0, 6)]
+	# W9-P4 S1 shadow mode is attached after the patrol data exists so the first
+	# observation is the real path, not the seeded fallback. `attach` returns null
+	# when the mode is off, so the steady-state cost is one null check per frame.
+	_st_shadow = StateTreeShadow.attach(self)
 
 
 ## Authored sense profile for this guard (RE-I-07). The roster bucket wins when
@@ -1441,6 +1450,8 @@ func _physics_process(delta: float) -> void:
 			_recover_from_ko()
 		else:
 			_update_guard_anim(delta)
+			if _st_shadow != null:
+				_st_shadow.tick(delta)
 		return
 
 	_tick_regen(delta)
@@ -1520,6 +1531,8 @@ func _physics_process(delta: float) -> void:
 	_scan_downed_guards(delta)
 	_move_ai(delta, player)
 	_update_guard_anim(delta)
+	if _st_shadow != null:
+		_st_shadow.tick(delta)
 
 
 ## P2 players.back(): the guard sensed only the last node in the player
@@ -1776,6 +1789,12 @@ func _patrol_service_waypoint(delta: float) -> bool:
 			return true
 		_advance_patrol_index()
 	return false
+
+
+## Authored dwell still owed at the current waypoint. Read-only accessor for the
+## StateTree shadow binding (W9-P4 S1): `_patrol_wait_left` stays private.
+func patrol_wait_remaining() -> float:
+	return maxf(0.0, _patrol_wait_left)
 
 
 ## Authored WaitSeconds for a waypoint (0.0 when the index has no record).
@@ -2571,3 +2590,4 @@ func _update_disguise_viewcone(delta: float, player: CharacterBody3D) -> void:
 static func cleanup_static_caches() -> void:
 	_downed_data.clear()
 	_carry_scr_cache = null
+	StateTreeShadow.cleanup_static_caches()

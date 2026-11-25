@@ -7576,6 +7576,33 @@ func _initialize() -> void:
 		else:
 			print("PASS: ", w9p3_suite[0], " ", w9p3_suite[1], " (", w9p3_ms, " ms)")
 
+	# 110-111. W9-P4 S1 StateTree runtime (standalone SceneTree children, the same
+	# pattern as 99/101-109: exit 0 AND the summary marker are both required).
+	# These parse/validate all 21 authored trees (459 states / 467 transitions),
+	# exercise the generic interpreter on synthetic selector/task/priority/
+	# observer/event/delay/UNKNOWN paths, build the measured coverage table, and
+	# prove shadow mode is side-effect free by running the same live arena with
+	# TAT2_STATETREE=off and =shadow and comparing the FSM signature.
+	for w9p4_suite: Array in [
+		["110", "W9-P4 S1 StateTree parse/interpreter/coverage (21 trees, 459/467, synthetic paths)", "res://tests/test_w9p4_statetree.gd", "W9P4_STATETREE_SUMMARY: fails=0"],
+		["111", "W9-P4 S1 shadow mode is side-effect free (off vs shadow, 240 live frames)", "res://tests/test_w9p4_shadow.gd", "W9P4_SHADOW_SUMMARY: fails=0"],
+	]:
+		var w9p4_out: Array = []
+		var w9p4_args: PackedStringArray = [
+			"--headless",
+			"--path", ProjectSettings.globalize_path("res://"),
+			"--script", str(w9p4_suite[2]),
+		]
+		var w9p4_t0: int = Time.get_ticks_msec()
+		var w9p4_code: int = OS.execute(OS.get_executable_path(), w9p4_args, w9p4_out, true)
+		var w9p4_ms: int = Time.get_ticks_msec() - w9p4_t0
+		var w9p4_text: String = "\n".join(PackedStringArray(w9p4_out))
+		if w9p4_code != 0 or w9p4_text.find(str(w9p4_suite[3])) < 0:
+			printerr("FAIL: ", w9p4_suite[0], " ", w9p4_suite[1], " exit=", w9p4_code, " ms=", w9p4_ms, "\n", w9p4_text.right(3000))
+			fails += 1
+		else:
+			print("PASS: ", w9p4_suite[0], " ", w9p4_suite[1], " (", w9p4_ms, " ms)")
+
 	# 12.6/12.7 process-lifetime caches must not outlive the run.
 	var am_node: Node = root.get_node_or_null("/root/AudioManager")
 	if am_node != null and am_node.has_method("cleanup_on_exit"):

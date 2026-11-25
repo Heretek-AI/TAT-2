@@ -20,6 +20,13 @@ const SAMPLE_CACHE_DISTANCE: float = 0.75
 #   10-33: movement speed (cm/s) -> the minimum light-detection value a moving
 #   player contributes. Consumed by the player's TATLightDetectionCharacterComponent
 #   _MovementSpeedToMinimumLightIntensity (BP_TATPlayerCharacter rows 978-981).
+# The endpoint values below are read from the generated curve tables
+# (GameData.eval_standalone_curve, curves.json index); the constants are the
+# documented fallback for a boot without generated data. The shared evaluator
+# lerps RCIM_Cubic segments, so the zero-tangent cubic shape stays expressed as
+# smoothstep here instead of being flattened to the evaluator's lerp.
+const LIGHT_INTENSITY_CURVE: String = "C_LightIntensityToRangeMultiplier"
+const MOVEMENT_SPEED_LIGHT_CURVE: String = "C_MovementSpeedToMinimumLightDetectionValue"
 const LIGHT_INTENSITY_RANGE_MIN: float = 0.15 # C_LightIntensityToRangeMultiplier Time 0.0 / Value 0.15, rows 15-16
 const LIGHT_INTENSITY_RANGE_MAX: float = 1.0 # C_LightIntensityToRangeMultiplier Time 1.0 / Value 1.0, rows 26-27
 const MOVEMENT_SPEED_LIGHT_MAX_CM_S: float = 600.0 # C_MovementSpeedToMinimumLightDetectionValue Time 600.0, row 26
@@ -52,6 +59,9 @@ const DIRECTIONAL_OCCLUSION_RANGE: float = 50.0
 
 var registered_lights: Array[Light3D] = []
 var disabled_until: Dictionary = {} # Light3D instance_id -> unix/run time
+## Cached GameData autoload for the static curve reads (never a hard preload, so
+## the script still loads in a producer-less tree).
+static var _game_data: Node = null
 
 ## (Single-slot _has_cache_* fields removed by H4: the two-slot ring above
 ## replaces them. short_circuit_lights/tick invalidate via _clear_slots().)
@@ -118,9 +128,13 @@ func sample_call_count() -> int:
 
 ## C_LightIntensityToRangeMultiplier: light intensity 0..1 -> detection range
 ## multiplier 0.15..1.0. Guards multiply their fresh sight range by this value.
+## Endpoints are the authored keys; between them the authored zero-tangent cubic
+## is smoothstep. Output stays inside the unchanged clamp range.
 static func light_intensity_range_multiplier(intensity: float) -> float:
-	var t: float = smoothstep(0.0, 1.0, clampf(intensity, 0.0, 1.0))
-	return lerpf(LIGHT_INTENSITY_RANGE_MIN, LIGHT_INTENSITY_RANGE_MAX, t)
+	var t: float = clampf(intensity, 0.0, 1.0)
+	var v0: float = _curve_endpoint(LIGHT_INTENSITY_CURVE, 0.0, LIGHT_INTENSITY_RANGE_MIN)
+	var v1: float = _curve_endpoint(LIGHT_INTENSITY_CURVE, 1.0, LIGHT_INTENSITY_RANGE_MAX)
+	return clampf(lerpf(v0, v1, smoothstep(0.0, 1.0, t)), LIGHT_INTENSITY_RANGE_MIN, LIGHT_INTENSITY_RANGE_MAX)
 
 
 ## C_MovementSpeedToMinimumLightDetectionValue: movement speed in cm/s -> the
@@ -128,8 +142,30 @@ static func light_intensity_range_multiplier(intensity: float) -> float:
 ## the sampled light is darker. Callers take max(sampled_light, this value).
 static func minimum_light_detection_for_speed(speed_cm_s: float) -> float:
 	var clamped: float = clampf(speed_cm_s, 0.0, MOVEMENT_SPEED_LIGHT_MAX_CM_S)
-	var t: float = smoothstep(0.0, MOVEMENT_SPEED_LIGHT_MAX_CM_S, clamped)
-	return lerpf(MOVEMENT_SPEED_LIGHT_MIN_VALUE, MOVEMENT_SPEED_LIGHT_MAX_VALUE, t)
+	var v0: float = _curve_endpoint(MOVEMENT_SPEED_LIGHT_CURVE, 0.0, MOVEMENT_SPEED_LIGHT_MIN_VALUE)
+	var v1: float = _curve_endpoint(MOVEMENT_SPEED_LIGHT_CURVE, MOVEMENT_SPEED_LIGHT_MAX_CM_S, MOVEMENT_SPEED_LIGHT_MAX_VALUE)
+	return clampf(lerpf(v0, v1, smoothstep(0.0, MOVEMENT_SPEED_LIGHT_MAX_CM_S, clamped)), MOVEMENT_SPEED_LIGHT_MIN_VALUE, MOVEMENT_SPEED_LIGHT_MAX_VALUE)
+
+
+## One authored key value of a light curve. `documented` is returned when the
+## generated index/table is unreadable, so a producer-less boot keeps the exact
+## constants this file shipped with.
+static func _curve_endpoint(curve_name: String, x: float, documented: float) -> float:
+	var gd: Node = _game_data_node()
+	if gd == null or not gd.has_method("eval_standalone_curve"):
+		return documented
+	var got: float = float(gd.call("eval_standalone_curve", curve_name, x, "Value", NAN))
+	return documented if is_nan(got) else got
+
+
+static func _game_data_node() -> Node:
+	if _game_data != null and is_instance_valid(_game_data):
+		return _game_data
+	var tree: SceneTree = Engine.get_main_loop() as SceneTree
+	if tree == null:
+		return null
+	_game_data = tree.root.get_node_or_null("GameData")
+	return _game_data
 
 
 ## Per-light stealth weight for a local (omni/spot) light energy. 1.0 is the

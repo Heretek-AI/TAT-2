@@ -22,6 +22,7 @@ func _initialize() -> void:
 	var saved_overrides: Dictionary = ctx.call("overrides") as Dictionary
 
 	_check_table()
+	_check_curves(gd)
 	_check_resolution()
 	_check_five_key_contradictions()
 	_check_glyphs()
@@ -82,15 +83,92 @@ func _check_table() -> void:
 			missing.append(ia)
 	_expect(missing.is_empty(), "no authored action dropped (missing %s)" % str(missing))
 	var ids: Array[String] = InputActions.ids()
-	_expect(ids.size() >= 30, "port action ids present (%d)" % ids.size())
+	_expect(ids.size() == 40, "40 port action ids present (%d)" % ids.size())
+	# The generated table is the source of truth (W9-P1 / A3 fact sheet A2 + A4).
+	# This check used to pin `source == "authored"` because GENERATED_PATH named
+	# the producer's old `input/` directory; that expectation encoded the bug (the
+	# real producer output is `gameplay/input_actions.json` and the 56-row
+	# transcription was masking it).
 	var table: Dictionary = InputActions.load_table()
-	_expect(str(table.get("source", "")) == "authored", "table source falls back to the authored mirror (T01 JSON absent)")
-	_expect((table.get("rows", []) as Array).size() == InputActions.rows().size(), "load_table returns the full row set")
+	_expect(str(table.get("source", "")) == "generated", "table source is the generated producer output")
+	var table_rows: Array = table.get("rows", []) as Array
+	_expect(table_rows.size() == 91, "generated table adapts the 91 shipping mappings (%d)" % table_rows.size())
+	_expect(int(table.get("shipping", 0)) == 91, "producer reports 91 shipping mappings (%d)" % int(table.get("shipping", 0)))
+	_expect(int(table.get("actions", 0)) == 52, "adapted rows carry 52 distinct IA_* actions (%d)" % int(table.get("actions", 0)))
+	var skipped: Array = table.get("skipped_contexts", []) as Array
+	_expect(skipped.has("IMC_Character_ClimbTest") and skipped.has("IMC_Character_Testing"), "dev-only contexts are skipped and named (%s)" % str(skipped))
+	_expect(int(table.get("skipped_mappings", 0)) == 146, "the 146 dev-context mappings are counted (%d)" % int(table.get("skipped_mappings", 0)))
+	var dev_only: Array = table.get("skipped_only_actions", []) as Array
+	_expect(dev_only.size() == 2 and dev_only.has("IA_AbilityLoadout_01") and dev_only.has("IA_Ability_SpecialAttack"), "only the two dev-only IAs are dropped (%s)" % str(dev_only))
+	# Port ids are runtime contracts: the ids and their authored keys survive.
+	var port_keys: Dictionary = {
+		"move_forward": ["W"], "move_backward": ["S"], "move_left": ["A"], "move_right": ["D"],
+		"crouch": ["LeftControl"], "crouch_hold": ["LeftAlt"], "lean_left": ["Q"],
+		"interact": ["F"], "jump": ["SpaceBar"], "sprint": ["LeftShift"],
+		"pause": ["Escape", "Pause"],
+	}
+	for id: String in port_keys.keys():
+		_eq_str_list(InputActions.authored_key_names(id, InputActions.DEVICE_KB), port_keys[id], "%s keeps its authored keys" % id)
+	_expect(InputActions.bound_keys("pause").get("pad", []) == ["Gamepad_Special_Right"], "legacy Pause keeps its gamepad Start")
 	# Move is split into four 1D port actions; the rest keep one row per action.
 	_expect(InputActions.row_for("move_forward").get("deadzone", 0.0) == 0.18, "move deadzone is the authored 0.18")
 	_expect(InputActions.row_for("look_gamepad").get("deadzone", 0.0) == 0.12, "look deadzone is the authored 0.12")
 	_expect(InputActions.PAD_TURN_H_DEG_S == 90.0 and InputActions.PAD_TURN_V_DEG_S == 52.0, "authored pad turn speeds 90/52 deg-per-s")
 	_expect(InputActions.HOLD_SECONDS == 0.2, "authored hold 0.2 s")
+	_expect(InputActions.port_id_for_ia("IA_ControllerLeftShoulder") == "input_chord_lb", "the chord IA resolves to the chord port action")
+
+
+# ---------------------------------------------------------------------------
+# 1b. Standalone curve index + the authored light/edge-boost curves (W9-P1)
+# ---------------------------------------------------------------------------
+
+func _check_curves(gd: Node) -> void:
+	var names: Array[String] = gd.call("standalone_curve_names") as Array[String]
+	_expect(names.size() == 16, "curves.json indexes 16 standalone curves (%d)" % names.size())
+	_expect(int(gd.get("curves_index_missing")) == 0, "curves.json loaded (curves_index_missing=0)")
+	# RCIM_Constant holds the left key's value until the next key (A3 fact sheet B7).
+	var constant_curve: String = "Curve_AI_HeightDifferenceToStrengthMultiplier"
+	_expect(is_equal_approx(float(gd.call("eval_standalone_curve", constant_curve, 2.5)), 1.0), "Constant interp holds 1.0 across 2.0..3.0 m")
+	_expect(is_equal_approx(float(gd.call("eval_standalone_curve", constant_curve, 3.0)), 0.0), "Constant interp releases at the next key (3.0 m -> 0.0)")
+	_expect(is_equal_approx(float(gd.call("eval_standalone_curve", constant_curve, 1.0)), 1.0), "before the first key clamps to the first value")
+	var doc: Variant = _read_json("res://data/generated/curves.json")
+	_expect(doc is Dictionary, "curves.json is readable for the coverage check")
+	var missing: Array[String] = []
+	if doc is Dictionary:
+		for rec_v: Variant in ((doc as Dictionary).get("standalone", []) as Array):
+			var rec: Dictionary = rec_v as Dictionary
+			var curve_name: String = str(rec.get("name", ""))
+			var channels: Array = rec.get("channels", []) as Array
+			var range_v: Array = rec.get("time_range", []) as Array
+			var x: float = float(range_v[0]) if not range_v.is_empty() else 0.0
+			for ch_v: Variant in channels:
+				var got: float = float(gd.call("eval_standalone_curve", curve_name, x, str(ch_v), NAN))
+				if is_nan(got):
+					missing.append("%s/%s" % [curve_name, str(ch_v)])
+	_expect(missing.is_empty(), "all 16 standalone curves resolve to keys (missing %s)" % str(missing))
+	# The two authored light curves: endpoints equal the authored keys, and the
+	# between-keys shape is the authored zero-tangent cubic (smoothstep).
+	var lp: GDScript = load("res://src/stealth/light_probe.gd") as GDScript
+	_expect(is_equal_approx(float(lp.call("light_intensity_range_multiplier", 0.0)), 0.15), "light intensity 0 -> authored 0.15 range multiplier")
+	_expect(is_equal_approx(float(lp.call("light_intensity_range_multiplier", 1.0)), 1.0), "light intensity 1 -> authored 1.0 range multiplier")
+	_expect(is_equal_approx(float(lp.call("light_intensity_range_multiplier", 0.5)), 0.575), "light curve keeps the authored smoothstep midpoint")
+	_expect(is_equal_approx(float(lp.call("minimum_light_detection_for_speed", 0.0)), 0.0), "0 cm/s -> authored 0.0 light floor")
+	_expect(is_equal_approx(float(lp.call("minimum_light_detection_for_speed", 600.0)), 0.1), "600 cm/s -> authored 0.1 light floor")
+	_expect(is_equal_approx(float(lp.call("minimum_light_detection_for_speed", 900.0)), 0.1), "speed clamps at the authored 600 cm/s key")
+	# Curve_GamepadLookEdgeBoost, read off the `look_gamepad` row's authored modifier.
+	_expect(is_equal_approx(InputActions.gamepad_look_edge_threshold(), 0.95), "edge boost threshold is the authored 0.95")
+	_expect(is_equal_approx(InputActions.gamepad_look_edge_boost(0.5, 1.0), 1.0), "no edge boost below the threshold")
+	_expect(is_equal_approx(InputActions.gamepad_look_edge_boost(0.99, 0.0), 1.0), "edge boost starts at the authored 1.0")
+	_expect(is_equal_approx(InputActions.gamepad_look_edge_boost(0.99, 0.4), 1.5), "edge boost reaches the authored 1.5 at 0.4 s")
+
+
+func _read_json(path: String) -> Variant:
+	if not FileAccess.file_exists(path):
+		return null
+	var f: FileAccess = FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return null
+	return JSON.parse_string(f.get_as_text())
 
 
 # ---------------------------------------------------------------------------
@@ -288,10 +366,17 @@ func _check_rebind_round_trip() -> void:
 func _check_sensitivity_ladder() -> void:
 	_expect(InputActions.SENSITIVITY_STEPS.size() == 5, "ladder has the authored 5 steps")
 	_expect(InputActions.SENSITIVITY_STEPS == ["VeryLow", "Low", "Normal", "Fast", "VeryFast"], "ladder names match OSEInputSensitivityLevel")
-	_expect(is_equal_approx(InputActions.mouse_rad_per_px("Normal"), 0.0025), "Normal keeps the port's effective base")
-	_expect(is_equal_approx(InputActions.mouse_rad_per_px("VeryFast"), 0.005), "VeryFast = 2.0x authored mouse multiplier")
-	_expect(is_equal_approx(InputActions.pad_look_scale("Fast"), 1.25), "pad look Fast = 1.25x (authored pad ladder differs)")
-	_expect(is_equal_approx(InputActions.pad_move_scale("VeryFast"), 2.0), "pad move VeryFast = 2.0x")
+	# The multipliers come from the shipped MouseLookSensitivityCurve /
+	# GamepadLookSensitivityCurve (TATInputDeveloperSettings), sampled at the 5
+	# ladder steps across each curve's authored [0, 2] range: 0 -> 0.2,
+	# 1 -> 1.125, 2 -> 2.0. The DefaultGame.ini OSE ladder survives only as the
+	# documented fallback, so Normal is 1.125x (not 1.0x) and pad VeryFast is
+	# 2.0x (not 1.5x) — both are shipped curve values, not port inventions.
+	_expect(is_equal_approx(InputActions.mouse_rad_per_px("Normal"), 0.0025 * 1.125), "Normal = the curve's 1.125x multiplier")
+	_expect(is_equal_approx(InputActions.mouse_rad_per_px("VeryFast"), 0.005), "VeryFast = the curve's 2.0x multiplier")
+	_expect(is_equal_approx(InputActions.pad_look_scale("Fast"), 1.5625), "pad look Fast samples the curve at 1.5 (1.5625x)")
+	_expect(is_equal_approx(InputActions.pad_look_scale("VeryFast"), 2.0), "pad look VeryFast = the curve's 2.0x")
+	_expect(is_equal_approx(InputActions.pad_move_scale("VeryFast"), 2.0), "pad move VeryFast = 2.0x (no shipped curve; ini ladder)")
 	_expect(InputActions.sensitivity_step_index("bogus") == 2, "unknown step falls back to Normal")
 	_expect(InputActions.nearest_mouse_step(0.0042) == "Fast", "legacy free-slider value migrates to its nearest step")
 

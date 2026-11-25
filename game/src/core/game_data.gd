@@ -1,9 +1,25 @@
 extends Node
 ## Loads normalized UE5 DataTables, CurveTables, and StringTables from res://data/generated/tables/.
 
+## Authored progression data (W9-P1): the per-difficulty endgame ladder. The
+## getters below keep their documented fallbacks when the file is unreadable.
+const Progression := preload("res://src/core/progression.gd")
+
 var contracts: Array[Dictionary] = []
 var curves: Dictionary = {} # table_name -> { row_name -> Array[{time, value}] }
 var tables: Dictionary = {} # data table_name -> rows Dictionary (non-curve DataTables)
+## Index of the standalone curve assets (tools/parse_curves.py -> curves.json,
+## `tat2.curves/1`). curve name -> index record {name, type, channels, table,
+## rows, time_range, ...}. The 16 records are the shipped curve assets that were
+## emitted as standalone tables; eval_standalone_curve reads the table file the
+## record names through `curves`, and falls back to the record's own `rows` for
+## the five curves whose table sits outside the 13 scanned roots (UI/Settings,
+## Gameplay/Indicators, MaterialLibrary/Character/EyeLibrary).
+var standalone_curves: Dictionary = {}
+## 1 when curves.json is absent or unreadable (export gate diagnostic; never fatal).
+var curves_index_missing: int = 0
+var _curves_index_loaded: bool = false
+const CURVES_INDEX_PATH: String = "res://data/generated/curves.json"
 var contract_strings: Dictionary = {} # contract_order -> Dictionary[key -> text]
 var mission_durations: Dictionary = {} # map_id -> { durations, quest_graph_ue_path, title/description, source_* }
 var missions: Array[Dictionary] = [] # all CDT_Missions / DT_Missions_* rows (11 authored rows)
@@ -56,6 +72,13 @@ var mission_briefings: Dictionary = {}
 ## hand-authored expansion data (not generated), e.g. the LootTheRoom letter's
 ## 20-minute magic door (1200 s, source KF13) over the QG's 480 s.
 var briefing_overrides: Dictionary = {}
+## W9-P1: 0-based difficulty index the authored endgame ladder resolves
+## through (project.endgame_durations_by_difficulty = [1200, 600, 300]).
+## -1 = nothing published, so get_mission_endgame_seconds() keeps the authored
+## QG EndgameDuration exactly as before. GameState.reset_run() publishes
+## clampi(difficulty - 1, 0, 2) at deploy: the run snapshots its difficulty and
+## the controller needs no edit. It is NOT re-read mid-run.
+var current_difficulty_index: int = -1
 const BRIEFING_OVERRIDES_PATH: String = "res://data/expansion/briefing_overrides.json"
 ## G1/G2 sentinels: every fallback routing decision is counted and named so
 ## a misspelled row or map can never route silently. Export gates on these.
@@ -70,6 +93,7 @@ var icon_unimported_rows: Array[String] = []
 
 func _ready() -> void:
 	_load_curves()
+	_load_curves_index()
 	_load_contracts()
 	_load_contracts_json()
 	_load_contract_strings()
@@ -110,6 +134,30 @@ func _load_curves() -> void:
 		"res://data/generated/tables/Gameplay/Traversal/Dodge",
 	]:
 		_load_tables_from_dir(dir_path, true)
+
+
+func _load_curves_index() -> void:
+	if _curves_index_loaded:
+		return
+	_curves_index_loaded = true
+	var doc: Variant = _load_json(CURVES_INDEX_PATH)
+	if not (doc is Dictionary):
+		curves_index_missing = 1
+		push_warning("[curves] index missing: %s (standalone curve access keeps its documented fallbacks)" % CURVES_INDEX_PATH)
+		return
+	var recs: Variant = (doc as Dictionary).get("standalone", null)
+	if not (recs is Array):
+		curves_index_missing = 1
+		push_warning("[curves] index has no standalone[] array: %s" % CURVES_INDEX_PATH)
+		return
+	for v: Variant in (recs as Array):
+		if not (v is Dictionary):
+			continue
+		var rec: Dictionary = v as Dictionary
+		var curve_name: String = str(rec.get("name", ""))
+		if curve_name == "":
+			continue
+		standalone_curves[curve_name] = rec
 
 
 func _load_tables_from_dir(base_dir: String, recursive: bool) -> void:
@@ -174,7 +222,22 @@ func eval_curve(table_name: String, row_name: String, x: float, fallback: float 
 	var row: Variant = (tbl as Dictionary).get(row_name)
 	if row == null or not (row is Dictionary):
 		return fallback
-	var keys: Array = (row as Dictionary).get("Keys", [])
+	return _eval_keys((row as Dictionary).get("Keys", []), x, fallback)
+
+
+## Shared key evaluator for the CurveTable cache and the standalone curve index.
+## UE stores InterpMode on the key that STARTS a segment:
+##   * RCIM_Constant holds that key's value until the next key's time
+##     (Curve_AI_HeightDifferenceToStrengthMultiplier needs this: 1.0 across
+##     2.0..3.0 m, then 0.0),
+##   * RCIM_Linear / RCIM_Cubic keep the port's lerp. Cubic tangents are not
+##     reconstructed here; a 2-key zero-tangent cubic (UE's smoothstep) is
+##     reproduced at its own call site (light_probe.gd), not silently here.
+## A curve with no InterpMode keeps the old lerp behaviour.
+func _eval_keys(keys_v: Variant, x: float, fallback: float) -> float:
+	if not (keys_v is Array):
+		return fallback
+	var keys: Array = keys_v as Array
 	if keys.is_empty():
 		return fallback
 	var first: Dictionary = keys[0]
@@ -190,9 +253,80 @@ func eval_curve(table_name: String, row_name: String, x: float, fallback: float 
 		if x <= t1:
 			if is_equal_approx(t0, t1):
 				return v1
+			if str(ka.get("InterpMode", "")) == "RCIM_Constant" and x < t1:
+				return v0
 			return lerpf(v0, v1, (x - t0) / (t1 - t0))
 	var last: Dictionary = keys[-1]
 	return float(last.get("Value", fallback))
+
+
+# ---------------------------------------------------------------------------
+# Standalone curve index (curves.json -> tables the 13 roots do not scan)
+# ---------------------------------------------------------------------------
+
+## Every standalone curve the producer emitted, sorted (16 on the 2026-11-25 tree).
+func standalone_curve_names() -> Array[String]:
+	_load_curves_index()
+	var out: Array[String] = []
+	for name_v: Variant in standalone_curves.keys():
+		out.append(str(name_v))
+	out.sort()
+	return out
+
+
+## Authored [first key time, last key time] for a standalone curve, or
+## Vector2.ZERO when the curve is unknown. Read from the index's `time_range`;
+## the sensitivity ladders in input_actions.gd sample across this range.
+func standalone_curve_range(curve_name: String) -> Vector2:
+	_load_curves_index()
+	var rec_v: Variant = standalone_curves.get(curve_name)
+	if not (rec_v is Dictionary):
+		return Vector2.ZERO
+	var rec: Dictionary = rec_v
+	var tr_v: Variant = rec.get("time_range", null)
+	if tr_v is Array and (tr_v as Array).size() >= 2:
+		return Vector2(float((tr_v as Array)[0]), float((tr_v as Array)[1]))
+	var keys: Array = _standalone_keys(rec, "Value")
+	if keys.size() < 2:
+		return Vector2.ZERO
+	return Vector2(float((keys[0] as Dictionary).get("Time", 0.0)), float((keys[-1] as Dictionary).get("Time", 0.0)))
+
+
+## Samples one channel of a standalone curve by name. The table file the index
+## names is preferred (`curves`), then the index's own `rows`; an unknown name or
+## an unreadable curve returns `fallback` — never a crash.
+func eval_standalone_curve(curve_name: String, x: float, channel: String = "Value", fallback: float = 0.0) -> float:
+	_load_curves_index()
+	var rec_v: Variant = standalone_curves.get(curve_name)
+	if not (rec_v is Dictionary):
+		return fallback
+	var keys: Array = _standalone_keys(rec_v as Dictionary, channel)
+	if keys.is_empty():
+		return fallback
+	return _eval_keys(keys, x, fallback)
+
+
+## Keys for one channel of a standalone curve: the emitted table first, the
+## index record second (UI/Settings, Indicators and EyeLibrary tables live
+## outside the scanned roots, so their only copy is the index's `rows`).
+func _standalone_keys(rec: Dictionary, channel: String) -> Array:
+	var table_path: String = str(rec.get("table", ""))
+	var table_name: String = table_path.get_file().get_basename() if table_path != "" else str(rec.get("name", ""))
+	var tbl_v: Variant = curves.get(table_name)
+	if tbl_v is Dictionary:
+		var row_v: Variant = (tbl_v as Dictionary).get(channel)
+		if row_v is Dictionary:
+			var keys_v: Variant = (row_v as Dictionary).get("Keys", [])
+			if keys_v is Array and not (keys_v as Array).is_empty():
+				return keys_v as Array
+	var rows_v: Variant = rec.get("rows", null)
+	if rows_v is Dictionary:
+		var index_row_v: Variant = (rows_v as Dictionary).get(channel)
+		if index_row_v is Dictionary:
+			var index_keys_v: Variant = (index_row_v as Dictionary).get("Keys", [])
+			if index_keys_v is Array:
+				return index_keys_v as Array
+	return []
 
 
 ## Authored footstep-surface loudness multipliers
@@ -570,29 +704,49 @@ func get_mission_briefing_record(mission_id: String) -> Dictionary:
 	return (rec_v as Dictionary).duplicate(true)
 
 
-## Endgame (magic escape door) window in seconds. The tracked expansion
-## override wins over the extracted quest graph: QG_Guildhall_LootTheRoom
-## authors 480 s, while the shipped briefing letter (KF13) promises 20 minutes,
-## so the override records 1200 s with source=KF13. Falls back to the plan's
-## authored EndgameDuration node (480 for LootTheRoom) when no override exists.
-func get_mission_endgame_seconds(mission_id: String) -> float:
+## Endgame (magic escape door) window in seconds.
+##
+## Precedence is fixed (W9-P1 keeps the order, adds one level):
+##   1. the tracked briefing override (KF13) — LootTheRoom's 20-minute letter,
+##      authored as 1200 s against the quest graph's 480 s; it always wins;
+##   2. the authored per-difficulty ladder,
+##      project.endgame_durations_by_difficulty = [1200, 600, 300]
+##      (progression.endgame_seconds_for_difficulty, index order only — the
+##      producer labels the index -> difficulty map "unproven");
+##   3. the mission plan's authored QG EndgameDuration (480 LootTheRoom/OldManor,
+##      300 Guildhall VaultHeist);
+##   4. the caller's 480 s fallback (mission_controller.ENDGAME_FALLBACK_SEC).
+##
+## Ladder selection: an explicit `difficulty_index` (0-based) wins; otherwise
+## `current_difficulty_index` is used when a deploy published one. That field
+## is written by GameState.reset_run() (clampi(difficulty - 1, 0, 2)), so the
+## run clock gets the ladder without a mission_controller edit. -1 (default,
+## nothing published) preserves the pre-W9 behaviour exactly: the QG plan.
+func get_mission_endgame_seconds(mission_id: String, difficulty_index: int = -1) -> float:
 	var ov_v: Variant = briefing_overrides.get(mission_id)
 	if ov_v is Dictionary:
 		var secs: Variant = (ov_v as Dictionary).get("endgame_seconds", null)
 		if secs is float or secs is int:
 			return float(secs)
+	var idx: int = difficulty_index if difficulty_index >= 0 else current_difficulty_index
+	if idx >= 0 and Progression.endgame_ladder_authored():
+		return Progression.endgame_seconds_for_difficulty(idx)
 	var plan: Dictionary = get_mission_plan(mission_id)
 	return float(plan.get("endgame_duration", 0.0))
 
 
-## Runtime source label for an endgame override ("KF13"), or "" when the value
-## came from the extracted quest graph. Printed by the mission controller so the
-## provenance of the 20-minute door is visible in the log and the report.
-func get_mission_endgame_source(mission_id: String) -> String:
+## Runtime source label for an endgame window: "KF13" (tracked override),
+## "project_settings" (authored per-difficulty ladder) or "quest_graph" (the
+## plan's EndgameDuration node / the caller's fallback). Printed by the mission
+## controller so the provenance of the door window is visible in the log.
+func get_mission_endgame_source(mission_id: String, difficulty_index: int = -1) -> String:
 	var ov_v: Variant = briefing_overrides.get(mission_id)
 	if ov_v is Dictionary:
 		return str((ov_v as Dictionary).get("source", ""))
-	return ""
+	var idx: int = difficulty_index if difficulty_index >= 0 else current_difficulty_index
+	if idx >= 0 and Progression.endgame_ladder_authored():
+		return "project_settings"
+	return "quest_graph"
 
 
 ## Format an authored briefing letter for the HUD. Only the two authored

@@ -147,23 +147,10 @@
       "claim_token": "content_overrides_applied"
     },
     {
-      "glob": "curves.json",
-      "kind": "provenance",
-      "reason": "Curve index: which standalone curve assets were emitted into tables/** and which curve objects are Blueprint sub-object defaults. The runtime reads the per-asset tables, not this index.",
-      "optional": true
-    },
-    {
       "glob": "project_settings.json",
       "kind": "blocked_on_team",
       "owner": "T10",
       "reason": "DefaultGame.ini producer (XP, MaximumLevel, endgame durations, authored map->mission lists). T10-GAMEPLAY owns the consumer; the producer exists to unblock it.",
-      "optional": true
-    },
-    {
-      "glob": "gameplay/input_actions.json",
-      "kind": "blocked_on_team",
-      "owner": "T06",
-      "reason": "Enhanced-Input ingest (91 shipping mappings / 52 actions). T06-INPUT owns the consumer and the rebinding model.",
       "optional": true
     },
     {

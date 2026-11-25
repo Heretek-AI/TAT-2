@@ -161,6 +161,13 @@ func _phase_b_hold(root: Node) -> void:
 	player.set("_interact_hold_ms", -1)
 	player.set("_interact_hold_sec", -1.0)
 	player.call("_perform_hold_action")
+	# T04-ANIM (RE-F-12): the KO lands inside the authored CombatHitbox window
+	# (0.390 s of the 0.667 s light swing), not on the release frame. Wait for
+	# the contact, bounded so a real failure still fails fast.
+	var ko_frames: int = 0
+	while int(guard.get("state")) != 5 and ko_frames < 90:
+		await physics_frame
+		ko_frames += 1
 	peak_detection = maxf(detection_during_hold, float(guard.get("detection")))
 	var ko: bool = int(guard.get("state")) == 5
 	var spotted: bool = bool(gs.get("ever_spotted"))

@@ -1650,9 +1650,11 @@ def main(argv=None):
     )
     parser.add_argument(
         "--out",
-        required=True,
+        type=Path,
+        default=ROOT / "game" / "data" / "generated",
         metavar="DIR",
-        help="output directory (created if missing); audio_wwise.json is written there",
+        help="output directory (created if missing); audio_wwise.json is written there "
+        "(default: game/data/generated, like the other producers)",
     )
     parser.add_argument(
         "--check",

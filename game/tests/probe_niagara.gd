@@ -50,8 +50,13 @@ const EXPECTED_ACTIVE_TOTAL: int = 1048
 const EXPECTED_CHUNK_SIZE: float = 32.0
 ## The five active systems whose resolved *sprite* renderer is a measured soft
 ## mask (mesh-only systems that carry a texture on a mesh renderer do not count).
+## Measured soft-mask set. `NS_LootStash` is deliberately absent: after the
+## authored regeneration its renderer is a MESH with an override material
+## (`/Engine/BasicShapes/Plane` + `MI_Portal_Lootstash`), so it authors no
+## sprite path and must keep the procedural falloff. Listing it here asserted a
+## sampler the shipped data never asks for.
 const EXPECTED_SPRITE_SYSTEMS: Array[String] = [
-	"NS_SecurityEye_Neutral", "NS_LootStash", "NS_Train_SparksEngine",
+	"NS_SecurityEye_Neutral", "NS_Train_SparksEngine",
 	"NS_Falling_Leaves", "NS_Ripple_02a",
 ]
 

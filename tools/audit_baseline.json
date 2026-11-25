@@ -20,21 +20,22 @@
     "levels": 107,
     "levels_invalid": 0,
     "loc_csv": 8,
-    "materials_albedo": 1379,
+    "materials_albedo": 1376,
     "materials_entries": 1629,
     "niagara": 3695,
     "scene_variants": 222,
     "scene_variants_records": 222,
-    "tables": 144,
+    "tables": 160,
     "tables_invalid": 0,
-    "texture_refs": 1507,
+    "texture_refs": 1523,
     "videos_manifest": 15,
     "videos_ogv": 15
   },
   "coverage": {
     "case_allowlisted": 73,
     "covered": 12703,
-    "disk_missing_allowlisted": 46,
+    "disk_missing_allowlisted": 43,
+    "disk_missing_resolved_by_rename": 3,
     "exact_raw": 12630,
     "manifest_tat": 16792,
     "resolved": 12703,
@@ -44,11 +45,11 @@
   "infrastructure": {
     "root:Makefile": {
       "command": "make extract / make normalize",
-      "sha256": "059b93c88a2763d5e160e3580d2023b874f4c0e8b192af84969efc0a61be6637"
+      "sha256": "d63b876028d1951c8a53a1eddf8d3f141eade5d96c277f6ed91c37f2919c3ec2"
     },
     "root:tools/audit_allowlists.json": {
       "command": "reviewed coverage allowlist",
-      "sha256": "a225e6de8285c779de93682410f60ee216c2fa7ee3b1b72da8a5bd946e0897aa"
+      "sha256": "04fee072ed34599e5c8ec8d42e99d4530100505df76646b86eac8881719d609e"
     },
     "root:tools/fetch_vgmstream.sh": {
       "command": "make audio-tools",
@@ -60,7 +61,7 @@
     },
     "root:tools/prebake_texture_cap.py": {
       "command": "make desktop-texture-cap",
-      "sha256": "a60dbe142c9d9696e52d8f762dd0dc4686317ec8dd88698495366d8358407ac3"
+      "sha256": "d2779833186e88b6173a5096b96607f1717252dbd7d3e036a37b8accb407f49c"
     },
     "root:tools/reimport_assets.sh": {
       "command": "tools/reimport_assets.sh",
@@ -102,7 +103,7 @@
           "bytes": 3532,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795569925.8979888,
+          "newest_mtime": 1795600164.173523,
           "sha256": "86fdefcf12e121de815a3dc05e1889aac230fc41fed452f99e36e01689ad7f08"
         }
       },
@@ -127,14 +128,14 @@
           "bytes": 1463161,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795569924.4291708,
+          "newest_mtime": 1795600162.7055092,
           "sha256": "17d852347531c34e3d42545584cd914a3dba6f8a34901d9874be755a3b3c36ff"
         },
         "gen:audio_library.json": {
           "bytes": 1423393,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795569923.9336152,
+          "newest_mtime": 1795600162.2326474,
           "sha256": "27337aac0f53643e58c76d201b1ba30f45f7815750a2a57f1fcc887c96fc3241"
         }
       },
@@ -148,7 +149,7 @@
           "bytes": 581725232,
           "exists": true,
           "files": 5027,
-          "newest_mtime": 1795569851.6549902,
+          "newest_mtime": 1795600094.7949498,
           "sha256": "bef0f231b03ec1cc9ab013f35e022df1bbce63311bdd77982703e6ef4279e3ac"
         }
       },
@@ -162,7 +163,7 @@
           "bytes": 1058776,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795569929.4096243,
+          "newest_mtime": 1795600167.1670215,
           "sha256": "70b6c2358b3bd80194a4dfaa23764033a39b9ad45f009a7bebe54e55dc4d6975"
         }
       },
@@ -176,11 +177,25 @@
           "bytes": 1514019,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795569843.137938,
+          "newest_mtime": 1795600081.1272335,
           "sha256": "f147dc87fe6636a32ccb9854d91d07ebfbabb8c5b9baaaa40868f61c4e5c30d0"
         }
       },
       "sha256": "7be8333e38fc58ddc5b9656558d8aa89e47a1d5d7ad67df1ccd423a18f931172"
+    },
+    "tools/parse_collision.py": {
+      "command": "python3 tools/parse_collision.py",
+      "metrics": {},
+      "outputs": {
+        "gen:mesh_collision.json": {
+          "bytes": 17626566,
+          "exists": true,
+          "files": 1,
+          "newest_mtime": 1795600093.2393978,
+          "sha256": "2a6f95153c55bf651e04905f7cd61f8c26d2e901de573cb1ee5eba74339edc47"
+        }
+      },
+      "sha256": "4707cb77ff43e3023938d77c51df774df043ea9ddca54dd92e18ccd66738c67c"
     },
     "tools/parse_containers.py": {
       "command": "python3 tools/parse_containers.py",
@@ -192,7 +207,7 @@
           "bytes": 4224,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795575093.717997,
+          "newest_mtime": 1795600086.9235952,
           "sha256": "db7fdd4f72f29cd984df81622fd1cbadbaa26b98482c01e903923fa06a41068d"
         }
       },
@@ -209,11 +224,32 @@
           "bytes": 28493,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795575093.142527,
+          "newest_mtime": 1795600079.7394876,
           "sha256": "ecbb4e27924dc061ba177b59ca0afa0a263f1b2eb5621e564df3ae5f096ea600"
         }
       },
       "sha256": "7f461d850f67e753d985833074485917f16164fcecec06c6c586a152f923a578"
+    },
+    "tools/parse_curves.py": {
+      "command": "python3 tools/parse_curves.py",
+      "metrics": {},
+      "outputs": {
+        "gen:curves.json": {
+          "bytes": 80654,
+          "exists": true,
+          "files": 1,
+          "newest_mtime": 1795600069.7005293,
+          "sha256": "837ef61fb3880a0d00bf7a9551b9f34b46db94dd18c88ba4217b21bd0963346a"
+        },
+        "gen:tables": {
+          "bytes": 1874019,
+          "exists": true,
+          "files": 160,
+          "newest_mtime": 1795600069.700099,
+          "sha256": "7f2aac5b35da0b9aaed74dae81520e554957f0bc0d1325ec4e5561e32c0667fd"
+        }
+      },
+      "sha256": "5285c1422b5f68d1c41c3c992e4760c50e8d40d886b25e43f2e2ea33aafe9e82"
     },
     "tools/parse_devices.py": {
       "command": "python3 tools/parse_devices.py",
@@ -223,7 +259,7 @@
           "bytes": 2115474,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795569848.3245065,
+          "newest_mtime": 1795600086.841544,
           "sha256": "39f060106ab1dd0c85752004166ba870548a5b72fa0621c2c6673a62ced9007e"
         }
       },
@@ -234,11 +270,11 @@
       "metrics": {},
       "outputs": {
         "gen:gameplay": {
-          "bytes": 5399262,
+          "bytes": 5669920,
           "exists": true,
-          "files": 22,
-          "newest_mtime": 1795575109.4592621,
-          "sha256": "00be399e9404b6966ca9bc25fa54da1498158d8c38fe4034cb930e9cf2fd186d"
+          "files": 23,
+          "newest_mtime": 1795600089.5864441,
+          "sha256": "fdd0b88834d180c29b440fda2ef08de1616859b0ee4b1c40365cb208f4400f6b"
         }
       },
       "sha256": "fb08beef0100ee52dadab6d2154a5e3d958a46f0f89311f56e145066bd69304a"
@@ -251,18 +287,32 @@
           "bytes": 242354,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795569850.6678443,
+          "newest_mtime": 1795600089.202643,
           "sha256": "2f30d7af62b7d09e69848ef9938ab8a65c006f5111c9ae2f17de08b82a0b080b"
         },
         "gen:gameplay/perception.json": {
           "bytes": 13314,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795569850.6684706,
+          "newest_mtime": 1795600089.203194,
           "sha256": "a051f2b4a26796916e8d9cd9a8512707afe84c77b9c9a4f9ee790f4ab430d9f0"
         }
       },
       "sha256": "923a6447b2cb7f84090b805087a69411e9c00dfe4a47f8c1a1d7457ea83cbf5a"
+    },
+    "tools/parse_input.py": {
+      "command": "python3 tools/parse_input.py",
+      "metrics": {},
+      "outputs": {
+        "gen:gameplay/input_actions.json": {
+          "bytes": 270658,
+          "exists": true,
+          "files": 1,
+          "newest_mtime": 1795600089.5864441,
+          "sha256": "db01b27f0b56a79e0a004982ee9fcf1fd093c99b00cb3a3e7063d9644f1e7f2c"
+        }
+      },
+      "sha256": "961fbaad927109836604230debfaa6fc9ccea72377bee567b7ae334d68c98d04"
     },
     "tools/parse_interactables.py": {
       "command": "python3 tools/parse_interactables.py",
@@ -272,7 +322,7 @@
           "bytes": 60362,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795569848.422279,
+          "newest_mtime": 1795600086.9482837,
           "sha256": "8bf683e0a8c08e5f83a4114a32ff261b67b393dcb7c92c4244b7b814234acc3f"
         }
       },
@@ -288,7 +338,7 @@
           "bytes": 2181168,
           "exists": true,
           "files": 9,
-          "newest_mtime": 1795569924.5256255,
+          "newest_mtime": 1795600162.7916574,
           "sha256": "ea1767ad076aae99c03299e0fb1aaab2de2724c822113006f7799b8e61ef032c"
         }
       },
@@ -302,7 +352,7 @@
           "bytes": 60762,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795575093.6556368,
+          "newest_mtime": 1795600087.4282925,
           "sha256": "9a758561abaa435be49057e21886757074fe30f8b34a03812892366df5de318e"
         }
       },
@@ -311,34 +361,48 @@
     "tools/parse_materials.py": {
       "command": "python3 tools/parse_materials.py",
       "metrics": {
-        "materials_albedo": 1379,
+        "materials_albedo": 1376,
         "materials_entries": 1629,
-        "texture_refs": 1507
+        "texture_refs": 1523
       },
       "outputs": {
         "gen:materials.json": {
-          "bytes": 2781543,
+          "bytes": 2784668,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795569840.9001458,
-          "sha256": "fe8b267416a7f9de2f70ab061570f7d0083128f8ade939791b92b61876530284"
+          "newest_mtime": 1795600079.345146,
+          "sha256": "43748d2b01a945d2fa7c4d8528cd1378841d0d287a24c3da26ce7438f916df42"
         },
         "gen:mesh_materials.json": {
           "bytes": 443572,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795569841.707177,
+          "newest_mtime": 1795600079.6839426,
           "sha256": "74476419aa47e966fdf56fae30315f81073b04504daccc8c0bce8f9329d04bea"
         },
         "gen:mesh_materials_provenance.json": {
           "bytes": 435741,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795569841.7105925,
+          "newest_mtime": 1795600079.6860576,
           "sha256": "e805cb29630a6593c9b5b844a14eabcaf0f654633af52ea9268d7aef8cfd7dca"
         }
       },
-      "sha256": "44b341d3cc5a2d1eae2d17065fb8be9f359382f19570145a865546935a89a6ca"
+      "sha256": "3d1c145871bd5c8144cd4054d6158c585f8d38d8286ce08d03566d3cbb88407c"
+    },
+    "tools/parse_project_ini.py": {
+      "command": "python3 tools/parse_project_ini.py",
+      "metrics": {},
+      "outputs": {
+        "gen:project_settings.json": {
+          "bytes": 36776,
+          "exists": true,
+          "files": 1,
+          "newest_mtime": 1795600089.5519934,
+          "sha256": "42fd62fd8236235f1edb7d1ff8f9f045f025c08e9463b12584718978905ab976"
+        }
+      },
+      "sha256": "f86bd28f1bf75d0693d1e109fb5a2f318bffd7945f8fb0dfa5d1cd3b2076b86e"
     },
     "tools/parse_quests.py": {
       "command": "python3 tools/parse_quests.py",
@@ -348,7 +412,7 @@
           "bytes": 425493,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795569845.884234,
+          "newest_mtime": 1795600084.1632333,
           "sha256": "4832c39ddf526bdc9a694fac06e61171ec0bfb152428987ed8536f18542343bf"
         }
       },
@@ -362,7 +426,7 @@
           "bytes": 5773,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795575093.743129,
+          "newest_mtime": 1795600079.7608235,
           "sha256": "996cfca24576f115992a80ff3bf19023ac2e383a863171cb61d1c3e19e906696"
         }
       },
@@ -376,7 +440,7 @@
           "bytes": 10623,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795569849.0832906,
+          "newest_mtime": 1795600087.6572967,
           "sha256": "379dc3de638656dc51f3a22b1659d22c19f213095b9bf9e3c116dcdfc1cd7158"
         }
       },
@@ -390,15 +454,15 @@
           "bytes": 784227,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795569968.26265,
+          "newest_mtime": 1795600089.310363,
           "sha256": "3f397005e37ebef7d7f5a8a924cdb9ee7ae9853fc1ffe6e6a9d93534fb26b006"
         },
         "root:docs/reports/w5e-guard-state-tree.md": {
-          "bytes": 17610,
+          "bytes": 17418,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795569968.2638593,
-          "sha256": "55f7971505b833ad70660cc451f50473fa360a05ce13011c99cc4c1a48c03405"
+          "newest_mtime": 1795600089.3114974,
+          "sha256": "9d5151f13a1fa31256aab2f304d76ad3110c3d63b0384d8e3f7263642fb907b8"
         }
       },
       "sha256": "85b210e7f23a5964647ddd62a9f4613c4de9bd2aeae2b31e7cf1076ede079e99"
@@ -410,39 +474,39 @@
         "devices_total": 4118,
         "levels": 107,
         "scene_variants": 222,
-        "tables": 144
+        "tables": 160
       },
       "outputs": {
         "gen:gameplay": {
-          "bytes": 5399262,
+          "bytes": 5669920,
           "exists": true,
-          "files": 22,
-          "newest_mtime": 1795575109.4592621,
-          "sha256": "00be399e9404b6966ca9bc25fa54da1498158d8c38fe4034cb930e9cf2fd186d"
+          "files": 23,
+          "newest_mtime": 1795600089.5864441,
+          "sha256": "fdd0b88834d180c29b440fda2ef08de1616859b0ee4b1c40365cb208f4400f6b"
         },
         "gen:levels": {
-          "bytes": 45834397,
+          "bytes": 46649694,
           "exists": true,
           "files": 108,
-          "newest_mtime": 1795575107.9264193,
-          "sha256": "bbcdce3cb9cc2d9837db51ec6b0c8a9ddf9573338d9619df6a3360e67a080880"
+          "newest_mtime": 1795600065.4599488,
+          "sha256": "5b3e7c186398f4543abaadff36dff090647c379f7ff41cf530e3a91447e9d36b"
         },
         "gen:scene_variants.json": {
           "bytes": 44415,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795575107.9723592,
+          "newest_mtime": 1795600065.503814,
           "sha256": "424e9fe4d92846e74e7e801084718009afb2a94461ca3ab2cfab544c40e39151"
         },
         "gen:tables": {
-          "bytes": 1842945,
+          "bytes": 1874019,
           "exists": true,
-          "files": 144,
-          "newest_mtime": 1795575095.9025536,
-          "sha256": "c08a537228a6297f078bbf72172df5030af5c8bdfa02532fccec16c25c0661e2"
+          "files": 160,
+          "newest_mtime": 1795600069.700099,
+          "sha256": "7f2aac5b35da0b9aaed74dae81520e554957f0bc0d1325ec4e5561e32c0667fd"
         }
       },
-      "sha256": "fe2f6a64dbd6b11a160e7b13c7e4839fa9f55ca9888e8e493faeed414d9ff781"
+      "sha256": "4ea9ee439ca25421a01a0bdf47a13d1ade790a91f4ea4106cc83915e545f23a7"
     },
     "tools/parse_unlocks.py": {
       "command": "python3 tools/parse_unlocks.py",
@@ -452,7 +516,7 @@
           "bytes": 117228,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795569849.638344,
+          "newest_mtime": 1795600088.2247088,
           "sha256": "1268019dac3fe30453556cb8f9e2a27c3d96918ca425b1d93f41aa3355ca10e1"
         }
       },
@@ -463,11 +527,11 @@
       "metrics": {},
       "outputs": {
         "gen:vfx": {
-          "bytes": 1391652,
+          "bytes": 1395344,
           "exists": true,
           "files": 2,
-          "newest_mtime": 1795569849.6126244,
-          "sha256": "85927d9634e7279e71bd0a30e12759f285b817494a0913e373c0c39470c30f9d"
+          "newest_mtime": 1795600088.19702,
+          "sha256": "d9c2d52d6a6d7bcbd22ddbf7721e4c43f06b79b4a90ad437e8b1ec44921ce463"
         }
       },
       "sha256": "cb9faaac63c7a4f65f0d6fc00d341b42e2d1a173a6eb3720266e9c4d358f4849"
@@ -480,11 +544,25 @@
           "bytes": 38638,
           "exists": true,
           "files": 17,
-          "newest_mtime": 1795569850.9604647,
+          "newest_mtime": 1795600089.50577,
           "sha256": "c7fe1b2d17a54ad16e29db54641f0f65807631ac8b9c8fddf48d6b34f7e5232d"
         }
       },
       "sha256": "fb6dfecec7ba865d3d322cbc7c08996104c9bdaa55e501bcd146123ad2015544"
+    },
+    "tools/parse_wwise.py": {
+      "command": "python3 tools/parse_wwise.py",
+      "metrics": {},
+      "outputs": {
+        "gen:audio_wwise.json": {
+          "bytes": 1378853,
+          "exists": true,
+          "files": 1,
+          "newest_mtime": 1795600093.9777458,
+          "sha256": "c87c62c189bb1b5ff5fbb1a1e3aea2ea7a188b37b7ba7c0ac0f0fd2208c95a9d"
+        }
+      },
+      "sha256": "c2297bd8413ddbeb9422a0900ae7dcfe36e3ed1fece79f9e7b3e2256335749cb"
     },
     "tools/usd_to_gltf.py": {
       "command": "make anims  # blender --background --python tools/usd_to_gltf.py ...",
@@ -497,24 +575,63 @@
       },
       "outputs": {
         "assets:ue/Anims": {
-          "bytes": 508286432,
+          "bytes": 508272644,
           "exists": true,
           "files": 995,
-          "newest_mtime": 1795310916.4263463,
-          "sha256": "f786f97fdc9dd68498a7fab3eb26cf018f3254d52efaf085666632922445aa76"
+          "newest_mtime": 1795601374.4035494,
+          "sha256": "95e95437a5a0e7bb80d7d5b62145c89ef7823dd625cb62fb1310867bab764b26"
         },
         "gen:anims_manifest.json": {
-          "bytes": 529087,
+          "bytes": 522544,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795310917.9653742,
-          "sha256": "3429b2be7c7123e781bbf6dcd5b4bcd24192534c7d65f3200e778b6c58c375f8"
+          "newest_mtime": 1795601375.5501885,
+          "sha256": "0a3944399adf575d6c7b0ddabade803ce3ea18c04ee6716e6e01782c9c918e18"
         }
       },
-      "sha256": "5b56060181660e72dfbc925d61f189677133c64084d2531847f539bd25627266"
+      "sha256": "aa619103969108c8008e8c9183ab74673d16f52f26fb73682fcd2325cb96dc0f"
+    }
+  },
+  "provenance": {
+    "extractor_binary": {
+      "binary_mtime": 1795600188.7922387,
+      "bytes": 78192,
+      "newest_source_mtime": 1795563343.5246322,
+      "path": "tools/tat-extract/bin/Release/net10.0/tat-extract",
+      "sha256": "dc806d85be6ce8f1026a9e85642a6ca256e87994ac256df2181b616cf37ddafa"
+    },
+    "usmap": {
+      "bytes": 2600600,
+      "path": "tools/ue4ss/output/TAT-5.5.4-148559+++TAT+tat_release_nosrc-30afe5ff.usmap",
+      "sha256": "52a50d957c48ea1dc38216ecda2b1d5e41378195c0f5bd0fd59e5bc41277f72a"
     }
   },
   "python": "3.10+",
+  "refresh_log": [
+    {
+      "notes": [
+        "baseline: tools/parse_tables.py source drift accepted by refresh (newest output 2026-11-25 04:48)",
+        "baseline: output content changed for tools/parse_tables.py: gen:levels, gen:tables, gen:gameplay (refresh accepted)",
+        "baseline: new producer tools/parse_curves.py accepted by refresh",
+        "baseline: new producer tools/parse_project_ini.py accepted by refresh",
+        "baseline: new producer tools/parse_input.py accepted by refresh",
+        "baseline: new producer tools/parse_collision.py accepted by refresh",
+        "baseline: new producer tools/parse_wwise.py accepted by refresh",
+        "baseline: output content changed for tools/parse_gameplay.py: gen:gameplay (refresh accepted)",
+        "baseline: tools/parse_materials.py source drift accepted by refresh (newest output 2026-11-25 04:47)",
+        "baseline: output content changed for tools/parse_materials.py: gen:materials.json (refresh accepted)",
+        "baseline: output content changed for tools/parse_state_tree.py: root:docs/reports/w5e-guard-state-tree.md (refresh accepted)",
+        "baseline: output content changed for tools/parse_vfx.py: gen:vfx (refresh accepted)",
+        "baseline: tools/usd_to_gltf.py source drift accepted by refresh (newest output 2026-11-25 05:09)",
+        "baseline: output content changed for tools/usd_to_gltf.py: assets:ue/Anims, gen:anims_manifest.json (refresh accepted)",
+        "baseline: infrastructure change accepted: root:Makefile",
+        "baseline: infrastructure change accepted: root:tools/audit_allowlists.json",
+        "baseline: infrastructure change accepted: root:tools/prebake_texture_cap.py"
+      ],
+      "reason": "R8 remediation merged (40 commits): five new producers (project_ini, input, collision, curves, wwise), parse_tables spline records, per-room light plan, authored materials/collision/animation durations; regenerated once at merged HEAD with make normalize + make anims + reimport + texture cap. parse_materials albedo 1379->1376 is authored-correct (invented fallbacks removed) and is recorded in EXPECTED_METRIC_DECREASES.",
+      "utc": "2026-11-25T10:12:23Z"
+    }
+  ],
   "tool_versions": {
     "blender": "Blender 5.3.0",
     "dotnet": "10.0.404",
@@ -522,5 +639,5 @@
     "vgmstream": "vgmstream CLI decoder r2168 (Oct 25 2026)"
   },
   "version": 2,
-  "written_utc": "2026-11-25T02:51:58Z"
+  "written_utc": "2026-11-25T10:12:23Z"
 }

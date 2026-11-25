@@ -139,6 +139,18 @@ class Producer:
 
 
 # Output tokens: gen: -> --generated, assets: -> --assets, root: -> repo root.
+# Metric decreases that are authored-correct and were accepted once, with the
+# floor they may not go below. Any other decrease still fails, and the floor
+# keeps a future silent loss visible instead of normalising it away.
+EXPECTED_METRIC_DECREASES: dict[tuple[str, str], tuple[int, str]] = {
+    ("tools/parse_materials.py", "materials_albedo"): (
+        1376,
+        "T08: a material that authors only an emissive colour no longer receives a "
+        "fallback-ranked albedo guess (1379 -> 1376). The three dropped albedos were "
+        "invented by the heuristic; the authored data has none.",
+    ),
+}
+
 PRODUCERS = (
     Producer(
         "tools/parse_tables.py",
@@ -176,6 +188,14 @@ PRODUCERS = (
         "tools/parse_collision.py",
         "python3 tools/parse_collision.py",
         ("gen:mesh_collision.json",),
+    ),
+    # Wwise control plane (T03): buses, attenuations, transmission loss, music
+    # segments, emitters and VO. The media itself is converted by
+    # convert_wwise.py; this producer owns the graph that drives the runtime.
+    Producer(
+        "tools/parse_wwise.py",
+        "python3 tools/parse_wwise.py",
+        ("gen:audio_wwise.json",),
     ),
     Producer(
         "tools/parse_gameplay.py",
@@ -1526,6 +1546,13 @@ def _compare_baseline(
                 and isinstance(old_value, int)
                 and value < old_value
             ):
+                expected = EXPECTED_METRIC_DECREASES.get((str(producer.script), key))
+                if expected is not None and value >= expected[0]:
+                    print(
+                        f"baseline: producer {producer.script} metric {key} decreased "
+                        f"{old_value} -> {value} as recorded ({expected[1]})"
+                    )
+                    continue
                 failures.append(
                     f"baseline: producer {producer.script} metric {key} decreased "
                     f"from {old_value} to {value}"

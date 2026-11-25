@@ -13,7 +13,7 @@ var tables: Dictionary = {} # data table_name -> rows Dictionary (non-curve Data
 ## rows, time_range, ...}. The 16 records are the shipped curve assets that were
 ## emitted as standalone tables; eval_standalone_curve reads the table file the
 ## record names through `curves`, and falls back to the record's own `rows` for
-## the five curves whose table sits outside the 13 scanned roots (UI/Settings,
+## the four curves whose table sits outside the 13 scanned roots (UI/Settings,
 ## Gameplay/Indicators, MaterialLibrary/Character/EyeLibrary).
 var standalone_curves: Dictionary = {}
 ## 1 when curves.json is absent or unreadable (export gate diagnostic; never fatal).
@@ -728,6 +728,13 @@ func get_mission_endgame_seconds(mission_id: String, difficulty_index: int = -1)
 		var secs: Variant = (ov_v as Dictionary).get("endgame_seconds", null)
 		if secs is float or secs is int:
 			return float(secs)
+	# PORT DECISION (W9-P1): the authored global ladder outranks a mission's own
+	# quest-graph EndgameDuration when a difficulty is known. The user decision
+	# for this wave is "adopt the authored EndgameDurationsByDifficulty" with the
+	# KF13 override preserved; the QG values (VaultHeist 300, OldManor 480) stay
+	# recorded in get_mission_plan() and are still asserted, they just no longer
+	# win the run clock. The producer labels the index->difficulty map
+	# "unproven: index order only", so the mapping is documented in progression.gd.
 	var idx: int = difficulty_index if difficulty_index >= 0 else current_difficulty_index
 	if idx >= 0 and Progression.endgame_ladder_authored():
 		return Progression.endgame_seconds_for_difficulty(idx)

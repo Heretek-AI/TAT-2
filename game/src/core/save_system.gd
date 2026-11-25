@@ -1168,6 +1168,8 @@ func record_contract_complete(order: int, score: int, ghost: bool, elapsed_sec: 
 		+ Progression.xp_award("mission") \
 		+ Progression.xp_award("win") \
 		+ Progression.xp_award("time", {"minutes": minutes})
+	# Novice is the documented default when no GameState is present (a headless
+	# save fixture); the live path always reads the run's difficulty.
 	var difficulty: int = 1
 	if gs != null:
 		difficulty = int(gs.get("difficulty"))

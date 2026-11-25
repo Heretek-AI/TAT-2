@@ -1566,8 +1566,8 @@ func _feat_16_shell_ui_letter_loading() -> void:
 	# curve's time range; step 3 = 1.5625x), not the OSE DefaultGame.ini ladder
 	# (1.5x), so the expected rad/px is 0.00390625. The old 0.00375 literal pinned
 	# the ladder the port replaced; the authored curve is the source of truth
-	# (game/data/generated/tables/Gameplay/Input/Character/MouseLookSensitivityCurve.json,
-	# indexed by curves.json, read by InputActions.mouse_rad_per_px()).
+	# (game/data/generated/tables/UI/Settings/MouseLookSensitivityCurve.json, indexed
+	# by curves.json, read by InputActions.mouse_rad_per_px()).
 	var fast_rad_per_px: float = 0.0025 * 1.5625
 	var cb_inv: CheckBox = st_ui.get("_invert_check") as CheckBox
 	var cb_spr: CheckBox = st_ui.get("_sprint_check") as CheckBox

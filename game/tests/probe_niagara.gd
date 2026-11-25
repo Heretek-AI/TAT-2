@@ -478,9 +478,14 @@ func _check_sprite_tokens(records: Array) -> bool:
 			" (authored data, not the gate: see W9-P1 report)")
 	var skipped: int = seen.size() - bound
 	var legacy_skipped: int = seen.size() - legacy
+	# `skipped <= legacy_skipped` is algebraically the same as `bound >= legacy`,
+	# so the resolver itself needs a floor: at least the two rain materials
+	# (MI_RainDrops_Additive_BC, MI_RainSplashes_BC) must move from the producer's
+	# bomb-liquid albedo to their authored opacity slot. Without this a resolver
+	# that silently returned the catalogue token would pass the non-regression
+	# check (W9-P1 audit A3, item 5).
 	return _check(bound >= legacy, "sprite tokens bound %d < legacy %d of %d" % [bound, legacy, seen.size()]) \
-		and _check(skipped <= legacy_skipped,
-			"sprite tokens skipped %d > legacy skipped %d of %d" % [skipped, legacy_skipped, seen.size()])
+		and _check(changed >= 2, "sprite token resolver moved %d tokens (expected >= 2: the two rain masks)" % changed)
 
 
 ## `key:value` histogram, alphabetical, for a stable log line.

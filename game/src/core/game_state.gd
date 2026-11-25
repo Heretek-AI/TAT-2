@@ -26,6 +26,9 @@ const PHASE_MAIN: String = "main"
 const PHASE_ENDGAME: String = "endgame"
 const PHASE_RESOLVED: String = "resolved"
 
+## Authored endgame ladder rung count - 1 (see reset_run). Asserted by
+## test_w9_progression.gd against Progression.ladder_size().
+const LADDER_INDEX_MAX: int = 2
 var thief_id: String = "spider" # spider (Nisha) | chameleon (Cotter)
 ## Optional player-chosen handle. Blank means "no explicit handle": the HUD
 ## portrait plate, ledger and prep screen then show the authored thief title
@@ -288,7 +291,11 @@ func reset_run(contract_order: int, map_id: String) -> void:
 	# clock without editing the controller. Prep picks GameState.difficulty
 	# before the deploy, so reset_run is the honest publication point; a
 	# mid-run difficulty change (QA cycle) does not move an already-open door.
-	GameData.current_difficulty_index = clampi(difficulty - 1, 0, 2)
+	# Top rung of the authored EndgameDurationsByDifficulty ladder (index 0..2 =
+	# Novice/Thief/Master). Kept as a named constant because game_state.gd has no
+	# Progression preload (an autoload must not depend on a data reader); the W9
+	# progression suite asserts LADDER_INDEX_MAX == Progression.ladder_size() - 1.
+	GameData.current_difficulty_index = clampi(difficulty - 1, 0, LADDER_INDEX_MAX)
 	escape_markers = []
 	extracted_players = []
 	loot_collected = 0

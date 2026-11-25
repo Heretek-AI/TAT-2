@@ -7431,6 +7431,14 @@ func _initialize() -> void:
 		w9_problems.append("weather_profile.gd failed to load")
 	else:
 		var w9_floor: float = float(w9_wp.NIGHT_EXPOSURE)
+		# The reference is a LITERAL, not the constant under test: comparing the
+		# applied value against NIGHT_EXPOSURE alone is tautological and accepts a
+		# global cut to 1.00 (W9-P1 audit A4, item 7). 1.15 is the measured night
+		# anchor the gate view was calibrated at; at 1.00 its black floor goes
+		# 23.9 -> 38.0 % < 8.
+		const W9_NIGHT_FLOOR_REFERENCE: float = 1.15
+		if w9_floor < W9_NIGHT_FLOOR_REFERENCE - 0.0001:
+			w9_problems.append("NIGHT_EXPOSURE %.3f lowered below the measured reference %.2f (the gate loses its black floor)" % [w9_floor, W9_NIGHT_FLOOR_REFERENCE])
 		# (a) Guildhall keeps the authored night floor and the authored ambient.
 		var w9_gh: Dictionary = w9_wp.preset_for_map("guildhall")
 		var e_gh := Environment.new()
@@ -7438,8 +7446,8 @@ func _initialize() -> void:
 		var ok_gh: bool = bool(w9_wp.apply_for_map(e_gh, m_gh, "guildhall"))
 		if not ok_gh or e_gh.tonemap_mode != Environment.TONE_MAPPER_AGX:
 			w9_problems.append("guildhall not graded AGX (applied=%s mode=%d)" % [str(ok_gh), e_gh.tonemap_mode])
-		if not is_equal_approx(e_gh.tonemap_exposure, w9_floor):
-			w9_problems.append("guildhall exposure=%.3f (must stay at the night floor %.2f; a global cut regresses the gate)" % [e_gh.tonemap_exposure, w9_floor])
+		if not is_equal_approx(e_gh.tonemap_exposure, W9_NIGHT_FLOOR_REFERENCE):
+			w9_problems.append("guildhall exposure=%.3f (must stay at the measured night floor %.2f; a global cut regresses the gate)" % [e_gh.tonemap_exposure, W9_NIGHT_FLOOR_REFERENCE])
 		if not is_equal_approx(e_gh.ambient_light_energy, 0.16):
 			w9_problems.append("guildhall ambient=%.4f (must stay the authored 0.16)" % e_gh.ambient_light_energy)
 		# (b) The other night preset (lobby/prep stage) keeps the same floor.
@@ -7447,8 +7455,8 @@ func _initialize() -> void:
 		var e_lob := Environment.new()
 		var m_lob := DirectionalLight3D.new()
 		w9_wp.apply_environment(e_lob, m_lob, w9_lob)
-		if not is_equal_approx(e_lob.tonemap_exposure, w9_floor):
-			w9_problems.append("lobby night preset exposure=%.3f (expected %.2f)" % [e_lob.tonemap_exposure, w9_floor])
+		if not is_equal_approx(e_lob.tonemap_exposure, W9_NIGHT_FLOOR_REFERENCE):
+			w9_problems.append("lobby night preset exposure=%.3f (expected the measured floor %.2f)" % [e_lob.tonemap_exposure, W9_NIGHT_FLOOR_REFERENCE])
 		# (c) The Den keeps its authored bias + floor (its own hand grade runs
 		# later in mission_controller; this seam must not move).
 		var w9_den: Dictionary = w9_wp.preset_for_map("thieves_den")
@@ -7456,7 +7464,7 @@ func _initialize() -> void:
 		var m_den := DirectionalLight3D.new()
 		w9_wp.apply_environment(e_den, m_den, w9_den)
 		var w9_den_bias: float = float((w9_den.get("postprocess", {}) as Dictionary).get("auto_exposure_bias", 0.0))
-		var w9_den_expected: float = maxf(1.0 + w9_den_bias, w9_floor)
+		var w9_den_expected: float = maxf(1.0 + w9_den_bias, W9_NIGHT_FLOOR_REFERENCE)
 		if not is_equal_approx(e_den.tonemap_exposure, w9_den_expected):
 			w9_problems.append("Den exposure=%.3f (expected %.3f = authored bias + floor)" % [e_den.tonemap_exposure, w9_den_expected])
 		# (d) Old Manor is not re-graded (not a night preset).

@@ -145,20 +145,6 @@
       "reason": "Applied override table is asserted by game/tests/test_content_overrides.gd; check_content_overrides.py re-derives it from the levels.",
       "consumer": "game/tests/test_content_overrides.gd",
       "claim_token": "content_overrides_applied"
-    },
-    {
-      "glob": "project_settings.json",
-      "kind": "blocked_on_team",
-      "owner": "T10",
-      "reason": "DefaultGame.ini producer (XP, MaximumLevel, endgame durations, authored map->mission lists). T10-GAMEPLAY owns the consumer; the producer exists to unblock it.",
-      "optional": true
-    },
-    {
-      "glob": "mesh_collision.json",
-      "kind": "blocked_on_team",
-      "owner": "T09",
-      "reason": "AggGeom simple-collision primitives per mesh. T09-GEOMETRY owns collision creation in the loader; T11 needs the hulls for nav.",
-      "optional": true
     }
   ]
 }

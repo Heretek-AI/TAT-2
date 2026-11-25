@@ -271,9 +271,10 @@ static func ftue_level_up_xp_is_on_top_of_regular_xp() -> bool:
 
 ## FTUE level-up credit: one credit per authored FTUE category.
 ## PORT DECISION: DT_PlayerExperience authors category *tags only* (no
-## per-tag amounts), so the credit per tag is the smallest authored category
-## weight (progression.contracts_xp = 20). The tag list is authored and read at
-## runtime; three tags therefore award 20+20+20 = 60 XP once.
+## per-tag amounts), so the credit per tag is the authored contracts category
+## weight (progression.contracts_xp = 20) -- not a derived minimum (open_queue_xp
+## is 5 and minor_loot_xp is 2 are smaller, but neither is a level-up category).
+## The tag list is authored and read at runtime; three tags award 60 XP once.
 static func ftue_level_up_xp() -> int:
 	var per_tag: int = xp_award("contracts")
 	return per_tag * ftue_level_up_xp_categories().size()
@@ -309,6 +310,17 @@ static func endgame_seconds_for_difficulty(index: int) -> float:
 ## True when the endgame ladder came from the file. GameData keeps its authored
 ## QG EndgameDuration when this is false, so a broken file cannot invent a
 ## window (fail closed).
+## Number of authored rungs in EndgameDurationsByDifficulty (3 today). Callers
+## clamp a difficulty index against this instead of a literal.
+static func ladder_size() -> int:
+	_ensure()
+	var sec: Dictionary = _section("project")
+	var arr: Variant = sec.get("endgame_durations_by_difficulty", null)
+	if arr is Array and not (arr as Array).is_empty():
+		return (arr as Array).size()
+	return FALLBACK_ENDGAME_DURATIONS.size()
+
+
 static func endgame_ladder_authored() -> bool:
 	_ensure()
 	if not _loaded:

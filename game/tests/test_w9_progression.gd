@@ -19,8 +19,10 @@ extends SceneTree
 ## Run:
 ##   tools/godot --headless --path game --script res://tests/test_w9_progression.gd
 ##
-## Save files live under user://w9_progression/ (path_override), so the
-## developer save at user://tat2_save.json is never read or written.
+## Save files live under user://w9_progression/ (path_override), so every
+## SaveSystem this suite drives writes only there. The GameData/Progression
+## autoloads the engine boots may still expose the developer save; nothing here
+## reads or writes it, and no assertion depends on it.
 
 const Progression := preload("res://src/core/progression.gd")
 
@@ -75,7 +77,7 @@ func _reset_dir() -> void:
 
 
 # --------------------------------------------------------------- fixtures ---
-## Unattached save: no _ready(), no GameState read, the developer save is never
+## Unattached save: no _ready(), no GameState read; the developer save is not
 ## touched because every path goes through path_override. `data` is seeded with
 ## _defaults() first exactly like _ready() does: _merge_validated only accepts
 ## keys already present in the target schema, so an empty data would drop every
@@ -567,6 +569,14 @@ func _check_map_order() -> void:
 			and Progression.maps().size() == 2,
 		"W9.7c OldManor authored order is Set, Vault, LootTheRoom (differs from DT_Missions)",
 		"W9.7c manor=%s maps=%d" % [str(manor), Progression.maps().size()])
+
+	# W9.7d: GameState's difficulty-index clamp matches the authored ladder rung
+	# count (game_state.gd has no Progression preload, so the constant is named
+	# and this assertion is what keeps it honest).
+	var gs_script: GDScript = load("res://src/core/game_state.gd") as GDScript
+	_check(gs_script != null and int(gs_script.LADDER_INDEX_MAX) == Progression.ladder_size() - 1,
+		"W9.7d GameState.LADDER_INDEX_MAX matches EndgameDurationsByDifficulty",
+		"W9.7d const=%s ladder=%d" % [str(gs_script.LADDER_INDEX_MAX) if gs_script != null else "null", Progression.ladder_size()])
 
 
 func _initialize() -> void:

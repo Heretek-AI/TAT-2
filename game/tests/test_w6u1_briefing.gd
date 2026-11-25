@@ -198,7 +198,8 @@ func _initialize() -> void:
 	_check(key != null and fill != null and rim != null,
 		"W6U1.27 local key/fill/rim lights exist",
 		"W6U1.27 local stage lights missing (key=%s fill=%s rim=%s)" % [str(key != null), str(fill != null), str(rim != null)])
-	var thief_pos: Vector3 = Vector3(-1.5871, 0.82, -0.7868)
+	# W7V moved the lobby dummy 0.84 m along screen-right for KF11 framing.
+	var thief_pos: Vector3 = Vector3(-0.4281, 0.82, -1.3868)
 	if key != null:
 		var to_thief: Vector3 = (thief_pos + Vector3(0, 1.05, 0) - key.global_position).normalized()
 		var key_aim: bool = (-key.global_transform.basis.z).dot(to_thief) > 0.9
@@ -228,10 +229,11 @@ func _initialize() -> void:
 		if vp_size.x > 0.0 and vp_size.y > 0.0:
 			var sx: float = p.x / vp_size.x
 			var sy: float = p.y / vp_size.y
-			disc_screen_ok = absf(sx - 0.88) < 0.03 and absf(sy - 0.12) < 0.03
+			# W7V reframed the disc to KF11's measured (0.76, 0.09).
+			disc_screen_ok = absf(sx - 0.76) < 0.03 and absf(sy - 0.09) < 0.03
 			print("W6U1 moon disc screen=(%.3f, %.3f)" % [sx, sy])
 	_check(disc_screen_ok,
-		"W6U1.30 moon disc lands at the measured upper-right sky gap (0.88, 0.12)",
+		"W6U1.30 moon disc lands at the measured upper-right sky gap (0.76, 0.09)",
 		"W6U1.30 moon disc screen position off the measured gap")
 	_check(env != null and absf(env.background_energy_multiplier - 0.18) < 0.01,
 		"W6U1.31 stage sky re-graded to navy (sky multiplier 0.18)",

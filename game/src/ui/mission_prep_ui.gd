@@ -58,21 +58,40 @@ const ThemeScript: GDScript = preload("res://src/ui/art_nouveau_theme.gd")
 ##
 ## W6U1 re-capture: from that mirrored slot the full frame is the authored
 ## Periphery storefront facade (SM_Storefront_Facade_1200 at x -33.5, 36 m
-## behind the thief), and the KF11 full moon is fully occluded. The stage now
-## stands NE of the ridge on the same authored rooftop: the slate ridge cap
-## reads along the bottom, the thief stays full-body and right of the info
-## stack, and the moon disc sits in the measured sky gap at (0.88, 0.12).
-## FOV stays the authored 20.0 and the preset stays midnight_clear_mission_lobby.
+## behind the thief), and the KF11 full moon is fully occluded. W6U1 stood the
+## stage NE of the ridge on the same authored rooftop: the slate ridge cap reads
+## along the bottom, the thief stays full-body and right of the info stack, and
+## the moon disc sits in the measured sky gap at (0.88, 0.12).
+##
+## W7V (KF11 full skyline): the authored lobby sublevels carry no skyline in the
+## framed sector (the nine Periphery DistantBuildingC blocks sit west, behind the
+## storefront wall), so the far side of the frame was empty sky. The stage now
+## yaws 4.2 deg left, which puts the thief at screen x ~0.77 (KF11: 0.70-0.84)
+## and opens the sky gap behind him; the tracked expansion backdrop
+## `game/data/expansion/prep_skyline.json` places the shipped Skybox
+## distant-building kit (Buildings / SkyboxUrban / SkyboxSmokestacks) into that
+## sector. FOV stays the authored 20.0 and the preset stays
+## midnight_clear_mission_lobby.
 const LOBBY_AUTHORED_CAM_POS: Vector3 = Vector3(12.6065, -0.16698, -1.05384)
 const LOBBY_AUTHORED_CAM_FWD: Vector3 = Vector3(-0.986184, 0.116419, 0.117848)
 const LOBBY_CAM_POS: Vector3 = Vector3(4.0, 1.0, 10.0)
 const LOBBY_CAM_FWD: Vector3 = Vector3(-0.458311, 0.083671, -0.884844)
 const LOBBY_CAM_FOV: float = 20.0
 const LOBBY_CAM_ROLL_DEG: float = -14.780165
+## W7V: the KF11 subject placement is done by moving the authored lobby dummy
+## along the camera's screen-right axis (0.84 m), NOT by yawing the camera. A
+## left yaw also swings the near authored city block into the sky sector behind
+## the thief and hides the moon; a 0.84 m dummy offset moves only the subject.
+## Measured on the live stage: thief screen centre 0.77, inside KF11's 0.70-0.84,
+## with the ridge cap still in the lower third and the open sky sector intact.
+const LOBBY_CAM_YAW_DEG: float = 0.0
 ## Authored BP_MatchLobbyDummyPlayer_C_1 (IsForLocalPlayer: True) rooftop slot.
 ## The GLB's front is +Z, so the authored 45° faces the camera (world +X) and
-## screen-left (+Z): the KF11 three-quarter view.
-const LOBBY_THIEF_POS: Vector3 = Vector3(-1.5871, 0.82, -0.7868)
+## screen-left (+Z): the KF11 three-quarter view. W7V offsets the dummy 1.26 m
+## along the camera's screen-right axis so KF11's right-of-stack subject
+## placement (measured subject centre 0.77) comes from the dummy, not from
+## yawing the camera into the facade.
+const LOBBY_THIEF_POS: Vector3 = Vector3(-0.4281, 0.82, -1.3868)
 const LOBBY_THIEF_YAW_DEG: float = 45.0
 ## KF11 stage exposure lift. The weather preset is authored for a
 ## multiplayer-lobby camera and lands at 0.5 tonemap exposure / 0.3 ambient,
@@ -80,15 +99,14 @@ const LOBBY_THIEF_YAW_DEG: float = 45.0
 const STAGE_EXPOSURE: float = 2.6
 const STAGE_AMBIENT_ENERGY: float = 1.8
 const STAGE_GLOW_INTENSITY: float = 1.0
-## The authored weather preset points the moon off-frame. W6U1 decouples the
+## The authored weather preset points the moon off-frame. W6U1 decoupled the
 ## visible disc from the key light:
 ##  * MOON_DISC_SCREEN is the sky disc only (KF13/KF11 upper-right composition).
 ##  * KEY_SCREEN is the cool directional key, aimed at the thief independently
 ##    (upper-left), so moving the disc can never drag the character lighting.
-## The disc position was measured against the live stage: (0.88, 0.20) is the
-## open sky gap above the authored Periphery facade.
-const MOON_DISC_SCREEN_X: float = 0.88
-const MOON_DISC_SCREEN_Y: float = 0.12
+## W7V reframes the disc to KF11's measured (0.76, 0.09).
+const MOON_DISC_SCREEN_X: float = 0.76
+const MOON_DISC_SCREEN_Y: float = 0.09
 const KEY_SCREEN_X: float = 0.30
 const KEY_SCREEN_Y: float = 0.28
 const STAGE_MOON_ENERGY: float = 0.85
@@ -103,6 +121,13 @@ const STAGE_MOON_DISC_ENERGY: float = 2.4
 const STAGE_KEY_ENERGY: float = 1.8
 const STAGE_FILL_ENERGY: float = 0.32
 const STAGE_RIM_ENERGY: float = 1.4
+
+## W7V KF11 distant skyline: tracked TAT-2 expansion layout over the shipped
+## Skybox distant-building kit. Stage-relative (azimuth/distance/base_y) so a
+## reframe keeps the composition. See game/data/expansion/prep_skyline.json.
+const PREP_SKYLINE_PATH: String = "res://data/expansion/prep_skyline.json"
+const PREP_SKYLINE_SCHEMA: String = "tat2.prep_skyline/1"
+const PREP_SKYLINE_GROUP: String = "prep_skyline"
 
 ## Authored backdrop size for the 3D rooftop stage. The stage container must
 ## deliver at least this size at runtime: anything smaller (in particular the
@@ -689,8 +714,13 @@ func _build_stage(viewport: SubViewport) -> void:
 	# The authored yaw already keeps the information stack left and the
 	# thief in the open right half; adding yaw here swings into the facade.
 	cam.look_at_from_position(cam.position, cam.position + LOBBY_CAM_FWD.normalized() * 15.0, Vector3.UP)
+	# W7V: KF11 subject placement. A camera-local left yaw moves the thief to
+	# screen x 0.77 without translating the stage; the roll stays authored.
+	if not is_zero_approx(LOBBY_CAM_YAW_DEG):
+		cam.rotate_object_local(Vector3.UP, deg_to_rad(LOBBY_CAM_YAW_DEG))
 	cam.rotate_object_local(Vector3.FORWARD, deg_to_rad(LOBBY_CAM_ROLL_DEG))
 	_aim_stage_moon_and_key(env, cam, viewport, moonlight)
+	_add_prep_skyline(stage_root, cam)
 
 	var thief_anchor: Node3D = Node3D.new()
 	thief_anchor.name = "MissionLobbyThiefAnchor"
@@ -778,6 +808,131 @@ func _aim_stage_moon_and_key(env: Environment, cam: Camera3D, viewport: SubViewp
 ## Normalised camera ray through a UI-space point (0..1, top-left origin).
 func _screen_dir(fwd: Vector3, right: Vector3, up: Vector3, tan_h: float, tan_v: float, sx: float, sy: float) -> Vector3:
 	return (fwd + right * ((sx * 2.0 - 1.0) * tan_h) + up * ((1.0 - sy * 2.0) * tan_v)).normalized()
+
+
+## W7V KF11 backdrop. Reads the tracked expansion layout and instantiates the
+## shipped Skybox distant-building meshes into the open sector behind the thief.
+## Decorative only: no collision, no light registration, no shadows. Returns the
+## number placed (0 when the file is missing or malformed: the stage still
+## renders, it just keeps the authored sky).
+func _add_prep_skyline(stage_root: Node3D, cam: Camera3D) -> int:
+	var data: Dictionary = _load_prep_skyline()
+	if data.is_empty() or stage_root == null or cam == null:
+		return 0
+	var loader: Node = _get_preview_mat_loader()
+	if loader == null:
+		return 0
+	var fwd: Vector3 = -cam.global_transform.basis.z
+	fwd.y = 0.0
+	if fwd.length() < 0.01:
+		return 0
+	fwd = fwd.normalized()
+	var pieces: Array = data.get("pieces", []) as Array
+	var placed: int = 0
+	var missing: Array[String] = []
+	for piece_v: Variant in pieces:
+		if not (piece_v is Dictionary):
+			continue
+		var piece: Dictionary = piece_v as Dictionary
+		var mesh_ue: String = str(piece.get("mesh", ""))
+		if mesh_ue == "":
+			continue
+		var info: Dictionary = loader.call("_get_mesh_and_shape", mesh_ue) as Dictionary
+		var mesh: Mesh = info.get("mesh") as Mesh
+		if mesh == null:
+			missing.append(mesh_ue)
+			continue
+		var az: float = deg_to_rad(float(piece.get("azimuth_deg", 0.0)))
+		var dir: Vector3 = Vector3(
+			fwd.x * cos(az) + fwd.z * sin(az), 0.0,
+			-fwd.x * sin(az) + fwd.z * cos(az))
+		var distance: float = maxf(float(piece.get("distance_m", 100.0)), 1.0)
+		var pos: Vector3 = cam.global_position + dir * distance
+		pos.y = float(piece.get("base_y", 0.0))
+		var mi := MeshInstance3D.new()
+		var piece_id: String = str(piece.get("id", "piece"))
+		mi.name = "PrepSkyline_%s" % piece_id
+		mi.mesh = mesh
+		var mat_ue: String = str(piece.get("material", ""))
+		if mat_ue != "":
+			var mat: Material = loader.call("get_material_for_ue", mat_ue) as Material
+			var graded: Material = _grade_skyline_material(mat)
+			if graded != null:
+				for s: int in range(mesh.get_surface_count()):
+					mi.set_surface_override_material(s, graded)
+		mi.position = pos
+		mi.rotation_degrees = Vector3(0.0, float(piece.get("yaw_deg", 0.0)), 0.0)
+		var sc: float = maxf(float(piece.get("scale", 1.0)), 0.01)
+		mi.scale = Vector3(sc, sc, sc)
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.set_meta("ue_mesh", mesh_ue)
+		mi.set_meta("expansion", true)
+		mi.set_meta("prep_skyline_layer", str(piece.get("layer", "")))
+		mi.add_to_group(PREP_SKYLINE_GROUP)
+		stage_root.add_child(mi)
+		placed += 1
+	if not missing.is_empty():
+		print("TAT-2 prep skyline: %d piece(s) missing mesh: %s" % [missing.size(), ", ".join(missing)])
+	print("TAT-2 prep skyline: placed %d/%d expansion pieces (group=%s)" % [
+		placed, pieces.size(), PREP_SKYLINE_GROUP])
+	return placed
+
+
+## Night grade for the KF11 backdrop: builds a fresh opaque StandardMaterial3D
+## from the authored Skybox material (never mutates the shared material DB) so
+## the distant city reads as a silhouette under the prep stage's exposure. The
+## authored albedo/emissive textures are preserved; blending is forced opaque
+## because a translucent skybox-material pass washed the blocks to flat lilac.
+func _grade_skyline_material(base: Material) -> Material:
+	if base == null:
+		return null
+	var src: StandardMaterial3D = base as StandardMaterial3D
+	if src == null:
+		return base
+	var out: StandardMaterial3D = StandardMaterial3D.new()
+	out.albedo_texture = src.albedo_texture
+	out.albedo_color = Color(0.11, 0.14, 0.21, 1.0)
+	out.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+	out.roughness = 1.0
+	out.metallic = 0.0
+	out.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
+	out.cull_mode = BaseMaterial3D.CULL_DISABLED
+	# The lobby preset carries 0.02/m height fog + volumetric clouds. At a
+	# 300-500 m standoff the fog fully veils the backdrop into flat lilac, so the
+	# distant city is excluded from the fog/ambient passes and graded as a
+	# backlit silhouette (KF11's city is darker than the sky behind it).
+	out.disable_fog = true
+	out.disable_ambient_light = true
+	# The authored distant-building emissive pass is a full-surface daylight
+	# window mask; at the lobby's 2.6 exposure it blows the block to white. The
+	# backdrop is graded as a silhouette instead (KF11's city is backlit).
+	out.emission_enabled = false
+	return out
+
+
+## Reads + fail-closed validates the tracked expansion layout. A missing or
+## drifted file yields {} so the stage silently keeps the authored sky.
+func _load_prep_skyline() -> Dictionary:
+	if not FileAccess.file_exists(PREP_SKYLINE_PATH):
+		return {}
+	var f: FileAccess = FileAccess.open(PREP_SKYLINE_PATH, FileAccess.READ)
+	if f == null:
+		return {}
+	var parsed: Variant = JSON.parse_string(f.get_as_text())
+	f.close()
+	if not (parsed is Dictionary):
+		return {}
+	var d: Dictionary = parsed as Dictionary
+	if str(d.get("schema", "")) != PREP_SKYLINE_SCHEMA:
+		push_warning("TAT-2 prep skyline: schema %s != %s" % [str(d.get("schema", "")), PREP_SKYLINE_SCHEMA])
+		return {}
+	if not bool(d.get("expansion", false)):
+		push_warning("TAT-2 prep skyline: layout is not marked expansion; ignored")
+		return {}
+	var pieces_v: Variant = d.get("pieces", [])
+	if not (pieces_v is Array) or (pieces_v as Array).is_empty():
+		return {}
+	return d
 
 
 func _add_thief(anchor: Node3D) -> void:

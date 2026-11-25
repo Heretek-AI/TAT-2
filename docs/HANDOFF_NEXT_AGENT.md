@@ -61,6 +61,28 @@ be pursued.
 The port is past M1, M2 and Track C. Gameplay milestones M3–M6 are implemented
 in slices (see the 2026-11-24 wave); the residuals in §7 are the remaining work.
 
+### W7V visual acceptance (this lane, 2026-11-24)
+
+Commit `feat(ui): KF11 skyline, Cotter wardrobe and acceptance captures`
+(worktree `/tmp/opencode/tat2-w7v-visual`, base `74a43b8`):
+
+- **KF11 prep**: new tracked TAT-2 expansion backdrop
+  `game/data/expansion/prep_skyline.json` (8 shipped Skybox pieces, marked
+  `expansion: true`, no collision, silhouette-graded), moon at (0.76, 0.09),
+  thief at screen x 0.77, FOV 20 `KEEP_WIDTH`,
+  `midnight_clear_mission_lobby`. **This is expansion content, not shipped
+  Kilcairn art** — see `docs/FIDELITY_GAPS.md` and
+  `docs/reports/w7v-visual.md`.
+- **Wardrobe**: `BowlerA` / `Default` / `Default` defaults; the Chameleon is the
+  authored ThiefCotter body + 18 Head meshes and `AN_ThiefCotter_WardrobeIdle`.
+- **Ledger**: shared `ToolPreviewStage`; the Black Market preview shows the live
+  3D tool for tool rows and the authored icon for non-tools.
+- **Gates**: compile 112/0, W7V 49/0, W6U1 0, W6U2 0, `make test` 0, E2E
+  264/264. `make audit` exit 2 on the W7S generated-data drift + missing
+  `vgmstream` (not fixed, not re-stamped).
+- **Open**: monochrome slot-icon shader, blurred Ledger/Wardrobe panel, briefing
+  paper tone/creases + `SPACE` keycap (HUD pass), C8/C9 Guildhall captures.
+
 ---
 
 ## 2. How to run everything (exact commands)

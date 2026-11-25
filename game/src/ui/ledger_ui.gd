@@ -13,6 +13,7 @@ signal closed()
 
 const ThemeScript := preload("res://src/ui/art_nouveau_theme.gd")
 const CatalogScript := preload("res://src/ui/unlock_catalog.gd")
+const ToolPreviewScript := preload("res://src/ui/tool_preview.gd")
 
 const PORTRAIT_PATH: String = "res://assets/ue/Raw/Art/UI/Shell/CharacterSelect/T_portrait_%s.png"
 const CHECK_ICON_PATH: String = "res://assets/ue/Raw/Art/UI/Icons/T_CheckMark.png"
@@ -87,6 +88,9 @@ var _contracts_box: HBoxContainer
 var _journal_clues_box: VBoxContainer
 var _assets_lbl: Label
 var _preview_icon: TextureRect
+var _preview_tool_host: Control
+var _preview_tool_view: SubViewportContainer
+var _tool_stage: Node3D = null
 var _preview_state: Label
 var _preview_title: Label
 var _preview_desc: Label
@@ -109,6 +113,12 @@ func _ready() -> void:
 			_catalog.entries().size()])
 	assert(ThemeScript != null, "LedgerUI requires res://src/ui/art_nouveau_theme.gd")
 	set_anchors_preset(Control.PRESET_FULL_RECT)
+	# The ledger is added under a CanvasLayer (mission_controller), which is not
+	# a Control: anchors alone leave the panel at (0,0) and uncentred. Size the
+	# root to the viewport's logical rect so the CenterContainer centres the
+	# KF08 panel at 1280x720 and at 1920x1080 (canvas_items stretch).
+	size = get_viewport_rect().size
+	get_viewport().size_changed.connect(_sync_logical_size)
 	_build_ui()
 	if AudioManager != null and AudioManager.has_method("wire_hover_sfx"):
 		AudioManager.wire_hover_sfx(self)
@@ -129,6 +139,13 @@ func open_ledger() -> void:
 	_refresh_journal()
 	_refresh_market()
 	_show_tab(_tab)
+
+
+## Keeps the modal centred at the viewport's logical size under the
+## canvas_items stretch (1280x720 design, 1920x1080 output).
+func _sync_logical_size() -> void:
+	if is_inside_tree():
+		size = get_viewport_rect().size
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -363,7 +380,7 @@ func _build_preview_card() -> PanelContainer:
 	var serif: Font = ThemeScript.font_serif()
 	var sans: Font = ThemeScript.font_sans()
 	var preview: PanelContainer = PanelContainer.new()
-	preview.custom_minimum_size = Vector2(0, 196)
+	preview.custom_minimum_size = Vector2(0, 250)
 	preview.add_theme_stylebox_override("panel", ThemeScript.teal_card_style(1, 5, ThemeScript.TEAL_GROUP_BG, 10))
 	ThemeScript.add_teal_filigree(preview, 3.0, 14.0)
 	var pv: VBoxContainer = VBoxContainer.new()
@@ -381,16 +398,39 @@ func _build_preview_card() -> PanelContainer:
 	var top_spacer: Control = Control.new()
 	top_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top_row.add_child(top_spacer)
-	var icon_row: HBoxContainer = HBoxContainer.new()
-	icon_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	icon_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	pv.add_child(icon_row)
+	var art_host: Control = Control.new()
+	art_host.name = "PreviewArtHost"
+	art_host.custom_minimum_size = Vector2(0, 132)
+	art_host.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	art_host.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pv.add_child(art_host)
 	_preview_icon = TextureRect.new()
-	_preview_icon.custom_minimum_size = Vector2(96, 96)
+	_preview_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_preview_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_preview_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	_preview_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	icon_row.add_child(_preview_icon)
+	art_host.add_child(_preview_icon)
+	# KF08: a live 3D gear preview replaces the flat reward icon for tools. The
+	# world/mesh code is ToolPreviewStage, shared with the Wardrobe tool card;
+	# non-tools (perks, cosmetics) keep the authored icon.
+	_preview_tool_view = SubViewportContainer.new()
+	_preview_tool_view.name = "LedgerToolPreview"
+	_preview_tool_view.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_preview_tool_view.stretch = true
+	_preview_tool_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_preview_tool_view.visible = false
+	art_host.add_child(_preview_tool_view)
+	var tool_sv: SubViewport = SubViewport.new()
+	tool_sv.name = "LedgerToolViewport"
+	tool_sv.own_world_3d = true
+	tool_sv.size = Vector2i(360, 220)
+	tool_sv.render_target_update_mode = SubViewport.UPDATE_WHEN_VISIBLE
+	_preview_tool_view.add_child(tool_sv)
+	var stage: Node3D = ToolPreviewScript.new() as Node3D
+	tool_sv.add_child(stage)
+	stage.call("setup", tool_sv)
+	stage.set("auto_rotate", true)
+	_tool_stage = stage
 	_preview_title = Label.new()
 	_preview_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_preview_title.add_theme_font_size_override("font_size", 19)
@@ -836,6 +876,7 @@ func _refresh_preview() -> void:
 		_preview_status.text = ""
 		_preview_state.text = ""
 		_preview_icon.texture = null
+		_set_tool_preview("")
 		_buy_btn.visible = false
 		return
 	var entry: Dictionary = _catalog.entry(_selected_id)
@@ -846,11 +887,18 @@ func _refresh_preview() -> void:
 		_preview_status.text = ""
 		_preview_state.text = ""
 		_preview_icon.texture = null
+		_set_tool_preview("")
 		_buy_btn.visible = false
 		return
 	_preview_title.text = CatalogScript.title_of(entry)
 	_preview_desc.text = CatalogScript.description_of(entry)
 	_preview_icon.texture = CatalogScript.icon_texture(entry)
+	# KF08: tools render their authored 3D gear mesh; everything else keeps the
+	# authored reward icon (no substitute model is invented).
+	var preview_sid: String = ""
+	if CatalogScript.category_of(entry) == "tools":
+		preview_sid = CatalogScript.save_id_of(entry)
+	_set_tool_preview(preview_sid)
 	var condition: String = CatalogScript.condition_text(entry)
 	_preview_condition.text = condition
 	var state: String = _catalog.state_of(entry)
@@ -873,6 +921,21 @@ func _refresh_preview() -> void:
 		_preview_status.add_theme_color_override("font_color", ThemeScript.GOLD)
 		_buy_btn.visible = true
 		_buy_btn.text = "BUY — £ %s" % _catalog.price_text(entry)
+
+
+## Toggles the live 3D gear preview. `save_id` empty or not a tool mesh falls
+## back to the authored reward icon; the viewport is hidden (and cleared) so a
+## non-tool row never shows a stale model.
+func _set_tool_preview(save_id: String) -> void:
+	var shown: bool = false
+	if save_id != "" and _tool_stage != null and _preview_tool_view != null:
+		shown = bool(_tool_stage.call("show_save_id", save_id))
+	if _preview_tool_view != null:
+		_preview_tool_view.visible = shown
+	if _preview_icon != null:
+		_preview_icon.visible = not shown
+	if not shown and _tool_stage != null:
+		_tool_stage.call("clear")
 
 
 func _on_item_pressed(save_id: String) -> void:

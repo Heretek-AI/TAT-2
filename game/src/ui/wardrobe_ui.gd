@@ -22,6 +22,7 @@ const ThemeScript: GDScript = preload("res://src/ui/art_nouveau_theme.gd")
 const CatalogScript: GDScript = preload("res://src/ui/unlock_catalog.gd")
 const LevelLoaderScript: GDScript = preload("res://src/core/level_loader.gd")
 const GuardAnimLibScript: GDScript = preload("res://src/core/animation_library.gd")
+const ToolPreviewScript: GDScript = preload("res://src/ui/tool_preview.gd")
 
 const OUTFITS_JSON_PATH: String = "res://data/generated/tables/Character/Player/DT_CharacterOutfitsMetadata.json"
 const LOCK_ICON_PATH: String = "res://assets/ue/Raw/Art/UI/Icons/T_Icon_Locked.png"
@@ -31,6 +32,40 @@ const BODY_TARANTULA_PATH: String = "res://assets/ue/Content/Art/Animation/Thief
 const BODY_TARANTULA_B_PATH: String = "res://assets/ue/Content/Art/Animation/ThiefNisha/Skin/Base/Dyn/SK_ThiefNisha_Dyn__Body_Tarantula_PatternB.glb"
 const HEAD_STATIC_PATH: String = "res://assets/ue/Content/Art/Animation/ThiefNisha/Skin/Base/SK_ThiefNisha__Head.glb"
 const DYN_HEAD_DIR: String = "res://assets/ue/Content/Art/Animation/ThiefNisha/Skin/Base/Dyn/"
+
+## Chameleon = ThiefCotter (the authored male disguise body). W7V: the wardrobe
+## previously rendered every thief on the Nisha skeleton, so the Chameleon wore
+## a Nisha head over a Nisha body. These are the authored Cotter meshes that
+## match the 18 DT_CharacterOutfitsMetadata Chameleon Head rows plus its three
+## Body rows.
+const COTTER_BASE_DIR: String = "res://assets/ue/Content/Art/Animation/ThiefCotter/Skin/Base/"
+const COTTER_BODY_DEFAULT_PATH: String = "res://assets/ue/Content/Art/Animation/ThiefCotter/Skin/Base/SK_ThiefCotter__Body.glb"
+const COTTER_BODY_ALTA_PATH: String = "res://assets/ue/Content/Art/Animation/ThiefCotter/Skin/Base/SK_ThiefCotter_AltA__Body.glb"
+const COTTER_BODY_ALTA_B_PATH: String = "res://assets/ue/Content/Art/Animation/ThiefCotter/Skin/Base/SK_ThiefCotter_AltA__Body_PatternB.glb"
+const COTTER_HEAD_DEFAULT_PATH: String = "res://assets/ue/Content/Art/Animation/ThiefCotter/Skin/Base/SK_ThiefCotter__Head.glb"
+## Chameleon Head row (authored tag) -> authored Cotter dyn head mesh. 18/18
+## data rows mapped; TopHatA.MonocleA has no standalone mesh, so it uses the
+## authored combined TopHatA_MonocleA_BeardA piece.
+const COTTER_HEAD_MESHES: Dictionary = {
+	"Outfit.Chameleon.Head.Default": "SK_ThiefCotter__Head.glb",
+	"Outfit.Chameleon.Head.BeardA": "SK_ThiefCotter__Head_BeardA.glb",
+	"Outfit.Chameleon.Head.BowlerA": "SK_ThiefCotter__Head_BowlerA.glb",
+	"Outfit.Chameleon.Head.BowlerA.MustacheA": "SK_ThiefCotter__Head_BowlerA_MustacheA.glb",
+	"Outfit.Chameleon.Head.BowlerA.ThiefMaskA": "SK_ThiefCotter__Head_BowlerA_ThiefMaskA.glb",
+	"Outfit.Chameleon.Head.CapA": "SK_ThiefCotter__Head_CapA.glb",
+	"Outfit.Chameleon.Head.EyepatchA": "SK_ThiefCotter__Head_EyepatchA.glb",
+	"Outfit.Chameleon.Head.EyepatchA.BeardA": "SK_ThiefCotter__Head_EyepatchA_BeardA.glb",
+	"Outfit.Chameleon.Head.GlassesA": "SK_ThiefCotter__Head_GlassesA.glb",
+	"Outfit.Chameleon.Head.HairB": "SK_ThiefCotter__Head_HairB.glb",
+	"Outfit.Chameleon.Head.HairBob": "SK_ThiefCotter__Head_Hair_Bob.glb",
+	"Outfit.Chameleon.Head.MonocleA": "SK_ThiefCotter__Head_MonocleA.glb",
+	"Outfit.Chameleon.Head.MustacheA": "SK_ThiefCotter__Head_MustacheA.glb",
+	"Outfit.Chameleon.Head.ThiefMaskA": "SK_ThiefCotter__Head_ThiefMaskA.glb",
+	"Outfit.Chameleon.Head.ThiefMaskA.MustacheA": "SK_ThiefCotter__Head_ThiefMaskA_MustacheA.glb",
+	"Outfit.Chameleon.Head.TopHatA": "SK_ThiefCotter__Head_TopHatA.glb",
+	"Outfit.Chameleon.Head.TopHatA.MonocleA": "SK_ThiefCotter__Head_TopHatA_MonocleA_BeardA.glb",
+	"Outfit.Chameleon.Head.TopHatA.MustacheA": "SK_ThiefCotter__Head_TopHatA_MustacheA.glb",
+}
 
 const CARD_SPIDER: String = "res://assets/ue/Content/Art/Gameplay/CallingCards/Spider/SM_CallingCard_Spider.glb"
 const CARD_SPIDER_SILVER: String = "res://assets/ue/Content/Art/Gameplay/CallingCards/Spider/SM_CallingCard_Spider_Silver.glb"
@@ -43,18 +78,10 @@ const CARD_CHAMELEON_GOLD: String = "res://assets/ue/Content/Art/Gameplay/Callin
 const CARD_CHAMELEON_MAGIC: String = "res://assets/ue/Content/Art/Gameplay/CallingCards/Chameleon/SM_CallingCard_Chameleon_Magic.glb"
 const CARD_CHAMELEON_SHIP: String = "res://assets/ue/Content/Art/Gameplay/CallingCards/Ship/SM_CallingCard_Ship_Chameleon.glb"
 
-## Catalog save id -> authored gear mesh (all verified on disk). Every tool the
-## Black Market sells has a 3D preview; blackjack is the built-in.
-const TOOL_MESHES: Dictionary = {
-	"zipwire": "res://assets/ue/Content/Art/Gameplay/Gear/Zipwire/SM_Zipwire.glb",
-	"smoke_bomb": "res://assets/ue/Content/Art/Gameplay/Gear/SmokeBomb/SK_SmokeBomb.glb",
-	"pickpocket_fairy": "res://assets/ue/Content/Art/Gameplay/Gear/PickpocketFairy/SK_PickpocketFairy.glb",
-	"insult_fairy": "res://assets/ue/Content/Art/Gameplay/Gear/InsultFairy/SK_InsultFairy.glb",
-	"slither_sap": "res://assets/ue/Content/Art/Gameplay/Gear/Slithersap/SK_SlimeBomb.glb",
-	"glamour": "res://assets/ue/Content/Art/Gameplay/Gear/Disguise/SK_DisguiseMask.glb",
-	"vistara_diamond": "res://assets/ue/Content/Art/Gameplay/Gear/VistaraDiamond/SM_VistaraDiamond_Gem.glb",
-	"blackjack": "res://assets/ue/Content/Art/Gameplay/Gear/BlackJack/SM_Blackjack.glb",
-}
+## Catalog save id -> authored gear mesh. Single source of truth lives in
+## ToolPreviewStage so the Wardrobe and the Ledger Black Market previews can
+## never drift apart.
+const TOOL_MESHES: Dictionary = ToolPreviewScript.TOOL_MESHES
 
 ## KF03: slot 1 and slot 4 are the thief's signature tools (grey padlock,
 ## "Signature Tools cannot be swapped out"). The other two slots swap from the
@@ -117,6 +144,7 @@ var _turntable: Node3D
 var _preview_cam: Camera3D
 var _tool_cam: Camera3D
 var _tool_holder: Node3D
+var _tool_stage: Node3D = null
 var _mat_loader: Node = null
 
 
@@ -942,73 +970,22 @@ func _add_room_box(parent: Node, box_size: Vector3, pos: Vector3, color: Color, 
 
 
 ## KF03/KF04 cite: tool tooltip-card staging (3D model + name + desc).
-## Port-authored numbers (standing HARD_LIMIT 5.2).
+## W7V: the world/mesh code is shared with the Ledger Black Market preview
+## through ToolPreviewStage, so both panels show the same authored gear mesh,
+## PBR slots, lighting and auto-framing.
 func _setup_tool_world(sv: SubViewport) -> void:
-	var env: Environment = Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.075, 0.052, 0.040)
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.58, 0.42, 0.28)
-	env.ambient_light_energy = 0.95
-	var world_env: WorldEnvironment = WorldEnvironment.new()
-	world_env.environment = env
-	sv.add_child(world_env)
-	_add_room_box(sv, Vector3(3.2, 2.2, 0.08), Vector3(0.0, 1.0, -0.8), Color(0.13, 0.078, 0.052), 0.9)
-	_add_room_box(sv, Vector3(3.2, 0.08, 2.0), Vector3(0.0, -0.05, 0.2), Color(0.145, 0.095, 0.065), 0.86)
-	var key: DirectionalLight3D = DirectionalLight3D.new()
-	key.light_color = Color(1.0, 0.9, 0.78)
-	key.light_energy = 1.2
-	key.rotation_degrees = Vector3(-35.0, -25.0, 0.0)
-	sv.add_child(key)
-	var fill: OmniLight3D = OmniLight3D.new()
-	fill.light_color = Color(1.0, 0.72, 0.45)
-	fill.light_energy = 0.8
-	fill.position = Vector3(-1.2, 1.4, 1.6)
-	sv.add_child(fill)
-	_tool_holder = Node3D.new()
-	_tool_holder.name = "ToolHolder"
-	sv.add_child(_tool_holder)
-	var cam: Camera3D = Camera3D.new()
-	cam.position = Vector3(0.0, 0.4, 1.7)
-	cam.fov = 38.0
-	cam.current = true
-	sv.add_child(cam)
-	cam.environment = env
-	cam.look_at_from_position(cam.position, Vector3(0.0, 0.25, 0.0))
-	_tool_cam = cam
+	var stage: Node3D = ToolPreviewScript.new() as Node3D
+	sv.add_child(stage)
+	stage.call("setup", sv)
+	stage.set("auto_rotate", false)
+	_tool_stage = stage
+	_tool_holder = stage.get("holder") as Node3D
+	_tool_cam = stage.get("cam") as Camera3D
 
 
 func _frame_tool_camera() -> void:
-	if _tool_cam == null or _tool_holder == null or not is_instance_valid(_tool_cam) or not is_instance_valid(_tool_holder):
-		return
-	# The gallery is deferred: a close in the same frame removes the SubViewport
-	# before this runs, and global transforms are invalid outside the tree.
-	if not _tool_holder.is_inside_tree() or not _tool_cam.is_inside_tree():
-		return
-	var box: AABB = AABB()
-	var have: bool = false
-	var inv: Transform3D = _tool_holder.global_transform.affine_inverse()
-	for node: Node in _tool_holder.find_children("*", "MeshInstance3D", true, false):
-		var mi: MeshInstance3D = node as MeshInstance3D
-		if mi == null or mi.mesh == null:
-			continue
-		var xf: Transform3D = inv * mi.global_transform
-		var ab: AABB = xf * mi.get_aabb()
-		if not have:
-			box = ab
-			have = true
-		else:
-			box = box.merge(ab)
-	if not have:
-		return
-	var center: Vector3 = _tool_holder.global_transform * box.get_center()
-	var max_dim: float = maxf(box.size.x, maxf(box.size.y, box.size.z))
-	max_dim = maxf(max_dim, 0.15)
-	var fov: float = deg_to_rad(_tool_cam.fov)
-	var dist: float = (max_dim * 0.5) / tan(fov * 0.5) * 1.25
-	var pos: Vector3 = center + Vector3(0.0, max_dim * 0.18, dist)
-	_tool_cam.position = pos
-	_tool_cam.look_at_from_position(pos, center)
+	if _tool_stage != null:
+		_tool_stage.call("frame_camera")
 
 
 func _on_preview_gui_input(event: InputEvent) -> void:
@@ -1150,15 +1127,20 @@ func _refresh_tool_ui() -> void:
 	var shown: Dictionary = _tool(_slots[_current_slot_for_preview()])
 	if shown.is_empty() and not _is_signature_slot(_slot_index) and not candidates.is_empty():
 		shown = candidates[0]
-	if _tool_holder != null and is_instance_valid(_tool_holder):
+	if _tool_stage != null and is_instance_valid(_tool_stage):
+		var mesh_path: String = str(shown.get("mesh", ""))
+		var loaded: bool = bool(_tool_stage.call("show_mesh_path", mesh_path))
+		if not loaded and _tool_holder != null:
+			_tool_holder.set_meta("preview_missing", mesh_path)
+	elif _tool_holder != null and is_instance_valid(_tool_holder):
 		for c: Node in _tool_holder.get_children():
 			_tool_holder.remove_child(c)
 			c.queue_free()
-		var mesh_path: String = str(shown.get("mesh", ""))
-		var node: Node = _load_model(mesh_path)
+		var mesh_path_legacy: String = str(shown.get("mesh", ""))
+		var node: Node = _load_model(mesh_path_legacy)
 		if node != null:
 			_tool_holder.add_child(node)
-			_bind_preview_materials(node, _glb_to_ue_mesh(mesh_path))
+			_bind_preview_materials(node, _glb_to_ue_mesh(mesh_path_legacy))
 			call_deferred("_frame_tool_camera")
 	if _tool_name_lbl != null:
 		_tool_name_lbl.text = str(shown.get("name", "Empty slot"))
@@ -1248,18 +1230,43 @@ func _update_outfit_card(btn: Button, key: String) -> void:
 
 func _refresh_thief_ui() -> void:
 	_collect_slots()
-	if not _body_keys.is_empty() and not _body_keys.has(_body):
-		_body = _body_keys[0]
-	if not _head_keys.is_empty() and not _head_keys.has(_head):
-		_head = _head_keys[0]
-	if not _card_keys.is_empty() and not _card_keys.has(_card):
-		_card = _card_keys[0]
+	if _body == "" or not _body_keys.has(_body):
+		_body = _default_outfit_key("Body")
+	if _head == "" or not _head_keys.has(_head):
+		_head = _default_outfit_key("Head")
+	if _card == "" or not _card_keys.has(_card):
+		_card = _default_outfit_key("CallingCard")
 	_sync_slots_for_thief()
 	_refresh_portraits()
 	_update_outfit_cards()
 	_update_desc()
 	_rebuild_figure()
 	_refresh_tool_ui()
+
+
+## KF03 shows the Spider in the Bowler Hat + Classic body, not the alphabetic
+## first row (AltA = Tarantula). The shipped profile's starter cosmetics are
+## Default body/card + Bowler Hat; the Chameleon mirrors that with its own
+## authored tags. Falls back to the first row only if the tag is absent.
+func _default_outfit_key(slot: String) -> String:
+	var tag: String = _thief_id.capitalize()
+	var prefs: Array[String] = []
+	match slot:
+		"Head":
+			prefs = ["Outfit.%s.Head.BowlerA" % tag, "Outfit.%s.Head.Default" % tag]
+		"Body":
+			prefs = ["Outfit.%s.Body.Default" % tag]
+		"CallingCard":
+			prefs = ["Outfit.%s.CallingCard.Default" % tag]
+	var keys: Array[String] = _head_keys
+	if slot == "Body":
+		keys = _body_keys
+	elif slot == "CallingCard":
+		keys = _card_keys
+	for key: String in prefs:
+		if _rows.has(key):
+			return key
+	return keys[0] if not keys.is_empty() else ""
 
 
 func _rebuild_figure() -> void:
@@ -1336,11 +1343,17 @@ func _apply_preview_idle(root: Node) -> void:
 	var alib: GuardAnimationLibrary = GuardAnimLibScript.new()
 	if not alib.setup("club", skel):
 		return
-	var anim: Animation = alib._retarget_general("AN_ThiefNisha_WardrobeIdle", true, true, true)
+	# W7V: the Chameleon plays its own authored Cotter wardrobe idle.
+	var idle_clip: String = "AN_ThiefNisha_WardrobeIdle"
+	var fallback_clip: String = "AN_ThiefNisha_Unarmed_StandIdle"
+	if _thief_id == "chameleon":
+		idle_clip = "AN_ThiefCotter_WardrobeIdle"
+		fallback_clip = "AN_ThiefCotter_Unarmed_StandIdle"
+	var anim: Animation = alib._retarget_general(idle_clip, true, true, true)
+	if anim == null:
+		anim = alib._retarget_general(fallback_clip, true, true, true)
 	if anim == null:
 		anim = alib._retarget_general("AN_GuardEnforcer_NeutralFresh_Idle", true, true, true)
-	if anim == null:
-		anim = alib._retarget_general("AN_ThiefNisha_Unarmed_StandIdle", true, true, true)
 	if anim == null:
 		return
 	var ap := AnimationPlayer.new()
@@ -1418,6 +1431,15 @@ func _load_model(path: String) -> Node:
 
 func _resolve_body_path(outfit_key: String) -> String:
 	var lowered: String = outfit_key.to_lower()
+	# W7V: the Chameleon is the authored ThiefCotter body, never the Nisha one.
+	if _thief_id == "chameleon":
+		if "patternb" in lowered and ResourceLoader.exists(COTTER_BODY_ALTA_B_PATH):
+			return COTTER_BODY_ALTA_B_PATH
+		if "alta" in lowered and ResourceLoader.exists(COTTER_BODY_ALTA_PATH):
+			return COTTER_BODY_ALTA_PATH
+		if ResourceLoader.exists(COTTER_BODY_DEFAULT_PATH):
+			return COTTER_BODY_DEFAULT_PATH
+		return ""
 	if "patternb" in lowered and ResourceLoader.exists(BODY_TARANTULA_B_PATH):
 		return BODY_TARANTULA_B_PATH
 	if "alta" in lowered and ResourceLoader.exists(BODY_TARANTULA_PATH):
@@ -1427,6 +1449,14 @@ func _resolve_body_path(outfit_key: String) -> String:
 
 func _resolve_head_path(outfit_key: String) -> String:
 	var lowered: String = outfit_key.to_lower()
+	# W7V: 18/18 Chameleon Head rows resolve to their authored Cotter mesh.
+	if _thief_id == "chameleon":
+		var cotter: String = str(COTTER_HEAD_MESHES.get(outfit_key, ""))
+		if cotter != "" and ResourceLoader.exists(COTTER_BASE_DIR + cotter):
+			return COTTER_BASE_DIR + cotter
+		if ResourceLoader.exists(COTTER_HEAD_DEFAULT_PATH):
+			return COTTER_HEAD_DEFAULT_PATH
+		return ""
 	var candidates: Array[String] = []
 	if "thiefmaska" in lowered and "mustachea" in lowered:
 		candidates.append("SK_ThiefNisha_Dyn__Head_ThiefMaskA_MustacheA.glb")

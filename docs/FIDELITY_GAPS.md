@@ -633,3 +633,40 @@ find extracted/json -name 'NS_*.json' | wc -l
     dropped body falls off the shell, the hip's four faces fall 2.70 m below the
     ridge, and the non-uniform POI instance (scale 0.8 on the slope axis)
     measures 51.1° vs the expected 51.5° and stays walkable.
+
+- **Visual acceptance wave W7V (2026-11-24)** — KF11 skyline, Chameleon Cotter
+  wardrobe, live Black Market tool preview, acceptance captures.
+  - **KF11 prep (TAT-2 expansion, not shipped art)**: the authored lobby
+    sublevels carry no usable skyline in the framed sector, so
+    `game/data/expansion/prep_skyline.json` is **new TAT-2 expansion content**
+    (`expansion: true`, `source` names the expansion) placing shipped Skybox
+    assets: `SM_DistantBuildingC`, `SM_DistantTowerA/B`,
+    `SM_SkyboxSmokestacksA`, `SM_Skybox_UrbanTowerB` with their authored
+    materials (`M_DistantBuildingC`, `ML/MI_DistantBuidingA`,
+    `M_DistantTowerB`, `ML/MI_SkyboxSmokestacks`, `M_DarkGrey`). It is
+    decorative (no collision/shadows), excluded from the lobby fog/ambient
+    passes and graded as a backlit silhouette. The stage keeps FOV 20
+    `KEEP_WIDTH`, roll −14.78°, `midnight_clear_mission_lobby`, the moon at
+    screen (0.76, 0.09), and the thief at screen x 0.77 via a 1.26 m dummy
+    offset (a camera yaw into the authored city block hid the moon).
+  - **Wardrobe**: defaults now resolve to `Head.BowlerA` / `Body.Default` /
+    `CallingCard.Default` (not the alphabetic `AltA` Tarantula row); the
+    Chameleon renders the authored ThiefCotter body and all 18 Head-row Cotter
+    meshes (TopHatA.MonocleA uses the shipped combined `..._TopHatA_MonocleA_BeardA`
+    mesh), with `AN_ThiefCotter_WardrobeIdle`. KF03 three-column layout and no
+    APPLY unchanged.
+  - **Ledger/Black Market**: shared `ToolPreviewStage` drives the Wardrobe tool
+    card and a new live `LedgerToolPreview` SubViewport for tool rows; non-tool
+    rows keep the authored reward icon. Ledger modal is centred at 1280×720 and
+    1920×1080. Catalog rows/prices/gates untouched.
+  - **Captures** (1920×1080, serialized Vulkan, sidecars with pose/FOV/preset/
+    save/profile/ROIs): `prep_before`/`prep_after`, `prep_720`, `briefing`,
+    `den_poster`, `den_west_window` (C1), `ledger_kf07`/`kf08`,
+    `wardrobe_kf03`/`kf04`/`chameleon`. No pre-W6L PNG is cited as current.
+  - **Deferred**: monochrome slot-icon shader; blurred Ledger/Wardrobe panel
+    background; briefing `T_Paper01` tone/creases and the `SPACE` keycap (HUD
+    pass; `hud.gd` untouched); C8 Guildhall haze/wet ground and C9 horizon vs
+    zenith captures (Guildhall mission staging, not owned here).
+  - **Gates**: compile 112/0, W7V 49/0, W6U1 0, W6U2 0, `run_tests` 0,
+    E2E 264/264. `make audit` exit 2 on the W7S producer drift +
+    missing `vgmstream`; not fixed, not re-stamped.

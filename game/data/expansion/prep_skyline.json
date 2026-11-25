@@ -1,0 +1,112 @@
+{
+  "schema": "tat2.prep_skyline/1",
+  "expansion": true,
+  "kind": "prep_skyline",
+  "stage": "MissionLobby",
+  "source": "TAT-2 expansion content built from the shipped Skybox distant-building kit",
+  "notes": [
+    "KF11's mission-preparation frame stands the thief on a slate ridge with the Kilcairn skyline behind him. The two loaded lobby sublevels (MissionLobby_Geo3 + MissionLobby_Periphery) only carry nine DistantBuildingC blocks, all west of the framed stage and hidden by the Periphery storefront wall.",
+    "This file is original TAT-2 layout data, not extracted content: it places shipped Skybox meshes/materials (/Game/Art/Environment/Skybox/...) in a stage-relative ring. The runtime never rewrites the authored sublevels.",
+    "Placement is camera-relative so a reframe keeps the composition: azimuth_deg is measured from the prep camera's horizontal forward (+ = left, matching Godot's +Y rotation), distance_m is the horizontal metres, base_y is the world Y of the mesh AABB bottom (the shipped skyline meshes sit on y=0), yaw_deg is the node's Y rotation, scale is uniform.",
+    "The 11.33 deg vertical prep lens sees ~0.09 m of height per metre of distance; DistantBuildingC is 24.4 m tall at scale 1, so the roofline band needs ~300-500 m standoff and a >1 scale to read above the ridge without eating the frame.",
+    "layer is documentation only: near = KF11 foreground mass, mid = the roofline band, far = the horizon row behind it."
+  ],
+  "pieces": [
+    {
+      "id": "mid_roofline_a",
+      "mesh": "/Game/Art/Environment/Skybox/Buildings/SM_DistantBuildingC",
+      "material": "/Game/Art/Environment/Skybox/Buildings/M_DistantBuildingC",
+      "azimuth_deg": -2.5,
+      "distance_m": 310.0,
+      "base_y": 0.0,
+      "yaw_deg": 123.0,
+      "scale": 1.7,
+      "layer": "mid",
+      "note": "Main KF11 roofline band behind the thief; the wide block carries the dormer/chimney jumble."
+    },
+    {
+      "id": "mid_roofline_b",
+      "mesh": "/Game/Art/Environment/Skybox/Buildings/SM_DistantBuildingC",
+      "material": "/Game/Art/Environment/Skybox/Buildings/M_DistantBuildingC",
+      "azimuth_deg": -7.0,
+      "distance_m": 380.0,
+      "base_y": 0.0,
+      "yaw_deg": 123.0,
+      "scale": 1.5,
+      "layer": "mid",
+      "note": "Second roofline layer, offset right so the silhouettes step instead of merging."
+    },
+    {
+      "id": "far_row_west",
+      "mesh": "/Game/Art/Environment/Skybox/Buildings/SM_DistantBuildingC",
+      "material": "/Game/Art/Environment/Skybox/Buildings/M_DistantBuildingC",
+      "azimuth_deg": 3.0,
+      "distance_m": 470.0,
+      "base_y": -2.0,
+      "yaw_deg": 123.0,
+      "scale": 1.2,
+      "layer": "far",
+      "note": "Horizon row behind the info stack; only its roof silhouette clears the cards."
+    },
+    {
+      "id": "far_row_east",
+      "mesh": "/Game/Art/Environment/Skybox/Buildings/SM_DistantBuildingC",
+      "material": "/Game/Art/Environment/Skybox/Buildings/M_DistantBuildingC",
+      "azimuth_deg": -11.0,
+      "distance_m": 480.0,
+      "base_y": -2.0,
+      "yaw_deg": 156.0,
+      "scale": 1.2,
+      "layer": "far",
+      "note": "Right-edge horizon row; rotated so the long axis closes the frame at the right."
+    },
+    {
+      "id": "clocktower_west",
+      "mesh": "/Game/Art/Environment/Skybox/Buildings/SM_DistantTowerA",
+      "material": "/Game/Art/Environment/Skybox/Buildings/ML/MI_DistantBuidingA",
+      "azimuth_deg": -0.5,
+      "distance_m": 420.0,
+      "base_y": -2.0,
+      "yaw_deg": 0.0,
+      "scale": 1.2,
+      "layer": "mid",
+      "note": "KF11 skyline clocktower spire left of the moon, against the roofline."
+    },
+    {
+      "id": "clocktower_east",
+      "mesh": "/Game/Art/Environment/Skybox/Buildings/SM_DistantTowerB",
+      "material": "/Game/Art/Environment/Skybox/Buildings/M_DistantTowerB",
+      "azimuth_deg": -6.2,
+      "distance_m": 430.0,
+      "base_y": -2.0,
+      "yaw_deg": 0.0,
+      "scale": 1.0,
+      "layer": "mid",
+      "note": "Secondary tower right of the clocktower, between it and the moon."
+    },
+    {
+      "id": "smokestack_row",
+      "mesh": "/Game/Art/Environment/Skybox/SkyboxSmokestacks/SM_SkyboxSmokestacksA",
+      "material": "/Game/Art/Environment/Skybox/SkyboxSmokestacks/ML/MI_SkyboxSmokestacks",
+      "azimuth_deg": -3.2,
+      "distance_m": 500.0,
+      "base_y": -2.0,
+      "yaw_deg": 18.0,
+      "scale": 1.2,
+      "layer": "far",
+      "note": "Kilcairn industrial stack breaking the far roofline."
+    },
+    {
+      "id": "urban_tower_east",
+      "mesh": "/Game/Art/Environment/Skybox/SkyboxUrban/SM_Skybox_UrbanTowerB",
+      "material": "/Game/MaterialLibrary/Utility/M_DarkGrey",
+      "azimuth_deg": -9.5,
+      "distance_m": 470.0,
+      "base_y": -2.0,
+      "yaw_deg": -12.0,
+      "scale": 1.0,
+      "layer": "far",
+      "note": "KF11 right-side tower silhouette under the moon."
+    }
+  ]
+}

@@ -8048,7 +8048,7 @@ func _run_suite95(host: Node) -> Array[String]:
 
 ## A player-shaped body with the properties guard_ai reads. Cheaper than the real
 ## thief (no GLB loads) and enough for perception geometry.
-func _ai_stub_player(host: Node, at: Vector3, with_shock: bool = false) -> CharacterBody3D:
+func _ai_stub_player(host: Node, at: Vector3) -> CharacterBody3D:
 	var body: CharacterBody3D = CharacterBody3D.new()
 	body.name = "AIPlayerStub"
 	body.collision_layer = 2

@@ -81,7 +81,7 @@ Subsections keep their §8 numbering; rows are copied in source order.
 | V4-04 | `BARRON'S DEMOLITION` alley dressing | S13 / KF15 #1, #3 | Weathered brick banner + faint `EST. 1865` + `Out with the old, in with the new!`; crates, fallen steel drums, ladder, alley weeds. | Rain-slick street with crates, hand cart, stone wall and iron fence; a large **blank white wall sign with a horizontal seam** occupies the banner site (f_0121), but no `BARRON'S DEMOLITION` / `EST. 1865` / `Out with the old…` lettering, no oil drums, no ladder and no car (`kf_presence.md` KF15 PARTIAL). Both L1 and L2 called the row N/A-route; the alley and the banner surface are present, so it is a delta. | DELTA |
 | V4-05 | Gate arch, griffins & gear plate | S14 / KF16 #1; S17 / KF18 #2, #4 | Wrought-iron `CONSTABLE'S GUILDHALL` arch with crowned star-topped pillars; twin stone griffins on brick pedestals; 10-bolt white gear plate with red downward `⚡` arrow. | Not reached. After spawn the run stays on a street/perimeter wall (t=01:49: unlettered stone wall, iron fence, gate pillar) then rooftops and interiors; no arch lettering, griffins or gear plate. KF16 and KF18 are ABSENT (`kf_presence.md`). | N/A-route |
 | V4-06 | `MACLEOD` vertical sign | S20 / KF23 #5 | Crisp illuminated vertical gold serif sign on the distant right facade (`02:35.00–02:41.50`, again `02:48.50–02:49.00`). | Not reached. No exterior side-wing facade after spawn; t=02:41 is an interior `DOOR LOCK (LV 3)` overlay. KF23 is ABSENT (`kf_presence.md`). | N/A-route |
-| V4-07 | Foyer dressing | S24 / KF27 #2; S25 / KF28 #3 | Tall lit glass statue vitrine, velvet armchair + ottoman, flush square metallic floor plate; framed `Basement Stairs` and `WC` plaques. | Checkered black/white marble hall with columns, a shrine and white busts (f_0174), a glass-cased white `Cat Statue` on a blue cushion (f_0208), and later a backlit glass display case with a statue inside plus two busts on plinths (f_0267); no velvet armchair/ottoman, no flush floor plate and no `Basement Stairs`/`WC` plaques (`kf_presence.md` KF27 PARTIAL). L2 called it N/A-route ("never reaches the foyer"); the vitrine-and-marble dressing is present, so it is a delta. | DELTA |
+| V4-07 | Foyer dressing | S24 / KF27 #2; S25 / KF28 #3 | Tall lit glass statue vitrine, velvet armchair + ottoman, flush square metallic floor plate; framed `Basement Stairs` and `WC` plaques. | Checkered black/white marble hall with columns, a shrine and white busts (f_0174), a glass-cased white `Cat Statue` on a blue cushion (f_0208), and later a backlit glass display case with a statue inside plus two busts on plinths (f_0267); no velvet armchair/ottoman, no flush floor plate and no `Basement Stairs`/`WC` plaques (`kf_presence.md` KF27 PARTIAL). L2 called it N/A-route ("never reaches the foyer"); the vitrine-and-marble dressing is present, so it is a delta. **Corrected in W9-P1**: the earlier "no velvet armchair/ottoman" clause is false. `build/qa/w9/captures/p1_before_foyer_sweep_yaw180.png` (Vulkan 1920×1080, authored upper-foyer slot turned 180°, `TAT2_AO=on`) shows a tufted armchair with a red ottoman, the white marble-topped vitrine, a framed picture on it, columns, an archway and a bust on a plinth. What is still absent is the flush square metallic floor plate and the `Basement Stairs`/`WC` plaques, so the row stays a delta. | DELTA |
 | V5-01 | Idle guard at shopfront | S01 / KF01 #4 | Stationary guard in dark uniform, helmet, brown belt before the `Mac Neish` shopfront. | Guard stands in the correct place at the shopfront doors, but renders as a dark unlit silhouette; helmet and belt are not readable (L2 §5, f_0005). L1 scored PASS; the owning lane's PARTIAL is used. | DELTA |
 | V5-02 | 3D Spider turntable with cap sync | S04 / KF03 #4; KF04 #4 | Spider with bowler hat, yellow goggles, purple sweater on turntable before open armoire; `Cap` equipped by KF04, `Head` thumbnail synced. | Not reached. The wardrobe overlay never opens; no turntable, `Edit Loadout` panel, cap sync or tooltip card appears (KF03/KF04 ABSENT, `kf_presence.md`; L2 §5 N/A-route). L2's P1 `FAIL` scores the **prep-stage avatar**, a different screen — carried under UI4-03/L2-08, not here. | N/A-route |
 | V5-03 | 1P gloved hands + ZipWire viewmodel | S12 / KF14 (vault); S21 / KF24 #4 | 1P gloved arms brace the railing vault (`01:19.6`); ZipWire `[1]` launcher gripped in right hand at the portico. | Launcher, checkered barrel shroud and brass cuff piping read correctly; the forearm/glove is a flat orange-tan surface with no leather grain, stitching or finger separation and is brighter than the tool (L2-09). The vault half (S12) has no counterpart. | DELTA |
@@ -89,7 +89,7 @@ Subsections keep their §8 numbering; rows are copied in source order.
 | V5-05 | Takedown grapple pose | S23 / KF26 #2 | 1P camera lunges/tilts closely over the constable's helmet and corded shoulder; guard knocked onto the parquet; pull-back to eye height. | Not reached. No grapple, no `[F] [HOLD] TAKEDOWN`, no KO; KF26 is ABSENT (`kf_presence.md`). | N/A-route |
 | V6-01 | Escape portal wall outline | S12 / KF14 #1 | Jagged glowing emerald-green + violet chromatic-edge outline shimmering on the safe-room wall (`01:15.2–01:16.2`). | Not reached. No escape portal is summoned and the run ends in a pause menu; the safe-room wall at t=01:41 shows a blue-white oval sconce with a mullion pattern, not the jagged green/violet outline (KF14 PARTIAL, `kf_presence.md`). | N/A-route |
 | V6-02 | Smoke bomb plume | S18 / KF20 #1 | Orange-white ignition flash (`02:28.20`) then opaque grey-white volumetric puffs expanding horizontally across the grand stairs (`02:28.40–02:29.80`). | Not reached. Slot `[2]` is never selected and no canister is thrown; KF19/KF20 are ABSENT (`kf_presence.md`). | N/A-route |
-| V6-03 | Security beams, emitter & node | S24 / KF27 #1, #3 | Two crisp horizontal white volumetric beams wall-to-wall from the mid-height circular white emitter (`x~17%, y~56%`); glowing cyan ceiling diamond node above the far doors. | Not reached. No beam, wall emitter, ceiling node, camera or floor plate anywhere; KF27 is PARTIAL on the room furniture only (`kf_presence.md`). | N/A-route |
+| V6-03 | Security beams, emitter & node | S24 / KF27 #1, #3 | Two crisp horizontal white volumetric beams wall-to-wall from the mid-height circular white emitter (`x~17%, y~56%`); glowing cyan ceiling diamond node above the far doors. | Not reached. No beam, wall emitter, ceiling node, camera or floor plate anywhere; KF27 is PARTIAL on the room furniture only (`kf_presence.md`). **Corrected in W9-P1**: the "no beam" clause is false. `build/qa/w9/captures/p1_before_upper_foyer.png` and `p1_before_foyer_sweep_yaw180.png` (Vulkan 1920×1080, authored upper-foyer slot, `TAT2_AO=on`) show a live `BP_Detector_LightBeam_C` beam from an authored `light_beam` device (`security_beam.gd`) crossing the hall as a bright horizontal band, and a lit ceiling practical. Still absent: the wall-mounted circular emitter at the reference position and the glowing cyan ceiling diamond above the far doors. Moved from N/A-route to a delta. | DELTA |
 | V6-04 | Purple ward + green vine lock | S25 / KF28 #2, #5 | Bright faceted purple crystalline ward seals the foyer archway; glowing green thorny vines erupt across the `Basement Stairs` doorway. | The ward **is** present, twice — t≈03:10–03:13 and 04:18–04:21 — but as a near-opaque flat violet box (`#7F5BBB`, within-pane sd 0.031 over 700×600, ~19 facets over 3.5 m) against a faceted crystal column with near-black facet gaps. The identity is settled: `tat_ward.gdshader` on the ward-zone `BoxMesh` (F1a C-2), not a level mesh. No green vine lock and no beam-tripwire lockdown; the violet is unshaded/blend-mix, so it reads as a solid pane. | HARD_LIMIT |
 | V7-01 | CineCamera startscreen framing | S01 / KF01 #3 | Locked-off wide shot of the street with right-aligned menu stack; port CineCamera at `(-12.7196, 0.4566, 14.6089)`, vFOV `48.03°`, pitch `+13.8°`, yaw `−46.335°`. | 24-band row profile of the right 40 % of the frame matches KF01 within ~10 LSB at every band (logo bands 7–13, menu rows 20–21); the earlier "oversized title" impression does not survive measurement (L1 §4.7). | PASS |
 | V7-02 | Telescope scripted hard cuts | S05 / KF05 #4 | Hard cut into the fixed sky view at `00:20.23`; centered `[F] EXIT`; hard cut back to the Den at `00:21.77`. | Sky view 22.0–23.0 s (1.3 s hold vs 1.54 s), `[F] EXIT` centred, cut back 23.25 s — within the ±0.2 s tolerance (L1 §4.2). | PASS |
@@ -255,8 +255,9 @@ segment's offset is the route divergence up to that anchor. `Port ts` is `t=mm:s
 
 Absent segments (no port anchor): S04 wardrobe, S06 journal, S07 gramophone, S16 roof-ridge arrival,
 S17 cable crossing, S19 Vistara equip, S20 balcony traverse, S22 parlor, S23 takedown, S24 foyer beam,
-S25 beam-cross trigger, S26 crimson alarm. S24's room exists but its anchor ("first beam in view")
-does not, so it has no row.
+S25 beam-cross trigger, S26 crimson alarm. S24's room exists and (W9-P1) a `light_beam` device beam is
+visible in it from the authored upper-foyer slot, so its row (V6-03) is scored; the beam-cross *trigger*
+(S25) still has no anchor and no row.
 
 ## 5. Summary score table
 
@@ -266,15 +267,15 @@ count cannot be read as a quality grade.
 | Score | Visual (V1–V7) | Audio (AU1–AU6) | HUD/UI (UI1–UI5) | Gameplay (G1–G5) | Total |
 |---|---|---|---|---|---|
 | `PASS` | 6 | 0 | 2 | 1 | **9** |
-| `DELTA` | 13 | 1 | 12 | 6 | **32** |
+| `DELTA` | 14 | 1 | 12 | 6 | **33** |
 | `MISSING` | 1 | 1 | 1 | 1 | **4** |
 | `HARD_LIMIT` | 2 | 0 | 0 | 0 | **2** |
 | `UNVERIFIED` | 1 | 14 | 1 | 0 | **16** |
-| `N/A-route` | 14 | 15 | 11 | 17 | **57** |
+| `N/A-route` | 13 | 15 | 11 | 17 | **56** |
 | **Checklist rows** | 37 | 31 | 27 | 25 | **120** |
 
-**Coverage line: scored 47 / N/A-route 57 / UNVERIFIED 16 (47 + 57 + 16 = 120).** The 47 comprises
-9 `PASS`, 32 `DELTA`, 4 `MISSING` and 2 `HARD_LIMIT`; it is not a quality grade, because 32 of the 47
+**Coverage line: scored 48 / N/A-route 56 / UNVERIFIED 16 (48 + 56 + 16 = 120).** The 48 comprises
+9 `PASS`, 33 `DELTA`, 4 `MISSING` and 2 `HARD_LIMIT`; it is not a quality grade, because 33 of the 48
 are deltas and 4 are missing elements. The audio column is still mostly uncovered: 14 of its 31 rows
 are `UNVERIFIED` after T03-AUDIO showed the captured bed is capture-borne, and the two scored audio
 rows rest on in-engine evidence rather than the capture — `AU6-01` `MISSING` on `VO_PINS` authored
@@ -282,12 +283,14 @@ data, `AU1-03` `DELTA` on `test_audio_mix.gd`'s loading-silence state. One visua
 (`V2-05`) is audio-owned and moved with the audio column.
 
 **Reconciliation with `row_route_matrix.md`'s tally (43 YES / 21 PARTIAL / 56 NO).** Re-scoring row by
-row gives 57 N/A-route, not 56, because four rows the matrix calls partly observable never show their
-subject — V3-02 (no diamond in any Den frame), AU3-03 (no grate/vault), G2-02 (no drop/sprint/crouch),
-G2-05 (no ascent) — while three it calls unreachable are reachable — V6-04 (the ward visual is present;
-`HARD_LIMIT`), AU5-05 (the ward audio window is present; `UNVERIFIED` for the capture reason), AU5-07 (a
-loot acquisition exists, though the key does not; `UNVERIFIED`). Net +1. `V4-04` stays scored (`DELTA`)
-because the alley and the banner surface are present even though the lettering is not.
+row gives 56 N/A-route, not 56-by-accident: four rows the matrix calls partly observable never show
+their subject — V3-02 (no diamond in any Den frame), AU3-03 (no grate/vault), G2-02 (no
+drop/sprint/crouch), G2-05 (no ascent) — while three it calls unreachable are reachable — V6-04 (the
+ward visual is present; `HARD_LIMIT`), AU5-05 (the ward audio window is present; `UNVERIFIED` for the
+capture reason), AU5-07 (a loot acquisition exists, though the key does not; `UNVERIFIED`). Net 0 after
+W9-P1: the three reachable rows are offset by V6-03, which left N/A-route for `DELTA` when a live
+`light_beam` device beam was captured in the foyer (`p1_before_upper_foyer.png`). `V4-04` stays scored
+(`DELTA`) because the alley and the banner surface are present even though the lettering is not.
 
 **Three rows changed reachability because a lane's premise was refuted by the frames**, and are flagged
 so no one "fixes" them back: AU1-04 (now `UNVERIFIED`, not N/A — the telescope cut is in the run, F1a

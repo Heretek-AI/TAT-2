@@ -28,10 +28,20 @@ UE -> Godot (StandardMaterial3D) parameter mapping used here and in
   cached Normal agrees) or the ``_D`` companion of its normal/ORM family
   (``T_BrickNewClean_N`` -> ``T_BrickNewClean_D``). Carpet/rug brush-layer
   materials and ``MI_AppleInterior`` are allowlisted as genuinely painterly.
-- ``BlendMode`` containing ``Translucent`` or ``AlphaComposite`` ->
-  ``TRANSPARENCY_ALPHA``; ``BLEND_Masked`` -> ``TRANSPARENCY_ALPHA_SCISSOR``
-  with ``alpha_scissor_threshold`` from ``BasePropertyOverrides`` /
-  ``OpacityMaskClipValue`` (default 0.5).
+  Long-form base-colour stems (``_base_color``/``_basecolor``/``_albedo``/
+  ``_diffuse``/``_color`` + optional digits) count as albedo only where the
+  material itself references them, never in the generic guess pool.
+- A material that only authors an emissive colour (no albedo slot of its own)
+  does not get a fallback-ranked albedo guess: the tier is dropped to ``none``.
+- ``BasePropertyOverrides`` blend/shading/two-sided values are honoured unless
+  their ``bOverride_*`` flag is explicitly false; the two forms are never both
+  present in one record.
+- ``BlendMode`` (top level, else ``BasePropertyOverrides.BlendMode``) ->
+  ``TRANSPARENCY_ALPHA`` when it contains ``Translucent`` or
+  ``AlphaComposite``; ``BLEND_Masked`` -> ``TRANSPARENCY_ALPHA_SCISSOR`` with
+  ``alpha_scissor_threshold`` from ``BasePropertyOverrides`` /
+  ``OpacityMaskClipValue`` (default 0.5). ``BasePropertyOverrides`` is honoured
+  only when its ``bOverride_BlendMode`` flag is absent or true (T08 FIX 1).
 - ``PhysMaterial`` name is stored for debugging; Godot has no equivalent.
 - NOT mapped (kept in the JSON for future work): shading model
   (``MSM_Unlit`` etc. would map to ``SHADING_MODE_UNSHADED`` but current
@@ -419,11 +429,23 @@ def _candidate_score(
     return (family_hit, path_hit, token_score, -len(stem))
 
 
-def _is_albedo_stem(low: str, allow_ui_map: bool = False) -> bool:
+# Long-form base-colour suffixes the third-party (Stylized Forest 2) and
+# shipped VFX families use instead of the _D/_BC short forms:
+# T_sf2_birch_bark_base_color2, T_sf2_plants_base_color, T_Goo_Decal_BaseColor1,
+# SimpleCobweb_Color. Only these six extracted stems newly qualify (T08 FIX 3);
+# every one is a colour map, not a mask.
+_LONG_ALBEDO_SUFFIX = re.compile(r"_(base_color|basecolor|albedo|diffuse|color)\d*$")
+
+
+def _is_albedo_stem(
+    low: str, allow_ui_map: bool = False, allow_long_form: bool = True
+) -> bool:
     # Numbered diffuse variants (T_Plaster_D04, T_Wood_BC2) are authored
     # albedo textures; the old endswith("-D") test dropped them.
     if not (
-        low.endswith(DIFFUSE_SUFFIXES) or re.search(r"_(d|da|bc|bco|c|alb)\d+$", low)
+        low.endswith(DIFFUSE_SUFFIXES)
+        or re.search(r"_(d|da|bc|bco|c|alb)\d+$", low)
+        or (allow_long_form and _LONG_ALBEDO_SUFFIX.search(low))
     ):
         return False
     if not allow_ui_map and _is_ui_or_map_stem(low):
@@ -444,6 +466,7 @@ def _best_albedo_candidate(
     is_character: bool,
     allow_unsignalled: bool = False,
     allow_ui_map: bool = False,
+    allow_long_form: bool = True,
 ) -> str:
     needs_anchor: bool = bool(family_words) or (
         path_category != "" and path_category != "Character"
@@ -452,7 +475,7 @@ def _best_albedo_candidate(
     best_score: tuple | None = None
     for res in res_paths:
         low: str = Path(res).stem.lower()
-        if not _is_albedo_stem(low, allow_ui_map):
+        if not _is_albedo_stem(low, allow_ui_map, allow_long_form):
             continue
         if _is_eye_stem(low) and not is_character:
             continue
@@ -554,6 +577,60 @@ CATEGORY_FALLBACK_STEMS = {
 }
 
 
+def _canon_blend_mode(value) -> str:
+    """Canonical ``EBlendMode::...`` form of a UE blend-mode string.
+
+    The cooked dump already writes the enum-qualified form in both places, but
+    the loader matches on substrings and older/other dumps emit the bare short
+    form (``BLEND_Masked``). Normalise to the prefix the existing entries use so
+    the JSON never mixes forms (T08 FIX 1).
+    """
+    s = str(value or "").strip()
+    if s == "":
+        return ""
+    if "::" in s:
+        s = s.split("::")[-1]
+    if s.startswith("EBlendMode"):
+        return s
+    return "EBlendMode::" + s
+
+
+def _canon_shading_model(value) -> str:
+    """Canonical ``EMaterialShadingModel::...`` form (see _canon_blend_mode)."""
+    s = str(value or "").strip()
+    if s == "":
+        return ""
+    if "::" in s:
+        s = s.split("::")[-1]
+    if s.startswith("EMaterialShadingModel"):
+        return s
+    return "EMaterialShadingModel::" + s
+
+
+# BasePropertyOverrides -> its bOverride_ flag. The flags are only emitted for
+# the few records that actually override (28 blend / 17 shading / 27 two-sided
+# over 1,637 dumped materials); a dump that omits the flag but carries a value
+# is treated as overriding, which is what every such record means: the two
+# places are mutually exclusive (0 records carry both a top-level and a BPO
+# value), so an unflagged BPO value can only be an override.
+_BPO_OVERRIDE_FLAGS = {
+    "BlendMode": "bOverride_BlendMode",
+    "ShadingModel": "bOverride_ShadingModel",
+    "TwoSided": "bOverride_TwoSided",
+}
+
+
+def _bpo_overrides(props: dict, field: str) -> bool:
+    bpo = props.get("BasePropertyOverrides")
+    if not isinstance(bpo, dict):
+        return False
+    if bpo.get(_BPO_OVERRIDE_FLAGS[field]) is False:
+        return False
+    if field == "TwoSided":
+        return bpo.get("TwoSided") is True
+    return bpo.get(field) not in (None, "")
+
+
 def _extract_real_params(props: dict) -> tuple:
     """Flatten real UE material data: scalars, vectors, switches, render flags."""
     params: dict = {}
@@ -581,22 +658,27 @@ def _extract_real_params(props: dict) -> tuple:
         if nm != "" and isinstance(sw.get("Value"), bool):
             switches[nm] = sw["Value"]
     render: dict = {}
-    if "BlendMode" in props and props["BlendMode"]:
-        render["blend_mode"] = str(props["BlendMode"])
+    # Blend mode and shading model are authored on the instance itself or, for
+    # the 5 blend / 31 shading records below, only in BasePropertyOverrides.
+    # Reading the top-level key alone left those materials inheriting nothing
+    # (UI/PP materials lost MSM_Unlit, foliage instances lost BLEND_Masked).
+    blend = props.get("BlendMode")
+    if not blend and _bpo_overrides(props, "BlendMode"):
+        blend = props["BasePropertyOverrides"].get("BlendMode")
+    if blend:
+        render["blend_mode"] = _canon_blend_mode(blend)
     # Two-sided can be authored either on the material itself or in the
     # instance's BasePropertyOverrides (21 shipped MIs use the latter:
     # MI_TrimMetalC_Rusty gates/fences, MI_TrimMetalA_brass doors/chandeliers,
     # MI_TrimMetalSurfaceA vaults, MI_TrimMetalA_brass_dark signs). Reading
     # only the top-level flag dropped them and single-sided leaves vanished.
-    two_sided: bool = props.get("TwoSided") is True
-    if not two_sided:
-        overrides = props.get("BasePropertyOverrides") or {}
-        if isinstance(overrides, dict) and overrides.get("TwoSided") is True:
-            two_sided = True
-    if two_sided:
+    if props.get("TwoSided") is True or _bpo_overrides(props, "TwoSided"):
         render["two_sided"] = True
-    if "ShadingModel" in props and props["ShadingModel"]:
-        render["shading_model"] = str(props["ShadingModel"])
+    shading = props.get("ShadingModel")
+    if not shading and _bpo_overrides(props, "ShadingModel"):
+        shading = props["BasePropertyOverrides"].get("ShadingModel")
+    if shading:
+        render["shading_model"] = _canon_shading_model(shading)
     clip = (props.get("BasePropertyOverrides") or {}).get("OpacityMaskClipValue")
     if clip is None:
         clip = props.get("OpacityMaskClipValue")
@@ -680,6 +762,7 @@ def _extract_cached_defaults(exp: dict) -> tuple:
                 "albedo",
                 "diffuse",
                 "color",
+                "colour",
                 "param",
                 "emissive",
                 "tint",
@@ -728,20 +811,107 @@ def _extract_cached_defaults(exp: dict) -> tuple:
     return params, vectors, switches, textures
 
 
-def _pick_tint(vectors: dict):
+def _norm_param_name(name) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(name).lower())
+
+
+_FLAT_COLOUR_NAMES = ("flatcolor", "flatcolour")
+# Emissive vector names, longest first so "EmissiveColor" also matches the
+# "emissive" prefix test below.
+_EMISSIVE_VECTOR_NAMES = ("emissivecolor", "emissivetint", "emissive", "emiscolor")
+
+
+def _flat_colour(vectors: dict):
+    """The authored ``Flat Color`` base colour, or None.
+
+    Loot masters carry both an HDR interaction-shine ``Color`` and the real
+    flat base colour under this name; it is a distinct, deliberately non-HDR
+    parameter (T08 FIX 5). Near-black values are rejected so a black
+    dimmer-style flat colour never becomes the base tint.
+    """
+    for name, val in vectors.items():
+        if not isinstance(val, list) or len(val) < 3:
+            continue
+        if _norm_param_name(name) not in _FLAT_COLOUR_NAMES:
+            continue
+        r, g, b = float(val[0]), float(val[1]), float(val[2])
+        a = float(val[3]) if len(val) >= 4 else 1.0
+        if a <= 0.01 or max(r, g, b) < 0.02:
+            continue
+        return [round(r, 3), round(g, 3), round(b, 3), round(a, 3)]
+    return None
+
+
+def _has_hdr_generic_colour(vectors: dict) -> bool:
+    """True when a generic (non-explicit) colour vector is HDR (>1.0)."""
+    for name, val in vectors.items():
+        if not isinstance(val, list) or len(val) < 3:
+            continue
+        norm = _norm_param_name(name)
+        if any(k in norm for k in ("mask", "channel", "emissive", "emis", "fresnel")):
+            continue
+        if any(k in norm for k in ("basecolor", "albedo", "diffuse")):
+            continue
+        generic = norm == "color" or norm == "param" or norm.endswith("tint")
+        if generic and max(float(val[0]), float(val[1]), float(val[2])) > 1.0:
+            return True
+    return False
+
+
+def _emissive_vector(vectors: dict):
+    """First non-zero authored emissive vector, or None (T08 FIX 4)."""
+    for name, val in vectors.items():
+        if not isinstance(val, list) or len(val) < 3:
+            continue
+        norm = _norm_param_name(name)
+        if not any(norm == e or norm.startswith(e) for e in _EMISSIVE_VECTOR_NAMES):
+            continue
+        if max(float(val[0]), float(val[1]), float(val[2])) > 0.0:
+            return name
+    return None
+
+
+def _pick_tint(vectors: dict, flat_tint=None):
     """Pick the authored base-colour vector from merged parameter values.
 
     Explicit BaseColor/Albedo/Diffuse names win even when A=0 (MI_Solid_Blue's
     "Base Color"; MI_DefaultRig_DarkGrey's "DefaultBaseColor"). Generic
     Color/Param/Tint names keep the old channel-selector guard: A=0 and pure
     RGB masks are rejected. Emissive tints are never treated as albedo.
+
+    T08 FIX 5: a generic name that is HDR (>1.0, the loot family's interaction
+    shine) is not a base colour; the authored "Flat Color" takes its place, and
+    only when neither exists does the HDR generic value win (MI_Neon,
+    M_Hotwire_Glow, MI_DoorWard_Glyph_DoubleSided have no flat colour). Explicit
+    BaseColor/Albedo/Diffuse are never filtered, so MI_LightBeam_SM keeps its
+    HDR BaseColor. Near-black generic colours are ignored while any other
+    candidate qualifies (they are dimmers/masks, not base colours).
+
+    The flat colour only substitutes for an HDR generic pick. Firing it whenever
+    the scored set is empty added a 0.5-grey tint to 20 world-aligned/gradient
+    masters that merely carry ``Flat Color`` as a master default; measured on
+    the 1,629-material corpus, that was the whole difference between 4 and 24
+    changed tints.
     """
+    selected = _scored_tint(vectors, allow_hdr_generic=False, allow_near_black=False)
+    if selected is not None:
+        return selected
+    # The flat colour is authoring truth for the same material *or* an ancestor
+    # master, hence the inherited `flat_tint`. Requiring that an HDR generic
+    # candidate existed keeps this from inventing a 0.5-grey tint on every
+    # world-aligned master that merely declares a Flat Color default.
+    if flat_tint is not None and _has_hdr_generic_colour(vectors):
+        return flat_tint
+    return _scored_tint(vectors, allow_hdr_generic=True, allow_near_black=True)
+
+
+def _scored_tint(vectors: dict, allow_hdr_generic: bool, allow_near_black: bool):
     best_score = 0
     best = None
     for name, val in vectors.items():
         if not isinstance(val, list) or len(val) < 3:
             continue
-        norm = re.sub(r"[^a-z0-9]", "", str(name).lower())
+        norm = _norm_param_name(name)
         if any(k in norm for k in ("mask", "channel", "emissive", "emis", "fresnel")):
             continue
         explicit_hard = "basecolor" in norm  # includes DefaultBaseColor
@@ -756,6 +926,10 @@ def _pick_tint(vectors: dict):
         if not explicit and (
             max(r, g, b) >= 0.99 and min(r, g, b) == 0.0 and (r + g + b) <= 1.01
         ):
+            continue
+        if not explicit and max(r, g, b) > 1.0 and not allow_hdr_generic:
+            continue
+        if generic and max(r, g, b) < 0.02 and not allow_near_black:
             continue
         score = 2 if explicit else 1
         if score > best_score:
@@ -947,11 +1121,16 @@ def _stem_fallback_albedo(
     path_category: str = _path_category(pkg)
     allow_ui_map: bool = "/ui/" in pkg.lower() or "/map/" in pkg.lower()
     # 1) Direct stem match: look for diffuse textures whose stem mentions the base.
+    # Long-form base-colour suffixes are excluded from this guess pool (see
+    # _is_albedo_stem): a stem such as SimpleCobweb_color shares the generic
+    # token "simple" with every M_SimpleGradient/Glow material and would turn a
+    # flat UI gradient into a cobweb-textured surface. A long-form name is only
+    # trusted when the material's own reference lists name it.
     best: str = ""
     best_len: int = 10_000
     for tstem, res in tex_by_stem.items():
         low: str = tstem.lower()
-        if not _is_albedo_stem(low, allow_ui_map):
+        if not _is_albedo_stem(low, allow_ui_map, allow_long_form=False):
             continue
         if _is_eye_stem(low) and not is_character:
             continue
@@ -970,6 +1149,7 @@ def _stem_fallback_albedo(
         path_category,
         is_character,
         allow_ui_map=allow_ui_map,
+        allow_long_form=False,
     )
     if best_res != "":
         return best_res, "ranked"
@@ -982,6 +1162,49 @@ def _stem_fallback_albedo(
                     found: str = tex_by_stem[cand]
                     return found, "category"
     return "", ""
+
+
+# T08 FIX 2: authored master-texture slots the five legacy name families never
+# classified (128 distinct names / 315 references were dropped on the floor).
+# Only names that are unambiguously a surface slot are mapped; brush, noise,
+# distortion and mask-atlas layers stay unmapped so no art is invented.
+_GROUP3_ALBEDO_NAMES = ("maintexture", "runestexture", "glyphtexture")
+_GROUP3_EMISSIVE_NAMES = ("emistexture",)
+_GROUP3_OPACITY_NAMES = ("masktexture",)
+# A "MaskTexture" is only a silhouette mask when it actually gates coverage.
+# The glass masters point it at their fresnel/dirt mask (T_GlassDirt_Ma, mean
+# luma 0.49), which the loader would apply as a 0.49 alpha multiplier on every
+# lit window; that is a shading mask, not a silhouette, so it stays out of the
+# opacity slot (T08 FIX 2 note).
+_GROUP3_OPACITY_NON_MASK_MARKERS = ("dirt", "fresnel")
+# A "MainTexture" that points at a brush/noise layer is a VFX utility texture
+# (M_AttackTrailLight_01 -> T_vfx_Noise_02), not surface albedo.
+_GROUP3_NON_ART_MARKERS = (
+    "noise",
+    "paintstroke",
+    "paint_stroke",
+    "grunge",
+    "brush",
+    "stroke",
+    "wobble",
+)
+# Slot names that already promise albedo art (FIX 4's condition (b)). "texture"
+# is a deliberate catch-all: a record whose slots are all *Texture is still
+# naming texture art, so the emissive-only drop must not touch it.
+_ALBEDO_SLOT_MARKERS = (
+    "albedo",
+    "diffuse",
+    "basecolor",
+    "maintexture",
+    "glyphtexture",
+    "runestexture",
+    "texture",
+)
+
+
+def _is_albedo_slot_name(name: str) -> bool:
+    n = _norm_param_name(name)
+    return any(k in n for k in _ALBEDO_SLOT_MARKERS)
 
 
 def main():
@@ -1137,8 +1360,20 @@ def main():
             tp = ue_to_res_png(str(cpath))
             if not tp:
                 continue
-            norm_name = re.sub(r"[^a-z0-9]", "", cname.lower())
-            if any(k in norm_name for k in ("albedo", "diffuse", "basecolor", "color")):
+            norm_name = _norm_param_name(cname)
+            if norm_name in _GROUP3_ALBEDO_NAMES:
+                if not any(k in Path(tp).stem.lower() for k in _GROUP3_NON_ART_MARKERS):
+                    texs.setdefault("albedo", tp)
+            elif norm_name in _GROUP3_EMISSIVE_NAMES:
+                texs.setdefault("emissive", tp)
+            elif norm_name in _GROUP3_OPACITY_NAMES:
+                if not any(
+                    k in Path(tp).stem.lower() for k in _GROUP3_OPACITY_NON_MASK_MARKERS
+                ):
+                    texs.setdefault("opacity", tp)
+            elif any(
+                k in norm_name for k in ("albedo", "diffuse", "basecolor", "color")
+            ):
                 texs.setdefault("albedo", tp)
             elif "normal" in norm_name or norm_name.endswith("norm"):
                 texs.setdefault("normal", tp)
@@ -1284,10 +1519,14 @@ def main():
                         albedo_recovery_source = "companion-diffuse"
                         break
         # Albedo: TextureStreamingData is a used-texture list, not array-first.
-        # Rank every candidate by family anchor, path category, tokens and stem
-        # specificity. A signal-less stream pick is ignored (F4) except for
-        # Character materials, whose cooked metal/glass TSDs are authored truth.
         if "albedo" not in texs:
+            # Rank every candidate by family anchor, path category, tokens and
+            # stem specificity. A signal-less stream pick is ignored (F4) except
+            # for Character materials, whose cooked metal/glass TSDs are
+            # authored truth. Long-form base-colour names (FIX 3) are not ranked
+            # here: a sole authored stream diffuse is trusted by the
+            # unique-stream check below, and the new suffixes must not widen an
+            # unranked guess.
             stream_pick: str = _best_albedo_candidate(
                 stream_paths,
                 tokens,
@@ -1296,6 +1535,7 @@ def main():
                 is_character,
                 allow_unsignalled=(path_category == "Character"),
                 allow_ui_map=allow_ui_map,
+                allow_long_form=False,
             )
             stream_single: bool = False
             if stream_pick == "":
@@ -1371,6 +1611,15 @@ def main():
         p_vectors = merged_vectors
         p_switches = merged_switches
         tint = _pick_tint(p_vectors)
+        # T08 FIX 4: remember whether this record promises albedo art itself.
+        # The fallback-albedo drop below is only safe for a material that names
+        # no albedo slot anywhere and whose look is an authored emissive.
+        flat = _flat_colour(p_vectors)
+        own_albedo_tpv = any(
+            _is_albedo_slot_name(((tv.get("ParameterInfo") or {}).get("Name")) or "")
+            for tv in (props.get("TextureParameterValues") or [])
+        )
+        own_albedo_g3 = any(_is_albedo_slot_name(cname) for cname in cached_textures)
         # An authored colour with no authored texture signal is a flat PBR
         # material (M_BasicGrey, BasicShapeMaterial, M_Solid). Binding a
         # ranked guess such as T_BasicBrick_D would turn authored grey into
@@ -1388,6 +1637,9 @@ def main():
             "parent": parent,
             "texs": texs,
             "tint": tint,
+            "flat": flat,
+            "own_albedo_tpv": own_albedo_tpv,
+            "own_albedo_g3": own_albedo_g3,
             "params": p_scalars,
             "vectors": p_vectors,
             "switches": p_switches,
@@ -1433,7 +1685,14 @@ def main():
         )
         texs = dict(base["texs"])
         texs.update(cur["texs"])
-        tint = cur["tint"] if cur["tint"] is not None else base["tint"]
+        # T08 FIX 5: the flat base colour is inherited like the tint itself, so
+        # MI_CatStatueA (which only overrides the HDR shine `Color`) still finds
+        # M_EnvLoot's authored `Flat Color`.
+        flat = cur.get("flat")
+        if flat is None:
+            flat = base.get("flat")
+        cur_tint = _pick_tint(cur["vectors"], flat)
+        tint = cur_tint if cur_tint is not None else base["tint"]
         params = dict(base["params"])
         params.update(cur["params"])
         vectors = dict(base["vectors"])
@@ -1498,9 +1757,25 @@ def main():
                 albedo_source = cur["albedo_source"]
         else:
             albedo_source = base["albedo_source"]
+        # T08 FIX 4: an unlit material whose authored look is an emissive colour
+        # plus a procedural distortion has no albedo at all. The ranked guess
+        # invented one (M_BlockerWard bound the Thieves-Den *wardrobe* diffuse
+        # over 376 level instances). Drop only a guess, and only when the record
+        # names no albedo slot of its own and does author an emissive. The
+        # emissive test runs on the resolved vectors: MIs inherit the master's
+        # EmissiveColor, and MI_BlockerWard's only own texture is BasePattern.
+        if (
+            str(albedo_source).startswith("fallback-")
+            and not cur.get("own_albedo_tpv")
+            and not cur.get("own_albedo_g3")
+            and _emissive_vector(vectors) is not None
+        ):
+            texs.pop("albedo", None)
+            albedo_source = "none"
         resolved[pkg] = {
             "texs": texs,
             "tint": tint,
+            "flat": flat,
             "parent": cur["parent"] or base.get("parent", ""),
             "params": params,
             "vectors": vectors,

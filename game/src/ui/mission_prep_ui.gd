@@ -55,8 +55,18 @@ const ThemeScript: GDScript = preload("res://src/ui/art_nouveau_theme.gd")
 ## mirrors the Z position/look component across the dummy: same X/Y, FOV 20
 ## and roll -14.78, but it looks back across the open rooftop instead of into
 ## the wall. This is a deliberate stage reframe, not a coordinate fix.
-const LOBBY_CAM_POS: Vector3 = Vector3(12.6065, -0.16698, 1.05384)
-const LOBBY_CAM_FWD: Vector3 = Vector3(-0.986184, 0.116419, -0.117848)
+##
+## W6U1 re-capture: from that mirrored slot the full frame is the authored
+## Periphery storefront facade (SM_Storefront_Facade_1200 at x -33.5, 36 m
+## behind the thief), and the KF11 full moon is fully occluded. The stage now
+## stands NE of the ridge on the same authored rooftop: the slate ridge cap
+## reads along the bottom, the thief stays full-body and right of the info
+## stack, and the moon disc sits in the measured sky gap at (0.88, 0.12).
+## FOV stays the authored 20.0 and the preset stays midnight_clear_mission_lobby.
+const LOBBY_AUTHORED_CAM_POS: Vector3 = Vector3(12.6065, -0.16698, -1.05384)
+const LOBBY_AUTHORED_CAM_FWD: Vector3 = Vector3(-0.986184, 0.116419, 0.117848)
+const LOBBY_CAM_POS: Vector3 = Vector3(4.0, 1.0, 10.0)
+const LOBBY_CAM_FWD: Vector3 = Vector3(-0.458311, 0.083671, -0.884844)
 const LOBBY_CAM_FOV: float = 20.0
 const LOBBY_CAM_ROLL_DEG: float = -14.780165
 ## Authored BP_MatchLobbyDummyPlayer_C_1 (IsForLocalPlayer: True) rooftop slot.
@@ -70,15 +80,29 @@ const LOBBY_THIEF_YAW_DEG: float = 45.0
 const STAGE_EXPOSURE: float = 2.6
 const STAGE_AMBIENT_ENERGY: float = 1.8
 const STAGE_GLOW_INTENSITY: float = 1.0
-## The authored weather preset points the moon off-frame. Re-aim the shared
-## moon light/disc toward the open upper-centre-right of the prep camera
-## (normalised UI coords) so it can key the thief; the near rooftop can still
-## occlude the disc itself, but the light direction remains authored-overridable.
-const MOON_SCREEN_X: float = 0.63
-const MOON_SCREEN_Y: float = 0.10
+## The authored weather preset points the moon off-frame. W6U1 decouples the
+## visible disc from the key light:
+##  * MOON_DISC_SCREEN is the sky disc only (KF13/KF11 upper-right composition).
+##  * KEY_SCREEN is the cool directional key, aimed at the thief independently
+##    (upper-left), so moving the disc can never drag the character lighting.
+## The disc position was measured against the live stage: (0.88, 0.20) is the
+## open sky gap above the authored Periphery facade.
+const MOON_DISC_SCREEN_X: float = 0.88
+const MOON_DISC_SCREEN_Y: float = 0.12
+const KEY_SCREEN_X: float = 0.30
+const KEY_SCREEN_Y: float = 0.28
 const STAGE_MOON_ENERGY: float = 0.85
-const STAGE_SKY_ENERGY: float = 3.0
+## KF11 night sky is deep navy; the pre-W6U1 3.0 sky multiplier blew it to
+## daylight. Surfaces keep their own exposure/ambient (unchanged); only the
+## sky background is re-graded, still on midnight_clear_mission_lobby.
+const STAGE_SKY_ENERGY: float = 0.18
 const STAGE_MOON_DISC_ENERGY: float = 2.4
+## Local character rig on the prep stage (KF11 keys the thief separately from
+## the sky). Key = cool moonlight from the camera side, fill = warm neutral,
+## rim = cool back edge to separate the silhouette from the slate roof.
+const STAGE_KEY_ENERGY: float = 1.8
+const STAGE_FILL_ENERGY: float = 0.32
+const STAGE_RIM_ENERGY: float = 1.4
 
 ## Authored backdrop size for the 3D rooftop stage. The stage container must
 ## deliver at least this size at runtime: anything smaller (in particular the
@@ -666,7 +690,7 @@ func _build_stage(viewport: SubViewport) -> void:
 	# thief in the open right half; adding yaw here swings into the facade.
 	cam.look_at_from_position(cam.position, cam.position + LOBBY_CAM_FWD.normalized() * 15.0, Vector3.UP)
 	cam.rotate_object_local(Vector3.FORWARD, deg_to_rad(LOBBY_CAM_ROLL_DEG))
-	_aim_kf11_moon(env, cam, viewport, moonlight)
+	_aim_stage_moon_and_key(env, cam, viewport, moonlight)
 
 	var thief_anchor: Node3D = Node3D.new()
 	thief_anchor.name = "MissionLobbyThiefAnchor"
@@ -674,13 +698,59 @@ func _build_stage(viewport: SubViewport) -> void:
 	thief_anchor.rotation_degrees = Vector3(0.0, LOBBY_THIEF_YAW_DEG, 0.0)
 	stage_root.add_child(thief_anchor)
 	_add_thief(thief_anchor)
+	_build_stage_character_lights(stage_root)
 
 
-## Re-aims the moon light so its sky disc lands at the KF11 screen position,
-## and pushes the same world direction into the sky shader (built earlier by
-## WeatherVisuals before the prep camera existed). The light also becomes the
-## cool key that lifts the thief's front out of the dark rooftop.
-func _aim_kf11_moon(env: Environment, cam: Camera3D, viewport: SubViewport, moonlight: DirectionalLight3D) -> void:
+## KF11 character rig: the authored weather preset gives the rooftop one cool
+## directional key and nothing else, so the thief reads as a silhouette. These
+## three local lights key/fill/rim the character only (short ranges), leaving
+## the authored environment exposure and glow untouched.
+func _build_stage_character_lights(stage_root: Node3D) -> void:
+	var key_spot: SpotLight3D = SpotLight3D.new()
+	key_spot.name = "MissionLobbyKey"
+	key_spot.position = LOBBY_THIEF_POS + Vector3(2.4, 2.9, 2.4)
+	key_spot.light_color = Color(0.80, 0.88, 1.0)
+	key_spot.light_energy = STAGE_KEY_ENERGY
+	key_spot.spot_range = 14.0
+	key_spot.spot_angle = 30.0
+	key_spot.spot_attenuation = 1.4
+	key_spot.shadow_enabled = true
+	key_spot.set_meta("stage_light_role", "key")
+	stage_root.add_child(key_spot)
+	key_spot.look_at(LOBBY_THIEF_POS + Vector3(0.0, 1.05, 0.0), Vector3.UP)
+
+	var fill_omni: OmniLight3D = OmniLight3D.new()
+	fill_omni.name = "MissionLobbyFill"
+	fill_omni.position = LOBBY_THIEF_POS + Vector3(1.6, 1.4, 2.6)
+	fill_omni.light_color = Color(1.0, 0.86, 0.72)
+	fill_omni.light_energy = STAGE_FILL_ENERGY
+	fill_omni.omni_range = 6.0
+	fill_omni.omni_attenuation = 2.0
+	fill_omni.shadow_enabled = false
+	fill_omni.light_specular = 0.0
+	fill_omni.set_meta("stage_light_role", "fill")
+	stage_root.add_child(fill_omni)
+
+	var rim_spot: SpotLight3D = SpotLight3D.new()
+	rim_spot.name = "MissionLobbyRim"
+	rim_spot.position = LOBBY_THIEF_POS + Vector3(-1.8, 2.3, -2.2)
+	rim_spot.light_color = Color(0.55, 0.78, 1.0)
+	rim_spot.light_energy = STAGE_RIM_ENERGY
+	rim_spot.spot_range = 9.0
+	rim_spot.spot_angle = 32.0
+	rim_spot.spot_attenuation = 1.8
+	rim_spot.shadow_enabled = false
+	rim_spot.set_meta("stage_light_role", "rim")
+	stage_root.add_child(rim_spot)
+	rim_spot.look_at(LOBBY_THIEF_POS + Vector3(0.0, 1.3, 0.0), Vector3.UP)
+
+
+## Places the KF11 sky disc at MOON_DISC_SCREEN and, independently, aims the
+## cool directional key at the thief from KEY_SCREEN. The sky shader direction
+## (disc) and the DirectionalLight travel direction (key) are deliberately
+## different values; the earlier code forced both onto one screen point, so
+## moving the moon also re-lit the character from the wall.
+func _aim_stage_moon_and_key(env: Environment, cam: Camera3D, viewport: SubViewport, moonlight: DirectionalLight3D) -> void:
 	if env == null or cam == null or moonlight == null:
 		return
 	var basis: Basis = cam.global_transform.basis
@@ -692,17 +762,22 @@ func _aim_kf11_moon(env: Environment, cam: Camera3D, viewport: SubViewport, moon
 		aspect = float(viewport.size.x) / float(viewport.size.y)
 	var tan_h: float = tan(deg_to_rad(cam.fov * 0.5))
 	var tan_v: float = tan(atan(tan_h / aspect)) if aspect > 0.001 else tan_h
-	var ndc_x: float = MOON_SCREEN_X * 2.0 - 1.0
-	var ndc_y: float = 1.0 - MOON_SCREEN_Y * 2.0
-	var moon_dir: Vector3 = (fwd + right * (ndc_x * tan_h) + up * (ndc_y * tan_v)).normalized()
+	var disc_dir: Vector3 = _screen_dir(fwd, right, up, tan_h, tan_v, MOON_DISC_SCREEN_X, MOON_DISC_SCREEN_Y)
+	var key_dir: Vector3 = _screen_dir(fwd, right, up, tan_h, tan_v, KEY_SCREEN_X, KEY_SCREEN_Y)
 	moonlight.light_energy = maxf(moonlight.light_energy, STAGE_MOON_ENERGY)
-	moonlight.look_at_from_position(moonlight.global_position, moonlight.global_position - moon_dir, Vector3.UP)
+	moonlight.look_at_from_position(moonlight.global_position, moonlight.global_position - key_dir, Vector3.UP)
+	moonlight.set_meta("stage_light_role", "moon_key")
 	var sky_mat: Material = env.sky.sky_material if env.sky != null else null
 	if sky_mat is ShaderMaterial:
 		var sm: ShaderMaterial = sky_mat as ShaderMaterial
-		sm.set_shader_parameter("moon_direction", moon_dir)
+		sm.set_shader_parameter("moon_direction", disc_dir)
 		sm.set_shader_parameter("moon_energy", STAGE_MOON_DISC_ENERGY)
 		sm.set_shader_parameter("moon_halo_strength", 0.7)
+
+
+## Normalised camera ray through a UI-space point (0..1, top-left origin).
+func _screen_dir(fwd: Vector3, right: Vector3, up: Vector3, tan_h: float, tan_v: float, sx: float, sy: float) -> Vector3:
+	return (fwd + right * ((sx * 2.0 - 1.0) * tan_h) + up * ((1.0 - sy * 2.0) * tan_v)).normalized()
 
 
 func _add_thief(anchor: Node3D) -> void:

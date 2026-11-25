@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "description": "Tracked TAT-2 expansion overlay for authored mission briefing rules that differ from the extracted quest graph. Hand-authored expansion data, never generated.",
+  "briefings": {
+    "Mission.Guildhall.LootTheRoom": {
+      "endgame_seconds": 1200,
+      "source": "KF13",
+      "evidence": "docs/reference/clip_1795033698901/clean/KF13_01m10s_briefing_letter.jpg",
+      "authored_qg_endgame_seconds": 480,
+      "table": "ST_Missions_Guildhall_LootTheRoom",
+      "key": "Guildhall.LootTheRoom.Briefing",
+      "note": "The shipped briefing letter says the magic door is summoned for 20 minutes, and mission prep matches the same 55-minute window. QG_Guildhall_LootTheRoom authors EndgameDuration 480 s; the letter is the player-facing rule, so runtime briefing/endgame uses 1200 s. The extracted QG value stays 480 for authored-plan parity (suite 65)."
+    }
+  }
+}

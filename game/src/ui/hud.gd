@@ -98,6 +98,63 @@ void fragment() {
 }
 """
 
+## KF13 briefing backdrop: the live safe-room view, blurred and darkened, not a
+## flat dim. The letter is opened after the gameplay HUD is hidden, so this
+## samples only the 3D frame. CanvasItem screen textures cannot use mipmaps
+## reliably, so the blur is a 13-tap linear kernel.
+const BRIEFING_BLUR_SHADER: String = """
+shader_type canvas_item;
+uniform sampler2D screen_tex : hint_screen_texture, filter_linear;
+uniform float blur_px : hint_range(0.5, 8.0) = 3.0;
+uniform vec4 tint : source_color = vec4(0.50, 0.52, 0.60, 1.0);
+void fragment() {
+	vec2 px = SCREEN_PIXEL_SIZE * blur_px;
+	vec3 c = texture(screen_tex, SCREEN_UV).rgb * 0.20;
+	c += (texture(screen_tex, SCREEN_UV + vec2(px.x, 0.0)).rgb
+		+ texture(screen_tex, SCREEN_UV - vec2(px.x, 0.0)).rgb
+		+ texture(screen_tex, SCREEN_UV + vec2(0.0, px.y)).rgb
+		+ texture(screen_tex, SCREEN_UV - vec2(0.0, px.y)).rgb) * 0.10;
+	c += (texture(screen_tex, SCREEN_UV + px).rgb
+		+ texture(screen_tex, SCREEN_UV - px).rgb
+		+ texture(screen_tex, SCREEN_UV + vec2(px.x, -px.y)).rgb
+		+ texture(screen_tex, SCREEN_UV + vec2(-px.x, px.y)).rgb) * 0.05;
+	c += (texture(screen_tex, SCREEN_UV + vec2(px.x * 2.0, 0.0)).rgb
+		+ texture(screen_tex, SCREEN_UV - vec2(px.x * 2.0, 0.0)).rgb
+		+ texture(screen_tex, SCREEN_UV + vec2(0.0, px.y * 2.0)).rgb
+		+ texture(screen_tex, SCREEN_UV - vec2(0.0, px.y * 2.0)).rgb) * 0.05;
+	COLOR = vec4(c * tint.rgb, 1.0);
+}
+"""
+
+## KF13 parchment sheet at 1280x720 design resolution: the 1920x1080 reference
+## sheet is 824x666 (crop 107,69 813x882 in the 1024^2 T_Paper01 source).
+## The text column is 412 px at 19 px SpecialElite, which reproduces the
+## reference's authored 11-line wrap exactly (measured by TextServer; see
+## suite W6U1).
+##
+## The authored T_Paper01 sheet carries vertical crease shadows that read as
+## grime over the typewriter text at the KF13 824x666 scale. Lift them toward
+## the paper tone while preserving the torn-edge alpha (a plain modulate would
+## brighten the shadows proportionally and a ColorRect would square the edge).
+const BRIEFING_PAPER_LIFT_SHADER: String = """
+shader_type canvas_item;
+uniform float lift : hint_range(0.0, 0.5) = 0.26;
+uniform vec4 paper_color : source_color = vec4(0.93, 0.88, 0.80, 1.0);
+void fragment() {
+	vec4 t = texture(TEXTURE, UV);
+	COLOR = vec4(mix(t.rgb, paper_color.rgb, lift), t.a);
+}
+"""
+
+const BRIEFING_PAPER_SIZE: Vector2 = Vector2(549.0, 444.0)
+const BRIEFING_PAPER_SOURCE_CROP: Rect2 = Rect2(107.0, 69.0, 813.0, 882.0)
+const BRIEFING_TEXT_ORIGIN: Vector2 = Vector2(68.0, 52.0)
+const BRIEFING_TEXT_WIDTH: float = 412.0
+const BRIEFING_FONT_SIZE: int = 19
+const BRIEFING_SCROLLBAR_X: float = 524.0
+const BRIEFING_SCROLLBAR_TOP: float = 60.0
+const BRIEFING_SCROLLBAR_HEIGHT: float = 300.0
+
 # Preserved public properties (checked by game/tests/run_tests.gd and callers).
 var obj_lbl: Label
 var compass_lbl: Label
@@ -248,6 +305,10 @@ var _letter_title_lbl: Label
 var _letter_body_lbl: Label
 var _letter_open: bool = false
 var _letter_prev_mouse: Input.MouseMode = Input.MOUSE_MODE_CAPTURED
+var _letter_blur_backdrop: ColorRect
+var _letter_paper: TextureRect
+var _letter_scrollbar: Panel
+var _letter_hud_visibility: Dictionary = {}
 
 # Thieves' Den Look-At Card
 var _den_card_panel: PanelContainer
@@ -1564,10 +1625,20 @@ func _build_mission_letter(root: Control) -> void:
 	_letter_root.visible = false
 	root.add_child(_letter_root)
 
-	var dim: ColorRect = ColorRect.new()
-	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	dim.color = Color(0.01, 0.015, 0.032, 0.62)
-	_letter_root.add_child(dim)
+	# KF13: the safe-room view stays visible, blurred and darkened, instead of
+	# a flat dim over a legible HUD. The gameplay HUD is hidden while the letter
+	# is open (so the blur samples only the 3D frame) and restored on close.
+	_letter_blur_backdrop = ColorRect.new()
+	_letter_blur_backdrop.name = "MissionLetterBlurBackdrop"
+	_letter_blur_backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_letter_blur_backdrop.color = Color.WHITE
+	_letter_blur_backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var blur_mat: ShaderMaterial = ShaderMaterial.new()
+	var blur_shader: Shader = Shader.new()
+	blur_shader.code = BRIEFING_BLUR_SHADER
+	blur_mat.shader = blur_shader
+	_letter_blur_backdrop.material = blur_mat
+	_letter_root.add_child(_letter_blur_backdrop)
 
 	var center: CenterContainer = CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -1579,44 +1650,86 @@ func _build_mission_letter(root: Control) -> void:
 	center.add_child(vb)
 
 	var paper_box: Control = Control.new()
-	paper_box.custom_minimum_size = Vector2(560, 390)
-	paper_box.size = Vector2(560, 390)
+	paper_box.name = "MissionLetterPaperBox"
+	paper_box.custom_minimum_size = BRIEFING_PAPER_SIZE
+	paper_box.size = BRIEFING_PAPER_SIZE
 	vb.add_child(paper_box)
 
-	var paper_tex: TextureRect = _tex_rect("res://assets/ue/Raw/Art/UI/InGameScreens/T_Paper01.png", Vector2(560, 390))
-	if paper_tex != null:
-		paper_tex.stretch_mode = TextureRect.STRETCH_SCALE
-		paper_box.add_child(paper_tex)
+	_letter_paper = TextureRect.new()
+	_letter_paper.name = "MissionLetterPaper"
+	_letter_paper.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_letter_paper.stretch_mode = TextureRect.STRETCH_SCALE
+	_letter_paper.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_letter_paper.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var paper_lift: ShaderMaterial = ShaderMaterial.new()
+	var paper_lift_shader: Shader = Shader.new()
+	paper_lift_shader.code = BRIEFING_PAPER_LIFT_SHADER
+	paper_lift.shader = paper_lift_shader
+	_letter_paper.material = paper_lift
+	var paper_src: Texture2D = null
+	if ResourceLoader.exists("res://assets/ue/Raw/Art/UI/InGameScreens/T_Paper01.png"):
+		paper_src = ResourceLoader.load("res://assets/ue/Raw/Art/UI/InGameScreens/T_Paper01.png") as Texture2D
+	if paper_src != null:
+		var atlas: AtlasTexture = AtlasTexture.new()
+		atlas.atlas = paper_src
+		atlas.region = BRIEFING_PAPER_SOURCE_CROP
+		_letter_paper.texture = atlas
+		paper_box.add_child(_letter_paper)
 	else:
 		var fallback_paper: ColorRect = ColorRect.new()
-		fallback_paper.size = Vector2(560, 390)
+		fallback_paper.set_anchors_preset(Control.PRESET_FULL_RECT)
 		fallback_paper.color = Color(0.84, 0.77, 0.68, 0.98)
 		paper_box.add_child(fallback_paper)
 
-	var text_vb: VBoxContainer = VBoxContainer.new()
-	text_vb.position = Vector2(88, 56)
-	text_vb.custom_minimum_size = Vector2(384, 276)
-	text_vb.size = Vector2(384, 276)
-	text_vb.add_theme_constant_override("separation", 10)
-	text_vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	paper_box.add_child(text_vb)
+	# KF13 right inner-margin scrollbar: a thin bright thumb over a darker track.
+	var scroll_track: ColorRect = ColorRect.new()
+	scroll_track.name = "MissionLetterScrollbarTrack"
+	scroll_track.position = Vector2(BRIEFING_SCROLLBAR_X - 1.0, BRIEFING_SCROLLBAR_TOP)
+	scroll_track.size = Vector2(5.0, BRIEFING_SCROLLBAR_HEIGHT)
+	scroll_track.color = Color(0.36, 0.31, 0.26, 0.22)
+	scroll_track.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	paper_box.add_child(scroll_track)
+	_letter_scrollbar = Panel.new()
+	_letter_scrollbar.name = "MissionLetterScrollbar"
+	_letter_scrollbar.position = Vector2(BRIEFING_SCROLLBAR_X, BRIEFING_SCROLLBAR_TOP + 18.0)
+	_letter_scrollbar.size = Vector2(3.0, BRIEFING_SCROLLBAR_HEIGHT - 46.0)
+	_letter_scrollbar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var thumb_style: StyleBoxFlat = StyleBoxFlat.new()
+	thumb_style.bg_color = Color(0.99, 0.97, 0.92, 0.86)
+	thumb_style.set_corner_radius_all(1)
+	_letter_scrollbar.add_theme_stylebox_override("panel", thumb_style)
+	paper_box.add_child(_letter_scrollbar)
+
+	var text_box: Control = Control.new()
+	text_box.name = "MissionLetterText"
+	text_box.position = BRIEFING_TEXT_ORIGIN
+	text_box.size = Vector2(BRIEFING_TEXT_WIDTH, BRIEFING_PAPER_SIZE.y - BRIEFING_TEXT_ORIGIN.y - 26.0)
+	text_box.custom_minimum_size = text_box.size
+	text_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	paper_box.add_child(text_box)
 
 	_letter_title_lbl = Label.new()
+	_letter_title_lbl.name = "MissionLetterTitle"
 	_letter_title_lbl.text = "Esteemed Colleague -"
-	_letter_title_lbl.add_theme_font_size_override("font_size", 18)
+	_letter_title_lbl.position = Vector2.ZERO
+	_letter_title_lbl.size = Vector2(BRIEFING_TEXT_WIDTH, 26.0)
+	_letter_title_lbl.add_theme_font_size_override("font_size", BRIEFING_FONT_SIZE)
 	_letter_title_lbl.add_theme_color_override("font_color", Color(0.11, 0.09, 0.08, 0.96))
 	if _typewriter != null:
 		_letter_title_lbl.add_theme_font_override("font", _typewriter)
-	text_vb.add_child(_letter_title_lbl)
+	text_box.add_child(_letter_title_lbl)
 
 	_letter_body_lbl = Label.new()
+	_letter_body_lbl.name = "MissionLetterBody"
+	_letter_body_lbl.position = Vector2(0.0, 30.0)
+	_letter_body_lbl.size = Vector2(BRIEFING_TEXT_WIDTH, text_box.size.y - 30.0)
+	_letter_body_lbl.custom_minimum_size = _letter_body_lbl.size
 	_letter_body_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_letter_body_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_letter_body_lbl.add_theme_font_size_override("font_size", 16)
+	_letter_body_lbl.add_theme_font_size_override("font_size", BRIEFING_FONT_SIZE)
 	_letter_body_lbl.add_theme_color_override("font_color", Color(0.12, 0.10, 0.08, 0.95))
 	if _typewriter != null:
 		_letter_body_lbl.add_theme_font_override("font", _typewriter)
-	text_vb.add_child(_letter_body_lbl)
+	text_box.add_child(_letter_body_lbl)
 
 	var btn_wrap: CenterContainer = CenterContainer.new()
 	vb.add_child(btn_wrap)
@@ -1920,15 +2033,77 @@ func set_map_table_card(card: Dictionary) -> void:
 func show_mission_letter(title: String, intro_text: String) -> void:
 	if _letter_root == null:
 		return
+	var was_open: bool = _letter_open
 	_letter_open = true
 	_letter_prev_mouse = Input.mouse_mode
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	var header: String = title.strip_edges()
+	var body_text: String = intro_text.strip_edges()
+	# An authored briefing (KF13) carries its own salutation as line 1, so the
+	# caller passes an empty title and the whole letter is laid out as one block.
+	var own_salutation: bool = header == ""
 	if _letter_title_lbl != null:
-		_letter_title_lbl.text = header if header != "" else "Esteemed Colleague -"
+		_letter_title_lbl.visible = not own_salutation
+		_letter_title_lbl.text = header if not own_salutation else ""
 	if _letter_body_lbl != null:
-		_letter_body_lbl.text = intro_text.strip_edges()
+		if own_salutation:
+			var lines: PackedStringArray = format_briefing_layout(body_text)
+			if lines.size() > 0:
+				body_text = "\n".join(lines)
+			_letter_body_lbl.position = Vector2.ZERO
+			_letter_body_lbl.size = Vector2(BRIEFING_TEXT_WIDTH, BRIEFING_PAPER_SIZE.y - BRIEFING_TEXT_ORIGIN.y - 26.0)
+			_letter_body_lbl.custom_minimum_size = _letter_body_lbl.size
+		else:
+			_letter_body_lbl.position = Vector2(0.0, 30.0)
+			_letter_body_lbl.size = Vector2(BRIEFING_TEXT_WIDTH, BRIEFING_PAPER_SIZE.y - BRIEFING_TEXT_ORIGIN.y - 56.0)
+			_letter_body_lbl.custom_minimum_size = _letter_body_lbl.size
+		_letter_body_lbl.text = body_text
+	if not was_open:
+		_set_letter_hud_hidden(true)
 	_letter_root.visible = true
+
+
+## KF13 layout: wrap the authored letter at the measured parchment text width
+## with the authored typewriter face. TextServer (not Label.get_line_count,
+## which needs a draw pass) is the source of truth so a headless test can pin
+## the reference's 11-line layout.
+func format_briefing_layout(text: String) -> PackedStringArray:
+	var out: PackedStringArray = PackedStringArray()
+	var body: String = text.replace("\r\n", "\n").replace("\r", "\n").strip_edges()
+	if body == "":
+		return out
+	if _typewriter == null:
+		return body.split("\n")
+	var ts: TextServer = TextServerManager.get_primary_interface()
+	var rid: RID = ts.create_shaped_text()
+	ts.shaped_text_add_string(rid, body, _typewriter.get_rids(), BRIEFING_FONT_SIZE)
+	var breaks: PackedInt32Array = ts.shaped_text_get_line_breaks(
+		rid, BRIEFING_TEXT_WIDTH, 0, TextServer.BREAK_MANDATORY | TextServer.BREAK_WORD_BOUND
+	)
+	for i: int in range(0, breaks.size() - 1, 2):
+		out.append(body.substr(breaks[i], breaks[i + 1] - breaks[i]).strip_edges())
+	ts.free_rid(rid)
+	return out
+
+
+## Hide every HUD sibling while the letter is open (KF13 has no gameplay HUD
+## behind the parchment) and restore the exact prior visibility on close.
+func _set_letter_hud_hidden(hide_rest: bool) -> void:
+	if _root == null:
+		return
+	if hide_rest:
+		_letter_hud_visibility.clear()
+		for ch: Node in _root.get_children():
+			if ch == _letter_root or not (ch is CanvasItem):
+				continue
+			var item: CanvasItem = ch as CanvasItem
+			_letter_hud_visibility[item] = item.visible
+			item.visible = false
+	else:
+		for item_v: Variant in _letter_hud_visibility.keys():
+			if item_v is CanvasItem and is_instance_valid(item_v):
+				(item_v as CanvasItem).visible = bool(_letter_hud_visibility[item_v])
+		_letter_hud_visibility.clear()
 
 
 func is_mission_letter_open() -> bool:
@@ -3035,6 +3210,7 @@ func _get_ping_marker_node(idx: int) -> Control:
 
 func _close_mission_letter() -> void:
 	_letter_open = false
+	_set_letter_hud_hidden(false)
 	if _letter_root != null:
 		_letter_root.visible = false
 	Input.mouse_mode = _letter_prev_mouse

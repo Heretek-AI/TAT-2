@@ -46,6 +46,17 @@ var loot_quest: Dictionary = {} # DT_LootInfo_Quest row -> authored row
 var _loot_quest_by_tag: Dictionary = {} # Loot.Quest.* -> same record
 var _quest_text_replacement: Dictionary = {}
 var _mission_plan_cache: Dictionary = {}
+## Authored briefing letters from StringTables/ST_Missions_*.json (parsed by
+## tools/parse_quests.py) keyed by Mission.*. The raw text keeps the authored
+## `{MatchDurationInMinutes}` / `{EndgameDurationInMinutes}` placeholders;
+## format_mission_briefing() is the only code that substitutes them.
+var mission_briefings: Dictionary = {}
+## Tracked expansion overlay for briefing/endgame rules that differ from the
+## extracted quest graph. game/data/expansion/briefing_overrides.json is
+## hand-authored expansion data (not generated), e.g. the LootTheRoom letter's
+## 20-minute magic door (1200 s, source KF13) over the QG's 480 s.
+var briefing_overrides: Dictionary = {}
+const BRIEFING_OVERRIDES_PATH: String = "res://data/expansion/briefing_overrides.json"
 ## G1/G2 sentinels: every fallback routing decision is counted and named so
 ## a misspelled row or map can never route silently. Export gates on these.
 ## The 64-row list caps below are named constants so the bound is provable
@@ -65,6 +76,7 @@ func _ready() -> void:
 	_load_missions()
 	_load_clues()
 	_load_quests()
+	_load_briefing_overrides()
 
 
 func _load_json(path: String) -> Variant:
@@ -548,6 +560,100 @@ func get_mission_loot_goal(mission_id: String, difficulty: int) -> int:
 	return int(goals[idx])
 
 
+## Authored briefing letter record for a mission id (StringTables/ST_Missions_*).
+## `text` is raw: the `{MatchDurationInMinutes}` / `{EndgameDurationInMinutes}`
+## placeholders are still present. Empty when the mission authors no letter.
+func get_mission_briefing_record(mission_id: String) -> Dictionary:
+	var rec_v: Variant = mission_briefings.get(mission_id)
+	if not (rec_v is Dictionary):
+		return {}
+	return (rec_v as Dictionary).duplicate(true)
+
+
+## Endgame (magic escape door) window in seconds. The tracked expansion
+## override wins over the extracted quest graph: QG_Guildhall_LootTheRoom
+## authors 480 s, while the shipped briefing letter (KF13) promises 20 minutes,
+## so the override records 1200 s with source=KF13. Falls back to the plan's
+## authored EndgameDuration node (480 for LootTheRoom) when no override exists.
+func get_mission_endgame_seconds(mission_id: String) -> float:
+	var ov_v: Variant = briefing_overrides.get(mission_id)
+	if ov_v is Dictionary:
+		var secs: Variant = (ov_v as Dictionary).get("endgame_seconds", null)
+		if secs is float or secs is int:
+			return float(secs)
+	var plan: Dictionary = get_mission_plan(mission_id)
+	return float(plan.get("endgame_duration", 0.0))
+
+
+## Runtime source label for an endgame override ("KF13"), or "" when the value
+## came from the extracted quest graph. Printed by the mission controller so the
+## provenance of the 20-minute door is visible in the log and the report.
+func get_mission_endgame_source(mission_id: String) -> String:
+	var ov_v: Variant = briefing_overrides.get(mission_id)
+	if ov_v is Dictionary:
+		return str((ov_v as Dictionary).get("source", ""))
+	return ""
+
+
+## Format an authored briefing letter for the HUD. Only the two authored
+## placeholders are substituted, from seconds (never a hand-typed minute count
+## in UI code). CRLF is normalised so Label renders the authored line breaks.
+static func format_mission_briefing(raw: String, match_seconds: float, endgame_seconds: float) -> String:
+	var text: String = raw.replace("\r\n", "\n").replace("\r", "\n")
+	var match_min: int = int(round(match_seconds / 60.0)) if match_seconds > 0.0 else 0
+	var endgame_min: int = int(round(endgame_seconds / 60.0)) if endgame_seconds > 0.0 else 0
+	if match_min > 0:
+		text = text.replace("{MatchDurationInMinutes}", str(match_min))
+	if endgame_min > 0:
+		text = text.replace("{EndgameDurationInMinutes}", str(endgame_min))
+	if text.find("{MatchDurationInMinutes}") >= 0 or text.find("{EndgameDurationInMinutes}") >= 0:
+		push_warning("[game_data] briefing placeholders left unsubstituted: match=", match_seconds, " endgame=", endgame_seconds)
+	return text.strip_edges()
+
+
+## Convenience: formatted letter for a mission, defaulting the match window to
+## the mission row's Novice limit and the endgame window to the override/plan.
+func get_mission_briefing_text(mission_id: String, match_seconds: float = -1.0, endgame_seconds: float = -1.0) -> String:
+	var rec: Dictionary = get_mission_briefing_record(mission_id)
+	if rec.is_empty():
+		return ""
+	var match_s: float = match_seconds
+	if match_s < 0.0:
+		match_s = get_mission_duration(mission_id, 1)
+	var endgame_s: float = endgame_seconds
+	if endgame_s < 0.0:
+		endgame_s = get_mission_endgame_seconds(mission_id)
+	return format_mission_briefing(str(rec.get("text", "")), match_s, endgame_s)
+
+
+func _load_briefing_overrides() -> void:
+	briefing_overrides.clear()
+	var data: Variant = _load_json(BRIEFING_OVERRIDES_PATH)
+	if not (data is Dictionary):
+		push_warning("[game_data] briefing_overrides.json missing or unreadable; extracted quest-graph endgame values stay authoritative")
+		return
+	var rows_v: Variant = (data as Dictionary).get("briefings", {})
+	if not (rows_v is Dictionary):
+		push_warning("[game_data] briefing_overrides.json has no 'briefings' object")
+		return
+	for mid_v: Variant in (rows_v as Dictionary).keys():
+		var mid: String = str(mid_v)
+		var rec_v: Variant = (rows_v as Dictionary)[mid_v]
+		if not (rec_v is Dictionary):
+			push_warning("[game_data] briefing override '", mid, "' is not an object; skipped")
+			continue
+		var rec: Dictionary = (rec_v as Dictionary).duplicate(true)
+		var secs: Variant = rec.get("endgame_seconds", null)
+		if not (secs is int or secs is float) or float(secs) <= 0.0:
+			push_warning("[game_data] briefing override '", mid, "' has no positive endgame_seconds; skipped")
+			continue
+		if str(rec.get("source", "")).strip_edges() == "":
+			push_warning("[game_data] briefing override '", mid, "' has no source; provenance is required")
+		if not quest_missions.has(mid) and not mission_briefings.has(mid):
+			push_warning("[game_data] briefing override '", mid, "' matches no authored mission row/letter")
+		briefing_overrides[mid] = rec
+
+
 ## Match time limit in seconds for a map + difficulty (1 Novice, 2 Thief,
 ## 3 Master Thief). Returns 0.0 when unknown or unlimited (FTUE/tutorial and
 ## the Jaspering Hall expansion have no limit).
@@ -970,6 +1076,9 @@ func _load_quests() -> void:
 	var m_v: Variant = d.get("missions", {})
 	if m_v is Dictionary:
 		quest_missions = (m_v as Dictionary).duplicate(true)
+	var mb_v: Variant = d.get("mission_briefings", {})
+	if mb_v is Dictionary:
+		mission_briefings = (mb_v as Dictionary).duplicate(true)
 	var g_v: Variant = d.get("quest_graphs", {})
 	if g_v is Dictionary:
 		quest_graphs = (g_v as Dictionary).duplicate(true)

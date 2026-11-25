@@ -7,6 +7,7 @@ Sources (all under extracted/json):
   Gameplay/Loot/Data/DT_LootInfo_Quest.json
   Gameplay/Loot/Actors/**/*.json           quest loot actor classes
   Gameplay/Clues/ClueSets/St_Clues_TextReplacement.json
+  StringTables/ST_Missions_*.json          authored `*.Briefing` letter text
   Maps/**/QG_*.json                        TATQuestGraph / TATQuestGraphModule
   Maps/**/*.json                           TATQuestActorSpawnerComponent and
                                            TATReadableClueSpawner components
@@ -50,6 +51,21 @@ LOOT_TABLE = EX / "Gameplay" / "Loot" / "Data" / "DT_LootInfo_Quest.json"
 TEXT_REPLACEMENT = (
     EX / "Gameplay" / "Clues" / "ClueSets" / "St_Clues_TextReplacement.json"
 )
+MISSION_STRINGS = EX / "StringTables"
+
+## Runtime-known briefing format params. tools/parse_quests.py emits the raw
+## authored text (placeholders intact); GameData.format_mission_briefing()
+## substitutes them and the tracked expansion override supplies the endgame
+## seconds. Any other `{Token}` in an authored letter would reach the player
+## verbatim, so it fails the parser gate.
+BRIEFING_PLACEHOLDERS = {"MatchDurationInMinutes", "EndgameDurationInMinutes"}
+## Authored string-table prefixes that do not spell the CDT mission id.
+## ST_Missions_Guildhall_Procurment (sic) is the Vault Heist letter: its text
+## names the Warburg Effigy in the Guildhall vaults, and the mission row is
+## Mission.Guildhall.VaultHeist.
+BRIEFING_MISSION_ALIASES = {
+    "Mission.Guildhall.Procurement": "Mission.Guildhall.VaultHeist",
+}
 
 OBJECTIVE_KEYS = {
     "Item",
@@ -796,6 +812,74 @@ def load_text_replacement() -> dict[str, dict]:
     return dict(sorted(out.items()))
 
 
+def load_mission_briefings(
+    missions: dict[str, dict], warnings: list[str]
+) -> dict[str, dict]:
+    """Authored mission briefing letters from StringTables/ST_Missions_*.json.
+
+    A key such as `Guildhall.LootTheRoom.Briefing` belongs to
+    `Mission.Guildhall.LootTheRoom`; the same namespace's `.Fact` row is kept
+    alongside it. Text is emitted verbatim (Windows line breaks and the
+    `{MatchDurationInMinutes}` / `{EndgameDurationInMinutes}` placeholders are
+    preserved) so the runtime formatter is the only thing that rewrites it.
+    """
+    out: dict[str, dict] = {}
+    for path in sorted(
+        Path(p) for p in glob.glob(str(MISSION_STRINGS / "ST_Missions_*.json"))
+    ):
+        data = load_json(path)
+        rows = list_records(data)
+        if not rows:
+            continue
+        table = rows[0].get("StringTable") or {}
+        entries = table.get("KeysToEntries") or {}
+        if not isinstance(entries, dict):
+            continue
+        table_name = str(rows[0].get("Name") or asset_stem(path))
+        namespace = str(table.get("TableNamespace") or "")
+        for key, text in entries.items():
+            if not isinstance(key, str) or not key.endswith(".Briefing"):
+                continue
+            if not isinstance(text, str) or text.strip() == "":
+                warnings.append(f"{table_name}.{key} is empty; no briefing emitted")
+                continue
+            mission_id = "Mission." + key[: -len(".Briefing")]
+            mission_id = BRIEFING_MISSION_ALIASES.get(mission_id, mission_id)
+            placeholders = sorted(set(re.findall(r"\{([A-Za-z0-9_]+)\}", text)))
+            fact_key = key[: -len(".Briefing")] + ".Fact"
+            fact = entries.get(fact_key)
+            rec = {
+                "mission_id": mission_id,
+                "key": key,
+                "text": text,
+                "table": table_name,
+                "namespace": namespace,
+                "placeholders": placeholders,
+                "unknown_placeholders": [
+                    p for p in placeholders if p not in BRIEFING_PLACEHOLDERS
+                ],
+                "fact_key": fact_key if isinstance(fact, str) else "",
+                "fact": fact if isinstance(fact, str) else "",
+                "source_file": rel(path),
+            }
+            if mission_id in out:
+                warnings.append(
+                    f"duplicate authored briefing for {mission_id}: "
+                    f"{out[mission_id]['source_file']} and {rec['source_file']}"
+                )
+                continue
+            out[mission_id] = rec
+    for mission in missions.values():
+        rec = out.get(mission["id"])
+        mission["briefing_key"] = rec["key"] if rec else ""
+        mission["briefing_present"] = rec is not None
+    for mission_id in sorted(set(out) - set(missions)):
+        warnings.append(
+            f"authored briefing {mission_id} has no CDT_Missions/DT_Missions_* row"
+        )
+    return dict(sorted(out.items()))
+
+
 def load_quest_spawners(loc: LocTable) -> tuple[list[dict], dict]:
     """Return spawner records, {map_id: {tag: [records]}} and level info."""
     records: list[dict] = []
@@ -1274,6 +1358,23 @@ def validate(
     }
 
 
+def validate_briefings(briefings: dict[str, dict]) -> dict:
+    """Fail closed on a letter placeholder the runtime cannot substitute."""
+    failures: list[str] = []
+    for mission_id, rec in briefings.items():
+        for token in rec["unknown_placeholders"]:
+            failures.append(
+                f"{mission_id} briefing uses unknown placeholder {{{token}}} "
+                f"({rec['table']}.{rec['key']})"
+            )
+    return {
+        "name": "briefing_placeholders_known",
+        "ok": not failures,
+        "checked": len(briefings),
+        "failures": failures,
+    }
+
+
 def main() -> None:
     warnings: list[str] = []
     loc = LocTable()
@@ -1283,6 +1384,7 @@ def main() -> None:
     link_missions_and_graphs(missions, graphs)
     loot_rows, loot_by_tag = load_loot_quest(loc, warnings)
     text_replacement = load_text_replacement()
+    briefings = load_mission_briefings(missions, warnings)
     quest_spawners, spawn_locations = load_quest_spawners(loc)
     readable_by_level = load_readable_by_level()
     clue_sets = load_clue_sets_for_validation()
@@ -1297,6 +1399,10 @@ def main() -> None:
         clue_sets,
         warnings,
     )
+    briefing_check = validate_briefings(briefings)
+    validation["checks"].append(briefing_check)
+    validation["failures"].extend(briefing_check["failures"])
+    validation["ok"] = not validation["failures"]
 
     # Diagnostic: loot rows whose QuestLocationTag has no quest spawner.  These
     # are ambient loot locations (Shop/HighStreet/...) and free-play drop tags,
@@ -1331,6 +1437,7 @@ def main() -> None:
         "quest_spawners": len(quest_spawners),
         "quest_spawn_locations": sum(len(tags) for tags in spawn_locations.values()),
         "text_replacement_keys": len(text_replacement),
+        "mission_briefings": len(briefings),
     }
 
     output = {
@@ -1340,12 +1447,14 @@ def main() -> None:
             "missions": rel(MISSIONS_TABLE),
             "loot": rel(LOOT_TABLE),
             "text_replacement": rel(TEXT_REPLACEMENT),
+            "mission_strings": rel(MISSION_STRINGS),
             "quest_graphs": sorted({g["source_file"] for g in graphs.values()}),
             "localization": rel(LOC_CSV),
         },
         "stats": stats,
         "contracts": contracts,
         "missions": missions,
+        "mission_briefings": briefings,
         "quest_graphs": graphs,
         "loot_quest": loot_rows,
         "quest_spawn_locations": spawn_locations,

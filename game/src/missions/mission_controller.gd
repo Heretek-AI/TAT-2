@@ -103,6 +103,12 @@ const DEN_WEST_WINDOW_ANCHOR := Vector3(-6.06, 43.05, 271.4)
 ## Inward shaft length: window plane to mid-room (shell centre x 1.3275 m, z
 ## 271.355 m) along the authored view axis.
 const DEN_WINDOW_SHAFT_LENGTH := 6.5
+## Authored Wanted-poster wall: SM_PosterWantedA..E AABBs in
+## ThievesDenTest_P (x -5.7777, z 268.77..269.26, y 40.86..42.30). The warm
+## poster fill sits just inboard of that wall, at poster mid-height.
+const DEN_POSTER_WALL_CENTRE := Vector3(-5.7777, 41.58, 269.0)
+const DEN_POSTER_FILL_OFFSET := Vector3(0.52, 0.0, 0.0)
+const DEN_POSTER_FILL_ENERGY := 0.10
 ## A parsed `window_positions` entry only counts as the framed window when it
 ## lies within this many degrees of the authored view axis and this many metres
 ## of lateral offset from it (the window opening is ~2 m wide).
@@ -957,19 +963,26 @@ func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> 
 	VfxManager.spawn_window_godray(self, win_pos, beam_target)
 	_spawn_den_window_vista(win_pos, outward)
 
-	# Authored window backlight assistant: a small shadowless cool omni just
-	# outside the glass so the frosted panes read like KF02/KF06 instead of a
-	# black hole. Deliberately NOT a hand fill: total stays 0.90. The authored
-	# BP_MoonShape_C_5 plane itself is unhidden by the loader.
-	var window_backlight := OmniLight3D.new()
+	# Authored window backlight assistant: a small shadowless cool spot placed
+	# OUTBOARD of the glass and aimed INTO the room, so the frosted panes and the
+	# room-facing reveal read like KF02/KF06 instead of a black hole or a
+	# symmetric omni glow. Deliberately NOT a hand fill: total stays 1.90. The
+	# authored BP_MoonShape_C_5 plane itself is unhidden by the loader.
+	var window_backlight := SpotLight3D.new()
 	window_backlight.name = "DenWindowBacklight"
-	window_backlight.position = win_pos + outward * 0.6
+	window_backlight.position = win_pos + outward * 1.1
 	window_backlight.light_color = Color(0.45, 0.78, 0.95)
 	window_backlight.light_energy = 0.6
-	window_backlight.omni_range = 4.0
-	window_backlight.omni_attenuation = 2.0
+	window_backlight.spot_range = 7.0
+	window_backlight.spot_angle = 50.0
+	window_backlight.spot_attenuation = 1.6
 	window_backlight.shadow_enabled = false
+	window_backlight.set_meta("room_facing", true)
+	window_backlight.set_meta("outboard", true)
+	window_backlight.set_meta("den_window_anchor", win_pos)
+	window_backlight.set_meta("den_outward", outward)
 	add_child(window_backlight)
+	window_backlight.look_at(win_pos - outward * 3.0, Vector3.UP)
 	light_probe.register_light(window_backlight)
 
 	# Single interior ReflectionProbe for Thieves' Den specular reflections.
@@ -1026,6 +1039,25 @@ func _setup_thieves_den_hub(anchor: Vector3, ue_level_data: Dictionary = {}) -> 
 		shade_fill.add_to_group("den_hand_fills")
 		add_child(shade_fill)
 		light_probe.register_light(shade_fill)
+
+	# W6U1: the five authored Wanted posters on the west wall sit in the window
+	# backlight's falloff and read black at KF06 framing. A single 0.10 warm omni
+	# just inboard of the poster wall closes that shadow side without raising
+	# exposure/glow. den_hand_fills total: 1.90 + 0.10 = 2.00 <= 2.01 (34b).
+	if not MobileProfile.is_mobile():
+		var poster_fill := OmniLight3D.new()
+		poster_fill.name = "DenPosterFill"
+		poster_fill.position = DEN_POSTER_WALL_CENTRE + DEN_POSTER_FILL_OFFSET
+		poster_fill.light_color = Color(1.0, 0.80, 0.56)
+		poster_fill.light_energy = DEN_POSTER_FILL_ENERGY
+		poster_fill.omni_range = 2.6
+		poster_fill.omni_attenuation = 2.0
+		poster_fill.light_specular = 0.0
+		poster_fill.shadow_enabled = false
+		poster_fill.light_volumetric_fog_energy = 0.0
+		poster_fill.add_to_group("den_hand_fills")
+		add_child(poster_fill)
+		light_probe.register_light(poster_fill)
 
 	_apply_den_parchment_emission()
 
@@ -2616,6 +2648,28 @@ func _trigger_mission_start_letter() -> void:
 	var intro_s: String = str(contract_info.get("intro", "")).strip_edges()
 	if intro_s == "":
 		intro_s = str(_active_mission_row.get("description", contract_info.get("description", ""))).strip_edges()
+	# Free play / side mission: the authored ST_Missions_* letter is the
+	# player-facing briefing (KF13), not the mission-row description. It carries
+	# its own salutation, so the HUD title is empty; the 55/20 minute values are
+	# substituted from seconds plus the tracked endgame override (never typed
+	# into UI code).
+	if GameState.free_play and GameState.active_mission_id != "":
+		var mid: String = GameState.active_mission_id
+		var rec: Dictionary = GameData.get_mission_briefing_record(mid)
+		if not rec.is_empty() and str(rec.get("text", "")).strip_edges() != "":
+			var match_s: float = GameState.run_time_limit
+			if match_s <= 0.0:
+				match_s = GameData.get_mission_duration(mid, GameState.difficulty)
+			var endgame_s: float = GameData.get_mission_endgame_seconds(mid)
+			var source: String = GameData.get_mission_endgame_source(mid)
+			title_s = ""
+			intro_s = GameData.format_mission_briefing(str(rec.get("text", "")), match_s, endgame_s)
+			print(
+				"TAT-2 briefing: mission=", mid, " table=", str(rec.get("table", "")),
+				" key=", str(rec.get("key", "")), " match_s=", match_s,
+				" endgame_s=", endgame_s, " endgame_source=", source if source != "" else "quest_graph",
+				" lines=", intro_s.split("\n").size()
+			)
 	if intro_s.find("{MatchDurationInMinutes}") >= 0:
 		var mins: int = int(round(GameState.run_time_limit / 60.0)) if GameState.run_time_limit > 0.0 else 120
 		intro_s = intro_s.replace("{MatchDurationInMinutes}", str(mins))

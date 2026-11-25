@@ -326,9 +326,23 @@ func _t4_11_clean_room_gate_verification() -> void:
 
 
 func _t4_12_r3_cooked_data_adversarial_audit() -> void:
-	# Enforce all 8 R3 cooked-data hard limits without fabrication
+	# Enforce all 8 R3 cooked-data hard limits without fabrication. R3-1 now
+	# asserts the authored Niagara renderer data is actually consumed
+	# (catalogue -> decoded params -> shader -> loader) rather than a source
+	# string absence, which failed whenever the VFX path improved.
 	var sys_v: Variant = h.read_json("res://data/generated/vfx/systems.json")
-	var r3_1: bool = sys_v is Dictionary and h.read_text("res://src/core/vfx_manager.gd").find("VectorVM") < 0
+	var r3_lib: String = h.read_text("res://src/core/vfx/niagara_library.gd")
+	var r3_prm: String = h.read_text("res://src/core/vfx/niagara_params.gd")
+	var r3_shd: String = h.read_text("res://src/core/level_niagara.gdshader")
+	var r3_ldr: String = h.read_text("res://src/core/level_loader.gd")
+	var r3_1: bool = sys_v is Dictionary and int((sys_v as Dictionary).get("system_count", 0)) == 120 \
+		and r3_lib != "" and r3_lib.find("SYSTEMS_PATH") >= 0 and r3_lib.find("systems.json") >= 0 \
+		and r3_prm != "" and r3_prm.find("SortedParameterOffsets") >= 0 \
+		and r3_prm.find("ParameterData") >= 0 and r3_prm.find("EVENT_GATED_SYSTEMS") >= 0 \
+		and r3_shd != "" and r3_shd.find("sampler2D sprite_tex") >= 0 \
+		and r3_shd.find("INSTANCE_CUSTOM") >= 0 \
+		and r3_ldr != "" and r3_ldr.find("NiagaraParams.prepare") >= 0 \
+		and r3_ldr.find("niagara_sprites") >= 0
 	var r3_2: bool = h.read_text("res://src/core/tat_sky.gdshader").find("APPROXIMATE") >= 0 and h.read_text("res://src/core/level_loader.gd").find("DECAL_GENERIC_TOKENS") >= 0
 	var r3_3: bool = h.read_text("res://src/ai/guard_ai.gd").find("BP_AIPatrolPath") < 0
 	var al_txt: String = h.read_text("res://src/core/animation_library.gd")
@@ -337,7 +351,7 @@ func _t4_12_r3_cooked_data_adversarial_audit() -> void:
 	var r3_6: bool = h.read_text("res://src/core/weather_profile.gd").find("LumenSkylightLeaking =") < 0
 	var r3_7: bool = h.read_text("res://src/core/audio_manager.gd").find("PLUG_IR_SYNTH") < 0
 	var r3_8: bool = h.read_text("res://src/core/level_loader.gd").find("SplineEditorMesh") >= 0
-	h.require(r3_1 and r3_2 and r3_3 and r3_4 and r3_5 and r3_6 and r3_7 and r3_8, "T4-12", "All 8 R3 cooked-data hard limits respected (zero fabricated params)")
+	h.require(r3_1 and r3_2 and r3_3 and r3_4 and r3_5 and r3_6 and r3_7 and r3_8, "T4-12", "R3 limits: 7 fabrication limits hold and Niagara consumes authored renderer data (zero fabricated params)")
 
 
 ## T4-13: Free play ("Contract Inactive") is the Guildhall Cleanout Heist run

@@ -320,11 +320,29 @@ func _bVA_05_mission_prep() -> void:
 
 
 func _bVA_06_vfx_glass_culling() -> void:
-	# T2-06-A: R3 Niagara VM Non-Fabrication
+	# T2-06-A: R3 Niagara authored renderer data is actually consumed. This
+	# replaces the old source-string absence guard, which inverted the signal:
+	# improving the VFX path failed the suite while the procedural stand-in
+	# stayed unguarded. Suite 52 owns the catalogue class split; this pins the
+	# count plus the runtime wiring catalogue -> decoded params -> shader -> loader.
 	var sys_v: Variant = h.read_json("res://data/generated/vfx/systems.json")
-	var vfx_txt: String = h.read_text("res://src/core/vfx_manager.gd")
-	var sys_ok: bool = sys_v is Dictionary and vfx_txt.find("VectorVM") < 0
-	h.require(sys_ok, "T2-06-A", "R3 Niagara VM bytecode parameters never fabricated")
+	var nlib_txt: String = h.read_text("res://src/core/vfx/niagara_library.gd")
+	var nprm_txt: String = h.read_text("res://src/core/vfx/niagara_params.gd")
+	var nshd_txt: String = h.read_text("res://src/core/level_niagara.gdshader")
+	var nldr_txt: String = h.read_text("res://src/core/level_loader.gd")
+	var lib_ok: bool = nlib_txt != "" and nlib_txt.find("SYSTEMS_PATH") >= 0 \
+		and nlib_txt.find("systems.json") >= 0
+	var prm_ok: bool = nprm_txt != "" and nprm_txt.find("SortedParameterOffsets") >= 0 \
+		and nprm_txt.find("ParameterData") >= 0 and nprm_txt.find("EVENT_GATED_SYSTEMS") >= 0
+	var shd_ok: bool = nshd_txt != "" and nshd_txt.find("sampler2D sprite_tex") >= 0 \
+		and nshd_txt.find("INSTANCE_CUSTOM") >= 0
+	var wire_ok: bool = nldr_txt != "" and nldr_txt.find("NiagaraParams.prepare") >= 0 \
+		and nldr_txt.find("niagara_sprites") >= 0
+	var sys_ok: bool = sys_v is Dictionary \
+		and int((sys_v as Dictionary).get("system_count", 0)) == 120 \
+		and lib_ok and prm_ok and shd_ok and wire_ok
+	h.require(sys_ok, "T2-06-A",
+		"R3 Niagara authored renderer data + decoded parameters consumed (no fabricated VM)")
 
 	var ll: Node = h.new_script_node("res://src/core/level_loader.gd")
 	h.root.add_child(ll)

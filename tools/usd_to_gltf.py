@@ -12,21 +12,78 @@ mirroring the relative path. Prints a JSON summary line per file to stdout.
 """
 
 import json
+import math
 import re
 import sys
 from pathlib import Path
 
 
-def read_usd_timecodes_per_second(usda_path: str) -> float | None:
-    """Parse the USDA header for its authored sample rate (no guessing)."""
+def read_usd_header(usda_path: str) -> dict:
+    """Parse the USDA header for its authored sample rate and timecode range."""
+    header = {"tps": None, "start": None, "end": None}
     with open(usda_path, "r", errors="ignore") as fh:
         for i, line in enumerate(fh):
             if i > 25:
                 break
             m = re.search(r"timeCodesPerSecond\s*=\s*([0-9.]+)", line)
             if m:
-                return float(m.group(1))
-    return None
+                header["tps"] = float(m.group(1))
+                continue
+            m = re.search(r"startTimeCode\s*=\s*(-?\d+)", line)
+            if m:
+                header["start"] = int(m.group(1))
+                continue
+            m = re.search(r"endTimeCode\s*=\s*(-?\d+)", line)
+            if m:
+                header["end"] = int(m.group(1))
+    return header
+
+
+def compute_render_fps(
+    tps: float | None,
+    start_timecode: int | None,
+    end_timecode: int | None,
+    frame_span: float | None,
+) -> dict | None:
+    """Scene fps/fps_base that makes the exported clip the authored length.
+
+    The USD writer emits N = end - start + 1 samples at timeCodesPerSecond, so
+    the authored length is L = N / tps. Blender maps every timecode to one
+    frame and its glTF exporter writes seconds as frame / (fps * fps_base)
+    (io_scene_gltf2/blender/exp/animation/keyframes.py), so a keyframe span of
+    `frame_span` frames lasts frame_span / (fps * fps_base). Solving that for L
+    gives the rate below; with startTimeCode == 0 the span is also the last
+    exported frame, so the GLB's max input time is exactly L.
+
+    Returns {"fps", "fps_base", "effective_fps", "authored_length"} or None
+    when there is nothing to match: a zero or unknown keyframe span (the 23
+    single-pose additive clips legitimately export duration 0) or a missing,
+    non-positive or non-finite tps/timecode range.
+    """
+    if frame_span is None or not math.isfinite(frame_span) or frame_span <= 0:
+        return None
+    if (
+        tps is None
+        or not math.isfinite(tps)
+        or tps <= 0
+        or start_timecode is None
+        or end_timecode is None
+        or end_timecode < start_timecode
+    ):
+        return None
+    authored_length = (end_timecode - start_timecode + 1) / tps
+    effective_fps = frame_span / authored_length
+    if not math.isfinite(effective_fps) or effective_fps <= 0:
+        return None
+    # Blender's render.fps is an integer; fps_base carries the fraction, and
+    # the exporter multiplies the two.
+    fps = max(1, round(effective_fps))
+    return {
+        "fps": fps,
+        "fps_base": effective_fps / fps,
+        "effective_fps": effective_fps,
+        "authored_length": authored_length,
+    }
 
 
 def convert_one(in_usda: str, out_glb: str) -> dict:
@@ -92,17 +149,30 @@ def convert_one(in_usda: str, out_glb: str) -> dict:
             }
         )
     Path(out_glb).parent.mkdir(parents=True, exist_ok=True)
-    # Preserve the authored sample rate. Blender maps USD timecodes 1:1 to
-    # frames, and its glTF exporter writes seconds as frame/(fps*fps_base)
-    # (verified empirically: 74 frames at 24fps -> 3.0833s). Default 24fps
-    # would silently slow every clip ~2.5x, so derive fps settings from the
-    # USDA header instead.
-    fps = read_usd_timecodes_per_second(in_usda)
-    if fps and fps > 0:
-        fps_int = max(1, round(fps))
+    # Preserve the authored clip length. Blender maps USD timecodes 1:1 to
+    # frames and its glTF exporter writes seconds as frame/(fps*fps_base), so
+    # fps = timeCodesPerSecond alone exports only (N-1)/N of the authored
+    # length: the N samples span N-1 frame intervals. compute_render_fps()
+    # solves for the rate that makes that span last the authored seconds;
+    # zero-span single-pose clips keep the legacy sample-rate mapping (they
+    # export duration 0 by design). Default 24fps would silently slow every
+    # clip ~2.5x, so the USDA header is always the source of truth.
+    header = read_usd_header(in_usda)
+    tps = header["tps"]
+    span = max(
+        (a["frame_range"][1] - a["frame_range"][0] for a in result["actions"]),
+        default=0.0,
+    )
+    retime = compute_render_fps(tps, header["start"], header["end"], span)
+    if retime is not None:
+        bpy.context.scene.render.fps = retime["fps"]
+        bpy.context.scene.render.fps_base = retime["fps_base"]
+        result["duration_retime"] = retime
+    elif tps and tps > 0:
+        fps_int = max(1, round(tps))
         bpy.context.scene.render.fps = fps_int
-        bpy.context.scene.render.fps_base = fps / fps_int
-    result["fps_applied"] = fps
+        bpy.context.scene.render.fps_base = tps / fps_int
+    result["fps_applied"] = tps
     bpy.ops.export_scene.gltf(
         filepath=out_glb,
         export_format="GLB",
@@ -180,7 +250,13 @@ def write_manifest(converted: list, src: Path, dst: Path, manifest: Path) -> Non
     manifest.parent.mkdir(parents=True, exist_ok=True)
     with open(manifest, "w") as fh:
         json.dump(
-            {"ok": ok, "fail": fail, "total": len(converted), "entries": entries},
+            {
+                "duration_mode": "authored",
+                "ok": ok,
+                "fail": fail,
+                "total": len(converted),
+                "entries": entries,
+            },
             fh,
             indent=1,
         )

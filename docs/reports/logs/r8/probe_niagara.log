@@ -1,0 +1,46 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:691)
+         [1] _mission_map_id (res://src/core/game_data.gd:791)
+         [2] _load_missions (res://src/core/game_data.gd:848)
+         [3] _ready (res://src/core/game_data.gd:76)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:691)
+         [1] _mission_map_id (res://src/core/game_data.gd:791)
+         [2] _load_missions (res://src/core/game_data.gd:848)
+         [3] _ready (res://src/core/game_data.gd:76)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:691)
+         [1] _mission_map_id (res://src/core/game_data.gd:791)
+         [2] _load_missions (res://src/core/game_data.gd:848)
+         [3] _ready (res://src/core/game_data.gd:76)
+TAT-2 Loc: reverse map built from sources.json (3404 keys)
+TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
+WARNING: [level_loader] level Niagara: 1048 placements across 16 systems in 140 chunk nodes (4 sprite-masked, 810 parameter sets, 2647 activation-skipped; decode root=res://../extracted/json files=77)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:6079)
+         [1] _run (res://tests/probe_niagara.gd:117)
+NIAGARA_PROBE files=107 authored=3695 active=1048 skipped=2647 systems=16 nodes=140 sprites=4 params=810 tint(param/material/fallback)=743/12/293
+NIAGARA_CANDLE Building_Guildhall_POI.tatlevel.json candles=121 flames=140 suppressed=79
+ERROR: Parse JSON failed. Error at line 0: Unknown error getting token
+   at: parse_string (core/io/json.cpp:629)
+   GDScript backtrace (most recent call first):
+       [0] _check_candle_dedup (res://tests/probe_niagara.gd:507)
+       [1] _run (res://tests/probe_niagara.gd:252)
+NIAGARA_CULL near(visible/total)=4/140 far=0/140
+NIAGARA_SWITCH NS_Ripple_02a off_changed=1 restored=true
+WARNING: [level_loader] level Niagara: 219 placements across 4 systems in 39 chunk nodes (1 sprite-masked, 159 parameter sets, 915 activation-skipped; decode root=res://../extracted/json files=17)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:6079)
+         [1] _run (res://tests/probe_niagara.gd:313)
+NIAGARA_CULL_MAP Guildhall_Gameplay active=219 nodes=39 visible=19
+NIAGARA_PROBE PASS

@@ -9,23 +9,30 @@ Everything numeric comes from `tools/gate_ratchet.json`; there is no second
 copy of a count in this file, so raising the ratchet after a real run never
 leaves a checker that forces the old figure.
 
+Floors are MINIMUMS
+-------------------
+A wave may add scripts or tests, so every count is read from the log and
+compared with `>=` against the ratchet value: a log below a floor fails, a log
+above it passes. Failure counts (`broken`, `fails`, `unexpected`, `offenders`)
+are exact zeros, `e2e.passed` must equal `e2e.total`, and audit coverage must
+satisfy `num <= den`. The ratchet value therefore never has to be bumped just
+because a wave added a test.
+
 Evidence layout
 ---------------
 `gate_ratchet.evidence` names the directory and one log per gate:
 
     docs/reports/logs/<log>          # committed by the wave that measured it
 
-For each gate with an evidence log this checker asserts the log contains the
-summary built from the ratchet values, and — for `run_tests`/`m2` — at least
-`passes` lines starting with `PASS`. `probe_leak` must contain `PROBE start` and
-no leak/script-error markers. A missing log, a stale/mismatched summary or too
-few PASS lines is a hard failure with the exact command to re-run and commit.
+For each gate with an evidence log this checker asserts the log matches the
+summary pattern and that every captured count is at or above the floor; for
+`run_tests`/`m2` it also requires at least `passes` lines starting with `PASS`.
+`probe_leak` must contain `PROBE start` and no leak/script-error markers, and
+the named probe logs must contain their PASS marker.
 
-`audit` and `texture_cap` have no log in the W7G wave: the worktree cannot run
-`make audit` while another lane's producers are uncommitted (the private
-data tree is shared). Their base floors remain in the JSON and integration must
-attach a log when it re-measures; this checker prints a notice rather than
-pretending it verified them.
+`report` names the report that must quote the floors, the coverage and the
+`measured_on` commit, so a stale report cannot claim a green gate. It defaults
+to the W7 report for older baselines.
 
 The hosted CI job runs this plus the Python/tooling checks. The Godot gates
 themselves need the private extract (`extracted/`, `game/assets/`) and run
@@ -41,57 +48,89 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 RATCHET = ROOT / "tools" / "gate_ratchet.json"
-REPORT = ROOT / "docs" / "reports" / "w7-integration.md"
+DEFAULT_REPORT = "docs/reports/w7-integration.md"
 
-# Non-numeric wiring only: which values form each log's summary and the exact
+# Non-numeric wiring only: the log pattern each gate writes and the exact
 # command that regenerates the log. All numbers come from the ratchet JSON.
+# `minimums` maps a regex group to the ratchet key it must be >=.
 LOG_GATES = {
     "compile": {
         "command": 'tools/godot --headless --path game --script "$PWD/tools/check_scripts_compile.gd"',
-        "summary": lambda g: rf"scripts checked: {g['checked']}, broken: {g['broken']}",
+        "pattern": lambda g: r"scripts checked: (\d+), broken: 0",
+        "minimums": [(1, "checked")],
         "passes_key": None,
     },
     "run_tests": {
         "command": "make test",
-        "summary": lambda g: rf"SUMMARY: fails={g['fails']}",
+        "pattern": lambda g: r"SUMMARY: fails=0",
+        "minimums": [],
         "passes_key": "passes",
     },
     "m2": {
         "command": "tools/godot --headless --path game --script res://tests/test_m2_player.gd",
-        "summary": lambda g: rf"M2_SUMMARY: fails={g['fails']}",
+        "pattern": lambda g: r"M2_SUMMARY: fails=0",
+        "minimums": [],
         "passes_key": "passes",
     },
     "e2e": {
         "command": "tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd",
-        "summary": lambda g: (
-            rf"SUMMARY: fails={g['fails']} passed={g['passed']} total={g['total']}"
-        ),
+        "pattern": lambda g: r"SUMMARY: fails=0 passed=(\d+) total=(\d+)",
+        "minimums": [(1, "passed"), (2, "total")],
+        "equal_groups": (1, 2),
         "passes_key": None,
     },
     "audit": {
         "command": "make audit",
-        # The coverage floor and the unexpected count share one summary line.
-        "summary": lambda g: (
-            rf"Disk-backed coverage: {g['coverage_num']}/{g['coverage_den']}"
-            rf"[^\n]*unexpected {g['unexpected']}"
+        # Coverage and the unexpected count share one summary line.
+        "pattern": lambda g: (
+            r"Disk-backed content coverage: (\d+)/(\d+)[^\n]*unexpected 0"
         ),
+        "minimums": [(1, "coverage_num"), (2, "coverage_den")],
+        "num_le_den": (1, 2),
         "passes_key": None,
     },
     "texture_cap": {
         "command": "make texture-cap-check",
         # Three values on separate lines; the file is scanned as a whole.
-        "summary": lambda g: (
-            rf"capped: {g['capped']}[\s\S]*"
-            rf"alpha-critical \(kept full-res\): {g['alpha_kept']}[\s\S]*"
-            rf"offenders: {g['offenders']}"
+        "pattern": lambda g: (
+            r"capped: (\d+)[\s\S]*"
+            r"alpha-critical \(kept full-res\): (\d+)[\s\S]*"
+            r"offenders: 0"
         ),
+        "minimums": [(1, "capped"), (2, "alpha_kept")],
+        "passes_key": None,
+    },
+    "perf_guard": {
+        "command": "build/qa/test_perf_guard.sh",
+        "pattern": lambda g: r"PERF_GUARD_TEST PASS checks=(\d+) fails=0",
+        "minimums": [(1, "checks")],
         "passes_key": None,
     },
 }
-# Gates without an evidence log. Empty now that integration committed audit and
-# texture-cap logs; keep the mechanism so a future wave can declare a gap
-# explicitly instead of silently leaving a floor unverified.
-NO_LOG_GATES: set[str] = set()
+
+# Probe logs have no numeric floor: a named marker and a clean run are the gate.
+PROBE_GATES = {
+    "probe_door_walk": (
+        "DOORWALK PASS",
+        "tools/godot --headless --path game --script res://tests/probe_door_walk.gd",
+    ),
+    "probe_viewmodel_truth": (
+        "VIEWMODEL_TRUTH PASS",
+        "tools/godot --headless --path game --script res://tests/probe_viewmodel_truth.gd",
+    ),
+    "probe_niagara": (
+        "NIAGARA_PROBE PASS",
+        "tools/godot --headless --path game --script res://tests/probe_niagara.gd",
+    ),
+    "probe_blackjack_race": (
+        "BLACKJACK_PROBE PASS",
+        "tools/godot --headless --path game --script res://tests/probe_blackjack_race.gd",
+    ),
+    "probe_geometry_placement": (
+        "GEOM_PROBE PASS",
+        "tools/godot --headless --path game --script res://tests/probe_geometry_placement.gd",
+    ),
+}
 
 fails: list[str] = []
 
@@ -144,6 +183,8 @@ def main() -> int:
         fail(f"e2e passed {get('e2e', 'passed')} != total {get('e2e', 'total')}")
     if get("audit", "unexpected") != 0 or get("texture_cap", "offenders") != 0:
         fail("audit.unexpected/texture_cap.offenders must be 0")
+    if get("perf_guard", "fails") != 0:
+        fail("perf_guard.fails must be 0")
     den = get("audit", "coverage_den")
     num = get("audit", "coverage_num")
     if den <= 0 or num > den:
@@ -171,15 +212,37 @@ def main() -> int:
             )
             continue
         text = path.read_text(errors="replace")
-        pattern = spec["summary"](gates[gate])
-        if re.search(pattern, text):
-            print(f"PASS: {log_name} proves {gate} ({pattern!r})")
-        else:
+        match = re.search(spec["pattern"](gates[gate]), text)
+        if match is None:
             fail(
-                f"{log_name} is stale or mismatched for {gate!r}: no /{pattern}/ — "
-                f"run `{command}` and commit the fresh log"
+                f"{log_name} is stale or mismatched for {gate!r}: no "
+                f"/{spec['pattern'](gates[gate])}/ — run `{command}` and commit the fresh log"
             )
             continue
+        print(f"PASS: {log_name} proves {gate} ({spec['pattern'](gates[gate])!r})")
+        for group, key in spec.get("minimums", []):
+            captured = int(match.group(group))
+            floor = get(gate, key)
+            if captured < floor:
+                fail(
+                    f"{log_name} records {gate}.{key}={captured}, below the floor {floor} — "
+                    f"run `{command}` and commit the fresh log"
+                )
+            else:
+                print(f"PASS: {log_name} records {gate}.{key}={captured} >= {floor}")
+        equal = spec.get("equal_groups")
+        if equal:
+            left, right = int(match.group(equal[0])), int(match.group(equal[1]))
+            if left != right:
+                fail(f"{log_name}: {gate} passed {left} != total {right}")
+        num_le_den = spec.get("num_le_den")
+        if num_le_den:
+            left, right = (
+                int(match.group(num_le_den[0])),
+                int(match.group(num_le_den[1])),
+            )
+            if right <= 0 or left > right:
+                fail(f"{log_name}: {gate} coverage {left}/{right} is impossible")
         passes_key = spec["passes_key"]
         if passes_key:
             floor = int(gates[gate][passes_key])
@@ -213,18 +276,37 @@ def main() -> int:
             else:
                 print(f"PASS: {leak_name} clean")
 
-    for gate in sorted(NO_LOG_GATES & set(gates)):
-        print(
-            f"NOTICE: {gate} has no committed log in this wave; its base floor is "
-            "kept but NOT verified here — integration must re-measure and attach a log"
-        )
+    for gate, (marker, command) in PROBE_GATES.items():
+        log_name = evidence.get(gate)
+        if not log_name:
+            fail(
+                f"no evidence log named for {gate!r} in gate_ratchet.json "
+                f"(add evidence.{gate}); run `{command}` and commit its log"
+            )
+            continue
+        path = log_dir / str(log_name)
+        if not path.exists():
+            fail(
+                f"missing gate log {path.relative_to(ROOT)} for {gate!r} — "
+                f"run `{command}` and commit the log"
+            )
+            continue
+        text = path.read_text(errors="replace")
+        if marker not in text:
+            fail(f"{log_name} does not contain {marker!r} — run `{command}`")
+        elif re.search(r"SCRIPT ERROR", text):
+            fail(f"{log_name} contains a SCRIPT ERROR; the probe must be clean")
+        else:
+            print(f"PASS: {log_name} records {marker}")
 
     # The report must quote the ratchet values, so a stale report cannot claim a
     # green gate. Regexes are built from the JSON numbers.
-    if not REPORT.exists():
-        fail(f"missing {REPORT.relative_to(ROOT)}")
+    report_name = str(data.get("report") or DEFAULT_REPORT)
+    report = ROOT / report_name
+    if not report.exists():
+        fail(f"missing {report.relative_to(ROOT)}")
     else:
-        text = REPORT.read_text()
+        text = report.read_text()
         report_checks = {
             "compile": rf"compile\s*\|\s*{get('compile', 'checked')}\s*/\s*{get('compile', 'broken')}",
             "run_tests": rf"run_tests\s*\|\s*{get('run_tests', 'passes')}",
@@ -238,7 +320,7 @@ def main() -> int:
             else:
                 fail(
                     f"report does not record {label}: no /{pattern}/ — update "
-                    f"{REPORT.relative_to(ROOT)} from the ratchet JSON"
+                    f"{report.relative_to(ROOT)} from the ratchet JSON"
                 )
         if measured_on and measured_on in text:
             print(f"PASS: report names measured_on={measured_on}")

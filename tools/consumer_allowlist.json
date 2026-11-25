@@ -80,12 +80,6 @@
       "reason": "Match-settings gameplay-tag groups have no runtime reader; T10-GAMEPLAY owns match settings and the run clock."
     },
     {
-      "glob": "tables/Art/UI/Icons/**",
-      "kind": "blocked_on_team",
-      "owner": "T06",
-      "reason": "DT_InputKeysToGlyphs is the authored key->glyph table; T06-INPUT owns input_glyphs.gd (RE-A-04)."
-    },
-    {
       "glob": "tables/UI/**",
       "kind": "blocked_on_team",
       "owner": "T05",
@@ -151,13 +145,6 @@
       "reason": "Applied override table is asserted by game/tests/test_content_overrides.gd; check_content_overrides.py re-derives it from the levels.",
       "consumer": "game/tests/test_content_overrides.gd",
       "claim_token": "content_overrides_applied"
-    },
-    {
-      "glob": "vfx/*.json",
-      "kind": "tests_only",
-      "reason": "Niagara system catalogue is asserted by the E2E tiers; the runtime spawns the systems directly and never reads the catalogue (RE-A-03).",
-      "consumer": "game/tests/run_tests.gd",
-      "claim_token": "systems.json"
     },
     {
       "glob": "curves.json",

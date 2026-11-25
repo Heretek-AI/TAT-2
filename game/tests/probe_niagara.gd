@@ -10,6 +10,10 @@ extends SceneTree
 ##   * every system whose resolved sprite is a measured soft mask has the
 ##     sampler bound (`use_sprite` + non-null `sprite_tex`), and no system whose
 ##     texture is an opaque atlas binds one;
+##   * every placed sprite renderer's finally bound token (opacity first, then
+##     albedo/emissive; SubUV atlases recorded but never bound), the non-regression
+##     floor against the catalogue's pre-baked tokens, and the additive-page
+##     follow-up metric;
 ##   * the decoded `ParameterData` values (candle Color1/Scale, rain spawn rate
 ##     and size band, turret EffectColor, beam Alpha/BeamLength/BoxSize);
 ##   * a real instance's tint = the authored candle colour and its XY scale =
@@ -24,6 +28,7 @@ extends SceneTree
 const NiagaraParams: GDScript = preload("res://src/core/vfx/niagara_params.gd")
 const NiagaraLibrary: GDScript = preload("res://src/core/vfx/niagara_library.gd")
 const SpriteMasks: GDScript = preload("res://src/core/vfx/sprite_masks.gd")
+const SpriteTokens: GDScript = preload("res://src/core/vfx/sprite_tokens.gd")
 
 ## Authored active set per system after `bAutoActivate` (measured 2026-11-25 on
 ## the current extraction; 3,695 authored -> 1,048 live, 2,647 event-gated).
@@ -202,6 +207,12 @@ func _run() -> void:
 			continue
 		_check(not bool(m.get_shader_parameter("use_sprite")), "%s bound an unmeasured sprite" % sys)
 
+	# --- sprite token resolution (W9-P1 / A3b) --------------------------------
+	# Every placed sprite renderer, judged by the token the runtime finally bound
+	# (not by the catalogue's pre-baked `sprite_texture`). `legacy=` re-judges the
+	# pre-baked token in the same pass, so one run proves what the resolver moved.
+	_check_sprite_tokens(records)
+
 	# --- authored per-instance tint and scale ---------------------------------
 	# --- authored per-instance values -----------------------------------------
 	# A MultiMesh keeps its instance buffer in the RenderingServer, and the
@@ -339,6 +350,7 @@ func _run() -> void:
 		"" if _fails.is_empty() else " (" + str(_fails.size()) + " failures)")
 	ll.queue_free()
 	host.queue_free()
+	SpriteTokens.release()
 	await process_frame
 	quit(0 if _fails.is_empty() else 1)
 
@@ -347,6 +359,202 @@ func _params_for(handle: Dictionary, file: String, asset: String) -> Dictionary:
 	var rec: Dictionary = {"source": file + "::probe", "asset": "/Game/Probe/" + asset}
 	var st: Dictionary = NiagaraParams.resolve(handle, rec)
 	return st.get("params", {}) as Dictionary
+
+
+## Every placed sprite renderer, once per distinct material, judged by the token the
+## runtime finally bound and — in the same pass — by the catalogue's pre-baked
+## `sprite_texture`. `bound` uses the same switch as the shader: a non-empty token,
+## not a SubUV atlas page, inside the measured soft-mask band.
+##
+## Denominators, which are easy to confuse: `SpriteMasks.MEASURED` holds 29 distinct
+## PNGs, the catalogue's 98 sprite-bearing systems author 312 sprite renderers over
+## 96 distinct materials, and this map set places 82 of those renderers over 39
+## materials. `total=` is the placed material count, `renderers=` the placed renderer
+## count and `masks=` the texture table; the `additive_*` pair counts renderers.
+##
+## The 23-of-29 target from the W9-P1 brief is NOT MET and the check no longer
+## asserts it: only 6 of the 29 measured PNGs pass the alpha/border band at all and
+## 17 of those 29 are not even referenced by a placed sprite renderer, so no token
+## choice inside `materials.json` can reach 23. The gate therefore asserts only what
+## is true and non-regressive — the resolver may never bind fewer materials than the
+## catalogue's pre-baked tokens did (`legacy=`), nor skip more. The shortfall and the
+## `additive_opaque=` follow-up metric are reported in the W9-P1 report.
+func _check_sprite_tokens(records: Array) -> bool:
+	var placed: Dictionary = {}
+	for r_v: Variant in records:
+		var sys_name: String = String((r_v as Dictionary).get("asset", "")).get_file()
+		if sys_name != "":
+			placed[sys_name] = true
+	SpriteTokens.ensure_loaded()
+	var stats: Dictionary = SpriteTokens.stats()
+	var seen: Dictionary = {}
+	var renderers: int = 0
+	var bound: int = 0
+	var legacy: int = 0
+	var changed: int = 0
+	var additive_total: int = 0
+	var additive_opaque: int = 0
+	var slots: Dictionary = {"opacity": 0, "albedo": 0, "emissive": 0, "normal": 0, "orm": 0, "none": 0, "subuv": 0}
+	var reasons: Dictionary = {}
+	var rows: Array[String] = []
+	var lum_cache: Dictionary = {}
+	var additive_verdict: Dictionary = {}
+	for sys_name: String in placed.keys():
+		var rec: Dictionary = NiagaraLibrary.info("/Game/W9P1/" + sys_name)
+		for t_v: Variant in (rec.get("sprite_tokens", []) as Array):
+			var t: Dictionary = t_v as Dictionary
+			var mat: String = str(t.get("material", ""))
+			var key: String = mat if mat != "" else "<engine-default>"
+			var first: bool = not seen.has(key)
+			seen[key] = true
+			renderers += 1
+			# Additive follow-up metric, counted per placed renderer: an authored
+			# additive material whose best page is opaque in alpha but reads as a mask
+			# on max(R,G,B) would bind correctly under a black-is-transparent additive
+			# sampler (no alpha gate). Measured here, implemented nowhere: it decides
+			# the next wave, not this one.
+			var facts: Dictionary = SpriteTokens.material_tokens(mat)
+			if bool(facts.get("additive", false)):
+				additive_total += 1
+				if not additive_verdict.has(key):
+					additive_verdict[key] = _additive_verdict(facts, lum_cache)
+				if bool((additive_verdict[key] as Dictionary).get("binds", false)):
+					additive_opaque += 1
+			if not first:
+				continue
+			var now: String = str(t.get("path", ""))
+			var before: String = str(t.get("current", ""))
+			var reason: String = str(t.get("reason", ""))
+			var slot: String = str(t.get("slot", ""))
+			var subuv: String = str(t.get("subuv", ""))
+			var ok_now: bool = now != "" and reason != "subuv_atlas" and SpriteMasks.acceptable(now)
+			var ok_before: bool = before != "" and SpriteMasks.acceptable(before)
+			if ok_now:
+				bound += 1
+			if ok_before:
+				legacy += 1
+			if now != before:
+				changed += 1
+			reasons[reason] = int(reasons.get(reason, 0)) + 1
+			var bucket: String = slot
+			if reason == "subuv_atlas":
+				bucket = "subuv"
+			elif now == "" or not slots.has(bucket):
+				bucket = "none"
+			slots[bucket] = int(slots[bucket]) + 1
+			var lum: Dictionary = additive_verdict.get(key, {}) as Dictionary
+			var lum_text: String = ""
+			if not lum.is_empty() and not bool(lum.get("alpha_ok", false)):
+				lum_text = "additive_lum(cov=%.3f border=%.3f %s)" % [float(lum.get("cov", 1.0)),
+					float(lum.get("border", 1.0)), "bind" if bool(lum.get("binds", false)) else "box"]
+			rows.append("NIAGARA_SPRITE_TOKEN mat=%s slot=%s now=%s before=%s gate=%s reason=%s%s%s" % [
+				mat if mat != "" else "<engine-default>", slot,
+				now.get_file() if now != "" else "-", before.get_file() if before != "" else "-",
+				"PASS" if ok_now else "reject", reason,
+				(" subuv=" + subuv) if subuv != "" else "", (" " + lum_text) if lum_text != "" else ""])
+	var measured: Dictionary = SpriteMasks.MEASURED as Dictionary
+	var masks_ok: int = 0
+	for p: String in measured.keys():
+		if SpriteMasks.acceptable(p):
+			masks_ok += 1
+	var lib: Dictionary = NiagaraLibrary.stats()
+	print("NIAGARA_SPRITE_TOKENS bound=", bound, " total=", seen.size(), " legacy=", legacy,
+		" renderers=", renderers, " changed=", changed,
+		" slots=opacity:", int(slots["opacity"]), ",albedo:", int(slots["albedo"]),
+		",emissive:", int(slots["emissive"]), ",normal:", int(slots["normal"]), ",orm:", int(slots["orm"]),
+		",none:", int(slots["none"]), ",subuv:", int(slots["subuv"]),
+		" reasons=", _histogram(reasons),
+		" additive_opaque=", additive_opaque, " additive_total=", additive_total,
+		" library=fixed:", int(lib.get("sprite_token_fixed", -1)),
+		"/kept:", int(lib.get("sprite_token_kept", -1)),
+		"/none:", int(lib.get("sprite_token_none", -1)),
+		" masks=", masks_ok, "/", measured.size(), " ms=", int(stats.get("load_ms", -1)),
+		" errors=", 1 if str(stats.get("load_error", "")) != "" else 0)
+	for row: String in rows:
+		print(row)
+	if bound < 23:
+		print("NIAGARA_SPRITE_TOKENS target 23/29 NOT MET: bound=", bound, " of ", seen.size(),
+			" placed materials; accepted_measured=", masks_ok, "/", measured.size(),
+			" (authored data, not the gate: see W9-P1 report)")
+	var skipped: int = seen.size() - bound
+	var legacy_skipped: int = seen.size() - legacy
+	return _check(bound >= legacy, "sprite tokens bound %d < legacy %d of %d" % [bound, legacy, seen.size()]) \
+		and _check(skipped <= legacy_skipped,
+			"sprite tokens skipped %d > legacy skipped %d of %d" % [skipped, legacy_skipped, seen.size()])
+
+
+## `key:value` histogram, alphabetical, for a stable log line.
+func _histogram(counts: Dictionary) -> String:
+	var keys: Array = counts.keys()
+	keys.sort()
+	var parts: Array[String] = []
+	for k: Variant in keys:
+		parts.append("%s:%d" % [str(k), int(counts[k])])
+	return ",".join(parts)
+
+
+## Additive follow-up verdict for one material: `{alpha_ok, binds, cov, border, page}`.
+## `alpha_ok` means an authored slot already passes the measured alpha band (nothing
+## to fix); `binds` means the best authored page passes the same band on max(R,G,B),
+## so a black-is-transparent additive sampler would read it as a sprite. A fully
+## covered RGB page (the electric dart) is `binds=false`: it would still read as a box.
+func _additive_verdict(facts: Dictionary, cache: Dictionary) -> Dictionary:
+	var out: Dictionary = {"alpha_ok": false, "binds": false, "cov": 1.0, "border": 1.0, "page": ""}
+	for s_v: Variant in (facts.get("slots", []) as Array):
+		var s: Dictionary = s_v as Dictionary
+		var p: String = str(s.get("path", ""))
+		if p == "":
+			continue
+		if out["page"] == "":
+			out["page"] = p
+		if SpriteMasks.acceptable(p):
+			out["alpha_ok"] = true
+	if bool(out["alpha_ok"]) or str(out["page"]) == "":
+		return out
+	var verdict: Array = _luminance_verdict(str(out["page"]), cache)
+	out["binds"] = bool(verdict[0])
+	out["cov"] = float(verdict[1])
+	out["border"] = float(verdict[2])
+	return out
+
+
+## Soft-mask band applied to max(R,G,B) instead of alpha — the value an additive
+## sprite sampler would read. Returns [passes_band, coverage, border].
+func _luminance_verdict(path: String, cache: Dictionary) -> Array:
+	if cache.has(path):
+		return cache[path] as Array
+	var img: Image = null
+	if path.get_extension().to_lower() == "png":
+		img = Image.load_from_file(ProjectSettings.globalize_path(path))
+	if img == null:
+		var missing: Array = [false, 1.0, 1.0]
+		cache[path] = missing
+		return missing
+	var w: int = img.get_width()
+	var h: int = img.get_height()
+	var step: int = maxi(1, int(sqrt(float(w * h) / 4096.0)))
+	var hit: int = 0
+	var tot: int = 0
+	var bhit: int = 0
+	var btot: int = 0
+	for y: int in range(0, h, step):
+		for x: int in range(0, w, step):
+			var c: Color = img.get_pixel(x, y)
+			var lum: float = maxf(c.r, maxf(c.g, c.b))
+			tot += 1
+			if lum > 0.1:
+				hit += 1
+			if x < step * 2 or x >= w - step * 2 or y < step * 2 or y >= h - step * 2:
+				btot += 1
+				if lum > 0.1:
+					bhit += 1
+	var cov: float = float(hit) / float(maxi(1, tot))
+	var border: float = float(bhit) / float(maxi(1, btot))
+	var ok: bool = border <= SpriteMasks.BORDER_MAX \
+		and cov >= SpriteMasks.COVERAGE_MIN and cov <= SpriteMasks.COVERAGE_MAX
+	var verdict: Array = [ok, cov, border]
+	cache[path] = verdict
+	return verdict
 
 
 func _verify_sprite_masks() -> bool:

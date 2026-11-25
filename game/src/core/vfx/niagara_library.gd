@@ -7,8 +7,9 @@ extends RefCounted
 ## placement by substring-matching the asset name. This module is that reader.
 ##
 ## It owns three answers per system:
-##   * which authored sprite texture to sample (and whether it is a usable soft
-##     mask, measured in `sprite_masks.gd`),
+##   * which authored sprite texture to sample — `sprite_tokens.gd` re-resolves the
+##     material's authored slot (opacity first, the producer preferred albedo) and
+##     the measured soft mask in `sprite_masks.gd` decides whether it binds,
 ##   * which authored colour the renderer material carries (`materials.json`
 ##     vectors / tint), and
 ##   * a base billboard size band derived from the authored complexity class.
@@ -19,6 +20,7 @@ extends RefCounted
 const SYSTEMS_PATH: String = "res://data/generated/vfx/systems.json"
 const MATERIALS_PATH: String = "res://data/generated/materials.json"
 const SpriteMasks := preload("res://src/core/vfx/sprite_masks.gd")
+const SpriteTokens := preload("res://src/core/vfx/sprite_tokens.gd")
 
 ## Base billboard size (metres) per authored complexity class. A stand-in where
 ## neither the placement scale nor a User.Scale parameter is authored; it is
@@ -64,7 +66,11 @@ static func ensure_loaded() -> bool:
 	if not (systems_v is Array):
 		return false
 	var sprites_usable: int = 0
+	var token_fixed: int = 0
+	var token_kept: int = 0
+	var token_none: int = 0
 	var textures: Dictionary = {}
+	var resolved_textures: Dictionary = {}
 	for s_v: Variant in (systems_v as Array):
 		if not (s_v is Dictionary):
 			continue
@@ -76,23 +82,51 @@ static func ensure_loaded() -> bool:
 		var sprite_count: int = 0
 		var textured: int = 0
 		var materials: Array[String] = []
+		var tokens: Array = []
 		for r_v: Variant in (s.get("renderers", []) as Array):
 			if not (r_v is Dictionary):
 				continue
 			var r: Dictionary = r_v as Dictionary
-			var mat: String = str(r.get("material", ""))
+			var mat_v: Variant = r.get("material", null)
+			var mat: String = str(mat_v) if mat_v != null else ""
 			if mat != "" and not materials.has(mat):
 				materials.append(mat)
 			if str(r.get("type", "")) != "sprite":
 				continue
 			sprite_count += 1
-			var tex: String = str(r.get("sprite_texture", ""))
-			if tex == "":
-				continue
-			textured += 1
-			textures[tex] = true
-			if sprite_path == "" and SpriteMasks.acceptable(tex):
-				sprite_path = tex
+			# JSON null must stay empty: `str(null)` is the literal "<null>", which
+			# would count a texture-less renderer as textured and defeat the counters.
+			var tex_v: Variant = r.get("sprite_texture", null)
+			var tex: String = str(tex_v) if tex_v != null else ""
+			if tex != "":
+				textured += 1
+				textures[tex] = true
+			# The producer's pick prefers albedo and never opacity, so re-resolve the
+			# authored slot from the material record; the catalogue token is kept when
+			# the material carries nothing better.
+			var token: Dictionary = SpriteTokens.resolve_sprite_texture(mat, tex)
+			var token_path: String = str(token.get("path", ""))
+			var token_slot: String = str(token.get("slot", ""))
+			var token_reason: String = str(token.get("reason", ""))
+			if token_path == "":
+				token_none += 1
+			elif token_path == tex:
+				token_kept += 1
+			else:
+				token_fixed += 1
+			if token_path != "":
+				resolved_textures[token_path] = true
+			tokens.append({
+				"material": mat,
+				"current": tex,
+				"path": token_path,
+				"slot": token_slot,
+				"reason": token_reason,
+				"subuv": str(token.get("subuv", "")),
+			})
+			if sprite_path == "" and token_path != "" and token_reason != "subuv_atlas" \
+					and SpriteMasks.acceptable(token_path):
+				sprite_path = token_path
 		if sprite_path != "":
 			sprites_usable += 1
 		_by_key[key] = {
@@ -104,11 +138,16 @@ static func ensure_loaded() -> bool:
 			"base_size": float(BASE_SIZE_BY_CLASS.get(str(s.get("complexity", "")), 0.12)),
 			"folder": str(s.get("folder", "")),
 			"materials": materials,
+			"sprite_tokens": tokens,
 		}
 	_stats = {
 		"systems": _by_key.size(),
 		"sprites_usable": sprites_usable,
 		"textures_referenced": textures.size(),
+		"textures_resolved": resolved_textures.size(),
+		"sprite_token_fixed": token_fixed,
+		"sprite_token_kept": token_kept,
+		"sprite_token_none": token_none,
 	}
 	return not _by_key.is_empty()
 

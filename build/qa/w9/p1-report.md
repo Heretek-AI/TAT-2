@@ -170,6 +170,20 @@ guard suite (98) that fails if anyone lands a global cut without the room scope.
   `_build_draw_items`, so the cost cap saw `instances=1` and dropped 2,411
   colliders; `_fill_col_path_counts()` now runs on both paths.
 
+### W9-P1-A1-3 — audit findings closed
+- **F1 (degenerate gate):** `placed_meshes_seen` is now the draw-item census taken
+  before classification, so the probe asserts a **falsifiable** identity
+  (`hull + absent == seen`), `prims <= hull`, and **coverage >= 0.95**:
+  `COL_ASSERT coverage=0.989 (937/947) prims_subset=true classification=937+10==947
+  mode=authored dropped=0`.
+- **F2 (77 MB of Jolt errors):** the instance's non-uniform scale is now baked
+  into each shape's own axes (`scaled_variant`, cached by path+scale) instead of
+  `CollisionShape3D.scale`, which Jolt refuses for capsule/convex/trimesh. Before
+  `grep -c "not supported by Jolt Physics"` = **95,293** / 77 MB; after **0** /
+  **7,290 B** (whole probe log); `run_tests` 0 / 251,947 B. Shapes unchanged
+  (30,901 / 30,905, dropped 0). Residual: a non-uniformly scaled capsule/sphere
+  cannot represent an ellipsoid, so its radius takes the mean lateral factor.
+
 ## A2 — PROGRESSION (user decision: adopt authored)
 
 ### W9-P1-A2-1 — the authored trajectory, a save migration, and the market gates
@@ -357,7 +371,7 @@ audit 12,660 → 12,660. The ratchet file itself is P0's; P1 did not raise it.
 
 | lane | report | verdict |
 |---|---|---|
-| A1 collision | `audit-a1.md` | PASS (see file) |
+| A1 collision | `audit-a1.md` | **ACCEPT with 3 findings**: every numeric claim reproduced against the GLBs (unit trap, capsule Z/`L+2R`, convex bake, A/B, budget, traversal in both modes, no test weakened). **F1** the new probe's coverage assertion was degenerate (double-count + tautology) and **F2** authored mode emitted 95,293 Jolt "unsupported non-uniform scale" errors (77 MB/load) and lost the authored non-uniform scale — **both fixed in `6b5b875`** (real census denominator + `>= 0.95`, and the instance scale baked into the shape: 0 errors, 7,290 B log, shapes unchanged); **F3** three commit-message overstatements (the spline path keeps its own 0.45 gate; the +2,878 instances split 2,706 gate / 184 token-list; the async cost-cap bug was introduced by the same commit) |
 | A2 progression | `audit-a2.md` | **PASS** on all 8 items, no test weakened; corrections: the suite has **35** checks (the commit said 36), the ladder-outranks-quest-graph rule needed a port-decision label (added), and four doc nits (fixed) |
 | A3 input/curves/sprites | `audit-a3.md` | **6/7 PASS**; item 5 FAIL on a *report* number ("12 of 29 referenced at all" — 12 is the placed count, 14 across all systems; corrected). It also found `5b112b1` does not compile alone (see integrator step 1) and that the two rain materials *resolve to* the mask without binding it (corrected) |
 | A4 prep/interior | `audit-a4.md` | **FAIL on item 7**: suite 98 compared the applied exposure to the same constant it read, so a 13 % global cut to 1.00 would have passed. **Fixed**: the guard now compares against the measured literal 1.15 and fails if `NIGHT_EXPOSURE` drops below it. Every other item reproduced exactly (camera unchanged, 4/4 prep stats, P14 band, grade log, interior table, scorecard 120 rows) |
@@ -393,8 +407,10 @@ integrator steps rather than fixed here.
 ## Open risks
 
 1. **Collision load time** +2.5-3.7 s (+13-18 %) is now the default; the FPS cost
-   is **not verified** (`fps_pose=n/a`). The shape budget has 523 shapes of
-   headroom on non-FTUE maps.
+   is **not verified** (`fps_pose=n/a`). The shape budget has 527 building shapes
+   of headroom on non-FTUE maps, and the per-path encoding decision is cached for
+   the process (a second map load reuses the first load's cost-cap choice).
+   Non-uniformly scaled capsules/spheres are approximated by a mean radius.
 2. **`test_roof_collision.gd`** fails 9 assertions in authored mode (not a gate);
    the probe measures one mesh-wide hull, not the authored per-element set.
 3. **`QueryOnly`** colliders answer physics as well as queries (Godot has no

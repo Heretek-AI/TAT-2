@@ -2,7 +2,11 @@
 
 **Auditor:** A1 (independent, read-only). I did not write this code.
 **Commit under audit:** `ff0f21d` "feat(collision): consume the authored UE AggGeom for every mesh (W9-P1 A1)".
-**Worktree:** `/home/john/Projects/TAT-2-rem-w9-p1` (HEAD `5a516f9`, whose parent is `ff0f21d`).
+**Worktree:** `/home/john/Projects/TAT-2-rem-w9-p1`. The commit under audit is `ff0f21d`; the
+four files in scope are **byte-identical** from `ff0f21d` through the final HEAD at the end of
+this audit (`ce80ade`) — `git diff ff0f21d..HEAD -- <the four files>` is empty. HEAD during my
+runs was `5a516f9` plus in-progress edits from other lanes (committed as `8a3c113` at 11:45),
+which touched the harness but never the collision code.
 **Date:** 2026-11-25.
 **Scope:** `game/src/core/collision/authored_collision.gd` (new), `game/tests/probe_collision_authored.gd` (new),
 `build/qa/w9_collision_ab.sh` (new), and the collision hunks of `game/src/core/level_loader.gd`.
@@ -236,12 +240,13 @@ SUMMARY: fails=0
   `build/qa/w9/logs/p1_baseline_run_tests.log` (6018 / 3554 / 768, shapes=24,466); only the
   shape/body counts moved (24,466 → 30,905 and 225 → 243).
 * My run took 203 s (11:33:24 → 11:36:47), inside the 300 s cap.
-* **Caveat:** the worktree's HEAD is `5a516f9` but other lanes were committing/editing
-  `game_state.gd`, `progression.gd`, `run_tests.gd` etc. in the working tree during this
-  window. The collision files (`level_loader.gd`, `authored_collision.gd`, the probe) were
-  never modified (`git status`), so the collision numbers are valid for `ff0f21d`; the
-  harness around them was moving. One aabb-mode probe pass later hit a *transient* parse
-  error from an in-progress edit (`Identifier "Progression" not declared`) — see §6.
+* **Caveat:** at run time HEAD was `5a516f9` and other lanes were editing
+  `game_state.gd`, `progression.gd`, `run_tests.gd` etc. in the shared working tree (those
+  edits became `8a3c113` at 11:45). The four collision files are byte-identical from
+  `ff0f21d` to the final HEAD (`ce80ade`) — verified with an empty `git diff` — so the
+  collision numbers are valid for `ff0f21d`; the harness around them was moving. One
+  aabb-mode probe pass later hit a *transient* parse error from an in-progress edit
+  (`Identifier "Progression" not declared`) — see §6.
 * Cross-check inside `run_tests`: the Guildhall load prints the same census as the A/B probe
   (`hull=937 prims=599 absent=10 no_collision=7 query_only=7 reduced=16`), and the FTUE load
   prints `meshes=692 hull=687 prims=384 convex=2726 absent=5 no_collision=8 query_only=5

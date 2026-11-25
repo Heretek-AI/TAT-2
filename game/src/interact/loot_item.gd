@@ -38,6 +38,7 @@ var fact_source_index: int = -1
 const INTERACTABLES_PATH := "res://data/generated/gameplay/interactables.json"
 const PersonalQuestScript := preload("res://src/quests/personal_quest.gd")
 const LootInventoryScript := preload("res://src/interact/loot_inventory.gd")
+const LevelLoaderScript := preload("res://src/core/level_loader.gd")
 
 static var _interactables: Dictionary = {}
 
@@ -188,6 +189,10 @@ func _ready() -> void:
 		visual_root.rotation_degrees = mesh_rotation_deg
 		var inst := packed.instantiate()
 		visual_root.add_child(inst)
+		# C2-01: the exported GLB carries no textures/baseColorFactor, so the
+		# surface must be rebound through the authored slot list or the prop
+		# renders flat white (this path previously never touched materials).
+		LevelLoaderScript.bind_prop_scene_materials(inst, glb_path)
 		_fit_prop_scale(inst)
 	else:
 		mesh_inst = MeshInstance3D.new()

@@ -13,6 +13,8 @@ extends Area3D
 
 enum Kind { THROWABLE, AMMO, HEALTH }
 
+const LevelLoaderScript := preload("res://src/core/level_loader.gd")
+
 ## Distance at which pickup meshes are culled (matches TINY_PROP policy).
 const VISIBILITY_RANGE_END_M: float = 45.0
 
@@ -81,6 +83,8 @@ func _attach_mesh(visual: Node3D) -> void:
 			var inst := packed.instantiate() as Node3D
 			if inst != null:
 				visual.add_child(inst)
+				# C2-01: authored slots, not the white glTF default.
+				LevelLoaderScript.bind_prop_scene_materials(inst, mesh_res_path)
 				added = true
 	if added:
 		for mi in visual.find_children("*", "MeshInstance3D", true, false):

@@ -8,6 +8,7 @@ extends StaticBody3D
 signal lockpick_updated(active: bool, progress: float, lock_level: int)
 
 const _VfxManager = preload('res://src/core/vfx_manager.gd')
+const LevelLoaderScript := preload("res://src/core/level_loader.gd")
 
 const INTERACTABLES_PATH := "res://data/generated/gameplay/interactables.json"
 ## Fallbacks mirror the extracted table (CT_LockpickDamage DamageByLockLevel
@@ -132,6 +133,8 @@ func _ready() -> void:
 		var inst := packed.instantiate()
 		inst.position = Vector3(0.65, 0.0, 0)
 		pivot.add_child(inst)
+		# C2-01: authored door slots, not the white glTF default.
+		LevelLoaderScript.bind_prop_scene_materials(inst, "res://assets/ue/Content/Art/Environment/City/Architecture/Doorways/SM_DoorCityExtA.glb")
 	else:
 		mesh_inst = MeshInstance3D.new()
 		var bm := BoxMesh.new()

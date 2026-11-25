@@ -1,6 +1,8 @@
 extends Area3D
 ## Interactive Clue / Note / Electrotype item.
 
+const LevelLoaderScript := preload("res://src/core/level_loader.gd")
+
 signal clue_collected(title: String, body: String)
 
 @export var clue_title: String = 'Contract Clue'
@@ -52,6 +54,9 @@ func _ready() -> void:
 		if packed != null:
 			var inst: Node3D = packed.instantiate() as Node3D
 			visual_root.add_child(inst)
+			# C2-01: rebind the authored slot materials (the GLB itself has no
+			# textures and defaults to white).
+			LevelLoaderScript.bind_prop_scene_materials(inst, glb_path)
 		else:
 			_build_parchment_fallback()
 	else:

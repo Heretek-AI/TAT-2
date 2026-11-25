@@ -8,6 +8,7 @@ extends RigidBody3D
 ##   THROW_SPEED_M_S = 12.0 m/s initial velocity along the throw direction.
 ##   IMPACT_NOISE_M  = 10.0 m NoiseBus radius with the "bottle" tag.
 
+const LevelLoaderScript := preload("res://src/core/level_loader.gd")
 const THROW_SPEED_M_S: float = 12.0 # APPROXIMATION: no UE InitialSpeed source
 const IMPACT_NOISE_M: float = 10.0 # APPROXIMATION: no UE impact-noise source
 const BOTTLE_MESHES: Array[String] = [
@@ -54,6 +55,8 @@ func _ready() -> void:
 			if inst != null:
 				inst.scale = Vector3.ONE * 1.0
 				add_child(inst)
+				# C2-01: authored glass/label slots, not the white glTF default.
+				LevelLoaderScript.bind_prop_scene_materials(inst, mesh_path)
 				break
 	body_entered.connect(_on_body_entered)
 	# Failsafe: a bottle that never impacts still despawns.

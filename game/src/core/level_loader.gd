@@ -61,6 +61,15 @@ var corrupt_meshes: Array[String] = []
 var corrupt_mesh_count: int = 0
 var fallback_materials: Array[String] = []
 var fallback_material_count: int = 0
+## Authored flat-colour binds (tint present, no albedo map). Counted so the
+## "untextured but correct" population is visible; near-white ones are named
+## and warned separately (L2-03: debug primitives rendered as flat white).
+var flat_colour_materials: Array[String] = []
+var flat_colour_material_count: int = 0
+## Empty-authoring slots rescued by a unique surface-name match (see
+## _slot_name_fallback). Zero on the shipped data set; any growth is a warning.
+var slot_name_fallback_count: int = 0
+var slot_name_fallback_names: Array[String] = []
 var _override_mesh_cache: Dictionary = {} # ue_path + "||" + ov_key -> Mesh
 var _emissive_cpd_mat: ShaderMaterial = null
 ## W6L: roof top-coverage measurements, keyed by lower-case UE path. The public
@@ -590,6 +599,12 @@ func _cap_texture(tex: Texture2D, res_path: String) -> Texture2D:
 
 func _enter_tree() -> void:
 	_roughness_live_loaders += 1
+	# RE-C/C2-01: props instantiated outside the level build (loot, clues,
+	# pickups, thrown bottles, locked doors) reuse the live loader's material
+	# DB + texture cache through bind_prop_scene_materials() instead of
+	# building their own. Group membership is additive: nothing else keys off
+	# it, and a loader that is not in a tree (tests) simply is not found.
+	add_to_group("level_loader")
 
 
 ## W7G: explicit teardown hook for probes/tests that hold a loader outside the
@@ -947,6 +962,18 @@ func _apply_diffuse_mask_tint(mat: StandardMaterial3D, info: Dictionary) -> void
 		mat.albedo_color.b * srgb.b,
 		mat.albedo_color.a
 	)
+
+
+## RE-C-08: convert an authored LINEAR base-colour composite into the sRGB space
+## Godot's `albedo_color` is declared in. Values above 1.0 are HDR emissive
+## carries (additive/unlit loot shine, hotwire glow, the beam card) and keep the
+## legacy pass-through; only <=1 authored surface tints are encoded.
+static func _srgb_encode_albedo_tint(c: Color) -> Color:
+	if maxf(c.r, maxf(c.g, c.b)) > 1.0:
+		return c
+	var s: Color = c.linear_to_srgb()
+	s.a = c.a
+	return s
 
 
 ## Applies real UE render flags from materials.json "render": TwoSided ->
@@ -1481,8 +1508,10 @@ func get_material_for_ue(ue_mat_path: String) -> Material:
 		var remap2: Vector2 = mat.get_meta("ue_roughness_remap") as Vector2
 		mat.roughness = clampf(remap2.y, 0.0, 1.0)
 	var tint: Variant = info.get("tint")
+	var tint_applied: bool = false
 	if tint is Array and tint.size() >= 3:
 		var tint_col: Color = Color(float(tint[0]), float(tint[1]), float(tint[2]), 1.0)
+		tint_applied = true
 		var tint_hdr: bool = maxf(tint_col.r, maxf(tint_col.g, tint_col.b)) > 1.0
 		var tint_vectors: Dictionary = info.get("vectors", {})
 		var plain_hdr_tint: bool = tint_hdr and alb == null and texs.is_empty() \
@@ -1551,6 +1580,18 @@ func get_material_for_ue(ue_mat_path: String) -> Material:
 				vc.g = lerpf(vc.g, lum, amt)
 				vc.b = lerpf(vc.b, lum, amt)
 		mat.albedo_color = vc
+	# Colour space (RE-C-08 / C2-02): UE base-colour vectors are LINEAR and
+	# Godot's albedo_color is a source_color uniform that is decoded sRGB ->
+	# linear in the shader. Assigning the authored value verbatim therefore
+	# multiplies the albedo map by one gamma too little (darker and more
+	# saturated). Encode the composite (tint x Overlay x Multiply, after
+	# desaturation) to sRGB exactly once, the same convention already used by
+	# _apply_diffuse_mask_tint and the storefront-decal shader. Values above
+	# 1.0 are HDR emissive carries on additive/unlit paths (loot shine,
+	# hotwire glow, the beam card) and are NOT surface albedo: they keep the
+	# legacy pass-through so those materials do not lose their glow.
+	if tint_applied:
+		mat.albedo_color = _srgb_encode_albedo_tint(mat.albedo_color)
 	_apply_diffuse_mask_tint(mat, info)
 	if _ue_emissive_allowed(info):
 		var em := _load_tex(str(texs.get("emissive", "")))
@@ -1617,6 +1658,22 @@ func get_material_for_ue(ue_mat_path: String) -> Material:
 		var fallback_tier: int = 2 if mat.albedo_texture != null else 3
 		mat.set_meta("tat_fallback_tier", fallback_tier)
 		_note_fallback_material(ue_mat_path, fallback_tier)
+	# L2-03: a material with an authored colour but no albedo map binds that
+	# colour as a flat surface. Legitimate for real flat PBR (M_Solid_*,
+	# M_BasicGrey) - and also exactly how untextured debug geometry
+	# (MI_Default_White) renders. It used to be completely silent (zero
+	# "material fallback" lines exist for it), so a capture could not tell a
+	# deliberate flat colour from a missing map. Count every bind and name the
+	# near-white class; the census lands in _finalize.
+	if alb == null and tint != null:
+		flat_colour_material_count += 1
+		if flat_colour_materials.size() < 128 and not flat_colour_materials.has(ue_mat_path):
+			flat_colour_materials.append(ue_mat_path)
+		var flat_col: Color = mat.albedo_color
+		if minf(flat_col.r, minf(flat_col.g, flat_col.b)) >= 0.90:
+			push_warning("[level_loader] material flat white: '", ue_mat_path,
+				"' has a colour but no albedo map (albedo_color=", flat_col,
+				", flat=", flat_colour_material_count, ")")
 	var low_wall: String = ue_mat_path.to_lower()
 	if "wallpaper" in low_wall or "thievesden" in low_wall:
 		if mat.albedo_texture == null:
@@ -1783,11 +1840,9 @@ func _get_mesh_and_shape(ue_path: String) -> Dictionary:
 				out["mesh"] = m
 				out["shape"] = null
 			else:
-				# Bind GLB-ordered material slots by surface name, then index.
-				# mesh_materials.json is emitted in GLB primitive order and Godot
-				# names imported surfaces after the GLB material, so prefer a
-				# case-insensitive name-substring match; fall back to primitive
-				# index when the surface name is generic or matches nothing.
+				# Bind GLB-ordered material slots by INDEX (the producer emits
+				# mesh_materials.json in GLB primitive order, the same order
+				# Godot imports); a name match fills an empty slot only.
 				var mesh_key: String = ue_path.split(".")[0]
 				var mat_slots: Array = _mesh_mats_db.get(mesh_key, _mesh_mats_db_lower.get(mesh_key.to_lower(), []))
 				var _m0: int = Time.get_ticks_msec()
@@ -1867,34 +1922,149 @@ func _note_fallback_material(ue_mat_path: String, tier: int) -> void:
 
 
 ## Binds GLB-ordered material slots to the imported ArrayMesh surfaces.
-## mesh_materials.json is emitted in GLB primitive order, and Godot names
-## imported GLB surfaces after the GLB material, so prefer a case-insensitive
-## name-substring match (GLB material object name in the surface name or vice
-## versa). Fall back to primitive index when the surface name is generic
-## (e.g. "Surface 0") or matches nothing, preserving the old index behavior.
+##
+## The SLOT INDEX is the authored mapping: `tools/parse_materials.py` emits
+## `mesh_materials.json` in GLB primitive order (`slot_order_source: "glb"` for
+## 2,047 of 2,065 meshes, 0 reorderings against the authored StaticMaterials
+## array), and Godot imports GLB primitives in that same order. The previous
+## implementation let a name-substring match win over the index, which bound the
+## wrong variant whenever one slot name contained another: a surface named
+## `MI_TrimMetalSurfaceA` matched slot `MI_TrimMetalSurfaceA_Copper`,
+## `MI_GlassPanels` matched `MI_GlassPanels_oldmanor`, `MI_RoastedPig` matched
+## `MI_RoastedPigDetails`. Repository census (RE-Q-06, reproduced): 53 placed
+## meshes / 776 instances took a different material than the authored slot.
+##
+## The name match survives only for an EMPTY authored slot (24 slots / 14
+## meshes, otherwise a white glTF default) and only when exactly one slot name
+## is a match; each such rescue is counted in slot_name_fallback_count.
 func _bind_glb_materials(m: Mesh, mat_slots: Array) -> void:
 	if m == null or mat_slots.is_empty():
 		return
 	for s in range(m.get_surface_count()):
-		var surf_name := str(m.surface_get_name(s)).to_lower()
-		var matched := -1
-		if surf_name != "" and surf_name.length() >= 3:
-			for i in range(mat_slots.size()):
-				var mp := str(mat_slots[i])
+		if s >= mat_slots.size():
+			break
+		var mp := str(mat_slots[s])
+		if mp == "":
+			mp = _slot_name_fallback(m, mat_slots, s)
+		if mp != "":
+			m.surface_set_material(s, get_material_for_ue(mp))
+
+
+## Rescues an empty authored slot by surface name. Returns "" when the surface
+## name is generic, no slot matches, or more than one does (an ambiguous name
+## must never pick a material).
+func _slot_name_fallback(m: Mesh, mat_slots: Array, surface: int) -> String:
+	var surf_name := str(m.surface_get_name(surface)).to_lower()
+	if surf_name.length() < 3:
+		return ""
+	var hit: String = ""
+	var hits: int = 0
+	for i in range(mat_slots.size()):
+		var mp := str(mat_slots[i])
+		if mp == "":
+			continue
+		var short := mp.get_file().split(".")[0].to_lower()
+		if short.length() < 3:
+			continue
+		if surf_name.find(short) >= 0 or short.find(surf_name) >= 0:
+			hit = mp
+			hits += 1
+	if hits != 1:
+		return ""
+	slot_name_fallback_count += 1
+	if slot_name_fallback_names.size() < 64 and not slot_name_fallback_names.has(hit):
+		slot_name_fallback_names.append(hit)
+	return hit
+
+
+## Reverse of _ue_mesh_to_res for the prop call sites: the exported GLB path is
+## deterministic (`res://assets/ue/Content/<Game-relative>.glb`, or the Raw/TAT
+## mirror for engine carriers), so the authored UE mesh path can be recovered
+## without another JSON field.
+static func glb_res_to_ue_path(res_path: String) -> String:
+	var rel: String = res_path
+	var prefixes: Array[String] = [
+		"res://assets/ue/Content/",
+		"res://assets/ue/Raw/TAT/Content/",
+	]
+	for prefix: String in prefixes:
+		if rel.begins_with(prefix):
+			rel = rel.substr(prefix.length())
+			if rel.to_lower().ends_with(".glb"):
+				rel = rel.substr(0, rel.length() - 4)
+			return "/Game/" + rel
+	return ""
+
+
+## One-time warning guard for bind_prop_scene_materials (static).
+static var _prop_bind_warned: bool = false
+
+
+## Bind the authored material slots onto a GLB prop that was instantiated
+## outside the level build (loot/quest/clue/pickup/prop/tool views).
+##
+## The glTF export carries no images and no baseColorFactor, so every surface of
+## an un-rebound GLB renders the glTF default - flat white, fully rough - which
+## is why the carried props, the cat statue and the clues were blank. The level
+## build rebinds through _bind_glb_materials(); this is the equivalent for the
+## standalone call sites, using the live loader's already-loaded DB + texture
+## cache. It sets per-instance surface OVERRIDES (never mutates the shared
+## imported Mesh, which a level instance may bind differently).
+##
+## Returns the number of surfaces bound (0 when the prop has no authored slot
+## list, or when no loader is live - one warning is emitted per process so a
+## white prop is never silent).
+static func bind_prop_scene_materials(root: Node, glb_res_path: String) -> int:
+	if root == null or glb_res_path == "":
+		return 0
+	var tree: SceneTree = root.get_tree()
+	if tree == null:
+		return 0
+	var loader: Node = null
+	for cand: Node in tree.get_nodes_in_group("level_loader"):
+		if is_instance_valid(cand):
+			loader = cand
+			break
+	var ue_mesh: String = glb_res_to_ue_path(glb_res_path)
+	var slots: Array = []
+	if loader != null and ue_mesh != "":
+		var db: Variant = loader.get("_mesh_mats_db")
+		var slots_v: Variant = (db as Dictionary).get(ue_mesh, null) if db is Dictionary else null
+		if not (slots_v is Array):
+			var db_low: Variant = loader.get("_mesh_mats_db_lower")
+			slots_v = (db_low as Dictionary).get(ue_mesh.to_lower(), null) if db_low is Dictionary else null
+		if slots_v is Array:
+			slots = slots_v as Array
+	if loader == null or slots.is_empty():
+		if not _prop_bind_warned:
+			_prop_bind_warned = true
+			push_warning("[level_loader] prop GLB '", glb_res_path,
+				"' has no authored slot list (loader=", loader != null,
+				"); its surfaces stay on the white glTF default")
+		return 0
+	return _bind_scene_overrides(root, loader, slots)
+
+
+## Walks an instantiated prop and sets a surface override from the authored slot
+## list (index order, same contract as _bind_glb_materials).
+static func _bind_scene_overrides(node: Node, loader: Node, slots: Array) -> int:
+	var bound: int = 0
+	if node is MeshInstance3D:
+		var mi: MeshInstance3D = node as MeshInstance3D
+		if mi.mesh != null:
+			for s: int in range(mi.mesh.get_surface_count()):
+				if s >= slots.size():
+					break
+				var mp: String = str(slots[s])
 				if mp == "":
 					continue
-				var short := mp.get_file().split(".")[0].to_lower()
-				if short == "" or short.length() < 3:
-					continue
-				if surf_name.find(short) >= 0 or short.find(surf_name) >= 0:
-					matched = i
-					break
-		if matched == -1 and s < mat_slots.size():
-			matched = s
-		if matched >= 0 and matched < mat_slots.size():
-			var mp2 := str(mat_slots[matched])
-			if mp2 != "":
-				m.surface_set_material(s, get_material_for_ue(mp2))
+				var mat: Material = loader.call("get_material_for_ue", mp) as Material
+				if mat != null:
+					mi.set_surface_override_material(s, mat)
+					bound += 1
+	for child: Node in node.get_children():
+		bound += _bind_scene_overrides(child, loader, slots)
+	return bound
 
 
 ## WorldGridMaterial is the UE checkerboard placeholder, not authored art. On
@@ -2913,6 +3083,18 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 		if low_mp.ends_with("/sm_wardbox"):
 			result["ward_box_hidden"] = int(result.get("ward_box_hidden", 0)) + 1
 			continue
+		# /Game/Test/Art/Primitives/SM_Shape_* are the editor's test
+		# primitives (sphere 115, plane 40, narrow capsule 16 campaign-wide =
+		# 171 instances, 58 of them in the Guildhall). All 171 slots bind
+		# MI_Default_White - an untextured white debug material - so they
+		# spawn as flat white geometry in every map and the reference build
+		# shows none of them. They are editorial debris, not art: skip and
+		# count them, like SM_WardBox above. Scoped to that exact authored
+		# folder and stem, so /Engine/BasicShapes volumes (cubes/planes used
+		# as gameplay volumes) are never touched.
+		if _is_debug_shape_mesh(low_mp, m_dict):
+			result["debug_shape_hidden"] = int(result.get("debug_shape_hidden", 0)) + 1
+			continue
 		var tr: Transform3D = _dict_to_transform(m_dict)
 		# Per-component OverrideMaterials split the batch so each MultiMesh
 		# shares an identically overridden duplicated Mesh resource.
@@ -3181,6 +3363,32 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 	for pp in data_dict.get("patrol_paths", []):
 		if pp is Dictionary:
 			(result["patrol_paths"] as Array).append(pp)
+
+
+## True for the editor's untextured test primitives only:
+## `/Game/Test/Art/Primitives/SM_Shape_{Sphere,Plane,NarrowCapsule}`, no authored
+## override material, and an authored slot that still binds MI_Default_White.
+## All 171 campaign-wide placements match (58 in the Guildhall) and they render
+## as flat white geometry. An override disqualifies the instance because a
+## designer deliberately re-purposed the primitive: the Den's window backlight
+## is exactly `SM_Shape_Plane` + MI_MoonshapeEmissive.
+func _is_debug_shape_mesh(low_path: String, entry: Dictionary) -> bool:
+	if low_path.find("/test/art/primitives/") < 0:
+		return false
+	if not low_path.get_file().split(".")[0].begins_with("sm_shape_"):
+		return false
+	if not _extract_override_materials(entry).is_empty():
+		return false
+	var mesh_path: String = str(entry.get("mesh", ""))
+	var slots_v: Variant = _mesh_mats_db.get(mesh_path, null)
+	if not (slots_v is Array):
+		slots_v = _mesh_mats_db_lower.get(mesh_path.to_lower(), null)
+	if not (slots_v is Array):
+		return false
+	for s: Variant in (slots_v as Array):
+		if str(s).to_lower().find("mi_default_white") >= 0:
+			return true
+	return false
 
 
 ## True only for the authored BP_MoonShape_C_5 window backlight plane. The
@@ -5284,6 +5492,13 @@ func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dict
 	result["downscaled_textures"] = downscaled_textures.duplicate()
 	result["fallback_material_count"] = fallback_material_count
 	result["fallback_materials"] = fallback_materials.duplicate()
+	# L2-03: authored flat-colour binds (visible population, near-white named).
+	result["flat_colour_material_count"] = flat_colour_material_count
+	result["flat_colour_materials"] = flat_colour_materials.duplicate()
+	# RE-Q-06: empty slots rescued by a unique surface-name match (0 on the
+	# shipped data set; the index is authoritative).
+	result["slot_name_fallback_count"] = slot_name_fallback_count
+	result["slot_name_fallback_names"] = slot_name_fallback_names.duplicate()
 	result["den_window_splits"] = int(ctx.get("den_window_splits", 0))
 	result["den_window_unsplit"] = int(ctx.get("den_window_unsplit", 0))
 	result["den_window_clip_miss"] = int(ctx.get("den_window_clip_miss", 0))

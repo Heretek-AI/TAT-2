@@ -266,7 +266,9 @@ func observe(delta: float) -> void:
 	var wait_left: float = 0.0
 	if guard.has_method("patrol_wait_remaining"):
 		wait_left = float(guard.call("patrol_wait_remaining"))
-	var at_point: bool = wp >= 0 and wp < points.size() and pos.distance_to(points[wp] as Vector3) <= 1.0
+	# The FSM's arrival gate is strictly `< 1.0` m (`_patrol_service_waypoint`);
+	# the binding must not accept a boundary the FSM has not accepted.
+	var at_point: bool = wp >= 0 and wp < points.size() and pos.distance_to(points[wp] as Vector3) < 1.0
 	var has_facing: bool = false
 	var facing_yaw: float = 0.0
 	var facing: Array = []
@@ -396,7 +398,7 @@ func task_tick(instance: Dictionary, delta: float) -> int:
 		"Move To":
 			if int(observed.get("wp_index", -1)) != int(instance.get("wp_at_enter", -1)):
 				return SUCCEEDED
-			if float(observed.get("dist_to_point", -1.0)) >= 0.0 and float(observed.get("dist_to_point", 1e9)) <= 1.0:
+			if float(observed.get("dist_to_point", -1.0)) >= 0.0 and float(observed.get("dist_to_point", 1e9)) < 1.0:
 				return SUCCEEDED
 			return RUNNING
 		"TATState Tree Task Rotate to Face":

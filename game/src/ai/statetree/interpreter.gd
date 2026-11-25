@@ -30,7 +30,10 @@ extends RefCounted
 ##   * `OnStateCompleted` fires on success OR failure; `OnStateSucceeded` /
 ##     `OnStateFailed` are the discriminated forms;
 ##   * a candidate whose target cannot be selected is skipped and the next
-##     candidate is considered (`ST_Subtree_Combat_ActivateAttack` state 3);
+##     candidate is considered (`ST_Subtree_Combat_ActivateAttack` state 3),
+##     unless it authors `Fallback = NextSelectableSibling` (39 of 467), in which
+##     case the next selectable sibling of the target is entered instead -- the
+##     "if/else" idiom of this AI (`ST_Patrol` `Set Next Patrol Path Point`);
 ##   * a state with children that cannot select any child is not selected
 ##     (Epic's selection docs), so its entry is rolled back and the parent tries
 ##     its next sibling;
@@ -677,8 +680,11 @@ func _collect_and_apply(candidates: Array, completion_pass: bool) -> bool:
 		if str(tr.get("to_kind", "")) == "state":
 			var owner_tree: String = str(frame.get("tree", ""))
 			var target: int = int(tr.get("to_state_index", -1))
-			if _evaluate_enter_conditions(owner_tree, target, false) != ENTER_OK:
-				unavailable.append({"transition": int(tr.get("index", -1)), "state": int(frame["state"]), "target": target})
+			if not _can_select_target(owner_tree, target, str(tr.get("fallback", "None"))):
+				unavailable.append({
+					"transition": int(tr.get("index", -1)), "state": int(frame["state"]),
+					"target": target, "fallback": str(tr.get("fallback", "None")),
+				})
 				continue
 		if float(tr.get("delay_s", 0.0)) > 0.0 and not completion_pass:
 			if not _pending_transition.is_empty() \
@@ -718,7 +724,7 @@ func _evaluate_transition_conditions(tr: Dictionary, frame: Dictionary) -> Dicti
 	return {"ok": unmet.is_empty(), "unmet": unmet}
 
 
-func _apply_transition(tr: Dictionary) -> void:
+func _apply_transition(tr: Dictionary) -> bool:
 	stats["transitions"] = int(stats["transitions"]) + 1
 	var owner_state: int = int(tr.get("state", -1))
 	var to_kind: String = str(tr.get("to_kind", ""))
@@ -730,6 +736,7 @@ func _apply_transition(tr: Dictionary) -> void:
 		"to_kind": to_kind,
 		"to_state": str(tr.get("to_state", "")),
 		"to_state_index": int(tr.get("to_state_index", -1)),
+		"fallback": str(tr.get("fallback", "None")),
 	}
 	transitions_fired.append(fired)
 	_emit({"kind": "transition", "chosen": fired, "path": current_path()})
@@ -751,39 +758,15 @@ func _apply_transition(tr: Dictionary) -> void:
 	var owner_tree: String = str((frames[owner_frame] as Dictionary).get("tree", tree_name)) if owner_frame < frames.size() else tree_name
 	if to_kind == "state":
 		var target: int = int(tr.get("to_state_index", -1))
-		var tree_dict: Dictionary = trees.get(owner_tree, {})
-		if not TreeModel.has_state(tree_dict, target):
-			_record_block(str(frames[owner_frame]["tree"]), owner_state, "transition", "target %d missing" % target)
-			return
-		# Exit down to the deepest active ancestor of the target, then enter it.
-		var chain: Dictionary = {}
-		var cursor: int = target
-		var hops: int = 0
-		while cursor >= 0 and hops < 64:
-			chain[cursor] = true
-			cursor = TreeModel.parent_index(tree_dict, cursor)
-			hops += 1
-		var depth: int = frames.size()
-		for i: int in range(frames.size() - 1, -1, -1):
-			if str((frames[i] as Dictionary).get("tree", "")) != str(frames[owner_frame]["tree"]):
-				continue
-			if chain.has(int((frames[i] as Dictionary).get("state", -1))):
-				depth = i + 1
-				break
-		_exit_to(depth)
-		if depth > 0 and target == int((frames[depth - 1] as Dictionary).get("state", -1)):
-			return
-		var result: int = _enter_state(owner_tree, target)
-		if result != ENTER_OK:
-			_record_block(owner_tree, target, "transition", "target refused (%s)" % _enter_name(result))
-			return
-		# The ancestor kept from the exit is the new target's parent: it now has
-		# a running child (without this, a stale child=SUCCEEDED completes it).
-		if depth - 1 >= 0 and depth - 1 < frames.size():
-			var parent: Dictionary = frames[depth - 1]
-			parent["has_child"] = true
-			parent["child"] = RUNNING
-		return
+		if not TreeModel.has_state(trees.get(owner_tree, {}), target):
+			_record_block(owner_tree, owner_state, "transition", "target %d missing" % target)
+			return false
+		var entered: int = _select_target(owner_tree, target, str(tr.get("fallback", "None")))
+		if entered < 0:
+			_record_block(owner_tree, target, "transition", "target refused (fallback %s)" % str(tr.get("fallback", "None")))
+			return false
+		fired["entered_state"] = entered
+		return true
 	# Succeeded / Next: the owning frame's status is already SUCCEEDED; exit its
 	# subtree and let the parent select the next sibling.
 	if owner_frame < frames.size():
@@ -798,11 +781,84 @@ func _apply_transition(tr: Dictionary) -> void:
 			(frames[parent_index] as Dictionary)["has_child"] = false
 		else:
 			tree_status = SUCCEEDED
+	return true
 
 
-# ---------------------------------------------------------------------------
-# Diagnostics
-# ---------------------------------------------------------------------------
+## Shallow viability of a transition target, honouring the authored
+## `Fallback == NextSelectableSibling` (39 of 467 transitions).
+func _can_select_target(tree_name: String, target: int, fallback: String) -> bool:
+	if _evaluate_enter_conditions(tree_name, target, false) == ENTER_OK:
+		return true
+	if fallback != "NextSelectableSibling":
+		return false
+	var tree_dict: Dictionary = trees.get(tree_name, {})
+	var parent: int = TreeModel.parent_index(tree_dict, target)
+	if parent < 0:
+		return false
+	var kids: Array = TreeModel.children(tree_dict, parent)
+	var pos: int = kids.find(target)
+	if pos < 0:
+		return false
+	for i: int in range(pos + 1, kids.size()):
+		if _evaluate_enter_conditions(tree_name, int(kids[i]), false) == ENTER_OK:
+			return true
+	return false
+
+
+## Exit to the target's deepest active ancestor, then enter the target -- or, when
+## it cannot be selected and `Fallback == NextSelectableSibling`, the first
+## selectable sibling after it (the "if/else" idiom of this AI: ST_Patrol's
+## `Set Next Patrol Path Point -> Has Broken Location?`). Returns the entered
+## state index, or -1.
+func _select_target(tree_name: String, target: int, fallback: String) -> int:
+	var depth: int = _ancestor_depth(tree_name, target)
+	_exit_to(depth)
+	if _enter_state(tree_name, target) == ENTER_OK:
+		_link_parent_child(depth)
+		return target
+	if fallback != "NextSelectableSibling":
+		return -1
+	var tree_dict: Dictionary = trees.get(tree_name, {})
+	var parent: int = TreeModel.parent_index(tree_dict, target)
+	if parent < 0:
+		return -1
+	var kids: Array = TreeModel.children(tree_dict, parent)
+	var pos: int = kids.find(target)
+	if pos < 0:
+		return -1
+	for i: int in range(pos + 1, kids.size()):
+		var sibling: int = int(kids[i])
+		if _enter_state(tree_name, sibling) == ENTER_OK:
+			_link_parent_child(depth)
+			return sibling
+	return -1
+
+
+## Index one past the deepest active frame that is an ancestor of (or equal to)
+## `target` in `tree_name`.
+func _ancestor_depth(tree_name: String, target: int) -> int:
+	var tree_dict: Dictionary = trees.get(tree_name, {})
+	var chain: Dictionary = {}
+	var cursor: int = target
+	var hops: int = 0
+	while cursor >= 0 and hops < 64:
+		chain[cursor] = true
+		cursor = TreeModel.parent_index(tree_dict, cursor)
+		hops += 1
+	for i: int in range(frames.size() - 1, -1, -1):
+		var frame: Dictionary = frames[i]
+		if str(frame.get("tree", "")) != tree_name:
+			continue
+		if chain.has(int(frame.get("state", -1))):
+			return i + 1
+	return 0
+
+
+func _link_parent_child(depth: int) -> void:
+	if depth - 1 >= 0 and depth - 1 < frames.size():
+		var parent: Dictionary = frames[depth - 1]
+		parent["has_child"] = true
+		parent["child"] = RUNNING
 
 
 func _record_block(tree: String, state_index: int, kind: String, reason: String) -> void:

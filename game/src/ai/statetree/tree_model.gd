@@ -27,20 +27,26 @@ extends RefCounted
 ##     "which bool does `Bool Compare` compare, and to what", and no runtime may
 ##     invent it.
 ##
-## FIELDS THE PRODUCER DROPS (measured in `build/qa/w9/p4-facts-data.md` and
-## `build/qa/w9/p4-re-statetree.md`; every one is needed for a faithful cutover):
+## FIELDS THE PAYLOAD OMITS, OR SCATTERS (measured in `build/qa/w9/p4-facts-data.md`
+## and `build/qa/w9/p4-re-statetree.md`; every one is needed for a faithful cutover):
 ##   * task / enter-condition / transition-condition PARAMETERS. The raw dump
 ##     carries them (`Nodes.Structs[k].InstanceTemplateIndex` -> the array named
-##     by `InstanceDataHandle.Source`): 260 of 326 task instances and 209 of 233
-##     condition instances have a non-empty authored parameter struct. The
-##     payload carries none, so no runtime can answer "which bool / which tag /
+##     by `InstanceDataHandle.Source`); the facts lane counted 260 of 326 task
+##     instances and 209 of 233 condition instances with an authored value, and
+##     the independent audit found 203 of 233 conditions (six records it excludes
+##     are `Get Actor Location` property functions, not conditions). The exact
+##     count depends on how an inherited Blueprint default is counted. The payload
+##     carries NONE of them, so no runtime can answer "which bool / which tag /
 ##     which alertness / what delay". `InstanceTemplateIndex` also differs from
 ##     `InstanceDataHandle.Index` on 300 of 566 nodes, so the mapping is not a
 ##     guess the consumer can make.
-##   * `Transitions[].Fallback` (39 `NextSelectableSibling`, 428 `None`) -- the
-##     "if/else" idiom of this AI.
-##   * `Transitions[].Delay` (0 of 467 non-zero authored, so inert today) and
-##     `bConsumeEventOnSelect` (false on 2 states).
+##   * the per-state `transitions[]` copies omit `fallback`, `delay_seconds` and
+##     `delay_random_variance`. They ARE in the payload, in the per-tree flat
+##     `transitions[]` array (14 keys: 428 `None` + 39 `NextSelectableSibling`,
+##     all 467 delays 0.0), and this parser JOINS them onto the per-state
+##     records by `index` and validates the `from_state_index` match. The model
+##     therefore has `fallback` and `delay_s`; the interpreter uses both.
+##   * `bConsumeEventOnSelect` (false on 2 states) is not emitted anywhere.
 ##   * `States[].RequiredEventToEnter` (3 states: ST_Patrol[21],
 ##     ST_Subtree_Combat[6], ST_InvestigateStims_Guard[6]).
 ##   * state/asset-level parameter values (93 states carry a schema only).
@@ -272,8 +278,49 @@ static func parse_tree(tree_name: String, raw: Dictionary, path: String = "") ->
 		"transitions": transitions,
 	}
 	tree["entry"] = entry_index(tree)
+	_join_flat_transitions(tree, raw.get("transitions", []))
 	_validate(tree)
 	return tree
+
+
+## The per-state `transitions[]` copies are 9-key records without `fallback` or
+## the delay; the tree's flat `transitions[]` has all 14. Join by `index` and
+## fail closed when a record is missing or belongs to another state.
+static func _join_flat_transitions(tree: Dictionary, flat_raw: Variant) -> void:
+	var errors: Array = tree["errors"]
+	if not (flat_raw is Array) or (flat_raw as Array).is_empty():
+		# A payload without the flat array (older producers, synthetic fixtures)
+		# keeps the nested `delay.duration` and fallback "None".
+		return
+	var by_index: Dictionary = {}
+	for entry: Variant in flat_raw:
+		if not (entry is Dictionary):
+			errors.append("flat transition entry is not an object")
+			continue
+		by_index[int((entry as Dictionary).get("index", -1))] = entry
+	var joined: int = 0
+	for state: Dictionary in tree["states"]:
+		for tr: Dictionary in state["transitions"]:
+			var index: int = int(tr["index"])
+			if not by_index.has(index):
+				errors.append("transition %d has no flat record" % index)
+				continue
+			var flat: Dictionary = by_index[index]
+			if int(flat.get("from_state_index", -1)) != int(state["index"]):
+				errors.append("transition %d flat from_state_index %d != owning state %d"
+					% [index, int(flat.get("from_state_index", -1)), int(state["index"])])
+			var fallback: String = str(flat.get("fallback", "None"))
+			if fallback != "None" and fallback != "NextSelectableSibling":
+				errors.append("transition %d has unknown fallback '%s'" % [index, fallback])
+			tr["fallback"] = fallback
+			tr["delay_s"] = float(flat.get("delay_seconds", 0.0))
+			tr["delay_variance_s"] = float(flat.get("delay_random_variance", 0.0))
+			joined += 1
+	var total: int = int((tree["transitions"] as Array).size())
+	if joined != total:
+		errors.append("joined %d of %d transitions" % [joined, total])
+	if by_index.size() != total:
+		errors.append("flat transition count %d != per-state count %d" % [by_index.size(), total])
 
 
 static func _empty_tree(tree_name: String, raw: Dictionary, path: String, roots: Array, errors: Array, warnings: Array) -> Dictionary:
@@ -401,7 +448,11 @@ static func _normalise_transition(owner_state: int, raw: Dictionary) -> Dictiona
 		"to_state": str(raw.get("to_state", "")) if raw.get("to_state", null) != null else "",
 		"conditions": conditions,
 		"enabled": bool(raw.get("enabled", true)),
+		# The nested copy's own delay is the fallback for payloads without the
+		# flat array; the join overwrites it with the authored value when present.
 		"delay_s": float(delay.get("duration", 0.0)),
+		"delay_variance_s": float(delay.get("RandomVariance", 0.0)),
+		"fallback": "None",
 	}
 
 

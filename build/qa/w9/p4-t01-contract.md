@@ -18,8 +18,12 @@ cooked dump carries the authored parameter struct for
 * **260 of 326** task instances,
 * **209 of 233** condition instances,
 
-and the payload carries none of them. Measured consequence today
-(`p4-report.md` §2):
+and the payload carries none of them. (The fact sheet counted 260/326 task and
+209/233 condition instances; the W9-P4 audit's own walk found **203/233**
+conditions, excluding six `Get Actor Location` property-function records that are
+never referenced as conditions. The exact count depends on how an inherited
+Blueprint default is counted; the direction is not in doubt.) Measured
+consequence today (`p4-report.md` §2):
 
 | class | authored | covered by the port binding | `parameter_blind` |
 |---|---:|---:|---:|
@@ -64,6 +68,15 @@ Every node entry becomes an object instead of a bare string. The old string form
 stays readable by the consumer (`tree_model.gd` accepts both), so the switch is
 additive.
 
+**Already emitted, keep it:** the per-tree *flat* `transitions[]` array already
+carries `fallback` (428 `None` + 39 `NextSelectableSibling`), `delay_seconds`
+(all 0.0), `delay_random_variance`, `from_state` and `from_state_index`. The W9-P4
+runtime now joins it onto the per-state copies (`tree_model._join_flat_transitions`)
+and honours `Fallback`, so this contract does **not** ask for it. The only
+transition field still missing is `consume_event_on_select`.
+
+The new node shape:
+
 ```jsonc
 "states": [{
   "index": 1, "name": "Set Alertness", "depth": 1, "type": "State",
@@ -89,9 +102,7 @@ additive.
   "index": 3, "to_state": "Has Broken Location?", "to_state_index": 5,
   "to_kind": "state", "trigger": "OnStateSucceeded",
   "priority": "None", "required_event": "",
-  "fallback": "NextSelectableSibling",               // NEW: 39 authored
   "consume_event_on_select": true,                   // NEW: false on 2 states
-  "delay": {"duration": 0.0, "random_variance": 0.0},// NEW: 0/467 non-zero today
   "conditions": [/* node objects as above */],
   "enabled": true
 }]
@@ -148,8 +159,9 @@ A minimal producer self-check that fails closed (add to
 3. the three worked examples equal
    `Neutral` / `1.0` and `100.0` / `SmartObjectInteraction` /
    `{inherited: true}` respectively;
-4. `fallback` is present on every transition and is one of
-   `None|NextSelectableSibling`;
+4. the flat `transitions[]` stays present on every tree (467 rows), its
+   `fallback` is one of `None|NextSelectableSibling`, and every row's
+   `from_state_index` matches its per-state owner;
 5. `required_event_to_enter` is non-null on exactly those 3 states.
 
 ## 6. What this unblocks (and what it does not)

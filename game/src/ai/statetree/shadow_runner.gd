@@ -243,14 +243,18 @@ static func trace_all_trees(p_ticks: int = 4) -> Dictionary:
 		for _i: int in range(p_ticks):
 			interp.tick(0.05)
 	var traces: Dictionary = {}
+	var missing: Array = []
 	for tree_name: String in names:
-		traces[tree_name] = sink.rows_for(tree_name)
+		var rows: Array = sink.rows_for(tree_name)
+		traces[tree_name] = rows
+		if rows.is_empty():
+			missing.append(tree_name)
 	return {
 		"traces": traces,
 		"started": names.size() - blocked,
 		"blocked": blocked,
 		"rows": sink.count(),
-		"missing": [],
+		"missing": missing,
 		"start_rows": start_rows,
 		"summary": sink.summary(),
 	}

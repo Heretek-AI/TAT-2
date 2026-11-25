@@ -35,6 +35,7 @@ func _initialize() -> void:
 	_check_observer_tick()
 	_check_event()
 	_check_delay()
+	_check_fallback()
 	_check_unknown_enter()
 	_check_coverage()
 	_check_all_tree_traces()
@@ -291,6 +292,24 @@ func _check_event() -> void:
 	_ok(int(idle["interp"].current_state()) == 1, "no event -> the state stays selected")
 
 
+## `Fallback = NextSelectableSibling` (39 of 467 authored): a candidate whose
+## target cannot be selected enters the next selectable sibling of the target.
+## Without the fallback the same candidate is skipped and the state stays.
+func _check_fallback() -> void:
+	var run: Dictionary = _run("SYN_FALLBACK", 3)
+	var entered: Array = _kinds(run["trace"], "enter", "state")
+	_ok(not entered.has(2), "the unenterable target is not entered (got %s)" % str(entered))
+	_ok(entered.has(3), "the fallback entered the target's next sibling (got %s)" % str(entered))
+	var fired: Array = (run["interp"] as RefCounted).transitions_fired
+	_ok(fired.size() == 1 and str((fired[0] as Dictionary).get("fallback", "")) == "NextSelectableSibling",
+		"the fired transition carries the authored fallback")
+	var run2: Dictionary = _run("SYN_NOFALLBACK", 3)
+	var entered2: Array = _kinds(run2["trace"], "enter", "state")
+	_ok(not entered2.has(2) and not entered2.has(3), "without a fallback the candidate is skipped (got %s)" % str(entered2))
+	_ok(int((run2["interp"] as RefCounted).current_state()) == 1, "the state stays selected without a fallback")
+	_ok(int((run2["interp"] as RefCounted).stats["unknown_transition_votes"]) == 0, "no unknown votes on a plain false")
+
+
 func _check_delay() -> void:
 	# 0.05 s ticks; a 0.20 s delay must not fire before tick 4.
 	var run: Dictionary = _run("SYN_DELAY", 3, 0.05)
@@ -428,7 +447,7 @@ func _state(index: int, name: String, parent: int, children: Array, tasks: Array
 	}
 
 
-func _tr(index: int, to_state: int, trigger: String, conditions: Array = [], priority: String = "None", event: String = "", to_kind: String = "state", to_index: int = -1, delay: float = 0.0) -> Dictionary:
+func _tr(index: int, to_state: int, trigger: String, conditions: Array = [], priority: String = "None", event: String = "", to_kind: String = "state", to_index: int = -1, delay: float = 0.0, fallback: String = "None") -> Dictionary:
 	return {
 		"index": index,
 		"to_state": "state_%d" % to_state if to_kind == "state" else null,
@@ -439,8 +458,35 @@ func _tr(index: int, to_state: int, trigger: String, conditions: Array = [], pri
 		"required_event": event,
 		"conditions": conditions,
 		"delay": {"duration": delay, "RandomVariance": 0},
+		"fallback": fallback,
 		"enabled": true,
 	}
+
+
+## The per-tree flat transition array the real payload carries (14 keys). The
+## model joins it onto the per-state copies; building it here means the tests
+## exercise the same shape the producer emits.
+func _flat_transitions(tree: Dictionary) -> Array:
+	var out: Array = []
+	for state: Dictionary in tree["states"]:
+		for tr: Dictionary in state["transitions"]:
+			out.append({
+				"index": tr["index"],
+				"from_state": state["name"],
+				"from_state_index": state["index"],
+				"to_state": tr["to_state"],
+				"to_state_index": tr["to_state_index"],
+				"to_kind": tr["to_kind"],
+				"trigger": tr["trigger"],
+				"priority": tr["priority"],
+				"required_event": tr["required_event"],
+				"conditions": tr["conditions"],
+				"enabled": tr["enabled"],
+				"delay_seconds": float((tr.get("delay", {}) as Dictionary).get("duration", 0.0)),
+				"delay_random_variance": 0.0,
+				"fallback": str(tr.get("fallback", "None")),
+			})
+	return out
 
 
 func _base_payload() -> Dictionary:
@@ -488,6 +534,32 @@ func _base_payload() -> Dictionary:
 		"transitions": [], "tasks": [], "conditions": [], "subtree_links": [],
 		"stats": {},
 	}
+	trees["SYN_FALLBACK"] = {
+		"name": "SYN_FALLBACK", "package": "<synthetic>", "asset": "/Synth/FALLBACK",
+		"roots": ["Root"],
+		"states": [
+			_state(0, "Root", -1, [1, 2, 3], [], [], []),
+			_state(1, "A", 0, [], ["SYN_NEVER"], ["SYN_TRUE"],
+				[_tr(0, 2, "OnTick", ["SYN_TRUE"], "None", "", "state", -1, 0.0, "NextSelectableSibling")]),
+			_state(2, "X", 0, [], ["SYN_DONE"], ["SYN_FALSE"], []),
+			_state(3, "Y", 0, [], ["SYN_DONE"], ["SYN_TRUE"], []),
+		],
+		"transitions": [], "tasks": [], "conditions": [], "subtree_links": [],
+		"stats": {},
+	}
+	trees["SYN_NOFALLBACK"] = {
+		"name": "SYN_NOFALLBACK", "package": "<synthetic>", "asset": "/Synth/NOFALLBACK",
+		"roots": ["Root"],
+		"states": [
+			_state(0, "Root", -1, [1, 2, 3], [], [], []),
+			_state(1, "A", 0, [], ["SYN_NEVER"], ["SYN_TRUE"],
+				[_tr(0, 2, "OnTick", ["SYN_TRUE"], "None", "", "state", -1, 0.0, "None")]),
+			_state(2, "X", 0, [], ["SYN_DONE"], ["SYN_FALSE"], []),
+			_state(3, "Y", 0, [], ["SYN_DONE"], ["SYN_TRUE"], []),
+		],
+		"transitions": [], "tasks": [], "conditions": [], "subtree_links": [],
+		"stats": {},
+	}
 	trees["SYN_EVENT"] = {
 		"name": "SYN_EVENT", "package": "<synthetic>", "asset": "/Synth/EVENT",
 		"roots": ["Root"],
@@ -524,6 +596,8 @@ func _base_payload() -> Dictionary:
 		"transitions": [], "tasks": [], "conditions": [], "subtree_links": [],
 		"stats": {},
 	}
+	for tree: Variant in trees.keys():
+		(trees[tree] as Dictionary)["transitions"] = _flat_transitions(trees[tree])
 	return {
 		"schema": TreeModel.SCHEMA,
 		"game_version": "synthetic",

@@ -70,6 +70,12 @@ check-logic:
 check-consumers:
 	python3 tools/check_consumers.py
 
+# Boot a real free-play mission headless and fail on any SCRIPT/SHADER ERROR.
+# The unit suites and E2E cannot see this class: the 2026-11-25 footstep
+# occlusion bug threw on every step while E2E still reported 278/278.
+runtime-smoke:
+	build/qa/runtime_smoke.sh 90
+
 # W6T graybox P0/3rd-floor gate: validates the tracked override table against
 # the applied .tatlevel.json output (counts, overlap, coverage regions,
 # graybox-only, authored materials). `--table-only` needs no private data.

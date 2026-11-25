@@ -23,28 +23,54 @@ extends SceneTree
 ##
 ## This test asserts, against the real shipped data:
 ##   * the roof census and the measured policy split (426 convex / 307 box);
-##   * every "convex" /roofs/ mesh really gets ConvexPolygonShape3D with a
-##     zero centre offset and more than a box's 8 hull points, and no pitched
-##     roof instance carries a BoxShape3D;
-##   * the six EndA/EndB gable shells (4.32 m and 8.47 m tall) are convex,
-##     their hull top matches the visual AABB top, and their eave band sits
-##     3 m+ below the box plateau (mirror variants flip which end is the eave);
+##   * every "convex" /roofs/ mesh encodes the authored per-element hull union
+##     (one ConvexPolygonShape3D per element, or the one coalesced trimesh the
+##     load-truth cost cap names), with no pitched roof instance carrying a
+##     BoxShape3D and no hull union presenting a flat top;
+##   * the six EndA/EndB gable shells (4.32 m and 8.47 m tall) are convex, their
+##     union top is within 0.10 m of the visual AABB top, and their eave band
+##     sits 3 m+ below the box plateau (mirror variants flip which end is eave);
 ##   * the (115.0, 57.5, 26.5) ridge instance bypasses the "end" name;
 ##   * flat pieces (trim/fascia, roof decks), roof props and non-uniformly
-##     scaled decks keep their exact box;
+##     scaled decks keep their authored primitive set (a single authored box is
+##     still a BoxShape3D with its authored centre);
 ##   * the POI 3rd-floor roof census (29 instances: 28 convex / 1 deck) and the
-##     Old Manor tower-roof census (6 instances: trimesh, never a box plateau);
+##     Old Manor tower-roof census (per mesh: 3 reduced trimeshes, 1 ten-hull
+##     set, 1 box, 1 complex-default trimesh - never a box plateau);
 ##   * no /roofs/ or stair mesh qualifies as an occluder while a 4x6 wall still
 ##     does, and the Guildhall sublevel census fills MAX_OCCLUDERS = 768.
+##
+## W9-P2: the shape assertions read `AuthoredCollision.resolve()` with the
+## shipped level's placement count, i.e. the authored per-element union the
+## loader encodes. They no longer read `info["shape"]` (the loader's `shapes[0]`
+## compatibility field) with no placement count, which measured one mesh-wide
+## hull with `n=1` and disagreed with the loader on every multi-element mesh.
+## The probe is therefore mode-independent and passes under
+## `TAT2_COLLISION=authored` and `TAT2_COLLISION=aabb`; loader integration is
+## owned by `probe_collision_authored.gd`.
 ##
 ## Run:
 ##   XDG_DATA_HOME=... tools/godot --headless --path game \
 ##     --script res://tests/test_roof_collision.gd
 
 const LOADER_PATH := "res://src/core/level_loader.gd"
+const AuthoredCollision: GDScript = preload("res://src/core/collision/authored_collision.gd")
 const LEVEL_PATH := "res://data/generated/levels/Guildhall/Guildhall_PeripheryA.tatlevel.json"
 const POI_LEVEL_PATH := "res://data/generated/levels/Buildings/Guildhall/Building_Guildhall_POI_3rdFloor.tatlevel.json"
 const OLDMANOR_LEVEL_PATH := "res://data/generated/levels/OldManor/OldManor_Geo.tatlevel.json"
+## W9-P2 authored encodings of the six Old Manor tower-roof meshes, measured
+## from `mesh_collision.json` + the reduction rule (elements > 16):
+##   Combo_01 (419 els) / Int_Combo_01 (62) / Int_Combo_02 (95) -> reduced
+##   Combo_02 (10 convex) -> 10 hulls, Fence (1 box) -> the authored box,
+##   Combo_Glass (no AggGeom record) -> complex-default render trimesh.
+const OLDMANOR_ENCODINGS: Dictionary = {
+	"SM_OldManor_TowerRoof_Combo_01": "reduced_trimesh",
+	"SM_OldManor_TowerRoof_Int_Combo_01": "reduced_trimesh",
+	"SM_OldManor_TowerRoof_Int_Combo_02": "reduced_trimesh",
+	"SM_OldManor_TowerRoof_Combo_02": "hulls",
+	"SM_OldManor_TowerRoof_Fence": "box",
+	"SM_OldManor_TowerRoof_Combo_Glass": "complex_trimesh",
+}
 ## Guildhall's authored sublevel list (mission_controller._map_id_to_sublevels),
 ## in load order. Pinned here so the occluder census walks the same files; a
 ## change there is a data change, not a flaky test.
@@ -113,6 +139,108 @@ func _const(name: String) -> Variant:
 	return (ll.get_script() as GDScript).get_script_constant_map().get(name)
 
 
+## Per-UE-path instance count for the /roofs/ meshes of one shipped level.
+## This is the placement count the loader's per-path cost cap keys on
+## (`_fill_col_path_counts` -> `AuthoredCollision.resolve(path, n)`), so the
+## probe's encoding matches the load, not the `n=1` direct-call default.
+func _roof_counts(level_path: String) -> Dictionary:
+	var counts: Dictionary = {}
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(level_path))
+	if not (parsed is Dictionary):
+		return counts
+	for rec_v: Variant in ((parsed as Dictionary).get("meshes", []) as Array):
+		if not (rec_v is Dictionary):
+			continue
+		var mp: String = str((rec_v as Dictionary).get("mesh", ""))
+		if mp.to_lower().find("/roofs/") < 0:
+			continue
+		counts[mp] = int(counts.get(mp, 0)) + 1
+	return counts
+
+
+## Authored collision union for one UE mesh: every element shape the loader
+## emits, transformed by its own offset and flattened to one mesh-local point
+## set + AABB. This is the authored truth the probe asserts; `info["shape"]` is
+## only the loader's single-shape compatibility field (`shapes[0]`).
+##
+## Returns {source, shapes, offsets, elements, convex, reduced, points, aabb}.
+## `source` is `AuthoredCollision.resolve()`'s string: "hull", "prims",
+## "complex_default", "no_collision" or "absent". Convex hulls bake their
+## element FTransform into the points and keep an identity offset, so the
+## identity-offset union is exactly the collision surface.
+func _authored_union(ue_path: String, instances: int = 1) -> Dictionary:
+	var res: Dictionary = AuthoredCollision.resolve(ue_path, maxi(instances, 1)) as Dictionary
+	var out: Dictionary = {
+		"source": str(res.get("source", "absent")),
+		"shapes": res.get("shapes", []) as Array,
+		"offsets": res.get("offsets", []) as Array,
+		"elements": int(res.get("elements", 0)),
+		"convex": int(res.get("convex", 0)),
+		"reduced": bool(res.get("reduced", false)),
+		"points": PackedVector3Array(),
+		"aabb": AABB(),
+	}
+	var shapes: Array = out["shapes"] as Array
+	var offsets: Array = out["offsets"] as Array
+	var pts := PackedVector3Array()
+	for i: int in range(shapes.size()):
+		var xf: Transform3D = Transform3D.IDENTITY
+		if i < offsets.size():
+			xf = offsets[i] as Transform3D
+		for p: Vector3 in _shape_points(shapes[i] as Shape3D):
+			pts.append(xf * p)
+	out["points"] = pts
+	out["aabb"] = _points_aabb(pts)
+	return out
+
+
+## Local-space point set of one shape, dense enough that its AABB is exact.
+## Convex hulls contribute their authored points; a coalesced/complex trimesh
+## contributes its faces; primitives contribute their support points.
+func _shape_points(shape: Shape3D) -> PackedVector3Array:
+	if shape == null:
+		return PackedVector3Array()
+	if shape is ConvexPolygonShape3D:
+		return (shape as ConvexPolygonShape3D).points
+	if shape is ConcavePolygonShape3D:
+		return (shape as ConcavePolygonShape3D).get_faces()
+	if shape is BoxShape3D:
+		var h: Vector3 = (shape as BoxShape3D).size * 0.5
+		return PackedVector3Array([
+			Vector3(-h.x, -h.y, -h.z), Vector3(h.x, -h.y, -h.z),
+			Vector3(h.x, -h.y, h.z), Vector3(-h.x, -h.y, h.z),
+			Vector3(-h.x, h.y, -h.z), Vector3(h.x, h.y, -h.z),
+			Vector3(h.x, h.y, h.z), Vector3(-h.x, h.y, h.z),
+		])
+	if shape is SphereShape3D:
+		var r: float = (shape as SphereShape3D).radius
+		return PackedVector3Array([
+			Vector3(-r, 0.0, 0.0), Vector3(r, 0.0, 0.0), Vector3(0.0, -r, 0.0),
+			Vector3(0.0, r, 0.0), Vector3(0.0, 0.0, -r), Vector3(0.0, 0.0, r),
+		])
+	if shape is CapsuleShape3D:
+		var cr: float = (shape as CapsuleShape3D).radius
+		var hh: float = (shape as CapsuleShape3D).height * 0.5
+		return PackedVector3Array([
+			Vector3(-cr, -hh, 0.0), Vector3(cr, -hh, 0.0),
+			Vector3(-cr, hh, 0.0), Vector3(cr, hh, 0.0),
+			Vector3(0.0, -hh, -cr), Vector3(0.0, -hh, cr),
+			Vector3(0.0, hh, -cr), Vector3(0.0, hh, cr),
+		])
+	return PackedVector3Array()
+
+
+func _points_aabb(pts: PackedVector3Array) -> AABB:
+	if pts.is_empty():
+		return AABB()
+	var mn: Vector3 = pts[0]
+	var mx: Vector3 = pts[0]
+	for p: Vector3 in pts:
+		mn = mn.min(p)
+		mx = mx.max(p)
+	return AABB(mn, mx - mn)
+
+
 func _initialize() -> void:
 	ll = (load(LOADER_PATH) as GDScript).new()
 	check_census()
@@ -179,55 +307,135 @@ func check_census() -> Dictionary:
 	return per_path
 
 
-## Every convex-policy mesh must really hand back a convex hull (never a box),
-## and the flat pieces must still be boxes.
+## Every convex-policy roof must encode the authored per-element hull union the
+## loader emits, and every flat/prop piece must keep its authored primitive set.
+## See the header for why the old `info["shape"]` / n=1 reading was wrong.
 func check_policy_shapes() -> void:
-	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(LEVEL_PATH))
-	var per_path: Dictionary = {}
-	for rec_v: Variant in ((parsed as Dictionary).get("meshes", []) as Array):
-		if rec_v is Dictionary:
-			var mp: String = str((rec_v as Dictionary).get("mesh", ""))
-			if mp.to_lower().find("/roofs/") >= 0:
-				per_path[mp] = true
+	var per_path: Dictionary = _roof_counts(LEVEL_PATH)
 	var convex_boxes: Array[String] = []
 	var convex_bad: Array[String] = []
 	var box_bad: Array[String] = []
-	var hull_points_min: int = 1 << 30
+	var convex_paths: Array[String] = []
+	var convex_instances: int = 0
+	var reduced_paths: Array[String] = []
+	var min_hull_points: int = 1 << 30
 	for mp2: String in per_path.keys():
 		var kind: String = str(ll.call("roof_collision_kind", mp2))
-		var info: Dictionary = ll.call("_get_mesh_and_shape", mp2)
-		var shape: Variant = info.get("shape")
-		if shape == null:
-			convex_bad.append(mp2 + " (no shape)")
+		var n: int = int(per_path[mp2])
+		var u: Dictionary = _authored_union(mp2, n)
+		var source: String = str(u["source"])
+		var shapes: Array = u["shapes"] as Array
+		var offsets: Array = u["offsets"] as Array
+		var elements: int = int(u["elements"])
+		var reduced: bool = bool(u["reduced"])
+		if source == "absent":
+			if kind == "box":
+				box_bad.append(mp2.get_file() + " (no authored collision)")
+			else:
+				convex_bad.append(mp2.get_file() + " (no authored collision)")
 			continue
-		var soff: Vector3 = info.get("shape_offset", Vector3.ONE)
 		if kind == "convex":
-			if not (shape is ConvexPolygonShape3D):
-				if shape is BoxShape3D:
-					convex_boxes.append(mp2)
+			convex_paths.append(mp2)
+			convex_instances += n
+			for sh: Variant in shapes:
+				if sh is BoxShape3D:
+					convex_boxes.append(mp2.get_file())
+			if reduced:
+				# Over the element/cost cap: the loader names one coalesced
+				# trimesh of the element AABBs, never a silent hull set.
+				reduced_paths.append(mp2)
+				if source != "hull" or shapes.size() != 1 or not (shapes[0] is ConcavePolygonShape3D):
+					convex_bad.append("%s (reduced: %s, %d shapes)" % [
+						mp2.get_file(), source, shapes.size()])
+			elif source == "hull":
+				if shapes.size() != elements:
+					convex_bad.append("%s (%d shapes for %d authored hulls)" % [
+						mp2.get_file(), shapes.size(), elements])
+				for i: int in range(shapes.size()):
+					if not (shapes[i] is ConvexPolygonShape3D):
+						convex_bad.append("%s (hull %d is %s)" % [mp2.get_file(), i,
+							(shapes[i] as Object).get_class()])
+					elif offsets[i] != Transform3D.IDENTITY:
+						convex_bad.append("%s (hull %d offset %s)" % [mp2.get_file(), i,
+							str(offsets[i])])
+					else:
+						min_hull_points = mini(min_hull_points, (shapes[i] as ConvexPolygonShape3D).points.size())
+			elif source == "prims":
+				# No convex element in the authored record: the primitive set is
+				# tessellated into the one exact trimesh per instance.
+				if shapes.size() != 1 or not (shapes[0] is ConcavePolygonShape3D):
+					convex_bad.append("%s (prims: %d shapes)" % [mp2.get_file(), shapes.size()])
+			else:
+				convex_bad.append("%s (unexpected source %s)" % [mp2.get_file(), source])
+			# No flat top: the union may only touch the top band along a ridge.
+			# A reduced set is a coalesced element-AABB trimesh by construction
+			# and is accounted for above, so it is not a pitched surface any
+			# more; the two reduced roofs are named by the census check below.
+			if not reduced:
+				var upts: PackedVector3Array = u["points"]
+				if upts.is_empty():
+					convex_bad.append(mp2.get_file() + " (empty union)")
 				else:
-					convex_bad.append(mp2 + " (" + (shape as Object).get_class() + ")")
-				continue
-			if soff != Vector3.ZERO:
-				convex_bad.append(mp2 + " (offset %s)" % str(soff))
-			var pts: PackedVector3Array = (shape as ConvexPolygonShape3D).points
-			hull_points_min = mini(hull_points_min, pts.size())
-			if pts.size() <= 8:
-				convex_bad.append(mp2 + " (%d hull points, a box has 8)" % pts.size())
+					var uaabb: AABB = u["aabb"]
+					var span: float = _hull_top_span_fraction(upts, uaabb)
+					if span >= 0.20:
+						convex_bad.append("%s (top span %.3f)" % [mp2.get_file(), span])
 		elif kind == "box":
-			if not (shape is BoxShape3D):
-				box_bad.append(mp2 + " (" + (shape as Object).get_class() + ")")
-			elif soff == Vector3.ZERO:
-				box_bad.append(mp2 + " (box without centre offset)")
+			if reduced:
+				if shapes.size() != 1 or not (shapes[0] is ConcavePolygonShape3D):
+					box_bad.append("%s (reduced: %d shapes)" % [mp2.get_file(), shapes.size()])
+			elif elements == 1:
+				# One authored primitive: the exact primitive is the answer.
+				# The roof trims/decks/side bands are authored boxes, so the
+				# shape is still a BoxShape3D - with the authored centre, not a
+				# render-AABB box invented at load.
+				if shapes.size() != 1 or offsets.size() != 1 \
+						or not (shapes[0] is BoxShape3D or shapes[0] is SphereShape3D or shapes[0] is CapsuleShape3D):
+					box_bad.append("%s (single element %s)" % [mp2.get_file(),
+						(shapes[0] as Object).get_class() if shapes.size() > 0 else "no shape"])
+					continue
+				var off: Transform3D = offsets[0] as Transform3D
+				var baabb: AABB = u["aabb"]
+				if off.origin == Vector3.ZERO:
+					box_bad.append(mp2.get_file() + " (box without centre offset)")
+				elif shapes[0] is BoxShape3D and not (shapes[0] as BoxShape3D).size.is_equal_approx(baabb.size):
+					box_bad.append("%s (box %s != authored %s)" % [mp2.get_file(),
+						str((shapes[0] as BoxShape3D).size), str(baabb.size)])
+			elif source == "prims":
+				# Primitive-only multi-element set: one exact tessellation.
+				if shapes.size() != 1 or not (shapes[0] is ConcavePolygonShape3D):
+					box_bad.append("%s (multi prims: %d shapes)" % [mp2.get_file(), shapes.size()])
+			elif source == "hull":
+				# Mixed hull/primitive set: one shape per authored element.
+				if shapes.size() != elements:
+					box_bad.append("%s (%d shapes for %d elements)" % [
+						mp2.get_file(), shapes.size(), elements])
+				for sh2: Variant in shapes:
+					if not (sh2 is ConvexPolygonShape3D or sh2 is BoxShape3D
+							or sh2 is SphereShape3D or sh2 is CapsuleShape3D):
+						box_bad.append("%s (%s)" % [mp2.get_file(), (sh2 as Object).get_class()])
+			else:
+				box_bad.append("%s (unexpected source %s)" % [mp2.get_file(), source])
+	reduced_paths.sort()
 	_check(convex_boxes.is_empty(),
-		"no pitched /roofs/ mesh returns BoxShape3D",
+		"no pitched /roofs/ mesh emits a BoxShape3D (authored hull union)",
 		"pitched roof meshes still boxed: " + str(convex_boxes))
 	_check(convex_bad.is_empty(),
-		"all pitched roof shapes are centred-zero convex hulls (min %d points)" % hull_points_min,
-		"convex roof shape problems: " + str(convex_bad))
+		"19 convex roofs: authored per-element union (min %d hull points), top span < 0.20" % min_hull_points,
+		"convex roof union problems: " + str(convex_bad))
 	_check(box_bad.is_empty(),
-		"trim/fascia/side/end/deck/prop roof pieces keep the exact box",
+		"27 flat/prop roofs: authored primitive/hull sets; single boxes keep the authored box",
 		"box roof shape problems: " + str(box_bad))
+	_check(convex_paths.size() == ROOF_CONVEX_UNIQUE and convex_instances == ROOF_CONVEX_INSTANCES,
+		"load-truth census: %d convex meshes / %d instances drive the union" % [
+			convex_paths.size(), convex_instances],
+		"convex census changed: %d meshes / %d instances (expected %d / %d)" % [
+			convex_paths.size(), convex_instances, ROOF_CONVEX_UNIQUE, ROOF_CONVEX_INSTANCES])
+	_check(reduced_paths == [
+			"/Game/Art/Environment/Urban/Roofs/SM_RoofUrban_Ext_BayWindowA_6x4",
+			"/Game/Art/Environment/Urban/Roofs/SM_RoofUrban_Ext_Corner_4x4x4"],
+		"load-truth instance counts coalesce exactly the 2 over-cap convex roofs (27 els / 13x38)",
+		"reduced convex roofs changed: " + str(reduced_paths))
 
 
 ## Roof AABBs are not occluders (12.9 % filled); walls still are.
@@ -284,20 +492,23 @@ func check_occluders() -> void:
 ## W6L: the EndA/EndB gable caps are pitched shells, not flat "end" panels.
 ## Six meshes, 92 PeripheryA instances, measured top coverage 0.000-0.014.
 func check_end_shells() -> void:
+	var counts: Dictionary = _roof_counts(LEVEL_PATH)
 	var bad_kind: Array[String] = []
 	var bad_top: Array[String] = []
-	var bad_hull: Array[String] = []
+	var bad_union: Array[String] = []
 	var min_eave_gap: float = 1e9
 	var heights_ok: bool = true
 	for rec: Dictionary in END_SHELLS:
 		var mp: String = str(rec["path"])
 		var info: Dictionary = ll.call("_get_mesh_and_shape", mp)
 		var mesh: Mesh = info.get("mesh") as Mesh
-		var shape: Variant = info.get("shape")
 		var kind: String = str(ll.call("roof_collision_kind", mp))
-		if kind != "convex" or not (shape is ConvexPolygonShape3D):
-			bad_kind.append("%s (kind=%s shape=%s)" % [mp.get_file(), kind,
-				(shape as Object).get_class() if shape != null else "null"])
+		var u: Dictionary = _authored_union(mp, int(counts.get(mp, 1)))
+		var source: String = str(u["source"])
+		var shapes: Array = u["shapes"] as Array
+		if kind != "convex" or source == "absent" or shapes.is_empty():
+			bad_kind.append("%s (kind=%s source=%s shapes=%d)" % [
+				mp.get_file(), kind, source, shapes.size()])
 			continue
 		if mesh == null:
 			bad_kind.append(mp.get_file() + " (mesh missing)")
@@ -309,43 +520,43 @@ func check_end_shells() -> void:
 		var top_frac: float = float(ll.call("_measure_roof_top_coverage", mesh))
 		if top_frac > 0.05:
 			bad_top.append("%s (%.4f)" % [mp.get_file(), top_frac])
-		# Hull vs visual: the hull's bbox must reproduce the authored AABB top
-		# and z span (the hull is the mesh's own convex hull, so it can never
-		# float above the visual surface).
-		var pts: PackedVector3Array = (shape as ConvexPolygonShape3D).points
-		var hull_top: float = -1e9
-		var z_min: float = 1e9
-		var z_max: float = -1e9
-		for p: Vector3 in pts:
-			hull_top = maxf(hull_top, p.y)
-			z_min = minf(z_min, p.z)
-			z_max = maxf(z_max, p.z)
+		# Union vs visual: the authored per-element hull union must reproduce
+		# the visual AABB top (within 10 cm per element, see W9-P2 facts:
+		# 0.039-0.082 m). The union z span is deliberately NOT asserted equal
+		# to the render AABB (hull elements overshoot by up to 0.198 m); only
+		# the eave band contract below cares about z.
+		var pts: PackedVector3Array = u["points"]
+		var uaabb: AABB = u["aabb"]
+		var union_top: float = uaabb.position.y + uaabb.size.y
 		var aabb_top: float = aabb.position.y + aabb.size.y
-		if absf(hull_top - aabb_top) > 0.01 or absf((z_max - z_min) - aabb.size.z) > 0.01:
-			bad_hull.append("%s (top %.3f vs %.3f, z %.3f vs %.3f)" % [
-				mp.get_file(), hull_top, aabb_top, z_max - z_min, aabb.size.z])
+		if pts.is_empty() or absf(union_top - aabb_top) > 0.10:
+			bad_union.append("%s (union top %.3f vs visual %.3f)" % [
+				mp.get_file(), union_top, aabb_top])
+			continue
 		# The box plateau removed: the eave end sits height - ridge below the
 		# AABB top. Mirror variants flip which z end is the eave, so take the
 		# deeper of the two end bands.
-		var run: float = z_max - z_min
+		var z_min: float = uaabb.position.z
+		var z_max: float = z_min + uaabb.size.z
+		var run: float = uaabb.size.z
 		var gap_lo: float = _end_band_gap(pts, z_min, run)
 		var gap_hi: float = _end_band_gap(pts, z_max, run)
 		min_eave_gap = minf(min_eave_gap, maxf(gap_lo, gap_hi))
 	_check(bad_kind.is_empty(),
-		"all 6 EndA/EndB gable shells are convex hulls (92 PeripheryA instances)",
-		"End shells not convex: " + str(bad_kind))
+		"all 6 EndA/EndB gable shells encode the authored hull union (92 PeripheryA instances)",
+		"End shells have no authored hull union: " + str(bad_kind))
 	_check(bad_top.is_empty(),
 		"End shells measure 0.000-0.014 top coverage (no standable plateau)",
 		"End shells still have a flat top: " + str(bad_top))
 	_check(heights_ok,
 		"End shells measured at the authored 4.32 m and 8.47 m heights",
 		"End shell heights changed from the authored 4.32 / 8.47 m")
-	_check(bad_hull.is_empty(),
-		"End hull bbox matches the visual AABB top and z span",
-		"End hull does not match the visual: " + str(bad_hull))
+	_check(bad_union.is_empty(),
+		"End shell union top matches the visual AABB within 0.10 m",
+		"End shell union top does not match the visual: " + str(bad_union))
 	_check(min_eave_gap >= MIN_EAVE_GAP_M,
-		"End hull eave band sits %.2f m below the AABB top the box floated" % min_eave_gap,
-		"End hull eave gap %.2f m < %.1f m" % [min_eave_gap, MIN_EAVE_GAP_M])
+		"End union eave band sits %.2f m below the AABB top the box floated" % min_eave_gap,
+		"End union eave gap %.2f m < %.1f m" % [min_eave_gap, MIN_EAVE_GAP_M])
 
 
 func _end_band_gap(pts: PackedVector3Array, z_end: float, run: float) -> float:
@@ -363,7 +574,7 @@ func _end_band_gap(pts: PackedVector3Array, z_end: float, run: float) -> float:
 ## The audit's ridge bypass: PeripheryA places a mirrored EndB and a flipped
 ## Mid_4x4 at (115.0, 57.5, 26.5). The mirrored End used to keep a BoxShape3D,
 ## so its plateau floated at the ridge line. Both meshes are uniform-scaled
-## there, so the measured hull is the visual surface exactly.
+## there, so the authored union is the visual surface exactly.
 func check_ridge_instance() -> void:
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(LEVEL_PATH))
 	var found: Array[String] = []
@@ -396,22 +607,19 @@ func check_ridge_instance() -> void:
 		"ridge roofs are uniform-scaled, so the measured hull is the visual",
 		"ridge roofs carry a non-uniform scale: " + str(bad_scale))
 	for mp2: String in [RIDGE_END_MESH, RIDGE_MID_MESH]:
-		var info: Dictionary = ll.call("_get_mesh_and_shape", mp2)
-		var shape: Variant = info.get("shape")
-		var mesh: Mesh = info.get("mesh") as Mesh
-		var ok: bool = shape is ConvexPolygonShape3D
+		var u: Dictionary = _authored_union(mp2, int(_roof_counts(LEVEL_PATH).get(mp2, 1)))
+		var ok: bool = str(u["source"]) != "absent" and not (u["shapes"] as Array).is_empty()
 		var span_frac: float = -1.0
-		if ok and mesh != null:
-			var aabb: AABB = mesh.get_aabb()
-			span_frac = _hull_top_span_fraction((shape as ConvexPolygonShape3D).points, aabb)
+		if ok:
+			span_frac = _hull_top_span_fraction(u["points"] as PackedVector3Array, u["aabb"] as AABB)
 		_check(ok and span_frac >= 0.0 and span_frac < 0.20,
-			"ridge %s bypasses the box: hull top coverage %.3f" % [mp2.get_file(), span_frac],
-			"ridge %s kept a box/plateau (shape=%s span=%.3f)" % [mp2.get_file(),
-				(shape as Object).get_class() if shape != null else "null", span_frac])
+			"ridge %s bypasses the box: authored union top coverage %.3f" % [mp2.get_file(), span_frac],
+			"ridge %s kept a box/plateau (source=%s span=%.3f)" % [mp2.get_file(),
+				str(u["source"]), span_frac])
 
 
-## Horizontal area of hull points within 10 cm of the hull top, over the AABB
-## footprint. A box plateau is 1.0; a ridge is a thin line.
+## Horizontal area of union points within 10 cm of the union top, over the union
+## AABB footprint. A box plateau is 1.0; a ridge is a thin line.
 func _hull_top_span_fraction(pts: PackedVector3Array, aabb: AABB) -> float:
 	var top: float = -1e9
 	for p: Vector3 in pts:
@@ -475,8 +683,10 @@ func check_poi_census() -> void:
 		"POI roof shape problems: " + str(bad))
 
 
-## Old Manor tower roofs live outside /roofs/ and are 19-118 m assemblies: they
-## keep the trimesh (never a box plateau), and never qualify as occluders.
+## Old Manor tower roofs live outside /roofs/ and are 19-118 m assemblies. W9-P2:
+## each keeps the authored per-mesh encoding (three over-cap coalesced
+## trimeshes, one ten-hull set, one authored box, one complex-default render
+## trimesh) - never a rendered-AABB box plateau - and none is an occluder.
 func check_old_manor_census() -> void:
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(OLDMANOR_LEVEL_PATH))
 	_check(parsed is Dictionary, "Old Manor level JSON parses", "cannot read " + OLDMANOR_LEVEL_PATH)
@@ -491,29 +701,69 @@ func check_old_manor_census() -> void:
 	var bad_kind: Array[String] = []
 	var bad_shape: Array[String] = []
 	var bad_occ: Array[String] = []
-	var trimesh_count: int = 0
+	var reduced_count: int = 0
+	var hull_count: int = 0
+	var box_count: int = 0
+	var complex_count: int = 0
 	for mp2: String in per.keys():
 		var kind: String = str(ll.call("roof_collision_kind", mp2))
 		if kind != "none":
 			bad_kind.append(mp2.get_file() + " (" + kind + ")")
 		var info: Dictionary = ll.call("_get_mesh_and_shape", mp2)
-		var shape: Variant = info.get("shape")
 		var mesh: Mesh = info.get("mesh") as Mesh
-		if shape is ConcavePolygonShape3D:
-			trimesh_count += 1
-		else:
-			bad_shape.append("%s (%s)" % [mp2.get_file(), (shape as Object).get_class() if shape != null else "null"])
+		var u: Dictionary = _authored_union(mp2, int(per[mp2]))
+		var source: String = str(u["source"])
+		var shapes: Array = u["shapes"] as Array
+		var elements: int = int(u["elements"])
+		if source == "absent":
+			bad_shape.append(mp2.get_file() + " (no authored collision)")
+			continue
+		var expected: String = str(OLDMANOR_ENCODINGS.get(mp2.get_file(), ""))
+		match expected:
+			"reduced_trimesh":
+				reduced_count += 1
+				if source != "hull" or not bool(u["reduced"]) \
+						or shapes.size() != 1 or not (shapes[0] is ConcavePolygonShape3D):
+					bad_shape.append("%s (reduced: source=%s shapes=%d)" % [
+						mp2.get_file(), source, shapes.size()])
+			"hulls":
+				hull_count += 1
+				if source != "hull" or bool(u["reduced"]) or shapes.size() != elements:
+					bad_shape.append("%s (hulls: source=%s reduced=%s shapes=%d/%d)" % [
+						mp2.get_file(), source, str(u["reduced"]), shapes.size(), elements])
+				else:
+					for sh: Variant in shapes:
+						if not (sh is ConvexPolygonShape3D):
+							bad_shape.append("%s (%s)" % [mp2.get_file(), (sh as Object).get_class()])
+							break
+			"box":
+				box_count += 1
+				if source != "prims" or elements != 1 or shapes.size() != 1 \
+						or not (shapes[0] is BoxShape3D):
+					bad_shape.append("%s (box: source=%s els=%d shapes=%d)" % [
+						mp2.get_file(), source, elements, shapes.size()])
+			"complex_trimesh":
+				complex_count += 1
+				var loader_shape: Variant = info.get("shape")
+				if source != "complex_default" or not (loader_shape is ConcavePolygonShape3D):
+					bad_shape.append("%s (complex: source=%s loader=%s)" % [
+						mp2.get_file(), source,
+						(loader_shape as Object).get_class() if loader_shape != null else "null"])
+			_:
+				bad_shape.append(mp2.get_file() + " (no expected encoding)")
 		if mesh != null and bool(ll.call("_qualifies_as_occluder", mp2.to_lower(), mesh)):
 			bad_occ.append(mp2.get_file())
-	_check(per.size() == 6 and trimesh_count == 6,
-		"Old Manor tower roofs: 6 meshes, all trimesh (no box plateau)",
-		"Old Manor roof census changed: unique=%d trimesh=%d" % [per.size(), trimesh_count])
+	_check(per.size() == 6 and reduced_count == 3 and hull_count == 1
+			and box_count == 1 and complex_count == 1,
+		"Old Manor tower roofs: 6 meshes = 3 reduced trimeshes + 1 ten-hull set + 1 box + 1 complex trimesh",
+		"Old Manor roof census changed: unique=%d reduced=%d hulls=%d box=%d complex=%d" % [
+			per.size(), reduced_count, hull_count, box_count, complex_count])
 	_check(bad_kind.is_empty(),
 		"Old Manor tower roofs are outside the /roofs/ policy (kind=none)",
 		"Old Manor roof policy leaked: " + str(bad_kind))
 	_check(bad_shape.is_empty(),
-		"Old Manor tower roofs keep ConcavePolygonShape3D",
-		"Old Manor roof shape problems: " + str(bad_shape))
+		"Old Manor tower roofs match their authored per-mesh encoding",
+		"Old Manor roof encoding problems: " + str(bad_shape))
 	_check(bad_occ.is_empty(),
 		"Old Manor tower roofs are not occluders",
 		"Old Manor roof occluders: " + str(bad_occ))
@@ -666,9 +916,11 @@ func hip_hull_height(half_span: float, pitch_deg: float) -> float:
 	return apex
 
 
-## Real shipped modules: the convex collider's eave band must sit well below the
-## AABB top the old BoxShape3D presented as a walking surface.
+## Real shipped modules: the authored union's pitch must follow the authored
+## geometry, and its eave band must sit well below the AABB top the old
+## BoxShape3D presented as a walking surface.
 func check_real_roof_heights() -> void:
+	var counts: Dictionary = _roof_counts(LEVEL_PATH)
 	for rec: Dictionary in [
 		{"path": SHALLOW_ROOF, "pitch": 45.0, "label": "shallow"},
 		{"path": STEEP_ROOF, "pitch": 68.0, "label": "steep"},
@@ -676,33 +928,31 @@ func check_real_roof_heights() -> void:
 		var mp: String = str(rec["path"])
 		var info: Dictionary = ll.call("_get_mesh_and_shape", mp)
 		var mesh: Mesh = info.get("mesh") as Mesh
-		var shape: Variant = info.get("shape")
-		_check(mesh != null and shape is ConvexPolygonShape3D,
-			"%s roof (%s) loads with a convex collider" % [rec["label"], mp.get_file()],
-			"%s roof (%s) did not load a convex collider" % [rec["label"], mp.get_file()])
-		if mesh == null or not (shape is ConvexPolygonShape3D):
+		var u: Dictionary = _authored_union(mp, int(counts.get(mp, 1)))
+		var source: String = str(u["source"])
+		var shapes: Array = u["shapes"] as Array
+		var ok: bool = mesh != null and source != "absent" and not shapes.is_empty()
+		_check(ok,
+			"%s roof (%s) loads with the authored collision union" % [rec["label"], mp.get_file()],
+			"%s roof (%s) has no authored collision (source=%s)" % [rec["label"], mp.get_file(), source])
+		if not ok:
 			continue
-		var pts: PackedVector3Array = (shape as ConvexPolygonShape3D).points
-		var top: float = -1e9
-		var bottom: float = 1e9
-		var z_min: float = 1e9
-		var z_max: float = -1e9
-		for p: Vector3 in pts:
-			top = maxf(top, p.y)
-			bottom = minf(bottom, p.y)
-			z_min = minf(z_min, p.z)
-			z_max = maxf(z_max, p.z)
-		var run: float = z_max - z_min
-		var rise: float = mesh.get_aabb().size.y
+		var upts: PackedVector3Array = u["points"]
+		var uaabb: AABB = u["aabb"]
+		var run: float = uaabb.size.z
+		var rise: float = uaabb.size.y
+		if run <= 0.0001:
+			_check(false, "", "%s roof union has no z run" % rec["label"])
+			continue
 		var pitch: float = rad_to_deg(atan(rise / run))
 		_check(absf(pitch - float(rec["pitch"])) <= PITCH_TOL_DEG,
-			"%s roof authored pitch %.1f deg (rise %.2f m / run %.2f m)" % [rec["label"], pitch, rise, run],
+			"%s roof authored union pitch %.1f deg (rise %.2f m / run %.2f m)" % [rec["label"], pitch, rise, run],
 			"%s roof pitch %.1f deg outside %.1f +/- %.1f" % [rec["label"], pitch, float(rec["pitch"]), PITCH_TOL_DEG])
 		var eave_top: float = -1e9
-		for p2: Vector3 in pts:
-			if p2.z >= z_max - 0.15 * run:
+		for p2: Vector3 in upts:
+			if p2.z >= uaabb.position.z + run - 0.15 * run:
 				eave_top = maxf(eave_top, p2.y)
 		var gap: float = mesh.get_aabb().position.y + mesh.get_aabb().size.y - eave_top
 		_check(gap >= MIN_EAVE_GAP_M,
-			"%s roof hull eave band sits %.2f m below the AABB top the box used" % [rec["label"], gap],
-			"%s roof hull eave band only %.2f m below the AABB top (want >= %.1f m)" % [rec["label"], gap, MIN_EAVE_GAP_M])
+			"%s roof union eave band sits %.2f m below the AABB top the box used" % [rec["label"], gap],
+			"%s roof union eave band only %.2f m below the AABB top (want >= %.1f m)" % [rec["label"], gap, MIN_EAVE_GAP_M])

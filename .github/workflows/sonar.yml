@@ -57,7 +57,7 @@ jobs:
       # SonarSource/sonarqube-scan-action v5 (pinned commit, not a moving tag)
       - name: SonarCloud scan
         if: steps.token.outputs.present == 'true'
-        uses: SonarSource/sonarqube-scan-action@2f77a1ec69fb1d595b06f35ab27e97605bdef703
+        uses: SonarSource/sonarqube-scan-action@70bad232163b09d998ea0707ee80c0ec80798c16
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: https://sonarcloud.io

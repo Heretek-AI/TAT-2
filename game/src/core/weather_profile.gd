@@ -51,6 +51,9 @@ extends RefCounted
 ##   module never spawns rain.
 
 const MobileProfile: GDScript = preload("res://src/core/mobile_profile.gd")
+## W6G: SoundCarry accessor delegates the tag join to the hearing layer, so the
+## authored weather rows have exactly one reader.
+const HearingData: GDScript = preload("res://src/ai/hearing_data.gd")
 
 const WEATHER_DIR := "res://data/generated/weather"
 const MAP_TABLE_PATH := "res://data/generated/weather/map_weather.json"
@@ -243,6 +246,41 @@ static func load_preset(preset_name: String) -> Dictionary:
 
 static func preset_for_map(map_id: String) -> Dictionary:
 	return load_preset(preset_name_for_map(map_id))
+
+
+## W6G: authored weather gameplay tag for a map (`weather_tag` in
+## map_weather.json, e.g. Weather.Type.Gloomy). "" when the map has no row.
+static func weather_tag_for_map(map_id: String) -> String:
+	var entry_v: Variant = load_map_table().get(map_id)
+	if entry_v is Dictionary:
+		return str((entry_v as Dictionary).get("weather_tag", ""))
+	return ""
+
+
+## W6G SoundCarry accessor: the authored range row for the map's weather type
+## and the indoor/outdoor side (hearing.json weather_sound_carry). {} when the
+## map/weather/side is unknown; the hearing layer then fails closed to 1.0.
+## Indoor/outdoor is the same preset classification the environment apply uses
+## (the Den is the only indoor preset), so AI hearing and fog share one rule.
+static func sound_carry_for_map(map_id: String, indoors: bool) -> Dictionary:
+	var tag: String = weather_tag_for_map(map_id)
+	if tag == "":
+		return {}
+	return HearingData.weather_sound_carry_row(tag, indoors)
+
+
+## W6G: multiplicative sound-carry range modifier for the map's weather type and
+## the indoor/outdoor side. 1.0 for unknown maps/weather (fail closed).
+static func sound_carry_multiplier_for_map(map_id: String, indoors: bool) -> float:
+	var tag: String = weather_tag_for_map(map_id)
+	if tag == "":
+		return 1.0
+	return HearingData.weather_sound_carry_multiplier(tag, indoors)
+
+
+## True when the map's authored preset is the indoor (Den style) environment.
+static func map_is_indoor(map_id: String) -> bool:
+	return is_indoor_preset(preset_for_map(map_id))
 
 
 static func _section(preset: Dictionary, key: String) -> Dictionary:

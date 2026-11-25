@@ -9,6 +9,10 @@ signal carried_item_stolen(item: Dictionary)
 
 const GuardAnimLib = preload("res://src/core/animation_library.gd")
 const LightProbeScript = preload("res://src/stealth/light_probe.gd")
+## W6G authored hearing + perception (hearing.json / perception.json) and the
+## weather SoundCarry accessor (map weather tag -> range row).
+const HearingData = preload("res://src/ai/hearing_data.gd")
+const WeatherProfile = preload("res://src/core/weather_profile.gd")
 const LANTERN_GLB_PRIMARY := "res://assets/ue/Content/Art/Environment/Lights/Mobile/SM_LanternGuardA.glb"
 const LANTERN_GLB_FALLBACK := "res://assets/ue/Content/Art/Gameplay/Gear/Lantern/SK_Lantern.glb"
 const DEFAULT_KEY_GLB := "res://assets/ue/Content/Art/Gameplay/KeyCabinets/SM_LootableKeys_LockedRoomKey.glb"
@@ -33,6 +37,22 @@ const SIGHT_RANGE: float = 20.0 # AIC_GuardBase Fresh SightRadius 2000cm
 const LOSE_SIGHT_RANGE: float = 30.0 # Bouncer/Hauntstable Fresh LoseSightRadius 3000cm (GuardBase Fresh=2500, see report)
 const HEARING_RANGE: float = 25.0 # AIC_GuardBase TATAISenseConfig_Hearing.HearingRange 2500cm
 const FOV_DEG: float = 80.0 # PeripheralVisionAngleDegrees 40 (UE half-angle) x 2
+## W6G escalation profiles (game/data/generated/gameplay/guard_ai.json
+## escalation_tables). AIC_Bouncer drives the Hauntstable guards, so the same
+## name hint guard_ai already uses for the Hauntstable skeleton selects the
+## bouncer row. The GuardBase rows are identical for Fresh/Mindful/Vigilant;
+## only Drowsy differs (30/35/60) and its vision range is scaled by the authored
+## AI.Status.Escalation.Drowsy.Asleep x0.1 perception modifier.
+const ESCALATION_PROFILE_GUARD: String = "guardbase"
+const ESCALATION_PROFILE_BOUNCER: String = "bouncer"
+const ESCALATION_STATE_ROWS: Dictionary = {
+	Alertness.NEUTRAL: "Fresh",
+	Alertness.SUSPICIOUS: "Mindful",
+	Alertness.SEARCH: "Mindful",
+	Alertness.ALERTED: "Vigilant",
+	Alertness.COMBAT: "Vigilant",
+	Alertness.KNOCKED_OUT: "Drowsy",
+}
 const MELEE_DAMAGE: float = 10.0 # CT_Melee_RangedAttackDamage close key
 const MELEE_COOLDOWN: float = 2.0 # GE_Melee_RangedAttack_Cooldown
 const MELEE_RADIUS: float = 1.0 # GA_MeleeRangedAttack DamageRadius 100cm
@@ -151,6 +171,33 @@ var health: float = 30.0
 var detection: float = 0.0 # 0..100
 var ko_timer: float = 0.0
 var wp_index: int = 0
+## W6G authored hearing. The stimulus's authored MaxRange replaces the emitter's
+## hand-tuned metre value (capped by hearing_range x weather x perception); the
+## query bitmask gates which stim families this listener accepts.
+var hearing_query_mask: int = 127
+var last_heard_tag: String = ""
+var last_heard_stim_tag: String = ""
+var last_heard_distance_m: float = -1.0
+var last_heard_radius_m: float = -1.0
+## "short" / "long": the authored AI.Behaviors.Investigate.Short/Long row
+## (ST_InvestigateStims_Guard -> Short/Long Investigation). Long fans the
+## post-investigation search out for longer.
+var last_investigation_kind: String = ""
+var investigation_search_seconds: float = 4.0
+## Authored range modifiers active on this listener. The port authors no
+## gameplay tag for Status.Nervous, so this stays empty until a system pushes
+## one; the plumbing is asserted by test_hearing_ranges.
+var perception_tags: Array[String] = []
+var _weather_sound_carry: float = 1.0
+## Authored escalation writes the sense exports only while they still hold the
+## value this script last wrote. A caller/test that pins sight_range (E2E LOS
+## probes do) disables the authored writes for that instance instead of being
+## silently overwritten on the next alertness transition.
+var _authored_senses_enabled: bool = true
+var _sense_diff_scale: float = 1.0
+var _written_sight: float = -1.0
+var _written_lose: float = -1.0
+var _written_fov: float = -1.0
 ## Authored waypoint dwell/patrol direction. _patrol_wait_left > 0 means the
 ## guard is standing at patrol_points[wp_index] until the authored WaitSeconds
 ## elapses; _patrol_dir is +1/-1 for PingPong reversal.
@@ -259,16 +306,94 @@ func _ready() -> void:
 	# catching the player). Scale the chase with the same difficulty lever
 	# (UE TATCharacterAIMovement MaxWalkSpeed 250 cm/s base).
 	chase_speed *= _speed_scale
-	lose_sight_range *= lerpf(0.85, 1.25, (diff_x - 1.0) * 0.5)
-	sight_range *= lerpf(0.85, 1.25, (diff_x - 1.0) * 0.5)
+	# W6G: the authored escalation rows are the sense base; difficulty keeps its
+	# retained 0.85..1.25 lever applied on top, and the exports stay overridable.
+	_sense_diff_scale = lerpf(0.85, 1.25, (diff_x - 1.0) * 0.5)
+	sight_range *= _sense_diff_scale
+	lose_sight_range *= _sense_diff_scale
+	_apply_authored_escalation(state)
+	refresh_weather_sound_carry()
 	_build_visuals()
 	if carries_lantern:
 		_build_lantern()
 	if not carried_item.is_empty():
 		_rebuild_carried_visual()
-	NoiseBus.noise_emitted.connect(_on_noise_emitted)
+	NoiseBus.noise_record_emitted.connect(_on_noise_record)
 	if patrol_points.is_empty():
 		patrol_points = [global_position, global_position + Vector3(6, 0, 0), global_position + Vector3(6, 0, 6)]
+
+
+## Authored sense profile: AIC_Bouncer (Hauntstable guards) or AIC_GuardBase.
+func escalation_profile() -> String:
+	var lname: String = name.to_lower()
+	if lname.find("bouncer") >= 0 or lname.find("haunt") >= 0:
+		return ESCALATION_PROFILE_BOUNCER
+	return ESCALATION_PROFILE_GUARD
+
+
+## Authored escalation row name ("Fresh"/"Mindful"/"Vigilant"/"Drowsy") for an
+## alertness level. KNOCKED_OUT is the Drowsy/asleep row.
+static func escalation_row_name(alertness: int) -> String:
+	return str(ESCALATION_STATE_ROWS.get(alertness, "Fresh"))
+
+
+## Authored escalation row for this guard + alertness. {} when the profile has no
+## row for that state (the Bouncer table authors no Drowsy row).
+func escalation_row(alertness: int) -> Dictionary:
+	return HearingData.escalation_row(escalation_profile(), escalation_row_name(alertness))
+
+
+## Writes the authored sense values for an alertness level (scaled by the
+## retained difficulty lever). Refuses once a caller has pinned the exports, so
+## authored escalation can never clobber a test/pose override.
+func _apply_authored_escalation(alertness: int) -> void:
+	if not _authored_senses_enabled:
+		return
+	if _written_sight >= 0.0 \
+		and (not is_equal_approx(sight_range, _written_sight) \
+			or not is_equal_approx(lose_sight_range, _written_lose) \
+			or not is_equal_approx(fov_deg, _written_fov)):
+		_authored_senses_enabled = false
+		return
+	var row: Dictionary = escalation_row(alertness)
+	if row.is_empty():
+		return
+	sight_range = float(row.get("sight_radius_m", sight_range / maxf(_sense_diff_scale, 0.001))) * _sense_diff_scale
+	lose_sight_range = float(row.get("lose_sight_radius_m", lose_sight_range / maxf(_sense_diff_scale, 0.001))) * _sense_diff_scale
+	fov_deg = float(row.get("peripheral_half_angle_deg", fov_deg * 0.5)) * 2.0
+	_written_sight = sight_range
+	_written_lose = lose_sight_range
+	_written_fov = fov_deg
+
+
+## Effective sight range for the current alertness. KNOCKED_OUT maps to the
+## authored Drowsy/asleep row and its x0.1 vision range modifier
+## (AI.Status.Escalation.Drowsy.Asleep). Conscious states are unchanged.
+func effective_vision_range(use_lose_range: bool = false) -> float:
+	var base: float = lose_sight_range if use_lose_range else sight_range
+	if state == Alertness.KNOCKED_OUT:
+		base *= HearingData.drowsy_vision_multiplier()
+	return base
+
+
+## Weather sound carry for this guard's map (authored Weather.SoundCarry row).
+## Weather is fixed per mission, so this is refreshed once at spawn and exposed
+## for tests/mission reloads.
+func refresh_weather_sound_carry() -> void:
+	var map_id: String = GameState.active_map_id
+	_weather_sound_carry = WeatherProfile.sound_carry_multiplier_for_map(map_id, WeatherProfile.map_is_indoor(map_id))
+
+
+func hearing_weather_multiplier() -> float:
+	return _weather_sound_carry
+
+
+## One listening-side range multiplier: weather sound carry x the shared-config
+## perception modifiers for the tags currently on this guard. Applied once, in
+## _hear; the emitter never applies it.
+func hearing_sense_multiplier() -> float:
+	var perception: float = HearingData.perception_range_multiplier(HearingData.SENSE_HEARING, perception_tags)
+	return maxf(0.0, _weather_sound_carry * perception)
 
 
 func _build_visuals() -> void:
@@ -878,6 +1003,7 @@ func _set_state(new_state: int) -> void:
 		_revive_target = null
 		_revive_progress = 0.0
 	detection = clamped_detection_for_transition(previous_state, new_state, detection)
+	_apply_authored_escalation(new_state)
 	_emit_alert_state_if_needed(true)
 
 
@@ -932,6 +1058,21 @@ func get_detection_rate(dist_m: float, crouching: bool) -> float:
 	var rate: float = 100.0 / time_s
 	if crouching and dist_m >= float(ramp.get("crouch_min", 2.75)):
 		rate *= float(ramp.get("crouch_mult", 0.75))
+	return rate
+
+
+## Full authored detection gain (points/sec) for one visible frame: the distance
+## ramp x the sprint modifier x the Neutral-only height-difference curve. Light
+## visibility is deliberately absent: C_LightIntensityToRangeMultiplier gates
+## acquisition range in _can_see_player, so light affects whether the guard can
+## see the player, never a second multiplicative ramp once it can. Pure, so the
+## single-light contract is directly testable.
+func detection_gain_per_second(dist_m: float, crouching: bool, sprinting: bool, height_diff_m: float) -> float:
+	var rate: float = get_detection_rate(dist_m, crouching)
+	rate *= sprint_ramp_multiplier(sprinting)
+	if state == Alertness.NEUTRAL:
+		# DA_DetectionSettings wires the height curve only on the Neutral ramp.
+		rate *= height_difference_strength_multiplier(height_diff_m)
 	return rate
 
 
@@ -1054,26 +1195,23 @@ func _physics_process(delta: float) -> void:
 	if sees_player:
 		# Real UE ramp (DA_DetectionSettings): time-to-detect(s) = agnostic *
 		# dist_m + critical_time; rate = 100/time; crouch x0.75 at/over 2.75m.
-		# The light/sprint/height multipliers below are authored; the smoke/LOS
+		# Sprint x8 and the Neutral-only height curve are authored; the smoke/LOS
 		# checks and 15/45/100 state thresholds are retained (no UE source).
+		# W6G single light: light visibility gates acquisition RANGE only
+		# (_can_see_player -> C_LightIntensityToRangeMultiplier). The old
+		# port-only `vis_mult` here scaled the ramp too, so darkness slowed
+		# detection twice; it is gone.
 		_seconds_since_visible = 0.0
-		# P1 sprint double-count: the movement floor in _player_light_value
-		# already raises visibility while sprinting, and the authored x8 ramp
-		# multiplied it again (UE detection.json Status.Sprinting 8.0 kept;
-		# UE Curve_AI_HeightDifferenceToStrengthMultiplierCurve kept). Rate the
-		# raw sampled light so sprint pays once, not twice.
-		var effective_light: float = GameState.player_light_visibility
-		var vis_mult: float = clampf(0.35 + effective_light * 1.15, 0.35, 1.5)
 		var dist_m: float = player.global_position.distance_to(global_position)
-		var rate: float = get_detection_rate(dist_m, _bool_property(player, "is_crouching"))
-		rate *= sprint_ramp_multiplier(_bool_property(player, "is_sprinting"))
-		if state == Alertness.NEUTRAL:
-			# DA_DetectionSettings wires the height curve only on the Neutral ramp.
-			rate *= height_difference_strength_multiplier(absf(player.global_position.y - global_position.y))
+		var rate: float = detection_gain_per_second(
+			dist_m,
+			_bool_property(player, "is_crouching"),
+			_bool_property(player, "is_sprinting"),
+			absf(player.global_position.y - global_position.y))
 		if is_inf(rate):
 			detection = 100.0
 		else:
-			detection = minf(100.0, detection + rate * vis_mult * delta)
+			detection = minf(100.0, detection + rate * delta)
 		investigate_pos = player.global_position
 		# Rank-based promotion: the enum declares SEARCH(4) after COMBAT(3),
 		# so raw </== comparisons misorder it (T2 dead zone 15-99). Compare
@@ -1108,7 +1246,9 @@ func _physics_process(delta: float) -> void:
 				state_timer = 6.0
 		elif state == Alertness.SUSPICIOUS and detection <= 0.0:
 			_set_state(Alertness.SEARCH)
-			state_timer = 4.0
+			# W6G: the authored short/long investigation selects how long the
+			# guard fans out (ST_InvestigateStims_Guard Short/Long Investigation).
+			state_timer = investigation_search_seconds
 		elif state == Alertness.SEARCH:
 			state_timer -= delta
 			if state_timer <= 0.0:
@@ -1286,7 +1426,7 @@ func _can_see_player(player: CharacterBody3D) -> bool:
 	# and the authored light multiplier gates both branches (UE
 	# _LightIntensityToRangeMultiplierCurve).
 	var sensed: bool = detection >= DETECTION_SUSPICIOUS_AT or state != Alertness.NEUTRAL
-	var effective_range: float = lose_sight_range if sensed else sight_range
+	var effective_range: float = effective_vision_range(sensed)
 	effective_range *= LightProbeScript.light_intensity_range_multiplier(_player_light_value(player))
 	var to_player: Vector3 = player.global_position - global_position
 	var dist: float = to_player.length()
@@ -1317,13 +1457,30 @@ func _can_see_player(player: CharacterBody3D) -> bool:
 
 
 func _on_noise_emitted(origin: Vector3, loudness: float, source: Node, tag: String) -> void:
-	# P1 dead hearing_range: the 25 m AIC_GuardBase HearingRange export was
-	# never read, so radius = emitter loudness (a loud emitter tuned
-	# difficulty). Clamp to the authored range (UE TATAISenseConfig_Hearing
-	# HearingRange 2500 cm); oversized emitters fail loud in the log.
-	var radius: float = minf(loudness, hearing_range)
-	if loudness > hearing_range:
-		push_warning("[guard_ai] noise '", tag, "' loudness ", loudness, " m exceeds HearingRange ", hearing_range, " m; clamped (UE TATAISenseConfig_Hearing)")
+	# Backwards-compatible 4-argument entry (external callers/tests). The bus is
+	# the normal path and hands the richer record below.
+	_hear(NoiseBus.build_record(origin, loudness, source, tag, ""))
+
+
+## W6G hearing. The emitted record already carries the resolved authored stim
+## (HearingData), so this function never guesses a range:
+##   authored:  radius = min(stim.MaxRange x surface multiplier,
+##                          HearingRange x weather x perception modifiers)
+##   legacy:    radius = min(emitter loudness, HearingRange) x weather/perception
+##             (tags with no honest authored row: guard_alert, smoke, ...)
+## Hearing raises ALERTNESS only. It never writes the 0..100 detection meter
+## any more (the meter is the sight ramp's; hearing used to seed 25/60 and leak
+## stale suspicion into the next sight acquisition). guard_alert keeps its
+## authored shout behaviour: it enters ALERTED and, when a real alerted guard is
+## the caller, marks the intruder spotted.
+func _on_noise_record(record: Dictionary) -> void:
+	_hear(record)
+
+
+func _hear(record: Dictionary) -> void:
+	if record.is_empty():
+		return
+	var source: Node = record.get("source") as Node
 	if state == Alertness.KNOCKED_OUT or source == self:
 		return
 	# Only the player thief carries astral_active (guards have no such
@@ -1331,20 +1488,77 @@ func _on_noise_emitted(origin: Vector3, loudness: float, source: Node, tag: Stri
 	# makes no noise.
 	if source != null and source.is_in_group("player") and _bool_property(source, "astral_active"):
 		return
-	if tag == "guard_alert":
-		if global_position.distance_to(origin) <= radius:
-			investigate_pos = origin
-			detection = maxf(detection, 60.0)
-			if state != Alertness.ALERTED and state != Alertness.COMBAT:
-				_enter_alerted()
-				state_timer = 6.0
+	var origin: Vector3 = record.get("origin", global_position)
+	var tag: String = str(record.get("tag", ""))
+	var dist_m: float = global_position.distance_to(origin)
+	var sense_mult: float = hearing_sense_multiplier()
+	var stim: Dictionary = record.get("stim", {}) as Dictionary
+	var radius_m: float = 0.0
+	var kind: String = HearingData.BEHAVIOUR_SHORT
+	var stim_tag: String = ""
+	if not stim.is_empty():
+		if not HearingData.heard_by(stim, HearingData.FACTION_HOSTILES):
+			return
+		if not HearingData.accepts_query(stim, hearing_query_mask):
+			return
+		var surface_mult: float = float(record.get("surface_multiplier", 1.0))
+		var sense_range: float = maxf(hearing_range, 0.0) * sense_mult
+		radius_m = minf(float(stim.get("max_range_m", 0.0)) * surface_mult, sense_range)
+		kind = str(stim.get("behaviour", HearingData.BEHAVIOUR_SHORT))
+		stim_tag = str(stim.get("tag", ""))
+	else:
+		# Legacy tag (HearingData.LEGACY_TAGS / unknown). Preserves the existing
+		# contract: emitter loudness capped by the authored sense range.
+		var loudness: float = float(record.get("loudness_m", 0.0))
+		if loudness > hearing_range:
+			push_warning("[guard_ai] noise '", tag, "' loudness ", loudness, " m exceeds HearingRange ", hearing_range, " m; clamped (UE TATAISenseConfig_Hearing)")
+		radius_m = HearingData.unknown_fallback_range(loudness, hearing_range) * sense_mult
+	if dist_m > radius_m:
 		return
-	if global_position.distance_to(origin) <= radius:
-		investigate_pos = origin
-		if state == Alertness.NEUTRAL:
-			_set_state(Alertness.SUSPICIOUS)
-			state_timer = 5.0
-		detection = maxf(detection, 25.0)
+	last_heard_tag = tag
+	last_heard_stim_tag = stim_tag
+	last_heard_distance_m = dist_m
+	last_heard_radius_m = radius_m
+	last_investigation_kind = kind
+	# Authored investigation target: exact stim location inside the outer
+	# investigation range, otherwise the midpoint of the authored inner..outer
+	# band on the guard's side (see HearingData.investigation_point).
+	investigate_pos = HearingData.investigation_point(stim, origin, global_position) if not stim.is_empty() else origin
+	investigation_search_seconds = 8.0 if kind == HearingData.BEHAVIOUR_LONG else 4.0
+	# guard_alert is the authored shout path (the only stim-shaped legacy tag):
+	# ST_InvestigateStims_Guard "React To Guard Calling For Help" raises
+	# alertness and investigates. Keep the existing ALERTED transition.
+	if tag == "guard_alert":
+		# A shout is a long investigation even on the legacy loudness path (the
+		# state tree routes "React To Guard Calling For Help" through the same
+		# investigate subtree with the extra nearby-location loop).
+		last_investigation_kind = HearingData.BEHAVIOUR_LONG
+		investigation_search_seconds = 8.0
+		if state != Alertness.ALERTED and state != Alertness.COMBAT:
+			state_timer = 6.0
+			_enter_alerted()
+		if hearing_marks_spotted(source):
+			GameState.ever_spotted = true
+		return
+	# Every other stimulus raises alertness through the existing transition and
+	# leaves the meter to the sight ramp. Promotion only from NEUTRAL, so hearing
+	# can never de-escalate an alerted guard.
+	if state == Alertness.NEUTRAL:
+		_set_state(Alertness.SUSPICIOUS)
+		state_timer = 5.0
+
+
+## A guard shout marks the intruder spotted only when a real guard that is
+## already alerted/combat is the caller (the sight path sets ever_spotted there
+## anyway). Alarm eyes and revive calls share the guard_alert tag but are not
+## "the thief was spotted" evidence.
+static func hearing_marks_spotted(source: Node) -> bool:
+	if source == null or not source.is_in_group("guards"):
+		return false
+	var source_state: Variant = source.get("state")
+	if source_state == null:
+		return false
+	return int(source_state) == Alertness.ALERTED or int(source_state) == Alertness.COMBAT
 
 
 func take_knockout(dmg: float) -> void:
@@ -1599,6 +1813,14 @@ func get_alert_state() -> Dictionary:
 		"world_pos": global_position,
 		"alerted": state == Alertness.ALERTED or state == Alertness.COMBAT,
 		"combat": state == Alertness.COMBAT,
+		# W6G diagnostic: what the hearing path last resolved (authored stim,
+		# distance vs the final radius, short/long investigation).
+		"hearing_multiplier": hearing_sense_multiplier(),
+		"last_heard_stim": last_heard_stim_tag,
+		"last_heard_tag": last_heard_tag,
+		"last_heard_distance_m": last_heard_distance_m,
+		"last_heard_radius_m": last_heard_radius_m,
+		"investigation_kind": last_investigation_kind,
 	}
 
 

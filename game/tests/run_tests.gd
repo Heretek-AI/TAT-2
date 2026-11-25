@@ -1633,7 +1633,7 @@ func _initialize() -> void:
 	var combat_at: float = float(guard_consts.get("DETECTION_COMBAT_AT", -1.0))
 	var neutral_ceiling: float = float(guard_scr.call("detection_entry_ceiling", neutral_id))
 	var seq_step: float = 1.0 / 60.0
-	var seq_detection: float = 60.0 # heard-only guard: _on_noise_emitted sets 60
+	var seq_detection: float = 60.0 # arbitrary high meter value (the sight ramp owns it since W6G)
 	var combat_to_alerted: float = float(guard_scr.call("clamped_detection_for_transition", combat_id, alerted_id, seq_detection))
 	seq_detection = combat_to_alerted
 	var seq_in_state: float = 0.0
@@ -1734,6 +1734,32 @@ func _initialize() -> void:
 		fails += 1
 	else:
 		print("PASS: AI light curves match C_LightIntensityToRangeMultiplier (", light_desc, ") and C_MovementSpeedToMinimumLightDetectionValue (", speed_desc, ")")
+
+	# W6G: single light path. Light visibility still gates acquisition RANGE
+	# (the authored curve asserted just above) but no longer multiplies the
+	# 0..100 ramp: detection_gain_per_second is light-independent and the
+	# port-only vis_mult is gone. Hearing raises alertness only (it must not seed
+	# the meter with 25/60), so stale suspicion cannot leak into sight.
+	var w6g_gain_guard: CharacterBody3D = guard_scr.new() as CharacterBody3D
+	var w6g_saved_light: float = float(gs.get("player_light_visibility"))
+	gs.set("player_light_visibility", 0.05)
+	var w6g_dark_gain: float = float(w6g_gain_guard.call("detection_gain_per_second", 10.0, false, false, 0.0))
+	gs.set("player_light_visibility", 0.95)
+	var w6g_lit_gain: float = float(w6g_gain_guard.call("detection_gain_per_second", 10.0, false, false, 0.0))
+	gs.set("player_light_visibility", w6g_saved_light)
+	var w6g_guard_src: String = FileAccess.get_file_as_string("res://src/ai/guard_ai.gd")
+	var w6g_once_ok: bool = is_equal_approx(w6g_dark_gain, w6g_lit_gain) \
+		and w6g_lit_gain > 0.0 \
+		and w6g_guard_src.find("var vis_mult") < 0 \
+		and w6g_guard_src.find("* vis_mult") < 0 \
+		and w6g_guard_src.find("detection = maxf(detection, 25.0)") < 0 \
+		and w6g_guard_src.find("detection = maxf(detection, 60.0)") < 0
+	w6g_gain_guard.free()
+	if not w6g_once_ok:
+		printerr("FAIL: W6G single light / hearing meter (dark gain=", w6g_dark_gain, " lit=", w6g_lit_gain, " vis_mult applied=", w6g_guard_src.find("var vis_mult") >= 0, " hearing writes detection)")
+		fails += 1
+	else:
+		print("PASS: W6G single light path: detection gain is light-independent (", w6g_lit_gain, "/s at 10 m in both) and hearing no longer writes the detection meter")
 
 	# 27. UE rotator shear regression: every generated basis is orthonormal.
 	# The parser stores bases with 5-decimal rounding, so the tolerance is
@@ -5410,15 +5436,20 @@ func _initialize() -> void:
 	nb.call("emit_noise", w2_ear_guard.global_position + Vector3(3.0, 0.0, 0.0), 8.0, null, "footstep", "carpet")
 	var w2_carpet_silent: bool = is_equal_approx(float(w2_ear_guard.get("detection")), 0.0) and int(w2_ear_guard.get("state")) == 0
 	nb.call("emit_noise", w2_ear_guard.global_position + Vector3(5.0, 0.0, 0.0), 3.5, null, "footstep", "glass")
-	var w2_glass_walk: bool = int(w2_ear_guard.get("state")) != 0 and float(w2_ear_guard.get("detection")) > 0.0
+	# W6G: hearing raises alertness only; it no longer seeds the 0..100 meter
+	# (that is the sight ramp's). The state transition is the real contract, and
+	# detection must stay 0 so a heard noise cannot leak suspicion into sight.
+	var w2_glass_walk: bool = int(w2_ear_guard.get("state")) != 0 and is_zero_approx(float(w2_ear_guard.get("detection"))) \
+		and str(w2_ear_guard.get("last_heard_stim_tag")) == "AI.Stim.Hearing.Footstep.Walking"
 	w2_ear_guard.set("state", 0)
 	w2_ear_guard.set("detection", 0.0)
 	nb.call("emit_noise", w2_ear_guard.global_position + Vector3(8.0, 0.0, 0.0), 8.0, null, "footstep", "glass")
-	var w2_glass_sprint8: bool = int(w2_ear_guard.get("state")) != 0 and float(w2_ear_guard.get("detection")) > 0.0
+	var w2_glass_sprint8: bool = int(w2_ear_guard.get("state")) != 0 and is_zero_approx(float(w2_ear_guard.get("detection"))) \
+		and str(w2_ear_guard.get("last_heard_stim_tag")) == "AI.Stim.Hearing.Footstep.Running"
 	w2_ear_guard.queue_free()
 	await process_frame
 	if w2_surface_ok and w2_gd_ok and w2_ratio_ok and w2_carpet_silent and w2_glass_walk and w2_glass_sprint8:
-		print("PASS: 55b surface loudness (22 authored rows, Carpet 0.0/Glass 1.5, radii 0/6/4, carpet sprint silent @3m, glass walk heard @5m, glass run heard @8m)")
+		print("PASS: 55b surface loudness (22 authored rows, Carpet 0.0/Glass 1.5, radii 0/6/4, carpet sprint silent @3m, glass walk heard @5m, glass run heard @8m; authored Walking/Running stim, meter stays 0)")
 	else:
 		printerr("FAIL: 55b surface loudness (json=", w2_surface_ok, " api=", w2_gd_ok, " ratio=", w2_ratio_ok, " carpet=", w2_carpet_silent, " glass_walk=", w2_glass_walk, " glass_run8=", w2_glass_sprint8, " radii=", w2_radii, ")")
 		fails += 1

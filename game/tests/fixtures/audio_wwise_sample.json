@@ -1,0 +1,266 @@
+{
+  "schema": "tat2.audio_wwise/1",
+  "generated_by": "hand-authored T03 audio fixture (values copied from build/qa/review_20261124/remediation/T03-audio-schema.md)",
+  "sources": {
+    "bank": "extracted/json/Audio/WwiseSharedAssetLibrary.json",
+    "events_dir": "extracted/audio-meta/Audio/Events",
+    "reverb_dir": "extracted/audio-meta/Audio/Reverb",
+    "init_bank": "extracted/json/Audio/InitBank.json",
+    "surface_table": "extracted/json/WwiseAudio/DefaultGeometrySurfacePropertiesTable.json",
+    "reverb_table": "extracted/json/WwiseAudio/DefaultReverbAssignmentTable.json"
+  },
+  "counts": {
+    "bank_packaged_files": 8593,
+    "bank_files_with_hierarchies": 3543,
+    "objects_unique": 18355,
+    "objects_entries": 28202,
+    "buses": 3,
+    "audio_buses": 1,
+    "aux_buses": 2,
+    "named_buses": 2,
+    "fx_sharesets": 1,
+    "fx_custom": 0,
+    "attenuations": 2,
+    "events_total": 4,
+    "events_ue_dumps": 4,
+    "events_play": 4,
+    "events_with_bus": 3,
+    "events_with_attenuation": 2,
+    "events_2d": 2,
+    "music_play_events": 1,
+    "music_segments": 0,
+    "music_tracks": 0,
+    "vo_events": 3,
+    "emitters": 2,
+    "room_beds": 2
+  },
+  "buses": [
+    {
+      "id": 1554268871,
+      "kind": "aux",
+      "name": "VERB_Cmn_Ext_World",
+      "parent": null,
+      "volume_db": -3.0,
+      "hpf_db": null,
+      "lpf_db": null,
+      "effects": [{"fx": 107242095, "shareset": true}],
+      "aux_sends": [],
+      "reflections_aux": null,
+      "device": null,
+      "state_groups": 0,
+      "rtpcs": 0,
+      "duck_rows": 0,
+      "opaque_props": []
+    },
+    {
+      "id": 3886768550,
+      "kind": "aux",
+      "name": "VERB_Cmn_Int_Room_Large",
+      "parent": null,
+      "volume_db": -1.5,
+      "hpf_db": null,
+      "lpf_db": null,
+      "effects": [],
+      "aux_sends": [],
+      "reflections_aux": null,
+      "device": null,
+      "state_groups": 0,
+      "rtpcs": 0,
+      "duck_rows": 0,
+      "opaque_props": []
+    },
+    {
+      "id": 2755434192,
+      "kind": "audio",
+      "name": null,
+      "parent": null,
+      "volume_db": -6.0,
+      "hpf_db": -12.0,
+      "lpf_db": -12.0,
+      "effects": [],
+      "aux_sends": [1554268871],
+      "reflections_aux": 0,
+      "device": null,
+      "state_groups": 0,
+      "rtpcs": 0,
+      "duck_rows": 0,
+      "opaque_props": [{"id": 41, "value": 100.0}]
+    }
+  ],
+  "fx": [
+    {
+      "id": 107242095,
+      "kind": "shareset",
+      "plugin": "AkConvolutionReverbFX",
+      "params": {"fPreDelay": 0.0, "fDecayTime": 8.0},
+      "ir_source_id": 331466410,
+      "ir_name": "BOOM Library IR - F&S\\Metropole 05 50m FOA.wav"
+    }
+  ],
+  "attenuation": [
+    {
+      "id": 530952049,
+      "height_spread": true,
+      "cone": false,
+      "curves": [
+        {
+          "scaling": "dB",
+          "points": [
+            {"from": 0.0, "to": 0.0, "interpolation": "Linear"},
+            {"from": 5.0, "to": 0.0, "interpolation": "Linear"},
+            {"from": 15.0, "to": -6.0, "interpolation": "Linear"},
+            {"from": 40.0, "to": -20.0, "interpolation": "Linear"},
+            {"from": 75.0, "to": -60.0, "interpolation": "Linear"}
+          ]
+        }
+      ]
+    },
+    {
+      "id": 388676855,
+      "height_spread": false,
+      "cone": false,
+      "curves": []
+    }
+  ],
+  "events": [
+    {
+      "name": "Play_UI_Menu_Press",
+      "id": 101,
+      "play": true,
+      "bus": 2755434192,
+      "attenuation": null,
+      "max_radius_cm": 0.0,
+      "is_infinite": false,
+      "duration_s": {"min": 0.0, "max": 0.0},
+      "media_count": 1
+    },
+    {
+      "name": "Play_Prop_Int_Door_Wood_Open",
+      "id": 102,
+      "play": true,
+      "bus": 2755434192,
+      "attenuation": 530952049,
+      "max_radius_cm": 7500.0,
+      "is_infinite": false,
+      "duration_s": {"min": 0.0, "max": 0.0},
+      "media_count": 2
+    },
+    {
+      "name": "Play_Amb_AbbotsfordPark_Exterior_Rooftops",
+      "id": 103,
+      "play": true,
+      "bus": 2755434192,
+      "attenuation": 388676855,
+      "max_radius_cm": 2500.0,
+      "is_infinite": false,
+      "duration_s": {"min": 0.0, "max": 0.0},
+      "media_count": 1
+    },
+    {
+      "name": "Play_Mus_MainTitleScreen",
+      "id": 104,
+      "play": true,
+      "bus": null,
+      "attenuation": null,
+      "max_radius_cm": 0.0,
+      "is_infinite": false,
+      "duration_s": {"min": 0.0, "max": 0.0},
+      "media_count": 1
+    }
+  ],
+  "transmission_loss": [
+    {"material": "/Game/Audio/Surfaces/Stone.Stone", "transmission_loss": 1.0, "acoustic_texture": "AT_Stone"},
+    {"material": "/Game/Audio/Surfaces/Wood.Wood", "transmission_loss": 0.5, "acoustic_texture": null}
+  ],
+  "reverb_assignment": [
+    {"decay_s": 8.0, "aux_bus": "VERB_Cmn_Ext_World", "aux_bus_id": 1554268871}
+  ],
+  "reverb_buses": [
+    {
+      "name": "VERB_Cmn_Ext_World",
+      "id": 1554268871,
+      "ir_name": "BOOM Library IR - F&S\\Metropole 05 50m FOA.wav",
+      "max_radius_cm": 2500.0
+    }
+  ],
+  "music": {
+    "play_events": ["Play_Mus_MainTitleScreen"],
+    "stop_events": ["Stop_Mus_MainTitleScreen"],
+    "mute_events": ["Mute_Music"],
+    "unmute_events": ["UnMute_Music"],
+    "segments": [],
+    "track_count": 0,
+    "switch_container_count": 0
+  },
+  "ambience": {
+    "emitters": [
+      {
+        "map": "Guildhall_Audio",
+        "actor": "AkAmbientSound_0",
+        "class": "AkAmbientSound",
+        "event": "Play_Amb_BeautifulCorner_Exterior_Steam_Loop",
+        "pos": [12.5, 0.0, -4.25]
+      },
+      {
+        "map": "Guildhall_Audio",
+        "actor": "TATCCAudioComponent_1",
+        "class": "TATCCAudioComponent",
+        "event": "Play_Amb_AbbotsfordPark_Exterior_Rooftops",
+        "pos": [-8.0, 3.5, 22.0]
+      }
+    ],
+    "room_beds": [
+      {
+        "map": "Guildhall_Audio",
+        "volume": "TATSpatialAudioVolume_0",
+        "event": "Play_Amb_AbbotsfordPark_Exterior_Rooftops",
+        "aux_bus": "VERB_Cmn_Ext_World"
+      },
+      {
+        "map": "Guildhall_Audio",
+        "volume": "TATSpatialAudioVolume_1",
+        "event": "Play_Amb_Int_RoomTone_A",
+        "aux_bus": "VERB_Cmn_Int_Room_Large"
+      }
+    ]
+  },
+  "vo": {
+    "speakers": {"Enforcer1": 389, "Enforcer2": 12},
+    "lines": [
+      {
+        "event": "Play_VO_Enforcer1_169_ThiefSeen_VisionStim_Heavy_01",
+        "speaker": "Enforcer1",
+        "line": 169,
+        "verb": "ThiefSeen",
+        "state": "VisionStim",
+        "severity": "Heavy",
+        "variant": 1,
+        "media_count": 3
+      },
+      {
+        "event": "Play_VO_Enforcer1_135_NoiseHeard_LowSeverityNoise_01",
+        "speaker": "Enforcer1",
+        "line": 135,
+        "verb": "NoiseHeard",
+        "state": "LowSeverityNoise",
+        "severity": "Light",
+        "variant": 1,
+        "media_count": 1
+      },
+      {
+        "event": "Play_VO_Enforcer2_42_AllyDown_Combat_Heavy_02",
+        "speaker": "Enforcer2",
+        "line": 42,
+        "verb": "AllyDown",
+        "state": "Combat",
+        "severity": "Heavy",
+        "variant": 2,
+        "media_count": 2
+      }
+    ]
+  },
+  "warnings": [
+    "fixture: hand-authored for the T03 audio runtime test, not producer output",
+    "fixture: impulse samples are a PLUG chunk and are not decoded"
+  ]
+}

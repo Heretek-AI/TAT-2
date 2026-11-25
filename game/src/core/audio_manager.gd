@@ -1,10 +1,14 @@
 extends Node
-## Full audio runtime (PG-6): bus architecture + Wwise-event-driven cues.
+## Full audio runtime (PG-6): authored bus architecture + Wwise-event cues.
 ##
 ## Buses: Master / Music / SFX / Ambience / UI / Dialogue (created once here,
-## volumes driven by SaveSystem.apply_saved_settings via apply_volumes).
-## Routing: gameplay SFX -> SFX (3D), UI -> UI (2D), ambience beds -> Ambience
-## (2D looped), gramophone -> Music (2D looped, diegetic), VO -> Dialogue.
+## volumes driven by SaveSystem.apply_saved_settings via apply_volumes) plus,
+## when the generated Wwise control plane is present, the 16 authored VERB_*
+## aux/reverb buses with real AudioEffect instances and the authored mastering
+## limiter/EQ on Master (T03, RE-M-01).
+## Routing: gameplay SFX -> SFX (3D), UI -> UI (2D), ambience -> Ambience
+## (authored placed emitters in 3D, room bed 2D), gramophone/music -> Music,
+## VO -> Dialogue.
 ##
 ## Source clips come ONLY from the decoded Wwise OGGs via the events join in
 ## res://data/generated/audio_events.json (parsed at runtime; pins below name
@@ -14,28 +18,36 @@ extends Node
 ## for the original nine gameplay tags.
 ##
 ## AU coverage against docs/reference/clip_1795033698901 KEYFRAME_INDEX §4:
-## - AU1 beds: rain (S01, -53..-49 dBFS, zero BGM) / den roomtone (S03,
-##   -76..-73) / rooftop wind (S05/S09) / roomtone. Bed players are trimmed
-##   relative to the measured RMS of the decoded clip (ffmpeg astats), so the
-##   BUS level lands on the absolute KEYFRAME dBFS target (see BED_TRIM_DB);
-##   absolute clip dBFS from the keyframe table is preserved, not re-mastered.
-##   Scene beds: S01 menu rain only; S03 Den room tone only; S12+ Guildhall
-##   rain + quiet safe-room tone; loading screens stop all beds. The wind bed
-##   is opt-in via start_bed("wind") for the S05/S09 rooftop sky view.
+## - AU1 beds: authored placed ambience (90 emitters, 128 room beds in the
+##   extraction) when data/generated/audio_wwise.json exists; otherwise the
+##   legacy rain/den/roomtone/wind bed keys, whose trims are calibrated to the
+##   measured clip RMS (BED_TRIM_DB).
 ## - AU4 UI: hover/select/confirm/back/open/close/ledger/paper + the S09
 ##   6 x 1.00 s countdown ticks (UI_MainMenu_Countdown) + modal chime.
 ## - AU3 footsteps: per-surface variation pools drawn from the
 ##   Play_FS_Player_{Walk,Run,Jog,Crouch} event media (wood/stone/carpet/
-##   metal/wet/earth/glass), round-robin, 3D on the SFX bus.
+##   metal/wet/earth/glass), round-robin, 3D on the SFX bus, authored radius.
 ## - AU5 gameplay SFX: original nine tags + bottle smash, car horn
 ##   double-honk (S13), ward activate/hit/end (S25), jaw-trap trigger (S26).
-## - AU6 VO: guard alert/suspicious/search + fairy intro lines (real Wwise VO
-##   cues mapped by function; the clip transcript is bandpass-resolved VO in
-##   KEYFRAME §4, not per-line Wwise subtitles, so cues are functional, not
-##   verbatim replicas of "Let the thieving begin.").
-## Explicit absences honored: no BGM score anywhere (only the diegetic
-## gramophone), digital silence on loading screens (beds stop on map change
-## via play_bed_scene / stop_all_beds called from the mission flow).
+## - AU6 VO: guard alert/suspicious/search + fairy intro lines plus the generic
+##   play_vo_event() entry point for the 689 authored VO lines; the extraction
+##   carries no dialogue text (localisation keys are GUIDs), so subtitles are
+##   functional descriptors emitted through `subtitle_shown`, never presented as
+##   transcribed speech.
+## Music (T03): the shipped build hard-wires Play_Mus_MainTitleScreen in
+## MainMenu_C, so the menu starts it (music.title_music.enabled in
+## data/expansion/audio_mix.json). Gameplay music is state-driven and starts
+## only when an owning system calls start_music()/play_music_event(): no map
+## plays un-authored music. The 2026-11-24 capture's continuous tonal bed is
+## capture-borne (it is audible during the engine boot splash and through the
+## loading screen where every bed is stopped), which is why the old "no BGM
+## anywhere" claim was removed.
+## Mix states (T03): the pause duck covers Ambience+SFX+Music (AU4-05),
+## begin_loading_silence() reaches digital zero for AU1-03, and indoor/outdoor
+## switches the authored reverb send (8.0 s exterior / 0.45 s interior decay).
+## The per-room *bed* swap is BLOCKED-ON T09: TATSpatialAudioVolume brush
+## geometry is not in the extraction.
+
 
 const FOOTSTEP_SFX: AudioStream = preload("res://assets/ue/audio/footstep.wav")
 const BLACKJACK_SFX: AudioStream = preload("res://assets/ue/audio/blackjack.wav")
@@ -114,6 +126,27 @@ const VO_DB: float = -6.0
 ## S27: opening the pause menu ducks gameplay ambience by 19 dB (doc:
 ## -53 -> -72.4 dBFS by 03:42.6); resuming restores the saved bus level.
 const PAUSE_DUCK_DB: float = -19.0
+## T03: the authored duck is a *gameplay* duck. It used to attenuate the
+## Ambience bus only, so a bed or one-shot living on SFX/Music was untouched.
+## UI stays up (pause clicks are the thing the player just pressed) and
+## Dialogue keeps an already-speaking line audible.
+const PAUSE_DUCK_BUSES: Array[String] = [BUS_AMBIENCE, BUS_SFX, BUS_MUSIC]
+## T03 authored control plane. `tools/parse_wwise.py` writes
+## data/generated/audio_wwise.json (buses, fx sharesets, attenuations,
+## transmission loss, music, placed emitters, VO lines). It is loaded
+## dynamically and never required: a fresh clone without the generated file
+## keeps the pre-T03 behaviour and reports the degraded path in mix_state().
+const WWISE_SCRIPT_PATH: String = "res://src/core/audio_wwise.gd"
+const MIX_CONFIG_PATH: String = "res://data/expansion/audio_mix.json"
+## Concurrent authored ambience emitters. 90 are placed across the shipped
+## audio sublevels; the four maps the port loads carry 34/27/17/12, and a
+## cap keeps a 34-emitter room from eating the 16-voice one-shot budget.
+const EMITTER_CAP: int = 24
+## Occlusion probe: a hit closer than this to either endpoint is the floor
+## under the player or the emitter's own wall, not a wall between them.
+const OCCLUSION_MIN_HIT_M: float = 0.4
+const OCCLUSION_WALL_DB_FALLBACK: float = -12.0
+const OCCLUSION_MIN_CUTOFF_HZ: float = 400.0
 
 # (event, media DebugName) pins. Clips resolve through the events join only.
 const EXTRA_PINS := {
@@ -171,7 +204,39 @@ const VO_PINS := {
 	"guard_search": ["Play_VO_Enforcer1_10_ThiefObserved_LostTargetToPatrol_02", "VO_Enforcer1_10_ThiefObserved_LostTargetToPatrol_02.wav"],
 	"fairy_intro": ["Play_tristan_fairy_ftue_intro_01", "VO_FairyTristan_597_Tutorial_Intro_01.wav"],
 }
-# Gait event per movement gait; surfaces match substrings of media DebugNames.
+## T03 authored music events by kind. Literal authored names (extracted event
+## assets), used when the generated control plane is absent; audio_wwise.json
+## is the authority when present. Gameplay kinds are NOT started anywhere by
+## this file — an owning system must ask for them, so no map plays un-authored
+## music (see game/data/expansion/audio_mix.json music.mission_music).
+const MUSIC_FALLBACK_PINS := {
+	"title": "Play_Mus_MainTitleScreen",
+	"character_select": "Play_Mus_CharacterSelectScreen",
+	"guard_alerted": "Play_Mus_GuardAlerted_Generic_01",
+	"guard_search": "Play_Mus_Guard_Searching_Suspense_Generic_MX",
+	"quest_complete": "Play_Mus_Stinger_Quest_Complete",
+	"escape_riser": "Play_Mus_Stinger_EscapePoint_Riser",
+	"end_escape": "Play_Mus_EndMission_Escape",
+	"end_caught": "Play_Mus_EndMission_Caught",
+	"mission": "Play_Mus_TVT_Match_Generic_Mission_MX",
+	"tutorial": "Play_Mus_TVT_Tutorial_Generic_MX",
+	"tutorial_intro": "Play_Mus_TutorialIntro_01",
+	"endgame": "Play_Mus_EndGame_Start_MX",
+	"end_match_1m": "Play_Mus_EndMatch_MX_1m",
+}
+## Music-bus trim for an authored music event. Not measured: the recording's
+## startscreen bed is capture-borne (see game/data/expansion/audio_mix.json
+## music.title_music.conflict), so there is no reference level to calibrate
+## against. Documented TAT-2 choice, overridable per event from the overlay.
+const MUSIC_TRIM_DB: float = -10.0
+
+## Gait event per movement gait; surfaces match substrings of media DebugNames.
+## T03 (RE-M-09): every authored media family present in the player FS events is
+## reached now. The previous seven keys missed Tile/Marble, the whole
+## ShallowWater family (85 media), Mud, MetalPipe/MetalVehicle and
+## WoodBeam/WoodObject, so those clips were decoded and never played. The
+## authored surface -> token mapping still lives in surface_resolver.gd (T10),
+## so "Tile" reaches the stone pool exactly as its authored loudness row says.
 const FOOTSTEP_GAIT_EVENTS := {
 	"walk": "Play_FS_Player_Walk",
 	"run": "Play_FS_Player_Run",
@@ -179,13 +244,13 @@ const FOOTSTEP_GAIT_EVENTS := {
 	"crouch": "Play_FS_Player_Crouch",
 }
 const FOOTSTEP_SURFACE_KEYS := {
-	"wood": ["woodgeneric", "woodfloor"],
-	"stone": ["stone", "concrete"],
-	"carpet": ["carpet"],
-	"metal": ["metalsheet", "metalgrate", "ladder"],
-	"wet": ["wethardsurface", "puddle"],
-	"earth": ["dirt", "grass", "foliage", "gravel"],
-	"glass": ["brokenglass", "glass"],
+	"wood": ["woodgeneric", "woodfloor", "woodbeam", "woodobject", "plank"],
+	"stone": ["stone", "concrete", "tile", "marble", "granite", "brick", "cobble", "terrazzo"],
+	"carpet": ["carpet", "rug"],
+	"metal": ["metalsheet", "metalgrate", "metalpipe", "metalvehicle", "metalthick", "ladder"],
+	"wet": ["wethardsurface", "puddle", "shallowwater", "groundwet"],
+	"earth": ["dirt", "grass", "foliage", "gravel", "mud", "ivy"],
+	"glass": ["brokenglass", "glasshorizontal", "glass"],
 }
 
 var _sfx: Dictionary = {}
@@ -237,12 +302,39 @@ var _bus_linear: Dictionary = {}
 var _pause_duck_db: float = 0.0
 var _pause_was_active: bool = false
 
+## T03 authored-control-plane state.
+## `_wwise` is the AudioWwise helper (res://src/core/audio_wwise.gd) or null.
+var _wwise: RefCounted = null
+## game/data/expansion/audio_mix.json — TAT-2 mix keys (see that file).
+var _mix_cfg: Dictionary = {}
+var _bus_gain_db: Dictionary = {}
+## Authored music player (menu title / explicit gameplay event). One at a time,
+## mirroring the shipped MainMenu_C Music_Start/Music_Stop pair.
+var _music_player: AudioStreamPlayer = null
+var _music_kind: String = ""
+## Authored placed ambience emitters, key -> AudioStreamPlayer3D.
+var _emitters: Dictionary = {}
+var _emitter_map: String = ""
+## Environment (indoor/outdoor) as last applied; drives the authored reverb
+## send and the authored room-tone bed swap.
+var _interior: bool = false
+var _env_initialised: bool = false
+## True while a LOADING screen owns the mix (AU1-03 digital silence).
+var _loading_silence: bool = false
+var _last_scene_state_msec: int = -100000
+## Functional VO descriptor for the UI (no authored dialogue text exists in
+## the extraction, so this is never presented as transcribed speech).
+signal subtitle_shown(text: String)
+
+
 
 func _ready() -> void:
 	# S27 pause duck must keep evaluating while the scene tree is paused.
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_pause_was_active = get_tree() != null and get_tree().paused
 	_pause_duck_db = PAUSE_DUCK_DB if _pause_was_active else 0.0
+	_load_mix_config()
+	_load_wwise()
 	_ensure_buses()
 	_sfx["footstep"] = FOOTSTEP_SFX
 	_sfx["blackjack"] = BLACKJACK_SFX
@@ -304,6 +396,23 @@ func cleanup_on_exit() -> void:
 		_gramophone_player.stream = null
 		_gramophone_player.free()
 	_gramophone_player = null
+	# T03 authored players: emitters and music are freed (not queue_free) for
+	# the same reason as the beds below — the deferred queue may not run.
+	for key: Variant in _emitters.keys():
+		var em: Node = _emitters[key] as Node
+		if em != null and is_instance_valid(em):
+			em.call("stop")
+			em.set("stream", null)
+			em.free()
+	_emitters.clear()
+	_emitter_map = ""
+	if _music_player != null and is_instance_valid(_music_player):
+		_music_player.stop()
+		_music_player.stream = null
+		_music_player.free()
+	_music_player = null
+	_music_kind = ""
+	_loading_silence = false
 	for bed: Variant in _beds.values():
 		if bed is Node and is_instance_valid(bed as Node):
 			(bed as Node).call("stop")
@@ -327,6 +436,79 @@ func _ensure_buses() -> void:
 		if AudioServer.get_bus_index(bus_name) == -1:
 			AudioServer.add_bus()
 			AudioServer.set_bus_name(AudioServer.bus_count - 1, bus_name)
+	# T03: authored bus tree (16 VERB_* aux buses with real AudioEffectReverb,
+	# mastering limiter + EQ on Master, sends). Idempotent and a no-op when the
+	# generated control plane is absent — the legacy six buses stay the only
+	# graph then, which mix_state() reports as `authored_buses: false`.
+	_ww_call("build_buses", [])
+
+
+## Loads the TAT-2 audio mix keys (game/data/expansion/audio_mix.json). A
+## missing or malformed file keeps every documented default.
+func _load_mix_config() -> void:
+	_mix_cfg.clear()
+	_bus_gain_db.clear()
+	if not FileAccess.file_exists(MIX_CONFIG_PATH):
+		return
+	var f: FileAccess = FileAccess.open(MIX_CONFIG_PATH, FileAccess.READ)
+	if f == null:
+		return
+	var parsed: Variant = JSON.parse_string(f.get_as_text())
+	if not (parsed is Dictionary):
+		push_warning("[audio_manager] %s is not a JSON object; defaults kept" % MIX_CONFIG_PATH)
+		return
+	_mix_cfg = parsed as Dictionary
+	var gains: Variant = _mix_cfg.get("bus_gains_db", {})
+	if gains is Dictionary:
+		for k: Variant in (gains as Dictionary).keys():
+			_bus_gain_db[str(k)] = float((gains as Dictionary)[k])
+
+
+## Instantiates the authored-control-plane helper. Dynamic on purpose: the
+## helper reads a generated file that a fresh clone does not have, so a missing
+## script or a missing JSON must degrade, never fail the autoload.
+func _load_wwise() -> void:
+	_wwise = null
+	if not ResourceLoader.exists(WWISE_SCRIPT_PATH):
+		return
+	var scr: GDScript = ResourceLoader.load(WWISE_SCRIPT_PATH) as GDScript
+	if scr == null:
+		return
+	var inst: Variant = scr.new()
+	if inst == null:
+		return
+	_wwise = inst as RefCounted
+	_ww_call("load_data", [])
+	if not bool(_ww_call("is_loaded", []) or false):
+		# Keep the helper for its documented neutral getters (so callers never
+		# need a second null test) but report the reason through mix_state().
+		push_warning("[audio_manager] authored Wwise control plane unavailable: %s" % str(_ww_call("degraded_reason", [])))
+
+
+## Calls a method on the authored-control-plane helper when it exists.
+## Returns null when the helper or the method is absent.
+func _ww_call(method: String, args: Array) -> Variant:
+	if _wwise == null or not _wwise.has_method(method):
+		return null
+	return _wwise.callv(method, args)
+
+
+## String result of a helper call, "" when the helper is absent or returns null.
+## (Must not be written as `str(_ww_call(...) or "")`: GDScript's `or` yields a
+## bool, so an empty authored string would become the literal "false".)
+func _ww_string(method: String, args: Array) -> String:
+	var v: Variant = _ww_call(method, args)
+	if v == null:
+		return ""
+	return str(v)
+
+
+## True when the authored control plane (buses/attenuation/music/emitters/VO)
+## is loaded. False on a fresh clone; every authored path then falls back to
+## the pre-T03 behaviour instead of failing.
+func has_authored_audio() -> bool:
+	return bool(_ww_call("is_loaded", []) or false)
+
 
 
 func _set_bus_vol(bus_name: String, vol: float) -> void:
@@ -342,24 +524,37 @@ func _apply_bus_level(bus_name: String) -> void:
 		return
 	var v: float = float(_bus_linear.get(bus_name, 1.0))
 	var db: float = linear_to_db(maxf(v, 0.001))
-	if bus_name == BUS_AMBIENCE:
+	db += float(_bus_gain_db.get(bus_name, 0.0))
+	if PAUSE_DUCK_BUSES.has(bus_name):
 		db += _pause_duck_db
 	AudioServer.set_bus_volume_db(idx, db)
 	AudioServer.set_bus_mute(idx, v <= 0.001)
 
 
+## Effective bus gain in dB for QA/tests (slider + authored trim + duck).
+func bus_level_db(bus_name: String) -> float:
+	var idx: int = AudioServer.get_bus_index(bus_name)
+	if idx < 0:
+		return 0.0
+	return AudioServer.get_bus_volume_db(idx)
+
+
 ## S27: pause menu ambience duck (AU4-05). The tree's paused flag is the
 ## authority, so HUD pause handling stays outside this file's ownership.
+## T03: the duck is a gameplay duck over Ambience+SFX+Music; the pre-T03 code
+## attenuated Ambience alone, so a bed or a one-shot on another bus kept its
+## level through the pause menu.
 func _process(_delta: float) -> void:
 	var tree: SceneTree = get_tree()
 	if tree == null:
 		return
 	var paused: bool = tree.paused
-	if paused == _pause_was_active:
-		return
-	_pause_was_active = paused
-	_pause_duck_db = PAUSE_DUCK_DB if paused else 0.0
-	_apply_bus_level(BUS_AMBIENCE)
+	if paused != _pause_was_active:
+		_pause_was_active = paused
+		_pause_duck_db = PAUSE_DUCK_DB if paused else 0.0
+		for bus_name: String in PAUSE_DUCK_BUSES:
+			_apply_bus_level(bus_name)
+	_sync_environment()
 
 
 ## Push volumes from SaveSystem settings (also called by SaveSystem so the
@@ -372,6 +567,435 @@ func apply_volumes(master_vol: float, music_vol: float, sfx_vol: float, ambience
 	_set_bus_vol(BUS_AMBIENCE, ambience_vol)
 	_set_bus_vol(BUS_UI, ui_vol)
 	_set_bus_vol(BUS_DIALOGUE, dialogue_vol)
+
+
+## ---------------------------------------------------------------------------
+## T03 authored control plane (RE-M-01/02/03/04/05/10).
+## Every function here is additive: with no generated `audio_wwise.json` the
+## pre-T03 behaviour is unchanged and mix_state() reports why.
+## ---------------------------------------------------------------------------
+
+## T03: environment = indoor/outdoor from the existing ceiling probe. It drives
+## the authored reverb send (8.0 s exterior / 0.45 s interior decay, from
+## DefaultReverbAssignmentTable). Throttled, and skipped without a player.
+func _sync_environment() -> void:
+	if not has_authored_audio():
+		return
+	var tree: SceneTree = get_tree()
+	if tree == null:
+		return
+	var now: int = Time.get_ticks_msec()
+	if now - _last_scene_state_msec < 500:
+		return
+	_last_scene_state_msec = now
+	if tree.get_first_node_in_group("player") == null:
+		return
+	set_environment(_is_indoor())
+
+
+## Applies the authored room reverb for [param indoor] to the gameplay buses.
+## The per-room *bed* swap needs the TATSpatialAudioVolume geometry, which the
+## extraction does not carry (no Brush bounds) — that half is BLOCKED-ON T09 and
+## reported as `bed_step: "blocked:T09"` rather than invented as a dB trim.
+func set_environment(indoor: bool) -> void:
+	if _env_initialised and indoor == _interior:
+		return
+	_interior = indoor
+	_env_initialised = true
+	var kind: String = "interior" if indoor else "exterior"
+	var rb: String = _ww_string("reverb_bus_for", [kind])
+	if rb.is_empty():
+		return
+	for bus_name: String in [BUS_AMBIENCE, BUS_SFX]:
+		_route_bus_reverb(bus_name, rb)
+
+
+## Routes [param bus_name]'s output through the authored reverb bus. Returns
+## false when the reverb bus does not exist (fresh clone) or the helper cannot
+## express the send; the bus then stays dry instead of being re-parented.
+func _route_bus_reverb(bus_name: String, reverb_bus: String) -> bool:
+	if AudioServer.get_bus_index(reverb_bus) == -1:
+		return false
+	var routed: Variant = _ww_call("route_bus_to_reverb", [bus_name, reverb_bus])
+	return routed is bool and bool(routed)
+
+
+## Authored attenuation for [param event_name] (RE-M-02). Empty when unknown.
+func authored_attenuation(event_name: String) -> Dictionary:
+	var info: Variant = _ww_call("attenuation_for", [event_name])
+	return (info as Dictionary) if info is Dictionary else {}
+
+
+## Stamps an authored radius/curve on a 3D player. Returns false when the event
+## has no authored attenuation, in which case the legacy 60 m inverse-distance
+## model stays in place (documented fallback, not a silent change).
+func _apply_authored_attenuation(player: AudioStreamPlayer3D, event_name: String) -> bool:
+	var info: Dictionary = authored_attenuation(event_name)
+	if not bool(info.get("found", false)):
+		player.max_distance = MAX_DISTANCE_M
+		player.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE
+		return false
+	var radius: float = float(info.get("max_distance_m", MAX_DISTANCE_M))
+	if bool(info.get("is_2d", false)) or radius <= 0.0:
+		# Authored 2D event (radius 0): keep it omnipresent instead of muting it
+		# at a distance it never had. unit_size >= max_distance = flat.
+		player.max_distance = MAX_DISTANCE_M
+		player.unit_size = MAX_DISTANCE_M
+		player.attenuation_model = AudioStreamPlayer3D.ATTENUATION_DISABLED
+		return true
+	var inner: float = float(info.get("unit_size", radius * 0.1))
+	player.max_distance = radius
+	player.unit_size = clampf(inner, 0.1, radius)
+	player.max_db = 0.0
+	# Godot 4.7 has no authored-curve model (INVERSE_DISTANCE / INVERSE_SQUARE /
+	# LOGARITHMIC / DISABLED only). The authored dB curve is matched at its
+	# endpoint by unit_size (see AudioWwise._unit_size_for), so the inverse
+	# distance model reproduces the authored level at the authored cull radius
+	# and is flat when the curve is flat. The curve shape is reported in
+	# mix_state() so the approximation is visible rather than silent.
+	player.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE
+	return true
+
+
+## T03 occlusion settings from the TAT-2 mix overlay (game/data/expansion/
+## audio_mix.json). Defaults are the documented values in that file.
+func _occlusion_cfg() -> Dictionary:
+	var occ: Variant = _mix_cfg.get("occlusion", {})
+	return (occ as Dictionary) if occ is Dictionary else {}
+
+
+## Extra gain in dB for a 3D one-shot at [param pos], from one listener→source
+## ray (RE-M-03). 0.0 when nothing blocks it.
+func occlusion_gain_db(pos: Vector3) -> float:
+	var cfg: Dictionary = _occlusion_cfg()
+	if not bool(cfg.get("enabled", true)):
+		return 0.0
+	var loss: float = float(cfg.get("authored_loss", 1.0))
+	if loss <= 0.0:
+		return 0.0
+	var wall_db: float = float(cfg.get("wall_db", OCCLUSION_WALL_DB_FALLBACK))
+	if not _occluded(pos):
+		return 0.0
+	return wall_db * loss
+
+
+## Authored low-pass cutoff for an occluded source (Hz).
+func occlusion_cutoff_hz() -> float:
+	var cfg: Dictionary = _occlusion_cfg()
+	var max_hz: float = float(cfg.get("max_cutoff_hz", 20000.0))
+	var min_hz: float = float(cfg.get("min_cutoff_hz", OCCLUSION_MIN_CUTOFF_HZ))
+	var loss: float = clampf(float(cfg.get("authored_loss", 1.0)), 0.001, 1.0)
+	return clampf(max_hz * loss * loss, min_hz, max_hz)
+
+
+## One listener→source ray. Hits closer than OCCLUSION_MIN_HIT_M to either end
+## are the floor under the player or the emitter's own wall, not a wall between.
+func _occluded(pos: Vector3) -> bool:
+	var vp: Viewport = get_viewport()
+	if vp == null:
+		return false
+	var world: World3D = vp.find_world_3d()
+	if world == null:
+		return false
+	var from: Vector3 = _listener_position()
+	var d: float = from.distance_to(pos)
+	if d < 1.0:
+		return false
+	var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(from, pos)
+	q.hit_from_inside = false
+	# The player's own capsule sits between the camera and its feet; excluding
+	# it keeps a footstep from being occluded by its emitter.
+	var tree: SceneTree = get_tree()
+	if tree != null:
+		var body: CollisionObject3D = tree.get_first_node_in_group("player") as CollisionObject3D
+		if body != null:
+			var excluded: Array[RID] = body.get_collision_exceptions()
+			excluded.append(body.get_rid())
+			q.exclude = excluded
+	var hit: Dictionary = world.direct_space_state.intersect_ray(q)
+	if hit.is_empty():
+		return false
+	var hp: Vector3 = hit.get("position", from) as Vector3
+	var along: float = from.distance_to(hp)
+	return along >= OCCLUSION_MIN_HIT_M and (d - along) >= OCCLUSION_MIN_HIT_M
+
+
+## Listener position for attenuation/occlusion: the active camera, else the
+## player, else the origin (menus and headless probes).
+func _listener_position() -> Vector3:
+	var vp: Viewport = get_viewport()
+	if vp != null:
+		var cam: Camera3D = vp.get_camera_3d()
+		if cam != null:
+			return cam.global_position
+	var tree: SceneTree = get_tree()
+	if tree != null:
+		var p: Node3D = tree.get_first_node_in_group("player") as Node3D
+		if p != null:
+			return p.global_position
+	return Vector3.ZERO
+
+
+## Spawns the authored placed emitters for [param map_id] (RE-M-04). Returns the
+## number started. `[]` for a map with no authored emitters — never invented.
+func start_map_emitters(map_id: String) -> int:
+	stop_map_emitters()
+	if not has_authored_audio():
+		return 0
+	var list: Variant = _ww_call("emitters_for_map", [map_id])
+	if not (list is Array):
+		return 0
+	var arr: Array = list as Array
+	if arr.is_empty():
+		_emitter_map = map_id
+		return 0
+	var chosen: Array = arr
+	if arr.size() > EMITTER_CAP:
+		chosen = _nearest_emitters(arr, _listener_position(), EMITTER_CAP)
+	var started: int = 0
+	for i: int in range(chosen.size()):
+		var e: Variant = chosen[i]
+		if not (e is Dictionary):
+			continue
+		var ed: Dictionary = e
+		var ev: String = str(ed.get("event", ""))
+		var pos_v: Variant = ed.get("pos")
+		if ev.is_empty() or not (pos_v is Vector3):
+			continue
+		var stream: AudioStream = _bed_stream(ev, "")
+		if stream == null:
+			continue
+		var p := AudioStreamPlayer3D.new()
+		p.stream = stream
+		p.bus = BUS_AMBIENCE
+		p.position = pos_v as Vector3
+		p.volume_db = _ambience_trim_db(ev)
+		_apply_authored_attenuation(p, ev)
+		add_child(p)
+		p.play()
+		_emitters[map_id + "|" + str(ed.get("actor", str(i)))] = p
+		started += 1
+	_emitter_map = map_id
+	return started
+
+
+## Deterministic nearest-first selection when a map authors more emitters than
+## the cap (stable sort on distance then actor name).
+func _nearest_emitters(arr: Array, listener: Vector3, cap: int) -> Array:
+	var keyed: Array = []
+	for e: Variant in arr:
+		if not (e is Dictionary):
+			continue
+		var ed: Dictionary = e
+		var pos_v: Variant = ed.get("pos")
+		var d: float = listener.distance_to(pos_v as Vector3) if pos_v is Vector3 else 0.0
+		keyed.append([d, str(ed.get("actor", "")), ed])
+	keyed.sort_custom(func(a: Array, b: Array) -> bool:
+		if is_equal_approx(float(a[0]), float(b[0])):
+			return str(a[1]) < str(b[1])
+		return float(a[0]) < float(b[0])
+	)
+	var out: Array = []
+	for i: int in range(mini(cap, keyed.size())):
+		out.append((keyed[i] as Array)[2])
+	return out
+
+
+func stop_map_emitters() -> void:
+	for key: Variant in _emitters.keys():
+		var p: Node = _emitters[key] as Node
+		if p != null and is_instance_valid(p):
+			p.call("stop")
+			p.set("stream", null)
+			p.queue_free()
+	_emitters.clear()
+	_emitter_map = ""
+
+
+## Count of live authored emitters (QA/probes).
+func active_emitters() -> int:
+	return _emitters.size()
+
+
+## ---------------------------------------------------------------------------
+## Music (RE-M-05). The shipped build hard-wires the title theme in
+## MainMenu_C (MusicEvent_Play = Play_Mus_MainTitleScreen). Gameplay music is
+## state-driven and stays off until an owning system calls start_music() with
+## an authored kind, so no map can play un-authored music.
+## ---------------------------------------------------------------------------
+
+## Authored music event for [param kind]; [] when the build has none. Falls back
+## to the literal authored names so this works before the JSON is regenerated.
+func music_event_for(kind: String) -> String:
+	var k: String = kind.to_lower().strip_edges()
+	if has_authored_audio():
+		var ev: Variant = _ww_call("music_event", [k])
+		if ev is String and not (ev as String).is_empty():
+			return ev as String
+	return str(MUSIC_FALLBACK_PINS.get(k, ""))
+
+
+## Starts an authored music event on the Music bus. One at a time (the shipped
+## MainMenu_C has a single Music_Start/Music_Stop pair). Returns false when the
+## kind is not authored or the clip did not resolve.
+## [param trim_db] NaN means "use the TAT-2 overlay's music.title_music.trim_db,
+## else MUSIC_TRIM_DB".
+func start_music(kind: String, trim_db: float = NAN, fade_s: float = 0.6) -> bool:
+	if _shutdown:
+		return false
+	var k: String = kind.to_lower().strip_edges()
+	if _music_kind == k and is_instance_valid(_music_player):
+		return true
+	return _start_music_event(music_event_for(k), k, trim_db, fade_s)
+
+
+## Plays an explicit authored music event (a gameplay system that knows its own
+## state, e.g. a stinger). Only authored `Play_Mus_*` events that resolve a clip
+## are accepted, so no map can play un-authored music.
+func play_music_event(event_name: String, trim_db: float = NAN, fade_s: float = 0.6) -> bool:
+	if _shutdown:
+		return false
+	var ev: String = event_name.strip_edges()
+	if not ev.begins_with("Play_Mus_"):
+		return false
+	if not _event_clips.has(ev):
+		return false
+	return _start_music_event(ev, "event:" + ev, trim_db, fade_s)
+
+
+func _start_music_event(ev: String, kind: String, trim_db: float, fade_s: float) -> bool:
+	if ev.is_empty():
+		return false
+	var stream: AudioStream = _bed_stream(ev, "")
+	if stream == null:
+		return false
+	var trim: float = _music_trim_db() if is_nan(trim_db) else trim_db
+	stop_music(0.0)
+	_music_player = AudioStreamPlayer.new()
+	_music_player.stream = stream
+	_music_player.bus = BUS_MUSIC
+	_music_player.volume_db = trim if fade_s <= 0.0 else trim - 20.0
+	add_child(_music_player)
+	_music_player.play()
+	if fade_s > 0.0:
+		var tw: Tween = _track_bed_tween(create_tween())
+		tw.tween_property(_music_player, "volume_db", trim, fade_s)
+	_music_kind = kind
+	return true
+
+
+## Music trim from the TAT-2 overlay (music.title_music.trim_db), else the
+## documented MUSIC_TRIM_DB.
+func _music_trim_db() -> float:
+	var music: Variant = _mix_cfg.get("music", {})
+	if music is Dictionary:
+		var title: Variant = (music as Dictionary).get("title_music", {})
+		if title is Dictionary:
+			return float((title as Dictionary).get("trim_db", MUSIC_TRIM_DB))
+	return MUSIC_TRIM_DB
+
+
+func stop_music(fade_s: float = 0.4) -> void:
+	var p: AudioStreamPlayer = _music_player
+	_music_player = null
+	_music_kind = ""
+	if not is_instance_valid(p):
+		return
+	if fade_s <= 0.0:
+		p.stop()
+		p.stream = null
+		p.queue_free()
+		return
+	var tw: Tween = _track_bed_tween(create_tween())
+	tw.tween_property(p, "volume_db", -60.0, fade_s)
+	tw.tween_callback(func() -> void:
+		if is_instance_valid(p):
+			p.stop()
+			p.stream = null
+			p.queue_free()
+	)
+
+
+func music_kind() -> String:
+	return _music_kind
+
+
+## True while an authored music event is playing.
+func is_music_playing() -> bool:
+	return _music_kind != "" and is_instance_valid(_music_player)
+
+
+## ---------------------------------------------------------------------------
+## VO (RE-M-10). 689 authored lines resolve clips already; this is the generic
+## entry point for them plus the functional subtitle the UI can display.
+## ---------------------------------------------------------------------------
+
+## Plays the first resolvable clip of an authored VO event on the Dialogue bus
+## and emits `subtitle_shown` with the functional descriptor.
+func play_vo_event(event_name: String, pos: Variant = null) -> bool:
+	var ev := event_name.strip_edges()
+	if ev.is_empty():
+		return false
+	var clips: Variant = _event_clips.get(ev, [])
+	if not (clips is Array):
+		return false
+	var stream: AudioStream = null
+	for c: Variant in (clips as Array):
+		if not (c is Dictionary):
+			continue
+		var clip := str((c as Dictionary).get("clip", ""))
+		if clip.is_empty() or not ResourceLoader.exists(clip):
+			continue
+		stream = ResourceLoader.load(clip) as AudioStream
+		if stream != null:
+			break
+	if stream == null:
+		return false
+	if pos is Vector3:
+		_play_stream_3d(stream, pos, VO_DB, BUS_DIALOGUE, ev)
+	else:
+		_play_stream_2d(stream, BUS_DIALOGUE, VO_DB)
+	var sub: String = vo_subtitle(ev)
+	if not sub.is_empty():
+		subtitle_shown.emit(sub)
+	return true
+
+
+## Functional VO descriptor from the authored event name, e.g.
+## "Enforcer1 · ThiefSeen · VisionStim · Heavy (01)". The extraction carries no
+## authored dialogue text (localization keys are GUIDs), so this is a
+## description of the authored line, never presented as transcribed speech.
+func vo_subtitle(event_name: String) -> String:
+	var s: Variant = _ww_call("vo_subtitle", [event_name])
+	return str(s) if s is String else ""
+
+
+## Everything the mix currently is, for QA/tests and the wave report.
+func mix_state() -> Dictionary:
+	var buses: Dictionary = {}
+	for bus_name: String in ["Master", BUS_MUSIC, BUS_SFX, BUS_AMBIENCE, BUS_UI, BUS_DIALOGUE]:
+		buses[bus_name] = bus_level_db(bus_name)
+	return {
+		"authored_audio": has_authored_audio(),
+		"degraded_reason": _ww_string("degraded_reason", []),
+		"bus_levels_db": buses,
+		"authored_bus_report": _ww_call("bus_report", []),
+		"pause_duck_db": _pause_duck_db,
+		"duck_buses": PAUSE_DUCK_BUSES,
+		"interior": _interior,
+		"bed_step": "blocked:T09" if _interior else "exterior",
+		"music_kind": _music_kind,
+		"emitters": _emitters.size(),
+		"emitter_map": _emitter_map,
+		"beds": active_bed_levels(),
+		"master_volume_db": bus_level_db("Master"),
+	}
+
+
+## True when a LOADING screen currently owns the mix (AU1-03).
+func is_loading_silence() -> bool:
+	return _loading_silence
+
 
 
 func _pull_volumes_from_savesystem() -> void:
@@ -624,7 +1248,7 @@ func play_footstep(surface: String = "wood", gait: String = "walk", pos: Vector3
 	if not clip.is_empty() and ResourceLoader.exists(clip):
 		var stream: AudioStream = ResourceLoader.load(clip) as AudioStream
 		if stream != null:
-			_play_stream_3d(stream, pos, 0.0, BUS_SFX)
+			_play_stream_3d(stream, pos, 0.0, BUS_SFX, str(FOOTSTEP_GAIT_EVENTS.get(gait.to_lower(), "")))
 			return true
 	if _sfx.has("footstep"):
 		_play_at("footstep", pos, 0.0)
@@ -878,15 +1502,93 @@ func stop_all_beds(fade_s: float = 0.0) -> void:
 			continue
 		_fade_out_bed(str(key), player, fade_s)
 	_beds.clear()
+	stop_map_emitters()
 	stop_gramophone()
+
+
+## T03 (AU1-03): true silence for a loading screen. Loading is a screen cut in
+## the shipped build, so the beds/emitters/music stop at once and the gameplay
+## buses are muted until the next scene. The caller keeps ownership of *when*
+## (loading_screen.gd:197 already stops the beds); this guarantees the result is
+## digital zero instead of a 0.35 s tail.
+func begin_loading_silence() -> void:
+	var cfg: Variant = _mix_cfg.get("mix_states", {})
+	if cfg is Dictionary:
+		var ls: Variant = (cfg as Dictionary).get("loading_silence", {})
+		if ls is Dictionary and not bool((ls as Dictionary).get("enabled", true)):
+			return
+	_loading_silence = true
+	stop_all_beds(0.0)
+	stop_music(0.0)
+	for bus_name: String in [BUS_AMBIENCE, BUS_SFX, BUS_MUSIC]:
+		var idx: int = AudioServer.get_bus_index(bus_name)
+		if idx >= 0:
+			AudioServer.set_bus_mute(idx, true)
+
+
+## Restores the gameplay buses muted by begin_loading_silence().
+func end_loading_silence() -> void:
+	if not _loading_silence:
+		return
+	_loading_silence = false
+	for bus_name: String in [BUS_AMBIENCE, BUS_SFX, BUS_MUSIC]:
+		_apply_bus_level(bus_name)
+
+
+## Starts a looped 2D bed from an authored event (any event, first resolvable
+## clip). Used by the authored ambience path; [param key] is the bed slot.
+func start_event_bed(key: String, ev_name: String, trim_db: float, fade_s: float = 0.6) -> bool:
+	if _shutdown:
+		return false
+	var k: String = key.to_lower().strip_edges()
+	if k.is_empty() or ev_name.is_empty():
+		return false
+	_cancel_fading_bed(k)
+	if _beds.has(k):
+		return true
+	var stream: AudioStream = _bed_stream(ev_name, "")
+	if stream == null:
+		return false
+	var player := AudioStreamPlayer.new()
+	player.stream = stream
+	player.bus = BUS_AMBIENCE
+	player.volume_db = trim_db if fade_s <= 0.0 else trim_db - 20.0
+	add_child(player)
+	player.play()
+	_beds[k] = player
+	if fade_s > 0.0:
+		var tw: Tween = _track_bed_tween(create_tween())
+		tw.tween_property(player, "volume_db", trim_db, fade_s)
+	return true
 
 
 ## AU1 scene beds against KEYFRAME §4. The Den is room tone only (no BGM);
 ## Guildhall layers the S12 rain under a quiet safe-room bed; the Manor is
 ## exterior rain; loading screens silence everything (LoadingScreen calls
 ## stop_all_beds). The wind bed is opt-in for the S05/S09 rooftop view.
+##
+## T03 (RE-M-04): when the authored control plane is present the map's 90 placed
+## emitters (3D, authored event + position + attenuation) plus the authored
+## per-room bed replace the invented bed keys. The legacy path stays as the
+## documented degraded fallback and is what mix_state() reports as
+## `authored_audio: false`.
 func play_bed_scene(map_id: String) -> void:
+	end_loading_silence()
 	stop_all_beds(0.2)
+	if has_authored_audio():
+		var started: int = start_map_emitters(map_id)
+		var base_ev: String = scene_bed_event(map_id)
+		if base_ev.is_empty():
+			base_ev = _ww_string("room_bed_for", [map_id])
+		if started > 0 or not base_ev.is_empty():
+			if not base_ev.is_empty():
+				start_event_bed("authored_room", base_ev, _ambience_trim_db(base_ev))
+			return
+		# A map that authors neither a placed emitter the contract can read nor a
+		# room bed (the Thieves' Den: its only placed component carries
+		# AkLoopingAudio, and its room volume has no event) falls through to the
+		# legacy bed rather than going silent.
+		stop_map_emitters()
 	var m := map_id.to_lower()
 	if m.find("thieves_den") >= 0 or m == "den":
 		start_bed("den")
@@ -899,15 +1601,64 @@ func play_bed_scene(map_id: String) -> void:
 		start_bed("rain")
 
 
+## T03: authored title music switch (music.title_music.enabled). The shipped
+## MainMenu_C hard-wires MusicEvent_Play = Play_Mus_MainTitleScreen; the
+## 2026-11-24 capture's startscreen bed matches neither that event nor any port
+## bed (see game/data/expansion/audio_mix.json), so the switch exists to match
+## the recording instead of the build.
+func title_music_enabled() -> bool:
+	var music: Variant = _mix_cfg.get("music", {})
+	if music is Dictionary:
+		var title: Variant = (music as Dictionary).get("title_music", {})
+		if title is Dictionary:
+			return bool((title as Dictionary).get("enabled", true))
+	return true
+
+
 func _autostart_scene_bed() -> void:
 	var tree: SceneTree = get_tree()
-	if tree == null or _beds.has("rain"):
+	if tree == null:
 		return
 	var scene: Node = tree.current_scene
 	if scene == null:
 		return
-	if scene.scene_file_path.ends_with("main_menu.tscn"):
-		start_bed("rain", 1.2)
+	if not scene.scene_file_path.ends_with("main_menu.tscn"):
+		return
+	# T03: authored players are restored on every scene that owns the mix, so a
+	# loading screen that is dismissed without a map change cannot leave the
+	# gameplay buses muted.
+	end_loading_silence()
+	if has_authored_audio():
+		# T03: the startscreen authors 12 placed emitters + 12 room beds
+		# (BeautifulCorner_Startscreen_P), a base ambience event
+		# (MainMenu_C.AmbientEvent_Play = Play_Amb_MainMenu) and the title theme
+		# (MainMenu_C.MusicEvent_Play).
+		if _emitter_map == "main_menu" and not _emitters.is_empty():
+			return
+		start_map_emitters("main_menu")
+		var base_ev: String = scene_bed_event("main_menu")
+		if base_ev.is_empty():
+			base_ev = _ww_string("room_bed_for", ["main_menu"])
+		if not base_ev.is_empty():
+			start_event_bed("authored_room", base_ev, _ambience_trim_db(base_ev), 1.2)
+		if title_music_enabled():
+			start_music("title", NAN, 1.2)
+		return
+	if _beds.has("rain"):
+		return
+	start_bed("rain", 1.2)
+
+
+## T03: authored base ambience event for a scene, from the TAT-2 overlay
+## (scene_beds.<key>.event). Empty when the scene has none.
+func scene_bed_event(scene_key: String) -> String:
+	var beds: Variant = _mix_cfg.get("scene_beds", {})
+	if not (beds is Dictionary):
+		return ""
+	var row: Variant = (beds as Dictionary).get(scene_key.to_lower(), {})
+	if not (row is Dictionary):
+		return ""
+	return str((row as Dictionary).get("event", ""))
 
 
 ## Effective bed level on the bus for QA/reporting: target dBFS, applied trim
@@ -997,9 +1748,12 @@ func play_vo(cue: String, pos: Variant = null) -> bool:
 	if stream == null:
 		return false
 	if pos is Vector3:
-		_play_stream_3d(stream, pos, VO_DB, BUS_DIALOGUE)
+		_play_stream_3d(stream, pos, VO_DB, BUS_DIALOGUE, str(pin[0]))
 	else:
 		_play_stream_2d(stream, BUS_DIALOGUE, VO_DB)
+	var sub: String = vo_subtitle(str(pin[0]))
+	if not sub.is_empty():
+		subtitle_shown.emit(sub)
 	return true
 
 
@@ -1020,7 +1774,7 @@ func _horn_second_blast(horn: AudioStream, pos: Vector3) -> void:
 	var scene: Node = tree.current_scene if tree != null else null
 	await get_tree().create_timer(0.15).timeout
 	if horn != null and get_tree() != null and get_tree().current_scene == scene:
-		_play_stream_3d(horn, pos, 0.0, BUS_SFX)
+		_play_stream_3d(horn, pos, 0.0, BUS_SFX, str((EXTRA_PINS["car_horn"] as Array)[0]))
 
 
 ## U2: calibrated play trims per bus. The old fire_event path played
@@ -1081,7 +1835,7 @@ func fire_event(event_name: String, pos: Vector3 = Vector3.ZERO, use_3d: bool = 
 	elif bus == BUS_MUSIC:
 		_play_stream_2d(stream, bus, MUSIC_FALLBACK_DB)
 	elif use_3d:
-		_play_stream_3d(stream, pos, 0.0, bus)
+		_play_stream_3d(stream, pos, 0.0, bus, ev)
 	else:
 		_play_stream_2d(stream, BUS_SFX, 0.0)
 	return true
@@ -1153,8 +1907,11 @@ func play_cue(cue: String, pos: Variant = null, duration_s: float = 0.0) -> bool
 		return true
 	if _cue_duplicate(key, pos):
 		return false
+	var ev: String = ""
+	if CUE_PINS.has(key):
+		ev = str((CUE_PINS[key] as Array)[0])
 	if pos is Vector3:
-		_play_stream_3d(stream, pos, 0.0, BUS_SFX)
+		_play_stream_3d(stream, pos, 0.0, BUS_SFX, ev)
 	else:
 		_play_stream_2d(stream, BUS_SFX, 0.0)
 	return true
@@ -1220,8 +1977,11 @@ func _replace_loop_cue(cue: String, stream: AudioStream, pos: Variant, duration_
 		p3.stream = loop_stream
 		p3.position = pos
 		p3.bus = BUS_SFX
-		p3.max_distance = MAX_DISTANCE_M
-		p3.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE
+		if CUE_PINS.has(cue):
+			_apply_authored_attenuation(p3, str((CUE_PINS[cue] as Array)[0]))
+		else:
+			p3.max_distance = MAX_DISTANCE_M
+			p3.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE
 		player = p3
 	else:
 		var p2: AudioStreamPlayer = AudioStreamPlayer.new()
@@ -1293,7 +2053,10 @@ func _play_at(key: String, pos: Vector3, volume_db: float) -> void:
 	_play_stream_3d(stream, pos, volume_db, BUS_SFX)
 
 
-func _play_stream_3d(stream: AudioStream, pos: Vector3, volume_db: float, bus: String) -> void:
+## T03: [param event_name] switches the player from the legacy 60 m
+## inverse-distance model to the authored radius/curve (RE-M-02) and enables
+## the occlusion probe (RE-M-03). Empty = legacy behaviour, unchanged.
+func _play_stream_3d(stream: AudioStream, pos: Vector3, volume_db: float, bus: String, event_name: String = "") -> void:
 	if stream == null or _shutdown:
 		return
 	_steal_voice_if_full("3d")
@@ -1302,10 +2065,17 @@ func _play_stream_3d(stream: AudioStream, pos: Vector3, volume_db: float, bus: S
 	var player := AudioStreamPlayer3D.new()
 	player.stream = stream
 	player.position = pos
-	player.volume_db = volume_db
 	player.bus = bus
-	player.max_distance = MAX_DISTANCE_M
-	player.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE
+	if event_name.is_empty():
+		player.max_distance = MAX_DISTANCE_M
+		player.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE
+		player.volume_db = volume_db
+	else:
+		_apply_authored_attenuation(player, event_name)
+		var occ_db: float = occlusion_gain_db(pos)
+		player.volume_db = volume_db + occ_db
+		if occ_db < 0.0:
+			player.attenuation_filter_cutoff_hz = occlusion_cutoff_hz()
 	add_child(player)
 	_voice_players.append(player)
 	_active_voices += 1

@@ -58,6 +58,11 @@ func _initialize() -> void:
 		return
 
 	# Start from a clean slate (the autoload may have autostarted a menu bed).
+	# T03: this suite pins the *legacy* bed-key fallback, so force it even when
+	# the integrator has regenerated data/generated/audio_wwise.json (the
+	# authored-emitter path is pinned separately by tests/test_audio_mix.gd).
+	OS.set_environment("TAT2_AUDIO_WWISE_JSON", "res://tests/fixtures/__absent__.json")
+	am.call("_load_wwise")
 	am.call("stop_all_beds", 0.0)
 	for cue: String in ["alarm_loop", "smoke_cloud", "lightbeam_hum"]:
 		am.call("stop_cue", cue)

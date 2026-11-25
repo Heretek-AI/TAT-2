@@ -1,0 +1,83 @@
+{
+  "schema": "tat2.audio_mix/1",
+  "note": "TAT-2 expansion overlay for audio runtime keys that are authoring decisions, not extracted data. Hand-authored, never generated. Read by game/src/core/audio_manager.gd; a missing or partial file keeps every default below. Every value is either copied from an authored Wwise row/event (then named) or labelled as a TAT-2 choice with its evidence.",
+  "music": {
+    "title_music": {
+      "enabled": true,
+      "event": "Play_Mus_MainTitleScreen",
+      "trim_db": -10.0,
+      "authored_by": "MainMenu_C.MusicEvent_Play = AkAudioEvent'Play_Mus_MainTitleScreen'; MusicEvent_Stop = 'Stop_Mus_MainTitleScreen'",
+      "evidence": "extracted/json/Maps/Menus/MainMenu/MainMenu.json (Music_Start/Music_Stop ubergraph)",
+      "conflict": "The 2026-11-24 port capture has a continuous tonal bed on the startscreen that matches neither this event's five media (waveform r<=0.05, L5-01) nor any port bed (band tilt +10..+13 dB vs the rain clip's -19.1 dB), and it is already audible during the engine boot splash and through the loading screen where loading_screen.gd:197 stops every bed. That layer is therefore capture-borne, not in-engine; the authored title music is enabled because the build authors it. Set enabled=false to match the recording instead.",
+      "status": "authored event, audibility on the captured screen unproven"
+    },
+    "mission_music": {
+      "enabled": false,
+      "why": "No map may play un-authored music, and the only authored mission-music drive is Music_Detection_MusicPlaying_RTPC + Play_Mus_TVT_Match_Generic_Mission_MX behind a state machine that the extraction does not resolve. The recorded reference run has zero BGM across the menu and the whole Guildhall infiltration. Gameplay call sites must use AudioManager.play_music_event() explicitly once their state is known.",
+      "available_events": [
+        "Play_Mus_TVT_Match_Generic_Mission_MX",
+        "Play_Mus_TVT_Tutorial_Generic_MX",
+        "Play_Mus_TutorialIntro_01",
+        "Play_Mus_GuardAlerted_Generic_01",
+        "Play_Mus_Guard_Searching_Suspense_Generic_MX",
+        "Play_Mus_Stinger_Quest_Complete",
+        "Play_Mus_Stinger_End_MX",
+        "Play_Mus_Stinger_EscapePoint_Riser",
+        "Play_Mus_EndMission_Escape",
+        "Play_Mus_EndMission_Caught",
+        "Play_Mus_EndGame_Start_MX",
+        "Play_Mus_EndMatch_MX_1m"
+      ]
+    }
+  },
+  "scene_beds": {
+    "main_menu": {
+      "event": "Play_Amb_MainMenu",
+      "trim_db": null,
+      "authored_by": "MainMenu_C.AmbientEvent_Play = AkAudioEvent'Play_Amb_MainMenu'",
+      "evidence": "extracted/json/Maps/Menus/MainMenu/MainMenu.json (ObjectProperty AmbientEvent_Play / Play_Amb_MainMenu.0, 26 media)",
+      "note": "The menu's authored base ambience. It replaces the pre-T03 'rain' bed key, which resolved to Amb_Weather_Rain_Impact_Puddle_Loop_Sml_03 (a 7.3 s puddle-impact loop), not a night-rain bed. trim_db null = use the measured bed trim for the event name (AudioManager._ambience_trim_db)."
+    }
+  },
+  "mix_states": {
+    "pause_duck": {
+      "db": -19.0,
+      "buses": ["Ambience", "SFX", "Music"],
+      "evidence": "AU4-05: 'ambience ducks -19 dB (-53 -> -72.4 dBFS by 03:42.6)'. The pre-T03 code ducked only Ambience, so any gameplay source on SFX/Music was untouched; the duck now covers every gameplay bus and leaves UI (pause clicks) and Dialogue (a line already speaking) up.",
+      "authored": true
+    },
+    "loading_silence": {
+      "enabled": true,
+      "fade_s": 0.0,
+      "mute_buses": ["Ambience", "SFX", "Music"],
+      "evidence": "AU1-03: 2.837 s of true digital zero at 01:04.94-01:07.78 and 'no loading music'. loading_screen.gd:197 already calls stop_all_beds(0.35); a 0.35 s fade cannot reach digital silence, so the manager additionally mutes the gameplay buses for the loading scene and restores them on the next scene.",
+      "authored": false,
+      "note": "fade_s=0 is a TAT-2 choice (the authored transition is a screen cut, not a fade); mute_buses is the smallest set that reaches digital zero when the game owns every source."
+    },
+    "scene_environment": {
+      "interior_reverb": "VERB_Cmn_Int_Room_Medium",
+      "exterior_reverb": "VERB_Cmn_Ext_World",
+      "indoor_ambience_step": null,
+      "evidence": "DefaultReverbAssignmentTable: 8.0 s -> VERB_Cmn_Ext_World, 0.45 s -> VERB_Cmn_Int_Room_Medium. indoor_ambience_step is deliberately null: the authored indoor/outdoor change is a per-room bed swap + aux-send change driven by TATSpatialAudioVolume brush geometry, which the extraction does not carry (no Brush bounds; Model vertices are not in the level tables). Inventing a dB step here would be fixing the mix by ear.",
+      "blocked_on": "T09 GEOMETRY (room volume bounds) for the per-room bed zones"
+    }
+  },
+  "occlusion": {
+    "enabled": true,
+    "wall_db": -12.0,
+    "min_cutoff_hz": 400.0,
+    "max_cutoff_hz": 20000.0,
+    "authored_loss": 1.0,
+    "evidence": "DefaultGeometrySurfacePropertiesTable: all 31 physical-material rows author TransmissionLoss = 1.0, i.e. 'no extra loss authored', so the model applies a documented TAT-2 wall attenuation and scales it by the authored multiplier: gain_db = wall_db * authored_loss, cutoff_hz = max_cutoff * authored_loss^2 clamped to [min_cutoff, max_cutoff]. wall_db is a TAT-2 choice; the multiplier and the 31 rows are authored.",
+    "note": "One ray per 3D one-shot from the listener to the source, ignoring hits closer than 0.4 m to either end so the floor under the player cannot muffle every cue."
+  },
+  "bus_gains_db": {
+    "Master": 0.0,
+    "Music": 0.0,
+    "SFX": 0.0,
+    "Ambience": 0.0,
+    "UI": 0.0,
+    "Dialogue": 0.0
+  },
+  "bus_gains_note": "Static authored-chain trims applied on top of the user slider, in dB. Zero today: the port's absolute level is the sliders' job (SAVE default 0.8 linear = -1.94 dB each), and the authored mix is carried by the Wwise bus volumes in audio_wwise.json. Do not use this table to fix loudness by ear; use it only for a measured, named correction."
+}

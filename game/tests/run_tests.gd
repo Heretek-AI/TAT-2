@@ -3105,7 +3105,8 @@ func _initialize() -> void:
 	else:
 		print("PASS: 34b Den lighting (hand_fills=", snappedf(p2_fill_sum, 0.01), "<=2.0, dark_amb=true, probes=1, no_red=true, 3/3 real deco GLBs)")
 
-	# 34c. Footprints: authored T_Decal_Footstep.png alpha mask, zero emission
+	# 34c. Footprints: authored footstep decal alpha mask (NS_MagicMarker_Footstep
+	# -> T_Crate_Decal_D alpha), zero emission
 	var p2_vfx: GDScript = load("res://src/core/vfx_manager.gd") as GDScript
 	var p2_fp_before: int = root.get_child_count()
 	p2_vfx.call("spawn_footprint_decal", Vector3.ZERO, Vector3.FORWARD, true)
@@ -3134,10 +3135,10 @@ func _initialize() -> void:
 			p2_fp_ok = (fp_mat.emission_enabled == false and fp_mat.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA and fp_tex != null and fp_alpha_ok)
 		p2_fp.queue_free()
 	if not p2_fp_ok:
-		printerr("FAIL: 34c Footprint decal T_Decal_Footstep alpha mask / zero emission (", p2_fp_dbg, ")")
+		printerr("FAIL: 34c Footprint decal authored-decal alpha mask / zero emission (", p2_fp_dbg, ")")
 		fails += 1
 	else:
-		print("PASS: 34c Footprint decal uses authored T_Decal_Footstep.png alpha mask with emission_enabled=false")
+		print("PASS: 34c Footprint decal uses the authored decal alpha mask (NS_MagicMarker_Footstep) with emission_enabled=false")
 
 	# 34d. Map table: +0.75 offset removed, token materials bound, tokens scaled to UE reference framing
 	var p2_tok_om: MeshInstance3D = p2_den.get_node_or_null("MapTokenOldManor") as MeshInstance3D

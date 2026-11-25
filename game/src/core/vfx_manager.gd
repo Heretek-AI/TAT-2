@@ -1,9 +1,13 @@
 class_name VfxManager
 extends RefCounted
 
-## APPROX_SHADER / REFERENCE_MATCHED procedural materials (HL-1). Each was
-## authored from the published KF frames, never from decompiled VM/shader
-## bytecode; the cooked UE graphs stay unread.
+## APPROX_SHADER procedural materials (HL-1) for the KF set-piece looks. Each
+## was authored from the published KF frames, never from decompiled VM/shader
+## bytecode; the cooked UE graphs stay unread. The four set-piece builders that
+## use them (spawn_foyer_security_beam, spawn_arcane_ward, spawn_vine_lock,
+## spawn_crimson_alarm) are QA_ONLY probe/capture helpers with no gameplay
+## caller; their doc comments name the in-game carrier for each look. See
+## build/qa/review_20261124/findings/RE-E-vfx.md (RE-E-08).
 const SMOKE_SHADER: Shader = preload("res://src/core/tat_smoke.gdshader")
 const BEAM_SHADER: Shader = preload("res://src/core/tat_beam.gdshader")
 const WARD_SHADER: Shader = preload("res://src/core/tat_ward.gdshader")
@@ -408,7 +412,18 @@ static func persistent_vfx_count() -> int:
 	return _persistent_vfx.size()
 
 
-const FOOTSTEP_MASK_PATH: String = "res://assets/ue/Raw/Art/UI/Icons/T_Decal_Footstep.png"
+## Authored footstep decal: `NS_MagicMarker_Footstep`
+## (Art/Effects/Thiefvision_Footprints) is a mesh renderer whose material
+## `MI_FootSteps_ThievesTrail` binds this diffuse (game/data/generated/vfx/
+## systems.json + materials.json). The port keeps its luminance->alpha bake:
+## _get_footstep_mask_tex() turns the authored diffuse's luminance into the
+## decal alpha (128 px, cached once per session).
+##
+## Known remaining gap (RE-E-11; gameplay-owned by T10, not implemented here):
+## the authored carrier is a thief-vision footprint trail, so whether the port
+## should show it only under xray is a gameplay decision. This constant fixes
+## the texture source only.
+const FOOTSTEP_DECAL_PATH: String = "res://assets/ue/Raw/Art/Environment/Props/Containers/Crates/T_Crate_Decal_D.png"
 static var _footstep_mask_tex: Texture2D = null
 ## V4: every footstep allocated a PlaneMesh + StandardMaterial3D + Tween +
 ## 6.1 s timer (sprinting = dozens of live transparent quads). The mesh is
@@ -440,37 +455,50 @@ static func _get_footstep_mask_tex() -> Texture2D:
 	if _footstep_mask_tex != null:
 		return _footstep_mask_tex
 	var src_img: Image = null
-	if ResourceLoader.exists(FOOTSTEP_MASK_PATH):
-		var loaded: Variant = load(FOOTSTEP_MASK_PATH)
+	if ResourceLoader.exists(FOOTSTEP_DECAL_PATH):
+		var loaded: Variant = load(FOOTSTEP_DECAL_PATH)
 		if loaded is Texture2D:
 			src_img = (loaded as Texture2D).get_image()
-	if (src_img == null or src_img.is_empty()) and FileAccess.file_exists(FOOTSTEP_MASK_PATH):
-		src_img = Image.load_from_file(ProjectSettings.globalize_path(FOOTSTEP_MASK_PATH))
+	if (src_img == null or src_img.is_empty()) and FileAccess.file_exists(FOOTSTEP_DECAL_PATH):
+		src_img = Image.load_from_file(ProjectSettings.globalize_path(FOOTSTEP_DECAL_PATH))
 	if src_img == null or src_img.is_empty():
 		return null
 	var img: Image = src_img.duplicate() as Image
 	if img.is_compressed():
 		img.decompress()
+	# The authored decal ships a real alpha mask (T_Crate_Decal_D: 716k of 1M
+	# texels at alpha 0), so use it as-is. The luminance bake is the fallback for
+	# an opaque source only: its mid-grey RGB (luma 0.19-0.45) would otherwise
+	# turn the footprint silhouette into a flat grey rectangle.
+	var has_alpha: bool = img.detect_alpha() != Image.ALPHA_NONE
 	if img.get_format() != Image.FORMAT_RGBA8:
 		img.convert(Image.FORMAT_RGBA8)
 	# V6: the old path ran get_pixel/set_pixel per texel at full authored
-	# resolution on the first wet step (main-thread stall). A 128 px
-	# luminance mask keeps the footprint alpha the test pins (corner < 0.05,
-	# max > 0.5) while the loop drops to <= 16k px; the result is still
-	# cached once per session below, and prewarm_footstep_mask() lets the
-	# loader hide even that behind the loading screen.
+	# resolution on the first wet step (main-thread stall). A 128 px mask keeps
+	# the footprint alpha the test pins (corner < 0.05, max > 0.5) while the loop
+	# drops to <= 16k px; the result is still cached once per session below, and
+	# prewarm_footstep_mask() lets the loader hide even that behind the loading
+	# screen.
 	if img.get_width() > 128 or img.get_height() > 128:
 		img.resize(128, 128, Image.INTERPOLATE_BILINEAR)
-		print("FootstepMask: downscaled ", src_img.get_width(), "x", src_img.get_height(), " -> 128x128 for one-time alpha bake")
-	var w: int = img.get_width()
-	var h: int = img.get_height()
-	for y: int in range(h):
-		for x: int in range(w):
-			var c: Color = img.get_pixel(x, y)
-			var lum: float = clampf(c.r * 0.299 + c.g * 0.587 + c.b * 0.114, 0.0, 1.0)
-			img.set_pixel(x, y, Color(1.0, 1.0, 1.0, lum))
+		print("FootstepMask: downscaled ", src_img.get_width(), "x", src_img.get_height(), " -> 128x128 for one-time alpha mask")
+	if has_alpha:
+		var w0: int = img.get_width()
+		var h0: int = img.get_height()
+		for y0: int in range(h0):
+			for x0: int in range(w0):
+				img.set_pixel(x0, y0, Color(1.0, 1.0, 1.0, img.get_pixel(x0, y0).a))
+	else:
+		var w: int = img.get_width()
+		var h: int = img.get_height()
+		for y: int in range(h):
+			for x: int in range(w):
+				var c: Color = img.get_pixel(x, y)
+				var lum: float = clampf(c.r * 0.299 + c.g * 0.587 + c.b * 0.114, 0.0, 1.0)
+				img.set_pixel(x, y, Color(1.0, 1.0, 1.0, lum))
 	_footstep_mask_tex = ImageTexture.create_from_image(img)
-	print("FootstepMask: baked one-time alpha mask (", img.get_width(), "x", img.get_height(), ") from ", FOOTSTEP_MASK_PATH, ")")
+	print("FootstepMask: baked one-time alpha mask (", img.get_width(), "x", img.get_height(),
+		", source_alpha=", has_alpha, ") from ", FOOTSTEP_DECAL_PATH)
 	return _footstep_mask_tex
 
 
@@ -830,11 +858,15 @@ static func _add_smoke_layer(root: Node3D, layer_name: String, amount: int, life
 	return mat
 
 
-## R3 APPROXIMATE / REFERENCE_MATCHED (HL-1): KF27 foyer security beams (S24).
+## QA_ONLY (probe/capture), RE-E-08: KF27 foyer security beams (S24).
 ## Two crisp horizontal white volumetric beams span wall-to-wall from the
 ## mid-height circular emitter (KF27#1) with the glowing cyan diamond node
-## above the far doors (KF27#3). Sweep/trip logic lives in HL-3 territory;
-## this only dresses the S24 look. Never an extraction.
+## above the far doors (KF27#3). No gameplay caller exists: only
+## build/qa/probe_vfx.gd and build/qa/capture_w1_trim_neon.gd call it. In game
+## the look is the authored detector cards paired with
+## game/src/devices/security_beam.gd, whose fallback cylinder uses
+## tat_beam.gdshader. Sweep/trip logic lives in HL-3 territory; this only
+## dresses the S24 look. Never an extraction.
 static func spawn_foyer_security_beam(parent: Node, emitter_pos: Vector3, far_pos: Vector3, beam_gap: float = 0.7, ttl: float = 0.0) -> Node3D:
 	if parent == null:
 		return null
@@ -953,10 +985,13 @@ static func _aim_node(node: Node3D, a: Vector3, b: Vector3) -> void:
 	node.basis = Basis(x_axis, y_axis, z_axis)
 
 
-## R3 APPROXIMATE / REFERENCE_MATCHED (HL-1): KF28 purple arcane ward (S25).
+## QA_ONLY (probe/capture), RE-E-08: KF28 purple arcane ward (S25).
 ## Faceted crystalline barrier sealing the foyer archway (KF28#2) plus the
 ## sustained ward hum lighting. Shard layout is eyeballed from the frame;
-## nothing here decodes a Niagara system. Never an extraction.
+## nothing here decodes a Niagara system. No gameplay caller exists: only
+## build/qa/probe_vfx.gd and build/qa/capture_w1_trim_neon.gd call it. In game
+## the ward is game/src/devices/ward_zone.gd, one BoxMesh at the authored zone
+## size with tat_ward.gdshader. Never an extraction.
 static func spawn_arcane_ward(parent: Node, pos: Vector3, facing_yaw: float = 0.0, width: float = 3.2, height: float = 2.6, ttl: float = 0.0) -> Node3D:
 	# V2: ward energies (wash 1.6, veil 2.4, shards 2.8) sat above every other
 	# cap with no shared budget. Capped + asserted here; stacked wards stay
@@ -1051,9 +1086,11 @@ static func spawn_arcane_ward(parent: Node, pos: Vector3, facing_yaw: float = 0.
 	return root
 
 
-## R3 APPROXIMATE / REFERENCE_MATCHED (HL-1): KF28 green vine lock (S25).
-## Emissive thorny vines across the Basement Stairs doorway (KF28#5).
-## Placement/trigger is HL-3 gameplay logic; this only dresses the look.
+## QA_ONLY (probe/capture), RE-E-08: KF28 green vine lock (S25).
+## Emissive thorny vines across the Basement Stairs doorway (KF28#5). No
+## gameplay caller exists (only the QA probe/capture scripts) and no in-game
+## carrier exists at all: the port has no vine-lock device or interactable, so
+## this look is unreachable in play. Placement/trigger is HL-3 gameplay logic.
 ## Never an extraction.
 static func spawn_vine_lock(parent: Node, pos: Vector3, facing_yaw: float = 0.0, width: float = 2.0, height: float = 2.4, ttl: float = 0.0) -> Node3D:
 	if parent == null:
@@ -1106,12 +1143,15 @@ static func _register_or_free(root: Node3D, parent: Node, ttl: float, label: Str
 		_register_persistent_vfx(root, label)
 
 
-## R3 APPROXIMATE / REFERENCE_MATCHED (HL-1): KF29 crimson alarm wash (S26).
+## QA_ONLY (probe/capture), RE-E-08: KF29 crimson alarm wash (S26).
 ## Intense crimson spotlight from the wall security fixture over the slate
 ## stairs (KF29#2, 03:38.20-03:39.60), with a strobing volumetric cone so the
 ## alarm reads as a sweeping wash rather than a point light. The crimson cast
-## is authored light, not a particle effect. ttl frees the fixture wash.
-## Never an extraction.
+## is authored light, not a particle effect. ttl frees the fixture wash. No
+## gameplay caller exists (only build/qa/probe_vfx.gd): in game the crimson cue
+## is game/src/devices/alarm_eye.gd's unshaded red emissive flash, and
+## tat_alarm.gdshader has no game-side consumer today (this builder is its only
+## user). Never an extraction.
 static func spawn_crimson_alarm(parent: Node, fixture_pos: Vector3, target_pos: Vector3, ttl: float = 6.0) -> Node3D:
 	# V1: the old strobe peaked at 5.4 (base 4.5 + overshoot) while a second
 	# fade tween drove the same light_energy — last-writer-wins flicker/pop.
@@ -1139,7 +1179,7 @@ static func spawn_crimson_alarm(parent: Node, fixture_pos: Vector3, target_pos: 
 	spot.spot_attenuation = 1.0
 	root.add_child(spot)
 	_aim_spot(spot, offset)
-	# APPROX_SHADER / REFERENCE_MATCHED (HL-1): TIME-strobed volume cone.
+	# APPROX_SHADER (HL-1; QA_ONLY per RE-E-08): TIME-strobed volume cone.
 	var cone_mesh: CylinderMesh = CylinderMesh.new()
 	cone_mesh.top_radius = 0.12
 	cone_mesh.bottom_radius = clampf(dist * tan(deg_to_rad(16.0)), 0.25, 4.0)

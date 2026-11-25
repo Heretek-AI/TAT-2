@@ -7,6 +7,8 @@ extends Node
 const _VfxManager: GDScript = preload("res://src/core/vfx_manager.gd")
 const MobileProfile: GDScript = preload("res://src/core/mobile_profile.gd")
 const WeatherProfile: GDScript = preload("res://src/core/weather_profile.gd")
+## W9-P1: authored UE `AggGeom` collision (TAT2_COLLISION=authored, default).
+const AuthoredCollision: GDScript = preload("res://src/core/collision/authored_collision.gd")
 const NiagaraParams: GDScript = preload("res://src/core/vfx/niagara_params.gd")
 const NiagaraLibrary: GDScript = preload("res://src/core/vfx/niagara_library.gd")
 const NiagaraCuller: GDScript = preload("res://src/core/vfx/level_niagara_culler.gd")
@@ -51,6 +53,17 @@ var _mesh_mats_db_lower: Dictionary = {}
 var _tex_cache: Dictionary = {}
 var _std_mat_cache: Dictionary = {}
 var _mesh_res_cache: Dictionary = {}
+## W9-P1: per-load placement count per UE path (filled by `_build_draw_items`);
+## only the authored-collision cost cap reads it, so a dense mesh can choose a
+## coalesced encoding without any per-instance work.
+var _col_path_counts: Dictionary = {}
+## W9-P1 hard guard: a malformed authored payload (or a future regression) must
+## never wedge a headless run on the shared Godot lock. A probe sets an absolute
+## `Time.get_ticks_msec()` deadline; collider emission stops at it and reports
+## `col_deadline_hit` instead of continuing. `_col_progress` prints one line
+## every 128 collision paths so a wedge is localised to the last mesh name.
+var _col_deadline_ms: int = 0
+var _col_progress: bool = false
 ## SM_Guildhall_Sign split-mesh cache (ue_path -> ArrayMesh).
 var _guildhall_sign_split_cache: Dictionary = {}
 var _prof_glb_ms: int = 0
@@ -185,16 +198,25 @@ const MAX_TOTAL_SHAPES: int = 32000
 ## T6 collider-budget partition (AUDIT.md T6 + core P1-L4): the single 32k
 ## shape budget is split so curb ribbons can never starve building colliders
 ## (or vice versa). Buildings carry world integrity (walls/floors), so they
-## keep 28000; curb ribbons emit 3 boxes per segment across at most
-## CURB_MAX_SPLINES (64) splines and are capped at 4000. The partitions sum
-## exactly to MAX_TOTAL_SHAPES, so the global cap still holds as a backstop.
-const MAX_BUILDING_SHAPES: int = 28000
-# FTUE is a whole-city tutorial map: 34,201 authored meshes against the 28,000
+## keep the larger share; curb ribbons emit 3 boxes per segment across at most
+## CURB_MAX_SPLINES (64) splines. The partitions sum exactly to
+## MAX_TOTAL_SHAPES, so the global cap still holds as a backstop.
+##
+## W9-P1 authored collision (measured on the 15-file Guildhall ground set,
+## `build/qa/w9_collision_ab.sh`): the authored AggGeom needs 30,873 building
+## shapes (+27 curb, +1 landscape = 30,901 total) against the old 28,000/4,000
+## split, so 4,000 curb slots for a partition that peaks at 27 would have
+## dropped 2,873 authored colliders. Split moved to 31,400/600: 527 building
+## shapes of headroom over the measurement (>= 512) and 22x the measured curb
+## peak. MAX_TOTAL_SHAPES stays 32,000 and the `run_tests` invariant
+## (`col_shapes < 32000`) is unchanged. The FTUE map keeps its own pair below.
+const MAX_BUILDING_SHAPES: int = 31400
+# FTUE is a whole-city tutorial map: 34,201 authored meshes against the 31,400
 # default. Raising the budget for this map (logged, never silent) keeps every
 # gameplay collider and the safe-room start instead of dropping 6,201 shapes.
 const MAX_BUILDING_SHAPES_FTUE: int = 40000
 const MAX_TOTAL_SHAPES_FTUE: int = 44000
-const MAX_CURB_SHAPES: int = 4000
+const MAX_CURB_SHAPES: int = 600
 const LIGHT_DISTANCE_FADE_BEGIN: float = 28.0
 const LIGHT_DISTANCE_FADE_LENGTH: float = 12.0
 const PROGRESS_YIELD_EVERY: int = 64
@@ -254,6 +276,7 @@ const LIGHT_ENERGY_FLOOR: float = 0.01
 ## the 2500-lumen train/security spots from stacking into a white blob while
 ## leaving the 15-lumen median at 1.0.
 const LIGHT_ENERGY_SOFT_CEIL: float = 3.5
+
 
 ## Den-only authored practical pass-through (FIX_SPEC P0 #1). The five
 ## ThievesDen_Geo spots keep their authored 0.75x intensity response,
@@ -1856,53 +1879,150 @@ func _get_mesh_and_shape(ue_path: String) -> Dictionary:
 				if "sm_guildhall_sign" in low_u:
 					m = _split_guildhall_sign_mesh(ue_path, m)
 				out["mesh"] = m
-				var is_nonblocking: bool = ("rug" in low_u or "carpet" in low_u or "placemat" in low_u or "paper" in low_u or "poster" in low_u or "scroll" in low_u or "curtain" in low_u or "cloth" in low_u or "drape" in low_u or "sheet" in low_u or "cable" in low_u or "wire" in low_u or "rope" in low_u or "ivy" in low_u or "vine" in low_u or "foliage" in low_u)
-				# Fast BoxShape3D for props; trimesh for walkable surfaces and large structural geometry.
-				# Stair runs must present tread faces instead of a full-AABB wall (an
-				# SM_StairsCity4x2m box is a flat-topped 2 m wall; an open-riser
-				# SM_Stairs_Industrial run boxes into a 0.69 m wall at the low end).
-				# Lipped sidewalk slabs must collide at the authored walk band
-				# instead of floating a flat box top at trim height
-				# (SM_SidewalkCityStone_6m: walk band ~0, box top +0.2).
-				# Cheek walls / rails / posts / banisters / upstairs masses keep
-				# boxes; tiny and non-blocking props keep the old fast path.
-				var is_stair_run: bool = "stair" in low_u and not ("rail" in low_u or "boundary" in low_u or "post" in low_u or "banister" in low_u or "balustrade" in low_u or "upstairs" in low_u)
-				var is_walk_surface: bool = "sidewalk" in low_u
-				# Door frames/doorways are modelled with an opening, but their
-				# AABB is solid. The old box path sealed every open doorway with
-				# an invisible wall 0.5-0.9 m in front of the leaf. A trimesh
-				# follows the modelled hole and is cheap for ~200 frames.
-				var is_door_aperture: bool = "door" in low_u or "archway" in low_u
-				# W6L: pitched /roofs/ modules must not box. See ROOF_BOX_TOKENS /
-				# _measure_roof_top_coverage; the split is measured from this mesh.
-				var is_roof_surface: bool = _is_roof_convex_surface(low_u, m)
-				var _s0: int = Time.get_ticks_msec()
-				var aabb := m.get_aabb()
-				var sz := aabb.size
-				if not is_nonblocking and sz.length() > 0.45:
-					if is_door_aperture:
-						out["shape"] = m.create_trimesh_shape()
-						out["shape_offset"] = Vector3.ZERO
-					elif is_roof_surface and sz.length() < 12.0:
-						# Convex hull: the authored pitch (ridge, hips, dormer
-						# cheeks) becomes walkable collision instead of a flat
-						# plateau at AABB top. Points are mesh-local, so no
-						# centre offset (boxes are centred, hulls are not).
-						out["shape"] = m.create_convex_shape()
-						out["shape_offset"] = Vector3.ZERO
-					elif sz.length() < 12.0 and not is_stair_run and not is_walk_surface:
-						var bx := BoxShape3D.new()
-						bx.size = Vector3(maxf(sz.x, 0.1), maxf(sz.y, 0.1), maxf(sz.z, 0.1))
-						out["shape"] = bx
-						out["shape_offset"] = aabb.get_center()
-					else:
-						out["shape"] = m.create_trimesh_shape()
-						out["shape_offset"] = Vector3.ZERO
+				# W9-P1: authored collision (default) reads the UE AggGeom; the
+				# AABB/name heuristic is built only in `aabb` mode and for the
+				# meshes that have no authored answer at all, so authored mode
+				# never pays for trimeshes/hulls it does not use.
+				if _collision_mode() == "aabb":
+					var heur_a: Dictionary = _heuristic_shape(m, low_u)
+					out["shape"] = heur_a["shape"]
+					out["shape_offset"] = heur_a["shape_offset"]
+				else:
+					_fill_authored_shape(out, ue_path, m)
+					if not out.has("shapes"):
+						var heur_b: Dictionary = _heuristic_shape(m, low_u)
+						out["shape"] = heur_b["shape"]
+						out["shape_offset"] = heur_b["shape_offset"]
 		inst.free()
 	if out.get("shape") is Shape3D:
 		(out["shape"] as Shape3D).set_meta("ue_mesh", ue_path)
+	if out.has("shapes"):
+		for s_var: Variant in (out["shapes"] as Array):
+			if s_var is Shape3D:
+				(s_var as Shape3D).set_meta("ue_mesh", ue_path)
 	_mesh_res_cache[ue_path] = out
 	return out
+
+
+## Collision mode for mesh colliders. `authored` (default) consumes the UE
+## simple-collision `AggGeom` payload (`mesh_collision.gd`); `aabb` keeps the
+## pre-W9 render-mesh heuristic as the A/B control. An unknown value warns once
+## (never per mesh) and falls back to `authored`, which is the uploaded default.
+static var _collision_mode_warned: bool = false
+
+
+static func _collision_mode() -> String:
+	var raw: String = OS.get_environment("TAT2_COLLISION").strip_edges().to_lower()
+	if raw == "" or raw == "authored":
+		return "authored"
+	if raw == "aabb":
+		return "aabb"
+	if not _collision_mode_warned:
+		_collision_mode_warned = true
+		push_warning("[level_loader] unknown TAT2_COLLISION='%s' (expected authored|aabb); using authored" % raw)
+	return "authored"
+
+
+## The pre-W9 shape heuristic, moved verbatim out of `_get_mesh_and_shape`:
+## name tokens + AABB size decide box / trimesh / convex for one mesh. Used for
+## `TAT2_COLLISION=aabb` and for the meshes that have no authored collision at
+## all (10 of the 79 collidable Guildhall paths, all `/Game/Test/` graybox).
+func _heuristic_shape(m: Mesh, low_u: String) -> Dictionary:
+	var out: Dictionary = {"shape": null, "shape_offset": Vector3.ZERO}
+	var is_nonblocking: bool = ("rug" in low_u or "carpet" in low_u or "placemat" in low_u or "paper" in low_u or "poster" in low_u or "scroll" in low_u or "curtain" in low_u or "cloth" in low_u or "drape" in low_u or "sheet" in low_u or "cable" in low_u or "wire" in low_u or "rope" in low_u or "ivy" in low_u or "vine" in low_u or "foliage" in low_u)
+	# Fast BoxShape3D for props; trimesh for walkable surfaces and large structural geometry.
+	# Stair runs must present tread faces instead of a full-AABB wall (an
+	# SM_StairsCity4x2m box is a flat-topped 2 m wall; an open-riser
+	# SM_Stairs_Industrial run boxes into a 0.69 m wall at the low end).
+	# Lipped sidewalk slabs must collide at the authored walk band
+	# instead of floating a flat box top at trim height
+	# (SM_SidewalkCityStone_6m: walk band ~0, box top +0.2).
+	# Cheek walls / rails / posts / banisters / upstairs masses keep
+	# boxes; tiny and non-blocking props keep the old fast path.
+	var is_stair_run: bool = "stair" in low_u and not ("rail" in low_u or "boundary" in low_u or "post" in low_u or "banister" in low_u or "balustrade" in low_u or "upstairs" in low_u)
+	var is_walk_surface: bool = "sidewalk" in low_u
+	# Door frames/doorways are modelled with an opening, but their
+	# AABB is solid. The old box path sealed every open doorway with
+	# an invisible wall 0.5-0.9 m in front of the leaf. A trimesh
+	# follows the modelled hole and is cheap for ~200 frames.
+	var is_door_aperture: bool = "door" in low_u or "archway" in low_u
+	# W6L: pitched /roofs/ modules must not box. See ROOF_BOX_TOKENS /
+	# _measure_roof_top_coverage; the split is measured from this mesh.
+	var is_roof_surface: bool = _is_roof_convex_surface(low_u, m)
+	var aabb := m.get_aabb()
+	var sz := aabb.size
+	if not is_nonblocking and sz.length() > 0.45:
+		if is_door_aperture:
+			out["shape"] = m.create_trimesh_shape()
+			out["shape_offset"] = Vector3.ZERO
+		elif is_roof_surface and sz.length() < 12.0:
+			# Convex hull: the authored pitch (ridge, hips, dormer
+			# cheeks) becomes walkable collision instead of a flat
+			# plateau at AABB top. Points are mesh-local, so no
+			# centre offset (boxes are centred, hulls are not).
+			out["shape"] = m.create_convex_shape()
+			out["shape_offset"] = Vector3.ZERO
+		elif sz.length() < 12.0 and not is_stair_run and not is_walk_surface:
+			var bx := BoxShape3D.new()
+			bx.size = Vector3(maxf(sz.x, 0.1), maxf(sz.y, 0.1), maxf(sz.z, 0.1))
+			out["shape"] = bx
+			out["shape_offset"] = aabb.get_center()
+		else:
+			out["shape"] = m.create_trimesh_shape()
+			out["shape_offset"] = Vector3.ZERO
+	return out
+
+
+## Fills the authored-collision fields for one mesh. `out["shape"]` keeps the
+## heuristic value only when the mesh has no authored answer at all; every other
+## source replaces it (`shapes`/`shape_offsets` carry the real per-instance set,
+## `shape` is the single-shape compatibility field for the tests/probes that
+## read `_get_mesh_and_shape` directly).
+func _fill_authored_shape(out: Dictionary, ue_path: String, m: Mesh) -> void:
+	# The load-total placement count only feeds the per-mesh cost cap; the
+	# pre-pass in `_build_draw_items` fills it, direct callers default to 1.
+	var n: int = maxi(int(_col_path_counts.get(ue_path, 1)), 1)
+	var res: Dictionary = AuthoredCollision.resolve(ue_path, n) as Dictionary
+	var source: String = str(res.get("source", "absent"))
+	out["col"] = {
+		"source": source,
+		"elements": int(res.get("elements", 0)),
+		"convex": int(res.get("convex", 0)),
+		"reduced": bool(res.get("reduced", false)),
+		"enabled": str(res.get("enabled", "QueryAndPhysics")),
+	}
+	match source:
+		"hull", "prims":
+			var shapes: Array = res["shapes"] as Array
+			var offs: Array = res["offsets"] as Array
+			out["shapes"] = shapes
+			out["shape_offsets"] = offs
+			# Single-shape compatibility field: legacy callers (roof/stair probes,
+			# `_get_mesh_and_shape` consumers) get the first authored shape. The
+			# draw path itself always uses `shapes`/`shape_offsets`, so a
+			# multi-hull mesh is never reduced to this field.
+			if not shapes.is_empty():
+				out["shape"] = shapes[0]
+				out["shape_offset"] = (offs[0] as Transform3D).origin
+			else:
+				out["shape"] = null
+				out["shape_offset"] = Vector3.ZERO
+		"complex_default":
+			# UE `CTF_UseDefaultCollision` + no simple geometry collides with the
+			# render triangles; that trimesh IS the authored answer (re-a1 §B6).
+			var ts: Shape3D = m.create_trimesh_shape()
+			out["shapes"] = [ts]
+			out["shape_offsets"] = [Transform3D.IDENTITY]
+			out["shape"] = ts
+			out["shape_offset"] = Vector3.ZERO
+		"no_collision":
+			out["shapes"] = [] as Array
+			out["shape_offsets"] = [] as Array
+			out["shape"] = null
+			out["shape_offset"] = Vector3.ZERO
+		_:
+			# "absent": no authored data exists; `out` already holds the heuristic.
+			pass
 
 
 ## L1 accounting: name the UE path + resolved file, count, cap the stored
@@ -2849,6 +2969,25 @@ func _new_build_ctx(parent: Node3D, light_probe: Node, generate_collision: bool)
 		"building_dropped": 0,
 		"curb_dropped": 0,
 		"dropped_colliders": [] as Array,
+		## W9-P1 authored-collision accounting (distinct paths unless noted).
+		"col_paths": {} as Dictionary,
+		"col_path_counts": {} as Dictionary,
+		"col_authored_hull": 0,
+		"col_authored_prims": 0,
+		"col_absent": 0,
+		"col_no_collision": 0,
+		"col_query_only": 0,
+		"col_reduced": 0,
+		"col_complex_default": 0,
+		"col_elements": 0,
+		"col_convex": 0,
+		"col_authored_instances": 0,
+		"col_authored_shapes": 0,
+		"col_heuristic_shapes": 0,
+		## W9-P1 probe safety (see `_col_deadline_ms`): 0 = no deadline.
+		"col_deadline_ms": _col_deadline_ms,
+		"col_deadline_hit": 0,
+		"col_progress": _col_progress,
 		"occluders": 0,
 		"missing_meshes": [] as Array,
 		"missing_mesh_count": 0,
@@ -4070,6 +4209,87 @@ func _add_collider(ctx: Dictionary, cell: Vector2i, shape: Shape3D, tr: Transfor
 	ctx[part_key] = part_count + 1
 
 
+## W9-P1: emit N authored shapes for one placed instance. Same per-body bucket,
+## same building/total caps and the same `ue_mesh` meta as `_add_collider`,
+## which is called once per (instance, shape) so the budget can never be
+## bypassed by a multi-element mesh. `offset` is the element-local transform
+## (rotation + centre) that `_add_collider` composes with the instance transform.
+func _add_collider_shapes(ctx: Dictionary, cell: Vector2i, shapes: Array, offsets: Array, trs: Array, count: int, kind: String = "building", label: String = "") -> void:
+	var n: int = mini(count, trs.size())
+	ctx["col_authored_shapes"] = int(ctx.get("col_authored_shapes", 0)) + shapes.size() * n
+	var deadline: int = int(ctx.get("col_deadline_ms", 0))
+	for i: int in range(n):
+		if deadline > 0 and Time.get_ticks_msec() > deadline:
+			# Named, counted stop: never a silent wedge (see `_col_deadline_ms`).
+			ctx["col_deadline_hit"] = int(ctx.get("col_deadline_hit", 0)) + 1
+			return
+		var tr_c: Transform3D = trs[i]
+		if absf(tr_c.basis.determinant()) < 0.0001:
+			continue
+		for s: int in range(shapes.size()):
+			var sh: Shape3D = shapes[s] as Shape3D
+			if sh == null:
+				continue
+			var off: Transform3D = (offsets[s] as Transform3D) if s < offsets.size() else Transform3D.IDENTITY
+			_add_collider(ctx, cell, sh, tr_c * off, Vector3.ZERO, kind, label)
+
+
+## W9-P1: per-load collision-source accounting, once per UE path (the draw item
+## loop visits a path many times). Feeds the `AUTHORED_COLLISION` summary, the
+## returned stats dict and `probe_collision_authored.gd`.
+## `col_authored_hull` counts every mesh whose collider came from authored data
+## (element hulls, primitive coalescing or UE complex-as-simple); `col_authored_prims`
+## is the subset encoded as one primitive/coalesced shape per instance.
+func _count_collision_path(ctx: Dictionary, mp: String, info: Dictionary) -> void:
+	var seen: Dictionary = ctx.get("col_paths", {}) as Dictionary
+	if seen.has(mp):
+		return
+	seen[mp] = true
+	ctx["col_paths"] = seen
+	if bool(ctx.get("col_progress", false)) and seen.size() % 128 == 0:
+		print("COL_PROGRESS paths=%d shapes=%d bodies=%d last=%s" % [
+			seen.size(), int(ctx.get("collision_shapes", 0)),
+			int(ctx.get("collision_bodies", 0)), mp])
+	var col: Dictionary = info.get("col", {}) as Dictionary
+	var source: String = str(col.get("source", "absent"))
+	var total: int = int((ctx.get("col_path_counts", {}) as Dictionary).get(mp, 1))
+	ctx["col_placed_instances"] = int(ctx.get("col_placed_instances", 0)) + total
+	if source == "absent":
+		ctx["col_absent"] = int(ctx.get("col_absent", 0)) + 1
+		return
+	ctx["col_authored_hull"] = int(ctx.get("col_authored_hull", 0)) + 1
+	ctx["col_elements"] = int(ctx.get("col_elements", 0)) + int(col.get("elements", 0))
+	ctx["col_convex"] = int(ctx.get("col_convex", 0)) + int(col.get("convex", 0))
+	ctx["col_authored_instances"] = int(ctx.get("col_authored_instances", 0)) + total
+	if source == "prims" or source == "complex_default":
+		ctx["col_authored_prims"] = int(ctx.get("col_authored_prims", 0)) + 1
+	if source == "complex_default":
+		ctx["col_complex_default"] = int(ctx.get("col_complex_default", 0)) + 1
+	if source == "no_collision":
+		ctx["col_no_collision"] = int(ctx.get("col_no_collision", 0)) + 1
+	if bool(col.get("reduced", false)):
+		ctx["col_reduced"] = int(ctx.get("col_reduced", 0)) + 1
+	if str(col.get("enabled", "")) == "QueryOnly":
+		# Port decision: Godot has no per-shape query-only flag, so the shape is
+		# kept on the world layer (a StaticBody3D answers traces and physics).
+		# RE-A1 §B5 proposes a dedicated layer for HidingSpot bushes; that is a
+		# gameplay-mask change, not an encoding change, and is left as a risk.
+		ctx["col_query_only"] = int(ctx.get("col_query_only", 0)) + 1
+
+
+## W9-P1: heuristic-path shape demand, once per UE path. Only used where the
+## per-instance shape count is not known to `_count_collision_path` (the spline
+## loft and the `absent` meshes, whose single shape comes from the AABB branch).
+func _count_heuristic_shapes(ctx: Dictionary, mp: String, per_instance: int) -> void:
+	var seen: Dictionary = ctx.get("col_heur_paths", {}) as Dictionary
+	if seen.has(mp):
+		return
+	seen[mp] = true
+	ctx["col_heur_paths"] = seen
+	var total: int = int((ctx.get("col_path_counts", {}) as Dictionary).get(mp, 1))
+	ctx["col_heuristic_shapes"] = int(ctx.get("col_heuristic_shapes", 0)) + per_instance * total
+
+
 ## T6 fail-loud export-time accounting hook. Call after a level build (or
 ## from the export pipeline over the _finalize result dict) to fail closed on
 ## collider overflow: returns true when nothing was dropped and the total is
@@ -4328,26 +4548,47 @@ func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> 
 
 	var is_clutter: bool = _has_token(low_mp, CLUTTER_TOKENS)
 	if not use_cpd and not hidden_in_game and bool(item.get("collide", false)) and bool(ctx.get("generate_collision", false)) and not is_clutter:
-		var shape: Shape3D = info["shape"] as Shape3D
+		var cell: Vector2i = item.get("cell", Vector2i.ZERO)
 		if not spline_item.is_empty():
+			# A lofted spline piece cannot share the rigid authored hull, so the
+			# deformed mesh keeps the spline trimesh in every mode.
 			var spline_shape: Dictionary = spline_shape_for(mesh)
-			shape = spline_shape["shape"] as Shape3D
-			info = {"shape": shape, "shape_offset": spline_shape["shape_offset"]}
-		if shape != null:
-			var soff: Vector3 = info.get("shape_offset", Vector3.ZERO)
-			var cell: Vector2i = item.get("cell", Vector2i.ZERO)
-			var den_split: bool = _is_den_window_wall(low_mp) and shape is BoxShape3D
-			for i2 in range(count):
-				var tr_c: Transform3D = trs[i2]
-				if absf(tr_c.basis.determinant()) < 0.0001:
-					continue
-				if den_split:
-					_add_den_window_split(ctx, cell, tr_c, shape as BoxShape3D, soff, "building", mp)
-				elif low_mp.find("thievesden") >= 0 and shape is BoxShape3D:
-					var grounded: Array = _ground_den_prop_shape(low_mp, shape as BoxShape3D, tr_c, soff)
-					_add_collider(ctx, cell, grounded[0] as Shape3D, tr_c, grounded[1] as Vector3, "building", mp)
-				else:
-					_add_collider(ctx, cell, shape, tr_c, soff, "building", mp)
+			var sshape: Shape3D = spline_shape["shape"] as Shape3D
+			_count_collision_path(ctx, mp, info)
+			if sshape != null:
+				var soff_s: Vector3 = spline_shape.get("shape_offset", Vector3.ZERO)
+				_count_heuristic_shapes(ctx, mp, 1)
+				for i2: int in range(count):
+					var tr_s: Transform3D = trs[i2]
+					if absf(tr_s.basis.determinant()) < 0.0001:
+						continue
+					_add_collider(ctx, cell, sshape, tr_s, soff_s, "building", mp)
+		elif info.has("shapes"):
+			# W9-P1 authored set: one CollisionShape3D per (shape, offset) on the
+			# same StaticBody3D bucket, sharing the per-path Shape3D resources.
+			var a_shapes: Array = info["shapes"] as Array
+			var a_offsets: Array = info.get("shape_offsets", []) as Array
+			_count_collision_path(ctx, mp, info)
+			if not a_shapes.is_empty():
+				_add_collider_shapes(ctx, cell, a_shapes, a_offsets, trs, count, "building", mp)
+		else:
+			var shape: Shape3D = info["shape"] as Shape3D
+			if shape != null:
+				var soff: Vector3 = info.get("shape_offset", Vector3.ZERO)
+				var den_split: bool = _is_den_window_wall(low_mp) and shape is BoxShape3D
+				_count_collision_path(ctx, mp, info)
+				_count_heuristic_shapes(ctx, mp, 1)
+				for i2b: int in range(count):
+					var tr_c: Transform3D = trs[i2b]
+					if absf(tr_c.basis.determinant()) < 0.0001:
+						continue
+					if den_split:
+						_add_den_window_split(ctx, cell, tr_c, shape as BoxShape3D, soff, "building", mp)
+					elif low_mp.find("thievesden") >= 0 and shape is BoxShape3D:
+						var grounded: Array = _ground_den_prop_shape(low_mp, shape as BoxShape3D, tr_c, soff)
+						_add_collider(ctx, cell, grounded[0] as Shape3D, tr_c, grounded[1] as Vector3, "building", mp)
+					else:
+						_add_collider(ctx, cell, shape, tr_c, soff, "building", mp)
 
 	if not use_cpd and not hidden_in_game and not is_clutter and not far_item and _qualifies_as_occluder(low_mp, mesh):
 		for i3 in range(count):
@@ -4784,7 +5025,38 @@ func _build_merged_cell_node(entry: Dictionary, parent: Node3D, ctx: Dictionary)
 ## Shared build path for tests: plan merges first (so a failed cell leaves its
 ## originals untouched), build merged nodes, then every original item. Items
 ## folded into a cell only emit collision/occluders here.
+## W9-P1: one cheap pre-pass so the authored-collision cost cap sees the real
+## placement count per path (draw items are split per 32 m cell, so a single
+## item's count is NOT the load total). Runs before ANY `_get_mesh_and_shape`
+## call — the sync (`_build_draw_items`) and async (`load_sublevels_async`)
+## paths both go through `_prepare_merge_plan`, which resolves meshes. No JSON
+## work happens here; it is a pure item census.
+func _fill_col_path_counts(items: Array, ctx: Dictionary) -> void:
+	if not (ctx.get("col_path_counts", {}) as Dictionary).is_empty():
+		return
+	var path_counts: Dictionary = {}
+	for pc_var: Variant in items:
+		if not (pc_var is Dictionary):
+			continue
+		var pc_item: Dictionary = pc_var as Dictionary
+		if not bool(pc_item.get("collide", false)) or bool(pc_item.get("hidden_in_game", false)):
+			continue
+		var pc_trs: Variant = pc_item.get("trs", [])
+		if not (pc_trs is Array):
+			continue
+		var pc_cpds: Variant = pc_item.get("cpds", [])
+		if pc_cpds is Array and not (pc_cpds as Array).is_empty() and (pc_cpds as Array).size() == (pc_trs as Array).size():
+			continue
+		var pc_mp: String = str(pc_item.get("mp", ""))
+		if _has_token(pc_mp.to_lower(), CLUTTER_TOKENS):
+			continue
+		path_counts[pc_mp] = int(path_counts.get(pc_mp, 0)) + (pc_trs as Array).size()
+	ctx["col_path_counts"] = path_counts
+	_col_path_counts = path_counts
+
+
 func _build_draw_items(items: Array, parent: Node3D, ctx: Dictionary) -> int:
+	_fill_col_path_counts(items, ctx)
 	var plan: Array = _prepare_merge_plan(items, ctx)
 	var total: int = 0
 	for entry_var: Variant in plan:
@@ -5407,6 +5679,34 @@ func _log_perf_census(parent: Node3D, ctx: Dictionary, result: Dictionary, json_
 
 func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dictionary:
 	result["mesh_instances"] = mesh_instances
+	# W9-P1: authored-collision source accounting for the A/B probe. `hull` is
+	# every mesh whose collider came from authored data (hulls, primitive
+	# coalescing or UE complex-as-simple); `prims` is the subset encoded as one
+	# coalesced/primitive shape per instance. `absent` is the meshes with no
+	# authored answer at all (heuristic fallback, counted, never silent).
+	for _col_key: String in ["col_authored_hull", "col_authored_prims", "col_absent",
+			"col_no_collision", "col_query_only", "col_reduced", "col_complex_default",
+			"col_elements", "col_convex", "col_authored_instances", "col_authored_shapes",
+			"col_heuristic_shapes", "col_path_counts", "col_placed_instances",
+			"col_deadline_hit"]:
+		result[_col_key] = ctx.get(_col_key, 0) if _col_key != "col_path_counts" else (ctx.get(_col_key, {}) as Dictionary).size()
+	result["collision_mode"] = _collision_mode()
+	if int(ctx.get("col_authored_hull", 0)) + int(ctx.get("col_absent", 0)) > 0:
+		var ainst: int = maxi(int(ctx.get("col_authored_instances", 0)), 1)
+		var ast: Dictionary = AuthoredCollision.stats() as Dictionary
+		print("AUTHORED_COLLISION meshes=%d hull=%d prims=%d convex=%d absent=%d no_collision=%d query_only=%d reduced=%d shapes_per_instance_avg=%.2f elements=%d load_ms=%d" % [
+			int(ctx.get("col_authored_hull", 0)) + int(ctx.get("col_absent", 0)),
+			int(ctx.get("col_authored_hull", 0)),
+			int(ctx.get("col_authored_prims", 0)),
+			int(ctx.get("col_convex", 0)),
+			int(ctx.get("col_absent", 0)),
+			int(ctx.get("col_no_collision", 0)),
+			int(ctx.get("col_query_only", 0)),
+			int(ctx.get("col_reduced", 0)),
+			float(ctx.get("col_authored_shapes", 0)) / float(ainst),
+			int(ctx.get("col_elements", 0)),
+			int(ast.get("load_ms", 0)),
+		])
 	if _roughness_bake_count > 0 or _roughness_cache_hits > 0:
 		print("ROUGHNESS_BAKE count=%d pixels=%d ms=%d bytes=%d hits=%d (L8 low+g*(high-low), full-res, process cache)" % [
 			_roughness_bake_count, _roughness_bake_px, _roughness_bake_ms,
@@ -6426,6 +6726,7 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 	load_progress.emit(0.52, "Building curbs...")
 
 	var items: Array = _collect_draw_items(acc)
+	_fill_col_path_counts(items, ctx)
 	var merge_plan: Array = _prepare_merge_plan(items, ctx)
 	var total_inst: int = 0
 	for entry_var: Variant in merge_plan:

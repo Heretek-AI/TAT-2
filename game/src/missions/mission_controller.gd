@@ -1304,6 +1304,10 @@ func interact(_actor: Node) -> void:
 	tele_area.set("mission_ctrl", self)
 	add_child(tele_area)
 
+	# L4-13: guard the authored west opening after the telescope exists, so the
+	# ponder camera/Area3D contract is measured against the final scene.
+	_add_den_west_window_blocker(floor_y)
+
 	# Trunk Decoration Pedestal + Gramophone
 	_spawn_thieves_den_props(anchor)
 	# P0.1: the wardrobe shelf gear (knockout grenade + stun truncheon) carries
@@ -1369,6 +1373,49 @@ func interact(_actor: Node) -> void:
 			if rotated:
 				player.rotation = Vector3(0.0, atan2(-hub_dir.x, -hub_dir.z), 0.0)
 			print("TAT-2 den spawn hub-facing: misalign_before_deg=", snappedf(misalign_deg, 0.1), " rotated_to_face=", rotated, " table=", _den_map_table_pos)
+
+
+## L4-13 / W9-P2 B3: the framed west opening is a legacy escape route. The
+## 0.745 m sill is inside the auto-mantle band (0.45..4.0 m) and the plank
+## roof beyond is walkable, so a player who walks into the opening used to
+## mantle out of the Den. On the current tree SM_ThievesDen_Glass builds
+## authored concave collision (W9-P1 7939a61) and already stops the walk, so
+## this is a defense-in-depth guard at the authored opening plane: if the
+## glass collision is ever dropped again (the state the L4-13 record was
+## captured on) the opening must not become a traversal route.
+##
+## The body is a designer blocking volume, not a wall: layer 1 / mask 0, no
+## mesh, tagged "blocking_volume" so try_auto_mantle / _try_step_up /
+## wall-climb / zipwire treat a hit as no hit while move_and_slide still
+## walks into it. It runs from the floor to the opening top because the first
+## mantle wall probe samples only 0.30 m above the feet, below the 41.0 m
+## sill; a box that started at the sill would be missed and the mantle would
+## still fire through the opening. The footprint matches the measured opening
+## (z 270.4..272.4), stays 1.14 m inboard of the telescope Area3D centre and
+## is invisible, so the ponder camera (1.24 m in front of it) is unaffected.
+func _add_den_west_window_blocker(floor_y: float) -> void:
+	if get_node_or_null("DenWestWindowBlocker") != null:
+		return
+	const THICKNESS: float = 0.12
+	const OPENING_HALF_H: float = 2.05 # anchor y 43.05 +/- 2.05 = 41.0..45.1 m
+	const OPENING_HALF_Z: float = 1.0 # anchor z 271.4 +/- 1.0 = 270.4..272.4 m
+	var top_y: float = DEN_WEST_WINDOW_ANCHOR.y + OPENING_HALF_H
+	var bottom_y: float = minf(floor_y, top_y - OPENING_HALF_H * 2.0) - 0.05
+	var blocker := StaticBody3D.new()
+	blocker.name = "DenWestWindowBlocker"
+	blocker.collision_layer = 1
+	blocker.collision_mask = 0
+	blocker.position = Vector3(
+		DEN_WEST_WINDOW_ANCHOR.x - THICKNESS * 0.5,
+		(bottom_y + top_y) * 0.5,
+		DEN_WEST_WINDOW_ANCHOR.z)
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(THICKNESS, top_y - bottom_y, OPENING_HALF_Z * 2.0)
+	var col := CollisionShape3D.new()
+	col.shape = shape
+	blocker.add_child(col)
+	blocker.add_to_group("blocking_volume")
+	add_child(blocker)
 
 
 ## Den paper P2: the authored map parchment (SM_Map_ThievesDen, MI_Map_ThievesDen)

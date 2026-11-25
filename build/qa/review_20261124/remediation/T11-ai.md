@@ -262,9 +262,11 @@ critical range the ramp returns `INF` and the guard goes straight to COMBAT).
   `SawIncorrectObject` one `Fixer`. `DT_StimProperties` (8 rows) includes
   **`GuardDowned` Heavy**.
 - **S3 confirm (red):** the broadcast is a single loop over the emitted signal
-  (`rg -c "noise_record_emitted.connect"` → one per guard) with no registry;
-  suite 91e measured 4 listeners → 4 SUSPICIOUS before this wave (it now
-  asserts 2/2).
+  (`rg -c "noise_record_emitted.connect"` → one per guard) with no registry,
+  no cap and no role: every listener in radius reaches
+  `if state == Alertness.NEUTRAL: _set_state(Alertness.SUSPICIOUS)`
+  (`fb93f84:1595-1597`). The red proof is the code path; suite 91e now measures
+  the fixed behaviour (4 listeners → 2 investigators + 2 standby).
 - **S4 fix:** `game/src/ai/reaction_roles.gd` (investigator cap/grace per
   severity, Phonograph 0, one Chaser, deterministic arrival order — the EQS
   scoring query is not recoverable, so no invented score); `NoiseBus` stamps a
@@ -295,8 +297,9 @@ critical range the ramp returns `INF` and the guard goes straight to COMBAT).
   instance scale). **No attenuation value is recoverable** (no `AkAttenuation`
   asset, no wall-penalty field), so only a binary wall/portal rule is defensible.
 - **S3 confirm (red):** `hearing_data.reachable_stim_tags(<pre-fix tag set>)`
-  = **8**; a wall between a guard and a bottle impact left the guard
-  `SUSPICIOUS` (no occlusion path existed).
+  = **8**; and `_hear` had no raycast at all (`rg -n acoustic_portal game/src`
+  → the accessor only), so a wall could not block any stimulus — a code-path
+  proof, no runtime measurement available without reverting.
 - **S4 fix:** `game/src/ai/hearing_occlusion.gd` — one segment test
   (listener eye → source chest, world layer 1): blocked unless the crossing
   point lies inside an authored portal OBB **and** no closed `swinging_doors`

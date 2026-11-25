@@ -607,11 +607,16 @@ func _consistency_checks(res: Dictionary, stats: Dictionary) -> Dictionary:
 	var bodies_expected: int = int(res.get("collision_bodies", -1))
 	var shapes_expected: int = int(res.get("collision_shapes", -1))
 	var niagara_systems: int = int(res.get("niagara_systems", -1))
+	var niagara_nodes: int = int(res.get("niagara_nodes", -1))
 	var mesh_instances: int = int(res.get("mesh_instances", -1))
 	checks["lights"] = _check_exact("loader light_count (excl. GI fills)", lights_expected, int(stats["loader_lights"]))
 	checks["occluders"] = _check_exact("loader occluder_count", occl_expected, int(stats["occluders"]))
 	checks["decals"] = _check_exact("loader decal_count", decal_expected, int(stats["decals"]))
-	checks["niagara_systems"] = _check_exact("loader niagara_systems", niagara_systems, int(stats["niagara_nodes"]))
+	# T12-VFX chunks level Niagara per (system, 32 m cell), so one authored system
+	# now owns several MultiMeshInstance3D nodes. The node count is the exact
+	# contract; the system count is recorded as information only.
+	checks["niagara_nodes"] = _check_exact("loader niagara_nodes (chunked)", niagara_nodes, int(stats["niagara_nodes"]))
+	checks["niagara_systems"] = _check_info("loader niagara_systems vs niagara nodes", niagara_systems, int(stats["niagara_nodes"]))
 	# StaticBody3D count can exceed the loader counter for authored extras the
 	# loader adds outside _add_collider (Guildhall safe-room slab). Never less.
 	checks["collision_bodies"] = _check_at_least("loader collision_bodies", bodies_expected, int(stats["collision_bodies"]))
@@ -642,7 +647,7 @@ func _pick_loader_counts(res: Dictionary) -> Dictionary:
 		"chunk_count", "mesh_instances", "light_count", "rect_light_count",
 		"occluder_count", "collision_bodies", "collision_shapes",
 		"building_shapes", "decal_count", "decal_skipped",
-		"niagara_placements", "niagara_spawned", "niagara_systems",
+		"niagara_placements", "niagara_spawned", "niagara_systems", "niagara_nodes",
 		"fog_volumes_built", "landscape_count", "missing_mesh_count",
 		"corrupt_mesh_count", "fallback_material_count",
 	]

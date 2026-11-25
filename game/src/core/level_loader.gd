@@ -7,6 +7,9 @@ extends Node
 const _VfxManager: GDScript = preload("res://src/core/vfx_manager.gd")
 const MobileProfile: GDScript = preload("res://src/core/mobile_profile.gd")
 const WeatherProfile: GDScript = preload("res://src/core/weather_profile.gd")
+const NiagaraParams: GDScript = preload("res://src/core/vfx/niagara_params.gd")
+const NiagaraLibrary: GDScript = preload("res://src/core/vfx/niagara_library.gd")
+const NiagaraCuller: GDScript = preload("res://src/core/vfx/level_niagara_culler.gd")
 const LANDSCAPE_SHADER: Shader = preload("res://src/core/tat_landscape.gdshader")
 const EMISSIVE_CPD_SHADER: Shader = preload("res://src/core/tat_emissive_cpd.gdshader")
 const GLASS_SHADER: Shader = preload("res://src/core/tat_glass.gdshader")
@@ -144,9 +147,9 @@ const TEX_BUDGET_MAX_DIM: int = 1024
 const ALPHA_CRITICAL_TEXTURES: Array[String] = [
 	"res://assets/ue/Raw/Art/Environment/Storefront/GlassDecals/T_Storefront_GlassDecalsA.png",
 ]
-## Authored Niagara systems with bAutoActivate=false. Candelabra extinguish
-## puffs are not live flames; spawning them doubles every candelabra. The
-## policy is global: 387 of the 3,695 authored placements are these systems.
+## Authored Niagara activation is per component (`NiagaraComponent.bAutoActivate`),
+## not a name blacklist: see `game/src/core/vfx/niagara_params.gd`. The old
+## one-entry table survives only as documentation of the system it covered.
 const NIAGARA_INACTIVE_ASSETS: Array[String] = [
 	"ns_candelabras_flame_out",
 ]
@@ -3000,19 +3003,21 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 			}
 			den_exit_doors.append(rec)
 
-	# Den candelabras carry authored NS_Candelabras_Flame placements. When
-	# those exist, the loader must not also spawn its procedural candle quad
-	# on the same mesh (doubled flames, FIX_SPEC P0 #7). Scoped to the Den so
-	# other maps keep their current loader VFX.
-	var authored_candle_vfx: bool = false
-	if json_path.to_lower().find("thievesden") >= 0:
-		for n_v: Variant in data_dict.get("niagara", []):
-			if not (n_v is Dictionary):
-				continue
-			var n_asset: String = str((n_v as Dictionary).get("asset", "")).to_lower()
-			if "candelabras_flame" in n_asset and not n_asset.ends_with("_flame_out"):
-				authored_candle_vfx = true
-				break
+	# Every map's candelabras carry authored NS_Candelabras_Flame placements, so
+	# the loader must not also spawn its procedural candle quad at the same wick
+	# (doubled flames, RE-E-09). Collect the authored wick positions and test each
+	# candle mesh against them: a per-wick test, not the old Den-only file scope,
+	# so Guildhall and OldManor de-duplicate too.
+	var authored_flame_positions: Array = []
+	for n_v: Variant in data_dict.get("niagara", []):
+		if not (n_v is Dictionary):
+			continue
+		var n_asset: String = str((n_v as Dictionary).get("asset", "")).to_lower()
+		if "candelabras_flame" in n_asset and not n_asset.ends_with("_flame_out"):
+			var fpos_v: Variant = (n_v as Dictionary).get("pos", null)
+			if fpos_v is Array and (fpos_v as Array).size() >= 3:
+				var fpos: Array = fpos_v as Array
+				authored_flame_positions.append(Vector3(float(fpos[0]), float(fpos[1]), float(fpos[2])))
 	for m in data_dict.get("meshes", []):
 		if not (m is Dictionary):
 			continue
@@ -3181,8 +3186,12 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 				wick_y = 0.55
 			wick_y *= tr.basis.get_scale().y
 			if not authored_candle_vfx:
-				_VfxManager.spawn_candle_flame(parent, prop_pos + Vector3(0.0, wick_y, 0.0))
-				_note_expansion_placement(parent, "candle_flame", result)
+				var wick: Vector3 = prop_pos + Vector3(0.0, wick_y, 0.0)
+				if _authored_flame_near(authored_flame_positions, wick):
+					result["candle_flames_suppressed"] = int(result.get("candle_flames_suppressed", 0)) + 1
+				else:
+					_VfxManager.spawn_candle_flame(parent, wick)
+					_note_expansion_placement(parent, "candle_flame", result)
 		if "wardrobe" in low_mp or "bureau" in low_mp or "armoire" in low_mp:
 			var ward_arr: Array = result["wardrobe_positions"]
 			ward_arr.append(prop_pos)
@@ -5449,6 +5458,9 @@ func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dict
 	result["fog_volumes_built"] = int(ctx.get("fog_volumes_built", 0))
 	result["niagara_spawned"] = int(ctx.get("niagara_spawned", 0))
 	result["niagara_systems"] = int(ctx.get("niagara_systems", 0))
+	result["niagara_nodes"] = int(ctx.get("niagara_nodes", 0))
+	result["niagara_sprites"] = int(ctx.get("niagara_sprites", 0))
+	result["niagara_params_applied"] = int(ctx.get("niagara_params_applied", 0))
 	result["niagara_inactive_skipped"] = int(ctx.get("niagara_inactive_skipped", 0))
 	result["spline_count"] = int(ctx.get("spline_count", 0))
 	result["curb_built"] = int(ctx.get("curb_built", 0))
@@ -5852,106 +5864,253 @@ func _store_level_extras(acc: Dictionary, ctx: Dictionary) -> void:
 ## Never registers bounce fills with light_probe (Suite 36/36b) or group
 ## "den_hand_fills" (Suite 34b), and never mutates ambient_light_energy or
 ## adjustment_brightness (Suites 17 & 34b).
-## Spawn every active authored Niagara placement through one MultiMesh per
-## NS_* system: 3,695 authored -> 3,308 active -> 36 nodes (36 draw calls).
-## NIAGARA_INACTIVE_ASSETS skips 387 bAutoActivate=false extinguish puffs.
-## The tint/size encode the system family; the shader animates per-instance phase.
+## Spawn every authored-active Niagara placement as one instanced billboard per
+## placement (T12-VFX; findings RE-E-02/03/04/10/14).
+##
+## Chain of truth, per placement:
+##   1. `bAutoActivate` on the owning component (decoded from the extraction by
+##      `niagara_params.gd`); a placement whose own component states a flag wins.
+##      Placements whose Blueprint inherits the component fall back to the
+##      authored event-gated set (30 systems), so 3,695 authored placements now
+##      resolve to 1,048 live instances instead of 3,308.
+##   2. Per-instance authoring: the placement `scale` multiplies the billboard,
+##      and a decoded `User.Scale` (a UE centimetre size) replaces the class band.
+##   3. Colour: the decoded user colour (Color1 / EffectColor / ParticleColor...),
+##      then the renderer material's authored vector, then the counted fallback.
+##   4. Sprite: `systems.json`'s resolved renderer texture, sampled only when the
+##      measured mask table says it is a soft mask (`sprite_masks.gd`).
+##   5. Culling: one MultiMesh per (system, 32 m XZ chunk), each registered with
+##      `level_niagara_culler.gd`, so instances beyond 60 m stop drawing.
 func _spawn_level_niagara(acc: Dictionary, ctx: Dictionary) -> void:
 	var parent: Node = ctx.get("parent") as Node
 	if parent == null:
 		return
-	var map_hint: String = str(ctx.get("map_hint", ""))
-	var groups: Dictionary = {}
-	for r: Variant in (acc.get("niagara", []) as Array):
-		if not (r is Dictionary):
+	var records: Array = acc.get("niagara", []) as Array
+	var ctx_skip: int = 0
+	var ctx_params: int = 0
+	var ctx_tint_param: int = 0
+	var ctx_tint_material: int = 0
+	var ctx_tint_fallback: int = 0
+	# Decode only the Blueprints this map's placements name, once per process.
+	var sources: Array = []
+	var seen_src: Dictionary = {}
+	for r_v: Variant in records:
+		if not (r_v is Dictionary):
 			continue
-		var asset: String = str((r as Dictionary).get("asset", ""))
+		var src: String = str((r_v as Dictionary).get("source", ""))
+		var sep: int = src.find("::")
+		var file: String = src.substr(0, sep) if sep >= 0 else src
+		if file != "" and not seen_src.has(file):
+			seen_src[file] = true
+			sources.append(file)
+	var params_handle: Dictionary = NiagaraParams.prepare(sources)
+	NiagaraLibrary.ensure_loaded()
+	# asset -> {"chunks": {Vector2i: {"trs": Array, "cols": Array}}, "abs": bool}
+	var groups: Dictionary = {}
+	for r_v: Variant in records:
+		if not (r_v is Dictionary):
+			continue
+		var r: Dictionary = r_v as Dictionary
+		var asset: String = str(r.get("asset", ""))
 		if asset == "":
 			continue
-		# FIX_SPEC P0 #7: skip authored bAutoActivate=false systems globally.
-		# `NS_Candelabras_Flame_Out` is the extinguish puff, not a live flame;
-		# spawning it doubles every candelabra on every map (387 placements).
-		var asset_name: String = asset.get_file().to_lower()
-		if NIAGARA_INACTIVE_ASSETS.has(asset_name):
-			ctx["niagara_inactive_skipped"] = int(ctx.get("niagara_inactive_skipped", 0)) + 1
+		var state: Dictionary = NiagaraParams.resolve(params_handle, r)
+		var auto_v: Variant = state.get("auto", null)
+		var active: bool
+		if auto_v is bool:
+			active = bool(auto_v)
+		else:
+			active = not NiagaraParams.is_event_gated(asset)
+		if not active:
+			ctx_skip += 1
 			continue
+		var params: Dictionary = state.get("params", {}) as Dictionary
+		if not params.is_empty():
+			ctx_params += 1
+		var pos_arr: Array = r.get("pos", [0, 0, 0]) as Array
+		var b_arr: Variant = r.get("basis", [])
+		var basis := Basis()
+		if b_arr is Array and (b_arr as Array).size() == 9:
+			var b: Array = b_arr as Array
+			basis = Basis(
+				Vector3(float(b[0]), float(b[1]), float(b[2])),
+				Vector3(float(b[3]), float(b[4]), float(b[5])),
+				Vector3(float(b[6]), float(b[7]), float(b[8])),
+			)
+		var pl_scale := Vector3.ONE
+		var sc_v: Variant = r.get("scale", null)
+		if sc_v is Array and (sc_v as Array).size() >= 3:
+			var sc: Array = sc_v as Array
+			pl_scale = Vector3(float(sc[0]), float(sc[1]), float(sc[2]))
+			if pl_scale.x <= 0.0 or pl_scale.y <= 0.0:
+				pl_scale = Vector3.ONE
+		# Authored per-instance size. `User.Scale` is a UE centimetre pair in the
+		# candle system (5, 10) -> 5 x 10 cm; clamp so a stray value cannot make a
+		# kilometre quad. Systems that carry it size absolute and skip the band.
+		var user_scale := Vector2.ONE
+		var abs_scale: bool = false
+		var us_v: Variant = params.get("Scale", null)
+		if us_v is Vector2:
+			var us: Vector2 = us_v as Vector2
+			user_scale = Vector2(maxf(us.x * 0.01, 0.01), maxf(us.y * 0.01, 0.01))
+			abs_scale = true
+		elif us_v is Vector3:
+			var us3: Vector3 = us_v as Vector3
+			user_scale = Vector2(maxf(us3.x * 0.01, 0.01), maxf(us3.y * 0.01, 0.01))
+			abs_scale = true
+		elif us_v is float:
+			user_scale = Vector2(maxf(float(us_v), 0.01), maxf(float(us_v), 0.01))
+		var tint := Color(1.0, 1.0, 1.0, 1.0)
+		var pc: Color = _niagara_param_colour(params)
+		if pc.a > 0.0:
+			tint = pc
+			ctx_tint_param += 1
+		else:
+			var mc: Color = NiagaraLibrary.material_tint(asset)
+			if mc.a > 0.0:
+				tint = mc
+				ctx_tint_material += 1
+			else:
+				tint = NiagaraLibrary.fallback_tint(asset)
+				ctx_tint_fallback += 1
+		tint.a = clampf(tint.a, 0.02, 1.0) * NIAGARA_ADDITIVE_ALPHA
+		var p := Vector3(float(pos_arr[0]), float(pos_arr[1]), float(pos_arr[2]))
+		var cell := Vector2i(int(floor(p.x / CHUNK_SIZE)), int(floor(p.z / CHUNK_SIZE)))
+		var inst_scale := Vector3(pl_scale.x * user_scale.x, pl_scale.y * user_scale.y, 1.0)
 		if not groups.has(asset):
-			groups[asset] = []
-		(groups[asset] as Array).append(r)
+			groups[asset] = {"chunks": {}, "abs": abs_scale}
+		var grp: Dictionary = groups[asset] as Dictionary
+		if abs_scale:
+			grp["abs"] = true
+		var chunks: Dictionary = grp["chunks"] as Dictionary
+		if not chunks.has(cell):
+			chunks[cell] = {"trs": [] as Array, "cols": [] as Array}
+		var bucket: Dictionary = chunks[cell] as Dictionary
+		(bucket["trs"] as Array).append(Transform3D(basis.scaled(inst_scale), p))
+		(bucket["cols"] as Array).append(tint)
+		if bool(ctx.get("niagara_log", false)):
+			var log: Array = ctx.get("niagara_instance_log", []) as Array
+			if log.is_empty():
+				ctx["niagara_instance_log"] = log
+			log.append({"a": str(asset).get_file(), "p": p, "t": tint,
+				"s": Vector2(inst_scale.x, inst_scale.y)})
+	ctx["niagara_inactive_skipped"] = ctx_skip
 	if groups.is_empty():
 		ctx["niagara_spawned"] = 0
 		ctx["niagara_systems"] = 0
+		ctx["niagara_nodes"] = 0
+		ctx["niagara_sprites"] = 0
+		ctx["niagara_params_applied"] = ctx_params
 		return
 	var shader: Shader = load("res://src/core/level_niagara.gdshader") as Shader
+	var culler: Node3D = NiagaraCuller.new() as Node3D
+	culler.name = "LevelNiagaraCuller"
+	parent.add_child(culler)
+	ctx["niagara_culler"] = culler
 	var total: int = 0
+	var nodes: int = 0
+	var sprites: int = 0
 	for asset: Variant in groups.keys():
-		var recs: Array = groups[asset]
-		if recs.is_empty():
-			continue
-		var quad := QuadMesh.new()
-		var mm := MultiMesh.new()
-		mm.transform_format = MultiMesh.TRANSFORM_3D
-		mm.mesh = quad
-		mm.instance_count = recs.size()
-		for i: int in range(recs.size()):
-			var rec: Dictionary = recs[i] as Dictionary
-			var pos_arr: Array = rec.get("pos", [0, 0, 0]) as Array
-			var b_arr: Variant = rec.get("basis", [])
-			var basis := Basis()
-			if b_arr is Array and (b_arr as Array).size() == 9:
-				var b: Array = b_arr as Array
-				basis = Basis(
-					Vector3(float(b[0]), float(b[1]), float(b[2])),
-					Vector3(float(b[3]), float(b[4]), float(b[5])),
-					Vector3(float(b[6]), float(b[7]), float(b[8])),
-				)
-			var p := Vector3(float(pos_arr[0]), float(pos_arr[1]), float(pos_arr[2]))
-			mm.set_instance_transform(i, Transform3D(basis, p))
+		var grp2: Dictionary = groups[asset] as Dictionary
+		var info: Dictionary = NiagaraLibrary.info(str(asset))
+		var sprite_path: String = str(info.get("sprite_path", ""))
+		var base_size: float = 1.0 if bool(grp2.get("abs", false)) 			else float(info.get("base_size", 0.12))
 		var mat := ShaderMaterial.new()
 		mat.shader = shader
-		mat.set_shader_parameter("tint", _niagara_tint(str(asset), map_hint))
-		mat.set_shader_parameter("base_size", _niagara_size(str(asset)))
-		var mmi := MultiMeshInstance3D.new()
-		mmi.name = "LevelNiagara_" + str(asset).get_file().replace(".", "_")
-		mmi.multimesh = mm
-		mmi.material_override = mat
-		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		parent.add_child(mmi)
-		total += recs.size()
+		mat.set_shader_parameter("tint", Color(1.0, 1.0, 1.0, 1.0))
+		mat.set_shader_parameter("base_size", base_size)
+		mat.set_shader_parameter("use_sprite", false)
+		if sprite_path != "":
+			var tex: Texture2D = _load_tex(sprite_path)
+			if tex != null:
+				mat.set_shader_parameter("sprite_tex", tex)
+				mat.set_shader_parameter("use_sprite", true)
+				sprites += 1
+		var sys_name: String = str(asset).get_file().replace(".", "_")
+		var chunks2: Dictionary = grp2["chunks"] as Dictionary
+		for cell_v: Variant in chunks2.keys():
+			var cell: Vector2i = cell_v as Vector2i
+			var bucket2: Dictionary = chunks2[cell_v] as Dictionary
+			var trs: Array = bucket2["trs"] as Array
+			var cols: Array = bucket2["cols"] as Array
+			if trs.is_empty():
+				continue
+			var quad := QuadMesh.new()
+			var mm := MultiMesh.new()
+			mm.transform_format = MultiMesh.TRANSFORM_3D
+			mm.use_custom_data = true
+			mm.mesh = quad
+			mm.instance_count = trs.size()
+			# Instance transforms stay relative to the chunk node so the node sits
+			# at its chunk centre: that is what the distance culler measures and it
+			# keeps world-space precision inside a large map.
+			var chunk_origin := Vector3((float(cell.x) + 0.5) * CHUNK_SIZE, 0.0,
+				(float(cell.y) + 0.5) * CHUNK_SIZE)
+			var lo := Vector3(INF, INF, INF)
+			var hi := Vector3(-INF, -INF, -INF)
+			for i: int in range(trs.size()):
+				var tr: Transform3D = trs[i] as Transform3D
+				var local := Transform3D(tr.basis, tr.origin - chunk_origin)
+				mm.set_instance_transform(i, local)
+				mm.set_instance_custom_data(i, cols[i] as Color)
+				lo = lo.min(local.origin)
+				hi = hi.max(local.origin)
+			var aabb := AABB(lo - Vector3.ONE, (hi - lo) + Vector3(2.0, 2.0, 2.0))
+			var mmi := MultiMeshInstance3D.new()
+			mmi.name = "LevelNiagara_%s_%d_%d" % [sys_name, cell.x, cell.y]
+			mmi.position = chunk_origin
+			mmi.multimesh = mm
+			mmi.material_override = mat
+			mmi.custom_aabb = aabb
+			mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			parent.add_child(mmi)
+			var radius: float = maxf(aabb.size.x, aabb.size.z) * 0.5
+			culler.call("add_chunk", mmi, radius, str(asset).get_file())
+			nodes += 1
+			total += trs.size()
 	ctx["niagara_spawned"] = total
 	ctx["niagara_systems"] = groups.size()
-	push_warning("[level_loader] level Niagara: %d placements across %d systems spawned" % [total, groups.size()])
+	ctx["niagara_nodes"] = nodes
+	ctx["niagara_sprites"] = sprites
+	ctx["niagara_params_applied"] = ctx_params
+	ctx["niagara_tint_param"] = ctx_tint_param
+	ctx["niagara_tint_material"] = ctx_tint_material
+	ctx["niagara_tint_fallback"] = ctx_tint_fallback
+	var st: Dictionary = params_handle.get("stats", {}) as Dictionary
+	push_warning("[level_loader] level Niagara: %d placements across %d systems in %d chunk nodes (%d sprite-masked, %d parameter sets, %d activation-skipped; decode root=%s files=%d)" % [
+		total, groups.size(), nodes, sprites, ctx_params, ctx_skip, str(st.get("root", "")), int(st.get("files_loaded", 0))])
 
 
-func _niagara_tint(asset: String, map_hint: String = "") -> Color:
-	var a: String = asset.to_lower()
-	# FIX_SPEC P0 #7: Den candle flames carry the authored HDR warm value so
-	# they survive AGX and seed the 0.85-threshold glow instead of reading as
-	# flat LDR orange.
-	if map_hint == "thieves_den" and "candelabras_flame" in a and not a.ends_with("_flame_out"):
-		return Color(2.2, 1.0, 0.30, 0.85)
-	if "flame" in a or "candle" in a or "fire" in a:
-		return Color(1.0, 0.55, 0.18, 0.9)
-	if "lightbeam" in a or "beam" in a:
-		return Color(0.55, 0.85, 1.0, 0.7)
-	if "eye" in a or "alarm" in a or "turret" in a:
-		return Color(1.0, 0.22, 0.18, 0.85)
-	if "dust" in a or "break" in a or "debris" in a:
-		return Color(0.62, 0.58, 0.52, 0.5)
-	if "smoke" in a:
-		return Color(0.55, 0.55, 0.58, 0.5)
-	if "ward" in a or "magic" in a or "arcane" in a:
-		return Color(0.55, 0.35, 1.0, 0.8)
-	return Color(0.9, 0.9, 0.95, 0.55)
+## The additive HDR band every level-Niagara billboard sits in. Global on purpose:
+## the authored colours stay authored, only the overall lift is a port constant.
+const NIAGARA_ADDITIVE_ALPHA: float = 0.85
+
+## First authored colour carried by the decoded user parameters, or transparent
+## black when the component overrides no colour.
+func _niagara_param_colour(params: Dictionary) -> Color:
+	for key: String in ["Color1", "EffectColor", "ParticleColor", "EmberColor", "PuddleColor", "BeamColor", "Tint", "Color"]:
+		var v: Variant = params.get(key, null)
+		if v is Color:
+			var c: Color = v as Color
+			if c.a <= 0.0:
+				c.a = 1.0
+			return c
+		if v is Vector3:
+			var v3: Vector3 = v as Vector3
+			return Color(v3.x, v3.y, v3.z, 1.0)
+	return Color(0.0, 0.0, 0.0, 0.0)
 
 
-func _niagara_size(asset: String) -> float:
-	var a: String = asset.to_lower()
-	if "dust" in a or "break" in a or "smoke" in a:
-		return 0.35
-	if "beam" in a:
-		return 0.08
-	return 0.12
+## True when an authored live-flame placement sits within [param radius] of
+## [param wick]. The loader's procedural candle quad must not stack on top of an
+## authored NS_Candelabras_Flame billboard (RE-E-09); a per-wick test replaces the
+## old Den-only file scope, so Guildhall and OldManor de-duplicate too.
+func _authored_flame_near(flames: Array, wick: Vector3, radius: float = 0.75) -> bool:
+	var r2: float = radius * radius
+	for f_v: Variant in flames:
+		if (f_v as Vector3).distance_squared_to(wick) <= r2:
+			return true
+	return false
 
 
 func _build_post_process_gi_fills(post_processes: Array, parent: Node3D, ctx: Dictionary) -> void:

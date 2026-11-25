@@ -11,9 +11,13 @@ extends SceneTree
 ##     load_ms=<n> fps_pose=n/a
 ##
 ## Counter meanings (all distinct-path counts unless noted):
-##   placed_meshes   UE paths the loader actually decided collision for
-##                   (decorative, hidden-in-game, CPD and clutter items are
-##                   already excluded by the loader's own collider gate).
+##   placed_meshes   classified paths (authored_hull + absent) — the sum only.
+##   placed_meshes_seen  the independent draw-item census (distinct collidable
+##                   UE paths, counted before any classification). The identity
+##                   `authored_hull + absent == placed_meshes_seen` and
+##                   `coverage = authored_hull / placed_meshes_seen >= 0.95`
+##                   are the gates; `authored_prims` is a subset of
+##                   `authored_hull` and is asserted to be one.
 ##   authored_hull   paths whose collider came from authored data: element
 ##                   hulls, primitive coalescing, UE complex-as-simple (a
 ##                   BodySetup with no AggGeom collides with the render tris in
@@ -56,7 +60,7 @@ const GUILDHALL_SUBLEVELS: Array[String] = [
 	"Guildhall/Guildhall_MissionClues",
 	"Guildhall/Guildhall_SkyboxGeo",
 ]
-const MIN_AUTHORED_COVERAGE := 0.85
+const MIN_AUTHORED_COVERAGE := 0.95
 ## One representative mesh per element type for `--validate`, plus a rotated box
 ## so the `P·M·P` basis is exercised (not just identity rotations).
 const VALIDATE_MESHES: Array[String] = [
@@ -122,6 +126,11 @@ func _run() -> void:
 
 	var active_mode: String = str(res.get("collision_mode", ""))
 	var placed_meshes: int = int(res.get("col_authored_hull", 0)) + int(res.get("col_absent", 0))
+	# F1: `placed_meshes_seen` is the draw-item census (distinct collidable UE
+	# paths the loader built, accumulated in `_fill_col_path_counts` BEFORE any
+	# classification), so `authored_hull + absent == placed_meshes_seen` is a
+	# real check and cannot be satisfied by construction.
+	var placed_meshes_seen: int = int(res.get("col_paths_seen", 0))
 	var placed_instances: int = int(res.get("col_placed_instances", 0))
 	var authored_hull: int = int(res.get("col_authored_hull", 0))
 	var authored_prims: int = int(res.get("col_authored_prims", 0))
@@ -132,20 +141,22 @@ func _run() -> void:
 	var shapes: int = int(res.get("collision_shapes", 0))
 	var bodies: int = int(res.get("collision_bodies", 0))
 	var dropped: int = int(res.get("collision_dropped", 0))
+	var coverage: float = 0.0 if placed_meshes_seen <= 0 else float(authored_hull) / float(placed_meshes_seen)
 
-	print("COL_AUDIT mode=%s placed_meshes=%d placed_instances=%d authored_hull=%d authored_prims=%d absent=%d no_collision=%d query_only=%d reduced=%d shapes=%d bodies=%d dropped=%d load_ms=%d fps_pose=n/a" % [
-		active_mode, placed_meshes, placed_instances, authored_hull, authored_prims,
-		absent, no_collision, query_only, reduced, shapes, bodies, dropped, load_ms])
+	print("COL_AUDIT mode=%s placed_meshes=%d placed_meshes_seen=%d placed_instances=%d authored_hull=%d authored_prims=%d absent=%d no_collision=%d query_only=%d reduced=%d shapes=%d bodies=%d dropped=%d load_ms=%d coverage=%.3f fps_pose=n/a" % [
+		active_mode, placed_meshes, placed_meshes_seen, placed_instances, authored_hull,
+		authored_prims, absent, no_collision, query_only, reduced, shapes, bodies,
+		dropped, load_ms, coverage])
 
 	# Independent diagnostic numbers (not part of the gate line): the payload
 	# census and the load-set denominators, so a silent data regression shows up.
 	var st: Dictionary = AuthoredCollision.stats() as Dictionary
-	print("COL_DETAIL payload_meshes=%d payload_elements=%d payload_convex=%d payload_load_ms=%d authored_instances=%d authored_shape_demand=%d heuristic_shapes=%d mode_requested=%s elements_on_placed=%d convex_on_placed=%d complex_default_paths=%d placed_paths_payload=%d" % [
+	print("COL_DETAIL payload_meshes=%d payload_elements=%d payload_convex=%d payload_load_ms=%d authored_instances=%d authored_shape_demand=%d heuristic_shapes=%d mode_requested=%s elements_on_placed=%d convex_on_placed=%d complex_default_paths=%d placed_paths_payload=%d scale_baked_shapes=%d" % [
 		int(st.get("meshes", -1)), int(st.get("elements", -1)), int(st.get("convex", -1)),
 		int(st.get("load_ms", -1)), int(res.get("col_authored_instances", 0)),
 		int(res.get("col_authored_shapes", 0)), int(res.get("col_heuristic_shapes", 0)),
 		req_mode, int(res.get("col_elements", 0)), int(res.get("col_convex", 0)),
-		int(res.get("col_complex_default", 0)), int(res.get("col_path_counts", 0))])
+		int(res.get("col_complex_default", 0)), int(res.get("col_path_counts", 0)), int(res.get("col_scale_baked", 0))])
 
 	if active_mode != req_mode:
 		_fail("mode=%s but requested %s" % [active_mode, req_mode])
@@ -155,12 +166,16 @@ func _run() -> void:
 		_fail("dropped=%d colliders (budget overflow; encoding must fit)" % dropped)
 	if int(res.get("col_deadline_hit", 0)) > 0:
 		_fail("wall-clock deadline hit %d times (collider emission stopped; last path in COL_PROGRESS)" % int(res.get("col_deadline_hit", 0)))
-	if authored_hull + absent != placed_meshes:
-		_fail("classification does not add up: authored_hull=%d + absent=%d != placed_meshes=%d" % [authored_hull, absent, placed_meshes])
-	if req_mode == "authored" and placed_meshes > 0:
-		var coverage: float = float(authored_hull + authored_prims) / float(placed_meshes)
+	if authored_hull + absent != placed_meshes_seen:
+		_fail("classification does not add up: authored_hull=%d + absent=%d != placed_meshes_seen=%d" % [authored_hull, absent, placed_meshes_seen])
+	if authored_prims > authored_hull:
+		_fail("authored_prims=%d > authored_hull=%d (double count: prims must be a subset)" % [authored_prims, authored_hull])
+	if req_mode == "authored" and placed_meshes_seen > 0:
 		if coverage < MIN_AUTHORED_COVERAGE:
-			_fail("authored coverage %.3f < %.2f (authored_hull=%d prims=%d placed=%d)" % [coverage, MIN_AUTHORED_COVERAGE, authored_hull, authored_prims, placed_meshes])
+			_fail("authored coverage %.3f < %.2f (authored_hull=%d placed_meshes_seen=%d)" % [coverage, MIN_AUTHORED_COVERAGE, authored_hull, placed_meshes_seen])
+		print("COL_ASSERT coverage=%.3f (%d/%d) prims_subset=%s classification=%d+%d==%d mode=%s dropped=%d" % [
+			coverage, authored_hull, placed_meshes_seen, str(authored_prims <= authored_hull),
+			authored_hull, absent, placed_meshes_seen, active_mode, dropped])
 
 	var args: PackedStringArray = OS.get_cmdline_user_args()
 	if args.has("--validate"):

@@ -95,6 +95,86 @@ static var _element_count: int = 0
 static var _convex_count: int = 0
 ## Resolved encoding cache: "<ue_path>|<instances>" -> resolve() result.
 static var _cache: Dictionary = {}
+## Non-uniform instance-scale variants: "<ue_path>|<sx>_<sy>_<sz>" -> shapes.
+## Jolt refuses a non-uniform `CollisionShape3D.scale` for capsule / convex /
+## trimesh shapes (it logs "Failed to correctly scale shape ... not supported by
+## Jolt Physics" per shape per tick and falls back to an averaged uniform
+## scale), so the loader asks for a baked variant instead. Distinct non-uniform
+## scales in the shipped levels are few (the 1.0598 case is one), so this stays
+## tiny; the key includes round-to-4-decimals so float noise cannot explode it.
+static var _scaled_cache: Dictionary = {}
+
+
+## Scale-baked copy of an authored encoding: the same shape set with `scale`
+## multiplied into each shape's own local axes — exactly what `CS.scale` did,
+## but representable by Jolt for every shape type.
+##
+## Approximation for the two primitives that cannot represent an ellipse/ovoid:
+## a capsule keeps a circular cross-section (`radius *= mean(sx, sz)`, `height
+## *= sy` — its local axis is Y, see `_decode_element`) and a sphere uses the
+## mean of the three axes. Boxes, convex hulls and trimeshes (including
+## `complex_default` render trimeshes) are scaled exactly, per axis.
+static func scaled_variant(ue_path: String, base: Dictionary, scale: Vector3) -> Dictionary:
+	var key: String = "%s|%.4f_%.4f_%.4f" % [ue_path, scale.x, scale.y, scale.z]
+	if _scaled_cache.has(key):
+		return _scaled_cache[key]
+	var src_shapes: Array = base["shapes"] as Array
+	var out_shapes: Array = []
+	out_shapes.resize(src_shapes.size())
+	for i: int in range(src_shapes.size()):
+		out_shapes[i] = _scaled_shape(src_shapes[i] as Shape3D, scale)
+	var out: Dictionary = base.duplicate(false)
+	out["shapes"] = out_shapes
+	_scaled_cache[key] = out
+	return out
+
+
+static func clear_scaled_cache() -> void:
+	_scaled_cache.clear()
+
+
+static func _scaled_shape(sh: Shape3D, s: Vector3) -> Shape3D:
+	if sh == null:
+		return null
+	var ax: float = absf(s.x)
+	var ay: float = absf(s.y)
+	var az: float = absf(s.z)
+	if sh is BoxShape3D:
+		var box := BoxShape3D.new()
+		box.size = Vector3((sh as BoxShape3D).size.x * ax, (sh as BoxShape3D).size.y * ay, (sh as BoxShape3D).size.z * az)
+		return box
+	if sh is SphereShape3D:
+		var sph := SphereShape3D.new()
+		sph.radius = maxf((sh as SphereShape3D).radius * (ax + ay + az) / 3.0, MIN_HALF_EXTENT_M)
+		return sph
+	if sh is CapsuleShape3D:
+		var cap := CapsuleShape3D.new()
+		var src: CapsuleShape3D = sh as CapsuleShape3D
+		cap.radius = maxf(src.radius * (ax + az) * 0.5, MIN_HALF_EXTENT_M)
+		cap.height = maxf(src.height * ay, 2.0 * cap.radius + 0.001)
+		return cap
+	if sh is ConvexPolygonShape3D:
+		var pts: PackedVector3Array = (sh as ConvexPolygonShape3D).points
+		var out_pts := PackedVector3Array()
+		out_pts.resize(pts.size())
+		for i: int in range(pts.size()):
+			out_pts[i] = Vector3(pts[i].x * ax, pts[i].y * ay, pts[i].z * az)
+		var hull := ConvexPolygonShape3D.new()
+		hull.points = out_pts
+		return hull
+	if sh is ConcavePolygonShape3D:
+		var faces: PackedVector3Array = (sh as ConcavePolygonShape3D).get_faces()
+		var out_faces := PackedVector3Array()
+		out_faces.resize(faces.size())
+		for i: int in range(faces.size()):
+			out_faces[i] = Vector3(faces[i].x * ax, faces[i].y * ay, faces[i].z * az)
+		var tris := ConcavePolygonShape3D.new()
+		tris.set_faces(out_faces)
+		tris.backface_collision = (sh as ConcavePolygonShape3D).backface_collision
+		return tris
+	# Unknown shape family: keep it shared and let the caller fall back to
+	# `CollisionShape3D.scale` (the pre-W9 behaviour) rather than guessing.
+	return sh
 
 
 ## One line of counters for the loader's `AUTHORED_COLLISION` summary.

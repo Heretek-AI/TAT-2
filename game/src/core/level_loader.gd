@@ -2984,6 +2984,8 @@ func _new_build_ctx(parent: Node3D, light_probe: Node, generate_collision: bool)
 		"col_authored_instances": 0,
 		"col_authored_shapes": 0,
 		"col_heuristic_shapes": 0,
+		"col_paths_seen": 0,
+		"col_scale_baked": 0,
 		## W9-P1 probe safety (see `_col_deadline_ms`): 0 = no deadline.
 		"col_deadline_ms": _col_deadline_ms,
 		"col_deadline_hit": 0,
@@ -4165,7 +4167,7 @@ func _clip_den_window_visual(ctx: Dictionary, tr: Transform3D, soff: Vector3, me
 ## drop is counted per partition and named in a push_warning carrying both
 ## partition counts. `label` names the dropped item (mesh path for
 ## buildings, ribbon/segment id for curbs).
-func _add_collider(ctx: Dictionary, cell: Vector2i, shape: Shape3D, tr: Transform3D, shape_offset: Vector3, kind: String = "building", label: String = "") -> void:
+func _add_collider(ctx: Dictionary, cell: Vector2i, shape: Shape3D, tr: Transform3D, shape_offset: Vector3, kind: String = "building", label: String = "", bake_scale: bool = false) -> void:
 	var is_curb: bool = kind == "curb"
 	var part_cap: int = MAX_CURB_SHAPES if is_curb else int(ctx.get("building_cap", MAX_BUILDING_SHAPES))
 	var part_key: String = "curb_shapes" if is_curb else "building_shapes"
@@ -4203,7 +4205,14 @@ func _add_collider(ctx: Dictionary, cell: Vector2i, shape: Shape3D, tr: Transfor
 		cs.set_meta("ue_mesh", label)
 	var sc: Vector3 = tr.basis.get_scale()
 	cs.transform = Transform3D(tr.basis.orthonormalized(), tr * shape_offset)
-	cs.scale = Vector3(maxf(absf(sc.x), 0.05), maxf(absf(sc.y), 0.05), maxf(absf(sc.z), 0.05))
+	if bake_scale:
+		# W9-P1: the authored shape already carries the instance scale (Jolt
+		# cannot non-uniformly scale capsule/convex/trimesh shapes and logs an
+		# error per shape per tick if asked). `cs.scale` stays identity.
+		cs.scale = Vector3.ONE
+		ctx["col_scale_baked"] = int(ctx.get("col_scale_baked", 0)) + 1
+	else:
+		cs.scale = Vector3(maxf(absf(sc.x), 0.05), maxf(absf(sc.y), 0.05), maxf(absf(sc.z), 0.05))
 	body.add_child(cs)
 	ctx["collision_shapes"] = int(ctx.get("collision_shapes", 0)) + 1
 	ctx[part_key] = part_count + 1
@@ -4226,12 +4235,27 @@ func _add_collider_shapes(ctx: Dictionary, cell: Vector2i, shapes: Array, offset
 		var tr_c: Transform3D = trs[i]
 		if absf(tr_c.basis.determinant()) < 0.0001:
 			continue
-		for s: int in range(shapes.size()):
-			var sh: Shape3D = shapes[s] as Shape3D
+		# W9-P1 (F2): Jolt rejects a non-uniform `CollisionShape3D.scale` for
+		# capsule/convex/trimesh shapes (it logs "Failed to correctly scale shape
+		# … not supported by Jolt Physics" every tick and silently uses an
+		# averaged uniform scale). Bake such an instance scale into the shape
+		# instead — exact for boxes/hulls/trimeshes, mean-radius for capsule and
+		# sphere (see `AuthoredCollision.scaled_variant`). Uniform scales keep
+		# the cheap shared shape and the CS scale Jolt accepts.
+		var sc: Vector3 = tr_c.basis.get_scale()
+		var ax: float = maxf(absf(sc.x), 0.05)
+		var ay: float = maxf(absf(sc.y), 0.05)
+		var az: float = maxf(absf(sc.z), 0.05)
+		var uniform: bool = absf(ax - ay) <= 0.0001 * ay and absf(ay - az) <= 0.0001 * az
+		var use_shapes: Array = shapes
+		if not uniform:
+			use_shapes = (AuthoredCollision.scaled_variant(label, {"shapes": shapes}, Vector3(ax, ay, az))["shapes"]) as Array
+		for s: int in range(use_shapes.size()):
+			var sh: Shape3D = use_shapes[s] as Shape3D
 			if sh == null:
 				continue
 			var off: Transform3D = (offsets[s] as Transform3D) if s < offsets.size() else Transform3D.IDENTITY
-			_add_collider(ctx, cell, sh, tr_c * off, Vector3.ZERO, kind, label)
+			_add_collider(ctx, cell, sh, tr_c * off, Vector3.ZERO, kind, label, not uniform)
 
 
 ## W9-P1: per-load collision-source accounting, once per UE path (the draw item
@@ -4573,10 +4597,13 @@ func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> 
 				_add_collider_shapes(ctx, cell, a_shapes, a_offsets, trs, count, "building", mp)
 		else:
 			var shape: Shape3D = info["shape"] as Shape3D
+			# Count even when the heuristic produced no shape (0.45 gate /
+			# non-blocking name): `absent` means "the heuristic decided this
+			# path", so the census identity holds in `aabb` mode too.
+			_count_collision_path(ctx, mp, info)
 			if shape != null:
 				var soff: Vector3 = info.get("shape_offset", Vector3.ZERO)
 				var den_split: bool = _is_den_window_wall(low_mp) and shape is BoxShape3D
-				_count_collision_path(ctx, mp, info)
 				_count_heuristic_shapes(ctx, mp, 1)
 				for i2b: int in range(count):
 					var tr_c: Transform3D = trs[i2b]
@@ -5052,6 +5079,9 @@ func _fill_col_path_counts(items: Array, ctx: Dictionary) -> void:
 			continue
 		path_counts[pc_mp] = int(path_counts.get(pc_mp, 0)) + (pc_trs as Array).size()
 	ctx["col_path_counts"] = path_counts
+	# F1: the independent census. Every distinct collidable UE path the draw-item
+	# census saw; the classification counters must account for exactly this many.
+	ctx["col_paths_seen"] = path_counts.size()
 	_col_path_counts = path_counts
 
 
@@ -5688,7 +5718,7 @@ func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dict
 			"col_no_collision", "col_query_only", "col_reduced", "col_complex_default",
 			"col_elements", "col_convex", "col_authored_instances", "col_authored_shapes",
 			"col_heuristic_shapes", "col_path_counts", "col_placed_instances",
-			"col_deadline_hit"]:
+			"col_deadline_hit", "col_paths_seen", "col_scale_baked"]:
 		result[_col_key] = ctx.get(_col_key, 0) if _col_key != "col_path_counts" else (ctx.get(_col_key, {}) as Dictionary).size()
 	result["collision_mode"] = _collision_mode()
 	if int(ctx.get("col_authored_hull", 0)) + int(ctx.get("col_absent", 0)) > 0:

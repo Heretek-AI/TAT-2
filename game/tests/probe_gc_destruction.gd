@@ -14,6 +14,10 @@ extends SceneTree
 ##      (93 chests + 68 display-case doors + 5 BP_Manor_Displaycase doors);
 ##   2. a real load builds 95 hidden broken layers and 79 visible leaves for
 ##      Guildhall_Loot, all with a mesh and no collision node;
+##   2b. owner index: 95 layers = 48 chest + 31 display case + 16 bookcase;
+##      87 owners = 79 containers (each with BOTH leaf and broken) + 8
+##      BP_Manor_Bookcase_Cabinet_MinorLoot actors (2 glass doors each, no leaf);
+##      every authored chest/display-case container record resolves a pair;
 ##   3. a control load with `TAT2_GC_LAYERS=off` emits the same collision shape
 ##      and body counts (the layers add no collision);
 ##   4. one chest and one display case swap intact -> broken on
@@ -191,7 +195,7 @@ func _make_loader() -> Node:
 	return ll
 
 
-func _build_containers(loader: Node, loot_records: Array, host: Node3D) -> Array:
+func _build_containers(loader: Node, loot_records: Array, host: Node3D, pair_failures: Array) -> Array:
 	var out: Array = []
 	var ContainerScript: GDScript = load("res://src/interact/loot_container.gd") as GDScript
 	for i in range(loot_records.size()):
@@ -200,16 +204,21 @@ func _build_containers(loader: Node, loot_records: Array, host: Node3D) -> Array
 			continue
 		var e: Dictionary = e_var as Dictionary
 		var cls: String = str(e.get("class", ""))
-		# Only the two destructible families this probe exercises. Spawning all
-		# 79 containers would drag in the full loot-table path for no signal.
+		# Only the two destructible families this probe exercises. Stash and
+		# storefront containers author no GC and are not expected to pair.
 		if cls.find("ChestTrunk") < 0 and cls.find("DisplayCaseA") < 0:
 			continue
+		var owner: String = str(e.get("owner", ""))
 		var c: Node = ContainerScript.new() as Node
 		c.call("configure", cls, e, i)
 		host.add_child(c)
-		var gcv: Dictionary = loader.call("gc_visuals_for", str(e.get("owner", ""))) as Dictionary
-		if not gcv.is_empty():
-			c.call("bind_gc_visuals", gcv.get("leaf"), gcv.get("broken"))
+		var gcv: Dictionary = loader.call("gc_visuals_for", owner) as Dictionary
+		var leaf: Node3D = gcv.get("leaf") as Node3D
+		var broken: Node3D = gcv.get("broken") as Node3D
+		if leaf == null or not is_instance_valid(leaf) or broken == null or not is_instance_valid(broken):
+			pair_failures.append("%s(%s)" % [owner, cls])
+		else:
+			c.call("bind_gc_visuals", leaf, broken)
 		out.append(c)
 	return out
 
@@ -313,6 +322,57 @@ func _run() -> void:
 	_check(leaves_visible == leaves.size(), "intact leaves visible before break",
 		"%d/%d visible" % [leaves_visible, leaves.size()])
 
+	# --- 2b. Owner index: which layers have no leaf, and does every authored
+	# chest/display-case container receive BOTH a leaf and a broken layer? -----
+	var broken_kinds: Dictionary = {}
+	var leaf_kinds: Dictionary = {}
+	var owners_broken: Dictionary = {}
+	var owners_leaf: Dictionary = {}
+	var broken_per_owner: Dictionary = {}
+	var broken_only_non_bookcase: Array[String] = []
+	for b3: MeshInstance3D in broken:
+		var bk: String = str(b3.get_meta("gc_kind", "other"))
+		broken_kinds[bk] = int(broken_kinds.get(bk, 0)) + 1
+		var bo: String = str(b3.get_meta("gc_owner", ""))
+		owners_broken[bo] = true
+		broken_per_owner[bo] = int(broken_per_owner.get(bo, 0)) + 1
+	for l4: MeshInstance3D in leaves:
+		var lk: String = str(l4.get_meta("gc_kind", "other"))
+		leaf_kinds[lk] = int(leaf_kinds.get(lk, 0)) + 1
+		owners_leaf[str(l4.get_meta("gc_owner", ""))] = true
+	var paired_owners: int = 0
+	var broken_only_owners: Array[String] = []
+	for o: String in owners_broken.keys():
+		if owners_leaf.has(o):
+			paired_owners += 1
+		else:
+			broken_only_owners.append(o)
+			var kc: String = ""
+			for b4: MeshInstance3D in broken:
+				if str(b4.get_meta("gc_owner", "")) == o:
+					kc = str(b4.get_meta("gc_kind", ""))
+					break
+			if kc != "bookcase" or int(broken_per_owner.get(o, 0)) != 2:
+				broken_only_non_bookcase.append("%s(%s x%d)" % [o, kc, int(broken_per_owner.get(o, 0))])
+	print("GC_PROBE owner_index broken_owners=%d leaf_owners=%d paired=%d broken_only=%d broken_kinds=%s leaf_kinds=%s" % [
+		owners_broken.size(), owners_leaf.size(), paired_owners, broken_only_owners.size(), str(broken_kinds), str(leaf_kinds)])
+	_check(int(broken_kinds.get("chest", 0)) == 48 and int(broken_kinds.get("display_case", 0)) == 31,
+		"broken layers are 48 chest + 31 display-case",
+		"chest=%d display_case=%d" % [int(broken_kinds.get("chest", 0)), int(broken_kinds.get("display_case", 0))])
+	_check(int(broken_kinds.get("bookcase", 0)) == 16, "16 bookcase broken layers",
+		"%d on %d actors (2 doors each)" % [int(broken_kinds.get("bookcase", 0)), broken_only_owners.size()])
+	_check(int(leaf_kinds.get("chest", 0)) == 48 and int(leaf_kinds.get("display_case", 0)) == 31,
+		"intact leaves are 48 chest + 31 display-case",
+		"chest=%d display_case=%d" % [int(leaf_kinds.get("chest", 0)), int(leaf_kinds.get("display_case", 0))])
+	_check(owners_leaf.size() == 79 and paired_owners == 79, "79 owners have both leaf and broken",
+		"leaf_owners=%d paired=%d" % [owners_leaf.size(), paired_owners])
+	_check(broken_only_owners.size() == 8 and broken_only_non_bookcase.is_empty(),
+		"8 broken-only owners are bookcase actors with 2 layers each",
+		"broken_only=%d unexpected=%s" % [broken_only_owners.size(), str(broken_only_non_bookcase)])
+	_check(int(res.get("gc_owner_count", -1)) == 87,
+		"owner index 87 == 79 paired containers + 8 bookcases",
+		"%d" % int(res.get("gc_owner_count", -1)))
+
 	# --- 3. Control load with the layers disabled: collision unchanged ------
 	OS.set_environment(ENV_GC_LAYERS, "off")
 	var loader_off: Node = _make_loader()
@@ -336,7 +396,18 @@ func _run() -> void:
 		"layers=%d leaves=%d" % [int(res_off.get("gc_layers_built", -1)), int(res_off.get("gc_leaves_built", -1))])
 
 	# --- 4. Break one chest and one display case ----------------------------
-	var containers: Array = _build_containers(loader, res.get("loot_containers", []) as Array, host)
+	var pair_failures: Array = []
+	var containers: Array = _build_containers(loader, res.get("loot_containers", []) as Array, host, pair_failures)
+	var destructible_records: int = 0
+	for lr_var: Variant in (res.get("loot_containers", []) as Array):
+		if lr_var is Dictionary:
+			var lr: Dictionary = lr_var as Dictionary
+			var lrc: String = str(lr.get("class", ""))
+			if lrc.find("ChestTrunk") >= 0 or lrc.find("DisplayCaseA") >= 0:
+				destructible_records += 1
+	_check(destructible_records == 79 and containers.size() == 79 and pair_failures.is_empty(),
+		"every authored chest/display-case container has a bound pair",
+		"records=%d built=%d failures=%s" % [destructible_records, containers.size(), str(pair_failures)])
 	var chest: Node = _first_of(containers, "ChestTrunk")
 	var case: Node = _first_of(containers, "DisplayCaseA")
 	_check(chest != null, "chest container found", "class=BP_ChestTrunk_MajorLoot_C")

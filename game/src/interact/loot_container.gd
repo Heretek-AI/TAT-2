@@ -29,6 +29,10 @@ const UIStringsScript := preload("res://src/ui/ui_strings.gd")
 
 const CONTAINERS_PATH := "res://data/generated/gameplay/containers.json"
 const LOOT_ACTORS_PATH := "res://data/generated/gameplay/loot_actors.json"
+## W10-A3-GC: the hold-to-smash secondary action requires the player to face
+## the container (ordinary interact has no facing cone by design). 0.5 is a
+## ~60 deg half-angle, enough to forgive camera/body mismatch at 1.75 m.
+const BREAK_HOLD_FACING_DOT: float = 0.5
 
 ## Raw UE centimetres -> Godot metres (UE X-fwd/Y-right/Z-up becomes
 ## Godot X-right/Y-up/Z-back: the same Y/Z swap the level extractor applies).
@@ -284,6 +288,13 @@ func is_broken() -> bool:
 	return broken
 
 
+## True when the level bound an authored broken overlay. The gameplay smash
+## trigger requires this, so a stash/storefront container that authors no GC is
+## never turned into a broken trigger with no visual.
+func has_broken_overlay() -> bool:
+	return _gc_broken != null and is_instance_valid(_gc_broken)
+
+
 ## Swap the intact lid/door for the authored broken overlay and open the
 ## container once. This is the destruction event; it bypasses the lock exactly
 ## like the authored breakable component does, but never duplicates loot (the
@@ -377,6 +388,40 @@ func get_interact_prompt() -> String:
 		# Authored "Pick Lock" row + the port's lock-level suffix; the glyph is live.
 		return InputGlyphs.prompt("interact", UIStringsScript.st_upper("ST_Lockpicking", "Lockpicking.Pompt.Start", "Pick Lock")) + " (Lv %d)" % maxi(lock_level, 1)
 	return InputGlyphs.prompt("interact", UIStringsScript.st_upper("ST_Interactables", "PromptOpen", "Open"))
+
+
+## W10-A3-GC: the deliberate smash is the existing stacked secondary hold (F),
+## the same contract doors use for [HOLD] LOCK. It is offered only on an
+## unbroken container that owns an authored broken overlay. The verb is the
+## authored ST_Interactables.PromptDestroyDeployable row; the keycap prefix is
+## port copy.
+func get_interact_secondary_prompt() -> String:
+	if broken or opened or is_stash:
+		return ""
+	if not has_broken_overlay():
+		return ""
+	return "[F] [HOLD] " + UIStringsScript.st_upper("ST_Interactables", "PromptDestroyDeployable", "Destroy")
+
+
+## W10-A3-GC secondary action: hold F to smash the container open. Ordinary
+## interact (tap E) still opens/lockpicks and never calls break_container, so a
+## locked container is not bypassed by a tap. The player must face the container
+## for the smash, unlike side-accessible ordinary interaction.
+func interact_hold(actor: Node) -> void:
+	if broken or opened or is_stash:
+		return
+	if not has_broken_overlay():
+		return
+	if actor is Node3D:
+		var a: Node3D = actor as Node3D
+		var to: Vector3 = global_position - a.global_position
+		to.y = 0.0
+		var fwd: Vector3 = -a.global_transform.basis.z
+		fwd.y = 0.0
+		if to.length() > 0.05 and fwd.length() > 0.05 \
+				and fwd.normalized().dot(to.normalized()) < BREAK_HOLD_FACING_DOT:
+			return
+	break_container(actor)
 
 
 ## Interaction LOS point (W2): the marker origin sits on the floor, so the

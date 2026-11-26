@@ -1479,6 +1479,30 @@ MESH_MATERIALS_FILE = OUT_DATA / "mesh_materials.json"
 MATERIALS_FILE = OUT_DATA / "materials.json"
 CONTENT_OVERRIDES_REPORT = OUT_DATA / "content_overrides_applied.json"
 
+# P0b parity governance. Every override rule is classified in the tracked table:
+#   parity_restoration: replace a port placeholder with shipped authored data
+#                       (graybox -> authored material); applied in both modes.
+#   tat2_expansion:     new content/overlay; applied only when the flag is off.
+# TAT2_PARITY_ONLY=1 is the build/run switch. A missing or unknown class is a
+# producer error (fail closed); an expansion rule encountered in the parity-only
+# path is skipped with a counted diagnostic, never a crash.
+PARITY_ONLY_ENV = "TAT2_PARITY_ONLY"
+PARITY_CLASS_RESTORATION = "parity_restoration"
+PARITY_CLASS_EXPANSION = "tat2_expansion"
+PARITY_CLASSES = (PARITY_CLASS_RESTORATION, PARITY_CLASS_EXPANSION)
+
+
+def _env_truthy(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def parity_only_enabled() -> bool:
+    return _env_truthy(PARITY_ONLY_ENV)
+
+
+def _rule_parity_class(rule: dict) -> str:
+    return str(rule.get("parity_class") or "")
+
 
 def load_content_overrides():
     if not CONTENT_OVERRIDES_FILE.exists():
@@ -1539,6 +1563,12 @@ def _validate_content_overrides(table: dict) -> None:
         if rid in seen:
             raise SystemExit(f"parse_tables: duplicate override rule id {rid}")
         seen.add(rid)
+        parity_class = _rule_parity_class(rule)
+        if parity_class not in PARITY_CLASSES:
+            raise SystemExit(
+                f"parse_tables: override rule {rid} has parity_class "
+                f"{parity_class!r}; expected one of {PARITY_CLASSES} (fail closed)"
+            )
         if rule.get("op") != "set_material":
             raise SystemExit(
                 f"parse_tables: rule {rid} op {rule.get('op')!r} is not set_material"
@@ -1573,6 +1603,12 @@ def _validate_content_overrides(table: dict) -> None:
         cid = str(cap.get("id") or "")
         if not cid:
             raise SystemExit("parse_tables: add_cap without an id")
+        parity_class = _rule_parity_class(cap)
+        if parity_class not in PARITY_CLASSES:
+            raise SystemExit(
+                f"parse_tables: add_cap {cid} has parity_class "
+                f"{parity_class!r}; expected one of {PARITY_CLASSES} (fail closed)"
+            )
         if not str(cap.get("mesh") or "").startswith(prefixes):
             raise SystemExit(f"parse_tables: add_cap {cid} targets a non-graybox mesh")
         if not cap.get("pos") or len(cap["pos"]) != 3:
@@ -1583,18 +1619,60 @@ def _validate_content_overrides(table: dict) -> None:
             )
 
 
-def apply_content_overrides(level_key: str, meshes: list, table: dict, mesh_mats: dict):
+def apply_content_overrides(
+    level_key: str,
+    meshes: list,
+    table: dict,
+    mesh_mats: dict,
+    parity_only: bool = False,
+    skipped: list | None = None,
+):
     """Apply the tracked override table to one level's mesh list in place.
 
     Returns the per-level applied block (rule -> matched/changed) that is
     written next to the meshes, plus a list of global rows for the report.
     Raises SystemExit on any count drift, overlap or non-graybox target.
+
+    `parity_only=True` applies only `parity_restoration` rules/caps. Every
+    `tat2_expansion` (or, defensively, unknown-class) row for this level is
+    appended to `skipped` with its class and level, so the caller can print and
+    report a counted diagnostic instead of silently baking expansion content.
     """
     prefixes = tuple(table.get("graybox_prefixes") or ())
-    rules = [
-        r for r in (table.get("rules") or []) if level_key in (r.get("levels") or [])
-    ]
-    if not rules:
+    parity_only = bool(parity_only)
+    rules = []
+    for rule in table.get("rules") or []:
+        if level_key not in (rule.get("levels") or []):
+            continue
+        if parity_only and _rule_parity_class(rule) != PARITY_CLASS_RESTORATION:
+            if skipped is not None:
+                skipped.append(
+                    {
+                        "id": str(rule.get("id") or ""),
+                        "parity_class": _rule_parity_class(rule),
+                        "level": level_key,
+                        "reason": "parity_only",
+                    }
+                )
+            continue
+        rules.append(rule)
+    caps = []
+    for cap in table.get("add_caps") or []:
+        if level_key not in (cap.get("levels") or []):
+            continue
+        if parity_only and _rule_parity_class(cap) != PARITY_CLASS_RESTORATION:
+            if skipped is not None:
+                skipped.append(
+                    {
+                        "id": str(cap.get("id") or ""),
+                        "parity_class": _rule_parity_class(cap),
+                        "level": level_key,
+                        "reason": "parity_only",
+                    }
+                )
+            continue
+        caps.append(cap)
+    if not rules and not caps:
         return None
     applied = []
     claimed: dict[int, str] = {}
@@ -1627,6 +1705,7 @@ def apply_content_overrides(level_key: str, meshes: list, table: dict, mesh_mats
             entry["override_materials"] = [material] * slots
             entry["override_material"] = material
             entry["content_rule"] = rid
+            entry["content_parity_class"] = _rule_parity_class(rule)
             changed += 1
         expect_count = int(rule["expect_count"])
         expect_changed = int(rule.get("expect_changed", expect_count))
@@ -1643,15 +1722,14 @@ def apply_content_overrides(level_key: str, meshes: list, table: dict, mesh_mats
         applied.append(
             {
                 "id": rid,
+                "parity_class": _rule_parity_class(rule),
                 "matched": len(selected),
                 "changed": changed,
                 "level": level_key,
             }
         )
 
-    for cap in table.get("add_caps") or []:
-        if level_key not in (cap.get("levels") or []):
-            continue
+    for cap in caps:
         cid = str(cap["id"])
         if level_key in (table.get("roof_census_levels") or []):
             raise SystemExit(
@@ -1687,11 +1765,18 @@ def apply_content_overrides(level_key: str, meshes: list, table: dict, mesh_mats
                     "override_materials": [material] * slots,
                     "override_material": material,
                     "content_rule": cid,
+                    "content_parity_class": _rule_parity_class(cap),
                     "content_cap": True,
                 }
             )
         applied.append(
-            {"id": cid, "matched": len(caps), "changed": len(caps), "level": level_key}
+            {
+                "id": cid,
+                "parity_class": _rule_parity_class(cap),
+                "matched": len(caps),
+                "changed": len(caps),
+                "level": level_key,
+            }
         )
     return {"schema": "tat2.content_overrides.applied/1", "rules": applied}
 
@@ -1836,6 +1921,8 @@ def extract_levels():
     if not isinstance(mesh_mats, dict):
         mesh_mats = {}
     content_applied: list = []
+    content_skipped: list = []
+    parity_only = parity_only_enabled()
     # Fail-closed file gate (pipeline P0-4): every Maps/*.json that does not
     # become a level payload is recorded here. BPP_* skips are legitimate
     # (re-consumed as packed-actor templates); corrupt/empty files are fatal.
@@ -3790,7 +3877,12 @@ def extract_levels():
         if pdata is not None:
             prel = meta["rel"]
             co_block = apply_content_overrides(
-                key, pdata["meshes"], content_overrides, mesh_mats
+                key,
+                pdata["meshes"],
+                content_overrides,
+                mesh_mats,
+                parity_only=parity_only,
+                skipped=content_skipped,
             )
             if co_block is not None:
                 pdata["content_overrides"] = co_block
@@ -3949,19 +4041,40 @@ def extract_levels():
             "parse_tables: content_overrides.json names levels that were not "
             f"normalized: {', '.join(missing)}"
         )
-    expected_ids = {str(r["id"]) for r in content_overrides.get("rules") or []}
-    expected_ids |= {str(c["id"]) for c in content_overrides.get("add_caps") or []}
+    expected_ids = {
+        str(r["id"])
+        for r in content_overrides.get("rules") or []
+        if not parity_only or _rule_parity_class(r) == PARITY_CLASS_RESTORATION
+    }
+    expected_ids |= {
+        str(c["id"])
+        for c in content_overrides.get("add_caps") or []
+        if not parity_only or _rule_parity_class(c) == PARITY_CLASS_RESTORATION
+    }
     applied_ids = {row["id"] for row in content_applied}
     if applied_ids != expected_ids:
         raise SystemExit(
             "parse_tables: override report mismatch, missing="
             f"{sorted(expected_ids - applied_ids)} extra={sorted(applied_ids - expected_ids)}"
         )
+    # One row per (id, level): a multi-level expansion rule is skipped once per
+    # level in apply_content_overrides but is one governance decision.
+    skipped_rows: dict[tuple[str, str], dict] = {}
+    for row in content_skipped:
+        skipped_rows[(row["id"], row["level"])] = row
+    skipped_report = [skipped_rows[k] for k in sorted(skipped_rows)]
+    class_counts: dict[str, int] = {}
+    for rule in content_overrides.get("rules") or []:
+        cls = _rule_parity_class(rule)
+        class_counts[cls] = class_counts.get(cls, 0) + 1
     CONTENT_OVERRIDES_REPORT.write_text(
         json.dumps(
             {
                 "schema": "tat2.content_overrides.applied/1",
                 "source": str(CONTENT_OVERRIDES_FILE.relative_to(ROOT)),
+                "parity_only": parity_only,
+                "parity_classes": dict(sorted(class_counts.items())),
+                "skipped": skipped_report,
                 "rules": content_applied,
             },
             indent=2,
@@ -3975,6 +4088,16 @@ def extract_levels():
         f"{co_matched} matched, {co_changed} re-materialised "
         f"({CONTENT_OVERRIDES_REPORT.relative_to(ROOT)})"
     )
+    print(
+        "Content override parity classes: "
+        + ", ".join(f"{k}={v}" for k, v in sorted(class_counts.items()))
+        + f"; parity_only={parity_only}; skipped={len(skipped_report)}"
+    )
+    for row in skipped_report:
+        print(
+            f"  PARITY_ONLY skip {row['id']}: class={row['parity_class']} "
+            f"level={row['level']}"
+        )
     for row in content_applied:
         print(
             f"  {row['id']}: matched={row['matched']} changed={row['changed']} "

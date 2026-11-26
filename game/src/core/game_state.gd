@@ -239,6 +239,20 @@ const COOP_PROVENANCE_PATH := "res://data/expansion/coop_provenance.json"
 var _coop_provenance: Dictionary = {}
 
 
+## P0b parity-only governance mirror (`TAT2_PARITY_ONLY=1`, default off).
+## A parity-only build keeps shipped behaviour and drops TAT-2 additions; the
+## single switch lives in `ParityGovernance` so every reader agrees.
+func parity_only() -> bool:
+	return ParityGovernance.enabled()
+
+
+## True unless the parity-only build excludes the TAT-2-invented ENet
+## transport. Co-op itself is shipped (coop_provenance().expansion is false);
+## only the transport is port content, so this is the co-op exclusion surface.
+func coop_transport_available() -> bool:
+	return ParityGovernance.coop_transport_allowed()
+
+
 func coop_provenance() -> Dictionary:
 	if _coop_provenance.is_empty():
 		if FileAccess.file_exists(COOP_PROVENANCE_PATH):
@@ -664,6 +678,10 @@ func has_clue_fact(fact_id: String, source_item_tag: String = "") -> bool:
 ## each one is re-read from GameData.grant_fact so the journal text stays
 ## authoritative.
 func hydrate_personal_facts() -> int:
+	if not ParityGovernance.record_allowed("res://data/expansion/personal_spider.json"):
+		# P0b parity-only: the Spider chain is TAT-2 expansion content; its
+		# persisted facts are not re-journaled into a parity-only run.
+		return 0
 	var ss: Node = get_node_or_null("/root/SaveSystem")
 	if ss == null or not ss.has_method("get_personal_quest"):
 		return 0

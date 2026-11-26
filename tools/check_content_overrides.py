@@ -39,6 +39,9 @@ MATERIALS = ROOT / "game" / "data" / "generated" / "materials.json"
 
 SCHEMA = "tat2.content_overrides/1"
 APPLIED_SCHEMA = "tat2.content_overrides.applied/1"
+PARITY_CLASS_RESTORATION = "parity_restoration"
+PARITY_CLASS_EXPANSION = "tat2_expansion"
+PARITY_CLASSES = (PARITY_CLASS_RESTORATION, PARITY_CLASS_EXPANSION)
 
 fails: list[str] = []
 
@@ -83,6 +86,9 @@ def check_table(table: dict, graybox: tuple[str, ...], materials: dict | None) -
         return
     if not graybox:
         fail("table declares no graybox_prefixes")
+    declared_classes = [str(c) for c in table.get("parity_classes") or []]
+    if declared_classes != list(PARITY_CLASSES):
+        fail(f"parity_classes is {declared_classes!r}, expected {list(PARITY_CLASSES)}")
     ids: set[str] = set()
     for rule in table.get("rules") or []:
         rid = str(rule.get("id") or "")
@@ -92,6 +98,12 @@ def check_table(table: dict, graybox: tuple[str, ...], materials: dict | None) -
         if rid in ids:
             fail(f"duplicate rule id {rid}")
         ids.add(rid)
+        parity_class = str(rule.get("parity_class") or "")
+        if parity_class not in PARITY_CLASSES:
+            fail(
+                f"{rid}: parity_class {parity_class!r} is not one of "
+                f"{PARITY_CLASSES} (fail closed)"
+            )
         if rule.get("op") != "set_material":
             fail(
                 f"{rid}: unsupported op {rule.get('op')!r} (only set_material/add_cap)"
@@ -137,6 +149,12 @@ def check_table(table: dict, graybox: tuple[str, ...], materials: dict | None) -
         if cid in ids or cid in cap_ids:
             fail(f"duplicate rule/cap id {cid}")
         cap_ids.add(cid)
+        parity_class = str(cap.get("parity_class") or "")
+        if parity_class not in PARITY_CLASSES:
+            fail(
+                f"{cid}: parity_class {parity_class!r} is not one of "
+                f"{PARITY_CLASSES} (fail closed)"
+            )
         if graybox and not str(cap.get("mesh") or "").startswith(graybox):
             fail(f"{cid}: add_cap targets a non-graybox mesh")
         if len(cap.get("pos") or []) != 3:
@@ -187,6 +205,12 @@ def check_applied(table: dict, materials: dict, mesh_mats: dict) -> None:
     if report.get("schema") != APPLIED_SCHEMA:
         fail(f"applied report schema is {report.get('schema')!r}")
         return
+    if report.get("parity_only"):
+        fail(
+            "applied report was produced with TAT2_PARITY_ONLY=1; "
+            "regenerate without the flag before auditing"
+        )
+        return
     rows = {str(r.get("id")): r for r in report.get("rules") or []}
     rules = table.get("rules") or []
     rule_ids = {str(r["id"]) for r in rules}
@@ -212,6 +236,11 @@ def check_applied(table: dict, materials: dict, mesh_mats: dict) -> None:
         if level_key not in (rule.get("levels") or []):
             fail(f"{rid}: report level {level_key} is not declared by the rule")
             continue
+        if str(row.get("parity_class", "")) != str(rule.get("parity_class", "")):
+            fail(
+                f"{rid}: report parity_class {row.get('parity_class')!r} does not "
+                f"match the table {rule.get('parity_class')!r}"
+            )
         if int(row.get("matched", -1)) != count:
             fail(f"{rid}: report matched {row.get('matched')}, table says {count}")
         if int(row.get("changed", -1)) != changed:
@@ -354,10 +383,18 @@ def check_applied(table: dict, materials: dict, mesh_mats: dict) -> None:
                     )
         print(f"  {cid}: add_cap checked")
 
+    class_counts: dict[str, int] = {}
+    for rule in table.get("rules") or []:
+        cls = str(rule.get("parity_class") or "")
+        class_counts[cls] = class_counts.get(cls, 0) + 1
     print(
         f"Content override totals: {len(rules)} set_material rules, "
         f"{total_matched} matched, {total_changed} re-materialised, "
         f"{len(table.get('add_caps') or [])} add_cap rules"
+    )
+    print(
+        "Parity classes: "
+        + ", ".join(f"{k}={v}" for k, v in sorted(class_counts.items()))
     )
 
 
@@ -365,7 +402,8 @@ def plot_counts(table: dict) -> None:
     print("Override rule table:")
     for rule in table.get("rules") or []:
         print(
-            f"  {rule['id']:42s} {rule.get('expect_count'):5d} / "
+            f"  {rule['id']:42s} {rule.get('parity_class', '?'):20s} "
+            f"{rule.get('expect_count'):5d} / "
             f"{rule.get('expect_changed', 0):5d}  {rule.get('material', '').rsplit('/', 1)[-1]}"
         )
 

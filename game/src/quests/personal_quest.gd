@@ -21,7 +21,12 @@ static var _chain_cache: Dictionary = {}
 
 
 ## Parsed expansion record (cached; the file is tracked authored data).
+## P0b parity-only: the whole Spider chain is TAT-2 expansion content, so
+## `chain()` returns {} and every hook/plan below becomes inert. Default off
+## keeps the authored record.
 static func chain() -> Dictionary:
+	if not ParityGovernance.record_allowed(EXPANSION_PATH):
+		return {}
 	if not _chain_cache.is_empty():
 		return _chain_cache
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(EXPANSION_PATH))
@@ -156,6 +161,8 @@ static func hydrate_facts() -> int:
 ## Start the chain on the first Guildhall deploy (contract or free play).
 ## `start_when_completed_contract` is 0, so it is independent of progression.
 static func should_start(map_id: String, thief_id: String = "") -> bool:
+	if not ParityGovernance.record_allowed(EXPANSION_PATH):
+		return false
 	if map_id != str(chain().get("start_map_id", "guildhall")):
 		return false
 	return stage_for(thief_id) == ""
@@ -190,6 +197,16 @@ static func runtime_thief(thief_id: String = "") -> String:
 ## the existing one-beat `record()` call, so re-running a deploy is idempotent.
 ## Returns {ok, reason, map_id, previous, stage, transitions[], plan[]}.
 static func on_deploy(map_id: String, thief_id: String = "") -> Dictionary:
+	if not ParityGovernance.record_allowed(EXPANSION_PATH):
+		return {
+			"ok": true,
+			"reason": "parity_only",
+			"map_id": map_id,
+			"previous": "",
+			"stage": "",
+			"transitions": [] as Array,
+			"plan": [] as Array,
+		}
 	var thief: String = runtime_thief(thief_id)
 	var out: Dictionary = {
 		"ok": true,
@@ -222,6 +239,8 @@ static func on_deploy(map_id: String, thief_id: String = "") -> Dictionary:
 ## after the same deploy already flushed them.
 ## Returns {ok, reason, previous, stage, granted[]}.
 static func on_hub_enter(thief_id: String = "") -> Dictionary:
+	if not ParityGovernance.record_allowed(EXPANSION_PATH):
+		return {"ok": true, "reason": "parity_only", "previous": "", "stage": "", "granted": [] as Array}
 	var thief: String = runtime_thief(thief_id)
 	var previous: String = stage_for(thief)
 	if thief != character_id():

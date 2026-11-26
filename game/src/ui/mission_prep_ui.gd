@@ -1083,6 +1083,12 @@ func _grade_skyline_material(base: Material) -> Material:
 ## Reads + fail-closed validates the tracked expansion layout. A missing or
 ## drifted file yields {} so the stage silently keeps the authored sky.
 func _load_prep_skyline() -> Dictionary:
+	if not ParityGovernance.record_allowed(PREP_SKYLINE_PATH):
+		# P0b parity-only: the KF11 backdrop is TAT-2 expansion content built
+		# from shipped Skybox meshes. Exclude it; the stage keeps the authored
+		# sky. Counted once per prep build; default off = no change.
+		print("TAT-2 prep skyline: TAT2_PARITY_ONLY=1, expansion backdrop excluded (0 pieces)")
+		return {}
 	if not FileAccess.file_exists(PREP_SKYLINE_PATH):
 		return {}
 	var f: FileAccess = FileAccess.open(PREP_SKYLINE_PATH, FileAccess.READ)

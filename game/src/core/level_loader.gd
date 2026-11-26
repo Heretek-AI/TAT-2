@@ -58,6 +58,12 @@ var _materials_db_lower: Dictionary = {}
 var _gc_owner_index: Dictionary = {}
 var _mesh_mats_db: Dictionary = {}
 var _mesh_mats_db_lower: Dictionary = {}
+## P0b parity-only load state (TAT2_PARITY_ONLY=1, default off). Resolved once
+## per build in `_new_build_ctx`; `_content_rule_classes` is the tracked
+## rule id -> parity_class map used to classify content-override-tagged meshes
+## when the generated payload predates the `content_parity_class` field.
+var _parity_only: bool = false
+var _content_rule_classes: Dictionary = {}
 var _tex_cache: Dictionary = {}
 var _std_mat_cache: Dictionary = {}
 var _mesh_res_cache: Dictionary = {}
@@ -2716,6 +2722,11 @@ func _new_accumulator() -> Dictionary:
 			"niagara_placements": 0,
 			"spline_count": 0,
 			"moonshape_hidden": 0,
+			# P0b parity-only counters (default 0; see ParityGovernance).
+			"parity_skipped_expansion_meshes": 0,
+			"parity_skipped_expansion_caps": 0,
+			"parity_skipped_expansion_nodes": 0,
+			"parity_skipped_expansion_rules": {} as Dictionary,
 			"sky_light": {},
 			"fog_volume": {},
 			"post_process": {},
@@ -3011,6 +3022,11 @@ func _apply_collider_budget(ctx: Dictionary, json_paths: Array) -> void:
 
 
 func _new_build_ctx(parent: Node3D, light_probe: Node, generate_collision: bool) -> Dictionary:
+	# P0b parity governance: resolve the flag + tracked rule classes once per
+	# build. When off (the default) every downstream gate is a no-op and the
+	# shipped load path is byte-for-byte unchanged.
+	_parity_only = ParityGovernance.enabled()
+	_content_rule_classes = ParityGovernance.load_rule_classes() if _parity_only else {}
 	# W10-A evidence: per-load planar-convex skip delta. `AuthoredCollision` is
 	# process-global (payload parsed once), so a map load takes a snapshot here
 	# and `_finalize` reports the difference. One `load_sublevels*` call is one
@@ -3110,6 +3126,25 @@ func _note_expansion_placement(parent: Node, kind_name: String, result: Dictiona
 	if not node.is_in_group("expansion_placements"):
 		node.add_to_group("expansion_placements")
 	result["expansion_placements"] = int(result.get("expansion_placements", 0)) + 1
+
+
+## P0b parity-only mesh gate. Returns true when this `.tatlevel.json` mesh entry
+## must be excluded from the load. Only `content_rule`-tagged entries are
+## eligible: `parity_restoration` stays, `tat2_expansion` and unknown classes are
+## skipped and counted per rule (fail closed, never a crash). This mirrors
+## ParityGovernance.filter_level_payload() exactly.
+func _parity_skip_mesh(m_dict: Dictionary, result: Dictionary) -> bool:
+	var rid: String = str(m_dict.get("content_rule", ""))
+	if rid == "":
+		return false
+	var decision: Dictionary = ParityGovernance.mesh_decision(m_dict, _content_rule_classes, true)
+	if not bool(decision.get("skip", false)):
+		return false
+	var key: String = "parity_skipped_expansion_caps" if bool(m_dict.get("content_cap", false)) else "parity_skipped_expansion_meshes"
+	result[key] = int(result.get(key, 0)) + 1
+	var by_rule: Dictionary = result["parity_skipped_expansion_rules"] as Dictionary
+	by_rule[rid] = int(by_rule.get(rid, 0)) + 1
+	return true
 
 
 ## Records one authored spawner against its SceneElement tag. The legacy
@@ -3249,6 +3284,11 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 		var m_dict: Dictionary = m
 		var mp: String = str(m_dict.get("mesh", ""))
 		if mp == "":
+			continue
+		# P0b parity-only: a content-override-tagged mesh whose rule is not a
+		# restoration is excluded whole (expansion content) or fail-closed
+		# (unclassified), counted per rule. Default off = no change.
+		if _parity_only and _parity_skip_mesh(m_dict, result):
 			continue
 		if not den_exit_doors.is_empty() and mp.ends_with("SM_DoorInaccessibleA"):
 			var tr_door: Transform3D = _dict_to_transform(m_dict)
@@ -3421,6 +3461,10 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 			var wick: Vector3 = prop_pos + Vector3(0.0, wick_y, 0.0)
 			if _authored_flame_near(authored_flame_positions, wick):
 				result["candle_flames_suppressed"] = int(result.get("candle_flames_suppressed", 0)) + 1
+			elif not ParityGovernance.expansion_nodes_allowed():
+				# P0b parity-only: the procedural wick quad is TAT-2 node
+				# content, not shipped art. Count it; spawn nothing.
+				result["parity_skipped_expansion_nodes"] = int(result.get("parity_skipped_expansion_nodes", 0)) + 1
 			else:
 				_VfxManager.spawn_candle_flame(parent, wick)
 				_note_expansion_placement(parent, "candle_flame", result)
@@ -5976,6 +6020,20 @@ func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dict
 	result["sublevels_from_graph"] = int(result.get("sublevels_from_graph", 0))
 	result["sublevels_graph_missing"] = int(result.get("sublevels_graph_missing", 0))
 	result["expansion_placements"] = int(result.get("expansion_placements", 0))
+	result["parity_only"] = _parity_only
+	if _parity_only:
+		var parity_rules: Dictionary = result.get("parity_skipped_expansion_rules", {}) as Dictionary
+		var names: Array = parity_rules.keys()
+		names.sort()
+		var parts := PackedStringArray()
+		for rid_v: Variant in names:
+			parts.append("%s=%d" % [str(rid_v), int(parity_rules[rid_v])])
+		print("PARITY_ONLY load: skipped_expansion_meshes=%d skipped_expansion_caps=%d skipped_expansion_nodes=%d rules={%s}" % [
+			int(result.get("parity_skipped_expansion_meshes", 0)),
+			int(result.get("parity_skipped_expansion_caps", 0)),
+			int(result.get("parity_skipped_expansion_nodes", 0)),
+			", ".join(parts),
+		])
 	# RE-P-09/RE-P-16: the mesh reconciliation used to live only in `result`,
 	# so no run log could prove a filter had not eaten authored geometry. One
 	# deterministic line per load, always on.

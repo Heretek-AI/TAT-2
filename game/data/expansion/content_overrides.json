@@ -1,6 +1,10 @@
 {
   "schema": "tat2.content_overrides/1",
-  "note": "W6T graybox P0 content table. Applied by tools/parse_tables.py inside extract_levels() before each .tatlevel.json is written; validated by tools/check_content_overrides.py and game/tests/test_content_overrides.gd. Only graybox kit meshes (GB_*) may be targeted, and only with authored materials from materials.json. expect_count is the number of raw instances the selector matches; expect_changed is how many of them the rule rewrites (rules with only_unmaterialed preserve authored overrides). Both are fail-closed: a drift fails parse_tables and the checker. add_cap is supported for a measured hole but no rule enables one today (adding geometry without a capture is not justified).",
+  "parity_classes": [
+    "parity_restoration",
+    "tat2_expansion"
+  ],
+  "note": "W6T graybox P0 content table. Applied by tools/parse_tables.py inside extract_levels() before each .tatlevel.json is written; validated by tools/check_content_overrides.py and game/tests/test_content_overrides.gd. Only graybox kit meshes (GB_*) may be targeted, and only with authored materials from materials.json. Every rule carries a parity_class: parity_restoration = replace a port placeholder with shipped authored data (applied in both modes); tat2_expansion = new content/overlay (applied only when TAT2_PARITY_ONLY is off, excluded and counted in parity-only). Both the producer and check_content_overrides.py fail closed on a missing or unknown class. expect_count is the number of raw instances the selector matches; expect_changed is how many of them the rule rewrites (rules with only_unmaterialed preserve authored overrides). Both are fail-closed: a drift fails parse_tables and the checker. add_cap is supported for a measured hole but no rule enables one today (adding geometry without a capture is not justified).",
   "graybox_prefixes": [
     "/Game/Test/LevelKits/Graybox/GB_",
     "/Game/Art/Environment/Urban/Roofs/GB_"
@@ -92,6 +96,7 @@
   "rules": [
     {
       "id": "missionlobby-roof-decks-slate-geo3",
+      "parity_class": "parity_restoration",
       "label": "MissionLobby roof decks -> authored slate",
       "levels": [
         "MissionLobby/MissionLobby_Geo3"
@@ -107,6 +112,7 @@
     },
     {
       "id": "missionlobby-roof-decks-slate-periph",
+      "parity_class": "parity_restoration",
       "label": "MissionLobby roof decks -> authored slate",
       "levels": [
         "MissionLobby/MissionLobby_Periphery"
@@ -122,6 +128,7 @@
     },
     {
       "id": "missionlobby-structure-decks-concrete-geo3",
+      "parity_class": "parity_restoration",
       "label": "MissionLobby 6x6/4x4 floor decks -> authored concrete",
       "levels": [
         "MissionLobby/MissionLobby_Geo3"
@@ -138,6 +145,7 @@
     },
     {
       "id": "missionlobby-structure-decks-concrete-periph",
+      "parity_class": "parity_restoration",
       "label": "MissionLobby 6x6/4x4 floor decks -> authored concrete",
       "levels": [
         "MissionLobby/MissionLobby_Periphery"
@@ -154,6 +162,7 @@
     },
     {
       "id": "poi-lounge-floor-tile",
+      "parity_class": "parity_restoration",
       "label": "POI Lounge 2x2 graybox floors -> authored floor tile",
       "levels": [
         "Buildings/Guildhall/Building_Guildhall_POI"
@@ -177,6 +186,7 @@
     },
     {
       "id": "poi-lounge-floorstone",
+      "parity_class": "parity_restoration",
       "label": "POI Lounge 3x3/4x4 graybox floors -> authored concrete",
       "levels": [
         "Buildings/Guildhall/Building_Guildhall_POI"
@@ -201,6 +211,7 @@
     },
     {
       "id": "poi-entrance-hall-floor-tile",
+      "parity_class": "parity_restoration",
       "label": "POI Entrance Hall 2x2 graybox floor -> authored floor tile",
       "levels": [
         "Buildings/Guildhall/Building_Guildhall_POI"
@@ -224,6 +235,7 @@
     },
     {
       "id": "vault-chambers-floorstone",
+      "parity_class": "parity_restoration",
       "label": "Ceremonial Chambers / Prison vault graybox floors -> authored concrete",
       "levels": [
         "Buildings/Guildhall/Guildhall_Vault_CeremonialChambers"
@@ -241,6 +253,7 @@
     },
     {
       "id": "poi-3rd-floor-tile",
+      "parity_class": "parity_restoration",
       "label": "POI 3rd-floor GB_Floor_2x2 -> authored floor tile",
       "levels": [
         "Buildings/Guildhall/Building_Guildhall_POI_3rdFloor"
@@ -256,6 +269,7 @@
     },
     {
       "id": "poi-3rd-floorstone",
+      "parity_class": "parity_restoration",
       "label": "POI 3rd-floor 4x4 graybox floors -> authored concrete",
       "levels": [
         "Buildings/Guildhall/Building_Guildhall_POI_3rdFloor"
@@ -271,6 +285,7 @@
     },
     {
       "id": "poi-3rd-roof-deck-slate",
+      "parity_class": "parity_restoration",
       "label": "POI 3rd-floor roof deck -> authored slate",
       "levels": [
         "Buildings/Guildhall/Building_Guildhall_POI_3rdFloor"

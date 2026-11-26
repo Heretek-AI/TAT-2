@@ -789,6 +789,13 @@ func get_mission_briefing_text(mission_id: String, match_seconds: float = -1.0, 
 
 func _load_briefing_overrides() -> void:
 	briefing_overrides.clear()
+	if not ParityGovernance.record_allowed(BRIEFING_OVERRIDES_PATH):
+		# P0b parity-only: the KF13 briefing/endgame overlay is TAT-2 expansion
+		# content. Excluded, the authored QG EndgameDuration (480 s) and the
+		# authored per-difficulty ladder stay authoritative. Default off = no
+		# change.
+		print("[game_data] TAT2_PARITY_ONLY=1: briefing override overlay excluded; authored quest-graph values stay authoritative")
+		return
 	var data: Variant = _load_json(BRIEFING_OVERRIDES_PATH)
 	if not (data is Dictionary):
 		push_warning("[game_data] briefing_overrides.json missing or unreadable; extracted quest-graph endgame values stay authoritative")

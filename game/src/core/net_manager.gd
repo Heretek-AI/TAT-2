@@ -102,6 +102,9 @@ func _ready() -> void:
 
 
 func host(port: int = DEFAULT_PORT) -> Error:
+	if not ParityGovernance.coop_transport_allowed():
+		push_warning("[net_manager] host refused: TAT2_PARITY_ONLY=1 excludes the TAT-2 co-op transport")
+		return ERR_UNAVAILABLE
 	peer = ENetMultiplayerPeer.new()
 	var err: Error = peer.create_server(port, 2)
 	if err == OK:
@@ -111,6 +114,9 @@ func host(port: int = DEFAULT_PORT) -> Error:
 
 
 func join(address: String, port: int = DEFAULT_PORT) -> Error:
+	if not ParityGovernance.coop_transport_allowed():
+		push_warning("[net_manager] join refused: TAT2_PARITY_ONLY=1 excludes the TAT-2 co-op transport")
+		return ERR_UNAVAILABLE
 	peer = ENetMultiplayerPeer.new()
 	var err: Error = peer.create_client(address, port)
 	if err == OK:

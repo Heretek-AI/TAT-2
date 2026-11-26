@@ -232,3 +232,21 @@ invented=111`, `LITERAL_GREPS PASS code_hits=0 ui_rating_literals=0 files=96`.
 committed evidence agree; Godot gates run locally)`, `measured_on=e2d783a`.
 
 AUDIT SECOND PASS: FAIL
+
+---
+
+## Third pass (commit cad4b19)
+
+Checked 2026-11-25 22:33–22:35, same worktree. Earlier sections unchanged; the only
+tree write is this appended section.
+
+| # | ITEM | THIRD PASS | evidence |
+|---|---|---|---|
+| 1 | IBL text (T07 / HANDOFF / a-report) | **PASS** | `grep -rn apply_preset game/src docs/reports/remediation-20261125/T07-render.md docs/HANDOFF_NEXT_AGENT.md build/qa/w10/a-report.md` → **0** lines. T07:526-527 "inside `apply_environment`, which `apply_for_map` calls" (`weather_profile.gd:875` definition, call at `:1070`); a-report:261 and :366 name `apply_environment` (2 occurrences each in T07 and the report). No claim of pixel-neutrality/inertness: T07:528 quotes it only to refute it (`so "the export alone changes no pixel" would be wrong too`), a-report:264 says "so it is not pixel-neutral", a-report:366 "the export is not pixel-neutral"; `grep inert` → 0. The residual is stated correctly: T07:527-531 "when the `.exr` exists, `ambient_light_sky_contribution` rises to 1.0. That does change the image (Godot blends the **default sky** into ambient at that factor) … nothing loads `cubemap_res_path` into a material … so the *authored cubemap* is never used"; HANDOFF:31-33 says the same ("which would blend the *default* sky, not the authored cubemap; no material loads `cubemap_res_path`"). |
+| 2 | Clean tree at `cad4b19` | **PASS** | `git status --short` (excluding `extracted`, `game/assets`, `game/data/generated`) is empty: only `?? extracted`, `?? game/assets`, `?? game/data/generated`; HEAD = `cad4b19` (the FIDELITY_GAPS tweak and the second-pass append are now committed). |
+
+No regression since the second pass: `python3 tools/check_gate_ratchet.py` → rc 0,
+`GATE_RATCHET: PASS (baseline and committed evidence agree; Godot gates run locally)`,
+`measured_on=e2d783a`.
+
+AUDIT THIRD PASS: PASS

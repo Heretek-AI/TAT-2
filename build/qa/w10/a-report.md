@@ -64,7 +64,7 @@ Each item carries the six rungs; the independent audit adds the seventh verdict.
 | **S3** | green proof | the suite/probe log in `docs/reports/logs/w10/` |
 | **S4** | committed gate | the same log is read by `tools/check_gate_ratchet.py` |
 | **S5** | doc correction | `docs/FIDELITY_GAPS.md`, `HANDOFF`, `AGENTS.md`, W9 report |
-| **S6** | independent audit | `build/qa/w10/audit.md` — first pass **FAIL** on three documentation/evidence items (T07 call-site, the FX-quad count, the "27/314" clamp census) and a stale engine log; every item is closed in §9's follow-up commit. All code/behaviour items passed. |
+| **S6** | independent audit | `build/qa/w10/audit.md` — first pass **FAIL** (evidence text only), second pass **FAIL** (two residual text errors), **third pass PASS**. All code/behaviour items passed on the first pass; no assertion weakened; every finding closed in §9. |
 
 ## 2. Before / after, the nine defects
 
@@ -374,5 +374,9 @@ lock, suite-110, string-audit and greps logs were **re-run on the tip** and repr
 same numbers (`COL_MAPS PASS … 0.976`, `applied=154`, `checks=86`, `306/195/111`,
 `0/0`). Every log in `docs/reports/logs/w10/` is now a tip run.
 
-The audit's `FAIL` is kept as the record of the first pass: the wave's own rule is that an
-auditor's first pass should be expected to fail, and the response is evidence, not prose.
+The audit's `FAIL` sections are kept as the record of the first and second passes: the
+wave's own rule is that an auditor's first pass should be expected to fail, and the
+response is evidence, not prose. The second pass caught two residual text errors in the
+first fix (the wrong function name `apply_preset`, and a new claim that the export would
+be pixel-neutral), both corrected in `cad4b19`; the third pass is **`AUDIT THIRD PASS:
+PASS`** with a clean tree at that commit.

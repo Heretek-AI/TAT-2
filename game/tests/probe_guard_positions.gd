@@ -1,14 +1,17 @@
 extends SceneTree
-## Fail-closed guard-spawn probe (W10 A2). Boots a real contract on Novice and
-## checks the LIVE guard group against the SPAWN MARKER each guard records:
+## Fail-closed guard-spawn probe (W10 A2, P0a bucket/layer rule). Boots a real
+## contract on Novice and checks the LIVE guard group against the SPAWN MARKER
+## each guard records:
 ##
 ##   * count == expected (4 on Novice),
+##   * every selected guard carries an authored guard SpawnBucket (no
+##     Hauntstable / civilian / SmartObject post),
+##   * Guildhall Contract 2 has at least one guard in the Lounge bbox with a
+##     StandardGuards bucket, and it is the authored C_20 marker,
 ##   * each guard within 2.0 m of its own `spawn_marker` meta (never "nearest
 ##     marker": C_116 is 1.62 m from Guard_1 and would pass the 8 m-up bug),
 ##   * each guard within 0.5 m of that marker's own downward floor ray when the
 ##     ray hits,
-##   * at least one guard inside the Guildhall Lounge bbox x 20..52, y 24..32,
-##     z -46..-5,
 ##   * no guard disappeared or became hidden/meshless after 600 physics frames.
 ##
 ## Prints one `GUARD_CHECK` line per value and `GUARD_CHECK PASS|FAIL` last;
@@ -19,6 +22,10 @@ extends SceneTree
 ##   tools/godot --headless --path game --script res://tests/probe_guard_positions.gd
 ##   tools/godot --headless --path game --script res://tests/probe_guard_positions.gd \
 ##       -- --map=old_manor --order=3
+##
+## PARITY_APPROX: bucket/layer selection until a live Contract 02 capture. The
+## probe always runs Novice (difficulty 1); the Old Manor day-1 capture is
+## unmeasured, so that run is labelled as Novice in its output.
 
 const DEFAULT_MAP: String = "guildhall"
 const DEFAULT_ORDER: int = 2
@@ -63,6 +70,42 @@ func _init() -> void:
 
 func _fmt_vec(v: Vector3) -> String:
 	return "(%.3f,%.3f,%.3f)" % [v.x, v.y, v.z]
+
+
+## Independent copy of the authored guard-bucket allowlist. Deliberately not
+## imported from guard_placement.gd: the probe must catch the helper if it is
+## ever relaxed to accept Hauntstable or a bucket-less marker.
+func _normalize_bucket(bucket: String) -> String:
+	var b: String = bucket.strip_edges()
+	if b == "":
+		return ""
+	var quote: int = b.find("'")
+	if quote >= 0:
+		var rest: String = b.substr(quote + 1)
+		var close: int = rest.find("'")
+		b = rest.substr(0, close) if close >= 0 else rest
+	b = b.get_file().split(".")[0]
+	if b.begins_with("DA_SpawnBucket_"):
+		b = b.substr("DA_SpawnBucket_".length())
+	return b
+
+
+func _is_guard_bucket(bucket: String) -> bool:
+	var b: String = _normalize_bucket(bucket)
+	if b == "":
+		return false
+	if b == "KeyHolder" or b == "PrivateSecurity" or b == "StandardGuards":
+		return true
+	return b.begins_with("StandardGuards_") or b.begins_with("PrivateSecurity_")
+
+
+## `BP_MissionSpawner_Character_C_20` -> `C_20` for the acceptance line.
+func _marker_code(marker_name: String) -> String:
+	var cut: int = marker_name.rfind("_Character_")
+	if cut >= 0:
+		var tail: String = marker_name.substr(cut + "_Character_".length())
+		return tail if tail.begins_with("C_") else "C_" + tail
+	return marker_name if marker_name != "" else "-"
 
 
 func _by_name(a: Node, b: Node) -> bool:
@@ -130,10 +173,17 @@ func _load_markers(map_id: String) -> Array[Dictionary]:
 			if not (pos_v is Array) or (pos_v as Array).size() < 3:
 				continue
 			var pos_a: Array = pos_v as Array
+			var layers: Array = []
+			var layers_v: Variant = row.get("spawn_layers", [])
+			if layers_v is Array:
+				for layer_v: Variant in (layers_v as Array):
+					layers.append(str(layer_v))
 			out.append({
 				"name": str(row.get("name", "?")),
 				"file": file,
 				"pos": Vector3(float(pos_a[0]), float(pos_a[1]), float(pos_a[2])),
+				"bucket": str(row.get("spawn_bucket", "")),
+				"layers": layers,
 			})
 	print("GUARD_CHECK marker_source=%s markers=%d" % [dir_path, out.size()])
 	return out
@@ -161,9 +211,11 @@ func _run() -> void:
 	# --script run the static name compiles game_state.gd before GameData
 	# exists, which aborts the probe before it boots.
 	gs.set("difficulty", 1)
-	print("GUARD_CHECK boot map=%s order=%d difficulty=%s expect_guards=%d" % [
+	print("GUARD_CHECK boot map=%s order=%d difficulty=%s expect_guards=%d selection=parity_approx_layer_bucket" % [
 		_map_id, _order, str(gs.get("difficulty")), _expect_guards,
 	])
+	if _map_id == "old_manor":
+		print("GUARD_CHECK difficulty_note=Novice fixed; the Old Manor shipped difficulty capture is unmeasured")
 
 	var mission: Node = (load("res://scenes/mission.tscn") as PackedScene).instantiate()
 	root.add_child(mission)
@@ -208,6 +260,12 @@ func _run() -> void:
 	var space: PhysicsDirectSpaceState3D = root.world_3d.direct_space_state
 	var t1: Array[Dictionary] = []
 	var lounge_guards: int = 0
+	var lounge_guard_id: String = ""
+	var lounge_marker: String = ""
+	var lounge_bucket: String = ""
+	var lounge_layers: Array = []
+	var guards_with_bucket: int = 0
+	var guards_without_bucket: int = 0
 	var with_meshes: int = 0
 	var floor_checked: int = 0
 	var floor_ok: int = 0
@@ -240,6 +298,39 @@ func _run() -> void:
 				marker = exact["pos"] as Vector3
 				marker_ok = true
 				marker_src = str(exact["name"])
+
+		# P0a: the authored bucket/layers that selected this guard. Meta is the
+		# primary source (it travels with the selected record); the marker row is
+		# the fallback for a run whose guard predates the meta.
+		var bucket: String = ""
+		var layers: Array = []
+		if g.has_meta(&"spawn_bucket"):
+			bucket = str(g.get_meta(&"spawn_bucket"))
+		if g.has_meta(&"spawn_layers"):
+			var layers_meta_v: Variant = g.get_meta(&"spawn_layers")
+			if layers_meta_v is Array:
+				for layer_v: Variant in (layers_meta_v as Array):
+					layers.append(str(layer_v))
+		if g.has_meta(&"spawn_marker_name"):
+			var meta_name: String = str(g.get_meta(&"spawn_marker_name"))
+			if meta_name != "":
+				marker_src = meta_name
+		if bucket == "" and marker_ok:
+			var mk2: Dictionary = _exact_marker(markers, marker)
+			if not mk2.is_empty():
+				bucket = str(mk2.get("bucket", ""))
+				var mk2_layers_v: Variant = mk2.get("layers", [])
+				if mk2_layers_v is Array:
+					for layer_v: Variant in (mk2_layers_v as Array):
+						layers.append(str(layer_v))
+		var bucket_ok: bool = _is_guard_bucket(bucket)
+		if bucket_ok:
+			guards_with_bucket += 1
+		else:
+			guards_without_bucket += 1
+			failures.append("%s: selected without an authored guard bucket (bucket='%s' marker=%s)" % [
+				str(g.name), bucket, marker_src,
+			])
 
 		var grounded_meta_v: Variant = null
 		if g.has_meta(&"grounded_spawn"):
@@ -287,14 +378,20 @@ func _run() -> void:
 		var in_lounge: bool = LOUNGE_BBOX.has_point(pos)
 		if in_lounge:
 			lounge_guards += 1
+			if lounge_guard_id == "" and _normalize_bucket(bucket).begins_with("StandardGuards_"):
+				lounge_guard_id = str(g.name)
+				lounge_marker = marker_src
+				lounge_bucket = bucket
+				lounge_layers = layers.duplicate()
 		if not g.is_visible_in_tree() or visible_meshes == 0:
 			failures.append("%s: hidden or meshless at spawn (visible_in_tree=%s meshes_visible=%d)" % [
 				str(g.name), str(g.is_visible_in_tree()), visible_meshes,
 			])
 
 		t1.append({"name": str(g.name), "pos": pos})
-		print("GUARD_CHECK guard id=%s src=%s marker=%s grounded_meta=%s dist_marker=%s grounded_to_marker=%s floor_ray=%s floor_y=%s delta_floor=%s lounge=%s dist_anchor=%.1f meshes=%d meshes_visible=%d visible_in_tree=%s" % [
-			str(g.name), marker_src, _fmt_vec(marker) if marker_ok else "none",
+		print("GUARD_CHECK guard id=%s src=%s bucket=%s layers=%s marker=%s grounded_meta=%s dist_marker=%s grounded_to_marker=%s floor_ray=%s floor_y=%s delta_floor=%s lounge=%s dist_anchor=%.1f meshes=%d meshes_visible=%d visible_in_tree=%s" % [
+			str(g.name), marker_src, bucket if bucket != "" else "-", str(layers),
+			_fmt_vec(marker) if marker_ok else "none",
 			grounded_text, dist_text, grounded_dist_text,
 			"hit" if not floor_hit.is_empty() else "miss", floor_text, floor_delta_text,
 			"yes" if in_lounge else "no", pos.distance_to(anchor), meshes, visible_meshes, str(g.is_visible_in_tree()),
@@ -302,11 +399,22 @@ func _run() -> void:
 
 	if t1.size() != _expect_guards:
 		failures.append("guard count %d != expected %d" % [t1.size(), _expect_guards])
+	print("GUARD_CHECK lounge_guard=%s marker=%s bucket=%s layers=%s" % [
+		lounge_guard_id if lounge_guard_id != "" else "-",
+		_marker_code(lounge_marker),
+		lounge_bucket if lounge_bucket != "" else "-",
+		str(lounge_layers),
+	])
 	# The Lounge bbox is Guildhall geometry (Contract 2's authored room); the
-	# Old Manor day-1 run reports count/offsets, not a Guildhall room.
+	# Old Manor day-1 run reports count/offsets, not a Guildhall room. Contract 2
+	# must select C_20 (StandardGuards_Bouncers) and never the Hauntstable C_16.
 	if _map_id == "guildhall":
 		if lounge_guards < 1:
 			failures.append("no guard inside the Lounge bbox x 20..52, y 24..32, z -46..-5")
+		if lounge_guard_id == "":
+			failures.append("no Lounge guard with a StandardGuards bucket")
+		if _order == 2 and _marker_code(lounge_marker) != "C_20":
+			failures.append("Lounge guard marker is %s, expected authored C_20" % _marker_code(lounge_marker))
 	else:
 		print("GUARD_CHECK lounge_check=not_applicable map=%s" % _map_id)
 
@@ -353,13 +461,14 @@ func _run() -> void:
 		failures.append("%s: hidden or meshless after 600 physics frames" % name_s)
 
 	print("GUARD_CHECK detail lanterns_t1=%d" % _count_lanterns(get_nodes_in_group("guards")))
-	print("GUARD_CHECK SUMMARY map=%s order=%d guards_t1=%d guards_t2=%d expected=%d lounge_guards=%d with_meshes=%d marker_floor_within_%.1fm=%d/%d" % [
+	print("GUARD_CHECK SUMMARY map=%s order=%d guards_t1=%d guards_t2=%d expected=%d lounge_guards=%d with_meshes=%d with_guard_bucket=%d without_guard_bucket=%d marker_floor_within_%.1fm=%d/%d" % [
 		_map_id, _order, t1.size(), t2_nodes.size(), _expect_guards, lounge_guards,
-		with_meshes, MARKER_FLOOR_MAX_M, floor_ok, floor_checked,
+		with_meshes, guards_with_bucket, guards_without_bucket, MARKER_FLOOR_MAX_M, floor_ok, floor_checked,
 	])
 	if failures.is_empty():
-		print("GUARD_CHECK PASS map=%s order=%d guards=%d lounge=%d" % [
-			_map_id, _order, t1.size(), lounge_guards,
+		print("GUARD_CHECK PASS map=%s order=%d guards=%d buckets=%d/%d lounge=%d lounge_marker=%s selection=parity_approx_layer_bucket difficulty=%d" % [
+			_map_id, _order, t1.size(), guards_with_bucket, t1.size(), lounge_guards,
+			_marker_code(lounge_marker), 1,
 		])
 		quit(0)
 		return

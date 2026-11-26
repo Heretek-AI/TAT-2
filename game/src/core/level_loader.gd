@@ -2673,7 +2673,7 @@ func _new_accumulator() -> Dictionary:
 		"result": {
 			"player_spawns": [] as Array[Vector3],
 		"player_spawn_transforms": [] as Array,
-			"guard_spawns": [] as Array[Vector3],
+			"guard_spawns": [] as Array,
 			# Authored APatrolPath records (actor/class/loop_type/points[]) in
 			# world metres, merged verbatim from each sublevel so the mission
 			# controller can assign real patrols instead of the 6x6 m square.
@@ -2963,13 +2963,20 @@ func apply_scene_variant_overrides(_map_id: String, seed_value: int, variant_ids
 					out["unmapped"] = int(out["unmapped"]) + 1
 				(out["tags"] as Array).append(tag)
 
-	# Presence arrays: filter poses that resolved false. Typed arrays are kept
-	# typed so existing consumers never see a shape change.
+	# Presence arrays: filter poses that resolved false. Guard records keep their
+	# authored bucket/layers; a record is dropped only when its `pos` is
+	# suppressed. (Vector3 entries are still accepted for legacy callers.)
 	var gs_in: Array = stats.get("guard_spawns", []) as Array
-	var gs_out: Array[Vector3] = []
+	var gs_out: Array = []
 	for gv: Variant in gs_in:
-		if gv is Vector3 and not suppress.has(_sv_pos_key(gv)):
-			gs_out.append(gv as Vector3)
+		if gv is Vector3:
+			if not suppress.has(_sv_pos_key(gv)):
+				gs_out.append(gv)
+		elif gv is Dictionary:
+			var gd: Dictionary = gv as Dictionary
+			var gp_v: Variant = gd.get("pos", null)
+			if gp_v is Vector3 and not suppress.has(_sv_pos_key(gp_v)):
+				gs_out.append(gd)
 	stats["guard_spawns"] = gs_out
 	for arr_key: String in ["loot_spawns", "door_spawns", "civilian_spawns"]:
 		var arr_in: Array = stats.get(arr_key, []) as Array
@@ -3505,8 +3512,22 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 			# y 122..394, z -807..679 (≈1 km outside the play space). Catching
 			# them with the "Guard" substring made the Guildhall pool 119 when
 			# the authored mission pool is 116.
+			# P0a: the authored SpawnBucket + Layers travel with the record; the
+			# mission selection must never receive a position-only guard.
 			var gs: Array = result["guard_spawns"]
-			gs.append(p)
+			var spawn_layers: Array = []
+			var marker_layers_v: Variant = mk.get("spawn_layers", [])
+			if marker_layers_v is Array:
+				for layer_v: Variant in (marker_layers_v as Array):
+					spawn_layers.append(str(layer_v))
+			gs.append({
+				"pos": p,
+				"name": str(mk.get("name", "")),
+				"class": cls,
+				"spawn_bucket": str(mk.get("spawn_bucket", "")),
+				"spawn_layers": spawn_layers,
+				"source_file": json_path,
+			})
 			_note_scene_element(result, "guard", mk, p)
 		elif "MissionSpawner_MajorLoot" in cls or "MissionSpawner_MinorLoot" in cls or "QuestSpawner" in cls:
 			var ls: Array = result["loot_spawns"]

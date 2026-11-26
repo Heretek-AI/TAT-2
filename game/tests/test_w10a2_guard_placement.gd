@@ -1,7 +1,7 @@
 extends SceneTree
-## Standalone unit checks for the A2 pure guard-placement helper
+## Standalone unit checks for the P0a pure guard-placement helper
 ## (game/src/missions/guard_placement.gd). Not registered in run_tests.gd: the
-## acceptance lane owns suite 117, so this script is run directly:
+## acceptance lane owns suite registration, so this script is run directly:
 ##
 ##   tools/godot --headless --path game --script res://tests/test_w10a2_guard_placement.gd
 ##
@@ -26,13 +26,23 @@ func _check(label: String, ok: bool, detail: String = "") -> void:
 		printerr("FAIL: ", label, (" — " + detail) if detail != "" else "")
 
 
-func _row(order: int, grounded_y: float, marker_y: float = NAN) -> Dictionary:
+func _row(
+	order: int,
+	bucket: String,
+	layers: Array,
+	grounded_y: float = 20.0,
+	marker_y: float = NAN,
+	name: String = ""
+) -> Dictionary:
 	var my: float = marker_y if is_finite(marker_y) else grounded_y
 	return {
 		"marker": Vector3(0.0, my, 0.0),
 		"grounded": Vector3(0.0, grounded_y, 0.0),
 		"hit_y": grounded_y - 0.15,
 		"order": order,
+		"name": name,
+		"spawn_bucket": bucket,
+		"spawn_layers": layers.duplicate(),
 	}
 
 
@@ -40,6 +50,17 @@ func _orders(rows: Array) -> Array:
 	var out: Array = []
 	for row_v: Variant in rows:
 		out.append(int((row_v as Dictionary)["order"]))
+	return out
+
+
+## The caller-side eligibility filter, exercised with the same helper the
+## mission uses (10-120 m annulus + authored guard bucket).
+func _eligible(rows: Array, anchor: Vector3) -> Array:
+	var out: Array = []
+	for row_v: Variant in rows:
+		var row: Dictionary = row_v as Dictionary
+		if GP.eligible_spawn(row["marker"] as Vector3, str(row["spawn_bucket"]), anchor):
+			out.append(row)
 	return out
 
 
@@ -52,70 +73,106 @@ func _run() -> void:
 	_check("ground_delta_ok NAN rejected", not GP.ground_delta_ok(10.0, NAN))
 	_check("ground_delta_ok INF rejected", not GP.ground_delta_ok(10.0, INF))
 
-	# 2. Storey clustering: merge within 5.0 m (inclusive), split above; single
-	# linkage means a chain of near floors is one storey.
-	var clusters: Array = GP.cluster_by_storey([
-		_row(0, 10.0), _row(1, 14.9), _row(2, 20.1),
-	])
-	_check("clusters: 10.0 + 14.9 same storey, 20.1 separate", clusters.size() == 2,
-		"sizes=%s" % str(clusters.map(func(c: Array) -> int: return c.size())))
-	var chain: Array = GP.cluster_by_storey([_row(0, 10.0), _row(1, 14.9), _row(2, 19.8)])
-	_check("clusters: single linkage chain 10/14.9/19.8 is one storey", chain.size() == 1,
-		"size=%d" % chain.size())
-	var exact_five: Array = GP.cluster_by_storey([_row(0, 10.0), _row(1, 15.0)])
-	_check("clusters: exactly 5.0 m merges", exact_five.size() == 1)
+	# 2. Bucket normalisation and the authored guard allowlist.
+	_check("normalize bare bucket",
+		GP.normalize_bucket("StandardGuards_Bouncers") == "StandardGuards_Bouncers")
+	_check("normalize authored object name",
+		GP.normalize_bucket("TATActorSpawnBucketAsset'DA_SpawnBucket_StandardGuards_Bouncers'")
+		== "StandardGuards_Bouncers")
+	_check("normalize authored asset path",
+		GP.normalize_bucket("/Game/Missions/Spawners/Buckets/DA_SpawnBucket_Hauntstable.0")
+		== "Hauntstable")
+	_check("guard bucket StandardGuards_Bouncers", GP.is_guard_bucket("StandardGuards_Bouncers"))
+	_check("guard bucket StandardGuards_Lanterns", GP.is_guard_bucket("StandardGuards_Lanterns"))
+	_check("guard bucket StandardGuards_PrivateSecurity_JasperingHall_Lantern",
+		GP.is_guard_bucket("StandardGuards_PrivateSecurity_JasperingHall_Lantern"))
+	_check("guard bucket PrivateSecurity", GP.is_guard_bucket("PrivateSecurity"))
+	_check("guard bucket PrivateSecurity_Lanterns", GP.is_guard_bucket("PrivateSecurity_Lanterns"))
+	_check("guard bucket KeyHolder", GP.is_guard_bucket("KeyHolder"))
+	_check("Hauntstable is not a guard bucket", not GP.is_guard_bucket("Hauntstable"))
+	_check("civilians are not guard buckets", not GP.is_guard_bucket("Civilians"))
+	_check("SmartObject posts are not guard buckets",
+		not GP.is_guard_bucket("SmartObject_GuardDefensiveLocation"))
+	_check("empty bucket is not a guard bucket", not GP.is_guard_bucket(""))
 
-	# 3. Storey order: at/above the player ascending, then below nearest first.
-	var ordered: Array = GP.order_storeys(GP.cluster_by_storey([
-		_row(0, -10.0), _row(1, 5.0), _row(2, 20.0), _row(3, -3.0),
-	]), 0.0)
-	var ordered_y: Array = []
-	for cluster_v: Variant in ordered:
-		ordered_y.append(float((cluster_v as Array)[0]["grounded"].y))
-	_check("storeys above-first ascending then below nearest-first",
-		str(ordered_y) == str([5.0, 20.0, -3.0, -10.0]), "got %s" % str(ordered_y))
+	# 3. Eligibility: 10-120 m annulus AND a guard bucket.
+	_check("eligible_spawn 9.99 m rejected",
+		not GP.eligible_spawn(Vector3(0.0, 9.99, 0.0), "StandardGuards_Bouncers", Vector3.ZERO))
+	_check("eligible_spawn 10.00 m rejected (exclusive)",
+		not GP.eligible_spawn(Vector3(0.0, 10.0, 0.0), "StandardGuards_Bouncers", Vector3.ZERO))
+	_check("eligible_spawn 10.01 m accepted",
+		GP.eligible_spawn(Vector3(0.0, 10.01, 0.0), "StandardGuards_Bouncers", Vector3.ZERO))
+	_check("eligible_spawn 119.99 m accepted",
+		GP.eligible_spawn(Vector3(0.0, 119.99, 0.0), "PrivateSecurity", Vector3.ZERO))
+	_check("eligible_spawn 120.00 m rejected (exclusive)",
+		not GP.eligible_spawn(Vector3(0.0, 120.0, 0.0), "PrivateSecurity", Vector3.ZERO))
+	_check("eligible_spawn Hauntstable rejected at 30 m",
+		not GP.eligible_spawn(Vector3(0.0, 30.0, 0.0), "Hauntstable", Vector3.ZERO))
 
-	# 4. One per storey, then a second pass (limit 5 over 3 storeys).
-	var two_each: Array = [
-		_row(0, 10.0), _row(1, 10.0),
-		_row(2, 20.0), _row(3, 20.0),
-		_row(4, 30.0), _row(5, 30.0),
+	# 4. Layer-first selection on the measured Guildhall Novice candidate order.
+	# Authored-order subset: C_100 (SecondFloor_D), C_114 (Tower_D), C_101
+	# (SecondFloor_D, duplicate), C_18 (Basement_Storage_A), C_20 (Lounge_A/B),
+	# plus C_16 (Hauntstable, Lounge_E) which eligibility must drop.
+	var novice_all: Array = [
+		_row(3, "StandardGuards_Lanterns", ["Security_SecondFloor_D"], 44.0, NAN, "C_100"),
+		_row(16, "Hauntstable", ["Security_GroundFloor_Lounge_E"], 26.2, NAN, "C_16"),
+		_row(17, "StandardGuards_Lanterns", ["Security_Tower_D"], 45.0, NAN, "C_114"),
+		_row(18, "StandardGuards_Lanterns", ["Security_SecondFloor_D"], 36.0, NAN, "C_101"),
+		_row(34, "StandardGuards_Bouncers", ["Security_Basement_Storage_A"], 36.0, NAN, "C_18"),
+		_row(37, "StandardGuards_Bouncers", [
+			"Security_GroundFloor_Lounge_A",
+			"Security_GroundFloor_Lounge_A_Easy",
+			"Security_GroundFloor_Lounge_B",
+			"Security_GroundFloor_Lounge_B_Easy",
+		], 26.1, NAN, "C_20"),
 	]
-	var picked: Array = GP.pick(two_each, 5.0, 5)
-	_check("pick: one per storey then second pass",
-		str(_orders(picked)) == str([0, 2, 4, 1, 3]), "got %s" % str(_orders(picked)))
+	var novice_eligible: Array = _eligible(novice_all, Vector3.ZERO)
+	_check("eligibility drops the Hauntstable C_16 marker",
+		not _orders(novice_eligible).has(16), "got %s" % str(_orders(novice_eligible)))
+	var novice_pick: Array = GP.pick(novice_eligible, 4)
+	_check("layer-first pick is C_100/C_114/C_18/C_20",
+		str(_orders(novice_pick)) == str([3, 17, 34, 37]), "got %s" % str(_orders(novice_pick)))
+	_check("Novice pick contains the Lounge marker C_20",
+		_orders(novice_pick).has(37))
+	_check("Novice pick never contains the Hauntstable C_16",
+		not _orders(novice_pick).has(16))
 
-	# 5. Authored order is the deterministic tie-break inside a storey, even
-	# when the input rows arrive in another order.
-	var shuffled: Array = [_row(4, 35.6), _row(3, 35.6), _row(1, 26.1)]
-	var tie_pick: Array = GP.pick(shuffled, 23.0, 2)
-	_check("pick: same-storey winner uses authored order, not input order",
-		str(_orders(tie_pick)) == str([1, 3]), "got %s" % str(_orders(tie_pick)))
-
-	# 6. Novice Guildhall model (measured floors from the A2 static model):
-	# C_16 26.165, C_20 26.150, C_100/101 35.683, C_114 45.202, C_118 53.702,
-	# anchor y 23.31. Prediction: 16, 100, 114, 118.
-	var novice: Array = [
-		_row(0, 35.683),   # C_100
-		_row(1, 35.683),   # C_101
-		_row(2, 53.702),   # C_118
-		_row(3, 26.165),   # C_16
-		_row(4, 26.150),   # C_20
-		_row(5, 45.202),   # C_114
-		_row(6, 18.768),   # below-anchor storey
+	# 5. One per layer, then authored-order fill: the duplicate SecondFloor_D
+	# marker (C_101) cannot win a layer slot and only appears as fill.
+	var dedupe: Array = [
+		_row(0, "StandardGuards_Lanterns", ["L1"], 20.0),
+		_row(1, "StandardGuards_Lanterns", ["L1"], 20.0),
+		_row(2, "StandardGuards_Lanterns", ["L2"], 20.0),
+		_row(3, "StandardGuards_Bouncers", [], 20.0),
 	]
-	var novice_pick: Array = GP.pick(novice, 23.3085, 4)
-	_check("pick: Novice prediction is storey-first 16/100/114/118",
-		str(_orders(novice_pick)) == str([3, 0, 5, 2]), "got %s" % str(_orders(novice_pick)))
+	var dedupe_pick: Array = GP.pick(dedupe, 4)
+	_check("one per layer, then fill in authored order",
+		str(_orders(dedupe_pick)) == str([0, 2, 1, 3]), "got %s" % str(_orders(dedupe_pick)))
+	var capped_pick: Array = GP.pick(dedupe, 3)
+	_check("layer winners fill the limit before the duplicate layer",
+		str(_orders(capped_pick)) == str([0, 2, 1]), "got %s" % str(_orders(capped_pick)))
 
-	# 7. Determinism: the same input twice gives the same result.
-	var again: Array = GP.pick(novice, 23.3085, 4)
-	_check("pick: deterministic across runs",
-		str(_orders(novice_pick)) == str(_orders(again)))
+	# 6. A marker claims every layer it carries, so a shared layer is not
+	# selected twice in the layer pass.
+	var shared: Array = [
+		_row(0, "StandardGuards_Bouncers", ["L1", "L2"], 20.0),
+		_row(1, "StandardGuards_Lanterns", ["L2"], 20.0),
+		_row(2, "StandardGuards_Lanterns", ["L3"], 20.0),
+	]
+	var shared_pick: Array = GP.pick(shared, 2)
+	_check("shared layer L2 is not double-claimed in the layer pass",
+		str(_orders(shared_pick)) == str([0, 2]), "got %s" % str(_orders(shared_pick)))
+
+	# 7. Determinism: the same authored orders in a shuffled input array give
+	# the same result, and no-layer rows stay eligible for fill only.
+	var shuffled: Array = [novice_eligible[4], novice_eligible[0], novice_eligible[3], novice_eligible[2], novice_eligible[1]]
+	var again: Array = GP.pick(shuffled, 4)
+	_check("pick: deterministic across input order",
+		str(_orders(novice_pick)) == str(_orders(again)), "got %s" % str(_orders(again)))
 
 	# 8. Degenerate inputs never crash and never invent a pick.
-	_check("pick: limit 0 is empty", (GP.pick(novice, 23.0, 0) as Array).is_empty())
-	_check("pick: empty rows is empty", (GP.pick([], 23.0, 4) as Array).is_empty())
+	_check("pick: limit 0 is empty", (GP.pick(novice_eligible, 0) as Array).is_empty())
+	_check("pick: empty rows is empty", (GP.pick([], 4) as Array).is_empty())
 
 	print("GUARD_PLACEMENT_SUMMARY: fails=%d" % fails)
 	quit(1 if fails > 0 else 0)

@@ -85,13 +85,12 @@ var patrol_fallback_log: Array[String] = []
 var patrol_paths_assigned: int = 0
 const PATROL_MATCH_RADIUS_M: float = 30.0
 ## A2 guard placement. A marker is usable only when its own downward cast lands
-## within GUARD_GROUND_SKIP_M of it (a ceiling one storey up is not a floor);
-## usable candidates are merged into storeys within GUARD_STOREY_MERGE_M and
-## picked storey-first. The cast itself is one ray from +0.05 m to -30 m: the
-## old +8 m origin took the FIRST hit, so 52 of 119 Guildhall markers spawned a
-## guard one storey above its authored room.
+## within GUARD_GROUND_SKIP_M of it (a ceiling one storey up is not a floor).
+## P0a replaces the old 5 m storey-first pick with the authored
+## SpawnBucket/Layers rule in GuardPlacement.pick(); the cast itself is one ray
+## from +0.05 m to -30 m: the old +8 m origin took the FIRST hit, so 52 of 119
+## Guildhall markers spawned a guard one storey above its authored room.
 const GUARD_GROUND_SKIP_M: float = 2.0
-const GUARD_STOREY_MERGE_M: float = 5.0
 const GUARD_GROUND_UP_M: float = 0.05
 const GUARD_GROUND_DOWN_M: float = 30.0
 
@@ -3547,7 +3546,9 @@ func _marker_fallback_spawn(stats: Dictionary, w3d: World3D) -> Dictionary:
 	if mn > 0:
 		candidates.append({"pos": macc / float(mn), "source": "minor_centroid"})
 	for g_var in guards:
-		if g_var is Vector3:
+		if g_var is Dictionary and (g_var as Dictionary).get("pos", null) is Vector3:
+			candidates.append({"pos": (g_var as Dictionary).get("pos", null), "source": "guard"})
+		elif g_var is Vector3:
 			candidates.append({"pos": g_var, "source": "guard"})
 	for x_var in escapes:
 		if x_var is Vector3:
@@ -3754,29 +3755,84 @@ func _key_pool_for_map(map_id: String) -> Array[Dictionary]:
 
 
 func _spawn_guards(ue_spawns: Array, anchor: Vector3, patrol_paths: Array = []) -> void:
-	# P1 flat Novice-to-Thief guard count: the old limit ignored the first two
-	# difficulties (identical patrol density Novice/Thief). Novice 4 / Thief 6 /
-	# Master Thief 8 (UE path: none authored per difficulty; retained tuning,
-	# fail-loud if the difficulty enum is unreadable).
+	# PORT_DECISION: 4 Novice / 6 Thief / 8 Master Thief. The shipped game has
+	# no authored per-difficulty guard count in the extracted tables; this is
+	# retained tuning until the live Contract 02 capture (PARITY_APPROX) and
+	# must not be described as authored.
 	var limit: int = 6
 	match GameState.difficulty:
 		GameState.Difficulty.NOVICE:
 			limit = 4
 		GameState.Difficulty.MASTER_THIEF:
 			limit = 8
+	# P0a authored eligibility: 10-120 m from the anchor and a guard SpawnBucket
+	# (StandardGuards_*, PrivateSecurity_*, KeyHolder). Hauntstable, civilians and
+	# SmartObject posts never enter the pool. The loader hands us full records;
+	# a position-only entry is refused whenever any record is present, so the
+	# bucket can never be lost. A wholly position-only array is accepted only as
+	# the legacy synthetic-test call form (no loader path produces it).
+	var eligible: Array[Dictionary] = []
+	var legacy_positions_skipped: int = 0
+	# Compatibility for direct synthetic callers (the patrol suite passes bare
+	# positions). A real load always sends records; if even one record is
+	# present, position-only entries are refused so the bucket cannot be lost.
+	var has_records: bool = false
+	for spawn_v: Variant in ue_spawns:
+		if spawn_v is Dictionary:
+			has_records = true
+			break
+	for i: int in range(ue_spawns.size()):
+		var spawn_v: Variant = ue_spawns[i]
+		var marker: Vector3
+		var bucket: String = ""
+		var layers: Array = []
+		var marker_name: String = ""
+		var legacy_position: bool = false
+		if spawn_v is Dictionary:
+			var srec: Dictionary = spawn_v as Dictionary
+			var pos_v: Variant = srec.get("pos", null)
+			if not (pos_v is Vector3):
+				continue
+			marker = pos_v as Vector3
+			bucket = str(srec.get("spawn_bucket", ""))
+			var layers_v: Variant = srec.get("spawn_layers", [])
+			if layers_v is Array:
+				for layer_v: Variant in (layers_v as Array):
+					layers.append(str(layer_v))
+			marker_name = str(srec.get("name", ""))
+		elif spawn_v is Vector3:
+			if has_records:
+				legacy_positions_skipped += 1
+				continue
+			marker = spawn_v as Vector3
+			legacy_position = true
+		else:
+			continue
+		if legacy_position:
+			var legacy_dist: float = marker.distance_to(anchor)
+			if legacy_dist <= GuardPlacementScript.SPAWN_MIN_M or legacy_dist >= GuardPlacementScript.SPAWN_MAX_M:
+				continue
+		elif not GuardPlacementScript.eligible_spawn(marker, bucket, anchor):
+			continue
+		eligible.append({
+			"marker": marker,
+			"order": i,
+			"name": marker_name,
+			"spawn_bucket": bucket,
+			"spawn_layers": layers,
+		})
+	if legacy_positions_skipped > 0:
+		push_warning("[mission_controller] guard spawn: %d position-only guard marker(s) refused (no authored spawn bucket); regenerate level data" % legacy_positions_skipped)
 	# A2 prepared list. Ground every eligible marker with the single downward
 	# cast and keep only markers whose own floor is within GUARD_GROUND_SKIP_M;
-	# a skipped marker never consumes a storey slot. The skipped rows are kept
+	# a skipped marker never consumes a selection slot. The skipped rows are kept
 	# for back-fill: a map whose authored floors are mostly missing (Old Manor)
 	# must not silently lose its difficulty count.
-	var eligible: Array[Vector3] = []
-	for p in ue_spawns:
-		if p is Vector3 and p.distance_to(anchor) > 10.0 and p.distance_to(anchor) < 120.0:
-			eligible.append(p)
 	var prepared: Array[Dictionary] = []
 	var skipped: Array[Dictionary] = []
 	for i: int in range(eligible.size()):
-		var marker: Vector3 = eligible[i]
+		var elig: Dictionary = eligible[i]
+		var marker: Vector3 = elig["marker"] as Vector3
 		var ground: Dictionary = _ground_position(marker)
 		var grounded: Vector3 = ground["pos"] as Vector3
 		var ok: bool = bool(ground.get("ok", false))
@@ -3785,7 +3841,10 @@ func _spawn_guards(ue_spawns: Array, anchor: Vector3, patrol_paths: Array = []) 
 			"marker": marker,
 			"grounded": grounded,
 			"hit_y": float(ground.get("hit_y", NAN)),
-			"order": i,
+			"order": int(elig.get("order", i)),
+			"name": str(elig.get("name", "")),
+			"spawn_bucket": str(elig.get("spawn_bucket", "")),
+			"spawn_layers": (elig.get("spawn_layers", []) as Array).duplicate(),
 		}
 		if not ok or not GuardPlacementScript.ground_delta_ok(marker.y, grounded.y, GUARD_GROUND_SKIP_M):
 			var reason: String = "no floor hit" if not ok else ("floor %.2f m from marker" % delta_y)
@@ -3796,8 +3855,7 @@ func _spawn_guards(ue_spawns: Array, anchor: Vector3, patrol_paths: Array = []) 
 			continue
 		prepared.append(rec)
 
-	var plan: Array[Dictionary] = GuardPlacementScript.pick(
-		prepared, anchor.y, limit, GUARD_STOREY_MERGE_M)
+	var plan: Array[Dictionary] = GuardPlacementScript.pick(prepared, limit)
 	var from_prepared: int = plan.size()
 	var backfilled: int = 0
 	if plan.size() < limit and not skipped.is_empty():
@@ -3811,12 +3869,12 @@ func _spawn_guards(ue_spawns: Array, anchor: Vector3, patrol_paths: Array = []) 
 		backfilled = fill
 	if plan.is_empty():
 		plan = [
-			{"marker": anchor + Vector3(12, 0, 0), "grounded": null, "hit_y": NAN, "order": 0},
-			{"marker": anchor + Vector3(-12, 0, -10), "grounded": null, "hit_y": NAN, "order": 1},
-			{"marker": anchor + Vector3(0, 0, -18), "grounded": null, "hit_y": NAN, "order": 2},
-			{"marker": anchor + Vector3(16, 0, -16), "grounded": null, "hit_y": NAN, "order": 3},
+			{"marker": anchor + Vector3(12, 0, 0), "grounded": null, "hit_y": NAN, "order": 0, "name": "", "spawn_bucket": "", "spawn_layers": []},
+			{"marker": anchor + Vector3(-12, 0, -10), "grounded": null, "hit_y": NAN, "order": 1, "name": "", "spawn_bucket": "", "spawn_layers": []},
+			{"marker": anchor + Vector3(0, 0, -18), "grounded": null, "hit_y": NAN, "order": 2, "name": "", "spawn_bucket": "", "spawn_layers": []},
+			{"marker": anchor + Vector3(16, 0, -16), "grounded": null, "hit_y": NAN, "order": 3, "name": "", "spawn_bucket": "", "spawn_layers": []},
 		]
-	print("TAT-2 guard spawn: eligible=%d prepared=%d skipped=%d selected=%d from_prepared=%d backfilled=%d" % [
+	print("TAT-2 guard spawn: selection=parity_approx_layer_bucket eligible=%d prepared=%d skipped=%d selected=%d from_prepared=%d backfilled=%d" % [
 		eligible.size(), prepared.size(), skipped.size(), plan.size(),
 		from_prepared, backfilled,
 	])
@@ -3863,6 +3921,11 @@ func _spawn_guards(ue_spawns: Array, anchor: Vector3, patrol_paths: Array = []) 
 		# from proximity: C_116 is 1.62 m from Guard_1 and masked the old bug.
 		g.set_meta(&"spawn_marker", pos)
 		g.set_meta(&"grounded_spawn", grounded_pos)
+		# P0a: the authored bucket/layers that selected this marker, so the probe
+		# can fail closed on a Hauntstable or bucket-less pick.
+		g.set_meta(&"spawn_bucket", str(entry.get("spawn_bucket", "")))
+		g.set_meta(&"spawn_layers", (entry.get("spawn_layers", []) as Array).duplicate())
+		g.set_meta(&"spawn_marker_name", str(entry.get("name", "")))
 		var path_index: int = _authored_patrol_index_for(pos, patrol_paths, used_paths)
 		if path_index >= 0:
 			used_paths[path_index] = true
@@ -3938,12 +4001,14 @@ func _spawn_guards(ue_spawns: Array, anchor: Vector3, patrol_paths: Array = []) 
 					src_name = str(se.get("name", ""))
 					src_class = str(se.get("class", ""))
 					break
-			print("GUARD_DIAG idx=%d name=%s marker=(%.3f,%.3f,%.3f) grounded=(%.3f,%.3f,%.3f) delta=%.2f moved=%s meshes=%d %s down={%s} up={%s} floor_hit=%d %s src_name=%s src_class=%s" % [
+			print("GUARD_DIAG idx=%d name=%s marker=(%.3f,%.3f,%.3f) grounded=(%.3f,%.3f,%.3f) delta=%.2f moved=%s meshes=%d %s down={%s} up={%s} floor_hit=%d %s src_name=%s src_class=%s bucket=%s layers=%s" % [
 				idx, str(g.name), pos.x, pos.y, pos.z,
 				grounded_pos.x, grounded_pos.y, grounded_pos.z,
 				delta, str(delta > 0.5), mesh_nodes.size(), aabb_text,
 				str(down["text"]), str(up["text"]), int(flr["hit"]), floor_text,
 				src_name, src_class,
+				str(g.get_meta(&"spawn_bucket", "")),
+				str(g.get_meta(&"spawn_layers", [])),
 			])
 	if OS.get_environment("TAT2_GUARD_DIAG") == "1":
 		print("GUARD_DIAG total=%d" % diag_guards)

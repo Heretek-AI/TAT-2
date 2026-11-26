@@ -1292,6 +1292,43 @@ def _authored_lock_fields(props: dict) -> dict:
     return out
 
 
+def _spawn_bucket_meta(exps, props, comp_by_full_objname):
+    """(bucket, layers, reason) for a BP_MissionSpawner_Character_C actor.
+
+    The placed actor owns the authored ``Layers``; its ``VariationSpawner``
+    component owns the ``SpawnBucket`` asset reference (the actor record has no
+    SpawnBucket key of its own). ``reason`` is empty on success and names the
+    unresolved field otherwise; the caller fails closed on any reason so a
+    guard marker can never silently reach the loader without its bucket.
+    """
+    ref = props.get("_spawnerComponent")
+    if not isinstance(ref, dict) or not ref.get("ObjectName"):
+        return "", [], "no_spawner_component"
+    cidx = comp_by_full_objname.get(ref.get("ObjectName", ""))
+    if cidx is None and "PersistentLevel." in ref.get("ObjectName", ""):
+        tail = ref["ObjectName"].split("PersistentLevel.")[-1].rstrip("'")
+        cidx = comp_by_full_objname.get(tail)
+    if cidx is None:
+        return "", [], "spawner_component_not_found"
+    cprops = exps[cidx].get("Properties") or {}
+    raw_bucket = cprops.get("SpawnBucket")
+    bucket = ""
+    if isinstance(raw_bucket, dict):
+        obj = str(raw_bucket.get("ObjectName", ""))
+        if "'" in obj:
+            obj = obj.split("'", 1)[1].split("'", 1)[0]
+        bucket = obj.split("/")[-1].split(".")[0]
+    if not bucket:
+        return "", [], "no_spawn_bucket"
+    raw_layers = props.get("Layers")
+    if raw_layers is None:
+        raw_layers = []
+    if not isinstance(raw_layers, list):
+        return bucket, [], "layers_not_a_list"
+    layers = [str(v) for v in raw_layers if isinstance(v, str) and v]
+    return bucket, layers, ""
+
+
 def _scene_element_kind(cls: str) -> str:
     if "MissionSpawner_Character" in cls or "Guard" in cls:
         return "guard"
@@ -1781,6 +1818,12 @@ def extract_levels():
     total_bp_mesh_visible = 0
     total_bp_mesh_unresolved = 0
     total_bp_mesh_dev_skipped = 0
+    total_guard_markers = 0
+    total_guard_markers_with_bucket = 0
+    total_guard_markers_with_layers = 0
+    total_guard_markers_without_layers = 0
+    total_guard_bucket_counts = {}
+    guard_meta_unresolved_all: list = []
     mid_stats = {"resolved": 0, "unresolved": 0, "samples": [], "records": []}
     level_payloads = {}
     content_overrides = load_content_overrides()
@@ -1963,6 +2006,15 @@ def extract_levels():
         decals_unresolved = 0
         splines_skipped = 0
         markers_origin_fixed = 0
+        # P0a guard parity: authored SpawnBucket + Layers carried on every
+        # BP_MissionSpawner_Character_C marker. A marker that cannot resolve
+        # them is fatal (the loader must never select a bucket-less guard).
+        guard_markers = 0
+        guard_markers_with_bucket = 0
+        guard_markers_with_layers = 0
+        guard_markers_without_layers = 0
+        guard_markers_unresolved = []
+        guard_bucket_counts = {}
         # W10-A3: BP component meshes resolved from the SCS/archetype Template
         # chain. `bp_mesh_unresolved` counts a visible SMC stub that still has
         # no mesh after merged props + bp_templates + GLB-stem fallbacks.
@@ -2738,6 +2790,29 @@ def extract_levels():
                     **({"scene_requirement": scene_tag} if scene_tag else {}),
                     **({"spawn_group": spawn_group} if spawn_group else {}),
                 }
+                if "MissionSpawner_Character" in et:
+                    bucket, layers, why = _spawn_bucket_meta(
+                        exps, props, comp_by_full_objname
+                    )
+                    if why:
+                        guard_markers_unresolved.append(
+                            {
+                                "path": f"{rel}::{e.get('Name', '')}",
+                                "reason": why,
+                            }
+                        )
+                    else:
+                        marker_rec["spawn_bucket"] = bucket
+                        marker_rec["spawn_layers"] = layers
+                        guard_markers += 1
+                        guard_markers_with_bucket += 1
+                        if layers:
+                            guard_markers_with_layers += 1
+                        else:
+                            guard_markers_without_layers += 1
+                        guard_bucket_counts[bucket] = (
+                            guard_bucket_counts.get(bucket, 0) + 1
+                        )
                 markers.append(marker_rec)
                 kind = _scene_element_kind(et)
                 if kind:
@@ -3577,6 +3652,14 @@ def extract_levels():
                     "door_leaves_excluded": door_leaves_excluded,
                     "swinging_doors_unresolved": swinging_unresolved,
                     "markers_origin_fixed": markers_origin_fixed,
+                    "guard_spawn_meta": {
+                        "markers": guard_markers,
+                        "with_bucket": guard_markers_with_bucket,
+                        "with_layers": guard_markers_with_layers,
+                        "without_layers": guard_markers_without_layers,
+                        "bucket_counts": guard_bucket_counts,
+                        "unresolved": guard_markers_unresolved,
+                    },
                     "bp_mesh_visible": bp_mesh_visible,
                     "bp_mesh_unresolved": bp_mesh_unresolved,
                     "bp_mesh_dev_skipped": bp_mesh_dev_skipped,
@@ -3661,6 +3744,44 @@ def extract_levels():
 
     for key in list(level_payloads.keys()):
         resolve_li(key)
+
+    # P0a guard parity gate: every BP_MissionSpawner_Character_C marker must
+    # carry the authored SpawnBucket and Layers before any payload is written.
+    # A missing bucket would let the loader fall back to a bucket-less pick,
+    # which is the defect this wave removes, so it is fatal (not a warning).
+    for key, lmeta in level_payloads.items():
+        ldata = lmeta["data"]
+        gsm = ldata.get("guard_spawn_meta") or {}
+        n_markers = int(gsm.get("markers", 0))
+        unresolved = gsm.get("unresolved") or []
+        if n_markers == 0 and not unresolved:
+            continue
+        total_guard_markers += n_markers
+        total_guard_markers_with_bucket += int(gsm.get("with_bucket", 0))
+        total_guard_markers_with_layers += int(gsm.get("with_layers", 0))
+        total_guard_markers_without_layers += int(gsm.get("without_layers", 0))
+        for b_name, b_count in (gsm.get("bucket_counts") or {}).items():
+            total_guard_bucket_counts[b_name] = total_guard_bucket_counts.get(
+                b_name, 0
+            ) + int(b_count)
+        for u in unresolved:
+            guard_meta_unresolved_all.append(u)
+        print(
+            f"  {lmeta['rel']}: guard_markers={n_markers} "
+            f"with_bucket={gsm.get('with_bucket', 0)} "
+            f"with_layers={gsm.get('with_layers', 0)} "
+            f"without_layers={gsm.get('without_layers', 0)} "
+            f"unresolved={len(unresolved)}"
+        )
+    if guard_meta_unresolved_all:
+        listing = "; ".join(
+            f"{u['path']} ({u['reason']})" for u in guard_meta_unresolved_all[:16]
+        )
+        raise SystemExit(
+            "parse_tables: REFUSING to normalize with "
+            f"{len(guard_meta_unresolved_all)} MissionSpawner_Character "
+            f"marker(s) missing SpawnBucket/Layers metadata: {listing}"
+        )
 
     # Write Pass: emit every map payload. A world-only or developer map is still a
     # level; the payload itself records whether it holds renderable entities.
@@ -3778,6 +3899,18 @@ def extract_levels():
         f"rigid_no_params={total_splines_rigid}"
     )
     print(f"Marker transforms: origin_fixed={total_markers_origin_fixed}")
+    bucket_text = ", ".join(
+        f"{k}={v}" for k, v in sorted(total_guard_bucket_counts.items())
+    )
+    print(
+        f"Guard spawn markers: total={total_guard_markers} "
+        f"with_bucket={total_guard_markers_with_bucket} "
+        f"with_layers={total_guard_markers_with_layers} "
+        f"without_layers={total_guard_markers_without_layers} "
+        f"unresolved={len(guard_meta_unresolved_all)}"
+    )
+    if bucket_text:
+        print(f"Guard spawn buckets: {bucket_text}")
     print(
         "GC layers: components={components} hidden={hidden} visible={visible} "
         "visible_emitted={visible_emitted} hidden_emitted={hidden_emitted} "

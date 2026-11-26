@@ -20,15 +20,32 @@ How the cooked graph is resolved (no guessing):
   ``TransitionsBegin/Num``, ``Type`` and ``LinkedAsset``. Child/condition/task
   indices index the same asset's ``Nodes.Structs`` array and the child indices
   index ``States``; every range is bounds-checked here.
-* Node display names (task, enter-condition, utility and transition-condition
-  names) are copied from ``Nodes.Structs[k].Name``. The cooked dump does not
-  serialise the node's UClass on the struct itself, so the graph keeps the
-  authored display name plus the instance-template index for traceability
-  instead of inventing a class mapping.
+* Every task / enter-condition / utility / transition-condition node is emitted
+  as an object (``schema tat2.guard_behavior/2``) carrying its display name,
+  Blueprint class when the dump serialises one, ``Nodes.Structs`` index, the
+  instance-template index, the instance-data source, its authored parameter
+  values and its input bindings. The resolution chain is
+  ``Nodes.Structs[k].InstanceTemplateIndex.Value`` -> the array named by
+  ``InstanceDataHandle.Source`` (``DefaultInstanceData`` for ``Active*`` /
+  ``Global*``, ``SharedInstanceData`` for ``Shared*``). The 139 ``…Object``
+  templates are a ``{InstanceObject: {ObjectPath: "<package>.<export>"}}``
+  pointer into the same file; the export's ``Properties`` are the per-instance
+  overrides and an empty ``Properties`` means "inherit the class default",
+  recorded as ``inherited: true`` (never guessed).
+* Bindings come from ``PropertyBindings.CopyBatches[BindingsBatch]`` ->
+  ``PropertyPathBindings[BindingsBegin..BindingsEnd]``; each becomes
+  ``bound[<target path>] = {source_array, source_index, source_state_index,
+  source_path}``. A parameter-bag source (``StateParameterData`` /
+  ``GlobalParameterData`` / ``SubtreeParameterData``) has no serialized value,
+  so its entry carries ``value: "UNKNOWN"``.
+* ``RequiredEventToEnter`` (3 states) and ``bConsumeEventOnSelect`` (states and
+  transitions) are emitted so a runtime can gate event entry.
+* The cooked dump does not serialise a native node's UClass; its ``class`` is
+  ``null``. Blueprint nodes carry ``TaskClass`` / ``ConditionClass``.
 * ``LinkedAsset`` states are resolved to the subtree asset name and, when
   present, the ``LinkedState`` entry point.
 * Transitions keep ``Trigger``, ``Priority``, ``RequiredEvent`` tag,
-  target state name/index, condition names, delay and enabled flag.
+  target state name/index, condition objects, delay and enabled flag.
 
 The report is generated here as well so its counts can never drift from the
 payload. The "port coverage" section is a curated comparison against
@@ -56,7 +73,7 @@ REPORT_PATH = ROOT / "docs" / "reports" / "w5e-guard-state-tree.md"
 GUARD_GD = ROOT / "game" / "src" / "ai" / "guard_ai.gd"
 CIVILIAN_GD = ROOT / "game" / "src" / "ai" / "civilian_npc.gd"
 
-SCHEMA = "tat2.guard_behavior/1"
+SCHEMA = "tat2.guard_behavior/2"
 GAME_VERSION = "Steam 1.5.193.148559"
 
 EXPECTED_TREES = 21
@@ -64,9 +81,50 @@ EXPECTED_GUARD = {"states": 126, "transitions": 148}
 EXPECTED_CIVILIAN = {"states": 73, "transitions": 82}
 ROOT_TREES = ("ST_Guard", "ST_Civilian", "ST_OffNavLink")
 
+# Payload /2 node inventory, measured from the dump (fail closed on drift).
+EXPECTED_NODES = 566
+EXPECTED_TASK_INSTANCES = 326
+EXPECTED_CONDITION_INSTANCES = 233
+EXPECTED_UNREFERENCED_NODES = 7
+EXPECTED_OBJECT_TEMPLATES = 139
+EXPECTED_INHERITED_TEMPLATES = 65
+EXPECTED_BOUND_BINDINGS = 676
+
 NO_INDEX = 65535
 # FStateTreeStateHandle special indices (UE MAX_uint16 - n).
 SPECIAL_HANDLES = {65535: "Invalid", 65534: "Succeeded", 65533: "Next"}
+
+# Instance-data sources whose struct is serialized in the dump. The ``…Object``
+# variants hold an ``InstanceObject`` pointer to a Blueprint template export in
+# the same file; the other two hold the struct inline.
+SERIALIZED_DATA_SOURCES = frozenset(
+    {
+        "ActiveInstanceData",
+        "ActiveInstanceDataObject",
+        "SharedInstanceData",
+        "SharedInstanceDataObject",
+        "GlobalInstanceData",
+        "GlobalInstanceDataObject",
+    }
+)
+# Data handles into runtime parameter bags: the dump carries the schema
+# (``PropertyDescs`` + ``SerialSize``) and no values, so a binding from one of
+# these arrays is marked ``value: "UNKNOWN"``. ``ResetAlertness`` (ST_Patrol's
+# asset parameter) is the canonical case.
+PARAMETER_BAG_SOURCES = frozenset(
+    {
+        "StateParameterData",
+        "GlobalParameterData",
+        "SubtreeParameterData",
+        "TransitionEvent",
+    }
+)
+# Engine context objects (Actor, AIController, …): live at runtime, not values
+# in the dump; the binding names the context slot instead.
+CONTEXT_DATA_SOURCE = "ContextData"
+
+# Instance array selection, keyed by the prefix of the source enum tail.
+ACTIVE_PREFIXES = ("Active", "Global")
 
 # Curated port comparison. `needle` is the grep pattern used against the port
 # source; `hits` records the measured match count so the report states evidence
@@ -269,6 +327,95 @@ def linked_asset_name(state: dict) -> str | None:
     return name or None
 
 
+def uobject_name(value) -> str | None:
+    """Leaf class/object name of a dump object reference, else ``None``.
+
+    ``BlueprintGeneratedClass'/Game/…/STT_X.STT_X_C'`` -> ``STT_X_C``;
+    ``Class'Pawn'`` -> ``Pawn``.
+    """
+    if not isinstance(value, dict):
+        return None
+    name = str(value.get("ObjectName", ""))
+    if "'" in name:
+        name = name.split("'")[1]
+    name = name.split(".")[0]
+    return name or None
+
+
+def uobject_path(value) -> str | None:
+    if not isinstance(value, dict):
+        return None
+    path = str(value.get("ObjectPath", ""))
+    return path or None
+
+
+def path_segments(path, label: str) -> list[str]:
+    """``{Segments: [{Name, ArrayIndex, InstanceStruct}]}`` -> segment names.
+
+    The dump's source paths are flat property chains (``PatrolPointData`` ->
+    ``WaitSeconds``); no source segment carries an array index or a nested
+    instance struct in the 676 measured bindings, so a non-flat path is a hard
+    error rather than a silent truncation.
+    """
+    if path is None:
+        return []
+    if not isinstance(path, dict):
+        raise Fail(f"{label}: property path is not an object")
+    segments = path.get("Segments") or []
+    if not isinstance(segments, list):
+        raise Fail(f"{label}: Segments is not a list")
+    names = []
+    for segment in segments:
+        if not isinstance(segment, dict):
+            raise Fail(f"{label}: path segment is not an object")
+        name = str(segment.get("Name", ""))
+        if not name:
+            raise Fail(f"{label}: empty path segment name")
+        if int(segment.get("ArrayIndex", -1)) != -1:
+            raise Fail(f"{label}: source path segment {name!r} carries an array index")
+        if segment.get("InstanceStruct") is not None:
+            raise Fail(
+                f"{label}: source path segment {name!r} carries an instance struct"
+            )
+        names.append(name)
+    return names
+
+
+def binding_target_key(path, label: str) -> str:
+    """Target path -> a stable key; array elements keep their index."""
+    if not isinstance(path, dict):
+        raise Fail(f"{label}: target property path is not an object")
+    parts = []
+    for segment in path.get("Segments") or []:
+        if not isinstance(segment, dict):
+            raise Fail(f"{label}: target path segment is not an object")
+        name = str(segment.get("Name", ""))
+        if not name:
+            raise Fail(f"{label}: empty target path segment name")
+        array_index = int(segment.get("ArrayIndex", -1))
+        parts.append(name if array_index < 0 else f"{name}[{array_index}]")
+    key = ".".join(parts)
+    if not key:
+        raise Fail(f"{label}: binding has an empty target path")
+    return key
+
+
+def jsonable(value, label: str):
+    """Convert a dump value to a JSON-safe authored value (no reinterpretation)."""
+    if isinstance(value, dict):
+        if set(value.keys()) == {"ObjectName", "ObjectPath"}:
+            return {
+                "object": str(value.get("ObjectName", "")),
+                "object_path": str(value.get("ObjectPath", "")),
+            }
+        return {str(key): jsonable(item, label) for key, item in value.items()}
+    if isinstance(value, list):
+        return [jsonable(item, label) for item in value]
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    raise Fail(f"{label}: value of type {type(value).__name__} is not JSON-safe")
+
+
 def build_tree(path: Path) -> dict | None:
     data = load_json(path)
     if not isinstance(data, list) or not data:
@@ -286,21 +433,194 @@ def build_tree(path: Path) -> dict | None:
     if not isinstance(transitions, list):
         raise Fail(f"{name}: Transitions is not a list")
 
-    def node_name(index: int, kind: str) -> str:
-        if not 0 <= index < len(nodes):
-            raise Fail(f"{name}: {kind} index {index} outside Nodes.Structs")
-        label = str(nodes[index].get("Name", "")).strip()
-        if not label:
-            raise Fail(f"{name}: {kind} index {index} has no Name")
-        return label
+    def instance_structs(key: str) -> list:
+        holder = props.get(key) or {}
+        data_block = (holder.get("Data") or {}).get("InstanceStructs") or {}
+        structs = data_block.get("Structs") or []
+        if not isinstance(structs, list):
+            raise Fail(f"{name}: {key}.Data.InstanceStructs.Structs is not a list")
+        return structs
 
-    def slice_names(begin: int, count: int, kind: str) -> list[str]:
+    default_structs = instance_structs("DefaultInstanceData")
+    shared_structs = instance_structs("SharedInstanceData")
+    bindings_block = props.get("PropertyBindings") or {}
+    copy_batches = bindings_block.get("CopyBatches") or []
+    path_bindings = bindings_block.get("PropertyPathBindings") or []
+    if not isinstance(copy_batches, list) or not isinstance(path_bindings, list):
+        raise Fail(f"{name}: PropertyBindings arrays are not lists")
+
+    # One node record per Nodes.Structs entry; every entry must be emitted
+    # exactly once (tasks/conditions by the graph, the rest as
+    # `nodes_unreferenced`).
+    node_records: dict[int, dict] = {}
+
+    def node_bindings(node: dict, node_index: int, kind: str) -> dict:
+        batch_value = int((node.get("BindingsBatch") or {}).get("Value", NO_INDEX))
+        if batch_value == NO_INDEX:
+            return {}
+        if not 0 <= batch_value < len(copy_batches):
+            raise Fail(
+                f"{name} node {node_index}: BindingsBatch {batch_value} out of range"
+            )
+        batch = copy_batches[batch_value]
+        target_handle = (batch.get("TargetStruct") or {}).get("DataHandle") or {}
+        if target_handle != (node.get("InstanceDataHandle") or {}):
+            raise Fail(
+                f"{name} node {node_index}: CopyBatches[{batch_value}] targets a "
+                "different DataHandle than the node"
+            )
+        begin = int((batch.get("BindingsBegin") or {}).get("Value", 0))
+        end = int((batch.get("BindingsEnd") or {}).get("Value", 0))
+        if not 0 <= begin <= end <= len(path_bindings):
+            raise Fail(
+                f"{name} node {node_index}: bindings {begin}..{end} outside "
+                f"PropertyPathBindings ({len(path_bindings)})"
+            )
+        out: dict[str, dict] = {}
+        for binding_index in range(begin, end):
+            binding = path_bindings[binding_index]
+            label = f"{name} node {node_index} binding {binding_index}"
+            key = binding_target_key(binding.get("TargetPropertyPath"), label)
+            if key in out:
+                raise Fail(f"{label}: target {key!r} is bound twice")
+            handle = binding.get("SourceDataHandle") or {}
+            source_array = enum_tail(handle.get("Source"), f"{label} Source")
+            if (
+                source_array not in SERIALIZED_DATA_SOURCES
+                and source_array not in PARAMETER_BAG_SOURCES
+                and source_array != CONTEXT_DATA_SOURCE
+            ):
+                raise Fail(f"{label}: unknown source array {source_array!r}")
+            source_index = int(handle.get("Index", NO_INDEX))
+            source_state = int((handle.get("StateHandle") or {}).get("Index", NO_INDEX))
+            record = {
+                "source_array": source_array,
+                "source_index": None if source_index == NO_INDEX else source_index,
+                "source_state_index": None
+                if source_state == NO_INDEX
+                else source_state,
+                "source_path": path_segments(binding.get("SourcePropertyPath"), label),
+            }
+            if source_array in PARAMETER_BAG_SOURCES:
+                # Schema-only bag: no value bytes anywhere in the dump.
+                record["value"] = "UNKNOWN"
+            out[key] = record
+        return out
+
+    def node_record(node_index: int, kind: str) -> dict:
+        if node_index in node_records:
+            raise Fail(f"{name}: node {node_index} is referenced more than once")
+        if not 0 <= node_index < len(nodes):
+            raise Fail(f"{name}: node index {node_index} outside Nodes.Structs")
+        node = nodes[node_index]
+        if not isinstance(node, dict):
+            raise Fail(f"{name}: node {node_index} is not an object")
+        label = f"{name} node {node_index}"
+        node_label = str(node.get("Name", "")).strip()
+        if not node_label:
+            raise Fail(f"{label}: no Name")
+        handle = node.get("InstanceDataHandle") or {}
+        data_source = enum_tail(
+            handle.get("Source"), f"{label} InstanceDataHandle.Source"
+        )
+        if data_source not in SERIALIZED_DATA_SOURCES:
+            raise Fail(
+                f"{label}: node data source {data_source!r} is not an instance array"
+            )
+        template_index = int(
+            (node.get("InstanceTemplateIndex") or {}).get("Value", NO_INDEX)
+        )
+        structs = (
+            default_structs
+            if data_source.startswith(ACTIVE_PREFIXES)
+            else shared_structs
+        )
+        if not 0 <= template_index < len(structs):
+            raise Fail(
+                f"{label}: InstanceTemplateIndex {template_index} outside its array ({len(structs)})"
+            )
+        template = structs[template_index]
+        if not isinstance(template, dict):
+            raise Fail(f"{label}: instance template {template_index} is not an object")
+        bp_class = uobject_name(node.get("TaskClass")) or uobject_name(
+            node.get("ConditionClass")
+        )
+        record = {
+            "name": node_label,
+            "class": bp_class,
+            "kind": kind,
+            "node_index": node_index,
+            "template_index": template_index,
+            "data_source": data_source,
+            "inherited": False,
+            "parameters": {},
+            "bound": node_bindings(node, node_index, kind),
+        }
+        if "InstanceObject" in template:
+            if bp_class is None:
+                raise Fail(f"{label}: Object template without TaskClass/ConditionClass")
+            object_path = uobject_path(template.get("InstanceObject"))
+            if not object_path or "." not in object_path:
+                raise Fail(f"{label}: malformed InstanceObject path {object_path!r}")
+            object_package, _, export_text = object_path.rpartition(".")
+            if object_package != package:
+                raise Fail(
+                    f"{label}: ObjectPath {object_path!r} is not in the same file ({package})"
+                )
+            try:
+                export_index = int(export_text)
+            except ValueError:
+                raise Fail(
+                    f"{label}: ObjectPath export {export_text!r} is not an int"
+                ) from None
+            if not 0 <= export_index < len(data):
+                raise Fail(
+                    f"{label}: ObjectPath export {export_index} outside the export list ({len(data)})"
+                )
+            export = data[export_index]
+            if not isinstance(export, dict):
+                raise Fail(
+                    f"{label}: ObjectPath export {export_index} is not an object"
+                )
+            overrides = export.get("Properties") or {}
+            if not isinstance(overrides, dict):
+                raise Fail(
+                    f"{label}: ObjectPath export {export_index} Properties is not an object"
+                )
+            record["object_path"] = object_path
+            record["object_export_index"] = export_index
+            record["inherited"] = not bool(overrides)
+            record["parameters"] = {
+                str(key): jsonable(value, f"{label}.{key}")
+                for key, value in overrides.items()
+                if key != "InstanceObject"
+            }
+        else:
+            parameters = {
+                str(key): jsonable(value, f"{label}.{key}")
+                for key, value in template.items()
+                if key != "InstanceObject"
+            }
+            # The engine slot is a binding slot, not an authored value; the
+            # bound map carries where it comes from. Other bound targets keep
+            # their serialized default (the engine overwrites it on enter).
+            if "AIController" in record["bound"]:
+                parameters.pop("AIController", None)
+            block = parameters.get("Parameters")
+            if isinstance(block, dict) and "PropertyDescs" in block:
+                # Schema only (never observed on a task/condition node).
+                record["runtime_fed"] = True
+            record["parameters"] = parameters
+        node_records[node_index] = record
+        return record
+
+    def slice_nodes(begin: int, count: int, kind: str) -> list[dict]:
         if count < 0 or begin < 0 or begin + count > len(nodes):
             raise Fail(
                 f"{name}: {kind} range {begin}..{begin + count} outside "
                 f"Nodes.Structs ({len(nodes)})"
             )
-        return [node_name(begin + offset, kind) for offset in range(count)]
+        return [node_record(begin + offset, kind) for offset in range(count)]
 
     def slice_transitions(begin: int, count: int) -> list[int]:
         if count < 0 or begin < 0 or begin + count > len(transitions):
@@ -353,19 +673,22 @@ def build_tree(path: Path) -> dict | None:
             if (states[child].get("Parent") or {}).get("Index") == index
         ]
 
-        tasks = slice_names(
+        task_nodes = slice_nodes(
             int(state.get("TasksBegin", 0)), int(state.get("TasksNum", 0)), "task"
         )
-        enter = slice_names(
+        enter_nodes = slice_nodes(
             int(state.get("EnterConditionsBegin", 0)),
             int(state.get("EnterConditionsNum", 0)),
-            "enter condition",
+            "enter_condition",
         )
-        utility = slice_names(
+        utility_nodes = slice_nodes(
             int(state.get("UtilityConsiderationsBegin", 0)),
             int(state.get("UtilityConsiderationsNum", 0)),
-            "utility consideration",
+            "utility_consideration",
         )
+        tasks = [node["name"] for node in task_nodes]
+        enter = [node["name"] for node in enter_nodes]
+        utility = [node["name"] for node in utility_nodes]
         trans_indices = slice_transitions(
             int(state.get("TransitionsBegin", 0)), int(state.get("TransitionsNum", 0))
         )
@@ -379,12 +702,12 @@ def build_tree(path: Path) -> dict | None:
             target_index = (transition.get("State") or {}).get("Index")
             if target_index is None:
                 raise Fail(f"{name}[{index}]: transition {trans_index} has no state")
-            conditions = slice_names(
+            condition_nodes = slice_nodes(
                 int(transition.get("ConditionsBegin", 0)),
                 int(transition.get("ConditionsNum", 0)),
-                "transition condition",
+                "transition_condition",
             )
-            condition_names.extend(conditions)
+            condition_names.extend(node["name"] for node in condition_nodes)
             event_ref = transition.get("RequiredEvent") or {}
             event = tag_name(event_ref.get("Tag"))
             if event in ("", "None"):
@@ -396,6 +719,7 @@ def build_tree(path: Path) -> dict | None:
             else:
                 to_state = state_name(int(target_index))
                 to_kind = "state"
+            consume_event = bool(transition.get("bConsumeEventOnSelect", True))
             record = {
                 "index": trans_index,
                 "from_state": str(state.get("Name", "")),
@@ -410,7 +734,8 @@ def build_tree(path: Path) -> dict | None:
                     transition.get("Priority"), f"{name} transition {trans_index}"
                 ),
                 "required_event": event,
-                "conditions": conditions,
+                "consume_event_on_select": consume_event,
+                "conditions": condition_nodes,
                 "enabled": bool(transition.get("bTransitionEnabled", True)),
                 "delay_seconds": float(delay.get("duration", 0.0)),
                 "delay_random_variance": float(delay.get("RandomVariance", 0.0)),
@@ -430,13 +755,18 @@ def build_tree(path: Path) -> dict | None:
                     "trigger": record["trigger"],
                     "priority": record["priority"],
                     "required_event": event,
-                    "conditions": conditions,
+                    "consume_event_on_select": consume_event,
+                    "conditions": condition_nodes,
                     "enabled": record["enabled"],
                 }
             )
 
         linked = linked_asset_name(state)
         linked_state = (state.get("LinkedState") or {}).get("Index", NO_INDEX)
+        required_event = state.get("RequiredEventToEnter") or {}
+        required_tag = tag_name(required_event.get("Tag"))
+        if required_tag in ("", "None"):
+            required_tag = ""
         out_states.append(
             {
                 "index": index,
@@ -447,9 +777,23 @@ def build_tree(path: Path) -> dict | None:
                 "parent_index": None if parent_index == NO_INDEX else int(parent_index),
                 "children": children,
                 "children_range": [children_begin, children_end],
-                "tasks": tasks,
-                "enter_conditions": enter,
-                "utility_considerations": utility,
+                "tasks": task_nodes,
+                "enter_conditions": enter_nodes,
+                "utility_considerations": utility_nodes,
+                "required_event_to_enter": (
+                    {
+                        "tag": required_tag,
+                        "payload_struct": uobject_name(
+                            required_event.get("PayloadStruct")
+                        ),
+                    }
+                    if required_tag
+                    else None
+                ),
+                "has_transition_tasks": bool(state.get("bHasTransitionTasks", False)),
+                "consume_event_on_select": bool(
+                    state.get("bConsumeEventOnSelect", True)
+                ),
                 "transitions": state_transitions,
                 "linked_asset": linked,
                 "linked_state_index": (
@@ -490,6 +834,36 @@ def build_tree(path: Path) -> dict | None:
     ]
     types = Counter(state["type"] for state in out_states)
 
+    # Every Nodes.Structs entry is emitted exactly once: 559 are reachable from
+    # the graph (326 tasks + 233 conditions) and 7 are not (6 `Get Actor
+    # Location` property functions used as binding sources + ST_Guard's
+    # Difficulty Evaluator). A hole or a duplicate is a producer bug.
+    unreferenced: list[dict] = []
+    for node_index, node in enumerate(nodes):
+        if node_index in node_records:
+            continue
+        label = str(node.get("Name", "")).strip()
+        kind = "evaluator" if label == "Difficulty Evaluator" else "property_function"
+        unreferenced.append(node_record(node_index, kind))
+    if len(node_records) != len(nodes):
+        missing = sorted(set(range(len(nodes))) - set(node_records))
+        raise Fail(f"{name}: nodes {missing[:8]} were never emitted")
+    bound_total = 0
+    bound_sources: Counter = Counter()
+    nodes_with_parameters = 0
+    inherited_total = 0
+    object_templates = 0
+    for record in node_records.values():
+        bound_total += len(record["bound"])
+        for entry in record["bound"].values():
+            bound_sources[entry["source_array"]] += 1
+        if record["parameters"]:
+            nodes_with_parameters += 1
+        if record["inherited"]:
+            inherited_total += 1
+        if "object_path" in record:
+            object_templates += 1
+
     return {
         "asset": package or f"/Game/AI/StateTrees/{name}",
         "package": str(path.relative_to(ROOT).as_posix()),
@@ -509,10 +883,32 @@ def build_tree(path: Path) -> dict | None:
             "condition_instances": len(condition_names),
             "events": sorted(set(events)),
             "subtree_links": len(subtree_links),
+            "exports": len(data),
+            "nodes": len(nodes),
+            "nodes_referenced": len(nodes) - len(unreferenced),
+            "nodes_unreferenced": len(unreferenced),
+            "nodes_with_parameters": nodes_with_parameters,
+            "object_templates": object_templates,
+            "inherited_templates": inherited_total,
+            "bound_bindings": bound_total,
+            "binding_sources": dict(sorted(bound_sources.items())),
+            "required_event_states": sum(
+                1 for state in out_states if state["required_event_to_enter"]
+            ),
+            "consume_event_false_states": sum(
+                1 for state in out_states if not state["consume_event_on_select"]
+            ),
+            "consume_event_false_transitions": sum(
+                1
+                for state in out_states
+                for transition in state["transitions"]
+                if not transition["consume_event_on_select"]
+            ),
         },
         "tasks": sorted(set(task_names)),
         "conditions": sorted(set(condition_names)),
         "subtree_links": subtree_links,
+        "nodes_unreferenced": unreferenced,
         "states": out_states,
         "transitions": out_transitions,
     }
@@ -726,6 +1122,97 @@ def build_report(payload: dict, coverage: list[dict]) -> str:
             add(f"- {entry}")
         add("")
     add("")
+    add("## Node parameters and bindings (`tat2.guard_behavior/2`)")
+    add("")
+    add(
+        "Every task, enter condition, utility consideration and transition "
+        "condition is an object. Its parameter struct is resolved through "
+        "`Nodes.Structs[k].InstanceTemplateIndex.Value` into the instance-data "
+        "array named by `InstanceDataHandle.Source` (`DefaultInstanceData` for "
+        "`Active*`/`Global*`, `SharedInstanceData` for `Shared*`). The 139 "
+        '`{InstanceObject: {ObjectPath: "<package>.<export>"}}` templates are '
+        "per-instance Blueprint overrides in the *same file*; all 139 resolve, "
+        "and 65 export empty `Properties`, recorded as `inherited: true` (the "
+        "class default applies and is not in the dump)."
+    )
+    add("")
+    add("| item | measured |")
+    add("|---|---|")
+    add(f"| `Nodes.Structs` nodes | {stats['nodes']} |")
+    add(f"| task instances | {stats['task_instances']} |")
+    add(
+        f"| condition instances (enter + transition) | {stats['condition_instances']} |"
+    )
+    add(
+        f"| unreferenced nodes (6 `Get Actor Location` + 1 evaluator) | "
+        f"{stats['nodes_unreferenced']} |"
+    )
+    add(
+        f"| Object templates / resolved same-file | "
+        f"{stats['object_templates']} / {stats['object_templates']} |"
+    )
+    add(
+        f"| inherited templates (empty `Properties`) | {stats['inherited_templates']} |"
+    )
+    add(
+        f"| nodes with a non-empty `parameters` block | {stats['nodes_with_parameters']} |"
+    )
+    add(
+        f"| `PropertyPathBindings` entries emitted as `bound` | {stats['bound_bindings']} |"
+    )
+    add("")
+    add("Bindings by source array (`bound` entries):")
+    add("")
+    add("| source array | entries |")
+    add("|---|---|")
+    for source_array, count in sorted(
+        (stats.get("binding_sources") or {}).items(), key=lambda row: (-row[1], row[0])
+    ):
+        add(f"| `{source_array}` | {count} |")
+    add("")
+    add(
+        "A binding from `StateParameterData`, `GlobalParameterData`, "
+        "`SubtreeParameterData` or `TransitionEvent` names a parameter bag that "
+        'serialises a schema only; those entries carry `value: "UNKNOWN"`. '
+        "`ContextData` entries name a live context slot (`0` = Actor, "
+        "`1` = AIController) and carry no value. `RequiredEventToEnter` is "
+        f"non-null on {len(stats.get('required_event_states') or [])} states; "
+        f"`bConsumeEventOnSelect` is false on "
+        f"{stats.get('consume_event_false_states', 0)} states and "
+        f"{stats.get('consume_event_false_transitions', 0)} transitions."
+    )
+    add("")
+    add("### Worked examples (verified by `tools/check_logic_data.py`)")
+    add("")
+    add(
+        "- `ST_Patrol[17] Delay`: template `duration = 1.0` is a **template "
+        "default**; `Duration` is bound to "
+        "`StateParameterData(state 3).PatrolPointData.WaitSeconds` and "
+        "`RandomDeviation` to `.WaitDeviation`, so the authored dwell is the "
+        "patrol point's, not 1.0 s."
+    )
+    add(
+        "- `ST_Patrol[19] Failed`: one `Delay Task` with template "
+        "`duration = 100.0` and no bindings batch - a **literal** 100 s."
+    )
+    add(
+        "- `ST_Patrol[1] Bool Compare`: `bLeft` is bound to "
+        "`GlobalParameterData.ResetAlertness` (`value: UNKNOWN`; the asset "
+        "parameter bag has no serialized value), `bRight = true` is authored."
+    )
+    add(
+        "- `ST_Patrol[14] Move To`: `Destination` is bound to "
+        "`StateParameterData(state 3).CurrentPatrolWorldLocation`."
+    )
+    add(
+        "- `ST_Patrol[11] Patrol Point Is Of Type`: export 2 carries "
+        "`PatrolPathType = EPatrolPointType::SmartObjectInteraction`; "
+        "`TargetPatrolPathType` is bound to "
+        "`StateParameterData(state 3).PatrolPointData.PatrolPointType`. The "
+        "second instance (`ST_Patrol[13]`, export 3) has empty `Properties` "
+        "and is `inherited: true`."
+    )
+    add("")
     add("## Port coverage (`game/src/ai/guard_ai.gd`, `civilian_npc.gd`)")
     add("")
     add(
@@ -775,15 +1262,23 @@ def build_report(payload: dict, coverage: list[dict]) -> str:
     add("## Remaining unknowns")
     add("")
     add(
-        "- Node UClasses: the cooked StateTree structs serialise the node's "
-        "display name and instance-template index, not the class path, so the "
-        "payload names tasks/conditions by their authored display name. Mapping "
-        "each name to `STT_*`/`STC_*` needs the per-node template walk."
+        "- Node UClasses for native nodes: the cooked struct serialises the "
+        "display name, the instance-data template index and the instance-data "
+        "struct, not the StateTree node class, so native nodes carry "
+        "`class: null`. The 139 Blueprint nodes carry `TaskClass` / "
+        "`ConditionClass` and are the only nodes with a class."
     )
     add(
-        "- Per-node parameters (durations, distances, tag queries) live in the "
-        "instance-data templates and the task Blueprints, not in the StateTree "
-        "graph; the payload does not claim them."
+        "- Parameter-bag values: state, global and subtree parameter bags "
+        "serialise a schema (`PropertyDescs`, `SerialSize`) and no value bytes. "
+        "A binding from one of those arrays is emitted with "
+        '`value: "UNKNOWN"` (canonical case: ST_Patrol\'s `ResetAlertness`, '
+        "bound to `Bool Compare.bLeft`). The port must supply the live value."
+    )
+    add(
+        "- `RefAccessIndex` slots inside native task templates (e.g. "
+        "`TATStateTreeTaskSetupPatrolData`) index `PropertyReferencePaths`; the "
+        "payload keeps them verbatim and does not resolve them."
     )
     add(
         "- EQS query assets behind `Run Env Query` are not enumerated here; the "
@@ -793,7 +1288,7 @@ def build_report(payload: dict, coverage: list[dict]) -> str:
         "- The `Difficulty Evaluator` (the asset's one global evaluator, "
         "`EvaluatorsNum = 1`, configured `ETATDifficulty::Normal`) sits in "
         "`Nodes.Structs` but is not referenced by any state's task/condition "
-        "range, so it is counted per tree (`global_evaluators`) and its "
+        "range, so it is emitted under `nodes_unreferenced` and its "
         "per-difficulty selection is not recovered."
     )
     add(
@@ -878,6 +1373,34 @@ def main() -> int:
         )
         states_total = sum(tree["stats"]["states"] for tree in trees.values())
         transitions_total = sum(tree["stats"]["transitions"] for tree in trees.values())
+        nodes_total = sum(tree["stats"]["nodes"] for tree in trees.values())
+        task_instances = sum(tree["stats"]["task_instances"] for tree in trees.values())
+        condition_instances = sum(
+            tree["stats"]["condition_instances"] for tree in trees.values()
+        )
+        unreferenced_total = sum(
+            tree["stats"]["nodes_unreferenced"] for tree in trees.values()
+        )
+        object_total = sum(tree["stats"]["object_templates"] for tree in trees.values())
+        inherited_total = sum(
+            tree["stats"]["inherited_templates"] for tree in trees.values()
+        )
+        bound_total = sum(tree["stats"]["bound_bindings"] for tree in trees.values())
+        binding_sources: Counter = Counter()
+        for tree in trees.values():
+            binding_sources.update(tree["stats"]["binding_sources"])
+        for label, have, want in (
+            ("nodes", nodes_total, EXPECTED_NODES),
+            ("task instances", task_instances, EXPECTED_TASK_INSTANCES),
+            ("condition instances", condition_instances, EXPECTED_CONDITION_INSTANCES),
+            ("unreferenced nodes", unreferenced_total, EXPECTED_UNREFERENCED_NODES),
+            ("Object templates", object_total, EXPECTED_OBJECT_TEMPLATES),
+            ("inherited templates", inherited_total, EXPECTED_INHERITED_TEMPLATES),
+            ("bound bindings", bound_total, EXPECTED_BOUND_BINDINGS),
+        ):
+            if have != want:
+                raise Fail(f"{label}: resolved {have}, expected {want}")
+
         payload = {
             "schema": SCHEMA,
             "game_version": GAME_VERSION,
@@ -888,8 +1411,12 @@ def main() -> int:
                     "game/src/ai/civilian_npc.gd",
                 ],
                 "note": (
-                    "Task/condition nodes are named from Nodes.Structs[].Name; "
-                    "the cooked graph does not serialise the node UClass."
+                    "Task/condition nodes are objects resolved through "
+                    "Nodes.Structs[].InstanceTemplateIndex into the instance-data "
+                    "array named by InstanceDataHandle.Source; native nodes carry "
+                    "no UClass in the dump (class: null), the 139 Blueprint nodes "
+                    "carry TaskClass/ConditionClass. Bindings are the authored "
+                    "PropertyPathBindings; parameter-bag values are not serialized."
                 ),
             },
             "units": {
@@ -910,8 +1437,41 @@ def main() -> int:
                 "tasks": len(
                     {task for tree in trees.values() for task in tree["tasks"]}
                 ),
+                "task_instances": task_instances,
                 "conditions": len(
                     {cond for tree in trees.values() for cond in tree["conditions"]}
+                ),
+                "condition_instances": condition_instances,
+                "nodes": nodes_total,
+                "nodes_unreferenced": unreferenced_total,
+                "object_templates": object_total,
+                "inherited_templates": inherited_total,
+                "nodes_with_parameters": sum(
+                    tree["stats"]["nodes_with_parameters"] for tree in trees.values()
+                ),
+                "bound_bindings": bound_total,
+                "binding_sources": dict(sorted(binding_sources.items())),
+                "required_event_states": [
+                    {
+                        "tree": tree_name,
+                        "state_index": state["index"],
+                        "state": state["name"],
+                        "tag": state["required_event_to_enter"]["tag"],
+                        "payload_struct": state["required_event_to_enter"][
+                            "payload_struct"
+                        ],
+                    }
+                    for tree_name, tree in trees.items()
+                    for state in tree["states"]
+                    if state["required_event_to_enter"]
+                ],
+                "consume_event_false_states": sum(
+                    tree["stats"]["consume_event_false_states"]
+                    for tree in trees.values()
+                ),
+                "consume_event_false_transitions": sum(
+                    tree["stats"]["consume_event_false_transitions"]
+                    for tree in trees.values()
                 ),
                 "events": all_events,
                 "st_guard": trees["ST_Guard"]["stats"],
@@ -965,6 +1525,27 @@ def main() -> int:
         )
     )
     print(f"  events: {', '.join(all_events)}")
+    print(
+        "  P4PARAMS nodes={} tasks={} conditions={} unreferenced={} "
+        "object_templates={} inherited={} nodes_with_parameters={} bound={}".format(
+            payload["stats"]["nodes"],
+            payload["stats"]["task_instances"],
+            payload["stats"]["condition_instances"],
+            payload["stats"]["nodes_unreferenced"],
+            payload["stats"]["object_templates"],
+            payload["stats"]["inherited_templates"],
+            payload["stats"]["nodes_with_parameters"],
+            payload["stats"]["bound_bindings"],
+        )
+    )
+    print(
+        "  P4PARAMS bound_sources={}".format(
+            " ".join(
+                f"{key}={value}"
+                for key, value in payload["stats"]["binding_sources"].items()
+            )
+        )
+    )
     print(f"Wrote {REPORT_PATH.relative_to(ROOT)}")
     return 0
 

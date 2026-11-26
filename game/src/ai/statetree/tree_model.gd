@@ -2,12 +2,18 @@ extends RefCounted
 ## Authored UE 5.5 StateTree graphs as a Godot model (W9-P4 S1).
 ##
 ## Data: `res://data/generated/gameplay/guard_behavior.json`
-## (`tat2.guard_behavior/1`, 21 trees / 459 states / 467 transitions, produced by
+## (`tat2.guard_behavior/2`, 21 trees / 459 states / 467 transitions, produced by
 ## `tools/parse_state_tree.py` from `extracted/json/AI/StateTrees/**`).
 ##
-## WHAT THE PAYLOAD IS, AND WHAT IT IS NOT
+## WHAT THE PAYLOAD IS, AND WHAT THIS MODEL KEEPS
 ## It is a *property dump* of the cooked assets, flattened into a state list. It
-## is NOT a compiled tree and it does NOT carry node parameters:
+## is NOT a compiled tree. Payload /2 carries one node object per task /
+## enter-condition / utility consideration / transition condition
+## (`{name, class, kind, node_index, template_index, data_source, inherited,
+## parameters, bound}`); this model deliberately flattens those objects back to
+## display names, because W10-B1 is the producer stage and the shadow runtime
+## drives tasks/conditions by name. Node identity, authored parameters and the
+## `bound` map are for the B2 runtime (ST_Patrol cutover), not for this file.
 ##
 ##   * a state carries: index, name, depth, type (State | Group | LinkedAsset |
 ##     Linked | Subtree), parent, children (direct), span (the raw
@@ -18,47 +24,34 @@ extends RefCounted
 ##   * a transition carries: index, trigger (OnEvent | OnStateCompleted |
 ##     OnStateSucceeded | OnStateFailed | OnTick), priority, required_event,
 ##     to_kind (state | Succeeded | Next), target, condition NAMES, enabled;
-##   * a task / enter condition / utility consideration is a **display name
-##     only**. The cooked `Nodes.Structs[].Name` was copied; the node's UClass is
-##     not serialised on the struct, and the per-node parameter struct
-##     (`Nodes.DefaultInstanceData.Data.InstanceStructs`), the node -> template
-##     index (`Nodes.Structs[].InstanceTemplateIndex`) and `PropertyBindings` are
-##     not emitted by the producer. `guard_behavior.json` therefore cannot answer
-##     "which bool does `Bool Compare` compare, and to what", and no runtime may
-##     invent it.
+##   * a task / enter condition / utility consideration / transition condition is
+##     a **display name** here. The name is `Nodes.Structs[].Name`; the node
+##     object around it is dropped by `_node_name()`.
 ##
-## FIELDS THE PAYLOAD OMITS, OR SCATTERS (measured in `build/qa/w9/p4-facts-data.md`
-## and `build/qa/w9/p4-re-statetree.md`; every one is needed for a faithful cutover):
-##   * task / enter-condition / transition-condition PARAMETERS. The raw dump
-##     carries them (`Nodes.Structs[k].InstanceTemplateIndex` -> the array named
-##     by `InstanceDataHandle.Source`); the facts lane counted 260 of 326 task
-##     instances and 209 of 233 condition instances with an authored value, and
-##     the independent audit found 203 of 233 conditions (six records it excludes
-##     are `Get Actor Location` property functions, not conditions). The exact
-##     count depends on how an inherited Blueprint default is counted. The payload
-##     carries NONE of them, so no runtime can answer "which bool / which tag /
-##     which alertness / what delay". `InstanceTemplateIndex` also differs from
-##     `InstanceDataHandle.Index` on 300 of 566 nodes, so the mapping is not a
-##     guess the consumer can make.
-##   * the per-state `transitions[]` copies omit `fallback`, `delay_seconds` and
-##     `delay_random_variance`. They ARE in the payload, in the per-tree flat
-##     `transitions[]` array (14 keys: 428 `None` + 39 `NextSelectableSibling`,
-##     all 467 delays 0.0), and this parser JOINS them onto the per-state
-##     records by `index` and validates the `from_state_index` match. The model
-##     therefore has `fallback` and `delay_s`; the interpreter uses both.
-##   * `bConsumeEventOnSelect` (false on 2 states) is not emitted anywhere.
-##   * `States[].RequiredEventToEnter` (3 states: ST_Patrol[21],
-##     ST_Subtree_Combat[6], ST_InvestigateStims_Guard[6]).
-##   * state/asset-level parameter values (93 states carry a schema only).
-## `build/qa/w9/p4-t01-contract.md` is the producer contract that would close
-## this; until it lands, every parameter-dependent node is `parameter_blind` and
-## the coverage table says so.
+## FIELDS THE PAYLOAD CARRIES THAT THIS MODEL DOES NOT EXPOSE (all measured in
+## `build/qa/w9/p4-facts-data.md`; consumed by B2):
+##   * per-node PARAMETERS: 566 `Nodes.Structs` entries (326 tasks, 233
+##     conditions, 7 unreferenced) resolve through `InstanceTemplateIndex` into
+##     `DefaultInstanceData` / `SharedInstanceData`; 139 are Blueprint
+##     `InstanceObject` templates resolved in the same file, 65 of which export
+##     empty `Properties` (`inherited: true`, class default unknown).
+##   * per-node `bound`: 676 `PropertyPathBindings` entries
+##     (`{source_array, source_index, source_state_index, source_path}`); a
+##     binding from a parameter bag carries `value: "UNKNOWN"` (canonical case:
+##     `Bool Compare.bLeft` <- `GlobalParameterData.ResetAlertness`).
+##   * `bConsumeEventOnSelect` (false on 2 states / 5 transitions) and
+##     `States[].RequiredEventToEnter` (3 states) are emitted on the state /
+##     transition records; this model does not surface them yet.
+##   * state/asset-level parameter values are still absent: the bags serialise a
+##     schema only (`PropertyDescs`, `SerialSize`), so those stay UNKNOWN.
 ##
 ## Consequences the interpreter respects (see `interpreter.gd`):
 ##   * a condition evaluates to TRUE / FALSE / UNKNOWN; UNKNOWN means "the
-##     payload does not determine this", never "false by default";
+##     runtime does not determine this", never "false by default";
 ##   * every task handler is declared with an evidence class (implemented /
-##     mapped-to-port / unsupported) and a `parameter_blind` flag.
+##     mapped-to-port / unsupported) and a `parameter_blind` flag. The shadow
+##     bindings are unchanged by payload /2; the coverage table still reports
+##     0/21 trees fully evaluable until B2 reads the parameters.
 ##
 ## Composition is two different things in this dump and the model keeps them
 ## apart:
@@ -74,7 +67,10 @@ extends RefCounted
 ## makes the payload's shape (and its gaps) visible instead of hidden behind
 ## accessors.
 
-const SCHEMA: String = "tat2.guard_behavior/1"
+const SCHEMA: String = "tat2.guard_behavior/2"
+## Schema /1 payloads are still accepted: they carry node NAMES where /2 carries
+## node objects, so the loader normalises both to the same name-only model.
+const SCHEMA_V1: String = "tat2.guard_behavior/1"
 const DEFAULT_PATH: String = "res://data/generated/gameplay/guard_behavior.json"
 
 ## `FStateTreeStateHandle` special indices (UE MAX_uint16 - n).
@@ -151,7 +147,7 @@ static func parse_payload(payload: Dictionary, path: String = "<memory>") -> Dic
 	var errors: Array = []
 	var warnings: Array = []
 	var schema: String = str(payload.get("schema", ""))
-	if schema != SCHEMA:
+	if schema != SCHEMA and schema != SCHEMA_V1:
 		errors.append("schema '%s' != %s" % [schema, SCHEMA])
 	var trees_raw: Variant = payload.get("trees", {})
 	if not (trees_raw is Dictionary):
@@ -336,7 +332,7 @@ static func _join_flat_transitions(tree: Dictionary, flat_raw: Variant) -> void:
 			if flat.has("conditions"):
 				var flat_conds: Array = []
 				for c: Variant in (flat["conditions"] as Array):
-					flat_conds.append(str(c))
+					flat_conds.append(_node_name(c))
 				if flat_conds != (tr.get("conditions", []) as Array):
 					errors.append("transition %d flat conditions differ from nested" % index)
 			tr["fallback"] = fallback
@@ -420,6 +416,16 @@ static func _validate(tree: Dictionary) -> void:
 		errors.append("no entry root")
 
 
+## One task / condition entry -> its authored display name.
+## Payload /2 carries node objects (`{name, class, node_index, …}`); /1 carried
+## bare names. W10-B1 keeps the model name-only on purpose: node identity,
+## parameters and bindings are consumed by the B2 runtime, not here.
+static func _node_name(entry: Variant) -> String:
+	if entry is Dictionary:
+		return str((entry as Dictionary).get("name", ""))
+	return str(entry)
+
+
 static func _normalise_state(index: int, raw: Dictionary) -> Dictionary:
 	var out: Dictionary = {
 		"index": index,
@@ -445,11 +451,11 @@ static func _normalise_state(index: int, raw: Dictionary) -> Dictionary:
 	if span is Array and (span as Array).size() == 2:
 		out["span"] = Vector2i(int((span as Array)[0]), int((span as Array)[1]))
 	for t: Variant in (raw.get("tasks", []) as Array):
-		out["tasks"].append(str(t))
+		out["tasks"].append(_node_name(t))
 	for c: Variant in (raw.get("enter_conditions", []) as Array):
-		out["enter_conditions"].append(str(c))
+		out["enter_conditions"].append(_node_name(c))
 	for u: Variant in (raw.get("utility_considerations", []) as Array):
-		out["utility"].append(str(u))
+		out["utility"].append(_node_name(u))
 	var list: Array = []
 	for tr_raw: Variant in (raw.get("transitions", []) as Array):
 		if not (tr_raw is Dictionary):
@@ -463,7 +469,7 @@ static func _normalise_transition(owner_state: int, raw: Dictionary) -> Dictiona
 	var priority: String = str(raw.get("priority", "None"))
 	var conditions: Array = []
 	for c: Variant in (raw.get("conditions", []) as Array):
-		conditions.append(str(c))
+		conditions.append(_node_name(c))
 	var delay: Dictionary = raw.get("delay", {}) if raw.get("delay", {}) is Dictionary else {}
 	return {
 		"index": int(raw.get("index", -1)),

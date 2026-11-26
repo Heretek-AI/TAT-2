@@ -2,12 +2,14 @@ extends "res://src/ai/statetree/bindings.gd"
 ## Guard observation binding for shadow mode (W9-P4 S1).
 ##
 ## WHAT THIS IS: the port's mapping from the authored StateTree nodes to state it
-## already has. It reads the live guard and never writes to it. Where the source
-## payload does not carry a node's parameter (`guard_behavior.json` carries NAMES
-## only -- see `tree_model.gd`), the declaration says `parameter_blind: true`
-## and the note says which port fact the answer came from. Nothing here claims
-## that an authored number was recovered; the coverage table prints the count of
-## parameter-blind instances so the reader can see the size of the inference.
+## already has. It reads the live guard and never writes to it. Payload /2 now
+## carries each node's authored `parameters` and `bound` map, but `tree_model.gd`
+## still flattens nodes to display names and this W9 binding does not read them
+## yet (B2 is the consumer), so every parameter-dependent declaration still says
+## `parameter_blind: true` and the note says which port fact the answer came from.
+## Nothing here claims that an authored number was recovered; the coverage table
+## prints the count of parameter-blind instances so the reader can see the size of
+## the inference.
 ##
 ## REACHABLE PATH THIS DRIVES (measured, see `p4-report.md`):
 ##   ST_Guard Root -> Standard States -> Reset Focus -> Return To Normal

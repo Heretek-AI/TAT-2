@@ -7,8 +7,9 @@ extends RefCounted
 ## This module produces exactly that, plus the two numbers that matter for the
 ## honest ceiling:
 ##   * `covered`   how many authored instances the binding can drive;
-##   * `blind`     how many covered instances are `parameter_blind` (the payload
-##                 does not carry the authored node parameter).
+##   * `blind`     how many covered instances are `parameter_blind` (the model
+##                 hands the binding only node names; payload /2's per-node
+##                 `parameters` / `bound` are B2's to consume).
 ##
 ## Nothing here is asserted: the table is recomputed from `guard_behavior.json`
 ## on every run, so a producer change or a new binding moves it.

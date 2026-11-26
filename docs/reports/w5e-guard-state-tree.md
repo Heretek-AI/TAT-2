@@ -226,6 +226,43 @@ The transitions listen for these gameplay events (17):
 - `ST_TriggerFlee_Civilian`: Trigger Noise Event (state 14)
 
 
+## Node parameters and bindings (`tat2.guard_behavior/2`)
+
+Every task, enter condition, utility consideration and transition condition is an object. Its parameter struct is resolved through `Nodes.Structs[k].InstanceTemplateIndex.Value` into the instance-data array named by `InstanceDataHandle.Source` (`DefaultInstanceData` for `Active*`/`Global*`, `SharedInstanceData` for `Shared*`). The 139 `{InstanceObject: {ObjectPath: "<package>.<export>"}}` templates are per-instance Blueprint overrides in the *same file*; all 139 resolve, and 65 export empty `Properties`, recorded as `inherited: true` (the class default applies and is not in the dump).
+
+| item | measured |
+|---|---|
+| `Nodes.Structs` nodes | 566 |
+| task instances | 326 |
+| condition instances (enter + transition) | 233 |
+| unreferenced nodes (6 `Get Actor Location` + 1 evaluator) | 7 |
+| Object templates / resolved same-file | 139 / 139 |
+| inherited templates (empty `Properties`) | 65 |
+| nodes with a non-empty `parameters` block | 497 |
+| `PropertyPathBindings` entries emitted as `bound` | 676 |
+
+Bindings by source array (`bound` entries):
+
+| source array | entries |
+|---|---|
+| `ContextData` | 422 |
+| `StateParameterData` | 175 |
+| `GlobalParameterData` | 64 |
+| `SubtreeParameterData` | 7 |
+| `SharedInstanceData` | 5 |
+| `ActiveInstanceData` | 2 |
+| `GlobalInstanceData` | 1 |
+
+A binding from `StateParameterData`, `GlobalParameterData`, `SubtreeParameterData` or `TransitionEvent` names a parameter bag that serialises a schema only; those entries carry `value: "UNKNOWN"`. `ContextData` entries name a live context slot (`0` = Actor, `1` = AIController) and carry no value. `RequiredEventToEnter` is non-null on 3 states; `bConsumeEventOnSelect` is false on 2 states and 5 transitions.
+
+### Worked examples (verified by `tools/check_logic_data.py`)
+
+- `ST_Patrol[17] Delay`: template `duration = 1.0` is a **template default**; `Duration` is bound to `StateParameterData(state 3).PatrolPointData.WaitSeconds` and `RandomDeviation` to `.WaitDeviation`, so the authored dwell is the patrol point's, not 1.0 s.
+- `ST_Patrol[19] Failed`: one `Delay Task` with template `duration = 100.0` and no bindings batch - a **literal** 100 s.
+- `ST_Patrol[1] Bool Compare`: `bLeft` is bound to `GlobalParameterData.ResetAlertness` (`value: UNKNOWN`; the asset parameter bag has no serialized value), `bRight = true` is authored.
+- `ST_Patrol[14] Move To`: `Destination` is bound to `StateParameterData(state 3).CurrentPatrolWorldLocation`.
+- `ST_Patrol[11] Patrol Point Is Of Type`: export 2 carries `PatrolPathType = EPatrolPointType::SmartObjectInteraction`; `TargetPatrolPathType` is bound to `StateParameterData(state 3).PatrolPointData.PatrolPointType`. The second instance (`ST_Patrol[13]`, export 3) has empty `Properties` and is `inherited: true`.
+
 ## Port coverage (`game/src/ai/guard_ai.gd`, `civilian_npc.gd`)
 
 Status is a curated read of the port source, not a runtime measurement. `grep hits` counts source lines matching the recorded pattern at generation time: 0 means the branch has no counterpart in the port file named, and the note says what does exist.
@@ -280,10 +317,11 @@ Status is a curated read of the port source, not a runtime measurement. `grep hi
 
 ## Remaining unknowns
 
-- Node UClasses: the cooked StateTree structs serialise the node's display name and instance-template index, not the class path, so the payload names tasks/conditions by their authored display name. Mapping each name to `STT_*`/`STC_*` needs the per-node template walk.
-- Per-node parameters (durations, distances, tag queries) live in the instance-data templates and the task Blueprints, not in the StateTree graph; the payload does not claim them.
+- Node UClasses for native nodes: the cooked struct serialises the display name, the instance-data template index and the instance-data struct, not the StateTree node class, so native nodes carry `class: null`. The 139 Blueprint nodes carry `TaskClass` / `ConditionClass` and are the only nodes with a class.
+- Parameter-bag values: state, global and subtree parameter bags serialise a schema (`PropertyDescs`, `SerialSize`) and no value bytes. A binding from one of those arrays is emitted with `value: "UNKNOWN"` (canonical case: ST_Patrol's `ResetAlertness`, bound to `Bool Compare.bLeft`). The port must supply the live value.
+- `RefAccessIndex` slots inside native task templates (e.g. `TATStateTreeTaskSetupPatrolData`) index `PropertyReferencePaths`; the payload keeps them verbatim and does not resolve them.
 - EQS query assets behind `Run Env Query` are not enumerated here; the state only records that the task exists.
-- The `Difficulty Evaluator` (the asset's one global evaluator, `EvaluatorsNum = 1`, configured `ETATDifficulty::Normal`) sits in `Nodes.Structs` but is not referenced by any state's task/condition range, so it is counted per tree (`global_evaluators`) and its per-difficulty selection is not recovered.
+- The `Difficulty Evaluator` (the asset's one global evaluator, `EvaluatorsNum = 1`, configured `ETATDifficulty::Normal`) sits in `Nodes.Structs` but is not referenced by any state's task/condition range, so it is emitted under `nodes_unreferenced` and its per-difficulty selection is not recovered.
 - Behavioural equivalence with the port is unmeasured: no branch of `ST_Guard`/`ST_Civilian` has been executed in-engine.
 
 ## Reproduce

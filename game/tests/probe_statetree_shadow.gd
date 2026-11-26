@@ -7,8 +7,9 @@ extends SceneTree
 ##   * the authored tree's selected-state sequence from the trace;
 ##   * the coverage table for all 21 trees.
 ## The report quotes this side by side; the parity claim is "the authored patrol
-## order is reproduced", not "the FSM was replaced" (S2 is BLOCKED-ON T01 -- the
-## payload carries no node parameters).
+## order is reproduced", not "the FSM was replaced". Payload /2 carries the
+## authored node parameters and bindings; B2 is the lane that reads them, so this
+## probe still measures the name-driven shadow runtime (0/21 fully evaluable).
 ##
 ## Run: TAT2_STATETREE=shadow tools/godot --headless --path game \
 ##        --script res://tests/probe_statetree_shadow.gd

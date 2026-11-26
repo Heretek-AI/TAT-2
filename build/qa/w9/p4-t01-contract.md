@@ -1,14 +1,26 @@
 # W9-P4 → T01 producer contract: StateTree node parameters
 
-Status: **BLOCKED-ON T01** (the integrator owns `tools/parse_state_tree.py` and
-the regeneration; W9-P4 owns only `game/src/ai/**`). Nothing in this document was
-applied. The runtime side is written and validated against the *current* payload;
-this is the exact change that lifts the ceiling measured in
-[`p4-report.md`](p4-report.md) §2.
+Status: **APPLIED (producer only) in W10-B1**. `tools/parse_state_tree.py` now
+emits `tat2.guard_behavior/2` with the per-node objects, the `bound` map, the
+three `required_event_to_enter` states and `consume_event_on_select`;
+`tools/check_logic_data.py` fails closed on the inventory
+(566/566 nodes, 139/139 same-file ObjectPaths), the five worked examples, the
+binding histogram, the flat transitions and the event gates. Measured:
+566 nodes = 326 tasks + 233 conditions + 7 unreferenced; 139 Object templates
+(65 `inherited: true`); 676 bound bindings by source array
+(`ContextData` 422, `StateParameterData` 175, `GlobalParameterData` 64,
+`SubtreeParameterData` 7, `SharedInstanceData` 5, `ActiveInstanceData` 2,
+`GlobalInstanceData` 1). The runtime side is **not** part of W10-B1: the model
+still flattens nodes to names, the shadow coverage stays 0/21, and B2 reads
+`parameters` / `bound` for the ST_Patrol cutover.
 
-Evidence for every claim: [`p4-facts-data.md`](p4-facts-data.md) §3 and
-[`p4-re-statetree.md`](p4-re-statetree.md) §6 (four-hop chain, three worked
-examples, counts).
+The narrative below is the original W9-P4 contract and is kept for provenance;
+its 260/203 parameter counts counted only non-null authored values. The payload's
+`parameters` block carries every serialized field: 269 of 326 task templates and
+225 of 233 condition templates are non-empty, and the rest are
+`inherited: true` class-default templates. Dropping the bound `AIController:
+null` slot makes 265 task records and 225 condition records non-empty in the
+emitted JSON (497 nodes including the 7 unreferenced).
 
 ## 1. Why
 

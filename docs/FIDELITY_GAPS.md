@@ -28,8 +28,11 @@ gate, plus the probe/ratchet hardening that keeps the claims re-derivable. Evide
   its log, and has a documented teardown allowlist plus a 29-check self-test. Suite **113**.
 - **Collision:** a coplanar authored **convex** element emits no collider
   (`planar_convex_skipped`, named by `COL_PLANAR`): the 160 `SM_SlowWardZone_Quad`
-  billboards (82 Guildhall + 78 OldManor) and the 3 FX quads. The box `2 cm` clamp stays,
-  and is now *measured*: its 27 meshes / 314 instances are real thin solids (glass, rugs,
+  billboards (82 Guildhall + 78 OldManor) and 2 `FXSHAPES_1_*` quads (the third coplanar
+  convex element is the ward quad itself). The box `2 cm` clamp stays, and is now
+  *measured*: it fires on 27 box elements across 18 placed meshes (295 placed instances
+  once the 20 `/Engine/BasicShapes/Plane` instances are excluded, 235 of them glass) — real
+  thin solids (glass, rugs,
   `/Engine/BasicShapes/Plane`). Stair meshes are exempt from the 16-hull reduce cap, so the
   OldManor tower flight (36 hulls) is per-element and walkable. Suites **115/116**.
 - **Locks:** `CanBeLockpicked` now resolves through a named authored default

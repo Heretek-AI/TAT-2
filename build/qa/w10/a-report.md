@@ -24,11 +24,23 @@ exit 0, `dropped=0` on every map):
 | ftue | 10 | 548 | 535 | **0.976** | 20 | 37 646 | 180 | 10.2–11.2 s |
 
 `COL_MAPS PASS maps=3 min_coverage=0.976 dropped=0 planar_skipped=2 coverage_ppm=976277`.
-Every reduced mesh is named in the log (71 `COL_REDUCED` lines). The static replay
+Every reduced mesh is named in the log (71 `COL_REDUCED` lines). The four names the brief
+predicted, measured:
+
+| predicted | measured |
+|---|---|
+| `SM_OldManor_Doorway_4x650` | **reduced**, 14 elements × 37 instances → 1 coalesced shape |
+| `SM_OldManor_Tower_VaultRoom` | **reduced**, 112 elements × 1 → 1 |
+| `SM_OldManor_Tower_Stairs_4x850` | **NOT reduced — DELIBERATE (D10)**. 36 elements; the stair exemption keeps one hull per element because the coalesced version blocked the climb. This is the OldManor 36 → 35 delta. |
+| `SM_Urban_Ext_BayWindow_Open_6x6_4m` | **reduced**, 22 elements × 2 → 1 |
+
+The static replay
 predicted 36 / 20 reduced paths; OldManor measures **35** because D10 exempts the
 OldManor tower stair (36 hulls) from the 16-element cap — a deliberate, tested change
 (§7). Guildhall dropped 30 901 → 30 819 shapes = exactly the 82 ward-zone hulls now
-skipped by D7; OldManor drops the corresponding 78.
+skipped by D7; OldManor's 78 ward instances are likewise skipped (its `planar_skipped=1`
+path), an arithmetic 78-shape reduction from the pre-D7 encoding (that map had no
+pre-wave probe run, so the delta is derived, not measured).
 
 **Runtime smoke** (`docs/reports/logs/w10/runtime_smoke.log` + the engine log it names):
 
@@ -52,7 +64,7 @@ Each item carries the six rungs; the independent audit adds the seventh verdict.
 | **S3** | green proof | the suite/probe log in `docs/reports/logs/w10/` |
 | **S4** | committed gate | the same log is read by `tools/check_gate_ratchet.py` |
 | **S5** | doc correction | `docs/FIDELITY_GAPS.md`, `HANDOFF`, `AGENTS.md`, W9 report |
-| **S6** | independent audit | `build/qa/w10/audit.md` (`AUDIT: PASS|FAIL` per item) |
+| **S6** | independent audit | `build/qa/w10/audit.md` — first pass **FAIL** on three documentation/evidence items (T07 call-site, the FX-quad count, the "27/314" clamp census) and a stale engine log; every item is closed in §9's follow-up commit. All code/behaviour items passed. |
 
 ## 2. Before / after, the nine defects
 
@@ -64,7 +76,7 @@ Each item carries the six rungs; the independent audit adds the seventh verdict.
 | 4 | timeout/collapse rendered "Caught" | `INV-1d.1–1d.3`, `1d.5–1d.7` FAIL: `status='CAUGHT'` | HUD **and** PostMatchUI render `TIME EXPIRED` / `MAGIC DOOR COLLAPSED`; capture/escape rows unchanged | suite 112 |
 | 5 | repeated opens stacked layers | `INV-1e.1/1e.2` FAIL: 2 children, 2 visible | HUD owns one rack-up (`remove_child` + `queue_free` before replace) | suite 112 |
 | 6 | trace NDJSON unbounded after the ring filled | 9 000 rows → 9 000 file lines while the ring held 8 192 | file budget 8 192 rows / 16 MiB, `file_dropped=808`, one `STATETREE_TRACE capped` line | suite **113**, `W10_RUNTIME_SUMMARY: fails=0 checks=45` |
-| 7 | zero-volume authored convex became a collider | ward-zone hull emitted for all 160 instances; a 0.2 m query hit it at 0.00/0.25 m | coplanar convex emits no shape (`planar_convex_skipped`, `COL_PLANAR`); box clamp kept (27 meshes / 314 real thin solids) | suite 113 + collision probe |
+| 7 | zero-volume authored convex became a collider | ward-zone hull emitted for all 160 instances; a 0.2 m query hit it at 0.00/0.25 m | coplanar convex emits no shape (`planar_convex_skipped`, `COL_PLANAR`); box clamp kept (27 clamp-hit elements on 18 placed meshes, real thin solids) | suite 113 + collision probe |
 | 8 | prison door "pickable on an absent flag" | **NOT REPRODUCED** — the authored resolution is `true` (delta dump; same-class FTUE door writes `false` explicitly) | behaviour unchanged, resolution made explicit + labelled; CDO gate added | suite **114**, `check_lock_cdo.py` |
 | 9 | runtime-smoke blind to `ERROR:`/exit code | fixture with 2 `ERROR:` + exit 1 printed PASS; `CODE` never read | exit **124 only**, `SCRIPT/SHADER/ERROR:` minus a documented teardown allowlist, `mission_ready`, log kept | `RUNTIME_SMOKE_SCAN_TEST PASS checks=29`, real boot PASS |
 | 10 | two stale traversal tests | `W6M_STAIR_SUMMARY: fails=13`; `W6M_TRAVERSAL_SUMMARY: fails=4` | union fixtures (one shape per authored element) + stair cap exemption; both fail 0 | suites **115/116** |
@@ -143,8 +155,9 @@ because it is two fixtures and it produced a real game fix (the stair exemption)
 - Change: `authored_collision.gd:95-113,312-345` — a convex element whose baked point
   AABB has a minimum extent `< 1e-4 m` emits no shape; `planar_convex_skipped`,
   `planar_skipped_paths`, `COL_PLANAR`. Boxes keep `MIN_HALF_EXTENT_M` (2 cm) and are
-  counted as `box_clamped`; that clamp is *measured* as legitimate (27 meshes /
-  314 instances: glass, rugs, `/Engine/BasicShapes/Plane`).
+  counted as `box_clamped`; that clamp is *measured* as legitimate (27 clamp-hit box
+  elements on 18 placed meshes = 295 placed instances excluding the 20 engine `Plane`
+  instances, 235 of them glass).
 - Why safe: the ward zone's collider is built by the device layer from `zone_size_m`
   (`ward_zone.gd:113-137`), so dropping the quad hull changes no ward behaviour.
 - Green: suite 113 (ward zone 0 shapes at 1 and 160 instances; FX quads 0; `Plane` still
@@ -245,8 +258,10 @@ the five probes, `probe_collision_authored`, `probe_lock_inventory`, `string_aud
 - `build/qa/w9/p3-report.md`: the `SHADOW` sentence now says the **rating word** is gone
   and 96 identifiers still contain the token (none a rating).
 - `docs/reports/remediation-20261125/T07-render.md`: the IBL note no longer claims "no
-  further code change is needed" — `sky_ibl_state()` is only called by the probe; a
-  runtime consumer (PanoramaSkyMaterial / ambient source) is still required.
+  further code change is needed". `sky_ibl_state()` **is** called by `apply_preset`
+  (`weather_profile.gd:959`) and its state is consumed (`:960-964`); what is missing is a
+  **texture** consumer — nothing binds `cubemap_res_path` into a material, so the export
+  alone changes no pixel.
 - `build/mobile_game` (stale untracked copy with `maxi(100, score/2)`): present only in
   the main checkout and git-ignored; deleting it is an integrator step (§7) because this
   worktree must not write there.
@@ -335,3 +350,28 @@ audit could pin provenance; they are git-ignored and not part of the commit.
 - The prison-door lock **level** (1 vs authored 4) is recorded, not fixed (§3.8).
 - Collision coverage is **per map**; 233 of 1,667 placed paths repo-wide still have no
   record and keep the heuristic (mostly `/Game/Test/` graybox, `/Engine/`, third-party).
+
+## 9. Independent audit response
+
+The auditor (a fresh session that wrote no fix) re-ran compile, `make test` (319/0), M2,
+E2E, the six new suites/probes, the string audit + negative control, the greps, the CDO
+gate, the smoke self-test (29/29) and a fresh 90 s boot, and reviewed every test diff for
+weakening. **No assertion was weakened and every defect gate re-derived green**
+(`build/qa/w10/audit.md`). Its first pass was still **FAIL** — on the evidence around the
+code, not the code:
+
+| Audit FAIL | Disposition |
+|---|---|
+| T07 note said `sky_ibl_state()` is called "only by the probe" | **Wrong, fixed.** It is called by `apply_preset` (`weather_profile.gd:959`) and consumed at `:960-964`; the true residual is a **texture** consumer (nothing binds the cubemap). The note now says exactly that. |
+| `AGENTS.md` / `FIDELITY_GAPS.md` said "3 FX quads" | **Wrong, fixed.** The dump has 3 coplanar convex elements: the ward quad + **2** `FXSHAPES_1_*` quads. |
+| "27 meshes / 314 instances" for the box clamp | **Wrong denominator, fixed.** The clamp fires on **27 box elements across 18 placed meshes** (295 placed instances excluding the 20 engine `Plane` instances; 235 of them glass). Corrected in `AGENTS.md`, `FIDELITY_GAPS.md`, `impl-b.md` and this report. |
+| `runtime_smoke_godot.log` was the evidence lane's 21:13 run, before the last loader edit | **Replaced** with the tip run the committed `runtime_smoke.log` names (`/tmp/tat2-smoke-ZV6qT7.log`, 21:44; `mission_ready=1`, 0 `ERROR:`). |
+| Uncommitted `AGENTS.md` / report edits at the audit tip | **Committed** with this response. |
+
+The auditor also flagged five logs that pre-dated the last source edit; the collision,
+lock, suite-110, string-audit and greps logs were **re-run on the tip** and reproduce the
+same numbers (`COL_MAPS PASS … 0.976`, `applied=154`, `checks=86`, `306/195/111`,
+`0/0`). Every log in `docs/reports/logs/w10/` is now a tip run.
+
+The audit's `FAIL` is kept as the record of the first pass: the wave's own rule is that an
+auditor's first pass should be expected to fail, and the response is evidence, not prose.

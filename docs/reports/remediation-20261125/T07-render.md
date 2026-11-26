@@ -520,10 +520,15 @@ New output the consumer already looks for:
 (6 × 512², linear, +X/-X/+Y/-Y/+Z/-Z in UE order, or an equirectangular HDR with
 the mapping documented in the extractor). `WeatherProfile.sky_ibl_state()` flips
 `ambient_light_sky_contribution` to 1.0 the moment `ResourceLoader.exists()` is
-true. **W10-A correction: that is not the whole consumer.** `sky_ibl_state()` is
-called only by `game/tests/probe_render_t07.gd`; nothing in the render path reads
-`cubemap_res_path` or builds a `PanoramaSkyMaterial`, so emitting the `.exr` alone
-would change no pixel. A runtime consumer is required as well as the export.
+true. **W10-A correction: that is a state consumer, not a texture consumer.** The helper
+*is* called in the render path (`weather_profile.gd:959`, inside `apply_preset`, and its
+`available`/`sky_contribution` are consumed at `:960-964` to raise
+`ambient_light_sky_contribution`), so "called only by the probe" would be wrong. What is
+still missing is the texture side: nothing loads `cubemap_res_path` into a material (no
+`PanoramaSkyMaterial`, no reflection/ambient texture path), so the authored cubemap stays
+unused even when the `.exr` exists — the contribution scalar would only blend the default
+sky. W10-C therefore needs a **consumer that binds the panorama** as well as the export;
+"no further code change is needed" was the wrong claim.
 
 ### T01-PIPELINE — authored exposure range + EV curve
 `tools/parse_weather.py` drops these from the `PostProcessComponent`:

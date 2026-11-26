@@ -137,7 +137,7 @@ behaviour.
 
 | Constant | Value | Why |
 |---|---|---|
-| `MIN_HALF_EXTENT_M` | 0.01 (unchanged) | A thin box is a real solid here (glass, rugs, the engine plane; the shipped load set places 27 thin-box meshes / 314 instances). Thickening to 2 cm remains the best available encoding. |
+| `MIN_HALF_EXTENT_M` | 0.01 (unchanged) | A thin box is a real solid here (glass, rugs, the engine plane; the payload's clamp fires on 27 box elements across 18 placed meshes = 295 placed instances excluding the 20 engine Plane instances, 235 glass). Thickening to 2 cm remains the best available encoding. |
 | `PLANAR_EPS_M` | `1e-4` m (0.1 mm) | Measured: the three coplanar convexes are **1.2e-18 m** (float residue of an authored exactly-0 extent); the next-flattest convex element in the whole 8,601-element dump is **2.000e-3 m** (`SM_TriangleRing`), then the 2.001e-3 m window glass. Nothing lies in `[1e-4, 1e-3)` or `[1e-3, 2e-3)`. One order of magnitude of headroom on the real side, fourteen on the defect side. |
 | `PLANAR_PATH_REPORT_MAX` | 32 | `planar_skipped_paths` is a report list; the counters stay exact. |
 
@@ -154,7 +154,7 @@ Measured payload (my own scan of `game/data/generated/mesh_collision.json`):
 
 ### Behaviour change (intended)
 
-160 ward colliders (82 + 78) disappear; the 3 FX quads disappear. No other mesh
+160 ward colliders (82 + 78) disappear and the 2 coplanar FX convexes emit no shape (the third coplanar element is the ward quad itself). No other mesh
 changes shape count. The reduced branch keeps its caps
 (`MAX_CONVEX_ELEMENTS_PER_MESH`, `MAX_ELEMENT_SHAPE_COST`) and its AABB
 coalescing; it now consumes the *kept* element list so a skipped coplanar

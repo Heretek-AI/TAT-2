@@ -79,7 +79,7 @@ If a headless run reports missing textures (`T1-01-C`, `moon_visible=0.0`), the
 import cache is incomplete — run `tools/godot --headless --path game --import`
 first.
 
-| Gate | Passing value (W9 tip, logs in `docs/reports/logs/r8/` — raise, never lower) |
+| Gate | Passing value (W10-A tip, logs in `docs/reports/logs/w10/` — raise, never lower) |
 |---|---|
 | compile | 189 checked, 0 broken |
 | `run_tests.gd` | `SUMMARY: fails=0` (319 PASS; suites numbered to 116) |
@@ -162,10 +162,12 @@ build/qa/             tracked capture/probe/export-stamp scripts; PNG output ign
 - **A coplanar authored convex element is not solid.** `authored_collision.gd` skips a
   convex element whose baked point AABB is flatter than `PLANAR_EPS_M = 1e-4 m`
   (`planar_convex_skipped`, one `COL_PLANAR` line per path). The 160
-  `SM_SlowWardZone_Quad` billboards and the 3 FX quads are this class; the ward zone's
+  `SM_SlowWardZone_Quad` billboards and 2 `FXSHAPES_1_*` quads are this class (the third
+  coplanar convex element is the ward quad itself); the ward zone's
   real body is the device layer's (`ward_zone.gd`, `zone_size_m`). Do **not** extend
   the skip to boxes: the `2 cm` `MIN_HALF_EXTENT_M` clamp is measured as legitimate
-  (27 thin-box meshes / 314 instances: glass, rugs, `/Engine/BasicShapes/Plane`).
+  (27 clamp-hit box elements on 18 placed meshes, 295 placed instances excluding the
+  20 `/Engine/BasicShapes/Plane` instances, 235 of them glass).
 - **The StateTree trace file is budgeted like the ring.** `trace.gd` stops the NDJSON
   sink at `MAX_FILE_ROWS = 8192` (the ring cap) or 16 MiB, keeps counting in
   `file_dropped`, and prints one `STATETREE_TRACE capped` line. `dropped` still means
@@ -306,12 +308,16 @@ copy of `game/data` instead of the symlink.
 
 ```bash
 git status --short                      # clean, or only intentional new files
-make audit                              # exit 0
+make audit                              # exit 0 (now incl. string-audit + check-greps)
 tools/godot … check_scripts_compile.gd  # 0 broken
 make test                               # fails=0
 tools/godot … test_m2_player.gd         # fails=0
 tools/godot … probe_leak.gd             # expected result or documented warning
+tools/godot … probe_collision_authored.gd  # COL_MAPS PASS, per-map coverage >= 0.95, dropped=0
+tools/godot … probe_lock_inventory.gd   # applied == 144 containers + 10 door nodes, never 0
 tools/godot … run_e2e_tests.gd          # 278/278, no new failures
+build/qa/runtime_smoke.sh 90            # exit 124 only, 0 unexpected ERROR:, mission_ready
+build/qa/test_runtime_smoke_scan.sh     # 29/29, no engine needed
 build/qa/test_perf_guard.sh             # 78/78, no GPU
 make gate-ratchet                       # floors + committed logs agree
 git push origin main

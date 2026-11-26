@@ -31,9 +31,9 @@ FootstepMask: baked one-time alpha mask (128x128, source_alpha=true) from res://
 WARNING: [level_loader] level Niagara: 5 placements across 3 systems in 4 chunk nodes (0 sprite-masked, 0 parameter sets, 0 activation-skipped; decode root=res://../extracted/json files=0)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _spawn_level_niagara (res://src/core/level_loader.gd:6466)
-         [1] _store_level_extras (res://src/core/level_loader.gd:6238)
-         [2] load_sublevels (res://src/core/level_loader.gd:6712)
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:6471)
+         [1] _store_level_extras (res://src/core/level_loader.gd:6243)
+         [2] load_sublevels (res://src/core/level_loader.gd:6717)
          [3] _build_3d_backdrop (res://src/ui/main_menu.gd:178)
          [4] _ready (res://src/ui/main_menu.gd:86)
 ROUGHNESS_BAKE_MODE on=1 resolution=full cache=process
@@ -43,12 +43,12 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [0] get_material_for_ue (res://src/core/level_loader.gd:1719)
          [1] _bind_glb_materials (res://src/core/level_loader.gd:2092)
          [2] _get_mesh_and_shape (res://src/core/level_loader.gd:1894)
-         [3] _build_one_draw_item (res://src/core/level_loader.gd:4480)
-         [4] _build_draw_items (res://src/core/level_loader.gd:5147)
-         [5] load_sublevels (res://src/core/level_loader.gd:6719)
+         [3] _build_one_draw_item (res://src/core/level_loader.gd:4483)
+         [4] _build_draw_items (res://src/core/level_loader.gd:5150)
+         [5] load_sublevels (res://src/core/level_loader.gd:6724)
          [6] _build_3d_backdrop (res://src/ui/main_menu.gd:178)
          [7] _ready (res://src/ui/main_menu.gd:86)
-ROUGHNESS_BAKE count=31 pixels=22806528 ms=1139 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=31 pixels=22806528 ms=1192 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=3115 applied=3112 duplicate=0 name_skipped=2 wardbox=0 moonshape=1 clamp=68 clamp_worst=4.67x mirrored=444 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0
 TAT-2 QA autostart contract=2 map=guildhall mission=Mission.Guildhall.LootTheRoom free_play=true
 TAT-2 HUD build: id=1 root_children=28 hp_frame=1 hp_fill=1 objectives=1
@@ -64,27 +64,27 @@ TAT-2 gate lights: total=160 (generic=159 rect=1) budget=159 forced=7 hero_shado
 WARNING: [level_loader] level Niagara: 452 placements across 8 systems in 66 chunk nodes (2 sprite-masked, 376 parameter sets, 1348 activation-skipped; decode root=res://../extracted/json files=46)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _spawn_level_niagara (res://src/core/level_loader.gd:6466)
-         [1] _store_level_extras (res://src/core/level_loader.gd:6238)
-         [2] load_sublevels_async (res://src/core/level_loader.gd:6800)
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:6471)
+         [1] _store_level_extras (res://src/core/level_loader.gd:6243)
+         [2] load_sublevels_async (res://src/core/level_loader.gd:6805)
 WARNING: [level_loader] material flat white: '/Engine/BasicShapes/BasicShapeMaterial' has a colour but no albedo map (albedo_color=(0.9547, 0.9547, 0.9547, 1.0), flat=2)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
          [0] get_material_for_ue (res://src/core/level_loader.gd:1719)
          [1] _get_overridden_mesh (res://src/core/level_loader.gd:2335)
-         [2] _build_one_draw_item (res://src/core/level_loader.gd:4521)
-         [3] load_sublevels_async (res://src/core/level_loader.gd:6825)
+         [2] _build_one_draw_item (res://src/core/level_loader.gd:4524)
+         [3] load_sublevels_async (res://src/core/level_loader.gd:6830)
 WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Default_White' has a colour but no albedo map (albedo_color=(1.0, 1.0, 1.0, 1.0), flat=5)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
          [0] get_material_for_ue (res://src/core/level_loader.gd:1719)
          [1] _bind_glb_materials (res://src/core/level_loader.gd:2092)
          [2] _get_mesh_and_shape (res://src/core/level_loader.gd:1894)
-         [3] _build_one_draw_item (res://src/core/level_loader.gd:4480)
-         [4] load_sublevels_async (res://src/core/level_loader.gd:6825)
+         [3] _build_one_draw_item (res://src/core/level_loader.gd:4483)
+         [4] load_sublevels_async (res://src/core/level_loader.gd:6830)
 COL_PLANAR /Game/Art/Effects/WardZones/SM_SlowWardZone_Quad instances=82 skipped=1
-AUTHORED_COLLISION meshes=947 hull=937 prims=599 convex=899 absent=10 no_collision=7 query_only=7 reduced=16 shapes_per_instance_avg=1.13 elements=2184 load_ms=278
-ROUGHNESS_BAKE count=86 pixels=73924608 ms=3851 bytes=98566111 hits=48 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=947 hull=937 prims=599 convex=899 absent=10 no_collision=7 query_only=7 reduced=16 shapes_per_instance_avg=1.13 elements=2184 load_ms=266
+ROUGHNESS_BAKE count=86 pixels=73924608 ms=3780 bytes=98566111 hits=48 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col0 scale_slot=2 clamp=200.0 max_scale=195.5292 max_length_m=19.944
 MESH_RECON authored=63578 applied=63100 duplicate=124 name_skipped=243 wardbox=41 moonshape=70 clamp=206 clamp_worst=500.00x mirrored=3299 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0
 PERF_CENSUS meshes=6103 instances=63547 chunk_nodes=6015 plain=2549 multimesh=3554 surface_draws=11119 lights=170 shadow_lights=7 occluders=768 collision_bodies=243 collision_shapes=30819 periph_nodes=3217 periph_instances=13433 periph_surface_draws=6189 periph_plain=1552 periph_multimesh=1665 periph_range=0 merge_mode=off merge_candidates=0 merge_nodes=0 merge_surfaces_before=0 merge_surfaces_after=0 light_budget=160 hero_shadows=6 source_sublevels={ "Guildhall_Landscape": 677, "Building_Guildhall_POI": 9781, "Guildhall_Geometry": 567, "Guildhall_Vault_CeremonialChambers": 772, "Guildhall_PeripheryA": 12362, "Building_Guildhall_POI_3rdFloor": 3613, "Guildhall_Gameplay": 1361, "Guildhall_P": 80, "Guildhall_LightingNoGameplay": 172, "Guildhall_Loot": 143, "Guildhall_SkyboxGeo": 33547 }
@@ -107,7 +107,7 @@ WARNING: [hearing_data] 5 authored investigation-range anomalies clamped: AI.Sti
          [7] _ready (res://src/ai/guard_ai.gd:405)
          [8] _spawn_guards (res://src/missions/mission_controller.gd:3795)
          [9] start_contract (res://src/missions/mission_controller.gd:729)
-         [10] load_sublevels_async (res://src/core/level_loader.gd:6836)
+         [10] load_sublevels_async (res://src/core/level_loader.gd:6841)
 TAT-2 loot containers: 107
 TAT-2 loot economy: 20395 >= loot_goal 4000
 TAT-2 clues: spawned=0 set(s)=CLS_Guildhall_LootTheRoom map=guildhall
@@ -123,7 +123,7 @@ WARNING: [civilian_npc] navmesh snap deferred: query landed before first map syn
          [3] _spawn_civilians (res://src/missions/mission_controller.gd:4414)
          [4] _spawn_spawner_content (res://src/missions/mission_controller.gd:4386)
          [5] start_contract (res://src/missions/mission_controller.gd:739)
-         [6] load_sublevels_async (res://src/core/level_loader.gd:6836)
+         [6] load_sublevels_async (res://src/core/level_loader.gd:6841)
 TAT-2 spawners: throwable=133 ammo=45 health=5 civilian=3
 TAT-2 swinging doors: 155 locked=2
 TAT-2 authored devices: 903 (alarm_eye=60, goo_pipe=90, junction=11, light_beam=134, noise_alarm=96, power_switch=29, power_wall=9, pressure_plate=162, turret=229, vault_door=6, ward_blocker=36, ward_slow=41)

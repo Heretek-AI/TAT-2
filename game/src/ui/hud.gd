@@ -180,6 +180,12 @@ var ribbon_clip: Control
 var ribbon_lbl: Label
 var interact_lbl: Label
 var _prompt_secondary_lbl: Label
+## KF24: the second prompt row draws its own white F keycap (the crop at
+## 03:00.60 shows two stacked badges), so the leading `[KEY]` token of the
+## secondary prompt is parsed into a badge instead of printing the brackets.
+var _prompt_secondary_row: HBoxContainer
+var _prompt_secondary_keycap: PanelContainer
+var _prompt_secondary_keycap_lbl: Label
 var stealth_gem: TextureRect
 ## T05: the authored shaped fill (T_healthBar_straight_RGB.png) is a TextureRect;
 ## its size.x still scales with health (E2E T1-13-E) and it shares the frame rect.
@@ -1519,13 +1525,25 @@ func _build_reticle_and_prompt(root: Control) -> void:
 
 	# KF24/KF25 stacked secondary prompt: [F] [HOLD] LOCK on blue doors and
 	# [F] [HOLD] TAKEDOWN over a guard, directly beneath the primary prompt.
+	# KF24 shows the row's own white F badge under the primary badge, so the
+	# row is an HBox (badge + text) and `_set_secondary_prompt` parses the
+	# leading `[KEY]` token out of the copy.
+	_prompt_secondary_row = HBoxContainer.new()
+	_prompt_secondary_row.set_anchors_preset(Control.PRESET_CENTER)
+	_prompt_secondary_row.offset_left = -190.0
+	_prompt_secondary_row.offset_top = 58.0
+	_prompt_secondary_row.offset_right = 190.0
+	_prompt_secondary_row.offset_bottom = 82.0
+	_prompt_secondary_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	_prompt_secondary_row.add_theme_constant_override("separation", 8)
+	_prompt_secondary_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(_prompt_secondary_row)
+	_prompt_secondary_keycap = ThemeScript.white_keycap("F", 13)
+	_prompt_secondary_keycap.visible = false
+	_prompt_secondary_row.add_child(_prompt_secondary_keycap)
+	_prompt_secondary_keycap_lbl = _prompt_secondary_keycap.get_child(0) as Label
 	_prompt_secondary_lbl = Label.new()
-	_prompt_secondary_lbl.set_anchors_preset(Control.PRESET_CENTER)
-	_prompt_secondary_lbl.offset_left = -190.0
-	_prompt_secondary_lbl.offset_top = 58.0
-	_prompt_secondary_lbl.offset_right = 190.0
-	_prompt_secondary_lbl.offset_bottom = 82.0
-	_prompt_secondary_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_prompt_secondary_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_prompt_secondary_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_prompt_secondary_lbl.add_theme_font_size_override("font_size", 14)
 	_prompt_secondary_lbl.add_theme_color_override("font_color", Color(0.58, 0.72, 0.98, 0.88))
@@ -1536,7 +1554,7 @@ func _build_reticle_and_prompt(root: Control) -> void:
 		_prompt_secondary_lbl.add_theme_font_override("font", _sans)
 	_prompt_secondary_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_prompt_secondary_lbl.visible = false
-	root.add_child(_prompt_secondary_lbl)
+	_prompt_secondary_row.add_child(_prompt_secondary_lbl)
 
 
 func _build_tool_hotbar(root: Control) -> void:
@@ -4097,8 +4115,31 @@ func _set_secondary_prompt(raw: String) -> void:
 	if txt == "" or MobileProfile.is_mobile():
 		_prompt_secondary_lbl.text = ""
 		_prompt_secondary_lbl.visible = false
+		if _prompt_secondary_keycap != null:
+			_prompt_secondary_keycap.visible = false
+		if _prompt_secondary_row != null:
+			_prompt_secondary_row.visible = false
 		return
-	_prompt_secondary_lbl.text = txt.to_upper()
+	# KF24: the shipped row draws its own keycap, so the leading `[KEY]` token is
+	# the key, not copy. Same treatment as the primary prompt: E is the legacy
+	# alias and the badge always reads F.
+	var key: String = ""
+	var rest: String = txt
+	if txt.begins_with("["):
+		var end: int = txt.find("]")
+		if end > 1:
+			key = txt.substr(1, end - 1).strip_edges()
+			rest = txt.substr(end + 1).strip_edges()
+	if key == "E":
+		key = "F"
+	if _prompt_secondary_row != null:
+		_prompt_secondary_row.visible = true
+	if key != "" and _prompt_secondary_keycap != null and _prompt_secondary_keycap_lbl != null:
+		_prompt_secondary_keycap_lbl.text = key.to_upper()
+		_prompt_secondary_keycap.visible = true
+	elif _prompt_secondary_keycap != null:
+		_prompt_secondary_keycap.visible = false
+	_prompt_secondary_lbl.text = rest.to_upper()
 	_prompt_secondary_lbl.visible = true
 
 

@@ -56,6 +56,11 @@ var pivot: Node3D = null
 var is_open: bool = false
 @export var locked: bool = false
 @export var lock_level: int = 0
+## Authored `_lockConfig` band from the record (0 = the record authors none).
+## S21's porch doors author `MinLockLevel 2 / MaxLockLevel 3`
+## (`Building_Guildhall_POI` BP_Manor_Porch_Door_8x8_C_0/1 `_lockConfig`).
+var authored_min_lock_level: int = 0
+var authored_max_lock_level: int = 0
 var lockpick_progress: float = 0.0
 var is_lockpicking: bool = false
 
@@ -160,6 +165,16 @@ func configure(entry: Dictionary, loader: Node) -> void:
 	# interaction, so an authored window lock would be dead state.
 	# `scene_locked` (SceneVariant Locks.Doors) is supplied by mission_controller
 	# and is a separate branch; it does not come through this dict.
+	# The authored lock band travels with every record, locked or not: a
+	# `[HOLD] LOCK` on an authored-unlocked door must never invent a level
+	# outside it (S21's porch doors author MinLockLevel 2 / MaxLockLevel 3 and
+	# the old fallback re-locked them at Lv1, below the authored minimum).
+	var auth_max_v: Variant = entry.get("max_lock_level", null)
+	var auth_min_v: Variant = entry.get("min_lock_level", null)
+	var auth_max: int = int(auth_max_v) if (auth_max_v is int or auth_max_v is float) else 0
+	var auth_min: int = int(auth_min_v) if (auth_min_v is int or auth_min_v is float) else 0
+	authored_max_lock_level = clampi(auth_max, 0, LockableDoorScript.table_max_lock_level())
+	authored_min_lock_level = clampi(auth_min, 0, authored_max_lock_level)
 	if entry.get("locked") == true:
 		var cls_name: String = str(entry.get("class", ""))
 		var can_pick: bool = AUTHORED_CAN_BE_LOCKPICKED_DEFAULT
@@ -401,12 +416,25 @@ func get_interact_secondary_prompt() -> String:
 
 
 ## KF24 secondary action: hold F to lock the closed door again.
+## The level stays inside the record's authored `_lockConfig` band: an
+## authored `MinLockLevel` is honoured (the old `maxi(lock_level, 1)` fallback
+## re-locked S21's 2..3 porch doors at Lv1). With no authored band the legacy
+## Lv1 fallback stands. PORT_DECISION: the band's floor is used, not its cap,
+## because neither authored value is "the" level and the floor is the cheaper
+## authored lock; an already-locked door keeps its level.
+func relock_level() -> int:
+	if authored_max_lock_level > 0:
+		return clampi(maxi(lock_level, authored_min_lock_level),
+			maxi(authored_min_lock_level, 1), authored_max_lock_level)
+	return maxi(lock_level, 1)
+
+
 func interact_hold(actor: Node) -> void:
 	if locked or is_open or _tweening:
 		return
 	# P2 relock downgrade fixed: the old set_locked(true, 1) reset any vault to
 	# Lv1; keep the authored level like lockable_door.interact_hold does.
-	set_locked(true, maxi(lock_level, 1))
+	set_locked(true, relock_level())
 	lockpick_updated.emit(false, 0.0, lock_level)
 	NoiseBus.emit_noise(global_position, 3.0, _audible_source(actor), "lock")
 

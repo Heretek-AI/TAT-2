@@ -106,6 +106,47 @@ LOG_GATES = {
         "minimums": [(1, "checks")],
         "passes_key": None,
     },
+    # W10-A: the three-map authored-collision gate. `COL_MAPS PASS` is printed
+    # only when every map passed its own `COL_MAP_ASSERT` (coverage >= 95 %,
+    # dropped == 0, non-zero shapes and placed meshes), so the PASS literal is
+    # the real gate; the captured numbers are the ratchet's floors.
+    "probe_collision": {
+        "command": "tools/godot --headless --path game --script res://tests/probe_collision_authored.gd",
+        "pattern": lambda g: (
+            r"COL_MAPS PASS maps=(\d+) min_coverage=([0-9.]+) dropped=(\d+) "
+            r"planar_skipped=(\d+) coverage_ppm=(\d+)"
+        ),
+        "minimums": [(1, "maps"), (3, "dropped"), (5, "coverage_ppm")],
+        "passes_key": None,
+    },
+    # W10-A: the de-duplicated runtime lock count (raw record count is separate).
+    "lock_inventory": {
+        "command": "tools/godot --headless --path game --script res://tests/probe_lock_inventory.gd",
+        "pattern": lambda g: (
+            r"LOCK_INVENTORY runtime: .*applied=(\d+) containers=(\d+) "
+            r"door_nodes=(\d+) .*state=APPLIED"
+        ),
+        "minimums": [(1, "applied"), (2, "containers"), (3, "door_nodes")],
+        "passes_key": None,
+    },
+    "string_audit": {
+        "command": "make string-audit",
+        "pattern": lambda g: (
+            r"UI_STRINGS total=(\d+) routed=(\d+) authored=(\d+) "
+            r"routed_authored=(\d+) invented=(\d+)"
+        ),
+        "minimums": [(2, "routed"), (3, "authored")],
+        "passes_key": None,
+    },
+    # W10-A D9: only exit 124 (the timeout kill) and a clean scan pass.
+    "runtime_smoke": {
+        "command": "build/qa/runtime_smoke.sh 90",
+        "pattern": lambda g: (
+            r"RUNTIME_SMOKE_SCAN PASS exit=124 errors=(\d+) .*mission_ready=(\d+) reason=ok"
+        ),
+        "minimums": [(1, "errors"), (2, "mission_ready")],
+        "passes_key": None,
+    },
 }
 
 # Probe logs have no numeric floor: a named marker and a clean run are the gate.
@@ -129,6 +170,17 @@ PROBE_GATES = {
     "probe_geometry_placement": (
         "GEOM_PROBE PASS",
         "tools/godot --headless --path game --script res://tests/probe_geometry_placement.gd",
+    ),
+    # W10-A: per-map collision assertion + the literal-grep gate. The collision
+    # probe's own exit code is the enforcement; this marker proves every map
+    # printed its `COL_MAP_ASSERT … PASS` before the summary line.
+    "probe_collision_maps": (
+        "COL_MAPS PASS",
+        "tools/godot --headless --path game --script res://tests/probe_collision_authored.gd",
+    ),
+    "literal_greps": (
+        "LITERAL_GREPS PASS",
+        "make check-greps",
     ),
 }
 

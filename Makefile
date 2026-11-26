@@ -8,7 +8,7 @@ MOBILE_ABI  ?= arm64
 QA_CONTRACT ?= 0
 KEYSTORE_PROPS := $(HOME)/.config/tat2/keystore.properties
 
-.PHONY: build-extractor extract anims normalize audit audit-bootstrap audit-refresh-stamps audit-imports content-overrides check-logic check-consumers gate-ratchet test test-producers run editor review review-capture bake-review bake-review-core desktop-texture-cap texture-cap-check audio-tools linux-build linux-stamp-verify linux-run android-prepare android-debug android-debug-gl android-release
+.PHONY: build-extractor extract anims normalize audit audit-bootstrap audit-refresh-stamps audit-imports content-overrides check-logic check-consumers string-audit check-greps gate-ratchet test test-producers run editor review review-capture bake-review bake-review-core desktop-texture-cap texture-cap-check audio-tools linux-build linux-stamp-verify linux-run android-prepare android-debug android-debug-gl android-release
 
 build-extractor:
 	DOTNET_ROOT=$(HOME)/.dotnet10 PATH=$(HOME)/.dotnet10:$(PATH) $(DOTNET) build tools/tat-extract -c Release
@@ -58,8 +58,9 @@ audio-tools:
 # cap must fail the content gate (see the check target below).
 # check-logic validates the W5E payloads (unlocks/hearing/perception/StateTrees)
 # with expectations kept outside the producers; check-consumers fails when a
-# generated file has no game/src reader and no allowlisted reason.
-audit: content-overrides texture-cap-check check-logic check-consumers
+# generated file has no game/src reader and no allowlisted reason; string-audit
+# and check-greps are the W10-A fail-closed UI-string and literal-formula gates.
+audit: content-overrides texture-cap-check check-logic check-consumers string-audit check-greps
 	python3 tools/manifest_audit.py --min-coverage 0.99 --min-exact-coverage 0.99
 
 # Fail-closed validator for the logic-data payloads (was wired to no target).
@@ -69,6 +70,18 @@ check-logic:
 # Every normalised output needs a reader or an allowlisted reason.
 check-consumers:
 	python3 tools/check_consumers.py
+
+# W10-A: the UI string audit becomes a gate. Floors are the measured W10-A
+# baseline (306 visible rows routed, 195 with an authored counterpart, 111
+# invented); raise them, never lower them.
+string-audit:
+	python3 build/qa/w9/p3_string_audit.py --min-routed 306 --min-authored 195 --max-invented 111
+
+# W10-A: no live port-invented formula in code and no invented post-match
+# rating label in a UI string literal (comments documenting the removals are
+# legal; a live occurrence is not).
+check-greps:
+	python3 tools/check_literal_greps.py
 
 # Boot a real free-play mission headless and fail on any SCRIPT/SHADER ERROR.
 # The unit suites and E2E cannot see this class: the 2026-11-25 footstep

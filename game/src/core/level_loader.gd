@@ -2974,6 +2974,14 @@ func _apply_collider_budget(ctx: Dictionary, json_paths: Array) -> void:
 
 
 func _new_build_ctx(parent: Node3D, light_probe: Node, generate_collision: bool) -> Dictionary:
+	# W10-A evidence: per-load planar-convex skip delta. `AuthoredCollision` is
+	# process-global (payload parsed once), so a map load takes a snapshot here
+	# and `_finalize` reports the difference. One `load_sublevels*` call is one
+	# map load, which is what makes the probe's per-map number exact. A load that
+	# generates no collision must not force the payload parse; it reports 0.
+	var col_base: Dictionary = {}
+	if generate_collision or AuthoredCollision.is_loaded():
+		col_base = AuthoredCollision.stats() as Dictionary
 	return {
 		"parent": parent,
 		"light_probe": light_probe,
@@ -3005,6 +3013,10 @@ func _new_build_ctx(parent: Node3D, light_probe: Node, generate_collision: bool)
 		"col_heuristic_shapes": 0,
 		"col_paths_seen": 0,
 		"col_scale_baked": 0,
+		## W10-A evidence: named reduced meshes + this load's planar skips.
+		"col_reduced_names": [] as Array,
+		"col_planar_base_skipped": int(col_base.get("planar_convex_skipped", 0)),
+		"col_planar_base_paths": (col_base.get("planar_skipped_paths", []) as Array).duplicate(),
 		## W9-P1 probe safety (see `_col_deadline_ms`): 0 = no deadline.
 		"col_deadline_ms": _col_deadline_ms,
 		"col_deadline_hit": 0,
@@ -4316,6 +4328,15 @@ func _count_collision_path(ctx: Dictionary, mp: String, info: Dictionary) -> voi
 		ctx["col_no_collision"] = int(ctx.get("col_no_collision", 0)) + 1
 	if bool(col.get("reduced", false)):
 		ctx["col_reduced"] = int(ctx.get("col_reduced", 0)) + 1
+		# W10-A evidence: name every reduced mesh, with the per-load placement
+		# count the cost cap used and the shape count actually emitted. The
+		# per-mesh `elements` is the authored count from `resolve()`.
+		(ctx["col_reduced_names"] as Array).append({
+			"path": mp,
+			"elements": int(col.get("elements", 0)),
+			"instances": total,
+			"shapes": (info.get("shapes", []) as Array).size(),
+		})
 	if str(col.get("enabled", "")) == "QueryOnly":
 		# Port decision: Godot has no per-shape query-only flag, so the shape is
 		# kept on the world layer (a StaticBody3D answers traces and physics).
@@ -5743,6 +5764,24 @@ func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dict
 			"col_heuristic_shapes", "col_path_counts", "col_placed_instances",
 			"col_deadline_hit", "col_paths_seen", "col_scale_baked"]:
 		result[_col_key] = ctx.get(_col_key, 0) if _col_key != "col_path_counts" else (ctx.get(_col_key, {}) as Dictionary).size()
+	# W10-A evidence: the reduced-mesh roster and the planar-convex skip delta
+	# for THIS load (the counters themselves stay in `AuthoredCollision.stats()`
+	# as exact process totals; the base snapshot is taken in `_new_build_ctx`).
+	result["col_reduced_names"] = (ctx.get("col_reduced_names", []) as Array).duplicate(true)
+	var planar_post: Dictionary = {}
+	if AuthoredCollision.is_loaded():
+		planar_post = AuthoredCollision.stats() as Dictionary
+	var planar_paths_now: Array = planar_post.get("planar_skipped_paths", []) as Array
+	var planar_paths_base: Array = ctx.get("col_planar_base_paths", []) as Array
+	var planar_new: Array[String] = []
+	for _planar_var: Variant in planar_paths_now:
+		var _planar_path: String = str(_planar_var)
+		if not planar_paths_base.has(_planar_var) and not planar_new.has(_planar_path):
+			planar_new.append(_planar_path)
+	result["col_planar_skipped"] = maxi(
+		int(planar_post.get("planar_convex_skipped", 0))
+		- int(ctx.get("col_planar_base_skipped", 0)), 0)
+	result["col_planar_paths"] = planar_new
 	result["collision_mode"] = _collision_mode()
 	if int(ctx.get("col_authored_hull", 0)) + int(ctx.get("col_absent", 0)) > 0:
 		var ainst: int = maxi(int(ctx.get("col_authored_instances", 0)), 1)

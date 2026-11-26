@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""W9-P3 visible-UI string audit (reproducible measurement, not a gate).
+"""W9-P3 visible-UI string audit (W10-A: optional fail-closed floors).
 
 Reads the port UI sources and classifies every *visible* string expression:
 
@@ -20,6 +20,12 @@ Two string sources are counted:
 
 Output: totals, coverage ratios, per-file routed counts, and an optional TSV.
 `--tsv PATH` writes file<TAB>line<TAB>kind<TAB>routed<TAB>authored<TAB>literal.
+
+Gate floors are optional: with no floor flag the script is the W9 measurement
+and always exits 0. `--min-routed N --min-authored N --max-invented N` turns it
+into a gate: a missed floor prints `UI_STRINGS GATE FAIL …` and exits 1. The
+Makefile target `string-audit` pins the W10-A measured floors
+(306 routed / 195 authored / 111 invented).
 """
 
 from __future__ import annotations
@@ -372,6 +378,24 @@ def main() -> int:
         action="store_true",
         help="count every expression instead of one row per assignment site",
     )
+    ap.add_argument(
+        "--min-routed",
+        type=int,
+        default=None,
+        help="fail (exit 1) when routed is below this floor",
+    )
+    ap.add_argument(
+        "--min-authored",
+        type=int,
+        default=None,
+        help="fail (exit 1) when authored is below this floor",
+    )
+    ap.add_argument(
+        "--max-invented",
+        type=int,
+        default=None,
+        help="fail (exit 1) when invented is above this ceiling",
+    )
     args = ap.parse_args()
     tables, keyed, sources = load_authored()
     files = UI_FILES + [p for p in EXTRA_FILES if p.exists()]
@@ -411,6 +435,34 @@ def main() -> int:
         f"UI_STRINGS total={total} routed={routed} authored={authored} "
         f"routed_authored={routed_auth} invented={len(invented)}"
     )
+    # W10-A: optional fail-closed floors. No flag = the W9 measurement contract
+    # (always exit 0); the `string-audit` Makefile target pins the measured
+    # floors and `make audit` fails on a regression.
+    gate_failures: list[str] = []
+    if args.min_routed is not None and routed < args.min_routed:
+        gate_failures.append(f"routed={routed} < min-routed={args.min_routed}")
+    if args.min_authored is not None and authored < args.min_authored:
+        gate_failures.append(f"authored={authored} < min-authored={args.min_authored}")
+    if args.max_invented is not None and len(invented) > args.max_invented:
+        gate_failures.append(
+            f"invented={len(invented)} > max-invented={args.max_invented}"
+        )
+    floors_set = any(
+        v is not None for v in (args.min_routed, args.min_authored, args.max_invented)
+    )
+    if gate_failures:
+        print(
+            "UI_STRINGS GATE FAIL "
+            + " ".join(gate_failures)
+            + f" (total={total} routed={routed} authored={authored} "
+            f"routed_authored={routed_auth} invented={len(invented)})"
+        )
+        return 1
+    if floors_set:
+        print(
+            "UI_STRINGS GATE PASS "
+            f"routed={routed} authored={authored} invented={len(invented)}"
+        )
     print(f"COVERAGE routed/total={routed / total:.4f}" if total else "COVERAGE n/a")
     if authored:
         print(f"COVERAGE authored_routed/authored={routed_auth / authored:.4f}")

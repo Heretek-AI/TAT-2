@@ -61,8 +61,8 @@ TAT-2 expansion content belong in git.
 
 ```bash
 make run         # native 4.7.2 client, F3 overlay
-make test        # tests/run_tests.gd — 314 checks, suites numbered to 111
-make runtime-smoke # real free-play boot; fails on any SCRIPT/SHADER ERROR
+make test        # tests/run_tests.gd — 319 checks, suites numbered to 116
+make runtime-smoke # real free-play boot: exit 124 only, ERROR:/push_error scan, allowlist
 make audit       # fail-closed content + producer/output baseline gate
 make gate-ratchet # floors + committed docs/reports/logs evidence agree
 build/qa/test_perf_guard.sh  # perf-wrapper contract, no GPU, no launch
@@ -81,8 +81,8 @@ first.
 
 | Gate | Passing value (W9 tip, logs in `docs/reports/logs/r8/` — raise, never lower) |
 |---|---|
-| compile | 186 checked, 0 broken |
-| `run_tests.gd` | `SUMMARY: fails=0` (314 PASS; suites numbered to 111) |
+| compile | 189 checked, 0 broken |
+| `run_tests.gd` | `SUMMARY: fails=0` (319 PASS; suites numbered to 116) |
 | `test_m2_player.gd` | `M2_SUMMARY: fails=0` (12 PASS) |
 | door walk / viewmodel / Niagara probes | `DOORWALK PASS` / `VIEWMODEL_TRUTH PASS` / `NIAGARA_PROBE PASS` (3695 authored / 3308 active / 36 systems) |
 | E2E | `fails=0 passed=278 total=278` (tier 1: 117; includes `--tier=s2`) |
@@ -100,7 +100,8 @@ and [`docs/reports/w7-integration.md`](docs/reports/w7-integration.md). E2E move
 
 The 2026-11-25 **W9 wave** (four phases, 34 commits) consumed the new producers:
 collision is authored `AggGeom` (98.9 % of meshes), progression is the authored table,
-locks are authored-only (363 applied), UI routing is 100 % of authored rows, and the
+locks are authored-only (154 runtime: 144 container placements + 10 door nodes; 363 is
+the raw record join), UI routing is 100 % of authored rows, and the
 StateTree runtime runs in shadow with a measured ceiling of **0/21 trees fully
 evaluable**. See [`docs/reports/w9-remediation-20261125.md`](docs/reports/w9-remediation-20261125.md).
 It also added `make runtime-smoke`.
@@ -150,6 +151,39 @@ build/qa/             tracked capture/probe/export-stamp scripts; PNG output ign
 ```
 
 ## Known traps
+
+- **Stair meshes are exempt from the convex element cap.** `authored_collision.gd`
+  reduces a convex set above `MAX_CONVEX_ELEMENTS_PER_MESH = 16` to one coalesced
+  trimesh of element AABBs, but a stair flight's hulls *are* the walkable surface:
+  the 36-hull `SM_OldManor_Tower_Stairs_4x850` moved -0.02 m over 280 frames when
+  coalesced. `resolve()` keeps every element for a path containing `stair` (the
+  instance-cost cap still applies). `test_stair_walk.gd` pins the per-element count,
+  so "one hull of many" cannot come back.
+- **A coplanar authored convex element is not solid.** `authored_collision.gd` skips a
+  convex element whose baked point AABB is flatter than `PLANAR_EPS_M = 1e-4 m`
+  (`planar_convex_skipped`, one `COL_PLANAR` line per path). The 160
+  `SM_SlowWardZone_Quad` billboards and the 3 FX quads are this class; the ward zone's
+  real body is the device layer's (`ward_zone.gd`, `zone_size_m`). Do **not** extend
+  the skip to boxes: the `2 cm` `MIN_HALF_EXTENT_M` clamp is measured as legitimate
+  (27 thin-box meshes / 314 instances: glass, rugs, `/Engine/BasicShapes/Plane`).
+- **The StateTree trace file is budgeted like the ring.** `trace.gd` stops the NDJSON
+  sink at `MAX_FILE_ROWS = 8192` (the ring cap) or 16 MiB, keeps counting in
+  `file_dropped`, and prints one `STATETREE_TRACE capped` line. `dropped` still means
+  ring drops only; do not "fix" a capped run by raising the budget without saying why.
+- **A screen that consumes ESC must stamp the frame.** `FocusNav.mark_escape_consumed()`
+  is the shared form of the lockpick `_pause_consumed_frame` guard: the HUD polls the
+  `pause` action in `_process`, and `set_input_as_handled()` does not clear it. Any new
+  screen that closes on ESC must stamp, or the pause menu opens behind it (suite 112).
+- **One rack-up, one consumer.** The HUD owns at most one `PostMatchUI`
+  (`_post_match_ui`, replaced on every open) and connects both `closed` and
+  `continue_requested`. A screen that hides instead of freeing is only safe because the
+  HUD is the owner; do not add a second opener.
+- **The prison door is pickable as authored.** `CanBeLockpicked` absent resolves to
+  `true` (delta dump; a same-class FTUE door writes `false` explicitly), so
+  `StaticMeshActor_528` must stay pickable — see `build/qa/w10/re-1-locks.md` and
+  `check_lock_cdo.py`. Its authored `MaxLockLevel` is **4** but the producer emits
+  instance deltas only, so the port locks at 1: a producer chain resolution +
+  regeneration is the open item, not a consumer flip.
 
 - **`game/assets/ue/Raw` is read-only.** Write the physical path under
   `extracted/assets/…`; the hidden `TAT/` subtree must keep its `.gdignore` or

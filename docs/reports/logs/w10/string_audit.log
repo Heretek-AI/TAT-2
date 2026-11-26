@@ -1,0 +1,20 @@
+UI_STRINGS total=306 routed=306 authored=195 routed_authored=195 invented=111
+UI_STRINGS GATE PASS routed=306 authored=195 invented=111
+COVERAGE routed/total=1.0000
+COVERAGE authored_routed/authored=1.0000
+KINDS _loc=5 _loc_upper=5 loc=125 loc_template=4 st_template=9 st_text=83 st_upper=75
+  game/src/ui/hud.gd: 69/69 routed
+  game/src/missions/mission_controller.gd: 36/36 routed
+  game/src/ui/mission_prep_ui.gd: 34/34 routed
+  game/src/ui/wardrobe_ui.gd: 28/28 routed
+  game/src/ui/ledger_ui.gd: 24/24 routed
+  game/src/ui/contract_table_ui.gd: 21/21 routed
+  game/src/ui/post_match_ui.gd: 21/21 routed
+  game/src/ui/mobile_touch_ui.gd: 16/16 routed
+  game/src/ui/settings_ui.gd: 15/15 routed
+  game/src/ui/main_menu.gd: 14/14 routed
+  game/src/ui/progression_ui.gd: 9/9 routed
+  game/src/interact/loot_container.gd: 9/9 routed
+  game/src/ui/tutorial_ui.gd: 5/5 routed
+  game/src/interact/clue_item.gd: 3/3 routed
+  game/src/ui/loading_screen.gd: 2/2 routed

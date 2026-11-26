@@ -1,0 +1,10 @@
+python3 tools/prebake_texture_cap.py --check --cap 1024
+repo: /home/john/Projects/TAT-2-rem-w10-a
+targets: 1568 (materials.json 1523, code 100, scenes 0, unique 1568, dangling literals skipped 4)
+mode: CHECK (cap 1024 px long edge)
+capped: 797
+alpha-critical (kept full-res): 1
+within cap: 770
+offenders: 0
+out-of-scope over-cap: 261 (ui 80, other 181)
+texture cap check: OK

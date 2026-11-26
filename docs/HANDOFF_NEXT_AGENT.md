@@ -16,8 +16,10 @@ E2E 278/278 (tier 1 117) · DOORWALK / VIEWMODEL / NIAGARA / BLACKJACK / GEOM pr
 `make runtime-smoke` PASS (script_errors=0, also with `TAT2_STATETREE=shadow`) ·
 `make audit` PASS (12,660/12,703, reason recorded) · texture cap 797/1/0 ·
 perf guard 78/78 · `make gate-ratchet` PASS.
-**What W9 changed in practice:** collision is authored `AggGeom` (98.9 % of meshes,
-`TAT2_COLLISION=authored|aabb`), progression and locks are authored, UI reads the
+**What W9 changed in practice:** collision is authored `AggGeom` for the meshes that have
+it — Guildhall-15 **937/947 collidable paths (98.9 %)**, with 10 `/Game/Test/` graybox
+paths on the heuristic and 233/1,667 placed paths repo-wide lacking a record, so it is not
+"every mesh" (`TAT2_COLLISION=authored|aabb`), progression and locks are authored, UI reads the
 authored tables, the TAB map has all 13 authored boundaries, and the StateTree runtime
 runs in **shadow** — 0/21 trees are fully evaluable because the payload drops node
 parameters, so the FSM still drives. Do not invent parameters to force a cutover.
@@ -500,10 +502,13 @@ Opened (none of these are green yet):
    light/shadow budget and occlusion/HLOD (not naive merge).
 5. **Den GI:** still a Lumen/real-GI gap. VoxelGI was reverted for room spill;
    run the VoxelGI-vs-SSRT bake-off before adding another approximation.
-6. **UI localization is partial:** `Loc.t()` works over the 8 shipped
-   `.translation` files and the export fallback is fixed, but only the main
-   menu/pause/prep labels were converted; the rest of the UI is still literal
-   English.
+6. **UI localization:** every visible UI string expression is routed through the
+   `UIStrings` reader (306/306; 195 have an authored table/locres row, 111 are
+   labelled port copy — `build/qa/w9/p3_string_audit.py`). `Loc.t()` itself is
+   **not** the routing call site: the only occurrence in `game/src/` is the
+   `localization.gd:11` docstring, and the screens reach `Loc` through
+   `UIStrings.st_text/st_upper` and the `_loc` wrappers. The honest residual is the
+   111 port-copy expressions, not "only main menu/pause/prep were converted".
 7. **Animation notifies are data-only:** `anims_meta.json` and `notify_at()` are
    available; footstep/Ak/hit-window consumers are not wired yet. 1,734
    name-only notifies have no class payload.

@@ -35,6 +35,20 @@ const OPEN_DISABLE_DEG: float = 70.0
 ## swing is the noise; the base value is only the mirror for the legacy path,
 ## the authored row supplies the radius the guard actually gets.
 const OPENING_CREAK_M: float = 5.0
+## W10-A defect 8 (NOT REPRODUCED — the port is already faithful): the authored
+## value of `_lockConfig.CanBeLockpicked` when a record authors no such key.
+## The dump serialises a DELTA against the archetype, so an absent property
+## means "inherit", not "false" (build/qa/w10/re-1-locks.md §2). `TATSwingingDoor`
+## is native (`/Script/TAT`) and no `/Script` package is dumped, so its C++
+## initialiser is unreadable (§3.4) — but the resolved value is forced to `true`
+## by the same-class FTUE door `BP_Res_Int_Doorway_C`, which writes
+## `CanBeLockpicked: false` explicitly on object #53 of
+## `Maps/FTUE/FTUE_Building_SpawnArea.json`: a delta serializer would have
+## dropped that write if the inherited value were already `false` (§3.2), and
+## 33 placed actors author `false` while not one authors `true` (§3.1).
+## Named and branched on so an absent flag is DELIBERATELY the authored default
+## rather than an `else` accident. Do not flip this to `false`: see §7.1.
+const AUTHORED_CAN_BE_LOCKPICKED_DEFAULT: bool = true
 
 var door_entry: Dictionary = {}
 var level_loader: Node = null
@@ -53,9 +67,13 @@ var _lockpick_actor: Node = null
 var _leaf_bodies: Array = []
 var _leaf_disabled: bool = false
 ## W9-P2 B2: authored locks this port deliberately does not apply, counted per
-## reason+class (printed once per class). Reasons: `key_only` (no key inventory
-## in the port) and `window` (no window interaction; the door prepass also
-## resolves swinging pivots on window actors).
+## reason+class (printed once per class). Reasons: `unpickable` (explicit
+## `CanBeLockpicked == false`; the port has no key inventory) and `window` (no
+## window interaction; the door prepass also resolves swinging pivots on window
+## actors). W10-A defect 8 label correction: the reason used to be `key_only`,
+## but the authored flag does not mean "needs a key" — 26 of the 33 placed
+## explicit-false actors carry no KeyTag at all
+## (build/qa/w10/re-1-locks.md §3.3).
 static var _lock_excluded: Dictionary = {}
 
 
@@ -71,12 +89,22 @@ static func lock_exclusions() -> Dictionary:
 	return _lock_excluded.duplicate()
 
 
-static func key_only_exclusions() -> Dictionary:
+## W10-A defect 8: the authored `CanBeLockpicked == false` bucket, reason key
+## `unpickable`. Prefer this name; `key_only` was a mislabel (26 of the 33
+## explicit-false actors have no KeyTag — build/qa/w10/re-1-locks.md §3.3).
+static func unpickable_exclusions() -> Dictionary:
 	var out: Dictionary = {}
 	for k: String in _lock_excluded:
-		if k.begins_with("key_only|"):
-			out[k.trim_prefix("key_only|")] = int(_lock_excluded[k])
+		if k.begins_with("unpickable|"):
+			out[k.trim_prefix("unpickable|")] = int(_lock_excluded[k])
 	return out
+
+
+## Deprecated alias of `unpickable_exclusions()` (W10-A defect 8 label rename).
+## Kept so callers written before the rename — e.g. tests/test_w9p2_locks.gd,
+## which must not be edited — keep reading the same per-class tally.
+static func key_only_exclusions() -> Dictionary:
+	return unpickable_exclusions()
 
 
 func set_locked(p_locked: bool, p_lock_level: int = 1) -> void:
@@ -113,12 +141,19 @@ func configure(entry: Dictionary, loader: Node) -> void:
 	# dump), clamped by set_locked to the authored door cap
 	# (interactables.json doors.max_lock_level = 4); `locked` with no authored
 	# cap locks at 1. `locked` absent/false stays unlocked.
-	# Key-only doors (`CanBeLockpicked == false`: the 3 BP_VaultDoor_Sliding_C and
-	# the Res/FTUE apartment doorway) are excluded — the port has no key
-	# inventory and a key-only lock would soft-lock the route. Note the prison
-	# doorway (BP_Prison_WallA_DoorwayB2_6x6_C) authors a KeyTag but **no**
-	# CanBeLockpicked, so by the authored flag it is pickable and locks at the
-	# 1 fallback; see build/qa/w9/b2-impl.md.
+	# W10-A defect 8: the lockpick gate is the authored `CanBeLockpicked`, and an
+	# absent flag is DELIBERATELY `AUTHORED_CAN_BE_LOCKPICKED_DEFAULT` (`true`,
+	# see the constant; build/qa/w10/re-1-locks.md §2-§3). A bool is taken
+	# literally; anything else (absent) resolves to the authored default.
+	# The prison doorway (BP_Prison_WallA_DoorwayB2_6x6_C,
+	# `StaticMeshActor_528`) authors a KeyTag and `_locked: true` but no
+	# CanBeLockpicked, so it is pickable by authorship and locks at the 1
+	# fallback. Do not turn that into a key-only rule: it contradicts 7 other
+	# locked doors that carry a key, and this actor binds no KeyItemInfo, so
+	# key-only would be unopenable (re-1-locks.md §4.1, §7.1).
+	# Unpickable doors (explicit `CanBeLockpicked == false`: the 3
+	# BP_VaultDoor_Sliding_C and the Res/FTUE apartment doorway) are excluded —
+	# the port has no key inventory and such a lock would soft-lock the route.
 	# Window actors are excluded too: the swinging-door prepass also resolves
 	# pivots on window Blueprints (8 of the 8 authored-locked windows are in
 	# OldManor_Geo swinging_doors records), and the port has no window
@@ -127,11 +162,14 @@ func configure(entry: Dictionary, loader: Node) -> void:
 	# and is a separate branch; it does not come through this dict.
 	if entry.get("locked") == true:
 		var cls_name: String = str(entry.get("class", ""))
-		var can_pick: Variant = entry.get("can_lockpick", null)
+		var can_pick: bool = AUTHORED_CAN_BE_LOCKPICKED_DEFAULT
+		var can_pick_v: Variant = entry.get("can_lockpick", null)
+		if can_pick_v is bool:
+			can_pick = bool(can_pick_v)
 		if cls_name.to_lower().find("window") >= 0:
 			_note_lock_exclusion("window", cls_name)
-		elif can_pick is bool and not bool(can_pick):
-			_note_lock_exclusion("key_only", cls_name)
+		elif not can_pick:
+			_note_lock_exclusion("unpickable", cls_name)
 		else:
 			var cap_lvl: int = int(entry.get("max_lock_level", 1))
 			set_locked(true, clampi(cap_lvl, 1, LockableDoorScript.table_max_lock_level()))

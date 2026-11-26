@@ -336,6 +336,11 @@ var _boundary_source: String = "fallback"
 var _toast: Control = null
 var _run_xp_start: int = -1
 var _result_xp_btn: Button = null
+## W10-A INV-1e.1/INV-1e.2: the HUD owns at most one rack-up. Each open replaces
+## the previous instance (`remove_child()` so the tree never holds two,
+## `queue_free()` for the memory); `close()` itself deliberately does not free
+## the screen because test_w9p3_screens.gd reads `is_open()` after close.
+var _post_match_ui: CanvasLayer = null
 var _hint_map_key_lbl: Label = null
 var _hint_ping_key_lbl: Label = null
 var _pause_esc_key_lbl: Label = null
@@ -2332,8 +2337,21 @@ func show_result(won: bool, score: int, info: Dictionary) -> void:
 	_last_info = info.duplicate(true)
 	if _result_xp_btn != null:
 		_result_xp_btn.visible = true
-	var status_key: String = "PostMatch.Status.Escaped" if won else "PostMatch.Status.Caught"
-	result_lbl.text = UIStringsScript.st_text("ST_PostMatch", status_key, "Escaped" if won else "Caught").to_upper()
+	# W10-A INV-1d.5/INV-1d.6/INV-1d.7: a timed-out run is not a capture. The
+	# producer (`mission_controller._finish_run`) sets `timed_out` plus a
+	# `timeout_reason` that is already the port constant `TIME_EXPIRED_REASON` /
+	# `DOOR_COLLAPSED_REASON` (mission_controller.gd:97-98), so show that reason
+	# instead of the Caught row. No ST_PostMatch key exists for these outcomes, so
+	# no table lookup is invented here. Non-timeout runs keep the authored
+	# PostMatch.Status.* rows byte-identical (INV-1d.8/INV-1d.9).
+	var timeout_reason: String = ""
+	if bool(info.get("timed_out", false)):
+		timeout_reason = str(info.get("timeout_reason", "")).strip_edges()
+	if timeout_reason != "":
+		result_lbl.text = timeout_reason.to_upper()
+	else:
+		var status_key: String = "PostMatch.Status.Escaped" if won else "PostMatch.Status.Caught"
+		result_lbl.text = UIStringsScript.st_text("ST_PostMatch", status_key, "Escaped" if won else "Caught").to_upper()
 	for c: Node in _result_lines.get_children():
 		_result_lines.remove_child(c)
 		c.queue_free()
@@ -2370,17 +2388,59 @@ func _open_post_match_xp() -> void:
 	var script: GDScript = load("res://src/ui/post_match_ui.gd") as GDScript
 	if script == null:
 		return
+	# W10-A INV-1e.1/INV-1e.2: replace, never stack. The old path created a new
+	# CanvasLayer on every press and freed nothing, so two opens left two visible
+	# screens layered over the result panel. remove_child() first means the tree
+	# never holds two even for one frame.
+	if _post_match_ui != null and is_instance_valid(_post_match_ui):
+		FocusNavScript.release_if_inside(_post_match_ui)
+		remove_child(_post_match_ui)
+		_post_match_ui.queue_free()
+	_post_match_ui = null
 	FocusNavScript.remember()
 	var ui: CanvasLayer = script.new() as CanvasLayer
 	# The HUD is a CanvasLayer; a same/default layer child has non-deterministic
 	# ordering (audit-c1 F2). 25 is above the HUD and the result panel.
 	ui.layer = 25
 	add_child(ui)
+	_post_match_ui = ui
+	# W10-A INV-1a.4/INV-1a.6: `continue_requested` used to emit into nothing.
+	# The screen also closes itself on the press; this consumer is the HUD's
+	# guarantee that a HUD-owned rack-up never stays open and that focus returns.
+	if ui.has_signal("continue_requested"):
+		ui.connect("continue_requested", _on_post_match_continue)
 	if ui.has_signal("closed"):
-		ui.connect("closed", func() -> void:
-			FocusNavScript.install(_root)
-			FocusNavScript.restore())
+		ui.connect("closed", _on_post_match_closed)
 	ui.call("open_result", _last_won, _last_score, _last_info, run_xp_awarded())
+
+
+## W10-A INV-1a.4/INV-1a.6: the Continue consumer. Closing here is idempotent —
+## `PostMatchUI._on_continue_pressed()` emits then closes, so normally the screen
+## is already closed by the time this runs — but a future caller that emits
+## without closing must not leave a HUD-owned layer behind.
+func _on_post_match_continue() -> void:
+	if _post_match_ui != null and is_instance_valid(_post_match_ui):
+		if bool(_post_match_ui.call("is_open")):
+			_post_match_ui.call("close")
+	_restore_result_focus()
+
+
+func _on_post_match_closed() -> void:
+	_restore_result_focus()
+
+
+## Re-ring the HUD and return focus to the result panel's opener. `restore()`
+## returns false when the remembered control went away with a replaced rack-up
+## (INV-1e), so fall back to the XP button that owns this screen; leaving focus
+## null would strand a pad-only player outside the result panel.
+func _restore_result_focus() -> void:
+	FocusNavScript.install(_root)
+	if FocusNavScript.restore():
+		return
+	if _result_xp_btn == null or not is_instance_valid(_result_xp_btn):
+		return
+	if _result_xp_btn.is_visible_in_tree():
+		_result_xp_btn.grab_focus()
 
 
 func _add_result_line(text: String, color: Color, font_size: int) -> void:
@@ -2843,6 +2903,13 @@ func _process(delta: float) -> void:
 			# The lockpick's own `_input` consumed this Escape (W9-P2 C1);
 			# set_input_as_handled() does not clear the Input action state, so
 			# the pause action is still "just pressed" this frame.
+			pass
+		elif FocusNavScript.escape_consumed_this_frame():
+			# W10-A INV-1c.2/INV-1c.6: a PostMatchUI/ProgressionUI closed on this
+			# Escape in its own `_unhandled_input` and stamped the shared
+			# FocusNav frame hook. Same protocol as `_pause_consumed_frame`
+			# above: skip exactly this frame so the pause menu cannot open
+			# behind the screen and a later pause press still works (INV-1c.8).
 			pass
 		elif Engine.get_process_frames() == _npc_dialogue_closed_frame:
 			# The dialogue consumed this Escape in its own _input.

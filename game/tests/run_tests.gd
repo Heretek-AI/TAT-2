@@ -7603,6 +7603,38 @@ func _initialize() -> void:
 		else:
 			print("PASS: ", w9p4_suite[0], " ", w9p4_suite[1], " (", w9p4_ms, " ms)")
 
+	# 112-116. W10-A correctness gates (standalone SceneTree children, the same
+	# pattern as 99/101-111: exit 0 AND the summary marker are both required).
+	# These pin the five UI defects reproduced by INV-1 (continue consumer,
+	# focus restore, ESC/pause, timeout reason, one rack-up layer), the StateTree
+	# trace file budget and the coplanar-convex collision rule, the authored
+	# `CanBeLockpicked` resolution (explicit-false exclusion + prison-door
+	# fallback), and the two traversal fixtures that now build the authored
+	# per-element union instead of `shapes[0]` (W10-A D10; the OldManor tower
+	# flight is per-element because stair meshes are exempt from the 16-hull cap).
+	for w10_suite: Array in [
+		["112", "W10-A screens: continue consumer, focus restore, ESC/pause, timeout reason, one layer", "res://tests/test_w10_screens.gd", "W10_SCREENS_SUMMARY: fails=0"],
+		["113", "W10-A runtime: StateTree trace file budget + coplanar convex rule (ward zone)", "res://tests/test_w10_runtime.gd", "W10_RUNTIME_SUMMARY: fails=0"],
+		["114", "W10-A locks: authored CanBeLockpicked resolution, explicit-false exclusion, prison fallback", "res://tests/test_w10_locks.gd", "W10_LOCKS_SUMMARY: fails=0"],
+		["115", "W10-A stairs: authored per-element union walk (7 flights, tower 36 hulls)", "res://tests/test_stair_walk.gd", "W6M_STAIR_SUMMARY: fails=0"],
+		["116", "W10-A traversal: authored per-element union roofs (3-4 hulls, no shapes[0])", "res://tests/test_traversal_routes.gd", "W6M_TRAVERSAL_SUMMARY: fails=0"],
+	]:
+		var w10_out: Array = []
+		var w10_args: PackedStringArray = [
+			"--headless",
+			"--path", ProjectSettings.globalize_path("res://"),
+			"--script", str(w10_suite[2]),
+		]
+		var w10_t0: int = Time.get_ticks_msec()
+		var w10_code: int = OS.execute(OS.get_executable_path(), w10_args, w10_out, true)
+		var w10_ms: int = Time.get_ticks_msec() - w10_t0
+		var w10_text: String = "\n".join(PackedStringArray(w10_out))
+		if w10_code != 0 or w10_text.find(str(w10_suite[3])) < 0:
+			printerr("FAIL: ", w10_suite[0], " ", w10_suite[1], " exit=", w10_code, " ms=", w10_ms, "\n", w10_text.right(3000))
+			fails += 1
+		else:
+			print("PASS: ", w10_suite[0], " ", w10_suite[1], " (", w10_ms, " ms)")
+
 	# 12.6/12.7 process-lifetime caches must not outlive the run.
 	var am_node: Node = root.get_node_or_null("/root/AudioManager")
 	if am_node != null and am_node.has_method("cleanup_on_exit"):

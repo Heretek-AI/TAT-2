@@ -16,24 +16,33 @@ worktree that the integrator cherry-picked and re-gated.
 |---|---|---|
 | **P0** verification | three Vulkan captures, perf matrix, scorecard closure, ratchet raised to R8 | upper foyer p50 **34**, gate **23.9 %** black; AO cost ≤0.17 ms |
 | **P1** data + visual | authored collision, progression, input/curves, sprite tokens, prep composition | collision **937/947 (98.9 %)**, **+2,878** instances recovered; prep mean **37.1 vs KF11 37.2**, black floor **18.8 % vs 22.9 %** |
-| **P2** behaviour | fills, authored locks, ESC guard, lockpick stand-in, Den window, jam/endgame | **363 locks applied** (157 containers, 8 doors), zero invented levels; upper foyer **34 → 29** |
+| **P2** behaviour | fills, authored locks, ESC guard, lockpick stand-in, Den window, jam/endgame | **154 runtime locks** (144 container placements + 10 door nodes; the authored dump has 157 container actors and the pre-dedup record join is 363), zero invented levels; upper foyer **34 → 29** |
 | **P3** UI | 3 screens, Loc wiring, pad focus, TAB map, toast | routed strings **26 → 306**; authored-mappable **26/51 → 195/195**; focus **67 checks / 10 screens**; map **13/13** actors |
 | **P4** StateTree | game-neutral interpreter + shadow mode + coverage | **0 of 21 trees fully evaluable**; 113/326 tasks, 35/233 conditions; side-effect signature identical |
 
 ## 2. The decisions, and where they landed
 
-- **Collision — every mesh at once.** Done behind `TAT2_COLLISION=authored|aabb`
-  (default authored). It also exposed three producer bugs: `half_extent` was the
+- **Collision — authored `AggGeom`, not "every mesh at once".** Done behind
+  `TAT2_COLLISION=authored|aabb` (default authored). The measured Guildhall-15 coverage is
+  **937/947 collidable paths (98.9 %)**: 10 `/Game/Test/` graybox paths have no dump and
+  keep the heuristic, 14 payload meshes are `complex_as_simple` (the render trimesh is the
+  authored answer), and 233 of 1,667 distinct placed paths repo-wide have no record.
+  It also exposed three producer bugs: `half_extent` was the
   *full* extent (a 2× trap), the capsule axis was wrong, and the convex bake ignored
   instance scale — together 95,293 Jolt scale errors, now zero. The port also
-  recovered 2,878 instances the old 0.45 m AABB gate silently dropped.
+  recovered 2,878 instances the old 0.45 m AABB gate silently dropped. W10-A extended the
+  probe to every load set: **Guildhall 937/947 (0.989), OldManor 687/692 (0.993), FTUE
+  535/548 (0.976)**, `dropped=0` per map, every reduced mesh named.
 - **Progression — authored.** `progression.gd` consumes `project_settings.json`:
   level cap 25 with XP preserved, the authored award, endgame precedence
   **KF13 → 1200/600/300 → QG → 480**, FTUE 5,000 with a one-shot migration, and
   **48 market gates** verified.
 - **Locks — authored only.** The producer now emits lock level, cap and key-only
-  flags; `probe_lock_inventory` reports `applied=363`, `state=APPLIED`, and the live
-  log shows `swinging doors: 155 locked=2`.
+  flags; `probe_lock_inventory` reports `applied=154` (144 de-duplicated container
+  placements + 10 door pivot nodes; 363 is the raw record join over
+  `markers`+`actors`+`swinging_doors`, which double-counts the producer's mirrored
+  records and the 8 window pivots), `state=APPLIED`, and the live Guildhall log
+  shows `swinging doors: 155 locked=2`.
 - **StateTree — full runtime.** S1 shipped: a game-neutral model/parser (validates
   21/21 trees, 459/467 transitions, fails closed on five corruption modes), an
   interpreter, a shadow runner, coverage and traces. **S2 is not attempted** because

@@ -1,11 +1,11 @@
 {
   "schema": "tat2.gate_ratchet/1",
-  "measured_on": "8a4b0dd",
-  "source": "W9 tip re-measurement of the merged tree (8a4b0dd) on 2026-11-25: compile 186/0, run_tests 314/0 (suites to 111), M2 12/0, E2E 278/278 (tier 1 117/117), the five probes, perf guard 78/78, audit 12,660/12,703, texture cap 797/1/0. Supersedes the R8 floors on e3678be (152/301/12/278). Logs in docs/reports/logs/w9/.",
+  "measured_on": "29046c8",
+  "source": "W10-A re-measurement on top of the W9 tip (29046c8) on 2026-11-25: compile 186/0, run_tests 314/0 (suites to 111), M2 12/0, E2E 278/278 (tier 1 117/117), the five W9 probes, perf guard 78/78, audit 12,660/12,703, texture cap 797/1/0. The W10-A gates (collision maps, lock inventory, string audit, literal greps, runtime smoke) were measured in the evidence lane; the unchanged logs are W9 placeholders the lead overwrites with the wave runs. Logs in docs/reports/logs/w10/.",
   "note": "Floors, not exact counts: a wave may add tests/files but must never lower a floor or introduce a failure. Counts are read from the committed log and compared with >=; failure counts are exact zeros and e2e.passed must equal e2e.total. Update only with a real gate log in docs/reports/logs/ (see tools/check_gate_ratchet.py for the evidence layout).",
-  "report": "docs/reports/w9-gate-ratchet.md",
+  "report": "docs/reports/w10-gate-ratchet.md",
   "evidence": {
-    "dir": "docs/reports/logs/w9",
+    "dir": "docs/reports/logs/w10",
     "compile": "compile.log",
     "run_tests": "run_tests.log",
     "m2": "m2.log",
@@ -18,7 +18,13 @@
     "probe_viewmodel_truth": "probe_viewmodel_truth.log",
     "probe_niagara": "probe_niagara.log",
     "probe_blackjack_race": "probe_blackjack_race.log",
-    "probe_geometry_placement": "probe_geometry_placement.log"
+    "probe_geometry_placement": "probe_geometry_placement.log",
+    "probe_collision": "probe_collision_authored.log",
+    "probe_collision_maps": "probe_collision_authored.log",
+    "lock_inventory": "probe_lock_inventory.log",
+    "string_audit": "string_audit.log",
+    "literal_greps": "literal_greps.log",
+    "runtime_smoke": "runtime_smoke.log"
   },
   "gates": {
     "compile": {
@@ -51,6 +57,30 @@
     "perf_guard": {
       "checks": 78,
       "fails": 0
+    },
+    "probe_collision": {
+      "maps": 3,
+      "coverage_ppm": 950000,
+      "dropped": 0,
+      "planar_skipped": 0
+    },
+    "lock_inventory": {
+      "applied": 154,
+      "containers": 144,
+      "door_nodes": 10
+    },
+    "string_audit": {
+      "routed": 306,
+      "authored": 195,
+      "invented": 111
+    },
+    "literal_greps": {
+      "code_hits": 0,
+      "ui_rating_literals": 0
+    },
+    "runtime_smoke": {
+      "errors": 0,
+      "mission_ready": 1
     }
   }
 }

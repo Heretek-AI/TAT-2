@@ -6,20 +6,80 @@ extracted through `tools/tat-extract` (CUE4Parse, `EGame.GAME_UE5_5`).
 Generated from `extracted/filelist.txt` (22,005 entries) and the current `extracted/` tree.
 Re-run the census with the commands at the bottom.
 
-## W9 status — 2026-11-25 (newest; supersedes the sections below where they differ)
+## W10-A status — 2026-11-25 (newest; supersedes the sections below where they differ)
+
+Correctness-and-evidence wave: nine reported defects, each with a red proof and a green
+gate, plus the probe/ratchet hardening that keeps the claims re-derivable. Evidence:
+`build/qa/w10/a-report.md`, `docs/reports/w10-gate-ratchet.md`, and the committed logs in
+`docs/reports/logs/w10/`.
+
+**Closed by W10-A**
+
+- **Screens:** `PostMatchUI.continue_requested` has a consumer (the screen closes, the HUD
+  restores focus); main-menu focus is restored after Settings/Tutorial (`closed` →
+  `FocusNav.install` + `restore()`); ESC on the post-match/progression screens no longer
+  opens the pause menu behind them (shared `FocusNav` frame stamp, the lockpick protocol);
+  timeout/door-collapse render `TIME EXPIRED` / `MAGIC DOOR COLLAPSED` instead of "Caught"
+  (HUD *and* PostMatchUI, authored rows unchanged for capture/escape); the HUD owns at
+  most one rack-up `CanvasLayer` (replace, never stack). Suite **112** (39 checks).
+- **Runtime:** the StateTree NDJSON trace has a hard file budget (8192 rows / 16 MiB) with
+  a reported `file_dropped` count — the ring contract is unchanged; `runtime-smoke` now
+  fails on `ERROR:`/`push_error`, accepts exit **124 only**, checks `mission_ready`, keeps
+  its log, and has a documented teardown allowlist plus a 29-check self-test. Suite **113**.
+- **Collision:** a coplanar authored **convex** element emits no collider
+  (`planar_convex_skipped`, named by `COL_PLANAR`): the 160 `SM_SlowWardZone_Quad`
+  billboards (82 Guildhall + 78 OldManor) and the 3 FX quads. The box `2 cm` clamp stays,
+  and is now *measured*: its 27 meshes / 314 instances are real thin solids (glass, rugs,
+  `/Engine/BasicShapes/Plane`). Stair meshes are exempt from the 16-hull reduce cap, so the
+  OldManor tower flight (36 hulls) is per-element and walkable. Suites **115/116**.
+- **Locks:** `CanBeLockpicked` now resolves through a named authored default
+  (`AUTHORED_CAN_BE_LOCKPICKED_DEFAULT = true`) instead of an `else` accident; the
+  exclusion label is `unpickable` (26 of 33 explicit-false actors carry no `KeyTag`).
+  Suite **114** + `build/qa/w10/check_lock_cdo.py`.
+
+**Defect 8 — NOT REPRODUCED (documented, not "fixed")**
+
+`StaticMeshActor_528` (the Guildhall prison door) is **pickable as authored**. The dump is
+a delta serialisation, so an absent `CanBeLockpicked` means "inherit", and the resolved
+value is `true`: a door on the *same* native class (`BP_Res_Int_Doorway_C`, FTUE spawn
+area) writes `CanBeLockpicked: false` explicitly, which a delta dump would have discarded
+if the inherited value were already `false`; 33 placed actors author `false` and not one
+authors `true`. The actor is also the only key-tagged POI actor with no `KeyItemInfo`, so
+"key-only" would leave it unopenable. Evidence: `build/qa/w10/re-1-locks.md`; gate:
+`check_lock_cdo.py` (31 classes, exactly one resolves `false` — unplaced — 33/33 placed
+`false` explicit).
+
+**Open, found by W10-A (recorded, not hidden)**
+
+- **Prison-door lock level:** the authored `MaxLockLevel` resolves to **4** (inherited from
+  `BP_SwingingDoor_C`), but `tools/parse_tables.py` emits instance deltas only, so the
+  record has no cap and the port locks at **1**. A fix is a producer chain resolution +
+  regeneration (integrator) and a deliberate difficulty change (LV4 pick on the cell door).
+- **Collision coverage is per map, not universal:** 233 of the 1,667 distinct placed mesh
+  paths repo-wide still have no `mesh_collision.json` record (mostly `/Game/Test/` graybox,
+  `/Engine/`, third-party cobwebs); they keep the heuristic collider. The extended probe
+  measures Guildhall, OldManor and FTUE separately — see the W10-A report.
+
+## W9 status — 2026-11-25 (supersedes the sections below where they differ)
 
 Four phases, 34 commits, every phase audited by an agent that did not write the code.
 Measured detail: [`reports/w9-remediation-20261125.md`](reports/w9-remediation-20261125.md).
 
 **Closed by W9**
 
-- **Collision is authored.** `AggGeom` on **937/947 meshes (98.9 %)**, `dropped=0`,
-  30,901 shapes, and **+2,878 instances** the old 0.45 m AABB gate discarded. Three
-  producer bugs fixed on the way (full-vs-half extent, capsule axis, convex bake scale).
+- **Collision is authored data — not "every mesh".** Guildhall-15: **937/947 collidable
+  paths (98.9 %)**, `dropped=0`, 30,901 shapes, and **+2,878 instances** the old 0.45 m AABB
+  gate discarded. The 10 remainder are `/Game/Test/` graybox paths with no dump (heuristic);
+  14 payload meshes are `complex_as_simple` (the render trimesh *is* the authored answer),
+  and 233 of 1,667 distinct placed paths repo-wide have no record. Three producer bugs
+  fixed on the way (full-vs-half extent, capsule axis, convex bake scale). W10-A measured
+  all three load sets separately: **Guildhall 937/947 (0.989), OldManor 687/692 (0.993),
+  FTUE 535/548 (0.976)**, `dropped=0` on each.
 - **Progression is authored.** Level cap 25 with XP preserved, authored award, endgame
   precedence KF13 → 1200/600/300 → QG → 480, FTUE 5,000 migrated once, 48 market gates.
-- **Locks are authored only.** 363 applied (157 containers, 8 doors, 8 windows excluded by
-  class); zero invented levels; the LV4 `ESC` no longer escapes into the pause menu.
+- **Locks are authored only.** 154 runtime locks applied (144 de-duplicated container
+  placements + 10 door pivot nodes; 363 is the raw record join and 8 window actors are
+  excluded by class); zero invented levels; the LV4 `ESC` no longer escapes into the pause menu.
 - **UI reads the authored tables.** String routing 26 → 306; authored-mappable 195/195;
   post-match, progression and tutorial screens exist; pad focus walks 10 screens / 58
   controls; the TAB map consumes all 13 `TATWorldMapBoundary` actors.
@@ -128,7 +188,7 @@ and the recorded-run evidence in
 | **Patrols** | 210 paths / 673 waypoints | 120 Guildhall / 350 points merged; guards use authored waits/yaw/PingPong | **done** |
 | **Clues / quests** | 96 fact rows / 18 QGs | 90 reachable / 6 dead (Spider `03:Reminder` withheld, `04:Renegade` excluded; the producer-dead `01:Intro` is granted at runtime); authored readable clues, quest items, journal, Set/LootTheRoom objectives; **Spider 01→04 personal chain live** (note → electrotype → Owl → courier → informant, 7 facts, 90/90 real-map probe) | **done (`eb55bc1`); residuals in the 2026-11-24 integration entry** |
 | **Player identity** | `PlayerState.GetPlayerName` | explicit handle, else authored `The Spider` / `The Chameleon`; no capture Steam persona | **done (W0a)** |
-| **Localization** | 8 locales | 8 `.translation` registered; 2,946 source→key entries; `Loc.t()` in main menu/pause/prep | **partial** |
+| **Localization** | 8 locales | 8 `.translation` registered; 2,946 source→key entries; every visible UI expression routed through `UIStrings` (306/306, 195 authored), **not** `Loc.t()` call sites — `Loc.t(` occurs once, in the `localization.gd` docstring | **partial (111 labelled port-copy rows)** |
 | Skeletal meshes / skins | 156 `SK_` | 156 GLB | guards play 10 real retargeted clips (a29a06f); player uses real 1P arms (9ef3bdc) |
 | Player model | `Mesh1P_UpperBody/LowerBody`, `Mesh3P_Body/Head` = ThiefNisha meshes | real ThiefNisha 3P body/head + 1P upper-body arms with Walk/Sprint/Crouch 1P clips | **done (9ef3bdc)** |
 

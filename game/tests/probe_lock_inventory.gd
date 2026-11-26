@@ -1,5 +1,5 @@
 extends SceneTree
-## W9-P2 E1: authored lock inventory probe.
+## W9-P2 E1 / W10-A: authored lock inventory probe.
 ##
 ## Prints, from the raw UE dump:
 ##   * per-map placed `_locked: true` counts,
@@ -8,12 +8,23 @@ extends SceneTree
 ## and asserts the fact-sheet totals (173 placed locks = 157 containers +
 ## 8 doors + 8 windows; 155 authored caps of 2 and 3 of 1).
 ##
-## Then it prints the CURRENT runtime state from the committed generated data.
-## Those are deliberately split: the producer contract
-## (build/qa/w9/b2-producer-contract.md) is NOT in the tree yet, so no authored
-## lock reaches a `.tatlevel.json` record until the integrator regenerates at
-## merged HEAD. `locked_now=0` is therefore the expected pre-regeneration value,
-## not a failure of this probe.
+## Then it prints what the CURRENT runtime actually applies from the committed
+## generated data. The two halves are deliberately split: the authored dump is
+## the source, the `.tatlevel.json` records are what the loader/consumers see.
+##
+## W10-A: `applied` is now the de-duplicated runtime count, not the raw record
+## count. Only these records reach `set_locked(true, …)`:
+##   * container markers (`markers` only, `actors` are never spawned as
+##     containers) whose class is in `level_loader.LOOT_CONTAINER_CLASSES`
+##     (read from the script's constant map, not duplicated here), `locked`
+##     true, de-duplicated by `(class, rounded pos)`;
+##   * `swinging_doors` records with `locked` true, a class without "Window"
+##     and `can_lockpick` not explicitly false.
+## The raw count (`raw=`) stays its own labelled number: it counts every
+## locked marker/actor/door record and is not the applied total. The probe
+## FAILS (exit 1) when `applied`, the container count or the door-node count is
+## zero — the old "0 means the producer has not regenerated yet" state is gone
+## because the current generated data carries the locks.
 ##
 ## Run:
 ##   flock /tmp/opencode/tat2-godot.lock -c \
@@ -21,13 +32,7 @@ extends SceneTree
 ##
 ## The probe never writes anything and never starts a renderer.
 
-const ALLOWLIST: Array[String] = [
-	"BP_ChestTrunk_MajorLoot_C",
-	"BP_DisplayCaseA_MajorLoot_C",
-	"BP_LootStashInteractable_Secret_ThinWall_C",
-	"BP_Storefront_DisplayCaseB_MinorLoot_C",
-	"BP_Storefront_DisplayCaseD_MinorLoot_C",
-]
+const LevelLoaderScript: GDScript = preload("res://src/core/level_loader.gd")
 
 ## Authored totals (docs/reference fact sheet §1.2-§1.3, re-measured here).
 const EXPECT_TOTAL := 173
@@ -38,6 +43,8 @@ const EXPECT_MAX2 := 155
 const EXPECT_MAX1 := 3
 
 var fails: int = 0
+## Runtime `LOOT_CONTAINER_CLASSES`, read from `level_loader.gd` in `_run`.
+var loot_classes: Array = []
 
 
 func _check(cond: bool, msg: String) -> void:
@@ -84,6 +91,20 @@ func _family(cls: String) -> String:
 	return "container"
 
 
+## De-duplication key for a placed container: the same authored actor appears
+## once as a marker and once as an actor record at the same position.
+func _container_key(cls: String, rec: Dictionary) -> String:
+	var pos_key: String = "?"
+	var pos: Variant = rec.get("pos")
+	if pos is Array and (pos as Array).size() >= 3:
+		pos_key = "%d_%d_%d" % [
+			int(round(float((pos as Array)[0]) * 100.0)),
+			int(round(float((pos as Array)[1]) * 100.0)),
+			int(round(float((pos as Array)[2]) * 100.0)),
+		]
+	return "%s|%s" % [cls, pos_key]
+
+
 func _run() -> void:
 	var project_dir: String = ProjectSettings.globalize_path("res://").simplify_path()
 	var ext_root: String = project_dir.path_join("../extracted/json").simplify_path()
@@ -92,6 +113,14 @@ func _run() -> void:
 		quit(0)
 		return
 	print("LOCK_INVENTORY source=", ext_root)
+
+	# Runtime container classes: one source of truth, the loader's own constant.
+	var const_map: Dictionary = LevelLoaderScript.get_script_constant_map()
+	var classes_v: Variant = const_map.get("LOOT_CONTAINER_CLASSES", null)
+	if classes_v is Array:
+		loot_classes = classes_v as Array
+	_check(loot_classes.size() > 0,
+		"LOOT_CONTAINER_CLASSES read from level_loader.gd (%d classes)" % loot_classes.size())
 
 	# --- Authored inventory (raw UE dump) ---------------------------------
 	var files: Array = []
@@ -166,12 +195,12 @@ func _run() -> void:
 	# --- Authored records the port can actually spawn ---------------------
 	var runtime_containers := 0
 	for cls: String in classes:
-		if ALLOWLIST.has(cls):
+		if loot_classes.has(cls):
 			runtime_containers += int(per_class[cls])
 	print("  authored-locked containers inside LOOT_CONTAINER_CLASSES: ", runtime_containers)
 	var excluded_classes: PackedStringArray = []
 	for cls: String in classes:
-		if _family(cls) == "container" and not ALLOWLIST.has(cls):
+		if _family(cls) == "container" and not loot_classes.has(cls):
 			excluded_classes.append("%s(%d)" % [cls, int(per_class[cls])])
 	print("  authored-locked containers outside the allowlist (never spawned): ",
 		", ".join(excluded_classes))
@@ -184,8 +213,14 @@ func _run() -> void:
 	_collect_json(levels_root, level_files)
 	var runtime_records := 0
 	var runtime_locked := 0
+	var locked_markers := 0
+	var locked_actors := 0
+	var locked_doors_raw := 0
 	var runtime_container_markers := 0
+	var locked_container_markers := 0
 	var runtime_door_records := 0
+	var door_nodes := 0
+	var container_keys: Dictionary = {}
 	for path: String in level_files:
 		var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
 		if not (parsed is Dictionary):
@@ -193,39 +228,72 @@ func _run() -> void:
 		var doc: Dictionary = parsed as Dictionary
 		for key: String in ["markers", "actors"]:
 			for rec_var: Variant in doc.get(key, []) as Array:
-				if rec_var is Dictionary:
-					var rec: Dictionary = rec_var as Dictionary
-					runtime_records += 1
-					if rec.get("locked") == true:
-						runtime_locked += 1
-					if ALLOWLIST.has(str(rec.get("class", ""))):
-						runtime_container_markers += 1
-		for rec_var: Variant in doc.get("swinging_doors", []) as Array:
-			if rec_var is Dictionary:
+				if not (rec_var is Dictionary):
+					continue
+				var rec: Dictionary = rec_var as Dictionary
 				runtime_records += 1
-				runtime_door_records += 1
-				if (rec_var as Dictionary).get("locked") == true:
-					runtime_locked += 1
+				var is_locked: bool = rec.get("locked") == true
+				var cls: String = str(rec.get("class", ""))
+				if key == "markers" and loot_classes.has(cls):
+					runtime_container_markers += 1
+				if not is_locked:
+					continue
+				runtime_locked += 1
+				if key == "markers":
+					locked_markers += 1
+				else:
+					locked_actors += 1
+				# Only markers spawn containers; actors are the same authored
+				# actor serialized a second time and are never spawned.
+				if key == "markers" and loot_classes.has(cls):
+					locked_container_markers += 1
+					container_keys[_container_key(cls, rec)] = true
+		for rec_var: Variant in doc.get("swinging_doors", []) as Array:
+			if not (rec_var is Dictionary):
+				continue
+			var rec: Dictionary = rec_var as Dictionary
+			runtime_records += 1
+			runtime_door_records += 1
+			if rec.get("locked") != true:
+				continue
+			runtime_locked += 1
+			locked_doors_raw += 1
+			# Door nodes: the same filter `swinging_door.configure()` applies
+			# (window and explicit `can_lockpick: false` excluded). One node per
+			# record, no dedupe.
+			if str(rec.get("class", "")).to_lower().find("window") >= 0:
+				continue
+			var can_pick: Variant = rec.get("can_lockpick", null)
+			if can_pick is bool and not bool(can_pick):
+				continue
+			door_nodes += 1
+	var containers: int = container_keys.size()
+	var applied: int = containers + door_nodes
+	var discarded: int = maxi(runtime_locked - applied, 0)
+	var runtime_state: String = "APPLIED" if applied > 0 else "EMPTY"
 
 	print("  runtime generated levels scanned: ", level_files.size())
 	print("  runtime level records (markers+actors+swinging_doors): ", runtime_records)
 	print("  runtime loot-container-class markers: ", runtime_container_markers)
 	print("  runtime swinging-door records: ", runtime_door_records)
-	print("  runtime records carrying an authored lock: ", runtime_locked)
-	# The authored dump and the runtime generated data are deliberately split:
-	# 0 means the producer contract has not been applied/regenerated yet (this
-	# branch), non-zero means it has (integrator tree). Neither is a failure.
-	var runtime_state: String = ("BLOCKED-ON-INTEGRATOR-REGENERATION"
-		if runtime_locked == 0 else "APPLIED")
-	print("LOCK_INVENTORY runtime: authored=%d applied=%d state=%s"
-		% [total, runtime_locked, runtime_state])
-	if runtime_locked == 0:
-		print("  (the producer contract is not in the tree; regeneration at merged HEAD applies it)")
+	print("  runtime records carrying an authored lock: %d (raw: markers=%d actors=%d doors=%d)"
+		% [runtime_locked, locked_markers, locked_actors, locked_doors_raw])
+	print("  runtime applied containers: %d de-duplicated by (class,pos) from %d locked container markers"
+		% [containers, locked_container_markers])
+	print("  runtime applied door nodes: %d (windows and explicit can_lockpick=false excluded)" % door_nodes)
+	print("LOCK_INVENTORY runtime: authored=%d raw=%d applied=%d containers=%d door_nodes=%d discarded=%d state=%s"
+		% [total, runtime_locked, applied, containers, door_nodes, discarded, runtime_state])
+	_check(applied > 0, "runtime applies at least one authored lock (applied=%d)" % applied)
+	_check(containers > 0, "runtime applies container locks (containers=%d)" % containers)
+	_check(door_nodes > 0, "runtime applies door-node locks (door_nodes=%d)" % door_nodes)
+	_check(applied == containers + door_nodes,
+		"applied = containers + door_nodes (%d = %d + %d)" % [applied, containers, door_nodes])
 
 	var ok: bool = fails == 0
 	if ok:
-		print("LOCK_INVENTORY PASS authored_containers=%d authored_doors=%d authored_windows=%d locked_now=%d"
-			% [int(families["container"]), int(families["door"]), int(families["window"]), runtime_locked])
+		print("LOCK_INVENTORY PASS authored_containers=%d authored_doors=%d authored_windows=%d locked_now=%d applied=%d containers=%d door_nodes=%d"
+			% [int(families["container"]), int(families["door"]), int(families["window"]), runtime_locked, applied, containers, door_nodes])
 	else:
-		print("LOCK_INVENTORY FAIL fails=%d locked_now=%d" % [fails, runtime_locked])
+		print("LOCK_INVENTORY FAIL fails=%d applied=%d containers=%d door_nodes=%d raw=%d"
+			% [fails, applied, containers, door_nodes, runtime_locked])
 	quit(0 if ok else 1)

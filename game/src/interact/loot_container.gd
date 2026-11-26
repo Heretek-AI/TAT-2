@@ -122,23 +122,33 @@ var is_lockpicking: bool = false
 var _lockpick_actor: Node = null
 ## One warning per authored container class missing from containers.json.
 static var _missing_class_warned: Dictionary = {}
-## W9-P2 B2: authored key-only locks ignored by this port (no key inventory),
-## counted per class so the exclusion is observable without per-instance spam.
-static var _key_only_excluded: Dictionary = {}
+## W9-P2 B2: authored locks this port ignores (no key inventory), counted per
+## class so the exclusion is observable without per-instance spam.
+## W10-A defect 8 label correction: this bucket is `CanBeLockpicked == false`
+## ("unpickable"), not "key only" — 26 of the 33 placed explicit-false actors
+## carry no KeyTag (build/qa/w10/re-1-locks.md §3.3).
+static var _unpickable_excluded: Dictionary = {}
 
 
-## W9-P2 B2: record an authored key-only lock we deliberately do not honour.
-## Counts every instance but prints once per class; `key_only_exclusions()`
+## W9-P2 B2: record an authored unpickable lock we deliberately do not honour.
+## Counts every instance but prints once per class; `unpickable_exclusions()`
 ## exposes the tally to tests/probes.
-func _note_key_only_exclusion(p_class: String) -> void:
-	var seen: int = int(_key_only_excluded.get(p_class, 0))
-	_key_only_excluded[p_class] = seen + 1
+func _note_unpickable_exclusion(p_class: String) -> void:
+	var seen: int = int(_unpickable_excluded.get(p_class, 0))
+	_unpickable_excluded[p_class] = seen + 1
 	if seen == 0:
-		print("[loot_container] authored key-only lock not applied (port has no key inventory): ", p_class)
+		print("[loot_container] authored unpickable lock not applied (port has no key inventory): ", p_class)
 
 
+static func unpickable_exclusions() -> Dictionary:
+	return _unpickable_excluded.duplicate()
+
+
+## Deprecated alias of `unpickable_exclusions()` (W10-A defect 8 label rename).
+## Kept so callers written before the rename — e.g. tests/test_w9p2_locks.gd,
+## which must not be edited — keep reading the same per-class tally.
 static func key_only_exclusions() -> Dictionary:
-	return _key_only_excluded.duplicate()
+	return unpickable_exclusions()
 
 
 func _warn_missing_container_class(p_class: String) -> void:
@@ -230,16 +240,17 @@ func configure(p_class: String, entry: Dictionary, p_index: int) -> void:
 	# `locked` means unlocked: class-default `_locked` values (BP_SmallSafe_C /
 	# BP_LargeFancySafe_C) are CDO defaults, not placed authoring.
 	#
-	# Key-only authored locks (`_lockConfig.CanBeLockpicked == false`) are
+	# Unpickable authored locks (`_lockConfig.CanBeLockpicked == false`) are
 	# excluded: the port has no key inventory, so honouring them would soft-lock
 	# the container. They stay open and are counted/labelled once per class (no
-	# per-instance spam). Unsupported container classes never reach this
-	# function at all (level_loader.LOOT_CONTAINER_CLASSES filters
+	# per-instance spam). W10-A defect 8: the flag means "cannot be picked", not
+	# "needs a key" (re-1-locks.md §3.3). Unsupported container classes never
+	# reach this function at all (level_loader.LOOT_CONTAINER_CLASSES filters
 	# BP_SmallSafe_MajorLoot_C / BP_ChestTrunk_C / BP_BookcaseB_C before spawn).
 	if entry.get("locked") == true:
 		var can_pick: Variant = entry.get("can_lockpick", null)
 		if can_pick is bool and not bool(can_pick):
-			_note_key_only_exclusion(p_class)
+			_note_unpickable_exclusion(p_class)
 		else:
 			var cap_lvl: int = int(entry.get("max_lock_level", 1))
 			set_locked(true, clampi(cap_lvl, 1, 6))

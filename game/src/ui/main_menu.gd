@@ -47,6 +47,10 @@ var _shop_glow: OmniLight3D
 var _menu_rain: Node3D = null
 var _sway_t: float = 0.0
 var selected_order: int = 1
+## W10-A INV-1b.4/1b.5/1b.8/1b.9: the menu column is the focus root a closing
+## modal re-installs before `FocusNav.restore()`. It used to be a local in
+## `_build_ui`, so the handlers had nothing to hand back to.
+var _menu_v: VBoxContainer = null
 
 
 func _ready() -> void:
@@ -624,6 +628,8 @@ func _build_ui() -> void:
 	add_child(right_anchor)
 
 	var menu_v := VBoxContainer.new()
+	# W10-A INV-1b: member, not a local, so `_on_modal_closed()` can re-ring it.
+	_menu_v = menu_v
 	menu_v.anchor_left = 0.0
 	menu_v.anchor_right = 1.0
 	menu_v.anchor_top = 0.26806
@@ -699,19 +705,38 @@ func _build_ui() -> void:
 
 
 func _on_settings_pressed() -> void:
+	# W10-A INV-1b.4/1b.5: remember the opener AND connect the modal's `closed`
+	# to the restore step (the HUD pause menu's Settings handler is the pattern).
+	# The old code called `remember()` and never connected anything, so closing
+	# Settings released focus and left it nowhere: `restore()` was never called.
 	FocusNavScript.remember()
 	var ui := SettingsUIScript.new()
 	add_child(ui)
+	if ui.has_signal("closed"):
+		ui.connect("closed", _on_modal_closed)
 	ui.open_settings()
+
+
+## Pad focus hand-back for both menu modals: re-ring the menu column and put
+## focus on the remembered opener. Pad-only — no mouse events, and no specific
+## button is grabbed, so the opener is whatever the player focused.
+func _on_modal_closed() -> void:
+	FocusNavScript.install(_menu_v)
+	FocusNavScript.restore()
 
 
 ## Authored FTUE entry: the browser lists every ST_Tutorial row; its
 ## START TUTORIAL button boots the authored FTUE map set (GameData.get_ftue_sublevels,
 ## which mission_controller loads as active_map_id "ftue").
 func _on_tutorial_pressed() -> void:
+	# W10-A INV-1b.8/1b.9: same restore connection as Settings. TutorialUI
+	# releases focus and emits `closed` (tutorial_ui.gd:115-121) but does not
+	# free itself, so the handler owns the focus hand-back only.
 	FocusNavScript.remember()
 	var ui: CanvasLayer = TutorialUIScript.new() as CanvasLayer
 	add_child(ui)
+	if ui.has_signal("closed"):
+		ui.connect("closed", _on_modal_closed)
 	if ui.has_signal("start_tutorial_requested"):
 		ui.connect("start_tutorial_requested", _start_tutorial_mission)
 	ui.call("open_tutorial")

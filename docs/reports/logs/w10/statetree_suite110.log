@@ -1,0 +1,145 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:852)
+         [1] _mission_map_id (res://src/core/game_data.gd:952)
+         [2] _load_missions (res://src/core/game_data.gd:1009)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:852)
+         [1] _mission_map_id (res://src/core/game_data.gd:952)
+         [2] _load_missions (res://src/core/game_data.gd:1009)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:852)
+         [1] _mission_map_id (res://src/core/game_data.gd:952)
+         [2] _load_missions (res://src/core/game_data.gd:1009)
+         [3] _ready (res://src/core/game_data.gd:100)
+TAT-2 Loc: reverse map built from sources.json (3404 keys)
+TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
+INPUT_TABLE source=generated rows=91 shipping=91 actions=52
+INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
+P4LIB trees=21 states=459 transitions=467 task_classes=77 condition_classes=36 linked_asset=45 local_links=2
+STATETREE_COVERAGE trees=21 task_classes=77 task_instances=326 task_covered=113 task_blind=94 condition_classes=36 condition_instances=233 condition_covered=35 condition_blind=32 implemented=0 mapped=24 unsupported=89
+P4COVERAGE fully_covered_trees=0 names=[]
+P4ROW TASK|Add Targeting Groups|mapped-to-port|2|2|2|PORT GAP (vacuous): the port keeps no targeting-group registry at the tree level; ReactionRoles covers only the combat role cap
+P4ROW TASK|Apply Gameplay Effect|unsupported|3|0|0|no port counterpart
+P4ROW TASK|Clear Focus|mapped-to-port|19|19|0|PORT GAP (vacuous): the port has no focus subsystem, so clearing focus completes immediately
+P4ROW TASK|Complete Broken Segment|mapped-to-port|1|1|1|the port has no broken-patrol-segment concept, so this branch is unreachable
+P4ROW TASK|Complete Patrol Segment|mapped-to-port|1|1|1|the FSM advances the authored path index itself; completion is observed, not commanded
+P4ROW TASK|Debug Text Task|unsupported|2|0|0|no port counterpart
+P4ROW TASK|Delay Task|mapped-to-port|32|2|2|observes the FSM's authored WaitSeconds dwell; the task's Duration binding is not in the payload
+P4ROW TASK|Extract Conversation Share Target Data|unsupported|1|0|0|no port counterpart
+P4ROW TASK|Extract Conversation Voice Line Data|unsupported|1|0|0|no port counterpart
+P4ROW TASK|Extract Distraction Data|unsupported|1|0|0|no port counterpart
+P4ROW TASK|Extract Reaction Role|unsupported|2|0|0|no port counterpart
+P4ROW TASK|Extract Scalable Float|unsupported|2|0|0|no port counterpart
+P4ROW TASK|Extract Target From Targeting Group|unsupported|14|0|0|no port counterpart
+P4ROW TASK|Get Location From Actor|unsupported|3|0|0|no port counterpart
+P4ROW TASK|Move To|mapped-to-port|9|2|2|completes when the FSM reaches the authored patrol point (1.0 m gate) or advances wp_index; the target binding is not in the payload
+P4ROW TASK|Register for Reaction Role|unsupported|2|0|0|no port counterpart
+P4ROW TASK|Repeatedly Trigger VO|mapped-to-port|3|3|3|PORT GAP: the delay/tag parameters are not in the payload; completes as a one-shot
+P4ROW TASK|Report Noise Event|unsupported|4|0|0|no port counterpart
+P4ROW TASK|Request Conditional Voice Line|mapped-to-port|10|10|10|PORT GAP: as Request Voice Line; the tag parameter is not in the payload
+P4ROW TASK|Request Conditional Voice Line Copy|mapped-to-port|2|2|2|PORT GAP: as Request Voice Line
+P4ROW TASK|Request Voice Line|mapped-to-port|31|31|31|PORT GAP: the port's VO is tag-driven from the FSM, not from the tree; the task completes without playing the authored line
+P4ROW TASK|Run Env Query|unsupported|19|0|0|no port counterpart
+P4ROW TASK|STT Distraction Smart Objects|unsupported|1|0|0|no port counterpart
+P4ROW TASK|STT Equip Unequip|unsupported|2|0|0|no port counterpart
+P4ROW TASK|STT Get Distance Between Actors|unsupported|1|0|0|no port counterpart
+P4ROW TASK|STT Remember Target to Share|unsupported|1|0|0|no port counterpart
+P4ROW TASK|STT Remember Target to Share Location|unsupported|1|0|0|no port counterpart
+P4ROW TASK|STT Set Clue Giving Enabled|unsupported|1|0|0|no port counterpart
+P4ROW TASK|STT Set Contextual Location in Use|unsupported|1|0|0|no port counterpart
+P4ROW TASK|STT Set Focus|mapped-to-port|3|3|3|PORT GAP (vacuous): no focus subsystem
+P4ROW TASK|STT Set Share Partner|unsupported|2|0|0|no port counterpart
+P4ROW TASK|STT Share Target|unsupported|1|0|0|no port counterpart
+P4ROW TASK|STT Trigger Search Animation|unsupported|2|0|0|no port counterpart
+P4ROW TASK|STT Try Claim Contextual Location|unsupported|1|0|0|no port counterpart
+P4ROW TASK|STT Try Forget Share Partner|unsupported|1|0|0|no port counterpart
+P4ROW TASK|STT Use Smart Object with Claimed Handle|unsupported|1|0|0|no port counterpart
+P4ROW TASK|STT Use Smart Object with Target Actor|unsupported|6|0|0|no port counterpart
+P4ROW TASK|STT Use Smart Object with Target Slot Handle|unsupported|5|0|0|no port counterpart
+P4ROW TASK|Scoped Individual Knowledge|unsupported|2|0|0|no port counterpart
+P4ROW TASK|Scoped Stim Investigation|unsupported|1|0|0|no port counterpart
+P4ROW TASK|Send Gameplay Event|unsupported|1|0|0|no port counterpart
+P4ROW TASK|Set Focus (Actor)|mapped-to-port|12|12|12|PORT GAP (vacuous): no focus subsystem; completes without turning the guard
+P4ROW TASK|Set Focus (Location)|mapped-to-port|1|1|1|PORT GAP (vacuous): no focus subsystem; completes without turning the guard
+P4ROW TASK|Set Individual Attitude To Target|unsupported|7|0|0|no port counterpart
+P4ROW TASK|Set Value (bool)|unsupported|8|0|0|no port counterpart
+P4ROW TASK|TATState Tree Lockdown|unsupported|1|0|0|no port counterpart
+P4ROW TASK|TATState Tree Lockdown Extract Search Target|unsupported|1|0|0|no port counterpart
+P4ROW TASK|TATState Tree Lockdown Finish Searching|unsupported|1|0|0|no port counterpart
+P4ROW TASK|TATState Tree Lockdown Get Alarm Station|unsupported|1|0|0|no port counterpart
+P4ROW TASK|TATState Tree Send Event to NPC|unsupported|3|0|0|no port counterpart
+P4ROW TASK|TATState Tree Send Event to NPC Share Target|unsupported|1|0|0|no port counterpart
+P4ROW TASK|TATState Tree Task Combat Positioning|unsupported|1|0|0|no port counterpart
+P4ROW TASK|TATState Tree Task Extract Main Target Data from Event|unsupported|3|0|0|no port counterpart
+P4ROW TASK|TATState Tree Task Extract Stim Data from Event|unsupported|4|0|0|no port counterpart
+P4ROW TASK|TATState Tree Task Loop|unsupported|2|0|0|no port counterpart
+P4ROW TASK|TATState Tree Task Persist Patrol Data|mapped-to-port|1|1|1|the port persists patrol state in guard fields (wp_index/_patrol_wait_left); no authored parameter is carried
+P4ROW TASK|TATState Tree Task Retrieve Share Target|unsupported|1|0|0|no port counterpart
+P4ROW TASK|TATState Tree Task Rotate to Face|mapped-to-port|9|1|1|observes the authored patrol yaw the FSM already applies; the task's target binding is not in the payload
+P4ROW TASK|TATState Tree Task Set Alertness|mapped-to-port|20|20|20|observes the FSM's alertness; the authored EAlertnessLevel parameter is not in the payload, the target is inferred from the state name
+P4ROW TASK|TATState Tree Task Set Blackboard Actor Value|unsupported|3|0|0|no port counterpart
+P4ROW TASK|TATState Tree Task Set Blackboard Value|unsupported|5|0|0|no port counterpart
+P4ROW TASK|TATState Tree Task Set Combat Target|unsupported|2|0|0|no port counterpart
+P4ROW TASK|TATState Tree Task Set Individual Knowledge|unsupported|5|0|0|no port counterpart
+P4ROW TASK|TATState Tree Task Setup Patrol|mapped-to-port|1|1|1|reads the same authored patrol record the FSM uses (level `patrol_paths`); Setup Patrol's own task params are not in the payload
+P4ROW TASK|TATState Tree Task Update Knowledge Of Actor|unsupported|9|0|0|no port counterpart
+P4ROW TASK|TATState Tree Task Wait for AIResource Unlocked|unsupported|1|0|0|no port counterpart
+P4ROW TASK|TATState Tree Task Wait for Applied Tags|unsupported|4|0|0|no port counterpart
+P4ROW TASK|Track Targeting Groups|mapped-to-port|1|1|1|PORT GAP (vacuous): no targeting-group registry
+P4ROW TASK|Trigger Gameplay Ability By Class|unsupported|4|0|0|no port counterpart
+P4ROW TASK|Trigger Gameplay Ability By Gameplay Event|unsupported|1|0|0|no port counterpart
+P4ROW TASK|Trigger Gameplay Ability By Input|unsupported|1|0|0|no port counterpart
+P4ROW TASK|Trigger ability via Gameplay Tag and Wait|unsupported|4|0|0|no port counterpart
+P4ROW TASK|Trigger and Wait For Animation|unsupported|1|0|0|no port counterpart
+P4ROW TASK|Update Stim Info|unsupported|1|0|0|no port counterpart
+P4ROW TASK|Use Interactable Actor|unsupported|1|0|0|no port counterpart
+P4ROW TASK|Use Smart Object|unsupported|1|0|0|no port counterpart
+P4ROW TASK|[TAT] Move To|unsupported|6|0|0|no port counterpart
+P4ROW COND|Bool Compare|mapped-to-port|15|2|2|answered only where the owning state disambiguates it; every other instance is UNKNOWN
+P4ROW COND|Check Distance From Owner|unsupported|10|0|0|no port counterpart
+P4ROW COND|Check Distance From Owner Copy|unsupported|1|0|0|no port counterpart
+P4ROW COND|Check Gameplay Tag Event Matches|unsupported|10|0|0|no port counterpart
+P4ROW COND|Check Gameplay Tag Is Valid|unsupported|2|0|0|no port counterpart
+P4ROW COND|Check Linked State Is Active|unsupported|1|0|0|no port counterpart
+P4ROW COND|Check Stim Data Instigator matches private zone tags on actor|unsupported|1|0|0|no port counterpart
+P4ROW COND|Check Stim Data instigator matches attitude|unsupported|4|0|0|no port counterpart
+P4ROW COND|Check Stim Data instigator matches attitude Copy|unsupported|1|0|0|no port counterpart
+P4ROW COND|Check Stim Event Matches|unsupported|6|0|0|no port counterpart
+P4ROW COND|Check Target Has Gameplay Tag|mapped-to-port|27|27|27|answered as 'the FSM is not NEUTRAL' (it has a target); the authored tag is not in the payload
+P4ROW COND|Check Target Knowledge with Attitude|unsupported|2|0|0|no port counterpart
+P4ROW COND|Check Target Knowledge with Detection|unsupported|4|0|0|no port counterpart
+P4ROW COND|Check Targeting Data Exists for Targeting Group|unsupported|17|0|0|no port counterpart
+P4ROW COND|Check Targeting Data Matches Specific Target|unsupported|1|0|0|no port counterpart
+P4ROW COND|Check Targeting Data Matches Visibility|unsupported|5|0|0|no port counterpart
+P4ROW COND|Check Targeting Data Matches Visibility Copy|unsupported|1|0|0|no port counterpart
+P4ROW COND|Check Targeting Group Matches|unsupported|16|0|0|no port counterpart
+P4ROW COND|Distance Compare|unsupported|1|0|0|no port counterpart
+P4ROW COND|Has Individual Knowledge|unsupported|1|0|0|no port counterpart
+P4ROW COND|Has Tag|unsupported|6|0|0|no port counterpart
+P4ROW COND|Integer Compare|unsupported|1|0|0|no port counterpart
+P4ROW COND|Is Carrying Major Loot|mapped-to-port|2|2|0|guards never carry major loot in the port; false by construction
+P4ROW COND|Object Equals|unsupported|2|0|0|no port counterpart
+P4ROW COND|Object Is Valid|mapped-to-port|18|1|1|answered false only where the port has no such object (smart-object states); otherwise UNKNOWN
+P4ROW COND|Object Is Valid Copy|unsupported|1|0|0|no port counterpart
+P4ROW COND|Patrol Point Is Of Type|mapped-to-port|2|2|2|answered from the owning state name; all 673 authored patrol points are PatrolToLocation, so the Smart Object branch is false
+P4ROW COND|STC Blackboard Actor Is Set|mapped-to-port|1|1|0|PORT GAP: the port has no StateTree blackboard, so no blackboard actor is set
+P4ROW COND|STC Has Clue|unsupported|2|0|0|no port counterpart
+P4ROW COND|STC Has Equipment|unsupported|2|0|0|no port counterpart
+P4ROW COND|STC Has Knowlewdge to Share|unsupported|3|0|0|no port counterpart
+P4ROW COND|TATState Tree Condition Main Target Matches Actor|unsupported|5|0|0|no port counterpart
+P4ROW COND|TATState Tree Condition Main Target Matches Detection|unsupported|21|0|0|no port counterpart
+P4ROW COND|TATState Tree Condition Main Targeting Group Matches|unsupported|31|0|0|no port counterpart
+P4ROW COND|TATState Tree Condition Stim|unsupported|7|0|0|no port counterpart
+P4ROW COND|TATState Tree Condition Target Detection|unsupported|3|0|0|no port counterpart
+P4TREES started=21 blocked=0 rows=140 trees=21
+W9P4_STATETREE_SUMMARY: fails=0 checks=86

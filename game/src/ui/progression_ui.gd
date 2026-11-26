@@ -131,6 +131,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		if key.pressed and not key.echo and key.keycode == KEY_ESCAPE:
 			escaped = true
 	if escaped:
+		# W10-A INV-1c.6/INV-1c.7: Progression's live opener is the Ledger
+		# (`ledger_ui._open_progression()`), not the HUD, so the stamp lives on
+		# FocusNav (which every screen preloads) instead of a HUD-side `closed`
+		# connection. The HUD's `_process` pause poll reads it for exactly this
+		# frame, because `set_input_as_handled()` does not clear the `pause`
+		# action state.
+		FocusNavScript.mark_escape_consumed()
 		close()
 		get_viewport().set_input_as_handled()
 

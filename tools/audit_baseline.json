@@ -45,7 +45,7 @@
   "infrastructure": {
     "root:Makefile": {
       "command": "make extract / make normalize",
-      "sha256": "e1eacfd0ebc7d392b7da8bae6721e4a5f5348b4206c1798c6258378fd8c12178"
+      "sha256": "fec3e8274b4e4ec500461fae81acaa917392ed0e59ce06e395ac4bff023ff79c"
     },
     "root:tools/audit_allowlists.json": {
       "command": "reviewed coverage allowlist",
@@ -461,7 +461,7 @@
           "bytes": 17418,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795643709.6821034,
+          "newest_mtime": 1795656273.4499385,
           "sha256": "9d5151f13a1fa31256aab2f304d76ad3110c3d63b0384d8e3f7263642fb907b8"
         }
       },
@@ -594,9 +594,9 @@
   },
   "provenance": {
     "extractor_binary": {
-      "binary_mtime": 1795639979.074518,
+      "binary_mtime": 1795660451.2363088,
       "bytes": 78192,
-      "newest_source_mtime": 1795563343.5246322,
+      "newest_source_mtime": 1795656273.5019395,
       "path": "tools/tat-extract/bin/Release/net10.0/tat-extract",
       "sha256": "dc806d85be6ce8f1026a9e85642a6ca256e87994ac256df2181b616cf37ddafa"
     },
@@ -647,6 +647,13 @@
       ],
       "reason": "W9-P3: parse_tables now emits the authored TATWorldMapBoundary actors (13 labels/anchors/235 m primary extent) so the TAB map can consume authored boundaries instead of the labelled stand-in; regenerated at merged HEAD.",
       "utc": "2026-11-25T21:56:42Z"
+    },
+    {
+      "notes": [
+        "baseline: infrastructure change accepted: root:Makefile"
+      ],
+      "reason": "W10-A added two pure-Python prerequisites to make audit (string-audit, check-greps) and no producer/generated output changed; refresh the Makefile infrastructure stamp only",
+      "utc": "2026-11-26T02:34:15Z"
     }
   ],
   "tool_versions": {
@@ -656,5 +663,5 @@
     "vgmstream": "vgmstream CLI decoder r2168 (Oct 25 2026)"
   },
   "version": 2,
-  "written_utc": "2026-11-25T21:56:42Z"
+  "written_utc": "2026-11-26T02:34:15Z"
 }

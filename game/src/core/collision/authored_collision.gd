@@ -44,6 +44,11 @@ extends RefCounted
 ## floor (`(elements - 1) * instances`). It exists because the measured authored
 ## set needs ~30.9 k shapes against a 32 k world budget; the 16 meshes it
 ## coalesces are printed by `stats()` consumers and named in the wave report.
+##
+## W10-A D7: a coplanar CONVEX element (baked point AABB below `PLANAR_EPS_M` on
+## any axis) is a decal/billboard surface, not a solid, and is skipped before a
+## shape is built. Boxes are untouched by that rule — they keep the documented
+## `MIN_HALF_EXTENT_M` clamp.
 
 ## Element kinds in the compact record.
 const KIND_BOX: int = 0
@@ -83,8 +88,33 @@ const SPHERE_SEGMENTS: int = 12
 const SPHERE_RINGS: int = 8
 const CAPSULE_SEGMENTS: int = 12
 const CAPSULE_CAP_RINGS: int = 3
-## Jolt rejects a zero-sized box; `/Engine/BasicShapes/Plane` authors Z=0.
+## Jolt rejects a zero-sized box; `/Engine/BasicShapes/Plane` authors Z=0. This
+## clamp stays, and it is only ever reached by BOXES: a thin box is a real solid
+## in this game (glass panes, rugs, the engine plane; the shipped load set places
+## 27 thin-box meshes, 314 instances), so thickening it to 2 cm is the authored
+## volume's best available answer. Boxes are counted as `box_clamped`, not
+## treated as degenerate and not warned about per mesh (W10-A D7 correction).
 const MIN_HALF_EXTENT_M: float = 0.01
+## W10-A D7: a *convex* element whose baked point AABB is flatter than this on
+## any axis is a coplanar surface, not a solid, and emits no shape at all.
+## UE authors a zero-thickness hull for decal/billboard surfaces
+## (`SM_SlowWardZone_Quad`, the two `FXSHAPES_1_*` quads). A coplanar point set
+## has no authored solid volume, so emitting a `ConvexPolygonShape3D` for it
+## invents a collider the shipped asset does not have. Measured consequence on
+## the real Guildhall placement (0.2 m shape query, W10-A INV-2): the ward quad
+## was solid only inside a sub-metre region (hit at 0.00/0.25 m, miss from
+## 0.50 m to 41 m) — an invisible obstruction, **not** the "room-sized 2 cm
+## slab" the wave brief assumed, and the clamp never touched it (its element is
+## convex, not a box). The ward zone's real body comes from the device layer
+## (`ward_zone.gd`, `zone_size_m`), so dropping this hull changes no ward
+## behaviour.
+## 1e-4 m = 0.1 mm: the measured flat hulls are ~1.2e-18 m (float residue of an
+## authored exactly-0 extent) and the next-flattest convex element in the whole
+## dump is 2.0e-3 m (`SM_TriangleRing`), so this leaves ~20x on the
+## real-geometry side and fourteen orders of magnitude on the defect side.
+const PLANAR_EPS_M: float = 1e-4
+## `planar_skipped_paths` is a report list, not a ledger: the counters stay exact.
+const PLANAR_PATH_REPORT_MAX: int = 32
 
 ## Compact DB: ue_path -> {enabled:int, complex:bool, elements:Array[Dictionary]}.
 static var _records: Dictionary = {}
@@ -93,6 +123,12 @@ static var _json_ms: int = -1
 static var _mesh_count: int = 0
 static var _element_count: int = 0
 static var _convex_count: int = 0
+## W10-A D7 accounting, cumulative per process (resolve() is cached per
+## path+instances, so a repeated resolve never double-counts).
+static var _planar_convex_skipped: int = 0
+static var _box_clamped: int = 0
+static var _planar_paths: Array[String] = []
+static var _planar_reported: Dictionary = {}
 ## Resolved encoding cache: "<ue_path>|<instances>" -> resolve() result.
 static var _cache: Dictionary = {}
 ## Non-uniform instance-scale variants: "<ue_path>|<sx>_<sy>_<sz>" -> shapes.
@@ -178,6 +214,9 @@ static func _scaled_shape(sh: Shape3D, s: Vector3) -> Shape3D:
 
 
 ## One line of counters for the loader's `AUTHORED_COLLISION` summary.
+## `box_clamped` counts BOX elements whose authored extent was below the Jolt
+## clamp (thickened to `2 * MIN_HALF_EXTENT_M`); `planar_convex_skipped` counts
+## coplanar convex elements that emitted no shape at all (W10-A D7).
 static func stats() -> Dictionary:
 	_ensure_loaded()
 	return {
@@ -185,7 +224,18 @@ static func stats() -> Dictionary:
 		"elements": _element_count,
 		"convex": _convex_count,
 		"load_ms": _json_ms,
+		"planar_convex_skipped": _planar_convex_skipped,
+		"box_clamped": _box_clamped,
+		"planar_skipped_paths": _planar_paths.duplicate(),
 	}
+
+
+## Decoded elements for one mesh (post-clamp primitives, baked convex points).
+## Probe/test surface: it lets a caller reproduce the pre-fix encoding of an
+## element this module now skips (W10-A D7). Empty when the path has no record.
+static func decoded_elements(ue_path: String) -> Array:
+	_ensure_loaded()
+	return ((_records.get(ue_path, {}) as Dictionary).get("elements", []) as Array)
 
 
 static func is_loaded() -> bool:
@@ -219,6 +269,12 @@ static func resolve(ue_path: String, instances: int = 1) -> Dictionary:
 		"elements": 0,
 		"reduced": false,
 		"enabled": "QueryAndPhysics",
+		"planar_convex_skipped": 0,
+		# W10-A investigation field name, kept so the red proof reads the same
+		# number after the D7 correction (coplanar convex is the only class that
+		# was ever degenerate here).
+		"degenerate": 0,
+		"box_clamped": 0,
 	}
 	var rec: Dictionary = _records.get(ue_path, {}) as Dictionary
 	if rec.is_empty():
@@ -254,28 +310,81 @@ static func resolve(ue_path: String, instances: int = 1) -> Dictionary:
 	out["convex"] = convex
 	var shapes: Array = out["shapes"] as Array
 	var offsets: Array = out["offsets"] as Array
-	if convex == 0:
+	var n: int = maxi(instances, 1)
+	# W10-A D7: drop coplanar convex surfaces before any shape is built. The
+	# baked point AABB is the authored geometry (identity offset), so the check
+	# cannot be fooled by the element transform. Boxes are kept: for a real thin
+	# solid the clamp is the best encoding available, counted as `box_clamped`.
+	var kept: Array = []
+	var planar_skipped: int = 0
+	var box_clamped: int = 0
+	for el_var3: Variant in els:
+		var el3: Dictionary = el_var3 as Dictionary
+		if int(el3["kind"]) == KIND_CONVEX:
+			if _planar_extent(el3["points"] as PackedVector3Array) < PLANAR_EPS_M:
+				planar_skipped += 1
+				continue
+		elif bool(el3.get("clamped", false)):
+			box_clamped += 1
+		kept.append(el3)
+	if planar_skipped > 0:
+		_planar_convex_skipped += planar_skipped
+		out["planar_convex_skipped"] = planar_skipped
+		out["degenerate"] = planar_skipped
+		if _planar_paths.size() < PLANAR_PATH_REPORT_MAX and not _planar_paths.has(ue_path):
+			_planar_paths.append(ue_path)
+		if not _planar_reported.has(ue_path):
+			# One line per path per process. The resolve cache already makes a
+			# repeat of the same path+instances free; this dict also covers a
+			# path resolved with two different placement counts.
+			_planar_reported[ue_path] = true
+			print("COL_PLANAR %s instances=%d skipped=%d" % [ue_path, n, planar_skipped])
+	if box_clamped > 0:
+		_box_clamped += box_clamped
+		out["box_clamped"] = box_clamped
+	if kept.is_empty():
+		# Every authored element was a coplanar surface: UE gives this mesh no
+		# solid volume, so it gets no collider at all (never a 2 cm slab).
+		out["source"] = "hull"
+		_cache[key] = out
+		return out
+	var kept_convex: int = 0
+	for el_var4: Variant in kept:
+		if int((el_var4 as Dictionary)["kind"]) == KIND_CONVEX:
+			kept_convex += 1
+	if kept_convex == 0:
 		# Primitive-only: one shape per instance. A single element keeps its
 		# native primitive (exact, cheap); a multi-element set tessellates into
 		# one closed trimesh.
-		if els.size() == 1:
-			shapes.append(_shape_of(els[0] as Dictionary))
-			offsets.append((els[0] as Dictionary)["xf"] as Transform3D)
+		if kept.size() == 1:
+			shapes.append(_shape_of(kept[0] as Dictionary))
+			offsets.append((kept[0] as Dictionary)["xf"] as Transform3D)
 		else:
-			shapes.append(_tessellate_elements(els))
+			shapes.append(_tessellate_elements(kept))
 			offsets.append(Transform3D.IDENTITY)
 		out["source"] = "prims"
 		_cache[key] = out
 		return out
-	var n: int = maxi(instances, 1)
-	if els.size() > MAX_CONVEX_ELEMENTS_PER_MESH or (els.size() - 1) * n > MAX_ELEMENT_SHAPE_COST:
-		shapes.append(_coalesce_element_aabbs(els))
+	# The caps and the coalescing are unchanged; the branch sees the kept list so
+	# a skipped coplanar surface can never return through the coalesced trimesh.
+	# W10-A D10: a *stair* flight's authored hulls are the walkable surface
+	# itself. Coalescing them to element AABBs removes the treads: the measured
+	# 36-hull `SM_OldManor_Tower_Stairs_4x850` reduced to one AABB trimesh moved
+	# -0.02 m over 280 frames (blocked), while the same flight walked per element.
+	# Stairs are therefore exempt from the per-mesh element cap (a draw/shape
+	# budget rule for detail props, not for structure a player walks); the
+	# instance-cost cap still applies, so a heavily placed flight cannot blow the
+	# global shape budget.
+	var stair_exempt: bool = ue_path.to_lower().find("stair") >= 0
+	var over_element_cap: bool = kept.size() > MAX_CONVEX_ELEMENTS_PER_MESH and not stair_exempt
+	if over_element_cap or (kept.size() - 1) * n > MAX_ELEMENT_SHAPE_COST:
+		shapes.append(_coalesce_element_aabbs(kept))
 		offsets.append(Transform3D.IDENTITY)
 		out["reduced"] = true
 		out["source"] = "hull"
 		_cache[key] = out
 		return out
-	for el_var2: Variant in els:
+	for el_var2: Variant in kept:
 		var el: Dictionary = el_var2 as Dictionary
 		shapes.append(_shape_of(el))
 		offsets.append(el["xf"] as Transform3D)
@@ -352,6 +461,8 @@ static func _ensure_loaded() -> void:
 ## Decode one producer element into compact mesh-space data (metres).
 ## `xf` is the element-local -> mesh-local transform; a convex hull bakes its
 ## FTransform into the points and keeps an identity xf.
+## `raw_size` is a box's authored extent BEFORE the Jolt clamp, so `resolve()`
+## can count a clamp that actually fired (W10-A D7).
 static func _decode_element(el: Dictionary) -> Dictionary:
 	var kind: String = str(el.get("type", ""))
 	var center: Vector3 = _p3(el.get("center"))
@@ -360,11 +471,15 @@ static func _decode_element(el: Dictionary) -> Dictionary:
 			# `half_extent` holds the FULL UE extent (re-a1 §3.1): X,Y,Z along UE
 			# axes -> Vector3(X, Z, Y) after the Y/Z swap, no factor of two.
 			var ext: Vector3 = _p3(el.get("half_extent"))
-			var size := Vector3(
-				maxf(absf(ext.x), MIN_HALF_EXTENT_M * 2.0),
-				maxf(absf(ext.y), MIN_HALF_EXTENT_M * 2.0),
-				maxf(absf(ext.z), MIN_HALF_EXTENT_M * 2.0))
-			return {"kind": KIND_BOX, "size": size, "xf": Transform3D(_rotator_basis(el.get("rotation")), center)}
+			var raw := Vector3(absf(ext.x), absf(ext.y), absf(ext.z))
+			var min_edge: float = MIN_HALF_EXTENT_M * 2.0
+			return {
+				"kind": KIND_BOX,
+				"size": Vector3(maxf(raw.x, min_edge), maxf(raw.y, min_edge), maxf(raw.z, min_edge)),
+				"raw_size": raw,
+				"clamped": raw.x < min_edge or raw.y < min_edge or raw.z < min_edge,
+				"xf": Transform3D(_rotator_basis(el.get("rotation")), center),
+			}
 		"sphere":
 			return {"kind": KIND_SPHERE, "radius": maxf(float(el.get("radius", 0.0)) * CM_TO_M, MIN_HALF_EXTENT_M), "xf": Transform3D(Basis(), center)}
 		"sphyl":
@@ -534,6 +649,22 @@ static func aabb_half_extent(pts: PackedVector3Array) -> Vector3:
 		mn = mn.min(p)
 		mx = mx.max(p)
 	return (mx - mn) * 0.5
+
+
+## Smallest AABB extent of a baked convex point set (W10-A D7). A malformed or
+## placeholder set (< 4 points, e.g. the unknown-element-type fallback) reports
+## INF so it keeps the pre-existing placeholder behaviour instead of being
+## silently treated as a planar surface.
+static func _planar_extent(pts: PackedVector3Array) -> float:
+	if pts.size() < 4:
+		return INF
+	var mn: Vector3 = pts[0]
+	var mx: Vector3 = pts[0]
+	for p: Vector3 in pts:
+		mn = mn.min(p)
+		mx = mx.max(p)
+	var d: Vector3 = mx - mn
+	return minf(minf(d.x, d.y), d.z)
 
 
 ## 12 triangles, outward winding (Godot front faces are clockwise).

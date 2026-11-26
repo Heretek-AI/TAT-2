@@ -125,9 +125,18 @@ func open_result(won: bool, score: int, info: Dictionary, xp_awarded: int = -1) 
 
 
 func close() -> void:
+	_close(true)
+
+
+## W10-A INV-1a.2: the Continue press must actually close the rack-up, not only
+## emit `continue_requested`. `_on_continue_pressed()` already played the
+## "click" cue, so it closes through the silent variant; `close()` (Back button
+## and every other caller) keeps the authored "back" cue exactly as before.
+func _close(with_cue: bool) -> void:
 	if not visible:
 		return
-	_play_ui("back")
+	if with_cue:
+		_play_ui("back")
 	FocusNavScript.release_if_inside(_panel)
 	visible = false
 	closed.emit()
@@ -150,6 +159,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		if key.pressed and not key.echo and key.keycode == KEY_ESCAPE:
 			escaped = true
 	if escaped:
+		# W10-A INV-1c.2/INV-1c.3: the HUD polls the same Escape through the
+		# `pause` action in `_process`, and `set_input_as_handled()` does not
+		# clear that action state. Stamp the shared FocusNav frame hook (the
+		# lockpick `_pause_consumed_frame` protocol in hud.gd) so the
+		# pause menu cannot open behind this close. The stamp names the exact
+		# frame, so a later pause press still works (INV-1c.8).
+		FocusNavScript.mark_escape_consumed()
 		close()
 		get_viewport().set_input_as_handled()
 
@@ -309,8 +325,20 @@ func _build_level_block() -> Control:
 func _refresh() -> void:
 	if _panel == null:
 		return
-	var status_key: String = "PostMatch.Status.Escaped" if _won else "PostMatch.Status.Caught"
-	_status_lbl.text = UIStringsScript.st_upper("ST_PostMatch", status_key, "")
+	var status_text: String = ""
+	# W10-A INV-1d.1-INV-1d.3: a timed-out run is not a capture. The producer
+	# (`mission_controller._finish_run`) sets `timed_out` plus a `timeout_reason`
+	# that is already the port constant `TIME_EXPIRED_REASON` /
+	# `DOOR_COLLAPSED_REASON` (mission_controller.gd:97-98), so render that
+	# reason rather than the authored Caught row. There is no ST_PostMatch key
+	# for these outcomes; inventing one would be fake authored copy. Non-timeout
+	# runs keep the authored PostMatch.Status.* rows untouched (INV-1d.4).
+	if bool(_info.get("timed_out", false)):
+		status_text = str(_info.get("timeout_reason", "")).strip_edges().to_upper()
+	if status_text == "":
+		var status_key: String = "PostMatch.Status.Escaped" if _won else "PostMatch.Status.Caught"
+		status_text = UIStringsScript.st_upper("ST_PostMatch", status_key, "")
+	_status_lbl.text = status_text
 	var contract_line: String = _contract_outcome_line()
 	_contract_lbl.text = contract_line
 	_contract_lbl.visible = contract_line != ""
@@ -641,7 +669,14 @@ func _mult_text(value: float) -> String:
 
 func _on_continue_pressed() -> void:
 	_play_ui("click")
+	# W10-A INV-1a.2 (standalone) / INV-1a.6 (HUD-owned): emit first so the owner
+	# (hud.gd `_on_post_match_continue`) sees the press, then close this screen so
+	# a PostMatchUI opened without a HUD consumer still leaves the rack-up. The
+	# Den transition stays with the result panel's own Continue
+	# (`_result_continue_btn` -> `_continue_to_den()`); this button never changes
+	# scene.
 	continue_requested.emit()
+	_close(false)
 
 
 func _play_ui(cue: String) -> void:

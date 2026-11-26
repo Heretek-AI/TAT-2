@@ -3,24 +3,37 @@ extends SceneTree
 ## Run: tools/godot --headless --path game --script res://tests/test_stair_walk.gd
 ##
 ## Why this exists: the geometry audit found every stair run in the shipped
-## levels is a trimesh flight — the civic flight measures 0.25 m risers on
-## 0.33 m treads (~37 deg) — and the port could not walk it: the step probe
-## reached 0.35 m from the capsule axis (past the tread), so a riser read as a
-## wall and auto-mantle covered it with a 0.3 s animation.
+## levels climbs 0.25 m risers, and the port's step probe used to reach 0.35 m
+## from the capsule axis (past the tread), so a riser read as a wall and
+## auto-mantle covered it with a 0.3 s animation.
 ##
-## The colliders are the real ones: level_loader._get_mesh_and_shape() builds
-## the same ConcavePolygonShape3D the loader drops into the level, so the
-## fixture walks the shipped geometry, not a synthetic staircase. Ground and
-## top-landing slabs are test scaffolding: the flights have no approach or
-## exit floor of their own.
+## The collider is the authored per-element union, not one mesh: the loader's
+## `_get_mesh_and_shape()` returns `shapes` + `shape_offsets` (one entry per
+## authored UE `AggGeom` element) and the loader drops exactly that set into the
+## level, so this fixture emits one CollisionShape3D per element at its own
+## offset — the authored surface, not `info["shape"]` (that field is only the
+## loader's single-shape compatibility value, `shapes[0]`, level_loader.gd
+## :2019-2028). W10-A D10 corrected exactly that bug here: the old fixture read
+## `shape` and demanded a `ConcavePolygonShape3D`, so six of the seven flights
+## aborted with "no trimesh collider" (they author one convex hull each) while
+## the tower was walked as one reduced trimesh. Ground and top-landing slabs are
+## test scaffolding: the flights have no approach or exit floor of their own.
+##
+## Authored shapes per flight (pinned by `_check_union_count`, so "one hull of
+## many" cannot come back): the six 3x150/3x850 flights are ONE convex element
+## (a wedge ramp — UE's convex stair collision has no treads), and
+## SM_OldManor_Tower_Stairs_4x850 is 36 elements. W10-A D10 exempts stair meshes
+## from `AuthoredCollision.MAX_CONVEX_ELEMENTS_PER_MESH` (16): coalescing the
+## tower's hulls to element AABBs removed its treads and blocked the climb, so
+## all 36 are emitted per element.
 ##
 ## W6M adds the shipped INSTANCES, not just the meshes: each route carries the
 ## authored basis/scale (and the level/pos it came from) so the rotated civic
 ## run (−X), the rotated industrial run (+Z), the non-uniform Old Manor tower
 ## (10.29 m mesh / 10.49 m scaled) and the 3x850 POI run are walked the way the
-## loader places them. A descent pass walks the rotated civic flight downwards
-## (0.25 m risers must stay snapped), and the civic ascent also verifies the
-## camera settles after the climb and the interaction prompt still resolves.
+## loader places them. A descent pass walks the rotated civic flight downwards,
+## and the civic ascent also verifies the camera settles after the climb and the
+## interaction prompt still resolves.
 ##
 ## The walk is driven by the real input action (move_forward) through the real
 ## _physics_process, one physics frame per step, exactly like play.
@@ -28,41 +41,55 @@ extends SceneTree
 ## basis is the shipped `.tatlevel.json` array (column-major, same decode as
 ## level_loader._json_to_transform), scale the shipped instance scale. The
 ## source note names the level and world position the instance came from.
+## `authored_elements` / `reduced` are the authored UE AggGeom element count and
+## the loader's reduction flag for that mesh (mesh_collision.json); the fixture
+## asserts both (see `_check_union_count`).
 const FLIGHTS: Array[Dictionary] = [
 	{
 		"label": "civic_3x150", "path": "/Game/Art/Environment/Civic/Stairs/SM_Stairs_Civic_3x150cm",
 		"basis": [1, 0, 0, 0, 1, 0, 0, 0, 1], "scale": [1, 1, 1], "frames": 180, "min_ascent": 1.4,
+		"authored_elements": 1, "reduced": false,
 		"source": "Guildhall POI 24.95/26.47/-27.10 (identity)",
 	},
 	{
 		"label": "industrial_3x150", "path": "/Game/Art/Environment/Urban/Industrial/Stairs/SM_Stairs_Industrial_3x150cm",
 		"basis": [1, 0, 0, 0, 1, 0, 0, 0, 1], "scale": [1, 1, 1], "frames": 180, "min_ascent": 1.4,
+		"authored_elements": 1, "reduced": false,
 		"source": "Guildhall POI 3rdFloor 12.40/64.00/-46.35 (identity, y 1.0454)",
 	},
 	{
 		"label": "city_6x2m", "path": "/Game/Art/Environment/City/Architecture/Stairs/2m/SM_StairsCity6x2m",
 		"basis": [1, 0, 0, 0, 1, 0, 0, 0, 1], "scale": [1, 1, 1], "frames": 180, "min_ascent": 1.4,
+		"authored_elements": 1, "reduced": false,
 		"source": "authored mesh AABB only (no single shipped instance)",
 	},
 	{
 		"label": "poi_3x850", "path": "/Game/Art/Environment/Civic/Stairs/SM_Stairs_Civic_3x850cm",
 		"basis": [1, 0, 0, 0, 1, 0, 0, 0, 1], "scale": [1, 1, 1], "frames": 260, "min_ascent": 7.4,
+		"authored_elements": 1, "reduced": false,
 		"source": "Guildhall POI 36.65/36.51/-37.50 (rising -Z)",
 	},
 	{
 		"label": "civic_3x150_rotX", "path": "/Game/Art/Environment/Civic/Stairs/SM_Stairs_Civic_3x150cm",
 		"basis": [0, 0, 1, 0, 1, 0, -1, 0, 0], "scale": [1, 1, 1], "frames": 100, "min_ascent": 1.4,
+		"authored_elements": 1, "reduced": false,
 		"down": true,
 		"source": "Guildhall PeripheryA 47.58/12.48/-4.18 (rising -X)",
 	},
 	{
 		"label": "industrial_rotZ", "path": "/Game/Art/Environment/Urban/Industrial/Stairs/SM_Stairs_Industrial_3x150cm",
 		"basis": [-1, 0, 0, 0, 1, 0, 0, 0, -1], "scale": [1, 1, 1], "frames": 180, "min_ascent": 1.4,
+		"authored_elements": 1, "reduced": false,
 		"source": "Guildhall PeripheryA 54.14/20.07/69.42 (rising +Z)",
 	},
 	{
+		# 36 authored hulls. W10-A D10 measured that the 16-element cap coalesced
+		# them into element AABBs and blocked the climb (moved≈-0.02 m, zero
+		# streak 268), so stair meshes are exempt from that cap and all 36 hulls
+		# are emitted per element — the authored walkable surface.
 		"label": "oldmanor_tower_4x850", "path": "/Game/Art/Environment/OldManor/SM_OldManor_Tower_Stairs_4x850",
 		"basis": [1, 0, 0, 0, 1, 0, 0, 0, 1], "scale": [1, 1.02, 0.9503], "frames": 280, "min_ascent": 8.4,
+		"authored_elements": 36, "reduced": false,
 		"source": "OldManor_Geo -53.00/33.23/16.50 (10.29 m mesh AABB; 8.8 m of walkable treads, the rest is rail/post tops)",
 	},
 ]
@@ -129,17 +156,21 @@ func _run() -> void:
 
 ## Build the shipped collider in its shipped pose, place a run-up slab and a top
 ## landing, then walk for `frames` physics frames and report measured metrics.
+## The collider is the authored per-element union (`shapes`/`shape_offsets`), one
+## CollisionShape3D per element at its own offset — never `info["shape"]`, which
+## is only `shapes[0]` (level_loader.gd:2019-2028).
 func _walk_flight(thief_script: GDScript, flight: Dictionary) -> Dictionary:
 	var path: String = str(flight.get("path", ""))
 	var label: String = str(flight.get("label", "?"))
 	_route_index += 1
 	var out: Dictionary = {"label": label, "ok": false}
 	var info: Dictionary = _ld.call("_get_mesh_and_shape", path) as Dictionary
-	var shape: Shape3D = info.get("shape") as Shape3D
-	if not (shape is ConcavePolygonShape3D):
-		out["error"] = "no trimesh collider for " + path
+	var union: Dictionary = _authored_union(info)
+	var shapes: Array = union.get("shapes", []) as Array
+	_check_union_count(label, flight, info, shapes)
+	if shapes.is_empty():
+		out["error"] = "no authored collider for " + path
 		return out
-	var faces: PackedVector3Array = (shape as ConcavePolygonShape3D).get_faces()
 	var basis: Basis = _shipped_basis(flight)
 	var scale: Vector3 = _shipped_scale(flight)
 
@@ -157,26 +188,34 @@ func _walk_flight(thief_script: GDScript, flight: Dictionary) -> Dictionary:
 	frame.rotation = Vector3(0.0, atan2(-rise_dir.x, -rise_dir.z), 0.0)
 	await process_frame
 
-	# Mesh collider exactly like level_loader._add_collider: shape in mesh-local
-	# space, orthonormal rotation + non-uniform scale on the CollisionShape3D.
+	# Mesh colliders exactly like level_loader._add_collider: each authored
+	# element shape in mesh-local space, its own offset composed under the
+	# instance's orthonormal rotation, and the shipped non-uniform scale on the
+	# CollisionShape3D (the pre-W10-A treatment, kept).
 	var body := StaticBody3D.new()
 	body.name = "ShippedFlight"
 	body.collision_layer = 1
 	body.collision_mask = 0
-	var cs := CollisionShape3D.new()
-	cs.shape = shape
-	cs.transform = Transform3D(basis.orthonormalized(), Vector3.ZERO)
-	cs.scale = Vector3(maxf(absf(scale.x), 0.05), maxf(absf(scale.y), 0.05), maxf(absf(scale.z), 0.05))
-	body.add_child(cs)
+	var offsets: Array = union.get("offsets", []) as Array
+	var rot: Basis = basis.orthonormalized()
+	for i: int in range(shapes.size()):
+		var off: Transform3D = Transform3D.IDENTITY
+		if i < offsets.size():
+			off = offsets[i] as Transform3D
+		var cs := CollisionShape3D.new()
+		cs.shape = shapes[i] as Shape3D
+		cs.transform = Transform3D(rot * off.basis, rot * off.origin)
+		cs.scale = Vector3(maxf(absf(scale.x), 0.05), maxf(absf(scale.y), 0.05), maxf(absf(scale.z), 0.05))
+		body.add_child(cs)
 	# The collider hangs off the rig (identity), not the frame: the frame only
 	# orients the scaffolding/walker, so the mesh keeps its shipped basis.
 	rig.add_child(body)
 
-	# Frame-local AABB of the placed mesh (scale applied, shipped basis folded
-	# into the frame yaw) — the frame's -Z is the world rise direction.
+	# Frame-local AABB of the placed authored union (scale applied, shipped basis
+	# folded into the frame yaw) — the frame's -Z is the world rise direction.
 	var lo := Vector3(INF, INF, INF)
 	var hi := Vector3(-INF, -INF, -INF)
-	for v: Vector3 in faces:
+	for v: Vector3 in union.get("points", PackedVector3Array()) as PackedVector3Array:
 		var p: Vector3 = frame.global_transform.affine_inverse() * rig.to_global(basis * (v * scale))
 		lo = lo.min(p)
 		hi = hi.max(p)
@@ -391,6 +430,125 @@ func _shipped_basis(flight: Dictionary) -> Basis:
 func _shipped_scale(flight: Dictionary) -> Vector3:
 	var s: Array = flight.get("scale", [1, 1, 1]) as Array
 	return Vector3(float(s[0]), float(s[1]), float(s[2]))
+
+
+## Authored per-element collision union for one loader result: every element
+## shape the loader emits, each transformed by its own offset, flattened to one
+## mesh-local point set + AABB. This is the pattern `test_roof_collision.gd`
+## (`_authored_union`/`_shape_points`) already uses; `info["shape"]` is only the
+## loader's single-shape compatibility field (`shapes[0]`, level_loader.gd
+## :2019-2028).
+##
+## Returns {shapes, offsets, elements, reduced, source, points, aabb}. Falls back
+## to the compatibility field only when the mesh has no authored set at all (aabb
+## mode / no dump); `_check_union_count` then fails loudly instead of the fixture
+## silently walking one hull.
+func _authored_union(info: Dictionary) -> Dictionary:
+	var shapes: Array = (info.get("shapes", []) as Array).duplicate()
+	var offsets: Array = (info.get("shape_offsets", []) as Array).duplicate()
+	if shapes.is_empty():
+		var single: Shape3D = info.get("shape") as Shape3D
+		if single != null:
+			shapes = [single]
+			offsets = [Transform3D(Basis(), info.get("shape_offset", Vector3.ZERO) as Vector3)]
+	var col: Dictionary = info.get("col", {}) as Dictionary
+	var pts := PackedVector3Array()
+	for i: int in range(shapes.size()):
+		var xf: Transform3D = Transform3D.IDENTITY
+		if i < offsets.size():
+			xf = offsets[i] as Transform3D
+		for p: Vector3 in _shape_points(shapes[i] as Shape3D):
+			pts.append(xf * p)
+	return {
+		"shapes": shapes,
+		"offsets": offsets,
+		"elements": int(col.get("elements", 0)),
+		"reduced": bool(col.get("reduced", false)),
+		"source": str(col.get("source", "heuristic")),
+		"points": pts,
+		"aabb": _points_aabb(pts),
+	}
+
+
+## Local-space point set of one shape, dense enough that the union AABB is exact.
+## Convex hulls contribute their authored points; a coalesced/complex trimesh
+## contributes its faces; primitives contribute their support points. Copied from
+## `test_roof_collision.gd::_shape_points` (do not reinvent).
+func _shape_points(shape: Shape3D) -> PackedVector3Array:
+	if shape == null:
+		return PackedVector3Array()
+	if shape is ConvexPolygonShape3D:
+		return (shape as ConvexPolygonShape3D).points
+	if shape is ConcavePolygonShape3D:
+		return (shape as ConcavePolygonShape3D).get_faces()
+	if shape is BoxShape3D:
+		var h: Vector3 = (shape as BoxShape3D).size * 0.5
+		return PackedVector3Array([
+			Vector3(-h.x, -h.y, -h.z), Vector3(h.x, -h.y, -h.z),
+			Vector3(h.x, -h.y, h.z), Vector3(-h.x, -h.y, h.z),
+			Vector3(-h.x, h.y, -h.z), Vector3(h.x, h.y, -h.z),
+			Vector3(h.x, h.y, h.z), Vector3(-h.x, h.y, h.z),
+		])
+	if shape is SphereShape3D:
+		var r: float = (shape as SphereShape3D).radius
+		return PackedVector3Array([
+			Vector3(-r, 0.0, 0.0), Vector3(r, 0.0, 0.0), Vector3(0.0, -r, 0.0),
+			Vector3(0.0, r, 0.0), Vector3(0.0, 0.0, -r), Vector3(0.0, 0.0, r),
+		])
+	if shape is CapsuleShape3D:
+		var cr: float = (shape as CapsuleShape3D).radius
+		var hh: float = (shape as CapsuleShape3D).height * 0.5
+		return PackedVector3Array([
+			Vector3(-cr, -hh, 0.0), Vector3(cr, -hh, 0.0),
+			Vector3(-cr, hh, 0.0), Vector3(cr, hh, 0.0),
+			Vector3(0.0, -hh, -cr), Vector3(0.0, -hh, cr),
+			Vector3(0.0, hh, -cr), Vector3(0.0, hh, cr),
+		])
+	return PackedVector3Array()
+
+
+func _points_aabb(pts: PackedVector3Array) -> AABB:
+	if pts.is_empty():
+		return AABB()
+	var mn: Vector3 = pts[0]
+	var mx: Vector3 = pts[0]
+	for p: Vector3 in pts:
+		mn = mn.min(p)
+		mx = mx.max(p)
+	return AABB(mn, mx - mn)
+
+
+## Pin the authored element count AND the emitted shape count for one flight.
+## `info["shape"]` is `shapes[0]` (level_loader.gd:2019-2028), so a fixture built
+## from it silently walks one element of many — the W10-A D10 bug: six of the
+## seven flights are ONE convex element (so the old `ConcavePolygonShape3D`
+## demand aborted them) and a multi-hull mesh would have been walked as its first
+## third/quarter. Fails closed on count, reduction flag and shape family.
+func _check_union_count(label: String, flight: Dictionary, info: Dictionary, shapes: Array) -> void:
+	var authored: int = int(flight.get("authored_elements", -1))
+	var want_reduced: bool = bool(flight.get("reduced", false))
+	var col: Dictionary = info.get("col", {}) as Dictionary
+	var got_elements: int = int(col.get("elements", -1))
+	var got_reduced: bool = bool(col.get("reduced", false))
+	var want_shapes: int = 1 if want_reduced else authored
+	var shape_type_ok: bool = false
+	if want_reduced:
+		shape_type_ok = shapes.size() == 1 and (shapes[0] is ConcavePolygonShape3D)
+	else:
+		# Every non-reduced flight is authored 100 % convex, so the emitted set
+		# must be one ConvexPolygonShape3D per element (W10-A D10: the tower's
+		# 36 hulls are kept per element, not coalesced).
+		shape_type_ok = shapes.size() == authored
+		for sh: Variant in shapes:
+			if not (sh is ConvexPolygonShape3D):
+				shape_type_ok = false
+				break
+	_check(authored > 0 and got_elements == authored and got_reduced == want_reduced
+			and shapes.size() == want_shapes and shape_type_ok,
+		"%s authored union: %d element(s) (%s), %d emitted shape(s) — the per-element set, not shapes[0]"
+		% [label, got_elements, "reduced trimesh" if got_reduced else "per element", shapes.size()],
+		"%s authored union STALE: authored elements=%d (expected %d), reduced=%s (expected %s), emitted shapes=%d (expected %d), shape_type_ok=%s"
+		% [label, got_elements, authored, str(got_reduced), str(want_reduced), shapes.size(), want_shapes, str(shape_type_ok)])
 
 
 ## Den wardrobe regression: the authored interaction point sits 0.48 m behind

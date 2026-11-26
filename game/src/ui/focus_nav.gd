@@ -30,6 +30,17 @@ const FOCUS_STYLEBOX: String = "focus"
 
 static var _remembered: Control = null
 
+## W10-A INV-1c: shared "this frame's Escape is already spent" stamp. Screens
+## that close on Escape call `mark_escape_consumed()`; the HUD's `_process`
+## pause poll skips the `pause` action only on that exact frame. This is the
+## lockpick `_pause_consumed_frame` protocol in `hud.gd` generalised: the
+## stamp must live here because Progression is opened by the Ledger
+## (`ledger_ui._open_progression()`), not by the HUD, so a HUD-side `closed`
+## connection alone cannot cover it. The process frame counter is monotonic, so
+## a stale stamp can never match a later frame and no explicit reset is needed
+## (INV-1c.8).
+static var _escape_consumed_frame: int = -1
+
 
 ## Every focusable descendant of `root` in tree order, skipping hidden subtrees
 ## and disabled buttons.
@@ -159,6 +170,18 @@ static func focus_first(root: Node) -> bool:
 		return false
 	controls[0].grab_focus()
 	return controls[0].has_focus()
+
+
+## W10-A INV-1c.2/INV-1c.6: mark the current process frame as having consumed
+## Escape, so the HUD's `pause` poll does not also open the pause menu behind a
+## screen that just closed (see `_escape_consumed_frame` above).
+static func mark_escape_consumed() -> void:
+	_escape_consumed_frame = Engine.get_process_frames()
+
+
+## True only on the frame a screen called `mark_escape_consumed()`.
+static func escape_consumed_this_frame() -> bool:
+	return _escape_consumed_frame == Engine.get_process_frames()
 
 
 ## Remember the current focus owner before opening a modal.

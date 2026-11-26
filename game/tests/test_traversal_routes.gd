@@ -9,6 +9,18 @@ extends SceneTree
 ## re-implements movement. The 1.82 m capsule and body_height_m() contract are
 ## asserted at the end.
 ##
+## The roof routes (W7H) walk the AUTHORED per-element collision union: the
+## loader returns `shapes` + `shape_offsets` (one entry per authored UE AggGeom
+## element) and `_make_roof` emits one CollisionShape3D per element at its own
+## offset. W10-A D10 corrected exactly that: the old fixture read `info["shape"]`
+## only, which is the loader's single-shape compatibility field (`shapes[0]`,
+## level_loader.gd:2019-2028), so a 3-hull hip roof was walked as its first hull
+## and a 4-hull gable as one quarter. `_make_roof` now asserts the authored
+## element count (3 or 4) and the emitted shape count, so "one hull of many"
+## cannot come back. The non-uniform pitch assertion is measured against the
+## unit-scale union's own pitch rather than the authored 45.2 deg of one face
+## (see the comment at that assertion).
+##
 ## Contract under test:
 ## - MaxStepHeight is the authored 0.45 m: 0.44 and 0.45 commit; 0.46 and 0.50
 ##   are walls (0.50 mantles only with the authored jump press).
@@ -584,14 +596,64 @@ func _roof_loader() -> Node:
 	return _loader
 
 
-## Builds a body carrying the real authored mesh + the real loader collider at
+## Authored per-element collision union for one loader result: every element
+## shape the loader emits with its own offset. `info["shape"]` is only the
+## loader's single-shape compatibility field (`shapes[0]`, level_loader.gd
+## :2019-2028), so a body built from it walks one element of many — the W10-A D10
+## bug (`test_roof_collision.gd::_authored_union` is the pattern).
+##
+## Returns {shapes, offsets, elements, reduced, source}. Falls back to the
+## compatibility field only when the mesh has no authored set at all (aabb mode /
+## no dump); `_make_roof`'s element-count check then fails loudly rather than the
+## fixture silently walking one hull.
+func _authored_union(info: Dictionary) -> Dictionary:
+	var shapes: Array = (info.get("shapes", []) as Array).duplicate()
+	var offsets: Array = (info.get("shape_offsets", []) as Array).duplicate()
+	if shapes.is_empty():
+		var single: Shape3D = info.get("shape") as Shape3D
+		if single != null:
+			shapes = [single]
+			offsets = [Transform3D(Basis(), info.get("shape_offset", Vector3.ZERO) as Vector3)]
+	var col: Dictionary = info.get("col", {}) as Dictionary
+	return {
+		"shapes": shapes,
+		"offsets": offsets,
+		"elements": int(col.get("elements", 0)),
+		"reduced": bool(col.get("reduced", false)),
+		"source": str(col.get("source", "heuristic")),
+	}
+
+
+## Builds a body carrying the real authored mesh + the real loader colliders at
 ## `base` (identity basis, optional instance scale like the shipped POI case).
+##
+## W10-A D10: the body carries the authored per-element union — one
+## CollisionShape3D per `shapes` entry at its own `shape_offsets` entry — not
+## `info["shape"]`, which is only the loader's single-shape compatibility field
+## (`shapes[0]`, level_loader.gd:2019-2028). The scale treatment is unchanged
+## from before W10-A (the instance scale on the body, offsets composed under it).
 func _make_roof(ue_path: String, scale: Vector3, base: Vector3) -> Dictionary:
 	var info: Dictionary = _roof_loader().call("_get_mesh_and_shape", ue_path)
 	var mesh: Mesh = info.get("mesh") as Mesh
-	var shape: Shape3D = info.get("shape") as Shape3D
-	if mesh == null or shape == null:
+	var union: Dictionary = _authored_union(info)
+	var shapes: Array = union.get("shapes", []) as Array
+	if mesh == null or shapes.is_empty():
 		return {}
+	var elements: int = int(union.get("elements", -1))
+	var reduced: bool = bool(union.get("reduced", false))
+	# The authored per-element set: 3 hulls on the hip module, 4 on the steep and
+	# End shells. A `reduced` mesh must be the one coalesced trimesh. Pinned so
+	# "one hull of many" (the D10 bug) cannot come back silently.
+	var emit_ok: bool = false
+	if reduced:
+		emit_ok = shapes.size() == 1 and shapes[0] is ConcavePolygonShape3D
+	else:
+		emit_ok = shapes.size() == elements and shapes[0] is ConvexPolygonShape3D
+	_check((elements == 3 or elements == 4) and emit_ok,
+		"%s roof collider: %d authored element(s), %d emitted shape(s) — the per-element union%s"
+		% [ue_path.get_file(), elements, shapes.size(), ", reduced to one trimesh" if reduced else ""],
+		"%s roof collider STALE: %d authored element(s) (expected 3 or 4), reduced=%s, %d emitted shape(s) — walked as shapes[0]?"
+		% [ue_path.get_file(), elements, str(reduced), shapes.size()])
 	var rig := Node3D.new()
 	root.add_child(rig)
 	rig.global_position = base
@@ -602,13 +664,21 @@ func _make_roof(ue_path: String, scale: Vector3, base: Vector3) -> Dictionary:
 	body.collision_layer = 1
 	body.collision_mask = 0
 	body.scale = scale
-	var cs := CollisionShape3D.new()
-	cs.shape = shape
-	cs.position = info.get("shape_offset", Vector3.ZERO)
-	body.add_child(cs)
+	var offsets: Array = union.get("offsets", []) as Array
+	for i: int in range(shapes.size()):
+		var cs := CollisionShape3D.new()
+		cs.shape = shapes[i] as Shape3D
+		if i < offsets.size():
+			cs.transform = offsets[i] as Transform3D
+		body.add_child(cs)
 	rig.add_child(body)
-	return {"rig": rig, "base": base, "mesh": mesh, "shape": shape, "scale": scale,
-		"top": mesh.get_aabb().position.y + mesh.get_aabb().size.y}
+	# The sampling scaffold stays the authored render-mesh AABB: every height
+	# assertion below is written against that authored `top` (the box plateau the
+	# old collider floated), while the collider itself is the union above.
+	return {"rig": rig, "base": base, "mesh": mesh, "shapes": shapes,
+		"offsets": offsets, "elements": elements, "reduced": reduced,
+		"source": str(union.get("source", "heuristic")),
+		"scale": scale, "top": mesh.get_aabb().position.y + mesh.get_aabb().size.y}
 
 
 ## Surface height of the collision hull under a local (x, z) sample.
@@ -691,7 +761,9 @@ func _roof_walk(f: Dictionary, frames: int = ROOF_WALK_FRAMES) -> Dictionary:
 	return result
 
 
-## 45.2 deg (walkable) vs 67.6 deg (refused), on the shipped modules.
+## Walkable vs refused, on the shipped modules. The pitches printed by the run
+## are the union's measured steepest sampled pair (W10-A INV-2 §B measured
+## ~51.8 deg and ~74.0 deg), not the authored plane of one hull.
 func _check_roof_routes() -> void:
 	for rec: Dictionary in [
 		{"path": ROOF_SHALLOW, "label": "shallow", "walkable": true},
@@ -820,11 +892,20 @@ func _check_roof_hip_and_scale() -> void:
 	_check(quarter_ok and lowest_quarter < apex - 1.0,
 		"hip roof: four faces fall %.2f m below the %.2f m ridge (no plateau across the hip)" % [apex - lowest_quarter, apex],
 		"hip roof: quarter faces only %.2f m below the ridge (%.2f m) - flat or missing faces" % [apex - lowest_quarter, apex])
+	# The unit-scale union's own measured pitch is the reference for the scaled
+	# instance below. It is NOT the authored 45.2 deg of one hip face: this
+	# metric reports the steepest sampled pair across the whole union (W10-A
+	# INV-2 §B measured 51.8 deg here and 59.0 deg on hull 0), so hardcoding
+	# 45.2 made the scaled assertion measure a different face and it could not
+	# pass with any hull count. Asserting against the measured unit pitch keeps
+	# the original intent ("the collider follows the instance scale") and is
+	# strictly self-consistent.
+	var unit_pitch: float = _roof_field_pitch(field)
 	await _free_node(f["rig"] as Node)
 
 	# 2. Non-uniform POI instance: SM_RoofUrban_Ext_Mid_4x4 at scale [1,1,0.8]
 	# (Building_Guildhall_POI_3rdFloor). The run shrinks, so the effective pitch
-	# is steeper than the module's authored 45.2 deg.
+	# is steeper than the unit-scale union's measured pitch.
 	var scaled_base: Vector3 = _next_base()
 	var sf: Dictionary = _make_roof(ROOF_SHALLOW, Vector3(1.0, 1.0, 0.8), scaled_base)
 	if sf.is_empty():
@@ -832,10 +913,11 @@ func _check_roof_hip_and_scale() -> void:
 		return
 	var sfield: Dictionary = _roof_field(sf)
 	var spitch: float = _roof_field_pitch(sfield)
-	var expect_pitch: float = rad_to_deg(atan2(tan(deg_to_rad(45.2)), 0.8))
+	# 1/0.8 in the run direction: the same union with the z footprint shrunk.
+	var expect_pitch: float = rad_to_deg(atan2(tan(deg_to_rad(unit_pitch)), 0.8))
 	_check(absf(spitch - expect_pitch) <= 2.5,
-		"non-uniform POI roof: measured %.1f deg == atan(tan(45.2 deg)/0.8) %.1f deg (collider follows the instance scale)" % [spitch, expect_pitch],
-		"non-uniform POI roof: measured %.1f deg vs expected %.1f deg" % [spitch, expect_pitch])
+		"non-uniform POI roof: measured %.1f deg == atan(tan(%.1f deg unit union pitch)/0.8) %.1f deg (collider follows the instance scale)" % [spitch, unit_pitch, expect_pitch],
+		"non-uniform POI roof: measured %.1f deg vs the unit union pitch %.1f deg scaled by 1/0.8 (expected %.1f deg)" % [spitch, unit_pitch, expect_pitch])
 	var swalk: Dictionary = await _roof_walk(sf)
 	_check(float(swalk.get("ascent", 0.0)) >= ROOF_MIN_WALKABLE_ASCENT_M and not bool(swalk.get("mantle", false)),
 		"non-uniform POI roof %.1f deg: still walkable (ascent %.2f m), no mantle" % [spitch, float(swalk.get("ascent", 0.0))],

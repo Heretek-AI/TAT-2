@@ -418,6 +418,26 @@ func _check_coverage() -> void:
 		"coverage counts every condition instance (enter + transition)")
 	_ok(int(totals["task_covered"]) <= int(totals["task_instances"]), "covered <= instances (tasks)")
 	_ok(int(totals["condition_covered"]) <= int(totals["condition_instances"]), "covered <= instances (conditions)")
+	# W10-A: absolute ceilings for the numbers the wave reports. The relational
+	# assertions above prove the table is internally consistent; these pin the
+	# measured payload so a change that quietly moves one of the 0/21 figures
+	# fails here instead of being restated in a report. Additive only.
+	_ok(int(totals["task_classes"]) == 77,
+		"absolute: task classes == 77 (got %d)" % int(totals["task_classes"]))
+	_ok(int(totals["task_instances"]) == 326,
+		"absolute: task instances == 326 (got %d)" % int(totals["task_instances"]))
+	_ok(int(totals["task_covered"]) == 113,
+		"absolute: task covered == 113 (got %d)" % int(totals["task_covered"]))
+	_ok(int(totals["task_blind"]) == 94,
+		"absolute: task parameter-blind == 94 (got %d)" % int(totals["task_blind"]))
+	_ok(int(totals["condition_classes"]) == 36,
+		"absolute: condition classes == 36 (got %d)" % int(totals["condition_classes"]))
+	_ok(int(totals["condition_instances"]) == 233,
+		"absolute: condition instances == 233 (got %d)" % int(totals["condition_instances"]))
+	_ok(int(totals["condition_covered"]) == 35,
+		"absolute: condition covered == 35 (got %d)" % int(totals["condition_covered"]))
+	_ok(int(totals["condition_blind"]) == 32,
+		"absolute: condition parameter-blind == 32 (got %d)" % int(totals["condition_blind"]))
 	var bad_status: Array = []
 	for table: Dictionary in [coverage["tasks"], coverage["conditions"]]:
 		for name: Variant in table.keys():
@@ -434,6 +454,11 @@ func _check_coverage() -> void:
 	for tree_name: Variant in coverage["per_tree"].keys():
 		if bool((coverage["per_tree"][tree_name] as Dictionary)["fully_covered"]):
 			fully.append(tree_name)
+	# W10-A: the payload's measured ceiling. The brief's "0/21" is asserted as
+	# both halves (0 fully evaluable, 21 per-tree rows), so a payload change that
+	# adds a tree or advances one to fully covered fails here.
+	_ok(fully.size() == 0 and (coverage["per_tree"] as Dictionary).size() == 21,
+		"absolute: fully covered trees == 0/21 (got %d/%d)" % [fully.size(), (coverage["per_tree"] as Dictionary).size()])
 	print(Coverage.summary_line(coverage))
 	print("P4COVERAGE fully_covered_trees=%d names=%s" % [fully.size(), str(fully)])
 	for line: String in Coverage.table_lines(coverage, "tasks"):

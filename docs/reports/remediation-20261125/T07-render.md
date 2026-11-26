@@ -520,7 +520,10 @@ New output the consumer already looks for:
 (6 × 512², linear, +X/-X/+Y/-Y/+Z/-Z in UE order, or an equirectangular HDR with
 the mapping documented in the extractor). `WeatherProfile.sky_ibl_state()` flips
 `ambient_light_sky_contribution` to 1.0 the moment `ResourceLoader.exists()` is
-true; no further code change is needed.
+true. **W10-A correction: that is not the whole consumer.** `sky_ibl_state()` is
+called only by `game/tests/probe_render_t07.gd`; nothing in the render path reads
+`cubemap_res_path` or builds a `PanoramaSkyMaterial`, so emitting the `.exr` alone
+would change no pixel. A runtime consumer is required as well as the export.
 
 ### T01-PIPELINE — authored exposure range + EV curve
 `tools/parse_weather.py` drops these from the `PostProcessComponent`:

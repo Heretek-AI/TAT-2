@@ -28,8 +28,9 @@ fixtures); the stair-mesh cap exemption made the 36-hull OldManor tower flight w
 and the probes/greps/string-audit/StateTree-coverage claims are now gates the ratchet
 reads. Reports: `build/qa/w10/{a-report,inv-*,re-1-locks,impl-*,evidence,audit}.md`.
 **Not verified / open:** the interior brightness band (foyer p50 29 vs the reference 15),
-IBL (the cubemap export is missing **and** nothing binds it — `sky_ibl_state()` is called
-but the ambient source is a flat colour, so the sky-contribution flip is inert), the
+IBL (the cubemap export is missing **and** nothing binds it — `sky_ibl_state()` raises
+`ambient_light_sky_contribution`, which would blend the *default* sky, not the authored
+cubemap; no material loads `cubemap_res_path`), the
 lockpick stand-in, and 34 of 39 VFX sprite materials. The temporal `AEM_Basic` adaptation (0.2 f-stops/s) is the
 designed next attempt for the interior band; a spatial grade was tried and rejected by
 its pre-registered criteria. **Prison-door lock level:** the authored `MaxLockLevel`

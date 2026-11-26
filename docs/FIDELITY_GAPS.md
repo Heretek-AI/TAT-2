@@ -32,8 +32,7 @@ gate, plus the probe/ratchet hardening that keeps the claims re-derivable. Evide
   convex element is the ward quad itself). The box `2 cm` clamp stays, and is now
   *measured*: it fires on 27 box elements across 18 placed meshes (295 placed instances
   once the 20 `/Engine/BasicShapes/Plane` instances are excluded, 235 of them glass) — real
-  thin solids (glass, rugs,
-  `/Engine/BasicShapes/Plane`). Stair meshes are exempt from the 16-hull reduce cap, so the
+  thin solids, not effects billboards. Stair meshes are exempt from the 16-hull reduce cap, so the
   OldManor tower flight (36 hulls) is per-element and walkable. Suites **115/116**.
 - **Locks:** `CanBeLockpicked` now resolves through a named authored default
   (`AUTHORED_CAN_BE_LOCKPICKED_DEFAULT = true`) instead of an `else` accident; the

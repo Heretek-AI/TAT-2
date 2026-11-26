@@ -207,3 +207,28 @@ false and the smoke evidence file is from the pre-edit tree. The fix is four tex
 lines plus one log copy, not a re-run.
 
 AUDIT VERDICT: FAIL
+
+---
+
+## Second pass (commit 7b05566)
+
+Checked 2026-11-25 22:24–22:27 in `/home/john/Projects/TAT-2-rem-w10-a`. I edited
+none of the five files; the only tree write is this appended section.
+
+| # | ITEM | SECOND PASS | evidence |
+|---|---|---|---|
+| 1 | T07 / HANDOFF IBL note | **FAIL** | T07 now says the helper *is* called (`:959`) and consumed (`:960-964`) and narrows the residual to a **texture** consumer — the substance is right — but the corrected sentence names the wrong function and two files still assert the disproved consequence. `T07-render.md:524` says "inside `apply_preset`"; there is no `apply_preset` in the tree (`grep -rn apply_preset game/src` → 0); the call is inside `apply_environment` (`weather_profile.gd:875`, call at `:959`; `apply_for_map` → `apply_environment` at `:1070`). The same name appears at `a-report.md:261,365`. `a-report.md:263-264` still says "the export alone changes no pixel" — false: `weather_profile.gd:960-961` raises `ambient_light_sky_contribution` to 1.0 when the `.exr` exists, and Godot's `Environment` docs say `ambient_light_color` is "only effective if `ambient_light_sky_contribution` is lower than 1.0", so the ambient changes; `T07-render.md:529` itself says the scalar "would only blend the default sky", contradicting the report. `HANDOFF:32` says "the sky-contribution flip is inert" — not inert (at 1.0 the ambient colour is replaced by the sky/background mix). |
+| 2 | "3 FX quads" | **PASS** | `AGENTS.md:165` "2 `FXSHAPES_1_*` quads … (the third coplanar convex element is the ward quad itself)"; `FIDELITY_GAPS.md:31`; `impl-b.md:157`; `a-report.md:79`. The four files agree with the dump (3 coplanar convex elements = ward + 2 FX). The only remaining "3 FX quads" string is `a-report.md:366`, quoting the old text in the disposition table ("said \"3 FX quads\" … **Wrong, fixed**") — not a claim. |
+| 3 | "27 meshes / 314 instances" | **PASS** | Re-derived from `mesh_collision.json` + all 107 level JSONs: clamp criterion `min(|half_extent|) < 2.0` raw cm → **27 box elements excluding `/Engine/BasicShapes/Plane`**, **18 placed meshes**, **295 placed instances excluding the 20 Plane instances**, **235 glass** (10 `*Glass*` meshes; 18+37+14+1+116+30+2+2+7+8). `AGENTS.md:169-170`, `FIDELITY_GAPS.md:33-34`, `impl-b.md:140`, `a-report.md:159-160,367` state exactly that. The only remaining "27 meshes / 314 instances" string is `a-report.md:367`, the quoted defect label ("**Wrong denominator, fixed**") — not a claim. |
+| 4 | `runtime_smoke_godot.log` | **PASS** | `md5 58378558f314276be0a8472270a8f7c5` == `/tmp/tat2-smoke-ZV6qT7.log` (copied 22:21:39); tip line numbers `level_loader.gd:6243/4483`; `TAT-2 mission_ready` = 1; `SCRIPT ERROR|SHADER ERROR|ERROR:` = 0. Committed `runtime_smoke.log` names `path=/tmp/tat2-smoke-ZV6qT7.log`. My scan: `RUNTIME_SMOKE_SCAN PASS exit=124 errors=0 raw=0 allowed=0 script_errors=0 shader_errors=0 mission_ready=1 reason=ok path=docs/reports/logs/w10/runtime_smoke_godot.log` (rc=0). |
+| 5 | clean working tree at `7b05566` | **FAIL** | At my first `git status --short` (~22:24:05) the only entries were `?? extracted`, `?? game/assets`, `?? game/data/generated` — clean. At **22:24:18** `docs/FIDELITY_GAPS.md` was modified by something other than me (mtime, and I wrote only this file); it now shows ` M docs/FIDELITY_GAPS.md` with an uncommitted diff replacing "real thin solids (glass, rugs, `/Engine/BasicShapes/Plane`)" with "real thin solids, not effects billboards". The commit `7b05566` itself is clean; the working tree at check time is not. |
+
+Log refresh: the five A5 logs are tip runs (22:22:58–22:23:07) and keep their gate
+numbers — `COL_MAPS PASS maps=3 min_coverage=0.976 dropped=0 planar_skipped=2
+coverage_ppm=976277` (71 `COL_REDUCED`, per-map `PASS`), `applied=154 containers=144
+door_nodes=10`, `checks=86`, `UI_STRINGS GATE PASS routed=306 authored=195
+invented=111`, `LITERAL_GREPS PASS code_hits=0 ui_rating_literals=0 files=96`.
+`python3 tools/check_gate_ratchet.py` → rc 0, `GATE_RATCHET: PASS (baseline and
+committed evidence agree; Godot gates run locally)`, `measured_on=e2d783a`.
+
+AUDIT SECOND PASS: FAIL

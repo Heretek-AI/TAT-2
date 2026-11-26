@@ -521,14 +521,16 @@ New output the consumer already looks for:
 the mapping documented in the extractor). `WeatherProfile.sky_ibl_state()` flips
 `ambient_light_sky_contribution` to 1.0 the moment `ResourceLoader.exists()` is
 true. **W10-A correction: that is a state consumer, not a texture consumer.** The helper
-*is* called in the render path (`weather_profile.gd:959`, inside `apply_preset`, and its
-`available`/`sky_contribution` are consumed at `:960-964` to raise
-`ambient_light_sky_contribution`), so "called only by the probe" would be wrong. What is
-still missing is the texture side: nothing loads `cubemap_res_path` into a material (no
-`PanoramaSkyMaterial`, no reflection/ambient texture path), so the authored cubemap stays
-unused even when the `.exr` exists — the contribution scalar would only blend the default
-sky. W10-C therefore needs a **consumer that binds the panorama** as well as the export;
-"no further code change is needed" was the wrong claim.
+*is* called in the render path (`weather_profile.gd:959`, inside
+`apply_environment`, which `apply_for_map` calls), and its `available`/
+`sky_contribution` are consumed at `:960-964`: when the `.exr` exists,
+`ambient_light_sky_contribution` rises to 1.0. That does change the image (Godot blends
+the **default sky** into ambient at that factor), so "the export alone changes no pixel"
+would be wrong too. What is still missing is the texture side: nothing loads
+`cubemap_res_path` into a material (no `PanoramaSkyMaterial`, no reflection/ambient
+texture path), so the *authored cubemap* is never used even when the file exists. W10-C
+therefore needs a **consumer that binds the panorama** as well as the export; "no further
+code change is needed" was the wrong claim.
 
 ### T01-PIPELINE — authored exposure range + EV curve
 `tools/parse_weather.py` drops these from the `PostProcessComponent`:

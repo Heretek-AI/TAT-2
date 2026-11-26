@@ -258,10 +258,11 @@ the five probes, `probe_collision_authored`, `probe_lock_inventory`, `string_aud
 - `build/qa/w9/p3-report.md`: the `SHADOW` sentence now says the **rating word** is gone
   and 96 identifiers still contain the token (none a rating).
 - `docs/reports/remediation-20261125/T07-render.md`: the IBL note no longer claims "no
-  further code change is needed". `sky_ibl_state()` **is** called by `apply_preset`
-  (`weather_profile.gd:959`) and its state is consumed (`:960-964`); what is missing is a
-  **texture** consumer — nothing binds `cubemap_res_path` into a material, so the export
-  alone changes no pixel.
+  further code change is needed". `sky_ibl_state()` **is** called by `apply_environment`
+  (`weather_profile.gd:959`, via `apply_for_map`) and consumed at `:960-964` — the .exr
+  would raise `ambient_light_sky_contribution` and blend the *default* sky, so it is not
+  pixel-neutral. What is missing is a **texture** consumer: nothing binds
+  `cubemap_res_path` into a material, so the authored cubemap is never used.
 - `build/mobile_game` (stale untracked copy with `maxi(100, score/2)`): present only in
   the main checkout and git-ignored; deleting it is an integrator step (§7) because this
   worktree must not write there.
@@ -362,7 +363,7 @@ code, not the code:
 
 | Audit FAIL | Disposition |
 |---|---|
-| T07 note said `sky_ibl_state()` is called "only by the probe" | **Wrong, fixed.** It is called by `apply_preset` (`weather_profile.gd:959`) and consumed at `:960-964`; the true residual is a **texture** consumer (nothing binds the cubemap). The note now says exactly that. |
+| T07 note said `sky_ibl_state()` is called "only by the probe" | **Wrong, fixed.** It is called by `apply_environment` (`weather_profile.gd:959`) and consumed at `:960-964` (the scalar would blend the default sky, so the export is not pixel-neutral); the true residual is a **texture** consumer (nothing binds the cubemap). The note now says exactly that. |
 | `AGENTS.md` / `FIDELITY_GAPS.md` said "3 FX quads" | **Wrong, fixed.** The dump has 3 coplanar convex elements: the ward quad + **2** `FXSHAPES_1_*` quads. |
 | "27 meshes / 314 instances" for the box clamp | **Wrong denominator, fixed.** The clamp fires on **27 box elements across 18 placed meshes** (295 placed instances excluding the 20 engine `Plane` instances; 235 of them glass). Corrected in `AGENTS.md`, `FIDELITY_GAPS.md`, `impl-b.md` and this report. |
 | `runtime_smoke_godot.log` was the evidence lane's 21:13 run, before the last loader edit | **Replaced** with the tip run the committed `runtime_smoke.log` names (`/tmp/tat2-smoke-ZV6qT7.log`, 21:44; `mission_ready=1`, 0 `ERROR:`). |

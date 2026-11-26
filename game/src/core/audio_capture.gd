@@ -115,7 +115,9 @@ func start(buffer_s: float = DEFAULT_BUFFER_S) -> bool:
 		])
 		return false
 	_effect = AudioEffectCapture.new()
-	_effect.name = "P0bCaptureTap"
+	# AudioEffect is a Resource, not a Node: `name` is not a property. Use
+	# resource_name so the tap is identifiable without a parse/runtime error.
+	_effect.resource_name = "P0bCaptureTap"
 	_effect.buffer_length = _buffer_s
 	AudioServer.add_bus_effect(_bus, _effect)
 	# Confirm the effect actually landed (a failed add would leave `enabled=true`

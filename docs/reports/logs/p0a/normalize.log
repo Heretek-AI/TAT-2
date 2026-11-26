@@ -1,0 +1,450 @@
+== parse_tables
+Normalized 144 DataTable/CurveTable/StringTable JSONs -> /home/john/Projects/TAT-2/game/data/generated/tables
+Indexed 465 Blueprint/PLA mesh templates
+Indexed 4 sublevel LevelTransforms
+Indexed 2048 extracted .glb stems for component fallback
+Indexed 140 UE-to-GLB material slot remaps
+Indexed 11861 Blueprint JSON files for SCS template resolution
+  FTUE/FTUE_AI.json: guard_markers=4 with_bucket=4 with_layers=4 without_layers=0 unresolved=0
+  Guildhall/Guildhall_Gameplay.json: guard_markers=116 with_bucket=116 with_layers=113 without_layers=3 unresolved=0
+  OldManor/OldManor_Clues.json: guard_markers=1 with_bucket=1 with_layers=1 without_layers=0 unresolved=0
+  OldManor/OldManor_Gameplay.json: guard_markers=82 with_bucket=82 with_layers=79 without_layers=3 unresolved=0
+  Developers/JCamera/Maos/CluesSpawner_Gym.json: rect=0 sky=1 fog=1 pp=1 atmo=1 decals=0 niagara=0 (+0 unresolved) volumes=0 splines=0 (+0 decal-no-material, +0 spline-no-mesh)
+  Buildings/Alley/Alley_Arched_1800.json: bp_mesh_visible=6 unresolved=0 dev_skipped=0
+  Buildings/Facades/Facade_Apartment_1000_2Story_Mansard.json: bp_mesh_visible=4 unresolved=0 dev_skipped=0
+  Buildings/Facades/Facade_Apartment_1000_3Story_Front.json: bp_mesh_visible=4 unresolved=0 dev_skipped=0
+  Buildings/Facades/Facade_Apartment_1400_2Story_3Sided_BayWindow.json: bp_mesh_visible=4 unresolved=0 dev_skipped=0
+  Buildings/Facades/Facade_Apartment_1400_2Story_Side_Arch.json: bp_mesh_visible=4 unresolved=0 dev_skipped=0
+  Buildings/Facades/Facade_Apartment_1400_3Story_3Sided_BayWindow.json: bp_mesh_visible=4 unresolved=0 dev_skipped=0
+  Buildings/Facades/Facade_Apartment_1400_3Story_Mansard_Turret.json: bp_mesh_visible=4 unresolved=0 dev_skipped=0
+  Buildings/Facades/Facade_Store_1000_2Story_Flat.json: bp_mesh_visible=2 unresolved=0 dev_skipped=0
+  Buildings/Facades/Facade_Store_1000_2Story_Front.json: bp_mesh_visible=2 unresolved=0 dev_skipped=0
+  Buildings/Facades/Facade_Store_1000_3Story_Flat.json: bp_mesh_visible=2 unresolved=0 dev_skipped=0
+  Buildings/Facades/Facade_Store_800_2Story_Front.json: bp_mesh_visible=2 unresolved=0 dev_skipped=0
+  Buildings/Facades/Facade_Storefront_1000.json: bp_mesh_visible=6 unresolved=0 dev_skipped=0
+  Buildings/Guildhall/Building_Guildhall_POI.json: bp_mesh_visible=1215 unresolved=12 dev_skipped=0
+  Buildings/Guildhall/Building_Guildhall_POI.json: swinging_doors=121 door_leaves_excluded=114 unresolved=0
+  Buildings/Guildhall/Building_Guildhall_POI.json: gc_components=30 hidden=30 visible_emitted=0 hidden_emitted=30 leaves=0 unresolved=0 fallback_broken=0 sibling_smc=0
+  Buildings/Guildhall/Building_Guildhall_POI.json: rect=0 sky=0 fog=0 pp=0 atmo=0 decals=38 niagara=410 (+0 unresolved) volumes=46 splines=0 (+0 decal-no-material, +0 spline-no-mesh)
+  Buildings/Guildhall/Building_Guildhall_POI_3rdFloor.json: bp_mesh_visible=444 unresolved=0 dev_skipped=0
+  Buildings/Guildhall/Building_Guildhall_POI_3rdFloor.json: swinging_doors=6 door_leaves_excluded=4 unresolved=0
+  Buildings/Guildhall/Building_Guildhall_POI_3rdFloor.json: gc_components=4 hidden=4 visible_emitted=0 hidden_emitted=4 leaves=0 unresolved=0 fallback_broken=0 sibling_smc=0
+  Buildings/Guildhall/Building_Guildhall_POI_3rdFloor.json: rect=0 sky=0 fog=0 pp=0 atmo=0 decals=18 niagara=11 (+0 unresolved) volumes=0 splines=0 (+0 decal-no-material, +0 spline-no-mesh)
+  Buildings/Guildhall/Guildhall_Vault_CeremonialChambers.json: bp_mesh_visible=186 unresolved=0 dev_skipped=0
+  Buildings/Guildhall/Guildhall_Vault_CeremonialChambers.json: swinging_doors=8 door_leaves_excluded=0 unresolved=0
+  Buildings/Guildhall/Guildhall_Vault_CeremonialChambers.json: rect=0 sky=0 fog=0 pp=0 atmo=0 decals=3 niagara=104 (+0 unresolved) volumes=0 splines=0 (+0 decal-no-material, +0 spline-no-mesh)
+  Buildings/Periphery/Periph_Building_City_4Floor.json: bp_mesh_visible=0 unresolved=0 dev_skipped=2
+  Buildings/Periphery/Periph_Building_City_6Floor.json: bp_mesh_visible=0 unresolved=0 dev_skipped=2
+  FTUE/FTUE_Building_JewelryStore.json: bp_mesh_visible=262 unresolved=0 dev_skipped=0
+  FTUE/FTUE_Building_JewelryStore.json: swinging_doors=4 door_leaves_excluded=2 unresolved=0
+  FTUE/FTUE_Building_JewelryStore.json: gc_components=20 hidden=20 visible_emitted=0 hidden_emitted=20 leaves=2 unresolved=0 fallback_broken=0 sibling_smc=2
+  FTUE/FTUE_Building_JewelryStore.json: rect=0 sky=0 fog=0 pp=0 atmo=0 decals=0 niagara=3 (+2 unresolved) volumes=0 splines=0 (+0 decal-no-material, +0 spline-no-mesh)
+  FTUE/FTUE_Building_SpawnArea.json: bp_mesh_visible=24 unresolved=0 dev_skipped=0
+  FTUE/FTUE_Building_SpawnArea.json: swinging_doors=2 door_leaves_excluded=2 unresolved=0
+  FTUE/FTUE_Building_SpawnArea.json: gc_components=2 hidden=2 visible_emitted=0 hidden_emitted=2 leaves=0 unresolved=0 fallback_broken=0 sibling_smc=0
+  FTUE/FTUE_Building_SpawnArea.json: rect=0 sky=0 fog=0 pp=0 atmo=0 decals=0 niagara=6 (+0 unresolved) volumes=0 splines=0 (+0 decal-no-material, +0 spline-no-mesh)
+  FTUE/FTUE_Fairy.json: bp_mesh_visible=7 unresolved=0 dev_skipped=0
+  FTUE/FTUE_Fairy.json: rect=0 sky=0 fog=0 pp=0 atmo=0 decals=4 niagara=2 (+0 unresolved) volumes=4 splines=0 (+0 decal-no-material, +0 spline-no-mesh)
+  FTUE/FTUE_Gameplay.json: bp_mesh_visible=54 unresolved=0 dev_skipped=2
+  FTUE/FTUE_Gameplay.json: gc_components=3 hidden=3 visible_emitted=0 hidden_emitted=3 leaves=3 unresolved=0 fallback_broken=3 sibling_smc=0
+  FTUE/FTUE_Gameplay.json: rect=0 sky=0 fog=0 pp=0 atmo=0 decals=4 niagara=26 (+0 unresolved) volumes=49 splines=0 (+0 decal-no-material, +0 spline-no-mesh)
+  FTUE/FTUE_Geometry.json: bp_mesh_visible=938 unresolved=0 dev_skipped=0
+  FTUE/FTUE_Geometry.json: swinging_doors=4 door_leaves_excluded=0 unresolved=0
+  FTUE/FTUE_Geometry.json: rect=1 sky=0 fog=0 pp=0 atmo=0 decals=120 niagara=7 (+0 unresolved) volumes=34 splines=0 (+0 decal-no-material, +0 spline-no-mesh)
+  FTUE/FTUE_P.json: bp_mesh_visible=86 unresolved=0 dev_skipped=0
+  FTUE/FTUE_P.json: rect=0 sky=0 fog=0 pp=0 atmo=0 decals=17 niagara=2 (+0 unresolved) volumes=3 splines=0 (+0 decal-no-material, +0 spline-no-mesh)
+  Guildhall/Building_Store_800_2Story_Spawn.json: bp_mesh_visible=1 unresolved=0 dev_skipped=0
+  Guildhall/Building_Store_800_2Story_Spawn.json: gc_components=1 hidden=1 visible_emitted=0 hidden_emitted=1 leaves=0 unresolved=0 fallback_broken=0 sibling_smc=0
+  Guildhall/Facade_Apartment_CarUnderpass.json: bp_mesh_visible=12 unresolved=0 dev_skipped=0
+  Guildhall/Facade_Apartment_CarUnderpass.json: rect=0 sky=0 fog=0 pp=0 atmo=0 decals=1 niagara=0 (+0 unresolved) volumes=0 splines=0 (+0 decal-no-material, +0 spline-no-mesh)
+  Guildhall/Facade_Storefront_Cluster.json: bp_mesh_visible=21 unresolved=0 dev_skipped=0
+  Guildhall/Facade_Storefront_Cluster.json: swinging_doors=2 door_leaves_excluded=2 unresolved=0
+  Guildhall/Facade_Storefront_Cluster.json: gc_components=2 hidden=2 visible_emitted=0 hidden_emitted=2 leaves=0 unresolved=0 fallback_broken=0 sibling_smc=0
+  Guildhall/Facade_Storefront_Cluster.json: rect=0 sky=0 fog=0 pp=0 atmo=0 decals=1 niagara=2 (+0 unresolved) volumes=0 splines=0 (+0 decal-no-material, +0 spline-no-mesh)
+  Guildhall/Guildhall_Clouds.json: bp_mesh_visible=0 unresolved=1 dev_skipped=0
+  Guildhall/Guildhall_Gameplay.json: bp_mesh_visible=2643 unresolved=0 dev_skipped=229
+  Guildhall/Guildhall_Gameplay.json: gc_components=1 hidden=1 visible_emitted=0 hidden_emitted=1 leaves=1 unresolved=0 fallback_broken=1 sibling_smc=0
+  Guildhall/Guildhall_Gameplay.json: rect=12 sky=0 fog=0 pp=0 atmo=0 decals=12 niagara=1134 (+0 unresolved) volumes=0 splines=0 (+0 decal-no-material, +0 spline-no-mesh)
+  Guildhall/Guildhall_Geometry.json: bp_mesh_visible=47 unresolved=0 dev_skipped=0
+  Guildhall/Guildhall_Geometry.json: swinging_doors=4 door_leaves_excluded=4 unresolved=0
+  Guildhall/Guildhall_Geometry.json: gc_components=4 hidden=4 visible_emitted=0 hidden_emitted=4 leaves=0 unresolved=0 fallback_broken=0 sibling_smc=0
+  Guildhall/Guildhall_Geometry.json: rect=0 sky=0 fog=0 pp=0 atmo=0 decals=2 niagara=36 (+0 unresolved) volumes=23 splines=0 (+0 decal-no-material, +0 spline-no-mesh)
+  Guildhall/Guildhall_Landscape.json: rect=0 sky=0 fog=0 pp=0 atmo=0 decals=0 niagara=0 (+0 unresolved) volumes=0 splines=2 (+0 decal-no-material, +0 spline-no-mesh)
+  Guildhall/Guildhall_LightingNoGameplay.json: bp_mesh_visible=111 unresolved=0 dev_skipped=0
+  Guildhall/Guildhall_LightingNoGameplay.json: rect=0 sky=0 fog=0 pp=0 atmo=0 decals=0 niagara=4 (+0 unresolved) volumes=0 splines=0 (+0 decal-no-material, +0 spline-no-mesh)
+  Guildhall/Guildhall_LocalVolumetric.json: bp_mesh_visible=27 unresolved=0 dev_skipped=0
+  Guildhall/Guildhall_Loot.json: bp_mesh_visible=175 unresolved=0 dev_skipped=0
+  Guildhall/Guildhall_Loot.json: gc_components=95 hidden=95 visible_emitted=0 hidden_emitted=95 leaves=79 unresolved=0 fallback_broken=48 sibling_smc=0
+  Guildhall/Guildhall_Loot.json: rect=0 sky=0 fog=0 pp=0 atmo=0 decals=0 niagara=48 (+0 unresolved) volumes=0 splines=0 (+0 decal-no-material, +0 spline-no-mesh)
+  Guildhall/Guildhall_P.json: bp_mesh_visible=25 unresolved=0 dev_skipped=0
+  Guildhall/Guildhall_P.json: gc_components=22 hidden=22 visible_emitted=0 hidden_emitted=22 leaves=0 unresolved=0 fallback_broken=0 sibling_smc=0
+  Guildhall/Guildhall_P.json: rect=4 sky=0 fog=0 pp=0 atmo=0 decals=0 niagara=4 (+0 unresolved) volumes=8 splines=0 (+0 decal-no-material, +0 spline-no-mesh)
+  Guildhall/Guildhall_PeripheryA.json: bp_mesh_visible=1034 unresolved=24 dev_skipped=0
+  Guildhall/Guildhall_PeripheryA.json: swinging_doors=16 door_leaves_excluded=14 unresolved=0
+  Guildhall/Guildhall_PeripheryA.json: gc_components=1 hidden=1 visible_emitted=0 hidden_emitted=1 leaves=0 unresolved=0 fallback_broken=0 sibling_smc=0
+  Guildhall/Guildhall_PeripheryA.json: rect=1 sky=0 fog=0 pp=0 atmo=0 decals=90 niagara=49 (+0 unresolved) volumes=41 splines=0 (+0 decal-no-material, +0 spline-no-mesh)
+  Guildhall/Guildhall_SkyboxGeo.json: bp_mesh_visible=4 unresolved=0 dev_skipped=0
+  Guildhall/Guildhall_SkyboxGeo.json: rect=0 sky=0 fog=0 pp=0 atmo=0 decals=2 niagara=0 (+0 unresolved) volumes=0 splines=0 (+0 decal-no-material, +0 spline-no-mesh)
+  Menus/MainMenu/BeautifulCorner_Startscreen_Lighting.json: rect=0 sky=1 fog=1 pp=1 atmo=1 decals=0 niagara=0 (+0 unresolved) volumes=0 splines=0 (+0 decal-no-material, +0 spline-no-mesh)
+  Menus/MainMenu/BeautifulCorner_Startscreen_P.json: bp_mesh_visible=99 unresolved=0 dev_skipped=39
+  Menus/MainMenu/BeautifulCorner_Startscreen_P.json: gc_components=4 hidden=4 visible_emitted=0 hidden_emitted=4 leaves=0 unresolved=0 fallback_broken=0 sibling_smc=0
+  Menus/MainMenu/BeautifulCorner_Startscreen_P.json: rect=2 sky=0 fog=0 pp=0 atmo=0 decals=60 niagara=5 (+0 unresolved) volumes=2 splines=23 (+0 decal-no-material, +12 spline-no-mesh)
+  MissionLobby/MissionLobby_Geo3.json: bp_mesh_visible=23 unresolved=0 dev_skipped=0
+  MissionLobby/MissionLobby_Geo3.json: rect=0 sky=0 fog=0 pp=0 atmo=0 decals=2 niagara=0 (+0 unresolved) volumes=0 splines=0 (+0 decal-no-material, +0 spline-no-mesh)
+  MissionLobby/MissionLobby_Periphery.json: bp_mesh_visible=2 unresolved=0 dev_skipped=0
+  MissionLobby/MissionLobby_Periphery.json: rect=0 sky=0 fog=0 pp=0 atmo=0 decals=0 niagara=6 (+0 unresolved) volumes=0 splines=0 (+0 decal-no-material, +0 spline-no-mesh)
+  OldManor/OldManor_Clouds.json: bp_mesh_visible=0 unresolved=1 dev_skipped=0
+  OldManor/OldManor_Clues.json: bp_mesh_visible=24 unresolved=0 dev_skipped=0
+  OldManor/OldManor_Contract10.json: rect=0 sky=0 fog=0 pp=0 atmo=0 decals=0 niagara=1 (+0 unresolved) volumes=0 splines=0 (+0 decal-no-material, +0 spline-no-mesh)
+  OldManor/OldManor_Contracts.json: bp_mesh_visible=3 unresolved=0 dev_skipped=0
+  OldManor/OldManor_Gameplay.json: bp_mesh_visible=2975 unresolved=0 dev_skipped=246
+  OldManor/OldManor_Gameplay.json: rect=10 sky=0 fog=0 pp=0 atmo=0 decals=0 niagara=1226 (+0 unresolved) volumes=0 splines=0 (+0 decal-no-material, +0 spline-no-mesh)
+  OldManor/OldManor_Geo.json: bp_mesh_visible=1169 unresolved=10 dev_skipped=0
+  OldManor/OldManor_Geo.json: swinging_doors=120 door_leaves_excluded=120 unresolved=0
+  OldManor/OldManor_Geo.json: gc_components=69 hidden=69 visible_emitted=0 hidden_emitted=69 leaves=3 unresolved=0 fallback_broken=0 sibling_smc=3
+  OldManor/OldManor_Geo.json: rect=0 sky=0 fog=0 pp=0 atmo=0 decals=292 niagara=510 (+0 unresolved) volumes=36 splines=0 (+0 decal-no-material, +0 spline-no-mesh)
+  OldManor/OldManor_Landscape.json: bp_mesh_visible=2 unresolved=0 dev_skipped=0
+  OldManor/OldManor_Landscape.json: rect=0 sky=0 fog=0 pp=0 atmo=0 decals=0 niagara=1 (+0 unresolved) volumes=0 splines=0 (+0 decal-no-material, +0 spline-no-mesh)
+  OldManor/OldManor_Loot.json: bp_mesh_visible=119 unresolved=0 dev_skipped=0
+  OldManor/OldManor_Loot.json: gc_components=78 hidden=78 visible_emitted=0 hidden_emitted=78 leaves=78 unresolved=0 fallback_broken=41 sibling_smc=0
+  OldManor/OldManor_Loot.json: rect=0 sky=0 fog=0 pp=0 atmo=0 decals=0 niagara=41 (+0 unresolved) volumes=0 splines=0 (+0 decal-no-material, +0 spline-no-mesh)
+  OldManor/OldManor_P.json: bp_mesh_visible=9 unresolved=0 dev_skipped=1
+  OldManor/OldManor_P.json: rect=0 sky=0 fog=0 pp=0 atmo=0 decals=0 niagara=2 (+0 unresolved) volumes=38 splines=8 (+0 decal-no-material, +7 spline-no-mesh)
+  OldManor/OldManor_PathBlockers.json: bp_mesh_visible=147 unresolved=0 dev_skipped=0
+  OldManor/OldManor_PickUps.json: bp_mesh_visible=1 unresolved=0 dev_skipped=0
+  OldManor/OldManor_PickUps.json: rect=0 sky=0 fog=0 pp=0 atmo=0 decals=0 niagara=31 (+0 unresolved) volumes=0 splines=0 (+0 decal-no-material, +0 spline-no-mesh)
+  OldManor/OldManor_SkyboxGeo.json: bp_mesh_visible=7 unresolved=0 dev_skipped=0
+  ThievesDen/ThievesDen_Geo.json: bp_mesh_visible=38 unresolved=0 dev_skipped=3
+  ThievesDen/ThievesDen_Geo.json: rect=0 sky=0 fog=0 pp=0 atmo=0 decals=9 niagara=20 (+0 unresolved) volumes=0 splines=0 (+0 decal-no-material, +0 spline-no-mesh)
+  ThievesDenTest/ThievesDenTest_Contracts.json: bp_mesh_visible=17 unresolved=0 dev_skipped=0
+  ThievesDenTest/ThievesDenTest_Contracts.json: rect=1 sky=0 fog=0 pp=0 atmo=0 decals=0 niagara=2 (+0 unresolved) volumes=0 splines=0 (+0 decal-no-material, +0 spline-no-mesh)
+  ThievesDenTest/ThievesDenTest_FTUE.json: rect=0 sky=0 fog=0 pp=0 atmo=0 decals=0 niagara=1 (+0 unresolved) volumes=4 splines=0 (+0 decal-no-material, +0 spline-no-mesh)
+  ThievesDenTest/ThievesDenTest_P.json: bp_mesh_visible=56 unresolved=0 dev_skipped=0
+  ThievesDenTest/ThievesDenTest_P.json: rect=0 sky=0 fog=0 pp=1 atmo=0 decals=0 niagara=1 (+0 unresolved) volumes=0 splines=0 (+0 decal-no-material, +0 spline-no-mesh)
+  ThievesDenTest/ThievesDenTest_Periphery.json: bp_mesh_visible=3 unresolved=0 dev_skipped=0
+Normalized 107 level JSONs -> 139796 mesh instances, 2142 lights (stale_removed=107)
+Patrol paths: 210 authored paths, 673 waypoints
+Level instances: actors=190 merged=190 meshes=34435 unresolved=0
+Streaming levels: maps=6 records=67 unresolved=0
+Spline meshes: emitted=432 rigid_no_params=37
+Marker transforms: origin_fixed=586
+Guard spawn markers: total=203 with_bucket=203 with_layers=197 without_layers=6 unresolved=0
+Guard spawn buckets: DA_SpawnBucket_Hauntstable=59, DA_SpawnBucket_PrivateSecurity=17, DA_SpawnBucket_PrivateSecurity_Lanterns=21, DA_SpawnBucket_StandardGuards_Bouncers=38, DA_SpawnBucket_StandardGuards_Lanterns=67, DA_SpawnBucket_StandardGuards_PrivateSecurity_JasperingHall_Lantern=1
+GC layers: components=336 hidden=336 visible=0 visible_emitted=0 hidden_emitted=336 leaves=166 unresolved=0 fallback_broken=93 sibling_smc=5
+BP mesh components: visible=12054 unresolved=48 dev_skipped=524
+Content overrides: 11 rules applied, 508 matched, 133 re-materialised (game/data/generated/content_overrides_applied.json)
+  poi-lounge-floor-tile: matched=130 changed=5 (Buildings/Guildhall/Building_Guildhall_POI)
+  poi-lounge-floorstone: matched=4 changed=4 (Buildings/Guildhall/Building_Guildhall_POI)
+  poi-entrance-hall-floor-tile: matched=26 changed=1 (Buildings/Guildhall/Building_Guildhall_POI)
+  poi-3rd-floor-tile: matched=229 changed=20 (Buildings/Guildhall/Building_Guildhall_POI_3rdFloor)
+  poi-3rd-floorstone: matched=16 changed=16 (Buildings/Guildhall/Building_Guildhall_POI_3rdFloor)
+  poi-3rd-roof-deck-slate: matched=1 changed=1 (Buildings/Guildhall/Building_Guildhall_POI_3rdFloor)
+  vault-chambers-floorstone: matched=36 changed=33 (Buildings/Guildhall/Guildhall_Vault_CeremonialChambers)
+  missionlobby-roof-decks-slate-geo3: matched=3 changed=3 (MissionLobby/MissionLobby_Geo3)
+  missionlobby-structure-decks-concrete-geo3: matched=11 changed=10 (MissionLobby/MissionLobby_Geo3)
+  missionlobby-roof-decks-slate-periph: matched=8 changed=8 (MissionLobby/MissionLobby_Periphery)
+  missionlobby-structure-decks-concrete-periph: matched=44 changed=32 (MissionLobby/MissionLobby_Periphery)
+MID overrides: mid_resolved=2038, mid_unresolved=0
+MID unresolved sidecar: game/data/generated/levels/_mid_unresolved.json (0 records)
+Interactables var/track alias patched tracks=0
+Scene variants: 222 configs -> /home/john/Projects/TAT-2/game/data/generated/scene_variants.json
+Devices: 4118 placements across 21 families -> /home/john/Projects/TAT-2/game/data/generated/gameplay/devices.json
+Copied 64 .ufont -> .ttf in /home/john/Projects/TAT-2/game/assets/ue/fonts
+== parse_curves
+curves: 16 standalone (CurveFloat 14, CurveLinearColor 2) -> 16 table files, 108 nested indexed, 23 CurveTables already normalised by parse_tables.py
+  /Game/AI/Alertness/Curve_AI_HeightDifferenceToStrengthMultiplier CurveFloat         2 keys  Value
+  /Game/AI/Data/C_LightIntensityToRangeMultiplier            CurveFloat         2 keys  Value
+  /Game/AI/Data/C_MovementSpeedToMinimumLightDetectionValue  CurveFloat         2 keys  Value
+  /Game/AI/Data/C_WaitingAIToNavLinkAcceptanceRadius         CurveFloat         4 keys  Value
+  /Game/Art/Environment/Weather/Curve_Exposure_Compensation_Float CurveFloat         7 keys  Value
+  /Game/Art/Environment/Weather/Curve_Exposure_Compensation_Float_V3 CurveFloat         8 keys  Value
+  /Game/Art/Environment/Weather/Skybox/C_Sky_Gradient        CurveLinearColor  18 keys  R,G,B
+  /Game/Character/Player/Curve_FallingDamage                 CurveFloat         3 keys  Value
+  /Game/Gameplay/Carry/Curve_CarryTargetThrowStrengthVsDirection CurveFloat         4 keys  Value
+  /Game/Gameplay/Indicators/C_GlyphIndicator_MajorLoot       CurveFloat         2 keys  Value
+  /Game/Gameplay/Input/Character/Curve_GamepadLookEdgeBoost  CurveFloat         2 keys  Value
+  /Game/Gameplay/Input/Character/Curve_GamepadMoveThumbstickResponse CurveFloat         4 keys  Value
+  /Game/Gameplay/Traversal/Dodge/Curve_Dodge                 CurveFloat         2 keys  Value
+  /Game/MaterialLibrary/Character/EyeLibrary/C_EyeGlow       CurveLinearColor   9 keys  R,G,B
+  /Game/UI/Settings/GamepadLookSensitivityCurve              CurveFloat         3 keys  Value
+  /Game/UI/Settings/MouseLookSensitivityCurve                CurveFloat         3 keys  Value
+== parse_materials
+material index: 2565 packages
+Resolved 1629 materials (1497 with real params) -> /home/john/Projects/TAT-2/game/data/generated/materials.json
+albedo_source counts: {'authored': 727, 'companion-diffuse': 5, 'fallback-ranked': 241, 'fallback-stem-direct': 27, 'instance-diffuse': 10, 'none': 253, 'stream-ranked': 337, 'stream-single': 29}
+Mapped 2065 mesh material slot lists (2047 GLB-ordered, 18 sidecar-fallback) -> /home/john/Projects/TAT-2/game/data/generated/mesh_materials.json
+meshes with degenerate-filtered primitives: 0 (0 primitives)
+[slot-order-sidecar] /Game/Art/Environment/Nature/Bushes/Old/SM_BushB
+[slot-order-sidecar] /Game/Art/Environment/Props/Containers/Crates/Old/SM_CrateA
+[slot-order-sidecar] /Game/Art/Environment/Props/Containers/Crates/Old/SM_CrateB
+[slot-order-sidecar] /Game/Art/Environment/Props/Containers/Crates/Old/SM_CrateC
+[slot-order-sidecar] /Game/Art/Environment/Props/Debris/Detritus/Old/SM_WoodPileA
+[slot-order-sidecar] /Game/Art/Environment/Props/Debris/Detritus/Old/SM_WoodPlankA
+[slot-order-sidecar] /Game/Art/Environment/Props/Debris/Detritus/Old/SM_WoodPlankB
+[slot-order-sidecar] /Game/Art/Environment/Props/Debris/Detritus/Old/SM_WoodPlankD
+[slot-order-sidecar] /Game/Art/Environment/Props/Pipes/Old/Modules/SM_MetalPipeModuleA
+[slot-order-sidecar] /Game/Art/Environment/Props/Pipes/Old/Modules/SM_MetalPipeModuleB
+[slot-order-sidecar] /Game/Art/Environment/Props/Pipes/Old/Modules/SM_MetalPipeModuleC
+[slot-order-sidecar] /Game/Art/Environment/Props/Pipes/Old/Modules/SM_MetalPipeModuleF
+[slot-order-sidecar] /Game/Art/Environment/Urban/Walls/unused/SM_Urban_Ext_CornerB_1x6
+[slot-order-sidecar] /Game/Art/Environment/Urban/Walls/unused/SM_Urban_Ext_Railing_2m
+[slot-order-sidecar] /Game/Art/Environment/Urban/Walls/unused/SM_Urban_Ext_TrimWallA_Turret
+[slot-order-sidecar] /Game/Art/Environment/Urban/Walls/unused/SM_Urban_Ext_TrimWallBayWindowA_6m
+[slot-order-sidecar] /Game/Art/Environment/Urban/Walls/unused/SM_Urban_Ext_Wall_1x6
+[slot-order-sidecar] /Game/Art/Environment/Urban/Walls/unused/SM_Urban_Ext_WindowB_Closed_4x6
+wrote slot-order provenance (2065 entries) -> /home/john/Projects/TAT-2/game/data/generated/mesh_materials_provenance.json
+== parse_gameplay
+alerted_combat_fallback_m_s derived from BP_Guard_Base MaxWalkSpeed 250.0 -> 2.5
+wrote game/data/generated/gameplay/character_movement.json
+wrote game/data/generated/gameplay/guard_ai.json
+wrote game/data/generated/gameplay/state_speeds.json
+wrote game/data/generated/gameplay/detection.json
+wrote game/data/generated/gameplay/player_tools.json
+wrote game/data/generated/gameplay/fall_damage.json
+wrote game/data/generated/gameplay/downed.json
+wrote game/data/generated/gameplay/health_blocks.json
+== parse_contracts
+Wrote 16 contracts + 6 mission durations + 1 loot goal ladders -> /home/john/Projects/TAT-2/game/data/generated/gameplay/contracts.json
+WARN: 1 contract(s) defaulted to thieves_den: Contract.Main.1 (order 1)
+== parse_settings
+wrote game/data/generated/gameplay/loot_settings.json (slots=12, linger=1.0s, reward=1000, 11 XP categories)
+== parse_clues
+clues: fact_tables=22, fact_rows=96, reachable_facts=90, dead_facts=6, suppressed_facts=0, facts_without_text=2, fact_tags=81, clue_sets=44, clue_entries=503, enabled_clues=406, disabled_clues=97, clues_with_follow_up_dialogue=2, clues_with_override_interaction_prompt=0, readable_visuals=3, readable_spawners=172, readable_spawners_tagged=168, npc_spawners=208, quest_spawners=38, quest_spawners_with_actions=32, pickup_clues=17, tutorial_clues=4, text_replacement_keys=9 -> game/data/generated/gameplay/clues.json
+WARN: 6 clue facts are unreachable (no enabled clue, tutorial clue or pickup-clue consumer); they are kept in facts with reachable=false: DT_ClueFacts_Contracts_10:Clue03, DT_ClueFacts_Personal_Spider_01:Intro, DT_ClueFacts_Personal_Spider_04:Renegade, DT_ClueFacts_Quest_Guildhall:Chambers.Vault.Security, DT_ClueFacts_Quest_Guildhall:Tower.VarA.Vault.Security, DT_ClueFacts_Quest_Guildhall:Tower.VarB.Key
+WARN: 6 quest spawner components have no _spawnActions; they are scene-requirement spawners and are kept with an empty action list (Guildhall/Guildhall_Gameplay:BP_QuestSpawner_Item_C_0, Guildhall/Guildhall_Gameplay:BP_QuestSpawner_Item_C_1, Guildhall/Guildhall_Gameplay:BP_QuestSpawner_Item_C_2, OldManor/OldManor_Clues:BP_QuestSpawner_Item_C_0, OldManor/OldManor_Clues:BP_QuestSpawner_Item_C_1, OldManor/OldManor_Loot:BP_QuestSpawner_Item_C_1)
+WARN: UTATQuestActorSpawnerComponent._clueLocationTag is not serialized on any authored instance; clue_location_tag is empty (not synthesised)
+WARN: UTATReadableClueVisuals.ReadableType is not serialized in the data assets; readable_visuals.type is derived from the actor class name
+WARN: clue set assets with no authored clue entries (placeholder/compound): CLS_Loot_Placeholder, CLS_Vault_Example
+WARN: fact DT_ClueFacts_Personal_Spider_01:ObjectiveComplete_Clue has no authored journal text
+WARN: fact DT_ClueFacts_Personal_Spider_01:ObjectiveComplete_Electrogram has no authored journal text
+WARN: no readable spawner carries placement tag CluePlacement.Common.Guildhall.Locations (exact match, all levels)
+WARN: no readable spawner carries placement tag CluePlacement.Common.Guildhall.Tower (exact match, all levels)
+== parse_quests
+quests: contracts=16, missions=11, quest_graphs=18, quest_graph_nodes=218, reachable_quest_nodes=201, dead_quest_nodes=17, loot_quest_rows=45, quest_spawners=38, quest_spawn_locations=18, text_replacement_keys=9, mission_briefings=3; validation=PASS -> game/data/generated/gameplay/quests.json
+  check referenced_cls_qg_exist: PASS (81 checked, 0 failure(s))
+  check objective_loot_tags_have_rows: PASS (32 checked, 0 failure(s))
+  check quest_location_tags_have_spawners: PASS (51 checked, 0 failure(s))
+  check cls_placement_tags_have_spawners: PASS (251 checked, 0 failure(s))
+  check briefing_placeholders_known: PASS (3 checked, 0 failure(s))
+WARN: Contract.Main.1 has no Map; the tutorial map is selected by the runtime flow
+WARN: Contract.Main.15 has serialized ContractOrder 0; order repaired to 15 from the row key
+WARN: DT_LootInfo_Quest contains example/test rows: Example, ExampleDiamond, ExampleGear, ExampleHat, ExampleHippo, ExampleLetters, ExampleUrn, Example_0
+WARN: DT_LootInfo_Quest has 2 rows for loot tag Loot.Quest.Set.BookMorning: BookOfMorning, BookOfNight
+WARN: Mission.Example.Clue (developers) has no loaded map levels; CLS placement validation skipped
+WARN: Mission.Example.Multi has no QuestGraph (example/template row)
+WARN: Mission.Example.Vault has no QuestGraph (example/template row)
+WARN: QG_Guildhall_LootTheRoom: RootNodes contains non-root nodes that are not execution roots: TATQuestGraphObjectiveNode_20, TATQuestGraphClueSetNode_16, TATQuestGraphClueSetNode_15
+WARN: QG_Guildhall_Set: RootNodes contains non-root nodes that are not execution roots: TATQuestGraphObjectiveNode_2
+WARN: QG_OldManor: RootNodes contains non-root nodes that are not execution roots: TATQuestGraphObjectiveNode_3
+WARN: QG_OldManor_Set: RootNodes contains non-root nodes that are not execution roots: TATQuestGraphObjectiveNode_2, TATQuestGraphClueSetNode_2
+WARN: loot row CarrazReliquary QuestLocationTag QuestLocation.ArtGallery.SouthWing has no quest spawner (ambient/free-play loot location)
+WARN: loot row Diamond QuestLocationTag QuestLocation.HighStreet has no quest spawner (ambient/free-play loot location)
+WARN: loot row Diamond_Temp QuestLocationTag QuestLocation.HighStreet has no quest spawner (ambient/free-play loot location)
+WARN: loot row ExampleGear QuestLocationTag QuestLocation.Shop has no quest spawner (ambient/free-play loot location)
+WARN: loot row ExampleHat QuestLocationTag QuestLocation.Shop has no quest spawner (ambient/free-play loot location)
+WARN: loot row ExampleHippo QuestLocationTag QuestLocation.Shop has no quest spawner (ambient/free-play loot location)
+WARN: loot row ExampleUrn QuestLocationTag QuestLocation.Shop has no quest spawner (ambient/free-play loot location)
+WARN: loot row LootTheRoom QuestLocationTag QuestLocation.Guildhall.LootTheRoom has no quest spawner (ambient/free-play loot location)
+WARN: loot row Piety QuestLocationTag QuestLocation.ArtGallery.NorthWing has no quest spawner (ambient/free-play loot location)
+WARN: loot row ThebanOwl QuestLocationTag QuestLocation.Personal.Spider.02 has no quest spawner (ambient/free-play loot location)
+WARN: loot row WesternPainting QuestLocationTag QuestLocation.TobyBedroom has no quest spawner (ambient/free-play loot location)
+WARN: placement tag canonicalised: Contract.Main.10 / CLS_Contract_10: CluePlacement.Common.Guildhall.Contracts.SecondFloor -> CluePlacement.Common.OldManor.Contracts.SecondFloor (namespace_alias, 5 available)
+WARN: placement tag canonicalised: Mission.Guildhall.Set / CLS_GH_SetB: CluePlacement.Common.Guildhall.Tower -> CluePlacement.Common.Guildhall.Locations.Tower (normalized, 3 available)
+WARN: placement tag canonicalised: Mission.Guildhall.Set / CLS_GH_SetC: CluePlacement.Common.Guildhall.Tower -> CluePlacement.Common.Guildhall.Locations.Tower (normalized, 3 available)
+WARN: placement tag canonicalised: Mission.Guildhall.Set / CLS_Guildhall_SetProcurment: CluePlacement.Common.Guildhall.Locations -> CluePlacement.Common.Guildhall.Archives, CluePlacement.Common.Guildhall.Contracts.Chambers, CluePlacement.Common.Guildhall.Contracts.Entrance, CluePlacement.Common.Guildhall.Contracts.FirstFloor, CluePlacement.Common.Guildhall.Contracts.SecondFloor, CluePlacement.Common.Guildhall.Contracts.ThirdFloor, CluePlacement.Common.Guildhall.Contracts.Vault, CluePlacement.Common.Guildhall.Locations.Basement, CluePlacement.Common.Guildhall.Locations.Basement.Hall, CluePlacement.Common.Guildhall.Locations.Basement.Kitchen, CluePlacement.Common.Guildhall.Locations.BullPen, CluePlacement.Common.Guildhall.Locations.DiningHall, CluePlacement.Common.Guildhall.Locations.EntranceHall, CluePlacement.Common.Guildhall.Locations.Library, CluePlacement.Common.Guildhall.Locations.Lounge, CluePlacement.Common.Guildhall.Locations.Office, CluePlacement.Common.Guildhall.Locations.SecondFloor.EastHall, CluePlacement.Common.Guildhall.Locations.SecondFloor.MainHall, CluePlacement.Common.Guildhall.Locations.SecondFloor.WestHall, CluePlacement.Common.Guildhall.Locations.Tower, CluePlacement.Common.Guildhall.Primary, CluePlacement.Common.Guildhall.Secondary (parent_prefix, 83 available)
+WARN: placement tag canonicalised: Mission.Guildhall.VaultHeist / CLS_Guildhall_Chambers: CluePlacement.Common.Guildhall.Tower -> CluePlacement.Common.Guildhall.Locations.Tower (normalized, 3 available)
+WARN: placement tag canonicalised: Mission.Guildhall.VaultHeist / CLS_Guildhall_Tower_Variant_A: CluePlacement.Common.Guildhall.Tower -> CluePlacement.Common.Guildhall.Locations.Tower (normalized, 3 available)
+== parse_devices
+TAT-2 devices runtime -> game/data/generated/gameplay/devices_runtime.json
+  schema: tat2.devices_runtime/1
+  total devices: 2095 (expected 2095) [OK]
+    guildhall      903  (16 sublevels) [OK]
+    old_manor     1164  (10 sublevels) [OK]
+    ftue            26  (10 sublevels) [OK]
+    thieves_den      2  (3 sublevels) [OK]
+  detector->action edges: 6005 edges, 613 nulls dropped, 90 duplicates dropped, 0 unresolved
+    all loaded sublevels: 618 nulls (5 outside *_Gameplay, 22 in null-only lists)
+  power: 1475 device->power edges, 15 power sources, 7 distinct supplies feed devices (10 loaded source records), 0 unresolved
+  transforms: 2095 generated, 0 raw fallback, 4 level-instance expanded, 0 non-unit behaviour scales, 0 non-orthonormal bases, 1 BPP wrappers skipped
+  guildhall BeamLength (cm): n=133 min=250.0 p50=774.823975 max=1995.194458
+  families (loaded / whole game):
+    turret             478 /   478 [OK]
+    alarm_eye          181 /   181 [OK]
+    light_beam         330 /   330 [OK]
+    pressure_plate     581 /   581 [OK]
+    noise_alarm        136 /   136 [OK]
+    ward_slow           80 /    80 [OK]
+    ward_blocker        63 /    63 [OK]
+    goo_pipe           135 /   135 [OK]
+    vault_door          12 /    12 [OK]
+    power_wall          15 /    15 [OK]
+    power_switch        59 /    57
+    junction            11 /    11 data-only [OK]
+    acoustic_portal     14 /   285 data-only [OK]
+    magnetic_lock       12 /    12 data-only [OK]
+  warnings: 9
+    - power.require is null where the class CDO serializes neither _requirePowerToTrigger nor _requirePowerSource: alarm_eye=181, noise_alarm=136, vault_door=7
+    - noise_alarm: 11 placements serialize _triggeringDuration=0.5, 125 carry null and use the runtime fallback
+    - turret variant starts_on is not serialized for BP_SecurityTurret_C; params.starts_on stays null and the runtime fallback applies
+    - 14 acoustic_portal placements carry non-unit authored scale; the device transform is normalized to [1,1,1] and the authored box scale is preserved in params.authored_scale (data-only family)
+    - 1 BPP_* packed-level wrapper named '*Turret*' skipped (ISMs only, no device components)
+    - magnetic_lock is component-only: 12 BP_MagneticLockComponent_C instances attached to vault doors; emitted as vault params and stats, not as separate device records (keeps the authored device census at 2095)
+    - action lists not serialized on 141 TATTrapDetectorComponent instances (5 alarm eyes, 136 noise alarms); actions=[] is the authored empty list
+    - BP_MagicAlarm_ShortRange_Narrow_C ships the LongRange perception block (2500/3000/10); emitted exactly as authored
+    - light_beam MaxDistanceToFireBeam default is 5000 cm (50 m) in the BP_Detector_LightBeam CDO; emitted as authored (the review note's '5 m' reads as a 10x typo, not a second authored value)
+== parse_containers
+WARN: container-shaped Blueprint outside CLASSES (not emitted): extracted/json/Art/Environment/Props/Furniture/Containers/Chest/BP_ChestTrunk.json
+WARN: container-shaped Blueprint outside CLASSES (not emitted): extracted/json/Art/Environment/Props/Furniture/Displays/DisplayPlinth/DisplayCases/BP_Museum_DisplayCase_2x2_Tall.json
+WARN: container-shaped Blueprint outside CLASSES (not emitted): extracted/json/Art/Environment/Storefront/Interior/BP_Storefront_DisplayCase.json
+WARN: container-shaped Blueprint outside CLASSES (not emitted): extracted/json/Art/Gameplay/MajorLootSafe/BP_DisplayCaseA.json
+WARN: container-shaped Blueprint outside CLASSES (not emitted): extracted/json/Art/Prototype/BP_DisplayCase.json
+WARN: container-shaped Blueprint outside CLASSES (not emitted): extracted/json/Gameplay/Loot/Actors/Stash/BP_LootStashInteractable.json
+wrote /home/john/Projects/TAT-2/game/data/generated/gameplay/containers.json (5 container classes: {'BP_ChestTrunk_MajorLoot_C': 'major', 'BP_DisplayCaseA_MajorLoot_C': 'major', 'BP_LootStashInteractable_Secret_ThinWall_C': 'stash', 'BP_Storefront_DisplayCaseB_MinorLoot_C': 'minor', 'BP_Storefront_DisplayCaseD_MinorLoot_C': 'minor'})
+== parse_interactables
+wrote /home/john/Projects/TAT-2/game/data/generated/gameplay/interactables.json
+loot minor n=30 pool=18 min=45 max=180
+loot major n=24 pool=18 min=225 max=1000
+loot quest n=45 pool=38 flagship=2500
+jam damage by level: {'1': 5.0, '2': 10.0, '3': 20.0, '4': 40.0}
+variation difficulties: ['0', '1', '2', '3', '4', '5']
+escape open=240.0 reusable=True
+door max_lock=4 shake=0.75
+== parse_loot
+[quest-mesh-missing] BP_LootActor_Quest_Abbessford_Northgate_60_CarrazReliquaryNotQuest_C: keeps mesh_res '' (labelled box fallback in loot_item.gd)
+[quest-mesh-missing] BP_LootActor_Quest_Abbessford_Northgate_60_CarrazReliquary_C: keeps mesh_res '' (labelled box fallback in loot_item.gd)
+wrote /home/john/Projects/TAT-2/game/data/generated/gameplay/loot_actors.json (20 bucket actors, 44 quest actors, 43 tag mappings, generic=BP_LootActor_Quest_Abbessford_Northgate_60_Piety_C)
+unmapped contract tags: []
+unmapped quest tags: ['Loot.Quest.Diamond', 'Loot.Quest.Diamond_Temp', 'Loot.Quest.Example.Diamond', 'Loot.Quest.OrbOfScrying']
+== parse_spawners
+wrote /home/john/Projects/TAT-2/game/data/generated/gameplay/spawners.json (8 bucket entries, 4 civilian variants)
+== parse_vfx
+Parsed 120 Niagara systems
+cutoff review: p90 scripts=18 (const 18), p90 LUTs=89 (const 72)
+WARN: bulk distribution drifted past GRAPH_HEAVY constants; review cutoffs (suite pins 21/70/29 — update both together)
+Wrote /home/john/Projects/TAT-2/game/data/generated/vfx/systems.json
+classes: graph_heavy=21, mesh_or_ribbon=70, sprite_only=29
+materials: 148 distinct, 143 resolved, 5 missing
+Wrote /home/john/Projects/TAT-2/game/data/generated/vfx/catalogue.md
+== parse_unlocks
+Parsed 68 unlockable entries -> game/data/generated/gameplay/unlocks.json
+  content types: Cosmetic=54, Difficulty=3, Gear=7, Map=2, Thief=2
+  shop columns: chameleon_cosmetics=26, guild_perks=7, spider_cosmetics=28, tools=7
+  prices: 55 priced / 13 free, 0..750000
+  catalog: 68 unique save ids, 68 icons (68 on disk), 5 condition-copy mismatches
+  KF08 anchor Outfit.Spider.Head.Hair.Bob Bob Hair Style = 7500
+  KF08 anchor Outfit.Spider.Head.MustacheA Mustache = 5000
+  KF08 anchor Outfit.Spider.Head.BeardA Full Beard = 7500
+  KF08 anchor Outfit.Spider.Head.EyepatchA Eyepatch = 2500
+  copy/gate disagreement Difficulty.MasterThief: Unlocked in Contract 5. vs Unlocked in Contract 8.
+  copy/gate disagreement Tool.Type.MagicSlime: Unlocked in Contract 7. vs Unlocked in Contract 9.
+  copy/gate disagreement Outfit.Chameleon.Head.HairB: Unlocked at Level 20. vs Unlocked at Level 16.
+  copy/gate disagreement Outfit.Chameleon.Head.BowlerA.MustacheA: Unlocked at Level 6. vs Unlocked at level 11.
+  copy/gate disagreement Outfit.Chameleon.Head.MustacheA: Unlocked at Level 11. vs Unlocked at Level 7.
+== parse_hearing
+Parsed 54 hearing stimuli, 22 loudness surfaces, 11 weather types, 285 acoustic portals -> game/data/generated/gameplay/hearing.json
+  severity: Heavy=26, Light=28 | behaviours: Long=24, Short=30
+  query bitmasks: 30=2, 62=1, 86=1, 127=50
+  portals per sublevel: Building_Guildhall_POI_Audio=128, FTUE_Audio=8, FTUE_Building_JewelryStore=2, Guildhall_Audio=1, BeautifulCorner_Startscreen_P=16, OldManor_Audio=128, ThievesDenTest_P=2
+  runtime portal cross-check: {'available': True, 'runtime_portals': 14, 'matched': 12, 'unmatched_source': 273, 'runtime_unmatched': ['FTUE_Geometry:AkAcousticPortal_1', 'FTUE_Geometry:AkAcousticPortal_2'], 'mismatched': [], 'notes': 'devices_runtime.json only carries the portals in the maps it loads (the other placements live in sublevels it never expands, and its level-instance expansion can add placements the raw dumps do not carry twice); the authored positions/scales must agree where both files cover a portal.'}
+Wrote game/data/generated/gameplay/perception.json (5/4 modifiers)
+  authored anomalies: ['LockPicked: outer 500.0 cm > max 300.0 cm (authored)', 'ShareKnowledge: outer 3000.0 cm > max 1500.0 cm (authored)', 'ToolDartLaunch: inner 300.0 cm > outer 200.0 cm (authored)', 'EnterExitHedge: outer 800.0 cm > max 750.0 cm (authored)', 'SecretSwitch: outer 800.0 cm > max 750.0 cm (authored)']
+== parse_state_tree
+Parsed 21 StateTrees (459 states, 467 transitions) -> game/data/generated/gameplay/guard_behavior.json
+  ST_Guard: 126 states / 148 transitions / 17 subtree links
+  ST_Civilian: 73 states / 82 transitions / 10 subtree links
+  ST_OffNavLink: 3 states / 2 transitions / 0 subtree links
+  leaves: 6 conditions, 28 tasks, 9 targeting considerations, 0 other
+  events: StateTreeEvent.AbandonLockdown, StateTreeEvent.Civilian.Flee, StateTreeEvent.ClueChange, StateTreeEvent.ConversationEvent, StateTreeEvent.ConversationEvent.Response, StateTreeEvent.DistractionEvent, StateTreeEvent.GameplayTagChange, StateTreeEvent.LockdownEvent, StateTreeEvent.LockdownGuardLeaving, StateTreeEvent.LockdownHoldPosition, StateTreeEvent.LockdownNewAlarmGuard, StateTreeEvent.ReactionEventEnd, StateTreeEvent.ReactionRoleChange, StateTreeEvent.SharePartnerLost, StateTreeEvent.ShareTarget, StateTreeEvent.StimChange, StateTreeEvent.TargetChange
+  P4PARAMS nodes=566 tasks=326 conditions=233 unreferenced=7 object_templates=139 inherited=65 nodes_with_parameters=497 bound=676
+  P4PARAMS bound_sources=ActiveInstanceData=2 ContextData=422 GlobalInstanceData=1 GlobalParameterData=64 SharedInstanceData=5 StateParameterData=175 SubtreeParameterData=7
+Wrote docs/reports/w5e-guard-state-tree.md
+== parse_weather
+Parsed 16 weather presets -> /home/john/Projects/TAT-2/game/data/generated/weather
+map old_manor      -> preset dense_fog_old_manor              tag Weather.Type.DenseFog
+    reason: OldManor_P PresetOverrides Weather.Type.DenseFog; preset is named for OldManor
+map guildhall      -> preset gloomy                           tag Weather.Type.Gloomy
+    reason: map manager defines no PresetOverrides; authored level dressing implies gloomy (wet_ground=5, haze_volumes=27, cloud_masks=4, moon_actors=8)
+map thieves_den    -> preset midnight_clear_thieves_den       tag Weather.Type.MidnightClear
+    reason: map TATWeatherManager routes every weather type to this single preset
+map jaspering_hall -> preset heavy_rain                       tag Weather.Type.HeavyRain
+    reason: map TATWeatherManager routes every weather type to this single preset
+map main_menu      -> preset midnight_clear_mission_lobby     tag Weather.Type.MidnightClear
+    reason: map TATWeatherManager routes every weather type to this single preset
+Wrote /home/john/Projects/TAT-2/game/data/generated/weather/map_weather.json
+== parse_project_ini
+wrote /home/john/Projects/TAT-2/game/data/generated/project_settings.json (2 maps, 8 map types, 158 project raw keys)
+== parse_input
+wrote gameplay/input_actions.json (contexts=5, shipping=91 mappings / 52 actions, all=237 mappings / 54 actions, 65 action assets, 2 curves)
+== parse_collision
+wrote /home/john/Projects/TAT-2/game/data/generated/mesh_collision.json (1992 packages, 8601 elements: 2334 box, 50 sphere, 295 sphyl, 5922 convex; point cloud only)
+== parse_wwise
+wrote /home/john/Projects/TAT-2/game/data/generated/audio_wwise.json (1378853 bytes, 19 warnings)
+WWISE_OK buses=130 audio=91 aux=39 named=16 fx=46+199 attenuation=23 events=3544 dumps=1296 play=3228 bus=1757 att=1580 2d=227 music=188/235/2 vo=645 emitters=90 room_beds=136
+== extract_audio
+WwiseSharedAssetLibrary.ubulk: 5018 RIFF/WAVE chunks extracted, 32 PLUG chunks skipped (plugin codec), 0 stale raw chunk(s) pruned, 0 Ogg chains
+loose audio files copied: 0
+synth footstep.wav: OK
+synth blackjack.wav: OK
+synth lockpick.wav: OK
+synth grapple.wav: OK
+synth smoke.wav: OK
+synth fairy.wav: OK
+synth alert.wav: OK
+synth loot.wav: OK
+synth door.wav: OK
+done: 5018 wwise chunks extracted (32 PLUG skipped), 0 ogg chains, 0 loose, 9 fallbacks -> /home/john/Projects/TAT-2/game/assets/ue/audio
+== convert_wwise
+found 5018 raw chunks
+  progress 500/5018
+  progress 1000/5018
+  progress 1500/5018
+  progress 2000/5018
+  progress 2500/5018
+  progress 3000/5018
+  progress 3500/5018
+  progress 4000/5018
+  progress 4500/5018
+  progress 5000/5018
+  progress 5018/5018
+pruned 0 stale clip(s) not present in the current manifest
+decode pass: decoded_this_pass=0 present_from_previous_pass=5018 failed=0 (probed_existing)
+total duration=39222.2s across 5018 clips, 581494198 bytes
+wrote game/data/generated/audio_library.json
+wrote game/data/generated/audio_events.json (events=1296, with_resolved_clip=1205, media=5862/5868 resolved, mapping_unavailable=False)
+wem entries=5050 streaming=51 plugin=32 unresolved_by_reason={'plugin_media': 6}
+== parse_locres
+  de-DE: 2053 keys -> /home/john/Projects/TAT-2/game/data/generated/localization/de-DE.csv
+  en: 3404 keys -> /home/john/Projects/TAT-2/game/data/generated/localization/en.csv
+  es-ES: 2084 keys -> /home/john/Projects/TAT-2/game/data/generated/localization/es-ES.csv
+  fr-FR: 2076 keys -> /home/john/Projects/TAT-2/game/data/generated/localization/fr-FR.csv
+  ja-JP: 2099 keys -> /home/john/Projects/TAT-2/game/data/generated/localization/ja-JP.csv
+  pt-BR: 2089 keys -> /home/john/Projects/TAT-2/game/data/generated/localization/pt-BR.csv
+  zh-Hans: 2106 keys -> /home/john/Projects/TAT-2/game/data/generated/localization/zh-Hans.csv
+  zh-Hant: 2107 keys -> /home/john/Projects/TAT-2/game/data/generated/localization/zh-Hant.csv
+locres: 8 locales written to /home/john/Projects/TAT-2/game/data/generated/localization
+== convert_videos
+videos: 15 converted -> /home/john/Projects/TAT-2/game/assets/ue/videos; manifest /home/john/Projects/TAT-2/game/data/generated/videos.json
+== parse_anim_meta
+Wrote game/data/generated/anims_meta.json
+clips: 995 (782 sequences, 213 montages)
+notifies: 3594 (1734 name-only) across 565 clips
+montage sections: 235; slots: DefaultSlot=116, UpperBody=59, UpperBodyOnlyWhenMoving=39
+notify classes:
+     95 AnimNotifyState_CombatHitbox
+     17 AnimNotifyState_CombatMontage
+      1 AnimNotifyState_FOVBoost_C
+      5 AnimNotifyState_MotionWarping
+      3 AnimNotifyState_ToolAnimationEvent_C
+     16 AnimNotifyState_WorldInteractCamera_C
+    205 AnimNotify_AkPlayerEvent
+     18 AnimNotify_CombatAnimationEnd
+     12 AnimNotify_CombatAnimationStart
+     11 AnimNotify_CombatAutoAim
+      8 AnimNotify_Footstep
+   1313 AnimNotify_Footstep_Previewable_C
+     83 AnimNotify_ForceControllerRotation
+     14 AnimNotify_GameplayEvent_C
+      3 AnimNotify_PlayMontageNotify
+     11 AnimNotify_ToolAnimationEvent_C
+     45 TransitionToLocomotion_C
+warnings: 0

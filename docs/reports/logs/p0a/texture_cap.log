@@ -1,0 +1,18 @@
+== P0A_GATE texture_cap
+COMMAND: make texture-cap-check
+CWD: /home/john/.local/share/opencode/worktree/318f41/p0a-evidence
+STARTED: 2026-11-26T14:14:24-05:00
+
+python3 tools/prebake_texture_cap.py --check --cap 1024
+repo: /home/john/.local/share/opencode/worktree/318f41/p0a-evidence
+targets: 1568 (materials.json 1523, code 100, scenes 0, unique 1568, dangling literals skipped 4)
+mode: CHECK (cap 1024 px long edge)
+capped: 797
+alpha-critical (kept full-res): 1
+within cap: 770
+offenders: 0
+out-of-scope over-cap: 261 (ui 80, other 181)
+texture cap check: OK
+
+EXIT: 0
+FINISHED: 2026-11-26T14:14:25-05:00

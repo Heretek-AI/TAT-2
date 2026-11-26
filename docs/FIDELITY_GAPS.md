@@ -6,7 +6,61 @@ extracted through `tools/tat-extract` (CUE4Parse, `EGame.GAME_UE5_5`).
 Generated from `extracted/filelist.txt` (22,005 entries) and the current `extracted/` tree.
 Re-run the census with the commands at the bottom.
 
-## W10-A status — 2026-11-25 (newest; supersedes the sections below where they differ)
+## P0a status — 2026-11-26 (newest; supersedes the sections below where they differ)
+
+Parity restorations plus the evidence repair, measured on `84912ee` in one serial
+run by `build/qa/run_p0a_gates.sh` (28 gates). Evidence:
+[`reports/p0a-20261126.md`](reports/p0a-20261126.md) and
+[`reports/logs/p0a/`](logs/p0a/).
+
+- **Guard selection — `PARITY_APPROX`.** `tools/parse_tables.py` now carries the
+  authored `VariationSpawner.SpawnBucket` and `Layers` into every generated guard
+  marker (`Guildhall_Gameplay`: 116 markers, 116 with bucket, 113 with layers, 0
+  unresolved). `guard_placement.gd` selects one guard per authored `spawn_layer`
+  first, then fills from the remaining eligible guard-bucket markers in authored
+  order (10–120 m from the anchor; `Hauntstable`, civilians and SmartObject posts
+  excluded). Guildhall Contract 2 `--order=2` selects `Guard_3` at the authored
+  Lounge marker `C_20` (`DA_SpawnBucket_StandardGuards_Bouncers`, four
+  `Security_GroundFloor_Lounge_*` layers); all `4/4` selected guards have a guard
+  bucket and none is Hauntstable. Old Manor `--order=3` (labelled Novice) also
+  selects `4/4` guard buckets (`PrivateSecurity*`). The 4/6/8 difficulty count
+  remains a labelled **`PORT_DECISION`**; a live Contract 02 capture is still
+  needed to confirm counts/positions. Gates: `probe_guard_positions` Guildhall +
+  Old Manor, `test_w10a2_guard_placement` (35 checks).
+- **Security beams — `PARITY_RESTORATION` (geometry).** `beam_card_transform()`
+  applies the merged record/device **column 2** as the authored beam axis (the
+  SM_LightBeam component's `RelativeRotation.Yaw=90` makes the 0.102 m mesh long
+  axis run along the actor's local +Z) and the authored `BeamLength`/scale there;
+  the old column-0 scaling made all 330 cards 90° cross-beam bars. All 330 cards
+  (134 Guildhall + 196 Old Manor) pair 1:1 with their detector record;
+  `max_axis_err_deg=0.000006`, `max_len_err=0.0406 %`, `clamped=0`; Old Manor's
+  authored maximum `236.9539` (24.169 m) is applied verbatim (the removed 200
+  ceiling would clip 5/196; the old 40 m clamp would clip 322/330). The beam
+  **material remains `PORT_APPROX`** (`tat_beam.gdshader`, P4).
+- **Destructibles / GC — `PORT_DECISION`.** The authored destruction payload is
+  336 hidden GeometryCollection components on 264 actors; a real `Guildhall_Loot`
+  load builds **95** hidden broken layers (48 chest + 31 display case + 16
+  bookcase) and 79 visible intact leaves, and a break swaps leaf → broken with
+  exactly two overlays visible (`visible_broken=2 of 95`, the rest still hidden).
+  The deliberate held-secondary smash (same stacked hold doors use) is the only
+  break path; ordinary tap keeps the lockpick path. That smash is a temporary
+  **`PORT_DECISION`** — the authored damage path is required before Parity
+  Complete. Gates: `probe_gc_destruction` (44 checks) + `test_gc_break_trigger`
+  (21 checks).
+- **Turrets and civilian (measured here; landed between W10-A and P0a).** 229
+  turret actors now emit **1,145 visible parts, 0 hidden** (`TURRET_PROBE PASS`);
+  the civilian body/head is dressed and sight casts from the head
+  (`W10A2_CIV_SUMMARY: fails=0 passed=22`). These replace the W10-A handoff's
+  "all 229 turrets invisible" / "untextured, blind civilian" entries.
+- **Landscape — no change, no new pixel claim.** The landscape docs remain
+  authoritative: 210/210 components across OldManor/Startscreen/Guildhall have
+  real heightmaps + weightmaps and the two-weightmap/five-slot blend
+  (`reports/landscape-weightmaps.md`, `reports/visual-polish.md`, A5 below), with
+  the `discard_holes=0` Guildhall rule. P0a is headless: landscape splines/grass
+  are still unparsed and the visibility-convention reference sample is still open
+  (`HANDOFF_NEXT_AGENT.md` §3.3); do not treat this wave as landscape verification.
+
+## W10-A status — 2026-11-25 (supersedes the sections below where they differ)
 
 Correctness-and-evidence wave: nine reported defects, each with a red proof and a green
 gate, plus the probe/ratchet hardening that keeps the claims re-derivable. Evidence:

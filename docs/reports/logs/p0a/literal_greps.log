@@ -1,0 +1,10 @@
+== P0A_GATE literal_greps
+COMMAND: make check-greps
+CWD: /home/john/.local/share/opencode/worktree/318f41/p0a-evidence
+STARTED: 2026-11-26T14:14:14-05:00
+
+python3 tools/check_literal_greps.py
+LITERAL_GREPS PASS code_hits=0 ui_rating_literals=0 files=97
+
+EXIT: 0
+FINISHED: 2026-11-26T14:14:14-05:00

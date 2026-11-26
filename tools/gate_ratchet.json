@@ -1,11 +1,11 @@
 {
   "schema": "tat2.gate_ratchet/1",
-  "measured_on": "e2d783a",
-  "source": "W10-A measurement on top of the W9 tip (29046c8), 2026-11-25/26: compile 189/0, run_tests 319/0 (suites to 116), M2 12/0, E2E 278/278, the five W9 probes, probe_leak clean, perf guard 78/78, audit 12,660/12,703, texture cap 797/1/0. New this wave: collision probe over Guildhall/OldManor/FTUE (0.989/0.993/0.976, dropped=0), lock inventory applied=154 (144+10), string audit 306/195/111, literal greps 0/0, runtime-smoke exit=124 errors=0. Logs in docs/reports/logs/w10/ are this wave's runs.",
+  "measured_on": "84912ee",
+  "source": "P0a measurement at 84912ee (merged guards + beam + audit re-stamp), 2026-11-26: compile 196/0, run_tests 319/0 (suites to 116), M2 12/0, E2E 278/278, guard selection Guildhall C_20 + Old Manor order 3 PASS (4/4 authored guard buckets, no Hauntstable), beam geometry 330 cards max_axis_err_deg=0.000006 clamped=0, GC 44+21 checks, turret 229/1,145 visible/0 hidden, collision 0.976321 dropped=0, lock inventory applied=154 (144+10), leak clean, runtime-smoke exit=124 errors=0, audit 12,660/12,703, texture cap 797/1/0, perf guard 78/78, string audit 307/196/111. Logs in docs/reports/logs/p0a/ are this wave's single serial run; docs/reports/logs/p0a/normalize.log is the integrator's post-merge regeneration.",
   "note": "Floors, not exact counts: a wave may add tests/files but must never lower a floor or introduce a failure. Counts are read from the committed log and compared with >=; failure counts are exact zeros and e2e.passed must equal e2e.total. Update only with a real gate log in docs/reports/logs/ (see tools/check_gate_ratchet.py for the evidence layout).",
-  "report": "docs/reports/w10-gate-ratchet.md",
+  "report": "docs/reports/p0a-20261126.md",
   "evidence": {
-    "dir": "docs/reports/logs/w10",
+    "dir": "docs/reports/logs/p0a",
     "compile": "compile.log",
     "run_tests": "run_tests.log",
     "m2": "m2.log",
@@ -24,11 +24,19 @@
     "lock_inventory": "probe_lock_inventory.log",
     "string_audit": "string_audit.log",
     "literal_greps": "literal_greps.log",
-    "runtime_smoke": "runtime_smoke.log"
+    "runtime_smoke": "runtime_smoke.log",
+    "probe_guard_positions_guildhall": "probe_guard_positions_guildhall.log",
+    "probe_guard_positions_old_manor": "probe_guard_positions_old_manor.log",
+    "beam_geometry": "test_beam_geometry.log",
+    "probe_device_meshes": "probe_device_meshes.log",
+    "probe_gc_destruction": "probe_gc_destruction.log",
+    "test_gc_break_trigger": "test_gc_break_trigger.log",
+    "test_w10a2_civilian": "test_w10a2_civilian.log",
+    "test_w10a2_guard_placement": "test_w10a2_guard_placement.log"
   },
   "gates": {
     "compile": {
-      "checked": 189,
+      "checked": 196,
       "broken": 0
     },
     "run_tests": {
@@ -60,9 +68,9 @@
     },
     "probe_collision": {
       "maps": 3,
-      "coverage_ppm": 950000,
+      "coverage_ppm": 976321,
       "dropped": 0,
-      "planar_skipped": 0
+      "planar_skipped": 2
     },
     "lock_inventory": {
       "applied": 154,
@@ -70,8 +78,8 @@
       "door_nodes": 10
     },
     "string_audit": {
-      "routed": 306,
-      "authored": 195,
+      "routed": 307,
+      "authored": 196,
       "invented": 111
     },
     "literal_greps": {

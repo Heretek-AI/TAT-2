@@ -182,6 +182,44 @@ PROBE_GATES = {
         "LITERAL_GREPS PASS",
         "make check-greps",
     ),
+    # P0a: guard bucket/layer selection, beam axis/length and the W10-A2/A3/B1
+    # standalone gates. The full PASS lines are the marker on purpose: they pin
+    # the authored Lounge C_20 / no-Hauntstable result and the Old Manor run,
+    # not just "some guard probe passed".
+    "probe_guard_positions_guildhall": (
+        "GUARD_CHECK PASS map=guildhall order=2 guards=4 buckets=4/4 lounge=1 "
+        "lounge_marker=C_20 selection=parity_approx_layer_bucket difficulty=1",
+        "tools/godot --headless --path game --script res://tests/probe_guard_positions.gd",
+    ),
+    "probe_guard_positions_old_manor": (
+        "GUARD_CHECK PASS map=old_manor order=3 guards=4 buckets=4/4 lounge=0 "
+        "lounge_marker=- selection=parity_approx_layer_bucket difficulty=1",
+        "tools/godot --headless --path game --script res://tests/probe_guard_positions.gd -- --map=old_manor --order=3",
+    ),
+    "beam_geometry": (
+        "BEAM_GEOMETRY_SUMMARY: fails=0",
+        "tools/godot --headless --path game --script res://tests/test_beam_geometry.gd",
+    ),
+    "probe_device_meshes": (
+        "TURRET_PROBE PASS",
+        "tools/godot --headless --path game --script res://tests/probe_device_meshes.gd",
+    ),
+    "probe_gc_destruction": (
+        "GC_PROBE PASS",
+        "tools/godot --headless --path game --script res://tests/probe_gc_destruction.gd",
+    ),
+    "test_gc_break_trigger": (
+        "GC_TRIGGER PASS",
+        "tools/godot --headless --path game --script res://tests/test_gc_break_trigger.gd",
+    ),
+    "test_w10a2_civilian": (
+        "W10A2_CIV_SUMMARY: fails=0",
+        "tools/godot --headless --path game --script res://tests/test_w10a2_civilian.gd",
+    ),
+    "test_w10a2_guard_placement": (
+        "GUARD_PLACEMENT_SUMMARY: fails=0",
+        "tools/godot --headless --path game --script res://tests/test_w10a2_guard_placement.gd",
+    ),
 }
 
 fails: list[str] = []

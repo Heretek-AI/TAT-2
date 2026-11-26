@@ -1,0 +1,88 @@
+== P0A_GATE probe_lock_inventory
+COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/probe_lock_inventory.gd
+CWD: /home/john/.local/share/opencode/worktree/318f41/p0a-evidence
+STARTED: 2026-11-26T14:03:24-05:00
+
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:852)
+         [1] _mission_map_id (res://src/core/game_data.gd:952)
+         [2] _load_missions (res://src/core/game_data.gd:1009)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:852)
+         [1] _mission_map_id (res://src/core/game_data.gd:952)
+         [2] _load_missions (res://src/core/game_data.gd:1009)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:852)
+         [1] _mission_map_id (res://src/core/game_data.gd:952)
+         [2] _load_missions (res://src/core/game_data.gd:1009)
+         [3] _ready (res://src/core/game_data.gd:100)
+TAT-2 Loc: reverse map built from sources.json (3404 keys)
+TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
+INPUT_TABLE source=generated rows=91 shipping=91 actions=52
+INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
+LOCK_INVENTORY source=/home/john/.local/share/opencode/worktree/318f41/p0a-evidence/extracted/json
+  ok: LOOT_CONTAINER_CLASSES read from level_loader.gd (5 classes)
+  dump json files scanned: 12541
+  per-map placed `_locked: true` counts:
+    Maps/Buildings/Guildhall/Building_Guildhall_POI.json: 1
+    Maps/FTUE/FTUE_Building_JewelryStore.json: 1
+    Maps/FTUE/FTUE_Building_SpawnArea.json: 1
+    Maps/FTUE/FTUE_Gameplay.json: 3
+    Maps/Guildhall/Guildhall_Loot.json: 87
+    Maps/Menus/MainMenu/BeautifulCorner_Startscreen_P.json: 2
+    Maps/OldManor/OldManor_Gameplay.json: 3
+    Maps/OldManor/OldManor_Geo.json: 10
+    Maps/OldManor/OldManor_Loot.json: 65
+  per class:
+    BP_BookcaseB_C: 2
+    BP_ChestTrunk_C: 3
+    BP_ChestTrunk_MajorLoot_C: 89
+    BP_DisplayCaseA_MajorLoot_C: 55
+    BP_GB_DoorSolo_C: 1
+    BP_Manor_WindowB_4x650_C: 2
+    BP_OldManor_Doorway_4x650_C: 2
+    BP_Prison_WallA_DoorwayB2_6x6_C: 1
+    BP_Res_Int_Doorway_C: 1
+    BP_SM_OldManor_WindowB_4x850_C: 6
+    BP_SmallSafe_MajorLoot_C: 8
+    BP_VaultDoor_Sliding_C: 3
+  family totals: containers=157 doors=8 windows=8 total=173
+  authored MaxLockLevel over the locked actors: nonex15, 1x3, 2x155
+  ok: placed `_locked: true` total = 173 (got 173)
+  ok: authored containers = 157 (got 157)
+  ok: authored doors = 8 (got 8)
+  ok: authored windows = 8 (got 8)
+  ok: authored cap 2 count = 155 (got 155)
+  ok: authored cap 1 count = 3 (got 3)
+  ok: locked actors with no MaxLockLevel = 15 (got 15)
+  dump records scanned for keys: 12541
+  authored-locked containers inside LOOT_CONTAINER_CLASSES: 144
+  authored-locked containers outside the allowlist (never spawned): BP_BookcaseB_C(2), BP_ChestTrunk_C(3), BP_SmallSafe_MajorLoot_C(8)
+  authored-locked windows: 8 (no window interaction in the port; not locked)
+  authored-locked key-only doors excluded (no key inventory): 4 (3 BP_VaultDoor_Sliding_C + 1 BP_Res_Int_Doorway_C)
+  runtime generated levels scanned: 108
+  runtime level records (markers+actors+swinging_doors): 17744
+  runtime loot-container-class markers: 254
+  runtime swinging-door records: 287
+  runtime records carrying an authored lock: 363 (raw: markers=161 actors=174 doors=28)
+  runtime applied containers: 144 de-duplicated by (class,pos) from 144 locked container markers
+  runtime applied door nodes: 10 (windows and explicit can_lockpick=false excluded)
+LOCK_INVENTORY runtime: authored=173 raw=363 applied=154 containers=144 door_nodes=10 discarded=209 state=APPLIED
+  ok: runtime applies at least one authored lock (applied=154)
+  ok: runtime applies container locks (containers=144)
+  ok: runtime applies door-node locks (door_nodes=10)
+  ok: applied = containers + door_nodes (154 = 144 + 10)
+LOCK_INVENTORY PASS authored_containers=157 authored_doors=8 authored_windows=8 locked_now=363 applied=154 containers=144 door_nodes=10
+
+EXIT: 0
+FINISHED: 2026-11-26T14:03:31-05:00

@@ -66,6 +66,7 @@ make runtime-smoke # real free-play boot: exit 124 only, ERROR:/push_error scan,
 make audit       # fail-closed content + producer/output baseline gate
 make gate-ratchet # floors + committed docs/reports/logs evidence agree
 build/qa/test_perf_guard.sh  # perf-wrapper contract, no GPU, no launch
+build/qa/run_p0a_gates.sh   # full P0a set (28 gates) -> docs/reports/logs/p0a/; no outer flock
 
 tools/godot --headless --path game --script "$PWD/tools/check_scripts_compile.gd"
 tools/godot --headless --path game --script res://tests/test_m2_player.gd
@@ -79,12 +80,15 @@ If a headless run reports missing textures (`T1-01-C`, `moon_visible=0.0`), the
 import cache is incomplete — run `tools/godot --headless --path game --import`
 first.
 
-| Gate | Passing value (W10-A tip, logs in `docs/reports/logs/w10/` — raise, never lower) |
+| Gate | Passing value (P0a tip, logs in `docs/reports/logs/p0a/` — raise, never lower) |
 |---|---|
-| compile | 189 checked, 0 broken |
+| compile | 196 checked, 0 broken |
 | `run_tests.gd` | `SUMMARY: fails=0` (319 PASS; suites numbered to 116) |
 | `test_m2_player.gd` | `M2_SUMMARY: fails=0` (12 PASS) |
 | door walk / viewmodel / Niagara probes | `DOORWALK PASS` / `VIEWMODEL_TRUTH PASS` / `NIAGARA_PROBE PASS` (3695 authored / 3308 active / 36 systems) |
+| guard selection (P0a) | `GUARD_CHECK PASS` Guildhall `lounge_marker=C_20` `buckets=4/4` and Old Manor `--order=3` (no Hauntstable) |
+| beam geometry (P0a) | `BEAM_GEOMETRY_SUMMARY: fails=0` — 330 cards, `max_axis_err_deg=0.000006`, `clamped=0` |
+| GC / turret / civilian (P0a) | `GC_PROBE PASS` (44) / `GC_TRIGGER PASS` (21) / `TURRET_PROBE PASS` (229 actors, 0 hidden) / `W10A2_CIV_SUMMARY: fails=0 passed=22` |
 | E2E | `fails=0 passed=278 total=278` (tier 1: 117; includes `--tier=s2`) |
 | `make texture-cap-check` | OK — 797 capped, 1 alpha-critical kept, 0 offenders |
 | `make audit` | exit 0, tracked baseline matches, disk-backed coverage (12660/12703), 0 unexpected, exact-case 0 unexpected, 13/13 content groups |
@@ -113,6 +117,21 @@ producer/output gate re-stamped. The upstream audit that motivated it is in
 [`docs/reports/re-audit-20261124.md`](docs/reports/re-audit-20261124.md) and the
 recorded-run scorecard in
 [`docs/reference/clip_1795033698901/COMPARISON_PORT_20261124.md`](docs/reference/clip_1795033698901/COMPARISON_PORT_20261124.md).
+
+The 2026-11-26 **P0a wave** restored two proven parity defects and repaired the
+gate evidence. Guard selection now uses the authored `spawn_bucket` /
+`spawn_layers` metadata (`PARITY_APPROX`; Guildhall Contract 2 selects the Lounge
+`C_20` `StandardGuards_Bouncers` marker, never Hauntstable; the 4/6/8 count stays
+a labelled `PORT_DECISION`). Beams apply the authored device column-2 axis and
+length instead of column 0: 330/330 cards, `max_axis_err_deg=0.000006`,
+`clamped=0` (134 Guildhall + 196 Old Manor; the removed 200 ceiling would clip
+5/196 and the old 40 m clamp 322/330). The complete set — 28 gates including the
+guard Guildhall/Old Manor probes, beam geometry, GC/turret/civilian, leak, full
+E2E, runtime smoke with **no outer flock**, audit, texture cap, perf guard and
+ratchet — now runs from the tracked `build/qa/run_p0a_gates.sh`, which stops on
+the first unexpected non-zero exit. Evidence:
+[`docs/reports/p0a-20261126.md`](docs/reports/p0a-20261126.md) and
+[`docs/reports/logs/p0a/`](docs/reports/logs/p0a/) (measured on `84912ee`).
 
 If `.godot/imported` lacks the `.s3tc.ctex` variants, `T1-01-C` fails with
 `moon_visible=0.0`. Run `tools/godot --headless --path game --import` first; it

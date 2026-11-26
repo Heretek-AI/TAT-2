@@ -1,0 +1,114 @@
+== P0A_GATE gate_ratchet (post-ratchet-update rerun)
+COMMAND: make gate-ratchet
+CWD: /home/john/.local/share/opencode/worktree/318f41/p0a-evidence
+STARTED: 2026-11-26T14:28:33-05:00
+
+python3 -m py_compile tools/*.py
+python3 tools/check_content_overrides.py --table-only
+Override rule table:
+  missionlobby-roof-decks-slate-geo3             3 /     3  MI_RoofSlateA
+  missionlobby-roof-decks-slate-periph           8 /     8  MI_RoofSlateA
+  missionlobby-structure-decks-concrete-geo3    11 /    10  MI_ConcreteB
+  missionlobby-structure-decks-concrete-periph    44 /    32  MI_ConcreteB
+  poi-lounge-floor-tile                        130 /     5  MI_FloorTileA_AlignXYZ
+  poi-lounge-floorstone                          4 /     4  MI_ConcreteB
+  poi-entrance-hall-floor-tile                  26 /     1  MI_FloorTileA_AlignXYZ
+  vault-chambers-floorstone                     36 /    33  MI_ConcreteB
+  poi-3rd-floor-tile                           229 /    20  MI_FloorTileA_AlignXYZ
+  poi-3rd-floorstone                            16 /    16  MI_ConcreteB
+  poi-3rd-roof-deck-slate                        1 /     1  MI_RoofSlateA
+Table-only mode: generated-data checks skipped.
+
+CONTENT_OVERRIDES: PASS
+python3 tools/check_gate_ratchet.py
+PASS: measured_on=84912ee
+PASS: audit.coverage_den=12703
+PASS: audit.coverage_num=12660
+PASS: audit.unexpected=0
+PASS: compile.broken=0
+PASS: compile.checked=196
+PASS: e2e.fails=0
+PASS: e2e.passed=278
+PASS: e2e.total=278
+PASS: literal_greps.code_hits=0
+PASS: literal_greps.ui_rating_literals=0
+PASS: lock_inventory.applied=154
+PASS: lock_inventory.containers=144
+PASS: lock_inventory.door_nodes=10
+PASS: m2.fails=0
+PASS: m2.passes=12
+PASS: perf_guard.checks=78
+PASS: perf_guard.fails=0
+PASS: probe_collision.coverage_ppm=976321
+PASS: probe_collision.dropped=0
+PASS: probe_collision.maps=3
+PASS: probe_collision.planar_skipped=2
+PASS: run_tests.fails=0
+PASS: run_tests.passes=319
+PASS: runtime_smoke.errors=0
+PASS: runtime_smoke.mission_ready=1
+PASS: string_audit.authored=196
+PASS: string_audit.invented=111
+PASS: string_audit.routed=307
+PASS: texture_cap.alpha_kept=1
+PASS: texture_cap.capped=797
+PASS: texture_cap.offenders=0
+PASS: audit coverage 12660/12703 (99.7 %)
+PASS: compile.log proves compile ('scripts checked: (\\d+), broken: 0')
+PASS: compile.log records compile.checked=196 >= 196
+PASS: run_tests.log proves run_tests ('SUMMARY: fails=0')
+PASS: run_tests.log records 319 PASS >= 319
+PASS: m2.log proves m2 ('M2_SUMMARY: fails=0')
+PASS: m2.log records 12 PASS >= 12
+PASS: e2e.log proves e2e ('SUMMARY: fails=0 passed=(\\d+) total=(\\d+)')
+PASS: e2e.log records e2e.passed=278 >= 278
+PASS: e2e.log records e2e.total=278 >= 278
+PASS: audit.log proves audit ('Disk-backed content coverage: (\\d+)/(\\d+)[^\\n]*unexpected 0')
+PASS: audit.log records audit.coverage_num=12660 >= 12660
+PASS: audit.log records audit.coverage_den=12703 >= 12703
+PASS: texture_cap.log proves texture_cap ('capped: (\\d+)[\\s\\S]*alpha-critical \\(kept full-res\\): (\\d+)[\\s\\S]*offenders: 0')
+PASS: texture_cap.log records texture_cap.capped=797 >= 797
+PASS: texture_cap.log records texture_cap.alpha_kept=1 >= 1
+PASS: perf_guard.log proves perf_guard ('PERF_GUARD_TEST PASS checks=(\\d+) fails=0')
+PASS: perf_guard.log records perf_guard.checks=78 >= 78
+PASS: probe_collision_authored.log proves probe_collision ('COL_MAPS PASS maps=(\\d+) min_coverage=([0-9.]+) dropped=(\\d+) planar_skipped=(\\d+) coverage_ppm=(\\d+)')
+PASS: probe_collision_authored.log records probe_collision.maps=3 >= 3
+PASS: probe_collision_authored.log records probe_collision.dropped=0 >= 0
+PASS: probe_collision_authored.log records probe_collision.coverage_ppm=976321 >= 976321
+PASS: probe_lock_inventory.log proves lock_inventory ('LOCK_INVENTORY runtime: .*applied=(\\d+) containers=(\\d+) door_nodes=(\\d+) .*state=APPLIED')
+PASS: probe_lock_inventory.log records lock_inventory.applied=154 >= 154
+PASS: probe_lock_inventory.log records lock_inventory.containers=144 >= 144
+PASS: probe_lock_inventory.log records lock_inventory.door_nodes=10 >= 10
+PASS: string_audit.log proves string_audit ('UI_STRINGS total=(\\d+) routed=(\\d+) authored=(\\d+) routed_authored=(\\d+) invented=(\\d+)')
+PASS: string_audit.log records string_audit.routed=307 >= 307
+PASS: string_audit.log records string_audit.authored=196 >= 196
+PASS: runtime_smoke.log proves runtime_smoke ('RUNTIME_SMOKE_SCAN PASS exit=124 errors=(\\d+) .*mission_ready=(\\d+) reason=ok')
+PASS: runtime_smoke.log records runtime_smoke.errors=0 >= 0
+PASS: runtime_smoke.log records runtime_smoke.mission_ready=1 >= 1
+PASS: probe_leak.log clean
+PASS: probe_door_walk.log records DOORWALK PASS
+PASS: probe_viewmodel_truth.log records VIEWMODEL_TRUTH PASS
+PASS: probe_niagara.log records NIAGARA_PROBE PASS
+PASS: probe_blackjack_race.log records BLACKJACK_PROBE PASS
+PASS: probe_geometry_placement.log records GEOM_PROBE PASS
+PASS: probe_collision_authored.log records COL_MAPS PASS
+PASS: literal_greps.log records LITERAL_GREPS PASS
+PASS: probe_guard_positions_guildhall.log records GUARD_CHECK PASS map=guildhall order=2 guards=4 buckets=4/4 lounge=1 lounge_marker=C_20 selection=parity_approx_layer_bucket difficulty=1
+PASS: probe_guard_positions_old_manor.log records GUARD_CHECK PASS map=old_manor order=3 guards=4 buckets=4/4 lounge=0 lounge_marker=- selection=parity_approx_layer_bucket difficulty=1
+PASS: test_beam_geometry.log records BEAM_GEOMETRY_SUMMARY: fails=0
+PASS: probe_device_meshes.log records TURRET_PROBE PASS
+PASS: probe_gc_destruction.log records GC_PROBE PASS
+PASS: test_gc_break_trigger.log records GC_TRIGGER PASS
+PASS: test_w10a2_civilian.log records W10A2_CIV_SUMMARY: fails=0
+PASS: test_w10a2_guard_placement.log records GUARD_PLACEMENT_SUMMARY: fails=0
+PASS: report records compile ('compile\\s*\\|\\s*196\\s*/\\s*0')
+PASS: report records run_tests ('run_tests\\s*\\|\\s*319')
+PASS: report records M2 ('M2\\s*\\|\\s*12')
+PASS: report records E2E ('E2E\\s*\\|\\s*278\\s*/\\s*278')
+PASS: report records coverage ('12660\\s*/\\s*12703')
+PASS: report names measured_on=84912ee
+
+GATE_RATCHET: PASS (baseline and committed evidence agree; Godot gates run locally)
+
+EXIT: 0
+FINISHED: 2026-11-26T14:28:34-05:00

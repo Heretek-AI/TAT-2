@@ -1,0 +1,46 @@
+P0A_GATE_RUN
+started: 2026-11-26T13:55:49-05:00
+root: /home/john/.local/share/opencode/worktree/318f41/p0a-evidence
+head: 84912eef76d4cbd0a65258aa6c715ed4e6a7a2c3
+branch: w10/p0a-evidence
+godot: 4.7.2.stable.official.ed1daf0bf
+godot_bin: /home/john/.local/share/opencode/worktree/318f41/p0a-evidence/tools/godot
+lock: /tmp/opencode/tat2-godot.lock
+uncommitted_entries_at_start: 2
+host: Linux 7.4.0-0.rc4.261125g4dce97c6c265.35.fc46.x86_64 x86_64
+nproc: 32
+runner: build/qa/run_p0a_gates.sh
+
+P0A_GATES start head=84912eef76d4cbd0a65258aa6c715ed4e6a7a2c3 branch=w10/p0a-evidence godot=4.7.2.stable.official.ed1daf0bf
+P0A_GATE name=compile exit=0 log=docs/reports/logs/p0a/compile.log
+P0A_GATE name=run_tests exit=0 log=docs/reports/logs/p0a/run_tests.log
+P0A_GATE name=m2 exit=0 log=docs/reports/logs/p0a/m2.log
+P0A_GATE name=probe_guard_positions_guildhall exit=0 log=docs/reports/logs/p0a/probe_guard_positions_guildhall.log
+P0A_GATE name=probe_guard_positions_old_manor exit=0 log=docs/reports/logs/p0a/probe_guard_positions_old_manor.log
+P0A_GATE name=probe_collision_authored exit=0 log=docs/reports/logs/p0a/probe_collision_authored.log
+P0A_GATE name=probe_lock_inventory exit=0 log=docs/reports/logs/p0a/probe_lock_inventory.log
+P0A_GATE name=probe_niagara exit=0 log=docs/reports/logs/p0a/probe_niagara.log
+P0A_GATE name=probe_door_walk exit=0 log=docs/reports/logs/p0a/probe_door_walk.log
+P0A_GATE name=probe_viewmodel_truth exit=0 log=docs/reports/logs/p0a/probe_viewmodel_truth.log
+P0A_GATE name=probe_geometry_placement exit=0 log=docs/reports/logs/p0a/probe_geometry_placement.log
+P0A_GATE name=probe_blackjack_race exit=0 log=docs/reports/logs/p0a/probe_blackjack_race.log
+P0A_GATE name=probe_device_meshes exit=0 log=docs/reports/logs/p0a/probe_device_meshes.log
+P0A_GATE name=probe_gc_destruction exit=0 log=docs/reports/logs/p0a/probe_gc_destruction.log
+P0A_GATE name=test_gc_break_trigger exit=0 log=docs/reports/logs/p0a/test_gc_break_trigger.log
+P0A_GATE name=test_w10a2_civilian exit=0 log=docs/reports/logs/p0a/test_w10a2_civilian.log
+P0A_GATE name=test_w10a2_guard_placement exit=0 log=docs/reports/logs/p0a/test_w10a2_guard_placement.log
+P0A_GATE name=test_beam_geometry exit=0 log=docs/reports/logs/p0a/test_beam_geometry.log
+P0A_GATE name=probe_leak exit=0 log=docs/reports/logs/p0a/probe_leak.log
+P0A_GATE name=e2e exit=0 log=docs/reports/logs/p0a/e2e.log
+P0A_GATE name=runtime_smoke exit=0 log=docs/reports/logs/p0a/runtime_smoke.log
+P0A_SMOKE_GODOT_LOG /home/john/.local/share/opencode/worktree/318f41/p0a-evidence/docs/reports/logs/p0a/runtime_smoke_godot.log (from /tmp/tat2-smoke-zg7D4Z.log)
+P0A_GATE name=runtime_smoke_scan exit=0 log=docs/reports/logs/p0a/runtime_smoke_scan.log
+P0A_GATE name=string_audit exit=0 log=docs/reports/logs/p0a/string_audit.log
+P0A_GATE name=literal_greps exit=0 log=docs/reports/logs/p0a/literal_greps.log
+P0A_GATE name=audit exit=0 log=docs/reports/logs/p0a/audit.log
+P0A_GATE name=texture_cap exit=0 log=docs/reports/logs/p0a/texture_cap.log
+P0A_GATE name=perf_guard exit=0 log=docs/reports/logs/p0a/perf_guard.log
+P0A_GATE name=gate_ratchet exit=0 log=docs/reports/logs/p0a/gate_ratchet.log
+P0A_GATES PASS head=84912eef76d4cbd0a65258aa6c715ed4e6a7a2c3 gates=28
+P0A_GATES evidence=/home/john/.local/share/opencode/worktree/318f41/p0a-evidence/docs/reports/logs/p0a summary=/home/john/.local/share/opencode/worktree/318f41/p0a-evidence/docs/reports/logs/p0a/p0a-summary.txt
+P0A_RATCHET_RERUN exit=0 at 2026-11-26T14:28:34-05:00 (after gate_ratchet.json + report update)

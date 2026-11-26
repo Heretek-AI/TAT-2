@@ -1,0 +1,90 @@
+== P0A_GATE test_w10a2_civilian
+COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/test_w10a2_civilian.gd
+CWD: /home/john/.local/share/opencode/worktree/318f41/p0a-evidence
+STARTED: 2026-11-26T14:04:28-05:00
+
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:852)
+         [1] _mission_map_id (res://src/core/game_data.gd:952)
+         [2] _load_missions (res://src/core/game_data.gd:1009)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:852)
+         [1] _mission_map_id (res://src/core/game_data.gd:952)
+         [2] _load_missions (res://src/core/game_data.gd:1009)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:852)
+         [1] _mission_map_id (res://src/core/game_data.gd:952)
+         [2] _load_missions (res://src/core/game_data.gd:1009)
+         [3] _ready (res://src/core/game_data.gd:100)
+TAT-2 Loc: reverse map built from sources.json (3404 keys)
+TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
+INPUT_TABLE source=generated rows=91 shipping=91 actions=52
+INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
+W10A2_CIV: civilian_meshes[0] body=res://assets/ue/Content/Art/Animation/CivFemale/Skin/Common/SK_CivFemale_Common_01C.glb head=res://assets/ue/Content/Art/Animation/CivFemale/Skin/Heads/SK_CivFemale_Head_Abby_Short01.glb
+PASS: LevelLoader live with mesh_materials DB (2065 meshes)
+WARNING: [civilian_npc] navmesh snap deferred: query landed before first map sync (deferred=1); target fails open until sync
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _is_target_valid (res://src/ai/civilian_npc.gd:653)
+         [1] _pick_new_target (res://src/ai/civilian_npc.gd:615)
+         [2] _ready (res://src/ai/civilian_npc.gd:155)
+         [3] _make_civilian (res://tests/test_w10a2_civilian.gd:340)
+         [4] _run (res://tests/test_w10a2_civilian.gd:133)
+WARNING: [hearing_data] 5 authored investigation-range anomalies clamped: AI.Stim.Hearing.LockPicking.Picked: outer 5.0 m > max 3.0 m (clamped); AI.Stim.Hearing.Alert.ShareKnowledge: outer 30.0 m > max 15.0 m (clamped); AI.Stim.Hearing.Tool.DartLaunch: inner 3.0 m > outer 2.0 m (clamped); AI.Stim.Hearing.EnterExitHedge: outer 8.0 m > max 7.5 m (clamped); AI.Stim.Hearing.Device.SecretSwitch: outer 8.0 m > max 7.5 m (clamped)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _log_anomalies_once (res://src/ai/hearing_data.gd:274)
+         [1] _build_stimuli (res://src/ai/hearing_data.gd:266)
+         [2] ensure_loaded (res://src/ai/hearing_data.gd:184)
+         [3] escalation_row (res://src/ai/hearing_data.gd:612)
+         [4] row (res://src/ai/sight_model.gd:120)
+         [5] sight_row (res://src/ai/civilian_npc.gd:165)
+         [6] _can_see (res://src/ai/civilian_npc.gd:522)
+         [7] _scan_for_thief (res://src/ai/civilian_npc.gd:507)
+         [8] _physics_process (res://src/ai/civilian_npc.gd:407)
+WARNING: [nav_steering] no synchronised navigation map (no NavigationRegion3D baked for this map); AI uses straight-line steering and will press into corners. Navmesh baking is T09's; this is the documented degradation (RE-I-10).
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_degraded (res://src/ai/nav_steering.gd:181)
+         [1] step_towards (res://src/ai/nav_steering.gd:141)
+         [2] _do_flee (res://src/ai/civilian_npc.gd:477)
+         [3] _physics_process (res://src/ai/civilian_npc.gd:417)
+PASS: A precondition: head->player ray is clear with the wall behind
+PASS: A wall 0.6 m behind does not blind the civilian (_can_see true)
+PASS: A civilian flees/yelps at a player 4 m in front (state=flee yelps=1)
+PASS: B precondition: the 2 m front wall occludes the head->player ray
+PASS: B a wall 2 m in front blocks sight (_can_see false)
+PASS: B occluded civilian does not flee (state=wander yelps=0)
+PASS: C body Skeleton3D present (bones=95)
+W10A2_CIV: facing skel_global_basis_z=(-0.0, 0.0, -1.0) actor_forward=(0.0, 0.0, -1.0) dot=1.0
+PASS: C skeleton basis.z follows actor forward (dot=1.0000 > 0.9)
+PASS: D MeshRoot present
+W10A2_CIV: bind surfaces body=3 head=6
+PASS: D body mesh has 3 surfaces
+PASS: D head mesh has 6 surfaces
+W10A2_CIV: surface overrides body=3 head=6
+PASS: D body 3/3 surfaces carry authored overrides
+PASS: D female head 6/6 surfaces carry authored overrides
+PASS: D every surface is a StandardMaterial3D that is textured or tinted
+PASS: D body slot 1 albedo is T_CivFemale_Common_01_Shirt_D.png
+PASS: D head slot 3 albedo is T_CivFemale_Base_Head_D.png
+PASS: D material_bind_stats() present
+W10A2_CIV: bind_stats total=9 bound=9 textured=8 default_white=0
+PASS: D bind_stats.total == 9
+PASS: D bind_stats.bound == 9
+PASS: D bind_stats.textured == 8 (+1 tinted MI_Default_Red)
+PASS: D bind_stats.default_white == 0
+W10A2_CIV_SUMMARY: fails=0 passed=22 total=22
+
+EXIT: 0
+FINISHED: 2026-11-26T14:04:30-05:00

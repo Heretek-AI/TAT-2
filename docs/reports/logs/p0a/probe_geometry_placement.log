@@ -1,0 +1,61 @@
+== P0A_GATE probe_geometry_placement
+COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/probe_geometry_placement.gd
+CWD: /home/john/.local/share/opencode/worktree/318f41/p0a-evidence
+STARTED: 2026-11-26T14:04:11-05:00
+
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:852)
+         [1] _mission_map_id (res://src/core/game_data.gd:952)
+         [2] _load_missions (res://src/core/game_data.gd:1009)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:852)
+         [1] _mission_map_id (res://src/core/game_data.gd:952)
+         [2] _load_missions (res://src/core/game_data.gd:1009)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:852)
+         [1] _mission_map_id (res://src/core/game_data.gd:952)
+         [2] _load_missions (res://src/core/game_data.gd:1009)
+         [3] _ready (res://src/core/game_data.gd:100)
+TAT-2 Loc: reverse map built from sources.json (3404 keys)
+TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
+INPUT_TABLE source=generated rows=91 shipping=91 actions=52
+INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
+GEOM_PROBE splines authored_records=432 files=8 rigid_dupes_of_spline_families=216
+  spline_family SM_OldManor_GardenWall_Fence_6x4 records=89 distinct=25 collapsed=64
+  spline_family SM_MonorailTrack records=54 distinct=1 collapsed=53
+  spline_family SM_OldManor_Railing_2 records=256 distinct=205 collapsed=51
+  spline_family SM_Chain_2m records=153 distinct=124 collapsed=29
+  spline_family SM_OldManor_DrivewayA_x6 records=91 distinct=72 collapsed=19
+PASS: RE-B-04 payload carries SplineParams records=432 (0 = pre-regeneration payload; every authored spline collapses to its parent transform)
+PASS: RE-B-04 spline loft endpoints p0=(-2.0, 0.0, 0.0) mid=(0.0, 0.5, 0.0) p1=(2.0, 1.0, 0.0)
+ROUGHNESS_BAKE_MODE on=1 resolution=full cache=process
+GEOM_PROBE real_spline mesh=SM_VentB_1m chord=0.99m loft_reaches_p0=true p1=true rigid_reaches_p1=false rigid_diag=2.37 loft_diag=2.32
+PASS: RE-B-04 real authored spline lofted loft reaches p0=true p1=true (chord 0.99 m)
+GEOM_PROBE streaming always_loaded total=42 { "Guildhall/Guildhall_P": 16, "OldManor/OldManor_P": 11, "FTUE/FTUE_P": 8, "ThievesDenTest/ThievesDenTest_P": 5, "MissionLobby/MissionLobby_P": 2 }
+PASS: RE-B-01 authored always-loaded graph consumed added=2 ["res://data/generated/levels/OldManor/OldManor_PathBlockers.tatlevel.json", "res://data/generated/levels/ThievesDenTest/ThievesDenTest_Contracts.tatlevel.json"]
+PASS: RE-B-01 graph counts always-loaded entries=42 (Guildhall 16 + OldManor 11 + FTUE 8 + Den 5 + Lobby 2)
+GEOM_PROBE ftue_jewelry_store merged=true standalone_listed=true standalone_meshes=1696
+PASS: RE-B-03 double-load detected and skippable merged=true standalone=true standalone_meshes=1696
+GEOM_PROBE placement records=50500 clamped=136 clamp_worst=500.00x mirrored=2645 duplicate=220
+GEOM_PROBE placement counters loader_clamp=136 loader_worst=500.00x loader_mirror=2645
+PASS: RE-P-10 scale clamp counted loader=136 payload=136
+PASS: RE-P-08 mirrored bases counted loader=2645 payload=2645
+PASS: RE-P-10 clamp worst ratio loader=500.00 payload=500.00
+GEOM_PROBE origin_markers door_markers=67 at_origin=0
+GEOM_PROBE SKIP real-map section: RE-P-05 origin guard behaviour and
+GEOM_PROBE SKIP the exported reconciliation counters need --load-map (571 GLBs)
+GEOM_PROBE checks=7 fails=0 pending_regeneration=0
+GEOM_PROBE PASS
+
+EXIT: 0
+FINISHED: 2026-11-26T14:04:16-05:00

@@ -3480,7 +3480,12 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 				"name": str(mk.get("name", "")),
 				"source_file": json_path,
 			})
-		elif "MissionSpawner_Character" in cls or "Guard" in cls:
+		elif ("MissionSpawner_Character" in cls or "Guard" in cls) and not cls.begins_with("BP_AirshipGuard_"):
+			# A2: the SkyboxGeo airship actors are set dressing, not mission
+			# guards: BP_AirshipGuard_Patrol/Swarm sit at x -1164..341,
+			# y 122..394, z -807..679 (≈1 km outside the play space). Catching
+			# them with the "Guard" substring made the Guildhall pool 119 when
+			# the authored mission pool is 116.
 			var gs: Array = result["guard_spawns"]
 			gs.append(p)
 			_note_scene_element(result, "guard", mk, p)

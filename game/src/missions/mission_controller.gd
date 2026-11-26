@@ -34,6 +34,7 @@ const ContractTableUIScript := preload("res://src/ui/contract_table_ui.gd")
 const ClueItemScript := preload("res://src/interact/clue_item.gd")
 const PersonalQuestScript := preload("res://src/quests/personal_quest.gd")
 const PersonalQuestSpawnerScript := preload("res://src/quests/personal_quest_spawner.gd")
+const GuardPlacementScript := preload("res://src/missions/guard_placement.gd")
 const LoadingScreenScript := preload("res://src/ui/loading_screen.gd")
 const LedgerUIScript := preload("res://src/ui/ledger_ui.gd")
 const MobileTouchUIScript := preload("res://src/ui/mobile_touch_ui.gd")
@@ -83,6 +84,16 @@ var patrol_fallback_count: int = 0
 var patrol_fallback_log: Array[String] = []
 var patrol_paths_assigned: int = 0
 const PATROL_MATCH_RADIUS_M: float = 30.0
+## A2 guard placement. A marker is usable only when its own downward cast lands
+## within GUARD_GROUND_SKIP_M of it (a ceiling one storey up is not a floor);
+## usable candidates are merged into storeys within GUARD_STOREY_MERGE_M and
+## picked storey-first. The cast itself is one ray from +0.05 m to -30 m: the
+## old +8 m origin took the FIRST hit, so 52 of 119 Guildhall markers spawned a
+## guard one storey above its authored room.
+const GUARD_GROUND_SKIP_M: float = 2.0
+const GUARD_STOREY_MERGE_M: float = 5.0
+const GUARD_GROUND_UP_M: float = 0.05
+const GUARD_GROUND_DOWN_M: float = 30.0
 
 var _is_thieves_den: bool = false
 var _letter_grace_sec: float = 0.0 # P1 timer-during-letter: run-clock hold after the start letter (see _process).
@@ -3659,23 +3670,30 @@ func _snap_player_to_ground() -> void:
 			player.position = hit_pos + Vector3(0, 0.15, 0)
 
 
-func _ground_position(pos: Vector3, up_m: float = 8.0, down_m: float = 30.0, offset_y: float = 0.15) -> Vector3:
-	# Off-tree callers (unit probes / spawn previews) have no world; the engine
-	# would log "!is_inside_world()" for get_world_3d(), so return the same
-	# clearance the no-hit path below uses.
+## Ground a marker with ONE downward cast from 0.05 m above it to 30 m below.
+## The old cast started 8 m up and returned the FIRST hit, so a ceiling or
+## upper slab grounded the guard one storey above its authored room (measured:
+## C_100/C_101 at +7.70/+7.55 m). Returns {ok, pos, hit_y}: `ok` is false only
+## when nothing is hit (the caller skips or back-fills); `pos` is the hit plus
+## `offset_y` (legacy +0.5 fail-soft when !ok) and `hit_y` the raw floor height.
+## Off-tree callers (unit probes / spawn previews) have no world, so they keep
+## ok=true and the +0.15 clearance: suite 55a's synthetic square relies on it.
+func _ground_position(pos: Vector3, offset_y: float = 0.15) -> Dictionary:
 	if not is_inside_tree():
-		return pos + Vector3(0.0, offset_y, 0.0)
+		return {"ok": true, "pos": pos + Vector3(0.0, offset_y, 0.0), "hit_y": pos.y}
 	var w3d: World3D = get_world_3d()
 	if w3d == null:
-		return pos + Vector3(0.0, offset_y, 0.0)
-	var phys: PhysicsDirectSpaceState3D = w3d.direct_space_state
-	var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(pos + Vector3(0.0, up_m, 0.0), pos + Vector3(0.0, -down_m, 0.0), 1)
-	var hit: Dictionary = phys.intersect_ray(q)
+		return {"ok": true, "pos": pos + Vector3(0.0, offset_y, 0.0), "hit_y": pos.y}
+	var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(
+		pos + Vector3(0.0, GUARD_GROUND_UP_M, 0.0),
+		pos - Vector3(0.0, GUARD_GROUND_DOWN_M, 0.0), 1)
+	var hit: Dictionary = w3d.direct_space_state.intersect_ray(q)
 	if not hit.is_empty():
 		var hp: Variant = hit.get("position", null)
 		if hp is Vector3:
-			return (hp as Vector3) + Vector3(0.0, offset_y, 0.0)
-	return pos + Vector3(0.0, 0.5, 0.0)
+			var floor_pos: Vector3 = hp as Vector3
+			return {"ok": true, "pos": floor_pos + Vector3(0.0, offset_y, 0.0), "hit_y": floor_pos.y}
+	return {"ok": false, "pos": pos + Vector3(0.0, 0.5, 0.0), "hit_y": NAN}
 
 
 ## P2 ground loot/civilians: marker positions are authored points on the floor
@@ -3746,14 +3764,62 @@ func _spawn_guards(ue_spawns: Array, anchor: Vector3, patrol_paths: Array = []) 
 			limit = 4
 		GameState.Difficulty.MASTER_THIEF:
 			limit = 8
-	var chosen: Array[Vector3] = []
+	# A2 prepared list. Ground every eligible marker with the single downward
+	# cast and keep only markers whose own floor is within GUARD_GROUND_SKIP_M;
+	# a skipped marker never consumes a storey slot. The skipped rows are kept
+	# for back-fill: a map whose authored floors are mostly missing (Old Manor)
+	# must not silently lose its difficulty count.
+	var eligible: Array[Vector3] = []
 	for p in ue_spawns:
 		if p is Vector3 and p.distance_to(anchor) > 10.0 and p.distance_to(anchor) < 120.0:
-			chosen.append(p)
-			if chosen.size() >= limit:
-				break
-	if chosen.is_empty():
-		chosen = [anchor + Vector3(12, 0, 0), anchor + Vector3(-12, 0, -10), anchor + Vector3(0, 0, -18), anchor + Vector3(16, 0, -16)]
+			eligible.append(p)
+	var prepared: Array[Dictionary] = []
+	var skipped: Array[Dictionary] = []
+	for i: int in range(eligible.size()):
+		var marker: Vector3 = eligible[i]
+		var ground: Dictionary = _ground_position(marker)
+		var grounded: Vector3 = ground["pos"] as Vector3
+		var ok: bool = bool(ground.get("ok", false))
+		var delta_y: float = absf(grounded.y - marker.y)
+		var rec: Dictionary = {
+			"marker": marker,
+			"grounded": grounded,
+			"hit_y": float(ground.get("hit_y", NAN)),
+			"order": i,
+		}
+		if not ok or not GuardPlacementScript.ground_delta_ok(marker.y, grounded.y, GUARD_GROUND_SKIP_M):
+			var reason: String = "no floor hit" if not ok else ("floor %.2f m from marker" % delta_y)
+			push_warning("[mission_controller] guard spawn skipped marker (%.2f, %.2f, %.2f): %s" % [
+				marker.x, marker.y, marker.z, reason,
+			])
+			skipped.append(rec)
+			continue
+		prepared.append(rec)
+
+	var plan: Array[Dictionary] = GuardPlacementScript.pick(
+		prepared, anchor.y, limit, GUARD_STOREY_MERGE_M)
+	var from_prepared: int = plan.size()
+	var backfilled: int = 0
+	if plan.size() < limit and not skipped.is_empty():
+		var fill: int = mini(limit - plan.size(), skipped.size())
+		if prepared.is_empty():
+			push_warning("[mission_controller] guard prepared pool empty (%d eligible marker(s), all skipped); restoring the previous marker list for %d guard(s)" % [skipped.size(), fill])
+		else:
+			push_warning("[mission_controller] guard back-fill: %d prepared, %d skipped; %d slot(s) fall back to skipped markers" % [prepared.size(), skipped.size(), fill])
+		for k: int in range(fill):
+			plan.append(skipped[k])
+		backfilled = fill
+	if plan.is_empty():
+		plan = [
+			{"marker": anchor + Vector3(12, 0, 0), "grounded": null, "hit_y": NAN, "order": 0},
+			{"marker": anchor + Vector3(-12, 0, -10), "grounded": null, "hit_y": NAN, "order": 1},
+			{"marker": anchor + Vector3(0, 0, -18), "grounded": null, "hit_y": NAN, "order": 2},
+			{"marker": anchor + Vector3(16, 0, -16), "grounded": null, "hit_y": NAN, "order": 3},
+		]
+	print("TAT-2 guard spawn: eligible=%d prepared=%d skipped=%d selected=%d from_prepared=%d backfilled=%d" % [
+		eligible.size(), prepared.size(), skipped.size(), plan.size(),
+		from_prepared, backfilled,
+	])
 
 	var key_pool: Array[Dictionary] = _key_pool_for_map(str(GameState.active_map_id))
 
@@ -3776,8 +3842,9 @@ func _spawn_guards(ue_spawns: Array, anchor: Vector3, patrol_paths: Array = []) 
 
 	var used_paths: Dictionary = {}
 	var diag_guards: int = 0
-	for idx: int in range(chosen.size()):
-		var pos: Vector3 = chosen[idx]
+	for idx: int in range(plan.size()):
+		var entry: Dictionary = plan[idx]
+		var pos: Vector3 = entry["marker"] as Vector3
 		var g := GuardScript.new()
 		g.level_ctrl = self
 		if idx % 2 == 0:
@@ -3785,7 +3852,17 @@ func _spawn_guards(ue_spawns: Array, anchor: Vector3, patrol_paths: Array = []) 
 			g.carries_lantern = true
 		else:
 			g.name = "Guard_%d" % idx
-		var grounded_pos: Vector3 = _ground_position(pos, 8.0, 30.0, 0.15)
+		var grounded_pos: Vector3
+		var grounded_v: Variant = entry.get("grounded", null)
+		if grounded_v is Vector3:
+			grounded_pos = grounded_v as Vector3
+		else:
+			grounded_pos = _ground_position(pos)["pos"] as Vector3
+		# A2 probe contract: the authored marker this guard was selected for,
+		# and the grounded placement actually used. Never re-derive the marker
+		# from proximity: C_116 is 1.62 m from Guard_1 and masked the old bug.
+		g.set_meta(&"spawn_marker", pos)
+		g.set_meta(&"grounded_spawn", grounded_pos)
 		var path_index: int = _authored_patrol_index_for(pos, patrol_paths, used_paths)
 		if path_index >= 0:
 			used_paths[path_index] = true
@@ -3803,9 +3880,9 @@ func _spawn_guards(ue_spawns: Array, anchor: Vector3, patrol_paths: Array = []) 
 			print("[mission_controller] ", line)
 			g.patrol_points = [
 				grounded_pos,
-				_ground_position(pos + Vector3(6, 0, 0), 8.0, 30.0, 0.15),
-				_ground_position(pos + Vector3(6, 0, 6), 8.0, 30.0, 0.15),
-				_ground_position(pos + Vector3(0, 0, 6), 8.0, 30.0, 0.15),
+				_ground_position(pos + Vector3(6, 0, 0))["pos"] as Vector3,
+				_ground_position(pos + Vector3(6, 0, 6))["pos"] as Vector3,
+				_ground_position(pos + Vector3(0, 0, 6))["pos"] as Vector3,
 			] as Array[Vector3]
 		g.position = grounded_pos
 		if idx % 2 == 0 or idx == 1:

@@ -19,19 +19,23 @@ const HDR_EMISSIVE_SHADER: Shader = preload("res://src/core/tat_hdr_emissive.gds
 const STOREFRONT_DECAL_SHADER: Shader = preload("res://src/core/tat_storefront_decal.gdshader")
 const BEAM_SHADER: Shader = preload("res://src/core/tat_beam.gdshader")
 
-## Authored security beam cards (Guildhall: 134 in Guildhall_Gameplay). The UE
-## StaticMesh bounds are X -0.1..10.1 cm (a 10.2 cm long axis on the mesh's
-## local X) and Y/Z +-50.04 cm (the 1 m additive cross width). The blueprint
-## scales LightBeam_Root X by 24.5..195.53 to reach the authored span, and the
-## producer emits that scale in the record's third slot with a basis whose
-## col0 is the actor-local Z beam direction. Record path is exact so no other
-## mesh changes scale/clamp behaviour.
+## Authored security beam cards (Guildhall 134 + Old Manor 196 in the *_Gameplay
+## sublevels). The UE StaticMesh bounds are X -0.1..10.1 cm (a 10.2 cm long axis
+## on the mesh's local X) and Y/Z +-50.04 cm (the 1 m additive cross width).
+## The SM_LightBeam component is authored with RelativeRotation.Yaw = 90, so on
+## the detector the mesh's local X lies along the actor's local +Z, which is the
+## merged record/device basis **column 2**. The blueprint writes the authored
+## span as a length scale of 24.5..236.9539 in record scale slot 2.
+##
+## The old path scaled column 0 (the 1 m cross axis), so all 330 cards rendered
+## as a cross-beam bar 90 deg off the authored direction. This exact-path
+## transform rotates the card's local X onto col2 and applies slot 2 there.
+## There is deliberately no ceiling: the old 40 m clamp clipped 129/134
+## Guildhall cards and the later 200 ceiling clipped 5/196 Old Manor cards
+## (max authored 236.9539 = 24.169 m). Record path is exact so no other mesh
+## changes scale/clamp behaviour.
 const BEAM_CARD_MESH: String = "/Game/Art/Effects/LightBeam/SM_LightBeam"
 const BEAM_CARD_LEN_M: float = 0.102
-## The generic per-axis scale ceiling (40 m) clipped 129 of the 134 Guildhall
-## cards. The authored maximum is 195.5291 (19.55 m), so the card gets its own
-## ceiling without touching any other mesh.
-const BEAM_SCALE_CEIL: float = 200.0
 
 ## Landscape layer name -> extracted albedo texture. Missing layers are skipped
 ## (the shader normalizes the remaining weights) instead of binding a guessed
@@ -118,9 +122,16 @@ var _roughness_bake_px: int = 0
 var _roughness_bake_ms: int = 0
 var _roughness_bake_bytes: int = 0
 var _roughness_cache_hits: int = 0
-## SM_LightBeam transform accounting: one BEAM_FIX line at settle.
+## SM_LightBeam transform accounting: one BEAM_FIX + one BEAM_AXIS line at
+## settle. `_beam_fix_max_axis_err_deg` is the worst angle between the applied
+## card long axis and the authored record col2; `_beam_fix_max_len_err` is the
+## worst relative rewrite of the authored length scale; `_beam_fix_clamped`
+## counts any card whose authored scale was not applied verbatim (must be 0).
 var _beam_fix_count: int = 0
 var _beam_fix_max_scale: float = 0.0
+var _beam_fix_max_axis_err_deg: float = 0.0
+var _beam_fix_max_len_err: float = 0.0
+var _beam_fix_clamped: int = 0
 # RE-P-10/08 accounting: the [0.05, 40] scale clamp and the reflected
 # (det < 0) bases used to be silent. Counted, never silently rewritten.
 var _scale_clamp_count: int = 0
@@ -5867,13 +5878,22 @@ func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dict
 		])
 	result["beam_cards_fixed"] = _beam_fix_count
 	result["beam_scale_max"] = _beam_fix_max_scale
+	result["beam_axis_max_err_deg"] = _beam_fix_max_axis_err_deg
+	result["beam_len_max_err"] = _beam_fix_max_len_err
+	result["beam_clamped"] = _beam_fix_clamped
 	if _beam_fix_count > 0:
-		# One line per load: applied count, authored max scale and the true
-		# applied world span (0.102 m card axis * max scale).
+		# One line per load: applied count, authored axis/length slot and the
+		# true applied world span (0.102 m authored card axis * max scale).
+		# `clamp=none`: the authored Old Manor maximum is 236.9539 (24.169 m)
+		# and the old 200 ceiling clipped 5/196 cards.
 		print("BEAM_FIX SM_LightBeam cards=", _beam_fix_count,
-			" axis=col0 scale_slot=2 clamp=", BEAM_SCALE_CEIL,
+			" axis=col2 length_slot=2 clamp=none",
 			" max_scale=", snappedf(_beam_fix_max_scale, 0.0001),
 			" max_length_m=", snappedf(_beam_fix_max_scale * BEAM_CARD_LEN_M, 0.001))
+		print("BEAM_AXIS cards=", _beam_fix_count,
+			" max_axis_err_deg=", snappedf(_beam_fix_max_axis_err_deg, 0.0001),
+			" max_len_err=", snappedf(_beam_fix_max_len_err, 0.000001),
+			" clamped=", _beam_fix_clamped)
 	result["player_spawn_transform_count"] = (result.get("player_spawn_transforms", []) as Array).size()
 	result["minor_loot_spawn_count"] = (result.get("minor_loot_spawns", []) as Array).size()
 	result["major_loot_spawn_count"] = (result.get("major_loot_spawns", []) as Array).size()
@@ -6761,6 +6781,9 @@ func load_sublevels(json_paths: Array[String], parent: Node3D, light_probe: Node
 	_roughness_cache_hits = 0
 	_beam_fix_count = 0
 	_beam_fix_max_scale = 0.0
+	_beam_fix_max_axis_err_deg = 0.0
+	_beam_fix_max_len_err = 0.0
+	_beam_fix_clamped = 0
 	_scale_clamp_count = 0
 	_scale_clamp_worst = 1.0
 	_mirrored_basis_count = 0
@@ -6808,6 +6831,9 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 	var total_files: int = maxi(json_paths.size(), 1)
 	_beam_fix_count = 0
 	_beam_fix_max_scale = 0.0
+	_beam_fix_max_axis_err_deg = 0.0
+	_beam_fix_max_len_err = 0.0
+	_beam_fix_clamped = 0
 	_scale_clamp_count = 0
 	_scale_clamp_worst = 1.0
 	_mirrored_basis_count = 0
@@ -7052,14 +7078,41 @@ func _make_gc_mesh_node(rec: Dictionary, role: String, make_visible: bool) -> Me
 
 
 func _dict_to_transform(d: Dictionary) -> Transform3D:
-	# Exact SM_LightBeam path only: the authored length scale belongs on the
-	# card's local X (record col0), not on col2 (a 1 m width axis). Scaling
-	# col2 drew a 42.5 m ribbon 90 deg off the beam and the 40 m ceiling then
-	# clipped 129/134 cards. See beam_card_transform().
+	# Exact SM_LightBeam path only: the authored beam axis is record basis
+	# column 2 and the authored span is scale slot 2. The old path scaled
+	# column 0 (the 1 m cross axis), so every card was a cross-beam bar 90 deg
+	# off the beam. See beam_card_transform().
 	if str(d.get("mesh", "")) == BEAM_CARD_MESH:
 		var beam_tr: Transform3D = beam_card_transform(d)
 		_beam_fix_count += 1
-		_beam_fix_max_scale = maxf(_beam_fix_max_scale, beam_tr.basis.get_scale().x)
+		var s_arr: Array = d.get("scale", [1, 1, 1])
+		var s_auth: float = float(s_arr[2]) if s_arr.size() > 2 else 1.0
+		var auth_basis: Basis = _record_basis(
+			d.get("basis", [1, 0, 0, 0, 1, 0, 0, 0, 1]))
+		# The record basis is emitted with 5-decimal rounding, so col2 is only
+		# ~1e-5 off unit length. Compare the applied *scale factor*, not the
+		# raw column length, or the rounding looks like a clamp.
+		var axis_len: float = maxf(auth_basis.z.length(), 0.000001)
+		var applied_scale: float = beam_tr.basis.x.length() / axis_len
+		_beam_fix_max_scale = maxf(_beam_fix_max_scale, maxf(s_auth, 0.0))
+		if is_finite(s_auth) and s_auth > 0.0:
+			var len_err: float = absf(applied_scale - s_auth) / s_auth
+			_beam_fix_max_len_err = maxf(_beam_fix_max_len_err, len_err)
+			# 1e-5 absorbs float32 division noise (~2e-7); a real clamp is
+			# orders of magnitude larger (the 200 ceiling would rewrite 5/196
+			# Old Manor cards by 15%+).
+			if len_err > 0.00001:
+				_beam_fix_clamped += 1
+		else:
+			# Degenerate authored scale (not a real card): count it, never
+			# hide it. The transform falls back to 1.0.
+			_beam_fix_clamped += 1
+			_beam_fix_max_len_err = maxf(_beam_fix_max_len_err, 1.0)
+		var auth_axis: Vector3 = auth_basis.z / axis_len
+		var card_axis: Vector3 = beam_tr.basis.x.normalized()
+		var axis_err: float = rad_to_deg(atan2(
+			card_axis.cross(auth_axis).length(), card_axis.dot(auth_axis)))
+		_beam_fix_max_axis_err_deg = maxf(_beam_fix_max_axis_err_deg, axis_err)
 		return beam_tr
 	var p: Array = d.get("pos", [0, 0, 0])
 	var b: Array = d.get("basis", [1, 0, 0, 0, 1, 0, 0, 0, 1])
@@ -7098,26 +7151,37 @@ func _dict_to_transform(d: Dictionary) -> Transform3D:
 	return Transform3D(basis, Vector3(float(p[0]), float(p[1]), float(p[2])))
 
 
+## Row-major 9-float record basis -> Godot Basis (same convention as
+## _dict_to_transform). Kept static so the pure beam transform and its
+## diagnostics share one construction.
+static func _record_basis(b: Array) -> Basis:
+	return Basis(
+		Vector3(float(b[0]), float(b[3]), float(b[6])),
+		Vector3(float(b[1]), float(b[4]), float(b[7])),
+		Vector3(float(b[2]), float(b[5]), float(b[8]))
+	)
+
+
 ## Pure SM_LightBeam record -> world transform (also used by
-## tests/test_beam_geometry.gd). The record basis is authored and kept as-is;
-## its col0 is the actor-local Z beam direction and the mesh's 10.2 cm long
-## axis. The length scale (record scale slot 2, or slot 0 if a future producer
-## moves it back to the authored axis) is applied on X and clamped only by
-## BEAM_SCALE_CEIL. Y/Z stay 1 so the authored 1 m cross width is preserved.
+## tests/test_beam_geometry.gd). The authored record basis is kept as-is: its
+## col2 (Basis.z) is the beam direction — the SM_LightBeam component is
+## authored with RelativeRotation.Yaw = 90, so the mesh's 10.2 cm local X runs
+## along the actor's local +Z — and record scale slot 2 is the authored length
+## scale (`BeamLength` / 0.102 m). The card's local X is rotated onto col2 and
+## scaled there; local Y stays on col1, preserving the authored cross width and
+## side. There is no ceiling: the authored maximum is 236.9539 (Old Manor,
+## 24.169 m). Only non-finite/non-positive scales fall back to 1.0, and the
+## loader counts those as clamped.
 static func beam_card_transform(d: Dictionary) -> Transform3D:
 	var p: Array = d.get("pos", [0, 0, 0])
 	var b: Array = d.get("basis", [1, 0, 0, 0, 1, 0, 0, 0, 1])
 	var s: Array = d.get("scale", [1, 1, 1])
-	var s_authored: float = maxf(
-		float(s[0]) if s.size() > 0 else 1.0,
-		float(s[2]) if s.size() > 2 else 1.0
-	)
-	var s_len: float = clampf(s_authored, 0.05, BEAM_SCALE_CEIL)
-	var basis: Basis = Basis(
-		Vector3(float(b[0]), float(b[3]), float(b[6])),
-		Vector3(float(b[1]), float(b[4]), float(b[7])),
-		Vector3(float(b[2]), float(b[5]), float(b[8]))
-	).scaled_local(Vector3(s_len, 1.0, 1.0))
+	var s_authored: float = float(s[2]) if s.size() > 2 else 1.0
+	var s_len: float = s_authored if is_finite(s_authored) and s_authored > 0.0 else 1.0
+	# Mesh local X -> record col2, mesh local Y -> record col1: -90 deg about
+	# the record's local +Y. Pure rotation, so only the length axis changes.
+	var basis: Basis = _record_basis(b) * Basis(Vector3.UP, -PI * 0.5)
+	basis = basis.scaled_local(Vector3(s_len, 1.0, 1.0))
 	return Transform3D(basis, Vector3(float(p[0]), float(p[1]), float(p[2])))
 
 

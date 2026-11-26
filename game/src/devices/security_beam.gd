@@ -4,8 +4,11 @@ extends Area3D
 ## Geometry comes from devices_runtime.json: BeamLength is the authored cooked
 ## centimetre clear span, emitted as a capsule along the detector's authored
 ## actor-local +Z with the authored 0.10 m radius. (The static SM_LightBeam
-## card's record basis col0 is that same actor-local +Z direction, 90 deg from
-## the actor-local +X used by the old code, so both now point the same way.)
+## card is authored with a 90 deg component yaw; the merged level record's
+## basis **column 2** is that same actor-local +Z beam direction, and the
+## loader rotates the card's 0.10 m local X onto it, so card and capsule point
+## the same way. The pre-P0a code scaled column 0 instead and drew every card
+## 90 deg across the beam.)
 ## Trigger/reset timings and the radius come from
 ## family_defaults.light_beam.metric; per-instance BaseRotation is applied
 ## to the component pivot, never to the actor transform.

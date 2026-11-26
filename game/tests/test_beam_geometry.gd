@@ -1,47 +1,69 @@
 extends SceneTree
-## W0R standalone headless beam-geometry truth test.
+## P0a lane-B standalone headless beam-geometry truth test.
 ##
-## Guildhall_Gameplay has 134 authored SM_LightBeam cards, one per
-## BP_Detector_LightBeam_C. The UE StaticMesh is 10.2 cm long on its local X
-## (Bounds X -0.1..10.1 cm) and 1.0008 m wide on Y/Z; the blueprint reaches the
-## authored span with LightBeam_Root RelativeScale3D.X = 24.5..195.5291. The
-## .tatlevel record carries that length scale in scale[2] and a basis whose
-## col0 is the actor-local Z beam direction.
+## The shipped maps have 330 authored SM_LightBeam cards: 134 in
+## Guildhall_Gameplay and 196 in OldManor_Gameplay, one per
+## BP_Detector_LightBeam_C and paired 1:1 with devices_runtime.json by authored
+## position. The UE StaticMesh is 10.2 cm long on its local X (bounds
+## X -0.1..10.1 cm) and 1.0008 m wide on Y/Z. The SM_LightBeam component is
+## authored with RelativeRotation.Yaw = 90, so on the detector the mesh's local
+## X runs along the actor's local +Z: the merged record/device basis **column 2**
+## (Basis.z), which is also the runtime security_beam.gd axis. The authored span
+## is record scale slot 2 (`BeamLength` / 0.102 m; Old Manor max 236.9539 =
+## 24.169 m).
 ##
-## The generic loader path applied scale[2] to basis col2 (a 1 m width axis)
-## and clamped every axis at 40 m: 129/134 cards rendered as a 40 m ribbon
-## 90 deg off the beam. level_loader.beam_card_transform() moves the scale onto
-## col0 and lifts the ceiling to 200.
+## The pre-P0a code scaled column 0 (the 1 m cross axis), so all 330 cards were
+## 90 deg cross-beam bars; the even older generic path also clamped every axis
+## at 40 m (322/330 clipped) and a later 200 ceiling still clipped 5/196 Old
+## Manor cards. level_loader.beam_card_transform() now rotates the card's local
+## X onto column 2, applies slot 2 there and never clips the authored scale.
 ##
-## This test asserts, for all 134 records:
-##   * world length == BeamLength_m within 2 % (0.102 m authored card axis);
-##   * direction == the record's col0 (and the device record's actor-local Z)
-##     within 1 deg;
-##   * the applied scale is never clamped (max authored 195.5291 <= 200);
-##   * the runtime security_beam.gd capsule/visual use the same actor-local +Z;
-##   * exactly one visual per detector once an authored card is adopted.
-## A negative control rebuilds the old col2 + 40 m clamp transform and proves
-## it fails the same length/direction assertions for every card.
+## Asserts, for all 330 cards against the real generated data:
+##   * card_axis == device basis column 2 within 2 deg;
+##   * card_len (0.102 m authored axis * applied scale) within 2 % of
+##     BeamLength (10 m family default for the one record per map without it);
+##   * the applied scale equals the authored scale (clamped == 0);
+##   * the 1 m cross width (Y/Z) is unchanged.
+## Negative controls prove the assertions are not vacuous: the pre-P0a col0
+## transform fails direction 330/330 (its lengths pass 326/330 — the stale test
+## hid the axis, and the other 4 are its own 200-ceiling clips), and the pre-W0R
+## col2+40 m path fails length 330/330 and clips 129 Guildhall / 193 Old Manor.
 ##
 ## Run:
-##   XDG_DATA_HOME=... tools/godot --headless --path game \
-##     --script res://tests/test_beam_geometry.gd
+##   tools/godot --headless --path game --script res://tests/test_beam_geometry.gd
 
-const LEVEL_PATH := "res://data/generated/levels/Guildhall/Guildhall_Gameplay.tatlevel.json"
 const DEVICES_PATH := "res://data/generated/gameplay/devices_runtime.json"
 const BEAM_MESH := "/Game/Art/Effects/LightBeam/SM_LightBeam"
-## Authored UE StaticMesh bounds (X -0.1..10.1 cm). The imported GLB is 0.1 m
-## long (2 % short), so the authored axis is used for the authoring check and
-## the GLB shortfall is reported, not silently folded into the tolerance.
+## Authored UE StaticMesh long axis (X -0.1..10.1 cm). The imported GLB AABB is
+## 0.100 m (2 % short); the transform is authored-exact against 0.102 m and the
+## GLB shortfall is reported, not folded into the tolerance.
 const BEAM_CARD_AXIS_M: float = 0.102
+const BEAM_CARD_GLB_AXIS_M: float = 0.100
+const BEAM_LEN_DEFAULT_M: float = 10.0
 const LEN_TOL: float = 0.02
-const ANG_TOL_DEG: float = 1.0
+const AXIS_TOL_DEG: float = 2.0
 const OLD_CLAMP_M: float = 40.0
-const BEAM_SCALE_CEIL: float = 200.0
-const SAMPLE_IDS: Array[String] = [
-	"guildhall/Guildhall_Gameplay:BP_Detector_LightBeam_C_0",
-	"guildhall/Guildhall_Gameplay:BP_Detector_LightBeam_C_1",
-	"guildhall/Guildhall_Gameplay:BP_Detector_LightBeam_C_134",
+const OLD_CEIL: float = 200.0
+const SAMPLE_ID := "guildhall/Guildhall_Gameplay:BP_Detector_LightBeam_C_0"
+const MAPS: Array = [
+	{
+		"key": "guildhall",
+		"level": "res://data/generated/levels/Guildhall/Guildhall_Gameplay.tatlevel.json",
+		"cards": 134,
+		"authored_max": 195.5291,
+		"old40_clipped": 129,
+		"old200_clipped": 0,
+		"old_col0_len_pass": 134,
+	},
+	{
+		"key": "old_manor",
+		"level": "res://data/generated/levels/OldManor/OldManor_Gameplay.tatlevel.json",
+		"cards": 196,
+		"authored_max": 236.9539,
+		"old40_clipped": 193,
+		"old200_clipped": 5,
+		"old_col0_len_pass": 192,
+	},
 ]
 
 var fails: int = 0
@@ -55,8 +77,8 @@ func _check(cond: bool, ok_msg: String, fail_msg: String) -> void:
 		fails += 1
 
 
-## .tatlevel stores the rotation row-major; the loader builds a Godot Basis
-## whose columns are those rows (Basis(col0, col1, col2)).
+## .tatlevel stores the basis row-major; the loader builds a Godot Basis whose
+## columns are the record's axis vectors.
 func _basis_from_record(b: Array) -> Basis:
 	return Basis(
 		Vector3(float(b[0]), float(b[3]), float(b[6])),
@@ -69,13 +91,26 @@ func _pos_key(p: Array) -> String:
 	return "%.3f,%.3f,%.3f" % [float(p[0]), float(p[1]), float(p[2])]
 
 
+## atan2 form: acos(dot) on float32 gives ~0.03 deg of noise near 1.
 func _angle_deg(a: Vector3, b: Vector3) -> float:
-	return rad_to_deg(acos(clampf(a.normalized().dot(b.normalized()), -1.0, 1.0)))
+	return rad_to_deg(atan2(a.normalized().cross(b.normalized()).length(),
+		a.normalized().dot(b.normalized())))
 
 
-## The exact pre-W0R behaviour: every axis clamped at 40 m, scale left on the
-## record's col2 (a 1 m width axis), card long axis never scaled.
-func _old_transform(rec: Dictionary) -> Transform3D:
+## The exact pre-P0a (W0R) transform: authored length scale on record col0.
+## This is the code this lane replaces; it is 90 deg off but its length passes.
+func _old_col0_transform(rec: Dictionary) -> Transform3D:
+	var b: Array = rec.get("basis", [1, 0, 0, 0, 1, 0, 0, 0, 1])
+	var s: Array = rec.get("scale", [1, 1, 1])
+	var p: Array = rec.get("pos", [0, 0, 0])
+	var s_len: float = clampf(float(s[2]), 0.05, OLD_CEIL)
+	var basis: Basis = _basis_from_record(b).scaled_local(Vector3(s_len, 1.0, 1.0))
+	return Transform3D(basis, Vector3(float(p[0]), float(p[1]), float(p[2])))
+
+
+## The exact pre-W0R generic path: every axis clamped at 40 m, length scale left
+## on record col2 (a 1 m width axis), card long axis never scaled.
+func _old_generic_transform(rec: Dictionary) -> Transform3D:
 	var b: Array = rec.get("basis", [1, 0, 0, 0, 1, 0, 0, 0, 1])
 	var s: Array = rec.get("scale", [1, 1, 1])
 	var p: Array = rec.get("pos", [0, 0, 0])
@@ -89,216 +124,357 @@ func _old_transform(rec: Dictionary) -> Transform3D:
 
 func _initialize() -> void:
 	await process_frame
-	var level_text: String = FileAccess.get_file_as_string(LEVEL_PATH)
-	var dev_text: String = FileAccess.get_file_as_string(DEVICES_PATH)
-	var level_doc: Variant = JSON.parse_string(level_text)
-	var dev_doc: Variant = JSON.parse_string(dev_text)
-	if not (level_doc is Dictionary) or not (dev_doc is Dictionary):
-		_check(false, "", "W0R.0 could not parse %s / %s" % [LEVEL_PATH, DEVICES_PATH])
+	var dev_doc: Variant = JSON.parse_string(FileAccess.get_file_as_string(DEVICES_PATH))
+	if not (dev_doc is Dictionary):
+		_check(false, "", "P0A-B.0 could not parse %s" % DEVICES_PATH)
 		_finish()
 		return
-
-	var cards: Array = []
-	for m_v: Variant in ((level_doc as Dictionary).get("meshes", []) as Array):
-		if m_v is Dictionary and str((m_v as Dictionary).get("mesh", "")) == BEAM_MESH:
-			cards.append(m_v)
-	var cards_by_pos: Dictionary = {}
-	for c_v: Variant in cards:
-		cards_by_pos[_pos_key((c_v as Dictionary).get("pos", [0, 0, 0]))] = c_v
-
 	var maps: Dictionary = (dev_doc as Dictionary).get("maps", {}) as Dictionary
-	var guildhall: Dictionary = maps.get("guildhall", {}) as Dictionary
-	var devices: Array = guildhall.get("devices", []) as Array
-	var dev_by_pos: Dictionary = {}
-	var beam_devices: int = 0
-	for d_v: Variant in devices:
-		if d_v is Dictionary and str((d_v as Dictionary).get("family", "")) == "light_beam":
-			beam_devices += 1
-			dev_by_pos[_pos_key((d_v as Dictionary).get("pos", [0, 0, 0]))] = d_v
-	var defaults: Dictionary = ((dev_doc as Dictionary).get("stats", {}) as Dictionary).get("family_defaults", {}) as Dictionary
-
-	_check(cards.size() == 134, "W0R.1 Guildhall_Gameplay has 134 %s cards" % BEAM_MESH,
-		"W0R.1 expected 134 cards, got %d" % cards.size())
-	_check(beam_devices == 134, "W0R.1b devices_runtime has 134 light_beam records",
-		"W0R.1b expected 134 light_beam devices, got %d" % beam_devices)
-
 	var ll_scr: GDScript = load("res://src/core/level_loader.gd") as GDScript
+	if ll_scr == null or not ll_scr.has_method("beam_card_transform"):
+		_check(false, "", "P0A-B.0 level_loader.beam_card_transform() missing")
+		_finish()
+		return
 	var ll: Node = ll_scr.new()
-	var helper_ok: bool = ll_scr.beam_card_transform(cards[0]) is Transform3D
-	_check(helper_ok, "W0R.2 level_loader.beam_card_transform() returns a Transform3D",
-		"W0R.2 beam_card_transform() helper missing/broken")
+	var all_cards: Array = []
+	var all_devs: Dictionary = {}
+	var total_axis_max: float = 0.0
+	var total_len_max: float = 0.0
+	var total_glb_max: float = 0.0
+	var total_axis_bad: int = 0
+	var total_len_bad: int = 0
+	var total_clamped: int = 0
+	var total_unmatched: int = 0
+	var total_old_col0_axis_bad: int = 0
+	var total_old_col0_len_pass: int = 0
+	var total_old40_len_pass: int = 0
+	var total_old40_clip: int = 0
+	var total_old200_clip: int = 0
+	var total_default_len: int = 0
 
-	var len_bad: int = 0
-	var ang_bad: int = 0
-	var clamp_bad: int = 0
-	var width_bad: int = 0
-	var unmatched: int = 0
-	var max_scale: float = 0.0
-	var max_len_err: float = 0.0
-	var max_ang: float = 0.0
-	var sample: Array[String] = []
-	# Negative control counters (the old axis + clamp must fail).
-	var old_len_pass: int = 0
-	var old_dir_pass: int = 0
-	var old_clamped: int = 0
-
-	for card_v: Variant in cards:
-		var rec: Dictionary = card_v as Dictionary
-		var dev: Dictionary = dev_by_pos.get(_pos_key(rec.get("pos", [0, 0, 0])), {}) as Dictionary
-		if dev.is_empty():
-			unmatched += 1
+	for m_v: Variant in MAPS:
+		var m: Dictionary = m_v as Dictionary
+		var map_key: String = str(m["key"])
+		var level_doc: Variant = JSON.parse_string(
+			FileAccess.get_file_as_string(str(m["level"])))
+		if not (level_doc is Dictionary):
+			_check(false, "", "P0A-B.1 could not parse %s" % str(m["level"]))
 			continue
-		var tr: Transform3D = ll_scr.beam_card_transform(rec)
-		var dir: Vector3 = tr.basis.x.normalized()
-		var rec_col0: Vector3 = _basis_from_record(rec.get("basis", [])).x.normalized()
-		var dev_col2: Vector3 = _basis_from_record(dev.get("basis", [])).z.normalized()
-		var s: Array = rec.get("scale", [1, 1, 1])
-		var s_auth: float = maxf(float(s[0]), float(s[2]))
-		max_scale = maxf(max_scale, s_auth)
+		var cards: Array = []
+		for mesh_v: Variant in ((level_doc as Dictionary).get("meshes", []) as Array):
+			if mesh_v is Dictionary and str((mesh_v as Dictionary).get("mesh", "")) == BEAM_MESH:
+				cards.append(mesh_v)
+		var devices: Array = ((maps.get(map_key, {}) as Dictionary).get("devices", []) as Array)
+		var by_pos: Dictionary = {}
+		var beam_devices: int = 0
+		for d_v: Variant in devices:
+			if not (d_v is Dictionary):
+				continue
+			var dev: Dictionary = d_v as Dictionary
+			if str(dev.get("family", "")) != "light_beam":
+				continue
+			beam_devices += 1
+			by_pos[_pos_key(dev.get("pos", [0, 0, 0]))] = dev
+		var expected: int = int(m["cards"])
+		_check(cards.size() == expected,
+			"P0A-B.1 %s has %d %s cards" % [map_key, expected, BEAM_MESH],
+			"P0A-B.1 %s expected %d cards, got %d" % [map_key, expected, cards.size()])
+		_check(beam_devices == expected,
+			"P0A-B.1b %s devices_runtime has %d light_beam records" % [map_key, expected],
+			"P0A-B.1b %s expected %d light_beam devices, got %d" % [map_key, expected, beam_devices])
 
-		var length_m: float = tr.basis.x.length() * BEAM_CARD_AXIS_M
-		var auth_v: Variant = (dev.get("params", {}) as Dictionary).get("BeamLength")
-		var auth_m: float = (float(auth_v) / 100.0) if auth_v != null else 10.0
-		var err: float = absf(length_m - auth_m) / auth_m
-		max_len_err = maxf(max_len_err, err)
-		if err > LEN_TOL:
-			len_bad += 1
+		var axis_max: float = 0.0
+		var len_max: float = 0.0
+		var glb_max: float = 0.0
+		var axis_bad: int = 0
+		var len_bad: int = 0
+		var clamped: int = 0
+		var width_bad: int = 0
+		var unmatched: int = 0
+		var authored_max: float = 0.0
+		var default_len: int = 0
+		var old_col0_axis_bad: int = 0
+		var old_col0_len_pass: int = 0
+		var old40_len_pass: int = 0
+		var old40_clip: int = 0
+		var old200_clip: int = 0
+		var samples: Array[String] = []
 
-		var ang: float = _angle_deg(dir, rec_col0)
-		max_ang = maxf(max_ang, ang)
-		if ang > ANG_TOL_DEG:
-			ang_bad += 1
-		# The record col0 is the device record's actor-local Z (the authored
-		# runtime axis): 90 deg away from the actor-local +X the old code used.
-		if _angle_deg(dir, dev_col2) > ANG_TOL_DEG:
-			ang_bad += 1
+		for card_v: Variant in cards:
+			var rec: Dictionary = card_v as Dictionary
+			var dev: Dictionary = by_pos.get(
+				_pos_key(rec.get("pos", [0, 0, 0])), {}) as Dictionary
+			if dev.is_empty():
+				unmatched += 1
+				continue
+			var rec_basis: Basis = _basis_from_record(
+				rec.get("basis", [1, 0, 0, 0, 1, 0, 0, 0, 1]))
+			var dev_basis: Basis = _basis_from_record(
+				dev.get("basis", [1, 0, 0, 0, 1, 0, 0, 0, 1]))
+			var dev_axis: Vector3 = dev_basis.z.normalized()
+			var s: Array = rec.get("scale", [1, 1, 1])
+			var s_auth: float = float(s[2])
+			authored_max = maxf(authored_max, s_auth)
 
-		# No clamp: applied length scale is the authored one, ceiling 200.
-		if not is_equal_approx(tr.basis.x.length(), s_auth) or s_auth > BEAM_SCALE_CEIL:
-			clamp_bad += 1
-		# Y/Z stay the authored 1 m cross width.
-		if absf(tr.basis.y.length() - 1.0) > 0.0001 or absf(tr.basis.z.length() - 1.0) > 0.0001:
-			width_bad += 1
+			# The new authored transform.
+			var tr: Transform3D = ll_scr.beam_card_transform(rec)
+			var card_axis: Vector3 = tr.basis.x.normalized()
+			var axis_err: float = _angle_deg(card_axis, dev_axis)
+			axis_max = maxf(axis_max, axis_err)
+			if axis_err > AXIS_TOL_DEG:
+				axis_bad += 1
+			var axis_len: float = maxf(rec_basis.z.length(), 0.000001)
+			var applied_scale: float = tr.basis.x.length() / axis_len
+			if absf(applied_scale - s_auth) / s_auth > 0.00001:
+				clamped += 1
+			var card_len: float = tr.basis.x.length() * BEAM_CARD_AXIS_M
+			var params: Dictionary = dev.get("params", {}) as Dictionary
+			var beam_v: Variant = params.get("BeamLength")
+			var auth_m: float = BEAM_LEN_DEFAULT_M
+			if beam_v != null:
+				auth_m = float(beam_v) / 100.0
+			else:
+				default_len += 1
+			var len_err: float = absf(card_len - auth_m) / auth_m
+			len_max = maxf(len_max, len_err)
+			if len_err > LEN_TOL:
+				len_bad += 1
+			# Imported GLB is 0.100 m long: report the real rendered shortfall.
+			var glb_len: float = tr.basis.x.length() * BEAM_CARD_GLB_AXIS_M
+			glb_max = maxf(glb_max, absf(glb_len - auth_m) / auth_m)
+			if absf(tr.basis.y.length() - 1.0) > 0.0001 \
+					or absf(tr.basis.z.length() - 1.0) > 0.0001:
+				width_bad += 1
 
-		# Negative control: the old transform must fail length and direction.
-		var old: Transform3D = _old_transform(rec)
-		var old_run: float = old.basis.z.length()          # scaled 1 m width axis
-		var old_err: float = absf(old_run - auth_m) / auth_m
-		if old_err <= LEN_TOL:
-			old_len_pass += 1
-		if _angle_deg(old.basis.z.normalized(), rec_col0) <= ANG_TOL_DEG:
-			old_dir_pass += 1
-		if float(s[2]) > OLD_CLAMP_M:
-			old_clamped += 1
-		if SAMPLE_IDS.has(str(dev.get("id", ""))):
-			sample.append("%s len=%.4f m (auth %.4f, err %.3f%%) dir=%s scale=%.4f old_ribbon=%.2f m" % [
-				str(dev.get("id", "")).get_file(), length_m, auth_m, err * 100.0,
-				str(dir), s_auth, old_run])
+			# Negative control A: the pre-P0a col0 transform (length passes,
+			# direction is 90 deg off).
+			var old_col0: Transform3D = _old_col0_transform(rec)
+			if _angle_deg(old_col0.basis.x, dev_axis) > AXIS_TOL_DEG:
+				old_col0_axis_bad += 1
+			if absf(old_col0.basis.x.length() * BEAM_CARD_AXIS_M - auth_m) / auth_m <= LEN_TOL:
+				old_col0_len_pass += 1
+			# Negative control B: the pre-W0R col2 + 40 m clamp path.
+			var old40: Transform3D = _old_generic_transform(rec)
+			if absf(old40.basis.z.length() - auth_m) / auth_m <= LEN_TOL:
+				old40_len_pass += 1
+			if s_auth > OLD_CLAMP_M:
+				old40_clip += 1
+			if s_auth > OLD_CEIL:
+				old200_clip += 1
 
-	_check(unmatched == 0, "W0R.3 134/134 cards pair with their detector record by authored position",
-		"W0R.3 %d cards have no matching light_beam device" % unmatched)
-	_check(len_bad == 0,
-		"W0R.4 134/134 world lengths match BeamLength_m within 2%% (max err %.3f%%)" % (max_len_err * 100.0),
-		"W0R.4 %d/134 lengths outside 2%% (max err %.3f%%)" % [len_bad, max_len_err * 100.0])
-	_check(ang_bad == 0,
-		"W0R.5 134/134 directions equal the record col0 / actor-local Z within 1 deg (max %.4f deg)" % max_ang,
-		"W0R.5 %d direction checks outside 1 deg (max %.4f deg)" % [ang_bad, max_ang])
-	_check(clamp_bad == 0,
-		"W0R.6 134/134 applied scales are unclamped; max authored scale %.4f (ceiling %.0f)" % [max_scale, BEAM_SCALE_CEIL],
-		"W0R.6 %d cards clamped or over the 200 ceiling (max authored %.4f)" % [clamp_bad, max_scale])
-	_check(width_bad == 0, "W0R.7 134/134 cards keep the authored 1 m cross width (Y/Z scale 1)",
-		"W0R.7 %d cards changed a width axis" % width_bad)
-	_check(is_equal_approx(max_scale, 195.5291) and max_scale > OLD_CLAMP_M,
-		"W0R.8 authored max scale is 195.5291 (19.55 m), above the old 40 m clamp",
-		"W0R.8 unexpected max scale %.4f" % max_scale)
-	for line: String in sample:
-		print("  sample: ", line)
+			if str(dev.get("id", "")) == SAMPLE_ID:
+				samples.append("%s len=%.4f m (auth %.4f, err %.3f%%) dir=%s scale=%.4f" % [
+					str(dev.get("id", "")).get_file(), card_len, auth_m, len_err * 100.0,
+					str(card_axis), applied_scale])
 
-	# The loader's own transform path (counters + BEAM_FIX evidence) delegates.
+		_check(unmatched == 0,
+			"P0A-B.2 %s: %d/%d cards pair with their detector record by authored position" % [
+				map_key, expected, expected],
+			"P0A-B.2 %s: %d cards have no matching light_beam device" % [map_key, unmatched])
+		_check(axis_bad == 0,
+			"P0A-B.3 %s: %d/%d card axes equal device column 2 within %.0f deg (max %.6f deg)" % [
+				map_key, expected, expected, AXIS_TOL_DEG, axis_max],
+			"P0A-B.3 %s: %d/%d axes outside %.0f deg (max %.6f deg)" % [
+				map_key, axis_bad, expected, AXIS_TOL_DEG, axis_max])
+		_check(len_bad == 0,
+			"P0A-B.4 %s: %d/%d card lengths match BeamLength within %.0f%% (max err %.4f%%)" % [
+				map_key, expected, expected, LEN_TOL * 100.0, len_max * 100.0],
+			"P0A-B.4 %s: %d/%d lengths outside %.0f%% (max err %.4f%%)" % [
+				map_key, len_bad, expected, LEN_TOL * 100.0, len_max * 100.0])
+		_check(clamped == 0,
+			"P0A-B.5 %s: %d/%d authored length scales applied verbatim (clamped=0, max %.4f)" % [
+				map_key, expected, expected, authored_max],
+			"P0A-B.5 %s: %d/%d cards had their authored scale rewritten (max %.4f)" % [
+				map_key, clamped, expected, authored_max])
+		_check(width_bad == 0,
+			"P0A-B.6 %s: %d/%d cards keep the authored 1 m cross width (Y/Z)" % [
+				map_key, expected, expected],
+			"P0A-B.6 %s: %d cards changed a width axis" % [map_key, width_bad])
+		_check(is_equal_approx(authored_max, float(m["authored_max"])),
+			"P0A-B.7 %s authored max scale is %.4f" % [map_key, authored_max],
+			"P0A-B.7 %s unexpected authored max scale %.4f (expected %.4f)" % [
+				map_key, authored_max, float(m["authored_max"])])
+		_check(old_col0_axis_bad == expected,
+			"P0A-B.8 negative control: pre-P0a col0 transform is 90 deg off %d/%d (the stale test hid this axis)" % [
+				expected, expected],
+			"P0A-B.8 negative control: pre-P0a col0 axis bad %d/%d (expected all)" % [
+				old_col0_axis_bad, expected])
+		_check(old_col0_len_pass == int(m["old_col0_len_pass"]),
+			"P0A-B.8b negative control: pre-P0a col0 lengths pass %d/%d (only its 200-ceiling clips fail)" % [
+				old_col0_len_pass, expected],
+			"P0A-B.8b %s expected %d pre-P0a col0 length passes, got %d" % [
+				map_key, int(m["old_col0_len_pass"]), old_col0_len_pass])
+		_check(old40_len_pass == 0,
+			"P0A-B.9 negative control: pre-W0R col2+40 m transform fails length %d/%d" % [
+				expected, expected],
+			"P0A-B.9 %d cards would still pass the old length check" % old40_len_pass)
+		_check(old40_clip == int(m["old40_clipped"]),
+			"P0A-B.10 negative control: the old 40 m clamp clipped %d/%d %s cards" % [
+				old40_clip, expected, map_key],
+			"P0A-B.10 %s expected %d clipped by the old 40 m clamp, got %d" % [
+				map_key, int(m["old40_clipped"]), old40_clip])
+		_check(old200_clip == int(m["old200_clipped"]),
+			"P0A-B.11 negative control: the 200 ceiling would clip %d/%d %s cards" % [
+				old200_clip, expected, map_key],
+			"P0A-B.11 %s expected %d clipped by the 200 ceiling, got %d" % [
+				map_key, int(m["old200_clipped"]), old200_clip])
+		_check(default_len == 1,
+			"P0A-B.12 %s: exactly 1 card has no BeamLength and uses the authored 10 m family default" % map_key,
+			"P0A-B.12 %s: %d cards without BeamLength (expected 1)" % [map_key, default_len])
+
+		for line: String in samples:
+			print("  sample: ", line)
+		print("BEAM_MAP %s cards=%d max_axis_err_deg=%.6f max_len_err=%.6f glb_len_err=%.6f clamped=%d authored_max=%.4f old40_clipped=%d old200_clipped=%d" % [
+			map_key, cards.size(), axis_max, len_max, glb_max, clamped, authored_max,
+			old40_clip, old200_clip])
+
+		all_cards.append_array(cards)
+		all_devs[map_key] = by_pos
+		total_axis_max = maxf(total_axis_max, axis_max)
+		total_len_max = maxf(total_len_max, len_max)
+		total_glb_max = maxf(total_glb_max, glb_max)
+		total_axis_bad += axis_bad
+		total_len_bad += len_bad
+		total_clamped += clamped
+		total_unmatched += unmatched
+		total_old_col0_axis_bad += old_col0_axis_bad
+		total_old_col0_len_pass += old_col0_len_pass
+		total_old40_len_pass += old40_len_pass
+		total_old40_clip += old40_clip
+		total_old200_clip += old200_clip
+		total_default_len += default_len
+
+	var total_expected: int = 134 + 196
+	_check(all_cards.size() == total_expected,
+		"P0A-B.13 total authored SM_LightBeam cards: %d (Guildhall 134 + Old Manor 196)" % all_cards.size(),
+		"P0A-B.13 total cards %d != 330" % all_cards.size())
+	_check(total_axis_bad == 0 and total_unmatched == 0,
+		"P0A-B.14 all %d cards: axis aligned to device column 2, 0 unmatched (max %.6f deg)" % [
+			total_expected, total_axis_max],
+		"P0A-B.14 totals: axis bad %d, unmatched %d (max %.6f deg)" % [
+			total_axis_bad, total_unmatched, total_axis_max])
+	_check(total_len_bad == 0 and total_clamped == 0,
+		"P0A-B.15 all %d cards: length within %.0f%% of BeamLength and clamped=0 (max err %.4f%%)" % [
+			total_expected, LEN_TOL * 100.0, total_len_max * 100.0],
+		"P0A-B.15 totals: length bad %d, clamped %d (max err %.4f%%)" % [
+			total_len_bad, total_clamped, total_len_max * 100.0])
+	_check(total_old_col0_axis_bad == total_expected and total_old_col0_len_pass == 326,
+		"P0A-B.16 negative control: pre-P0a col0 transform fails direction %d/%d while passing length %d/%d (4 over-200 cards also fail length)" % [
+			total_expected, total_expected, total_old_col0_len_pass, total_expected],
+		"P0A-B.16 negative control totals: axis bad %d, length pass %d (expected %d/326)" % [
+			total_old_col0_axis_bad, total_old_col0_len_pass, total_expected])
+	_check(total_old40_len_pass == 0 and total_old40_clip == 322 and total_old200_clip == 5,
+		"P0A-B.17 negative controls: pre-W0R 40 m clamp clips %d/%d; 200 ceiling clips %d/196 Old Manor" % [
+			total_old40_clip, total_expected, total_old200_clip],
+		"P0A-B.17 negative controls: old40 clip %d (expected 322), old200 clip %d (expected 5)" % [
+			total_old40_clip, total_old200_clip])
+	print("BEAM_AXIS_TOTAL cards=%d max_axis_err_deg=%.6f max_len_err=%.6f glb_len_err=%.6f clamped=%d old40_clipped=%d old200_clipped=%d" % [
+		total_expected, total_axis_max, total_len_max, total_glb_max, total_clamped,
+		total_old40_clip, total_old200_clip])
+	print("  note: GLB card axis is 0.100 m vs the authored 0.102 m (%.3f%% short in engine)" % [
+		total_glb_max * 100.0])
+
+	# The loader's own transform path (counters + BEAM_FIX/BEAM_AXIS evidence)
+	# delegates to the same pure transform.
 	var delegate_ok: bool = true
-	for card_v2: Variant in cards:
+	for card_v2: Variant in all_cards:
 		var rec2: Dictionary = card_v2 as Dictionary
 		var via_loader: Transform3D = ll.call("_dict_to_transform", rec2)
 		var pure: Transform3D = ll_scr.beam_card_transform(rec2)
 		if not via_loader.is_equal_approx(pure):
 			delegate_ok = false
 			break
-	_check(delegate_ok, "W0R.9 _dict_to_transform delegates the exact SM_LightBeam path to beam_card_transform()",
-		"W0R.9 _dict_to_transform disagrees with beam_card_transform() for a beam record")
-	_check(int(ll.get("_beam_fix_count")) == 134,
-		"W0R.10 loader applied the beam fix 134 times (BEAM_FIX count)",
-		"W0R.10 loader beam fix count %d != 134" % int(ll.get("_beam_fix_count")))
-	_check(absf(float(ll.get("_beam_fix_max_scale")) - 195.5291) < 0.0001,
-		"W0R.10b loader BEAM_FIX max scale 195.5291",
-		"W0R.10b loader max scale %.4f != 195.5291" % float(ll.get("_beam_fix_max_scale")))
+	_check(delegate_ok,
+		"P0A-B.18 _dict_to_transform delegates the exact SM_LightBeam path to beam_card_transform()",
+		"P0A-B.18 _dict_to_transform disagrees with beam_card_transform() for a beam record")
+	_check(int(ll.get("_beam_fix_count")) == total_expected,
+		"P0A-B.19 loader applied the beam fix %d times (BEAM_FIX count)" % total_expected,
+		"P0A-B.19 loader beam fix count %d != %d" % [
+			int(ll.get("_beam_fix_count")), total_expected])
+	_check(absf(float(ll.get("_beam_fix_max_scale")) - 236.9539) < 0.0001,
+		"P0A-B.19b loader BEAM_FIX max authored scale 236.9539",
+		"P0A-B.19b loader max scale %.4f != 236.9539" % float(ll.get("_beam_fix_max_scale")))
+	_check(float(ll.get("_beam_fix_max_axis_err_deg")) <= 0.01,
+		"P0A-B.19c loader BEAM_AXIS max axis error %.6f deg (<= 0.01)" % float(ll.get("_beam_fix_max_axis_err_deg")),
+		"P0A-B.19c loader max axis error %.6f deg > 0.01" % float(ll.get("_beam_fix_max_axis_err_deg")))
+	_check(float(ll.get("_beam_fix_max_len_err")) <= 0.00001,
+		"P0A-B.19d loader BEAM_AXIS max length error %.8f (<= 0.00001)" % float(ll.get("_beam_fix_max_len_err")),
+		"P0A-B.19d loader max length error %.8f > 0.00001" % float(ll.get("_beam_fix_max_len_err")))
+	_check(int(ll.get("_beam_fix_clamped")) == 0,
+		"P0A-B.19e loader BEAM_AXIS clamped=0",
+		"P0A-B.19e loader clamped %d != 0" % int(ll.get("_beam_fix_clamped")))
 
-	# Negative control (old scale-on-col2 + 40 m clamp): every card must fail.
-	_check(old_len_pass == 0,
-		"W0R.11 negative control: old col2+40 m transform fails length for 134/134 cards",
-		"W0R.11 %d cards would still pass the old length check" % old_len_pass)
-	_check(old_dir_pass == 0,
-		"W0R.12 negative control: old transform axis is 90 deg off col0 for 134/134 cards",
-		"W0R.12 %d cards would still pass the old direction check" % old_dir_pass)
-	_check(old_clamped == 129,
-		"W0R.13 negative control: the old 40 m clamp clipped exactly 129/134 cards",
-		"W0R.13 expected 129 clipped by the old clamp, got %d" % old_clamped)
-
-	# Runtime security_beam.gd: capsule/visual along actor-local +Z, one visual.
-	await _test_runtime_beam(dev_by_pos, cards_by_pos, defaults)
-
+	# Runtime security_beam.gd: capsule/visual along actor-local +Z, the same
+	# device column 2 as the card, and one visual after adoption.
+	await _test_runtime_beam(all_devs.get("guildhall", {}) as Dictionary)
 	ll.free()
 	_finish()
 
 
-func _test_runtime_beam(dev_by_pos: Dictionary, cards_by_pos: Dictionary, defaults: Dictionary) -> void:
-	var sample_id: String = SAMPLE_IDS[0]
+func _test_runtime_beam(dev_by_pos: Dictionary) -> void:
 	var dev: Dictionary = {}
-	var card_rec: Dictionary = {}
 	for d_v: Variant in dev_by_pos.values():
-		if str((d_v as Dictionary).get("id", "")) == sample_id:
+		if str((d_v as Dictionary).get("id", "")) == SAMPLE_ID:
 			dev = d_v as Dictionary
 			break
 	if dev.is_empty():
-		_check(false, "", "W0R.14 sample detector C_0 missing")
+		_check(false, "", "P0A-B.20 sample detector C_0 missing")
 		return
-	card_rec = cards_by_pos.get(_pos_key(dev.get("pos", [0, 0, 0])), {}) as Dictionary
-	if card_rec.is_empty():
-		_check(false, "", "W0R.14b sample card C_0 missing")
-		return
+	var dev_basis: Basis = _basis_from_record(dev.get("basis", []))
+	var dev_axis: Vector3 = dev_basis.z.normalized()
 
+	var defaults: Dictionary = {}
+	var dev_doc: Variant = JSON.parse_string(FileAccess.get_file_as_string(DEVICES_PATH))
+	if dev_doc is Dictionary:
+		defaults = ((dev_doc as Dictionary).get("stats", {}) as Dictionary).get(
+			"family_defaults", {}) as Dictionary
 	var beam_scr: GDScript = load("res://src/devices/security_beam.gd") as GDScript
 	var host := Node3D.new()
 	root.add_child(host)
 	var beam: Area3D = beam_scr.new() as Area3D
 	host.add_child(beam)
 	beam.call("configure", dev, defaults, 2)
-	var device_basis: Basis = _basis_from_record(dev.get("basis", []))
-	beam.global_transform = Transform3D(device_basis, Vector3.ZERO)
+	beam.global_transform = Transform3D(dev_basis, Vector3.ZERO)
 	var pivot: Node3D = beam.get_node_or_null("BeamPivot") as Node3D
 	var shape: CollisionShape3D = beam.get_node_or_null("BeamPivot/BeamShape") as CollisionShape3D
 	var visual: MeshInstance3D = beam.get_node_or_null("BeamPivot/BeamVisual") as MeshInstance3D
-	var rec_col0: Vector3 = _basis_from_record(dev.get("basis", [])).z.normalized()
-	var dir_ok: bool = pivot != null and _angle_deg(pivot.global_transform.basis.z, rec_col0) <= ANG_TOL_DEG
-	_check(dir_ok, "W0R.14 runtime beam pivot +Z equals the authored actor-local Z (%.3f deg)" %
-		(_angle_deg(pivot.global_transform.basis.z, rec_col0) if pivot != null else -1.0),
-		"W0R.14 runtime beam direction is not actor-local +Z")
+	var pivot_err: float = _angle_deg(pivot.global_transform.basis.z, dev_axis) if pivot != null else -1.0
+	_check(pivot != null and pivot_err <= AXIS_TOL_DEG,
+		"P0A-B.20 runtime beam pivot +Z equals device column 2 (%.6f deg)" % pivot_err,
+		"P0A-B.20 runtime beam direction is not device column 2 (%.6f deg)" % pivot_err)
 	var beam_len: float = float(beam.get("beam_length_m"))
 	var cap_ok: bool = shape != null and shape.shape is CapsuleShape3D \
 		and absf(shape.position.z - beam_len * 0.5) < 0.001 \
 		and absf(shape.rotation.x - PI * 0.5) < 0.0001 \
 		and absf(shape.position.x) < 0.0001
-	_check(cap_ok, "W0R.15 runtime capsule runs along +Z (centre %.3f, rot X %.3f)" % [
+	_check(cap_ok, "P0A-B.21 runtime capsule runs along +Z (centre %.3f, rot X %.3f)" % [
 		shape.position.z if shape != null else -1.0, shape.rotation.x if shape != null else -1.0],
-		"W0R.15 runtime capsule not rotated onto +Z")
+		"P0A-B.21 runtime capsule not rotated onto +Z")
 	var vis_ok: bool = visual != null and absf(visual.position.z - beam_len * 0.5) < 0.001 \
 		and absf(visual.rotation.x - PI * 0.5) < 0.0001
-	_check(vis_ok, "W0R.16 stand-in visual fallback also runs along +Z",
-		"W0R.16 stand-in visual not rotated onto +Z")
+	_check(vis_ok, "P0A-B.22 stand-in visual fallback also runs along +Z",
+		"P0A-B.22 stand-in visual not rotated onto +Z")
 
-	# Card adoption: exactly one visual, and it follows power state.
+	# Card adoption: the authored card's long axis is the same column 2, and it
+	# is the single visual.
 	var card := Node3D.new()
 	card.name = "BeamCard"
 	host.add_child(card)
+	var card_rec: Dictionary = {}
+	for m_v: Variant in MAPS:
+		var m: Dictionary = m_v as Dictionary
+		if str(m["key"]) != "guildhall":
+			continue
+		var level_doc: Variant = JSON.parse_string(
+			FileAccess.get_file_as_string(str(m["level"])))
+		if not (level_doc is Dictionary):
+			continue
+		for mesh_v: Variant in ((level_doc as Dictionary).get("meshes", []) as Array):
+			if mesh_v is Dictionary and str((mesh_v as Dictionary).get("mesh", "")) == BEAM_MESH:
+				var r: Dictionary = mesh_v as Dictionary
+				if _pos_key(r.get("pos", [0, 0, 0])) == _pos_key(dev.get("pos", [0, 0, 0])):
+					card_rec = r
+					break
 	var ll_scr: GDScript = load("res://src/core/level_loader.gd") as GDScript
 	card.global_transform = ll_scr.beam_card_transform(card_rec)
 	beam.call("adopt_beam_card", card)
@@ -307,13 +483,13 @@ func _test_runtime_beam(dev_by_pos: Dictionary, cards_by_pos: Dictionary, defaul
 	beam.call("_on_power_changed", true)
 	var on_one: bool = card.visible and (visual != null and not visual.visible)
 	_check(off_one and on_one,
-		"W0R.17 adopted card is the single visual: unpowered both dark, powered card on and cylinder off",
-		"W0R.17 visual ownership/power state wrong (card=%s cylinder=%s)" % [
+		"P0A-B.23 adopted card is the single visual: unpowered both dark, powered card on and cylinder off",
+		"P0A-B.23 visual ownership/power state wrong (card=%s cylinder=%s)" % [
 			card.visible, visual.visible if visual != null else false])
-	var card_dir: Vector3 = card.global_transform.basis.x.normalized()
-	var card_ok: bool = _angle_deg(card_dir, rec_col0) <= ANG_TOL_DEG
-	_check(card_ok, "W0R.18 adopted card keeps the authored col0 direction after adoption",
-		"W0R.18 adopted card direction drifted %.3f deg" % _angle_deg(card_dir, rec_col0))
+	var card_err: float = _angle_deg(card.global_transform.basis.x, dev_axis)
+	_check(card_err <= AXIS_TOL_DEG,
+		"P0A-B.24 adopted card long axis equals device column 2 (%.6f deg)" % card_err,
+		"P0A-B.24 adopted card direction drifted %.6f deg" % card_err)
 	host.queue_free()
 	await process_frame
 

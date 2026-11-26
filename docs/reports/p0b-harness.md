@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | lane | P0b-HARNESS (Lane H of `P0B_WAVE_BRIEF.md`) |
-| base | `main` `09d8a30` (P0a merged) |
+| base | `main` `09d8a30` (P0a merged); harness commit `4f03868` merged as `75e39fc` |
 | branch | `w10/p0b-harness` (not pushed) |
 | engine | `4.7.2.stable.official.ed1daf0bf` via native `tools/godot` |
 | host | Linux x86_64, headless, one Godot at a time under `/tmp/opencode/tat2-godot.lock` |
@@ -21,7 +21,8 @@ from a committed log in `docs/reports/logs/p0b-harness/`.
 | compile | **199 checked / 0 broken** | `compile.log` |
 | `run_tests.gd` | **322 PASS / fails=0** (suites 117/118/120 added) | `run_tests.log` |
 | E2E tier 1 | **117 / 117**, `T1-22-A` ratchet check green | `e2e_tier1.log` |
-| E2E tier a2 | **22 / 22**, wall 35.88 s | `e2e_a2.log` |
+| **E2E full `all` (a2 included)** | **300 / 300**, `fails=0`, wall **663.62 s** (11:04) | `e2e_all.log` |
+| E2E tier a2 standalone | **22 / 22**, wall 35.88 s | `e2e_a2.log` |
 | E2E tier p2 | **12 / 12**, `expected_fail=1 expected_delta=1 unexpected_fail=0` | `e2e_p2.log` |
 | cream RED proof | **RED as designed** (2 expected failures; not registered) | `cream.log` |
 | `make gate-ratchet` | **PASS** with the new `e2e_a2` / `e2e_p2` gates | `gate_ratchet.log` |
@@ -47,8 +48,8 @@ that comment so the next reader does not "fix" it by registering a red suite.
 
 ## E2E tier `a2` — one real Contract 02 Novice load
 
-`game/tests/e2e/e2e_a2_playtest.gd`, standalone (`--tier=a2`), not part of
-`all`. It snapshots GameState, boots one real mission
+`game/tests/e2e/e2e_a2_playtest.gd` runs last in `all` and is also available
+standalone (`--tier=a2`). It snapshots GameState, boots one real mission
 (`instantiate_mission(2, 900, 1)`), frees it and restores the snapshot.
 
 | check | measured |
@@ -89,10 +90,13 @@ allowlisted. The tier also fails if a future edit tries to allowlist it:
 `_check_near_white()` clears any allowlist match whose key contains
 `1m_plane_reverse` or `emislight_moonlight`.
 
-**`a2` is not in `all`.** It is green standalone (35.88 s) and self-contained;
-the full run's floor stays 278/278 until the integrator adds it and reports the
-new total. Adding it is a one-line change in `run_e2e_tests.gd`; no measured
-reason blocks it.
+**`a2` is now part of `all`**, last after `s2` (`if tier_filter == "all" or
+tier_filter == "a2"`), because it snapshots/restores GameState and frees the
+mission before the summary. The full run measured **`SUMMARY: fails=0
+passed=300 total=300`** in **663.62 s** — the P0a 278 plus the 22 a2 checks,
+with `T1=117 T2=110 T3=25 T4=14 S2=12 A2=22` and no tier regression (the only
+exit-time lines are the known engine `3 RID allocations … leaked at exit`).
+The standalone `--tier=a2` path remains for the lane's own measurement.
 
 ## E2E tier `p2` — authored-data parity, never in `all`
 
@@ -176,19 +180,39 @@ Measured at this tip: `markers=97 max=120 floor=319 log_PASS=319 log_fails=0`
 
 ## Gate ratchet
 
+The checker reads this report (`report` = `docs/reports/p0b-harness.md`) and
+requires the floor lines below; `measured_on 84912ee` stays the P0a baseline
+for the floors measured there. The full E2E floor was re-measured after a2
+joined `all` (see `e2e_all.log`).
+
+The exact lines the checker parses:
+
+```
+compile | 196 / 0        # P0a evidence; this lane measured 199/0
+run_tests | 319          # P0a evidence; this lane measured 322
+M2 | 12
+E2E | 300 / 300          # measured with a2 in `all` (e2e_all.log)
+12660 / 12703            # audit coverage, P0a
+measured_on 84912ee      # P0a baseline for the unchanged floors
+```
+
+Evidence: `docs/reports/logs/p0a/compile.log`, `run_tests.log`, `m2.log`,
+`audit.log` for the P0a floors; `docs/reports/logs/p0b-harness/e2e_all.log`
+for the raised E2E floor.
+
 Added after the measured runs:
 
 | key | value | log |
 |---|---|---|
+| `gates.e2e.passed/total/fails` | **300 / 300 / 0** (raised from 278/278) | `docs/reports/logs/p0b-harness/e2e_all.log` |
 | `gates.e2e_a2.passed/total/fails` | 22 / 22 / 0 | `docs/reports/logs/p0b-harness/e2e_a2.log` |
 | `gates.e2e_p2.expected_fail/expected_delta/fixed/unexpected_fail` | 1 / 1 / 0 / 0 | `docs/reports/logs/p0b-harness/e2e_p2.log` |
 
-`tools/check_gate_ratchet.py` now accepts a repo-root-relative evidence path
-(one containing `/`) so a later wave can keep its own log directory; bare
-filenames still resolve under `evidence.dir`. No existing floor was lowered:
-`e2e` stays 278/278 (a2 is standalone), `run_tests` stays 319 and `compile`
-stays 196 because their committed evidence is still the P0a log. Those three
-floors should be raised at merged HEAD (measured here: 322 and 199).
+`tools/check_gate_ratchet.py` accepts a repo-root-relative evidence path (one
+containing `/`) so a later wave can keep its own log directory; bare filenames
+still resolve under `evidence.dir`. No existing floor was lowered: `run_tests`
+stays 319 and `compile` stays 196 because their committed evidence is still the
+P0a log (measured here: 322 and 199; raise them at merged HEAD).
 
 ## Remaining for the data wave
 
@@ -200,9 +224,8 @@ floors should be raised at merged HEAD (measured here: 322 and 199).
   FAIL becomes a PASS and `fixed` moves to 1.
 - **Beam material** P4 authored centre-line/fade; p2's expected DELTA then
   measures the new values.
-- **a2 into `all`** after one full-run measurement; report the new E2E total and
-  wall clock (a2 adds ~36 s here).
-- **Ratchet re-stamp** at merged HEAD (compile 196→199, run_tests 319→322).
+- **Ratchet re-stamp** at merged HEAD (compile 196→199, run_tests 319→322). The
+  E2E floor is already raised to the measured 300/300.
 
 ## Reproduce
 

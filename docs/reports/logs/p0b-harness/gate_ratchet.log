@@ -23,8 +23,8 @@ PASS: audit.unexpected=0
 PASS: compile.broken=0
 PASS: compile.checked=196
 PASS: e2e.fails=0
-PASS: e2e.passed=278
-PASS: e2e.total=278
+PASS: e2e.passed=300
+PASS: e2e.total=300
 PASS: e2e_a2.fails=0
 PASS: e2e_a2.passed=22
 PASS: e2e_a2.total=22
@@ -62,9 +62,9 @@ PASS: run_tests.log proves run_tests ('SUMMARY: fails=0')
 PASS: run_tests.log records 319 PASS >= 319
 PASS: m2.log proves m2 ('M2_SUMMARY: fails=0')
 PASS: m2.log records 12 PASS >= 12
-PASS: e2e.log proves e2e ('SUMMARY: fails=0 passed=(\\d+) total=(\\d+)')
-PASS: e2e.log records e2e.passed=278 >= 278
-PASS: e2e.log records e2e.total=278 >= 278
+PASS: docs/reports/logs/p0b-harness/e2e_all.log proves e2e ('SUMMARY: fails=0 passed=(\\d+) total=(\\d+)')
+PASS: docs/reports/logs/p0b-harness/e2e_all.log records e2e.passed=300 >= 300
+PASS: docs/reports/logs/p0b-harness/e2e_all.log records e2e.total=300 >= 300
 PASS: docs/reports/logs/p0b-harness/e2e_a2.log proves e2e_a2 ('SUMMARY: fails=0 passed=(\\d+) total=(\\d+)')
 PASS: docs/reports/logs/p0b-harness/e2e_a2.log records e2e_a2.passed=22 >= 22
 PASS: docs/reports/logs/p0b-harness/e2e_a2.log records e2e_a2.total=22 >= 22
@@ -110,7 +110,7 @@ PASS: test_w10a2_guard_placement.log records GUARD_PLACEMENT_SUMMARY: fails=0
 PASS: report records compile ('compile\\s*\\|\\s*196\\s*/\\s*0')
 PASS: report records run_tests ('run_tests\\s*\\|\\s*319')
 PASS: report records M2 ('M2\\s*\\|\\s*12')
-PASS: report records E2E ('E2E\\s*\\|\\s*278\\s*/\\s*278')
+PASS: report records E2E ('E2E\\s*\\|\\s*300\\s*/\\s*300')
 PASS: report records coverage ('12660\\s*/\\s*12703')
 PASS: report names measured_on=84912ee
 

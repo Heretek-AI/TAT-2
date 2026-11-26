@@ -1,15 +1,15 @@
 {
   "schema": "tat2.gate_ratchet/1",
   "measured_on": "84912ee",
-  "source": "P0a measurement at 84912ee (merged guards + beam + audit re-stamp), 2026-11-26: compile 196/0, run_tests 319/0 (suites to 116), M2 12/0, E2E 278/278, guard selection Guildhall C_20 + Old Manor order 3 PASS (4/4 authored guard buckets, no Hauntstable), beam geometry 330 cards max_axis_err_deg=0.000006 clamped=0, GC 44+21 checks, turret 229/1,145 visible/0 hidden, collision 0.976321 dropped=0, lock inventory applied=154 (144+10), leak clean, runtime-smoke exit=124 errors=0, audit 12,660/12,703, texture cap 797/1/0, perf guard 78/78, string audit 307/196/111. Logs in docs/reports/logs/p0a/ are this wave's single serial run; docs/reports/logs/p0a/normalize.log is the integrator's post-merge regeneration. P0b-HARNESS lane (base 09d8a30, 2026-11-26) added suites 117/118/120 and tiers a2/p2: compile 199/0, run_tests 322/0, tier 1 117/117, a2 22/22, p2 12/12 with 1 expected FAIL (civilian pants albedo, BaseColorOpacity) and 1 expected DELTA (beam PORT_APPROX: dG=0.054 dB=0.117 dE=0.20); new gate logs in docs/reports/logs/p0b-harness/. The e2e floor stays 278 because a2 is standalone until the integrator adds it to `all`; the run_tests/compile floors stay at the lower P0a committed logs and must be raised at merged HEAD.",
+  "source": "P0a measurement at 84912ee (merged guards + beam + audit re-stamp), 2026-11-26: compile 196/0, run_tests 319/0 (suites to 116), M2 12/0, E2E 278/278, guard selection Guildhall C_20 + Old Manor order 3 PASS (4/4 authored guard buckets, no Hauntstable), beam geometry 330 cards max_axis_err_deg=0.000006 clamped=0, GC 44+21 checks, turret 229/1,145 visible/0 hidden, collision 0.976321 dropped=0, lock inventory applied=154 (144+10), leak clean, runtime-smoke exit=124 errors=0, audit 12,660/12,703, texture cap 797/1/0, perf guard 78/78, string audit 307/196/111. Logs in docs/reports/logs/p0a/ are this wave's single serial run; docs/reports/logs/p0a/normalize.log is the integrator's post-merge regeneration. P0b-HARNESS lane (base 09d8a30, merged as 75e39fc, 2026-11-26) added suites 117/118/120 and tiers a2/p2: compile 199/0, run_tests 322/0, tier 1 117/117, a2 22/22, p2 12/12 with 1 expected FAIL (civilian pants albedo, BaseColorOpacity) and 1 expected DELTA (beam PORT_APPROX: dG=0.054 dB=0.117 dE=0.20); new gate logs in docs/reports/logs/p0b-harness/. Follow-up: a2 joined the full `all` run after s2 and the full E2E measured fails=0 passed=300 total=300 in 663.62 s (T1=117 T2=110 T3=25 T4=14 S2=12 A2=22), so the e2e floor is raised 278 -> 300 and its evidence is docs/reports/logs/p0b-harness/e2e_all.log. The run_tests/compile floors stay at the lower P0a committed logs (measured here: 322 and 199) and must be raised at merged HEAD.",
   "note": "Floors, not exact counts: a wave may add tests/files but must never lower a floor or introduce a failure. Counts are read from the committed log and compared with >=; failure counts are exact zeros and e2e.passed must equal e2e.total. Update only with a real gate log in docs/reports/logs/ (see tools/check_gate_ratchet.py for the evidence layout).",
-  "report": "docs/reports/p0a-20261126.md",
+  "report": "docs/reports/p0b-harness.md",
   "evidence": {
     "dir": "docs/reports/logs/p0a",
     "compile": "compile.log",
     "run_tests": "run_tests.log",
     "m2": "m2.log",
-    "e2e": "e2e.log",
+    "e2e": "docs/reports/logs/p0b-harness/e2e_all.log",
     "e2e_a2": "docs/reports/logs/p0b-harness/e2e_a2.log",
     "e2e_p2": "docs/reports/logs/p0b-harness/e2e_p2.log",
     "probe_leak": "probe_leak.log",
@@ -50,8 +50,8 @@
       "fails": 0
     },
     "e2e": {
-      "passed": 278,
-      "total": 278,
+      "passed": 300,
+      "total": 300,
       "fails": 0
     },
     "e2e_a2": {

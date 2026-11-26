@@ -108,10 +108,11 @@ func _initialize() -> void:
 			h.require(false, "S2-BOOT", "Failed to load e2e_s2_loot.gd")
 		await _settle_harness()
 
-	# P0b acceptance tier "a2": one real Contract 02 Novice mission. Standalone
-	# while it is measured (`--tier=a2`); it joins `all` only in a separate
-	# change that reports the new E2E total and the added wall-clock cost.
-	if tier_filter == "a2":
+	# P0b acceptance tier "a2": one real Contract 02 Novice mission. Runs last in
+	# `all` (after s2) because it snapshots/restores GameState and frees the
+	# mission, so nothing later depends on its actors. Standalone `--tier=a2`
+	# stays available for the lane's own measurement.
+	if tier_filter == "all" or tier_filter == "a2":
 		await _settle_harness()
 		var a2_scr: GDScript = load("res://tests/e2e/e2e_a2_playtest.gd") as GDScript
 		if a2_scr != null:

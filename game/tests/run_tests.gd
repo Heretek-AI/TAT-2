@@ -3823,7 +3823,13 @@ func _initialize() -> void:
 	var ss_blk_rise: float = float(ss_thief.call("_try_step_up", Vector3(0.0, 0.0, -3.6)))
 	ss_blk.remove_from_group("blocking_volume")
 	var ss_vis_rise: float = float(ss_thief.call("_try_step_up", Vector3(0.0, 0.0, -3.6)))
-	var ss_blocker_ok: bool = is_zero_approx(ss_blk_rise) and absf(ss_vis_rise - 0.40) <= 0.01
+	# Assert the destination, not the returned delta. `_try_step_up` commits
+	# `global_position.y = floor_y`, so the box top is the contract; the delta is
+	# measured from wherever gravity has settled the body (0.4154 when it sits
+	# 0.0154 below the origin), which made this flake after the W10-A collision
+	# change. The W10-A stair fixtures use the same destination assertion.
+	var ss_vis_dest: float = float(ss_thief.global_position.y)
+	var ss_blocker_ok: bool = is_zero_approx(ss_blk_rise) and absf(ss_vis_dest - 0.40) <= 0.01
 	ss_bg.queue_free()
 	ss_blk.queue_free()
 	await physics_frame

@@ -48,6 +48,10 @@ signal load_progress(pct: float, status: String)
 
 var _materials_db: Dictionary = {}
 var _materials_db_lower: Dictionary = {}
+## W10-A3-GC: owner actor name -> {"leaf": Node3D, "broken": Node3D} for the
+## destructible overlays built by this load. Rebuilt per load; the loot
+## containers read it once in `_ready` through `gc_visuals_for()`.
+var _gc_owner_index: Dictionary = {}
 var _mesh_mats_db: Dictionary = {}
 var _mesh_mats_db_lower: Dictionary = {}
 var _tex_cache: Dictionary = {}
@@ -406,6 +410,19 @@ const LOOT_CONTAINER_CLASSES: Array[String] = [
 	"BP_Storefront_DisplayCaseB_MinorLoot_C",
 	"BP_Storefront_DisplayCaseD_MinorLoot_C",
 ]
+
+## W10-A3-GC: destructible broken-state overlays (chests, display cases, glass).
+## The producer emits one hidden `gc` layer per authored GeometryCollection and
+## one visible `gc_leaves` record for the intact chest lid / display-case door.
+## The runtime swaps them on `loot_container.break_container()`. `off` builds
+## the same level without the layers so a probe can prove they add no collision.
+const ENV_GC_LAYERS: String = "TAT2_GC_LAYERS"
+const GC_ROOT_NAME: String = "GC_Destruction"
+
+
+static func gc_layers_enabled() -> bool:
+	var v: String = OS.get_environment(ENV_GC_LAYERS).to_lower()
+	return v == "" or (v != "off" and v != "0" and v != "false")
 
 ## W9-P2 B2: authored lock keys carried 1:1 from a marker record into the
 ## `loot_containers`/`swinging_doors` record. The producer emits them only when
@@ -2630,6 +2647,8 @@ func _new_accumulator() -> Dictionary:
 		"level_instance_targets": {},
 		"streaming_levels": [] as Array,
 		"lights": [] as Array,
+		"gc": [] as Array,
+		"gc_leaves": [] as Array,
 		"landscapes": [] as Array,
 		"decals": [] as Array,
 		"rect_lights": [] as Array,
@@ -3146,6 +3165,22 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 		if lc is Dictionary:
 			landscapes.append(lc)
 
+	# W10-A3-GC: destructible broken-state overlays and their intact leaves.
+	# Both are per-component records (not batched) because the runtime swaps
+	# one owner's leaf/layer pair on break.
+	var gc_entries: Array = acc["gc"]
+	for gc_var: Variant in (data_dict.get("gc", []) as Array):
+		if gc_var is Dictionary:
+			var gc_rec: Dictionary = (gc_var as Dictionary).duplicate(true)
+			gc_rec["source_sublevel"] = sublevel_tag
+			gc_entries.append(gc_rec)
+	var gc_leaf_entries: Array = acc["gc_leaves"]
+	for gl_var: Variant in (data_dict.get("gc_leaves", []) as Array):
+		if gl_var is Dictionary:
+			var gl_rec: Dictionary = (gl_var as Dictionary).duplicate(true)
+			gl_rec["source_sublevel"] = sublevel_tag
+			gc_leaf_entries.append(gl_rec)
+
 	var decorative_sublevel: bool = _is_decorative_sublevel(json_path)
 	var collide_sublevel: bool = not decorative_sublevel
 	var batches: Dictionary = acc["batches"] if collide_sublevel else acc["batches_nocol"]
@@ -3496,6 +3531,7 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 				sc = Vector3(float(sc_raw[0]), float(sc_raw[1]), float(sc_raw[2]))
 			var lc_rec := {
 				"class": cls,
+				"owner": str(mk.get("name", "")),
 				"pos": p,
 				"basis": (mk.get("basis", [1, 0, 0, 0, 1, 0, 0, 0, 1]) as Array).duplicate(),
 				"scale": sc,
@@ -5853,6 +5889,12 @@ func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dict
 	result["niagara_sprites"] = int(ctx.get("niagara_sprites", 0))
 	result["niagara_params_applied"] = int(ctx.get("niagara_params_applied", 0))
 	result["niagara_inactive_skipped"] = int(ctx.get("niagara_inactive_skipped", 0))
+	result["gc_layers_enabled"] = bool(ctx.get("gc_layers_enabled", false))
+	result["gc_layers_built"] = int(ctx.get("gc_layers_built", 0))
+	result["gc_leaves_built"] = int(ctx.get("gc_leaves_built", 0))
+	result["gc_missing_mesh"] = int(ctx.get("gc_missing_mesh", 0))
+	result["gc_visible_broken"] = int(ctx.get("gc_visible_broken", 0))
+	result["gc_owner_count"] = _gc_owner_index.size()
 	result["spline_count"] = int(ctx.get("spline_count", 0))
 	result["curb_built"] = int(ctx.get("curb_built", 0))
 	result["missing_mesh_count"] = int(ctx.get("missing_mesh_count", 0))
@@ -6722,6 +6764,7 @@ func load_sublevels(json_paths: Array[String], parent: Node3D, light_probe: Node
 
 	var items: Array = _collect_draw_items(acc)
 	var total_inst: int = _build_draw_items(items, parent, ctx)
+	_build_gc_layers(acc["gc"], acc["gc_leaves"], parent, ctx)
 	_finalize(acc["result"], ctx, total_inst)
 	_log_perf_census(parent, ctx, acc["result"], json_paths)
 	return acc["result"]
@@ -6836,6 +6879,7 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 	if _timing:
 		print("LoadTiming draw_ms=", Time.get_ticks_msec() - _t0, " items=", items.size(), " instances=", total_inst, " mesh_ms=", int(ctx.get("perf_mesh_ms", 0)), " build_ms=", int(ctx.get("perf_build_ms", 0)), " glb_ms=", _prof_glb_ms, " mat_ms=", _prof_mat_ms, " shape_ms=", _prof_shape_ms, " downscaled=", downscaled_count)
 	load_progress.emit(1.0, "Done")
+	_build_gc_layers(acc["gc"], acc["gc_leaves"], parent, ctx)
 	_finalize(acc["result"], ctx, total_inst)
 	_log_perf_census(parent, ctx, acc["result"], json_paths)
 	return acc["result"]
@@ -6878,6 +6922,108 @@ func _sort_lights_desc(a: Dictionary, b: Dictionary) -> bool:
 		if not is_equal_approx(va, vb):
 			return va > vb
 	return false
+
+
+## W10-A3-GC: owner -> intact leaf / broken overlay for the current load.
+## Both nodes may be null when a map authors only one half (or GC layers are
+## disabled). Containers guard with `is_instance_valid`.
+func gc_visuals_for(owner: String) -> Dictionary:
+	var rec: Variant = _gc_owner_index.get(owner, null)
+	if rec is Dictionary:
+		return rec as Dictionary
+	return {}
+
+
+## Spawns the destructible layers emitted by tools/parse_tables.py:
+##  * one visible MeshInstance3D for each intact chest lid / display-case door;
+##  * one hidden MeshInstance3D for each authored broken-state overlay.
+## No StaticBody3D, CollisionShape3D or occluder is created here, so the layers
+## add no collision by construction (the GC probe also measures the delta).
+func _build_gc_layers(gc_entries: Array, leaf_entries: Array, parent: Node3D, ctx: Dictionary) -> void:
+	_gc_owner_index.clear()
+	var built_broken: int = 0
+	var built_leaves: int = 0
+	var missing: int = 0
+	var visible_broken: int = 0
+	if not gc_layers_enabled():
+		ctx["gc_layers_enabled"] = false
+		ctx["gc_layers_built"] = 0
+		ctx["gc_leaves_built"] = 0
+		ctx["gc_missing_mesh"] = 0
+		return
+	var root := Node3D.new()
+	root.name = GC_ROOT_NAME
+	root.set_meta("gc_no_collision", true)
+	parent.add_child(root)
+	for rec_var: Variant in gc_entries:
+		if not (rec_var is Dictionary):
+			continue
+		var rec: Dictionary = rec_var as Dictionary
+		var node: MeshInstance3D = _make_gc_mesh_node(rec, "broken", false)
+		if node == null:
+			missing += 1
+			if rec.get("hidden") != true:
+				push_error("[level_loader] visible GeometryCollection has no mesh: owner=%s component=%s collection=%s" % [
+					str(rec.get("owner", "")), str(rec.get("component", "")), str(rec.get("collection", ""))])
+			continue
+		root.add_child(node)
+		built_broken += 1
+		if node.visible:
+			visible_broken += 1
+		var owner: String = str(rec.get("owner", ""))
+		if owner != "":
+			var slot: Dictionary = _gc_owner_index.get(owner, {"leaf": null, "broken": null}) as Dictionary
+			slot["broken"] = node
+			_gc_owner_index[owner] = slot
+	for rec_var2: Variant in leaf_entries:
+		if not (rec_var2 is Dictionary):
+			continue
+		var rec2: Dictionary = rec_var2 as Dictionary
+		var node2: MeshInstance3D = _make_gc_mesh_node(rec2, "leaf", true)
+		if node2 == null:
+			missing += 1
+			continue
+		root.add_child(node2)
+		built_leaves += 1
+		var owner2: String = str(rec2.get("owner", ""))
+		if owner2 != "":
+			var slot2: Dictionary = _gc_owner_index.get(owner2, {"leaf": null, "broken": null}) as Dictionary
+			slot2["leaf"] = node2
+			_gc_owner_index[owner2] = slot2
+	ctx["gc_layers_enabled"] = true
+	ctx["gc_layers_built"] = built_broken
+	ctx["gc_leaves_built"] = built_leaves
+	ctx["gc_missing_mesh"] = missing
+	ctx["gc_visible_broken"] = visible_broken
+
+
+func _make_gc_mesh_node(rec: Dictionary, role: String, make_visible: bool) -> MeshInstance3D:
+	var mp: String = str(rec.get("mesh", ""))
+	if mp == "":
+		return null
+	var info: Dictionary = _get_mesh_and_shape(mp)
+	var mesh: Mesh = info["mesh"] as Mesh
+	if mesh == null:
+		return null
+	var ov_arr: Array[String] = _extract_override_materials(rec)
+	if not ov_arr.is_empty():
+		mesh = _get_overridden_mesh(mp, mesh, ov_arr, "|".join(ov_arr))
+	var node := MeshInstance3D.new()
+	node.name = ("GCLeaf_%s" if role == "leaf" else "GCBroken_%s") % str(rec.get("owner", "unknown"))
+	node.mesh = mesh
+	node.transform = _dict_to_transform(rec)
+	node.visible = make_visible
+	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	node.gi_mode = GeometryInstance3D.GI_MODE_STATIC if make_visible else GeometryInstance3D.GI_MODE_DISABLED
+	node.set_meta("ue_mesh", mp)
+	node.set_meta("gc_owner", str(rec.get("owner", "")))
+	node.set_meta("gc_role", role)
+	node.set_meta("gc_kind", str(rec.get("kind", "")))
+	node.set_meta("gc_source", str(rec.get("source", "")))
+	node.set_meta("gc_no_collision", true)
+	node.set_meta("decorative", true)
+	node.add_to_group("gc_leaves" if role == "leaf" else "gc_broken_layers")
+	return node
 
 
 func _dict_to_transform(d: Dictionary) -> Transform3D:

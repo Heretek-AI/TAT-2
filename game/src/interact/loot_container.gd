@@ -13,6 +13,12 @@ extends Area3D
 ## deposit-all — its own loot arrives as separately placed actors.
 
 signal lockpick_updated(active: bool, progress: float, lock_level: int)
+## W10-A3-GC: destructible container state. `container_broken` is the gameplay
+## event (one per container, idempotent); `broken_changed` mirrors the visual
+## layer swap for HUD/audio consumers. Both fire before the one-shot loot spawn
+## so a listener can react to the smash independently of the loot payout.
+signal container_broken(container: Node, actor: Node)
+signal broken_changed(is_broken: bool)
 
 const LootScript := preload("res://src/interact/loot_item.gd")
 const LootInventoryScript := preload("res://src/interact/loot_inventory.gd")
@@ -105,6 +111,15 @@ static func marker_transform(entry: Dictionary) -> Transform3D:
 
 var container_class: String = ""
 var loot_tier: String = ""
+## Authored actor name (level loader marker name). The destructible leaf/broken
+## layers are keyed by it; empty means this container has no GC overlay.
+var owner_name: String = ""
+## W10-A3-GC: true after `break_container()`. The intact leaf is hidden and the
+## authored broken overlay is shown; loot behaviour is unchanged (a smashed
+## container opens once, exactly like an unlocked interact).
+var broken: bool = false
+var _gc_leaf: Node3D = null
+var _gc_broken: Node3D = null
 ## Authored secret stash (containers.json kind "stash"): the trigger is a
 ## one-use deposit-all, never a loot spawner.
 var is_stash: bool = false
@@ -188,6 +203,7 @@ func get_track_duration() -> float:
 func configure(p_class: String, entry: Dictionary, p_index: int) -> void:
 	container_class = p_class
 	spawn_index = p_index
+	owner_name = str(entry.get("owner", ""))
 	marker_pos = entry.get("pos", Vector3.ZERO)
 	var tr := marker_transform(entry)
 	marker_basis = tr.basis
@@ -254,6 +270,47 @@ func configure(p_class: String, entry: Dictionary, p_index: int) -> void:
 		else:
 			var cap_lvl: int = int(entry.get("max_lock_level", 1))
 			set_locked(true, clampi(cap_lvl, 1, 6))
+
+
+## W10-A3-GC: bind the level-owned intact leaf and hidden broken overlay for
+## this container's actor. Safe to call with nulls (a map that authors no GC).
+func bind_gc_visuals(leaf: Node3D, broken_layer: Node3D) -> void:
+	_gc_leaf = leaf
+	_gc_broken = broken_layer
+	_apply_gc_visuals()
+
+
+func is_broken() -> bool:
+	return broken
+
+
+## Swap the intact lid/door for the authored broken overlay and open the
+## container once. This is the destruction event; it bypasses the lock exactly
+## like the authored breakable component does, but never duplicates loot (the
+## one-shot `opened` guard stays the only loot gate). Returns false when the
+## container was already broken.
+func break_container(actor: Node = null) -> bool:
+	if broken:
+		return false
+	broken = true
+	set_meta("broken", true)
+	add_to_group("broken_containers")
+	_clear_actor_lockpicking()
+	_apply_gc_visuals()
+	broken_changed.emit(true)
+	container_broken.emit(self, actor)
+	if is_inside_tree():
+		NoiseBus.emit_noise(global_position, 6.0, _noise_source(), "break")
+	if not opened:
+		_open_container()
+	return true
+
+
+func _apply_gc_visuals() -> void:
+	if _gc_leaf != null and is_instance_valid(_gc_leaf):
+		_gc_leaf.visible = not broken
+	if _gc_broken != null and is_instance_valid(_gc_broken):
+		_gc_broken.visible = broken
 
 
 func _ready() -> void:

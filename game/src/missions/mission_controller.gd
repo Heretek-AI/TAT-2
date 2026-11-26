@@ -4293,6 +4293,13 @@ func _spawn_loot_containers(stats: Dictionary) -> void:
 		var c := LootContainerScript.new()
 		c.configure(str(e.get("class", "")), e, order)
 		add_child(c)
+		# W10-A3-GC: hand over the level-owned intact leaf / hidden broken
+		# overlay for this actor. Maps without a GC overlay return {} and the
+		# container stays a trigger-only node exactly as before.
+		if level_loader != null and level_loader.has_method("gc_visuals_for"):
+			var gcv: Dictionary = level_loader.call("gc_visuals_for", str(e.get("owner", ""))) as Dictionary
+			if not gcv.is_empty():
+				c.bind_gc_visuals(gcv.get("leaf") as Node3D, gcv.get("broken") as Node3D)
 		order += 1
 	print("TAT-2 loot containers: ", order)
 

@@ -984,6 +984,99 @@ def _door_glb_exists(ue_path):
     return (ROOT / "game" / "assets" / "ue" / "Content" / (clean + ".glb")).exists()
 
 
+# ---------------------------------------------------------------------------
+# GeometryCollection broken-state overlays (W10-A3-GC).
+# ---------------------------------------------------------------------------
+# The shipped destructibles are GeometryCollectionComponent overlays authored
+# hidden until the owning prop breaks. The dump only carries the collection's
+# AutoInstanceMeshes (the intact source mesh); the fracture pieces themselves
+# are not in the JSON. The port therefore emits a separate *hidden* layer per
+# component (one MeshInstance3D, swapped in by the runtime on break) instead of
+# drawing broken glass on intact containers. `GC_ChestTrunkALid` (93 chests) is
+# the only referenced collection with no dump, and gets an explicit labelled
+# broken-mesh fallback; `GC_BookCaseUpperB_DoorWindow_01` (5 doors) has a dump
+# but a null AutoInstanceMeshes mesh and falls back to its sibling glass SMC.
+_GC_ASSET_CACHE = {}
+# Labelled fallbacks for a missing collection dump. These are *not* authored
+# AutoInstanceMeshes; every use is counted as `fallback_broken` in gc_stats.
+_GC_BROKEN_FALLBACKS = {
+    "GC_ChestTrunkALid": (
+        "/Game/Art/Environment/Props/Furniture/Containers/Chest/SM_ChestTrunkALid_Broken"
+    ),
+}
+GC_COMPONENT_TYPES = {"GeometryCollectionComponent"}
+
+
+def _gc_collection_props(rest_path):
+    """Properties of a RestCollection GeometryCollection dump, or None."""
+    stem = str(rest_path or "").rsplit("/", 1)[-1].split(".")[0]
+    if not stem:
+        return None
+    if stem in _GC_ASSET_CACHE:
+        return _GC_ASSET_CACHE[stem]
+    jf = build_bp_file_index().get(stem)
+    props = None
+    if jf is not None:
+        try:
+            exps = json.loads(jf.read_text())
+        except Exception:
+            exps = None
+        if isinstance(exps, list):
+            for e in exps:
+                if e.get("Type") == "GeometryCollection":
+                    props = e.get("Properties") or {}
+                    break
+    _GC_ASSET_CACHE[stem] = props
+    return props
+
+
+def _gc_auto_instance_mesh(rest_path):
+    """First authored AutoInstanceMeshes mesh path (no extension), or None."""
+    props = _gc_collection_props(rest_path)
+    if not props:
+        return None
+    for aim in props.get("AutoInstanceMeshes") or []:
+        if not isinstance(aim, dict):
+            continue
+        mesh = (aim.get("Mesh") or {}).get("ObjectPath")
+        if mesh:
+            return str(mesh).split(".")[0]
+    return None
+
+
+def _gc_kind(owner_class):
+    low = str(owner_class).lower()
+    if "chesttrunk" in low:
+        return "chest"
+    if "displaycase" in low:
+        return "display_case"
+    if "bookcase" in low:
+        return "bookcase"
+    return "other"
+
+
+def _gc_mesh_stem(ue_path):
+    return str(ue_path or "").rsplit("/", 1)[-1].split(".")[0]
+
+
+def _gc_static_mesh(exps, comp_idx):
+    """(mesh path without extension, merged props) for a static-mesh component."""
+    if comp_idx is None or comp_idx < 0 or comp_idx >= len(exps):
+        return None, {}
+    e = exps[comp_idx]
+    if e.get("Type") not in (
+        "StaticMeshComponent",
+        "SplineMeshComponent",
+        "InstancedStaticMeshComponent",
+        "HierarchicalInstancedStaticMeshComponent",
+        "FoliageInstancedStaticMeshComponent",
+    ):
+        return None, {}
+    mp = _merged_comp_props(e)
+    sm = (mp.get("StaticMesh") or {}).get("ObjectPath")
+    return (str(sm).split(".")[0] if sm else None), mp
+
+
 def _apply_godot_transform(entry, trs):
     """Apply a Godot-space rigid transform to a generated level entry."""
     p = entry.get("pos")
@@ -1632,6 +1725,18 @@ def extract_levels():
     total_splines_emitted = 0
     total_splines_rigid = 0
     total_markers_origin_fixed = 0
+    total_gc_visible_missing = 0
+    total_gc_stats = {
+        "components": 0,
+        "hidden": 0,
+        "visible": 0,
+        "visible_emitted": 0,
+        "hidden_emitted": 0,
+        "unresolved": 0,
+        "fallback_broken": 0,
+        "sibling_smc": 0,
+        "leaves": 0,
+    }
     mid_stats = {"resolved": 0, "unresolved": 0, "samples": [], "records": []}
     level_payloads = {}
     content_overrides = load_content_overrides()
@@ -1779,6 +1884,19 @@ def extract_levels():
             total_streaming_levels += len(streaming_levels)
 
         meshes = []
+        gc_layers = []
+        gc_leaves = []
+        gc_stats = {
+            "components": 0,
+            "hidden": 0,
+            "visible": 0,
+            "visible_emitted": 0,
+            "hidden_emitted": 0,
+            "unresolved": 0,
+            "fallback_broken": 0,
+            "sibling_smc": 0,
+            "leaves": 0,
+        }
         lights = []
         markers = []
         boundaries = []
@@ -1807,6 +1925,15 @@ def extract_levels():
             an = ae.get("Name", "")
             if an and an not in actor_by_name:
                 actor_by_name[an] = aidx
+
+        # W10-A3-GC: component indices grouped by owning actor name. The GC
+        # branch needs the actor's sibling SMCs (the intact lid/door and the
+        # glass fallback) without rescanning every export per component.
+        comps_by_actor = {}
+        for cidx, ce in enumerate(exps):
+            _bp_c, _actor_c = _stub_actor(exps, cidx)
+            if _actor_c:
+                comps_by_actor.setdefault(_actor_c, []).append(cidx)
 
         # 0. Swinging-door pre-pass: resolve each TATSwingingDoorPivotComponent
         # to (actor root world x pivot relative) plus its leaf mesh components
@@ -2240,6 +2367,165 @@ def extract_levels():
                             sentry["hidden_in_game"] = True
                         meshes.append(sentry)
                     continue
+
+            # 2b. GeometryCollectionComponent (W10-A3-GC): authored hidden
+            # broken-state overlay. Emit ONLY into the separate hidden `gc`
+            # layer (never into `meshes`, so an intact chest/display case never
+            # draws broken glass). Visible collections keep the same record
+            # shape and are counted separately; a visible collection with no
+            # resoluble mesh is the only fatal case (0 today).
+            if et in GC_COMPONENT_TYPES:
+                gprops = _merged_comp_props(e)
+                gc_class, gc_actor = _stub_actor(exps, idx)
+                if not gc_actor:
+                    gc_stats["unresolved"] += 1
+                    continue
+                gc_stats["components"] += 1
+                hidden_gc = (
+                    gprops.get("bVisible") is False
+                    or gprops.get("bHiddenInGame") is True
+                )
+                if hidden_gc:
+                    gc_stats["hidden"] += 1
+                else:
+                    gc_stats["visible"] += 1
+                rest = (gprops.get("RestCollection") or {}).get("ObjectPath", "")
+                collection = _gc_mesh_stem(rest)
+                attach_name = (gprops.get("AttachParent") or {}).get("ObjectName", "")
+                attach_idx = comp_by_full_objname.get(attach_name)
+                if attach_idx is None and "PersistentLevel." in attach_name:
+                    attach_idx = comp_by_full_objname.get(
+                        attach_name.split("PersistentLevel.")[-1].rstrip("'")
+                    )
+                attach_mesh, _attach_props = _gc_static_mesh(exps, attach_idx)
+                # Broken-state mesh: authored AutoInstanceMeshes first, then
+                # the labelled missing-dump fallback, then a sibling glass SMC.
+                broken_mesh = _gc_auto_instance_mesh(rest)
+                broken_source = "auto_instance" if broken_mesh else ""
+                if not broken_mesh and collection in _GC_BROKEN_FALLBACKS:
+                    broken_mesh = _GC_BROKEN_FALLBACKS[collection]
+                    broken_source = "fallback_broken"
+                if not broken_mesh:
+                    sibling_glass = None
+                    for cidx in comps_by_actor.get(gc_actor, []):
+                        if cidx == idx:
+                            continue
+                        sm_c, sm_props = _gc_static_mesh(exps, cidx)
+                        if not sm_c:
+                            continue
+                        if "glass" not in _gc_mesh_stem(sm_c).lower():
+                            continue
+                        sib_attach = (sm_props.get("AttachParent") or {}).get(
+                            "ObjectName", ""
+                        )
+                        if attach_name and sib_attach != attach_name:
+                            continue
+                        if "broken" in _gc_mesh_stem(sm_c).lower():
+                            sibling_glass = sm_c
+                            break
+                        if sibling_glass is None:
+                            sibling_glass = sm_c
+                    if sibling_glass:
+                        broken_mesh = sibling_glass
+                        broken_source = "sibling_smc"
+                gc_kind = _gc_kind(gc_class)
+                wmat_gc = get_world_mat(idx, use_templates=True)
+                if level_mat is not None:
+                    wmat_gc = mat4_mul(level_mat, wmat_gc)
+                trs_gc = ue_mat4_to_godot_trs(wmat_gc)
+                if broken_mesh:
+                    ov_gc = _component_override_paths(
+                        gprops,
+                        exps=exps,
+                        map_ue_path=raw_map_ue_path,
+                        mid_stats=mid_stats,
+                        sm_ue_path=broken_mesh,
+                        ue_to_glb=ue_to_glb,
+                    )
+                    gentry = {
+                        "owner": gc_actor,
+                        "owner_class": gc_class or "",
+                        "component": e.get("Name", ""),
+                        "collection": collection,
+                        "kind": gc_kind,
+                        "mesh": broken_mesh,
+                        "source": broken_source,
+                        "hidden": hidden_gc,
+                        **trs_gc,
+                    }
+                    if ov_gc:
+                        gentry["override_materials"] = ov_gc
+                        if ov_gc[0]:
+                            gentry["override_material"] = ov_gc[0]
+                    gc_layers.append(gentry)
+                    if hidden_gc:
+                        gc_stats["hidden_emitted"] += 1
+                    else:
+                        gc_stats["visible_emitted"] += 1
+                    if broken_source == "fallback_broken":
+                        gc_stats["fallback_broken"] += 1
+                    elif broken_source == "sibling_smc":
+                        gc_stats["sibling_smc"] += 1
+                else:
+                    gc_stats["unresolved"] += 1
+                    if not hidden_gc:
+                        # Fail loud: an authored-visible collection is meant to
+                        # render on load and has no mesh in this dump.
+                        total_gc_visible_missing += 1
+                        print(
+                            f"  GC_VISIBLE_NO_MESH {gc_actor}.{e.get('Name', '')} "
+                            f"collection={collection or '?'} source={rel}"
+                        )
+                # Intact lid/door leaf for the openable containers. The shipped
+                # stubs are authored bVisible=false (the BP shows the leaf only
+                # on open), so the runtime layer owns them instead of the static
+                # batch. Only chest/display-case actors get a leaf.
+                if hidden_gc and gc_kind in ("chest", "display_case"):
+                    leaf_idx = None
+                    leaf_mesh = None
+                    if attach_mesh and (
+                        "lid" in _gc_mesh_stem(attach_mesh).lower()
+                        or "door" in _gc_mesh_stem(attach_mesh).lower()
+                    ):
+                        leaf_idx, leaf_mesh = attach_idx, attach_mesh
+                    if leaf_mesh is None and gc_kind == "chest":
+                        for cidx in comps_by_actor.get(gc_actor, []):
+                            if cidx == idx:
+                                continue
+                            sm_c, _sm_props = _gc_static_mesh(exps, cidx)
+                            stem_low = _gc_mesh_stem(sm_c).lower()
+                            if sm_c and "lid" in stem_low and "broken" not in stem_low:
+                                leaf_idx, leaf_mesh = cidx, sm_c
+                                break
+                    if leaf_idx is not None and leaf_mesh:
+                        wmat_leaf = get_world_mat(leaf_idx, use_templates=True)
+                        if level_mat is not None:
+                            wmat_leaf = mat4_mul(level_mat, wmat_leaf)
+                        trs_leaf = ue_mat4_to_godot_trs(wmat_leaf)
+                        lprops = _merged_comp_props(exps[leaf_idx])
+                        ov_leaf = _component_override_paths(
+                            lprops,
+                            exps=exps,
+                            map_ue_path=raw_map_ue_path,
+                            mid_stats=mid_stats,
+                            sm_ue_path=leaf_mesh,
+                            ue_to_glb=ue_to_glb,
+                        )
+                        lentry = {
+                            "owner": gc_actor,
+                            "owner_class": gc_class or "",
+                            "component": exps[leaf_idx].get("Name", ""),
+                            "kind": gc_kind,
+                            "mesh": leaf_mesh,
+                            **trs_leaf,
+                        }
+                        if ov_leaf:
+                            lentry["override_materials"] = ov_leaf
+                            if ov_leaf[0]:
+                                lentry["override_material"] = ov_leaf[0]
+                        gc_leaves.append(lentry)
+                        gc_stats["leaves"] += 1
+                continue
 
             # 3. Lights
             if (
@@ -3172,6 +3458,9 @@ def extract_levels():
                 "data": {
                     "source": str(rel),
                     "meshes": meshes,
+                    "gc": gc_layers,
+                    "gc_leaves": gc_leaves,
+                    "gc_stats": gc_stats,
                     "lights": lights,
                     "markers": markers,
                     "map_boundaries": boundaries,
@@ -3202,6 +3491,8 @@ def extract_levels():
     visiting_li = set()
     li_merge_keys = (
         "meshes",
+        "gc",
+        "gc_leaves",
         "lights",
         "markers",
         "actors",
@@ -3300,6 +3591,19 @@ def extract_levels():
                     f"door_leaves_excluded={pdata['door_leaves_excluded']} "
                     f"unresolved={len(pdata['swinging_doors_unresolved'])}"
                 )
+            if pdata["gc_stats"]["components"]:
+                print(
+                    f"  {prel}: gc_components={pdata['gc_stats']['components']} "
+                    f"hidden={pdata['gc_stats']['hidden']} "
+                    f"visible_emitted={pdata['gc_stats']['visible_emitted']} "
+                    f"hidden_emitted={pdata['gc_stats']['hidden_emitted']} "
+                    f"leaves={pdata['gc_stats']['leaves']} "
+                    f"unresolved={pdata['gc_stats']['unresolved']} "
+                    f"fallback_broken={pdata['gc_stats']['fallback_broken']} "
+                    f"sibling_smc={pdata['gc_stats']['sibling_smc']}"
+                )
+                for _gc_key in total_gc_stats:
+                    total_gc_stats[_gc_key] += int(pdata["gc_stats"].get(_gc_key, 0))
             if (
                 pdata["rect_lights"]
                 or pdata["sky_lights"]
@@ -3361,6 +3665,20 @@ def extract_levels():
         f"rigid_no_params={total_splines_rigid}"
     )
     print(f"Marker transforms: origin_fixed={total_markers_origin_fixed}")
+    print(
+        "GC layers: components={components} hidden={hidden} visible={visible} "
+        "visible_emitted={visible_emitted} hidden_emitted={hidden_emitted} "
+        "leaves={leaves} unresolved={unresolved} "
+        "fallback_broken={fallback_broken} sibling_smc={sibling_smc}".format(
+            **total_gc_stats
+        )
+    )
+    if total_gc_visible_missing > 0:
+        raise SystemExit(
+            "parse_tables: REFUSING to normalize with "
+            f"{total_gc_visible_missing} authored-visible GeometryCollection(s) "
+            "that resolved no mesh (see GC_VISIBLE_NO_MESH lines)"
+        )
 
     # W6T content overrides: every declared rule must have found its level, and
     # every rule/cap must be accounted for exactly once in the applied report.

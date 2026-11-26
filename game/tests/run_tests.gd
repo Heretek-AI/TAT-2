@@ -2798,7 +2798,12 @@ func _initialize() -> void:
 	var cpd_wb_mat_ok: bool = cpd_wb_built == 1 and cpd_wb_node != null and cpd_wb_node.material_override == null \
 		and cpd_wb_node.mesh != null and (cpd_wb_node.mesh.surface_get_material(0) is StandardMaterial3D)
 
-	if cpd_fw_count != 35 or cpd_fw_bad != 0 or not cpd_fw_mat_ok or cpd_wb_count != 80 or cpd_wb_bad != 0 or not cpd_wb_gate_false or not cpd_wb_mat_ok:
+	# W10-A3: the merged BP component props/transform fix emits the authored
+	# Firewood_01..04 components of every campfire Blueprint. The old count (35)
+	# was the pre-fix under-emission: PeripheryA gained 3 and OldManor_Geo 15
+	# Firewood_01 placements that the raw level stubs did not carry. The
+	# property under test is unchanged: none of them may carry CPD.
+	if cpd_fw_count != 53 or cpd_fw_bad != 0 or not cpd_fw_mat_ok or cpd_wb_count != 80 or cpd_wb_bad != 0 or not cpd_wb_gate_false or not cpd_wb_mat_ok:
 		printerr("FAIL: 32b non-emissive separation (fw=", cpd_fw_count, "/bad=", cpd_fw_bad, "/mat=", cpd_fw_mat_ok, " wb=", cpd_wb_count, "/bad=", cpd_wb_bad, "/gate=", cpd_wb_gate_false, "/mat=", cpd_wb_mat_ok, ")")
 		fails += 1
 	else:
@@ -2903,13 +2908,17 @@ func _initialize() -> void:
 	var cpd_manor_acc: Dictionary = cpd_ll.call("_new_accumulator") as Dictionary
 	cpd_ll.call("_parse_sublevel_file", "res://data/generated/levels/OldManor/OldManor_Geo.tatlevel.json", cpd_manor_acc, cpd_e2e_host)
 	var cpd_manor_res: Dictionary = cpd_manor_acc.get("result", {}) as Dictionary
-	var cpd_moon_ok: bool = int(cpd_manor_res.get("moonshape_hidden", -1)) == 22
+	# W10-A3: 47 (not 22) is the authored census of visible `1m_Plane_Reverse`
+	# moon planes in OldManor_Geo (50 SM_Shape_Plane/_Shadow stubs minus 3
+	# bVisible=false). The merged-template fix resolves all of them and every one
+	# is hidden_in_game, so the moonshape rule still hides the whole set.
+	var cpd_moon_ok: bool = int(cpd_manor_res.get("moonshape_hidden", -1)) == 47
 
 	if not cpd_vis1_ok or not cpd_hid1_ok or not cpd_bat2_ok or not cpd_col_zero_ok or not cpd_e2e_ok or not cpd_moon_ok:
 		printerr("FAIL: 32c runtime CPD MultiMesh (vis1=", cpd_vis1_ok, " hid1=", cpd_hid1_ok, " bat2=", cpd_bat2_ok, " col0=", cpd_col_zero_ok, " e2e=", cpd_e2e_ok, " moon22=", cpd_moon_ok, " got=", cpd_manor_res.get("moonshape_hidden", -1), ")")
 		fails += 1
 	else:
-		print("PASS: 32c runtime CPD MultiMesh (count=1 vis/hid, count=2 distinct, zero collision, BeautifulCorner e2e, OldManor moonshape_hidden=22)")
+		print("PASS: 32c runtime CPD MultiMesh (count=1 vis/hid, count=2 distinct, zero collision, BeautifulCorner e2e, OldManor moonshape_hidden=47)")
 
 	cpd_e2e_host.queue_free()
 	cpd_host.queue_free()

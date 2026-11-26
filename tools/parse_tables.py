@@ -901,8 +901,12 @@ def _extract_emissive_cpd(mprops, ov_paths):
     return out
 
 
-def _merged_comp_props(e):
-    """Merge level export Properties on top of its BP Template archetype chain."""
+def _merged_comp_props_ex(e):
+    """_merged_comp_props + whether the BP Template archetype chain resolved.
+
+    The flag is what prevents applying a second copy of the template's local
+    transform: `get_world_mat(..., use_templates=True)` already composes it.
+    """
     props = dict(e.get("Properties") or {})
     tref = e.get("Template")
     if isinstance(tref, dict):
@@ -914,8 +918,45 @@ def _merged_comp_props(e):
                 if base:
                     merged = dict(base)
                     merged.update(props)
-                    return merged
-    return props
+                    return merged, True
+    return props, False
+
+
+def _merged_comp_props(e):
+    """Merge level export Properties on top of its BP Template archetype chain."""
+    return _merged_comp_props_ex(e)[0]
+
+
+# W10-A3: developer-only debug meshes (e.g. the turret DebugMesh
+# `/Game/Developers/gjasp/Maps/_GENERATED/gjasp/Disc_1A004574`) are editor
+# debris. The shipped build never draws them, so the producer never emits them.
+_DEVELOPER_MESH_PREFIX = "/game/developers/"
+# Exception: `1m_Plane_Reverse` is the authored moon-billboard carrier. The
+# loader has a dedicated rule that hides and counts it
+# (`_is_moonshape_mesh`): 19 dev-carrier planes in the Guildhall set and 47 in
+# OldManor_Geo, part of the loader's measured moonshape_hidden count. Treating
+# it as editor debris would silently erase that accounting and the cream/moon
+# census that reads it. Keep the mesh; the loader still never draws it.
+_DEVELOPER_MESH_KEEP_STEMS = frozenset({"1m_plane_reverse"})
+
+
+def _is_developer_mesh(sm: str) -> bool:
+    if _DEVELOPER_MESH_PREFIX not in (sm or "").lower():
+        return False
+    stem = str(sm).replace("\\", "/").rsplit("/", 1)[-1].split(".")[0].lower()
+    return stem not in _DEVELOPER_MESH_KEEP_STEMS
+
+
+# W10-A3: authored turret art. A turret's parts are gameplay props bolted to
+# walls/stands, not masonry: they must render but never join the building
+# collider budget. Guildhall measured 30,819 shapes before the fix; the 1,145
+# visible turret parts would each add a heuristic/authored shape and overrun the
+# 31,400 building partition, so the producer marks them `no_collide`.
+_TURRET_MESH_PREFIX = "/game/art/gameplay/turrets/"
+
+
+def _is_turret_mesh(sm: str) -> bool:
+    return (sm or "").lower().startswith(_TURRET_MESH_PREFIX)
 
 
 # ---------------------------------------------------------------------------
@@ -1737,6 +1778,9 @@ def extract_levels():
         "sibling_smc": 0,
         "leaves": 0,
     }
+    total_bp_mesh_visible = 0
+    total_bp_mesh_unresolved = 0
+    total_bp_mesh_dev_skipped = 0
     mid_stats = {"resolved": 0, "unresolved": 0, "samples": [], "records": []}
     level_payloads = {}
     content_overrides = load_content_overrides()
@@ -1919,6 +1963,13 @@ def extract_levels():
         decals_unresolved = 0
         splines_skipped = 0
         markers_origin_fixed = 0
+        # W10-A3: BP component meshes resolved from the SCS/archetype Template
+        # chain. `bp_mesh_unresolved` counts a visible SMC stub that still has
+        # no mesh after merged props + bp_templates + GLB-stem fallbacks.
+        bp_mesh_visible = 0
+        bp_mesh_unresolved = 0
+        bp_mesh_dev_skipped = 0
+        bp_mesh_unresolved_samples = []
 
         actor_by_name = {}
         for aidx, ae in enumerate(exps):
@@ -2211,10 +2262,15 @@ def extract_levels():
                 if idx in door_leaf_idx:
                     door_leaves_excluded += 1
                     continue
-                mprops = _merged_comp_props(e)
+                mprops, mprops_from_template = _merged_comp_props_ex(e)
                 if mprops.get("bVisible") is False:
                     continue
-                sm = (props.get("StaticMesh") or {}).get("ObjectPath")
+                # W10-A3: a BP component stub carries no StaticMesh of its own;
+                # the authored mesh lives on the SCS ComponentTemplate. Read the
+                # merged result (raw stub props still win over the template) and
+                # count a stub that stays unresolved instead of dropping it
+                # silently.
+                sm = (mprops.get("StaticMesh") or {}).get("ObjectPath")
                 bp_lmat = None
                 if not sm and outer_name:
                     bp_cls = outer_name.split("'")[0]
@@ -2223,7 +2279,14 @@ def extract_levels():
                     tpl = bp_map.get(cname) or bp_map.get(cname.rstrip("0123456789"))
                     if isinstance(tpl, dict):
                         sm = tpl.get("sm")
-                        if not (
+                        if mprops_from_template:
+                            # The merged transform already carries the
+                            # template's RelativeLocation/Rotation/Scale3D.
+                            # Applying tpl["local"] again would double it; only
+                            # the stub's own override may replace it, and
+                            # `_merged_comp_props` lets the raw stub win.
+                            bp_lmat = None
+                        elif not (
                             props.get("RelativeLocation")
                             or props.get("RelativeRotation")
                             or props.get("RelativeScale3D")
@@ -2237,10 +2300,26 @@ def extract_levels():
                         sm = glb_by_name.get("sm_deskvariant_b") or glb_by_name.get(
                             "sm_deskvariant_a"
                         )
+                if not sm:
+                    # Visible BP/level component with no authored mesh anywhere
+                    # in its Template chain, bp_templates or the GLB index.
+                    bp_mesh_unresolved += 1
+                    if len(bp_mesh_unresolved_samples) < 16:
+                        bp_mesh_unresolved_samples.append(
+                            f"{outer_name.split(chr(39))[0]}.{e.get('Name', '')}"
+                        )
+                    continue
                 if sm:
+                    if _is_developer_mesh(sm):
+                        bp_mesh_dev_skipped += 1
+                        continue
                     if "SplineEditorMesh" in sm:
                         continue
-                    wmat = get_world_mat(idx)
+                    # Merged transform: the component's authored RelativeTRS
+                    # from the Template chain composed through the level stub's
+                    # AttachParent. The raw stub's own transform still wins
+                    # (merged.update(raw)).
+                    wmat = get_world_mat(idx, use_templates=mprops_from_template)
                     if bp_lmat is not None:
                         wmat = mat4_mul(wmat, bp_lmat)
                     if level_mat is not None:
@@ -2265,6 +2344,13 @@ def extract_levels():
                         entry["cpd"] = cpd_vals
                     if mprops.get("bHiddenInGame") is True:
                         entry["hidden_in_game"] = True
+                    elif mprops_from_template:
+                        bp_mesh_visible += 1
+                    if _is_turret_mesh(sm_clean):
+                        # Authored turret prop: visible, never a building
+                        # collider. The loader honours this per entry and keeps
+                        # its 32,000 shape budget for masonry.
+                        entry["no_collide"] = True
                     if et == "SplineMeshComponent":
                         # RE-B-04: SplineParams was never read, so every piece of
                         # a spline actor collapsed onto its parent transform.
@@ -2288,10 +2374,10 @@ def extract_levels():
                 if idx in door_leaf_idx:
                     door_leaves_excluded += 1
                     continue
-                mprops2 = _merged_comp_props(e)
+                mprops2, mprops2_from_template = _merged_comp_props_ex(e)
                 if mprops2.get("bVisible") is False:
                     continue
-                sm = (props.get("StaticMesh") or {}).get("ObjectPath")
+                sm = (mprops2.get("StaticMesh") or {}).get("ObjectPath")
                 bp_cls = outer_name.split("'")[0] if outer_name else ""
                 cname = e.get("Name", "")
                 tpl2 = bp_templates.get(bp_cls, {}).get(cname)
@@ -2307,6 +2393,9 @@ def extract_levels():
                 if not instances and isinstance(tpl2, dict):
                     instances = tpl2.get("instances") or []
                 if sm:
+                    if _is_developer_mesh(sm):
+                        bp_mesh_dev_skipped += 1
+                        continue
                     if "SplineEditorMesh" in sm:
                         continue
                     sm_clean2 = sm.split(".")[0]
@@ -2318,7 +2407,7 @@ def extract_levels():
                         sm_ue_path=sm_clean2,
                         ue_to_glb=ue_to_glb,
                     )
-                    wmat = get_world_mat(idx)
+                    wmat = get_world_mat(idx, use_templates=mprops2_from_template)
                     stub_has_transform = bool(
                         props.get("RelativeLocation")
                         or props.get("RelativeRotation")
@@ -2328,7 +2417,10 @@ def extract_levels():
                         isinstance(tpl2, dict)
                         and tpl2.get("local") is not None
                         and not stub_has_transform
+                        and not mprops2_from_template
                     ):
+                        # Only the bp_templates fallback needs the extra template
+                        # local; the merged transform already applied it.
                         wmat = mat4_mul(wmat, tpl2["local"])
                     if level_mat is not None:
                         wmat = mat4_mul(level_mat, wmat)
@@ -2353,6 +2445,8 @@ def extract_levels():
                                 ientry["cpd"] = list(cpd_vals2)
                             if hidden2:
                                 ientry["hidden_in_game"] = True
+                            if _is_turret_mesh(sm_clean2):
+                                ientry["no_collide"] = True
                             meshes.append(ientry)
                     else:
                         trs = ue_mat4_to_godot_trs(wmat)
@@ -2365,6 +2459,8 @@ def extract_levels():
                             sentry["cpd"] = cpd_vals2
                         if hidden2:
                             sentry["hidden_in_game"] = True
+                        if _is_turret_mesh(sm_clean2):
+                            sentry["no_collide"] = True
                         meshes.append(sentry)
                     continue
 
@@ -3481,6 +3577,10 @@ def extract_levels():
                     "door_leaves_excluded": door_leaves_excluded,
                     "swinging_doors_unresolved": swinging_unresolved,
                     "markers_origin_fixed": markers_origin_fixed,
+                    "bp_mesh_visible": bp_mesh_visible,
+                    "bp_mesh_unresolved": bp_mesh_unresolved,
+                    "bp_mesh_dev_skipped": bp_mesh_dev_skipped,
+                    "bp_mesh_unresolved_samples": bp_mesh_unresolved_samples,
                     "streaming_levels": streaming_levels,
                     "level_instances": [],
                 },
@@ -3585,6 +3685,19 @@ def extract_levels():
                 len(p.get("points") or []) for p in (pdata.get("patrol_paths") or [])
             )
             total_markers_origin_fixed += int(pdata.get("markers_origin_fixed") or 0)
+            total_bp_mesh_visible += int(pdata.get("bp_mesh_visible") or 0)
+            total_bp_mesh_unresolved += int(pdata.get("bp_mesh_unresolved") or 0)
+            total_bp_mesh_dev_skipped += int(pdata.get("bp_mesh_dev_skipped") or 0)
+            if (
+                pdata.get("bp_mesh_visible")
+                or pdata.get("bp_mesh_unresolved")
+                or pdata.get("bp_mesh_dev_skipped")
+            ):
+                print(
+                    f"  {prel}: bp_mesh_visible={pdata.get('bp_mesh_visible', 0)} "
+                    f"unresolved={pdata.get('bp_mesh_unresolved', 0)} "
+                    f"dev_skipped={pdata.get('bp_mesh_dev_skipped', 0)}"
+                )
             if pdata["swinging_doors"] or pdata["swinging_doors_unresolved"]:
                 print(
                     f"  {prel}: swinging_doors={len(pdata['swinging_doors'])} "
@@ -3679,6 +3792,11 @@ def extract_levels():
             f"{total_gc_visible_missing} authored-visible GeometryCollection(s) "
             "that resolved no mesh (see GC_VISIBLE_NO_MESH lines)"
         )
+    print(
+        f"BP mesh components: visible={total_bp_mesh_visible} "
+        f"unresolved={total_bp_mesh_unresolved} "
+        f"dev_skipped={total_bp_mesh_dev_skipped}"
+    )
 
     # W6T content overrides: every declared rule must have found its level, and
     # every rule/cap must be accounted for exactly once in the applied report.

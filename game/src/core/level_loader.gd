@@ -3328,6 +3328,11 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 				has_cpd = true
 		var hidden_raw: Variant = m_dict.get("hidden_in_game", false)
 		var hidden_in_game: bool = hidden_raw is bool and (hidden_raw as bool)
+		# W10-A3: producer-emitted per-entry collision opt-out (authored turret
+		# props). Batches split on the flag so a no-collide placement can never
+		# share a collider bucket with collidable masonry of the same UE path.
+		var no_collide_raw: Variant = m_dict.get("no_collide", false)
+		var no_collide: bool = no_collide_raw is bool and (no_collide_raw as bool)
 		# Authored SplineMeshComponent params: each distinct spline is its own
 		# loft, so it must be its own batch (and its own collider shape).
 		var spline_raw: Variant = m_dict.get("spline", null)
@@ -3341,6 +3346,8 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 			bkey += "||cpd"
 		if hidden_in_game:
 			bkey += "||hidden"
+		if no_collide:
+			bkey += "||nocol"
 		if spline_key != "":
 			bkey += "||spline||" + spline_key
 		var dedupe_key: String = bkey + "||" + str(tr)
@@ -3360,6 +3367,7 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 				"source_sublevel": sublevel_tag,
 				"source_sublevels": {} as Dictionary,
 				"hidden_in_game": hidden_in_game,
+				"no_collide": no_collide,
 			}
 			if spline_key != "":
 				(batches[bkey] as Dictionary)["spline"] = spline_rec
@@ -3720,6 +3728,7 @@ func _make_draw_items(batches: Dictionary, collide: bool, global_batch: bool = f
 		var cpds: Array[Color] = []
 		var sources: Array = []
 		var hidden_in_game: bool = false
+		var no_collide: bool = false
 		var per_instance: bool = false
 		var spline_rec: Dictionary = {}
 		if bval is Dictionary:
@@ -3744,6 +3753,8 @@ func _make_draw_items(batches: Dictionary, collide: bool, global_batch: bool = f
 						cpds.append(c_var as Color)
 			var hid_raw: Variant = bdict.get("hidden_in_game", false)
 			hidden_in_game = hid_raw is bool and (hid_raw as bool)
+			var nocol_raw: Variant = bdict.get("no_collide", false)
+			no_collide = nocol_raw is bool and (nocol_raw as bool)
 			var spl_raw: Variant = bdict.get("spline", null)
 			if spl_raw is Dictionary:
 				spline_rec = spl_raw as Dictionary
@@ -3770,6 +3781,7 @@ func _make_draw_items(batches: Dictionary, collide: bool, global_batch: bool = f
 				"trs": trs,
 				"cpds": cpds if has_cpds else ([] as Array[Color]),
 				"hidden_in_game": hidden_in_game,
+				"no_collide": no_collide,
 				"collide": collide,
 				"cell": Vector2i.ZERO,
 				"spline": spline_rec,
@@ -3795,6 +3807,7 @@ func _make_draw_items(batches: Dictionary, collide: bool, global_batch: bool = f
 					"trs": [tr_pi],
 					"cpds": pi_cpds,
 					"hidden_in_game": hidden_in_game,
+					"no_collide": no_collide,
 					"collide": collide,
 					"cell": _cell_of(tr_pi),
 					"spline": spline_rec,
@@ -3815,6 +3828,7 @@ func _make_draw_items(batches: Dictionary, collide: bool, global_batch: bool = f
 				"trs": trs,
 				"cpds": single_cpds,
 				"hidden_in_game": hidden_in_game,
+				"no_collide": no_collide,
 				"collide": collide,
 				"cell": _cell_of(single_tr),
 				"spline": spline_rec,
@@ -3854,6 +3868,7 @@ func _make_draw_items(batches: Dictionary, collide: bool, global_batch: bool = f
 				"trs": cells[ck_var],
 				"cpds": item_cpds,
 				"hidden_in_game": hidden_in_game,
+				"no_collide": no_collide,
 				"collide": collide,
 				"cell": cell,
 				"spline": spline_rec,
@@ -4556,6 +4571,11 @@ func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> 
 	var use_cpd: bool = not cpds.is_empty() and cpds.size() == count
 	var hidden_raw: Variant = item.get("hidden_in_game", false)
 	var hidden_in_game: bool = hidden_raw is bool and (hidden_raw as bool)
+	# W10-A3: authored turret props opt out of building collision (and occluder
+	# proxies) per entry. The producer emits `no_collide: true`; the loader must
+	# never count them against the 32,000-shape budget.
+	var no_collide_raw: Variant = item.get("no_collide", false)
+	var no_collide: bool = no_collide_raw is bool and (no_collide_raw as bool)
 	var far_raw: Variant = item.get("far", false)
 	var far_item: bool = far_raw is bool and (far_raw as bool)
 	var ov_key_eff: String = str(item.get("override_key", ""))
@@ -4636,7 +4656,7 @@ func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> 
 			node.lod_bias = MobileProfile.lod_bias()
 		_apply_periph_range(node, item, ctx)
 		node.set_meta("ue_mesh", mp)
-		node.set_meta("decorative", not bool(item.get("collide", false)))
+		node.set_meta("decorative", not bool(item.get("collide", false)) or no_collide)
 		node.set_meta("source_sublevel", source_sublevel)
 		node.set_meta("source_sublevels", source_sublevels)
 		node.set_meta("source_counts", source_counts)
@@ -4656,7 +4676,7 @@ func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> 
 		ctx["perf_build_ms"] = int(ctx["perf_build_ms"]) + (Time.get_ticks_msec() - _pm0)
 
 	var is_clutter: bool = _has_token(low_mp, CLUTTER_TOKENS)
-	if not use_cpd and not hidden_in_game and bool(item.get("collide", false)) and bool(ctx.get("generate_collision", false)) and not is_clutter:
+	if not use_cpd and not hidden_in_game and not no_collide and bool(item.get("collide", false)) and bool(ctx.get("generate_collision", false)) and not is_clutter:
 		var cell: Vector2i = item.get("cell", Vector2i.ZERO)
 		if not spline_item.is_empty():
 			# A lofted spline piece cannot share the rigid authored hull, so the
@@ -4702,7 +4722,7 @@ func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> 
 					else:
 						_add_collider(ctx, cell, shape, tr_c, soff, "building", mp)
 
-	if not use_cpd and not hidden_in_game and not is_clutter and not far_item and _qualifies_as_occluder(low_mp, mesh):
+	if not use_cpd and not hidden_in_game and not no_collide and not is_clutter and not far_item and _qualifies_as_occluder(low_mp, mesh):
 		for i3 in range(count):
 			if int(ctx.get("occluders", 0)) >= MAX_OCCLUDERS:
 				break
@@ -5151,7 +5171,7 @@ func _fill_col_path_counts(items: Array, ctx: Dictionary) -> void:
 		if not (pc_var is Dictionary):
 			continue
 		var pc_item: Dictionary = pc_var as Dictionary
-		if not bool(pc_item.get("collide", false)) or bool(pc_item.get("hidden_in_game", false)):
+		if not bool(pc_item.get("collide", false)) or bool(pc_item.get("hidden_in_game", false)) or bool(pc_item.get("no_collide", false)):
 			continue
 		var pc_trs: Variant = pc_item.get("trs", [])
 		if not (pc_trs is Array):

@@ -25,10 +25,12 @@ one **expected FAIL** (civilian pants albedo — a producer
 `PORT_APPROX`). Parity-only governance is proven: every content-override rule
 is classified, and `TAT2_PARITY_ONLY=1` excludes expansion content while keeping
 every shipped record. The port capture harness (six poses, audio tap, ROI/KF27
-scorer) is built and self-tested headless, but **no Vulkan capture and no live
-reference capture were run**, so the 120-row baseline is still unscored. The next
-work is the capture + baseline; the cream/beam look fixes and the StateTree
-cutover come after it.
+scorer) is built and self-tested; the first six-pose port capture ran at
+`5301fc6` (`docs/reports/logs/p0b/20261126T210338Z_...`). The frames confirm the
+visible cream bars are the `SM_LightBeam` cards (axis fixed, full-tube material
+still P4) and the exposure split (gate too dark, foyer too bright). The live
+reference and 120-row baseline are still unscored; the beam material is the
+top visual fix, then the live-reference score.
 
 ## 2. Gates at this HEAD (all measured, logs in `docs/reports/logs/p0b/full/`)
 
@@ -63,10 +65,11 @@ unexpected non-zero exit.
 | perf guard | 78/78 |
 | `make gate-ratchet` | PASS (`measured_on=dfa8c7e`; floors raised, never lowered) |
 
-**Caveat:** no Vulkan capture and no live reference capture. P0b measured the
-instruments headless and validated the manifest/reference; it makes no new pixel
-claim. The W9 interior numbers were measured on a frame with a light-card slab
-covering half the screen and are **not** a valid interior baseline.
+**Caveat:** no live reference capture. The port-side six-pose capture exists and
+is measured, but it is not a parity score; the 120-row baseline still needs the
+shipped reference. The W9 interior numbers were measured on a frame with a
+light-card slab covering half the screen and are **not** a valid interior
+baseline.
 
 ## 3. Closed by P0a (previously the top defects)
 

@@ -16,12 +16,12 @@ Table-only mode: generated-data checks skipped.
 
 CONTENT_OVERRIDES: PASS
 python3 tools/check_gate_ratchet.py
-PASS: measured_on=29046c8
+PASS: measured_on=e2d783a
 PASS: audit.coverage_den=12703
 PASS: audit.coverage_num=12660
 PASS: audit.unexpected=0
 PASS: compile.broken=0
-PASS: compile.checked=186
+PASS: compile.checked=189
 PASS: e2e.fails=0
 PASS: e2e.passed=278
 PASS: e2e.total=278
@@ -39,7 +39,7 @@ PASS: probe_collision.dropped=0
 PASS: probe_collision.maps=3
 PASS: probe_collision.planar_skipped=0
 PASS: run_tests.fails=0
-PASS: run_tests.passes=314
+PASS: run_tests.passes=319
 PASS: runtime_smoke.errors=0
 PASS: runtime_smoke.mission_ready=1
 PASS: string_audit.authored=195
@@ -50,9 +50,9 @@ PASS: texture_cap.capped=797
 PASS: texture_cap.offenders=0
 PASS: audit coverage 12660/12703 (99.7 %)
 PASS: compile.log proves compile ('scripts checked: (\\d+), broken: 0')
-PASS: compile.log records compile.checked=189 >= 186
+PASS: compile.log records compile.checked=189 >= 189
 PASS: run_tests.log proves run_tests ('SUMMARY: fails=0')
-PASS: run_tests.log records 319 PASS >= 314
+PASS: run_tests.log records 319 PASS >= 319
 PASS: m2.log proves m2 ('M2_SUMMARY: fails=0')
 PASS: m2.log records 12 PASS >= 12
 PASS: e2e.log proves e2e ('SUMMARY: fails=0 passed=(\\d+) total=(\\d+)')
@@ -88,11 +88,11 @@ PASS: probe_blackjack_race.log records BLACKJACK_PROBE PASS
 PASS: probe_geometry_placement.log records GEOM_PROBE PASS
 PASS: probe_collision_authored.log records COL_MAPS PASS
 PASS: literal_greps.log records LITERAL_GREPS PASS
-PASS: report records compile ('compile\\s*\\|\\s*186\\s*/\\s*0')
-PASS: report records run_tests ('run_tests\\s*\\|\\s*314')
+PASS: report records compile ('compile\\s*\\|\\s*189\\s*/\\s*0')
+PASS: report records run_tests ('run_tests\\s*\\|\\s*319')
 PASS: report records M2 ('M2\\s*\\|\\s*12')
 PASS: report records E2E ('E2E\\s*\\|\\s*278\\s*/\\s*278')
 PASS: report records coverage ('12660\\s*/\\s*12703')
-PASS: report names measured_on=29046c8
+PASS: report names measured_on=e2d783a
 
 GATE_RATCHET: PASS (baseline and committed evidence agree; Godot gates run locally)

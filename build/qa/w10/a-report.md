@@ -1,6 +1,7 @@
 # W10-A — correctness and evidence (wave report)
 
-Worktree `/home/john/Projects/TAT-2-rem-w10-a`, branch `w10/a`, base `29046c8`.
+Worktree `/home/john/Projects/TAT-2-rem-w10-a`, branch `w10/a`, base `29046c8`,
+wave commit **`e2d783a`** (the ratchet stamp is a follow-up commit on top).
 **Nothing pushed, merged or rebased.** Lead: W10-A. Nested team: 4 investigation/RE
 lanes (INV-1, INV-2, INV-3, RE-1), 3 implementation lanes on disjoint files
 (IMPL-A screens, IMPL-B runtime, IMPL-C locks+traversal), 1 evidence lane, and an
@@ -298,12 +299,13 @@ audit could pin provenance; they are git-ignored and not part of the commit.
 
 ## 7. Integrator steps
 
-1. **Re-stamp the ratchet.** `tools/gate_ratchet.json` currently carries
-   `measured_on: 29046c8` (base) so the chart is readable in-branch. After cherry-picking
-   `w10/a`, set `measured_on` to the merged tip and update the same string in
-   `docs/reports/w10-gate-ratchet.md`, then `make gate-ratchet`. No other ratchet value
-   needs to move: the new floors are 154 locks / 3 collision maps / 306 routed / 195
-   authored / 0 greps / exit-124 smoke.
+1. **Re-stamp the ratchet at the merged tip.** `tools/gate_ratchet.json` and
+   `docs/reports/w10-gate-ratchet.md` carry `measured_on: e2d783a` (this wave's commit).
+   After cherry-picking `w10/a`, set both to the merged tip, then `make gate-ratchet` and
+   commit the refreshed `docs/reports/logs/w10/gate_ratchet.log`. No gate value needs to
+   move: the wave raised `compile` 186 → 189 and `run_tests` 314 → 319 and added the six
+   new families (collision maps, lock inventory, string audit, literal greps,
+   runtime-smoke, collision marker).
 2. **Regenerate nothing for this wave.** `game/data/generated/` was read-only; the
    collision/lock/string gates read the current payload. The only data change belongs to
    the open prison-door cap item: `tools/parse_tables.py` chain-resolving

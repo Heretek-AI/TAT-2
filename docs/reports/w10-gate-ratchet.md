@@ -5,7 +5,7 @@
 | wave | W10-A (D6 trace budget, D7 coplanar convex, D8 lock resolution, D9 runtime-smoke scan, D10 traversal fixtures + the evidence hardening) |
 | ratchet file | `tools/gate_ratchet.json` |
 | evidence directory | `docs/reports/logs/w10/` |
-| **measured_on** `29046c8` | **placeholder.** `29046c8` is the W9 tip the wave branched from; the lead re-stamps `measured_on` with the W10-A wave commit after the full serial gate run. |
+| **measured_on** `e2d783a` | the W10-A wave commit. The integrator re-stamps this and `tools/gate_ratchet.json` at the merged tip after the cherry-pick. |
 | checker | `python3 tools/check_gate_ratchet.py` (`make gate-ratchet`) |
 
 This report is the one the checker reads (`tools/gate_ratchet.json:report`). The
@@ -20,31 +20,31 @@ lines (parsed as `compile | checked / broken`, `run_tests | passes`,
 `measured_on` SHA):
 
 ```
-compile | 186 / 0
-run_tests | 314
+compile | 189 / 0
+run_tests | 319
 M2 | 12
 E2E | 278 / 278
 12660 / 12703
-measured_on 29046c8
+measured_on e2d783a
 ```
 
-These are the W9 tip floors: W10-A adds suites and probes but does not re-baseline
-the W9 gate counts. The lead raises them only after the full serial run records
-higher numbers (never lowers them). The audit line must match
+The W9 floors were raised to this wave's measured values for the two counts the wave
+increased (`compile` 186 -> 189 scripts; `run_tests` 314 -> 319 passes for the five new
+suites), so a later change cannot silently drop a W10-A suite. Every other floor is
+unchanged, and no floor is ever lowered. The audit line must match
 `Disk-backed content coverage: <num>/<den> … unexpected 0`.
 
-`measured_on` is `29046c8` until the lead re-stamps the wave commit; the checker
-requires that exact string in this report.
+`measured_on` is the wave commit; the checker requires that exact string in this report
+and in `tools/gate_ratchet.json`.
 
-## Placeholder logs (the lead must overwrite)
+## Logs are this wave's runs
 
-`docs/reports/logs/w10/` was seeded with copies of the 13 unchanged-gate logs
-from `docs/reports/logs/w9/` (`compile`, `run_tests`, `m2`, `e2e`, `audit`,
-`texture_cap`, `perf_guard`, `probe_leak` and the five W9 probes). They are
-**placeholders only**: they prove the wiring, not this wave. The lead overwrites
-each one with the W10-A run of the same command before pushing. The five
-W10-A-owned logs in the same directory were produced by this lane (see
-`build/qa/w10/evidence.md`).
+`docs/reports/logs/w10/` is now entirely this wave: the 13 unchanged-gate logs
+(`compile`, `run_tests`, `m2`, `e2e`, `audit`, `texture_cap`, `perf_guard`,
+`probe_leak` and the five W9 probes) were overwritten by the lead's full serial run,
+and the six W10-A logs were produced by the evidence lane
+(`build/qa/w10/evidence.md`). `runtime_smoke_godot.log` is the engine log the smoke
+command names.
 
 ## W10-A gates added
 

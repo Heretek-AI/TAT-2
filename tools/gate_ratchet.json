@@ -1,7 +1,7 @@
 {
   "schema": "tat2.gate_ratchet/1",
-  "measured_on": "29046c8",
-  "source": "W10-A re-measurement on top of the W9 tip (29046c8) on 2026-11-25: compile 186/0, run_tests 314/0 (suites to 111), M2 12/0, E2E 278/278 (tier 1 117/117), the five W9 probes, perf guard 78/78, audit 12,660/12,703, texture cap 797/1/0. The W10-A gates (collision maps, lock inventory, string audit, literal greps, runtime smoke) were measured in the evidence lane; the unchanged logs are W9 placeholders the lead overwrites with the wave runs. Logs in docs/reports/logs/w10/.",
+  "measured_on": "e2d783a",
+  "source": "W10-A measurement on top of the W9 tip (29046c8), 2026-11-25/26: compile 189/0, run_tests 319/0 (suites to 116), M2 12/0, E2E 278/278, the five W9 probes, probe_leak clean, perf guard 78/78, audit 12,660/12,703, texture cap 797/1/0. New this wave: collision probe over Guildhall/OldManor/FTUE (0.989/0.993/0.976, dropped=0), lock inventory applied=154 (144+10), string audit 306/195/111, literal greps 0/0, runtime-smoke exit=124 errors=0. Logs in docs/reports/logs/w10/ are this wave's runs.",
   "note": "Floors, not exact counts: a wave may add tests/files but must never lower a floor or introduce a failure. Counts are read from the committed log and compared with >=; failure counts are exact zeros and e2e.passed must equal e2e.total. Update only with a real gate log in docs/reports/logs/ (see tools/check_gate_ratchet.py for the evidence layout).",
   "report": "docs/reports/w10-gate-ratchet.md",
   "evidence": {
@@ -28,11 +28,11 @@
   },
   "gates": {
     "compile": {
-      "checked": 186,
+      "checked": 189,
       "broken": 0
     },
     "run_tests": {
-      "passes": 314,
+      "passes": 319,
       "fails": 0
     },
     "m2": {

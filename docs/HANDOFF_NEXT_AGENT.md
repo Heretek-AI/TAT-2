@@ -1,9 +1,11 @@
 # Handoff — Thick As Thieves Godot 4.7.2 port (next run)
 
 **Repo:** `/home/john/Projects/TAT-2`
-**HEAD at handoff:** the **W9 tip** (`4845992`) — four phases on top of R8:
-verification, data consumption, behaviour, UI completeness and the StateTree runtime.
-See [`reports/w9-remediation-20261125.md`](reports/w9-remediation-20261125.md), and the
+**HEAD at handoff:** the **W10-A tip** (`e2d783a`, branch `w10/a`) — correctness and
+evidence on top of the W9 tip (`4845992`). See
+[`reports/w10-gate-ratchet.md`](reports/w10-gate-ratchet.md),
+`build/qa/w10/a-report.md` and the wave detail in
+[`reports/w9-remediation-20261125.md`](reports/w9-remediation-20261125.md) plus the
 upstream audits at `fb93f84`
 ([`reports/re-audit-20261124.md`](reports/re-audit-20261124.md),
 [`reports/r8-live-run-review-20261124.md`](reports/r8-live-run-review-20261124.md),
@@ -11,23 +13,29 @@ upstream audits at `fb93f84`
 **Working tree:** clean apart from private/derived data. Phase worktrees live at
 `/home/john/Projects/TAT-2-rem-*` and the R8 team branches (`rem/T01-pipeline` …
 `rem/T12-vfx`) are kept locally for provenance; both can be removed.
-**Gates:** compile 186/0 · `run_tests` 314 PASS fails=0 (suites to 111) · M2 12/0 ·
-E2E 278/278 (tier 1 117) · DOORWALK / VIEWMODEL / NIAGARA / BLACKJACK / GEOM probes PASS ·
-`make runtime-smoke` PASS (script_errors=0, also with `TAT2_STATETREE=shadow`) ·
-`make audit` PASS (12,660/12,703, reason recorded) · texture cap 797/1/0 ·
-perf guard 78/78 · `make gate-ratchet` PASS.
-**What W9 changed in practice:** collision is authored `AggGeom` for the meshes that have
-it — Guildhall-15 **937/947 collidable paths (98.9 %)**, with 10 `/Game/Test/` graybox
-paths on the heuristic and 233/1,667 placed paths repo-wide lacking a record, so it is not
-"every mesh" (`TAT2_COLLISION=authored|aabb`), progression and locks are authored, UI reads the
-authored tables, the TAB map has all 13 authored boundaries, and the StateTree runtime
-runs in **shadow** — 0/21 trees are fully evaluable because the payload drops node
-parameters, so the FSM still drives. Do not invent parameters to force a cutover.
+**Gates:** compile **189/0** · `run_tests` **319 PASS fails=0** (suites to **116**) ·
+M2 12/0 · E2E 278/278 (tier 1 117) · DOORWALK / VIEWMODEL / NIAGARA / BLACKJACK / GEOM
+probes PASS · probe_leak clean · collision probe **per map 0.989 / 0.993 / 0.976,
+dropped=0** · lock inventory **applied=154 (144+10)** · string audit **306/195/111** ·
+literal greps 0/0 · `make runtime-smoke` PASS (**exit=124, errors=0**) ·
+`make audit` PASS (12,660/12,703) · texture cap 797/1/0 ·
+perf guard 78/78 · `make gate-ratchet` PASS. Logs: `docs/reports/logs/w10/`.
+**What W10-A changed in practice:** nine reported defects fixed red -> green behind
+suites 112-116 (the post-match Continue consumer, main-menu focus restore, the ESC/pause
+double-handling, the timeout reason, one rack-up layer, the StateTree trace file budget,
+the coplanar-convex collision rule, the runtime-smoke scan, and the two traversal
+fixtures); the stair-mesh cap exemption made the 36-hull OldManor tower flight walkable;
+and the probes/greps/string-audit/StateTree-coverage claims are now gates the ratchet
+reads. Reports: `build/qa/w10/{a-report,inv-*,re-1-locks,impl-*,evidence,audit}.md`.
 **Not verified / open:** the interior brightness band (foyer p50 29 vs the reference 15),
-IBL (cubemap export missing), the lockpick stand-in, and 34 of 39 VFX sprite materials.
-The temporal `AEM_Basic` adaptation (0.2 f-stops/s) is the designed next attempt for the
-interior band; a spatial grade was tried and rejected by its pre-registered criteria.
-Suite-45 (stairs) flaked once; a clean rerun is recorded in the P4 report.
+IBL (cubemap export missing *and* no runtime consumer of it), the lockpick stand-in, and
+34 of 39 VFX sprite materials. The temporal `AEM_Basic` adaptation (0.2 f-stops/s) is the
+designed next attempt for the interior band; a spatial grade was tried and rejected by
+its pre-registered criteria. **Prison-door lock level:** the authored `MaxLockLevel`
+resolves to 4 but the producer emits instance deltas only, so the port locks at 1 — a
+producer chain resolution + regeneration (integrator) and a deliberate difficulty call.
+Suite-45 (stairs) flaked once; W10-A replaced the fixture with the authored per-element
+union and it is now suite 115, green.
 **Godot:** `4.7.2.stable` via **native `tools/godot`** (Flatpak fallback inside the
 wrapper). `godot` is **not** on `$PATH`.
 **Renderer:** Forward+ · Jolt Physics 60 Hz · 1280×720 reference

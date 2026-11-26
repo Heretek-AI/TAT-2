@@ -441,7 +441,12 @@ tested and to fail closed on every field divergence (N2) and for three
 evidence-hygiene fixes (N3-N5), all done. `_can_select_target` is now a
 recursive dry run.
 
-**Final verdict: see [`audit-p4.md`](audit-p4.md) `## Final re-audit`.** <!-- final verdict -->
+**Final verdict: `AUDIT: PASS`** — no blocker remains. The auditor's own ancestor
+probe shows `frames=3`, 0 duplicate frames and exactly one fire per tick; suites
+110/111 were re-run at 77/0 and 20/0 with the signature unchanged; the 560-frame
+probe reproduced the same waypoint/state order; and its join probe reproduced
+`467 / 39 / 428 / 0`. Four text-only nits (N3/F10, N4, N5, F4) were fixed in
+`9509844`. Full text: [`audit-p4.md`](audit-p4.md) `## Final re-audit`.
 
 ## 7. Gates
 
@@ -451,7 +456,7 @@ Godot at a time.
 | gate | result |
 |---|---|
 | `tools/check_scripts_compile.gd` | **186 checked, 0 broken** (base 176; +10 = 7 statetree + 2 suites + 1 probe) |
-| `tests/run_tests.gd` | **`SUMMARY: fails=0`**, **314** `^PASS` (base 312 + suites 110/111; no suite removed) |
+| `tests/run_tests.gd` | **`SUMMARY: fails=0`**, **314** `^PASS` (base 312 + suites 110/111; no suite removed). The *first* post-fix run hit the pre-existing suite-45 stairs flake (`blocker_rise=0.0` fine; `visible_rise=0.4154` vs `0.40 ± 0.01`, a 5.4 mm overshoot — P3 recorded the same suite at 0.415 and it was clean on rerun); the immediate rerun was **fails=0 / 314**. |
 | `tests/test_m2_player.gd` | **`M2_SUMMARY: fails=0`** |
 | `tests/e2e/run_e2e_tests.gd -- --tier=1` | **`fails=0 passed=117 total=117`** |
 | `tests/e2e/run_e2e_tests.gd` | **`fails=0 passed=278 total=278`** |

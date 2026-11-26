@@ -142,7 +142,7 @@ or `null`.
 must print, with no code change on the runtime side:
 
 ```
-P4PARAMS task_instances_with_params=260 condition_instances_with_params=209
+P4PARAMS task_instances_with_params=260 condition_instances_with_params=203
 P4COVERAGE ... task_blind_templated=94->0 ...
 ```
 

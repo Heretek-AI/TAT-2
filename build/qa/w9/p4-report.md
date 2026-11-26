@@ -35,7 +35,7 @@ task instances and 32 of its 35 covered condition instances are
 `TAT2_STATETREE=off` and once with `=shadow`: **signature identical**
 (`sig=-5750684789768048477` both; position `1.382652,-0.049066,3.357109`, yaw,
 alertness 0, detection `0.000000`, `wp_index` 2, dwell timer, `ever_spotted`
-false). The shadow run ticked **241** frames, wrote **70** trace rows and reached
+false). The shadow run ticked **241** frames, wrote **66** trace rows and reached
 `ST_Patrol`. Detail in §W9-P4-3.
 
 **S2 decision: BLOCKED-ON T01, not attempted.** 0 of 21 trees can be fully
@@ -197,8 +197,9 @@ already reproduces the authored patrol **order** against the FSM's real waypoint
 - **test:** nine synthetic trees in suite 110 drive selector → task lifecycle →
   `OnStateCompleted` switch, `OnTick` observer, `OnEvent`, transition delay,
   `Succeeded` handle, `Fallback=NextSelectableSibling` (and its absence),
-  UNKNOWN-enter fall-through, and `Medium` vs `Normal` priority. Five corrupt
-  payloads are rejected (child out of range, missing
+  ancestor/self re-entry without a duplicate frame, the flat-transition join and
+  its five corruption modes, UNKNOWN-enter fall-through, and `Medium` vs
+  `Normal` priority. Five corrupt payloads are rejected (child out of range, missing
   transition target, `OnEvent` without an event, unknown trigger, unresolvable
   link) and the clean payload is accepted.
 - **verdict: FIXED** for the generic runtime. Gameplay-node coverage is
@@ -429,7 +430,18 @@ list in `trace_all_trees`, the abridged `SHADOW_PHASE` quote label, the `<=` vs
 `<` arrival gate (now `<`, matching the FSM), the inspection-only `patrol` note,
 and the pending report edit it flagged.
 
-**Re-audit: see [`audit-p4.md`](audit-p4.md) `## Re-audit`.** <!-- re-audit verdict -->
+**Second verdict: `AUDIT: FAIL`** — the two blockers were closed, but the re-audit
+found a **new blocker in the code this phase added** (N1): the fallback rewrite
+had dropped the "target already active" guard, so an ancestor/self transition
+re-entered the active state and appended a duplicate frame on every fire (71
+authored transitions; 67 non-`OnEvent`, so the missing event emitter does not
+protect them). Fixed by replace-in-place re-entry (`_exit_to(depth-1)` then
+`_enter_state`), pinned by `SYN_ANCESTOR`. It also asked for the join to be
+tested and to fail closed on every field divergence (N2) and for three
+evidence-hygiene fixes (N3-N5), all done. `_can_select_target` is now a
+recursive dry run.
+
+**Final verdict: see [`audit-p4.md`](audit-p4.md) `## Final re-audit`.** <!-- final verdict -->
 
 ## 7. Gates
 
@@ -513,10 +525,12 @@ M2 12 → 12.
    the port has no civilian sense/health/behaviour binding.
 10. **Cross-branch transitions are entered directly, not through their
     intermediate ancestors.** `_select_target` exits to the target's deepest
-    *active* ancestor and appends the target; it does not re-enter the states
-    between that ancestor and the target (their enter conditions and tasks do not
-    run). 69 authored transitions target an ancestor, 22 a strict descendant and
-    2 their own state, so the common case is exact; a cousin jump is
+    *active* ancestor and appends the target — except when the target is
+    already active (an ancestor or the state itself, 71 authored transitions),
+    which is replaced in place. It does not re-enter the states between the
+    deepest active ancestor and the target (their enter conditions and tasks do
+    not run). 69 authored transitions target an ancestor, 22 a strict descendant
+    and 2 their own state, so the common case is exact; a cousin jump is
     approximate. No path in the S1
     evidence exercises a cousin jump, and a full cutover must rebuild the path
     (UE visits the children of a selector transition target until a leaf).
@@ -543,10 +557,9 @@ M2 12 → 12.
 6. **Docs owed at integration (not P4-owned):** `docs/FIDELITY_GAPS.md` — the
    StateTree consumer now exists (21 trees parsed, 0 fully evaluable, the
    parameter gap and the T01 contract); `docs/HANDOFF_NEXT_AGENT.md` — new HEAD,
-   gate numbers, the S2/S3 list. `docs/FIDELITY_GAPS.md:421-425` and `:535` say
-   the tree "does not drive `guard_ai.gd`" — still true for behaviour, and now
-   false for "no consumer". The file's StateTree rows are at `:475`, `:499`
-   and `:587`.
+   gate numbers, the S2/S3 list. The file's StateTree rows are at `:475`, `:499`
+   and `:587`; they say the tree "does not drive `guard_ai.gd`" — still true for
+   behaviour, and now false for "no consumer".
 7. **Keep `TAT2_STATETREE=off` as the shipped default.** Shadow is opt-in until
    S2 lands.
 

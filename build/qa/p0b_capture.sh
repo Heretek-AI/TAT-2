@@ -81,6 +81,12 @@ else
   LOG="$ROOT/docs/reports/logs/p0b/$RUN/capture.log"
 fi
 mkdir -p "$(dirname "$LOG")" "$(dirname "$MANIFEST")" || exit 2
+# Write the run log to a temp file and only replace the previous evidence once
+# the run returns. A blocked `flock` waiter (another lane owns the Godot lock)
+# therefore never truncates the previous capture log; a run killed mid-flight
+# leaves its partial log behind via the EXIT trap.
+TMPLOG="$LOG.tmp"
+trap 'if [ -s "$TMPLOG" ]; then mv -f "$TMPLOG" "$LOG"; fi' EXIT
 
 if [ "$MODE" = "capture" ]; then
   if ! command -v xvfb-run >/dev/null 2>&1; then
@@ -113,8 +119,9 @@ if [ "$MODE" = "capture" ]; then
     "cd '$ROOT' && timeout 1800 xvfb-run -a -s '-screen 0 1920x1080x24' \
      tools/godot --path game --rendering-driver vulkan \
      --script '$SCRIPT' -- $ARGS" \
-    > "$LOG" 2>&1
+    > "$TMPLOG" 2>&1
   ST=$?
+  mv -f "$TMPLOG" "$LOG"
   END="$(date +%s)"
   nvidia-smi --query-gpu="$GPU_Q" --format=csv,noheader > "$LOG.gpu_after" 2>&1
   echo "P0B_CAPTURE_WALL mode=$MODE run=$(basename "$OUT") beam=$BEAM ao=$AO exit=$ST wall=$((END - START))s"
@@ -125,8 +132,9 @@ else
   flock "$LOCK" -c \
     "cd '$ROOT' && timeout 600 tools/godot --headless --path game \
      --script '$SCRIPT' -- $ARGS" \
-    > "$LOG" 2>&1
+    > "$TMPLOG" 2>&1
   ST=$?
+  mv -f "$TMPLOG" "$LOG"
   END="$(date +%s)"
   echo "P0B_CAPTURE_WALL mode=$MODE exit=$ST wall=$((END - START))s (headless, no GPU)"
 fi

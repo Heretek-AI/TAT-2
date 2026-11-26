@@ -16,14 +16,14 @@ examples, counts).
 cooked dump carries the authored parameter struct for
 
 * **260 of 326** task instances,
-* **209 of 233** condition instances,
+* **203 of 233** condition instances,
 
-and the payload carries none of them. (The fact sheet counted 260/326 task and
-209/233 condition instances; the W9-P4 audit's own walk found **203/233**
-conditions, excluding six `Get Actor Location` property-function records that are
-never referenced as conditions. The exact count depends on how an inherited
-Blueprint default is counted; the direction is not in doubt.) Measured
-consequence today (`p4-report.md` §2):
+and the payload carries none of them. (The facts lane first reported 209/233
+conditions; the W9-P4 audit's own walk found 203/233, because six of those
+records are `Get Actor Location` property functions that are never referenced as
+conditions. The exact count depends on how an inherited Blueprint default is
+counted; the direction is not in doubt.) Measured consequence today
+(`p4-report.md` §2):
 
 | class | authored | covered by the port binding | `parameter_blind` |
 |---|---:|---:|---:|

@@ -293,6 +293,7 @@ static func _join_flat_transitions(tree: Dictionary, flat_raw: Variant) -> void:
 		# keeps the nested `delay.duration` and fallback "None".
 		return
 	var by_index: Dictionary = {}
+	var flat_count: int = (flat_raw as Array).size()
 	for entry: Variant in flat_raw:
 		if not (entry is Dictionary):
 			errors.append("flat transition entry is not an object")
@@ -312,6 +313,32 @@ static func _join_flat_transitions(tree: Dictionary, flat_raw: Variant) -> void:
 			var fallback: String = str(flat.get("fallback", "None"))
 			if fallback != "None" and fallback != "NextSelectableSibling":
 				errors.append("transition %d has unknown fallback '%s'" % [index, fallback])
+			# Cross-check every field the two records share: a producer that
+			# changes one list and not the other must fail here, not silently
+			# mix a nested target with a flat fallback. JSON numbers arrive as
+			# floats, so the index compares numerically and a null `to_state`
+			# (Succeeded/Next handles) normalises to the empty string.
+			if flat.has("to_state_index") and int(flat["to_state_index"]) != int(tr.get("to_state_index", -1)):
+				errors.append("transition %d flat to_state_index=%d != nested %d"
+					% [index, int(flat["to_state_index"]), int(tr.get("to_state_index", -1))])
+			if flat.has("enabled") and bool(flat["enabled"]) != bool(tr.get("enabled", true)):
+				errors.append("transition %d flat enabled=%s != nested %s"
+					% [index, str(flat["enabled"]), str(tr.get("enabled", true))])
+			for key: String in ["to_kind", "trigger", "priority", "required_event"]:
+				if flat.has(key) and str(flat[key]) != str(tr.get(key, "")):
+					errors.append("transition %d flat %s=%s != nested %s"
+						% [index, key, str(flat[key]), str(tr.get(key, ""))])
+			if flat.has("to_state"):
+				var flat_name: String = "" if flat["to_state"] == null else str(flat["to_state"])
+				if flat_name != str(tr.get("to_state", "")):
+					errors.append("transition %d flat to_state '%s' != nested '%s'"
+						% [index, flat_name, str(tr.get("to_state", ""))])
+			if flat.has("conditions"):
+				var flat_conds: Array = []
+				for c: Variant in (flat["conditions"] as Array):
+					flat_conds.append(str(c))
+				if flat_conds != (tr.get("conditions", []) as Array):
+					errors.append("transition %d flat conditions differ from nested" % index)
 			tr["fallback"] = fallback
 			tr["delay_s"] = float(flat.get("delay_seconds", 0.0))
 			tr["delay_variance_s"] = float(flat.get("delay_random_variance", 0.0))
@@ -321,6 +348,8 @@ static func _join_flat_transitions(tree: Dictionary, flat_raw: Variant) -> void:
 		errors.append("joined %d of %d transitions" % [joined, total])
 	if by_index.size() != total:
 		errors.append("flat transition count %d != per-state count %d" % [by_index.size(), total])
+	if flat_count != total:
+		errors.append("flat array has %d entries for %d per-state transitions" % [flat_count, total])
 
 
 static func _empty_tree(tree_name: String, raw: Dictionary, path: String, roots: Array, errors: Array, warnings: Array) -> Dictionary:

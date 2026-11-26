@@ -133,8 +133,13 @@ static func attach(p_guard: Node) -> RefCounted:
 func _start() -> void:
 	var lib: Dictionary = library()
 	var tree_set: Dictionary = lib.get("trees", {})
-	if not tree_set.has(GUARD_ROOT):
+	# A partially joined or invalid library must not be shadowed: a missing
+	# fallback/delay silently changes the tree's behaviour, and a wrong answer is
+	# worse than no answer. Fail closed and say why.
+	if not bool(lib.get("ok", false)) or not tree_set.has(GUARD_ROOT):
 		start_failed = true
+		push_warning("StateTree shadow not started: library ok=%s errors=%d"
+			% [str(lib.get("ok", false)), (lib.get("errors", []) as Array).size()])
 		return
 	bindings = GuardBindings.new()
 	bindings.setup(guard, tree_set)

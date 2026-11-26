@@ -40,8 +40,8 @@ false). The shadow run ticked **241** frames, wrote **70** trace rows and reache
 
 **S2 decision: BLOCKED-ON T01, not attempted.** 0 of 21 trees can be fully
 evaluated: the payload carries no node parameters at all, while the raw dump
-carries an authored parameter struct for most nodes (fact sheet 260/326 tasks and
-209/233 conditions; the audit found 203/233 conditions — see §W9-P4-1)
+carries an authored parameter struct for most nodes (260/326 task instances and
+203/233 condition instances — see §W9-P4-1)
 ([`p4-t01-contract.md`](p4-t01-contract.md)). A cutover driven by state-name
 inferences would be invented behaviour, which the brief forbids. The shadow trace
 already reproduces the authored patrol **order** against the FSM's real waypoints
@@ -100,9 +100,10 @@ already reproduces the authored patrol **order** against the FSM's real waypoint
   `OnStateCompleted 284 / OnEvent 89 / OnStateSucceeded 38 / OnStateFailed 36 /
   OnTick 20`; priorities `None 358 / Normal 67 / Medium 21 / Critical 12 /
   High 9`; targets `state 417 / Succeeded 35 / Next 15`; **7 disabled states, 1
-  disabled transition, 0 utility considerations**; the payload has no transition
-  `delay`/`fallback`/`consume_event` key at all (the raw dump authors 0 of 467
-  non-zero delays).
+  disabled transition, 0 utility considerations**. The per-state transition
+  records omit `fallback`/`delay`; the per-tree flat `transitions[]` carries
+  them (39 `NextSelectableSibling`, all 467 delays 0.0) and the model joins
+  them — see the correction below and §W9-P4-2.
 - **composition, kept apart:** 45 `LinkedAsset` states name another asset and
   always run its `Root` (`linked_state_index` null on all 45); 2 `Linked` states
   (both in `ST_InvestigateStims_Guard`) point at a **second root inside the same
@@ -112,7 +113,7 @@ already reproduces the authored patrol **order** against the FSM's real waypoint
 | omitted field | authored / recoverable from the raw dump | effect on a runtime |
 |---|---|---|
 | task parameters | **260 of 326** instances | which alertness, which delay, which target |
-| enter / transition condition parameters | ~203-209 of 233 instances (counting method in the note below) | which bool, which tag, which distance, which patrol type |
+| enter / transition condition parameters | **203 of 233** instances (six unreferenced property functions excluded) | which bool, which tag, which distance, which patrol type |
 | `Transitions[].Fallback` | **in the payload**, per-tree flat `transitions[]`: 39 `NextSelectableSibling` / 428 `None` | the "if/else" idiom of this AI — now joined and honoured (see the fix below) |
 | `Transitions[].Delay` | **in the payload**, per-tree flat `transitions[]`: all 467 `delay_seconds` are 0.0 | inert today, but now read instead of dropped |
 | `bConsumeEventOnSelect` | false on 2 states | event re-use in one tick; not emitted anywhere |
@@ -142,7 +143,7 @@ already reproduces the authored patrol **order** against the FSM's real waypoint
 - **fix:** new `game/src/ai/statetree/tree_model.gd` — load/parse/validate, all
   indices bounds-checked, every `LinkedAsset` target resolved, every
   trigger/priority/to_kind validated, `errors`/`warnings` per tree.
-- **test:** `W9P4_STATETREE_SUMMARY: fails=0 checks=64`;
+- **test:** `W9P4_STATETREE_SUMMARY: fails=0 checks=77`;
   `P4LIB trees=21 states=459 transitions=467 task_classes=77
   condition_classes=36 linked_asset=45 local_links=2`.
 - **verdict: FIXED.** The payload parses and validates 21/21. What it cannot
@@ -193,7 +194,7 @@ already reproduces the authored patrol **order** against the FSM's real waypoint
   an unsupported task marks its frame `UNSET` (that frame can never complete)
   but its already-selected child keeps running so the reachable sub-graph stays
   observable.
-- **test:** eight synthetic trees in suite 110 drive selector → task lifecycle →
+- **test:** nine synthetic trees in suite 110 drive selector → task lifecycle →
   `OnStateCompleted` switch, `OnTick` observer, `OnEvent`, transition delay,
   `Succeeded` handle, `Fallback=NextSelectableSibling` (and its absence),
   UNKNOWN-enter fall-through, and `Medium` vs `Normal` priority. Five corrupt
@@ -233,7 +234,7 @@ already reproduces the authored patrol **order** against the FSM's real waypoint
 - **confirm (green):**
   ```
   SHADOW_PHASE mode=off    sig=-5750684789768048477 pos=1.382652,-0.049066,3.357109 state=0 detection=0.000000 wp=2 ever=false rows=0 ticks=0 transitions=0 trees=
-  SHADOW_PHASE mode=shadow sig=-5750684789768048477 pos=1.382652,-0.049066,3.357109 state=0 detection=0.000000 wp=2 ever=false rows=70 ticks=241 transitions=6 visited=16 trees=ST_Guard,ST_Patrol reached_patrol=true
+  SHADOW_PHASE mode=shadow sig=-5750684789768048477 pos=1.382652,-0.049066,3.357109 state=0 detection=0.000000 wp=2 ever=false rows=66 ticks=241 transitions=10 visited=16 trees=ST_Guard,ST_Patrol reached_patrol=true
   W9P4_SHADOW_SUMMARY: fails=0 checks=20
   ```
   Read honestly: the no-player arena means `detection` is `0.000000` in both
@@ -299,10 +300,10 @@ already reproduces the authored patrol **order** against the FSM's real waypoint
   carries one unsupported task (`Debug Text Task` / `Trigger and Wait For
   Animation`); `ST_OffNavLink` has no conditions and both of its tasks are
   unsupported (`Run Env Query`, `[TAT] Move To`). The full 113-row table is
-  Appendix A; every row has a note. On the 24 (of 35) covered condition rows and
-  the mapped task rows, the note says which port fact answered the question;
-  only some of them spell out "the authored value is absent" — the `blind`
-  column, not the prose, is the count.
+  Appendix A; every row has a note saying which port fact answered the question.
+  The rows whose note spells out "the authored value is absent" are a subset:
+  the `blind` column (94 task + 32 condition instances), not the prose, is the
+  count.
 - **why `implemented` is zero:** every node's behaviour depends on an authored
   parameter the payload does not carry. The nearest thing to an `implemented`
   class is a transition's trigger/priority mechanics, which are graph fields and
@@ -313,9 +314,9 @@ already reproduces the authored patrol **order** against the FSM's real waypoint
 ---
 
 ### W9-P4-5 — tests
-- **suite 110** `test_w9p4_statetree.gd` — **64 checks, 0 fails**:
+- **suite 110** `test_w9p4_statetree.gd` — **77 checks, 0 fails**:
   21/21 parse + per-tree count equality vs `stats`; 459/467/45/2 measured; five
-  corruptions rejected; eight synthetic trees for the interpreter paths; the
+  corruptions rejected; nine synthetic trees for the interpreter paths; the
   coverage table covers every class and instance with valid statuses/notes and
   `covered <= instances`; 21/21 structural traces.
 - **suite 111** `test_w9p4_shadow.gd` — **20 checks, 0 fails**: the off/shadow
@@ -331,12 +332,12 @@ already reproduces the authored patrol **order** against the FSM's real waypoint
   `guard_ai._patrol_service_waypoint` (:1775) / `_patrol_wait_for` (:1801) /
   `_apply_patrol_yaw` (:1810) / `_advance_patrol_index` (:1821), driven by the
   authored level record the level producer emits (210 paths / 673 points).
-- **parameter-count caveat:** the fact sheet counted 260/326 task instances and
-  209/233 condition instances with an authored parameter struct; the independent
-  audit's own walk found **203/233** conditions, because six of the fact sheet's
-  records are `Get Actor Location` property functions that are never referenced
-  as conditions. Both counts are in the same place: the raw dump has the values,
-  the payload has none. The runtime does not depend on the exact count.
+- **parameter-count caveat:** the count of condition instances with an authored
+  parameter struct is **203 of 233**, not 209: six of the fact sheet's records are
+  `Get Actor Location` property functions that are never referenced as conditions
+  (the fact sheet's 239-node numerator was copied onto the 233 denominator). The
+  task count, 260 of 326, reproduced. Either way the raw dump has the values and
+  the payload has none; the runtime does not depend on the exact count.
 - **research:** the authored patrol branch is
   `ST_Guard Root → Standard States → Reset Focus → Return To Normal →
   Patrolling (LinkedAsset) → ST_Patrol Root → Patrol`, then
@@ -447,10 +448,10 @@ Godot at a time.
 | `tests/probe_niagara.gd` | **NIAGARA_PROBE PASS** (3695 authored / 1048 active / 16 systems) |
 | `tests/probe_blackjack_race.gd` | **BLACKJACK_PROBE PASS fails=0** |
 | `tests/probe_geometry_placement.gd` | **GEOM_PROBE PASS checks=7 fails=0** |
-| suite 110 | **`W9P4_STATETREE_SUMMARY: fails=0 checks=64`** |
+| suite 110 | **`W9P4_STATETREE_SUMMARY: fails=0 checks=77`** |
 | suite 111 | **`W9P4_SHADOW_SUMMARY: fails=0 checks=20`** |
 | `build/qa/runtime_smoke.sh 90` (off) | **`RUNTIME_SMOKE PASS`** (`exit=124 script_errors=0 shader_errors=0 mission_ready=1`) |
-| `TAT2_STATETREE=shadow build/qa/runtime_smoke.sh 90` | **`RUNTIME_SMOKE PASS`** (`script_errors=0 shader_errors=0 mission_ready=1`), 4 guards traced |
+| `TAT2_STATETREE=shadow build/qa/runtime_smoke.sh 90` | **`RUNTIME_SMOKE PASS`** (`script_errors=0 shader_errors=0 mission_ready=1`); 4 guards traced, 209 rows, 29 transitions |
 | `make audit` | **AUDIT PASS** (`CONSUMER AUDIT PASS`, baseline matches) |
 | `make texture-cap-check` | **OK** |
 | `make gate-ratchet` | **GATE_RATCHET: PASS** |
@@ -510,6 +511,20 @@ M2 12 → 12.
    no capture permitted). `not verified`.
 9. **S3 civilians untouched**: `ST_Civilian` (73 states) parses and traces, but
    the port has no civilian sense/health/behaviour binding.
+10. **Cross-branch transitions are entered directly, not through their
+    intermediate ancestors.** `_select_target` exits to the target's deepest
+    *active* ancestor and appends the target; it does not re-enter the states
+    between that ancestor and the target (their enter conditions and tasks do not
+    run). 69 authored transitions target an ancestor, 22 a strict descendant and
+    2 their own state, so the common case is exact; a cousin jump is
+    approximate. No path in the S1
+    evidence exercises a cousin jump, and a full cutover must rebuild the path
+    (UE visits the children of a selector transition target until a leaf).
+11. **The dry run does not simulate tasks.** `_can_select_target` is recursive
+    over enter conditions and child selection (exact for the 39 authored
+    fallbacks), but a target whose *tasks* fail still commits and then reports
+    the failure as a state completion. That is correct for a completion trigger
+    and cannot lose a frame.
 
 ## 10. Integrator steps
 
@@ -530,8 +545,8 @@ M2 12 → 12.
    parameter gap and the T01 contract); `docs/HANDOFF_NEXT_AGENT.md` — new HEAD,
    gate numbers, the S2/S3 list. `docs/FIDELITY_GAPS.md:421-425` and `:535` say
    the tree "does not drive `guard_ai.gd`" — still true for behaviour, and now
-   false for "no consumer". (The current file's StateTree rows are at `:475`,
-   `:499` and `:587`, not the `:421-425`/`:535` an earlier draft cited.)
+   false for "no consumer". The file's StateTree rows are at `:475`, `:499`
+   and `:587`.
 7. **Keep `TAT2_STATETREE=off` as the shipped default.** Shadow is opt-in until
    S2 lands.
 

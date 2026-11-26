@@ -36,6 +36,8 @@ func _initialize() -> void:
 	_check_event()
 	_check_delay()
 	_check_fallback()
+	_check_ancestor_transition()
+	_check_flat_join()
 	_check_unknown_enter()
 	_check_coverage()
 	_check_all_tree_traces()
@@ -310,6 +312,62 @@ func _check_fallback() -> void:
 	_ok(int((run2["interp"] as RefCounted).stats["unknown_transition_votes"]) == 0, "no unknown votes on a plain false")
 
 
+## 71 authored transitions target an ancestor or their own state. The re-entry
+## must replace the active frame, not append a duplicate (the audit's N1).
+func _check_ancestor_transition() -> void:
+	var run: Dictionary = _run("SYN_ANCESTOR", 4)
+	var interp: RefCounted = run["interp"]
+	var frames: Array = interp.frames
+	_ok(frames.size() == 3, "ancestor re-entry keeps the stack depth (got %d)" % frames.size())
+	var states: Array = []
+	for frame: Dictionary in frames:
+		states.append(int(frame.get("state", -1)))
+	_ok(states == [0, 1, 2], "no duplicate frame after an ancestor transition (got %s)" % str(states))
+	_ok(int(interp.transitions_fired.size()) == 4, "the ancestor transition fired once per tick (got %d)" % interp.transitions_fired.size())
+	_ok(int(interp.stats["max_frames"]) == 3, "the stack never exceeded 3 frames (max %d)" % int(interp.stats["max_frames"]))
+
+
+## The flat per-tree `transitions[]` join: the real payload and its failure modes.
+func _check_flat_join() -> void:
+	var lib: Dictionary = TreeModel.load_library()
+	_ok(bool(lib.get("ok", false)), "real payload still validates with the join")
+	var tree: Dictionary = lib["trees"]["ST_Patrol"]
+	var by_index: Dictionary = {}
+	for tr: Dictionary in tree["transitions"]:
+		by_index[int(tr["index"])] = tr
+	_ok(str(by_index[3].get("fallback", "")) == "NextSelectableSibling", "ST_Patrol t3 joined the authored fallback")
+	_ok(is_equal_approx(float(by_index[3].get("delay_s", -1.0)), 0.0), "ST_Patrol t3 joined the authored delay")
+	var total: int = 0
+	var next_sibling: int = 0
+	var none: int = 0
+	for tree_name: Variant in lib["trees"].keys():
+		for tr: Dictionary in (lib["trees"][tree_name] as Dictionary)["transitions"]:
+			total += 1
+			if str(tr.get("fallback", "")) == "NextSelectableSibling":
+				next_sibling += 1
+			elif str(tr.get("fallback", "")) == "None":
+				none += 1
+	_ok(total == 467 and next_sibling == 39 and none == 428,
+		"join reaches all 467 transitions (39 fallback / 428 none, got %d/%d/%d)" % [total, next_sibling, none])
+	# Failure modes.
+	var payload: Dictionary = _base_payload()
+	((payload["trees"]["SYN_SELECTOR"] as Dictionary)["transitions"] as Array).pop_back()
+	_ok(not bool(TreeModel.parse_payload(payload, "<missing-flat>")["ok"]), "a missing flat record fails closed")
+	payload = _base_payload()
+	(((payload["trees"]["SYN_SELECTOR"] as Dictionary)["transitions"] as Array)[0] as Dictionary)["from_state_index"] = 99
+	_ok(not bool(TreeModel.parse_payload(payload, "<foreign-from>")["ok"]), "a foreign from_state_index fails closed")
+	payload = _base_payload()
+	(((payload["trees"]["SYN_SELECTOR"] as Dictionary)["transitions"] as Array)[0] as Dictionary)["fallback"] = "Bogus"
+	_ok(not bool(TreeModel.parse_payload(payload, "<bad-fallback>")["ok"]), "an unknown fallback fails closed")
+	payload = _base_payload()
+	var flats: Array = (payload["trees"]["SYN_SELECTOR"] as Dictionary)["transitions"]
+	flats.append((flats[0] as Dictionary).duplicate(true))
+	_ok(not bool(TreeModel.parse_payload(payload, "<dup-flat>")["ok"]), "a duplicate flat record fails closed")
+	payload = _base_payload()
+	(((payload["trees"]["SYN_SELECTOR"] as Dictionary)["transitions"] as Array)[0] as Dictionary)["to_state_index"] = 3
+	_ok(not bool(TreeModel.parse_payload(payload, "<diverged>")["ok"]), "a flat/nested target divergence fails closed")
+
+
 func _check_delay() -> void:
 	# 0.05 s ticks; a 0.20 s delay must not fire before tick 4.
 	var run: Dictionary = _run("SYN_DELAY", 3, 0.05)
@@ -430,7 +488,7 @@ func _state(index: int, name: String, parent: int, children: Array, tasks: Array
 	return {
 		"index": index,
 		"name": name,
-		"depth": 0 if parent < 0 else 1,
+		"depth": 0 if parent < 0 else (1 if parent == 0 else 2),
 		"type": "State",
 		"parent": "Root" if parent < 0 else "",
 		"parent_index": null if parent < 0 else parent,
@@ -556,6 +614,18 @@ func _base_payload() -> Dictionary:
 				[_tr(0, 2, "OnTick", ["SYN_TRUE"], "None", "", "state", -1, 0.0, "None")]),
 			_state(2, "X", 0, [], ["SYN_DONE"], ["SYN_FALSE"], []),
 			_state(3, "Y", 0, [], ["SYN_DONE"], ["SYN_TRUE"], []),
+		],
+		"transitions": [], "tasks": [], "conditions": [], "subtree_links": [],
+		"stats": {},
+	}
+	trees["SYN_ANCESTOR"] = {
+		"name": "SYN_ANCESTOR", "package": "<synthetic>", "asset": "/Synth/ANCESTOR",
+		"roots": ["Root"],
+		"states": [
+			_state(0, "Root", -1, [1], [], [], []),
+			_state(1, "A", 0, [2], [], ["SYN_TRUE"], []),
+			_state(2, "B", 1, [], ["SYN_NEVER"], ["SYN_TRUE"],
+				[_tr(0, 1, "OnTick", ["SYN_TRUE"], "Normal")]),
 		],
 		"transitions": [], "tasks": [], "conditions": [], "subtree_links": [],
 		"stats": {},

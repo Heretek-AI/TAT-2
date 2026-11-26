@@ -784,10 +784,14 @@ func _apply_transition(tr: Dictionary) -> bool:
 	return true
 
 
-## Shallow viability of a transition target, honouring the authored
-## `Fallback == NextSelectableSibling` (39 of 467 transitions).
+## Viability of a transition target, honouring the authored
+## `Fallback == NextSelectableSibling` (39 of 467 transitions). The check is
+## recursive over the child chain because `_enter_state` also selects the
+## target's first enterable child: a target whose own conditions pass but whose
+## children cannot be selected would otherwise be declared viable, then fail
+## after the stack had been exited.
 func _can_select_target(tree_name: String, target: int, fallback: String) -> bool:
-	if _evaluate_enter_conditions(tree_name, target, false) == ENTER_OK:
+	if _can_enter_deep(tree_name, target, 0):
 		return true
 	if fallback != "NextSelectableSibling":
 		return false
@@ -800,7 +804,32 @@ func _can_select_target(tree_name: String, target: int, fallback: String) -> boo
 	if pos < 0:
 		return false
 	for i: int in range(pos + 1, kids.size()):
-		if _evaluate_enter_conditions(tree_name, int(kids[i]), false) == ENTER_OK:
+		if _can_enter_deep(tree_name, int(kids[i]), 0):
+			return true
+	return false
+
+
+## Dry run of `_enter_state`: enter conditions, then the first enterable child
+## (and a linked asset's root). No tasks run and nothing is mutated; bindings are
+## deterministic inside a tick, so a true answer commits on the real call.
+func _can_enter_deep(tree_name: String, state_index: int, depth: int) -> bool:
+	if depth > 16:
+		return false
+	if _evaluate_enter_conditions(tree_name, state_index, false) != ENTER_OK:
+		return false
+	var tree_dict: Dictionary = trees.get(tree_name, {})
+	if TreeModel.is_linked_asset(tree_dict, state_index):
+		var linked: String = str(TreeModel.state(tree_dict, state_index).get("linked_asset", ""))
+		var entry: int = int((trees.get(linked, {}) as Dictionary).get("entry", -1))
+		return entry < 0 or _can_enter_deep(linked, entry, depth + 1)
+	if TreeModel.is_local_link(tree_dict, state_index):
+		var local: int = int(TreeModel.state(tree_dict, state_index).get("linked_state_index", -1))
+		return local < 0 or _can_enter_deep(tree_name, local, depth + 1)
+	var kids: Array = TreeModel.children(tree_dict, state_index)
+	if kids.is_empty():
+		return true
+	for child: Variant in kids:
+		if _can_enter_deep(tree_name, int(child), depth + 1):
 			return true
 	return false
 
@@ -813,6 +842,19 @@ func _can_select_target(tree_name: String, target: int, fallback: String) -> boo
 func _select_target(tree_name: String, target: int, fallback: String) -> int:
 	var depth: int = _ancestor_depth(tree_name, target)
 	_exit_to(depth)
+	# The target may already be the active frame at `depth-1` -- an ancestor
+	# transition, or a self-transition (71 authored transitions). Appending it
+	# again would duplicate the frame and grow the stack on every fire, so the
+	# re-entry REPLACES it: pop the target and its subtree, then enter it fresh
+	# (tasks re-enter, selection re-runs). The stack depth is unchanged.
+	if depth > 0 and depth - 1 < frames.size():
+		var active: Dictionary = frames[depth - 1]
+		if int(active.get("state", -1)) == target and str(active.get("tree", "")) == tree_name:
+			_exit_to(depth - 1)
+			if _enter_state(tree_name, target) != ENTER_OK:
+				return -1
+			_link_parent_child(depth - 1)
+			return target
 	if _enter_state(tree_name, target) == ENTER_OK:
 		_link_parent_child(depth)
 		return target

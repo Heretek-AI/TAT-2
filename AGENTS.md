@@ -61,12 +61,13 @@ TAT-2 expansion content belong in git.
 
 ```bash
 make run         # native 4.7.2 client, F3 overlay
-make test        # tests/run_tests.gd — 319 checks, suites numbered to 116
+make test        # tests/run_tests.gd — 322 checks, suites numbered to 120
 make runtime-smoke # real free-play boot: exit 124 only, ERROR:/push_error scan, allowlist
 make audit       # fail-closed content + producer/output baseline gate
 make gate-ratchet # floors + committed docs/reports/logs evidence agree
 build/qa/test_perf_guard.sh  # perf-wrapper contract, no GPU, no launch
-build/qa/run_p0a_gates.sh   # full P0a set (28 gates) -> docs/reports/logs/p0a/; no outer flock
+build/qa/run_p0b_gates.sh    # current full set (35 gates + cream RED) -> docs/reports/logs/p0b/full/; no outer flock
+build/qa/run_p0a_gates.sh    # historical P0a 28-gate set -> docs/reports/logs/p0a/
 
 tools/godot --headless --path game --script "$PWD/tools/check_scripts_compile.gd"
 tools/godot --headless --path game --script res://tests/test_m2_player.gd
@@ -80,16 +81,21 @@ If a headless run reports missing textures (`T1-01-C`, `moon_visible=0.0`), the
 import cache is incomplete — run `tools/godot --headless --path game --import`
 first.
 
-| Gate | Passing value (P0a tip, logs in `docs/reports/logs/p0a/` — raise, never lower) |
+| Gate | Passing value (P0b tip, logs in `docs/reports/logs/p0b/full/` — raise, never lower) |
 |---|---|
-| compile | 196 checked, 0 broken |
-| `run_tests.gd` | `SUMMARY: fails=0` (319 PASS; suites numbered to 116) |
+| compile | 202 checked, 0 broken |
+| `run_tests.gd` | `SUMMARY: fails=0` (322 PASS; suites numbered to 120, 119 deliberately unregistered) |
 | `test_m2_player.gd` | `M2_SUMMARY: fails=0` (12 PASS) |
 | door walk / viewmodel / Niagara probes | `DOORWALK PASS` / `VIEWMODEL_TRUTH PASS` / `NIAGARA_PROBE PASS` (3695 authored / 3308 active / 36 systems) |
 | guard selection (P0a) | `GUARD_CHECK PASS` Guildhall `lounge_marker=C_20` `buckets=4/4` and Old Manor `--order=3` (no Hauntstable) |
 | beam geometry (P0a) | `BEAM_GEOMETRY_SUMMARY: fails=0` — 330 cards, `max_axis_err_deg=0.000006`, `clamped=0` |
-| GC / turret / civilian (P0a) | `GC_PROBE PASS` (44) / `GC_TRIGGER PASS` (21) / `TURRET_PROBE PASS` (229 actors, 0 hidden) / `W10A2_CIV_SUMMARY: fails=0 passed=22` |
-| E2E | `fails=0 passed=278 total=278` (tier 1: 117; includes `--tier=s2`) |
+| GC / turret / civilian (P0a) | `GC_PROBE PASS` (44) / `GC_TRIGGER PASS` (21) / `TURRET_PROBE PASS` (229 actors, 1145 parts, 0 hidden) / `W10A2_CIV_SUMMARY: fails=0 passed=22` |
+| E2E | `fails=0 passed=300 total=300` (T1=117 T2=110 T3=25 T4=14 S2=12 A2=22; a2 runs inside `all`) |
+| E2E tier a2 | `SUMMARY: fails=0 passed=22 total=22` |
+| E2E tier p2 | `P2_SUMMARY: expected_fail=1 expected_delta=1 fixed=0 unexpected_fail=0` (pants albedo + beam DELTA recorded) |
+| parity-only (P0b) | `PARITY_ONLY_SUMMARY: fails=0 passed=60 rules=11 restoration=11 expansion=0` |
+| port capture harness (P0b) | dry-run `poses=6` manifest valid; `P0B_SELFTEST PASS checks=21 fails=0`; `P0B_KF27_REF … met=7/7` |
+| cream RED proof (P0b) | expected `exit 1`, `CREAM_PROOF: RED passes=2 expected_fail=2` — not a gate until suite 119 is registered |
 | `make texture-cap-check` | OK — 797 capped, 1 alpha-critical kept, 0 offenders |
 | `make audit` | exit 0, tracked baseline matches, disk-backed coverage (12660/12703), 0 unexpected, exact-case 0 unexpected, 13/13 content groups |
 
@@ -132,6 +138,34 @@ ratchet — now runs from the tracked `build/qa/run_p0a_gates.sh`, which stops o
 the first unexpected non-zero exit. Evidence:
 [`docs/reports/p0a-20261126.md`](docs/reports/p0a-20261126.md) and
 [`docs/reports/logs/p0a/`](docs/reports/logs/p0a/) (measured on `84912ee`).
+
+The 2026-11-26 **P0b wave** built the parity instruments and measured them at the
+merged HEAD. The acceptance harness added suites **117/118/120** (suite **119** is
+the standalone cream RED proof and is deliberately unregistered) and the E2E tier
+`a2` (one real Contract 02 Novice load; now inside `all`), so `run_tests` is
+**322** and E2E is **300/300** (T1=117 T2=110 T3=25 T4=14 S2=12 A2=22). Tier
+`p2` records authored-data parity as **12/12 with one expected FAIL** (civilian
+pants albedo: `parse_materials` puts the authored `Pants_D` in the `opacity`
+slot) and **one expected DELTA** (beam `PORT_APPROX`: `dG=0.054 dB=0.117 dE=0.20`);
+the gate is `unexpected_fail=0`, so a data wave must promote `fixed`. Parity-only
+governance is proven by `test_parity_only.gd` (**60/60**; 11 content-override
+rules, all `parity_restoration`, 0 unclassified) and `TAT2_PARITY_ONLY=1` excludes
+expansion content while keeping every shipped marker/guard/GC/loot record. The
+port capture harness (six-pose manifest, Master-bus audio tap with a headless
+fallback, ROI/KF27 scorer) is built and self-tested headless; **no Vulkan capture
+and no live reference capture were run**, and the 120-row baseline is not scored.
+The complete set — 35 gates plus the cream expected failure — runs from
+`build/qa/run_p0b_gates.sh` with logs in
+[`docs/reports/logs/p0b/full/`](docs/reports/logs/p0b/full/) (measured on
+`dfa8c7e`); report:
+[`docs/reports/p0b-20261126.md`](docs/reports/p0b-20261126.md).
+
+**Fresh worktree trap (P0b).** A copied `game/.godot` does not know a new global
+`class_name`; scripts that use it fail with `Identifier "X" not declared` and
+`test_parity_only.gd` reports `GameState autoload missing`. Run
+`tools/godot --headless --path game --import` once after checking out a merged
+tree in a worktree. It writes only gitignored `.godot/` state and local `.uid`
+sidecars; no tracked file changes.
 
 If `.godot/imported` lacks the `.s3tc.ctex` variants, `T1-01-C` fails with
 `moon_visible=0.0`. Run `tools/godot --headless --path game --import` first; it
@@ -334,10 +368,12 @@ tools/godot … test_m2_player.gd         # fails=0
 tools/godot … probe_leak.gd             # expected result or documented warning
 tools/godot … probe_collision_authored.gd  # COL_MAPS PASS, per-map coverage >= 0.95, dropped=0
 tools/godot … probe_lock_inventory.gd   # applied == 144 containers + 10 door nodes, never 0
-tools/godot … run_e2e_tests.gd          # 278/278, no new failures
+tools/godot … run_e2e_tests.gd          # 300/300, no new failures
+tools/godot … test_parity_only.gd       # PARITY_ONLY_SUMMARY: fails=0 (needs TAT2_PARITY_ONLY proof)
 build/qa/runtime_smoke.sh 90            # exit 124 only, 0 unexpected ERROR:, mission_ready
 build/qa/test_runtime_smoke_scan.sh     # 29/29, no engine needed
 build/qa/test_perf_guard.sh             # 78/78, no GPU
+build/qa/run_p0b_gates.sh               # all of the above serially, with the P0b instruments
 make gate-ratchet                       # floors + committed logs agree
 git push origin main
 ```

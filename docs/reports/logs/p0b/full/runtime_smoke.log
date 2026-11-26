@@ -1,0 +1,11 @@
+== P0B_GATE runtime_smoke
+COMMAND: /home/john/.local/share/opencode/worktree/318f41/p0b-evidence/build/qa/runtime_smoke.sh 90
+CWD: /home/john/.local/share/opencode/worktree/318f41/p0b-evidence
+STARTED: 2026-11-26T15:56:43-05:00
+
+log: /tmp/tat2-smoke-PhqPwu.log
+RUNTIME_SMOKE_SCAN PASS exit=124 errors=0 raw=0 allowed=0 script_errors=0 shader_errors=0 mission_ready=1 reason=ok path=/tmp/tat2-smoke-PhqPwu.log
+RUNTIME_SMOKE PASS
+
+EXIT: 0
+FINISHED: 2026-11-26T15:58:13-05:00

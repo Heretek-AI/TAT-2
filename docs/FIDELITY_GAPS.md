@@ -6,7 +6,62 @@ extracted through `tools/tat-extract` (CUE4Parse, `EGame.GAME_UE5_5`).
 Generated from `extracted/filelist.txt` (22,005 entries) and the current `extracted/` tree.
 Re-run the census with the commands at the bottom.
 
-## P0a status — 2026-11-26 (newest; supersedes the sections below where they differ)
+## P0b status — 2026-11-26 (newest; supersedes the sections below where they differ)
+
+The parity instruments and the honest acceptance baseline, measured on `dfa8c7e`
+in one serial run by `build/qa/run_p0b_gates.sh` (35 gates + the cream expected
+failure). Evidence: [`reports/p0b-20261126.md`](reports/p0b-20261126.md) and
+[`reports/logs/p0b/full/`](logs/p0b/full/). **P0b is not Parity Complete**; it
+builds the instruments and records what is still wrong.
+
+- **Parity-only governance — `PARITY_RESTORATION` vs `TAT2_EXPANSION`.** Every
+  rule in `game/data/expansion/content_overrides.json` now carries a
+  `parity_class` (11 rules, all `parity_restoration`) and the producer/checker
+  fails closed on an unclassified rule. `TAT2_PARITY_ONLY=1` (default off)
+  excludes every registered expansion record/node (prep skyline, personal
+  Spider quest, co-op transport, briefing overrides, candle-fire nodes) and
+  applies only restoration rules; off changes nothing. `test_parity_only.gd`
+  proves both directions and that no shipped marker/guard/GC/loot record is
+  dropped: **60/60**, 11 classified rules, 0 unclassified. This is the build the
+  120-row scorecard must use.
+- **Acceptance harness — tier `a2`.** One real Contract 02 Novice load now runs
+  in the full E2E suite (and standalone): boot identity, guard marker/distance/
+  floor/bucket, the Lounge `C_20` guard in the tracked bbox, 3 civilians with 9
+  bound surfaces and `default_white=0`, a scene-wide near-white audit with 0
+  unexplained, the Lounge shell rays, the 1,145-part turret census and the GC
+  runtime census (`layers=174`, `leaves=80`, `visible_broken=0`, `missing=0`).
+  E2E is **300/300** (T1=117 T2=110 T3=25 T4=14 S2=12 A2=22); `run_tests` is
+  **322** (suites 117/118/120).
+- **Parity tier `p2` — expected failures are recorded, not hidden.** 12/12 with
+  `expected_fail=1` and `expected_delta=1`: the civilian **pants albedo** is a
+  producer defect (`parse_materials` puts the authored
+  `T_CivFemale_Common_01_Pants_D.png` in the `opacity` slot and
+  `T_Civ_M_01_Top_D.png` in albedo), and the **beam material** remains
+  `PORT_APPROX` (`dG=0.054 dB=0.117 dE=0.20` versus the authored normalised
+  colour/energy). The gate is `unexpected_fail=0`; the data wave promotes
+  `fixed` when each is repaired.
+- **Cream — RED proof, fix not landed.** `test_w10a2_cream.gd` is a standalone
+  RED proof (not registered as suite 119): `_apply_ue_emissive()` still invents
+  white for an `EmissiveStrength`-only material and the loader has no
+  `tat_invented_white` counter. The authored moon cards are safe (122/122
+  `hidden_in_game`), so this is the invented-white path, not the cards.
+- **Capture instruments — built and self-tested, no capture yet.** Six fixed
+  poses (`gate`, `upper_foyer`, `yaw180`, `lounge`, `lounge_beam`, `beam_close`)
+  at the shipped 54.54° vertical lens, 1920×1080, 60 settle + 5 median frames,
+  a Master-bus `AudioEffectCapture` tap with a headless `dummy_audio_driver`
+  fallback, a tracked manifest (HEAD/seed/lens/pose), and the ROI script
+  (luma/percentiles, beam rows, 16×9 cream map, KF27 criteria). The dry-run
+  manifest validates (`poses=6`), the self-test is **21/21**, and the KF27
+  reference frame scores **7/7**. The real Vulkan capture and the live reference
+  are **PENDING** GPU/owner steps; PNGs are ignored, manifests/logs tracked.
+- **Live reference — prepared, not launched.** The appid 3341000 prefix is
+  copied and verified at `/tmp/opencode/tat2-ref-prefix`; the blockers (Steam
+  auto-update `AutoUpdateBehavior=0`, 2.2–2.5 GiB free VRAM, Wayland capture
+  path, Steam Cloud overwrite risk) and the exact offline launch/capture steps
+  are in [`reports/p0b-live-capture.md`](reports/p0b-live-capture.md). No Steam,
+  Proton or game process was started by the prep lane.
+
+## P0a status — 2026-11-26 (supersedes the sections below where they differ)
 
 Parity restorations plus the evidence repair, measured on `84912ee` in one serial
 run by `build/qa/run_p0a_gates.sh` (28 gates). Evidence:

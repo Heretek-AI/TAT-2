@@ -1,17 +1,21 @@
 {
   "schema": "tat2.gate_ratchet/1",
-  "measured_on": "84912ee",
-  "source": "P0a measurement at 84912ee (merged guards + beam + audit re-stamp), 2026-11-26: compile 196/0, run_tests 319/0 (suites to 116), M2 12/0, E2E 278/278, guard selection Guildhall C_20 + Old Manor order 3 PASS (4/4 authored guard buckets, no Hauntstable), beam geometry 330 cards max_axis_err_deg=0.000006 clamped=0, GC 44+21 checks, turret 229/1,145 visible/0 hidden, collision 0.976321 dropped=0, lock inventory applied=154 (144+10), leak clean, runtime-smoke exit=124 errors=0, audit 12,660/12,703, texture cap 797/1/0, perf guard 78/78, string audit 307/196/111. Logs in docs/reports/logs/p0a/ are this wave's single serial run; docs/reports/logs/p0a/normalize.log is the integrator's post-merge regeneration. P0b-HARNESS lane (base 09d8a30, merged as 75e39fc, 2026-11-26) added suites 117/118/120 and tiers a2/p2: compile 199/0, run_tests 322/0, tier 1 117/117, a2 22/22, p2 12/12 with 1 expected FAIL (civilian pants albedo, BaseColorOpacity) and 1 expected DELTA (beam PORT_APPROX: dG=0.054 dB=0.117 dE=0.20); new gate logs in docs/reports/logs/p0b-harness/. Follow-up: a2 joined the full `all` run after s2 and the full E2E measured fails=0 passed=300 total=300 in 663.62 s (T1=117 T2=110 T3=25 T4=14 S2=12 A2=22), so the e2e floor is raised 278 -> 300 and its evidence is docs/reports/logs/p0b-harness/e2e_all.log. The run_tests/compile floors stay at the lower P0a committed logs (measured here: 322 and 199) and must be raised at merged HEAD.",
+  "measured_on": "dfa8c7e",
+  "source": "P0b measurement at dfa8c7e (merged P0b code + parity governance regeneration/audit re-stamp), 2026-11-26, one serial run of build/qa/run_p0b_gates.sh into docs/reports/logs/p0b/full/: compile 202/0 (199 harness + parity_governance.gd + test_parity_only.gd + audio_capture.gd), run_tests 322/0 (suites 117/118/120 registered, 119 deliberately not), M2 12/0, E2E 300/300 (T1=117 T2=110 T3=25 T4=14 S2=12 A2=22, a2 now in `all`), e2e_a2 22/22, e2e_p2 12/12 with expected_fail=1 expected_delta=1 fixed=0 unexpected_fail=0, parity-only 60/60 (11 rules, all parity_restoration, 0 unclassified), cream RED proof 2 expected failures (not a gate), capture dry-run manifest 6 poses validated, self-test 21/0, KF27 reference 7/7, guard Guildhall C_20 + Old Manor order 3 PASS (4/4 buckets, no Hauntstable), beam 330 cards max_axis_err_deg=0.000006 clamped=0, GC 44+21, turret 229/1,145/0, collision 0.976321 dropped=0, lock applied=154 (144+10), leak clean, runtime-smoke exit=124 errors=0, audit 12,660/12,703, texture cap 797/1/0, perf guard 78/78, literal greps 99 files 0 hits, string audit 307/196/111. The P0a floors (compile 196, run_tests 319) are raised to this measurement; the E2E floor was already 300 from the P0b-HARNESS lane and is unchanged. Prior evidence: docs/reports/logs/p0a/ (84912ee) and docs/reports/logs/p0b-harness/ (75e39fc).",
   "note": "Floors, not exact counts: a wave may add tests/files but must never lower a floor or introduce a failure. Counts are read from the committed log and compared with >=; failure counts are exact zeros and e2e.passed must equal e2e.total. Update only with a real gate log in docs/reports/logs/ (see tools/check_gate_ratchet.py for the evidence layout).",
-  "report": "docs/reports/p0b-harness.md",
+  "report": "docs/reports/p0b-20261126.md",
   "evidence": {
-    "dir": "docs/reports/logs/p0a",
+    "dir": "docs/reports/logs/p0b/full",
     "compile": "compile.log",
     "run_tests": "run_tests.log",
     "m2": "m2.log",
-    "e2e": "docs/reports/logs/p0b-harness/e2e_all.log",
-    "e2e_a2": "docs/reports/logs/p0b-harness/e2e_a2.log",
-    "e2e_p2": "docs/reports/logs/p0b-harness/e2e_p2.log",
+    "e2e": "e2e.log",
+    "e2e_a2": "e2e_a2.log",
+    "e2e_p2": "e2e_p2.log",
+    "parity_only": "parity_only.log",
+    "p0b_capture": "p0b_manifest_validate.log",
+    "p0b_capture_self_test": "p0b_capture_self_test.log",
+    "p0b_kf27_reference": "p0b_kf27_reference.log",
     "probe_leak": "probe_leak.log",
     "audit": "audit.log",
     "texture_cap": "texture_cap.log",
@@ -38,11 +42,11 @@
   },
   "gates": {
     "compile": {
-      "checked": 196,
+      "checked": 202,
       "broken": 0
     },
     "run_tests": {
-      "passes": 319,
+      "passes": 322,
       "fails": 0
     },
     "m2": {
@@ -64,6 +68,13 @@
       "expected_delta": 1,
       "fixed": 0,
       "unexpected_fail": 0
+    },
+    "parity_only": {
+      "passes": 60,
+      "fails": 0
+    },
+    "p0b_capture": {
+      "poses": 6
     },
     "audit": {
       "coverage_num": 12660,

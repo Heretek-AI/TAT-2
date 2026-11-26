@@ -101,6 +101,32 @@ LOG_GATES = {
         "minimums": [],
         "passes_key": None,
     },
+    # P0b parity-only governance: every content-override rule is classified and
+    # `TAT2_PARITY_ONLY=1` excludes expansion content while keeping every
+    # shipped marker/guard/GC/loot record. The standalone contract test.
+    "parity_only": {
+        "command": (
+            "tools/godot --headless --path game "
+            "--script res://tests/test_parity_only.gd"
+        ),
+        "pattern": lambda g: r"PARITY_ONLY_SUMMARY: fails=0 passed=(\d+)",
+        "minimums": [(1, "passes")],
+        "passes_key": None,
+    },
+    # P0b port capture: the headless dry-run writes the six-pose manifest and
+    # the ROI script validates its schema without a GPU. The validated manifest
+    # is the same file the real capture run overwrites, so a schema regression
+    # fails here before any capture time is spent.
+    "p0b_capture": {
+        "command": (
+            "build/qa/p0b_capture.sh --dry-run && "
+            "build/qa/p0b_roi_stats.py --validate-manifest "
+            "docs/reports/logs/p0b/dry-run/manifest.json"
+        ),
+        "pattern": lambda g: r"P0B_MANIFEST_OK [^\n]*poses=(\d+) dry_run=true",
+        "minimums": [(1, "poses")],
+        "passes_key": None,
+    },
     "audit": {
         "command": "make audit",
         # Coverage and the unexpected count share one summary line.
@@ -241,6 +267,17 @@ PROBE_GATES = {
     "test_w10a2_guard_placement": (
         "GUARD_PLACEMENT_SUMMARY: fails=0",
         "tools/godot --headless --path game --script res://tests/test_w10a2_guard_placement.gd",
+    ),
+    # P0b capture instruments: the headless self-test (audio tap fallback,
+    # manifest round-trip, rejected FOV/settle) and the tracked KF27 reference
+    # frame scored with the same criteria the port ROI script applies.
+    "p0b_capture_self_test": (
+        "P0B_SELFTEST PASS",
+        "build/qa/p0b_capture.sh --self-test",
+    ),
+    "p0b_kf27_reference": (
+        "P0B_KF27_REF pose=upper_foyer met=7/7",
+        "build/qa/p0b_roi_stats.py --port docs/reference/clip_1795033698901/clean/KF27_03m27s_foyer_security_beam.jpg --pose upper_foyer --reference-only",
     ),
 }
 

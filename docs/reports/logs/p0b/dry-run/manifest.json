@@ -22,7 +22,7 @@
     "audio_mix_rate": 44100.0,
     "cmdline": [
       "--script",
-      "/home/john/.local/share/opencode/worktree/318f41/p0b-capture/build/qa/p0b_capture.gd"
+      "/home/john/.local/share/opencode/worktree/318f41/p0b-evidence/build/qa/p0b_capture.gd"
     ],
     "display_server": "headless",
     "godot": "4.7.2-stable (official)",
@@ -38,12 +38,12 @@
     "TAT2_BEAM_CARD": "on",
     "XDG_SESSION_TYPE": "wayland"
   },
-  "finished_at_utc": "2026-11-26T19:56:57",
+  "finished_at_utc": "2026-11-26T20:56:42",
   "git": {
-    "branch": "w10/p0b-capture",
-    "dirty": true,
-    "sha": "09d8a3069676bfe9af7c698208c112a2944b4282",
-    "sha_short": "09d8a3069676"
+    "branch": "w10/p0b-evidence",
+    "dirty": false,
+    "sha": "dfa8c7e7f9a66e24c114ee56e1e9d37ab66dc58d",
+    "sha_short": "dfa8c7e7f9a6"
   },
   "gpu": {
     "available": true,
@@ -53,10 +53,10 @@
       [
         "NVIDIA GeForce RTX 4070 Laptop GPU",
         "620.73.04",
-        "66.94",
-        "5322",
-        "41",
-        "450"
+        "63.18",
+        "4994",
+        "8",
+        "210"
       ]
     ],
     "used_by_capture": false
@@ -85,7 +85,7 @@
     "The fixed-pose run marks poses, not route beats. A 27-beat route run must call mark_beat(S01..S27); p0b_audio_stats.py --route prints the reference table.",
     "Reference audio is documented RMS/peak dBFS (not LUFS); the script computes RMS/peak only and states the clip's -43.9 LUFS as context."
   ],
-  "out_dir": "/home/john/.local/share/opencode/worktree/318f41/p0b-capture/build/qa/p0b/dry-run",
+  "out_dir": "/home/john/.local/share/opencode/worktree/318f41/p0b-evidence/build/qa/p0b/dry-run",
   "poses": [
     {
       "beat": "S13",
@@ -232,8 +232,8 @@
       ]
     }
   ],
-  "repo_root": "/home/john/.local/share/opencode/worktree/318f41/p0b-capture",
-  "run_id": "20261126T195657Z_09d8a3069676_on",
+  "repo_root": "/home/john/.local/share/opencode/worktree/318f41/p0b-evidence",
+  "run_id": "20261126T205642Z_dfa8c7e7f9a6_on",
   "schema": "tat2.p0b_capture/1",
   "seed": {
     "active_map_seed": 0,
@@ -257,5 +257,5 @@
     "frames": 60,
     "selector": "median-mean"
   },
-  "started_at_utc": "2026-11-26T19:56:57"
+  "started_at_utc": "2026-11-26T20:56:42"
 }

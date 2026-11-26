@@ -1,0 +1,35 @@
+# gate: compile
+# command: tools/godot --headless --path game --script $PWD/tools/check_scripts_compile.gd
+# cwd: /home/john/.local/share/opencode/worktree/318f41/p0b-harness
+# base: 09d8a30 (P0a main) + P0b-HARNESS working tree, 2026-11-26
+# exit: 0
+# checked: 199, broken: 0
+# --- raw output ---
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+scripts checked: 199, broken: 0
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:852)
+         [1] _mission_map_id (res://src/core/game_data.gd:952)
+         [2] _load_missions (res://src/core/game_data.gd:1009)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:852)
+         [1] _mission_map_id (res://src/core/game_data.gd:952)
+         [2] _load_missions (res://src/core/game_data.gd:1009)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:852)
+         [1] _mission_map_id (res://src/core/game_data.gd:952)
+         [2] _load_missions (res://src/core/game_data.gd:1009)
+         [3] _ready (res://src/core/game_data.gd:100)
+TAT-2 Loc: reverse map built from sources.json (3404 keys)
+TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
+INPUT_TABLE source=generated rows=91 shipping=91 actions=52
+INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack

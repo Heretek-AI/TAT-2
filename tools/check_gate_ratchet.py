@@ -79,6 +79,28 @@ LOG_GATES = {
         "equal_groups": (1, 2),
         "passes_key": None,
     },
+    # P0b acceptance tier a2: one real Contract 02 Novice mission. Standalone
+    # (`--tier=a2`) until the integrator merges it into `all`; the log is its
+    # own evidence so the full `e2e` floor stays the P0a measurement.
+    "e2e_a2": {
+        "command": "tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd -- --tier=a2",
+        "pattern": lambda g: r"SUMMARY: fails=0 passed=(\d+) total=(\d+)",
+        "minimums": [(1, "passed"), (2, "total")],
+        "equal_groups": (1, 2),
+        "passes_key": None,
+    },
+    # P0b parity tier p2: authored-data provenance with recorded expected
+    # FAIL/DELTA. `unexpected_fail=0` is the gate; expected_fail/expected_delta
+    # are recorded measurements, not floors (a data wave may fix them).
+    "e2e_p2": {
+        "command": "tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd -- --tier=p2",
+        "pattern": lambda g: (
+            r"P2_SUMMARY: expected_fail=(\d+) expected_delta=(\d+) "
+            r"fixed=(\d+) unexpected_fail=0"
+        ),
+        "minimums": [],
+        "passes_key": None,
+    },
     "audit": {
         "command": "make audit",
         # Coverage and the unexpected count share one summary line.
@@ -282,9 +304,16 @@ def main() -> int:
     else:
         print(f"PASS: audit coverage {num}/{den} ({100.0 * num / den:.1f} %)")
 
-    # Committed log evidence, one log per entry in `evidence`.
+    # Committed log evidence, one log per entry in `evidence`. A value with a
+    # "/" is a repo-root-relative path (a later wave's own log directory); a
+    # bare filename lives in `evidence.dir`, so older baselines are unchanged.
     evidence = data.get("evidence") or {}
     log_dir = ROOT / str(evidence.get("dir") or "docs/reports/logs")
+
+    def evidence_path(log_name: str) -> Path:
+        name = str(log_name)
+        return ROOT / name if "/" in name else log_dir / name
+
     for gate, spec in LOG_GATES.items():
         log_name = evidence.get(gate)
         command = spec["command"]
@@ -294,7 +323,7 @@ def main() -> int:
                 f"(add evidence.{gate}); run `{command}` and commit its log"
             )
             continue
-        path = log_dir / str(log_name)
+        path = evidence_path(log_name)
         if not path.exists():
             fail(
                 f"missing gate log {path.relative_to(ROOT)} for {gate!r} — "
@@ -374,7 +403,7 @@ def main() -> int:
                 f"(add evidence.{gate}); run `{command}` and commit its log"
             )
             continue
-        path = log_dir / str(log_name)
+        path = evidence_path(log_name)
         if not path.exists():
             fail(
                 f"missing gate log {path.relative_to(ROOT)} for {gate!r} — "

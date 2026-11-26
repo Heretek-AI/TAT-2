@@ -1893,10 +1893,28 @@ func _feat_21_old_manor_walk_collision() -> void:
 
 
 # --- Feature #22: E2E Requirement-Driven & Visual Parity Test Suite ---
-func _feat_22_verification_gates() -> void:	# T1-22-A: Existing 38 Regression Suites Preserved
+func _feat_22_verification_gates() -> void:	# T1-22-A: run_tests suite ratchet (markers + floor + committed log)
 	var rt_src: String = h.read_text("res://tests/run_tests.gd")
-	var has_38: bool = rt_src.find("# 38.") >= 0 and rt_src.find("SUMMARY: fails=") >= 0
-	h.require(has_38, "T1-22-A", "run_tests.gd preserves 38 suites & SUMMARY: fails= contract")
+	var ratchet_v: Variant = h.repo_read_json("tools/gate_ratchet.json")
+	var log_rel: String = ""
+	if ratchet_v is Dictionary:
+		var evidence: Dictionary = (ratchet_v as Dictionary).get("evidence", {}) as Dictionary
+		var log_dir: String = str(evidence.get("dir", ""))
+		var log_name: String = str(evidence.get("run_tests", ""))
+		if log_dir != "" and log_name != "":
+			log_rel = log_dir.path_join(log_name)
+	var stats: Dictionary = h.suite_ratchet_stats(rt_src, ratchet_v, h.repo_read_text(log_rel))
+	var problems: Array = stats.get("problems", []) as Array
+	h.require(
+		problems.is_empty(),
+		"T1-22-A",
+		"run_tests ratchet markers=%d max=%d floor=%d log_PASS=%d log_fails=%d log=%s%s" % [
+			int(stats.get("markers", -1)), int(stats.get("max_marker", -1)),
+			int(stats.get("floor", -1)), int(stats.get("log_passes", -1)),
+			int(stats.get("log_fails", -1)), log_rel,
+			"" if problems.is_empty() else " problems=" + str(problems),
+		]
+	)
 
 	# T1-22-B: Manifest Coverage Gate Preconditions
 	var am_v: Variant = h.read_json("res://data/generated/anims_manifest.json")

@@ -108,6 +108,31 @@ func _initialize() -> void:
 			h.require(false, "S2-BOOT", "Failed to load e2e_s2_loot.gd")
 		await _settle_harness()
 
+	# P0b acceptance tier "a2": one real Contract 02 Novice mission. Standalone
+	# while it is measured (`--tier=a2`); it joins `all` only in a separate
+	# change that reports the new E2E total and the added wall-clock cost.
+	if tier_filter == "a2":
+		await _settle_harness()
+		var a2_scr: GDScript = load("res://tests/e2e/e2e_a2_playtest.gd") as GDScript
+		if a2_scr != null:
+			var a2: RefCounted = a2_scr.new(h)
+			await a2.call("run")
+		else:
+			h.require(false, "A2-BOOT", "Failed to load e2e_a2_playtest.gd")
+		await _settle_harness()
+
+	# P0b parity tier "p2": authored-data only, expected FAIL/DELTA recorded.
+	# Never part of `all` (the acceptance report owns the expected failures).
+	if tier_filter == "p2":
+		await _settle_harness()
+		var p2_scr: GDScript = load("res://tests/e2e/e2e_p2_parity.gd") as GDScript
+		if p2_scr != null:
+			var p2: RefCounted = p2_scr.new(h)
+			await p2.call("run")
+		else:
+			h.require(false, "P2-BOOT", "Failed to load e2e_p2_parity.gd")
+		await _settle_harness()
+
 	var fails: int = int(h.get("fails"))
 	var passed: int = int(h.get("passed"))
 	var total: int = int(h.get("total"))

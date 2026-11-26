@@ -617,3 +617,62 @@ func is_teal_style(box: StyleBoxFlat) -> bool:
 	if box == null:
 		return false
 	return box.border_color.b > box.border_color.r and box.border_color.g > box.border_color.r
+
+
+## T1-22-A: the run_tests acceptance ratchet.
+##
+## Before P0b the check hard-coded `# 38.` and proved nothing about the suite
+## count. This helper reads three real sources instead:
+##   * `run_tests.gd` source -> numbered suite markers (`# 117.` / `["117", ...]`);
+##   * `tools/gate_ratchet.json` -> `gates.run_tests.passes` (the floor);
+##   * the committed evidence log named by `evidence.dir/run_tests` -> it must
+##     record `SUMMARY: fails=0` and at least the floor's PASS lines.
+## Pure over the three texts (no engine/data dependency), returns
+## {markers, max_marker, floor, log_passes, log_fails, problems:Array[String]}.
+func suite_ratchet_stats(rt_src: String, ratchet_v: Variant, log_text: String) -> Dictionary:
+	var markers: Dictionary = {}
+	var re_comment := RegEx.new()
+	re_comment.compile("(?m)^[ \\t]*#[ \\t]*(\\d+)\\.")
+	for m: RegExMatch in re_comment.search_all(rt_src):
+		markers[int(m.get_string(1))] = true
+	var re_suite := RegEx.new()
+	re_suite.compile("\\[\"(\\d{2,3})\",")
+	for m2: RegExMatch in re_suite.search_all(rt_src):
+		markers[int(m2.get_string(1))] = true
+	var max_marker: int = 0
+	for k: Variant in markers.keys():
+		max_marker = maxi(max_marker, int(k))
+	var floor: int = -1
+	if ratchet_v is Dictionary:
+		var gates: Dictionary = (ratchet_v as Dictionary).get("gates", {}) as Dictionary
+		var rt: Dictionary = gates.get("run_tests", {}) as Dictionary
+		floor = int(rt.get("passes", -1))
+	var log_passes: int = 0
+	for line: String in log_text.split("\n"):
+		if line.begins_with("PASS"):
+			log_passes += 1
+	var log_fails: int = -1
+	var re_sum := RegEx.new()
+	re_sum.compile("SUMMARY: fails=(\\d+)")
+	var sm: RegExMatch = re_sum.search(log_text)
+	if sm != null:
+		log_fails = int(sm.get_string(1))
+	var problems: Array[String] = []
+	if markers.size() < 38:
+		problems.append("run_tests.gd has %d numbered suite markers (< 38)" % markers.size())
+	if max_marker < 120:
+		problems.append("run_tests.gd max numbered suite marker is %d (< 120)" % max_marker)
+	if floor < 0:
+		problems.append("tools/gate_ratchet.json has no gates.run_tests.passes floor")
+	if log_fails != 0:
+		problems.append("committed run_tests log records fails=%d (want 0)" % log_fails)
+	if floor >= 0 and log_passes < floor:
+		problems.append("committed run_tests log has %d PASS lines (< floor %d)" % [log_passes, floor])
+	return {
+		"markers": markers.size(),
+		"max_marker": max_marker,
+		"floor": floor,
+		"log_passes": log_passes,
+		"log_fails": log_fails,
+		"problems": problems,
+	}

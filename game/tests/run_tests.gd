@@ -7618,7 +7618,7 @@ func _initialize() -> void:
 		else:
 			print("PASS: ", w9p4_suite[0], " ", w9p4_suite[1], " (", w9p4_ms, " ms)")
 
-	# 112-116. W10-A correctness gates (standalone SceneTree children, the same
+	# 112-120. W10 correctness gates (standalone SceneTree children, the same
 	# pattern as 99/101-111: exit 0 AND the summary marker are both required).
 	# These pin the five UI defects reproduced by INV-1 (continue consumer,
 	# focus restore, ESC/pause, timeout reason, one rack-up layer), the StateTree
@@ -7627,12 +7627,19 @@ func _initialize() -> void:
 	# fallback), and the two traversal fixtures that now build the authored
 	# per-element union instead of `shapes[0]` (W10-A D10; the OldManor tower
 	# flight is per-element because stair meshes are exempt from the 16-hull cap).
+	# 117/118/120 are the P0a/P0b acceptance suites (guard placement, civilian
+	# dress/sight/facing, GC hold-smash trigger). Suite 119 is deliberately
+	# absent: `test_w10a2_cream.gd` is a standalone RED proof of the invented
+	# white emissive and is registered by the data wave that fixes it.
 	for w10_suite: Array in [
 		["112", "W10-A screens: continue consumer, focus restore, ESC/pause, timeout reason, one layer", "res://tests/test_w10_screens.gd", "W10_SCREENS_SUMMARY: fails=0"],
 		["113", "W10-A runtime: StateTree trace file budget + coplanar convex rule (ward zone)", "res://tests/test_w10_runtime.gd", "W10_RUNTIME_SUMMARY: fails=0"],
 		["114", "W10-A locks: authored CanBeLockpicked resolution, explicit-false exclusion, prison fallback", "res://tests/test_w10_locks.gd", "W10_LOCKS_SUMMARY: fails=0"],
 		["115", "W10-A stairs: authored per-element union walk (7 flights, tower 36 hulls)", "res://tests/test_stair_walk.gd", "W6M_STAIR_SUMMARY: fails=0"],
 		["116", "W10-A traversal: authored per-element union roofs (3-4 hulls, no shapes[0])", "res://tests/test_traversal_routes.gd", "W6M_TRAVERSAL_SUMMARY: fails=0"],
+		["117", "W10-A2 guards: authored bucket/layer selection, 2 m marker / 0.5 m floor, C_20 Lounge pick", "res://tests/test_w10a2_guard_placement.gd", "GUARD_PLACEMENT_SUMMARY: fails=0"],
+		["118", "W10-A2 civilian: head-cast LOS, 180 deg facing, body/head 3+6 authored surfaces", "res://tests/test_w10a2_civilian.gd", "W10A2_CIV_SUMMARY: fails=0"],
+		["120", "W10-A3 GC: hold-interact smash swaps leaf/broken once; tap keeps the lockpick", "res://tests/test_gc_break_trigger.gd", "GC_TRIGGER PASS"],
 	]:
 		var w10_out: Array = []
 		var w10_args: PackedStringArray = [

@@ -152,8 +152,11 @@ governance is proven by `test_parity_only.gd` (**60/60**; 11 content-override
 rules, all `parity_restoration`, 0 unclassified) and `TAT2_PARITY_ONLY=1` excludes
 expansion content while keeping every shipped marker/guard/GC/loot record. The
 port capture harness (six-pose manifest, Master-bus audio tap with a headless
-fallback, ROI/KF27 scorer) is built and self-tested headless; **no Vulkan capture
-and no live reference capture were run**, and the 120-row baseline is not scored.
+fallback, ROI/KF27 scorer) is built and self-tested. The first real port capture
+ran on 2026-11-26 (`docs/reports/logs/p0b/20261126T210338Z_...`); the frames
+confirm the visible cream bars are the `SM_LightBeam` cards (axis fixed,
+full-tube material still P4), and exposure is split (gate too dark, foyer too
+bright). The live reference and 120-row baseline are not scored.
 The complete set — 35 gates plus the cream expected failure — runs from
 `build/qa/run_p0b_gates.sh` with logs in
 [`docs/reports/logs/p0b/full/`](docs/reports/logs/p0b/full/) (measured on

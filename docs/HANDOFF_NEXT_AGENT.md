@@ -87,17 +87,17 @@ covering half the screen and are **not** a valid interior baseline.
 
 | Defect / item | Evidence | Next step |
 |---|---|---|
-| **No port capture yet** | harness built + dry-run/self-test/KF27 green (`logs/p0b/full/`) | run `build/qa/p0b_capture.sh` (one GPU job, Xvfb) after the gates |
+| **Port capture** | six-pose run 2026-11-26 at `5301fc6` (`logs/p0b/20261126T210338Z_...`): gate 23.2/10, foyer 45.8/29, Lounge 28.6/23; audio enabled 85.3 s | live reference + 120-row score; exposure/IBL remains split |
 | **120-row baseline unscored** | instruments ready; live reference prepared, nothing launched (`reports/p0b-live-capture.md`) | score the 120 rows on the parity-only build with recorded evidence |
-| **Cream / invented white** | cream RED proof `expected_fail=2`; 122 authored moon cards are safe | fix `_apply_ue_emissive` + expose `tat_invented_white`, register suite 119 |
+| **Cream / invented white** | the visible cream bars are `SM_LightBeam` cards (axis fixed; full-tube material); cream RED proof `expected_fail=2`; 122 authored moon cards are safe | P4 authored beam centre-line/fade; data wave fixes `_apply_ue_emissive` + registers suite 119 |
 | **Civilian pants albedo** | p2 expected FAIL: authored `Pants_D` in the `opacity` slot | producer fix (`BaseColorOpacity` → albedo), then p2 `fixed` → 1 |
-| **63 cream slabs** from `1m_Plane_Reverse` + `MI_EmisLight_Moonlight` | no albedo/opacity/emissive vector; loader invents white emissive | treat light cards as additive/skipped; never default white |
+| **Cream bars (retired 63 claim)** | all 122 `1m_Plane_Reverse` are hidden and `MI_EmisLight_Moonlight` resolves unshaded black; the visible bars are `SM_LightBeam` | retire the 63/moon attribution; fix the beam material (P4) |
 | **3,288 mirrored instances, winding unverified** | 1,601 floors/roofs; `MESH_RECON ... mirrored=` | one `CULL_DISABLED` capture, then compensate |
 | **Landscape visibility may be inverted** | `tat_landscape.gdshader` discards `vis > 0.5`; UE convention is 1 = visible | one reference sample; do not "fix" blind |
 | **Sky contributes no light** | `sky_contribution=0`, `IBL available=false` | cubemap export + consumer (W10-C) |
 | **Authored −4.00 EV bias not applied** | emissives hot against a zero floor | apply the AEM curve (W10-C) |
 | **Guard count** | 4/6/8 is a labelled `PORT_DECISION`; selection is `PARITY_APPROX` | live Contract 02 capture before any parity claim |
-| **Beam material** | additive `tat_beam.gdshader`; p2 expected DELTA `dG=0.054 dB=0.117 dE=0.20` | P4 authored centre-line/fade |
+| **Beam material (top visual defect)** | capture confirms broad cream bars; additive `tat_beam.gdshader` alpha 0.55/energy 1.7/full tube; p2 DELTA `dG=0.054 dB=0.117 dE=0.20` | P4 authored centre-line/fade |
 | **GC hold-smash** | temporary `PORT_DECISION`; 95 broken layers / 79 leaves measured | authored damage path before Parity Complete |
 | **Prison-door lock level** | authored `MaxLockLevel` 4, port locks at 1 (producer emits instance deltas) | producer chain resolution + regeneration on the integrator |
 | **StateTree** | payload v2 emits parameters (497/566 nodes, 676 bindings, 139 templates) but the runtime still flattens nodes to names; shadow `0/21` fully evaluable | consume v2 in `tree_model`/`coverage`; never invent parameters |
@@ -105,11 +105,11 @@ covering half the screen and are **not** a valid interior baseline.
 
 ## 5. Wave plan for the next session
 
-**P0b remainder — capture + the 120-row baseline (do this first).** The
-instruments exist and are self-tested; run the port capture
-(`build/qa/p0b_capture.sh`, one GPU job under Xvfb), then the live reference
-offline following `docs/reports/p0b-live-capture.md`, score the 120 rows from
-`docs/reference/clip_1795033698901/COMPARISON_PORT_20261124.md` on the
+**P0b remainder — live reference + the 120-row baseline (do this first).** The
+port-side six-pose capture is measured
+(`logs/p0b/20261126T210338Z_...`); the live reference is still blocked on
+VRAM/offline mode. Follow `docs/reports/p0b-live-capture.md`, then score the 120
+rows from `docs/reference/clip_1795033698901/COMPARISON_PORT_20261124.md` on the
 parity-only build, and publish an honest per-row PASS/PARTIAL/FAIL with recorded
 evidence. Do not re-grade on frame `215507`.
 
@@ -117,8 +117,9 @@ evidence. Do not re-grade on frame `215507`.
 interpreter) then navmesh/EQS; Niagara activation bridge. Audio direction if B
 finishes early.
 
-**W10-C — look.** AEM scalars/temporal model, cubemap/IBL, then the table above
-(cream slabs, mirrored winding, landscape visibility).
+**W10-C — look.** The beam material is the top visual defect confirmed by the
+capture (authored centre-line/fade), then AEM/IBL/EV bias, mirrored winding and
+the landscape docs/A-B.
 
 ## 6. How to run everything
 

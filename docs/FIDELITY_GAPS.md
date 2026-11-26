@@ -40,20 +40,29 @@ builds the instruments and records what is still wrong.
   `PORT_APPROX` (`dG=0.054 dB=0.117 dE=0.20` versus the authored normalised
   colour/energy). The gate is `unexpected_fail=0`; the data wave promotes
   `fixed` when each is repaired.
-- **Cream — RED proof, fix not landed.** `test_w10a2_cream.gd` is a standalone
-  RED proof (not registered as suite 119): `_apply_ue_emissive()` still invents
+- **Cream — beam cards confirmed; invented-white fix still RED.** The visible
+  cream bars in the 2026-11-26 capture are the `SM_LightBeam` cards (axis
+  fixed, full-tube material), not the moon planes. `test_w10a2_cream.gd` remains
+  a standalone RED proof (not suite 119): `_apply_ue_emissive()` still invents
   white for an `EmissiveStrength`-only material and the loader has no
   `tat_invented_white` counter. The authored moon cards are safe (122/122
-  `hidden_in_game`), so this is the invented-white path, not the cards.
-- **Capture instruments — built and self-tested, no capture yet.** Six fixed
+  `hidden_in_game`); the invented-white path is a separate data-wave fix.
+- **Capture instruments — port capture run, live reference pending.** Six fixed
   poses (`gate`, `upper_foyer`, `yaw180`, `lounge`, `lounge_beam`, `beam_close`)
   at the shipped 54.54° vertical lens, 1920×1080, 60 settle + 5 median frames,
   a Master-bus `AudioEffectCapture` tap with a headless `dummy_audio_driver`
   fallback, a tracked manifest (HEAD/seed/lens/pose), and the ROI script
   (luma/percentiles, beam rows, 16×9 cream map, KF27 criteria). The dry-run
   manifest validates (`poses=6`), the self-test is **21/21**, and the KF27
-  reference frame scores **7/7**. The real Vulkan capture and the live reference
-  are **PENDING** GPU/owner steps; PNGs are ignored, manifests/logs tracked.
+  reference frame scores **7/7**.
+  The real port run is
+  `docs/reports/logs/p0b/20261126T210338Z_5301fc661750_bon/` (1920×1080, 93 s,
+  audio 85.3 s at RMS −36.50/peak −15.12 dBFS; gate 23.2/10, upper_foyer
+  45.8/29, yaw180 39.0/31, Lounge 28.6/23, lounge_beam 24.4/23, beam_close
+  20.8/19). The frames confirm the visible cream bars are the `SM_LightBeam`
+  cards: the P0a axis is correct, but the full-tube material still reads as a
+  slab. The live reference and 120-row baseline remain **PENDING** owner steps;
+  PNGs are ignored, manifests/logs tracked.
 - **Live reference — prepared, not launched.** The appid 3341000 prefix is
   copied and verified at `/tmp/opencode/tat2-ref-prefix`; the blockers (Steam
   auto-update `AutoUpdateBehavior=0`, 2.2–2.5 GiB free VRAM, Wayland capture
@@ -91,7 +100,9 @@ run by `build/qa/run_p0a_gates.sh` (28 gates). Evidence:
   `max_axis_err_deg=0.000006`, `max_len_err=0.0406 %`, `clamped=0`; Old Manor's
   authored maximum `236.9539` (24.169 m) is applied verbatim (the removed 200
   ceiling would clip 5/196; the old 40 m clamp would clip 322/330). The beam
-  **material remains `PORT_APPROX`** (`tat_beam.gdshader`, P4).
+  **material remains `PORT_APPROX`** (`tat_beam.gdshader`, P4); the 2026-11-26
+  capture confirms it renders the full 1 m tube as a broad cream bar, while the
+  authored material is a 1.5 cm centre line with a 25 m fade.
 - **Destructibles / GC — `PORT_DECISION`.** The authored destruction payload is
   336 hidden GeometryCollection components on 264 actors; a real `Guildhall_Loot`
   load builds **95** hidden broken layers (48 chest + 31 display case + 16

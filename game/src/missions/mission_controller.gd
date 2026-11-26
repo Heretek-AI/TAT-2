@@ -3757,7 +3757,25 @@ func _spawn_guards(ue_spawns: Array, anchor: Vector3, patrol_paths: Array = []) 
 
 	var key_pool: Array[Dictionary] = _key_pool_for_map(str(GameState.active_map_id))
 
+	# TAT2_GUARD_DIAG=1 (inert unless set): prove what _spawn_guards receives.
+	# The authored guard rows include SmartObject defensive posts, which the
+	# loader routes to smart_objects before its guard branch, so candidates
+	# must be the MissionSpawner_Character count, not the raw kind=guard rows.
+	var diag_scene: Array = []
+	if OS.get_environment("TAT2_GUARD_DIAG") == "1":
+		var scene_v: Variant = level_stats.get("scene_element_spawns", [])
+		if scene_v is Array:
+			for se_v: Variant in (scene_v as Array):
+				if se_v is Dictionary and str((se_v as Dictionary).get("kind", "")) == "guard":
+					diag_scene.append(se_v)
+		var smart_v: Variant = level_stats.get("smart_objects", [])
+		var smart_count: int = (smart_v as Array).size() if smart_v is Array else 0
+		print("GUARD_DIAG candidates=%d guard_scene_elements=%d smart_objects=%d" % [
+			ue_spawns.size(), diag_scene.size(), smart_count,
+		])
+
 	var used_paths: Dictionary = {}
+	var diag_guards: int = 0
 	for idx: int in range(chosen.size()):
 		var pos: Vector3 = chosen[idx]
 		var g := GuardScript.new()
@@ -3793,6 +3811,113 @@ func _spawn_guards(ue_spawns: Array, anchor: Vector3, patrol_paths: Array = []) 
 		if idx % 2 == 0 or idx == 1:
 			g.set_carried_item(key_pool[idx % key_pool.size()])
 		add_child(g)
+		# TAT2_GUARD_DIAG=1 (inert unless set): one line per spawned guard so a
+		# run can tell whether _ground_position landed the guard on a ceiling
+		# above the marker (H1), whether the body has meshes at a sane height
+		# (H2), and whether every selected marker produced a guard (H3).
+		if OS.get_environment("TAT2_GUARD_DIAG") == "1":
+			diag_guards += 1
+			var delta: float = pos.distance_to(grounded_pos)
+			var mesh_nodes: Array[Node] = []
+			if g.visual_root != null:
+				mesh_nodes = g.visual_root.find_children("*", "MeshInstance3D", true, false)
+			var union: AABB = AABB()
+			var union_set: bool = false
+			for n_v: Node in mesh_nodes:
+				var mi: MeshInstance3D = n_v as MeshInstance3D
+				if mi == null or mi.mesh == null:
+					continue
+				var box: AABB = mi.global_transform * mi.mesh.get_aabb()
+				union = box if not union_set else union.merge(box)
+				union_set = true
+			var aabb_text: String = "aabb=none"
+			if union_set:
+				aabb_text = "aabb_min=(%.3f,%.3f,%.3f) aabb_max=(%.3f,%.3f,%.3f)" % [
+					union.position.x, union.position.y, union.position.z,
+					union.end.x, union.end.y, union.end.z,
+				]
+			var ray_from: Vector3 = g.global_position + Vector3(0.0, 0.10, 0.0)
+			var down: Dictionary = _diag_ray(ray_from, ray_from + Vector3(0.0, -6.0, 0.0), grounded_pos.y)
+			var up: Dictionary = _diag_ray(ray_from, ray_from + Vector3(0.0, 6.0, 0.0), grounded_pos.y)
+			var floor_from: Vector3 = pos + Vector3(0.0, 0.05, 0.0)
+			var flr: Dictionary = _diag_ray(floor_from, floor_from + Vector3(0.0, -4.0, 0.0), pos.y)
+			var floor_text: String = "floor=(-,-,-)"
+			if int(flr["hit"]) == 1:
+				var fp: Vector3 = flr["pos"] as Vector3
+				floor_text = "floor=(%.3f,%.3f,%.3f)" % [fp.x, fp.y, fp.z]
+			# Which authored scene element the marker came from: the loader's
+			# guard record whose pos matches the marker on all three axes.
+			var src_name: String = "-"
+			var src_class: String = "-"
+			for se_v: Variant in diag_scene:
+				var se: Dictionary = se_v as Dictionary
+				var sp_v: Variant = se.get("pos", null)
+				if not (sp_v is Array):
+					continue
+				var sp: Array = sp_v as Array
+				if sp.size() < 3:
+					continue
+				if absf(float(sp[0]) - pos.x) <= 0.01 and absf(float(sp[1]) - pos.y) <= 0.01 and absf(float(sp[2]) - pos.z) <= 0.01:
+					src_name = str(se.get("name", ""))
+					src_class = str(se.get("class", ""))
+					break
+			print("GUARD_DIAG idx=%d name=%s marker=(%.3f,%.3f,%.3f) grounded=(%.3f,%.3f,%.3f) delta=%.2f moved=%s meshes=%d %s down={%s} up={%s} floor_hit=%d %s src_name=%s src_class=%s" % [
+				idx, str(g.name), pos.x, pos.y, pos.z,
+				grounded_pos.x, grounded_pos.y, grounded_pos.z,
+				delta, str(delta > 0.5), mesh_nodes.size(), aabb_text,
+				str(down["text"]), str(up["text"]), int(flr["hit"]), floor_text,
+				src_name, src_class,
+			])
+	if OS.get_environment("TAT2_GUARD_DIAG") == "1":
+		print("GUARD_DIAG total=%d" % diag_guards)
+
+
+## TAT2_GUARD_DIAG helper: one world-layer ray as {hit, pos, text}; `text` is
+## the single-line form printed inside down/up/floor braces. Inert unless the
+## caller is inside the env-gated block in _spawn_guards().
+func _diag_ray(origin: Vector3, target: Vector3, ref_y: float) -> Dictionary:
+	if not is_inside_tree():
+		return {"hit": 0, "text": "hit=0"}
+	var w3d: World3D = get_world_3d()
+	if w3d == null:
+		return {"hit": 0, "text": "hit=0"}
+	var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(origin, target, 1)
+	var hit: Dictionary = w3d.direct_space_state.intersect_ray(q)
+	if hit.is_empty():
+		return {"hit": 0, "text": "hit=0"}
+	var hp_v: Variant = hit.get("position", null)
+	if not (hp_v is Vector3):
+		return {"hit": 0, "text": "hit=0"}
+	var hp: Vector3 = hp_v as Vector3
+	var col_name: String = "-"
+	var parent_name: String = "-"
+	var meta_val: String = "-"
+	var meta_key: String = "-"
+	var col_v: Variant = hit.get("collider", null)
+	if col_v is Node:
+		var col: Node = col_v as Node
+		col_name = str(col.name)
+		var par: Node = col.get_parent()
+		if par != null:
+			parent_name = str(par.name)
+		# Loader-tagged collision shapes carry the UE mesh on themselves; the
+		# ray collider is their StaticBody parent, so probe both once.
+		var probes: Array[Node] = [col, par]
+		for probe: Node in probes:
+			if probe == null:
+				continue
+			if probe.has_meta("ue_mesh"):
+				meta_val = str(probe.get_meta("ue_mesh"))
+				meta_key = "ue_mesh"
+				break
+			if probe.has_meta("ue_mesh_path"):
+				meta_val = str(probe.get_meta("ue_mesh_path"))
+				meta_key = "ue_mesh_path"
+				break
+	var text: String = "hit=1 pos=(%.3f,%.3f,%.3f) collider=%s parent=%s meta_ue_mesh=%s meta_key=%s dy=%.2f" % [
+		hp.x, hp.y, hp.z, col_name, parent_name, meta_val, meta_key, hp.y - ref_y,
+	]
+	return {"hit": 1, "pos": hp, "text": text}
 
 
 ## Index of the authored APatrolPath to give a guard spawned at `pos`, or -1.

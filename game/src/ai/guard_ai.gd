@@ -1736,7 +1736,10 @@ func _scan_downed_guards(delta: float) -> void:
 		if not SightModel.frustum_admits(row, to_target, fwd, -1.0, sight_frustum_enabled):
 			continue
 		if space != null:
-			var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(eye, SightModel.target_point(body), 1, [get_rid(), body.get_rid()])
+			# W10-A2: `eye` orients the frustum only (it sits behind the head by
+			# the authored POV offset); the occlusion ray leaves the model head,
+			# or a guard backed against a wall starts the ray inside it.
+			var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(SightModel.head_position(self), SightModel.target_point(body), 1, [get_rid(), body.get_rid()])
 			if not space.intersect_ray(q).is_empty():
 				continue
 		seen += 1

@@ -1,0 +1,90 @@
+W10-A2 civilian lane (w10/w10a2-civilian) — gate evidence, 2026-11-26
+Base: 4a5e4d4 (plan tip). One Godot at a time under /tmp/opencode/tat2-godot.lock.
+Test: game/tests/test_w10a2_civilian.gd (standalone; NOT registered in run_tests.gd).
+
+===============================================================================
+1. compile — tools/godot --headless --path game --script tools/check_scripts_compile.gd
+===============================================================================
+scripts checked: 191, broken: 0
+
+===============================================================================
+2. RED — same test run against the PRE-FIX tree (sight_model.gd, civilian_npc.gd,
+   guard_ai.gd stashed; only the new test file present)
+===============================================================================
+W10A2_CIV: civilian_meshes[0] body=res://assets/ue/Content/Art/Animation/CivFemale/Skin/Common/SK_CivFemale_Common_01C.glb head=res://assets/ue/Content/Art/Animation/CivFemale/Skin/Heads/SK_CivFemale_Head_Abby_Short01.glb
+PASS: LevelLoader live with mesh_materials DB (2065 meshes)
+PASS: A precondition: head->player ray is clear with the wall behind
+FAIL: A wall 0.6 m behind blinds the civilian (_can_see false)
+FAIL: A civilian did not flee/yelp (state=wander yelps=0)
+PASS: B precondition: the 2 m front wall occludes the head->player ray
+PASS: B a wall 2 m in front blocks sight (_can_see false)
+PASS: B occluded civilian does not flee (state=wander yelps=0)
+PASS: C body Skeleton3D present (bones=95)
+W10A2_CIV: facing skel_global_basis_z=(0.0, 0.0, 1.0) actor_forward=(0.0, 0.0, -1.0) dot=-1.0
+FAIL: C skeleton basis.z is backwards vs actor forward (dot=-1.0000 <= 0.9)
+PASS: D MeshRoot present
+W10A2_CIV: bind surfaces body=3 head=6
+PASS: D body mesh has 3 surfaces
+PASS: D head mesh has 6 surfaces
+W10A2_CIV: surface overrides body=0 head=0
+FAIL: D body overrides 0 != 3 (head slots applied to the body?)
+FAIL: D female head overrides 0 != 6 (body slot list applied to the head?)
+FAIL: D a surface is not StandardMaterial3D or is the default white (std=false dressed=false)
+FAIL: D body slot 1 albedo is '' (want suffix T_CivFemale_Common_01_Shirt_D.png)
+FAIL: D head slot 3 albedo is '' (want suffix T_CivFemale_Base_Head_D.png)
+FAIL: D material_bind_stats() missing (no surface census)
+W10A2_CIV: bind_stats total=-1 bound=-1 textured=-1 default_white=-1
+FAIL: D bind_stats.total -1 != 9
+FAIL: D bind_stats.bound -1 != 9
+FAIL: D bind_stats.textured -1 != 8
+FAIL: D bind_stats.default_white -1 != 0 (surfaces left glTF white)
+W10A2_CIV_SUMMARY: fails=13 passed=9 total=22
+
+===============================================================================
+3. GREEN — fixed tree
+   flock /tmp/opencode/tat2-godot.lock -c 'tools/godot --headless --path game
+     --script res://tests/test_w10a2_civilian.gd'   (exit 0)
+===============================================================================
+PASS: LevelLoader live with mesh_materials DB (2065 meshes)
+PASS: A precondition: head->player ray is clear with the wall behind
+PASS: A wall 0.6 m behind does not blind the civilian (_can_see true)
+PASS: A civilian flees/yelps at a player 4 m in front (state=flee yelps=1)
+PASS: B precondition: the 2 m front wall occludes the head->player ray
+PASS: B a wall 2 m in front blocks sight (_can_see false)
+PASS: B occluded civilian does not flee (state=wander yelps=0)
+PASS: C body Skeleton3D present (bones=95)
+W10A2_CIV: facing skel_global_basis_z=(-0.0, 0.0, -1.0) actor_forward=(0.0, 0.0, -1.0) dot=1.0
+PASS: C skeleton basis.z follows actor forward (dot=1.0000 > 0.9)
+PASS: D MeshRoot present
+W10A2_CIV: bind surfaces body=3 head=6
+PASS: D body mesh has 3 surfaces
+PASS: D head mesh has 6 surfaces
+W10A2_CIV: surface overrides body=3 head=6
+PASS: D body 3/3 surfaces carry authored overrides
+PASS: D female head 6/6 surfaces carry authored overrides
+PASS: D every surface is a StandardMaterial3D that is textured or tinted
+PASS: D body slot 1 albedo is T_CivFemale_Common_01_Shirt_D.png
+PASS: D head slot 3 albedo is T_CivFemale_Base_Head_D.png
+PASS: D material_bind_stats() present
+W10A2_CIV: bind_stats total=9 bound=9 textured=8 default_white=0
+PASS: D bind_stats.total == 9
+PASS: D bind_stats.bound == 9
+PASS: D bind_stats.textured == 8 (+1 tinted MI_Default_Red)
+PASS: D bind_stats.default_white == 0
+W10A2_CIV_SUMMARY: fails=0 passed=22 total=22
+
+===============================================================================
+4. regression — tools/godot --headless --path game --script res://tests/run_tests.gd
+===============================================================================
+PASS: 113 W10-A runtime: StateTree trace file budget + coplanar convex rule (ward zone) (1468 ms)
+PASS: 114 W10-A locks: authored CanBeLockpicked resolution, explicit-false exclusion, prison fallback (913 ms)
+PASS: 115 W10-A stairs: authored per-element union walk (7 flights, tower 36 hulls) (26892 ms)
+PASS: 116 W10-A traversal: authored per-element union roofs (3-4 hulls, no shapes[0]) (59337 ms)
+SUMMARY: fails=0
+(grep -c '^PASS' = 319; suite 97 GuardDowned covers the guard_ai ray-origin change)
+
+===============================================================================
+Not run in this lane (integrator gate set): E2E tiers, probe_guard_positions,
+probe_collision_authored, probe_lock_inventory, runtime-smoke, make audit,
+make gate-ratchet, the full pose-set capture.
+===============================================================================

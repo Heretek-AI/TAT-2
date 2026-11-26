@@ -188,6 +188,18 @@ static func eye_position(body: Node3D, sight_row: Dictionary) -> Vector3:
 	return body.global_position + Vector3.UP * EYE_HEIGHT_M - fwd * point_of_view_offset_m(sight_row)
 
 
+## Occlusion-ray origin: the model head, capsule origin + eye height, with no
+## POV offset. The authored backward offset orients the frustum only; a ray cast
+## from `eye_position()` starts behind the body and can begin inside a wall the
+## actor is backed against (measured W10-A2: a civilian with a wall 0.6 m behind
+## and the player 4 m in front could not see the player). Keep `eye_position()`
+## for the angular frustum and use this for the line-of-sight ray.
+static func head_position(body: Node3D) -> Vector3:
+	if body == null:
+		return Vector3.ZERO
+	return body.global_position + Vector3.UP * EYE_HEIGHT_M
+
+
 ## World point the guard aims at on a target body.
 static func target_point(target: Node3D) -> Vector3:
 	return target.global_position + Vector3.UP * TARGET_HEIGHT_M

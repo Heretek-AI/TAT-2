@@ -36,11 +36,20 @@ extends CharacterBody3D
 ##   use the same generic MM_Unarmed_* clips; when a clip shares no bones
 ##   with the civilian skeleton it is skipped and the civilian holds rest
 ##   pose with a procedural position bob.
+##
+## W10-A2: the body/head GLBs face +Z while this actor's forward is -Z (see
+## _build_meshes), and the two GLBs are dressed separately because they carry
+## different authored slot lists (body 3, female head 6, male head 7). Sight uses
+## the authored frustum from `SightModel.eye_position()` but the occlusion ray
+## leaves `SightModel.head_position()`.
 
 const AnimLib := preload("res://src/core/animation_library.gd")
 const HearingData := preload("res://src/ai/hearing_data.gd")
 const SightModel := preload("res://src/ai/sight_model.gd")
 const NavSteering := preload("res://src/ai/nav_steering.gd")
+## Standalone prop material binding (W10-A2): the civilian GLBs ship no images,
+## so an unbound body/head renders the glTF default white.
+const LevelLoaderScript := preload("res://src/core/level_loader.gd")
 
 ## APPROXIMATION: no UE civilian walk-speed source.
 const WALK_SPEED_M_S: float = 1.4
@@ -100,6 +109,8 @@ var _anim_player: AnimationPlayer = null
 var _has_anims: bool = false
 var _bob_phase: float = 0.0
 var _skel: Skeleton3D = null
+## Surface census of the last _build_meshes() bind (see material_bind_stats()).
+var _material_stats: Dictionary = {"total": 0, "bound": 0, "textured": 0, "default_white": 0}
 
 ## W8 authored civilian behaviour state.
 var mode: int = Mode.WANDER
@@ -209,20 +220,78 @@ func _build_meshes() -> void:
 	var root := Node3D.new()
 	root.name = "MeshRoot"
 	add_child(root)
+	# W10-A2 measured: the civilian GLBs' front is +Z (the exported Blender/UE
+	# rig), while this actor's forward convention is -Z (_face_and_move writes
+	# atan2(-dir.x, -dir.z) and _can_see uses -global_transform.basis.z). Every
+	# civilian therefore walked and looked backwards. Rotate the shared MeshRoot
+	# -- not the CharacterBody3D (the sight cone and movement would turn with
+	# it), not one MeshInstance3D (skinning follows the Skeleton3D), and not only
+	# the body instance (the grafted head would stay backwards).
+	root.rotation.y = PI
+	var body_inst: Node = null
 	if body_res_path != "" and ResourceLoader.exists(body_res_path):
 		var packed := ResourceLoader.load(body_res_path) as PackedScene
 		if packed != null:
-			root.add_child(packed.instantiate())
+			body_inst = packed.instantiate()
+			root.add_child(body_inst)
 	_skel = _find_skeleton(root)
+	var head_inst: Node = null
 	if head_res_path != "" and ResourceLoader.exists(head_res_path):
 		var head_packed := ResourceLoader.load(head_res_path) as PackedScene
 		if head_packed != null:
-			var head_inst := head_packed.instantiate() as Node
+			head_inst = head_packed.instantiate() as Node
 			if head_inst != null:
 				root.add_child(head_inst)
-				_graft_head_meshes(head_inst, root)
+	# Dress both GLBs after add_child (bind_prop_scene_materials looks up the live
+	# level loader in the tree) and before _graft_head_meshes (the head container
+	# is freed there). Two binds, one slot list each: the body carries 3 authored
+	# slots, the female head 6 and the male head 7. Binding MeshRoot with one path
+	# would apply the body list to the head and leave half its surfaces white.
+	_material_stats = {"total": 0, "bound": 0, "textured": 0, "default_white": 0}
+	if body_inst != null:
+		_bind_materials(body_inst, body_res_path)
+	if head_inst != null:
+		_bind_materials(head_inst, head_res_path)
+	if head_inst != null:
+		_graft_head_meshes(head_inst, root)
 	if _skel != null:
 		_setup_civilian_anims()
+
+
+## Authored surface census for the last _build_meshes() bind. `total` counts
+## every surface on both GLBs, `bound` those that got an authored override,
+## `textured` those whose StandardMaterial3D carries an albedo texture, and
+## `default_white` those still on the glTF default (no material, or no albedo
+## texture with a white albedo colour). A dressed civilian reports
+## total == bound == 9, textured == 8, default_white == 0 on the female rig.
+func material_bind_stats() -> Dictionary:
+	return _material_stats.duplicate()
+
+
+func _bind_materials(scene: Node, glb_path: String) -> void:
+	LevelLoaderScript.bind_prop_scene_materials(scene, glb_path)
+	for node: Node in scene.find_children("*", "MeshInstance3D", true, false):
+		var mi := node as MeshInstance3D
+		if mi == null or mi.mesh == null:
+			continue
+		for s: int in range(mi.mesh.get_surface_count()):
+			_material_stats.total += 1
+			var override_mat: Material = mi.get_surface_override_material(s)
+			if override_mat != null:
+				_material_stats.bound += 1
+			var effective: Material = override_mat if override_mat != null else mi.get_active_material(s)
+			var sm := effective as StandardMaterial3D
+			if sm != null:
+				if sm.albedo_texture != null:
+					_material_stats.textured += 1
+				elif _is_white(sm.albedo_color):
+					_material_stats.default_white += 1
+			elif effective == null:
+				_material_stats.default_white += 1
+
+
+static func _is_white(c: Color) -> bool:
+	return c.r >= 0.99 and c.g >= 0.99 and c.b >= 0.99
 
 
 ## Moves skinned head meshes onto the body skeleton so one AnimationPlayer
@@ -460,8 +529,13 @@ func _can_see(player: CharacterBody3D) -> bool:
 	var world: World3D = get_world_3d()
 	if world == null:
 		return true
+	# W10-A2 measured: the authored POV backward offset (1.2 m) orients the
+	# frustum; it must not move the occlusion ray. Casting from eye_position()
+	# started the ray behind the head, so a wall 0.6 m behind the civilian
+	# blocked a player 4 m in front. The ray leaves the model head, same
+	# contract as guard_ai.
 	var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(
-		eye, SightModel.target_point(player), 1 | 2 | 4, [get_rid(), player.get_rid()])
+		SightModel.head_position(self), SightModel.target_point(player), 1 | 2 | 4, [get_rid(), player.get_rid()])
 	if not world.direct_space_state.intersect_ray(q).is_empty():
 		return false
 	last_sight_distance_m = global_position.distance_to(player.global_position)

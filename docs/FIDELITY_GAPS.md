@@ -6,6 +6,48 @@ extracted through `tools/tat-extract` (CUE4Parse, `EGame.GAME_UE5_5`).
 Generated from `extracted/filelist.txt` (22,005 entries) and the current `extracted/` tree.
 Re-run the census with the commands at the bottom.
 
+## W9 status — 2026-11-25 (newest; supersedes the sections below where they differ)
+
+Four phases, 34 commits, every phase audited by an agent that did not write the code.
+Measured detail: [`reports/w9-remediation-20261125.md`](reports/w9-remediation-20261125.md).
+
+**Closed by W9**
+
+- **Collision is authored.** `AggGeom` on **937/947 meshes (98.9 %)**, `dropped=0`,
+  30,901 shapes, and **+2,878 instances** the old 0.45 m AABB gate discarded. Three
+  producer bugs fixed on the way (full-vs-half extent, capsule axis, convex bake scale).
+- **Progression is authored.** Level cap 25 with XP preserved, authored award, endgame
+  precedence KF13 → 1200/600/300 → QG → 480, FTUE 5,000 migrated once, 48 market gates.
+- **Locks are authored only.** 363 applied (157 containers, 8 doors, 8 windows excluded by
+  class); zero invented levels; the LV4 `ESC` no longer escapes into the pause menu.
+- **UI reads the authored tables.** String routing 26 → 306; authored-mappable 195/195;
+  post-match, progression and tutorial screens exist; pad focus walks 10 screens / 58
+  controls; the TAB map consumes all 13 `TATWorldMapBoundary` actors.
+- **Prep composition matches KF11** in pixels: mean 37.1 vs 37.2, black floor 18.8 % vs
+  22.9 %, skyline visible (RMSE 9.1 %) via a **cull rule**, not a camera move.
+- **A runtime-error gate exists.** `make runtime-smoke` boots a real mission and fails on
+  any `SCRIPT ERROR`; a footstep-occlusion type error had spammed every step while E2E
+  reported 278/278.
+
+**Open after W9 (recorded, not hidden)**
+
+- **Interior brightness**: upper foyer p50 **29 / 1.1 %**, `yaw180` **31 / 2.5 %**, against
+  13–15 / 9–24. Fill removal recovered 5 of ~19 points; the remainder is authored-light
+  level plus highlights (p95 182 vs 34). The next attempt must be the **temporal**
+  `AEM_Basic` adaptation (0.2 f-stops/s, ~20 s), validated against the gate pose too — a
+  spatial or scene-wide grade was tried and **failed its pre-registered criteria**.
+- **StateTree ceiling:** 18/77 task and 6/36 condition classes mapped; **0 of 21 trees
+  fully evaluable** because the payload drops node parameters. Runs in shadow
+  (`TAT2_STATETREE=off|shadow`); the FSM still drives. Contract:
+  `build/qa/w9/p4-t01-contract.md`.
+- **IBL** remains an approximation until the SkyLight cubemap export exists
+  (`available=false, sky_contribution=0.0` in the live log).
+- **Lockpick** ships a labelled stand-in (41 assets, 0 animations).
+- **VFX sprites:** 6 soft-mask textures bind; 34 of 39 placed materials keep the procedural
+  falloff; the ceiling without new shader modes is 15/39.
+- The 600×600 `KillZ` floor is **PORT INVENTED** (no authored KillZ).
+- Suite-45 stairs flake observed once; a clean rerun is recorded in the P4 report.
+
 ## R8 remediation status — 2026-11-25
 
 The tables below predate the R8 wave and are **not** authoritative for the areas it

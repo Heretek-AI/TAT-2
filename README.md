@@ -9,15 +9,15 @@ the TAT-2 expansion adds **The Moth** thief, **Jaspering Hall** and co-op.
 > `extracted/` and `game/assets/ue/`, both git-ignored. Only original code, tools
 > and expansion content are committed. Do not redistribute extracted content.
 
-**Status (2026-11-25, R8 remediation tip)** — playable end-to-end: startscreen → Den →
+**Status (2026-11-25, W9 tip)** — playable end-to-end: startscreen → Den →
 contract prep → Guildhall run → two-phase escape → scoring, plus free-play
 cleanout, carried-loot capacity and stashing, two-player ENet co-op and all five
 E2E tiers.
 
 | Gate | Result |
 |---|---|
-| GDScript compile (`tools/check_scripts_compile.gd`) | **152 scripts, 0 broken** |
-| Unit/integration (`tests/run_tests.gd`) | **301 checks, fails=0** (suites numbered to 97) |
+| GDScript compile (`tools/check_scripts_compile.gd`) | **186 scripts, 0 broken** |
+| Unit/integration (`tests/run_tests.gd`) | **314 checks, fails=0** (suites numbered to 111) |
 | M2 traversal/tools (`tests/test_m2_player.gd`) | **fails=0** (12) |
 | E2E (`tests/e2e/run_e2e_tests.gd`, tiers 1–4 + `s2`) | **278/278** (tier 1: 117) |
 | Door walk · viewmodel truth · Niagara · leak probe | **PASS** |
@@ -55,7 +55,7 @@ builds are documented in [`docs/ANDROID.md`](docs/ANDROID.md).
 | Command | Purpose |
 |---|---|
 | `make run` | Launch the desktop client (`F3` = FPS/draw-call overlay) |
-| `make test` | Headless integration run (301 checks) |
+| `make test` | Headless integration run (314 checks) |
 | `make audit` | Fail-closed gate: texture cap, mount/disk coverage, 13 content domains, producer output hashes, `errors.log` marker, freshness |
 | `make gate-ratchet` | Assert the gate floors in `tools/gate_ratchet.json` against the committed logs in `docs/reports/logs/` |
 | `make audit-bootstrap` | Explicit first run; writes the tracked `tools/audit_baseline.json` |
@@ -148,6 +148,9 @@ data under `game/data/generated/` (gitignored, produced by `make normalize`).
   pipeline gotchas and open work.
 - [`docs/FIDELITY_GAPS.md`](docs/FIDELITY_GAPS.md) — live 1:1 coverage tracker and
   every documented residual.
+- [`docs/reports/w9-remediation-20261125.md`](docs/reports/w9-remediation-20261125.md) —
+  latest: authored collision on 98.9 % of meshes, authored progression/locks, UI at 100 %
+  of authored rows, and the measured StateTree ceiling (0/21 trees fully evaluable).
 - [`docs/reports/r8-remediation-20261125.md`](docs/reports/r8-remediation-20261125.md) —
   latest: twelve remediation teams, the measured before/after per system, and what is
   deliberately still open.

@@ -1,23 +1,31 @@
 # Handoff — Thick As Thieves Godot 4.7.2 port (next run)
 
 **Repo:** `/home/john/Projects/TAT-2`
-**HEAD at handoff:** the **R8 remediation** tip (12 teams, 43 commits, merged and
-re-gated on the merged tree — see
-[`reports/r8-remediation-20261125.md`](reports/r8-remediation-20261125.md)). It sits on
-top of `38e7b03` (W7) plus the two audits at `fb93f84`
+**HEAD at handoff:** the **W9 tip** (`4845992`) — four phases on top of R8:
+verification, data consumption, behaviour, UI completeness and the StateTree runtime.
+See [`reports/w9-remediation-20261125.md`](reports/w9-remediation-20261125.md), and the
+upstream audits at `fb93f84`
 ([`reports/re-audit-20261124.md`](reports/re-audit-20261124.md),
-[`reports/r8-live-run-review-20261124.md`](reports/r8-live-run-review-20261124.md)).
-**Working tree:** clean apart from private/derived data. The twelve team worktrees
-live at `/home/john/Projects/TAT-2-rem-<team>` and can be removed once their branches
-are no longer needed (`rem/T01-pipeline` … `rem/T12-vfx`).
-**Gates:** compile 152/0 · `run_tests` 301 PASS fails=0 (suites to 97) · M2 fails=0 ·
-E2E 278/278 (tier 1 117) · door/viewmodel/Niagara/blackjack/render/geometry probes PASS ·
-`make audit` PASS (12,657/12,703, reason recorded) · texture cap 0 offenders ·
+[`reports/r8-live-run-review-20261124.md`](reports/r8-live-run-review-20261124.md),
+[`reports/r8-remediation-20261125.md`](reports/r8-remediation-20261125.md)).
+**Working tree:** clean apart from private/derived data. Phase worktrees live at
+`/home/john/Projects/TAT-2-rem-*` and the R8 team branches (`rem/T01-pipeline` …
+`rem/T12-vfx`) are kept locally for provenance; both can be removed.
+**Gates:** compile 186/0 · `run_tests` 314 PASS fails=0 (suites to 111) · M2 12/0 ·
+E2E 278/278 (tier 1 117) · DOORWALK / VIEWMODEL / NIAGARA / BLACKJACK / GEOM probes PASS ·
+`make runtime-smoke` PASS (script_errors=0, also with `TAT2_STATETREE=shadow`) ·
+`make audit` PASS (12,660/12,703, reason recorded) · texture cap 797/1/0 ·
 perf guard 78/78 · `make gate-ratchet` PASS.
-**Not verified:** no Vulkan capture has been taken since the lighting/prep work. The
-prep composition, the per-room light plan and the new SSAO are numerically correct and
-pixel-unconfirmed; the capture plan is
-[`../build/qa/review_20261124/INTEGRATION_RUNBOOK.md`](../build/qa/review_20261124/INTEGRATION_RUNBOOK.md) §4.
+**What W9 changed in practice:** collision is authored `AggGeom` (98.9 % of meshes,
+`TAT2_COLLISION=authored|aabb`), progression and locks are authored, UI reads the
+authored tables, the TAB map has all 13 authored boundaries, and the StateTree runtime
+runs in **shadow** — 0/21 trees are fully evaluable because the payload drops node
+parameters, so the FSM still drives. Do not invent parameters to force a cutover.
+**Not verified / open:** the interior brightness band (foyer p50 29 vs the reference 15),
+IBL (cubemap export missing), the lockpick stand-in, and 34 of 39 VFX sprite materials.
+The temporal `AEM_Basic` adaptation (0.2 f-stops/s) is the designed next attempt for the
+interior band; a spatial grade was tried and rejected by its pre-registered criteria.
+Suite-45 (stairs) flaked once; a clean rerun is recorded in the P4 report.
 **Godot:** `4.7.2.stable` via **native `tools/godot`** (Flatpak fallback inside the
 wrapper). `godot` is **not** on `$PATH`.
 **Renderer:** Forward+ · Jolt Physics 60 Hz · 1280×720 reference

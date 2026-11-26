@@ -61,7 +61,8 @@ TAT-2 expansion content belong in git.
 
 ```bash
 make run         # native 4.7.2 client, F3 overlay
-make test        # tests/run_tests.gd — 301 checks, suites numbered to 97
+make test        # tests/run_tests.gd — 314 checks, suites numbered to 111
+make runtime-smoke # real free-play boot; fails on any SCRIPT/SHADER ERROR
 make audit       # fail-closed content + producer/output baseline gate
 make gate-ratchet # floors + committed docs/reports/logs evidence agree
 build/qa/test_perf_guard.sh  # perf-wrapper contract, no GPU, no launch
@@ -78,15 +79,15 @@ If a headless run reports missing textures (`T1-01-C`, `moon_visible=0.0`), the
 import cache is incomplete — run `tools/godot --headless --path game --import`
 first.
 
-| Gate | Passing value (W7 merged tree, `6760dd0`, logs in `docs/reports/logs/w7-merged/`) |
+| Gate | Passing value (W9 tip, logs in `docs/reports/logs/r8/` — raise, never lower) |
 |---|---|
-| compile | 120 checked, 0 broken |
-| `run_tests.gd` | `SUMMARY: fails=0` (301 PASS; suites numbered to 97) |
-| `test_m2_player.gd` | `M2_SUMMARY: fails=0` (11 PASS) |
+| compile | 186 checked, 0 broken |
+| `run_tests.gd` | `SUMMARY: fails=0` (314 PASS; suites numbered to 111) |
+| `test_m2_player.gd` | `M2_SUMMARY: fails=0` (12 PASS) |
 | door walk / viewmodel / Niagara probes | `DOORWALK PASS` / `VIEWMODEL_TRUTH PASS` / `NIAGARA_PROBE PASS` (3695 authored / 3308 active / 36 systems) |
 | E2E | `fails=0 passed=278 total=278` (tier 1: 117; includes `--tier=s2`) |
-| `make texture-cap-check` | OK — 773 capped, 1 alpha-critical kept, 0 offenders |
-| `make audit` | exit 0, tracked baseline matches, disk-backed coverage 99.6 % (12657/12703), 0 unexpected, exact-case 0 unexpected, 13/13 content groups |
+| `make texture-cap-check` | OK — 797 capped, 1 alpha-critical kept, 0 offenders |
+| `make audit` | exit 0, tracked baseline matches, disk-backed coverage (12660/12703), 0 unexpected, exact-case 0 unexpected, 13/13 content groups |
 
 The 2026-11-24 W7 wave (five lanes, cherry-picked) re-ran the **complete** set
 serially on `6760dd0` — compile, `run_tests`, M2, the three probes, `probe_leak`
@@ -96,6 +97,13 @@ baseline. Evidence: [`docs/reports/logs/w7-merged/`](docs/reports/logs/w7-merged
 and [`docs/reports/w7-integration.md`](docs/reports/w7-integration.md). E2E moved
 264 → 278 (W7H guard-sprint pair + W7S 12-case loot tier); `run_tests` moved
 263 → 278 (S2 suites 89/90, W7E suite, W7H tests).
+
+The 2026-11-25 **W9 wave** (four phases, 34 commits) consumed the new producers:
+collision is authored `AggGeom` (98.9 % of meshes), progression is the authored table,
+locks are authored-only (363 applied), UI routing is 100 % of authored rows, and the
+StateTree runtime runs in shadow with a measured ceiling of **0/21 trees fully
+evaluable**. See [`docs/reports/w9-remediation-20261125.md`](docs/reports/w9-remediation-20261125.md).
+It also added `make runtime-smoke`.
 
 The 2026-11-25 R8 wave merged twelve remediation teams (40 commits, see
 [`docs/reports/r8-remediation-20261125.md`](docs/reports/r8-remediation-20261125.md)):
@@ -166,6 +174,19 @@ build/qa/             tracked capture/probe/export-stamp scripts; PNG output ign
   project, not a loader defect. Do not “fix” them by nudging the loader.
 - **Den probe leak:** 7 texture RIDs warn at exit; `TAT2_NO_DEN_PROBE=1` is the
   clean path. Not a script error.
+- **Collision is authored `AggGeom`, behind a flag.** `TAT2_COLLISION=authored|aabb`
+  (default `authored`). The producer's `half_extent` is the *full* extent (a 2× trap), the
+  capsule axis is Z, and convex bakes must carry instance scale — getting any of those wrong
+  produced 95,293 Jolt scale errors. `probe_collision_authored.gd` is the coverage gate
+  (`coverage=0.989`, `dropped=0`). `test_roof_collision.gd` runs both modes; do not restore
+  the old one-hull heuristic.
+- **The StateTree dump is a property dump; the trees are not fully evaluable.** 18/77 task
+  classes and 6/36 condition classes are mapped, and **0 of 21 trees** can be evaluated
+  end-to-end because the payload drops every node parameter (`EAlertnessLevel`,
+  `DelayTask.duration`, `Move To` target, `Bool Compare` operands). The runtime therefore
+  runs in **shadow** (`TAT2_STATETREE=off|shadow`, default off) and reports; the FSM still
+  drives. A cutover needs the producer contract in
+  `build/qa/w9/p4-t01-contract.md`. Do not "finish" a cutover by inventing parameters.
 - **The light budget is per-room fair, not a global energy cut.** `plan_light_selection()`
   water-fills the same 160 slots per 16 m room bubble (one light per bubble before any
   second, densest-first, deterministic) instead of ranking all 914 deduped Guildhall lights

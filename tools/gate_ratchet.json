@@ -1,11 +1,11 @@
 {
   "schema": "tat2.gate_ratchet/1",
-  "measured_on": "e3678be",
-  "source": "W9-P0 re-measurement of the merged R8 tree (e3678be) on 2026-11-25: compile 152/0, run_tests 301/0 (suites to 97), M2 12/0, E2E 278/278 (tier 1 117/117), the five probes, perf guard 78/78, audit 12,660/12,703, texture cap 797/1/0. Supersedes the W7 floors on 6760dd0 (120/278/11/278). Logs in docs/reports/logs/r8/.",
+  "measured_on": "8a4b0dd",
+  "source": "W9 tip re-measurement of the merged tree (8a4b0dd) on 2026-11-25: compile 186/0, run_tests 314/0 (suites to 111), M2 12/0, E2E 278/278 (tier 1 117/117), the five probes, perf guard 78/78, audit 12,660/12,703, texture cap 797/1/0. Supersedes the R8 floors on e3678be (152/301/12/278). Logs in docs/reports/logs/w9/.",
   "note": "Floors, not exact counts: a wave may add tests/files but must never lower a floor or introduce a failure. Counts are read from the committed log and compared with >=; failure counts are exact zeros and e2e.passed must equal e2e.total. Update only with a real gate log in docs/reports/logs/ (see tools/check_gate_ratchet.py for the evidence layout).",
-  "report": "docs/reports/r8-gate-ratchet.md",
+  "report": "docs/reports/w9-gate-ratchet.md",
   "evidence": {
-    "dir": "docs/reports/logs/r8",
+    "dir": "docs/reports/logs/w9",
     "compile": "compile.log",
     "run_tests": "run_tests.log",
     "m2": "m2.log",
@@ -21,12 +21,36 @@
     "probe_geometry_placement": "probe_geometry_placement.log"
   },
   "gates": {
-    "compile": { "checked": 152, "broken": 0 },
-    "run_tests": { "passes": 301, "fails": 0 },
-    "m2": { "passes": 12, "fails": 0 },
-    "e2e": { "passed": 278, "total": 278, "fails": 0 },
-    "audit": { "coverage_num": 12660, "coverage_den": 12703, "unexpected": 0 },
-    "texture_cap": { "capped": 797, "alpha_kept": 1, "offenders": 0 },
-    "perf_guard": { "checks": 78, "fails": 0 }
+    "compile": {
+      "checked": 186,
+      "broken": 0
+    },
+    "run_tests": {
+      "passes": 314,
+      "fails": 0
+    },
+    "m2": {
+      "passes": 12,
+      "fails": 0
+    },
+    "e2e": {
+      "passed": 278,
+      "total": 278,
+      "fails": 0
+    },
+    "audit": {
+      "coverage_num": 12660,
+      "coverage_den": 12703,
+      "unexpected": 0
+    },
+    "texture_cap": {
+      "capped": 797,
+      "alpha_kept": 1,
+      "offenders": 0
+    },
+    "perf_guard": {
+      "checks": 78,
+      "fails": 0
+    }
   }
 }

@@ -28,7 +28,7 @@ port. It is the third ten-minute file of one continuous session, and it plays a
 | `docs/reference/clip_1795033698901/clean/*.jpg` (30 keyframes) | official comparison frames (KF01, KF02, KF12, KF24, KF27, KF28, KF30 opened directly) |
 | `docs/reference/clip_1795033698901/KEYFRAME_INDEX.md` | beat boundaries, keyframe mapping, official observations |
 | `docs/reference/clip_1795033698901/BREAKDOWN.md` | S01–S27 narratives and per-beat subjects |
-| `build/qa/review_20261124/row_route_matrix.md` | 120 row ids and their short criteria |
+| `docs/reference/clip_1795033698901/row_route_matrix.md` | 120 row ids and their short criteria |
 | `docs/reports/p0b-live-capture.md` §5 | the seven pose ids and their reference keyframes |
 | `docs/reports/live-ref-review-plan.md` | lane assignment, verdict vocabulary, gap rule |
 | `docs/reports/p0b-route-rescore.md` | claim-boundary precedent (frame captured ≠ beat played) |
@@ -203,7 +203,7 @@ live percentage is claimed here.
 
 ## 5. Row ids whose subject is visible
 
-Row ids are from `build/qa/review_20261124/row_route_matrix.md`. A row is listed
+Row ids are from `docs/reference/clip_1795033698901/row_route_matrix.md`. A row is listed
 only because its **subject** is in a cited frame. This is not a score and says
 nothing about how well the port reproduces it. Rows supported only by a
 `partial` beat would be `partial-subject` under the plan's rules (plan §6.2).

@@ -26,7 +26,7 @@ TAT-2 Loc: reverse map built from sources.json (3404 keys)
 TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
 INPUT_TABLE source=generated rows=91 shipping=91 actions=52
 INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
-P0B_ROUTE_START mode=self-test run=20261127T054152Z_434143970f43_staged schema=tat2.p0b_route/1 seed=derived fov=54.54 size=(1920, 1080) out=/home/john/Projects/TAT-2/build/qa/p0b_route/selftest manifest=/home/john/Projects/TAT-2/build/qa/p0b_route/selftest/manifest.json
+P0B_ROUTE_START mode=self-test run=20261127T151134Z_a9ac606f141c_staged schema=tat2.p0b_route/1 seed=derived fov=54.54 size=(1920, 1080) out=/home/john/Projects/TAT-2/build/qa/p0b_route/selftest manifest=/home/john/Projects/TAT-2/build/qa/p0b_route/selftest/manifest.json
 P0B_ROUTE_SELFTEST ok schema is tat2.p0b_route/1
 P0B_ROUTE_SELFTEST ok base schema is tat2.p0b_capture/1
 P0B_ROUTE_SELFTEST ok mode=staged route_claim=none
@@ -93,3 +93,4 @@ P0B_ROUTE_SELFTEST ok dummy reason is dummy_audio_driver
 P0B_ROUTE_SELFTEST ok audio sidecar written
 P0B_ROUTE_SELFTEST_SUMMARY checks=62 fails=0
 P0B_ROUTE_SELFTEST PASS checks=62 fails=0
+P0B_ROUTE_WALL mode=self-test exit=0 wall=1s (headless, no GPU render)

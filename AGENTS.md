@@ -66,7 +66,7 @@ make runtime-smoke # real free-play boot: exit 124 only, ERROR:/push_error scan,
 make audit       # fail-closed content + producer/output baseline gate
 make gate-ratchet # floors + committed docs/reports/logs evidence agree
 build/qa/test_perf_guard.sh  # perf-wrapper contract, no GPU, no launch
-build/qa/run_final_gates.sh  # current full set (44 gates) -> docs/reports/logs/final/; no outer flock
+build/qa/run_final_gates.sh  # current full set (45 gates) -> docs/reports/logs/final/; no outer flock
 build/qa/run_p0b_gates.sh    # historical P1 set (40 gates + cream RED) -> docs/reports/logs/p1/full/
 build/qa/run_p0a_gates.sh    # historical P0a 28-gate set -> docs/reports/logs/p0a/
 
@@ -103,6 +103,7 @@ first.
 | P5 UI probe (W10-P5) | `P5_UI PASS checks=44` (headless; no visual score) |
 | Den spawn (W10) | `DEN_SPAWN PASS checks=9 fails=0` (`source=authored`, 2434 meshes) |
 | port capture harness (P0b) | dry-run `poses=6` manifest valid; `P0B_SELFTEST PASS checks=21 fails=0`; `P0B_KF27_REF … met=7/7` |
+| route runner self-test (Phase 0a) | `P0B_ROUTE_SELFTEST PASS checks=62 fails=0`; `bash -n` on `p0b_route.sh` and `p0b_live_capture.sh` |
 | `make texture-cap-check` | OK — 796 capped, 1 alpha-critical kept, 0 offenders (target set 1567 after the accepted `texture_refs 1523→1522` drop) |
 | `make audit` | exit 0, tracked baseline matches, disk-backed coverage (12660/12703), 0 unexpected, exact-case 0 unexpected, 13/13 content groups |
 | `make string-audit` | `UI_STRINGS total=311 routed=311 authored=199 routed_authored=199 invented=112` (ceiling 112; one documented `Thieves' Den` port copy at `contract_table_ui.gd:362`) |
@@ -200,7 +201,7 @@ live-reference 120-row score remain **pending** (no GPU run in P1). Report:
 
 The 2026-11-27 **W10 FINAL wave** merged the P2/P3/P5 + data lanes and measured
 them at `5135f53` in one serial `build/qa/run_final_gates.sh` run — **44 gates**
-(no expected failure), logs in
+(no expected failure; Phase 0a adds the route self-test for **45**), logs in
 [`docs/reports/logs/final/`](docs/reports/logs/final/), report
 [`docs/reports/final-20261127.md`](docs/reports/final-20261127.md). `compile` is
 **217/0**, `run_tests` **324/0** (suites **119** cream + **121** audio
@@ -479,7 +480,7 @@ tools/godot … probe_p1_street.gd        # P1_STREET PASS checks=31 hard_limits
 build/qa/runtime_smoke.sh 90            # exit 124 only, 0 unexpected ERROR:, mission_ready
 build/qa/test_runtime_smoke_scan.sh     # 29/29, no engine needed
 build/qa/test_perf_guard.sh             # 78/78, no GPU
-build/qa/run_final_gates.sh             # all of the above serially (44 gates, no expected failure)
+build/qa/run_final_gates.sh             # all of the above serially (45 gates, no expected failure)
 make gate-ratchet                       # floors + committed logs agree
 git push origin main
 ```

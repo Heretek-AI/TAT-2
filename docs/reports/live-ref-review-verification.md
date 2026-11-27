@@ -12,7 +12,7 @@ with Python's standard library, visual inspection of the cited frames, and `git 
 | # | Check | Verdict |
 |---|---|---|
 | 1 | Mission mismatch | **PASS** |
-| 2 | 27-beat table (10 / 12 / 2 / 3 / 0) | **PASS** (note corrections applied; UI4-05 and S27 timing fixed after the re-check) |
+| 2 | 27-beat table (10 / 12 / 2 / 3 / 0) | **PASS** (note corrections applied) |
 | 3 | Poses (0 present / 3 partial / 4 absent) | **PASS** |
 | 4 | 120-row accounting (64 / 55 / 56) and tally | **PASS** |
 | 5 | KF27 correction (40 % not 56 %; beam/node) | **PASS (resolved)** — emitter/56 % half and the corrected cyan-node / one-band text now match the keyframe measurements |
@@ -87,15 +87,15 @@ Specific confirmations:
 1. **S10 spinner note — resolved.** The synthesis line 211 now reads "visible in both R1's and R3's
    sampled frames", matching the frames: the cyan/white spinner ring is present in
    `r1_s10_loading2_225.png` and in `r1_s10_mapload_196.png` (8× crop unambiguous). S10 remains
-   `present`. **Residual:** §6.4 row UI4-05 (line 434) still carries the old "R1's sampled frame
-   lacks the spinner, R3's has it" — stale evidence copy, no count/status effect.
-2. **S26/S27 frame and time — resolved for S26.** The S26 row now cites
+   `present`. The former §6.4 UI4-05 "R1's sampled frame lacks the spinner" copy was aligned in the
+   synthesis (`UI4-05` now says the spinner is visible in both); no count/status effect.
+2. **S26/S27 frame and time — resolved.** The S26 row now cites
    `r3_S25_ward_179.png` (intact ward) plus `r3_S25_ward_367.png` (pause), states the barrier is
    **intact at p3 366** and the pause begins at **367**, and §3.4 repeats it. That matches the
-   measured 359–371 strip. **Residual:** S27's time column still reads "p3 368–369" (line 228), a
-   cosmetic off-by-one against "pause begins at 367"; and no `r3_*_366.png` is saved in `review/`,
-   so the 366 statement is carried by the 179 intact-ward frame + the 367 pause frame (sufficient
-   for the `absent` verdict, since S26 is not a presence row).
+   measured 359–371 strip. The S27 time column was aligned in the synthesis (pause begins at 367);
+   no saved `r3_*_366.png` exists in `review/`, so the 366 statement is carried by the 179
+   intact-ward frame + the 367 pause frame (sufficient for the `absent` verdict, since S26 is not a
+   presence row).
 
 ---
 
@@ -153,13 +153,15 @@ and no id is missing (the four lists partition all 120 rows).
 - **No row token assigned:** a grep for `PASS|DELTA|MISSING|HARD_LIMIT|N/A-route` finds only the
   disclaimers (lines 6, 347) and the quotes of the unchanged tally; the §6 tables use only
   supportable / not-supportable and caveats.
-- **Scorecard unmodified:** `git diff --stat -- docs/reference/clip_1795033698901/COMPARISON_PORT_20261124.md`
-  is empty; `git status --short docs/reference` is clean.
-- **`row_route_matrix.md` caveat:** `build/qa/review_20261124/row_route_matrix.md` is **git-ignored**
-  (`.gitignore:25` `build/qa/*`) and untracked, so `git diff` cannot attest it. It is nevertheless
-  unchanged by this review: mtime `2026-11-24 23:29` (before the 2026-11-27 capture and this wave),
-  and its own tally still reads 43 YES / 21 PARTIAL / 56 NO, which the scorecard reconciles to
-  48/56/16. The requested "git diff" check is inapplicable to this file; the content check passes.
+- **Scorecard unmodified by this review:** `git diff --stat --
+  docs/reference/clip_1795033698901/COMPARISON_PORT_20261124.md` was empty and
+  `git status --short docs/reference` clean at review time. Phase 0a later corrected **only** the
+  official V6-03 cell with a dated erratum; the port-side cell and the 120 tally were not changed.
+- **`row_route_matrix.md` provenance.** The matrix was git-ignored under
+  `build/qa/review_20261124/` during this review; Phase 0a moved it (with `ADJUDICATIONS.md`) to
+  `docs/reference/clip_1795033698901/` and tracked it. Its content still reads 43 YES / 21 PARTIAL /
+  56 NO, which the scorecard reconciles to 48/56/16; the move changes provenance, not the tally.
+  The 2026-11-24 capture media remains outside git.
 
 ---
 
@@ -209,8 +211,8 @@ rejection stand:
   empty, `git status` clean).
 - The S24 row, `beam_close`, V4-07 and V6-03 coverage rows are reworded to the same numbers —
   verified at synthesis lines 225, 284, 392 and 399.
-- S10 and S26 notes are corrected (see §2); one stale UI4-05 spinner sentence remains (line 434),
-  with no status or count effect.
+- S10 and S26 notes are corrected (see §2); the UI4-05 spinner copy and the S27 time were aligned in
+  the synthesis, with no status or count effect.
 - **Counts unchanged:** 27 beats still **10 / 12 / 2 / 3 / 0**; poses still **3 partial / 4
   absent / 0 present**; 120 rows still **32 + 23 + 9 + 56**, **64 lane-listed**, **55
   supportable**, all 120 covered once.
@@ -290,7 +292,8 @@ git status --short
 `git log --oneline -1` is still `4969d92` — no commit. The scorecard/game/build were not modified
 by this review; the pre-existing helper/doc changes the brief identified were left alone, and the
 handoff change (`docs/HANDOFF_NEXT_AGENT.md`, mtime 03:29) was made by the integrator after this
-verification.
+verification. Phase 0a (later, 2026-11-27) moved the two provenance documents and corrected only
+the official V6-03 cell; the port-side cell and tally were not touched.
 
 ---
 
@@ -298,17 +301,17 @@ verification.
 
 1. **§5 cyan node / two-beam — applied and verified.** The synthesis now states the same
    above-door fixture (live 53.3 %/27.8 %, KF27 53.5 %/23.3 %) and one KF27 band at 40.0–40.5 %;
-   the S24, `beam_close`, V4-07 and V6-03 rows carry the same numbers; the official cell is flagged
-   for adjudication. Counts and statuses unchanged.
+   the S24, `beam_close`, V4-07 and V6-03 rows carry the same numbers. The official scorecard cell
+   was corrected in Phase 0a with a dated erratum; the port-side cell stays Phase 3. Counts and
+   statuses unchanged.
 2. **S10 note — applied and verified.** Line 211 now says the spinner is visible in both R1's and
-   R3's frames. **Residual:** §6.4 UI4-05 (line 434) still says "R1's sampled frame lacks the
-   spinner" — stale copy; recommend aligning it, no count/status effect.
-3. **S26 / S27 timing — applied for S26.** S26 cites `r3_S25_ward_179.png` (intact) + the 367 pause
-   frame and states 366 intact / 367 pause. **Residual:** S27's time column still reads "p3
-   368–369" (line 228), a cosmetic off-by-one; the 366 statement has no saved 366 PNG in `review/`
-   but is carried by the 179 intact frame and the 367 pause, which suffices for an `absent` verdict.
-4. **Optional wording — not addressed.** §1.1 "~150 s" and the `row_route_matrix.md` git-ignore
-   caveat remain optional wording items.
+   R3's frames. The §6.4 UI4-05 copy was aligned in the synthesis; no count/status effect.
+3. **S26 / S27 timing — applied.** S26 cites `r3_S25_ward_179.png` (intact) + the 367 pause frame
+   and states 366 intact / 367 pause. The S27 time column was aligned in the synthesis; the 366
+   statement has no saved 366 PNG in `review/` but is carried by the 179 intact frame and the 367
+   pause, which suffices for an `absent` verdict.
+4. **Optional wording — left as history.** §1.1's "~150 s" wording is unchanged; the
+   `row_route_matrix.md` provenance was moved out of the git-ignored tree in Phase 0a (see §4).
 
 ---
 
@@ -327,8 +330,9 @@ verification.
   bytes; there is no manifest, no `poses.tsv`, and no byte-verified build.
 - **The official clip/keyframes remain the official reference.** This capture is coverage, not a
   score; the 120-row tally stays 48 / 56 / 16.
-- **KF27 prose in `KEYFRAME_INDEX.md` and V6-03 still says "two beams" / `y~56%`.** The scorecard
-  was deliberately not edited; the correction is for the adjudication wave.
+- **KF27 prose in `KEYFRAME_INDEX.md` still carries the old "two beams" / `y~56%` wording.** The
+  official V6-03 cell was corrected in Phase 0a with a dated erratum; the keyframe index, port-side
+  cell and 120 tally stay Phase 3.
 
 ---
 
@@ -357,5 +361,6 @@ ffmpeg -i clean/KF27_03m27s_foyer_security_beam.jpg -vf "crop=576:324:0:270" \
 **Verdict:** the synthesis's counts, mission mismatch, pose table, row accounting and capture
 defects are confirmed, and the KF27 section is now **PASS (resolved)** — the emitter/40 %
 measurement and the corrected cyan-node / one-band text match the official keyframe. The 27-beat,
-pose and 120-row counts are unchanged; the only remaining items are a stale UI4-05 spinner sentence
-and optional wording.
+pose and 120-row counts are unchanged. The UI4-05 and S27 notes were aligned in the synthesis and
+are no longer residuals; the optional "~150 s" wording and the Phase 3 keyframe-index/port-side
+corrections remain.

@@ -3,7 +3,7 @@
 **Status:** lane report only. It records what is visible in one 300 s window of the live shipped-build
 capture and nothing else. It does **not** score the port, does not touch
 `docs/reference/clip_1795033698901/COMPARISON_PORT_20261124.md`, `KEYFRAME_INDEX.md`,
-`build/qa/review_20261124/row_route_matrix.md`, the game or any build file, and it assigns no
+`docs/reference/clip_1795033698901/row_route_matrix.md`, the game or any build file, and it assigns no
 `PASS` / `DELTA` / `MISSING` / `HARD_LIMIT` token. No commit.
 
 **Lane window:** part 1, proxy seconds **300–600** (the last frame is 599). Plan: `docs/reports/live-ref-review-plan.md` §2.2.
@@ -22,7 +22,7 @@ capture and nothing else. It does **not** score the port, does not touch
 | `docs/reference/clip_1795033698901/KEYFRAME_INDEX.md` | official S01–S27 spans, KF01–KF30 subjects and strings |
 | `docs/reference/clip_1795033698901/clean/*.jpg` | KF15, KF16, KF18, KF24, KF25, KF27, KF28, KF29, KF30 opened for the comparisons below |
 | `docs/reference/clip_1795033698901/COMPARISON_PORT_20261124.md` / `COMPARISON_TEMPLATE.md` §2 | the 120 row ids and their short criteria |
-| `build/qa/review_20261124/row_route_matrix.md` | row observability language |
+| `docs/reference/clip_1795033698901/row_route_matrix.md` | row observability language |
 | `docs/reports/p0b-live-capture.md` §5 (Steps 11–12), `docs/reports/p0b-route-rescore.md` | route order, pose definitions, status vocabulary |
 | `docs/reports/live-ref-review-plan.md` | segment assignment, vocabulary, row rules |
 

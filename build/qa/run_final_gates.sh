@@ -12,6 +12,10 @@
 # 119 is now a normal green gate, not the old RED proof), and the evidence is
 # written to `docs/reports/logs/final/`.
 #
+# Phase 0a (2026-11-27) adds one gate — `p0b_route_self_test`: `bash -n` on the
+# route and live-capture wrappers, then the staged-route runner's 62-check
+# headless self-test — for 45 gates. No other gate body changes.
+#
 # Rules encoded here (same contract as P0a/P0b/P1)
 # ------------------------------------------------
 #   * Never hold the Godot lock across the runner. Each Godot invocation takes
@@ -351,6 +355,21 @@ gate_marker p0b_kf27_reference "$OUT/p0b_kf27_reference.log" \
 	python3 build/qa/p0b_roi_stats.py \
 	--port docs/reference/clip_1795033698901/clean/KF27_03m27s_foyer_security_beam.jpg \
 	--pose upper_foyer --reference-only
+
+#    Route-runner self-test (Phase 0a, headless, no GPU): both QA wrappers must
+#    parse, then the staged-route table/schema/audio self-test must pass 62/62.
+#    The wrapper writes its evidence under $OUT, so a FINAL run does not rewrite
+#    the committed Phase 0a log under docs/reports/logs/p0b-route/.
+qa_route_self_test() {
+	printf 'bash -n build/qa/p0b_route.sh\n'
+	bash -n "$ROOT/build/qa/p0b_route.sh" || return $?
+	printf 'bash -n build/qa/p0b_live_capture.sh\n'
+	bash -n "$ROOT/build/qa/p0b_live_capture.sh" || return $?
+	P0B_ROUTE_EVIDENCE_DIR="$OUT" "$ROOT/build/qa/p0b_route.sh" --self-test
+}
+gate_marker p0b_route_self_test "$OUT/p0b_route_self_test.log" \
+	"P0B_ROUTE_SELFTEST PASS checks=62 fails=0" \
+	qa_route_self_test
 
 # 9. Runtime smoke: NO outer flock — the script takes the lock itself and
 #    expects the inner `timeout` kill (exit 124), then scans the log.

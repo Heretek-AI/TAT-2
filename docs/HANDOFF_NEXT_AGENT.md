@@ -2,9 +2,10 @@
 
 **Repo:** `/home/john/Projects/TAT-2`
 **Code/data tip:** `5135f53` (P2/P3/P5/data + Den/navmesh/UI/audio merged).
-**Docs/evidence tip / `origin/main`:** `3d62f6b` (44-gate final evidence, pushed)
-plus this handoff commit.
-**Working tree:** clean. No uncommitted tracked work.
+**Docs/evidence tip / `origin/main`:** `a9ac606` (live-reference review, pushed).
+**This session:** Phase 0a truth/save/gate hygiene; the Phase 0a commit is local
+and **not pushed**.
+**Working tree:** clean after the Phase 0a commit. No uncommitted tracked work.
 **Godot:** `4.7.2.stable` via native `tools/godot` (`godot` is **not** on `$PATH`).
 **Renderer:** Forward+ · Jolt 60 Hz · 1280×720 base · Linux x86_64.
 **Steam reference:** `/home/john/.steam/steam/steamapps/common/Thick As Thieves/`
@@ -22,10 +23,17 @@ The offline finding stands: the shipped launcher needs an online login. On
 launched directly through Proton with the copied prefix
 (`/tmp/opencode/tat2-ref-prefix`), reached the startscreen, and the copy wrote
 its prefix while the original did not (copy `system.reg`/`user.reg` at
-01:23:49; original unchanged at 2026-11-26 23:06). The copied prefix has the
-owner save restored (`TAT_ETS.sav` md5
-`976f8730eac989bab1c6c792343b7c00`); the original install, prefix and save are
-untouched. Steam is online for auth; the game may still be at the main menu.
+01:23:49; original unchanged at 2026-11-26 23:06). The original install, prefix
+and save are untouched. Steam is online for auth; the game may still be at the
+main menu.
+
+**Save state (Phase 0a, 2026-11-27):** the copied prefix is **774 files** and
+its `SaveGames/` explicitly holds the owner save restored from
+`SaveGames.pre-p0b-20261126-230522/.`:
+`TAT_ETS.sav` md5 **`976f8730eac989bab1c6c792343b7c00`**, `EnhancedInputUserSettings.sav`
+and `steam_autocloud.vdf`. The archive is untouched (same md5), and **never**
+run `stage` + `tail -1` to pick it: use the archive path explicitly. The live
+capture is deferred as issue **#13**.
 
 The live capture is **not the official route**: it is the **Staff of Edinburgh
 Item Collection Heist** (120-minute limit, outdoor canal-side spawn), not the
@@ -54,10 +62,11 @@ unchanged (48/56/16).
   Thieves`).
 
 The live capture is a P4/ROI reference; the 120-row scorecard is re-scored from
-a **port** full-route run, not from the shipped capture. The V6-03 official cell
-still says `y~56%` / two beams / cyan ceiling diamond; the review measures
-17.8 %/40.0 %, one band, above-door node — correct the cell in the adjudication
-wave.
+a **port** full-route run, not from the shipped capture. The **official** V6-03
+cell was corrected in Phase 0a with a dated erratum: emitter **17.8 %/40.0 %**,
+**one** band at **40.0–40.5 %**, cyan node **above the doors**; the old
+`y~56 %`/two-beam/ceiling-diamond text was a transcription error. The port-side
+cell and the 120 tally stay for Phase 3.
 
 ---
 
@@ -73,13 +82,14 @@ the previous handoff conflated:
 
 - **120-row scorecard** — already filled against the official clip
   (**9 PASS / 33 DELTA / 4 MISSING / 2 HARD_LIMIT / 16 UNVERIFIED / 56
-  N/A-route**, 2026-11-24) but **stale**: it predates every wave. Re-scoring it
-  needs a new **port** full-route run, not a shipped-build capture.
+  N/A-route**, 2026-11-24) but **stale**: it **predates W10**, and V4-07/V6-03
+  were re-scored in W9-P1. Re-scoring it needs a new **port** full-route run,
+  not a shipped-build capture.
 - **Matched-settings live capture** — taken 2026-11-27, but it is the **Staff of
   Edinburgh Item Collection Heist**, not the Cleanout; 10 beats present / 12
   partial / 2 wrong / 3 absent, 0 poses present / 3 partial, 55/120 rows with
   supportable look/HUD subjects, 120 tally unchanged. **No valid Cleanout live
-  reference exists yet**; see §0/§4.1.
+  reference exists yet** (issue **#13**); see §0/§4.1.
 
 Still open: P4 look/exposure, the navmesh runtime consumer, the StateTree shadow
 ceiling (`fully_parity_covered_trees=0`, FSM authoritative), partial audio
@@ -109,6 +119,7 @@ hold-smash `PORT_DECISION`.
 | StateTree suite 110 | **191/0**, `fully_covered_trees=1`, `fully_parity_covered_trees=0` |
 | navmesh spike | 2,958 tiles / 14,930 polys / 221 off-mesh; consumer 16/0; doorway 3 waypoints / 4.15 m |
 | runtime smoke | `RUNTIME_SMOKE_SCAN PASS exit=124 errors=0 mission_ready=1` |
+| route self-test (Phase 0a) | `P0B_ROUTE_SELFTEST PASS checks=62 fails=0` (headless wrapper `--self-test`; `bash -n` on the route/live wrappers) |
 | audit / texture / perf / ratchet | **PASS** / 796 capped, 1 alpha, 0 offenders / 78/78 / PASS |
 | string audit | 311 routed / 199 authored / 112 invented (one documented `Thieves' Den` port copy) |
 
@@ -116,6 +127,11 @@ hold-smash `PORT_DECISION`.
 **element** coverage; the old value counted invented render-trimesh fallbacks),
 texture cap `797 → 796` from the accepted `texture_refs 1523 → 1522` pants fix.
 The old `coverage=0.989` is not a valid authored number; do not restore it.
+
+Phase 0a added `p0b_route_self_test` to `build/qa/run_final_gates.sh` (45
+gates). The route self-test and the wrapper `bash -n` checks are green; the
+first full **45-gate serial run** is Phase 0b (GPU, clean route2), not yet
+measured.
 
 ---
 
@@ -163,8 +179,9 @@ StateTree shadow ceiling; the authored-element collision floor.
 - The 120-row scorecard is
   `docs/reference/clip_1795033698901/COMPARISON_PORT_20261124.md`; current
   baseline is **9 PASS / 33 DELTA / 4 MISSING / 2 HARD_LIMIT / 16 UNVERIFIED /
-  56 N/A-route** from 2026-11-24, predating every wave. Re-score it from a new
-  parity-only **port** full-route run (not from the live capture).
+  56 N/A-route** from 2026-11-24. It **predates W10** (V4-07 and V6-03 were
+  re-scored in W9-P1); re-score it from a new parity-only **port** full-route
+  run (not from the live capture).
 - The corrected six-pose port capture is at
   `docs/reports/logs/p0b/20261127T015115Z_fafb78f122d5_bon/` (gate 23.85,
   upper_foyer 40.88, yaw180 39.47, Lounge 28.37, audio 92.8 s); it is not the
@@ -175,21 +192,27 @@ StateTree shadow ceiling; the authored-element collision floor.
   `status=partial`** (S06 `_show_tab` called on the CanvasLayer instead of the
   `LedgerUI` Control); the hook is fixed and **route2 is all-green**
   (`captured=13 deferred=14 partial=0 frame_errors=0 frames=17`, exit 0,
-  `docs/reports/logs/p0b-route/route2/`). The **120-row re-score is still
-  next**. The Guildhall stage is a **free-play substitute**
-  (`Mission.Guildhall.LootTheRoom`, contract 2) used only for the KF13 letter;
-  it is **not** the official selection (canonical contract-2 row:
-  `Mission.Guildhall.VaultHeist`; historical baseline: `LootTheRoom`,
-  `free_play=false`). The wrapper exports `TAT2_PARITY_ONLY=1` for every mode.
-  Contract and measured runs: [`docs/reports/p0b-route.md`](p0b-route.md).
+  `docs/reports/logs/p0b-route/route2/`) but it is **`git.dirty=true`** at
+  `4341439` (the S06 fix was uncommitted at capture time; it is `f44bc23` in
+  the current tree). A **clean route2 re-run is Phase 0b** (GPU). The
+  **120-row re-score** is Phase 2 R-2 / Phase 3 R-3. The Guildhall stage is a
+  **free-play substitute** (`Mission.Guildhall.LootTheRoom`, contract 2) used
+  only for the KF13 letter; it is **not** the official selection (canonical
+  contract-2 row: `Mission.Guildhall.VaultHeist`; historical baseline:
+  `LootTheRoom`, `free_play=false`). The wrapper exports `TAT2_PARITY_ONLY=1`
+  for every mode. Contract, measured runs and the staged evidence index:
+  [`docs/reports/p0b-route.md`](p0b-route.md),
+  [`docs/reports/p0b-route-rescore.md`](p0b-route-rescore.md).
 
 - **Live-reference review (2026-11-27):**
   `docs/reports/live-ref-review-20261127.md` — the two-part capture is the
   Staff of Edinburgh Item Collection Heist, not the Cleanout; 10 present / 12
   partial / 2 wrong / 3 absent; 0 poses present / 3 partial; 55/120 look/HUD
   rows supportable; the 120 tally unchanged; 226.5 s gap, part 3 ends at
-  541.7 s; the KF27 official cell correction (17.8 %/40.0 %, one band,
-  above-door node) is pending the adjudication wave.
+  541.7 s. The **official** KF27 correction (17.8 %/40.0 %, one band at
+  40.0–40.5 %, above-door node) is now a dated erratum in the scorecard
+  (Phase 0a); the port-side V6-03 cell stays Phase 3. The Cleanout capture
+  remains **deferred as issue #13** (save `976f`, 900 s, audio 80).
 
 ### 4.2 P4 look (the visible parity gap)
 
@@ -201,15 +224,26 @@ StateTree shadow ceiling; the authored-element collision floor.
   has no `UTextureCube` branch and `TextureQueued` filters the package. Need
   producer + consumer (`AT_CUBEMAP_PASS`), a pure `step(dt, ev100)` model, and
   one global calibration offset; no per-room grade, no global 0.44 cut.
-- **Mirrors:** 3,312 negative-determinant instances, 3,215 in MultiMeshes;
-  standalone `MeshInstance3D` mirrors are compensated by Godot 4.7, but the
-  MultiMesh node is identity. Fix: sign-split + `CULL_FRONT` on the mirrored
-  batch, with a synthetic 2-instance GPU test.
-- **Landscape:** current `vis > 0.5` discard is likely **correct** (raw weight
-  1 = hole; UE node output 1 = visible). Do not flip without the A/B; correct
-  the stale docs and add raw-mask tests.
-- **Beam material:** already authored-parameter match; capture shows a thin
-  line and no cream bars. The old "63 moon-plane" claim is retired.
+- **Mirrors — carried, not re-measured (UNVERIFIED).** 3,312
+  negative-determinant instances, 3,215 in MultiMeshes; standalone
+  `MeshInstance3D` mirrors are compensated by Godot 4.7, but the MultiMesh node
+  is identity. Fix: sign-split + a baked mirrored mesh variant (reverse
+  winding/normals/tangents); `CULL_FRONT` is only a single-surface
+  `BaseMaterial3D` fast path. Needs the synthetic 2-instance probe in Phase 1
+  P4.2; the counts are carried from the earlier audit.
+- **Landscape — carried, not re-measured (UNVERIFIED).** Current `vis > 0.5`
+  discard is *likely* correct (raw weight 1 = hole; UE node output 1 = visible).
+  Do not flip without the raw-mask A/B and the safe-room data assertion in
+  Phase 1 P4.4; the stale docs still need correcting.
+- **Beam material — qualified, not settled.** The authored-parameter material
+  and geometry are a real match (330 cards, `max_axis_err_deg=0.000006`), but
+  the route2 `upper_foyer` frame still measures peak row **49.07 %**, excess
+  **131.15**, and **12** cream-unexplained 16×9 cells (8 on the beam row),
+  against KF27 **40.19 %** and **0.12 %** cream outside the band. The earlier
+  "thin line and no cream bars" claim came from a different pose and is
+  qualified, not repeated. P4.5 must implement the authored sphere-mask / edge
+  / fake-glow terms and re-measure at the KF27 pose. The old "63 moon-plane"
+  claim is retired.
 
 ### 4.3 Navmesh runtime (authored tiles proven)
 
@@ -300,13 +334,16 @@ tools/godot --headless --path game --script res://tests/probe_p5_ui.gd
 tools/godot --headless --path game --script res://tests/test_audio_control.gd
 tools/godot --headless --path game --script res://tests/test_w10a2_cream.gd
 tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd
-build/qa/run_final_gates.sh       # 44 gates, logs docs/reports/logs/final/
+build/qa/run_final_gates.sh       # 45 gates, logs docs/reports/logs/final/
+build/qa/p0b_route.sh --self-test # 62 checks, headless; part of the 45-gate set
 make audit && make gate-ratchet
 build/qa/runtime_smoke.sh 90      # no outer flock
 ```
 
 - `build/qa/run_p0b_gates.sh` is the historical P1 40-gate set; the current
-  runner is `build/qa/run_final_gates.sh`.
+  runner is `build/qa/run_final_gates.sh`. Phase 0a added
+  `p0b_route_self_test` (route/live `bash -n` + the 62-check self-test); the
+  first full 45-gate measured run is Phase 0b.
 - One Godot at a time: `flock /tmp/opencode/tat2-godot.lock`.
 - A fresh worktree with a copied `.godot` needs
   `tools/godot --headless --path game --import` before scripts using a new
@@ -323,6 +360,8 @@ build/qa/runtime_smoke.sh 90      # no outer flock
 ## 7. Evidence map
 
 - `docs/reports/final-20261127.md` — 44-gate measured table and truth corrections.
+- `docs/reports/phase0a-20261127.md` — Phase 0a save/docs/provenance/gate/issue
+  evidence (no GPU; 45-gate runner, not yet measured as a set).
 - `docs/reports/logs/final/` — every final gate log.
 - `docs/reports/p1-integration-20261126.md` — P1 route content and 40-gate evidence.
 - `docs/reports/p5-ui-20261126.md` — P5 UI probe and string audit.
@@ -333,7 +372,16 @@ build/qa/runtime_smoke.sh 90      # no outer flock
   capture runbook (A/B/C).
 - `docs/reports/p0b-route.md` — staged 27-beat route runner v1 (schema, beat
   status, deferred blockers, owner GPU command).
+- `docs/reports/p0b-route-rescore.md` — route2 staged evidence index (beam/ROI
+  numbers, provenance status; no row token changed).
 - `docs/reports/live-ref-review-20261127.md` — live-reference review
-  (Staff mission, 2026-11-27); plan, three lanes, verification.
+  (Staff mission, 2026-11-27); plan (`live-ref-review-plan.md`), three lanes
+  (`live-ref-lane-r1/r2/r3.md`) and verification (`live-ref-review-verification.md`).
 - `docs/reference/clip_1795033698901/COMPARISON_PORT_20261124.md` — 120-row scorecard.
+- `docs/reference/clip_1795033698901/row_route_matrix.md` and
+  `ADJUDICATIONS.md` — the provenance moved from the git-ignored
+  `build/qa/review_20261124/` in Phase 0a; the 2026-11-24 capture media and
+  frames remain outside git.
+- Issue **#13** (deferred Cleanout live reference); issues **#2–#11** triaged in
+  Phase 0a (see their labels/comments).
 - `docs/FIDELITY_GAPS.md`, `AGENTS.md` — invariants, traps, gate table.

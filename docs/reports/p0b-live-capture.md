@@ -16,15 +16,19 @@ machine was restored. On 2026-11-27 the **A path worked** (direct Proton launch 
 the copied install/prefix, startscreen reached, prefix isolation proven). The
 capture is the **Staff of Edinburgh Item Collection Heist**, not the Cleanout
 Heist; see `docs/reports/live-ref-review-20261127.md`. **No valid Cleanout live
-reference exists yet.** The preparation lane's state and the attempt's side
+reference exists yet.** The next run is **one 900 s lossless file**, started at
+the main menu, with Master/Music/SFX/Dialogue **80** and the poses held 3 s
+(issue **#13**). The preparation lane's state and the attempt's side
 effects are in §1.1.
 
 **What exists now:** the appid 3341000 Proton prefix copied and byte-verified at
-`/tmp/opencode/tat2-ref-prefix` (already staged: 771 files, empty `SaveGames/`
-apart from `EnhancedInputUserSettings.sav`), and the tracked helper
-[`build/qa/p0b_live_capture.sh`](../../build/qa/p0b_live_capture.sh). The helper never launches
-anything; it only checks, copies, stages the copy, prints the capture command and
-hashes the result.
+`/tmp/opencode/tat2-ref-prefix` (**774 files**), with the owner save explicitly
+restored into `SaveGames/` (Phase 0a, 2026-11-27: `TAT_ETS.sav` md5
+`976f8730eac989bab1c6c792343b7c00`, copied from
+`SaveGames.pre-p0b-20261126-230522/`; the archive is untouched), and the tracked
+helper [`build/qa/p0b_live_capture.sh`](../../build/qa/p0b_live_capture.sh). The
+helper never launches anything; it only checks, copies, stages the copy, prints
+the capture command and hashes the result.
 
 The reference target is the **shipped UE5.5 build** `1.5.148559` (Steam appid
 3341000). The port capture (Lane I) uses fixed poses; the live capture takes the
@@ -114,7 +118,7 @@ and the shipped default preset. Reset them **in-game** and record the settings s
 | Display | HDMI-A-1 3840×2160 @ 119.86 Hz |
 | Audio | default sink `alsa_output.pci-0000_01_00.1.hdmi-stereo`, monitor available; USB Sony INZONE H9 suspended |
 | ffmpeg | 9.1; `x11grab` supports `-window_id` |
-| Disk | `/home` 188 G free; `/tmp` 31 G tmpfs (not for video) |
+| Disk | `/home` **126 G** free; `/tmp` 32 G tmpfs, **9.1 G** free (not for video); `~/Videos` **52 G** used |
 | Capture test | a real (non-game) 1600×900 X window, 60 fps, **120 frames / 2.000 s**, `libx264rgb -qp 0`, `pix_fmt=gbrp`, FLAC 48 kHz stereo — the command path works |
 
 ### 1.1 Current state after the offline attempt (2026-11-26)
@@ -127,10 +131,15 @@ following, and this is the state the next run starts from:
   config hashes are unchanged;
 - `vkd3d-proton.cache` grew **1,743,312 → 1,744,384 B**; the `.write` sidecar is
   now **0 B**, so the 1,120 B value above is historical;
-- the canonical copy is **staged**: 771 files (not 775), and `SaveGames/` holds
-  only `EnhancedInputUserSettings.sav`; the owner's save is the archive
-  `SaveGames.pre-p0b-20261126-230522/` (md5 `976f8730…`);
-- `/home` free is **177 G** (not 188 G); VRAM free measured **5,143 MiB**;
+- the canonical copy is **staged**: **774 files**, and `SaveGames/` has the
+  owner save **restored explicitly** from the archive
+  `SaveGames.pre-p0b-20261126-230522/` (Phase 0a, 2026-11-27; `TAT_ETS.sav`
+  md5 `976f8730…`; the archive is untouched). Earlier in this lane the copy was
+  771 files with `SaveGames/` holding only `EnhancedInputUserSettings.sav`;
+  after the restore `TAT_ETS.sav`, `EnhancedInputUserSettings.sav` and
+  `steam_autocloud.vdf` are all present;
+- `/home` free is **126 G** (not 188 G); `~/Videos` is **52 G**; `/tmp` is
+  **9.1 G** free; VRAM free measured **5,143 MiB**;
 - `verify-copy` now **FAILs** on file count by design; it is only meaningful
   before `stage`.
 
@@ -191,7 +200,7 @@ expected.
 | B3 | **VRAM** | **high** | 8188 MiB total; **5,143 MiB free** at the last check. Close Brave, VS Code, Vesktop, ptyxis and every other GPU app; target **≥ 5.5 GiB free**. The helper blocks below 4 GiB; **a READY verdict below 5.5 GiB is not sufficient for a scored 1440p run**. Watch `nvidia-smi dmon`; if it thrashes, stop. |
 | B4 | **Wayland / XWayland** | medium | Session is Wayland; Proton renders through XWayland (`DISPLAY=:0`). `x11grab -window_id` was verified on a 1600×900 X window (120 frames / 2 s). Verify on the *game* window with a 10 s test; fallback: window at 0,0 and `-video_size 2560x1440 -i :0.0+0,0`. Do not switch to a lossy encoder. |
 | B5 | **Audio routing** | low | Default sink is HDMI with a monitor source. If the game selects the USB headset, set it as the default and capture its `.monitor`. Close all other audio sources. |
-| B6 | **Disk** | medium | The 2026-11-27 capture measured **~45 MB/s** (27 GB / 600 s); a 900 s run is **~40 GB**, and `/home` had **152 G** free after the two parts. The earlier 107 MB/s figure was a worst-case re-encode of the official clip; budget **2×** the measured projection, and delete the old parts if needed. Capture to `/home`, never `/tmp`. Gate on free ≥ 2× the projected size. |
+| B6 | **Disk** | medium | The 2026-11-27 capture measured **~45 MB/s** (27 GB / 600 s); a 900 s run is **~40 GB**. `/home` has **126 G** free and `~/Videos` already holds **52 G**; `/tmp` has **9.1 G** free (never capture there). Budget **2×** the measured projection, and delete the old video parts if needed. Gate on free ≥ 2× the projected size. |
 | B7 | **Thermals / 60 fps** | medium | Laptop host with a history near 80 °C; the perf matrix is waived. The recorder writes 60 fps, but the game may repeat frames if it drops below 60. Record `nvidia-smi` before/after and state whether the render held 60; duplicated frames are not a native 60 fps render. |
 | B8 | **Steam Cloud** | **high** | If the capture uses a copy of the owner's save, a Cloud sync could overwrite the real progression. **Disable Steam Cloud for 3341000 before the run** and keep it off until the copied prefix is deleted. This setting is in the client, not `localconfig.vdf`. |
 | B9 | **`/tmp` is ephemeral** | medium | The prefix copy (590 M) is on tmpfs and disappears at reboot; the install copy is on `/home`. Re-run `copy` if the prefix is gone; never point the launch at the original prefix. |
@@ -220,8 +229,9 @@ Done, in this lane:
 2. Tested the helper end-to-end on a **scratch copy**
    (`/tmp/opencode/tat2-stage-test`, deleted after): `copy` → byte-identical,
    `stage` → `SaveGames.pre-p0b-<ts>` + archived `GameUserSettings.ini`, empty
-   `SaveGames/`. The canonical copy was later staged for the attempt, so it is
-   now 771 files with an empty `SaveGames/` (see §1.1).
+   `SaveGames/`. The canonical copy was later staged for the attempt and then
+   explicitly restored in Phase 0a: **774 files** with the owner save present
+   (see §1.1).
 3. Tested the lossless x11grab path on a real X window: 1600×900, 60/1, 120 frames
    over 2.000 s, `gbrp`, FLAC 48 kHz stereo.
 4. Tested `verify` on a synthetic 3 s capture: two pose PNGs, SHA-256s, and
@@ -254,7 +264,8 @@ Throughout: `ROOT` = this repo worktree; the helper is
   not enough for a scored 1440p run.
 - Free disk: project the **900 s** size from a 10 s test and require **≥ 2×** it.
   The 2026-11-27 capture measured ~45 MB/s (27 GB / 600 s), so 900 s is ~40 GB;
-  `/home` had 152 G free after the two parts.
+  `/home` has **126 G** free, `~/Videos` holds **52 G**, and `/tmp` has **9.1 G**
+  free. Never capture to `/tmp`.
 - Do not reboot after this point unless you re-copy the prefix (it is on tmpfs).
 
 ### Step 1 — preflight (must print READY)
@@ -283,8 +294,8 @@ build/qa/p0b_live_capture.sh verify-copy     # only meaningful BEFORE stage
 build/qa/p0b_live_capture.sh copy            # refuses outside /tmp/opencode
 ```
 
-The canonical copy is **already staged** (771 files, empty `SaveGames/` apart
-from `EnhancedInputUserSettings.sav`), so `verify-copy` now FAILs on file count.
+The canonical copy is **already staged and restored** (**774 files**; `SaveGames/`
+holds `TAT_ETS.sav` md5 `976f8730…`), so `verify-copy` now FAILs on file count.
 That is the expected state, not corruption; do not re-copy to silence it.
 Do **not** use the original prefix for the run.
 
@@ -296,14 +307,20 @@ the official route's progression rows (B12): S06/KF07–KF08 assumes Level 4, XP
 94/500, Contracts #1–#2 completed, £26,275 and purchased Black Market checks.
 
 - **Recommended:** restore the archived copy into the live `SaveGames/` so the
-  run starts from the owner's progressed state (the archive stays untouched):
+  run starts from the owner's progressed state (the archive stays untouched).
+  **Already done in Phase 0a (2026-11-27); do it again only if `SaveGames/` is
+  empty.** Use the explicit archive path — never `stage` + `tail -1`:
 
   ```bash
   P=/tmp/opencode/tat2-ref-prefix/pfx/drive_c/users/steamuser/AppData/Local/TAT/Saved
-  ARCH=$(ls -d "$P"/SaveGames.pre-p0b-* | tail -1)
+  ARCH="$P/SaveGames.pre-p0b-20261126-230522"
   cp -a "$ARCH/." "$P/SaveGames/"
   ls -l "$P/SaveGames/"          # TAT_ETS.sav must be present
+  md5sum "$P/SaveGames/TAT_ETS.sav" "$ARCH/TAT_ETS.sav"   # both 976f8730eac989bab1c6c792343b7c00
   ```
+
+  Measured Phase 0a state: prefix **774 files**, save md5
+  `976f8730eac989bab1c6c792343b7c00`, archive untouched.
 
 - **Alternative:** keep the empty save and pre-declare S06/KF07–KF08 and the
   footer/level rows as save-state deltas in the scorecard. Never score them as
@@ -419,7 +436,8 @@ Also confirm the expected save state:
 
 ```bash
 ls -l "$P/pfx/drive_c/users/steamuser/AppData/Local/TAT/Saved/SaveGames/"
-# recommended: TAT_ETS.sav restored from the archive
+md5sum "$P/pfx/drive_c/users/steamuser/AppData/Local/TAT/Saved/SaveGames/TAT_ETS.sav"
+# expected: TAT_ETS.sav present, md5 976f8730eac989bab1c6c792343b7c00
 # alternative: empty (fresh save) — then record the progression deltas (B12)
 ```
 
@@ -581,11 +599,11 @@ geometry/content in the shipped map.
 |---|---|---|---|---|
 | `gate` | KF16 01:40.20 | Alley side of the wrought-iron `CONSTABLE'S GUILDHALL` arch; guard with red eyes/alert bar, car headlights right, ZipWire `[1]` equipped, HUD on | alley gate approach (content cue; no single authored point) | `pose_gate.png` |
 | `kf18_overlook` | KF18 02:14.80 | Mid-cable over the arch: crowned pillars, twin griffins, distant green guard; **moving shot** — extract the still; do not try to freeze the cable | cable from the gate pillar to the roof | `pose_kf18_overlook.png` |
-| `upper_foyer` | KF27 03:27.60 | Foyer threshold, look down the hall; checkered marble, glass vitrine, armchair/ottoman, two beams, cyan ceiling node | eye `(27, 29.67, -50)` → `(27, 29.67, -60)` | `pose_upper_foyer.png` |
+| `upper_foyer` | KF27 03:27.60 | Foyer threshold, look down the hall; checkered marble, glass vitrine, armchair/ottoman, one beam band at 40.0–40.5 %, cyan node above the far doors | eye `(27, 29.67, -50)` → `(27, 29.67, -60)` | `pose_upper_foyer.png` |
 | `yaw180` | KF27 +0.5 s | Same eye, turn **180°**; the reverse foyer view (beam diagonal) | eye `(27, 29.67, -50)` → `(27, 29.67, -40)` | `pose_yaw180.png` |
 | `lounge` | new pose (not in the official clip) | Guildhall ground-floor Lounge, stand at the east doorway and look west into the room; tiled floor, C_20 bouncer, room dressing | eye `~(43.7, 27.05, -26.2)`; the `poi-lounge-floor` tiled meshes span x 21.98–39.50, z −43.0…−11.0; courier `(35.9, 27.0, -22.7)` faces −X | `pose_lounge.png` |
 | `lounge_beam` | new pose | From the Lounge doorway, frame the Lounge beam/emitter; two crisp white beams if both are in view | beam card `(42.34, 28.9, -28.97)` | `pose_lounge_beam.png` |
-| `beam_close` | KF27 beam | 2–3 m from the left-wall emitter in the foyer: emitter at **x≈17.8 %, y≈40 %** of frame, two horizontal white beams wall-to-wall, cyan ceiling diamond above the far doors | foyer beam `(23.27, 29.76, -57.4)` from `(27, 29.67, -55)` | `pose_beam_close.png` |
+| `beam_close` | KF27 beam | 2–3 m from the left-wall emitter in the foyer: emitter at **x≈17.8 %, y≈40.0 %** of frame, **one** horizontal white band at **40.0–40.5 %** height, cyan node **above the far doors** (Phase 0a erratum; not two beams / not a ceiling diamond) | foyer beam `(23.27, 29.76, -57.4)` from `(27, 29.67, -55)` | `pose_beam_close.png` |
 
 The official framing references are `docs/reference/clip_1795033698901/clean/`:
 `KF16_01m40s_zipwire_gate_headlights.jpg`,
@@ -695,7 +713,8 @@ cream map), never by hash equality.
   level, contracts, assets), quality preset, actual client area, free-space
   projection, whether the render held 60 fps, peak VRAM, and any settings drift.
 
-No capture exists yet; this lane makes no visual claim. The capture is a
-matched-settings reference for P4/ROI, not a replacement for the official clip
-and keyframes, and the 120-row scorecard is re-scored from a **port** run, not
-from this capture.
+No **valid Cleanout** capture exists yet; this lane makes no visual claim. The
+capture is a matched-settings reference for P4/ROI, not a replacement for the
+official clip and keyframes, and the 120-row scorecard is re-scored from a
+**port** run, not from this capture. The deferred Cleanout capture is issue
+**#13** (single 900 s file, audio Master/Music/SFX/Dialogue 80, poses held 3 s).

@@ -130,8 +130,12 @@ if [ "$MODE" = "capture" ]; then
 	ST=$?
 	mv -f "$TMPLOG" "$LOG"
 	END="$(date +%s)"
+	WALL=$((END - START))
 	nvidia-smi --query-gpu="$GPU_Q" --format=csv,noheader >"$LOG.gpu_after" 2>&1
-	echo "P0B_ROUTE_WALL mode=$MODE run=$(basename "$OUT") exit=$ST wall=$((END - START))s"
+	# The captured log is the evidence file; write the wrapper's own exit into it
+	# as well as stdout, so a deferred/failed run is visible without the shell.
+	printf 'P0B_ROUTE_WALL mode=%s run=%s exit=%d wall=%ds\n' "$MODE" "$(basename "$OUT")" "$ST" "$WALL" >>"$LOG"
+	echo "P0B_ROUTE_WALL mode=$MODE run=$(basename "$OUT") exit=$ST wall=${WALL}s"
 	echo "GPU before: $(cat "$LOG.gpu_before" 2>/dev/null)"
 	echo "GPU after:  $(cat "$LOG.gpu_after" 2>/dev/null)"
 else
@@ -143,7 +147,9 @@ else
 	ST=$?
 	mv -f "$TMPLOG" "$LOG"
 	END="$(date +%s)"
-	echo "P0B_ROUTE_WALL mode=$MODE exit=$ST wall=$((END - START))s (headless, no GPU render)"
+	WALL=$((END - START))
+	printf 'P0B_ROUTE_WALL mode=%s exit=%d wall=%ds (headless, no GPU render)\n' "$MODE" "$ST" "$WALL" >>"$LOG"
+	echo "P0B_ROUTE_WALL mode=$MODE exit=$ST wall=${WALL}s (headless, no GPU render)"
 fi
 
 echo "manifest: $MANIFEST"

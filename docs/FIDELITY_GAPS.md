@@ -6,7 +6,55 @@ extracted through `tools/tat-extract` (CUE4Parse, `EGame.GAME_UE5_5`).
 Generated from `extracted/filelist.txt` (22,005 entries) and the current `extracted/` tree.
 Re-run the census with the commands at the bottom.
 
-## W10 FINAL — 2026-11-27 (newest; supersedes the P1/W10-P2 sections where they differ)
+## Phase 0a — truth / save / gate hygiene — 2026-11-27 (newest; no new render claim)
+
+Phase 0a is a **no-GPU** truth pass: restore the owner save, make the stated
+gate/docs numbers match the committed evidence, put the scorecard provenance in
+git, and add the staged-route self-test to the final gate set. It makes **no new
+visual claim** and does not re-score a row.
+
+- **Save baseline restored.** `/tmp/opencode/tat2-ref-prefix` is **774 files**;
+  `SaveGames/` holds the owner save explicitly copied from
+  `SaveGames.pre-p0b-20261126-230522/.` — `TAT_ETS.sav` md5
+  **`976f8730eac989bab1c6c792343b7c00`**. The archive is untouched. Do not use
+  `stage` + `tail -1` to select it; use the archive path.
+- **Valid Cleanout live reference — pending, not "none".** The 2026-11-27
+  capture is the **Staff of Edinburgh Item Collection Heist** (120 minutes,
+  outdoor canal-side spawn), not the official Cleanout (55 minutes, brick safe
+  room): 10 beats present / 12 partial / 2 wrong / 3 absent, 0 poses present /
+  3 partial, 55/120 rows with a supportable subject. It is useful Den/Guildhall
+  look/UI evidence; it is **not** a valid Cleanout reference. Deferred as
+  issue **#13**.
+- **Beam claim qualified.** The authored beam geometry/material match is real
+  (330 cards, `max_axis_err_deg=0.000006`), but the route2 staged
+  `upper_foyer` frame measures peak row **49.07 %**, excess **131.15**, and
+  **12** cream-unexplained 16×9 cells (8 on the beam row), against KF27
+  **40.19 %** and **0.12 %** cream outside the band. "Thin line, no cream bars"
+  is a different-pose result and is **not** a current foyer claim; P4.5 must
+  re-measure at the KF27 pose.
+- **Light Gem — record present, payload absent.** `GEM_AUTHORED_SLICES=21` and
+  the array record exist; the authored 21-slice `T_stealthball_Array` payload is
+  absent from the extracted tree, so the gem stays `PORT_APPROX` until the U-4
+  extractor pass. Headless P5 does not score its pixels.
+- **Mirrors / landscape — carried, not re-measured (UNVERIFIED).** Mirrors are
+  the earlier audit's 3,312 negative-determinant instances / 3,215 in
+  MultiMeshes; landscape `vis > 0.5` is likely correct but unproven. Both get a
+  probe in Phase 1 P4.2/P4.4; neither is verified by Phase 0a.
+- **Provenance.** `row_route_matrix.md` and `ADJUDICATIONS.md` moved from the
+  git-ignored `build/qa/review_20261124/` to
+  `docs/reference/clip_1795033698901/`; the scorecard/rescore/live-ref/plan
+  references were updated. The 2026-11-24 recording and its 281 frames remain
+  outside git (capture media is not committed).
+- **Official V6-03 erratum.** The scorecard's **official** cell now records the
+  measured emitter **17.8 %/40.0 %**, **one** band at **40.0–40.5 %**, and the
+  cyan node **above the doors**; the old 56 %/two-beam/ceiling-diamond text was
+  a transcription error. The **port-side** cell and the 120 tally are untouched
+  (Phase 3).
+- **Tally note.** The 2026-11-24 tally (**48 scored / 56 N/A / 16
+  UNVERIFIED**) predates W10; V4-07/V6-03 were re-scored in W9-P1. No row token
+  changed in Phase 0a.
+
+## W10 FINAL — 2026-11-27 (supersedes the P1/W10-P2 sections where they differ)
 
 Merged wave: **P2-ST StateTree B2.1**, **P2-NAV Detour spike**, **P3 Wwise
 control plane**, **P5 UI**, **W10-P2 data**, and the **Den restore**. Measured at
@@ -52,7 +100,8 @@ string audit **311/311/199/199/112**; perf guard **78/78**.
   `FS_Layers` and named-RTPC low-pass are deferred with reasons. Not a full
   mix/music/VO port.
 - **P5 UI — headless-verified, not visually scored.** Light Gem lit-cap +
-  direction (`PORT_APPROX`; the authored 21-slice array is absent), card/compass,
+  direction (`PORT_APPROX`; the 21-slice array record is present but its payload
+  is absent), card/compass,
   loadout hotbar, pause blur/dim with the HUD hidden, the 11-line KF13 briefing,
   `CRANK [LMB]`, and authored map names. The one new invented literal is the
   documented `Thieves' Den` port copy (`contract_table_ui.gd:362`, string-audit
@@ -61,9 +110,11 @@ string audit **311/311/199/199/112**; perf guard **78/78**.
   shell/floor; `DEN_SPAWN PASS checks=9` pins `source=authored`,
   `pos=(5.669,40.117,270.686)`, 2,434 meshes, 3,017 collision shapes and the
   authored start-marker/floor ray.
-- **Still pending:** live reference + 120-row baseline, any GPU capture (UI
-  pixels, beam falloff, exposure), StateTree cutover, audio state/music layers,
-  navmesh runtime consumer, `Destructibles/` + GC census, perf matrix.
+- **Still pending:** a **valid Cleanout live reference** (the 2026-11-27
+  capture is the Staff mission, issue **#13**) + the 120-row baseline, any GPU
+  capture (UI pixels, beam falloff, exposure), StateTree cutover, audio
+  state/music layers, navmesh runtime consumer, `Destructibles/` + GC census,
+  perf matrix.
 
 ## W10-P2 data wave — 2026-11-27 (superseded by W10 FINAL above where they differ)
 
@@ -244,8 +295,11 @@ builds the instruments and records what is still wrong.
   `docs/reports/logs/p0b/20261127T015115Z_fafb78f122d5_bon/` (1920×1080, 98 s,
   audio 92.8 s at RMS −36.38/peak −15.69, 0 dropped; gate 23.85, upper_foyer
   40.88, yaw180 39.47, Lounge 28.37, lounge_beam 24.52, beam_close 21.02).
-  The frames show the authored thin beam line, no cream bars, and the P1 foyer
-  dressing. The P1-W HUD status-icon SubViewport had shared the gameplay
+  That run showed the authored thin beam line at its poses; the later route2
+  staged `upper_foyer` frame still measures **12** cream-unexplained cells with
+  the beam at **49.07 %** vs KF27 **40.19 % / 0.12 %** (Phase 0a qualification;
+  see `p0b-route-rescore.md`). The P1 foyer
+  dressing is present. The P1-W HUD status-icon SubViewport had shared the gameplay
   `World3D` (its `DirectionalLight3D` lit the level); `own_world_3d = true` in
   `status_icon.gd` fixed it. The live reference and 120-row baseline remain
   **PENDING** owner steps; PNGs are ignored, manifests/logs tracked.
@@ -321,8 +375,10 @@ run by `build/qa/run_p0a_gates.sh` (28 gates). Evidence:
   ceiling would clip 5/196; the old 40 m clamp would clip 322/330). The beam
   **material is now an authored-parameter match**: 1.5 cm centre line, opacity
   0.5, 6% fake glow, 25 m fade, tint `(5.0, 4.381, 3.516)` × 3.0,
-  additive/unlit/two-sided; the corrected 2026-11-27 capture shows a thin line
-  and no cream bars. The exact UE graph remains `APPROX_SHADER`; the p2 beam
+  additive/unlit/two-sided. The earlier "thin line and no cream bars" read is
+  **qualified** by route2's `upper_foyer` numbers (peak 49.07 %, 12
+  cream-unexplained cells vs KF27 40.19 % / 0.12 %); P4.5 must re-measure at
+  the KF27 pose. The exact UE graph remains `APPROX_SHADER`; the p2 beam
   delta was promoted (`expected_delta=0`).
 - **Destructibles / GC — `PORT_DECISION`.** The authored destruction payload is
   336 hidden GeometryCollection components on 264 actors; a real `Guildhall_Loot`
@@ -345,7 +401,9 @@ run by `build/qa/run_p0a_gates.sh` (28 gates). Evidence:
   (`reports/landscape-weightmaps.md`, `reports/visual-polish.md`, A5 below), with
   the `discard_holes=0` Guildhall rule. P0a is headless: landscape splines/grass
   are still unparsed and the visibility-convention reference sample is still open
-  (`HANDOFF_NEXT_AGENT.md` §3.3); do not treat this wave as landscape verification.
+  (`HANDOFF_NEXT_AGENT.md` §3.3); do not treat this wave as landscape
+  verification. The `vis > 0.5` convention itself remains **UNVERIFIED** until
+  the Phase 1 P4.4 raw-mask A/B.
 
 ## W10-A status — 2026-11-25 (supersedes the sections below where they differ)
 

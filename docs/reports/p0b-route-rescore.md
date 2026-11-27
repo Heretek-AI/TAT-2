@@ -7,12 +7,21 @@
 (`status=captured`, `mode=staged`, `route_claim=none`, `counts={captured:13, deferred:14, partial:0,
 frames:17, frame_errors:0, extras:1}`, `git.sha=434143970f43`, `git.dirty=true`). The dirty flag is
 the S06 ledger-tab fix that was uncommitted at capture time; it is commit `f44bc23` in the current
-tree.
+tree, so a **clean re-run is Phase 0b** (GPU).
+
+**Provenance (Phase 0a, 2026-11-27):** `row_route_matrix.md` and `ADJUDICATIONS.md` moved out of the
+git-ignored `build/qa/review_20261124/` and are now tracked under
+`docs/reference/clip_1795033698901/`. The 2026-11-24 recording and its 281 frames remain **outside
+git** (capture media is not committed). The scorecard's **official V6-03 cell** now carries a dated
+erratum: emitter **17.8 %/40.0 %**, **one** band at **40.0–40.5 %**, cyan node **above the doors**;
+the old 56 %/two-beam/ceiling text was a transcription error. The port-side cell and the 120 tally
+are untouched.
 
 **What this report is not.** It does not play a route, does not align a staged frame to an official
 beat, and does not add or change a `PASS` / `DELTA` / `MISSING` / `HARD_LIMIT` / `N/A-route` token.
 `docs/reference/clip_1795033698901/COMPARISON_PORT_20261124.md` and
-`build/qa/review_20261124/row_route_matrix.md` are unchanged. No Godot, Vulkan, Xvfb, Steam or game
+`docs/reference/clip_1795033698901/row_route_matrix.md` are unchanged by this report. No Godot,
+Vulkan, Xvfb, Steam or game
 build was launched for this report; the capture itself is the earlier owner run recorded in the
 manifest, and this report only reads it plus the reference keyframes and the CPU scorer.
 
@@ -29,7 +38,7 @@ manifest, and this report only reads it plus the reference keyframes and the CPU
 | `docs/reference/clip_1795033698901/clean/*.jpg` (30 files) | the official keyframes; KF01, KF12, KF14, KF27 and KF30 were opened directly for the comparisons below, the others are read through `KEYFRAME_INDEX.md` and the scorecard |
 | `docs/reference/clip_1795033698901/COMPARISON_PORT_20261124.md` | the 120 rows and their existing observations/tally |
 | `docs/reference/clip_1795033698901/KEYFRAME_INDEX.md` | official beat/keyframe mapping and the official observations |
-| `build/qa/review_20261124/row_route_matrix.md` | row-to-beat observability |
+| `docs/reference/clip_1795033698901/row_route_matrix.md` | row-to-beat observability (formerly `build/qa/review_20261124/`, moved in Phase 0a) |
 | `docs/reports/p0b-route.md` | the runner's claim boundary and the scorer gap |
 | `build/qa/p0b_roi_stats.py` | the luma / beam / cream / KF27-criteria scorer |
 
@@ -231,6 +240,12 @@ saturation p95 35; cream outside the beam band 0.12% vs the published ~0.10%. Th
 columns use the W9 method (ImageMagick gray, ITU-R 601, 480-px resize); the cell/beam/cream columns
 use full-resolution 16x9 cells sampled every 2nd pixel.
 
+**Official V6-03 erratum (Phase 0a):** the scorecard's official cell is corrected to these
+measurements — emitter **17.8 %/40.0 %**, **one** band at **40.0–40.5 %**, cyan node **above the
+doors**; the old `y~56 %`/two-beam/ceiling-diamond text is a transcription error. This report's
+port-side numbers are evidence for a later `V6-03` review, not a row score, and no tally token
+changed.
+
 ### 3.4 `S24_foyer_beam.png` (no pose id)
 
 The manifest's median frame stats are:
@@ -403,4 +418,5 @@ unsettled by design.
 *Evidence paths: `docs/reports/logs/p0b-route/route2/manifest.json`,
 `build/qa/p0b_route/route2/*.png` (18 files, git-ignored),
 `docs/reference/clip_1795033698901/clean/*.jpg` (30 files, read-only),
-`build/qa/p0b_roi_stats.py`. This file is the only new file in the working tree; nothing was committed.*
+`docs/reference/clip_1795033698901/row_route_matrix.md` (tracked from Phase 0a),
+`build/qa/p0b_roi_stats.py`. This file was committed in Phase 0a; the 2026-11-24 media is not.*

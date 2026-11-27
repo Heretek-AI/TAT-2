@@ -27,7 +27,7 @@ scored, and no claim is made about 300–600 s, part 2 (not present) or part 3.
 | `docs/reference/clip_1795033698901/clean/*.jpg` (30 keyframes) | official comparison frames (KF02, KF05–KF11, KF13–KF16, KF30 opened directly) |
 | `docs/reference/clip_1795033698901/KEYFRAME_INDEX.md` | beat boundaries, keyframe mapping, official observations |
 | `docs/reference/clip_1795033698901/BREAKDOWN.md` | S01–S27 narratives and per-beat subjects |
-| `build/qa/review_20261124/row_route_matrix.md` | 120 row ids and their short criteria |
+| `docs/reference/clip_1795033698901/row_route_matrix.md` | 120 row ids and their short criteria |
 | `docs/reports/p0b-route-rescore.md` | claim-boundary precedent (frame captured ≠ beat played) |
 | `docs/reports/p0b-live-capture.md` §5 | the six/seven pose ids and their reference keyframes |
 
@@ -167,7 +167,7 @@ segment (see §6).
 
 ## 5. Row ids whose subject is visible
 
-Row ids are from `build/qa/review_20261124/row_route_matrix.md`; a row is listed
+Row ids are from `docs/reference/clip_1795033698901/row_route_matrix.md`; a row is listed
 only because its **subject** is in the frame. This is not a score and says
 nothing about how well the port reproduces it. Audio rows (AU*) are excluded:
 this lane did no audio analysis, and their subject is not visible.

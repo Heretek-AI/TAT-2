@@ -2,7 +2,7 @@
 
 **Status:** synthesis of lanes R1, R2 and R3. Presence and coverage only. This report does **not**
 re-score the port, does **not** edit `docs/reference/clip_1795033698901/COMPARISON_PORT_20261124.md`
-or `build/qa/review_20261124/row_route_matrix.md`, and assigns no
+or `docs/reference/clip_1795033698901/row_route_matrix.md`, and assigns no
 `PASS` / `DELTA` / `MISSING` / `HARD_LIMIT` / `N/A-route` token to any row. No game, Godot, Vulkan,
 Steam or GPU process was started for this synthesis; nothing was committed.
 
@@ -15,7 +15,7 @@ task specified one synthesis report. No separate logs directory was created.
 **Inputs used.** `docs/reports/live-ref-review-plan.md`; `docs/reports/live-ref-lane-r1.md` (part 1,
 0–300 s); `docs/reports/live-ref-lane-r2.md` (part 1, 300–600 s); `docs/reports/live-ref-lane-r3.md`
 (part 3, 0–542 s); `docs/reference/clip_1795033698901/KEYFRAME_INDEX.md`,
-`COMPARISON_PORT_20261124.md` and `clean/*.jpg`; `build/qa/review_20261124/row_route_matrix.md`;
+`COMPARISON_PORT_20261124.md` and `clean/*.jpg`; `docs/reference/clip_1795033698901/row_route_matrix.md`;
 `docs/reports/p0b-live-capture.md` §5 Steps 11–12; `docs/reports/p0b-route-rescore.md`. The lane
 evidence frames are in `~/Videos/tat2_ref_20261127/review/` (outside git); all are 480×270 proxy PNGs
 except the `r1_full_*` and `r3_full_*` frames, which are 2560×1440.
@@ -304,10 +304,11 @@ x = 341 / 1920 = 17.76 %   y = 432 / 1080 = 40.00 %
 ```
 
 This **supports 40.0 %, not 56 %**. The V6-03 text is the outlier; the keyframe index and the scorer's
-40.0 % criterion agree with the image. Do **not** edit the scorecard in this wave; the correction goes
-to the adjudication wave. That official cell also says "two ... beams" and "cyan ceiling diamond";
-the measured KF27 is **one** band and the above-door node, so the adjudication wave should correct the
-whole cell, not only `y %`.
+40.0 % criterion agree with the image. That official cell also says "two ... beams" and "cyan ceiling
+diamond"; the measured KF27 is **one** band and the above-door node, so the whole cell needed the
+correction — not only `y %`. **Phase 0a (2026-11-27)** recorded it as a dated erratum in the
+scorecard's **official** V6-03 cell (17.8 %/40.0 %, one band at 40.0–40.5 %, above-door node); the
+port-side cell and the 120 tally remain Phase 3. No row token changed.
 
 **No live percentage is claimed.** The live part-3 beam frames are **not KF27-framed**: the camera is
 at a different distance/heading, and part 3 has no controlled 3 s hold at the KF27 pose. A percentage

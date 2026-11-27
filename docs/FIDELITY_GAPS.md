@@ -129,14 +129,20 @@ builds the instruments and records what is still wrong.
   (luma/percentiles, beam rows, 16×9 cream map, KF27 criteria). The dry-run
   manifest validates (`poses=6`), the self-test is **21/21**, and the KF27
   reference frame scores **7/7**.
-  The real port run is
+  The first port run is
   `docs/reports/logs/p0b/20261126T210338Z_5301fc661750_bon/` (1920×1080, 93 s,
   audio 85.3 s at RMS −36.50/peak −15.12 dBFS; gate 23.2/10, upper_foyer
   45.8/29, yaw180 39.0/31, Lounge 28.6/23, lounge_beam 24.4/23, beam_close
-  20.8/19). The frames confirm the visible cream bars are the `SM_LightBeam`
-  cards: the P0a axis is correct, but the full-tube material still reads as a
-  slab. The live reference and 120-row baseline remain **PENDING** owner steps;
-  PNGs are ignored, manifests/logs tracked.
+  20.8/19); it confirmed the visible cream bars were the `SM_LightBeam` cards.
+  After the P1 beam material and HUD-world fixes, the corrected run is
+  `docs/reports/logs/p0b/20261127T015115Z_fafb78f122d5_bon/` (1920×1080, 98 s,
+  audio 92.8 s at RMS −36.38/peak −15.69, 0 dropped; gate 23.85, upper_foyer
+  40.88, yaw180 39.47, Lounge 28.37, lounge_beam 24.52, beam_close 21.02).
+  The frames show the authored thin beam line, no cream bars, and the P1 foyer
+  dressing. The P1-W HUD status-icon SubViewport had shared the gameplay
+  `World3D` (its `DirectionalLight3D` lit the level); `own_world_3d = true` in
+  `status_icon.gd` fixed it. The live reference and 120-row baseline remain
+  **PENDING** owner steps; PNGs are ignored, manifests/logs tracked.
 - **Live reference — prepared, not launched.** The appid 3341000 prefix is
   copied and verified at `/tmp/opencode/tat2-ref-prefix`; the blockers (Steam
   auto-update `AutoUpdateBehavior=0`, 2.2–2.5 GiB free VRAM, Wayland capture
@@ -207,9 +213,11 @@ run by `build/qa/run_p0a_gates.sh` (28 gates). Evidence:
   `max_axis_err_deg=0.000006`, `max_len_err=0.0406 %`, `clamped=0`; Old Manor's
   authored maximum `236.9539` (24.169 m) is applied verbatim (the removed 200
   ceiling would clip 5/196; the old 40 m clamp would clip 322/330). The beam
-  **material remains `PORT_APPROX`** (`tat_beam.gdshader`, P4); the 2026-11-26
-  capture confirms it renders the full 1 m tube as a broad cream bar, while the
-  authored material is a 1.5 cm centre line with a 25 m fade.
+  **material is now an authored-parameter match**: 1.5 cm centre line, opacity
+  0.5, 6% fake glow, 25 m fade, tint `(5.0, 4.381, 3.516)` × 3.0,
+  additive/unlit/two-sided; the corrected 2026-11-27 capture shows a thin line
+  and no cream bars. The exact UE graph remains `APPROX_SHADER`; the p2 beam
+  delta was promoted (`expected_delta=0`).
 - **Destructibles / GC — `PORT_DECISION`.** The authored destruction payload is
   336 hidden GeometryCollection components on 264 actors; a real `Guildhall_Loot`
   load builds **95** hidden broken layers (48 chest + 31 display case + 16

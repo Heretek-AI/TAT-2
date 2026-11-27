@@ -254,3 +254,9 @@ the gameplay `World3D`. Every other UI SubViewport already isolates its world.
 viewport is skipped when headless), so the Xvfb Vulkan A/B is the gate.
 Evidence: [`docs/reports/p1-beams.md`](p1-beams.md) and
 `docs/reports/logs/p0b/p1_beams_{ab,fix,part}_*`.
+
+The final corrected capture is
+`docs/reports/logs/p0b/20261127T015115Z_fafb78f122d5_bon/` at `fafb78f`:
+gate 23.85, upper_foyer 40.88, yaw180 39.47, Lounge 28.37, lounge_beam 24.52,
+beam_close 21.02; audio 92.8 s, 0 dropped frames. The frames show the authored
+thin beam line, no cream bars, and the P1 foyer dressing.

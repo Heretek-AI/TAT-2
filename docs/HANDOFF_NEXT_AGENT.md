@@ -1,12 +1,12 @@
 # Handoff — Thick As Thieves Godot 4.7.2 port (next session)
 
 **Repo:** `/home/john/Projects/TAT-2`
-**Code/data tip:** `3998761` (P1: five route-content lanes merged) + `78884fe`
-(the `A2-WHITE` portal-surface integration fix). This handoff and the P1
-evidence are the commit on top of that tip.
-**Working tree:** clean apart from private/derived data, the tracked
-`docs/reports/logs/p1/full/` evidence and local untracked `.uid` sidecars
-created by `--import`.
+**Code/data tip:** `fafb78f` (P1: five route-content lanes + the `A2-WHITE`
+portal-surface fix + the HUD status-icon `own_world_3d` fix) + `9fcec91` (the
+corrected six-pose capture). This handoff and the P1 evidence are the commit on
+top of that tip.
+**Working tree:** clean apart from private/derived data; the tracked P1 evidence
+and capture logs are committed.
 **Godot:** `4.7.2.stable` via native `tools/godot` (`godot` is **not** on `$PATH`).
 **Renderer:** Forward+ · Jolt 60 Hz · 1280×720 reference · Linux x86_64.
 **Steam reference:** `/home/john/.steam/steam/steamapps/common/Thick As Thieves/`.
@@ -32,9 +32,14 @@ G1-05, V1-04, V1-05, V3-01, V3-03, UI2-05, V4-05, V4-06, V4-07, V6-03, V6-04,
 G5-03, G5-04, V1-07, UI5-06, G1-04, AU5-01. Remaining gaps are labelled:
 `BARRON'S DEMOLITION` banner and KF15 drum placement are HARD_LIMIT (no asset /
 no placement), the exact cyan KF27 node is a hidden BP/Niagara overlay, and the
-authored circular-lockpick widget art is absent. **No visual score is claimed**:
-the port capture and the live-reference 120-row baseline are still pending and
-were not run in P1.
+authored circular-lockpick widget art is absent. The P1 port capture ran at
+`fafb78f` (`logs/p0b/20261127T015115Z_...`): gate 23.85, upper_foyer 40.88,
+yaw180 39.47, Lounge 28.37, lounge_beam 24.52, beam_close 21.02; audio 92.8 s,
+0 dropped. The frames show the authored thin beam line, no cream bars, and the
+P1 foyer dressing. A P1 HUD `SubViewport` had shared the gameplay `World3D`
+(its `DirectionalLight3D` lit the level; yaw180 84 → 39 after the fix). The
+live-reference 120-row baseline is still unscored; **no visual parity PASS is
+claimed**.
 
 ## 2. Gates at this HEAD (all measured, logs in `docs/reports/logs/p1/full/`)
 
@@ -70,10 +75,10 @@ unexpected non-zero exit.
 | perf guard | 78/78 |
 | `make gate-ratchet` | PASS (`measured_on=78884fe`; floors raised, never lowered) |
 
-**Caveat:** no live reference capture and no P1 port capture. The P1 rows are
-scoreable, not scored; the P0b six-pose capture predates P1. The 120-row baseline
-still needs the shipped reference. The W9 interior numbers were measured on a
-frame with a light-card slab covering half the screen and are **not** a valid
+**Caveat:** no live reference capture. The P1 port capture exists (above), but
+the P1 rows are scoreable, not scored; the 120-row baseline still needs the
+shipped reference. The W9 interior numbers were measured on a frame with a
+light-card slab covering half the screen and are **not** a valid
 interior baseline.
 
 ## 3. Closed by P0a (previously the top defects)
@@ -115,9 +120,9 @@ interior baseline.
 
 | Defect / item | Evidence | Next step |
 |---|---|---|
-| **Port capture (P1 tree)** | the last real capture is the P0b six-pose run at `5301fc6` (`logs/p0b/20261126T210338Z_...`): gate 23.2/10, foyer 45.8/29, Lounge 28.6/23; it predates P1 | re-run `build/qa/p0b_capture.sh` on this tree, inspect KF14/15/16/23/24/27/28/29, then score the rows |
+| **Port capture (P1 tree)** | corrected six-pose run at `fafb78f` (`logs/p0b/20261127T015115Z_...`): gate 23.85, upper_foyer 40.88, yaw180 39.47, Lounge 28.37; thin beam line, no cream bars; audio 92.8 s/0 dropped | inspect KF14/15/16/23/24/27/28/29, then score the rows with the live reference |
 | **120-row baseline unscored** | instruments ready; live reference prepared, nothing launched (`reports/p0b-live-capture.md`) | score the 120 rows on the parity-only build with recorded evidence |
-| **Cream / invented white** | the beam cards are now the authored centre-line/fade material, so the old broad cream slabs need a fresh capture; cream RED proof `expected_fail=2`; 122 authored moon cards are safe | data wave fixes `_apply_ue_emissive` + registers suite 119; verify the beam read in the P1 capture |
+| **Cream / invented white** | corrected capture shows the authored thin beam line and no cream bars; the beam material is an authored-parameter match; cream RED proof `expected_fail=2`; 122 authored moon cards are safe | data wave fixes `_apply_ue_emissive` + registers suite 119 |
 | **Civilian pants albedo** | p2 expected FAIL: authored `Pants_D` in the `opacity` slot | producer fix (`BaseColorOpacity` → albedo), then p2 `fixed` → 1 |
 | **`BARRON'S DEMOLITION` banner** | P1-STREET `HARD_LIMIT`: 0 name hits in the extraction; only the blue `KILCAIRN` banner set exists | no authored asset; do not invent a decal |
 | **KF15 fallen drums** | P1-STREET `HARD_LIMIT (placement)`: `SM_Metal_BarrelA/B/C` exist but no placement within 12 m of the alley | needs a producer/placement source before it can be scored |
@@ -137,11 +142,10 @@ interior baseline.
 
 ## 5. Wave plan for the next session
 
-**P1 remainder — re-run the port capture on this tree and score the route rows
-(do this first).** The last six-pose capture predates P1; run
-`build/qa/p0b_capture.sh` (one GPU job, after the gates) and inspect KF14/15/16/
-23/24/27/28/29. Then follow `docs/reports/p0b-live-capture.md` for the shipped
-reference and score the 120 rows from
+**P1 remainder — live reference + score the route rows (do this first).** The
+corrected P1 six-pose capture is measured
+(`logs/p0b/20261127T015115Z_...`). Follow `docs/reports/p0b-live-capture.md` for
+the shipped reference and score the 120 rows from
 `docs/reference/clip_1795033698901/COMPARISON_PORT_20261124.md` on the
 parity-only build, publishing an honest per-row PASS/PARTIAL/FAIL with recorded
 evidence. Do not re-grade on frame `215507`.

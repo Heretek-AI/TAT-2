@@ -284,6 +284,11 @@ build/qa/             tracked capture/probe/export-stamp scripts; PNG output ign
   the acceptance audit. Bind the material on the mesh surface
   (`surface_set_material`) as well; `SafeRoomPortalOutline` at `3998761` is the
   measured example (fixed in `78884fe`).
+- **A HUD SubViewport must set `own_world_3d = true`.** `status_icon.gd` (P1-W)
+  created its jaw-trap SubViewport without it, so its `DirectionalLight3D` lit
+  the gameplay `World3D` (yaw180 mean 39 → 84). Every other UI SubViewport sets
+  it. Headless probes skip the icon; only the Xvfb Vulkan capture caught it.
+  Fixed in `fafb78f`.
 - **`MI_LightBeam_SM` is a deliberate exception** to the HDR neon path: it uses
   additive `tat_beam.gdshader`. T2-04-C guards the exception plus three
   `StandardMaterial3D` negative controls.

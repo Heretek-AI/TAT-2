@@ -22,6 +22,11 @@
 # to the merged measurements (beams 9, audio 123, P5 54, self-test 23, KF27
 # 9/9); no floor is lowered.
 #
+# Phase 3 §2.5.1 (2026-11-27) restores the three ratchet-pinned suites that no
+# earlier runner invoked — `test_vo_director` (53), `probe_auto_exposure` (77)
+# and `probe_cubemap` (37) — for 52 gates. Their pinned logs predated the
+# 17:06 run; these gates now produce them in-run. No other gate body changes.
+#
 # Rules encoded here (same contract as P0a/P0b/P1)
 # ------------------------------------------------
 #   * Never hold the Godot lock across the runner. Each Godot invocation takes
@@ -345,6 +350,25 @@ gate_marker test_audio_control "$OUT/test_audio_control.log" \
 	"AUDIO_CONTROL_SUMMARY: fails=0 checks=123" \
 	flock "$LOCK" tools/godot --headless --path game \
 	--script res://tests/test_audio_control.gd
+
+# Phase 3 §2.5.1: suites 122-124 were ratchet-pinned but invoked by no runner
+# gate before Phase 3 (their logs predated the 17:06 run). Restore them here so
+# every pinned value is reproduced by this runner. The counts are the measured
+# floors (a suite may add checks, never drop them).
+gate_marker test_vo_director "$OUT/test_vo_director.log" \
+	"VO_DIRECTOR_SUMMARY: fails=0 checks=53" \
+	flock "$LOCK" tools/godot --headless --path game \
+	--script res://tests/test_vo_director.gd
+
+gate_marker probe_auto_exposure "$OUT/probe_auto_exposure.log" \
+	"AEM_PROBE: fails=0 passed=77" \
+	flock "$LOCK" tools/godot --headless --path game \
+	--script res://tests/probe_auto_exposure.gd
+
+gate_marker probe_cubemap "$OUT/probe_cubemap.log" \
+	"CUBEMAP_PROBE: fails=0 passed=37" \
+	flock "$LOCK" tools/godot --headless --path game \
+	--script res://tests/probe_cubemap.gd
 
 gate_marker probe_p5_ui "$OUT/probe_p5_ui.log" "P5_UI PASS checks=54" \
 	flock "$LOCK" tools/godot --headless --path game \

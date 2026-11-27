@@ -181,6 +181,16 @@ StateTree shadow ceiling; the authored-element collision floor.
   `docs/reports/logs/p0b/20261127T015115Z_fafb78f122d5_bon/` (gate 23.85,
   upper_foyer 40.88, yaw180 39.47, Lounge 28.37, audio 92.8 s); it is not the
   120-row baseline.
+- **Staged 27-beat runner (v1):** `build/qa/p0b_route.sh` writes a
+  `tat2.p0b_route/1` manifest for all S01–S27 — **13 beats planned to be
+  staged** through live UI/API hooks, 14 deferred with reasons,
+  `route_claim=none` (no played route). The Guildhall stage is a **free-play
+  substitute** (`Mission.Guildhall.LootTheRoom`, contract 2) used only for the
+  KF13 letter; it is **not** the official selection (canonical contract-2 row:
+  `Mission.Guildhall.VaultHeist`; historical baseline: `LootTheRoom`,
+  `free_play=false`). Dry-run/self-test are green; the GPU capture is **not
+  run**. The wrapper exports `TAT2_PARITY_ONLY=1` for every mode. Contract and
+  the owner command: [`docs/reports/p0b-route.md`](p0b-route.md).
 
 ### 4.2 P4 look (the visible parity gap)
 
@@ -322,5 +332,7 @@ build/qa/runtime_smoke.sh 90      # no outer flock
 - `docs/reports/navmesh-spike.md` — authored Detour tile extraction/consumer.
 - `docs/reports/p0b-live-capture.md` — offline attempt, restore, and the online
   capture runbook (A/B/C).
+- `docs/reports/p0b-route.md` — staged 27-beat route runner v1 (schema, beat
+  status, deferred blockers, owner GPU command).
 - `docs/reference/clip_1795033698901/COMPARISON_PORT_20261124.md` — 120-row scorecard.
 - `docs/FIDELITY_GAPS.md`, `AGENTS.md` — invariants, traps, gate table.

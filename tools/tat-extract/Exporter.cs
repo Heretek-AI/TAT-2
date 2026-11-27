@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Security.Cryptography;
+using System.Text;
 using CUE4Parse.FileProvider;
 using CUE4Parse.FileProvider.Objects;
 using CUE4Parse.UE4.Assets;
@@ -524,6 +525,148 @@ public sealed class Exporter
                 Count("audio-pkg", true);
             }
         });
+    }
+
+    // ------------------------------------------------------------------ cubemaps
+    // Authored sky TextureCubes referenced by the shipped weather presets:
+    //   Gloomy / MidnightClear* -> /Game/MaterialLibrary/Utility/Cubemap_GroundFloor_01
+    //   DenseFog_OldManor      -> /Engine/MapTemplates/daylight
+    //   Base / Example*        -> /Game/ThirdParty/.../T_FakeSpecular1
+    // None of them can reach Textures(): Cubemap_GroundFloor_01 has no T_
+    // prefix and is not under /Textures/, T_FakeSpecular1 lives under a
+    // ThirdParty use-case folder, and daylight is an Engine template. The
+    // allowlist is therefore by exact package, counted as cubemaps-filtered.
+    static readonly string[] AuthoredCubePackages =
+    {
+        "TAT/Content/MaterialLibrary/Utility/Cubemap_GroundFloor_01.uasset",
+        "TAT/Content/ThirdParty/FluidNinjaLive/UseCases/007_SmallWater/T_FakeSpecular1.uasset",
+        "Engine/Content/MapTemplates/daylight.uasset",
+    };
+
+    // UE ECubeFace order in the cooked TextureCube slice data (the six faces
+    // are stacked vertically in one decoded image).
+    static readonly string[] CubeFaceNames = { "px", "nx", "py", "ny", "pz", "nz" };
+
+    static string CubeId(string name)
+    {
+        var sb = new StringBuilder(name.Length + 4);
+        for (int i = 0; i < name.Length; i++)
+        {
+            char c = name[i];
+            if (char.IsUpper(c) && i > 0 && (char.IsLower(name[i - 1]) || char.IsDigit(name[i - 1])))
+                sb.Append('_');
+            sb.Append(char.ToLowerInvariant(c));
+        }
+        return sb.ToString();
+    }
+
+    // Cheap orientation gauge for the integrator: an 8-bit face mean over a
+    // strided sample. The sky cube's +Y face should read brighter than -Y.
+    static double[]? FaceMean(CUE4Parse_Conversion.Textures.CTexture face)
+    {
+        try
+        {
+            using var bmp = face.ToSkBitmap();
+            int step = Math.Max(1, Math.Max(bmp.Width, bmp.Height) / 32);
+            long r = 0, g = 0, b = 0, n = 0;
+            for (int y = 0; y < bmp.Height; y += step)
+            {
+                for (int x = 0; x < bmp.Width; x += step)
+                {
+                    var px = bmp.GetPixel(x, y);
+                    r += px.Red; g += px.Green; b += px.Blue; n++;
+                }
+            }
+            if (n == 0) return null;
+            return new[] { Math.Round(r / (double) n / 255.0, 5), Math.Round(g / (double) n / 255.0, 5), Math.Round(b / (double) n / 255.0, 5) };
+        }
+        catch
+        {
+            return null; // diagnostics only; never fail the cube export for it
+        }
+    }
+
+    static string UePath(string path)
+    {
+        var rel = path.Replace('\\', '/');
+        if (rel.StartsWith("TAT/Content/", StringComparison.OrdinalIgnoreCase))
+            return "/Game/" + Path.ChangeExtension(rel["TAT/Content/".Length..], null);
+        if (rel.StartsWith("Engine/Content/", StringComparison.OrdinalIgnoreCase))
+            return "/Engine/" + Path.ChangeExtension(rel["Engine/Content/".Length..], null);
+        return "/" + Path.ChangeExtension(rel, null);
+    }
+
+    public void Cubemaps()
+    {
+        var opts = DefaultOpts();
+        var candidates = Packages(p => p.EndsWith(".uasset")).ToList();
+        var wanted = candidates.Where(f => AuthoredCubePackages.Contains(f.Path, StringComparer.OrdinalIgnoreCase)).ToList();
+        CountSkip("cubemaps-filtered", candidates.Count - wanted.Count);
+        foreach (var missing in AuthoredCubePackages.Where(p => !wanted.Any(f => string.Equals(f.Path, p, StringComparison.OrdinalIgnoreCase))))
+            Count("cubemaps", false, missing + ": not in the mount");
+        foreach (var f in wanted)
+        {
+            try
+            {
+                var pkg = _p.LoadPackage(f);
+                int cubes = 0;
+                foreach (var e in pkg.GetExports())
+                {
+                    if (e is not UTextureCube cube) continue;
+                    cubes++;
+                    var id = CubeId(cube.Name);
+                    var dir = Path.Combine(_o.Out, "assets", "TAT", "Content", "Cubemaps", id);
+                    var manifest = Path.Combine(dir, "cubemap.json");
+                    Directory.CreateDirectory(dir);
+                    if (!_o.Overwrite && File.Exists(manifest)) { CountSkip("cubemaps"); continue; }
+                    var decoded = TextureDecoder.Decode(cube, opts);
+                    if (decoded == null) { Count("cubemaps", false, f.Path + ": decode null"); continue; }
+                    if (decoded.Height % 6 != 0)
+                    {
+                        Count("cubemaps", false, $"{f.Path}: decoded {decoded.Width}x{decoded.Height} is not six stacked faces");
+                        continue;
+                    }
+                    int faceH = decoded.Height / 6;
+                    var faces = new Dictionary<string, string>();
+                    var means = new Dictionary<string, double[]>();
+                    bool ok = true;
+                    for (int i = 0; i < 6; i++)
+                    {
+                        var face = decoded.Crop(0, i * faceH, decoded.Width, faceH);
+                        var mean = FaceMean(face);
+                        if (mean != null) means[CubeFaceNames[i]] = mean;
+                        var bytes = face.Encode(opts, out var ext);
+                        if (bytes == null) { ok = false; break; }
+                        var file = $"face_{CubeFaceNames[i]}.{ext}";
+                        File.WriteAllBytes(Path.Combine(dir, file), bytes);
+                        faces[CubeFaceNames[i]] = file;
+                    }
+                    if (!ok) { Count("cubemaps", false, f.Path + ": face encode failed"); continue; }
+                    var doc = new Dictionary<string, object?>
+                    {
+                        ["schema"] = "tat2.cubemap/1",
+                        ["id"] = id,
+                        ["ue_path"] = UePath(f.Path),
+                        ["source_package"] = f.Path,
+                        ["width"] = decoded.Width,
+                        ["height"] = faceH,
+                        ["pixel_format"] = cube.Format.ToString(),
+                        ["srgb"] = cube.SRGB,
+                        ["transfer"] = cube.SRGB ? "srgb" : "linear",
+                        ["slices"] = 6,
+                        ["face_order"] = CubeFaceNames,
+                        ["ue_face_order"] = new[] { "PosX", "NegX", "PosY", "NegY", "PosZ", "NegZ" },
+                        ["faces"] = faces,
+                        ["face_mean_8bit"] = means,
+                    };
+                    File.WriteAllText(manifest, JsonConvert.SerializeObject(doc, Formatting.Indented));
+                    Count("cubemaps", true);
+                    Console.Error.WriteLine($"  cubemap {cube.Name}: {decoded.Width}x{faceH} {cube.Format} srgb={cube.SRGB} -> {dir}");
+                }
+                if (cubes == 0) Count("cubemaps", false, f.Path + ": no UTextureCube export");
+            }
+            catch (Exception e) { Count("cubemaps", false, $"{f.Path}: {e.GetType().Name}: {e.Message}"); }
+        }
     }
 
     // ------------------------------------------------------------------- navmesh

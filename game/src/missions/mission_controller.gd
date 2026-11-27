@@ -31,6 +31,7 @@ const MobileProfile := preload("res://src/core/mobile_profile.gd")
 const PerfProfile := preload("res://src/core/perf_profile.gd")
 const WeatherProfile := preload("res://src/core/weather_profile.gd")
 const WeatherVisuals := preload("res://src/core/weather_visuals.gd")
+const AutoExposureControllerScript := preload("res://src/core/auto_exposure_controller.gd")
 const VfxManager := preload("res://src/core/vfx_manager.gd")
 const HudScript := preload("res://src/ui/hud.gd")
 const WardrobeUIScript := preload("res://src/ui/wardrobe_ui.gd")
@@ -331,6 +332,17 @@ func _setup_environment() -> void:
 	print("TAT-2 environment: bg=", e.background_mode, " ambient_src=", e.ambient_light_source, " ambient_energy=", e.ambient_light_energy, " ambient_color=", e.ambient_light_color, " sky=", e.sky != null, " fog=", e.fog_enabled, " fog_density=", e.fog_density)
 
 	add_child(moon)
+	# P4.1b/c: `TAT2_AEM=meter` attaches the live CompositorEffect meter. The
+	# default `fixed` and the static `model` path need no node, so `wanted()` is
+	# false and the env above stays byte-for-byte today's. The Node is created
+	# only when wanted (a Node created and not added would leak).
+	if AutoExposureControllerScript.wanted():
+		var aem_controller := AutoExposureControllerScript.new()
+		if aem_controller.setup(e, wpreset):
+			aem_controller.name = "AutoExposureController"
+			add_child(aem_controller)
+		else:
+			aem_controller.free()
 	light_probe.register_light(moon)
 	_add_guildhall_gate_fills()
 	_add_guildhall_car_lights()

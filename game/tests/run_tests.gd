@@ -7669,6 +7669,32 @@ func _initialize() -> void:
 		else:
 			print("PASS: ", w10_suite[0], " ", w10_suite[1], " (", w10_ms, " ms)")
 
+	# 122-123. P4.1 exposure/IBL headless probes (standalone SceneTree children,
+	# the same exit-0 + summary-marker contract as 99/101-121). Suite 122 pins
+	# the authored AEM chain data, the pure AutoExposure model (speeds, clamps,
+	# V3 curve, determinism) and the meter's CPU log-luminance mirror; suite 123
+	# pins the cubemap face mapping, the exact-solid-angle cosine irradiance and
+	# `TAT2_IBL=off` compatibility. Neither runs a GPU or the extractor.
+	for p4_suite: Array in [
+		["122", "P4.1a/b authored auto-exposure data + pure model + meter reduction", "res://tests/probe_auto_exposure.gd", "AEM_PROBE: fails=0"],
+		["123", "P4.1 IBL cubemap faces + CPU cosine irradiance + off compatibility", "res://tests/probe_cubemap.gd", "CUBEMAP_PROBE: fails=0"],
+	]:
+		var p4_out: Array = []
+		var p4_args: PackedStringArray = [
+			"--headless",
+			"--path", ProjectSettings.globalize_path("res://"),
+			"--script", str(p4_suite[2]),
+		]
+		var p4_t0: int = Time.get_ticks_msec()
+		var p4_code: int = OS.execute(OS.get_executable_path(), p4_args, p4_out, true)
+		var p4_ms: int = Time.get_ticks_msec() - p4_t0
+		var p4_text: String = "\n".join(PackedStringArray(p4_out))
+		if p4_code != 0 or p4_text.find(str(p4_suite[3])) < 0:
+			printerr("FAIL: ", p4_suite[0], " ", p4_suite[1], " exit=", p4_code, " ms=", p4_ms, "\n", p4_text.right(3000))
+			fails += 1
+		else:
+			print("PASS: ", p4_suite[0], " ", p4_suite[1], " (", p4_ms, " ms)")
+
 	# 12.6/12.7 process-lifetime caches must not outlive the run.
 	var am_node: Node = root.get_node_or_null("/root/AudioManager")
 	if am_node != null and am_node.has_method("cleanup_on_exit"):

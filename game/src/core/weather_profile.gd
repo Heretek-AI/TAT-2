@@ -1,6 +1,9 @@
 extends RefCounted
 ## Real weather data extracted from Thick As Thieves.
 ##
+const AutoExposure := preload("res://src/core/auto_exposure.gd")
+const CubemapLoader := preload("res://src/core/cubemap_loader.gd")
+##
 ## Loads the normalized presets written by `tools/parse_weather.py` from
 ## `res://data/generated/weather/` and applies them to a Godot Environment +
 ## DirectionalLight3D. Every value comes from the game's own
@@ -52,9 +55,18 @@ extends RefCounted
 ##   (outdoor presets only; a room has no height gradient).
 ## - moon_light.source_angle -> DirectionalLight3D.light_angular_distance (1:1
 ##   degrees). sky.volumetric_cloud_visible gates the procedural cloud stand-in.
-## - Night presets (`gloomy`, `midnight_clear*`) take AGX + NIGHT_EXPOSURE; the
-##   authored AutoExposureBiasCurve (V3) is transcribed for the exposure decision
-##   only, never multiplied into tonemap_exposure (EV100 space != a linear gain).
+## - Night presets (`gloomy`, `midnight_clear*`) take AGX + NIGHT_EXPOSURE.
+## - `TAT2_AEM=fixed` (default) keeps that constant path exactly. `model` uses
+##   the authored AEM_Basic fields + V3 curve through `auto_exposure.gd`; it
+##   resolves to the same 1.15 at the documented night anchor and is a no-op
+##   there. `meter` additionally attaches the live CompositorEffect meter
+##   controller in mission_controller (the integrator's GPU calibration run).
+##   The authored EV100 space is luminance-calibrated and tonemap_exposure is a
+##   linear multiplier; `AEM_CALIBRATION` is the ONE conversion, never a
+##   per-preset grade.
+## - `TAT2_IBL=off` (default) leaves ambient exactly as authored. `ambient`
+##   replaces the flat SkyLight colour with the CPU cosine irradiance of the
+##   authored TextureCube (`cubemap_loader.gd`), energy NOT clamped.
 ## - Fog DirectionalInscattering luminance -> fog_sun_scatter (0..1).
 ## - enable_rain / rain_intensity are exposed for later particle wiring; this
 ##   module never spawns rain.
@@ -80,6 +92,10 @@ static var _lut_cache: Dictionary = {}
 ## One loud line per session for the IBL/GI state (authored cubemap reachable?
 ## which approximation is active?). Repeated applies stay quiet.
 static var _ibl_state_logged: bool = false
+## P4.1: one loud line per session for the opted-in authored paths.
+static var _aem_logged: bool = false
+static var _aem_non_night_logged: bool = false
+static var _cubemap_ambient_logged: bool = false
 
 # UE centimetres -> Godot metres, calibrated for the 20-120 m readability band
 # (see the header table); NOT the plain 0.01 geometry convention.
@@ -120,21 +136,10 @@ const AMBIENT_UE_TO_GODOT := 0.08
 # is_night_preset() instead of an exact-id match.
 const NIGHT_EXPOSURE := 1.15
 ## Authored AutoExposureBiasCurve (`Curve_Exposure_Compensation_Float_V3`, the
-## curve the Gloomy -> Base_Skybox -> Base weather chain selects): x is the
-## auto-exposure average brightness in EV100, y the extra bias in EV. The shipped
-## night deliberately pulls the image DOWN by up to 4 EV as the scene darkens, on
-## top of AutoExposureBias 0.0.
-## `tools/parse_weather.py` emits neither this curve nor
-## AutoExposureMin/MaxBrightness (T01 producer gap, see the T07 report's
-## BLOCKED-ON T01 contract). Consumed by ev_curve_bias() for the *exposure
-## decision only*: UE's EV100 space is luminance-calibrated and Godot's
-## tonemap_exposure is a linear multiplier, so applying -4 EV literally would
-## divide the frame by 16. Godot has no auto exposure at all.
-const EV_CURVE_POINTS: Array[Vector2] = [
-	Vector2(-12.1, -0.5), Vector2(-11.1, -1.5), Vector2(-10.1, -2.0),
-	Vector2(-9.1, -2.25), Vector2(-8.1, -2.5), Vector2(-6.1, -3.0),
-	Vector2(-3.0, -4.0), Vector2(0.2, -4.0),
-]
+## curve the Gloomy -> Base_Skybox -> Base weather chain selects) now lives in
+## `auto_exposure.gd` (one table, one reader) and is read through GameData's
+## standalone curve index. `ev_curve_bias()` below delegates to it so existing
+## callers keep working.
 ## EV100 the shipped night rows meter at (AEM_Basic over a 0.01-0.033 lux moon
 ## plus practicals). At or below this the authored curve is saturated at -4 EV.
 const EV_CURVE_NIGHT_EV100 := -3.0
@@ -484,20 +489,11 @@ static func is_night_preset(preset: Dictionary) -> bool:
 	return tag == "weather.type.gloomy" or tag == "weather.type.midnightclear"
 
 
-## Piecewise-linear read of the authored V3 exposure-compensation curve.
+## Authored V3 exposure-compensation curve, delegated to `auto_exposure.gd`
+## (GameData's standalone curve index, transcribed keys as fallback). Kept as a
+## WeatherProfile entry point because T07/probe code reads it here.
 static func ev_curve_bias(ev100: float) -> float:
-	if EV_CURVE_POINTS.is_empty():
-		return 0.0
-	if ev100 <= EV_CURVE_POINTS[0].x:
-		return EV_CURVE_POINTS[0].y
-	for i: int in range(1, EV_CURVE_POINTS.size()):
-		var a: Vector2 = EV_CURVE_POINTS[i - 1]
-		var b: Vector2 = EV_CURVE_POINTS[i]
-		if ev100 <= b.x:
-			var span: float = b.x - a.x
-			var t: float = 0.0 if is_zero_approx(span) else (ev100 - a.x) / span
-			return lerpf(a.y, b.y, t)
-	return EV_CURVE_POINTS[EV_CURVE_POINTS.size() - 1].y
+	return AutoExposure.ev_curve_bias(ev100)
 
 
 ## Authored UE LightSourceAngle -> Godot DirectionalLight3D.light_angular_distance
@@ -966,6 +962,27 @@ static func apply_environment(env: Environment, moon: DirectionalLight3D, preset
 		if amb_e != null:
 			env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 			env.ambient_light_energy = float(amb_e)
+		# P4.1 IBL stage 1: the authored SkyLight TextureCube -> CPU cosine
+		# irradiance (cubemap_loader.gd). `TAT2_IBL=off` (default) returns
+		# available=false and everything above stays byte-for-byte today's.
+		# `ambient` replaces the flat SkyLight colour with the measured
+		# irradiance; energy is the raw luminance (no AMBIENT_ENERGY_MAX clamp:
+		# stage 1 must not hide its own measurement behind a tuning ceiling).
+		var cm_amb: Dictionary = CubemapLoader.ambient_for_preset(preset)
+		if bool(cm_amb.get("available", false)):
+			env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+			env.ambient_light_color = cm_amb.get("color", env.ambient_light_color) as Color
+			env.ambient_light_energy = float(cm_amb.get("energy", env.ambient_light_energy))
+			if not _cubemap_ambient_logged:
+				_cubemap_ambient_logged = true
+				print("TAT-2 IBL ambient: mode=%s cubemap=%s energy=%.5f color=(%.4f,%.4f,%.4f) (CPU cosine irradiance, no clamp)" % [
+					str(cm_amb.get("mode", "")),
+					str(cm_amb.get("cubemap", "")),
+					float(cm_amb.get("energy", 0.0)),
+					(env.ambient_light_color as Color).r,
+					(env.ambient_light_color as Color).g,
+					(env.ambient_light_color as Color).b,
+				])
 		var bg: Variant = background_color(preset)
 		if bg != null:
 			env.background_mode = Environment.BG_COLOR
@@ -1007,6 +1024,41 @@ static func apply_environment(env: Environment, moon: DirectionalLight3D, preset
 				EV_CURVE_NIGHT_EV100,
 				ev_curve_bias(EV_CURVE_NIGHT_EV100),
 			])
+		# P4.1a/b authored exposure. `fixed` (default) is exactly the block
+		# above. `model` reads the authored AEM fields + V3 curve at the
+		# documented night anchor through auto_exposure.gd (the single
+		# AEM_CALIBRATION resolves it to the same 1.15); `meter` seeds the same
+		# anchor here and the CompositorEffect controller then adapts on the GPU
+		# calibration run. A non-night preset has no measured scene EV100
+		# without the meter, so the fixed value is kept rather than invented.
+		var aem_mode: String = AutoExposure.mode()
+		if aem_mode != AutoExposure.MODE_FIXED:
+			if is_night_preset(preset):
+				env.tonemap_exposure = AutoExposure.exposure_for_preset(preset, EV_CURVE_NIGHT_EV100)
+			elif not _aem_non_night_logged:
+				_aem_non_night_logged = true
+				print("TAT-2 AEM: mode=%s preset=%s is not a night preset and has no measured scene EV100; keeping the fixed exposure (GPU meter run required)" % [
+					aem_mode, str(preset.get("preset", "?")),
+				])
+			if not _aem_logged:
+				_aem_logged = true
+				var probe_model = AutoExposure.new()
+				probe_model.configure(preset)
+				var pm: Dictionary = probe_model.state()
+				print("TAT-2 AEM: mode=%s preset=%s method=%s min=%.2f max=%.2f speed=%.2f/%.2f bias=%.2f curve=%s authored=%s exposure=%.4f calibration=%.9f" % [
+					aem_mode,
+					str(preset.get("preset", "?")),
+					str(pm.get("method", "")),
+					float(pm.get("min_brightness", 0.0)),
+					float(pm.get("max_brightness", 0.0)),
+					float(pm.get("speed_up", 0.0)),
+					float(pm.get("speed_down", 0.0)),
+					float(pm.get("bias", 0.0)),
+					str(pm.get("bias_curve", "")),
+					str(pm.get("authored", false)),
+					env.tonemap_exposure,
+					float(AutoExposure.AEM_CALIBRATION),
+				])
 		var glow: Variant = glow_intensity(preset)
 		if glow != null:
 			# Den RD cap: indoor Den preset keeps glow on for the warm look
@@ -1077,3 +1129,6 @@ static func cleanup_static_caches() -> void:
 	_preset_cache.clear()
 	_lut_cache.clear()
 	_ibl_state_logged = false
+	_aem_logged = false
+	_aem_non_night_logged = false
+	_cubemap_ambient_logged = false

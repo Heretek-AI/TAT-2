@@ -20,6 +20,12 @@ parent before normalizing.
 
 No numbers are invented: fields absent from the source JSON become null and
 the Godot side leaves the corresponding environment property untouched.
+
+The post-process block also carries the authored auto-exposure chain
+(`auto_exposure_method`, `min_brightness`, `max_brightness`, `speed_up`,
+`speed_down`, `bias_curve`) consumed by `game/src/core/auto_exposure.gd`.
+Base authors -3.5/+1.0/0.5/V1; Base_Skybox overrides Min -10.0, Bias 0.0 and
+the V3 curve, and every shipped night preset inherits Base_Skybox.
 """
 
 import json
@@ -145,6 +151,24 @@ def _ref_path(v):
         p = v.get("ObjectPath") or v.get("AssetPathName")
         if isinstance(p, str) and p:
             return p.split(".")[0]
+    return None
+
+
+def _aem_method(v):
+    """EAutoExposureMethod enum -> 'AEM_Basic' (the serialized enum's tail)."""
+    if isinstance(v, str) and v:
+        return v.split("::", 1)[1] if "::" in v else v
+    return None
+
+
+def _curve_ref_name(v):
+    """CurveFloat object ref -> curve asset name (the `curves.json` key)."""
+    if isinstance(v, dict):
+        obj = v.get("ObjectName")
+        if isinstance(obj, str):
+            match = re.search(r"'([^']+)'", obj)
+            if match:
+                return match.group(1)
     return None
 
 
@@ -410,6 +434,17 @@ def parse_preset(path: Path) -> dict:
             "gamma_highlights": _norm_vec(pps.get("ColorGammaHighlights")),
             "bloom_intensity": _num(pps.get("BloomIntensity")),
             "auto_exposure_bias": _num(pps.get("AutoExposureBias")),
+            # P4.1a authored AEM_Basic (the merged chain: Base authors
+            # -3.5/+1.0/0.5/V1, Base_Skybox overrides Min -10.0, Bias 0.0 and
+            # V3, so the shipped Gloomy preset is -10/+1, 0.2/2.0, 0, V3).
+            # Consumers: game/src/core/auto_exposure.gd; citations in
+            # build/qa/w9/re-b1-exposure.md §1.
+            "auto_exposure_method": _aem_method(pps.get("AutoExposureMethod")),
+            "min_brightness": _num(pps.get("AutoExposureMinBrightness")),
+            "max_brightness": _num(pps.get("AutoExposureMaxBrightness")),
+            "speed_up": _num(pps.get("AutoExposureSpeedUp")),
+            "speed_down": _num(pps.get("AutoExposureSpeedDown")),
+            "bias_curve": _curve_ref_name(pps.get("AutoExposureBiasCurve")),
             "vignette_intensity": _num(pps.get("VignetteIntensity")),
             "white_temp": _num(pps.get("WhiteTemp")),
             "film_slope": _num(pps.get("FilmSlope")),

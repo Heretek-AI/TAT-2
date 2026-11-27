@@ -29,6 +29,7 @@ extract: build-extractor
 	$(EX) materials --overwrite
 	$(EX) audio
 	$(EX) textures
+	$(EX) cubemaps
 	$(EX) anims
 
 anims: build-extractor
@@ -43,7 +44,7 @@ NORMALIZERS := parse_tables parse_curves parse_materials parse_gameplay \
                parse_contracts parse_settings parse_clues parse_quests \
                parse_devices parse_containers parse_interactables parse_loot \
                parse_spawners parse_vfx parse_unlocks parse_hearing \
-               parse_state_tree parse_weather parse_project_ini parse_input \
+               parse_state_tree parse_weather parse_cubemap parse_project_ini parse_input \
                parse_nav parse_collision parse_wwise extract_audio convert_wwise \
                parse_audio_control parse_locres convert_videos parse_anim_meta
 

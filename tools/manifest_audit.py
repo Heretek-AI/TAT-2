@@ -299,6 +299,11 @@ PRODUCERS = (
         ("gen:weather",),
     ),
     Producer(
+        "tools/parse_cubemap.py",
+        "python3 tools/parse_cubemap.py",
+        ("gen:ibl",),
+    ),
+    Producer(
         "tools/parse_vfx.py",
         "python3 tools/parse_vfx.py",
         ("gen:vfx",),

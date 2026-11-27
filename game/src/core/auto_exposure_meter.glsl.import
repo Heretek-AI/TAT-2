@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://c662mu8dghqt6"
+path="res://.godot/imported/auto_exposure_meter.glsl-30ad36410ad1b064d75de511d2690f53.res"
+
+[deps]
+
+source_file="res://src/core/auto_exposure_meter.glsl"
+dest_files=["res://.godot/imported/auto_exposure_meter.glsl-30ad36410ad1b064d75de511d2690f53.res"]
+
+[params]
+

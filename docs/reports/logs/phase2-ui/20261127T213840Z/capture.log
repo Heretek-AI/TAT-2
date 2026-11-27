@@ -1,0 +1,452 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+Vulkan 1.4.357 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 4070 Laptop GPU
+
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+TAT-2 Loc: reverse map built from sources.json (3404 keys)
+TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
+INPUT_TABLE source=generated rows=91 shipping=91 actions=52
+INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
+P5_CAPTURE_START run_id=20261127T213840Z out=/tmp/opencode/p5-ui-captures/20261127T213840Z shots=startscreen,den_hud,wardrobe,ledger,ledger_market,contract_table,prep,briefing,safe_room,crank,doors,key,pause_backdrop,pause sizes=[(1280, 720), (1920, 1080)]
+P5_CAPTURE_SIZE 1280x720
+TAT-2 UI main-menu: theme=res://src/ui/art_nouveau_theme.gd; journal drawer removed (T9)
+FootstepMask: downscaled 1024x1024 -> 128x128 for one-time alpha mask
+FootstepMask: baked one-time alpha mask (128x128, source_alpha=true) from res://assets/ue/Raw/Art/Environment/Props/Containers/Crates/T_Crate_Decal_D.png
+WARNING: [level_loader] level Niagara: 5 placements across 3 systems in 4 chunk nodes (0 sprite-masked, 0 parameter sets, 0 activation-skipped; decode root=res://../extracted/json files=0)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:6740)
+         [1] _store_level_extras (res://src/core/level_loader.gd:6512)
+         [2] load_sublevels (res://src/core/level_loader.gd:6989)
+         [3] _build_3d_backdrop (res://src/ui/main_menu.gd:178)
+         [4] _ready (res://src/ui/main_menu.gd:86)
+         [5] _shot_startscreen (/home/john/.local/share/opencode/worktree/318f41/phase2-ui/build/qa/capture_p5_ui.gd:337)
+         [6] _run (/home/john/.local/share/opencode/worktree/318f41/phase2-ui/build/qa/capture_p5_ui.gd:660)
+         [7] _wait (/home/john/.local/share/opencode/worktree/318f41/phase2-ui/build/qa/capture_p5_ui.gd:78)
+ROUGHNESS_BAKE_MODE on=1 resolution=full cache=process
+WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Default_White' has a colour but no albedo map (albedo_color=(1.0, 1.0, 1.0, 1.0), flat=1)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] get_material_for_ue (res://src/core/level_loader.gd:1801)
+         [1] _bind_glb_materials (res://src/core/level_loader.gd:2183)
+         [2] _get_mesh_and_shape (res://src/core/level_loader.gd:1976)
+         [3] _build_one_draw_item (res://src/core/level_loader.gd:4702)
+         [4] _build_draw_items (res://src/core/level_loader.gd:5381)
+         [5] load_sublevels (res://src/core/level_loader.gd:6996)
+         [6] _build_3d_backdrop (res://src/ui/main_menu.gd:178)
+         [7] _ready (res://src/ui/main_menu.gd:86)
+         [8] _shot_startscreen (/home/john/.local/share/opencode/worktree/318f41/phase2-ui/build/qa/capture_p5_ui.gd:337)
+         [9] _run (/home/john/.local/share/opencode/worktree/318f41/phase2-ui/build/qa/capture_p5_ui.gd:660)
+         [10] _wait (/home/john/.local/share/opencode/worktree/318f41/phase2-ui/build/qa/capture_p5_ui.gd:78)
+ROUGHNESS_BAKE count=31 pixels=22806528 ms=1728 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
+MESH_RECON authored=3116 applied=3112 duplicate=0 name_skipped=3 wardbox=0 moonshape=1 clamp=68 clamp_worst=4.67x mirrored=444 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0
+MoonPanorama: cached res://assets/ue/Raw/Art/Environment/City/Architecture/BeautifulCorner/Materials/T_Moon_D.png (4096x2048, one decode per session)
+P5_CAPTURE shot=startscreen path=/tmp/opencode/p5-ui-captures/20261127T213840Z/startscreen_p5_1280x720.png w=1280 h=720
+TAT-2 HUD build: id=1 root_children=28 hp_frame=1 hp_fill=1 objectives=1
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'midnight_clear_thieves_den'
+TAT-2 IBL: skylight_cubemap=/Game/MaterialLibrary/Utility/Cubemap_GroundFloor_01 converted=res://assets/ue/Raw/MaterialLibrary/Utility/Cubemap_GroundFloor_01.exr available=false sky_contribution=0.0 gi=ssil ao=true
+TAT-2 exposure: preset=midnight_clear_thieves_den mode=AGX exposure=1.500 authored_bias=0.5 ev100_night=-3.0 authored_curve_bias=-4.00 (curve recorded, not applied)
+TAT-2 environment: bg=2 ambient_src=2 ambient_energy=0.07999999821186 ambient_color=(0.851, 0.9922, 1.0, 1.0) sky=true fog=true fog_density=0.00899999961257
+TAT-2 run clock: map=thieves_den hub=no_mission_clock main_s=0.0 endgame_s=0.0
+WARNING: [level_loader] level Niagara: 10 placements across 1 systems in 2 chunk nodes (0 sprite-masked, 10 parameter sets, 13 activation-skipped; decode root=res://../extracted/json files=4)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:6740)
+         [1] _store_level_extras (res://src/core/level_loader.gd:6512)
+         [2] load_sublevels_async (res://src/core/level_loader.gd:7081)
+WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Default_White' has a colour but no albedo map (albedo_color=(1.0, 1.0, 1.0, 1.0), flat=1)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] get_material_for_ue (res://src/core/level_loader.gd:1801)
+         [1] _bind_glb_materials (res://src/core/level_loader.gd:2183)
+         [2] _get_mesh_and_shape (res://src/core/level_loader.gd:1976)
+         [3] _build_one_draw_item (res://src/core/level_loader.gd:4702)
+         [4] load_sublevels_async (res://src/core/level_loader.gd:7106)
+AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=385
+ROUGHNESS_BAKE count=34 pixels=25690112 ms=2229 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
+MESH_RECON authored=2440 applied=2434 duplicate=5 name_skipped=0 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.38x mirrored=2 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0
+TAT-2 Loaded thieves_den: meshes=2434 lights=13
+TAT-2 post_process 'PostProcessVolume_1' carries only Lumen/UE-only settings (LumenSkylightLeaking, LumenFullSkylightLeakingDistance, LocalExposureHighlightContrastScale, LocalExposureShadowContrastScale, LocalExposureMiddleGreyBias); nothing Godot-mappable, environment unchanged
+TAT-2 Perf: chunks=793 collision_bodies=88 collision_shapes=3017 occluders=0
+TAT-2 player spawn: source=authored pos=(5.6692, 42.1592, 270.6863) yaw=3.05529569165687 headroom_clear=true forward_clear=true
+TAT-2 Den window staging: source=authored-west-opening anchor=(-6.06, 43.05, 271.4) parsed_windows=1 facing=(-0.848048, 0.0, 0.529919)
+PersistentVfx: 'WindowGodray' caller-owned (ttl<=0); live=1 total=1 (freed with parent; live count via persistent_vfx_count())
+TAT-2 Den KF10 desk spot: energy=2.0 pos=(3.6446, 41.803, 267.8289) range=6.48999977111816 cone=80.0 aimed_at=(2.769, 41.1737, 268.0207)
+TAT-2 Den parchment emission: node=@MeshInstance3D@1406 energy=0.2
+WispCap: wisp light energy=0.3 cap=0.65
+TAT-2 den spawn hub-facing: misalign_before_deg=127.6 rotated_to_face=true table=(2.769, 41.1137, 268.0207)
+TAT-2 spawners: throwable=0 ammo=0 health=0 civilian=0
+TAT-2 swinging doors: 1 locked=0
+TAT-2 authored devices: 2 (acoustic_portal=2)
+TAT-2 mission_ready map=thieves_den meshes=2434 lights=13 chunks=793
+P5_MISSION ready map=thieves_den order=1 free_play=false mission= waited=16 doors=1
+P5_CAPTURE shot=den_hud path=/tmp/opencode/p5-ui-captures/20261127T213840Z/den_hud_p5_1280x720.png w=1280 h=720
+P5_CAPTURE shot=wardrobe path=/tmp/opencode/p5-ui-captures/20261127T213840Z/wardrobe_p5_1280x720.png w=1280 h=720
+TAT-2 UI ledger: 68 authored catalog rows, 4 columns, 68 icons
+WARNING: Nodes with non-equal opposite anchors will have their size overridden after _ready(). 
+If you want to set size, change the anchors or consider using set_deferred().
+     at: _set_size (scene/gui/control.cpp:1519)
+     GDScript backtrace (most recent call first):
+         [0] _ready (res://src/ui/ledger_ui.gd:125)
+         [1] open_ledger_ui (res://src/missions/mission_controller.gd:1696)
+         [2] _shot_ledger (/home/john/.local/share/opencode/worktree/318f41/phase2-ui/build/qa/capture_p5_ui.gd:396)
+         [3] _run (/home/john/.local/share/opencode/worktree/318f41/phase2-ui/build/qa/capture_p5_ui.gd:673)
+         [4] _shot_wardrobe (/home/john/.local/share/opencode/worktree/318f41/phase2-ui/build/qa/capture_p5_ui.gd:384)
+         [5] _wait (/home/john/.local/share/opencode/worktree/318f41/phase2-ui/build/qa/capture_p5_ui.gd:78)
+P5_CAPTURE shot=ledger path=/tmp/opencode/p5-ui-captures/20261127T213840Z/ledger_p5_1280x720.png w=1280 h=720
+P5_CAPTURE shot=ledger_market path=/tmp/opencode/p5-ui-captures/20261127T213840Z/ledger_market_p5_1280x720.png w=1280 h=720
+P5_CAPTURE shot=contract_table path=/tmp/opencode/p5-ui-captures/20261127T213840Z/contract_table_p5_1280x720.png w=1280 h=720
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'midnight_clear_mission_lobby'
+TAT-2 IBL: skylight_cubemap=/Game/MaterialLibrary/Utility/Cubemap_GroundFloor_01 converted=res://assets/ue/Raw/MaterialLibrary/Utility/Cubemap_GroundFloor_01.exr available=false sky_contribution=0.0 gi=ssil ao=true
+TAT-2 exposure: preset=midnight_clear_mission_lobby mode=AGX exposure=1.150 authored_bias=-0.5 ev100_night=-3.0 authored_curve_bias=-4.00 (curve recorded, not applied)
+TAT-2 prep grade: tonemap=4 exposure=1.150 ambient=0.350 glow=0.1267 sky=1.000
+FootstepMask: downscaled 1024x1024 -> 128x128 for one-time alpha mask
+FootstepMask: baked one-time alpha mask (128x128, source_alpha=true) from res://assets/ue/Raw/Art/Environment/Props/Containers/Crates/T_Crate_Decal_D.png
+WARNING: [level_loader] level Niagara: 6 placements across 1 systems in 4 chunk nodes (0 sprite-masked, 6 parameter sets, 0 activation-skipped; decode root=res://../extracted/json files=1)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:6740)
+         [1] _store_level_extras (res://src/core/level_loader.gd:6512)
+         [2] load_sublevels (res://src/core/level_loader.gd:6989)
+         [3] _build_stage (res://src/ui/mission_prep_ui.gd:770)
+         [4] _build_all (res://src/ui/mission_prep_ui.gd:432)
+         [5] _ready (res://src/ui/mission_prep_ui.gd:235)
+         [6] _shot_prep (/home/john/.local/share/opencode/worktree/318f41/phase2-ui/build/qa/capture_p5_ui.gd:456)
+         [7] _run (/home/john/.local/share/opencode/worktree/318f41/phase2-ui/build/qa/capture_p5_ui.gd:679)
+         [8] _free_mission (/home/john/.local/share/opencode/worktree/318f41/phase2-ui/build/qa/capture_p5_ui.gd:327)
+         [9] _wait (/home/john/.local/share/opencode/worktree/318f41/phase2-ui/build/qa/capture_p5_ui.gd:78)
+WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Default_White' has a colour but no albedo map (albedo_color=(1.0, 1.0, 1.0, 1.0), flat=1)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] get_material_for_ue (res://src/core/level_loader.gd:1801)
+         [1] _bind_glb_materials (res://src/core/level_loader.gd:2183)
+         [2] _get_mesh_and_shape (res://src/core/level_loader.gd:1976)
+         [3] _build_one_draw_item (res://src/core/level_loader.gd:4702)
+         [4] _build_draw_items (res://src/core/level_loader.gd:5381)
+         [5] load_sublevels (res://src/core/level_loader.gd:6996)
+         [6] _build_stage (res://src/ui/mission_prep_ui.gd:770)
+         [7] _build_all (res://src/ui/mission_prep_ui.gd:432)
+         [8] _ready (res://src/ui/mission_prep_ui.gd:235)
+         [9] _shot_prep (/home/john/.local/share/opencode/worktree/318f41/phase2-ui/build/qa/capture_p5_ui.gd:456)
+         [10] _run (/home/john/.local/share/opencode/worktree/318f41/phase2-ui/build/qa/capture_p5_ui.gd:679)
+         [11] _free_mission (/home/john/.local/share/opencode/worktree/318f41/phase2-ui/build/qa/capture_p5_ui.gd:327)
+         [12] _wait (/home/john/.local/share/opencode/worktree/318f41/phase2-ui/build/qa/capture_p5_ui.gd:78)
+ROUGHNESS_BAKE count=22 pixels=15728640 ms=1238 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
+MESH_RECON authored=2109 applied=2105 duplicate=0 name_skipped=4 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.00x mirrored=146 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0
+TAT-2 prep skyline: placed 8/8 expansion pieces (group=prep_skyline)
+TAT-2 prep stage: kept=19 hid=399 radius=9.0
+P5_CAPTURE shot=prep path=/tmp/opencode/p5-ui-captures/20261127T213840Z/prep_p5_1280x720.png w=1280 h=720
+TAT-2 HUD build: id=2 root_children=29 hp_frame=1 hp_fill=1 objectives=1
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'gloomy'
+TAT-2 exposure: preset=gloomy mode=AGX exposure=1.150 authored_bias=0.0 ev100_night=-3.0 authored_curve_bias=-4.00 (curve recorded, not applied)
+TAT-2 environment: bg=2 ambient_src=2 ambient_energy=0.15999999642372 ambient_color=(1.0, 1.0, 1.0, 1.0) sky=true fog=true fog_density=0.00480000022799
+TAT-2 P1-SAFE dressing: anchor=(126.29, 25.0, -2.28) portal=portal lantern=lantern flyer=spider_flyer missing_meshes=0 missing_materials=0
+TAT-2 scene variants selected=104 seed=1176381077
+TAT-2 run clock: map=guildhall mission=Mission.Guildhall.LootTheRoom main_s=3300.0 main_source=mission_row endgame_s=1200.0 endgame_source=KF13
+TAT-2 light allocation: map=guildhall authored=914 kept=159 budget=159 forced=7 rooms=152/187 cell_m=16.0
+TAT-2 gate lights: total=160 (generic=159 rect=1) budget=159 forced=7 hero_shadows=6
+WARNING: [level_loader] level Niagara: 452 placements across 8 systems in 66 chunk nodes (2 sprite-masked, 376 parameter sets, 1348 activation-skipped; decode root=res://../extracted/json files=46)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:6740)
+         [1] _store_level_extras (res://src/core/level_loader.gd:6512)
+         [2] load_sublevels_async (res://src/core/level_loader.gd:7081)
+WARNING: [level_loader] material flat white: '/Engine/BasicShapes/BasicShapeMaterial' has a colour but no albedo map (albedo_color=(0.9547, 0.9547, 0.9547, 1.0), flat=3)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] get_material_for_ue (res://src/core/level_loader.gd:1801)
+         [1] _get_overridden_mesh (res://src/core/level_loader.gd:2426)
+         [2] _build_one_draw_item (res://src/core/level_loader.gd:4748)
+         [3] load_sublevels_async (res://src/core/level_loader.gd:7106)
+WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Default_White' has a colour but no albedo map (albedo_color=(1.0, 1.0, 1.0, 1.0), flat=6)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] get_material_for_ue (res://src/core/level_loader.gd:1801)
+         [1] _bind_glb_materials (res://src/core/level_loader.gd:2183)
+         [2] _get_mesh_and_shape (res://src/core/level_loader.gd:1976)
+         [3] _build_one_draw_item (res://src/core/level_loader.gd:4702)
+         [4] load_sublevels_async (res://src/core/level_loader.gd:7106)
+COL_PLANAR /Game/Art/Effects/WardZones/SM_SlowWardZone_Quad instances=82 skipped=1
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=385
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=5780 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
+BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
+MESH_RECON authored=64953 applied=64682 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=206 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0
+MATERIAL_EMISSIVE invented_white=1 names=/Game/Art/Environment/Lights/Candles/MI_FlameCandleOrangeB
+PERF_CENSUS meshes=6425 instances=65129 chunk_nodes=6337 plain=2773 multimesh=3652 surface_draws=11451 lights=170 shadow_lights=7 occluders=768 collision_bodies=243 collision_shapes=31049 periph_nodes=3218 periph_instances=13446 periph_surface_draws=6186 periph_plain=1548 periph_multimesh=1670 periph_range=0 merge_mode=off merge_candidates=0 merge_nodes=0 merge_surfaces_before=0 merge_surfaces_after=0 light_budget=160 hero_shadows=6 source_sublevels={ "Guildhall_Landscape": 677, "Building_Guildhall_POI": 9847, "Guildhall_Geometry": 567, "Guildhall_Vault_CeremonialChambers": 908, "Guildhall_PeripheryA": 12378, "Building_Guildhall_POI_3rdFloor": 3624, "Guildhall_Gameplay": 2690, "Guildhall_P": 80, "Guildhall_LightingNoGameplay": 164, "Guildhall_Loot": 175, "Guildhall_SkyboxGeo": 33547 }
+TAT-2 Loaded guildhall: meshes=64682 lights=160
+TAT-2 KF16 car lenses: node=@MeshInstance3D@44351 dist=0.0 glass_surface=1 emission=1.0,0.6186,0.2552 energy=2.0
+TAT-2 KF16 street car: root=(19.0, 18.5304, 66.3382) headlights=2 lens=true prompt=INTERACT
+TAT-2 KF17 clocktower: placed GuildhallSkylineClocktower mat=/Game/Art/Environment/Skybox/Buildings/ML/MI_DistantBuidingA
+TAT-2 KF16 sign letters: node=@MeshInstance3D@44727 surface=1 emission=(1.0, 0.62, 0.2, 1.0) energy=0.10000000149012 albedo=(1.0, 0.6848, 0.2726, 1.0)
+P1_FOYER_DRESSING parts=bulbs,node,plaques,plate bulb_items=11 cyan_node_items=0 cyan_node_created=1 plaque_labels=2 floor_plate=1 floor_plate_approx=1
+TAT-2 KF23 Macleod sign: nodes=3 emission=(1.0, 0.361, 0.078, 1.0) energy=4.0 source=/Game/Art/Effects/HotWire_Ride/M_Crystal_Glow
+TAT-2 Perf: chunks=6337 collision_bodies=243 collision_shapes=31049 occluders=768
+TAT-2 player spawn: source=authored pos=(127.2747, 26.4694, -5.3296) yaw=-3.05432154567525 headroom_clear=true forward_clear=true
+TAT-2 guard spawn: selection=parity_approx_layer_bucket eligible=42 prepared=42 skipped=0 selected=4 from_prepared=4 backfilled=0
+WARNING: [hearing_data] 5 authored investigation-range anomalies clamped: AI.Stim.Hearing.LockPicking.Picked: outer 5.0 m > max 3.0 m (clamped); AI.Stim.Hearing.Alert.ShareKnowledge: outer 30.0 m > max 15.0 m (clamped); AI.Stim.Hearing.Tool.DartLaunch: inner 3.0 m > outer 2.0 m (clamped); AI.Stim.Hearing.EnterExitHedge: outer 8.0 m > max 7.5 m (clamped); AI.Stim.Hearing.Device.SecretSwitch: outer 8.0 m > max 7.5 m (clamped)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _log_anomalies_once (res://src/ai/hearing_data.gd:277)
+         [1] _build_stimuli (res://src/ai/hearing_data.gd:269)
+         [2] ensure_loaded (res://src/ai/hearing_data.gd:187)
+         [3] escalation_row (res://src/ai/hearing_data.gd:615)
+         [4] row (res://src/ai/sight_model.gd:120)
+         [5] escalation_row (res://src/ai/guard_ai.gd:488)
+         [6] _apply_authored_escalation (res://src/ai/guard_ai.gd:527)
+         [7] _ready (res://src/ai/guard_ai.gd:413)
+         [8] _spawn_guards (res://src/missions/mission_controller.gd:4143)
+         [9] start_contract (res://src/missions/mission_controller.gd:929)
+         [10] load_sublevels_async (res://src/core/level_loader.gd:7118)
+TAT-2 loot containers: 107
+TAT-2 loot economy: 20395 >= loot_goal 4000
+TAT-2 clues: spawned=0 set(s)=CLS_Guildhall_LootTheRoom map=guildhall
+PQ_PLACE kind=readable y=pin anchor=library_note yaw=none pin_y=28.0021 floor_y=28.0064 pos=(-26.8541, 28.0021, -9.4431)
+TAT-2 personal quest: map=guildhall thief=spider stage=intro plan=1 spawned=1 anchors=library_note
+TAT-2 escape markers: authored=14 spawned=14 grounded=14 connected=14 phase=main
+WARNING: [civilian_npc] navmesh snap deferred: query landed before first map sync (deferred=1); target fails open until sync
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _is_target_valid (res://src/ai/civilian_npc.gd:653)
+         [1] _pick_new_target (res://src/ai/civilian_npc.gd:615)
+         [2] _ready (res://src/ai/civilian_npc.gd:155)
+         [3] _spawn_civilians (res://src/missions/mission_controller.gd:4986)
+         [4] _spawn_spawner_content (res://src/missions/mission_controller.gd:4958)
+         [5] start_contract (res://src/missions/mission_controller.gd:939)
+         [6] load_sublevels_async (res://src/core/level_loader.gd:7118)
+TAT-2 spawners: throwable=133 ammo=45 health=5 civilian=3
+TAT-2 swinging doors: 155 locked=2
+TAT-2 authored devices: 903 (alarm_eye=60, goo_pipe=90, junction=11, light_beam=134, noise_alarm=96, power_switch=29, power_wall=9, pressure_plate=162, turret=229, vault_door=6, ward_blocker=36, ward_slow=41)
+P1_WARD_LOCKDOWN wired ward=Guildhall_Gameplay:BP_WardZone_Blocker_C_31 beam=Guildhall_Gameplay:BP_Detector_LightBeam_C_117 alarm=Guildhall_Gameplay:BP_MagicAlarm_LongRange_Narrow_C_38 shards=233 vine=(30.7, 28.0, -47.1)
+TAT-2 briefing: mission=Mission.Guildhall.LootTheRoom table=ST_Missions_Guildhall_LootTheRoom key=Guildhall.LootTheRoom.Briefing match_s=3300.0 endgame_s=1200.0 endgame_source=KF13 lines=3
+TAT-2 mission_ready map=guildhall meshes=64682 lights=160 chunks=6337
+WARNING: [nav_steering] no synchronised navigation map (no NavigationRegion3D baked for this map); AI uses straight-line steering and will press into corners. Navmesh baking is T09's; this is the documented degradation (RE-I-10).
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_degraded (res://src/ai/nav_steering.gd:181)
+         [1] step_towards (res://src/ai/nav_steering.gd:141)
+         [2] _move_ai (res://src/ai/guard_ai.gd:1608)
+         [3] _physics_process (res://src/ai/guard_ai.gd:1540)
+P5_MISSION ready map=guildhall order=2 free_play=true mission=Mission.Guildhall.LootTheRoom waited=128 doors=155
+P5_CAPTURE shot=briefing path=/tmp/opencode/p5-ui-captures/20261127T213840Z/briefing_p5_1280x720.png w=1280 h=720
+P5_CAPTURE shot=safe_room path=/tmp/opencode/p5-ui-captures/20261127T213840Z/safe_room_p5_1280x720.png w=1280 h=720
+P5_CAPTURE shot=crank path=/tmp/opencode/p5-ui-captures/20261127T213840Z/crank_p5_1280x720.png w=1280 h=720
+P5_CAPTURE shot=doors path=/tmp/opencode/p5-ui-captures/20261127T213840Z/doors_p5_1280x720.png w=1280 h=720
+P5_CAPTURE shot=key path=/tmp/opencode/p5-ui-captures/20261127T213840Z/key_p5_1280x720.png w=1280 h=720
+P5_CAPTURE shot=pause_backdrop path=/tmp/opencode/p5-ui-captures/20261127T213840Z/pause_backdrop_p5_1280x720.png w=1280 h=720
+P5_CAPTURE shot=pause path=/tmp/opencode/p5-ui-captures/20261127T213840Z/pause_p5_1280x720.png w=1280 h=720
+P5_CAPTURE_SIZE 1920x1080
+TAT-2 UI main-menu: theme=res://src/ui/art_nouveau_theme.gd; journal drawer removed (T9)
+FootstepMask: downscaled 1024x1024 -> 128x128 for one-time alpha mask
+FootstepMask: baked one-time alpha mask (128x128, source_alpha=true) from res://assets/ue/Raw/Art/Environment/Props/Containers/Crates/T_Crate_Decal_D.png
+WARNING: [level_loader] level Niagara: 5 placements across 3 systems in 4 chunk nodes (0 sprite-masked, 0 parameter sets, 0 activation-skipped; decode root=res://../extracted/json files=0)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:6740)
+         [1] _store_level_extras (res://src/core/level_loader.gd:6512)
+         [2] load_sublevels (res://src/core/level_loader.gd:6989)
+         [3] _build_3d_backdrop (res://src/ui/main_menu.gd:178)
+         [4] _ready (res://src/ui/main_menu.gd:86)
+         [5] _shot_startscreen (/home/john/.local/share/opencode/worktree/318f41/phase2-ui/build/qa/capture_p5_ui.gd:337)
+         [6] _run (/home/john/.local/share/opencode/worktree/318f41/phase2-ui/build/qa/capture_p5_ui.gd:660)
+         [7] _wait (/home/john/.local/share/opencode/worktree/318f41/phase2-ui/build/qa/capture_p5_ui.gd:78)
+WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Default_White' has a colour but no albedo map (albedo_color=(1.0, 1.0, 1.0, 1.0), flat=1)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] get_material_for_ue (res://src/core/level_loader.gd:1801)
+         [1] _bind_glb_materials (res://src/core/level_loader.gd:2183)
+         [2] _get_mesh_and_shape (res://src/core/level_loader.gd:1976)
+         [3] _build_one_draw_item (res://src/core/level_loader.gd:4702)
+         [4] _build_draw_items (res://src/core/level_loader.gd:5381)
+         [5] load_sublevels (res://src/core/level_loader.gd:6996)
+         [6] _build_3d_backdrop (res://src/ui/main_menu.gd:178)
+         [7] _ready (res://src/ui/main_menu.gd:86)
+         [8] _shot_startscreen (/home/john/.local/share/opencode/worktree/318f41/phase2-ui/build/qa/capture_p5_ui.gd:337)
+         [9] _run (/home/john/.local/share/opencode/worktree/318f41/phase2-ui/build/qa/capture_p5_ui.gd:660)
+         [10] _wait (/home/john/.local/share/opencode/worktree/318f41/phase2-ui/build/qa/capture_p5_ui.gd:78)
+ROUGHNESS_BAKE count=31 pixels=22806528 ms=1845 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
+MESH_RECON authored=3116 applied=3112 duplicate=0 name_skipped=3 wardbox=0 moonshape=1 clamp=68 clamp_worst=4.67x mirrored=444 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0
+P5_CAPTURE shot=startscreen path=/tmp/opencode/p5-ui-captures/20261127T213840Z/startscreen_p5_1920x1080.png w=1920 h=1080
+TAT-2 HUD build: id=3 root_children=28 hp_frame=1 hp_fill=1 objectives=1
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'midnight_clear_thieves_den'
+TAT-2 IBL: skylight_cubemap=/Game/MaterialLibrary/Utility/Cubemap_GroundFloor_01 converted=res://assets/ue/Raw/MaterialLibrary/Utility/Cubemap_GroundFloor_01.exr available=false sky_contribution=0.0 gi=ssil ao=true
+TAT-2 exposure: preset=midnight_clear_thieves_den mode=AGX exposure=1.500 authored_bias=0.5 ev100_night=-3.0 authored_curve_bias=-4.00 (curve recorded, not applied)
+TAT-2 environment: bg=2 ambient_src=2 ambient_energy=0.07999999821186 ambient_color=(0.851, 0.9922, 1.0, 1.0) sky=true fog=true fog_density=0.00899999961257
+TAT-2 run clock: map=thieves_den hub=no_mission_clock main_s=0.0 endgame_s=0.0
+WARNING: [level_loader] level Niagara: 10 placements across 1 systems in 2 chunk nodes (0 sprite-masked, 10 parameter sets, 13 activation-skipped; decode root=res://../extracted/json files=4)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:6740)
+         [1] _store_level_extras (res://src/core/level_loader.gd:6512)
+         [2] load_sublevels_async (res://src/core/level_loader.gd:7081)
+WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Default_White' has a colour but no albedo map (albedo_color=(1.0, 1.0, 1.0, 1.0), flat=1)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] get_material_for_ue (res://src/core/level_loader.gd:1801)
+         [1] _bind_glb_materials (res://src/core/level_loader.gd:2183)
+         [2] _get_mesh_and_shape (res://src/core/level_loader.gd:1976)
+         [3] _build_one_draw_item (res://src/core/level_loader.gd:4702)
+         [4] load_sublevels_async (res://src/core/level_loader.gd:7106)
+AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=385
+ROUGHNESS_BAKE count=34 pixels=25690112 ms=2147 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
+MESH_RECON authored=2440 applied=2434 duplicate=5 name_skipped=0 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.38x mirrored=2 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0
+TAT-2 Loaded thieves_den: meshes=2434 lights=13
+TAT-2 post_process 'PostProcessVolume_1' carries only Lumen/UE-only settings (LumenSkylightLeaking, LumenFullSkylightLeakingDistance, LocalExposureHighlightContrastScale, LocalExposureShadowContrastScale, LocalExposureMiddleGreyBias); nothing Godot-mappable, environment unchanged
+TAT-2 Perf: chunks=793 collision_bodies=88 collision_shapes=3017 occluders=0
+TAT-2 player spawn: source=authored pos=(5.6692, 42.1592, 270.6863) yaw=3.05529569165687 headroom_clear=true forward_clear=true
+TAT-2 Den window staging: source=authored-west-opening anchor=(-6.06, 43.05, 271.4) parsed_windows=1 facing=(-0.848048, 0.0, 0.529919)
+TAT-2 Den KF10 desk spot: energy=2.0 pos=(3.6446, 41.803, 267.8289) range=6.48999977111816 cone=80.0 aimed_at=(2.769, 41.1737, 268.0207)
+TAT-2 Den parchment emission: node=@MeshInstance3D@49516 energy=0.2
+WispCap: wisp light energy=0.3 cap=0.65
+TAT-2 den spawn hub-facing: misalign_before_deg=127.6 rotated_to_face=true table=(2.769, 41.1137, 268.0207)
+TAT-2 spawners: throwable=0 ammo=0 health=0 civilian=0
+TAT-2 swinging doors: 1 locked=0
+TAT-2 authored devices: 2 (acoustic_portal=2)
+TAT-2 mission_ready map=thieves_den meshes=2434 lights=13 chunks=793
+P5_MISSION ready map=thieves_den order=1 free_play=false mission= waited=16 doors=1
+P5_CAPTURE shot=den_hud path=/tmp/opencode/p5-ui-captures/20261127T213840Z/den_hud_p5_1920x1080.png w=1920 h=1080
+P5_CAPTURE shot=wardrobe path=/tmp/opencode/p5-ui-captures/20261127T213840Z/wardrobe_p5_1920x1080.png w=1920 h=1080
+TAT-2 UI ledger: 68 authored catalog rows, 4 columns, 68 icons
+WARNING: Nodes with non-equal opposite anchors will have their size overridden after _ready(). 
+If you want to set size, change the anchors or consider using set_deferred().
+     at: _set_size (scene/gui/control.cpp:1519)
+     GDScript backtrace (most recent call first):
+         [0] _ready (res://src/ui/ledger_ui.gd:125)
+         [1] open_ledger_ui (res://src/missions/mission_controller.gd:1696)
+         [2] _shot_ledger (/home/john/.local/share/opencode/worktree/318f41/phase2-ui/build/qa/capture_p5_ui.gd:396)
+         [3] _run (/home/john/.local/share/opencode/worktree/318f41/phase2-ui/build/qa/capture_p5_ui.gd:673)
+         [4] _shot_wardrobe (/home/john/.local/share/opencode/worktree/318f41/phase2-ui/build/qa/capture_p5_ui.gd:384)
+         [5] _wait (/home/john/.local/share/opencode/worktree/318f41/phase2-ui/build/qa/capture_p5_ui.gd:78)
+P5_CAPTURE shot=ledger path=/tmp/opencode/p5-ui-captures/20261127T213840Z/ledger_p5_1920x1080.png w=1920 h=1080
+P5_CAPTURE shot=ledger_market path=/tmp/opencode/p5-ui-captures/20261127T213840Z/ledger_market_p5_1920x1080.png w=1920 h=1080
+P5_CAPTURE shot=contract_table path=/tmp/opencode/p5-ui-captures/20261127T213840Z/contract_table_p5_1920x1080.png w=1920 h=1080
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'midnight_clear_mission_lobby'
+TAT-2 IBL: skylight_cubemap=/Game/MaterialLibrary/Utility/Cubemap_GroundFloor_01 converted=res://assets/ue/Raw/MaterialLibrary/Utility/Cubemap_GroundFloor_01.exr available=false sky_contribution=0.0 gi=ssil ao=true
+TAT-2 exposure: preset=midnight_clear_mission_lobby mode=AGX exposure=1.150 authored_bias=-0.5 ev100_night=-3.0 authored_curve_bias=-4.00 (curve recorded, not applied)
+TAT-2 prep grade: tonemap=4 exposure=1.150 ambient=0.350 glow=0.1267 sky=1.000
+FootstepMask: downscaled 1024x1024 -> 128x128 for one-time alpha mask
+FootstepMask: baked one-time alpha mask (128x128, source_alpha=true) from res://assets/ue/Raw/Art/Environment/Props/Containers/Crates/T_Crate_Decal_D.png
+WARNING: [level_loader] level Niagara: 6 placements across 1 systems in 4 chunk nodes (0 sprite-masked, 6 parameter sets, 0 activation-skipped; decode root=res://../extracted/json files=1)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:6740)
+         [1] _store_level_extras (res://src/core/level_loader.gd:6512)
+         [2] load_sublevels (res://src/core/level_loader.gd:6989)
+         [3] _build_stage (res://src/ui/mission_prep_ui.gd:770)
+         [4] _build_all (res://src/ui/mission_prep_ui.gd:432)
+         [5] _ready (res://src/ui/mission_prep_ui.gd:235)
+         [6] _shot_prep (/home/john/.local/share/opencode/worktree/318f41/phase2-ui/build/qa/capture_p5_ui.gd:456)
+         [7] _run (/home/john/.local/share/opencode/worktree/318f41/phase2-ui/build/qa/capture_p5_ui.gd:679)
+         [8] _free_mission (/home/john/.local/share/opencode/worktree/318f41/phase2-ui/build/qa/capture_p5_ui.gd:327)
+         [9] _wait (/home/john/.local/share/opencode/worktree/318f41/phase2-ui/build/qa/capture_p5_ui.gd:78)
+WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Default_White' has a colour but no albedo map (albedo_color=(1.0, 1.0, 1.0, 1.0), flat=1)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] get_material_for_ue (res://src/core/level_loader.gd:1801)
+         [1] _bind_glb_materials (res://src/core/level_loader.gd:2183)
+         [2] _get_mesh_and_shape (res://src/core/level_loader.gd:1976)
+         [3] _build_one_draw_item (res://src/core/level_loader.gd:4702)
+         [4] _build_draw_items (res://src/core/level_loader.gd:5381)
+         [5] load_sublevels (res://src/core/level_loader.gd:6996)
+         [6] _build_stage (res://src/ui/mission_prep_ui.gd:770)
+         [7] _build_all (res://src/ui/mission_prep_ui.gd:432)
+         [8] _ready (res://src/ui/mission_prep_ui.gd:235)
+         [9] _shot_prep (/home/john/.local/share/opencode/worktree/318f41/phase2-ui/build/qa/capture_p5_ui.gd:456)
+         [10] _run (/home/john/.local/share/opencode/worktree/318f41/phase2-ui/build/qa/capture_p5_ui.gd:679)
+         [11] _free_mission (/home/john/.local/share/opencode/worktree/318f41/phase2-ui/build/qa/capture_p5_ui.gd:327)
+         [12] _wait (/home/john/.local/share/opencode/worktree/318f41/phase2-ui/build/qa/capture_p5_ui.gd:78)
+ROUGHNESS_BAKE count=22 pixels=15728640 ms=1264 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
+MESH_RECON authored=2109 applied=2105 duplicate=0 name_skipped=4 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.00x mirrored=146 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0
+TAT-2 prep skyline: placed 8/8 expansion pieces (group=prep_skyline)
+TAT-2 prep stage: kept=19 hid=399 radius=9.0
+P5_CAPTURE shot=prep path=/tmp/opencode/p5-ui-captures/20261127T213840Z/prep_p5_1920x1080.png w=1920 h=1080
+TAT-2 HUD build: id=4 root_children=29 hp_frame=1 hp_fill=1 objectives=1
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'gloomy'
+TAT-2 exposure: preset=gloomy mode=AGX exposure=1.150 authored_bias=0.0 ev100_night=-3.0 authored_curve_bias=-4.00 (curve recorded, not applied)
+TAT-2 environment: bg=2 ambient_src=2 ambient_energy=0.15999999642372 ambient_color=(1.0, 1.0, 1.0, 1.0) sky=true fog=true fog_density=0.00480000022799
+TAT-2 P1-SAFE dressing: anchor=(126.29, 25.0, -2.28) portal=portal lantern=lantern flyer=spider_flyer missing_meshes=0 missing_materials=0
+TAT-2 scene variants selected=104 seed=1176381077
+TAT-2 run clock: map=guildhall mission=Mission.Guildhall.LootTheRoom main_s=3300.0 main_source=mission_row endgame_s=1200.0 endgame_source=KF13
+TAT-2 light allocation: map=guildhall authored=914 kept=159 budget=159 forced=7 rooms=152/187 cell_m=16.0
+TAT-2 gate lights: total=160 (generic=159 rect=1) budget=159 forced=7 hero_shadows=6
+WARNING: [level_loader] level Niagara: 452 placements across 8 systems in 66 chunk nodes (2 sprite-masked, 376 parameter sets, 1348 activation-skipped; decode root=res://../extracted/json files=46)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:6740)
+         [1] _store_level_extras (res://src/core/level_loader.gd:6512)
+         [2] load_sublevels_async (res://src/core/level_loader.gd:7081)
+WARNING: [level_loader] material flat white: '/Engine/BasicShapes/BasicShapeMaterial' has a colour but no albedo map (albedo_color=(0.9547, 0.9547, 0.9547, 1.0), flat=3)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] get_material_for_ue (res://src/core/level_loader.gd:1801)
+         [1] _get_overridden_mesh (res://src/core/level_loader.gd:2426)
+         [2] _build_one_draw_item (res://src/core/level_loader.gd:4748)
+         [3] load_sublevels_async (res://src/core/level_loader.gd:7106)
+WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Default_White' has a colour but no albedo map (albedo_color=(1.0, 1.0, 1.0, 1.0), flat=6)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] get_material_for_ue (res://src/core/level_loader.gd:1801)
+         [1] _bind_glb_materials (res://src/core/level_loader.gd:2183)
+         [2] _get_mesh_and_shape (res://src/core/level_loader.gd:1976)
+         [3] _build_one_draw_item (res://src/core/level_loader.gd:4702)
+         [4] load_sublevels_async (res://src/core/level_loader.gd:7106)
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=385
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=6011 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
+BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
+MESH_RECON authored=64953 applied=64682 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=206 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0
+MATERIAL_EMISSIVE invented_white=1 names=/Game/Art/Environment/Lights/Candles/MI_FlameCandleOrangeB
+PERF_CENSUS meshes=6425 instances=65129 chunk_nodes=6337 plain=2773 multimesh=3652 surface_draws=11451 lights=170 shadow_lights=7 occluders=768 collision_bodies=243 collision_shapes=31049 periph_nodes=3218 periph_instances=13446 periph_surface_draws=6186 periph_plain=1548 periph_multimesh=1670 periph_range=0 merge_mode=off merge_candidates=0 merge_nodes=0 merge_surfaces_before=0 merge_surfaces_after=0 light_budget=160 hero_shadows=6 source_sublevels={ "Guildhall_Landscape": 677, "Building_Guildhall_POI": 9847, "Guildhall_Geometry": 567, "Guildhall_Vault_CeremonialChambers": 908, "Guildhall_PeripheryA": 12378, "Building_Guildhall_POI_3rdFloor": 3624, "Guildhall_Gameplay": 2690, "Guildhall_P": 80, "Guildhall_LightingNoGameplay": 164, "Guildhall_Loot": 175, "Guildhall_SkyboxGeo": 33547 }
+TAT-2 Loaded guildhall: meshes=64682 lights=160
+TAT-2 KF16 car lenses: node=@MeshInstance3D@92461 dist=0.0 glass_surface=1 emission=1.0,0.6186,0.2552 energy=2.0
+TAT-2 KF16 street car: root=(19.0, 18.5304, 66.3382) headlights=2 lens=true prompt=INTERACT
+TAT-2 KF17 clocktower: placed GuildhallSkylineClocktower mat=/Game/Art/Environment/Skybox/Buildings/ML/MI_DistantBuidingA
+TAT-2 KF16 sign letters: node=@MeshInstance3D@92837 surface=1 emission=(1.0, 0.62, 0.2, 1.0) energy=0.10000000149012 albedo=(1.0, 0.6848, 0.2726, 1.0)
+P1_FOYER_DRESSING parts=bulbs,node,plaques,plate bulb_items=11 cyan_node_items=0 cyan_node_created=1 plaque_labels=2 floor_plate=1 floor_plate_approx=1
+TAT-2 KF23 Macleod sign: nodes=3 emission=(1.0, 0.361, 0.078, 1.0) energy=4.0 source=/Game/Art/Effects/HotWire_Ride/M_Crystal_Glow
+TAT-2 Perf: chunks=6337 collision_bodies=243 collision_shapes=31049 occluders=768
+TAT-2 player spawn: source=authored pos=(127.2747, 26.4694, -5.3296) yaw=-3.05432154567525 headroom_clear=true forward_clear=true
+TAT-2 guard spawn: selection=parity_approx_layer_bucket eligible=42 prepared=42 skipped=0 selected=4 from_prepared=4 backfilled=0
+TAT-2 loot containers: 107
+TAT-2 loot economy: 20395 >= loot_goal 4000
+TAT-2 clues: spawned=0 set(s)=CLS_Guildhall_LootTheRoom map=guildhall
+PQ_PLACE kind=readable y=pin anchor=library_note yaw=none pin_y=28.0021 floor_y=28.0064 pos=(-26.8541, 28.0021, -9.4431)
+TAT-2 personal quest: map=guildhall thief=spider stage=intro plan=1 spawned=1 anchors=library_note
+TAT-2 escape markers: authored=14 spawned=14 grounded=14 connected=14 phase=main
+TAT-2 spawners: throwable=133 ammo=45 health=5 civilian=3
+TAT-2 swinging doors: 155 locked=2
+TAT-2 authored devices: 903 (alarm_eye=60, goo_pipe=90, junction=11, light_beam=134, noise_alarm=96, power_switch=29, power_wall=9, pressure_plate=162, turret=229, vault_door=6, ward_blocker=36, ward_slow=41)
+P1_WARD_LOCKDOWN wired ward=Guildhall_Gameplay:BP_WardZone_Blocker_C_31 beam=Guildhall_Gameplay:BP_Detector_LightBeam_C_117 alarm=Guildhall_Gameplay:BP_MagicAlarm_LongRange_Narrow_C_38 shards=233 vine=(30.7, 28.0, -47.1)
+TAT-2 briefing: mission=Mission.Guildhall.LootTheRoom table=ST_Missions_Guildhall_LootTheRoom key=Guildhall.LootTheRoom.Briefing match_s=3300.0 endgame_s=1200.0 endgame_source=KF13 lines=3
+TAT-2 mission_ready map=guildhall meshes=64682 lights=160 chunks=6337
+P5_MISSION ready map=guildhall order=2 free_play=true mission=Mission.Guildhall.LootTheRoom waited=128 doors=155
+P5_CAPTURE shot=briefing path=/tmp/opencode/p5-ui-captures/20261127T213840Z/briefing_p5_1920x1080.png w=1920 h=1080
+P5_CAPTURE shot=safe_room path=/tmp/opencode/p5-ui-captures/20261127T213840Z/safe_room_p5_1920x1080.png w=1920 h=1080
+P5_CAPTURE shot=crank path=/tmp/opencode/p5-ui-captures/20261127T213840Z/crank_p5_1920x1080.png w=1920 h=1080
+P5_CAPTURE shot=doors path=/tmp/opencode/p5-ui-captures/20261127T213840Z/doors_p5_1920x1080.png w=1920 h=1080
+P5_CAPTURE shot=key path=/tmp/opencode/p5-ui-captures/20261127T213840Z/key_p5_1920x1080.png w=1920 h=1080
+P5_CAPTURE shot=pause_backdrop path=/tmp/opencode/p5-ui-captures/20261127T213840Z/pause_backdrop_p5_1920x1080.png w=1920 h=1080
+P5_CAPTURE shot=pause path=/tmp/opencode/p5-ui-captures/20261127T213840Z/pause_p5_1920x1080.png w=1920 h=1080
+P5_CAPTURE_DONE run_id=20261127T213840Z captures=28 failures=0 out=/tmp/opencode/p5-ui-captures/20261127T213840Z
+WARNING: 7 RIDs of type "Texture" were leaked.
+   at: finalize (servers/rendering/rendering_device.cpp:8900)
+CAPTURE_EXIT=0

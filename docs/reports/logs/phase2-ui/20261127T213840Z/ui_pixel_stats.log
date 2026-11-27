@@ -1,0 +1,54 @@
+UI_PIXEL_STATS dir=/tmp/opencode/p5-ui-captures/20261127T213840Z frames=28
+  briefing@1280x720  briefing lines=11 last_y=484 margin=95 overflow=False
+  briefing@1920x1080  briefing lines=10 last_y=727 margin=142 overflow=False
+  contract_table@1280x720  legend contrast=7.21 ink=780 clip=left,top
+  contract_table@1920x1080  legend contrast=5.54 ink=1666 clip=left,top
+  crank@1280x720  gem lit=0.024 ang=-46.64 dir=[0.6865, -0.7271] ring=6px  GEM_ANGLE_ERR=90.3  prompt contrast=3.62 ink=2069 clip=top,bottom
+  crank@1920x1080  gem lit=0.023 ang=-48.28 dir=[0.6655, -0.7464] ring=9px  GEM_ANGLE_ERR=88.6  prompt contrast=4.35 ink=4022 clip=top,bottom
+  den_hud@1280x720  compass rule_row=52 thick=7 span=311 heading=NW
+  den_hud@1920x1080  compass rule_row=80 thick=9 span=466 heading=NW
+  doors@1280x720  prompt contrast=3.07 ink=1306 clip=top,bottom  prompt_secondary contrast=3.77 ink=964 clip=top,bottom
+  doors@1920x1080  prompt contrast=3.81 ink=2584 clip=top,bottom  prompt_secondary contrast=4.52 ink=1760 clip=top,bottom
+  key@1280x720  key_row contrast=3.42 ink=77 clip=bottom
+  key@1920x1080  key_row contrast=3.62 ink=161 clip=bottom
+  ledger@1280x720  tabs contrast=7.75 ink=1457 clip=bottom
+  ledger@1920x1080  tabs contrast=7.64 ink=3464 clip=bottom
+  ledger_market@1280x720  tabs contrast=8.08 ink=1492 clip=bottom
+  ledger_market@1920x1080  tabs contrast=7.75 ink=3590 clip=bottom
+  pause@1280x720  footer contrast=1.10 ink=0 clip=-  modal contrast=5.85 ink=2938 clip=-  pause dim=0.2992 blur=7.8726
+  pause@1920x1080  footer contrast=1.10 ink=0 clip=-  modal contrast=5.85 ink=7202 clip=-  pause dim=0.3084 blur=6.5834
+  pause_backdrop@1280x720
+  pause_backdrop@1920x1080
+  prep@1280x720  prompt contrast=7.88 ink=543 clip=left,top,bottom  cards contrast=8.35 ink=6262 clip=left,top,bottom
+  prep@1920x1080  prompt contrast=7.83 ink=1075 clip=left,top,bottom  cards contrast=8.33 ink=13170 clip=left,top
+  safe_room@1280x720  gem lit=0.080 ang=-66.19 dir=[0.4037, -0.9149] ring=5px
+  safe_room@1920x1080  gem lit=0.081 ang=-64.28 dir=[0.4339, -0.9009] ring=3px
+  startscreen@1280x720
+  startscreen@1920x1080
+  wardrobe@1280x720
+  wardrobe@1920x1080
+UI_PIXEL_STATS FAIL contract_table@1280x720 legend text clipped at left,top
+UI_PIXEL_STATS FAIL contract_table@1920x1080 legend text clipped at left,top
+UI_PIXEL_STATS FAIL crank@1280x720 prompt contrast 3.62 < 4.5
+UI_PIXEL_STATS FAIL crank@1280x720 prompt text clipped at top,bottom
+UI_PIXEL_STATS FAIL crank@1920x1080 prompt contrast 4.35 < 4.5
+UI_PIXEL_STATS FAIL crank@1920x1080 prompt text clipped at top,bottom
+UI_PIXEL_STATS FAIL doors@1280x720 prompt contrast 3.07 < 4.5
+UI_PIXEL_STATS FAIL doors@1280x720 prompt text clipped at top,bottom
+UI_PIXEL_STATS FAIL doors@1280x720 prompt_secondary text clipped at top,bottom
+UI_PIXEL_STATS FAIL doors@1920x1080 prompt contrast 3.81 < 4.5
+UI_PIXEL_STATS FAIL doors@1920x1080 prompt text clipped at top,bottom
+UI_PIXEL_STATS FAIL doors@1920x1080 prompt_secondary text clipped at top,bottom
+UI_PIXEL_STATS FAIL key@1280x720 key_row text clipped at bottom
+UI_PIXEL_STATS FAIL key@1920x1080 key_row text clipped at bottom
+UI_PIXEL_STATS FAIL ledger@1280x720 tabs text clipped at bottom
+UI_PIXEL_STATS FAIL ledger@1920x1080 tabs text clipped at bottom
+UI_PIXEL_STATS FAIL ledger_market@1280x720 tabs text clipped at bottom
+UI_PIXEL_STATS FAIL ledger_market@1920x1080 tabs text clipped at bottom
+UI_PIXEL_STATS FAIL pause@1280x720 blur_ratio 7.87 > 0.60
+UI_PIXEL_STATS FAIL pause@1920x1080 blur_ratio 6.58 > 0.60
+UI_PIXEL_STATS FAIL prep@1280x720 prompt text clipped at left,top,bottom
+UI_PIXEL_STATS FAIL prep@1280x720 cards text clipped at left,top,bottom
+UI_PIXEL_STATS FAIL prep@1920x1080 prompt text clipped at left,top,bottom
+UI_PIXEL_STATS FAIL prep@1920x1080 cards text clipped at left,top
+UI_PIXEL_STATS SUMMARY rows=28 fails=24

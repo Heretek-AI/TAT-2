@@ -197,8 +197,10 @@ func _save(shot: String, rois: Dictionary, extras: Array) -> bool:
 			str(gs.get("thief_id")), str(gs.get("level")), str(gs.get("currency")),
 			str(gs.get("active_map_id")), str(gs.get("active_contract_order")),
 			str(gs.get("active_mission_mode")), str(gs.get("free_play"))])
-	for line: String in extras:
-		side.store_line(line)
+	# Flat list of strings by contract; `str()` keeps a future nested entry
+	# from aborting the writer before the roi.* lines (the old failure mode).
+	for line in extras:
+		side.store_line(str(line))
 	for roi_name: String in rois.keys():
 		var r: Rect2 = rois[roi_name] as Rect2
 		var st: Dictionary = _roi_stats(img, r)
@@ -377,7 +379,7 @@ func _shot_wardrobe(mission: Node3D) -> void:
 				"thief": Rect2(0.36, 0.06, 0.28, 0.88),
 				"left_panel": Rect2(0.01, 0.10, 0.30, 0.84),
 				"right_panel": Rect2(0.74, 0.10, 0.25, 0.84),
-			}, [_hud_sidecar(hud), "pose=wardrobe turntable (auto frame fov=36)"])
+			}, _hud_sidecar(hud) + ["pose=wardrobe turntable (auto frame fov=36)"])
 		_free_ui(mission, "wardrobe_ui.gd")
 		await _wait(8)
 	else:
@@ -407,7 +409,7 @@ func _shot_ledger(mission: Node3D) -> void:
 				"portrait": Rect2(0.03, 0.08, 0.30, 0.30),
 				"contracts": Rect2(0.03, 0.40, 0.94, 0.35),
 				"xp": Rect2(0.03, 0.30, 0.30, 0.10),
-			}, [_hud_sidecar(hud), "pose=ledger tab:journal"])
+			}, _hud_sidecar(hud) + ["pose=ledger tab:journal"])
 		if _wants("ledger_market"):
 			if ledger.has_method("_show_tab"):
 				ledger.call("_show_tab", 1)
@@ -419,7 +421,7 @@ func _shot_ledger(mission: Node3D) -> void:
 				"preview_card": Rect2(0.01, 0.14, 0.44, 0.34),
 				"tables_left": Rect2(0.01, 0.50, 0.48, 0.46),
 				"tables_right": Rect2(0.50, 0.14, 0.48, 0.82),
-			}, [_hud_sidecar(hud), "pose=ledger tab:black_market selected:zipwire"])
+			}, _hud_sidecar(hud) + ["pose=ledger tab:black_market selected:zipwire"])
 	_free_ui(mission, "ledger_ui.gd")
 	await _wait(8)
 
@@ -443,7 +445,7 @@ func _shot_contract_table(mission: Node3D) -> void:
 		await _save("contract_table", {
 			"table": Rect2(0.05, 0.12, 0.9, 0.62),
 			"legend": Rect2(0.55, 0.78, 0.42, 0.18),
-		}, [_hud_sidecar(hud), "pose=contract_table guildhall Novice Solo", "staged=set_den_selected_map('guildhall')"])
+		}, _hud_sidecar(hud) + ["pose=contract_table guildhall Novice Solo", "staged=set_den_selected_map('guildhall')"])
 	_free_ui(mission, "contract_table_ui.gd")
 	await _wait(8)
 
@@ -706,7 +708,7 @@ func _run() -> void:
 							"paper": Rect2(0.285, 0.185, 0.43, 0.62),
 							"paper_text": Rect2(0.30, 0.28, 0.38, 0.45),
 							"world": Rect2(0.0, 0.0, 0.28, 1.0),
-						}, [_hud_sidecar(hud), "pose=briefing letter over the live safe room"])
+						}, _hud_sidecar(hud) + ["pose=briefing letter over the live safe room"])
 				if hud != null and hud.has_method("_close_mission_letter"):
 					hud.call("_close_mission_letter")
 					await _wait(20)

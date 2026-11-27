@@ -45,7 +45,7 @@
   "infrastructure": {
     "root:Makefile": {
       "command": "make extract / make normalize",
-      "sha256": "9b1121dd7444004b909dcecdc6dc6be5f49f21ed12497d17d28c803a641e372d"
+      "sha256": "a45431e3f26beede826e8f78648723f1edb5096084685297a6aeab60cf625ffe"
     },
     "root:tools/audit_allowlists.json": {
       "command": "reviewed coverage allowlist",
@@ -721,6 +721,13 @@
       ],
       "reason": "P2/P3/P5/data final regeneration",
       "utc": "2026-11-27T03:20:53Z"
+    },
+    {
+      "notes": [
+        "baseline: infrastructure change accepted: root:Makefile"
+      ],
+      "reason": "P5 string-audit ceiling + final integration",
+      "utc": "2026-11-27T03:25:17Z"
     }
   ],
   "tool_versions": {
@@ -730,5 +737,5 @@
     "vgmstream": "vgmstream CLI decoder r2168 (Oct 25 2026)"
   },
   "version": 2,
-  "written_utc": "2026-11-27T03:20:53Z"
+  "written_utc": "2026-11-27T03:25:17Z"
 }

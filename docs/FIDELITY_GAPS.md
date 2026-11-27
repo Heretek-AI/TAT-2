@@ -23,9 +23,14 @@ authored Light Gem.
   kind=directional`. The native index selection remains `derived-approx`
   (`mapping_kind=directional`).
 - **Beams** are an authored-parameter match (15/15 terms, 330 cards,
-  `max_axis_err_deg=0.000005`), the KF27 contract is one band 40.0–40.5 % and
-  emitter 17.8 %/40.0 %, and the reference calibration is 9/9. The GPU port
-  capture at `foyer_beam` is still pending.
+  `max_axis_err_deg=0.000006` — the 330-card total; Old Manor alone reads
+  `0.000005`), the KF27 contract is one band 40.0–40.5 % and emitter
+  17.8 %/40.0 %, and the reference calibration is 9/9 (`--reference-only`). The
+  first **port-side** `foyer_beam` capture scored **5/9** — one band at
+  **50.00 %**, emitter **(0,0)** absent, glow offset `(+78.04,+79.46)`, cream
+  **1.30 %** — see `docs/reports/gpu-phase12-20261127.md`. That frame is end-on
+  (eye 4.44 m from the card, 17° off-axis), so it is a framing result, not a
+  material verdict.
 - **Landscape** `vis > 0.5` discard is pinned by `probe_landscape_mask` 7/0
   (three diagnostic modes, 50/50 mask, Guildhall component 12 safe-room gap).
   The raw-mask pixel A/B is still the integrator's GPU step.
@@ -38,14 +43,27 @@ authored Light Gem.
   Wwise effects/mix are still deferred; VO director 53/0.
 - **P4.1 exposure/IBL** AEM 77/0 and cubemap 37/0 with no PENDING data block.
   `CUBEMAP_ORIENT` records a daylight `+Y < -Y` luminance WARN (0.0680 vs
-  0.0712); the GPU IBL/AEM meter comparison is pending.
-- **Mirrors** are the negative-determinant split (`07ecb56`), 3,312 instances;
-  the headless split census is 29/0 (772 with `--full`); the engine readback
-  needs `build/qa/mirror_probe.sh --run` (Vulkan, pending).
+  0.0712). GPU-measured: the IBL ambient path carries energy **0.00005** and
+  darkens interiors by design (default stays `off`). The AEM adaptation loop is
+  at its fixed point (`adapted == target == -4.863`), BUT the meter path is
+  **NOT CALIBRATED**: the metered scene EV100 **-0.863** is 2.14 stops brighter
+  than the **-3.0** anchor assumed by the fixed path
+  (`1.150 / 0.2615 = 4.40`), and no ≥25 s settle measurement has been made
+  (gate luma 23.49 → 8.82). Default stays `fixed`; the `model`/`meter` path is
+  not promoted.
+- **Mirrors** are the negative-determinant split (`07ecb56`); the measured draw
+  census is **3,297 = 3,119 MultiMesh + 178 standalone**, with **464** splits and
+  **103** baked variants (**31,097,388 B**). The GPU readback is **measured
+  PASS** (`MIRROR_PROBE RESULT control_ok=true … pass=1`, log
+  `docs/reports/logs/p4-mirrors/p4mirrors_final.log`); it is a culling /
+  compensation probe, not a lighting capture.
 - **49-gate set**: compile 228/0, `run_tests` 327/0, audio 123, VO 53, AEM 77,
   cubemap 37, P5 54, beams 9, landscape 7, nav 70, GC 52, locks 162 (152+10),
-  capture 7 poses / self-test 23 / KF27 9/9, audit 12660/12703, texture cap
-  1567/796/1/0. Evidence:
+  capture 7 poses / self-test 23 / KF27 9/9 (`--reference-only`; the first port
+  `foyer_beam` is 5/9), audit 12660/12703, texture cap
+  1567/796/1/0. VO 53 / AEM 77 / cubemap 37 are **carried forward** from their
+  standalone logs, not printed by this runner (see `HANDOFF_NEXT_AGENT.md` §2 †).
+  Evidence:
   [`reports/integration-20261127.md`](reports/integration-20261127.md).
 
 ## Phase 0a — truth / save / gate hygiene — 2026-11-27 (prior; superseded by Phase 1/2 above where they differ)
@@ -98,7 +116,7 @@ visual claim** and does not re-score a row.
   the first real run must print `STEALTHBALL_ARRAY mapping_kind=…` and the
   probe `GEM_PAYLOAD present=true …` before any visual claim. Headless P5 still
   does not score its pixels.
-- **Mirrors — P4.2 split implemented, headless-measured; GPU readback pending.**
+- **Mirrors — P4.2 split implemented, headless-measured; GPU readback measured PASS.**
   The carried 3,312 is real for the Guildhall contract-2 base set (3,312
   authored negative-determinant mesh records). After the loader's pre-draw
   filters (271 records in the 64,956-record mission load: `duplicate=130`,
@@ -143,7 +161,10 @@ visual claim** and does not re-score a row.
   (Phase 3).
 - **Tally note.** The 2026-11-24 tally (**48 scored / 56 N/A / 16
   UNVERIFIED**) predates W10; V4-07/V6-03 were re-scored in W9-P1. No row token
-  changed in Phase 0a.
+  changed in Phase 0a. **Erratum pointer (Phase 3):** the tally is stale for six
+  rows built in P1 and G5-02 is recorded **MISSING** where the route never fell;
+  see `docs/reports/phase3-plan-20261127.md` §1.4. The tally is not re-scored
+  here — it changes only with owner sign-off.
 
 **Phase 0b (2026-11-27):** the **45-gate** set was re-measured at `912a481`
 (45/45 exit 0, every count unchanged) and the clean route2 capture
@@ -159,7 +180,7 @@ copies remain recoverable at `912a481` and `3d62f6b`).
 Merged wave: **P2-ST StateTree B2.1**, **P2-NAV Detour spike**, **P3 Wwise
 control plane**, **P5 UI**, **W10-P2 data**, and the **Den restore**. Measured at
 `5135f53` in one serial `build/qa/run_final_gates.sh` run — **44 gates, all exit
-0**, logs in [`reports/logs/final/`](logs/final/), report
+0**, logs in [`reports/logs/final/`](reports/logs/final/), report
 [`reports/final-20261127.md`](reports/final-20261127.md). `compile` **217/0**;
 `run_tests` **324/0** (suites **119** cream and **121** audio registered); M2
 **12/0**; E2E **300/300** (T1=117 T2=110 T3=25 T4=14 S2=12 A2=22); p2 **14/14**
@@ -233,7 +254,7 @@ string audit **311/311/199/199/112**; perf guard **78/78**.
 One lane on `w10/data-wave` (base `8a3ad62`) regenerated the private data copy and
 fixed three measured data defects. Report with all lines:
 [`reports/w10p2-20261126.md`](reports/w10p2-20261126.md); logs:
-[`reports/logs/w10p2/`](logs/w10p2/).
+[`reports/logs/w10p2/`](reports/logs/w10p2/).
 
 - **Invented white emission — closed.** `_apply_ue_emissive()` now requires an
   authored `EmissiveColor` or an emissive map; a strength-only material gets no
@@ -278,7 +299,7 @@ The P1 route-content wave restored the S12–S26 subjects in five lanes (safe ro
 blue doors, beams/foyer, ward/alarm, street) and measured them at
 `78884fe` (`3998761` merged tip + one integration fix) in one serial run of
 `build/qa/run_p0b_gates.sh`: **40 gates** plus the cream expected failure, logs
-in [`reports/logs/p1/full/`](logs/p1/full/), report
+in [`reports/logs/p1/full/`](reports/logs/p1/full/), report
 [`reports/p1-integration-20261126.md`](reports/p1-integration-20261126.md).
 `compile` is **213/0**, `run_tests` **322**, E2E **300/300**, p2
 `expected_fail=1 expected_delta=0`, and the five lane probes are
@@ -351,7 +372,7 @@ P1).
 The parity instruments and the honest acceptance baseline, measured on `dfa8c7e`
 in one serial run by `build/qa/run_p0b_gates.sh` (35 gates + the cream expected
 failure). Evidence: [`reports/p0b-20261126.md`](reports/p0b-20261126.md) and
-[`reports/logs/p0b/full/`](logs/p0b/full/). **P0b is not Parity Complete**; it
+[`reports/logs/p0b/full/`](reports/logs/p0b/full/). **P0b is not Parity Complete**; it
 builds the instruments and records what is still wrong.
 
 - **Parity-only governance — `PARITY_RESTORATION` vs `TAT2_EXPANSION`.** Every
@@ -461,7 +482,7 @@ and the tracked probe log under `reports/logs/p1-street/`.
 Parity restorations plus the evidence repair, measured on `84912ee` in one serial
 run by `build/qa/run_p0a_gates.sh` (28 gates). Evidence:
 [`reports/p0a-20261126.md`](reports/p0a-20261126.md) and
-[`reports/logs/p0a/`](logs/p0a/).
+[`reports/logs/p0a/`](reports/logs/p0a/).
 
 - **Guard selection — `PARITY_APPROX`.** `tools/parse_tables.py` now carries the
   authored `VariationSpawner.SpawnBucket` and `Layers` into every generated guard
@@ -670,8 +691,11 @@ and the recorded-run evidence in
 
 - Candle **lights** remain 0/135 by design (sconce glows; a slot costs a room its practical).
 - The authored SkyLight **cubemap export** is not produced yet (T01 contract), so IBL is a
-  documented approximation.
+  documented approximation. *(Historical — superseded by the P4.1 cubemap chain in
+  Phase 1/2 above: 3 cubemaps / 18 faces are produced and measured.)*
 - Lockpick has 41 assets and **0 animations**; the dial minigame has no hand animation.
+  *(Historical R8 note — the port ships a labelled stand-in; the authored
+  circular-lockpick widget art remains a P1 `HARD_LIMIT`, not a new regression.)*
 - VFX sprite resolution is wrong-token for most systems (6 of 29 textures pass the soft-mask
   gate); the authored "footstep" texture is a crate decal used as a thief-vision mask.
 - Texture streaming/eviction is deferred; the roughness bake is ~54 % of the Guildhall
@@ -687,7 +711,7 @@ and the recorded-run evidence in
 |---|---|---|---|
 | Packages (`.uasset` + `.umap`) | 13,162 (12,547 TAT) | 12,541 JSON dumps; 12,439/12,547 TAT packages = 99.1 % | **done** |
 | Static/skeletal meshes | 1,852 `SM_` + 156 `SK_` | 2,065 GLB (`2,047` GLB-ordered + `18` sidecar `mesh_materials.json`) | **done (`6783c2d`)** |
-| Textures | 2,211 `T_` packages | 2,529 PNG; all 3,817 material texture refs exist; 1,059 exceed 1024 px (773 loader-managed capped; 1 alpha-critical decal kept full-res by design) | **done, with a documented 1024 px cap and a stale-cap gate** |
+| Textures | 2,211 `T_` packages | 2,529 PNG; all 3,817 material texture refs exist; 1,059 exceed 1024 px (**796 capped** of a 1,567 target set, 1 alpha-critical decal kept full-res by design, **0 offenders**) | **done, with a documented 1024 px cap and a stale-cap gate** |
 | Levels | 107 `.umap` | 107 `.tatlevel.json` (`159,941` orthonormal bases, `OverrideMaterials`, `bVisible:false`/`SplineEditorMesh` filtered, `1,293` emissive CPD shapes) | **done (`7458198`, `24cac7e`, `d0f895a`)** |
 | DataTables / CurveTables / StringTables | 58 `DT_` / 79 `ST_` / curves | 144 normalized tables | **done** |
 | **Animations** | **879 `AN_`** | **995 GLB clips** + **3,594 authored notifies** / 235 montage sections; 14 blend-space graphs unsupported | **export done; ~90 clip names wired, notifies data-only** |
@@ -705,7 +729,7 @@ and the recorded-run evidence in
 | **Combat/health** | fall 6.5→23.25 m curve, 10 s downed, 5 s revive, 15/s guard regen | **implemented** (`16edb4e`) with curve-verified damage and a downed countdown | **done** |
 | **Blueprints (logic)** | 979 `BP_` + 225 `BPUI_` | 963 `BP_` + 225 `BPUI_` dumped; 18 `BP_` missing (Test/ClothSimulation); movement/detection/tools/contracts wired | **graphs not translatable; selective transpiler only** |
 | **Spawners** | 689 markers + 546 loot markers + 254 containers | all spawned: real meshes/pickups/civilians (7172096), real loot actors (1c5225f), openable containers (`5bc2d83`) | **done** |
-| **Devices** | 4,118 / 21 families | 2,095 loaded-map records, 6,005 trigger edges, 1,475 power edges; **5 families run** (beams, plates, noise alarms, power, turrets, cameras, wards) | **partial** |
+| **Devices** | 4,118 / 21 families | 2,095 loaded-map records, 6,005 trigger edges, 1,475 power edges; **7 families run** (beams, plates, noise alarms, power, turrets, cameras, wards) | **partial** |
 | **Patrols** | 210 paths / 673 waypoints | 120 Guildhall / 350 points merged; guards use authored waits/yaw/PingPong | **done** |
 | **Clues / quests** | 96 fact rows / 18 QGs | 90 reachable / 6 dead (Spider `03:Reminder` withheld, `04:Renegade` excluded; the producer-dead `01:Intro` is granted at runtime); authored readable clues, quest items, journal, Set/LootTheRoom objectives; **Spider 01→04 personal chain live** (note → electrotype → Owl → courier → informant, 7 facts, 90/90 real-map probe) | **done (`eb55bc1`); residuals in the 2026-11-24 integration entry** |
 | **Player identity** | `PlayerState.GetPlayerName` | explicit handle, else authored `The Spider` / `The Chameleon`; no capture Steam persona | **done (W0a)** |
@@ -795,7 +819,7 @@ Authored follow-up values (`docs/reports/gameplay-constants.md`): disguise integ
 - **Doors done** (`caec0d4`, extended `doors-attachparent`): 281 pivots → 281 doors / 373 leaves / 0 unresolved. The first wave resolved 170 doors / 262 leaves through attached leaf stubs; the follow-up wave resolves the remaining 111 doorway-BP pivots through the pivot component's own template `StaticMesh` (the pivot is a `StaticMeshComponent` subclass), with identity leaf transforms and GLB existence checks. Static meshes stay at 55,452 (no duplicates). Runtime `[F] OPEN/CLOSE` 90°/0.4 s with per-leaf layer-1 collision. Desktop/headless probe: Old Manor 120 doors / 176 rendered leaves, `rot 0.0→1.571`, suite `fails=0`. Evidence: `docs/reports/doors-attachparent.md`, `/tmp/opencode/doors_test.log`.
 - **Doors (old note)**: 281 pivots resolve through their parent Blueprint actor (e.g. `BP_Storefront_Facade_1200a_C` instance `StaticMeshActor_10`) to SCS leaf nodes whose `ParentComponentOrVariableName` is `Pivot`/`SecondPivot` (`SM_Urban_Ext_FrontDoorA_Glass`); the pivot carries the real relative transform (`(-500,-70,10)`, yaw -90). Static batches currently contain door leaves (26 `sm_urban_ext_frontdoora_glass`, 60 `sm_urban_ext_door_closed_4x6`, 3 `sm_doorcityexta`), so the door wave (A21) excludes the resolved leaves from `meshes` and spawns them as rotatable pivot nodes with collision.
 - **Containers**: 89 `BP_ChestTrunk_MajorLoot`, 68 `BP_DisplayCaseA_MajorLoot`, 57 secret wall stashes, 20 storefront display cases. Each has real meshes (`SM_ChestTrunk`, lid, filler) and a `TATContainerSpawnerComponent` with `SpawnBucket` (major/minor). These are actor markers with real transforms and can be spawned with loot-on-open using A16's loot actor data.
-- **Guard patrols**: not recoverable — `BP_AIPatrolPath` has no spline points in the cooked actor; 249 path actors give positions only.
+- **Guard patrols**: not recoverable — `BP_AIPatrolPath` has no spline points in the cooked actor; 249 path actors give positions only. *(Historical — superseded by the Summary table: authored waits/yaw/PingPong drive 120 Guildhall paths / 350 merged points.)*
 
 ### A7 — Audio
 Wwise media are RIFF with codec tag `0xFFFF` (Wwise Vorbis); FFmpeg alone reports "no decoder found", but vgmstream r2168 decodes them. The `1,296` `AkAudioEvent` dumps carry `EventCookedData.EventLanguageMap[].Value.Media[]` with `MediaId`, `DebugName` and `PackagedFile.Hash`.

@@ -1,3 +1,5 @@
+> **SUPERSEDED — see [docs/HANDOFF_NEXT_AGENT.md](HANDOFF_NEXT_AGENT.md).**
+
 # OpenCode Task Prompt: Finish the Official-Footage Reference Baseline (M2 + M3)
 
 > Paste this whole file into OpenCode as the task prompt, or tell OpenCode:

@@ -107,7 +107,7 @@ first.
 | cubemap suite 124 (P4.1) | `CUBEMAP_PROBE: fails=0 passed=37` (no PENDING; `CUBEMAP_ORIENT` daylight WARN recorded) |
 | P5 UI probe (W10-P5/U-4) | `P5_UI PASS checks=54`; `GEM_PAYLOAD present=true: layers=21` (headless; no visual score) |
 | Den spawn (W10) | `DEN_SPAWN PASS checks=9 fails=0` (`source=authored`, 2434 meshes) |
-| port capture harness (P0b/P4) | dry-run `poses=7` manifest valid; `P0B_SELFTEST PASS checks=23 fails=0`; `P0B_KF27_REF … met=9/9` |
+| port capture harness (P0b/P4) | dry-run `poses=7` manifest valid; `P0B_SELFTEST PASS checks=23 fails=0`; `P0B_KF27_REF … met=9/9` (`--reference-only`; the first port `foyer_beam` is 5/9) |
 | route runner self-test (Phase 0a) | `P0B_ROUTE_SELFTEST PASS checks=62 fails=0`; `bash -n` on `p0b_route.sh` and `p0b_live_capture.sh` |
 | producer tests (P1/2) | `make test-producers` + `build/qa/test_parse_nav.py` 7/7; `STEALTHBALL_ARRAY_TEST PASS checks=22`; `UI_PIXEL_STATS_TEST PASS checks=15` |
 | P5 capture filter (U-2) | `CAPTURE_P5_FILTER_TEST PASS checks=5` |
@@ -131,11 +131,15 @@ audit `PRODUCERS` map (it was a `NORMALIZERS` entry with no baseline stamp).
 The current set is **49 gates**, measured at `37bb69e`: compile **228/0**,
 `run_tests` **327/0** (suites 119/121/122/123/124), audio **123/0**, VO 53/0,
 AEM 77/0, cubemap 37/0, P5 UI 54, beams 9, landscape 7, nav 70, GC 52, locks
-**162 = 152 containers + 10 doors**, capture 7 poses / self-test 23 / KF27 9/9,
-producer tests and the P5 capture filter included, audit 12660/12703 and texture
-cap 1567/796/1/0 unchanged. No GPU/Vulkan capture was run; the mirror readback,
-landscape A/B, KF27 port capture, IBL/AEM meter and P5 pixel score remain the
-GPU steps. Report:
+**162 = 152 containers + 10 doors**, capture 7 poses / self-test 23 / KF27 9/9
+(`--reference-only`; port `foyer_beam` 5/9), producer tests and the P5 capture
+filter included, audit 12660/12703 and texture
+cap 1567/796/1/0 unchanged. GPU-measured: the mirror readback is PASS
+(`pass=1`), the UI capture is 28/28 frames with 24 strict rows, the KF27 port
+`foyer_beam` is 5/9, the landscape A/B has no subject (unmeasured), the IBL
+ambient energy is 0.00005 (`TAT2_IBL=off` stays the default), the AEM meter
+residual is not calibrated (`TAT2_AEM=fixed` stays the default), and the P5 pixel
+score still needs visual adjudication. Report:
 [`docs/reports/integration-20261127.md`](docs/reports/integration-20261127.md).
 
 The 2026-11-24 W7 wave (five lanes, cherry-picked) re-ran the **complete** set
@@ -264,7 +268,8 @@ identical to the `5135f53` table, logs in `docs/reports/logs/final/`, report
 [`docs/reports/final-20261127-phase0b.md`](docs/reports/final-20261127-phase0b.md).
 The clean route2 capture is `docs/reports/logs/p0b-route/route2-clean/`
 (`status=captured`, `git.dirty=false`, 13/14/0, 17 frames, 18 PNGs at 1920×1080,
-exit 0). The ratchet is re-stamped `measured_on=912a481` and pins
+exit 0). The ratchet has since been re-stamped `measured_on=37bb69e` by the
+Phase 1/2 49-gate run (superseding the Phase 0b `912a481` stamp) and still pins
 `p0b_route_self_test.checks=62`. The 44-gate logs were measured at `5135f53`,
 committed on `main` at `3d62f6b`, and the Phase 0b run replaced the logs in
 place at `912a481` (pre-Phase-0b copies remain recoverable at `912a481` under

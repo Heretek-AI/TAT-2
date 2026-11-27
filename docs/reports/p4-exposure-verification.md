@@ -22,7 +22,7 @@ The two original blockers are closed:
    API is now used correctly and the six faces are sliced from
    `CTexture.Data` (no `Crop`). See F1.
 2. **Speed semantics:** `step()` now selects `speed_up` for a rising target
-   (`delta > 0`) and `speed_down` for a falling target; suite 122 measures
+   (`delta > 0`) and `speed_down` for a falling target; suite 123 measures
    20.00 s / 2.00 s and the `t_up > 5 * t_down` negative control. See F2.
 
 The default `TAT2_AEM=fixed` and `TAT2_IBL=off` paths remain no-op-compatible
@@ -119,7 +119,7 @@ documentation (Speed Up = dark environment to bright environment; Speed Down =
 bright environment to dark environment) and the repo RE's 20 s bright-foyer
 statement.
 
-Suite 122 was run independently at `bce2ed3`:
+Suite 123 was run independently at `bce2ed3`:
 
 ```
 PASS: SpeedUp ramp is +0.2 EV100/s per 0.1 s (delta=+0.020000)
@@ -138,7 +138,7 @@ old inverted mapping would give `t_up=2`, `t_down=20` and fail the
 
 **Fixed path:** the fix diff is limited to `Exporter.cs`, `auto_exposure.gd`,
 `probe_auto_exposure.gd` and the lane report; `weather_profile.gd` and
-`cubemap_loader.gd` are untouched. Suite 122 reports
+`cubemap_loader.gd` are untouched. Suite 123 reports
 `fixed reproduces today's 1.15 exactly`; T07 reports
 `exposure=1.150 ambient_energy=0.160`; the default fixed smoke has no AEM
 opt-in line. The default `fixed` path is unchanged.
@@ -152,13 +152,13 @@ opt-in line. The default `fixed` path is unchanged.
 | `parse_cubemap.py` (temp output) | `3 converged, 0 rejected`, 18 faces, 3 `by_ue_path` | `/tmp/opencode/p4_verify_parse_cubemap.log` |
 | compile | `scripts checked: 223, broken: 0`, exit 0 | `/tmp/opencode/p4_verify_compile.log` |
 | `make test` | **326** `PASS:` lines, `SUMMARY: fails=0`, exit 0 | `/tmp/opencode/p4_verify_make_test.log` |
-| suite 122 | `AEM_PROBE: fails=0 passed=70` | `/tmp/opencode/p4_verify_aem.log` |
-| suite 123 | `CUBEMAP_PROBE: fails=0 passed=25` | `/tmp/opencode/p4_verify_cubemap.log` |
+| suite 123 | `AEM_PROBE: fails=0 passed=70` | `/tmp/opencode/p4_verify_aem.log` |
+| suite 124 | `CUBEMAP_PROBE: fails=0 passed=25` | `/tmp/opencode/p4_verify_cubemap.log` |
 | T07 | `T07_SUMMARY: fails=0`; Guildhall `exposure=1.150 ambient_energy=0.160` | `/tmp/opencode/p4_verify_t07.log` |
 | `make gate-ratchet` | PASS (committed logs/floors untouched) | terminal run in this worktree |
 | `make audit` | expected red until `make normalize` + re-stamp (8 failures; new `stale generated group materials` from the Cubemaps faces) | `/tmp/opencode/p4_fix_audit.log` |
 | runtime smoke (fixed/default) | **HEAD-stamped PASS**: `RUNTIME_SMOKE_SCAN PASS exit=124 errors=0 raw=0 allowed=0 script_errors=0 shader_errors=0 mission_ready=1 reason=ok`; wrapper `RUNTIME_SMOKE PASS`, exit 0 | `/tmp/tat2-smoke-LMhWfF.log`; `/tmp/opencode/p4_verify_smoke_fixed_wrap.log` |
-| runtime smoke (`model TAT2_IBL=ambient`, `meter`) | not HEAD-stamped; pre-fix fixed/model/meter logs and the model anchor are covered by suite 122; no new code path in the fix | `/tmp/tat2-smoke-c36vqx.log`, `/tmp/tat2-smoke-YjDSoX.log` (pre-fix); see residual 6 |
+| runtime smoke (`model TAT2_IBL=ambient`, `meter`) | not HEAD-stamped; pre-fix fixed/model/meter logs and the model anchor are covered by suite 123; no new code path in the fix | `/tmp/tat2-smoke-c36vqx.log`, `/tmp/tat2-smoke-YjDSoX.log` (pre-fix); see residual 6 |
 
 The lane's own `/tmp` fix logs agree on the build (15 warnings/0 errors),
 the real 3/18-face run, 326 PASS and the 8 expected audit failures; the 70/25
@@ -170,7 +170,7 @@ The runtime smoke gate is now HEAD-stamped for the default/fixed path:
 `RUNTIME_SMOKE_SCAN PASS exit=124 errors=0 ... mission_ready=1`, and the
 Godot log has no AEM opt-in line and no `ERROR:`/`SCRIPT ERROR`/`SHADER ERROR`.
 The `model TAT2_IBL=ambient` and `meter` smoke modes were not re-run at this
-HEAD; the fix changes only the `step()` selection, and suite 122 already pins
+HEAD; the fix changes only the `step()` selection, and suite 123 already pins
 the model anchor and the meter CPU mirror. This is an evidence-completeness
 note for those two opt-in modes, not a fixed/default regression.
 
@@ -181,10 +181,10 @@ note for those two opt-in modes, not a fixed/default regression.
 `game/data/generated/weather/gloomy.json` still lacks the new AEM fields.
 Therefore at `bce2ed3`:
 
-- Suite 123 prints `PENDING: res://data/generated/ibl/cubemaps.json absent;
+- Suite 124 prints `PENDING: res://data/generated/ibl/cubemaps.json absent;
   the integrator runs the cubemaps extract + parse_cubemap...` and passes
   **25** checks (the no-index path).
-- Suite 122 prints `PENDING: weather/gloomy.json predates the P4.1 producer
+- Suite 123 prints `PENDING: weather/gloomy.json predates the P4.1 producer
   fields...` and passes **70** checks.
 - If the integrator runs `make normalize`, the generated AEM fields and the
   `ibl/cubemaps.json` index appear and both generated blocks activate. If only
@@ -235,7 +235,7 @@ data/stage-1 observations, not compile or default-path defects.
 6. **Runtime smoke modes:** the default/fixed run is HEAD-stamped PASS
    (`exit=124`, errors 0, `mission_ready=1`); the `model TAT2_IBL=ambient` and
    `meter` modes were not re-run at this HEAD (the fix only changes the speed
-   selection; suite 122 covers the model anchor and meter CPU mirror). Re-run
+   selection; suite 123 covers the model anchor and meter CPU mirror). Re-run
    those two opt-in modes when the shared Godot lock is free for a fully
    mode-complete smoke record.
 

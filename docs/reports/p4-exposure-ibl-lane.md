@@ -99,8 +99,8 @@ those values for `gloomy`, `midnight_clear` and `dense_fog_old_manor`;
 |---|---|
 | `tools/check_scripts_compile.gd` | `scripts checked: 223, broken: 0` (was 217; +4 core, +2 probes) |
 | `make test` | exit 0, `SUMMARY: fails=0`, 326 `PASS:` lines |
-| suite 122 (`probe_auto_exposure.gd`) | `AEM_PROBE: fails=0 passed=70` (corrected SpeedUp/SpeedDown) |
-| suite 123 (`probe_cubemap.gd`) | `CUBEMAP_PROBE: fails=0 passed=25` |
+| suite 123 (`probe_auto_exposure.gd`) | `AEM_PROBE: fails=0 passed=70` (corrected SpeedUp/SpeedDown) |
+| suite 124 (`probe_cubemap.gd`) | `CUBEMAP_PROBE: fails=0 passed=25` |
 | meter GLSL | `RDShaderFile` loads, `compile_error_compute=''`, 4,636 SPIR-V bytes |
 | `make build-extractor` | `Build succeeded. 15 Warning(s) 0 Error(s)` (14 NuGet advisory + 1 pre-existing `Program.cs:91 CS8603`) |
 | `tat-extract cubemaps` (real run) | exit 0: `[cubemaps] ok=3 skip=0 fail=0`, `errors.log` 0 entries |
@@ -171,7 +171,7 @@ FAIL tool version drift: vgmstream ... -> missing   (worktree-only: the untracke
    and the new `auto_exposure_meter.glsl`.
 4. `make audit-refresh-stamps REASON='P4.1 AEM producer fields + cubemap producer; regenerated after make normalize'`,
    then `make audit` (expect exit 0).
-5. Re-run suites 122/123: the generated-data block stops printing
+5. Re-run suites 123/124: the generated-data block stops printing
    `PENDING` and asserts `-10/+1, 0.2/2.0, 0, V3`; the cubemap block asserts
    the index schema, six faces and the `by_ue_path` mapping.
 6. Raise the ratchet floors after committing the gate logs: compile

@@ -320,7 +320,7 @@ and change the header's "45 gates" (`run_final_gates.sh:17`) to **46**.
 
 - `tools/gate_ratchet.json` — `compile.checked 217 → 218`,
   `run_tests.passes 324 → 326` (measure after the P4.1 exposure/IBL lane's
-  suites 122/123 merge, on the merged HEAD — the 326 in `/tmp/opencode` came
+  suites 123/124 merge, on the merged HEAD — the 326 in `/tmp/opencode` came
   from that worktree, not this lane), `probe_p1_beams.checks 7 → 9`,
   `p0b_capture.poses 6 → 7`,
   add `probe_landscape_mask` to `evidence` + `gates` (**7**), and re-stamp

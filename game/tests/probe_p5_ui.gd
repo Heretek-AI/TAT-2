@@ -68,6 +68,16 @@ func _wait(n: int) -> void:
 		await process_frame
 
 
+## Canonical, greppable payload evidence. The integrator greps exactly this
+## line after regenerating the extractor + producer; the absent path prints the
+## same shape with present=false so the grep never goes silent.
+func _gem_payload_line(info: Dictionary, state: Dictionary, missing: Array) -> String:
+	var authored: bool = bool(info.get("bound", false)) and str(state.get("gem_path", "")) == "authored_array"
+	return "GEM_PAYLOAD present=%s: layers=%d table=%d kind=%s slice=%d missing=%s" % [
+		str(authored), int(info.get("layers", 0)), int(info.get("table_size", 0)),
+		str(info.get("mapping_kind", "")), int(state.get("slice_index", -1)), str(missing)]
+
+
 func _finish() -> void:
 	if fails == 0:
 		print("P5_UI PASS checks=", checks)
@@ -269,6 +279,13 @@ func _initialize() -> void:
 	var manifest_path: String = str(hud_scr.get_script_constant_map().get("GEM_ARRAY_MANIFEST_PATH", ""))
 	var payload_ok: bool = false
 	var payload_note: String = "payload absent: PORT_APPROX retained"
+	# The formatter itself is pinned here (inside P5.11k, so the check count
+	# stays 54) even when the payload is absent: the present=true line must be
+	# exact, not prose that drifts.
+	var fmt_ok: bool = _gem_payload_line(
+		{"bound": true, "layers": 21, "table_size": 21, "mapping_kind": "area_ramp"},
+		{"gem_path": "authored_array", "slice_index": 17}, []).begins_with(
+			"GEM_PAYLOAD present=true: layers=21 table=21 kind=area_ramp slice=17 missing=[]")
 	if manifest_path != "" and FileAccess.file_exists(manifest_path):
 		var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(manifest_path))
 		if parsed is Dictionary and str((parsed as Dictionary).get("status", "")) == "payload_present":
@@ -294,7 +311,7 @@ func _initialize() -> void:
 			hud.call("apply_light_gem_state", 0.35, Vector3(0, -1, 0), 0.5)
 			await process_frame
 			var bind_state: Dictionary = hud.call("light_gem_state") as Dictionary
-			payload_ok = unit_ok and missing.is_empty() \
+			payload_ok = fmt_ok and unit_ok and missing.is_empty() \
 				and int(bind_info.get("layers", 0)) == 21 \
 				and int(bind_info.get("table_size", 0)) == 21 \
 				and str(bind_info.get("mapping_kind", "")) in ["area_ramp", "directional"] \
@@ -303,15 +320,18 @@ func _initialize() -> void:
 			payload_note = "payload present: layers=%d table=%d kind=%s slice=%d missing=%s" % [
 				int(bind_info.get("layers", 0)), int(bind_info.get("table_size", 0)),
 				str(bind_info.get("mapping_kind", "")), int(bind_state.get("slice_index", -1)), str(missing)]
+			print(_gem_payload_line(bind_info, bind_state, missing))
 			_check(payload_ok,
 				"P5.11k authored payload binds 21 layers and selects a measured slice (%s)" % payload_note,
 				"P5.11k payload bind failed: %s" % payload_note)
 		else:
+			print(_gem_payload_line({}, {}, []))
 			print("GEM_PAYLOAD status!=payload_present; PORT_APPROX retained")
 	else:
+		print(_gem_payload_line({}, {}, []))
 		print("GEM_PAYLOAD absent (extractor/producer not run); PORT_APPROX retained")
 	if payload_note.begins_with("payload absent"):
-		_check(true, "P5.11k authored payload absent: binding covered by the synthetic 21-slice test", "")
+		_check(fmt_ok, "P5.11k authored payload absent: binding covered by the synthetic 21-slice test; GEM_PAYLOAD format pinned", "")
 
 	# =====================================================================
 	# 2. Player card identity + compass geometry (UI3-01 / KF02/KF14)

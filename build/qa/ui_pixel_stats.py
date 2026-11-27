@@ -16,7 +16,9 @@ What is measured
                span, plus the heading ink bbox above the rule.
 * **prompt**   inside `roi.prompt`/`roi.prompt_secondary`: text ink count,
                contrast ratio (text p98 vs background median, 0..255 luma),
-               and clipping at the ROI edge.
+               and clipping at the ROI edge. Luma is Rec. 709
+               (0.2126R + 0.7152G + 0.0722B) everywhere in this tool and in the
+               gem producer — not ITU-R 601.
 * **pause**    `pause` vs `pause_backdrop` (same pose, no modal): world luma
                ratio (dim) and edge-energy ratio (blur); modal ink bbox.
 * **briefing** `roi.paper_text` line runs: line count, first/last ink row,
@@ -33,7 +35,7 @@ Usage::
     build/qa/ui_pixel_stats.py --dir /tmp/opencode/p5-ui-captures/<run>
     build/qa/ui_pixel_stats.py --dir ... --json p5_ui_stats.json --strict
     build/qa/ui_pixel_stats.py --dir ... --size 1080 --shots gem
-    build/qa/ui_pixel_stats.py --dir ... --require startscreen,pause,briefing
+    build/qa/ui_pixel_stats.py --dir ... --require startscreen,pause,pause_backdrop,briefing
 """
 
 from __future__ import annotations
@@ -68,6 +70,7 @@ STRICT_PAUSE_DIM_RATIO = 0.90
 
 
 def luma(r: int, g: int, b: int) -> float:
+    """Rec. 709 relative luma on 0..255 channels (not ITU-R 601)."""
     return 0.2126 * r + 0.7152 * g + 0.0722 * b
 
 
@@ -357,6 +360,7 @@ def _briefing(frame: Frame) -> dict:
     if box is None:
         return {"present": False}
     x0, y0, x1, y1 = box
+    # Luma is Rec. 709 (0.2126R + 0.7152G + 0.0722B) for the whole tool.
     # The authored letter is dark ink on parchment, so the line detector keys
     # on deviation from the *page* background, not on a bright threshold.
     bg_values: list[float] = []
@@ -633,6 +637,15 @@ def main(argv: list[str]) -> int:
         print("  " + "  ".join(bits))
     for note in errors:
         print("  ERROR " + note)
+    if args.strict:
+        # A paused frame without its same-size backdrop silently skips the
+        # dim/blur check; fail closed instead of reporting a clean pause.
+        for key, row in result["rows"].items():
+            if row["shot"] != "pause":
+                continue
+            size = row["size"]
+            if not any(r["shot"] == "pause_backdrop" and r["size"] == size for r in result["rows"].values()):
+                fails.append("%s pause has no pause_backdrop at %dx%d" % (key, size[0], size[1]))
     required = [s for s in args.require.split(",") if s]
     missing = [
         s for s in required if not any(r["shot"] == s for r in result["rows"].values())

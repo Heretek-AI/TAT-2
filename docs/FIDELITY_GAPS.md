@@ -1381,7 +1381,13 @@ find extracted/json -name 'NS_*.json' | wc -l
     authored frame (both `ImageSize` 144) and selects a slice from the measured
     table. `gem_path()` reports `authored_array` only when all 21 slices bind;
     otherwise the labelled `PORT_APPROX` shader stays. The native index
-    selection is not in the dump, so the selection is `derived-approx`.
+    selection is not in the dump, so the selection is `derived-approx`; the
+    0.35 angle weight is recorded as `mapping.selection.source=port_decision`.
+    Two approximations are documented in `hud.gd`: `filter_linear` without mips
+    (the authored array has a single mip, so mips would add data the payload
+    lacks) and plain canvas alpha instead of the authored
+    `BLEND_TranslucentGreyTransmittance`. Luma is Rec. 709 in the producer and
+    pixel scorer, not ITU-R 601.
   - **U-1/U-2 instruments**: `build/qa/capture_p5_ui.gd` captures startscreen,
     Den HUD, wardrobe, ledger (+ market), contract table, prep, briefing, safe
     room, crank, doors, key, pause and the pause backdrop at 1280×720 and
@@ -1391,8 +1397,8 @@ find extracted/json -name 'NS_*.json' | wc -l
     invariants (stdlib decoder + ffmpeg fast path, unit-tested).
   - **Not measured**: no GPU capture and no extractor run in the lane, so the
     rendered gem and every pixel score remain **unverified**; the C# branch was
-    checked against the CUE4Parse 1.2.2.202611 metadata but not compiled here
-    (host SDK 8, project `net10.0`). `make audit` in the lane fails only on the
+    checked against the CUE4Parse 1.2.2.202611 metadata and the extractor builds
+    cleanly with .NET 10.0.404 (verifier run, 0 errors). `make audit` in the lane fails only on the
     new producer output/infrastructure hashes; the integrator regenerates and
     re-stamps. String audit is unchanged at 311/311/199/199/112 (no new
     invented literals).

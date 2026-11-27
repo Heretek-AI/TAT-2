@@ -69,8 +69,10 @@ const GEM_ARRAY_ASSET_DIR: String = "res://assets/ue/Raw/Art/UI/HUD/Stealth_Ball
 ## procedural fallback keeps its hand-tuned 62 px orb.
 const GEM_FRAME_SIZE: float = 84.0
 const GEM_ORB_PROCEDURAL_SIZE: float = 62.0
-## Derived selection weight: fraction error dominates, the cap angle breaks
-## ties only when the measured mapping is directional (see the producer).
+## Derived selection weight fallback: fraction error dominates, the cap angle
+## breaks ties only when the measured mapping is directional. The producer
+## writes its value to `mapping.selection.angle_weight`; this constant is only
+## the fallback for a synthetic/older manifest (keep the two in sync).
 const GEM_SLICE_ANGLE_WEIGHT: float = 0.35
 const DEN_SCENE_PATH: String = "res://scenes/mission.tscn"
 const LootInventoryScript := preload("res://src/interact/loot_inventory.gd")
@@ -166,6 +168,16 @@ void fragment() {
 ## with a scalar `Index`; this shader is the canvas equivalent: one binding of
 ## all 21 authored slices, one layer selected per state. The selection comes
 ## from the derived mapping in `GEM_ARRAY_MANIFEST_PATH`, never from a guess.
+##
+## Two authored details are approximated, deliberately:
+## * filtering is `filter_linear` with no mipmaps: the authored array carries a
+##   single mip (`Mips[0].SizeZ=21`, `FirstMipToSerialize=0`), so generating mips
+##   here would add data the payload does not have (`filter_linear_mipmap` does
+##   compile; it is not used).
+## * `MI_StealthBallTextureArray` is
+##   `BLEND_TranslucentGreyTransmittance`; canvas alpha compositing is plain
+##   straight-alpha, not that grey-transmittance blend. The array pixels and
+##   the authored frame tint are exact; the compositing model is not.
 const STEALTH_ARRAY_SHADER: String = """
 shader_type canvas_item;
 uniform sampler2DArray ball_array : filter_linear, repeat_disable;
@@ -3429,9 +3441,14 @@ func _normalise_gem_mapping(meta: Dictionary) -> Dictionary:
 				"direction": dir,
 				"angle_deg": float(d.get("angle_deg", rad_to_deg(atan2(dir.y, dir.x)))),
 			})
+	var selection: Dictionary = {}
+	if mapping.get("selection") is Dictionary:
+		selection = mapping.get("selection")
+	var weight: float = float(selection.get("angle_weight", GEM_SLICE_ANGLE_WEIGHT))
 	return {
 		"kind": kind,
 		"angle_spread_deg": float(mapping.get("angle_spread_deg", 0.0)),
+		"angle_weight": clampf(weight, 0.0, 1.0),
 		"slices": table,
 	}
 
@@ -3523,7 +3540,7 @@ func gem_slice_for(amount: float, view_dir: Vector3 = GEM_DEFAULT_DIR) -> int:
 		var score: float = absf(float(d.get("lit_fraction", 0.0)) - a)
 		if kind == "directional":
 			var da: float = absf(fposmod(float(d.get("angle_deg", 0.0)) - want_angle + 180.0, 360.0) - 180.0) / 180.0
-			score += GEM_SLICE_ANGLE_WEIGHT * da
+			score += float(_gem_array_mapping.get("angle_weight", GEM_SLICE_ANGLE_WEIGHT)) * da
 		var idx: int = int(d.get("index", 0))
 		if score < best_score - 0.0000001 or (absf(score - best_score) <= 0.0000001 and idx < best):
 			best_score = score

@@ -398,15 +398,16 @@ func _shot_ledger(mission: Node3D) -> void:
 		printerr("P5_CAPTURE FAILED ledger: open_ledger_ui did not yield a LedgerUI Control")
 		failures += 1
 	else:
-		if ledger.has_method("_show_tab"):
-			ledger.call("_show_tab", 0)
-		await _wait(16)
-		await _save("ledger", {
-			"tabs": Rect2(0.01, 0.02, 0.98, 0.10),
-			"portrait": Rect2(0.03, 0.08, 0.30, 0.30),
-			"contracts": Rect2(0.03, 0.40, 0.94, 0.35),
-			"xp": Rect2(0.03, 0.30, 0.30, 0.10),
-		}, [_hud_sidecar(hud), "pose=ledger tab:journal"])
+		if _wants("ledger"):
+			if ledger.has_method("_show_tab"):
+				ledger.call("_show_tab", 0)
+			await _wait(16)
+			await _save("ledger", {
+				"tabs": Rect2(0.01, 0.02, 0.98, 0.10),
+				"portrait": Rect2(0.03, 0.08, 0.30, 0.30),
+				"contracts": Rect2(0.03, 0.40, 0.94, 0.35),
+				"xp": Rect2(0.03, 0.30, 0.30, 0.10),
+			}, [_hud_sidecar(hud), "pose=ledger tab:journal"])
 		if _wants("ledger_market"):
 			if ledger.has_method("_show_tab"):
 				ledger.call("_show_tab", 1)
@@ -617,6 +618,12 @@ func _run() -> void:
 		run_id = _stamp()
 	if OS.has_environment("P5_ONLY"):
 		only = OS.get_environment("P5_ONLY").split(",", false)
+		for requested: String in only:
+			if not SHOTS.has(requested):
+				printerr("P5_CAPTURE FAIL unknown shot=%s known=%s" % [requested, ",".join(SHOTS)])
+				print("P5_CAPTURE_DONE run_id=%s captures=0 failures=1 out=%s" % [run_id, out_dir])
+				quit(2)
+				return
 	match OS.get_environment("P5_SIZE"):
 		"720":
 			sizes = [Vector2i(1280, 720)]
@@ -651,7 +658,7 @@ func _run() -> void:
 			await _shot_startscreen()
 
 		# Den surface: den_hud -> wardrobe -> ledger -> contract_table.
-		if _wants("den_hud") or _wants("wardrobe") or _wants("ledger") or _wants("contract_table"):
+		if _wants("den_hud") or _wants("wardrobe") or _wants("ledger") or _wants("ledger_market") or _wants("contract_table"):
 			var den: Node3D = await _mission("thieves_den", 1)
 			if den == null:
 				failures += 1
@@ -660,7 +667,7 @@ func _run() -> void:
 					await _shot_den(den)
 				if _wants("wardrobe"):
 					await _shot_wardrobe(den)
-				if _wants("ledger"):
+				if _wants("ledger") or _wants("ledger_market"):
 					await _shot_ledger(den)
 				if _wants("contract_table"):
 					await _shot_contract_table(den)

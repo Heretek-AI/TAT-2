@@ -15,7 +15,7 @@ is not in the extracted data. So the slice->direction mapping is **derived from
 the pixels**, never invented:
 
 1. the disc is the alpha>16 region of a slice (DXT5 carries the mask);
-2. luma is ITU-R 601 on the premultiplied-by-nothing RGB (0..255);
+2. luma is Rec. 709 (0.2126R + 0.7152G + 0.0722B) on the RGB (0..255);
 3. the lit cap is `luma >= p10 + 0.50 * (p99.9 - p10)` inside the disc
    (the cap is a bright plateau with a wide margin over the concealed face, so
    a range midpoint is stable for caps from ~1 % to ~100 % of the disc; a
@@ -70,6 +70,9 @@ LIT_SPAN = 0.50
 FLAT_SPAN = 8.0
 CENTRED_OFFSET = 0.08
 DIRECTIONAL_MIN_SPREAD_DEG = 15.0
+## Port decision, recorded in `mapping.selection` so the runtime reads the same
+## weight the mapping was produced with (game/src/ui/hud.gd defaults to it).
+ANGLE_WEIGHT = 0.35
 SCHEMA = "tat2.stealthball_array/1"
 
 
@@ -239,7 +242,12 @@ def _empty(status: str, reason: str, source: dict | None = None) -> dict:
             "pixel_format": "PF_DXT5",
             "material": "/Game/MaterialLibrary/Widget/M_TextureArray (TexArray + Index)",
         },
-        "mapping": {"kind": None, "order": [], "angle_spread_deg": 0.0},
+        "mapping": {
+            "kind": None,
+            "order": [],
+            "angle_spread_deg": 0.0,
+            "selection": _selection(),
+        },
         "slices": [],
     }
 
@@ -248,7 +256,7 @@ def _derivation() -> dict:
     return {
         "frame": "canvas (+x right, +y down, +z toward the camera)",
         "disc": "alpha >= %d" % ALPHA_MIN,
-        "luma": "ITU-R 601 0.2126R + 0.7152G + 0.0722B (0..255)",
+        "luma": "Rec. 709 0.2126R + 0.7152G + 0.0722B (0..255)",
         "lit_threshold": "p10 + %.2f * (p99.9 - p10) inside the disc; flat if the span < %.1f"
         % (LIT_SPAN, FLAT_SPAN),
         "centroid": "mean lit pixel - disc bbox centre, normalised by the bbox half extents",
@@ -256,6 +264,18 @@ def _derivation() -> dict:
         "directional_min_spread_deg": DIRECTIONAL_MIN_SPREAD_DEG,
         "selection": "derived-approx: nearest measured fraction (area ramp) or angle+fraction (directional)",
         "z": "front-hemisphere assumption: sqrt(1 - x^2 - y^2)",
+    }
+
+
+## The one port decision in the mapping: the angle term weight. Written to the
+## JSON so the runtime consumes the producer's value instead of duplicating a
+## magic number; `source=port_decision` keeps it out of the authored columns.
+def _selection() -> dict:
+    return {
+        "kind": "derived-approx",
+        "angle_weight": ANGLE_WEIGHT,
+        "source": "port_decision",
+        "note": "fraction error dominates; the angle term only breaks ties on a measured directional payload",
     }
 
 
@@ -349,6 +369,7 @@ def _build(manifest_path: Path, extracted: Path) -> tuple[dict, int]:
             "kind": "directional" if directional else "area_ramp",
             "angle_spread_deg": spread,
             "order": order,
+            "selection": _selection(),
             "lit_fraction_range": [fractions[0], fractions[-1]]
             if fractions
             else [0.0, 0.0],

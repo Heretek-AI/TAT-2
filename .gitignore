@@ -38,3 +38,5 @@ extracted.bak/
 game/data/generated.bak/
 extracted.bak/*
 game/data/generated.bak/*
+# stray 0-byte `-1` shell artifact (never tracked; Phase 3 hygiene)
+/-1

@@ -1,3 +1,5 @@
+> **SUPERSEDED — see [docs/HANDOFF_NEXT_AGENT.md](HANDOFF_NEXT_AGENT.md).**
+
 # `omo` Mass-`ulw` Master Prompt: Finish TAT-2 (Godot 4.7.2 · Linux 60 FPS · Visual & Gameplay Parity)
 
 > **How to launch this in standalone `omo` (pi coding agent):**

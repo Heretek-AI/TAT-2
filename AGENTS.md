@@ -264,7 +264,8 @@ identical to the `5135f53` table, logs in `docs/reports/logs/final/`, report
 [`docs/reports/final-20261127-phase0b.md`](docs/reports/final-20261127-phase0b.md).
 The clean route2 capture is `docs/reports/logs/p0b-route/route2-clean/`
 (`status=captured`, `git.dirty=false`, 13/14/0, 17 frames, 18 PNGs at 1920×1080,
-exit 0). The ratchet is re-stamped `measured_on=912a481` and pins
+exit 0). The ratchet has since been re-stamped `measured_on=37bb69e` by the
+Phase 1/2 49-gate run (superseding the Phase 0b `912a481` stamp) and still pins
 `p0b_route_self_test.checks=62`. The 44-gate logs were measured at `5135f53`,
 committed on `main` at `3d62f6b`, and the Phase 0b run replaced the logs in
 place at `912a481` (pre-Phase-0b copies remain recoverable at `912a481` under

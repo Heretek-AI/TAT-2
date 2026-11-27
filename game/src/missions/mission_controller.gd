@@ -4320,6 +4320,8 @@ func _assign_authored_patrol(guard: Node, path: Dictionary) -> void:
 	var waits: Array[float] = []
 	var yaws: Array[float] = []
 	var facings: Array[bool] = []
+	var types: Array[String] = []
+	var deviations: Array[float] = []
 	for p_var: Variant in path.get("points", []) as Array:
 		if not (p_var is Dictionary):
 			continue
@@ -4331,12 +4333,16 @@ func _assign_authored_patrol(guard: Node, path: Dictionary) -> void:
 		waits.append(maxf(0.0, float(pt.get("wait", 0.0))))
 		yaws.append(float(pt.get("yaw", 0.0)))
 		facings.append(bool(pt.get("facing", false)))
+		types.append(str(pt.get("type", "")))
+		deviations.append(maxf(0.0, float(pt.get("wait_deviation", 0.0))))
 	if points.is_empty():
 		return
 	guard.set("patrol_points", points)
 	guard.set("patrol_waits", waits)
 	guard.set("patrol_yaws", yaws)
 	guard.set("patrol_facing", facings)
+	guard.set("patrol_types", types)
+	guard.set("patrol_wait_deviations", deviations)
 	guard.set("patrol_loop_mode", str(path.get("loop_type", "")))
 
 

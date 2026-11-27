@@ -10,48 +10,56 @@ extends RefCounted
 ## is NOT a compiled tree. Payload /2 carries one node object per task /
 ## enter-condition / utility consideration / transition condition
 ## (`{name, class, kind, node_index, template_index, data_source, inherited,
-## parameters, bound}`); this model deliberately flattens those objects back to
-## display names, because W10-B1 is the producer stage and the shadow runtime
-## drives tasks/conditions by name. Node identity, authored parameters and the
-## `bound` map are for the B2 runtime (ST_Patrol cutover), not for this file.
+## parameters, bound}`); B2.1 keeps that object and exposes it as a normalised
+## node (`_normalise_node`), because node identity, authored parameters and the
+## `bound` map are what the interpreter now passes to the bindings. The name
+## arrays (`tasks[]`, `enter_conditions[]`, `utility[]`,
+## `transitions[].conditions[]`) are kept unchanged for legacy traces and
+## inventory helpers.
 ##
 ##   * a state carries: index, name, depth, type (State | Group | LinkedAsset |
 ##     Linked | Subtree), parent, children (direct), span (the raw
 ##     `ChildrenBegin..ChildrenEnd` pre-order range, which includes every
-##     descendant -- NOT the direct child list), tasks, enter_conditions,
-##     utility conditions, transitions, linked_asset, linked_state_index,
-##     enabled, selection_behavior;
+##     descendant -- NOT the direct child list), tasks, task_nodes,
+##     enter_conditions, enter_condition_nodes, utility, utility_nodes,
+##     condition_nodes (enter + every transition condition, flat),
+##     transitions, required_event_to_enter, consume_event_on_select,
+##     linked_asset, linked_state_index, enabled, selection_behavior;
 ##   * a transition carries: index, trigger (OnEvent | OnStateCompleted |
 ##     OnStateSucceeded | OnStateFailed | OnTick), priority, required_event,
-##     to_kind (state | Succeeded | Next), target, condition NAMES, enabled;
-##   * a task / enter condition / utility consideration / transition condition is
-##     a **display name** here. The name is `Nodes.Structs[].Name`; the node
-##     object around it is dropped by `_node_name()`.
+##     consume_event_on_select, to_kind (state | Succeeded | Next), target,
+##     condition NAMES, condition_nodes, enabled;
+##   * a node carries: name, class, kind, node_index, template_index,
+##     data_source, inherited, parameters, bound, bound_targets, ref_access,
+##     template_present, object_path, is_object, tree, state, key.
 ##
-## FIELDS THE PAYLOAD CARRIES THAT THIS MODEL DOES NOT EXPOSE (all measured in
-## `build/qa/w9/p4-facts-data.md`; consumed by B2):
-##   * per-node PARAMETERS: 566 `Nodes.Structs` entries (326 tasks, 233
-##     conditions, 7 unreferenced) resolve through `InstanceTemplateIndex` into
-##     `DefaultInstanceData` / `SharedInstanceData`; 139 are Blueprint
-##     `InstanceObject` templates resolved in the same file, 65 of which export
-##     empty `Properties` (`inherited: true`, class default unknown).
-##   * per-node `bound`: 676 `PropertyPathBindings` entries
-##     (`{source_array, source_index, source_state_index, source_path}`); a
-##     binding from a parameter bag carries `value: "UNKNOWN"` (canonical case:
-##     `Bool Compare.bLeft` <- `GlobalParameterData.ResetAlertness`).
-##   * `bConsumeEventOnSelect` (false on 2 states / 5 transitions) and
-##     `States[].RequiredEventToEnter` (3 states) are emitted on the state /
-##     transition records; this model does not surface them yet.
+## NODE IDENTITY. `key` is `"<tree>#<node_index>"` for payload /2 objects and
+## `"<tree>#n:<name>"` for /1 bare names. Display names are NOT unique (12
+## classes share two display names), so every join and every diagnostic uses
+## the key, never the name.
+##
+## MEASURED PAYLOAD FACTS THIS MODEL NOW EXPOSES (see `measure()`):
+##   * 566 `Nodes.Structs` entries = 559 referenced + 7 unreferenced, all keyed;
+##   * 497 records with non-empty `parameters`; 139 Blueprint object templates,
+##     65 of them `inherited: true` (class default unknown);
+##   * 676 `bound` entries; a binding from a parameter bag carries
+##     `value: "UNKNOWN"` (canonical case: `Bool Compare.bLeft` <-
+##     `GlobalParameterData.ResetAlertness`);
+##   * 3 states with `required_event_to_enter`; `consume_event_on_select` false
+##     on 2 states / 5 transitions;
+##   * a `RefAccessIndex` parameter (`{"RefAccessIndex": {"Value": n}}`) is an
+##     output slot, NOT a value; `_is_ref_access()` classifies it.
 ##   * state/asset-level parameter values are still absent: the bags serialise a
 ##     schema only (`PropertyDescs`, `SerialSize`), so those stay UNKNOWN.
 ##
 ## Consequences the interpreter respects (see `interpreter.gd`):
 ##   * a condition evaluates to TRUE / FALSE / UNKNOWN; UNKNOWN means "the
 ##     runtime does not determine this", never "false by default";
+##   * a bound target is authoritative: `bindings.resolve()` never falls back to
+##     the template default for a target that has a `bound` entry;
 ##   * every task handler is declared with an evidence class (implemented /
-##     mapped-to-port / unsupported) and a `parameter_blind` flag. The shadow
-##     bindings are unchanged by payload /2; the coverage table still reports
-##     0/21 trees fully evaluable until B2 reads the parameters.
+##     mapped-to-port / unsupported); the coverage table now splits structural
+##     coverage (`fully_covered`) from data parity (`fully_parity_covered`).
 ##
 ## Composition is two different things in this dump and the model keeps them
 ## apart:
@@ -110,6 +118,13 @@ const TRIGGERS: Array[String] = [
 
 ## A `Linked` state whose LinkedAsset is null names a root *inside* the same asset.
 const LOCAL_LINK_TYPES: Array[String] = ["Linked", "Subtree"]
+
+## Normalised node kinds.
+const NODE_TASK: String = "task"
+const NODE_ENTER: String = "enter_condition"
+const NODE_UTILITY: String = "utility_consideration"
+const NODE_TRANSITION: String = "transition_condition"
+const NODE_UNREFERENCED: String = "unreferenced"
 
 
 # ---------------------------------------------------------------------------
@@ -201,12 +216,18 @@ static func parse_payload(payload: Dictionary, path: String = "<memory>") -> Dic
 ##   "states": Array[Dictionary],     # index == position
 ##   "entry": int,                    # roots[0]'s index, -1 when empty
 ##   "by_name": Dictionary,           # state name -> index (first wins)
-##   "transitions": Array[Dictionary] # flat, in authored order
+##   "transitions": Array[Dictionary], # flat, in authored order
+##   "unreferenced_nodes": Array[Dictionary]  # the 7 Nodes.Structs the graph skips
 ## }
 ## A state is:
 ## { "index", "name", "depth", "type", "parent", "children": Array[int],
-##   "span": Vector2i, "tasks": Array[String], "enter_conditions": Array[String],
-##   "utility": Array[String], "transitions": Array[Dictionary],
+##   "span": Vector2i,
+##   "tasks": Array[String], "task_nodes": Array[Dictionary],
+##   "enter_conditions": Array[String], "enter_condition_nodes": Array[Dictionary],
+##   "utility": Array[String], "utility_nodes": Array[Dictionary],
+##   "condition_nodes": Array[Dictionary],   # enter + every transition condition
+##   "transitions": Array[Dictionary],
+##   "required_event_to_enter": Dictionary, "consume_event_on_select": bool,
 ##   "linked_asset": String, "linked_state_index": int, "enabled": bool,
 ##   "selection": String, "is_root": bool }
 static func parse_tree(tree_name: String, raw: Dictionary, path: String = "") -> Dictionary:
@@ -247,7 +268,7 @@ static func parse_tree(tree_name: String, raw: Dictionary, path: String = "") ->
 		if not by_index.has(i):
 			errors.append("missing state index %d" % i)
 			by_index[i] = {}
-		var state: Dictionary = _normalise_state(i, by_index[i])
+		var state: Dictionary = _normalise_state(i, by_index[i], tree_name)
 		states.append(state)
 		if not by_name.has(str(state["name"])):
 			by_name[str(state["name"])] = i
@@ -272,7 +293,17 @@ static func parse_tree(tree_name: String, raw: Dictionary, path: String = "") ->
 		"entry": -1,
 		"by_name": by_name,
 		"transitions": transitions,
+		"unreferenced_nodes": [],
 	}
+	# The 7 `Nodes.Structs` entries the graph never references (`Get Actor
+	# Location` property functions + ST_Guard's Difficulty Evaluator). They are
+	# part of the 566-node inventory, so the model keys them too.
+	var unref_raw: Variant = raw.get("nodes_unreferenced", [])
+	if unref_raw is Array:
+		for entry: Variant in unref_raw:
+			tree["unreferenced_nodes"].append(_normalise_node(entry, NODE_UNREFERENCED, tree_name, -1))
+	else:
+		warnings.append("nodes_unreferenced is not an array")
 	tree["entry"] = entry_index(tree)
 	_join_flat_transitions(tree, raw.get("transitions", []))
 	_validate(tree)
@@ -282,6 +313,12 @@ static func parse_tree(tree_name: String, raw: Dictionary, path: String = "") ->
 ## The per-state `transitions[]` copies are 9-key records without `fallback` or
 ## the delay; the tree's flat `transitions[]` has all 14. Join by `index` and
 ## fail closed when a record is missing or belongs to another state.
+##
+## Conditions are joined by NODE IDENTITY (`node_index`, or the name on a /1
+## payload) plus the authored `parameters`/`bound` maps -- never by the
+## display-name list alone: two different nodes can share a display name, and a
+## producer that changed a parameter without changing the name would otherwise
+## pass silently.
 static func _join_flat_transitions(tree: Dictionary, flat_raw: Variant) -> void:
 	var errors: Array = tree["errors"]
 	if not (flat_raw is Array) or (flat_raw as Array).is_empty():
@@ -330,14 +367,33 @@ static func _join_flat_transitions(tree: Dictionary, flat_raw: Variant) -> void:
 					errors.append("transition %d flat to_state '%s' != nested '%s'"
 						% [index, flat_name, str(tr.get("to_state", ""))])
 			if flat.has("conditions"):
-				var flat_conds: Array = []
+				var flat_ids: Array = []
 				for c: Variant in (flat["conditions"] as Array):
-					flat_conds.append(_node_name(c))
-				if flat_conds != (tr.get("conditions", []) as Array):
-					errors.append("transition %d flat conditions differ from nested" % index)
+					flat_ids.append(_node_signature(c))
+				var nested_ids: Array = []
+				for c: Dictionary in tr.get("condition_nodes", []):
+					nested_ids.append(_node_signature(c))
+				if flat_ids != nested_ids:
+					errors.append("transition %d flat conditions differ from nested (identity %s != %s)"
+						% [index, str(flat_ids), str(nested_ids)])
+				elif (flat["conditions"] as Array).size() > 0 and (flat["conditions"] as Array)[0] is Dictionary:
+					# Same identity list: the authored values must agree too.
+					var flat_full: Array = []
+					for c: Variant in (flat["conditions"] as Array):
+						flat_full.append([(c as Dictionary).get("parameters", {}), (c as Dictionary).get("bound", {})])
+					var nested_full: Array = []
+					for c: Dictionary in tr.get("condition_nodes", []):
+						nested_full.append([(c as Dictionary).get("parameters", {}), (c as Dictionary).get("bound", {})])
+					if flat_full != nested_full:
+						errors.append("transition %d flat conditions carry different parameters/bindings" % index)
+			if flat.has("consume_event_on_select") and bool(flat["consume_event_on_select"]) != bool(tr.get("consume_event_on_select", true)):
+				errors.append("transition %d flat consume_event_on_select=%s != nested %s"
+					% [index, str(flat["consume_event_on_select"]), str(tr.get("consume_event_on_select", true))])
 			tr["fallback"] = fallback
 			tr["delay_s"] = float(flat.get("delay_seconds", 0.0))
 			tr["delay_variance_s"] = float(flat.get("delay_random_variance", 0.0))
+			if flat.has("consume_event_on_select"):
+				tr["consume_event_on_select"] = bool(flat["consume_event_on_select"])
 			joined += 1
 	var total: int = int((tree["transitions"] as Array).size())
 	if joined != total:
@@ -362,6 +418,7 @@ static func _empty_tree(tree_name: String, raw: Dictionary, path: String, roots:
 		"entry": -1,
 		"by_name": {},
 		"transitions": [],
+		"unreferenced_nodes": [],
 	}
 
 
@@ -370,6 +427,12 @@ static func _validate(tree: Dictionary) -> void:
 	var errors: Array = tree["errors"]
 	var warnings: Array = tree["warnings"]
 	var count: int = states.size()
+	var seen_keys: Dictionary = {}
+	for unref: Dictionary in tree.get("unreferenced_nodes", []):
+		var ukey: String = str(unref.get("key", ""))
+		if bool(unref.get("is_object", false)) and seen_keys.has(ukey):
+			errors.append("node key '%s' is not unique" % ukey)
+		seen_keys[ukey] = true
 	for i: int in range(count):
 		var state: Dictionary = states[i]
 		if int(state["index"]) != i:
@@ -389,6 +452,25 @@ static func _validate(tree: Dictionary) -> void:
 				continue
 			if int((states[c] as Dictionary)["parent"]) != i:
 				errors.append("state %d child %d claims parent %d" % [i, c, int((states[c] as Dictionary)["parent"])])
+		# The name arrays are a legacy view of the node arrays; they must stay in
+		# lockstep or a trace would name a different node than the interpreter ran.
+		if (state["task_nodes"] as Array).size() != (state["tasks"] as Array).size():
+			errors.append("state %d has %d task nodes for %d task names" % [i, (state["task_nodes"] as Array).size(), (state["tasks"] as Array).size()])
+		if (state["enter_condition_nodes"] as Array).size() != (state["enter_conditions"] as Array).size():
+			errors.append("state %d has %d enter nodes for %d names" % [i, (state["enter_condition_nodes"] as Array).size(), (state["enter_conditions"] as Array).size()])
+		if (state["utility_nodes"] as Array).size() != (state["utility"] as Array).size():
+			errors.append("state %d has %d utility nodes for %d names" % [i, (state["utility_nodes"] as Array).size(), (state["utility"] as Array).size()])
+		var gate: Dictionary = state.get("required_event_to_enter", {})
+		if not gate.is_empty() and str(gate.get("tag", "")) == "":
+			errors.append("state %d has required_event_to_enter without a tag" % i)
+		for node_list: Array in [state["task_nodes"], state["enter_condition_nodes"], state["utility_nodes"]]:
+			for node: Dictionary in node_list:
+				var key: String = str(node.get("key", ""))
+				if key == "":
+					errors.append("state %d has a node with no identity" % i)
+				elif bool(node.get("is_object", false)) and seen_keys.has(key):
+					errors.append("state %d node key '%s' is not unique" % [i, key])
+				seen_keys[key] = true
 		for tr: Dictionary in state["transitions"]:
 			var to_kind: String = str(tr["to_kind"])
 			var to_index: int = int(tr["to_state_index"])
@@ -411,6 +493,13 @@ static func _validate(tree: Dictionary) -> void:
 				warnings.append("state %d transition %d carries required_event on %s" % [i, int(tr["index"]), trigger])
 			if int(tr["priority_rank"]) == PRIORITY_UNKNOWN_RANK:
 				errors.append("state %d transition %d has unknown priority '%s'" % [i, int(tr["index"]), str(tr["priority"])])
+			for node: Dictionary in tr.get("condition_nodes", []):
+				var key: String = str(node.get("key", ""))
+				if key == "":
+					errors.append("state %d transition %d has a condition with no identity" % [i, int(tr["index"])])
+				elif bool(node.get("is_object", false)) and seen_keys.has(key):
+					errors.append("state %d transition %d node key '%s' is not unique" % [i, int(tr["index"]), key])
+				seen_keys[key] = true
 	# A tree root must be indexed before the tree can be entered.
 	if tree["entry"] < 0:
 		errors.append("no entry root")
@@ -418,15 +507,113 @@ static func _validate(tree: Dictionary) -> void:
 
 ## One task / condition entry -> its authored display name.
 ## Payload /2 carries node objects (`{name, class, node_index, …}`); /1 carried
-## bare names. W10-B1 keeps the model name-only on purpose: node identity,
-## parameters and bindings are consumed by the B2 runtime, not here.
+## bare names. Names stay the trace key; `_normalise_node()` keeps the object.
 static func _node_name(entry: Variant) -> String:
 	if entry is Dictionary:
 		return str((entry as Dictionary).get("name", ""))
 	return str(entry)
 
 
-static func _normalise_state(index: int, raw: Dictionary) -> Dictionary:
+## Stable identity for a raw payload entry or an already-normalised node:
+## `node:<index>` for payload /2 objects, `name:<name>` for /1 bare names.
+static func _node_signature(entry: Variant) -> String:
+	if entry is Dictionary:
+		var d: Dictionary = entry as Dictionary
+		var idx: int = int(d.get("node_index", -1))
+		if idx >= 0:
+			return "node:%d" % idx
+		return "name:%s" % str(d.get("name", ""))
+	return "name:%s" % str(entry)
+
+
+## A `{"RefAccessIndex": {"Value": n}}` parameter is an output *slot*, not a
+## value: the task writes it at run time. 119 authored parameter values are this
+## shape, so treating it as data would fabricate a number.
+static func _is_ref_access(value: Variant) -> bool:
+	return value is Dictionary and (value as Dictionary).has("RefAccessIndex")
+
+
+## Payload /2 node object (or /1 bare name) -> the normalised node the
+## interpreter and bindings consume. `parameters`/`bound` are kept by reference:
+## the parsed payload is read-only after `load_library()`.
+static func _normalise_node(entry: Variant, kind: String, tree_name: String, state_index: int) -> Dictionary:
+	var out: Dictionary = {
+		"name": "",
+		"class": "",
+		"kind": kind,
+		"node_index": -1,
+		"template_index": -1,
+		"data_source": "",
+		"inherited": false,
+		"parameters": {},
+		"bound": {},
+		"bound_targets": [],
+		"ref_access": [],
+		"template_present": false,
+		"object_path": "",
+		"is_object": false,
+		"tree": tree_name,
+		"state": state_index,
+		"key": "",
+	}
+	if entry is Dictionary:
+		var d: Dictionary = entry as Dictionary
+		out["is_object"] = true
+		out["name"] = str(d.get("name", ""))
+		out["class"] = "" if d.get("class", null) == null else str(d.get("class"))
+		if d.has("kind"):
+			out["kind"] = str(d.get("kind", kind))
+		out["node_index"] = int(d.get("node_index", -1))
+		out["template_index"] = int(d.get("template_index", -1))
+		out["data_source"] = str(d.get("data_source", ""))
+		out["inherited"] = bool(d.get("inherited", false))
+		var params: Variant = d.get("parameters", {})
+		if params is Dictionary:
+			out["parameters"] = params
+			out["template_present"] = true
+		var bound: Variant = d.get("bound", {})
+		if bound is Dictionary:
+			out["bound"] = bound
+		out["object_path"] = str(d.get("object_path", ""))
+	else:
+		out["name"] = str(entry)
+	# Derived views, built once at parse time.
+	var bound_targets: Array = []
+	for target: Variant in (out["bound"] as Dictionary).keys():
+		bound_targets.append(str(target))
+	bound_targets.sort()
+	out["bound_targets"] = bound_targets
+	var ref_access: Array = []
+	for key: Variant in (out["parameters"] as Dictionary).keys():
+		if _is_ref_access((out["parameters"] as Dictionary)[key]):
+			ref_access.append(str(key))
+	ref_access.sort()
+	out["ref_access"] = ref_access
+	out["key"] = node_key(tree_name, int(out["node_index"]), str(out["name"]))
+	return out
+
+
+## The identity key: `"<tree>#<node_index>"` for payload /2, `"<tree>#n:<name>"`
+## when the payload carries only a display name. Unique across the 566 nodes.
+static func node_key(tree_name: String, node_index: int, node_name: String) -> String:
+	if node_index >= 0:
+		return "%s#%d" % [tree_name, node_index]
+	return "%s#n:%s" % [tree_name, node_name]
+
+
+static func _normalise_required_event(raw: Variant) -> Dictionary:
+	if raw is Dictionary:
+		var d: Dictionary = raw as Dictionary
+		return {
+			"tag": str(d.get("tag", "")),
+			"payload_struct": str(d.get("payload_struct", "")),
+		}
+	if raw is String and str(raw) != "":
+		return {"tag": str(raw), "payload_struct": ""}
+	return {}
+
+
+static func _normalise_state(index: int, raw: Dictionary, tree_name: String = "") -> Dictionary:
 	var out: Dictionary = {
 		"index": index,
 		"name": str(raw.get("name", "")),
@@ -436,9 +623,15 @@ static func _normalise_state(index: int, raw: Dictionary) -> Dictionary:
 		"children": [],
 		"span": Vector2i(0, 0),
 		"tasks": [],
+		"task_nodes": [],
 		"enter_conditions": [],
+		"enter_condition_nodes": [],
 		"utility": [],
+		"utility_nodes": [],
+		"condition_nodes": [],
 		"transitions": [],
+		"required_event_to_enter": {},
+		"consume_event_on_select": bool(raw.get("consume_event_on_select", true)),
 		"linked_asset": str(raw.get("linked_asset", "")) if raw.get("linked_asset", null) != null else "",
 		"linked_state_index": int(raw.get("linked_state_index", -1)) if raw.get("linked_state_index", null) != null else -1,
 		"enabled": bool(raw.get("enabled", true)),
@@ -451,25 +644,39 @@ static func _normalise_state(index: int, raw: Dictionary) -> Dictionary:
 	if span is Array and (span as Array).size() == 2:
 		out["span"] = Vector2i(int((span as Array)[0]), int((span as Array)[1]))
 	for t: Variant in (raw.get("tasks", []) as Array):
-		out["tasks"].append(_node_name(t))
+		var node: Dictionary = _normalise_node(t, NODE_TASK, tree_name, index)
+		out["task_nodes"].append(node)
+		out["tasks"].append(str(node["name"]))
 	for c: Variant in (raw.get("enter_conditions", []) as Array):
-		out["enter_conditions"].append(_node_name(c))
+		var node: Dictionary = _normalise_node(c, NODE_ENTER, tree_name, index)
+		out["enter_condition_nodes"].append(node)
+		out["enter_conditions"].append(str(node["name"]))
+		out["condition_nodes"].append(node)
 	for u: Variant in (raw.get("utility_considerations", []) as Array):
-		out["utility"].append(_node_name(u))
+		var node: Dictionary = _normalise_node(u, NODE_UTILITY, tree_name, index)
+		out["utility_nodes"].append(node)
+		out["utility"].append(str(node["name"]))
+	out["required_event_to_enter"] = _normalise_required_event(raw.get("required_event_to_enter", null))
 	var list: Array = []
 	for tr_raw: Variant in (raw.get("transitions", []) as Array):
 		if not (tr_raw is Dictionary):
 			continue
-		list.append(_normalise_transition(index, tr_raw))
+		var tr: Dictionary = _normalise_transition(index, tr_raw, tree_name)
+		list.append(tr)
+		for node: Dictionary in tr["condition_nodes"]:
+			out["condition_nodes"].append(node)
 	out["transitions"] = list
 	return out
 
 
-static func _normalise_transition(owner_state: int, raw: Dictionary) -> Dictionary:
+static func _normalise_transition(owner_state: int, raw: Dictionary, tree_name: String = "") -> Dictionary:
 	var priority: String = str(raw.get("priority", "None"))
 	var conditions: Array = []
+	var condition_nodes: Array = []
 	for c: Variant in (raw.get("conditions", []) as Array):
-		conditions.append(_node_name(c))
+		var node: Dictionary = _normalise_node(c, NODE_TRANSITION, tree_name, owner_state)
+		condition_nodes.append(node)
+		conditions.append(str(node["name"]))
 	var delay: Dictionary = raw.get("delay", {}) if raw.get("delay", {}) is Dictionary else {}
 	return {
 		"index": int(raw.get("index", -1)),
@@ -478,10 +685,12 @@ static func _normalise_transition(owner_state: int, raw: Dictionary) -> Dictiona
 		"priority": priority,
 		"priority_rank": int(PRIORITY_RANK.get(priority, PRIORITY_UNKNOWN_RANK)),
 		"required_event": str(raw.get("required_event", "")),
+		"consume_event_on_select": bool(raw.get("consume_event_on_select", true)),
 		"to_kind": str(raw.get("to_kind", "")),
 		"to_state_index": int(raw.get("to_state_index", -1)),
 		"to_state": str(raw.get("to_state", "")) if raw.get("to_state", null) != null else "",
 		"conditions": conditions,
+		"condition_nodes": condition_nodes,
 		"enabled": bool(raw.get("enabled", true)),
 		# The nested copy's own delay is the fallback for payloads without the
 		# flat array; the join overwrites it with the authored value when present.
@@ -609,6 +818,34 @@ static func task_inventory(trees: Dictionary) -> Dictionary:
 	return out
 
 
+## Every normalised node in one tree, referenced first then unreferenced.
+static func all_nodes(tree: Dictionary) -> Array:
+	var out: Array = []
+	for i: int in range(state_count(tree)):
+		var state: Dictionary = state(tree, i)
+		for node: Dictionary in state.get("task_nodes", []):
+			out.append(node)
+		for node: Dictionary in state.get("enter_condition_nodes", []):
+			out.append(node)
+		for node: Dictionary in state.get("utility_nodes", []):
+			out.append(node)
+		for tr: Dictionary in state.get("transitions", []):
+			for node: Dictionary in tr.get("condition_nodes", []):
+				out.append(node)
+	for node: Dictionary in tree.get("unreferenced_nodes", []):
+		out.append(node)
+	return out
+
+
+## Sorted identity keys for one tree (referenced + unreferenced).
+static func node_keys(tree: Dictionary) -> PackedStringArray:
+	var keys: PackedStringArray = []
+	for node: Dictionary in all_nodes(tree):
+		keys.append(str(node.get("key", "")))
+	keys.sort()
+	return keys
+
+
 ## Every distinct condition name (enter + transition) with instance counts.
 static func condition_inventory(trees: Dictionary) -> Dictionary:
 	var out: Dictionary = {}
@@ -624,7 +861,8 @@ static func condition_inventory(trees: Dictionary) -> Dictionary:
 
 
 ## Per-tree counts measured from the parsed model, in the payload's `stats`
-## shape, so producer drift shows up as a mismatch.
+## shape, so producer drift shows up as a mismatch. The node block is what B2.1
+## added: 566 keys, 497 records with parameters, 676 bindings.
 static func measure(tree: Dictionary) -> Dictionary:
 	var transitions: int = 0
 	var task_instances: int = 0
@@ -637,6 +875,18 @@ static func measure(tree: Dictionary) -> Dictionary:
 	var condition_names: Dictionary = {}
 	var events: Dictionary = {}
 	var triggers: Dictionary = {}
+	var node_keys_seen: Dictionary = {}
+	var nodes: int = 0
+	var node_duplicates: int = 0
+	var nodes_with_parameters: int = 0
+	var object_templates: int = 0
+	var inherited_templates: int = 0
+	var bound_bindings: int = 0
+	var binding_sources: Dictionary = {}
+	var ref_access_values: int = 0
+	var gated_states: int = 0
+	var consume_false_states: int = 0
+	var consume_false_transitions: int = 0
 	for i: int in range(state_count(tree)):
 		var s: Dictionary = state(tree, i)
 		max_depth = maxi(max_depth, int(s.get("depth", 0)))
@@ -646,6 +896,10 @@ static func measure(tree: Dictionary) -> Dictionary:
 			groups += 1
 		if is_linked_asset(tree, i):
 			linked += 1
+		if not (s.get("required_event_to_enter", {}) as Dictionary).is_empty():
+			gated_states += 1
+		if not bool(s.get("consume_event_on_select", true)):
+			consume_false_states += 1
 		for t: Variant in s.get("tasks", []):
 			task_instances += 1
 			task_names[str(t)] = true
@@ -659,9 +913,30 @@ static func measure(tree: Dictionary) -> Dictionary:
 			var ev: String = str(tr.get("required_event", ""))
 			if ev != "":
 				events[ev] = true
+			if not bool(tr.get("consume_event_on_select", true)):
+				consume_false_transitions += 1
 			for c: Variant in tr.get("conditions", []):
 				condition_instances += 1
 				condition_names[str(c)] = true
+	for node: Dictionary in all_nodes(tree):
+		nodes += 1
+		var key: String = str(node.get("key", ""))
+		if bool(node.get("is_object", false)):
+			if node_keys_seen.has(key):
+				node_duplicates += 1
+			node_keys_seen[key] = true
+		if not (node.get("parameters", {}) as Dictionary).is_empty():
+			nodes_with_parameters += 1
+		if str(node.get("object_path", "")) != "":
+			object_templates += 1
+		if bool(node.get("inherited", false)):
+			inherited_templates += 1
+		for target: Variant in (node.get("bound", {}) as Dictionary).keys():
+			bound_bindings += 1
+			var binding: Dictionary = (node.get("bound", {}) as Dictionary)[target]
+			var source: String = str(binding.get("source_array", ""))
+			binding_sources[source] = int(binding_sources.get(source, 0)) + 1
+		ref_access_values += (node.get("ref_access", []) as Array).size()
 	var event_list: Array = events.keys()
 	event_list.sort()
 	return {
@@ -677,4 +952,18 @@ static func measure(tree: Dictionary) -> Dictionary:
 		"condition_instances": condition_instances,
 		"events": event_list,
 		"triggers": triggers,
+		"nodes": nodes,
+		"nodes_referenced": nodes - (tree.get("unreferenced_nodes", []) as Array).size(),
+		"nodes_unreferenced": (tree.get("unreferenced_nodes", []) as Array).size(),
+		"node_keys": node_keys_seen.size(),
+		"nodes_duplicate_keys": node_duplicates,
+		"nodes_with_parameters": nodes_with_parameters,
+		"object_templates": object_templates,
+		"inherited_templates": inherited_templates,
+		"bound_bindings": bound_bindings,
+		"binding_sources": binding_sources,
+		"ref_access_values": ref_access_values,
+		"required_event_states": gated_states,
+		"consume_event_false_states": consume_false_states,
+		"consume_event_false_transitions": consume_false_transitions,
 	}

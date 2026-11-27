@@ -1,15 +1,11 @@
 extends "res://src/ai/statetree/bindings.gd"
-## Guard observation binding for shadow mode (W9-P4 S1).
+## Guard observation binding for shadow mode (W10-B2.1).
 ##
-## WHAT THIS IS: the port's mapping from the authored StateTree nodes to state it
-## already has. It reads the live guard and never writes to it. Payload /2 now
-## carries each node's authored `parameters` and `bound` map, but `tree_model.gd`
-## still flattens nodes to display names and this W9 binding does not read them
-## yet (B2 is the consumer), so every parameter-dependent declaration still says
-## `parameter_blind: true` and the note says which port fact the answer came from.
-## Nothing here claims that an authored number was recovered; the coverage table
-## prints the count of parameter-blind instances so the reader can see the size of
-## the inference.
+## WHAT THIS IS: the port's mapping from the authored StateTree NODES to state it
+## already has. It reads the live guard and never writes to it. Payload /2
+## carries each node's authored `parameters` and `bound` map; B2.1 consumes them
+## through `resolve()` (base class), so a bound target is authoritative and
+## `UNKNOWN` never falls back to the template default.
 ##
 ## REACHABLE PATH THIS DRIVES (measured, see `p4-report.md`):
 ##   ST_Guard Root -> Standard States -> Reset Focus -> Return To Normal
@@ -19,60 +15,77 @@ extends "res://src/ai/statetree/bindings.gd"
 ## Location -> Move To Point -> Say a Voice Line -> Rotate -> Delay
 ##     -> Complete Segment -> Set Next Patrol Path Point ...
 ##
-## WHAT IT CANNOT DRIVE, AND SAYS SO:
-##   * every smart-object task (no smart-object system in the port);
+## AUTHORED RECORDS THIS READS (all measured from the shipped level data,
+## `patrol_paths[].points[]`, not inferred):
+##   * `WaitSeconds`, `WaitDeviation`, `HasFacing`, `Facing`,
+##     `EPatrolPointType` and the point position for the guard's current
+##     waypoint; `CurrentPatrolWorldLocation` is that point's position. These are
+##     exactly the six `AUTHORED_RECORD_PATHS` in `bindings.gd`.
+##   * The shipped 673 authored points are 668 `PatrolToLocation` and 5
+##     `SmartObjectInteraction`, so the patrol point type is NOT assumed.
+##
+## WHAT THIS CANNOT DRIVE, AND SAYS SO:
+##   * every smart-object task (no smart-object system in the port), including
+##     `PatrolPointData.SmartObjectComponent`, which stays UNKNOWN;
 ##   * every targeting-group / individual-knowledge / attitude task (no
 ##     knowledge subsystem; `Extract Target From Targeting Group` cannot answer
 ##     "which target");
 ##   * every EQS (`Run Env Query`), gameplay-ability, lockdown, revive and
 ##     combat-positioning task;
+##   * every `Setup Patrol` output (`PatrolData`, `PatrolWorldLocation`,
+##     `PatrolWasInterrupted`, `PatrolBrokenLocation` are `RefAccessIndex` output
+##     slots in the payload; the port does not invent their values);
+##   * the `GlobalParameterData` bags (`ResetAlertness`, `Target`,
+##     `ShouldReactToIncorrectObjects`, ...): schema only, always UNKNOWN;
 ##   * every `OnEvent` transition: the port has **no** `StateTreeEvent.*`
-##     emitter (0 hits in `game/src`), so no event-bearing branch can fire. The
-##     trace records the required event and the shadow summary counts it.
+##     emitter (0 hits in `game/src`). The interpreter's event gates are driven
+##     by synthetic events in tests only; no live event bus is claimed.
 ##
-## The two conditions that decide the patrol branch are answered from the port's
-## own authored patrol record, not from a guess: `Patrol Point Is Of Type` from
-## the state name ("Smart Object" vs "Patrol to Location", matching the one
-## authored parameter in the dump plus the 673 authored points, all of which are
-## `EPatrolPointType::PatrolToLocation`), and `Bool Compare` in "Rotate" from the
-## point's authored `HasFacing`.
+## The two conditions that decide the patrol branch are now answered from the
+## authored values first and fall back to the declared mapping only when the
+## value is UNKNOWN: `Patrol Point Is Of Type` compares the authored
+## `PatrolPathType` with `PatrolPointData.PatrolPointType`; `Bool Compare`
+## compares `bLeft` (bound `PatrolPointData.HasFacing` / `ResetAlertness` / ...)
+## with `bRight`.
 
 const TreeModel = preload("res://src/ai/statetree/tree_model.gd")
 const BindingsBase = preload("res://src/ai/statetree/bindings.gd")
 
-## Class-level declarations. `parameter_blind` means the authored node parameter
-## is NOT in the payload, so the handler's behaviour is a port mapping.
-const TASK_DECL: Dictionary = {
+## Class-level declarations. `parameter_blind` is kept for compatibility with
+## the W9 declaration table; the coverage table now derives per-instance
+## `param_source`/`parity` from the node itself, so a class-level flag can no
+## longer hide an authored parameter that a handler reads.
+const GUARD_TASK_DECL: Dictionary = {
 	"TATState Tree Task Setup Patrol": {
 		"status": "mapped-to-port", "parameter_blind": true,
-		"note": "reads the same authored patrol record the FSM uses (level `patrol_paths`); Setup Patrol's own task params are not in the payload",
+		"note": "reads the same authored patrol record the FSM uses (level `patrol_paths`); its four outputs are RefAccessIndex slots, not values",
 	},
 	"TATState Tree Task Persist Patrol Data": {
-		"status": "mapped-to-port", "parameter_blind": true,
-		"note": "the port persists patrol state in guard fields (wp_index/_patrol_wait_left); no authored parameter is carried",
+		"status": "mapped-to-port", "parameter_blind": false,
+		"note": "the port persists patrol state in guard fields (wp_index/_patrol_wait_left); the node has no value parameter",
 	},
 	"TATState Tree Task Set Alertness": {
-		"status": "mapped-to-port", "parameter_blind": true,
-		"note": "observes the FSM's alertness; the authored EAlertnessLevel parameter is not in the payload, the target is inferred from the state name",
+		"status": "mapped-to-port", "parameter_blind": false,
+		"note": "compares the authored EAlertnessLevel with the FSM's alertness (observation, not command)",
 	},
 	"Move To": {
-		"status": "mapped-to-port", "parameter_blind": true,
-		"note": "completes when the FSM reaches the authored patrol point (1.0 m gate) or advances wp_index; the target binding is not in the payload",
+		"status": "mapped-to-port", "parameter_blind": false,
+		"note": "completes when the FSM reaches the authored patrol point (1.0 m gate) or advances wp_index; Destination resolves from the authored patrol record",
 	},
 	"TATState Tree Task Rotate to Face": {
-		"status": "mapped-to-port", "parameter_blind": true,
-		"note": "observes the authored patrol yaw the FSM already applies; the task's target binding is not in the payload",
+		"status": "mapped-to-port", "parameter_blind": false,
+		"note": "observes the authored patrol yaw the FSM already applies; TargetRotation resolves from PatrolPointData.Facing",
 	},
 	"Delay Task": {
-		"status": "mapped-to-port", "parameter_blind": true,
-		"note": "observes the FSM's authored WaitSeconds dwell; the task's Duration binding is not in the payload",
+		"status": "mapped-to-port", "parameter_blind": false,
+		"note": "bound Duration observes the FSM's authored WaitSeconds dwell; a literal Duration is driven by the generic base handler",
 	},
 	"Complete Patrol Segment": {
-		"status": "mapped-to-port", "parameter_blind": true,
+		"status": "mapped-to-port", "parameter_blind": false,
 		"note": "the FSM advances the authored path index itself; completion is observed, not commanded",
 	},
 	"Complete Broken Segment": {
-		"status": "mapped-to-port", "parameter_blind": true,
+		"status": "mapped-to-port", "parameter_blind": false,
 		"note": "the port has no broken-patrol-segment concept, so this branch is unreachable",
 	},
 	"Clear Focus": {
@@ -81,31 +94,31 @@ const TASK_DECL: Dictionary = {
 	},
 	"Set Focus (Actor)": {
 		"status": "mapped-to-port", "parameter_blind": true,
-		"note": "PORT GAP (vacuous): no focus subsystem; completes without turning the guard",
+		"note": "PORT GAP (vacuous): no focus subsystem; the Target binding is a GlobalParameterData slot with no serialized value",
 	},
 	"Set Focus (Location)": {
 		"status": "mapped-to-port", "parameter_blind": true,
-		"note": "PORT GAP (vacuous): no focus subsystem; completes without turning the guard",
+		"note": "PORT GAP (vacuous): no focus subsystem; the Target binding is a state parameter with no serialized value",
 	},
 	"STT Set Focus": {
 		"status": "mapped-to-port", "parameter_blind": true,
 		"note": "PORT GAP (vacuous): no focus subsystem",
 	},
 	"Request Voice Line": {
-		"status": "mapped-to-port", "parameter_blind": true,
-		"note": "PORT GAP: the port's VO is tag-driven from the FSM, not from the tree; the task completes without playing the authored line",
+		"status": "mapped-to-port", "parameter_blind": false,
+		"note": "PORT GAP: the port's VO is tag-driven from the FSM, not from the tree; the authored VOLineTag is carried but not played",
 	},
 	"Request Conditional Voice Line": {
-		"status": "mapped-to-port", "parameter_blind": true,
-		"note": "PORT GAP: as Request Voice Line; the tag parameter is not in the payload",
+		"status": "mapped-to-port", "parameter_blind": false,
+		"note": "PORT GAP: as Request Voice Line; the tag parameter is authored but not played",
 	},
 	"Request Conditional Voice Line Copy": {
-		"status": "mapped-to-port", "parameter_blind": true,
+		"status": "mapped-to-port", "parameter_blind": false,
 		"note": "PORT GAP: as Request Voice Line",
 	},
 	"Repeatedly Trigger VO": {
-		"status": "mapped-to-port", "parameter_blind": true,
-		"note": "PORT GAP: the delay/tag parameters are not in the payload; completes as a one-shot",
+		"status": "mapped-to-port", "parameter_blind": false,
+		"note": "PORT GAP: the tag/delay parameters are authored; the port completes it as a one-shot",
 	},
 	"Add Targeting Groups": {
 		"status": "mapped-to-port", "parameter_blind": true,
@@ -117,7 +130,7 @@ const TASK_DECL: Dictionary = {
 	},
 }
 
-const COND_DECL: Dictionary = {
+const GUARD_COND_DECL: Dictionary = {
 	"Is Carrying Major Loot": {
 		"status": "mapped-to-port", "parameter_blind": false,
 		"note": "guards never carry major loot in the port; false by construction",
@@ -128,19 +141,19 @@ const COND_DECL: Dictionary = {
 	},
 	"Check Target Has Gameplay Tag": {
 		"status": "mapped-to-port", "parameter_blind": true,
-		"note": "answered as 'the FSM is not NEUTRAL' (it has a target); the authored tag is not in the payload",
+		"note": "answered as 'the FSM is not NEUTRAL' (it has a target); the authored tag is carried but the port has no knowledge subsystem",
 	},
 	"Bool Compare": {
-		"status": "mapped-to-port", "parameter_blind": true,
-		"note": "answered only where the owning state disambiguates it; every other instance is UNKNOWN",
+		"status": "mapped-to-port", "parameter_blind": false,
+		"note": "compares the two resolved operands when both carry values; otherwise the declared state-name mapping answers or UNKNOWN",
 	},
 	"Patrol Point Is Of Type": {
-		"status": "mapped-to-port", "parameter_blind": true,
-		"note": "answered from the owning state name; all 673 authored patrol points are PatrolToLocation, so the Smart Object branch is false",
+		"status": "mapped-to-port", "parameter_blind": false,
+		"note": "compares the authored PatrolPathType with the authored patrol record's point type; only an UNKNOWN record falls back to the state-name mapping",
 	},
 	"Object Is Valid": {
 		"status": "mapped-to-port", "parameter_blind": true,
-		"note": "answered false only where the port has no such object (smart-object states); otherwise UNKNOWN",
+		"note": "false where the port has no smart object; otherwise UNKNOWN (the bound object is not serialized)",
 	},
 }
 
@@ -169,11 +182,13 @@ var unknown_conditions: Dictionary = {}
 var task_instances: Dictionary = {}
 var last_guard_position: Vector3 = Vector3.ZERO
 var stationary_s: float = 0.0
+var _slot_cache: Dictionary = {}
 
 
 func setup(p_guard: Node, p_trees: Dictionary) -> void:
 	guard = p_guard
 	trees = p_trees
+	_slot_cache.clear()
 
 
 func mutates() -> bool:
@@ -186,7 +201,7 @@ func mutates() -> bool:
 
 
 func declaration(kind: String, name: String) -> Dictionary:
-	var table: Dictionary = TASK_DECL if kind == "task" else COND_DECL
+	var table: Dictionary = GUARD_TASK_DECL if kind == "task" else GUARD_COND_DECL
 	var row: Dictionary = table.get(name, {})
 	if row.is_empty():
 		return {
@@ -205,10 +220,10 @@ func declaration(kind: String, name: String) -> Dictionary:
 	}
 
 
-## Narrow a class-level declaration to one authored instance. Everything not
+## Narrow a class-level declaration to one authored INSTANCE. Everything not
 ## explicitly reachable is excluded, so the coverage table cannot claim a class
 ## is covered because one of its instances happens to be.
-func covers(kind: String, name: String, tree_name: String, state_index: int) -> bool:
+func covers(kind: String, name: String, tree_name: String, state_index: int, node: Dictionary = {}) -> bool:
 	var decl: Dictionary = declaration(kind, name)
 	if str(decl.get("status", STATUS_UNSUPPORTED)) == STATUS_UNSUPPORTED:
 		return false
@@ -227,7 +242,15 @@ func covers(kind: String, name: String, tree_name: String, state_index: int) -> 
 		if name == "TATState Tree Task Rotate to Face":
 			return tree_name == "ST_Patrol" and tasks.has("TATState Tree Task Rotate to Face")
 		if name == "Delay Task":
-			return tree_name == "ST_Patrol" and (state_name == "Delay" or state_name == "Failed")
+			# A bound Duration is driven only where the port supplies it from the
+			# authored patrol record (ST_Patrol's WaitSeconds); a literal Duration
+			# is driven by the generic base handler in any tree.
+			var source: String = BindingsBase.param_source(node) if not node.is_empty() else "literal"
+			if source == "bound-authored-record":
+				return tree_name == "ST_Patrol"
+			if source == "bound-port-fallback" or source == "bound-unknown" or source == "ref-access" or source == "inherited":
+				return false
+			return true
 		return true
 	# Conditions.
 	if name == "Bool Compare":
@@ -264,6 +287,15 @@ func observe(delta: float) -> void:
 	var points: Array = []
 	if guard.get("patrol_points") is Array:
 		points = guard.get("patrol_points")
+	var waits: Array = []
+	if guard.get("patrol_waits") is Array:
+		waits = guard.get("patrol_waits")
+	var types: Array = []
+	if guard.get("patrol_types") is Array:
+		types = guard.get("patrol_types")
+	var deviations: Array = []
+	if guard.get("patrol_wait_deviations") is Array:
+		deviations = guard.get("patrol_wait_deviations")
 	var wp: int = int(guard.get("wp_index"))
 	var wait_left: float = 0.0
 	if guard.has_method("patrol_wait_remaining"):
@@ -282,6 +314,20 @@ func observe(delta: float) -> void:
 	if wp >= 0 and wp < facing.size() and wp < yaws.size():
 		has_facing = bool(facing[wp])
 		facing_yaw = float(yaws[wp])
+	# The mission controller fills waits/yaws/facing/types together from the
+	# authored APatrolPath; the synthetic 6x6 m fallback sets patrol_points only.
+	# So an equal-length waits array is the measured discriminator for "this
+	# guard's record is authored", with no new runtime flag.
+	var authored_record: bool = not waits.is_empty() and waits.size() == points.size()
+	var wait_s: float = 0.0
+	if authored_record and wp >= 0 and wp < waits.size():
+		wait_s = maxf(0.0, float(waits[wp]))
+	var point_type: String = "UNKNOWN"
+	if authored_record and wp >= 0 and wp < types.size() and str(types[wp]) != "":
+		point_type = str(types[wp])
+	var wait_deviation_s: float = 0.0
+	if authored_record and wp >= 0 and wp < deviations.size():
+		wait_deviation_s = maxf(0.0, float(deviations[wp]))
 	var state_value: int = int(guard.get("state"))
 	observed = {
 		"pos": pos,
@@ -293,6 +339,10 @@ func observe(delta: float) -> void:
 		"wp_index": wp,
 		"wp_count": points.size(),
 		"wait_left": wait_left,
+		"wait_s": wait_s,
+		"wait_deviation_s": wait_deviation_s,
+		"patrol_authored": authored_record,
+		"point_type": point_type,
 		"at_point": at_point,
 		"dist_to_point": pos.distance_to(points[wp] as Vector3) if wp >= 0 and wp < points.size() else -1.0,
 		"has_facing": has_facing,
@@ -320,13 +370,96 @@ static func _alertness_name(value: int) -> String:
 
 
 # ---------------------------------------------------------------------------
+# Frame bags (authored patrol record -> StateParameterData)
+# ---------------------------------------------------------------------------
+
+
+## Which `StateParameterData` slots the tree's nodes bind on `state_index`. The
+## slot index comes from the payload (`source_index`), never from a guess; for
+## ST_Patrol state 3 the 13 bindings all name slot 3.
+func _state_parameter_slots(tree_name: String, state_index: int) -> Array:
+	var cache_key: String = "%s|%d" % [tree_name, state_index]
+	if _slot_cache.has(cache_key):
+		return _slot_cache[cache_key]
+	var slots: Dictionary = {}
+	var tree: Dictionary = trees.get(tree_name, {})
+	for node: Dictionary in TreeModel.all_nodes(tree):
+		for target: Variant in (node.get("bound", {}) as Dictionary).keys():
+			var binding: Dictionary = (node.get("bound", {}) as Dictionary)[target]
+			if str(binding.get("source_array", "")) != "StateParameterData":
+				continue
+			var owner_raw: Variant = binding.get("source_state_index", null)
+			if owner_raw == null or int(owner_raw) != state_index:
+				continue
+			var index_raw: Variant = binding.get("source_index", null)
+			if index_raw != null:
+				slots[str(int(index_raw))] = true
+	var out: Array = slots.keys()
+	out.sort()
+	_slot_cache[cache_key] = out
+	return out
+
+
+## Fill ST_Patrol's `Patrol` state bag from the authored patrol record. The
+## fields are exactly the six `AUTHORED_RECORD_PATHS`; `SmartObjectComponent`
+## stays UNKNOWN (no smart-object system), and the four `Setup Patrol` outputs
+## are not supplied because the payload carries them as `RefAccessIndex` slots.
+func state_bags(tree_name: String, state_index: int) -> Dictionary:
+	if observed.is_empty():
+		return {}
+	if tree_name != "ST_Patrol":
+		return {}
+	var tree: Dictionary = trees.get(tree_name, {})
+	if TreeModel.state_name(tree, state_index) != "Patrol":
+		return {}
+	var wp: int = int(observed.get("wp_index", -1))
+	var points: Array = []
+	if guard != null and guard.get("patrol_points") is Array:
+		points = guard.get("patrol_points")
+	if wp < 0 or wp >= points.size():
+		return {}
+	var authored: bool = bool(observed.get("patrol_authored", false))
+	var position_source: String = SOURCE_AUTHORED_RECORD if authored else SOURCE_PORT_FALLBACK
+	var point: Dictionary = {
+		"WaitSeconds": _bag_leaf(float(observed.get("wait_s", 0.0)), authored),
+		"WaitDeviation": _bag_leaf(float(observed.get("wait_deviation_s", 0.0)), authored),
+		"HasFacing": _bag_leaf(bool(observed.get("has_facing", false)), authored),
+		"Facing": _bag_leaf(float(observed.get("facing_yaw", 0.0)), authored),
+		"PatrolPointType": _bag_leaf(str(observed.get("point_type", "UNKNOWN")), authored),
+		"SmartObjectComponent": {"value": VALUE_UNKNOWN, "source": SOURCE_BOUND_UNKNOWN},
+	}
+	var slot_value: Dictionary = {
+		"PatrolPointData": point,
+		"CurrentPatrolWorldLocation": {"value": points[wp] as Vector3, "source": position_source},
+		# Setup Patrol outputs: the payload carries them as RefAccessIndex slots.
+		"PatrolData": {"value": VALUE_UNKNOWN, "source": SOURCE_REF_ACCESS},
+		"PatrolWorldLocation": {"value": VALUE_UNKNOWN, "source": SOURCE_REF_ACCESS},
+		"PatrolWasInterrupted": {"value": VALUE_UNKNOWN, "source": SOURCE_REF_ACCESS},
+		"PatrolBrokenLocation": {"value": VALUE_UNKNOWN, "source": SOURCE_REF_ACCESS},
+	}
+	var by_slot: Dictionary = {}
+	for slot: Variant in _state_parameter_slots(tree_name, state_index):
+		by_slot[str(slot)] = slot_value
+	return {"StateParameterData": by_slot}
+
+
+func _bag_leaf(value: Variant, authored: bool) -> Dictionary:
+	if not authored:
+		return {"value": VALUE_UNKNOWN, "source": SOURCE_PORT_FALLBACK}
+	return {"value": value, "source": SOURCE_AUTHORED_RECORD}
+
+
+# ---------------------------------------------------------------------------
 # Conditions
 # ---------------------------------------------------------------------------
 
 
-func condition_state(name: String, tree_name: String, state_index: int, _transition: Dictionary) -> int:
+func condition_state(node: Dictionary, ctx: Dictionary) -> int:
 	if guard == null or not is_instance_valid(guard):
 		return COND_UNKNOWN
+	var name: String = str(node.get("name", ""))
+	var tree_name: String = str(ctx.get("tree", ""))
+	var state_index: int = int(ctx.get("state", -1))
 	var tree: Dictionary = trees.get(tree_name, {})
 	var state: Dictionary = TreeModel.state(tree, state_index)
 	var state_name: String = str(state.get("name", ""))
@@ -339,18 +472,34 @@ func condition_state(name: String, tree_name: String, state_index: int, _transit
 		"Check Target Has Gameplay Tag":
 			return COND_TRUE if int(observed.get("state", 0)) != 0 and not bool(observed.get("knocked_out", false)) else COND_FALSE
 		"Bool Compare":
+			var left: Dictionary = resolve(node, "bLeft", ctx)
+			var right: Dictionary = resolve(node, "bRight", ctx)
+			if (left["value"] is bool) and (right["value"] is bool) \
+					and str(left["source"]) != SOURCE_BOUND_UNKNOWN and str(left["source"]) != SOURCE_REF_ACCESS:
+				return COND_TRUE if bool(left["value"]) == bool(right["value"]) else COND_FALSE
+			# Declared mapping, used only when an operand is UNKNOWN.
 			if state_name.find("Broken Location") >= 0:
 				return COND_FALSE
 			if tasks.has("TATState Tree Task Rotate to Face"):
 				return COND_TRUE if bool(observed.get("has_facing", false)) else COND_FALSE
 			return COND_UNKNOWN
 		"Patrol Point Is Of Type":
+			var expected: Dictionary = resolve(node, "PatrolPathType", ctx)
+			var actual: Dictionary = resolve(node, "TargetPatrolPathType", ctx)
+			if str(expected["source"]) == SOURCE_LITERAL and str(actual["value"]) != VALUE_UNKNOWN \
+					and (str(actual["source"]) == SOURCE_AUTHORED_RECORD or str(actual["source"]) == SOURCE_PORT_FALLBACK):
+				return COND_TRUE if str(expected["value"]) == str(actual["value"]) else COND_FALSE
+			# Declared mapping, used only when the record carries no type.
 			if state_name.find("Smart Object") >= 0:
 				return COND_FALSE
 			if state_name.find("Patrol to Location") >= 0:
 				return COND_TRUE
 			return COND_UNKNOWN
 		"Object Is Valid":
+			var object_value: Dictionary = resolve(node, "Object", ctx)
+			if str(object_value["value"]) != VALUE_UNKNOWN \
+					and str(object_value["source"]) == SOURCE_AUTHORED_RECORD:
+				return COND_TRUE
 			if state_name.find("Smart Object") >= 0:
 				return COND_FALSE
 			return COND_UNKNOWN
@@ -364,12 +513,19 @@ func condition_state(name: String, tree_name: String, state_index: int, _transit
 # ---------------------------------------------------------------------------
 
 
-func task_enter(name: String, tree_name: String, state_index: int) -> Dictionary:
-	if not covers("task", name, tree_name, state_index):
+func task_enter(node: Dictionary, ctx: Dictionary) -> Dictionary:
+	var name: String = str(node.get("name", ""))
+	var tree_name: String = str(ctx.get("tree", ""))
+	var state_index: int = int(ctx.get("state", -1))
+	if not covers("task", name, tree_name, state_index, node):
 		return {}
+	# A literal `Delay Task` is fully drivable by the generic base handler.
+	if name == "Delay Task" and BindingsBase.param_source(node) != "bound-authored-record":
+		return super.task_enter(node, ctx)
 	task_instances[name] = int(task_instances.get(name, 0)) + 1
 	var instance: Dictionary = {
 		"task": name,
+		"node": node,
 		"tree": tree_name,
 		"state": state_index,
 		"entered_t": 0.0,
@@ -388,6 +544,8 @@ func task_enter(name: String, tree_name: String, state_index: int) -> Dictionary
 
 
 func task_tick(instance: Dictionary, delta: float) -> int:
+	if instance.has("duration_s"):
+		return super.task_tick(instance, delta)
 	instance["elapsed"] = float(instance.get("elapsed", 0.0)) + delta
 	var name: String = str(instance.get("task", ""))
 	match name:
@@ -414,6 +572,7 @@ func task_tick(instance: Dictionary, delta: float) -> int:
 				return SUCCEEDED
 			return RUNNING
 		"Delay Task":
+			# Bound Duration: the FSM's own dwell IS the authored WaitSeconds.
 			if int(observed.get("wp_index", -1)) != int(instance.get("wp_at_enter", -1)):
 				return SUCCEEDED
 			if float(instance.get("wait_at_enter", 0.0)) <= 0.0:
@@ -424,14 +583,21 @@ func task_tick(instance: Dictionary, delta: float) -> int:
 	return SUCCEEDED
 
 
-## `Set Alertness` has no authored level in the payload. The target comes from
-## the owning state name: "Reset Alertness" / "Set Alertness" (the patrol entry)
-## mean Neutral, "Raise alertness (so we run back)" means at least Suspicious.
-## Declared parameter_blind in TASK_DECL.
+## `Set Alertness`: compare the AUTHORED `EAlertnessLevel` with the FSM's current
+## alertness. The state-name inference survives only as the fallback for a node
+## whose level is missing (none in the payload: 20/20 carry it).
 func _tick_set_alertness(instance: Dictionary) -> int:
+	var node: Dictionary = instance.get("node", {})
+	var level: Dictionary = resolve(node, "AlertnessLevel", {})
+	var current: String = str(observed.get("state_name", "Unknown"))
+	if str(level["source"]) == SOURCE_LITERAL and str(level["value"]) != VALUE_UNKNOWN:
+		var want: String = str(level["value"])
+		var split_at: int = want.find("::")
+		if split_at >= 0:
+			want = want.substr(split_at + 2)
+		return SUCCEEDED if current == want else RUNNING
 	var tree: Dictionary = trees.get(str(instance.get("tree", "")), {})
 	var state_name: String = TreeModel.state_name(tree, int(instance.get("state", -1)))
-	var current: String = str(observed.get("state_name", "Unknown"))
 	if state_name.find("Raise") >= 0:
 		return SUCCEEDED if current != "Neutral" else RUNNING
 	return SUCCEEDED if current == "Neutral" else RUNNING
@@ -461,7 +627,10 @@ func task_exit(_instance: Dictionary) -> void:
 
 ## The port has no `StateTreeEvent.*` emitter. Returning FALSE (not UNKNOWN)
 ## keeps the meaning precise: the authored event never happens in this port, so
-## the branch is unreachable -- it is not a data gap in the payload.
+## the branch is unreachable -- it is not a data gap in the payload. The
+## interpreter's `required_event_to_enter` / `consume_event_on_select` gates are
+## exercised with synthetic events by suite 110; this method is what a live
+## event would go through.
 func event_matches(transition: Dictionary, event: Dictionary) -> int:
 	if str(transition.get("required_event", "")) == str(event.get("tag", "")):
 		events_matched += 1

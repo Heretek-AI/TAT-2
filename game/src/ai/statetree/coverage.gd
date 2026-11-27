@@ -1,81 +1,132 @@
 extends RefCounted
-## Coverage table for the 21 authored trees (W9-P4 S1), measured from the
+## Coverage table for the 21 authored trees (W10-B2.1), measured from the
 ## payload and the binding's per-instance predicate.
 ##
-## The brief asks for: for each task/condition class in the dump,
-## `implemented` / `mapped-to-port` / `unsupported`, counted across all 21 trees.
-## This module produces exactly that, plus the two numbers that matter for the
-## honest ceiling:
-##   * `covered`   how many authored instances the binding can drive;
-##   * `blind`     how many covered instances are `parameter_blind` (the model
-##                 hands the binding only node names; payload /2's per-node
-##                 `parameters` / `bound` are B2's to consume).
+## TWO DIFFERENT NUMBERS, never conflated:
+##   * `fully_covered`         STRUCTURAL: every task and condition instance has
+##                             a handler that can drive it, either from an
+##                             authored literal or from an authored record the
+##                             port supplies. This is what "the port can run the
+##                             tree" means.
+##   * `fully_parity_covered`  DATA PARITY: additionally, no instance reads a
+##                             value the payload/port cannot supply (`parity ==
+##                             "unknown"`). A tree can be structurally covered
+##                             and still be far from parity.
+##
+## Per instance the table records `param_source` (where the value comes from) and
+## `parity` (whether that value is the authored one):
+##   param_source: literal | bound-authored-record | bound-unknown | context |
+##                 ref-access | inherited | none
+##   parity:       authored | runtime-fed | unknown | uncovered
+## and `blind` counts the covered instances whose parity is `unknown`.
+##
+## PARITY IS DATA PARITY, not behaviour parity. A `PORT GAP` row (e.g. a voice
+## line the port does not play) can be `authored` because the value it would read
+## is in the payload; the `status`/`note` columns remain the behaviour statement.
+## `fully_parity_covered` therefore answers "every value this tree reads is the
+## authored one", not "the port behaves like UE".
 ##
 ## Nothing here is asserted: the table is recomputed from `guard_behavior.json`
 ## on every run, so a producer change or a new binding moves it.
 
 const TreeModel = preload("res://src/ai/statetree/tree_model.gd")
+const Bindings = preload("res://src/ai/statetree/bindings.gd")
+
+const PARITY_AUTHORED: String = "authored"
+const PARITY_RUNTIME_FED: String = "runtime-fed"
+const PARITY_UNKNOWN: String = "unknown"
+const PARITY_UNCOVERED: String = "uncovered"
 
 const ROW_KEYS: Array[String] = ["status", "instances", "covered", "blind", "note"]
 
 
 ## Returns
 ## {
-##   "tasks": {name: {status, instances, covered, blind, note, trees: {tree: n}}},
+##   "tasks": {name: {status, instances, covered, blind, note, param_sources,
+##                    parity, trees}},
 ##   "conditions": {...},
-##   "totals": {tasks, conditions, instances, covered, blind} per status,
+##   "instances": [ {tree, state, state_name, kind, name, class, key, covered,
+##                   param_source, parity, blind} ... ],
+##   "totals": {...},
 ##   "per_tree": {tree: {tasks_instances, tasks_covered, conditions_instances,
-##                       conditions_covered, fully_covered: bool}},
+##                       conditions_covered, fully_covered,
+##                       fully_parity_covered, parity_unknown, param_sources}},
 ## }
 static func build(trees: Dictionary, bindings: RefCounted) -> Dictionary:
 	var tasks: Dictionary = {}
 	var conditions: Dictionary = {}
 	var per_tree: Dictionary = {}
+	var instances: Array = []
 	for tree_name: Variant in trees.keys():
 		var tree: Dictionary = trees[tree_name]
 		per_tree[tree_name] = {
-			"tasks_instances": 0, "tasks_covered": 0,
-			"conditions_instances": 0, "conditions_covered": 0,
+			"tasks_instances": 0, "tasks_covered": 0, "tasks_blind": 0,
+			"conditions_instances": 0, "conditions_covered": 0, "conditions_blind": 0,
 			"states": TreeModel.state_count(tree),
+			"parity_authored": 0, "parity_runtime_fed": 0, "parity_unknown": 0,
+			"param_sources": {},
 		}
+		var tree_row: Dictionary = per_tree[tree_name]
 		for i: int in range(TreeModel.state_count(tree)):
 			var state: Dictionary = TreeModel.state(tree, i)
-			for task: Variant in state.get("tasks", []):
-				_accumulate(tasks, str(task), "task", str(tree_name), i, bindings, per_tree[tree_name], true)
-			for cond: Variant in state.get("enter_conditions", []):
-				_accumulate(conditions, str(cond), "condition", str(tree_name), i, bindings, per_tree[tree_name], false)
+			for node: Dictionary in state.get("task_nodes", []):
+				_accumulate(tasks, node, "task", str(tree_name), i, str(state.get("name", "")), bindings, tree_row, true, instances)
+			for node: Dictionary in state.get("enter_condition_nodes", []):
+				_accumulate(conditions, node, "condition", str(tree_name), i, str(state.get("name", "")), bindings, tree_row, false, instances)
 			for tr: Dictionary in state.get("transitions", []):
-				for cond: Variant in tr.get("conditions", []):
-					_accumulate(conditions, str(cond), "condition", str(tree_name), i, bindings, per_tree[tree_name], false)
+				for node: Dictionary in tr.get("condition_nodes", []):
+					_accumulate(conditions, node, "condition", str(tree_name), i, str(state.get("name", "")), bindings, tree_row, false, instances)
 		var row: Dictionary = per_tree[tree_name]
 		row["fully_covered"] = int(row["tasks_instances"]) == int(row["tasks_covered"]) \
 				and int(row["conditions_instances"]) == int(row["conditions_covered"])
-	var totals: Dictionary = {"tasks": 0, "conditions": 0, "instances": 0, "covered": 0, "blind": 0}
+		row["fully_parity_covered"] = bool(row["fully_covered"]) and int(row["parity_unknown"]) == 0
+	var fully_covered_trees: Array = []
+	var fully_parity_trees: Array = []
+	for tree_name: Variant in per_tree.keys():
+		if bool((per_tree[tree_name] as Dictionary)["fully_covered"]):
+			fully_covered_trees.append(str(tree_name))
+		if bool((per_tree[tree_name] as Dictionary)["fully_parity_covered"]):
+			fully_parity_trees.append(str(tree_name))
+	fully_covered_trees.sort()
+	fully_parity_trees.sort()
 	var by_status: Dictionary = {}
 	for table: Dictionary in [tasks, conditions]:
 		for name: Variant in table.keys():
 			var row: Dictionary = table[name]
 			var status: String = str(row["status"])
 			by_status[status] = int(by_status.get(status, 0)) + 1
+	var task_parity: Dictionary = _sum_dict(tasks, "parity")
+	var condition_parity: Dictionary = _sum_dict(conditions, "parity")
 	return {
 		"tasks": tasks,
 		"conditions": conditions,
+		"instances": instances,
 		"totals": {
 			"task_classes": tasks.size(),
 			"condition_classes": conditions.size(),
 			"task_instances": _sum(tasks, "instances"),
 			"task_covered": _sum(tasks, "covered"),
 			"task_blind": _sum(tasks, "blind"),
+			"task_parity_authored": int(task_parity.get(PARITY_AUTHORED, 0)),
+			"task_parity_runtime_fed": int(task_parity.get(PARITY_RUNTIME_FED, 0)),
+			"task_parity_unknown": int(task_parity.get(PARITY_UNKNOWN, 0)),
 			"condition_instances": _sum(conditions, "instances"),
 			"condition_covered": _sum(conditions, "covered"),
 			"condition_blind": _sum(conditions, "blind"),
+			"condition_parity_authored": int(condition_parity.get(PARITY_AUTHORED, 0)),
+			"condition_parity_runtime_fed": int(condition_parity.get(PARITY_RUNTIME_FED, 0)),
+			"condition_parity_unknown": int(condition_parity.get(PARITY_UNKNOWN, 0)),
 			"by_status": by_status,
+			"fully_covered_trees": fully_covered_trees,
+			"fully_parity_covered_trees": fully_parity_trees,
+			"instances": instances.size(),
 		},
 		"per_tree": per_tree,
 	}
 
 
-static func _accumulate(table: Dictionary, name: String, kind: String, tree: String, state_index: int, bindings: RefCounted, tree_row: Dictionary, is_task: bool) -> void:
+static func _accumulate(table: Dictionary, node: Dictionary, kind: String, tree: String, state_index: int, state_name: String, bindings: RefCounted, tree_row: Dictionary, is_task: bool, instances: Array) -> void:
+	var name: String = str(node.get("name", ""))
 	var row: Dictionary = table.get(name, {})
 	if row.is_empty():
 		var decl: Dictionary = bindings.declaration(kind, name) if bindings != null else {}
@@ -87,26 +138,73 @@ static func _accumulate(table: Dictionary, name: String, kind: String, tree: Str
 			"note": str(decl.get("note", "")),
 			"parameter_blind_class": bool(decl.get("parameter_blind", false)),
 			"trees": {},
+			"param_sources": {},
+			"parity": {},
 		}
 		table[name] = row
 	var covered: bool = false
 	if bindings != null:
-		covered = bool(bindings.covers(kind, name, tree, state_index))
+		covered = bool(bindings.covers(kind, name, tree, state_index, node))
+	var param_source: String = Bindings.param_source(node)
+	var parity: String = _parity(covered, param_source)
+	var blind: bool = covered and parity == PARITY_UNKNOWN
 	row["instances"] = int(row["instances"]) + 1
 	if covered:
 		row["covered"] = int(row["covered"]) + 1
-		if bool(row.get("parameter_blind_class", false)):
-			row["blind"] = int(row["blind"]) + 1
+	if blind:
+		row["blind"] = int(row["blind"]) + 1
+	var source_counts: Dictionary = row["param_sources"]
+	source_counts[param_source] = int(source_counts.get(param_source, 0)) + 1
+	var parity_counts: Dictionary = row["parity"]
+	parity_counts[parity] = int(parity_counts.get(parity, 0)) + 1
 	var tree_counts: Dictionary = row["trees"]
 	tree_counts[tree] = int(tree_counts.get(tree, 0)) + 1
+	var tree_sources: Dictionary = tree_row["param_sources"]
+	tree_sources[param_source] = int(tree_sources.get(param_source, 0)) + 1
+	if parity == PARITY_AUTHORED:
+		tree_row["parity_authored"] = int(tree_row["parity_authored"]) + 1
+	elif parity == PARITY_RUNTIME_FED:
+		tree_row["parity_runtime_fed"] = int(tree_row["parity_runtime_fed"]) + 1
+	elif parity == PARITY_UNKNOWN:
+		tree_row["parity_unknown"] = int(tree_row["parity_unknown"]) + 1
 	if is_task:
 		tree_row["tasks_instances"] = int(tree_row["tasks_instances"]) + 1
 		if covered:
 			tree_row["tasks_covered"] = int(tree_row["tasks_covered"]) + 1
+		if blind:
+			tree_row["tasks_blind"] = int(tree_row["tasks_blind"]) + 1
 	else:
 		tree_row["conditions_instances"] = int(tree_row["conditions_instances"]) + 1
 		if covered:
 			tree_row["conditions_covered"] = int(tree_row["conditions_covered"]) + 1
+		if blind:
+			tree_row["conditions_blind"] = int(tree_row["conditions_blind"]) + 1
+	instances.append({
+		"tree": tree,
+		"state": state_index,
+		"state_name": state_name,
+		"kind": kind,
+		"name": name,
+		"class": str(node.get("class", "")),
+		"key": str(node.get("key", "")),
+		"node_index": int(node.get("node_index", -1)),
+		"covered": covered,
+		"param_source": param_source,
+		"parity": parity,
+		"blind": blind,
+	})
+
+
+## Data parity for one instance. `uncovered` first: a tree can be structurally
+## covered only if every instance is covered, so this never hides a gap.
+static func _parity(covered: bool, param_source: String) -> String:
+	if not covered:
+		return PARITY_UNCOVERED
+	if param_source == "bound-authored-record":
+		return PARITY_RUNTIME_FED
+	if param_source == "bound-unknown" or param_source == "ref-access" or param_source == "inherited":
+		return PARITY_UNKNOWN
+	return PARITY_AUTHORED
 
 
 static func _sum(table: Dictionary, key: String) -> int:
@@ -116,8 +214,18 @@ static func _sum(table: Dictionary, key: String) -> int:
 	return total
 
 
+## Per-row parity histogram summed across a class table.
+static func _sum_dict(table: Dictionary, key: String) -> Dictionary:
+	var out: Dictionary = {}
+	for name: Variant in table.keys():
+		var d: Dictionary = (table[name] as Dictionary).get(key, {})
+		for k: Variant in d.keys():
+			out[k] = int(out.get(k, 0)) + int(d[k])
+	return out
+
+
 ## A stable human table for the report/probe:
-##   TASK|name|status|instances|covered|blind|note
+##   TASK|name|status|instances|covered|blind|note|param_sources|parity
 static func table_lines(coverage: Dictionary, kind: String = "tasks") -> PackedStringArray:
 	var out: PackedStringArray = []
 	var table: Dictionary = coverage.get(kind, {})
@@ -125,21 +233,37 @@ static func table_lines(coverage: Dictionary, kind: String = "tasks") -> PackedS
 	names.sort()
 	for name: Variant in names:
 		var row: Dictionary = table[name]
-		out.append("%s|%s|%s|%d|%d|%d|%s" % [
+		out.append("%s|%s|%s|%d|%d|%d|%s|%s|%s" % [
 			"TASK" if kind == "tasks" else "COND",
 			str(name), str(row["status"]), int(row["instances"]),
 			int(row["covered"]), int(row["blind"]), str(row["note"]),
+			_compact(row.get("param_sources", {})), _compact(row.get("parity", {})),
 		])
 	return out
+
+
+static func _compact(counts: Dictionary) -> String:
+	var keys: Array = counts.keys()
+	keys.sort()
+	var parts: PackedStringArray = []
+	for key: Variant in keys:
+		parts.append("%s=%d" % [str(key), int(counts[key])])
+	return ",".join(parts)
 
 
 ## One-line machine summary used by the probe and the test.
 static func summary_line(coverage: Dictionary) -> String:
 	var t: Dictionary = coverage["totals"]
 	var status: Dictionary = t["by_status"]
-	return "STATETREE_COVERAGE trees=%d task_classes=%d task_instances=%d task_covered=%d task_blind=%d condition_classes=%d condition_instances=%d condition_covered=%d condition_blind=%d implemented=%d mapped=%d unsupported=%d" % [
+	var ts: Dictionary = _sum_dict(coverage["tasks"], "param_sources")
+	var cs: Dictionary = _sum_dict(coverage["conditions"], "param_sources")
+	return "STATETREE_COVERAGE trees=%d task_classes=%d task_instances=%d task_covered=%d task_blind=%d condition_classes=%d condition_instances=%d condition_covered=%d condition_blind=%d implemented=%d mapped=%d unsupported=%d fully_covered_trees=%d fully_parity_covered_trees=%d task_parity_authored=%d task_parity_runtime_fed=%d task_parity_unknown=%d condition_parity_authored=%d condition_parity_runtime_fed=%d condition_parity_unknown=%d task_sources=%s condition_sources=%s" % [
 		(coverage["per_tree"] as Dictionary).size(),
 		int(t["task_classes"]), int(t["task_instances"]), int(t["task_covered"]), int(t["task_blind"]),
 		int(t["condition_classes"]), int(t["condition_instances"]), int(t["condition_covered"]), int(t["condition_blind"]),
 		int(status.get("implemented", 0)), int(status.get("mapped-to-port", 0)), int(status.get("unsupported", 0)),
+		(t["fully_covered_trees"] as Array).size(), (t["fully_parity_covered_trees"] as Array).size(),
+		int(t["task_parity_authored"]), int(t["task_parity_runtime_fed"]), int(t["task_parity_unknown"]),
+		int(t["condition_parity_authored"]), int(t["condition_parity_runtime_fed"]), int(t["condition_parity_unknown"]),
+		_compact(ts), _compact(cs),
 	]

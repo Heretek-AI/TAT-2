@@ -1,5 +1,5 @@
 extends RefCounted
-## Shadow StateTree runner (W9-P4 S1).
+## Shadow StateTree runner (W9-P4 S1, B2.1 node-aware).
 ##
 ## `TAT2_STATETREE=off|shadow|patrol` (default `off`, read once per process):
 ##   off     - nothing is loaded and no per-tick work happens;
@@ -11,6 +11,11 @@ extends RefCounted
 ##   patrol  - reserved for the S2 cutover. `guard_ai.gd` checks the mode before
 ##             using the interpreter as the movement authority; until S2 lands
 ##             this behaves exactly like `shadow` and says so once.
+##
+## B2.1 consumes payload /2's per-node `parameters` and `bound` map through
+## `bindings.resolve()`; the coverage table separates structural coverage
+## (`fully_covered`) from data parity (`fully_parity_covered`). No patrol cutover
+## happens here and the FSM remains the movement authority.
 ##
 ## The trace sink is shared per process (`trace.gd`). `TAT2_STATETREE_TRACE`
 ## streams NDJSON to a path; without it the rows stay in memory for tests.

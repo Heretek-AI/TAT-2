@@ -20,6 +20,7 @@ const BindingsBase = preload("res://src/ai/statetree/bindings.gd")
 const Trace = preload("res://src/ai/statetree/trace.gd")
 const Coverage = preload("res://src/ai/statetree/coverage.gd")
 const ShadowRunner = preload("res://src/ai/statetree/shadow_runner.gd")
+const GuardBindings = preload("res://src/ai/statetree/guard_bindings.gd")
 
 var fails: int = 0
 var checks: int = 0
@@ -39,6 +40,11 @@ func _initialize() -> void:
 	_check_ancestor_transition()
 	_check_flat_join()
 	_check_unknown_enter()
+	_check_node_model()
+	_check_binding_precedence()
+	_check_event_gates()
+	_check_guard_bag()
+	_check_literal_delay()
 	_check_coverage()
 	_check_all_tree_traces()
 	print("W9P4_STATETREE_SUMMARY: fails=%d checks=%d" % [fails, checks])
@@ -73,7 +79,10 @@ func _check_library() -> void:
 		total_states += int(measured["states"])
 		total_transitions += int(measured["transitions"])
 		var stats: Dictionary = tree.get("stats", {})
-		for key: String in ["states", "transitions", "groups", "disabled_states", "max_depth", "tasks", "task_instances", "conditions", "condition_instances"]:
+		for key: String in ["states", "transitions", "groups", "disabled_states", "max_depth", "tasks", "task_instances", "conditions", "condition_instances",
+				"nodes", "nodes_referenced", "nodes_unreferenced", "nodes_with_parameters", "object_templates",
+				"inherited_templates", "bound_bindings", "required_event_states", "consume_event_false_states",
+				"consume_event_false_transitions"]:
 			if stats.has(key) and int(stats[key]) != int(measured[key]):
 				drift.append("%s.%s payload=%s model=%s" % [tree_name, key, str(stats[key]), str(measured[key])])
 	_ok(total_states == 459, "459 states measured (got %d)" % total_states)
@@ -156,6 +165,7 @@ func _check_validator_fails_closed() -> void:
 
 ## A recording binding: counts condition/task calls and lets the test drive the
 ## flags. Not a game binding -- it proves the interpreter's own semantics.
+## B2.1 signature: conditions/tasks receive the NODE and a ctx dictionary.
 class SynthBinding extends RefCounted:
 	const COND_TRUE: int = 1
 	const COND_FALSE: int = 0
@@ -167,8 +177,10 @@ class SynthBinding extends RefCounted:
 	var flags: Dictionary = {}
 	var own_tick: int = 0
 	var cond_calls: Dictionary = {}
+	var cond_keys: Array = []
 	var task_ticks: Dictionary = {}
 	var task_enters: Dictionary = {}
+	var task_nodes: Array = []
 
 	func mutates() -> bool:
 		return false
@@ -176,11 +188,19 @@ class SynthBinding extends RefCounted:
 	func declaration(kind: String, name: String) -> Dictionary:
 		return {"status": "implemented", "parameter_blind": false, "note": "synthetic", "kind": kind, "name": name}
 
-	func covers(_kind: String, _name: String, _tree_name: String, _state_index: int) -> bool:
+	func covers(_kind: String, _name: String, _tree_name: String, _state_index: int, _node: Dictionary = {}) -> bool:
 		return true
 
-	func condition_state(name: String, _tree_name: String, _state_index: int, _transition: Dictionary) -> int:
+	func state_bags(_tree_name: String, _state_index: int) -> Dictionary:
+		return {}
+
+	func condition_state(node: Dictionary, ctx: Dictionary) -> int:
+		var name: String = str(node.get("name", ""))
 		cond_calls[name] = int(cond_calls.get(name, 0)) + 1
+		cond_keys.append(str(node.get("key", "")))
+		# Prove the interpreter passes node identity + ctx, not just a name.
+		if not ctx.has("frames") or str(ctx.get("tree", "")) == "":
+			return COND_UNKNOWN
 		if name == "SYN_TRUE":
 			return COND_TRUE
 		if name == "SYN_FALSE":
@@ -189,10 +209,12 @@ class SynthBinding extends RefCounted:
 			return COND_TRUE if int(flags.get("flag", 0)) == 1 else COND_FALSE
 		return COND_UNKNOWN
 
-	func task_enter(name: String, _tree_name: String, _state_index: int) -> Dictionary:
+	func task_enter(node: Dictionary, ctx: Dictionary) -> Dictionary:
+		var name: String = str(node.get("name", ""))
 		task_enters[name] = int(task_enters.get(name, 0)) + 1
 		task_ticks[name] = 0
-		return {"task": name, "status": RUNNING}
+		task_nodes.append(node)
+		return {"task": name, "node": node, "tree": str(ctx.get("tree", "")), "status": RUNNING}
 
 	func task_exit(_instance: Dictionary) -> void:
 		pass
@@ -213,7 +235,7 @@ class SynthBinding extends RefCounted:
 		own_tick += 1
 
 
-func _run(tree_name: String, ticks: int, delta: float = 0.05, flag_at: int = -1, event_at: int = -1) -> Dictionary:
+func _run(tree_name: String, ticks: int, delta: float = 0.05, flag_at: int = -1, event_at: int = -1, event_tag: String = "StateTreeEvent.Test") -> Dictionary:
 	var lib: Dictionary = TreeModel.parse_payload(_base_payload(), "<synth>")
 	var binding: RefCounted = SynthBinding.new()
 	var trace: RefCounted = Trace.new()
@@ -224,7 +246,7 @@ func _run(tree_name: String, ticks: int, delta: float = 0.05, flag_at: int = -1,
 		if flag_at >= 0 and i >= flag_at:
 			binding.flags["flag"] = 1
 		if event_at >= 0 and i == event_at:
-			interp.push_event("StateTreeEvent.Test")
+			interp.push_event(event_tag)
 		interp.tick(delta)
 	return {"interp": interp, "binding": binding, "trace": trace, "started": started}
 
@@ -391,6 +413,363 @@ func _check_unknown_enter() -> void:
 	_ok(int(interp.stats["conditions_unknown"]) >= 1, "the unknown condition is counted")
 
 
+# ---------------------------------------------------------------------------
+# 3b. B2.1 node model and binding precedence
+# ---------------------------------------------------------------------------
+
+
+## 566/566 node keys, the four exposed node arrays, and the five worked
+## bindings (T01 contract §5). Every number here is measured from the payload.
+func _check_node_model() -> void:
+	var lib: Dictionary = TreeModel.load_library()
+	var trees: Dictionary = lib["trees"]
+	var total_nodes: int = 0
+	var total_referenced: int = 0
+	var total_unreferenced: int = 0
+	var with_parameters: int = 0
+	var object_templates: int = 0
+	var inherited: int = 0
+	var bindings: int = 0
+	var gated: int = 0
+	var consume_false_states: int = 0
+	var consume_false_transitions: int = 0
+	var duplicate_keys: int = 0
+	var lockstep: bool = true
+	var sources_agree: bool = true
+	var all_keys: Dictionary = {}
+	for tree_name: Variant in trees.keys():
+		var tree: Dictionary = trees[tree_name]
+		var measured: Dictionary = TreeModel.measure(tree)
+		total_nodes += int(measured["nodes"])
+		total_referenced += int(measured["nodes_referenced"])
+		total_unreferenced += int(measured["nodes_unreferenced"])
+		with_parameters += int(measured["nodes_with_parameters"])
+		object_templates += int(measured["object_templates"])
+		inherited += int(measured["inherited_templates"])
+		bindings += int(measured["bound_bindings"])
+		gated += int(measured["required_event_states"])
+		consume_false_states += int(measured["consume_event_false_states"])
+		consume_false_transitions += int(measured["consume_event_false_transitions"])
+		duplicate_keys += int(measured["nodes_duplicate_keys"])
+		for key: String in TreeModel.node_keys(tree):
+			all_keys[key] = true
+		var payload_stats: Dictionary = tree.get("stats", {})
+		if payload_stats.has("binding_sources"):
+			# JSON numbers arrive as floats; compare the counts numerically.
+			var want: Dictionary = payload_stats["binding_sources"]
+			var got: Dictionary = measured["binding_sources"]
+			if want.size() != got.size():
+				sources_agree = false
+			for source_key: Variant in want.keys():
+				if int(got.get(str(source_key), -1)) != int(want[source_key]):
+					sources_agree = false
+		for i: int in range(TreeModel.state_count(tree)):
+			var state: Dictionary = TreeModel.state(tree, i)
+			if (state["task_nodes"] as Array).size() != (state["tasks"] as Array).size():
+				lockstep = false
+			if (state["enter_condition_nodes"] as Array).size() != (state["enter_conditions"] as Array).size():
+				lockstep = false
+			if (state["utility_nodes"] as Array).size() != (state["utility"] as Array).size():
+				lockstep = false
+			var condition_nodes: int = (state["enter_condition_nodes"] as Array).size()
+			var condition_names: int = (state["enter_conditions"] as Array).size()
+			for tr: Dictionary in state.get("transitions", []):
+				condition_nodes += (tr["condition_nodes"] as Array).size()
+				condition_names += (tr["conditions"] as Array).size()
+			if condition_nodes != (state["condition_nodes"] as Array).size() or condition_names != (state["condition_nodes"] as Array).size():
+				lockstep = false
+	_ok(total_nodes == 566, "566 node keys measured (got %d)" % total_nodes)
+	_ok(total_referenced == 559, "559 referenced nodes (got %d)" % total_referenced)
+	_ok(total_unreferenced == 7, "7 unreferenced nodes (got %d)" % total_unreferenced)
+	_ok(all_keys.size() == 566, "566 distinct node identity keys (got %d)" % all_keys.size())
+	_ok(duplicate_keys == 0, "no duplicate node keys (got %d)" % duplicate_keys)
+	_ok(with_parameters == 497, "497 nodes carry parameters (got %d)" % with_parameters)
+	_ok(object_templates == 139, "139 Blueprint object templates (got %d)" % object_templates)
+	_ok(inherited == 65, "65 inherited class-default templates (got %d)" % inherited)
+	_ok(bindings == 676, "676 bound bindings (got %d)" % bindings)
+	_ok(gated == 3, "3 required_event_to_enter states (got %d)" % gated)
+	_ok(consume_false_states == 2, "2 consume_event_on_select=false states (got %d)" % consume_false_states)
+	_ok(consume_false_transitions == 5, "5 consume_event_on_select=false transitions (got %d)" % consume_false_transitions)
+	_ok(lockstep, "node arrays and legacy name arrays are in lockstep")
+	_ok(sources_agree, "per-tree binding_sources match the payload stats")
+	# The modelled gate records carry the authored tag and payload struct.
+	var patrol: Dictionary = trees["ST_Patrol"]
+	var gate: Dictionary = TreeModel.state(patrol, 21).get("required_event_to_enter", {})
+	_ok(str(gate.get("tag", "")) == "StateTreeEvent.DistractionEvent", "ST_Patrol[21] requires DistractionEvent (got %s)" % str(gate.get("tag", "")))
+	_ok(str(gate.get("payload_struct", "")) == "TATAITargetingEvent_DistractionEvent", "ST_Patrol[21] payload struct")
+	_ok(not bool(TreeModel.state(patrol, 21).get("consume_event_on_select", true)), "ST_Patrol[21] does not consume on select")
+	var into_distraction: Dictionary = TreeModel.state(patrol, 3).get("transitions", [])[1]
+	_ok(int(into_distraction.get("index", -1)) == 2 and str(into_distraction.get("trigger", "")) == "OnEvent", "ST_Patrol[3] transition 2 is the DistractionEvent OnEvent transition")
+	_ok(not bool(into_distraction.get("consume_event_on_select", true)), "ST_Patrol[3] t2 also keeps the event (authored false)")
+	# Node identity is the class, not the display name.
+	var patrol_type_node: Dictionary = _enter_node(patrol, 11, "Patrol Point Is Of Type")
+	_ok(str(patrol_type_node.get("class", "")) == "STC_PatrolPathPointIsOfType_C",
+		"class identity for ST_Patrol[11] (got '%s')" % str(patrol_type_node.get("class", "")))
+	_ok(str((patrol_type_node.get("parameters", {}) as Dictionary).get("PatrolPathType", "")) == "EPatrolPointType::SmartObjectInteraction",
+		"ST_Patrol[11] authored PatrolPathType")
+	var inherited_node: Dictionary = _enter_node(patrol, 13, "Patrol Point Is Of Type")
+	_ok(bool(inherited_node.get("inherited", false)), "ST_Patrol[13] template is inherited")
+	_ok((inherited_node.get("parameters", {}) as Dictionary).is_empty(), "ST_Patrol[13] has no overrides")
+	print("P4NODES nodes=%d referenced=%d unreferenced=%d keys=%d parameters=%d objects=%d inherited=%d bindings=%d gated=%d consume_false_states=%d consume_false_transitions=%d"
+		% [total_nodes, total_referenced, total_unreferenced, all_keys.size(), with_parameters,
+			object_templates, inherited, bindings, gated, consume_false_states, consume_false_transitions])
+
+
+func _task_node(tree: Dictionary, state_index: int, name: String) -> Dictionary:
+	for node: Dictionary in TreeModel.state(tree, state_index).get("task_nodes", []):
+		if str(node.get("name", "")) == name:
+			return node
+	return {}
+
+
+func _enter_node(tree: Dictionary, state_index: int, name: String) -> Dictionary:
+	for node: Dictionary in TreeModel.state(tree, state_index).get("enter_condition_nodes", []):
+		if str(node.get("name", "")) == name:
+			return node
+	return {}
+
+
+## The five T01 worked bindings, proved through `resolve()`:
+##   ST_Patrol[17] Duration uses PatrolPointData.WaitSeconds, never the 1.0
+##   template; ST_Patrol[19] is the 100.0 literal; Bool Compare.bLeft is
+##   UNKNOWN (ResetAlertness); Move To.Destination is bound;
+##   Setup Patrol's outputs are RefAccessIndex slots, not values.
+func _check_binding_precedence() -> void:
+	var lib: Dictionary = TreeModel.load_library()
+	var patrol: Dictionary = lib["trees"]["ST_Patrol"]
+	var base: RefCounted = BindingsBase.new()
+	var ctx: Dictionary = {"tree": "ST_Patrol", "state": 17, "transition": {}, "tick": 0, "time": 0.0, "frames": []}
+	var delay: Dictionary = _task_node(patrol, 17, "Delay Task")
+	_ok(not delay.is_empty(), "ST_Patrol[17] Delay Task node exists")
+	var duration: Dictionary = base.resolve(delay, "Duration", ctx)
+	_ok(bool(duration["template_present"]), "Duration template is present")
+	_ok(duration["template"] is float and is_equal_approx(float(duration["template"]), 1.0),
+		"the template value is the 1.0 s default (got %s)" % str(duration["template"]))
+	_ok(str(duration["value"]) == BindingsBase.VALUE_UNKNOWN, "a bound Duration with no bag resolves UNKNOWN (got %s)" % str(duration["value"]))
+	_ok(str(duration["source"]) == BindingsBase.SOURCE_BOUND_UNKNOWN, "source is bound-unknown (got %s)" % str(duration["source"]))
+	_ok(str(duration["path"]) == str(["PatrolPointData", "WaitSeconds"]), "the bound path is PatrolPointData.WaitSeconds (got %s)" % str(duration["path"]))
+	_ok(BindingsBase.param_source(delay) == "bound-authored-record", "Delay Task param_source is the authored patrol record")
+	# The case difference is real: `parameters.duration` vs `bound.Duration`.
+	_ok((delay["parameters"] as Dictionary).has("duration") and not (delay["parameters"] as Dictionary).has("Duration"),
+		"Delay Task template key is lowercase 'duration'")
+	var duration_lower: Dictionary = base.resolve(delay, "duration", ctx)
+	_ok(str(duration_lower["source"]) == BindingsBase.SOURCE_BOUND_UNKNOWN,
+		"the bound map matches the lowercase template key case-insensitively (source %s)" % str(duration_lower["source"]))
+	# With the authored record in a frame bag, the bound value wins over 1.0.
+	var frames: Array = [{
+		"tree": "ST_Patrol", "state": 3,
+		"bags": {"StateParameterData": {"3": {"PatrolPointData": {
+			"WaitSeconds": {"value": 10.0, "source": BindingsBase.SOURCE_AUTHORED_RECORD},
+		}}}},
+	}]
+	var ctx_bag: Dictionary = {"tree": "ST_Patrol", "state": 17, "transition": {}, "tick": 0, "time": 0.0, "frames": frames}
+	var authored: Dictionary = base.resolve(delay, "Duration", ctx_bag)
+	_ok(is_equal_approx(float(authored["value"]), 10.0), "the bag's WaitSeconds wins (got %s)" % str(authored["value"]))
+	_ok(str(authored["source"]) == BindingsBase.SOURCE_AUTHORED_RECORD, "source is bound-authored-record (got %s)" % str(authored["source"]))
+	# A bag that lacks WaitSeconds still must not fall back to 1.0.
+	var empty_frames: Array = [{"tree": "ST_Patrol", "state": 3, "bags": {"StateParameterData": {"3": {"PatrolPointData": {}}}}}]
+	var ctx_empty: Dictionary = {"tree": "ST_Patrol", "state": 17, "transition": {}, "tick": 0, "time": 0.0, "frames": empty_frames}
+	var missing: Dictionary = base.resolve(delay, "Duration", ctx_empty)
+	_ok(str(missing["value"]) == BindingsBase.VALUE_UNKNOWN,
+		"a missing bag value stays UNKNOWN, never the 1.0 template (got %s)" % str(missing["value"]))
+	# The 100.0 literal.
+	var failed: Dictionary = _task_node(patrol, 19, "Delay Task")
+	var literal: Dictionary = base.resolve(failed, "Duration", ctx)
+	_ok(str(literal["source"]) == BindingsBase.SOURCE_LITERAL, "ST_Patrol[19] Duration is a literal (got %s)" % str(literal["source"]))
+	_ok(is_equal_approx(float(literal["value"]), 100.0), "ST_Patrol[19] Duration is 100.0 (got %s)" % str(literal["value"]))
+	_ok((failed["bound"] as Dictionary).is_empty(), "ST_Patrol[19] has no bindings")
+	# Bool Compare.bLeft <- ResetAlertness is UNKNOWN; bRight is authored.
+	var compare: Dictionary = _enter_node(patrol, 1, "Bool Compare")
+	var left: Dictionary = base.resolve(compare, "bLeft", ctx)
+	var right: Dictionary = base.resolve(compare, "bRight", ctx)
+	_ok(str(left["value"]) == BindingsBase.VALUE_UNKNOWN, "Bool Compare.bLeft is UNKNOWN (got %s)" % str(left["value"]))
+	_ok(str(left["source"]) == BindingsBase.SOURCE_BOUND_UNKNOWN, "bLeft source is bound-unknown")
+	_ok(str(left["path"]) == str(["ResetAlertness"]), "bLeft is GlobalParameterData.ResetAlertness (got %s)" % str(left["path"]))
+	_ok(left["template"] is bool and bool(left["template"]) == false, "bLeft has a false template that is NOT used")
+	_ok(right["value"] is bool and bool(right["value"]) == true, "bRight is the authored true")
+	# Move To.Destination is bound to CurrentPatrolWorldLocation.
+	var move: Dictionary = _task_node(patrol, 14, "Move To")
+	var destination: Dictionary = base.resolve(move, "Destination", ctx)
+	_ok(str(destination["source"]) == BindingsBase.SOURCE_BOUND_UNKNOWN or str(destination["source"]) == BindingsBase.SOURCE_AUTHORED_RECORD,
+		"Move To.Destination is bound (source %s)" % str(destination["source"]))
+	_ok(str(destination["path"]) == str(["CurrentPatrolWorldLocation"]), "Destination is CurrentPatrolWorldLocation (got %s)" % str(destination["path"]))
+	_ok(destination["template"] is Dictionary, "Destination has a zero-vector template that is NOT used")
+	# Setup Patrol outputs are RefAccessIndex slots, not values.
+	var setup: Dictionary = _task_node(patrol, 4, "TATState Tree Task Setup Patrol")
+	_ok(setup["ref_access"] == ["PatrolBrokenLocation", "PatrolData", "PatrolWasInterrupted", "PatrolWorldLocation"],
+		"Setup Patrol exposes four RefAccessIndex outputs (got %s)" % str(setup["ref_access"]))
+	var patrol_data: Dictionary = base.resolve(setup, "PatrolData", ctx)
+	_ok(str(patrol_data["source"]) == BindingsBase.SOURCE_REF_ACCESS, "PatrolData is ref-access (got %s)" % str(patrol_data["source"]))
+	_ok(str(patrol_data["value"]) == BindingsBase.VALUE_UNKNOWN, "PatrolData is not a value (got %s)" % str(patrol_data["value"]))
+	# The four worked-example values in one line for the report.
+	print("P4BIND delay_template=%s delay_bound=%s delay_bag=%s failed_literal=%s bLeft=%s bRight=%s destination=%s patrol_data=%s"
+		% [str(duration["template"]), str(duration["value"]), str(authored["value"]),
+			str(literal["value"]), str(left["value"]), str(right["value"]),
+			str(destination["source"]), str(patrol_data["source"])])
+
+
+## `required_event_to_enter` / `consume_event_on_select`, driven by synthetic
+## events only: no live event bus is claimed.
+func _check_event_gates() -> void:
+	# a) A gated sibling is refused at selection time; the plain sibling runs.
+	var blocked: Dictionary = _run("SYN_GATE_BLOCK", 2)
+	var blocked_interp: RefCounted = blocked["interp"]
+	var blocked_enters: Array = _kinds(blocked["trace"], "enter", "state")
+	_ok(bool(blocked["started"]), "a tree whose first child is gated still starts")
+	_ok(not blocked_enters.has(1), "the gated state is not entered without an event (got %s)" % str(blocked_enters))
+	_ok(blocked_enters.has(2), "selection falls through to the plain sibling (got %s)" % str(blocked_enters))
+	_ok(int(blocked_interp.stats["event_gate_blocked"]) >= 1, "the blocked gate is counted")
+	# b) A live event opens the gate; transition + state consume it once.
+	var opened: Dictionary = _run("SYN_GATE_EVENT", 1, 0.05, -1, 0, "StateTreeEvent.Gate")
+	var opened_interp: RefCounted = opened["interp"]
+	_ok(int(opened_interp.current_state()) >= 0, "the gated tree starts")
+	var opened_enters: Array = _kinds(opened["trace"], "enter", "state")
+	_ok(opened_enters.has(2), "the event enters the gated state (got %s)" % str(opened_enters))
+	_ok(int(opened_interp.stats["event_gate_enters"]) == 1, "one gated enter (got %d)" % int(opened_interp.stats["event_gate_enters"]))
+	_ok(int(opened_interp.stats["events_consumed"]) == 1, "the event is consumed once (got %d)" % int(opened_interp.stats["events_consumed"]))
+	_ok((opened_interp.tick_events as Array).is_empty(), "the consumed event is gone")
+	# c) consume_event_on_select=false on both transition and state keeps it.
+	var kept: Dictionary = _run("SYN_GATE_KEEP", 1, 0.05, -1, 0, "StateTreeEvent.Gate")
+	var kept_interp: RefCounted = kept["interp"]
+	_ok(int(kept_interp.stats["events_consumed"]) == 0, "a kept event is not consumed (got %d)" % int(kept_interp.stats["events_consumed"]))
+	_ok(int(kept_interp.stats["events_kept"]) == 2, "the transition and the state each keep the event (got %d)" % int(kept_interp.stats["events_kept"]))
+	_ok((kept_interp.tick_events as Array).size() == 1, "the kept event is still live for the tick")
+	_ok((_kinds(kept["trace"], "enter", "state") as Array).has(2), "the kept event still entered the gated state")
+	# d) A gated parent with a gated child: the child selects before the parent
+	# consumes (port decision 3), so both enter and the event is consumed once.
+	var nested: Dictionary = _run("SYN_GATE_NESTED", 1, 0.05, -1, 0, "StateTreeEvent.Gate")
+	var nested_interp: RefCounted = nested["interp"]
+	var nested_enters: Array = _kinds(nested["trace"], "enter", "state")
+	_ok(nested_enters.has(2) and nested_enters.has(3), "both gated states enter (got %s)" % str(nested_enters))
+	_ok(int(nested_interp.stats["event_gate_enters"]) == 2, "two gated enters (got %d)" % int(nested_interp.stats["event_gate_enters"]))
+	_ok(int(nested_interp.stats["events_consumed"]) == 1, "the event is consumed once after the subtree (got %d)" % int(nested_interp.stats["events_consumed"]))
+	_ok((nested_interp.tick_events as Array).is_empty(), "the event is gone after the subtree selected")
+	# e) A wrong tag never opens the gate.
+	var wrong: Dictionary = _run("SYN_GATE_EVENT", 2, 0.05, -1, 0, "StateTreeEvent.Other")
+	_ok(int((wrong["interp"] as RefCounted).current_state()) == 1, "a different event tag does not open the gate")
+	print("P4GATES blocked=%d gate_enters=%d consumed=%d kept=%d nested_enters=%d"
+		% [int(blocked_interp.stats["event_gate_blocked"]), int(opened_interp.stats["event_gate_enters"]),
+			int(opened_interp.stats["events_consumed"]), int(kept_interp.stats["events_kept"]),
+			int(nested_interp.stats["event_gate_enters"])])
+
+
+## The generic base `Delay Task` driver: an authored literal duration is fully
+## drivable with no game binding. This is what makes
+## ST_Subtree_IntruderNoLongerSuspicious structurally covered.
+class LiteralDelayBinding extends "res://src/ai/statetree/bindings.gd":
+	func condition_state(_node: Dictionary, _ctx: Dictionary) -> int:
+		return COND_TRUE
+
+
+## A minimal stand-in for `guard_ai.gd`: only the fields `GuardBindings.observe`
+## reads, so the bag test needs no world, no physics and no autoload.
+class FakeGuard extends Node3D:
+	var patrol_points: Array = []
+	var patrol_waits: Array = []
+	var patrol_yaws: Array = []
+	var patrol_facing: Array = []
+	var patrol_types: Array = []
+	var patrol_wait_deviations: Array = []
+	var wp_index: int = 0
+	var state: int = 0
+	var detection: float = 0.0
+	var health: float = 100.0
+
+	func patrol_wait_remaining() -> float:
+		return 0.0
+
+
+## `PatrolPointData` comes from the AUTHORED patrol record: the real ST_Patrol[17]
+## Delay Task resolves the record's WaitSeconds (10.0) through the frame bag, and
+## a synthetic fallback record resolves UNKNOWN instead of the 1.0 template.
+func _check_guard_bag() -> void:
+	var lib: Dictionary = TreeModel.load_library()
+	var trees: Dictionary = lib["trees"]
+	var patrol: Dictionary = trees["ST_Patrol"]
+	var guard: Node3D = FakeGuard.new()
+	var points: Array = [Vector3(1, 0, 1), Vector3(5, 0, 2)]
+	guard.set("patrol_points", points)
+	guard.set("patrol_waits", [0.0, 10.0])
+	guard.set("patrol_yaws", [0.0, 90.0])
+	guard.set("patrol_facing", [false, true])
+	guard.set("patrol_types", ["EPatrolPointType::PatrolToLocation", "EPatrolPointType::PatrolToLocation"])
+	guard.set("patrol_wait_deviations", [0.0, 2.0])
+	guard.set("wp_index", 1)
+	var bindings: RefCounted = GuardBindings.new()
+	bindings.setup(guard, trees)
+	bindings.observe(0.05)
+	var bags: Dictionary = bindings.state_bags("ST_Patrol", 3)
+	_ok((bags.get("StateParameterData", {}) as Dictionary).has("3"),
+		"the Patrol state bag fills the payload's slot 3")
+	var slot: Dictionary = (bags["StateParameterData"] as Dictionary)["3"]
+	var point: Dictionary = slot.get("PatrolPointData", {})
+	_ok(is_equal_approx(float((point.get("WaitSeconds", {}) as Dictionary).get("value", -1.0)), 10.0),
+		"WaitSeconds comes from the authored record (got %s)" % str((point.get("WaitSeconds", {}) as Dictionary).get("value")))
+	_ok(is_equal_approx(float((point.get("WaitDeviation", {}) as Dictionary).get("value", -1.0)), 2.0),
+		"WaitDeviation comes from the authored record (got %s)" % str((point.get("WaitDeviation", {}) as Dictionary).get("value")))
+	_ok(str((point.get("HasFacing", {}) as Dictionary).get("value", "")) == "true", "HasFacing is the authored true")
+	_ok(str((point.get("PatrolPointType", {}) as Dictionary).get("value", "")) == "EPatrolPointType::PatrolToLocation",
+		"PatrolPointType comes from the authored record")
+	_ok(str((point.get("SmartObjectComponent", {}) as Dictionary).get("source", "")) == BindingsBase.SOURCE_BOUND_UNKNOWN,
+		"SmartObjectComponent stays UNKNOWN (no smart-object system)")
+	_ok(str((slot.get("PatrolData", {}) as Dictionary).get("source", "")) == BindingsBase.SOURCE_REF_ACCESS,
+		"Setup Patrol's PatrolData stays a RefAccessIndex slot")
+	_ok((slot.get("CurrentPatrolWorldLocation", {}) as Dictionary).get("value") == points[1],
+		"CurrentPatrolWorldLocation is the authored point")
+	# The real Delay Task resolves through that bag.
+	var delay: Dictionary = _task_node(patrol, 17, "Delay Task")
+	var frames: Array = [{"tree": "ST_Patrol", "state": 3, "bags": bags}]
+	var ctx: Dictionary = {"tree": "ST_Patrol", "state": 17, "transition": {}, "tick": 0, "time": 0.0, "frames": frames}
+	var duration: Dictionary = bindings.resolve(delay, "Duration", ctx)
+	_ok(is_equal_approx(float(duration["value"]), 10.0), "ST_Patrol[17] resolves WaitSeconds through the bag (got %s)" % str(duration["value"]))
+	_ok(str(duration["source"]) == BindingsBase.SOURCE_AUTHORED_RECORD, "the bag source is bound-authored-record")
+	_ok(bool(bindings.covers("task", "Delay Task", "ST_Patrol", 17, delay)), "the bound ST_Patrol Delay Task is covered")
+	_ok(not bool(bindings.covers("task", "Delay Task", "ST_Guard", 68, _task_node(trees["ST_Guard"], 68, "Delay Task"))),
+		"a Delay Task bound to a GlobalParameterData bag is not covered")
+	# A synthetic 6x6 m fallback has patrol_points but no waits: the record fields
+	# are UNKNOWN, not invented zeroes.
+	var fallback: Node3D = FakeGuard.new()
+	fallback.set("patrol_points", [Vector3(0, 0, 0), Vector3(1, 0, 0)])
+	fallback.set("wp_index", 0)
+	var fallback_bindings: RefCounted = GuardBindings.new()
+	fallback_bindings.setup(fallback, trees)
+	fallback_bindings.observe(0.05)
+	var fallback_bags: Dictionary = fallback_bindings.state_bags("ST_Patrol", 3)
+	var fallback_slot: Dictionary = (fallback_bags["StateParameterData"] as Dictionary)["3"]
+	var fallback_point: Dictionary = fallback_slot.get("PatrolPointData", {})
+	_ok(str((fallback_point.get("WaitSeconds", {}) as Dictionary).get("value", "")) == BindingsBase.VALUE_UNKNOWN,
+		"the synthetic fallback leaves WaitSeconds UNKNOWN")
+	_ok(str((fallback_point.get("WaitSeconds", {}) as Dictionary).get("source", "")) == BindingsBase.SOURCE_PORT_FALLBACK,
+		"the synthetic fallback is labelled port-fallback")
+	print("P4BAG wait_s=%s wait_dev=%s facing=%s type=%s position_source=%s fallback_wait=%s"
+		% [str((point.get("WaitSeconds", {}) as Dictionary).get("value")),
+			str((point.get("WaitDeviation", {}) as Dictionary).get("value")),
+			str((point.get("HasFacing", {}) as Dictionary).get("value")),
+			str((point.get("PatrolPointType", {}) as Dictionary).get("value")),
+			str((slot.get("CurrentPatrolWorldLocation", {}) as Dictionary).get("source")),
+			str((fallback_point.get("WaitSeconds", {}) as Dictionary).get("value"))])
+
+
+func _check_literal_delay() -> void:
+	var lib: Dictionary = TreeModel.parse_payload(_base_payload(), "<delay-literal>")
+	var binding: RefCounted = LiteralDelayBinding.new()
+	var trace: RefCounted = Trace.new()
+	var interp: RefCounted = Interpreter.new()
+	interp.setup(lib["trees"], "SYN_DELAY_LITERAL", binding, trace)
+	_ok(interp.start(), "the literal-delay tree starts")
+	# 0.05 s ticks: 0.15 s < 0.20 s, so the task must still be RUNNING at tick 3.
+	for _i: int in range(3):
+		interp.tick(0.05)
+	_ok(int(interp.current_state()) == 1, "the 0.20 s literal delay has not completed at 0.15 s (state %d)" % int(interp.current_state()))
+	for _i: int in range(3):
+		interp.tick(0.05)
+	var entered: Array = _kinds(trace, "enter", "state")
+	_ok(entered.has(2), "the literal delay completed into state 2 (got %s)" % str(entered))
+	var declares: Dictionary = binding.declaration("task", "Delay Task")
+	_ok(str(declares["status"]) == "implemented", "the base declares Delay Task implemented")
+	print("P4DELAYLITERAL duration=0.20 completed=%s enters=%s" % [str(entered.has(2)), str(entered)])
+
+
 func _kinds(trace: RefCounted, kind: String, key: String) -> Array:
 	var out: Array = []
 	for row: Dictionary in trace.rows:
@@ -420,24 +799,40 @@ func _check_coverage() -> void:
 	_ok(int(totals["condition_covered"]) <= int(totals["condition_instances"]), "covered <= instances (conditions)")
 	# W10-A: absolute ceilings for the numbers the wave reports. The relational
 	# assertions above prove the table is internally consistent; these pin the
-	# measured payload so a change that quietly moves one of the 0/21 figures
-	# fails here instead of being restated in a report. Additive only.
+	# measured payload so a change that quietly moves one of the figures fails
+	# here instead of being restated in a report. B2.1 moved them by MEASURED
+	# amounts (task_covered 113 -> 139, task_blind 94 -> 56, condition_blind
+	# 32 -> 20): node-aware coverage drives 27 authored literal `Delay Task`
+	# instances and reads `Set Alertness`/`Delay Task`/`Move To`/`Rotate`
+	# parameters. No floor was lowered.
 	_ok(int(totals["task_classes"]) == 77,
 		"absolute: task classes == 77 (got %d)" % int(totals["task_classes"]))
 	_ok(int(totals["task_instances"]) == 326,
 		"absolute: task instances == 326 (got %d)" % int(totals["task_instances"]))
-	_ok(int(totals["task_covered"]) == 113,
-		"absolute: task covered == 113 (got %d)" % int(totals["task_covered"]))
-	_ok(int(totals["task_blind"]) == 94,
-		"absolute: task parameter-blind == 94 (got %d)" % int(totals["task_blind"]))
+	_ok(int(totals["task_covered"]) == 139,
+		"absolute: task covered == 139 (got %d)" % int(totals["task_covered"]))
+	_ok(int(totals["task_blind"]) == 56,
+		"absolute: task parameter-blind == 56 (got %d)" % int(totals["task_blind"]))
 	_ok(int(totals["condition_classes"]) == 36,
 		"absolute: condition classes == 36 (got %d)" % int(totals["condition_classes"]))
 	_ok(int(totals["condition_instances"]) == 233,
 		"absolute: condition instances == 233 (got %d)" % int(totals["condition_instances"]))
 	_ok(int(totals["condition_covered"]) == 35,
 		"absolute: condition covered == 35 (got %d)" % int(totals["condition_covered"]))
-	_ok(int(totals["condition_blind"]) == 32,
-		"absolute: condition parameter-blind == 32 (got %d)" % int(totals["condition_blind"]))
+	_ok(int(totals["condition_blind"]) == 20,
+		"absolute: condition parameter-blind == 20 (got %d)" % int(totals["condition_blind"]))
+	_ok(int(totals["task_parity_authored"]) == 80,
+		"absolute: task parity authored == 80 (got %d)" % int(totals["task_parity_authored"]))
+	_ok(int(totals["task_parity_runtime_fed"]) == 3,
+		"absolute: task parity runtime-fed == 3 (got %d)" % int(totals["task_parity_runtime_fed"]))
+	_ok(int(totals["task_parity_unknown"]) == 56,
+		"absolute: task parity unknown == 56 (got %d)" % int(totals["task_parity_unknown"]))
+	_ok(int(totals["condition_parity_authored"]) == 13,
+		"absolute: condition parity authored == 13 (got %d)" % int(totals["condition_parity_authored"]))
+	_ok(int(totals["condition_parity_runtime_fed"]) == 2,
+		"absolute: condition parity runtime-fed == 2 (got %d)" % int(totals["condition_parity_runtime_fed"]))
+	_ok(int(totals["condition_parity_unknown"]) == 20,
+		"absolute: condition parity unknown == 20 (got %d)" % int(totals["condition_parity_unknown"]))
 	var bad_status: Array = []
 	for table: Dictionary in [coverage["tasks"], coverage["conditions"]]:
 		for name: Variant in table.keys():
@@ -448,19 +843,65 @@ func _check_coverage() -> void:
 			if str(row.get("note", "")).strip_edges() == "":
 				bad_status.append("%s has no note" % str(name))
 	_ok(bad_status.is_empty(), "every row has a valid status and a note (%s)" % str(bad_status.slice(0, 4)))
-	# A tree is only "fully covered" if every task AND condition instance is
-	# driven; the report quotes this count.
+	# Structural coverage vs data parity are different numbers.
 	var fully: Array = []
+	var fully_parity: Array = []
 	for tree_name: Variant in coverage["per_tree"].keys():
 		if bool((coverage["per_tree"][tree_name] as Dictionary)["fully_covered"]):
-			fully.append(tree_name)
-	# W10-A: the payload's measured ceiling. The brief's "0/21" is asserted as
-	# both halves (0 fully evaluable, 21 per-tree rows), so a payload change that
-	# adds a tree or advances one to fully covered fails here.
-	_ok(fully.size() == 0 and (coverage["per_tree"] as Dictionary).size() == 21,
-		"absolute: fully covered trees == 0/21 (got %d/%d)" % [fully.size(), (coverage["per_tree"] as Dictionary).size()])
+			fully.append(str(tree_name))
+		if bool((coverage["per_tree"][tree_name] as Dictionary)["fully_parity_covered"]):
+			fully_parity.append(str(tree_name))
+	fully.sort()
+	fully_parity.sort()
+	# The first structurally covered tree is the one with no undeclared task and
+	# whose only gap was a literal Delay Task. ST_Patrol is NOT fully covered.
+	_ok(fully.size() == 1 and str(fully[0]) == "ST_Subtree_IntruderNoLongerSuspicious",
+		"the one structurally covered tree is ST_Subtree_IntruderNoLongerSuspicious (got %s)" % str(fully))
+	_ok(fully_parity.is_empty(), "no tree is fully parity-covered yet (got %s)" % str(fully_parity))
+	_ok(not fully.has("ST_Patrol"), "ST_Patrol is not claimed fully covered")
+	_ok(not bool((coverage["per_tree"]["ST_Patrol"] as Dictionary)["fully_covered"]),
+		"ST_Patrol per-tree row is not fully_covered")
+	# Per-instance detail: the three Delay Tasks and the UNKNOWN Bool Compare.
+	var instances: Array = coverage["instances"]
+	_ok(instances.size() == 559, "one coverage row per referenced node (got %d)" % instances.size())
+	var by_key: Dictionary = {}
+	for row: Dictionary in instances:
+		by_key[str(row["key"])] = row
+	var delay_17: Dictionary = by_key.get("ST_Patrol#14", {})
+	_ok(int(delay_17.get("node_index", -2)) == 14, "instance rows carry the node index")
+	_ok(delay_17.get("param_source", "") == "bound-authored-record",
+		"ST_Patrol[17] Delay Task param_source (got %s)" % str(delay_17.get("param_source", "")))
+	_ok(delay_17.get("parity", "") == "runtime-fed",
+		"ST_Patrol[17] Delay Task parity (got %s)" % str(delay_17.get("parity", "")))
+	_ok(bool(delay_17.get("covered", false)), "ST_Patrol[17] Delay Task is covered")
+	var delay_19: Dictionary = by_key.get("ST_Patrol#16", {})
+	_ok(delay_19.get("param_source", "") == "literal",
+		"ST_Patrol[19] Delay Task param_source (got %s)" % str(delay_19.get("param_source", "")))
+	_ok(delay_19.get("parity", "") == "authored",
+		"ST_Patrol[19] Delay Task parity (got %s)" % str(delay_19.get("parity", "")))
+	var intruder_delay: Dictionary = {}
+	for row: Dictionary in instances:
+		if str(row["tree"]) == "ST_Subtree_IntruderNoLongerSuspicious" and str(row["name"]) == "Delay Task":
+			intruder_delay = row
+	_ok(not intruder_delay.is_empty(), "the intruder tree's Delay Task has an instance row")
+	_ok(bool(intruder_delay.get("covered", false)) and intruder_delay.get("parity", "") == "authored",
+		"the intruder tree's literal Delay Task is covered and authored (got %s/%s)"
+			% [str(intruder_delay.get("covered", false)), str(intruder_delay.get("parity", ""))])
+	var bad_rows: Array = []
+	var unknown_rows: int = 0
+	for row: Dictionary in instances:
+		if not (str(row.get("param_source", "")) in ["literal", "bound-authored-record", "bound-unknown", "context", "ref-access", "inherited", "none"]):
+			bad_rows.append(str(row.get("key", "")))
+		if not (str(row.get("parity", "")) in ["authored", "runtime-fed", "unknown", "uncovered"]):
+			bad_rows.append(str(row.get("key", "")))
+		if str(row.get("parity", "")) == "unknown":
+			unknown_rows += 1
+	_ok(bad_rows.is_empty(), "every instance has a valid param_source/parity (%s)" % str(bad_rows.slice(0, 4)))
+	_ok(unknown_rows == int(totals["task_parity_unknown"]) + int(totals["condition_parity_unknown"]),
+		"instance parity unknown rows == the class totals (%d)" % unknown_rows)
 	print(Coverage.summary_line(coverage))
-	print("P4COVERAGE fully_covered_trees=%d names=%s" % [fully.size(), str(fully)])
+	print("P4COVERAGE fully_covered_trees=%d names=%s fully_parity_covered_trees=%d names=%s"
+		% [fully.size(), str(fully), fully_parity.size(), str(fully_parity)])
 	for line: String in Coverage.table_lines(coverage, "tasks"):
 		print("P4ROW ", line)
 	for line: String in Coverage.table_lines(coverage, "conditions"):
@@ -509,7 +950,7 @@ func _transition_condition_instances(trees: Dictionary) -> int:
 # ---------------------------------------------------------------------------
 
 
-func _state(index: int, name: String, parent: int, children: Array, tasks: Array = [], enter: Array = [], transitions: Array = [], selection: String = "TrySelectChildrenInOrder") -> Dictionary:
+func _state(index: int, name: String, parent: int, children: Array, tasks: Array = [], enter: Array = [], transitions: Array = [], selection: String = "TrySelectChildrenInOrder", required_event: Dictionary = {}, consume: bool = true) -> Dictionary:
 	return {
 		"index": index,
 		"name": name,
@@ -522,6 +963,8 @@ func _state(index: int, name: String, parent: int, children: Array, tasks: Array
 		"tasks": tasks,
 		"enter_conditions": enter,
 		"utility_considerations": [],
+		"required_event_to_enter": required_event if not required_event.is_empty() else null,
+		"consume_event_on_select": consume,
 		"transitions": transitions,
 		"linked_asset": null,
 		"linked_state_index": null,
@@ -530,7 +973,7 @@ func _state(index: int, name: String, parent: int, children: Array, tasks: Array
 	}
 
 
-func _tr(index: int, to_state: int, trigger: String, conditions: Array = [], priority: String = "None", event: String = "", to_kind: String = "state", to_index: int = -1, delay: float = 0.0, fallback: String = "None") -> Dictionary:
+func _tr(index: int, to_state: int, trigger: String, conditions: Array = [], priority: String = "None", event: String = "", to_kind: String = "state", to_index: int = -1, delay: float = 0.0, fallback: String = "None", consume: bool = true) -> Dictionary:
 	return {
 		"index": index,
 		"to_state": "state_%d" % to_state if to_kind == "state" else null,
@@ -539,6 +982,7 @@ func _tr(index: int, to_state: int, trigger: String, conditions: Array = [], pri
 		"trigger": trigger,
 		"priority": priority,
 		"required_event": event,
+		"consume_event_on_select": consume,
 		"conditions": conditions,
 		"delay": {"duration": delay, "RandomVariance": 0},
 		"fallback": fallback,
@@ -565,6 +1009,7 @@ func _flat_transitions(tree: Dictionary) -> Array:
 				"required_event": tr["required_event"],
 				"conditions": tr["conditions"],
 				"enabled": tr["enabled"],
+				"consume_event_on_select": bool(tr.get("consume_event_on_select", true)),
 				"delay_seconds": float((tr.get("delay", {}) as Dictionary).get("duration", 0.0)),
 				"delay_random_variance": 0.0,
 				"fallback": str(tr.get("fallback", "None")),
@@ -687,6 +1132,79 @@ func _base_payload() -> Dictionary:
 			_state(1, "X", 0, [], ["SYN_DONE"], ["SYN_UNKNOWN_COND"], []),
 			_state(2, "Y", 0, [], ["SYN_DONE"], ["SYN_TRUE"],
 				[_tr(0, -1, "OnStateCompleted", [], "None", "", "Succeeded", 65534)]),
+		],
+		"transitions": [], "tasks": [], "conditions": [], "subtree_links": [],
+		"stats": {},
+	}
+	# B2.1 event gates. `STATE_GATE` is the tag all of these use; the real
+	# payload's three gated states carry the same shape.
+	var gate_event: Dictionary = {"tag": "StateTreeEvent.Gate", "payload_struct": "SynthGatePayload"}
+	trees["SYN_GATE_BLOCK"] = {
+		"name": "SYN_GATE_BLOCK", "package": "<synthetic>", "asset": "/Synth/GATE_BLOCK",
+		"roots": ["Root"],
+		"states": [
+			_state(0, "Root", -1, [1, 2], [], [], []),
+			_state(1, "Gated", 0, [], ["SYN_NEVER"], [], [], "TrySelectChildrenInOrder", gate_event),
+			_state(2, "Plain", 0, [], ["SYN_NEVER"], [], []),
+		],
+		"transitions": [], "tasks": [], "conditions": [], "subtree_links": [],
+		"stats": {},
+	}
+	# Transition + state both consume (the default pair).
+	trees["SYN_GATE_EVENT"] = {
+		"name": "SYN_GATE_EVENT", "package": "<synthetic>", "asset": "/Synth/GATE_EVENT",
+		"roots": ["Root"],
+		"states": [
+			_state(0, "Root", -1, [1], [], [], []),
+			_state(1, "Idle", 0, [], ["SYN_NEVER"], ["SYN_TRUE"],
+				[_tr(0, 2, "OnEvent", [], "Normal", "StateTreeEvent.Gate")]),
+			_state(2, "Gated", 0, [], ["SYN_NEVER"], [], [], "TrySelectChildrenInOrder", gate_event),
+		],
+		"transitions": [], "tasks": [], "conditions": [], "subtree_links": [],
+		"stats": {},
+	}
+	# Transition keeps the event (consume_event_on_select false); state keeps it too.
+	trees["SYN_GATE_KEEP"] = {
+		"name": "SYN_GATE_KEEP", "package": "<synthetic>", "asset": "/Synth/GATE_KEEP",
+		"roots": ["Root"],
+		"states": [
+			_state(0, "Root", -1, [1], [], [], []),
+			_state(1, "Idle", 0, [], ["SYN_NEVER"], ["SYN_TRUE"],
+				[_tr(0, 2, "OnEvent", [], "Normal", "StateTreeEvent.Gate", "state", -1, 0.0, "None", false)]),
+			_state(2, "Gated", 0, [], ["SYN_NEVER"], [], [], "TrySelectChildrenInOrder", gate_event, false),
+		],
+		"transitions": [], "tasks": [], "conditions": [], "subtree_links": [],
+		"stats": {},
+	}
+	# A gated state whose gated child also needs the same event: the parent must
+	# consume only AFTER the child selected (port decision 3).
+	trees["SYN_GATE_NESTED"] = {
+		"name": "SYN_GATE_NESTED", "package": "<synthetic>", "asset": "/Synth/GATE_NESTED",
+		"roots": ["Root"],
+		"states": [
+			_state(0, "Root", -1, [1], [], [], []),
+			_state(1, "Idle", 0, [], ["SYN_NEVER"], ["SYN_TRUE"],
+				[_tr(0, 2, "OnEvent", [], "Normal", "StateTreeEvent.Gate", "state", -1, 0.0, "None", false)]),
+			_state(2, "GatedParent", 0, [3], [], [], [], "TrySelectChildrenInOrder", gate_event),
+			_state(3, "GatedChild", 2, [], ["SYN_NEVER"], [], [], "TrySelectChildrenInOrder", gate_event),
+		],
+		"transitions": [], "tasks": [], "conditions": [], "subtree_links": [],
+		"stats": {},
+	}
+	# A literal (unbound) Delay Task: the generic base driver must run it.
+	trees["SYN_DELAY_LITERAL"] = {
+		"name": "SYN_DELAY_LITERAL", "package": "<synthetic>", "asset": "/Synth/DELAY_LITERAL",
+		"roots": ["Root"],
+		"states": [
+			_state(0, "Root", -1, [1], [], [], []),
+			_state(1, "Wait", 0, [], [
+				{"name": "Delay Task", "node_index": 0, "template_index": 0,
+					"data_source": "ActiveInstanceData", "inherited": false,
+					"parameters": {"duration": 0.20, "RandomDeviation": 0.0, "bRunForever": false},
+					"bound": {}},
+			], ["SYN_TRUE"], [_tr(0, 2, "OnStateCompleted")]),
+			_state(2, "Done", 0, [], ["SYN_DONE"], ["SYN_TRUE"],
+				[_tr(1, -1, "OnStateCompleted", [], "None", "", "Succeeded", 65534)]),
 		],
 		"transitions": [], "tasks": [], "conditions": [], "subtree_links": [],
 		"stats": {},

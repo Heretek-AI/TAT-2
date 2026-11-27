@@ -7,12 +7,17 @@ extends RefCounted
 ##
 ## WHAT THE INTERPRETER DOES
 ##   * keeps a stack of active frames (root .. selected leaf); a frame is
-##     `{tree, state}` so a `LinkedAsset` state can run another tree without
-##     flattening the two;
-##   * enters states by evaluating `enter_conditions` (TRUE / FALSE / UNKNOWN),
-##     then runs `TrySelectChildrenInOrder` / `TryEnterState` selection;
-##   * drives task instances through `bindings.task_enter/tick/exit` and
-##     propagates RUNNING / SUCCEEDED / FAILED / UNSET up the frame stack;
+##     `{tree, state, bags}` so a `LinkedAsset` state can run another tree
+##     without flattening the two;
+##   * builds one parameter BAG per entered state (`bindings.state_bags`), which
+##     is how a `StateParameterData` / `SharedInstanceData` binding reaches the
+##     node that reads it (`bindings.resolve` walks the active frames);
+##   * enters states by evaluating `enter_condition_nodes` (TRUE / FALSE /
+##     UNKNOWN), then runs `TrySelectChildrenInOrder` / `TryEnterState`
+##     selection;
+##   * drives task instances through `bindings.task_enter(node, ctx)` /
+##     `task_tick` / `task_exit` and propagates RUNNING / SUCCEEDED / FAILED /
+##     UNSET up the frame stack;
 ##   * arbitrates transitions from every active frame: enabled, trigger match,
 ##     every condition TRUE, highest `EStateTreeTransitionPriority` first, then
 ##     deepest frame, then lowest authored transition index;
@@ -20,7 +25,9 @@ extends RefCounted
 ##     state completes successfully) and `"Next"` (the owning state's parent
 ##     advances past it);
 ##   * queues events (`StateTreeEvent.*` tags) and matches them against
-##     `RequiredEvent`.
+##     `RequiredEvent`; a state with `required_event_to_enter` is only entered
+##     while a matching event is live, and `consume_event_on_select` (state or
+##     transition) removes it so no later selection in the same tick can use it.
 ##
 ## PROVEN RULES ENCODED (citations in `build/qa/w9/p4-re-statetree.md`):
 ##   * priority order is `None < Low < Normal < Medium < High < Critical` (UE
@@ -40,8 +47,8 @@ extends RefCounted
 ##   * a no-task state has finished its own work on entry, which is how a Group
 ##     waits for a child and how a no-task leaf completes at once.
 ##
-## PORT DECISIONS (no UE reference was available for these two, so they are
-## stated rather than hidden):
+## PORT DECISIONS (no UE reference was available for these, so they are stated
+## rather than hidden):
 ##   1. UNKNOWN is treated like FALSE for both selection and transition
 ##      conditions. The interpreter never fires a transition on a condition the
 ##      payload cannot evaluate; every UNKNOWN is recorded in the trace.
@@ -52,6 +59,17 @@ extends RefCounted
 ##      `EStateTreeSelectionFallback` is `None`/`NextSelectableSibling`; the
 ##      payload does not carry the property, and this reading keeps the tree
 ##      alive rather than collapsing it when one branch cannot be entered.
+##   3. EVENT GATE ORDER. A `required_event_to_enter` state must still be able to
+##      see the event that selected it, so the event is consumed only AFTER the
+##      target state and its children have been selected. This is forced by the
+##      authored data: `ST_InvestigateStims_Guard` transition 2 both consumes
+##      the event (`consume_event_on_select: true`) and targets a gated state
+##      (`ST_InvestigateStims_Guard[6]`). Consuming before entry would make that
+##      authored pair impossible.
+##   4. An event is live for the tick that delivered it (plus any tick where a
+##      caller re-pushes it). `consume_event_on_select: false` therefore means
+##      "a later selection in the same tick may still use it"; the event is not
+##      carried into the next tick.
 ##
 ## The interpreter is gameplay-agnostic: it never touches a Node, a transform, a
 ## player or an autoload. Everything observable goes through `bindings`.
@@ -106,6 +124,11 @@ var stats: Dictionary = {
 	"fallback_selections": 0,
 	"selection_refused": 0,
 	"events": 0,
+	"event_gate_checks": 0,
+	"event_gate_blocked": 0,
+	"event_gate_enters": 0,
+	"events_consumed": 0,
+	"events_kept": 0,
 	"max_frames": 0,
 }
 var visited: Dictionary = {}
@@ -276,6 +299,12 @@ func _enter_state(tree: String, state_index: int) -> int:
 	if not TreeModel.has_state(tree_dict, state_index):
 		return ENTER_FALSE
 	var state: Dictionary = TreeModel.state(tree_dict, state_index)
+	# `RequiredEventToEnter` (3 authored states): the state may only be selected
+	# while a matching StateTreeEvent is live. Checked before the enter
+	# conditions so a gated branch never even evaluates them.
+	var gate: int = _event_gate(tree, state_index, true)
+	if gate != ENTER_OK:
+		return gate
 	var result: int = _evaluate_enter_conditions(tree, state_index)
 	if result != ENTER_OK:
 		return result
@@ -283,13 +312,14 @@ func _enter_state(tree: String, state_index: int) -> int:
 	# its status then depends only on its selected child (or, for a leaf, on
 	# nothing). That is how a Group waits for a child and how a no-task leaf
 	# completes immediately -- both are load-bearing in the authored data.
-	var has_tasks: bool = not (state.get("tasks", []) as Array).is_empty()
+	var has_tasks: bool = not (state.get("task_nodes", []) as Array).is_empty()
 	# Pop any sibling frames at this depth: entering is always a replacement.
 	var frame: Dictionary = {
 		"tree": tree,
 		"state": state_index,
 		"name": str(state.get("name", "")),
 		"tasks": [],
+		"bags": _state_bags(tree, state_index),
 		"own": RUNNING if has_tasks else SUCCEEDED,
 		"child": RUNNING,
 		"completion_consumed": false,
@@ -348,6 +378,9 @@ func _enter_state(tree: String, state_index: int) -> int:
 			_exit_to(frame_index)
 			stats["selection_refused"] = int(stats.get("selection_refused", 0)) + 1
 			return ENTER_FALSE
+	# Consume the gate event now that the whole subtree selected (port decision
+	# 3). A gated child above has already used it; a later sibling cannot.
+	_consume_required_event(tree, state_index)
 	return ENTER_OK
 
 
@@ -428,10 +461,11 @@ func _exit_to(depth: int) -> void:
 
 func _evaluate_enter_conditions(tree: String, state_index: int, count_stats: bool = true) -> int:
 	var tree_dict: Dictionary = trees.get(tree, {})
-	var conditions: PackedStringArray = PackedStringArray(TreeModel.state(tree_dict, state_index).get("enter_conditions", []))
+	var nodes: Array = TreeModel.state(tree_dict, state_index).get("enter_condition_nodes", [])
 	var saw_unknown: bool = false
-	for name: String in conditions:
-		var value: int = _condition(name, tree, state_index, {}, count_stats)
+	var ctx: Dictionary = _ctx(tree, state_index, {})
+	for node: Dictionary in nodes:
+		var value: int = _condition(node, ctx, count_stats)
 		if value == Bindings.COND_FALSE:
 			return ENTER_FALSE
 		if value == Bindings.COND_UNKNOWN:
@@ -441,10 +475,118 @@ func _evaluate_enter_conditions(tree: String, state_index: int, count_stats: boo
 	return ENTER_OK
 
 
-func _condition(name: String, tree: String, frame_state: int, transition: Dictionary, count_stats: bool = true) -> int:
+## Build the per-evaluation context handed to the bindings. `frames` is the
+## live stack (read-only for bindings): `resolve()` walks it to find the frame
+## that owns a `StateParameterData` bag.
+func _ctx(tree: String, state_index: int, transition: Dictionary) -> Dictionary:
+	return {
+		"tree": tree,
+		"state": state_index,
+		"transition": transition,
+		"tick": ticks,
+		"time": time_s,
+		"frames": frames,
+		"interpreter": self,
+	}
+
+
+func _state_bags(tree: String, state_index: int) -> Dictionary:
+	if bindings == null:
+		return {}
+	if not bindings.has_method("state_bags"):
+		return {}
+	var bags: Variant = bindings.call("state_bags", tree, state_index)
+	return bags if bags is Dictionary else {}
+
+
+## `{"tag": String, "payload_struct": String}` or {} for the state's
+## `RequiredEventToEnter`.
+func _required_event(tree: String, state_index: int) -> Dictionary:
+	var gate: Variant = TreeModel.state(trees.get(tree, {}), state_index).get("required_event_to_enter", {})
+	return gate if gate is Dictionary else {}
+
+
+## Index in `tick_events` of a live event with this tag, or -1. The oldest
+## matching event wins (events are processed in push order).
+func _event_index_for(tag: String) -> int:
+	for i: int in range(tick_events.size()):
+		if str((tick_events[i] as Dictionary).get("tag", "")) == tag:
+			return i
+	return -1
+
+
+## Remove the oldest live event with `tag`. Returns true when one was removed;
+## `stats.events_consumed` counts removals, so a state and its transition both
+## asking to consume one event counts it once.
+func _consume_event(tag: String) -> bool:
+	var index: int = _event_index_for(tag)
+	if index < 0:
+		return false
+	tick_events.remove_at(index)
+	stats["events_consumed"] = int(stats["events_consumed"]) + 1
+	return true
+
+
+## Evaluate `RequiredEventToEnter` for one state. `commit` false is the dry run
+## used by `_can_enter_deep` (no counters, no consumption). Consumption is NOT
+## done here: it happens at the end of `_enter_state`, after the state's children
+## have selected (port decision 3).
+func _event_gate(tree: String, state_index: int, commit: bool) -> int:
+	var gate: Dictionary = _required_event(tree, state_index)
+	if gate.is_empty():
+		return ENTER_OK
+	var tag: String = str(gate.get("tag", ""))
+	var index: int = _event_index_for(tag)
+	if index < 0:
+		if commit:
+			stats["event_gate_checks"] = int(stats["event_gate_checks"]) + 1
+			stats["event_gate_blocked"] = int(stats["event_gate_blocked"]) + 1
+			_emit({
+				"kind": "event_gate", "tree": tree, "state": state_index,
+				"tag": tag, "result": "blocked",
+				"reason": "required_event_to_enter has no live event",
+			})
+		return ENTER_UNKNOWN
+	if commit:
+		stats["event_gate_checks"] = int(stats["event_gate_checks"]) + 1
+		stats["event_gate_enters"] = int(stats["event_gate_enters"]) + 1
+		_emit({
+			"kind": "event_gate", "tree": tree, "state": state_index,
+			"tag": tag, "result": "entered",
+			"payload_struct": str(gate.get("payload_struct", "")),
+		})
+	return ENTER_OK
+
+
+## State-level `bConsumeEventOnSelect`: called at the end of `_enter_state`, after
+## the state's own selection completed.
+func _consume_required_event(tree: String, state_index: int) -> void:
+	var gate: Dictionary = _required_event(tree, state_index)
+	if gate.is_empty():
+		return
+	var state: Dictionary = TreeModel.state(trees.get(tree, {}), state_index)
+	if not bool(state.get("consume_event_on_select", true)):
+		stats["events_kept"] = int(stats["events_kept"]) + 1
+		_emit({
+			"kind": "event_kept", "tag": str(gate.get("tag", "")),
+			"state": state_index, "by": "state",
+		})
+		return
+	var tag: String = str(gate.get("tag", ""))
+	var removed: bool = _consume_event(tag)
+	_emit({
+		"kind": "event_consumed", "tag": tag,
+		"state": state_index, "by": "state", "removed": removed,
+	})
+
+
+## Evaluate one condition INSTANCE. Returns TRUE / FALSE / UNKNOWN and records
+## the node key in `unknown_conditions` when the answer is UNKNOWN.
+func _condition(node: Dictionary, ctx: Dictionary, count_stats: bool = true) -> int:
 	var value: int = Bindings.COND_UNKNOWN
 	if bindings != null:
-		value = bindings.condition_state(name, tree, frame_state, transition)
+		value = bindings.condition_state(node, ctx)
+	var node_key: String = str(node.get("key", ""))
 	if value == Bindings.COND_TRUE:
 		if count_stats:
 			stats["conditions_true"] = int(stats["conditions_true"]) + 1
@@ -455,34 +597,53 @@ func _condition(name: String, tree: String, frame_state: int, transition: Dictio
 		value = Bindings.COND_UNKNOWN
 		if count_stats:
 			stats["conditions_unknown"] = int(stats["conditions_unknown"]) + 1
-			var key: String = "%s|%s|%d" % [name, tree, frame_state]
-			unknown_conditions[key] = int(unknown_conditions.get(key, 0)) + 1
-			_emit({"kind": "condition_unknown", "name": name, "tree": tree, "state": frame_state})
+			unknown_conditions[node_key] = int(unknown_conditions.get(node_key, 0)) + 1
+			_emit({
+				"kind": "condition_unknown",
+				"name": str(node.get("name", "")),
+				"class": str(node.get("class", "")),
+				"node": int(node.get("node_index", -1)),
+				"key": node_key,
+				"tree": str(ctx.get("tree", "")),
+				"state": int(ctx.get("state", -1)),
+			})
 	return value
 
 
 func _enter_tasks(frame: Dictionary) -> void:
 	var tree_dict: Dictionary = _tree_of(frame)
-	var names: PackedStringArray = PackedStringArray(TreeModel.state(tree_dict, int(frame["state"])).get("tasks", []))
+	var nodes: Array = TreeModel.state(tree_dict, int(frame["state"])).get("task_nodes", [])
+	var ctx: Dictionary = _ctx(str(frame["tree"]), int(frame["state"]), {})
 	var instances: Array = []
-	for name: String in names:
+	for node: Dictionary in nodes:
+		var name: String = str(node.get("name", ""))
 		stats["tasks_entered"] = int(stats["tasks_entered"]) + 1
 		var instance: Dictionary = {}
 		if bindings != null:
-			instance = bindings.task_enter(name, str(frame["tree"]), int(frame["state"]))
+			instance = bindings.task_enter(node, ctx)
 		if instance.is_empty():
 			instance = {"task": name, "status": UNSET, "state": int(frame["state"]), "unsupported": true}
 			stats["tasks_unset"] = int(stats["tasks_unset"]) + 1
 			_record_block(str(frame["tree"]), int(frame["state"]), "task", "unsupported task '%s'" % name)
-			_emit({"kind": "task_block", "task": name, "state": int(frame["state"]), "name": str(frame["name"])})
+			_emit({
+				"kind": "task_block", "task": name, "state": int(frame["state"]),
+				"name": str(frame["name"]), "node": int(node.get("node_index", -1)),
+				"key": str(node.get("key", "")),
+			})
 		else:
 			instance["task"] = name
 			instance["state"] = int(frame["state"])
+			if not instance.has("node"):
+				instance["node"] = node
 			if not instance.has("status"):
 				instance["status"] = RUNNING
 			_emit({
 				"kind": "task_enter", "task": name, "state": int(frame["state"]),
 				"name": str(frame["name"]),
+				"node": int(node.get("node_index", -1)),
+				"key": str(node.get("key", "")),
+				"duration_s": instance.get("duration_s", null),
+				"duration_source": str(instance.get("duration_source", "")),
 				"declaration": bindings.declaration("task", name) if bindings != null else {},
 			})
 		instances.append(instance)
@@ -699,6 +860,8 @@ func _collect_and_apply(candidates: Array, completion_pass: bool) -> bool:
 			_emit({"kind": "transition_armed", "transition": int(tr.get("index", -1)), "delay_s": _pending_remaining})
 			return false
 		_apply_transition(tr)
+		if candidate.has("event"):
+			_after_event_transition(tr, candidate["event"])
 		return true
 	if not unmet.is_empty() or not unavailable.is_empty():
 		_emit({
@@ -713,12 +876,39 @@ func _collect_and_apply(candidates: Array, completion_pass: bool) -> bool:
 	return false
 
 
+## Consumption happens after the target state has been entered (port decision 3
+## in the header): a gated target must still see the event that selected it.
+## `consume_event_on_select: false` leaves it live for a later selection in the
+## same tick and is counted in `stats.events_kept`.
+func _after_event_transition(tr: Dictionary, event: Dictionary) -> void:
+	var tag: String = str(event.get("tag", ""))
+	if bool(tr.get("consume_event_on_select", true)):
+		var consumed: bool = _consume_event(tag)
+		_emit({
+			"kind": "event_consumed", "tag": tag,
+			"transition": int(tr.get("index", -1)),
+			"removed": consumed,
+		})
+	else:
+		stats["events_kept"] = int(stats["events_kept"]) + 1
+		_emit({
+			"kind": "event_kept", "tag": tag,
+			"transition": int(tr.get("index", -1)),
+		})
+
+
 func _evaluate_transition_conditions(tr: Dictionary, frame: Dictionary) -> Dictionary:
 	var unmet: Array = []
-	for name: Variant in tr.get("conditions", []):
-		var value: int = _condition(str(name), str(frame["tree"]), int(frame["state"]), tr)
+	var ctx: Dictionary = _ctx(str(frame.get("tree", "")), int(frame.get("state", -1)), tr)
+	for node: Dictionary in tr.get("condition_nodes", []):
+		var value: int = _condition(node, ctx)
 		if value != Bindings.COND_TRUE:
-			unmet.append({"name": str(name), "result": "true" if value == Bindings.COND_TRUE else ("false" if value == Bindings.COND_FALSE else "unknown")})
+			unmet.append({
+				"name": str(node.get("name", "")),
+				"key": str(node.get("key", "")),
+				"node": int(node.get("node_index", -1)),
+				"result": "true" if value == Bindings.COND_TRUE else ("false" if value == Bindings.COND_FALSE else "unknown"),
+			})
 			if value == Bindings.COND_UNKNOWN:
 				stats["unknown_transition_votes"] = int(stats["unknown_transition_votes"]) + 1
 	return {"ok": unmet.is_empty(), "unmet": unmet}
@@ -814,6 +1004,9 @@ func _can_select_target(tree_name: String, target: int, fallback: String) -> boo
 ## deterministic inside a tick, so a true answer commits on the real call.
 func _can_enter_deep(tree_name: String, state_index: int, depth: int) -> bool:
 	if depth > 16:
+		return false
+	# A dry run: check the gate, never consume the event it finds.
+	if _event_gate(tree_name, state_index, false) != ENTER_OK:
 		return false
 	if _evaluate_enter_conditions(tree_name, state_index, false) != ENTER_OK:
 		return false

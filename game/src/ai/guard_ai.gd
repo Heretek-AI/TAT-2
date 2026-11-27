@@ -203,6 +203,14 @@ const HEIGHT_STRENGTH_ZERO_M: float = 3.0
 @export var patrol_waits: Array[float] = []
 @export var patrol_yaws: Array[float] = []
 @export var patrol_facing: Array[bool] = []
+## Authored `EPatrolPointType` per point (`EPatrolPointType::PatrolToLocation` /
+## `SmartObjectInteraction`), parallel to patrol_points. The shipped data has
+## 668/673 location points and 5 smart-object points, so a consumer must not
+## assume one type. Empty = no authored type (synthetic fallback patrol).
+@export var patrol_types: Array[String] = []
+## Authored `FPatrolPoint.WaitDeviation` per point. 24 of the 673 authored points
+## have a non-zero deviation, so a consumer must not assume 0.0.
+@export var patrol_wait_deviations: Array[float] = []
 ## APatrolPath.LoopType, e.g. "EPatrolLoopType::PingPong". Any value containing
 ## "pingpong" reverses at both ends instead of wrapping.
 @export var patrol_loop_mode: String = ""

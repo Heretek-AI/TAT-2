@@ -8,8 +8,9 @@ extends SceneTree
 ##   * the coverage table for all 21 trees.
 ## The report quotes this side by side; the parity claim is "the authored patrol
 ## order is reproduced", not "the FSM was replaced". Payload /2 carries the
-## authored node parameters and bindings; B2 is the lane that reads them, so this
-## probe still measures the name-driven shadow runtime (0/21 fully evaluable).
+## authored node parameters and bindings, and B2.1 reads them through
+## `bindings.resolve()`; the coverage line now prints structural coverage and
+## data parity separately (`fully_covered_trees` / `fully_parity_covered_trees`).
 ##
 ## Run: TAT2_STATETREE=shadow tools/godot --headless --path game \
 ##        --script res://tests/probe_statetree_shadow.gd

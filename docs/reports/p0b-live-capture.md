@@ -1,28 +1,33 @@
-# P0b Lane L — live reference preparation (no launch)
+# P0b Lane L — live reference: offline attempt, restore, online runbook
 
 > **MEASURED 2026-11-26 — the shipped build will not run in Steam Offline Mode.**
-> With `WantsOfflineMode=1`, build `25076818` launched to `LOGIN FAILED!` with only
-> `QUIT`; the launcher requires an online login. This *disproves* the offline-first
-> assumption in §2 and Step 5 below. The machine was restored afterwards (original
-> prefix active, `WantsOfflineMode=0`, save hash unchanged); no capture was taken.
-> Resume only with an **online** launch after re-verifying `buildid=25076818`,
-> `TargetBuildID=0`, `StateFlags=4` and Valve `up_to_date: true`, or score from the
-> official 30 keyframes and mark live-only rows `UNVERIFIED`. See
+> With `WantsOfflineMode=1`, build `25076818` reached the launcher's
+> `LOGIN FAILED!` with only `QUIT`; the launcher requires an online login. This
+> *disproves* the offline-first assumption in the preparation below; the
+> pre-attempt Steps 5–7 are rewritten in §5. The machine was restored afterwards (original prefix
+> active, `WantsOfflineMode=0`, save hash unchanged); no capture was taken.
+> The online path needs an update-protection decision first: see §2. See
 > [`HANDOFF_NEXT_AGENT.md`](../HANDOFF_NEXT_AGENT.md) §0.
 
-**Status:** prepared 2026-11-26 in worktree `w10/p0b-live`, base `09d8a30`.
-**Nothing was launched.** Steam, Proton and the shipped game were not started by this
-lane; the Steam client was already running (PID 17548) and was only inspected.
+**Status:** the preparation pass ran 2026-11-26 in worktree `w10/p0b-live`, base
+`09d8a30`. That lane did not launch anything; a later offline attempt (same day)
+failed at the launcher's login and the machine was restored. **No capture
+exists.** The preparation lane's state and the attempt's side effects are in
+§1.1.
+
 **What exists now:** the appid 3341000 Proton prefix copied and byte-verified at
-`/tmp/opencode/tat2-ref-prefix`, and the tracked helper
+`/tmp/opencode/tat2-ref-prefix` (already staged: 771 files, empty `SaveGames/`
+apart from `EnhancedInputUserSettings.sav`), and the tracked helper
 [`build/qa/p0b_live_capture.sh`](../../build/qa/p0b_live_capture.sh). The helper never launches
 anything; it only checks, copies, stages the copy, prints the capture command and
 hashes the result.
 
-The live reference is the **shipped UE5.5 build** `1.5.148559` (Steam appid 3341000):
-the only ground truth for the 120-row baseline. The port capture (Lane I) uses fixed
-poses; this plan captures the same poses in the shipped game at **2560×1440, 60 fps,
-100 % screen percentage**, lossless, with system audio.
+The reference target is the **shipped UE5.5 build** `1.5.148559` (Steam appid
+3341000). The port capture (Lane I) uses fixed poses; the live capture takes the
+same poses in the shipped game at **2560×1440, 60 fps, 100 % screen percentage**,
+lossless, with system audio. It is a matched-settings reference for P4/ROI; the
+120-row scorecard's official observations come from the official clip and the 30
+keyframes, not from this capture.
 
 ---
 
@@ -71,7 +76,7 @@ poses; this plan captures the same poses in the shipped game at **2560×1440, 60
 | Files | 775 | 775 |
 | `version` | `11.0-100` | `11.0-100` |
 | `config_info` | `Proton - Experimental` / `11.0-100` | same |
-| Last written | 2026-11-18 15:24 (`pfx/system.reg`) | copy of that state |
+| Last written | 2026-11-18 15:24 (`pfx/system.reg`; pre-attempt, see §1.1) | copy of that state |
 | Verification | — | `diff -r --no-dereference` clean; all 775 files and every symlink match (`diff` exit 0) |
 
 Proton installed: `Proton - Experimental` version file
@@ -108,39 +113,68 @@ and the shipped default preset. Reset them **in-game** and record the settings s
 | Disk | `/home` 188 G free; `/tmp` 31 G tmpfs (not for video) |
 | Capture test | a real (non-game) 1600×900 X window, 60 fps, **120 frames / 2.000 s**, `libx264rgb -qp 0`, `pix_fmt=gbrp`, FLAC 48 kHz stereo — the command path works |
 
+### 1.1 Current state after the offline attempt (2026-11-26)
+
+The table above is the preparation baseline. The attempt changed only the
+following, and this is the state the next run starts from:
+
+- the original prefix's `pfx/system.reg`/`user.reg` were rewritten at
+  **2026-11-26 23:06** (the launch option did not redirect Proton); save and
+  config hashes are unchanged;
+- `vkd3d-proton.cache` grew **1,743,312 → 1,744,384 B**; the `.write` sidecar is
+  now **0 B**, so the 1,120 B value above is historical;
+- the canonical copy is **staged**: 771 files (not 775), and `SaveGames/` holds
+  only `EnhancedInputUserSettings.sav`; the owner's save is the archive
+  `SaveGames.pre-p0b-20261126-230522/` (md5 `976f8730…`);
+- `/home` free is **177 G** (not 188 G); VRAM free measured **5,143 MiB**;
+- `verify-copy` now **FAILs** on file count by design; it is only meaningful
+  before `stage`.
+
+Do not re-copy the prefix to silence `verify-copy`; the staged state is what the
+next run wants. Do not use the 2026-11-18 prefix mtimes as the isolation
+baseline — snapshot them immediately before the next launch.
+
 ---
 
-## 2. Can an offline launch avoid updating the install?
+## 2. Why Offline Mode is not a capture path, and what protects the build
 
-> **CORRECTED 2026-11-26:** offline mode does avoid an update, but the launcher
-> then refuses to log in (`LOGIN FAILED!`). The "Yes" below is therefore
-> conditional on an online login having already succeeded, which the measured
-> build does not allow. Use the online-capture path with the preflight.
+> **MEASURED 2026-11-26:** Offline Mode avoids the update, but the shipped
+> launcher then refuses to log in — `WantsOfflineMode=1` produced `LOGIN FAILED!`
+> with only `QUIT`. Offline Mode is retired. The port itself is unaffected; this
+> is a launcher constraint.
 
-**Yes, if Steam is switched to Offline Mode before Play. Currently no update is
-offered**, so an online launch *today* would not update:
+As of the last check the install is still the reference build and no update is
+queued: `buildid=25076818`, `TargetBuildID=0`, `StateFlags=4`, Valve
+`up_to_date:true`, exe `1.5.193.148559`, appmanifest unchanged since 2026-11-18.
+That is a point-in-time fact, not a control: `AutoUpdateBehavior=0` ("always
+keep this game up to date") means an online **Steam Play** will update as soon as
+a new build is published, and the client runs its own update check at launch.
+Once a download starts, the reference is gone.
 
-- `TargetBuildID=0`, no queued update; `appmanifest` mtime 2026-11-18;
-- `content_log.txt` has no download/update events for 3341000 since 2026-11-18;
-- Valve's `UpToDateCheck` says buildid **25076818 is up to date** (queried today);
-- the installed exe is `1.5.193.148559`, i.e. the 1.5.148559 build.
+**Protection must be structural.** Choose one:
 
-**But `AutoUpdateBehavior=0` means an online launch will update as soon as a new
-build is published.** The install last changed 2026-09-16, 71 days ago; a patch can
-ship at any time. Therefore:
+1. **Copied install + direct Proton launch (recommended, not yet measured).**
+   Copy the 3.8 GB install to a private path and launch the copy's
+   `TAT-Win64-Shipping.exe` under Proton with the copied prefix. Steam stays
+   online for authentication only and **never launches the app**, so the
+   updater is not in the path and the managed install cannot be replaced. The
+   open question is whether the shipping exe initialises SteamAPI without the
+   `TAT.exe` launcher; Step 6A is the test. If it fails, stop — do not fall back
+   to Steam Play without the owner's approval.
+2. **Steam Play with the prefix swapped (fallback).** Stop Steam, snapshot the
+   install and appmanifest, swap the prefix, start Steam online and press Play.
+   This accepts a small update race; abort on any `buildid`/appmanifest change.
+3. **No shipped launch.** Score the 120 rows from the official clip and its 30
+   keyframes, marking live-only rows `UNVERIFIED`. The official clip is on disk
+   (`~/Videos/clip_1,795,033,698,901.mp4`, 3840×2160 @ 29.67 fps, 225.5 s), and
+   the keyframes are the ones the scorecard already uses. This does not need a
+   capture and should not wait for one.
 
-1. **Switch Steam to Offline Mode before pressing Play.** Offline mode does not
-   contact the CDN, so it cannot download a build.
-2. Re-run the preflight immediately before the run; abort if `buildid` is no longer
-   25076818, `TargetBuildID` is not 0, or `UpToDateCheck` says `up_to_date:false`.
-3. **If Offline Mode cannot be entered, do not launch.** Wait for the owner. Do not
-   "try it online and see"; a background auto-update would destroy the reference
-   install (3.8 GB re-download, and the build may no longer be 1.5.148559).
-
-The run itself necessarily writes two non-code things: Steam updates the
-appmanifest `LastPlayed` state, and the game appends its `vkd3d-proton.cache*`
-inside the install directory. This lane did **not** do either; hash both before and
-after and record the deltas. Nothing else in the install should change.
+The run itself still writes two non-code things: Steam updates the appmanifest
+`LastPlayed` state, and the game appends `vkd3d-proton.cache*` inside the
+**prefix/install it is actually using**. Hash both before and after and record
+the deltas. An appmanifest `buildid` change is not acceptable; a cache append is
+expected.
 
 ---
 
@@ -148,23 +182,27 @@ after and record the deltas. Nothing else in the install should change.
 
 | # | Blocker | Severity | Measured / action |
 |---|---|---|---|
-| B1 | **Steam sign-in** | medium | Already logged on with a remembered password; offline mode should work. If Steam asks for a password or a Steam Guard code, stop: do not switch online to re-auth during the capture window. |
-| B2 | **Auto-update** | **high** | `AutoUpdateBehavior=0`. Offline Mode is mandatory. Verify `buildid=25076818`, `TargetBuildID=0` and `UpToDateCheck=true` immediately before. Abort on any change. |
-| B3 | **VRAM** | **high** | 8188 MiB total, only **2,253–2,499 MiB free**. Close Brave, VS Code, Vesktop, ptyxis and every other GPU app; target **≥ 5.5 GiB free** (preflight blocks below 4 GiB). A 1440p native UE5.5 scene on an 8 GiB laptop GPU is still tight; watch `nvidia-smi dmon` and `nvidia-smi --query-gpu=memory.used`. If it thrashes, stop; do not silently drop to 1080p. |
-| B4 | **Wayland / XWayland** | medium | Session is Wayland; Proton/Wine renders through XWayland (`DISPLAY=:0`). `ffmpeg x11grab -window_id` was verified on a real 1600×900 X window (120 frames/2 s, 60/1). Capturing the *game* window is unverified until the run: check with `xdotool getwindowgeometry` and a 10 s test. Fallback: put the window at 0,0 and capture `-video_size 2560x1440 -i :0.0+0,0`; do not switch to a lossy encoder. |
-| B5 | **Audio routing** | low | Default sink is HDMI, monitor available. If the game selects the USB headset instead, set it as the default sink and capture **its** `.monitor`. Close all other audio sources; the monitor captures the whole system mix. |
-| B6 | **Disk** | low | `/home` has 188 G; the capture must go there (`~/Videos/...`), never `/tmp` (31 G tmpfs, wiped on reboot). Measure the first 10 s bitrate before the full run. |
-| B7 | **Thermals / 60 fps** | medium | This is a laptop host with a history near 80 °C; the perf matrix was waived. The recorder still writes 60 fps, but the game may repeat frames if it drops below 60. Record `nvidia-smi` before/after and state whether the render held 60; never call duplicated frames a native 60 fps render. |
-| B8 | **Steam Cloud** | medium | The throwaway save could sync to the owner's cloud and later overwrite the real progression. **Disable Steam Cloud for 3341000 before the run** and keep it off until the copy is deleted. The original save is preserved inside the copy as `SaveGames.pre-p0b-*`. |
-| B9 | **`/tmp` is ephemeral** | low | The prefix copy is on tmpfs and disappears at reboot. Re-run `p0b_live_capture.sh copy` if `/tmp/opencode/tat2-ref-prefix` is gone; never point the launch at the original prefix. |
-| B10 | **Proton drift** | medium | Steam may update Proton Experimental. The prep baseline is `experimental-11.0-20261112-x86_64` / prefix `11.0-100`. If the version changed, stop: the renderer is no longer the prepared one. |
-| B11 | **Steam overlay / notifications** | low | Disable the Steam overlay and notifications for the app, or they will appear in the lossless capture. |
+| B1 | **Steam sign-in** | **high** | The launcher requires an **online** login; Offline Mode gives `LOGIN FAILED!`. Start Steam online and confirm the account is logged on (`RememberPassword=1`). If Steam asks for a password or Steam Guard, stop. |
+| B2 | **Auto-update** | **high** | `AutoUpdateBehavior=0`. Offline Mode is not available, so the update must be kept out of the path: copied install + direct Proton launch (A), or a pre-run install snapshot + prefix swap (B). Abort on any `buildid`/appmanifest change. |
+| B3 | **VRAM** | **high** | 8188 MiB total; **5,143 MiB free** at the last check. Close Brave, VS Code, Vesktop, ptyxis and every other GPU app; target **≥ 5.5 GiB free**. The helper blocks below 4 GiB; **a READY verdict below 5.5 GiB is not sufficient for a scored 1440p run**. Watch `nvidia-smi dmon`; if it thrashes, stop. |
+| B4 | **Wayland / XWayland** | medium | Session is Wayland; Proton renders through XWayland (`DISPLAY=:0`). `x11grab -window_id` was verified on a 1600×900 X window (120 frames / 2 s). Verify on the *game* window with a 10 s test; fallback: window at 0,0 and `-video_size 2560x1440 -i :0.0+0,0`. Do not switch to a lossy encoder. |
+| B5 | **Audio routing** | low | Default sink is HDMI with a monitor source. If the game selects the USB headset, set it as the default and capture its `.monitor`. Close all other audio sources. |
+| B6 | **Disk** | medium | `/home` has **177 G** free (was 188 G). A 4 s 1440p re-encode of the official clip measured ~1.78 MB/frame ≈ **107 MB/s at 60 fps**, i.e. **≥ 45 GB for 420 s**; a native frame is noisier, so budget 2×. Capture to `/home`, never `/tmp`. Gate on free ≥ 2× the projected size. |
+| B7 | **Thermals / 60 fps** | medium | Laptop host with a history near 80 °C; the perf matrix is waived. The recorder writes 60 fps, but the game may repeat frames if it drops below 60. Record `nvidia-smi` before/after and state whether the render held 60; duplicated frames are not a native 60 fps render. |
+| B8 | **Steam Cloud** | **high** | If the capture uses a copy of the owner's save, a Cloud sync could overwrite the real progression. **Disable Steam Cloud for 3341000 before the run** and keep it off until the copied prefix is deleted. This setting is in the client, not `localconfig.vdf`. |
+| B9 | **`/tmp` is ephemeral** | medium | The prefix copy (590 M) is on tmpfs and disappears at reboot; the install copy is on `/home`. Re-run `copy` if the prefix is gone; never point the launch at the original prefix. |
+| B10 | **Proton drift** | medium | Baseline `experimental-11.0-20261112-x86_64` / prefix `11.0-100`. If the version changed, stop. A direct launch (A) pins the Proton path; Steam Play (B) does not. |
+| B11 | **Steam overlay / notifications** | low | Disable the overlay and toasts for 3341000, or they appear in the lossless capture. |
+| B12 | **Save progression** | **high** | The official route's S06/KF07–KF08 rows assume the official save: Level 4, XP 94/500, Contracts #1–#2 completed, £26,275, purchased Black Market checks. An empty save changes those rows. Restore the archived owner save into the copy (recommended) or pre-declare those rows as save-state deltas — never score them as port deltas. |
+| B13 | **Prefix-isolation proof** | **high** | The launch option `STEAM_COMPAT_DATA_PATH=... %command%` did **not** redirect Proton. Snapshot the original prefix's `system.reg`/`user.reg` mtimes before launch and compare after; a post-hoc "within the first minute" check is too late. |
 
-**Safest path:** close GPU apps → preflight READY → copy/verify/stage → disable
-Cloud/overlay → record hashes → **Go Offline** → launch with the copied prefix →
-verify the copy is in use → set 1440p/60/100 % in-game → warm-up → capture → hash.
-If any of B1/B2/B10 is not satisfied, **stop and wait for the owner**; a wrong build
-or the original prefix makes the reference worthless and may lose the owner's save.
+**Safest path:** close GPU apps → preflight READY (VRAM ≥ 5.5 GiB) → choose A or
+B (§2) → snapshot hashes → for A: copy the install and prove the direct launch
+on the copy; for B: stop Steam, snapshot the install, swap the prefix → disable
+Cloud/overlay → record the save state → launch → prove the copy/prefix is in use
+→ set 1440p/60/100% → warm-up → capture → hash. If any of B1/B2/B10/B13 is not
+satisfied, **stop**; a wrong build or the original prefix makes the reference
+worthless and may lose the owner's save.
 
 ---
 
@@ -178,7 +216,8 @@ Done, in this lane:
 2. Tested the helper end-to-end on a **scratch copy**
    (`/tmp/opencode/tat2-stage-test`, deleted after): `copy` → byte-identical,
    `stage` → `SaveGames.pre-p0b-<ts>` + archived `GameUserSettings.ini`, empty
-   `SaveGames/`. The canonical copy was left untouched by `stage`.
+   `SaveGames/`. The canonical copy was later staged for the attempt, so it is
+   now 771 files with an empty `SaveGames/` (see §1.1).
 3. Tested the lossless x11grab path on a real X window: 1600×900, 60/1, 120 frames
    over 2.000 s, `gbrp`, FLAC 48 kHz stereo.
 4. Tested `verify` on a synthetic 3 s capture: two pose PNGs, SHA-256s, and
@@ -187,8 +226,10 @@ Done, in this lane:
    Proton or game process was started and no install/appmanifest/prefix file was
    written.
 
-Not done (owner/GPU step): no frame of the shipped game was captured; no settings
-were changed in the original prefix; no Steam offline switch; no Steam Cloud change.
+Not done by the preparation lane (owner/GPU step): no frame of the shipped game
+was captured; no settings were changed in the original prefix; no Steam offline
+switch; no Steam Cloud change. The later offline attempt is recorded in §2; it
+did launch the game, failed at the launcher, and was reverted (§1.1).
 
 ---
 
@@ -197,15 +238,20 @@ were changed in the original prefix; no Steam offline switch; no Steam Cloud cha
 Throughout: `ROOT` = this repo worktree; the helper is
 `build/qa/p0b_live_capture.sh`.
 
-### Step 0 — owner approval and preconditions
+### Step 0 — decision and preconditions
 
-- Owner confirms the capture may run now (offline, new save, Steam Cloud off).
-- Close Brave, VS Code, Vesktop, ptyxis, and any other GPU-heavy app. Leave Steam
-  running (it must be running to launch the game).
+- Owner picks **A** (copied install + direct Proton launch), **B** (Steam Play
+  with the prefix swapped), or **C** (no shipped launch) from §2. Do not press
+  Play until the choice is recorded; Offline Mode is not a fallback.
+- Close Brave, VS Code, Vesktop, ptyxis, and any other GPU-heavy app. Steam must
+  be running **online** and logged on for the launcher.
 - Free VRAM target: **≥ 5.5 GiB** (`nvidia-smi --query-gpu=memory.free --format=csv`).
-  The helper hard-blocks below 4 GiB as a floor; 5.5 GiB is the recommended
-  headroom for 1440p native. More is better.
-- Do not reboot after this point unless you re-copy the prefix.
+  The helper hard-blocks below 4 GiB as a floor; a READY verdict at 4–5.5 GiB is
+  not enough for a scored 1440p run.
+- Free disk: project the 420 s size from a 10 s test and require **≥ 2×** it.
+  At the measured rate, 420 s at 1440p60 lossless RGB is ≥ 45 GB; `/home` has
+  177 G free.
+- Do not reboot after this point unless you re-copy the prefix (it is on tmpfs).
 
 ### Step 1 — preflight (must print READY)
 
@@ -221,86 +267,156 @@ the prefix copy, Proton version, VRAM, ffmpeg `-window_id`, `xdotool`, `pulse`
 monitor, disk, and that no TAT process is running. `WARN` lines are conditions the
 owner must handle; `FAIL` lines block.
 
+A `WARN` that Steam is **online** is expected and correct now: the launcher needs
+the online login. `verify-copy` is only meaningful **before** `stage`; the current
+copy is staged, so its file-count failure is by design (§1.1).
+
 ### Step 2 — prefix copy (already present; re-create only if missing)
 
 ```bash
-build/qa/p0b_live_capture.sh verify-copy     # byte-for-byte check, pre-run only
+build/qa/p0b_live_capture.sh verify-copy     # only meaningful BEFORE stage
 # if missing:
 build/qa/p0b_live_capture.sh copy            # refuses outside /tmp/opencode
 ```
 
-Do **not** use the original prefix for the run. The copy is what isolates the new
-save and protects the owner's progression.
+The canonical copy is **already staged** (771 files, empty `SaveGames/` apart
+from `EnhancedInputUserSettings.sav`), so `verify-copy` now FAILs on file count.
+That is the expected state, not corruption; do not re-copy to silence it.
+Do **not** use the original prefix for the run.
 
-### Step 3 — stage a throwaway save in the copy
+### Step 3 — save state (choose once)
 
-```bash
-build/qa/p0b_live_capture.sh stage
-```
+`stage` archives the copied save to `SaveGames.pre-p0b-<timestamp>` and leaves an
+empty `SaveGames/`. That is the right isolation move, but an empty save changes
+the official route's progression rows (B12): S06/KF07–KF08 assumes Level 4, XP
+94/500, Contracts #1–#2 completed, £26,275 and purchased Black Market checks.
 
-This moves the copy's `SaveGames/` to `SaveGames.pre-p0b-<timestamp>` (the owner's
-save state as copied), creates an empty `SaveGames/`, and archives
-`GameUserSettings.ini`. It does **not** edit the ini: the video settings are set
-in-game because the shipped default preset is not known until the menu is read.
+- **Recommended:** restore the archived copy into the live `SaveGames/` so the
+  run starts from the owner's progressed state (the archive stays untouched):
 
-### Step 4 — Steam: protect the install and the save
+  ```bash
+  P=/tmp/opencode/tat2-ref-prefix/pfx/drive_c/users/steamuser/AppData/Local/TAT/Saved
+  ARCH=$(ls -d "$P"/SaveGames.pre-p0b-* | tail -1)
+  cp -a "$ARCH/." "$P/SaveGames/"
+  ls -l "$P/SaveGames/"          # TAT_ETS.sav must be present
+  ```
+
+- **Alternative:** keep the empty save and pre-declare S06/KF07–KF08 and the
+  footer/level rows as save-state deltas in the scorecard. Never score them as
+  port deltas.
+
+Do not re-run `stage` after restoring: it would archive the restored save and
+empty the directory again. Record the footer seed, level, contracts and asset
+total before the run. If the save is the owner's, **Steam Cloud must be off**
+(Step 4).
+
+### Step 4 — Steam: protect the save and record the build
 
 In the Steam client, for **Thick As Thieves (3341000)**:
 
-1. Properties → General → **Steam Cloud: off** (this app only).
+1. Properties → General → **Steam Cloud: off** (this app only). Mandatory if the
+   run uses a copy of the owner's save.
 2. Properties → General → **Steam Overlay: off**.
-3. Settings → Notifications → disable toasts (or set the client to offline first).
-4. Do **not** change `AutoUpdateBehavior` thinking it stops updates: "only update
-   when I launch" still updates at launch. Offline Mode is the only reliable stop.
-5. Record the appmanifest and exe hashes now:
+3. Settings → Notifications → disable toasts (Steam stays online).
+4. Do **not** rely on `AutoUpdateBehavior` to stop updates: "only update when I
+   launch" still updates at launch. Protection is the copied install (A) or the
+   pre-run snapshot + prefix swap (B), not a preflight check.
+5. Record the appmanifest and exe hashes now, and snapshot the original prefix's
+   mtimes (the 2026-11-18 value is gone; the failed attempt wrote them at
+   2026-11-26 23:06):
 
 ```bash
 sha256sum ~/.steam/steam/steamapps/appmanifest_3341000.acf \
           "$HOME/.steam/steam/steamapps/common/Thick As Thieves/TAT/Binaries/Win64/TAT-Win64-Shipping.exe" \
           "$HOME/.steam/steam/steamapps/common/Thick As Thieves/TAT/Binaries/Win64/vkd3d-proton.cache"* \
   | tee /tmp/opencode/p0b_build_hashes_before.txt
+stat -c '%y %n' \
+  ~/.steam/steam/steamapps/compatdata/3341000/pfx/system.reg \
+  ~/.steam/steam/steamapps/compatdata/3341000/pfx/user.reg \
+  | tee /tmp/opencode/p0b_prefix_mtimes_before.txt
 build/qa/p0b_live_capture.sh preflight | tee /tmp/opencode/p0b_preflight_before.txt
 ```
 
-### Step 5 — Steam Offline Mode (before Play)
+### Step 5 — choose the protection path (no Offline Mode)
 
-Steam menu → **Go Offline…** → confirm. Wait until the client shows **Offline
-Mode** and the store/friends panels are unavailable. Do not press Play while the
-client is online. If offline mode fails, **stop** (B1/B2).
+Offline Mode is retired: it gives `LOGIN FAILED!`. Pick one:
 
-### Step 6 — launch with the copied prefix
+- **A — copied install + direct Proton launch (recommended, unproven):** Steam
+  stays online for auth, but it never launches the app, so the updater cannot
+  replace the reference. The test is Step 6A. The open question is SteamAPI init;
+  if the shipping exe will not start without `TAT.exe`, stop.
+- **B — Steam Play + prefix swap (fallback):** stop Steam fully, confirm
+  `compatdata/3341000.orig-p0b` does not already exist, snapshot the install
+  (`cp -a` the 3.8 GB directory to `/home/john/tat2-ref-build`), move the original
+  prefix to `compatdata/3341000.orig-p0b`, and `cp -a` the staged copy into
+  `compatdata/3341000`. Then start Steam online and press Play. This accepts a
+  small update race; abort on any appmanifest/buildid change.
 
-Properties → Launch Options:
+If neither is acceptable, choose **C** and do not launch: re-score the 120 rows
+from the official clip/keyframes and mark live-only rows `UNVERIFIED`.
 
-```text
-STEAM_COMPAT_DATA_PATH=/tmp/opencode/tat2-ref-prefix %command%
-```
+### Step 6 — launch
 
-Press **Play**. This is the standard Proton prefix override used with Steam launch
-options; step 7 proves it took effect. If Steam ignores it, **stop** — do not fall
-back to the original prefix. No other flags: no `-dx12` (DX12 is the default path),
-no `PROTON_ENABLE_WAYLAND` (keep X11 so x11grab sees the window), no mods.
-
-### Step 7 — prove the copy is in use (do this within the first minute)
-
-In another terminal:
+**6A — direct Proton launch (A):**
 
 ```bash
-stat -c '%y %n' /tmp/opencode/tat2-ref-prefix/pfx/system.reg \
-                 /tmp/opencode/tat2-ref-prefix/pfx/user.reg \
-                 ~/.steam/steam/steamapps/compatdata/3341000/pfx/system.reg
+REF="$HOME/tat2-ref-build"
+# REF must not already exist; if it does, remove that disposable copy first
+# (cp -a into an existing directory would nest a second Thick As Thieves/).
+cp -a "$HOME/.steam/steam/steamapps/common/Thick As Thieves" "$REF"
+printf '3341000' > "$REF/TAT/Binaries/Win64/steam_appid.txt"
+# Steam online and logged on; do NOT press Play in the client.
+cd "$REF/TAT/Binaries/Win64"
+STEAM_COMPAT_CLIENT_INSTALL_PATH="$HOME/.steam/steam" \
+STEAM_COMPAT_DATA_PATH=/tmp/opencode/tat2-ref-prefix \
+STEAM_COMPAT_INSTALL_PATH="$REF" \
+SteamAppId=3341000 SteamGameId=3341000 \
+"$HOME/.steam/steam/steamapps/common/Proton - Experimental/proton" run \
+  "$REF/TAT/Binaries/Win64/TAT-Win64-Shipping.exe"
 ```
 
-- The **copy's** `system.reg`/`user.reg` mtimes must be **now**.
-- The **original** prefix's `system.reg` mtime must stay **2026-11-18 15:24**.
+**Not yet measured on this host.** Success = the startscreen appears (no
+`LOGIN FAILED!`) and the copy's prefix writes while the original's do not
+(Step 7). If it fails, stop; do not silently switch to B.
+
+**6B — Steam Play (B, only after Step 5's snapshot and swap):**
+
+Press **Play**. No other flags: no `-dx12`, no `PROTON_ENABLE_WAYLAND` (keep X11
+so x11grab sees the window), no mods. The launch option
+`STEAM_COMPAT_DATA_PATH=... %command%` is **retired**; it did not redirect Proton.
+
+### Step 7 — prove the copy is in use (before the first save)
+
+Do this **before** the game writes a save. Use the Step 4 snapshot.
+
+**A — the copy is the explicit prefix; the original is `compatdata/3341000`:**
+
+```bash
+P=/tmp/opencode/tat2-ref-prefix
+stat -c '%y %n' "$P/pfx/system.reg" "$P/pfx/user.reg" \
+  ~/.steam/steam/steamapps/compatdata/3341000/pfx/system.reg
+```
+
+**B — the copy is now `compatdata/3341000`; the original is `.orig-p0b`:**
+
+```bash
+stat -c '%y %n' ~/.steam/steam/steamapps/compatdata/3341000/pfx/system.reg \
+  ~/.steam/steam/steamapps/compatdata/3341000.orig-p0b/pfx/system.reg
+```
+
+- The prefix the game is using must have mtimes **newer than the Step 4
+  snapshot** (A: the copy; B: `compatdata/3341000`).
+- The original prefix (A: `compatdata/3341000`; B: `.orig-p0b`) must be
+  **unchanged**.
 - If the original changed, quit immediately; the run used the owner's prefix. Do
   not continue, and report it (the owner's save may have been touched).
 
-Also confirm the new save appears:
+Also confirm the expected save state:
 
 ```bash
-ls -l /tmp/opencode/tat2-ref-prefix/pfx/drive_c/users/steamuser/AppData/Local/TAT/Saved/SaveGames/
-# expected: a fresh TAT_ETS.sav, not the archived one
+ls -l "$P/pfx/drive_c/users/steamuser/AppData/Local/TAT/Saved/SaveGames/"
+# recommended: TAT_ETS.sav restored from the archive
+# alternative: empty (fresh save) — then record the progression deltas (B12)
 ```
 
 ### Step 8 — in-game video settings (record the screen)
@@ -320,7 +436,12 @@ Settings → Video, then:
 The copy's archived ini still says 1920×1440 / 42 % / all-Low, so the **first**
 launch will inherit those values. Change them to the table above before the scored
 run, then re-read the ini (or the settings screen) to confirm. Hold the settings
-screen for 3 s so the recording contains the exact values.
+screen for 3 s so the recording contains the exact values, and record the
+**quality preset** and the actual client area in the run note. 2560×1440 is the
+target because it is the owner's last 16:9 mode (Steam `ResolutionOverride
+2560x1440`); the port harness captures 1920×1080 and the ROI stats downsample both
+to 480 px, so this is a detail superset, not a pixel match. If the host cannot
+hold 1440p at 60, stop — do not silently drop to 1080p.
 
 Then check the client area really is 1440p:
 
@@ -335,16 +456,14 @@ comparison. If the search returns nothing, list the XWayland windows
 (`xdotool search --onlyvisible --name '.'`) and use the Proton/UE window; the title
 is normally `Thick As Thieves`, but the class may be `TAT-Win64-Shipping`.
 
-### Step 9 — warm-up, then discard
+### Step 9 — warm-up, then start the recorder
 
 Do a **warm-up run outside the scored capture**: boot → enter the Guildhall
-contract → play ~60 s (move through the gate, fire the zipwire once) → return to the
-menu. This warms the PSO/vkd3d caches. Then start the recorder at the Startscreen
-and play the route from S01. If you cannot return to the menu, restart the game and
-start recording at the Startscreen; the on-disk PSO cache survives.
-
-The first ~120 s of any run (boot, load, shader compile) are **not** evidence and
-must not be scored.
+contract → play ~60 s (move through the gate, fire the zipwire once) → return to
+the menu. This warms the PSO/vkd3d caches. If you cannot return to the menu,
+restart the game; the on-disk PSO cache survives. **The warm-up is not evidence.**
+Start the recorder at the Startscreen; every beat from S01 in the recording is
+evidence.
 
 ### Step 10 — lossless capture (exact command)
 
@@ -378,6 +497,9 @@ ffmpeg -hide_banner -y \
 - **Test the first 10 s** (`-t 10` to a scratch file) and check the frame is not
   black before committing to the full run. If `-window_id` yields black (XWayland
   compositor edge case), use the region fallback in §3 B4.
+- **Disk gate:** measure the 10 s file size and project it to 420 s (`bytes ×
+  42`); require free ≥ 2× the projection before the full run. At the measured
+  rate the full capture is ≥ 45 GB.
 - Do not run OBS, another ffmpeg, or any GPU capture at the same time.
 - Record `nvidia-smi --query-gpu=name,driver_version,memory.used,clocks.current.graphics,temperature.gpu --format=csv`
   before and after into `$OUT/gpu_before.csv` / `gpu_after.csv`.
@@ -419,6 +541,11 @@ official anchors, used only to find the beats, not to force clock alignment.
 
 Do not change difficulty, mode or settings mid-run. The official run is
 `CONSTABLES' GUILDHALL — Cleanout Heist`, `Novice`, `Solo`.
+
+The route assumes the **official save's progression** for S06 (ledger/Black
+Market) and the footer/level rows. If you chose the empty-save alternative in
+Step 3, those rows are save-state deltas; record the difference and do not score
+them as port parity.
 
 ### Step 12 — the six fixed poses (plus the KF18 still)
 
@@ -467,31 +594,47 @@ Expected output: `P0B_LIVE_VERIFY PASS poses=N video_sha256=…`, plus
 - Proton version and prefix path;
 - per-pose PNG SHA-256 and timestamps.
 
-Then verify the **build in-game**: pause menu footer must read
-`1.5.148559` and `Novice`; the seed will be **new** (the official footer seed
-`1025051536` belongs to the official save — do not expect it). Capture the footer
-crop and hash it:
+Then verify the **build in-game**: the pause footer must read `1.5.148559` and
+`Novice`. The seed depends on the save: a restored owner save may carry the
+official `1025051536`; a fresh save will differ. Record it and do not compare it
+across saves. Capture the footer crop and hash it:
 
 ```bash
 ffmpeg -v error -ss <footer_t> -i "$OUT/route_lossless.mkv" -frames:v 1 -f image2 -c:v png "$OUT/footer.png"
 sha256sum "$OUT/footer.png"
-# read it: 1.5.148559   Novice   <new seed>
+# read it: 1.5.148559   Novice   <seed>
 ```
 
 Record the frame hashes in the wave report; they prove file integrity, **not**
-pixel equality with the official frames. Score the look with Lane I's
-`p0b_roi_stats.py` (luma percentiles, beam rows, cream map), never by hash equality.
+pixel equality with the official frames.
+
+Check the encoded frame size explicitly (the helper warns if the frame is not
+2560×1440; this is the hard record):
+
+```bash
+ffprobe -v error -select_streams v:0 \
+  -show_entries stream=width,height,pix_fmt,avg_frame_rate \
+  -of default=nw=1 "$OUT/route_lossless.mkv"   # 2560x1440, gbrp, 60/1
+```
+
+Score the look with Lane I's `p0b_roi_stats.py` (luma percentiles, beam rows,
+cream map), never by hash equality.
 
 ### Step 14 — cleanup / rollback
 
-- Stop the game, return Steam online only after the capture is verified.
-- Keep Steam Cloud **off** for 3341000 until the copy is deleted, so the throwaway
-  save cannot overwrite the real one.
-- Delete `/tmp/opencode/tat2-ref-prefix` only after the manifest is recorded and
-  cited; the original prefix and save were never touched (verify the original `system.reg`
-  mtime is still 2026-11-18 15:24).
-- Re-hash the appmanifest and `vkd3d-proton.cache*`; record any change. The game
-  appending to its cache is expected; an appmanifest `buildid` change is not.
+- Stop the game. Steam can stay online (it was online for the launcher); return
+  it to its normal state after the capture is verified.
+- Keep Steam Cloud **off** for 3341000 until the copied prefix is deleted, so a
+  throwaway or restored save cannot overwrite the real one.
+- **A:** delete `$HOME/tat2-ref-build` and `/tmp/opencode/tat2-ref-prefix` after
+  the manifest is recorded and cited. **B:** stop Steam, move the copy
+  `compatdata/3341000` aside (or delete it), move
+  `compatdata/3341000.orig-p0b` back to `compatdata/3341000`, and only then delete
+  the copied install.
+- Re-hash the appmanifest and `vkd3d-proton.cache*`; record any change. A cache
+  append is expected; a `buildid` change is not.
+- Verify the original prefix's mtimes are unchanged from the Step 4 snapshot (the
+  old 2026-11-18 baseline is gone).
 
 ---
 
@@ -499,15 +642,17 @@ pixel equality with the official frames. Score the look with Lane I's
 
 | Condition | Why |
 |---|---|
-| Steam is online when you press Play | Auto-update can replace 1.5.148559. |
+| Steam starts downloading an update for 3341000 | The reference build can be replaced; stop and restore from the pre-run snapshot. |
 | `buildid` ≠ 25076818, `TargetBuildID` ≠ 0, or `UpToDateCheck` false | The install is no longer the reference build. |
-| Offline Mode fails or Steam asks for a password/Steam Guard | Do not go online mid-run. |
-| The **original** prefix's `system.reg` mtime changes | The launch used the owner's prefix; the save may have been touched. |
+| The launcher shows `LOGIN FAILED!`, or Steam asks for a password/Steam Guard | The online login is not ready; do not improvise a re-auth mid-run. |
+| The **original** prefix's `system.reg`/`user.reg` mtimes change from the Step 4 snapshot | The launch used the owner's prefix; the save may have been touched. |
 | Proton Experimental version ≠ `experimental-11.0-20261112-x86_64` | Renderer drift; the prepared baseline no longer applies. |
 | VRAM free < 4 GiB, or `nvidia-smi` shows thrash/OOM | The 1440p capture will stutter or fail. |
-| Client area ≠ 2560×1440 after the setting change | The comparison would be at the wrong resolution. |
+| Free space < 2× the projected 420 s size | The lossless capture will fill the disk. |
+| Client area is not 2560×1440 and the deviation is not deliberately accepted | The reference is at the wrong size for the stated spec. |
+| The A direct launch does not reach the game | The direct path is disproven; stop and choose B/C with the owner. |
 | `-window_id` capture is black | Use the region fallback; never switch to a lossy codec. |
-| Steam Cloud prompts to sync the new save | Disable Cloud, do not upload; the owner's progression is at risk. |
+| Steam Cloud prompts to sync the new/restored save | Disable Cloud, do not upload; the owner's progression is at risk. |
 
 ---
 
@@ -518,10 +663,13 @@ pixel equality with the official frames. Score the look with Lane I's
 - `manifest.json` with video + pose hashes, build id, exe version, Proton version,
   GPU/driver and sink.
 - The six pose PNGs + the KF18 still + the pause-footer crop, with hashes.
-- The pre/post `appmanifest`/`vkd3d` hash file and the preflight log.
-- A short note: did the render hold 60 fps, what was the peak VRAM, any captured
-  settings drift.
+- The pre/post `appmanifest`/`vkd3d` hash file, the Step 4 prefix-mtime snapshot,
+  the preflight log, and the A/B isolation proof.
+- The run note: capture path (A/B), install/prefix provenance, save state (seed,
+  level, contracts, assets), quality preset, actual client area, free-space
+  projection, whether the render held 60 fps, peak VRAM, and any settings drift.
 
-No capture exists yet; this lane makes no visual claim. The 120-row baseline is
-scored only after the owner runs this plan and Lane I's ROI stats consume the
-frames.
+No capture exists yet; this lane makes no visual claim. The capture is a
+matched-settings reference for P4/ROI, not a replacement for the official clip
+and keyframes, and the 120-row scorecard is re-scored from a **port** run, not
+from this capture.

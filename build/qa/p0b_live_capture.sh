@@ -151,8 +151,10 @@ cmd_preflight() {
     printf '  account     : %s\n' "${persona:-?}"
     printf '  offline     : WantsOfflineMode=%s (0 = currently online)\n' "${offline:-?}"
     printf '  remembered  : RememberPassword=%s\n' "${remember:-?}"
-    [ "$offline" = "1" ] || warn "Steam is online; switch to Offline Mode BEFORE pressing Play"
-    [ "$remember" = "1" ] || warn "RememberPassword!=1: offline mode may require a sign-in"
+    if [ "$offline" = "1" ]; then
+      warn "Steam is in Offline Mode; the shipped launcher fails at LOGIN. Use an online login for the capture."
+    fi
+    [ "$remember" = "1" ] || warn "RememberPassword!=1: the online login may need manual credentials"
   else
     warn "loginusers.vdf not found; cannot confirm the remembered account"
   fi
@@ -216,6 +218,8 @@ cmd_preflight() {
       else
         blocker "VRAM free ${free} MiB < 4096 MiB; close GPU apps (browser, editor, chat) first"
       fi
+    elif [ "${free:-0}" -lt 5632 ] 2>/dev/null; then
+      warn "VRAM free ${free} MiB < 5.5 GiB target for a scored 1440p run; close more GPU apps"
     else
       ok "VRAM headroom looks sufficient for 1440p"
     fi
@@ -340,8 +344,9 @@ cmd_capture_cmd() {
   sink="$(pactl get-default-sink 2>/dev/null || true)"
   mkdir -p "$CAPDIR" 2>/dev/null || true
   cat <<EOF
-# Run this ONLY after: Steam -> Go Offline, the copied prefix is verified in
-# use, the new save exists, and the in-game video settings are confirmed.
+# Run this ONLY after: the section 2 protection path (A or B) is chosen, the
+# copied prefix is proven in use, the expected save state exists, and the in-game
+# video settings are confirmed. Offline Mode is retired (the launcher fails).
 # It does not start the game; it records the already-running window.
 
 OUT="$CAPDIR"
@@ -389,6 +394,11 @@ cmd_verify() {
     || warn "pix_fmt is not gbrp; the capture is not provably lossless RGB"
   printf '%s' "$vinfo" | grep -q 'avg_frame_rate=60/1' \
     && ok "60 fps" || warn "avg_frame_rate is not 60/1"
+  if printf '%s' "$vinfo" | grep -q 'width=2560' && printf '%s' "$vinfo" | grep -q 'height=1440'; then
+    ok "2560x1440"
+  else
+    warn "capture is not 2560x1440; record the deviation or recapture"
+  fi
 
   local poses="$CAPDIR/poses.tsv"
   if [ ! -f "$poses" ]; then
@@ -479,7 +489,7 @@ manifest = {
     'prefix': os.environ['P0B_PREFIX'],
     'proton_version': os.environ['P0B_PROTON'],
     'poses': poses,
-    'notes': 'New save; in-game footer seed differs from the official 1025051536. Compare with Lane I ROI stats, not pixel equality.',
+    'notes': 'Save state (restored owner save vs fresh) must be recorded in the run note; the footer seed differs accordingly. Compare with Lane I ROI stats, not pixel equality.',
 }
 out = os.path.join(capdir, 'manifest.json')
 with open(out, 'w', encoding='utf-8') as f:
@@ -495,20 +505,19 @@ cmd_steps() {
   cat <<'EOF'
 P0b live reference — condensed runbook (full detail: docs/reports/p0b-live-capture.md)
 
- 0. Close every GPU-heavy app; target >= 5.5 GiB VRAM free.
- 1. ./p0b_live_capture.sh preflight          # must print READY
- 2. ./p0b_live_capture.sh copy               # /tmp/opencode/tat2-ref-prefix
- 3. ./p0b_live_capture.sh stage              # new save in the COPY only
- 4. Steam: disable Cloud + overlay for 3341000; record appmanifest hash.
- 5. Steam: Go Offline (do not press Play while online).
- 6. Launch Options: STEAM_COMPAT_DATA_PATH=/tmp/opencode/tat2-ref-prefix %command%
- 7. Press Play; verify the COPY's pfx mtime changes and the original's does not.
- 8. Settings: Windowed 2560x1440, VSync off, 60 cap, 100%, default preset.
- 9. Warm-up run: boot -> mission -> 60 s -> back to the menu; then record.
-10. ./p0b_live_capture.sh capture-cmd          # review, then run by hand
-11. Play the 27 beats; hold the six poses for 3 s each.
-12. Fill poses.tsv; ./p0b_live_capture.sh verify
-13. Pause-menu footer must read 1.5.148559 / Novice / <new seed>; hash the frame.
+ 0. Close every GPU-heavy app; target >= 5.5 GiB VRAM free; project the 420 s disk size (>= 45 GB).
+ 1. ./p0b_live_capture.sh preflight          # READY; online WARN is expected
+ 2. ./p0b_live_capture.sh copy               # only if /tmp/opencode/tat2-ref-prefix is gone
+ 3. ./p0b_live_capture.sh stage              # then restore the archive for the owner save
+ 4. Steam: disable Cloud + overlay for 3341000; snapshot appmanifest/exe/prefix hashes.
+ 5. Choose A (copied install + direct Proton) or B (snapshot + prefix swap). OFFLINE MODE IS RETIRED.
+ 6. Launch; prove the copy/prefix is in use BEFORE the first save.
+ 7. Settings: Windowed 2560x1440, VSync off, 60 cap, 100%, record the preset.
+ 8. Warm-up before recording; then record from the Startscreen.
+ 9. ./p0b_live_capture.sh capture-cmd        # review, then run by hand
+10. Play the 27 beats; hold the six poses for 3 s each.
+11. Fill poses.tsv; ./p0b_live_capture.sh verify; check ffprobe 2560x1440/gbrp/60.
+12. Footer 1.5.148559 / Novice / seed; hash the frame; record the save state.
 EOF
 }
 

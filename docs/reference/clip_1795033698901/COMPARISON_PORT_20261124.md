@@ -36,7 +36,7 @@ settle it, the owning lane is used, or `UNVERIFIED` with the named experiment �
 **What this run is not.** It is a different route from the official clip: no NPC of any kind, no
 smoke bomb, no vintage car, no Vistara Diamond, no escape/endgame, no foyer beam, no crimson alarm. It
 does contain a ZipWire (launch 02:01, crank 02:12–02:19) — L5's "no zipwire" is retracted below — and
-the telescope Easter egg. 57 of 120 rows are therefore `N/A-route`; read §5 before quoting any tally.
+the telescope Easter egg. 56 of 120 rows are therefore `N/A-route`; read §5 before quoting any tally.
 
 ## 1. Scoring rules (verbatim from `docs/REFERENCE_BASELINE.md` §8)
 

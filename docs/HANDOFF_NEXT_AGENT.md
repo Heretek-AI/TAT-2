@@ -10,49 +10,63 @@ plus this handoff commit.
 **Steam reference:** `/home/john/.steam/steam/steamapps/common/Thick As Thieves/`
 (appid `3341000`, build `25076818`, `1.5.148559`).
 
-Read this section first: the capture attempt failed and the machine has been
-restored; the live reference is still not taken.
+Read this section first: the offline capture attempt failed and the machine has
+been restored; the matched-settings capture is still not taken.
 
 ---
 
-## 0. Machine state — RESTORED (live capture not taken)
+## 0. Machine state — RESTORED; the offline path is disproven; one decision blocks the capture
 
-The last attempt was the shipped-reference capture. **The shipped build will not
-run in Steam Offline Mode:** it sits at `LOGIN FAILED!` with only `QUIT`, so the
-launcher requires an online login. The port itself is fully offline; this is a
-capture constraint, not a port requirement.
+The shipped build `25076818` **will not run in Steam Offline Mode**: with
+`WantsOfflineMode=1` it reaches the launcher's `LOGIN FAILED!` with only `QUIT`.
+The launcher requires an online login. The port itself is fully offline; this is
+a capture constraint, not a port requirement.
 
-The machine was restored at the end of the session. Current state:
+The machine was restored after the attempt. Verified state:
 
-- `/home/john/.local/share/Steam/steamapps/compatdata/3341000` is the **original**
-  prefix again; the staged copy was removed and no `.orig-p0b` remains.
-- `TAT_ETS.sav` md5 `976f8730eac989bab1c6c792343b7c00` matches the pre-run
-  archive `/tmp/opencode/tat2-ref-prefix/.../SaveGames.pre-p0b-20261126-230522/`.
-- Steam config restored from `/tmp/opencode/steam-config-backup/`:
-  `WantsOfflineMode=0`, no `STEAM_COMPAT_DATA_PATH` launch option.
-- Steam is **stopped**; start it normally when needed.
+- `compatdata/3341000` is the **original** prefix again; the swapped-in copy was
+  removed and no `.orig-p0b` remains.
+- `TAT_ETS.sav` md5 `976f8730eac989bab1c6c792343b7c00` matches the archive at
+  `/tmp/opencode/tat2-ref-prefix/.../SaveGames.pre-p0b-20261126-230522/`.
+  The canonical copy's `SaveGames/` holds only `EnhancedInputUserSettings.sav` —
+  there is no fresh `TAT_ETS.sav`; the archive is the only save.
+- Steam is stopped; `WantsOfflineMode=0`; no launch option for 3341000.
+- The failed attempt used the **original** prefix because the
+  `STEAM_COMPAT_DATA_PATH=... %command%` launch option did **not** redirect
+  Proton. It rewrote the original's `pfx/system.reg`, `pfx/user.reg` (now
+  2026-11-26 23:06) and the prefix's `steamclient*.dll` stubs, and grew
+  `vkd3d-proton.cache` 1,743,312 → 1,744,384 B; the `.write` sidecar is now
+  0 B. Save/config hashes are unchanged. Both are benign and were not reverted.
+- The prefix copy is staged: **771 files vs the original's 775**, so
+  `verify-copy` now **FAILs by design**; it is only meaningful before `stage`.
+- Host at the last check: **177 G** free on `/home`; **5,143 MiB** VRAM free
+  (VRAM moves with the desktop; re-run `preflight`); Proton
+  `experimental-11.0-20261112-x86_64`; `buildid=25076818`, `up_to_date:true`
+  (last check).
 
-Side effects of the attempt, kept for the record (not damage): the first
-`-applaunch` ignored the launch option and used the original prefix, which
-rewrote `pfx/system.reg`, `pfx/user.reg` and the prefix's `steamclient*.dll`
-stubs (normal Proton startup; save/config hashes unchanged). It also grew
-`vkd3d-proton.cache` inside the install dir by 1,072 bytes (1,743,312 →
-1,744,384). Both are benign and were not reverted.
+**Decision required before any launch.** Offline is not a fallback. Choose:
 
-The staged copy and its fresh save still exist at
-`/tmp/opencode/tat2-ref-prefix` (old save archived as
-`SaveGames.pre-p0b-20261126-230522`, old video settings as
-`GameUserSettings.ini.pre-p0b-20261126-230522`).
+- **A — matched-settings live capture, updater out of the path (recommended,
+  UNTESTED):** copy the 3.8 GB install to a private path and launch the copy's
+  `TAT-Win64-Shipping.exe` directly under Proton with the copied prefix; keep
+  Steam online only for auth. Steam never launches the app, so
+  `AutoUpdateBehavior=0` cannot replace the reference. The open question is
+  SteamAPI init without the `TAT.exe` launcher; Step 6A of the runbook is the
+  test.
+- **B — Steam Play with the prefix swapped:** stop Steam, snapshot the install
+  and appmanifest, `mv` the original prefix aside and `cp -a` the staged copy
+  in, then start Steam online. Accept the update race only with owner approval;
+  abort on any appmanifest/buildid change.
+- **C — no shipped launch:** re-score the 120 rows from the official clip and
+  keyframes (`~/Videos/clip_1,795,033,698,901.mp4`, 3840×2160 @ 29.67 fps,
+  225.5 s; keyframes in `docs/reference/clip_1795033698901/clean/`), marking
+  live-only rows `UNVERIFIED`. This does not need a capture and can run now.
 
-**To resume the live capture online:** verify `appmanifest buildid=25076818`,
-`TargetBuildID=0`, `StateFlags=4`, and Valve `up_to_date: true`, then start Steam
-online and press Play. `AutoUpdateBehavior=0`: abort if any update appears.
-Save isolation needs the prefix **swapped while Steam is fully stopped**
-(`mv compatdata/3341000 .../3341000.orig-p0b; cp -a /tmp/opencode/tat2-ref-prefix
-.../3341000`) — the launch option alone did **not** redirect Proton. Then set
-2560×1440, 100%, VSync off, 60 cap, default quality, HDR off, capture the
-27-beat route with `build/qa/p0b_live_capture.sh capture-cmd`, and score the 120
-rows. No capture has been taken.
+**Do not press Play in Steam until A or B is chosen and its isolation proof is
+in place.** The runbook is `docs/reports/p0b-live-capture.md` §5; the pre-attempt
+Offline Mode and launch-option instructions are retired. The live capture is a
+matched-settings **P4/ROI** reference; the 120-row scorecard is re-scored from a
+**port** full-route run, not from this capture.
 
 ---
 
@@ -63,11 +77,21 @@ hotfix**, **P2 StateTree v2 shadow runtime**, the **navmesh extraction spike**,
 **P3 Wwise control plane**, **P5 UI correctness** and the **data-truth wave**.
 The complete 44-gate set passes at `5135f53`; the evidence is in
 `docs/reports/logs/final/` and `docs/reports/final-20261127.md`. The port is not
-Parity Complete: the **live-reference / 120-row baseline is unscored**, P4
-look/exposure is outstanding, the navmesh has no runtime consumer, the
-StateTree still drives only in shadow with the FSM authoritative, audio is
-partial, UI is headless-verified but not visually scored, and the GC hold-smash
-remains a labelled port decision.
+Parity Complete, and the remaining measurement work splits into two tracks that
+the previous handoff conflated:
+
+- **120-row scorecard** — already filled against the official clip
+  (**9 PASS / 33 DELTA / 4 MISSING / 2 HARD_LIMIT / 16 UNVERIFIED / 56
+  N/A-route**, 2026-11-24) but **stale**: it predates every wave. Re-scoring it
+  needs a new **port** full-route run, not a shipped-build capture.
+- **Matched-settings live capture** — still not taken; it is the P4/ROI
+  instrument for exposure/look, not the source of the 120-row tally. Its
+  offline path is disproven and its online path needs the §0 decision.
+
+Still open: P4 look/exposure, the navmesh runtime consumer, the StateTree shadow
+ceiling (`fully_parity_covered_trees=0`, FSM authoritative), partial audio
+(14/23 switches, 4/8 states, 16/50 RTPCs), UI headless-only, and the GC
+hold-smash `PORT_DECISION`.
 
 ---
 
@@ -137,17 +161,18 @@ StateTree shadow ceiling; the authored-element collision floor.
 
 ## 4. Remaining waves and open items
 
-### 4.1 Live reference + 120-row baseline (decision needed, highest measurement priority)
+### 4.1 Live reference (P4/ROI) and the 120-row re-score
 
 - Shipped launcher requires **online login**; Steam Offline Mode gives
-  `LOGIN FAILED!`. Decide: online capture with build/update preflight, or score
-  from the official 30 keyframes and mark live-only rows `UNVERIFIED`. The
-  machine is restored and ready for either; see §0.
+  `LOGIN FAILED!`. Decide: **A** copied install + direct Proton launch,
+  **B** snapshot + prefix swap, or **C** score from the official 30 keyframes
+  and mark live-only rows `UNVERIFIED`. A build preflight is not update
+  protection; see §0.
 - The 120-row scorecard is
   `docs/reference/clip_1795033698901/COMPARISON_PORT_20261124.md`; current
   baseline is **9 PASS / 33 DELTA / 4 MISSING / 2 HARD_LIMIT / 16 UNVERIFIED /
-  56 N/A-route** from 2026-11-24, predating every wave. Re-score on the
-  parity-only build.
+  56 N/A-route** from 2026-11-24, predating every wave. Re-score it from a new
+  parity-only **port** full-route run (not from the live capture).
 - The corrected six-pose port capture is at
   `docs/reports/logs/p0b/20261127T015115Z_fafb78f122d5_bon/` (gate 23.85,
   upper_foyer 40.88, yaw180 39.47, Lounge 28.37, audio 92.8 s); it is not the
@@ -235,15 +260,16 @@ ceiling is 112 and must not rise further without evidence.
 
 ## 5. Recommended next order
 
-1. **Decide the live-capture path** (§0/§4.1): online capture with the build
-   preflight, or score from the official keyframes and mark live-only rows
-   `UNVERIFIED`. Do not fabricate measurements.
+1. **Decide the live-capture path** (§0): **A** copied install + direct Proton
+   launch, **B** snapshot + prefix swap, or **C** keyframe-only. Offline is
+   retired; a preflight is not update protection. Do not fabricate measurements.
 2. **P4 look** (exposure/IBL/AEM first, then mirrors/landscape) because it is the
    visible gap in the current playtest and blocks honest visual scoring.
 3. **Navmesh P1 Detour consumer**, then **P2.3 patrol cutover + event bus**.
 4. **Full audio direction** and **GC/bookcase destruction** in parallel where
    files allow.
-5. Re-score the 120 rows and raise the ratchet only from measured logs.
+5. Re-score the 120 rows from a **port** full-route run and raise the ratchet
+   only from measured logs.
 
 ---
 
@@ -290,6 +316,7 @@ build/qa/runtime_smoke.sh 90      # no outer flock
 - `docs/reports/w10-p3-audio.md` — Wwise control-plane counts/wiring.
 - `docs/reports/w10p2-20261126.md` — data wave, collision truth, cream/pants.
 - `docs/reports/navmesh-spike.md` — authored Detour tile extraction/consumer.
-- `docs/reports/p0b-live-capture.md` — copied-prefix offline/online capture runbook.
+- `docs/reports/p0b-live-capture.md` — offline attempt, restore, and the online
+  capture runbook (A/B/C).
 - `docs/reference/clip_1795033698901/COMPARISON_PORT_20261124.md` — 120-row scorecard.
 - `docs/FIDELITY_GAPS.md`, `AGENTS.md` — invariants, traps, gate table.

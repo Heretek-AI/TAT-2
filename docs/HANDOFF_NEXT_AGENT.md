@@ -1,12 +1,13 @@
 # Handoff — Thick As Thieves Godot 4.7.2 port (next session)
 
 **Repo:** `/home/john/Projects/TAT-2`
-**Code/data tip:** `fafb78f` (P1: five route-content lanes + the `A2-WHITE`
-portal-surface fix + the HUD status-icon `own_world_3d` fix) + `9fcec91` (the
-corrected six-pose capture). This handoff and the P1 evidence are the commit on
-top of that tip.
-**Working tree:** clean apart from private/derived data; the tracked P1 evidence
-and capture logs are committed.
+**Code/data tip:** `8a3ad62` (P1) + the W10-P2 data-wave commit on
+`w10/data-wave` (cream emission, pants albedo, collision truth,
+`GC_ChestTrunkALid` measurement). This branch is **not** merged; the integrator
+merges it and re-stamps the two data baselines listed in
+[`reports/w10p2-20261126.md`](reports/w10p2-20261126.md).
+**Working tree:** clean apart from private/derived data; the W10-P2 lane logs are
+in `docs/reports/logs/w10p2/`.
 **Godot:** `4.7.2.stable` via native `tools/godot` (`godot` is **not** on `$PATH`).
 **Renderer:** Forward+ · Jolt 60 Hz · 1280×720 reference · Linux x86_64.
 **Steam reference:** `/home/john/.steam/steam/steamapps/common/Thick As Thieves/`.
@@ -42,6 +43,22 @@ live-reference 120-row baseline is still unscored; **no visual parity PASS is
 claimed**.
 
 ## 2. Gates at this HEAD (all measured, logs in `docs/reports/logs/p1/full/`)
+
+**W10-P2 lane (unmerged branch `w10/data-wave`, base `8a3ad62`), measured
+serially on 2026-11-27 with logs in [`reports/logs/w10p2/`](reports/logs/w10p2/):**
+`compile` **213/0**; `run_tests` **323/0** (suite **119** registered);
+E2E **300/300**; p2 `expected_fail=0 expected_delta=0 fixed=0
+unexpected_fail=0` (14/14); collision
+`COL_MAPS PASS min_coverage=0.869 coverage_ppm=868852 dropped=0`; GC
+`GC_PROBE checks=44 fails=0`; roof `ROOF_COLLISION_SUMMARY: fails=0`; parser
+tests `PASS: 28 checks`. `make audit` is **expected red** until the integrator
+re-stamps `tools/audit_baseline.json` (three producer hashes, two payloads, the
+`texture_refs` metric); `tools/gate_ratchet.json` `probe_collision.coverage_ppm`
+must be re-based to 868852. Details:
+[`reports/w10p2-20261126.md`](reports/w10p2-20261126.md).
+
+The P1 gate set below is still the last **fully green** 40-gate run and remains
+the reference until the merge re-runs it.
 
 Run: `build/qa/run_p0b_gates.sh` on
 `78884fe7d19d43a51e6c7a35d5f886401ffda869` (Godot
@@ -122,8 +139,10 @@ interior baseline.
 |---|---|---|
 | **Port capture (P1 tree)** | corrected six-pose run at `fafb78f` (`logs/p0b/20261127T015115Z_...`): gate 23.85, upper_foyer 40.88, yaw180 39.47, Lounge 28.37; thin beam line, no cream bars; audio 92.8 s/0 dropped | inspect KF14/15/16/23/24/27/28/29, then score the rows with the live reference |
 | **120-row baseline unscored** | instruments ready; live reference prepared, nothing launched (`reports/p0b-live-capture.md`) | score the 120 rows on the parity-only build with recorded evidence |
-| **Cream / invented white** | corrected capture shows the authored thin beam line and no cream bars; the beam material is an authored-parameter match; cream RED proof `expected_fail=2`; 122 authored moon cards are safe | data wave fixes `_apply_ue_emissive` + registers suite 119 |
-| **Civilian pants albedo** | p2 expected FAIL: authored `Pants_D` in the `opacity` slot | producer fix (`BaseColorOpacity` → albedo), then p2 `fixed` → 1 |
+| **Cream / invented white** | W10-P2 **closed**: `_apply_ue_emissive()` needs an authored colour or map; `tat_invented_white` census; suite **119** green (`passes=5`). The remaining cream bars in old captures are the `SM_LightBeam` cards | beam full-tube material is P4 |
+| **Civilian pants albedo** | W10-P2 **closed**: `BaseColorOpacity` → albedo, `Source Color Texture` fallback; p2 `expected_fail=0` (14/14), 19 albedo bindings corrected, 75 bogus opacity binds removed | keep an eye on the audit `texture_refs 1523 → 1522` drop (the wrong male top) when re-stamping |
+| **Collision coverage metric** | W10-P2: `no_simple_collision` map (334 packages), true element coverage 0.910/0.912/0.869; `coverage_ppm=868852` | re-stamp `tools/gate_ratchet.json` `probe_collision.coverage_ppm` (the old 976321 measured a fallback-inflated ratio) |
+| **`GC_ChestTrunkALid`** | not in `extracted/json`; private dump shows `AutoInstanceMeshes = SM_ChestTrunkALid` (**intact** lid, 51 instances), so the labelled `_Broken` fallback stays (`fallback_broken=93`); producer guard skips an intact auto-instance | land `extracted/json/Destructibles/**` (one filtered `json` pass) + `normalize`; expected census unchanged, **not yet measured** |
 | **`BARRON'S DEMOLITION` banner** | P1-STREET `HARD_LIMIT`: 0 name hits in the extraction; only the blue `KILCAIRN` banner set exists | no authored asset; do not invent a decal |
 | **KF15 fallen drums** | P1-STREET `HARD_LIMIT (placement)`: `SM_Metal_BarrelA/B/C` exist but no placement within 12 m of the alley | needs a producer/placement source before it can be scored |
 | **Cyan KF27 node** | POI `SM_Sphere2Count` is `hidden_in_game: true`; the visible node is a BP/Niagara overlay; port uses `PORT_APPROX` | exact node is HARD_LIMIT unless a Niagara/BP payload is exported |

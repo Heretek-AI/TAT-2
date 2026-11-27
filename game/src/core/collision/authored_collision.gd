@@ -63,12 +63,15 @@ const ENABLED_NONE: int = 2
 
 const DATA_PATH: String = "res://data/generated/mesh_collision.json"
 const CM_TO_M: float = 0.01
-## UE's default (`CTF_UseDefaultCollision`) collides with the render triangles
-## when the mesh has no simple collision, so a render trimesh IS the authored
-## answer for those. Placed meshes with no dump at all in `extracted/json` are
-## all under this prefix (measured: 10 of the 79 Guildhall absent paths, 13 of
-## the 107 level-JSON paths; the other 69/94 DO have a BodySetup dump with no
-## `AggGeom`). Those keep the loader's AABB heuristic. [re-a1 §B6]
+## A package with a BodySetup dump but no authored simple geometry is classified
+## from the producer's `no_simple_collision` map: `complex_as_simple` (UE
+## collides with the render triangles, so the trimesh is the authored answer) or
+## `no_collision` (explicit NoCollision / SimpleAsComplex with nothing simple).
+## A placed mesh with NO BodySetup record at all has no authored collision and
+## gets `no_collision` — never an invented render trimesh. The only paths that
+## keep the loader's AABB heuristic are the `/Game/Test/` meshes with no dump at
+## all (measured: 10 in the Guildhall load set; they have no package in
+## `extracted/json`). [re-a1 §B6, W10-P2 correction]
 const ABSENT_NO_DUMP_PREFIX: String = "/game/test/"
 
 ## Per-mesh element cap: above this a convex set coalesces to one hull of
@@ -118,6 +121,10 @@ const PLANAR_PATH_REPORT_MAX: int = 32
 
 ## Compact DB: ue_path -> {enabled:int, complex:bool, elements:Array[Dictionary]}.
 static var _records: Dictionary = {}
+## `no_simple_collision` map: ue_path -> {"kind": String, "reason": String}.
+## These packages have a BodySetup dump and no AggGeom; `resolve()` needs them to
+## tell an authored complex-as-simple mesh from a package with no record at all.
+static var _no_simple: Dictionary = {}
 static var _loaded: bool = false
 static var _json_ms: int = -1
 static var _mesh_count: int = 0
@@ -223,6 +230,7 @@ static func stats() -> Dictionary:
 		"meshes": _mesh_count,
 		"elements": _element_count,
 		"convex": _convex_count,
+		"no_simple": _no_simple.size(),
 		"load_ms": _json_ms,
 		"planar_convex_skipped": _planar_convex_skipped,
 		"box_clamped": _box_clamped,
@@ -247,9 +255,20 @@ static func is_loaded() -> bool:
 ## Returns:
 ##   source:  "hull"            authored elements, one shape per element
 ##            "prims"           authored elements, one coalesced/primitive shape
-##            "complex_default" no simple collision in UE -> render trimesh
-##            "absent"          no authored data at all -> loader heuristic
-##            "no_collision"    authored NoCollision -> no shape
+##            "complex_default" no simple collision authored, UE collides with
+##                              the render triangles -> render trimesh
+##            "no_collision"    authored NoCollision, or no BodySetup record at
+##                              all -> no shape
+##            "absent"          no dump at all (/Game/Test/) -> loader heuristic
+##   class:   "elements"        source hull/prims (authored simple geometry)
+##            "complex"         source complex_default (render-trimesh fallback)
+##            "no_collision"    authored NoCollision / SimpleAsComplex-no-shapes
+##            "no_record"       no BodySetup dumped for this package
+##            "absent"          no dump at all (heuristic, never counted authored)
+##   reason:  the authored trigger for the class ("default_complex_fallback",
+##            "complex_as_simple_flag", "explicit_no_collision",
+##            "simple_as_complex_without_shapes", "record_complex_flag",
+##            "empty_element_record", "no_body_setup", "no_dump")
 ##   shapes:  Array[Shape3D] (shared resources; empty for the loader-built cases)
 ##   offsets: Array[Transform3D], same length, applied as `instance_tr * offset`
 ##   elements, reduced, enabled
@@ -264,6 +283,8 @@ static func resolve(ue_path: String, instances: int = 1) -> Dictionary:
 		return _cache[key]
 	var out: Dictionary = {
 		"source": "absent",
+		"class": "absent",
+		"reason": "no_dump",
 		"shapes": [] as Array,
 		"offsets": [] as Array,
 		"elements": 0,
@@ -278,10 +299,32 @@ static func resolve(ue_path: String, instances: int = 1) -> Dictionary:
 	}
 	var rec: Dictionary = _records.get(ue_path, {}) as Dictionary
 	if rec.is_empty():
-		# No AggGeom record. 69/79 Guildhall paths still have a BodySetup with no
-		# AggGeom (UE complex-as-simple = the render triangles are the collision);
-		# the 10 under /Game/Test/ have no dump at all and keep the heuristic.
-		out["source"] = "absent" if ue_path.to_lower().begins_with(ABSENT_NO_DUMP_PREFIX) else "complex_default"
+		var ns: Dictionary = _no_simple.get(ue_path, {}) as Dictionary
+		if not ns.is_empty():
+			# Authored BodySetup dump with no AggGeom. The producer resolved the
+			# authored flag/enabled pair: complex-as-simple is a real collision
+			# answer (render trimesh), NoCollision / SimpleAsComplex-without-
+			# shapes is not (no invented collider).
+			out["reason"] = str(ns.get("reason", ""))
+			if str(ns.get("kind", "")) == "no_collision":
+				out["source"] = "no_collision"
+				out["class"] = "no_collision"
+				if out["reason"] == "explicit_no_collision":
+					out["enabled"] = "NoCollision"
+			else:
+				out["source"] = "complex_default"
+				out["class"] = "complex"
+			_cache[key] = out
+			return out
+		if ue_path.to_lower().begins_with(ABSENT_NO_DUMP_PREFIX):
+			_cache[key] = out
+			return out
+		# No BodySetup/WKB dump for this package at all: UE has no authored
+		# collision here. The old code invented a render trimesh and counted it
+		# as authored coverage; that is exactly the defect this class fixes.
+		out["source"] = "no_collision"
+		out["class"] = "no_record"
+		out["reason"] = "no_body_setup"
 		_cache[key] = out
 		return out
 	var enabled: int = int(rec["enabled"])
@@ -290,17 +333,23 @@ static func resolve(ue_path: String, instances: int = 1) -> Dictionary:
 	out["elements"] = els.size()
 	if enabled == ENABLED_NONE:
 		out["source"] = "no_collision"
+		out["class"] = "no_collision"
+		out["reason"] = "explicit_no_collision"
 		_cache[key] = out
 		return out
 	if bool(rec["complex"]):
 		# `CTF_UseComplexAsSimple`: UE ignores the authored simple elements.
 		out["source"] = "complex_default"
+		out["class"] = "complex"
+		out["reason"] = "record_complex_flag"
 		_cache[key] = out
 		return out
 	if els.is_empty():
 		# Producer never emits an empty element list for a kept record; if it
 		# ever does, the render mesh is the only authored answer left.
 		out["source"] = "complex_default"
+		out["class"] = "complex"
+		out["reason"] = "empty_element_record"
 		_cache[key] = out
 		return out
 	var convex: int = 0
@@ -346,6 +395,7 @@ static func resolve(ue_path: String, instances: int = 1) -> Dictionary:
 		# Every authored element was a coplanar surface: UE gives this mesh no
 		# solid volume, so it gets no collider at all (never a 2 cm slab).
 		out["source"] = "hull"
+		out["class"] = "elements"
 		_cache[key] = out
 		return out
 	var kept_convex: int = 0
@@ -363,6 +413,7 @@ static func resolve(ue_path: String, instances: int = 1) -> Dictionary:
 			shapes.append(_tessellate_elements(kept))
 			offsets.append(Transform3D.IDENTITY)
 		out["source"] = "prims"
+		out["class"] = "elements"
 		_cache[key] = out
 		return out
 	# The caps and the coalescing are unchanged; the branch sees the kept list so
@@ -382,6 +433,7 @@ static func resolve(ue_path: String, instances: int = 1) -> Dictionary:
 		offsets.append(Transform3D.IDENTITY)
 		out["reduced"] = true
 		out["source"] = "hull"
+		out["class"] = "elements"
 		_cache[key] = out
 		return out
 	for el_var2: Variant in kept:
@@ -389,6 +441,7 @@ static func resolve(ue_path: String, instances: int = 1) -> Dictionary:
 		shapes.append(_shape_of(el))
 		offsets.append(el["xf"] as Transform3D)
 	out["source"] = "hull"
+	out["class"] = "elements"
 	_cache[key] = out
 	return out
 
@@ -453,6 +506,15 @@ static func _ensure_loaded() -> void:
 			"elements": els_out,
 		}
 	_mesh_count = _records.size()
+	# BodySetups with no AggGeom: the producer resolves complex-as-simple vs
+	# authored no-collision, so a package with no record is never guessed.
+	var ns_map: Dictionary = (parsed as Dictionary).get("no_simple_collision", {}) as Dictionary
+	for ns_key: Variant in ns_map.keys():
+		var ns_rec: Dictionary = ns_map[ns_key] as Dictionary
+		_no_simple[str(ns_key)] = {
+			"kind": str(ns_rec.get("kind", "")),
+			"reason": str(ns_rec.get("reason", "")),
+		}
 	parsed = null
 	meshes = {}
 	_json_ms = Time.get_ticks_msec() - t0

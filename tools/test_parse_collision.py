@@ -364,6 +364,58 @@ def main() -> int:
             repr(empty_payload["counts"]),
         )
 
+        # -- fixture: a BodySetup with no AggGeom is recorded separately, and
+        # the authored trace flag / CollisionEnabled decide complex vs none ----
+        no_geom_fixture = tmpdir / "no-geom"
+        write_dump(
+            no_geom_fixture,
+            "Props/SM_NoGeom.json",
+            [
+                body_export("BodySetup_0", "/Game/Test/SM_NoGeom", 1, {}, None),
+                body_export("BodySetup_1", "/Game/Test/SM_NoGeom", 2, {}, None),
+            ],
+        )
+        # The helper always writes AggGeom; drop the key to model the real dumps.
+        no_geom_path = no_geom_fixture / "json" / "Props" / "SM_NoGeom.json"
+        exports = json.loads(no_geom_path.read_text())
+        for export in exports:
+            export["Properties"].pop("AggGeom", None)
+        exports[1]["Properties"]["CollisionTraceFlag"] = (
+            "ECollisionTraceFlag::CTF_UseSimpleAsComplex"
+        )
+        no_geom_path.write_text(json.dumps(exports, indent=1) + "\n", encoding="utf-8")
+        write_dump(
+            no_geom_fixture,
+            "Props/SM_NoGeomOff.json",
+            [body_export("BodySetup_0", "/Game/Test/SM_NoGeomOff", 1, {}, None)],
+        )
+        off_path = no_geom_fixture / "json" / "Props" / "SM_NoGeomOff.json"
+        off_exports = json.loads(off_path.read_text())
+        off_exports[0]["Properties"].pop("AggGeom", None)
+        off_exports[0]["Properties"]["DefaultInstance"]["CollisionEnabled"] = (
+            "ECollisionEnabled::NoCollision"
+        )
+        off_path.write_text(json.dumps(off_exports, indent=1) + "\n", encoding="utf-8")
+        no_geom_out = tmpdir / "no-geom-out"
+        run = run_producer(no_geom_fixture, no_geom_out)
+        no_geom_payload = json.loads((no_geom_out / "mesh_collision.json").read_text())
+        no_simple = no_geom_payload["no_simple_collision"]
+        check(
+            run.returncode == 0
+            and no_geom_payload["counts"]["meshes"] == 0
+            and no_geom_payload["counts"]["body_setups"] == 0
+            and no_geom_payload["no_simple_collision_counts"]
+            == {"packages": 2, "complex_as_simple": 1, "no_collision": 1}
+            and no_simple["/Game/Test/SM_NoGeom"]["kind"] == "complex_as_simple"
+            and no_simple["/Game/Test/SM_NoGeom"]["reason"]
+            == "default_complex_fallback"
+            and no_simple["/Game/Test/SM_NoGeomOff"]["kind"] == "no_collision"
+            and no_simple["/Game/Test/SM_NoGeomOff"]["reason"]
+            == "explicit_no_collision",
+            "BodySetup without AggGeom is recorded as complex-as-simple or no-collision",
+            repr(no_geom_payload["no_simple_collision_counts"]),
+        )
+
         # -- fixture: an unknown AggGeom key fails closed ------------------
         bad_fixture = tmpdir / "bad"
         write_dump(
@@ -409,6 +461,31 @@ def main() -> int:
             real["counts"] == MEASURED_COUNTS and real["index_data_included"] is False,
             "measured counts match (1992 packages / 8601 elements)",
             repr(real["counts"]),
+        )
+        check(
+            real["no_simple_collision_counts"]
+            == {"packages": 334, "complex_as_simple": 293, "no_collision": 41},
+            "measured no-simple-collision census (334 packages / 293 complex / 41 none)",
+            repr(real["no_simple_collision_counts"]),
+        )
+        no_simple = real["no_simple_collision"]
+        check(
+            set(no_simple) == set(sorted(no_simple))
+            and all(
+                entry["kind"] in ("complex_as_simple", "no_collision")
+                and entry["reason"]
+                in (
+                    "default_complex_fallback",
+                    "complex_as_simple_flag",
+                    "explicit_no_collision",
+                    "simple_as_complex_without_shapes",
+                )
+                for entry in no_simple.values()
+            )
+            and no_simple["/Game/Developers/Christopher/1m_Plane_Reverse"]["kind"]
+            == "complex_as_simple",
+            "no-simple-collision entries are sorted, closed-vocabulary and typed",
+            repr(no_simple.get("/Game/Developers/Christopher/1m_Plane_Reverse")),
         )
 
         meshes = real["meshes"]

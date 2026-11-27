@@ -6,6 +6,50 @@ extracted through `tools/tat-extract` (CUE4Parse, `EGame.GAME_UE5_5`).
 Generated from `extracted/filelist.txt` (22,005 entries) and the current `extracted/` tree.
 Re-run the census with the commands at the bottom.
 
+## W10-P2 data wave — 2026-11-27 (newest; supersedes the P1 bullets it names)
+
+One lane on `w10/data-wave` (base `8a3ad62`) regenerated the private data copy and
+fixed three measured data defects. Report with all lines:
+[`reports/w10p2-20261126.md`](reports/w10p2-20261126.md); logs:
+[`reports/logs/w10p2/`](logs/w10p2/).
+
+- **Invented white emission — closed.** `_apply_ue_emissive()` now requires an
+  authored `EmissiveColor` or an emissive map; a strength-only material gets no
+  emission and is counted in `tat_invented_white`
+  (`_invented_white_count`, `invented_white_count()`, and the
+  `invented_white_count`/`invented_white_materials` result keys). The cream proof
+  is registered as suite **119** (`CREAM_PROOF: GREEN passes=5`), so `run_tests`
+  is **323**. A synthetic authored-colour control proves the fix does not
+  suppress real emission. The cream bars in the three captures remain the
+  `SM_LightBeam` cards; that is a separate beam-material item (P4).
+- **Civilian pants albedo — closed.** `parse_materials.py` treats
+  `BaseColorOpacity` / `BaseColorOpacity Map` as the authored base colour (alpha =
+  opacity mask) and keeps `Source Color Texture` only as a fallback. Measured:
+  19 albedo bindings corrected (all civilian clothing, glasses/hats, the skyline
+  `MI_HorizonA`, `MI_StoneWallA`), 75 bogus opacity binds removed (those maps were
+  base colour, not alpha, so `BLEND_Masked` surfaces were at risk of holes). p2 is
+  `expected_fail=0 expected_delta=0 fixed=0 unexpected_fail=0` (14/14), and
+  `test_w10a2_civilian.gd` asserts body slot 0 = `T_CivFemale_Common_01_Pants_D`
+  (23 checks). `texture_refs` in the audit drops by exactly one
+  (`T_Civ_M_01_Top_D.png`, the wrong male-top default) — expected, see the report.
+- **Collision classification — corrected, coverage re-based.** `mesh_collision.json`
+  gains the additive `no_simple_collision` map (334 BodySetups with no `AggGeom`:
+  293 `complex_as_simple`, 41 `no_collision`) and no longer treats a package with
+  no BodySetup record as authored complex collision. The probe now gates on
+  authored **element** coverage: Guildhall **0.910**, OldManor **0.912**, FTUE
+  **0.869**, `COL_MAPS PASS min_coverage=0.869 coverage_ppm=868852 dropped=0`.
+  The old 0.989/0.976321 was inflated by counting render-trimesh fallbacks as
+  authored. Turret/no-collide paths stay authored `no_collision`.
+- **`GC_ChestTrunkALid` — measured, deliberately not "fixed".** The collection is
+  not in the shared extracted tree; a private filtered dump shows its
+  `AutoInstanceMeshes` is the **intact** lid (`SM_ChestTrunkALid`, 51 instances),
+  so using it as the broken overlay would be a regression. The labelled
+  `SM_ChestTrunkALid_Broken` fallback stays (`fallback_broken=93`) and a producer
+  guard refuses an intact auto-instance mesh. Landing
+  `extracted/json/Destructibles/**` + `normalize` is the integrator step; the
+  expected post-dump census is stated but **not yet measured** in-tree.
+
+
 ## P1 status — 2026-11-26 (newest; supersedes the P0b section below where they differ)
 
 The P1 route-content wave restored the S12–S26 subjects in five lanes (safe room,
@@ -113,7 +157,8 @@ builds the instruments and records what is still wrong.
   `T_Civ_M_01_Top_D.png` in albedo). P1-BEAMS (`372bf74`) replaced the
   full-tube beam with the authored centre-line material, so the beam is no
   longer a DELTA. The gate is `unexpected_fail=0`; the data wave promotes
-  `fixed` when the pants producer is repaired.
+  `fixed` when the pants producer is repaired. **Superseded by W10-P2 above:
+  fixed, p2 is 14/14 with `expected_fail=0`.**
 - **Cream — beam cards confirmed; invented-white fix still RED.** The visible
   cream bars in the 2026-11-26 capture are the `SM_LightBeam` cards (axis
   fixed, full-tube material), not the moon planes. `test_w10a2_cream.gd` remains
@@ -121,6 +166,8 @@ builds the instruments and records what is still wrong.
   white for an `EmissiveStrength`-only material and the loader has no
   `tat_invented_white` counter. The authored moon cards are safe (122/122
   `hidden_in_game`); the invented-white path is a separate data-wave fix.
+  **Superseded by W10-P2 above: suite 119 is green; the remaining cream bars are
+  the beam cards (P4 beam material).**
 - **Capture instruments — port capture run, live reference pending.** Six fixed
   poses (`gate`, `upper_foyer`, `yaw180`, `lounge`, `lounge_beam`, `beam_close`)
   at the shipped 54.54° vertical lens, 1920×1080, 60 settle + 5 median frames,
@@ -296,6 +343,11 @@ authors `true`. The actor is also the only key-tagged POI actor with no `KeyItem
   paths repo-wide still have no `mesh_collision.json` record (mostly `/Game/Test/` graybox,
   `/Engine/`, third-party cobwebs); they keep the heuristic collider. The extended probe
   measures Guildhall, OldManor and FTUE separately — see the W10-A report.
+  **W10-P2 corrects the numbers:** of the 334 packages with a BodySetup and no `AggGeom`,
+  293 fall back to the render trimesh (authored complex-as-simple) and 41 are authored
+  `NoCollision`; only `/Game/Test/` packages keep the heuristic. The per-map gate is now
+  authored **element** coverage (`0.910 / 0.912 / 0.869`), not the fallback-inflated
+  `authored_hull / placed` ratio (`0.989 / 0.993 / 0.976`). See the W10-P2 section above.
 
 ## W9 status — 2026-11-25 (supersedes the sections below where they differ)
 

@@ -8,21 +8,22 @@ extends RefCounted
 ## loader builds from it) and records the expected deviation instead of
 ## weakening the assertion:
 ##   * PASS checks are the gate and go through h.require();
-##   * `P2_EXPECTED_FAIL` records a known authored-data defect (the pants
-##     albedo misclassification) and does not fail the tier;
+##   * `P2_EXPECTED_FAIL` records a known authored-data defect and does not fail
+##     the tier (none left: the pants albedo was promoted to a PASS check by the
+##     W10-P2 data wave that fixed `parse_materials`);
 ##   * `P2_EXPECTED_DELTA` records a labelled port approximation; the beam
 ##     DELTA was promoted to `P2-BEAM-AUTHORED-PORT` by P1-BEAMS;
-##   * `P2_FIXED` means the data wave fixed a recorded defect: the expectation
+##   * `P2_FIXED` means a data wave fixed a recorded defect: the expectation
 ##     must then be promoted to a PASS check, not silently dropped.
 ##
-## The stable gate marker is `P2_SUMMARY: … unexpected_fail=0`: an expected
-## defect flipping to fixed stays green, a new failure of a PASS check does not.
+## The stable gate marker is `P2_SUMMARY: … unexpected_fail=0`: a new failure of
+## a PASS check turns it red.
 ##
 ## Checks (from the P0b acceptance report):
 ##   P2-GUARD-*  guard bucket/layer provenance (116 markers, 116 buckets,
 ##               113 layer lists, authored bucket census, C_20 Lounge row)
 ##   P2-CIV-*    authored civilian slots (body 3, head 6), shirt/head albedo,
-##               pants albedo EXPECTED_FAIL (BaseColorOpacity misclassified)
+##               pants albedo PASS + opacity clear (BaseColorOpacity fixed)
 ##   P2-BEAM-*   authored beam BaseColor/EmissiveMultiplier/additive-unlit
 ##               flags PASS and the port material now carries the authored
 ##               HDR colour + centre-line row (P1-BEAMS, DELTA promoted)
@@ -173,24 +174,27 @@ func _check_civilian_slots() -> void:
 		]
 	)
 
-	# The recorded P0b defect: parse_materials classifies the BaseColorOpacity
-	# (_D) companion as `opacity` and the albedo falls back to a male top.
-	# Expected authoured pants albedo = T_CivFemale_Common_01_Pants_D.png.
+	# W10-P2 promoted the recorded P0b defect: `parse_materials` now binds the
+	# authored `BaseColorOpacity` map (Pants_D) as albedo instead of filing it
+	# as an opacity mask. Both expectations are hard PASS checks now; a
+	# regression fails the tier.
 	var pants: Dictionary = mats.get(CIV_PANTS, {}) as Dictionary
 	var pants_texs: Dictionary = pants.get("texs", {}) as Dictionary
 	var pants_alb: String = str(pants_texs.get("albedo", ""))
 	var pants_op: String = str(pants_texs.get("opacity", ""))
-	_expect_fail(
+	h.require(
 		pants_alb.ends_with(PANTS_ALBEDO_SUFFIX),
 		"P2-CIV-PANTS-ALBEDO",
-		"pants albedo='%s' expected='%s' (opacity slot carries the authored Pants_D: '%s')" % [
-			pants_alb.get_file(), PANTS_ALBEDO_SUFFIX, pants_op.get_file()
+		"pants albedo='%s' expected='%s' (authored BaseColorOpacity)" % [
+			pants_alb.get_file(), PANTS_ALBEDO_SUFFIX
 		]
 	)
 	h.require(
-		pants_op.ends_with(PANTS_ALBEDO_SUFFIX),
+		not pants_op.ends_with(PANTS_ALBEDO_SUFFIX),
 		"P2-CIV-PANTS-OPACITY",
-		"the authored pants colour map is emitted in the opacity slot (%s) — evidence of the BaseColorOpacity misclassification" % pants_op.get_file()
+		"the authored pants colour map is no longer emitted in the opacity slot (opacity='%s')" % [
+			pants_op.get_file()
+		]
 	)
 
 

@@ -108,6 +108,27 @@ export. Every one of the 1977 exports carries only ``CookedFormatData`` (no
 format metadata is emitted. 330 packages have NavCollision without any simple
 collision and therefore no ``meshes`` entry; ``counts`` records them.
 
+``no_simple_collision`` is the second additive map: one entry per package whose
+BodySetup/SkeletalBodySetup exports carry **no** ``AggGeom`` (334 packages in the
+shipped dumps). ``kind`` is the consumer contract and is derived only from
+authored fields:
+
+* ``complex_as_simple`` - the default trace flag or
+  ``CTF_UseComplexAsSimple``; UE collides with the render triangles, so the
+  render trimesh is the authored answer (310 packages: 289 no flag, 21
+  ``CTF_UseComplexAsSimple``);
+* ``no_collision`` - ``DefaultInstance.CollisionEnabled`` is explicitly
+  ``NoCollision`` (44), or ``CTF_UseSimpleAsComplex`` leaves nothing simple to
+  use (2 of the 9 SimpleAsComplex packages are enabled).
+
+``reason`` names the exact authored trigger (``default_complex_fallback``,
+``complex_as_simple_flag``, ``explicit_no_collision``,
+``simple_as_complex_without_shapes``). A package that has both an AggGeom body
+and a body without one stays authoritative in ``meshes``. The map is separate
+from ``counts`` so the measured simple-collision baseline (1992 packages / 8601
+elements) stays byte-identical; ``no_simple_collision_counts`` carries its own
+census.
+
 Element vocabulary (closed)
 ---------------------------
 ``AggGeom`` keys are exactly ``BoxElems``, ``SphereElems``, ``SphylElems``,
@@ -394,6 +415,66 @@ def _element(
     return out
 
 
+def _body_header(export: dict[str, Any], path: Path) -> tuple[str, str, str, str]:
+    """(name, owner_type, owner_object, owner_path) for one body export."""
+    outer = export.get("Outer") or {}
+    owner_object = _str(outer.get("ObjectName"), f"{path}: Outer.ObjectName")
+    owner_path = _str(outer.get("ObjectPath"), f"{path}: Outer.ObjectPath")
+    if "'" not in owner_object:
+        raise CollisionError(f"{path}: unparsable Outer.ObjectName {owner_object!r}")
+    owner_type = owner_object.split("'", 1)[0]
+    return (
+        _str(export.get("Name", ""), f"{path}: export Name"),
+        owner_type,
+        owner_object,
+        owner_path,
+    )
+
+
+def _body_flags(
+    props: dict[str, Any], path: Path
+) -> tuple[str | None, dict[str, Any] | None, dict[str, Any]]:
+    """(trace_flag, default_instance, extras) for one body export."""
+    trace_flag = None
+    if "CollisionTraceFlag" in props:
+        trace_flag = _str(props["CollisionTraceFlag"], f"{path}: CollisionTraceFlag")
+        if trace_flag not in TRACE_FLAG_COMPLEX:
+            raise CollisionError(f"{path}: unknown CollisionTraceFlag {trace_flag!r}")
+    default_instance = props.get("DefaultInstance")
+    if default_instance is not None and not isinstance(default_instance, dict):
+        raise CollisionError(f"{path}: DefaultInstance is not a struct")
+    extras = {
+        target: props[source]
+        for source, target in BODY_EXTRA_KEYS.items()
+        if source in props
+    }
+    return trace_flag, default_instance, extras
+
+
+def _body_without_agg(export: dict[str, Any], package: str, path: Path) -> Body:
+    """A BodySetup / SkeletalBodySetup that carries no AggGeom.
+
+    UE has no simple elements here; whether that means "collide with the render
+    mesh" or "no collision at all" is decided by the trace flag and the
+    DefaultInstance CollisionEnabled, and recorded by `_no_geom_reason()`.
+    """
+    name, owner_type, owner_object, owner_path = _body_header(export, path)
+    trace_flag, default_instance, extras = _body_flags(
+        export.get("Properties") or {}, path
+    )
+    return Body(
+        package=package,
+        owner_type=owner_type,
+        owner_object=owner_object,
+        owner_path=owner_path,
+        name=name,
+        elements=[],
+        trace_flag=trace_flag,
+        default_instance=default_instance,
+        extras=extras,
+    )
+
+
 def _body_export(
     export: dict[str, Any], package: str, path: Path, with_index_data: bool
 ) -> Body:
@@ -420,32 +501,14 @@ def _body_export(
             where = f"{path}: {export.get('Name')}.{agg_key}[{index}]"
             elements.append(_element(kind, element, index, where, with_index_data))
 
-    outer = export.get("Outer") or {}
-    owner_object = _str(outer.get("ObjectName"), f"{path}: Outer.ObjectName")
-    owner_path = _str(outer.get("ObjectPath"), f"{path}: Outer.ObjectPath")
-    if "'" not in owner_object:
-        raise CollisionError(f"{path}: unparsable Outer.ObjectName {owner_object!r}")
-    owner_type = owner_object.split("'", 1)[0]
-
-    trace_flag = None
-    if "CollisionTraceFlag" in props:
-        trace_flag = _str(props["CollisionTraceFlag"], f"{path}: CollisionTraceFlag")
-        if trace_flag not in TRACE_FLAG_COMPLEX:
-            raise CollisionError(f"{path}: unknown CollisionTraceFlag {trace_flag!r}")
-    default_instance = props.get("DefaultInstance")
-    if default_instance is not None and not isinstance(default_instance, dict):
-        raise CollisionError(f"{path}: DefaultInstance is not a struct")
-    extras = {
-        target: props[source]
-        for source, target in BODY_EXTRA_KEYS.items()
-        if source in props
-    }
+    name, owner_type, owner_object, owner_path = _body_header(export, path)
+    trace_flag, default_instance, extras = _body_flags(props, path)
     return Body(
         package=package,
         owner_type=owner_type,
         owner_object=owner_object,
         owner_path=owner_path,
-        name=_str(export.get("Name", ""), f"{path}: export Name"),
+        name=name,
         elements=elements,
         trace_flag=trace_flag,
         default_instance=default_instance,
@@ -587,6 +650,55 @@ def _package_json(package: str, bodies: list[Body], nav: dict | None) -> dict:
     return out
 
 
+def _no_geom_reason(bodies: list[Body]) -> tuple[str, str]:
+    """(kind, reason) for a package whose every body has no AggGeom.
+
+    `kind` is the consumer contract:
+      * "complex_as_simple" - UE collides with the render triangles, which is
+        the authored answer (default trace flag or CTF_UseComplexAsSimple);
+      * "no_collision"      - UE collides with nothing (explicit NoCollision, or
+        CTF_UseSimpleAsComplex with no simple elements to use).
+    """
+    enabled = [(body.default_instance or {}).get("CollisionEnabled") for body in bodies]
+    flags = [body.trace_flag for body in bodies]
+    if enabled and all(value == "ECollisionEnabled::NoCollision" for value in enabled):
+        return "no_collision", "explicit_no_collision"
+    if flags and all(
+        value == "ECollisionTraceFlag::CTF_UseSimpleAsComplex" for value in flags
+    ):
+        return "no_collision", "simple_as_complex_without_shapes"
+    if flags and all(
+        value == "ECollisionTraceFlag::CTF_UseComplexAsSimple" for value in flags
+    ):
+        return "complex_as_simple", "complex_as_simple_flag"
+    return "complex_as_simple", "default_complex_fallback"
+
+
+def _no_simple_json(bodies: list[Body]) -> dict[str, Any]:
+    owner_types = sorted({body.owner_type for body in bodies})
+    kind, reason = _no_geom_reason(bodies)
+    out: dict[str, Any] = {
+        "owner_type": owner_types[0] if len(owner_types) == 1 else "mixed",
+        "owner_types": owner_types,
+        "kind": kind,
+        "reason": reason,
+        "body_setups": [_body_json(body, 0) for body in bodies],
+    }
+    if len(bodies) == 1:
+        out["body_setup"] = bodies[0].name
+    ok, enabled = _uniform(bodies, _collision_enabled)
+    if ok:
+        out["collision_enabled"] = enabled
+    ok, profile = _uniform(bodies, _profile)
+    if ok:
+        out["collision_profile"] = profile
+    ok, flag = _uniform(bodies, lambda body: body.trace_flag)
+    if ok:
+        out["collision_trace_flag"] = flag
+        out["complex_as_simple"] = TRACE_FLAG_COMPLEX[flag]
+    return out
+
+
 def build_payload(root: Path, with_index_data: bool = False) -> dict[str, Any]:
     if not root.is_dir():
         raise CollisionError(f"missing extracted json directory {root}")
@@ -595,6 +707,7 @@ def build_payload(root: Path, with_index_data: bool = False) -> dict[str, Any]:
         raise CollisionError(f"no *.json dumps under {root}")
 
     bodies: dict[str, list[Body]] = defaultdict(list)
+    bodies_no_geom: dict[str, list[Body]] = defaultdict(list)
     nav_by_package: dict[str, dict[str, Any]] = {}
     kind_counts: Counter[str] = Counter()
     elem_counts: Counter[str] = Counter()
@@ -642,7 +755,7 @@ def build_payload(root: Path, with_index_data: bool = False) -> dict[str, Any]:
                     "cooked": sorted(cooked, key=lambda item: item["format"]),
                 }
                 continue
-            if kind not in BODY_TYPES or "AggGeom" not in props:
+            if kind not in BODY_TYPES:
                 continue
             outer = export.get("Outer") or {}
             owner_path = outer.get("ObjectPath")
@@ -651,6 +764,15 @@ def build_payload(root: Path, with_index_data: bool = False) -> dict[str, Any]:
                     f"{path}: {kind} {export.get('Name')!r} has no package path"
                 )
             package = owner_path.rsplit(".", 1)[0]
+            if "AggGeom" not in props:
+                # A BodySetup with no AggGeom has no authored simple elements.
+                # UE then either falls back to the render triangles (default /
+                # CTF_UseComplexAsSimple) or has no collision at all (explicit
+                # NoCollision, or CTF_UseSimpleAsComplex with nothing simple to
+                # use). Recorded separately so the consumer can tell the two
+                # apart instead of inventing a trimesh for both.
+                bodies_no_geom[package].append(_body_without_agg(export, package, path))
+                continue
             body = _body_export(export, package, path, with_index_data)
             bodies[package].append(body)
             kind_counts[kind] += 1
@@ -666,6 +788,14 @@ def build_payload(root: Path, with_index_data: bool = False) -> dict[str, Any]:
         for package in sorted(bodies)
     }
     nav_only = sorted(set(nav_by_package) - set(bodies))
+    # BodySetups with no AggGeom. A package that also has authored simple
+    # elements stays authoritative in `meshes`; this map only informs the
+    # consumer about packages that would otherwise look like "no record".
+    no_simple = {
+        package: _no_simple_json(bodies_no_geom[package])
+        for package in sorted(bodies_no_geom)
+    }
+    no_simple_kinds = Counter(entry["kind"] for entry in no_simple.values())
 
     counts: dict[str, Any] = {
         "meshes": len(meshes),
@@ -707,7 +837,15 @@ def build_payload(root: Path, with_index_data: bool = False) -> dict[str, Any]:
         "notes": NOTES,
         "index_data_included": with_index_data,
         "counts": counts,
+        # Additive census (not part of `counts`, which is the simple-collision
+        # baseline pinned by tools/test_parse_collision.py).
+        "no_simple_collision_counts": {
+            "packages": len(no_simple),
+            "complex_as_simple": no_simple_kinds["complex_as_simple"],
+            "no_collision": no_simple_kinds["no_collision"],
+        },
         "meshes": meshes,
+        "no_simple_collision": no_simple,
     }
 
 

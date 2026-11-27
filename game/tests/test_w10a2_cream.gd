@@ -1,28 +1,27 @@
 extends SceneTree
-## W10-A2/P0b CREAM STANDALONE RED PROOF — deliberately NOT registered in
-## run_tests.gd and NOT a gate. Run it directly:
+## W10-A2/P0b CREAM PROOF — registered as suite 119 by the W10-P2 data wave.
 ##
 ##   flock /tmp/opencode/tat2-godot.lock -c \
 ##     'tools/godot --headless --path game --script res://tests/test_w10a2_cream.gd'
 ##
 ## The shipped `1m_Plane_Reverse` moon cards (122 instances, all authored
 ## `hidden_in_game: true`) and their `MI_EmisLight_Moonlight` material have no
-## albedo/opacity/emissive vector. The loader's `_apply_ue_emissive()` has one
-## branch that invents WHITE when a material authors an emissive strength but
-## no EmissiveColor (and no emissive map): `col` stays (1,1,1) and the strength
-## is applied. That is the cream-slab class.
+## albedo/opacity/emissive vector. The loader's `_apply_ue_emissive()` used to
+## invent WHITE whenever a material authored an emissive strength but no
+## EmissiveColor and no emissive map (`col` stayed (1,1,1)); that is the
+## cream-slab class.
 ##
-## The next data wave must:
-##   1. stop inventing white in `_apply_ue_emissive()` (no colour + no map =>
-##      no emission, or a labelled authored fallback colour);
-##   2. expose a `tat_invented_white` counter/meta on the loader so the census
-##      is measurable;
-##   3. then register this suite as 119 in run_tests.gd and make it green.
+## W10-P2 fixed it: no authored colour + no authored emissive map => no
+## emission, counted in the loader's `tat_invented_white` census
+## (`_invented_white_count` / `invented_white_count()` / the
+## `invented_white_count` + `invented_white_materials` result keys). This suite
+## is now GREEN and fails on any regression:
+##   * an invented white emission for a strength-only material;
+##   * a missing/never-incrementing counter;
+##   * over-suppression: an authored EmissiveColor must still emit.
 ##
-## Until then this proof is RED by design: exit 1, with every failure printed as
-## `CREAM_EXPECTED_FAIL`. An UNEXPECTED failure prints `CREAM_FAIL`; a fixed
-## item prints `CREAM_FIXED`. When every expectation is fixed the script exits 0
-## and prints `CREAM_PROOF: GREEN` so the data wave can register it.
+## Prints `CREAM_PROOF: GREEN passes=N expected_fail=0` and exits 0; any failure
+## prints `CREAM_FAIL` and exits 1.
 
 const LevelLoaderScript := preload("res://src/core/level_loader.gd")
 const LEVELS_ROOT := "res://data/generated/levels/"
@@ -31,7 +30,6 @@ const MOON_MAT := "/Game/MaterialLibrary/Environment/Lights/MI_EmisLight_Moonlig
 
 var _fails: int = 0
 var _passes: int = 0
-var _expected: int = 0
 var _ldr: Node = null
 
 
@@ -40,15 +38,6 @@ func _initialize() -> void:
 
 
 func _check(ok: bool, msg: String) -> void:
-	if ok:
-		_passes += 1
-		print("CREAM_CHECK PASS ", msg)
-	else:
-		_expected += 1
-		print("CREAM_EXPECTED_FAIL ", msg)
-
-
-func _hard(ok: bool, msg: String) -> void:
 	if ok:
 		_passes += 1
 		print("CREAM_CHECK PASS ", msg)
@@ -113,7 +102,7 @@ func _run() -> void:
 			cards += 1
 			if not bool(m.get("hidden_in_game", false)):
 				visible += 1
-	_hard(cards >= 60 and visible == 0,
+	_check(cards >= 60 and visible == 0,
 		"moon cards authored hidden: total=%d visible=%d (want >=60 / 0)" % [cards, visible])
 
 	# 2. The cream material must not resolve to a white/emissive surface.
@@ -122,12 +111,12 @@ func _run() -> void:
 	var white_albedo: bool = sm != null and sm.albedo_texture == null and _near_white(sm.albedo_color)
 	var white_emission: bool = sm != null and sm.emission_enabled and _near_white(sm.emission) \
 		and sm.emission_texture == null
-	_hard(mat != null and not white_albedo and not white_emission,
+	_check(mat != null and not white_albedo and not white_emission,
 		"MI_EmisLight_Moonlight resolves without invented white (class=%s)" % (
 			mat.get_class() if mat != null else "null"))
 
-	# 3. RED: the loader must not invent white emission for a material that
-	# authors EmissiveStrength but no EmissiveColor and no emissive map.
+	# 3. GREEN: a material that authors EmissiveStrength and no EmissiveColor /
+	# emissive map must not receive an emission at all.
 	var synth := StandardMaterial3D.new()
 	_ldr.call("_apply_ue_emissive", synth, {
 		"path": "/Game/Test/EmissiveNoColour",
@@ -138,30 +127,43 @@ func _run() -> void:
 	})
 	var invented_white: bool = synth.emission_enabled and _near_white(synth.emission) \
 		and synth.emission_texture == null and synth.emission_energy_multiplier > 0.0
-	_check(not invented_white,
+	_check(not invented_white and not synth.emission_enabled,
 		"_apply_ue_emissive invents no white for EmissiveStrength-only material (enabled=%s colour=%s energy=%.2f)" % [
 			str(synth.emission_enabled), str(synth.emission), synth.emission_energy_multiplier
 		])
 
-	# 4. RED: the invented-white census must be exposed on the loader.
+	# 4. The census must be exposed AND must have counted case 3.
 	var names: Array[String] = _prop_names(_ldr)
 	var has_counter: bool = names.has("_invented_white_count") \
 		or _ldr.has_method("invented_white_count") \
 		or _ldr.has_meta("tat_invented_white")
-	_check(has_counter,
-		"loader exposes a tat_invented_white counter (%d properties)" % names.size())
+	var count: int = int(_ldr.call("invented_white_count")) if _ldr.has_method("invented_white_count") else -1
+	_check(has_counter and count >= 1,
+		"loader exposes a tat_invented_white counter and counted the suppression (count=%d, %d properties)" % [
+			count, names.size()
+		])
+
+	# 5. Negative control: an authored EmissiveColor still emits (the fix must
+	# suppress only the invented tint, never authored emission).
+	var authored := StandardMaterial3D.new()
+	_ldr.call("_apply_ue_emissive", authored, {
+		"path": "/Game/Test/EmissiveColour",
+		"texs": {},
+		"params": {"EmissiveStrength": 2.0},
+		"vectors": {"EmissiveColor": [1.0, 0.5, 0.2, 1.0]},
+		"switches": {},
+	})
+	_check(authored.emission_enabled and authored.emission.r > 0.9 \
+			and authored.emission.g < 0.7 and not _near_white(authored.emission),
+		"authored EmissiveColor still emits (enabled=%s colour=%s)" % [
+			str(authored.emission_enabled), str(authored.emission)
+		])
 
 	if _ldr != null:
 		_ldr.queue_free()
 	await process_frame
 	if _fails > 0:
-		printerr("CREAM_PROOF: UNEXPECTED_FAIL passes=%d expected_fail=%d unexpected=%d" % [
-			_passes, _expected, _fails
-		])
-		quit(1)
-		return
-	if _expected > 0:
-		print("CREAM_PROOF: RED passes=%d expected_fail=%d" % [_passes, _expected])
+		printerr("CREAM_PROOF: UNEXPECTED_FAIL passes=%d unexpected=%d" % [_passes, _fails])
 		quit(1)
 		return
 	print("CREAM_PROOF: GREEN passes=%d expected_fail=0" % _passes)

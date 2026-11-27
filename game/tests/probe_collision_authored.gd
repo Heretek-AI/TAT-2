@@ -6,12 +6,13 @@ extends SceneTree
 ## For each map it prints one line:
 ##
 ##   COL_MAP map=<id> files=<n> placed_meshes=<n> placed_instances=<n>
-##     authored=<n> absent=<n> coverage=<f> reduced=<n> planar_skipped=<n>
+##     authored=<n> elements=<n> complex=<n> no_record=<n> absent=<n>
+##     coverage=<f> reduced=<n> planar_skipped=<n>
 ##     drops=<n> shapes=<n> bodies=<n> load_ms=<n>
 ##
 ## then one line per reduced mesh (`COL_REDUCED`) and one assertion line:
 ##
-##   COL_MAP_ASSERT map=<id> coverage>=0.950 dropped==0 coverage=<f>
+##   COL_MAP_ASSERT map=<id> coverage>=F dropped==0 coverage=<f>
 ##     dropped=<n> PASS|FAIL
 ##
 ## The Guildhall legacy lines are unchanged (backward compatible):
@@ -30,18 +31,25 @@ extends SceneTree
 ## Counter meanings (all distinct-path counts unless noted):
 ##   placed_meshes   the independent draw-item census (distinct collidable UE
 ##                   paths, counted before any classification). The identity
-##                   `authored + absent == placed_meshes` and
-##                   `coverage = authored / placed_meshes >= 0.95` are the
-##                   per-map gates; `authored_prims` is a subset of `authored`
-##                   and is asserted to be one.
-##   authored        paths whose collider came from authored data: element
-##                   hulls, primitive coalescing, UE complex-as-simple (a
-##                   BodySetup with no AggGeom collides with the render tris in
-##                   UE, so the render trimesh IS the authored answer) and the
-##                   authored NoCollision/QueryOnly flags.
-##   authored_prims  subset encoded as ONE coalesced/primitive shape per
-##                   instance (primitive-only meshes + complex-as-simple).
-##   absent          paths with no authored answer at all -> heuristic fallback.
+##                   `authored + absent == placed_meshes`, the class split
+##                   `elements + complex + no_collision == authored` and the
+##                   coverage definition `elements / placed_meshes >= floor` are
+##                   the per-map gates; `authored_prims` is a subset of
+##                   `authored` and is asserted to be one.
+##   authored        paths with a non-absent classification (elements, render
+##                   trimesh or an authored no-collision flag).
+##   elements        paths with authored simple collision elements (hull/prims).
+##                   THIS is the true authored-collision coverage: a render
+##                   trimesh is a fallback to render geometry and a no-record
+##                   package has no authored collision at all.
+##   complex         paths that fall back to the render trimesh (authored
+##                   complex-as-simple: a BodySetup with no AggGeom under the
+##                   default trace flag / CTF_UseComplexAsSimple).
+##   no_collision    paths with no collider: authored NoCollision, or a package
+##                   with no BodySetup dump (see no_record). No trimesh invented.
+##   no_record       the subset of no_collision whose package has no BodySetup
+##                   record at all (the old code invented a trimesh here).
+##   absent          paths with no dump at all (/Game/Test/) -> AABB heuristic.
 ##   reduced         paths coalesced to one trimesh by the element/cost cap;
 ##                   every one is named by a `COL_REDUCED` line.
 ##   planar_skipped  coplanar convex elements skipped by the W10-A D7 rule in
@@ -67,7 +75,10 @@ extends SceneTree
 ## emits no shape or classifies no placed mesh, when anything was dropped, when
 ## its classification does not add up, when fewer reduced meshes are named than
 ## counted, when the collider deadline was hit, or (authored mode) when a map's
-## authored-derived coverage is below 95 %.
+## authored ELEMENT coverage (`elements / placed_meshes`) is below the floor.
+## The floor is the measured W10-P2 minimum (previous metric counted the
+## render-trimesh fallback as authored and measured 0.976321, which overstated
+## real authored-simple coverage by ~7 points).
 
 const LEVELS_ROOT := "res://data/generated/levels/"
 const AuthoredCollision: GDScript = preload("res://src/core/collision/authored_collision.gd")
@@ -121,7 +132,12 @@ const FTUE_SUBLEVELS: Array[String] = [
 	"FTUE/FTUE_Geometry",
 	"FTUE/FTUE_Audio",
 ]
-const MIN_AUTHORED_COVERAGE := 0.95
+## True authored-collision coverage floor: authored simple ELEMENTS / placed
+## meshes. Measured 2026-11-26 after the W10-P2 classification fix: Guildhall
+## 866/952 = 0.910, OldManor 641/703 = 0.912, FTUE 477/549 = 0.869 (the min).
+## Raise it when a data wave improves the ratio; never lower it without a new
+## measurement and a report entry.
+const MIN_AUTHORED_ELEMENT_COVERAGE := 0.868
 ## One representative mesh per element type for `--validate`, plus a rotated box
 ## so the `P·M·P` basis is exercised (not just identity rotations).
 const VALIDATE_MESHES: Array[String] = [
@@ -210,6 +226,9 @@ func _run() -> void:
 		var placed_meshes: int = int(res.get("col_paths_seen", 0))
 		var placed_instances: int = int(res.get("col_placed_instances", 0))
 		var authored_hull: int = int(res.get("col_authored_hull", 0))
+		var authored_elements: int = int(res.get("col_authored_elements", 0))
+		var authored_complex: int = int(res.get("col_authored_complex", 0))
+		var no_record: int = int(res.get("col_no_record", 0))
 		var authored_prims: int = int(res.get("col_authored_prims", 0))
 		var absent: int = int(res.get("col_absent", 0))
 		var no_collision: int = int(res.get("col_no_collision", 0))
@@ -221,7 +240,9 @@ func _run() -> void:
 		var shapes: int = int(res.get("collision_shapes", 0))
 		var bodies: int = int(res.get("collision_bodies", 0))
 		var dropped: int = int(res.get("collision_dropped", 0))
-		var coverage: float = 0.0 if placed_meshes <= 0 else float(authored_hull) / float(placed_meshes)
+		# True authored-coverage: author-simple elements only. The render trimesh
+		# (complex) and the no-collision classes are not authored collision.
+		var coverage: float = 0.0 if placed_meshes <= 0 else float(authored_elements) / float(placed_meshes)
 		var map_ok: bool = true
 
 		if map_id == "guildhall":
@@ -230,8 +251,9 @@ func _run() -> void:
 				absent, no_collision, query_only, reduced, shapes, bodies, dropped,
 				load_ms, coverage, res)
 
-		print("COL_MAP map=%s files=%d placed_meshes=%d placed_instances=%d authored=%d absent=%d coverage=%.3f reduced=%d planar_skipped=%d drops=%d shapes=%d bodies=%d load_ms=%d" % [
-			map_id, paths.size(), placed_meshes, placed_instances, authored_hull, absent,
+		print("COL_MAP map=%s files=%d placed_meshes=%d placed_instances=%d authored=%d elements=%d complex=%d no_record=%d absent=%d coverage=%.3f reduced=%d planar_skipped=%d drops=%d shapes=%d bodies=%d load_ms=%d" % [
+			map_id, paths.size(), placed_meshes, placed_instances, authored_hull,
+			authored_elements, authored_complex, no_record, absent,
 			coverage, reduced, planar_skipped, dropped, shapes, bodies, load_ms])
 		# Deterministic order: the draw-item loop visits paths in cell order, which
 		# must not make the evidence log row order vary between runs.
@@ -268,6 +290,14 @@ func _run() -> void:
 		if authored_hull + absent != placed_meshes:
 			_fail("%s: classification does not add up: authored=%d + absent=%d != placed_meshes=%d" % [map_id, authored_hull, absent, placed_meshes])
 			map_ok = false
+		if authored_elements + authored_complex + no_collision != authored_hull:
+			_fail("%s: class split does not add up: elements=%d + complex=%d + no_collision=%d != authored=%d" % [
+				map_id, authored_elements, authored_complex, no_collision, authored_hull])
+			map_ok = false
+		if no_record > no_collision:
+			_fail("%s: no_record=%d > no_collision=%d (no_record must be a subset)" % [
+				map_id, no_record, no_collision])
+			map_ok = false
 		if authored_prims > authored_hull:
 			_fail("%s: authored_prims=%d > authored=%d (double count: prims must be a subset)" % [map_id, authored_prims, authored_hull])
 			map_ok = false
@@ -275,14 +305,16 @@ func _run() -> void:
 			_fail("%s: reduced=%d but only %d reduced mesh names reported" % [map_id, reduced, rows.size()])
 			map_ok = false
 		if req_mode == "authored":
-			if coverage < MIN_AUTHORED_COVERAGE:
-				_fail("%s: authored coverage %.3f < %.2f (authored=%d placed_meshes=%d)" % [map_id, coverage, MIN_AUTHORED_COVERAGE, authored_hull, placed_meshes])
+			if coverage < MIN_AUTHORED_ELEMENT_COVERAGE:
+				_fail("%s: authored ELEMENT coverage %.3f < %.2f (elements=%d placed_meshes=%d; complex=%d no_collision=%d)" % [
+					map_id, coverage, MIN_AUTHORED_ELEMENT_COVERAGE, authored_elements,
+					placed_meshes, authored_complex, no_collision])
 				map_ok = false
 			print("COL_MAP_ASSERT map=%s coverage>=%.3f dropped==0 coverage=%.3f dropped=%d %s" % [
-				map_id, MIN_AUTHORED_COVERAGE, coverage, dropped, "PASS" if map_ok else "FAIL"])
+				map_id, MIN_AUTHORED_ELEMENT_COVERAGE, coverage, dropped, "PASS" if map_ok else "FAIL"])
 		else:
 			print("COL_MAP_ASSERT map=%s coverage>=%.3f dropped==0 coverage=%.3f dropped=%d SKIP (mode=%s)" % [
-				map_id, MIN_AUTHORED_COVERAGE, coverage, dropped, active_mode])
+				map_id, MIN_AUTHORED_ELEMENT_COVERAGE, coverage, dropped, active_mode])
 		maps_checked += 1
 		min_coverage = minf(min_coverage, coverage)
 		total_planar += planar_skipped
@@ -310,7 +342,10 @@ func _run() -> void:
 
 
 ## The W9-P1 Guildhall lines, kept byte-for-byte compatible so
-## `build/qa/w9_collision_ab.sh` and the W9 logs stay comparable.
+## `build/qa/w9_collision_ab.sh` and the W9 logs stay comparable. `coverage` here
+## is the historical (non-absent / placed) ratio; the true authored-element
+## coverage is printed as the trailing `element_coverage` field and is the
+## number the per-map gate uses.
 func _emit_legacy_guildhall(active_mode: String, placed_meshes_seen: int,
 		authored_hull: int, authored_prims: int, absent: int, no_collision: int,
 		query_only: int, reduced: int, shapes: int, bodies: int, dropped: int,
@@ -319,20 +354,23 @@ func _emit_legacy_guildhall(active_mode: String, placed_meshes_seen: int,
 	print("COL_AUDIT mode=%s placed_meshes=%d placed_meshes_seen=%d placed_instances=%d authored_hull=%d authored_prims=%d absent=%d no_collision=%d query_only=%d reduced=%d shapes=%d bodies=%d dropped=%d load_ms=%d coverage=%.3f fps_pose=n/a" % [
 		active_mode, placed_meshes, placed_meshes_seen, int(res.get("col_placed_instances", 0)),
 		authored_hull, authored_prims, absent, no_collision, query_only, reduced,
-		shapes, bodies, dropped, load_ms, coverage])
+		shapes, bodies, dropped, load_ms,
+		0.0 if placed_meshes <= 0 else float(authored_hull) / float(placed_meshes)])
 	# Independent diagnostic numbers (not part of the gate line): the payload
 	# census and the load-set denominators, so a silent data regression shows up.
 	var st: Dictionary = AuthoredCollision.stats() as Dictionary
-	print("COL_DETAIL payload_meshes=%d payload_elements=%d payload_convex=%d payload_load_ms=%d authored_instances=%d authored_shape_demand=%d heuristic_shapes=%d mode_requested=%s elements_on_placed=%d convex_on_placed=%d complex_default_paths=%d placed_paths_payload=%d scale_baked_shapes=%d" % [
+	print("COL_DETAIL payload_meshes=%d payload_elements=%d payload_convex=%d payload_load_ms=%d authored_instances=%d authored_shape_demand=%d heuristic_shapes=%d mode_requested=%s elements_on_placed=%d convex_on_placed=%d complex_default_paths=%d no_record_paths=%d payload_no_simple=%d placed_paths_payload=%d scale_baked_shapes=%d" % [
 		int(st.get("meshes", -1)), int(st.get("elements", -1)), int(st.get("convex", -1)),
 		int(st.get("load_ms", -1)), int(res.get("col_authored_instances", 0)),
 		int(res.get("col_authored_shapes", 0)), int(res.get("col_heuristic_shapes", 0)),
 		active_mode, int(res.get("col_elements", 0)), int(res.get("col_convex", 0)),
-		int(res.get("col_complex_default", 0)), int(res.get("col_path_counts", 0)), int(res.get("col_scale_baked", 0))])
+		int(res.get("col_complex_default", 0)), int(res.get("col_no_record", 0)),
+		int(st.get("no_simple", -1)), int(res.get("col_path_counts", 0)), int(res.get("col_scale_baked", 0))])
 	if active_mode == "authored" and placed_meshes_seen > 0:
-		print("COL_ASSERT coverage=%.3f (%d/%d) prims_subset=%s classification=%d+%d==%d mode=%s dropped=%d" % [
-			coverage, authored_hull, placed_meshes_seen, str(authored_prims <= authored_hull),
-			authored_hull, absent, placed_meshes_seen, active_mode, dropped])
+		print("COL_ASSERT coverage=%.3f (%d/%d) prims_subset=%s classification=%d+%d==%d mode=%s dropped=%d element_coverage=%.3f" % [
+			0.0 if placed_meshes <= 0 else float(authored_hull) / float(placed_meshes),
+			authored_hull, placed_meshes_seen, str(authored_prims <= authored_hull),
+			authored_hull, absent, placed_meshes_seen, active_mode, dropped, coverage])
 
 
 ## Authored-vs-render AABB check (lead's mandatory validation): the authored

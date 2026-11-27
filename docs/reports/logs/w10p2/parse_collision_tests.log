@@ -1,0 +1,29 @@
+ok fixture producer exits 0
+ok fixture schema, units and default index-data mode
+ok fixture counts
+ok fixture elements round-trip (flat vertices, no index data)
+ok fixture --with-index-data emits triangles
+ok fixture body setup and profile fields
+ok fixture nav collision metadata
+ok empty AggGeom is counted
+ok BodySetup without AggGeom is recorded as complex-as-simple or no-collision
+ok unknown AggGeom key fails closed
+ok producer fails on a missing dump tree
+ok producer real run exits 0
+ok measured counts match (1992 packages / 8601 elements)
+ok measured no-simple-collision census (334 packages / 293 complex / 41 none)
+ok no-simple-collision entries are sorted, closed-vocabulary and typed
+ok meshes are sorted by package path
+ok every body slice indexes its merged element list; flat vertices only
+ok SM_CanA collision profile and no guessed complex flag
+ok SM_CanA box half-extents (tolerance 1e-6)
+ok SM_CanA nav collision is cooked-only
+ok convex hull flat vertices and non-degenerate AABB
+ok sphyl radius and length are positive and exact
+ok complex-as-simple comes from the authored trace flag
+ok producer --with-index-data exits 0
+ok --with-index-data payload flag and counts
+ok every index is in range and index_count matches (all hulls)
+ok hat hull keeps its 180 authored indices in opt-in mode
+ok two runs are byte-identical in both modes
+PASS: 28 checks

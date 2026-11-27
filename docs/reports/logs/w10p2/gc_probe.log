@@ -1,0 +1,102 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+TAT-2 Loc: reverse map built from sources.json (3404 keys)
+TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
+INPUT_TABLE source=generated rows=91 shipping=91 actions=52
+INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
+GC_PROBE payload authored_components=336 authored_hidden=336 placements=375 placement_hidden=375 visible=0 emitted=375 placement_leaves=168 authored_leaves=166 fallback_broken=93 sibling_smc=5 unresolved=0
+GC_CHECK PASS authored GC components 336 (expected 336)
+GC_CHECK PASS authored GC hidden 336/336 (expected 336/336)
+GC_CHECK PASS placement records (LevelInstance copies included) components=375 hidden=375 (expected 375/375)
+GC_CHECK PASS LevelInstance GC placements accounted 336 authored + 39 merged copies = 375
+GC_CHECK PASS visible GC without a mesh (fail-loud class) 0
+GC_CHECK PASS any GC without a mesh missing=0
+GC_CHECK PASS broken layers emitted 375/375
+GC_CHECK PASS authored-visible GC emitted 0 (expected 0 today)
+GC_CHECK PASS authored intact leaf records 166 (expected 166)
+GC_CHECK PASS intact leaf placements 168 (expected 168 = 166 authored + 2 copies)
+GC_CHECK PASS GC_ChestTrunkALid labelled fallback 93 (expected 93, no dump)
+GC_CHECK PASS bookcase GC sibling-SMC fallback 5 (expected 5, no AutoInstanceMeshes mesh)
+GC_CHECK PASS unresolved GC records 0
+FootstepMask: downscaled 1024x1024 -> 128x128 for one-time alpha mask
+FootstepMask: baked one-time alpha mask (128x128, source_alpha=true) from res://assets/ue/Raw/Art/Environment/Props/Containers/Crates/T_Crate_Decal_D.png
+TAT-2 gate lights: total=0 (generic=0 rect=0) budget=8 forced=0 hero_shadows=6
+ROUGHNESS_BAKE_MODE on=1 resolution=full cache=process
+AUTHORED_COLLISION meshes=7 hull=7 authored_elements=7 complex=0 no_record=0 prims=4 convex=24 absent=0 no_collision=0 query_only=0 reduced=1 shapes_per_instance_avg=1.46 elements=47 load_ms=336
+ROUGHNESS_BAKE count=6 pixels=5373952 ms=390 bytes=7165267 hits=0 (L8 low+g*(high-low), full-res, process cache)
+MESH_RECON authored=175 applied=175 duplicate=0 name_skipped=0 wardbox=0 moonshape=0 clamp=0 clamp_worst=1.00x mirrored=16 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0
+PERF_CENSUS meshes=39 instances=176 chunk_nodes=38 plain=11 multimesh=28 surface_draws=64 lights=0 shadow_lights=0 occluders=0 collision_bodies=13 collision_shapes=256 periph_nodes=0 periph_instances=0 periph_surface_draws=0 periph_plain=0 periph_multimesh=0 periph_range=0 merge_mode=off merge_candidates=0 merge_nodes=0 merge_surfaces_before=0 merge_surfaces_after=0 light_budget=8 hero_shadows=6 source_sublevels={ "Guildhall_Loot": 175 }
+GC_PROBE load layers=95 leaves=79 hidden_initial=95 visible_broken=0 meshless=0 owner_index=87 collision_shapes=256
+GC_CHECK PASS Guildhall_Loot broken layers 95 (expected 95)
+GC_CHECK PASS Guildhall_Loot intact leaves 79 (expected 79)
+GC_CHECK PASS every broken layer hidden initially 95/95 hidden
+GC_CHECK PASS loader reports 0 visible broken layers 0
+GC_CHECK PASS broken layer meshes resolved meshless=0 loader_missing=0
+GC_CHECK PASS GC layer nodes own no collision colliding_nodes=0
+GC_CHECK PASS intact leaves visible before break 79/79 visible
+GC_PROBE owner_index broken_owners=87 leaf_owners=79 paired=79 broken_only=8 broken_kinds={ "chest": 48, "display_case": 31, "bookcase": 16 } leaf_kinds={ "chest": 48, "display_case": 31 }
+GC_CHECK PASS broken layers are 48 chest + 31 display-case chest=48 display_case=31
+GC_CHECK PASS 16 bookcase broken layers 16 on 8 actors (2 doors each)
+GC_CHECK PASS intact leaves are 48 chest + 31 display-case chest=48 display_case=31
+GC_CHECK PASS 79 owners have both leaf and broken leaf_owners=79 paired=79
+GC_CHECK PASS 8 broken-only owners are bookcase actors with 2 layers each broken_only=8 unexpected=[]
+GC_CHECK PASS owner index 87 == 79 paired containers + 8 bookcases 87
+TAT-2 gate lights: total=0 (generic=0 rect=0) budget=8 forced=0 hero_shadows=6
+AUTHORED_COLLISION meshes=7 hull=7 authored_elements=7 complex=0 no_record=0 prims=4 convex=24 absent=0 no_collision=0 query_only=0 reduced=1 shapes_per_instance_avg=1.46 elements=47 load_ms=336
+ROUGHNESS_BAKE count=0 pixels=0 ms=0 bytes=0 hits=6 (L8 low+g*(high-low), full-res, process cache)
+MESH_RECON authored=175 applied=175 duplicate=0 name_skipped=0 wardbox=0 moonshape=0 clamp=0 clamp_worst=1.00x mirrored=16 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0
+PERF_CENSUS meshes=39 instances=176 chunk_nodes=38 plain=11 multimesh=28 surface_draws=64 lights=0 shadow_lights=0 occluders=0 collision_bodies=13 collision_shapes=256 periph_nodes=0 periph_instances=0 periph_surface_draws=0 periph_plain=0 periph_multimesh=0 periph_range=0 merge_mode=off merge_candidates=0 merge_nodes=0 merge_surfaces_before=0 merge_surfaces_after=0 light_budget=8 hero_shadows=6 source_sublevels={ "Guildhall_Loot": 175 }
+GC_PROBE control shapes_on=256 shapes_off=256 bodies_on=13 bodies_off=13 layers_off=0
+GC_CHECK PASS GC layers add no collision (control load) shapes 256==256 bodies 13==13
+GC_CHECK PASS TAT2_GC_LAYERS=off disables the layers layers=0 leaves=0
+GC_CHECK PASS every authored chest/display-case container has a bound pair records=79 built=79 failures=[]
+GC_CHECK PASS chest container found class=BP_ChestTrunk_MajorLoot_C
+GC_CHECK PASS display-case container found class=BP_DisplayCaseA_MajorLoot_C
+GC_CHECK PASS chest bindings resolved leaf=true broken=true
+GC_CHECK PASS display-case bindings resolved leaf=true broken=true
+GC_CHECK PASS chest intact before break leaf=true broken=false
+WARNING: [hearing_data] 5 authored investigation-range anomalies clamped: AI.Stim.Hearing.LockPicking.Picked: outer 5.0 m > max 3.0 m (clamped); AI.Stim.Hearing.Alert.ShareKnowledge: outer 30.0 m > max 15.0 m (clamped); AI.Stim.Hearing.Tool.DartLaunch: inner 3.0 m > outer 2.0 m (clamped); AI.Stim.Hearing.EnterExitHedge: outer 8.0 m > max 7.5 m (clamped); AI.Stim.Hearing.Device.SecretSwitch: outer 8.0 m > max 7.5 m (clamped)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _log_anomalies_once (res://src/ai/hearing_data.gd:277)
+         [1] _build_stimuli (res://src/ai/hearing_data.gd:269)
+         [2] ensure_loaded (res://src/ai/hearing_data.gd:187)
+         [3] resolve_stim (res://src/ai/hearing_data.gd:346)
+         [4] build_record (res://src/stealth/noise_bus.gd:105)
+         [5] emit_noise (res://src/stealth/noise_bus.gd:124)
+         [6] break_container (res://src/interact/loot_container.gd:314)
+         [7] _run (res://tests/probe_gc_destruction.gd:444)
+GC_CHECK PASS chest break is one-shot first=true second=false
+GC_CHECK PASS chest intact -> broken swap leaf=false broken=true
+GC_CHECK PASS chest broken state recorded is_broken + meta
+GC_CHECK PASS chest break signals broken_changed(1)+container_broken(10)=11
+GC_CHECK PASS chest break opened the container once (loot behaviour kept) opened=true
+GC_CHECK PASS display case intact before break leaf=true broken=false
+GC_CHECK PASS display case intact -> broken swap leaf=false broken=true
+GC_CHECK PASS display-case break signals broken_changed(1)+container_broken(10)=11
+GC_PROBE after_break visible_broken=2 of 95
+GC_CHECK PASS only the two broken overlays are visible 2/95
+GC_CHECK PASS only the two intact leaves were hidden 77/79 visible
+GC_PROBE checks=44 fails=0
+GC_PROBE PASS

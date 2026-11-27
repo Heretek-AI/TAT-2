@@ -31,6 +31,11 @@ UE -> Godot (StandardMaterial3D) parameter mapping used here and in
   Long-form base-colour stems (``_base_color``/``_basecolor``/``_albedo``/
   ``_diffuse``/``_color`` + optional digits) count as albedo only where the
   material itself references them, never in the generic guess pool.
+- ``BaseColorOpacity`` / ``BaseColorOpacity Map`` is the authored packed base
+  colour (RGB) + opacity (alpha) map of the character masters and is bound as
+  albedo, not as an opacity mask. ``Source Color Texture`` is the master's
+  colour default and is used only when the record authors no albedo of its own
+  (PantsC: Pants_D wins over the inherited male ``T_Civ_M_01_Top_D``).
 - A material that only authors an emissive colour (no albedo slot of its own)
   does not get a fallback-ranked albedo guess: the tier is dropped to ``none``.
 - ``BasePropertyOverrides`` blend/shading/two-sided values are honoured unless
@@ -1264,6 +1269,9 @@ def main():
             _extract_cached_defaults(exp)
         )
         texs = {}
+        # Master-level `Source Color Texture` candidate; only used when the
+        # instance authors no base colour of its own (W10-P2).
+        source_albedo: dict[str, str] = {}
         for tv in props.get("TextureParameterValues") or []:
             pinfo = tv.get("ParameterInfo") or {}
             pname = (pinfo.get("Name") or "").lower()
@@ -1315,6 +1323,22 @@ def main():
                     )
                 )
             )
+            # W10-P2 pants fix: `BaseColorOpacity` / `BaseColorOpacity Map` is
+            # the authored packed base-colour + opacity map (UE's
+            # M_BasicChar_Tintable family). The old name test hit `"opacity" in
+            # pname` first and filed it as an opacity mask, so PantsC bound a
+            # male top texture as its albedo while its own Pants_D sat unused in
+            # the opacity slot. The map's RGB is the base colour; its alpha is
+            # the mask, which Godot consumes through the albedo texture's alpha.
+            if "basecolor" in pname and "opacity" in pname:
+                texs.setdefault("albedo", tpath)
+                continue
+            # `Source Color Texture` is a master-level default (the civilian
+            # masters carry the male UpperClass top here); it is authored albedo
+            # only when the instance does not author its own BaseColorOpacity.
+            if _norm_param_name(pname) == "sourcecolortexture":
+                source_albedo.setdefault("tex", tpath)
+                continue
             if any(k in pname for k in ("normal", "norm")) or stem.endswith(
                 ("_n", "_nm")
             ):
@@ -1383,6 +1407,13 @@ def main():
                 texs.setdefault("emissive", tp)
             elif "opacity" in norm_name:
                 texs.setdefault("opacity", tp)
+
+        # W10-P2: `Source Color Texture` is the master's colour default, used
+        # only when this record authors no albedo of its own (BaseColorOpacity,
+        # Albedo/Diffuse, a group-3 BaseColor slot). It is deliberately ranked
+        # below those authored binds and above every guessed stream/stem pick.
+        if "albedo" not in texs and "tex" in source_albedo:
+            texs["albedo"] = source_albedo["tex"]
 
         # Fallback: UE5 MaterialLayers store used textures in TextureStreamingData and CachedExpressionData.ReferencedTextures
         stream_paths = []

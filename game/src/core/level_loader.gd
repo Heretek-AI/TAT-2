@@ -91,6 +91,12 @@ var corrupt_meshes: Array[String] = []
 var corrupt_mesh_count: int = 0
 var fallback_materials: Array[String] = []
 var fallback_material_count: int = 0
+## W10-P2 cream fix: a material that authors EmissiveStrength but neither an
+## EmissiveColor nor an emissive map used to receive an invented WHITE emission
+## (the cream-slab class). It now gets no emission and is counted here. This is
+## the `tat_invented_white` census the cream proof reads.
+var invented_white_materials: Array[String] = []
+var _invented_white_count: int = 0
 ## Authored flat-colour binds (tint present, no albedo map). Counted so the
 ## "untextured but correct" population is visible; near-white ones are named
 ## and warned separately (L2-03: debug primitives rendered as flat white).
@@ -1265,11 +1271,27 @@ func _apply_ue_emissive(mat: StandardMaterial3D, info: Dictionary) -> void:
 	if ecol == null and estr == null:
 		return
 	var col := Color(1.0, 1.0, 1.0)
+	var authored_colour: bool = false
 	if ecol is Array and (ecol as Array).size() >= 3:
+		authored_colour = true
 		var ea: Array = ecol
 		col = Color(float(ea[0]), float(ea[1]), float(ea[2]))
 		if maxf(col.r, maxf(col.g, col.b)) <= 0.02 and estr == null:
 			return
+	# W10-P2 cream fix: a WHITE tint is only authored when an emissive map
+	# supplies the colour (the caller binds `emission_texture` from
+	# texs.emissive) or the material authors an EmissiveColor. With neither, the
+	# old code left `col` at (1,1,1) and multiplied the authored strength into
+	# it — that invented emission is the cream slab on the moon cards'
+	# MI_EmisLight_Moonlight class. No colour + no map => no emission, counted.
+	var has_emissive_map: bool = str(texs_em.get("emissive", "")).strip_edges() != ""
+	if not authored_colour and not has_emissive_map:
+		_invented_white_count += 1
+		var iw_name: String = str(info.get("path", ""))
+		if invented_white_materials.size() < 64 and not invented_white_materials.has(iw_name):
+			invented_white_materials.append(iw_name)
+		set_meta("tat_invented_white", _invented_white_count)
+		return
 	var energy_cap: float = _emissive_energy_cap(str(info.get("path", "")).to_lower())
 	if mat.emission_enabled:
 		mat.emission = col
@@ -2065,6 +2087,8 @@ func _fill_authored_shape(out: Dictionary, ue_path: String, m: Mesh) -> void:
 	var source: String = str(res.get("source", "absent"))
 	out["col"] = {
 		"source": source,
+		"class": str(res.get("class", "")),
+		"reason": str(res.get("reason", "")),
 		"elements": int(res.get("elements", 0)),
 		"convex": int(res.get("convex", 0)),
 		"reduced": bool(res.get("reduced", false)),
@@ -2112,6 +2136,13 @@ func _note_corrupt_mesh(ue_path: String, res_path: String) -> void:
 	if corrupt_meshes.size() < 128 and not corrupt_meshes.has(ue_path):
 		corrupt_meshes.append(ue_path)
 	push_error("[level_loader] corrupt mesh import for UE path '", ue_path, "' (resolved ", res_path, "); cached as missing (corrupt=", corrupt_mesh_count, ")")
+
+
+## W10-P2 cream census: number of materials where `_apply_ue_emissive()` would
+## have invented a white emission (EmissiveStrength with no EmissiveColor and no
+## emissive map) and suppressed it instead. Exposed for the cream proof.
+func invented_white_count() -> int:
+	return _invented_white_count
 
 
 ## L2 accounting: substring-guess fallbacks bind plausible-but-wrong
@@ -3080,6 +3111,9 @@ func _new_build_ctx(parent: Node3D, light_probe: Node, generate_collision: bool)
 		"col_path_counts": {} as Dictionary,
 		"col_authored_hull": 0,
 		"col_authored_prims": 0,
+		"col_authored_elements": 0,
+		"col_authored_complex": 0,
+		"col_no_record": 0,
 		"col_absent": 0,
 		"col_no_collision": 0,
 		"col_query_only": 0,
@@ -4468,9 +4502,12 @@ func _add_collider_shapes(ctx: Dictionary, cell: Vector2i, shapes: Array, offset
 ## W9-P1: per-load collision-source accounting, once per UE path (the draw item
 ## loop visits a path many times). Feeds the `AUTHORED_COLLISION` summary, the
 ## returned stats dict and `probe_collision_authored.gd`.
-## `col_authored_hull` counts every mesh whose collider came from authored data
-## (element hulls, primitive coalescing or UE complex-as-simple); `col_authored_prims`
-## is the subset encoded as one primitive/coalesced shape per instance.
+## `col_authored_hull` counts every path with a non-absent classification (the
+## collision accounting identity); `col_authored_elements` is the subset whose
+## collider is authored simple geometry, `col_authored_complex` the subset that
+## falls back to the render trimesh, `col_no_record` the packages with no
+## BodySetup dump at all (no collider), and `col_authored_prims` the subset
+## encoded as one primitive/coalesced shape per instance.
 func _count_collision_path(ctx: Dictionary, mp: String, info: Dictionary) -> void:
 	var seen: Dictionary = ctx.get("col_paths", {}) as Dictionary
 	if seen.has(mp):
@@ -4492,10 +4529,20 @@ func _count_collision_path(ctx: Dictionary, mp: String, info: Dictionary) -> voi
 	ctx["col_elements"] = int(ctx.get("col_elements", 0)) + int(col.get("elements", 0))
 	ctx["col_convex"] = int(ctx.get("col_convex", 0)) + int(col.get("convex", 0))
 	ctx["col_authored_instances"] = int(ctx.get("col_authored_instances", 0)) + total
+	# W10-P2: the collision class separates authored simple elements from the
+	# render-trimesh fallback and from "no record at all". Only `elements`
+	# counts as authored-coverage: the trimesh is a fallback to render geometry
+	# and a no-record package has no authored collision.
+	var cls: String = str(col.get("class", ""))
+	if cls == "elements":
+		ctx["col_authored_elements"] = int(ctx.get("col_authored_elements", 0)) + 1
+	elif cls == "complex":
+		ctx["col_authored_complex"] = int(ctx.get("col_authored_complex", 0)) + 1
+		ctx["col_complex_default"] = int(ctx.get("col_complex_default", 0)) + 1
+	elif cls == "no_record":
+		ctx["col_no_record"] = int(ctx.get("col_no_record", 0)) + 1
 	if source == "prims" or source == "complex_default":
 		ctx["col_authored_prims"] = int(ctx.get("col_authored_prims", 0)) + 1
-	if source == "complex_default":
-		ctx["col_complex_default"] = int(ctx.get("col_complex_default", 0)) + 1
 	if source == "no_collision":
 		ctx["col_no_collision"] = int(ctx.get("col_no_collision", 0)) + 1
 	if bool(col.get("reduced", false)):
@@ -5944,6 +5991,7 @@ func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dict
 	# authored answer at all (heuristic fallback, counted, never silent).
 	for _col_key: String in ["col_authored_hull", "col_authored_prims", "col_absent",
 			"col_no_collision", "col_query_only", "col_reduced", "col_complex_default",
+			"col_authored_elements", "col_authored_complex", "col_no_record",
 			"col_elements", "col_convex", "col_authored_instances", "col_authored_shapes",
 			"col_heuristic_shapes", "col_path_counts", "col_placed_instances",
 			"col_deadline_hit", "col_paths_seen", "col_scale_baked"]:
@@ -5970,9 +6018,12 @@ func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dict
 	if int(ctx.get("col_authored_hull", 0)) + int(ctx.get("col_absent", 0)) > 0:
 		var ainst: int = maxi(int(ctx.get("col_authored_instances", 0)), 1)
 		var ast: Dictionary = AuthoredCollision.stats() as Dictionary
-		print("AUTHORED_COLLISION meshes=%d hull=%d prims=%d convex=%d absent=%d no_collision=%d query_only=%d reduced=%d shapes_per_instance_avg=%.2f elements=%d load_ms=%d" % [
+		print("AUTHORED_COLLISION meshes=%d hull=%d authored_elements=%d complex=%d no_record=%d prims=%d convex=%d absent=%d no_collision=%d query_only=%d reduced=%d shapes_per_instance_avg=%.2f elements=%d load_ms=%d" % [
 			int(ctx.get("col_authored_hull", 0)) + int(ctx.get("col_absent", 0)),
 			int(ctx.get("col_authored_hull", 0)),
+			int(ctx.get("col_authored_elements", 0)),
+			int(ctx.get("col_authored_complex", 0)),
+			int(ctx.get("col_no_record", 0)),
 			int(ctx.get("col_authored_prims", 0)),
 			int(ctx.get("col_convex", 0)),
 			int(ctx.get("col_absent", 0)),
@@ -6108,6 +6159,11 @@ func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dict
 	result["downscaled_textures"] = downscaled_textures.duplicate()
 	result["fallback_material_count"] = fallback_material_count
 	result["fallback_materials"] = fallback_materials.duplicate()
+	result["invented_white_count"] = _invented_white_count
+	result["invented_white_materials"] = invented_white_materials.duplicate()
+	if _invented_white_count > 0:
+		print("MATERIAL_EMISSIVE invented_white=%d names=%s" % [
+			_invented_white_count, ",".join(invented_white_materials)])
 	# L2-03: authored flat-colour binds (visible population, near-white named).
 	result["flat_colour_material_count"] = flat_colour_material_count
 	result["flat_colour_materials"] = flat_colour_materials.duplicate()

@@ -11,8 +11,8 @@ extends SceneTree
 ##   3. Materials: the body GLB and the head GLB carry DIFFERENT authored slot
 ##      lists (body 3, female head 6, male head 7); one bind of MeshRoot leaves
 ##      the head on the glTF default white. Specific albedo paths are asserted;
-##      the pants albedo is deliberately NOT asserted (producer misclassifies
-##      BaseColorOpacity -> opacity, so PantsC binds a male top texture).
+##      the pants albedo (slot 0, T_CivFemale_Common_01_Pants_D) is asserted
+##      too since W10-P2 fixed parse_materials' BaseColorOpacity handling.
 ##
 ## Standalone SceneTree test: it is not registered in run_tests.gd (the
 ## acceptance lane registers suite 117 there). Exits non-zero on any failure.
@@ -31,6 +31,7 @@ var _civ_script: GDScript = null
 const FEMALE_BODY := "res://assets/ue/Content/Art/Animation/CivFemale/Skin/Common/SK_CivFemale_Common_01C.glb"
 const FEMALE_HEAD := "res://assets/ue/Content/Art/Animation/CivFemale/Skin/Heads/SK_CivFemale_Head_Abby_Short01.glb"
 const SHIRT_ALBEDO_SUFFIX := "T_CivFemale_Common_01_Shirt_D.png"
+const PANTS_ALBEDO_SUFFIX := "T_CivFemale_Common_01_Pants_D.png"
 const HEAD_ALBEDO_SUFFIX := "T_CivFemale_Base_Head_D.png"
 
 ## Authored counts pinned by mesh_materials.json:
@@ -272,6 +273,15 @@ func _run() -> void:
 	_check(shirt_path.ends_with(SHIRT_ALBEDO_SUFFIX),
 		"D body slot 1 albedo is " + SHIRT_ALBEDO_SUFFIX,
 		"D body slot 1 albedo is '%s' (want suffix %s)" % [shirt_path, SHIRT_ALBEDO_SUFFIX])
+	# W10-P2: the authored BaseColorOpacity map (Pants_D) is the pants albedo.
+	var pants_path: String = ""
+	if body_mi != null:
+		var pants := body_mi.get_surface_override_material(0) as StandardMaterial3D
+		if pants != null and pants.albedo_texture != null:
+			pants_path = pants.albedo_texture.resource_path
+	_check(pants_path.ends_with(PANTS_ALBEDO_SUFFIX),
+		"D body slot 0 albedo is " + PANTS_ALBEDO_SUFFIX,
+		"D body slot 0 albedo is '%s' (want suffix %s)" % [pants_path, PANTS_ALBEDO_SUFFIX])
 	var head_path: String = ""
 	if head_mi != null:
 		var headmat := head_mi.get_surface_override_material(3) as StandardMaterial3D

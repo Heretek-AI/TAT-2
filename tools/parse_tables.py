@@ -1090,8 +1090,17 @@ def _gc_collection_props(rest_path):
     return props
 
 
-def _gc_auto_instance_mesh(rest_path):
-    """First authored AutoInstanceMeshes mesh path (no extension), or None."""
+def _gc_auto_instance_mesh(rest_path, intact_stem=None):
+    """First authored AutoInstanceMeshes mesh path (no extension), or None.
+
+    W10-P2 measured (private filtered dump of the shipped pak, 2026-11-26):
+    ``GC_ChestTrunkALid`` authors ONE AutoInstanceMeshes entry,
+    ``StaticMesh'SM_ChestTrunkALid'`` with ``NumInstances: 51`` — the collection's
+    intact auto-instance source, not a fracture. Using it as the broken overlay
+    would show an intact lid after the chest is smashed, so an entry whose stem
+    equals the owning component's intact mesh is skipped and the labelled
+    ``_Broken`` fallback / sibling SMC still wins.
+    """
     props = _gc_collection_props(rest_path)
     if not props:
         return None
@@ -1099,8 +1108,12 @@ def _gc_auto_instance_mesh(rest_path):
         if not isinstance(aim, dict):
             continue
         mesh = (aim.get("Mesh") or {}).get("ObjectPath")
-        if mesh:
-            return str(mesh).split(".")[0]
+        if not mesh:
+            continue
+        mesh = str(mesh).split(".")[0]
+        if intact_stem and _gc_mesh_stem(mesh).lower() == str(intact_stem).lower():
+            continue
+        return mesh
     return None
 
 
@@ -2654,7 +2667,10 @@ def extract_levels():
                 attach_mesh, _attach_props = _gc_static_mesh(exps, attach_idx)
                 # Broken-state mesh: authored AutoInstanceMeshes first, then
                 # the labelled missing-dump fallback, then a sibling glass SMC.
-                broken_mesh = _gc_auto_instance_mesh(rest)
+                # The intact stem is passed so a collection that auto-instances
+                # its own intact mesh (GC_ChestTrunkALid -> SM_ChestTrunkALid)
+                # can never be used as the broken overlay (W10-P2 measured).
+                broken_mesh = _gc_auto_instance_mesh(rest, _gc_mesh_stem(attach_mesh))
                 broken_source = "auto_instance" if broken_mesh else ""
                 if not broken_mesh and collection in _GC_BROKEN_FALLBACKS:
                     broken_mesh = _GC_BROKEN_FALLBACKS[collection]

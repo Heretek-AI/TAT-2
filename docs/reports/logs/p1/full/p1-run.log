@@ -1,0 +1,93 @@
+P1_GATE_RUN
+started: 2026-11-26T20:05:04-05:00
+root: /home/john/.local/share/opencode/worktree/318f41/p1-evidence
+head: 78884fe7d19d43a51e6c7a35d5f886401ffda869
+branch: w10/p1-evidence
+godot: 4.7.2.stable.official.ed1daf0bf
+godot_bin: /home/john/.local/share/opencode/worktree/318f41/p1-evidence/tools/godot
+lock: /tmp/opencode/tat2-godot.lock
+uncommitted_entries_at_start: 10
+host: Linux 7.4.0-0.rc4.261125g4dce97c6c265.35.fc46.x86_64 x86_64
+nproc: 32
+runner: build/qa/run_p0b_gates.sh
+
+P1_GATES start head=78884fe7d19d43a51e6c7a35d5f886401ffda869 branch=w10/p1-evidence godot=4.7.2.stable.official.ed1daf0bf
+P1_GATE name=compile exit=0 log=docs/reports/logs/p1/full/compile.log
+P1_MARKER name=compile marker=scripts checked: [0-9]+, broken: 0
+P1_GATE name=run_tests exit=0 log=docs/reports/logs/p1/full/run_tests.log
+P1_MARKER name=run_tests marker=SUMMARY: fails=0
+P1_GATE name=m2 exit=0 log=docs/reports/logs/p1/full/m2.log
+P1_MARKER name=m2 marker=M2_SUMMARY: fails=0
+P1_GATE name=probe_p1_safe exit=0 log=docs/reports/logs/p1/full/probe_p1_safe.log
+P1_MARKER name=probe_p1_safe marker=P1_SAFE PASS checks=86 fails=0
+P1_GATE name=probe_p1_doors exit=0 log=docs/reports/logs/p1/full/probe_p1_doors.log
+P1_MARKER name=probe_p1_doors marker=P1_DOORS PASS
+P1_GATE name=probe_p1_beams exit=0 log=docs/reports/logs/p1/full/probe_p1_beams.log
+P1_MARKER name=probe_p1_beams marker=P1_BEAMS PASS checks=7 fails=0
+P1_GATE name=probe_p1_ward exit=0 log=docs/reports/logs/p1/full/probe_p1_ward.log
+P1_MARKER name=probe_p1_ward marker=P1_WARD PASS checks=44
+P1_GATE name=probe_p1_street exit=0 log=docs/reports/logs/p1/full/probe_p1_street.log
+P1_MARKER name=probe_p1_street marker=P1_STREET PASS
+P1_GATE name=probe_guard_positions_guildhall exit=0 log=docs/reports/logs/p1/full/probe_guard_positions_guildhall.log
+P1_MARKER name=probe_guard_positions_guildhall marker=GUARD_CHECK PASS
+P1_GATE name=probe_guard_positions_old_manor exit=0 log=docs/reports/logs/p1/full/probe_guard_positions_old_manor.log
+P1_MARKER name=probe_guard_positions_old_manor marker=GUARD_CHECK PASS
+P1_GATE name=probe_collision_authored exit=0 log=docs/reports/logs/p1/full/probe_collision_authored.log
+P1_MARKER name=probe_collision_authored marker=COL_MAPS PASS
+P1_GATE name=probe_lock_inventory exit=0 log=docs/reports/logs/p1/full/probe_lock_inventory.log
+P1_MARKER name=probe_lock_inventory marker=state=APPLIED
+P1_GATE name=probe_niagara exit=0 log=docs/reports/logs/p1/full/probe_niagara.log
+P1_MARKER name=probe_niagara marker=NIAGARA_PROBE PASS
+P1_GATE name=probe_door_walk exit=0 log=docs/reports/logs/p1/full/probe_door_walk.log
+P1_MARKER name=probe_door_walk marker=DOORWALK PASS
+P1_GATE name=probe_viewmodel_truth exit=0 log=docs/reports/logs/p1/full/probe_viewmodel_truth.log
+P1_MARKER name=probe_viewmodel_truth marker=VIEWMODEL_TRUTH PASS
+P1_GATE name=probe_geometry_placement exit=0 log=docs/reports/logs/p1/full/probe_geometry_placement.log
+P1_MARKER name=probe_geometry_placement marker=GEOM_PROBE PASS
+P1_GATE name=probe_blackjack_race exit=0 log=docs/reports/logs/p1/full/probe_blackjack_race.log
+P1_MARKER name=probe_blackjack_race marker=BLACKJACK_PROBE PASS
+P1_GATE name=probe_device_meshes exit=0 log=docs/reports/logs/p1/full/probe_device_meshes.log
+P1_MARKER name=probe_device_meshes marker=TURRET_PROBE PASS
+P1_GATE name=probe_gc_destruction exit=0 log=docs/reports/logs/p1/full/probe_gc_destruction.log
+P1_MARKER name=probe_gc_destruction marker=GC_PROBE PASS
+P1_GATE name=test_gc_break_trigger exit=0 log=docs/reports/logs/p1/full/test_gc_break_trigger.log
+P1_MARKER name=test_gc_break_trigger marker=GC_TRIGGER PASS
+P1_GATE name=test_w10a2_civilian exit=0 log=docs/reports/logs/p1/full/test_w10a2_civilian.log
+P1_MARKER name=test_w10a2_civilian marker=W10A2_CIV_SUMMARY: fails=0
+P1_GATE name=test_w10a2_guard_placement exit=0 log=docs/reports/logs/p1/full/test_w10a2_guard_placement.log
+P1_MARKER name=test_w10a2_guard_placement marker=GUARD_PLACEMENT_SUMMARY: fails=0
+P1_GATE name=test_beam_geometry exit=0 log=docs/reports/logs/p1/full/test_beam_geometry.log
+P1_MARKER name=test_beam_geometry marker=BEAM_GEOMETRY_SUMMARY: fails=0
+P1_GATE name=probe_leak exit=0 log=docs/reports/logs/p1/full/probe_leak.log
+P1_MARKER name=probe_leak marker=PROBE start
+P1_GATE name=e2e exit=0 log=docs/reports/logs/p1/full/e2e.log
+P1_MARKER name=e2e marker=SUMMARY: fails=0 passed=300 total=300
+P1_GATE name=e2e_a2 exit=0 log=docs/reports/logs/p1/full/e2e_a2.log
+P1_MARKER name=e2e_a2 marker=SUMMARY: fails=0 passed=22 total=22
+P1_GATE name=e2e_p2 exit=0 log=docs/reports/logs/p1/full/e2e_p2.log
+P1_MARKER name=e2e_p2 marker=P2_SUMMARY: expected_fail=1 expected_delta=0 fixed=0 unexpected_fail=0
+P1_GATE name=parity_only exit=0 log=docs/reports/logs/p1/full/parity_only.log
+P1_MARKER name=parity_only marker=PARITY_ONLY_SUMMARY: fails=0 passed=60
+P1_EXPECTED_GATE name=cream_red_proof exit=1 expected=1 log=docs/reports/logs/p1/full/cream_red_proof.log
+P1_EXPECTED_MARKER name=cream_red_proof marker=CREAM_PROOF: RED passes=2 expected_fail=2
+P1_GATE name=p0b_capture_dry_run exit=0 log=docs/reports/logs/p1/full/p0b_capture_dry_run.log
+P1_MARKER name=p0b_capture_dry_run marker=P0B_DRY_RUN
+P1_GATE name=p0b_capture_self_test exit=0 log=docs/reports/logs/p1/full/p0b_capture_self_test.log
+P1_MARKER name=p0b_capture_self_test marker=P0B_SELFTEST PASS checks=21 fails=0
+P1_GATE name=p0b_manifest_validate exit=0 log=docs/reports/logs/p1/full/p0b_manifest_validate.log
+P1_MARKER name=p0b_manifest_validate marker=P0B_MANIFEST_OK
+P1_GATE name=p0b_kf27_reference exit=0 log=docs/reports/logs/p1/full/p0b_kf27_reference.log
+P1_MARKER name=p0b_kf27_reference marker=P0B_KF27_REF pose=upper_foyer met=7/7
+P1_GATE name=runtime_smoke exit=0 log=docs/reports/logs/p1/full/runtime_smoke.log
+P1_SMOKE_GODOT_LOG /home/john/.local/share/opencode/worktree/318f41/p1-evidence/docs/reports/logs/p1/full/runtime_smoke_godot.log (from /tmp/tat2-smoke-QnhTuZ.log)
+P1_GATE name=runtime_smoke_scan exit=0 log=docs/reports/logs/p1/full/runtime_smoke_scan.log
+P1_MARKER name=runtime_smoke_scan marker=RUNTIME_SMOKE_SCAN_TEST PASS
+P1_GATE name=string_audit exit=0 log=docs/reports/logs/p1/full/string_audit.log
+P1_GATE name=literal_greps exit=0 log=docs/reports/logs/p1/full/literal_greps.log
+P1_MARKER name=literal_greps marker=LITERAL_GREPS PASS
+P1_GATE name=audit exit=0 log=docs/reports/logs/p1/full/audit.log
+P1_GATE name=texture_cap exit=0 log=docs/reports/logs/p1/full/texture_cap.log
+P1_GATE name=perf_guard exit=0 log=docs/reports/logs/p1/full/perf_guard.log
+P1_GATE name=gate_ratchet exit=0 log=docs/reports/logs/p1/full/gate_ratchet.log
+P1_GATES PASS head=78884fe7d19d43a51e6c7a35d5f886401ffda869 gates=40 expected_gates=1
+P1_GATES evidence=/home/john/.local/share/opencode/worktree/318f41/p1-evidence/docs/reports/logs/p1/full summary=/home/john/.local/share/opencode/worktree/318f41/p1-evidence/docs/reports/logs/p1/full/p1-summary.txt

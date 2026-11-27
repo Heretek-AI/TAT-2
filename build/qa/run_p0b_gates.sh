@@ -1,23 +1,24 @@
 #!/usr/bin/env bash
-# P0b evidence runner — the full P0a 28-gate set at merged HEAD plus the P0b
-# instruments (E2E a2 standalone + p2, parity-only governance, cream RED proof,
-# capture dry-run/self-test + manifest validation + KF27 reference calibration).
+# P1 evidence runner — the full P0b 35-gate set at the merged P1 HEAD plus the
+# five P1 route-content probes (safe / doors / beams / ward / street).
 #
-# Why a separate file instead of editing run_p0a_gates.sh
-# --------------------------------------------------------
-# `run_p0a_gates.sh` is the committed P0a evidence artifact and its log
-# directory (`docs/reports/logs/p0a/`) is still the ratchet evidence for the
-# floors measured at 84912ee. P0b re-measures the same set at the merged HEAD
-# into its own directory so a later wave can tell the two runs apart.
+# History
+# -------
+# This file was the P0b runner (35 gates plus the cream RED proof, logs in
+# `docs/reports/logs/p0b/full/`). P1 reuses it as the *current* full set: every
+# P0b gate body is unchanged, the five P1 probes are spliced in as section 1b so
+# a P1 run proves the P0b set still holds and measures the new content in one
+# serial pass. `build/qa/run_p0a_gates.sh` (28 gates) stays historical P0a
+# evidence. The P0b logs stay committed as the prior-wave measurement.
 #
-# Rules encoded here (same contract as P0a)
-# -----------------------------------------
+# Rules encoded here (same contract as P0a/P0b)
+# ---------------------------------------------
 #   * Never hold the Godot lock across the runner. Each Godot invocation takes
 #     the lock itself (`flock <lock> tools/godot ...`).
 #   * `runtime_smoke.sh` and `p0b_capture.sh` take the lock internally, so they
 #     are invoked WITHOUT an outer flock (an outer lock deadlocks them).
 #   * Start refuses to run if another process already holds the lock.
-#   * Every gate's full output goes to `docs/reports/logs/p0b/full/<gate>.log`
+#   * Every gate's full output goes to `docs/reports/logs/p1/full/<gate>.log`
 #     with the exact command line, start time, exit code and finish time.
 #   * Any unexpected non-zero exit stops the run. The cream RED proof is the
 #     only expected failure: exit 1 with
@@ -25,6 +26,9 @@
 #     the run.
 #   * Generated data and the extract are read-only for this lane: the runner
 #     never calls `make normalize` or a producer.
+#   * The headless capture dry-run/self-test record under this wave's directory
+#     via `P0B_EVIDENCE_DIR` (default unchanged: `docs/reports/logs/p0b`), so a
+#     P1 run does not rewrite the committed P0b evidence.
 #
 # Usage:
 #   build/qa/run_p0b_gates.sh
@@ -34,13 +38,15 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-OUT="$ROOT/docs/reports/logs/p0b/full"
-MASTER="$OUT/p0b-run.log"
-SUMMARY="$OUT/p0b-summary.txt"
+OUT="$ROOT/docs/reports/logs/p1/full"
+MASTER="$OUT/p1-run.log"
+SUMMARY="$OUT/p1-summary.txt"
 LOCK="/tmp/opencode/tat2-godot.lock"
 
 mkdir -p "$OUT" "$(dirname "$LOCK")" || exit 2
 cd "$ROOT" || exit 2
+# Headless capture dry-run/self-test evidence goes to this wave's directory.
+export P0B_EVIDENCE_DIR="$OUT"
 
 say() {
 	printf '%s\n' "$*"
@@ -54,7 +60,7 @@ GODOT_VERSION="$(tools/godot --version 2>&1)"
 DIRTY="$(git status --porcelain | wc -l)"
 
 {
-	printf 'P0B_GATE_RUN\n'
+	printf 'P1_GATE_RUN\n'
 	printf 'started: %s\n' "$(date -Is)"
 	printf 'root: %s\n' "$ROOT"
 	printf 'head: %s\n' "$HEAD_SHA"
@@ -72,12 +78,12 @@ DIRTY="$(git status --porcelain | wc -l)"
 
 # Refuse to start inside an outer Godot lock: that is the W10-A2 deadlock.
 if ! flock -n "$LOCK" true; then
-	say "P0B_GATES BLOCKED: another process holds $LOCK."
+	say "P1_GATES BLOCKED: another process holds $LOCK."
 	say "Do NOT wrap this runner in flock; runtime_smoke.sh/p0b_capture.sh take it themselves."
 	exit 2
 fi
 
-say "P0B_GATES start head=$HEAD_SHA branch=$BRANCH godot=$GODOT_VERSION"
+say "P1_GATES start head=$HEAD_SHA branch=$BRANCH godot=$GODOT_VERSION"
 
 GATE_COUNT=0
 EXPECTED_COUNT=0
@@ -87,7 +93,7 @@ _open_log() { # <name> <log> <command...>
 	local log="${2:?gate log path}"
 	shift 2
 	{
-		printf '== P0B_GATE %s\n' "$name"
+		printf '== P1_GATE %s\n' "$name"
 		printf 'COMMAND:'
 		printf ' %q' "$@"
 		printf '\nCWD: %s\nSTARTED: %s\n\n' "$ROOT" "$(date -Is)"
@@ -112,9 +118,9 @@ gate() { # gate <name> <log> <command...> — exit 0 required
 	log_rel="${log#"$ROOT"/}"
 	GATE_COUNT=$((GATE_COUNT + 1))
 	printf '%s\texit=%d\t%s\n' "$name" "$code" "$log_rel" >>"$SUMMARY"
-	say "P0B_GATE name=$name exit=$code log=$log_rel"
+	say "P1_GATE name=$name exit=$code log=$log_rel"
 	if [ "$code" -ne 0 ]; then
-		say "P0B_GATES FAIL gate=$name exit=$code log=$log_rel"
+		say "P1_GATES FAIL gate=$name exit=$code log=$log_rel"
 		say "--- last 25 lines of $log_rel ---"
 		tail -25 "$log" | tee -a "$MASTER"
 		say "--- end $log_rel ---"
@@ -135,20 +141,49 @@ gate_marker() { # gate_marker <name> <log> <literal marker> <command...>
 	log_rel="${log#"$ROOT"/}"
 	GATE_COUNT=$((GATE_COUNT + 1))
 	printf '%s\texit=%d\t%s\n' "$name" "$code" "$log_rel" >>"$SUMMARY"
-	say "P0B_GATE name=$name exit=$code log=$log_rel"
+	say "P1_GATE name=$name exit=$code log=$log_rel"
 	if [ "$code" -ne 0 ]; then
-		say "P0B_GATES FAIL gate=$name exit=$code log=$log_rel"
+		say "P1_GATES FAIL gate=$name exit=$code log=$log_rel"
 		say "--- last 25 lines of $log_rel ---"
 		tail -25 "$log" | tee -a "$MASTER"
 		say "--- end $log_rel ---"
 		exit "$code"
 	fi
 	if ! grep -Fq -- "$marker" "$log"; then
-		say "P0B_GATES FAIL gate=$name missing marker: $marker log=$log_rel"
+		say "P1_GATES FAIL gate=$name missing marker: $marker log=$log_rel"
 		tail -25 "$log" | tee -a "$MASTER"
 		exit 4
 	fi
-	say "P0B_MARKER name=$name marker=$marker"
+	say "P1_MARKER name=$name marker=$marker"
+}
+
+gate_marker_re() { # gate_marker_re <name> <log> <extended-regex marker> <command...>
+	local name="${1:?gate name}"
+	local log="${2:?gate log path}"
+	local marker="${3:?marker regex}"
+	shift 3
+	local code log_rel
+	_open_log "$name" "$log" "$@"
+	"$@" >>"$log" 2>&1
+	code=$?
+	_finish_log "$log" "$code"
+	log_rel="${log#"$ROOT"/}"
+	GATE_COUNT=$((GATE_COUNT + 1))
+	printf '%s\texit=%d\t%s\n' "$name" "$code" "$log_rel" >>"$SUMMARY"
+	say "P1_GATE name=$name exit=$code log=$log_rel"
+	if [ "$code" -ne 0 ]; then
+		say "P1_GATES FAIL gate=$name exit=$code log=$log_rel"
+		say "--- last 25 lines of $log_rel ---"
+		tail -25 "$log" | tee -a "$MASTER"
+		say "--- end $log_rel ---"
+		exit "$code"
+	fi
+	if ! grep -Eq -- "$marker" "$log"; then
+		say "P1_GATES FAIL gate=$name missing marker regex: $marker log=$log_rel"
+		tail -25 "$log" | tee -a "$MASTER"
+		exit 4
+	fi
+	say "P1_MARKER name=$name marker=$marker"
 }
 
 expected_gate() { # expected_gate <name> <log> <expected exit> <marker> <command...>
@@ -165,22 +200,25 @@ expected_gate() { # expected_gate <name> <log> <expected exit> <marker> <command
 	log_rel="${log#"$ROOT"/}"
 	EXPECTED_COUNT=$((EXPECTED_COUNT + 1))
 	printf '%s\texit=%d(expected=%d)\t%s\n' "$name" "$code" "$want" "$log_rel" >>"$SUMMARY"
-	say "P0B_EXPECTED_GATE name=$name exit=$code expected=$want log=$log_rel"
+	say "P1_EXPECTED_GATE name=$name exit=$code expected=$want log=$log_rel"
 	if [ "$code" -ne "$want" ]; then
-		say "P0B_GATES FAIL gate=$name exit=$code expected=$want log=$log_rel"
+		say "P1_GATES FAIL gate=$name exit=$code expected=$want log=$log_rel"
 		tail -25 "$log" | tee -a "$MASTER"
 		exit 5
 	fi
 	if ! grep -Fq -- "$marker" "$log"; then
-		say "P0B_GATES FAIL gate=$name missing marker: $marker log=$log_rel"
+		say "P1_GATES FAIL gate=$name missing marker: $marker log=$log_rel"
 		tail -25 "$log" | tee -a "$MASTER"
 		exit 6
 	fi
-	say "P0B_EXPECTED_MARKER name=$name marker=$marker"
+	say "P1_EXPECTED_MARKER name=$name marker=$marker"
 }
 
 # 1. Script compile + the two suite runners.
-gate_marker compile "$OUT/compile.log" ", broken: 0" \
+#    The compile marker is a regex because the checked count grows with every
+#    wave; the ratchet (`tools/gate_ratchet.json`) pins the floor, this gate
+#    only fails on a broken script or a malformed summary.
+gate_marker_re compile "$OUT/compile.log" "scripts checked: [0-9]+, broken: 0" \
 	flock "$LOCK" tools/godot --headless --path game \
 	--script "$ROOT/tools/check_scripts_compile.gd"
 
@@ -191,6 +229,34 @@ gate_marker run_tests "$OUT/run_tests.log" "SUMMARY: fails=0" \
 gate_marker m2 "$OUT/m2.log" "M2_SUMMARY: fails=0" \
 	flock "$LOCK" tools/godot --headless --path game \
 	--script res://tests/test_m2_player.gd
+
+# 1b. P1 route-content probes (S12, S21, S24, S25-S26, S13-S20/KF15-16-23).
+#     One probe per lane; each prints its own PASS line and exits non-zero on a
+#     failed check. They are spliced here, before the long probes, so a P1
+#     regression fails early in the serial run. The measured check counts are
+#     pinned in the marker on purpose (same convention as E2E/p2): a probe that
+#     silently loses checks must be re-measured, not ignored.
+gate_marker probe_p1_safe "$OUT/probe_p1_safe.log" \
+	"P1_SAFE PASS checks=86 fails=0" \
+	flock "$LOCK" tools/godot --headless --path game \
+	--script res://tests/probe_p1_safe.gd
+
+gate_marker probe_p1_doors "$OUT/probe_p1_doors.log" "P1_DOORS PASS" \
+	flock "$LOCK" tools/godot --headless --path game \
+	--script res://tests/probe_p1_doors.gd
+
+gate_marker probe_p1_beams "$OUT/probe_p1_beams.log" \
+	"P1_BEAMS PASS checks=7 fails=0" \
+	flock "$LOCK" tools/godot --headless --path game \
+	--script res://tests/probe_p1_beams.gd
+
+gate_marker probe_p1_ward "$OUT/probe_p1_ward.log" "P1_WARD PASS checks=44" \
+	flock "$LOCK" tools/godot --headless --path game \
+	--script res://tests/probe_p1_ward.gd
+
+gate_marker probe_p1_street "$OUT/probe_p1_street.log" "P1_STREET PASS" \
+	flock "$LOCK" tools/godot --headless --path game \
+	--script res://tests/probe_p1_street.gd
 
 # 2. Guard selection (PARITY_APPROX bucket/layer rule): Guildhall Contract 2
 #    must select the authored Lounge C_20 (StandardGuards_Bouncers), never the
@@ -280,8 +346,9 @@ gate_marker e2e_a2 "$OUT/e2e_a2.log" "SUMMARY: fails=0 passed=22 total=22" \
 	flock "$LOCK" tools/godot --headless --path game \
 	--script res://tests/e2e/run_e2e_tests.gd -- --tier=a2
 
-#    p2 is authored-data parity: 1 recorded FAIL (pants albedo) and 1 recorded
-#    DELTA (beam) are the honest baseline; `unexpected_fail=0` is the gate.
+#    p2 is authored-data parity: 1 recorded FAIL (pants albedo) and 0 recorded
+#    DELTA (P1-BEAMS promoted the beam to the authored parameters); the gate is
+#    `unexpected_fail=0`.
 gate_marker e2e_p2 "$OUT/e2e_p2.log" \
 	"P2_SUMMARY: expected_fail=1 expected_delta=0 fixed=0 unexpected_fail=0" \
 	flock "$LOCK" tools/godot --headless --path game \
@@ -299,7 +366,8 @@ expected_gate cream_red_proof "$OUT/cream_red_proof.log" 1 \
 	flock "$LOCK" tools/godot --headless --path game \
 	--script res://tests/test_w10a2_cream.gd
 
-# 8. Port capture harness (headless, no GPU): the wrapper takes the lock itself.
+# 8. Port capture harness (headless, no GPU): the wrapper takes the lock itself
+#    and writes its dry-run/self-test evidence under $OUT via P0B_EVIDENCE_DIR.
 gate_marker p0b_capture_dry_run "$OUT/p0b_capture_dry_run.log" \
 	"P0B_DRY_RUN" \
 	"$ROOT/build/qa/p0b_capture.sh" --dry-run
@@ -311,7 +379,7 @@ gate_marker p0b_capture_self_test "$OUT/p0b_capture_self_test.log" \
 gate_marker p0b_manifest_validate "$OUT/p0b_manifest_validate.log" \
 	"P0B_MANIFEST_OK" \
 	python3 build/qa/p0b_roi_stats.py --validate-manifest \
-	docs/reports/logs/p0b/dry-run/manifest.json
+	"$OUT/dry-run/manifest.json"
 
 #    Reference-only KF27 calibration: proves the tracked reference frame still
 #    meets the same criteria the ROI scorer applies. No port image involved.
@@ -328,16 +396,16 @@ gate runtime_smoke "$OUT/runtime_smoke.log" \
 
 SMOKE_GODOT_LOG="$(awk '/^log: /{p=$2} END{print p}' "$OUT/runtime_smoke.log")"
 if [ -z "$SMOKE_GODOT_LOG" ] || [ ! -f "$SMOKE_GODOT_LOG" ]; then
-	say "P0B_GATES FAIL gate=runtime_smoke no Godot log path in runtime_smoke.log"
+	say "P1_GATES FAIL gate=runtime_smoke no Godot log path in runtime_smoke.log"
 	exit 3
 fi
 cp -- "$SMOKE_GODOT_LOG" "$OUT/runtime_smoke_godot.log"
 if ! grep -q 'RUNTIME_SMOKE_SCAN PASS exit=124 ' "$OUT/runtime_smoke.log"; then
-	say "P0B_GATES FAIL gate=runtime_smoke scan did not report PASS exit=124"
+	say "P1_GATES FAIL gate=runtime_smoke scan did not report PASS exit=124"
 	tail -5 "$OUT/runtime_smoke.log" | tee -a "$MASTER"
 	exit 3
 fi
-say "P0B_SMOKE_GODOT_LOG $OUT/runtime_smoke_godot.log (from $SMOKE_GODOT_LOG)"
+say "P1_SMOKE_GODOT_LOG $OUT/runtime_smoke_godot.log (from $SMOKE_GODOT_LOG)"
 
 gate_marker runtime_smoke_scan "$OUT/runtime_smoke_scan.log" \
 	"RUNTIME_SMOKE_SCAN_TEST PASS" \
@@ -352,6 +420,6 @@ gate texture_cap "$OUT/texture_cap.log" make texture-cap-check
 gate perf_guard "$OUT/perf_guard.log" build/qa/test_perf_guard.sh
 gate gate_ratchet "$OUT/gate_ratchet.log" make gate-ratchet
 
-say "P0B_GATES PASS head=$HEAD_SHA gates=$GATE_COUNT expected_gates=$EXPECTED_COUNT"
-say "P0B_GATES evidence=$OUT summary=$SUMMARY"
+say "P1_GATES PASS head=$HEAD_SHA gates=$GATE_COUNT expected_gates=$EXPECTED_COUNT"
+say "P1_GATES evidence=$OUT summary=$SUMMARY"
 exit 0

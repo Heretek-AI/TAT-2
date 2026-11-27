@@ -6,7 +6,81 @@ extracted through `tools/tat-extract` (CUE4Parse, `EGame.GAME_UE5_5`).
 Generated from `extracted/filelist.txt` (22,005 entries) and the current `extracted/` tree.
 Re-run the census with the commands at the bottom.
 
-## P0b status — 2026-11-26 (newest; supersedes the sections below where they differ)
+## P1 status — 2026-11-26 (newest; supersedes the P0b section below where they differ)
+
+The P1 route-content wave restored the S12–S26 subjects in five lanes (safe room,
+blue doors, beams/foyer, ward/alarm, street) and measured them at
+`78884fe` (`3998761` merged tip + one integration fix) in one serial run of
+`build/qa/run_p0b_gates.sh`: **40 gates** plus the cream expected failure, logs
+in [`reports/logs/p1/full/`](logs/p1/full/), report
+[`reports/p1-integration-20261126.md`](reports/p1-integration-20261126.md).
+`compile` is **213/0**, `run_tests` **322**, E2E **300/300**, p2
+`expected_fail=1 expected_delta=0`, and the five lane probes are
+**86 / 47 / 7 / 44 / 31** checks. **P1 is not Parity Complete**: it makes the
+route subjects present and scoreable; the visual score still needs a port
+capture, and the live reference/120-row baseline remain unscored (no GPU run in
+P1).
+
+- **Safe room (S12/KF14) — present.** `SafeRoomPortalOutline` (authored
+  `BP_EscapePoint` emerald `#7EFF9B` / violet `#C651FF`, `SummonBox` size, violet
+  `Door_Light`), the `BP_ToggleableLanternA` port (`5.0` / `#FFC277` / 80° /
+  4.5 m spot, glass emission 6.0, `[F] TURN ON`/`[F] TURN OFF`), and the
+  `"SPIDER"` `SM_PosterWantedA` flyer (UV cell proven) are anchored to authored
+  landmarks. The shimmer/particle components remain `APPROX_SHADER` (HL-1).
+  V6-01, G1-05, V1-04 scoreable.
+- **Blue double doors (S21/KF24) — present.** The four authored
+  `BP_Manor_Porch_Door_8x8_C` pivots spawn; the leaf binds **two** authored slots
+  in GLB order (`MI_TrimMetalA_brass` diamond mullions + twin pulls,
+  `MI_ManorTrim` slab). There is no authored “blue paint” or glass material —
+  those reads are lighting. The HUD secondary row is a real keycap +
+  `[F] [HOLD] LOCK`, flipping to `[F] CLOSE`; `[HOLD] LOCK` re-locks inside the
+  authored `MinLockLevel 2 / MaxLockLevel 3` band (floor used for an unlocked
+  door, `PORT_DECISION`). V3-03, UI2-05 scoreable; PG-2’s lockpick art is
+  **HARD_LIMIT** (dial exists with authored arc parameters; the UMG widget tree
+  is absent from the dump) and its node-name mapping is `PORT_DECISION`.
+- **Beams / foyer (S24/KF27) — authored-parameter match.** `tat_beam.gdshader`
+  now carries the authored `MI_LightBeam_SM` model: 1.5 cm centre line at
+  opacity 0.5, 6 % fake glow (8.5 cm), 25 m fade, HDR `(5.0, 4.3813, 3.5156)`
+  × 3.0, additive/unlit/two-sided; the P0a column-2 axis/length fix is
+  untouched (330 cards, `max_axis_err_deg=0.000006`, `clamped=0`). The foyer
+  vitrine/armchair/plaque/floor-plate dressing is built; the exact shipped cyan
+  ceiling node is **HARD_LIMIT** (the POI record is `hidden_in_game: true`;
+  the visible KF27 node is a BP/Niagara overlay) and the port uses a labelled
+  `PORT_APPROX` lozenge at the authored light position. V6-03, V4-07 scoreable.
+- **Ward / lockdown / alarm (S25–S26/KF28–29) — restored.** The flat violet
+  pane is gone: `ward_zone.gd` adopts the authored `SM_BlockerWard_*` shards
+  (233/233 paired on Guildhall, 6 m nearest-ward cap, 7-shard foyer cluster),
+  `vine_lock.gd` reproduces the authored `BP_OneWayBarrier` green door ward
+  (2.6 × 3.4 m plane, `0.16 × 2.56 × 3.36 m` BlockerBox, tint
+  `(0.1334, 1.0, 0.0)`), and a beam trip seals both and raises the jaw-trap
+  status icon. Contact-dwell shatter → ward/vine collapse + crimson alarm
+  spotlight (authored cone 15° / range 15.32772 m; colour/energy `APPROX_LIGHT`)
+  + `guard_alerted` sting. The Kismet shatter trigger is a `PORT_DECISION`
+  (HL-3). V6-04, G5-03, G5-04, V1-07, UI5-06 scoreable.
+- **Street / car / gate / MACLEOD (S13–S20/KF15–16/18/23) — present.** The
+  authored `BP_Automobile_Truck_A_Alarm_C_3` carries `[F] INTERACT`, the
+  authored `Play_Obj_Vehicle_Car_Horn_OneOff`, the 10 s alarm with the 2 s
+  headlight flash (50 lm, `CurveFloat_2` keys 0/1/0), and the authored
+  `AI.Stim.Hearing.CarAlarm` row (50 m). `SM_SignMacleod` emits the authored
+  `M_Crystal_Glow` tint at the 4.0 loader cap (authored 5.0). Crates, ladder,
+  weeds, wall light, gate sign (4 surfaces), 2 griffins and the transformer
+  plate are authored and pinned; the wet path uses the existing
+  `ground_wetness=1.0` + Puddle bindings. V4-05, V4-06, V1-05, V3-01, G1-04,
+  AU5-01 scoreable; V4-04 is **PARTIAL**.
+- **HARD_LIMITs recorded, not faked.** `BARRON'S DEMOLITION` banner (0 name
+  hits in the extraction; the only banners are the blue `KILCAIRN`
+  `T_BannerSet_D` set), KF15 fallen-drum placement (assets exist, no placement
+  within 12 m of the alley), the exact cyan KF27 node, and the circular-lockpick
+  widget art. Beam pixel falloff and the ward/vine shader graphs are
+  `PORT_APPROX`; the indirect lantern bounce is HL-7.
+- **Integration fix.** The first run at the merged tip `3998761` failed
+  `A2-WHITE` (1 unexplained near-white node: `SafeRoomPortalOutline` carried
+  only a `material_override`, which the audit’s surface sampler read as
+  glTF-default white). `78884fe` binds the same shader on the QuadMesh surface
+  and keeps the override; the red proof is committed under
+  `reports/logs/p1/pre-fix/`. No test was weakened.
+
+## P0b status — 2026-11-26 (prior; the P1 section above supersedes where they differ)
 
 The parity instruments and the honest acceptance baseline, measured on `dfa8c7e`
 in one serial run by `build/qa/run_p0b_gates.sh` (35 gates + the cream expected

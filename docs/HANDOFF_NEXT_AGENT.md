@@ -1,11 +1,11 @@
 # Handoff — Thick As Thieves Godot 4.7.2 port (next session)
 
 **Repo:** `/home/john/Projects/TAT-2`
-**Code/data tip:** `dfa8c7e` (P0b: capture instruments + acceptance harness +
-parity-only governance + audit re-stamp). This handoff and the P0b evidence are
-the commit on top of that tip.
+**Code/data tip:** `3998761` (P1: five route-content lanes merged) + `78884fe`
+(the `A2-WHITE` portal-surface integration fix). This handoff and the P1
+evidence are the commit on top of that tip.
 **Working tree:** clean apart from private/derived data, the tracked
-`docs/reports/logs/p0b/full/` evidence and local untracked `.uid` sidecars
+`docs/reports/logs/p1/full/` evidence and local untracked `.uid` sidecars
 created by `--import`.
 **Godot:** `4.7.2.stable` via native `tools/godot` (`godot` is **not** on `$PATH`).
 **Renderer:** Forward+ · Jolt 60 Hz · 1280×720 reference · Linux x86_64.
@@ -16,37 +16,40 @@ they take the lock themselves).
 
 ## 1. State in one paragraph
 
-P0b built the parity instruments and measured them at the merged HEAD. The
-acceptance harness registers suites 117/118/120 and runs a real Contract 02
-Novice load in E2E tier `a2` (inside `all`), so `run_tests` is **322** and E2E is
-**300/300**. Tier `p2` records the authored-data parity baseline as 12/12 with
-one **expected FAIL** (civilian pants albedo — a producer
-`BaseColorOpacity`→albedo defect). The beam material was promoted to an
-authored-parameter match in P1-BEAMS (`372bf74`), so the current p2 is
-`expected_fail=1 expected_delta=0`. Parity-only governance is proven: every
-content-override rule
-is classified, and `TAT2_PARITY_ONLY=1` excludes expansion content while keeping
-every shipped record. The port capture harness (six poses, audio tap, ROI/KF27
-scorer) is built and self-tested; the first six-pose port capture ran at
-`5301fc6` (`docs/reports/logs/p0b/20261126T210338Z_...`). The frames confirm the
-visible cream bars are the `SM_LightBeam` cards (axis fixed, full-tube material
-still P4) and the exposure split (gate too dark, foyer too bright). The live
-reference and 120-row baseline are still unscored; the beam material is the
-top visual fix, then the live-reference score.
+P1 restored the S12–S26 route subjects in five lanes (safe room/portal/lantern,
+blue double doors/prompts, security beams/foyer, ward/lockdown/alarm,
+street/car/gate/MACLEOD) and measured them at `78884fe` in one serial
+`build/qa/run_p0b_gates.sh` run — **40 gates** plus the cream expected failure,
+logs in `docs/reports/logs/p1/full/`. `compile` is **213/0**, `run_tests` **322**,
+E2E **300/300**, p2 `expected_fail=1 expected_delta=0`, and the five new probes
+are **86 / 47 / 7 / 44 / 31** checks. The five lane commits are `5075283`
+(safe), `4b1576a` (doors), `08a1cfa` (beams), `9b0c47a` (ward), `3998761`
+(street); `78884fe` fixes a merge-only failure where the new
+`SafeRoomPortalOutline` bound its shader only through `material_override` and
+the `A2-WHITE` audit (which samples surface materials) read it as glTF-default
+white. Rows now **scoreable** (subject present and probe-measured): V6-01,
+G1-05, V1-04, V1-05, V3-01, V3-03, UI2-05, V4-05, V4-06, V4-07, V6-03, V6-04,
+G5-03, G5-04, V1-07, UI5-06, G1-04, AU5-01. Remaining gaps are labelled:
+`BARRON'S DEMOLITION` banner and KF15 drum placement are HARD_LIMIT (no asset /
+no placement), the exact cyan KF27 node is a hidden BP/Niagara overlay, and the
+authored circular-lockpick widget art is absent. **No visual score is claimed**:
+the port capture and the live-reference 120-row baseline are still pending and
+were not run in P1.
 
-## 2. Gates at this HEAD (all measured, logs in `docs/reports/logs/p0b/full/`)
+## 2. Gates at this HEAD (all measured, logs in `docs/reports/logs/p1/full/`)
 
 Run: `build/qa/run_p0b_gates.sh` on
-`dfa8c7e7f9a66e24c114ee56e1e9d37ab66dc58d` (Godot
-`4.7.2.stable.official.ed1daf0bf`), 18 m 39 s wall. Every gate exited 0 except
+`78884fe7d19d43a51e6c7a35d5f886401ffda869` (Godot
+`4.7.2.stable.official.ed1daf0bf`), 19 m 31 s wall. Every gate exited 0 except
 the cream proof, which is expected to exit 1; the runner stops on the first
 unexpected non-zero exit.
 
 | Gate | Value |
 |---|---|
-| compile | **202 checked, 0 broken** |
+| compile | **213 checked, 0 broken** |
 | `run_tests.gd` | **322 PASS, fails=0** (suites 117/118/120; 119 deliberately not registered) |
 | `test_m2_player.gd` | **12 PASS, fails=0** |
+| P1 probes | `P1_SAFE PASS checks=86` · `P1_DOORS checks=47 fails=0` · `P1_BEAMS PASS checks=7` · `P1_WARD PASS checks=44` · `P1_STREET PASS checks=31 hard_limits=2` |
 | guard, Guildhall Contract 2 | `GUARD_CHECK PASS ... guards=4 buckets=4/4 lounge=1 lounge_marker=C_20 selection=parity_approx_layer_bucket` |
 | guard, Old Manor `--order=3` | `GUARD_CHECK PASS ... guards=4 buckets=4/4 lounge=0` (Novice-labelled) |
 | beams | `BEAM_GEOMETRY_SUMMARY: fails=0` — `cards=330 max_axis_err_deg=0.000006 clamped=0` |
@@ -57,21 +60,21 @@ unexpected non-zero exit.
 | `probe_leak` | clean (`TAT2_NO_DEN_PROBE=1`, `res://probe_leak.gd`) |
 | E2E | **300/300**, `fails=0 passed=300 total=300` (T1=117 T2=110 T3=25 T4=14 S2=12 A2=22) |
 | E2E tier `a2` | **22/22** standalone |
-| E2E tier `p2` | **12/12**, `expected_fail=1 expected_delta=0 fixed=0 unexpected_fail=0` (pants only; beam promoted) |
+| E2E tier `p2` | **13/13**, `expected_fail=1 expected_delta=0 fixed=0 unexpected_fail=0` (pants only; beam promoted) |
 | parity-only | **60/60**, 11 rules all `parity_restoration`, 0 unclassified |
 | cream RED proof | **expected exit 1**, `CREAM_PROOF: RED passes=2 expected_fail=2` |
-| capture harness | dry-run `poses=6` manifest valid · self-test **21/21** · KF27 reference **7/7** |
+| capture harness | dry-run `poses=6` manifest valid under `p1/full/dry-run` · self-test **21/21** · KF27 reference **7/7** |
 | `make runtime-smoke` | **PASS** (`RUNTIME_SMOKE_SCAN PASS exit=124 errors=0 mission_ready=1`) |
 | `make audit` | PASS — 12,660/12,703, 0 unexpected |
 | texture cap | 797 capped / 1 alpha-critical kept / 0 offenders |
 | perf guard | 78/78 |
-| `make gate-ratchet` | PASS (`measured_on=dfa8c7e`; floors raised, never lowered) |
+| `make gate-ratchet` | PASS (`measured_on=78884fe`; floors raised, never lowered) |
 
-**Caveat:** no live reference capture. The port-side six-pose capture exists and
-is measured, but it is not a parity score; the 120-row baseline still needs the
-shipped reference. The W9 interior numbers were measured on a frame with a
-light-card slab covering half the screen and are **not** a valid interior
-baseline.
+**Caveat:** no live reference capture and no P1 port capture. The P1 rows are
+scoreable, not scored; the P0b six-pose capture predates P1. The 120-row baseline
+still needs the shipped reference. The W9 interior numbers were measured on a
+frame with a light-card slab covering half the screen and are **not** a valid
+interior baseline.
 
 ## 3. Closed by P0a (previously the top defects)
 
@@ -88,21 +91,45 @@ baseline.
   call under one lock, runs `runtime_smoke.sh` without an outer flock, uses the
   correct leak path, and covers audit/texture/perf/ratchet.
 
+**Closed by P1 (route content S12–S26)**
+
+- **Safe room/portal/lantern** — authored portal contour + violet door light,
+  `[F] TURN ON/OFF` lantern, `"SPIDER"` flyer (V6-01 / G1-05 / V1-04 scoreable).
+- **Blue doors/prompts** — the four S21 pivots spawn with two authored material
+  slots; `[F] OPEN` over `[F] [HOLD] LOCK` with two keycaps, `[F] CLOSE` flip,
+  authored 2..3 lock band (V3-03 / UI2-05 scoreable).
+- **Beams/foyer** — the full-tube stand-in is replaced by the authored
+  centre-line/fade material (1.5 cm line, opacity 0.5, 6 % glow, 25 m fade, HDR
+  ×3), and the foyer dressing is built (V6-03 / V4-07 scoreable).
+- **Ward/lockdown/alarm** — the flat violet pane is replaced by the authored
+  233/233 ward shards and the green `BP_OneWayBarrier` door ward; beam trip →
+  seal + icon, shatter → crimson spot + sting (V6-04 / G5-03 / G5-04 / V1-07 /
+  UI5-06 scoreable).
+- **Street/car/gate/MACLEOD** — `[F] INTERACT` car + authored horn/alarm/stim,
+  MACLEOD emission, gate sign/griffins/plate, wet path (V4-05 / V4-06 / V1-05 /
+  V3-01 / G1-04 / AU5-01 scoreable; V4-04 partial).
+- **Merge-only `A2-WHITE` regression** — `78884fe` binds the portal shader on the
+  mesh surface; red proof under `logs/p1/pre-fix/`.
+
 ## 4. Open work (measured/recorded, not hidden)
 
 | Defect / item | Evidence | Next step |
 |---|---|---|
-| **Port capture** | six-pose run 2026-11-26 at `5301fc6` (`logs/p0b/20261126T210338Z_...`): gate 23.2/10, foyer 45.8/29, Lounge 28.6/23; audio enabled 85.3 s | live reference + 120-row score; exposure/IBL remains split |
+| **Port capture (P1 tree)** | the last real capture is the P0b six-pose run at `5301fc6` (`logs/p0b/20261126T210338Z_...`): gate 23.2/10, foyer 45.8/29, Lounge 28.6/23; it predates P1 | re-run `build/qa/p0b_capture.sh` on this tree, inspect KF14/15/16/23/24/27/28/29, then score the rows |
 | **120-row baseline unscored** | instruments ready; live reference prepared, nothing launched (`reports/p0b-live-capture.md`) | score the 120 rows on the parity-only build with recorded evidence |
-| **Cream / invented white** | the visible cream bars are `SM_LightBeam` cards (axis fixed; full-tube material); cream RED proof `expected_fail=2`; 122 authored moon cards are safe | P4 authored beam centre-line/fade; data wave fixes `_apply_ue_emissive` + registers suite 119 |
+| **Cream / invented white** | the beam cards are now the authored centre-line/fade material, so the old broad cream slabs need a fresh capture; cream RED proof `expected_fail=2`; 122 authored moon cards are safe | data wave fixes `_apply_ue_emissive` + registers suite 119; verify the beam read in the P1 capture |
 | **Civilian pants albedo** | p2 expected FAIL: authored `Pants_D` in the `opacity` slot | producer fix (`BaseColorOpacity` → albedo), then p2 `fixed` → 1 |
-| **Cream bars (retired 63 claim)** | all 122 `1m_Plane_Reverse` are hidden and `MI_EmisLight_Moonlight` resolves unshaded black; the visible bars are `SM_LightBeam` | retire the 63/moon attribution; fix the beam material (P4) |
+| **`BARRON'S DEMOLITION` banner** | P1-STREET `HARD_LIMIT`: 0 name hits in the extraction; only the blue `KILCAIRN` banner set exists | no authored asset; do not invent a decal |
+| **KF15 fallen drums** | P1-STREET `HARD_LIMIT (placement)`: `SM_Metal_BarrelA/B/C` exist but no placement within 12 m of the alley | needs a producer/placement source before it can be scored |
+| **Cyan KF27 node** | POI `SM_Sphere2Count` is `hidden_in_game: true`; the visible node is a BP/Niagara overlay; port uses `PORT_APPROX` | exact node is HARD_LIMIT unless a Niagara/BP payload is exported |
+| **Circular lockpick art** | PG-2: dial exists with authored arc parameters; authored UMG widget tree absent from the dump | HARD_LIMIT art; node-name mapping is `PORT_DECISION` |
 | **3,288 mirrored instances, winding unverified** | 1,601 floors/roofs; `MESH_RECON ... mirrored=` | one `CULL_DISABLED` capture, then compensate |
 | **Landscape visibility may be inverted** | `tat_landscape.gdshader` discards `vis > 0.5`; UE convention is 1 = visible | one reference sample; do not "fix" blind |
 | **Sky contributes no light** | `sky_contribution=0`, `IBL available=false` | cubemap export + consumer (W10-C) |
 | **Authored −4.00 EV bias not applied** | emissives hot against a zero floor | apply the AEM curve (W10-C) |
 | **Guard count** | 4/6/8 is a labelled `PORT_DECISION`; selection is `PARITY_APPROX` | live Contract 02 capture before any parity claim |
-| **Beam material (top visual defect)** | capture confirms broad cream bars; additive `tat_beam.gdshader` alpha 0.55/energy 1.7/full tube; p2 DELTA `dG=0.054 dB=0.117 dE=0.20` | P4 authored centre-line/fade |
+| **Beam pixel falloff** | authored params 1:1; `EdgeFadePower`/sphere-mask terms not decompiled | `PORT_APPROX`; compare in the capture, never invent the graph |
+| **Ward active colour** | saved per-instance MID is green `#7DFFB2`; KF28 reads purple; port uses base `WardColor #FF4DFD` | `APPROX_COLOR`; cooked activation colour not in the dump |
 | **GC hold-smash** | temporary `PORT_DECISION`; 95 broken layers / 79 leaves measured | authored damage path before Parity Complete |
 | **Prison-door lock level** | authored `MaxLockLevel` 4, port locks at 1 (producer emits instance deltas) | producer chain resolution + regeneration on the integrator |
 | **StateTree** | payload v2 emits parameters (497/566 nodes, 676 bindings, 139 templates) but the runtime still flattens nodes to names; shadow `0/21` fully evaluable | consume v2 in `tree_model`/`coverage`; never invent parameters |
@@ -110,30 +137,36 @@ baseline.
 
 ## 5. Wave plan for the next session
 
-**P0b remainder — live reference + the 120-row baseline (do this first).** The
-port-side six-pose capture is measured
-(`logs/p0b/20261126T210338Z_...`); the live reference is still blocked on
-VRAM/offline mode. Follow `docs/reports/p0b-live-capture.md`, then score the 120
-rows from `docs/reference/clip_1795033698901/COMPARISON_PORT_20261124.md` on the
-parity-only build, and publish an honest per-row PASS/PARTIAL/FAIL with recorded
+**P1 remainder — re-run the port capture on this tree and score the route rows
+(do this first).** The last six-pose capture predates P1; run
+`build/qa/p0b_capture.sh` (one GPU job, after the gates) and inspect KF14/15/16/
+23/24/27/28/29. Then follow `docs/reports/p0b-live-capture.md` for the shipped
+reference and score the 120 rows from
+`docs/reference/clip_1795033698901/COMPARISON_PORT_20261124.md` on the
+parity-only build, publishing an honest per-row PASS/PARTIAL/FAIL with recorded
 evidence. Do not re-grade on frame `215507`.
 
 **W10-B — behaviour.** StateTree payload-v2 consumer (parameters/bindings →
 interpreter) then navmesh/EQS; Niagara activation bridge. Audio direction if B
 finishes early.
 
-**W10-C — look.** The beam material is the top visual defect confirmed by the
-capture (authored centre-line/fade), then AEM/IBL/EV bias, mirrored winding and
-the landscape docs/A-B.
+**W10-C — look.** AEM/IBL/EV bias, mirrored winding and the landscape docs/A-B;
+the beam material has moved to the authored centre-line model but its pixel
+falloff is still `PORT_APPROX`.
 
 ## 6. How to run everything
 
 ```bash
-build/qa/run_p0b_gates.sh    # 35 gates + cream RED -> docs/reports/logs/p0b/full/ (no outer flock)
+build/qa/run_p0b_gates.sh    # 40 gates + cream RED -> docs/reports/logs/p1/full/ (no outer flock)
 make run                     # native client
 make test                    # run_tests (322)
-tools/godot --headless --path game --script "$PWD/tools/check_scripts_compile.gd"  # 202
+tools/godot --headless --path game --script "$PWD/tools/check_scripts_compile.gd"  # 213
 tools/godot --headless --path game --script res://tests/test_m2_player.gd
+tools/godot --headless --path game --script res://tests/probe_p1_safe.gd
+tools/godot --headless --path game --script res://tests/probe_p1_doors.gd
+tools/godot --headless --path game --script res://tests/probe_p1_beams.gd
+tools/godot --headless --path game --script res://tests/probe_p1_ward.gd
+tools/godot --headless --path game --script res://tests/probe_p1_street.gd
 tools/godot --headless --path game --script res://tests/probe_guard_positions.gd
 tools/godot --headless --path game --script res://tests/probe_guard_positions.gd -- --map=old_manor --order=3
 tools/godot --headless --path game --script res://tests/test_beam_geometry.gd
@@ -183,6 +216,11 @@ TAT2_GUARD_DIAG=1 tools/godot --headless --path game -- --qa-free-play   # guard
   0.102 m authored mesh length in the calculation, apply the authored length
   without a ceiling, and keep `BEAM_AXIS ... clamped=0`. The `MESH_RECON`
   `mirrored=` count is the winding follow-up, not a beam bug.
+- **A2-WHITE samples surface materials, not `material_override`.** A port-built
+  `MeshInstance3D` with only an instance override reads as glTF-default white in
+  the acceptance audit. Bind the material on the mesh surface
+  (`surface_set_material`) as well; `SafeRoomPortalOutline` at `3998761` is the
+  measured regression (fixed in `78884fe`).
 - **The StateTree runs in shadow** (`TAT2_STATETREE=off|shadow`): the FSM still
   drives. Payload v2 has the parameters/bindings; the runtime still flattens
   nodes to names, so `0/21` trees are fully evaluable. Do not invent parameters.
@@ -192,8 +230,12 @@ TAT2_GUARD_DIAG=1 tools/godot --headless --path game -- --qa-free-play   # guard
 
 ## 8. Where the evidence lives
 
-- `docs/reports/p0b-20261126.md` — the P0b measured table and exact lines (current).
-- `docs/reports/logs/p0b/full/` — the 35 gate logs + the cream expected failure.
+- `docs/reports/p1-integration-20261126.md` — the P1 measured table and exact lines (current).
+- `docs/reports/logs/p1/full/` — the 40 gate logs + the cream expected failure;
+  `docs/reports/logs/p1/pre-fix/` holds the merged-tip `A2-WHITE` red proof.
+- `docs/reports/p1-safe-lane.md`, `p1-doors.md`, `p1-beams.md`, `p1-ward.md`,
+  `p1-street-20261126.md` — the five lane reports.
+- `docs/reports/p0b-20261126.md` + `docs/reports/logs/p0b/full/` — the preceding P0b run.
 - `docs/reports/p0b-harness.md` — the Lane H acceptance-harness report.
 - `docs/reports/p0b-live-capture.md` — live-reference prep and blockers (no launch).
 - `docs/reports/p0a-20261126.md` + `docs/reports/logs/p0a/` — the preceding P0a run.
@@ -206,11 +248,11 @@ TAT2_GUARD_DIAG=1 tools/godot --headless --path game -- --qa-free-play   # guard
 
 ```bash
 git status --short                    # clean, or only intentional evidence
-build/qa/run_p0b_gates.sh             # 35 gates + cream RED, stops on first unexpected failure
-make gate-ratchet                     # PASS against the committed p0b/full logs
+build/qa/run_p0b_gates.sh             # 40 gates + cream RED, stops on first unexpected failure
+make gate-ratchet                     # PASS against the committed p1/full logs
 git push origin main
 ```
 
 When a gate value moves, update `tools/gate_ratchet.json`, the report it names
-(`docs/reports/p0b-20261126.md` or its successor) and this file in the same
-wave. Never fabricate a capture, ROI or timing: say "not verified" instead.
+(`docs/reports/p1-integration-20261126.md` or its successor) and this file in the
+same wave. Never fabricate a capture, ROI or timing: say "not verified" instead.

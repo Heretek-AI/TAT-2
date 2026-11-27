@@ -116,15 +116,64 @@ LOG_GATES = {
     # P0b port capture: the headless dry-run writes the six-pose manifest and
     # the ROI script validates its schema without a GPU. The validated manifest
     # is the same file the real capture run overwrites, so a schema regression
-    # fails here before any capture time is spent.
+    # fails here before any capture time is spent. P1 records its dry-run under
+    # its own evidence dir via P0B_EVIDENCE_DIR (default stays the P0b path).
     "p0b_capture": {
         "command": (
+            "P0B_EVIDENCE_DIR=docs/reports/logs/p1/full "
             "build/qa/p0b_capture.sh --dry-run && "
             "build/qa/p0b_roi_stats.py --validate-manifest "
-            "docs/reports/logs/p0b/dry-run/manifest.json"
+            "docs/reports/logs/p1/full/dry-run/manifest.json"
         ),
         "pattern": lambda g: r"P0B_MANIFEST_OK [^\n]*poses=(\d+) dry_run=true",
         "minimums": [(1, "poses")],
+        "passes_key": None,
+    },
+    # P1 route-content probes: one per lane, each prints a stable PASS line with
+    # its measured check count. The counts are floors (a probe may add checks,
+    # never drop them); the PASS literal is part of the pattern so a probe that
+    # exits 0 without its summary fails here.
+    "probe_p1_safe": {
+        "command": (
+            "tools/godot --headless --path game --script res://tests/probe_p1_safe.gd"
+        ),
+        "pattern": lambda g: r"P1_SAFE PASS checks=(\d+) fails=0",
+        "minimums": [(1, "checks")],
+        "passes_key": None,
+    },
+    "probe_p1_doors": {
+        "command": (
+            "tools/godot --headless --path game --script res://tests/probe_p1_doors.gd"
+        ),
+        "pattern": lambda g: r"P1_DOORS checks=(\d+) fails=0\s*\nP1_DOORS PASS",
+        "minimums": [(1, "checks")],
+        "passes_key": None,
+    },
+    "probe_p1_beams": {
+        "command": (
+            "tools/godot --headless --path game --script res://tests/probe_p1_beams.gd"
+        ),
+        "pattern": lambda g: r"P1_BEAMS PASS checks=(\d+) fails=0",
+        "minimums": [(1, "checks")],
+        "passes_key": None,
+    },
+    "probe_p1_ward": {
+        "command": (
+            "tools/godot --headless --path game --script res://tests/probe_p1_ward.gd"
+        ),
+        "pattern": lambda g: r"P1_WARD PASS checks=(\d+)",
+        "minimums": [(1, "checks")],
+        "passes_key": None,
+    },
+    "probe_p1_street": {
+        "command": (
+            "tools/godot --headless --path game --script res://tests/probe_p1_street.gd"
+        ),
+        "pattern": lambda g: (
+            r"P1_STREET SUMMARY checks=(\d+) fails=0 hard_limits=(\d+)"
+            r"\s*\nP1_STREET PASS"
+        ),
+        "minimums": [(1, "checks")],
         "passes_key": None,
     },
     "audit": {
@@ -273,7 +322,7 @@ PROBE_GATES = {
     # frame scored with the same criteria the port ROI script applies.
     "p0b_capture_self_test": (
         "P0B_SELFTEST PASS",
-        "build/qa/p0b_capture.sh --self-test",
+        "P0B_EVIDENCE_DIR=docs/reports/logs/p1/full build/qa/p0b_capture.sh --self-test",
     ),
     "p0b_kf27_reference": (
         "P0B_KF27_REF pose=upper_foyer met=7/7",

@@ -14,6 +14,10 @@
 #   docs/reports/logs/p0b/<run>/manifest.json      (tracked provenance)
 #   docs/reports/logs/p0b/<run>/capture.log        (tracked evidence; dry-run/self-test logs too)
 #
+# P0B_EVIDENCE_DIR overrides the evidence root for the headless dry-run/self-test
+# only (a later wave records its own logs without rewriting the P0b evidence);
+# the default stays docs/reports/logs/p0b and a real capture always writes there.
+#
 # The wrapper refuses to start a GPU run while another Godot/game process is
 # live or the lock is held. It never holds the lock across the run itself: the
 # `flock ... -c` invocation owns it for exactly the Godot process.
@@ -22,6 +26,7 @@ set -u
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SCRIPT="$ROOT/build/qa/p0b_capture.gd"
 LOCK="/tmp/opencode/tat2-godot.lock"
+EVIDENCE_DIR="${P0B_EVIDENCE_DIR:-$ROOT/docs/reports/logs/p0b}"
 BEAM="on"
 AO="${TAT2_AO:-on}"
 SEED="derived"
@@ -64,12 +69,12 @@ mkdir -p "$(dirname "$LOCK")" || exit 2
 
 if [ "$MODE" = "dry-run" ]; then
   OUT="$ROOT/build/qa/p0b/dry-run"
-  MANIFEST="$ROOT/docs/reports/logs/p0b/dry-run/manifest.json"
-  LOG="$ROOT/docs/reports/logs/p0b/dry-run/dry-run.log"
+  MANIFEST="$EVIDENCE_DIR/dry-run/manifest.json"
+  LOG="$EVIDENCE_DIR/dry-run/dry-run.log"
 elif [ "$MODE" = "self-test" ]; then
   OUT="$ROOT/build/qa/p0b/selftest"
   MANIFEST="$ROOT/build/qa/p0b/selftest/manifest.json"
-  LOG="$ROOT/docs/reports/logs/p0b/self-test/self-test.log"
+  LOG="$EVIDENCE_DIR/self-test/self-test.log"
 else
   SHORT="$(git -C "$ROOT" rev-parse --short=12 HEAD 2>/dev/null || echo nogit)"
   RUN="${TAG:-$(date -u +%Y%m%dT%H%M%SZ)_${SHORT}_b${BEAM}}"

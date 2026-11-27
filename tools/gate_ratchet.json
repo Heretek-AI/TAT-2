@@ -1,11 +1,11 @@
 {
   "schema": "tat2.gate_ratchet/1",
-  "measured_on": "dfa8c7e",
-  "source": "P0b measurement at dfa8c7e (merged P0b code + parity governance regeneration/audit re-stamp), 2026-11-26, one serial run of build/qa/run_p0b_gates.sh into docs/reports/logs/p0b/full/: compile 202/0 (199 harness + parity_governance.gd + test_parity_only.gd + audio_capture.gd), run_tests 322/0 (suites 117/118/120 registered, 119 deliberately not), M2 12/0, E2E 300/300 (T1=117 T2=110 T3=25 T4=14 S2=12 A2=22, a2 now in `all`), e2e_a2 22/22, e2e_p2 12/12 with expected_fail=1 expected_delta=0 fixed=0 unexpected_fail=0 (P1-BEAMS promoted the authored beam), parity-only 60/60 (11 rules, all parity_restoration, 0 unclassified), cream RED proof 2 expected failures (not a gate), capture dry-run manifest 6 poses validated, self-test 21/0, KF27 reference 7/7, guard Guildhall C_20 + Old Manor order 3 PASS (4/4 buckets, no Hauntstable), beam 330 cards max_axis_err_deg=0.000006 clamped=0, GC 44+21, turret 229/1,145/0, collision 0.976321 dropped=0, lock applied=154 (144+10), leak clean, runtime-smoke exit=124 errors=0, audit 12,660/12,703, texture cap 797/1/0, perf guard 78/78, literal greps 99 files 0 hits, string audit 307/196/111. The P0a floors (compile 196, run_tests 319) are raised to this measurement; the E2E floor was already 300 from the P0b-HARNESS lane and is unchanged. Prior evidence: docs/reports/logs/p0a/ (84912ee) and docs/reports/logs/p0b-harness/ (75e39fc).",
+  "measured_on": "78884fe",
+  "source": "P1 measurement at 78884fe (base merged tip 3998761 + one integration fix: the safe-room portal ShaderMaterial is bound on the QuadMesh surface so A2-WHITE can classify it), 2026-11-26, one serial run of build/qa/run_p0b_gates.sh into docs/reports/logs/p1/full/: compile 213/0 (202 P0b + 11 P1 scripts/probes), run_tests 322/0 (suites 117/118/120 registered, 119 deliberately not), M2 12/0, P1 probes safe 86 / doors 47 / beams 7 / ward 44 / street 31 (street 2 HARD_LIMITs), E2E 300/300 (T1=117 T2=110 T3=25 T4=14 S2=12 A2=22), e2e_a2 22/22, e2e_p2 13/13 with expected_fail=1 expected_delta=0 fixed=0 unexpected_fail=0 (pants albedo only; beam authored in P1-BEAMS), parity-only 60/60 (11 rules, all parity_restoration, 0 unclassified), cream RED proof 2 expected failures (not a gate), capture dry-run manifest 6 poses validated under p1/full/dry-run (P0B_EVIDENCE_DIR keeps the P0b evidence untouched), self-test 21/0, KF27 reference 7/7, guard Guildhall C_20 + Old Manor order 3 PASS (4/4 buckets, no Hauntstable), beam 330 cards max_axis_err_deg=0.000006 clamped=0, GC 44+21, turret 229/1,145/0, collision 0.976321 dropped=0, lock applied=154 (144+10), leak clean, runtime-smoke exit=124 errors=0, audit 12,660/12,703, texture cap 797/1/0, perf guard 78/78, literal greps 105 files 0 hits, string audit 307/196/111. The P0b compile floor (202) is raised to this measurement (213); run_tests 322, E2E 300 and every other floor are unchanged because the measurement meets them. Prior evidence: docs/reports/logs/p0b/full/ (dfa8c7e), docs/reports/logs/p0a/ (84912ee) and docs/reports/logs/p0b-harness/ (75e39fc).",
   "note": "Floors, not exact counts: a wave may add tests/files but must never lower a floor or introduce a failure. Counts are read from the committed log and compared with >=; failure counts are exact zeros and e2e.passed must equal e2e.total. Update only with a real gate log in docs/reports/logs/ (see tools/check_gate_ratchet.py for the evidence layout).",
-  "report": "docs/reports/p0b-20261126.md",
+  "report": "docs/reports/p1-integration-20261126.md",
   "evidence": {
-    "dir": "docs/reports/logs/p0b/full",
+    "dir": "docs/reports/logs/p1/full",
     "compile": "compile.log",
     "run_tests": "run_tests.log",
     "m2": "m2.log",
@@ -38,11 +38,16 @@
     "probe_gc_destruction": "probe_gc_destruction.log",
     "test_gc_break_trigger": "test_gc_break_trigger.log",
     "test_w10a2_civilian": "test_w10a2_civilian.log",
-    "test_w10a2_guard_placement": "test_w10a2_guard_placement.log"
+    "test_w10a2_guard_placement": "test_w10a2_guard_placement.log",
+    "probe_p1_safe": "probe_p1_safe.log",
+    "probe_p1_doors": "probe_p1_doors.log",
+    "probe_p1_beams": "probe_p1_beams.log",
+    "probe_p1_ward": "probe_p1_ward.log",
+    "probe_p1_street": "probe_p1_street.log"
   },
   "gates": {
     "compile": {
-      "checked": 202,
+      "checked": 213,
       "broken": 0
     },
     "run_tests": {
@@ -113,6 +118,21 @@
     "runtime_smoke": {
       "errors": 0,
       "mission_ready": 1
+    },
+    "probe_p1_safe": {
+      "checks": 86
+    },
+    "probe_p1_doors": {
+      "checks": 47
+    },
+    "probe_p1_beams": {
+      "checks": 7
+    },
+    "probe_p1_ward": {
+      "checks": 44
+    },
+    "probe_p1_street": {
+      "checks": 31
     }
   }
 }

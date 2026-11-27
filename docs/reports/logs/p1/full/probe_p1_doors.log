@@ -1,0 +1,119 @@
+== P1_GATE probe_p1_doors
+COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/probe_p1_doors.gd
+CWD: /home/john/.local/share/opencode/worktree/318f41/p1-evidence
+STARTED: 2026-11-26T20:09:45-05:00
+
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+TAT-2 Loc: reverse map built from sources.json (3404 keys)
+TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
+INPUT_TABLE source=generated rows=91 shipping=91 actions=52
+INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
+P1_DOORS probe — S21 blue double doors (KF24)
+  project=/home/john/.local/share/opencode/worktree/318f41/p1-evidence/game
+  ok: S21 records = 4 (2 actors x Pivot+SecondPivot), got 4
+  ok: every S21 record: class BP_Civic_Doorway_6x8_C, 1 leaf /Game/Art/Environment/Civic/Doors/SM_Civic_DoorDouble_x4, unlocked, lockpickable
+    record BP_Manor_Porch_Door_8x8_C_0.Pivot@(11.50,27.50,-73.50)
+    record BP_Manor_Porch_Door_8x8_C_0.SecondPivot@(14.48,27.50,-73.50)
+    record BP_Manor_Porch_Door_8x8_C_1.Pivot@(5.50,27.50,-73.50)
+    record BP_Manor_Porch_Door_8x8_C_1.SecondPivot@(8.48,27.50,-73.50)
+  ok: authored lock config present (min_lock_level=2.0 max_lock_level=3.0 on the first record)
+ROUGHNESS_BAKE_MODE on=1 resolution=full cache=process
+  ok: 4/4 S21 door nodes built a pivot + leaf (got 4)
+  ok: leaf MeshInstance3D present on the first door
+  ok: leaf has 2 GLB surfaces (got 2)
+    leaf AABB size=(1.513941, 4.00001, 0.259206) surfaces=2
+  ok: leaf extent 1.51 x 4.00 m == authored 1.5 x 4.0
+  ok: surface 0 material is a BaseMaterial3D (StandardMaterial3D)
+    slot 0 albedo=T_TrimMetalA_D.png normal=T_TrimMetalA_N.png orm=T_TrimMetalA_ORM.png roughness=
+  ok: surface 1 material is a BaseMaterial3D (StandardMaterial3D)
+    slot 1 albedo=T_ManorTrim_D.png normal=T_ManorTrim_N.png orm=T_ManorTrim_ORM.png roughness=
+  ok: slot 0 (mullions + twin pulls) = MI_TrimMetalA_brass (got T_TrimMetalA_D.png)
+  ok: slot 1 (painted slab) = MI_ManorTrim (got T_ManorTrim_D.png)
+  ok: slots are not collapsed/duplicated (order is real, not slot 0 twice)
+  ok: each slot binds its own authored ORM map (AO + metallic + roughness input)
+  ok: closed primary == "[F] OPEN" (got "[F] OPEN")
+  ok: closed secondary == "[F] [HOLD] LOCK" (got "[F] [HOLD] LOCK")
+    KF24 stack: "[F] OPEN" above "[F] [HOLD] LOCK"
+WARNING: [hearing_data] 5 authored investigation-range anomalies clamped: AI.Stim.Hearing.LockPicking.Picked: outer 5.0 m > max 3.0 m (clamped); AI.Stim.Hearing.Alert.ShareKnowledge: outer 30.0 m > max 15.0 m (clamped); AI.Stim.Hearing.Tool.DartLaunch: inner 3.0 m > outer 2.0 m (clamped); AI.Stim.Hearing.EnterExitHedge: outer 8.0 m > max 7.5 m (clamped); AI.Stim.Hearing.Device.SecretSwitch: outer 8.0 m > max 7.5 m (clamped)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _log_anomalies_once (res://src/ai/hearing_data.gd:277)
+         [1] _build_stimuli (res://src/ai/hearing_data.gd:269)
+         [2] ensure_loaded (res://src/ai/hearing_data.gd:187)
+         [3] resolve_stim (res://src/ai/hearing_data.gd:346)
+         [4] build_record (res://src/stealth/noise_bus.gd:105)
+         [5] emit_noise (res://src/stealth/noise_bus.gd:124)
+         [6] _emit_swing_creak (res://src/interact/swinging_door.gd:498)
+         [7] _start_swing_toggle (res://src/interact/swinging_door.gd:490)
+         [8] interact (res://src/interact/swinging_door.gd:603)
+         [9] _run (res://tests/probe_p1_doors.gd:282)
+         [10] _wait_frames (res://tests/probe_p1_doors.gd:131)
+  ok: during the swing primary flips to "[F] CLOSE" (got "[F] CLOSE")
+  ok: during the swing the [HOLD] LOCK row is withdrawn (got "")
+  ok: the leaf is swinging (angle 0.0 -> 26.7 deg)
+  ok: swing completes at the authored 90 deg (got 90.0)
+  ok: open door stays on "[F] CLOSE"
+  ok: while closing primary is "[F] OPEN" (got "[F] OPEN")
+  ok: while closing the secondary stays withdrawn
+  ok: close returns the pivot to 0 deg (got 0.0)
+  ok: closed again restores "[F] OPEN" + "[F] [HOLD] LOCK"
+  ok: door carries the authored lock band 2..3 (got 2..3)
+  ok: interact_hold locks the closed door
+  ok: [HOLD] LOCK stays inside the authored band (lock_level=2 in 2..3)
+  ok: locked primary reads "[F] PICK LOCK (Lv 2)" (got "[F] PICK LOCK (Lv 2)")
+  ok: locked door offers no second hold action
+    locked: "[F] PICK LOCK (Lv 2)"
+  ok: interact on the locked door starts a pick
+  ok: the pick drives actor.set_lockpicking_active(true)
+  ok: the pick unlocks the door (locked=false)
+  ok: a successful pick swings the door past the 70 deg leaf gate (angle 90.0)
+  ok: the unlock clears actor.set_lockpicking_active
+TAT-2 HUD build: id=1 root_children=29 hp_frame=1 hp_fill=1 objectives=1
+  ok: HUD primary label renders "OPEN" (got "OPEN")
+  ok: HUD primary keycap renders F (got "F")
+  ok: HUD secondary text renders "[HOLD] LOCK" (got "[HOLD] LOCK")
+  ok: HUD secondary row has its own white F keycap (got "F")
+    HUD layout: parent_w=1280 primary row y=668.0..698.0 secondary row y=698.0..722.0
+  ok: HUD stacks the secondary BELOW the primary (primary end 698.0, secondary start 698.0)
+  ok: both rows share the reticle centre (primary 640.0, secondary 640.0)
+  ok: the stack is centred on the screen axis (row centre 640.0, axis 640.0)
+  ok: HUD flips to "CLOSE" (got "CLOSE")
+  ok: HUD hides the whole secondary row when the door reports none
+  ok: authored lockpick table present in interactables.json
+  ok: authored minigame is ARC/circular: arc_angle_deg=80 deg, duration=3.0 s
+  ok: authored jam table + cancel radius present (jam={ "1": 5.0, "2": 10.0, "3": 20.0, "4": 40.0 } cancel=200 cm)
+  ok: HUD owns the circular lockpick overlay entry points
+    lockpick UI nodes on the built HUD fragment: overlay=true dial=true
+    HARD_LIMIT: authored lockpick UMG widget dump entries=0 (0 = art not exported); the dial is a PORT_DECISION rendering of the authored arc parameters.
+    PORT_DECISION: PG-2's parity scenario looks for LockpickWheel/LockpickArc; the port's nodes are LockpickMinigameOverlay/LockpickDial (no authored name to rename to).
+P1_DOORS checks=47 fails=0
+P1_DOORS PASS
+WARNING: 4 ObjectDB instances were leaked at exit (run with `--verbose` for details).
+   at: cleanup (core/object/object.cpp:2536)
+ERROR: 2 resources still in use at exit (run with --verbose for details).
+   at: clear (core/io/resource.cpp:822)
+
+EXIT: 0
+FINISHED: 2026-11-26T20:09:50-05:00

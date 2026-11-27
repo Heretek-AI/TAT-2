@@ -1,0 +1,143 @@
+== P1_GATE audit
+COMMAND: make audit
+CWD: /home/john/.local/share/opencode/worktree/318f41/p1-evidence
+STARTED: 2026-11-26T20:24:19-05:00
+
+python3 tools/check_content_overrides.py
+Override rule table:
+  missionlobby-roof-decks-slate-geo3         parity_restoration       3 /     3  MI_RoofSlateA
+  missionlobby-roof-decks-slate-periph       parity_restoration       8 /     8  MI_RoofSlateA
+  missionlobby-structure-decks-concrete-geo3 parity_restoration      11 /    10  MI_ConcreteB
+  missionlobby-structure-decks-concrete-periph parity_restoration      44 /    32  MI_ConcreteB
+  poi-lounge-floor-tile                      parity_restoration     130 /     5  MI_FloorTileA_AlignXYZ
+  poi-lounge-floorstone                      parity_restoration       4 /     4  MI_ConcreteB
+  poi-entrance-hall-floor-tile               parity_restoration      26 /     1  MI_FloorTileA_AlignXYZ
+  vault-chambers-floorstone                  parity_restoration      36 /    33  MI_ConcreteB
+  poi-3rd-floor-tile                         parity_restoration     229 /    20  MI_FloorTileA_AlignXYZ
+  poi-3rd-floorstone                         parity_restoration      16 /    16  MI_ConcreteB
+  poi-3rd-roof-deck-slate                    parity_restoration       1 /     1  MI_RoofSlateA
+  missionlobby-roof-decks-slate-geo3: matched=3 changed=3 level=MissionLobby/MissionLobby_Geo3
+  missionlobby-roof-decks-slate-periph: matched=8 changed=8 level=MissionLobby/MissionLobby_Periphery
+  missionlobby-structure-decks-concrete-geo3: matched=11 changed=10 level=MissionLobby/MissionLobby_Geo3
+  missionlobby-structure-decks-concrete-periph: matched=44 changed=32 level=MissionLobby/MissionLobby_Periphery
+  poi-lounge-floor-tile: matched=130 changed=5 level=Buildings/Guildhall/Building_Guildhall_POI
+  poi-lounge-floorstone: matched=4 changed=4 level=Buildings/Guildhall/Building_Guildhall_POI
+  poi-entrance-hall-floor-tile: matched=26 changed=1 level=Buildings/Guildhall/Building_Guildhall_POI
+  vault-chambers-floorstone: matched=36 changed=33 level=Buildings/Guildhall/Guildhall_Vault_CeremonialChambers
+  poi-3rd-floor-tile: matched=229 changed=20 level=Buildings/Guildhall/Building_Guildhall_POI_3rdFloor
+  poi-3rd-floorstone: matched=16 changed=16 level=Buildings/Guildhall/Building_Guildhall_POI_3rdFloor
+  poi-3rd-roof-deck-slate: matched=1 changed=1 level=Buildings/Guildhall/Building_Guildhall_POI_3rdFloor
+PASS: coverage missionlobby-roof-decks: 0 graybox floors left (11 scanned)
+PASS: coverage missionlobby-structure-decks: 0 graybox floors left (55 scanned)
+PASS: coverage poi-lounge-floor: 0 graybox floors left (130 scanned)
+PASS: coverage poi-entrance-hall-floor: 0 graybox floors left (26 scanned)
+PASS: coverage vault-chambers-floor: 0 graybox floors left (4 scanned)
+PASS: coverage poi-3rd-floor: 0 graybox floors left (229 scanned)
+Content override totals: 11 set_material rules, 508 matched, 133 re-materialised, 0 add_cap rules
+Parity classes: parity_restoration=11
+
+CONTENT_OVERRIDES: PASS
+python3 tools/prebake_texture_cap.py --check --cap 1024
+repo: /home/john/.local/share/opencode/worktree/318f41/p1-evidence
+targets: 1568 (materials.json 1523, code 102, scenes 0, unique 1568, dangling literals skipped 4)
+mode: CHECK (cap 1024 px long edge)
+capped: 797
+alpha-critical (kept full-res): 1
+within cap: 770
+offenders: 0
+out-of-scope over-cap: 261 (ui 80, other 181)
+texture cap check: OK
+python3 tools/check_logic_data.py
+P4PARAMS nodes=566 tasks=326 conditions=233 unreferenced=7 object_templates=139 inherited=65 bound=676
+P4PARAMS binding_sources=ActiveInstanceData=2 ContextData=422 GlobalInstanceData=1 GlobalParameterData=64 SharedInstanceData=5 StateParameterData=175 SubtreeParameterData=7
+P4PARAMS required_event_states=3 consume_event_false_states=2 consume_event_false_transitions=5
+LOGIC_DATA PASS: 22750 checks, 0 failures
+  unlocks 68 (4 KF08 prices) | hearing 54 stim / 22 surfaces / 11 weather / 285 portals | perception 2 senses / 8 vision stim | guard 21 trees / 459 states / 467 transitions
+python3 tools/check_consumers.py
+consumer audit: 215 generated files
+  runtime-read: 155 (dir_scan 65, literal 50, table_root 40)
+  allowlisted:  60 (blocked_on_team 19, build_manifest 2, folded_into_aggregate 24, placeholder 1, producer_intermediate 7, provenance 1, tests_only 3, text_via_locres 3)
+  table roots parsed from game_data.gd: 13
+  blocked on a named owner: T03 7, T05 10, T08 1, T10 1
+CONSUMER AUDIT PASS
+python3 build/qa/w9/p3_string_audit.py --min-routed 306 --min-authored 195 --max-invented 111
+UI_STRINGS total=307 routed=307 authored=196 routed_authored=196 invented=111
+UI_STRINGS GATE PASS routed=307 authored=196 invented=111
+COVERAGE routed/total=1.0000
+COVERAGE authored_routed/authored=1.0000
+KINDS _loc=5 _loc_upper=5 loc=125 loc_template=4 st_template=9 st_text=83 st_upper=76
+  game/src/ui/hud.gd: 69/69 routed
+  game/src/missions/mission_controller.gd: 36/36 routed
+  game/src/ui/mission_prep_ui.gd: 34/34 routed
+  game/src/ui/wardrobe_ui.gd: 28/28 routed
+  game/src/ui/ledger_ui.gd: 24/24 routed
+  game/src/ui/contract_table_ui.gd: 21/21 routed
+  game/src/ui/post_match_ui.gd: 21/21 routed
+  game/src/ui/mobile_touch_ui.gd: 16/16 routed
+  game/src/ui/settings_ui.gd: 15/15 routed
+  game/src/ui/main_menu.gd: 14/14 routed
+  game/src/interact/loot_container.gd: 10/10 routed
+  game/src/ui/progression_ui.gd: 9/9 routed
+  game/src/ui/tutorial_ui.gd: 5/5 routed
+  game/src/interact/clue_item.gd: 3/3 routed
+  game/src/ui/loading_screen.gd: 2/2 routed
+python3 tools/check_literal_greps.py
+LITERAL_GREPS PASS code_hits=0 ui_rating_literals=0 files=105
+python3 tools/manifest_audit.py --min-coverage 0.99 --min-exact-coverage 0.99
+Manifest TAT entries: 16792 (12703 payload, 4088 .ubulk, 1 pak)
+Pak containers excluded: 1 (TAT/Content/Paks/pakchunk0-Windows.pak)
+Mount/path consistency (case-insensitive, pak excluded): 12703/12703 (100.0%)
+Case-sensitive parity: raw 12630/12703 (99.4%), allowlisted 73/73, unexpected 0; effective 100.0%
+Disk-backed content coverage: 12660/12703 (99.7%), resolved by exported-name rename 3, allowlisted missing 43, unexpected 0
+  renamed exports (SK_ authored -> SKM_ exported): SK_TarpC.uasset, SK_TarpB.uasset, SK_TarpA.uasset
+  allowlisted missing by kind: cloth_simulation 1, editor_copy 2, gameplay_asset 2, geometry_collection 4, graybox_template 13, movie_wrapper 18, perf_harness 1, shader_cache 2
+UBULK companions: 4088 manifest, 0 case-insensitive missing, 0 unexpected exact-case missing
+stage raw: 141 payload files (min 120, 0 importer/sidecar files excluded)
+stage json: 12541 payload files (min 12000, 0 importer/sidecar files excluded)
+stage assets: 6659 payload files (min 6500, 4592 importer/sidecar files excluded)
+stage audio: 5019 payload files (min 5000, 0 importer/sidecar files excluded)
+stage audio-meta: 1441 payload files (min 1200, 0 importer/sidecar files excluded)
+Payload files written to extracted: 25801
+godot-import (separate gate): 10677 .import sidecars, 8 .translation files; run tools/reimport_assets.sh
+Engine/Content files mounted: 4639
+engine-dep OK: Engine/Content/EngineMaterials/WorldGridMaterial.uasset
+engine-dep OK: Engine/Content/BasicShapes/Cube.uasset
+engine-dep OK: Engine/Content/BasicShapes/Plane.uasset
+engine-dep OK: Engine/Content/BasicShapes/Sphere.uasset
+engine-dep OK: Engine/Content/BasicShapes/Cone.uasset
+engine-dep OK: Engine/Content/BasicShapes/Cylinder.uasset
+errors.log: 14 known-unsupported BlendSpace, 0 unexpected
+freshness levels: fresh (newest src 2026-11-21 21:32, oldest out 2026-11-26 15:15, 108 outputs)
+freshness gameplay: fresh (newest src 2026-11-21 21:32, oldest out 2026-11-26 15:15, 23 outputs)
+freshness tables: fresh (newest src 2026-11-21 21:32, oldest out 2026-11-26 15:14, 161 outputs)
+freshness project_ini: fresh (newest src 2026-11-21 19:16, oldest out 2026-11-26 15:15, 1 outputs)
+freshness input_actions: fresh (newest src 2026-11-21 20:41, oldest out 2026-11-26 15:15, 1 outputs)
+freshness mesh_collision: fresh (newest src 2026-11-21 21:32, oldest out 2026-11-26 15:15, 1 outputs)
+freshness materials: fresh (newest src 2026-11-21 21:39, oldest out 2026-11-26 15:15, 3 outputs)
+freshness audio: fresh (newest src 2026-11-21 19:57, oldest out 2026-11-26 15:17, 2 outputs)
+freshness weather: fresh (newest src 2026-11-21 21:32, oldest out 2026-11-26 15:15, 17 outputs)
+freshness vfx: fresh (newest src 2026-11-21 21:32, oldest out 2026-11-26 15:15, 2 outputs)
+freshness anims: fresh (newest src 2026-11-25 04:50, oldest out 2026-11-25 04:50, 996 outputs)
+freshness localization: fresh (newest src 2026-11-21 19:16, oldest out 2026-11-26 15:17, 9 outputs)
+freshness scene_variants: fresh (newest src 2026-11-21 21:32, oldest out 2026-11-26 15:15, 1 outputs)
+freshness videos: fresh (newest src 2026-06-06 23:27, oldest out 2026-11-21 17:39, 16 outputs)
+content levels: OK   files=107, min=107, invalid=0
+content contracts: OK   entries=16, expected=16, loot_goals=True
+content tables: OK   files=160, min=144, invalid=0
+content materials: OK   entries=1629, min_entries=1620, with_albedo=1376, min_albedo=1370, texture_refs=1523, missing_textures=0
+content containers: OK   records=254, min=250, classes=5
+content decals: OK   records=675, min=670
+content devices: OK   total=4118, expected=4118, families=21, expected_families=21, family_sum=4118
+content animations: OK   ok=995, min_ok=995, fail=0, entries=995, total=995, glb=995, zero_glb=0
+content audio: OK   clips=5018, min_clips=5018, failed=0, failure_records=0, ogg=5018, zero_ogg=0
+content localization: OK   csv=8, expected=8, empty=0
+content videos: OK   ogv=15, manifest=15, expected=15, zero_ogv=0
+content scene_variants: OK   count=222, records=222, expected=222
+content niagara: OK   records=3695, min=3695
+provenance: no .usmap under tools/ue4ss/output in this checkout, so the property-name mapping is UNPINNED here (pass --require-usmap to fail instead)
+provenance: extractor binary not built in this checkout (bin/Release/net10.0/tat-extract absent); `make extract` rebuilds it
+baseline: matches /home/john/.local/share/opencode/worktree/318f41/p1-evidence/tools/audit_baseline.json
+AUDIT PASS
+
+EXIT: 0
+FINISHED: 2026-11-26T20:24:32-05:00

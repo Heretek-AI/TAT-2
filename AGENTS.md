@@ -66,7 +66,7 @@ make runtime-smoke # real free-play boot: exit 124 only, ERROR:/push_error scan,
 make audit       # fail-closed content + producer/output baseline gate
 make gate-ratchet # floors + committed docs/reports/logs evidence agree
 build/qa/test_perf_guard.sh  # perf-wrapper contract, no GPU, no launch
-build/qa/run_p0b_gates.sh    # current full set (35 gates + cream RED) -> docs/reports/logs/p0b/full/; no outer flock
+build/qa/run_p0b_gates.sh    # current full set (40 gates + cream RED) -> docs/reports/logs/p1/full/; no outer flock
 build/qa/run_p0a_gates.sh    # historical P0a 28-gate set -> docs/reports/logs/p0a/
 
 tools/godot --headless --path game --script "$PWD/tools/check_scripts_compile.gd"
@@ -81,11 +81,12 @@ If a headless run reports missing textures (`T1-01-C`, `moon_visible=0.0`), the
 import cache is incomplete — run `tools/godot --headless --path game --import`
 first.
 
-| Gate | Passing value (P0b tip, logs in `docs/reports/logs/p0b/full/` — raise, never lower) |
+| Gate | Passing value (P1 tip, logs in `docs/reports/logs/p1/full/` — raise, never lower) |
 |---|---|
-| compile | 202 checked, 0 broken |
+| compile | 213 checked, 0 broken |
 | `run_tests.gd` | `SUMMARY: fails=0` (322 PASS; suites numbered to 120, 119 deliberately unregistered) |
 | `test_m2_player.gd` | `M2_SUMMARY: fails=0` (12 PASS) |
+| P1 route probes (S12/S21/S24/S25–26/S13–20) | `P1_SAFE PASS checks=86` / `P1_DOORS checks=47 fails=0` / `P1_BEAMS PASS checks=7` / `P1_WARD PASS checks=44` / `P1_STREET PASS checks=31 hard_limits=2` |
 | door walk / viewmodel / Niagara probes | `DOORWALK PASS` / `VIEWMODEL_TRUTH PASS` / `NIAGARA_PROBE PASS` (3695 authored / 3308 active / 36 systems) |
 | guard selection (P0a) | `GUARD_CHECK PASS` Guildhall `lounge_marker=C_20` `buckets=4/4` and Old Manor `--order=3` (no Hauntstable) |
 | beam geometry (P0a) | `BEAM_GEOMETRY_SUMMARY: fails=0` — 330 cards, `max_axis_err_deg=0.000006`, `clamped=0` |
@@ -165,6 +166,27 @@ The complete set — 35 gates plus the cream expected failure — runs from
 `dfa8c7e`); report:
 [`docs/reports/p0b-20261126.md`](docs/reports/p0b-20261126.md).
 
+The 2026-11-26 **P1 wave** restored the route content for S12–S26 in five lanes
+(safe room / portal / lantern, blue double doors / prompts, security beams /
+foyer, ward / lockdown / alarm, street / car / gate / MACLEOD). The merged tip
+`3998761` was red at `A2-WHITE`: the new safe-room portal outline carried only a
+`material_override`, which the audit's surface sampler reads as glTF-default
+white. `78884fe` binds the same shader on the QuadMesh surface and is the tree
+measured by one serial `build/qa/run_p0b_gates.sh` run — **40 gates** plus the
+cream expected failure, logs in
+[`docs/reports/logs/p1/full/`](docs/reports/logs/p1/full/). `compile` is
+**213/0**, `run_tests` **322**, E2E **300/300**, p2
+`expected_fail=1 expected_delta=0`, and the five new probes are
+**86 / 47 / 7 / 44 / 31** checks (safe / doors / beams / ward / street). Rows
+now scoreable (subject present and probe-measured; not yet visually scored):
+V6-01, G1-05, V1-04, V1-05, V3-01, V3-03, UI2-05, V4-05, V4-06, V4-07,
+V6-03, V6-04, G5-03, G5-04, V1-07, UI5-06, G1-04, AU5-01. HARD_LIMITs are
+recorded, not faked: the `BARRON'S DEMOLITION` banner (no asset), the KF15 drum
+placement (no record), the exact cyan ceiling node (hidden BP/Niagara overlay),
+and the authored circular-lockpick widget art. The port capture and the
+live-reference 120-row score remain **pending** (no GPU run in P1). Report:
+[`docs/reports/p1-integration-20261126.md`](docs/reports/p1-integration-20261126.md).
+
 **Fresh worktree trap (P0b).** A copied `game/.godot` does not know a new global
 `class_name`; scripts that use it fail with `Identifier "X" not declared` and
 `test_parity_only.gd` reports `GameState autoload missing`. Run
@@ -194,11 +216,14 @@ game/src/player/      thief_character (movement, mantle, wall climb, zipwire,
 game/src/ai/          guard_ai, civilian_npc, hearing_data
 game/src/stealth/     light_probe, noise_bus, surface_resolver (ray → authored surface)
 game/src/interact/    swinging_door, loot, loot_inventory (12-slot bag),
-                      loot_stash, clues, escape_gate
+                      loot_stash, clues, escape_gate, street_car,
+                      toggleable_lantern
 game/src/missions/    mission_controller (spawns, Den/Guildhall fills, sign,
-                      free play, two-phase run clock)
+                      free play, two-phase run clock), safe_room_dressing
+game/src/devices/     device_layer, security_beam, ward_zone, vine_lock,
+                      alarm_eye
 game/src/ui/          main_menu, contract_table, mission_prep, hud, wardrobe,
-                      ledger, tool_preview, settings
+                      ledger, tool_preview, settings, status_icon
 game/data/expansion/  tracked TAT-2 content (briefing overrides, graybox rules,
                       prep_skyline backdrop)
 game/tests/           run_tests.gd, test_m2_player.gd, probe_*.gd,
@@ -254,6 +279,11 @@ build/qa/             tracked capture/probe/export-stamp scripts; PNG output ign
   unlit) and prefer a child MI's own `_D` companion over the parent master's
   painterly `T_PaintStrokesD`. Regressing either silently breaks gates, doors and
   floors.
+- **A2-WHITE samples surface materials, not `material_override`.** A port-built
+  `MeshInstance3D` with only an instance override reads as glTF-default white in
+  the acceptance audit. Bind the material on the mesh surface
+  (`surface_set_material`) as well; `SafeRoomPortalOutline` at `3998761` is the
+  measured example (fixed in `78884fe`).
 - **`MI_LightBeam_SM` is a deliberate exception** to the HDR neon path: it uses
   additive `tat_beam.gdshader`. T2-04-C guards the exception plus three
   `StandardMaterial3D` negative controls.
@@ -375,10 +405,15 @@ tools/godot … probe_collision_authored.gd  # COL_MAPS PASS, per-map coverage >
 tools/godot … probe_lock_inventory.gd   # applied == 144 containers + 10 door nodes, never 0
 tools/godot … run_e2e_tests.gd          # 300/300, no new failures
 tools/godot … test_parity_only.gd       # PARITY_ONLY_SUMMARY: fails=0 (needs TAT2_PARITY_ONLY proof)
+tools/godot … probe_p1_safe.gd          # P1_SAFE PASS checks=86 fails=0
+tools/godot … probe_p1_doors.gd         # P1_DOORS checks=47 fails=0
+tools/godot … probe_p1_beams.gd         # P1_BEAMS PASS checks=7 fails=0
+tools/godot … probe_p1_ward.gd          # P1_WARD PASS checks=44
+tools/godot … probe_p1_street.gd        # P1_STREET PASS checks=31 hard_limits=2
 build/qa/runtime_smoke.sh 90            # exit 124 only, 0 unexpected ERROR:, mission_ready
 build/qa/test_runtime_smoke_scan.sh     # 29/29, no engine needed
 build/qa/test_perf_guard.sh             # 78/78, no GPU
-build/qa/run_p0b_gates.sh               # all of the above serially, with the P0b instruments
+build/qa/run_p0b_gates.sh               # all of the above serially, with the P1 route probes
 make gate-ratchet                       # floors + committed logs agree
 git push origin main
 ```

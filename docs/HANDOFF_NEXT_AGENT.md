@@ -21,8 +21,10 @@ acceptance harness registers suites 117/118/120 and runs a real Contract 02
 Novice load in E2E tier `a2` (inside `all`), so `run_tests` is **322** and E2E is
 **300/300**. Tier `p2` records the authored-data parity baseline as 12/12 with
 one **expected FAIL** (civilian pants albedo — a producer
-`BaseColorOpacity`→albedo defect) and one **expected DELTA** (beam material,
-`PORT_APPROX`). Parity-only governance is proven: every content-override rule
+`BaseColorOpacity`→albedo defect). The beam material was promoted to an
+authored-parameter match in P1-BEAMS (`372bf74`), so the current p2 is
+`expected_fail=1 expected_delta=0`. Parity-only governance is proven: every
+content-override rule
 is classified, and `TAT2_PARITY_ONLY=1` excludes expansion content while keeping
 every shipped record. The port capture harness (six poses, audio tap, ROI/KF27
 scorer) is built and self-tested; the first six-pose port capture ran at
@@ -55,7 +57,7 @@ unexpected non-zero exit.
 | `probe_leak` | clean (`TAT2_NO_DEN_PROBE=1`, `res://probe_leak.gd`) |
 | E2E | **300/300**, `fails=0 passed=300 total=300` (T1=117 T2=110 T3=25 T4=14 S2=12 A2=22) |
 | E2E tier `a2` | **22/22** standalone |
-| E2E tier `p2` | **12/12**, `expected_fail=1 expected_delta=1 fixed=0 unexpected_fail=0` |
+| E2E tier `p2` | **12/12**, `expected_fail=1 expected_delta=0 fixed=0 unexpected_fail=0` (pants only; beam promoted) |
 | parity-only | **60/60**, 11 rules all `parity_restoration`, 0 unclassified |
 | cream RED proof | **expected exit 1**, `CREAM_PROOF: RED passes=2 expected_fail=2` |
 | capture harness | dry-run `poses=6` manifest valid · self-test **21/21** · KF27 reference **7/7** |

@@ -283,7 +283,7 @@ gate_marker e2e_a2 "$OUT/e2e_a2.log" "SUMMARY: fails=0 passed=22 total=22" \
 #    p2 is authored-data parity: 1 recorded FAIL (pants albedo) and 1 recorded
 #    DELTA (beam) are the honest baseline; `unexpected_fail=0` is the gate.
 gate_marker e2e_p2 "$OUT/e2e_p2.log" \
-	"P2_SUMMARY: expected_fail=1 expected_delta=1 fixed=0 unexpected_fail=0" \
+	"P2_SUMMARY: expected_fail=1 expected_delta=0 fixed=0 unexpected_fail=0" \
 	flock "$LOCK" tools/godot --headless --path game \
 	--script res://tests/e2e/run_e2e_tests.gd -- --tier=p2
 

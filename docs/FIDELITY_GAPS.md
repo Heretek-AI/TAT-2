@@ -32,14 +32,14 @@ builds the instruments and records what is still wrong.
   runtime census (`layers=174`, `leaves=80`, `visible_broken=0`, `missing=0`).
   E2E is **300/300** (T1=117 T2=110 T3=25 T4=14 S2=12 A2=22); `run_tests` is
   **322** (suites 117/118/120).
-- **Parity tier `p2` — expected failures are recorded, not hidden.** 12/12 with
-  `expected_fail=1` and `expected_delta=1`: the civilian **pants albedo** is a
-  producer defect (`parse_materials` puts the authored
+- **Parity tier `p2` — pants is the only expected failure; beam promoted.**
+  12/12 with `expected_fail=1` and `expected_delta=0`: the civilian **pants
+  albedo** remains a producer defect (`parse_materials` puts the authored
   `T_CivFemale_Common_01_Pants_D.png` in the `opacity` slot and
-  `T_Civ_M_01_Top_D.png` in albedo), and the **beam material** remains
-  `PORT_APPROX` (`dG=0.054 dB=0.117 dE=0.20` versus the authored normalised
-  colour/energy). The gate is `unexpected_fail=0`; the data wave promotes
-  `fixed` when each is repaired.
+  `T_Civ_M_01_Top_D.png` in albedo). P1-BEAMS (`372bf74`) replaced the
+  full-tube beam with the authored centre-line material, so the beam is no
+  longer a DELTA. The gate is `unexpected_fail=0`; the data wave promotes
+  `fixed` when the pants producer is repaired.
 - **Cream — beam cards confirmed; invented-white fix still RED.** The visible
   cream bars in the 2026-11-26 capture are the `SM_LightBeam` cards (axis
   fixed, full-tube material), not the moon planes. `test_w10a2_cream.gd` remains

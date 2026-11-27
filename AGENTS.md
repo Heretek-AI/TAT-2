@@ -92,7 +92,7 @@ first.
 | GC / turret / civilian (P0a) | `GC_PROBE PASS` (44) / `GC_TRIGGER PASS` (21) / `TURRET_PROBE PASS` (229 actors, 1145 parts, 0 hidden) / `W10A2_CIV_SUMMARY: fails=0 passed=22` |
 | E2E | `fails=0 passed=300 total=300` (T1=117 T2=110 T3=25 T4=14 S2=12 A2=22; a2 runs inside `all`) |
 | E2E tier a2 | `SUMMARY: fails=0 passed=22 total=22` |
-| E2E tier p2 | `P2_SUMMARY: expected_fail=1 expected_delta=1 fixed=0 unexpected_fail=0` (pants albedo + beam DELTA recorded) |
+| E2E tier p2 | `P2_SUMMARY: expected_fail=1 expected_delta=0 fixed=0 unexpected_fail=0` (pants albedo; beam promoted to authored in P1-BEAMS) |
 | parity-only (P0b) | `PARITY_ONLY_SUMMARY: fails=0 passed=60 rules=11 restoration=11 expansion=0` |
 | port capture harness (P0b) | dry-run `poses=6` manifest valid; `P0B_SELFTEST PASS checks=21 fails=0`; `P0B_KF27_REF … met=7/7` |
 | cream RED proof (P0b) | expected `exit 1`, `CREAM_PROOF: RED passes=2 expected_fail=2` — not a gate until suite 119 is registered |
@@ -146,8 +146,10 @@ the standalone cream RED proof and is deliberately unregistered) and the E2E tie
 **322** and E2E is **300/300** (T1=117 T2=110 T3=25 T4=14 S2=12 A2=22). Tier
 `p2` records authored-data parity as **12/12 with one expected FAIL** (civilian
 pants albedo: `parse_materials` puts the authored `Pants_D` in the `opacity`
-slot) and **one expected DELTA** (beam `PORT_APPROX`: `dG=0.054 dB=0.117 dE=0.20`);
-the gate is `unexpected_fail=0`, so a data wave must promote `fixed`. Parity-only
+slot); the beam material was promoted to an authored-parameter match in
+P1-BEAMS (`372bf74`), so the current summary is
+`expected_fail=1 expected_delta=0`. The gate is `unexpected_fail=0`, so a data
+wave must promote `fixed`. Parity-only
 governance is proven by `test_parity_only.gd` (**60/60**; 11 content-override
 rules, all `parity_restoration`, 0 unclassified) and `TAT2_PARITY_ONLY=1` excludes
 expansion content while keeping every shipped marker/guard/GC/loot record. The

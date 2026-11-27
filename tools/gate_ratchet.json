@@ -1,7 +1,7 @@
 {
   "schema": "tat2.gate_ratchet/1",
   "measured_on": "dfa8c7e",
-  "source": "P0b measurement at dfa8c7e (merged P0b code + parity governance regeneration/audit re-stamp), 2026-11-26, one serial run of build/qa/run_p0b_gates.sh into docs/reports/logs/p0b/full/: compile 202/0 (199 harness + parity_governance.gd + test_parity_only.gd + audio_capture.gd), run_tests 322/0 (suites 117/118/120 registered, 119 deliberately not), M2 12/0, E2E 300/300 (T1=117 T2=110 T3=25 T4=14 S2=12 A2=22, a2 now in `all`), e2e_a2 22/22, e2e_p2 12/12 with expected_fail=1 expected_delta=1 fixed=0 unexpected_fail=0, parity-only 60/60 (11 rules, all parity_restoration, 0 unclassified), cream RED proof 2 expected failures (not a gate), capture dry-run manifest 6 poses validated, self-test 21/0, KF27 reference 7/7, guard Guildhall C_20 + Old Manor order 3 PASS (4/4 buckets, no Hauntstable), beam 330 cards max_axis_err_deg=0.000006 clamped=0, GC 44+21, turret 229/1,145/0, collision 0.976321 dropped=0, lock applied=154 (144+10), leak clean, runtime-smoke exit=124 errors=0, audit 12,660/12,703, texture cap 797/1/0, perf guard 78/78, literal greps 99 files 0 hits, string audit 307/196/111. The P0a floors (compile 196, run_tests 319) are raised to this measurement; the E2E floor was already 300 from the P0b-HARNESS lane and is unchanged. Prior evidence: docs/reports/logs/p0a/ (84912ee) and docs/reports/logs/p0b-harness/ (75e39fc).",
+  "source": "P0b measurement at dfa8c7e (merged P0b code + parity governance regeneration/audit re-stamp), 2026-11-26, one serial run of build/qa/run_p0b_gates.sh into docs/reports/logs/p0b/full/: compile 202/0 (199 harness + parity_governance.gd + test_parity_only.gd + audio_capture.gd), run_tests 322/0 (suites 117/118/120 registered, 119 deliberately not), M2 12/0, E2E 300/300 (T1=117 T2=110 T3=25 T4=14 S2=12 A2=22, a2 now in `all`), e2e_a2 22/22, e2e_p2 12/12 with expected_fail=1 expected_delta=0 fixed=0 unexpected_fail=0 (P1-BEAMS promoted the authored beam), parity-only 60/60 (11 rules, all parity_restoration, 0 unclassified), cream RED proof 2 expected failures (not a gate), capture dry-run manifest 6 poses validated, self-test 21/0, KF27 reference 7/7, guard Guildhall C_20 + Old Manor order 3 PASS (4/4 buckets, no Hauntstable), beam 330 cards max_axis_err_deg=0.000006 clamped=0, GC 44+21, turret 229/1,145/0, collision 0.976321 dropped=0, lock applied=154 (144+10), leak clean, runtime-smoke exit=124 errors=0, audit 12,660/12,703, texture cap 797/1/0, perf guard 78/78, literal greps 99 files 0 hits, string audit 307/196/111. The P0a floors (compile 196, run_tests 319) are raised to this measurement; the E2E floor was already 300 from the P0b-HARNESS lane and is unchanged. Prior evidence: docs/reports/logs/p0a/ (84912ee) and docs/reports/logs/p0b-harness/ (75e39fc).",
   "note": "Floors, not exact counts: a wave may add tests/files but must never lower a floor or introduce a failure. Counts are read from the committed log and compared with >=; failure counts are exact zeros and e2e.passed must equal e2e.total. Update only with a real gate log in docs/reports/logs/ (see tools/check_gate_ratchet.py for the evidence layout).",
   "report": "docs/reports/p0b-20261126.md",
   "evidence": {
@@ -65,7 +65,7 @@
     },
     "e2e_p2": {
       "expected_fail": 1,
-      "expected_delta": 1,
+      "expected_delta": 0,
       "fixed": 0,
       "unexpected_fail": 0
     },

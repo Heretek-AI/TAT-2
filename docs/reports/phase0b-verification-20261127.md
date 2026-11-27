@@ -3,7 +3,9 @@
 | | |
 |---|---|
 | scope | `7681b1c` (clean route2 evidence) and `074341f` (45-gate set + ratchet) on `main` |
-| verified HEAD | `074341f474b92602ba5e58863d661683dff30173` (working tree clean) |
+| verified HEAD | `79d8b8a2271681b54355f094c4a194a2d1ef9b69` (working tree clean before this update) |
+| first-pass HEAD | `074341f474b92602ba5e58863d661683dff30173` |
+| fix commit | `79d8b8a` (parent `074341f`; local, **not pushed**) |
 | measured head | `912a481d42611cb0de77f31d4e01e63029b68190` |
 | plan | `docs/reports/next-phases-plan-20261127.md` §3 |
 | method | read-only: committed evidence, `git show`/`grep`/`identify`/`ffprobe`/`ffmpeg`, `make check-greps`, `make gate-ratchet`, `make audit`; no GPU/Steam/Vulkan; no edit outside this file; no push |
@@ -11,13 +13,33 @@
 
 ## Verdict
 
-**Overall: PASS, conditional on three minor corrections (§4.1–4.3).** The 45/45
-gate set at `912a481`, the clean route2-clean capture, the ratchet re-stamp and
-the audit are all substantiated by committed, independently reproducible
-evidence. No gate value, no measurement and no `game/` or generated-data byte
-is wrong. The only defects are documentation/hygiene: one trailing space in a
-verbatim capture log, one wrong historic commit citation (six places) and one
-stale `measured_on` row. None requires re-measurement.
+**Overall: FINAL PASS.** The 45/45 gate set at `912a481`, the clean
+route2-clean capture, the ratchet re-stamp and the audit are all substantiated
+by committed, independently reproducible evidence. The three conditional
+corrections from the first pass (trailing space, wrong historic commit
+citation, stale `measured_on` row) are resolved in `79d8b8a`; the artifact
+bytes, every gate value and every ratchet floor are unchanged. No
+re-measurement was needed.
+
+## 0. Conditional fixes resolved (`79d8b8a`) — final PASS
+
+Re-checked `79d8b8a2271681b54355f094c4a194a2d1ef9b69` (parent `074341f`) on
+2026-11-27 after the fix commit:
+
+| Fix | Evidence in `79d8b8a` | Verdict |
+|---|---|---|
+| Trailing space | `.gitattributes:1–5` adds `docs/reports/logs/**/capture.log whitespace=-trailing-space` with a verbatim-log rationale; `route2-clean/capture.log` blob is still `bbbcb1aea5a3a67f63f68b2afd5a0743a334b3f` (= `7681b1c` blob), sha256 `fe9c529b5cfdd0bedb1d9d5f134ffc39d356eb0643e774142ba84c3c778af12c`; `git diff --check 912a481..7681b1c`, `git diff --check` (worktree) and `git diff --check 912a481..HEAD` all exit 0 | **RESOLVED** |
+| Citations | all six places now read “measured at `5135f53`, committed on `main` at `3d62f6b`, replaced in place at `912a481`” and name `docs/reports/logs/final/`; four also spell out recovery “at `912a481` and `3d62f6b`”, while `AGENTS.md` and `HANDOFF_NEXT_AGENT.md` name `912a481` as the recovery point and `3d62f6b` as the commit. No “remain in git history at commit `5135f53`” remains outside this report’s own quotation | **RESOLVED** |
+| `AGENTS.md` ratchet row | `AGENTS.md:111` is now `PASS (measured_on=912a481; …)`, matching line 85 and `tools/gate_ratchet.json:3` | **RESOLVED** |
+
+Unchanged evidence after the fix: `git diff --name-only 074341f..79d8b8a --
+docs/reports/logs/ build/qa/ game/ extracted/ game/data/` is empty (0 files);
+`tools/gate_ratchet.json`’s `gates`, `evidence`, `measured_on` and `report`
+objects are byte-identical to `074341f` (only the `source` prose changed);
+`P0B_ROUTE_SELFTEST PASS checks=62 fails=0` is still the committed line
+(`docs/reports/logs/final/p0b_route_self_test.log:49–50`); and
+`make check-greps`, `make gate-ratchet` and `make audit` all pass at `79d8b8a`
+(see §7).
 
 ## 1. Checks
 
@@ -25,10 +47,10 @@ stale `measured_on` row. None requires re-measurement.
 |---|---|---|
 | 1 | Route2-clean manifest/log, counts, PNGs, S24 beam, audio, error scan, preserved route1/route2, gitignored media | **PASS** |
 | 2 | 45-gate set, `FINAL_GATES PASS`, values vs `AGENTS.md`, `uncommitted_entries_at_start: 1` | **PASS** |
-| 3 | Report exists with the measured table; cross-refs; handoff/AGENTS/README/FIDELITY_GAPS/plan updated; old `5135f53` evidence noted | **FAIL (minor)** — one provenance citation is wrong in six places (§4.2) and `AGENTS.md:111` still pins the old `measured_on` (§4.3); everything else PASS |
+| 3 | Report exists with the measured table; cross-refs; handoff/AGENTS/README/FIDELITY_GAPS/plan updated; old `5135f53` evidence noted | **PASS** after `79d8b8a` — the six citations and `AGENTS.md:111` were fixed (§0); the `074341f` finding was FAIL (minor) and is kept in §2.3 as the record |
 | 4 | Ratchet `measured_on=912a481`, route self-test floor 62, no floor lowered, checker reads the log, `make gate-ratchet`/`make audit` PASS, post-stamp logs | **PASS** (one stale-name note, §4.5) |
-| 5 | Commit hygiene, clean tree, no `game/`/`extracted/`/generated data, `origin/main` / push state | **PASS** (push happened during verification, §4.6) |
-| 6 | `git diff --check`, `make check-greps`, route self-test 62/0, run wall/time, audio/peak | **FAIL (minor)** on `git diff --check` only (§4.1); 6b–6e PASS |
+| 5 | Commit hygiene, clean tree, no `game/`/`extracted/`/generated data, `origin/main` / push state | **PASS** — `79d8b8a` is local, `origin/main` is `074341f`; the earlier push moved `912a481 → 074341f` during the first pass (§4.6) |
+| 6 | `git diff --check`, `make check-greps`, route self-test 62/0, run wall/time, audio/peak | **PASS** after `79d8b8a` — `.gitattributes` exempts the verbatim log; all three `git diff --check` forms exit 0; 6b–6e unchanged |
 
 ## 2. Evidence
 
@@ -120,7 +142,7 @@ The “every count unchanged” claim is independently true: I compared the mark
 lines of 32 log files covering the numeric gates against the old logs committed
 at `3d62f6b` (measured head `5135f53`) — all identical.
 
-### 2.3 Evidence/report (check 3) — FAIL (minor, docs accuracy)
+### 2.3 Evidence/report (check 3) — PASS after `79d8b8a` (was FAIL in `074341f`)
 
 Present and correct:
 
@@ -137,13 +159,14 @@ Present and correct:
   `docs/reports/logs/final/final-run.log` still ends
   `FINAL_GATES PASS head=5135f53… gates=44`; the new run overwrote it.
 
-**Defect:** the sentence “they remain in git history at commit `5135f53`” is
-false. At `5135f53`, `docs/reports/logs/final/final-run.log` does not exist
-(`git cat-file -e` → “exists on disk, but not in '5135f53'”). The 44-gate logs
-were **measured at** `5135f53` and **committed on `main` at `3d62f6b`**
-(“chore(final): W10 evidence run, ratchet re-stamp and docs”; its
-`final-run.log` records `head: 5135f53…`, `gates=44`). They are also recoverable
-from the pre-Phase-0b revision `912a481`. The wrong citation appears in:
+**Defect found in `074341f` (now resolved in `79d8b8a`):** the sentence “they
+remain in git history at commit `5135f53`” was false. At `5135f53`,
+`docs/reports/logs/final/final-run.log` does not exist (`git cat-file -e` →
+“exists on disk, but not in '5135f53'”). The 44-gate logs were **measured at**
+`5135f53` and **committed on `main` at `3d62f6b`** (“chore(final): W10 evidence
+run, ratchet re-stamp and docs”; its `final-run.log` records
+`head: 5135f53…`, `gates=44`). They are also recoverable from the pre-Phase-0b
+revision `912a481`. The wrong citation appeared in:
 
 | File | Line |
 |---|---|
@@ -154,13 +177,14 @@ from the pre-Phase-0b revision `912a481`. The wrong citation appears in:
 | `docs/HANDOFF_NEXT_AGENT.md` | 145–146 |
 | `tools/gate_ratchet.json` (`source` prose) | 4 |
 
-Everything substantive on the page is right; only the recovery pointer is
-wrong. §4.2 gives the minimal replacement.
+Everything substantive on the page was right; only the recovery pointer was
+wrong. `79d8b8a` now states the correct chain in all six places (§0), including
+the exact path `docs/reports/logs/final/`.
 
-**Second defect (same check):** `AGENTS.md:111` still reads
+**Second defect found in `074341f` (now resolved):** `AGENTS.md:111` read
 `make gate-ratchet | PASS (measured_on=5135f53; …)` while the table header on
-line 85 and `tools/gate_ratchet.json` both say `912a481`. One row was missed in
-the update; §4.3 gives the replacement. `README.md:26` was updated correctly.
+line 85 and `tools/gate_ratchet.json` both said `912a481`. One row was missed;
+`79d8b8a` now sets it to `912a481` (§0). `README.md:26` was already correct.
 
 ### 2.4 Ratchet/audit (check 4) — PASS
 
@@ -176,11 +200,12 @@ the update; §4.3 gives the replacement. `README.md:26` was updated correctly.
   `p0b_route_self_test`; every existing gate object is byte-identical.
 - I re-ran `make gate-ratchet` on `074341f`: exit 0,
   `GATE_RATCHET: PASS (baseline and committed evidence agree; Godot gates run locally)`,
-  ending `PASS: report names measured_on=912a481`.
+  ending `PASS: report names measured_on=912a481`; re-ran it again on `79d8b8a`
+  with the same result (§7).
 - I re-ran `make audit` on `074341f`: exit 0, `AUDIT PASS`;
   `Case-sensitive parity: raw 12630/12703 … unexpected 0` (line 90);
   `Disk-backed content coverage: 12660/12703 (99.7%) … unexpected 0` (line 91);
-  13 `content …: OK` groups.
+  13 `content …: OK` groups; re-ran on `79d8b8a` with the same result (§7).
 - Post-stamp logs exist: `gate_ratchet_poststamp.log` (finished 11:00:35, exit 0,
   `PASS: p0b_route_self_test.checks=62 >= 62` lines 47–48 and 100–101) and
   `audit_poststamp.log` (`AUDIT PASS`, exit 0).
@@ -200,20 +225,29 @@ the post-stamp log is the proof of the new floor.
   `tools/check_gate_ratchet.py`.
 - `git diff --name-only 912a481..074341f | grep -E '^(game/|extracted/)'` →
   none; no `game/data/generated`; no media under `build/`.
-- Working tree clean (`git status --short` empty); HEAD `074341f`.
+- Working tree clean at the first-pass HEAD (`074341f`, `git status --short`
+  empty).
 - Push state changed **during** this verification: at the start
   `git rev-parse origin/main` returned `912a481`; at 11:04:49 EST the reflog
   records `074341f … update by push`, and `git ls-remote origin
   refs/heads/main` confirms `074341f…`. The worker's “commits local, not
   pushed” was true at handoff (commits 11:01:39 / 11:02:02, push 11:04:49);
   the pushed tree is the same HEAD verified here. I ran no push. See §4.6.
+- Fix commit `79d8b8a` (8 files): `.gitattributes`, the five citation/AGENTS
+  docs, this verification report and `tools/gate_ratchet.json`; no `game/`,
+  `extracted/`, `game/data/generated/`, `build/qa/**` or media path. HEAD is
+  `79d8b8a`, `origin/main` is `074341f`, `79d8b8a` is not on `origin/main`
+  (`git branch -r --contains 79d8b8a` is empty; `git ls-remote origin
+  refs/heads/main` returns `074341f…`), and the working tree was clean before
+  this report update.
 
-### 2.6 Checks (check 6) — PASS except `git diff --check`
+### 2.6 Checks (check 6) — PASS after `79d8b8a`
 
 | Sub-check | Result |
 |---|---|
-| `git diff --check 912a481..7681b1c` | **FAIL** — `docs/reports/logs/p0b-route/route2-clean/capture.log:133: trailing whitespace` (exit 2) |
-| `git diff --check 7681b1c..074341f` | PASS (exit 0) |
+| `git diff --check 912a481..7681b1c` | **PASS** (exit 0) after `79d8b8a`; it was the one trailing-space failure before `.gitattributes` |
+| `git diff --check` (worktree) | PASS (exit 0) |
+| `git diff --check 912a481..HEAD` | PASS (exit 0) |
 | `make check-greps` | PASS — `LITERAL_GREPS PASS code_hits=0 ui_rating_literals=0 files=106` |
 | route self-test | PASS — `P0B_ROUTE_SELFTEST PASS checks=62 fails=0` (`p0b_route_self_test.log:49–50`) |
 | run wall/time | 19 m 49 s (`final-run.log:2` 10:35:15 → `perf_guard.log` / `gate_ratchet.log` 10:55:04); capture 207 s (`capture.log:375`) |
@@ -222,9 +256,10 @@ the post-stamp log is the proof of the new floor.
 The one whitespace line is Godot's own warning text
 (`WARNING: Nodes with non-equal opposite anchors …`) copied verbatim; the same
 line already exists in the committed `route1/capture.log` and
-`route2/capture.log` (added by `f44bc23`), so this is an established
-raw-log-capture convention, not a Phase 0b data problem. It is still a literal
-`git diff --check` failure and should be handled once, in §4.1.
+`route2/capture.log` (added by `f44bc23`). `79d8b8a` exempts only the
+trailing-space rule for `docs/reports/logs/**/capture.log` (`.gitattributes:5`)
+and leaves the log bytes intact; the three `git diff --check` forms above now
+all exit 0.
 
 ## 3. What is *not* claimed (checked, correct)
 
@@ -240,36 +275,43 @@ raw-log-capture convention, not a Phase 0b data problem. It is still a literal
 - `beam_visible=true` is a presence flag at the authored card; the S24
   cream/exposure numbers in `FIDELITY_GAPS.md` are explicitly not re-scored.
 
-## 4. Minimal corrections
+## 4. Corrections (all three applied in `79d8b8a`)
 
-### 4.1 `git diff --check` (hygiene, one line)
+### 4.1 `git diff --check` — RESOLVED
 
-Godot's warning line in the new `capture.log` ends with a space. Pick one:
+Godot's warning line in the new `capture.log` ends with a space. `79d8b8a`
+added `.gitattributes:1–5`:
 
-- preferred: add a `.gitattributes` rule so verbatim capture logs are exempt,
-  e.g. `docs/reports/logs/**/capture.log -whitespace` (also covers route1/route2);
-- or trim the single trailing space in the three committed `capture.log` files
-  (byte-identical to the on-disk run apart from that space);
-- or document the check as `git diff --check -- ':!docs/reports/logs/**/capture.log'`.
+```
+# Verbatim run logs are engine output, not hand-written text: Godot prints
+# lines that end in a space, so `git diff --check` would flag every capture
+# forever. Keep the bytes intact and exempt the logs from the trailing-space
+# rule only (space-before-tab and other rules still apply).
+docs/reports/logs/**/capture.log whitespace=-trailing-space
+```
 
-No gate reads this file's whitespace; the choice is cosmetic.
+The route2-clean `capture.log` bytes are unchanged: `git hash-object` gives
+`bbbcb1aea5a3a67f63f68b2afd5a0743a334b3f` (the `7681b1c` blob) and sha256
+`fe9c529b5cfdd0bedb1d9d5f134ffc39d356eb0643e774142ba84c3c778af12c`.
+`git diff --check 912a481..7681b1c`, `git diff --check` (worktree) and
+`git diff --check 912a481..HEAD` all exit 0.
 
-### 4.2 Fix the old-evidence commit citation (six places)
+### 4.2 Old-evidence commit citation — RESOLVED
 
-Replace “remain in git history at commit `5135f53`” with:
+All six places (`final-20261127-phase0b.md`, `final-20261127.md`, `AGENTS.md`,
+`FIDELITY_GAPS.md`, `HANDOFF_NEXT_AGENT.md`, `tools/gate_ratchet.json` source)
+now state: measured at `5135f53`, committed on `main` at `3d62f6b`, replaced in
+place at `912a481`; the exact path `docs/reports/logs/final/` is named, and the
+pre-Phase-0b copies are pointed at `912a481` (four places add `3d62f6b`
+explicitly; `AGENTS.md`/`HANDOFF` name `3d62f6b` as the commit). No “remain in
+git history at commit `5135f53`” remains outside this report's own quotation
+(§2.3).
 
-> remain in git history at `912a481` (the pre-Phase-0b revision) and were
-> committed on `main` at `3d62f6b`; they were measured at `5135f53`.
+### 4.3 Stale `measured_on` row in `AGENTS.md` — RESOLVED
 
-Apply to §2.3's six locations. This is the only wrong historic citation; the
-stale `AGENTS.md` row in §4.3 is the other document inconsistency.
-
-### 4.3 Fix the stale `measured_on` row in `AGENTS.md`
-
-`AGENTS.md:111` still says ``PASS (`measured_on=5135f53`; floors raised, never
-lowered)``. Replace `5135f53` with `912a481`; the table header (line 85), the
-`README.md:26` row, the handoff and `tools/gate_ratchet.json` already carry the
-new stamp. No value or floor changes.
+`AGENTS.md:111` now reads ``PASS (`measured_on=912a481`; floors raised, never
+lowered)``, matching the table header (line 85), `README.md:26` and
+`tools/gate_ratchet.json:3`. No value or floor changed.
 
 ### 4.4 Audio drop caveat (documentation, not a defect)
 
@@ -286,15 +328,15 @@ beat-accurate or audio-fidelity claims. One sentence in
 `measured_on=5135f53`, no route-self-test lines). The new floor is proven only
 by `gate_ratchet_poststamp.log`. Consider keeping the post-stamp pass as
 `gate_ratchet.log` and renaming the serial one `gate_ratchet_presstamp.log`, or
-add a one-line pointer in `final-summary.txt`. The current report §5 already
-explains it, so this is optional.
+add a one-line pointer in `final-summary.txt`. `final-20261127-phase0b.md` §5
+already explains it, so this is optional.
 
 ### 4.6 Push state (no action)
 
-`origin/main` advanced to `074341f` at 11:04:49 EST during verification. If the
-intent was to keep Phase 0b local, that decision was overtaken; if the push was
-intended, the “local, not pushed” wording in the plan execution log and handoff
-should be updated when the corrections land.
+`origin/main` is `074341f` (the first-pass push at 11:04:49 EST moved
+`912a481 → 074341f`); `79d8b8a` is local and **not pushed**. If the fix commit
+should be remote, push it as a separate step; nothing in the verification
+depends on it being on `origin`.
 
 ## 5. Residual risk
 
@@ -306,10 +348,10 @@ should be updated when the corrections land.
 - **Renamed stale artifact.** `gate_ratchet.log` inside the 45-gate evidence
   directory reflects the old baseline; the new floor lives in
   `gate_ratchet_poststamp.log` (§4.5).
-- **Two doc-accuracy traps for the next agent (until §4.2/§4.3 land).** The
-  wrong `5135f53` citation and `AGENTS.md:111`'s stale `measured_on=5135f53`
-  (the table header on line 85 already says `912a481`) can mislead a reader who
-  greps only one of them.
+- **Fix commit is local only.** `79d8b8a` is on local `main`; `origin/main` is
+  `074341f`. Until it is pushed, a fresh clone still sees the three pre-fix
+  documents (wrong citation, stale `AGENTS.md` row, no `.gitattributes`). The
+  measured evidence and every gate value are identical either way.
 - **`uncommitted_entries_at_start` is not path-stamped.** The runner records the
   count only; identifying the one entry as route2-clean rests on `912a481`
   lacking that directory, the tracked tree matching HEAD and the capture
@@ -318,16 +360,16 @@ should be updated when the corrections land.
   `912a481`; the route capture is GPU/Xvfb-only and its PNGs are git-ignored,
   so a re-run needs the private extract and the same host class. The committed
   manifest/log is the durable evidence.
-- **External push.** The verified commit is now on `origin/main`; the
-  verification was performed on a clean tree at the same SHA, so there is no
-  divergence, but the “not pushed” claim is no longer literally true.
 
 ## 6. Commands used (for reproduction)
 
 ```bash
-git show --stat 7681b1c 074341f
+git show --stat 7681b1c 074341f 79d8b8a
 git diff --name-only 912a481..074341f
-git diff --check 912a481..7681b1c        # fails on capture.log:133
+git diff --name-only 074341f..79d8b8a
+git diff 074341f..79d8b8a -- tools/gate_ratchet.json
+git diff --check 912a481..7681b1c        # exit 0 after 79d8b8a
+git diff --check 912a481..HEAD           # exit 0
 identify -format '%f %wx%h %[colorspace]\n' build/qa/p0b_route/route2-clean/*.png
 ffprobe -v error -show_entries stream=codec_name,sample_rate,channels,duration \
   build/qa/p0b_route/route2-clean/audio.wav
@@ -338,6 +380,20 @@ make gate-ratchet
 make audit
 ```
 
-Both `make` gates were re-run at `074341f` and passed (exit 0); `make audit`
-and `make gate-ratchet` do not write tracked files (the working tree stayed
-clean).
+## 7. Re-verification at `79d8b8a`
+
+Re-run after the fix commit (2026-11-27, no GPU, no push):
+
+| Check | Result |
+|---|---|
+| HEAD / tree | `79d8b8a2271681b54355f094c4a194a2d1ef9b69`; clean before this report update |
+| `origin/main` | `074341f474b92602ba5e58863d661683dff30173`; `7681b1c` and `074341f` are ancestors, `79d8b8a` is not on the remote (`git ls-remote`; `git branch -r --contains 79d8b8a` empty) |
+| evidence unchanged | `git diff --name-only 074341f..79d8b8a -- docs/reports/logs/ build/qa/ game/ extracted/ game/data/` → 0 files; `gate_ratchet.json` `gates`/`evidence`/`measured_on`/`report` identical (only `source` prose) |
+| `git diff --check` | `912a481..7681b1c`, worktree and `912a481..HEAD` all exit 0 |
+| `make check-greps` | PASS — `LITERAL_GREPS PASS code_hits=0 ui_rating_literals=0 files=106` |
+| `make gate-ratchet` | PASS — `GATE_RATCHET: PASS (baseline and committed evidence agree; Godot gates run locally)`; `PASS: report names measured_on=912a481` |
+| `make audit` | PASS — `AUDIT PASS`; disk-backed coverage `12660/12703`, unexpected 0 |
+| route self-test | unchanged `P0B_ROUTE_SELFTEST PASS checks=62 fails=0` |
+
+`make audit` and `make gate-ratchet` write no tracked files; the only dirty
+path after this update is this report.

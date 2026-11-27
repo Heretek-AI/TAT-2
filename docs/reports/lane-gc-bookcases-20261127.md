@@ -51,10 +51,12 @@ binds 0 (no container is spawned there).
 | `BP_SmallSafe_MajorLoot_C` | major | MajorLoot | 1 | 1 (minor, 1 slot) | cap 3, `_locked=false` CDO | `disabled_component` |
 
 Spawner choice is the authored `_primarySpawnerForActor` first, then the bucket
-tier, then non-clue-mode as a tie-break. `_clueMode` is
-`ETATSpawnerClueMode::FromSpawnedActor` on the major spawner of chest, display
-case, bookcase **and** safe, so it is provenance, not a disqualifier. Extra
-spawners are preserved verbatim.
+tier, then non-clue-mode as a tie-break. Measured nuance: no shipped spawner
+authors `_primarySpawnerForActor: true` (all are `None`/`False`), so today the
+bucket tier is the deciding rule; the flag preference is there for future data.
+`_clueMode` is `ETATSpawnerClueMode::FromSpawnedActor` on the major spawner of
+chest, display case, bookcase **and** safe, so it is provenance, not a
+disqualifier. Extra spawners are preserved verbatim.
 
 Measured container records (same 11-sublevel Guildhall set the free-play smoke
 loads): **107 → 125 (+18)** = 8 minor bookcases + 2 POI major bookcases + 8

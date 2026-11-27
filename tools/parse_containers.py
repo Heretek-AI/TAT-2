@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """
-Emit game/data/generated/gameplay/containers.json: every placed loot-container
-Blueprint that carries a TATContainerSpawnerComponent, mapped to
-kind/bucket/slot entries.
+Emit game/data/generated/gameplay/containers.json: every allowlisted placed
+loot-container Blueprint (the CLASSES map below), mapped to kind/bucket/slot
+entries. `BP_UtilityBoxA_MinorLoot_C` also carries a spawner but is
+deliberately outside CLASSES (one POI 3rd-floor marker); it is recorded as the
+one known unemitted container in docs/reports/lane-gc-bookcases-20261127.md.
 
 Classes:
   BP_ChestTrunk_MajorLoot_C               89  kind major (major bucket + minor bonus spawner)
@@ -271,9 +273,11 @@ def pick_primary_spawner(spawners: list, kind: str) -> tuple[dict, list]:
 
 def main() -> None:
     classes_out: dict[str, dict] = {}
-    # P2-4: the CLASSES dict is closed — a 6th container Blueprint in cooked
+    # P2-4: the CLASSES dict is closed — another container Blueprint in cooked
     # data would never emit. Scan for container-shaped Blueprints outside the
-    # dict and warn so the gap is a visible line, not a silent hole.
+    # dict and warn so the gap is a visible line, not a silent hole. The token
+    # list does not match `UtilityBox`, so `BP_UtilityBoxA_MinorLoot_C` (the one
+    # known gap) stays silent here and is recorded in the lane report instead.
     known_stems = {Path(r).stem for r in CLASSES}
     for bp_file in sorted(EX.rglob("BP_*.json")):
         stem = bp_file.stem

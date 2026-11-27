@@ -359,7 +359,7 @@ func _map_display_name(map_id: String, order: int = 0) -> String:
 	if mid == "old_manor":
 		return UIStringsScript.st_upper("ST_OldManor_map", "OldManor.MapName", "Elway Manor")
 	if mid == "thieves_den" or (mid == "" and order <= 1):
-		return UIStringsScript.loc("Thieves' Den").to_upper()
+		return UIStringsScript.loc("Thieves' Den").to_upper() ## PORT COPY (no authored standalone map-name row; the hub is Thieves' Den)
 	if mid == "":
 		return UIStringsScript.loc("Contract").to_upper() ## PORT COPY (no authored row)
 	return mid.replace("_", " ").to_upper() ## PORT COPY (unknown map key)

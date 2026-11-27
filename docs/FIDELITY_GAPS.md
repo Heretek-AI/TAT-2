@@ -1170,6 +1170,16 @@ find extracted/json -name 'NS_*.json' | wc -l
     contract); the centre ring prompt reads `CRANK [LMB]`; the prep mission
     selector and contract list show authored titles/map names (Constables'
     Guildhall / Elway Manor / Thieves' Den), never `Mission.…` or raw map ids.
+  - **UI3-06 string audit**: the standalone hub map label `Thieves' Den` has no
+    authored standalone map-name row. The nearest authored rows are actions or
+    prose (`Quit to Thieves Den`, `Return to Thief's Den`, `Learn About the
+    Thieves' Den`, `Welcome tae your Thief's Den…`) and `ST_ThievesDen.CityMap`
+    only authors Guildhall/OldManor. The reference copy is kept and labelled
+    `PORT COPY (no authored standalone map-name row; the hub is Thieves' Den)`
+    at `contract_table_ui.gd:362`; the string-audit invented ceiling moves
+    111 -> 112 (`Makefile`, `tools/gate_ratchet.json`, `AGENTS.md`). A sorted
+    multiset diff of the audit TSV against `--rev 8a3ad62` shows this is the
+    only new invented literal (307/307/196/196/111 -> 311/311/199/199/112).
   - **Not measured**: no GPU capture in this lane, so the rendered gem, blur and
     line weights are **not visually scored**; the headless probe measures the
     widget tree, shader parameters, text and geometry only. The live-reference

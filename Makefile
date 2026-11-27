@@ -73,9 +73,13 @@ check-consumers:
 
 # W10-A: the UI string audit becomes a gate. Floors are the measured W10-A
 # baseline (306 visible rows routed, 195 with an authored counterpart, 111
-# invented); raise them, never lower them.
+# invented); raise them, never lower them. P5-UI raises only the invented
+# ceiling to 112: the contract list's standalone hub map label "Thieves' Den"
+# has no authored map-name row (authored rows only carry "Quit to Thieves Den" /
+# "Return to Thief's Den" / "Learn About the Thieves' Den"), and it is the
+# correct reference copy. Documented at contract_table_ui.gd:362.
 string-audit:
-	python3 build/qa/w9/p3_string_audit.py --min-routed 306 --min-authored 195 --max-invented 111
+	python3 build/qa/w9/p3_string_audit.py --min-routed 306 --min-authored 195 --max-invented 112
 
 # W10-A: no live port-invented formula in code and no invented post-match
 # rating label in a UI string literal (comments documenting the removals are

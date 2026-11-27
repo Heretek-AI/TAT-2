@@ -99,6 +99,7 @@ first.
 | cream RED proof (P0b) | expected `exit 1`, `CREAM_PROOF: RED passes=2 expected_fail=2` — not a gate until suite 119 is registered |
 | `make texture-cap-check` | OK — 797 capped, 1 alpha-critical kept, 0 offenders |
 | `make audit` | exit 0, tracked baseline matches, disk-backed coverage (12660/12703), 0 unexpected, exact-case 0 unexpected, 13/13 content groups |
+| `make string-audit` | `UI_STRINGS total=311 routed=311 authored=199 routed_authored=199 invented=112` (ceiling 112; one documented `Thieves' Den` port copy at `contract_table_ui.gd:362`) |
 
 The 2026-11-24 W7 wave (five lanes, cherry-picked) re-ran the **complete** set
 serially on `6760dd0` — compile, `run_tests`, M2, the three probes, `probe_leak`

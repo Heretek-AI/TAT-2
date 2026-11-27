@@ -62,9 +62,14 @@ The machine was restored after the attempt. Verified state:
   225.5 s; keyframes in `docs/reference/clip_1795033698901/clean/`), marking
   live-only rows `UNVERIFIED`. This does not need a capture and can run now.
 
-**Do not press Play in Steam until A or B is chosen and its isolation proof is
-in place.** The runbook is `docs/reports/p0b-live-capture.md` §5; the pre-attempt
-Offline Mode and launch-option instructions are retired. The live capture is a
+**Decision (2026-11-26, owner):** run **A first with B as fallback**; restore the
+archived owner save into the isolated prefix (Steam Cloud off); capture at
+**2560×1440**; re-score the 120 rows now from a **port** full-route run. A is
+still untested; runbook Step 6A must pass before a scored run.
+
+**Do not press Play in Steam until the Step 6A isolation proof is in place.**
+The runbook is `docs/reports/p0b-live-capture.md` §5; the pre-attempt Offline
+Mode and launch-option instructions are retired. The live capture is a
 matched-settings **P4/ROI** reference; the 120-row scorecard is re-scored from a
 **port** full-route run, not from this capture.
 
@@ -86,7 +91,8 @@ the previous handoff conflated:
   needs a new **port** full-route run, not a shipped-build capture.
 - **Matched-settings live capture** — still not taken; it is the P4/ROI
   instrument for exposure/look, not the source of the 120-row tally. Its
-  offline path is disproven and its online path needs the §0 decision.
+  offline path is disproven; the owner's decision is **A first, B fallback**
+  (§0).
 
 Still open: P4 look/exposure, the navmesh runtime consumer, the StateTree shadow
 ceiling (`fully_parity_covered_trees=0`, FSM authoritative), partial audio
@@ -164,10 +170,8 @@ StateTree shadow ceiling; the authored-element collision floor.
 ### 4.1 Live reference (P4/ROI) and the 120-row re-score
 
 - Shipped launcher requires **online login**; Steam Offline Mode gives
-  `LOGIN FAILED!`. Decide: **A** copied install + direct Proton launch,
-  **B** snapshot + prefix swap, or **C** score from the official 30 keyframes
-  and mark live-only rows `UNVERIFIED`. A build preflight is not update
-  protection; see §0.
+  `LOGIN FAILED!`. **Decision: A first, B fallback** (see §0); **C** remains the
+  no-launch fallback. A build preflight is not update protection.
 - The 120-row scorecard is
   `docs/reference/clip_1795033698901/COMPARISON_PORT_20261124.md`; current
   baseline is **9 PASS / 33 DELTA / 4 MISSING / 2 HARD_LIMIT / 16 UNVERIFIED /
@@ -260,9 +264,9 @@ ceiling is 112 and must not rise further without evidence.
 
 ## 5. Recommended next order
 
-1. **Decide the live-capture path** (§0): **A** copied install + direct Proton
-   launch, **B** snapshot + prefix swap, or **C** keyframe-only. Offline is
-   retired; a preflight is not update protection. Do not fabricate measurements.
+1. **Execute the chosen live-capture path** (§0): **A** first (runbook Step 6A),
+   **B** as fallback. Offline is retired; a preflight is not update protection.
+   Do not fabricate measurements.
 2. **P4 look** (exposure/IBL/AEM first, then mirrors/landscape) because it is the
    visible gap in the current playtest and blocks honest visual scoring.
 3. **Navmesh P1 Detour consumer**, then **P2.3 patrol cutover + event bus**.

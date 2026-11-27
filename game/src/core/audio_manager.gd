@@ -18,7 +18,7 @@ extends Node
 ## for the original nine gameplay tags.
 ##
 ## AU coverage against docs/reference/clip_1795033698901 KEYFRAME_INDEX §4:
-## - AU1 beds: authored placed ambience (90 emitters, 128 room beds in the
+## - AU1 beds: authored placed ambience (90 emitters, 136 room beds in the
 ##   extraction) when data/generated/audio_wwise.json exists; otherwise the
 ##   legacy rain/den/roomtone/wind bed keys, whose trims are calibrated to the
 ##   measured clip RMS (BED_TRIM_DB).
@@ -29,10 +29,10 @@ extends Node
 ##   metal/wet/earth/glass), round-robin, 3D on the SFX bus, authored radius.
 ## - AU5 gameplay SFX: original nine tags + bottle smash, car horn
 ##   double-honk (S13), ward activate/hit/end (S25), jaw-trap trigger (S26).
-## - AU6 VO: guard alert/suspicious/search + fairy intro lines plus the generic
-##   play_vo_event() entry point for the 689 authored VO lines; the extraction
-##   carries no dialogue text (localisation keys are GUIDs), so subtitles are
-##   functional descriptors emitted through `subtitle_shown`, never presented as
+## - AU6 VO: guard alert/suspicious/search + fairy intro lines plus the W11-A
+##   VO director over the 645 authored VO lines; the extraction carries no
+##   dialogue text (localisation keys are GUIDs), so subtitles are functional
+##   descriptors emitted through `subtitle_shown`, never presented as
 ##   transcribed speech.
 ## Music (T03): the shipped build hard-wires Play_Mus_MainTitleScreen in
 ## MainMenu_C, so the menu starts it (music.title_music.enabled in
@@ -143,6 +143,11 @@ const MIX_CONFIG_PATH: String = "res://data/expansion/audio_mix.json"
 ## file keeps the token footstep pools and the pre-B3a behaviour, and
 ## mix_state().control says why.
 const CONTROL_SCRIPT_PATH: String = "res://src/core/audio_control.gd"
+## W11-A: the authored VO director (pure selector over AudioWwise.vo_index()).
+const VO_DIRECTOR_PATH: String = "res://src/core/vo_director.gd"
+## W11-C: the authored surface resolver owns surface -> audio token and the
+## FS_Layers value, so the footstep path cannot drift from the loudness path.
+const SurfaceResolver: GDScript = preload("res://src/stealth/surface_resolver.gd")
 const CONTROL_DETECTION_RTPC: String = "Character_Enemy_Detection_Level_RTPC"
 ## The RTPC's authored curve is per node; the music container is the node whose
 ## curve the port applies (the detection level is a music mix control in the
@@ -152,7 +157,17 @@ const CONTROL_STATE_ENV: String = "Weather_isExterior"
 const CONTROL_STATE_MODAL: String = "Modal_State"
 const CONTROL_SWITCH_GAIT: String = "Character_Movement_Mode"
 const CONTROL_SWITCH_MATERIAL: String = "FS_Material"
+const CONTROL_SWITCH_LAYER: String = "FS_Layers"
 const CONTROL_SWITCH_LOCAL: String = "Character_IsLocallyControlled"
+## W11-D: the five authored mix parameters this port has real callers for
+## (stamina, crouch, fall velocity, rain, disguise). See authored_rtpc_state().
+const AUTHORED_RTPCS: Array[String] = [
+	"Character_Stamina_RTPC",
+	"Character_FS_isCrouching",
+	"Character_Fall_Velocity_Z",
+	"Weather_Rain_Intensity",
+	"Character_DisguiseIntegrity",
+]
 ## Port surface key -> authored FS_Material value. Derived by measuring which
 ## bank package carries the family's media (tools/parse_audio_control.py +
 ## audio_events.json), never invented; the full evidence table is in
@@ -262,6 +277,9 @@ const MUSIC_FALLBACK_PINS := {
 ## music.title_music.conflict), so there is no reference level to calibrate
 ## against. Documented TAT-2 choice, overridable per event from the overlay.
 const MUSIC_TRIM_DB: float = -10.0
+## W11-B: fade used when the event is not bound to an authored
+## MusicSwitchContainer (no authored transition to read).
+const MUSIC_FADE_FALLBACK_S: float = 0.6
 
 ## Gait event per movement gait; surfaces match substrings of media DebugNames.
 ## T03 (RE-M-09): every authored media family present in the player FS events is
@@ -298,6 +316,10 @@ var _voice_steals: int = 0
 var _last_steal_warn_msec: int = -100000
 var _event_clips: Dictionary = {}
 var _foot_pools: Dictionary = {}
+## W11-C: authored FS_Layers recordings per `gait|surface|layer`, and their
+## round-robin cursors. Built lazily from the authored package media.
+var _layer_pools: Dictionary = {}
+var _layer_idx: Dictionary = {}
 ## B3a: pool key -> media ids parallel to _foot_pools[key], so the authored
 ## switch selection can filter the token pool by MediaId.
 var _foot_media: Dictionary = {}
@@ -343,6 +365,12 @@ var _pause_was_active: bool = false
 var _wwise: RefCounted = null
 ## B3a: the AudioControl helper (res://src/core/audio_control.gd) or null.
 var _control: RefCounted = null
+## W11-A: the VoDirector (res://src/core/vo_director.gd) or null.
+var _vo_director: RefCounted = null
+## W11-A: last resolved guard speaker per guard state transition (QA only).
+var _vo_last_transition: Dictionary = {}
+## W11-A: true once the live player's disguise signal is bound.
+var _vo_player_bound: bool = false
 ## Authored RTPC gain/pitch currently applied to the music player.
 var _rtpc_music_gain_db: float = 0.0
 var _rtpc_music_pitch: float = 1.0
@@ -384,6 +412,7 @@ func _ready() -> void:
 	_load_mix_config()
 	_load_wwise()
 	_load_control()
+	_load_vo_director()
 	_ensure_buses()
 	_sfx["footstep"] = FOOTSTEP_SFX
 	_sfx["blackjack"] = BLACKJACK_SFX
@@ -400,6 +429,10 @@ func _ready() -> void:
 	_build_footstep_pools()
 	_pull_volumes_from_savesystem()
 	NoiseBus.noise_emitted.connect(_on_noise_emitted)
+	# W11-A: guard/quest VO owns the GameState phase transition line; the
+	# director is only an observer, it never changes the phase.
+	if GameState != null and not GameState.phase_changed.is_connected(_on_phase_changed):
+		GameState.phase_changed.connect(_on_phase_changed)
 	# S01: the Startscreen owns the rain bed and no music score. The menu
 	# script is outside this file's ownership, so the bed autostarts when the
 	# main-menu scene is the current scene (mission loads replace it via
@@ -479,6 +512,8 @@ func cleanup_on_exit() -> void:
 	_foot_pools.clear()
 	_foot_media.clear()
 	_foot_idx.clear()
+	_layer_pools.clear()
+	_layer_idx.clear()
 
 
 func _ensure_buses() -> void:
@@ -558,6 +593,162 @@ func _ww_string(method: String, args: Array) -> String:
 ## the pre-T03 behaviour instead of failing.
 func has_authored_audio() -> bool:
 	return bool(_ww_call("is_loaded", []) or false)
+
+
+## ---------------------------------------------------------------------------
+## W11-A authored VO director.
+## ---------------------------------------------------------------------------
+
+## Instantiates the VO director and feeds it the authored index. Dynamic for the
+## same reason as the other helpers: a fresh clone has no audio_wwise.json, so
+## the director stays unloaded and every cue resolves to "no authored line".
+func _load_vo_director() -> void:
+	_vo_director = null
+	if not ResourceLoader.exists(VO_DIRECTOR_PATH):
+		return
+	var scr: GDScript = ResourceLoader.load(VO_DIRECTOR_PATH) as GDScript
+	if scr == null:
+		return
+	var inst: Variant = scr.new()
+	if inst == null:
+		return
+	_vo_director = inst as RefCounted
+	var index_v: Variant = _ww_call("vo_index", [])
+	if index_v is Dictionary:
+		_vo_director.call("load_index", index_v)
+	if not bool(_vo_director.call("is_loaded")):
+		push_warning("[audio_manager] authored VO index unavailable; guard/quest VO stays silent")
+
+
+## The director instance (null on a build without the script).
+func vo_director() -> RefCounted:
+	return _vo_director
+
+
+## QA surface for the VO director (index size, cooldowns, last pick).
+func vo_state() -> Dictionary:
+	var lines: int = 0
+	var stats_v: Variant = _ww_call("stats", [])
+	if stats_v is Dictionary:
+		lines = int((stats_v as Dictionary).get("vo_lines", 0))
+	var out: Dictionary = {
+		"available": _vo_director != null,
+		"authored_lines": lines,
+		"last_transition": _vo_last_transition.duplicate(true),
+	}
+	if _vo_director != null:
+		out["director"] = _vo_director.call("report")
+	return out
+
+
+## Plays one authored VO event on the Dialogue bus and emits its functional
+## subtitle. Zero-media authored lines (`Play_VO_Enforcer1_0_Silent_Empty_01`)
+## are refused before any clip lookup: they are authored silence, not a missing
+## join. Returns true only when a real clip started.
+func play_vo_line(event_name: String, pos: Variant = null) -> bool:
+	if _shutdown:
+		return false
+	var ev: String = event_name.strip_edges()
+	if ev.is_empty():
+		return false
+	if has_authored_audio():
+		var media_v: Variant = _ww_call("vo_media_count", [ev])
+		if media_v is int and int(media_v) == 0:
+			return false
+	var clips: Variant = _event_clips.get(ev, [])
+	if not (clips is Array):
+		return false
+	var stream: AudioStream = null
+	for c: Variant in (clips as Array):
+		if not (c is Dictionary):
+			continue
+		var clip := str((c as Dictionary).get("clip", ""))
+		if clip.is_empty() or not ResourceLoader.exists(clip):
+			continue
+		stream = ResourceLoader.load(clip) as AudioStream
+		if stream != null:
+			break
+	if stream == null:
+		return false
+	if pos is Vector3:
+		_play_stream_3d(stream, pos, VO_DB, BUS_DIALOGUE, ev)
+	else:
+		_play_stream_2d(stream, BUS_DIALOGUE, VO_DB)
+	var sub: String = vo_subtitle(ev)
+	if not sub.is_empty():
+		subtitle_shown.emit(sub)
+	return true
+
+
+## Resolves a guard alertness transition to an authored line and plays it.
+## [param speaker] is the authored speaker (`Enforcer1` / `Hauntstable1`).
+func play_vo_transition(previous: String, next: String, speaker: String = "Enforcer1", pos: Variant = null) -> bool:
+	_vo_last_transition = {
+		"previous": previous,
+		"next": next,
+		"speaker": speaker,
+	}
+	if _vo_director == null:
+		return false
+	var now_s: float = float(Time.get_ticks_msec()) / 1000.0
+	var pick_v: Variant = _vo_director.callv("vo_pick_transition", [previous, next, speaker, now_s])
+	if not (pick_v is Dictionary):
+		return false
+	var pick: Dictionary = pick_v
+	if not bool(pick.get("ok", false)):
+		return false
+	_vo_last_transition["event"] = str(pick.get("event", ""))
+	_vo_last_transition["verb"] = str(pick.get("verb", ""))
+	_vo_last_transition["state"] = str(pick.get("state", ""))
+	return play_vo_line(str(pick.get("event", "")), pos)
+
+
+## Resolves a player/quest cue (see VoDirector.EVENT_CUES) and plays it.
+func play_vo_cue(cue: String, pos: Variant = null) -> bool:
+	if _shutdown or _vo_director == null:
+		return false
+	var now_s: float = float(Time.get_ticks_msec()) / 1000.0
+	var pick_v: Variant = _vo_director.callv("vo_pick_event", [cue, now_s])
+	if not (pick_v is Dictionary):
+		return false
+	var pick: Dictionary = pick_v
+	if not bool(pick.get("ok", false)):
+		return false
+	return play_vo_line(str(pick.get("event", "")), pos)
+
+
+## GameState phase -> authored escape-phase player line. The line is authored
+## voice; nothing about the mission flow changes here.
+func _on_phase_changed(phase: String) -> void:
+	if phase == GameState.PHASE_ENDGAME:
+		var player: Node = get_tree().get_first_node_in_group("player") if get_tree() != null else null
+		var pos: Variant = (player as Node3D).global_position if player is Node3D else null
+		play_vo_cue("escape_phase", pos)
+
+
+## Binds the player's disguise signal once the player exists. The same handler
+## pushes the authored disguise-integrity RTPC and plays the authored
+## DisguiseEnding line when the disguise collapses.
+func _sync_vo_sources() -> void:
+	if _vo_player_bound:
+		return
+	var tree: SceneTree = get_tree()
+	if tree == null:
+		return
+	var player: Node = tree.get_first_node_in_group("player")
+	if player == null or not player.has_signal("disguise_changed"):
+		return
+	player.connect("disguise_changed", _on_disguise_changed)
+	_vo_player_bound = true
+
+
+func _on_disguise_changed(integrity: float, active: bool) -> void:
+	# W11-D: the authored Character_DisguiseIntegrity curve is in 0..100 units.
+	set_rtpc("Character_DisguiseIntegrity", clampf(integrity, 0.0, 100.0))
+	if not active and integrity <= 0.0:
+		var player: Node = get_tree().get_first_node_in_group("player") if get_tree() != null else null
+		var pos: Variant = (player as Node3D).global_position if player is Node3D else null
+		play_vo_cue("disguise_ending", pos)
 
 
 ## ---------------------------------------------------------------------------
@@ -740,6 +931,7 @@ func _process(_delta: float) -> void:
 		_c_set_state(CONTROL_STATE_MODAL, "Modal_Menu" if paused else "Modal_Gameplay")
 	_sync_environment()
 	_sync_detection()
+	_sync_vo_sources()
 
 
 ## Push volumes from SaveSystem settings (also called by SaveSystem so the
@@ -1040,7 +1232,9 @@ func music_event_for(kind: String) -> String:
 ## kind is not authored or the clip did not resolve.
 ## [param trim_db] NaN means "use the TAT-2 overlay's music.title_music.trim_db,
 ## else MUSIC_TRIM_DB".
-func start_music(kind: String, trim_db: float = NAN, fade_s: float = 0.6) -> bool:
+## [param fade_s] NaN means "use the authored transition fade when the event is
+## bound to a MusicSwitchContainer, else MUSIC_FADE_FALLBACK_S" (W11-B).
+func start_music(kind: String, trim_db: float = NAN, fade_s: float = NAN) -> bool:
 	if _shutdown:
 		return false
 	var k: String = kind.to_lower().strip_edges()
@@ -1052,7 +1246,7 @@ func start_music(kind: String, trim_db: float = NAN, fade_s: float = 0.6) -> boo
 ## Plays an explicit authored music event (a gameplay system that knows its own
 ## state, e.g. a stinger). Only authored `Play_Mus_*` events that resolve a clip
 ## are accepted, so no map can play un-authored music.
-func play_music_event(event_name: String, trim_db: float = NAN, fade_s: float = 0.6) -> bool:
+func play_music_event(event_name: String, trim_db: float = NAN, fade_s: float = NAN) -> bool:
 	if _shutdown:
 		return false
 	var ev: String = event_name.strip_edges()
@@ -1063,12 +1257,34 @@ func play_music_event(event_name: String, trim_db: float = NAN, fade_s: float = 
 	return _start_music_event(ev, "event:" + ev, trim_db, fade_s)
 
 
+## W11-B: the authored transition fade for a music event, in seconds; NAN when
+## the event is not bound to a MusicSwitchContainer or the document has no music
+## block. A 0 ms authored fade is a real authored value (0.0), not "unknown".
+func music_fade_for_event(event_name: String) -> float:
+	if not has_control_plane():
+		return NAN
+	var container_v: Variant = _c_call("music_container_for_event", [event_name])
+	if not (container_v is int) or int(container_v) == 0:
+		return NAN
+	var rule_v: Variant = _c_call("music_transition", [int(container_v)])
+	if not (rule_v is Dictionary):
+		return NAN
+	var rule: Dictionary = rule_v as Dictionary
+	if not bool(rule.get("found", false)):
+		return NAN
+	return maxf(float(rule.get("fade_ms", 0.0)) / 1000.0, 0.0)
+
+
 func _start_music_event(ev: String, kind: String, trim_db: float, fade_s: float) -> bool:
 	if ev.is_empty():
 		return false
 	var stream: AudioStream = _bed_stream(ev, "")
 	if stream == null:
 		return false
+	var fade: float = fade_s
+	if is_nan(fade):
+		var authored: float = music_fade_for_event(ev)
+		fade = authored if not is_nan(authored) else MUSIC_FADE_FALLBACK_S
 	var trim: float = _music_trim_db() if is_nan(trim_db) else trim_db
 	stop_music(0.0)
 	_music_base_db = trim
@@ -1077,13 +1293,13 @@ func _start_music_event(ev: String, kind: String, trim_db: float, fade_s: float)
 	_music_player.stream = stream
 	_music_player.bus = BUS_MUSIC
 	_music_player.pitch_scale = _rtpc_music_pitch
-	_music_player.volume_db = (trim + _rtpc_music_gain_db) if fade_s <= 0.0 else trim - 20.0
+	_music_player.volume_db = (trim + _rtpc_music_gain_db) if fade <= 0.0 else trim - 20.0
 	add_child(_music_player)
 	_music_player.play()
-	if fade_s > 0.0:
+	if fade > 0.0:
 		_music_fading = true
 		var tw: Tween = _track_bed_tween(create_tween())
-		tw.tween_property(_music_player, "volume_db", trim + _rtpc_music_gain_db, fade_s)
+		tw.tween_property(_music_player, "volume_db", trim + _rtpc_music_gain_db, fade)
 		tw.finished.connect(func() -> void:
 			_music_fading = false
 		)
@@ -1134,39 +1350,16 @@ func is_music_playing() -> bool:
 
 
 ## ---------------------------------------------------------------------------
-## VO (RE-M-10). 689 authored lines resolve clips already; this is the generic
-## entry point for them plus the functional subtitle the UI can display.
+## VO (RE-M-10). The 645 authored lines now reach the director (W11-A); this is
+## the single playback entry point for them plus the functional subtitle the UI
+## can display. It is NOT a claim that all 645 lines are wired: the director maps
+## the guard transitions and the player/quest beats it owns, and the lines with
+## no honest caller stay unmapped (see VoDirector.EVENT_CUES).
 ## ---------------------------------------------------------------------------
 
-## Plays the first resolvable clip of an authored VO event on the Dialogue bus
-## and emits `subtitle_shown` with the functional descriptor.
+## Plays one authored VO line. Back-compat alias of [method play_vo_line].
 func play_vo_event(event_name: String, pos: Variant = null) -> bool:
-	var ev := event_name.strip_edges()
-	if ev.is_empty():
-		return false
-	var clips: Variant = _event_clips.get(ev, [])
-	if not (clips is Array):
-		return false
-	var stream: AudioStream = null
-	for c: Variant in (clips as Array):
-		if not (c is Dictionary):
-			continue
-		var clip := str((c as Dictionary).get("clip", ""))
-		if clip.is_empty() or not ResourceLoader.exists(clip):
-			continue
-		stream = ResourceLoader.load(clip) as AudioStream
-		if stream != null:
-			break
-	if stream == null:
-		return false
-	if pos is Vector3:
-		_play_stream_3d(stream, pos, VO_DB, BUS_DIALOGUE, ev)
-	else:
-		_play_stream_2d(stream, BUS_DIALOGUE, VO_DB)
-	var sub: String = vo_subtitle(ev)
-	if not sub.is_empty():
-		subtitle_shown.emit(sub)
-	return true
+	return play_vo_line(event_name, pos)
 
 
 ## Functional VO descriptor from the authored event name, e.g.
@@ -1193,15 +1386,72 @@ func mix_state() -> Dictionary:
 		"interior": _interior,
 		"bed_step": "blocked:T09" if _interior else "exterior",
 		"music_kind": _music_kind,
+		"music": authored_music_state(_current_music_event()),
 		"emitters": _emitters.size(),
 		"emitter_map": _emitter_map,
 		"beds": active_bed_levels(),
 		"master_volume_db": bus_level_db("Master"),
 		"control": control_state(),
+		"vo": vo_state(),
+		"rtpc": authored_rtpc_state(),
 		"detection_level": _detection_level,
 		"rtpc_music_gain_db": _rtpc_music_gain_db,
 		"rtpc_music_pitch": _rtpc_music_pitch,
 	}
+
+
+## W11-B: the authored music transition state for one event (fade, container,
+## rule). Empty-ish when the event is not bound to a MusicSwitchContainer.
+func authored_music_state(event_name: String) -> Dictionary:
+	var fade: float = music_fade_for_event(event_name)
+	var out: Dictionary = {
+		"event": event_name,
+		"container_id": 0,
+		"fade_s": -1.0 if is_nan(fade) else fade,
+		"transition": {},
+	}
+	if not has_control_plane() or event_name.is_empty():
+		return out
+	var container_v: Variant = _c_call("music_container_for_event", [event_name])
+	if not (container_v is int) or int(container_v) == 0:
+		return out
+	out["container_id"] = int(container_v)
+	out["transition"] = _c_call("music_transition", [int(container_v)])
+	return out
+
+
+func _current_music_event() -> String:
+	if _music_kind.begins_with("event:"):
+		return _music_kind.substr(6)
+	if _music_kind.is_empty():
+		return ""
+	return music_event_for(_music_kind)
+
+
+## W11-D: the authored mix parameters with real callers in this port, with the
+## exact curve values at their current setting. The five curves live on
+## ActorMixer/LayerContainer nodes the port does not instantiate as buses, so
+## they are recorded and exposed rather than applied to a global bus (a global
+## application would fight the slider + duck contract pinned by
+## test_audio_mix.gd). The crouch curve is the exception: `play_footstep` adds
+## its exact authored gain to the footstep playback.
+func authored_rtpc_state() -> Dictionary:
+	var out: Dictionary = {}
+	for name: String in AUTHORED_RTPCS:
+		if not has_control_plane():
+			out[name] = {"value": 0.0, "gain_db": 0.0, "pitch_scale": 1.0, "low_pass_hz": 0.0}
+			continue
+		var value_v: Variant = _c_call("rtpc_value", [name])
+		var gain_v: Variant = _c_call("gain_db", [name])
+		var pitch_v: Variant = _c_call("pitch_scale", [name])
+		var lpf_v: Variant = _c_call("low_pass_hz", [name])
+		out[name] = {
+			"value": float(value_v) if value_v != null else 0.0,
+			"gain_db": float(gain_v) if gain_v != null else 0.0,
+			"pitch_scale": float(pitch_v) if pitch_v != null else 1.0,
+			"low_pass_hz": float(lpf_v) if lpf_v != null else 0.0,
+		}
+	return out
 
 
 ## True when a LOADING screen currently owns the mix (AU1-03).
@@ -1469,34 +1719,129 @@ func _next_foot_clip(pool_key: String) -> String:
 ## set first and the token pool is filtered by the authored package media, so
 ## the clip family is the bank's choice. The token pool stays the fallback (and
 ## the whole path on a fresh clone).
-func play_footstep(surface: String = "wood", gait: String = "walk", pos: Vector3 = Vector3.ZERO) -> bool:
+## W11-C: [param layer] is the authored `FS_Layers` value (Puddle /
+## Glass_Broken / Foliage / Grass / Nothing). Empty derives it from the surface
+## through the resolver, which is exact for the wet/glass tokens and cannot
+## recover Grass/Foliage from the collapsed "earth" token — a caller that knows
+## the authored surface name should pass `SurfaceResolver.layer_for(name)`.
+func play_footstep(surface: String = "wood", gait: String = "walk", pos: Vector3 = Vector3.ZERO, layer: String = "") -> bool:
 	var g: String = gait.to_lower().strip_edges()
 	var s: String = _scene_surface(surface)
-	_apply_footstep_control(g, s)
+	var l: String = layer.strip_edges()
+	if l.is_empty():
+		l = str(SurfaceResolver.layer_for(surface))
+	_apply_footstep_control(g, s, l)
 	var clip: String = _footstep_clip_control(g, s)
 	if clip.is_empty():
 		clip = _footstep_clip(gait, surface)
+	# W11-D: the authored Character_FS_isCrouching curve is applied to the
+	# footstep playback (its authored target is the FS actor-mixer chain). The
+	# value is the exact authored curve output; the node binding is the port's
+	# documented choice because the port has one footstep player, not the bank's
+	# ActorMixer tree.
+	var crouch_gain_db: float = 0.0
+	if has_control_plane():
+		var gain_v: Variant = _c_call("gain_db", ["Character_FS_isCrouching"])
+		if gain_v != null:
+			crouch_gain_db = float(gain_v)
+	var played: bool = false
 	if not clip.is_empty() and ResourceLoader.exists(clip):
 		var stream: AudioStream = ResourceLoader.load(clip) as AudioStream
 		if stream != null:
-			_play_stream_3d(stream, pos, 0.0, BUS_SFX, str(FOOTSTEP_GAIT_EVENTS.get(gait.to_lower(), "")))
-			return true
-	if _sfx.has("footstep"):
+			_play_stream_3d(stream, pos, crouch_gain_db, BUS_SFX,
+				str(FOOTSTEP_GAIT_EVENTS.get(gait.to_lower(), "")))
+			played = true
+	if not played and _sfx.has("footstep"):
 		_play_at("footstep", pos, 0.0)
-		return true
-	return false
+		played = true
+	# W11-C: the authored layer is a *second* Play action branch in the bank
+	# (FS_Layers=Puddle adds 8 recordings on top of the 44 Stone ones), so it
+	# plays alongside the surface clip, not instead of it. No authored trim is
+	# applied; the recordings carry their own level.
+	var layer_clip: String = _layer_clip_control(g, s, l)
+	if not layer_clip.is_empty() and ResourceLoader.exists(layer_clip):
+		var layer_stream: AudioStream = ResourceLoader.load(layer_clip) as AudioStream
+		if layer_stream != null:
+			_play_stream_3d(layer_stream, pos, 0.0, BUS_SFX, str(FOOTSTEP_GAIT_EVENTS.get(g, "")))
+			played = true
+	return played
+
+
+## W11-C: round-robin over the layer recordings the authored `FS_Layers`
+## package adds on top of the selected `FS_Material` package. Empty when the
+## control plane is absent, the layer is `Nothing`, or the material/layer
+## packages do not resolve for this gait. The pool is authored package media
+## joined to clips through `audio_events.json`; nothing is guessed from a name.
+func _layer_clip_control(gait: String, surface: String, layer: String) -> String:
+	if not has_control_plane() or layer.is_empty() or layer == "Nothing":
+		return ""
+	var key: String = gait + "|" + surface + "|" + layer
+	if not _layer_pools.has(key):
+		_layer_pools[key] = _build_layer_pool(gait, surface, layer)
+	var pool: Array = _layer_pools[key] as Array
+	if pool.is_empty():
+		return ""
+	var idx: int = int(_layer_idx.get(key, 0)) % pool.size()
+	_layer_idx[key] = idx + 1
+	return str(pool[idx])
+
+
+func _build_layer_pool(gait: String, surface: String, layer: String) -> Array:
+	var ev: String = str(FOOTSTEP_GAIT_EVENTS.get(gait, ""))
+	var material: String = str(CONTROL_SURFACE_VALUES.get(surface, ""))
+	if ev.is_empty() or material.is_empty():
+		return []
+	var base_v: Variant = _c_call("media_ids_for", [ev, CONTROL_SWITCH_MATERIAL, material])
+	var layer_v: Variant = _c_call("media_ids_for", [ev, CONTROL_SWITCH_LAYER, layer])
+	if not (base_v is Array) or not (layer_v is Array):
+		return []
+	# The layer package list is a per-container superset (it carries nested
+	# branches), so intersect it with the current selection before subtracting
+	# the material package: the authored layer set is what the ban leaves alive.
+	var allowed_v: Variant = _c_call("select_media", [ev, layer_v])
+	var allowed: Array = allowed_v as Array if allowed_v is Array else (layer_v as Array)
+	var base: Dictionary = {}
+	for mid: Variant in (base_v as Array):
+		base[int(mid)] = true
+	var want: Dictionary = {}
+	for mid: Variant in allowed:
+		if not base.has(int(mid)):
+			want[int(mid)] = true
+	if want.is_empty():
+		return []
+	var clips: Variant = _event_clips.get(ev, [])
+	if not (clips is Array):
+		return []
+	var out: Array = []
+	for c: Variant in (clips as Array):
+		if not (c is Dictionary):
+			continue
+		var cd: Dictionary = c
+		if not want.has(int(cd.get("media_id", 0))):
+			continue
+		var clip: String = str(cd.get("clip", ""))
+		if not clip.is_empty() and not out.has(clip):
+			out.append(clip)
+	out.sort()
+	return out
 
 
 ## B3a: pushes the authored footstep switch set. Gait is one of the authored
 ## Character_Movement_Mode values (walk/run/jog/crouch/wallclimb); a surface the
 ## table does not cover leaves FS_Material at its authored default.
-func _apply_footstep_control(gait: String, surface: String) -> void:
+## W11-C: `FS_Layers` is set from the authored layer value; an empty/unknown
+## layer falls back to the authored group default (`Nothing`), never a guess.
+func _apply_footstep_control(gait: String, surface: String, layer: String = "Nothing") -> void:
 	if not has_control_plane():
 		return
 	_c_set_switch(CONTROL_SWITCH_GAIT, gait)
 	var value: String = str(CONTROL_SURFACE_VALUES.get(surface, ""))
 	if not value.is_empty():
 		_c_set_switch(CONTROL_SWITCH_MATERIAL, value)
+	var layer_value: String = layer.strip_edges()
+	if layer_value.is_empty():
+		layer_value = "Nothing"
+	_c_set_switch(CONTROL_SWITCH_LAYER, layer_value)
 
 
 ## B3a: round-robin inside the token pool restricted to the media the authored

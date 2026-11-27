@@ -197,6 +197,13 @@ var _emitters: Array[Dictionary] = []
 var _room_beds: Array[Dictionary] = []
 var _vo_lines: Dictionary = {}
 var _vo_speakers: Dictionary = {}
+## W11-A: `speaker -> verb -> state -> Array[line record]`. `state` is "" for an
+## authored line whose `vo.lines[].state` is null (the JSON writes null), so the
+## 645-line index is exact rather than collapsing those rows into one bucket.
+## Built at load from the same rows `vo.lines` carries; every authored line
+## appears exactly once.
+var _vo_index: Dictionary = {}
+var _vo_zero_media: PackedStringArray = PackedStringArray()
 var _warnings: PackedStringArray = PackedStringArray()
 
 var _built: bool = false
@@ -750,6 +757,97 @@ func vo_subtitle(event_name: String) -> String:
 	return _vo_label_from_name(event)
 
 
+## W11-A: the authored VO index, `speaker -> verb -> state -> Array[record]`.
+## A record is `{event, line, variant, severity, media_count}` (a copy). `state`
+## is "" when the authored line carries no state. Empty when the graph is
+## absent. This is the only surface `vo_director.gd` indexes; it never invents
+## a speaker, verb or state.
+func vo_index() -> Dictionary:
+	var out: Dictionary = {}
+	for speaker: Variant in _vo_index.keys():
+		var by_verb: Dictionary = _vo_index[speaker]
+		var verbs: Dictionary = {}
+		for verb: Variant in by_verb.keys():
+			var by_state: Dictionary = by_verb[verb]
+			var states: Dictionary = {}
+			for state: Variant in by_state.keys():
+				var rows: Array = []
+				for record: Dictionary in (by_state[state] as Array):
+					rows.append((record as Dictionary).duplicate(true))
+				states[state] = rows
+			verbs[verb] = states
+		out[speaker] = verbs
+	return out
+
+
+## Every authored event under one `(speaker, verb, state)` triple, sorted by
+## authored variant/line. Empty when the triple does not exist. `state` "" is
+## the authored no-state bucket.
+func vo_events(speaker: String, verb: String, state: String) -> PackedStringArray:
+	var out: PackedStringArray = PackedStringArray()
+	var by_verb: Variant = _vo_index.get(speaker, null)
+	if not (by_verb is Dictionary):
+		return out
+	var by_state: Variant = (by_verb as Dictionary).get(verb, null)
+	if not (by_state is Dictionary):
+		return out
+	var rows: Variant = (by_state as Dictionary).get(state, null)
+	if not (rows is Array):
+		return out
+	for record: Variant in (rows as Array):
+		if record is Dictionary:
+			out.append(str((record as Dictionary).get("event", "")))
+	return out
+
+
+## Authored speakers, sorted (7 in the shipped extraction).
+func vo_speakers() -> PackedStringArray:
+	var out: PackedStringArray = PackedStringArray()
+	for speaker: Variant in _vo_index.keys():
+		out.append(str(speaker))
+	out.sort()
+	return out
+
+
+## The authored `(speaker, verb, state)` triples, sorted (76 in the shipped
+## extraction). Each item is `{"speaker", "verb", "state", "lines"}`.
+func vo_triples() -> Array:
+	var out: Array = []
+	for speaker: Variant in _vo_index.keys():
+		var by_verb: Dictionary = _vo_index[speaker]
+		for verb: Variant in by_verb.keys():
+			var by_state: Dictionary = by_verb[verb]
+			for state: Variant in by_state.keys():
+				out.append({
+					"speaker": str(speaker),
+					"verb": str(verb),
+					"state": str(state),
+					"lines": (by_state[state] as Array).size(),
+				})
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if str(a["speaker"]) != str(b["speaker"]):
+			return str(a["speaker"]) < str(b["speaker"])
+		if str(a["verb"]) != str(b["verb"]):
+			return str(a["verb"]) < str(b["verb"])
+		return str(a["state"]) < str(b["state"])
+	)
+	return out
+
+
+## Authored VO lines with no media at all (the extractor's `Silent` line). A
+## director must refuse these: they are authored *silence*, not a missing clip.
+func vo_zero_media_events() -> PackedStringArray:
+	return _vo_zero_media.duplicate()
+
+
+## Authored media count for one VO event, -1 when the event is not a VO line.
+func vo_media_count(event_name: String) -> int:
+	var raw: Variant = _vo_lines.get(event_name.strip_edges(), null)
+	if raw is Dictionary:
+		return int((raw as Dictionary).get("media_count", 0))
+	return -1
+
+
 # =========================================================================
 # Probe statistics
 # =========================================================================
@@ -800,6 +898,8 @@ func stats() -> Dictionary:
 		"events_2d": two_d,
 		"vo_lines": _vo_lines.size(),
 		"vo_speakers": _vo_speakers.size(),
+		"vo_triples": vo_triples().size(),
+		"vo_zero_media": _vo_zero_media.size(),
 		"emitters": _emitters.size(),
 		"emitter_maps": emitter_map_keys().size(),
 		"room_beds": _room_beds.size(),
@@ -863,6 +963,8 @@ func _reset() -> void:
 	_room_beds = []
 	_vo_lines = {}
 	_vo_speakers = {}
+	_vo_index = {}
+	_vo_zero_media = PackedStringArray()
 	_warnings = PackedStringArray()
 	_built = false
 	_report = {}
@@ -1084,6 +1186,54 @@ func _parse_vo(vo: Dictionary) -> void:
 			"variant": int(_num(row.get("variant"), 0.0)),
 			"media_count": int(_num(row.get("media_count"), 0.0)),
 		}
+	_build_vo_index()
+
+
+## W11-A: `(speaker, verb, state) -> lines`. A line with an empty authored
+## speaker/verb is skipped (it cannot be indexed by the three authored keys and
+## no shipped row is like that — the count assertion would fail loudly).
+func _build_vo_index() -> void:
+	_vo_index = {}
+	_vo_zero_media = PackedStringArray()
+	for event: Variant in _vo_lines.keys():
+		var record: Dictionary = _vo_lines[event]
+		var speaker: String = str(record["speaker"])
+		var verb: String = str(record["verb"])
+		var state: String = str(record["state"])
+		if speaker.is_empty() or verb.is_empty():
+			continue
+		if int(record["media_count"]) <= 0 and not _vo_zero_media.has(str(event)):
+			_vo_zero_media.append(str(event))
+		var by_verb: Dictionary = _vo_index.get(speaker, {})
+		if not _vo_index.has(speaker):
+			_vo_index[speaker] = by_verb
+		var by_state: Dictionary = by_verb.get(verb, {})
+		if not by_verb.has(verb):
+			by_verb[verb] = by_state
+		var rows: Array = by_state.get(state, [])
+		if not by_state.has(state):
+			by_state[state] = rows
+		rows.append({
+			"event": str(event),
+			"line": int(record["line"]),
+			"variant": int(record["variant"]),
+			"severity": str(record["severity"]),
+			"media_count": int(record["media_count"]),
+		})
+	_vo_zero_media.sort()
+	# Authored order: line, then variant, then event (deterministic rotation).
+	for speaker: Variant in _vo_index.keys():
+		var by_verb: Dictionary = _vo_index[speaker]
+		for verb: Variant in by_verb.keys():
+			var by_state: Dictionary = by_verb[verb]
+			for state: Variant in by_state.keys():
+				(by_state[state] as Array).sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+					if int(a["line"]) != int(b["line"]):
+						return int(a["line"]) < int(b["line"])
+					if int(a["variant"]) != int(b["variant"]):
+						return int(a["variant"]) < int(b["variant"])
+					return str(a["event"]) < str(b["event"])
+				)
 
 
 # =========================================================================

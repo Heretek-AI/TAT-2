@@ -7651,6 +7651,7 @@ func _initialize() -> void:
 		["119", "W10-P2 cream: no invented white emission, tat_invented_white census, authored colour control", "res://tests/test_w10a2_cream.gd", "CREAM_PROOF: GREEN"],
 		["120", "W10-A3 GC: hold-interact smash swaps leaf/broken once; tap keeps the lockpick", "res://tests/test_gc_break_trigger.gd", "GC_TRIGGER PASS"],
 		["121", "W10-P3 audio control: Wwise switches/states/RTPCs, footstep selection, curve application", "res://tests/test_audio_control.gd", "AUDIO_CONTROL_SUMMARY: fails=0"],
+		["122", "W11-A VO director: 645-line index, guard transitions, cooldowns/priority, zero-media refusal", "res://tests/test_vo_director.gd", "VO_DIRECTOR_SUMMARY: fails=0"],
 	]:
 		var w10_out: Array = []
 		var w10_args: PackedStringArray = [

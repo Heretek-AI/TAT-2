@@ -312,9 +312,40 @@ static func carry(item: Node, actor: Node = null) -> Dictionary:
 	# T05 capacity widget contract: every accepted pickup publishes used/max so
 	# the bag gauge and the refusal share one source of truth.
 	broadcast_capacity(actor)
+	# W11-A: authored pickup VO. Major tier -> Player/PickupLoot/Major; a quest
+	# relic -> the talking bag's MatchLootIsPickedUp; the first carried entry of
+	# a run -> PlayerIsCarryingLoot. The director owns cooldowns and refuses an
+	# authored triple the speaker never recorded.
+	_vo_for_pickup(tier, is_quest_item, actor)
 	check["entry"] = entry
 	check["used"] = used_slots()
 	return check
+
+
+## W11-A pickup cues. Static-friendly: resolves the AudioManager autoload from
+## the main loop like smoke_projectile does, and tolerates its absence (tests
+## that call carry() without a tree keep working).
+static func _vo_for_pickup(tier: String, is_quest_item: bool, actor: Node) -> void:
+	var am: Node = _audio_manager()
+	if am == null or not am.has_method("play_vo_cue"):
+		return
+	var pos: Variant = null
+	if actor is Node3D and (actor as Node3D).is_inside_tree():
+		pos = (actor as Node3D).global_position
+	if is_quest_item:
+		am.call("play_vo_cue", "match_loot_picked", pos)
+		return
+	if tier == "major":
+		am.call("play_vo_cue", "loot_pickup_major", pos)
+	if GameState.carried_loot.size() == 1:
+		am.call("play_vo_cue", "carrying_loot", pos)
+
+
+static func _audio_manager() -> Node:
+	var loop: MainLoop = Engine.get_main_loop()
+	if not (loop is SceneTree):
+		return null
+	return (loop as SceneTree).root.get_node_or_null("AudioManager")
 
 
 ## Authored pickup prompt for a loot item. A full inventory reads the authored

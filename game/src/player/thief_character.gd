@@ -503,6 +503,9 @@ var _fall_immunity_revoked: bool = false # set at the chain limit; cleared on gr
 var _interact_hold_sec: float = -1.0 # P2 two-clock hold: physics-delta accumulation replaces wall-clock diffs (pause/slow-mo safe).
 var _last_stamina_emitted: float = -1.0 # P2 per-tick signal spam: emit only on change.
 var _last_disguise_emitted: float = -1.0
+## W11-D authored RTPC push state (see _push_audio_rtpcs).
+var _rtpc_push_accum: float = 0.0
+var _last_crouch_rtpc: int = -1
 var _last_disguise_active_emitted: bool = false
 var _smoke_preview_accum: float = 0.0 # P2 smoke preview: 32-ray ballistic sweep throttled to PROP_SCAN_INTERVAL (was every rendered frame).
 
@@ -1560,7 +1563,11 @@ func _physics_process(delta: float) -> void:
 			_refresh_audio_surface()
 			NoiseBus.emit_noise(global_position, loudness, self, "footstep", footstep_surface())
 			if AudioManager != null and AudioManager.has_method("play_footstep"):
-				AudioManager.play_footstep(_audio_surface(), _audio_gait(), global_position)
+				# W11-C: pass the authored FS_Layers value from the same surface
+				# name the loudness path uses (the "earth" token collapses
+				# Grass/Foliage/Dirt, so the token alone cannot carry the layer).
+				AudioManager.play_footstep(_audio_surface(), _audio_gait(), global_position,
+					SurfaceResolver.layer_for(footstep_surface()))
 			fp_step_left = not fp_step_left
 			var fwd_flat: Vector3 = Vector3(-global_transform.basis.z.x, 0.0, -global_transform.basis.z.z)
 			if fwd_flat.length() < 0.05:
@@ -1625,6 +1632,45 @@ func _tick_sustained_systems(delta: float) -> void:
 	else:
 		_interact_hold_sec = -1.0
 		interact_hold_progress = 0.0
+	_push_audio_rtpcs(delta)
+
+
+## W11-D authored mix parameters. `Character_Stamina_RTPC` and
+## `Character_Fall_Velocity_Z` are continuous, so they are pushed at this
+## interval rather than every physics tick; crouch is pushed on change only.
+## The values are the authored game-parameter domains (stamina 0..100, fall
+## velocity cm/s), never the port's internal units.
+const RTPC_PUSH_INTERVAL_S: float = 0.1
+const RTPC_STAMINA_MAX: float = 100.0
+const RTPC_FALL_MIN_CM_S: float = -5000.0
+const RTPC_FALL_MAX_CM_S: float = 500.0
+
+
+## W11-D: pushes the authored mix parameters this controller owns:
+##   * `Character_FS_isCrouching`  — 0/1, on change;
+##   * `Character_Stamina_RTPC`    — the authored 0..100 parameter (the port's
+##     authored `BaseStamina` is 260, so the value is normalised, not silently
+##     clamped against the curve's domain);
+##   * `Character_Fall_Velocity_Z` — the authored cm/s parameter (Godot `velocity`
+##     is m/s, so it is scaled by 100 and clamped to the authored -5000..500).
+## The disguise-integrity parameter is pushed by AudioManager's
+## `disguise_changed` handler, which owns that signal's lifetime.
+func _push_audio_rtpcs(delta: float) -> void:
+	if AudioManager == null or not AudioManager.has_method("set_rtpc"):
+		return
+	var crouch: int = 1 if is_crouching else 0
+	if crouch != _last_crouch_rtpc:
+		_last_crouch_rtpc = crouch
+		AudioManager.set_rtpc("Character_FS_isCrouching", float(crouch))
+	_rtpc_push_accum += delta
+	if _rtpc_push_accum < RTPC_PUSH_INTERVAL_S:
+		return
+	_rtpc_push_accum = 0.0
+	var stamina_norm: float = clampf(stamina / maxf(max_stamina, 0.001) * RTPC_STAMINA_MAX,
+		0.0, RTPC_STAMINA_MAX)
+	AudioManager.set_rtpc("Character_Stamina_RTPC", stamina_norm)
+	AudioManager.set_rtpc("Character_Fall_Velocity_Z",
+		clampf(velocity.y * 100.0, RTPC_FALL_MIN_CM_S, RTPC_FALL_MAX_CM_S))
 
 
 ## P2 per-tick signal spam: stamina_changed fires only when the value moved.

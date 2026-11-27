@@ -140,7 +140,25 @@ static func deposit_all(host: Node = null, uses_left: int = -1) -> Dictionary:
 	out["prompt"] = prompt_for(left, false)
 	deposit_count += 1
 	_emit_feedback(host, deposited_count)
+	# W11-A: authored Player/StashInteract/StoringLoot line. Best-effort: the
+	# deposit itself already succeeded, so a missing audio manager is not an
+	# error path here.
+	_vo_stash(host)
 	return out
+
+
+## W11-A stash VO (see VoDirector.EVENT_CUES["stash_deposit"]).
+static func _vo_stash(host: Node) -> void:
+	var loop: MainLoop = Engine.get_main_loop()
+	if not (loop is SceneTree):
+		return
+	var am: Node = (loop as SceneTree).root.get_node_or_null("AudioManager")
+	if am == null or not am.has_method("play_vo_cue"):
+		return
+	var pos: Variant = null
+	if host is Node3D and (host as Node3D).is_inside_tree():
+		pos = (host as Node3D).global_position
+	am.call("play_vo_cue", "stash_deposit", pos)
 
 
 ## SFX/VFX wiring point. No authored media resolves today, so the default

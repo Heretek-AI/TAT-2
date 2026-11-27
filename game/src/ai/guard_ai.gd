@@ -877,7 +877,14 @@ func _on_guard_anim_finished(anim_name: StringName) -> void:
 ## Alertness -> ST_Guard / clip_for_state state name. KNOCKED_OUT never
 ## reaches clip_for_state (KO handling owns the player in _update_guard_anim).
 func _anim_state_name() -> String:
-	match state:
+	return alertness_name(state)
+
+
+## Alertness enum -> the authored state name. Single source for the animation
+## state machine and the W11-A VO transition mapping (which keys on the same
+## six names).
+static func alertness_name(value: int) -> String:
+	match value:
 		Alertness.NEUTRAL:
 			return "NEUTRAL"
 		Alertness.SUSPICIOUS:
@@ -888,6 +895,8 @@ func _anim_state_name() -> String:
 			return "COMBAT"
 		Alertness.SEARCH:
 			return "SEARCH"
+		Alertness.KNOCKED_OUT:
+			return "KNOCKED_OUT"
 	return "NEUTRAL"
 
 
@@ -1281,6 +1290,14 @@ func _set_state(new_state: int) -> void:
 		_revive_progress = 0.0
 	detection = clamped_detection_for_transition(previous_state, new_state, detection)
 	_apply_authored_escalation(new_state)
+	# W11-A: authored VO for the transition. The speaker comes from the weapon
+	# set (Hauntstable -> Hauntstable1); the director skips a triple that speaker
+	# never authored and enforces its own cooldowns, so no line is invented and
+	# no bark repeats back to back.
+	if AudioManager != null and AudioManager.has_method("play_vo_transition"):
+		var speaker: String = "Hauntstable1" if _guard_weapon_set() == "hauntstable" else "Enforcer1"
+		AudioManager.play_vo_transition(
+			alertness_name(previous_state), alertness_name(new_state), speaker, global_position)
 	_emit_alert_state_if_needed(true)
 
 
@@ -1298,8 +1315,6 @@ func _enter_alerted() -> void:
 		return
 	_set_state(Alertness.ALERTED)
 	NoiseBus.emit_noise(global_position, 14.0, self, "guard_alert")
-	if AudioManager != null and AudioManager.has_method("play_vo"):
-		AudioManager.play_vo("guard_alert", global_position)
 
 
 func _enter_combat() -> void:
@@ -1307,8 +1322,6 @@ func _enter_combat() -> void:
 		return
 	_set_state(Alertness.COMBAT)
 	NoiseBus.emit_noise(global_position, 12.0, self, "guard_alert")
-	if AudioManager != null and AudioManager.has_method("play_vo"):
-		AudioManager.play_vo("guard_alert", global_position)
 
 
 func _ramp_for_state() -> Dictionary:
@@ -2207,8 +2220,6 @@ func _update_ally_wakeup(delta: float) -> void:
 				state_timer = 6.0
 				detection = maxf(detection, 40.0)
 				NoiseBus.emit_noise(global_position, 10.0, self, "guard_alert")
-				if AudioManager != null and AudioManager.has_method("play_vo"):
-					AudioManager.play_vo("guard_search", global_position)
 				revived = true
 		elif state == Alertness.NEUTRAL:
 			_set_state(Alertness.SUSPICIOUS)

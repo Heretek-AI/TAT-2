@@ -19,6 +19,12 @@ extends SceneTree
 ##   4. RTPC curve application: the authored music-node curve drives gain and
 ##      pitch, an authored id-only low-pass curve drives the filter Hz, and
 ##      Constant/edge evaluation matches the authored points.
+##   5. W11-B music: 2 MusicSwitchContainers, 9 DecisionTree keys (6 resolved,
+##      3 id-only), the authored 2000 ms transition and the single stinger.
+##   6. W11-C `FS_Layers`: the surface -> layer mapping and the measured
+##      44 -> 52 media step (Stone + Puddle).
+##   7. W11-D RTPCs: stamina/crouch/fall/rain/disguise exact curve values.
+##   8. W11-E state rows: the 183-row census and the 24 deferred unnamed buses.
 ##
 ## Then the runtime wiring (`AudioManager`): the control plane loads, the
 ## footstep path still resolves clips (no cue regression), interior/exterior and
@@ -38,6 +44,8 @@ const DETECTION_MUSIC_NODE: String = "MusicRandomSequenceContainer:248405997"
 ## Authored id-only RTPC with a low-pass curve (no AkRtpc dump, so it is emitted
 ## by id under unnamed_rtpcs; its curve is points [-90,44] ... [90,0]).
 const LPF_RTPC: int = 2141048674
+## W11-C: the surface resolver owns the FS_Layers mapping.
+const SurfaceResolverScript := preload("res://src/stealth/surface_resolver.gd")
 
 ## Surface families that must NOT survive FS_Material=Stone.
 const NOT_STONE: Array[String] = ["carpet", "tile", "dirt", "mud", "grassrustle",
@@ -81,6 +89,10 @@ func _run() -> void:
 	_test_fail_closed(ctl)
 	_test_selection(ctl)
 	_test_curves(ctl)
+	_test_music(ctl)
+	_test_layers(ctl)
+	_test_rtpc_callers(ctl)
+	_test_state_report(ctl)
 	await _test_runtime(ctl)
 	_test_degraded(ctl)
 	await _finish(ctl)
@@ -268,6 +280,34 @@ func _test_selection(ctl: AudioControl) -> void:
 	_check(ctl.media_ids_for(FOOTSTEP_EVENT, "FS_Material", "Stone").size() >= 8,
 		"AUD4.7 media_ids_for() exposes the authored Stone package",
 		"AUD4.7 media_ids_for() found no Stone package media")
+	# W11-C: the authored FS_Layers branch is additive: Stone 44 -> +Puddle 52.
+	_select(ctl, "Stone")
+	var stone_exact: Array = ctl.select_media(FOOTSTEP_EVENT, media)
+	_check(stone_exact.size() == 44,
+		"AUD4.8 FS_Material=Stone selects exactly the measured 44 media",
+		"AUD4.8 Stone selection=%d (want 44)" % stone_exact.size())
+	ctl.set_switch("FS_Layers", "Puddle")
+	var stone_puddle: Array = ctl.select_media(FOOTSTEP_EVENT, media)
+	_check(stone_puddle.size() == 52,
+		"AUD4.9 Stone + FS_Layers=Puddle selects exactly the measured 52 media",
+		"AUD4.9 Stone+Puddle selection=%d (want 52)" % stone_puddle.size())
+	var layer_ids: Array = ctl.media_ids_for(FOOTSTEP_EVENT, "FS_Layers", "Puddle")
+	var layer_set: Dictionary = {}
+	for mid: Variant in layer_ids:
+		layer_set[int(mid)] = true
+	var added: Array = []
+	for mid: Variant in stone_puddle:
+		if not stone_exact.has(int(mid)):
+			added.append(int(mid))
+	var all_authored: bool = true
+	for mid: Variant in added:
+		if not layer_set.has(int(mid)):
+			all_authored = false
+	_check(added.size() == 8 and all_authored,
+		"AUD4.10 the Puddle layer adds exactly 8 recordings, all from its authored package",
+		"AUD4.10 added=%d all_authored=%s (package carries %d; it is a per-container superset)" % [
+			added.size(), str(all_authored), layer_ids.size()])
+	ctl.set_switch("FS_Layers", "Nothing")
 
 
 ## 5. RTPC curves: authored gain, pitch and low-pass evaluation.
@@ -332,6 +372,245 @@ func _test_curves(ctl: AudioControl) -> void:
 	_check(int(report.get("calls", 0)) > 0,
 		"AUD5.9 curve evaluator counted %d calls" % int(report.get("calls", 0)),
 		"AUD5.9 curve report did not count calls")
+
+
+## 6. W11-B: the authored MusicSwitchContainers (DecisionTree keys, transitions,
+## stingers) and the fail-closed selection.
+func _test_music(ctl: AudioControl) -> void:
+	var counts: Dictionary = ctl.counts()
+	_check(int(counts.get("music_containers", 0)) == 2,
+		"AUD7.1 2 authored MusicSwitchContainers",
+		"AUD7.1 music_containers=%d (want 2)" % int(counts.get("music_containers", 0)))
+	_check(int(counts.get("music_keys", 0)) == 9
+		and int(counts.get("music_resolved_keys", 0)) == 6
+		and int(counts.get("music_unresolved_keys", 0)) == 3,
+		"AUD7.1 9 decision keys: 6 resolve to a named value, 3 stay id-only",
+		"AUD7.1 keys=%d resolved=%d unresolved=%d (want 9/6/3)" % [
+			int(counts.get("music_keys", 0)), int(counts.get("music_resolved_keys", 0)),
+			int(counts.get("music_unresolved_keys", 0))])
+	_check(ctl.music_containers().size() == 2,
+		"AUD7.1 music_containers() exposes both containers",
+		"AUD7.1 music_containers()=%d" % ctl.music_containers().size())
+	_check(ctl.music_container_for_group("Music_Switch_Phase") == 369450896
+		and ctl.music_container_for_group("Music_Switch_Escape") == 1052896423,
+		"AUD7.2 the two authored groups map to their container ids",
+		"AUD7.2 Phase=%d Escape=%d" % [
+			ctl.music_container_for_group("Music_Switch_Phase"),
+			ctl.music_container_for_group("Music_Switch_Escape")])
+	_check(ctl.music_container_for_event("Play_Mus_TVT_Match_Generic_Mission_MX") == 369450896
+		and ctl.music_container_for_event("Play_Mus_EndMission_Escape") == 1052896423,
+		"AUD7.2 the authored play events bind to their containers",
+		"AUD7.2 event bindings=%d/%d" % [
+			ctl.music_container_for_event("Play_Mus_TVT_Match_Generic_Mission_MX"),
+			ctl.music_container_for_event("Play_Mus_EndMission_Escape")])
+	# A resolved key selects the authored value and its audio node.
+	var early: Dictionary = ctl.music_select("Music_Switch_Phase", "Music_Switch_Phase_Early")
+	_check(bool(early.get("found", false))
+		and int(early.get("key", 0)) == 3143687845
+		and int(early.get("audio_node_id", 0)) == 664990907
+		and (early.get("play_events", []) as Array).has("Play_Mus_TVT_Match_Generic_Mission_MX"),
+		"AUD7.3 Phase=Early resolves key 3143687845 -> node 664990907",
+		"AUD7.3 Phase=Early=%s" % str(early))
+	var mid: Dictionary = ctl.music_select("Music_Switch_Escape", "Escape_Mid")
+	_check(bool(mid.get("found", false)) and int(mid.get("key", 0)) == 1699409647,
+		"AUD7.3 Escape=Mid resolves key 1699409647",
+		"AUD7.3 Escape=Mid=%s" % str(mid))
+	# The three unresolved keys stay id-only: selecting by id is refused.
+	var unresolved: Dictionary = ctl.music_select("Music_Switch_Phase", 1363461318)
+	_check(not bool(unresolved.get("found", false))
+		and str(unresolved.get("reason", "")) == "unresolved_key"
+		and int(unresolved.get("key", 0)) == 1363461318,
+		"AUD7.4 an unresolved decision key is refused with its id (no invented name)",
+		"AUD7.4 unresolved=%s" % str(unresolved))
+	var unknown_group: Dictionary = ctl.music_select("Music_Switch_NoSuch", "Whatever")
+	_check(not bool(unknown_group.get("found", false))
+		and str(unknown_group.get("reason", "")) == "unknown_group",
+		"AUD7.4 an unknown music group is refused",
+		"AUD7.4 unknown group=%s" % str(unknown_group))
+	var unknown_value: Dictionary = ctl.music_select("Music_Switch_Escape", "Escape_NoSuch")
+	_check(not bool(unknown_value.get("found", false))
+		and str(unknown_value.get("reason", "")) == "unknown_value",
+		"AUD7.4 an unknown music value is refused",
+		"AUD7.4 unknown value=%s" % str(unknown_value))
+	# Transitions: the authored fade is exact (2000 ms on the Phase container).
+	var phase_rule: Dictionary = ctl.music_transition(369450896)
+	_check(bool(phase_rule.get("found", false))
+		and _approx(float(phase_rule.get("fade_ms", 0.0)), 2000.0)
+		and str(phase_rule.get("fade_source", "")) == "src"
+		and str(phase_rule.get("fade_curve", "")) == "Linear",
+		"AUD7.5 the Phase container authors a 2000 ms Linear transition",
+		"AUD7.5 phase transition=%s" % str(phase_rule))
+	var escape_rule: Dictionary = ctl.music_transition(1052896423)
+	_check(bool(escape_rule.get("found", false))
+		and _approx(float(escape_rule.get("fade_ms", -1.0)), 0.0)
+		and str(escape_rule.get("fade_source", "")) == "none"
+		and str(escape_rule.get("src_sync", "")) == "ExitMarker",
+		"AUD7.5 the Escape container authors a 0 ms ExitMarker transition",
+		"AUD7.5 escape transition=%s" % str(escape_rule))
+	_check(not bool(ctl.music_transition(123456).get("found", false)),
+		"AUD7.6 an unknown music container has no transition",
+		"AUD7.6 unknown container returned a transition")
+	# Stingers: one authored row, trigger id-only, segment duration from the bank.
+	var stingers: Array = ctl.music_stingers(369450896)
+	var stinger_ok: bool = stingers.size() == 1
+	if stinger_ok:
+		var row: Dictionary = stingers[0] as Dictionary
+		stinger_ok = int(row.get("trigger_id", 0)) == 547253114 \
+			and int(row.get("segment_id", 0)) == 797529307 \
+			and _approx(float(row.get("segment_duration_ms", 0.0)), 8000.0) \
+			and str(row.get("sync_play_at", "")) == "NextBeat" \
+			and row.get("trigger_name", "") == null
+	_check(stinger_ok,
+		"AUD7.7 the Phase container authors 1 stinger (trigger id-only, 8 s segment, NextBeat)",
+		"AUD7.7 stingers=%s" % str(stingers))
+	_check(ctl.music_stingers(1052896423).is_empty(),
+		"AUD7.7 the Escape container authors no stinger",
+		"AUD7.7 Escape stingers=%s" % str(ctl.music_stingers(1052896423)))
+
+
+## 7. W11-C: the authored FS_Layers value per surface.
+func _test_layers(ctl: AudioControl) -> void:
+	var resolvers: Array = [
+		["Puddle", "Puddle"], ["GroundWet", "Puddle"], ["BrokenGlass", "Glass_Broken"],
+		["Foliage", "Foliage"], ["Grass", "Grass"], ["Stone", "Nothing"],
+		["WoodFloor", "Nothing"], ["NotASurface", "Nothing"],
+	]
+	var wrong: Array = []
+	for pair: Array in resolvers:
+		var got: String = str(SurfaceResolverScript.layer_for(str(pair[0])))
+		if got != str(pair[1]):
+			wrong.append("%s=%s" % [str(pair[0]), got])
+	_check(wrong.is_empty(),
+		"AUD8.1 layer_for() maps the authored wet/glass/foliage/grass surfaces (8 cases)",
+		"AUD8.1 wrong layer mapping: %s" % str(wrong))
+	_check(SurfaceResolverScript.layer_values() == PackedStringArray(
+		["Glass_Broken", "Grass", "Foliage", "Nothing", "Puddle"]),
+		"AUD8.2 the resolver produces exactly the five documented layer values",
+		"AUD8.2 layer_values()=%s" % str(SurfaceResolverScript.layer_values()))
+	var names: Array = ctl.switch_value_names("FS_Layers")
+	_check(names.size() == 10 and names.has("Puddle") and names.has("Glass_Broken")
+		and names.has("Foliage") and names.has("Grass") and names.has("Nothing"),
+		"AUD8.3 FS_Layers carries the 10 authored values (5 produced, 5 documented)",
+		"AUD8.3 FS_Layers=%s" % str(names))
+
+
+## 8. W11-D: the five authored mix parameters and their exact curve values.
+func _test_rtpc_callers(ctl: AudioControl) -> void:
+	var stamina := "Character_Stamina_RTPC"
+	_check(ctl.set_rtpc(stamina, 63.67521),
+		"AUD9.1 the stamina RTPC accepts the authored 0..100 domain",
+		"AUD9.1 set_rtpc(%s) refused" % stamina)
+	_check(_approx(ctl.gain_db(stamina), -0.317507, 0.00001),
+		"AUD9.2 stamina 63.67521 -> exactly -0.317507 dB",
+		"AUD9.2 stamina gain=%f" % ctl.gain_db(stamina))
+	ctl.set_rtpc(stamina, 100.0)
+	_check(_approx(ctl.gain_db(stamina), -1.0),
+		"AUD9.2 stamina 100 -> exactly -1.0 dB",
+		"AUD9.2 stamina 100 gain=%f" % ctl.gain_db(stamina))
+	ctl.set_rtpc(stamina, 50.0)
+	var want_half: float = -0.317507 * 50.0 / 63.67521
+	_check(_approx(ctl.gain_db(stamina), want_half, 0.00001),
+		"AUD9.2 stamina 50 -> %.6f dB (authored linear segment)" % want_half,
+		"AUD9.2 stamina 50 gain=%f (want %.6f)" % [ctl.gain_db(stamina), want_half])
+
+	var crouch := "Character_FS_isCrouching"
+	ctl.set_rtpc(crouch, 0.0)
+	_check(_approx(ctl.gain_db(crouch, "ActorMixer:492723062"), 0.0),
+		"AUD9.3 crouch 0 -> 0 dB",
+		"AUD9.3 crouch 0 gain=%f" % ctl.gain_db(crouch, "ActorMixer:492723062"))
+	ctl.set_rtpc(crouch, 1.0)
+	_check(_approx(ctl.gain_db(crouch, "ActorMixer:492723062"), -0.608844, 0.00001),
+		"AUD9.3 crouch 1 -> exactly -0.608844 dB",
+		"AUD9.3 crouch 1 gain=%f" % ctl.gain_db(crouch, "ActorMixer:492723062"))
+
+	var fall := "Character_Fall_Velocity_Z"
+	var fall_node := "LayerContainer:350464786"
+	ctl.set_rtpc(fall, -5000.0)
+	_check(_approx(ctl.gain_db(fall, fall_node), 0.498813, 0.00001)
+		and _approx(ctl.pitch_scale(fall, fall_node), pow(2.0, -100.0 / 1200.0), 0.00001),
+		"AUD9.4 fall -5000 cm/s -> +0.498813 dB and -100 cents",
+		"AUD9.4 fall -5000 gain=%f pitch=%f" % [
+			ctl.gain_db(fall, fall_node), ctl.pitch_scale(fall, fall_node)])
+	ctl.set_rtpc(fall, -500.0)
+	_check(_approx(ctl.gain_db(fall, fall_node), -1.0)
+		and _approx(ctl.pitch_scale(fall, fall_node), pow(2.0, -2.0 / 1200.0), 0.00001),
+		"AUD9.4 fall -500 cm/s -> exactly -1.0 dB and -2 cents",
+		"AUD9.4 fall -500 gain=%f" % ctl.gain_db(fall, fall_node))
+	ctl.set_rtpc(fall, 500.0)
+	_check(_approx(ctl.gain_db(fall, fall_node), -1.0),
+		"AUD9.4 fall 500 cm/s clamps to the authored tail (-1.0 dB)",
+		"AUD9.4 fall 500 gain=%f" % ctl.gain_db(fall, fall_node))
+
+	var rain := "Weather_Rain_Intensity"
+	ctl.set_rtpc(rain, 0.0)
+	_check(_approx(ctl.gain_db(rain), -1.0),
+		"AUD9.5 rain 0 -> -1.0 dB",
+		"AUD9.5 rain 0 gain=%f" % ctl.gain_db(rain))
+	ctl.set_rtpc(rain, 0.65)
+	_check(_approx(ctl.gain_db(rain), 0.0),
+		"AUD9.5 rain 0.65 -> exactly 0 dB (authored breakpoint)",
+		"AUD9.5 rain 0.65 gain=%f" % ctl.gain_db(rain))
+	ctl.set_rtpc(rain, 0.3)
+	var want_rain: float = -1.0 + (0.3 / 0.65)
+	_check(_approx(ctl.gain_db(rain), want_rain, 0.00001),
+		"AUD9.5 rain 0.3 -> %.6f dB (authored linear segment)" % want_rain,
+		"AUD9.5 rain 0.3 gain=%f (want %.6f)" % [ctl.gain_db(rain), want_rain])
+
+	var disguise := "Character_DisguiseIntegrity"
+	ctl.set_rtpc(disguise, 0.0)
+	_check(_approx(ctl.gain_db(disguise), 0.0),
+		"AUD9.6 disguise 0 -> 0 dB",
+		"AUD9.6 disguise 0 gain=%f" % ctl.gain_db(disguise))
+	ctl.set_rtpc(disguise, 1.0)
+	_check(_approx(ctl.gain_db(disguise), -1.0, 0.00001),
+		"AUD9.6 disguise 100 -> exactly -1.0 dB",
+		"AUD9.6 disguise 1.0 gain=%f" % ctl.gain_db(disguise))
+	# Restore the authored rests so later runtime assertions see a clean table.
+	ctl.set_rtpc(stamina, 100.0)
+	ctl.set_rtpc(crouch, 0.0)
+	ctl.set_rtpc(fall, 0.0)
+	ctl.set_rtpc(rain, 0.0)
+	ctl.set_rtpc(disguise, 100.0)
+
+
+## 9. W11-E: the counted state-override table and the deferred unnamed buses.
+func _test_state_report(ctl: AudioControl) -> void:
+	var report: Dictionary = ctl.state_override_report()
+	_check(int(report.get("rows", 0)) == 183,
+		"AUD10.1 the state table has 183 authored row references",
+		"AUD10.1 rows=%d (want 183)" % int(report.get("rows", 0)))
+	_check(int(report.get("nodes", 0)) == 62,
+		"AUD10.1 those rows target 62 authored nodes",
+		"AUD10.1 nodes=%d (want 62)" % int(report.get("nodes", 0)))
+	_check(int(report.get("audio_bus_rows", 0)) == 98
+		and int(report.get("audio_bus_nodes", 0)) == 24,
+		"AUD10.2 98 rows target 24 AudioBus nodes",
+		"AUD10.2 bus rows=%d nodes=%d (want 98/24)" % [
+			int(report.get("audio_bus_rows", 0)), int(report.get("audio_bus_nodes", 0))])
+	_check(int(report.get("other_rows", 0)) == 85,
+		"AUD10.2 the other 85 rows target non-bus nodes",
+		"AUD10.2 other_rows=%d (want 85)" % int(report.get("other_rows", 0)))
+	var deferred: Dictionary = report.get("deferred", {}) as Dictionary
+	_check(int(deferred.get("unnamed_buses", 0)) == 24
+		and int(deferred.get("rows", 0)) == 98,
+		"AUD10.3 the 24 unnamed buses are deferred with their row count (98)",
+		"AUD10.3 deferred=%s" % str(deferred))
+	var groups: Dictionary = report.get("groups", {}) as Dictionary
+	_check(groups.size() == 7
+		and int(groups.get("Player_HeightenedSenses", 0)) == 113
+		and int(groups.get("Player_Downed", 0)) == 16
+		and int(groups.get("Weather_isExterior", 0)) == 10
+		and int(groups.get("Modal_State", 0)) == 7
+		and int(groups.get("354100577", 0)) == 7,
+		"AUD10.3 7 authored state groups with the measured per-group rows",
+		"AUD10.3 groups=%s" % str(groups))
+	# The existing per-selection API is unchanged.
+	ctl.set_state("Player_HeightenedSenses", "Listening")
+	var rows: Array = ctl.state_override_rows("Player_HeightenedSenses")
+	_check(not rows.is_empty(),
+		"AUD10.4 state_override_rows() still returns the selected state's rows",
+		"AUD10.4 state_override_rows() returned nothing")
+	ctl.set_state("Player_HeightenedSenses", "Normal")
 
 
 ## 6. Runtime wiring: AudioManager consumes the control plane without breaking
@@ -424,6 +703,47 @@ func _test_runtime(ctl: AudioControl) -> void:
 		"AUD6.6 authored music gain at 0.6 is -0.501 dB",
 		"AUD6.6 rtpc_music_gain_db=%f" % float(state.get("rtpc_music_gain_db", 0.0)))
 	am.call("set_detection_level", 0.0)
+	# W11-C: the footstep path sets the authored FS_Layers value, and the
+	# authored layer recordings play as their own branch.
+	am.call("play_footstep", "wet", "walk", Vector3(2.0, 0.0, 2.0))
+	ctl_state = am.call("control_state") as Dictionary
+	switches = ctl_state.get("switches", {}) as Dictionary
+	_check(str(switches.get("Puddle", "")) == "FS_Layers",
+		"AUD6.7 a wet surface sets FS_Layers=Puddle",
+		"AUD6.7 switches=%s" % str(switches))
+	am.call("play_footstep", "stone", "walk", Vector3(3.0, 0.0, 3.0), "Puddle")
+	var layer_pools_v: Variant = am.get("_layer_pools")
+	var layer_pools: Dictionary = layer_pools_v as Dictionary if layer_pools_v is Dictionary else {}
+	var puddle_pool: Array = layer_pools.get("walk|stone|Puddle", []) as Array
+	_check(puddle_pool.size() == 8,
+		"AUD6.8 Stone + Puddle builds the authored 8-recording layer pool",
+		"AUD6.8 layer pool=%d (%s)" % [puddle_pool.size(), str(layer_pools.keys())])
+	# W11-D: the five authored parameters are exposed with their exact curves.
+	am.call("set_rtpc", "Character_Stamina_RTPC", 63.67521)
+	var mix: Dictionary = am.call("mix_state") as Dictionary
+	var rtpc: Dictionary = mix.get("rtpc", {}) as Dictionary
+	var stamina_block: Dictionary = rtpc.get("Character_Stamina_RTPC", {}) as Dictionary
+	_check(rtpc.size() == 5
+		and _approx(float(stamina_block.get("gain_db", 0.0)), -0.317507, 0.00001),
+		"AUD6.9 mix_state().rtpc reports the 5 authored parameters with exact curves",
+		"AUD6.9 rtpc=%s" % str(rtpc))
+	am.call("set_rtpc", "Character_Stamina_RTPC", 100.0)
+	# W11-B: the authored Phase transition (2000 ms) is the music fade.
+	var authored_fade: float = float(am.call("music_fade_for_event",
+		"Play_Mus_TVT_Match_Generic_Mission_MX"))
+	_check(_approx(authored_fade, 2.0),
+		"AUD6.10 the Phase music event authors a 2.0 s fade",
+		"AUD6.10 authored fade=%f" % authored_fade)
+	_check(bool(am.call("start_music", "mission")),
+		"AUD6.10 start_music('mission') plays the authored event",
+		"AUD6.10 start_music('mission') refused")
+	mix = am.call("mix_state") as Dictionary
+	var music: Dictionary = mix.get("music", {}) as Dictionary
+	_check(_approx(float(music.get("fade_s", -1.0)), 2.0)
+		and int(music.get("container_id", 0)) == 369450896,
+		"AUD6.10 the runtime music player uses the authored 2.0 s fade",
+		"AUD6.10 mix_state().music=%s" % str(music))
+	am.call("stop_music", 0.0)
 
 
 ## 7. Degradation: no document -> identity selection and a stated reason.

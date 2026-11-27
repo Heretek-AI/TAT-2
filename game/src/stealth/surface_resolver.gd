@@ -225,6 +225,45 @@ static func audio_token(surface: String) -> String:
 	return str(AUDIO_TOKEN.get(s, "stone"))
 
 
+## W11-C: the authored `FS_Layers` value a surface contributes *on top of* its
+## `FS_Material`. The bank's layer group has 10 values; this returns five:
+##
+##   Puddle       <- Puddle, GroundWet (the two authored wet surface rows)
+##   Glass_Broken <- BrokenGlass
+##   Foliage      <- Foliage
+##   Grass        <- Grass
+##   Nothing      <- every other surface (the authored group default)
+##
+## The other five authored layer values are deliberately not produced:
+##   * MetalPipe / MetalSheet / Glass / Metal are `FS_Material` families the
+##     surface switch already selects. Selecting them again as a layer would
+##     double-ban the same clips (the package ban is not additive across groups).
+##   * Slime is an authored tool effect (`Eqp_SlimeTool_*`), not a world surface
+##     in `DA_LoudnessModifiers`; there is no surface record to derive it from.
+##
+## Accepts an authored surface name or one of the seven audio tokens, so a
+## caller that already resolved the surface and one that only has the pool token
+## agree for every layer this returns (the token "earth" collapses Grass,
+## Foliage and Dirt, so a caller that knows the authored name must pass that).
+static func layer_for(surface: String) -> String:
+	var s: String = canonical(surface)
+	match s:
+		"Puddle", "GroundWet":
+			return "Puddle"
+		"BrokenGlass":
+			return "Glass_Broken"
+		"Foliage":
+			return "Foliage"
+		"Grass":
+			return "Grass"
+	return "Nothing"
+
+
+## The authored layer values this resolver can produce, sorted (QA/tests).
+static func layer_values() -> PackedStringArray:
+	return PackedStringArray(["Glass_Broken", "Grass", "Foliage", "Nothing", "Puddle"])
+
+
 ## Explicit author/test override on a node (see OVERRIDE_META_KEYS).
 static func override_surface(node: Object) -> String:
 	if node == null:

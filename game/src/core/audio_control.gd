@@ -71,6 +71,11 @@ var _state_blocks: Array = []
 var _rtpc_blocks: Array = []
 var _containers: Dictionary = {}
 var _events: Dictionary = {}
+## W11-B: the two MusicSwitchContainers (DecisionTree keys, transitions,
+## stingers) and their play/stop event bindings. Empty when the producer
+## predates W11-B or the document has no music block.
+var _music_containers: Array = []
+var _music_by_id: Dictionary = {}
 
 ## name/id -> block
 var _switch_by_name: Dictionary = {}
@@ -196,6 +201,15 @@ func load_data(path: String = "") -> bool:
 	var events_v: Variant = doc.get("events", {})
 	if events_v is Dictionary:
 		_events = events_v as Dictionary
+	var music_v: Variant = doc.get("music", {})
+	if music_v is Dictionary:
+		var music_block: Dictionary = music_v as Dictionary
+		var rows_v: Variant = music_block.get("containers", [])
+		if rows_v is Array:
+			_music_containers = (rows_v as Array).duplicate(true)
+		for container_v: Variant in _music_containers:
+			if container_v is Dictionary:
+				_music_by_id[int((container_v as Dictionary).get("id", 0))] = container_v
 	_loaded = true
 	return true
 
@@ -210,6 +224,8 @@ func reset() -> void:
 	_rtpc_blocks = []
 	_containers = {}
 	_events = {}
+	_music_containers = []
+	_music_by_id = {}
 	_switch_by_name = {}
 	_switch_by_id = {}
 	_state_by_name = {}
@@ -512,8 +528,224 @@ func curve_report() -> Dictionary:
 
 
 ## ---------------------------------------------------------------------------
-## Media selection
+## Music switch containers (W11-B)
 ## ---------------------------------------------------------------------------
+
+## The authored MusicSwitchContainers (2 in the shipped bank), copied.
+func music_containers() -> Array:
+	return _music_containers.duplicate(true)
+
+
+## Container id for a group name/id (`Music_Switch_Phase` / `Music_Switch_Escape`
+## or the numeric group id). 0 when unknown.
+func music_container_for_group(group: Variant) -> int:
+	var wanted_name: String = str(group).strip_edges().to_lower()
+	var wanted_id: int = int(group) if group is int or group is float else -1
+	for container_v: Variant in _music_containers:
+		if not (container_v is Dictionary):
+			continue
+		var container: Dictionary = container_v as Dictionary
+		if wanted_id >= 0 and int(container.get("group_id", 0)) == wanted_id:
+			return int(container.get("id", 0))
+		if str(container.get("group_name", "")).to_lower() == wanted_name:
+			return int(container.get("id", 0))
+	return 0
+
+
+## Container id whose authored play events include [param event_name], 0 when
+## the event is not bound to a MusicSwitchContainer.
+func music_container_for_event(event_name: String) -> int:
+	var wanted: String = event_name.strip_edges()
+	if wanted.is_empty():
+		return 0
+	for container_v: Variant in _music_containers:
+		if not (container_v is Dictionary):
+			continue
+		var container: Dictionary = container_v as Dictionary
+		for event_v: Variant in (container.get("play_events", []) as Array):
+			if str(event_v) == wanted:
+				return int(container.get("id", 0))
+	return 0
+
+
+## Authored music selection: `MusicSwitchContainer.<group> = <value>` -> the
+## decision key, its audio node and the event that plays the container.
+##
+## Fail closed: an unknown group, an unknown value, a key that does not resolve
+## to an authored switch value, or a document without the music block all return
+## `{found: false, reason: ...}`. No value name is invented and the 3 unresolved
+## keys stay id-only.
+func music_select(group: Variant, value: Variant) -> Dictionary:
+	var out: Dictionary = {"found": false, "reason": "no_music_block"}
+	if _music_containers.is_empty():
+		return out
+	var container_id: int = music_container_for_group(group)
+	if container_id == 0:
+		out["reason"] = "unknown_group"
+		return out
+	var container: Dictionary = _music_by_id.get(container_id, {}) as Dictionary
+	var wanted_name: String = str(value).strip_edges().to_lower()
+	var wanted_key: int = int(value) if value is int or value is float else -1
+	if value is String and (value as String).strip_edges().is_valid_int():
+		wanted_key = int((value as String).strip_edges())
+	for row_v: Variant in (container.get("keys", []) as Array):
+		if not (row_v is Dictionary):
+			continue
+		var row: Dictionary = row_v as Dictionary
+		var key: int = int(row.get("key", 0))
+		var name: String = str(row.get("value_name", "")).to_lower()
+		if wanted_key >= 0 and key == wanted_key:
+			pass
+		elif not wanted_name.is_empty() and name == wanted_name:
+			pass
+		else:
+			continue
+		if not bool(row.get("resolved", false)):
+			return {
+				"found": false,
+				"reason": "unresolved_key",
+				"container_id": container_id,
+				"group_id": int(container.get("group_id", 0)),
+				"group_name": str(container.get("group_name", "")),
+				"key": key,
+			}
+		return {
+			"found": true,
+			"reason": "ok",
+			"container_id": container_id,
+			"group_id": int(container.get("group_id", 0)),
+			"group_name": str(container.get("group_name", "")),
+			"key": key,
+			"value_id": int(row.get("value_id", 0)),
+			"value_name": str(row.get("value_name", "")),
+			"audio_node_id": int(row.get("audio_node_id", 0)),
+			"node_type": str(row.get("node_type", "")),
+			"segment_id": row.get("segment_id"),
+			"segment_duration_ms": row.get("segment_duration_ms"),
+			"play_events": (container.get("play_events", []) as Array).duplicate(),
+			"stop_events": (container.get("stop_events", []) as Array).duplicate(),
+		}
+	out = {
+		"found": false,
+		"reason": "unknown_value",
+		"container_id": container_id,
+		"group_id": int(container.get("group_id", 0)),
+		"group_name": str(container.get("group_name", "")),
+	}
+	return out
+
+
+## The authored transition rule for a music container, with the fade the runtime
+## should use: `src.transition_ms` when authored (the source fades out), else
+## `dest.transition_ms`. `fade_source` says which side supplied it, so a caller
+## never has to guess. Fail closed for an unknown container or no rule.
+func music_transition(container_id: int) -> Dictionary:
+	var container_v: Variant = _music_by_id.get(int(container_id), null)
+	if not (container_v is Dictionary):
+		return {"found": false, "reason": "unknown_container", "container_id": int(container_id)}
+	var container: Dictionary = container_v as Dictionary
+	var rules: Array = container.get("transitions", []) as Array
+	if rules.is_empty():
+		return {"found": false, "reason": "no_transition", "container_id": int(container_id)}
+	var rule: Dictionary = rules[0] as Dictionary
+	var src: Dictionary = rule.get("src", {}) as Dictionary
+	var dest: Dictionary = rule.get("dest", {}) as Dictionary
+	var src_ms: float = float(src.get("transition_ms", 0.0))
+	var dest_ms: float = float(dest.get("transition_ms", 0.0))
+	var fade_ms: float = src_ms if src_ms > 0.0 else dest_ms
+	var fade_source: String = "src" if src_ms > 0.0 else ("dest" if dest_ms > 0.0 else "none")
+	return {
+		"found": true,
+		"container_id": int(container_id),
+		"group_id": int(container.get("group_id", 0)),
+		"group_name": str(container.get("group_name", "")),
+		"rule_count": rules.size(),
+		"src_ids": (rule.get("src_ids", []) as Array).duplicate(),
+		"dest_ids": (rule.get("dest_ids", []) as Array).duplicate(),
+		"fade_ms": fade_ms,
+		"fade_source": fade_source,
+		"fade_curve": str(src.get("fade_curve", "")),
+		"src_sync": str(src.get("sync", "")),
+		"src_fade_offset_ms": float(src.get("fade_offset_ms", 0.0)),
+		"dest_entry_type": str(dest.get("entry_type", "")),
+	}
+
+
+## The authored stinger rows for a music container (1 in the shipped bank).
+## Empty for an unknown container or a container with no stinger.
+func music_stingers(container_id: int) -> Array:
+	var container_v: Variant = _music_by_id.get(int(container_id), null)
+	if not (container_v is Dictionary):
+		return []
+	return ((container_v as Dictionary).get("stingers", []) as Array).duplicate(true)
+
+
+## Document-level census of the authored state property rows (W11-E). This is
+## the whole authored table, not the currently selected state's rows:
+##   * `rows` counts every `(group, param, state, value, node)` reference
+##     (183 in the shipped bank);
+##   * `audio_bus_rows` / `audio_bus_nodes` count the rows whose target is an
+##     `AudioBus:<id>` node. Every one of those 24 bus ids is unnamed in the
+##     extraction (no `AkAudioBus` name dump; the 16 named buses are the
+##     `VERB_*` reverb buses, none of which carry a state row), so those rows
+##     are deferred rather than applied to a global bus.
+## `state_override_rows(group)` stays the per-selection API and is unchanged.
+func state_override_report() -> Dictionary:
+	var rows: int = 0
+	var nodes: Dictionary = {}
+	var by_group: Dictionary = {}
+	var by_param: Dictionary = {}
+	var bus_rows: int = 0
+	var bus_nodes: Dictionary = {}
+	for block_v: Variant in _state_blocks:
+		if not (block_v is Dictionary):
+			continue
+		var block: Dictionary = block_v as Dictionary
+		var gid: int = int(block.get("id", 0))
+		var name_v: Variant = block.get("name", null)
+		var gname: String = "" if name_v == null else str(name_v)
+		if gname.is_empty():
+			gname = str(gid)
+		var group_rows: int = 0
+		for row_v: Variant in (block.get("overrides", []) as Array):
+			if not (row_v is Dictionary):
+				continue
+			var row: Dictionary = row_v as Dictionary
+			var param: String = str(row.get("param", ""))
+			for value_v: Variant in (row.get("values", []) as Array):
+				if not (value_v is Dictionary):
+					continue
+				for node_v: Variant in ((value_v as Dictionary).get("nodes", []) as Array):
+					var node: String = str(node_v)
+					rows += 1
+					group_rows += 1
+					nodes[node] = true
+					by_param[param] = int(by_param.get(param, 0)) + 1
+					if node.begins_with("AudioBus:"):
+						bus_rows += 1
+						bus_nodes[node] = true
+		if group_rows > 0:
+			by_group[gname] = int(by_group.get(gname, 0)) + group_rows
+	return {
+		"loaded": _loaded,
+		"rows": rows,
+		"nodes": nodes.size(),
+		"groups": by_group,
+		"groups_total": _state_blocks.size(),
+		"params": by_param,
+		"audio_bus_rows": bus_rows,
+		"audio_bus_nodes": bus_nodes.size(),
+		"other_rows": rows - bus_rows,
+		"deferred": {
+			"unnamed_buses": bus_nodes.size(),
+			"rows": bus_rows,
+			"reason": "state rows target per-node property overrides; 24 target AudioBus ids "
+				+ "that carry no authored bus name, so no global bus can reproduce them",
+		},
+	}
+
+
+
 
 ## Control surface an event reaches, straight from the document: {event_id,
 ## containers, switch_groups, state_groups, rtpcs}. Empty for an event with no
@@ -524,6 +756,10 @@ func event_control(event_name: String) -> Dictionary:
 		return (block as Dictionary).duplicate(true)
 	return {}
 
+
+## ---------------------------------------------------------------------------
+## Media selection
+## ---------------------------------------------------------------------------
 
 ## Filters [param media_ids] (MediaIds from audio_events.json) down to what the
 ## current switch values can play. Identity when the event has no control data

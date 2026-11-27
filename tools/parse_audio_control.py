@@ -157,6 +157,13 @@ EXPECTED_COUNTS = {
     "switch_containers": 185,
     "switch_package_media": 13146,
     "events_with_control": 180,
+    "music_containers": 2,
+    "music_keys": 9,
+    "music_resolved_keys": 6,
+    "music_unresolved_keys": 3,
+    "music_transitions": 2,
+    "music_stingers": 1,
+    "music_bound_events": 4,
 }
 
 _ABS_PATH_RE = re.compile(r"^(?:/home/|/tmp/|/Users/|/var/|/root/|[A-Za-z]:[\\/])")
@@ -783,6 +790,191 @@ def parse_events(bank, event_names, container_groups):
 
 
 # ---------------------------------------------------------------------------
+# Music switch containers (DecisionTree keys, transitions, stingers)
+# ---------------------------------------------------------------------------
+def _decision_keys(node, out, depth=0):
+    """Every ``(key, audio node id)`` pair in a MusicSwitchContainer tree.
+
+    The shipped bank has one root node (key 0, no audio) whose children carry the
+    switch keys; the walk is recursive so a deeper authored tree cannot silently
+    drop a key. Only the leaf rows (an ``AudioNodeId``) are emitted.
+    """
+    if depth > MAX_WALK_DEPTH or not isinstance(node, dict):
+        return
+    audio_id = node.get("AudioNodeId")
+    key = node.get("Key")
+    if audio_id:
+        out.append((int(key), int(audio_id)))
+    for child in node.get("Children") or []:
+        _decision_keys(child, out, depth + 1)
+
+
+def parse_music_containers(bank, switch_groups, event_names):
+    """The two authored MusicSwitchContainers, their keys, transitions and stingers.
+
+    A MusicSwitchContainer selects through a ``DecisionTree`` key, not
+    ``SwitchPackages``, so the key list is the *only* authored binding between a
+    music event and a switch group value. A key that does not resolve to one of
+    the group's named values is emitted with ``value_id``/``value_name`` null and
+    ``resolved: false`` — it stays id-only rather than being dropped or guessed.
+    """
+    actions_by_container = defaultdict(list)
+    for (obj_type, obj_id), hierarchy in bank["objects"].items():
+        if obj_type != "EventAction":
+            continue
+        reference = (hierarchy.get("Data") or {}).get("ReferencedId")
+        if reference:
+            actions_by_container[int(reference)].append(int(obj_id))
+    events_by_action = defaultdict(list)
+    for (obj_type, obj_id), hierarchy in bank["objects"].items():
+        if obj_type != "Event":
+            continue
+        for action_id in (hierarchy.get("Data") or {}).get("EventActionIds") or []:
+            events_by_action[int(action_id)].append(int(obj_id))
+
+    segment_info = {}
+    for (obj_type, obj_id), hierarchy in bank["objects"].items():
+        if obj_type != "MusicSegment":
+            continue
+        data = hierarchy.get("Data") or {}
+        segment_info[int(obj_id)] = {
+            "duration_ms": _round(data.get("Duration"), 3),
+        }
+
+    containers = []
+    key_total = 0
+    resolved_total = 0
+    transition_total = 0
+    stinger_total = 0
+    for (obj_type, obj_id), hierarchy in sorted(bank["objects"].items()):
+        if obj_type != "MusicSwitchContainer":
+            continue
+        data = hierarchy.get("Data") or {}
+        arguments = data.get("Arguments") or []
+        group_id = None
+        if arguments and arguments[0].get("GroupId") is not None:
+            group_id = u32(arguments[0].get("GroupId"))
+        group = switch_groups.get(group_id) or {}
+        values = group.get("values") or {}
+
+        raw_keys = []
+        for root in (data.get("DecisionTree") or {}).get("Nodes") or []:
+            _decision_keys(root, raw_keys)
+        keys = []
+        for key, audio_node_id in sorted(raw_keys):
+            value = values.get(key) or {}
+            resolved = value.get("name") is not None
+            row = {
+                "key": key,
+                "audio_node_id": audio_node_id,
+                "node_type": node_type(bank, audio_node_id),
+                "value_id": key if resolved else None,
+                "value_name": value.get("name"),
+                "resolved": resolved,
+            }
+            if audio_node_id in segment_info:
+                row["segment_id"] = audio_node_id
+                row["segment_duration_ms"] = segment_info[audio_node_id]["duration_ms"]
+            else:
+                row["segment_id"] = None
+                row["segment_duration_ms"] = None
+            keys.append(row)
+            key_total += 1
+            if resolved:
+                resolved_total += 1
+
+        transitions = []
+        for rule in data.get("MusicTransitionRule") or []:
+            src = rule.get("SrcRules") or {}
+            dest = rule.get("DestRules") or {}
+            row = {
+                "src_ids": [int(value) for value in rule.get("SrcIds") or []],
+                "dest_ids": [int(value) for value in rule.get("DestIds") or []],
+                "src": {
+                    "transition_ms": _round(src.get("TransitionTime"), 3),
+                    "fade_curve": src.get("FadeCurve"),
+                    "fade_offset_ms": _round(src.get("FadeOffset"), 3),
+                    "sync": src.get("SyncType"),
+                    "play_post_exit": src.get("PlayPostExit"),
+                },
+                "dest": {
+                    "transition_ms": _round(dest.get("TransitionTime"), 3),
+                    "fade_curve": dest.get("FadeCurve"),
+                    "fade_offset_ms": _round(dest.get("FadeOffset"), 3),
+                    "entry_type": dest.get("EntryType"),
+                    "play_pre_entry": dest.get("PlayPreEntry"),
+                    "jump_to_type": dest.get("JumpToType"),
+                },
+            }
+            if rule.get("TransObject") is not None:
+                row["transition_object_id"] = int(rule["TransObject"])
+            transitions.append(row)
+            transition_total += 1
+
+        stingers = []
+        for stinger in data.get("Stingers") or []:
+            segment_id = stinger.get("SegmentId")
+            segment_id = int(segment_id) if segment_id is not None else None
+            info = segment_info.get(segment_id) or {}
+            stingers.append(
+                {
+                    "trigger_id": int(stinger["TriggerId"])
+                    if stinger.get("TriggerId") is not None
+                    else None,
+                    # No AkTrigger dump exists in this extraction: the trigger
+                    # stays id-only. The segment is a MusicSegment id whose
+                    # duration comes from the bank, not from a name.
+                    "trigger_name": None,
+                    "segment_id": segment_id,
+                    "segment_duration_ms": info.get("duration_ms"),
+                    "sync_play_at": stinger.get("SyncPlayAt"),
+                    "dont_repeat_time_ms": _round(stinger.get("DontRepeatTime"), 3),
+                    "look_ahead": stinger.get("NumSegmentLookAhead"),
+                }
+            )
+            stinger_total += 1
+
+        play_events = []
+        stop_events = []
+        for action_id in actions_by_container.get(int(obj_id), []):
+            for event_id in events_by_action.get(action_id, []):
+                name = event_names.get(event_id)
+                if not name:
+                    continue
+                if name.startswith("Stop_"):
+                    if name not in stop_events:
+                        stop_events.append(name)
+                elif name not in play_events:
+                    play_events.append(name)
+        containers.append(
+            {
+                "id": int(obj_id),
+                "group_id": group_id,
+                "group_name": group.get("name"),
+                "mode": data.get("Mode"),
+                "continue_playback": data.get("IsContinuePlayback"),
+                "keys": keys,
+                "transitions": transitions,
+                "stingers": stingers,
+                "play_events": sorted(play_events),
+                "stop_events": sorted(stop_events),
+            }
+        )
+    containers.sort(key=lambda item: item["id"])
+    return {
+        "containers": containers,
+        "keys": key_total,
+        "resolved_keys": resolved_total,
+        "unresolved_keys": key_total - resolved_total,
+        "transitions": transition_total,
+        "stingers": stinger_total,
+        "bound_events": sum(
+            len(item["play_events"]) + len(item["stop_events"]) for item in containers
+        ),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Assembly
 # ---------------------------------------------------------------------------
 def _group_block(
@@ -1002,6 +1194,7 @@ def build():
     }
     event_control = parse_events(bank, event_names, container_groups)
     rtpc_block = parse_rtpcs(bank, rtpc_assets["rtpcs"], event_control)
+    music_block = parse_music_containers(bank, switch_groups, event_names)
 
     # Switch groups present in the bank but with no asset dump.
     named_switch_ids = set(switch_groups)
@@ -1099,6 +1292,13 @@ def build():
             for item in switch_blocks
             if item["name"] is not None and item["containers"] == 0
         ),
+        "music_containers": len(music_block["containers"]),
+        "music_keys": music_block["keys"],
+        "music_resolved_keys": music_block["resolved_keys"],
+        "music_unresolved_keys": music_block["unresolved_keys"],
+        "music_transitions": music_block["transitions"],
+        "music_stingers": music_block["stingers"],
+        "music_bound_events": music_block["bound_events"],
     }
 
     warnings = _warnings(
@@ -1126,6 +1326,18 @@ def build():
         "unnamed_rtpcs": rtpc_block["unnamed"],
         "switch_containers": switch_container_block["containers"],
         "events": event_control["events"],
+        "music": {
+            "containers": music_block["containers"],
+            "counts": {
+                "containers": len(music_block["containers"]),
+                "keys": music_block["keys"],
+                "resolved_keys": music_block["resolved_keys"],
+                "unresolved_keys": music_block["unresolved_keys"],
+                "transitions": music_block["transitions"],
+                "stingers": music_block["stingers"],
+                "bound_events": music_block["bound_events"],
+            },
+        },
         "warnings": warnings,
     }
 
@@ -1205,6 +1417,21 @@ def _warnings(
             f"{named_without_containers} named switch groups have no SwitchContainer: the two "
             "MusicSwitchContainers select through a DecisionTree key rather than SwitchPackages, "
             "so those groups carry no package media."
+        )
+    music = counts.get("music_containers", 0)
+    if music:
+        warnings.append(
+            f"{music} MusicSwitchContainers select through a DecisionTree: "
+            f"{counts['music_keys']} keys of which {counts['music_resolved_keys']} resolve to a "
+            f"named switch value and {counts['music_unresolved_keys']} stay id-only (no "
+            "AkSwitchValue dump for that key). The resolved keys are the only authored music "
+            "selection binding; an unresolved key is never given an invented value name."
+        )
+    if counts.get("music_stingers", 0):
+        warnings.append(
+            f"{counts['music_stingers']} authored music stinger row(s) carry a TriggerId with no "
+            "AkTrigger dump in this extraction, so the trigger stays id-only; the stinger segment "
+            "duration is read from the bank MusicSegment."
         )
     return sorted(set(warnings))
 
@@ -1336,6 +1563,57 @@ def verify(document, raw_text):
             continue
         break
 
+    music = document.get("music") or {}
+    music_containers = music.get("containers") or []
+    music_counts = music.get("counts") or {}
+    if music_counts.get("containers") != len(music_containers):
+        failures.append("music.counts.containers disagrees with the container list")
+    key_rows = 0
+    resolved_rows = 0
+    transition_rows = 0
+    stinger_rows = 0
+    for container in music_containers:
+        group_id = container.get("group_id")
+        if group_id not in known_groups:
+            failures.append(
+                f"music container {container['id']} names unknown group {group_id}"
+            )
+            break
+        keys = [row["key"] for row in container["keys"]]
+        if len(set(keys)) != len(keys):
+            failures.append(f"music container {container['id']} repeats a key")
+            break
+        for row in container["keys"]:
+            key_rows += 1
+            if row["resolved"]:
+                resolved_rows += 1
+                if row["value_name"] is None or row["value_id"] != row["key"]:
+                    failures.append(
+                        f"music container {container['id']} key {row['key']} is "
+                        "resolved but carries no value binding"
+                    )
+                    break
+            elif row["value_id"] is not None or row["value_name"] is not None:
+                failures.append(
+                    f"music container {container['id']} key {row['key']} is "
+                    "unresolved but carries a name/id"
+                )
+                break
+        transition_rows += len(container["transitions"])
+        stinger_rows += len(container["stingers"])
+    if key_rows != music_counts.get("keys"):
+        failures.append(f"music key rows {key_rows} != music.counts.keys")
+    if resolved_rows != music_counts.get("resolved_keys"):
+        failures.append(
+            f"music resolved keys {resolved_rows} != music.counts.resolved_keys"
+        )
+    if transition_rows != music_counts.get("transitions"):
+        failures.append(
+            f"music transitions {transition_rows} != music.counts.transitions"
+        )
+    if stinger_rows != music_counts.get("stingers"):
+        failures.append(f"music stingers {stinger_rows} != music.counts.stingers")
+
     for source in (document.get("sources") or {}).values():
         if isinstance(source, list):
             continue
@@ -1378,7 +1656,11 @@ def summary_line(counts):
         f"{counts['rtpcs_total']} curves={counts['rtpc_curves']} "
         f"containers={counts['switch_containers']} "
         f"package_media={counts['switch_package_media']} "
-        f"events={counts['events_with_control']}"
+        f"events={counts['events_with_control']} "
+        f"music={counts['music_containers']} music_keys="
+        f"{counts['music_resolved_keys']}/{counts['music_keys']} "
+        f"music_transitions={counts['music_transitions']} "
+        f"music_stingers={counts['music_stingers']}"
     )
 
 

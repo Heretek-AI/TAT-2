@@ -138,6 +138,39 @@ const PAUSE_DUCK_BUSES: Array[String] = [BUS_AMBIENCE, BUS_SFX, BUS_MUSIC]
 ## keeps the pre-T03 behaviour and reports the degraded path in mix_state().
 const WWISE_SCRIPT_PATH: String = "res://src/core/audio_wwise.gd"
 const MIX_CONFIG_PATH: String = "res://data/expansion/audio_mix.json"
+## B3a authored switch/state/RTPC control plane (tools/parse_audio_control.py).
+## Loaded dynamically like the Wwise helper: a fresh clone without the generated
+## file keeps the token footstep pools and the pre-B3a behaviour, and
+## mix_state().control says why.
+const CONTROL_SCRIPT_PATH: String = "res://src/core/audio_control.gd"
+const CONTROL_DETECTION_RTPC: String = "Character_Enemy_Detection_Level_RTPC"
+## The RTPC's authored curve is per node; the music container is the node whose
+## curve the port applies (the detection level is a music mix control in the
+## shipped bank — 3 of its 24 node rows sit on music containers).
+const CONTROL_MUSIC_NODE_TYPE: String = "MusicRandomSequenceContainer"
+const CONTROL_STATE_ENV: String = "Weather_isExterior"
+const CONTROL_STATE_MODAL: String = "Modal_State"
+const CONTROL_SWITCH_GAIT: String = "Character_Movement_Mode"
+const CONTROL_SWITCH_MATERIAL: String = "FS_Material"
+const CONTROL_SWITCH_LOCAL: String = "Character_IsLocallyControlled"
+## Port surface key -> authored FS_Material value. Derived by measuring which
+## bank package carries the family's media (tools/parse_audio_control.py +
+## audio_events.json), never invented; the full evidence table is in
+## docs/reports/w10-p3-audio.md §5. "wood" is WoodFloor because the bank puts
+## the wood floor family there (WoodBeam is the sibling package that carries
+## the beam samples).
+const CONTROL_SURFACE_VALUES := {
+	"wood": "WoodFloor",
+	"stone": "Stone",
+	"carpet": "Carpet",
+	"metal": "MetalGrate",
+	"wet": "ShallowWater",
+	"earth": "Dirt",
+	"glass": "Glass",
+}
+## Guards are polled for their normalized detection (guard_ai.get_alert_state
+## .suspicion) at this interval; the RTPC is the max across live guards.
+const DETECTION_POLL_MS: int = 250
 ## Concurrent authored ambience emitters. 90 are placed across the shipped
 ## audio sublevels; the four maps the port loads carry 34/27/17/12, and a
 ## cap keeps a 34-emitter room from eating the 16-voice one-shot budget.
@@ -265,6 +298,9 @@ var _voice_steals: int = 0
 var _last_steal_warn_msec: int = -100000
 var _event_clips: Dictionary = {}
 var _foot_pools: Dictionary = {}
+## B3a: pool key -> media ids parallel to _foot_pools[key], so the authored
+## switch selection can filter the token pool by MediaId.
+var _foot_media: Dictionary = {}
 var _foot_idx: Dictionary = {}
 var _beds: Dictionary = {}
 ## W5D: beds currently fading out, key -> {player, tween}. A re-entry for the
@@ -305,6 +341,18 @@ var _pause_was_active: bool = false
 ## T03 authored-control-plane state.
 ## `_wwise` is the AudioWwise helper (res://src/core/audio_wwise.gd) or null.
 var _wwise: RefCounted = null
+## B3a: the AudioControl helper (res://src/core/audio_control.gd) or null.
+var _control: RefCounted = null
+## Authored RTPC gain/pitch currently applied to the music player.
+var _rtpc_music_gain_db: float = 0.0
+var _rtpc_music_pitch: float = 1.0
+## Music player's authored trim (fade target without the RTPC gain) and whether
+## a fade tween currently owns volume_db.
+var _music_base_db: float = 0.0
+var _music_fading: bool = false
+## Last detection level pushed to the control plane (-1 = never pushed).
+var _detection_level: float = -1.0
+var _last_detection_msec: int = -100000
 ## game/data/expansion/audio_mix.json — TAT-2 mix keys (see that file).
 var _mix_cfg: Dictionary = {}
 var _bus_gain_db: Dictionary = {}
@@ -335,6 +383,7 @@ func _ready() -> void:
 	_pause_duck_db = PAUSE_DUCK_DB if _pause_was_active else 0.0
 	_load_mix_config()
 	_load_wwise()
+	_load_control()
 	_ensure_buses()
 	_sfx["footstep"] = FOOTSTEP_SFX
 	_sfx["blackjack"] = BLACKJACK_SFX
@@ -428,6 +477,7 @@ func cleanup_on_exit() -> void:
 	_real_clips.clear()
 	_sfx.clear()
 	_foot_pools.clear()
+	_foot_media.clear()
 	_foot_idx.clear()
 
 
@@ -510,6 +560,136 @@ func has_authored_audio() -> bool:
 	return bool(_ww_call("is_loaded", []) or false)
 
 
+## ---------------------------------------------------------------------------
+## B3a authored switch/state/RTPC control plane.
+## Additive like T03: with no `audio_control.json` the token footstep pools and
+## the legacy mix stay exactly as they were.
+## ---------------------------------------------------------------------------
+
+## Instantiates the control-plane helper. Dynamic for the same reason as
+## `_load_wwise`: the JSON is derived content a fresh clone does not have.
+func _load_control() -> void:
+	_control = null
+	if not ResourceLoader.exists(CONTROL_SCRIPT_PATH):
+		return
+	var scr: GDScript = ResourceLoader.load(CONTROL_SCRIPT_PATH) as GDScript
+	if scr == null:
+		return
+	var inst: Variant = scr.new()
+	if inst == null:
+		return
+	_control = inst as RefCounted
+	_c_call("load_data", [])
+	if not has_control_plane():
+		push_warning("[audio_manager] authored Wwise control plane unavailable: %s" % str(_c_call("degraded_reason", [])))
+		return
+	# Single-player build: every character is locally controlled. The authored
+	# group exists so a networked build could flip it; the port never sets Remote.
+	_c_set_switch(CONTROL_SWITCH_LOCAL, "Local")
+
+
+## Calls a method on the control helper when it exists; null otherwise.
+func _c_call(method: String, args: Array) -> Variant:
+	if _control == null or not _control.has_method(method):
+		return null
+	return _control.callv(method, args)
+
+
+func _c_set_switch(group: String, value: String) -> bool:
+	return bool(_c_call("set_switch", [group, value]) or false)
+
+
+func _c_set_state(group: String, value: String) -> bool:
+	return bool(_c_call("set_state", [group, value]) or false)
+
+
+## True when audio_control.json loaded (switches/states/RTPCs available).
+func has_control_plane() -> bool:
+	return bool(_c_call("is_loaded", []) or false)
+
+
+## Sets an authored switch (name or id either side). Public so a system that
+## owns a group (e.g. enemy identity) can drive it without reaching into the
+## helper.
+func set_switch(group: Variant, value: Variant) -> bool:
+	return bool(_c_call("set_switch", [group, value]) or false)
+
+
+## Sets an authored state. States drive property overrides, not media selection.
+func set_state(group: Variant, value: Variant) -> bool:
+	return bool(_c_call("set_state", [group, value]) or false)
+
+
+## Sets an authored RTPC value. Returns false when the id is not authored.
+func set_rtpc(name: Variant, value: float) -> bool:
+	return bool(_c_call("set_rtpc", [name, value]) or false)
+
+
+## Switch/state/RTPC snapshot for QA (`mix_state().control`).
+func control_state() -> Dictionary:
+	var out: Variant = _c_call("state", [])
+	return (out as Dictionary) if out is Dictionary else {"loaded": false, "degraded_reason": "missing_helper"}
+
+
+## B3a: pushes the authored detection RTPC. [param level] is the normalized
+## guard detection (0..1) already used by guard_ai.get_alert_state().suspicion.
+## The value is always recorded; the authored music-node curve's gain and pitch
+## are applied to the live music player (Godot has no bus pitch, and applying
+## the gain to the Music bus would fight the slider/duck contract).
+func set_detection_level(level: float) -> bool:
+	if not has_control_plane():
+		return false
+	var v: float = clampf(level, 0.0, 1.0)
+	if not bool(_c_call("set_rtpc", [CONTROL_DETECTION_RTPC, v]) or false):
+		return false
+	_detection_level = v
+	# Never write `x or default` for a number: GDScript's `or` yields a bool, so
+	# a non-zero authored value would become 1.0 (the `_ww_string` trap).
+	var node_v: Variant = _c_call("curve_node_for_type", [CONTROL_DETECTION_RTPC, "volume_db", CONTROL_MUSIC_NODE_TYPE])
+	var node: String = str(node_v) if node_v != null else ""
+	var gain_v: Variant = _c_call("gain_db", [CONTROL_DETECTION_RTPC, node])
+	_rtpc_music_gain_db = float(gain_v) if gain_v != null else 0.0
+	var pitch_v: Variant = _c_call("pitch_scale", [CONTROL_DETECTION_RTPC, node])
+	_rtpc_music_pitch = float(pitch_v) if pitch_v != null else 1.0
+	_apply_music_rtpc()
+	return true
+
+
+## Applies the stored RTPC gain/pitch to the live music player. Volume is only
+## touched when no fade tween owns it (`_music_fading`), so a fade-in and the
+## RTPC can never overwrite each other in the same frame.
+func _apply_music_rtpc() -> void:
+	if _music_player == null or not is_instance_valid(_music_player):
+		return
+	_music_player.pitch_scale = _rtpc_music_pitch
+	if not _music_fading:
+		_music_player.volume_db = _music_base_db + _rtpc_music_gain_db
+
+
+## Polls every live guard for its normalized detection and pushes the max into
+## the authored RTPC. Throttled; a frame with no guards pushes 0 once.
+func _sync_detection() -> void:
+	if not has_control_plane():
+		return
+	var tree: SceneTree = get_tree()
+	if tree == null:
+		return
+	var now: int = Time.get_ticks_msec()
+	if now - _last_detection_msec < DETECTION_POLL_MS:
+		return
+	_last_detection_msec = now
+	var worst: float = 0.0
+	for node: Node in tree.get_nodes_in_group("guards"):
+		if not node.has_method("get_alert_state"):
+			continue
+		var info: Variant = node.call("get_alert_state")
+		if info is Dictionary:
+			worst = maxf(worst, clampf(float((info as Dictionary).get("suspicion", 0.0)), 0.0, 1.0))
+	if is_equal_approx(worst, _detection_level):
+		return
+	set_detection_level(worst)
+
+
 
 func _set_bus_vol(bus_name: String, vol: float) -> void:
 	_bus_linear[bus_name] = clampf(vol, 0.0, 1.0)
@@ -554,7 +734,12 @@ func _process(_delta: float) -> void:
 		_pause_duck_db = PAUSE_DUCK_DB if paused else 0.0
 		for bus_name: String in PAUSE_DUCK_BUSES:
 			_apply_bus_level(bus_name)
+		# B3a: authored modal state (the bank's Modal_State group). Recorded for
+		# the control plane and for any system that reads the state; the duck
+		# above stays the audible pause change.
+		_c_set_state(CONTROL_STATE_MODAL, "Modal_Menu" if paused else "Modal_Gameplay")
 	_sync_environment()
+	_sync_detection()
 
 
 ## Push volumes from SaveSystem settings (also called by SaveSystem so the
@@ -598,6 +783,9 @@ func _sync_environment() -> void:
 ## extraction does not carry (no Brush bounds) — that half is BLOCKED-ON T09 and
 ## reported as `bed_step: "blocked:T09"` rather than invented as a dB trim.
 func set_environment(indoor: bool) -> void:
+	# B3a: authored Weather_isExterior state. Set before the early return so a
+	# repeated environment push still reaches the control plane's state table.
+	_c_set_state(CONTROL_STATE_ENV, "Interior" if indoor else "Exterior")
 	if _env_initialised and indoor == _interior:
 		return
 	_interior = indoor
@@ -883,15 +1071,22 @@ func _start_music_event(ev: String, kind: String, trim_db: float, fade_s: float)
 		return false
 	var trim: float = _music_trim_db() if is_nan(trim_db) else trim_db
 	stop_music(0.0)
+	_music_base_db = trim
+	_music_fading = false
 	_music_player = AudioStreamPlayer.new()
 	_music_player.stream = stream
 	_music_player.bus = BUS_MUSIC
-	_music_player.volume_db = trim if fade_s <= 0.0 else trim - 20.0
+	_music_player.pitch_scale = _rtpc_music_pitch
+	_music_player.volume_db = (trim + _rtpc_music_gain_db) if fade_s <= 0.0 else trim - 20.0
 	add_child(_music_player)
 	_music_player.play()
 	if fade_s > 0.0:
+		_music_fading = true
 		var tw: Tween = _track_bed_tween(create_tween())
-		tw.tween_property(_music_player, "volume_db", trim, fade_s)
+		tw.tween_property(_music_player, "volume_db", trim + _rtpc_music_gain_db, fade_s)
+		tw.finished.connect(func() -> void:
+			_music_fading = false
+		)
 	_music_kind = kind
 	return true
 
@@ -911,6 +1106,7 @@ func stop_music(fade_s: float = 0.4) -> void:
 	var p: AudioStreamPlayer = _music_player
 	_music_player = null
 	_music_kind = ""
+	_music_fading = false
 	if not is_instance_valid(p):
 		return
 	if fade_s <= 0.0:
@@ -1001,6 +1197,10 @@ func mix_state() -> Dictionary:
 		"emitter_map": _emitter_map,
 		"beds": active_bed_levels(),
 		"master_volume_db": bus_level_db("Master"),
+		"control": control_state(),
+		"detection_level": _detection_level,
+		"rtpc_music_gain_db": _rtpc_music_gain_db,
+		"rtpc_music_pitch": _rtpc_music_pitch,
 	}
 
 
@@ -1065,7 +1265,12 @@ func _load_events() -> void:
 			var clip := str(md.get("clip", ""))
 			if clip.is_empty():
 				continue
-			clips.append({"debug_name": str(md.get("debug_name", "")), "clip": clip})
+			clips.append({
+				"debug_name": str(md.get("debug_name", "")),
+				"clip": clip,
+				# B3a: the authored MediaId, the key audio_control.json selects on.
+				"media_id": int(md.get("media_id", 0)),
+			})
 		if not clips.is_empty():
 			_event_clips[ev_name] = clips
 
@@ -1158,6 +1363,7 @@ func _register_named(tag: String, clip: String, mirror_sfx: bool) -> void:
 
 func _build_footstep_pools() -> void:
 	_foot_pools.clear()
+	_foot_media.clear()
 	_foot_idx.clear()
 	for gait: Variant in FOOTSTEP_GAIT_EVENTS.keys():
 		var ev_name := str(FOOTSTEP_GAIT_EVENTS[gait])
@@ -1167,19 +1373,23 @@ func _build_footstep_pools() -> void:
 		for surface: Variant in FOOTSTEP_SURFACE_KEYS.keys():
 			var keys: Array = FOOTSTEP_SURFACE_KEYS[surface] as Array
 			var pool: Array = []
+			var media: Array = []
 			for c: Variant in (clips as Array):
 				if not (c is Dictionary):
 					continue
-				var dn := str((c as Dictionary).get("debug_name", "")).to_lower().replace("\\", "/")
+				var cd: Dictionary = c
+				var dn := str(cd.get("debug_name", "")).to_lower().replace("\\", "/")
 				if dn.find("loot_bag") >= 0:
 					continue
 				for sk: Variant in keys:
 					if dn.find(str(sk)) >= 0:
-						pool.append(str((c as Dictionary).get("clip", "")))
+						pool.append(str(cd.get("clip", "")))
+						media.append(int(cd.get("media_id", 0)))
 						break
 			if not pool.is_empty():
 				var pool_key := str(gait) + "|" + str(surface)
 				_foot_pools[pool_key] = pool
+				_foot_media[pool_key] = media
 				_foot_idx[pool_key] = 0
 
 
@@ -1255,8 +1465,17 @@ func _next_foot_clip(pool_key: String) -> String:
 
 ## AU3: per-surface footstep with variation pools (3D, SFX bus). Falls back
 ## to the resolved footstep tag clip when no pool matches.
+## B3a: when the authored control plane is loaded the surface/gait switches are
+## set first and the token pool is filtered by the authored package media, so
+## the clip family is the bank's choice. The token pool stays the fallback (and
+## the whole path on a fresh clone).
 func play_footstep(surface: String = "wood", gait: String = "walk", pos: Vector3 = Vector3.ZERO) -> bool:
-	var clip: String = _footstep_clip(gait, surface)
+	var g: String = gait.to_lower().strip_edges()
+	var s: String = _scene_surface(surface)
+	_apply_footstep_control(g, s)
+	var clip: String = _footstep_clip_control(g, s)
+	if clip.is_empty():
+		clip = _footstep_clip(gait, surface)
 	if not clip.is_empty() and ResourceLoader.exists(clip):
 		var stream: AudioStream = ResourceLoader.load(clip) as AudioStream
 		if stream != null:
@@ -1266,6 +1485,53 @@ func play_footstep(surface: String = "wood", gait: String = "walk", pos: Vector3
 		_play_at("footstep", pos, 0.0)
 		return true
 	return false
+
+
+## B3a: pushes the authored footstep switch set. Gait is one of the authored
+## Character_Movement_Mode values (walk/run/jog/crouch/wallclimb); a surface the
+## table does not cover leaves FS_Material at its authored default.
+func _apply_footstep_control(gait: String, surface: String) -> void:
+	if not has_control_plane():
+		return
+	_c_set_switch(CONTROL_SWITCH_GAIT, gait)
+	var value: String = str(CONTROL_SURFACE_VALUES.get(surface, ""))
+	if not value.is_empty():
+		_c_set_switch(CONTROL_SWITCH_MATERIAL, value)
+
+
+## B3a: round-robin inside the token pool restricted to the media the authored
+## switch selection allows. "" when the control plane is absent, the pool has no
+## media ids, or the authored selection empties the pool (then the caller keeps
+## the unfiltered pool).
+func _footstep_clip_control(gait: String, surface: String) -> String:
+	if not has_control_plane():
+		return ""
+	var pool_key: String = gait + "|" + surface
+	var media_v: Variant = _foot_media.get(pool_key, null)
+	if not (media_v is Array):
+		return ""
+	var media: Array = media_v as Array
+	if media.is_empty():
+		return ""
+	var event_name: String = str(FOOTSTEP_GAIT_EVENTS.get(gait, ""))
+	if event_name.is_empty():
+		return ""
+	var filtered_v: Variant = _c_call("select_media", [event_name, media])
+	if not (filtered_v is Array) or (filtered_v as Array).is_empty():
+		return ""
+	var allowed: Dictionary = {}
+	for mid: Variant in (filtered_v as Array):
+		allowed[int(mid)] = true
+	var pool: Array = _foot_pools[pool_key] as Array
+	var n: int = pool.size()
+	var start: int = int(_foot_idx.get(pool_key, 0))
+	for i: int in range(n):
+		var idx: int = (start + i) % n
+		if not allowed.has(int(media[idx])):
+			continue
+		_foot_idx[pool_key] = idx + 1
+		return str(pool[idx])
+	return ""
 
 
 ## AU4: UI cue (2D, UI bus). Accepts either the bare cue name ("click",

@@ -515,6 +515,23 @@ Authored follow-up values (`docs/reports/gameplay-constants.md`): disguise integ
 Wwise media are RIFF with codec tag `0xFFFF` (Wwise Vorbis); FFmpeg alone reports "no decoder found", but vgmstream r2168 decodes them. The `1,296` `AkAudioEvent` dumps carry `EventCookedData.EventLanguageMap[].Value.Media[]` with `MediaId`, `DebugName` and `PackagedFile.Hash`.
 **Mapping recovered** (`docs/reports/audio-wwise.md`): `tools/extract_audio.py` walks the cooked ubulk with a strict unpadded chunk walk (`5,050` media chunks = `5,018` RIFF + `32` PLUG), and `tools/convert_wwise.py` joins the k-th non-plugin `IsWemFile` entry to the k-th RIFF chunk, validated against `4,160` `SoundSfxVoice` `InMemoryMediaSize` values (`4,155` exact = `99.88%`). All `5,018` clips decode to Ogg under `game/assets/ue/audio/wwise/`; `5,862` of `5,868` event media entries resolve, and all nine gameplay tags are wired to a verified event dump + resolved clip. The `6` unresolved entries are convolution-reverb IRs in PLUG chunks; `51` WEMs are `bStreaming: true` but their chunks are present and decode.
 
+**Control plane (W10-P3, `docs/reports/w10-p3-audio.md`).** The bank's
+switch/state/RTPC graph is now produced (`tools/parse_audio_control.py` ->
+`audio_control.json`, `tat2.audio_control/1`) and consumed by
+`game/src/core/audio_control.gd`: **14** named switch groups / **84** values,
+**4** named state groups / **10** values, **16** named RTPCs with **142**
+authored curves, **185** switch containers and **180** named events with control
+data. Wired: footstep surface (`FS_Material`) + gait (`Character_Movement_Mode`)
+selection, interior/exterior (`Weather_isExterior`), pause modal
+(`Modal_State`) and the detection-level RTPC's authored music gain/pitch.
+**Deferred:** state *property* application (authored per-node rows are emitted but
+not applied), music switch containers (their `DecisionTree` keys are unbound),
+`FS_Layers`/`Character_Select`/`Enemy_Identity` (no caller yet), and named-RTPC
+low-pass (none of the 16 named RTPCs carries an LPF curve; the two authored LPF
+curves are on id-only RTPCs). 70 `(group, value)` package references and 34 RTPC
+ids have no asset dump and stay `name: null`; the brief's "5 state groups" is
+not in the extraction (4 named + 4 bank-only ids).
+
 ### A7 — Blueprint gameplay logic
 981 `BP_` packages exist. DataTables/CurveTables already drive most tuning; BP graphs
 (visual scripting) are not machine-translated. Further gains: dump all `BP_` JSON,

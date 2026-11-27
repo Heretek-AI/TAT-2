@@ -197,6 +197,15 @@ PRODUCERS = (
         "python3 tools/parse_wwise.py",
         ("gen:audio_wwise.json",),
     ),
+    # B3a Wwise control plane: switch groups/values, state groups/values,
+    # RTPCs + authored curves, switch containers and the event->control edges.
+    # Ranges over the same bank + dumps as parse_wwise.py; the two outputs are
+    # independent files and neither may write the other's.
+    Producer(
+        "tools/parse_audio_control.py",
+        "python3 tools/parse_audio_control.py",
+        ("gen:audio_control.json",),
+    ),
     Producer(
         "tools/parse_gameplay.py",
         "python3 tools/parse_gameplay.py",

@@ -7649,6 +7649,7 @@ func _initialize() -> void:
 		["117", "W10-A2 guards: authored bucket/layer selection, 2 m marker / 0.5 m floor, C_20 Lounge pick", "res://tests/test_w10a2_guard_placement.gd", "GUARD_PLACEMENT_SUMMARY: fails=0"],
 		["118", "W10-A2 civilian: head-cast LOS, 180 deg facing, body/head 3+6 authored surfaces", "res://tests/test_w10a2_civilian.gd", "W10A2_CIV_SUMMARY: fails=0"],
 		["120", "W10-A3 GC: hold-interact smash swaps leaf/broken once; tap keeps the lockpick", "res://tests/test_gc_break_trigger.gd", "GC_TRIGGER PASS"],
+		["121", "W10-P3 audio control: Wwise switches/states/RTPCs, footstep selection, curve application", "res://tests/test_audio_control.gd", "AUDIO_CONTROL_SUMMARY: fails=0"],
 	]:
 		var w10_out: Array = []
 		var w10_args: PackedStringArray = [

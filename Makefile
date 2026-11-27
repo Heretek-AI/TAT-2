@@ -41,8 +41,8 @@ NORMALIZERS := parse_tables parse_curves parse_materials parse_gameplay \
                parse_devices parse_containers parse_interactables parse_loot \
                parse_spawners parse_vfx parse_unlocks parse_hearing \
                parse_state_tree parse_weather parse_project_ini parse_input \
-               parse_collision parse_wwise extract_audio convert_wwise parse_locres \
-               convert_videos parse_anim_meta
+               parse_collision parse_wwise extract_audio convert_wwise \
+               parse_audio_control parse_locres convert_videos parse_anim_meta
 
 normalize:
 	@for t in $(NORMALIZERS); do \

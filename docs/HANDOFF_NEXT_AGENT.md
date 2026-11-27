@@ -142,9 +142,11 @@ The old `coverage=0.989` is not a valid authored number; do not restore it.
 The 45-gate set was measured at `912a481` in one serial
 `build/qa/run_final_gates.sh` run (Phase 0b): **45/45 exit 0**, wall 19 m 49 s,
 logs in `docs/reports/logs/final/`, report
-`docs/reports/final-20261127-phase0b.md`. The run replaced the `5135f53` logs in
-place; the old 44-gate evidence remains in git history at `5135f53` and in
-`docs/reports/final-20261127.md`. The route self-test (`checks=62`) is now also a
+`docs/reports/final-20261127-phase0b.md`. The old 44-gate logs were measured at
+`5135f53`, committed on `main` at `3d62f6b`, and the Phase 0b run replaced them
+in place at `912a481` (pre-Phase-0b copies remain recoverable at `912a481`
+under `docs/reports/logs/final/`); `docs/reports/final-20261127.md` describes
+the 44-gate run. The route self-test (`checks=62`) is now also a
 ratchet floor, and the clean route2 capture is
 `docs/reports/logs/p0b-route/route2-clean/` (`git.dirty=false`).
 

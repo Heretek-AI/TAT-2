@@ -62,7 +62,9 @@ visual claim** and does not re-score a row.
 (`status=captured`, `git.dirty=false`, 13/14/0, 17 frames, 18 PNGs) is the new
 route provenance. Evidence: [`reports/final-20261127-phase0b.md`](reports/final-20261127-phase0b.md),
 [`reports/logs/p0b-route/route2-clean/`](reports/logs/p0b-route/route2-clean/).
-The 44-gate `5135f53` logs remain in git history at that commit.
+The 44-gate logs were measured at `5135f53`, committed on `main` at `3d62f6b`,
+and the Phase 0b run replaced the logs in place at `912a481` (pre-Phase-0b
+copies remain recoverable at `912a481` and `3d62f6b`).
 
 ## W10 FINAL — 2026-11-27 (supersedes the P1/W10-P2 sections where they differ)
 

@@ -108,7 +108,7 @@ first.
 | `make audit` | exit 0, tracked baseline matches, disk-backed coverage (12660/12703), 0 unexpected, exact-case 0 unexpected, 13/13 content groups |
 | `make string-audit` | `UI_STRINGS total=311 routed=311 authored=199 routed_authored=199 invented=112` (ceiling 112; one documented `Thieves' Den` port copy at `contract_table_ui.gd:362`) |
 | perf guard | `PERF_GUARD_TEST PASS checks=78 fails=0` |
-| `make gate-ratchet` | PASS (`measured_on=5135f53`; floors raised, never lowered) |
+| `make gate-ratchet` | PASS (`measured_on=912a481`; floors raised, never lowered) |
 
 The 2026-11-24 W7 wave (five lanes, cherry-picked) re-ran the **complete** set
 serially on `6760dd0` — compile, `run_tests`, M2, the three probes, `probe_leak`
@@ -236,8 +236,10 @@ identical to the `5135f53` table, logs in `docs/reports/logs/final/`, report
 The clean route2 capture is `docs/reports/logs/p0b-route/route2-clean/`
 (`status=captured`, `git.dirty=false`, 13/14/0, 17 frames, 18 PNGs at 1920×1080,
 exit 0). The ratchet is re-stamped `measured_on=912a481` and pins
-`p0b_route_self_test.checks=62`. The run replaced the logs in place; the
-`5135f53` logs remain in git history at that commit. Still a **staged** capture
+`p0b_route_self_test.checks=62`. The 44-gate logs were measured at `5135f53`,
+committed on `main` at `3d62f6b`, and the Phase 0b run replaced the logs in
+place at `912a481` (pre-Phase-0b copies remain recoverable at `912a481` under
+`docs/reports/logs/final/`). Still a **staged** capture
 (`route_claim=none`), not a played route.
 
 **Fresh worktree trap (P0b).** A copied `game/.godot` does not know a new global

@@ -35,8 +35,11 @@ the run). Every Godot invocation takes `flock /tmp/opencode/tat2-godot.lock`;
 `runtime_smoke.sh` and the two `p0b_*` wrappers are invoked **without** an outer
 flock because they take the lock themselves.
 
-**The old `5135f53` logs were replaced in place by this run.** They are not
-lost: they remain in git history at commit `5135f53` and are described by
+**The old 44-gate logs were replaced in place by this run.** They are not
+lost: they were measured at `5135f53`, committed on `main` at `3d62f6b`, and
+the Phase 0b run replaced the logs in place at `912a481`; the pre-Phase-0b
+copies remain recoverable at `912a481` under `docs/reports/logs/final/` and at
+`3d62f6b`. They are described by
 [`docs/reports/final-20261127.md`](final-20261127.md) (the W10 FINAL 44-gate
 report). This report is the current measured set; the old report is kept as
 history and cross-references this one.

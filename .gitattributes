@@ -1,0 +1,5 @@
+# Verbatim run logs are engine output, not hand-written text: Godot prints
+# lines that end in a space, so `git diff --check` would flag every capture
+# forever. Keep the bytes intact and exempt the logs from the trailing-space
+# rule only (space-before-tab and other rules still apply).
+docs/reports/logs/**/capture.log whitespace=-trailing-space

@@ -56,9 +56,23 @@ visual claim** and does not re-score a row.
   the first real run must print `STEALTHBALL_ARRAY mapping_kind=…` and the
   probe `GEM_PAYLOAD present=true …` before any visual claim. Headless P5 still
   does not score its pixels.
-- **Mirrors — carried, not re-measured (UNVERIFIED).** Mirrors are the earlier
-  audit's 3,312 negative-determinant instances / 3,215 in MultiMeshes; they get
-  a probe in Phase 1 P4.2. Not verified by Phase 0a.
+- **Mirrors — P4.2 split implemented, headless-measured; GPU readback pending.**
+  The carried 3,312 is real for the Guildhall contract-2 base set (3,312
+  authored negative-determinant mesh records). After the loader's existing
+  filters (130 duplicate + 30 name-skipped in the whole 64,953-record set) the
+  draw census is **3,297 = 3,129 MultiMesh + 168 standalone**; the old
+  "3,215 in MultiMeshes" is **not** reproduced — it counted path-level
+  multi-placements, not post-32 m-cell batch membership. Negative instances now
+  get their own batch: **104** baked local-X mesh variants
+  (**31,099,116 B** uncompressed estimate) and **312** instances on the cloned
+  `CULL_FRONT` fast path; `unbaked=0`. `MIRROR_RECON` reconciles
+  `multimesh + single == bases` on every load. Standalone `MeshInstance3D`
+  mirrors keep Godot's native compensation by default; `TAT2_MIRROR_SINGLE=baked`
+  is the measured fallback (223 variants / 61,972,836 B) if the synthetic
+  readback says the engine does not compensate. The GPU probe
+  (`build/qa/mirror_probe.sh --run`) has **not** been run, so the visual claim
+  is still pending. Report:
+  [`p4-mirrors-20261127.md`](reports/p4-mirrors-20261127.md).
 - **Landscape — data assertion PASS; pixel A/B pending (P4.4).** The shipped
   `vis > 0.5` discard stays (not flipped). `probe_landscape_mask` (7 checks)
   pins the three-mode diagnostic `TAT2_LANDSCAPE_MASK=discard|raw|off`, the

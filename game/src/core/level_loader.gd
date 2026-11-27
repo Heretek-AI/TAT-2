@@ -155,7 +155,45 @@ var _beam_fix_clamped: int = 0
 # (det < 0) bases used to be silent. Counted, never silently rewritten.
 var _scale_clamp_count: int = 0
 var _scale_clamp_worst: float = 1.0
+# `_mirrored_basis_count` is the placement-transform census: every
+# `_dict_to_transform()` call with det < 0, including decals and GC overlays.
+# It is kept for the RE-P-08 probes. The draw-item census (`_mirror_draw_bases`)
+# is the render-relevant one and is reconciled against the split batches below.
 var _mirrored_basis_count: int = 0
+## P4.2 mirror split. A UE placement with a reflected basis (determinant < 0)
+## is authored art, not a defect. Godot compensates a negative-determinant
+## `MeshInstance3D` by flipping its cull face, but a `MultiMesh` has no
+## per-instance cull state (and no surface override in 4.7.2), so a mirrored
+## MultiMesh batch renders its one-sided faces from the wrong side. Negative
+## instances therefore get their own batch drawn from a mesh baked with a
+## local-X reflection: vertices x negated, triangle winding reversed, normals
+## x negated and tangent x/w negated (the handedness term). The instance basis
+## is right-multiplied by the same reflection so det(instance) > 0 and the
+## engine adds no second flip:
+##   B' = B * S,  M' = S * M,  B' * M' = B * M.
+## A single-surface `BaseMaterial3D` mesh uses a cloned `CULL_FRONT` material
+## instead (no mesh copy); the shared source material is never mutated. A
+## two-sided source already renders mirrored correctly and keeps its material.
+## Standalone mirrored `MeshInstance3D` keep Godot's native compensation by
+## default; `TAT2_MIRROR_SINGLE=baked` opts into the bake if the synthetic
+## `build/qa/mirror_probe.sh --run` readback proves the engine does not
+## compensate. `TAT2_MIRROR_FAST=off` disables the cull-front fast path.
+const MIRROR_LOCAL_FLIP: Basis = Basis(Vector3(-1, 0, 0), Vector3(0, 1, 0), Vector3(0, 0, 1))
+const MIRROR_LOG_LIMIT: int = 64
+var _mirror_variant_cache: Dictionary = {}
+var _mirror_cull_front_cache: Dictionary = {}
+var _mirror_draw_bases: int = 0
+var _mirror_batches_split: int = 0
+var _mirror_multimesh_instances: int = 0
+var _mirror_single_instances: int = 0
+var _mirror_cull_front_instances: int = 0
+var _mirror_cull_disabled_instances: int = 0
+var _mirror_mesh_bytes: int = 0
+var _mirror_mesh_count: int = 0
+var _mirror_unbaked: int = 0
+var _mirror_log_count: int = 0
+var _mirror_log_suppressed: int = 0
+var _mirror_warned: Dictionary = {}
 
 ## TASK 4.2 tiny-texture mip guard: icon-size sprites (min dimension <32px,
 ## i.e. below TINY_TEX_MIN_SIZE) skip the mip chain — a full mip chain on a <32px
@@ -2466,6 +2504,240 @@ func _get_overridden_mesh(ue_path: String, base_mesh: Mesh, ov_arr: Array[String
 	return ov_mesh
 
 
+## ----- P4.2 mirror split ---------------------------------------------------
+## Per-load reset. The caches hold baked meshes and cull-front material clones
+## for the duration of one load only, so a second map does not retain the
+## previous map's geometry.
+func _reset_mirror_counters() -> void:
+	_mirror_variant_cache.clear()
+	_mirror_cull_front_cache.clear()
+	_mirror_warned.clear()
+	_mirror_draw_bases = 0
+	_mirror_batches_split = 0
+	_mirror_multimesh_instances = 0
+	_mirror_single_instances = 0
+	_mirror_cull_front_instances = 0
+	_mirror_cull_disabled_instances = 0
+	_mirror_mesh_bytes = 0
+	_mirror_mesh_count = 0
+	_mirror_unbaked = 0
+	_mirror_log_count = 0
+	_mirror_log_suppressed = 0
+
+
+static func _mirror_fast_path_enabled() -> bool:
+	return OS.get_environment("TAT2_MIRROR_FAST").strip_edges().to_lower() != "off"
+
+
+static func _mirror_single_baked() -> bool:
+	return OS.get_environment("TAT2_MIRROR_SINGLE").strip_edges().to_lower() == "baked"
+
+
+## Cached mirror variant for one effective mesh (already override-bound):
+##   mode "baked"          -> `mesh` is the local-X-mirrored ArrayMesh
+##   mode "cull_front"     -> `material` is a CULL_FRONT clone, mesh unchanged
+##   mode "cull_disabled"  -> source already two-sided (or single-surface
+##                            bake fallback); `material` is set only when the
+##                            fallback had to clone a BaseMaterial3D
+##   mode "native"         -> no bake possible; caller keeps Godot's own
+##                            negative-determinant handling (standalone only)
+## `allow_material_clone` is false when the caller applies a material override
+## of its own (CPD emissive), because a second override would replace it.
+func _get_mirror_variant(source: Mesh, ov_key: String, allow_material_clone: bool) -> Dictionary:
+	var fast_on: bool = _mirror_fast_path_enabled()
+	# The cull-front/cull-disabled decision depends on both the caller's
+	# override policy and the A/B env, so both are part of the cache key.
+	var key: String = "%d||%s||%d||%d" % [
+		source.get_instance_id(), ov_key, 1 if allow_material_clone else 0, 1 if fast_on else 0]
+	var hit: Variant = _mirror_variant_cache.get(key)
+	if hit is Dictionary:
+		return hit as Dictionary
+	var surfaces: int = source.get_surface_count()
+	var out: Dictionary = {
+		"mode": "baked",
+		"mesh": source,
+		"material": null,
+		"materials": [] as Array,
+		"bytes": 0,
+		"surfaces": surfaces,
+	}
+	# Fast path: one surface, BaseMaterial3D, no caller override. A CULL_FRONT
+	# clone is enough for a MultiMesh batch (no per-instance engine flip). A
+	# source that is already two-sided needs no flip at all.
+	if allow_material_clone and fast_on and surfaces == 1:
+		var src_mat: Material = source.surface_get_material(0)
+		var bm: BaseMaterial3D = src_mat as BaseMaterial3D
+		if bm != null:
+			if bm.cull_mode == BaseMaterial3D.CULL_DISABLED:
+				out["mode"] = "cull_disabled"
+				_mirror_variant_cache[key] = out
+				return out
+			var front: BaseMaterial3D = _get_mirror_cull_front_material(bm)
+			if front != null:
+				out["mode"] = "cull_front"
+				out["material"] = front
+				_mirror_variant_cache[key] = out
+				return out
+	var baked: ArrayMesh = _bake_mirrored_mesh(source)
+	if baked != null:
+		out["mesh"] = baked
+		out["bytes"] = int(baked.get_meta("mirror_bytes", 0))
+		_mirror_mesh_bytes += int(out["bytes"])
+		_mirror_mesh_count += 1
+		_mirror_variant_cache[key] = out
+		return out
+	# Baked mesh unavailable (non-triangle primitive or unreadable arrays).
+	# Single-surface BaseMaterial3D can still be made two-sided; anything else
+	# is recorded as unbaked instead of silently rendering inside-out.
+	if surfaces == 1:
+		var fb_mat: Material = source.surface_get_material(0)
+		var fb_bm: BaseMaterial3D = fb_mat as BaseMaterial3D
+		if fb_bm != null:
+			var disabled: BaseMaterial3D = fb_bm.duplicate() as BaseMaterial3D
+			if disabled != null:
+				disabled.cull_mode = BaseMaterial3D.CULL_DISABLED
+				out["mode"] = "cull_disabled"
+				out["material"] = disabled
+				_mirror_variant_cache[key] = out
+				return out
+	out["mode"] = "native"
+	_mirror_unbaked += 1
+	var warn_key: String = str(source.resource_path)
+	if warn_key == "":
+		warn_key = "mesh_%d" % source.get_instance_id()
+	if not _mirror_warned.has(warn_key) and _mirror_warned.size() < 8:
+		_mirror_warned[warn_key] = true
+		push_warning("[level_loader] mirrored mesh has no bake/fast path; negative instances keep the authored basis: ", warn_key)
+	_mirror_variant_cache[key] = out
+	return out
+
+
+## One CULL_FRONT clone per source material (never mutates the shared source).
+func _get_mirror_cull_front_material(src: BaseMaterial3D) -> BaseMaterial3D:
+	var key: int = int(src.get_instance_id())
+	var hit: Variant = _mirror_cull_front_cache.get(key)
+	if hit is BaseMaterial3D:
+		return hit as BaseMaterial3D
+	var clone: BaseMaterial3D = src.duplicate() as BaseMaterial3D
+	if clone == null:
+		return null
+	clone.cull_mode = BaseMaterial3D.CULL_FRONT
+	_mirror_cull_front_cache[key] = clone
+	return clone
+
+
+## Build the local-X mirror of `source`: S = diag(-1, 1, 1). Per surface:
+## vertices x negated; triangle winding reversed (0,1,2 -> 0,2,1); normals x
+## negated; tangent x and tangent.w negated so the bitangent stays consistent
+## (`w' = -w` because cross(S n, S t) = -S cross(n, t) for det S = -1). UVs,
+## colours, custom channels, bones and weights are copied unchanged, and every
+## surface keeps its authored Material (same resource, not a copy).
+func _bake_mirrored_mesh(source: Mesh) -> ArrayMesh:
+	if source == null:
+		return null
+	var surfaces: int = source.get_surface_count()
+	if surfaces <= 0:
+		return null
+	var out: ArrayMesh = ArrayMesh.new()
+	out.resource_name = "%s_mirrorX" % source.resource_name
+	var total_bytes: int = 0
+	for s: int in range(surfaces):
+		var prim: int = source.surface_get_primitive_type(s)
+		if prim != Mesh.PRIMITIVE_TRIANGLES:
+			return null
+		var arrays: Array = source.surface_get_arrays(s)
+		if arrays.is_empty() or arrays.size() <= Mesh.ARRAY_VERTEX:
+			return null
+		var verts_v: Variant = arrays[Mesh.ARRAY_VERTEX]
+		if not (verts_v is PackedVector3Array) or (verts_v as PackedVector3Array).is_empty():
+			return null
+		var verts: PackedVector3Array = (verts_v as PackedVector3Array).duplicate()
+		for i: int in range(verts.size()):
+			verts[i] = Vector3(-verts[i].x, verts[i].y, verts[i].z)
+		arrays[Mesh.ARRAY_VERTEX] = verts
+		var normals_v: Variant = arrays[Mesh.ARRAY_NORMAL]
+		if normals_v is PackedVector3Array:
+			var normals: PackedVector3Array = (normals_v as PackedVector3Array).duplicate()
+			for i: int in range(normals.size()):
+				normals[i] = Vector3(-normals[i].x, normals[i].y, normals[i].z)
+			arrays[Mesh.ARRAY_NORMAL] = normals
+		var tangents_v: Variant = arrays[Mesh.ARRAY_TANGENT]
+		if tangents_v is PackedFloat32Array:
+			var tangents: PackedFloat32Array = (tangents_v as PackedFloat32Array).duplicate()
+			var ti: int = 0
+			while ti + 3 < tangents.size():
+				tangents[ti] = -tangents[ti]
+				tangents[ti + 3] = -tangents[ti + 3]
+				ti += 4
+			arrays[Mesh.ARRAY_TANGENT] = tangents
+		var idx_v: Variant = arrays[Mesh.ARRAY_INDEX]
+		var idx: PackedInt32Array
+		if idx_v is PackedInt32Array and (idx_v as PackedInt32Array).size() >= 3:
+			idx = (idx_v as PackedInt32Array).duplicate()
+		else:
+			# Non-indexed surface: indexing it first lets the winding flip
+			# without reordering every per-vertex attribute.
+			idx = PackedInt32Array()
+			idx.resize(verts.size())
+			for i: int in range(verts.size()):
+				idx[i] = i
+		if idx.size() % 3 != 0:
+			return null
+		var ti2: int = 0
+		while ti2 + 2 < idx.size():
+			var tmp: int = idx[ti2 + 1]
+			idx[ti2 + 1] = idx[ti2 + 2]
+			idx[ti2 + 2] = tmp
+			ti2 += 3
+		arrays[Mesh.ARRAY_INDEX] = idx
+		total_bytes += _mirror_arrays_bytes(arrays)
+		# Source format flags preserve compression / attribute packing. The
+		# mirror data test drives a real compressed surface through this path.
+		out.add_surface_from_arrays(prim, arrays, [], {}, source.surface_get_format(s))
+		out.surface_set_material(out.get_surface_count() - 1, source.surface_get_material(s))
+	out.set_meta("mirror_baked", true)
+	out.set_meta("mirror_source_id", source.get_instance_id())
+	out.set_meta("mirror_bytes", total_bytes)
+	return out
+
+
+## Uncompressed byte estimate for the baked array set (the report's memory
+## figure; Godot may store less when the source flags compress attributes).
+static func _mirror_arrays_bytes(arrays: Array) -> int:
+	var total: int = 0
+	for a_v: Variant in arrays:
+		if a_v == null:
+			continue
+		if a_v is PackedByteArray:
+			total += (a_v as PackedByteArray).size()
+		elif a_v is PackedInt32Array:
+			total += (a_v as PackedInt32Array).size() * 4
+		elif a_v is PackedInt64Array:
+			total += (a_v as PackedInt64Array).size() * 8
+		elif a_v is PackedFloat32Array:
+			total += (a_v as PackedFloat32Array).size() * 4
+		elif a_v is PackedFloat64Array:
+			total += (a_v as PackedFloat64Array).size() * 8
+		elif a_v is PackedVector2Array:
+			total += (a_v as PackedVector2Array).size() * 8
+		elif a_v is PackedVector3Array:
+			total += (a_v as PackedVector3Array).size() * 12
+		elif a_v is PackedVector4Array:
+			total += (a_v as PackedVector4Array).size() * 16
+		elif a_v is PackedColorArray:
+			total += (a_v as PackedColorArray).size() * 16
+	return total
+
+
+func _mirror_log_split(mp: String, mode: String, pos_n: int, neg_n: int, bytes: int, surfaces: int) -> void:
+	if _mirror_log_count >= MIRROR_LOG_LIMIT:
+		_mirror_log_suppressed += 1
+		return
+	_mirror_log_count += 1
+	print("MIRROR_SPLIT mp=%s mode=%s pos=%d neg=%d surfaces=%d bytes=%d" % [
+		mp.left(96), mode, pos_n, neg_n, surfaces, bytes])
+
+
 ## ----- SplineMeshComponent deformation (RE-B-04) ---------------------------
 ## A UE `SplineMeshComponent` lofts its static mesh along an authored cubic
 ## Hermite spline: the mesh's local X axis is the splice axis (its bounds map
@@ -4734,6 +5006,147 @@ func _apply_periph_range(node: GeometryInstance3D, item: Dictionary, ctx: Dictio
 	ctx["periph_range_applied"] = int(ctx.get("periph_range_applied", 0)) + 1
 
 
+## One draw node for an already-partitioned batch. The pre-P4.2 path is
+## unchanged for a batch without negative determinants; a split item calls
+## this twice (positive batch with the authored mesh, negative batch with the
+## mirror variant) so all culling/metadata policy stays in one place.
+func _make_draw_batch_node(mesh_b: Mesh, trs_b: Array, cpds_b: Array[Color], use_cpd_b: bool) -> GeometryInstance3D:
+	var bcount: int = trs_b.size()
+	if bcount >= 2 or use_cpd_b:
+		var mm: MultiMesh = MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		if use_cpd_b:
+			mm.use_custom_data = true
+		mm.mesh = mesh_b
+		mm.instance_count = bcount
+		# Explicit tight bounds: Godot only frustum-culls a MultiMesh against
+		# its AABB, so each 32m chunk gets the real merged instance bounds.
+		var mesh_aabb: AABB = mesh_b.get_aabb()
+		var chunk_aabb: AABB = AABB()
+		var have_bounds: bool = false
+		for i: int in range(bcount):
+			var tr_i: Transform3D = trs_b[i]
+			mm.set_instance_transform(i, tr_i)
+			if use_cpd_b:
+				mm.set_instance_custom_data(i, cpds_b[i])
+			var world_aabb: AABB = tr_i * mesh_aabb
+			if not have_bounds:
+				chunk_aabb = world_aabb
+				have_bounds = true
+			else:
+				chunk_aabb = chunk_aabb.merge(world_aabb)
+		if have_bounds:
+			mm.custom_aabb = chunk_aabb
+		var mmi: MultiMeshInstance3D = MultiMeshInstance3D.new()
+		mmi.multimesh = mm
+		if use_cpd_b:
+			mmi.material_override = _get_emissive_cpd_material()
+		return mmi
+	var mi: MeshInstance3D = MeshInstance3D.new()
+	mi.mesh = mesh_b
+	mi.transform = trs_b[0]
+	return mi
+
+
+## Shared node policy/metadata path (extracted verbatim from the pre-P4.2
+## single-node build so a split positive and negative node stay identical).
+func _finish_draw_node(
+		node: GeometryInstance3D,
+		item: Dictionary,
+		mp: String,
+		low_mp: String,
+		ov_arr: Array[String],
+		mesh_for_policy: Mesh,
+		source_sublevel: String,
+		source_sublevels: Array[String],
+		source_counts: Dictionary,
+		far_item: bool,
+		use_cpd: bool,
+		hidden_in_game: bool,
+		no_collide: bool,
+		ctx: Dictionary,
+		parent: Node3D) -> void:
+	_apply_culling_policy(node, low_mp, mesh_for_policy)
+	if far_item:
+		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		node.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+		node.visibility_range_end = 0.0
+	if use_cpd or hidden_in_game:
+		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	if hidden_in_game:
+		node.visible = false
+		node.gi_mode = GeometryInstance3D.GI_MODE_STATIC
+	if MobileProfile.is_mobile():
+		node.lod_bias = MobileProfile.lod_bias()
+	_apply_periph_range(node, item, ctx)
+	node.set_meta("ue_mesh", mp)
+	node.set_meta("decorative", not bool(item.get("collide", false)) or no_collide)
+	node.set_meta("source_sublevel", source_sublevel)
+	node.set_meta("source_sublevels", source_sublevels)
+	node.set_meta("source_counts", source_counts)
+	if not ov_arr.is_empty():
+		node.set_meta("override_materials", ov_arr)
+	if low_mp.contains("/sm_blockerward_"):
+		# P1-W: authored ward shard; hidden until the ward device activates.
+		node.name = "WardShard"
+		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		node.visible = false
+		node.add_to_group("ward_shards")
+		node.set_meta("ward_shard", true)
+	if mp == BEAM_CARD_MESH:
+		# Authored beam cards are per-instance so the device layer can bind
+		# one card to each detector and drive its powered visibility. They
+		# are additive/unlit: never a shadow caster.
+		node.name = "BeamCard"
+		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		node.add_to_group("lightbeam_cards")
+		node.set_meta("beam_card", true)
+	if mp == GC_BOOKCASE_GLASS_MESH:
+		# Phase 2 G-2: intact bookcase glass door in the static batch. Keep
+		# the node addressable so `_build_gc_layers` can bind it as the
+		# owner's leaf instead of emitting a duplicate. It keeps the same
+		# culling/shadow outcome the batched instance had (the split is per
+		# instance, not a visual change) and never joins the GC groups, so
+		# the GC census stays emitted-leaf only. The per-instance split makes
+		# the normal case a MeshInstance3D; a split negative pane is also a
+		# MeshInstance3D and is registered here.
+		var glass_mm: MultiMeshInstance3D = node as MultiMeshInstance3D
+		if node is MeshInstance3D:
+			node.name = "BookcaseGlass"
+			node.set_meta("gc_static_leaf", true)
+			node.set_meta("gc_no_collision", true)
+			_gc_static_glass.append({
+				"node": node,
+				"source_sublevel": source_sublevel,
+				"used": false,
+			})
+		else:
+			# The per-instance split is required; a batched pane cannot be
+			# hidden for one owner. Fail visible instead of silently leaving
+			# the bookcase without an intact leaf.
+			var glass_n: int = 1
+			if glass_mm != null and glass_mm.multimesh != null:
+				glass_n = glass_mm.multimesh.instance_count
+			ctx["gc_static_leaf_multi"] = int(ctx.get("gc_static_leaf_multi", 0)) + glass_n
+	parent.add_child(node)
+	ctx["chunk_count"] = int(ctx.get("chunk_count", 0)) + 1
+
+
+## Pure index partition for the render split: positive-determinant instances
+## keep the authored mesh, negative-determinant instances go to a mirrored
+## batch. Static so the headless data test drives exactly this code.
+static func partition_mirror_indices(trs: Array) -> Dictionary:
+	var pos: Array = []
+	var neg: Array = []
+	for i: int in range(trs.size()):
+		var tr: Transform3D = trs[i]
+		if tr.basis.determinant() < 0.0:
+			neg.append(i)
+		else:
+			pos.append(i)
+	return {"pos": pos, "neg": neg}
+
+
 func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> int:
 	var mp: String = str(item.get("mp", ""))
 	var trs: Array = item.get("trs", [])
@@ -4809,101 +5222,99 @@ func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> 
 		source_counts = {source_sublevel: count}
 	var skip_visual: bool = bool(item.get("_merge_skip_visual", false))
 	if not skip_visual:
-		var node: GeometryInstance3D
-		if count >= 2 or use_cpd:
-			var mm: MultiMesh = MultiMesh.new()
-			mm.transform_format = MultiMesh.TRANSFORM_3D
-			if use_cpd:
-				mm.use_custom_data = true
-			mm.mesh = mesh
-			mm.instance_count = count
-			# Explicit tight bounds: Godot only frustum-culls a MultiMesh against
-			# its AABB, so each 32m chunk gets the real merged instance bounds.
-			var mesh_aabb: AABB = mesh.get_aabb()
-			var chunk_aabb: AABB = AABB()
-			var have_bounds: bool = false
-			for i in range(count):
-				var tr_i: Transform3D = trs[i]
-				mm.set_instance_transform(i, tr_i)
-				if use_cpd:
-					mm.set_instance_custom_data(i, cpds[i])
-				var world_aabb: AABB = tr_i * mesh_aabb
-				if not have_bounds:
-					chunk_aabb = world_aabb
-					have_bounds = true
-				else:
-					chunk_aabb = chunk_aabb.merge(world_aabb)
-			if have_bounds:
-				mm.custom_aabb = chunk_aabb
-			var mmi: MultiMeshInstance3D = MultiMeshInstance3D.new()
-			mmi.multimesh = mm
-			if use_cpd:
-				mmi.material_override = _get_emissive_cpd_material()
-			node = mmi
+		var split: Dictionary = partition_mirror_indices(trs)
+		var pos_indices: Array = split["pos"] as Array
+		var neg_indices: Array = split["neg"] as Array
+		if neg_indices.is_empty():
+			var node: GeometryInstance3D = _make_draw_batch_node(mesh, trs, cpds, use_cpd)
+			_finish_draw_node(node, item, mp, low_mp, ov_arr, mesh,
+				source_sublevel, source_sublevels, source_counts, far_item,
+				use_cpd, hidden_in_game, no_collide, ctx, parent)
 		else:
-			var tr_one: Transform3D = trs[0]
-			var mi: MeshInstance3D = MeshInstance3D.new()
-			mi.mesh = mesh
-			mi.transform = tr_one
-			node = mi
-		_apply_culling_policy(node, low_mp, mesh)
-		if far_item:
-			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			node.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
-			node.visibility_range_end = 0.0
-		if use_cpd or hidden_in_game:
-			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		if hidden_in_game:
-			node.visible = false
-			node.gi_mode = GeometryInstance3D.GI_MODE_STATIC
-		if MobileProfile.is_mobile():
-			node.lod_bias = MobileProfile.lod_bias()
-		_apply_periph_range(node, item, ctx)
-		node.set_meta("ue_mesh", mp)
-		node.set_meta("decorative", not bool(item.get("collide", false)) or no_collide)
-		node.set_meta("source_sublevel", source_sublevel)
-		node.set_meta("source_sublevels", source_sublevels)
-		node.set_meta("source_counts", source_counts)
-		if not ov_arr.is_empty():
-			node.set_meta("override_materials", ov_arr)
-		if low_mp.contains("/sm_blockerward_"):
-			# P1-W: authored ward shard; hidden until the ward device activates.
-			node.name = "WardShard"
-			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			node.visible = false
-			node.add_to_group("ward_shards")
-			node.set_meta("ward_shard", true)
-		if mp == BEAM_CARD_MESH:
-			# Authored beam cards are per-instance so the device layer can bind
-			# one card to each detector and drive its powered visibility. They
-			# are additive/unlit: never a shadow caster.
-			node.name = "BeamCard"
-			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			node.add_to_group("lightbeam_cards")
-			node.set_meta("beam_card", true)
-		if mp == GC_BOOKCASE_GLASS_MESH:
-			# Phase 2 G-2: intact bookcase glass door in the static batch. Keep
-			# the node addressable so `_build_gc_layers` can bind it as the
-			# owner's leaf instead of emitting a duplicate. It keeps the same
-			# culling/shadow outcome the batched instance had (the split is per
-			# instance, not a visual change) and never joins the GC groups, so
-			# the GC census stays emitted-leaf only.
-			if node is MeshInstance3D and count == 1:
-				node.name = "BookcaseGlass"
-				node.set_meta("gc_static_leaf", true)
-				node.set_meta("gc_no_collision", true)
-				_gc_static_glass.append({
-					"node": node,
-					"source_sublevel": source_sublevel,
-					"used": false,
-				})
+			_mirror_draw_bases += neg_indices.size()
+			_mirror_batches_split += 1
+			# Split, preserving authored order inside each batch. `cpds` only
+			# exists when `use_cpd`, so the parallel arrays stay aligned.
+			var pos_trs: Array = []
+			var neg_trs: Array = []
+			var pos_cpds: Array[Color] = []
+			var neg_cpds: Array[Color] = []
+			for pi: int in range(pos_indices.size()):
+				var ip: int = int(pos_indices[pi])
+				pos_trs.append(trs[ip])
+				if use_cpd:
+					pos_cpds.append(cpds[ip])
+			for ni: int in range(neg_indices.size()):
+				var ineg: int = int(neg_indices[ni])
+				neg_trs.append(trs[ineg])
+				if use_cpd:
+					neg_cpds.append(cpds[ineg])
+			var variant: Dictionary
+			if neg_trs.size() >= 2 or use_cpd:
+				# MultiMesh: no per-instance cull state (and no surface
+				# override), so negative instances get a baked mesh or a
+				# whole-batch CULL_FRONT material clone.
+				variant = _get_mirror_variant(mesh, ov_key_eff, not use_cpd)
+				var mm_mode: String = str(variant.get("mode", "native"))
+				if mm_mode == "baked":
+					for bi: int in range(neg_trs.size()):
+						var tr_b: Transform3D = neg_trs[bi]
+						# B' = B * S; the baked mesh is already S * M, so the
+						# world geometry is unchanged and det(B') > 0.
+						neg_trs[bi] = Transform3D(tr_b.basis * MIRROR_LOCAL_FLIP, tr_b.origin)
+				elif mm_mode == "cull_front":
+					_mirror_cull_front_instances += neg_trs.size()
+				elif mm_mode == "cull_disabled":
+					_mirror_cull_disabled_instances += neg_trs.size()
+				_mirror_multimesh_instances += neg_trs.size()
 			else:
-				# The per-instance split is required; a batched pane cannot be
-				# hidden for one owner. Fail visible instead of silently leaving
-				# the bookcase without an intact leaf.
-				ctx["gc_static_leaf_multi"] = int(ctx.get("gc_static_leaf_multi", 0)) + count
-		parent.add_child(node)
-		ctx["chunk_count"] = int(ctx.get("chunk_count", 0)) + 1
+				# A one-instance batch is a MeshInstance3D. Godot already
+				# compensates a negative-determinant MeshInstance3D; the bake
+				# is opt-in for the synthetic probe's readback verdict.
+				if _mirror_single_baked():
+					variant = _get_mirror_variant(mesh, ov_key_eff, false)
+					if str(variant.get("mode", "native")) == "baked":
+						var tr_one: Transform3D = neg_trs[0]
+						neg_trs[0] = Transform3D(tr_one.basis * MIRROR_LOCAL_FLIP, tr_one.origin)
+					else:
+						_mirror_unbaked += 1
+				else:
+					variant = {
+						"mode": "native",
+						"mesh": mesh,
+						"material": null,
+						"materials": [] as Array,
+						"bytes": 0,
+						"surfaces": mesh.get_surface_count(),
+					}
+				_mirror_single_instances += 1
+			var neg_mesh: Mesh = variant.get("mesh", mesh) as Mesh
+			if not pos_trs.is_empty():
+				var pos_node: GeometryInstance3D = _make_draw_batch_node(mesh, pos_trs, pos_cpds, use_cpd)
+				_finish_draw_node(pos_node, item, mp, low_mp, ov_arr, mesh,
+					source_sublevel, source_sublevels, source_counts, far_item,
+					use_cpd, hidden_in_game, no_collide, ctx, parent)
+			var neg_node: GeometryInstance3D = _make_draw_batch_node(neg_mesh, neg_trs, neg_cpds, use_cpd)
+			neg_node.set_meta("mirror_neg", true)
+			neg_node.set_meta("mirror_mode", str(variant.get("mode", "native")))
+			neg_node.set_meta("mirror_instances", neg_trs.size())
+			neg_node.set_meta("mirror_source_mesh", mp)
+			var neg_mat: Variant = variant.get("material")
+			if neg_mat is Material:
+				neg_node.material_override = neg_mat as Material
+			var neg_mats: Array = variant.get("materials", [] as Array) as Array
+			if not neg_mats.is_empty():
+				var mi_neg: MeshInstance3D = neg_node as MeshInstance3D
+				if mi_neg != null:
+					for s_neg: int in range(neg_mats.size()):
+						if neg_mats[s_neg] is Material:
+							mi_neg.set_surface_override_material(s_neg, neg_mats[s_neg] as Material)
+			_finish_draw_node(neg_node, item, mp, low_mp, ov_arr, neg_mesh,
+				source_sublevel, source_sublevels, source_counts, far_item,
+				use_cpd, hidden_in_game, no_collide, ctx, parent)
+			_mirror_log_split(mp, str(variant.get("mode", "native")),
+				pos_trs.size(), neg_trs.size(), int(variant.get("bytes", 0)),
+				mesh.get_surface_count())
 	if ctx.has("perf_build_ms"):
 		ctx["perf_build_ms"] = int(ctx["perf_build_ms"]) + (Time.get_ticks_msec() - _pm0)
 
@@ -6177,7 +6588,19 @@ func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dict
 	result["moonshape_hidden"] = int(result.get("moonshape_hidden", 0))
 	result["clamped_scales"] = _scale_clamp_count
 	result["scale_clamp_worst_ratio"] = snappedf(_scale_clamp_worst, 0.0001)
-	result["mirrored_bases"] = _mirrored_basis_count
+	# P4.2: `mirrored_bases` is the draw-item census (the set the split batches
+	# and mirrored standalone nodes must account for). The transform-level
+	# census (includes decals/GC overlays) stays exported for the RE-P-08 probe.
+	result["mirrored_bases"] = _mirror_draw_bases
+	result["mirrored_transform_bases"] = _mirrored_basis_count
+	result["mirrored_multimesh"] = _mirror_multimesh_instances
+	result["mirrored_single"] = _mirror_single_instances
+	result["mirrored_batches_split"] = _mirror_batches_split
+	result["mirrored_cull_front"] = _mirror_cull_front_instances
+	result["mirrored_cull_disabled"] = _mirror_cull_disabled_instances
+	result["mirrored_mesh_bytes"] = _mirror_mesh_bytes
+	result["mirrored_mesh_count"] = _mirror_mesh_count
+	result["mirrored_unbaked"] = _mirror_unbaked
 	result["authored_meshes"] = int(result.get("authored_meshes", 0))
 	result["sublevels_skipped_merged"] = int(result.get("sublevels_skipped_merged", 0))
 	result["sublevels_from_graph"] = int(result.get("sublevels_from_graph", 0))
@@ -6200,7 +6623,7 @@ func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dict
 	# RE-P-09/RE-P-16: the mesh reconciliation used to live only in `result`,
 	# so no run log could prove a filter had not eaten authored geometry. One
 	# deterministic line per load, always on.
-	print("MESH_RECON authored=%d applied=%d duplicate=%d name_skipped=%d wardbox=%d moonshape=%d clamp=%d clamp_worst=%.2fx mirrored=%d origin_markers_skipped=%d skipped_merged=%d from_graph=%d graph_missing=%d" % [
+	print("MESH_RECON authored=%d applied=%d duplicate=%d name_skipped=%d wardbox=%d moonshape=%d clamp=%d clamp_worst=%.2fx mirrored=%d origin_markers_skipped=%d skipped_merged=%d from_graph=%d graph_missing=%d mirrored_bases=%d mirrored_multimesh=%d mirrored_single=%d mirrored_splits=%d mirrored_cull_front=%d mirrored_cull_disabled=%d mirrored_mesh_bytes=%d mirrored_mesh_count=%d mirrored_unbaked=%d" % [
 		int(result["authored_meshes"]),
 		mesh_instances,
 		int(result["duplicate_meshes"]),
@@ -6214,7 +6637,37 @@ func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dict
 		int(result["sublevels_skipped_merged"]),
 		int(result["sublevels_from_graph"]),
 		int(result["sublevels_graph_missing"]),
+		_mirror_draw_bases,
+		_mirror_multimesh_instances,
+		_mirror_single_instances,
+		_mirror_batches_split,
+		_mirror_cull_front_instances,
+		_mirror_cull_disabled_instances,
+		_mirror_mesh_bytes,
+		_mirror_mesh_count,
+		_mirror_unbaked,
 	])
+	# P4.2 reconcile: every mirrored draw instance must be in a negative
+	# MultiMesh batch or a mirrored standalone node. A mismatch is a split bug,
+	# not a data quality number, so it is loud.
+	var mirror_total: int = _mirror_multimesh_instances + _mirror_single_instances
+	var mirror_ok: bool = mirror_total == _mirror_draw_bases
+	print("MIRROR_RECON bases=%d multimesh=%d single=%d split=%d cull_front=%d cull_disabled=%d baked=%d baked_bytes=%d unbaked=%d suppressed=%d ok=%s" % [
+		_mirror_draw_bases,
+		_mirror_multimesh_instances,
+		_mirror_single_instances,
+		_mirror_batches_split,
+		_mirror_cull_front_instances,
+		_mirror_cull_disabled_instances,
+		_mirror_mesh_count,
+		_mirror_mesh_bytes,
+		_mirror_unbaked,
+		_mirror_log_suppressed,
+		str(mirror_ok),
+	])
+	if not mirror_ok:
+		push_error("[level_loader] MIRROR_RECON mismatch: bases=%d multimesh=%d single=%d" % [
+			_mirror_draw_bases, _mirror_multimesh_instances, _mirror_single_instances])
 	result["missing_meshes"] = (ctx.get("missing_meshes", [] as Array) as Array).duplicate()
 	result["corrupt_mesh_count"] = corrupt_mesh_count
 	result["corrupt_meshes"] = corrupt_meshes.duplicate()
@@ -7034,6 +7487,7 @@ func load_sublevels(json_paths: Array[String], parent: Node3D, light_probe: Node
 	_scale_clamp_count = 0
 	_scale_clamp_worst = 1.0
 	_mirrored_basis_count = 0
+	_reset_mirror_counters()
 	_parse_sublevels_with_graph(json_paths, acc, parent)
 
 	if _timing:
@@ -7084,6 +7538,7 @@ func load_sublevels_async(json_paths: Array, parent: Node3D, light_probe: Node =
 	_scale_clamp_count = 0
 	_scale_clamp_worst = 1.0
 	_mirrored_basis_count = 0
+	_reset_mirror_counters()
 	_roughness_bake_count = 0
 	_roughness_bake_px = 0
 	_roughness_bake_ms = 0
@@ -7460,10 +7915,9 @@ func _dict_to_transform(d: Dictionary) -> Transform3D:
 			if ratio > _scale_clamp_worst:
 				_scale_clamp_worst = ratio
 	basis = basis.scaled_local(s_clamped)
-	# RE-P-08: reflected bases (det < 0) are authored mirrors. Whether Godot
-	# compensates the winding for a negative-determinant instance is NOT
-	# verified in this lane (it needs a capture), so the count is exported on
-	# every load and the winding question stays open in the report.
+	# RE-P-08: reflected bases (det < 0) are authored mirrors. This increment
+	# is the placement-transform census (the RE-P-08 probe); the render split
+	# is counted in _build_one_draw_item() and reconciled by MIRROR_RECON.
 	if basis.determinant() < 0.0:
 		_mirrored_basis_count += 1
 	return Transform3D(basis, Vector3(float(p[0]), float(p[1]), float(p[2])))

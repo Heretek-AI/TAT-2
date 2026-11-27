@@ -243,13 +243,20 @@ StateTree shadow ceiling; the authored-element collision floor.
   has no `UTextureCube` branch and `TextureQueued` filters the package. Need
   producer + consumer (`AT_CUBEMAP_PASS`), a pure `step(dt, ev100)` model, and
   one global calibration offset; no per-room grade, no global 0.44 cut.
-- **Mirrors — carried, not re-measured (UNVERIFIED).** 3,312
-  negative-determinant instances, 3,215 in MultiMeshes; standalone
-  `MeshInstance3D` mirrors are compensated by Godot 4.7, but the MultiMesh node
-  is identity. Fix: sign-split + a baked mirrored mesh variant (reverse
-  winding/normals/tangents); `CULL_FRONT` is only a single-surface
-  `BaseMaterial3D` fast path. Needs the synthetic 2-instance probe in Phase 1
-  P4.2; the counts are carried from the earlier audit.
+- **Mirrors — P4.2 split implemented, headless-measured; GPU readback pending.**
+  The 3,312 authored negative records are real (Guildhall contract-2 base set).
+  The draw census is **3,297 = 3,129 MultiMesh + 168 standalone** after the
+  existing filters; the old "3,215 in MultiMeshes" counted path-level
+  multi-placements, not post-32 m-cell batch membership. Negative instances are
+  split into their own batch and drawn from a baked local-X mesh variant
+  (winding/normals/tangents fixed); **104** variants / **31,099,116 B**
+  uncompressed estimate and **312** instances on the single-surface
+  `CULL_FRONT` clone fast path, `unbaked=0`. `MIRROR_RECON` reconciles every
+  load. Standalone `MeshInstance3D` mirrors rely on Godot's native compensation
+  by default; `TAT2_MIRROR_SINGLE=baked` is the measured fallback (223 variants
+  / 61,972,836 B). The synthetic GPU probe (`build/qa/mirror_probe.sh --run`)
+  is the pending visual verdict; `--selftest` is green. Report:
+  [`reports/p4-mirrors-20261127.md`](reports/p4-mirrors-20261127.md).
 - **Landscape — data assertion PASS; pixel A/B pending (P4.4).** The shipped
   `vis > 0.5` discard stays; do not flip it. `TAT2_LANDSCAPE_MASK=discard|raw|off`
   selects the shipped rule, a raw-mask debug view, or no mask read, and the

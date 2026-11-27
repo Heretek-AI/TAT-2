@@ -182,15 +182,18 @@ StateTree shadow ceiling; the authored-element collision floor.
   upper_foyer 40.88, yaw180 39.47, Lounge 28.37, audio 92.8 s); it is not the
   120-row baseline.
 - **Staged 27-beat runner (v1):** `build/qa/p0b_route.sh` writes a
-  `tat2.p0b_route/1` manifest for all S01–S27 — **13 beats planned to be
-  staged** through live UI/API hooks, 14 deferred with reasons,
-  `route_claim=none` (no played route). The Guildhall stage is a **free-play
-  substitute** (`Mission.Guildhall.LootTheRoom`, contract 2) used only for the
-  KF13 letter; it is **not** the official selection (canonical contract-2 row:
+  `tat2.p0b_route/1` manifest for all S01–S27 — 13 staged beats, 14 deferred
+  with reasons, `route_claim=none` (no played route). **route1 was
+  `status=partial`** (S06 `_show_tab` called on the CanvasLayer instead of the
+  `LedgerUI` Control); the hook is fixed and **route2 is all-green**
+  (`captured=13 deferred=14 partial=0 frame_errors=0 frames=17`, exit 0,
+  `docs/reports/logs/p0b-route/route2/`). The **120-row re-score is still
+  next**. The Guildhall stage is a **free-play substitute**
+  (`Mission.Guildhall.LootTheRoom`, contract 2) used only for the KF13 letter;
+  it is **not** the official selection (canonical contract-2 row:
   `Mission.Guildhall.VaultHeist`; historical baseline: `LootTheRoom`,
-  `free_play=false`). Dry-run/self-test are green; the GPU capture is **not
-  run**. The wrapper exports `TAT2_PARITY_ONLY=1` for every mode. Contract and
-  the owner command: [`docs/reports/p0b-route.md`](p0b-route.md).
+  `free_play=false`). The wrapper exports `TAT2_PARITY_ONLY=1` for every mode.
+  Contract and measured runs: [`docs/reports/p0b-route.md`](p0b-route.md).
 
 ### 4.2 P4 look (the visible parity gap)
 

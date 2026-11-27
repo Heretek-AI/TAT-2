@@ -729,12 +729,12 @@
       ]
     }
   ],
-  "finished_at_utc": "2026-11-27T05:30:32",
+  "finished_at_utc": "2026-11-27T05:41:51",
   "git": {
     "branch": "main",
     "dirty": true,
-    "sha": "77b0bf96fd52e1c7b5f1fc089f3ed9984a7560c5",
-    "sha_short": "77b0bf96fd52"
+    "sha": "434143970f43b8274fb8144810f3bcfc05e8d5a3",
+    "sha_short": "434143970f43"
   },
   "gpu": {
     "available": false,
@@ -795,7 +795,7 @@
   "out_dir": "/home/john/Projects/TAT-2/build/qa/p0b_route/dry-run",
   "repo_root": "/home/john/Projects/TAT-2",
   "route_claim": "none",
-  "run_id": "20261127T053032Z_77b0bf96fd52_staged",
+  "run_id": "20261127T054151Z_434143970f43_staged",
   "schema": "tat2.p0b_route/1",
   "seed": {
     "active_map_seed": 0,
@@ -826,7 +826,7 @@
     "frames": 60,
     "selector": "median-mean"
   },
-  "started_at_utc": "2026-11-27T05:30:32",
+  "started_at_utc": "2026-11-27T05:41:51",
   "status": "planned",
   "store": {
     "exists": true,

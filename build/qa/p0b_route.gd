@@ -1207,6 +1207,16 @@ func _find_ui_node(host: Node, suffix: String) -> Node:
 	return null
 
 
+func _find_ui_control(host: Node, suffix: String) -> Node:
+	if host == null:
+		return null
+	for n: Node in host.find_children("*", "Control", true, false):
+		var scr: Script = n.get_script() as Script
+		if scr != null and str(scr.resource_path).ends_with(suffix):
+			return n
+	return null
+
+
 func _free_ui(host: Node, suffix: String) -> bool:
 	var n: Node = _find_ui_node(host, suffix)
 	if n == null:
@@ -1449,13 +1459,17 @@ func _stage_den(rows: Array, tap: Node) -> void:
 		_defer_row(rows, "S04", "mission_controller.open_wardrobe_ui missing")
 
 	# S06 Ledger: Journal then Black Market.
+	# `open_ledger_ui()` adds a plain CanvasLayer holding a LedgerUI Control;
+	# `_show_tab` lives on the Control, not the layer. Resolve both so the
+	# layer is freed correctly and the tab switch actually runs.
 	var r06: Dictionary = _row_by_id(rows, "S06")
 	if mission.has_method("open_ledger_ui"):
 		mission.call("open_ledger_ui")
 		await _wait(20)
-		var ledger: Node = _find_ui_node(mission, "ledger_ui.gd")
-		if ledger == null:
-			_defer_row(rows, "S06", "open_ledger_ui() did not add a ledger_ui.gd layer")
+		var ledger_layer: Node = _find_ui_node(mission, "ledger_ui.gd")
+		var ledger: Node = _find_ui_control(mission, "ledger_ui.gd")
+		if ledger_layer == null or ledger == null:
+			_defer_row(rows, "S06", "open_ledger_ui() did not yield both a ledger_ui.gd CanvasLayer and a LedgerUI Control")
 		else:
 			if ledger.has_method("_show_tab"):
 				ledger.call("_show_tab", 0)
@@ -1466,8 +1480,8 @@ func _stage_den(rows: Array, tap: Node) -> void:
 				await _wait(12)
 				r06 = _add_frame(r06, await _shoot_frame("S06", "black_market", tap, null))
 			else:
-				_note_frame_error(r06, "black_market: ledger_ui._show_tab missing")
-			_finish_row(r06, "mission_controller.open_ledger_ui() -> ledger_ui._show_tab(0) journal + _show_tab(1) black market")
+				_note_frame_error(r06, "black_market: ledger_ui._show_tab missing on the Control")
+			_finish_row(r06, "mission_controller.open_ledger_ui() -> LedgerUI Control _show_tab(0) journal + _show_tab(1) black market")
 		_free_ui(mission, "ledger_ui.gd")
 		await _wait(6)
 	else:

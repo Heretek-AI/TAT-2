@@ -1,9 +1,12 @@
 # P0b route runner v1 — staged/mixed 27-beat capture
 
-**Status:** harness built and headless-verified (dry-run + self-test green).
-The **staged Vulkan capture has not been run** (no GPU render in this session),
-and the **120-row re-score is not done**. This page is the contract for the
-owner's GPU run and for a later scoring lane.
+**Status:** harness built and headless-verified. The first real port capture
+(**route1**, `4341439`) was `status=partial` because the S06 ledger hook called
+`_show_tab` on the CanvasLayer instead of the `LedgerUI` Control; the hook is
+fixed and the second capture (**route2**) is **all-green**: 13 captured / 14
+deferred / 0 partial / 0 frame errors / 17 frames, exit 0. The **120-row
+re-score is still not done** (and the live Steam capture is untouched). See
+[§6](#6-measured-evidence) for both runs and the measured lines.
 
 - Runner: `build/qa/p0b_route.gd` (`extends SceneTree`)
 - Wrapper: `build/qa/p0b_route.sh` (owns the shared flock, Xvfb, timeout; exports
@@ -38,8 +41,10 @@ frame was saved, validated non-black, and every planned frame for that beat
 succeeded. Dry runs never print or store a **nonzero** `captured` count; they
 print `planned=13` and keep `counts.captured=0`.
 
-This is **not** a played route, **not** an audio measurement under a Dummy
-driver, and **not** the 120-row baseline. A later lane maps these 27 rows onto
+This is **not** a played route and **not** the 120-row baseline. (Under a
+Dummy driver the audio tap records `enabled=false` with a reason; route2 ran
+with a real device and `audio.enabled=true`, but that audio is recorded, not
+scored.) A later lane maps these 27 rows onto
 `docs/reference/clip_1795033698901/COMPARISON_PORT_20261124.md`.
 
 ### Free-play disclosure (staged substitute)
@@ -74,8 +79,8 @@ build/qa/p0b_route.sh --dry-run
 build/qa/p0b_route.sh --self-test
 # -> P0B_ROUTE_SELFTEST PASS checks=62 fails=0
 
-# The real staged capture (owner GPU run; NOT run in this session).
-build/qa/p0b_route.sh --tag=route1
+# The real staged capture (run as route1/route2; see §6).
+build/qa/p0b_route.sh --tag=route2
 ```
 
 The wrapper's default mode is capture (run it with no mode flag); the runner
@@ -100,7 +105,7 @@ evidence root for a later wave's own logs; a real capture always writes under
 ### Exact GPU command
 
 ```bash
-build/qa/p0b_route.sh --tag=route1
+build/qa/p0b_route.sh --tag=route2
 ```
 
 which runs, under the shared flock and Xvfb:
@@ -113,7 +118,7 @@ cd /home/john/Projects/TAT-2 && timeout 1800 \
   --mode=capture --seed=derived --run-id=<run_id>
 ```
 
-Expected all-green result:
+Measured all-green result (route2):
 `status=captured beats=27 captured=13 deferred=14 partial=0 staged_failed=0
 frame_errors=0 frames=17 errors=0 exit_ok=true`.
 
@@ -209,8 +214,9 @@ consumable by the current scorer and must not be claimed as scored.
 
 `planned` = in the v1 capture plan (no frame exists until the GPU run);
 `deferred` = out of scope with the reason recorded in the manifest. `ref` is
-the reference keyframe. The table's "v1" column never says `captured` for a
-beat that has not run.
+the reference keyframe. The table's "v1" column is the plan; §6 records what
+actually ran (route2 captured the 13 planned beats; the 14 deferred ones stay
+deferred with their reasons).
 
 | Beat | Official span | Class | Ref | v1 | Hook / blocker |
 |---|---|---|---|---|---|
@@ -297,9 +303,59 @@ Hooks confirmed in the tree before writing the runner: `open_wardrobe_ui`,
 
 ---
 
-## 6. Measured evidence (this session, headless only)
+## 6. Measured evidence
 
-Measured on `77b0bf9` with `tools/godot` (Godot 4.7.2), no GPU render, no Xvfb.
+### Measured runs (port only, Xvfb Vulkan, no Steam)
+
+Both runs used the port build only, one Godot at a time, the wrapper's shared
+flock, Xvfb `1920x1080x24`, and `--rendering-driver vulkan`. Wall is the
+manifest `started_at_utc`→`finished_at_utc` span; the wrapper adds ~5 s of
+launch overhead (route2 wrapper wall: 193 s).
+
+| Run | Tree | Status | captured | partial | deferred | frames | frame_errors | wall | exit | Evidence |
+|---|---|---|---|---|---|---|---|---|---|---|
+| route1 | `4341439` (clean) | `partial` | 12 | 1 | 14 | 16 | 1 | 193 s | 1 | `docs/reports/logs/p0b-route/route1/` |
+| route2 | `4341439` + S06 fix (dirty) | `captured` | 13 | 0 | 14 | 17 | 0 | 188 s | 0 | `docs/reports/logs/p0b-route/route2/` |
+
+route1 exact line:
+
+```
+P0B_ROUTE_CAPTURE_DONE status=partial beats=27 captured=12 deferred=14 partial=1 staged_failed=0 frame_errors=1 frames=16 errors=0 exit_ok=false
+```
+
+route1's only failure was **S06**
+(`partial_capture: 1 frame(s) failed; first=black_market: ledger_ui._show_tab
+missing`). Root cause: `mission_controller.open_ledger_ui()` adds a plain
+`CanvasLayer` holding a `LedgerUI` Control; `_find_ui_node("ledger_ui.gd")`
+returned the **layer**, and `_show_tab` lives on the **Control**
+(`game/src/ui/ledger_ui.gd:552`). The journal frame saved, the Black Market
+frame did not. Everything else was green: S24 `beam_visible=true` with 3/3
+frames, S12/S27 captured, audio enabled (189.1 s).
+
+Fix (runner only, no game code): `_find_ui_control(host, "ledger_ui.gd")`
+returns the scripted `Control`; S06 keeps `_find_ui_node` for the layer null
+check and `_free_ui`, and calls `_show_tab` on the Control. S06 defers unless
+both the layer and the Control exist, and is never captured unless both the
+journal and Black Market frames are saved.
+
+route2 exact line:
+
+```
+P0B_ROUTE_CAPTURE_DONE status=captured beats=27 captured=13 deferred=14 partial=0 staged_failed=0 frame_errors=0 frames=17 errors=0 exit_ok=true
+```
+
+route2 details: S06 has both `journal` and `black_market` (2/2); S24 has
+`upper_foyer`/`yaw180`/`foyer_beam` (3/3, `beam_visible=true`,
+`camera_source=player`); S12 (player camera, lantern lit) and S27 (paused) are
+captured; the Lounge `beam_close` extra is captured; audio is enabled
+(187.42 s, 19 marks, WAV+PCM+JSON); 18 PNGs total (17 beat frames + 1 extra),
+all `1920x1080`, no `SCRIPT ERROR`/`SHADER ERROR`/`Parse Error` in the log.
+The manifest's `git.dirty=true` is expected: route2 ran on `4341439` plus the
+uncommitted S06 fix.
+
+### Headless gates (after the S06 fix)
+
+Measured on `4341439` with `tools/godot` (Godot 4.7.2), no GPU render, no Xvfb.
 
 ```
 $ bash -n build/qa/p0b_route.sh && echo "bash_n_exit=$?"
@@ -320,15 +376,18 @@ $ git diff --check
 (clean, exit 0)
 
 $ git status --short
+ M build/qa/p0b_route.gd
  M docs/HANDOFF_NEXT_AGENT.md
-?? build/qa/p0b_route.gd
-?? build/qa/p0b_route.sh
-?? docs/reports/logs/p0b-route/
-?? docs/reports/p0b-route.md
+ M docs/reports/logs/p0b-route/dry-run/dry-run.log
+ M docs/reports/logs/p0b-route/dry-run/manifest.json
+ M docs/reports/logs/p0b-route/self-test/self-test.log
+ M docs/reports/p0b-route.md
+?? docs/reports/logs/p0b-route/route1/
+?? docs/reports/logs/p0b-route/route2/
 ```
 
-Five paths: one modified tracked file and four new paths (the runner, the
-wrapper, the tracked dry-run/self-test evidence directory, and this report).
+The two run directories are new evidence; the S06 fix and the regenerated
+headless logs are the working-tree changes (no commit in this wave).
 
 Dry-run manifest spot checks: `counts.captured=0`, `counts.planned=13`,
 `counts.deferred=14`, `counts.partial=0`, `counts.frame_errors=0`,
@@ -348,20 +407,28 @@ This is the documented fresh-worktree trap in `AGENTS.md`; running
 `tools/godot --headless --path game --import` once repaired the ignored cache
 and the re-run was `217/0`. No tracked file changed.
 
-**Not verified by this session:** the Vulkan capture, any PNG, any audio
-window, the foyer/C_107 beam's on-screen visibility, and the 120-row re-score.
-The audio tap is disabled under the Dummy driver by design.
+**Verified by route2:** the Vulkan staged capture runs end to end (13/13
+captured, 17 beat frames, exit 0), the S24 C_107 beam card is visible
+(`beam_visible=true`), and the audio tap captures with a real device (enabled,
+187.42 s). **Not verified:** the 120-row re-score, any ROI/visual score of the
+route2 PNGs, the audio windows against the reference levels, and the live
+Steam reference capture. The audio is recorded, not scored.
 
 ---
 
 ## 7. What the next lane owes
 
-1. Run `build/qa/p0b_route.sh --tag=<wave>` on the GPU host (one Godot at a
-   time; the wrapper takes the flock). Require `status=captured captured=13
-   deferred=14 partial=0 staged_failed=0 frame_errors=0 frames=17 exit_ok=true`.
+1. **The capture is done** (route2 all-green). The next action is the **120-row
+   re-score**: map the 27 rows/17 frames onto
+   `docs/reference/clip_1795033698901/COMPARISON_PORT_20261124.md`, using the
+   route2 manifest/PNGs (`docs/reports/logs/p0b-route/route2/`,
+   `build/qa/p0b_route/route2/`). A later re-run must still produce
+   `status=captured captured=13 deferred=14 partial=0 staged_failed=0
+   frame_errors=0 frames=17 exit_ok=true`.
 2. If S24's `foyer_beam` reports `beam_visible=false` or any beat is
    `partial`/`deferred`, fix the hook/content or record the defect here and in
-   `docs/FIDELITY_GAPS.md`; never relabel a failed/partial beat as captured.
+   `docs/FIDELITY_GAPS.md`; never relabel a failed/partial beat as captured
+   (route1's S06 is the worked example: partial, root-caused, fixed, re-run).
 3. Score only the frames the current scorer understands
    (`--port <png> --pose <id>` for the six p0b poses), or build the translation
    lane; do not feed `tat2.p0b_route/1` to `--validate-manifest`/`--all`.

@@ -10,8 +10,8 @@ extends RefCounted
 ##   * PASS checks are the gate and go through h.require();
 ##   * `P2_EXPECTED_FAIL` records a known authored-data defect (the pants
 ##     albedo misclassification) and does not fail the tier;
-##   * `P2_EXPECTED_DELTA` records a labelled port approximation (the beam
-##     material is `PORT_APPROX`) with the measured numbers;
+##   * `P2_EXPECTED_DELTA` records a labelled port approximation; the beam
+##     DELTA was promoted to `P2-BEAM-AUTHORED-PORT` by P1-BEAMS;
 ##   * `P2_FIXED` means the data wave fixed a recorded defect: the expectation
 ##     must then be promoted to a PASS check, not silently dropped.
 ##
@@ -24,7 +24,8 @@ extends RefCounted
 ##   P2-CIV-*    authored civilian slots (body 3, head 6), shirt/head albedo,
 ##               pants albedo EXPECTED_FAIL (BaseColorOpacity misclassified)
 ##   P2-BEAM-*   authored beam BaseColor/EmissiveMultiplier/additive-unlit
-##               flags PASS, port material EXPECTED_DELTA (PORT_APPROX)
+##               flags PASS and the port material now carries the authored
+##               HDR colour + centre-line row (P1-BEAMS, DELTA promoted)
 ##   P2-CENSUS-* turret 229/1,145/0 with 0 missing GLBs; GC 336 hidden
 ##               components / 166 leaves, 0 visible, 0 unresolved
 ##   P2-GC-LABEL GC interaction label is the authored
@@ -226,31 +227,48 @@ func _check_beam() -> void:
 	var sm: ShaderMaterial = mat as ShaderMaterial
 	var shader_path: String = ""
 	var port_color := Color(0.0, 0.0, 0.0, 0.0)
-	var port_energy: float = 0.0
+	var port_emissive: float = 0.0
+	var port_thickness: float = 0.0
+	var port_line_opacity: float = 0.0
+	var port_glow: float = 0.0
+	var port_fade: float = 0.0
 	if sm != null and sm.shader != null:
 		shader_path = sm.shader.resource_path
 		var cv: Variant = sm.get_shader_parameter("beam_color")
 		if cv is Color:
 			port_color = cv as Color
-		port_energy = float(sm.get_shader_parameter("energy"))
-	var authored_norm := Vector3(float(base[0]) / 5.0, float(base[1]) / 5.0, float(base[2]) / 5.0) \
-		if base.size() >= 3 else Vector3.ZERO
-	var authored_energy: float = 3.0 * 0.5
-	var dg: float = absf(port_color.g - authored_norm.y)
-	var db: float = absf(port_color.b - authored_norm.z)
-	var de: float = absf(port_energy - authored_energy)
+		port_emissive = float(sm.get_shader_parameter("emissive_multiplier"))
+		port_thickness = float(sm.get_shader_parameter("center_line_thickness"))
+		port_line_opacity = float(sm.get_shader_parameter("center_line_opacity"))
+		port_glow = float(sm.get_shader_parameter("fake_glow_opacity"))
+		port_fade = float(sm.get_shader_parameter("fade_distance"))
+	var authored_col := Color(
+		float(base[0]), float(base[1]), float(base[2]), float(base[3])) if base.size() >= 4 else Color(0, 0, 0, 0)
+	var authored_emissive: float = float(params.get("EmissiveMultiplier", 0.0))
+	var authored_thickness: float = float(params.get("Center Line Thickness", 0.0))
+	var authored_line_opacity: float = float(params.get("Center Line Opacity", 0.0))
+	var authored_glow: float = float(params.get("Fake Glow Opacity", 0.0))
+	var authored_fade: float = float(params.get("FadeDistance", 0.0))
 	h.require(
 		sm != null and shader_path.ends_with("tat_beam.gdshader"),
 		"P2-BEAM-SHADER",
-		"the loader builds the labelled beam stand-in (%s)" % shader_path
+		"the loader builds the authored centre-line beam shader (%s)" % shader_path
 	)
-	_expect_delta(
-		dg <= 0.01 and db <= 0.01 and de <= 0.01,
-		"P2-BEAM-PORT-APPROX",
-		"PORT_APPROX colour port=(%.3f, %.3f, %.3f) authored_norm=(%.3f, %.3f, %.3f) dG=%.3f dB=%.3f; energy port=%.2f authored=%.2f dE=%.2f" % [
-			port_color.r, port_color.g, port_color.b,
-			authored_norm.x, authored_norm.y, authored_norm.z, dg, db,
-			port_energy, authored_energy, de,
+	# P1-BEAMS promoted the old PORT_APPROX DELTA to this PASS: the port now
+	# carries the authored HDR colour and the centre-line row, so a measured
+	# deviation here is a real regression.
+	h.require(
+		port_color.is_equal_approx(authored_col) \
+			and absf(port_emissive - authored_emissive) < 0.001 \
+			and absf(port_thickness - authored_thickness) < 0.0001 \
+			and absf(port_line_opacity - authored_line_opacity) < 0.001 \
+			and absf(port_glow - authored_glow) < 0.001 \
+			and absf(port_fade - authored_fade) < 0.001,
+		"P2-BEAM-AUTHORED-PORT",
+		"port=(%s) emissive=%.2f line=%.3fm a=%.2f glow=%.2f fade=%.0fm authored=(%s) emissive=%.2f line=%.3fm a=%.2f glow=%.2f fade=%.0fm" % [
+			str(port_color), port_emissive, port_thickness, port_line_opacity,
+			port_glow, port_fade, str(authored_col), authored_emissive,
+			authored_thickness, authored_line_opacity, authored_glow, authored_fade,
 		]
 	)
 	await h.free_node(ll)

@@ -34,7 +34,10 @@ const Geometry := preload("res://src/devices/device_geometry.gd")
 const BEAM_SHADER: Shader = preload("res://src/core/tat_beam.gdshader")
 
 const CUE_TRIP: String = "lightbeam_trip"
-const VISUAL_RADIUS_M: float = 0.012
+## Authored centre line is 0.015 m thick (MI_LightBeam_SM Center Line
+## Thickness), so the fallback cylinder's radius is half of it. The authored
+## card core mesh is 0.014 m across.
+const VISUAL_RADIUS_M: float = 0.0075
 
 var device_id: String = ""
 var family: String = "light_beam"
@@ -124,9 +127,10 @@ func _build() -> void:
 	_shape_node.rotation = Vector3(PI * 0.5, 0.0, 0.0)
 	_pivot.add_child(_shape_node)
 
-	# Cheap additive stand-in for the authored UE beam card. The cooked
-	# material graph was not decompiled; tat_beam.gdshader is the documented
-	# stand-in already used by the level loader for security beams.
+	# Additive authored-material stand-in for the authored UE beam card, used
+	# only when no authored card was adopted. The values are MI_LightBeam_SM's
+	# authored centre-line/fake-glow/fade row; the cylinder's axis is local Y,
+	# so radial_axis=1 keeps the 1.5 cm centre line on the shaft.
 	var cyl := CylinderMesh.new()
 	cyl.height = beam_length_m
 	cyl.top_radius = VISUAL_RADIUS_M
@@ -135,8 +139,14 @@ func _build() -> void:
 	cyl.rings = 1
 	var mat := ShaderMaterial.new()
 	mat.shader = BEAM_SHADER
-	mat.set_shader_parameter("beam_color", Color(1.0, 0.82, 0.62, 0.55))
-	mat.set_shader_parameter("energy", 2.0)
+	mat.set_shader_parameter("beam_color", Color(5.0, 4.3813, 3.5156, 0.5))
+	mat.set_shader_parameter("emissive_multiplier", 3.0)
+	mat.set_shader_parameter("center_line_thickness", 0.015)
+	mat.set_shader_parameter("center_line_opacity", 0.5)
+	mat.set_shader_parameter("fake_glow_opacity", 0.06)
+	mat.set_shader_parameter("fake_glow_center_width", 0.085)
+	mat.set_shader_parameter("fade_distance", 25.0)
+	mat.set_shader_parameter("radial_axis", 1)
 	_visual = MeshInstance3D.new()
 	_visual.name = "BeamVisual"
 	_visual.mesh = cyl

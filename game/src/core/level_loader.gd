@@ -1458,6 +1458,34 @@ static func _copy_mask_to_alpha(out_img: Image, mask_img: Image, from_alpha: boo
 	out_img.set_data(out_img.get_width(), out_img.get_height(), false, Image.FORMAT_RGBA8, od)
 
 
+## Authored beam material (MI_LightBeam_SM) for the SM_LightBeam cards and the
+## security_beam fallback. Every value comes from the generated material row so
+## a producer change flows through instead of being hidden in a constant; the
+## fallbacks are the authored values measured above. Additive/unlit/two-sided
+## is the shader's render_mode, matching the authored render block.
+func _build_beam_material(info: Dictionary) -> ShaderMaterial:
+	var mat := ShaderMaterial.new()
+	mat.shader = BEAM_SHADER
+	var vecs: Dictionary = info.get("vectors", {}) as Dictionary if info.get("vectors", {}) is Dictionary else {}
+	var base: Array = vecs.get("BaseColor", []) as Array if vecs.get("BaseColor", []) is Array else []
+	var beam_col := Color(5.0, 4.3813, 3.5156, 0.5)
+	if base.size() >= 4:
+		beam_col = Color(float(base[0]), float(base[1]), float(base[2]), float(base[3]))
+	var params: Dictionary = info.get("params", {}) as Dictionary if info.get("params", {}) is Dictionary else {}
+	mat.set_shader_parameter("beam_color", beam_col)
+	mat.set_shader_parameter("emissive_multiplier", float(params.get("EmissiveMultiplier", 3.0)))
+	mat.set_shader_parameter("center_line_thickness", float(params.get("Center Line Thickness", 0.015)))
+	mat.set_shader_parameter("center_line_opacity", float(params.get("Center Line Opacity", 0.5)))
+	mat.set_shader_parameter("center_line_falloff", float(params.get("Center Line Falloff", 0.25)))
+	mat.set_shader_parameter("fake_glow_opacity", float(params.get("Fake Glow Opacity", 0.06)))
+	mat.set_shader_parameter("fake_glow_center_width", float(params.get("Fake Glow Center Width", 0.085)))
+	mat.set_shader_parameter("fake_glow_power", float(params.get("Fake Glow Power", 1.1)))
+	mat.set_shader_parameter("fade_distance", float(params.get("FadeDistance", 25.0)))
+	# The authored card's local X is the length axis (radial = YZ).
+	mat.set_shader_parameter("radial_axis", 0)
+	return mat
+
+
 func get_material_for_ue(ue_mat_path: String) -> Material:
 	if _std_mat_cache.has(ue_mat_path):
 		return _std_mat_cache[ue_mat_path] as Material
@@ -1478,13 +1506,11 @@ func get_material_for_ue(ue_mat_path: String) -> Material:
 	# Exact MI only: MI_LightBeam_SM (134 Guildhall SM_LightBeam meshes) is
 	# authored Additive + Unlit + TwoSided with an HDR warm-white alpha 0.5.
 	# The StandardMaterial3D path turned it into an opaque white lit slab.
-	# The volumetric card shader keeps the authored additive, unshaded,
-	# cull-disabled, depth-write-off look (no bloom pass is added).
+	# The beam shader keeps the authored additive, unshaded, cull-disabled,
+	# depth-write-off look and draws the authored 1.5 cm centre line / 6 %
+	# fake glow / 25 m fade instead of the old full-tube bar.
 	if low_mat.ends_with("mi_lightbeam_sm"):
-		var beam_m: ShaderMaterial = ShaderMaterial.new()
-		beam_m.shader = BEAM_SHADER
-		beam_m.set_shader_parameter("beam_color", Color(1.0, 0.93, 0.82, 0.55))
-		beam_m.set_shader_parameter("energy", 1.7)
+		var beam_m: ShaderMaterial = _build_beam_material(info)
 		_std_mat_cache[ue_mat_path] = beam_m
 		return beam_m
 	if is_translucent_early and ("glass" in low_mat or "window" in low_mat):

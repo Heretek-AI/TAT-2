@@ -877,7 +877,7 @@ static func spawn_foyer_security_beam(parent: Node, emitter_pos: Vector3, far_po
 	for i: int in [-1, 1]:
 		var a: Vector3 = emitter_pos + Vector3(0.0, float(i) * beam_gap * 0.5, 0.0)
 		var b: Vector3 = far_pos + Vector3(0.0, float(i) * beam_gap * 0.5, 0.0)
-		_add_beam_mesh(root, a, b, 0.035, Color(1.0, 1.0, 1.0, 0.55), 2.0)
+		_add_beam_mesh(root, a, b, 0.0075, Color(5.0, 4.3813, 3.5156, 0.5), 3.0)
 	var housing_mesh: SphereMesh = SphereMesh.new()
 	housing_mesh.radius = 0.12
 	housing_mesh.height = 0.24
@@ -951,13 +951,18 @@ static func _add_beam_mesh(root: Node3D, a: Vector3, b: Vector3, radius: float, 
 	cyl.height = dist
 	cyl.radial_segments = 12
 	cyl.rings = 1
-	# APPROX_SHADER (HL-1, KF27): the UE beam cards were not decompiled; the
-	# view-facing core + feathered silhouette makes the cylinder read as a
-	# crisp white volumetric shaft instead of a lit plastic rod.
+	# Authored MI_LightBeam_SM centre-line material (1.5 cm line, 6 % glow,
+	# 25 m fade). The cylinder axis is local Y, so radial_axis=1.
 	var beam_mat: ShaderMaterial = ShaderMaterial.new()
 	beam_mat.shader = BEAM_SHADER
 	beam_mat.set_shader_parameter("beam_color", color)
-	beam_mat.set_shader_parameter("energy", energy)
+	beam_mat.set_shader_parameter("emissive_multiplier", energy)
+	beam_mat.set_shader_parameter("center_line_thickness", 0.015)
+	beam_mat.set_shader_parameter("center_line_opacity", 0.5)
+	beam_mat.set_shader_parameter("fake_glow_opacity", 0.06)
+	beam_mat.set_shader_parameter("fake_glow_center_width", 0.085)
+	beam_mat.set_shader_parameter("fade_distance", 25.0)
+	beam_mat.set_shader_parameter("radial_axis", 1)
 	cyl.material = beam_mat
 	var beam: MeshInstance3D = MeshInstance3D.new()
 	beam.name = "SecurityBeam"

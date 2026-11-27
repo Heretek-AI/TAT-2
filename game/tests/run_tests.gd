@@ -2098,24 +2098,33 @@ func _initialize() -> void:
 	else:
 		print("PASS: UE Overlay/Multiply darken metals (brass ", brass_mat29.albedo_color, ", iron ", iron_mat29.albedo_color, ") and BlackUnlit is unshaded black")
 	# 29b. MI_LightBeam_SM uses the additive/unlit beam shader with the
-	# authored warm-white colour, not an opaque lit StandardMaterial3D.
+	# authored HDR centre-line row (P1-BEAMS), not an opaque lit
+	# StandardMaterial3D and not the old full-tube 0.55-alpha bar.
 	var beam_mat29: Variant = vec_ll.call("get_material_for_ue", "/Game/Gameplay/Traps/Detectors/LightBeam/MI_LightBeam_SM")
 	var beam_sm29 := beam_mat29 as ShaderMaterial
 	var beam_ok29: bool = beam_sm29 != null and beam_sm29.shader != null and beam_sm29.shader.resource_path.ends_with("tat_beam.gdshader")
 	if beam_ok29:
 		var beam_col29: Variant = beam_sm29.get_shader_parameter("beam_color")
-		var beam_energy29: Variant = beam_sm29.get_shader_parameter("energy")
+		var beam_emis29: Variant = beam_sm29.get_shader_parameter("emissive_multiplier")
+		var beam_thick29: Variant = beam_sm29.get_shader_parameter("center_line_thickness")
+		var beam_line_a29: Variant = beam_sm29.get_shader_parameter("center_line_opacity")
+		var beam_glow29: Variant = beam_sm29.get_shader_parameter("fake_glow_opacity")
+		var beam_fade29: Variant = beam_sm29.get_shader_parameter("fade_distance")
 		beam_ok29 = beam_col29 is Color \
-			and is_equal_approx((beam_col29 as Color).a, 0.55) \
-			and absf(float((beam_col29 as Color).r) - 1.0) < 0.002 \
-			and absf(float((beam_col29 as Color).g) - 0.93) < 0.002 \
-			and absf(float((beam_col29 as Color).b) - 0.82) < 0.002 \
-			and is_equal_approx(float(beam_energy29), 1.7)
+			and absf(float((beam_col29 as Color).r) - 5.0) < 0.002 \
+			and absf(float((beam_col29 as Color).g) - 4.3813) < 0.002 \
+			and absf(float((beam_col29 as Color).b) - 3.5156) < 0.002 \
+			and absf(float((beam_col29 as Color).a) - 0.5) < 0.002 \
+			and absf(float(beam_emis29) - 3.0) < 0.002 \
+			and absf(float(beam_thick29) - 0.015) < 0.0001 \
+			and absf(float(beam_line_a29) - 0.5) < 0.002 \
+			and absf(float(beam_glow29) - 0.06) < 0.002 \
+			and absf(float(beam_fade29) - 25.0) < 0.002
 	if not beam_ok29:
-		printerr("FAIL: 29b MI_LightBeam_SM not the additive beam shader (mat=", beam_mat29, ")")
+		printerr("FAIL: 29b MI_LightBeam_SM not the authored centre-line beam shader (mat=", beam_mat29, ")")
 		fails += 1
 	else:
-		print("PASS: 29b MI_LightBeam_SM binds tat_beam.gdshader (warm white a=0.55, energy 1.7)")
+		print("PASS: 29b MI_LightBeam_SM binds tat_beam.gdshader (HDR 5/4.381/3.516 a=0.5, line 1.5cm a=0.5, glow 6%, fade 25m)")
 	# 29c. _build_volumes tags designer blockers for traversal rejection while
 	# leaving the body solid on layer 1.
 	var vol_parent29 := Node3D.new()

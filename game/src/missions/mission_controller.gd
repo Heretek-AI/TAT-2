@@ -24,6 +24,7 @@ const EscapeScript := preload("res://src/interact/escape_gate.gd")
 const SafeRoomDressingScript := preload("res://src/missions/safe_room_dressing.gd")
 const LightProbeScript := preload("res://src/stealth/light_probe.gd")
 const LevelLoaderScript := preload("res://src/core/level_loader.gd")
+const FoyerDressingScript := preload("res://src/core/foyer_dressing.gd")
 const MobileProfile := preload("res://src/core/mobile_profile.gd")
 const PerfProfile := preload("res://src/core/perf_profile.gd")
 const WeatherProfile := preload("res://src/core/weather_profile.gd")
@@ -624,6 +625,30 @@ func _add_guildhall_foyer_fills() -> void:
 		light_probe.register_light(fill)
 
 
+## P1-BEAMS: repair the KF27 foyer subjects on the built POI nodes. The module
+## owns the authored material/text/placement values; this wrapper only guards
+## the map, calls it and logs the measured counts once per load.
+func _build_foyer_dressing() -> void:
+	if GameState.active_map_id != "guildhall":
+		return
+	var node: Node3D = FoyerDressingScript.build(self, level_loader)
+	if node == null:
+		push_warning("[mission_controller] P1 foyer dressing could not build")
+		return
+	var stats_v: Variant = node.get("stats")
+	if not (stats_v is Dictionary):
+		return
+	var stats: Dictionary = stats_v as Dictionary
+	print("P1_FOYER_DRESSING bulb_items=%d cyan_node_items=%d cyan_node_created=%d plaque_labels=%d floor_plate=%d floor_plate_approx=%d" % [
+		int(stats.get("emitter_bulbs", 0)),
+		int(stats.get("node_items", 0)),
+		int(stats.get("node_created", 0)),
+		int(stats.get("plaque_labels", 0)),
+		int(stats.get("floor_plate", 0)),
+		int(stats.get("floor_plate_approx", 0)),
+	])
+
+
 ## Previous hand-tuned night look. Used as the base under real weather data
 ## and as the full fallback when a map has no weather preset.
 func _apply_fallback_environment(e: Environment) -> void:
@@ -740,6 +765,10 @@ func start_contract(order: int) -> void:
 		_override_guildhall_car_lenses()
 		_add_guildhall_skyline_clocktower()
 		_add_guildhall_sign_letter_emission()
+		# P1-BEAMS: the authored emitter/node materials and the plaque text
+		# need the built POI nodes, so this runs after the load like the car
+		# lens / sign repairs above.
+		_build_foyer_dressing()
 	if int(ue_level_data.get("chunk_count", 0)) > 0:
 		print("TAT-2 Perf: chunks=", ue_level_data.get("chunk_count", 0), " collision_bodies=", ue_level_data.get("collision_bodies", 0), " collision_shapes=", ue_level_data.get("collision_shapes", 0), " occluders=", ue_level_data.get("occluder_count", 0))
 

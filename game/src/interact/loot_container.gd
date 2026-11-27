@@ -122,6 +122,11 @@ var owner_name: String = ""
 ## authored broken overlay is shown; loot behaviour is unchanged (a smashed
 ## container opens once, exactly like an unlocked interact).
 var broken: bool = false
+## Phase 2 G-2: a bookcase owns two intact doors (and two broken overlays), so
+## the bindings are arrays. `_gc_leaf` / `_gc_broken` stay as first-of aliases
+## for existing readers (A2 playtest, HUD); new code uses the arrays.
+var _gc_leaves: Array[Node3D] = []
+var _gc_broken_layers: Array[Node3D] = []
 var _gc_leaf: Node3D = null
 var _gc_broken: Node3D = null
 ## Authored secret stash (containers.json kind "stash"): the trigger is a
@@ -174,7 +179,7 @@ func _warn_missing_container_class(p_class: String) -> void:
 	if _missing_class_warned.has(p_class):
 		return
 	_missing_class_warned[p_class] = true
-	push_warning("[loot_container] authored container class '", p_class, "' has no containers.json row; opening via the authored *_MajorLoot/*_MinorLoot tier bucket (producer gap: tools/parse_containers.py CLASSES)")
+	push_warning("[loot_container] containers.json has no row for '", p_class, "' (data tree older than tools/parse_containers.py CLASSES; run make normalize); opening via the authored *_MajorLoot/*_MinorLoot tier bucket")
 
 
 func set_locked(p_locked: bool, p_lock_level: int = 1) -> void:
@@ -232,12 +237,10 @@ func configure(p_class: String, entry: Dictionary, p_index: int) -> void:
 	# authored container class: the authored Blueprint name carries the bucket
 	# tier (`*_MajorLoot_C` / `*_MinorLoot_C`) and the per-tier authored spawn
 	# bucket supplies the actors, so the marker still opens with authored loot.
-	# The dropped classes this restores (8 BP_SmallSafe_MajorLoot_C + 8
-	# BP_Manor_Bookcase_Cabinet_MinorLoot_C in loaded Guildhall sublevels) need
-	# the producer (T01) to emit their containers.json rows and the level loader
-	# (T07/T09) to stop filtering them; this fallback makes the consumer half
-	# right the moment either lands. Slot offsets are unknown for such a class,
-	# so the loot spawns at the marker (labelled fallback, never invented).
+	# Phase 2 G-1 landed the producer rows + loader allowlist for the K-06
+	# classes (bookcases/safes); this fallback stays for a stale data tree, and
+	# slot offsets are unknown for such a class, so the loot spawns at the
+	# marker (labelled fallback, never invented).
 	if loot_tier == "" and p_class.find("MajorLoot") >= 0:
 		loot_tier = "major"
 		_warn_missing_container_class(p_class)
@@ -265,8 +268,9 @@ func configure(p_class: String, entry: Dictionary, p_index: int) -> void:
 	# the container. They stay open and are counted/labelled once per class (no
 	# per-instance spam). W10-A defect 8: the flag means "cannot be picked", not
 	# "needs a key" (re-1-locks.md §3.3). Unsupported container classes never
-	# reach this function at all (level_loader.LOOT_CONTAINER_CLASSES filters
-	# BP_SmallSafe_MajorLoot_C / BP_ChestTrunk_C / BP_BookcaseB_C before spawn).
+	# reach this function at all (level_loader.LOOT_CONTAINER_CLASSES gates
+	# them; BP_ChestTrunk_C / BP_BookcaseB_C / BP_UtilityBoxA_MinorLoot_C are
+	# still outside it — Phase 2 G-1 landed the bookcase/safe rows only).
 	if entry.get("locked") == true:
 		var can_pick: Variant = entry.get("can_lockpick", null)
 		if can_pick is bool and not bool(can_pick):
@@ -276,12 +280,27 @@ func configure(p_class: String, entry: Dictionary, p_index: int) -> void:
 			set_locked(true, clampi(cap_lvl, 1, 6))
 
 
-## W10-A3-GC: bind the level-owned intact leaf and hidden broken overlay for
-## this container's actor. Safe to call with nulls (a map that authors no GC).
-func bind_gc_visuals(leaf: Node3D, broken_layer: Node3D) -> void:
-	_gc_leaf = leaf
-	_gc_broken = broken_layer
+## W10-A3-GC: bind the level-owned intact leaves and hidden broken overlays for
+## this container's actor. Phase 2 G-2: both arguments are arrays (a bookcase
+## has two doors); a single Node3D is still accepted for old callers and
+## normalised. Safe to call with empty arrays (a map that authors no GC).
+func bind_gc_visuals(leaves: Variant, broken_layers: Variant) -> void:
+	_gc_leaves.clear()
+	_gc_broken_layers.clear()
+	_collect_gc_nodes(leaves, _gc_leaves)
+	_collect_gc_nodes(broken_layers, _gc_broken_layers)
+	_gc_leaf = _gc_leaves[0] if not _gc_leaves.is_empty() else null
+	_gc_broken = _gc_broken_layers[0] if not _gc_broken_layers.is_empty() else null
 	_apply_gc_visuals()
+
+
+static func _collect_gc_nodes(src: Variant, out: Array[Node3D]) -> void:
+	if src is Node3D:
+		out.append(src as Node3D)
+	elif src is Array:
+		for n_var: Variant in (src as Array):
+			if n_var is Node3D:
+				out.append(n_var as Node3D)
 
 
 func is_broken() -> bool:
@@ -292,7 +311,10 @@ func is_broken() -> bool:
 ## trigger requires this, so a stash/storefront container that authors no GC is
 ## never turned into a broken trigger with no visual.
 func has_broken_overlay() -> bool:
-	return _gc_broken != null and is_instance_valid(_gc_broken)
+	for b: Node3D in _gc_broken_layers:
+		if b != null and is_instance_valid(b):
+			return true
+	return false
 
 
 ## Swap the intact lid/door for the authored broken overlay and open the
@@ -318,10 +340,12 @@ func break_container(actor: Node = null) -> bool:
 
 
 func _apply_gc_visuals() -> void:
-	if _gc_leaf != null and is_instance_valid(_gc_leaf):
-		_gc_leaf.visible = not broken
-	if _gc_broken != null and is_instance_valid(_gc_broken):
-		_gc_broken.visible = broken
+	for leaf: Node3D in _gc_leaves:
+		if leaf != null and is_instance_valid(leaf):
+			leaf.visible = not broken
+	for layer: Node3D in _gc_broken_layers:
+		if layer != null and is_instance_valid(layer):
+			layer.visible = broken
 
 
 func _ready() -> void:

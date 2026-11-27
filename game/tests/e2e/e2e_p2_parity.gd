@@ -28,14 +28,20 @@ extends RefCounted
 ##               flags PASS and the port material now carries the authored
 ##               HDR colour + centre-line row (P1-BEAMS, DELTA promoted)
 ##   P2-CENSUS-* turret 229/1,145/0 with 0 missing GLBs; GC 336 hidden
-##               components / 166 leaves, 0 visible, 0 unresolved
+##               components / 166 leaves, 0 visible, 0 unresolved;
+##               containers 8 classes with the three K-06 rows (Phase 2 G-1),
+##               Guildhall_Loot 8 bookcases + 8 locked safes; bookcase intact
+##               glass is static batch (16+16 Guildhall_Loot, 4+4 POI, 1:1 at
+##               <= 0.60 m, 0 extra emitted leaves — Phase 2 G-2)
 ##   P2-GC-LABEL GC interaction label is the authored
 ##               ST_Interactables.PromptDestroyDeployable row ("Destroy")
 
-const LevelLoaderScript := preload("res://src/core/level_loader.gd")
+const LevelLoaderScript: GDScript = preload("res://src/core/level_loader.gd")
 
 const GUILDHALL_GAMEPLAY := "res://data/generated/levels/Guildhall/Guildhall_Gameplay.tatlevel.json"
 const GUILDHALL_LOOT := "res://data/generated/levels/Guildhall/Guildhall_Loot.tatlevel.json"
+const GUILDHALL_POI := "res://data/generated/levels/Buildings/Guildhall/Building_Guildhall_POI.tatlevel.json"
+const CONTAINERS := "res://data/generated/gameplay/containers.json"
 const LEVELS_ROOT := "res://data/generated/levels/"
 const MESH_MATERIALS := "res://data/generated/mesh_materials.json"
 const MATERIALS := "res://data/generated/materials.json"
@@ -53,6 +59,19 @@ const TURRET_PREFIX := "bp_securityturret"
 const TURRET_MESH_PREFIX := "/game/art/gameplay/turrets/"
 const EXPECTED_TURRET_ACTORS := 229
 const EXPECTED_TURRET_VISIBLE := 1145
+## Phase 2 G-1/G-2 measured values (2026-11-27, generated payload at the lane
+## base). Markers are the placed `.tatlevel.json` records, not raw UE actors.
+const BOOKCASE_GLASS_MESH := "/Game/Art/Environment/Manor/SM_Manor_Bookcase_Cabinet_Door_Glass_2x8"
+const EXPECTED_CONTAINER_CLASSES := 8
+const EXPECTED_GUILDHALL_BOOKCASES := 8
+const EXPECTED_GUILDHALL_SAFES := 8
+const EXPECTED_GUILDHALL_SAFE_LOCKS := 8
+const EXPECTED_GUILDHALL_SAFE_CAP := 2
+const EXPECTED_GUILDHALL_BOOKCASE_GLASS := 16
+const EXPECTED_GUILDHALL_BOOKCASE_GC := 16
+const EXPECTED_POI_BOOKCASE_GLASS := 4
+const EXPECTED_POI_BOOKCASE_GC := 4
+const BOOKCASE_LEAF_MATCH_MAX_M := 0.60
 
 var h: RefCounted
 var expected_fail: int = 0
@@ -70,6 +89,7 @@ func run() -> void:
 	_check_civilian_slots()
 	await _check_beam()
 	_check_census()
+	_check_containers_and_bookcases()
 	_check_gc_label()
 	var self_fails: int = int(h.get("fails")) - fails_before
 	print("P2_SUMMARY: expected_fail=%d expected_delta=%d fixed=%d unexpected_fail=%d" % [
@@ -372,6 +392,144 @@ func _check_census() -> void:
 			int(sum.get("leaves", -1)),
 		]
 	)
+
+
+# --- G-1 / G-2 containers + bookcase static batch -------------------------
+
+## Phase 2 G-1/G-2 provenance. Every number here is measured from the generated
+## payload (2026-11-27) and the producer rows the integrator must regenerate:
+##   * 8+ container classes, with the three K-06 rows carrying their authored
+##     bucket/slot/extra-spawner/breakable provenance;
+##   * Guildhall_Loot: 8 minor bookcases (unlocked) + 8 safes (locked, cap 2);
+##   * the bookcase intact glass is static batch: 16 panes + 16 GC overlays in
+##     Guildhall_Loot, 4 + 4 in the POI, each pair within 0.60 m (measured
+##     max 0.472 m, second-nearest >= 0.838 m), and NO extra emitted leaves
+##     (gc_stats.leaves stays 79) — G-2 binds, never duplicates.
+func _check_containers_and_bookcases() -> void:
+	var root: Dictionary = h.read_json(CONTAINERS) as Dictionary
+	var classes: Dictionary = root.get("classes", {}) as Dictionary
+	var const_map: Dictionary = LevelLoaderScript.get_script_constant_map()
+	var allow: Array = const_map.get("LOOT_CONTAINER_CLASSES", []) as Array
+	var want_rows := {
+		"BP_Manor_Bookcase_Cabinet_MinorLoot_C": {"bucket": "MinorLoot", "slots": 4, "extra": 0,
+			"breakable": "authored_breakable", "cap": 2},
+		"BP_Manor_Bookcase_Cabinet_MajorLoot_C": {"bucket": "MajorLoot", "slots": 1, "extra": 1,
+			"breakable": "authored_breakable", "cap": 3},
+		"BP_SmallSafe_MajorLoot_C": {"bucket": "MajorLoot", "slots": 1, "extra": 1,
+			"breakable": "disabled_component", "cap": 3},
+	}
+	var row_ok: bool = true
+	var row_detail: PackedStringArray = []
+	for cls: String in want_rows.keys():
+		var want: Dictionary = want_rows[cls] as Dictionary
+		var rec: Dictionary = classes.get(cls, {}) as Dictionary
+		var lc: Dictionary = rec.get("lock_config", {}) as Dictionary
+		var ok: bool = not rec.is_empty() \
+			and str(rec.get("bucket", "")).find(str(want["bucket"])) >= 0 \
+			and int(rec.get("slot_count", -1)) == int(want["slots"]) \
+			and (rec.get("extra_spawners", []) as Array).size() == int(want["extra"]) \
+			and str(rec.get("breakable_source", "")) == str(want["breakable"]) \
+			and int(lc.get("max_lock_level", -1)) == int(want["cap"]) \
+			and allow.has(cls)
+		row_ok = row_ok and ok
+		row_detail.append("%s=%s" % [cls.trim_suffix("_C"), "ok" if ok else "MISSING/DRIFT"])
+	h.require(
+		classes.size() >= EXPECTED_CONTAINER_CLASSES and row_ok,
+		"P2-CENSUS-CONTAINERS",
+		"containers.json classes=%d (>=%d); K-06 rows: %s; loader allowlist=%d" % [
+			classes.size(), EXPECTED_CONTAINER_CLASSES, ", ".join(row_detail), allow.size()
+		]
+	)
+
+	var loot: Dictionary = h.read_json(GUILDHALL_LOOT) as Dictionary
+	var poi: Dictionary = h.read_json(GUILDHALL_POI) as Dictionary
+	var loot_markers: Dictionary = _marker_counts(loot)
+	var safe_locks: int = 0
+	for m_v: Variant in (loot.get("markers", []) as Array):
+		var m: Dictionary = m_v as Dictionary
+		if str(m.get("class", "")) == "BP_SmallSafe_MajorLoot_C" \
+				and m.get("locked") == true and int(m.get("max_lock_level", 0)) == EXPECTED_GUILDHALL_SAFE_CAP:
+			safe_locks += 1
+	var loot_match: Dictionary = _one_to_one_match(loot)
+	var poi_match: Dictionary = _one_to_one_match(poi)
+	var loot_gc: Dictionary = loot.get("gc_stats", {}) as Dictionary
+	h.require(
+		int(loot_markers.get("BP_Manor_Bookcase_Cabinet_MinorLoot_C", 0)) == EXPECTED_GUILDHALL_BOOKCASES \
+			and int(loot_markers.get("BP_SmallSafe_MajorLoot_C", 0)) == EXPECTED_GUILDHALL_SAFES \
+			and safe_locks == EXPECTED_GUILDHALL_SAFE_LOCKS \
+			and int(_marker_counts(poi).get("BP_Manor_Bookcase_Cabinet_MajorLoot_C", 0)) == 2,
+		"P2-CENSUS-CONTAINER-MARKERS",
+		"Guildhall_Loot bookcases=%d safes=%d locked_safes=%d; POI major bookcases=%d" % [
+			int(loot_markers.get("BP_Manor_Bookcase_Cabinet_MinorLoot_C", 0)),
+			int(loot_markers.get("BP_SmallSafe_MajorLoot_C", 0)), safe_locks,
+			int(_marker_counts(poi).get("BP_Manor_Bookcase_Cabinet_MajorLoot_C", 0)),
+		]
+	)
+	h.require(
+		int(loot_match.get("glass", 0)) == EXPECTED_GUILDHALL_BOOKCASE_GLASS \
+			and int(loot_match.get("gc", 0)) == EXPECTED_GUILDHALL_BOOKCASE_GC \
+			and int(loot_match.get("matched", 0)) == EXPECTED_GUILDHALL_BOOKCASE_GC \
+			and float(loot_match.get("max_d", 99.0)) <= BOOKCASE_LEAF_MATCH_MAX_M \
+			and int(loot_gc.get("leaves", -1)) == 79 \
+			and int(poi_match.get("glass", 0)) == EXPECTED_POI_BOOKCASE_GLASS \
+			and int(poi_match.get("gc", 0)) == EXPECTED_POI_BOOKCASE_GC \
+			and int(poi_match.get("matched", 0)) == EXPECTED_POI_BOOKCASE_GC,
+		"P2-CENSUS-BOOKCASE-STATIC",
+		"Guildhall_Loot glass=%d gc=%d matched=%d max_d=%.3f leaves=%d; POI glass=%d gc=%d matched=%d max_d=%.3f" % [
+			int(loot_match.get("glass", 0)), int(loot_match.get("gc", 0)), int(loot_match.get("matched", 0)),
+			float(loot_match.get("max_d", 99.0)), int(loot_gc.get("leaves", -1)),
+			int(poi_match.get("glass", 0)), int(poi_match.get("gc", 0)), int(poi_match.get("matched", 0)),
+			float(poi_match.get("max_d", 99.0)),
+		]
+	)
+
+
+func _marker_counts(level: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	for m_v: Variant in (level.get("markers", []) as Array):
+		if m_v is Dictionary:
+			var cls: String = str((m_v as Dictionary).get("class", ""))
+			out[cls] = int(out.get(cls, 0)) + 1
+	return out
+
+
+## Nearest unused static glass pane per authored bookcase broken overlay. The
+## probe/loader use the same 0.60 m bound; this records the measured distance.
+func _one_to_one_match(level: Dictionary) -> Dictionary:
+	var glass: Array[Vector3] = []
+	for m_v: Variant in (level.get("meshes", []) as Array):
+		var m: Dictionary = m_v as Dictionary
+		if str(m.get("mesh", "")) == BOOKCASE_GLASS_MESH:
+			glass.append(_vec(m.get("pos", [])))
+	var gc_pos: Array[Vector3] = []
+	for g_v: Variant in (level.get("gc", []) as Array):
+		var g: Dictionary = g_v as Dictionary
+		if str(g.get("kind", "")) == "bookcase":
+			gc_pos.append(_vec(g.get("pos", [])))
+	var used: Dictionary = {}
+	var matched: int = 0
+	var max_d: float = 0.0
+	for p: Vector3 in gc_pos:
+		var best_i: int = -1
+		var best_d: float = BOOKCASE_LEAF_MATCH_MAX_M
+		for i: int in range(glass.size()):
+			if used.has(i):
+				continue
+			var d: float = p.distance_to(glass[i])
+			if d <= best_d:
+				best_d = d
+				best_i = i
+		if best_i >= 0:
+			used[best_i] = true
+			matched += 1
+			max_d = maxf(max_d, best_d)
+	return {"glass": glass.size(), "gc": gc_pos.size(), "matched": matched, "max_d": max_d}
+
+
+func _vec(a: Variant) -> Vector3:
+	if a is Array and (a as Array).size() >= 3:
+		return Vector3(float((a as Array)[0]), float((a as Array)[1]), float((a as Array)[2]))
+	return Vector3.ZERO
 
 
 # --- GC interaction label --------------------------------------------------

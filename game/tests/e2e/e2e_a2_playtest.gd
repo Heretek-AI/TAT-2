@@ -56,6 +56,10 @@ const EXPECTED_TURRET_VISIBLE: int = 1145
 ## layers / 79 visible intact leaves for the same level set).
 const MIN_GC_LAYERS: int = 95
 const MIN_GC_LEAVES: int = 79
+## Phase 2 G-2 measured on the real Contract 02 Guildhall load: 16 static
+## bookcase panes in Guildhall_Loot + 4 in the POI, bound 1:1 to the 20 authored
+## broken overlays. This is a new floor from a measurement, not a re-baseline.
+const MIN_GC_STATIC_LEAVES: int = 20
 
 ## Explicit near-white allowlist: ue_mesh substring -> documented reason.
 ## This is NOT a blanket escape: the cream-slab class (`1m_Plane_Reverse` bound
@@ -760,17 +764,20 @@ func _check_gc(mission: Node) -> void:
 	var stats: Dictionary = mission.get("level_stats") as Dictionary
 	var layers: int = int(stats.get("gc_layers_built", -1))
 	var leaves: int = int(stats.get("gc_leaves_built", -1))
+	var static_leaves: int = int(stats.get("gc_static_leaves_bound", -1))
 	var visible_broken: int = int(stats.get("gc_visible_broken", -1))
 	var missing: int = int(stats.get("gc_missing_mesh", -1))
-	print("A2_MEASURE gc layers=%d leaves=%d visible_broken=%d missing=%d" % [
-		layers, leaves, visible_broken, missing
+	print("A2_MEASURE gc layers=%d leaves=%d static_bookcase_leaves=%d visible_broken=%d missing=%d" % [
+		layers, leaves, static_leaves, visible_broken, missing
 	])
 	h.require(
 		layers >= MIN_GC_LAYERS and leaves >= MIN_GC_LEAVES \
+			and static_leaves >= MIN_GC_STATIC_LEAVES \
 			and visible_broken == 0 and missing == 0,
 		"A2-GC-STATS",
-		"runtime GC census layers=%d (>=%d) leaves=%d (>=%d) visible_broken=%d missing=%d" % [
-			layers, MIN_GC_LAYERS, leaves, MIN_GC_LEAVES, visible_broken, missing
+		"runtime GC census layers=%d (>=%d) leaves=%d (>=%d) static_bookcase_leaves=%d (>=%d) visible_broken=%d missing=%d" % [
+			layers, MIN_GC_LAYERS, leaves, MIN_GC_LEAVES, static_leaves, MIN_GC_STATIC_LEAVES,
+			visible_broken, missing
 		]
 	)
 	var container: Node = null

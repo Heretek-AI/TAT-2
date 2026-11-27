@@ -52,10 +52,17 @@ signal load_progress(pct: float, status: String)
 
 var _materials_db: Dictionary = {}
 var _materials_db_lower: Dictionary = {}
-## W10-A3-GC: owner actor name -> {"leaf": Node3D, "broken": Node3D} for the
-## destructible overlays built by this load. Rebuilt per load; the loot
-## containers read it once in `_ready` through `gc_visuals_for()`.
+## W10-A3-GC: owner actor name -> {"leaves": Array[Node3D],
+## "broken": Array[Node3D]} for the destructible overlays built by this load.
+## Chests/display cases own one emitted leaf; a bookcase owns two doors whose
+## intact glass panes are existing static-batch nodes (Phase 2 G-2), so the
+## arrays are plural by authored design. Rebuilt per load; the loot containers
+## read it once in `_ready` through `gc_visuals_for()`.
 var _gc_owner_index: Dictionary = {}
+## Phase 2 G-2: intact bookcase glass nodes created by the static batch for this
+## load, as {node, source_sublevel, used}. Resolved into the owner index after
+## the draw items exist (nearest unused node within the measured radius).
+var _gc_static_glass: Array[Dictionary] = []
 var _mesh_mats_db: Dictionary = {}
 var _mesh_mats_db_lower: Dictionary = {}
 ## P0b parity-only load state (TAT2_PARITY_ONLY=1, default off). Resolved once
@@ -424,23 +431,38 @@ const UU_CM_TO_M: float = 0.01
 ## Tokens too generic to prove a decal texture belongs to its material.
 const DECAL_GENERIC_TOKENS: Array[String] = ["m", "mi", "t", "d", "da", "a", "inst", "decal", "decals"]
 
-## Placed loot containers (chests / display cases / secret stashes): meshes are
-## level geometry, so only the marker transform is kept for the openable wave.
+## Placed loot containers (chests / display cases / bookcases / wall safes /
+## secret stashes): meshes are level geometry, so only the marker transform is
+## kept for the openable wave. Phase 2 G-1 added the three K-06 classes the old
+## 5-class allowlist dropped (8 Guildhall bookcases, 2 POI bookcases, 8 safes).
 const LOOT_CONTAINER_CLASSES: Array[String] = [
 	"BP_ChestTrunk_MajorLoot_C",
 	"BP_DisplayCaseA_MajorLoot_C",
 	"BP_LootStashInteractable_Secret_ThinWall_C",
 	"BP_Storefront_DisplayCaseB_MinorLoot_C",
 	"BP_Storefront_DisplayCaseD_MinorLoot_C",
+	"BP_Manor_Bookcase_Cabinet_MinorLoot_C",
+	"BP_Manor_Bookcase_Cabinet_MajorLoot_C",
+	"BP_SmallSafe_MajorLoot_C",
 ]
 
 ## W10-A3-GC: destructible broken-state overlays (chests, display cases, glass).
-## The producer emits one hidden `gc` layer per authored GeometryCollection and
-## one visible `gc_leaves` record for the intact chest lid / display-case door.
-## The runtime swaps them on `loot_container.break_container()`. `off` builds
-## the same level without the layers so a probe can prove they add no collision.
+## The producer emits one hidden `gc` layer per authored GeometryCollection and,
+## for chests/display cases, one visible `gc_leaves` record for the intact lid /
+## door. The runtime swaps them on `loot_container.break_container()`. `off`
+## builds the same level without the layers so a probe can prove they add no
+## collision.
 const ENV_GC_LAYERS: String = "TAT2_GC_LAYERS"
 const GC_ROOT_NAME: String = "GC_Destruction"
+## Phase 2 G-2: the intact bookcase glass door is already in the static level
+## batch. The authored broken overlay replaces only the glass pane
+## (`SM_BookcaseB_GlassBrokenDoor`), so the loader binds the existing static
+## node instead of emitting a duplicate leaf (a duplicate would double the
+## transparent pane). The pane is split to one MeshInstance3D per instance so a
+## single owner's door can be hidden; measured one-to-one with the broken
+## overlay at 0.472 m, second-nearest >= 0.838 m -> 0.60 m is the unique match.
+const GC_BOOKCASE_GLASS_MESH: String = "/Game/Art/Environment/Manor/SM_Manor_Bookcase_Cabinet_Door_Glass_2x8"
+const GC_STATIC_LEAF_MATCH_M: float = 0.60
 
 
 static func gc_layers_enabled() -> bool:
@@ -2721,6 +2743,9 @@ func _is_decorative_sublevel(json_path: String) -> bool:
 
 
 func _new_accumulator() -> Dictionary:
+	# Phase 2 G-2: the static bookcase glass candidates are collected while the
+	# draw items are built; a new load must not inherit the previous map's nodes.
+	_gc_static_glass.clear()
 	return {
 		"batches": {},
 		"batches_nocol": {},
@@ -3517,10 +3542,12 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 			if spline_key != "":
 				(batches[bkey] as Dictionary)["spline"] = spline_rec
 		var batch_rec: Dictionary = batches[bkey] as Dictionary
-		if mp == BEAM_CARD_MESH or is_ward_shard:
+		if mp == BEAM_CARD_MESH or is_ward_shard or mp == GC_BOOKCASE_GLASS_MESH:
 			# One MeshInstance3D per authored card/shard so the device layer can
 			# drive its powered/active state (a MultiMesh hides instances
-			# together).
+			# together). Phase 2 G-2: the bookcase glass pane is also split so
+			# one owner's door can be hidden when its authored broken overlay
+			# takes over (the intact pane is static-batch geometry).
 			batch_rec["per_instance"] = true
 		var arr: Array[Transform3D] = batch_rec["trs"]
 		arr.append(tr)
@@ -4854,6 +4881,27 @@ func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> 
 			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			node.add_to_group("lightbeam_cards")
 			node.set_meta("beam_card", true)
+		if mp == GC_BOOKCASE_GLASS_MESH:
+			# Phase 2 G-2: intact bookcase glass door in the static batch. Keep
+			# the node addressable so `_build_gc_layers` can bind it as the
+			# owner's leaf instead of emitting a duplicate. It keeps the same
+			# culling/shadow outcome the batched instance had (the split is per
+			# instance, not a visual change) and never joins the GC groups, so
+			# the GC census stays emitted-leaf only.
+			if node is MeshInstance3D and count == 1:
+				node.name = "BookcaseGlass"
+				node.set_meta("gc_static_leaf", true)
+				node.set_meta("gc_no_collision", true)
+				_gc_static_glass.append({
+					"node": node,
+					"source_sublevel": source_sublevel,
+					"used": false,
+				})
+			else:
+				# The per-instance split is required; a batched pane cannot be
+				# hidden for one owner. Fail visible instead of silently leaving
+				# the bookcase without an intact leaf.
+				ctx["gc_static_leaf_multi"] = int(ctx.get("gc_static_leaf_multi", 0)) + count
 		parent.add_child(node)
 		ctx["chunk_count"] = int(ctx.get("chunk_count", 0)) + 1
 	if ctx.has("perf_build_ms"):
@@ -6116,6 +6164,9 @@ func _finalize(result: Dictionary, ctx: Dictionary, mesh_instances: int) -> Dict
 	result["gc_leaves_built"] = int(ctx.get("gc_leaves_built", 0))
 	result["gc_missing_mesh"] = int(ctx.get("gc_missing_mesh", 0))
 	result["gc_visible_broken"] = int(ctx.get("gc_visible_broken", 0))
+	result["gc_static_leaves_bound"] = int(ctx.get("gc_static_leaves_bound", 0))
+	result["gc_static_leaves_unmatched"] = int(ctx.get("gc_static_leaves_unmatched", 0))
+	result["gc_static_leaf_multi"] = int(ctx.get("gc_static_leaf_multi", 0))
 	result["gc_owner_count"] = _gc_owner_index.size()
 	result["spline_count"] = int(ctx.get("spline_count", 0))
 	result["curb_built"] = int(ctx.get("curb_built", 0))
@@ -7171,18 +7222,22 @@ func _sort_lights_desc(a: Dictionary, b: Dictionary) -> bool:
 	return false
 
 
-## W10-A3-GC: owner -> intact leaf / broken overlay for the current load.
-## Both nodes may be null when a map authors only one half (or GC layers are
-## disabled). Containers guard with `is_instance_valid`.
+## W10-A3-GC: owner -> intact leaves / broken overlays for the current load.
+## Shape: {"leaves": Array[Node3D], "broken": Array[Node3D]}. A chest/display
+## case owns one leaf; a bookcase owns two (its paired static-batch glass
+## doors, Phase 2 G-2). Either array may be empty when a map authors only one
+## half (or GC layers are disabled); containers guard with `is_instance_valid`.
 func gc_visuals_for(owner: String) -> Dictionary:
 	var rec: Variant = _gc_owner_index.get(owner, null)
 	if rec is Dictionary:
 		return rec as Dictionary
-	return {}
+	return {"leaves": [] as Array, "broken": [] as Array}
 
 
 ## Spawns the destructible layers emitted by tools/parse_tables.py:
-##  * one visible MeshInstance3D for each intact chest lid / display-case door;
+##  * one visible MeshInstance3D for each intact chest lid / display-case door
+##    (emitted as `gc_leaves`), plus the bookcase glass doors resolved from the
+##    static batch (Phase 2 G-2: never duplicated);
 ##  * one hidden MeshInstance3D for each authored broken-state overlay.
 ## No StaticBody3D, CollisionShape3D or occluder is created here, so the layers
 ## add no collision by construction (the GC probe also measures the delta).
@@ -7197,6 +7252,9 @@ func _build_gc_layers(gc_entries: Array, leaf_entries: Array, parent: Node3D, ct
 		ctx["gc_layers_built"] = 0
 		ctx["gc_leaves_built"] = 0
 		ctx["gc_missing_mesh"] = 0
+		ctx["gc_static_leaves_bound"] = 0
+		ctx["gc_static_leaves_unmatched"] = 0
+		_gc_static_glass.clear()
 		return
 	var root := Node3D.new()
 	root.name = GC_ROOT_NAME
@@ -7219,8 +7277,12 @@ func _build_gc_layers(gc_entries: Array, leaf_entries: Array, parent: Node3D, ct
 			visible_broken += 1
 		var owner: String = str(rec.get("owner", ""))
 		if owner != "":
-			var slot: Dictionary = _gc_owner_index.get(owner, {"leaf": null, "broken": null}) as Dictionary
-			slot["broken"] = node
+			var slot: Dictionary = _gc_owner_slot(owner)
+			(slot["broken"] as Array).append(node)
+			# The broken record is the anchor for the static-batch leaf match:
+			# it is the same door's authored end state.
+			if str(rec.get("kind", "")) == "bookcase":
+				slot["_anchor"] = rec
 			_gc_owner_index[owner] = slot
 	for rec_var2: Variant in leaf_entries:
 		if not (rec_var2 is Dictionary):
@@ -7234,14 +7296,73 @@ func _build_gc_layers(gc_entries: Array, leaf_entries: Array, parent: Node3D, ct
 		built_leaves += 1
 		var owner2: String = str(rec2.get("owner", ""))
 		if owner2 != "":
-			var slot2: Dictionary = _gc_owner_index.get(owner2, {"leaf": null, "broken": null}) as Dictionary
-			slot2["leaf"] = node2
+			var slot2: Dictionary = _gc_owner_slot(owner2)
+			(slot2["leaves"] as Array).append(node2)
 			_gc_owner_index[owner2] = slot2
+	# Phase 2 G-2: bookcase intact glass lives in the static batch. Bind the
+	# nearest unused authored pane to each broken record, one-to-one, by
+	# position and source sublevel. Measured 0.472 m for the authored pair vs
+	# >= 0.838 m for any other pane, so GC_STATIC_LEAF_MATCH_M is a unique
+	# match; an unmatched door is counted, never guessed from a further node.
+	var static_bound: int = 0
+	var static_unmatched: int = 0
+	for owner3: String in _gc_owner_index.keys():
+		var slot3: Dictionary = _gc_owner_index[owner3] as Dictionary
+		if not slot3.has("_anchor"):
+			continue
+		slot3.erase("_anchor")
+		var owner_source: String = ""
+		if not (slot3["broken"] as Array).is_empty():
+			var anchor: Node3D = (slot3["broken"] as Array)[0] as Node3D
+			if anchor != null:
+				owner_source = str(anchor.get_meta("source_sublevel", ""))
+		for broken_node: Node3D in (slot3["broken"] as Array):
+			if not (broken_node is MeshInstance3D):
+				continue
+			var bp: Vector3 = broken_node.global_position
+			var best: Dictionary = {}
+			var best_d: float = GC_STATIC_LEAF_MATCH_M
+			for cand: Dictionary in _gc_static_glass:
+				if bool(cand.get("used", false)):
+					continue
+				if owner_source != "" and str(cand.get("source_sublevel", "")) != owner_source:
+					continue
+				var cand_node: Node3D = cand["node"] as Node3D
+				if cand_node == null or not is_instance_valid(cand_node):
+					continue
+				var d: float = bp.distance_to(cand_node.global_position)
+				if d <= best_d:
+					best_d = d
+					best = cand
+			if best.is_empty():
+				static_unmatched += 1
+				continue
+			best["used"] = true
+			var leaf_node: Node3D = best["node"] as Node3D
+			leaf_node.set_meta("gc_owner", owner3)
+			leaf_node.set_meta("gc_kind", "bookcase")
+			leaf_node.set_meta("gc_static_leaf", true)
+			(slot3["leaves"] as Array).append(leaf_node)
+			static_bound += 1
+		_gc_owner_index[owner3] = slot3
+	# Unused panes stay ordinary static geometry; only the candidate list is
+	# released, never the nodes themselves.
+	_gc_static_glass.clear()
 	ctx["gc_layers_enabled"] = true
 	ctx["gc_layers_built"] = built_broken
 	ctx["gc_leaves_built"] = built_leaves
 	ctx["gc_missing_mesh"] = missing
 	ctx["gc_visible_broken"] = visible_broken
+	ctx["gc_static_leaves_bound"] = static_bound
+	ctx["gc_static_leaves_unmatched"] = static_unmatched
+
+
+## Owner index slot, preserving both arrays (a bookcase has two doors).
+func _gc_owner_slot(owner: String) -> Dictionary:
+	var rec: Variant = _gc_owner_index.get(owner, null)
+	if rec is Dictionary:
+		return rec as Dictionary
+	return {"leaves": [] as Array, "broken": [] as Array}
 
 
 func _make_gc_mesh_node(rec: Dictionary, role: String, make_visible: bool) -> MeshInstance3D:
@@ -7267,6 +7388,7 @@ func _make_gc_mesh_node(rec: Dictionary, role: String, make_visible: bool) -> Me
 	node.set_meta("gc_role", role)
 	node.set_meta("gc_kind", str(rec.get("kind", "")))
 	node.set_meta("gc_source", str(rec.get("source", "")))
+	node.set_meta("source_sublevel", str(rec.get("source_sublevel", "")))
 	node.set_meta("gc_no_collision", true)
 	node.set_meta("decorative", true)
 	node.add_to_group("gc_leaves" if role == "leaf" else "gc_broken_layers")

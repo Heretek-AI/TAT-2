@@ -7,22 +7,32 @@ extends SceneTree
 ## keeps the intact leaf (SM_ChestTrunkALid / SM_DisplayCaseADoor) visible; on
 ## break the runtime hides the leaf and shows the authored broken overlay.
 ##
+## Phase 2 G-2: the bookcase's two intact glass doors are ALREADY static-batch
+## geometry (measured: every authored broken overlay has one intact pane at
+## 0.472 m, second-nearest >= 0.838 m). The loader therefore binds the existing
+## per-instance pane nodes as the owner's leaves instead of emitting duplicates
+## (`gc_static_leaves_bound`), and a bookcase break hides both panes.
+##
 ## This probe checks, from the real generated payload and a real Guildhall_Loot
 ## load:
 ##   1. payload census: 336 components / 336 authored hidden / 0 visible /
 ##      0 visible-without-mesh / 336 emitted / 166 intact leaves
 ##      (93 chests + 68 display-case doors + 5 BP_Manor_Displaycase doors);
 ##   2. a real load builds 95 hidden broken layers and 79 visible leaves for
-##      Guildhall_Loot, all with a mesh and no collision node;
+##      Guildhall_Loot, all with a mesh and no collision node, plus 16 static
+##      bookcase glass bindings (0 unmatched, 0 batched-pane failures);
 ##   2b. owner index: 95 layers = 48 chest + 31 display case + 16 bookcase;
 ##      87 owners = 79 containers (each with BOTH leaf and broken) + 8
-##      BP_Manor_Bookcase_Cabinet_MinorLoot actors (2 glass doors each, no leaf);
-##      every authored chest/display-case container record resolves a pair;
+##      BP_Manor_Bookcase_Cabinet_MinorLoot actors (2 glass doors each, bound
+##      from the static batch); every authored chest/display-case/bookcase
+##      container record resolves at least one leaf and one broken layer;
 ##   3. a control load with `TAT2_GC_LAYERS=off` emits the same collision shape
 ##      and body counts (the layers add no collision);
-##   4. one chest and one display case swap intact -> broken on
+##   4. one chest, one display case and one bookcase swap intact -> broken on
 ##      `break_container()`, fire `broken_changed`/`container_broken`, open
 ##      once (loot behaviour unchanged), and leave every other overlay hidden.
+##      The bookcase hides exactly its two bound panes and shows its two
+##      authored broken overlays; no duplicate glass node is created.
 ##
 ## Run:
 ##   flock /tmp/opencode/tat2-godot.lock -c \
@@ -51,6 +61,10 @@ const EXPECTED_PLACEMENT_LEAVES := 168
 const EXPECTED_PLACEMENT_SIBLING_SMC := 7
 const EXPECTED_GUILDHALL_LOOT_LAYERS := 95
 const EXPECTED_GUILDHALL_LOOT_LEAVES := 79
+## Phase 2 G-2 measured: 8 Guildhall_Loot bookcases x 2 intact glass doors,
+## resolved from the static batch at 0.472 m (second-nearest 0.838..1.226 m).
+const EXPECTED_GC_STATIC_LEAVES_BOUND := 16
+const EXPECTED_GC_STATIC_LEAVES_UNMATCHED := 0
 
 var _fails: int = 0
 var _checks: int = 0
@@ -108,6 +122,16 @@ func _collect_gc_nodes(node: Node, leaves: Array[MeshInstance3D], broken: Array[
 			elif role == "broken":
 				broken.append(mi)
 		_collect_gc_nodes(child, leaves, broken)
+
+
+## Phase 2 G-2: intact bookcase panes are static-batch nodes marked
+## `gc_static_leaf`, not emitted GC leaves (no `gc_role`), so they are counted
+## separately and never inflate the emitted-leaf census.
+func _collect_static_leaves(node: Node, out: Array[Node3D]) -> void:
+	for child: Node in node.get_children():
+		if child is Node3D and bool(child.get_meta("gc_static_leaf", false)):
+			out.append(child as Node3D)
+		_collect_static_leaves(child, out)
 
 
 func _count_collision_children(node: Node) -> int:
@@ -204,21 +228,22 @@ func _build_containers(loader: Node, loot_records: Array, host: Node3D, pair_fai
 			continue
 		var e: Dictionary = e_var as Dictionary
 		var cls: String = str(e.get("class", ""))
-		# Only the two destructible families this probe exercises. Stash and
-		# storefront containers author no GC and are not expected to pair.
-		if cls.find("ChestTrunk") < 0 and cls.find("DisplayCaseA") < 0:
+		# Only the destructible families this probe exercises. Stash, storefront
+		# and safe containers author no GC overlay and are not expected to pair.
+		if cls.find("ChestTrunk") < 0 and cls.find("DisplayCaseA") < 0 and cls.find("Bookcase") < 0:
 			continue
 		var owner: String = str(e.get("owner", ""))
 		var c: Node = ContainerScript.new() as Node
 		c.call("configure", cls, e, i)
 		host.add_child(c)
 		var gcv: Dictionary = loader.call("gc_visuals_for", owner) as Dictionary
-		var leaf: Node3D = gcv.get("leaf") as Node3D
-		var broken: Node3D = gcv.get("broken") as Node3D
-		if leaf == null or not is_instance_valid(leaf) or broken == null or not is_instance_valid(broken):
-			pair_failures.append("%s(%s)" % [owner, cls])
+		var leaves: Array = gcv.get("leaves", []) as Array
+		var broken: Array = gcv.get("broken", []) as Array
+		var want_leaves: int = 2 if cls.find("Bookcase") >= 0 else 1
+		if leaves.size() != want_leaves or broken.is_empty():
+			pair_failures.append("%s(%s leaves=%d broken=%d)" % [owner, cls, leaves.size(), broken.size()])
 		else:
-			c.call("bind_gc_visuals", leaf, broken)
+			c.call("bind_gc_visuals", leaves, broken)
 		out.append(c)
 	return out
 
@@ -340,6 +365,16 @@ func _run() -> void:
 		var lk: String = str(l4.get_meta("gc_kind", "other"))
 		leaf_kinds[lk] = int(leaf_kinds.get(lk, 0)) + 1
 		owners_leaf[str(l4.get_meta("gc_owner", ""))] = true
+	# Phase 2 G-2: the bookcase leaves are static-batch nodes, not emitted GC
+	# leaves. Count them separately so the emitted-leaf census above stays
+	# exact and the binding is still proven owner by owner.
+	var static_leaves: Array[Node3D] = []
+	_collect_static_leaves(host, static_leaves)
+	var static_kinds: Dictionary = {}
+	for sl: Node3D in static_leaves:
+		var sk: String = str(sl.get_meta("gc_kind", "other"))
+		static_kinds[sk] = int(static_kinds.get(sk, 0)) + 1
+		owners_leaf[str(sl.get_meta("gc_owner", ""))] = true
 	var paired_owners: int = 0
 	var broken_only_owners: Array[String] = []
 	for o: String in owners_broken.keys():
@@ -354,8 +389,9 @@ func _run() -> void:
 					break
 			if kc != "bookcase" or int(broken_per_owner.get(o, 0)) != 2:
 				broken_only_non_bookcase.append("%s(%s x%d)" % [o, kc, int(broken_per_owner.get(o, 0))])
-	print("GC_PROBE owner_index broken_owners=%d leaf_owners=%d paired=%d broken_only=%d broken_kinds=%s leaf_kinds=%s" % [
-		owners_broken.size(), owners_leaf.size(), paired_owners, broken_only_owners.size(), str(broken_kinds), str(leaf_kinds)])
+	print("GC_PROBE owner_index broken_owners=%d leaf_owners=%d paired=%d broken_only=%d broken_kinds=%s leaf_kinds=%s static_leaves=%d static_kinds=%s" % [
+		owners_broken.size(), owners_leaf.size(), paired_owners, broken_only_owners.size(), str(broken_kinds), str(leaf_kinds),
+		static_leaves.size(), str(static_kinds)])
 	_check(int(broken_kinds.get("chest", 0)) == 48 and int(broken_kinds.get("display_case", 0)) == 31,
 		"broken layers are 48 chest + 31 display-case",
 		"chest=%d display_case=%d" % [int(broken_kinds.get("chest", 0)), int(broken_kinds.get("display_case", 0))])
@@ -364,14 +400,26 @@ func _run() -> void:
 	_check(int(leaf_kinds.get("chest", 0)) == 48 and int(leaf_kinds.get("display_case", 0)) == 31,
 		"intact leaves are 48 chest + 31 display-case",
 		"chest=%d display_case=%d" % [int(leaf_kinds.get("chest", 0)), int(leaf_kinds.get("display_case", 0))])
-	_check(owners_leaf.size() == 79 and paired_owners == 79, "79 owners have both leaf and broken",
+	_check(owners_leaf.size() == 87 and paired_owners == 87, "87 owners have both leaf and broken",
 		"leaf_owners=%d paired=%d" % [owners_leaf.size(), paired_owners])
-	_check(broken_only_owners.size() == 8 and broken_only_non_bookcase.is_empty(),
-		"8 broken-only owners are bookcase actors with 2 layers each",
+	_check(broken_only_owners.is_empty(),
+		"no broken-only owner (bookcase panes bound from the static batch)",
 		"broken_only=%d unexpected=%s" % [broken_only_owners.size(), str(broken_only_non_bookcase)])
 	_check(int(res.get("gc_owner_count", -1)) == 87,
-		"owner index 87 == 79 paired containers + 8 bookcases",
+		"owner index 87 == 79 emitted-leaf containers + 8 bookcases",
 		"%d" % int(res.get("gc_owner_count", -1)))
+	_check(static_leaves.size() == EXPECTED_GC_STATIC_LEAVES_BOUND
+			and int(static_kinds.get("bookcase", 0)) == EXPECTED_GC_STATIC_LEAVES_BOUND,
+		"bookcase intact panes bound from the static batch",
+		"%d panes (expected %d), kinds=%s" % [static_leaves.size(), EXPECTED_GC_STATIC_LEAVES_BOUND, str(static_kinds)])
+	_check(int(res.get("gc_static_leaves_bound", -1)) == EXPECTED_GC_STATIC_LEAVES_BOUND
+			and int(res.get("gc_static_leaves_unmatched", -1)) == EXPECTED_GC_STATIC_LEAVES_UNMATCHED
+			and int(res.get("gc_static_leaf_multi", -1)) == 0,
+		"static-batch binding is exact (no duplicate, no fallback guess)",
+		"bound=%d unmatched=%d batched_panes=%d" % [
+			int(res.get("gc_static_leaves_bound", -1)),
+			int(res.get("gc_static_leaves_unmatched", -1)),
+			int(res.get("gc_static_leaf_multi", -1))])
 
 	# --- 3. Control load with the layers disabled: collision unchanged ------
 	OS.set_environment(ENV_GC_LAYERS, "off")
@@ -403,40 +451,55 @@ func _run() -> void:
 		if lr_var is Dictionary:
 			var lr: Dictionary = lr_var as Dictionary
 			var lrc: String = str(lr.get("class", ""))
-			if lrc.find("ChestTrunk") >= 0 or lrc.find("DisplayCaseA") >= 0:
+			if lrc.find("ChestTrunk") >= 0 or lrc.find("DisplayCaseA") >= 0 or lrc.find("Bookcase") >= 0:
 				destructible_records += 1
-	_check(destructible_records == 79 and containers.size() == 79 and pair_failures.is_empty(),
-		"every authored chest/display-case container has a bound pair",
+	_check(destructible_records == 87 and containers.size() == 87 and pair_failures.is_empty(),
+		"every authored chest/display-case/bookcase container has a bound pair",
 		"records=%d built=%d failures=%s" % [destructible_records, containers.size(), str(pair_failures)])
 	var chest: Node = _first_of(containers, "ChestTrunk")
 	var case: Node = _first_of(containers, "DisplayCaseA")
+	var bookcase: Node = _first_of(containers, "Bookcase")
 	_check(chest != null, "chest container found", "class=BP_ChestTrunk_MajorLoot_C")
 	_check(case != null, "display-case container found", "class=BP_DisplayCaseA_MajorLoot_C")
+	_check(bookcase != null, "bookcase container found", "class=BP_Manor_Bookcase_Cabinet_MinorLoot_C")
 	var chest_leaf: Node3D = null
 	var chest_broken: Node3D = null
 	var case_leaf: Node3D = null
 	var case_broken: Node3D = null
+	var book_leaves: Array = []
+	var book_broken: Array = []
 	if chest != null:
 		var cgv: Dictionary = loader.call("gc_visuals_for", str(chest.get("owner_name"))) as Dictionary
-		chest_leaf = cgv.get("leaf") as Node3D
-		chest_broken = cgv.get("broken") as Node3D
+		chest_leaf = _first_valid(cgv.get("leaves", []) as Array)
+		chest_broken = _first_valid(cgv.get("broken", []) as Array)
 	if case != null:
 		var cgv2: Dictionary = loader.call("gc_visuals_for", str(case.get("owner_name"))) as Dictionary
-		case_leaf = cgv2.get("leaf") as Node3D
-		case_broken = cgv2.get("broken") as Node3D
+		case_leaf = _first_valid(cgv2.get("leaves", []) as Array)
+		case_broken = _first_valid(cgv2.get("broken", []) as Array)
+	if bookcase != null:
+		var cgv3: Dictionary = loader.call("gc_visuals_for", str(bookcase.get("owner_name"))) as Dictionary
+		book_leaves = cgv3.get("leaves", []) as Array
+		book_broken = cgv3.get("broken", []) as Array
 	_check(chest_leaf != null and chest_broken != null, "chest bindings resolved",
 		"leaf=%s broken=%s" % [str(chest_leaf != null), str(chest_broken != null)])
 	_check(case_leaf != null and case_broken != null, "display-case bindings resolved",
 		"leaf=%s broken=%s" % [str(case_leaf != null), str(case_broken != null)])
+	_check(book_leaves.size() == 2 and book_broken.size() == 2,
+		"bookcase bindings resolved (2 static panes + 2 broken overlays)",
+		"leaves=%d broken=%d" % [book_leaves.size(), book_broken.size()])
 
 	var chest_signals: Dictionary = {"n": 0}
 	var case_signals: Dictionary = {"n": 0}
+	var book_signals: Dictionary = {"n": 0}
 	if chest != null:
 		chest.connect("broken_changed", func(_b: bool) -> void: chest_signals["n"] = int(chest_signals["n"]) + 1)
 		chest.connect("container_broken", func(_c: Node, _a: Node) -> void: chest_signals["n"] = int(chest_signals["n"]) + 10)
 	if case != null:
 		case.connect("broken_changed", func(_b: bool) -> void: case_signals["n"] = int(case_signals["n"]) + 1)
 		case.connect("container_broken", func(_c: Node, _a: Node) -> void: case_signals["n"] = int(case_signals["n"]) + 10)
+	if bookcase != null:
+		bookcase.connect("broken_changed", func(_b: bool) -> void: book_signals["n"] = int(book_signals["n"]) + 1)
+		bookcase.connect("container_broken", func(_c: Node, _a: Node) -> void: book_signals["n"] = int(book_signals["n"]) + 10)
 
 	if chest != null and chest_leaf != null and chest_broken != null:
 		_check(chest_leaf.visible and not chest_broken.visible, "chest intact before break",
@@ -466,22 +529,69 @@ func _run() -> void:
 		_check(int(case_signals["n"]) == 11, "display-case break signals",
 			"broken_changed(1)+container_broken(10)=%d" % int(case_signals["n"]))
 
-	# Exactly the two broken overlays are visible; every other layer stays off.
+	# Phase 2 G-2: a bookcase break hides BOTH bound static panes and shows BOTH
+	# authored broken overlays, without creating a duplicate pane node.
+	var panes_before: int = _count_static_leaves(host)
+	if bookcase != null and book_leaves.size() == 2 and book_broken.size() == 2:
+		var intact_before: int = 0
+		for lv: Variant in book_leaves:
+			if lv is Node3D and (lv as Node3D).visible:
+				intact_before += 1
+		var broken_before: int = 0
+		for bv: Variant in book_broken:
+			if bv is Node3D and (bv as Node3D).visible:
+				broken_before += 1
+		_check(intact_before == 2 and broken_before == 0, "bookcase intact before break",
+			"panes=%d/2 broken_visible=%d" % [intact_before, broken_before])
+		var broke3: bool = bool(bookcase.call("break_container", null))
+		var after_panes: int = 0
+		for lv2: Variant in book_leaves:
+			if lv2 is Node3D and (lv2 as Node3D).visible:
+				after_panes += 1
+		var after_broken: int = 0
+		for bv2: Variant in book_broken:
+			if bv2 is Node3D and (bv2 as Node3D).visible:
+				after_broken += 1
+		_check(broke3 and after_panes == 0 and after_broken == 2,
+			"bookcase break hides both panes and shows both authored overlays",
+			"panes_visible=%d broken_visible=%d" % [after_panes, after_broken])
+		_check(int(book_signals["n"]) == 11, "bookcase break signals",
+			"broken_changed(1)+container_broken(10)=%d" % int(book_signals["n"]))
+	_check(_count_static_leaves(host) == panes_before,
+		"bookcase break created no duplicate glass node",
+		"static_panes=%d before/after" % panes_before)
+
+	# Exactly the four broken overlays (chest + display case + 2 bookcase doors)
+	# are visible; every other layer stays off.
 	var visible_after: int = 0
 	for b2: MeshInstance3D in broken:
 		if b2.visible:
 			visible_after += 1
 	print("GC_PROBE after_break visible_broken=%d of %d" % [visible_after, broken.size()])
-	_check(visible_after == 2, "only the two broken overlays are visible",
+	_check(visible_after == 4, "only the four broken overlays are visible",
 		"%d/%d" % [visible_after, broken.size()])
 	var leaves_after: int = 0
 	for l3: MeshInstance3D in leaves:
 		if l3.visible:
 			leaves_after += 1
-	_check(leaves_after == leaves.size() - 2, "only the two intact leaves were hidden",
+	_check(leaves_after == leaves.size() - 2, "only the two emitted intact leaves were hidden",
 		"%d/%d visible" % [leaves_after, leaves.size()])
 
 	_finish()
+
+
+func _first_valid(nodes: Array) -> Node3D:
+	for n_var: Variant in nodes:
+		if n_var is Node3D and is_instance_valid(n_var as Node3D):
+			return n_var as Node3D
+	return null
+
+
+func _count_static_leaves(node: Node) -> int:
+	var n: int = 1 if bool(node.get_meta("gc_static_leaf", false)) else 0
+	for child: Node in node.get_children():
+		n += _count_static_leaves(child)
+	return n
 
 
 func _finish() -> void:

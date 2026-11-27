@@ -4,9 +4,13 @@
 (**route1**, `4341439`) was `status=partial` because the S06 ledger hook called
 `_show_tab` on the CanvasLayer instead of the `LedgerUI` Control; the hook is
 fixed and the second capture (**route2**) is **all-green**: 13 captured / 14
-deferred / 0 partial / 0 frame errors / 17 frames, exit 0. The **120-row
-re-score is still not done** (and the live Steam capture is untouched). See
-[§6](#6-measured-evidence) for both runs and the measured lines.
+deferred / 0 partial / 0 frame errors / 17 frames, exit 0. **Route2-clean**
+(Phase 0b, **`912a481`**, `git.dirty=false`) reproduces the same result and is
+now the **provenance reference**; route2 remains the historical
+`git.dirty=true` run that carried the S06 fix before it was committed. The
+**120-row re-score is still not done** (and the live Steam capture is
+untouched). See [§6](#6-measured-evidence) for all runs and the measured
+lines.
 
 - Runner: `build/qa/p0b_route.gd` (`extends SceneTree`)
 - Wrapper: `build/qa/p0b_route.sh` (owns the shared flock, Xvfb, timeout; exports
@@ -79,8 +83,8 @@ build/qa/p0b_route.sh --dry-run
 build/qa/p0b_route.sh --self-test
 # -> P0B_ROUTE_SELFTEST PASS checks=62 fails=0
 
-# The real staged capture (run as route1/route2; see §6).
-build/qa/p0b_route.sh --tag=route2
+# The real staged capture (route1/route2/route2-clean; see §6).
+build/qa/p0b_route.sh --tag=route2-clean
 ```
 
 The wrapper's default mode is capture (run it with no mode flag); the runner
@@ -307,15 +311,16 @@ Hooks confirmed in the tree before writing the runner: `open_wardrobe_ui`,
 
 ### Measured runs (port only, Xvfb Vulkan, no Steam)
 
-Both runs used the port build only, one Godot at a time, the wrapper's shared
+All runs used the port build only, one Godot at a time, the wrapper's shared
 flock, Xvfb `1920x1080x24`, and `--rendering-driver vulkan`. Wall is the
 manifest `started_at_utc`→`finished_at_utc` span; the wrapper adds ~5 s of
-launch overhead (route2 wrapper wall: 193 s).
+launch overhead (route2 wrapper wall: 193 s; route2-clean wrapper wall: 207 s).
 
 | Run | Tree | Status | captured | partial | deferred | frames | frame_errors | wall | exit | Evidence |
 |---|---|---|---|---|---|---|---|---|---|---|
 | route1 | `4341439` (clean) | `partial` | 12 | 1 | 14 | 16 | 1 | 193 s | 1 | `docs/reports/logs/p0b-route/route1/` |
 | route2 | `4341439` + S06 fix (dirty) | `captured` | 13 | 0 | 14 | 17 | 0 | 188 s | 0 | `docs/reports/logs/p0b-route/route2/` |
+| **route2-clean** | **`912a481` (clean)** | **`captured`** | **13** | **0** | **14** | **17** | **0** | **201 s** | **0** | **`docs/reports/logs/p0b-route/route2-clean/`** |
 
 route1 exact line:
 
@@ -352,6 +357,40 @@ captured; the Lounge `beam_close` extra is captured; audio is enabled
 all `1920x1080`, no `SCRIPT ERROR`/`SHADER ERROR`/`Parse Error` in the log.
 The manifest's `git.dirty=true` is expected: route2 ran on `4341439` plus the
 uncommitted S06 fix.
+
+### Route2-clean (Phase 0b provenance reference)
+
+Route2-clean re-ran the same staged capture on the **clean Phase 0a HEAD**
+`912a481` (`git.dirty=false`), one Godot at a time, after the S06 fix was
+committed. Exact line:
+
+```
+P0B_ROUTE_CAPTURE_DONE status=captured beats=27 captured=13 deferred=14 partial=0 staged_failed=0 frame_errors=0 frames=17 errors=0 exit_ok=true manifest=<repo>/docs/reports/logs/p0b-route/route2-clean/manifest.json out=<repo>/build/qa/p0b_route/route2-clean
+```
+
+Manifest facts (`docs/reports/logs/p0b-route/route2-clean/manifest.json`):
+
+- `git`: `sha=912a481d42611cb0de77f31d4e01e63029b68190`, `branch=main`, `dirty=false`.
+- `counts`: `beats=27 captured=13 deferred=14 partial=0 frame_errors=0 frames=17 extras=1`.
+- `schema` / `mode` / `route_claim`: `tat2.p0b_route/1` / `staged` / `none`; lens 54.54 / 1920x1080.
+- `level`: `free_play_substitute=true`, `official_free_play=false`, historical `Mission.Guildhall.LootTheRoom`, canonical `Mission.Guildhall.VaultHeist`.
+- audio: enabled, 186.259 s, 19 marks, `rms=-30.32 dBFS`, `peak=-0.76 dBFS`.
+- window: `2026-11-27T15:31:32Z` to `15:34:53Z` (201 s); wrapper wall 207 s.
+- frames: 18 PNGs, all 1920x1080 (17 beat frames + 1 Lounge extra).
+
+The captured beats are the same 13 as route2; S06 has both frames, S12 is
+player-camera with the lantern lit, S24 has `upper_foyer`/`yaw180`/`foyer_beam`
+(3/3, `beam_visible=true` at the `C_107` card `(23.27, 29.76, -57.4)`), and
+S27 is the paused frame. The capture log has no `SCRIPT ERROR`, `SHADER ERROR`
+or `Parse Error`; it ends with the known teardown warning (`7 RIDs of type
+"Texture" were leaked`) plus the wrapper's `exit=0` line. The media stays under
+the git-ignored `build/qa/p0b_route/route2-clean/`; only the manifest, log and
+GPU samples are tracked.
+
+**Provenance:** route2-clean is the clean-tree reference for any later route
+score or diff. Route1/route2 are kept as the historical partial -> fixed ->
+dirty-green sequence and must not be deleted. The manifest's `route_claim`
+stays `none`; this is still a staged capture, not a played route.
 
 ### Headless gates (after the S06 fix)
 
@@ -418,11 +457,12 @@ Steam reference capture. The audio is recorded, not scored.
 
 ## 7. What the next lane owes
 
-1. **The capture is done** (route2 all-green). The next action is the **120-row
-   re-score**: map the 27 rows/17 frames onto
+1. **The capture is done** (route2 all-green; route2-clean at `912a481` is the
+   clean-tree reference). The next action is the **120-row re-score**: map the
+   27 rows/17 frames onto
    `docs/reference/clip_1795033698901/COMPARISON_PORT_20261124.md`, using the
-   route2 manifest/PNGs (`docs/reports/logs/p0b-route/route2/`,
-   `build/qa/p0b_route/route2/`). A later re-run must still produce
+   route2-clean manifest/PNGs (`docs/reports/logs/p0b-route/route2-clean/`,
+   `build/qa/p0b_route/route2-clean/`). A later re-run must still produce
    `status=captured captured=13 deferred=14 partial=0 staged_failed=0
    frame_errors=0 frames=17 exit_ok=true`.
 2. If S24's `foyer_beam` reports `beam_visible=false` or any beat is

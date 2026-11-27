@@ -1,0 +1,1765 @@
+{
+  "audio": {
+    "buffer_s": 10.0,
+    "channels": 2,
+    "driver": "PulseAudio",
+    "dropped_frames": 647168,
+    "enabled": true,
+    "files": [
+      "/home/john/Projects/TAT-2/build/qa/p0b_route/route2-clean/audio.pcm",
+      "/home/john/Projects/TAT-2/build/qa/p0b_route/route2-clean/audio.wav",
+      "/home/john/Projects/TAT-2/build/qa/p0b_route/route2-clean/audio.json"
+    ],
+    "frames": 8214016,
+    "mark_kind": "mark",
+    "marks": [
+      {
+        "beat": "",
+        "frame": 0,
+        "label": "route_start",
+        "msec": 2,
+        "t_s": 0.0,
+        "unix": 1795793492.03587,
+        "window": {
+          "frames": 155648,
+          "peak_dbfs": -180.0,
+          "rms_dbfs": -180.0,
+          "seconds": 3.52943310657596,
+          "zero_fraction": 1.0
+        }
+      },
+      {
+        "beat": "",
+        "frame": 155648,
+        "label": "S01_startscreen",
+        "msec": 10831,
+        "t_s": 3.52943310657596,
+        "unix": 1795793502.86529,
+        "window": {
+          "frames": 460288,
+          "peak_dbfs": -180.0,
+          "rms_dbfs": -180.0,
+          "seconds": 10.4373696145125,
+          "zero_fraction": 1.0
+        }
+      },
+      {
+        "beat": "",
+        "frame": 615936,
+        "label": "S02_loading_1",
+        "msec": 13979,
+        "t_s": 13.9668027210884,
+        "unix": 1795793506.01387,
+        "window": {
+          "frames": 736768,
+          "peak_dbfs": -61.6817234160146,
+          "rms_dbfs": -81.5453354241694,
+          "seconds": 16.7067573696145,
+          "zero_fraction": 0.809334824530924
+        }
+      },
+      {
+        "beat": "",
+        "frame": 1352704,
+        "label": "S03_den_entry",
+        "msec": 31912,
+        "t_s": 30.6735600907029,
+        "unix": 1795793523.94733,
+        "window": {
+          "frames": 384000,
+          "peak_dbfs": -11.7165336688895,
+          "rms_dbfs": -41.4949402670274,
+          "seconds": 8.70748299319728,
+          "zero_fraction": 0.0521341145833333
+        }
+      },
+      {
+        "beat": "",
+        "frame": 1736704,
+        "label": "S04_wardrobe",
+        "msec": 39408,
+        "t_s": 39.3810430839002,
+        "unix": 1795793531.44293,
+        "window": {
+          "frames": 301056,
+          "peak_dbfs": -12.2918286051545,
+          "rms_dbfs": -37.8318516071314,
+          "seconds": 6.82666666666667,
+          "zero_fraction": 0.0177458678784014
+        }
+      },
+      {
+        "beat": "",
+        "frame": 2037760,
+        "label": "S06_journal",
+        "msec": 46271,
+        "t_s": 46.2077097505669,
+        "unix": 1795793538.30618,
+        "window": {
+          "frames": 239616,
+          "peak_dbfs": -21.4500013076371,
+          "rms_dbfs": -48.476332674031,
+          "seconds": 5.4334693877551,
+          "zero_fraction": 0.0409592848557692
+        }
+      },
+      {
+        "beat": "",
+        "frame": 2277376,
+        "label": "S06_black_market",
+        "msec": 51715,
+        "t_s": 51.641179138322,
+        "unix": 1795793543.74986,
+        "window": {
+          "frames": 289792,
+          "peak_dbfs": -15.5954241810763,
+          "rms_dbfs": -43.3807882098424,
+          "seconds": 6.57124716553288,
+          "zero_fraction": 0.0289362715326855
+        }
+      },
+      {
+        "beat": "",
+        "frame": 2567168,
+        "label": "S08_map_table",
+        "msec": 58308,
+        "t_s": 58.2124263038549,
+        "unix": 1795793550.34323,
+        "window": {
+          "frames": 201728,
+          "peak_dbfs": -16.2414513289474,
+          "rms_dbfs": -41.1142540160898,
+          "seconds": 4.57433106575964,
+          "zero_fraction": 0.0228352038388325
+        }
+      },
+      {
+        "beat": "",
+        "frame": 2768896,
+        "label": "S08_confirm",
+        "msec": 62828,
+        "t_s": 62.7867573696145,
+        "unix": 1795793554.86376,
+        "window": {
+          "frames": 292352,
+          "peak_dbfs": -20.4677666089424,
+          "rms_dbfs": -43.9245623377438,
+          "seconds": 6.62929705215419,
+          "zero_fraction": 0.0316673051663748
+        }
+      },
+      {
+        "beat": "",
+        "frame": 3061248,
+        "label": "S05_telescope_sky",
+        "msec": 69453,
+        "t_s": 69.4160544217687,
+        "unix": 1795793561.48828,
+        "window": {
+          "frames": 631296,
+          "peak_dbfs": -15.6002146341647,
+          "rms_dbfs": -41.8292628743553,
+          "seconds": 14.3151020408163,
+          "zero_fraction": 0.514975542376318
+        }
+      },
+      {
+        "beat": "",
+        "frame": 3692544,
+        "label": "S09_mission_prep",
+        "msec": 83766,
+        "t_s": 83.731156462585,
+        "unix": 1795793575.80137,
+        "window": {
+          "frames": 154112,
+          "peak_dbfs": -17.4399451694706,
+          "rms_dbfs": -43.4741661643703,
+          "seconds": 3.49460317460317,
+          "zero_fraction": 0.0280477834302326
+        }
+      },
+      {
+        "beat": "",
+        "frame": 3846656,
+        "label": "S10_loading_2",
+        "msec": 87240,
+        "t_s": 87.2257596371882,
+        "unix": 1795793579.27579,
+        "window": {
+          "frames": 1665536,
+          "peak_dbfs": -22.8618070487079,
+          "rms_dbfs": -59.5142750013221,
+          "seconds": 37.7672562358277,
+          "zero_fraction": 0.907328031336459
+        }
+      },
+      {
+        "beat": "",
+        "frame": 5512192,
+        "label": "S11_briefing_letter",
+        "msec": 145567,
+        "t_s": 124.993015873016,
+        "unix": 1795793637.60402,
+        "window": {
+          "frames": 683008,
+          "peak_dbfs": -15.7192233156031,
+          "rms_dbfs": -32.7915455810443,
+          "seconds": 15.4877097505669,
+          "zero_fraction": 0.0480982653204648
+        }
+      },
+      {
+        "beat": "",
+        "frame": 6195200,
+        "label": "S12_safe_room",
+        "msec": 155251,
+        "t_s": 140.480725623583,
+        "unix": 1795793647.28806,
+        "window": {
+          "frames": 334848,
+          "peak_dbfs": -23.9979880107563,
+          "rms_dbfs": -40.6877500321388,
+          "seconds": 7.59292517006803,
+          "zero_fraction": 0.0014304998088685
+        }
+      },
+      {
+        "beat": "",
+        "frame": 6530048,
+        "label": "S24_upper_foyer",
+        "msec": 162814,
+        "t_s": 148.073650793651,
+        "unix": 1795793654.85079,
+        "window": {
+          "frames": 338944,
+          "peak_dbfs": -26.3413560990285,
+          "rms_dbfs": -40.3548504382534,
+          "seconds": 7.68580498866213,
+          "zero_fraction": 0.00132617777567976
+        }
+      },
+      {
+        "beat": "",
+        "frame": 6868992,
+        "label": "S24_yaw180",
+        "msec": 170523,
+        "t_s": 155.759455782313,
+        "unix": 1795793662.56025,
+        "window": {
+          "frames": 400384,
+          "peak_dbfs": -0.75818130044489,
+          "rms_dbfs": -18.2559970863761,
+          "seconds": 9.0790022675737,
+          "zero_fraction": 0.000579443734015345
+        }
+      },
+      {
+        "beat": "",
+        "frame": 7269376,
+        "label": "S24_foyer_beam",
+        "msec": 179607,
+        "t_s": 164.838458049887,
+        "unix": 1795793671.64488,
+        "window": {
+          "frames": 335360,
+          "peak_dbfs": -8.87724928889483,
+          "rms_dbfs": -25.7640285902055,
+          "seconds": 7.60453514739229,
+          "zero_fraction": 0.00066793893129771
+        }
+      },
+      {
+        "beat": "",
+        "frame": 7604736,
+        "label": "extra_lounge_beam_close_pose",
+        "msec": 187173,
+        "t_s": 172.442993197279,
+        "unix": 1795793679.21101,
+        "window": {
+          "frames": 320512,
+          "peak_dbfs": -15.4875432517279,
+          "rms_dbfs": -33.8301639080414,
+          "seconds": 7.26784580498866,
+          "zero_fraction": 0.00181272464057508
+        }
+      },
+      {
+        "beat": "",
+        "frame": 7925248,
+        "label": "S27_pause",
+        "msec": 194429,
+        "t_s": 179.710839002268,
+        "unix": 1795793686.46696,
+        "window": {
+          "frames": 288768,
+          "peak_dbfs": -11.3622851802196,
+          "rms_dbfs": -38.5004443997719,
+          "seconds": 6.54802721088435,
+          "zero_fraction": 0.00837523548315603
+        }
+      }
+    ],
+    "note": "Staged frames use mark() only; the S01..S27 beat-marker entry point is never called.",
+    "pcm": "/home/john/Projects/TAT-2/build/qa/p0b_route/route2-clean/audio.pcm",
+    "peak_dbfs": -0.75818130044489,
+    "pushed_frames": 8214016,
+    "reason": "",
+    "route_claim": "none",
+    "sample_rate": 44100,
+    "schema": "tat2.audio_capture/1",
+    "seconds": 186.258866213152,
+    "sidecar": "/home/john/Projects/TAT-2/build/qa/p0b_route/route2-clean/audio.json",
+    "started_at_utc": "2026-11-27T15:31:32",
+    "stopped_at_utc": "2026-11-27T15:34:53",
+    "total": {
+      "frames": 8214016,
+      "peak_dbfs": -0.75818130044489,
+      "rms_dbfs": -30.3171955780485,
+      "seconds": 186.258866213152,
+      "zero_fraction": 0.383186738374992
+    },
+    "truncated": false,
+    "wav": "/home/john/Projects/TAT-2/build/qa/p0b_route/route2-clean/audio.wav"
+  },
+  "base_schema": "tat2.p0b_capture/1",
+  "beam_card": {
+    "hidden": 0,
+    "mechanism": "not applicable: the route runner never hides beam cards and never touches the beam fix; the field is kept for tat2.p0b_capture/1 compatibility",
+    "mode": "on"
+  },
+  "beats": [
+    {
+      "camera_source": "ui",
+      "class": "ui",
+      "evidence": "main_menu.gd instantiated (real startscreen over its 3D backdrop); no menu input driven",
+      "eye": [],
+      "frame_count_planned": 1,
+      "frame_errors": [],
+      "frame_no": 0,
+      "frames": [
+        {
+          "camera_source": "ui",
+          "error": "",
+          "eye": [],
+          "frame_no": 0,
+          "frames_mean": [
+            41.1749111562649,
+            41.2197272332039,
+            41.3727724853505,
+            41.312558407266,
+            41.0763294717863
+          ],
+          "mark_kind": "mark",
+          "median_index": 1,
+          "median_lt8": 3.56172839506173,
+          "median_mean": 41.2197272332039,
+          "median_peak": 255.0,
+          "name": "startscreen",
+          "ok": true,
+          "png": "build/qa/p0b_route/route2-clean/S01_startscreen.png",
+          "png_size": [
+            1920,
+            1080
+          ],
+          "staged": true,
+          "t_s": 10.839,
+          "target": []
+        }
+      ],
+      "id": "S01",
+      "label": "Startscreen (main menu)",
+      "mark_kind": "mark",
+      "official_end_s": 2.15,
+      "official_start_s": 0.0,
+      "png": "build/qa/p0b_route/route2-clean/S01_startscreen.png",
+      "reason": "",
+      "ref_keyframe": "KF01",
+      "source": "staged",
+      "stage_hook": "main_menu.gd instantiate; the real PLAY/SETTINGS/CREDITS/QUIT menu over its 3D backdrop",
+      "staged": true,
+      "status": "captured",
+      "t_s": 10.839,
+      "target": []
+    },
+    {
+      "camera_source": "ui",
+      "class": "ui",
+      "evidence": "loading_screen.gd start_loading('', '', 'guildhall') + set_progress(0.62); authored T_loadingScreen_1 splash",
+      "eye": [],
+      "frame_count_planned": 1,
+      "frame_errors": [],
+      "frame_no": 1,
+      "frames": [
+        {
+          "camera_source": "ui",
+          "error": "",
+          "eye": [],
+          "frame_no": 1,
+          "frames_mean": [
+            21.0340396132765,
+            21.0323212028547,
+            21.01906967475,
+            21.01906967475,
+            21.0323841040112
+          ],
+          "mark_kind": "mark",
+          "median_index": 1,
+          "median_lt8": 27.6975308641975,
+          "median_mean": 21.0323212028547,
+          "median_peak": 212.342002542615,
+          "name": "loading_1",
+          "ok": true,
+          "png": "build/qa/p0b_route/route2-clean/S02_loading_1.png",
+          "png_size": [
+            1920,
+            1080
+          ],
+          "staged": true,
+          "t_s": 13.987,
+          "target": []
+        }
+      ],
+      "id": "S02",
+      "label": "Loading screen 1",
+      "mark_kind": "mark",
+      "official_end_s": 2.6,
+      "official_start_s": 2.15,
+      "png": "build/qa/p0b_route/route2-clean/S02_loading_1.png",
+      "reason": "",
+      "ref_keyframe": "KF12",
+      "source": "staged",
+      "stage_hook": "loading_screen.gd instantiate + start_loading('', '', 'guildhall') + set_progress(0.62, '')",
+      "staged": true,
+      "status": "captured",
+      "t_s": 13.987,
+      "target": []
+    },
+    {
+      "camera_source": "synthetic",
+      "class": "world",
+      "evidence": "mission.tscn order=1 map=thieves_den; synthetic Den-wide camera (camera_source=synthetic) at the capture_e2e_parity Den pose; HUD live",
+      "eye": [
+        4.19999980926514,
+        41.9000015258789,
+        271.200012207031
+      ],
+      "frame_count_planned": 1,
+      "frame_errors": [],
+      "frame_no": 2,
+      "frames": [
+        {
+          "camera_source": "synthetic",
+          "error": "",
+          "eye": [
+            4.19999980926514,
+            41.9000015258789,
+            271.200012207031
+          ],
+          "frame_no": 2,
+          "frames_mean": [
+            33.686681013271,
+            33.7313455977386,
+            33.7322574800588,
+            33.7320416229218,
+            33.7299042308723
+          ],
+          "mark_kind": "mark",
+          "median_index": 1,
+          "median_lt8": 0.64429012345679,
+          "median_mean": 33.7313455977386,
+          "median_peak": 248.000000417232,
+          "name": "den_entry",
+          "ok": true,
+          "png": "build/qa/p0b_route/route2-clean/S03_den_entry.png",
+          "png_size": [
+            1920,
+            1080
+          ],
+          "staged": true,
+          "t_s": 31.92,
+          "target": [
+            -5.78352642059326,
+            41.4409866333008,
+            271.544250488281
+          ]
+        }
+      ],
+      "id": "S03",
+      "label": "Thieves' Den entry / pan",
+      "mark_kind": "mark",
+      "official_end_s": 6.57,
+      "official_start_s": 2.6,
+      "png": "build/qa/p0b_route/route2-clean/S03_den_entry.png",
+      "reason": "",
+      "ref_keyframe": "KF02",
+      "source": "staged",
+      "stage_hook": "mission.tscn with GameState contract_order=1 map=thieves_den; fixed Den-wide camera (capture_e2e_parity Den pose)",
+      "staged": true,
+      "status": "captured",
+      "t_s": 31.92,
+      "target": [
+        -5.78352642059326,
+        41.4409866333008,
+        271.544250488281
+      ]
+    },
+    {
+      "camera_source": "ui",
+      "class": "ui",
+      "evidence": "mission_controller.open_wardrobe_ui() -> wardrobe_ui.open_customizer(); 3D Spider turntable + loadout panels",
+      "eye": [],
+      "frame_count_planned": 1,
+      "frame_errors": [],
+      "frame_no": 3,
+      "frames": [
+        {
+          "camera_source": "ui",
+          "error": "",
+          "eye": [],
+          "frame_no": 3,
+          "frames_mean": [
+            23.8349742490423,
+            23.8201209383461,
+            23.8057313394964,
+            23.7875325425324,
+            23.7778192784111
+          ],
+          "mark_kind": "mark",
+          "median_index": 2,
+          "median_lt8": 35.525462962963,
+          "median_mean": 23.8057313394964,
+          "median_peak": 255.0,
+          "name": "wardrobe",
+          "ok": true,
+          "png": "build/qa/p0b_route/route2-clean/S04_wardrobe.png",
+          "png_size": [
+            1920,
+            1080
+          ],
+          "staged": true,
+          "t_s": 39.416,
+          "target": []
+        }
+      ],
+      "id": "S04",
+      "label": "Wardrobe UI",
+      "mark_kind": "mark",
+      "official_end_s": 18.24,
+      "official_start_s": 6.57,
+      "png": "build/qa/p0b_route/route2-clean/S04_wardrobe.png",
+      "reason": "",
+      "ref_keyframe": "KF03/KF04",
+      "source": "staged",
+      "stage_hook": "mission_controller.open_wardrobe_ui() -> wardrobe_ui.open_customizer()",
+      "staged": true,
+      "status": "captured",
+      "t_s": 39.416,
+      "target": []
+    },
+    {
+      "camera_source": "mission",
+      "class": "camera",
+      "evidence": "toggle_telescope_ponder(): mission _ponder_cam current, fov=13.0; no exit call (L4-13)",
+      "eye": [
+        -4.82019996643066,
+        41.9668807983398,
+        270.733703613281
+      ],
+      "frame_count_planned": 1,
+      "frame_errors": [],
+      "frame_no": 8,
+      "frames": [
+        {
+          "camera_source": "mission",
+          "error": "",
+          "eye": [
+            -4.82019996643066,
+            41.9668807983398,
+            270.733703613281
+          ],
+          "frame_no": 8,
+          "frames_mean": [
+            61.9266910717744,
+            61.9266910717744,
+            61.9266910717744,
+            61.9266910717744,
+            61.9266910717744
+          ],
+          "mark_kind": "mark",
+          "median_index": 2,
+          "median_lt8": 26.0486111111111,
+          "median_mean": 61.9266910717744,
+          "median_peak": 247.103000470698,
+          "name": "telescope_sky",
+          "ok": true,
+          "png": "build/qa/p0b_route/route2-clean/S05_telescope_sky.png",
+          "png_size": [
+            1920,
+            1080
+          ],
+          "staged": true,
+          "t_s": 69.461,
+          "target": [
+            -13.3043184280396,
+            42.4510383605957,
+            276.0048828125
+          ]
+        }
+      ],
+      "id": "S05",
+      "label": "Thieves' Den telescope sky (no exit)",
+      "mark_kind": "mark",
+      "official_end_s": 26.58,
+      "official_start_s": 18.24,
+      "png": "build/qa/p0b_route/route2-clean/S05_telescope_sky.png",
+      "reason": "",
+      "ref_keyframe": "KF05/KF06",
+      "source": "staged",
+      "stage_hook": "mission_controller.toggle_telescope_ponder(); the mission's _ponder_cam; never toggled back (L4-13 exit strands the player)",
+      "staged": true,
+      "status": "captured",
+      "t_s": 69.461,
+      "target": [
+        -13.3043184280396,
+        42.4510383605957,
+        276.0048828125
+      ]
+    },
+    {
+      "camera_source": "ui",
+      "class": "ui",
+      "evidence": "mission_controller.open_ledger_ui() -> LedgerUI Control _show_tab(0) journal + _show_tab(1) black market",
+      "eye": [],
+      "frame_count_planned": 2,
+      "frame_errors": [],
+      "frame_no": 4,
+      "frames": [
+        {
+          "camera_source": "ui",
+          "error": "",
+          "eye": [],
+          "frame_no": 4,
+          "frames_mean": [
+            21.8945919898906,
+            21.8940380238225,
+            21.8935924142343,
+            21.8932751148511,
+            21.8930612954024
+          ],
+          "mark_kind": "mark",
+          "median_index": 2,
+          "median_lt8": 17.1728395061728,
+          "median_mean": 21.8935924142343,
+          "median_peak": 251.668000198603,
+          "name": "journal",
+          "ok": true,
+          "png": "build/qa/p0b_route/route2-clean/S06_journal.png",
+          "png_size": [
+            1920,
+            1080
+          ],
+          "staged": true,
+          "t_s": 46.279,
+          "target": []
+        },
+        {
+          "camera_source": "ui",
+          "error": "",
+          "eye": [],
+          "frame_no": 5,
+          "frames_mean": [
+            23.7537812052556,
+            23.751532532402,
+            23.7484790986108,
+            23.7464886279779,
+            23.7432635045318
+          ],
+          "mark_kind": "mark",
+          "median_index": 2,
+          "median_lt8": 17.4621913580247,
+          "median_mean": 23.7484790986108,
+          "median_peak": 251.668000198603,
+          "name": "black_market",
+          "ok": true,
+          "png": "build/qa/p0b_route/route2-clean/S06_black_market.png",
+          "png_size": [
+            1920,
+            1080
+          ],
+          "staged": true,
+          "t_s": 51.723,
+          "target": []
+        }
+      ],
+      "id": "S06",
+      "label": "Ledger / Black Market",
+      "mark_kind": "mark",
+      "official_end_s": 38.17,
+      "official_start_s": 26.58,
+      "png": "build/qa/p0b_route/route2-clean/S06_journal.png",
+      "reason": "",
+      "ref_keyframe": "KF07/KF08",
+      "source": "staged",
+      "stage_hook": "mission_controller.open_ledger_ui() -> ledger_ui._show_tab(0)/(1)",
+      "staged": true,
+      "status": "captured",
+      "t_s": 46.279,
+      "target": []
+    },
+    {
+      "camera_source": "player",
+      "class": "world",
+      "evidence": "",
+      "eye": [],
+      "frame_count_planned": 0,
+      "frame_errors": [],
+      "frame_no": -1,
+      "frames": [],
+      "id": "S07",
+      "label": "Den props, decals & gramophone",
+      "mark_kind": "mark",
+      "official_end_s": 51.08,
+      "official_start_s": 38.17,
+      "png": "",
+      "reason": "Multi-subject beat: decoration swap (DenDecorationPedestal.interact), boot-trail decal crossing, gramophone ON (gram area -> AudioManager.toggle_gramophone), trunk-treasure cycling, then a walk to the map table. The two interact hooks exist, but there is no camera/pan driver for the sequence; a single prop frame would misrepresent the beat. Deferred to a v2 lane, not faked.",
+      "ref_keyframe": "KF09",
+      "source": "absent",
+      "stage_hook": "",
+      "staged": false,
+      "status": "deferred",
+      "t_s": -1.0,
+      "target": []
+    },
+    {
+      "camera_source": "ui",
+      "class": "ui",
+      "evidence": "set_den_selected_map('guildhall') + open_contract_table_ui() + open_confirm(); difficulty=Novice mode=Solo kept",
+      "eye": [],
+      "frame_count_planned": 2,
+      "frame_errors": [],
+      "frame_no": 6,
+      "frames": [
+        {
+          "camera_source": "ui",
+          "error": "",
+          "eye": [],
+          "frame_no": 6,
+          "frames_mean": [
+            29.6619797463735,
+            29.6624360812647,
+            29.6628197386714,
+            29.6633111044173,
+            29.6640148390018
+          ],
+          "mark_kind": "mark",
+          "median_index": 2,
+          "median_lt8": 21.4035493827161,
+          "median_mean": 29.6628197386714,
+          "median_peak": 253.505000089109,
+          "name": "map_table",
+          "ok": true,
+          "png": "build/qa/p0b_route/route2-clean/S08_map_table.png",
+          "png_size": [
+            1920,
+            1080
+          ],
+          "staged": true,
+          "t_s": 58.316,
+          "target": []
+        },
+        {
+          "camera_source": "ui",
+          "error": "",
+          "eye": [],
+          "frame_no": 7,
+          "frames_mean": [
+            15.4578405319128,
+            15.457261041159,
+            15.4570810565829,
+            15.4568804007169,
+            15.4565706939048
+          ],
+          "mark_kind": "mark",
+          "median_index": 2,
+          "median_lt8": 63.4521604938272,
+          "median_mean": 15.4570810565829,
+          "median_peak": 235.444001165628,
+          "name": "confirm",
+          "ok": true,
+          "png": "build/qa/p0b_route/route2-clean/S08_confirm.png",
+          "png_size": [
+            1920,
+            1080
+          ],
+          "staged": true,
+          "t_s": 62.836,
+          "target": []
+        }
+      ],
+      "id": "S08",
+      "label": "Map table & confirmation modal",
+      "mark_kind": "mark",
+      "official_end_s": 56.08,
+      "official_start_s": 51.08,
+      "png": "build/qa/p0b_route/route2-clean/S08_map_table.png",
+      "reason": "",
+      "ref_keyframe": "KF10",
+      "source": "staged",
+      "stage_hook": "mission_controller.set_den_selected_map('guildhall') + open_contract_table_ui() + contract_table_ui.open_confirm(); Novice/Solo kept",
+      "staged": true,
+      "status": "captured",
+      "t_s": 58.316,
+      "target": []
+    },
+    {
+      "camera_source": "ui",
+      "class": "ui",
+      "evidence": "mission_prep_ui.open_prep('guildhall', 1, 'Solo', 2, true): MissionLobby stage, Novice/Solo, Contract Inactive",
+      "eye": [],
+      "frame_count_planned": 1,
+      "frame_errors": [],
+      "frame_no": 9,
+      "frames": [
+        {
+          "camera_source": "ui",
+          "error": "",
+          "eye": [],
+          "frame_no": 9,
+          "frames_mean": [
+            42.9123946838419,
+            42.9226736651377,
+            42.9301931327934,
+            42.9252044136961,
+            42.9212527549734
+          ],
+          "mark_kind": "mark",
+          "median_index": 1,
+          "median_lt8": 6.37731481481481,
+          "median_mean": 42.9226736651377,
+          "median_peak": 255.0,
+          "name": "mission_prep",
+          "ok": true,
+          "png": "build/qa/p0b_route/route2-clean/S09_mission_prep.png",
+          "png_size": [
+            1920,
+            1080
+          ],
+          "staged": true,
+          "t_s": 83.774,
+          "target": []
+        }
+      ],
+      "id": "S09",
+      "label": "Mission preparation",
+      "mark_kind": "mark",
+      "official_end_s": 64.8,
+      "official_start_s": 56.08,
+      "png": "build/qa/p0b_route/route2-clean/S09_mission_prep.png",
+      "reason": "",
+      "ref_keyframe": "KF11",
+      "source": "staged",
+      "stage_hook": "mission_prep_ui.gd instantiate + open_prep('guildhall', 1, 'Solo', 2, true) (free play: Contract Inactive)",
+      "staged": true,
+      "status": "captured",
+      "t_s": 83.774,
+      "target": []
+    },
+    {
+      "camera_source": "ui",
+      "class": "ui",
+      "evidence": "loading_screen.gd start_loading('', '', 'guildhall') + set_progress(0.31); second loading beat",
+      "eye": [],
+      "frame_count_planned": 1,
+      "frame_errors": [],
+      "frame_no": 10,
+      "frames": [
+        {
+          "camera_source": "ui",
+          "error": "",
+          "eye": [],
+          "frame_no": 10,
+          "frames_mean": [
+            20.9365784082765,
+            20.9365784082765,
+            20.9498928375377,
+            20.9494822588292,
+            20.9508138637141
+          ],
+          "mark_kind": "mark",
+          "median_index": 3,
+          "median_lt8": 27.6967592592593,
+          "median_mean": 20.9494822588292,
+          "median_peak": 212.342002542615,
+          "name": "loading_2",
+          "ok": true,
+          "png": "build/qa/p0b_route/route2-clean/S10_loading_2.png",
+          "png_size": [
+            1920,
+            1080
+          ],
+          "staged": true,
+          "t_s": 87.248,
+          "target": []
+        }
+      ],
+      "id": "S10",
+      "label": "Loading screen 2",
+      "mark_kind": "mark",
+      "official_end_s": 69.44,
+      "official_start_s": 64.8,
+      "png": "build/qa/p0b_route/route2-clean/S10_loading_2.png",
+      "reason": "",
+      "ref_keyframe": "KF12",
+      "source": "staged",
+      "stage_hook": "loading_screen.gd instantiate + start_loading('', '', 'guildhall') + set_progress(0.31, '')",
+      "staged": true,
+      "status": "captured",
+      "t_s": 87.248,
+      "target": []
+    },
+    {
+      "camera_source": "ui",
+      "class": "ui",
+      "evidence": "GameState.request_mission_letter -> hud.show_mission_letter; KF13 parchment over the live safe-room view",
+      "eye": [],
+      "frame_count_planned": 1,
+      "frame_errors": [],
+      "frame_no": 11,
+      "frames": [
+        {
+          "camera_source": "ui",
+          "error": "",
+          "eye": [],
+          "frame_no": 11,
+          "frames_mean": [
+            56.939390909973,
+            56.9396508009439,
+            56.9216772281492,
+            56.9156751528562,
+            56.9417073752948
+          ],
+          "mark_kind": "mark",
+          "median_index": 0,
+          "median_lt8": 17.3842592592593,
+          "median_mean": 56.939390909973,
+          "median_peak": 236.61100109607,
+          "name": "briefing_letter",
+          "ok": true,
+          "png": "build/qa/p0b_route/route2-clean/S11_briefing_letter.png",
+          "png_size": [
+            1920,
+            1080
+          ],
+          "staged": true,
+          "t_s": 145.575,
+          "target": []
+        }
+      ],
+      "id": "S11",
+      "label": "Briefing letter",
+      "mark_kind": "mark",
+      "official_end_s": 70.81,
+      "official_start_s": 69.44,
+      "png": "build/qa/p0b_route/route2-clean/S11_briefing_letter.png",
+      "reason": "",
+      "ref_keyframe": "KF13",
+      "source": "staged",
+      "stage_hook": "mission.tscn free play Mission.Guildhall.LootTheRoom on contract_order=2 map=guildhall; hud.is_mission_letter_open() (GameState.request_mission_letter -> hud.show_mission_letter)",
+      "staged": true,
+      "status": "captured",
+      "t_s": 145.575,
+      "target": []
+    },
+    {
+      "camera_source": "player",
+      "class": "world",
+      "evidence": "SafeRoomDressing present=true; SafeRoomLanternStation.set_lit(true) -> lit=true; player camera at the authored TATSafeRoomPlayerStart_0 eye (camera_source=player)",
+      "eye": [
+        127.274696350098,
+        27.1381511688232,
+        -5.32959985733032
+      ],
+      "frame_count_planned": 1,
+      "frame_errors": [],
+      "frame_no": 12,
+      "frames": [
+        {
+          "camera_source": "player",
+          "error": "",
+          "eye": [
+            127.274696350098,
+            27.1381511688232,
+            -5.32959985733032
+          ],
+          "frame_no": 12,
+          "frames_mean": [
+            42.551621714266,
+            42.6915135882538,
+            42.7337924933865,
+            42.6350576480982,
+            42.4735181488926
+          ],
+          "mark_kind": "mark",
+          "median_index": 3,
+          "median_lt8": 1.71219135802469,
+          "median_mean": 42.6350576480982,
+          "median_peak": 255.0,
+          "name": "safe_room",
+          "ok": true,
+          "png": "build/qa/p0b_route/route2-clean/S12_safe_room.png",
+          "png_size": [
+            1920,
+            1080
+          ],
+          "staged": true,
+          "t_s": 155.259,
+          "target": [
+            122.712158203125,
+            25.8650321960449,
+            3.47735071182251
+          ]
+        }
+      ],
+      "id": "S12",
+      "label": "Guildhall safe-room HUD / lantern / portal",
+      "mark_kind": "mark",
+      "official_end_s": 80.1,
+      "official_start_s": 70.81,
+      "png": "build/qa/p0b_route/route2-clean/S12_safe_room.png",
+      "reason": "",
+      "ref_keyframe": "KF14",
+      "source": "staged",
+      "stage_hook": "safe_room_dressing.gd (mission_controller._add_guildhall_saferoom_dressing) + SafeRoomLanternStation.set_lit(true, false) + authored TATSafeRoomPlayerStart_0 pose",
+      "staged": true,
+      "status": "captured",
+      "t_s": 155.259,
+      "target": [
+        122.712158203125,
+        25.8650321960449,
+        3.47735071182251
+      ]
+    },
+    {
+      "camera_source": "player",
+      "class": "world",
+      "evidence": "",
+      "eye": [],
+      "frame_count_planned": 0,
+      "frame_errors": [],
+      "frame_no": -1,
+      "frames": [],
+      "id": "S13",
+      "label": "Street / alley approach, vintage car & gate alert",
+      "mark_kind": "mark",
+      "official_end_s": 99.3,
+      "official_start_s": 80.1,
+      "png": "",
+      "reason": "Needs a continuous movement driver from the safe-room catwalk to the alley: vault, wet-cobble sprint, crouch, and the car [F] INTERACT at the wrought-iron gate. No multi-beat input driver exists. The authored BARRON'S DEMOLITION banner asset is also absent (HARD_LIMIT, docs/reports/p1-integration-20261126.md).",
+      "ref_keyframe": "KF15",
+      "source": "absent",
+      "stage_hook": "",
+      "staged": false,
+      "status": "deferred",
+      "t_s": -1.0,
+      "target": []
+    },
+    {
+      "camera_source": "ui",
+      "class": "camera",
+      "evidence": "",
+      "eye": [],
+      "frame_count_planned": 0,
+      "frame_errors": [],
+      "frame_no": -1,
+      "frames": [],
+      "id": "S14",
+      "label": "ZipWire [1] equip, gate headlights, 1st launch",
+      "mark_kind": "mark",
+      "official_end_s": 109.5,
+      "official_start_s": 99.3,
+      "png": "",
+      "reason": "Requires [1] equip, gate aim, the 1st zipwire launch and a planter landing. The zipwire traversal has no stable still-stage hook without an input driver.",
+      "ref_keyframe": "KF16",
+      "source": "absent",
+      "stage_hook": "",
+      "staged": false,
+      "status": "deferred",
+      "t_s": -1.0,
+      "target": []
+    },
+    {
+      "camera_source": "player",
+      "class": "world",
+      "evidence": "",
+      "eye": [],
+      "frame_count_planned": 0,
+      "frame_errors": [],
+      "frame_no": -1,
+      "frames": [],
+      "id": "S15",
+      "label": "2nd ZipWire launch & crank ascent",
+      "mark_kind": "mark",
+      "official_end_s": 118.5,
+      "official_start_s": 109.5,
+      "png": "",
+      "reason": "Requires the 2nd zipwire shot plus ~7 s of crank input ([HOLD] CRANK) to the roof ridge; depends on S14 state and a continuous driver.",
+      "ref_keyframe": "KF17",
+      "source": "absent",
+      "stage_hook": "",
+      "staged": false,
+      "status": "deferred",
+      "t_s": -1.0,
+      "target": []
+    },
+    {
+      "camera_source": "player",
+      "class": "world",
+      "evidence": "",
+      "eye": [],
+      "frame_count_planned": 0,
+      "frame_errors": [],
+      "frame_no": -1,
+      "frames": [],
+      "id": "S16",
+      "label": "Roofline traversal & 3rd ZipWire",
+      "mark_kind": "mark",
+      "official_end_s": 131.0,
+      "official_start_s": 118.5,
+      "png": "",
+      "reason": "Roofline/chimney traversal and the 3rd zipwire to the gate pillar; depends on S14/S15 state and has no input driver. The reference table links no keyframe to S16.",
+      "ref_keyframe": "none",
+      "source": "absent",
+      "stage_hook": "",
+      "staged": false,
+      "status": "deferred",
+      "t_s": -1.0,
+      "target": []
+    },
+    {
+      "camera_source": "player",
+      "class": "world",
+      "evidence": "",
+      "eye": [],
+      "frame_count_planned": 0,
+      "frame_errors": [],
+      "frame_no": -1,
+      "frames": [],
+      "id": "S17",
+      "label": "Gate pillar gear plate & courtyard descent",
+      "mark_kind": "mark",
+      "official_end_s": 143.3,
+      "official_start_s": 131.0,
+      "png": "",
+      "reason": "Cable crossing, gear-plate landing and the courtyard drop that takes authored fall damage; cannot be staged without the prior zipwire state and physics-driven traversal.",
+      "ref_keyframe": "KF18",
+      "source": "absent",
+      "stage_hook": "",
+      "staged": false,
+      "status": "deferred",
+      "t_s": -1.0,
+      "target": []
+    },
+    {
+      "camera_source": "player",
+      "class": "world",
+      "evidence": "",
+      "eye": [],
+      "frame_count_planned": 0,
+      "frame_errors": [],
+      "frame_no": -1,
+      "frames": [],
+      "id": "S18",
+      "label": "Smoke bomb [2] throw & plume",
+      "mark_kind": "mark",
+      "official_end_s": 150.7,
+      "official_start_s": 143.3,
+      "png": "",
+      "reason": "Needs the throw input and the plume VFX; Niagara is a labelled procedural stand-in (HL-1, docs/REFERENCE_BASELINE.md). No input driver.",
+      "ref_keyframe": "KF19/KF20",
+      "source": "absent",
+      "stage_hook": "",
+      "staged": false,
+      "status": "deferred",
+      "t_s": -1.0,
+      "target": []
+    },
+    {
+      "camera_source": "ui",
+      "class": "camera",
+      "evidence": "",
+      "eye": [],
+      "frame_count_planned": 0,
+      "frame_errors": [],
+      "frame_no": -1,
+      "frames": [],
+      "id": "S19",
+      "label": "Vistara Diamond [4] scan pulse",
+      "mark_kind": "mark",
+      "official_end_s": 153.0,
+      "official_start_s": 150.7,
+      "png": "",
+      "reason": "Requires a live guard at the portico steps plus the [4] scan input (RED->GREEN silhouette). The staged route has no NPC in view: 4 guards + 3 civilians spawn at 48–151 m (C4-08/L4-08).",
+      "ref_keyframe": "KF21/KF22",
+      "source": "absent",
+      "stage_hook": "",
+      "staged": false,
+      "status": "deferred",
+      "t_s": -1.0,
+      "target": []
+    },
+    {
+      "camera_source": "player",
+      "class": "world",
+      "evidence": "",
+      "eye": [],
+      "frame_count_planned": 0,
+      "frame_errors": [],
+      "frame_no": -1,
+      "frames": [],
+      "id": "S20",
+      "label": "Side wing, MACLEOD sign & terrace patrol",
+      "mark_kind": "mark",
+      "official_end_s": 174.5,
+      "official_start_s": 153.0,
+      "png": "",
+      "reason": "A ~21 s balcony/terrace traversal with a patrol guard; no continuous driver and no NPC on the staged route.",
+      "ref_keyframe": "KF23",
+      "source": "absent",
+      "stage_hook": "",
+      "staged": false,
+      "status": "deferred",
+      "t_s": -1.0,
+      "target": []
+    },
+    {
+      "camera_source": "player",
+      "class": "world",
+      "evidence": "",
+      "eye": [],
+      "frame_count_planned": 0,
+      "frame_errors": [],
+      "frame_no": -1,
+      "frames": [],
+      "id": "S21",
+      "label": "Arched portico, blue double doors & scaffolding",
+      "mark_kind": "mark",
+      "official_end_s": 184.5,
+      "official_start_s": 174.5,
+      "png": "",
+      "reason": "Needs the approach plus [F] OPEN / [HOLD] LOCK on the blue double doors and a walk-through. The door content is proven by the P1 probes, but the staged runner cannot drive the approach.",
+      "ref_keyframe": "KF24",
+      "source": "absent",
+      "stage_hook": "",
+      "staged": false,
+      "status": "deferred",
+      "t_s": -1.0,
+      "target": []
+    },
+    {
+      "camera_source": "player",
+      "class": "world",
+      "evidence": "",
+      "eye": [],
+      "frame_count_planned": 0,
+      "frame_errors": [],
+      "frame_no": -1,
+      "frames": [],
+      "id": "S22",
+      "label": "Fireplace parlor stealth & pickpocket",
+      "mark_kind": "mark",
+      "official_end_s": 197.1,
+      "official_start_s": 184.5,
+      "png": "",
+      "reason": "Requires a live constable, a crouch approach and the [F] PICK POCKET hold; no NPC on the staged route and no input driver.",
+      "ref_keyframe": "KF25",
+      "source": "absent",
+      "stage_hook": "",
+      "staged": false,
+      "status": "deferred",
+      "t_s": -1.0,
+      "target": []
+    },
+    {
+      "camera_source": "ui",
+      "class": "camera",
+      "evidence": "",
+      "eye": [],
+      "frame_count_planned": 0,
+      "frame_errors": [],
+      "frame_no": -1,
+      "frames": [],
+      "id": "S23",
+      "label": "Guard takedown",
+      "mark_kind": "mark",
+      "official_end_s": 202.0,
+      "official_start_s": 197.1,
+      "png": "",
+      "reason": "Requires the S22 guard and the [HOLD] TAKEDOWN lunge camera. The rig was repaired, but a takedown needs a live guard and input; it is not stageable as a still.",
+      "ref_keyframe": "KF26",
+      "source": "absent",
+      "stage_hook": "",
+      "staged": false,
+      "status": "deferred",
+      "t_s": -1.0,
+      "target": []
+    },
+    {
+      "beam_visible": true,
+      "camera_source": "player",
+      "class": "world",
+      "evidence": "S24 foyer poses upper_foyer/yaw180/foyer_beam via player camera (camera_source=player); the C_107 foyer beam card must be visible for the beam frame",
+      "eye": [
+        27.0,
+        29.6687507629395,
+        -50.0
+      ],
+      "frame_count_planned": 3,
+      "frame_errors": [],
+      "frame_no": 13,
+      "frames": [
+        {
+          "camera_source": "player",
+          "error": "",
+          "eye": [
+            27.0,
+            29.6687507629395,
+            -50.0
+          ],
+          "frame_no": 13,
+          "frames_mean": [
+            40.7550696632856,
+            40.7551875335624,
+            40.7559255428119,
+            40.7543128574979,
+            40.7604824948468
+          ],
+          "mark_kind": "mark",
+          "median_index": 1,
+          "median_lt8": 2.63194444444444,
+          "median_mean": 40.7551875335624,
+          "median_peak": 255.0,
+          "name": "upper_foyer",
+          "ok": true,
+          "png": "build/qa/p0b_route/route2-clean/S24_upper_foyer.png",
+          "png_size": [
+            1920,
+            1080
+          ],
+          "staged": true,
+          "t_s": 162.822,
+          "target": [
+            27.0,
+            29.6687507629395,
+            -60.0
+          ]
+        },
+        {
+          "camera_source": "player",
+          "error": "",
+          "eye": [
+            27.0,
+            29.6687507629395,
+            -50.0
+          ],
+          "frame_no": 14,
+          "frames_mean": [
+            44.4419552361971,
+            44.4655043424186,
+            44.4880583945287,
+            44.4987527004683,
+            44.5031714424287
+          ],
+          "mark_kind": "mark",
+          "median_index": 2,
+          "median_lt8": 3.72222222222222,
+          "median_mean": 44.4880583945287,
+          "median_peak": 255.0,
+          "name": "yaw180",
+          "ok": true,
+          "png": "build/qa/p0b_route/route2-clean/S24_yaw180.png",
+          "png_size": [
+            1920,
+            1080
+          ],
+          "staged": true,
+          "t_s": 170.531,
+          "target": [
+            27.0,
+            29.6687507629395,
+            -40.0
+          ]
+        },
+        {
+          "beam_visible": true,
+          "camera_source": "player",
+          "error": "",
+          "eye": [
+            27.0,
+            29.6687507629395,
+            -55.0
+          ],
+          "frame_no": 15,
+          "frames_mean": [
+            34.3574854200341,
+            34.3563054112261,
+            34.3551192693125,
+            34.3505022011911,
+            34.3541441458486
+          ],
+          "mark_kind": "mark",
+          "median_index": 2,
+          "median_lt8": 2.36496913580247,
+          "median_mean": 34.3551192693125,
+          "median_peak": 255.0,
+          "name": "foyer_beam",
+          "ok": true,
+          "png": "build/qa/p0b_route/route2-clean/S24_foyer_beam.png",
+          "png_size": [
+            1920,
+            1080
+          ],
+          "staged": true,
+          "t_s": 179.615,
+          "target": [
+            18.5921478271484,
+            29.8716278076172,
+            -60.4098854064941
+          ]
+        }
+      ],
+      "id": "S24",
+      "label": "Foyer approach & sweeping security beams",
+      "mark_kind": "mark",
+      "official_end_s": 209.0,
+      "official_start_s": 202.0,
+      "png": "build/qa/p0b_route/route2-clean/S24_upper_foyer.png",
+      "reason": "",
+      "ref_keyframe": "KF27",
+      "source": "staged",
+      "stage_hook": "mission.tscn map=guildhall; live KF27 foyer poses: upper_foyer + yaw180 (p0b foyer slots) + foyer_beam at the authored C_107 beam card cue; player camera, camera_source=player",
+      "staged": true,
+      "status": "captured",
+      "t_s": 162.822,
+      "target": [
+        27.0,
+        29.6687507629395,
+        -60.0
+      ]
+    },
+    {
+      "camera_source": "player",
+      "class": "world",
+      "evidence": "",
+      "eye": [],
+      "frame_count_planned": 0,
+      "frame_errors": [],
+      "frame_no": -1,
+      "frames": [],
+      "id": "S25",
+      "label": "Beam trigger, purple ward, green arcane lock",
+      "mark_kind": "mark",
+      "official_end_s": 217.4,
+      "official_start_s": 209.0,
+      "png": "",
+      "reason": "Requires the player to walk through the foreground beam so the authored signal seals the ward and vine lock. The lockdown hooks exist (_spawn_foyer_lockdown, security_beam.beam_triggered), but firing them directly would be a faked played beat; deferred.",
+      "ref_keyframe": "KF28",
+      "source": "absent",
+      "stage_hook": "",
+      "staged": false,
+      "status": "deferred",
+      "t_s": -1.0,
+      "target": []
+    },
+    {
+      "camera_source": "player",
+      "class": "world",
+      "evidence": "",
+      "eye": [],
+      "frame_count_planned": 0,
+      "frame_errors": [],
+      "frame_no": -1,
+      "frames": [],
+      "id": "S26",
+      "label": "Crimson alarm spotlight & slate-stair ascent",
+      "mark_kind": "mark",
+      "official_end_s": 221.9,
+      "official_start_s": 217.4,
+      "png": "",
+      "reason": "Depends on S25 (breaking a barrier triggers the crimson alarm) and a stair traversal to the upper landing; no input driver.",
+      "ref_keyframe": "KF29",
+      "source": "absent",
+      "stage_hook": "",
+      "staged": false,
+      "status": "deferred",
+      "t_s": -1.0,
+      "target": []
+    },
+    {
+      "camera_source": "player",
+      "class": "ui",
+      "evidence": "hud.toggle_pause() over the loaded Guildhall mission; upper_foyer backdrop (player camera); audio tap PROCESS_MODE_ALWAYS; tree_paused=true",
+      "eye": [],
+      "frame_count_planned": 1,
+      "frame_errors": [],
+      "frame_no": 17,
+      "frames": [
+        {
+          "camera_source": "player",
+          "error": "",
+          "eye": [],
+          "frame_no": 17,
+          "frames_mean": [
+            17.5394323935537,
+            17.5394369229088,
+            17.5394347006523,
+            17.5394364599115,
+            17.539438682168
+          ],
+          "mark_kind": "mark",
+          "median_index": 3,
+          "median_lt8": 0.891975308641975,
+          "median_mean": 17.5394364599115,
+          "median_peak": 235.444001165628,
+          "name": "pause",
+          "ok": true,
+          "png": "build/qa/p0b_route/route2-clean/S27_pause.png",
+          "png_size": [
+            1920,
+            1080
+          ],
+          "staged": true,
+          "t_s": 194.437,
+          "target": []
+        }
+      ],
+      "id": "S27",
+      "label": "Pause menu",
+      "mark_kind": "mark",
+      "official_end_s": 225.64,
+      "official_start_s": 221.9,
+      "png": "build/qa/p0b_route/route2-clean/S27_pause.png",
+      "reason": "",
+      "ref_keyframe": "KF30",
+      "source": "staged",
+      "stage_hook": "hud.toggle_pause() over the loaded Guildhall mission; the audio tap is switched to PROCESS_MODE_ALWAYS before the pause so marks keep draining",
+      "staged": true,
+      "status": "captured",
+      "t_s": 194.437,
+      "target": []
+    }
+  ],
+  "counts": {
+    "beats": 27,
+    "captured": 13,
+    "deferred": 14,
+    "extras": 1,
+    "frame_errors": 0,
+    "frames": 17,
+    "partial": 0,
+    "plan_staged": 13,
+    "planned": 0
+  },
+  "dry_run": false,
+  "engine": {
+    "audio_driver": "PulseAudio",
+    "audio_mix_rate": 44100.0,
+    "cmdline": [
+      "--script",
+      "/home/john/Projects/TAT-2/build/qa/p0b_route.gd"
+    ],
+    "configured_rendering_driver": "vulkan",
+    "display_server": "X11",
+    "display_server_headless": false,
+    "godot": "4.7.2-stable (official)",
+    "godot_hex": "263938",
+    "video_adapter": "NVIDIA GeForce RTX 4070 Laptop GPU",
+    "video_api": "1.4.357",
+    "video_vendor": "NVIDIA"
+  },
+  "env": {
+    "DISPLAY": ":99",
+    "P0B_ROUTE_MANIFEST": "/home/john/Projects/TAT-2/docs/reports/logs/p0b-route/route2-clean/manifest.json",
+    "P0B_ROUTE_OUT": "/home/john/Projects/TAT-2/build/qa/p0b_route/route2-clean",
+    "TAT2_PARITY_ONLY": "1",
+    "XDG_SESSION_TYPE": "wayland"
+  },
+  "extras": [
+    {
+      "beat": "",
+      "camera_source": "player",
+      "eye": [
+        39.0,
+        28.8187503814697,
+        -28.9699993133545
+      ],
+      "frame_no": 16,
+      "id": "lounge_beam_close",
+      "note": "p0b beam_close pose; Lounge C_57 beam at (39,28.82,-28.97)->(42.4,28.9,-28.97). NOT S24/KF27.",
+      "png": "build/qa/p0b_route/route2-clean/extra_lounge_beam_close_pose.png",
+      "reason": "",
+      "ref_keyframe": null,
+      "status": "captured",
+      "subject": "Lounge C_57 beam",
+      "t_s": 187.181,
+      "target": [
+        48.9972343444824,
+        29.0539836883545,
+        -28.9699993133545
+      ]
+    }
+  ],
+  "finished_at_utc": "2026-11-27T15:34:53",
+  "git": {
+    "branch": "main",
+    "dirty": false,
+    "sha": "912a481d42611cb0de77f31d4e01e63029b68190",
+    "sha_short": "912a481d4261"
+  },
+  "gpu": {
+    "available": true,
+    "command": "nvidia-smi --query-gpu=name,driver_version,temperature.gpu,memory.used,utilization.gpu,clocks.current.graphics --format=csv,noheader,nounits",
+    "queried": true,
+    "query": "name,driver_version,temperature.gpu,memory.used,utilization.gpu,clocks.current.graphics",
+    "reason": "",
+    "rows": [
+      [
+        "NVIDIA GeForce RTX 4070 Laptop GPU",
+        "620.73.04",
+        "48.27",
+        "2030",
+        "2",
+        "1980"
+      ]
+    ],
+    "used_by_capture": true
+  },
+  "host": {
+    "cpu": "Intel(R) Core(TM) i9-14900HX",
+    "hostname": "AtomMan",
+    "nproc": 32,
+    "os": "Linux",
+    "os_version": "46 (KDE Plasma Desktop Edition Prerelease)"
+  },
+  "lens": {
+    "aspect": 1.77777777777778,
+    "fov_source": "shipped authored lens: UE 85 deg horizontal at 16:9 -> 54.54 deg vertical",
+    "fov_vertical_deg": 54.54,
+    "keep_aspect": "height",
+    "resolution": [
+      1920,
+      1080
+    ]
+  },
+  "level": {
+    "canonical_mission_id": "Mission.Guildhall.VaultHeist",
+    "den_contract_order": 1,
+    "difficulty": "Novice",
+    "free_play": true,
+    "free_play_mission_id": "Mission.Guildhall.LootTheRoom",
+    "free_play_substitute": true,
+    "guildhall_contract_order": 2,
+    "historical_mission_id": "Mission.Guildhall.LootTheRoom",
+    "mission_mode": "Solo",
+    "note": "The Guildhall stage is a STAGED SUBSTITUTE: free play Mission.Guildhall.LootTheRoom on contract 2 is used only to show the KF13 briefing letter over the live safe room. It is not the official mission selection. The 2026-11-24 port baseline ran Mission.Guildhall.LootTheRoom on Contract.Main.2 with free_play=false, and the canonical contract-2 Guildhall row is Mission.Guildhall.VaultHeist (docs/reports/contract-flow.md). The 120-row scorer must not treat this free-play combination as official.",
+    "official_free_play": false,
+    "route_contract": "CONSTABLES' GUILDHALL — Cleanout Heist (staged substitute, free play)",
+    "scope": "Den beats S03/S04/S06/S08/S05 (contract 1); prep/loading S09/S10; Guildhall beats S11/S12/S24/S27 (free play LootTheRoom on contract 2)"
+  },
+  "manifest_errors": [],
+  "mode": "staged",
+  "notes": [
+    "This is a STAGED/MIXED capture, not a played route. route_claim=none.",
+    "13 of the 27 official beats are PLANNED to be staged through live UI/API hooks; 14 are deferred with an explicit reason. No beat is claimed as reached in a played run.",
+    "Official S01..S27 times and keyframes are provenance anchors from KEYFRAME_INDEX.md §2 (mirrored in p0b_audio_stats.py); the run does not align to them.",
+    "Staged frames use the audio tap's generic mark() only; the S01..S27 beat-marker entry point is never called, so a staged frame cannot claim a played-beat alignment.",
+    "The Den stage is contract 1 (no free play). The Guildhall stage is a STAGED SUBSTITUTE: free play Mission.Guildhall.LootTheRoom on contract 2, used only to show the KF13 briefing letter over the live safe room. It is not the official mission selection (canonical contract-2 row: Mission.Guildhall.VaultHeist; historical 2026-11-24 baseline: LootTheRoom, free_play=false). The 120-row scorer must not treat it as official.",
+    "S05 enters the telescope view and never exits: the [F] EXIT path is L4-13 (player stranded on the Den roof).",
+    "S03 uses a synthetic camera (camera_source=synthetic); S12/S24 and the Lounge extra use the player camera (camera_source=player) at the authored eye/target.",
+    "S24 is the foyer only: upper_foyer + yaw180 + foyer_beam (KF27 cue aimed at the authored C_107 card). The p0b beam_close pose is the Lounge C_57 card and is recorded in extras[0], never as S24.",
+    "TAT2_PARITY_ONLY=1 is exported by the wrapper for every mode, so expansion content is excluded from the staged run.",
+    "Under a headless/Dummy audio driver the tap records enabled=false with a reason; that is not an audio measurement.",
+    "A later lane maps these 27 rows onto docs/reference/clip_1795033698901/COMPARISON_PORT_20261124.md; this runner does not score the 120 rows."
+  ],
+  "out_dir": "/home/john/Projects/TAT-2/build/qa/p0b_route/route2-clean",
+  "repo_root": "/home/john/Projects/TAT-2",
+  "route_claim": "none",
+  "run_id": "route2-clean",
+  "schema": "tat2.p0b_route/1",
+  "seed": {
+    "active_map_seed": 1176381077,
+    "official_clip_seed": 1025051536,
+    "requested": "derived"
+  },
+  "self_test": false,
+  "settings": {
+    "active_contract_order": 2,
+    "active_map_id": "guildhall",
+    "active_mission_id": "Mission.Guildhall.LootTheRoom",
+    "den_contract_order": 1,
+    "difficulty": 1,
+    "difficulty_label": "Novice",
+    "fov_vertical_deg": 54.54,
+    "free_play": true,
+    "free_play_mission_id": "Mission.Guildhall.LootTheRoom",
+    "free_play_substitute": true,
+    "graphics_quality": "0",
+    "guildhall_contract_order": 2,
+    "mission_mode": "Solo",
+    "note": "Staged state recorded for a later re-score; the runner does not drive gameplay input.",
+    "resolution": [
+      1920,
+      1080
+    ],
+    "thief_id": "spider"
+  },
+  "settle": {
+    "capture_frames": 5,
+    "frames": 60,
+    "selector": "median-mean"
+  },
+  "started_at_utc": "2026-11-27T15:31:32",
+  "status": "captured",
+  "store": {
+    "exists": true,
+    "load_failed": false,
+    "note": "Read-only: this runner never calls SaveSystem.write_save. source=owner_restore when a save file existed and loaded cleanly at boot, else fresh.",
+    "path": "/home/john/.local/share/godot/app_userdata/Thick As Thieves 2/tat2_save.json",
+    "profile": {
+      "completed_contracts": 0,
+      "currency": 5000,
+      "level": 1,
+      "unlocked_cosmetics": 5,
+      "unlocked_perks": 4,
+      "unlocked_tools": 5,
+      "xp": 0
+    },
+    "schema_version": 8,
+    "settings": {
+      "fov": 54.54,
+      "graphics_quality": "high",
+      "master_volume": 0.8
+    },
+    "sha256": "25a853f6c8529793d8db0abd0322cc5139b17005f090ef3b5d6b7e5163386da1",
+    "source": "owner_restore"
+  },
+  "video": {
+    "audio": {
+      "channels": 2,
+      "codec": "aac lc",
+      "sample_rate": 48000
+    },
+    "duration_s": 225.642333,
+    "frame_rate": {
+      "avg_fps": 29.672,
+      "nb_frames": 6696,
+      "r_frame_rate": "179/6 (29.833 fps)"
+    },
+    "keyframes": 30,
+    "native_resolution": [
+      3840,
+      2160
+    ],
+    "note": "Reference metadata only. The runner stages stills; nothing here is a played-route or video capture.",
+    "source_clip": "clip_1,795,033,698,901.mp4 (docs/reference/clip_1795033698901/KEYFRAME_INDEX.md §1)"
+  }
+}

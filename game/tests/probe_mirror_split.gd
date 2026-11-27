@@ -582,11 +582,12 @@ func _walk_mirror_nodes(host: Node3D) -> Dictionary:
 		var mi: MeshInstance3D = gi as MeshInstance3D
 		if mi == null:
 			continue
-		if gi.has_meta("gc_role") or gi.has_meta("gc_owner"):
-			# GC leaf/broken overlays are standalone MeshInstance3D nodes built
-			# by _build_gc_layers(), outside the draw-item census. Godot
-			# compensates a negative-determinant MeshInstance3D natively; count
-			# them so the exclusion is visible, never silent.
+		if not tagged and (gi.has_meta("gc_role") or gi.has_meta("gc_owner")):
+			# Mirrored GC overlays built by _build_gc_layers() are standalone
+			# MeshInstance3D nodes outside the draw-item census; Godot
+			# compensates them natively. A *tagged* bookcase glass pane also
+			# carries gc_owner/gc_static_leaf after the owner bind, so the
+			# exclusion must never swallow a tagged mirror node.
 			if mi.transform.basis.determinant() < 0.0:
 				out["gc_native_neg"] = int(out["gc_native_neg"]) + 1
 			continue

@@ -245,14 +245,15 @@ StateTree shadow ceiling; the authored-element collision floor.
   one global calibration offset; no per-room grade, no global 0.44 cut.
 - **Mirrors — P4.2 split implemented, headless-measured; GPU readback pending.**
   The 3,312 authored negative records are real (Guildhall contract-2 base set).
-  The draw census is **3,297 = 3,129 MultiMesh + 168 standalone** after the
-  pre-draw filters (271 records total; the per-filter negative split is **not
-  measured**, so the 15-record gap to 3,312 is not attributed). The old "3,215
-  in MultiMeshes" counted path-level multi-placements, not post-32 m-cell batch
-  membership. Negative instances are split into their own batch and drawn from
-  a baked local-X mesh variant (winding/normals/tangents fixed); **104**
-  variants / **31,099,116 B** uncompressed estimate and **312** instances on
-  the single-surface `CULL_FRONT` clone fast path, `unbaked=0`. `MIRROR_RECON`
+  The draw census is **3,297 = 3,119 MultiMesh + 178 standalone** after the
+  pre-draw filters and the merged GC per-instance glass split (271 filter
+  records total; the per-filter negative split is **not measured**, so the
+  15-record gap to 3,312 is not attributed). The old "3,215 in MultiMeshes"
+  counted path-level multi-placements, not post-32 m-cell batch membership.
+  Negative instances are split into their own batch and drawn from a baked
+  local-X mesh variant (winding/normals/tangents fixed); **103** variants /
+  **31,097,388 B** uncompressed estimate and **312** instances on the
+  single-surface `CULL_FRONT` clone fast path, `unbaked=0`. `MIRROR_RECON`
   reconciles every load, and `source_counts` is apportioned so
   `PERF_CENSUS.source_sublevels` stays at the **64,660** baseline (`make test`
   pins it exactly). Standalone `MeshInstance3D` mirrors rely on Godot's native

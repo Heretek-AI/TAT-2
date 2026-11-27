@@ -61,21 +61,22 @@ visual claim** and does not re-score a row.
   authored negative-determinant mesh records). After the loader's pre-draw
   filters (271 records in the 64,956-record mission load: `duplicate=130`,
   `name_skipped=30`, `wardbox=41`, `moonshape=70`) the draw census is
-  **3,297 = 3,129 MultiMesh + 168 standalone**; the old "3,215 in MultiMeshes"
-  is **not** reproduced — it counted path-level multi-placements, not
-  post-32 m-cell batch membership. The 15-record gap to 3,312 is **not
-  attributed** per filter; the per-filter negative split is not measured.
-  Negative instances now get their own batch: **104** baked local-X mesh
-  variants (**31,099,116 B** uncompressed estimate) and **312** instances on
-  the cloned `CULL_FRONT` fast path; `unbaked=0`. `MIRROR_RECON` reconciles
-  `multimesh + single == bases` on every load, and the split apportions
-  `source_counts` so `PERF_CENSUS.source_sublevels` stays at the **64,660**
-  baseline (`make test` pins it). Standalone `MeshInstance3D` mirrors keep
-  Godot's native compensation by default; `TAT2_MIRROR_SINGLE=baked` is the
-  measured fallback (223 variants / 61,972,836 B) if the synthetic readback
-  says the engine does not compensate. The GPU probe
-  (`build/qa/mirror_probe.sh --run`) has **not** been run, so the visual claim
-  is still pending. Report:
+  **3,297 = 3,119 MultiMesh + 178 standalone** (the six-lane integration's GC
+  bookcase glass is per-instance, so 10 negative panes moved from MultiMesh to
+  standalone); the old "3,215 in MultiMeshes" is **not** reproduced — it
+  counted path-level multi-placements, not post-32 m-cell batch membership.
+  The 15-record gap to 3,312 is **not attributed** per filter; the per-filter
+  negative split is not measured. Negative instances now get their own batch:
+  **103** baked local-X mesh variants (**31,097,388 B** uncompressed estimate)
+  and **312** instances on the cloned `CULL_FRONT` fast path; `unbaked=0`.
+  `MIRROR_RECON` reconciles `multimesh + single == bases` on every load, and
+  the split apportions `source_counts` so `PERF_CENSUS.source_sublevels` stays
+  at the **64,660** baseline (`make test` pins it). Standalone
+  `MeshInstance3D` mirrors keep Godot's native compensation by default;
+  `TAT2_MIRROR_SINGLE=baked` is the measured fallback (223 variants /
+  61,972,836 B) if the synthetic readback says the engine does not compensate.
+  The GPU probe (`build/qa/mirror_probe.sh --run`) has **not** been run, so the
+  visual claim is still pending. Report:
   [`p4-mirrors-20261127.md`](reports/p4-mirrors-20261127.md).
 - **Landscape — data assertion PASS; pixel A/B pending (P4.4).** The shipped
   `vis > 0.5` discard stays (not flipped). `probe_landscape_mask` (7 checks)

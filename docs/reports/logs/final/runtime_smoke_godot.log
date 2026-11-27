@@ -31,25 +31,154 @@ FootstepMask: baked one-time alpha mask (128x128, source_alpha=true) from res://
 WARNING: [level_loader] level Niagara: 5 placements across 3 systems in 4 chunk nodes (0 sprite-masked, 0 parameter sets, 0 activation-skipped; decode root=res://../extracted/json files=0)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _spawn_level_niagara (res://src/core/level_loader.gd:6740)
-         [1] _store_level_extras (res://src/core/level_loader.gd:6512)
-         [2] load_sublevels (res://src/core/level_loader.gd:6989)
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:7345)
+         [1] _store_level_extras (res://src/core/level_loader.gd:7117)
+         [2] load_sublevels (res://src/core/level_loader.gd:7595)
          [3] _build_3d_backdrop (res://src/ui/main_menu.gd:178)
          [4] _ready (res://src/ui/main_menu.gd:86)
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(-252.00,-0.10,-252.00) wm=Weightmap_18.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(-189.00,-0.10,-252.00) wm=Weightmap_18.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(-126.00,-0.10,-189.00) wm=Weightmap_20.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(-63.00,-0.10,-189.00) wm=Weightmap_20.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(0.00,-0.10,-189.00) wm=Weightmap_21.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(63.00,-0.10,-189.00) wm=Weightmap_21.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(126.00,-0.10,-189.00) wm=Weightmap_21.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(189.00,-0.10,-189.00) wm=Weightmap_21.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(-252.00,-0.10,-126.00) wm=Weightmap_22.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(-189.00,-0.10,-126.00) wm=Weightmap_22.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(-126.00,-0.10,-126.00) wm=Weightmap_22.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(-63.00,-0.10,-126.00) wm=Weightmap_22.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(-126.00,-0.10,-252.00) wm=Weightmap_18.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(0.00,-0.10,-126.00) wm=Weightmap_23.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(63.00,-0.10,-126.00) wm=Weightmap_23.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(126.00,-0.10,-126.00) wm=Weightmap_23.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(189.00,-0.10,-126.00) wm=Weightmap_23.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(-252.00,-0.10,-63.00) wm=Weightmap_24.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(-189.00,-0.10,-63.00) wm=Weightmap_24.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(-126.00,-0.10,-63.00) wm=Weightmap_24.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(-63.00,-0.10,-63.00) wm=Weightmap_1.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(0.00,-0.10,-63.00) wm=Weightmap_25.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(63.00,-0.10,-63.00) wm=Weightmap_25.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(-63.00,-0.10,-252.00) wm=Weightmap_18.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(126.00,-0.10,-63.00) wm=Weightmap_25.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(189.00,-0.10,-63.00) wm=Weightmap_25.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(-252.00,-0.10,0.00) wm=Weightmap_26.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(-189.00,-0.10,0.00) wm=Weightmap_26.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(-126.00,-0.10,0.00) wm=Weightmap_26.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(-63.00,-0.10,0.00) wm=Weightmap_35.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(0.00,-0.10,0.00) wm=Weightmap_37.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(63.00,-0.10,0.00) wm=Weightmap_27.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(126.00,-0.10,0.00) wm=Weightmap_27.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(189.00,-0.10,0.00) wm=Weightmap_27.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(0.00,-0.10,-252.00) wm=Weightmap_19.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(-252.00,-0.10,63.00) wm=Weightmap_28.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(-189.00,-0.10,63.00) wm=Weightmap_28.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(-126.00,-0.10,63.00) wm=Weightmap_28.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(-63.00,-0.10,63.00) wm=Weightmap_28.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(0.00,-0.10,63.00) wm=Weightmap_29.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(63.00,-0.10,63.00) wm=Weightmap_29.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(126.00,-0.10,63.00) wm=Weightmap_29.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(189.00,-0.10,63.00) wm=Weightmap_29.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(-252.00,-0.10,126.00) wm=Weightmap_30.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(-189.00,-0.10,126.00) wm=Weightmap_30.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(63.00,-0.10,-252.00) wm=Weightmap_19.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(-126.00,-0.10,126.00) wm=Weightmap_30.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(-63.00,-0.10,126.00) wm=Weightmap_30.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(0.00,-0.10,126.00) wm=Weightmap_31.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(63.00,-0.10,126.00) wm=Weightmap_31.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(126.00,-0.10,126.00) wm=Weightmap_31.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(189.00,-0.10,126.00) wm=Weightmap_31.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(-252.00,-0.10,189.00) wm=Weightmap_32.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(-189.00,-0.10,189.00) wm=Weightmap_32.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(-126.00,-0.10,189.00) wm=Weightmap_32.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(-63.00,-0.10,189.00) wm=Weightmap_32.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(126.00,-0.10,-252.00) wm=Weightmap_19.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(0.00,-0.10,189.00) wm=Weightmap_33.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(63.00,-0.10,189.00) wm=Weightmap_33.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(126.00,-0.10,189.00) wm=Weightmap_33.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(189.00,-0.10,189.00) wm=Weightmap_33.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(189.00,-0.10,-252.00) wm=Weightmap_19.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(-252.00,-0.10,-189.00) wm=Weightmap_20.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(-189.00,-0.10,-189.00) wm=Weightmap_20.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
 ROUGHNESS_BAKE_MODE on=1 resolution=full cache=process
 WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Default_White' has a colour but no albedo map (albedo_color=(1.0, 1.0, 1.0, 1.0), flat=1)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] get_material_for_ue (res://src/core/level_loader.gd:1801)
-         [1] _bind_glb_materials (res://src/core/level_loader.gd:2183)
-         [2] _get_mesh_and_shape (res://src/core/level_loader.gd:1976)
-         [3] _build_one_draw_item (res://src/core/level_loader.gd:4702)
-         [4] _build_draw_items (res://src/core/level_loader.gd:5381)
-         [5] load_sublevels (res://src/core/level_loader.gd:6996)
+         [0] get_material_for_ue (res://src/core/level_loader.gd:1875)
+         [1] _bind_glb_materials (res://src/core/level_loader.gd:2257)
+         [2] _get_mesh_and_shape (res://src/core/level_loader.gd:2050)
+         [3] _build_one_draw_item (res://src/core/level_loader.gd:5230)
+         [4] _build_draw_items (res://src/core/level_loader.gd:5941)
+         [5] load_sublevels (res://src/core/level_loader.gd:7602)
          [6] _build_3d_backdrop (res://src/ui/main_menu.gd:178)
          [7] _ready (res://src/ui/main_menu.gd:86)
-ROUGHNESS_BAKE count=31 pixels=22806528 ms=1666 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
-MESH_RECON authored=3116 applied=3112 duplicate=0 name_skipped=3 wardbox=0 moonshape=1 clamp=68 clamp_worst=4.67x mirrored=444 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0
+MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_RailingA_1m mode=cull_front pos=23 neg=30 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_RailingA_1m mode=cull_front pos=16 neg=22 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_RailingA_1m mode=cull_front pos=22 neg=24 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_RailingA_1m mode=cull_front pos=51 neg=34 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_RailingA_1m mode=cull_front pos=36 neg=42 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_RailingA_1m mode=cull_front pos=19 neg=30 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_RailingA_1m mode=cull_front pos=16 neg=8 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_RailingA_1m mode=cull_front pos=11 neg=20 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Museum/Ceilings/SM_ScaffoldMuseumA_5m mode=cull_front pos=4 neg=8 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Museum/Ceilings/SM_ScaffoldMuseumA_5m mode=cull_front pos=5 neg=4 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Museum/Ceilings/SM_ScaffoldMuseumA_5m mode=cull_front pos=7 neg=8 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Museum/Ceilings/SM_ScaffoldMuseumA_5m mode=cull_front pos=6 neg=4 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Museum/Ceilings/SM_ScaffoldMuseumA_5m mode=cull_front pos=8 neg=4 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Museum/Ceilings/SM_ScaffoldMuseumA_5m mode=cull_front pos=4 neg=6 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Museum/Ceilings/SM_ScaffoldMuseumA_5m mode=cull_front pos=2 neg=2 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Museum/Ceilings/SM_ScaffoldMuseumA_5m mode=cull_front pos=3 neg=4 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_Pillar_5m_NoCover mode=native pos=16 neg=1 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_Pillar_5m_NoCover mode=native pos=25 neg=1 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_Pillar_5m_NoCover mode=native pos=16 neg=1 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_Pillar_5m_NoCover mode=native pos=7 neg=1 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_Pillar_5m_NoCover mode=native pos=12 neg=1 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Architecture/BeautifulCorner/SM_CityWall_3x6 mode=cull_front pos=10 neg=10 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Architecture/BeautifulCorner/SM_CityWall_3x6 mode=cull_front pos=6 neg=6 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Architecture/BeautifulCorner/SM_CityWall_3x6 mode=cull_front pos=30 neg=3 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Architecture/BeautifulCorner/SM_CityWall_3x6 mode=cull_front pos=0 neg=6 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Common/Doors/SM_DoorLrg_SquareA mode=cull_front pos=1 neg=2 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Common/Doors/SM_DoorLrg_SquareA mode=cull_front pos=3 neg=4 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Common/Doors/SM_DoorLrg_SquareA mode=cull_front pos=0 neg=2 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Common/Doors/SM_DoorLrg_SquareA mode=cull_front pos=2 neg=2 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Common/Doors/SM_DoorLrg_SquareA mode=cull_front pos=1 neg=4 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Common/Doors/SM_DoorLrg_SquareA mode=cull_front pos=2 neg=2 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Common/Doors/SM_DoorLrg_SquareA mode=cull_front pos=2 neg=2 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Common/Doors/SM_DoorLrg_SquareA mode=cull_front pos=2 neg=2 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Architecture/BeautifulCorner/SM_CityWall_1x6 mode=cull_front pos=18 neg=2 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Architecture/BeautifulCorner/SM_CityWall_1x6 mode=cull_front pos=14 neg=3 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Architecture/BeautifulCorner/SM_CityWall_1x6 mode=cull_front pos=3 neg=3 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Architecture/BeautifulCorner/SM_CityWall_1x6 mode=native pos=2 neg=1 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Architecture/BeautifulCorner/SM_CityWall_1x6 mode=cull_front pos=0 neg=3 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Architecture/Walls/5m/SM_Wall3x5_DoorB mode=native pos=1 neg=1 surfaces=3 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Architecture/Walls/5m/SM_Wall3x5_DoorB mode=native pos=0 neg=1 surfaces=3 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Architecture/Walls/5m/SM_Wall3x5_DoorB mode=native pos=0 neg=1 surfaces=3 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Architecture/Walls/5m/SM_Wall3x5_DoorB mode=baked pos=1 neg=2 surfaces=3 bytes=36840
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Architecture/Walls/5m/SM_Wall3x5_DoorB mode=native pos=1 neg=1 surfaces=3 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Architecture/Walls/5m/SM_Wall3x5_DoorB mode=baked pos=1 neg=2 surfaces=3 bytes=36840
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Architecture/Walls/5m/SM_Wall3x5_DoorB mode=native pos=1 neg=1 surfaces=3 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Architecture/Walls/5m/SM_Wall3x5_DoorB mode=native pos=2 neg=1 surfaces=3 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Streets/Sidewalks/SM_SidewalkCityStones_6m mode=native pos=16 neg=1 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Architecture/BeautifulCorner/SM_CityWindowWall mode=cull_front pos=0 neg=6 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Architecture/BeautifulCorner/SM_CityWindowWall mode=cull_front pos=0 neg=6 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Architecture/BeautifulCorner/SM_CityWindow mode=baked pos=8 neg=2 surfaces=3 bytes=331584
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Architecture/BeautifulCorner/SM_CityWindow mode=baked pos=0 neg=6 surfaces=3 bytes=331584
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Architecture/BeautifulCorner/SM_CityWindow mode=baked pos=0 neg=6 surfaces=3 bytes=331584
+MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_RailingA_Corner mode=cull_front pos=4 neg=2 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_RailingA_Corner mode=cull_front pos=3 neg=2 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_RailingA_Corner mode=cull_front pos=4 neg=2 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_RailingA_Corner mode=cull_front pos=3 neg=4 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_RailingA_Corner mode=cull_front pos=4 neg=2 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_RailingA_Corner mode=cull_front pos=0 neg=4 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_RailingA_Corner mode=cull_front pos=1 neg=2 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_RailingA_Corner mode=cull_front pos=2 neg=2 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Gameplay/ElectricPowerSource/SM_PowerSupplyBodyB mode=native pos=0 neg=1 surfaces=3 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Gameplay/ElectricPowerSource/SM_PowerSupplyBodyB mode=baked pos=0 neg=3 surfaces=3 bytes=180732
+MIRROR_SPLIT mp=/Game/Art/Gameplay/ElectricPowerSource/SM_PowerSupplyBodyB mode=native pos=0 neg=1 surfaces=3 bytes=0
+MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_RoofShedB_EndL mode=native pos=1 neg=1 surfaces=2 bytes=0
+ROUGHNESS_BAKE count=31 pixels=22806528 ms=1643 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
+MESH_RECON authored=3116 applied=3112 duplicate=0 name_skipped=3 wardbox=0 moonshape=1 clamp=68 clamp_worst=4.67x mirrored=444 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0 mirrored_bases=444 mirrored_multimesh=418 mirrored_single=26 mirrored_splits=92 mirrored_cull_front=361 mirrored_cull_disabled=0 mirrored_mesh_bytes=697560 mirrored_mesh_count=8 mirrored_unbaked=0
+MIRROR_RECON bases=444 multimesh=418 single=26 split=92 cull_front=361 cull_disabled=0 baked=8 baked_bytes=697560 unbaked=0 suppressed=28 ok=true
 TAT-2 QA autostart contract=2 map=guildhall mission=Mission.Guildhall.LootTheRoom free_play=true
 TAT-2 HUD build: id=1 root_children=29 hp_frame=1 hp_fill=1 objectives=1
 WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'gloomy'
@@ -65,41 +194,125 @@ TAT-2 gate lights: total=160 (generic=159 rect=1) budget=159 forced=7 hero_shado
 WARNING: [level_loader] level Niagara: 452 placements across 8 systems in 66 chunk nodes (2 sprite-masked, 376 parameter sets, 1348 activation-skipped; decode root=res://../extracted/json files=46)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _spawn_level_niagara (res://src/core/level_loader.gd:6740)
-         [1] _store_level_extras (res://src/core/level_loader.gd:6512)
-         [2] load_sublevels_async (res://src/core/level_loader.gd:7081)
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:7345)
+         [1] _store_level_extras (res://src/core/level_loader.gd:7117)
+         [2] load_sublevels_async (res://src/core/level_loader.gd:7688)
+LANDSCAPE_MASK src=Guildhall/Guildhall_Landscape comp=(19.10,27.00,-88.60) wm=Weightmap_6.png mode=discard mask=present tex=0 ch=1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Guildhall/Guildhall_Landscape comp=(-43.90,27.00,-25.60) wm=Weightmap_1.png mode=discard mask=present tex=0 ch=1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Guildhall/Guildhall_Landscape comp=(19.10,27.00,-25.60) wm=Weightmap_4.png mode=discard mask=present tex=0 ch=1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Guildhall/Guildhall_Landscape comp=(-43.90,27.00,-88.60) wm=Weightmap_12.png mode=discard mask=present tex=0 ch=1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Guildhall/Guildhall_Landscape comp=(-146.90,10.70,31.90) wm=Weightmap_10.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Guildhall/Guildhall_Landscape comp=(-146.90,10.70,-31.10) wm=Weightmap_17.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Guildhall/Guildhall_Landscape comp=(-83.90,10.70,-31.10) wm=Weightmap_7.png mode=discard mask=present tex=0 ch=3 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Guildhall/Guildhall_Landscape comp=(-20.90,10.70,-31.10) wm=Weightmap_22.png mode=discard mask=present tex=0 ch=3 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Guildhall/Guildhall_Landscape comp=(42.10,10.70,-31.10) wm=Weightmap_1.png mode=discard mask=present tex=0 ch=2 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Guildhall/Guildhall_Landscape comp=(-83.90,10.70,31.90) wm=Weightmap_13.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Guildhall/Guildhall_Landscape comp=(-20.90,10.70,31.90) wm=Weightmap_16.png mode=discard mask=present tex=1 ch=0 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Guildhall/Guildhall_Landscape comp=(42.10,10.70,31.90) wm=Weightmap_98.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Guildhall/Guildhall_Landscape comp=(105.10,10.70,-31.10) wm=Weightmap_20.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Guildhall/Guildhall_Landscape comp=(-20.90,10.70,94.90) wm=Weightmap_40.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Guildhall/Guildhall_Landscape comp=(105.10,10.70,31.90) wm=Weightmap_16.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Guildhall/Guildhall_Landscape comp=(-83.90,10.70,-94.10) wm=Weightmap_12.png mode=discard mask=present tex=0 ch=1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Guildhall/Guildhall_Landscape comp=(-20.90,10.70,-94.10) wm=Weightmap_58.png mode=discard mask=present tex=0 ch=1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Guildhall/Guildhall_Landscape comp=(42.10,10.70,-94.10) wm=Weightmap_18.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Common/Floors/SM_Floor_2x2A_CornerA mode=baked pos=1 neg=4 surfaces=2 bytes=9744
+MIRROR_SPLIT mp=/Game/Art/Environment/Common/Floors/SM_Floor_2x2A_CornerA mode=baked pos=3 neg=12 surfaces=2 bytes=9744
+MIRROR_SPLIT mp=/Game/Art/Environment/Common/Floors/SM_Floor_2x2A_CornerA mode=baked pos=9 neg=86 surfaces=2 bytes=9744
+MIRROR_SPLIT mp=/Game/Art/Environment/Common/Floors/SM_Floor_2x2A_CornerA mode=baked pos=23 neg=12 surfaces=2 bytes=9744
+MIRROR_SPLIT mp=/Game/Art/Environment/Prison/SM_Prison_WallA_2x6 mode=cull_front pos=42 neg=42 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Prison/SM_Prison_WallA_2x6 mode=cull_front pos=60 neg=60 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Prison/SM_Prison_WallA_2x6 mode=cull_front pos=4 neg=4 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Prison/SM_Prison_WallA_2x6 mode=cull_front pos=2 neg=2 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Prison/SM_Prison_WallA_2x6 mode=cull_front pos=3 neg=3 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Prison/SM_Prison_WallA_2x6 mode=cull_front pos=58 neg=58 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Props/Pipes/SM_Pipe_Double_Short mode=baked pos=30 neg=3 surfaces=3 bytes=269520
+MIRROR_SPLIT mp=/Game/Art/Environment/Props/Pipes/SM_Pipe_Double_Short mode=native pos=5 neg=1 surfaces=3 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Props/Pipes/SM_Pipe_Double_Short mode=native pos=3 neg=1 surfaces=3 bytes=0
+MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_Floor_4x4 mode=baked pos=7 neg=3 surfaces=2 bytes=3024
+MIRROR_SPLIT mp=/Game/Art/Environment/Civic/Interior/SM_Civic_WallA_Int_6x8 mode=native pos=11 neg=1 surfaces=2 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Civic/Interior/SM_Civic_WallA_Int_6x8 mode=baked pos=11 neg=6 surfaces=2 bytes=46392
+MIRROR_SPLIT mp=/Game/Art/Environment/Civic/Interior/SM_Civic_WallA_Int_6x8 mode=native pos=20 neg=1 surfaces=2 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Prison/SM_Prison_WallA_4x6 mode=cull_front pos=10 neg=14 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Prison/SM_Prison_WallA_4x6 mode=cull_front pos=4 neg=3 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Prison/SM_Prison_WallA_4x6 mode=cull_front pos=4 neg=2 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Prison/SM_Prison_WallA_4x6 mode=cull_front pos=4 neg=5 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Prison/SM_Prison_WallA_4x6 mode=cull_front pos=1 neg=4 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Prison/SM_Prison_WallA_4x6 mode=native pos=0 neg=1 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Civic/Exterior/SM_Civic_WallB_Ext_4x8 mode=native pos=0 neg=1 surfaces=2 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Civic/Exterior/SM_Civic_WallB_Ext_4x8 mode=native pos=0 neg=1 surfaces=2 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Civic/Exterior/SM_Civic_WallB_Ext_4x8 mode=baked pos=35 neg=6 surfaces=2 bytes=26304
+MIRROR_SPLIT mp=/Game/Art/Environment/Civic/Exterior/SM_Civic_WallB_Ext_4x8 mode=baked pos=0 neg=23 surfaces=2 bytes=26304
+MIRROR_SPLIT mp=/Game/Art/Environment/Props/Furniture/Seating/SM_ChairUpperA mode=cull_front pos=8 neg=8 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Prison/SM_Prison_WallA_PillarWayA mode=baked pos=0 neg=9 surfaces=2 bytes=1125348
+MIRROR_SPLIT mp=/Game/Art/Environment/Prison/SM_Prison_WallA_6x6 mode=cull_front pos=18 neg=4 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Prison/SM_Prison_WallA_6x6 mode=cull_front pos=5 neg=11 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Prison/SM_Prison_WallA_6x6 mode=cull_front pos=3 neg=4 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Prison/SM_Prison_WallA_6x6 mode=cull_front pos=12 neg=3 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Prison/SM_Prison_WallA_6x6 mode=cull_front pos=1 neg=5 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Props/Furniture/Tables/SM_TableWallUpperA mode=native pos=4 neg=1 surfaces=2 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Civic/Interior/SM_Civic_CornerD_Wall_Int_2x8 mode=native pos=2 neg=1 surfaces=2 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Civic/Interior/SM_Civic_CornerD_Wall_Int_2x8 mode=baked pos=1 neg=2 surfaces=2 bytes=50712
+MIRROR_SPLIT mp=/Game/Art/Environment/Civic/Interior/SM_Civic_CornerD_Wall_Int_2x8 mode=baked pos=7 neg=2 surfaces=2 bytes=50712
+MIRROR_SPLIT mp=/Game/Art/Environment/Civic/Interior/SM_Civic_CornerD_Wall_Int_2x8 mode=native pos=2 neg=1 surfaces=2 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Manor/Walls/SM_Manor_Int_Trim_x4 mode=cull_front pos=1 neg=3 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Manor/SM_Manor_Stairs_Railing_x1 mode=baked pos=6 neg=8 surfaces=2 bytes=179388
+MIRROR_SPLIT mp=/Game/Art/Environment/Manor/SM_Manor_Stairs_Railing_x1 mode=baked pos=1 neg=2 surfaces=2 bytes=179388
+MIRROR_SPLIT mp=/Game/Art/Environment/Prison/SM_Prison_WallA_2x6 mode=cull_front pos=9 neg=3 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Prison/SM_Prison_WallA_2x6 mode=cull_front pos=2 neg=4 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Prison/SM_Prison_WallA_2x6 mode=native pos=3 neg=1 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Prison/SM_Prison_WallA_2x6 mode=cull_front pos=5 neg=4 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Prison/SM_Prison_WallA_2x6 mode=native pos=1 neg=1 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Civic/Exterior/SM_Civic_TrimWallWide_Ext_4x1 mode=cull_front pos=2 neg=5 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Props/Statues/StatueBusts/SM_StatueBustHumanA mode=native pos=1 neg=1 surfaces=2 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Civic/Exterior/SM_Civic_CornerB_Wall_Ext_2x8 mode=baked pos=0 neg=2 surfaces=2 bytes=28944
+MIRROR_SPLIT mp=/Game/Art/Environment/Civic/Exterior/SM_Civic_CornerB_Wall_Ext_2x8 mode=baked pos=2 neg=2 surfaces=2 bytes=28944
+MIRROR_SPLIT mp=/Game/Art/Environment/Civic/Exterior/SM_Civic_CornerB_Wall_Ext_2x8 mode=baked pos=0 neg=2 surfaces=2 bytes=28944
+MIRROR_SPLIT mp=/Game/Art/Environment/Civic/Exterior/SM_Civic_CornerB_Wall_Ext_2x8 mode=native pos=0 neg=1 surfaces=2 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Civic/Interior/SM_Civic_Arch_Int_4x8 mode=baked pos=6 neg=3 surfaces=3 bytes=144372
+MIRROR_SPLIT mp=/Game/Art/Environment/Civic/Exterior/SM_Civic_Doorway_Frame mode=cull_front pos=2 neg=5 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Civic/Exterior/SM_Civic_Doorway_Frame mode=native pos=0 neg=1 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Manor/SM_Manor_Stairs_RailingB_x3 mode=baked pos=2 neg=3 surfaces=2 bytes=100656
+MIRROR_SPLIT mp=/Game/Art/Environment/Prison/SM_Prison_WallA_CornerA mode=cull_front pos=5 neg=5 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Prison/SM_Prison_WallA_CornerA mode=native pos=2 neg=1 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Prison/SM_Prison_WallA_CornerA mode=cull_front pos=4 neg=3 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Civic/Exterior/SM_Civic_WallB_Ext_4x8 mode=baked pos=0 neg=2 surfaces=2 bytes=26304
+MIRROR_SPLIT mp=/Game/Art/Environment/Civic/Exterior/SM_Civic_WallB_Ext_4x8 mode=baked pos=0 neg=21 surfaces=2 bytes=26304
+MIRROR_SPLIT mp=/Game/Art/Environment/Civic/Exterior/SM_Civic_WallB_Ext_4x8 mode=baked pos=3 neg=2 surfaces=2 bytes=26304
+MIRROR_SPLIT mp=/Game/Art/Environment/Civic/Interior/SM_Civic_Arch_Int_6x8 mode=baked pos=2 neg=3 surfaces=3 bytes=155832
 WARNING: [level_loader] material flat white: '/Engine/BasicShapes/BasicShapeMaterial' has a colour but no albedo map (albedo_color=(0.9547, 0.9547, 0.9547, 1.0), flat=3)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] get_material_for_ue (res://src/core/level_loader.gd:1801)
-         [1] _get_overridden_mesh (res://src/core/level_loader.gd:2426)
-         [2] _build_one_draw_item (res://src/core/level_loader.gd:4748)
-         [3] load_sublevels_async (res://src/core/level_loader.gd:7106)
+         [0] get_material_for_ue (res://src/core/level_loader.gd:1875)
+         [1] _get_overridden_mesh (res://src/core/level_loader.gd:2500)
+         [2] _build_one_draw_item (res://src/core/level_loader.gd:5276)
+         [3] load_sublevels_async (res://src/core/level_loader.gd:7713)
 WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Default_White' has a colour but no albedo map (albedo_color=(1.0, 1.0, 1.0, 1.0), flat=6)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] get_material_for_ue (res://src/core/level_loader.gd:1801)
-         [1] _bind_glb_materials (res://src/core/level_loader.gd:2183)
-         [2] _get_mesh_and_shape (res://src/core/level_loader.gd:1976)
-         [3] _build_one_draw_item (res://src/core/level_loader.gd:4702)
-         [4] load_sublevels_async (res://src/core/level_loader.gd:7106)
+         [0] get_material_for_ue (res://src/core/level_loader.gd:1875)
+         [1] _bind_glb_materials (res://src/core/level_loader.gd:2257)
+         [2] _get_mesh_and_shape (res://src/core/level_loader.gd:2050)
+         [3] _build_one_draw_item (res://src/core/level_loader.gd:5230)
+         [4] load_sublevels_async (res://src/core/level_loader.gd:7713)
 COL_PLANAR /Game/Art/Effects/WardZones/SM_SlowWardZone_Quad instances=82 skipped=1
-AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=375
-ROUGHNESS_BAKE count=87 pixels=74973184 ms=5982 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=368
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=5690 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
 BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
-MESH_RECON authored=64953 applied=64682 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=206 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0
+MESH_RECON authored=64953 applied=64682 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=206 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0 mirrored_bases=3297 mirrored_multimesh=3119 mirrored_single=178 mirrored_splits=464 mirrored_cull_front=312 mirrored_cull_disabled=0 mirrored_mesh_bytes=31097388 mirrored_mesh_count=103 mirrored_unbaked=0
+MIRROR_RECON bases=3297 multimesh=3119 single=178 split=464 cull_front=312 cull_disabled=0 baked=103 baked_bytes=31097388 unbaked=0 suppressed=400 ok=true
 MATERIAL_EMISSIVE invented_white=1 names=/Game/Art/Environment/Lights/Candles/MI_FlameCandleOrangeB
-PERF_CENSUS meshes=6425 instances=65129 chunk_nodes=6337 plain=2773 multimesh=3652 surface_draws=11451 lights=170 shadow_lights=7 occluders=768 collision_bodies=243 collision_shapes=31049 periph_nodes=3218 periph_instances=13446 periph_surface_draws=6186 periph_plain=1548 periph_multimesh=1670 periph_range=0 merge_mode=off merge_candidates=0 merge_nodes=0 merge_surfaces_before=0 merge_surfaces_after=0 light_budget=160 hero_shadows=6 source_sublevels={ "Guildhall_Landscape": 677, "Building_Guildhall_POI": 9847, "Guildhall_Geometry": 567, "Guildhall_Vault_CeremonialChambers": 908, "Guildhall_PeripheryA": 12378, "Building_Guildhall_POI_3rdFloor": 3624, "Guildhall_Gameplay": 2690, "Guildhall_P": 80, "Guildhall_LightingNoGameplay": 164, "Guildhall_Loot": 175, "Guildhall_SkyboxGeo": 33547 }
+PERF_CENSUS meshes=6709 instances=65129 chunk_nodes=6621 plain=2923 multimesh=3786 surface_draws=12090 lights=170 shadow_lights=7 occluders=768 collision_bodies=243 collision_shapes=31049 periph_nodes=3350 periph_instances=13446 periph_surface_draws=6524 periph_plain=1631 periph_multimesh=1719 periph_range=0 merge_mode=off merge_candidates=0 merge_nodes=0 merge_surfaces_before=0 merge_surfaces_after=0 light_budget=160 hero_shadows=6 source_sublevels={ "Guildhall_Landscape": 677, "Building_Guildhall_POI": 9847, "Guildhall_Geometry": 567, "Guildhall_Vault_CeremonialChambers": 908, "Guildhall_PeripheryA": 12378, "Building_Guildhall_POI_3rdFloor": 3624, "Guildhall_Gameplay": 2690, "Guildhall_P": 80, "Guildhall_LightingNoGameplay": 164, "Guildhall_Loot": 175, "Guildhall_SkyboxGeo": 33547 }
 TAT-2 Loaded guildhall: meshes=64682 lights=160
-TAT-2 KF16 car lenses: node=@MeshInstance3D@38113 dist=0.0 glass_surface=1 emission=1.0,0.6186,0.2552 energy=2.0
+TAT-2 KF16 car lenses: node=@MeshInstance3D@38428 dist=0.0 glass_surface=1 emission=1.0,0.6186,0.2552 energy=2.0
 TAT-2 KF16 street car: root=(19.0, 18.5304, 66.3382) headlights=2 lens=true prompt=INTERACT
 TAT-2 KF17 clocktower: placed GuildhallSkylineClocktower mat=/Game/Art/Environment/Skybox/Buildings/ML/MI_DistantBuidingA
-TAT-2 KF16 sign letters: node=@MeshInstance3D@38489 surface=1 emission=(1.0, 0.62, 0.2, 1.0) energy=0.10000000149012 albedo=(1.0, 0.6848, 0.2726, 1.0)
+TAT-2 KF16 sign letters: node=@MeshInstance3D@38804 surface=1 emission=(1.0, 0.62, 0.2, 1.0) energy=0.10000000149012 albedo=(1.0, 0.6848, 0.2726, 1.0)
 P1_FOYER_DRESSING parts=bulbs,node,plaques,plate bulb_items=11 cyan_node_items=0 cyan_node_created=1 plaque_labels=2 floor_plate=1 floor_plate_approx=1
 TAT-2 KF23 Macleod sign: nodes=3 emission=(1.0, 0.361, 0.078, 1.0) energy=4.0 source=/Game/Art/Effects/HotWire_Ride/M_Crystal_Glow
-TAT-2 Perf: chunks=6337 collision_bodies=243 collision_shapes=31049 occluders=768
+TAT-2 Perf: chunks=6621 collision_bodies=243 collision_shapes=31049 occluders=768
 TAT-2 player spawn: source=authored pos=(127.2747, 26.4694, -5.3296) yaw=-3.05432154567525 headroom_clear=true forward_clear=true
+TAT-2 swinging doors: 155 locked=2
 TAT-2 guard spawn: selection=parity_approx_layer_bucket eligible=42 prepared=42 skipped=0 selected=4 from_prepared=4 backfilled=0
 WARNING: [hearing_data] 5 authored investigation-range anomalies clamped: AI.Stim.Hearing.LockPicking.Picked: outer 5.0 m > max 3.0 m (clamped); AI.Stim.Hearing.Alert.ShareKnowledge: outer 30.0 m > max 15.0 m (clamped); AI.Stim.Hearing.Tool.DartLaunch: inner 3.0 m > outer 2.0 m (clamped); AI.Stim.Hearing.EnterExitHedge: outer 8.0 m > max 7.5 m (clamped); AI.Stim.Hearing.Device.SecretSwitch: outer 8.0 m > max 7.5 m (clamped)
      at: push_warning (core/variant/variant_utility.cpp:1033)
@@ -112,10 +325,10 @@ WARNING: [hearing_data] 5 authored investigation-range anomalies clamped: AI.Sti
          [5] escalation_row (res://src/ai/guard_ai.gd:488)
          [6] _apply_authored_escalation (res://src/ai/guard_ai.gd:527)
          [7] _ready (res://src/ai/guard_ai.gd:413)
-         [8] _spawn_guards (res://src/missions/mission_controller.gd:4143)
-         [9] start_contract (res://src/missions/mission_controller.gd:929)
-         [10] load_sublevels_async (res://src/core/level_loader.gd:7118)
-TAT-2 loot containers: 107
+         [8] _spawn_guards (res://src/missions/mission_controller.gd:4174)
+         [9] start_contract (res://src/missions/mission_controller.gd:961)
+         [10] load_sublevels_async (res://src/core/level_loader.gd:7725)
+TAT-2 loot containers: 125
 TAT-2 loot economy: 20395 >= loot_goal 4000
 TAT-2 clues: spawned=0 set(s)=CLS_Guildhall_LootTheRoom map=guildhall
 PQ_PLACE kind=readable y=pin anchor=library_note yaw=none pin_y=28.0021 floor_y=28.0064 pos=(-26.8541, 28.0021, -9.4431)
@@ -127,20 +340,19 @@ WARNING: [civilian_npc] navmesh snap deferred: query landed before first map syn
          [0] _is_target_valid (res://src/ai/civilian_npc.gd:653)
          [1] _pick_new_target (res://src/ai/civilian_npc.gd:615)
          [2] _ready (res://src/ai/civilian_npc.gd:155)
-         [3] _spawn_civilians (res://src/missions/mission_controller.gd:4986)
-         [4] _spawn_spawner_content (res://src/missions/mission_controller.gd:4958)
-         [5] start_contract (res://src/missions/mission_controller.gd:939)
-         [6] load_sublevels_async (res://src/core/level_loader.gd:7118)
+         [3] _spawn_civilians (res://src/missions/mission_controller.gd:5067)
+         [4] _spawn_spawner_content (res://src/missions/mission_controller.gd:5039)
+         [5] start_contract (res://src/missions/mission_controller.gd:971)
+         [6] load_sublevels_async (res://src/core/level_loader.gd:7725)
 TAT-2 spawners: throwable=133 ammo=45 health=5 civilian=3
-TAT-2 swinging doors: 155 locked=2
 TAT-2 authored devices: 903 (alarm_eye=60, goo_pipe=90, junction=11, light_beam=134, noise_alarm=96, power_switch=29, power_wall=9, pressure_plate=162, turret=229, vault_door=6, ward_blocker=36, ward_slow=41)
 P1_WARD_LOCKDOWN wired ward=Guildhall_Gameplay:BP_WardZone_Blocker_C_31 beam=Guildhall_Gameplay:BP_Detector_LightBeam_C_117 alarm=Guildhall_Gameplay:BP_MagicAlarm_LongRange_Narrow_C_38 shards=233 vine=(30.7, 28.0, -47.1)
 TAT-2 briefing: mission=Mission.Guildhall.LootTheRoom table=ST_Missions_Guildhall_LootTheRoom key=Guildhall.LootTheRoom.Briefing match_s=3300.0 endgame_s=1200.0 endgame_source=KF13 lines=3
-TAT-2 mission_ready map=guildhall meshes=64682 lights=160 chunks=6337
+TAT-2 mission_ready map=guildhall meshes=64682 lights=160 chunks=6621
 WARNING: [nav_steering] no synchronised navigation map (no NavigationRegion3D baked for this map); AI uses straight-line steering and will press into corners. Navmesh baking is T09's; this is the documented degradation (RE-I-10).
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
          [0] _note_degraded (res://src/ai/nav_steering.gd:181)
          [1] step_towards (res://src/ai/nav_steering.gd:141)
-         [2] _move_ai (res://src/ai/guard_ai.gd:1608)
-         [3] _physics_process (res://src/ai/guard_ai.gd:1540)
+         [2] _move_ai (res://src/ai/guard_ai.gd:1621)
+         [3] _physics_process (res://src/ai/guard_ai.gd:1553)

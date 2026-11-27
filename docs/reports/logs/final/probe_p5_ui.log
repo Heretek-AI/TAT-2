@@ -1,7 +1,7 @@
 == FINAL_GATE probe_p5_ui
 COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/probe_p5_ui.gd
-CWD: /home/john/Projects/TAT-2
-STARTED: 2026-11-27T10:53:04-05:00
+CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
+STARTED: 2026-11-27T15:54:51-05:00
 
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
@@ -43,6 +43,17 @@ PASS: P5.9 sector angle follows the applied direction (-90 deg up)
 PASS: P5.10 the shader material carries the applied amount + direction
 PASS: P5.11 gem frame keeps the authored BPUI Image_177 violet tint
 PASS: P5.11b authored stealth-ball array is recorded as 21 slices
+PASS: P5.11c authored array shader binds a sampler2DArray and selects a layer
+PASS: P5.11d0 manifest validation accepts exactly 21 rows and rejects absent/short payloads
+PASS: P5.11d 21 authored slices bind as one Texture2DArray with a 21-row table
+PASS: P5.11e area-ramp selection picks the measured fraction (0/0.5/1 -> 0/10/20)
+PASS: P5.11f directional mapping rotates the cap with the light (-90/0/180 -> 0/1/3)
+PASS: P5.11g the array material carries the selected slice (index 1, angle 0)
+PASS: P5.11h the authored sphere shares the 84 px frame rect (both ImageSize 144)
+PASS: P5.11i a synthetic bind never claims the authored path
+PASS: P5.11j the authored frame tint survives the array bind
+GEM_PAYLOAD present=true: layers=21 table=21 kind=directional slice=9 missing=[]
+PASS: P5.11k authored payload binds 21 layers and selects a measured slice (payload present: layers=21 table=21 kind=directional slice=9 missing=[])
 PASS: P5.12 player card binds the explicit handle (P5 Handle)
 PASS: P5.13 blank handle shows the authored thief title, never the capture persona
 PASS: P5.14 card level badge reads the save (1)
@@ -75,7 +86,7 @@ PASS: P5.40 the duplicate hint line is not drawn; the single action button is
 PASS: P5.41 prep mission selector names the authored heist, never the mission id
 PASS: P5.42 centre crank prompt reads CRANK [LMB] (label then keycap)
 PASS: P5.43 contract list shows authored map names, not internal ids
-P5_UI PASS checks=44
+P5_UI PASS checks=54
 
 EXIT: 0
-FINISHED: 2026-11-27T10:53:06-05:00
+FINISHED: 2026-11-27T15:54:53-05:00

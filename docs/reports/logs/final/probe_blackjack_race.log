@@ -1,7 +1,7 @@
 == FINAL_GATE probe_blackjack_race
 COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/probe_blackjack_race.gd
-CWD: /home/john/Projects/TAT-2
-STARTED: 2026-11-27T10:44:00-05:00
+CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
+STARTED: 2026-11-27T15:45:45-05:00
 
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
@@ -48,8 +48,8 @@ WARNING: [nav_steering] no synchronised navigation map (no NavigationRegion3D ba
      GDScript backtrace (most recent call first):
          [0] _note_degraded (res://src/ai/nav_steering.gd:181)
          [1] step_towards (res://src/ai/nav_steering.gd:141)
-         [2] _move_ai (res://src/ai/guard_ai.gd:1608)
-         [3] _physics_process (res://src/ai/guard_ai.gd:1540)
+         [2] _move_ai (res://src/ai/guard_ai.gd:1621)
+         [3] _physics_process (res://src/ai/guard_ai.gd:1553)
 [phase A] pose: dist=2.20 m angle=90.6 deg fov=80.0
 [phase A] inhabited 3.5 m bypass -> seen=true (ramp 113.6 pts/s, ALERTED at 0.396 s vs hold 0.45 s)
 [phase A] authored frustum    -> seen=false
@@ -61,4 +61,4 @@ WARNING: [nav_steering] no synchronised navigation map (no NavigationRegion3D ba
 BLACKJACK_PROBE PASS fails=0
 
 EXIT: 0
-FINISHED: 2026-11-27T10:44:03-05:00
+FINISHED: 2026-11-27T15:45:49-05:00

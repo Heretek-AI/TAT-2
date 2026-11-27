@@ -1,0 +1,125 @@
+== FINAL_GATE nav_runtime_probe
+COMMAND: /home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/nav_runtime_probe.sh
+CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
+STARTED: 2026-11-27T15:44:57-05:00
+
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+TAT-2 Loc: reverse map built from sources.json (3404 keys)
+TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
+INPUT_TABLE source=generated rows=91 shipping=91 actions=52
+INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
+  PASS  nav manifest parses (/home/john/.local/share/opencode/worktree/318f41/phase12-integration/game/data/generated/nav)
+  PASS  manifest schema is tat2.nav/1
+  PASS  manifest carries guildhall
+  PASS  guildhall tiles == 2958 (got 2958)
+  PASS  guildhall walkable polys == 14709 (got 14709)
+  PASS  guildhall deduped verts == 30918 (got 30918)
+  PASS  raw offmesh records == 221 (got 221)
+  PASS  logical links == 80 (got 80)
+  PASS  bidirectional links == 35 (got 35)
+  PASS  one-way links == 45 (got 45)
+  PASS  producer max_poly_verts <= 6
+  PASS  8 authored supported areas (got 8)
+  PASS  area 63 is NavArea_Default (never Recast null)
+  PASS  Guildhall area 4 is NavArea_Door_C
+  PASS  Guildhall area 3 is NavArea_Bushes_C
+  PASS  authored agent radius 45 cm
+  PASS  authored agent height 240 cm
+  PASS  authored agent step 45 cm
+  PASS  nav_runtime.setup(guildhall)
+  PASS  runtime state is built (got built)
+  PASS  runtime owns a NavigationMesh
+  PASS  NavigationMesh holds 14709 polys (got 14709)
+  PASS  NavigationMesh holds 30918 verts (got 30918)
+  PASS  runtime created 80 NavigationLink3D (got 80)
+  PASS  runtime bidirectional links == 35
+  PASS  runtime one-way links == 45
+  PASS  every NavigationMesh polygon has <= 6 verts (max 6)
+  PASS  navigation map committed
+  PASS  runtime state is ready (got ready)
+NAV_MAP_ASYNC async=true
+  PASS  map iteration id > 0
+  PASS  map carries the nav region
+  PASS  map cell size 0.01 m
+  PASS  map edge connection margin 0.05 m
+  PASS  map link connection radius 1.0 m
+  PASS  map carries 80 baked links (got 80)
+NAV_PROBE_READY frames=73 ready_ms=1064 build_ms=38 links=80
+  PASS  at least 155/160 baked link endpoints project within 2.5 m (got 155)
+  PASS  at least 79/80 baked links have one side on the mesh (got 79)
+NAV_LINKS endpoints_near=155/160 links_with_side=79/80
+  PASS  authored door record BP_Doorless_Civic_DoorA_Wall_Int_6x6_C_281
+NAV_DOOR_PATH actor=BP_Doorless_Civic_DoorA_Wall_Int_6x6_C_281 door=(12.5, 11.5, -45.0) normal=(0.0, 0.0, -1.0) waypoints=3 length_m=4.15 straight_m=4.15 reach=0.00
+  PASS  both doorway sides project onto the navmesh
+  PASS  doorless doorway path has >= 3 waypoints (got 3)
+  PASS  doorless path reaches the far side (0.00 m short)
+  PASS  doorless path is not partial
+  PASS  doorless path is not a wall detour
+  PASS  authored prison door record BP_Prison_WallA_DoorwayB_6x6_C_0
+NAV_DOORS groups=1 links=1 skipped=0 open_now=0
+  PASS  one prison door link created (got 1)
+  PASS  runtime owns one door link
+  PASS  door link node found
+  PASS  door link starts disabled (open angle 0)
+NAV_DOORLINK start=(3.2, 36.6, -64.0) end=(-1.71, 36.6, -64.0) enabled=false links_on_map=80
+NAV_DOORLINK snap start=0.00 end=0.00
+NAV_PRISON off waypoints=4 length_m=3.58 straight_m=4.91 reach=1.33
+  PASS  closed prison door blocks east->west (partial path)
+  PASS  door link enables at open angle 90
+NAV_DOORLINK on enabled=true links_on_map=81 server_enabled=true iter=1
+NAV_PRISON on  waypoints=2 length_m=4.91 straight_m=4.91 reach=0.00
+  PASS  open prison door reaches the far side (0.00 m short)
+  PASS  door link disables when the door closes
+  PASS  re-closed prison door blocks again
+NAV_PRISON toggles=2
+NAV_DOORS groups=1 links=0 skipped=1 open_now=0
+  PASS  far door creates no link (got 0)
+  PASS  far door counted as skipped
+  PASS  clear() returns the runtime to off
+  PASS  clear() removes every baked link
+  PASS  clear() removes the region
+  PASS  navigation map has no region after clear
+  PASS  nav_runtime.setup(old_manor)
+  PASS  old_manor walkable polys == 9059
+  PASS  old_manor links == 64
+  PASS  old_manor bidirectional links == 15
+  PASS  nav_runtime.setup(ftue)
+  PASS  ftue walkable polys == 5576
+  PASS  ftue links == 4
+  PASS  ftue bidirectional links == 0
+  PASS  navigation map has no region after the per-map checks
+  PASS  TAT2_NAV=off builds nothing (state disabled)
+WARNING: [nav_runtime] no generated nav manifest at /tmp/opencode/nav-runtime-probe-empty/manifest.json (run tools/parse_nav.py); AI keeps straight-line steering
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _warn_once (res://src/ai/nav_runtime.gd:578)
+         [1] setup (res://src/ai/nav_runtime.gd:104)
+         [2] _run (/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/nav_runtime_probe.gd:294)
+         [3] _frames (/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/nav_runtime_probe.gd:343)
+  PASS  missing assets fail closed (state assets_missing)
+NAV_RUNTIME_PROBE checks=70 fails=0
+
+EXIT: 0
+FINISHED: 2026-11-27T15:45:02-05:00

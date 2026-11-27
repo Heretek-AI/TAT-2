@@ -1,7 +1,7 @@
 == FINAL_GATE probe_guard_positions_old_manor
 COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/probe_guard_positions.gd -- --map=old_manor --order=3
-CWD: /home/john/Projects/TAT-2
-STARTED: 2026-11-27T10:41:17-05:00
+CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
+STARTED: 2026-11-27T15:42:53-05:00
 
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
@@ -45,34 +45,230 @@ TAT-2 light allocation: map=old_manor authored=838 kept=160 budget=160 forced=0 
 WARNING: [level_loader] level Niagara: 559 placements across 8 systems in 83 chunk nodes (2 sprite-masked, 413 parameter sets, 1252 activation-skipped; decode root=res://../extracted/json files=36)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _spawn_level_niagara (res://src/core/level_loader.gd:6740)
-         [1] _store_level_extras (res://src/core/level_loader.gd:6512)
-         [2] load_sublevels_async (res://src/core/level_loader.gd:7081)
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:7345)
+         [1] _store_level_extras (res://src/core/level_loader.gd:7117)
+         [2] load_sublevels_async (res://src/core/level_loader.gd:7688)
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-146.90,10.00,31.90) wm=Weightmap_10.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-146.90,10.00,-31.10) wm=Weightmap_94.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-83.90,10.00,94.90) wm=Weightmap_40.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-83.90,10.00,-31.10) wm=Weightmap_37.png mode=discard mask=present tex=0 ch=2 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-20.90,10.00,-31.10) wm=Weightmap_21.png mode=discard mask=present tex=0 ch=2 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(42.10,10.00,-31.10) wm=Weightmap_98.png mode=discard mask=present tex=0 ch=2 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(42.10,10.00,94.90) wm=Weightmap_20.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(105.10,10.00,94.90) wm=Weightmap_4.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-83.90,10.00,31.90) wm=Weightmap_33.png mode=discard mask=present tex=0 ch=2 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-20.90,10.00,31.90) wm=Weightmap_25.png mode=discard mask=present tex=0 ch=2 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(42.10,10.00,31.90) wm=Weightmap_29.png mode=discard mask=present tex=0 ch=3 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(105.10,10.00,-94.10) wm=Weightmap_18.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(105.10,10.00,-31.10) wm=Weightmap_94.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-20.90,10.00,94.90) wm=Weightmap_23.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(105.10,10.00,31.90) wm=Weightmap_14.png mode=discard mask=present tex=0 ch=3 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-146.90,10.00,-94.10) wm=Weightmap_5.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-83.90,10.00,-94.10) wm=Weightmap_2.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-20.90,10.00,-94.10) wm=Weightmap_35.png mode=discard mask=present tex=0 ch=3 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(42.10,10.00,-94.10) wm=Weightmap_18.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-146.90,10.00,94.90) wm=Weightmap_16.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(42.60,-3.00,32.40) wm=Weightmap_5.png mode=discard mask=present tex=0 ch=2 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(42.60,-3.00,-30.60) wm=Weightmap_3.png mode=discard mask=present tex=0 ch=2 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-20.40,-3.00,-30.60) wm=Weightmap_19.png mode=discard mask=present tex=1 ch=2 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-20.40,-3.00,32.40) wm=Weightmap_8.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-83.40,-3.00,32.40) wm=Weightmap_14.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-83.40,-3.00,-30.60) wm=Weightmap_14.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-20.40,-3.00,-93.60) wm=Weightmap_58.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-146.40,10.00,-193.60) wm=Weightmap_33.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-146.40,10.00,-256.60) wm=Weightmap_43.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-83.40,10.00,-130.60) wm=Weightmap_45.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(231.60,10.00,184.40) wm=Weightmap_14.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-83.40,10.00,-256.60) wm=Weightmap_37.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-20.40,10.00,-256.60) wm=Weightmap_21.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(42.60,10.00,-256.60) wm=Weightmap_98.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(42.60,10.00,-130.60) wm=Weightmap_20.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(105.60,10.00,-130.60) wm=Weightmap_4.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-83.40,10.00,-193.60) wm=Weightmap_33.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-20.40,10.00,-193.60) wm=Weightmap_25.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(42.60,10.00,-193.60) wm=Weightmap_29.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(105.60,10.00,-319.60) wm=Weightmap_18.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(105.60,10.00,-256.60) wm=Weightmap_94.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-209.40,10.00,-319.60) wm=Weightmap_5.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-209.40,10.00,-256.60) wm=Weightmap_10.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-209.40,10.00,-193.60) wm=Weightmap_142.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-209.40,10.00,-130.60) wm=Weightmap_10.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-209.40,10.00,-67.60) wm=Weightmap_44.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(168.60,10.00,-130.60) wm=Weightmap_20.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(168.60,10.00,-193.60) wm=Weightmap_98.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(168.60,10.00,-256.60) wm=Weightmap_14.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(168.60,10.00,-319.60) wm=Weightmap_18.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-272.40,10.00,-319.60) wm=Weightmap_5.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-20.40,10.00,-130.60) wm=Weightmap_44.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-272.40,10.00,-256.60) wm=Weightmap_5.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-272.40,10.00,-193.60) wm=Weightmap_16.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-272.40,10.00,-130.60) wm=Weightmap_45.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-272.40,10.00,-67.60) wm=Weightmap_130.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(231.60,10.00,-319.60) wm=Weightmap_18.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(231.60,10.00,-256.60) wm=Weightmap_4.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(231.60,10.00,-193.60) wm=Weightmap_29.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(231.60,10.00,-130.60) wm=Weightmap_129.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-146.40,10.00,-67.60) wm=Weightmap_132.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(105.60,10.00,-67.60) wm=Weightmap_25.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(105.60,10.00,-193.60) wm=Weightmap_14.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(168.60,10.00,-67.60) wm=Weightmap_21.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(231.60,10.00,-67.60) wm=Weightmap_129.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(42.60,10.00,-67.60) wm=Weightmap_130.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-335.40,10.00,-319.60) wm=Weightmap_5.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-335.40,10.00,-193.60) wm=Weightmap_142.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-335.40,10.00,-256.60) wm=Weightmap_94.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-335.40,10.00,-130.60) wm=Weightmap_132.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-209.40,10.00,-4.60) wm=Weightmap_132.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-272.40,10.00,-4.60) wm=Weightmap_94.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-398.40,10.00,-67.60) wm=Weightmap_37.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-146.40,10.00,-319.60) wm=Weightmap_35.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-335.40,10.00,-67.60) wm=Weightmap_21.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-398.40,10.00,-4.60) wm=Weightmap_186.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-335.40,10.00,-4.60) wm=Weightmap_186.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-398.40,10.00,58.40) wm=Weightmap_344.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-335.40,10.00,58.40) wm=Weightmap_344.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-272.40,10.00,58.40) wm=Weightmap_172.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-209.40,10.00,58.40) wm=Weightmap_172.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-272.40,10.00,121.40) wm=Weightmap_337.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-209.40,10.00,121.40) wm=Weightmap_281.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-272.40,10.00,184.40) wm=Weightmap_281.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-83.40,10.00,-319.60) wm=Weightmap_43.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-209.40,10.00,184.40) wm=Weightmap_214.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-398.40,10.00,121.40) wm=Weightmap_200.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-335.40,10.00,121.40) wm=Weightmap_339.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-398.40,10.00,184.40) wm=Weightmap_200.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-335.40,10.00,184.40) wm=Weightmap_337.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-398.40,10.00,247.40) wm=Weightmap_200.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-335.40,10.00,247.40) wm=Weightmap_200.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-398.40,10.00,310.40) wm=Weightmap_214.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-335.40,10.00,310.40) wm=Weightmap_214.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-272.40,10.00,247.40) wm=Weightmap_228.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-20.40,10.00,-319.60) wm=Weightmap_35.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-209.40,10.00,247.40) wm=Weightmap_339.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-272.40,10.00,310.40) wm=Weightmap_228.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-209.40,10.00,310.40) wm=Weightmap_228.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-146.40,10.00,247.40) wm=Weightmap_242.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-83.40,10.00,247.40) wm=Weightmap_242.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-146.40,10.00,310.40) wm=Weightmap_332.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-83.40,10.00,310.40) wm=Weightmap_340.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-20.40,10.00,247.40) wm=Weightmap_332.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(42.60,10.00,247.40) wm=Weightmap_328.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-20.40,10.00,310.40) wm=Weightmap_256.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(42.60,10.00,-319.60) wm=Weightmap_37.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(42.60,10.00,310.40) wm=Weightmap_328.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(105.60,10.00,247.40) wm=Weightmap_256.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(105.60,10.00,310.40) wm=Weightmap_270.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(168.60,10.00,247.40) wm=Weightmap_270.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(168.60,10.00,310.40) wm=Weightmap_270.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(231.60,10.00,247.40) wm=Weightmap_334.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(231.60,10.00,310.40) wm=Weightmap_326.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-146.40,10.00,184.40) wm=Weightmap_340.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-83.40,10.00,121.40) wm=Weightmap_334.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-20.40,10.00,121.40) wm=Weightmap_326.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-146.40,10.00,-130.60) wm=Weightmap_16.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-83.40,10.00,184.40) wm=Weightmap_330.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-20.40,10.00,184.40) wm=Weightmap_330.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(-146.40,10.00,121.40) wm=Weightmap_295.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(42.60,10.00,121.40) wm=Weightmap_295.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(105.60,10.00,121.40) wm=Weightmap_312.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(42.60,10.00,184.40) wm=Weightmap_312.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(105.60,10.00,184.40) wm=Weightmap_312.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(168.60,10.00,121.40) wm=Weightmap_256.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(231.60,10.00,121.40) wm=Weightmap_334.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=OldManor/OldManor_P comp=(168.60,10.00,184.40) wm=Weightmap_326.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
 ROUGHNESS_BAKE_MODE on=1 resolution=full cache=process
+MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_Floor_2x2 mode=baked pos=105 neg=36 surfaces=2 bytes=3024
+MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_Floor_2x2 mode=baked pos=186 neg=7 surfaces=2 bytes=3024
+MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_Floor_2x2 mode=baked pos=46 neg=38 surfaces=2 bytes=3024
+MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_Floor_2x2 mode=baked pos=17 neg=42 surfaces=2 bytes=3024
+MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_Floor_2x2 mode=baked pos=70 neg=170 surfaces=2 bytes=3024
+MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_Floor_2x2 mode=baked pos=211 neg=224 surfaces=2 bytes=3024
+MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_Floor_2x2 mode=baked pos=28 neg=8 surfaces=2 bytes=3024
+MIRROR_SPLIT mp=/Game/Art/Environment/Lights/LightModules/EmissiveShapes/SM_Sphere4Count mode=baked pos=6 neg=1 surfaces=1 bytes=71736
+MIRROR_SPLIT mp=/Game/Art/Environment/Props/Armor/SM_ArmorDisplay_Shield mode=cull_front pos=1 neg=2 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Props/Wall/Frames/SM_FrameUpperMedA_Wood mode=baked pos=1 neg=3 surfaces=3 bytes=156468
+MIRROR_SPLIT mp=/Game/Art/Environment/Props/Wall/Frames/SM_FrameUpperMedA_Wood mode=baked pos=2 neg=3 surfaces=3 bytes=156468
+MIRROR_SPLIT mp=/Game/Art/Environment/OldManor/SM_OldManor_Railing_2 mode=cull_front pos=15 neg=18 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/OldManor/SM_OldManor_Railing_2 mode=cull_front pos=8 neg=20 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/OldManor/SM_OldManor_Railing_2 mode=cull_front pos=10 neg=11 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/OldManor/SM_OldManor_Railing_2 mode=cull_front pos=7 neg=5 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/OldManor/SM_OldManor_Railing_2 mode=cull_front pos=0 neg=16 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Streets/Sidewalks/SM_SidewalkCityStones_B mode=cull_front pos=5 neg=3 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Streets/Sidewalks/SM_SidewalkCityStones_B mode=cull_front pos=8 neg=6 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Streets/Sidewalks/SM_SidewalkCityStones_B mode=cull_front pos=11 neg=9 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Streets/Sidewalks/SM_SidewalkCityStones_B mode=cull_front pos=0 neg=4 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Streets/Sidewalks/SM_SidewalkCityStones_B mode=cull_front pos=0 neg=4 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Streets/Sidewalks/SM_SidewalkCityStones_A mode=cull_front pos=2 neg=6 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Streets/Sidewalks/SM_SidewalkCityStones_A mode=cull_front pos=4 neg=2 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Streets/Sidewalks/SM_SidewalkCityStones_A mode=native pos=3 neg=1 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Streets/Sidewalks/SM_SidewalkCityStones_A mode=cull_front pos=0 neg=2 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Streets/Sidewalks/SM_SidewalkCityStones_A mode=cull_front pos=0 neg=2 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Streets/Sidewalks/SM_SidewalkCityStones_D mode=native pos=2 neg=1 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Streets/Sidewalks/SM_SidewalkCityStones_D mode=cull_front pos=4 neg=3 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Streets/Sidewalks/SM_SidewalkCityStones_D mode=cull_front pos=3 neg=2 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Streets/Sidewalks/SM_SidewalkCityStones_D mode=native pos=0 neg=1 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/City/Streets/Sidewalks/SM_SidewalkCityStones_D mode=native pos=0 neg=1 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_Floor_2x2 mode=native pos=2 neg=1 surfaces=2 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/OldManor/SM_OldManor_Railing_Pillar mode=cull_front pos=8 neg=4 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/OldManor/SM_OldManor_Railing_Pillar mode=cull_front pos=1 neg=3 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/OldManor/SM_OldManor_Railing_Pillar mode=native pos=1 neg=1 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/OldManor/SM_OldManor_Railing_Pillar mode=cull_front pos=0 neg=5 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/OldManor/SM_OldManor_Railing_Pillar mode=cull_front pos=0 neg=3 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Props/Wall/Frames/SM_FrameUpperLrgB mode=native pos=0 neg=1 surfaces=2 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Props/Weapons/SpearMilitia/SM_SpearMilitiaA mode=cull_front pos=6 neg=4 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Props/Weapons/SpearMilitia/SM_SpearMilitiaA mode=cull_front pos=3 neg=2 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Props/Weapons/SpearMilitia/SM_SpearMilitiaA mode=cull_front pos=0 neg=2 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Props/Weapons/SpearMilitia/SM_SpearMilitiaB mode=cull_front pos=2 neg=2 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Props/Weapons/SpearMilitia/SM_SpearMilitiaB mode=native pos=1 neg=1 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Props/Weapons/SpearMilitia/SM_SpearMilitiaC mode=cull_front pos=4 neg=4 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Props/Weapons/SpearMilitia/SM_SpearMilitiaC mode=cull_front pos=2 neg=2 surfaces=1 bytes=0
 WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Default_White' has a colour but no albedo map (albedo_color=(1.0, 1.0, 1.0, 1.0), flat=2)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] get_material_for_ue (res://src/core/level_loader.gd:1801)
-         [1] _bind_glb_materials (res://src/core/level_loader.gd:2183)
-         [2] _get_mesh_and_shape (res://src/core/level_loader.gd:1976)
-         [3] _build_one_draw_item (res://src/core/level_loader.gd:4702)
-         [4] load_sublevels_async (res://src/core/level_loader.gd:7106)
+         [0] get_material_for_ue (res://src/core/level_loader.gd:1875)
+         [1] _bind_glb_materials (res://src/core/level_loader.gd:2257)
+         [2] _get_mesh_and_shape (res://src/core/level_loader.gd:2050)
+         [3] _build_one_draw_item (res://src/core/level_loader.gd:5230)
+         [4] load_sublevels_async (res://src/core/level_loader.gd:7713)
+MIRROR_SPLIT mp=/Game/Art/Environment/Manor/SM_Manor_Bookcase_Cabinet_Door_2x8 mode=native pos=2 neg=1 surfaces=2 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Manor/SM_Manor_Bookcase_Cabinet_Door_2x8 mode=native pos=0 neg=1 surfaces=2 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/OldManor/SM_OldManor_Wall_Int_2x8 mode=native pos=0 neg=1 surfaces=3 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/OldManor/SM_OldManor_Wall_Int_2x8 mode=baked pos=7 neg=2 surfaces=3 bytes=151632
+MIRROR_SPLIT mp=/Game/Art/Environment/OldManor/SM_OldManor_Wall_Int_4x8 mode=native pos=1 neg=1 surfaces=3 bytes=0
+MIRROR_SPLIT mp=/Game/Maps/OldManor/_GENERATED/gjasp/Box_760A8A3A1 mode=native pos=0 neg=1 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Maps/OldManor/_GENERATED/gjasp/Box_760A8A3A1 mode=native pos=0 neg=1 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Manor/SM_Manor_Arch_6x8 mode=native pos=2 neg=1 surfaces=3 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Props/Wall/Frames/SM_FrameUpperLrgB mode=native pos=0 neg=1 surfaces=2 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Props/Wall/Frames/SM_FrameUpperLrgB mode=native pos=0 neg=1 surfaces=2 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Props/Wall/Frames/SM_FrameUpperMedA_Wood mode=baked pos=1 neg=6 surfaces=3 bytes=156468
+MIRROR_SPLIT mp=/Game/Art/Environment/OldManor/SM_OldManor_Backwall_4x4 mode=cull_front pos=12 neg=2 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/OldManor/SM_OldManor_Backwall_4x2 mode=native pos=4 neg=1 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/OldManor/SM_OldManor_Backwall_4x2 mode=cull_front pos=11 neg=4 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/OldManor/SM_OldManor_Backwall_4x2 mode=cull_front pos=8 neg=4 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Props/Wall/Frames/SM_FrameUpperLrgA mode=native pos=0 neg=1 surfaces=2 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Manor/Walls/SM_Manor_Foundation_Wall_Corner mode=native pos=1 neg=1 surfaces=2 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Props/Wall/Frames/SM_FrameUpperMedA_Wood mode=baked pos=7 neg=2 surfaces=3 bytes=156468
+MIRROR_SPLIT mp=/Game/Art/Environment/Props/Wall/Frames/SM_FrameUpperMedA_Wood mode=native pos=0 neg=1 surfaces=3 bytes=0
 WARNING: [level_loader] material flat white: '/Engine/BasicShapes/BasicShapeMaterial' has a colour but no albedo map (albedo_color=(0.9547, 0.9547, 0.9547, 1.0), flat=7)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] get_material_for_ue (res://src/core/level_loader.gd:1801)
-         [1] _get_overridden_mesh (res://src/core/level_loader.gd:2426)
-         [2] _build_one_draw_item (res://src/core/level_loader.gd:4748)
-         [3] load_sublevels_async (res://src/core/level_loader.gd:7106)
+         [0] get_material_for_ue (res://src/core/level_loader.gd:1875)
+         [1] _get_overridden_mesh (res://src/core/level_loader.gd:2500)
+         [2] _build_one_draw_item (res://src/core/level_loader.gd:5276)
+         [3] load_sublevels_async (res://src/core/level_loader.gd:7713)
 COL_PLANAR /Game/Art/Effects/WardZones/SM_SlowWardZone_Quad instances=78 skipped=1
-AUTHORED_COLLISION meshes=703 hull=698 authored_elements=641 complex=44 no_record=0 prims=380 convex=2739 absent=5 no_collision=13 query_only=5 reduced=35 shapes_per_instance_avg=1.10 elements=3710 load_ms=335
-ROUGHNESS_BAKE count=87 pixels=72220672 ms=5229 bytes=96294196 hits=39 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=703 hull=698 authored_elements=641 complex=44 no_record=0 prims=380 convex=2739 absent=5 no_collision=13 query_only=5 reduced=35 shapes_per_instance_avg=1.10 elements=3710 load_ms=345
+ROUGHNESS_BAKE count=87 pixels=72220672 ms=5472 bytes=96294196 hits=39 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=196 axis=col2 length_slot=2 clamp=none max_scale=236.9539 max_length_m=24.169
 BEAM_AXIS cards=196 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
-MESH_RECON authored=24819 applied=24180 duplicate=547 name_skipped=6 wardbox=39 moonshape=47 clamp=287 clamp_worst=500.00x mirrored=780 origin_markers_skipped=0 skipped_merged=0 from_graph=4 graph_missing=0
+MESH_RECON authored=24819 applied=24180 duplicate=547 name_skipped=6 wardbox=39 moonshape=47 clamp=287 clamp_worst=500.00x mirrored=780 origin_markers_skipped=0 skipped_merged=0 from_graph=4 graph_missing=0 mirrored_bases=779 mirrored_multimesh=746 mirrored_single=33 mirrored_splits=86 mirrored_cull_front=177 mirrored_cull_disabled=0 mirrored_mesh_bytes=1501416 mirrored_mesh_count=11 mirrored_unbaked=0
+MIRROR_RECON bases=779 multimesh=746 single=33 split=86 cull_front=177 cull_disabled=0 baked=11 baked_bytes=1501416 unbaked=0 suppressed=22 ok=true
 TAT-2 Loaded old_manor: meshes=24180 lights=160
-TAT-2 Perf: chunks=4670 collision_bodies=471 collision_shapes=22678 occluders=768
+TAT-2 Perf: chunks=4726 collision_bodies=471 collision_shapes=22678 occluders=768
 TAT-2 player spawn: source=authored pos=(5.9512, 9.5283, 126.025) yaw=1.5707963267949 headroom_clear=true forward_clear=true
+[swinging_door] authored lock not applied (window): BP_SM_OldManor_WindowB_4x850_C
+[swinging_door] authored lock not applied (window): BP_Manor_WindowB_4x650_C
+TAT-2 swinging doors: 120 locked=4
 TAT-2 guard spawn: selection=parity_approx_layer_bucket eligible=20 prepared=20 skipped=0 selected=4 from_prepared=4 backfilled=0
 WARNING: [hearing_data] 5 authored investigation-range anomalies clamped: AI.Stim.Hearing.LockPicking.Picked: outer 5.0 m > max 3.0 m (clamped); AI.Stim.Hearing.Alert.ShareKnowledge: outer 30.0 m > max 15.0 m (clamped); AI.Stim.Hearing.Tool.DartLaunch: inner 3.0 m > outer 2.0 m (clamped); AI.Stim.Hearing.EnterExitHedge: outer 8.0 m > max 7.5 m (clamped); AI.Stim.Hearing.Device.SecretSwitch: outer 8.0 m > max 7.5 m (clamped)
      at: push_warning (core/variant/variant_utility.cpp:1033)
@@ -85,11 +281,11 @@ WARNING: [hearing_data] 5 authored investigation-range anomalies clamped: AI.Sti
          [5] escalation_row (res://src/ai/guard_ai.gd:488)
          [6] _apply_authored_escalation (res://src/ai/guard_ai.gd:527)
          [7] _ready (res://src/ai/guard_ai.gd:413)
-         [8] _spawn_guards (res://src/missions/mission_controller.gd:4143)
-         [9] start_contract (res://src/missions/mission_controller.gd:929)
-         [10] load_sublevels_async (res://src/core/level_loader.gd:7118)
+         [8] _spawn_guards (res://src/missions/mission_controller.gd:4174)
+         [9] start_contract (res://src/missions/mission_controller.gd:961)
+         [10] load_sublevels_async (res://src/core/level_loader.gd:7725)
 TAT-2 quest items: spawned=1 mission=Mission.OldManor.Vault free_play=false
-TAT-2 loot containers: 110
+TAT-2 loot containers: 111
 TAT-2 clues: spawned=2 set(s)=CLS_Contract_03 map=old_manor
 TAT-2 escape markers: authored=10 spawned=10 grounded=10 connected=10 phase=main
 WARNING: [civilian_npc] navmesh snap deferred: query landed before first map sync (deferred=1); target fails open until sync
@@ -98,23 +294,20 @@ WARNING: [civilian_npc] navmesh snap deferred: query landed before first map syn
          [0] _is_target_valid (res://src/ai/civilian_npc.gd:653)
          [1] _pick_new_target (res://src/ai/civilian_npc.gd:615)
          [2] _ready (res://src/ai/civilian_npc.gd:155)
-         [3] _spawn_civilians (res://src/missions/mission_controller.gd:4986)
-         [4] _spawn_spawner_content (res://src/missions/mission_controller.gd:4958)
-         [5] start_contract (res://src/missions/mission_controller.gd:939)
-         [6] load_sublevels_async (res://src/core/level_loader.gd:7118)
+         [3] _spawn_civilians (res://src/missions/mission_controller.gd:5067)
+         [4] _spawn_spawner_content (res://src/missions/mission_controller.gd:5039)
+         [5] start_contract (res://src/missions/mission_controller.gd:971)
+         [6] load_sublevels_async (res://src/core/level_loader.gd:7725)
 TAT-2 spawners: throwable=385 ammo=97 health=7 civilian=2
-[swinging_door] authored lock not applied (window): BP_SM_OldManor_WindowB_4x850_C
-[swinging_door] authored lock not applied (window): BP_Manor_WindowB_4x650_C
-TAT-2 swinging doors: 120 locked=4
 TAT-2 authored devices: 1164 (alarm_eye=119, goo_pipe=45, light_beam=196, noise_alarm=40, power_switch=26, power_wall=2, pressure_plate=419, turret=247, vault_door=6, ward_blocker=25, ward_slow=39)
-TAT-2 mission_ready map=old_manor meshes=24180 lights=160 chunks=4670
+TAT-2 mission_ready map=old_manor meshes=24180 lights=160 chunks=4726
 WARNING: [nav_steering] no synchronised navigation map (no NavigationRegion3D baked for this map); AI uses straight-line steering and will press into corners. Navmesh baking is T09's; this is the documented degradation (RE-I-10).
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
          [0] _note_degraded (res://src/ai/nav_steering.gd:181)
          [1] step_towards (res://src/ai/nav_steering.gd:141)
-         [2] _move_ai (res://src/ai/guard_ai.gd:1608)
-         [3] _physics_process (res://src/ai/guard_ai.gd:1540)
+         [2] _move_ai (res://src/ai/guard_ai.gd:1621)
+         [3] _physics_process (res://src/ai/guard_ai.gd:1553)
 GUARD_CHECK boot_state loaded_map=old_manor frames=211 player=true guards=4
 GUARD_CHECK anchor=(5.951,7.266,126.025)
 GUARD_CHECK guard_pool=85
@@ -136,4 +329,4 @@ GUARD_CHECK SUMMARY map=old_manor order=3 guards_t1=4 guards_t2=4 expected=4 lou
 GUARD_CHECK PASS map=old_manor order=3 guards=4 buckets=4/4 lounge=0 lounge_marker=- selection=parity_approx_layer_bucket difficulty=1
 
 EXIT: 0
-FINISHED: 2026-11-27T10:42:02-05:00
+FINISHED: 2026-11-27T15:43:40-05:00

@@ -1,8 +1,8 @@
 # Handoff — Thick As Thieves Godot 4.7.2 port (next session)
 
 **Repo:** `/home/john/Projects/TAT-2`
-**Code/data tip:** `0ed2b42` (mirrors + six lanes + P4.1 regeneration + gate wiring).
-**Docs/evidence tip:** `0ed2b42` + this integration evidence commit (local, **not
+**Code/data tip:** `71e77f6` (mirrors + six lanes + P4.1 regeneration + gate wiring).
+**Docs/evidence tip:** `71e77f6` + this integration evidence commit (local, **not
 pushed**); `origin/main` is `7de2f0c`.
 **This session:** Phase 1/2 integration — six lanes cherry-picked, mirrors
 fast-forwarded (`07ecb56`), P4.1 producers regenerated, the real 21-slice gem
@@ -10,7 +10,7 @@ payload extracted, and the 49-gate set measured. The commits are local and
 **not pushed**.
 **Working tree:** clean before the final evidence commit; logs are under
 `docs/reports/logs/final/`.
-**Measured gate set:** **49/49 at `0ed2b42`**; no GPU/Vulkan capture run.
+**Measured gate set:** **49/49 at `71e77f6`**; no GPU/Vulkan capture run.
 **Godot:** `4.7.2.stable` via native `tools/godot` (`godot` is **not** on `$PATH`).
 **Renderer:** Forward+ · Jolt 60 Hz · 1280×720 base · Linux x86_64.
 **Steam reference:** `/home/john/.steam/steam/steamapps/common/Thick As Thieves/`
@@ -89,7 +89,7 @@ hotfix**, **P2 StateTree v2 shadow runtime**, the **navmesh runtime consumer**,
 **P3 Wwise control plane**, **P5 UI correctness**, the **data-truth wave** and
 the **Phase 1/2 integration** (landscape/beams, GC/bookcases, navmesh, W11
 audio, P4.1 exposure/IBL, U-4 gem, mirrors). The complete 49-gate set passes at
-`0ed2b42`; the evidence is in `docs/reports/logs/final/` and
+`71e77f6`; the evidence is in `docs/reports/logs/final/` and
 `docs/reports/integration-20261127.md`. The port is not
 Parity Complete, and the remaining measurement work splits into two tracks that
 the previous handoff conflated:
@@ -112,7 +112,7 @@ hold-smash `PORT_DECISION`.
 
 ---
 
-## 2. Gates at the final tip (measured at `0ed2b42`, 49 gates)
+## 2. Gates at the final tip (measured at `71e77f6`, 49 gates)
 
 | Gate | Value |
 |---|---|
@@ -150,7 +150,7 @@ hold-smash `PORT_DECISION`.
 texture cap `797 → 796` from the accepted `texture_refs 1523 → 1522` pants fix.
 The old `coverage=0.989` is not a valid authored number; do not restore it.
 
-The 49-gate set was measured at `0ed2b42` in one serial
+The 49-gate set was measured at `71e77f6` in one serial
 `build/qa/run_final_gates.sh` run (Phase 1/2): **49/49 exit 0**, wall recorded in
 `docs/reports/logs/final/final-run.log`, logs in `docs/reports/logs/final/`,
 report `docs/reports/integration-20261127.md`. The previous Phase 0b 45-gate

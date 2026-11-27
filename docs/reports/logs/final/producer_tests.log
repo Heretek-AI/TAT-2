@@ -1,0 +1,260 @@
+== FINAL_GATE producer_tests
+COMMAND: qa_producer_tests
+CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
+STARTED: 2026-11-27T15:56:45-05:00
+
+== tools/test_check_consumers.py
+ok unconsumed table fails the audit
+ok orphan is named
+ok a non-recursive root does not cover subdirectories
+ok recursive root covers deep tables
+ok literal reader counts as consumed
+ok tests-only reader is classified, not silently passed
+ok complete allowlist passes
+ok blocked owner is reported
+ok a rule without a reason fails
+ok blocked_on_team without owner fails
+ok a rule that matches nothing fails
+ok an optional stale rule is a note, not a failure
+ok a consumer claim without claim_token fails
+ok a false claim_token fails
+ok a missing consumer file fails
+ok an unknown kind fails
+ok an empty root is reported
+ok an empty root alone does not fail before regeneration
+ok an empty root fails once curves.json exists
+ok a filled root passes
+ok ** spans directories
+ok * does not span directories
+ok parser reads literal roots and loop roots
+ok an unparseable root argument fails closed
+PASS: 24 checks
+== tools/test_manifest_audit.py
+ok bootstrap + normal
+ok missing baseline fails then bootstrap
+ok missing producer output
+ok empty tables and loot goals
+ok missing/zero assets
+ok import gate and missing translations
+ok import-only assets fail / extraction-only assets pass
+ok producer drift
+ok corrupt baseline + refresh
+ok refresh refuses missing output
+ok refresh refuses unregenerated outputs
+ok errors.log missing/stale/zero/whitespace
+ok case-only loss and .ubulk loss
+ok disk-backed coverage
+ok content coverage + exported-name rename
+ok allowlist staleness and kind labels
+ok refresh requires and records a reason
+ok provenance pinning (usmap hash, absence, binary freshness)
+PASS: 18 control groups
+== tools/test_parse_collision.py
+ok fixture producer exits 0
+ok fixture schema, units and default index-data mode
+ok fixture counts
+ok fixture elements round-trip (flat vertices, no index data)
+ok fixture --with-index-data emits triangles
+ok fixture body setup and profile fields
+ok fixture nav collision metadata
+ok empty AggGeom is counted
+ok BodySetup without AggGeom is recorded as complex-as-simple or no-collision
+ok unknown AggGeom key fails closed
+ok producer fails on a missing dump tree
+ok producer real run exits 0
+ok measured counts match (1992 packages / 8601 elements)
+ok measured no-simple-collision census (334 packages / 293 complex / 41 none)
+ok no-simple-collision entries are sorted, closed-vocabulary and typed
+ok meshes are sorted by package path
+ok every body slice indexes its merged element list; flat vertices only
+ok SM_CanA collision profile and no guessed complex flag
+ok SM_CanA box half-extents (tolerance 1e-6)
+ok SM_CanA nav collision is cooked-only
+ok convex hull flat vertices and non-degenerate AABB
+ok sphyl radius and length are positive and exact
+ok complex-as-simple comes from the authored trace flag
+ok producer --with-index-data exits 0
+ok --with-index-data payload flag and counts
+ok every index is in range and index_count matches (all hulls)
+ok hat hull keeps its 180 authored indices in opt-in mode
+ok two runs are byte-identical in both modes
+PASS: 28 checks
+== tools/test_parse_curves.py
+ok fixture: producer exits 0
+ok fixture: curve table file written
+ok fixture: type is the UE class
+ok fixture: asset path preserved
+ok fixture: single Value row with both keys
+ok fixture: authored key values preserved
+ok fixture: time_range computed
+ok fixture: no invented channel
+ok fixture: colour curve written
+ok fixture: sparse channels indexed, authored R kept
+ok fixture: RCIM_Constant survives normalisation
+ok fixture: nested blueprint curve is indexed, not emitted as a table
+ok fixture: nested curve records its owner
+ok fixture: existing CurveTable untouched
+ok fixture: curve table counted
+ok fixture: counts reconcile
+ok fixture: two runs are byte-identical
+ok fixture: an empty curve fails closed
+ok fixture: failure names the curve
+ok real: producer exits 0
+ok real: standalone curve assets
+ok real: nested curve objects
+ok real: CurveTables untouched
+ok real: every standalone curve emitted
+ok real: by type
+ok real: root tables/AI/Alertness is no longer empty
+ok real: root tables/Art/Environment/Weather is no longer empty
+ok real: root tables/Gameplay/Carry is no longer empty
+ok real: root tables/Gameplay/Input/Character is no longer empty
+ok real: root tables/Gameplay/Traversal/Dodge is no longer empty
+ok real: alertness curve emitted
+ok real: alertness keys are (2.0,1.0 Constant),(3.0,0.0 Linear)
+ok real: Curve_GamepadMoveThumbstickResponse emitted with keys
+ok real: Curve_GamepadLookEdgeBoost emitted with keys
+ok real: payload matches the game_data.gd curve contract
+PASS: 35 checks
+== tools/test_parse_input.py
+ok fixture payload + contract
+ok fixture determinism
+ok cross-package + same-file ObjectPath resolution
+ok unknown trigger class fails closed
+ok unknown modifier class fails closed
+ok missing context fails closed
+ok unresolved reference fails closed
+ok real tree counts
+ok real tree authored rows + curves
+ok real tree determinism
+PASS: 10 checks
+== tools/test_parse_level_splines.py
+..........
+----------------------------------------------------------------------
+Ran 10 tests in 0.009s
+
+OK
+== tools/test_parse_project_ini.py
+ok parser nested structs
+ok parser indexed properties
+ok parser +/- array ops
+ok parser LOCTABLE/INVTEXT/NSLOCTEXT kept raw
+ok parser scalars, empty list, tag tuple
+ok producer fails on missing source
+ok producer fails on an incomplete ini
+ok producer real run exits 0
+ok schema and provenance metadata
+ok source sha256 matches the measured ini
+ok no timestamps in the payload
+ok progression level/XP scalars
+ok difficulty XP multipliers
+ok progression FTUE list and editor styles
+ok progression XP-to-level curve reference
+ok project map flags and FTUE money
+ok post-FTUE contracts
+ok maps: 2 entries, authored mission order
+ok Guildhall map fields
+ok map type settings (8 authored indices)
+ok endgame durations and difficulty-index provenance
+ok endgame trigger scalars
+ok initial and post-FTUE unlocked content
+ok scoring weights
+ok general session/project provenance
+ok raw map is byte-exact for every covered key
+ok raw key counts match the measured section scans
+ok raw values are the exact authored strings
+ok unmapped_keys is empty
+ok two runs are byte-identical
+PASS: 30 checks
+== tools/test_stealthball_array.py
+PASS: PNG RGBA filter 0 round-trips
+PASS: PNG RGBA filter 1 round-trips
+PASS: PNG RGBA filter 2 round-trips
+PASS: PNG RGBA filter 3 round-trips
+PASS: PNG RGBA filter 4 round-trips
+PASS: PNG RGB expands to opaque RGBA
+PASS: PNG gray expands to RGBA
+PASS: PNG gray+alpha expands to RGBA
+PASS: PNG reader rejects a non-PNG signature
+PASS: PNG reader rejects an unsupported bit depth
+PASS: producer exits 0 on a complete payload
+PASS: 21 authored slices measured
+PASS: moving caps derive mapping.kind=directional
+PASS: every derived cap angle matches its painted direction
+PASS: mapping.order sorts by measured lit fraction
+PASS: producer output is byte-deterministic
+PASS: absent payload records payload_absent
+PASS: require-payload turns absence into exit 2
+PASS: missing slice records payload_incomplete and exits 1
+PASS: centred growing caps derive mapping.kind=area_ramp
+PASS: area ramp order is the authored index order
+PASS: area ramp range is increasing
+STEALTHBALL_ARRAY_TEST PASS checks=22
+== tools/test_ui_pixel_stats.py
+PASS: gem direction follows the cream cap (+x -> angle ~0)
+PASS: gem lit fraction is the cream share of the ROI
+PASS: gem violet ring thickness is measured
+PASS: gem pixel angle agrees with the HUD state angle
+PASS: compass rule row/thickness are measured
+PASS: compass rule span + heading above the rule
+PASS: compass heading letter comes from the sidecar
+PASS: prompt contrast is high and unclipped
+PASS: briefing finds the 11 ink lines with no overflow
+PASS: pause dim ratio measures the darkened world
+PASS: pause blur ratio measures the softened world
+UI_PIXEL_STATS dir=/tmp/tmp66ef5khw frames=5
+  briefing@240x180  briefing lines=11 last_y=142 margin=20 overflow=False
+  doors@240x160  prompt contrast=12.77 ink=400 clip=-
+  pause@240x160  modal contrast=1.00 ink=800 clip=-  pause dim=0.4941 blur=0.0632
+  pause_backdrop@240x160  modal contrast=1.00 ink=672 clip=-
+  safe_room@240x160  gem lit=0.078 ang=0.0 dir=[1.0, 0.0] ring=5px  compass rule_row=41 thick=2 span=160 heading=NE
+UI_PIXEL_STATS PASS rows=5
+PASS: clean capture reports PASS
+UI_PIXEL_STATS dir=/tmp/tmp66ef5khw frames=5
+  briefing@240x180  briefing lines=11 last_y=142 margin=20 overflow=False
+  doors@240x160  prompt contrast=12.77 ink=400 clip=-
+  pause@240x160  modal contrast=1.00 ink=800 clip=-  pause dim=0.4941 blur=0.0632
+  pause_backdrop@240x160  modal contrast=1.00 ink=672 clip=-
+  safe_room@240x160  gem lit=0.078 ang=0.0 dir=[1.0, 0.0] ring=5px  compass rule_row=41 thick=2 span=160 heading=NE
+UI_PIXEL_STATS PASS rows=5
+PASS: clean capture passes --strict
+UI_PIXEL_STATS dir=/tmp/tmpk6r7qvz6 frames=2
+  doors_clip@240x160  prompt contrast=1.00 ink=490 clip=right
+  safe_room@240x160  gem lit=0.078 ang=0.0 dir=[1.0, 0.0] ring=5px  compass rule_row=41 thick=2 span=160 heading=NE
+UI_PIXEL_STATS FAIL doors_clip@240x160 prompt contrast 1.00 < 4.5
+UI_PIXEL_STATS FAIL doors_clip@240x160 prompt text clipped at right
+UI_PIXEL_STATS SUMMARY rows=2 fails=2
+PASS: text clipped at the ROI edge fails --strict
+UI_PIXEL_STATS dir=/tmp/tmpvm4c6tf1 frames=2
+  pause@240x160  modal contrast=1.00 ink=1072 clip=-  pause dim=0.498 blur=0.8911
+  pause_backdrop@240x160  modal contrast=1.00 ink=672 clip=-
+UI_PIXEL_STATS FAIL pause@240x160 blur_ratio 0.89 > 0.60
+UI_PIXEL_STATS SUMMARY rows=2 fails=1
+PASS: an unblurred pause pair fails --strict
+UI_PIXEL_STATS_TEST PASS checks=15
+== tools/test_usd_to_gltf_duration.py
+test_errors_are_one_sample_interval (__main__.ComputeRenderFpsTest.test_errors_are_one_sample_interval) ... ok
+test_fps_fps_base_reproduce_the_requested_rate (__main__.ComputeRenderFpsTest.test_fps_fps_base_reproduce_the_requested_rate) ... ok
+test_fractional_sample_rate_is_exact (__main__.ComputeRenderFpsTest.test_fractional_sample_rate_is_exact) ... ok
+test_integer_sample_rate_is_exact (__main__.ComputeRenderFpsTest.test_integer_sample_rate_is_exact) ... ok
+test_legacy_fps_equals_tps_is_short (__main__.ComputeRenderFpsTest.test_legacy_fps_equals_tps_is_short) ... ok
+test_missing_inputs_keep_legacy_behaviour (__main__.ComputeRenderFpsTest.test_missing_inputs_keep_legacy_behaviour) ... ok
+test_two_key_clip_spanning_the_full_clip (__main__.ComputeRenderFpsTest.test_two_key_clip_spanning_the_full_clip) ... ok
+test_two_key_two_sample_clip (__main__.ComputeRenderFpsTest.test_two_key_two_sample_clip) ... ok
+test_zero_span_single_pose_is_left_alone (__main__.ComputeRenderFpsTest.test_zero_span_single_pose_is_left_alone) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.000s
+
+OK
+PASS positive merge + per-map areas
+PASS missing supported_areas
+PASS area 63 is not Default
+PASS 7-vertex poly
+PASS NavArea_Null poly
+PASS missing nav_data_config
+PASS one-way direction
+PRODUCER_TESTS PASS
+
+EXIT: 0
+FINISHED: 2026-11-27T15:58:51-05:00

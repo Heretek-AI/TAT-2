@@ -1,0 +1,53 @@
+== FINAL_GATE probe_landscape_mask
+COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/probe_landscape_mask.gd
+CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
+STARTED: 2026-11-27T15:41:36-05:00
+
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+TAT-2 Loc: reverse map built from sources.json (3404 keys)
+TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
+INPUT_TABLE source=generated rows=91 shipping=91 actions=52
+INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
+WARNING: LANDSCAPE_MASK unknown mode 'bogus'; using discard
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] landscape_mask_mode (res://src/core/level_loader.gd:8209)
+         [1] _check_modes (res://tests/probe_landscape_mask.gd:128)
+         [2] _run (res://tests/probe_landscape_mask.gd:115)
+LANDSCAPE_MASK OK modes default=discard discard={ "mode": "discard", "sample_mask": 1.0, "discard_holes": 1.0, "mask_raw_view": 0.0 } raw={ "mode": "raw", "sample_mask": 1.0, "discard_holes": 0.0, "mask_raw_view": 1.0 } off={ "mode": "off", "sample_mask": 0.0, "discard_holes": 0.0, "mask_raw_view": 0.0 } rule=vis>0.5
+LANDSCAPE_MASK OK shader keeps the authored vis>0.5 discard and the sample/raw controls
+LANDSCAPE_MASK OK synthetic 50/50 mask samples=4096 holes=2048 frac=0.500 stride2=512/1024 channel0_holes=0
+LANDSCAPE_MASK OK safe-room gap comp=12 (105.1,10.7,-31.1) wm=Weightmap_20.png mask=absent resolved=0.0 <0.5 visible=true (points (126.0, 18.56, -10.43) / (114.5, 18.56, -3.2))
+LANDSCAPE_MASK OK control comp=0 (19.1,27.0,-88.6) mask present ch=1 samples=64 holes=58 frac=0.906 max=1.000
+LANDSCAPE_MASK OK Guildhall components=18 masked=10 unmasked=8
+LANDSCAPE_MASK src=Guildhall/Guildhall_Landscape comp=(19.10,27.00,-88.60) wm=Weightmap_6.png mode=discard mask=present tex=0 ch=1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK src=Guildhall/Guildhall_Landscape comp=(19.10,27.00,-88.60) wm=Weightmap_6.png mode=raw mask=present tex=0 ch=1 sample=1 discard=0 raw=1
+LANDSCAPE_MASK src=Guildhall/Guildhall_Landscape comp=(19.10,27.00,-88.60) wm=Weightmap_6.png mode=off mask=present tex=0 ch=1 sample=0 discard=0 raw=0
+LANDSCAPE_MASK src=Guildhall/Guildhall_Landscape comp=(105.10,10.70,-31.10) wm=Weightmap_20.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
+LANDSCAPE_MASK OK loader binding masked[discard=true, raw=true, off=true] gap_comp12=true
+LANDSCAPE_MASK_SUMMARY: PASS fails=0 checks=7 last=loader binding masked[discard=true, raw=true, off=true] gap_comp12=true
+
+EXIT: 0
+FINISHED: 2026-11-27T15:41:38-05:00

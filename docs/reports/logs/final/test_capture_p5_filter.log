@@ -1,0 +1,14 @@
+== FINAL_GATE test_capture_p5_filter
+COMMAND: flock /tmp/opencode/tat2-godot.lock /home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/test_capture_p5_ui_filter.sh
+CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
+STARTED: 2026-11-27T15:54:53-05:00
+
+ok   unknown P5_ONLY exits 2
+ok   unknown P5_ONLY names the rejected shot
+ok   unknown P5_ONLY stops before the shot loop
+ok   ledger_market accepted by the filter
+ok   ledger_market reaches the shot loop (headless capture refused, exit 1)
+CAPTURE_P5_FILTER_TEST PASS checks=5
+
+EXIT: 0
+FINISHED: 2026-11-27T15:55:03-05:00

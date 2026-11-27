@@ -3,9 +3,10 @@
 Status: **headless integration measured**; no GPU/Vulkan capture was run.
 Merge base: `354fab0` (six lanes: landscape/beams, GC/bookcases, navmesh,
 audio W11, P4-E exposure/IBL, UI). Mirrors fast-forwarded at `07ecb56`.
-Final code/gate commit: `0ed2b42` (mirrors merge + extractor fix + audit
-baseline + gate wiring + ratchet floors). The full 49-gate serial run was made
-at `0ed2b42`; this report and the logs are the commit that follows it.
+Final code/gate commit: `71e77f6` (mirrors merge, P4.1 regeneration, extractor
+fix, audit baseline, gate wiring, ratchet floors and the E2E authored-array
+fix). The full 49-gate serial run was made at `71e77f6` with a clean tree; this
+report and the logs are the commit that follows it.
 
 ## Merge order and conflicts
 
@@ -114,8 +115,10 @@ Audit integration fixes: added `tools/parse_nav.py` to `manifest_audit.py`'s
 | perf guard | 78 / 78 |
 | gate ratchet | PASS |
 
-`measured_on` = `0ed2b42` for this run (the final docs/logs commit re-stamps
-`measured_on` to its own SHA; the code state is identical).
+`measured_on` = `71e77f6` (the code/gate HEAD measured, one commit above the
+mirrors merge; the docs/logs commit is its child). The serial run took
+**22m38s** (15:36:27 → 15:59:05) with `uncommitted_entries_at_start: 0` and
+`FINAL_GATES PASS gates=49`.
 
 ## Residual warnings / still pending (GPU, no capture run here)
 

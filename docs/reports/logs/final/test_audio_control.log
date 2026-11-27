@@ -1,7 +1,7 @@
 == FINAL_GATE test_audio_control
 COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/test_audio_control.gd
-CWD: /home/john/Projects/TAT-2
-STARTED: 2026-11-27T10:53:03-05:00
+CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
+STARTED: 2026-11-27T15:54:50-05:00
 
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
@@ -66,6 +66,9 @@ PASS: AUD4.4 FS_Material=WoodFloor selects a different set (44 media)
 PASS: AUD4.5 WoodFloor keeps the bank's WoodBeam family (8) and no Stone clip
 PASS: AUD4.6 unset groups resolve the authored DefaultSwitch (38 media)
 PASS: AUD4.7 media_ids_for() exposes the authored Stone package
+PASS: AUD4.8 FS_Material=Stone selects exactly the measured 44 media
+PASS: AUD4.9 Stone + FS_Layers=Puddle selects exactly the measured 52 media
+PASS: AUD4.10 the Puddle layer adds exactly 8 recordings, all from its authored package
 PASS: AUD5.1 detection RTPC accepts 0.0
 PASS: AUD5.1 rtpc_value() reads back the set value
 PASS: AUD5.2 authored music-node gain at 0 is -1.0 dB
@@ -81,6 +84,46 @@ PASS: AUD5.8 the id-only low-pass RTPC accepts a value
 PASS: AUD5.8 authored 44% filter -> 422.2 Hz
 PASS: AUD5.9 low-pass evaluation is deterministic (422.243 Hz twice)
 PASS: AUD5.9 curve evaluator counted 20 calls
+PASS: AUD7.1 2 authored MusicSwitchContainers
+PASS: AUD7.1 9 decision keys: 6 resolve to a named value, 3 stay id-only
+PASS: AUD7.1 music_containers() exposes both containers
+PASS: AUD7.2 the two authored groups map to their container ids
+PASS: AUD7.2 the authored play events bind to their containers
+PASS: AUD7.3 Phase=Early resolves key 3143687845 -> node 664990907
+PASS: AUD7.3 Escape=Mid resolves key 1699409647
+PASS: AUD7.4 an unresolved decision key is refused with its id (no invented name)
+PASS: AUD7.4 an unknown music group is refused
+PASS: AUD7.4 an unknown music value is refused
+PASS: AUD7.5 the Phase container authors a 2000 ms Linear transition
+PASS: AUD7.5 the Escape container authors a 0 ms ExitMarker transition
+PASS: AUD7.6 an unknown music container has no transition
+PASS: AUD7.7 the Phase container authors 1 stinger (trigger id-only, 8 s segment, NextBeat)
+PASS: AUD7.7 the Escape container authors no stinger
+PASS: AUD8.1 layer_for() maps the authored wet/glass/foliage/grass surfaces (8 cases)
+PASS: AUD8.2 the resolver produces exactly the five documented layer values
+PASS: AUD8.3 FS_Layers carries the 10 authored values (5 produced, 5 documented)
+PASS: AUD9.1 the stamina RTPC accepts the authored 0..100 domain
+PASS: AUD9.2 stamina 63.67521 -> exactly -0.317507 dB
+PASS: AUD9.2 stamina 100 -> exactly -1.0 dB
+PASS: AUD9.2 stamina 50 -> -0.249318 dB (authored linear segment)
+PASS: AUD9.3 crouch 0 -> 0 dB
+PASS: AUD9.3 crouch 1 -> exactly -0.608844 dB
+PASS: AUD9.4 fall -5000 cm/s -> +0.498813 dB and -100 cents
+PASS: AUD9.4 fall -500 cm/s -> exactly -1.0 dB and -2 cents
+PASS: AUD9.4 fall 500 cm/s clamps to the authored tail (-1.0 dB)
+PASS: AUD9.5 rain 0 -> -1.0 dB
+PASS: AUD9.5 rain 0.65 -> exactly 0 dB (authored breakpoint)
+PASS: AUD9.5 rain 0.3 -> -0.538462 dB (authored linear segment)
+PASS: AUD9.6 disguise curve x=0 -> 0 dB
+PASS: AUD9.6 disguise curve x=1 -> exactly -1.0 dB (authored 0..1 domain)
+PASS: AUD9.6 the disguise RTPC is left at the authored 1.0 (not 100.0)
+PASS: AUD10.1 the state table has 183 authored row references
+PASS: AUD10.1 those rows target 62 authored nodes
+PASS: AUD10.2 98 rows target 24 AudioBus nodes
+PASS: AUD10.2 the other 85 rows target non-bus nodes
+PASS: AUD10.3 the 24 unnamed buses are deferred with their row count (98)
+PASS: AUD10.3 7 authored state groups with the measured per-group rows
+PASS: AUD10.4 state_override_rows() still returns the selected state's rows
 PASS: AUD6.0 AudioManager autoload present
 PASS: AUD6.1 AudioManager loaded the control plane
 PASS: AUD6.1 mix_state().control reports the loaded plane
@@ -97,16 +140,21 @@ PASS: AUD6.5 unpaused sets Modal_State=Modal_Gameplay
 PASS: AUD6.6 AudioManager.set_detection_level(0.6) accepted
 PASS: AUD6.6 mix_state().detection_level is 0.6
 PASS: AUD6.6 authored music gain at 0.6 is -0.501 dB
+PASS: AUD6.7 a wet surface sets FS_Layers=Puddle
+PASS: AUD6.8 Stone + Puddle builds the authored 8-recording layer pool
+PASS: AUD6.9 mix_state().rtpc reports the 5 authored parameters with exact curves
+PASS: AUD6.11 disguise 0/25/50/75/100 stores 0/0.25/0.5/0.75/1.0
+PASS: AUD6.11 disguise 25 -> -0.627605 dB (mid-curve, not the -1 dB endpoint)
+PASS: AUD6.11 the disguise_changed handler stores 75 as 0.75
+PASS: AUD6.10 the Phase music event authors a 2.0 s fade
+PASS: AUD6.10 start_music('mission') plays the authored event
+PASS: AUD6.10 the runtime music player uses the authored 2.0 s fade
 PASS: AUD7.1 an absent control document degrades instead of failing
 PASS: AUD7.1 degraded_reason() explains the fallback (missing:res://tests/fixtures/__absent__.json)
 PASS: AUD7.2 degraded select_media() returns the input unchanged
 PASS: AUD7.3 the real document reloads after the degraded probe
 AUDIO_CONTROL counts: switch=14/23 values=84 state=4/8 values=10 rtpcs=16/50 curves=142 containers=185
-AUDIO_CONTROL_SUMMARY: fails=0 checks=71
-WARNING: 4 ObjectDB instances were leaked at exit (run with `--verbose` for details).
-   at: cleanup (core/object/object.cpp:2536)
-ERROR: 2 resources still in use at exit (run with --verbose for details).
-   at: clear (core/io/resource.cpp:822)
+AUDIO_CONTROL_SUMMARY: fails=0 checks=123
 
 EXIT: 0
-FINISHED: 2026-11-27T10:53:04-05:00
+FINISHED: 2026-11-27T15:54:51-05:00

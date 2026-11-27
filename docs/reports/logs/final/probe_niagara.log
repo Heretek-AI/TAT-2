@@ -1,7 +1,7 @@
 == FINAL_GATE probe_niagara
 COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/probe_niagara.gd
-CWD: /home/john/Projects/TAT-2
-STARTED: 2026-11-27T10:43:17-05:00
+CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
+STARTED: 2026-11-27T15:45:02-05:00
 
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
@@ -33,10 +33,10 @@ INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mapp
 WARNING: [level_loader] level Niagara: 1048 placements across 16 systems in 140 chunk nodes (4 sprite-masked, 810 parameter sets, 2647 activation-skipped; decode root=res://../extracted/json files=77)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _spawn_level_niagara (res://src/core/level_loader.gd:6740)
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:7345)
          [1] _run (res://tests/probe_niagara.gd:122)
 NIAGARA_PROBE files=107 authored=3695 active=1048 skipped=2647 systems=16 nodes=140 sprites=4 params=810 tint(param/material/fallback)=743/12/293
-NIAGARA_SPRITE_TOKENS bound=5 total=39 legacy=5 renderers=82 changed=2 slots=opacity:2,albedo:23,emissive:0,normal:0,orm:0,none:11,subuv:3 reasons=gate:5,kept:18,no_material_record:2,no_texture:9,opacity_fallback:2,subuv_atlas:3 additive_opaque=9 additive_total=16 library=fixed:11/kept:194/none:107 masks=6/29 ms=39 errors=0
+NIAGARA_SPRITE_TOKENS bound=5 total=39 legacy=5 renderers=82 changed=2 slots=opacity:2,albedo:23,emissive:0,normal:0,orm:0,none:11,subuv:3 reasons=gate:5,kept:18,no_material_record:2,no_texture:9,opacity_fallback:2,subuv_atlas:3 additive_opaque=9 additive_total=16 library=fixed:11/kept:194/none:107 masks=6/29 ms=41 errors=0
 NIAGARA_SPRITE_TOKEN mat=/Game/Art/Environment/Lights/Candles/MI_FlameCandleOrangeB slot=albedo now=T_Atlas_B_01_BC.png before=T_Atlas_B_01_BC.png gate=reject reason=subuv_atlas subuv=8x8
 NIAGARA_SPRITE_TOKEN mat=/Game/Art/Effects/WeaponImpact/MI_BurstEmbers slot=albedo now=vfx_MuzzleFlare01.png before=vfx_MuzzleFlare01.png gate=reject reason=kept
 NIAGARA_SPRITE_TOKEN mat=/Game/Art/Effects/GlyphLock/MI_Candlabra_SmokeWisp slot=albedo now=T_Atlas_B_01_BC.png before=T_Atlas_B_01_BC.png gate=reject reason=subuv_atlas subuv=8x8
@@ -88,10 +88,10 @@ NIAGARA_SWITCH NS_Ripple_02a off_changed=1 restored=true
 WARNING: [level_loader] level Niagara: 219 placements across 4 systems in 39 chunk nodes (1 sprite-masked, 159 parameter sets, 915 activation-skipped; decode root=res://../extracted/json files=17)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _spawn_level_niagara (res://src/core/level_loader.gd:6740)
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:7345)
          [1] _run (res://tests/probe_niagara.gd:324)
 NIAGARA_CULL_MAP Guildhall_Gameplay active=219 nodes=39 visible=19
 NIAGARA_PROBE PASS
 
 EXIT: 0
-FINISHED: 2026-11-27T10:43:20-05:00
+FINISHED: 2026-11-27T15:45:05-05:00

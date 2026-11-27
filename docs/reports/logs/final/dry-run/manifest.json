@@ -22,7 +22,7 @@
     "audio_mix_rate": 44100.0,
     "cmdline": [
       "--script",
-      "/home/john/Projects/TAT-2/build/qa/p0b_capture.gd"
+      "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b_capture.gd"
     ],
     "display_server": "headless",
     "godot": "4.7.2-stable (official)",
@@ -38,12 +38,12 @@
     "TAT2_BEAM_CARD": "on",
     "XDG_SESSION_TYPE": "wayland"
   },
-  "finished_at_utc": "2026-11-27T15:53:15",
+  "finished_at_utc": "2026-11-27T20:55:13",
   "git": {
-    "branch": "main",
+    "branch": "phase12-integration",
     "dirty": true,
-    "sha": "912a481d42611cb0de77f31d4e01e63029b68190",
-    "sha_short": "912a481d4261"
+    "sha": "71e77f6ae4710301c98d7f52ebb2835090a12db8",
+    "sha_short": "71e77f6ae471"
   },
   "gpu": {
     "available": true,
@@ -53,10 +53,10 @@
       [
         "NVIDIA GeForce RTX 4070 Laptop GPU",
         "620.73.04",
-        "62.59",
-        "3958",
-        "7",
-        "210"
+        "65.57",
+        "6144",
+        "37",
+        "420"
       ]
     ],
     "used_by_capture": false
@@ -85,7 +85,7 @@
     "The fixed-pose run marks poses, not route beats. A 27-beat route run must call mark_beat(S01..S27); p0b_audio_stats.py --route prints the reference table.",
     "Reference audio is documented RMS/peak dBFS (not LUFS); the script computes RMS/peak only and states the clip's -43.9 LUFS as context."
   ],
-  "out_dir": "/home/john/Projects/TAT-2/build/qa/p0b/dry-run",
+  "out_dir": "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b/dry-run",
   "poses": [
     {
       "beat": "S13",
@@ -162,6 +162,30 @@
     {
       "beat": "S24",
       "eye": [
+        27.0,
+        29.6700000762939,
+        -55.0
+      ],
+      "fov_vertical_deg": 54.54,
+      "ground_planned": false,
+      "grounded": false,
+      "id": "foyer_beam",
+      "note": "KF27-framed cue aimed at the authored BP_Detector_LightBeam_C_107 card at (23.27,29.76,-57.4); the one-band/emitter criteria are in build/qa/kf27_beam_reference.json",
+      "ref_keyframe": "KF27",
+      "resolution": [
+        1920,
+        1080
+      ],
+      "status": "dry_run",
+      "target": [
+        23.2700004577637,
+        29.7600002288818,
+        -57.4000015258789
+      ]
+    },
+    {
+      "beat": "S24",
+      "eye": [
         31.0,
         28.7199993133545,
         -26.2000007629395
@@ -208,7 +232,7 @@
       ]
     },
     {
-      "beat": "S25",
+      "beat": "",
       "eye": [
         39.0,
         28.8199996948242,
@@ -218,8 +242,8 @@
       "ground_planned": true,
       "grounded": false,
       "id": "beam_close",
-      "note": "3.4 m from the C_57 card; beam core/glow rows are measured by p0b_roi_stats.py",
-      "ref_keyframe": "KF27",
+      "note": "Lounge C_57 extra (not KF27/S24): 3.4 m from the C_57 card; luma stats only, no KF27 criteria",
+      "ref_keyframe": "EXTRA",
       "resolution": [
         1920,
         1080
@@ -232,8 +256,8 @@
       ]
     }
   ],
-  "repo_root": "/home/john/Projects/TAT-2",
-  "run_id": "20261127T155315Z_912a481d4261_on",
+  "repo_root": "/home/john/.local/share/opencode/worktree/318f41/phase12-integration",
+  "run_id": "20261127T205512Z_71e77f6ae471_on",
   "schema": "tat2.p0b_capture/1",
   "seed": {
     "active_map_seed": 0,
@@ -245,6 +269,7 @@
       "gate",
       "upper_foyer",
       "yaw180",
+      "foyer_beam",
       "lounge",
       "lounge_beam",
       "beam_close"
@@ -257,5 +282,5 @@
     "frames": 60,
     "selector": "median-mean"
   },
-  "started_at_utc": "2026-11-27T15:53:15"
+  "started_at_utc": "2026-11-27T20:55:13"
 }

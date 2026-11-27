@@ -72,14 +72,21 @@ func _run() -> void:
 func _tri_mesh(mat: Material) -> ArrayMesh:
 	var arrays: Array = []
 	arrays.resize(Mesh.ARRAY_MAX)
+	# Godot culls by the triangle winding, not the +Z vertex normal. The
+	# original A=(-0.6,-0.6), B=(0.6,-0.6), C=(0,0.6) + [0,1,2] order put the
+	# front face away from the camera at z=+6 (the GPU readback showed the
+	# CULL_BACK control black). Swapping B/C is the equivalent of index
+	# [0,2,1] on the original order: same triangle, +Z front face, and it keeps
+	# the probe's baked-winding selftest expectation ([0,2,1] after the bake)
+	# unchanged. Normals/tangents stay +Z; UVs move with their vertices.
 	arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array([
-		Vector3(-0.6, -0.6, 0.0), Vector3(0.6, -0.6, 0.0), Vector3(0.0, 0.6, 0.0)])
+		Vector3(-0.6, -0.6, 0.0), Vector3(0.0, 0.6, 0.0), Vector3(0.6, -0.6, 0.0)])
 	arrays[Mesh.ARRAY_NORMAL] = PackedVector3Array([
 		Vector3(0.0, 0.0, 1.0), Vector3(0.0, 0.0, 1.0), Vector3(0.0, 0.0, 1.0)])
 	arrays[Mesh.ARRAY_TANGENT] = PackedFloat32Array([
 		1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0])
 	arrays[Mesh.ARRAY_TEX_UV] = PackedVector2Array([
-		Vector2(0.0, 1.0), Vector2(1.0, 1.0), Vector2(0.5, 0.0)])
+		Vector2(0.0, 1.0), Vector2(0.5, 0.0), Vector2(1.0, 1.0)])
 	arrays[Mesh.ARRAY_INDEX] = PackedInt32Array([0, 1, 2])
 	var m := ArrayMesh.new()
 	m.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
@@ -242,6 +249,13 @@ func _selftest() -> void:
 
 func _sample(img: Image, cam: Camera3D, world_pos: Vector3) -> Color:
 	var screen: Vector2 = cam.unproject_position(world_pos)
+	# `unproject_position` is in the camera viewport's coordinates (the
+	# project viewport is 1280x720), while the saved/readback image is the
+	# 960x540 window. Scale the sample point into image pixels; without this
+	# every readback sampled above the triangles and reported black.
+	var vp_size: Vector2 = cam.get_viewport().get_visible_rect().size
+	if vp_size.x > 0.0 and vp_size.y > 0.0:
+		screen *= Vector2(img.get_width(), img.get_height()) / vp_size
 	var x: int = clampi(roundi(screen.x), 0, img.get_width() - 1)
 	var y: int = clampi(roundi(screen.y), 0, img.get_height() - 1)
 	return img.get_pixel(x, y)
@@ -274,6 +288,8 @@ func _render_and_read(tag: String) -> void:
 	var png_path: String = out_dir.path_join("%s.png" % tag)
 	img.save_png(png_path)
 	print("MIRROR_PROBE_IMAGE path=%s size=%dx%d" % [png_path, img.get_width(), img.get_height()])
+	print("MIRROR_PROBE SIZES viewport=%s image=%dx%d" % [
+		str(cam.get_viewport().get_visible_rect().size), img.get_width(), img.get_height()])
 	var names: Array[String] = [
 		"control_back", "control_front", "single_native",
 		"mm_native_identity", "mm_native_mirror",

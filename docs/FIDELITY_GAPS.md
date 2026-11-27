@@ -116,9 +116,11 @@ visual claim** and does not re-score a row.
   at the **64,660** baseline (`make test` pins it). Standalone
   `MeshInstance3D` mirrors keep Godot's native compensation by default;
   `TAT2_MIRROR_SINGLE=baked` is the measured fallback (223 variants /
-  61,972,836 B) if the synthetic readback says the engine does not compensate.
-  The GPU probe (`build/qa/mirror_probe.sh --run`) has **not** been run, so the
-  visual claim is still pending. Report:
+  61,972,836 B). The synthetic GPU probe now **PASSes** on the integrated tree
+  (`control_ok=true`, `pass=1`; `native_mm=not_compensated`,
+  `native_single=compensated`, baked/cull/single all red); the log is committed
+  at `docs/reports/logs/p4-mirrors/p4mirrors_fix.log`. That is a culling probe,
+  not a lighting/shadows visual capture. Report:
   [`p4-mirrors-20261127.md`](reports/p4-mirrors-20261127.md).
 - **Landscape — data assertion PASS; pixel A/B pending (P4.4).** The shipped
   `vis > 0.5` discard stays (not flipped). `probe_landscape_mask` (7 checks)

@@ -268,10 +268,12 @@ StateTree shadow ceiling; the authored-element collision floor.
   `PERF_CENSUS.source_sublevels` stays at the **64,660** baseline (`make test`
   pins it exactly). Standalone `MeshInstance3D` mirrors rely on Godot's native
   compensation by default; `TAT2_MIRROR_SINGLE=baked` is the measured fallback
-  (223 variants / 61,972,836 B). The synthetic GPU probe
-  (`build/qa/mirror_probe.sh --run`) is the pending visual verdict and now
-  exits non-zero unless the RESULT line reports `pass=1`; `--selftest` is
-  green. Report: [`reports/p4-mirrors-20261127.md`](reports/p4-mirrors-20261127.md).
+  (223 variants / 61,972,836 B). The synthetic GPU probe **PASSes** on the
+  integrated tree (`pass=1`; `native_mm=not_compensated`,
+  `native_single=compensated`, baked/cull/single all red; log committed at
+  `docs/reports/logs/p4-mirrors/p4mirrors_fix.log`). It proves culling, not
+  lighting/shadows or a rotated mirror. Report:
+  [`reports/p4-mirrors-20261127.md`](reports/p4-mirrors-20261127.md).
 - **Landscape — data assertion PASS; pixel A/B pending (P4.4).** The shipped
   `vis > 0.5` discard stays; do not flip it. `TAT2_LANDSCAPE_MASK=discard|raw|off`
   selects the shipped rule, a raw-mask debug view, or no mask read, and the

@@ -1,14 +1,16 @@
 # Handoff — Thick As Thieves Godot 4.7.2 port (next session)
 
 **Repo:** `/home/john/Projects/TAT-2`
-**Code/data tip:** `5135f53` (P2/P3/P5/data + Den/navmesh/UI/audio merged).
-**Docs/evidence tip:** `912a481` + the Phase 0b evidence commit (local, **not
-pushed**); `origin/main` is `912a481`.
-**This session:** Phase 0a truth/save/gate hygiene and Phase 0b (clean route2 +
-the first measured 45-gate set). The commits are local and **not pushed**.
-**Working tree:** clean after the Phase 0b commits. No uncommitted tracked work.
-**Measured gate set:** **45/45 at `912a481`**; clean route2 manifest
-`status=captured`, `git.dirty=false`.
+**Code/data tip:** `0ed2b42` (mirrors + six lanes + P4.1 regeneration + gate wiring).
+**Docs/evidence tip:** `0ed2b42` + this integration evidence commit (local, **not
+pushed**); `origin/main` is `7de2f0c`.
+**This session:** Phase 1/2 integration — six lanes cherry-picked, mirrors
+fast-forwarded (`07ecb56`), P4.1 producers regenerated, the real 21-slice gem
+payload extracted, and the 49-gate set measured. The commits are local and
+**not pushed**.
+**Working tree:** clean before the final evidence commit; logs are under
+`docs/reports/logs/final/`.
+**Measured gate set:** **49/49 at `0ed2b42`**; no GPU/Vulkan capture run.
 **Godot:** `4.7.2.stable` via native `tools/godot` (`godot` is **not** on `$PATH`).
 **Renderer:** Forward+ · Jolt 60 Hz · 1280×720 base · Linux x86_64.
 **Steam reference:** `/home/john/.steam/steam/steamapps/common/Thick As Thieves/`
@@ -83,11 +85,12 @@ cell and the 120 tally stay for Phase 3.
 ## 1. State in one paragraph
 
 The port has completed **P0a/P0b**, **P1 route content**, the **Den spawn
-hotfix**, **P2 StateTree v2 shadow runtime**, the **navmesh extraction spike**,
-**P3 Wwise control plane**, **P5 UI correctness** and the **data-truth wave**.
-The complete 45-gate set passes at `912a481` (clean route2 + the Phase 0a route
-self-test); the evidence is in `docs/reports/logs/final/` and
-`docs/reports/final-20261127-phase0b.md`. The port is not
+hotfix**, **P2 StateTree v2 shadow runtime**, the **navmesh runtime consumer**,
+**P3 Wwise control plane**, **P5 UI correctness**, the **data-truth wave** and
+the **Phase 1/2 integration** (landscape/beams, GC/bookcases, navmesh, W11
+audio, P4.1 exposure/IBL, U-4 gem, mirrors). The complete 49-gate set passes at
+`0ed2b42`; the evidence is in `docs/reports/logs/final/` and
+`docs/reports/integration-20261127.md`. The port is not
 Parity Complete, and the remaining measurement work splits into two tracks that
 the previous handoff conflated:
 
@@ -109,28 +112,36 @@ hold-smash `PORT_DECISION`.
 
 ---
 
-## 2. Gates at the final tip (measured at `912a481`, 45 gates)
+## 2. Gates at the final tip (measured at `0ed2b42`, 49 gates)
 
 | Gate | Value |
 |---|---|
-| compile | **217 checked / 0 broken** |
-| `run_tests.gd` | **324 PASS / fails=0** (suites 119 cream, 121 audio registered) |
+| compile | **228 checked / 0 broken** |
+| `run_tests.gd` | **327 PASS / fails=0** (suites 119 cream, 121 audio, 122 VO, 123 AEM, 124 cubemap) |
 | M2 | **12 PASS / fails=0** |
-| P1 route probes | safe **86**, doors **47**, beams **7**, ward **44**, street **31** (`hard_limits=2`) |
+| P1 route probes | safe **86**, doors **47**, beams **9**, ward **44**, street **31** (`hard_limits=2`) |
+| landscape mask | **7/0** (`discard|raw|off`; safe-room gap comp 12) |
+| navmesh runtime | **70/0** (Guildhall 80 links, door state rule, negative controls) |
 | guards | Guildhall `C_20`, buckets 4/4; Old Manor order 3, 4/4 |
 | collision | `COL_MAPS PASS min_coverage=0.869 dropped=0 planar_skipped=2 coverage_ppm=868852` (Guildhall 0.910, Old Manor 0.912, FTUE 0.869; `no_record=0`) |
-| locks | `applied=154` (144 containers + 10 door nodes) |
+| locks | `applied=162` (152 containers + 10 door nodes) |
 | E2E `all` | **300/300** (T1=117 T2=110 T3=25 T4=14 S2=12 A2=22) |
-| E2E p2 | **14/14**, `expected_fail=0 expected_delta=0 fixed=0 unexpected_fail=0` |
+| E2E p2 | **17/17**, `expected_fail=0 expected_delta=0 fixed=0 unexpected_fail=0` |
 | parity-only | **60/60**, 11 rules all `parity_restoration` |
 | cream suite 119 | **GREEN**, `CREAM_PROOF: GREEN passes=5` (old RED proof retired) |
-| audio control 121 | **71/0** (14/23 switch groups, 4/8 states, 16/50 RTPCs, 142 curves) |
-| P5 UI | **44/0** headless |
+| audio control 121 | **123/0** (14/23 switch groups, 4/8 states, 16/50 RTPCs, 142 curves, music=2, music_keys=6/9) |
+| VO director 122 | **53/0** |
+| AEM 123 | **77/0**, no PENDING |
+| cubemap 124 | **37/0**, no PENDING; `CUBEMAP_ORIENT` daylight WARN recorded |
+| P5 UI | **54/0** headless; `GEM_PAYLOAD present=true: layers=21` |
 | Den spawn | **9/0**, `source=authored`, `(5.669,40.117,270.686)` |
 | StateTree suite 110 | **191/0**, `fully_covered_trees=1`, `fully_parity_covered_trees=0` |
-| navmesh spike | 2,958 tiles / 14,930 polys / 221 raw off-mesh -> 80 logical links; consumer 16/0; doorway 3 waypoints / 4.15 m |
+| navmesh asset | Guildhall 2,958 tiles / 14,930 polys; Old Manor 1,469 / 9,275; FTUE 1,558 / 5,587; `max_poly_verts=6`, `decompress_fail=0`; 80 logical links |
 | runtime smoke | `RUNTIME_SMOKE_SCAN PASS exit=124 errors=0 mission_ready=1` |
 | route self-test (Phase 0a) | `P0B_ROUTE_SELFTEST PASS checks=62 fails=0` (headless wrapper `--self-test`; `bash -n` on the route/live wrappers) |
+| capture harness | dry-run `poses=7`; self-test **23/0**; KF27 **9/9** |
+| producer tests | `make test-producers` + `test_parse_nav.py` 7/7 (stealthball 22, UI pixel 15) |
+| P5 capture filter | **5/5** |
 | audit / texture / perf / ratchet | **PASS** / 796 capped, 1 alpha, 0 offenders / 78/78 / PASS |
 | string audit | 311 routed / 199 authored / 112 invented (one documented `Thieves' Den` port copy) |
 
@@ -139,16 +150,15 @@ hold-smash `PORT_DECISION`.
 texture cap `797 → 796` from the accepted `texture_refs 1523 → 1522` pants fix.
 The old `coverage=0.989` is not a valid authored number; do not restore it.
 
-The 45-gate set was measured at `912a481` in one serial
-`build/qa/run_final_gates.sh` run (Phase 0b): **45/45 exit 0**, wall 19 m 49 s,
-logs in `docs/reports/logs/final/`, report
-`docs/reports/final-20261127-phase0b.md`. The old 44-gate logs were measured at
-`5135f53`, committed on `main` at `3d62f6b`, and the Phase 0b run replaced them
-in place at `912a481` (pre-Phase-0b copies remain recoverable at `912a481`
-under `docs/reports/logs/final/`); `docs/reports/final-20261127.md` describes
-the 44-gate run. The route self-test (`checks=62`) is now also a
-ratchet floor, and the clean route2 capture is
-`docs/reports/logs/p0b-route/route2-clean/` (`git.dirty=false`).
+The 49-gate set was measured at `0ed2b42` in one serial
+`build/qa/run_final_gates.sh` run (Phase 1/2): **49/49 exit 0**, wall recorded in
+`docs/reports/logs/final/final-run.log`, logs in `docs/reports/logs/final/`,
+report `docs/reports/integration-20261127.md`. The previous Phase 0b 45-gate
+logs were measured at `912a481` and remain recoverable there under
+`docs/reports/logs/final/`; `docs/reports/final-20261127-phase0b.md` describes
+that run. The route self-test (`checks=62`) remains a ratchet floor, and the
+clean route2 capture is `docs/reports/logs/p0b-route/route2-clean/`
+(`git.dirty=false`).
 
 ---
 
@@ -311,9 +321,9 @@ partial with the link off and completes with it on. The headless probe is
 `build/qa/nav_runtime_probe.gd` (`NAV_RUNTIME_PROBE checks=70 fails=0`); a real
 free-play boot with `TAT2_NAV=on` reached `mission_ready` with the region ready
 (57..79 frames / 865..1215 ms) and 42/80 door groups linked (38 skipped by the
-2.5 m snap). Remaining: default-on (N-P3), the full gate set/trajectory deltas,
-and the one authored drop link (`NavLink_71`) whose both endpoints are ~6 m off
-the mesh.
+2.5 m snap). Remaining: default-on (N-P3), the trajectory/full-route deltas, and
+the one authored drop link (`NavLink_71`) whose both endpoints are ~6 m off the
+mesh; the headless 49-gate set now pins the runtime at 70/0.
 
 ### 4.4 StateTree patrol cutover (shadow only)
 
@@ -348,10 +358,28 @@ lines and the full Wwise effects/mix are not wired. The current work is not
 
 ### 4.7 UI visual score / remaining UI
 
-P5 is headless-verified only. A GPU capture is needed for Light Gem appearance
-(the 21-slice `T_stealthball_Array` is absent → `PORT_APPROX`), pause blur/line
-weights, briefing fit and the `Thieves' Den` port-copy label. The string-audit
-ceiling is 112 and must not rise further without evidence.
+P5 is headless-verified only. The 21-slice `T_stealthball_Array` payload is now
+extracted and binds (`GEM_PAYLOAD present=true: layers=21`,
+`mapping_kind=directional`); a GPU capture is still needed for Light Gem
+appearance, pause blur/line weights, briefing fit and the `Thieves' Den`
+port-copy label. The string-audit ceiling is 112 and must not rise further
+without evidence.
+
+### 4.9 Phase 1/2 remaining GPU gates (no capture run yet)
+
+Run serially, one Godot at a time, and record under `docs/reports/logs/`:
+
+- `build/qa/mirror_probe.sh --run --tag=p4mirrors` (engine readback; the
+  headless split census is 29/0, 772 with `--full`).
+- Landscape A/B at `upper_foyer`: `TAT2_LANDSCAPE_MASK=discard|raw|off`.
+- `foyer_beam` KF27 capture + `p0b_roi_stats.py` (one band 40.0–40.5 %,
+  emitter 17.8 %/40.0 %); Lounge `beam_close` is `P0B_EXTRA`.
+- IBL `off` vs `ambient` (KF16/KF17/KF18), `TAT2_AEM=model` no-op, then
+  `TAT2_AEM=meter` at six poses with >=25 s settle.
+- `capture_p5_ui.gd` at 720p/1080p + `ui_pixel_stats.py --strict`.
+- `CUBEMAP_ORIENT` recorded a daylight `+Y < -Y` luminance WARN (0.0680 vs
+  0.0712); check the UE ECubeFace slice order before trusting the ambient
+  direction in a visual score.
 
 ### 4.8 Data/perf/ship
 

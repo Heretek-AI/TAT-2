@@ -6,7 +6,49 @@ extracted through `tools/tat-extract` (CUE4Parse, `EGame.GAME_UE5_5`).
 Generated from `extracted/filelist.txt` (22,005 entries) and the current `extracted/` tree.
 Re-run the census with the commands at the bottom.
 
-## Phase 0a — truth / save / gate hygiene — 2026-11-27 (newest; no new render claim)
+## Phase 1/2 integration — 2026-11-27 (newest; headless gates, no GPU score)
+
+Seven lanes merged (six by cherry-pick, mirrors by fast-forward at `07ecb56`)
+and the P4.1 producers were regenerated. The port now has the authored
+landscape visibility rule + A/B switch, the authored 2 cm beam core and KF27
+cue, GC bookcase/cabinet leaves and authored containers, the authored navmesh
+runtime behind `TAT2_NAV` (80 Guildhall links, door state rule), W11 VO/music
+keys/FS_Layers, the P4.1 AEM model/IBL cubemap chain, and the U-4 21-slice
+authored Light Gem.
+
+- **Light Gem payload is real now.** The real extractor initially wrote
+  `slice_00png` (missing dot); the HUD could not import it and P5 stayed
+  `PORT_APPROX`. `Exporter.cs` now adds the dot, the 21 slices import, and the
+  probe reports `GEM_PAYLOAD present=true: layers=21 table=21
+  kind=directional`. The native index selection remains `derived-approx`
+  (`mapping_kind=directional`).
+- **Beams** are an authored-parameter match (15/15 terms, 330 cards,
+  `max_axis_err_deg=0.000005`), the KF27 contract is one band 40.0–40.5 % and
+  emitter 17.8 %/40.0 %, and the reference calibration is 9/9. The GPU port
+  capture at `foyer_beam` is still pending.
+- **Landscape** `vis > 0.5` discard is pinned by `probe_landscape_mask` 7/0
+  (three diagnostic modes, 50/50 mask, Guildhall component 12 safe-room gap).
+  The raw-mask pixel A/B is still the integrator's GPU step.
+- **Navmesh runtime** is authored (Guildhall 2958 tiles / 14,930 polys; Old
+  Manor 1469 / 9275; FTUE 1558 / 5587; `max_poly_verts=6`,
+  `decompress_fail=0`). `nav_runtime_probe` is 70/0; `TAT2_NAV` defaults **off**
+  and the FSM still drives. N-P3 default-on and trajectory deltas remain.
+- **Audio** control is 123/0 with `music=2 music_keys=6/9`; 14/23 switches,
+  4/8 states, 16/50 RTPCs and 142 curves. State-property rows and the full
+  Wwise effects/mix are still deferred; VO director 53/0.
+- **P4.1 exposure/IBL** AEM 77/0 and cubemap 37/0 with no PENDING data block.
+  `CUBEMAP_ORIENT` records a daylight `+Y < -Y` luminance WARN (0.0680 vs
+  0.0712); the GPU IBL/AEM meter comparison is pending.
+- **Mirrors** are the negative-determinant split (`07ecb56`), 3,312 instances;
+  the headless split census is 29/0 (772 with `--full`); the engine readback
+  needs `build/qa/mirror_probe.sh --run` (Vulkan, pending).
+- **49-gate set**: compile 228/0, `run_tests` 327/0, audio 123, VO 53, AEM 77,
+  cubemap 37, P5 54, beams 9, landscape 7, nav 70, GC 52, locks 162 (152+10),
+  capture 7 poses / self-test 23 / KF27 9/9, audit 12660/12703, texture cap
+  1567/796/1/0. Evidence:
+  [`reports/integration-20261127.md`](reports/integration-20261127.md).
+
+## Phase 0a — truth / save / gate hygiene — 2026-11-27 (prior; superseded by Phase 1/2 above where they differ)
 
 Phase 0a is a **no-GPU** truth pass: restore the owner save, make the stated
 gate/docs numbers match the committed evidence, put the scorecard provenance in

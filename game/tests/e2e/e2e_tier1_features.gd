@@ -1334,20 +1334,40 @@ func _feat_13_hud_stealth_sound_health() -> void:
 	if sg != null:
 		var sg_pos: Vector2 = sg.get_global_rect().position + sg.get_global_rect().size * 0.5
 		sg_centered = sg_pos.x > 420.0 and sg_pos.x < 860.0 and sg_pos.y > 460.0
-		gs.set("player_light_visibility", 0.05)
-		hud.set("_vis_smooth", 0.0)
-		await h.step_process(10)
-		var dark_amount: float = float(orb_mat.get_shader_parameter("lit_amount")) if orb_mat != null else -1.0
-		var dark_frame: Color = sg.modulate
-		gs.set("player_light_visibility", 0.95)
-		hud.set("_vis_smooth", 1.0)
-		await h.step_process(10)
-		var bright_amount: float = float(orb_mat.get_shader_parameter("lit_amount")) if orb_mat != null else -1.0
-		var bright_frame: Color = sg.modulate
-		# UI3: the authored frame tint is constant; reactivity lives in the
-		# orb's lit-cap amount (the old assertion read the frame modulate).
+	# U-4 authored array path: the array material has `ball_array`/`slice_index`
+	# but not the procedural `lit_amount` scalar. Light reactivity is then the
+	# selected slice (the measured mapping), so assert that instead of forcing the
+	# old scalar contract on the authored material.
+	var array_info: Dictionary = hud.call("gem_array_info") as Dictionary
+	var array_path: bool = bool(array_info.get("bound", false))
+	var dark_slice: int = -1
+	var dark_amount: float = -1.0
+	var dark_frame: Color = sg.modulate if sg != null else Color.WHITE
+	gs.set("player_light_visibility", 0.05)
+	hud.set("_vis_smooth", 0.0)
+	await h.step_process(10)
+	if array_path:
+		dark_slice = int((hud.call("gem_array_info") as Dictionary).get("slice_index", -1))
+	else:
+		dark_amount = float(orb_mat.get_shader_parameter("lit_amount")) if orb_mat != null else -1.0
+	var bright_slice: int = -1
+	var bright_amount: float = -1.0
+	gs.set("player_light_visibility", 0.95)
+	hud.set("_vis_smooth", 1.0)
+	await h.step_process(10)
+	if array_path:
+		bright_slice = int((hud.call("gem_array_info") as Dictionary).get("slice_index", -1))
+	else:
+		bright_amount = float(orb_mat.get_shader_parameter("lit_amount")) if orb_mat != null else -1.0
+	var bright_frame: Color = sg.modulate if sg != null else Color.WHITE
+	# UI3: the authored frame tint is constant; reactivity lives in the orb's
+	# lit-cap amount (procedural) or the authored slice (array).
+	if array_path:
+		sg_reactive = dark_slice >= 0 and bright_slice >= 0 and dark_slice != bright_slice \
+			and bright_frame.is_equal_approx(dark_frame)
+	else:
 		sg_reactive = bright_amount > dark_amount + 0.5 and bright_frame.is_equal_approx(dark_frame)
-	h.require(sg_centered and sg_reactive, "T1-13-A", "StealthBall centered=%s light_reactive=%s" % [str(sg_centered), str(sg_reactive)])
+	h.require(sg_centered and sg_reactive, "T1-13-A", "StealthBall centered=%s light_reactive=%s (path=%s dark=%s bright=%s)" % [str(sg_centered), str(sg_reactive), "array" if array_path else "procedural", str(dark_slice if array_path else dark_amount), str(bright_slice if array_path else bright_amount)])
 
 	# T1-13-B: Bilateral Red SoundWaves on NoiseBus
 	var nb: Node = h.noise_bus()

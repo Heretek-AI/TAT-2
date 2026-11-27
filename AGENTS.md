@@ -61,12 +61,12 @@ TAT-2 expansion content belong in git.
 
 ```bash
 make run         # native 4.7.2 client, F3 overlay
-make test        # tests/run_tests.gd — 324 checks, suites numbered to 121
+make test        # tests/run_tests.gd — 327 checks, suites numbered to 124
 make runtime-smoke # real free-play boot: exit 124 only, ERROR:/push_error scan, allowlist
 make audit       # fail-closed content + producer/output baseline gate
 make gate-ratchet # floors + committed docs/reports/logs evidence agree
 build/qa/test_perf_guard.sh  # perf-wrapper contract, no GPU, no launch
-build/qa/run_final_gates.sh  # current full set (45 gates) -> docs/reports/logs/final/; no outer flock
+build/qa/run_final_gates.sh  # current full set (49 gates) -> docs/reports/logs/final/; no outer flock
 build/qa/run_p0b_gates.sh    # historical P1 set (40 gates + cream RED) -> docs/reports/logs/p1/full/
 build/qa/run_p0a_gates.sh    # historical P0a 28-gate set -> docs/reports/logs/p0a/
 
@@ -82,33 +82,61 @@ If a headless run reports missing textures (`T1-01-C`, `moon_visible=0.0`), the
 import cache is incomplete — run `tools/godot --headless --path game --import`
 first.
 
-| Gate | Passing value (45-gate set measured_on `912a481`, logs in `docs/reports/logs/final/` — raise, never lower) |
+| Gate | Passing value (49-gate set measured_on `0ed2b42`, logs in `docs/reports/logs/final/` — raise, never lower) |
 |---|---|
-| compile | 217 checked, 0 broken |
-| `run_tests.gd` | `SUMMARY: fails=0` (324 PASS; suites numbered to 121, 119 cream + 121 audio registered) |
+| compile | 228 checked, 0 broken |
+| `run_tests.gd` | `SUMMARY: fails=0` (327 PASS; suites numbered to 124, 119 cream + 121 audio + 122 VO + 123 AEM + 124 cubemap registered) |
 | `test_m2_player.gd` | `M2_SUMMARY: fails=0` (12 PASS) |
-| P1 route probes (S12/S21/S24/S25–26/S13–20) | `P1_SAFE PASS checks=86` / `P1_DOORS checks=47 fails=0` / `P1_BEAMS PASS checks=7` / `P1_WARD PASS checks=44` / `P1_STREET PASS checks=31 hard_limits=2` |
+| P1 route probes (S12/S21/S24/S25–26/S13–20) | `P1_SAFE PASS checks=86` / `P1_DOORS checks=47 fails=0` / `P1_BEAMS PASS checks=9` / `P1_WARD PASS checks=44` / `P1_STREET PASS checks=31 hard_limits=2` |
+| landscape mask (P4.4) | `LANDSCAPE_MASK_SUMMARY: PASS fails=0 checks=7` (`discard|raw|off`, safe-room gap comp 12/`Weightmap_20`) |
+| navmesh runtime (N-P1/P2) | `NAV_RUNTIME_PROBE checks=70 fails=0` (Guildhall 80 links, door rule, negative controls) |
 | door walk / viewmodel / Niagara probes | `DOORWALK PASS` / `VIEWMODEL_TRUTH PASS` / `NIAGARA_PROBE PASS` (3695 authored / 1048 active / 16 systems in this probe's map scope; the payload-wide census is 3308 active / 36 systems) |
 | guard selection (P0a) | `GUARD_CHECK PASS` Guildhall `lounge_marker=C_20` `buckets=4/4` and Old Manor `--order=3` (no Hauntstable) |
 | beam geometry (P0a) | `BEAM_GEOMETRY_SUMMARY: fails=0` — 330 cards, `max_axis_err_deg=0.000006`, `clamped=0` |
-| GC / turret / civilian (P0a/W10) | `GC_PROBE PASS` (44) / `GC_TRIGGER PASS` (21) / `TURRET_PROBE PASS` (229 actors, 1145 parts, 0 hidden) / `W10A2_CIV_SUMMARY: fails=0 passed=23` |
+| GC / turret / civilian (P0a/W10) | `GC_PROBE PASS` (52) / `GC_TRIGGER PASS` (21) / `TURRET_PROBE PASS` (229 actors, 1145 parts, 0 hidden) / `W10A2_CIV_SUMMARY: fails=0 passed=23` |
 | collision (W10-P2 truth) | `COL_MAPS PASS maps=3 min_coverage=0.869 dropped=0 planar_skipped=2 coverage_ppm=868852` — authored element coverage 0.910/0.912/0.869, `no_record=0`, no invented fallback |
-| lock inventory | `applied=154 containers=144 door_nodes=10 state=APPLIED` |
+| lock inventory | `applied=162 containers=152 door_nodes=10 state=APPLIED` |
 | E2E | `fails=0 passed=300 total=300` (T1=117 T2=110 T3=25 T4=14 S2=12 A2=22; a2 runs inside `all`) |
-| E2E tier a2 | `SUMMARY: fails=0 passed=22 total=22` |
-| E2E tier p2 | `P2_SUMMARY: expected_fail=0 expected_delta=0 fixed=0 unexpected_fail=0` (14/14; both pants checks are hard) |
+| E2E tier a2 | `SUMMARY: fails=0 passed=22 total=22` (`static_bookcase_leaves>=20`) |
+| E2E tier p2 | `P2_SUMMARY: expected_fail=0 expected_delta=0 fixed=0 unexpected_fail=0` (17/17; both pants checks are hard) |
 | parity-only (P0b) | `PARITY_ONLY_SUMMARY: fails=0 passed=60 rules=11 restoration=11 expansion=0` |
 | cream suite 119 (W10-P2) | `CREAM_PROOF: GREEN passes=5 expected_fail=0`, exit 0 (the old RED proof is retired) |
-| audio control suite 121 (W10-P3) | `AUDIO_CONTROL_SUMMARY: fails=0 checks=71` (switch=14/23, state=4/8, rtpc=16/50, 142 curves) |
-| P5 UI probe (W10-P5) | `P5_UI PASS checks=44` (headless; no visual score) |
+| audio control suite 121 (W10-P3/W11) | `AUDIO_CONTROL_SUMMARY: fails=0 checks=123` (switch=14/23, state=4/8, rtpc=16/50, 142 curves, music=2, music_keys=6/9) |
+| VO director suite 122 (W11) | `VO_DIRECTOR_SUMMARY: fails=0 checks=53` |
+| AEM suite 123 (P4.1) | `AEM_PROBE: fails=0 passed=77` (no PENDING after the producer regen) |
+| cubemap suite 124 (P4.1) | `CUBEMAP_PROBE: fails=0 passed=37` (no PENDING; `CUBEMAP_ORIENT` daylight WARN recorded) |
+| P5 UI probe (W10-P5/U-4) | `P5_UI PASS checks=54`; `GEM_PAYLOAD present=true: layers=21` (headless; no visual score) |
 | Den spawn (W10) | `DEN_SPAWN PASS checks=9 fails=0` (`source=authored`, 2434 meshes) |
-| port capture harness (P0b) | dry-run `poses=6` manifest valid; `P0B_SELFTEST PASS checks=21 fails=0`; `P0B_KF27_REF … met=7/7` |
+| port capture harness (P0b/P4) | dry-run `poses=7` manifest valid; `P0B_SELFTEST PASS checks=23 fails=0`; `P0B_KF27_REF … met=9/9` |
 | route runner self-test (Phase 0a) | `P0B_ROUTE_SELFTEST PASS checks=62 fails=0`; `bash -n` on `p0b_route.sh` and `p0b_live_capture.sh` |
+| producer tests (P1/2) | `make test-producers` + `build/qa/test_parse_nav.py` 7/7; `STEALTHBALL_ARRAY_TEST PASS checks=22`; `UI_PIXEL_STATS_TEST PASS checks=15` |
+| P5 capture filter (U-2) | `CAPTURE_P5_FILTER_TEST PASS checks=5` |
 | `make texture-cap-check` | OK — 796 capped, 1 alpha-critical kept, 0 offenders (target set 1567 after the accepted `texture_refs 1523→1522` drop) |
 | `make audit` | exit 0, tracked baseline matches, disk-backed coverage (12660/12703), 0 unexpected, exact-case 0 unexpected, 13/13 content groups |
 | `make string-audit` | `UI_STRINGS total=311 routed=311 authored=199 routed_authored=199 invented=112` (ceiling 112; one documented `Thieves' Den` port copy at `contract_table_ui.gd:362`) |
 | perf guard | `PERF_GUARD_TEST PASS checks=78 fails=0` |
-| `make gate-ratchet` | PASS (`measured_on=912a481`; floors raised, never lowered) |
+| `make gate-ratchet` | PASS (`measured_on=0ed2b42`; floors raised, never lowered) |
+
+The 2026-11-27 **Phase 1/2 integration** merged the six P4/GC/nav/audio/UI
+lanes and then fast-forwarded the mirrors lane to `07ecb56` (no conflict). It
+also ran the first real P4.1 producer regeneration: cubemaps `ok=3 fail=0`, the
+three authored navmeshes (`max_poly_verts=6`, `decompress_fail=0`), the 21-slice
+`T_stealthball_Array`, `AUDIO_CONTROL_OK music=2 music_keys=6/9`, and
+`STEALTHBALL_ARRAY status=payload_present slices=21 mapping_kind=directional`.
+The real extraction exposed one producer bug: array slices were written as
+`slice_00png` (missing dot), so Godot could not import them and P5 stayed
+`PORT_APPROX`; `Exporter.cs` now always adds the extension dot and the array
+rebinds (`GEM_PAYLOAD present=true: layers=21`). `parse_nav` was added to the
+audit `PRODUCERS` map (it was a `NORMALIZERS` entry with no baseline stamp).
+The current set is **49 gates**, measured at `0ed2b42`: compile **228/0**,
+`run_tests` **327/0** (suites 119/121/122/123/124), audio **123/0**, VO 53/0,
+AEM 77/0, cubemap 37/0, P5 UI 54, beams 9, landscape 7, nav 70, GC 52, locks
+**162 = 152 containers + 10 doors**, capture 7 poses / self-test 23 / KF27 9/9,
+producer tests and the P5 capture filter included, audit 12660/12703 and texture
+cap 1567/796/1/0 unchanged. No GPU/Vulkan capture was run; the mirror readback,
+landscape A/B, KF27 port capture, IBL/AEM meter and P5 pixel score remain the
+GPU steps. Report:
+[`docs/reports/integration-20261127.md`](docs/reports/integration-20261127.md).
 
 The 2026-11-24 W7 wave (five lanes, cherry-picked) re-ran the **complete** set
 serially on `6760dd0` — compile, `run_tests`, M2, the three probes, `probe_leak`
@@ -221,13 +249,14 @@ this is a deliberate truth correction, not a regression. The texture cap moved
 `TAT2_STATETREE` stays `off` and the FSM still drives — **no cutover**. P2-NAV
 proved the cooked Guildhall Detour tiles (2,958 tiles / 14,930 polys) and a
 Godot consumer (**16/0**, 3-waypoint doorway, sync 975 ms, total 1,172 ms);
-the **P1 Detour consumer is the next navmesh lane**, still no runtime region.
+Phase 1/2 later landed the authored P1 runtime (`nav_runtime.gd`, 80 links,
+`TAT2_NAV=off` default), so the old "consumer is next" note is historical.
 The P3 audio control plane is **partial** (14/23 switches, 4/8 states, 16/50
 RTPCs; state property rows, music decision trees and `FS_Layers` deferred). P5
-UI is **headless-verified, not visually scored** (44 checks; Light Gem
-`PORT_APPROX` because the 21-slice array is absent), with one documented
-`Thieves' Den` port copy (string-audit ceiling 112). The live-reference / 120-row
-baseline and a GPU capture remain **pending**.
+UI is **headless-verified, not visually scored** (44 checks; Phase 1/2 later
+extracted the 21-slice gem and the probe reports `GEM_PAYLOAD present=true`),
+with one documented `Thieves' Den` port copy (string-audit ceiling 112). The
+live-reference / 120-row baseline and a GPU capture remain **pending**.
 
 The 2026-11-27 **Phase 0b** run re-measured the **45-gate** set at `912a481`
 (clean route2 + the Phase 0a route self-test) — **45/45 exit 0**, every count
@@ -495,22 +524,30 @@ make test                               # fails=0
 tools/godot … test_m2_player.gd         # fails=0
 tools/godot … probe_leak.gd             # expected result or documented warning
 tools/godot … probe_collision_authored.gd  # COL_MAPS PASS, element coverage >= 0.868, no_record=0, dropped=0
-tools/godot … probe_lock_inventory.gd   # applied == 144 containers + 10 door nodes, never 0
+tools/godot … probe_lock_inventory.gd   # applied == 152 containers + 10 door nodes (=162), never 0
 tools/godot … run_e2e_tests.gd          # 300/300, no new failures
 tools/godot … test_parity_only.gd       # PARITY_ONLY_SUMMARY: fails=0 (needs TAT2_PARITY_ONLY proof)
 tools/godot … test_w10a2_cream.gd       # CREAM_PROOF: GREEN passes=5, exit 0 (suite 119)
-tools/godot … test_audio_control.gd     # AUDIO_CONTROL_SUMMARY: fails=0 checks=71
-tools/godot … probe_p5_ui.gd            # P5_UI PASS checks=44
+tools/godot … test_audio_control.gd     # AUDIO_CONTROL_SUMMARY: fails=0 checks=123
+tools/godot … test_vo_director.gd       # VO_DIRECTOR_SUMMARY: fails=0 checks=53 (suite 122)
+tools/godot … probe_auto_exposure.gd    # AEM_PROBE: fails=0 passed=77 (suite 123)
+tools/godot … probe_cubemap.gd          # CUBEMAP_PROBE: fails=0 passed=37 (suite 124)
+tools/godot … probe_p5_ui.gd            # P5_UI PASS checks=54, GEM_PAYLOAD present=true layers=21
 tools/godot … probe_den_spawn.gd        # DEN_SPAWN PASS checks=9 fails=0
 tools/godot … probe_p1_safe.gd          # P1_SAFE PASS checks=86 fails=0
 tools/godot … probe_p1_doors.gd         # P1_DOORS checks=47 fails=0
-tools/godot … probe_p1_beams.gd         # P1_BEAMS PASS checks=7 fails=0
+tools/godot … probe_p1_beams.gd         # P1_BEAMS PASS checks=9 fails=0
 tools/godot … probe_p1_ward.gd          # P1_WARD PASS checks=44
 tools/godot … probe_p1_street.gd        # P1_STREET PASS checks=31 hard_limits=2
+tools/godot … probe_landscape_mask.gd   # LANDSCAPE_MASK_SUMMARY: PASS fails=0 checks=7
+build/qa/nav_runtime_probe.sh           # NAV_RUNTIME_PROBE checks=70 fails=0
+make test-producers                     # all tools/test_*.py (includes 22/15)
+python3 build/qa/test_parse_nav.py      # 7/7
+build/qa/test_capture_p5_ui_filter.sh   # CAPTURE_P5_FILTER_TEST PASS checks=5
 build/qa/runtime_smoke.sh 90            # exit 124 only, 0 unexpected ERROR:, mission_ready
 build/qa/test_runtime_smoke_scan.sh     # 29/29, no engine needed
 build/qa/test_perf_guard.sh             # 78/78, no GPU
-build/qa/run_final_gates.sh             # all of the above serially (45 gates, no expected failure)
+build/qa/run_final_gates.sh             # all of the above serially (49 gates, no expected failure)
 make gate-ratchet                       # floors + committed logs agree
 git push origin main
 ```

@@ -81,8 +81,9 @@ NavMeshVersion = NAVMESHVER_TILE_RESOLUTIONS_AGENTMAXSTEPHEIGHT
 Polygon areas (authored `SupportedAreas`): **63 `NavArea_Default` = 14,558**,
 **3 `NavArea_Bushes_C` = 144**, **1 `NavArea_Obstacle` = 7**. Every poly has
 flag `1` (`DT_POLYFLAGS_WALK`). Note that UE maps **`NavArea_Default` to 63**
-while `NavArea_Null` is 0; Recast's own `RC_NULL_AREA` is also 63, so a consumer
-must read `SupportedAreas`, never treat 63 as "null"/unwalkable.
+while `NavArea_Null` is 0; area 63 is Recast's `RC_WALKABLE_AREA` (the default
+poly area), not `RC_NULL_AREA` (0), so refusing area 0 is correct and never
+drops default polys.
 
 > Producer caveat: `ARecastNavMesh.AgentHeight`/`AgentRadius` read as `0.0` in
 > the output because CUE4Parse's `GetOrDefault` does not resolve the nested

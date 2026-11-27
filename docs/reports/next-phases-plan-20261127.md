@@ -46,7 +46,7 @@ The 44-gate set at `5135f53` matches the committed logs: compile **217/0**, `run
 
 ### 1.4 Navmesh + StateTree
 
-- **221 off-mesh records → 80 logical links** (123 exact pairs, parallel-copy merge); **`NavArea_Default` = 63** (14,558 polys) and must never be treated as Recast's null area even though `RC_NULL_AREA` is also 63; areas are per-map (Guildhall Door=4/Bushes=3; Old Manor Door=3/Bushes=4).
+- **221 off-mesh records → 80 logical links** (123 exact pairs, parallel-copy merge); **`NavArea_Default` = 63** (14,558 polys) is `RC_WALKABLE_AREA` (the default poly area), not `RC_NULL_AREA` (0); refusing area 0 is correct and never drops default polys; areas are per-map (Guildhall Door=4/Bushes=3; Old Manor Door=3/Bushes=4).
 - `nav_steering` is already wired; adding a region changes all guard/civilian movement — enable behind `TAT2_NAV=off|on`.
 - Door links from the leaf midpoint + normal, enabled at `open_angle_deg() > 70`, not the co-located `NavLinkFront/Back`.
 - `ST_Patrol` loop needs no new parameter data; `ResetAlertness` is schema-only; event bus/smart objects are separate (deferred).

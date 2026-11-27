@@ -284,8 +284,8 @@ polys / 30,918 verts / 221 -> 123 -> **80** (35 bidirectional); **Old Manor**
 1,469 / 9,059 / 17,643 / 216 -> 113 -> **64** (15); **FTUE** 1,558 / 5,576 /
 11,711 / 11 -> 8 -> **4** (0). Area ids are per-map: Guildhall and FTUE
 `Door=4/Bushes=3`; Old Manor `Door=3/Bushes=4`; `NavArea_Default=63` is
-walkable and must not be treated as null even though Recast's `RC_NULL_AREA`
-is also 63.
+`RC_WALKABLE_AREA` (the default poly area), not `RC_NULL_AREA` (0); refusing
+area 0 is correct and never drops default polys.
 
 `game/src/ai/nav_runtime.gd` builds one region per map behind
 `TAT2_NAV=off|on` (**default off**), sets `cell_size=0.01`,

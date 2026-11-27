@@ -82,7 +82,7 @@ If a headless run reports missing textures (`T1-01-C`, `moon_visible=0.0`), the
 import cache is incomplete — run `tools/godot --headless --path game --import`
 first.
 
-| Gate | Passing value (49-gate set measured_on `71e77f6`, logs in `docs/reports/logs/final/` — raise, never lower) |
+| Gate | Passing value (49-gate set measured_on `37bb69e`, logs in `docs/reports/logs/final/` — raise, never lower) |
 |---|---|
 | compile | 228 checked, 0 broken |
 | `run_tests.gd` | `SUMMARY: fails=0` (327 PASS; suites numbered to 124, 119 cream + 121 audio + 122 VO + 123 AEM + 124 cubemap registered) |
@@ -115,7 +115,7 @@ first.
 | `make audit` | exit 0, tracked baseline matches, disk-backed coverage (12660/12703), 0 unexpected, exact-case 0 unexpected, 13/13 content groups |
 | `make string-audit` | `UI_STRINGS total=311 routed=311 authored=199 routed_authored=199 invented=112` (ceiling 112; one documented `Thieves' Den` port copy at `contract_table_ui.gd:362`) |
 | perf guard | `PERF_GUARD_TEST PASS checks=78 fails=0` |
-| `make gate-ratchet` | PASS (`measured_on=71e77f6`; floors raised, never lowered) |
+| `make gate-ratchet` | PASS (`measured_on=37bb69e`; floors raised, never lowered) |
 
 The 2026-11-27 **Phase 1/2 integration** merged the six P4/GC/nav/audio/UI
 lanes and then fast-forwarded the mirrors lane to `07ecb56` (no conflict). It
@@ -128,7 +128,7 @@ The real extraction exposed one producer bug: array slices were written as
 `PORT_APPROX`; `Exporter.cs` now always adds the extension dot and the array
 rebinds (`GEM_PAYLOAD present=true: layers=21`). `parse_nav` was added to the
 audit `PRODUCERS` map (it was a `NORMALIZERS` entry with no baseline stamp).
-The current set is **49 gates**, measured at `71e77f6`: compile **228/0**,
+The current set is **49 gates**, measured at `37bb69e`: compile **228/0**,
 `run_tests` **327/0** (suites 119/121/122/123/124), audio **123/0**, VO 53/0,
 AEM 77/0, cubemap 37/0, P5 UI 54, beams 9, landscape 7, nav 70, GC 52, locks
 **162 = 152 containers + 10 doors**, capture 7 poses / self-test 23 / KF27 9/9,

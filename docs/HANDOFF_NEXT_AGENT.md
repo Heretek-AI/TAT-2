@@ -1,8 +1,8 @@
 # Handoff — Thick As Thieves Godot 4.7.2 port (next session)
 
 **Repo:** `/home/john/Projects/TAT-2`
-**Code/data tip:** `71e77f6` (mirrors + six lanes + P4.1 regeneration + gate wiring).
-**Docs/evidence tip:** `71e77f6` + this integration evidence commit (local, **not
+**Code/data tip:** `37bb69e` (mirrors + six lanes + P4.1 regeneration + gate wiring).
+**Docs/evidence tip:** `37bb69e` + this integration evidence commit (local, **not
 pushed**); `origin/main` is `7de2f0c`.
 **This session:** Phase 1/2 integration — six lanes cherry-picked, mirrors
 fast-forwarded (`07ecb56`), P4.1 producers regenerated, the real 21-slice gem
@@ -10,7 +10,8 @@ payload extracted, and the 49-gate set measured. The commits are local and
 **not pushed**.
 **Working tree:** clean before the final evidence commit; logs are under
 `docs/reports/logs/final/`.
-**Measured gate set:** **49/49 at `71e77f6`**; no GPU/Vulkan capture run.
+**Measured gate set:** **49/49 at `37bb69e`**; GPU evidence is included
+(`docs/reports/gpu-phase12-20261127.md`), with the open gaps listed there.
 **Godot:** `4.7.2.stable` via native `tools/godot` (`godot` is **not** on `$PATH`).
 **Renderer:** Forward+ · Jolt 60 Hz · 1280×720 base · Linux x86_64.
 **Steam reference:** `/home/john/.steam/steam/steamapps/common/Thick As Thieves/`
@@ -89,7 +90,7 @@ hotfix**, **P2 StateTree v2 shadow runtime**, the **navmesh runtime consumer**,
 **P3 Wwise control plane**, **P5 UI correctness**, the **data-truth wave** and
 the **Phase 1/2 integration** (landscape/beams, GC/bookcases, navmesh, W11
 audio, P4.1 exposure/IBL, U-4 gem, mirrors). The complete 49-gate set passes at
-`71e77f6`; the evidence is in `docs/reports/logs/final/` and
+`37bb69e`; the evidence is in `docs/reports/logs/final/` and
 `docs/reports/integration-20261127.md`. The port is not
 Parity Complete, and the remaining measurement work splits into two tracks that
 the previous handoff conflated:
@@ -112,7 +113,7 @@ hold-smash `PORT_DECISION`.
 
 ---
 
-## 2. Gates at the final tip (measured at `71e77f6`, 49 gates)
+## 2. Gates at the final tip (measured at `37bb69e`, 49 gates)
 
 | Gate | Value |
 |---|---|
@@ -150,7 +151,7 @@ hold-smash `PORT_DECISION`.
 texture cap `797 → 796` from the accepted `texture_refs 1523 → 1522` pants fix.
 The old `coverage=0.989` is not a valid authored number; do not restore it.
 
-The 49-gate set was measured at `71e77f6` in one serial
+The 49-gate set was measured at `37bb69e` in one serial
 `build/qa/run_final_gates.sh` run (Phase 1/2): **49/49 exit 0**, wall recorded in
 `docs/reports/logs/final/final-run.log`, logs in `docs/reports/logs/final/`,
 report `docs/reports/integration-20261127.md`. The previous Phase 0b 45-gate
@@ -435,7 +436,7 @@ build/qa/runtime_smoke.sh 90      # no outer flock
   runner is `build/qa/run_final_gates.sh`. Phase 0a added
   `p0b_route_self_test` (route/live `bash -n` + the 62-check self-test) and
   Phase 0b measured the then-current **45/45** set at `912a481`; the Phase 1/2
-  integration measured **49/49** at `71e77f6` (mirrors + P4/GC/nav/audio/UI).
+  integration measured **49/49** at `37bb69e` (mirrors + P4/GC/nav/audio/UI).
   The route self-test is a ratchet floor (`checks=62`).
 - One Godot at a time: `flock /tmp/opencode/tat2-godot.lock`.
 - A fresh worktree with a copied `.godot` needs
@@ -453,7 +454,7 @@ build/qa/runtime_smoke.sh 90      # no outer flock
 ## 7. Evidence map
 
 - `docs/reports/integration-20261127.md` — **current** 49-gate Phase 1/2
-  integration table at `71e77f6`, the regen outputs, and the cherry-pick map.
+  integration table at `37bb69e`, the regen outputs, and the cherry-pick map.
 - `docs/reports/final-20261127-phase0b.md` — historical 45-gate table at
   `912a481` (clean route2 + route self-test) and the Phase 0b ratchet re-stamp.
 - `docs/reports/final-20261127.md` — W10 FINAL 44-gate table at `5135f53` and the

@@ -1,12 +1,16 @@
 # Phase 1/2 integration — mirrors + six lanes — 2026-11-27
 
-Status: **headless integration measured**; no GPU/Vulkan capture was run.
+Status: **headless integration measured**; the GPU evidence lane is now
+included ([`gpu-phase12-20261127.md`](gpu-phase12-20261127.md)): mirror readback
+PASS and UI sidecars complete, with KF27 5/9, landscape A/B no-subject, AEM
+meter not converged and prompt contrast 3.24–4.32 still open.
 Merge base: `354fab0` (six lanes: landscape/beams, GC/bookcases, navmesh,
 audio W11, P4-E exposure/IBL, UI). Mirrors fast-forwarded at `07ecb56`.
-Final code/gate commit: `71e77f6` (mirrors merge, P4.1 regeneration, extractor
+Final code/gate commit: `37bb69e` (mirrors merge, P4.1 regeneration, extractor
 fix, audit baseline, gate wiring, ratchet floors and the E2E authored-array
-fix). The full 49-gate serial run was made at `71e77f6` with a clean tree; this
-report and the logs are the commit that follows it.
+fix, GPU harness fixes and GPU evidence). The final 49-gate serial run at
+`37bb69e` is recorded in the “Final gate run at 37bb69e” section below; this
+report and its logs are the commit that follows it.
 
 ## Merge order and conflicts
 
@@ -135,10 +139,10 @@ Audit integration fixes: added `tools/parse_nav.py` to `manifest_audit.py`'s
 | perf guard | 78 / 78 |
 | gate ratchet | PASS |
 
-`measured_on` = `71e77f6` (the code/gate HEAD measured, one commit above the
-mirrors merge; the docs/logs commit is its child). The serial run took
-**22m38s** (15:36:27 → 15:59:05) with `uncommitted_entries_at_start: 0` and
-`FINAL_GATES PASS gates=49`.
+`measured_on` = `37bb69e` (the code/gate HEAD measured, the GPU harness/evidence
+tip; the docs/logs commit is its child). The previous 71e77f6 run took 22m38s;
+the 37bb69e run’s wall and exact `FINAL_GATES PASS` line are in the final
+section below.
 
 ## Residual warnings / still pending (GPU, no capture run here)
 

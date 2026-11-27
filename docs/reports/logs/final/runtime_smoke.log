@@ -1,11 +1,11 @@
 == FINAL_GATE runtime_smoke
-COMMAND: /home/john/.local/share/opencode/worktree/318f41/final-evidence/build/qa/runtime_smoke.sh 90
-CWD: /home/john/.local/share/opencode/worktree/318f41/final-evidence
-STARTED: 2026-11-26T22:47:41-05:00
+COMMAND: /home/john/Projects/TAT-2/build/qa/runtime_smoke.sh 90
+CWD: /home/john/Projects/TAT-2
+STARTED: 2026-11-27T10:53:17-05:00
 
-log: /tmp/tat2-smoke-tZOvMz.log
-RUNTIME_SMOKE_SCAN PASS exit=124 errors=0 raw=0 allowed=0 script_errors=0 shader_errors=0 mission_ready=1 reason=ok path=/tmp/tat2-smoke-tZOvMz.log
+log: /tmp/tat2-smoke-vFBUAy.log
+RUNTIME_SMOKE_SCAN PASS exit=124 errors=0 raw=0 allowed=0 script_errors=0 shader_errors=0 mission_ready=1 reason=ok path=/tmp/tat2-smoke-vFBUAy.log
 RUNTIME_SMOKE PASS
 
 EXIT: 0
-FINISHED: 2026-11-26T22:49:11-05:00
+FINISHED: 2026-11-27T10:54:47-05:00

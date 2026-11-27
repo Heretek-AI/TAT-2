@@ -1,7 +1,7 @@
 == FINAL_GATE test_audio_control
 COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/test_audio_control.gd
-CWD: /home/john/.local/share/opencode/worktree/318f41/final-evidence
-STARTED: 2026-11-26T22:47:27-05:00
+CWD: /home/john/Projects/TAT-2
+STARTED: 2026-11-27T10:53:03-05:00
 
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
@@ -103,6 +103,10 @@ PASS: AUD7.2 degraded select_media() returns the input unchanged
 PASS: AUD7.3 the real document reloads after the degraded probe
 AUDIO_CONTROL counts: switch=14/23 values=84 state=4/8 values=10 rtpcs=16/50 curves=142 containers=185
 AUDIO_CONTROL_SUMMARY: fails=0 checks=71
+WARNING: 4 ObjectDB instances were leaked at exit (run with `--verbose` for details).
+   at: cleanup (core/object/object.cpp:2536)
+ERROR: 2 resources still in use at exit (run with --verbose for details).
+   at: clear (core/io/resource.cpp:822)
 
 EXIT: 0
-FINISHED: 2026-11-26T22:47:28-05:00
+FINISHED: 2026-11-27T10:53:04-05:00

@@ -1,7 +1,7 @@
 == FINAL_GATE parity_only
 COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/test_parity_only.gd
-CWD: /home/john/.local/share/opencode/worktree/318f41/final-evidence
-STARTED: 2026-11-26T22:47:24-05:00
+CWD: /home/john/Projects/TAT-2
+STARTED: 2026-11-27T10:52:59-05:00
 
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
@@ -109,4 +109,4 @@ PASS: flag off restores the shipped path
 PARITY_ONLY_SUMMARY: fails=0 passed=60 rules=11 restoration=11 expansion=0
 
 EXIT: 0
-FINISHED: 2026-11-26T22:47:25-05:00
+FINISHED: 2026-11-27T10:53:00-05:00

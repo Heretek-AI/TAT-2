@@ -1,7 +1,7 @@
 == FINAL_GATE test_w10a2_guard_placement
 COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/test_w10a2_guard_placement.gd
-CWD: /home/john/.local/share/opencode/worktree/318f41/final-evidence
-STARTED: 2026-11-26T22:38:54-05:00
+CWD: /home/john/Projects/TAT-2
+STARTED: 2026-11-27T10:44:13-05:00
 
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
@@ -68,4 +68,4 @@ PASS: pick: empty rows is empty
 GUARD_PLACEMENT_SUMMARY: fails=0
 
 EXIT: 0
-FINISHED: 2026-11-26T22:38:55-05:00
+FINISHED: 2026-11-27T10:44:14-05:00

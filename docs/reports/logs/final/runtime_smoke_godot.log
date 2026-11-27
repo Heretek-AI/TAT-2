@@ -48,7 +48,7 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [5] load_sublevels (res://src/core/level_loader.gd:6996)
          [6] _build_3d_backdrop (res://src/ui/main_menu.gd:178)
          [7] _ready (res://src/ui/main_menu.gd:86)
-ROUGHNESS_BAKE count=31 pixels=22806528 ms=1638 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=31 pixels=22806528 ms=1666 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=3116 applied=3112 duplicate=0 name_skipped=3 wardbox=0 moonshape=1 clamp=68 clamp_worst=4.67x mirrored=444 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0
 TAT-2 QA autostart contract=2 map=guildhall mission=Mission.Guildhall.LootTheRoom free_play=true
 TAT-2 HUD build: id=1 root_children=29 hp_frame=1 hp_fill=1 objectives=1
@@ -84,8 +84,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [3] _build_one_draw_item (res://src/core/level_loader.gd:4702)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7106)
 COL_PLANAR /Game/Art/Effects/WardZones/SM_SlowWardZone_Quad instances=82 skipped=1
-AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=364
-ROUGHNESS_BAKE count=87 pixels=74973184 ms=5427 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=375
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=5982 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
 BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=64953 applied=64682 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=206 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0

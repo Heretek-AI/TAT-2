@@ -9,7 +9,7 @@ the TAT-2 expansion adds **The Moth** thief, **Jaspering Hall** and co-op.
 > `extracted/` and `game/assets/ue/`, both git-ignored. Only original code, tools
 > and expansion content are committed. Do not redistribute extracted content.
 
-**Status (2026-11-27, W10 FINAL + Phase 0a)** — playable end-to-end: startscreen → Den →
+**Status (2026-11-27, W10 FINAL + Phase 0a/0b)** — playable end-to-end: startscreen → Den →
 contract prep → Guildhall run → two-phase escape → scoring, plus free-play
 cleanout, carried-loot capacity and stashing, two-player ENet co-op and all five
 E2E tiers.
@@ -21,9 +21,9 @@ E2E tiers.
 | M2 traversal/tools (`tests/test_m2_player.gd`) | **fails=0** (12) |
 | E2E (`tests/e2e/run_e2e_tests.gd`, tiers 1–4 + `s2` + `a2`) | **300/300** (tier 1: 117) |
 | Door walk · viewmodel truth · Niagara · leak probe | **PASS** |
-| Staged-route self-test (`build/qa/p0b_route.sh --self-test`) | **62/62**, added to the final gate set in Phase 0a |
+| Staged-route self-test (`build/qa/p0b_route.sh --self-test`) | **62/62**, in the 45-gate set (Phase 0b) |
 | Steam manifest + content audit (`make audit`) | exit 0, fail-closed tracked baseline, disk-backed coverage 99.7 % (12660/12703), 13/13 content groups |
-| Gate ratchet (`make gate-ratchet`) | **PASS** — floors verified against committed logs at `5135f53` |
+| Gate ratchet (`make gate-ratchet`) | **PASS** — floors verified against committed logs at `912a481` (45 gates) |
 
 Not yet measured: the perf matrix (no publishable FPS run) and the editor's
 per-process VRAM. Do not quote frame rates from any older run.

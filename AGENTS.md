@@ -82,7 +82,7 @@ If a headless run reports missing textures (`T1-01-C`, `moon_visible=0.0`), the
 import cache is incomplete — run `tools/godot --headless --path game --import`
 first.
 
-| Gate | Passing value (W10 FINAL measured_on `5135f53`, logs in `docs/reports/logs/final/` — raise, never lower) |
+| Gate | Passing value (45-gate set measured_on `912a481`, logs in `docs/reports/logs/final/` — raise, never lower) |
 |---|---|
 | compile | 217 checked, 0 broken |
 | `run_tests.gd` | `SUMMARY: fails=0` (324 PASS; suites numbered to 121, 119 cream + 121 audio registered) |
@@ -228,6 +228,17 @@ UI is **headless-verified, not visually scored** (44 checks; Light Gem
 `PORT_APPROX` because the 21-slice array is absent), with one documented
 `Thieves' Den` port copy (string-audit ceiling 112). The live-reference / 120-row
 baseline and a GPU capture remain **pending**.
+
+The 2026-11-27 **Phase 0b** run re-measured the **45-gate** set at `912a481`
+(clean route2 + the Phase 0a route self-test) — **45/45 exit 0**, every count
+identical to the `5135f53` table, logs in `docs/reports/logs/final/`, report
+[`docs/reports/final-20261127-phase0b.md`](docs/reports/final-20261127-phase0b.md).
+The clean route2 capture is `docs/reports/logs/p0b-route/route2-clean/`
+(`status=captured`, `git.dirty=false`, 13/14/0, 17 frames, 18 PNGs at 1920×1080,
+exit 0). The ratchet is re-stamped `measured_on=912a481` and pins
+`p0b_route_self_test.checks=62`. The run replaced the logs in place; the
+`5135f53` logs remain in git history at that commit. Still a **staged** capture
+(`route_claim=none`), not a played route.
 
 **Fresh worktree trap (P0b).** A copied `game/.godot` does not know a new global
 `class_name`; scripts that use it fail with `Identifier "X" not declared` and

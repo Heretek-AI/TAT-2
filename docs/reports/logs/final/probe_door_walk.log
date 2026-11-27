@@ -1,7 +1,7 @@
 == FINAL_GATE probe_door_walk
 COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/probe_door_walk.gd
-CWD: /home/john/.local/share/opencode/worktree/318f41/final-evidence
-STARTED: 2026-11-26T22:38:03-05:00
+CWD: /home/john/Projects/TAT-2
+STARTED: 2026-11-27T10:43:20-05:00
 
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
@@ -67,8 +67,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [4] load_sublevels_async (res://src/core/level_loader.gd:7106)
 COL_PLANAR /Game/Art/Effects/WardZones/SM_SlowWardZone_Quad instances=82 skipped=1
 COL_PLANAR /Game/Art/VFX/Meshes/FXSHAPES_1_FXQuadPivotDownEdge instances=1 skipped=1
-AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=338
-ROUGHNESS_BAKE count=87 pixels=74973184 ms=5521 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=339
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=5644 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
 BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=64956 applied=64685 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=208 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0
@@ -138,7 +138,7 @@ DOORWALK ray y=20.75 ....XX...X
 DOORWALK ray y=21.25 ....XX...X
 DOORWALK ray y=22.0 ....XXX.XX
 DOORWALK closed hits=2 door=1
-DOORWALK closed walk z=127.25439453125
+DOORWALK closed walk z=127.254829406738
 DOORWALK open angle=90.0000025044782 hits=1 door=0
 DOORWALK open collider=/root/Mission/SwingingDoor_146/DoorPivot/@AnimatableBody3D@40808
 DOORWALK open walk z=124.602729797363
@@ -146,4 +146,4 @@ DOORWALK player=(127.2747, 23.15878, -5.3296)
 DOORWALK PASS
 
 EXIT: 0
-FINISHED: 2026-11-26T22:38:35-05:00
+FINISHED: 2026-11-27T10:43:54-05:00

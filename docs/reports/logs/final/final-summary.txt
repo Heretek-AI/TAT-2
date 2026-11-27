@@ -34,6 +34,7 @@ p0b_capture_dry_run	exit=0	docs/reports/logs/final/p0b_capture_dry_run.log
 p0b_capture_self_test	exit=0	docs/reports/logs/final/p0b_capture_self_test.log
 p0b_manifest_validate	exit=0	docs/reports/logs/final/p0b_manifest_validate.log
 p0b_kf27_reference	exit=0	docs/reports/logs/final/p0b_kf27_reference.log
+p0b_route_self_test	exit=0	docs/reports/logs/final/p0b_route_self_test.log
 runtime_smoke	exit=0	docs/reports/logs/final/runtime_smoke.log
 runtime_smoke_scan	exit=0	docs/reports/logs/final/runtime_smoke_scan.log
 string_audit	exit=0	docs/reports/logs/final/string_audit.log

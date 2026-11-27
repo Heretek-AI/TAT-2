@@ -2,10 +2,13 @@
 
 **Repo:** `/home/john/Projects/TAT-2`
 **Code/data tip:** `5135f53` (P2/P3/P5/data + Den/navmesh/UI/audio merged).
-**Docs/evidence tip / `origin/main`:** `a9ac606` (live-reference review, pushed).
-**This session:** Phase 0a truth/save/gate hygiene; the Phase 0a commit is local
-and **not pushed**.
-**Working tree:** clean after the Phase 0a commit. No uncommitted tracked work.
+**Docs/evidence tip:** `912a481` + the Phase 0b evidence commit (local, **not
+pushed**); `origin/main` is `912a481`.
+**This session:** Phase 0a truth/save/gate hygiene and Phase 0b (clean route2 +
+the first measured 45-gate set). The commits are local and **not pushed**.
+**Working tree:** clean after the Phase 0b commits. No uncommitted tracked work.
+**Measured gate set:** **45/45 at `912a481`**; clean route2 manifest
+`status=captured`, `git.dirty=false`.
 **Godot:** `4.7.2.stable` via native `tools/godot` (`godot` is **not** on `$PATH`).
 **Renderer:** Forward+ · Jolt 60 Hz · 1280×720 base · Linux x86_64.
 **Steam reference:** `/home/john/.steam/steam/steamapps/common/Thick As Thieves/`
@@ -34,6 +37,13 @@ its `SaveGames/` explicitly holds the owner save restored from
 and `steam_autocloud.vdf`. The archive is untouched (same md5), and **never**
 run `stage` + `tail -1` to pick it: use the archive path explicitly. The live
 capture is deferred as issue **#13**.
+
+**Port route evidence (Phase 0b):** the staged 27-beat runner was re-captured on
+the clean Phase 0a HEAD `912a481` (`build/qa/p0b_route.sh --tag=route2-clean`):
+`status=captured captured=13 deferred=14 partial=0 frame_errors=0 frames=17`,
+`git.dirty=false`, 18 PNGs at 1920×1080, exit 0. This is a **port** capture, not
+the live Steam reference; it did not touch the save or launch the shipped game.
+Evidence: `docs/reports/logs/p0b-route/route2-clean/`.
 
 The live capture is **not the official route**: it is the **Staff of Edinburgh
 Item Collection Heist** (120-minute limit, outdoor canal-side spawn), not the
@@ -75,8 +85,9 @@ cell and the 120 tally stay for Phase 3.
 The port has completed **P0a/P0b**, **P1 route content**, the **Den spawn
 hotfix**, **P2 StateTree v2 shadow runtime**, the **navmesh extraction spike**,
 **P3 Wwise control plane**, **P5 UI correctness** and the **data-truth wave**.
-The complete 44-gate set passes at `5135f53`; the evidence is in
-`docs/reports/logs/final/` and `docs/reports/final-20261127.md`. The port is not
+The complete 45-gate set passes at `912a481` (clean route2 + the Phase 0a route
+self-test); the evidence is in `docs/reports/logs/final/` and
+`docs/reports/final-20261127-phase0b.md`. The port is not
 Parity Complete, and the remaining measurement work splits into two tracks that
 the previous handoff conflated:
 
@@ -98,7 +109,7 @@ hold-smash `PORT_DECISION`.
 
 ---
 
-## 2. Gates at the final tip (measured at `5135f53`, evidence `3d62f6b`)
+## 2. Gates at the final tip (measured at `912a481`, 45 gates)
 
 | Gate | Value |
 |---|---|
@@ -128,10 +139,14 @@ hold-smash `PORT_DECISION`.
 texture cap `797 → 796` from the accepted `texture_refs 1523 → 1522` pants fix.
 The old `coverage=0.989` is not a valid authored number; do not restore it.
 
-Phase 0a added `p0b_route_self_test` to `build/qa/run_final_gates.sh` (45
-gates). The route self-test and the wrapper `bash -n` checks are green; the
-first full **45-gate serial run** is Phase 0b (GPU, clean route2), not yet
-measured.
+The 45-gate set was measured at `912a481` in one serial
+`build/qa/run_final_gates.sh` run (Phase 0b): **45/45 exit 0**, wall 19 m 49 s,
+logs in `docs/reports/logs/final/`, report
+`docs/reports/final-20261127-phase0b.md`. The run replaced the `5135f53` logs in
+place; the old 44-gate evidence remains in git history at `5135f53` and in
+`docs/reports/final-20261127.md`. The route self-test (`checks=62`) is now also a
+ratchet floor, and the clean route2 capture is
+`docs/reports/logs/p0b-route/route2-clean/` (`git.dirty=false`).
 
 ---
 
@@ -190,18 +205,20 @@ StateTree shadow ceiling; the authored-element collision floor.
   `tat2.p0b_route/1` manifest for all S01–S27 — 13 staged beats, 14 deferred
   with reasons, `route_claim=none` (no played route). **route1 was
   `status=partial`** (S06 `_show_tab` called on the CanvasLayer instead of the
-  `LedgerUI` Control); the hook is fixed and **route2 is all-green**
-  (`captured=13 deferred=14 partial=0 frame_errors=0 frames=17`, exit 0,
-  `docs/reports/logs/p0b-route/route2/`) but it is **`git.dirty=true`** at
-  `4341439` (the S06 fix was uncommitted at capture time; it is `f44bc23` in
-  the current tree). A **clean route2 re-run is Phase 0b** (GPU). The
-  **120-row re-score** is Phase 2 R-2 / Phase 3 R-3. The Guildhall stage is a
-  **free-play substitute** (`Mission.Guildhall.LootTheRoom`, contract 2) used
-  only for the KF13 letter; it is **not** the official selection (canonical
-  contract-2 row: `Mission.Guildhall.VaultHeist`; historical baseline:
-  `LootTheRoom`, `free_play=false`). The wrapper exports `TAT2_PARITY_ONLY=1`
-  for every mode. Contract, measured runs and the staged evidence index:
-  [`docs/reports/p0b-route.md`](p0b-route.md),
+  `LedgerUI` Control); the hook is fixed and route2 is all-green
+  (`captured=13 deferred=14 partial=0 frame_errors=0 frames=17`, exit 0).
+  **Route2-clean (Phase 0b) re-ran it on the clean `912a481` tree:
+  `git.dirty=false`, `status=captured`, the same 13/14/0, 17 beat frames, 18
+  PNGs at 1920×1080, `beam_visible=true` at the S24 `C_107` card, 186.259 s
+  audio, exit 0** (`docs/reports/logs/p0b-route/route2-clean/`). Route2 remains
+  the historical `git.dirty=true` run at `4341439` (the S06 fix was uncommitted
+  at capture time). The **120-row re-score** is Phase 2 R-2 / Phase 3 R-3. The
+  Guildhall stage is a **free-play substitute** (`Mission.Guildhall.LootTheRoom`,
+  contract 2) used only for the KF13 letter; it is **not** the official selection
+  (canonical contract-2 row: `Mission.Guildhall.VaultHeist`; historical
+  baseline: `LootTheRoom`, `free_play=false`). The wrapper exports
+  `TAT2_PARITY_ONLY=1` for every mode. Contract, measured runs and the staged
+  evidence index: [`docs/reports/p0b-route.md`](p0b-route.md),
   [`docs/reports/p0b-route-rescore.md`](p0b-route-rescore.md).
 
 - **Live-reference review (2026-11-27):**
@@ -342,8 +359,9 @@ build/qa/runtime_smoke.sh 90      # no outer flock
 
 - `build/qa/run_p0b_gates.sh` is the historical P1 40-gate set; the current
   runner is `build/qa/run_final_gates.sh`. Phase 0a added
-  `p0b_route_self_test` (route/live `bash -n` + the 62-check self-test); the
-  first full 45-gate measured run is Phase 0b.
+  `p0b_route_self_test` (route/live `bash -n` + the 62-check self-test) and
+  Phase 0b measured the full **45/45** set at `912a481`; the route self-test is
+  a ratchet floor (`checks=62`).
 - One Godot at a time: `flock /tmp/opencode/tat2-godot.lock`.
 - A fresh worktree with a copied `.godot` needs
   `tools/godot --headless --path game --import` before scripts using a new
@@ -359,9 +377,12 @@ build/qa/runtime_smoke.sh 90      # no outer flock
 
 ## 7. Evidence map
 
-- `docs/reports/final-20261127.md` — 44-gate measured table and truth corrections.
+- `docs/reports/final-20261127-phase0b.md` — **current** 45-gate measured table at
+  `912a481` (clean route2 + route self-test) and the ratchet re-stamp.
+- `docs/reports/final-20261127.md` — W10 FINAL 44-gate table at `5135f53` and the
+  truth corrections (kept as history; the `5135f53` logs live in git history).
 - `docs/reports/phase0a-20261127.md` — Phase 0a save/docs/provenance/gate/issue
-  evidence (no GPU; 45-gate runner, not yet measured as a set).
+  evidence (no GPU; 45-gate runner added, measured in Phase 0b).
 - `docs/reports/logs/final/` — every final gate log.
 - `docs/reports/p1-integration-20261126.md` — P1 route content and 40-gate evidence.
 - `docs/reports/p5-ui-20261126.md` — P5 UI probe and string audit.
@@ -371,7 +392,8 @@ build/qa/runtime_smoke.sh 90      # no outer flock
 - `docs/reports/p0b-live-capture.md` — offline attempt, restore, and the online
   capture runbook (A/B/C).
 - `docs/reports/p0b-route.md` — staged 27-beat route runner v1 (schema, beat
-  status, deferred blockers, owner GPU command).
+  status, deferred blockers, owner GPU command); §6 includes the clean
+  route2-clean run at `912a481`.
 - `docs/reports/p0b-route-rescore.md` — route2 staged evidence index (beam/ROI
   numbers, provenance status; no row token changed).
 - `docs/reports/live-ref-review-20261127.md` — live-reference review

@@ -1,7 +1,7 @@
 == FINAL_GATE string_audit
 COMMAND: make string-audit
-CWD: /home/john/.local/share/opencode/worktree/318f41/final-evidence
-STARTED: 2026-11-26T22:49:11-05:00
+CWD: /home/john/Projects/TAT-2
+STARTED: 2026-11-27T10:54:48-05:00
 
 python3 build/qa/w9/p3_string_audit.py --min-routed 306 --min-authored 195 --max-invented 112
 UI_STRINGS total=311 routed=311 authored=199 routed_authored=199 invented=112
@@ -26,4 +26,4 @@ KINDS _loc=5 _loc_upper=5 loc=127 loc_template=4 st_template=9 st_text=83 st_upp
   game/src/ui/loading_screen.gd: 2/2 routed
 
 EXIT: 0
-FINISHED: 2026-11-26T22:49:12-05:00
+FINISHED: 2026-11-27T10:54:48-05:00

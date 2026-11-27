@@ -22,7 +22,7 @@
     "audio_mix_rate": 44100.0,
     "cmdline": [
       "--script",
-      "/home/john/.local/share/opencode/worktree/318f41/final-evidence/build/qa/p0b_capture.gd"
+      "/home/john/Projects/TAT-2/build/qa/p0b_capture.gd"
     ],
     "display_server": "headless",
     "godot": "4.7.2-stable (official)",
@@ -38,12 +38,12 @@
     "TAT2_BEAM_CARD": "on",
     "XDG_SESSION_TYPE": "wayland"
   },
-  "finished_at_utc": "2026-11-27T03:47:40",
+  "finished_at_utc": "2026-11-27T15:53:15",
   "git": {
-    "branch": "w10/final-evidence",
-    "dirty": false,
-    "sha": "5135f53dfff8a9b268576f7731588ab7a0be3494",
-    "sha_short": "5135f53dfff8"
+    "branch": "main",
+    "dirty": true,
+    "sha": "912a481d42611cb0de77f31d4e01e63029b68190",
+    "sha_short": "912a481d4261"
   },
   "gpu": {
     "available": true,
@@ -53,10 +53,10 @@
       [
         "NVIDIA GeForce RTX 4070 Laptop GPU",
         "620.73.04",
-        "63.09",
-        "5082",
-        "4",
-        "345"
+        "62.59",
+        "3958",
+        "7",
+        "210"
       ]
     ],
     "used_by_capture": false
@@ -85,7 +85,7 @@
     "The fixed-pose run marks poses, not route beats. A 27-beat route run must call mark_beat(S01..S27); p0b_audio_stats.py --route prints the reference table.",
     "Reference audio is documented RMS/peak dBFS (not LUFS); the script computes RMS/peak only and states the clip's -43.9 LUFS as context."
   ],
-  "out_dir": "/home/john/.local/share/opencode/worktree/318f41/final-evidence/build/qa/p0b/dry-run",
+  "out_dir": "/home/john/Projects/TAT-2/build/qa/p0b/dry-run",
   "poses": [
     {
       "beat": "S13",
@@ -232,8 +232,8 @@
       ]
     }
   ],
-  "repo_root": "/home/john/.local/share/opencode/worktree/318f41/final-evidence",
-  "run_id": "20261127T034740Z_5135f53dfff8_on",
+  "repo_root": "/home/john/Projects/TAT-2",
+  "run_id": "20261127T155315Z_912a481d4261_on",
   "schema": "tat2.p0b_capture/1",
   "seed": {
     "active_map_seed": 0,
@@ -257,5 +257,5 @@
     "frames": 60,
     "selector": "median-mean"
   },
-  "started_at_utc": "2026-11-27T03:47:40"
+  "started_at_utc": "2026-11-27T15:53:15"
 }

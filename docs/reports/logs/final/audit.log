@@ -1,7 +1,7 @@
 == FINAL_GATE audit
 COMMAND: make audit
-CWD: /home/john/.local/share/opencode/worktree/318f41/final-evidence
-STARTED: 2026-11-26T22:49:12-05:00
+CWD: /home/john/Projects/TAT-2
+STARTED: 2026-11-27T10:54:48-05:00
 
 python3 tools/check_content_overrides.py
 Override rule table:
@@ -38,8 +38,8 @@ Parity classes: parity_restoration=11
 
 CONTENT_OVERRIDES: PASS
 python3 tools/prebake_texture_cap.py --check --cap 1024
-repo: /home/john/.local/share/opencode/worktree/318f41/final-evidence
-targets: 1567 (materials.json 1522, code 102, scenes 0, unique 1567, dangling literals skipped 4)
+repo: /home/john/Projects/TAT-2
+targets: 1567 (materials.json 1522, code 102, scenes 1, unique 1567, dangling literals skipped 4)
 mode: CHECK (cap 1024 px long edge)
 capped: 796
 alpha-critical (kept full-res): 1
@@ -134,10 +134,9 @@ content localization: OK   csv=8, expected=8, empty=0
 content videos: OK   ogv=15, manifest=15, expected=15, zero_ogv=0
 content scene_variants: OK   count=222, records=222, expected=222
 content niagara: OK   records=3695, min=3695
-provenance: no .usmap under tools/ue4ss/output in this checkout, so the property-name mapping is UNPINNED here (pass --require-usmap to fail instead)
-provenance: extractor binary is newer than its sources (tat-extract.csproj)
-baseline: matches /home/john/.local/share/opencode/worktree/318f41/final-evidence/tools/audit_baseline.json
+provenance: extractor binary is newer than its sources (Program.cs)
+baseline: matches /home/john/Projects/TAT-2/tools/audit_baseline.json
 AUDIT PASS
 
 EXIT: 0
-FINISHED: 2026-11-26T22:49:21-05:00
+FINISHED: 2026-11-27T10:55:02-05:00

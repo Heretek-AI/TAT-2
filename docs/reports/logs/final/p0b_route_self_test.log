@@ -1,0 +1,53 @@
+== FINAL_GATE p0b_route_self_test
+COMMAND: qa_route_self_test
+CWD: /home/john/Projects/TAT-2
+STARTED: 2026-11-27T10:53:16-05:00
+
+bash -n build/qa/p0b_route.sh
+bash -n build/qa/p0b_live_capture.sh
+P0B_ROUTE_WALL mode=self-test exit=0 wall=1s (headless, no GPU render)
+manifest: /home/john/Projects/TAT-2/build/qa/p0b_route/selftest/manifest.json
+log:      /home/john/Projects/TAT-2/docs/reports/logs/final/self-test/self-test.log
+P0B_ROUTE_SELFTEST ok S24 does not use the Lounge beam_close pose
+P0B_ROUTE_SELFTEST ok Lounge C_57 extra pose is labelled separately
+P0B_ROUTE_SELFTEST ok foyer beam cue targets the authored C_107 card
+P0B_ROUTE_SELFTEST ok a successful first frame marks captured
+P0B_ROUTE_SELFTEST ok a secondary frame failure marks partial, not captured
+P0B_ROUTE_SELFTEST ok runner source readable for the marker scan
+P0B_ROUTE_SELFTEST ok no beat-marker call in the runner
+P0B_ROUTE_SELFTEST ok no beat-marker token in the runner
+P0B_ROUTE_SELFTEST ok dry-run manifest validates (0 errors)
+P0B_ROUTE_SELFTEST ok manifest counts 13 staged
+P0B_ROUTE_SELFTEST ok manifest counts 14 deferred
+P0B_ROUTE_SELFTEST ok self-test manifest writes
+P0B_ROUTE_SELFTEST ok self-test manifest reads back
+P0B_ROUTE_SELFTEST ok round-tripped manifest validates
+P0B_ROUTE_SELFTEST ok dry-run manifest path is tracked
+P0B_ROUTE_SELFTEST ok capture manifest path is tracked per run
+P0B_ROUTE_SELFTEST ok capture media root is under build/qa/p0b_route
+P0B_ROUTE_SELFTEST ok dry-run gpu block is not queried (no nvidia-smi)
+P0B_ROUTE_SELFTEST ok engine records configured_rendering_driver
+P0B_ROUTE_SELFTEST ok wrapper exports TAT2_PARITY_ONLY=1 for every mode
+P0B_ROUTE_SELFTEST ok wrong FOV is rejected
+P0B_ROUTE_SELFTEST ok 26 beats is rejected
+P0B_ROUTE_SELFTEST ok duplicate id is rejected
+P0B_ROUTE_SELFTEST ok deferred without a reason is rejected
+P0B_ROUTE_SELFTEST ok staged without a hook is rejected
+P0B_ROUTE_SELFTEST ok route_claim=played is rejected
+P0B_ROUTE_SELFTEST ok non-mark mark_kind is rejected
+P0B_ROUTE_SELFTEST ok wrong settle count is rejected
+P0B_ROUTE_SELFTEST ok counts/rows mismatch is rejected
+P0B_ROUTE_SELFTEST ok partial without a reason is rejected
+P0B_ROUTE_SELFTEST ok an extra claiming a beat is rejected
+P0B_ROUTE_SELFTEST ok captured with frame_errors is rejected
+P0B_ROUTE_SELFTEST ok audio_capture.gd loads
+P0B_ROUTE_SELFTEST ok audio result has enabled
+P0B_ROUTE_SELFTEST ok audio result explains a disabled tap
+P0B_ROUTE_SELFTEST ok dummy driver -> disabled tap
+P0B_ROUTE_SELFTEST ok dummy reason is dummy_audio_driver
+P0B_ROUTE_SELFTEST ok audio sidecar written
+P0B_ROUTE_SELFTEST_SUMMARY checks=62 fails=0
+P0B_ROUTE_SELFTEST PASS checks=62 fails=0
+
+EXIT: 0
+FINISHED: 2026-11-27T10:53:17-05:00

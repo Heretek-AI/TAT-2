@@ -1,7 +1,14 @@
 # TAT-2 next phases — execution plan (2026-11-27)
 
-**Status:** HEAD `a9ac606` = `origin/main`; gate baseline `5135f53` (44 gates); working tree clean before this plan.
-**Phase 0a executed:** 2026-11-27, no GPU — save `976f8730…` restored (774 files), docs/gate numbers aligned, provenance moved to `docs/reference/`, route self-test gate added (45-gate runner), V6-03 official erratum recorded, issues #2–#11 triaged. Phases 0b–3 remain as written; Phase 0a is not a visual/parity result.
+**Status:** HEAD `912a481` = `origin/main`; **measured gate baseline `912a481`
+(45 gates, Phase 0b)**; working tree clean after the Phase 0b evidence commit.
+**Phase 0a executed:** 2026-11-27, no GPU — save `976f8730…` restored (774 files), docs/gate numbers aligned, provenance moved to `docs/reference/`, route self-test gate added (45-gate runner), V6-03 official erratum recorded, issues #2–#11 triaged. Phase 0a is not a visual/parity result.
+**Phase 0b executed:** 2026-11-27, GPU headless Xvfb — clean route2 at `912a481`
+(`status=captured`, `git.dirty=false`, 13 captured / 14 deferred / 0 partial /
+17 frames / 18 PNGs), then the first full **45/45** serial gate set at the same
+HEAD; the ratchet is re-stamped `measured_on=912a481` and
+`p0b_route_self_test=62` is a floor. Evidence:
+[`final-20261127-phase0b.md`](final-20261127-phase0b.md).
 **Source:** four read-only lanes (repo audit, P4 look, navmesh + StateTree, remaining systems). Their findings are summarised in §1; the work packages in §2–§6 are the execution contract.
 **Owner decisions (2026-11-27):** Phase 0 first; P4 meter = `CompositorEffect`; mirrors = baked mesh variant; 120-row mission = **official Cleanout (`LootTheRoom`, `free_play=false`)**; restore the `976f8730…` save now; move adjudication provenance under `docs/reference/`; run audio + GC in parallel; triage all open issues.
 
@@ -254,10 +261,24 @@ The 44-gate set at `5135f53` matches the committed logs: compile **217/0**, `run
 ## 10. References
 
 - `docs/HANDOFF_NEXT_AGENT.md` — current gate table, traps, open items.
-- `docs/reports/final-20261127.md` + `docs/reports/logs/final/` — the 44-gate evidence.
+- `docs/reports/final-20261127.md` + `docs/reports/logs/final/` — the W10 FINAL
+  44-gate evidence at `5135f53` (history) and the Phase 0b 45-gate measurement
+  at `912a481`; current report:
+  [`final-20261127-phase0b.md`](final-20261127-phase0b.md).
 - `docs/reports/p0b-route.md` + `docs/reports/logs/p0b-route/route2/` — the staged runner and measured capture.
 - `docs/reports/live-ref-review-20261127.md` (+ plan/lanes/verification) — the Staff-mission live review and KF27 correction.
 - `docs/reports/p0b-route-rescore.md` — the staged evidence index; the beam/ROI numbers.
 - `docs/reference/clip_1795033698901/` — the official clip, keyframes, scorecard, matrix/adjudications.
 - `docs/FIDELITY_GAPS.md`, `AGENTS.md` — invariants, traps, gate rules.
 - Issue **#13** — deferred Cleanout live reference (save caveat in the comment).
+
+---
+
+## 11. Execution log
+
+| Date | Phase | Measured evidence |
+|---|---|---|
+| 2026-11-27 | 0a | `276a5bd` (truth/save/provenance/gate hygiene); independent verification `912a481` = **8/8 PASS** ([`phase0a-verification-20261127.md`](phase0a-verification-20261127.md)). No GPU. |
+| 2026-11-27 | 0b | Route2-clean at `912a481`: `status=captured beats=27 captured=13 deferred=14 partial=0 frame_errors=0 frames=17`, `git.dirty=false`, 18 PNGs 1920×1080, exit 0, wrapper wall 207 s (`docs/reports/logs/p0b-route/route2-clean/`). One Godot at a time under Xvfb; no Steam/shipped game. |
+| 2026-11-27 | 0b | First full 45-gate set at `912a481`: **45/45 exit 0**, wall 19 m 49 s (`docs/reports/logs/final/`); route self-test `P0B_ROUTE_SELFTEST PASS checks=62 fails=0`. Ratchet re-stamped `measured_on=912a481` with `p0b_route_self_test.checks=62`; `make gate-ratchet` and `make audit` PASS. Report: [`final-20261127-phase0b.md`](final-20261127-phase0b.md). Commits local, **not pushed**. |
+| next | 1 | P4 look: instruments (`mirror_probe`, landscape mask probe, KF27 beam re-measure) → exposure/IBL/AEM → mirrors/landscape/beams. No visual claim without a capture. |

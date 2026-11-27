@@ -1,7 +1,7 @@
 == FINAL_GATE probe_gc_destruction
 COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/probe_gc_destruction.gd
-CWD: /home/john/.local/share/opencode/worktree/318f41/final-evidence
-STARTED: 2026-11-26T22:38:46-05:00
+CWD: /home/john/Projects/TAT-2
+STARTED: 2026-11-27T10:44:05-05:00
 
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
@@ -48,8 +48,8 @@ FootstepMask: downscaled 1024x1024 -> 128x128 for one-time alpha mask
 FootstepMask: baked one-time alpha mask (128x128, source_alpha=true) from res://assets/ue/Raw/Art/Environment/Props/Containers/Crates/T_Crate_Decal_D.png
 TAT-2 gate lights: total=0 (generic=0 rect=0) budget=8 forced=0 hero_shadows=6
 ROUGHNESS_BAKE_MODE on=1 resolution=full cache=process
-AUTHORED_COLLISION meshes=7 hull=7 authored_elements=7 complex=0 no_record=0 prims=4 convex=24 absent=0 no_collision=0 query_only=0 reduced=1 shapes_per_instance_avg=1.46 elements=47 load_ms=253
-ROUGHNESS_BAKE count=6 pixels=5373952 ms=304 bytes=7165267 hits=0 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=7 hull=7 authored_elements=7 complex=0 no_record=0 prims=4 convex=24 absent=0 no_collision=0 query_only=0 reduced=1 shapes_per_instance_avg=1.46 elements=47 load_ms=339
+ROUGHNESS_BAKE count=6 pixels=5373952 ms=393 bytes=7165267 hits=0 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=175 applied=175 duplicate=0 name_skipped=0 wardbox=0 moonshape=0 clamp=0 clamp_worst=1.00x mirrored=16 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0
 PERF_CENSUS meshes=39 instances=176 chunk_nodes=38 plain=11 multimesh=28 surface_draws=64 lights=0 shadow_lights=0 occluders=0 collision_bodies=13 collision_shapes=256 periph_nodes=0 periph_instances=0 periph_surface_draws=0 periph_plain=0 periph_multimesh=0 periph_range=0 merge_mode=off merge_candidates=0 merge_nodes=0 merge_surfaces_before=0 merge_surfaces_after=0 light_budget=8 hero_shadows=6 source_sublevels={ "Guildhall_Loot": 175 }
 GC_PROBE load layers=95 leaves=79 hidden_initial=95 visible_broken=0 meshless=0 owner_index=87 collision_shapes=256
@@ -68,7 +68,7 @@ GC_CHECK PASS 79 owners have both leaf and broken leaf_owners=79 paired=79
 GC_CHECK PASS 8 broken-only owners are bookcase actors with 2 layers each broken_only=8 unexpected=[]
 GC_CHECK PASS owner index 87 == 79 paired containers + 8 bookcases 87
 TAT-2 gate lights: total=0 (generic=0 rect=0) budget=8 forced=0 hero_shadows=6
-AUTHORED_COLLISION meshes=7 hull=7 authored_elements=7 complex=0 no_record=0 prims=4 convex=24 absent=0 no_collision=0 query_only=0 reduced=1 shapes_per_instance_avg=1.46 elements=47 load_ms=253
+AUTHORED_COLLISION meshes=7 hull=7 authored_elements=7 complex=0 no_record=0 prims=4 convex=24 absent=0 no_collision=0 query_only=0 reduced=1 shapes_per_instance_avg=1.46 elements=47 load_ms=339
 ROUGHNESS_BAKE count=0 pixels=0 ms=0 bytes=0 hits=6 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=175 applied=175 duplicate=0 name_skipped=0 wardbox=0 moonshape=0 clamp=0 clamp_worst=1.00x mirrored=16 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0
 PERF_CENSUS meshes=39 instances=176 chunk_nodes=38 plain=11 multimesh=28 surface_draws=64 lights=0 shadow_lights=0 occluders=0 collision_bodies=13 collision_shapes=256 periph_nodes=0 periph_instances=0 periph_surface_draws=0 periph_plain=0 periph_multimesh=0 periph_range=0 merge_mode=off merge_candidates=0 merge_nodes=0 merge_surfaces_before=0 merge_surfaces_after=0 light_budget=8 hero_shadows=6 source_sublevels={ "Guildhall_Loot": 175 }
@@ -107,4 +107,4 @@ GC_PROBE checks=44 fails=0
 GC_PROBE PASS
 
 EXIT: 0
-FINISHED: 2026-11-26T22:38:49-05:00
+FINISHED: 2026-11-27T10:44:08-05:00

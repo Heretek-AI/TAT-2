@@ -1,7 +1,7 @@
 == FINAL_GATE gate_ratchet
 COMMAND: make gate-ratchet
-CWD: /home/john/.local/share/opencode/worktree/318f41/final-evidence
-STARTED: 2026-11-26T22:56:43-05:00
+CWD: /home/john/Projects/TAT-2
+STARTED: 2026-11-27T10:55:04-05:00
 
 python3 -m py_compile tools/*.py
 python3 tools/check_content_overrides.py --table-only
@@ -164,4 +164,4 @@ PASS: report names measured_on=5135f53
 GATE_RATCHET: PASS (baseline and committed evidence agree; Godot gates run locally)
 
 EXIT: 0
-FINISHED: 2026-11-26T22:56:43-05:00
+FINISHED: 2026-11-27T10:55:04-05:00

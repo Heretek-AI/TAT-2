@@ -1,7 +1,7 @@
 == FINAL_GATE e2e_a2
 COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd -- --tier=a2
-CWD: /home/john/.local/share/opencode/worktree/318f41/final-evidence
-STARTED: 2026-11-26T22:46:52-05:00
+CWD: /home/john/Projects/TAT-2
+STARTED: 2026-11-27T10:52:26-05:00
 
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
@@ -66,8 +66,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [3] _build_one_draw_item (res://src/core/level_loader.gd:4702)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7106)
 COL_PLANAR /Game/Art/Effects/WardZones/SM_SlowWardZone_Quad instances=82 skipped=1
-AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=346
-ROUGHNESS_BAKE count=87 pixels=74973184 ms=5575 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=363
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=5808 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
 BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=64953 applied=64682 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=206 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0
@@ -165,6 +165,10 @@ A2_MEASURE gc layers=174 leaves=80 visible_broken=0 missing=0
 PASS: [A2-GC-STATS] runtime GC census layers=174 (>=95) leaves=80 (>=79) visible_broken=0 missing=0
 PASS: [A2-GC-SWAP] one chest swap @Area3D@39692 -> leaf (broken=true opened=true)
 SUMMARY: fails=0 passed=22 total=22
+WARNING: 8 ObjectDB instances were leaked at exit (run with `--verbose` for details).
+   at: cleanup (core/object/object.cpp:2536)
+ERROR: 4 resources still in use at exit (run with --verbose for details).
+   at: clear (core/io/resource.cpp:822)
 
 EXIT: 0
-FINISHED: 2026-11-26T22:47:21-05:00
+FINISHED: 2026-11-27T10:52:56-05:00

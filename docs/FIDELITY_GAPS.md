@@ -29,7 +29,10 @@ visual claim** and does not re-score a row.
   (330 cards, `max_axis_err_deg=0.000006`), but the route2 staged
   `upper_foyer` frame measures peak row **49.07 %**, excess **131.15**, and
   **12** cream-unexplained 16×9 cells (8 on the beam row), against KF27
-  **40.19 %** and **0.12 %** cream outside the band. "Thin line, no cream bars"
+  **40.19 %** and **0.12 %** cream outside the band. The clean route2-clean
+  capture (`912a481`, Phase 0b) reproduces the S24 three-frame set with
+  `beam_visible=true`; the numbers above are from the earlier route2 frame and
+  are not re-scored here. "Thin line, no cream bars"
   is a different-pose result and is **not** a current foyer claim; P4.5 must
   re-measure at the KF27 pose.
 - **Light Gem — record present, payload absent.** `GEM_AUTHORED_SLICES=21` and
@@ -53,6 +56,13 @@ visual claim** and does not re-score a row.
 - **Tally note.** The 2026-11-24 tally (**48 scored / 56 N/A / 16
   UNVERIFIED**) predates W10; V4-07/V6-03 were re-scored in W9-P1. No row token
   changed in Phase 0a.
+
+**Phase 0b (2026-11-27):** the **45-gate** set was re-measured at `912a481`
+(45/45 exit 0, every count unchanged) and the clean route2 capture
+(`status=captured`, `git.dirty=false`, 13/14/0, 17 frames, 18 PNGs) is the new
+route provenance. Evidence: [`reports/final-20261127-phase0b.md`](reports/final-20261127-phase0b.md),
+[`reports/logs/p0b-route/route2-clean/`](reports/logs/p0b-route/route2-clean/).
+The 44-gate `5135f53` logs remain in git history at that commit.
 
 ## W10 FINAL — 2026-11-27 (supersedes the P1/W10-P2 sections where they differ)
 

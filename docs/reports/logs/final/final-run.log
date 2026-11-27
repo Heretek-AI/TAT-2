@@ -1,17 +1,17 @@
 FINAL_GATE_RUN
-started: 2026-11-26T22:29:51-05:00
-root: /home/john/.local/share/opencode/worktree/318f41/final-evidence
-head: 5135f53dfff8a9b268576f7731588ab7a0be3494
-branch: w10/final-evidence
+started: 2026-11-27T10:35:15-05:00
+root: /home/john/Projects/TAT-2
+head: 912a481d42611cb0de77f31d4e01e63029b68190
+branch: main
 godot: 4.7.2.stable.official.ed1daf0bf
-godot_bin: /home/john/.local/share/opencode/worktree/318f41/final-evidence/tools/godot
+godot_bin: /home/john/Projects/TAT-2/tools/godot
 lock: /tmp/opencode/tat2-godot.lock
-uncommitted_entries_at_start: 2
+uncommitted_entries_at_start: 1
 host: Linux 7.4.0-0.rc4.261125g4dce97c6c265.35.fc46.x86_64 x86_64
 nproc: 32
 runner: build/qa/run_final_gates.sh
 
-FINAL_GATES start head=5135f53dfff8a9b268576f7731588ab7a0be3494 branch=w10/final-evidence godot=4.7.2.stable.official.ed1daf0bf
+FINAL_GATES start head=912a481d42611cb0de77f31d4e01e63029b68190 branch=main godot=4.7.2.stable.official.ed1daf0bf
 FINAL_GATE name=compile exit=0 log=docs/reports/logs/final/compile.log
 FINAL_MARKER name=compile marker=scripts checked: [0-9]+, broken: 0
 FINAL_GATE name=run_tests exit=0 log=docs/reports/logs/final/run_tests.log
@@ -84,8 +84,10 @@ FINAL_GATE name=p0b_manifest_validate exit=0 log=docs/reports/logs/final/p0b_man
 FINAL_MARKER name=p0b_manifest_validate marker=P0B_MANIFEST_OK
 FINAL_GATE name=p0b_kf27_reference exit=0 log=docs/reports/logs/final/p0b_kf27_reference.log
 FINAL_MARKER name=p0b_kf27_reference marker=P0B_KF27_REF pose=upper_foyer met=7/7
+FINAL_GATE name=p0b_route_self_test exit=0 log=docs/reports/logs/final/p0b_route_self_test.log
+FINAL_MARKER name=p0b_route_self_test marker=P0B_ROUTE_SELFTEST PASS checks=62 fails=0
 FINAL_GATE name=runtime_smoke exit=0 log=docs/reports/logs/final/runtime_smoke.log
-FINAL_SMOKE_GODOT_LOG /home/john/.local/share/opencode/worktree/318f41/final-evidence/docs/reports/logs/final/runtime_smoke_godot.log (from /tmp/tat2-smoke-tZOvMz.log)
+FINAL_SMOKE_GODOT_LOG /home/john/Projects/TAT-2/docs/reports/logs/final/runtime_smoke_godot.log (from /tmp/tat2-smoke-vFBUAy.log)
 FINAL_GATE name=runtime_smoke_scan exit=0 log=docs/reports/logs/final/runtime_smoke_scan.log
 FINAL_MARKER name=runtime_smoke_scan marker=RUNTIME_SMOKE_SCAN_TEST PASS
 FINAL_GATE name=string_audit exit=0 log=docs/reports/logs/final/string_audit.log
@@ -95,5 +97,5 @@ FINAL_GATE name=audit exit=0 log=docs/reports/logs/final/audit.log
 FINAL_GATE name=texture_cap exit=0 log=docs/reports/logs/final/texture_cap.log
 FINAL_GATE name=perf_guard exit=0 log=docs/reports/logs/final/perf_guard.log
 FINAL_GATE name=gate_ratchet exit=0 log=docs/reports/logs/final/gate_ratchet.log
-FINAL_GATES PASS head=5135f53dfff8a9b268576f7731588ab7a0be3494 gates=44
-FINAL_GATES evidence=/home/john/.local/share/opencode/worktree/318f41/final-evidence/docs/reports/logs/final summary=/home/john/.local/share/opencode/worktree/318f41/final-evidence/docs/reports/logs/final/final-summary.txt
+FINAL_GATES PASS head=912a481d42611cb0de77f31d4e01e63029b68190 gates=45
+FINAL_GATES evidence=/home/john/Projects/TAT-2/docs/reports/logs/final summary=/home/john/Projects/TAT-2/docs/reports/logs/final/final-summary.txt

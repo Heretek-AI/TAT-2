@@ -131,6 +131,21 @@ LOG_GATES = {
         "minimums": [(1, "poses")],
         "passes_key": None,
     },
+    # Phase 0a/0b route self-test: both QA wrappers must parse, then the
+    # staged-route runner's headless table/schema/audio self-test must pass.
+    # The floor is the measured check count (62); the PASS literal is part of
+    # the pattern so a probe that silently drops checks cannot satisfy the gate.
+    "p0b_route_self_test": {
+        "command": (
+            "bash -n build/qa/p0b_route.sh && "
+            "bash -n build/qa/p0b_live_capture.sh && "
+            "P0B_ROUTE_EVIDENCE_DIR=docs/reports/logs/final "
+            "build/qa/p0b_route.sh --self-test"
+        ),
+        "pattern": lambda g: r"P0B_ROUTE_SELFTEST PASS checks=(\d+) fails=0",
+        "minimums": [(1, "checks")],
+        "passes_key": None,
+    },
     # W10-P2/P3/P5 suites and probes. Each prints a stable numeric summary, so
     # the measured count is a floor (a suite may add checks, never drop them).
     # Cream suite 119 is GREEN now; `expected_fail=0` is in the literal pattern

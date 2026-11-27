@@ -1,7 +1,7 @@
 == FINAL_GATE compile
-COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script /home/john/.local/share/opencode/worktree/318f41/final-evidence/tools/check_scripts_compile.gd
-CWD: /home/john/.local/share/opencode/worktree/318f41/final-evidence
-STARTED: 2026-11-26T22:29:51-05:00
+COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script /home/john/Projects/TAT-2/tools/check_scripts_compile.gd
+CWD: /home/john/Projects/TAT-2
+STARTED: 2026-11-27T10:35:15-05:00
 
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
@@ -33,4 +33,4 @@ INPUT_TABLE source=generated rows=91 shipping=91 actions=52
 INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
 
 EXIT: 0
-FINISHED: 2026-11-26T22:29:57-05:00
+FINISHED: 2026-11-27T10:35:21-05:00

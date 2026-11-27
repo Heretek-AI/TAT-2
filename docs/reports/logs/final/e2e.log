@@ -1,7 +1,7 @@
 == FINAL_GATE e2e
 COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd
-CWD: /home/john/.local/share/opencode/worktree/318f41/final-evidence
-STARTED: 2026-11-26T22:39:29-05:00
+CWD: /home/john/Projects/TAT-2
+STARTED: 2026-11-27T10:44:51-05:00
 
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
@@ -64,8 +64,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [2] _get_mesh_and_shape (res://src/core/level_loader.gd:1976)
          [3] _build_one_draw_item (res://src/core/level_loader.gd:4702)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7106)
-AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=345
-ROUGHNESS_BAKE count=34 pixels=25690112 ms=1877 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=365
+ROUGHNESS_BAKE count=34 pixels=25690112 ms=1988 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2440 applied=2434 duplicate=5 name_skipped=0 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.38x mirrored=2 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0
 TAT-2 Loaded thieves_den: meshes=2434 lights=13
 TAT-2 post_process 'PostProcessVolume_1' carries only Lumen/UE-only settings (LumenSkylightLeaking, LumenFullSkylightLeakingDistance, LocalExposureHighlightContrastScale, LocalExposureShadowContrastScale, LocalExposureMiddleGreyBias); nothing Godot-mappable, environment unchanged
@@ -116,8 +116,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [3] _build_one_draw_item (res://src/core/level_loader.gd:4702)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7106)
 COL_PLANAR /Game/Art/Effects/WardZones/SM_SlowWardZone_Quad instances=82 skipped=1
-AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=345
-ROUGHNESS_BAKE count=87 pixels=74973184 ms=5456 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=365
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=5534 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
 BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=64953 applied=64682 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=206 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0
@@ -210,7 +210,7 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [10] _feat_02_interior_shadow_gi (res://tests/e2e/e2e_tier1_features.gd:231)
          [11] free_node (res://tests/e2e/e2e_helpers.gd:272)
          [12] step_process (res://tests/e2e/e2e_helpers.gd:261)
-ROUGHNESS_BAKE count=31 pixels=22806528 ms=1631 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=31 pixels=22806528 ms=1676 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=3116 applied=3112 duplicate=0 name_skipped=3 wardbox=0 moonshape=1 clamp=68 clamp_worst=4.67x mirrored=444 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0
 PASS: [T1-03-A] cam eye_ok=true fov=48.03 pitch=13.67
 PASS: [T1-03-B] startscreen dirs=2 total_lights=31 env=true
@@ -243,7 +243,7 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [7] _ready (res://src/ui/main_menu.gd:86)
          [8] _feat_04_neon_ssr (res://tests/e2e/e2e_tier1_features.gd:357)
          [9] step_process (res://tests/e2e/e2e_helpers.gd:261)
-ROUGHNESS_BAKE count=31 pixels=22806528 ms=1627 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=31 pixels=22806528 ms=1659 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=3116 applied=3112 duplicate=0 name_skipped=3 wardbox=0 moonshape=1 clamp=68 clamp_worst=4.67x mirrored=444 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0
 PASS: [T1-04-C] desktop ssr_enabled on MainMenu=true and Mission/Weather=true
 PASS: [T1-04-D] tat_landscape.gdshader wet puddle roughness ~0.04 (found_0.04=true)
@@ -283,7 +283,7 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [11] _feat_04_neon_ssr (res://tests/e2e/e2e_tier1_features.gd:385)
          [12] free_node (res://tests/e2e/e2e_helpers.gd:272)
          [13] step_process (res://tests/e2e/e2e_helpers.gd:261)
-ROUGHNESS_BAKE count=22 pixels=15728640 ms=1130 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=22 pixels=15728640 ms=1148 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2109 applied=2105 duplicate=0 name_skipped=4 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.00x mirrored=146 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0
 TAT-2 prep skyline: placed 8/8 expansion pieces (group=prep_skyline)
 TAT-2 prep stage: kept=260 hid=158 radius=9.0
@@ -412,7 +412,7 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [9] _feat_16_shell_ui_letter_loading (res://tests/e2e/e2e_tier1_features.gd:1523)
          [10] free_node (res://tests/e2e/e2e_helpers.gd:272)
          [11] step_process (res://tests/e2e/e2e_helpers.gd:261)
-ROUGHNESS_BAKE count=22 pixels=15728640 ms=910 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=22 pixels=15728640 ms=1190 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2109 applied=2105 duplicate=0 name_skipped=4 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.00x mirrored=146 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0
 TAT-2 prep skyline: placed 8/8 expansion pieces (group=prep_skyline)
 TAT-2 prep stage: kept=260 hid=158 radius=9.0
@@ -461,7 +461,7 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [9] _feat_16_shell_ui_letter_loading (res://tests/e2e/e2e_tier1_features.gd:1602)
          [10] free_node (res://tests/e2e/e2e_helpers.gd:272)
          [11] step_process (res://tests/e2e/e2e_helpers.gd:261)
-ROUGHNESS_BAKE count=22 pixels=15728640 ms=1150 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=22 pixels=15728640 ms=1138 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2109 applied=2105 duplicate=0 name_skipped=4 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.00x mirrored=146 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0
 TAT-2 prep skyline: placed 8/8 expansion pieces (group=prep_skyline)
 TAT-2 prep stage: kept=260 hid=158 radius=9.0
@@ -485,8 +485,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [2] _get_mesh_and_shape (res://src/core/level_loader.gd:1976)
          [3] _build_one_draw_item (res://src/core/level_loader.gd:4702)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7106)
-AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=345
-ROUGHNESS_BAKE count=34 pixels=25690112 ms=1863 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=365
+ROUGHNESS_BAKE count=34 pixels=25690112 ms=1869 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2440 applied=2434 duplicate=5 name_skipped=0 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.38x mirrored=2 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0
 TAT-2 Loaded thieves_den: meshes=2434 lights=13
 TAT-2 post_process 'PostProcessVolume_1' carries only Lumen/UE-only settings (LumenSkylightLeaking, LumenFullSkylightLeakingDistance, LocalExposureHighlightContrastScale, LocalExposureShadowContrastScale, LocalExposureMiddleGreyBias); nothing Godot-mappable, environment unchanged
@@ -544,8 +544,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [2] _get_mesh_and_shape (res://src/core/level_loader.gd:1976)
          [3] _build_one_draw_item (res://src/core/level_loader.gd:4702)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7106)
-AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=345
-ROUGHNESS_BAKE count=87 pixels=74973184 ms=5456 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=365
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=5630 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
 BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=64953 applied=64682 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=206 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0
@@ -624,8 +624,8 @@ WARNING: [level_loader] material flat white: '/Engine/BasicShapes/BasicShapeMate
          [1] _get_overridden_mesh (res://src/core/level_loader.gd:2426)
          [2] _build_one_draw_item (res://src/core/level_loader.gd:4748)
          [3] load_sublevels_async (res://src/core/level_loader.gd:7106)
-AUTHORED_COLLISION meshes=703 hull=698 authored_elements=641 complex=44 no_record=0 prims=380 convex=2739 absent=5 no_collision=13 query_only=5 reduced=35 shapes_per_instance_avg=1.10 elements=3710 load_ms=345
-ROUGHNESS_BAKE count=87 pixels=72220672 ms=5196 bytes=96294196 hits=39 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=703 hull=698 authored_elements=641 complex=44 no_record=0 prims=380 convex=2739 absent=5 no_collision=13 query_only=5 reduced=35 shapes_per_instance_avg=1.10 elements=3710 load_ms=365
+ROUGHNESS_BAKE count=87 pixels=72220672 ms=4522 bytes=96294196 hits=39 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=196 axis=col2 length_slot=2 clamp=none max_scale=236.9539 max_length_m=24.169
 BEAM_AXIS cards=196 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=24819 applied=24180 duplicate=547 name_skipped=6 wardbox=39 moonshape=47 clamp=287 clamp_worst=500.00x mirrored=780 origin_markers_skipped=0 skipped_merged=0 from_graph=4 graph_missing=0
@@ -647,7 +647,7 @@ PASS: [T1-21-D] OldManor spawn headroom=true forward=true
 PASS: [T1-21-B] OldManor_P player walk & collision stable (true)
 PASS: [T1-21-C] OldManor_P guard collision stable (true, guards=4)
 PASS: [T1-21-E] OldManor_P dual-weightmap components=7 shader=true
-PASS: [T1-22-A] run_tests ratchet markers=99 max=121 floor=322 log_PASS=322 log_fails=0 log=docs/reports/logs/p1/full/run_tests.log
+PASS: [T1-22-A] run_tests ratchet markers=99 max=121 floor=324 log_PASS=324 log_fails=0 log=docs/reports/logs/final/run_tests.log
 PASS: [T1-22-B] manifest_audit.py & anims_manifest.json intact
 PASS: [T1-22-C] Standalone E2E suite files present under res://tests/e2e/
 PASS: [T1-22-D] build/qa/capture_e2e_parity.{sh,gd} with SHADER/SCRIPT ERROR=0 gate (true)
@@ -693,7 +693,7 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [8] _bVA_03_startscreen (res://tests/e2e/e2e_tier2_boundaries.gd:133)
          [9] free_node (res://tests/e2e/e2e_helpers.gd:272)
          [10] step_process (res://tests/e2e/e2e_helpers.gd:261)
-ROUGHNESS_BAKE count=31 pixels=22806528 ms=1197 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=31 pixels=22806528 ms=1648 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=3116 applied=3112 duplicate=0 name_skipped=3 wardbox=0 moonshape=1 clamp=68 clamp_worst=4.67x mirrored=444 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0
 PASS: [T2-03-B] Startscreen DirectionalLight energy=0.4500 == loader authored 0.4500 (>=0.01 floor)
 PASS: [T2-03-C] Startscreen active lights=31 (>=22)
@@ -739,7 +739,7 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [11] _bVA_04_neon_landscape (res://tests/e2e/e2e_tier2_boundaries.gd:218)
          [12] free_node (res://tests/e2e/e2e_helpers.gd:272)
          [13] step_process (res://tests/e2e/e2e_helpers.gd:261)
-ROUGHNESS_BAKE count=22 pixels=15728640 ms=841 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=22 pixels=15728640 ms=1168 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2109 applied=2105 duplicate=0 name_skipped=4 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.00x mirrored=146 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0
 TAT-2 prep skyline: placed 8/8 expansion pieces (group=prep_skyline)
 TAT-2 prep stage: kept=260 hid=158 radius=9.0
@@ -920,7 +920,7 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [9] _bVA_16_shell_ui (res://tests/e2e/e2e_tier2_boundaries.gd:1015)
          [10] free_node (res://tests/e2e/e2e_helpers.gd:272)
          [11] step_process (res://tests/e2e/e2e_helpers.gd:261)
-ROUGHNESS_BAKE count=22 pixels=15728640 ms=1155 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=22 pixels=15728640 ms=1106 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2109 applied=2105 duplicate=0 name_skipped=4 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.00x mirrored=146 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0
 TAT-2 prep skyline: placed 8/8 expansion pieces (group=prep_skyline)
 TAT-2 prep stage: kept=260 hid=158 radius=9.0
@@ -965,7 +965,7 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [9] _bVA_16_shell_ui (res://tests/e2e/e2e_tier2_boundaries.gd:1042)
          [10] free_node (res://tests/e2e/e2e_helpers.gd:272)
          [11] step_process (res://tests/e2e/e2e_helpers.gd:261)
-ROUGHNESS_BAKE count=22 pixels=15728640 ms=1163 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=22 pixels=15728640 ms=1125 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2109 applied=2105 duplicate=0 name_skipped=4 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.00x mirrored=146 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0
 TAT-2 prep skyline: placed 8/8 expansion pieces (group=prep_skyline)
 TAT-2 prep stage: kept=260 hid=158 radius=9.0
@@ -998,8 +998,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [2] _get_mesh_and_shape (res://src/core/level_loader.gd:1976)
          [3] _build_one_draw_item (res://src/core/level_loader.gd:4702)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7106)
-AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=345
-ROUGHNESS_BAKE count=34 pixels=25690112 ms=1876 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=365
+ROUGHNESS_BAKE count=34 pixels=25690112 ms=1883 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2440 applied=2434 duplicate=5 name_skipped=0 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.38x mirrored=2 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0
 TAT-2 Loaded thieves_den: meshes=2434 lights=13
 TAT-2 post_process 'PostProcessVolume_1' carries only Lumen/UE-only settings (LumenSkylightLeaking, LumenFullSkylightLeakingDistance, LocalExposureHighlightContrastScale, LocalExposureShadowContrastScale, LocalExposureMiddleGreyBias); nothing Godot-mappable, environment unchanged
@@ -1105,7 +1105,7 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [10] _t3_08_1p_zipwire_glb_anims_subviewport (res://tests/e2e/e2e_tier3_pairwise.gd:268)
          [11] free_node (res://tests/e2e/e2e_helpers.gd:272)
          [12] step_process (res://tests/e2e/e2e_helpers.gd:261)
-ROUGHNESS_BAKE count=31 pixels=22806528 ms=1625 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=31 pixels=22806528 ms=1648 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=3116 applied=3112 duplicate=0 name_skipped=3 wardbox=0 moonshape=1 clamp=68 clamp_worst=4.67x mirrored=444 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0
 PASS: [T3-09] Startscreen sky + volumetric mist + neon HDR + SSR/SSIL coexist cleanly (env=true)
 TAT-2 HUD build: id=22 root_children=29 hp_frame=1 hp_fill=1 objectives=1
@@ -1139,8 +1139,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [2] _get_mesh_and_shape (res://src/core/level_loader.gd:1976)
          [3] _build_one_draw_item (res://src/core/level_loader.gd:4702)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7106)
-AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=345
-ROUGHNESS_BAKE count=87 pixels=74973184 ms=5419 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=365
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=6303 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
 BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=64953 applied=64682 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=206 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0
@@ -1195,8 +1195,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [2] _get_mesh_and_shape (res://src/core/level_loader.gd:1976)
          [3] _build_one_draw_item (res://src/core/level_loader.gd:4702)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7106)
-AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=345
-ROUGHNESS_BAKE count=34 pixels=25690112 ms=1836 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=365
+ROUGHNESS_BAKE count=34 pixels=25690112 ms=1874 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2440 applied=2434 duplicate=5 name_skipped=0 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.38x mirrored=2 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0
 TAT-2 Loaded thieves_den: meshes=2434 lights=13
 TAT-2 post_process 'PostProcessVolume_1' carries only Lumen/UE-only settings (LumenSkylightLeaking, LumenFullSkylightLeakingDistance, LocalExposureHighlightContrastScale, LocalExposureShadowContrastScale, LocalExposureMiddleGreyBias); nothing Godot-mappable, environment unchanged
@@ -1242,8 +1242,8 @@ WARNING: [level_loader] material flat white: '/Engine/BasicShapes/BasicShapeMate
          [1] _get_overridden_mesh (res://src/core/level_loader.gd:2426)
          [2] _build_one_draw_item (res://src/core/level_loader.gd:4748)
          [3] load_sublevels_async (res://src/core/level_loader.gd:7106)
-AUTHORED_COLLISION meshes=703 hull=698 authored_elements=641 complex=44 no_record=0 prims=380 convex=2739 absent=5 no_collision=13 query_only=5 reduced=35 shapes_per_instance_avg=1.10 elements=3710 load_ms=345
-ROUGHNESS_BAKE count=87 pixels=72220672 ms=5217 bytes=96294196 hits=39 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=703 hull=698 authored_elements=641 complex=44 no_record=0 prims=380 convex=2739 absent=5 no_collision=13 query_only=5 reduced=35 shapes_per_instance_avg=1.10 elements=3710 load_ms=365
+ROUGHNESS_BAKE count=87 pixels=72220672 ms=4908 bytes=96294196 hits=39 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=196 axis=col2 length_slot=2 clamp=none max_scale=236.9539 max_length_m=24.169
 BEAM_AXIS cards=196 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=24819 applied=24180 duplicate=547 name_skipped=6 wardbox=39 moonshape=47 clamp=287 clamp_worst=500.00x mirrored=780 origin_markers_skipped=0 skipped_merged=0 from_graph=4 graph_missing=0
@@ -1301,7 +1301,7 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [9] run (res://tests/e2e/e2e_tier4_scenarios.gd:15)
          [10] _initialize (res://tests/e2e/run_e2e_tests.gd:93)
          [11] _settle_harness (res://tests/e2e/run_e2e_tests.gd:24)
-ROUGHNESS_BAKE count=31 pixels=22806528 ms=1629 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=31 pixels=22806528 ms=1668 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=3116 applied=3112 duplicate=0 name_skipped=3 wardbox=0 moonshape=1 clamp=68 clamp_worst=4.67x mirrored=444 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0
 TAT-2 UI settings: theme=res://src/ui/art_nouveau_theme.gd strings=res://data/generated/tables/StringTables/ST_Settings.json
 PASS: [T4-01] Startscreen->Settings->Back parity journey (cam=true vis=true teal=true persist=true)
@@ -1325,8 +1325,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [2] _get_mesh_and_shape (res://src/core/level_loader.gd:1976)
          [3] _build_one_draw_item (res://src/core/level_loader.gd:4702)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7106)
-AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=345
-ROUGHNESS_BAKE count=34 pixels=25690112 ms=1842 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=365
+ROUGHNESS_BAKE count=34 pixels=25690112 ms=1902 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2440 applied=2434 duplicate=5 name_skipped=0 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.38x mirrored=2 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0
 TAT-2 Loaded thieves_den: meshes=2434 lights=13
 TAT-2 post_process 'PostProcessVolume_1' carries only Lumen/UE-only settings (LumenSkylightLeaking, LumenFullSkylightLeakingDistance, LocalExposureHighlightContrastScale, LocalExposureShadowContrastScale, LocalExposureMiddleGreyBias); nothing Godot-mappable, environment unchanged
@@ -1388,7 +1388,7 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [11] _t4_02_thieves_den_hub_journey (res://tests/e2e/e2e_tier4_scenarios.gd:101)
          [12] free_node (res://tests/e2e/e2e_helpers.gd:272)
          [13] step_process (res://tests/e2e/e2e_helpers.gd:261)
-ROUGHNESS_BAKE count=22 pixels=15728640 ms=1252 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=22 pixels=15728640 ms=1048 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2109 applied=2105 duplicate=0 name_skipped=4 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.00x mirrored=146 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0
 TAT-2 prep skyline: placed 8/8 expansion pieces (group=prep_skyline)
 TAT-2 prep stage: kept=260 hid=158 radius=9.0
@@ -1422,8 +1422,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [2] _get_mesh_and_shape (res://src/core/level_loader.gd:1976)
          [3] _build_one_draw_item (res://src/core/level_loader.gd:4702)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7106)
-AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=345
-ROUGHNESS_BAKE count=87 pixels=74973184 ms=5510 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=365
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=5469 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
 BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=64953 applied=64682 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=206 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0
@@ -1484,8 +1484,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [2] _get_mesh_and_shape (res://src/core/level_loader.gd:1976)
          [3] _build_one_draw_item (res://src/core/level_loader.gd:4702)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7106)
-AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=345
-ROUGHNESS_BAKE count=87 pixels=74973184 ms=5423 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=365
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=5602 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
 BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=64953 applied=64682 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=206 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0
@@ -1547,8 +1547,8 @@ WARNING: [level_loader] material flat white: '/Engine/BasicShapes/BasicShapeMate
          [1] _get_overridden_mesh (res://src/core/level_loader.gd:2426)
          [2] _build_one_draw_item (res://src/core/level_loader.gd:4748)
          [3] load_sublevels_async (res://src/core/level_loader.gd:7106)
-AUTHORED_COLLISION meshes=703 hull=698 authored_elements=641 complex=44 no_record=0 prims=380 convex=2739 absent=5 no_collision=13 query_only=5 reduced=35 shapes_per_instance_avg=1.10 elements=3710 load_ms=345
-ROUGHNESS_BAKE count=87 pixels=72220672 ms=5213 bytes=96294196 hits=39 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=703 hull=698 authored_elements=641 complex=44 no_record=0 prims=380 convex=2739 absent=5 no_collision=13 query_only=5 reduced=35 shapes_per_instance_avg=1.10 elements=3710 load_ms=365
+ROUGHNESS_BAKE count=87 pixels=72220672 ms=5354 bytes=96294196 hits=39 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=196 axis=col2 length_slot=2 clamp=none max_scale=236.9539 max_length_m=24.169
 BEAM_AXIS cards=196 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=24819 applied=24180 duplicate=547 name_skipped=6 wardbox=39 moonshape=47 clamp=287 clamp_worst=500.00x mirrored=780 origin_markers_skipped=0 skipped_merged=0 from_graph=4 graph_missing=0
@@ -1602,8 +1602,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [2] _get_mesh_and_shape (res://src/core/level_loader.gd:1976)
          [3] _build_one_draw_item (res://src/core/level_loader.gd:4702)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7106)
-AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=345
-ROUGHNESS_BAKE count=87 pixels=74973184 ms=5487 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=365
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=5463 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
 BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=64953 applied=64682 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=206 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0
@@ -1664,8 +1664,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [2] _get_mesh_and_shape (res://src/core/level_loader.gd:1976)
          [3] _build_one_draw_item (res://src/core/level_loader.gd:4702)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7106)
-AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=345
-ROUGHNESS_BAKE count=87 pixels=74973184 ms=5592 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=365
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=5495 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
 BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=64953 applied=64682 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=206 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0
@@ -1725,8 +1725,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [2] _get_mesh_and_shape (res://src/core/level_loader.gd:1976)
          [3] _build_one_draw_item (res://src/core/level_loader.gd:4702)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7106)
-AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=345
-ROUGHNESS_BAKE count=87 pixels=74973184 ms=5425 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=365
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=5494 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
 BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=64953 applied=64682 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=206 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0
@@ -1823,8 +1823,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [2] _get_mesh_and_shape (res://src/core/level_loader.gd:1976)
          [3] _build_one_draw_item (res://src/core/level_loader.gd:4702)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7106)
-AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=345
-ROUGHNESS_BAKE count=87 pixels=74973184 ms=5422 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=365
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=5474 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
 BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=64953 applied=64682 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=206 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0
@@ -1856,17 +1856,17 @@ PASS: [A2-02] boot identity map=guildhall mission=Mission.Guildhall.VaultHeist
 PASS: [A2-03] boot identity difficulty=1 free_play=false phase=main
 PASS: [A2-04] run clock run_time_limit=7200 s == authored mission row 7200 s
 PASS: [A2-05] Novice guard count 4 == 4 (PORT_DECISION 4/6/8)
-A2_MEASURE guard=Guard_1 marker=(49.2489, 46.3155, -35.9301) dist=1.293 bucket=DA_SpawnBucket_StandardGuards_Lanterns layers=["Security_Tower_D"]
-A2_MEASURE guard=Guard_3 marker=(43.7149, 27.05, -26.2188) dist=1.084 bucket=DA_SpawnBucket_StandardGuards_Bouncers layers=["Security_GroundFloor_Lounge_A", "Security_GroundFloor_Lounge_A_Easy", "Security_GroundFloor_Lounge_B", "Security_GroundFloor_Lounge_B_Easy"]
+A2_MEASURE guard=Guard_1 marker=(49.2489, 46.3155, -35.9301) dist=1.297 bucket=DA_SpawnBucket_StandardGuards_Lanterns layers=["Security_Tower_D"]
+A2_MEASURE guard=Guard_3 marker=(43.7149, 27.05, -26.2188) dist=1.090 bucket=DA_SpawnBucket_StandardGuards_Bouncers layers=["Security_GroundFloor_Lounge_A", "Security_GroundFloor_Lounge_A_Easy", "Security_GroundFloor_Lounge_B", "Security_GroundFloor_Lounge_B_Easy"]
 A2_MEASURE guard=Guard_ClubLantern_0 marker=(39.5989, 36.5, -13.8801) dist=0.967 bucket=DA_SpawnBucket_StandardGuards_Lanterns layers=["Security_SecondFloor_D"]
-A2_MEASURE guard=Guard_ClubLantern_2 marker=(30.9197, 12.4488, -31.5598) dist=0.987 bucket=DA_SpawnBucket_StandardGuards_Bouncers layers=["Security_Basement_Storage_A_Easy", "Security_Basement_Storage_A"]
+A2_MEASURE guard=Guard_ClubLantern_2 marker=(30.9197, 12.4488, -31.5598) dist=0.993 bucket=DA_SpawnBucket_StandardGuards_Bouncers layers=["Security_Basement_Storage_A_Easy", "Security_Basement_Storage_A"]
 PASS: [A2-GUARD-META] every guard carries its own spawn_marker meta ([])
 PASS: [A2-GUARD-DIST] every guard <= 2.0 m from its spawn marker ([])
 PASS: [A2-GUARD-FLOOR] every guard <= 0.5 m off its marker floor ray ([])
 PASS: [A2-GUARD-BUCKET] every guard selected through an authored guard bucket, never Hauntstable ([])
 PASS: [A2-GUARD-VISIBLE] every guard visible with meshes ([])
 PASS: [A2-LOUNGE-BBOX] tracked poi-lounge-floor bbox read from content_overrides.json ([P: (20.0, 24.0, -46.0), S: (32.0, 8.0, 41.0)])
-PASS: [A2-LOUNGE-GUARD] Lounge guard marker=C_20 inside the tracked bbox at (43.82217, 26.00134, -25.96422) (guards in bbox=1)
+PASS: [A2-LOUNGE-GUARD] Lounge guard marker=C_20 inside the tracked bbox at (43.83042, 26.00134, -25.94464) (guards in bbox=1)
 PASS: [A2-CIV-COUNT] civilian count 3 == 3
 A2_MEASURE civilian=@CharacterBody3D@505041 pos=(44.0425, 26.00162, -25.6772) in_lounge=true
 A2_MEASURE civilian=@CharacterBody3D@505044 pos=(7.5943, 28.0012, -43.3089) in_lounge=false
@@ -1881,10 +1881,10 @@ A2_WHITE allowed key=/Engine/BasicShapes/Cone count=1 reason=authored /Engine/Ba
 A2_WHITE allowed key=/Engine/BasicShapes/Cube count=2 reason=authored /Engine/BasicShapes placeholder (BasicShapeMaterial, no emission; PORT_DECISION)
 A2_WHITE allowed key=<no ue_mesh> MeshInstance3D count=5 reason=port guard carried-key GLB is untextured (glTF default); PORT_APPROX actor prop
 A2_MEASURE cream_slabs nodes=0 detail=[]
-A2_MEASURE near_white visible_nodes=6805 shader_surfaces=398 unexplained=0 allowed=3 allowlist=5
-PASS: [A2-WHITE] no unexplained near-white visible mesh (visible=6805 shader_surfaces=398 unexplained=0 allowlisted=3)
-A2_MEASURE shell origin=(43.82036, 27.00134, -25.85159) horizontal=4/4 ["+X=hit", "-X=hit", "+Z=hit", "-Z=hit"] floor=hit
-PASS: [A2-SHELL] Lounge shell rays: 4/4 horizontal hits + floor hit (origin=(43.82036, 27.00134, -25.85159), ["+X=hit", "-X=hit", "+Z=hit", "-Z=hit"])
+A2_MEASURE near_white visible_nodes=6746 shader_surfaces=398 unexplained=0 allowed=3 allowlist=5
+PASS: [A2-WHITE] no unexplained near-white visible mesh (visible=6746 shader_surfaces=398 unexplained=0 allowlisted=3)
+A2_MEASURE shell origin=(43.99426, 27.00134, -25.59596) horizontal=4/4 ["+X=hit", "-X=hit", "+Z=hit", "-Z=hit"] floor=hit
+PASS: [A2-SHELL] Lounge shell rays: 4/4 horizontal hits + floor hit (origin=(43.99426, 27.00134, -25.59596), ["+X=hit", "-X=hit", "+Z=hit", "-Z=hit"])
 A2_MEASURE turret visible=91 hidden=0 meshless=0 merged_cells=0 multi_path_cells=0 authored=1145/0 paths=5 missing_paths=0 unique_runtime_cells=0
 PASS: [A2-TURRET] turret census authored visible=1145 (want 1145) hidden=0; runtime meshless=0 missing_paths=[] (individual=91, merged_cells=0)
 A2_MEASURE gc layers=174 leaves=80 visible_broken=0 missing=0
@@ -1896,4 +1896,4 @@ WARNING: 3 ObjectDB instances were leaked at exit (run with `--verbose` for deta
 ERROR: 3 RID allocations of type 'N17RendererSceneCull8InstanceE' were leaked at exit.
 
 EXIT: 0
-FINISHED: 2026-11-26T22:46:52-05:00
+FINISHED: 2026-11-27T10:52:26-05:00

@@ -1,7 +1,7 @@
 == FINAL_GATE run_tests
 COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/run_tests.gd
-CWD: /home/john/.local/share/opencode/worktree/318f41/final-evidence
-STARTED: 2026-11-26T22:29:57-05:00
+CWD: /home/john/Projects/TAT-2
+STARTED: 2026-11-27T10:35:21-05:00
 
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
@@ -70,8 +70,8 @@ WARNING: [level_loader] material flat white: '/Engine/BasicShapes/BasicShapeMate
          [2] _build_one_draw_item (res://src/core/level_loader.gd:4748)
          [3] load_sublevels_async (res://src/core/level_loader.gd:7106)
 COL_PLANAR /Game/Art/Effects/WardZones/SM_SlowWardZone_Quad instances=78 skipped=1
-AUTHORED_COLLISION meshes=703 hull=698 authored_elements=641 complex=44 no_record=0 prims=380 convex=2739 absent=5 no_collision=13 query_only=5 reduced=35 shapes_per_instance_avg=1.10 elements=3710 load_ms=332
-ROUGHNESS_BAKE count=87 pixels=72220672 ms=5232 bytes=96294196 hits=39 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=703 hull=698 authored_elements=641 complex=44 no_record=0 prims=380 convex=2739 absent=5 no_collision=13 query_only=5 reduced=35 shapes_per_instance_avg=1.10 elements=3710 load_ms=334
+ROUGHNESS_BAKE count=87 pixels=72220672 ms=5225 bytes=96294196 hits=39 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=196 axis=col2 length_slot=2 clamp=none max_scale=236.9539 max_length_m=24.169
 BEAM_AXIS cards=196 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=24819 applied=24180 duplicate=547 name_skipped=6 wardbox=39 moonshape=47 clamp=287 clamp_worst=500.00x mirrored=780 origin_markers_skipped=0 skipped_merged=0 from_graph=4 graph_missing=0
@@ -97,16 +97,6 @@ TAT-2 quest items: spawned=1 mission=Mission.OldManor.Vault free_play=false
 TAT-2 loot containers: 110
 TAT-2 clues: spawned=2 set(s)=CLS_Contract_03 map=old_manor
 TAT-2 escape markers: authored=10 spawned=10 grounded=10 connected=10 phase=main
-WARNING: [civilian_npc] navmesh snap deferred: query landed before first map sync (deferred=1); target fails open until sync
-     at: push_warning (core/variant/variant_utility.cpp:1033)
-     GDScript backtrace (most recent call first):
-         [0] _is_target_valid (res://src/ai/civilian_npc.gd:653)
-         [1] _pick_new_target (res://src/ai/civilian_npc.gd:615)
-         [2] _ready (res://src/ai/civilian_npc.gd:155)
-         [3] _spawn_civilians (res://src/missions/mission_controller.gd:4986)
-         [4] _spawn_spawner_content (res://src/missions/mission_controller.gd:4958)
-         [5] start_contract (res://src/missions/mission_controller.gd:939)
-         [6] load_sublevels_async (res://src/core/level_loader.gd:7118)
 TAT-2 spawners: throwable=385 ammo=97 health=7 civilian=2
 [swinging_door] authored lock not applied (window): BP_SM_OldManor_WindowB_4x850_C
 [swinging_door] authored lock not applied (window): BP_Manor_WindowB_4x650_C
@@ -121,7 +111,7 @@ WARNING: [nav_steering] no synchronised navigation map (no NavigationRegion3D ba
          [2] _move_ai (res://src/ai/guard_ai.gd:1608)
          [3] _physics_process (res://src/ai/guard_ai.gd:1540)
 PASS: Old Manor mission spawned 6 guards, 298 loot items and 120 doors / 176 leaves
-PASS: pivot-mesh door swings 90 degrees (rot=1.553)
+PASS: pivot-mesh door swings 90 degrees (rot=1.555)
 TAT-2 endgame: phase=endgame reason=objective_complete window_s=600.0 doors=10/10
 PASS: Ghost stealth bonus 1.25x verified
 WARNING: [level_loader] prop GLB 'res://assets/ue/Content/Art/Environment/City/Architecture/Doorways/SM_DoorCityExtA.glb' has no authored slot list (loader=false); its surfaces stay on the white glTF default
@@ -153,8 +143,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [2] _get_mesh_and_shape (res://src/core/level_loader.gd:1976)
          [3] _build_one_draw_item (res://src/core/level_loader.gd:4702)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7106)
-AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=332
-ROUGHNESS_BAKE count=34 pixels=25690112 ms=1859 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=334
+ROUGHNESS_BAKE count=34 pixels=25690112 ms=1847 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2440 applied=2434 duplicate=5 name_skipped=0 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.38x mirrored=2 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0
 TAT-2 Loaded thieves_den: meshes=2434 lights=13
 TAT-2 post_process 'PostProcessVolume_1' carries only Lumen/UE-only settings (LumenSkylightLeaking, LumenFullSkylightLeakingDistance, LocalExposureHighlightContrastScale, LocalExposureShadowContrastScale, LocalExposureMiddleGreyBias); nothing Godot-mappable, environment unchanged
@@ -210,7 +200,7 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [7] _build_all (res://src/ui/mission_prep_ui.gd:432)
          [8] _ready (res://src/ui/mission_prep_ui.gd:235)
          [9] _initialize (res://tests/run_tests.gd:303)
-ROUGHNESS_BAKE count=22 pixels=15728640 ms=1134 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=22 pixels=15728640 ms=1128 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2109 applied=2105 duplicate=0 name_skipped=4 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.00x mirrored=146 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0
 TAT-2 prep skyline: placed 8/8 expansion pieces (group=prep_skyline)
 TAT-2 prep stage: kept=260 hid=158 radius=9.0
@@ -248,8 +238,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [3] _build_one_draw_item (res://src/core/level_loader.gd:4702)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7106)
 COL_PLANAR /Game/Art/VFX/Meshes/FXSHAPES_1_FXQuadPivotDownEdge instances=1 skipped=1
-AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=332
-ROUGHNESS_BAKE count=87 pixels=74973184 ms=5410 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=334
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=5398 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
 BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=64956 applied=64685 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=208 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0
@@ -382,8 +372,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [2] _get_mesh_and_shape (res://src/core/level_loader.gd:1976)
          [3] _build_one_draw_item (res://src/core/level_loader.gd:4702)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7106)
-AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=332
-ROUGHNESS_BAKE count=34 pixels=25690112 ms=1843 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=334
+ROUGHNESS_BAKE count=34 pixels=25690112 ms=1839 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2440 applied=2434 duplicate=5 name_skipped=0 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.38x mirrored=2 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0
 TAT-2 Loaded thieves_den: meshes=2434 lights=13
 TAT-2 post_process 'PostProcessVolume_1' carries only Lumen/UE-only settings (LumenSkylightLeaking, LumenFullSkylightLeakingDistance, LocalExposureHighlightContrastScale, LocalExposureShadowContrastScale, LocalExposureMiddleGreyBias); nothing Godot-mappable, environment unchanged
@@ -401,7 +391,7 @@ TAT-2 mission_ready map=thieves_den meshes=2434 lights=13 chunks=793
 PASS: 34a Den exit door wired into swinging-door path (SM_DoorInaccessibleA, 0 static duplicates)
 PASS: 34b Den lighting (hand_fills=2.0<=2.0, dark_amb=true, probes=1, no_red=true, 3/3 real deco GLBs)
 PASS: 34c Footprint decal uses the authored decal alpha mask (NS_MagicMarker_Footstep) with emission_enabled=false
-PASS: 34d Map table tokens seated at y=41.134 scale=0.411 (+0.75 removed) with authored M_MapBuilding_* materials
+PASS: 34d Map table tokens seated at y=41.134 scale=0.409 (+0.75 removed) with authored M_MapBuilding_* materials
 TAT-2 UI main-menu: theme=res://src/ui/art_nouveau_theme.gd; journal drawer removed (T9)
 FootstepMask: downscaled 1024x1024 -> 128x128 for one-time alpha mask
 FootstepMask: baked one-time alpha mask (128x128, source_alpha=true) from res://assets/ue/Raw/Art/Environment/Props/Containers/Crates/T_Crate_Decal_D.png
@@ -426,9 +416,9 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [6] _build_3d_backdrop (res://src/ui/main_menu.gd:178)
          [7] _ready (res://src/ui/main_menu.gd:86)
          [8] _initialize (res://tests/run_tests.gd:3191)
-ROUGHNESS_BAKE count=31 pixels=22806528 ms=1642 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=31 pixels=22806528 ms=1623 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=3116 applied=3112 duplicate=0 name_skipped=3 wardbox=0 moonshape=1 clamp=68 clamp_worst=4.67x mirrored=444 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0
-PASS: 35a Startscreen CineCamera eye=(-12.71834, 0.496597, 14.6089) pitch=13.67 deg vFOV=48.0299987792969
+PASS: 35a Startscreen CineCamera eye=(-12.71813, 0.496597, 14.6089) pitch=13.67 deg vFOV=48.0299987792969
 PASS: 35a2 Startscreen headlight taming via tat_ue_intensity (["@SpotLight3D@83278 authored=7000 x=-10.79 energy=2.60 angle=32.0 atten=2.00", "@SpotLight3D@83279 authored=7000 x=-12.03 energy=2.60 angle=32.0 atten=2.00"])
 TAT-2 UI settings: theme=res://src/ui/art_nouveau_theme.gd strings=res://data/generated/tables/StringTables/ST_Settings.json
 PASS: 35b Settings teal theme, 6 grouped cards, persisted values wired into ThiefCharacter
@@ -459,7 +449,7 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [7] _build_all (res://src/ui/mission_prep_ui.gd:432)
          [8] _ready (res://src/ui/mission_prep_ui.gd:235)
          [9] _initialize (res://tests/run_tests.gd:3285)
-ROUGHNESS_BAKE count=22 pixels=15728640 ms=1149 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=22 pixels=15728640 ms=1131 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2109 applied=2105 duplicate=0 name_skipped=4 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.00x mirrored=146 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0
 TAT-2 prep skyline: placed 8/8 expansion pieces (group=prep_skyline)
 TAT-2 prep stage: kept=260 hid=158 radius=9.0
@@ -1128,7 +1118,7 @@ PASS: 46 Den doors leaf disabled past 70 deg (layer 0 + disabled, re-enabled on 
 PASS: 47 all 16 contracts resolve title/map/loot_tag (generic=BP_LootActor_Quest_Abbessford_Northgate_60_Piety_C) repairs: 
 PASS: 48 spawner approximations pinned (throw 12.0/noise 10.0/walk 1.4, ammo refill-all, full-heal) & alerted=2.5m/s derived from BP 250.0
 INFO: 49 developer save before: completed_contracts={  } xp=0.0 level=1.0 currency=5000.0
-ERROR: [save_system] save at user://tat2_save.json is unusable (parse_error: Expected key (line 0)); preserved as user://tat2_save.json.corrupt-1795750294. Defaults are live for this boot and will not be written.
+ERROR: [save_system] save at user://tat2_save.json is unusable (parse_error: Expected key (line 0)); preserved as user://tat2_save.json.corrupt-1795793816. Defaults are live for this boot and will not be written.
    at: push_error (core/variant/variant_utility.cpp:1023)
    GDScript backtrace (most recent call first):
        [0] _report_load_failure (res://src/core/save_system.gd:1021)
@@ -1169,7 +1159,7 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [7] _build_all (res://src/ui/mission_prep_ui.gd:432)
          [8] _ready (res://src/ui/mission_prep_ui.gd:235)
          [9] _initialize (res://tests/run_tests.gd:4901)
-ROUGHNESS_BAKE count=22 pixels=15728640 ms=1135 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=22 pixels=15728640 ms=1127 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2109 applied=2105 duplicate=0 name_skipped=4 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.00x mirrored=146 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0
 TAT-2 prep skyline: placed 8/8 expansion pieces (group=prep_skyline)
 TAT-2 prep stage: kept=260 hid=158 radius=9.0
@@ -1203,13 +1193,13 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [6] _build_3d_backdrop (res://src/ui/main_menu.gd:178)
          [7] _ready (res://src/ui/main_menu.gd:86)
          [8] _initialize (res://tests/run_tests.gd:5074)
-ROUGHNESS_BAKE count=31 pixels=22806528 ms=1256 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=31 pixels=22806528 ms=1618 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=3116 applied=3112 duplicate=0 name_skipped=3 wardbox=0 moonshape=1 clamp=68 clamp_worst=4.67x mirrored=444 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0
 TAT-2 UI settings: theme=res://src/ui/art_nouveau_theme.gd strings=res://data/generated/tables/StringTables/ST_Settings.json
-SmokeFlashCap: ignition flash energy=0.64999997615814 cap=0.65 (no UE flash light; mission glow 0.65)
 PASS: 60 W5 UI (prep 6 s countdown/UNREADY + card wrap, player_name, (£) currency, key row, PRICE UNKNOWN, pause seed, portal, menu rain, localization)
 PASS: 82 W0a identity (persona migrated once, authored titles), shipped key names (Guildhall/Elway Manor/Vault), texture cap sidecars + alpha-critical exception
 TAT-2 guard spawn: selection=parity_approx_layer_bucket eligible=2 prepared=2 skipped=0 selected=2 from_prepared=2 backfilled=0
+SmokeFlashCap: ignition flash energy=0.64999997615814 cap=0.65 (no UE flash light; mission glow 0.65)
 TAT-2 guard spawn: selection=parity_approx_layer_bucket eligible=1 prepared=1 skipped=0 selected=1 from_prepared=1 backfilled=0
 [mission_controller] patrol fallback: guard 0 spawn (9000.0, 0.0, 9000.0) has no authored path within 30 m (nearest 12652.57 m); using synthetic 6x6 m square
 PASS: 55a authored patrols merged (120 paths / 350 waypoints) and assigned (waits/yaws/PingPong/fallback log)
@@ -1247,7 +1237,7 @@ PASS: 80.3 broadcast_player_state: 2 calls in one 50 ms window -> 1 send, INF/NA
 PASS: 80.4 remote visual create/free without a peer; door apply_remote_toggle open/idempotent/close; the mission's coop listener opens/closes a real door from the transport signal and the door announces through the host gate
 PASS: 75 authored animation metadata (995 clips, 213 montages, 3594 notifies, 4 known notify classes, CrankStart/Loop/Finish sections, notify_at nearest/null)
 PASS: 85 graphics_quality default/validation, --perf-* parser accept/reject, mission_ready emitted (old_manor)
-PASS: 83 review baker (tagger + thieves_den bake, exit=0, 9600 ms)
+PASS: 83 review baker (tagger + thieves_den bake, exit=0, 9499 ms)
 PASS: 86 Spider personal chain (schema/migration/normalization, 8-beat chain, per-thief, free-play, save restore, contract-fact wipe)
 PASS: [spider] first Guildhall deploy starts intro
 PASS: [spider] intro pins the Library note
@@ -1349,6 +1339,15 @@ PASS: [pq-settle] Owl is is_quest_item=true
 PASS: [pq-settle] Owl keeps its personal quest id
 PASS: [pq-settle] Owl prompt is [E] Take Theban Owl
 PASS: [pq-settle] Owl node is not rotated (its visual root spins)
+WARNING: [civilian_npc] navmesh snap deferred: query landed before first map sync (deferred=1); target fails open until sync
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _is_target_valid (res://src/ai/civilian_npc.gd:653)
+         [1] _pick_new_target (res://src/ai/civilian_npc.gd:615)
+         [2] _ready (res://src/ai/civilian_npc.gd:155)
+         [3] _ready (res://src/quests/npc_clue_actor.gd:47)
+         [4] spawn_anchor (res://src/quests/personal_quest_spawner.gd:144)
+         [5] run (res://tests/test_personal_quest_settle.gd:163)
 PQ_PLACE kind=npc y=floor anchor=courier yaw=90.0 pin_y=27.0019 floor_y=27.0019 pos=(35.9000, 27.0224, -22.7280)
 PASS: [pq-settle] npc spawn_anchor() places the Lounge courier
 PASS: [pq-settle] NPC records y_source=floor
@@ -1553,7 +1552,7 @@ ERROR: RPC 'request_run_resolved' on yourself is not allowed by selected mode.
        [8] _check_major_mesh (res://tests/test_w7s_loot_save.gd:286)
 PASS: T02-B client extraction routes to the host
 PASS: 91 T02 run lifecycle (reset clears, hub clock, failure-path banking, co-op outcome)
-ERROR: [save_system] save at user://t02_save_integrity/corrupt.json is unusable (parse_error: Expected key (line 0)); preserved as user://t02_save_integrity/corrupt.json.corrupt-1795750324. Defaults are live for this boot and will not be written.
+ERROR: [save_system] save at user://t02_save_integrity/corrupt.json is unusable (parse_error: Expected key (line 0)); preserved as user://t02_save_integrity/corrupt.json.corrupt-1795793846. Defaults are live for this boot and will not be written.
    at: push_error (core/variant/variant_utility.cpp:1023)
    GDScript backtrace (most recent call first):
        [0] _report_load_failure (res://src/core/save_system.gd:1021)
@@ -1566,7 +1565,7 @@ ERROR: [save_system] save at user://t02_save_integrity/corrupt.json is unusable 
        [7] run (res://tests/test_w7s_loot_save.gd:31)
        [8] _check_major_mesh (res://tests/test_w7s_loot_save.gd:286)
 PASS: T02 save integrity 1 (corrupt bytes quarantined whole, nothing overwritten, load_failed emitted once)
-ERROR: [save_system] save at user://t02_save_integrity/string.json is unusable (not_an_object: JSON root is String, expected an object); preserved as user://t02_save_integrity/string.json.corrupt-1795750324. Defaults are live for this boot and will not be written.
+ERROR: [save_system] save at user://t02_save_integrity/string.json is unusable (not_an_object: JSON root is String, expected an object); preserved as user://t02_save_integrity/string.json.corrupt-1795793846. Defaults are live for this boot and will not be written.
    at: push_error (core/variant/variant_utility.cpp:1023)
    GDScript backtrace (most recent call first):
        [0] _report_load_failure (res://src/core/save_system.gd:1021)
@@ -1578,7 +1577,7 @@ ERROR: [save_system] save at user://t02_save_integrity/string.json is unusable (
        [6] _run_suite90 (res://tests/run_tests.gd:7838)
        [7] run (res://tests/test_w7s_loot_save.gd:31)
        [8] _check_major_mesh (res://tests/test_w7s_loot_save.gd:286)
-ERROR: [save_system] save at user://t02_save_integrity/array.json is unusable (not_an_object: JSON root is Array, expected an object); preserved as user://t02_save_integrity/array.json.corrupt-1795750324. Defaults are live for this boot and will not be written.
+ERROR: [save_system] save at user://t02_save_integrity/array.json is unusable (not_an_object: JSON root is Array, expected an object); preserved as user://t02_save_integrity/array.json.corrupt-1795793846. Defaults are live for this boot and will not be written.
    at: push_error (core/variant/variant_utility.cpp:1023)
    GDScript backtrace (most recent call first):
        [0] _report_load_failure (res://src/core/save_system.gd:1021)
@@ -1590,7 +1589,7 @@ ERROR: [save_system] save at user://t02_save_integrity/array.json is unusable (n
        [6] _run_suite90 (res://tests/run_tests.gd:7838)
        [7] run (res://tests/test_w7s_loot_save.gd:31)
        [8] _check_major_mesh (res://tests/test_w7s_loot_save.gd:286)
-ERROR: [save_system] save at user://t02_save_integrity/null.json is unusable (not_an_object: JSON root is Nil, expected an object); preserved as user://t02_save_integrity/null.json.corrupt-1795750324. Defaults are live for this boot and will not be written.
+ERROR: [save_system] save at user://t02_save_integrity/null.json is unusable (not_an_object: JSON root is Nil, expected an object); preserved as user://t02_save_integrity/null.json.corrupt-1795793846. Defaults are live for this boot and will not be written.
    at: push_error (core/variant/variant_utility.cpp:1023)
    GDScript backtrace (most recent call first):
        [0] _report_load_failure (res://src/core/save_system.gd:1021)
@@ -2910,29 +2909,29 @@ TAT-2 exposure: preset=midnight_clear_mission_lobby mode=AGX exposure=1.150 auth
 WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'midnight_clear_thieves_den'
 TAT-2 exposure: preset=midnight_clear_thieves_den mode=AGX exposure=1.500 authored_bias=0.5 ev100_night=-3.0 authored_curve_bias=-4.00 (curve recorded, not applied)
 PASS: 98 W9-P1-A4 night-grade guard (guildhall keeps AGX 1.15 / ambient 0.16, lobby floor held, Den bias+floor held, old_manor ungraded, gloomy preset is one-map scoped)
-PASS: 99 W9-P1 authored progression (level cap 25 with XP kept, authored XP award, KF13>ladder>QG endgame, FTUE 5,000, 48 level gates, map order; 2347 ms)
-PASS: 101 W9-P2 B2 authored locks (cap-as-level, key-only/window exclusions, no invented level) (1315 ms)
-PASS: 102 W9-P2 B2 lockpick ESC cancel does not open pause (LV4 path) (1689 ms)
-PASS: 103 W9-P2 B2 labelled lockpick hands stand-in (no authored mesh/animation) (1596 ms)
-PASS: 104 W9-P2 B3 jam damage is the authored value (no balance change) (3748 ms)
-PASS: 105 W9-P2 B3 magic-door continuity during the endgame (dormant never extracts) (2519 ms)
-PASS: 106 W9-P3 C1 post-match/XP + progression + tutorial from authored tables (1501 ms)
-PASS: 107 W9-P3 C3 gamepad focus walk + rebind glyph (10 menus, no dead end) (3443 ms)
-PASS: 108 W9-P3 C4 authored TAB-map boundaries + major-loot toast (1684 ms)
-PASS: 109 W9-P3 C2 Loc fallback (English, never a GUID) + reverse map (753 ms)
-PASS: 110 W9-P4 S1 StateTree parse/interpreter/coverage (21 trees, 459/467, synthetic paths) (1403 ms)
-PASS: 111 W9-P4 S1 shadow mode is side-effect free (off vs shadow, 240 live frames) (9684 ms)
-PASS: 112 W10-A screens: continue consumer, focus restore, ESC/pause, timeout reason, one layer (2448 ms)
-PASS: 113 W10-A runtime: StateTree trace file budget + coplanar convex rule (ward zone) (1973 ms)
-PASS: 114 W10-A locks: authored CanBeLockpicked resolution, explicit-false exclusion, prison fallback (1405 ms)
-PASS: 115 W10-A stairs: authored per-element union walk (7 flights, tower 36 hulls) (28020 ms)
-PASS: 116 W10-A traversal: authored per-element union roofs (3-4 hulls, no shapes[0]) (62207 ms)
-PASS: 117 W10-A2 guards: authored bucket/layer selection, 2 m marker / 0.5 m floor, C_20 Lounge pick (738 ms)
-PASS: 118 W10-A2 civilian: head-cast LOS, 180 deg facing, body/head 3+6 authored surfaces (2059 ms)
-PASS: 119 W10-P2 cream: no invented white emission, tat_invented_white census, authored colour control (2251 ms)
-PASS: 120 W10-A3 GC: hold-interact smash swaps leaf/broken once; tap keeps the lockpick (2900 ms)
+PASS: 99 W9-P1 authored progression (level cap 25 with XP kept, authored XP award, KF13>ladder>QG endgame, FTUE 5,000, 48 level gates, map order; 2247 ms)
+PASS: 101 W9-P2 B2 authored locks (cap-as-level, key-only/window exclusions, no invented level) (1219 ms)
+PASS: 102 W9-P2 B2 lockpick ESC cancel does not open pause (LV4 path) (1683 ms)
+PASS: 103 W9-P2 B2 labelled lockpick hands stand-in (no authored mesh/animation) (1594 ms)
+PASS: 104 W9-P2 B3 jam damage is the authored value (no balance change) (3751 ms)
+PASS: 105 W9-P2 B3 magic-door continuity during the endgame (dormant never extracts) (2518 ms)
+PASS: 106 W9-P3 C1 post-match/XP + progression + tutorial from authored tables (1491 ms)
+PASS: 107 W9-P3 C3 gamepad focus walk + rebind glyph (10 menus, no dead end) (3456 ms)
+PASS: 108 W9-P3 C4 authored TAB-map boundaries + major-loot toast (1786 ms)
+PASS: 109 W9-P3 C2 Loc fallback (English, never a GUID) + reverse map (751 ms)
+PASS: 110 W9-P4 S1 StateTree parse/interpreter/coverage (21 trees, 459/467, synthetic paths) (1302 ms)
+PASS: 111 W9-P4 S1 shadow mode is side-effect free (off vs shadow, 240 live frames) (9606 ms)
+PASS: 112 W10-A screens: continue consumer, focus restore, ESC/pause, timeout reason, one layer (2443 ms)
+PASS: 113 W10-A runtime: StateTree trace file budget + coplanar convex rule (ward zone) (2065 ms)
+PASS: 114 W10-A locks: authored CanBeLockpicked resolution, explicit-false exclusion, prison fallback (1310 ms)
+PASS: 115 W10-A stairs: authored per-element union walk (7 flights, tower 36 hulls) (27891 ms)
+PASS: 116 W10-A traversal: authored per-element union roofs (3-4 hulls, no shapes[0]) (61699 ms)
+PASS: 117 W10-A2 guards: authored bucket/layer selection, 2 m marker / 0.5 m floor, C_20 Lounge pick (750 ms)
+PASS: 118 W10-A2 civilian: head-cast LOS, 180 deg facing, body/head 3+6 authored surfaces (2062 ms)
+PASS: 119 W10-P2 cream: no invented white emission, tat_invented_white census, authored colour control (2237 ms)
+PASS: 120 W10-A3 GC: hold-interact smash swaps leaf/broken once; tap keeps the lockpick (2899 ms)
 PASS: 121 W10-P3 audio control: Wwise switches/states/RTPCs, footstep selection, curve application (935 ms)
 SUMMARY: fails=0
 
 EXIT: 0
-FINISHED: 2026-11-26T22:34:34-05:00
+FINISHED: 2026-11-27T10:39:54-05:00

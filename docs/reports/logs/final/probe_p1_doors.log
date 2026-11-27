@@ -1,7 +1,7 @@
 == FINAL_GATE probe_p1_doors
 COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/probe_p1_doors.gd
-CWD: /home/john/.local/share/opencode/worktree/318f41/final-evidence
-STARTED: 2026-11-26T22:34:38-05:00
+CWD: /home/john/Projects/TAT-2
+STARTED: 2026-11-27T10:39:58-05:00
 
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
@@ -31,7 +31,7 @@ TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
 INPUT_TABLE source=generated rows=91 shipping=91 actions=52
 INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
 P1_DOORS probe — S21 blue double doors (KF24)
-  project=/home/john/.local/share/opencode/worktree/318f41/final-evidence/game
+  project=/home/john/Projects/TAT-2/game
   ok: S21 records = 4 (2 actors x Pivot+SecondPivot), got 4
   ok: every S21 record: class BP_Civic_Doorway_6x8_C, 1 leaf /Game/Art/Environment/Civic/Doors/SM_Civic_DoorDouble_x4, unlocked, lockpickable
     record BP_Manor_Porch_Door_8x8_C_0.Pivot@(11.50,27.50,-73.50)
@@ -72,7 +72,7 @@ WARNING: [hearing_data] 5 authored investigation-range anomalies clamped: AI.Sti
          [10] _wait_frames (res://tests/probe_p1_doors.gd:131)
   ok: during the swing primary flips to "[F] CLOSE" (got "[F] CLOSE")
   ok: during the swing the [HOLD] LOCK row is withdrawn (got "")
-  ok: the leaf is swinging (angle 0.0 -> 25.6 deg)
+  ok: the leaf is swinging (angle 0.0 -> 22.5 deg)
   ok: swing completes at the authored 90 deg (got 90.0)
   ok: open door stays on "[F] CLOSE"
   ok: while closing primary is "[F] OPEN" (got "[F] OPEN")
@@ -116,4 +116,4 @@ ERROR: 2 resources still in use at exit (run with --verbose for details).
    at: clear (core/io/resource.cpp:822)
 
 EXIT: 0
-FINISHED: 2026-11-26T22:34:43-05:00
+FINISHED: 2026-11-27T10:40:03-05:00

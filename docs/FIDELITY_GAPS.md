@@ -43,10 +43,19 @@ visual claim** and does not re-score a row.
   (`build/qa/kf27_beam_reference.json`), but the GPU re-measure at that pose is
   the integrator's and has **not** been run in this lane. "Thin line, no cream
   bars" is a different-pose result and is **not** a current foyer claim.
-- **Light Gem — record present, payload absent.** `GEM_AUTHORED_SLICES=21` and
-  the array record exist; the authored 21-slice `T_stealthball_Array` payload is
-  absent from the extracted tree, so the gem stays `PORT_APPROX` until the U-4
-  extractor pass. Headless P5 does not score its pixels.
+- **Light Gem — authored array extracted; mapping derived, not yet measured on
+  the real payload.** U-4 adds the `UTexture2DArray` extractor branch
+  (`T_stealthball_Array`, 21 × 256² PF_DXT5 → `slice_00..20.png` + manifest),
+  `tools/parse_stealthball_array.py` (measured cap fraction/centroid/angle per
+  slice, `mapping.kind` = `directional` or `area_ramp`) and the HUD
+  `Texture2DArray` bind + slice selection. The payload is absent from *this*
+  tree until the integrator runs the extractor and producer, so the rendered
+  gem stays `PORT_APPROX` here; `gem_path()` reports `authored_array` only when
+  all 21 slices actually bind. The native `TATUnifiedStealthWidget` index
+  selection is not in the dump, so the selection is labelled `derived-approx`;
+  the first real run must print `STEALTHBALL_ARRAY mapping_kind=…` and the
+  probe `GEM_PAYLOAD present=true …` before any visual claim. Headless P5 still
+  does not score its pixels.
 - **Mirrors — carried, not re-measured (UNVERIFIED).** Mirrors are the earlier
   audit's 3,312 negative-determinant instances / 3,215 in MultiMeshes; they get
   a probe in Phase 1 P4.2. Not verified by Phase 0a.
@@ -137,12 +146,15 @@ string audit **311/311/199/199/112**; perf guard **78/78**.
   `FS_Layers` and named-RTPC low-pass are deferred with reasons. Not a full
   mix/music/VO port.
 - **P5 UI — headless-verified, not visually scored.** Light Gem lit-cap +
-  direction (`PORT_APPROX`; the 21-slice array record is present but its payload
-  is absent), card/compass,
+  direction plus the U-4 authored 21-slice array bind/selection (payload absent
+  in this tree; the synthetic 21-layer bind and the derived mapping are pinned
+  by the probe), card/compass,
   loadout hotbar, pause blur/dim with the HUD hidden, the 11-line KF13 briefing,
   `CRANK [LMB]`, and authored map names. The one new invented literal is the
   documented `Thieves' Den` port copy (`contract_table_ui.gd:362`, string-audit
-  ceiling 112).
+  ceiling 112). The capture harness (`build/qa/capture_p5_ui.gd`, 12 screens ×
+  720/1080 + a pause backdrop) and `build/qa/ui_pixel_stats.py` exist, but the
+  GPU capture and the visual score remain the integrator's step.
 - **Den restored.** The narrowed developer-mesh skip brings back the authored
   shell/floor; `DEN_SPAWN PASS checks=9` pins `source=authored`,
   `pos=(5.669,40.117,270.686)`, 2,434 meshes, 3,017 collision shapes and the
@@ -1342,3 +1354,45 @@ find extracted/json -name 'NS_*.json' | wc -l
     line weights are **not visually scored**; the headless probe measures the
     widget tree, shader parameters, text and geometry only. The live-reference
     120-row score remains pending.
+
+- 2026-11-27: **Phase 2 UI lane (U-1/U-2/U-4)** — authored
+  `T_stealthball_Array` extraction + bind, the twelve-screen capture harness and
+  the pixel-metrics tool. Files: `tools/tat-extract/Exporter.cs`,
+  `tools/parse_stealthball_array.py`, `tools/png_rgba.py`,
+  `game/src/ui/hud.gd`, `game/tests/probe_p5_ui.gd`,
+  `build/qa/capture_p5_ui.gd`, `build/qa/ui_pixel_stats.py` (+ unit tests),
+  `Makefile`, `tools/manifest_audit.py`.
+  - **U-4 extractor**: an allowlisted `UTexture2DArray` branch
+    (`T_stealthball_Array`) decodes 21 slices through
+    `TextureDecoder.DecodeTextureArray` and writes `slice_00..20.png` +
+    `manifest.json` beside the array art; the manifest records 256×256,
+    `PF_DXT5`, `PackedData=21`, the source mip (1,376,256 bulk bytes) and a
+    sha256 per PNG. Other arrays are counted (`textures-array-unlisted`), never
+    silently dropped.
+  - **U-4 producer**: `tools/parse_stealthball_array.py` measures the alpha disc,
+    the lit cap (p10 + 0.5·(p99.9 − p10) luma), its fraction/centroid/angle and
+    a front-hemisphere direction per slice, then derives `mapping.kind`
+    (`area_ramp` when the cap angles span < 15°, else `directional`). It is a
+    registered `NORMALIZERS`/`PRODUCERS` entry (output
+    `game/data/generated/ui/stealthball_array.json`); absent/incomplete payloads
+    are explicit statuses, never a partial map.
+  - **U-4 runtime**: the HUD binds the 21 PNGs as a real `Texture2DArray`
+    (`sampler2DArray` + `slice_index`), places it in the same 84 px rect as the
+    authored frame (both `ImageSize` 144) and selects a slice from the measured
+    table. `gem_path()` reports `authored_array` only when all 21 slices bind;
+    otherwise the labelled `PORT_APPROX` shader stays. The native index
+    selection is not in the dump, so the selection is `derived-approx`.
+  - **U-1/U-2 instruments**: `build/qa/capture_p5_ui.gd` captures startscreen,
+    Den HUD, wardrobe, ledger (+ market), contract table, prep, briefing, safe
+    room, crank, doors, key, pause and the pause backdrop at 1280×720 and
+    1920×1080 with state sidecars; `build/qa/ui_pixel_stats.py` measures gem
+    lit-area/centroid/angle and ring, compass rule/heading, prompt contrast and
+    clipping, pause dim/blur (relative edge energy), briefing line fit and text
+    invariants (stdlib decoder + ffmpeg fast path, unit-tested).
+  - **Not measured**: no GPU capture and no extractor run in the lane, so the
+    rendered gem and every pixel score remain **unverified**; the C# branch was
+    checked against the CUE4Parse 1.2.2.202611 metadata but not compiled here
+    (host SDK 8, project `net10.0`). `make audit` in the lane fails only on the
+    new producer output/infrastructure hashes; the integrator regenerates and
+    re-stamps. String audit is unchanged at 311/311/199/199/112 (no new
+    invented literals).

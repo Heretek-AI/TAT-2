@@ -379,6 +379,23 @@ public sealed class Exporter
             bool isUmap = f.Path.EndsWith(".umap", StringComparison.OrdinalIgnoreCase);
             foreach (var e in pkg.GetExports())
             {
+                if (e is UTexture2DArray arr)
+                {
+                    // U-4: the UI gem array. The UTexture2D loop below skips it
+                    // (a Texture2DArray is not a Texture2D), which is why the
+                    // 21-slice T_stealthball_Array payload had no PNGs at all.
+                    // Only allowlisted arrays are decoded: each one is a set of
+                    // full-size slices with no consumer yet, so an unlisted
+                    // array is counted, never silently dumped or dropped.
+                    if (isUmap) { CountSkip("textures-array-umap"); continue; }
+                    if (!ArrayAllowlist.Contains(Path.GetFileNameWithoutExtension(f.Path)))
+                    {
+                        CountSkip("textures-array-unlisted");
+                        continue;
+                    }
+                    ExportTextureArray(f, arr, opts);
+                    continue;
+                }
                 if (e is not UTexture2D tex) continue;
                 var dst = isUmap
                     ? Path.Combine(Path.ChangeExtension(OutPath("assets", f.Path, ".png"), null), e.Name + ".png")
@@ -393,6 +410,97 @@ public sealed class Exporter
                 Count("textures", true);
             }
         });
+    }
+
+    // U-4 scope: only arrays with a runtime consumer are decoded. The gem
+    // array is `T_stealthball_Array` (21 x 256x256 PF_DXT5, 1,376,256 bytes of
+    // bulk data). Add a stem here only together with its consumer.
+    static readonly HashSet<string> ArrayAllowlist = new(StringComparer.Ordinal)
+    {
+        "T_stealthball_Array",
+    };
+
+    /// <summary>
+    /// Decode a UTexture2DArray into one PNG per slice plus a manifest that
+    /// records the authored shape and a sha256 per written PNG. The runtime
+    /// (`game/src/ui/hud.gd`) reads the manifest; `tools/parse_stealthball_array.py`
+    /// derives the slice stats from these PNGs. Kept next to the frame art
+    /// (`assets/&lt;package&gt;/slice_NN.png`) so one directory holds the array.
+    /// </summary>
+    void ExportTextureArray(GameFile f, UTexture2DArray arr, ExportOptions opts)
+    {
+        var rel = f.Path.StartsWith("TAT/Content/") ? f.Path["TAT/Content/".Length..] : f.Path;
+        var stem = Path.GetFileNameWithoutExtension(rel);
+        var relDir = (Path.GetDirectoryName(rel) ?? "").Replace('\\', '/');
+        var outDir = Path.Combine(_o.Out, "assets", Path.GetDirectoryName(rel) ?? "", stem);
+        var manifestPath = Path.Combine(outDir, "manifest.json");
+        if (!_o.Overwrite && File.Exists(manifestPath)) { CountSkip("textures-array"); return; }
+        Directory.CreateDirectory(outDir);
+
+        var pd = arr.PlatformData;
+        var expected = pd?.GetNumSlices() ?? 0;
+        var files = new List<object>();
+        var failures = new List<string>();
+        try
+        {
+            var parts = TextureDecoder.DecodeTextureArray(arr, opts.TexturePlatform);
+            if (parts == null || parts.Length == 0)
+                throw new Exception("DecodeTextureArray returned no slices");
+            for (int i = 0; i < parts.Length; i++)
+            {
+                var bytes = TextureEncoder.Encode(parts[i], opts, out var ext);
+                if (bytes == null) { failures.Add($"slice {i}: encode null"); continue; }
+                var name = $"slice_{i:00}{ext}";
+                File.WriteAllBytes(Path.Combine(outDir, name), bytes);
+                files.Add(new
+                {
+                    index = i,
+                    file = name,
+                    width = parts[i].Width,
+                    height = parts[i].Height,
+                    bytes = bytes.Length,
+                    sha256 = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant(),
+                });
+            }
+            if (expected > 0 && files.Count != expected)
+                failures.Add($"slice count {files.Count} != PlatformData.GetNumSlices() {expected}");
+        }
+        catch (Exception ex)
+        {
+            failures.Add($"{ex.GetType().Name}: {ex.Message}");
+        }
+
+        var mip = pd?.Mips is { Length: > 0 } mips ? mips[0] : null;
+        var manifest = new
+        {
+            schema = "tat2.texture2darray/1",
+            asset = stem,
+            source_package = f.Path,
+            export_path = string.IsNullOrEmpty(relDir) ? stem : relDir + "/" + stem,
+            width = pd?.SizeX ?? 0,
+            height = pd?.SizeY ?? 0,
+            slices = expected,
+            pixel_format = pd?.PixelFormat ?? "",
+            packed_data = pd?.PackedData ?? 0,
+            first_mip_to_serialize = pd?.FirstMipToSerialize ?? 0,
+            source_mip = mip == null ? null : new
+            {
+                size_x = mip.SizeX,
+                size_y = mip.SizeY,
+                size_z = mip.SizeZ,
+                flags = mip.BulkData?.BulkDataFlags.ToString(),
+                bytes = mip.BulkData?.Header.SizeOnDisk,
+            },
+            decode = new
+            {
+                slice_files = files.Count,
+                failures,
+            },
+            slice_files = files,
+        };
+        File.WriteAllText(manifestPath, JsonConvert.SerializeObject(manifest, Formatting.Indented));
+        Count("textures-array", failures.Count == 0 && files.Count > 0,
+            failures.Count == 0 ? null : $"{f.Path}: {string.Join("; ", failures)}");
     }
 
     public void Meshes()

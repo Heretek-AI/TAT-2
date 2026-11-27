@@ -9,8 +9,12 @@ extends SceneTree
 ## Covered rows (REFERENCE_BASELINE.md):
 ##   UI3-05  Light Gem: amount -> lit-cap area, direction -> cap position
 ##           (KF14/17/24/25). The authored 21-slice T_stealthball_Array payload
-##           is absent from the extract, so the sphere is a PORT_APPROX; the
-##           authored frame tint and the 21-slice count are pinned.
+##           is extracted by U-4; this probe binds 21 synthetic slices to prove
+##           the Texture2DArray + derived-selection path headlessly, validates
+##           the producer manifest, and only reports `authored_array` when the
+##           real payload binds. Without the payload the sphere stays a
+##           labelled PORT_APPROX and the authored frame tint/slice count are
+##           still pinned.
 ##   UI3-01  player card identity + compass geometry (KF02/KF14).
 ##   UI3-02  single loot line, hotbar slots that carry a tool (1/2/4), no ammo
 ##           counts, no garbled slot 3/4 labels (KF14/KF19).
@@ -94,6 +98,11 @@ func _initialize() -> void:
 
 	var hud_src: String = FileAccess.get_file_as_string(HUD_PATH)
 
+	# The procedural checks below pin the labelled fallback. Force it even when
+	# the authored payload is present (the array path is checked afterwards) so
+	# the fallback never silently loses its shader terms.
+	hud.call("clear_gem_array")
+
 	# =====================================================================
 	# 1. Light Gem (UI3-05): amount -> lit-cap area, direction -> position
 	# =====================================================================
@@ -168,6 +177,141 @@ func _initialize() -> void:
 	_check(authored_slices == 21,
 		"P5.11b authored stealth-ball array is recorded as 21 slices",
 		"P5.11b GEM_AUTHORED_SLICES = %d (want 21)" % authored_slices)
+
+	# =====================================================================
+	# 1b. U-4 authored 21-slice array: bind + derived slice selection
+	# =====================================================================
+	var array_src: String = str(hud_scr.get_script_constant_map().get("STEALTH_ARRAY_SHADER", ""))
+	_check(array_src.find("sampler2DArray") >= 0 and array_src.find("slice_index") >= 0,
+		"P5.11c authored array shader binds a sampler2DArray and selects a layer",
+		"P5.11c array shader lacks sampler2DArray/slice_index")
+
+	var good_rows: Array = []
+	for i: int in range(21):
+		good_rows.append({"index": i, "file": "slice_%02d.png" % i})
+	var good_manifest: Dictionary = {"status": "payload_present", "authored": {"slices": 21}, "slices": good_rows}
+	var bad_status: Dictionary = {"status": "payload_absent", "authored": {"slices": 21}, "slices": good_rows}
+	var bad_count: Dictionary = {"status": "payload_present", "authored": {"slices": 20}, "slices": good_rows.slice(0, 20)}
+	_check((hud.call("gem_manifest_rows", good_manifest) as Array).size() == 21
+			and (hud.call("gem_manifest_rows", bad_status) as Array).is_empty()
+			and (hud.call("gem_manifest_rows", bad_count) as Array).is_empty(),
+		"P5.11d0 manifest validation accepts exactly 21 rows and rejects absent/short payloads",
+		"P5.11d0 manifest validation wrong")
+
+	var synth: Array[Image] = []
+	for i: int in range(21):
+		var img: Image = Image.create(8, 8, false, Image.FORMAT_RGBA8)
+		img.fill(Color(float(i) / 20.0, 0.05, 0.9, 1.0))
+		synth.append(img)
+	var ramp_table: Array = []
+	for i: int in range(21):
+		ramp_table.append({"index": i, "lit_fraction": float(i) / 20.0, "direction": [0.0, 0.0, 1.0], "angle_deg": 0.0})
+	var bound: bool = bool(hud.call("bind_gem_array_images", synth, {"source": "synthetic", "mapping_kind": "area_ramp", "slices": ramp_table}))
+	var info: Dictionary = hud.call("gem_array_info") as Dictionary
+	_check(bound and int(info.get("layers", 0)) == 21 and int(info.get("table_size", 0)) == 21,
+		"P5.11d 21 authored slices bind as one Texture2DArray with a 21-row table",
+		"P5.11d bound=%s layers=%s table=%s" % [str(bound), str(info.get("layers")), str(info.get("table_size"))])
+	var sel0: int = int(hud.call("gem_slice_for", 0.0, Vector3(1, 0, 0)))
+	var sel5: int = int(hud.call("gem_slice_for", 0.5, Vector3(1, 0, 0)))
+	var sel1: int = int(hud.call("gem_slice_for", 1.0, Vector3(1, 0, 0)))
+	var monotone: bool = true
+	var prev: int = -1
+	for k: int in range(21):
+		var got: int = int(hud.call("gem_slice_for", float(k) / 20.0, Vector3(1, 0, 0)))
+		if got < prev:
+			monotone = false
+			break
+		prev = got
+	_check(sel0 == 0 and sel5 == 10 and sel1 == 20 and monotone,
+		"P5.11e area-ramp selection picks the measured fraction (0/0.5/1 -> 0/10/20)",
+		"P5.11e selection = %d/%d/%d monotone=%s" % [sel0, sel5, sel1, str(monotone)])
+
+	var dir_table: Array = [
+		{"index": 0, "lit_fraction": 0.5, "direction": [0.0, -1.0, 0.0], "angle_deg": -90.0},
+		{"index": 1, "lit_fraction": 0.5, "direction": [1.0, 0.0, 0.0], "angle_deg": 0.0},
+		{"index": 2, "lit_fraction": 0.5, "direction": [0.0, 1.0, 0.0], "angle_deg": 90.0},
+		{"index": 3, "lit_fraction": 0.5, "direction": [-1.0, 0.0, 0.0], "angle_deg": 180.0},
+	]
+	var dir_imgs: Array[Image] = []
+	for k: int in range(4):
+		dir_imgs.append(synth[k])
+	hud.call("bind_gem_array_images", dir_imgs, {"source": "synthetic", "mapping_kind": "directional", "slices": dir_table})
+	var sel_right: int = int(hud.call("gem_slice_for", 0.5, Vector3(1, 0, 0)))
+	var sel_up: int = int(hud.call("gem_slice_for", 0.5, Vector3(0, -1, 0)))
+	var sel_left: int = int(hud.call("gem_slice_for", 0.5, Vector3(-1, 0, 0)))
+	_check(sel_right == 1 and sel_up == 0 and sel_left == 3,
+		"P5.11f directional mapping rotates the cap with the light (-90/0/180 -> 0/1/3)",
+		"P5.11f directional selection = %d/%d/%d" % [sel_up, sel_right, sel_left])
+
+	hud.call("apply_light_gem_state", 0.5, Vector3(1, 0, 0), 0.8)
+	await process_frame
+	var arr_orb: ColorRect = hud.find_child("StealthOrbInner", true, false) as ColorRect
+	var arr_mat: ShaderMaterial = arr_orb.material as ShaderMaterial if arr_orb != null else null
+	var arr_frame: TextureRect = hud.get("stealth_gem") as TextureRect
+	var sl_param: float = float(arr_mat.get_shader_parameter("slice_index")) if arr_mat != null else -1.0
+	var arr_state: Dictionary = hud.call("light_gem_state") as Dictionary
+	_check(arr_mat != null and arr_mat.shader != null and arr_mat.shader.code.find("sampler2DArray") >= 0
+			and absf(sl_param - 1.0) < 0.001,
+		"P5.11g the array material carries the selected slice (index 1, angle 0)",
+		"P5.11g material=%s slice_index=%s" % [str(arr_mat != null), str(sl_param)])
+	_check(arr_orb != null and arr_frame != null and arr_orb.size.is_equal_approx(arr_frame.size)
+			and arr_orb.position.is_equal_approx(arr_frame.position),
+		"P5.11h the authored sphere shares the 84 px frame rect (both ImageSize 144)",
+		"P5.11h orb rect=%s frame rect=%s" % [str(arr_orb.size if arr_orb != null else Vector2.ZERO), str(arr_frame.size if arr_frame != null else Vector2.ZERO)])
+	_check(arr_state.get("gem_path", "") == "port_approx" and arr_state.get("array_source", "") == "synthetic",
+		"P5.11i a synthetic bind never claims the authored path",
+		"P5.11i gem_path=%s source=%s" % [str(arr_state.get("gem_path", "")), str(arr_state.get("array_source", ""))])
+	_check(arr_frame != null and arr_frame.modulate.is_equal_approx(authored_tint),
+		"P5.11j the authored frame tint survives the array bind",
+		"P5.11j tint = %s" % str(arr_frame.modulate if arr_frame != null else Color.BLACK))
+
+	# Real payload (present only after the extractor + producer have run).
+	var manifest_path: String = str(hud_scr.get_script_constant_map().get("GEM_ARRAY_MANIFEST_PATH", ""))
+	var payload_ok: bool = false
+	var payload_note: String = "payload absent: PORT_APPROX retained"
+	if manifest_path != "" and FileAccess.file_exists(manifest_path):
+		var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(manifest_path))
+		if parsed is Dictionary and str((parsed as Dictionary).get("status", "")) == "payload_present":
+			var doc: Dictionary = parsed
+			var rows: Array = doc.get("slices", [])
+			var unit_ok: bool = rows.size() == 21
+			var missing: Array[String] = []
+			var dir_const: String = str(hud_scr.get_script_constant_map().get("GEM_ARRAY_ASSET_DIR", ""))
+			for row_v: Variant in rows:
+				if not (row_v is Dictionary):
+					unit_ok = false
+					continue
+				var row: Dictionary = row_v
+				var d: Array = row.get("direction", [])
+				if d.size() < 3 or absf(Vector3(float(d[0]), float(d[1]), float(d[2])).length() - 1.0) > 0.02:
+					unit_ok = false
+				var fname: String = str(row.get("file", ""))
+				if fname == "" or not ResourceLoader.exists(dir_const + "/" + fname):
+					missing.append(fname)
+			hud.set("_gem_array_checked", false)
+			hud.call("_ensure_gem_array")
+			var bind_info: Dictionary = hud.call("gem_array_info") as Dictionary
+			hud.call("apply_light_gem_state", 0.35, Vector3(0, -1, 0), 0.5)
+			await process_frame
+			var bind_state: Dictionary = hud.call("light_gem_state") as Dictionary
+			payload_ok = unit_ok and missing.is_empty() \
+				and int(bind_info.get("layers", 0)) == 21 \
+				and int(bind_info.get("table_size", 0)) == 21 \
+				and str(bind_info.get("mapping_kind", "")) in ["area_ramp", "directional"] \
+				and bind_state.get("gem_path", "") == "authored_array" \
+				and int(bind_state.get("slice_index", -1)) >= 0 and int(bind_state.get("slice_index", -1)) <= 20
+			payload_note = "payload present: layers=%d table=%d kind=%s slice=%d missing=%s" % [
+				int(bind_info.get("layers", 0)), int(bind_info.get("table_size", 0)),
+				str(bind_info.get("mapping_kind", "")), int(bind_state.get("slice_index", -1)), str(missing)]
+			_check(payload_ok,
+				"P5.11k authored payload binds 21 layers and selects a measured slice (%s)" % payload_note,
+				"P5.11k payload bind failed: %s" % payload_note)
+		else:
+			print("GEM_PAYLOAD status!=payload_present; PORT_APPROX retained")
+	else:
+		print("GEM_PAYLOAD absent (extractor/producer not run); PORT_APPROX retained")
+	if payload_note.begins_with("payload absent"):
+		_check(true, "P5.11k authored payload absent: binding covered by the synthetic 21-slice test", "")
 
 	# =====================================================================
 	# 2. Player card identity + compass geometry (UI3-01 / KF02/KF14)

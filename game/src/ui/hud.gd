@@ -54,9 +54,24 @@ const GEM_FRAME_TINT: Color = Color(0.082283, 0.109462, 0.686685, 1.0)
 ## published one: upper-left, the direction every lit reference frame shows.
 const GEM_DEFAULT_DIR: Vector3 = Vector3(-0.62, -0.58, 0.53)
 ## Authored widget fact: `BPUI_UniversalStealthBall.NumTexturesInArray = 21` and
-## `T_stealthball_Array.SizeZ = 21` (extracted/json/...). The 21 texture slices
-## are NOT in the extract (only the UAsset record), so the sphere is procedural.
+## `T_stealthball_Array.SizeZ = 21` (extracted/json/...). U-4 extracts the
+## payload (`slice_00..20.png`); the derived mapping lives in
+## `GEM_ARRAY_MANIFEST_PATH`. When that payload is absent the sphere falls back
+## to the labelled PORT_APPROX shader below.
 const GEM_AUTHORED_SLICES: int = 21
+const GEM_ARRAY_MANIFEST_PATH: String = "res://data/generated/ui/stealthball_array.json"
+## `game/assets/ue/Raw` is `extracted/assets`; the extractor writes the array
+## package directory beside `T_stealthball_frame.png`.
+const GEM_ARRAY_ASSET_DIR: String = "res://assets/ue/Raw/Art/UI/HUD/Stealth_Ball/T_stealthball_Array"
+## Authored widget geometry: `Image_177` (frame) and `USB_Image` (array) both
+## declare ImageSize 144x144 in BPUI_UniversalStealthBall. The port draws the
+## frame at 84x84, so the authored sphere occupies that same rect; the
+## procedural fallback keeps its hand-tuned 62 px orb.
+const GEM_FRAME_SIZE: float = 84.0
+const GEM_ORB_PROCEDURAL_SIZE: float = 62.0
+## Derived selection weight: fraction error dominates, the cap angle breaks
+## ties only when the measured mapping is directional (see the producer).
+const GEM_SLICE_ANGLE_WEIGHT: float = 0.35
 const DEN_SCENE_PATH: String = "res://scenes/mission.tscn"
 const LootInventoryScript := preload("res://src/interact/loot_inventory.gd")
 
@@ -80,14 +95,14 @@ void fragment() {
 }
 """
 
-## UI3 Light Gem. The authored `BPUI_UniversalStealthBall` samples one of 21
-## directional slices from `T_stealthball_Array`, but only the UAsset record is
-## in the extract (`SizeZ: 21`, `NumTexturesInArray: 21`) — the 21-slice payload
-## was never dumped. This shader is a PORT_APPROX of that array: `lit_amount`
-## sets how much of the sphere's projected area is lit (KF17 a small cap, KF16
-## about half, KF24/25 almost all) and `sector_dir` places that cap at the
-## strongest scene light. The two colours are sampled from the reference frames,
-## not invented: concealed KF17 crown (10,9,53)/(38,28,84), exposed KF16
+## UI3 Light Gem fallback. The authored `BPUI_UniversalStealthBall` samples one
+## of 21 directional slices from `T_stealthball_Array`. U-4 extracts that payload
+## (`slice_00..20.png`) and binds it as a real `Texture2DArray`; when the payload
+## or its derived mapping is absent this shader is the labelled PORT_APPROX:
+## `lit_amount` sets how much of the sphere's projected area is lit (KF17 a small
+## cap, KF16 about half, KF24/25 almost all) and `sector_dir` places that cap at
+## the strongest scene light. The two colours are sampled from the reference
+## frames, not invented: concealed KF17 crown (10,9,53)/(38,28,84), exposed KF16
 ## (217,200,161) / KF25 (237,222,195). The authored frame tint stays separate.
 const STEALTH_ORB_SHADER: String = """
 shader_type canvas_item;
@@ -143,6 +158,20 @@ void fragment() {
 	float crescent = clamp(sector_strength, 0.0, 1.0) * (1.0 - abs(amount * 2.0 - 1.0));
 	col += vec3(1.0, 0.86, 0.58) * wedge * crescent * 0.10;
 	COLOR = vec4(col, mask * 0.98);
+}
+"""
+
+## U-4: authored `T_stealthball_Array` sampled as a real `Texture2DArray`.
+## `MI_StealthBallTextureArray` (parent `M_TextureArray`) samples `TexArray`
+## with a scalar `Index`; this shader is the canvas equivalent: one binding of
+## all 21 authored slices, one layer selected per state. The selection comes
+## from the derived mapping in `GEM_ARRAY_MANIFEST_PATH`, never from a guess.
+const STEALTH_ARRAY_SHADER: String = """
+shader_type canvas_item;
+uniform sampler2DArray ball_array : filter_linear, repeat_disable;
+uniform float slice_index = 0.0;
+void fragment() {
+	COLOR = texture(ball_array, vec3(UV, slice_index));
 }
 """
 
@@ -317,6 +346,17 @@ var _gem_sector_angle: float = atan2(GEM_DEFAULT_DIR.y, GEM_DEFAULT_DIR.x)
 var _gem_sector_dir: Vector2 = Vector2(GEM_DEFAULT_DIR.x, GEM_DEFAULT_DIR.y).normalized()
 var _gem_sector_z: float = GEM_DEFAULT_DIR.z
 var _gem_sector_strength: float = 0.0
+## U-4 authored array state. `_gem_array` is only set when all 21 authored
+## slices bind; `_gem_array_source` is "authored" for the payload and
+## "synthetic" for the probe's in-memory array, so `gem_path()` never calls a
+## test binding authored. `_gem_array_checked` makes the load attempt once.
+var _gem_orb: ColorRect
+var _gem_array: Texture2DArray
+var _gem_array_mat: ShaderMaterial
+var _gem_array_source: String = ""
+var _gem_array_mapping: Dictionary = {}
+var _gem_array_checked: bool = false
+var _gem_slice_index: int = -1
 
 # Bottom-left Octagonal Tool Hotbar
 var _hotbar_anchor: Control
@@ -1502,11 +1542,12 @@ func _build_stealth_ball_and_soundwaves(root: Control) -> void:
 	_soundwaves_draw.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_stealth_holder.add_child(_soundwaves_draw)
 
-	# Shaded light-reactive inner orb.
+	# Shaded light-reactive inner orb (procedural fallback; swapped for the
+	# authored 21-slice array at the first state apply when the payload exists).
 	var orb: ColorRect = ColorRect.new()
 	orb.name = "StealthOrbInner"
-	orb.position = Vector2(110.0 - 31.0, 48.0 - 31.0)
-	orb.size = Vector2(62.0, 62.0)
+	orb.position = Vector2(110.0 - GEM_ORB_PROCEDURAL_SIZE * 0.5, 48.0 - GEM_ORB_PROCEDURAL_SIZE * 0.5)
+	orb.size = Vector2(GEM_ORB_PROCEDURAL_SIZE, GEM_ORB_PROCEDURAL_SIZE)
 	orb.color = Color(1.0, 1.0, 1.0, 1.0)
 	orb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var orb_sh: Shader = Shader.new()
@@ -1521,6 +1562,7 @@ func _build_stealth_ball_and_soundwaves(root: Control) -> void:
 	_stealth_orb_mat.set_shader_parameter("sector_strength", 0.0)
 	orb.material = _stealth_orb_mat
 	_stealth_holder.add_child(orb)
+	_gem_orb = orb
 
 	# Ornate Art Nouveau Stealth Ball frame (preserved stealth_gem property).
 	stealth_gem = _tex_rect("res://assets/ue/Raw/Art/UI/HUD/Stealth_Ball/T_stealthball_frame.png", Vector2(84, 84))
@@ -3293,17 +3335,226 @@ static func light_gem_view_dir(dir_world: Vector3, cam: Camera3D) -> Vector3:
 	return v.normalized()
 
 
-## UI3: projected area of the lit cap for a given amount. The shader's
-## terminator is `ndl = 1 - 2 * amount`, whose projected cap area is `amount`
-## (0 = point highlight, 0.5 = half sphere, 1 = full sphere). PORT_APPROX of the
-## missing T_stealthball_Array slices; the mapping is what the probe pins.
+## UI3: projected area of the lit cap for a given amount. The procedural
+## shader's terminator is `ndl = 1 - 2 * amount`, whose projected cap area is
+## `amount` (0 = point highlight, 0.5 = half sphere, 1 = full sphere). This only
+## describes the PORT_APPROX fallback; with the authored array bound the slice
+## carries its own measured cap and this helper is not used for selection.
 static func gem_lit_area_fraction(amount: float) -> float:
 	return clampf(amount, 0.0, 1.0)
+
+
+## U-4: bind a real `Texture2DArray` of authored slices and the derived slice
+## table. `meta` is either the parsed manifest (source=authored) or the probe's
+## synthetic `{source, mapping_kind, slices:[{index,lit_fraction,direction,
+## angle_deg}]}`. Returns false (leaving the procedural fallback intact) when
+## the images disagree on size or the GPU array cannot be created.
+func bind_gem_array_images(images: Array[Image], meta: Dictionary = {}) -> bool:
+	if images.is_empty():
+		return false
+	var w: int = images[0].get_width()
+	var h: int = images[0].get_height()
+	if w <= 0 or h <= 0:
+		return false
+	for img: Image in images:
+		if img == null or img.get_width() != w or img.get_height() != h:
+			return false
+	var arr: Texture2DArray = Texture2DArray.new()
+	# create_from_images wants RGBA8; the PNG import is already 8-bit but a
+	# future compression setting must not silently change the layer format.
+	var ready: Array[Image] = []
+	for img: Image in images:
+		if img.is_compressed():
+			img.decompress()
+		if img.get_format() != Image.FORMAT_RGBA8:
+			img.convert(Image.FORMAT_RGBA8)
+		ready.append(img)
+	if arr.create_from_images(ready) != OK:
+		return false
+	var mat: ShaderMaterial = ShaderMaterial.new()
+	var sh: Shader = Shader.new()
+	sh.code = STEALTH_ARRAY_SHADER
+	mat.shader = sh
+	mat.set_shader_parameter("ball_array", arr)
+	mat.set_shader_parameter("slice_index", 0.0)
+	_gem_array = arr
+	_gem_array_mat = mat
+	_gem_array_source = str(meta.get("source", "synthetic"))
+	_gem_array_mapping = _normalise_gem_mapping(meta)
+	_gem_slice_index = -1
+	if _gem_orb != null:
+		_gem_orb.material = mat
+		# Authored geometry: both Image_177 and USB_Image are 144x144, so the
+		# sphere shares the 84 px frame rect (the procedural 62 px is a
+		# hand-tuned fallback, not the authored size).
+		_gem_orb.position = Vector2(110.0 - GEM_FRAME_SIZE * 0.5, 48.0 - GEM_FRAME_SIZE * 0.5)
+		_gem_orb.size = Vector2(GEM_FRAME_SIZE, GEM_FRAME_SIZE)
+	return true
+
+
+## Test/diagnostic reset: drop the array and restore the procedural shader.
+func clear_gem_array() -> void:
+	_gem_array = null
+	_gem_array_mat = null
+	_gem_array_source = ""
+	_gem_array_mapping = {}
+	_gem_slice_index = -1
+	_gem_array_checked = true
+	if _gem_orb != null:
+		_gem_orb.material = _stealth_orb_mat
+		_gem_orb.position = Vector2(110.0 - GEM_ORB_PROCEDURAL_SIZE * 0.5, 48.0 - GEM_ORB_PROCEDURAL_SIZE * 0.5)
+		_gem_orb.size = Vector2(GEM_ORB_PROCEDURAL_SIZE, GEM_ORB_PROCEDURAL_SIZE)
+
+
+func _normalise_gem_mapping(meta: Dictionary) -> Dictionary:
+	var mapping: Dictionary = {}
+	if meta.get("mapping") is Dictionary:
+		mapping = meta.get("mapping")
+	var kind: String = str(mapping.get("kind", meta.get("mapping_kind", "")))
+	var table: Array = []
+	var entries: Variant = meta.get("slices", [])
+	if entries is Array:
+		for e: Variant in entries:
+			if not (e is Dictionary):
+				continue
+			var d: Dictionary = e
+			var dir_v: Variant = d.get("direction", [0.0, 0.0, 1.0])
+			var dir: Vector3 = Vector3(0.0, 0.0, 1.0)
+			if dir_v is Array and (dir_v as Array).size() >= 3:
+				var a: Array = dir_v
+				dir = Vector3(float(a[0]), float(a[1]), float(a[2]))
+			table.append({
+				"index": int(d.get("index", table.size())),
+				"lit_fraction": clampf(float(d.get("lit_fraction", 0.0)), 0.0, 1.0),
+				"direction": dir,
+				"angle_deg": float(d.get("angle_deg", rad_to_deg(atan2(dir.y, dir.x)))),
+			})
+	return {
+		"kind": kind,
+		"angle_spread_deg": float(mapping.get("angle_spread_deg", 0.0)),
+		"slices": table,
+	}
+
+
+## U-4: validate a producer manifest. Returns the 21 slice rows or an empty
+## array; a wrong status, a count other than 21, a non-dictionary row or an
+## empty file name all reject the payload instead of binding a partial map.
+func gem_manifest_rows(manifest: Dictionary) -> Array:
+	if str(manifest.get("status", "")) != "payload_present":
+		return []
+	var authored: Dictionary = {}
+	if manifest.get("authored") is Dictionary:
+		authored = manifest.get("authored")
+	if int(authored.get("slices", 0)) != GEM_AUTHORED_SLICES:
+		return []
+	var entries_v: Variant = manifest.get("slices", [])
+	if not (entries_v is Array) or (entries_v as Array).size() != GEM_AUTHORED_SLICES:
+		return []
+	var rows: Array = []
+	for e: Variant in entries_v:
+		if not (e is Dictionary):
+			return []
+		if str((e as Dictionary).get("file", "")) == "":
+			return []
+		rows.append(e)
+	return rows
+
+
+## U-4: the authored payload load. Runs once; anything missing (no producer
+## output, no imported slice, wrong count/size) leaves the PORT_APPROX shader.
+func _ensure_gem_array() -> void:
+	if _gem_array_checked:
+		return
+	_gem_array_checked = true
+	var f: FileAccess = FileAccess.open(GEM_ARRAY_MANIFEST_PATH, FileAccess.READ)
+	if f == null:
+		return
+	var parsed: Variant = JSON.parse_string(f.get_as_text())
+	if not (parsed is Dictionary):
+		return
+	var manifest: Dictionary = parsed
+	var entries: Array = gem_manifest_rows(manifest)
+	if entries.is_empty():
+		return
+	var images: Array[Image] = []
+	for e: Variant in entries:
+		if not (e is Dictionary):
+			return
+		var name: String = str((e as Dictionary).get("file", ""))
+		if name == "":
+			return
+		var path: String = GEM_ARRAY_ASSET_DIR + "/" + name
+		if not ResourceLoader.exists(path):
+			return
+		var tex: Texture2D = load(path) as Texture2D
+		if tex == null:
+			return
+		var img: Image = tex.get_image()
+		if img == null:
+			return
+		images.append(img)
+	manifest["source"] = "authored"
+	bind_gem_array_images(images, manifest)
+
+
+## U-4: pick a slice for (amount, direction). The mapping is measured from the
+## authored PNGs (`tools/parse_stealthball_array.py`): an area ramp picks the
+## nearest measured lit fraction; a directional array also scores the cap angle.
+## Returns -1 when no authored array is bound.
+func gem_slice_for(amount: float, view_dir: Vector3 = GEM_DEFAULT_DIR) -> int:
+	if _gem_array == null:
+		return -1
+	var table: Array = []
+	if _gem_array_mapping.get("slices") is Array:
+		table = _gem_array_mapping.get("slices")
+	if table.is_empty():
+		return -1
+	var kind: String = str(_gem_array_mapping.get("kind", ""))
+	var a: float = clampf(amount, 0.0, 1.0)
+	var v: Vector3 = view_dir
+	if v.length_squared() < 0.000001:
+		v = GEM_DEFAULT_DIR
+	v = v.normalized()
+	var want_angle: float = rad_to_deg(atan2(v.y, v.x))
+	var best: int = -1
+	var best_score: float = INF
+	for entry: Variant in table:
+		var d: Dictionary = entry
+		var score: float = absf(float(d.get("lit_fraction", 0.0)) - a)
+		if kind == "directional":
+			var da: float = absf(fposmod(float(d.get("angle_deg", 0.0)) - want_angle + 180.0, 360.0) - 180.0) / 180.0
+			score += GEM_SLICE_ANGLE_WEIGHT * da
+		var idx: int = int(d.get("index", 0))
+		if score < best_score - 0.0000001 or (absf(score - best_score) <= 0.0000001 and idx < best):
+			best_score = score
+			best = idx
+	return best
+
+
+func gem_array_info() -> Dictionary:
+	var mapping: Array = []
+	if _gem_array_mapping.get("slices") is Array:
+		mapping = _gem_array_mapping.get("slices")
+	return {
+		"bound": _gem_array != null,
+		"layers": _gem_array.get_layers() if _gem_array != null else 0,
+		"size": Vector2i(_gem_array.get_width(), _gem_array.get_height()) if _gem_array != null else Vector2i.ZERO,
+		"source": _gem_array_source,
+		"mapping_kind": str(_gem_array_mapping.get("kind", "")),
+		"slice_index": _gem_slice_index,
+		"table_size": mapping.size(),
+	}
+
+
+## The rendered gem path: authored only when all 21 slices actually bound.
+func gem_path() -> String:
+	return "authored_array" if _gem_array != null and _gem_array_source == "authored" else "port_approx"
 
 
 ## UI3: apply one gem state (amount, canvas-space light direction, confidence).
 ## Public so the probe can drive the exact shader parameters without a camera.
 func apply_light_gem_state(amount: float, view_dir: Vector3, strength: float) -> void:
+	_ensure_gem_array()
 	_gem_amount = clampf(amount, 0.0, 1.0)
 	var v: Vector3 = view_dir
 	if v.length_squared() < 0.000001:
@@ -3315,7 +3566,12 @@ func apply_light_gem_state(amount: float, view_dir: Vector3, strength: float) ->
 		_gem_sector_angle = atan2(_gem_sector_dir.y, _gem_sector_dir.x)
 	_gem_sector_z = clampf(v.z, -1.0, 1.0)
 	_gem_sector_strength = clampf(strength, 0.0, 1.0)
-	if _stealth_orb_mat != null:
+	if _gem_array_mat != null:
+		var idx: int = gem_slice_for(_gem_amount, v)
+		if idx >= 0 and idx != _gem_slice_index:
+			_gem_slice_index = idx
+			_gem_array_mat.set_shader_parameter("slice_index", float(idx))
+	elif _stealth_orb_mat != null:
 		_stealth_orb_mat.set_shader_parameter("visibility", _gem_amount)
 		_stealth_orb_mat.set_shader_parameter("lit_amount", _gem_amount)
 		_stealth_orb_mat.set_shader_parameter("sector_angle", _gem_sector_angle)
@@ -3328,6 +3584,7 @@ func apply_light_gem_state(amount: float, view_dir: Vector3, strength: float) ->
 
 ## UI3: read back the applied gem state (probe + diagnostics).
 func light_gem_state() -> Dictionary:
+	var info: Dictionary = gem_array_info()
 	return {
 		"amount": _gem_amount,
 		"lit_area_fraction": gem_lit_area_fraction(_gem_amount),
@@ -3337,6 +3594,12 @@ func light_gem_state() -> Dictionary:
 		"sector_z": _gem_sector_z,
 		"sector_strength": _gem_sector_strength,
 		"frame_tint": GEM_FRAME_TINT,
+		"gem_path": gem_path(),
+		"array_bound": bool(info.get("bound", false)),
+		"array_layers": int(info.get("layers", 0)),
+		"array_source": str(info.get("source", "")),
+		"mapping_kind": str(info.get("mapping_kind", "")),
+		"slice_index": int(info.get("slice_index", -1)),
 	}
 
 

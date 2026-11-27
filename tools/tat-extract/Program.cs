@@ -4,7 +4,8 @@
 //   list                  write file list to OUT/filelist.txt
 //   json                  every package matching filter -> OUT/json/<path>.json (property dump)
 //   tables                DataTables/CurveTables/DataAssets under Gameplay|AI|Missions|Maps -> json
-//   textures              Texture2D -> OUT/assets/<path>.png
+//   textures              Texture2D -> OUT/assets/<path>.png (allowlisted
+//                         UTexture2DArray -> OUT/assets/<path>/slice_NN.png + manifest.json)
 //   meshes                StaticMesh/SkeletalMesh (+ materials) -> OUT/assets/<path>.gltf
 //   anims                 AnimSequence -> gltf
 //   levels                .umap -> OUT/levels/<path>.json (actors + transforms)

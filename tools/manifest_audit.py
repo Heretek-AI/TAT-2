@@ -346,6 +346,17 @@ PRODUCERS = (
         "python3 tools/parse_anim_meta.py",
         ("gen:anims_meta.json",),
     ),
+    # U-4: the authored 21-slice T_stealthball_Array mapping. The extractor
+    # writes slice_00..20.png + manifest.json under
+    # `assets/Art/UI/HUD/Stealth_Ball/T_stealthball_Array/`; this producer
+    # derives the measured cap fraction/centroid/direction per slice. With no
+    # payload it records `status=payload_absent` and the HUD keeps its
+    # labelled PORT_APPROX shader; `--require-payload` turns that into exit 2.
+    Producer(
+        "tools/parse_stealthball_array.py",
+        "python3 tools/parse_stealthball_array.py",
+        ("gen:ui/stealthball_array.json",),
+    ),
 )
 
 # Pipeline infrastructure that changes extraction semantics even though it is

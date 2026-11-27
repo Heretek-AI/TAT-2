@@ -90,6 +90,9 @@ const PORT_TAG_TO_STIM: Dictionary = {
 	"combat_hit": "AI.Stim.Hearing.Combat.Hit",
 	"npc_yelp": "AI.Stim.Hearing.NPC.Yelp",
 	"npc_call_help": "AI.Stim.Hearing.NPC.CallForHelp",
+	# KF15/KF16 car alarm (BP_Automobile_AlarmBase StimTag). hearing.json row
+	# Car_Alarm: MaxRange 5000 cm (50 m), Heavy, Long investigation.
+	"car_alarm": "AI.Stim.Hearing.CarAlarm",
 }
 
 ## One port tag, two authored rows. Crouch has no authored row of its own, so it

@@ -18,6 +18,7 @@ const LootContainerScript := preload("res://src/interact/loot_container.gd")
 const SwingingDoorScript := preload("res://src/interact/swinging_door.gd")
 const DeviceLayerScript := preload("res://src/devices/device_layer.gd")
 const WorldPickupScript := preload("res://src/interact/world_pickup.gd")
+const StreetCarScript := preload("res://src/interact/street_car.gd")
 const CivilianScript := preload("res://src/ai/civilian_npc.gd")
 const DoorScript := preload("res://src/interact/lockable_door.gd")
 const EscapeScript := preload("res://src/interact/escape_gate.gd")
@@ -75,6 +76,9 @@ var foyer_lockdown_active: bool = false
 var foyer_lockdown_broken: bool = false
 var foyer_lockdown_shards: int = 0
 var _foyer_impact_seconds: float = 0.0
+## KF16 car headlights created in _add_guildhall_car_lights(); the street-car
+## interaction adds the authored 50 lm alarm flash on top of these beams.
+var _guildhall_car_headlights: Array[SpotLight3D] = []
 var smokes: Array[Dictionary] = []
 var rain_node: Node3D = null
 var lens_rain_node: CanvasLayer = null
@@ -422,6 +426,7 @@ func _add_guildhall_car_lights() -> void:
 		return
 	if MobileProfile.is_mobile():
 		return
+	_guildhall_car_headlights.clear()
 	var specs: Array = [
 		["GuildhallCarHeadlightL", Vector3(17.83, 19.96, 65.81), Vector3(11.0, 18.6, 54.0)],
 		["GuildhallCarHeadlightR", Vector3(17.91, 19.96, 67.02), Vector3(9.0, 18.6, 57.0)],
@@ -444,6 +449,7 @@ func _add_guildhall_car_lights() -> void:
 		# Aim after add_child so look_at uses the global transform; per-light
 		# targets throw the beams down the gate approach instead of the kerb.
 		beam.look_at(spec[2] as Vector3, Vector3.UP)
+		_guildhall_car_headlights.append(beam)
 
 
 ## KF16 lens cores: SM_Automobile_Lights_B's authored slot 1 is
@@ -452,12 +458,13 @@ func _add_guildhall_car_lights() -> void:
 ## loader's material join, so the lenses render dead. Duplicate the surface
 ## materials per instance (the mesh resource is shared across every car) and
 ## enable the authored warm emission on the glass surface only. Runs after the
-## Guildhall sublevels build; skips cleanly when the node is absent.
-func _override_guildhall_car_lenses() -> void:
+## Guildhall sublevels build; skips cleanly when the node is absent. Returns the
+## overridden lens node so the KF16 street-car interaction can flash it.
+func _override_guildhall_car_lenses() -> MeshInstance3D:
 	if GameState.active_map_id != "guildhall":
-		return
+		return null
 	if MobileProfile.is_mobile():
-		return
+		return null
 	const LENS_TARGET: Vector3 = Vector3(17.93, 19.88, 66.41)
 	var best: MeshInstance3D = null
 	var best_d: float = 4.0
@@ -473,14 +480,14 @@ func _override_guildhall_car_lenses() -> void:
 			best = mi
 	if best == null:
 		print("TAT-2 KF16 car lenses: SM_Automobile_Lights_B node not found within 4 m of ", LENS_TARGET, "; lens emission skipped")
-		return
+		return null
 	for s in range(best.mesh.get_surface_count()):
 		if not best.mesh.surface_get_name(s).to_lower().contains("glass"):
 			continue
 		var mat: Material = best.get_active_material(s)
 		if mat == null:
 			print("TAT-2 KF16 car lenses: glass surface ", s, " has no material; lens emission skipped")
-			return
+			return null
 		var dup: Material = mat.duplicate()
 		if dup is StandardMaterial3D:
 			var smat: StandardMaterial3D = dup as StandardMaterial3D
@@ -493,8 +500,77 @@ func _override_guildhall_car_lenses() -> void:
 			shmat.set_shader_parameter("emission_energy", 2.0)
 		best.set_surface_override_material(s, dup)
 		print("TAT-2 KF16 car lenses: node=", best.name, " dist=", snappedf(best_d, 0.01), " glass_surface=", s, " emission=1.0,0.6186,0.2552 energy=2.0")
-		return
+		return best
 	print("TAT-2 KF16 car lenses: no glass surface on ", best.name, "; lens emission skipped")
+	return null
+
+
+## KF15/KF16 street car: PeripheryA authors the car as
+## BP_Automobile_Truck_A_Alarm_C_3 at (19.0, 18.5304, 66.3382) and the loader
+## batches its mesh parts. Add the authored interaction area at that root; it
+## fires the authored car-horn event and the authored alarm flash on the two
+## KF16 headlight spots. Desktop only, like the headlight beams themselves.
+func _add_guildhall_street_car(lens: MeshInstance3D) -> void:
+	if GameState.active_map_id != "guildhall":
+		return
+	if MobileProfile.is_mobile():
+		return
+	if get_node_or_null("GuildhallStreetCar") != null:
+		return
+	const CAR_ROOT: Vector3 = Vector3(19.0, 18.5304, 66.3382)
+	var area: Area3D = StreetCarScript.new()
+	area.name = "GuildhallStreetCar"
+	area.position = CAR_ROOT
+	area.call("setup", lens, _guildhall_car_headlights)
+	add_child(area)
+	print("TAT-2 KF16 street car: root=", CAR_ROOT, " headlights=", _guildhall_car_headlights.size(), " lens=", lens != null, " prompt=INTERACT")
+
+
+## KF23 MACLEOD: SM_SignMacleod's sole slot is the authored
+## M_Crystal_Glow (Emissive Amount 2 = 5.0, tint 1.0/0.361/0.078). The generic
+## material path carries the authored tint as albedo but the authored emissive
+## amount is not one of its recognised keys, so the sign reads dull. Duplicate
+## the cached sign material and enable the authored gold emission (clamped by
+## the existing 4.0 emissive ceiling). The material is only used by this sign.
+func _add_guildhall_macleod_emission() -> void:
+	if GameState.active_map_id != "guildhall":
+		return
+	const MACLEOD_UE_MESH: String = "/Game/Art/Environment/Props/Signage/SM_SignMacleod"
+	const MACLEOD_UE_MAT: String = "/Game/Art/Effects/HotWire_Ride/M_Crystal_Glow"
+	const MACLEOD_TINT: Color = Color(1.0, 0.361, 0.078)
+	const MACLEOD_EMISSION_ENERGY: float = 4.0
+	var base: Material = level_loader.call("get_material_for_ue", MACLEOD_UE_MAT) as Material
+	if base == null:
+		print("TAT-2 KF23 Macleod sign: material missing for ", MACLEOD_UE_MAT, "; emission skipped")
+		return
+	var count: int = 0
+	var geo_nodes: Array = []
+	geo_nodes.append_array(find_children("*", "MeshInstance3D", true, false))
+	geo_nodes.append_array(find_children("*", "MultiMeshInstance3D", true, false))
+	for node: Node in geo_nodes:
+		var gi: GeometryInstance3D = node as GeometryInstance3D
+		if not str(gi.get_meta("ue_mesh", "")).contains("SM_SignMacleod"):
+			continue
+		var dup: StandardMaterial3D = null
+		if base is StandardMaterial3D:
+			dup = (base as StandardMaterial3D).duplicate() as StandardMaterial3D
+		else:
+			dup = StandardMaterial3D.new()
+		dup.emission_enabled = true
+		dup.emission = MACLEOD_TINT
+		dup.emission_energy_multiplier = MACLEOD_EMISSION_ENERGY
+		if gi is MultiMeshInstance3D:
+			(gi as MultiMeshInstance3D).material_override = dup
+		elif gi is MeshInstance3D:
+			var mi: MeshInstance3D = gi as MeshInstance3D
+			if mi.mesh != null:
+				for s: int in range(mi.mesh.get_surface_count()):
+					mi.set_surface_override_material(s, dup)
+		count += 1
+	if count == 0:
+		print("TAT-2 KF23 Macleod sign: ", MACLEOD_UE_MESH, " not found in the loaded staging; emission skipped")
+	else:
+		print("TAT-2 KF23 Macleod sign: nodes=", count, " emission=", MACLEOD_TINT, " energy=", MACLEOD_EMISSION_ENERGY, " source=", MACLEOD_UE_MAT)
 
 
 ## KF16 sign letters: the split SM_Guildhall_Sign mesh keeps the 268-tri
@@ -788,13 +864,15 @@ func start_contract(order: int) -> void:
 	# KF16/KF17 dressing needs the authored sublevels (the car lens node and the
 	# loaded material DB), so these run after the build, next to the gate fills.
 	if map_id == "guildhall":
-		_override_guildhall_car_lenses()
+		var car_lens: MeshInstance3D = _override_guildhall_car_lenses()
+		_add_guildhall_street_car(car_lens)
 		_add_guildhall_skyline_clocktower()
 		_add_guildhall_sign_letter_emission()
 		# P1-BEAMS: the authored emitter/node materials and the plaque text
 		# need the built POI nodes, so this runs after the load like the car
 		# lens / sign repairs above.
 		_build_foyer_dressing()
+		_add_guildhall_macleod_emission()
 	if int(ue_level_data.get("chunk_count", 0)) > 0:
 		print("TAT-2 Perf: chunks=", ue_level_data.get("chunk_count", 0), " collision_bodies=", ue_level_data.get("collision_bodies", 0), " collision_shapes=", ue_level_data.get("collision_shapes", 0), " occluders=", ue_level_data.get("occluder_count", 0))
 

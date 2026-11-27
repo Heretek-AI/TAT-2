@@ -70,6 +70,39 @@ builds the instruments and records what is still wrong.
   are in [`reports/p0b-live-capture.md`](reports/p0b-live-capture.md). No Steam,
   Proton or game process was started by the prep lane.
 
+## P1 Lane T — street / car / gate / MACLEOD (2026-11-26)
+
+P1 route-content lane T. Evidence: [`reports/p1-street-20261126.md`](reports/p1-street-20261126.md)
+and the tracked probe log under `reports/logs/p1-street/`.
+
+- **KF16 car interact — restored.** `game/src/interact/street_car.gd` adds the
+  authored `[F] INTERACT` on `BP_Automobile_Truck_A_Alarm_C_3` at
+  `(19.0, 18.5304, 66.3382)`, plays the authored
+  `Play_Obj_Vehicle_Car_Horn_OneOff` and drives the authored 10 s alarm flash
+  (2 s loop, keys 0@0 / 1@0.2–1.0 / 0@1.1, 50 lm) on the two KF16 headlight
+  spots. The authored `AI.Stim.Hearing.CarAlarm` row is emitted (50 m, Heavy,
+  Long). Lens emission is dark at rest and pulses to the authored 2.0 during
+  the alarm; the existing 2.0 override remains the fallback.
+- **KF23 `MACLEOD` — emissive restored.** `SM_SignMacleod` binds the authored
+  `M_Crystal_Glow` tint `(1.0, 0.361, 0.078)`; the post-load override enables
+  that emission at the loader's existing 4.0 ceiling (authored `Emissive
+  Amount 2 = 5.0`). Placement `(116.6284, 53.2895, 22.6352)` is the authored
+  PeripheryA record. `APPROX_SHADER` remains for the final exposure check.
+- **Already authored and measured:** 19 crates within 10 m of the KF15 alley,
+  the two truck ladders, the weeds and the authored bulkhead wall fixture; the
+  `SM_Guildhall_Sign` 4-surface arch, two `SM_StatueGriffonA`, and the white
+  10-bolt `MI_ElectricalTransformer` / `T_ElectricalTransformer_D.png` plate;
+  the gloomy `ground_wetness=1.0` + Guildhall landscape `Puddle` layers on the
+  existing `tat_landscape.gdshader` path (no new shader).
+- **HARD_LIMIT — `BARRON'S DEMOLITION` banner.** No `barron`/`demolition`
+  name exists in the extracted JSON/assets or the nine relevant Guildhall
+  level JSONs. The only banner assets are `SM_BannerB` /
+  `SM_BannerWall_IronBeam` with `T_BannerSet_D.png` (the blue `KILCAIRN`
+  heraldic banner), not the KF15 brick-wall banner. Not invented.
+- **HARD_LIMIT (placement) — KF15 fallen steel drums.** The authored
+  `SM_Metal_BarrelA/B/C` assets exist and are placed elsewhere in PeripheryA,
+  but there is no barrel/cask placement within 12 m of the KF15 alley.
+
 ## P0a status — 2026-11-26 (supersedes the sections below where they differ)
 
 Parity restorations plus the evidence repair, measured on `84912ee` in one serial

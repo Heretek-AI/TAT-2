@@ -927,24 +927,43 @@ def _merged_comp_props(e):
     return _merged_comp_props_ex(e)[0]
 
 
-# W10-A3: developer-only debug meshes (e.g. the turret DebugMesh
-# `/Game/Developers/gjasp/Maps/_GENERATED/gjasp/Disc_1A004574`) are editor
-# debris. The shipped build never draws them, so the producer never emits them.
+# W10-A3: `/Game/Developers/` is NOT a debris namespace. A blanket skip only
+# matched the turret DebugMesh (`.../Maps/_GENERATED/gjasp/Disc_1A004574`) by
+# accident: it also deleted the Thieves Den shell (`gjasp/SM_ThievesDen`,
+# `SM_ThievesDen_Floor`, `SM_ThievesDen_Glass`) and the main-menu start-screen
+# cubes (`gjasp/Cube2`, `Cube3`). Without the Den floor every authored
+# TATPlayerStart floor ray missed and the hub booted at the legacy origin.
+# Skip only editor/debug artifacts: the `_GENERATED` dump directory, debris
+# stems (`Disc_*`, `Debug_*`) and spline-editor helper meshes. Measured W10
+# dev_skipped 524 -> 482 (478 Disc_1A004574 + 4 Box_BF2D60F3, both under
+# `/Game/Developers/gjasp/Maps/_GENERATED/gjasp/`), restoring 42 authored map
+# meshes (3 Den + 39 start-screen cubes).
 _DEVELOPER_MESH_PREFIX = "/game/developers/"
-# Exception: `1m_Plane_Reverse` is the authored moon-billboard carrier. The
-# loader has a dedicated rule that hides and counts it
-# (`_is_moonshape_mesh`): 19 dev-carrier planes in the Guildhall set and 47 in
-# OldManor_Geo, part of the loader's measured moonshape_hidden count. Treating
-# it as editor debris would silently erase that accounting and the cream/moon
-# census that reads it. Keep the mesh; the loader still never draws it.
+_DEVELOPER_MESH_DEBRIS_DIRS = ("/maps/_generated/",)
+_DEVELOPER_MESH_DEBRIS_STEMS = ("disc_", "debug_")
+_DEVELOPER_MESH_DEBRIS_TOKENS = ("splineeditormesh",)
+# Exception pinned even though the narrowed rule would keep it: `1m_Plane_Reverse`
+# is the authored moon-billboard carrier. The loader has a dedicated rule that
+# hides and counts it (`_is_moonshape_mesh`): 19 dev-carrier planes in the
+# Guildhall set and 47 in OldManor_Geo, part of the loader's measured
+# moonshape_hidden count. Any future widening of the debris rule must not erase
+# that accounting or the cream/moon census that reads it. Keep the mesh; the
+# loader still never draws it.
 _DEVELOPER_MESH_KEEP_STEMS = frozenset({"1m_plane_reverse"})
 
 
 def _is_developer_mesh(sm: str) -> bool:
-    if _DEVELOPER_MESH_PREFIX not in (sm or "").lower():
+    path = (sm or "").replace("\\", "/").lower()
+    if _DEVELOPER_MESH_PREFIX not in path:
         return False
-    stem = str(sm).replace("\\", "/").rsplit("/", 1)[-1].split(".")[0].lower()
-    return stem not in _DEVELOPER_MESH_KEEP_STEMS
+    stem = path.rsplit("/", 1)[-1].split(".")[0]
+    if stem in _DEVELOPER_MESH_KEEP_STEMS:
+        return False
+    if any(d in path for d in _DEVELOPER_MESH_DEBRIS_DIRS):
+        return True
+    if any(stem.startswith(p) for p in _DEVELOPER_MESH_DEBRIS_STEMS):
+        return True
+    return any(t in path for t in _DEVELOPER_MESH_DEBRIS_TOKENS)
 
 
 # W10-A3: authored turret art. A turret's parts are gameplay props bolted to

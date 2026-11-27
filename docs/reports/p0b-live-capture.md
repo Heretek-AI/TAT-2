@@ -1,5 +1,15 @@
 # P0b Lane L — live reference preparation (no launch)
 
+> **MEASURED 2026-11-26 — the shipped build will not run in Steam Offline Mode.**
+> With `WantsOfflineMode=1`, build `25076818` launched to `LOGIN FAILED!` with only
+> `QUIT`; the launcher requires an online login. This *disproves* the offline-first
+> assumption in §2 and Step 5 below. The machine was restored afterwards (original
+> prefix active, `WantsOfflineMode=0`, save hash unchanged); no capture was taken.
+> Resume only with an **online** launch after re-verifying `buildid=25076818`,
+> `TargetBuildID=0`, `StateFlags=4` and Valve `up_to_date: true`, or score from the
+> official 30 keyframes and mark live-only rows `UNVERIFIED`. See
+> [`HANDOFF_NEXT_AGENT.md`](../HANDOFF_NEXT_AGENT.md) §0.
+
 **Status:** prepared 2026-11-26 in worktree `w10/p0b-live`, base `09d8a30`.
 **Nothing was launched.** Steam, Proton and the shipped game were not started by this
 lane; the Steam client was already running (PID 17548) and was only inspected.
@@ -101,6 +111,11 @@ and the shipped default preset. Reset them **in-game** and record the settings s
 ---
 
 ## 2. Can an offline launch avoid updating the install?
+
+> **CORRECTED 2026-11-26:** offline mode does avoid an update, but the launcher
+> then refuses to log in (`LOGIN FAILED!`). The "Yes" below is therefore
+> conditional on an online login having already succeeded, which the measured
+> build does not allow. Use the online-capture path with the preflight.
 
 **Yes, if Steam is switched to Offline Mode before Play. Currently no update is
 offered**, so an online launch *today* would not update:

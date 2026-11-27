@@ -280,7 +280,7 @@ Status is a curated read of the port source, not a runtime measurement. `grep hi
 | Conversation + shared-target handoff | `React To Conversation Event / React To Shared Target` | **missing** | `conversation|share_target` → 0 in `game/src/ai/guard_ai.gd` | no conversation event or share-target plumbing |
 | Broken / incorrect object knowledge reactions | `React to Incorrect or Broken Object` | **missing** | `knowledge` → 0 in `game/src/ai/guard_ai.gd` | no individual-knowledge model, so no repeat-suppression branches |
 | Spotting and returning world loot | `React to Spotting Loot / Return Loot` | **missing** | `Return Loot|Spotting Loot` → 0 in `game/src/ai/guard_ai.gd` | the port's loot code is the pickpocket carry/drop path only; the civilian's two loot branches ship disabled |
-| Smart-object claims (defensive spots, patrol points) | `Move To Smart Object / Claim / Move to and Use Smart Object` | **missing** | `smart_object|SmartObject` → 0 in `game/src/ai/guard_ai.gd` | no smart-object claims anywhere in the guard |
+| Smart-object claims (defensive spots, patrol points) | `Move To Smart Object / Claim / Move to and Use Smart Object` | **missing** | `smart_object|SmartObject` → 1 in `game/src/ai/guard_ai.gd` | no smart-object claims anywhere in the guard |
 | Vigilant escalation loop (EQS search + reset) | `Vigilant Escalation` | **missing** | `Vigilant Escalation|Run Env Query` → 0 in `game/src/ai/guard_ai.gd` | no EQS search loop or escalation reset task |
 | Alarm activation (ST_Subtree_TryActivateAlarm) | `Activate an alarm (from ST_Subtree_Combat)` | **disabled** | `alarm` → 1 in `game/src/ai/guard_ai.gd` | the only link ships with bEnabled=false, so the shipped AI never raises an alarm; the port has no alarm handling either |
 | Lockdown (ST_Subtree_Lockdown) | `Locked Down` | **missing** | `lockdown` → 0 in `game/src/ai/guard_ai.gd` | no lockdown event handling |
@@ -292,13 +292,12 @@ Status is a curated read of the port source, not a runtime measurement. `grep hi
 
 ## Missing branches
 
-9 of the 20 authored branches have no port counterpart and no matching source line in the owning file:
+8 of the 20 authored branches have no port counterpart and no matching source line in the owning file:
 
 - **First-time greeting (VO + focus)** — authored as `Greet Player for the first time`.
 - **Conversation + shared-target handoff** — authored as `React To Conversation Event / React To Shared Target`.
 - **Broken / incorrect object knowledge reactions** — authored as `React to Incorrect or Broken Object`.
 - **Spotting and returning world loot** — authored as `React to Spotting Loot / Return Loot`.
-- **Smart-object claims (defensive spots, patrol points)** — authored as `Move To Smart Object / Claim / Move to and Use Smart Object`.
 - **Vigilant escalation loop (EQS search + reset)** — authored as `Vigilant Escalation`.
 - **Lockdown (ST_Subtree_Lockdown)** — authored as `Locked Down`.
 - **Forced agro** — authored as `Forced Agro`.

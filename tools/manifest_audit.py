@@ -149,6 +149,13 @@ EXPECTED_METRIC_DECREASES: dict[tuple[str, str], tuple[int, str]] = {
         "fallback-ranked albedo guess (1379 -> 1376). The three dropped albedos were "
         "invented by the heuristic; the authored data has none.",
     ),
+    ("tools/parse_materials.py", "texture_refs"): (
+        1522,
+        "P0b/data wave: the civilian pants fix stops binding the wrong male-top "
+        "default T_Civ_M_01_Top_D.png as the pants albedo (1523 -> 1522). The "
+        "dropped ref was a BaseColorOpacity/SourceColor misclassification, not a "
+        "lost authored texture; the authored Pants_D is retained.",
+    ),
 }
 
 PRODUCERS = (

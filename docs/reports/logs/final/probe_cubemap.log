@@ -1,0 +1,84 @@
+== FINAL_GATE probe_cubemap
+COMMAND: tools/godot --headless --path game --script res://tests/probe_cubemap.gd
+CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
+STARTED: 2026-11-27T14:51:25-05:00
+
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+TAT-2 Loc: reverse map built from sources.json (3404 keys)
+TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
+INPUT_TABLE source=generated rows=91 shipping=91 actions=52
+INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
+PASS: unset TAT2_IBL is off (today's look)
+PASS: TAT2_IBL=ambient selects stage-1 IBL
+WARNING: TAT2_IBL='bogus' is not one of ["off", "ambient"]; using off
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] mode (res://src/core/cubemap_loader.gd:62)
+         [1] _test_mode (res://tests/probe_cubemap.gd:58)
+         [2] _run (res://tests/probe_cubemap.gd:43)
+PASS: an unknown TAT2_IBL falls back to off
+PASS: face centres round-trip to their axis (0..5 = +X,-X,+Y,-Y,+Z,-Z)
+PASS: face_index picks the dominant axis (-X)
+PASS: face_index picks the dominant axis (-Z)
+PASS: face_index rejects a zero vector
+PASS: +Y face: image top is -Z, right is +X (top=(0.0, 0.707107, -0.707107) right=(0.707107, 0.707107, 0.0))
+PASS: uniform grey cube returns exactly its radiance on the six axes (0.2 grey (RGBA8-exact), tol 5e-4)
+PASS: the diagonal normal stays within 2 % (coarse horizon cells) (0.199941)
+PASS: ambient energy is the irradiance luminance (0.200114)
+PASS: ambient colour is luminance-normalised (no double scale)
+PASS: +Y-only cube matches the independent analytic face integral (0.554105 want 0.554127)
+PASS: +Y-only cube has no borrowed channels
+PASS: the opposite hemisphere receives exactly zero (0.000000000)
+PASS: the authored up-face dominates the up normal
+PASS: linear transfer keeps the decoded value (0.40023)
+PASS: srgb transfer converts to linear (0.13294 want 0.13287)
+PASS: off reports available=false
+PASS: off reports mode=off (TAT2_IBL=off)
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'gloomy'
+TAT-2 IBL: skylight_cubemap=/Game/MaterialLibrary/Utility/Cubemap_GroundFloor_01 converted=res://assets/ue/Raw/MaterialLibrary/Utility/Cubemap_GroundFloor_01.exr available=false sky_contribution=0.0 gi=ssil ao=true
+TAT-2 exposure: preset=gloomy mode=AGX exposure=1.150 authored_bias=0.0 ev100_night=-3.0 authored_curve_bias=-4.00 (curve recorded, not applied)
+PASS: gloomy preset still applies with TAT2_IBL=off
+PASS: off keeps the authored SkyLight colour ((1.0, 1.0, 1.0, 1.0))
+PASS: off keeps the authored SkyLight energy (0.160000)
+PASS: off keeps sky_ibl_state unavailable (no sky_contribution flip)
+PASS: converted cubemap index present (res://data/generated/ibl/cubemaps.json)
+PASS: cubemap index schema (tat2.cubemaps/1)
+PASS: cubemap face order is explicit
+PASS: cubemap index has at least one converged cube (3)
+PASS: cubemap cubemap_ground_floor_01 face PNGs resolve (/Game/MaterialLibrary/Utility/Cubemap_GroundFloor_01)
+PASS: cubemap cubemap_ground_floor_01 records its transfer (linear)
+PASS: cubemap cubemap_ground_floor_01 is indexed by UE path
+CUBEMAP_ORIENT: cubemap_ground_floor_01 +Y luminance 0.0001 >= -Y 0.0001 (informational)
+PASS: cubemap daylight face PNGs resolve (/Engine/MapTemplates/daylight)
+PASS: cubemap daylight records its transfer (linear)
+PASS: cubemap daylight is indexed by UE path
+CUBEMAP_ORIENT: WARN daylight +Y luminance 0.0680 < -Y 0.0712 — check the UE ECubeFace slice order before trusting the ambient direction
+PASS: cubemap t_fake_specular1 face PNGs resolve (/Game/ThirdParty/FluidNinjaLive/UseCases/007_SmallWater/T_FakeSpecular1)
+PASS: cubemap t_fake_specular1 records its transfer (linear)
+PASS: cubemap t_fake_specular1 is indexed by UE path
+CUBEMAP_ORIENT: t_fake_specular1 +Y luminance 0.0000 >= -Y 0.0000 (informational)
+CUBEMAP_PROBE: fails=0 passed=37
+
+EXIT: 0

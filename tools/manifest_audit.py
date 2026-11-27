@@ -303,6 +303,14 @@ PRODUCERS = (
         "python3 tools/parse_cubemap.py",
         ("gen:ibl",),
     ),
+    # N-P0/N-P1: decoded Recast/Detour tiles -> one compact nav asset per map
+    # (`gen:nav/<map>.nav.bin` + manifest). The extractor's `nav` stage writes
+    # the raw JSON; this producer owns the runtime asset.
+    Producer(
+        "tools/parse_nav.py",
+        "python3 tools/parse_nav.py",
+        ("gen:nav",),
+    ),
     Producer(
         "tools/parse_vfx.py",
         "python3 tools/parse_vfx.py",

@@ -131,6 +131,15 @@ LOG_GATES = {
         "minimums": [(1, "poses")],
         "passes_key": None,
     },
+    # Phase 0a/0b port capture self-test: the four-pose audio-tap fallback,
+    # manifest round-trip, FOV and settle-count rejection. Phase 1/2 adds the
+    # seventh pose and raises the measured count 21 -> 23.
+    "p0b_capture_self_test": {
+        "command": "P0B_EVIDENCE_DIR=docs/reports/logs/final build/qa/p0b_capture.sh --self-test",
+        "pattern": lambda g: r"P0B_SELFTEST PASS checks=(\d+) fails=0",
+        "minimums": [(1, "checks")],
+        "passes_key": None,
+    },
     # Phase 0a/0b route self-test: both QA wrappers must parse, then the
     # staged-route runner's headless table/schema/audio self-test must pass.
     # The floor is the measured check count (62); the PASS literal is part of
@@ -160,6 +169,30 @@ LOG_GATES = {
         "command": "tools/godot --headless --path game --script res://tests/test_audio_control.gd",
         "pattern": lambda g: r"AUDIO_CONTROL_SUMMARY: fails=0 checks=(\d+)",
         "minimums": [(1, "checks")],
+        "passes_key": None,
+    },
+    # W11-A VO director (suite 122): the authored 645-line index, guard
+    # transitions, cooldowns/priority and the zero-media refusal.
+    "test_vo_director": {
+        "command": "tools/godot --headless --path game --script res://tests/test_vo_director.gd",
+        "pattern": lambda g: r"VO_DIRECTOR_SUMMARY: fails=0 checks=(\d+)",
+        "minimums": [(1, "checks")],
+        "passes_key": None,
+    },
+    # P4.1a/b authored auto-exposure (suite 123): the model/meter data is pinned
+    # by its own log; the AEM model block is no longer PENDING after the regen.
+    "probe_auto_exposure": {
+        "command": "tools/godot --headless --path game --script res://tests/probe_auto_exposure.gd",
+        "pattern": lambda g: r"AEM_PROBE: fails=0 passed=(\d+)",
+        "minimums": [(1, "passed")],
+        "passes_key": None,
+    },
+    # P4.1 IBL cubemaps (suite 124): face mapping + CPU cosine irradiance with
+    # the authored payload present (no PENDING block after the regen).
+    "probe_cubemap": {
+        "command": "tools/godot --headless --path game --script res://tests/probe_cubemap.gd",
+        "pattern": lambda g: r"CUBEMAP_PROBE: fails=0 passed=(\d+)",
+        "minimums": [(1, "passed")],
         "passes_key": None,
     },
     "probe_p5_ui": {
@@ -199,6 +232,16 @@ LOG_GATES = {
             "tools/godot --headless --path game --script res://tests/probe_p1_beams.gd"
         ),
         "pattern": lambda g: r"P1_BEAMS PASS checks=(\d+) fails=0",
+        "minimums": [(1, "checks")],
+        "passes_key": None,
+    },
+    # P4.4 landscape mask A/B (7 checks): the shipped `vis > 0.5` discard,
+    # the diagnostic switch and the safe-room gap data assertion.
+    "probe_landscape_mask": {
+        "command": (
+            "tools/godot --headless --path game --script res://tests/probe_landscape_mask.gd"
+        ),
+        "pattern": lambda g: r"LANDSCAPE_MASK_SUMMARY: PASS fails=0 checks=(\d+)",
         "minimums": [(1, "checks")],
         "passes_key": None,
     },
@@ -271,6 +314,14 @@ LOG_GATES = {
         "minimums": [(1, "applied"), (2, "containers"), (3, "door_nodes")],
         "passes_key": None,
     },
+    # N-P1/N-P2 authored navmesh runtime: 80 links, door state rule and the
+    # negative controls. The wrapper takes the Godot lock itself.
+    "nav_runtime_probe": {
+        "command": "build/qa/nav_runtime_probe.sh",
+        "pattern": lambda g: r"NAV_RUNTIME_PROBE checks=(\d+) fails=0",
+        "minimums": [(1, "checks")],
+        "passes_key": None,
+    },
     "string_audit": {
         "command": "make string-audit",
         "pattern": lambda g: (
@@ -324,6 +375,15 @@ PROBE_GATES = {
         "LITERAL_GREPS PASS",
         "make check-greps",
     ),
+    # Phase 1/2 integration: producer unit tests and the P5 capture filter.
+    "producer_tests": (
+        "PRODUCER_TESTS PASS",
+        "make test-producers && python3 build/qa/test_parse_nav.py && echo PRODUCER_TESTS PASS",
+    ),
+    "test_capture_p5_filter": (
+        "CAPTURE_P5_FILTER_TEST PASS checks=5",
+        "build/qa/test_capture_p5_ui_filter.sh",
+    ),
     # P0a: guard bucket/layer selection, beam axis/length and the W10-A2/A3/B1
     # standalone gates. The full PASS lines are the marker on purpose: they pin
     # the authored Lounge C_20 / no-Hauntstable result and the Old Manor run,
@@ -362,15 +422,11 @@ PROBE_GATES = {
         "GUARD_PLACEMENT_SUMMARY: fails=0",
         "tools/godot --headless --path game --script res://tests/test_w10a2_guard_placement.gd",
     ),
-    # P0b capture instruments: the headless self-test (audio tap fallback,
-    # manifest round-trip, rejected FOV/settle) and the tracked KF27 reference
-    # frame scored with the same criteria the port ROI script applies.
-    "p0b_capture_self_test": (
-        "P0B_SELFTEST PASS",
-        "P0B_EVIDENCE_DIR=docs/reports/logs/final build/qa/p0b_capture.sh --self-test",
-    ),
+    # P0b capture instruments: the tracked KF27 reference frame is scored with
+    # the same criteria the port ROI script applies. The headless self-test now
+    # has a numeric floor in LOG_GATES (checks=23).
     "p0b_kf27_reference": (
-        "P0B_KF27_REF pose=upper_foyer met=7/7",
+        "P0B_KF27_REF pose=upper_foyer met=9/9",
         "build/qa/p0b_roi_stats.py --port docs/reference/clip_1795033698901/clean/KF27_03m27s_foyer_security_beam.jpg --pose upper_foyer --reference-only",
     ),
 }

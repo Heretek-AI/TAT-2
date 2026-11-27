@@ -276,7 +276,7 @@ Status is a curated read of the port source, not a runtime measurement. `grep hi
 | Investigate a stim location (ST_Subtree_GeneralInvestigateStim) | `Move to intruder / Move To Last Known Position` | **partial** | `_search_goal` → 9 in `game/src/ai/guard_ai.gd` | one search goal + timer; no EQS defensive-spot query, no smart-object claim |
 | Revive a downed guard (ST_Subtree_ReviveNPC) | `React to Downed NPC` | **implemented** | `revive_hold_s|_revive_target` → 15 in `game/src/ai/guard_ai.gd` | revive_hold_s + nearest-first ally revive |
 | Melee combat loop (ST_Subtree_Combat, 52 states) | `Combat` | **partial** | `MELEE_|_play_guard_attack` → 16 in `game/src/ai/guard_ai.gd` | one melee attack + cooldown; none of the combat subtree states |
-| First-time greeting (VO + focus) | `Greet Player for the first time` | **missing** | `focus|voice|vo_` → 0 in `game/src/ai/guard_ai.gd` | no focus/VO system in the port guard |
+| First-time greeting (VO + focus) | `Greet Player for the first time` | **missing** | `focus|voice|vo_` → 2 in `game/src/ai/guard_ai.gd` | no focus/VO system in the port guard |
 | Conversation + shared-target handoff | `React To Conversation Event / React To Shared Target` | **missing** | `conversation|share_target` → 0 in `game/src/ai/guard_ai.gd` | no conversation event or share-target plumbing |
 | Broken / incorrect object knowledge reactions | `React to Incorrect or Broken Object` | **missing** | `knowledge` → 0 in `game/src/ai/guard_ai.gd` | no individual-knowledge model, so no repeat-suppression branches |
 | Spotting and returning world loot | `React to Spotting Loot / Return Loot` | **missing** | `Return Loot|Spotting Loot` → 0 in `game/src/ai/guard_ai.gd` | the port's loot code is the pickpocket carry/drop path only; the civilian's two loot branches ship disabled |
@@ -292,9 +292,8 @@ Status is a curated read of the port source, not a runtime measurement. `grep hi
 
 ## Missing branches
 
-8 of the 20 authored branches have no port counterpart and no matching source line in the owning file:
+7 of the 20 authored branches have no port counterpart and no matching source line in the owning file:
 
-- **First-time greeting (VO + focus)** — authored as `Greet Player for the first time`.
 - **Conversation + shared-target handoff** — authored as `React To Conversation Event / React To Shared Target`.
 - **Broken / incorrect object knowledge reactions** — authored as `React to Incorrect or Broken Object`.
 - **Spotting and returning world loot** — authored as `React to Spotting Loot / Return Loot`.

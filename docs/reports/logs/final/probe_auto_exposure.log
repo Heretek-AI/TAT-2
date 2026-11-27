@@ -1,0 +1,124 @@
+== FINAL_GATE probe_auto_exposure
+COMMAND: tools/godot --headless --path game --script res://tests/probe_auto_exposure.gd
+CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
+STARTED: 2026-11-27T14:51:25-05:00
+
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+TAT-2 Loc: reverse map built from sources.json (3404 keys)
+TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
+INPUT_TABLE source=generated rows=91 shipping=91 actions=52
+INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
+PASS: GameData autoload present (ok)
+PASS: generated gloomy preset readable (res://data/generated/weather/gloomy.json)
+PASS: Base authors AEM_Basic (EAutoExposureMethod::AEM_Basic)
+PASS: Base MinBrightness is the inherited -3.5 (not the shipped clamp) (-3.5)
+PASS: Base MaxBrightness +1.0 (1.0)
+PASS: Base SpeedUp 0.2 f-stops/s (0.2)
+PASS: Base SpeedDown 2.0 f-stops/s (2.0)
+PASS: Base Bias +0.5 (overridden by Skybox) (0.5)
+PASS: Base selects the V1 curve (Curve_Exposure_Compensation_Float)
+PASS: Base_Skybox MinBrightness -10.0 (the shipped clamp) (-10.0)
+PASS: Base_Skybox Bias 0.0 (0.0)
+PASS: Base_Skybox selects the V3 curve (Curve_Exposure_Compensation_Float_V3)
+PASS: Base_Skybox inherits Method/Speeds from Base (inherited)
+PASS: shipped merged chain is AEM_Basic -10/+1, 0.2/2.0, 0, V3 (min=-10.0 max=1.0 speed=0.2/2.0 bias=0.0 curve=Curve_Exposure_Compensation_Float_V3)
+PASS: generated method AEM_Basic (AEM_Basic)
+PASS: generated min_brightness -10.0 (-10.0)
+PASS: generated max_brightness +1.0 (1.0)
+PASS: generated speed_up 0.2 (0.2)
+PASS: generated speed_down 2.0 (2.0)
+PASS: generated bias 0.0 (0.0)
+PASS: generated bias_curve V3 (Curve_Exposure_Compensation_Float_V3)
+PASS: model method AEM_Basic (AEM_Basic)
+PASS: model clamp min -10.0
+PASS: model clamp max +1.0
+PASS: model speed_up 0.2
+PASS: model speed_down 2.0
+PASS: model bias 0.0
+PASS: model bias curve V3 (Curve_Exposure_Compensation_Float_V3)
+PASS: model state carries the documented keys (13 keys)
+PASS: AEM_CALIBRATION resolves the -7 EV100 anchor to today's 1.15 (0.008984375 * 2^7 = 1.150000000)
+PASS: transcribed V3 table is the authored 8-key curve (8 keys)
+PASS: all 8 V3 keys match 3 readers (GameData + AutoExposure + WeatherProfile)
+PASS: V3 clamps before the first key (-0.5)
+PASS: V3 interpolates linearly (-10.6 -> -1.75)
+PASS: V3 saturates at -4.0 after the last key (9.0 -> -4.0)
+PASS: TAT2_AEM=fixed selects fixed
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'gloomy'
+TAT-2 IBL: skylight_cubemap=/Game/MaterialLibrary/Utility/Cubemap_GroundFloor_01 converted=res://assets/ue/Raw/MaterialLibrary/Utility/Cubemap_GroundFloor_01.exr available=false sky_contribution=0.0 gi=ssil ao=true
+TAT-2 exposure: preset=gloomy mode=AGX exposure=1.150 authored_bias=0.0 ev100_night=-3.0 authored_curve_bias=-4.00 (curve recorded, not applied)
+PASS: fixed: authored gloomy preset applies
+PASS: fixed reproduces today's 1.15 exactly (exposure=1.150000)
+PASS: fixed matches the model's calibration anchor (1.150000)
+PASS: fixed keeps the AGX night tonemapper
+PASS: TAT2_AEM=model selects the model
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'gloomy'
+TAT-2 exposure: preset=gloomy mode=AGX exposure=1.150 authored_bias=0.0 ev100_night=-3.0 authored_curve_bias=-4.00 (curve recorded, not applied)
+TAT-2 AEM: mode=model preset=gloomy method=AEM_Basic min=-10.00 max=1.00 speed=0.20/2.00 bias=0.00 curve=Curve_Exposure_Compensation_Float_V3 authored=true exposure=1.1500 calibration=0.008984375
+PASS: model: authored gloomy preset applies
+PASS: model at the night anchor equals the fixed 1.15 (exposure=1.150000)
+PASS: flat model starts converged at -8 EV100
+PASS: SpeedUp ramp is +0.2 EV100/s per 0.1 s (delta=+0.020000)
+PASS: after 19.9 s the +4 EV100 ramp is not settled (adapted=-4.020000)
+PASS: +4 EV100 settles at 20.0 s at the authored SpeedUp 0.2 (adapted=-4.000000)
+PASS: adapted EV100 -4 is 2^4 brighter than the anchor (exposure=0.143750000)
+PASS: SpeedDown ramp is -2.0 EV100/s per 0.1 s (delta=-0.200000)
+PASS: after 1.9 s the -4 EV100 ramp is not settled (adapted=-2.800000)
+PASS: -4 EV100 settles at 2.0 s at the authored SpeedDown 2.0 (adapted=-3.000000)
+PASS: dt=0 never teleports the adaptation
+PASS: a huge step still clamps at min -10.0 (adapted=-10.000000)
+PASS: +4 EV100 (SpeedUp) is strictly slower than -4 EV100 (SpeedDown) (t_up=20.00s t_down=2.00s)
+PASS: measured settle times are the authored 20 s / 2 s (t_up=20.00s t_down=2.00s)
+PASS: V3 target at the -3.0 night anchor is -7.0 EV100 (-7.000000)
+PASS: target clamps at min -10.0 EV100 (-10.000000)
+PASS: target clamps at max +1.0 EV100 (1.000000)
+PASS: authored bias at -3.0 is -4.0 EV (bias 0 + V3) (-4.000000)
+PASS: the model is deterministic for an identical sequence (-8.469716906)
+PASS: dt subdivision does not change the linear ramp (1s=-9.999999800 0.05s=-9.999999800)
+PASS: 0.18 grey meters log2(18) EV100 (4.169925 want 4.169925)
+PASS: 64x64 is four 32x32 meter groups (4)
+PASS: the reduction covers every pixel (4096)
+PASS: doubling luminance is exactly +1 EV100 (4.169925 -> 5.169925)
+PASS: black pixels use the EPS floor, never -inf (-13.287712)
+PASS: 64x32 uses two equal 32x32 groups (2)
+PASS: gradient EV100 matches the brute-force mean (4.425287008 vs 4.425286972)
+PASS: 40x20 uses two groups (2x1, one partial) (2)
+PASS: a short pixel buffer is refused (NAN), not guessed
+PASS: meter registers at POST_TRANSPARENT
+PASS: meter has no measurement before the GPU run
+PASS: meter read_ev100 is NAN headless
+PASS: meter state exposes ev100/readbacks/groups
+PASS: meter GLSL compiles to SPIR-V (bytes=4636)
+WARNING: TAT2_AEM='bogus' is not one of ["fixed", "model", "meter"]; using fixed
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] mode (res://src/core/auto_exposure.gd:103)
+         [1] _test_mode_env (res://tests/probe_auto_exposure.gd:442)
+         [2] _run (res://tests/probe_auto_exposure.gd:69)
+PASS: an unknown TAT2_AEM falls back to fixed
+PASS: TAT2_AEM=meter selects the meter
+AEM_PROBE: fails=0 passed=77
+
+EXIT: 0

@@ -1,0 +1,88 @@
+== FINAL_GATE test_vo_director
+COMMAND: tools/godot --headless --path game --script res://tests/test_vo_director.gd
+CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
+STARTED: 2026-11-27T14:51:29-05:00
+
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+TAT-2 Loc: reverse map built from sources.json (3404 keys)
+TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
+INPUT_TABLE source=generated rows=91 shipping=91 actions=52
+INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
+PASS: VO1.0 the authored Wwise graph loads (res://data/generated/audio_wwise.json)
+PASS: VO1.0 VoDirector loads the authored index
+PASS: VO1.1 stats.vo_lines == 645 authored lines
+PASS: VO1.1 the index has 76 authored (speaker, verb, state) triples
+PASS: VO1.1 7 authored speakers
+PASS: VO1.1 the director index carries all 645 lines
+PASS: VO1.1 the director index carries all 76 triples
+PASS: VO1.1 authored speakers include Enforcer1/Hauntstable1/Player/TalkingLoot01
+PASS: VO1.2 the index holds 645 distinct authored events
+PASS: VO1.2 the zero-media authored line is indexed under Enforcer1/Silent/Empty
+PASS: VO1.2 a null authored state indexes under the "" bucket
+PASS: VO1.2 no row is invented under the literal state "None"
+PASS: VO1.3 exactly one authored zero-media line is flagged
+PASS: VO2.0 the director maps 249 authored lines
+PASS: VO2.1 every mapped event is one of the 645 authored lines
+PASS: VO2.2 no mapped event is the zero-media authored line
+PASS: VO2.3 every mapped event joins >= 1 authored media id
+PASS: VO2.4 every mapped event resolves a clip path that exists on disk
+PASS: VO3.1 all 42 guard transition/speaker pairs resolve an authored line
+PASS: VO3.2 every resolved guard pick is the requested speaker's authored triple
+PASS: VO3.2 the only authored guard gap is Hauntstable1's 5 KO transitions (measured)
+PASS: VO3.3 NEUTRAL>SUSPICIOUS picks ThiefSeen/VisionStim
+PASS: VO3.3 NEUTRAL>KNOCKED_OUT picks ExertionCombat/KnockedOut for Enforcer1
+PASS: VO3.4 an unmapped transition is refused (no invented line)
+PASS: VO4.1 the six wired player/quest cues pick their authored triple
+PASS: VO4.2 the 8 documented callerless cues still resolve an authored line
+PASS: VO4.3 an unknown cue is refused
+PASS: VO5.1 the first pick at t=0 plays
+PASS: VO5.1 the same triple 1 s later is suppressed by its cooldown
+PASS: VO5.2 the same triple after its cooldown plays again
+PASS: VO5.3 a priority-60 bark suppresses a priority-10 line inside the 2 s window
+PASS: VO5.4 the calmer line plays after the priority window
+PASS: VO5.5 a multi-variant triple rotates recordings (Play_VO_Enforcer1_34_CallForHelp_CallForGuards_01 -> Play_VO_Enforcer1_35_CallForHelp_CallForGuards_02)
+PASS: VO6.1 the Silent line carries 0 authored media
+PASS: VO6.2 the director refuses the zero-media line with reason zero_media
+PASS: VO6.2 the refusal is counted in the report
+PASS: VO6.3 AudioManager autoload present
+PASS: VO6.3 AudioManager.play_vo_line refuses the zero-media line
+PASS: VO7.1 AudioManager holds the VO director
+PASS: VO7.1 mix_state().vo reports the 645 authored lines
+PASS: VO7.2 AudioManager.play_vo_transition plays an authored line
+PASS: VO7.2 the resolved event is recorded (Play_VO_Enforcer1_169_ThiefSeen_VisionStim_Heavy_01)
+PASS: VO7.3 AudioManager.play_vo_cue plays an authored player line
+PASS: VO7.4 the played transition is a media-bearing authored line
+PASS: VO8.1 the first player's disguise_changed is bound exactly once
+PASS: VO8.2 the first player's disguise RTPC stores 25 as 0.25
+PASS: VO8.2 repeated frames do not duplicate the connection
+PASS: VO8.3 the second player's disguise_changed is bound
+PASS: VO8.3 the replaced player's connection is disconnected
+PASS: VO8.4 the second player's 0 integrity plays the authored ending line
+PASS: VO8.4 the ending line emits its functional subtitle
+PASS: VO8.4 the second player's 0 integrity stores 0.0
+PASS: VO8.5 the player binding is cleared when no player exists
+VO_DIRECTOR_SUMMARY: fails=0 checks=53
+
+EXIT: 0

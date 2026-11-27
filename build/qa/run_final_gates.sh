@@ -16,6 +16,12 @@
 # route and live-capture wrappers, then the staged-route runner's 62-check
 # headless self-test — for 45 gates. No other gate body changes.
 #
+# Phase 1/2 integration (2026-11-27) adds four gates — `probe_landscape_mask`
+# (7), `nav_runtime_probe` (70), `producer_tests` (test-producers + parse_nav)
+# and `test_capture_p5_filter` (5) — for 49 gates. Existing markers are raised
+# to the merged measurements (beams 9, audio 123, P5 54, self-test 23, KF27
+# 9/9); no floor is lowered.
+#
 # Rules encoded here (same contract as P0a/P0b/P1)
 # ------------------------------------------------
 #   * Never hold the Godot lock across the runner. Each Godot invocation takes
@@ -199,9 +205,17 @@ gate_marker probe_p1_doors "$OUT/probe_p1_doors.log" "P1_DOORS PASS" \
 	--script res://tests/probe_p1_doors.gd
 
 gate_marker probe_p1_beams "$OUT/probe_p1_beams.log" \
-	"P1_BEAMS PASS checks=7 fails=0" \
+	"P1_BEAMS PASS checks=9 fails=0" \
 	flock "$LOCK" tools/godot --headless --path game \
 	--script res://tests/probe_p1_beams.gd
+
+# P4.4 landscape mask A/B: the authored `vis > 0.5` discard plus the diagnostic
+# `TAT2_LANDSCAPE_MASK=discard|raw|off` switch and the safe-room gap. Headless;
+# no pixel claim (the GPU A/B remains the integrator's separate step).
+gate_marker probe_landscape_mask "$OUT/probe_landscape_mask.log" \
+	"LANDSCAPE_MASK_SUMMARY: PASS fails=0 checks=7" \
+	flock "$LOCK" tools/godot --headless --path game \
+	--script res://tests/probe_landscape_mask.gd
 
 gate_marker probe_p1_ward "$OUT/probe_p1_ward.log" "P1_WARD PASS checks=44" \
 	flock "$LOCK" tools/godot --headless --path game \
@@ -237,6 +251,13 @@ gate_marker probe_lock_inventory "$OUT/probe_lock_inventory.log" \
 	"state=APPLIED" \
 	flock "$LOCK" tools/godot --headless --path game \
 	--script res://tests/probe_lock_inventory.gd
+
+# N-P1/N-P2 authored navmesh runtime: one NavigationRegion3D per map, the 80
+# baked links, the door link state rule and the negative controls. The wrapper
+# takes the Godot lock itself (like runtime_smoke), so no outer flock.
+gate_marker nav_runtime_probe "$OUT/nav_runtime_probe.log" \
+	"NAV_RUNTIME_PROBE checks=70 fails=0" \
+	"$ROOT/build/qa/nav_runtime_probe.sh"
 
 gate_marker probe_niagara "$OUT/probe_niagara.log" "NIAGARA_PROBE PASS" \
 	flock "$LOCK" tools/godot --headless --path game \
@@ -321,13 +342,20 @@ gate_marker test_w10a2_cream "$OUT/test_w10a2_cream.log" \
 	--script res://tests/test_w10a2_cream.gd
 
 gate_marker test_audio_control "$OUT/test_audio_control.log" \
-	"AUDIO_CONTROL_SUMMARY: fails=0 checks=71" \
+	"AUDIO_CONTROL_SUMMARY: fails=0 checks=123" \
 	flock "$LOCK" tools/godot --headless --path game \
 	--script res://tests/test_audio_control.gd
 
-gate_marker probe_p5_ui "$OUT/probe_p5_ui.log" "P5_UI PASS checks=44" \
+gate_marker probe_p5_ui "$OUT/probe_p5_ui.log" "P5_UI PASS checks=54" \
 	flock "$LOCK" tools/godot --headless --path game \
 	--script res://tests/probe_p5_ui.gd
+
+# U-2: the P5 capture filter is fail-closed (unknown shot exits 2 before the
+# mission load); headless only, no render. The script starts Godot itself, so
+# the outer lock is held for its duration.
+gate_marker test_capture_p5_filter "$OUT/test_capture_p5_filter.log" \
+	"CAPTURE_P5_FILTER_TEST PASS checks=5" \
+	flock "$LOCK" "$ROOT/build/qa/test_capture_p5_ui_filter.sh"
 
 gate_marker probe_den_spawn "$OUT/probe_den_spawn.log" "DEN_SPAWN PASS checks=9 fails=0" \
 	flock "$LOCK" tools/godot --headless --path game \
@@ -340,7 +368,7 @@ gate_marker p0b_capture_dry_run "$OUT/p0b_capture_dry_run.log" \
 	"$ROOT/build/qa/p0b_capture.sh" --dry-run
 
 gate_marker p0b_capture_self_test "$OUT/p0b_capture_self_test.log" \
-	"P0B_SELFTEST PASS checks=21 fails=0" \
+	"P0B_SELFTEST PASS checks=23 fails=0" \
 	"$ROOT/build/qa/p0b_capture.sh" --self-test
 
 gate_marker p0b_manifest_validate "$OUT/p0b_manifest_validate.log" \
@@ -351,7 +379,7 @@ gate_marker p0b_manifest_validate "$OUT/p0b_manifest_validate.log" \
 #    Reference-only KF27 calibration: proves the tracked reference frame still
 #    meets the same criteria the ROI scorer applies. No port image involved.
 gate_marker p0b_kf27_reference "$OUT/p0b_kf27_reference.log" \
-	"P0B_KF27_REF pose=upper_foyer met=7/7" \
+	"P0B_KF27_REF pose=upper_foyer met=9/9" \
 	python3 build/qa/p0b_roi_stats.py \
 	--port docs/reference/clip_1795033698901/clean/KF27_03m27s_foyer_security_beam.jpg \
 	--pose upper_foyer --reference-only
@@ -393,7 +421,19 @@ gate_marker runtime_smoke_scan "$OUT/runtime_smoke_scan.log" \
 	"RUNTIME_SMOKE_SCAN_TEST PASS" \
 	"$ROOT/build/qa/test_runtime_smoke_scan.sh"
 
-# 10. Static audit family. `make audit` includes texture-cap-check, string-audit
+# 10. Producer/unit tests (stdlib + one headless-free parser fixture). This
+#     was outside the runner before Phase 1/2; `test-producers` covers every
+#     tools/test_*.py (stealthball array 22, ui pixel stats 15) and the separate
+#     build/qa/test_parse_nav.py is the 7-case nav merge/area fixture.
+qa_producer_tests() {
+	make test-producers || return $?
+	python3 "$ROOT/build/qa/test_parse_nav.py" || return $?
+	printf 'PRODUCER_TESTS PASS\n'
+}
+gate_marker producer_tests "$OUT/producer_tests.log" "PRODUCER_TESTS PASS" \
+	qa_producer_tests
+
+# 11. Static audit family. `make audit` includes texture-cap-check, string-audit
 #     and check-greps; the separate runs below own their ratchet evidence logs.
 gate string_audit "$OUT/string_audit.log" make string-audit
 gate_marker literal_greps "$OUT/literal_greps.log" "LITERAL_GREPS PASS" make check-greps

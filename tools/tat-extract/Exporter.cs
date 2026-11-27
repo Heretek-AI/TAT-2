@@ -450,7 +450,7 @@ public sealed class Exporter
             {
                 var bytes = TextureEncoder.Encode(parts[i], opts, out var ext);
                 if (bytes == null) { failures.Add($"slice {i}: encode null"); continue; }
-                var name = $"slice_{i:00}{ext}";
+                var name = $"slice_{i:00}{(ext.StartsWith(".") ? ext : "." + ext)}";
                 File.WriteAllBytes(Path.Combine(outDir, name), bytes);
                 files.Add(new
                 {

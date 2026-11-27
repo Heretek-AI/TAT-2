@@ -1,7 +1,7 @@
 == FINAL_GATE p0b_route_self_test
 COMMAND: qa_route_self_test
 CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
-STARTED: 2026-11-27T15:55:14-05:00
+STARTED: 2026-11-27T17:25:07-05:00
 
 bash -n build/qa/p0b_route.sh
 bash -n build/qa/p0b_live_capture.sh
@@ -50,4 +50,4 @@ P0B_ROUTE_SELFTEST_SUMMARY checks=62 fails=0
 P0B_ROUTE_SELFTEST PASS checks=62 fails=0
 
 EXIT: 0
-FINISHED: 2026-11-27T15:55:15-05:00
+FINISHED: 2026-11-27T17:25:08-05:00

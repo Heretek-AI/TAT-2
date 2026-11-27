@@ -1,3 +1,8 @@
+== FINAL_GATE gate_ratchet
+COMMAND: make gate-ratchet
+CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
+STARTED: 2026-11-27T17:28:54-05:00
+
 python3 -m py_compile tools/*.py
 python3 tools/check_content_overrides.py --table-only
 Override rule table:
@@ -16,7 +21,7 @@ Table-only mode: generated-data checks skipped.
 
 CONTENT_OVERRIDES: PASS
 python3 tools/check_gate_ratchet.py
-PASS: measured_on=71e77f6
+PASS: measured_on=37bb69e
 PASS: audit.coverage_den=12703
 PASS: audit.coverage_num=12660
 PASS: audit.unexpected=0
@@ -183,6 +188,9 @@ PASS: report records run_tests ('run_tests\\s*\\|\\s*327')
 PASS: report records M2 ('M2\\s*\\|\\s*12')
 PASS: report records E2E ('E2E\\s*\\|\\s*300\\s*/\\s*300')
 PASS: report records coverage ('12660\\s*/\\s*12703')
-PASS: report names measured_on=71e77f6
+PASS: report names measured_on=37bb69e
 
 GATE_RATCHET: PASS (baseline and committed evidence agree; Godot gates run locally)
+
+EXIT: 0
+FINISHED: 2026-11-27T17:28:55-05:00

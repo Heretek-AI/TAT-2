@@ -1,7 +1,7 @@
 == FINAL_GATE probe_p1_doors
 COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/probe_p1_doors.gd
 CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
-STARTED: 2026-11-27T15:41:29-05:00
+STARTED: 2026-11-27T17:11:32-05:00
 
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
@@ -72,7 +72,7 @@ WARNING: [hearing_data] 5 authored investigation-range anomalies clamped: AI.Sti
          [10] _wait_frames (res://tests/probe_p1_doors.gd:131)
   ok: during the swing primary flips to "[F] CLOSE" (got "[F] CLOSE")
   ok: during the swing the [HOLD] LOCK row is withdrawn (got "")
-  ok: the leaf is swinging (angle 0.0 -> 26.0 deg)
+  ok: the leaf is swinging (angle 0.0 -> 27.6 deg)
   ok: swing completes at the authored 90 deg (got 90.0)
   ok: open door stays on "[F] CLOSE"
   ok: while closing primary is "[F] OPEN" (got "[F] OPEN")
@@ -112,4 +112,4 @@ P1_DOORS checks=47 fails=0
 P1_DOORS PASS
 
 EXIT: 0
-FINISHED: 2026-11-27T15:41:34-05:00
+FINISHED: 2026-11-27T17:11:37-05:00

@@ -1,7 +1,7 @@
 == FINAL_GATE audit
 COMMAND: make audit
 CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
-STARTED: 2026-11-27T15:58:52-05:00
+STARTED: 2026-11-27T17:28:43-05:00
 
 python3 tools/check_content_overrides.py
 Override rule table:
@@ -140,4 +140,4 @@ baseline: matches /home/john/.local/share/opencode/worktree/318f41/phase12-integ
 AUDIT PASS
 
 EXIT: 0
-FINISHED: 2026-11-27T15:59:02-05:00
+FINISHED: 2026-11-27T17:28:52-05:00

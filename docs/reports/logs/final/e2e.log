@@ -1,7 +1,7 @@
 == FINAL_GATE e2e
 COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd
 CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
-STARTED: 2026-11-27T15:46:37-05:00
+STARTED: 2026-11-27T17:16:39-05:00
 
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
@@ -66,8 +66,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [3] _build_one_draw_item (res://src/core/level_loader.gd:5230)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7713)
 MIRROR_SPLIT mp=/Game/Art/Environment/Props/Furniture/Tables/SM_DiningTable_2m_End mode=native pos=1 neg=1 surfaces=3 bytes=0
-AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=347
-ROUGHNESS_BAKE count=34 pixels=25690112 ms=2022 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=353
+ROUGHNESS_BAKE count=34 pixels=25690112 ms=1973 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2440 applied=2434 duplicate=5 name_skipped=0 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.38x mirrored=2 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0 mirrored_bases=2 mirrored_multimesh=1 mirrored_single=1 mirrored_splits=2 mirrored_cull_front=0 mirrored_cull_disabled=0 mirrored_mesh_bytes=36000 mirrored_mesh_count=1 mirrored_unbaked=0
 MIRROR_RECON bases=2 multimesh=1 single=1 split=2 cull_front=0 cull_disabled=0 baked=1 baked_bytes=36000 unbaked=0 suppressed=0 ok=true
 TAT-2 Loaded thieves_den: meshes=2434 lights=13
@@ -201,8 +201,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [3] _build_one_draw_item (res://src/core/level_loader.gd:5230)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7713)
 COL_PLANAR /Game/Art/Effects/WardZones/SM_SlowWardZone_Quad instances=82 skipped=1
-AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=347
-ROUGHNESS_BAKE count=87 pixels=74973184 ms=5677 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=353
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=5519 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
 BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=64953 applied=64682 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=206 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0 mirrored_bases=3297 mirrored_multimesh=3119 mirrored_single=178 mirrored_splits=464 mirrored_cull_front=312 mirrored_cull_disabled=0 mirrored_mesh_bytes=31097388 mirrored_mesh_count=103 mirrored_unbaked=0
@@ -424,7 +424,7 @@ MIRROR_SPLIT mp=/Game/Art/Gameplay/ElectricPowerSource/SM_PowerSupplyBodyB mode=
 MIRROR_SPLIT mp=/Game/Art/Gameplay/ElectricPowerSource/SM_PowerSupplyBodyB mode=baked pos=0 neg=3 surfaces=3 bytes=180732
 MIRROR_SPLIT mp=/Game/Art/Gameplay/ElectricPowerSource/SM_PowerSupplyBodyB mode=native pos=0 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_RoofShedB_EndL mode=native pos=1 neg=1 surfaces=2 bytes=0
-ROUGHNESS_BAKE count=31 pixels=22806528 ms=1671 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=31 pixels=22806528 ms=1321 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=3116 applied=3112 duplicate=0 name_skipped=3 wardbox=0 moonshape=1 clamp=68 clamp_worst=4.67x mirrored=444 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0 mirrored_bases=444 mirrored_multimesh=418 mirrored_single=26 mirrored_splits=92 mirrored_cull_front=361 mirrored_cull_disabled=0 mirrored_mesh_bytes=697560 mirrored_mesh_count=8 mirrored_unbaked=0
 MIRROR_RECON bases=444 multimesh=418 single=26 split=92 cull_front=361 cull_disabled=0 baked=8 baked_bytes=697560 unbaked=0 suppressed=28 ok=true
 PASS: [T1-03-A] cam eye_ok=true fov=48.03 pitch=13.67
@@ -586,7 +586,7 @@ MIRROR_SPLIT mp=/Game/Art/Gameplay/ElectricPowerSource/SM_PowerSupplyBodyB mode=
 MIRROR_SPLIT mp=/Game/Art/Gameplay/ElectricPowerSource/SM_PowerSupplyBodyB mode=baked pos=0 neg=3 surfaces=3 bytes=180732
 MIRROR_SPLIT mp=/Game/Art/Gameplay/ElectricPowerSource/SM_PowerSupplyBodyB mode=native pos=0 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_RoofShedB_EndL mode=native pos=1 neg=1 surfaces=2 bytes=0
-ROUGHNESS_BAKE count=31 pixels=22806528 ms=1669 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=31 pixels=22806528 ms=1647 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=3116 applied=3112 duplicate=0 name_skipped=3 wardbox=0 moonshape=1 clamp=68 clamp_worst=4.67x mirrored=444 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0 mirrored_bases=444 mirrored_multimesh=418 mirrored_single=26 mirrored_splits=92 mirrored_cull_front=361 mirrored_cull_disabled=0 mirrored_mesh_bytes=697560 mirrored_mesh_count=8 mirrored_unbaked=0
 MIRROR_RECON bases=444 multimesh=418 single=26 split=92 cull_front=361 cull_disabled=0 baked=8 baked_bytes=697560 unbaked=0 suppressed=28 ok=true
 PASS: [T1-04-C] desktop ssr_enabled on MainMenu=true and Mission/Weather=true
@@ -693,7 +693,7 @@ MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrbanB_Ext_Side_4x8 mod
 MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrban_Ext_EndB_2x4x4 mode=native pos=0 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrbanB_Ext_Corner_4x4x8 mode=native pos=1 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Art/Environment/Civic/Exterior/SM_Civic_CornerB_Wall_Ext_2x8 mode=baked pos=2 neg=2 surfaces=2 bytes=28944
-ROUGHNESS_BAKE count=22 pixels=15728640 ms=1159 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=22 pixels=15728640 ms=1137 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2109 applied=2105 duplicate=0 name_skipped=4 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.00x mirrored=146 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0 mirrored_bases=146 mirrored_multimesh=110 mirrored_single=36 mirrored_splits=67 mirrored_cull_front=24 mirrored_cull_disabled=0 mirrored_mesh_bytes=17881908 mirrored_mesh_count=19 mirrored_unbaked=0
 MIRROR_RECON bases=146 multimesh=110 single=36 split=67 cull_front=24 cull_disabled=0 baked=19 baked_bytes=17881908 unbaked=0 suppressed=3 ok=true
 TAT-2 prep skyline: placed 8/8 expansion pieces (group=prep_skyline)
@@ -887,7 +887,7 @@ MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrbanB_Ext_Side_4x8 mod
 MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrban_Ext_EndB_2x4x4 mode=native pos=0 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrbanB_Ext_Corner_4x4x8 mode=native pos=1 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Art/Environment/Civic/Exterior/SM_Civic_CornerB_Wall_Ext_2x8 mode=baked pos=2 neg=2 surfaces=2 bytes=28944
-ROUGHNESS_BAKE count=22 pixels=15728640 ms=1200 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=22 pixels=15728640 ms=1139 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2109 applied=2105 duplicate=0 name_skipped=4 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.00x mirrored=146 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0 mirrored_bases=146 mirrored_multimesh=110 mirrored_single=36 mirrored_splits=67 mirrored_cull_front=24 mirrored_cull_disabled=0 mirrored_mesh_bytes=17881908 mirrored_mesh_count=19 mirrored_unbaked=0
 MIRROR_RECON bases=146 multimesh=110 single=36 split=67 cull_front=24 cull_disabled=0 baked=19 baked_bytes=17881908 unbaked=0 suppressed=3 ok=true
 TAT-2 prep skyline: placed 8/8 expansion pieces (group=prep_skyline)
@@ -1001,7 +1001,7 @@ MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrbanB_Ext_Side_4x8 mod
 MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrban_Ext_EndB_2x4x4 mode=native pos=0 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrbanB_Ext_Corner_4x4x8 mode=native pos=1 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Art/Environment/Civic/Exterior/SM_Civic_CornerB_Wall_Ext_2x8 mode=baked pos=2 neg=2 surfaces=2 bytes=28944
-ROUGHNESS_BAKE count=22 pixels=15728640 ms=1169 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=22 pixels=15728640 ms=1132 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2109 applied=2105 duplicate=0 name_skipped=4 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.00x mirrored=146 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0 mirrored_bases=146 mirrored_multimesh=110 mirrored_single=36 mirrored_splits=67 mirrored_cull_front=24 mirrored_cull_disabled=0 mirrored_mesh_bytes=17881908 mirrored_mesh_count=19 mirrored_unbaked=0
 MIRROR_RECON bases=146 multimesh=110 single=36 split=67 cull_front=24 cull_disabled=0 baked=19 baked_bytes=17881908 unbaked=0 suppressed=3 ok=true
 TAT-2 prep skyline: placed 8/8 expansion pieces (group=prep_skyline)
@@ -1028,8 +1028,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [3] _build_one_draw_item (res://src/core/level_loader.gd:5230)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7713)
 MIRROR_SPLIT mp=/Game/Art/Environment/Props/Furniture/Tables/SM_DiningTable_2m_End mode=native pos=1 neg=1 surfaces=3 bytes=0
-AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=347
-ROUGHNESS_BAKE count=34 pixels=25690112 ms=1895 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=353
+ROUGHNESS_BAKE count=34 pixels=25690112 ms=1860 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2440 applied=2434 duplicate=5 name_skipped=0 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.38x mirrored=2 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0 mirrored_bases=2 mirrored_multimesh=1 mirrored_single=1 mirrored_splits=2 mirrored_cull_front=0 mirrored_cull_disabled=0 mirrored_mesh_bytes=36000 mirrored_mesh_count=1 mirrored_unbaked=0
 MIRROR_RECON bases=2 multimesh=1 single=1 split=2 cull_front=0 cull_disabled=0 baked=1 baked_bytes=36000 unbaked=0 suppressed=0 ok=true
 TAT-2 Loaded thieves_den: meshes=2434 lights=13
@@ -1170,8 +1170,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [2] _get_mesh_and_shape (res://src/core/level_loader.gd:2050)
          [3] _build_one_draw_item (res://src/core/level_loader.gd:5230)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7713)
-AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=347
-ROUGHNESS_BAKE count=87 pixels=74973184 ms=5641 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=353
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=5419 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
 BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=64953 applied=64682 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=206 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0 mirrored_bases=3297 mirrored_multimesh=3119 mirrored_single=178 mirrored_splits=464 mirrored_cull_front=312 mirrored_cull_disabled=0 mirrored_mesh_bytes=31097388 mirrored_mesh_count=103 mirrored_unbaked=0
@@ -1215,7 +1215,7 @@ PASS: [T1-19-C] Locked safe unlocks & spawns MajorLoot (true, loot 0->1)
 PASS: [T1-19-D] High-security SwingingDoor lockpicking wired (true)
 PASS: [T1-19-E] CT_LockpickDamage 5/10/20/40 across lock levels 1..4 (true)
 PASS: [T1-20-A] ClubLantern guard has warm OmniLight3D & SK_Lantern (true)
-PASS: [T1-20-B] Guard lantern affects LightProbe visibility=0.536 (> 0.10)
+PASS: [T1-20-B] Guard lantern affects LightProbe visibility=0.537 (> 0.10)
 PASS: [T1-20-C] guard.steal_carried_item() yields carried item once (true)
 PASS: [T1-20-D] guard.get_alert_state() returns {state, suspicion, world_pos}
 TAT-2 HUD build: id=9 root_children=29 hp_frame=1 hp_fill=1 objectives=1
@@ -1443,8 +1443,8 @@ WARNING: [level_loader] material flat white: '/Engine/BasicShapes/BasicShapeMate
          [1] _get_overridden_mesh (res://src/core/level_loader.gd:2500)
          [2] _build_one_draw_item (res://src/core/level_loader.gd:5276)
          [3] load_sublevels_async (res://src/core/level_loader.gd:7713)
-AUTHORED_COLLISION meshes=703 hull=698 authored_elements=641 complex=44 no_record=0 prims=380 convex=2739 absent=5 no_collision=13 query_only=5 reduced=35 shapes_per_instance_avg=1.10 elements=3710 load_ms=347
-ROUGHNESS_BAKE count=87 pixels=72220672 ms=5368 bytes=96294196 hits=39 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=703 hull=698 authored_elements=641 complex=44 no_record=0 prims=380 convex=2739 absent=5 no_collision=13 query_only=5 reduced=35 shapes_per_instance_avg=1.10 elements=3710 load_ms=353
+ROUGHNESS_BAKE count=87 pixels=72220672 ms=5206 bytes=96294196 hits=39 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=196 axis=col2 length_slot=2 clamp=none max_scale=236.9539 max_length_m=24.169
 BEAM_AXIS cards=196 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=24819 applied=24180 duplicate=547 name_skipped=6 wardbox=39 moonshape=47 clamp=287 clamp_worst=500.00x mirrored=780 origin_markers_skipped=0 skipped_merged=0 from_graph=4 graph_missing=0 mirrored_bases=779 mirrored_multimesh=746 mirrored_single=33 mirrored_splits=86 mirrored_cull_front=177 mirrored_cull_disabled=0 mirrored_mesh_bytes=1501416 mirrored_mesh_count=11 mirrored_unbaked=0
@@ -1641,7 +1641,7 @@ MIRROR_SPLIT mp=/Game/Art/Gameplay/ElectricPowerSource/SM_PowerSupplyBodyB mode=
 MIRROR_SPLIT mp=/Game/Art/Gameplay/ElectricPowerSource/SM_PowerSupplyBodyB mode=baked pos=0 neg=3 surfaces=3 bytes=180732
 MIRROR_SPLIT mp=/Game/Art/Gameplay/ElectricPowerSource/SM_PowerSupplyBodyB mode=native pos=0 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_RoofShedB_EndL mode=native pos=1 neg=1 surfaces=2 bytes=0
-ROUGHNESS_BAKE count=31 pixels=22806528 ms=1711 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=31 pixels=22806528 ms=1640 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=3116 applied=3112 duplicate=0 name_skipped=3 wardbox=0 moonshape=1 clamp=68 clamp_worst=4.67x mirrored=444 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0 mirrored_bases=444 mirrored_multimesh=418 mirrored_single=26 mirrored_splits=92 mirrored_cull_front=361 mirrored_cull_disabled=0 mirrored_mesh_bytes=697560 mirrored_mesh_count=8 mirrored_unbaked=0
 MIRROR_RECON bases=444 multimesh=418 single=26 split=92 cull_front=361 cull_disabled=0 baked=8 baked_bytes=697560 unbaked=0 suppressed=28 ok=true
 PASS: [T2-03-B] Startscreen DirectionalLight energy=0.4500 == loader authored 0.4500 (>=0.01 floor)
@@ -1753,7 +1753,7 @@ MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrbanB_Ext_Side_4x8 mod
 MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrban_Ext_EndB_2x4x4 mode=native pos=0 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrbanB_Ext_Corner_4x4x8 mode=native pos=1 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Art/Environment/Civic/Exterior/SM_Civic_CornerB_Wall_Ext_2x8 mode=baked pos=2 neg=2 surfaces=2 bytes=28944
-ROUGHNESS_BAKE count=22 pixels=15728640 ms=1187 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=22 pixels=15728640 ms=1140 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2109 applied=2105 duplicate=0 name_skipped=4 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.00x mirrored=146 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0 mirrored_bases=146 mirrored_multimesh=110 mirrored_single=36 mirrored_splits=67 mirrored_cull_front=24 mirrored_cull_disabled=0 mirrored_mesh_bytes=17881908 mirrored_mesh_count=19 mirrored_unbaked=0
 MIRROR_RECON bases=146 multimesh=110 single=36 split=67 cull_front=24 cull_disabled=0 baked=19 baked_bytes=17881908 unbaked=0 suppressed=3 ok=true
 TAT-2 prep skyline: placed 8/8 expansion pieces (group=prep_skyline)
@@ -1999,7 +1999,7 @@ MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrbanB_Ext_Side_4x8 mod
 MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrban_Ext_EndB_2x4x4 mode=native pos=0 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrbanB_Ext_Corner_4x4x8 mode=native pos=1 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Art/Environment/Civic/Exterior/SM_Civic_CornerB_Wall_Ext_2x8 mode=baked pos=2 neg=2 surfaces=2 bytes=28944
-ROUGHNESS_BAKE count=22 pixels=15728640 ms=1193 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=22 pixels=15728640 ms=902 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2109 applied=2105 duplicate=0 name_skipped=4 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.00x mirrored=146 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0 mirrored_bases=146 mirrored_multimesh=110 mirrored_single=36 mirrored_splits=67 mirrored_cull_front=24 mirrored_cull_disabled=0 mirrored_mesh_bytes=17881908 mirrored_mesh_count=19 mirrored_unbaked=0
 MIRROR_RECON bases=146 multimesh=110 single=36 split=67 cull_front=24 cull_disabled=0 baked=19 baked_bytes=17881908 unbaked=0 suppressed=3 ok=true
 TAT-2 prep skyline: placed 8/8 expansion pieces (group=prep_skyline)
@@ -2109,7 +2109,7 @@ MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrbanB_Ext_Side_4x8 mod
 MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrban_Ext_EndB_2x4x4 mode=native pos=0 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrbanB_Ext_Corner_4x4x8 mode=native pos=1 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Art/Environment/Civic/Exterior/SM_Civic_CornerB_Wall_Ext_2x8 mode=baked pos=2 neg=2 surfaces=2 bytes=28944
-ROUGHNESS_BAKE count=22 pixels=15728640 ms=1223 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=22 pixels=15728640 ms=1142 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2109 applied=2105 duplicate=0 name_skipped=4 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.00x mirrored=146 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0 mirrored_bases=146 mirrored_multimesh=110 mirrored_single=36 mirrored_splits=67 mirrored_cull_front=24 mirrored_cull_disabled=0 mirrored_mesh_bytes=17881908 mirrored_mesh_count=19 mirrored_unbaked=0
 MIRROR_RECON bases=146 multimesh=110 single=36 split=67 cull_front=24 cull_disabled=0 baked=19 baked_bytes=17881908 unbaked=0 suppressed=3 ok=true
 TAT-2 prep skyline: placed 8/8 expansion pieces (group=prep_skyline)
@@ -2145,8 +2145,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [3] _build_one_draw_item (res://src/core/level_loader.gd:5230)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7713)
 MIRROR_SPLIT mp=/Game/Art/Environment/Props/Furniture/Tables/SM_DiningTable_2m_End mode=native pos=1 neg=1 surfaces=3 bytes=0
-AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=347
-ROUGHNESS_BAKE count=34 pixels=25690112 ms=1935 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=353
+ROUGHNESS_BAKE count=34 pixels=25690112 ms=1859 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2440 applied=2434 duplicate=5 name_skipped=0 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.38x mirrored=2 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0 mirrored_bases=2 mirrored_multimesh=1 mirrored_single=1 mirrored_splits=2 mirrored_cull_front=0 mirrored_cull_disabled=0 mirrored_mesh_bytes=36000 mirrored_mesh_count=1 mirrored_unbaked=0
 MIRROR_RECON bases=2 multimesh=1 single=1 split=2 cull_front=0 cull_disabled=0 baked=1 baked_bytes=36000 unbaked=0 suppressed=0 ok=true
 TAT-2 Loaded thieves_den: meshes=2434 lights=13
@@ -2156,7 +2156,7 @@ TAT-2 player spawn: source=authored pos=(5.6692, 42.1592, 270.6863) yaw=3.055295
 TAT-2 swinging doors: 1 locked=0
 TAT-2 Den window staging: source=authored-west-opening anchor=(-6.06, 43.05, 271.4) parsed_windows=1 facing=(-0.848048, 0.0, 0.529919)
 TAT-2 Den KF10 desk spot: energy=2.0 pos=(3.6446, 41.803, 267.8289) range=6.48999977111816 cone=80.0 aimed_at=(2.769, 41.1737, 268.0207)
-TAT-2 Den parchment emission: node=@MeshInstance3D@139188 energy=0.2
+TAT-2 Den parchment emission: node=@MeshInstance3D@139189 energy=0.2
 WispCap: wisp light energy=0.3 cap=0.65
 TAT-2 den spawn hub-facing: misalign_before_deg=127.6 rotated_to_face=true table=(2.769, 41.1137, 268.0207)
 TAT-2 spawners: throwable=0 ammo=0 health=0 civilian=0
@@ -2209,7 +2209,7 @@ ERROR: Parameter "material" is null.
    at: material_get_instance_shader_parameters (servers/rendering/dummy/storage/material_storage.cpp:264)
 PASS: [T3-02] Zipwire aim validity + crank progress synced to HUD ring (true)
 TAT-2 HUD build: id=20 root_children=29 hp_frame=1 hp_fill=1 objectives=1
-[T3-03] smoke_clouds=1 blocked=true noise_tags=["smoke", "smoke"] guard_state=SEARCH hud_wave_energy=0.000 min=(9498.282, 498.0633, 9470.726) max=(9503.282, 502.0633, 9475.726) guard=(9500.0, 501.5009, 9470.043) player=(9500.672, 501.3009, 9500.011)
+[T3-03] smoke_clouds=1 blocked=true noise_tags=["smoke", "smoke"] guard_state=SEARCH hud_wave_energy=0.000 min=(9498.283, 498.0633, 9471.01) max=(9503.283, 502.0633, 9476.01) guard=(9500.0, 501.5009, 9470.043) player=(9500.672, 501.3009, 9500.011)
 PASS: [T3-03] Smoke Bomb -> NoiseBus -> guard LOS block composition (true)
 PASS: [T3-04] Lockpicking drains disguise 5/s + 1/s and clears on finish (true)
 PASS: [T3-05] Den Map Table -> MissionPrepUI -> Loading -> Set Objectives contract (true)
@@ -2381,7 +2381,7 @@ MIRROR_SPLIT mp=/Game/Art/Gameplay/ElectricPowerSource/SM_PowerSupplyBodyB mode=
 MIRROR_SPLIT mp=/Game/Art/Gameplay/ElectricPowerSource/SM_PowerSupplyBodyB mode=baked pos=0 neg=3 surfaces=3 bytes=180732
 MIRROR_SPLIT mp=/Game/Art/Gameplay/ElectricPowerSource/SM_PowerSupplyBodyB mode=native pos=0 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_RoofShedB_EndL mode=native pos=1 neg=1 surfaces=2 bytes=0
-ROUGHNESS_BAKE count=31 pixels=22806528 ms=1692 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=31 pixels=22806528 ms=1504 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=3116 applied=3112 duplicate=0 name_skipped=3 wardbox=0 moonshape=1 clamp=68 clamp_worst=4.67x mirrored=444 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0 mirrored_bases=444 mirrored_multimesh=418 mirrored_single=26 mirrored_splits=92 mirrored_cull_front=361 mirrored_cull_disabled=0 mirrored_mesh_bytes=697560 mirrored_mesh_count=8 mirrored_unbaked=0
 MIRROR_RECON bases=444 multimesh=418 single=26 split=92 cull_front=361 cull_disabled=0 baked=8 baked_bytes=697560 unbaked=0 suppressed=28 ok=true
 PASS: [T3-09] Startscreen sky + volumetric mist + neon HDR + SSR/SSIL coexist cleanly (env=true)
@@ -2498,8 +2498,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [2] _get_mesh_and_shape (res://src/core/level_loader.gd:2050)
          [3] _build_one_draw_item (res://src/core/level_loader.gd:5230)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7713)
-AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=347
-ROUGHNESS_BAKE count=87 pixels=74973184 ms=5655 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=353
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=5541 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
 BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=64953 applied=64682 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=206 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0 mirrored_bases=3297 mirrored_multimesh=3119 mirrored_single=178 mirrored_splits=464 mirrored_cull_front=312 mirrored_cull_disabled=0 mirrored_mesh_bytes=31097388 mirrored_mesh_count=103 mirrored_unbaked=0
@@ -2507,10 +2507,10 @@ MIRROR_RECON bases=3297 multimesh=3119 single=178 split=464 cull_front=312 cull_
 MATERIAL_EMISSIVE invented_white=1 names=/Game/Art/Environment/Lights/Candles/MI_FlameCandleOrangeB
 PERF_CENSUS meshes=6709 instances=65129 chunk_nodes=6621 plain=2923 multimesh=3786 surface_draws=12090 lights=170 shadow_lights=7 occluders=768 collision_bodies=243 collision_shapes=31049 periph_nodes=3350 periph_instances=13446 periph_surface_draws=6524 periph_plain=1631 periph_multimesh=1719 periph_range=0 merge_mode=off merge_candidates=0 merge_nodes=0 merge_surfaces_before=0 merge_surfaces_after=0 light_budget=160 hero_shadows=6 source_sublevels={ "Guildhall_Landscape": 677, "Building_Guildhall_POI": 9847, "Guildhall_Geometry": 567, "Guildhall_Vault_CeremonialChambers": 908, "Guildhall_PeripheryA": 12378, "Building_Guildhall_POI_3rdFloor": 3624, "Guildhall_Gameplay": 2690, "Guildhall_P": 80, "Guildhall_LightingNoGameplay": 164, "Guildhall_Loot": 175, "Guildhall_SkyboxGeo": 33547 }
 TAT-2 Loaded guildhall: meshes=64682 lights=160
-TAT-2 KF16 car lenses: node=@MeshInstance3D@182185 dist=0.0 glass_surface=1 emission=1.0,0.6186,0.2552 energy=2.0
+TAT-2 KF16 car lenses: node=@MeshInstance3D@182186 dist=0.0 glass_surface=1 emission=1.0,0.6186,0.2552 energy=2.0
 TAT-2 KF16 street car: root=(19.0, 18.5304, 66.3382) headlights=2 lens=true prompt=INTERACT
 TAT-2 KF17 clocktower: placed GuildhallSkylineClocktower mat=/Game/Art/Environment/Skybox/Buildings/ML/MI_DistantBuidingA
-TAT-2 KF16 sign letters: node=@MeshInstance3D@182561 surface=1 emission=(1.0, 0.62, 0.2, 1.0) energy=0.10000000149012 albedo=(1.0, 0.6848, 0.2726, 1.0)
+TAT-2 KF16 sign letters: node=@MeshInstance3D@182562 surface=1 emission=(1.0, 0.62, 0.2, 1.0) energy=0.10000000149012 albedo=(1.0, 0.6848, 0.2726, 1.0)
 P1_FOYER_DRESSING parts=bulbs,node,plaques,plate bulb_items=11 cyan_node_items=0 cyan_node_created=1 plaque_labels=2 floor_plate=1 floor_plate_approx=1
 TAT-2 KF23 Macleod sign: nodes=3 emission=(1.0, 0.361, 0.078, 1.0) energy=4.0 source=/Game/Art/Effects/HotWire_Ride/M_Crystal_Glow
 TAT-2 Perf: chunks=6621 collision_bodies=243 collision_shapes=31049 occluders=768
@@ -2557,8 +2557,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [3] _build_one_draw_item (res://src/core/level_loader.gd:5230)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7713)
 MIRROR_SPLIT mp=/Game/Art/Environment/Props/Furniture/Tables/SM_DiningTable_2m_End mode=native pos=1 neg=1 surfaces=3 bytes=0
-AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=347
-ROUGHNESS_BAKE count=34 pixels=25690112 ms=1932 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=353
+ROUGHNESS_BAKE count=34 pixels=25690112 ms=1738 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2440 applied=2434 duplicate=5 name_skipped=0 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.38x mirrored=2 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0 mirrored_bases=2 mirrored_multimesh=1 mirrored_single=1 mirrored_splits=2 mirrored_cull_front=0 mirrored_cull_disabled=0 mirrored_mesh_bytes=36000 mirrored_mesh_count=1 mirrored_unbaked=0
 MIRROR_RECON bases=2 multimesh=1 single=1 split=2 cull_front=0 cull_disabled=0 baked=1 baked_bytes=36000 unbaked=0 suppressed=0 ok=true
 TAT-2 Loaded thieves_den: meshes=2434 lights=13
@@ -2568,7 +2568,7 @@ TAT-2 player spawn: source=authored pos=(5.6692, 42.1592, 270.6863) yaw=3.055295
 TAT-2 swinging doors: 1 locked=0
 TAT-2 Den window staging: source=authored-west-opening anchor=(-6.06, 43.05, 271.4) parsed_windows=1 facing=(-0.848048, 0.0, 0.529919)
 TAT-2 Den KF10 desk spot: energy=2.0 pos=(3.6446, 41.803, 267.8289) range=6.48999977111816 cone=80.0 aimed_at=(2.769, 41.1737, 268.0207)
-TAT-2 Den parchment emission: node=@MeshInstance3D@186867 energy=0.2
+TAT-2 Den parchment emission: node=@MeshInstance3D@186868 energy=0.2
 WispCap: wisp light energy=0.3 cap=0.65
 TAT-2 den spawn hub-facing: misalign_before_deg=127.6 rotated_to_face=true table=(2.769, 41.1137, 268.0207)
 TAT-2 spawners: throwable=0 ammo=0 health=0 civilian=0
@@ -2797,8 +2797,8 @@ WARNING: [level_loader] material flat white: '/Engine/BasicShapes/BasicShapeMate
          [1] _get_overridden_mesh (res://src/core/level_loader.gd:2500)
          [2] _build_one_draw_item (res://src/core/level_loader.gd:5276)
          [3] load_sublevels_async (res://src/core/level_loader.gd:7713)
-AUTHORED_COLLISION meshes=703 hull=698 authored_elements=641 complex=44 no_record=0 prims=380 convex=2739 absent=5 no_collision=13 query_only=5 reduced=35 shapes_per_instance_avg=1.10 elements=3710 load_ms=347
-ROUGHNESS_BAKE count=87 pixels=72220672 ms=5226 bytes=96294196 hits=39 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=703 hull=698 authored_elements=641 complex=44 no_record=0 prims=380 convex=2739 absent=5 no_collision=13 query_only=5 reduced=35 shapes_per_instance_avg=1.10 elements=3710 load_ms=353
+ROUGHNESS_BAKE count=87 pixels=72220672 ms=5339 bytes=96294196 hits=39 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=196 axis=col2 length_slot=2 clamp=none max_scale=236.9539 max_length_m=24.169
 BEAM_AXIS cards=196 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=24819 applied=24180 duplicate=547 name_skipped=6 wardbox=39 moonshape=47 clamp=287 clamp_worst=500.00x mirrored=780 origin_markers_skipped=0 skipped_merged=0 from_graph=4 graph_missing=0 mirrored_bases=779 mirrored_multimesh=746 mirrored_single=33 mirrored_splits=86 mirrored_cull_front=177 mirrored_cull_disabled=0 mirrored_mesh_bytes=1501416 mirrored_mesh_count=11 mirrored_unbaked=0
@@ -2985,7 +2985,7 @@ MIRROR_SPLIT mp=/Game/Art/Gameplay/ElectricPowerSource/SM_PowerSupplyBodyB mode=
 MIRROR_SPLIT mp=/Game/Art/Gameplay/ElectricPowerSource/SM_PowerSupplyBodyB mode=baked pos=0 neg=3 surfaces=3 bytes=180732
 MIRROR_SPLIT mp=/Game/Art/Gameplay/ElectricPowerSource/SM_PowerSupplyBodyB mode=native pos=0 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_RoofShedB_EndL mode=native pos=1 neg=1 surfaces=2 bytes=0
-ROUGHNESS_BAKE count=31 pixels=22806528 ms=1703 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=31 pixels=22806528 ms=1646 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=3116 applied=3112 duplicate=0 name_skipped=3 wardbox=0 moonshape=1 clamp=68 clamp_worst=4.67x mirrored=444 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0 mirrored_bases=444 mirrored_multimesh=418 mirrored_single=26 mirrored_splits=92 mirrored_cull_front=361 mirrored_cull_disabled=0 mirrored_mesh_bytes=697560 mirrored_mesh_count=8 mirrored_unbaked=0
 MIRROR_RECON bases=444 multimesh=418 single=26 split=92 cull_front=361 cull_disabled=0 baked=8 baked_bytes=697560 unbaked=0 suppressed=28 ok=true
 TAT-2 UI settings: theme=res://src/ui/art_nouveau_theme.gd strings=res://data/generated/tables/StringTables/ST_Settings.json
@@ -3012,8 +3012,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [3] _build_one_draw_item (res://src/core/level_loader.gd:5230)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7713)
 MIRROR_SPLIT mp=/Game/Art/Environment/Props/Furniture/Tables/SM_DiningTable_2m_End mode=native pos=1 neg=1 surfaces=3 bytes=0
-AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=347
-ROUGHNESS_BAKE count=34 pixels=25690112 ms=2047 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=353
+ROUGHNESS_BAKE count=34 pixels=25690112 ms=1919 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2440 applied=2434 duplicate=5 name_skipped=0 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.38x mirrored=2 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0 mirrored_bases=2 mirrored_multimesh=1 mirrored_single=1 mirrored_splits=2 mirrored_cull_front=0 mirrored_cull_disabled=0 mirrored_mesh_bytes=36000 mirrored_mesh_count=1 mirrored_unbaked=0
 MIRROR_RECON bases=2 multimesh=1 single=1 split=2 cull_front=0 cull_disabled=0 baked=1 baked_bytes=36000 unbaked=0 suppressed=0 ok=true
 TAT-2 Loaded thieves_den: meshes=2434 lights=13
@@ -3023,7 +3023,7 @@ TAT-2 player spawn: source=authored pos=(5.6692, 42.1592, 270.6863) yaw=3.055295
 TAT-2 swinging doors: 1 locked=0
 TAT-2 Den window staging: source=authored-west-opening anchor=(-6.06, 43.05, 271.4) parsed_windows=1 facing=(-0.848048, 0.0, 0.529919)
 TAT-2 Den KF10 desk spot: energy=2.0 pos=(3.6446, 41.803, 267.8289) range=6.48999977111816 cone=80.0 aimed_at=(2.769, 41.1737, 268.0207)
-TAT-2 Den parchment emission: node=@MeshInstance3D@224318 energy=0.2
+TAT-2 Den parchment emission: node=@MeshInstance3D@224319 energy=0.2
 WispCap: wisp light energy=0.3 cap=0.65
 TAT-2 den spawn hub-facing: misalign_before_deg=127.6 rotated_to_face=true table=(2.769, 41.1137, 268.0207)
 TAT-2 spawners: throwable=0 ammo=0 health=0 civilian=0
@@ -3140,7 +3140,7 @@ MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrbanB_Ext_Side_4x8 mod
 MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrban_Ext_EndB_2x4x4 mode=native pos=0 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrbanB_Ext_Corner_4x4x8 mode=native pos=1 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Art/Environment/Civic/Exterior/SM_Civic_CornerB_Wall_Ext_2x8 mode=baked pos=2 neg=2 surfaces=2 bytes=28944
-ROUGHNESS_BAKE count=22 pixels=15728640 ms=1162 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=22 pixels=15728640 ms=1203 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2109 applied=2105 duplicate=0 name_skipped=4 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.00x mirrored=146 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0 mirrored_bases=146 mirrored_multimesh=110 mirrored_single=36 mirrored_splits=67 mirrored_cull_front=24 mirrored_cull_disabled=0 mirrored_mesh_bytes=17881908 mirrored_mesh_count=19 mirrored_unbaked=0
 MIRROR_RECON bases=146 multimesh=110 single=36 split=67 cull_front=24 cull_disabled=0 baked=19 baked_bytes=17881908 unbaked=0 suppressed=3 ok=true
 TAT-2 prep skyline: placed 8/8 expansion pieces (group=prep_skyline)
@@ -3257,8 +3257,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [2] _get_mesh_and_shape (res://src/core/level_loader.gd:2050)
          [3] _build_one_draw_item (res://src/core/level_loader.gd:5230)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7713)
-AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=347
-ROUGHNESS_BAKE count=87 pixels=74973184 ms=5490 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=353
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=5430 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
 BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=64953 applied=64682 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=206 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0 mirrored_bases=3297 mirrored_multimesh=3119 mirrored_single=178 mirrored_splits=464 mirrored_cull_front=312 mirrored_cull_disabled=0 mirrored_mesh_bytes=31097388 mirrored_mesh_count=103 mirrored_unbaked=0
@@ -3266,10 +3266,10 @@ MIRROR_RECON bases=3297 multimesh=3119 single=178 split=464 cull_front=312 cull_
 MATERIAL_EMISSIVE invented_white=1 names=/Game/Art/Environment/Lights/Candles/MI_FlameCandleOrangeB
 PERF_CENSUS meshes=6709 instances=65129 chunk_nodes=6621 plain=2923 multimesh=3786 surface_draws=12090 lights=170 shadow_lights=7 occluders=768 collision_bodies=243 collision_shapes=31049 periph_nodes=3350 periph_instances=13446 periph_surface_draws=6524 periph_plain=1631 periph_multimesh=1719 periph_range=0 merge_mode=off merge_candidates=0 merge_nodes=0 merge_surfaces_before=0 merge_surfaces_after=0 light_budget=160 hero_shadows=6 source_sublevels={ "Guildhall_Landscape": 677, "Building_Guildhall_POI": 9847, "Guildhall_Geometry": 567, "Guildhall_Vault_CeremonialChambers": 908, "Guildhall_PeripheryA": 12378, "Building_Guildhall_POI_3rdFloor": 3624, "Guildhall_Gameplay": 2690, "Guildhall_P": 80, "Guildhall_LightingNoGameplay": 164, "Guildhall_Loot": 175, "Guildhall_SkyboxGeo": 33547 }
 TAT-2 Loaded guildhall: meshes=64682 lights=160
-TAT-2 KF16 car lenses: node=@MeshInstance3D@267522 dist=0.0 glass_surface=1 emission=1.0,0.6186,0.2552 energy=2.0
+TAT-2 KF16 car lenses: node=@MeshInstance3D@267523 dist=0.0 glass_surface=1 emission=1.0,0.6186,0.2552 energy=2.0
 TAT-2 KF16 street car: root=(19.0, 18.5304, 66.3382) headlights=2 lens=true prompt=INTERACT
 TAT-2 KF17 clocktower: placed GuildhallSkylineClocktower mat=/Game/Art/Environment/Skybox/Buildings/ML/MI_DistantBuidingA
-TAT-2 KF16 sign letters: node=@MeshInstance3D@267898 surface=1 emission=(1.0, 0.62, 0.2, 1.0) energy=0.10000000149012 albedo=(1.0, 0.6848, 0.2726, 1.0)
+TAT-2 KF16 sign letters: node=@MeshInstance3D@267899 surface=1 emission=(1.0, 0.62, 0.2, 1.0) energy=0.10000000149012 albedo=(1.0, 0.6848, 0.2726, 1.0)
 P1_FOYER_DRESSING parts=bulbs,node,plaques,plate bulb_items=11 cyan_node_items=0 cyan_node_created=1 plaque_labels=2 floor_plate=1 floor_plate_approx=1
 TAT-2 KF23 Macleod sign: nodes=3 emission=(1.0, 0.361, 0.078, 1.0) energy=4.0 source=/Game/Art/Effects/HotWire_Ride/M_Crystal_Glow
 TAT-2 Perf: chunks=6621 collision_bodies=243 collision_shapes=31049 occluders=768
@@ -3402,8 +3402,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [2] _get_mesh_and_shape (res://src/core/level_loader.gd:2050)
          [3] _build_one_draw_item (res://src/core/level_loader.gd:5230)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7713)
-AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=347
-ROUGHNESS_BAKE count=87 pixels=74973184 ms=5574 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=353
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=5424 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
 BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=64953 applied=64682 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=206 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0 mirrored_bases=3297 mirrored_multimesh=3119 mirrored_single=178 mirrored_splits=464 mirrored_cull_front=312 mirrored_cull_disabled=0 mirrored_mesh_bytes=31097388 mirrored_mesh_count=103 mirrored_unbaked=0
@@ -3411,10 +3411,10 @@ MIRROR_RECON bases=3297 multimesh=3119 single=178 split=464 cull_front=312 cull_
 MATERIAL_EMISSIVE invented_white=1 names=/Game/Art/Environment/Lights/Candles/MI_FlameCandleOrangeB
 PERF_CENSUS meshes=6709 instances=65129 chunk_nodes=6621 plain=2923 multimesh=3786 surface_draws=12090 lights=170 shadow_lights=7 occluders=768 collision_bodies=243 collision_shapes=31049 periph_nodes=3350 periph_instances=13446 periph_surface_draws=6524 periph_plain=1631 periph_multimesh=1719 periph_range=0 merge_mode=off merge_candidates=0 merge_nodes=0 merge_surfaces_before=0 merge_surfaces_after=0 light_budget=160 hero_shadows=6 source_sublevels={ "Guildhall_Landscape": 677, "Building_Guildhall_POI": 9847, "Guildhall_Geometry": 567, "Guildhall_Vault_CeremonialChambers": 908, "Guildhall_PeripheryA": 12378, "Building_Guildhall_POI_3rdFloor": 3624, "Guildhall_Gameplay": 2690, "Guildhall_P": 80, "Guildhall_LightingNoGameplay": 164, "Guildhall_Loot": 175, "Guildhall_SkyboxGeo": 33547 }
 TAT-2 Loaded guildhall: meshes=64682 lights=160
-TAT-2 KF16 car lenses: node=@MeshInstance3D@308725 dist=0.0 glass_surface=1 emission=1.0,0.6186,0.2552 energy=2.0
+TAT-2 KF16 car lenses: node=@MeshInstance3D@308726 dist=0.0 glass_surface=1 emission=1.0,0.6186,0.2552 energy=2.0
 TAT-2 KF16 street car: root=(19.0, 18.5304, 66.3382) headlights=2 lens=true prompt=INTERACT
 TAT-2 KF17 clocktower: placed GuildhallSkylineClocktower mat=/Game/Art/Environment/Skybox/Buildings/ML/MI_DistantBuidingA
-TAT-2 KF16 sign letters: node=@MeshInstance3D@309101 surface=1 emission=(1.0, 0.62, 0.2, 1.0) energy=0.10000000149012 albedo=(1.0, 0.6848, 0.2726, 1.0)
+TAT-2 KF16 sign letters: node=@MeshInstance3D@309102 surface=1 emission=(1.0, 0.62, 0.2, 1.0) energy=0.10000000149012 albedo=(1.0, 0.6848, 0.2726, 1.0)
 P1_FOYER_DRESSING parts=bulbs,node,plaques,plate bulb_items=11 cyan_node_items=0 cyan_node_created=1 plaque_labels=2 floor_plate=1 floor_plate_approx=1
 TAT-2 KF23 Macleod sign: nodes=3 emission=(1.0, 0.361, 0.078, 1.0) energy=4.0 source=/Game/Art/Effects/HotWire_Ride/M_Crystal_Glow
 TAT-2 Perf: chunks=6621 collision_bodies=243 collision_shapes=31049 occluders=768
@@ -3658,8 +3658,8 @@ WARNING: [level_loader] material flat white: '/Engine/BasicShapes/BasicShapeMate
          [1] _get_overridden_mesh (res://src/core/level_loader.gd:2500)
          [2] _build_one_draw_item (res://src/core/level_loader.gd:5276)
          [3] load_sublevels_async (res://src/core/level_loader.gd:7713)
-AUTHORED_COLLISION meshes=703 hull=698 authored_elements=641 complex=44 no_record=0 prims=380 convex=2739 absent=5 no_collision=13 query_only=5 reduced=35 shapes_per_instance_avg=1.10 elements=3710 load_ms=347
-ROUGHNESS_BAKE count=87 pixels=72220672 ms=5604 bytes=96294196 hits=39 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=703 hull=698 authored_elements=641 complex=44 no_record=0 prims=380 convex=2739 absent=5 no_collision=13 query_only=5 reduced=35 shapes_per_instance_avg=1.10 elements=3710 load_ms=353
+ROUGHNESS_BAKE count=87 pixels=72220672 ms=5238 bytes=96294196 hits=39 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=196 axis=col2 length_slot=2 clamp=none max_scale=236.9539 max_length_m=24.169
 BEAM_AXIS cards=196 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=24819 applied=24180 duplicate=547 name_skipped=6 wardbox=39 moonshape=47 clamp=287 clamp_worst=500.00x mirrored=780 origin_markers_skipped=0 skipped_merged=0 from_graph=4 graph_missing=0 mirrored_bases=779 mirrored_multimesh=746 mirrored_single=33 mirrored_splits=86 mirrored_cull_front=177 mirrored_cull_disabled=0 mirrored_mesh_bytes=1501416 mirrored_mesh_count=11 mirrored_unbaked=0
@@ -3796,8 +3796,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [2] _get_mesh_and_shape (res://src/core/level_loader.gd:2050)
          [3] _build_one_draw_item (res://src/core/level_loader.gd:5230)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7713)
-AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=347
-ROUGHNESS_BAKE count=87 pixels=74973184 ms=5608 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=353
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=5548 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
 BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=64953 applied=64682 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=206 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0 mirrored_bases=3297 mirrored_multimesh=3119 mirrored_single=178 mirrored_splits=464 mirrored_cull_front=312 mirrored_cull_disabled=0 mirrored_mesh_bytes=31097388 mirrored_mesh_count=103 mirrored_unbaked=0
@@ -3805,10 +3805,10 @@ MIRROR_RECON bases=3297 multimesh=3119 single=178 split=464 cull_front=312 cull_
 MATERIAL_EMISSIVE invented_white=1 names=/Game/Art/Environment/Lights/Candles/MI_FlameCandleOrangeB
 PERF_CENSUS meshes=6709 instances=65129 chunk_nodes=6621 plain=2923 multimesh=3786 surface_draws=12090 lights=170 shadow_lights=7 occluders=768 collision_bodies=243 collision_shapes=31049 periph_nodes=3350 periph_instances=13446 periph_surface_draws=6524 periph_plain=1631 periph_multimesh=1719 periph_range=0 merge_mode=off merge_candidates=0 merge_nodes=0 merge_surfaces_before=0 merge_surfaces_after=0 light_budget=160 hero_shadows=6 source_sublevels={ "Guildhall_Landscape": 677, "Building_Guildhall_POI": 9847, "Guildhall_Geometry": 567, "Guildhall_Vault_CeremonialChambers": 908, "Guildhall_PeripheryA": 12378, "Building_Guildhall_POI_3rdFloor": 3624, "Guildhall_Gameplay": 2690, "Guildhall_P": 80, "Guildhall_LightingNoGameplay": 164, "Guildhall_Loot": 175, "Guildhall_SkyboxGeo": 33547 }
 TAT-2 Loaded guildhall: meshes=64682 lights=160
-TAT-2 KF16 car lenses: node=@MeshInstance3D@381875 dist=0.0 glass_surface=1 emission=1.0,0.6186,0.2552 energy=2.0
+TAT-2 KF16 car lenses: node=@MeshInstance3D@381876 dist=0.0 glass_surface=1 emission=1.0,0.6186,0.2552 energy=2.0
 TAT-2 KF16 street car: root=(19.0, 18.5304, 66.3382) headlights=2 lens=true prompt=INTERACT
 TAT-2 KF17 clocktower: placed GuildhallSkylineClocktower mat=/Game/Art/Environment/Skybox/Buildings/ML/MI_DistantBuidingA
-TAT-2 KF16 sign letters: node=@MeshInstance3D@382251 surface=1 emission=(1.0, 0.62, 0.2, 1.0) energy=0.10000000149012 albedo=(1.0, 0.6848, 0.2726, 1.0)
+TAT-2 KF16 sign letters: node=@MeshInstance3D@382252 surface=1 emission=(1.0, 0.62, 0.2, 1.0) energy=0.10000000149012 albedo=(1.0, 0.6848, 0.2726, 1.0)
 P1_FOYER_DRESSING parts=bulbs,node,plaques,plate bulb_items=11 cyan_node_items=0 cyan_node_created=1 plaque_labels=2 floor_plate=1 floor_plate_approx=1
 TAT-2 KF23 Macleod sign: nodes=3 emission=(1.0, 0.361, 0.078, 1.0) energy=4.0 source=/Game/Art/Effects/HotWire_Ride/M_Crystal_Glow
 TAT-2 Perf: chunks=6621 collision_bodies=243 collision_shapes=31049 occluders=768
@@ -3941,8 +3941,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [2] _get_mesh_and_shape (res://src/core/level_loader.gd:2050)
          [3] _build_one_draw_item (res://src/core/level_loader.gd:5230)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7713)
-AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=347
-ROUGHNESS_BAKE count=87 pixels=74973184 ms=5590 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=353
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=5445 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
 BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=64953 applied=64682 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=206 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0 mirrored_bases=3297 mirrored_multimesh=3119 mirrored_single=178 mirrored_splits=464 mirrored_cull_front=312 mirrored_cull_disabled=0 mirrored_mesh_bytes=31097388 mirrored_mesh_count=103 mirrored_unbaked=0
@@ -3950,10 +3950,10 @@ MIRROR_RECON bases=3297 multimesh=3119 single=178 split=464 cull_front=312 cull_
 MATERIAL_EMISSIVE invented_white=1 names=/Game/Art/Environment/Lights/Candles/MI_FlameCandleOrangeB
 PERF_CENSUS meshes=6709 instances=65129 chunk_nodes=6621 plain=2923 multimesh=3786 surface_draws=12090 lights=170 shadow_lights=7 occluders=768 collision_bodies=243 collision_shapes=31049 periph_nodes=3350 periph_instances=13446 periph_surface_draws=6524 periph_plain=1631 periph_multimesh=1719 periph_range=0 merge_mode=off merge_candidates=0 merge_nodes=0 merge_surfaces_before=0 merge_surfaces_after=0 light_budget=160 hero_shadows=6 source_sublevels={ "Guildhall_Landscape": 677, "Building_Guildhall_POI": 9847, "Guildhall_Geometry": 567, "Guildhall_Vault_CeremonialChambers": 908, "Guildhall_PeripheryA": 12378, "Building_Guildhall_POI_3rdFloor": 3624, "Guildhall_Gameplay": 2690, "Guildhall_P": 80, "Guildhall_LightingNoGameplay": 164, "Guildhall_Loot": 175, "Guildhall_SkyboxGeo": 33547 }
 TAT-2 Loaded guildhall: meshes=64682 lights=160
-TAT-2 KF16 car lenses: node=@MeshInstance3D@423048 dist=0.0 glass_surface=1 emission=1.0,0.6186,0.2552 energy=2.0
+TAT-2 KF16 car lenses: node=@MeshInstance3D@423049 dist=0.0 glass_surface=1 emission=1.0,0.6186,0.2552 energy=2.0
 TAT-2 KF16 street car: root=(19.0, 18.5304, 66.3382) headlights=2 lens=true prompt=INTERACT
 TAT-2 KF17 clocktower: placed GuildhallSkylineClocktower mat=/Game/Art/Environment/Skybox/Buildings/ML/MI_DistantBuidingA
-TAT-2 KF16 sign letters: node=@MeshInstance3D@423424 surface=1 emission=(1.0, 0.62, 0.2, 1.0) energy=0.10000000149012 albedo=(1.0, 0.6848, 0.2726, 1.0)
+TAT-2 KF16 sign letters: node=@MeshInstance3D@423425 surface=1 emission=(1.0, 0.62, 0.2, 1.0) energy=0.10000000149012 albedo=(1.0, 0.6848, 0.2726, 1.0)
 P1_FOYER_DRESSING parts=bulbs,node,plaques,plate bulb_items=11 cyan_node_items=0 cyan_node_created=1 plaque_labels=2 floor_plate=1 floor_plate_approx=1
 TAT-2 KF23 Macleod sign: nodes=3 emission=(1.0, 0.361, 0.078, 1.0) energy=4.0 source=/Game/Art/Effects/HotWire_Ride/M_Crystal_Glow
 TAT-2 Perf: chunks=6621 collision_bodies=243 collision_shapes=31049 occluders=768
@@ -4085,8 +4085,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [2] _get_mesh_and_shape (res://src/core/level_loader.gd:2050)
          [3] _build_one_draw_item (res://src/core/level_loader.gd:5230)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7713)
-AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=347
-ROUGHNESS_BAKE count=87 pixels=74973184 ms=5626 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=353
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=5430 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
 BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=64953 applied=64682 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=206 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0 mirrored_bases=3297 mirrored_multimesh=3119 mirrored_single=178 mirrored_splits=464 mirrored_cull_front=312 mirrored_cull_disabled=0 mirrored_mesh_bytes=31097388 mirrored_mesh_count=103 mirrored_unbaked=0
@@ -4094,10 +4094,10 @@ MIRROR_RECON bases=3297 multimesh=3119 single=178 split=464 cull_front=312 cull_
 MATERIAL_EMISSIVE invented_white=1 names=/Game/Art/Environment/Lights/Candles/MI_FlameCandleOrangeB
 PERF_CENSUS meshes=6709 instances=65129 chunk_nodes=6621 plain=2923 multimesh=3786 surface_draws=12090 lights=170 shadow_lights=7 occluders=768 collision_bodies=243 collision_shapes=31049 periph_nodes=3350 periph_instances=13446 periph_surface_draws=6524 periph_plain=1631 periph_multimesh=1719 periph_range=0 merge_mode=off merge_candidates=0 merge_nodes=0 merge_surfaces_before=0 merge_surfaces_after=0 light_budget=160 hero_shadows=6 source_sublevels={ "Guildhall_Landscape": 677, "Building_Guildhall_POI": 9847, "Guildhall_Geometry": 567, "Guildhall_Vault_CeremonialChambers": 908, "Guildhall_PeripheryA": 12378, "Building_Guildhall_POI_3rdFloor": 3624, "Guildhall_Gameplay": 2690, "Guildhall_P": 80, "Guildhall_LightingNoGameplay": 164, "Guildhall_Loot": 175, "Guildhall_SkyboxGeo": 33547 }
 TAT-2 Loaded guildhall: meshes=64682 lights=160
-TAT-2 KF16 car lenses: node=@MeshInstance3D@464255 dist=0.0 glass_surface=1 emission=1.0,0.6186,0.2552 energy=2.0
+TAT-2 KF16 car lenses: node=@MeshInstance3D@464256 dist=0.0 glass_surface=1 emission=1.0,0.6186,0.2552 energy=2.0
 TAT-2 KF16 street car: root=(19.0, 18.5304, 66.3382) headlights=2 lens=true prompt=INTERACT
 TAT-2 KF17 clocktower: placed GuildhallSkylineClocktower mat=/Game/Art/Environment/Skybox/Buildings/ML/MI_DistantBuidingA
-TAT-2 KF16 sign letters: node=@MeshInstance3D@464631 surface=1 emission=(1.0, 0.62, 0.2, 1.0) energy=0.10000000149012 albedo=(1.0, 0.6848, 0.2726, 1.0)
+TAT-2 KF16 sign letters: node=@MeshInstance3D@464632 surface=1 emission=(1.0, 0.62, 0.2, 1.0) energy=0.10000000149012 albedo=(1.0, 0.6848, 0.2726, 1.0)
 P1_FOYER_DRESSING parts=bulbs,node,plaques,plate bulb_items=11 cyan_node_items=0 cyan_node_created=1 plaque_labels=2 floor_plate=1 floor_plate_approx=1
 TAT-2 KF23 Macleod sign: nodes=3 emission=(1.0, 0.361, 0.078, 1.0) energy=4.0 source=/Game/Art/Effects/HotWire_Ride/M_Crystal_Glow
 TAT-2 Perf: chunks=6621 collision_bodies=243 collision_shapes=31049 occluders=768
@@ -4266,8 +4266,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [2] _get_mesh_and_shape (res://src/core/level_loader.gd:2050)
          [3] _build_one_draw_item (res://src/core/level_loader.gd:5230)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7713)
-AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=347
-ROUGHNESS_BAKE count=87 pixels=74973184 ms=5549 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=353
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=5431 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
 BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=64953 applied=64682 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=206 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0 mirrored_bases=3297 mirrored_multimesh=3119 mirrored_single=178 mirrored_splits=464 mirrored_cull_front=312 mirrored_cull_disabled=0 mirrored_mesh_bytes=31097388 mirrored_mesh_count=103 mirrored_unbaked=0
@@ -4275,10 +4275,10 @@ MIRROR_RECON bases=3297 multimesh=3119 single=178 split=464 cull_front=312 cull_
 MATERIAL_EMISSIVE invented_white=1 names=/Game/Art/Environment/Lights/Candles/MI_FlameCandleOrangeB
 PERF_CENSUS meshes=6709 instances=65129 chunk_nodes=6621 plain=2923 multimesh=3786 surface_draws=12090 lights=170 shadow_lights=7 occluders=768 collision_bodies=243 collision_shapes=31049 periph_nodes=3350 periph_instances=13446 periph_surface_draws=6524 periph_plain=1631 periph_multimesh=1719 periph_range=0 merge_mode=off merge_candidates=0 merge_nodes=0 merge_surfaces_before=0 merge_surfaces_after=0 light_budget=160 hero_shadows=6 source_sublevels={ "Guildhall_Landscape": 677, "Building_Guildhall_POI": 9847, "Guildhall_Geometry": 567, "Guildhall_Vault_CeremonialChambers": 908, "Guildhall_PeripheryA": 12378, "Building_Guildhall_POI_3rdFloor": 3624, "Guildhall_Gameplay": 2690, "Guildhall_P": 80, "Guildhall_LightingNoGameplay": 164, "Guildhall_Loot": 175, "Guildhall_SkyboxGeo": 33547 }
 TAT-2 Loaded guildhall: meshes=64682 lights=160
-TAT-2 KF16 car lenses: node=@MeshInstance3D@505477 dist=0.0 glass_surface=1 emission=1.0,0.6186,0.2552 energy=2.0
+TAT-2 KF16 car lenses: node=@MeshInstance3D@505478 dist=0.0 glass_surface=1 emission=1.0,0.6186,0.2552 energy=2.0
 TAT-2 KF16 street car: root=(19.0, 18.5304, 66.3382) headlights=2 lens=true prompt=INTERACT
 TAT-2 KF17 clocktower: placed GuildhallSkylineClocktower mat=/Game/Art/Environment/Skybox/Buildings/ML/MI_DistantBuidingA
-TAT-2 KF16 sign letters: node=@MeshInstance3D@505853 surface=1 emission=(1.0, 0.62, 0.2, 1.0) energy=0.10000000149012 albedo=(1.0, 0.6848, 0.2726, 1.0)
+TAT-2 KF16 sign letters: node=@MeshInstance3D@505854 surface=1 emission=(1.0, 0.62, 0.2, 1.0) energy=0.10000000149012 albedo=(1.0, 0.6848, 0.2726, 1.0)
 P1_FOYER_DRESSING parts=bulbs,node,plaques,plate bulb_items=11 cyan_node_items=0 cyan_node_created=1 plaque_labels=2 floor_plate=1 floor_plate_approx=1
 TAT-2 KF23 Macleod sign: nodes=3 emission=(1.0, 0.361, 0.078, 1.0) energy=4.0 source=/Game/Art/Effects/HotWire_Ride/M_Crystal_Glow
 TAT-2 Perf: chunks=6621 collision_bodies=243 collision_shapes=31049 occluders=768
@@ -4300,21 +4300,21 @@ PASS: [A2-02] boot identity map=guildhall mission=Mission.Guildhall.VaultHeist
 PASS: [A2-03] boot identity difficulty=1 free_play=false phase=main
 PASS: [A2-04] run clock run_time_limit=7200 s == authored mission row 7200 s
 PASS: [A2-05] Novice guard count 4 == 4 (PORT_DECISION 4/6/8)
-A2_MEASURE guard=Guard_1 marker=(49.2489, 46.3155, -35.9301) dist=1.302 bucket=DA_SpawnBucket_StandardGuards_Lanterns layers=["Security_Tower_D"]
-A2_MEASURE guard=Guard_3 marker=(43.7149, 27.05, -26.2188) dist=1.096 bucket=DA_SpawnBucket_StandardGuards_Bouncers layers=["Security_GroundFloor_Lounge_A", "Security_GroundFloor_Lounge_A_Easy", "Security_GroundFloor_Lounge_B", "Security_GroundFloor_Lounge_B_Easy"]
+A2_MEASURE guard=Guard_1 marker=(49.2489, 46.3155, -35.9301) dist=1.297 bucket=DA_SpawnBucket_StandardGuards_Lanterns layers=["Security_Tower_D"]
+A2_MEASURE guard=Guard_3 marker=(43.7149, 27.05, -26.2188) dist=1.090 bucket=DA_SpawnBucket_StandardGuards_Bouncers layers=["Security_GroundFloor_Lounge_A", "Security_GroundFloor_Lounge_A_Easy", "Security_GroundFloor_Lounge_B", "Security_GroundFloor_Lounge_B_Easy"]
 A2_MEASURE guard=Guard_ClubLantern_0 marker=(39.5989, 36.5, -13.8801) dist=0.967 bucket=DA_SpawnBucket_StandardGuards_Lanterns layers=["Security_SecondFloor_D"]
-A2_MEASURE guard=Guard_ClubLantern_2 marker=(30.9197, 12.4488, -31.5598) dist=1.000 bucket=DA_SpawnBucket_StandardGuards_Bouncers layers=["Security_Basement_Storage_A_Easy", "Security_Basement_Storage_A"]
+A2_MEASURE guard=Guard_ClubLantern_2 marker=(30.9197, 12.4488, -31.5598) dist=0.993 bucket=DA_SpawnBucket_StandardGuards_Bouncers layers=["Security_Basement_Storage_A_Easy", "Security_Basement_Storage_A"]
 PASS: [A2-GUARD-META] every guard carries its own spawn_marker meta ([])
 PASS: [A2-GUARD-DIST] every guard <= 2.0 m from its spawn marker ([])
 PASS: [A2-GUARD-FLOOR] every guard <= 0.5 m off its marker floor ray ([])
 PASS: [A2-GUARD-BUCKET] every guard selected through an authored guard bucket, never Hauntstable ([])
 PASS: [A2-GUARD-VISIBLE] every guard visible with meshes ([])
 PASS: [A2-LOUNGE-BBOX] tracked poi-lounge-floor bbox read from content_overrides.json ([P: (20.0, 24.0, -46.0), S: (32.0, 8.0, 41.0)])
-PASS: [A2-LOUNGE-GUARD] Lounge guard marker=C_20 inside the tracked bbox at (43.83867, 26.00134, -25.92506) (guards in bbox=1)
+PASS: [A2-LOUNGE-GUARD] Lounge guard marker=C_20 inside the tracked bbox at (43.83042, 26.00134, -25.94464) (guards in bbox=1)
 PASS: [A2-CIV-COUNT] civilian count 3 == 3
-A2_MEASURE civilian=@CharacterBody3D@509296 pos=(44.0425, 26.00162, -25.6772) in_lounge=true
-A2_MEASURE civilian=@CharacterBody3D@509299 pos=(7.5943, 28.0012, -43.3089) in_lounge=false
-A2_MEASURE civilian=@CharacterBody3D@509302 pos=(-21.7857, 11.52354, -23.9914) in_lounge=false
+A2_MEASURE civilian=@CharacterBody3D@509297 pos=(44.0425, 26.00162, -25.6772) in_lounge=true
+A2_MEASURE civilian=@CharacterBody3D@509300 pos=(7.5943, 28.0012, -43.3089) in_lounge=false
+A2_MEASURE civilian=@CharacterBody3D@509303 pos=(-21.7857, 11.52354, -23.9914) in_lounge=false
 PASS: [A2-CIV-LOUNGE] one civilian stands inside the tracked Lounge bbox
 A2_MEASURE lounge_civ bind_stats total=9 bound=9 textured=8 default_white=0
 PASS: [A2-CIV-BIND] Lounge civilian authored surface bind total=9 bound=9 textured=8 default_white=0 (want 9/9/8/0)
@@ -4327,17 +4327,17 @@ A2_WHITE allowed key=<no ue_mesh> MeshInstance3D count=5 reason=port guard carri
 A2_MEASURE cream_slabs nodes=0 detail=[]
 A2_MEASURE near_white visible_nodes=7030 shader_surfaces=415 unexplained=0 allowed=3 allowlist=5
 PASS: [A2-WHITE] no unexplained near-white visible mesh (visible=7030 shader_surfaces=415 unexplained=0 allowlisted=3)
-A2_MEASURE shell origin=(43.98094, 27.00134, -25.59619) horizontal=4/4 ["+X=hit", "-X=hit", "+Z=hit", "-Z=hit"] floor=hit
-PASS: [A2-SHELL] Lounge shell rays: 4/4 horizontal hits + floor hit (origin=(43.98094, 27.00134, -25.59619), ["+X=hit", "-X=hit", "+Z=hit", "-Z=hit"])
+A2_MEASURE shell origin=(44.00762, 27.00134, -25.58597) horizontal=4/4 ["+X=hit", "-X=hit", "+Z=hit", "-Z=hit"] floor=hit
+PASS: [A2-SHELL] Lounge shell rays: 4/4 horizontal hits + floor hit (origin=(44.00762, 27.00134, -25.58597), ["+X=hit", "-X=hit", "+Z=hit", "-Z=hit"])
 A2_MEASURE turret visible=91 hidden=0 meshless=0 merged_cells=0 multi_path_cells=0 authored=1145/0 paths=5 missing_paths=0 unique_runtime_cells=0
 PASS: [A2-TURRET] turret census authored visible=1145 (want 1145) hidden=0; runtime meshless=0 missing_paths=[] (individual=91, merged_cells=0)
 A2_MEASURE gc layers=174 leaves=80 static_bookcase_leaves=20 visible_broken=0 missing=0
 PASS: [A2-GC-STATS] runtime GC census layers=174 (>=95) leaves=80 (>=79) static_bookcase_leaves=20 (>=20) visible_broken=0 missing=0
-PASS: [A2-GC-SWAP] one chest swap @Area3D@508632 -> leaf (broken=true opened=true)
+PASS: [A2-GC-SWAP] one chest swap @Area3D@508633 -> leaf (broken=true opened=true)
 SUMMARY: fails=0 passed=300 total=300
 WARNING: 3 ObjectDB instances were leaked at exit (run with `--verbose` for details).
    at: cleanup (core/object/object.cpp:2536)
 ERROR: 3 RID allocations of type 'N17RendererSceneCull8InstanceE' were leaked at exit.
 
 EXIT: 0
-FINISHED: 2026-11-27T15:54:13-05:00
+FINISHED: 2026-11-27T17:24:07-05:00

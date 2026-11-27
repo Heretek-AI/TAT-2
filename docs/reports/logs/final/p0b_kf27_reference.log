@@ -1,10 +1,10 @@
 == FINAL_GATE p0b_kf27_reference
 COMMAND: python3 build/qa/p0b_roi_stats.py --port docs/reference/clip_1795033698901/clean/KF27_03m27s_foyer_security_beam.jpg --pose upper_foyer --reference-only
 CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
-STARTED: 2026-11-27T15:55:14-05:00
+STARTED: 2026-11-27T17:25:07-05:00
 
 P0B_STATS kind=reference pose=upper_foyer file=/home/john/.local/share/opencode/worktree/318f41/phase12-integration/docs/reference/clip_1795033698901/clean/KF27_03m27s_foyer_security_beam.jpg mean=16.7 p50=15 p95=34 lt8=16.7 lt16=53.8 gt200=0.03
 P0B_KF27_REF pose=upper_foyer met=9/9 emitter_box=true emitter_at_kf27=true beam_row_band=true one_band=true row_excess_ge_2=true glow_falloff=true core_neutral=true no_cream_slab_10pct=true cream_reference_like_2pct=true
 
 EXIT: 0
-FINISHED: 2026-11-27T15:55:14-05:00
+FINISHED: 2026-11-27T17:25:07-05:00

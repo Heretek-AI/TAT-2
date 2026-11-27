@@ -1,11 +1,11 @@
 == FINAL_GATE runtime_smoke
 COMMAND: /home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/runtime_smoke.sh 90
 CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
-STARTED: 2026-11-27T15:55:15-05:00
+STARTED: 2026-11-27T17:25:08-05:00
 
-log: /tmp/tat2-smoke-upu44d.log
-RUNTIME_SMOKE_SCAN PASS exit=124 errors=0 raw=0 allowed=0 script_errors=0 shader_errors=0 mission_ready=1 reason=ok path=/tmp/tat2-smoke-upu44d.log
+log: /tmp/tat2-smoke-IRuXzU.log
+RUNTIME_SMOKE_SCAN PASS exit=124 errors=0 raw=0 allowed=0 script_errors=0 shader_errors=0 mission_ready=1 reason=ok path=/tmp/tat2-smoke-IRuXzU.log
 RUNTIME_SMOKE PASS
 
 EXIT: 0
-FINISHED: 2026-11-27T15:56:45-05:00
+FINISHED: 2026-11-27T17:26:38-05:00

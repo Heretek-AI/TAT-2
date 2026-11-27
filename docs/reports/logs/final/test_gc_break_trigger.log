@@ -1,7 +1,7 @@
 == FINAL_GATE test_gc_break_trigger
 COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/test_gc_break_trigger.gd
 CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
-STARTED: 2026-11-27T15:45:54-05:00
+STARTED: 2026-11-27T17:15:57-05:00
 
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
@@ -66,6 +66,10 @@ GC_TRIGGER_CHECK PASS interact starts the lockpick minigame
 GC_TRIGGER_CHECK PASS locked chest is not opened by interact 
 GC_TRIGGER checks=21 fails=0
 GC_TRIGGER PASS
+WARNING: 4 ObjectDB instances were leaked at exit (run with `--verbose` for details).
+   at: cleanup (core/object/object.cpp:2536)
+ERROR: 2 resources still in use at exit (run with --verbose for details).
+   at: clear (core/io/resource.cpp:822)
 
 EXIT: 0
-FINISHED: 2026-11-27T15:45:57-05:00
+FINISHED: 2026-11-27T17:16:00-05:00

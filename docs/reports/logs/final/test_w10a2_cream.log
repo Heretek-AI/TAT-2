@@ -1,7 +1,7 @@
 == FINAL_GATE test_w10a2_cream
 COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/test_w10a2_cream.gd
 CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
-STARTED: 2026-11-27T15:54:48-05:00
+STARTED: 2026-11-27T17:24:41-05:00
 
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
@@ -38,4 +38,4 @@ CREAM_CHECK PASS authored EmissiveColor still emits (enabled=true colour=(1.0, 0
 CREAM_PROOF: GREEN passes=5 expected_fail=0
 
 EXIT: 0
-FINISHED: 2026-11-27T15:54:50-05:00
+FINISHED: 2026-11-27T17:24:43-05:00

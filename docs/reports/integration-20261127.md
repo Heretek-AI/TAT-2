@@ -144,6 +144,33 @@ tip; the docs/logs commit is its child). The previous 71e77f6 run took 22m38s;
 the 37bb69e run’s wall and exact `FINAL_GATES PASS` line are in the final
 section below.
 
+## Final gate run at 37bb69e
+
+- **Run head:** `60474c004d21b0f19481cdf0b223afde2e12a78a` — the pre-stamp docs
+  commit on top of `37bb69e`; the code is identical to `37bb69e`.
+- **Result:** `FINAL_GATES PASS head=60474c004d21b0f19481cdf0b223afde2e12a78a gates=49`
+  (exit 0), started `2026-11-27T17:06:31-05:00`, finished `17:28:55` (**22m24s**),
+  `uncommitted_entries_at_start: 0`.
+- **Value delta vs the 71e77f6 run: none.** The full 49-gate table above is the
+  final-run table: compile **228/0**, `run_tests` **327/0** (suites to 124),
+  audio **123/0**, VO **53/0**, AEM **77/0**, cubemap **37/0**, P5 **54** with
+  `GEM_PAYLOAD present=true: layers=21`, beams **9/0**, landscape **7/0**, nav
+  **70/0**, GC **52/0**, locks **162 (152+10)**, E2E **300/300**, a2 **22/22**,
+  p2 **17/17**, capture **7 poses / 23 / 9-of-9**, audit **12660/12703**,
+  texture **1567/796/1/0**, string **112**, perf **78/78**.
+- **GPU evidence (included at `37bb69e`):** mirror readback **PASS**
+  (`control_ok=true`, 8 red + the 2 expected black, `pass=1`, exit 0); UI
+  sidecars **28/28** carry `roi.*` (the truncation is resolved). Open gaps:
+  **KF27 5/9** (band 50.0 %, emitter absent, falloff), **landscape A/B no
+  landscape subject** at `upper_foyer`/`gate`, **AEM meter 0.2615 vs authored
+  1.150** (not converged), and **prompt contrast 3.24–4.32** on crank/doors.
+  Details: [`gpu-phase12-20261127.md`](gpu-phase12-20261127.md).
+- **In-run ratchet evidence:** `docs/reports/logs/final/gate_ratchet.log` is the
+  runner's own log (`== FINAL_GATE gate_ratchet`, `EXIT: 0`), sha256
+  `7d859b9740a50710bf127c1b126ae513d59431f82f2540cbd1ac30944c2912b2`,
+  mtime `2026-11-27 17:28:55`. It was not re-run into. The separate
+  `gate_ratchet_poststamp.log` is a post-run baseline check only.
+
 ## Residual warnings / still pending (GPU, no capture run here)
 
 - `CUBEMAP_ORIENT`: daylight `+Y` luminance 0.0680 < `-Y` 0.0712 (informational

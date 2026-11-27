@@ -1,7 +1,7 @@
 FINAL_GATE_RUN
-started: 2026-11-27T15:36:27-05:00
+started: 2026-11-27T17:06:31-05:00
 root: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
-head: 71e77f6ae4710301c98d7f52ebb2835090a12db8
+head: 60474c004d21b0f19481cdf0b223afde2e12a78a
 branch: phase12-integration
 godot: 4.7.2.stable.official.ed1daf0bf
 godot_bin: /home/john/.local/share/opencode/worktree/318f41/phase12-integration/tools/godot
@@ -11,7 +11,7 @@ host: Linux 7.4.0-0.rc4.261125g4dce97c6c265.35.fc46.x86_64 x86_64
 nproc: 32
 runner: build/qa/run_final_gates.sh
 
-FINAL_GATES start head=71e77f6ae4710301c98d7f52ebb2835090a12db8 branch=phase12-integration godot=4.7.2.stable.official.ed1daf0bf
+FINAL_GATES start head=60474c004d21b0f19481cdf0b223afde2e12a78a branch=phase12-integration godot=4.7.2.stable.official.ed1daf0bf
 FINAL_GATE name=compile exit=0 log=docs/reports/logs/final/compile.log
 FINAL_MARKER name=compile marker=scripts checked: [0-9]+, broken: 0
 FINAL_GATE name=run_tests exit=0 log=docs/reports/logs/final/run_tests.log
@@ -93,7 +93,7 @@ FINAL_MARKER name=p0b_kf27_reference marker=P0B_KF27_REF pose=upper_foyer met=9/
 FINAL_GATE name=p0b_route_self_test exit=0 log=docs/reports/logs/final/p0b_route_self_test.log
 FINAL_MARKER name=p0b_route_self_test marker=P0B_ROUTE_SELFTEST PASS checks=62 fails=0
 FINAL_GATE name=runtime_smoke exit=0 log=docs/reports/logs/final/runtime_smoke.log
-FINAL_SMOKE_GODOT_LOG /home/john/.local/share/opencode/worktree/318f41/phase12-integration/docs/reports/logs/final/runtime_smoke_godot.log (from /tmp/tat2-smoke-upu44d.log)
+FINAL_SMOKE_GODOT_LOG /home/john/.local/share/opencode/worktree/318f41/phase12-integration/docs/reports/logs/final/runtime_smoke_godot.log (from /tmp/tat2-smoke-IRuXzU.log)
 FINAL_GATE name=runtime_smoke_scan exit=0 log=docs/reports/logs/final/runtime_smoke_scan.log
 FINAL_MARKER name=runtime_smoke_scan marker=RUNTIME_SMOKE_SCAN_TEST PASS
 FINAL_GATE name=producer_tests exit=0 log=docs/reports/logs/final/producer_tests.log
@@ -105,5 +105,5 @@ FINAL_GATE name=audit exit=0 log=docs/reports/logs/final/audit.log
 FINAL_GATE name=texture_cap exit=0 log=docs/reports/logs/final/texture_cap.log
 FINAL_GATE name=perf_guard exit=0 log=docs/reports/logs/final/perf_guard.log
 FINAL_GATE name=gate_ratchet exit=0 log=docs/reports/logs/final/gate_ratchet.log
-FINAL_GATES PASS head=71e77f6ae4710301c98d7f52ebb2835090a12db8 gates=49
+FINAL_GATES PASS head=60474c004d21b0f19481cdf0b223afde2e12a78a gates=49
 FINAL_GATES evidence=/home/john/.local/share/opencode/worktree/318f41/phase12-integration/docs/reports/logs/final summary=/home/john/.local/share/opencode/worktree/318f41/phase12-integration/docs/reports/logs/final/final-summary.txt

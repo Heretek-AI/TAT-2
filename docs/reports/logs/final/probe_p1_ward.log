@@ -1,7 +1,7 @@
 == FINAL_GATE probe_p1_ward
 COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/probe_p1_ward.gd
 CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
-STARTED: 2026-11-27T15:41:38-05:00
+STARTED: 2026-11-27T17:11:41-05:00
 
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
@@ -90,8 +90,8 @@ WARNING: [level_loader] level Niagara: 219 placements across 4 systems in 39 chu
          [2] load_sublevels_async (res://src/core/level_loader.gd:7688)
 ROUGHNESS_BAKE_MODE on=1 resolution=full cache=process
 COL_PLANAR /Game/Art/Effects/WardZones/SM_SlowWardZone_Quad instances=82 skipped=1
-AUTHORED_COLLISION meshes=53 hull=53 authored_elements=43 complex=9 no_record=0 prims=35 convex=33 absent=0 no_collision=1 query_only=1 reduced=1 shapes_per_instance_avg=0.85 elements=93 load_ms=336
-ROUGHNESS_BAKE count=18 pixels=15204352 ms=1168 bytes=20272462 hits=5 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=53 hull=53 authored_elements=43 complex=9 no_record=0 prims=35 convex=33 absent=0 no_collision=1 query_only=1 reduced=1 shapes_per_instance_avg=0.85 elements=93 load_ms=342
+ROUGHNESS_BAKE count=18 pixels=15204352 ms=1206 bytes=20272462 hits=5 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
 BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=2742 applied=2690 duplicate=11 name_skipped=0 wardbox=41 moonshape=0 clamp=83 clamp_worst=1.03x mirrored=0 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0 mirrored_bases=0 mirrored_multimesh=0 mirrored_single=0 mirrored_splits=0 mirrored_cull_front=0 mirrored_cull_disabled=0 mirrored_mesh_bytes=0 mirrored_mesh_count=0 mirrored_unbaked=0
@@ -107,6 +107,10 @@ PASS: [p1-ward] foyer ward shards stay hidden before the beam trip (KF28 gate)
 PASS: [p1-ward] beam/activation shows the foyer ward's authored shard cluster
 PASS: [p1-ward] foyer ward shatter hides the authored cluster (G5-04)
 P1_WARD PASS checks=44
+WARNING: 12 ObjectDB instances were leaked at exit (run with `--verbose` for details).
+   at: cleanup (core/object/object.cpp:2536)
+ERROR: 6 resources still in use at exit (run with --verbose for details).
+   at: clear (core/io/resource.cpp:822)
 
 EXIT: 0
-FINISHED: 2026-11-27T15:41:43-05:00
+FINISHED: 2026-11-27T17:11:46-05:00

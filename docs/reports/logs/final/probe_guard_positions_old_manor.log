@@ -1,7 +1,7 @@
 == FINAL_GATE probe_guard_positions_old_manor
 COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/probe_guard_positions.gd -- --map=old_manor --order=3
 CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
-STARTED: 2026-11-27T15:42:53-05:00
+STARTED: 2026-11-27T17:12:56-05:00
 
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
@@ -257,8 +257,8 @@ WARNING: [level_loader] material flat white: '/Engine/BasicShapes/BasicShapeMate
          [2] _build_one_draw_item (res://src/core/level_loader.gd:5276)
          [3] load_sublevels_async (res://src/core/level_loader.gd:7713)
 COL_PLANAR /Game/Art/Effects/WardZones/SM_SlowWardZone_Quad instances=78 skipped=1
-AUTHORED_COLLISION meshes=703 hull=698 authored_elements=641 complex=44 no_record=0 prims=380 convex=2739 absent=5 no_collision=13 query_only=5 reduced=35 shapes_per_instance_avg=1.10 elements=3710 load_ms=345
-ROUGHNESS_BAKE count=87 pixels=72220672 ms=5472 bytes=96294196 hits=39 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=703 hull=698 authored_elements=641 complex=44 no_record=0 prims=380 convex=2739 absent=5 no_collision=13 query_only=5 reduced=35 shapes_per_instance_avg=1.10 elements=3710 load_ms=340
+ROUGHNESS_BAKE count=87 pixels=72220672 ms=5268 bytes=96294196 hits=39 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=196 axis=col2 length_slot=2 clamp=none max_scale=236.9539 max_length_m=24.169
 BEAM_AXIS cards=196 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=24819 applied=24180 duplicate=547 name_skipped=6 wardbox=39 moonshape=47 clamp=287 clamp_worst=500.00x mirrored=780 origin_markers_skipped=0 skipped_merged=0 from_graph=4 graph_missing=0 mirrored_bases=779 mirrored_multimesh=746 mirrored_single=33 mirrored_splits=86 mirrored_cull_front=177 mirrored_cull_disabled=0 mirrored_mesh_bytes=1501416 mirrored_mesh_count=11 mirrored_unbaked=0
@@ -329,4 +329,4 @@ GUARD_CHECK SUMMARY map=old_manor order=3 guards_t1=4 guards_t2=4 expected=4 lou
 GUARD_CHECK PASS map=old_manor order=3 guards=4 buckets=4/4 lounge=0 lounge_marker=- selection=parity_approx_layer_bucket difficulty=1
 
 EXIT: 0
-FINISHED: 2026-11-27T15:43:40-05:00
+FINISHED: 2026-11-27T17:13:43-05:00

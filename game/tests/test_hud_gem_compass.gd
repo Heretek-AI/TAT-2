@@ -101,10 +101,13 @@ func _initialize() -> void:
 			ribbon_lbl.text if ribbon_lbl != null else "<null>"])
 
 	var line: TextureRect = hud.find_child("CompassCenterLine", true, false) as TextureRect
-	_check(line != null and line.size.x <= 160.0,
-		"W5D.8 authored compass strip is a small centre line (%.0f px)" % [
-			line.size.x if line != null else -1.0],
-		"W5D.8 compass centre line missing or still full-width")
+	# KF02/KF14 measure a single thin rule spanning most of the frame width with
+	# one centre tick; the W5D assertion pinned a 160 px centre line, which the
+	# enlarged reference crop shows is too short (the P5 probe re-measures it).
+	_check(line != null and line.size.x >= 500.0 and line.size.y <= 12.0,
+		"W5D.8 authored compass strip is the measured wide thin rule (%.0f x %.0f px)" % [
+			line.size.x if line != null else -1.0, line.size.y if line != null else -1.0],
+		"W5D.8 compass rule missing or not the wide thin line")
 
 	var visible_labels: int = 0
 	if box != null:

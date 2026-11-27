@@ -1078,3 +1078,47 @@ find extracted/json -name 'NS_*.json' | wc -l
   - **Gates**: compile 112/0, W7V 49/0, W6U1 0, W6U2 0, `run_tests` 0,
     E2E 264/264. `make audit` exit 2 on the W7S producer drift +
     missing `vgmstream`; not fixed, not re-stamped.
+
+- 2026-11-26: **P5 UI first slice (W10 lane)** — Light Gem exposure/direction,
+  HUD identity/hotbar, pause backdrop, briefing layout, prep prompts and map
+  names. Files: `game/src/ui/hud.gd`, `mission_prep_ui.gd`,
+  `contract_table_ui.gd`, `game/tests/probe_p5_ui.gd`.
+  - **UI3-05 Light Gem**: the uniform blue-violet sphere is replaced by a lit-cap
+    model. `lit_amount` sets the cap's projected area (0 = KF17's point
+    highlight, 0.5 = KF16's half sphere, 1 = KF24/KF25's full cream sphere) and
+    the player's strongest-light direction (`light_sector_dir`, already
+    published by `thief_character`) places it in the gem's canvas frame. The
+    sphere colours are **sampled from the reference frames** (KF17 concealed
+    crown 10,9,53; KF16 exposed 217,200,161; KF25 237,222,195); the frame uses
+    the authored `BPUI_UniversalStealthBall.Image_177` violet tint
+    (0.082283, 0.109462, 0.686685) in every exposure state. **HARD_LIMIT**: the
+    authored `T_stealthball_Array` 21-slice payload (21 = `SizeZ` /
+    `NumTexturesInArray`) is not in the extract, so the directional sphere is a
+    **PORT_APPROX**; the 21-slice count is recorded as `GEM_AUTHORED_SLICES`.
+  - **UI3-01 card/compass**: the card continues to bind the explicit save handle
+    or the authored thief title (never the capture machine's Steam persona),
+    with the save level. The compass rule is now the measured wide thin line
+    with one centre tick and the heading above it (KF02/KF14), not a 100 px
+    solid segment.
+  - **UI3-02 loot/hotbar**: one visible loot line, the KF14 inline objective
+    (`Steal 4,000 in loot value[0/4,000]`, no `❧` sub-line), and the hotbar now
+    follows the save loadout: the default slots 1/2/4 are drawn, empty slot 3 is
+    omitted (slot 4 keeps keycap `4`), and no ammo/count text is drawn. The
+    preserved four-label `∞` contract remains in `slot_count_lbls[3]`.
+  - **UI1-02 pause**: the KF30 backdrop is a 13-tap screen-texture blur (same
+    shader as the briefing) plus the 0.86 dim; the live HUD (including the
+    bottom-left MAP/PING hint bar) is hidden while paused, so the bottom-left
+    build/difficulty/seed footer no longer overprints a keybind legend.
+  - **UI4-04 briefing**: the authored ST_Missions letter is pinned to the KF13
+    copy and the HUD wraps it to the 11 reference lines; the shaped block is
+    220 px in a 366 px text box (no overflow). The own-salutation path keeps the
+    title hidden and the right scrollbar visible.
+  - **UI4-03 prep / UI2-04 crank / UI3-06 map names**: prep no longer repeats
+    READY/BACK in a hint line (the hidden label is kept for the T05 text
+    contract); the centre ring prompt reads `CRANK [LMB]`; the prep mission
+    selector and contract list show authored titles/map names (Constables'
+    Guildhall / Elway Manor / Thieves' Den), never `Mission.…` or raw map ids.
+  - **Not measured**: no GPU capture in this lane, so the rendered gem, blur and
+    line weights are **not visually scored**; the headless probe measures the
+    widget tree, shader parameters, text and geometry only. The live-reference
+    120-row score remains pending.

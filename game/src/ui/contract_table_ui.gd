@@ -298,7 +298,9 @@ func _refresh_list() -> void:
 		var order: int = int(c.get("order", 0))
 		var disp: Dictionary = GameData.get_contract_display(order)
 		var title_text: String = str(disp.get("title", c.get("id", "Contract")))
-		var map_text: String = str(c.get("map_id", "")).to_upper()
+		# UI3-06: the map token is the authored display name, never the raw
+		# map id (`GUILDHALL` / `THIEVES_DEN`) the old list printed.
+		var map_text: String = _map_display_name(str(c.get("map_id", "")), order)
 		_list.add_item("#%02d  %s  (%s)" % [order, title_text, map_text])
 		if order == selected_order:
 			sel_idx = i
@@ -329,7 +331,9 @@ func _refresh_details(c: Dictionary) -> void:
 	var disp: Dictionary = GameData.get_contract_display(selected_order)
 	var title_text: String = str(disp.get("title", c.get("id", "Contract")))
 	_title_lbl.text = "#%02d  %s" % [selected_order, title_text]
-	var map_text: String = str(disp.get("location", c.get("map_id", "")))
+	var map_text: String = str(disp.get("location", "")).strip_edges()
+	if map_text == "" or map_text.to_lower() == str(c.get("map_id", "")).to_lower():
+		map_text = _map_display_name(selected_map_id, selected_order)
 	var desc_text: String = str(disp.get("description", ""))
 	var quest_text: String = str(disp.get("quest_item", ""))
 	# PORT COPY (no authored row): the authored contract details are a splash +
@@ -344,6 +348,21 @@ func _refresh_details(c: Dictionary) -> void:
 		clue_text = "\n".join(parts)
 	_intel_lbl.text = UIStringsScript.loc("Intel:\n") + clue_text ## PORT COPY (no authored row)
 	_update_splash(selected_map_id)
+
+
+## UI3-06: authored map names for the contract list/details. The raw map ids
+## (`guildhall`, `old_manor`, `thieves_den`) are load keys, never copy.
+func _map_display_name(map_id: String, order: int = 0) -> String:
+	var mid: String = map_id.strip_edges().to_lower()
+	if mid == "guildhall":
+		return UIStringsScript.st_upper("ST_MapTool", "Guildhall.MapName", "Constables' Guildhall")
+	if mid == "old_manor":
+		return UIStringsScript.st_upper("ST_OldManor_map", "OldManor.MapName", "Elway Manor")
+	if mid == "thieves_den" or (mid == "" and order <= 1):
+		return UIStringsScript.loc("Thieves' Den").to_upper()
+	if mid == "":
+		return UIStringsScript.loc("Contract").to_upper() ## PORT COPY (no authored row)
+	return mid.replace("_", " ").to_upper() ## PORT COPY (unknown map key)
 
 
 func _update_splash(map_id: String) -> void:

@@ -46,6 +46,17 @@ const HP_BAR_H: float = 64.0
 ## overlay, not a permanent decoration (C3-08 / ADJUDICATIONS C-4).
 const HP_SPLATTER_THRESHOLD: float = 0.5
 const STAM_BAR_MAX_W: float = 176.0
+## UI3: authored frame tint from `BPUI_UniversalStealthBall.Image_177`
+## ColorAndOpacity (R 0.082283, G 0.109462, B 0.686685, A 1.0). The frame is a
+## violet outline in every reference state; only the sphere's lit cap changes.
+const GEM_FRAME_TINT: Color = Color(0.082283, 0.109462, 0.686685, 1.0)
+## Default light direction (canvas space, +Y down) when the probe has not yet
+## published one: upper-left, the direction every lit reference frame shows.
+const GEM_DEFAULT_DIR: Vector3 = Vector3(-0.62, -0.58, 0.53)
+## Authored widget fact: `BPUI_UniversalStealthBall.NumTexturesInArray = 21` and
+## `T_stealthball_Array.SizeZ = 21` (extracted/json/...). The 21 texture slices
+## are NOT in the extract (only the UAsset record), so the sphere is procedural.
+const GEM_AUTHORED_SLICES: int = 21
 const DEN_SCENE_PATH: String = "res://scenes/mission.tscn"
 const LootInventoryScript := preload("res://src/interact/loot_inventory.gd")
 
@@ -53,7 +64,9 @@ const TOOL_ICON_MAP: Dictionary = {
 	"zipwire": "res://assets/ue/Raw/Art/UI/Icons/Rewards/Gear/T_Zipwire_Wide.png",
 	"smoke_bomb": "res://assets/ue/Raw/Art/UI/Icons/Rewards/Gear/T_Bomb_Smoke_Wide.png",
 	"slithersap": "res://assets/ue/Raw/Art/UI/Icons/Rewards/Gear/T_SlimeBomb_Wide.png",
+	"slither_sap": "res://assets/ue/Raw/Art/UI/Icons/Rewards/Gear/T_SlimeBomb_Wide.png",
 	"fairy": "res://assets/ue/Raw/Art/UI/Icons/Rewards/Gear/T_PickpocketFairy_Wide.png",
+	"pickpocket_fairy": "res://assets/ue/Raw/Art/UI/Icons/Rewards/Gear/T_PickpocketFairy_Wide.png",
 	"vistara_diamond": "res://assets/ue/Raw/Art/UI/Icons/Rewards/Gear/T_VistaraDiamond_Wide.png",
 	"blackjack": "res://assets/ue/Raw/Art/UI/Icons/T_Icon_Abilities.png",
 }
@@ -67,12 +80,25 @@ void fragment() {
 }
 """
 
+## UI3 Light Gem. The authored `BPUI_UniversalStealthBall` samples one of 21
+## directional slices from `T_stealthball_Array`, but only the UAsset record is
+## in the extract (`SizeZ: 21`, `NumTexturesInArray: 21`) — the 21-slice payload
+## was never dumped. This shader is a PORT_APPROX of that array: `lit_amount`
+## sets how much of the sphere's projected area is lit (KF17 a small cap, KF16
+## about half, KF24/25 almost all) and `sector_dir` places that cap at the
+## strongest scene light. The two colours are sampled from the reference frames,
+## not invented: concealed KF17 crown (10,9,53)/(38,28,84), exposed KF16
+## (217,200,161) / KF25 (237,222,195). The authored frame tint stays separate.
 const STEALTH_ORB_SHADER: String = """
 shader_type canvas_item;
+// `visibility` is the W5D public contract (amount). `lit_amount` is the same
+// value under the name the sector geometry uses; both are written by the HUD.
 uniform float visibility : hint_range(0.0, 1.0) = 0.2;
-// UI3: warm sector pointing at the strongest scene light. sector_angle is in
-// canvas space (+Y down), mirroring the HUD's screen-space mapping.
+uniform float lit_amount : hint_range(0.0, 1.0) = 0.2;
+// Canvas-space direction of the light: +X right, +Y down, +Z toward the camera.
 uniform float sector_angle = 0.0;
+uniform vec2 sector_dir = vec2(-0.707, -0.707);
+uniform float sector_z : hint_range(-1.0, 1.0) = 0.55;
 uniform float sector_strength : hint_range(0.0, 1.0) = 0.0;
 void fragment() {
 	vec2 p = UV * 2.0 - 1.0;
@@ -83,25 +109,40 @@ void fragment() {
 	float mask = 1.0 - smoothstep(0.90, 1.0, d);
 	float z = sqrt(max(0.0, 1.0 - dot(p, p)));
 	vec3 n = normalize(vec3(p.x, p.y, z));
-	vec3 light_dir = normalize(vec3(-0.38, -0.45, 0.80));
-	float ndl = max(0.0, dot(n, light_dir));
-	float spec = pow(max(0.0, dot(n, normalize(light_dir + vec3(0.0, 0.0, 1.0)))), 18.0);
+	vec2 sxy = sector_dir;
+	if (length(sxy) < 0.001) {
+		sxy = vec2(cos(sector_angle), sin(sector_angle));
+	}
+	vec3 L = normalize(vec3(sxy, sector_z));
+	float ndl = dot(n, L);
+	float amount = clamp(lit_amount, 0.0, 1.0);
+	// Terminator: ndl = 1.0 - 2.0 * amount. The lit cap's projected area is
+	// `amount` (0 = point highlight, 0.5 = half sphere, 1 = full sphere with a
+	// thin dark rim left at the far edge, as KF24 shows).
+	float thr = 1.0 - 2.0 * amount;
+	float lit = smoothstep(thr - 0.28, thr + 0.28, ndl);
+	// The lit face is cream; the concealed face is deep royal blue. Both keep a
+	// soft radial falloff (the reference is a gradient, not a flat disc).
+	float face = 0.72 + 0.28 * clamp(ndl * 0.5 + 0.5, 0.0, 1.0);
+	vec3 dark_base = vec3(0.030, 0.028, 0.190);
+	vec3 dark_hi = vec3(0.200, 0.170, 0.480);
+	vec3 lit_base = vec3(0.720, 0.660, 0.500);
+	vec3 lit_hi = vec3(0.930, 0.880, 0.760);
+	vec3 col = mix(dark_base, lit_base * face, lit);
+	// The concealed sphere still carries a soft cream highlight at the light
+	// point (KF17's upper-left glow) plus the glass rim.
+	float spec = pow(max(0.0, dot(n, normalize(L + vec3(0.0, 0.0, 1.0)))), 18.0);
+	col += lit_hi * spec * (0.30 + 0.30 * amount);
 	float fresnel = pow(1.0 - clamp(z, 0.0, 1.0), 2.2);
-	vec3 dark_base = vec3(0.055, 0.068, 0.24);
-	vec3 dark_hi = vec3(0.70, 0.76, 0.96);
-	vec3 lit_base = vec3(0.68, 0.62, 0.42);
-	vec3 lit_hi = vec3(0.99, 0.96, 0.82);
-	vec3 base_col = mix(dark_base, lit_base, visibility);
-	vec3 hi_col = mix(dark_hi, lit_hi, visibility);
-	vec3 shaded = base_col * (0.42 + 0.68 * ndl) + hi_col * (0.28 * ndl * visibility + 0.82 * spec);
-	shaded += mix(vec3(0.12, 0.18, 0.46), vec3(0.96, 0.90, 0.62), visibility) * fresnel * 0.35;
+	col += mix(dark_hi, lit_hi, lit) * fresnel * 0.30;
+	// Sector boundary crescent, only while the direction is known and the gem is
+	// partly exposed: the array's slices show a bright edge where the cap turns.
 	float ang = atan(p.y, p.x);
 	float d_ang = abs(mod(ang - sector_angle + PI, 6.28318530718) - PI);
 	float wedge = 1.0 - smoothstep(0.32, 0.88, d_ang);
-	float rim = smoothstep(0.42, 0.90, d);
-	shaded += mix(vec3(0.16, 0.22, 0.58), vec3(1.0, 0.96, 0.78), visibility) * pow(rim, 2.4) * 0.55;
-	shaded += vec3(1.0, 0.70, 0.30) * wedge * sector_strength * (0.30 + 0.55 * rim);
-	COLOR = vec4(shaded, mask * 0.98);
+	float crescent = clamp(sector_strength, 0.0, 1.0) * (1.0 - abs(amount * 2.0 - 1.0));
+	col += vec3(1.0, 0.86, 0.58) * wedge * crescent * 0.10;
+	COLOR = vec4(col, mask * 0.98);
 }
 """
 
@@ -268,9 +309,19 @@ var _soundwaves_draw: SoundWavesDraw
 var _soundwave_energy: float = 0.0
 var _soundwave_phase: float = 0.0
 var _vis_smooth: float = 0.2
+## UI3 Light Gem state (last applied), published to the shader and readable by
+## the P5 probe. `_gem_amount` is the smoothed light visibility (0..1); the
+## direction is a canvas-space unit vector (+X right, +Y down, +Z to camera).
+var _gem_amount: float = 0.2
+var _gem_sector_angle: float = atan2(GEM_DEFAULT_DIR.y, GEM_DEFAULT_DIR.x)
+var _gem_sector_dir: Vector2 = Vector2(GEM_DEFAULT_DIR.x, GEM_DEFAULT_DIR.y).normalized()
+var _gem_sector_z: float = GEM_DEFAULT_DIR.z
+var _gem_sector_strength: float = 0.0
 
 # Bottom-left Octagonal Tool Hotbar
 var _hotbar_anchor: Control
+var _slot_containers: Array[Control] = []
+var _slot_owned: Array[bool] = [true, true, false, true]
 var _slot_icons: Array[TextureRect] = []
 var _slot_borders: Array[TextureRect] = []
 var _slot_bgs: Array[TextureRect] = []
@@ -1099,29 +1150,34 @@ func _build_compass_strip(root: Control) -> void:
 	compass_box.name = "CompassStrip"
 	compass_box.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	compass_box.offset_left = -290.0
-	compass_box.offset_top = 10.0
+	compass_box.offset_top = 8.0
 	compass_box.offset_right = 290.0
 	compass_box.offset_bottom = 40.0
-	compass_box.custom_minimum_size = Vector2(580, 30)
+	compass_box.custom_minimum_size = Vector2(580, 32)
 	compass_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(compass_box)
 
-	# W5D: subtle centre line. The authored T_compass_lines strip is kept (the
-	# E2E contract names it) but at native 100x30 centred on the tick, not
-	# stretched across 580 px with every cardinal in between.
-	var c_lines: TextureRect = _tex_rect("res://assets/ue/Raw/Art/UI/HUD/T_compass_lines.png", Vector2(100, 30))
+	# W5D: subtle centre line. KF02/KF14 measure a single thin rule spanning
+	# most of the top of the frame with one centre tick, and the heading letter
+	# ABOVE the rule. The authored 100x30 T_compass_lines strip holds only that
+	# rule, so it is stretched to the measured width instead of shown as a
+	# 100 px solid bar.
+	var c_lines: TextureRect = _tex_rect("res://assets/ue/Raw/Art/UI/HUD/T_compass_lines.png", Vector2(560, 8))
 	if c_lines != null:
 		c_lines.name = "CompassCenterLine"
-		c_lines.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		c_lines.position = Vector2(240, 0)
-		c_lines.modulate = Color(0.55, 0.72, 1.0, 0.42)
+		c_lines.stretch_mode = TextureRect.STRETCH_SCALE
+		c_lines.position = Vector2(10, 22)
+		c_lines.size = Vector2(560, 8)
+		c_lines.modulate = Color(0.55, 0.72, 1.0, 0.30)
 		compass_box.add_child(c_lines)
 
-	# Subtle center '+' tick matching UE5 compass strip.
+	# Subtle center '+' tick matching UE5 compass strip: it rises from the rule
+	# to just under the heading (KF02's measured centre tick).
 	var tick_v: ColorRect = ColorRect.new()
+	tick_v.name = "CompassCenterTick"
 	tick_v.color = Color(0.66, 0.80, 1.0, 0.55)
-	tick_v.position = Vector2(289.5, 9.0)
-	tick_v.size = Vector2(1.0, 12.0)
+	tick_v.position = Vector2(289.25, 9.0)
+	tick_v.size = Vector2(1.5, 13.0)
 	tick_v.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	compass_box.add_child(tick_v)
 
@@ -1154,9 +1210,13 @@ func _build_compass_strip(root: Control) -> void:
 		ribbon_lbl.add_theme_font_override("font", _sans)
 	ribbon_clip.add_child(ribbon_lbl)
 
-	# The single heading nearest the centre tick (W5D reference HUD).
+	# The single heading nearest the centre tick (W5D reference HUD), sitting
+	# above the thin rule as in KF02 (NW) and KF14 (SE).
 	compass_lbl = Label.new()
-	compass_lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
+	compass_lbl.name = "CompassHeading"
+	compass_lbl.position = Vector2.ZERO
+	compass_lbl.custom_minimum_size = Vector2(580, 20)
+	compass_lbl.size = Vector2(580, 20)
 	compass_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	compass_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	compass_lbl.add_theme_font_size_override("font_size", 15)
@@ -1454,6 +1514,11 @@ func _build_stealth_ball_and_soundwaves(root: Control) -> void:
 	_stealth_orb_mat = ShaderMaterial.new()
 	_stealth_orb_mat.shader = orb_sh
 	_stealth_orb_mat.set_shader_parameter("visibility", 0.2)
+	_stealth_orb_mat.set_shader_parameter("lit_amount", 0.2)
+	_stealth_orb_mat.set_shader_parameter("sector_angle", _gem_sector_angle)
+	_stealth_orb_mat.set_shader_parameter("sector_dir", _gem_sector_dir)
+	_stealth_orb_mat.set_shader_parameter("sector_z", _gem_sector_z)
+	_stealth_orb_mat.set_shader_parameter("sector_strength", 0.0)
 	orb.material = _stealth_orb_mat
 	_stealth_holder.add_child(orb)
 
@@ -1462,7 +1527,8 @@ func _build_stealth_ball_and_soundwaves(root: Control) -> void:
 	if stealth_gem != null:
 		stealth_gem.name = "StealthGemFrame"
 		stealth_gem.position = Vector2(110.0 - 42.0, 48.0 - 42.0)
-		stealth_gem.modulate = Color(0.48, 0.58, 0.96, 0.98)
+		# UI3: the authored frame tint, constant in every exposure state.
+		stealth_gem.modulate = GEM_FRAME_TINT
 		_stealth_holder.add_child(stealth_gem)
 
 	# UI5-06 / KF28 #6: status icon column directly above the Light Gem.
@@ -1521,9 +1587,11 @@ func _build_reticle_and_prompt(root: Control) -> void:
 	_crank_prompt_lbl.offset_right = 90.0
 	_crank_prompt_lbl.offset_bottom = 56.0
 	_crank_prompt_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	# "Crank" is an authored source (ST_Tools Tools_Deploy_Crank / the locres);
-	# [RMB] is the live secondary-action glyph.
-	_crank_prompt_lbl.text = InputGlyphs.prompt("secondary_action", UIStringsScript.loc("Crank").to_upper())
+	# KF17/KF29 centre prompt: the label first, then the keycap (`CRANK [LMB]`).
+	# The bottom-right `[HOLD] CRANK [RMB]` hint comes from the reticle state and
+	# is unchanged; this centre string is the authored ring prompt.
+	var crank_key: String = InputGlyphs.bracket("primary_action")
+	_crank_prompt_lbl.text = UIStringsScript.loc("Crank").to_upper() + ((" " + crank_key) if crank_key != "" else "")
 	_crank_prompt_lbl.add_theme_font_size_override("font_size", 12)
 	_crank_prompt_lbl.add_theme_color_override("font_color", Color(0.58, 0.92, 1.0, 0.96))
 	_crank_prompt_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
@@ -1603,6 +1671,7 @@ func _build_tool_hotbar(root: Control) -> void:
 	_slot_borders.clear()
 	_slot_bgs.clear()
 	_slot_key_lbls.clear()
+	_slot_containers.clear()
 
 	_hotbar_anchor = Control.new()
 	_hotbar_anchor.name = "BottomLeftToolHotbar"
@@ -1627,16 +1696,25 @@ func _build_tool_hotbar(root: Control) -> void:
 	var bg_shader: Shader = Shader.new()
 	bg_shader.code = ABILITY_BG_MASK_SHADER
 
+	# KF14/KF19: the reference hotbar renders the authored slot indices that
+	# carry a tool (1, 2, 4 in a default loadout) and no ammo counts. Slot 3 is
+	# the swappable slot and stays empty until the save actually equips one.
 	var default_keys: Array[String] = ["1", "2", "3", "4"]
-	var default_ids: Array[String] = ["zipwire", "smoke_bomb", "slithersap", "vistara_diamond"]
+	var loadout: Array[String] = _loadout_tool_ids()
+	_slot_owned.clear()
+	for i: int in range(4):
+		var owned: bool = i < loadout.size() and loadout[i] != ""
+		_slot_owned.append(owned)
 
 	for i: int in range(4):
 		var slot: Control = Control.new()
 		slot.name = "ToolSlot_%d" % (i + 1)
 		slot.custom_minimum_size = Vector2(62, 62)
 		slot.size = Vector2(62, 62)
+		slot.visible = _slot_owned[i]
 		slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		hb.add_child(slot)
+		_slot_containers.append(slot)
 
 		# Masked octagonal background (T_Ability_Background luminance mask).
 		var bg_tr: TextureRect = TextureRect.new()
@@ -1659,9 +1737,10 @@ func _build_tool_hotbar(root: Control) -> void:
 		icon.position = Vector2(10, 9)
 		icon.size = Vector2(42, 42)
 		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		var init_tex: Texture2D = _tool_icon_for(default_ids[i])
-		if init_tex != null:
-			icon.texture = init_tex
+		if _slot_owned[i]:
+			var init_tex: Texture2D = _tool_icon_for(loadout[i])
+			if init_tex != null:
+				icon.texture = init_tex
 		slot.add_child(icon)
 		_slot_icons.append(icon)
 
@@ -1676,16 +1755,20 @@ func _build_tool_hotbar(root: Control) -> void:
 		slot.add_child(border_tr)
 		_slot_borders.append(border_tr)
 
-		# Crisp white square keycap badge at bottom-left of slot.
+		# Crisp white square keycap badge at bottom-left of slot. The number is
+		# the authored slot index, so an empty slot 3 never renumbers slot 4.
 		var key_badge: PanelContainer = ThemeScript.white_keycap(default_keys[i], 11)
 		key_badge.position = Vector2(-2, 44)
 		key_badge.custom_minimum_size = Vector2(18, 18)
+		key_badge.visible = _slot_owned[i]
 		slot.add_child(key_badge)
 		_slot_key_lbls.append(key_badge.get_child(0) as Label)
 
-		# Count / ∞ glyph at bottom-right (preserved slot_count_lbls).
+		# Count / ∞ glyph at bottom-right (preserved slot_count_lbls). The
+		# reference HUD has no ammo counts; the label is kept for the existing
+		# ∞ contract but is not drawn. Slot 4 keeps the "∞" text (signature tool).
 		var count_lbl: Label = Label.new()
-		count_lbl.text = "∞" if i == 3 else "0"
+		count_lbl.text = "∞" if i == 3 else ""
 		count_lbl.position = Vector2(30, 42)
 		count_lbl.custom_minimum_size = Vector2(28, 18)
 		count_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -1697,6 +1780,7 @@ func _build_tool_hotbar(root: Control) -> void:
 		if _sans != null:
 			count_lbl.add_theme_font_override("font", _sans)
 		count_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		count_lbl.visible = false
 		slot.add_child(count_lbl)
 		slot_count_lbls.append(count_lbl)
 
@@ -2222,6 +2306,24 @@ func _build_pause_menu(root: Control) -> void:
 	_pause_root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_pause_root.visible = false
 	root.add_child(_pause_root)
+	# KF30: the gameplay behind the modal is heavily blurred AND darkened. The
+	# old panel blurred nothing (the comparison read "blurs without dimming");
+	# this is the same 13-tap screen-texture blur the KF13 letter uses, over the
+	# 3D frame only because `_hide_live_hud_for_pause` hides every live HUD node
+	# before this backdrop draws.
+	var pause_blur: ColorRect = ColorRect.new()
+	pause_blur.name = "PauseBlurBackdrop"
+	pause_blur.set_anchors_preset(Control.PRESET_FULL_RECT)
+	pause_blur.color = Color.WHITE
+	pause_blur.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var pause_blur_mat: ShaderMaterial = ShaderMaterial.new()
+	var pause_blur_shader: Shader = Shader.new()
+	pause_blur_shader.code = BRIEFING_BLUR_SHADER
+	pause_blur_mat.shader = pause_blur_shader
+	pause_blur_mat.set_shader_parameter("blur_px", 6.0)
+	pause_blur_mat.set_shader_parameter("tint", Color(0.62, 0.64, 0.70, 1.0))
+	pause_blur.material = pause_blur_mat
+	_pause_root.add_child(pause_blur)
 	var dim: ColorRect = ColorRect.new()
 	dim.name = "PauseDim"
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -3152,29 +3254,20 @@ func _update_stealth_ball_and_soundwaves(p: Node3D, delta: float, is_hub: bool) 
 		return
 	var target_vis: float = clampf(GameState.player_light_visibility, 0.0, 1.0)
 	_vis_smooth = lerpf(_vis_smooth, target_vis, clampf(delta * 8.0, 0.0, 1.0))
-	if _stealth_orb_mat != null:
-		_stealth_orb_mat.set_shader_parameter("visibility", _vis_smooth)
-		# UI3 directional warm sector: the player publishes the strongest
-		# nearby light direction; convert it to canvas angle (+Y down).
-		var sector_angle: float = 0.0
-		var sector_strength: float = 0.0
-		if p != null:
-			var dir_v: Variant = p.get("light_sector_dir")
-			var strength_v: Variant = p.get("light_sector_strength")
-			var strength: float = float(strength_v) if (strength_v is float or strength_v is int) else 0.0
+	# UI3 directional warm sector: the player publishes the strongest nearby
+	# light direction; convert it to the gem's canvas frame (+X right, +Y down,
+	# +Z toward the camera) so the lit cap sits on the light's side.
+	var view_dir: Vector3 = GEM_DEFAULT_DIR
+	var strength: float = 0.0
+	if p != null:
+		var dir_v: Variant = p.get("light_sector_dir")
+		var strength_v: Variant = p.get("light_sector_strength")
+		var raw_strength: float = float(strength_v) if (strength_v is float or strength_v is int) else 0.0
+		if dir_v is Vector3 and (dir_v as Vector3).length_squared() > 0.0001:
 			var cam3d: Camera3D = get_viewport().get_camera_3d() if is_inside_tree() else null
-			if dir_v is Vector3 and cam3d != null:
-				var dir: Vector3 = dir_v
-				if dir.length_squared() > 0.0001:
-					dir = dir.normalized()
-					var cam_right: Vector3 = cam3d.global_transform.basis.x
-					var cam_up: Vector3 = cam3d.global_transform.basis.y
-					sector_angle = atan2(-dir.dot(cam_up), dir.dot(cam_right))
-					sector_strength = clampf(strength, 0.0, 1.0)
-		_stealth_orb_mat.set_shader_parameter("sector_angle", sector_angle)
-		_stealth_orb_mat.set_shader_parameter("sector_strength", sector_strength)
-	if stealth_gem != null:
-		stealth_gem.modulate = Color(0.45, 0.56, 0.96, 0.96).lerp(Color(0.96, 0.90, 0.62, 1.0), _vis_smooth * 0.65)
+			view_dir = light_gem_view_dir(dir_v as Vector3, cam3d)
+			strength = clampf(raw_strength, 0.0, 1.0)
+	apply_light_gem_state(_vis_smooth, view_dir, strength)
 	if _soundwave_energy > 0.0:
 		_soundwave_energy = maxf(0.0, _soundwave_energy - delta * 1.35)
 		_soundwave_phase = fposmod(_soundwave_phase + delta * 2.2, 1.0)
@@ -3182,6 +3275,69 @@ func _update_stealth_ball_and_soundwaves(p: Node3D, delta: float, is_hub: bool) 
 		_soundwaves_draw.energy = _soundwave_energy
 		_soundwaves_draw.phase = _soundwave_phase
 		_soundwaves_draw.queue_redraw()
+
+
+## UI3: world "direction to the strongest light" -> the gem's canvas frame.
+## Godot's camera looks down its local -Z, so a light on the viewer's side has
+## +Z here. The result is a unit vector in (right, down, toward-camera) space.
+static func light_gem_view_dir(dir_world: Vector3, cam: Camera3D) -> Vector3:
+	if dir_world.length_squared() < 0.000001:
+		return GEM_DEFAULT_DIR
+	if cam == null:
+		return GEM_DEFAULT_DIR
+	var d: Vector3 = dir_world.normalized()
+	var b: Basis = cam.global_transform.basis.orthonormalized()
+	var v: Vector3 = Vector3(d.dot(b.x), -d.dot(b.y), d.dot(b.z))
+	if v.length_squared() < 0.000001:
+		return GEM_DEFAULT_DIR
+	return v.normalized()
+
+
+## UI3: projected area of the lit cap for a given amount. The shader's
+## terminator is `ndl = 1 - 2 * amount`, whose projected cap area is `amount`
+## (0 = point highlight, 0.5 = half sphere, 1 = full sphere). PORT_APPROX of the
+## missing T_stealthball_Array slices; the mapping is what the probe pins.
+static func gem_lit_area_fraction(amount: float) -> float:
+	return clampf(amount, 0.0, 1.0)
+
+
+## UI3: apply one gem state (amount, canvas-space light direction, confidence).
+## Public so the probe can drive the exact shader parameters without a camera.
+func apply_light_gem_state(amount: float, view_dir: Vector3, strength: float) -> void:
+	_gem_amount = clampf(amount, 0.0, 1.0)
+	var v: Vector3 = view_dir
+	if v.length_squared() < 0.000001:
+		v = GEM_DEFAULT_DIR
+	v = v.normalized()
+	var xy: Vector2 = Vector2(v.x, v.y)
+	if xy.length() > 0.02:
+		_gem_sector_dir = xy.normalized()
+		_gem_sector_angle = atan2(_gem_sector_dir.y, _gem_sector_dir.x)
+	_gem_sector_z = clampf(v.z, -1.0, 1.0)
+	_gem_sector_strength = clampf(strength, 0.0, 1.0)
+	if _stealth_orb_mat != null:
+		_stealth_orb_mat.set_shader_parameter("visibility", _gem_amount)
+		_stealth_orb_mat.set_shader_parameter("lit_amount", _gem_amount)
+		_stealth_orb_mat.set_shader_parameter("sector_angle", _gem_sector_angle)
+		_stealth_orb_mat.set_shader_parameter("sector_dir", _gem_sector_dir)
+		_stealth_orb_mat.set_shader_parameter("sector_z", _gem_sector_z)
+		_stealth_orb_mat.set_shader_parameter("sector_strength", _gem_sector_strength)
+	if stealth_gem != null:
+		stealth_gem.modulate = GEM_FRAME_TINT
+
+
+## UI3: read back the applied gem state (probe + diagnostics).
+func light_gem_state() -> Dictionary:
+	return {
+		"amount": _gem_amount,
+		"lit_area_fraction": gem_lit_area_fraction(_gem_amount),
+		"sector_angle": _gem_sector_angle,
+		"sector_angle_deg": rad_to_deg(_gem_sector_angle),
+		"sector_dir": _gem_sector_dir,
+		"sector_z": _gem_sector_z,
+		"sector_strength": _gem_sector_strength,
+		"frame_tint": GEM_FRAME_TINT,
+	}
 
 
 func _update_portrait_plate() -> void:
@@ -3254,9 +3410,6 @@ func _update_tool_hotbar_and_reticle(p: Node3D, is_hub: bool) -> void:
 	## P2-2: legacy hotbar_lbl is a hidden API-compat stub (e2e_tier2_boundaries
 	## asserts its existence). The octagonal hotbar below is the live UI, so no
 	## per-frame text is pushed here anymore.
-	var ch_v: Variant = p.get("charges")
-	var ch: Dictionary = ch_v as Dictionary if ch_v is Dictionary else {}
-
 	if p.has_method("get_tool_slots"):
 		var slots_v: Variant = p.call("get_tool_slots")
 		if slots_v is Array:
@@ -3270,7 +3423,18 @@ func _update_tool_hotbar_and_reticle(p: Node3D, is_hub: bool) -> void:
 				var tid: String = str(sd.get("id", ""))
 				var cnt: int = int(sd.get("count", 0))
 				var is_active: bool = sd.get("active", false) == true
-				slot_count_lbls[i].text = "∞" if cnt < 0 else str(cnt)
+				var owned: bool = i < _slot_owned.size() and _slot_owned[i] and tid != ""
+				if i < _slot_containers.size():
+					_slot_containers[i].visible = owned
+				if i < _slot_key_lbls.size() and _slot_key_lbls[i] != null:
+					_slot_key_lbls[i].get_parent().visible = owned
+				if not owned:
+					slot_count_lbls[i].visible = false
+					continue
+				# Reference HUD carries no ammo counts; keep the preserved ∞ text
+				# on the unlimited signature slot for the contract, never drawn.
+				slot_count_lbls[i].text = "∞" if cnt < 0 else ""
+				slot_count_lbls[i].visible = false
 				if i < _slot_icons.size() and i < _slot_last_ids.size() and _slot_last_ids[i] != tid:
 					_slot_last_ids[i] = tid
 					var tex: Texture2D = _tool_icon_for(tid)
@@ -3282,10 +3446,12 @@ func _update_tool_hotbar_and_reticle(p: Node3D, is_hub: bool) -> void:
 					_slot_icons[i].modulate = Color(1.0, 1.0, 1.0, 1.0) if is_active else Color(0.75, 0.82, 0.96, 0.80)
 	else:
 		if slot_count_lbls.size() >= 4:
-			slot_count_lbls[0].text = str(int(ch.get("grapple", ch.get("slithersap", 0))))
-			slot_count_lbls[1].text = str(int(ch.get("smoke_bomb", 0)))
-			slot_count_lbls[2].text = str(int(ch.get("slithersap", ch.get("pickpocket_fairy", 0))))
+			slot_count_lbls[0].text = ""
+			slot_count_lbls[1].text = ""
+			slot_count_lbls[2].text = ""
 			slot_count_lbls[3].text = "∞"
+			for lbl: Label in slot_count_lbls:
+				lbl.visible = false
 
 	# Dynamic reticle & bottom-right contextual hints.
 	var ret_state: Dictionary = {}
@@ -4208,6 +4374,21 @@ func _tool_icon_for(tool_id: String) -> Texture2D:
 	if path != "" and ResourceLoader.exists(path):
 		return ResourceLoader.load(path) as Texture2D
 	return null
+
+
+## KF03/KF14: the four authored tool slots, from the save's loadout. A slot with
+## no tool is not drawn at all (the reference run carries 1, 2 and 4 and has no
+## empty third octagon). Unknown ids are kept so a save cannot silently drop a
+## tool; the icon resolves through TOOL_ICON_MAP.
+func _loadout_tool_ids() -> Array[String]:
+	var out: Array[String] = ["zipwire", "smoke_bomb", "", "vistara_diamond"]
+	if SaveSystem != null:
+		var tools_v: Variant = SaveSystem.data.get("tools", null)
+		if tools_v is Array:
+			var tools: Array = tools_v as Array
+			for i: int in range(4):
+				out[i] = str(tools[i]).strip_edges() if i < tools.size() else ""
+	return out
 
 
 func _tex_rect(path: String, min_sz: Vector2) -> TextureRect:

@@ -612,6 +612,11 @@ func _build_all() -> void:
 		_controls_lbl.add_theme_font_override("font", sans)
 	_controls_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bottom.add_child(_controls_lbl)
+	# KF11 shows ONE stack of prompts (`[F] UNREADY` above `[ESC] BACK`), not a
+	# hint line repeating both buttons. The label stays in the tree (the T05
+	# contract reads its text) but is not drawn; the two action buttons below
+	# are the single visible READY/BACK prompt pair.
+	_controls_lbl.visible = false
 	var btn_row: HBoxContainer = HBoxContainer.new()
 	btn_row.alignment = BoxContainer.ALIGNMENT_END
 	btn_row.add_theme_constant_override("separation", 10)
@@ -1308,7 +1313,13 @@ func _populate_mission_rows() -> void:
 					_mission_rows.append(m_v as Dictionary)
 	for m: Dictionary in _mission_rows:
 		if _mission_selector != null:
-			_mission_selector.add_item("%s (%s)" % [str(m.get("title", "")), str(m.get("id", ""))])
+			# KF11: the mission card names the authored heist, not the internal
+			# mission id (`Mission.Guildhall.LootTheRoom`). The id still drives
+			# selection by index and is kept as item metadata for tests/tools;
+			# it is never shown.
+			var item_idx: int = _mission_selector.item_count
+			_mission_selector.add_item(str(m.get("title", "")))
+			_mission_selector.set_item_metadata(item_idx, str(m.get("id", "")))
 
 
 func _on_mission_selected(idx: int) -> void:

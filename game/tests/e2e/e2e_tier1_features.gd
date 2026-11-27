@@ -1327,6 +1327,8 @@ func _feat_13_hud_stealth_sound_health() -> void:
 
 	# T1-13-A: Center Stealth Ball Light Reactivity
 	var sg: TextureRect = hud.get("stealth_gem") as TextureRect
+	var orb_node: ColorRect = hud.find_child("StealthOrbInner", true, false) as ColorRect
+	var orb_mat: ShaderMaterial = orb_node.material as ShaderMaterial if orb_node != null else null
 	var sg_centered: bool = false
 	var sg_reactive: bool = false
 	if sg != null:
@@ -1335,12 +1337,16 @@ func _feat_13_hud_stealth_sound_health() -> void:
 		gs.set("player_light_visibility", 0.05)
 		hud.set("_vis_smooth", 0.0)
 		await h.step_process(10)
-		var mod_dark: Color = sg.modulate
+		var dark_amount: float = float(orb_mat.get_shader_parameter("lit_amount")) if orb_mat != null else -1.0
+		var dark_frame: Color = sg.modulate
 		gs.set("player_light_visibility", 0.95)
 		hud.set("_vis_smooth", 1.0)
 		await h.step_process(10)
-		var mod_bright: Color = sg.modulate
-		sg_reactive = (mod_bright.v > mod_dark.v + 0.01) or (mod_bright.r > mod_dark.r + 0.01)
+		var bright_amount: float = float(orb_mat.get_shader_parameter("lit_amount")) if orb_mat != null else -1.0
+		var bright_frame: Color = sg.modulate
+		# UI3: the authored frame tint is constant; reactivity lives in the
+		# orb's lit-cap amount (the old assertion read the frame modulate).
+		sg_reactive = bright_amount > dark_amount + 0.5 and bright_frame.is_equal_approx(dark_frame)
 	h.require(sg_centered and sg_reactive, "T1-13-A", "StealthBall centered=%s light_reactive=%s" % [str(sg_centered), str(sg_reactive)])
 
 	# T1-13-B: Bilateral Red SoundWaves on NoiseBus

@@ -245,7 +245,9 @@ func _bVA_05_mission_prep() -> void:
 			continue
 		var idx: int = -1
 		for i: int in range(sel.item_count):
-			if sel.get_item_text(i).find(row_id) >= 0:
+			# The prep selector shows authored titles only (KF11); the mission
+			# id is item metadata so the copy can never be a test locator.
+			if str(sel.get_item_metadata(i)) == row_id:
 				idx = i
 				break
 		if idx < 0:
@@ -304,7 +306,7 @@ func _bVA_05_mission_prep() -> void:
 	var no_zero_window: bool = true
 	if sel != null:
 		for i: int in range(sel.item_count):
-			if sel.get_item_text(i).find("Mission.Tutorial.Single") >= 0:
+			if str(sel.get_item_metadata(i)) == "Mission.Tutorial.Single":
 				sel.select(i)
 				sel.item_selected.emit(i)
 				await h.step_process(1)

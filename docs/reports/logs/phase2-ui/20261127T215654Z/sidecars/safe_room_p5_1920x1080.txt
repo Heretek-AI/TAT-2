@@ -1,0 +1,25 @@
+capture=safe_room_p5_1920x1080
+shot=safe_room
+tag=p5
+run_id=20261127T215654Z
+size=1920x1080
+engine=4.7.2-stable (official)
+renderer=forward_plus
+timestamp=2026-11-27T16:59:54
+save_home=/tmp/opencode/p5-ui-data
+save_path=
+profile=thief:spider level:<null> currency:<null> map:guildhall contract:2 mode:Solo free_play:true
+camera.pos=127.2747,27.1382,-5.3296 fwd=-0.4563,-0.1273,0.8807 fov=54.540 keep_aspect=1 far=4000.0
+pose=safe_room authored spawn eye
+lantern_lit=true
+hud.gem=path:authored_array bound:true layers:21 kind:directional slice:8 amount:0.420 lit_area:0.420 angle:-88.9
+hud.compass=SW
+hud.prompt=
+hud.prompt_secondary=
+hud.keys=
+hud.letter_open=false
+hud.tree_paused=false
+roi.gem=0.4550,0.8550,0.0900,0.1400 mean=0.1487 max=0.9628 px=6612
+roi.lantern=0.1500,0.3500,0.3000,0.4500 mean=0.3533 max=1.0000 px=69984
+roi.portal=0.4500,0.3000,0.3000,0.5500 mean=0.2738 max=0.9687 px=85833
+roi.full=0.0000,0.0000,1.0000,1.0000 mean=0.1685 max=1.0000 px=518400

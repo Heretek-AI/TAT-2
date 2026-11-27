@@ -1,0 +1,23 @@
+capture=ledger_p5_1280x720
+shot=ledger
+tag=p5
+run_id=20261127T215654Z
+size=1280x720
+engine=4.7.2-stable (official)
+renderer=forward_plus
+timestamp=2026-11-27T16:57:22
+save_home=/tmp/opencode/p5-ui-data
+save_path=
+profile=thief:spider level:<null> currency:<null> map:thieves_den contract:1 mode:Solo free_play:false
+hud.gem=path:port_approx bound:false layers:0 kind: slice:-1 amount:0.200 lit_area:0.200 angle:-136.9
+hud.compass=NW
+hud.prompt=
+hud.prompt_secondary=
+hud.keys=
+hud.letter_open=false
+hud.tree_paused=false
+pose=ledger tab:journal
+roi.tabs=0.0100,0.0200,0.9800,0.1000 mean=0.1162 max=0.9908 px=22608
+roi.portrait=0.0300,0.0800,0.3000,0.3000 mean=0.1370 max=0.9908 px=20736
+roi.contracts=0.0300,0.4000,0.9400,0.3500 mean=0.1193 max=0.9034 px=75852
+roi.xp=0.0300,0.3000,0.3000,0.1000 mean=0.0796 max=0.9049 px=6912

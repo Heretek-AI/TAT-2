@@ -1,0 +1,25 @@
+capture=den_hud_p5_1280x720
+shot=den_hud
+tag=p5
+run_id=20261127T215654Z
+size=1280x720
+engine=4.7.2-stable (official)
+renderer=forward_plus
+timestamp=2026-11-27T16:57:18
+save_home=/tmp/opencode/p5-ui-data
+save_path=
+profile=thief:spider level:<null> currency:<null> map:thieves_den contract:1 mode:Solo free_play:false
+camera.pos=4.2000,41.9000,271.2000 fwd=-0.9984,-0.0459,0.0344 fov=54.540 keep_aspect=1 far=4000.0
+pose=den_entry(4.2,41.9,271.2)->(-4.5,41.5,271.5)
+hud.gem=path:port_approx bound:false layers:0 kind: slice:-1 amount:0.200 lit_area:0.200 angle:-136.9
+hud.compass=NW
+hud.prompt=
+hud.prompt_secondary=
+hud.keys=
+hud.letter_open=false
+hud.tree_paused=false
+roi.compass=0.3000,0.0000,0.4000,0.1000 mean=0.1092 max=0.9034 px=9216
+roi.player_card=0.7200,0.0000,0.2800,0.1300 mean=0.0866 max=0.9306 px=8460
+roi.loot=0.0000,0.0200,0.2700,0.1300 mean=0.0366 max=0.1668 px=8131
+roi.hotbar=0.0120,0.7900,0.2600,0.2000 mean=0.1011 max=0.2679 px=12024
+roi.full=0.0000,0.0000,1.0000,1.0000 mean=0.1338 max=0.9686 px=230400

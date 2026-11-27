@@ -1,0 +1,57 @@
+$ python3 build/qa/ui_pixel_stats.py --dir /tmp/opencode/p5-ui-captures/20261127T215654Z --json /tmp/opencode/p5-ui-captures/20261127T215654Z/ui_pixel_stats.json --require startscreen,den_hud,pause,prep,briefing,contract_table,wardrobe,ledger,safe_room,crank,doors,key,pause_backdrop --strict
+UI_PIXEL_STATS dir=/tmp/opencode/p5-ui-captures/20261127T215654Z frames=28
+  briefing@1280x720  briefing lines=11 last_y=484 margin=95 overflow=False
+  briefing@1920x1080  briefing lines=10 last_y=727 margin=142 overflow=False
+  contract_table@1280x720  legend contrast=7.21 ink=780 clip=left,top
+  contract_table@1920x1080  legend contrast=5.54 ink=1666 clip=left,top
+  crank@1280x720  gem lit=0.007 ang=-52.61 dir=[0.6072, -0.7945] ring=6px  GEM_ANGLE_ERR=84.3  prompt contrast=3.81 ink=2032 clip=top,bottom
+  crank@1920x1080  gem lit=0.008 ang=-52.02 dir=[0.6154, -0.7882] ring=9px  GEM_ANGLE_ERR=84.9  prompt contrast=4.32 ink=3998 clip=top,bottom
+  den_hud@1280x720  compass rule_row=52 thick=7 span=311 heading=NW
+  den_hud@1920x1080  compass rule_row=80 thick=9 span=466 heading=NW
+  doors@1280x720  prompt contrast=3.24 ink=1308 clip=top,bottom  prompt_secondary contrast=3.65 ink=990 clip=top,bottom
+  doors@1920x1080  prompt contrast=3.70 ink=2581 clip=top,bottom  prompt_secondary contrast=4.35 ink=1800 clip=top,bottom
+  key@1280x720  key_row contrast=3.42 ink=77 clip=bottom
+  key@1920x1080  key_row contrast=3.62 ink=161 clip=bottom
+  ledger@1280x720  tabs contrast=7.75 ink=1457 clip=bottom
+  ledger@1920x1080  tabs contrast=7.64 ink=3464 clip=bottom
+  ledger_market@1280x720  tabs contrast=8.08 ink=1492 clip=bottom
+  ledger_market@1920x1080  tabs contrast=7.75 ink=3590 clip=bottom
+  pause@1280x720  footer contrast=1.10 ink=0 clip=-  modal contrast=5.85 ink=2938 clip=-  pause dim=0.2996 blur=7.9298
+  pause@1920x1080  footer contrast=1.11 ink=0 clip=-  modal contrast=5.85 ink=7202 clip=-  pause dim=0.309 blur=6.6112
+  pause_backdrop@1280x720
+  pause_backdrop@1920x1080
+  prep@1280x720  prompt contrast=8.20 ink=558 clip=left,top,bottom  cards contrast=8.35 ink=6262 clip=left,top,bottom
+  prep@1920x1080  prompt contrast=7.92 ink=1111 clip=left,top,bottom  cards contrast=8.33 ink=13170 clip=left,top
+  safe_room@1280x720  gem lit=0.068 ang=-85.48 dir=[0.0789, -0.9969] ring=5px
+  safe_room@1920x1080  gem lit=0.073 ang=-73.79 dir=[0.2792, -0.9602] ring=3px
+  startscreen@1280x720
+  startscreen@1920x1080
+  wardrobe@1280x720
+  wardrobe@1920x1080
+UI_PIXEL_STATS FAIL contract_table@1280x720 legend text clipped at left,top
+UI_PIXEL_STATS FAIL contract_table@1920x1080 legend text clipped at left,top
+UI_PIXEL_STATS FAIL crank@1280x720 prompt contrast 3.81 < 4.5
+UI_PIXEL_STATS FAIL crank@1280x720 prompt text clipped at top,bottom
+UI_PIXEL_STATS FAIL crank@1920x1080 prompt contrast 4.32 < 4.5
+UI_PIXEL_STATS FAIL crank@1920x1080 prompt text clipped at top,bottom
+UI_PIXEL_STATS FAIL doors@1280x720 prompt contrast 3.24 < 4.5
+UI_PIXEL_STATS FAIL doors@1280x720 prompt text clipped at top,bottom
+UI_PIXEL_STATS FAIL doors@1280x720 prompt_secondary text clipped at top,bottom
+UI_PIXEL_STATS FAIL doors@1920x1080 prompt contrast 3.70 < 4.5
+UI_PIXEL_STATS FAIL doors@1920x1080 prompt text clipped at top,bottom
+UI_PIXEL_STATS FAIL doors@1920x1080 prompt_secondary text clipped at top,bottom
+UI_PIXEL_STATS FAIL key@1280x720 key_row text clipped at bottom
+UI_PIXEL_STATS FAIL key@1920x1080 key_row text clipped at bottom
+UI_PIXEL_STATS FAIL ledger@1280x720 tabs text clipped at bottom
+UI_PIXEL_STATS FAIL ledger@1920x1080 tabs text clipped at bottom
+UI_PIXEL_STATS FAIL ledger_market@1280x720 tabs text clipped at bottom
+UI_PIXEL_STATS FAIL ledger_market@1920x1080 tabs text clipped at bottom
+UI_PIXEL_STATS FAIL pause@1280x720 blur_ratio 7.93 > 0.60
+UI_PIXEL_STATS FAIL pause@1920x1080 blur_ratio 6.61 > 0.60
+UI_PIXEL_STATS FAIL prep@1280x720 prompt text clipped at left,top,bottom
+UI_PIXEL_STATS FAIL prep@1280x720 cards text clipped at left,top,bottom
+UI_PIXEL_STATS FAIL prep@1920x1080 prompt text clipped at left,top,bottom
+UI_PIXEL_STATS FAIL prep@1920x1080 cards text clipped at left,top
+UI_PIXEL_STATS SUMMARY rows=28 fails=24
+
+EXIT=1 DURATION=6s

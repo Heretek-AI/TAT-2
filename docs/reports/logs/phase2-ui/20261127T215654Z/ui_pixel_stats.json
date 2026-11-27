@@ -1,0 +1,1097 @@
+{
+ "dir": "/tmp/opencode/p5-ui-captures/20261127T215654Z",
+ "errors": [],
+ "frames": 28,
+ "rows": {
+  "briefing@1280x720": {
+   "briefing": {
+    "bottom_margin_px": 95,
+    "first_ink_y": 201,
+    "last_ink_y": 484,
+    "line_count": 11,
+    "line_rows": [
+     [
+      201,
+      206
+     ],
+     [
+      222,
+      238
+     ],
+     [
+      253,
+      269
+     ],
+     [
+      284,
+      300
+     ],
+     [
+      315,
+      331
+     ],
+     [
+      333,
+      334
+     ],
+     [
+      346,
+      361
+     ],
+     [
+      377,
+      395
+     ],
+     [
+      408,
+      423
+     ],
+     [
+      439,
+      455
+     ],
+     [
+      470,
+      484
+     ]
+    ],
+    "overflow": false,
+    "paper_bottom_px": 579,
+    "present": true
+   },
+   "capture": "briefing_p5_1280x720",
+   "hud.gem": "path:authored_array bound:true layers:21 kind:directional slice:8 amount:0.420 lit_area:0.420 angle:-86.3",
+   "hud.prompt": "",
+   "png": "/tmp/opencode/p5-ui-captures/20261127T215654Z/briefing_p5_1280x720.png",
+   "shot": "briefing",
+   "size": [
+    1280,
+    720
+   ],
+   "staged": "",
+   "tag": "p5"
+  },
+  "briefing@1920x1080": {
+   "briefing": {
+    "bottom_margin_px": 142,
+    "first_ink_y": 302,
+    "last_ink_y": 727,
+    "line_count": 10,
+    "line_rows": [
+     [
+      302,
+      372
+     ],
+     [
+      379,
+      404
+     ],
+     [
+      426,
+      451
+     ],
+     [
+      472,
+      497
+     ],
+     [
+      499,
+      501
+     ],
+     [
+      519,
+      543
+     ],
+     [
+      565,
+      592
+     ],
+     [
+      612,
+      635
+     ],
+     [
+      658,
+      683
+     ],
+     [
+      705,
+      727
+     ]
+    ],
+    "overflow": false,
+    "paper_bottom_px": 869,
+    "present": true
+   },
+   "capture": "briefing_p5_1920x1080",
+   "hud.gem": "path:authored_array bound:true layers:21 kind:directional slice:8 amount:0.420 lit_area:0.420 angle:-86.3",
+   "hud.prompt": "",
+   "png": "/tmp/opencode/p5-ui-captures/20261127T215654Z/briefing_p5_1920x1080.png",
+   "shot": "briefing",
+   "size": [
+    1920,
+    1080
+   ],
+   "staged": "",
+   "tag": "p5"
+  },
+  "contract_table@1280x720": {
+   "capture": "contract_table_p5_1280x720",
+   "hud.gem": "path:port_approx bound:false layers:0 kind: slice:-1 amount:0.200 lit_area:0.200 angle:-136.9",
+   "hud.prompt": "",
+   "png": "/tmp/opencode/p5-ui-captures/20261127T215654Z/contract_table_p5_1280x720.png",
+   "shot": "contract_table",
+   "size": [
+    1280,
+    720
+   ],
+   "staged": "set_den_selected_map('guildhall')",
+   "tag": "p5",
+   "text": {
+    "legend": {
+     "bg_luma": 0.0606,
+     "clipped_edges": [
+      "left",
+      "top"
+     ],
+     "contrast": 7.21,
+     "ink_bbox": [
+      704,
+      561,
+      1148,
+      679
+     ],
+     "ink_px": 780,
+     "present": true,
+     "px": 17485,
+     "solid": false,
+     "text_luma_p98": 0.747
+    }
+   }
+  },
+  "contract_table@1920x1080": {
+   "capture": "contract_table_p5_1920x1080",
+   "hud.gem": "path:port_approx bound:false layers:0 kind: slice:-1 amount:0.200 lit_area:0.200 angle:-136.9",
+   "hud.prompt": "",
+   "png": "/tmp/opencode/p5-ui-captures/20261127T215654Z/contract_table_p5_1920x1080.png",
+   "shot": "contract_table",
+   "size": [
+    1920,
+    1080
+   ],
+   "staged": "set_den_selected_map('guildhall')",
+   "tag": "p5",
+   "text": {
+    "legend": {
+     "bg_luma": 0.0606,
+     "clipped_edges": [
+      "left",
+      "top"
+     ],
+     "contrast": 5.54,
+     "ink_bbox": [
+      1056,
+      842,
+      1724,
+      1018
+     ],
+     "ink_px": 1666,
+     "present": true,
+     "px": 39091,
+     "solid": false,
+     "text_luma_p98": 0.5621
+    }
+   }
+  },
+  "crank@1280x720": {
+   "capture": "crank_p5_1280x720",
+   "gem": {
+    "angle_deg": -52.61,
+    "angle_err_deg": 84.29,
+    "centroid": [
+     671.0,
+     629.3
+    ],
+    "cream_px": 20,
+    "direction": [
+     0.6072,
+     -0.7945
+    ],
+    "lit_fraction": 0.0068,
+    "lit_rgb_p95": 241,
+    "pixels": 2958,
+    "present": true,
+    "ring_thickness_px": 6,
+    "state_amount": 0.0,
+    "state_angle_deg": -136.9,
+    "state_lit_area": 0.0,
+    "state_slice": 18.0,
+    "violet_px": 199
+   },
+   "hud.gem": "path:authored_array bound:true layers:21 kind:directional slice:18 amount:0.000 lit_area:0.000 angle:-136.9",
+   "hud.prompt": "",
+   "png": "/tmp/opencode/p5-ui-captures/20261127T215654Z/crank_p5_1280x720.png",
+   "shot": "crank",
+   "size": [
+    1280,
+    720
+   ],
+   "staged": "hud.set_process(false); reticle crank 0.62 + CRANK label; gem concealed (amount 0)",
+   "tag": "p5",
+   "text": {
+    "prompt": {
+     "bg_luma": 0.2254,
+     "clipped_edges": [
+      "top",
+      "bottom"
+     ],
+     "contrast": 3.81,
+     "ink_bbox": [
+      463,
+      360,
+      771,
+      416
+     ],
+     "ink_px": 2032,
+     "present": true,
+     "px": 5945,
+     "solid": false,
+     "text_luma_p98": 1.0
+    }
+   }
+  },
+  "crank@1920x1080": {
+   "capture": "crank_p5_1920x1080",
+   "gem": {
+    "angle_deg": -52.02,
+    "angle_err_deg": 84.88,
+    "centroid": [
+     1008.5,
+     943.7
+    ],
+    "cream_px": 53,
+    "direction": [
+     0.6154,
+     -0.7882
+    ],
+    "lit_fraction": 0.008,
+    "lit_rgb_p95": 242,
+    "pixels": 6612,
+    "present": true,
+    "ring_thickness_px": 9,
+    "state_amount": 0.0,
+    "state_angle_deg": -136.9,
+    "state_lit_area": 0.0,
+    "state_slice": 18.0,
+    "violet_px": 465
+   },
+   "hud.gem": "path:authored_array bound:true layers:21 kind:directional slice:18 amount:0.000 lit_area:0.000 angle:-136.9",
+   "hud.prompt": "",
+   "png": "/tmp/opencode/p5-ui-captures/20261127T215654Z/crank_p5_1920x1080.png",
+   "shot": "crank",
+   "size": [
+    1920,
+    1080
+   ],
+   "staged": "hud.set_process(false); reticle crank 0.62 + CRANK label; gem concealed (amount 0)",
+   "tag": "p5",
+   "text": {
+    "prompt": {
+     "bg_luma": 0.1929,
+     "clipped_edges": [
+      "top",
+      "bottom"
+     ],
+     "contrast": 4.32,
+     "ink_bbox": [
+      704,
+      540,
+      1160,
+      624
+     ],
+     "ink_px": 3998,
+     "present": true,
+     "px": 13244,
+     "solid": false,
+     "text_luma_p98": 1.0
+    }
+   }
+  },
+  "den_hud@1280x720": {
+   "capture": "den_hud_p5_1280x720",
+   "compass": {
+    "heading_above_rule": true,
+    "heading_bbox": [
+     627,
+     14,
+     652,
+     16
+    ],
+    "heading_ink_px": 13,
+    "heading_letter": "NW",
+    "present": true,
+    "rule_peak_px": 303,
+    "rule_row": 52,
+    "rule_rows": [
+     18,
+     55
+    ],
+    "rule_span_px": 311,
+    "rule_thickness_px": 7
+   },
+   "hud.gem": "path:port_approx bound:false layers:0 kind: slice:-1 amount:0.200 lit_area:0.200 angle:-136.9",
+   "hud.prompt": "",
+   "png": "/tmp/opencode/p5-ui-captures/20261127T215654Z/den_hud_p5_1280x720.png",
+   "shot": "den_hud",
+   "size": [
+    1280,
+    720
+   ],
+   "staged": "",
+   "tag": "p5"
+  },
+  "den_hud@1920x1080": {
+   "capture": "den_hud_p5_1920x1080",
+   "compass": {
+    "heading_above_rule": true,
+    "heading_bbox": [
+     941,
+     22,
+     978,
+     25
+    ],
+    "heading_ink_px": 26,
+    "heading_letter": "NW",
+    "present": true,
+    "rule_peak_px": 455,
+    "rule_row": 80,
+    "rule_rows": [
+     27,
+     84
+    ],
+    "rule_span_px": 466,
+    "rule_thickness_px": 9
+   },
+   "hud.gem": "path:port_approx bound:false layers:0 kind: slice:-1 amount:0.200 lit_area:0.200 angle:-136.9",
+   "hud.prompt": "",
+   "png": "/tmp/opencode/p5-ui-captures/20261127T215654Z/den_hud_p5_1920x1080.png",
+   "shot": "den_hud",
+   "size": [
+    1920,
+    1080
+   ],
+   "staged": "",
+   "tag": "p5"
+  },
+  "doors@1280x720": {
+   "capture": "doors_p5_1280x720",
+   "hud.gem": "path:authored_array bound:true layers:21 kind:directional slice:18 amount:0.000 lit_area:0.000 angle:-136.9",
+   "hud.prompt": "[F] Open Door",
+   "png": "/tmp/opencode/p5-ui-captures/20261127T215654Z/doors_p5_1280x720.png",
+   "shot": "doors",
+   "size": [
+    1280,
+    720
+   ],
+   "staged": "hud.set_steal_prompt('[F] Open Door') + _set_secondary_prompt('[F] [HOLD] LOCK')",
+   "tag": "p5",
+   "text": {
+    "prompt": {
+     "bg_luma": 0.2742,
+     "clipped_edges": [
+      "top",
+      "bottom"
+     ],
+     "contrast": 3.24,
+     "ink_bbox": [
+      466,
+      374,
+      770,
+      408
+     ],
+     "ink_px": 1308,
+     "present": true,
+     "px": 3240,
+     "solid": false,
+     "text_luma_p98": 1.0
+    },
+    "prompt_secondary": {
+     "bg_luma": 0.238,
+     "clipped_edges": [
+      "top",
+      "bottom"
+     ],
+     "contrast": 3.65,
+     "ink_bbox": [
+      478,
+      396,
+      770,
+      430
+     ],
+     "ink_px": 990,
+     "present": true,
+     "px": 3240,
+     "solid": false,
+     "text_luma_p98": 1.0
+    }
+   }
+  },
+  "doors@1920x1080": {
+   "capture": "doors_p5_1920x1080",
+   "hud.gem": "path:authored_array bound:true layers:21 kind:directional slice:18 amount:0.000 lit_area:0.000 angle:-136.9",
+   "hud.prompt": "[F] Open Door",
+   "png": "/tmp/opencode/p5-ui-captures/20261127T215654Z/doors_p5_1920x1080.png",
+   "shot": "doors",
+   "size": [
+    1920,
+    1080
+   ],
+   "staged": "hud.set_steal_prompt('[F] Open Door') + _set_secondary_prompt('[F] [HOLD] LOCK')",
+   "tag": "p5",
+   "text": {
+    "prompt": {
+     "bg_luma": 0.2338,
+     "clipped_edges": [
+      "top",
+      "bottom"
+     ],
+     "contrast": 3.7,
+     "ink_bbox": [
+      711,
+      561,
+      1157,
+      613
+     ],
+     "ink_px": 2581,
+     "present": true,
+     "px": 7263,
+     "solid": false,
+     "text_luma_p98": 1.0
+    },
+    "prompt_secondary": {
+     "bg_luma": 0.1914,
+     "clipped_edges": [
+      "top",
+      "bottom"
+     ],
+     "contrast": 4.35,
+     "ink_bbox": [
+      727,
+      594,
+      1157,
+      646
+     ],
+     "ink_px": 1800,
+     "present": true,
+     "px": 7263,
+     "solid": false,
+     "text_luma_p98": 1.0
+    }
+   }
+  },
+  "key@1280x720": {
+   "capture": "key_p5_1280x720",
+   "hud.gem": "path:authored_array bound:true layers:21 kind:directional slice:18 amount:0.000 lit_area:0.000 angle:-136.9",
+   "hud.prompt": "",
+   "png": "/tmp/opencode/p5-ui-captures/20261127T215654Z/key_p5_1280x720.png",
+   "shot": "key",
+   "size": [
+    1280,
+    720
+   ],
+   "staged": "GameState.add_stolen_key('key_guildhall') + _update_key_row(false)",
+   "tag": "p5",
+   "text": {
+    "key_row": {
+     "bg_luma": 0.0678,
+     "clipped_edges": [
+      "bottom"
+     ],
+     "contrast": 3.42,
+     "ink_bbox": [
+      19,
+      639,
+      189,
+      665
+     ],
+     "ink_px": 77,
+     "present": true,
+     "px": 4498,
+     "solid": false,
+     "text_luma_p98": 0.3529
+    }
+   }
+  },
+  "key@1920x1080": {
+   "capture": "key_p5_1920x1080",
+   "hud.gem": "path:authored_array bound:true layers:21 kind:directional slice:18 amount:0.000 lit_area:0.000 angle:-136.9",
+   "hud.prompt": "",
+   "png": "/tmp/opencode/p5-ui-captures/20261127T215654Z/key_p5_1920x1080.png",
+   "shot": "key",
+   "size": [
+    1920,
+    1080
+   ],
+   "staged": "GameState.add_stolen_key('key_guildhall') + _update_key_row(false)",
+   "tag": "p5",
+   "text": {
+    "key_row": {
+     "bg_luma": 0.0693,
+     "clipped_edges": [
+      "bottom"
+     ],
+     "contrast": 3.62,
+     "ink_bbox": [
+      27,
+      963,
+      279,
+      997
+     ],
+     "ink_px": 161,
+     "present": true,
+     "px": 9842,
+     "solid": false,
+     "text_luma_p98": 0.3815
+    }
+   }
+  },
+  "ledger@1280x720": {
+   "capture": "ledger_p5_1280x720",
+   "hud.gem": "path:port_approx bound:false layers:0 kind: slice:-1 amount:0.200 lit_area:0.200 angle:-136.9",
+   "hud.prompt": "",
+   "png": "/tmp/opencode/p5-ui-captures/20261127T215654Z/ledger_p5_1280x720.png",
+   "shot": "ledger",
+   "size": [
+    1280,
+    720
+   ],
+   "staged": "",
+   "tag": "p5",
+   "text": {
+    "tabs": {
+     "bg_luma": 0.0606,
+     "clipped_edges": [
+      "bottom"
+     ],
+     "contrast": 7.75,
+     "ink_bbox": [
+      90,
+      30,
+      1188,
+      84
+     ],
+     "ink_px": 1457,
+     "present": true,
+     "px": 22608,
+     "solid": false,
+     "text_luma_p98": 0.8065
+    }
+   }
+  },
+  "ledger@1920x1080": {
+   "capture": "ledger_p5_1920x1080",
+   "hud.gem": "path:port_approx bound:false layers:0 kind: slice:-1 amount:0.200 lit_area:0.200 angle:-136.9",
+   "hud.prompt": "",
+   "png": "/tmp/opencode/p5-ui-captures/20261127T215654Z/ledger_p5_1920x1080.png",
+   "shot": "ledger",
+   "size": [
+    1920,
+    1080
+   ],
+   "staged": "",
+   "tag": "p5",
+   "text": {
+    "tabs": {
+     "bg_luma": 0.0606,
+     "clipped_edges": [
+      "bottom"
+     ],
+     "contrast": 7.64,
+     "ink_bbox": [
+      135,
+      45,
+      1783,
+      127
+     ],
+     "ink_px": 3464,
+     "present": true,
+     "px": 50814,
+     "solid": false,
+     "text_luma_p98": 0.7945
+    }
+   }
+  },
+  "ledger_market@1280x720": {
+   "capture": "ledger_market_p5_1280x720",
+   "hud.gem": "path:port_approx bound:false layers:0 kind: slice:-1 amount:0.200 lit_area:0.200 angle:-136.9",
+   "hud.prompt": "",
+   "png": "/tmp/opencode/p5-ui-captures/20261127T215654Z/ledger_market_p5_1280x720.png",
+   "shot": "ledger_market",
+   "size": [
+    1280,
+    720
+   ],
+   "staged": "",
+   "tag": "p5",
+   "text": {
+    "tabs": {
+     "bg_luma": 0.0606,
+     "clipped_edges": [
+      "bottom"
+     ],
+     "contrast": 8.08,
+     "ink_bbox": [
+      90,
+      30,
+      1188,
+      84
+     ],
+     "ink_px": 1492,
+     "present": true,
+     "px": 22608,
+     "solid": false,
+     "text_luma_p98": 0.8438
+    }
+   }
+  },
+  "ledger_market@1920x1080": {
+   "capture": "ledger_market_p5_1920x1080",
+   "hud.gem": "path:port_approx bound:false layers:0 kind: slice:-1 amount:0.200 lit_area:0.200 angle:-136.9",
+   "hud.prompt": "",
+   "png": "/tmp/opencode/p5-ui-captures/20261127T215654Z/ledger_market_p5_1920x1080.png",
+   "shot": "ledger_market",
+   "size": [
+    1920,
+    1080
+   ],
+   "staged": "",
+   "tag": "p5",
+   "text": {
+    "tabs": {
+     "bg_luma": 0.0606,
+     "clipped_edges": [
+      "bottom"
+     ],
+     "contrast": 7.75,
+     "ink_bbox": [
+      135,
+      45,
+      1783,
+      127
+     ],
+     "ink_px": 3590,
+     "present": true,
+     "px": 50814,
+     "solid": false,
+     "text_luma_p98": 0.8065
+    }
+   }
+  },
+  "pause@1280x720": {
+   "capture": "pause_p5_1280x720",
+   "gem": {
+    "present": false
+   },
+   "hud.gem": "path:authored_array bound:true layers:21 kind:directional slice:18 amount:0.000 lit_area:0.000 angle:-136.9",
+   "hud.prompt": "",
+   "pause_pair": {
+    "backdrop_edge_energy": 5.773,
+    "backdrop_mean_luma": 37.75,
+    "blur_ratio": 7.9298,
+    "dim_ratio": 0.2996,
+    "modal_ink": {
+     "bg_luma": 0.0965,
+     "clipped_edges": [],
+     "contrast": 5.85,
+     "ink_bbox": [
+      380,
+      172,
+      898,
+      550
+     ],
+     "ink_px": 5044,
+     "present": true,
+     "px": 56964,
+     "solid": false,
+     "text_luma_p98": 0.8065
+    },
+    "paused_edge_energy": 13.716,
+    "paused_mean_luma": 11.31,
+    "present": true
+   },
+   "png": "/tmp/opencode/p5-ui-captures/20261127T215654Z/pause_p5_1280x720.png",
+   "shot": "pause",
+   "size": [
+    1280,
+    720
+   ],
+   "staged": "",
+   "tag": "p5",
+   "text": {
+    "footer": {
+     "bg_luma": 0.0409,
+     "clipped_edges": [],
+     "contrast": 1.1,
+     "ink_bbox": null,
+     "ink_px": 0,
+     "present": true,
+     "px": 11520,
+     "solid": false,
+     "text_luma_p98": 0.0505
+    },
+    "modal": {
+     "bg_luma": 0.0965,
+     "clipped_edges": [],
+     "contrast": 5.85,
+     "ink_bbox": [
+      380,
+      172,
+      898,
+      550
+     ],
+     "ink_px": 2938,
+     "present": true,
+     "px": 56964,
+     "solid": false,
+     "text_luma_p98": 0.8065
+    }
+   }
+  },
+  "pause@1920x1080": {
+   "capture": "pause_p5_1920x1080",
+   "gem": {
+    "present": false
+   },
+   "hud.gem": "path:authored_array bound:true layers:21 kind:directional slice:18 amount:0.000 lit_area:0.000 angle:-136.9",
+   "hud.prompt": "",
+   "pause_pair": {
+    "backdrop_edge_energy": 4.749,
+    "backdrop_mean_luma": 36.19,
+    "blur_ratio": 6.6112,
+    "dim_ratio": 0.309,
+    "modal_ink": {
+     "bg_luma": 0.0965,
+     "clipped_edges": [],
+     "contrast": 5.85,
+     "ink_bbox": [
+      571,
+      257,
+      1349,
+      825
+     ],
+     "ink_px": 11238,
+     "present": true,
+     "px": 128169,
+     "solid": false,
+     "text_luma_p98": 0.8065
+    },
+    "paused_edge_energy": 9.701,
+    "paused_mean_luma": 11.18,
+    "present": true
+   },
+   "png": "/tmp/opencode/p5-ui-captures/20261127T215654Z/pause_p5_1920x1080.png",
+   "shot": "pause",
+   "size": [
+    1920,
+    1080
+   ],
+   "staged": "",
+   "tag": "p5",
+   "text": {
+    "footer": {
+     "bg_luma": 0.0407,
+     "clipped_edges": [],
+     "contrast": 1.11,
+     "ink_bbox": null,
+     "ink_px": 0,
+     "present": true,
+     "px": 25920,
+     "solid": false,
+     "text_luma_p98": 0.0505
+    },
+    "modal": {
+     "bg_luma": 0.0965,
+     "clipped_edges": [],
+     "contrast": 5.85,
+     "ink_bbox": [
+      571,
+      257,
+      1349,
+      825
+     ],
+     "ink_px": 7202,
+     "present": true,
+     "px": 128169,
+     "solid": false,
+     "text_luma_p98": 0.8065
+    }
+   }
+  },
+  "pause_backdrop@1280x720": {
+   "capture": "pause_backdrop_p5_1280x720",
+   "gem": {
+    "present": false
+   },
+   "hud.gem": "path:authored_array bound:true layers:21 kind:directional slice:18 amount:0.000 lit_area:0.000 angle:-136.9",
+   "hud.prompt": "",
+   "png": "/tmp/opencode/p5-ui-captures/20261127T215654Z/pause_backdrop_p5_1280x720.png",
+   "shot": "pause_backdrop",
+   "size": [
+    1280,
+    720
+   ],
+   "staged": "",
+   "tag": "p5"
+  },
+  "pause_backdrop@1920x1080": {
+   "capture": "pause_backdrop_p5_1920x1080",
+   "gem": {
+    "present": false
+   },
+   "hud.gem": "path:authored_array bound:true layers:21 kind:directional slice:18 amount:0.000 lit_area:0.000 angle:-136.9",
+   "hud.prompt": "",
+   "png": "/tmp/opencode/p5-ui-captures/20261127T215654Z/pause_backdrop_p5_1920x1080.png",
+   "shot": "pause_backdrop",
+   "size": [
+    1920,
+    1080
+   ],
+   "staged": "",
+   "tag": "p5"
+  },
+  "prep@1280x720": {
+   "capture": "prep_p5_1280x720",
+   "hud.gem": "",
+   "hud.prompt": "",
+   "png": "/tmp/opencode/p5-ui-captures/20261127T215654Z/prep_p5_1280x720.png",
+   "shot": "prep",
+   "size": [
+    1280,
+    720
+   ],
+   "staged": "mission_prep_ui.open_prep",
+   "tag": "p5",
+   "text": {
+    "cards": {
+     "bg_luma": 0.0466,
+     "clipped_edges": [
+      "left",
+      "top",
+      "bottom"
+     ],
+     "contrast": 8.35,
+     "ink_bbox": [
+      51,
+      100,
+      581,
+      530
+     ],
+     "ink_px": 6262,
+     "present": true,
+     "px": 77544,
+     "solid": false,
+     "text_luma_p98": 0.7561
+    },
+    "prompt": {
+     "bg_luma": 0.0429,
+     "clipped_edges": [
+      "left",
+      "top",
+      "bottom"
+     ],
+     "contrast": 8.2,
+     "ink_bbox": [
+      435,
+      518,
+      619,
+      660
+     ],
+     "ink_px": 558,
+     "present": true,
+     "px": 14760,
+     "solid": false,
+     "text_luma_p98": 0.7118
+    }
+   }
+  },
+  "prep@1920x1080": {
+   "capture": "prep_p5_1920x1080",
+   "hud.gem": "",
+   "hud.prompt": "",
+   "png": "/tmp/opencode/p5-ui-captures/20261127T215654Z/prep_p5_1920x1080.png",
+   "shot": "prep",
+   "size": [
+    1920,
+    1080
+   ],
+   "staged": "mission_prep_ui.open_prep",
+   "tag": "p5",
+   "text": {
+    "cards": {
+     "bg_luma": 0.0468,
+     "clipped_edges": [
+      "left",
+      "top"
+     ],
+     "contrast": 8.33,
+     "ink_bbox": [
+      76,
+      151,
+      778,
+      789
+     ],
+     "ink_px": 13170,
+     "present": true,
+     "px": 174312,
+     "solid": false,
+     "text_luma_p98": 0.7561
+    },
+    "prompt": {
+     "bg_luma": 0.0429,
+     "clipped_edges": [
+      "left",
+      "top",
+      "bottom"
+     ],
+     "contrast": 7.92,
+     "ink_bbox": [
+      652,
+      777,
+      1034,
+      991
+     ],
+     "ink_px": 1111,
+     "present": true,
+     "px": 33264,
+     "solid": false,
+     "text_luma_p98": 0.6857
+    }
+   }
+  },
+  "safe_room@1280x720": {
+   "capture": "safe_room_p5_1280x720",
+   "gem": {
+    "angle_deg": -85.48,
+    "angle_err_deg": 3.42,
+    "centroid": [
+     640.6,
+     653.4
+    ],
+    "cream_px": 200,
+    "direction": [
+     0.0789,
+     -0.9969
+    ],
+    "lit_fraction": 0.0676,
+    "lit_rgb_p95": 228,
+    "pixels": 2958,
+    "present": true,
+    "ring_thickness_px": 5,
+    "state_amount": 0.42,
+    "state_angle_deg": -88.9,
+    "state_lit_area": 0.42,
+    "state_slice": 8.0,
+    "violet_px": 176
+   },
+   "hud.gem": "path:authored_array bound:true layers:21 kind:directional slice:8 amount:0.420 lit_area:0.420 angle:-88.9",
+   "hud.prompt": "",
+   "png": "/tmp/opencode/p5-ui-captures/20261127T215654Z/safe_room_p5_1280x720.png",
+   "shot": "safe_room",
+   "size": [
+    1280,
+    720
+   ],
+   "staged": "",
+   "tag": "p5"
+  },
+  "safe_room@1920x1080": {
+   "capture": "safe_room_p5_1920x1080",
+   "gem": {
+    "angle_deg": -73.79,
+    "angle_err_deg": 15.11,
+    "centroid": [
+     966.9,
+     976.3
+    ],
+    "cream_px": 486,
+    "direction": [
+     0.2792,
+     -0.9602
+    ],
+    "lit_fraction": 0.0735,
+    "lit_rgb_p95": 242,
+    "pixels": 6612,
+    "present": true,
+    "ring_thickness_px": 3,
+    "state_amount": 0.42,
+    "state_angle_deg": -88.9,
+    "state_lit_area": 0.42,
+    "state_slice": 8.0,
+    "violet_px": 391
+   },
+   "hud.gem": "path:authored_array bound:true layers:21 kind:directional slice:8 amount:0.420 lit_area:0.420 angle:-88.9",
+   "hud.prompt": "",
+   "png": "/tmp/opencode/p5-ui-captures/20261127T215654Z/safe_room_p5_1920x1080.png",
+   "shot": "safe_room",
+   "size": [
+    1920,
+    1080
+   ],
+   "staged": "",
+   "tag": "p5"
+  },
+  "startscreen@1280x720": {
+   "capture": "startscreen_p5_1280x720",
+   "hud.gem": "",
+   "hud.prompt": "",
+   "png": "/tmp/opencode/p5-ui-captures/20261127T215654Z/startscreen_p5_1280x720.png",
+   "shot": "startscreen",
+   "size": [
+    1280,
+    720
+   ],
+   "staged": "main_menu.gd standalone",
+   "tag": "p5"
+  },
+  "startscreen@1920x1080": {
+   "capture": "startscreen_p5_1920x1080",
+   "hud.gem": "",
+   "hud.prompt": "",
+   "png": "/tmp/opencode/p5-ui-captures/20261127T215654Z/startscreen_p5_1920x1080.png",
+   "shot": "startscreen",
+   "size": [
+    1920,
+    1080
+   ],
+   "staged": "main_menu.gd standalone",
+   "tag": "p5"
+  },
+  "wardrobe@1280x720": {
+   "capture": "wardrobe_p5_1280x720",
+   "hud.gem": "path:port_approx bound:false layers:0 kind: slice:-1 amount:0.200 lit_area:0.200 angle:-136.9",
+   "hud.prompt": "",
+   "png": "/tmp/opencode/p5-ui-captures/20261127T215654Z/wardrobe_p5_1280x720.png",
+   "shot": "wardrobe",
+   "size": [
+    1280,
+    720
+   ],
+   "staged": "",
+   "tag": "p5"
+  },
+  "wardrobe@1920x1080": {
+   "capture": "wardrobe_p5_1920x1080",
+   "hud.gem": "path:port_approx bound:false layers:0 kind: slice:-1 amount:0.200 lit_area:0.200 angle:-136.9",
+   "hud.prompt": "",
+   "png": "/tmp/opencode/p5-ui-captures/20261127T215654Z/wardrobe_p5_1920x1080.png",
+   "shot": "wardrobe",
+   "size": [
+    1920,
+    1080
+   ],
+   "staged": "",
+   "tag": "p5"
+  }
+ },
+ "schema": "tat2.ui_pixel_stats/1"
+}

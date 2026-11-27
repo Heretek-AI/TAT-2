@@ -1,0 +1,22 @@
+capture=wardrobe_p5_1920x1080
+shot=wardrobe
+tag=p5
+run_id=20261127T215654Z
+size=1920x1080
+engine=4.7.2-stable (official)
+renderer=forward_plus
+timestamp=2026-11-27T16:58:45
+save_home=/tmp/opencode/p5-ui-data
+save_path=
+profile=thief:spider level:<null> currency:<null> map:thieves_den contract:1 mode:Solo free_play:false
+hud.gem=path:port_approx bound:false layers:0 kind: slice:-1 amount:0.200 lit_area:0.200 angle:-136.9
+hud.compass=NW
+hud.prompt=
+hud.prompt_secondary=
+hud.keys=
+hud.letter_open=false
+hud.tree_paused=false
+pose=wardrobe turntable (auto frame fov=36)
+roi.thief=0.3600,0.0600,0.2800,0.8800 mean=0.1001 max=0.9284 px=128044
+roi.left_panel=0.0100,0.1000,0.3000,0.8400 mean=0.0845 max=0.9496 px=130752
+roi.right_panel=0.7400,0.1000,0.2500,0.8400 mean=0.1354 max=0.9908 px=108960

@@ -21,6 +21,9 @@ signal gate_collapsed()
 
 const INTERACTABLES_PATH := "res://data/generated/gameplay/interactables.json"
 const PORTAL_SHADER_PATH := "res://src/core/tat_escape_portal.gdshader"
+## Authored UE intensity -> Godot energy, shared with the level loader so the
+## portal's 30 lm light uses the same monotonic mapping as every authored light.
+const LevelLoaderScript: GDScript = preload("res://src/core/level_loader.gd")
 ## Fallbacks mirror BP_EscapePoint (_escapeOpenDuration 240,
 ## _canBeUsedMultipleTimes true); the JSON above is authoritative.
 const FALLBACK_OPEN_DURATION_SEC := 240.0
@@ -28,9 +31,25 @@ const FALLBACK_OPEN_DURATION_SEC := 240.0
 ## Visual portal slot (wall outline). Kept as a named child so QA/tests can
 ## identify the marker without a floating Label3D.
 const PORTAL_NODE_NAME := "EscapePortalVisual"
-const PORTAL_SIZE: Vector2 = Vector2(2.6, 3.0)
+## P1-SAFE: authored geometry. BP_EscapePoint `SummonBox` BoxExtent is
+## (92.07361, 12.25, 119.341095) cm - a 1.841 x 2.387 m doorway outline, not the
+## old 2.6 x 3.0 ring. X is the wall width, Z the height.
+const PORTAL_SIZE: Vector2 = Vector2(1.8407362, 2.3868219)
+## P1-SAFE: authored colours. BP_EscapePoint.OpenColor #7EFF9B is the emerald
+## core the reference outline glows with; ClosedColor #C651FF is the violet
+## chromatic fringe riding just outside it (KF14 01:15.2-01:16.2).
+const PORTAL_CORE_COLOR: Color = Color(0.207843, 1.0, 0.329412)
+const PORTAL_EDGE_COLOR: Color = Color(0.561445, 0.083097, 1.0)
+## P1-SAFE: authored door light. BP_EscapePoint `Door_Light` is a violet point
+## light (LightColor #BF00FF, 30 lumens, AttenuationRadius 450 cm,
+## VolumetricScatteringIntensity 0); `Door_Summonable_Light` authors 0 lumens
+## (off until the door-open timeline), so only the 30 lm light is ported.
+const PORTAL_LIGHT_COLOR: Color = Color(0.7490196, 0.0, 1.0)
+const PORTAL_LIGHT_LUMENS: float = 30.0
+const PORTAL_LIGHT_RADIUS_M: float = 4.5
 
 var portal_visual: MeshInstance3D = null
+var portal_light: OmniLight3D = null
 
 ## Seconds the escape stays usable once opened (BP_EscapePoint).
 var open_duration_sec: float = FALLBACK_OPEN_DURATION_SEC
@@ -65,6 +84,46 @@ static func escape_config() -> Dictionary:
 	return {}
 
 
+## P1-SAFE: the one portal visual both the endgame escape gates and the
+## Contract-02 safe-room wall outline use (S12/KF14 #1). A QuadMesh in the
+## local XY plane with the authored emerald/violet contour shader; the caller's
+## transform decides the wall and facing, so nothing billboards. Named
+## PORTAL_NODE_NAME so QA/tests identify it without a floating Label3D.
+static func make_portal_visual() -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	mi.name = PORTAL_NODE_NAME
+	var quad := QuadMesh.new()
+	quad.size = PORTAL_SIZE
+	mi.mesh = quad
+	var mat := ShaderMaterial.new()
+	if ResourceLoader.exists(PORTAL_SHADER_PATH):
+		mat.shader = ResourceLoader.load(PORTAL_SHADER_PATH) as Shader
+	# Authored BP_EscapePoint colours, not the old ring approximations.
+	mat.set_shader_parameter("core_color", PORTAL_CORE_COLOR)
+	mat.set_shader_parameter("edge_color", PORTAL_EDGE_COLOR)
+	mi.material_override = mat
+	# Bottom of the doorway sits on the gate origin (the old ring was centred
+	# at 1.5 m with a 3.0 m height, which also put its base at 0).
+	mi.position = Vector3(0.0, PORTAL_SIZE.y * 0.5, 0.0)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return mi
+
+
+## P1-SAFE: authored `Door_Light` point light, hidden until the door is active.
+static func make_portal_light() -> OmniLight3D:
+	var lamp := OmniLight3D.new()
+	lamp.name = "EscapePortalLight"
+	lamp.light_color = PORTAL_LIGHT_COLOR
+	lamp.light_energy = LevelLoaderScript.light_energy_for_intensity(PORTAL_LIGHT_LUMENS)
+	lamp.omni_range = PORTAL_LIGHT_RADIUS_M
+	lamp.omni_attenuation = 1.0
+	lamp.light_volumetric_fog_energy = 0.0
+	lamp.shadow_enabled = false
+	lamp.position = Vector3(0.0, PORTAL_SIZE.y * 0.5, 0.0)
+	lamp.visible = false
+	return lamp
+
+
 func apply_escape_config(cfg: Dictionary) -> void:
 	if cfg.is_empty():
 		return
@@ -85,24 +144,18 @@ func _ready() -> void:
 	col.position = Vector3(0, 1.5, 0)
 	add_child(col)
 
-	# Wall-outline portal: a thin vertical ring on a QuadMesh in the gate's
-	# local XY plane (green core + violet rim shader), so the marker reads as a
-	# doorway on the wall instead of the flat green floor cylinder + floating
-	# "ESCAPE GATE" label the first port shipped.
-	var mi := MeshInstance3D.new()
-	mi.name = PORTAL_NODE_NAME
-	var quad := QuadMesh.new()
-	quad.size = PORTAL_SIZE
-	mi.mesh = quad
-	var mat := ShaderMaterial.new()
-	if ResourceLoader.exists(PORTAL_SHADER_PATH):
-		mat.shader = ResourceLoader.load(PORTAL_SHADER_PATH) as Shader
-	mi.material_override = mat
-	mi.position = Vector3(0, 1.5, 0)
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Wall-outline portal: a thin vertical doorway outline on a QuadMesh in the
+	# gate's local XY plane (emerald core + violet rim shader), so the marker
+	# reads as a doorway on the wall instead of the flat green floor cylinder +
+	# floating "ESCAPE GATE" label the first port shipped.
+	var mi: MeshInstance3D = make_portal_visual()
 	mi.visible = active
 	add_child(mi)
 	portal_visual = mi
+	var lamp: OmniLight3D = make_portal_light()
+	lamp.visible = active
+	add_child(lamp)
+	portal_light = lamp
 	set_process(active)
 
 
@@ -126,6 +179,8 @@ func activate(duration_sec: float = -1.0) -> bool:
 	open_elapsed = 0.0
 	if portal_visual != null:
 		portal_visual.visible = true
+	if portal_light != null:
+		portal_light.visible = true
 	set_process(true)
 	return true
 
@@ -139,6 +194,8 @@ func expire() -> void:
 	expired = true
 	if portal_visual != null:
 		portal_visual.visible = false
+	if portal_light != null:
+		portal_light.visible = false
 	set_process(false)
 	gate_expired.emit()
 
@@ -154,6 +211,8 @@ func collapse() -> void:
 	activated = false
 	if portal_visual != null:
 		portal_visual.visible = false
+	if portal_light != null:
+		portal_light.visible = false
 	set_process(false)
 	gate_collapsed.emit()
 

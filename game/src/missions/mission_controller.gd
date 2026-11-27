@@ -21,6 +21,7 @@ const WorldPickupScript := preload("res://src/interact/world_pickup.gd")
 const CivilianScript := preload("res://src/ai/civilian_npc.gd")
 const DoorScript := preload("res://src/interact/lockable_door.gd")
 const EscapeScript := preload("res://src/interact/escape_gate.gd")
+const SafeRoomDressingScript := preload("res://src/missions/safe_room_dressing.gd")
 const LightProbeScript := preload("res://src/stealth/light_probe.gd")
 const LevelLoaderScript := preload("res://src/core/level_loader.gd")
 const MobileProfile := preload("res://src/core/mobile_profile.gd")
@@ -42,6 +43,9 @@ const UIStringsScript := preload("res://src/ui/ui_strings.gd")
 
 var light_probe: Node
 var level_loader: Node
+## P1-SAFE: Contract-02 safe-room portal outline + lantern station + SPIDER
+## flyer. Built once per mission instance during environment setup.
+var _saferoom_dressing: Node3D = null
 var player: CharacterBody3D
 var hud: CanvasLayer
 var smokes: Array[Dictionary] = []
@@ -297,6 +301,7 @@ func _setup_environment() -> void:
 	_add_guildhall_road_fills()
 	_add_guildhall_foyer_fills()
 	_add_guildhall_saferoom_fill()
+	_add_guildhall_saferoom_dressing()
 
 
 ## The extracted Guildhall gate/fence sublevel carries the iron gate, arch,
@@ -566,6 +571,25 @@ func _add_guildhall_saferoom_fill() -> void:
 	fill.shadow_enabled = false
 	add_child(fill)
 	light_probe.register_light(fill)
+
+
+## P1-SAFE (S12 / KF14): the Contract-02 safe room's exit-portal outline, the
+## caged lantern station the player switches on and the "SPIDER" flyer beside
+## it. Built from authored assets through the live loader; see
+## `safe_room_dressing.gd` for the authored/approximated split and why the
+## transform is a PORT_DECISION (the extract authors no lantern/escape marker
+## in this room). Runs after `_setup_environment` has a live loader (its
+## material DBs load in `_ready`) and before the sublevels build, so the props
+## are in the tree with the rest of the safe room.
+func _add_guildhall_saferoom_dressing() -> void:
+	if GameState.active_map_id != "guildhall":
+		return
+	if _saferoom_dressing != null and is_instance_valid(_saferoom_dressing):
+		return
+	_saferoom_dressing = SafeRoomDressingScript.new() as Node3D
+	_saferoom_dressing.set("level_loader", level_loader)
+	add_child(_saferoom_dressing)
+	print("TAT-2 ", str(_saferoom_dressing.call("report")))
 
 
 ## The authored Guildhall foyer is a large checkered hall with a refill

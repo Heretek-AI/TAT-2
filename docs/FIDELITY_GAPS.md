@@ -114,13 +114,22 @@ string audit **311/311/199/199/112**; perf guard **78/78**.
   (`ST_Subtree_IntruderNoLongerSuspicious`), `fully_parity_covered_trees=0`;
   task 326/139/56, condition 233/35/20. `TAT2_STATETREE` remains `off`; `patrol`
   is not enabled. The FSM still drives — **no cutover**.
-- **P2-NAV — data proven, consumer next.** The cooked Guildhall navmesh is
-  extractable (2,958 tiles / 14,930 polys / 221 off-mesh / 240-45-45 cm). The
-  spike builds a Godot mesh and proves a doorway path (**16/0**, 3 waypoints,
-  4.15 m, sync 975 ms, total 1,172 ms, 61.8 MB). No runtime region; the **P1
-  Detour consumer** (compact asset, async commit, 221 `NavigationLink3D`) is the
-  next lane. The closed prison doorway's partial path is the unconsumed authored
-  link, not a tile defect.
+- **P2-NAV — authored consumer landed behind `TAT2_NAV` (off).** The cooked
+  Guildhall navmesh is extractable (2,958 tiles / 14,930 polys / 221 raw
+  off-mesh records / 240-45-45 cm) and `tools/parse_nav.py` now emits the
+  compact runtime asset. The 221 records are 123 exact unordered pairs and
+  **80 logical links** (35 bidirectional) after the parallel-copy merge; Old
+  Manor is 216 -> 113 -> 64 and FTUE 11 -> 8 -> 4. `nav_runtime.gd` builds one
+  `NavigationRegion3D` per map (`TAT2_NAV=off|on`, default off), waits for the
+  map commit before guards spawn, adds the 80 `NavigationLink3D`s and the
+  state-gated door links (leaf midpoint + normal, enabled >70 degrees, skip
+  snap >2.5 m). The headless probe proves the 3-waypoint doorless doorway
+  (4.15 m), the prison east->west link-on/off path, and the off/missing-asset
+  negative controls. Still open: default-on (N-P3), full-gate trajectory
+  deltas, and the one authored drop link (`NavLink_71`) whose endpoints are
+  ~6 m off the mesh. The closed prison doorway's partial path was the
+  unconsumed authored link, not a tile defect.
+
 - **P3 audio control plane — partial.** `audio_control.json` carries 14/23
   switch groups, 4/8 state groups, 16/50 RTPCs and 142 curves; footstep
   surface/gait, interior/exterior, modal state and the detection RTPC→music

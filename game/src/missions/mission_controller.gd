@@ -25,6 +25,7 @@ const EscapeScript := preload("res://src/interact/escape_gate.gd")
 const SafeRoomDressingScript := preload("res://src/missions/safe_room_dressing.gd")
 const LightProbeScript := preload("res://src/stealth/light_probe.gd")
 const LevelLoaderScript := preload("res://src/core/level_loader.gd")
+const NavRuntimeScript := preload("res://src/ai/nav_runtime.gd")
 const FoyerDressingScript := preload("res://src/core/foyer_dressing.gd")
 const MobileProfile := preload("res://src/core/mobile_profile.gd")
 const PerfProfile := preload("res://src/core/perf_profile.gd")
@@ -63,6 +64,10 @@ const FOYER_STATUS_ICON_SECONDS: float = 8.0
 
 var light_probe: Node
 var level_loader: Node
+## N-P1 authored navmesh runtime; null when `TAT2_NAV` is off (default).
+## Untyped on purpose: the node's script is preloaded, and the dynamic calls
+## keep this file compilable when the nav lane is absent from an older tree.
+var nav_runtime = null
 ## P1-SAFE: Contract-02 safe-room portal outline + lantern station + SPIDER
 ## flyer. Built once per mission instance during environment setup.
 var _saferoom_dressing: Node3D = null
@@ -810,6 +815,7 @@ func _apply_fallback_moon(moon: DirectionalLight3D) -> void:
 
 
 func start_contract(order: int) -> void:
+	_clear_nav_runtime()
 	contract_info = GameData.get_contract_display(order)
 	var map_id: String = str(contract_info.get("map_id", "old_manor"))
 	_is_thieves_den = (map_id == "thieves_den")
@@ -923,6 +929,13 @@ func start_contract(order: int) -> void:
 			player.thief_vision_toggled.connect(hud.set_thief_vision)
 
 	var anchor: Vector3 = player.global_position if player != null else Vector3.ZERO
+	# N-P1: the nav region is built after the sublevels AND the swinging doors,
+	# then the mission waits for the navigation server to commit it before any
+	# guard spawns. Door links can therefore be registered immediately. Doors
+	# are independent of guards, so spawning them one step earlier is inert;
+	# the Den hub has no generated navmesh and skips the runtime.
+	_spawn_swinging_doors(ue_level_data)
+	await _start_nav_runtime(map_id)
 	if map_id == "thieves_den":
 		_setup_thieves_den_hub(anchor, ue_level_data)
 	else:
@@ -937,7 +950,6 @@ func start_contract(order: int) -> void:
 		_spawn_personal_quest_actors()
 		_spawn_escape(ue_level_data.get("escape_points", []), anchor)
 	_spawn_spawner_content(ue_level_data)
-	_spawn_swinging_doors(ue_level_data)
 	_spawn_devices()
 
 	if hud.has_method("set_contract_info"):
@@ -4646,6 +4658,52 @@ func _spawn_loot_containers(stats: Dictionary) -> void:
 	print("TAT-2 loot containers: ", order)
 
 
+## N-P1: build the authored navmesh region (TAT2_NAV=off by default) and wait
+## for the navigation server to commit it. A missing/failed asset is logged and
+## leaves `nav_steering` on its documented straight-line fallback; it never
+## blocks the mission.
+func _start_nav_runtime(map_id: String) -> void:
+	if not NavRuntimeScript.is_enabled():
+		return
+	if map_id == "thieves_den":
+		print("NAV_RUNTIME map=thieves_den state=skipped (hub has no generated navmesh)")
+		return
+	nav_runtime = NavRuntimeScript.new()
+	nav_runtime.name = "NavRuntime"
+	add_child(nav_runtime)
+	var built: bool = nav_runtime.setup(map_id)
+	if not built:
+		var why: String = str(nav_runtime.last_warning())
+		print("NAV_RUNTIME map=%s state=%s reason=%s" % [map_id, nav_runtime.status(), why])
+		_clear_nav_runtime()
+		return
+	var ready: bool = await nav_runtime.wait_ready()
+	if nav_runtime == null or not is_instance_valid(nav_runtime):
+		return
+	var doors: int = 0
+	if ready:
+		doors = nav_runtime.register_swinging_doors()
+	var rep: Dictionary = nav_runtime.report()
+	print("NAV_RUNTIME map=%s state=%s ready=%s polys=%d verts=%d links=%d bidir=%d oneway=%d door_links=%d door_skipped=%d build_ms=%d ready_frames=%d ready_ms=%d" % [
+		map_id, str(rep.get("state", "")), str(ready), int(rep.get("polys", 0)),
+		int(rep.get("verts", 0)), int(rep.get("links", 0)),
+		int(rep.get("links_bidirectional", 0)), int(rep.get("links_one_way", 0)),
+		doors, int(rep.get("door_skipped", 0)), int(rep.get("build_ms", 0)),
+		int(rep.get("ready_frames", 0)), int(rep.get("ready_ms", 0))])
+	if not ready:
+		_clear_nav_runtime()
+
+
+func _clear_nav_runtime() -> void:
+	if nav_runtime == null or not is_instance_valid(nav_runtime):
+		nav_runtime = null
+		return
+	if nav_runtime.has_method("clear"):
+		nav_runtime.clear()
+	nav_runtime.queue_free()
+	nav_runtime = null
+
+
 ## Real swinging doors (tools/parse_tables.py swinging_doors): one
 ## SwingingDoorScript node per pivot entry, built from the authored pivot
 ## transform + template leaf meshes. Skipped when the map has no doors; no
@@ -5295,6 +5353,9 @@ func _on_time_expired() -> void:
 ## systems when a mission leaves the tree. Without this the last mission's
 ## textures, LUTs and retarget caches survive shutdown as leaked resources.
 func _exit_tree() -> void:
+	# N-P1: remove the navigation region/links before the tree teardown so a
+	# reload cannot stack regions on the default world map.
+	_clear_nav_runtime()
 	# Godot 4.7.2 holds the Den reflection probe atlas (7 texture RIDs) until the
 	# node itself is deleted; queue_free() alone leaves it to the tree teardown.
 	# Stop updates and free it now so the leak verifier sees a clean exit.

@@ -128,7 +128,7 @@ hold-smash `PORT_DECISION`.
 | P5 UI | **44/0** headless |
 | Den spawn | **9/0**, `source=authored`, `(5.669,40.117,270.686)` |
 | StateTree suite 110 | **191/0**, `fully_covered_trees=1`, `fully_parity_covered_trees=0` |
-| navmesh spike | 2,958 tiles / 14,930 polys / 221 off-mesh; consumer 16/0; doorway 3 waypoints / 4.15 m |
+| navmesh spike | 2,958 tiles / 14,930 polys / 221 raw off-mesh -> 80 logical links; consumer 16/0; doorway 3 waypoints / 4.15 m |
 | runtime smoke | `RUNTIME_SMOKE_SCAN PASS exit=124 errors=0 mission_ready=1` |
 | route self-test (Phase 0a) | `P0B_ROUTE_SELFTEST PASS checks=62 fails=0` (headless wrapper `--self-test`; `bash -n` on the route/live wrappers) |
 | audit / texture / perf / ratchet | **PASS** / 796 capped, 1 alpha, 0 offenders / 78/78 / PASS |
@@ -273,14 +273,35 @@ StateTree shadow ceiling; the authored-element collision floor.
   capture table and the ROI reference, and `beam_close` is relabelled the
   Lounge C_57 **extra**. The GPU re-measure at `foyer_beam` is still required.
 
-### 4.3 Navmesh runtime (authored tiles proven)
+### 4.3 Navmesh runtime (N-P0/N-P1/N-P2, 2026-11-27)
 
-The spike emitted 2,958 tiles / 14,930 polys / 221 off-mesh links from the cooked
-archive (no bake needed). Next: convert to a generated runtime asset, build one
-`NavigationMesh` per map (1.0–1.5 s headless budget, ~60 MB), map authored area
-63/62/1/3/4, consume off-mesh links as `NavigationLink3D`, exclude
-`swinging_doors`, prove a doorway path, then wire `nav_steering` in a separate
-lane. Do not call an offline bake parity.
+The extractor `nav` command now emits `supported_areas`, `nav_data_config` and
+`max_poly_verts` and fails closed on a 7+ vertex poly.
+`tools/parse_nav.py` writes `game/data/generated/nav/<map>.nav.bin` plus
+`manifest.json`. Measured authored sets, raw off-mesh records -> deduped
+unordered pairs -> logical links: **Guildhall** 2,958 tiles / 14,709 walkable
+polys / 30,918 verts / 221 -> 123 -> **80** (35 bidirectional); **Old Manor**
+1,469 / 9,059 / 17,643 / 216 -> 113 -> **64** (15); **FTUE** 1,558 / 5,576 /
+11,711 / 11 -> 8 -> **4** (0). Area ids are per-map: Guildhall and FTUE
+`Door=4/Bushes=3`; Old Manor `Door=3/Bushes=4`; `NavArea_Default=63` is
+walkable and must not be treated as null even though Recast's `RC_NULL_AREA`
+is also 63.
+
+`game/src/ai/nav_runtime.gd` builds one region per map behind
+`TAT2_NAV=off|on` (**default off**), sets `cell_size=0.01`,
+`edge_connection_margin=0.05`, `link_connection_radius=1.0`, waits for the
+region to commit before guards spawn, and adds the 80 links. Door links come
+from the real `swinging_doors` nodes (leaf midpoint + averaged normal); a door
+link is enabled only while every leaf of that actor is open >70 degrees, and is
+skipped if either snapped side misses the mesh by >2.5 m. The co-located
+`NavLinkFront/Back` actors are not used. The prison door east->west path is
+partial with the link off and completes with it on. The headless probe is
+`build/qa/nav_runtime_probe.gd` (`NAV_RUNTIME_PROBE checks=70 fails=0`); a real
+free-play boot with `TAT2_NAV=on` reached `mission_ready` with the region ready
+(57..79 frames / 865..1215 ms) and 42/80 door groups linked (38 skipped by the
+2.5 m snap). Remaining: default-on (N-P3), the full gate set/trajectory deltas,
+and the one authored drop link (`NavLink_71`) whose both endpoints are ~6 m off
+the mesh.
 
 ### 4.4 StateTree patrol cutover (shadow only)
 

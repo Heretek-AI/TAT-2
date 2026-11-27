@@ -162,18 +162,21 @@ model, and the link is in the extracted payload: the off-mesh data carries
 endpoints at Godot `(0.5, 36.5, -63.6)` and `(-2.5, 36.5, -63.6)` across the
 doorway (radius 100 cm, raw flags 64; the adjacent tile carries the same link,
 so a consumer must dedupe endpoints). The probe does not yet consume it, which
-is why the path stops short. A consumer must add the **221 off-mesh connections**
-as `NavigationLink3D` (and honour `GA_NavLink_SwingingDoor` / `ST_OffNavLink`)
-rather than patch the mesh or bake around it.
+is why the path stops short. A consumer must add the **80 logical links** from
+the 221 raw off-mesh records (35 bidirectional; 123 exact unordered pairs
+before the parallel-copy merge) as `NavigationLink3D` (and honour
+`GA_NavLink_SwingingDoor` / `ST_OffNavLink`) rather than patch the mesh or bake
+around it.
+
 
 ## 4. Authored vs port decision
 
 | item | status |
 |---|---|
-| tile grid, borders, 14,930 polys, 221 links, areas | **authored**, decoded losslessly from the cooked navmesh (CUE4Parse typed reader); the exact compressed cache payload is emitted separately |
+| tile grid, borders, 14,930 polys, 221 off-mesh records (80 logical links), areas | **authored**, decoded losslessly from the cooked navmesh (CUE4Parse typed reader); the exact compressed cache payload is emitted separately |
 | `WalkableHeight/Radius/Climb 240/45/45` | **authored** (`DetourNavMeshParams`; matches `NavDataConfig` 240/45/45) |
 | tile width/height 988 cm, `MaxTiles 13448` | **authored** |
-| area IDs 63/3/1 | **authored**, via `SupportedAreas` (`NavArea_Default/Bushes/Obstacle`) |
+| area IDs `63/3/1` (Guildhall) | **authored**, via `SupportedAreas` (`NavArea_Default/Bushes/Obstacle`); Old Manor uses `Door=3/Bushes=4`, so the table is per-map, never a global `63/62/1/3/4` list |
 | nav→Godot `(x, y, -z) * 0.01` | **port mapping** matching `parse_tables.ue_mat4_to_godot_trs`; not an authored field |
 | `cell_size=0.01`, `edge_connection_margin=0.05` | **PORT_DECISION** for this consumer spike; the authored edges are cm-scale and the default 0.25 m map cell would quantise them away |
 | one `NavigationRegion3D` for the whole map | **spike decision**; runtime region ownership is not claimed |
@@ -192,20 +195,21 @@ no region exists; that is unchanged.
 2. **P3 bake: not taken.** It would replace authored data (tile borders, areas,
    off-mesh links, agent parameters) with a collision approximation and add a
    bake pass per map. The measured authored set is complete and cheaper.
-3. **P1 consumer (next lane):**
-   - add a producer that converts the `tat2.nav_tiles/1` dump into a compact,
-     versioned runtime asset under the gitignored generated tree (the 3.2 MB
-     JSON parses in 68–93 ms; a binary would cut that and the 59–62 MB peak);
-   - build one `NavigationMesh` per map at load (as the probe does), with
-     **asynchronous/prebuilt** commit; budget 1.0–1.5 s headless;
-   - consume the **221 off-mesh connections** as `NavigationLink3D` (respect
-     authored radius/height/flags) and the door records (`GA_NavLink_*`) so
-     closed-door cuts like the prison doorway are traversable only through the
-     authored link;
-   - map authored areas 63/62/1/3/4 to navigation layers/costs; never treat 63
-     as Recast's null area;
-   - wire `nav_steering` in a **separate lane** after the region exists; keep
-     the no-map straight-line fallback and its counters.
+3. **P1 consumer (landed N-P0/P1/P2, 2026-11-27):**
+   - `tools/parse_nav.py` converts the `tat2.nav_tiles/1` dump into a compact,
+     versioned runtime asset under the gitignored generated tree (`nav/<map>.nav.bin`
+     + manifest); the JSON parse is 68–93 ms, the binary load is ~30-40 ms;
+   - `game/src/ai/nav_runtime.gd` builds one `NavigationMesh`/`NavigationRegion3D`
+     per map with **cell 0.01 / margin 0.05 / link radius 1.0**, behind
+     `TAT2_NAV=off|on` (default off), and waits for the map commit before guards
+     spawn (budget 1.0–1.5 s headless);
+   - the **80 logical links** (221 raw records) are `NavigationLink3D`s; door
+     links come from the leaf midpoint + normal, enabled at `open_angle_deg() >
+     70`, and the co-located `NavLinkFront/Back` actors are not used;
+   - area ids are read per map from `SupportedAreas`; never treat 63 as Recast's
+     null area and never hard-code `63/62/1/3/4`;
+   - the runtime probe (`build/qa/nav_runtime_probe.gd`) proves the 3-waypoint
+     doorway, the prison link on/off path and the off/missing-asset controls.
 4. Re-measure on the real client, not only headless, before calling it parity.
 
 ## 6. Gate evidence and integration note
@@ -258,3 +262,20 @@ for the negative-control run above.
 
 No generated navmesh data, no change to `game/src/ai/nav_steering.gd`, the FSM,
 `level_loader.gd`, `mission_controller.gd` or any game asset.
+
+## 9. Update — the N-P0/N-P1/N-P2 consumer (2026-11-27)
+
+The spike's forward-looking "221 links" phrasing is superseded by the measured
+merge: 221 raw off-mesh records -> 123 exact unordered pairs -> **80 logical
+links** for Guildhall (35 bidirectional, 45 one-way). The same producer gives
+Old Manor 216 -> 113 -> **64** (15 bidirectional) and FTUE 11 -> 8 -> **4**.
+Only Guildhall was extracted for this spike; the three-map numbers were
+measured by the N-P0 extractor run and are recorded in
+[`navmesh-p0-p2-20261127.md`](navmesh-p0-p2-20261127.md).
+
+The consumer now exists: `tools/parse_nav.py` writes `nav/<map>.nav.bin` +
+`manifest.json`, `game/src/ai/nav_runtime.gd` builds one region per map behind
+`TAT2_NAV=off|on` (default off), and `build/qa/nav_runtime_probe.gd` proves the
+doorway, the 80 links and the prison door link on/off. Area ids stay per-map:
+Guildhall/FTUE `Door=4/Bushes=3`, Old Manor `Door=3/Bushes=4`; 63 is
+`NavArea_Default` and is walkable. Do not create one link per raw record.

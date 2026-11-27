@@ -387,6 +387,23 @@ build/qa/             tracked capture/probe/export-stamp scripts; PNG output ign
   task/condition parameters (the producer contract in
   `build/qa/w9/p4-t01-contract.md`), never invented values. Suite 110 is **191
   checks**; suite 111 keeps shadow side-effect free.
+- **The navmesh runtime is off by default and consumes authored links, not 221 copies.**
+  `TAT2_NAV=off|on` (default `off`) gates `game/src/ai/nav_runtime.gd`;
+  `tools/parse_nav.py` writes `game/data/generated/nav/<map>.nav.bin` +
+  `manifest.json` from the extractor `nav` output. Guildhall is 2,958 tiles /
+  14,709 walkable polys / **221 raw off-mesh records -> 123 exact pairs -> 80
+  logical links** (35 bidirectional); Old Manor 216 -> 113 -> 64; FTUE 11 -> 8
+  -> 4. Do not create one link per raw record. Area ids are per-map
+  (`NavArea_Default=63` is walkable, never null; Guildhall/FTUE Door=4/Bushes=3,
+  Old Manor Door=3/Bushes=4), so never hard-code a global `63/62/1/3/4` table.
+  The map needs `cell_size=0.01` / `edge_connection_margin=0.05` /
+  `link_connection_radius=1.0` for the authored centimetre mesh. Door links are
+  built from the real `swinging_doors` leaf midpoint + normal (enabled only
+  >70 degrees; skip a side snapped >2.5 m); the co-located `NavLinkFront/Back`
+  actors are not used. `NavigationLink3D.start_position`/`end_position` must be
+  set **before** the node enters the tree (a post-enter write is not re-read).
+  One authored Guildhall drop link (`NavLink_71`) has both endpoints ~6 m off
+  the cooked mesh; it is kept as authored data and cannot connect in Godot.
 - **The light budget is per-room fair, not a global energy cut.** `plan_light_selection()`
   water-fills the same 160 slots per 16 m room bubble (one light per bubble before any
   second, densest-first, deterministic) instead of ranking all 914 deduped Guildhall lights

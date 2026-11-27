@@ -19,6 +19,9 @@ extract: build-extractor
 	$(EX) raw
 	$(EX) tables
 	$(EX) levels
+	# N-P0: decoded ARecastNavMesh tiles for the three navmesh maps only. The
+	# generated runtime asset is produced by tools/parse_nav.py in `normalize`.
+	$(EX) nav --overwrite --filter 'Maps/(Guildhall|OldManor|FTUE)/.*\.umap$'
 	# meshes writes *.materials.json sidecars; materials consumes them to queue
 	# authored materials whose names don't start MI_/M_ (CobwebFogy, T_*).
 	# --overwrite keeps a changed material filter effective on an existing tree.
@@ -41,7 +44,7 @@ NORMALIZERS := parse_tables parse_curves parse_materials parse_gameplay \
                parse_devices parse_containers parse_interactables parse_loot \
                parse_spawners parse_vfx parse_unlocks parse_hearing \
                parse_state_tree parse_weather parse_project_ini parse_input \
-               parse_collision parse_wwise extract_audio convert_wwise \
+               parse_nav parse_collision parse_wwise extract_audio convert_wwise \
                parse_audio_control parse_locres convert_videos parse_anim_meta
 
 normalize:

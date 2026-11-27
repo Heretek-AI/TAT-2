@@ -11,6 +11,8 @@ using CUE4Parse.UE4.Assets.Exports.NavigationSystem;
 using CUE4Parse.UE4.Assets.Exports.SkeletalMesh;
 using CUE4Parse.UE4.Assets.Exports.StaticMesh;
 using CUE4Parse.UE4.Assets.Exports.Texture;
+using CUE4Parse.UE4.Assets.Objects;
+using CUE4Parse.UE4.Assets.Objects.Properties;
 using CUE4Parse_Conversion;
 using CUE4Parse_Conversion.Exporters;
 using CUE4Parse_Conversion.Options;
@@ -549,13 +551,17 @@ public sealed class Exporter
                 var dst = OutPath("nav", f.Path, ".json");
                 if (!_o.Overwrite && File.Exists(dst)) { CountSkip("nav"); continue; }
                 var sw = Stopwatch.StartNew();
+                // Fail closed on a re-run too: delete the previous JSON before
+                // decoding so a 7+ vertex refusal cannot leave stale tiles for
+                // parse_nav to consume.
+                if (File.Exists(dst)) File.Delete(dst);
                 // Keep the JSON deterministic: timings go to stderr, never into
                 // the data file (the next lane may hash/diff the artifact).
                 var doc = NavDoc(f.Path, e.Name, nm, nm.RecastNavMeshImpl, dst);
                 File.WriteAllText(dst, JsonConvert.SerializeObject(doc));
                 Count("nav", true);
                 var impl = nm.RecastNavMeshImpl;
-                Console.Error.WriteLine($"  nav {f.Path}:{e.Name} tiles={impl.DetourMeshTiles.Length} polys={doc["poly_count_total"]} verts={doc["vert_count_total"]} offmesh={doc["offmesh_connection_total"]} cache_bytes={doc["cache_compressed_bytes"]} decompress_fail={doc["cache_decompress_fail"]} in {sw.Elapsed.TotalSeconds:F1}s -> {dst}");
+                Console.Error.WriteLine($"  nav {f.Path}:{e.Name} tiles={impl.DetourMeshTiles.Length} polys={doc["poly_count_total"]} verts={doc["vert_count_total"]} offmesh={doc["offmesh_connection_total"]} max_poly_verts={doc["max_poly_verts"]} cache_bytes={doc["cache_compressed_bytes"]} decompress_fail={doc["cache_decompress_fail"]} in {sw.Elapsed.TotalSeconds:F1}s -> {dst}");
             }
             if (navMeshes == 0) CountSkip("nav-nonavmesh");
         });
@@ -564,6 +570,36 @@ public sealed class Exporter
     static float R2(float v) => MathF.Round(v, 2);
 
     static float[] Vec3(CUE4Parse.UE4.Objects.Core.Math.FVector v) => new[] { R2(v.X), R2(v.Y), R2(v.Z) };
+
+    // ------------------------------------------------------- property helpers
+    // ARecastNavMesh exposes no typed SupportedAreas/NavDataConfig members in
+    // CUE4Parse 1.2.2 (reflection shows only the base UObject properties), so
+    // the authored area table and agent config are read from the generic
+    // property tags. A missing tag is emitted as an empty value, never guessed.
+    static FPropertyTag? FindProp(UObject o, string name) =>
+        o.Properties?.FirstOrDefault(p => p.Name.Text == name);
+
+    static IEnumerable<FPropertyTag> StructProps(StructProperty? st)
+    {
+        if (st?.Value == null) return Enumerable.Empty<FPropertyTag>();
+        return st.Value.StructType is FStructFallback fb ? fb.Properties : Enumerable.Empty<FPropertyTag>();
+    }
+
+    static IEnumerable<FPropertyTag> StructProps(FPropertyTag? tag) =>
+        tag?.Tag is StructProperty st ? StructProps(st) : Enumerable.Empty<FPropertyTag>();
+
+    static double? NumOf(FPropertyTag? tag) => tag?.Tag switch
+    {
+        Int8Property p => p.Value,
+        Int16Property p => p.Value,
+        IntProperty p => p.Value,
+        Int64Property p => p.Value,
+        UInt16Property p => p.Value,
+        UInt32Property p => p.Value,
+        UInt64Property p => p.Value,
+        FloatProperty p => p.Value,
+        _ => null,
+    };
 
     Dictionary<string, object?> NavDoc(string mapPath, string exportName, ARecastNavMesh nm, FPImplRecastNavMesh impl, string jsonPath)
     {
@@ -574,9 +610,52 @@ public sealed class Exporter
         int cacheTiles = 0, decompressOk = 0, decompressFail = 0;
         long compressedBytes = 0, uncompressedBytes = 0;
         int polyTotal = 0, vertTotal = 0, offmeshTotal = 0, offmeshSegTotal = 0;
+        int maxPolyVerts = 0;
         var tileDocs = new List<Dictionary<string, object?>>(impl.DetourMeshTiles.Length);
         var areaHistogram = new SortedDictionary<int, int>();
         var flagHistogram = new SortedDictionary<int, int>();
+        var supportedAreas = new List<Dictionary<string, object?>>();
+        var areaTag = FindProp(nm, "SupportedAreas");
+        if (areaTag?.Tag is ArrayProperty areaArray && areaArray.Value != null)
+        {
+            foreach (var item in areaArray.Value.Properties)
+            {
+                if (item is not StructProperty st) continue;
+                var fields = new Dictionary<string, FPropertyTag>();
+                foreach (var f in StructProps(st)) fields[f.Name.Text] = f;
+                string className = "";
+                if (fields.TryGetValue("AreaClassName", out var cn))
+                {
+                    // The typed FNavAgentSelectorSupportedAreas serializer emits
+                    // the class name as FString (StrProperty), not FName.
+                    className = cn.Tag switch
+                    {
+                        StrProperty sp => sp.Value,
+                        NameProperty np => np.Value.Text,
+                        _ => "",
+                    };
+                }
+                double? areaId = fields.TryGetValue("AreaID", out var aid) ? NumOf(aid) : null;
+                if (className == "" || areaId == null) continue;
+                supportedAreas.Add(new Dictionary<string, object?>
+                {
+                    ["id"] = (int)areaId.Value,
+                    ["class"] = className,
+                });
+            }
+        }
+        var navDataConfig = new Dictionary<string, object?>();
+        foreach (var f in StructProps(FindProp(nm, "NavDataConfig")))
+        {
+            double? value = NumOf(f);
+            if (value == null) continue;
+            switch (f.Name.Text)
+            {
+                case "AgentRadius": navDataConfig["agent_radius_cm"] = R2((float)value.Value); break;
+                case "AgentHeight": navDataConfig["agent_height_cm"] = R2((float)value.Value); break;
+                case "AgentStepHeight": navDataConfig["agent_step_height_cm"] = R2((float)value.Value); break;
+            }
+        }
 
         foreach (var t in impl.DetourMeshTiles)
         {
@@ -607,8 +686,16 @@ public sealed class Exporter
             for (int i = 0; i < groundPolys; i++)
             {
                 var poly = tile.Polys[i];
-                int n = Math.Min((int)poly.VertCount, 6);
+                // Detour stores at most 6 verts per convex poly (RC_MESH_NULL_IDX
+                // beyond VertCount). The old Math.Min(…, 6) silently truncated a
+                // malformed authored poly; fail closed instead so a 7+ vert poly
+                // can never produce a plausible-looking navmesh.
+                int n = (int)poly.VertCount;
+                if (n > 6)
+                    throw new InvalidDataException(
+                        $"tile {h.X},{h.Y} layer {h.Layer} poly {i} has {n} verts; Detour max is 6 (refusing to clamp)");
                 if (n < 3) continue;
+                maxPolyVerts = Math.Max(maxPolyVerts, n);
                 var idx = new int[n];
                 for (int k = 0; k < n; k++) idx[k] = poly.Verts[k];
                 polys.Add(idx);
@@ -714,14 +801,20 @@ public sealed class Exporter
         cacheOut.Flush();
 
         var p = impl.DetourNavMeshParams;
+        double? cfgRadius = navDataConfig.TryGetValue("agent_radius_cm", out var cr) ? Convert.ToDouble(cr) : null;
+        double? cfgHeight = navDataConfig.TryGetValue("agent_height_cm", out var ch) ? Convert.ToDouble(ch) : null;
         return new Dictionary<string, object?>
         {
             ["schema"] = "tat2.nav_tiles/1",
             ["map"] = mapPath,
             ["export"] = exportName,
             ["nav_mesh_version"] = nm.NavMeshVersion.ToString(),
-            ["agent_height_cm"] = R2(nm.AgentHeight),
-            ["agent_radius_cm"] = R2(nm.AgentRadius),
+            // The typed AgentHeight/AgentRadius read as 0 in CUE4Parse 1.2.2;
+            // prefer the authored NavDataConfig, then the Detour params.
+            ["agent_height_cm"] = R2((float)(cfgHeight ?? p.WalkableHeight)),
+            ["agent_radius_cm"] = R2((float)(cfgRadius ?? p.WalkableRadius)),
+            ["nav_data_config"] = navDataConfig,
+            ["supported_areas"] = supportedAreas,
             ["nav_mesh_resolution_params"] = nm.NavMeshResolutionParams?.Select(r => new Dictionary<string, object?>
             {
                 ["cell_size"] = R2(r.CellSize),
@@ -740,6 +833,7 @@ public sealed class Exporter
             ["vert_count_total"] = vertTotal,
             ["offmesh_connection_total"] = offmeshTotal,
             ["offmesh_segment_total"] = offmeshSegTotal,
+            ["max_poly_verts"] = maxPolyVerts,
             ["poly_area_histogram"] = areaHistogram.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value),
             ["poly_flag_histogram"] = flagHistogram.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value),
             ["cache_tiles"] = cacheTiles,

@@ -1,0 +1,313 @@
+{
+  "audio": {
+    "buffer_s": 10.0,
+    "channels": 2,
+    "driver": "PulseAudio",
+    "dropped_frames": 17408,
+    "enabled": true,
+    "files": [
+      "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b/captures/ibl_ambient/audio_on.pcm",
+      "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b/captures/ibl_ambient/audio_on.wav",
+      "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b/captures/ibl_ambient/audio_on.json"
+    ],
+    "frames": 2866688,
+    "marks": [
+      {
+        "beat": "",
+        "frame": 0,
+        "label": "capture_start",
+        "msec": 1,
+        "t_s": 0.0,
+        "unix": 1795814099.76153,
+        "window": {
+          "frames": 1449984,
+          "peak_dbfs": -180.0,
+          "rms_dbfs": -180.0,
+          "seconds": 32.8794557823129,
+          "zero_fraction": 1.0
+        }
+      },
+      {
+        "beat": "",
+        "frame": 1449984,
+        "label": "gate",
+        "msec": 40921,
+        "t_s": 32.8794557823129,
+        "unix": 1795814140.68194,
+        "window": {
+          "frames": 565248,
+          "peak_dbfs": -15.6322186852514,
+          "rms_dbfs": -33.2443767910236,
+          "seconds": 12.8174149659864,
+          "zero_fraction": 0.202667678611866
+        }
+      },
+      {
+        "beat": "",
+        "frame": 2015232,
+        "label": "upper_foyer",
+        "msec": 48954,
+        "t_s": 45.6968707482993,
+        "unix": 1795814148.71498,
+        "window": {
+          "frames": 454656,
+          "peak_dbfs": -16.6787469664151,
+          "rms_dbfs": -35.9821818318584,
+          "seconds": 10.3096598639456,
+          "zero_fraction": 0.001220703125
+        }
+      },
+      {
+        "beat": "",
+        "frame": 2469888,
+        "label": "yaw180",
+        "msec": 56527,
+        "t_s": 56.0065306122449,
+        "unix": 1795814156.28839,
+        "window": {
+          "frames": 396800,
+          "peak_dbfs": -26.3468587217263,
+          "rms_dbfs": -40.0013614023265,
+          "seconds": 8.99773242630386,
+          "zero_fraction": 0.00122353830645161
+        }
+      }
+    ],
+    "pcm": "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b/captures/ibl_ambient/audio_on.pcm",
+    "peak_dbfs": -15.6322186852514,
+    "pushed_frames": 2873344,
+    "reason": "",
+    "sample_rate": 44100,
+    "schema": "tat2.audio_capture/1",
+    "seconds": 65.0042630385488,
+    "sidecar": "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b/captures/ibl_ambient/audio_on.json",
+    "started_at_utc": "2026-11-27T21:14:59",
+    "stopped_at_utc": "2026-11-27T21:16:05",
+    "total": {
+      "frames": 2866688,
+      "peak_dbfs": -15.6322186852514,
+      "rms_dbfs": -38.3192822096389,
+      "seconds": 65.0042630385488,
+      "zero_fraction": 0.546129191596714
+    },
+    "truncated": false,
+    "wav": "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b/captures/ibl_ambient/audio_on.wav"
+  },
+  "beam_card": {
+    "hidden": 0,
+    "mechanism": "capture-side runtime hide of the lightbeam_cards group; level_loader.gd has no TAT2_BEAM_CARD flag and the beam fix is unchanged",
+    "mode": "on"
+  },
+  "dry_run": false,
+  "engine": {
+    "audio_driver": "PulseAudio",
+    "audio_mix_rate": 44100.0,
+    "cmdline": [
+      "--script",
+      "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b_capture.gd"
+    ],
+    "display_server": "X11",
+    "godot": "4.7.2-stable (official)",
+    "godot_hex": "263938",
+    "rendering_driver": "vulkan",
+    "video_adapter": "NVIDIA GeForce RTX 4070 Laptop GPU",
+    "video_api": "1.4.357",
+    "video_vendor": "NVIDIA"
+  },
+  "env": {
+    "DISPLAY": ":99",
+    "TAT2_AO": "on",
+    "TAT2_BEAM_CARD": "on",
+    "XDG_SESSION_TYPE": "wayland"
+  },
+  "finished_at_utc": "2026-11-27T21:16:05",
+  "git": {
+    "branch": "phase12-integration",
+    "dirty": true,
+    "sha": "cb1941568467e7fc188ac60c5615b9170475e283",
+    "sha_short": "cb1941568467"
+  },
+  "gpu": {
+    "available": true,
+    "command": "nvidia-smi --query-gpu=name,driver_version,temperature.gpu,memory.used,utilization.gpu,clocks.current.graphics --format=csv,noheader,nounits",
+    "query": "name,driver_version,temperature.gpu,memory.used,utilization.gpu,clocks.current.graphics",
+    "rows": [
+      [
+        "NVIDIA GeForce RTX 4070 Laptop GPU",
+        "620.73.04",
+        "70.15",
+        "5503",
+        "13",
+        "2370"
+      ]
+    ],
+    "used_by_capture": true
+  },
+  "host": {
+    "cpu": "Intel(R) Core(TM) i9-14900HX",
+    "hostname": "AtomMan",
+    "nproc": 32,
+    "os": "Linux",
+    "os_version": "46 (KDE Plasma Desktop Edition Prerelease)"
+  },
+  "lens": {
+    "aspect": 1.77777777777778,
+    "fov_source": "shipped authored lens: UE 85 deg horizontal at 16:9 -> 54.54 deg vertical",
+    "fov_vertical_deg": 54.54,
+    "keep_aspect": "height",
+    "resolution": [
+      1920,
+      1080
+    ]
+  },
+  "manifest_errors": [],
+  "notes": [
+    "Pose alignment against the reference keyframe is approximate; p0b_roi_stats.py reports numbers, not a pixel registration.",
+    "The beam numbers are diagnostic: KF27 criteria are encoded in p0b_roi_stats.py from the cream/beam RE (emitter x~17.8% y~40.0%, beam rows 39-40%).",
+    "TAT2_BEAM_CARD=off hides the lightbeam_cards group at runtime; it is an A/B control, not a game setting.",
+    "The fixed-pose run marks poses, not route beats. A 27-beat route run must call mark_beat(S01..S27); p0b_audio_stats.py --route prints the reference table.",
+    "Reference audio is documented RMS/peak dBFS (not LUFS); the script computes RMS/peak only and states the clip's -43.9 LUFS as context."
+  ],
+  "out_dir": "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b/captures/ibl_ambient",
+  "poses": [
+    {
+      "beat": "S13",
+      "duration_ms": 7525,
+      "eye": [
+        10.0,
+        24.0,
+        66.0
+      ],
+      "fov_vertical_deg": 54.54,
+      "frames_mean": [
+        23.4845112592161,
+        23.4841512437067,
+        23.4805445382428,
+        23.489523589523,
+        23.4924617069839
+      ],
+      "ground_hit": [],
+      "grounded": false,
+      "id": "gate",
+      "median_index": 0,
+      "median_lt8": 24.7793209876543,
+      "median_mean": 23.4845112592161,
+      "median_peak": 238.830000963807,
+      "note": "street-side gate approach (W9 grade-probe pose); reference KF16 is the gate/headlights keyframe",
+      "png": "build/qa/p0b/captures/ibl_ambient/gate.png",
+      "png_size": [
+        1920,
+        1080
+      ],
+      "ref_keyframe": "KF16",
+      "resolution": [
+        1920,
+        1080
+      ],
+      "status": "captured",
+      "target": [
+        10.0,
+        25.0,
+        48.0
+      ]
+    },
+    {
+      "beat": "S24",
+      "duration_ms": 7149,
+      "eye": [
+        27.0,
+        29.6700000762939,
+        -50.0
+      ],
+      "fov_vertical_deg": 54.54,
+      "frames_mean": [
+        20.1076636981343,
+        20.107788073133,
+        20.1078405808467,
+        20.1077713447314,
+        20.1078247783628
+      ],
+      "ground_hit": [],
+      "grounded": false,
+      "id": "upper_foyer",
+      "median_index": 1,
+      "median_lt8": 59.3117283950617,
+      "median_mean": 20.107788073133,
+      "median_peak": 255.0,
+      "note": "authored upper-foyer slot looking into the hall; KF27 is the foyer security-beam keyframe",
+      "png": "build/qa/p0b/captures/ibl_ambient/upper_foyer.png",
+      "png_size": [
+        1920,
+        1080
+      ],
+      "ref_keyframe": "KF27",
+      "resolution": [
+        1920,
+        1080
+      ],
+      "status": "captured",
+      "target": [
+        27.0,
+        29.6700000762939,
+        -60.0
+      ]
+    },
+    {
+      "beat": "S24",
+      "duration_ms": 8683,
+      "eye": [
+        27.0,
+        29.6700000762939,
+        -50.0
+      ],
+      "fov_vertical_deg": 54.54,
+      "frames_mean": [
+        12.0581590749484,
+        12.0581799159934,
+        12.0582575780378,
+        12.0581822230942,
+        12.0581214592078
+      ],
+      "ground_hit": [],
+      "grounded": false,
+      "id": "yaw180",
+      "median_index": 1,
+      "median_lt8": 80.9128086419753,
+      "median_mean": 12.0581799159934,
+      "median_peak": 255.0,
+      "note": "same slot turned 180 deg; W9-P1 showed the armchair/ottoman/vitrine from here",
+      "png": "build/qa/p0b/captures/ibl_ambient/yaw180.png",
+      "png_size": [
+        1920,
+        1080
+      ],
+      "ref_keyframe": "KF27",
+      "resolution": [
+        1920,
+        1080
+      ],
+      "status": "captured",
+      "target": [
+        27.0,
+        29.6700000762939,
+        -40.0
+      ]
+    }
+  ],
+  "repo_root": "/home/john/.local/share/opencode/worktree/318f41/phase12-integration",
+  "run_id": "ibl_ambient",
+  "schema": "tat2.p0b_capture/1",
+  "seed": {
+    "active_map_seed": 1075715363,
+    "official_clip_seed": 1025051536,
+    "requested": "derived"
+  },
+  "self_test": false,
+  "settle": {
+    "capture_frames": 5,
+    "frames": 60,
+    "selector": "median-mean"
+  },
+  "started_at_utc": "2026-11-27T21:14:59",
+  "status": "captured"
+}

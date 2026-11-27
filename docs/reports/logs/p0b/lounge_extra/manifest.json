@@ -1,0 +1,205 @@
+{
+  "audio": {
+    "buffer_s": 10.0,
+    "channels": 2,
+    "driver": "PulseAudio",
+    "dropped_frames": 185344,
+    "enabled": true,
+    "files": [
+      "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b/captures/lounge_extra/audio_on.pcm",
+      "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b/captures/lounge_extra/audio_on.wav",
+      "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b/captures/lounge_extra/audio_on.json"
+    ],
+    "frames": 2015232,
+    "marks": [
+      {
+        "beat": "",
+        "frame": 0,
+        "label": "capture_start",
+        "msec": 2,
+        "t_s": 0.0,
+        "unix": 1795813948.97983,
+        "window": {
+          "frames": 1449984,
+          "peak_dbfs": -180.0,
+          "rms_dbfs": -180.0,
+          "seconds": 32.8794557823129,
+          "zero_fraction": 1.0
+        }
+      },
+      {
+        "beat": "",
+        "frame": 1449984,
+        "label": "beam_close",
+        "msec": 44895,
+        "t_s": 32.8794557823129,
+        "unix": 1795813993.87401,
+        "window": {
+          "frames": 565248,
+          "peak_dbfs": -13.9023418012062,
+          "rms_dbfs": -31.9669035523648,
+          "seconds": 12.8174149659864,
+          "zero_fraction": 0.202529686084692
+        }
+      }
+    ],
+    "pcm": "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b/captures/lounge_extra/audio_on.pcm",
+    "peak_dbfs": -13.9023418012062,
+    "pushed_frames": 2120704,
+    "reason": "",
+    "sample_rate": 44100,
+    "schema": "tat2.audio_capture/1",
+    "seconds": 45.6968707482993,
+    "sidecar": "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b/captures/lounge_extra/audio_on.json",
+    "started_at_utc": "2026-11-27T21:12:28",
+    "stopped_at_utc": "2026-11-27T21:13:21",
+    "total": {
+      "frames": 2015232,
+      "peak_dbfs": -13.9023418012062,
+      "rms_dbfs": -37.487763716026,
+      "seconds": 45.6968707482993,
+      "zero_fraction": 0.776319302194487
+    },
+    "truncated": false,
+    "wav": "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b/captures/lounge_extra/audio_on.wav"
+  },
+  "beam_card": {
+    "hidden": 0,
+    "mechanism": "capture-side runtime hide of the lightbeam_cards group; level_loader.gd has no TAT2_BEAM_CARD flag and the beam fix is unchanged",
+    "mode": "on"
+  },
+  "dry_run": false,
+  "engine": {
+    "audio_driver": "PulseAudio",
+    "audio_mix_rate": 44100.0,
+    "cmdline": [
+      "--script",
+      "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b_capture.gd"
+    ],
+    "display_server": "X11",
+    "godot": "4.7.2-stable (official)",
+    "godot_hex": "263938",
+    "rendering_driver": "vulkan",
+    "video_adapter": "NVIDIA GeForce RTX 4070 Laptop GPU",
+    "video_api": "1.4.357",
+    "video_vendor": "NVIDIA"
+  },
+  "env": {
+    "DISPLAY": ":99",
+    "TAT2_AO": "on",
+    "TAT2_BEAM_CARD": "on",
+    "XDG_SESSION_TYPE": "wayland"
+  },
+  "finished_at_utc": "2026-11-27T21:13:21",
+  "git": {
+    "branch": "phase12-integration",
+    "dirty": true,
+    "sha": "cb1941568467e7fc188ac60c5615b9170475e283",
+    "sha_short": "cb1941568467"
+  },
+  "gpu": {
+    "available": true,
+    "command": "nvidia-smi --query-gpu=name,driver_version,temperature.gpu,memory.used,utilization.gpu,clocks.current.graphics --format=csv,noheader,nounits",
+    "query": "name,driver_version,temperature.gpu,memory.used,utilization.gpu,clocks.current.graphics",
+    "rows": [
+      [
+        "NVIDIA GeForce RTX 4070 Laptop GPU",
+        "620.73.04",
+        "69.30",
+        "5434",
+        "17",
+        "1980"
+      ]
+    ],
+    "used_by_capture": true
+  },
+  "host": {
+    "cpu": "Intel(R) Core(TM) i9-14900HX",
+    "hostname": "AtomMan",
+    "nproc": 32,
+    "os": "Linux",
+    "os_version": "46 (KDE Plasma Desktop Edition Prerelease)"
+  },
+  "lens": {
+    "aspect": 1.77777777777778,
+    "fov_source": "shipped authored lens: UE 85 deg horizontal at 16:9 -> 54.54 deg vertical",
+    "fov_vertical_deg": 54.54,
+    "keep_aspect": "height",
+    "resolution": [
+      1920,
+      1080
+    ]
+  },
+  "manifest_errors": [],
+  "notes": [
+    "Pose alignment against the reference keyframe is approximate; p0b_roi_stats.py reports numbers, not a pixel registration.",
+    "The beam numbers are diagnostic: KF27 criteria are encoded in p0b_roi_stats.py from the cream/beam RE (emitter x~17.8% y~40.0%, beam rows 39-40%).",
+    "TAT2_BEAM_CARD=off hides the lightbeam_cards group at runtime; it is an A/B control, not a game setting.",
+    "The fixed-pose run marks poses, not route beats. A 27-beat route run must call mark_beat(S01..S27); p0b_audio_stats.py --route prints the reference table.",
+    "Reference audio is documented RMS/peak dBFS (not LUFS); the script computes RMS/peak only and states the clip's -43.9 LUFS as context."
+  ],
+  "out_dir": "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b/captures/lounge_extra",
+  "poses": [
+    {
+      "beat": "",
+      "duration_ms": 7054,
+      "eye": [
+        39.0,
+        28.6700000762939,
+        -28.9699993133545
+      ],
+      "fov_vertical_deg": 54.54,
+      "frames_mean": [
+        20.7152324643299,
+        20.7152324643299,
+        20.7152324643299,
+        20.7206099952616,
+        20.7206833054484
+      ],
+      "ground_hit": [
+        39.0,
+        27.0,
+        -28.9699993133545
+      ],
+      "grounded": true,
+      "id": "beam_close",
+      "median_index": 2,
+      "median_lt8": 0.503086419753086,
+      "median_mean": 20.7152324643299,
+      "median_peak": 238.830000963807,
+      "note": "Lounge C_57 extra (not KF27/S24): 3.4 m from the C_57 card; luma stats only, no KF27 criteria",
+      "png": "build/qa/p0b/captures/lounge_extra/beam_close.png",
+      "png_size": [
+        1920,
+        1080
+      ],
+      "ref_keyframe": "EXTRA",
+      "resolution": [
+        1920,
+        1080
+      ],
+      "status": "captured",
+      "target": [
+        42.4000015258789,
+        28.8999996185303,
+        -28.9699993133545
+      ]
+    }
+  ],
+  "repo_root": "/home/john/.local/share/opencode/worktree/318f41/phase12-integration",
+  "run_id": "lounge_extra",
+  "schema": "tat2.p0b_capture/1",
+  "seed": {
+    "active_map_seed": 1075715363,
+    "official_clip_seed": 1025051536,
+    "requested": "derived"
+  },
+  "self_test": false,
+  "settle": {
+    "capture_frames": 5,
+    "frames": 60,
+    "selector": "median-mean"
+  },
+  "started_at_utc": "2026-11-27T21:12:29",
+  "status": "captured"
+}

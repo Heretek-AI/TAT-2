@@ -1,0 +1,91 @@
+P1_GATE_RUN
+started: 2026-11-26T19:45:43-05:00
+root: /home/john/.local/share/opencode/worktree/318f41/p1-evidence
+head: 3998761f4ac19d334463daae693cd3f2051e9c16
+branch: w10/p1-evidence
+godot: 4.7.2.stable.official.ed1daf0bf
+godot_bin: /home/john/.local/share/opencode/worktree/318f41/p1-evidence/tools/godot
+lock: /tmp/opencode/tat2-godot.lock
+uncommitted_entries_at_start: 10
+host: Linux 7.4.0-0.rc4.261125g4dce97c6c265.35.fc46.x86_64 x86_64
+nproc: 32
+runner: build/qa/run_p0b_gates.sh
+
+P1_GATES start head=3998761f4ac19d334463daae693cd3f2051e9c16 branch=w10/p1-evidence godot=4.7.2.stable.official.ed1daf0bf
+P1_GATE name=compile exit=0 log=docs/reports/logs/p1/full/compile.log
+P1_MARKER name=compile marker=scripts checked: [0-9]+, broken: 0
+P1_GATE name=run_tests exit=0 log=docs/reports/logs/p1/full/run_tests.log
+P1_MARKER name=run_tests marker=SUMMARY: fails=0
+P1_GATE name=m2 exit=0 log=docs/reports/logs/p1/full/m2.log
+P1_MARKER name=m2 marker=M2_SUMMARY: fails=0
+P1_GATE name=probe_p1_safe exit=0 log=docs/reports/logs/p1/full/probe_p1_safe.log
+P1_MARKER name=probe_p1_safe marker=P1_SAFE PASS checks=86 fails=0
+P1_GATE name=probe_p1_doors exit=0 log=docs/reports/logs/p1/full/probe_p1_doors.log
+P1_MARKER name=probe_p1_doors marker=P1_DOORS PASS
+P1_GATE name=probe_p1_beams exit=0 log=docs/reports/logs/p1/full/probe_p1_beams.log
+P1_MARKER name=probe_p1_beams marker=P1_BEAMS PASS checks=7 fails=0
+P1_GATE name=probe_p1_ward exit=0 log=docs/reports/logs/p1/full/probe_p1_ward.log
+P1_MARKER name=probe_p1_ward marker=P1_WARD PASS checks=44
+P1_GATE name=probe_p1_street exit=0 log=docs/reports/logs/p1/full/probe_p1_street.log
+P1_MARKER name=probe_p1_street marker=P1_STREET PASS
+P1_GATE name=probe_guard_positions_guildhall exit=0 log=docs/reports/logs/p1/full/probe_guard_positions_guildhall.log
+P1_MARKER name=probe_guard_positions_guildhall marker=GUARD_CHECK PASS
+P1_GATE name=probe_guard_positions_old_manor exit=0 log=docs/reports/logs/p1/full/probe_guard_positions_old_manor.log
+P1_MARKER name=probe_guard_positions_old_manor marker=GUARD_CHECK PASS
+P1_GATE name=probe_collision_authored exit=0 log=docs/reports/logs/p1/full/probe_collision_authored.log
+P1_MARKER name=probe_collision_authored marker=COL_MAPS PASS
+P1_GATE name=probe_lock_inventory exit=0 log=docs/reports/logs/p1/full/probe_lock_inventory.log
+P1_MARKER name=probe_lock_inventory marker=state=APPLIED
+P1_GATE name=probe_niagara exit=0 log=docs/reports/logs/p1/full/probe_niagara.log
+P1_MARKER name=probe_niagara marker=NIAGARA_PROBE PASS
+P1_GATE name=probe_door_walk exit=0 log=docs/reports/logs/p1/full/probe_door_walk.log
+P1_MARKER name=probe_door_walk marker=DOORWALK PASS
+P1_GATE name=probe_viewmodel_truth exit=0 log=docs/reports/logs/p1/full/probe_viewmodel_truth.log
+P1_MARKER name=probe_viewmodel_truth marker=VIEWMODEL_TRUTH PASS
+P1_GATE name=probe_geometry_placement exit=0 log=docs/reports/logs/p1/full/probe_geometry_placement.log
+P1_MARKER name=probe_geometry_placement marker=GEOM_PROBE PASS
+P1_GATE name=probe_blackjack_race exit=0 log=docs/reports/logs/p1/full/probe_blackjack_race.log
+P1_MARKER name=probe_blackjack_race marker=BLACKJACK_PROBE PASS
+P1_GATE name=probe_device_meshes exit=0 log=docs/reports/logs/p1/full/probe_device_meshes.log
+P1_MARKER name=probe_device_meshes marker=TURRET_PROBE PASS
+P1_GATE name=probe_gc_destruction exit=0 log=docs/reports/logs/p1/full/probe_gc_destruction.log
+P1_MARKER name=probe_gc_destruction marker=GC_PROBE PASS
+P1_GATE name=test_gc_break_trigger exit=0 log=docs/reports/logs/p1/full/test_gc_break_trigger.log
+P1_MARKER name=test_gc_break_trigger marker=GC_TRIGGER PASS
+P1_GATE name=test_w10a2_civilian exit=0 log=docs/reports/logs/p1/full/test_w10a2_civilian.log
+P1_MARKER name=test_w10a2_civilian marker=W10A2_CIV_SUMMARY: fails=0
+P1_GATE name=test_w10a2_guard_placement exit=0 log=docs/reports/logs/p1/full/test_w10a2_guard_placement.log
+P1_MARKER name=test_w10a2_guard_placement marker=GUARD_PLACEMENT_SUMMARY: fails=0
+P1_GATE name=test_beam_geometry exit=0 log=docs/reports/logs/p1/full/test_beam_geometry.log
+P1_MARKER name=test_beam_geometry marker=BEAM_GEOMETRY_SUMMARY: fails=0
+P1_GATE name=probe_leak exit=0 log=docs/reports/logs/p1/full/probe_leak.log
+P1_MARKER name=probe_leak marker=PROBE start
+P1_GATE name=e2e exit=1 log=docs/reports/logs/p1/full/e2e.log
+P1_GATES FAIL gate=e2e exit=1 log=docs/reports/logs/p1/full/e2e.log
+--- last 25 lines of docs/reports/logs/p1/full/e2e.log ---
+PASS: [A2-CIV-BIND] Lounge civilian authored surface bind total=9 bound=9 textured=8 default_white=0 (want 9/9/8/0)
+PASS: [A2-CIV-FACING] Lounge civilian skeleton follows the actor forward (dot=1.0000 > 0.9)
+A2_MEASURE lounge_civ flee clear_ray=true deg=30 can_see=true state=flee yelps=1 spot=(42.0425, 26.05162, -29.1413)
+PASS: [A2-CIV-FLEE] Lounge civilian flees with a yelp at a player 4 m in front (clear=true deg=30 can_see=true state=flee yelps=1)
+A2_WHITE unexplained key=<no ue_mesh> MeshInstance3D count=1 sample=/root/Mission/SafeRoomDressing/SafeRoomPortalOutline detail=[0]null(glTF-default)
+A2_WHITE allowed key=/Engine/BasicShapes/Cone count=1 reason=authored /Engine/BasicShapes placeholder (BasicShapeMaterial, no emission; PORT_DECISION)
+A2_WHITE allowed key=/Engine/BasicShapes/Cube count=2 reason=authored /Engine/BasicShapes placeholder (BasicShapeMaterial, no emission; PORT_DECISION)
+A2_WHITE allowed key=<no ue_mesh> MeshInstance3D count=5 reason=port guard carried-key GLB is untextured (glTF default); PORT_APPROX actor prop
+A2_MEASURE cream_slabs nodes=0 detail=[]
+A2_MEASURE near_white visible_nodes=6746 shader_surfaces=397 unexplained=1 allowed=3 allowlist=5
+FAIL: [A2-WHITE] no unexplained near-white visible mesh (visible=6746 shader_surfaces=397 unexplained=1 allowlisted=3)
+A2_MEASURE shell origin=(44.00966, 27.00134, -25.56296) horizontal=4/4 ["+X=hit", "-X=hit", "+Z=hit", "-Z=hit"] floor=hit
+PASS: [A2-SHELL] Lounge shell rays: 4/4 horizontal hits + floor hit (origin=(44.00966, 27.00134, -25.56296), ["+X=hit", "-X=hit", "+Z=hit", "-Z=hit"])
+A2_MEASURE turret visible=91 hidden=0 meshless=0 merged_cells=0 multi_path_cells=0 authored=1145/0 paths=5 missing_paths=0 unique_runtime_cells=0
+PASS: [A2-TURRET] turret census authored visible=1145 (want 1145) hidden=0; runtime meshless=0 missing_paths=[] (individual=91, merged_cells=0)
+A2_MEASURE gc layers=174 leaves=80 visible_broken=0 missing=0
+PASS: [A2-GC-STATS] runtime GC census layers=174 (>=95) leaves=80 (>=79) visible_broken=0 missing=0
+PASS: [A2-GC-SWAP] one chest swap @Area3D@504932 -> leaf (broken=true opened=true)
+SUMMARY: fails=1 passed=299 total=300
+WARNING: 3 ObjectDB instances were leaked at exit (run with `--verbose` for details).
+   at: cleanup (core/object/object.cpp:2536)
+ERROR: 3 RID allocations of type 'N17RendererSceneCull8InstanceE' were leaked at exit.
+
+EXIT: 1
+FINISHED: 2026-11-26T20:03:06-05:00
+--- end docs/reports/logs/p1/full/e2e.log ---

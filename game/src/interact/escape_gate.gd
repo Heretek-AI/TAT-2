@@ -102,6 +102,11 @@ static func make_portal_visual() -> MeshInstance3D:
 	mat.set_shader_parameter("core_color", PORTAL_CORE_COLOR)
 	mat.set_shader_parameter("edge_color", PORTAL_EDGE_COLOR)
 	mi.material_override = mat
+	# A2-WHITE samples the *surface* materials and treats a material_override-only
+	# mesh as glTF-default white. Bind the same shader on the QuadMesh surface so
+	# the acceptance audit sees a ShaderMaterial instead of an unexplained
+	# near-white node; the override stays for the probes/render path.
+	quad.surface_set_material(0, mat)
 	# Bottom of the doorway sits on the gate origin (the old ring was centred
 	# at 1.5 m with a 3.0 m height, which also put its base at 0).
 	mi.position = Vector3(0.0, PORTAL_SIZE.y * 0.5, 0.0)

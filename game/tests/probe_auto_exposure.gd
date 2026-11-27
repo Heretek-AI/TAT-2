@@ -240,37 +240,72 @@ func _test_model_anchor(preset: Dictionary) -> void:
 	moon.free()
 
 
-## Asymmetric speeds: +4 EV of exposure takes 20 s at 0.2; -4 EV takes 2 s at
-## 2.0. A flat synthetic curve isolates the ramp from the authored V3 curve.
+## Asymmetric authored speeds, in EV100 terms: RISING +4 (dark -> bright,
+## SpeedUp 0.2) takes 20 s; FALLING -4 (bright -> dark, SpeedDown 2.0) takes
+## 2 s. A flat synthetic curve isolates the ramp from the V3 curve. The
+## measured-times comparison is the negative control against an inverted
+## SpeedUp/SpeedDown mapping.
 func _test_speeds() -> void:
 	var m = _flat_model()
-	m.reset(0.0)
-	_check(is_equal_approx(float(m.call("adapted_ev100")), 0.0), "flat model starts converged at 0 EV100")
+	# +4 EV100: -8 -> -4, both inside the authored -10..+1 clamp.
+	m.reset(-8.0)
+	_check(is_equal_approx(float(m.call("adapted_ev100")), -8.0), "flat model starts converged at -8 EV100")
 	var first: float = float(m.call("step", 0.1, -4.0))
-	_check(is_equal_approx(0.0 - first, 0.02), "speed_up ramp is 0.2 EV/s per 0.1 s", "delta=%.6f" % (0.0 - first))
+	_check(is_equal_approx(first - (-8.0), 0.02), "SpeedUp ramp is +0.2 EV100/s per 0.1 s",
+		"delta=%+.6f" % (first - (-8.0)))
 	for _i: int in range(198):
 		m.call("step", 0.1, -4.0)
-	_check(float(m.call("adapted_ev100")) > -4.0 + 1e-4, "after 19.9 s the +4 EV ramp is not settled",
+	_check(float(m.call("adapted_ev100")) < -4.0 - 1e-4, "after 19.9 s the +4 EV100 ramp is not settled",
 		"adapted=%.6f" % float(m.call("adapted_ev100")))
 	m.call("step", 0.1, -4.0)
-	_check(is_equal_approx(float(m.call("adapted_ev100")), -4.0), "+4 EV settles at 20.0 s at 0.2 f-stops/s",
+	_check(is_equal_approx(float(m.call("adapted_ev100")), -4.0), "+4 EV100 settles at 20.0 s at the authored SpeedUp 0.2",
 		"adapted=%.6f" % float(m.call("adapted_ev100")))
 	_check(is_equal_approx(float(m.call("exposure")), float(AutoExposure.AEM_CALIBRATION) * 16.0),
 		"adapted EV100 -4 is 2^4 brighter than the anchor", "exposure=%.9f" % float(m.call("exposure")))
 
-	# -4 EV of exposure in 2 s: from -3 EV100 to the authored max clamp +1.0.
-	m.reset(-3.0)
-	for _i: int in range(19):
-		m.call("step", 0.1, 40.0)
-	_check(float(m.call("adapted_ev100")) < 1.0 - 1e-4, "after 1.9 s the -4 EV ramp is not settled",
+	# -4 EV100: +1 -> -3 (the authored max clamp down to the dark anchor),
+	# SpeedDown 2.0.
+	m.reset(1.0)
+	var down_first: float = float(m.call("step", 0.1, -3.0))
+	_check(is_equal_approx(down_first - 1.0, -0.2), "SpeedDown ramp is -2.0 EV100/s per 0.1 s",
+		"delta=%+.6f" % (down_first - 1.0))
+	for _i: int in range(18):
+		m.call("step", 0.1, -3.0)
+	_check(float(m.call("adapted_ev100")) > -3.0 + 1e-4, "after 1.9 s the -4 EV100 ramp is not settled",
 		"adapted=%.6f" % float(m.call("adapted_ev100")))
-	m.call("step", 0.1, 40.0)
-	_check(is_equal_approx(float(m.call("adapted_ev100")), 1.0), "-4 EV settles at 2.0 s at 2.0 f-stops/s",
+	m.call("step", 0.1, -3.0)
+	_check(is_equal_approx(float(m.call("adapted_ev100")), -3.0), "-4 EV100 settles at 2.0 s at the authored SpeedDown 2.0",
 		"adapted=%.6f" % float(m.call("adapted_ev100")))
-	_check(float(m.call("step", 0.0, -40.0)) == 1.0, "dt=0 never teleports the adaptation")
-	m.call("step", 5.0, 40.0)
-	_check(is_equal_approx(float(m.call("adapted_ev100")), 1.0), "a huge step still clamps at max +1.0",
+	_check(float(m.call("step", 0.0, 40.0)) == -3.0, "dt=0 never teleports the adaptation")
+	m.call("step", 5.0, -40.0)
+	_check(is_equal_approx(float(m.call("adapted_ev100")), -10.0), "a huge step still clamps at min -10.0",
 		"adapted=%.6f" % float(m.call("adapted_ev100")))
+
+	# Measured negative control: with the authored 0.2/2.0 pair the rising
+	# (+4, SpeedUp) ramp must be ~10x slower than the falling (-4, SpeedDown)
+	# ramp. An inverted selection would make this 2.0 s vs 20.0 s and fail.
+	var t_up: float = _time_to_settle(-8.0, -4.0)
+	var t_down: float = _time_to_settle(1.0, -3.0)
+	_check(t_up > t_down * 5.0, "+4 EV100 (SpeedUp) is strictly slower than -4 EV100 (SpeedDown)",
+		"t_up=%.2fs t_down=%.2fs" % [t_up, t_down])
+	_check(absf(t_up - 20.0) < 0.15 and absf(t_down - 2.0) < 0.15,
+		"measured settle times are the authored 20 s / 2 s",
+		"t_up=%.2fs t_down=%.2fs" % [t_up, t_down])
+
+
+## Wall-clock seconds for the flat model to reach its clamp at `ev100`, stepping
+## 0.05 s (test-only mirror of the same `step` call).
+func _time_to_settle(start_ev100: float, ev100: float) -> float:
+	var m = _flat_model()
+	m.reset(start_ev100)
+	var t: float = 0.0
+	var want: float = float(m.call("target", ev100))
+	while t < 60.0:
+		m.call("step", 0.05, ev100)
+		t += 0.05
+		if is_equal_approx(float(m.call("adapted_ev100")), want):
+			return t
+	return INF
 
 
 ## Authored clamps + determinism + the V3 target at the documented anchors.

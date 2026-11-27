@@ -17,14 +17,17 @@ extends RefCounted
 ## What the model does (UE AEM_Basic, the part Godot cannot do itself):
 ##   target_ev100 = clamp(scene_ev100 + bias + bias_curve(scene_ev100),
 ##                        min_brightness, max_brightness)
-##   adapted_ev100 moves toward target at speed_up (image getting brighter,
-##   i.e. target below the current EV100) or speed_down (image getting darker)
+##   adapted_ev100 moves toward target at speed_up when the target EV100 RISES
+##   (dark -> bright adaptation) or speed_down when it FALLS (bright -> dark)
 ##   f-stops per second — UE's asymmetric eye adaptation.
 ##
-## Direction convention (matches the authored 0.2 slow / 2.0 fast pair and the
-## plan's "+4 EV 20 s / -4 EV 2 s" probe): a LOWER EV100 is a BRIGHTER image.
-## Entering a bright place darkens the image (EV100 rises) at 2.0 EV/s; dark
-## adaptation (+exposure, EV100 falls) takes 0.2 EV/s.
+## Direction convention (matches the authored 0.2/2.0 pair and the plan's
+## "+4 EV 20 s / -4 EV 2 s" probe): a LOWER EV100 is a BRIGHTER image. The
+## authored `SpeedUp` (0.2) is the DARK -> BRIGHT ramp: entering a bright place
+## raises the target EV100 (+4 EV100 takes 20 s). `SpeedDown` (2.0) is the
+## BRIGHT -> DARK ramp: entering a dark place lowers it (-4 EV100 takes 2 s).
+## The selection is `delta = target - adapted > 0 ? speed_up : speed_down`;
+## probing it backwards is the exact defect this comment guards.
 ##
 ## `AEM_CALIBRATION` is the port's ONE global calibration from the authored
 ## EV100 model to Godot's `Environment.tonemap_exposure` (a linear multiplier).
@@ -139,12 +142,14 @@ func reset(scene_ev100: float = 0.0) -> void:
 ## One time step toward the authored target. Returns the adapted EV100 (lower
 ## is a brighter image; see header). `dt` seconds, `ev100` the measured/average
 ## scene EV100. dt <= 0 is a no-op (never teleports the adaptation).
+## Authored semantics: target RISING (delta > 0, dark -> bright) uses SpeedUp
+## 0.2; target FALLING (delta < 0, bright -> dark) uses SpeedDown 2.0.
 func step(dt: float, ev100: float) -> float:
 	if dt <= 0.0:
 		return _adapted_ev100
 	var tgt: float = target(ev100)
 	var delta: float = tgt - _adapted_ev100
-	var rate: float = speed_up if delta < 0.0 else speed_down
+	var rate: float = speed_up if delta > 0.0 else speed_down
 	var max_step: float = rate * dt
 	if absf(delta) <= max_step or max_step <= 0.0:
 		_adapted_ev100 = tgt

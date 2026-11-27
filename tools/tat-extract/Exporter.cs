@@ -596,6 +596,30 @@ public sealed class Exporter
         return "/" + Path.ChangeExtension(rel, null);
     }
 
+    // The pinned CUE4Parse-Conversion 1.2.2.202611 decodes a UTextureCube as one
+    // tall CTexture (TextureDecoder.Decode stacks GetNumSlices() faces:
+    // sizeY *= 6). CTexture has no Crop() in that assembly, so slice the raw
+    // decoded bytes by row: every decoded format here is raw (block formats are
+    // expanded by DecodeBytes), so face i is the contiguous run
+    // [i * faceH * rowBytes, (i+1) * faceH * rowBytes).
+    static CTexture SliceCubeFace(CTexture src, int index, int faceHeight)
+    {
+        if (!PixelFormatUtils.PixelFormats.TryGetValue(src.PixelFormat, out var info) || info.BlockBytes <= 0)
+            throw new InvalidOperationException($"cube face slice: unsupported pixel format {src.PixelFormat}");
+        int bpp = info.BlockBytes / (info.BlockSizeX * info.BlockSizeY * info.BlockSizeZ);
+        if (bpp <= 0)
+            throw new InvalidOperationException($"cube face slice: {src.PixelFormat} has no whole bytes per pixel");
+        int rowBytes = src.Width * bpp;
+        int faceBytes = rowBytes * faceHeight;
+        int offset = faceBytes * index;
+        if (index < 0 || offset < 0 || faceBytes <= 0 || offset + faceBytes > src.Data.Length)
+            throw new InvalidOperationException(
+                $"cube face {index} out of range ({src.Width}x{src.Height}, {src.PixelFormat}, bpp={bpp}, data={src.Data.Length})");
+        var slice = new byte[faceBytes];
+        Buffer.BlockCopy(src.Data, offset, slice, 0, faceBytes);
+        return new CTexture(src.Width, faceHeight, src.PixelFormat, slice);
+    }
+
     public void Cubemaps()
     {
         var opts = DefaultOpts();
@@ -619,7 +643,7 @@ public sealed class Exporter
                     var manifest = Path.Combine(dir, "cubemap.json");
                     Directory.CreateDirectory(dir);
                     if (!_o.Overwrite && File.Exists(manifest)) { CountSkip("cubemaps"); continue; }
-                    var decoded = TextureDecoder.Decode(cube, opts);
+                    var decoded = TextureDecoder.Decode(cube, opts.TexturePlatform);
                     if (decoded == null) { Count("cubemaps", false, f.Path + ": decode null"); continue; }
                     if (decoded.Height % 6 != 0)
                     {
@@ -627,12 +651,17 @@ public sealed class Exporter
                         continue;
                     }
                     int faceH = decoded.Height / 6;
+                    if (decoded.Width != faceH)
+                    {
+                        Count("cubemaps", false, $"{f.Path}: decoded {decoded.Width}x{decoded.Height} is not six square {faceH}px faces");
+                        continue;
+                    }
                     var faces = new Dictionary<string, string>();
                     var means = new Dictionary<string, double[]>();
                     bool ok = true;
                     for (int i = 0; i < 6; i++)
                     {
-                        var face = decoded.Crop(0, i * faceH, decoded.Width, faceH);
+                        var face = SliceCubeFace(decoded, i, faceH);
                         var mean = FaceMean(face);
                         if (mean != null) means[CubeFaceNames[i]] = mean;
                         var bytes = face.Encode(opts, out var ext);

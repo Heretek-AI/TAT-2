@@ -1,9 +1,10 @@
 # P4.1 exposure + IBL lane (2026-11-27)
 
-**Status:** headless/codeable part **done and green**; no GPU run, no capture, no
-visual score. Worktree branch `p4-exposure` based on `a1c3597` (the Phase 0b
-main tip). The integrator owns regeneration, the audit re-stamp and the GPU
-calibration; the lane commit hash is reported in the handback, not here.
+**Status:** headless/codeable part **done and green**; the cubemap extractor is
+**built and run against the real assets** (3 cubes / 18 faces); no GPU run, no
+capture, no visual score. Worktree branch `p4-exposure` based on `a1c3597` (the
+Phase 0b main tip). The integrator owns `make normalize`, the audit re-stamp and
+the GPU calibration; the lane commit hash is reported in the handback, not here.
 
 ## What this lane ships
 
@@ -34,9 +35,11 @@ those values for `gloomy`, `midnight_clear` and `dense_fog_old_manor`;
   `GameData.eval_standalone_curve` with the transcribed 8-key table as the
   fallback.
 - UE AEM_Basic semantics: `target = clamp(scene + bias + curve(scene), -10, +1)`;
-  adaptation at `speed_up` when the image must brighten (EV100 falls) and
-  `speed_down` when it must darken. `+4 EV` takes 20 s at 0.2; `-4 EV` takes
-  2 s at 2.0.
+  `delta = target - adapted`; a RISING target (dark -> bright) uses `speed_up`
+  (0.2) and a FALLING target (bright -> dark) uses `speed_down` (2.0).
+  `+4 EV100` takes 20 s at 0.2; `-4 EV100` takes 2 s at 2.0. The probe measures
+  both settle times (20.00 s / 2.00 s) and asserts the rising ramp is strictly
+  slower (`t_up > 5 * t_down`), which fails under an inverted mapping.
 - ONE global calibration: `AEM_CALIBRATION = 0.008984375 = 1.15 * 2^-7`, i.e.
   the authored night anchor (scene `-3.0`, V3 `-4.0`, adapted `-7.0`) resolves
   to today's measured `NIGHT_EXPOSURE` 1.15 exactly. The GPU calibration run
@@ -54,7 +57,9 @@ those values for `gloomy`, `midnight_clear` and `dense_fog_old_manor`;
 ### 3. IBL producer + consumer
 
 - `tools/tat-extract/Exporter.cs` `cubemaps` command: decodes the authored
-  `UTextureCube`s, splits the six stacked faces, writes
+  `UTextureCube`s with the pinned API (`TextureDecoder.Decode(cube,
+  opts.TexturePlatform)`; the 1.2.2.202611 `CTexture` has no `Crop`, so the
+  command slices the six stacked faces itself by raw decoded rows), writes
   `OUT/assets/TAT/Content/Cubemaps/<id>/face_{px,nx,py,ny,pz,nz}.png` plus a
   `cubemap.json` sidecar (size, pixel format, SRGB, transfer, UE face order,
   a strided 8-bit face mean as an orientation gauge).
@@ -94,19 +99,60 @@ those values for `gloomy`, `midnight_clear` and `dense_fog_old_manor`;
 |---|---|
 | `tools/check_scripts_compile.gd` | `scripts checked: 223, broken: 0` (was 217; +4 core, +2 probes) |
 | `make test` | exit 0, `SUMMARY: fails=0`, 326 `PASS:` lines |
-| suite 122 (`probe_auto_exposure.gd`) | `AEM_PROBE: fails=0 passed=67` |
+| suite 122 (`probe_auto_exposure.gd`) | `AEM_PROBE: fails=0 passed=70` (corrected SpeedUp/SpeedDown) |
 | suite 123 (`probe_cubemap.gd`) | `CUBEMAP_PROBE: fails=0 passed=25` |
 | meter GLSL | `RDShaderFile` loads, `compile_error_compute=''`, 4,636 SPIR-V bytes |
+| `make build-extractor` | `Build succeeded. 15 Warning(s) 0 Error(s)` (14 NuGet advisory + 1 pre-existing `Program.cs:91 CS8603`) |
+| `tat-extract cubemaps` (real run) | exit 0: `[cubemaps] ok=3 skip=0 fail=0`, `errors.log` 0 entries |
 | `make gate-ratchet` | PASS (committed logs/floors untouched by this lane) |
 | `probe_render_t07.gd` | `T07_SUMMARY: fails=0` (Guildhall exposure 1.150 / ambient 0.160 unchanged) |
 | `build/qa/runtime_smoke.sh 90` | PASS, exit 124, errors=0, `mission_ready=1` for default/fixed, `TAT2_AEM=model TAT2_IBL=ambient`, and `TAT2_AEM=meter` (meter pending headless) |
 | `make audit` | **expected red until regeneration** (see below) |
 
+### Measured extractor build + real cubemap run
+
+```
+Build succeeded.
+    15 Warning(s)
+    0 Error(s)
+Time Elapsed 00:00:01.65
+cp tools/tat-extract/native/linux-x64/CUE4Parse-Natives.so tools/tat-extract/bin/Release/net10.0/
+```
+
+```
+$ tat-extract cubemaps --usmap .../TAT-5.5.4-...usmap
+mounted 22005 files
+== cubemaps
+  cubemap daylight: 256x256 PF_FloatRGBA srgb=False -> extracted/assets/TAT/Content/Cubemaps/daylight
+  cubemap Cubemap_GroundFloor_01: 512x512 PF_FloatRGBA srgb=False -> extracted/assets/TAT/Content/Cubemaps/cubemap_ground_floor_01
+  cubemap T_FakeSpecular1: 128x128 PF_FloatRGBA srgb=False -> extracted/assets/TAT/Content/Cubemaps/t_fake_specular1
+[cubemaps] ok=3 skip=0 fail=0
+[cubemaps-filtered] ok=0 skip=12559 fail=0
+errors -> extracted/errors.log (0 entries, this run only)
+```
+
+Six named PNGs per cube are on disk (18 faces); `tools/parse_cubemap.py`
+validates them into `tat2.cubemaps/1` in a /tmp run (3 converged, 0 rejected,
+`by_ue_path` for all three). The faces live in the shared
+`extracted/assets/TAT/Content/Cubemaps/` (they are extraction output; the
+generated JSON is still the integrator's `make normalize`).
+
+Real 8-bit face means (linear transfer) and the orientation observation:
+
+| cube | bright faces | note |
+|---|---|---|
+| `cubemap_ground_floor_01` (Gloomy SkyLight) | all ~0.00006–0.00085 | authored cube is very dark; naive irradiance ambient is ~0.0001, not today's 0.16 — the A/B decides |
+| `daylight` (DenseFog Old Manor) | px/nx/py/ny/pz 0.065–0.075 | `nz` is uniformly black under the UE ECubeFace order |
+| `t_fake_specular1` (Base/Examples) | `pz` only ~0.0039 | five black faces, one highlight face |
+
+
+
 `make audit` remaining failures in this worktree:
 
 ```
-FAIL producer tools/parse_cubemap.py: output gen:ibl is missing
+FAIL stale generated group materials: oldest output predates newest source  (new Cubemaps faces under extracted/assets; cleared by make normalize)
 FAIL baseline: producer tools/parse_weather.py changed since the baseline
+FAIL producer tools/parse_cubemap.py: output gen:ibl is missing
 FAIL baseline: no entry for producer tools/parse_cubemap.py
 FAIL baseline: infrastructure root:Makefile changed
 FAIL baseline: infrastructure root:tools/tat-extract/Exporter.cs changed
@@ -116,9 +162,9 @@ FAIL tool version drift: vgmstream ... -> missing   (worktree-only: the untracke
 
 ## What the integrator must do
 
-1. **Build/run the extractor** (not done here — the lane is forbidden to):
-   `make build-extractor`, then `$(EX) cubemaps` (or `make extract`). It writes
-   `extracted/assets/TAT/Content/Cubemaps/<id>/`.
+1. The extractor is **already built and run** in this lane; the three cubes and
+   their 18 faces are in the shared `extracted/assets/TAT/Content/Cubemaps/`.
+   Re-run `$(EX) cubemaps` only if the private extract changes.
 2. `make normalize` — regenerates `game/data/generated/weather/*.json` (new
    AEM fields) and creates `game/data/generated/ibl/cubemaps.json`.
 3. `tools/godot --headless --path game --import` — imports the six face PNGs
@@ -155,16 +201,22 @@ All are Vulkan/Xvfb runs at one Godot at a time; none were run here.
 
 ## Risks / conflicts
 
-- **`Exporter.cs` was not compiled or run** (build forbidden in this lane). The
-  code is written against CUE4Parse 1.2.2.202611 (`UTextureCube`,
-  `TextureDecoder.Decode` stacks the six `GetNumSlices()` faces, `CTexture.Crop`,
-  `Encode`); the command fails loudly on a non-six-face image, a missing
-  package or a decode/encode error. First run must be watched.
+- **Extractor API is now the measured one.** `make build-extractor` is green
+  against CUE4Parse/CUE4Parse-Conversion 1.2.2.202611 (15 warnings, 0 errors;
+  14 NuGet advisories + the pre-existing `Program.cs:91` nullable warning). The
+  pinned `CTexture` has no `Crop`, so faces are sliced from the raw decoded
+  bytes; `TextureDecoder.Decode(cube, opts.TexturePlatform)` is the real
+  overload. The real run decoded 3/3 cubes and wrote 18 faces, so the
+  six-stacked-face assumption is now measured, not inferred.
 - **Face order is UE `ECubeFace`** (PosX, NegX, PosY, NegY, PosZ, NegZ). The
   extractor names the files, so the runtime never guesses; the orientation
-  gauge + GPU A/B are the verification. CUE4Parse's
-  `CubemapConverter.ToPanorama` uses a different order and is deliberately not
-  used.
+  gauge + GPU A/B are the verification. Real data already shows two things the
+  A/B must resolve: `daylight` has a uniformly black `nz` face under this
+  order, and `cubemap_ground_floor_01` is near-black on every face (the
+  authored SkyLight cube is not a bright sky dome, so raw irradiance ambient
+  would be ~0.0001 vs today's 0.16). CUE4Parse's
+  `CubemapConverter.ToPanorama` uses a different face order and is deliberately
+  not used.
 - **Generated-data baseline**: the weather files change shape (new fields), so
   `make audit` is red until step 4. `TAT2_AEM=fixed` means no visual delta.
 - **Shared files**: `weather_profile.gd` and `mission_controller.gd` are edited

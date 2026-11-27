@@ -389,13 +389,14 @@ builds the instruments and records what is still wrong.
   **Superseded by W10-P2 above: suite 119 is green; the remaining cream bars are
   the beam cards (P4 beam material).**
 - **Capture instruments — port capture run, live reference pending.** Six fixed
-  poses (`gate`, `upper_foyer`, `yaw180`, `lounge`, `lounge_beam`, `beam_close`)
-  at the shipped 54.54° vertical lens, 1920×1080, 60 settle + 5 median frames,
-  a Master-bus `AudioEffectCapture` tap with a headless `dummy_audio_driver`
-  fallback, a tracked manifest (HEAD/seed/lens/pose), and the ROI script
-  (luma/percentiles, beam rows, 16×9 cream map, KF27 criteria). The dry-run
-  manifest validates (`poses=6`), the self-test is **21/21**, and the KF27
-  reference frame scores **7/7**.
+  poses (`gate`, `upper_foyer`, `yaw180`, `foyer_beam`, `lounge`, `lounge_beam`,
+  `beam_close`) at the shipped 54.54° vertical lens, 1920×1080, 60 settle + 5
+  median frames, a Master-bus `AudioEffectCapture` tap with a headless
+  `dummy_audio_driver` fallback, a tracked manifest (HEAD/seed/lens/pose), and
+  the ROI script (luma/percentiles, beam rows, 16×9 cream map, KF27 criteria).
+  The dry-run manifest validates (`poses=7`), the self-test is **23/23**, and the
+  KF27 reference frame scores **9/9** (reference-only; the first port-side
+  `foyer_beam` capture scored 5/9, see `docs/reports/gpu-phase12-20261127.md`).
   The first port run is
   `docs/reports/logs/p0b/20261126T210338Z_5301fc661750_bon/` (1920×1080, 93 s,
   audio 85.3 s at RMS −36.50/peak −15.12 dBFS; gate 23.2/10, upper_foyer
@@ -595,7 +596,7 @@ Measured detail: [`reports/w9-remediation-20261125.md`](reports/w9-remediation-2
   FTUE 535/548 (0.976)**, `dropped=0` on each.
 - **Progression is authored.** Level cap 25 with XP preserved, authored award, endgame
   precedence KF13 → 1200/600/300 → QG → 480, FTUE 5,000 migrated once, 48 market gates.
-- **Locks are authored only.** 154 runtime locks applied (144 de-duplicated container
+- **Locks are authored only.** 162 runtime locks applied (152 de-duplicated container
   placements + 10 door pivot nodes; 363 is the raw record join and 8 window actors are
   excluded by class); zero invented levels; the LV4 `ESC` no longer escapes into the pause menu.
 - **UI reads the authored tables.** String routing 26 → 306; authored-mappable 195/195;

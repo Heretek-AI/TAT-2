@@ -413,7 +413,7 @@ Run serially, one Godot at a time, and record under `docs/reports/logs/`:
 
 ```bash
 make run
-make test                         # 324 checks
+make test                         # 327 checks
 tools/godot --headless --path game --script "$PWD/tools/check_scripts_compile.gd"
 tools/godot --headless --path game --script res://tests/run_tests.gd
 tools/godot --headless --path game --script res://tests/test_m2_player.gd
@@ -423,8 +423,8 @@ tools/godot --headless --path game --script res://tests/probe_p5_ui.gd
 tools/godot --headless --path game --script res://tests/test_audio_control.gd
 tools/godot --headless --path game --script res://tests/test_w10a2_cream.gd
 tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd
-build/qa/run_final_gates.sh       # 45 gates, logs docs/reports/logs/final/
-build/qa/p0b_route.sh --self-test # 62 checks, headless; part of the 45-gate set
+build/qa/run_final_gates.sh       # 49 gates, logs docs/reports/logs/final/
+build/qa/p0b_route.sh --self-test # 62 checks, headless; part of the 49-gate set
 make audit && make gate-ratchet
 build/qa/runtime_smoke.sh 90      # no outer flock
 ```
@@ -432,8 +432,9 @@ build/qa/runtime_smoke.sh 90      # no outer flock
 - `build/qa/run_p0b_gates.sh` is the historical P1 40-gate set; the current
   runner is `build/qa/run_final_gates.sh`. Phase 0a added
   `p0b_route_self_test` (route/live `bash -n` + the 62-check self-test) and
-  Phase 0b measured the full **45/45** set at `912a481`; the route self-test is
-  a ratchet floor (`checks=62`).
+  Phase 0b measured the then-current **45/45** set at `912a481`; the Phase 1/2
+  integration measured **49/49** at `71e77f6` (mirrors + P4/GC/nav/audio/UI).
+  The route self-test is a ratchet floor (`checks=62`).
 - One Godot at a time: `flock /tmp/opencode/tat2-godot.lock`.
 - A fresh worktree with a copied `.godot` needs
   `tools/godot --headless --path game --import` before scripts using a new
@@ -449,12 +450,15 @@ build/qa/runtime_smoke.sh 90      # no outer flock
 
 ## 7. Evidence map
 
-- `docs/reports/final-20261127-phase0b.md` — **current** 45-gate measured table at
-  `912a481` (clean route2 + route self-test) and the ratchet re-stamp.
+- `docs/reports/integration-20261127.md` — **current** 49-gate Phase 1/2
+  integration table at `71e77f6`, the regen outputs, and the cherry-pick map.
+- `docs/reports/final-20261127-phase0b.md` — historical 45-gate table at
+  `912a481` (clean route2 + route self-test) and the Phase 0b ratchet re-stamp.
 - `docs/reports/final-20261127.md` — W10 FINAL 44-gate table at `5135f53` and the
   truth corrections (kept as history; the `5135f53` logs live in git history).
 - `docs/reports/phase0a-20261127.md` — Phase 0a save/docs/provenance/gate/issue
-  evidence (no GPU; 45-gate runner added, measured in Phase 0b).
+  evidence (no GPU; the 45-gate runner was added then, and Phase 1/2 later
+  extended it to 49 gates).
 - `docs/reports/logs/final/` — every final gate log.
 - `docs/reports/p1-integration-20261126.md` — P1 route content and 40-gate evidence.
 - `docs/reports/p5-ui-20261126.md` — P5 UI probe and string audit.

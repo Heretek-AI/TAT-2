@@ -32,6 +32,26 @@ report and the logs are the commit that follows it.
   auto-merged; no substantive conflict. Door → nav → guard order holds; the
   mirror bake math was not edited.
 
+### Cherry-pick provenance
+
+`main` was checked out in the primary worktree, so the six lanes were applied
+with `git cherry-pick <base>..<tip>` on `phase12-integration` rather than as
+merge commits. The verifier-approved lane tips are therefore **not ancestors**;
+the content is preserved with **identical stable patch-ids**:
+
+| Lane | Verifier tip | Integrated commits | Patch-id of the tip |
+|---|---|---|---|
+| P4 landscape/beams | `371eb4a` | `8bb89fe`, `acf5953` | `7b3bd0093a10…` |
+| GC/bookcases | `dfa1a40` | `0adfea7`, `66fcbd4` | `2d04d7c3dab7…` |
+| Navmesh | `0200d62` | `e5a2805`, `178c4aa` | `3cc23f76cd05…` |
+| Audio W11 | `f4b907f` | `d25ea4b`, `b7f03fa`, `262d138` | `e0468f2277be…` |
+| P4 exposure/IBL | `26ed975` | `12fb0d7`, `518ca94`, `93a518b` | `290b614f9e15…` |
+| UI | `b4471e9` | `79c097b`, `7fa6186`, `495e554` | `8c93e7a23ab8…` |
+| Mirrors | `07ecb56` | `a371852` → `07ecb56` | ancestor (`--ff-only`) |
+
+Reproduce with `git show <tip> | git patch-id --stable` and the same command on
+the corresponding integrated commit. The six patch-ids match byte-for-byte.
+
 ## Real-extraction defect found and fixed
 
 The first real `textures` run wrote the UI array slices as `slice_00png` (no

@@ -3364,10 +3364,17 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 			result["moonshape_hidden"] = int(result.get("moonshape_hidden", 0)) + 1
 			continue
 		var low_mp: String = mp.to_lower()
-		if "fogsheet" in low_mp or "fogsphere" in low_mp or "volumetric" in low_mp or "skysphere" in low_mp or "blocker" in low_mp:
-			# RE-B-14: 392 authored instances (376 SM_BlockerWard_*, 15
-			# SM_FogSphere, 1 SM_SkySphere) are intentionally invisible, but the
-			# drop used to be uncounted.
+		# P1-W (V6-04, KF28): the authored `SM_BlockerWard_*` shard cluster is
+		# the shipped ward visual. The old blanket `"blocker" in low_mp` filter
+		# dropped all 376 instances and left the flat `tat_ward` BoxMesh as the
+		# only thing on screen (the "near-opaque flat violet box" in the
+		# comparison). The shards are now spawned per instance into the
+		# `ward_shards` group, hidden and collision-free, and the device layer
+		# hands each ward its own cluster. Fog/sky blockers stay dropped.
+		var is_ward_shard: bool = low_mp.contains("/sm_blockerward_")
+		if not is_ward_shard and ("fogsheet" in low_mp or "fogsphere" in low_mp or "volumetric" in low_mp or "skysphere" in low_mp):
+			# RE-B-14: 16 authored instances (15 SM_FogSphere, 1 SM_SkySphere)
+			# are intentionally invisible, but the drop used to be uncounted.
 			result["name_skipped"] = int(result.get("name_skipped", 0)) + 1
 			continue
 		# SM_WardBox is the authored ward-zone trigger volume (8 instances at
@@ -3412,6 +3419,12 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 				has_cpd = true
 		var hidden_raw: Variant = m_dict.get("hidden_in_game", false)
 		var hidden_in_game: bool = hidden_raw is bool and (hidden_raw as bool)
+		# P1-W: ward shards are spawned hidden and collision-free; the ward
+		# device owns their visibility (KF28).
+		if is_ward_shard:
+			hidden_in_game = true
+			m_dict["no_collide"] = true
+			result["ward_shard_spawned"] = int(result.get("ward_shard_spawned", 0)) + 1
 		# W10-A3: producer-emitted per-entry collision opt-out (authored turret
 		# props). Batches split on the flag so a no-collide placement can never
 		# share a collider bucket with collidable masonry of the same UE path.
@@ -3456,9 +3469,10 @@ func _parse_sublevel_file(json_path: String, acc: Dictionary, parent: Node3D) ->
 			if spline_key != "":
 				(batches[bkey] as Dictionary)["spline"] = spline_rec
 		var batch_rec: Dictionary = batches[bkey] as Dictionary
-		if mp == BEAM_CARD_MESH:
-			# One MeshInstance3D per authored card so the device layer can
-			# drive its powered state (a MultiMesh hides instances together).
+		if mp == BEAM_CARD_MESH or is_ward_shard:
+			# One MeshInstance3D per authored card/shard so the device layer can
+			# drive its powered/active state (a MultiMesh hides instances
+			# together).
 			batch_rec["per_instance"] = true
 		var arr: Array[Transform3D] = batch_rec["trs"]
 		arr.append(tr)
@@ -4764,6 +4778,13 @@ func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> 
 		node.set_meta("source_counts", source_counts)
 		if not ov_arr.is_empty():
 			node.set_meta("override_materials", ov_arr)
+		if low_mp.contains("/sm_blockerward_"):
+			# P1-W: authored ward shard; hidden until the ward device activates.
+			node.name = "WardShard"
+			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			node.visible = false
+			node.add_to_group("ward_shards")
+			node.set_meta("ward_shard", true)
 		if mp == BEAM_CARD_MESH:
 			# Authored beam cards are per-instance so the device layer can bind
 			# one card to each detector and drive its powered visibility. They

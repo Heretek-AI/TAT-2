@@ -33,6 +33,10 @@ var lose_sight_m: float = 30.0
 var half_fov_deg: float = 10.0
 var alarm_base_seconds: float = 2.0
 var alarm_delay_s: float = 2.0
+## Authored visual cone/range for the alarm-eye spotlight (OuterConeAngle,
+## AttenuationRadius in UE cm). Used by the KF29 crimson alarm wash.
+var cone_deg: float = 15.0
+var light_range_m: float = 15.33
 var swivel_angle_deg: float = 45.0
 var swivel_seconds: float = 10.0
 var swivel_pause_seconds: float = 2.0
@@ -51,6 +55,10 @@ var _powered: bool = true
 var _seen_seconds: float = 0.0
 var _time: float = 0.0
 var _alarmed: bool = false
+## PORT_DECISION (HL-3): the Kismet lockdown alarm holds longer than the
+## camera's 2 s sight reset, so the crimson wash survives the stair ascent
+## (KF29 shows it 03:38.20-03:39.60). Cleared by reset_alarm().
+var _alarm_hold_seconds: float = 0.0
 var _flash: MeshInstance3D = null
 var _flash_mat: StandardMaterial3D = null
 var _built: bool = false
@@ -75,6 +83,13 @@ func configure(rec: Dictionary, family_defaults: Dictionary, difficulty_value: i
 	sight_m = float(variant_metric.get("sight_m", 25.0))
 	lose_sight_m = float(variant_metric.get("lose_sight_m", 30.0))
 	half_fov_deg = float(variant_metric.get("half_fov_deg", 10.0))
+	# Authored spotlight cone/range (visual, not the perception half-angle).
+	var cone_v: Variant = params.get("OuterConeAngle", null)
+	if cone_v is float or cone_v is int:
+		cone_deg = float(cone_v)
+	var range_cm_v: Variant = params.get("AttenuationRadius", params.get("LightRange", null))
+	if range_cm_v is float or range_cm_v is int:
+		light_range_m = maxf(float(range_cm_v) * 0.01, 0.5)
 	swivel_angle_deg = _param_or_metric("_swivelAngle", "swivel_angle_deg", variant_metric, float(metric.get("swivel_angle_deg", 45.0)))
 	swivel_seconds = _param_or_metric("_swivelSeconds", "swivel_seconds", variant_metric, float(metric.get("swivel_seconds", 10.0)))
 	swivel_pause_seconds = _param_or_metric("_swivelPauseSeconds", "swivel_pause_seconds", variant_metric, float(metric.get("swivel_pause_seconds", 2.0)))
@@ -154,8 +169,14 @@ func tick(delta: float) -> void:
 	_time += delta
 	if _flash_mat != null:
 		_flash_mat.emission_energy_multiplier = 1.5 + 1.0 * sin(_time * 18.0)
+	if _alarm_hold_seconds > 0.0:
+		_alarm_hold_seconds = maxf(0.0, _alarm_hold_seconds - delta)
 	if not can_trigger():
 		_seen_seconds = 0.0
+		return
+	if _alarm_hold_seconds > 0.0:
+		# Lockdown alarm hold: keep the crimson wash even when the camera's
+		# perception cone has lost the player.
 		return
 	var target: Node3D = _resolve_player()
 	if target == null:
@@ -225,6 +246,7 @@ func _trigger_alarm() -> void:
 	_alarmed = true
 	alarms += 1
 	alarm_triggered.emit(self)
+	_spawn_crimson_spot()
 	NoiseBus.emit_noise(global_position, ALARM_LOUDNESS_M, self, ALARM_TAG)
 	for target_v: Variant in action_targets:
 		if not (target_v is Node) or not is_instance_valid(target_v as Node):
@@ -280,14 +302,64 @@ func _flash_alarm() -> void:
 	add_child(_flash)
 
 
+## KF29 V1-07 / G5-04: crimson alarm spotlight.
+##
+## Authored: the fixture pose is this camera's authored actor transform, and
+## the cone/range are the authored OuterConeAngle (15 deg) and AttenuationRadius
+## (15.33 m). Not authored: the crimson colour and the spot energy. The cooked
+## alarm BP does not store the runtime light (Kismet sets it; HL-3), so the
+## colour/energy are the documented KF29 approximation already used by
+## `vfx_manager.spawn_crimson_alarm` (colour (1.0, 0.07, 0.05), energy 4.5).
+## The light is unshadowed and unlit-bloom only; it never writes the environment.
+func _spawn_crimson_spot() -> void:
+	if not is_inside_tree():
+		return
+	if has_node("CrimsonAlarmSpot"):
+		return
+	var spot: SpotLight3D = SpotLight3D.new()
+	spot.name = "CrimsonAlarmSpot"
+	spot.light_color = Color(1.0, 0.07, 0.05)
+	spot.light_energy = 4.5
+	spot.spot_range = maxf(light_range_m, 4.0)
+	# APPROX_LIGHT: the authored camera cone is 15 deg (security cone). KF29's
+	# wash covers the stair width; the port capture builder measured 32 deg as
+	# the KF29 match. Kept as a named constant so the delta is explicit.
+	spot.spot_angle = 32.0
+	spot.spot_angle_attenuation = 1.0
+	spot.spot_attenuation = 1.0
+	spot.shadow_enabled = false
+	var fwd: Vector3 = _forward()
+	if fwd.length_squared() < 0.5:
+		fwd = Vector3.DOWN
+	var up: Vector3 = Vector3.UP if absf(fwd.dot(Vector3.UP)) < 0.99 else Vector3.FORWARD
+	# Add first, then write the GLOBAL transform: a global transform set before
+	# entering the tree becomes local and picks up the parent rotation again.
+	add_child(spot)
+	spot.global_transform = Transform3D(Basis.looking_at(fwd, up), global_position)
+
+
+## Public one-shot alarm entry for the foyer lockdown (KF29). Behaves exactly
+## like a sight alarm except that it assumes the intruder was seen.
+func trigger_alarm() -> void:
+	if _alarmed or not alive:
+		return
+	_seen_seconds = alarm_delay_s
+	_alarm_hold_seconds = 6.0
+	_trigger_alarm()
+
+
 func reset_alarm() -> void:
 	var was_alarmed: bool = _alarmed
 	_seen_seconds = 0.0
+	_alarm_hold_seconds = 0.0
 	_alarmed = false
 	if was_alarmed:
 		_stop_alarm_loop()
 	if _flash != null and is_instance_valid(_flash):
 		_flash.queue_free()
+	var spot: Node = get_node_or_null("CrimsonAlarmSpot")
+	if spot != null:
+		spot.queue_free()
 
 
 func take_damage(amount: float, _source: String = "") -> void:
@@ -300,6 +372,9 @@ func take_damage(amount: float, _source: String = "") -> void:
 		_stop_alarm_loop()
 		if _flash != null and is_instance_valid(_flash):
 			_flash.visible = false
+		var spot: Node = get_node_or_null("CrimsonAlarmSpot")
+		if spot != null:
+			spot.queue_free()
 
 
 func _resolve_player() -> Node3D:

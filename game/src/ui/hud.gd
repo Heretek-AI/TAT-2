@@ -22,6 +22,7 @@ const ThemeScript := preload("res://src/ui/art_nouveau_theme.gd")
 const FocusNavScript := preload("res://src/ui/focus_nav.gd")
 const MapBoundariesScript := preload("res://src/ui/map_boundaries.gd")
 const UIToastScript := preload("res://src/ui/ui_toast.gd")
+const StatusIconScript := preload("res://src/ui/status_icon.gd")
 const UIStringsScript := preload("res://src/ui/ui_strings.gd")
 const MobileProfile := preload("res://src/core/mobile_profile.gd")
 
@@ -214,6 +215,8 @@ var fps_overlay_enabled: bool = false
 
 # Internal HUD controls & state
 var _root: Control
+## UI5-06: status icons above the Light Gem (kind -> StatusIcon).
+var _status_icons: Dictionary = {}
 var _sans: Font
 var _italic: Font
 var _serif: Font
@@ -1461,6 +1464,43 @@ func _build_stealth_ball_and_soundwaves(root: Control) -> void:
 		stealth_gem.position = Vector2(110.0 - 42.0, 48.0 - 42.0)
 		stealth_gem.modulate = Color(0.48, 0.58, 0.96, 0.98)
 		_stealth_holder.add_child(stealth_gem)
+
+	# UI5-06 / KF28 #6: status icon column directly above the Light Gem.
+	var status_icon: Control = StatusIconScript.new() as Control
+	if status_icon != null:
+		status_icon.name = "StatusIcon_jaw_trap"
+		status_icon.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+		status_icon.offset_left = -38.0
+		status_icon.offset_top = -204.0
+		status_icon.offset_right = 38.0
+		status_icon.offset_bottom = -128.0
+		status_icon.visible = false
+		root.add_child(status_icon)
+		_status_icons["jaw_trap"] = status_icon
+
+
+## UI5-06: raise/refresh a status icon above the Light Gem. `seconds` drives the
+## procedural countdown ring (0 keeps a solid ring). Returns false for an
+## unknown kind (the shipped HUD has only the jaw-trap status in this wave).
+func set_status_icon(kind: String, seconds: float) -> bool:
+	var icon: Control = _status_icons.get(kind, null) as Control
+	if icon == null:
+		return false
+	icon.call("show_icon", kind, seconds)
+	return true
+
+
+func clear_status_icon(kind: String) -> void:
+	var icon: Control = _status_icons.get(kind, null) as Control
+	if icon != null:
+		icon.call("clear_icon")
+
+
+func status_icon_state(kind: String) -> Dictionary:
+	var icon: Control = _status_icons.get(kind, null) as Control
+	if icon == null:
+		return {}
+	return icon.call("state") as Dictionary
 
 
 func _build_reticle_and_prompt(root: Control) -> void:

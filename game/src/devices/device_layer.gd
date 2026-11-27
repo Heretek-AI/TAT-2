@@ -51,6 +51,15 @@ var unresolved_actions: Array[String] = []
 var spawn_count: int = 0
 ## Authored SM_LightBeam cards paired to their detector (one visual per beam).
 var beam_cards_adopted: int = 0
+## Authored SM_BlockerWard shard clusters paired to their ward (one visual per
+## ward); shards stay at their authored transforms and follow ward state.
+## `AddMeshesAlongVolume` spreads a cluster along the authored zone depth, so a
+## component's origin can sit up to ~5.2 m from the actor origin (measured on
+## Guildhall_Gameplay). Nearest-ward assignment with a 6 m cap covers every
+## loaded shard; a shard is never shared by two wards.
+const WARD_SHARD_PAIR_RADIUS_M: float = 6.0
+var ward_shards_total: int = 0
+var ward_shards_adopted: int = 0
 
 var _accum: float = 0.0
 var _tick_enabled: bool = true
@@ -140,6 +149,7 @@ func spawn_for_map(map_id_value: String, player_value: Node3D = null, difficulty
 	spawn_count = device_order.size()
 	_resolve_graph()
 	_adopt_beam_cards()
+	_adopt_ward_shards()
 	_apply_player()
 	_update_awake(false)
 	layer_spawned.emit(map_id, spawn_count)
@@ -153,12 +163,16 @@ func clear_spawned() -> void:
 		if node != null and is_instance_valid(node):
 			if node.has_method("release_beam_card"):
 				node.call("release_beam_card")
+			if node.has_method("release_ward_shards"):
+				node.call("release_ward_shards")
 			node.free()
 	devices.clear()
 	device_order.clear()
 	family_counts.clear()
 	_record_by_id.clear()
 	beam_cards_adopted = 0
+	ward_shards_total = 0
+	ward_shards_adopted = 0
 	spawn_count = 0
 
 
@@ -277,6 +291,57 @@ func _adopt_beam_cards() -> void:
 			node.call("adopt_beam_card", best)
 			used[best] = true
 			beam_cards_adopted += 1
+
+
+## Pair each authored `SM_BlockerWard_*` shard cluster with its nearest ward
+## blocker. The cluster is the BP's seven StaticMeshComponents, but
+## `AddMeshesAlongVolume` spreads them along the authored zone depth, so a
+## component can be up to ~5.2 m from the actor origin (measured on the loaded
+## Guildhall_Gameplay). Nearest-device assignment with a 6 m cap therefore
+## covers every loaded shard and keeps a shard from being adopted twice when
+## two wards sit close together. Slow wards keep the authored translucent glyph
+## quad and take no shards.
+func _adopt_ward_shards() -> void:
+	ward_shards_total = 0
+	ward_shards_adopted = 0
+	if not is_inside_tree():
+		return
+	var shards: Array = get_tree().get_nodes_in_group("ward_shards")
+	if shards.is_empty():
+		return
+	var ward_nodes: Array[Node3D] = []
+	for id: String in device_order:
+		var node: Node = devices.get(id) as Node
+		if node == null or not (node is Node3D) or not node.has_method("adopt_ward_shards"):
+			continue
+		if str(node.get("mode")) != "blocker":
+			continue
+		ward_nodes.append(node as Node3D)
+	if ward_nodes.is_empty():
+		return
+	var per_ward: Dictionary = {}
+	for s_var: Variant in shards:
+		if not (s_var is Node3D):
+			continue
+		var shard: Node3D = s_var as Node3D
+		if not shard.is_inside_tree():
+			continue
+		var best: Node3D = null
+		var best_d: float = WARD_SHARD_PAIR_RADIUS_M
+		for ward: Node3D in ward_nodes:
+			var d: float = shard.global_position.distance_to(ward.global_position)
+			if d <= best_d:
+				best_d = d
+				best = ward
+		if best != null:
+			if not per_ward.has(best):
+				per_ward[best] = []
+			(per_ward[best] as Array).append(shard)
+			ward_shards_total += 1
+	for ward_v: Variant in per_ward.keys():
+		var ward: Node = ward_v as Node
+		ward.call("adopt_ward_shards", per_ward[ward_v] as Array)
+		ward_shards_adopted += (per_ward[ward_v] as Array).size()
 
 
 func _physics_process(delta: float) -> void:

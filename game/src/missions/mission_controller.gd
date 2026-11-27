@@ -41,6 +41,24 @@ const LoadingScreenScript := preload("res://src/ui/loading_screen.gd")
 const LedgerUIScript := preload("res://src/ui/ledger_ui.gd")
 const MobileTouchUIScript := preload("res://src/ui/mobile_touch_ui.gd")
 const UIStringsScript := preload("res://src/ui/ui_strings.gd")
+const VineLockScript := preload("res://src/devices/vine_lock.gd")
+
+## P1-W (KF28/KF29): authored Guildhall foyer lockdown actors, by cooked id.
+const FOYER_WARD_ID: String = "guildhall/Guildhall_Gameplay:BP_WardZone_Blocker_C_31"
+const FOYER_BEAM_ID: String = "guildhall/Guildhall_Gameplay:BP_Detector_LightBeam_C_117"
+const FOYER_ALARM_ID: String = "guildhall/Guildhall_Gameplay:BP_MagicAlarm_LongRange_Narrow_C_38"
+## APPROX_PLACEMENT (HL-3): the Kismet `BP_OneWayBarrier` spawn transform is not
+## in the extracted dump. The port anchors the green door ward on the measured
+## east-wall Basement Stairs door cluster: the authored `SM_InteriorSign_WealthyA`
+## plaque (x 30.72, z -45.79), `SM_FixtureWallC` sconce and `SM_LightSwitch_Main`
+## sit together on the wall at z ~ -45.8, just south of the ward archway
+## (`SM_Civic_Doorway_Frame` jambs at z -44.02 / -40.02). The panel is centred
+## south of the plaque so the plaque stays screen-left (KF28), facing west.
+const FOYER_VINE_POS: Vector3 = Vector3(30.70, 28.0, -47.1)
+const FOYER_VINE_YAW: float = -PI * 0.5
+## PORT_DECISION (HL-3): contact dwell for the unrecoverable Kismet shatter.
+const FOYER_IMPACT_DWELL_SECONDS: float = 0.35
+const FOYER_STATUS_ICON_SECONDS: float = 8.0
 
 var light_probe: Node
 var level_loader: Node
@@ -49,6 +67,14 @@ var level_loader: Node
 var _saferoom_dressing: Node3D = null
 var player: CharacterBody3D
 var hud: CanvasLayer
+## P1-W foyer lockdown state (KF28/KF29); null except on the Guildhall.
+var foyer_vine_lock: Node3D = null
+var foyer_ward: Node = null
+var foyer_alarm_eye: Node = null
+var foyer_lockdown_active: bool = false
+var foyer_lockdown_broken: bool = false
+var foyer_lockdown_shards: int = 0
+var _foyer_impact_seconds: float = 0.0
 var smokes: Array[Dictionary] = []
 var rain_node: Node3D = null
 var lens_rain_node: CanvasLayer = null
@@ -4577,6 +4603,108 @@ func _spawn_devices() -> void:
 			for key: Variant in keys:
 				parts.append("%s=%d" % [str(key), int(counts[key])])
 		print("TAT-2 authored devices: ", count, " (", ", ".join(parts), ")")
+		if GameState.active_map_id == "guildhall":
+			_spawn_foyer_lockdown(layer)
+
+
+## P1-W (KF28/KF29): wire the authored foyer lockdown.
+##
+## Existing contract kept: `security_beam.beam_triggered(source)` is untouched.
+## The foyer beam already lists the ward blocker as an action target in
+## devices_runtime.json. The green door ward (BP_OneWayBarrier, a Kismet spawn
+## with no level record) is added as one more action target, so the same beam
+## signal seals both barriers. The lockdown raises the jaw-trap status icon.
+## Breaking either barrier (contact dwell, PORT_DECISION) triggers the authored
+## stairwell alarm eye's crimson spotlight and the alert music sting.
+func _spawn_foyer_lockdown(layer: Node) -> void:
+	if layer == null:
+		return
+	foyer_ward = layer.call("get_device", FOYER_WARD_ID) as Node
+	var beam: Node = layer.call("get_device", FOYER_BEAM_ID) as Node
+	foyer_alarm_eye = layer.call("get_device", FOYER_ALARM_ID) as Node
+	if foyer_ward == null or beam == null:
+		push_warning("[mission_controller] foyer lockdown: authored ward/beam missing (ward=", foyer_ward != null, " beam=", beam != null, ")")
+		return
+	var count_v: Variant = layer.get("ward_shards_adopted")
+	foyer_lockdown_shards = int(count_v) if count_v != null else 0
+	var vine: Node3D = VineLockScript.new() as Node3D
+	vine.name = "FoyerVineLock"
+	add_child(vine)
+	vine.call("configure", FOYER_VINE_POS, FOYER_VINE_YAW)
+	vine.call("set_player", player)
+	foyer_vine_lock = vine
+	# Keep the beam's authored action list and add the vine lock to it.
+	var targets_v: Variant = beam.get("action_targets")
+	var targets: Array = (targets_v as Array) if targets_v is Array else []
+	if not targets.has(vine):
+		targets.append(vine)
+	if beam.has_method("set_action_targets"):
+		beam.call("set_action_targets", targets)
+	if beam.has_signal("beam_triggered"):
+		beam.connect("beam_triggered", Callable(self, "_on_foyer_beam_triggered"))
+	if vine.has_signal("shattered"):
+		vine.connect("shattered", Callable(self, "_on_foyer_vine_shattered"), CONNECT_DEFERRED)
+	print("P1_WARD_LOCKDOWN wired ward=", FOYER_WARD_ID.get_file(), " beam=", FOYER_BEAM_ID.get_file(), " alarm=", FOYER_ALARM_ID.get_file(), " shards=", foyer_lockdown_shards, " vine=", FOYER_VINE_POS)
+
+
+func _on_foyer_beam_triggered(_source: Node) -> void:
+	if foyer_lockdown_active:
+		return
+	foyer_lockdown_active = true
+	_foyer_impact_seconds = 0.0
+	if foyer_ward != null and not bool(foyer_ward.get("active")):
+		foyer_ward.call("activate_from", self)
+	if hud != null and hud.has_method("set_status_icon"):
+		hud.call("set_status_icon", "jaw_trap", FOYER_STATUS_ICON_SECONDS)
+	print("P1_WARD_SEALED ward=", foyer_ward != null, " vine=", foyer_vine_lock != null and bool(foyer_vine_lock.get("active")), " status_icon=jaw_trap")
+
+
+## One-shot completion: the alarm first (its authored action graph re-activates
+## the ward), then both barriers collapse. Idempotent.
+func _complete_foyer_lockdown_break() -> void:
+	if foyer_lockdown_broken:
+		return
+	foyer_lockdown_broken = true
+	if foyer_alarm_eye != null and foyer_alarm_eye.has_method("trigger_alarm"):
+		foyer_alarm_eye.call("trigger_alarm")
+	if foyer_ward != null and foyer_ward.has_method("shatter"):
+		foyer_ward.call("shatter", self)
+	if foyer_vine_lock != null and foyer_vine_lock.has_method("shatter"):
+		foyer_vine_lock.call("shatter", self)
+	if AudioManager != null and AudioManager.has_method("start_music"):
+		# AU5-06 alert sting: the authored guard-alert music event.
+		AudioManager.call("start_music", "guard_alerted")
+	if hud != null and hud.has_method("set_status_icon"):
+		hud.call("set_status_icon", "jaw_trap", FOYER_STATUS_ICON_SECONDS)
+	print("P1_WARD_SHATTER alarm=", foyer_alarm_eye != null, " crimson_spot=", foyer_alarm_eye != null and foyer_alarm_eye.has_node("CrimsonAlarmSpot"), " sting=guard_alerted")
+
+
+func _on_foyer_vine_shattered(_source: Node) -> void:
+	_complete_foyer_lockdown_break()
+
+
+## PORT_DECISION (HL-3): the cooked shatter trigger is Kismet. The port uses a
+## short body-contact dwell on the active ward, matching the reference walk-up
+## at 03:37.7-03:38.2. No per-frame cost before the lockdown or after the break.
+func _tick_foyer_lockdown(delta: float) -> void:
+	if not foyer_lockdown_active or foyer_lockdown_broken:
+		return
+	if foyer_ward == null or not is_instance_valid(foyer_ward):
+		return
+	if not bool(foyer_ward.get("active")) or bool(foyer_ward.get("shattered")):
+		return
+	if player == null or not is_instance_valid(player):
+		return
+	var ward_pos: Vector3 = (foyer_ward as Node3D).global_position
+	var feet: Vector3 = player.global_position
+	var flat: Vector3 = Vector3(feet.x - ward_pos.x, 0.0, feet.z - ward_pos.z)
+	if flat.length() > 1.2 or absf(feet.y - ward_pos.y) > 2.2:
+		_foyer_impact_seconds = 0.0
+		return
+	_foyer_impact_seconds += delta
+	if _foyer_impact_seconds + 0.000001 >= FOYER_IMPACT_DWELL_SECONDS:
+		_foyer_impact_seconds = 0.0
+		_complete_foyer_lockdown_break()
 
 
 ## P2 escape grounding: explicit floor raycast with a hit flag (unlike
@@ -4835,6 +4963,7 @@ func _process(delta: float) -> void:
 			_rearm_escape_gates()
 		if light_probe != null:
 			light_probe.tick(GameState.total_elapsed())
+		_tick_foyer_lockdown(delta)
 		for i in range(smokes.size() - 1, -1, -1):
 			smokes[i]["ttl"] -= delta
 			if smokes[i]["ttl"] <= 0.0:
@@ -4948,6 +5077,8 @@ func _finish_run(outcome: String, reason: String = "", peer_id: int = -1) -> voi
 	# behind a result the player already earned or lost.
 	if GameState.state != "playing":
 		return
+	if hud != null and hud.has_method("clear_status_icon"):
+		hud.call("clear_status_icon", "jaw_trap")
 	var resolved_peer: int = peer_id
 	if resolved_peer <= 0 and NetManager != null:
 		resolved_peer = NetManager.local_peer_id()

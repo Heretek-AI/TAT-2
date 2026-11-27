@@ -730,10 +730,42 @@ func _add_guildhall_foyer_fills() -> void:
 ## P1-BEAMS: repair the KF27 foyer subjects on the built POI nodes. The module
 ## owns the authored material/text/placement values; this wrapper only guards
 ## the map, calls it and logs the measured counts once per load.
+##
+## TAT2_P1_FOYER_DRESSING is a diagnostic/acceptance switch:
+##   unset / "all"/"on"      all four parts (default)
+##   "off"/"0"/"none"        skip the whole dressing
+##   "bulbs,node,plaques,plate"  only the named parts
+## The switch exists so the P1 brightness A/B can attribute any glow change to
+## one part; the shipping default stays all-on.
+func _p1_foyer_dressing_parts() -> Array[String]:
+	var all_parts: Array[String] = ["bulbs", "node", "plaques", "plate"]
+	var raw: String = OS.get_environment("TAT2_P1_FOYER_DRESSING").strip_edges().to_lower()
+	if raw == "":
+		return all_parts
+	if raw in ["off", "0", "none", "disabled"]:
+		var empty: Array[String] = []
+		return empty
+	if raw in ["all", "on", "1"]:
+		return all_parts
+	var out: Array[String] = []
+	for token: String in raw.split(",", false):
+		var key: String = token.strip_edges()
+		if all_parts.has(key) and not out.has(key):
+			out.append(key)
+		else:
+			push_warning("[mission_controller] TAT2_P1_FOYER_DRESSING unknown part '%s' (known: %s)" % [
+				key, ",".join(all_parts)])
+	return out
+
+
 func _build_foyer_dressing() -> void:
 	if GameState.active_map_id != "guildhall":
 		return
-	var node: Node3D = FoyerDressingScript.build(self, level_loader)
+	var parts: Array[String] = _p1_foyer_dressing_parts()
+	if parts.is_empty():
+		print("P1_FOYER_DRESSING skipped env=%s" % OS.get_environment("TAT2_P1_FOYER_DRESSING"))
+		return
+	var node: Node3D = FoyerDressingScript.build(self, level_loader, parts)
 	if node == null:
 		push_warning("[mission_controller] P1 foyer dressing could not build")
 		return
@@ -741,7 +773,8 @@ func _build_foyer_dressing() -> void:
 	if not (stats_v is Dictionary):
 		return
 	var stats: Dictionary = stats_v as Dictionary
-	print("P1_FOYER_DRESSING bulb_items=%d cyan_node_items=%d cyan_node_created=%d plaque_labels=%d floor_plate=%d floor_plate_approx=%d" % [
+	print("P1_FOYER_DRESSING parts=%s bulb_items=%d cyan_node_items=%d cyan_node_created=%d plaque_labels=%d floor_plate=%d floor_plate_approx=%d" % [
+		",".join(parts),
 		int(stats.get("emitter_bulbs", 0)),
 		int(stats.get("node_items", 0)),
 		int(stats.get("node_created", 0)),

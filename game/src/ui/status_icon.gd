@@ -104,6 +104,12 @@ func _build_mesh_icon() -> void:
 	var vp: SubViewport = SubViewport.new()
 	vp.size = Vector2i(VIEW_SIZE, VIEW_SIZE)
 	vp.transparent_bg = true
+	# The jaw-trap key/fill lights below must light only the icon. Without an
+	# own World3D the SubViewport shares the gameplay world and the 1.6-energy
+	# DirectionalLight brightens the whole level (P1 capture: upper_foyer
+	# 45.8 -> 71.0, yaw180 39.0 -> 84.4). Every other UI SubViewport already
+	# sets this; the status icon was the exception.
+	vp.own_world_3d = true
 	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	vp.msaa_3d = Viewport.MSAA_2X
 	_vp_container.add_child(vp)

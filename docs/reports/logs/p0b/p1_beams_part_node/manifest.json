@@ -1,0 +1,317 @@
+{
+  "audio": {
+    "buffer_s": 10.0,
+    "channels": 2,
+    "driver": "PulseAudio",
+    "dropped_frames": 0,
+    "enabled": true,
+    "files": [
+      "/home/john/.local/share/opencode/worktree/318f41/p1-beams/build/qa/p0b/captures/p1_beams_part_node/audio_on.pcm",
+      "/home/john/.local/share/opencode/worktree/318f41/p1-beams/build/qa/p0b/captures/p1_beams_part_node/audio_on.wav",
+      "/home/john/.local/share/opencode/worktree/318f41/p1-beams/build/qa/p0b/captures/p1_beams_part_node/audio_on.json"
+    ],
+    "frames": 2546688,
+    "marks": [
+      {
+        "beat": "",
+        "frame": 0,
+        "label": "capture_start",
+        "msec": 1,
+        "t_s": 0.0,
+        "unix": 1795743954.24532,
+        "window": {
+          "frames": 1449984,
+          "peak_dbfs": -16.8448930636135,
+          "rms_dbfs": -46.4299839083283,
+          "seconds": 32.8794557823129,
+          "zero_fraction": 0.952165334238171
+        }
+      },
+      {
+        "beat": "",
+        "frame": 1449984,
+        "label": "upper_foyer",
+        "msec": 35919,
+        "t_s": 32.8794557823129,
+        "unix": 1795743990.16387,
+        "window": {
+          "frames": 420352,
+          "peak_dbfs": -15.481238849609,
+          "rms_dbfs": -32.338100312344,
+          "seconds": 9.53179138321996,
+          "zero_fraction": 0.000870698842874543
+        }
+      },
+      {
+        "beat": "",
+        "frame": 1870336,
+        "label": "yaw180",
+        "msec": 42713,
+        "t_s": 42.4112471655329,
+        "unix": 1795743996.95797,
+        "window": {
+          "frames": 351744,
+          "peak_dbfs": -16.6013305031646,
+          "rms_dbfs": -35.2407566747258,
+          "seconds": 7.97605442176871,
+          "zero_fraction": 0.00120257914847162
+        }
+      },
+      {
+        "beat": "",
+        "frame": 2222080,
+        "label": "lounge",
+        "msec": 50813,
+        "t_s": 50.3873015873016,
+        "unix": 1795744005.05751,
+        "window": {
+          "frames": 324608,
+          "peak_dbfs": -19.2848798242362,
+          "rms_dbfs": -33.620414452418,
+          "seconds": 7.36072562358277,
+          "zero_fraction": 0.000599184246845426
+        }
+      }
+    ],
+    "pcm": "/home/john/.local/share/opencode/worktree/318f41/p1-beams/build/qa/p0b/captures/p1_beams_part_node/audio_on.pcm",
+    "peak_dbfs": -15.481238849609,
+    "pushed_frames": 2553344,
+    "reason": "",
+    "sample_rate": 44100,
+    "schema": "tat2.audio_capture/1",
+    "seconds": 57.7480272108844,
+    "sidecar": "/home/john/.local/share/opencode/worktree/318f41/p1-beams/build/qa/p0b/captures/p1_beams_part_node/audio_on.json",
+    "started_at_utc": "2026-11-27T01:45:54",
+    "stopped_at_utc": "2026-11-27T01:46:52",
+    "total": {
+      "frames": 2546688,
+      "peak_dbfs": -15.481238849609,
+      "rms_dbfs": -36.8613660987042,
+      "seconds": 57.7480272108844,
+      "zero_fraction": 0.542511685765983
+    },
+    "truncated": false,
+    "wav": "/home/john/.local/share/opencode/worktree/318f41/p1-beams/build/qa/p0b/captures/p1_beams_part_node/audio_on.wav"
+  },
+  "beam_card": {
+    "hidden": 0,
+    "mechanism": "capture-side runtime hide of the lightbeam_cards group; level_loader.gd has no TAT2_BEAM_CARD flag and the beam fix is unchanged",
+    "mode": "on"
+  },
+  "dry_run": false,
+  "engine": {
+    "audio_driver": "PulseAudio",
+    "audio_mix_rate": 44100.0,
+    "cmdline": [
+      "--script",
+      "/home/john/.local/share/opencode/worktree/318f41/p1-beams/build/qa/p0b_capture.gd"
+    ],
+    "display_server": "X11",
+    "godot": "4.7.2-stable (official)",
+    "godot_hex": "263938",
+    "rendering_driver": "vulkan",
+    "video_adapter": "NVIDIA GeForce RTX 4070 Laptop GPU",
+    "video_api": "1.4.357",
+    "video_vendor": "NVIDIA"
+  },
+  "env": {
+    "DISPLAY": ":99",
+    "TAT2_AO": "on",
+    "TAT2_BEAM_CARD": "on",
+    "XDG_SESSION_TYPE": "wayland"
+  },
+  "finished_at_utc": "2026-11-27T01:46:52",
+  "git": {
+    "branch": "w10/p1-beams",
+    "dirty": true,
+    "sha": "9cba1356a20ab859dc8aacf6a1ca2ea169564884",
+    "sha_short": "9cba1356a20a"
+  },
+  "gpu": {
+    "available": true,
+    "command": "nvidia-smi --query-gpu=name,driver_version,temperature.gpu,memory.used,utilization.gpu,clocks.current.graphics --format=csv,noheader,nounits",
+    "query": "name,driver_version,temperature.gpu,memory.used,utilization.gpu,clocks.current.graphics",
+    "rows": [
+      [
+        "NVIDIA GeForce RTX 4070 Laptop GPU",
+        "620.73.04",
+        "65.69",
+        "4971",
+        "7",
+        "1980"
+      ]
+    ],
+    "used_by_capture": true
+  },
+  "host": {
+    "cpu": "Intel(R) Core(TM) i9-14900HX",
+    "hostname": "AtomMan",
+    "nproc": 32,
+    "os": "Linux",
+    "os_version": "46 (KDE Plasma Desktop Edition Prerelease)"
+  },
+  "lens": {
+    "aspect": 1.77777777777778,
+    "fov_source": "shipped authored lens: UE 85 deg horizontal at 16:9 -> 54.54 deg vertical",
+    "fov_vertical_deg": 54.54,
+    "keep_aspect": "height",
+    "resolution": [
+      1920,
+      1080
+    ]
+  },
+  "manifest_errors": [],
+  "notes": [
+    "Pose alignment against the reference keyframe is approximate; p0b_roi_stats.py reports numbers, not a pixel registration.",
+    "The beam numbers are diagnostic: KF27 criteria are encoded in p0b_roi_stats.py from the cream/beam RE (emitter x~17.8% y~40.0%, beam rows 39-40%).",
+    "TAT2_BEAM_CARD=off hides the lightbeam_cards group at runtime; it is an A/B control, not a game setting.",
+    "The fixed-pose run marks poses, not route beats. A 27-beat route run must call mark_beat(S01..S27); p0b_audio_stats.py --route prints the reference table.",
+    "Reference audio is documented RMS/peak dBFS (not LUFS); the script computes RMS/peak only and states the clip's -43.9 LUFS as context."
+  ],
+  "out_dir": "/home/john/.local/share/opencode/worktree/318f41/p1-beams/build/qa/p0b/captures/p1_beams_part_node",
+  "poses": [
+    {
+      "beat": "S24",
+      "duration_ms": 6363,
+      "eye": [
+        27.0,
+        29.6700000762939,
+        -50.0
+      ],
+      "fov_vertical_deg": 54.54,
+      "frames_mean": [
+        40.8574058079187,
+        40.8575661705874,
+        40.8574710239864,
+        40.8568106767539,
+        40.8569836628547
+      ],
+      "ground_hit": [],
+      "grounded": false,
+      "id": "upper_foyer",
+      "median_index": 0,
+      "median_lt8": 1.86111111111111,
+      "median_mean": 40.8574058079187,
+      "median_peak": 255.0,
+      "note": "authored upper-foyer slot looking into the hall; KF27 is the foyer security-beam keyframe",
+      "png": "build/qa/p0b/captures/p1_beams_part_node/upper_foyer.png",
+      "png_size": [
+        1920,
+        1080
+      ],
+      "ref_keyframe": "KF27",
+      "resolution": [
+        1920,
+        1080
+      ],
+      "status": "captured",
+      "target": [
+        27.0,
+        29.6700000762939,
+        -60.0
+      ]
+    },
+    {
+      "beat": "S24",
+      "duration_ms": 7625,
+      "eye": [
+        27.0,
+        29.6700000762939,
+        -50.0
+      ],
+      "fov_vertical_deg": 54.54,
+      "frames_mean": [
+        39.4648605151423,
+        39.4647543963215,
+        39.4645824981629,
+        39.4646794888607,
+        39.4642516801738
+      ],
+      "ground_hit": [],
+      "grounded": false,
+      "id": "yaw180",
+      "median_index": 3,
+      "median_lt8": 3.51774691358025,
+      "median_mean": 39.4646794888607,
+      "median_peak": 255.0,
+      "note": "same slot turned 180 deg; W9-P1 showed the armchair/ottoman/vitrine from here",
+      "png": "build/qa/p0b/captures/p1_beams_part_node/yaw180.png",
+      "png_size": [
+        1920,
+        1080
+      ],
+      "ref_keyframe": "KF27",
+      "resolution": [
+        1920,
+        1080
+      ],
+      "status": "captured",
+      "target": [
+        27.0,
+        29.6700000762939,
+        -40.0
+      ]
+    },
+    {
+      "beat": "S24",
+      "duration_ms": 6809,
+      "eye": [
+        31.0,
+        28.6700000762939,
+        -26.2000007629395
+      ],
+      "fov_vertical_deg": 54.54,
+      "frames_mean": [
+        28.361723126642,
+        28.3618639136784,
+        28.3627427408303,
+        28.3637162902056,
+        28.3653763982151
+      ],
+      "ground_hit": [
+        31.0,
+        27.0,
+        -26.2000007629395
+      ],
+      "grounded": true,
+      "id": "lounge",
+      "median_index": 2,
+      "median_lt8": 5.45679012345679,
+      "median_mean": 28.3627427408303,
+      "median_peak": 255.0,
+      "note": "Lounge wide view toward guard marker C_20; the C_57 beam crosses the left half",
+      "png": "build/qa/p0b/captures/p1_beams_part_node/lounge.png",
+      "png_size": [
+        1920,
+        1080
+      ],
+      "ref_keyframe": "KF27",
+      "resolution": [
+        1920,
+        1080
+      ],
+      "status": "captured",
+      "target": [
+        44.2000007629395,
+        28.7199993133545,
+        -26.2000007629395
+      ]
+    }
+  ],
+  "repo_root": "/home/john/.local/share/opencode/worktree/318f41/p1-beams",
+  "run_id": "p1_beams_part_node",
+  "schema": "tat2.p0b_capture/1",
+  "seed": {
+    "active_map_seed": 1075715363,
+    "official_clip_seed": 1025051536,
+    "requested": "derived"
+  },
+  "self_test": false,
+  "settle": {
+    "capture_frames": 5,
+    "frames": 60,
+    "selector": "median-mean"
+  },
+  "started_at_utc": "2026-11-27T01:45:54",
+  "status": "captured"
+}

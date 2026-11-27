@@ -1,7 +1,9 @@
 # P1 lane B — security beams / foyer dressing (S24, KF27)
 
-Branch `w10/p1-beams`, base `27b4d5c` (P1 wave base). Scope: V6-03, V4-07,
-V1-04/AU3-04 marble (material only; no GPU capture in-lane).
+Branch `w10/p1-beams`, base `9cba135` (merged P1 tip; the lane's original
+commit is `372bf74`, merged as `08a1cfa`). Scope: V6-03, V4-07, V1-04/AU3-04
+marble (material only). A follow-up Xvfb/Vulkan A/B for the post-P1 capture
+brightness regression is recorded below.
 
 ## What changed
 
@@ -119,11 +121,64 @@ PORT_APPROX node instead.
   radius (0.35 m) are invisible at foyer distances. The bulb emission carries
   the read.
 
+## Post-P1 capture brightness A/B (2026-11-26 follow-up)
+
+The merged P1 capture (`9cba135`) was much brighter than the pre-P1 capture
+(`5301fc6`). A controlled A/B with the diagnostic
+`TAT2_P1_FOYER_DRESSING` switch (values: unset/`all` = all parts, `off` = no
+dressing, or a comma list of `bulbs,node,plaques,plate`) was run on the merged
+tree, one Godot at a time under the shared flock, Xvfb Vulkan, three poses.
+Means are the capture harness `median_mean` (ITU-R 601 luma, 5-frame median).
+
+Pre-fix (9cba135 + the switch only):
+
+| run | upper_foyer | yaw180 | lounge |
+|---|---:|---:|---:|
+| dressing `off` | 70.96 | 84.42 | 53.07 |
+| dressing `on` (all) | 71.02 | 84.43 | 53.08 |
+
+The dressing changes the mean by **≤0.06**; the regression is **not** the
+foyer dressing. The switch was proven live in the log
+(`P1_FOYER_DRESSING skipped env=off`).
+
+**Root cause:** `game/src/ui/status_icon.gd` (P1-W/UI5-06) built its HUD
+jaw-trap `SubViewport` without `own_world_3d`, so it shared the gameplay
+`World3D`. Its `DirectionalLight3D` (`light_energy = 1.6`) and the 0.8 fill
+then lit the whole level. Every other UI SubViewport
+(`wardrobe_ui`, `mission_prep_ui`, `ledger_ui`, `main_menu`) already sets
+`own_world_3d = true`; the status icon was the only exception. Headless
+probes/runtime smoke cannot see it because `_build_mesh_icon()` is skipped
+when `DisplayServer.get_name() == "headless"`.
+
+**Fix:** `vp.own_world_3d = true` in `status_icon.gd`.
+
+Post-fix A/B (same three poses):
+
+| run | upper_foyer | yaw180 | lounge |
+|---|---:|---:|---:|
+| dressing `on` (all, default) | 40.88 | 39.47 | 28.38 |
+| dressing `off` | 40.80 | 39.46 | 28.36 |
+| bulbs only | 40.82 | 39.47 | 28.37 |
+| node only | 40.86 | 39.46 | 28.36 |
+| plaques only | 40.80 | 39.46 | 28.38 |
+| plate only | 40.80 | 39.46 | 28.37 |
+
+Pre-P1 reference (`5301fc6`): 45.8 / 39.0 / 28.6. The post-fix yaw180 and
+lounge match pre-P1 within 0.5; upper_foyer is 4.9 lower (the authored beam
+material removed the cream bars, which is the intended fix, not a
+regression). The largest single dressing contribution is the cyan node at
+**+0.06** mean (upper_foyer), within frame noise; the authored HDR bulb
+(`2.0, 1.38, 0.53`) and node (`1.53, 1.97, 3.0`) values are therefore kept
+as authored — no clamp/PORT_APPROX tradeoff is needed at the port's 1.6 glow
+threshold. Final default: **`TAT2_P1_FOYER_DRESSING` unset = all four parts**.
+
+Evidence: `docs/reports/logs/p0b/p1_beams_ab_{off,on}/`,
+`p1_beams_fix_{on,off}/`, `p1_beams_part_{bulbs,node,plaques,plate}/`
+(manifests + capture logs; PNGs are gitignored).
+
 ## Integration note (p2)
 
 The `e2e_p2_parity` beam DELTA was promoted to `P2-BEAM-AUTHORED-PORT`
-(`P2_SUMMARY ... expected_delta=0 fixed=0`). `build/qa/run_p0b_gates.sh:286`
-still hard-codes `expected_delta=1 fixed=0` and `tools/gate_ratchet.json`
-still records `fixed=0`; the integrator must re-stamp both with a real P0b
-log at the merged HEAD. This lane did not run the full P0b set (no GPU work
-in-lane).
+(`P2_SUMMARY ... expected_delta=0 fixed=0`). The P1 integration tip already
+re-stamped `build/qa/run_p0b_gates.sh:353` and `tools/gate_ratchet.json` to
+`expected_delta=0`; no further action.

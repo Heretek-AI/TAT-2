@@ -238,3 +238,19 @@ and `p0b/self-test/` files are untouched.
   797/1/0, `perf_guard` 78, collision 976,321 ppm, locks 154/144/10, string
   audit 307/196/111, runtime smoke 0 errors
 - no floor was lowered
+
+## 9. Post-P1 capture brightness (follow-up at `9cba135`)
+
+A port capture after the P1 merge was much brighter than the pre-P1 capture
+(`5301fc6`): upper_foyer 71.0 vs 45.8, yaw180 84.4 vs 39.0, lounge 53.1 vs
+28.6. A dressing-on/off A/B (`TAT2_P1_FOYER_DRESSING`) showed the foyer
+dressing contributes **≤0.06** mean and is not the cause. The cause is
+`game/src/ui/status_icon.gd` (UI5-06): its HUD jaw-trap `SubViewport` did not
+set `own_world_3d`, so its 1.6-energy `DirectionalLight3D` and 0.8 fill lit
+the gameplay `World3D`. Every other UI SubViewport already isolates its world.
+`vp.own_world_3d = true` restores the pre-P1 levels: dressing-on
+**40.88 / 39.47 / 28.38** (upper_foyer / yaw180 / lounge), dressing-off
+40.80 / 39.46 / 28.36. Headless probes cannot see this class (the icon
+viewport is skipped when headless), so the Xvfb Vulkan A/B is the gate.
+Evidence: [`docs/reports/p1-beams.md`](p1-beams.md) and
+`docs/reports/logs/p0b/p1_beams_{ab,fix,part}_*`.

@@ -84,19 +84,27 @@ var stats: Dictionary = {
 
 ## Build the repair node under `parent`. `loader` is the live level_loader
 ## (group "level_loader") so the authored mesh/material DB is reused.
-static func build(parent: Node3D, loader: Node) -> Node3D:
+## `parts` is the diagnostic subset (bulbs/node/plaques/plate); empty = all.
+static func build(parent: Node3D, loader: Node, parts: Array = []) -> Node3D:
 	if parent == null:
 		return null
+	var selected: Array = parts.duplicate()
+	if selected.is_empty():
+		selected = ["bulbs", "node", "plaques", "plate"]
 	var script := load("res://src/core/foyer_dressing.gd") as GDScript
 	if script == null:
 		return null
 	var dressing: Node3D = script.new()
 	dressing.name = "P1FoyerDressing"
 	parent.add_child(dressing)
-	dressing.call("_repair_emitter_bulbs", parent)
-	dressing.call("_repair_cyan_node", parent, loader)
-	dressing.call("_add_plaque_text", parent)
-	dressing.call("_add_floor_plate", parent, loader)
+	if selected.has("bulbs"):
+		dressing.call("_repair_emitter_bulbs", parent)
+	if selected.has("node"):
+		dressing.call("_repair_cyan_node", parent, loader)
+	if selected.has("plaques"):
+		dressing.call("_add_plaque_text", parent)
+	if selected.has("plate"):
+		dressing.call("_add_floor_plate", parent, loader)
 	return dressing
 
 

@@ -19,7 +19,9 @@ extends SceneTree
 ##     "xvfb-run -a -s '-screen 0 1920x1080x24' tools/godot --path game \
 ##      --rendering-driver vulkan --script '$PWD/build/qa/p0b_capture.gd' -- --mode=capture"
 ##
-## Poses: gate, upper_foyer, yaw180, lounge, lounge_beam, beam_close.
+## Poses: gate, upper_foyer, yaw180, foyer_beam, lounge, lounge_beam, beam_close.
+## `foyer_beam` is the KF27-framed cue at the authored C_107 foyer card;
+## `beam_close` is the Lounge C_57 extra (ref=EXTRA), never a KF27 frame.
 ## Lens: the shipped authored 54.54 deg vertical (UE 85 deg horizontal at 16:9),
 ## 1920x1080, KEEP_HEIGHT. Each pose waits SETTLE_FRAMES=60, then captures
 ## CAPTURE_FRAMES=5 frames and saves the median-mean frame. The authoritative
@@ -40,7 +42,7 @@ const SETTLE_FRAMES: int = 60
 const CAPTURE_FRAMES: int = 5
 const OFFICIAL_CLIP_SEED: int = 1025051536
 const AUDIO_SRC: String = "res://src/core/audio_capture.gd"
-const POSE_IDS: Array[String] = ["gate", "upper_foyer", "yaw180", "lounge", "lounge_beam", "beam_close"]
+const POSE_IDS: Array[String] = ["gate", "upper_foyer", "yaw180", "foyer_beam", "lounge", "lounge_beam", "beam_close"]
 
 ## Pose table. `ground=false` uses the authored absolute eye (the W9 capture
 ## poses); `ground=true` casts a downward ray at the authored x/z and places the
@@ -73,6 +75,14 @@ const POSES := {
 		"ref": "KF27",
 		"note": "same slot turned 180 deg; W9-P1 showed the armchair/ottoman/vitrine from here",
 	},
+	"foyer_beam": {
+		"eye": Vector3(27.0, 29.67, -55.0),
+		"target": Vector3(23.27, 29.76, -57.4),
+		"ground": false,
+		"beat": "S24",
+		"ref": "KF27",
+		"note": "KF27-framed cue aimed at the authored BP_Detector_LightBeam_C_107 card at (23.27,29.76,-57.4); the one-band/emitter criteria are in build/qa/kf27_beam_reference.json",
+	},
 	"lounge": {
 		"eye": Vector3(31.0, 28.72, -26.2),
 		"target": Vector3(44.2, 28.72, -26.2),
@@ -93,9 +103,9 @@ const POSES := {
 		"eye": Vector3(39.0, 28.82, -28.97),
 		"target": Vector3(42.4, 28.9, -28.97),
 		"ground": true,
-		"beat": "S25",
-		"ref": "KF27",
-		"note": "3.4 m from the C_57 card; beam core/glow rows are measured by p0b_roi_stats.py",
+		"beat": "",
+		"ref": "EXTRA",
+		"note": "Lounge C_57 extra (not KF27/S24): 3.4 m from the C_57 card; luma stats only, no KF27 criteria",
 	},
 }
 
@@ -509,11 +519,21 @@ func _check(cond: bool, what: String) -> void:
 
 func _self_test() -> void:
 	# 1. Contract constants.
-	_check(POSE_IDS.size() == 6, "six pose ids")
+	_check(POSE_IDS.size() == 7, "seven pose ids (incl. KF27 foyer_beam + Lounge extra)")
 	_check(is_equal_approx(SHIPPED_FOV, 54.54), "shipped vertical FOV is 54.54")
 	_check(SIZE == Vector2i(1920, 1080), "resolution is 1920x1080")
 	_check(SETTLE_FRAMES == 60 and CAPTURE_FRAMES == 5, "settle 60 + 5 frames")
 	_check(OFFICIAL_CLIP_SEED == 1025051536, "official clip seed recorded")
+	var foyer_beam: Dictionary = POSES["foyer_beam"] as Dictionary
+	_check((foyer_beam.get("eye") as Vector3).is_equal_approx(Vector3(27.0, 29.67, -55.0))
+		and (foyer_beam.get("target") as Vector3).is_equal_approx(Vector3(23.27, 29.76, -57.4))
+		and str(foyer_beam.get("ref", "")) == "KF27"
+		and str(foyer_beam.get("beat", "")) == "S24",
+		"foyer_beam is the KF27 cue (27,29.67,-55) -> (23.27,29.76,-57.4)")
+	var lounge_extra: Dictionary = POSES["beam_close"] as Dictionary
+	_check(str(lounge_extra.get("ref", "")) == "EXTRA"
+		and str(lounge_extra.get("beat", "")) == "",
+		"beam_close is the Lounge C_57 extra, not a KF27/S24 frame")
 	var pose_ok: bool = true
 	for pid: String in POSE_IDS:
 		var p: Dictionary = POSES[pid] as Dictionary

@@ -12,10 +12,17 @@ extends SceneTree
 ##   3. the P0a card transform: local X -> record col2, slot-2 length
 ##      [Guildhall_Gameplay / OldManor_Gameplay cards]
 ##   4. the authored centre-line / fake-glow / 25 m-fade profile, evaluated
-##      with the same math as the shader (no broad shell)
-##   5. the authored foyer dressing records (vitrine, armchair/ottoman,
+##      with the same math as the shader (no broad shell); the P4.5 core
+##      (Fake Glow Thickness + Center Power) is measured glow-only so the
+##      centre line cannot mask it
+##   5. every authored beam scalar is consumed from materials.json (no
+##      literals), including the exposed-but-inert side/sphere/edge terms
+##   6. the KF27 contract: one band at 40.0-40.5 %, emitter 17.8 %/40.0 %,
+##      the foyer_beam cue, and the Lounge beam_close extra
+##      [build/qa/kf27_beam_reference.json + capture/ROI tables]
+##   7. the authored foyer dressing records (vitrine, armchair/ottoman,
 ##      plaques, node, emitter hardware) [Building_Guildhall_POI + Gameplay]
-##   6. the dressing module on a synthetic scene: bulb/node material repair,
+##   8. the dressing module on a synthetic scene: bulb/node material repair,
 ##      authored plaque text, PORT_APPROX floor plate
 ##
 ## It is headless and loads no map, so it can run beside the other P1 probes.
@@ -73,8 +80,10 @@ func _run() -> void:
 	var mat: ShaderMaterial = ll.call("get_material_for_ue", BEAM_MAT) as ShaderMaterial
 	var values: Dictionary = _check_material(mat)
 	_check_authored_row(values, _read_json(MATERIALS) as Dictionary)
+	_check_authored_terms(values, _read_json(MATERIALS) as Dictionary)
 	_check_geometry(ll)
 	_check_profile(values)
+	_check_kf27_contract()
 	_check_foyer_records()
 	_check_dressing_module(ll)
 
@@ -107,12 +116,31 @@ func _check_shader_source(txt: String) -> void:
 	var defaults_ok: bool = txt.find("center_line_thickness = 0.015") >= 0 \
 		and txt.find("center_line_opacity = 0.5") >= 0 \
 		and txt.find("fake_glow_opacity = 0.06") >= 0 \
+		and txt.find("fake_glow_thickness = 0.02") >= 0 \
+		and txt.find("fake_glow_center_power = 2.0") >= 0 \
+		and txt.find("fake_glow_side_width = 1.0") >= 0 \
+		and txt.find("center_line_sphere_mask_radius = 1.0") >= 0 \
+		and txt.find("sphere_mask_opacity = 0.25") >= 0 \
+		and txt.find("sphere_mask_power = 2.0") >= 0 \
+		and txt.find("edge_fade_power = 0.5") >= 0 \
 		and txt.find("fade_distance = 25.0") >= 0 \
 		and txt.find("4.3813") >= 0 and txt.find("3.5156") >= 0
 	var radial_ok: bool = txt.find("v_local.yz") >= 0 and txt.find("radial_axis") >= 0
-	_check(render_ok and defaults_ok and radial_ok,
-		"shader render_mode=unshaded+blend_add+cull_disabled authored_defaults=%s radial=%s" % [
-			str(defaults_ok), str(radial_ok)])
+	# The three ambiguous groups must be documented as exposed/not applied,
+	# not silently dropped: the probe pins the rationale next to the uniforms.
+	var ambiguous_ok: bool = txt.find("Fake Glow Side Width = 1.0 m    (exposed, not applied") >= 0 \
+		and txt.find("Center Line Sphere Mask Radius = 1.0 m  (exposed, not applied") >= 0 \
+		and txt.find("EdgeFadePower        = 0.5     (exposed, not applied") >= 0
+	# The four ambiguous groups are exposed as uniforms but must not enter the
+	# fragment math (no `uniform * ...` / `uniform / ...` use).
+	var inert_ok: bool = txt.find("fake_glow_side_width *") < 0 \
+		and txt.find("center_line_sphere_mask_radius *") < 0 \
+		and txt.find("sphere_mask_opacity *") < 0 \
+		and txt.find("sphere_mask_power *") < 0 \
+		and txt.find("edge_fade_power *") < 0
+	_check(render_ok and defaults_ok and radial_ok and ambiguous_ok and inert_ok,
+		"shader render_mode=unshaded+blend_add+cull_disabled authored_defaults=%s radial=%s ambiguous_documented=%s inert=%s" % [
+			str(defaults_ok), str(radial_ok), str(ambiguous_ok), str(inert_ok)])
 
 
 func _check_material(mat: ShaderMaterial) -> Dictionary:
@@ -122,8 +150,15 @@ func _check_material(mat: ShaderMaterial) -> Dictionary:
 	var line_opacity := 0.0
 	var falloff := 0.0
 	var glow := 0.0
+	var glow_thickness := 0.0
 	var glow_width := 0.0
+	var glow_center_power := 0.0
 	var glow_power := 0.0
+	var glow_side_width := 0.0
+	var sphere_radius := 0.0
+	var sphere_opacity := 0.0
+	var sphere_power := 0.0
+	var edge_fade := 0.0
 	var fade := 0.0
 	var axis := -1
 	if mat != null and mat.shader != null:
@@ -135,8 +170,15 @@ func _check_material(mat: ShaderMaterial) -> Dictionary:
 		line_opacity = float(mat.get_shader_parameter("center_line_opacity"))
 		falloff = float(mat.get_shader_parameter("center_line_falloff"))
 		glow = float(mat.get_shader_parameter("fake_glow_opacity"))
+		glow_thickness = float(mat.get_shader_parameter("fake_glow_thickness"))
 		glow_width = float(mat.get_shader_parameter("fake_glow_center_width"))
+		glow_center_power = float(mat.get_shader_parameter("fake_glow_center_power"))
 		glow_power = float(mat.get_shader_parameter("fake_glow_power"))
+		glow_side_width = float(mat.get_shader_parameter("fake_glow_side_width"))
+		sphere_radius = float(mat.get_shader_parameter("center_line_sphere_mask_radius"))
+		sphere_opacity = float(mat.get_shader_parameter("sphere_mask_opacity"))
+		sphere_power = float(mat.get_shader_parameter("sphere_mask_power"))
+		edge_fade = float(mat.get_shader_parameter("edge_fade_power"))
 		fade = float(mat.get_shader_parameter("fade_distance"))
 		axis = int(mat.get_shader_parameter("radial_axis"))
 	var ok: bool = mat != null and mat.shader != null \
@@ -145,17 +187,25 @@ func _check_material(mat: ShaderMaterial) -> Dictionary:
 		and absf(col.b - 3.5156) < 0.0001 and absf(col.a - 0.5) < 0.0001 \
 		and absf(emissive - 3.0) < 0.0001 and absf(thickness - 0.015) < 0.0001 \
 		and absf(line_opacity - 0.5) < 0.0001 and absf(falloff - 0.25) < 0.0001 \
-		and absf(glow - 0.06) < 0.0001 and absf(glow_width - 0.085) < 0.0001 \
-		and absf(glow_power - 1.1) < 0.0001 and absf(fade - 25.0) < 0.0001 \
-		and axis == 0
-	_check(ok, "loader MI_LightBeam_SM shader=%s color=(%.4f,%.4f,%.4f,%.2f) emissive=%.1f line=%.3fm a=%.2f falloff=%.2f glow=%.2f/%.3fm p=%.1f fade=%.0fm axis=%d" % [
+		and absf(glow - 0.06) < 0.0001 and absf(glow_thickness - 0.02) < 0.0001 \
+		and absf(glow_width - 0.085) < 0.0001 and absf(glow_center_power - 2.0) < 0.0001 \
+		and absf(glow_power - 1.1) < 0.0001 and absf(glow_side_width - 1.0) < 0.0001 \
+		and absf(sphere_radius - 1.0) < 0.0001 and absf(sphere_opacity - 0.25) < 0.0001 \
+		and absf(sphere_power - 2.0) < 0.0001 and absf(edge_fade - 0.5) < 0.0001 \
+		and absf(fade - 25.0) < 0.0001 and axis == 0
+	_check(ok, "loader MI_LightBeam_SM shader=%s color=(%.4f,%.4f,%.4f,%.2f) emissive=%.1f line=%.3fm a=%.2f falloff=%.2f glow=%.2f/%.3fm core=%.3fm cp=%.1f p=%.1f side=%.2fm sphere=%.1f/%.2f/%.1f edge=%.2f fade=%.0fm axis=%d" % [
 		mat.shader.resource_path.get_file() if mat != null and mat.shader != null else "<none>",
 		col.r, col.g, col.b, col.a, emissive, thickness, line_opacity, falloff,
-		glow, glow_width, glow_power, fade, axis])
+		glow, glow_width, glow_thickness, glow_center_power, glow_power, glow_side_width,
+		sphere_radius, sphere_opacity, sphere_power, edge_fade, fade, axis])
 	return {
 		"color": col, "emissive": emissive, "thickness": thickness,
 		"line_opacity": line_opacity, "falloff": falloff, "glow": glow,
-		"glow_width": glow_width, "glow_power": glow_power, "fade": fade,
+		"glow_thickness": glow_thickness, "glow_width": glow_width,
+		"glow_center_power": glow_center_power, "glow_power": glow_power,
+		"glow_side_width": glow_side_width, "sphere_radius": sphere_radius,
+		"sphere_opacity": sphere_opacity, "sphere_power": sphere_power,
+		"edge_fade": edge_fade, "fade": fade,
 	}
 
 
@@ -182,6 +232,51 @@ func _check_authored_row(values: Dictionary, mats: Dictionary) -> void:
 		str(base), float(params.get("Center Line Thickness", 0.0)),
 		float(params.get("Fake Glow Opacity", 0.0)),
 		float(params.get("FadeDistance", 0.0))])
+
+
+func _check_authored_terms(values: Dictionary, mats: Dictionary) -> void:
+	# P4.5 consumption contract: every authored scalar that the shader/loader
+	# exposes must come from the generated row, not a literal. This is the
+	# check that fails if a producer drops a term or the loader stops reading it.
+	var row: Dictionary = mats.get(BEAM_MAT, {}) as Dictionary
+	var params: Dictionary = row.get("params", {}) as Dictionary
+	var terms: Dictionary = {
+		"EmissiveMultiplier": "emissive",
+		"Center Line Thickness": "thickness",
+		"Center Line Opacity": "line_opacity",
+		"Center Line Falloff": "falloff",
+		"Fake Glow Opacity": "glow",
+		"Fake Glow Thickness": "glow_thickness",
+		"Fake Glow Center Width": "glow_width",
+		"Fake Glow Center Power": "glow_center_power",
+		"Fake Glow Power": "glow_power",
+		"Fake Glow Side Width": "glow_side_width",
+		"Center Line Sphere Mask Radius": "sphere_radius",
+		"Sphere Mask Opacity": "sphere_opacity",
+		"Sphere Mask Power": "sphere_power",
+		"EdgeFadePower": "edge_fade",
+		"FadeDistance": "fade",
+	}
+	var consumed: int = 0
+	var missing: Array[String] = []
+	var mismatched: Array[String] = []
+	for row_name: String in terms.keys():
+		var key: String = str(terms[row_name])
+		if not params.has(row_name):
+			missing.append(row_name)
+			continue
+		var want: float = float(params[row_name])
+		var got: float = float(values.get(key, -9999.0))
+		if absf(want - got) > 0.000001:
+			mismatched.append("%s(row=%.6f mat=%.6f)" % [row_name, want, got])
+		else:
+			consumed += 1
+	# The three exposed-but-not-applied groups are still consumed as uniforms
+	# (so the authored data reaches the material) even though the shader leaves
+	# them inert on purpose; that distinction is asserted in _check_profile().
+	var ok: bool = missing.is_empty() and mismatched.is_empty() and consumed == terms.size()
+	_check(ok, "authored beam terms consumed=%d/%d missing=%s mismatched=%s" % [
+		consumed, terms.size(), str(missing), str(mismatched)])
 
 
 func _check_geometry(ll: Node) -> void:
@@ -241,40 +336,116 @@ func _check_profile(values: Dictionary) -> void:
 	var line_a: float = float(values.get("line_opacity", 0.5))
 	var falloff: float = float(values.get("falloff", 0.25))
 	var glow_a: float = float(values.get("glow", 0.06))
+	var glow_thick: float = float(values.get("glow_thickness", 0.02))
 	var glow_w: float = float(values.get("glow_width", 0.085))
+	var glow_cp: float = float(values.get("glow_center_power", 2.0))
 	var glow_p: float = float(values.get("glow_power", 1.1))
 	var fade: float = float(values.get("fade", 25.0))
 
-	var a_core: float = _beam_alpha(0.0, 8.0, thickness, line_a, falloff, glow_a, glow_w, glow_p, fade)
-	var a_half: float = _beam_alpha(thickness * 0.5, 8.0, thickness, line_a, falloff, glow_a, glow_w, glow_p, fade)
-	var a_1cm: float = _beam_alpha(0.01, 8.0, thickness, line_a, falloff, glow_a, glow_w, glow_p, fade)
-	var a_25cm: float = _beam_alpha(0.25, 8.0, thickness, line_a, falloff, glow_a, glow_w, glow_p, fade)
-	var a_shell: float = _beam_alpha(0.50, 8.0, thickness, line_a, falloff, glow_a, glow_w, glow_p, fade)
-	var a_near: float = _beam_alpha(0.0, 8.0, thickness, line_a, falloff, glow_a, glow_w, glow_p, fade)
-	var a_mid: float = _beam_alpha(0.0, 20.0, thickness, line_a, falloff, glow_a, glow_w, glow_p, fade)
-	var a_far: float = _beam_alpha(0.0, 25.0, thickness, line_a, falloff, glow_a, glow_w, glow_p, fade)
+	var a_core: float = _beam_alpha(0.0, 8.0, thickness, line_a, falloff, glow_a, glow_thick, glow_w, glow_cp, glow_p, fade)
+	var a_half: float = _beam_alpha(thickness * 0.5, 8.0, thickness, line_a, falloff, glow_a, glow_thick, glow_w, glow_cp, glow_p, fade)
+	var a_1cm: float = _beam_alpha(0.01, 8.0, thickness, line_a, falloff, glow_a, glow_thick, glow_w, glow_cp, glow_p, fade)
+	var a_25cm: float = _beam_alpha(0.25, 8.0, thickness, line_a, falloff, glow_a, glow_thick, glow_w, glow_cp, glow_p, fade)
+	var a_shell: float = _beam_alpha(0.50, 8.0, thickness, line_a, falloff, glow_a, glow_thick, glow_w, glow_cp, glow_p, fade)
+	var a_near: float = _beam_alpha(0.0, 8.0, thickness, line_a, falloff, glow_a, glow_thick, glow_w, glow_cp, glow_p, fade)
+	var a_mid: float = _beam_alpha(0.0, 20.0, thickness, line_a, falloff, glow_a, glow_thick, glow_w, glow_cp, glow_p, fade)
+	var a_far: float = _beam_alpha(0.0, 25.0, thickness, line_a, falloff, glow_a, glow_thick, glow_w, glow_cp, glow_p, fade)
+
+	# P4.5 core: the authored 2 cm thickness / 2.0 centre power must show up in
+	# the glow-only profile (the 1.5 cm centre line would otherwise mask it).
+	var g_zero: float = _beam_glow(0.0, glow_a, glow_thick, glow_w, glow_cp, glow_p)
+	var g_plateau: float = _beam_glow(glow_thick * 0.25, glow_a, glow_thick, glow_w, glow_cp, glow_p)
+	var g_core_edge: float = _beam_glow(glow_thick * 0.5, glow_a, glow_thick, glow_w, glow_cp, glow_p)
+	var g_cp4: float = _beam_glow(glow_thick * 0.4, glow_a, glow_thick, glow_w, 4.0, glow_p)
+	var g_thick2x: float = _beam_glow(glow_thick * 0.4, glow_a, glow_thick * 2.0, glow_w, glow_cp, glow_p)
+	var g_tail: float = _beam_glow(0.05, glow_a, glow_thick, glow_w, glow_cp, glow_p)
+	var g_end: float = _beam_glow(glow_w, glow_a, glow_thick, glow_w, glow_cp, glow_p)
+	var core_ok: bool = absf(g_zero - glow_a) < 0.0001 \
+		and absf(g_plateau - glow_a) < 0.0001 \
+		and g_core_edge < g_plateau and g_core_edge > 0.0 \
+		and g_cp4 < g_plateau and g_thick2x > g_core_edge
 	var ok: bool = absf(a_core - clampf(line_a + glow_a, 0.0, 1.0)) < 0.0001 \
 		and a_half > 0.25 and a_half < a_core \
 		and a_1cm < glow_a + 0.005 \
 		and a_25cm <= 0.0001 and a_shell <= 0.0001 \
 		and absf(a_near - a_core) < 0.0001 and a_mid < a_near and a_mid > 0.1 \
-		and a_far <= 0.0001
-	_check(ok, "profile center=%.3f half=%.3f 1cm=%.3f 25cm=%.4f shell=%.4f fade@8=%.3f @20=%.3f @25=%.4f (no full-tube)" % [
-		a_core, a_half, a_1cm, a_25cm, a_shell, a_near, a_mid, a_far])
+		and a_far <= 0.0001 and core_ok \
+		and g_tail > 0.0 and g_end <= 0.0001
+	_check(ok, "profile center=%.3f half=%.3f 1cm=%.3f 25cm=%.4f shell=%.4f fade@8=%.3f @20=%.3f @25=%.4f core=(0=%.3f plateau=%.3f edge=%.3f cp4=%.3f thick2x=%.3f)" % [
+		a_core, a_half, a_1cm, a_25cm, a_shell, a_near, a_mid, a_far,
+		g_zero, g_plateau, g_core_edge, g_cp4, g_thick2x])
+
+
+static func _beam_glow(radius: float, glow_a: float, glow_thick: float,
+		glow_w: float, glow_cp: float, glow_p: float) -> float:
+	var core_r: float = maxf(glow_thick * 0.5, 0.0001)
+	var center_r: float = maxf(glow_w, core_r + 0.0001)
+	var body_t: float = clampf(1.0 - radius / center_r, 0.0, 1.0)
+	var body: float = pow(body_t, maxf(glow_p, 0.001))
+	var core_t: float = clampf(1.0 - radius / core_r, 0.0, 1.0)
+	var core: float = pow(core_t, maxf(glow_cp, 0.001))
+	return glow_a * minf(body + core, 1.0)
 
 
 static func _beam_alpha(radius: float, cam_dist: float, thickness: float, line_a: float,
-		falloff: float, glow_a: float, glow_w: float, glow_p: float, fade: float) -> float:
+		falloff: float, glow_a: float, glow_thick: float, glow_w: float,
+		glow_cp: float, glow_p: float, fade: float) -> float:
 	var half_t: float = maxf(thickness * 0.5, 0.0005)
 	var inner: float = maxf(half_t * (1.0 - falloff), 0.0)
 	var outer: float = maxf(half_t * (1.0 + falloff), inner + 0.0001)
 	var line: float = 1.0 - smoothstep(inner, outer, radius)
-	var glow_t: float = clampf(1.0 - radius / maxf(glow_w, 0.0001), 0.0, 1.0)
-	var glow: float = glow_a * pow(glow_t, maxf(glow_p, 0.001))
+	var glow: float = _beam_glow(radius, glow_a, glow_thick, glow_w, glow_cp, glow_p)
 	var a: float = clampf(line_a * line + glow, 0.0, 1.0)
 	var fade_start: float = fade * 0.75
 	a *= 1.0 - smoothstep(fade_start, maxf(fade, fade_start + 0.001), cam_dist)
 	return a
+
+
+func _check_kf27_contract() -> void:
+	# The KF27 expectation is one measured contract shared by the headless probe
+	# and the ROI scorer: one band at 40.0-40.5 %, emitter at 17.8 %/40.0 %,
+	# the foyer_beam cue, and the Lounge beam_close extra (no KF27 criteria).
+	var ref: Variant = _read_json("res://../build/qa/kf27_beam_reference.json")
+	var j: Dictionary = ref as Dictionary if ref is Dictionary else {}
+	var measured: Dictionary = j.get("measured", {}) as Dictionary
+	var emitter: Dictionary = measured.get("emitter_pct", {}) as Dictionary
+	var band: Array = measured.get("beam_band_row_pct", []) as Array
+	var cue: Dictionary = j.get("foyer_beam_cue", {}) as Dictionary
+	var extra: Dictionary = j.get("lounge_extra", {}) as Dictionary
+	var cue_eye: Array = cue.get("eye", []) as Array
+	var cue_target: Array = cue.get("target", []) as Array
+	var ref_ok: bool = not j.is_empty() \
+		and str(j.get("keyframe", "")) == "KF27" \
+		and absf(float(emitter.get("x", 0.0)) - 17.8) < 0.0001 \
+		and absf(float(emitter.get("y", 0.0)) - 40.0) < 0.0001 \
+		and int(measured.get("beam_bands", 0)) == 1 \
+		and band.size() == 2 and absf(float(band[0]) - 40.0) < 0.0001 and absf(float(band[1]) - 40.5) < 0.0001 \
+		and cue_eye.size() == 3 and cue_target.size() == 3 \
+		and absf(float(cue_eye[0]) - 27.0) < 0.0001 and absf(float(cue_eye[1]) - 29.67) < 0.0001 \
+		and absf(float(cue_eye[2]) + 55.0) < 0.0001 \
+		and absf(float(cue_target[0]) - 23.27) < 0.0001 and absf(float(cue_target[1]) - 29.76) < 0.0001 \
+		and absf(float(cue_target[2]) + 57.4) < 0.0001 \
+		and str(extra.get("pose", "")) == "beam_close"
+	# The capture table and the ROI script must point at the same contract.
+	var cap_txt: String = _read_text("res://../build/qa/p0b_capture.gd")
+	var roi_txt: String = _read_text("res://../build/qa/p0b_roi_stats.py")
+	var cap_ok: bool = cap_txt.find("\"foyer_beam\"") >= 0 \
+		and cap_txt.find("Vector3(27.0, 29.67, -55.0)") >= 0 \
+		and cap_txt.find("Vector3(23.27, 29.76, -57.4)") >= 0 \
+		and cap_txt.find("\"ref\": \"EXTRA\"") >= 0 \
+		and cap_txt.find("\"foyer_beam\", \"lounge\"") >= 0
+	var roi_ok: bool = roi_txt.find("\"foyer_beam\": \"KF27_03m27s_foyer_security_beam.jpg\"") >= 0 \
+		and roi_txt.find("POSE_EXTRAS = {\"beam_close\"}") >= 0 \
+		and roi_txt.find("\"one_band\":") >= 0 \
+		and roi_txt.find("\"emitter_at_kf27\":") >= 0 \
+		and roi_txt.find("and pose not in POSE_EXTRAS") >= 0 \
+		and roi_txt.find("kf27_beam_reference.json") >= 0
+	_check(ref_ok and cap_ok and roi_ok,
+		"KF27 contract emitter=(%.1f,%.1f) bands=%d row=(%.1f,%.1f) foyer_beam=%s lounge_extra=%s ref=%s capture=%s roi=%s" % [
+			float(emitter.get("x", 0.0)), float(emitter.get("y", 0.0)),
+			int(measured.get("beam_bands", 0)), float(band[0]) if band.size() > 0 else -1.0,
+			float(band[1]) if band.size() > 1 else -1.0, str(cue_eye), str(extra.get("pose", "")),
+			str(ref_ok), str(cap_ok), str(roi_ok)])
 
 
 func _check_foyer_records() -> void:

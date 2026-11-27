@@ -32,7 +32,15 @@ uniform int groundwet_tex_idx = 0;
 uniform int groundwet_channel = -1;
 uniform sampler2D puddle_normal : hint_normal, repeat_enable;
 uniform sampler2D puddle_opacity : filter_linear, repeat_enable;
+// Visibility-mask controls. `discard_holes` is the authored rule (UE stores
+// 1 = hole) and stays 1.0 in the default `discard` mode. `sample_mask` lets
+// the loader turn the read off entirely (`TAT2_LANDSCAPE_MASK=off`), and
+// `mask_raw_view` renders the raw mask red (hole) / green (visible) for the
+// `raw` A/B. The defaults are the shipped discard path so a material built
+// without the loader (tests, VFX) keeps the authored behaviour.
 uniform float discard_holes = 1.0;
+uniform float sample_mask = 1.0;
+uniform float mask_raw_view = 0.0;
 uniform float uv_scale = 12.0;
 uniform vec3 fallback_color : source_color = vec3(0.42, 0.42, 0.40);
 // Components whose authored weights never reach a colour layer (the Guildhall
@@ -80,8 +88,11 @@ void fragment() {
 	// was inverted (vis < 0.5), and Guildhall forced discard_holes=0 to hide
 	// the resulting solid elevated shell. Fail safe to 0 (no discard) when a
 	// component has no mask; discard only authored holes (vis > 0.5).
+	// `TAT2_LANDSCAPE_MASK=discard|raw|off` is a loader diagnostic, not a
+	// second convention: discard is the shipped rule, raw shows the mask
+	// without discarding, off skips the read.
 	float vis = 0.0;
-	if (discard_holes > 0.5 && visibility_tex_idx >= 0 && visibility_channel >= 0) {
+	if (sample_mask > 0.5 && visibility_tex_idx >= 0 && visibility_channel >= 0) {
 		vis = channel_value(weight_at(visibility_tex_idx, UV), visibility_channel);
 	}
 	vec3 col = vec3(0.0);
@@ -155,5 +166,14 @@ void fragment() {
 	if (total <= 0.001 && puddle <= 0.001 && fallback_tex_on > 0.5) {
 		ROUGHNESS = 0.52;
 		SPECULAR = 0.80;
+	}
+	if (mask_raw_view > 0.5) {
+		// `TAT2_LANDSCAPE_MASK=raw` A/B: show the sampled mask instead of the
+		// blended surface. Red = authored hole (vis > 0.5), green = visible.
+		// A component with no visibility layer samples 0 and reads green,
+		// which is the fail-safe path the data assertion checks.
+		ALBEDO = mix(vec3(0.10, 0.55, 0.12), vec3(0.75, 0.08, 0.08), step(0.5, vis));
+		ROUGHNESS = 0.9;
+		SPECULAR = 0.0;
 	}
 }

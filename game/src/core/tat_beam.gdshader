@@ -7,19 +7,35 @@ shader_type spatial;
 //   Center Line Opacity  = 0.5
 //   Center Line Falloff  = 0.25
 //   Fake Glow Opacity    = 0.06
-//   Fake Glow Center W.  = 0.085 m
+//   Fake Glow Thickness  = 0.02 m   (the tight core, full width)
+//   Fake Glow Center W.  = 0.085 m  (the centre glow radius)
+//   Fake Glow Center Pow.= 2.0
 //   Fake Glow Power      = 1.1
+//   Fake Glow Side Width = 1.0 m    (exposed, not applied: this is the wide
+//                                    side lobe; the authored material masks it
+//                                    with T_Noise2/T_Noise_01, which this
+//                                    shader does not sample. A bare 1 m lobe
+//                                    at 6 % is the broad cream slab P1 removed,
+//                                    so it waits for a noise-mask lane.)
 //   FadeDistance         = 25.0 m
-//   EdgeFadePower        = 0.5  (a silhouette term; the centre-line model has
-//                                 no visible card silhouette, so it is unused)
+//   Center Line Sphere Mask Radius = 1.0 m  (exposed, not applied: no authored
+//                                    sphere centre/space is serialized, so any
+//                                    choice would be invented)
+//   Sphere Mask Opacity  = 0.25    (exposed, not applied, same reason)
+//   Sphere Mask Power    = 2.0     (exposed, not applied, same reason)
+//   EdgeFadePower        = 0.5     (exposed, not applied: the centre-line
+//                                    model has no visible card silhouette and
+//                                    a radial edge term would double-count
+//                                    Fake Glow Power)
 //   BLEND_Additive, two-sided, MSM_Unlit
 //
 // The authored SM_LightBeam mesh is a 1 m crossed-card volume with a 14 mm
 // octagonal core on its local X axis. The material draws a 1.5 cm centre line
-// (the core) plus a 6 % fake glow that falls off within 8.5 cm of the axis, so
-// the 1 m card reads as a thin crisp line instead of the old full-tube bar.
-// The old stand-in used beam_color alpha 0.55 across the whole shell; that is
-// why the P0b capture showed broad cream bars. No flow animation is authored.
+// (the core) plus a 6 % fake glow: a 2 cm authored core inside the 8.5 cm
+// centre glow, so the 1 m card reads as a thin crisp line instead of the old
+// full-tube bar. The old stand-in used beam_color alpha 0.55 across the whole
+// shell; that is why the P0b capture showed broad cream bars. No flow
+// animation is authored.
 // HDR values are authored linear, so the uniform deliberately has no
 // source_color hint (that would sRGB-decode 5.0 to ~34).
 render_mode unshaded, blend_add, depth_draw_never, cull_disabled, shadows_disabled;
@@ -30,9 +46,19 @@ uniform float center_line_thickness = 0.015;
 uniform float center_line_opacity = 0.5;
 uniform float center_line_falloff = 0.25;
 uniform float fake_glow_opacity = 0.06;
+uniform float fake_glow_thickness = 0.02;
 uniform float fake_glow_center_width = 0.085;
+uniform float fake_glow_center_power = 2.0;
 uniform float fake_glow_power = 1.1;
+uniform float fake_glow_side_width = 1.0;
 uniform float fade_distance = 25.0;
+// Authored terms that are exposed but intentionally not applied (see the
+// header): the UE graph is not in the dump and every available reading would
+// invent a centre/axis or reintroduce the broad cream slab P1 removed.
+uniform float center_line_sphere_mask_radius = 1.0;
+uniform float sphere_mask_opacity = 0.25;
+uniform float sphere_mask_power = 2.0;
+uniform float edge_fade_power = 0.5;
 // 0 = card (axis local X, radial YZ); 1 = cylinder (axis local Y, radial XZ);
 // 2 = axis local Z, radial XY. The authored card is 0; the security_beam.gd
 // fallback cylinder and the QA foyer beams are 1.
@@ -59,9 +85,18 @@ void fragment() {
 	float outer = max(half_thickness * (1.0 + center_line_falloff), inner + 0.0001);
 	float line = 1.0 - smoothstep(inner, outer, radius);
 
-	// Fake glow: authored 6 % peak, 8.5 cm centre width, power 1.1.
-	float glow_t = clamp(1.0 - radius / max(fake_glow_center_width, 0.0001), 0.0, 1.0);
-	float glow = fake_glow_opacity * pow(glow_t, max(fake_glow_power, 0.001));
+	// Fake glow (authored row): a tight core (Fake Glow Thickness) with the
+	// centre power, inside the 8.5 cm centre glow (Fake Glow Power), at the
+	// authored 6 % peak. The two lobes are summed and clamped to the authored
+	// peak so the core can never exceed Fake Glow Opacity. Every value is a
+	// uniform fed from materials.json; the fallbacks are the authored values.
+	float core_radius = max(fake_glow_thickness * 0.5, 0.0001);
+	float center_radius = max(fake_glow_center_width, core_radius + 0.0001);
+	float body_t = clamp(1.0 - radius / center_radius, 0.0, 1.0);
+	float glow_body = pow(body_t, max(fake_glow_power, 0.001));
+	float core_t = clamp(1.0 - radius / core_radius, 0.0, 1.0);
+	float glow_core = pow(core_t, max(fake_glow_center_power, 0.001));
+	float glow = fake_glow_opacity * min(glow_body + glow_core, 1.0);
 
 	float alpha = clamp(center_line_opacity * line + glow, 0.0, 1.0);
 	// Authored 25 m fade distance. Fade only the last quarter so the beam keeps

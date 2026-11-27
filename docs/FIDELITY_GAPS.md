@@ -25,24 +25,40 @@ visual claim** and does not re-score a row.
   3 partial, 55/120 rows with a supportable subject. It is useful Den/Guildhall
   look/UI evidence; it is **not** a valid Cleanout reference. Deferred as
   issue **#13**.
-- **Beam claim qualified.** The authored beam geometry/material match is real
-  (330 cards, `max_axis_err_deg=0.000006`), but the route2 staged
-  `upper_foyer` frame measures peak row **49.07 %**, excess **131.15**, and
-  **12** cream-unexplained 16×9 cells (8 on the beam row), against KF27
-  **40.19 %** and **0.12 %** cream outside the band. The clean route2-clean
-  capture (`912a481`, Phase 0b) reproduces the S24 three-frame set with
+- **Beam claim qualified; P4.5 implements the core, re-measure pending.** The
+  authored beam geometry/material match is real (330 cards,
+  `max_axis_err_deg=0.000006`), but the route2 staged `upper_foyer` frame
+  measures peak row **49.07 %**, excess **131.15**, and **12**
+  cream-unexplained 16×9 cells (8 on the beam row), against KF27 **40.19 %**
+  and **0.12 %** cream outside the band. The clean route2-clean capture
+  (`912a481`, Phase 0b) reproduces the S24 three-frame set with
   `beam_visible=true`; the numbers above are from the earlier route2 frame and
-  are not re-scored here. "Thin line, no cream bars"
-  is a different-pose result and is **not** a current foyer claim; P4.5 must
-  re-measure at the KF27 pose.
+  are not re-scored here. P4.5 added the authored **2 cm fake-glow core**
+  (`Fake Glow Thickness` + `Fake Glow Center Power`, consumed from
+  `materials.json`), exposed the wide side lobe / sphere-mask trio /
+  `EdgeFadePower` as authored uniforms but deliberately leaves them inert (no
+  serialized sphere centre and no noise mask; the side lobe would restore the
+  1 m cream slab), and added the `foyer_beam` KF27 cue. The corrected KF27
+  contract is **one band 40.0–40.5 %**, emitter **17.8 %/40.0 %**
+  (`build/qa/kf27_beam_reference.json`), but the GPU re-measure at that pose is
+  the integrator's and has **not** been run in this lane. "Thin line, no cream
+  bars" is a different-pose result and is **not** a current foyer claim.
 - **Light Gem — record present, payload absent.** `GEM_AUTHORED_SLICES=21` and
   the array record exist; the authored 21-slice `T_stealthball_Array` payload is
   absent from the extracted tree, so the gem stays `PORT_APPROX` until the U-4
   extractor pass. Headless P5 does not score its pixels.
-- **Mirrors / landscape — carried, not re-measured (UNVERIFIED).** Mirrors are
-  the earlier audit's 3,312 negative-determinant instances / 3,215 in
-  MultiMeshes; landscape `vis > 0.5` is likely correct but unproven. Both get a
-  probe in Phase 1 P4.2/P4.4; neither is verified by Phase 0a.
+- **Mirrors — carried, not re-measured (UNVERIFIED).** Mirrors are the earlier
+  audit's 3,312 negative-determinant instances / 3,215 in MultiMeshes; they get
+  a probe in Phase 1 P4.2. Not verified by Phase 0a.
+- **Landscape — data assertion PASS; pixel A/B pending (P4.4).** The shipped
+  `vis > 0.5` discard stays (not flipped). `probe_landscape_mask` (7 checks)
+  pins the three-mode diagnostic `TAT2_LANDSCAPE_MASK=discard|raw|off`, the
+  50/50 synthetic mask, and the safe-room gap: Guildhall landscape component
+  **12** (`Weightmap_20`) covers `(126.0,-10.43)` and `(114.5,-3.2)` and carries
+  **no** `LandscapeVisibilityLayerInfo`, so the resolved mask is **0.0 < 0.5**
+  and the gap is visible; control component 0 (`Weightmap_6`) has real 1.0
+  holes (58/64 sampled), so the rule is not vacuous. The GPU raw-mask A/B is
+  still the integrator's; no pixel claim is made here.
 - **Provenance.** `row_route_matrix.md` and `ADJUDICATIONS.md` moved from the
   git-ignored `build/qa/review_20261124/` to
   `docs/reference/clip_1795033698901/`; the scorecard/rescore/live-ref/plan
@@ -407,15 +423,17 @@ run by `build/qa/run_p0a_gates.sh` (28 gates). Evidence:
   the civilian body/head is dressed and sight casts from the head
   (`W10A2_CIV_SUMMARY: fails=0 passed=22`). These replace the W10-A handoff's
   "all 229 turrets invisible" / "untextured, blind civilian" entries.
-- **Landscape — no change, no new pixel claim.** The landscape docs remain
+- **Landscape — no new pixel claim.** The landscape docs remain
   authoritative: 210/210 components across OldManor/Startscreen/Guildhall have
   real heightmaps + weightmaps and the two-weightmap/five-slot blend
-  (`reports/landscape-weightmaps.md`, `reports/visual-polish.md`, A5 below), with
-  the `discard_holes=0` Guildhall rule. P0a is headless: landscape splines/grass
-  are still unparsed and the visibility-convention reference sample is still open
+  (`reports/landscape-weightmaps.md`, `reports/visual-polish.md`, A5 below).
+  P0a is headless: landscape splines/grass are still unparsed and the
+  visibility-convention reference sample was open at this point
   (`HANDOFF_NEXT_AGENT.md` §3.3); do not treat this wave as landscape
-  verification. The `vis > 0.5` convention itself remains **UNVERIFIED** until
-  the Phase 1 P4.4 raw-mask A/B.
+  verification. P4.4 later added the safe-room gap data assertion (component 12
+  / `Weightmap_20` has no visibility layer, so mask 0.0 < 0.5 and the gap is
+  visible) and the `TAT2_LANDSCAPE_MASK` A/B switch; the raw-mask pixel A/B is
+  still pending, and `vis > 0.5` is not flipped.
 
 ## W10-A status — 2026-11-25 (supersedes the sections below where they differ)
 
@@ -668,13 +686,15 @@ collapse at actor roots. Guildhall `PeripheryA` is collidable (25,074 shapes,
 apartment / storefront sublevels at authored transforms (138 LevelInstances /
 32,166 meshes across all maps). Landscape layer weightmaps are also blended by
 `tat_landscape.gdshader` (GroundA/GrassA/CobbleA/CobbleB/RockTileA +
-Visibility, plus Puddle normal/opacity and GroundWet darkening). Guildhall sets
-`discard_holes=0` because the safe-room gap has no lower-floor mesh; the
-authored surface fills it. The second weightmap and fifth colour slot shipped
-(`fadefa5`, `2a8f3d5`; `docs/reports/landscape-weightmaps.md`): 210/210
-components emit `weightmaps`, 15 have two, 8/18 Guildhall components use
-`weightmap_1`; the two captured viewpoints showed no measurable pixel delta
-(within run-to-run jitter). OldManor_P extracted 2026-11-18 (155 files, suite 38; `docs/reports/visual-polish.md`); remaining A5 work is landscape splines/grass runtime.
+Visibility, plus Puddle normal/opacity and GroundWet darkening). Guildhall
+discards authored holes (`discard_holes=1`); the safe-room gap is on
+`Weightmap_20`, which carries no `LandscapeVisibilityLayerInfo`, so the resolved
+mask is 0.0 and the authored surface fills the gap (P4.4 data assertion:
+`game/tests/probe_landscape_mask.gd`, 7 checks). The second weightmap and fifth
+colour slot shipped (`fadefa5`, `2a8f3d5`;
+`docs/reports/landscape-weightmaps.md`): 210/210 components emit `weightmaps`,
+15 have two, 8/18 Guildhall components use `weightmap_1`; the two captured
+viewpoints showed no measurable pixel delta (within run-to-run jitter). OldManor_P extracted 2026-11-18 (155 files, suite 38; `docs/reports/visual-polish.md`); remaining A5 work is landscape splines/grass runtime.
 
 ### A6 — Gameplay constants (done, f567d23 + 3e0817f)
 BP defaults carry the real movement and perception values: player 360/180 cm/s walk/crouch, +90 sprint increment, 550 jump, 91 cm capsule half height, 79.625 cm eye offset; guard 250 cm/s, 25 m sight, 30 m lose-sight, 40° half-FOV, 25 m hearing; `DA_AIStatesToSpeed_Guard` 1.5/1.7 m/s; `DA_DetectionSettings` 0.4 s/m (0.2 alerted) with crouch multiplier. Parsed into `game/data/generated/gameplay/` and wired into the player/guard.

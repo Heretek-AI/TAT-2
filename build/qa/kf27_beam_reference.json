@@ -1,0 +1,38 @@
+{
+  "schema": "tat2.kf27_beam_reference/1",
+  "keyframe": "KF27",
+  "image": "KF27_03m27s_foyer_security_beam.jpg",
+  "source": "docs/reference/clip_1795033698901/clean/KF27_03m27s_foyer_security_beam.jpg",
+  "measured": {
+    "emitter_pct": {"x": 17.8, "y": 40.0},
+    "beam_bands": 1,
+    "beam_band_row_pct": [40.0, 40.5],
+    "core_sat_p95": 35,
+    "cream_outside_band_pct": 0.12
+  },
+  "tolerance": {
+    "emitter_pct": 2.0,
+    "beam_row_pct": 0.5,
+    "core_sat_p95": 60,
+    "cream_outside_band_pct": 2.0
+  },
+  "foyer_beam_cue": {
+    "pose": "foyer_beam",
+    "eye": [27.0, 29.67, -55.0],
+    "target": [23.27, 29.76, -57.4],
+    "beat": "S24",
+    "card": "BP_Detector_LightBeam_C_107"
+  },
+  "lounge_extra": {
+    "pose": "beam_close",
+    "eye": [39.0, 28.82, -28.97],
+    "target": [42.4, 28.9, -28.97],
+    "beat": "",
+    "note": "Lounge C_57 beam; an extra, never a KF27/S24 frame"
+  },
+  "notes": [
+    "The official cell records one band at 40.0-40.5 % and the emitter at 17.8 %/40.0 %.",
+    "The 16x9 cream criterion is the reference's 0.12 % outside-band cream; 2 % is the acceptance ceiling used by P0b.",
+    "The Lounge beam_close pose is not KF27-framed; it is scored as an extra with no KF27 criteria."
+  ]
+}

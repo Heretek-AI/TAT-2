@@ -408,9 +408,10 @@ cmd_verify() {
 gate	0.0	KF16 01:40.20, arch + guard + car headlights + ZipWire
 upper_foyer	0.0	KF27 03:27.60, foyer threshold, eye (27,29.67,-50) -> (27,29.67,-60)
 yaw180	0.0	same eye -> (27,29.67,-40)
+foyer_beam	0.0	KF27 beam cue, eye (27,29.67,-55) -> (23.27,29.76,-57.4); emitter x~17.8% y~40%, one band 40.0-40.5%
 lounge	0.0	east doorway ~ (43.7,27.05,-26.2) looking west into the Lounge
 lounge_beam	0.0	Lounge beam ~ (42.34,28.9,-28.97)
-beam_close	0.0	foyer beam ~ (23.27,29.76,-57.4), emitter x~17.8% y~40%
+beam_close	0.0	Lounge C_57 extra ~ (39,28.82,-28.97) -> (42.4,28.9,-28.97); NOT KF27
 EOF
     die "wrote a template $poses — fill the six seconds, then rerun verify"
   fi

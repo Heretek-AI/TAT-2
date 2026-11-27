@@ -26,6 +26,10 @@ build/qa/*
 !build/qa/**/*.gd
 !build/qa/**/*.sh
 !build/qa/**/*.py
+# P4.5: the measured KF27 beam contract is a tracked QA fixture (the headless
+# beam probe and p0b_roi_stats.py both read it); capture PNGs/manifests stay
+# ignored by the rules above.
+!build/qa/kf27_beam_reference.json
 .agents/
 .claude/
 .claude-flow/

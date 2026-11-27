@@ -1502,6 +1502,20 @@ func _build_beam_material(info: Dictionary) -> ShaderMaterial:
 	mat.set_shader_parameter("fake_glow_opacity", float(params.get("Fake Glow Opacity", 0.06)))
 	mat.set_shader_parameter("fake_glow_center_width", float(params.get("Fake Glow Center Width", 0.085)))
 	mat.set_shader_parameter("fake_glow_power", float(params.get("Fake Glow Power", 1.1)))
+	# P4.5: the remaining authored beam terms. `Fake Glow Thickness` and
+	# `Fake Glow Center Power` drive the tight core; `Fake Glow Side Width`,
+	# the sphere-mask trio and `EdgeFadePower` are bound so a future noise-mask
+	# / graph recovery can switch them on without touching this loader, but the
+	# shader deliberately does not apply them (no authored sphere centre and no
+	# noise mask; see tat_beam.gdshader). The fallbacks are the authored values
+	# from materials.json / MI_LightBeam_SM.json.
+	mat.set_shader_parameter("fake_glow_thickness", float(params.get("Fake Glow Thickness", 0.02)))
+	mat.set_shader_parameter("fake_glow_center_power", float(params.get("Fake Glow Center Power", 2.0)))
+	mat.set_shader_parameter("fake_glow_side_width", float(params.get("Fake Glow Side Width", 1.0)))
+	mat.set_shader_parameter("center_line_sphere_mask_radius", float(params.get("Center Line Sphere Mask Radius", 1.0)))
+	mat.set_shader_parameter("sphere_mask_opacity", float(params.get("Sphere Mask Opacity", 0.25)))
+	mat.set_shader_parameter("sphere_mask_power", float(params.get("Sphere Mask Power", 2.0)))
+	mat.set_shader_parameter("edge_fade_power", float(params.get("EdgeFadePower", 0.5)))
 	mat.set_shader_parameter("fade_distance", float(params.get("FadeDistance", 25.0)))
 	# The authored card's local X is the length axis (radial = YZ).
 	mat.set_shader_parameter("radial_axis", 0)
@@ -7511,6 +7525,92 @@ func _build_guildhall_saferoom_floor(parent: Node3D, ctx: Dictionary) -> void:
 	ctx["collision_shapes"] = int(ctx.get("collision_shapes", 0)) + 1
 
 
+## P4.4 landscape visibility-mask diagnostic. `discard` is the shipped rule
+## (UE LandscapeVisibilityLayerInfo stores 1 = hole); `raw` samples the mask
+## and renders it as a debug A/B without discarding; `off` skips the read.
+## An unknown value falls back to `discard` so a typo can never turn authored
+## holes into solid terrain. The data assertion for the safe-room gap lives in
+## `game/tests/probe_landscape_mask.gd`; no flip happens here.
+const LANDSCAPE_MASK_ENV: String = "TAT2_LANDSCAPE_MASK"
+const LANDSCAPE_MASK_MODES: Array[String] = ["discard", "raw", "off"]
+
+
+static func landscape_mask_mode(raw: String = "") -> String:
+	var v: String = raw.strip_edges().to_lower()
+	if v == "":
+		v = OS.get_environment(LANDSCAPE_MASK_ENV).strip_edges().to_lower()
+	if v == "":
+		return "discard"
+	if LANDSCAPE_MASK_MODES.has(v):
+		return v
+	push_warning("LANDSCAPE_MASK unknown mode '%s'; using discard" % v)
+	return "discard"
+
+
+## Shader parameters for a mode. Kept as a pure function so the probe can
+## assert all three paths without a renderer.
+static func landscape_mask_params(mode: String = "") -> Dictionary:
+	var m: String = landscape_mask_mode(mode)
+	if m == "raw":
+		return {"mode": m, "sample_mask": 1.0, "discard_holes": 0.0, "mask_raw_view": 1.0}
+	if m == "off":
+		return {"mode": m, "sample_mask": 0.0, "discard_holes": 0.0, "mask_raw_view": 0.0}
+	return {"mode": m, "sample_mask": 1.0, "discard_holes": 1.0, "mask_raw_view": 0.0}
+
+
+## The authored visibility convention: raw weight 1 = hole. Kept in one place
+## so the probe's CPU model and the shader's `vis > 0.5` cannot drift.
+static func landscape_mask_hole(vis: float) -> bool:
+	return vis > 0.5
+
+
+## Mask coverage of one weightmap image channel, sampled on a stride. Used by
+## the probe and by the optional `TAT2_LANDSCAPE_MASK_STATS=1` log; the load
+## path itself only logs presence/channel so a 128-component map does not pay
+## a per-texel scan.
+static func landscape_mask_stats(img: Image, channel: int, stride: int = 8) -> Dictionary:
+	if img == null or img.is_empty() or channel < 0 or channel > 3:
+		return {"samples": 0, "holes": 0, "hole_frac": 0.0, "min": 0.0, "max": 0.0, "mean": 0.0}
+	var work: Image = img
+	if work.is_compressed():
+		var dec: Image = work.duplicate() as Image
+		if dec == null or dec.decompress() != OK:
+			return {"samples": 0, "holes": 0, "hole_frac": 0.0, "min": 0.0, "max": 0.0, "mean": 0.0}
+		work = dec
+	var w: int = work.get_width()
+	var h: int = work.get_height()
+	var step: int = maxi(stride, 1)
+	var samples: int = 0
+	var holes: int = 0
+	var mn: float = 1.0
+	var mx: float = 0.0
+	var sum: float = 0.0
+	for y: int in range(0, h, step):
+		for x: int in range(0, w, step):
+			var c: Color = work.get_pixel(x, y)
+			var v: float = c.r
+			if channel == 1:
+				v = c.g
+			elif channel == 2:
+				v = c.b
+			elif channel == 3:
+				v = c.a
+			samples += 1
+			sum += v
+			mn = minf(mn, v)
+			mx = maxf(mx, v)
+			if landscape_mask_hole(v):
+				holes += 1
+	return {
+		"samples": samples,
+		"holes": holes,
+		"hole_frac": float(holes) / float(samples) if samples > 0 else 0.0,
+		"min": mn if samples > 0 else 0.0,
+		"max": mx,
+		"mean": sum / float(samples) if samples > 0 else 0.0,
+	}
+
+
 ## Builds the real layer-blended landscape material from the component's
 ## WeightmapTextures + WeightmapLayerAllocations. Returns null when the
 ## component has no weightmap or no resolvable layer, so the caller falls back
@@ -7541,13 +7641,20 @@ func _landscape_weighted_material(lc: Dictionary, map_hint: String = "") -> Shad
 		push_warning("Landscape %s: %d weightmaps extracted but only %d bound; extra weightmaps are not sampled" % [source, wm_paths.size(), bound_count])
 	var mat := ShaderMaterial.new()
 	mat.shader = LANDSCAPE_SHADER
-	# UE LandscapeVisibilityLayerInfo stores 1 = hole. Always discard authored
-	# holes; the old Guildhall discard_holes=0 workaround rendered the 27 m
-	# elevated shell as a solid cobblestone ceiling over the lower street.
-	mat.set_shader_parameter("discard_holes", 1.0)
+	# UE LandscapeVisibilityLayerInfo stores 1 = hole. The shipped mode is
+	# `discard` (sample the authored mask, discard vis > 0.5); `TAT2_LANDSCAPE_MASK`
+	# exists only for the raw-mask A/B and the off control. See
+	# landscape_mask_params() for the three paths.
+	var mask_mode: String = landscape_mask_mode()
+	var mask_params: Dictionary = landscape_mask_params(mask_mode)
+	mat.set_shader_parameter("sample_mask", float(mask_params["sample_mask"]))
+	mat.set_shader_parameter("discard_holes", float(mask_params["discard_holes"]))
+	mat.set_shader_parameter("mask_raw_view", float(mask_params["mask_raw_view"]))
 	mat.set_shader_parameter("weightmap", wm)
 	if wm1 != null:
 		mat.set_shader_parameter("weightmap_1", wm1)
+	var vis_idx: int = -1
+	var vis_ch: int = -1
 	var slot: int = 0
 	var layer_i: int = -1
 	for l_var: Variant in (lc.get("layers", []) as Array):
@@ -7579,6 +7686,8 @@ func _landscape_weighted_material(lc: Dictionary, map_hint: String = "") -> Shad
 		if is_visibility:
 			# Visibility is a mask, not an albedo layer, so it must not consume
 			# one of the five colour slots.
+			vis_idx = tex_idx
+			vis_ch = channel
 			mat.set_shader_parameter("visibility_tex_idx", tex_idx)
 			mat.set_shader_parameter("visibility_channel", channel)
 			continue
@@ -7616,6 +7725,32 @@ func _landscape_weighted_material(lc: Dictionary, map_hint: String = "") -> Shad
 		if fb_norm != null:
 			mat.set_shader_parameter("fallback_normal", fb_norm)
 			mat.set_shader_parameter("fallback_normal_on", 1.0)
+	# Per-component mask provenance (P4.4). This is the load-time half of the
+	# data assertion: which components carry a `LandscapeVisibilityLayerInfo`,
+	# on which weightmap/channel, and what the active diagnostic mode does.
+	# The coverage fraction is computed by probe_landscape_mask.gd (and by
+	# `TAT2_LANDSCAPE_MASK_STATS=1` below) because a per-texel scan on every
+	# component would tax the 128-component OldManor map.
+	var pos_arr: Array = lc.get("pos", []) as Array
+	var pos := Vector3.ZERO
+	if pos_arr.size() >= 3:
+		pos = Vector3(float(pos_arr[0]), float(pos_arr[1]), float(pos_arr[2]))
+	var comp_wm: String = wm_path.get_file()
+	if vis_idx == 1 and wm_paths.size() > 1:
+		comp_wm = str(wm_paths[1]).get_file()
+	var mask_line: String = "LANDSCAPE_MASK src=%s comp=(%.2f,%.2f,%.2f) wm=%s mode=%s mask=%s tex=%d ch=%d sample=%.0f discard=%.0f raw=%.0f" % [
+		source, pos.x, pos.y, pos.z, comp_wm, mask_mode,
+		"present" if vis_idx >= 0 else "absent", vis_idx, vis_ch,
+		float(mask_params["sample_mask"]), float(mask_params["discard_holes"]),
+		float(mask_params["mask_raw_view"])]
+	if vis_idx >= 0 and OS.get_environment("TAT2_LANDSCAPE_MASK_STATS").strip_edges() == "1":
+		var mask_tex: Texture2D = wm1 if vis_idx == 1 else wm
+		var mask_img: Image = mask_tex.get_image() if mask_tex != null else null
+		var st: Dictionary = landscape_mask_stats(mask_img, vis_ch, 16)
+		mask_line += " samples=%d hole_frac=%.4f min=%.3f max=%.3f mean=%.3f" % [
+			int(st["samples"]), float(st["hole_frac"]), float(st["min"]),
+			float(st["max"]), float(st["mean"])]
+	print(mask_line)
 	return mat
 
 

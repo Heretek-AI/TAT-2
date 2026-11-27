@@ -250,19 +250,28 @@ StateTree shadow ceiling; the authored-element collision floor.
   winding/normals/tangents); `CULL_FRONT` is only a single-surface
   `BaseMaterial3D` fast path. Needs the synthetic 2-instance probe in Phase 1
   P4.2; the counts are carried from the earlier audit.
-- **Landscape — carried, not re-measured (UNVERIFIED).** Current `vis > 0.5`
-  discard is *likely* correct (raw weight 1 = hole; UE node output 1 = visible).
-  Do not flip without the raw-mask A/B and the safe-room data assertion in
-  Phase 1 P4.4; the stale docs still need correcting.
-- **Beam material — qualified, not settled.** The authored-parameter material
-  and geometry are a real match (330 cards, `max_axis_err_deg=0.000006`), but
-  the route2 `upper_foyer` frame still measures peak row **49.07 %**, excess
-  **131.15**, and **12** cream-unexplained 16×9 cells (8 on the beam row),
-  against KF27 **40.19 %** and **0.12 %** cream outside the band. The earlier
-  "thin line and no cream bars" claim came from a different pose and is
-  qualified, not repeated. P4.5 must implement the authored sphere-mask / edge
-  / fake-glow terms and re-measure at the KF27 pose. The old "63 moon-plane"
-  claim is retired.
+- **Landscape — data assertion PASS; pixel A/B pending (P4.4).** The shipped
+  `vis > 0.5` discard stays; do not flip it. `TAT2_LANDSCAPE_MASK=discard|raw|off`
+  selects the shipped rule, a raw-mask debug view, or no mask read, and the
+  loader prints one `LANDSCAPE_MASK` line per component. `probe_landscape_mask`
+  (7 checks) proves the safe-room gap is on Guildhall component 12
+  (`Weightmap_20`, no `LandscapeVisibilityLayerInfo` → mask 0.0 < 0.5 →
+  visible), the synthetic 50/50 mask counts exactly 50 %, and control component
+  0 has real 1.0 holes. The raw-mask pixel A/B is the integrator's GPU step.
+- **Beam material — core implemented, re-measure pending.** The authored
+  geometry/parameters are a real match (330 cards, `max_axis_err_deg=0.000006`).
+  P4.5 now consumes **all 15** authored scalars from `materials.json`
+  (`probe_p1_beams` fails if any is missing/mismatched), implements the 2 cm
+  fake-glow core (`Fake Glow Thickness` + `Fake Glow Center Power`), and binds
+  `Fake Glow Side Width`, the sphere-mask trio and `EdgeFadePower` as
+  authored-but-inert uniforms: the UE graph is not in the dump, no sphere
+  centre is serialized, and the 1 m side lobe without its authored noise mask
+  is the broad cream slab P1 removed. The route2 `upper_foyer` frame still
+  measures peak row **49.07 %**, excess **131.15**, and **12**
+  cream-unexplained 16×9 cells against the corrected KF27 **one band
+  40.0–40.5 %**, emitter **17.8 %/40.0 %**; the `foyer_beam` pose is now in the
+  capture table and the ROI reference, and `beam_close` is relabelled the
+  Lounge C_57 **extra**. The GPU re-measure at `foyer_beam` is still required.
 
 ### 4.3 Navmesh runtime (authored tiles proven)
 

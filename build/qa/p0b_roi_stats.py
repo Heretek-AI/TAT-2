@@ -21,11 +21,16 @@ What is measured (and what is not)
   corresponding reference cream). Authored white emitters are not inferred from
   pixels; pass `--allow-cells` for a documented exception.
 * KF27 criteria are the cream/beam RE values: the wall emitter's max-bright
-  cluster sits at x~17.8 %, y~40.0 % in clean/KF27; the beam rows are 39-40 %;
-  the core is neutral (top-5 % saturation p95 ~35); the glow falls off within
-  ~1 % of frame height; the viewport outside the beam band has ~0.1 % cream.
-  The port is scored against those *reported* numbers, never against a guessed
-  threshold.
+  cluster sits at x~17.8 %, y~40.0 % in clean/KF27; the beam is **one** band at
+  40.0-40.5 % of frame height; the core is neutral (top-5 % saturation p95
+  ~35); the glow falls off within ~1 % of frame height; the viewport outside
+  the beam band has ~0.1 % cream. The port is scored against those *reported*
+  numbers, never against a guessed threshold. The numbers live in
+  `build/qa/kf27_beam_reference.json` so the headless beam probe asserts the
+  same contract.
+* `beam_close` is the Lounge C_57 extra pose, not KF27. It gets luma stats but
+  no KF27 criteria; `foyer_beam` is the KF27-framed cue at
+  (27,29.67,-55) -> (23.27,29.76,-57.4).
 
 Usage
 -----
@@ -70,11 +75,37 @@ CREAM_SAT = 46
 CELL_SAMPLE = 2
 REF_DIR = REPO / "docs/reference/clip_1795033698901/clean"
 SCHEMA = "tat2.p0b_capture/1"
-POSE_IDS = ["gate", "upper_foyer", "yaw180", "lounge", "lounge_beam", "beam_close"]
+KF27_REF_PATH = HERE / "kf27_beam_reference.json"
+
+
+def _load_kf27_reference() -> dict:
+    """The measured KF27 contract; fails closed if the tracked file is absent."""
+    with KF27_REF_PATH.open(encoding="utf-8") as fh:
+        data = json.load(fh)
+    if data.get("schema") != "tat2.kf27_beam_reference/1":
+        raise ValueError(f"{KF27_REF_PATH}: unexpected schema {data.get('schema')!r}")
+    return data
+
+
+KF27_REF = _load_kf27_reference()
+KF27_MEASURED = KF27_REF["measured"]
+KF27_TOL = KF27_REF["tolerance"]
+POSE_IDS = [
+    "gate",
+    "upper_foyer",
+    "yaw180",
+    "foyer_beam",
+    "lounge",
+    "lounge_beam",
+    "beam_close",
+]
+# Lounge C_57 is an extra, not a KF27/S24 frame: luma stats only, no criteria.
+POSE_EXTRAS = {"beam_close"}
 POSE_REFS = {
     "gate": "KF16_01m40s_zipwire_gate_headlights.jpg",
     "upper_foyer": "KF27_03m27s_foyer_security_beam.jpg",
     "yaw180": "KF27_03m27s_foyer_security_beam.jpg",
+    "foyer_beam": "KF27_03m27s_foyer_security_beam.jpg",
     "lounge": "KF27_03m27s_foyer_security_beam.jpg",
     "lounge_beam": "KF27_03m27s_foyer_security_beam.jpg",
     "beam_close": "KF27_03m27s_foyer_security_beam.jpg",
@@ -285,7 +316,8 @@ def beam_rows(raw: bytes) -> dict:
         core_rows += 1
         y += 1
     # Distinct beam lines: local maxima over a +/-3 px window, merged when
-    # adjacent, reported by excess. KF27 has two crisp horizontal beams.
+    # adjacent, reported by excess. KF27 is one crisp horizontal band (40.0-
+    # 40.5 %); secondary ripple under a quarter of the peak is not a band.
     candidates: list[tuple[int, float]] = []
     for yy in range(y0 + 3, y1 - 3):
         val = profile.get(yy, baseline) - baseline
@@ -301,6 +333,8 @@ def beam_rows(raw: bytes) -> dict:
     for yy, val in candidates:
         if all(abs(yy - m[0]) > 4 for m in merged):
             merged.append((yy, val))
+    band_floor = max(4.0, 0.25 * excess)
+    band_count = sum(1 for _, val in merged if val >= band_floor)
     peaks = [
         {"row": yy, "y_pct": 100.0 * yy / H, "excess": val} for yy, val in merged[:3]
     ]
@@ -324,6 +358,8 @@ def beam_rows(raw: bytes) -> dict:
         "peak_mean": peak,
         "excess": excess,
         "core_rows": core_rows,
+        "bands": band_count,
+        "band_floor": round(band_floor, 3),
         "peaks": peaks,
         "glow": offsets,
         "core_top5_luma_p50": luma_sorted[len(luma_sorted) // 2],
@@ -392,18 +428,27 @@ def kf27_criteria(
     cyan = cyan_node(raw)
     glow_l = max(0.0, float(br["glow"]["-1%"]))
     glow_r = max(0.0, float(br["glow"]["+1%"]))
+    emitter_x = float(KF27_MEASURED["emitter_pct"]["x"])
+    emitter_y = float(KF27_MEASURED["emitter_pct"]["y"])
+    emitter_tol = float(KF27_TOL["emitter_pct"])
+    row_lo, row_hi = (float(v) for v in KF27_MEASURED["beam_band_row_pct"])
     criteria = {
         "emitter_box": bool(em["found"])
         and 10.0 <= em["x_pct"] <= 26.0
         and 33.0 <= em["y_pct"] <= 47.0,
-        "beam_row_band": 36.0 <= br["peak_y_pct"] <= 44.0,
+        "emitter_at_kf27": bool(em["found"])
+        and abs(em["x_pct"] - emitter_x) <= emitter_tol
+        and abs(em["y_pct"] - emitter_y) <= emitter_tol,
+        "beam_row_band": row_lo <= br["peak_y_pct"] <= row_hi,
+        "one_band": br["bands"] == int(KF27_MEASURED["beam_bands"]),
         "row_excess_ge_2": br["excess"] >= 2.0,
         "glow_falloff": br["excess"] > 0
         and glow_l <= 0.60 * br["excess"]
         and glow_r <= 0.60 * br["excess"],
-        "core_neutral": br["core_top5_sat_p95"] <= 60,
+        "core_neutral": br["core_top5_sat_p95"] <= float(KF27_TOL["core_sat_p95"]),
         "no_cream_slab_10pct": cream["cream_pct_outside_band"] <= 10.0,
-        "cream_reference_like_2pct": cream["cream_pct_outside_band"] <= 2.0,
+        "cream_reference_like_2pct": cream["cream_pct_outside_band"]
+        <= float(KF27_TOL["cream_outside_band_pct"]),
     }
     return {
         "emitter": em,
@@ -498,7 +543,8 @@ def measure(port: Path, pose: str, ref_path: Path, allow: set[tuple[int, int]]) 
         "reference": str(ref_path),
         "port_native": list(port_native),
         "reference_native": list(ref_native),
-        "kf27_applies": ref_path.name.startswith("KF27"),
+        "kf27_applies": ref_path.name.startswith("KF27") and pose not in POSE_EXTRAS,
+        "pose_extra": pose in POSE_EXTRAS,
         "luma": {
             "port": {
                 k: round(v, 3) if isinstance(v, float) else v
@@ -559,7 +605,7 @@ def print_report(m: dict) -> None:
         print(
             f"P0B_BEAM pose={m['pose']} emitter_pct=({b['emitter']['x_pct']:.1f},{b['emitter']['y_pct']:.1f}) "
             f"peak_row={b['beam']['peak_y_pct']:.2f}% excess={b['beam']['excess']:.2f} "
-            f"peaks=({peaks_txt}) core_px={b['beam']['core_rows']} "
+            f"bands={b['beam']['bands']} peaks=({peaks_txt}) core_px={b['beam']['core_rows']} "
             f"glow_1pct=({b['beam']['glow']['-1%']:+.2f},{b['beam']['glow']['+1%']:+.2f}) "
             f"core_sat_p95={b['beam']['core_top5_sat_p95']} "
             f"cream_outside_band={b['cream']['cream_pct_outside_band']:.2f}% "
@@ -568,7 +614,7 @@ def print_report(m: dict) -> None:
         print(
             f"P0B_BEAM_REF pose={m['pose']} emitter_pct=({rb['emitter']['x_pct']:.1f},{rb['emitter']['y_pct']:.1f}) "
             f"peak_row={rb['beam']['peak_y_pct']:.2f}% excess={rb['beam']['excess']:.2f} "
-            f"peaks=({rpeaks_txt}) core_px={rb['beam']['core_rows']} "
+            f"bands={rb['beam']['bands']} peaks=({rpeaks_txt}) core_px={rb['beam']['core_rows']} "
             f"glow_1pct=({rb['beam']['glow']['-1%']:+.2f},{rb['beam']['glow']['+1%']:+.2f}) "
             f"core_sat_p95={rb['beam']['core_top5_sat_p95']} "
             f"cream_outside_band={rb['cream']['cream_pct_outside_band']:.2f}%"
@@ -576,6 +622,11 @@ def print_report(m: dict) -> None:
         print(
             f"P0B_KF27 pose={m['pose']} met={b['criteria_met']}/{b['criteria_total']} "
             + " ".join(f"{k}={str(v).lower()}" for k, v in b["criteria"].items())
+        )
+    elif m.get("pose_extra"):
+        print(
+            f"P0B_EXTRA pose={m['pose']} extra=true kf27_applies=false "
+            "reason=lounge_c_57_not_kf27"
         )
     print(
         f"P0B_CELLMAP pose={m['pose']} grid={COLS}x{ROWS} "
@@ -819,7 +870,9 @@ def main() -> int:
                 else:
                     print(f"P0B_ALL_MISSING pose={pid} png={port}", file=sys.stderr)
                     continue
-            ref_name = REF_FILES.get(str(p.get("ref_keyframe", "")))
+            ref_name = REF_FILES.get(str(p.get("ref_keyframe", ""))) or POSE_REFS.get(
+                pid
+            )
             if not ref_name:
                 print(
                     f"P0B_ALL_MISSING_REF pose={pid} ref={p.get('ref_keyframe')}",
@@ -851,7 +904,12 @@ def main() -> int:
             f"lt8={w9['pct_lt8']:.1f} lt16={w9['pct_lt16']:.1f} gt200={w9['pct_gt200']:.2f}"
         )
         m = kf27_criteria(raw, allow)
-        if ref_path.name.startswith("KF27"):
+        if args.pose in POSE_EXTRAS:
+            print(
+                f"P0B_EXTRA pose={args.pose} extra=true kf27_applies=false "
+                "reason=lounge_c_57_not_kf27"
+            )
+        elif ref_path.name.startswith("KF27"):
             print(
                 f"P0B_KF27_REF pose={args.pose} met={m['criteria_met']}/{m['criteria_total']} "
                 + " ".join(f"{k}={str(v).lower()}" for k, v in m["criteria"].items())

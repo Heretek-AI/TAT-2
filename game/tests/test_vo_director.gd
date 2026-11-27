@@ -78,6 +78,7 @@ func _run() -> void:
 	_test_cooldowns(director)
 	_test_zero_media(aw, director)
 	await _test_runtime(aw, director)
+	await _test_player_rebind()
 	await _finish()
 
 
@@ -454,6 +455,107 @@ func _load_event_clips() -> void:
 			if not clip.is_empty():
 				_clips_by_event[name] = clip
 				break
+
+
+## 8. W11-D: the disguise signal follows the *player instance*. AudioManager is
+## an autoload while `mission_controller` creates a new ThiefCharacter per
+## contract, so a one-shot "bound" flag left every later mission without the
+## disguise RTPC or the `disguise_ending` line. This drives two fake players
+## through the real `_process` binding path.
+func _test_player_rebind() -> void:
+	var am: Node = root.get_node_or_null("AudioManager")
+	if am == null:
+		return
+	# The runtime section above left a last transition/cue behind; clear the
+	# director's cooldowns so the disguise line is not priority-blocked.
+	var director_v: Variant = am.call("vo_director")
+	if director_v != null:
+		director_v.call("reset_cooldowns")
+	var first := FakePlayer.new()
+	first.name = "W11FakePlayerOne"
+	root.add_child(first)
+	first.add_to_group("player")
+	for _i: int in range(3):
+		await process_frame
+	_check(first.get_signal_connection_list("disguise_changed").size() == 1,
+		"VO8.1 the first player's disguise_changed is bound exactly once",
+		"VO8.1 first player connections=%d" % first.get_signal_connection_list(
+			"disguise_changed").size())
+	# The bound handler normalises the player's 0..100 unit into the authored 0..1.
+	first.emit_disguise(25.0, true)
+	var values: Dictionary = (am.call("control_state") as Dictionary).get(
+		"rtpc_values", {}) as Dictionary
+	_check(_approx(float(values.get("Character_DisguiseIntegrity", -1.0)), 0.25, 0.00001),
+		"VO8.2 the first player's disguise RTPC stores 25 as 0.25",
+		"VO8.2 stored %s" % str(values.get("Character_DisguiseIntegrity", -1.0)))
+	for _i: int in range(3):
+		await process_frame
+	_check(first.get_signal_connection_list("disguise_changed").size() == 1,
+		"VO8.2 repeated frames do not duplicate the connection",
+		"VO8.2 connections=%d after repeated frames" % first.get_signal_connection_list(
+			"disguise_changed").size())
+	# A new contract spawns a new player. Replace the resolved player while the
+	# old node is still alive, so the old connection must be dropped explicitly.
+	var second := FakePlayer.new()
+	second.name = "W11FakePlayerTwo"
+	root.add_child(second)
+	second.add_to_group("player")
+	first.remove_from_group("player")
+	for _i: int in range(3):
+		await process_frame
+	_check(second.get_signal_connection_list("disguise_changed").size() == 1,
+		"VO8.3 the second player's disguise_changed is bound",
+		"VO8.3 second player connections=%d" % second.get_signal_connection_list(
+			"disguise_changed").size())
+	_check(first.get_signal_connection_list("disguise_changed").size() == 0,
+		"VO8.3 the replaced player's connection is disconnected",
+		"VO8.3 old player still has %d connection(s)" % first.get_signal_connection_list(
+			"disguise_changed").size())
+	# The second player's signal must reach the RTPC and the authored ending line.
+	if director_v != null:
+		director_v.call("reset_cooldowns")
+	var subtitles: Array = []
+	var capture: Callable = func(text: String) -> void:
+		subtitles.append(text)
+	if not am.is_connected("subtitle_shown", capture):
+		am.connect("subtitle_shown", capture)
+	second.emit_disguise(0.0, false)
+	var last_cue: Dictionary = (am.call("vo_state") as Dictionary).get("last_cue", {}) as Dictionary
+	_check(str(last_cue.get("cue", "")) == "disguise_ending"
+		and str(last_cue.get("event", "")) == "Play_VO_Player_DisguiseEnding",
+		"VO8.4 the second player's 0 integrity plays the authored ending line",
+		"VO8.4 last_cue=%s" % str(last_cue))
+	_check(not subtitles.is_empty()
+		and str(subtitles[subtitles.size() - 1]).find("DisguiseEnding") >= 0,
+		"VO8.4 the ending line emits its functional subtitle",
+		"VO8.4 subtitles=%s" % str(subtitles))
+	values = (am.call("control_state") as Dictionary).get("rtpc_values", {}) as Dictionary
+	_check(_approx(float(values.get("Character_DisguiseIntegrity", -1.0)), 0.0, 0.00001),
+		"VO8.4 the second player's 0 integrity stores 0.0",
+		"VO8.4 stored %s" % str(values.get("Character_DisguiseIntegrity", -1.0)))
+	if am.is_connected("subtitle_shown", capture):
+		am.disconnect("subtitle_shown", capture)
+	# Teardown: no player left, so the tracking is cleared (a later mission's
+	# player is then bound fresh instead of being skipped).
+	second.remove_from_group("player")
+	first.queue_free()
+	second.queue_free()
+	for _i: int in range(4):
+		await process_frame
+	_check(not bool((am.call("vo_state") as Dictionary).get("bound_player", true)),
+		"VO8.5 the player binding is cleared when no player exists",
+		"VO8.5 vo_state().bound_player still true")
+
+
+## Minimal stand-in for `ThiefCharacter`'s disguise signal (the real player
+## extends CharacterBody3D; `_sync_vo_sources` only needs the signal and the
+## `player` group).
+class FakePlayer:
+	extends Node3D
+	signal disguise_changed(integrity: float, active: bool)
+
+	func emit_disguise(integrity: float, active: bool) -> void:
+		disguise_changed.emit(integrity, active)
 
 
 func _finish() -> void:

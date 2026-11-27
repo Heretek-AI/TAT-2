@@ -559,18 +559,23 @@ func _test_rtpc_callers(ctl: AudioControl) -> void:
 	var disguise := "Character_DisguiseIntegrity"
 	ctl.set_rtpc(disguise, 0.0)
 	_check(_approx(ctl.gain_db(disguise), 0.0),
-		"AUD9.6 disguise 0 -> 0 dB",
+		"AUD9.6 disguise curve x=0 -> 0 dB",
 		"AUD9.6 disguise 0 gain=%f" % ctl.gain_db(disguise))
 	ctl.set_rtpc(disguise, 1.0)
 	_check(_approx(ctl.gain_db(disguise), -1.0, 0.00001),
-		"AUD9.6 disguise 100 -> exactly -1.0 dB",
+		"AUD9.6 disguise curve x=1 -> exactly -1.0 dB (authored 0..1 domain)",
 		"AUD9.6 disguise 1.0 gain=%f" % ctl.gain_db(disguise))
 	# Restore the authored rests so later runtime assertions see a clean table.
+	# The disguise value is the authored 0..1 domain, never the player's 0..100
+	# unit (the manager normalises at the call site; AUD6.11 pins that).
 	ctl.set_rtpc(stamina, 100.0)
 	ctl.set_rtpc(crouch, 0.0)
 	ctl.set_rtpc(fall, 0.0)
 	ctl.set_rtpc(rain, 0.0)
-	ctl.set_rtpc(disguise, 100.0)
+	ctl.set_rtpc(disguise, 1.0)
+	_check(_approx(ctl.rtpc_value(disguise), 1.0),
+		"AUD9.6 the disguise RTPC is left at the authored 1.0 (not 100.0)",
+		"AUD9.6 disguise rest value=%f" % ctl.rtpc_value(disguise))
 
 
 ## 9. W11-E: the counted state-override table and the deferred unnamed buses.
@@ -728,6 +733,44 @@ func _test_runtime(ctl: AudioControl) -> void:
 		"AUD6.9 mix_state().rtpc reports the 5 authored parameters with exact curves",
 		"AUD6.9 rtpc=%s" % str(rtpc))
 	am.call("set_rtpc", "Character_Stamina_RTPC", 100.0)
+	# W11-D: the player's 0..100 disguise unit must be normalised into the
+	# authored 0..1 RTPC domain. Feeding the raw value would saturate every
+	# integrity >= 1 at the curve's 1.0 endpoint and never traverse it.
+	var domain: Array = [[0.0, 0.0], [25.0, 0.25], [50.0, 0.5], [75.0, 0.75], [100.0, 1.0]]
+	var domain_wrong: Array = []
+	var state_now: Dictionary = {}
+	var values: Dictionary = {}
+	for pair: Array in domain:
+		am.call("push_disguise_integrity", float(pair[0]))
+		var stored: float = -1.0
+		state_now = am.call("control_state") as Dictionary
+		values = state_now.get("rtpc_values", {}) as Dictionary
+		stored = float(values.get("Character_DisguiseIntegrity", -1.0))
+		if not _approx(stored, float(pair[1]), 0.00001):
+			domain_wrong.append("%d->%.2f" % [int(pair[0]), stored])
+	_check(domain_wrong.is_empty(),
+		"AUD6.11 disguise 0/25/50/75/100 stores 0/0.25/0.5/0.75/1.0",
+		"AUD6.11 wrong stored domain: %s" % str(domain_wrong))
+	am.call("push_disguise_integrity", 25.0)
+	mix = am.call("mix_state") as Dictionary
+	rtpc = mix.get("rtpc", {}) as Dictionary
+	var disguise_block: Dictionary = rtpc.get("Character_DisguiseIntegrity", {}) as Dictionary
+	# The authored first curve is [0,0] [0.39834,-1] [1,-1]; x=0.25 is mid-knee.
+	var want_disguise_gain: float = -1.0 * 0.25 / 0.39834
+	var got_disguise_gain: float = float(disguise_block.get("gain_db", 0.0))
+	_check(_approx(got_disguise_gain, want_disguise_gain, 0.0001)
+		and not _approx(got_disguise_gain, -1.0, 0.0001),
+		"AUD6.11 disguise 25 -> %.6f dB (mid-curve, not the -1 dB endpoint)" % want_disguise_gain,
+		"AUD6.11 disguise 25 gain=%f (want %.6f, endpoint is -1.0)" % [
+			got_disguise_gain, want_disguise_gain])
+	# The signal handler itself must normalise, not just the helper.
+	am.call("_on_disguise_changed", 75.0, true)
+	state_now = am.call("control_state") as Dictionary
+	values = state_now.get("rtpc_values", {}) as Dictionary
+	_check(_approx(float(values.get("Character_DisguiseIntegrity", -1.0)), 0.75, 0.00001),
+		"AUD6.11 the disguise_changed handler stores 75 as 0.75",
+		"AUD6.11 handler stored %s" % str(values.get("Character_DisguiseIntegrity", -1.0)))
+	am.call("push_disguise_integrity", 100.0)
 	# W11-B: the authored Phase transition (2000 ms) is the music fade.
 	var authored_fade: float = float(am.call("music_fade_for_event",
 		"Play_Mus_TVT_Match_Generic_Mission_MX"))

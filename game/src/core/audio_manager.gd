@@ -160,7 +160,14 @@ const CONTROL_SWITCH_MATERIAL: String = "FS_Material"
 const CONTROL_SWITCH_LAYER: String = "FS_Layers"
 const CONTROL_SWITCH_LOCAL: String = "Character_IsLocallyControlled"
 ## W11-D: the five authored mix parameters this port has real callers for
-## (stamina, crouch, fall velocity, rain, disguise). See authored_rtpc_state().
+## (stamina, crouch, fall velocity, rain, disguise). Each caller converts its
+## game-side unit into the authored game-parameter domain before `set_rtpc`;
+## the authored curve itself is never rescaled:
+##   * `Character_Stamina_RTPC`      player 0..max_stamina -> authored 0..100
+##   * `Character_FS_isCrouching`    bool                  -> authored 0..1
+##   * `Character_Fall_Velocity_Z`   m/s * 100             -> authored cm/s
+##   * `Weather_Rain_Intensity`      preset 0..1           -> authored 0..1
+##   * `Character_DisguiseIntegrity` player 0..100         -> authored 0..1
 const AUTHORED_RTPCS: Array[String] = [
 	"Character_Stamina_RTPC",
 	"Character_FS_isCrouching",
@@ -168,6 +175,10 @@ const AUTHORED_RTPCS: Array[String] = [
 	"Weather_Rain_Intensity",
 	"Character_DisguiseIntegrity",
 ]
+## The player's disguise-integrity game unit (it starts at 100.0). The authored
+## `Character_DisguiseIntegrity` RTPC curve is 0..1, so this is only the
+## conversion constant; the curve keeps its authored points.
+const RTPC_DISGUISE_MAX: float = 100.0
 ## Port surface key -> authored FS_Material value. Derived by measuring which
 ## bank package carries the family's media (tools/parse_audio_control.py +
 ## audio_events.json), never invented; the full evidence table is in
@@ -369,8 +380,12 @@ var _control: RefCounted = null
 var _vo_director: RefCounted = null
 ## W11-A: last resolved guard speaker per guard state transition (QA only).
 var _vo_last_transition: Dictionary = {}
-## W11-A: true once the live player's disguise signal is bound.
-var _vo_player_bound: bool = false
+## W11-A: last resolved player/quest cue (QA only).
+var _vo_last_cue: Dictionary = {}
+## W11-A: the live player whose `disguise_changed` is connected. A new instance
+## is created for every contract (`mission_controller._spawn_player`), so this
+## tracks the *instance* and rebinds when the player changes or is freed.
+var _vo_bound_player: Node = null
 ## Authored RTPC gain/pitch currently applied to the music player.
 var _rtpc_music_gain_db: float = 0.0
 var _rtpc_music_pitch: float = 1.0
@@ -452,6 +467,9 @@ func cleanup_on_exit() -> void:
 	# countdown coroutine and the 0.15 s second car-horn blast would otherwise
 	# spawn a fresh playback in the two frames between teardown and quit.
 	_shutdown = true
+	# W11-A: the player is freed with the scene; drop the tracked connection so a
+	# later player cannot be missed and no callable into this autoload survives.
+	_disconnect_vo_player()
 	_countdown_token += 1
 	_countdown_running = false
 	for tw: Tween in _bed_tweens:
@@ -635,6 +653,8 @@ func vo_state() -> Dictionary:
 		"available": _vo_director != null,
 		"authored_lines": lines,
 		"last_transition": _vo_last_transition.duplicate(true),
+		"last_cue": _vo_last_cue.duplicate(true),
+		"bound_player": _vo_bound_player != null and is_instance_valid(_vo_bound_player),
 	}
 	if _vo_director != null:
 		out["director"] = _vo_director.call("report")
@@ -714,6 +734,7 @@ func play_vo_cue(cue: String, pos: Variant = null) -> bool:
 	var pick: Dictionary = pick_v
 	if not bool(pick.get("ok", false)):
 		return false
+	_vo_last_cue = pick.duplicate(true)
 	return play_vo_line(str(pick.get("event", "")), pos)
 
 
@@ -726,25 +747,68 @@ func _on_phase_changed(phase: String) -> void:
 		play_vo_cue("escape_phase", pos)
 
 
-## Binds the player's disguise signal once the player exists. The same handler
-## pushes the authored disguise-integrity RTPC and plays the authored
-## DisguiseEnding line when the disguise collapses.
+## W11-A/W11-D: binds the live player's disguise signal, following the player
+## *instance*. `AudioManager` is an autoload but `mission_controller` creates a
+## new `ThiefCharacter` for every contract, so a one-shot "bound" flag left the
+## second mission with no disguise RTPC and no `disguise_ending` line. This runs
+## every frame: it clears a freed binding, disconnects a replaced player and
+## connects the current one exactly once. The director's cooldowns/priority are
+## reset when the player instance changes (a new run starts from a clean slate).
 func _sync_vo_sources() -> void:
-	if _vo_player_bound:
-		return
 	var tree: SceneTree = get_tree()
 	if tree == null:
 		return
 	var player: Node = tree.get_first_node_in_group("player")
-	if player == null or not player.has_signal("disguise_changed"):
+	if player != null and not is_instance_valid(player):
+		player = null
+	if _vo_bound_player != null and not is_instance_valid(_vo_bound_player):
+		# The previous mission freed its player; the engine already dropped the
+		# connection, so only the reference needs clearing.
+		_vo_bound_player = null
+		if _vo_director != null:
+			_vo_director.call("reset_cooldowns")
+	if player == null:
+		_disconnect_vo_player()
 		return
-	player.connect("disguise_changed", _on_disguise_changed)
-	_vo_player_bound = true
+	if _vo_bound_player == player:
+		return
+	# A different live player: drop the old connection before binding the new
+	# one, so one player can never be connected twice and the old one is not
+	# left holding a callable into this autoload.
+	_disconnect_vo_player()
+	if not player.has_signal("disguise_changed"):
+		return
+	var cb: Callable = Callable(self, "_on_disguise_changed")
+	if not player.is_connected("disguise_changed", cb):
+		player.connect("disguise_changed", cb)
+	_vo_bound_player = player
+	if _vo_director != null:
+		_vo_director.call("reset_cooldowns")
+
+
+## Drops the tracked player connection (safe when the node is already freed).
+func _disconnect_vo_player() -> void:
+	if _vo_bound_player != null and is_instance_valid(_vo_bound_player):
+		if _vo_bound_player.has_signal("disguise_changed"):
+			var cb: Callable = Callable(self, "_on_disguise_changed")
+			if _vo_bound_player.is_connected("disguise_changed", cb):
+				_vo_bound_player.disconnect("disguise_changed", cb)
+	_vo_bound_player = null
+
+
+## W11-D: normalises the player's authored 0..100 disguise integrity into the
+## authored `Character_DisguiseIntegrity` 0..1 domain and stores it. The curve
+## is `[0,0] [0.39834,-1] [1,-1]`; feeding 0..100 raw made every value >= 1
+## evaluate at the 1.0 endpoint and never traversed the authored response.
+func push_disguise_integrity(integrity_0_100: float) -> bool:
+	var value: float = clampf(integrity_0_100 / RTPC_DISGUISE_MAX, 0.0, 1.0)
+	return set_rtpc("Character_DisguiseIntegrity", value)
 
 
 func _on_disguise_changed(integrity: float, active: bool) -> void:
-	# W11-D: the authored Character_DisguiseIntegrity curve is in 0..100 units.
-	set_rtpc("Character_DisguiseIntegrity", clampf(integrity, 0.0, 100.0))
+	# W11-D: `disguise_integrity` is 0..100 in the player, the authored RTPC is
+	# 0..1; normalise before it reaches the curve.
+	push_disguise_integrity(integrity)
 	if not active and integrity <= 0.0:
 		var player: Node = get_tree().get_first_node_in_group("player") if get_tree() != null else null
 		var pos: Variant = (player as Node3D).global_position if player is Node3D else null

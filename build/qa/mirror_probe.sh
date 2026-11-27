@@ -9,6 +9,12 @@
 # integrator's GPU measurement (one Godot at a time, shared flock); it writes
 # build/qa/mirror_probe/<tag>.png + <tag>.log, both gitignored.
 #
+# Exit contract (`--run`): 0 only when `MIRROR_PROBE RESULT ... pass=1`.
+# `pass=1` requires control_ok, the baked identity+mirror terms, single_baked,
+# the CULL_FRONT terms unless TAT2_MIRROR_FAST=off, and native_single unless
+# TAT2_MIRROR_SINGLE=baked. The wrapper also greps the RESULT flag, so a stray
+# exit 0 cannot be read as a pass.
+#
 # The readback answers two questions:
 #   * does a negative-scale MultiMesh instance render its front face?
 #   * does the port's baked variant / CULL_FRONT fast path render it instead?
@@ -93,7 +99,14 @@ echo "png: $OUT/$TAG.png"
 status=$?
 echo "exit=$status"
 grep -E "MIRROR_PROBE " "$LOG" || true
+# Gate on both: the probe exits non-zero on a bad term, and the wrapper also
+# requires the machine-readable RESULT pass flag so an unexpected exit 0 can
+# never be read as a pass.
+if [ "$status" -eq 0 ] && ! grep -q "MIRROR_PROBE RESULT .*pass=1" "$LOG"; then
+	echo "ABORT: probe exited 0 without MIRROR_PROBE RESULT ... pass=1" >&2
+	status=1
+fi
 if [ "$status" -ne 0 ]; then
-	echo "ABORT: mirror probe failed (negative control or renderer); see $LOG" >&2
+	echo "ABORT: mirror probe failed (negative control, a port term, or renderer); see $LOG" >&2
 fi
 exit "$status"

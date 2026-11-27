@@ -246,17 +246,21 @@ StateTree shadow ceiling; the authored-element collision floor.
 - **Mirrors — P4.2 split implemented, headless-measured; GPU readback pending.**
   The 3,312 authored negative records are real (Guildhall contract-2 base set).
   The draw census is **3,297 = 3,129 MultiMesh + 168 standalone** after the
-  existing filters; the old "3,215 in MultiMeshes" counted path-level
-  multi-placements, not post-32 m-cell batch membership. Negative instances are
-  split into their own batch and drawn from a baked local-X mesh variant
-  (winding/normals/tangents fixed); **104** variants / **31,099,116 B**
-  uncompressed estimate and **312** instances on the single-surface
-  `CULL_FRONT` clone fast path, `unbaked=0`. `MIRROR_RECON` reconciles every
-  load. Standalone `MeshInstance3D` mirrors rely on Godot's native compensation
-  by default; `TAT2_MIRROR_SINGLE=baked` is the measured fallback (223 variants
-  / 61,972,836 B). The synthetic GPU probe (`build/qa/mirror_probe.sh --run`)
-  is the pending visual verdict; `--selftest` is green. Report:
-  [`reports/p4-mirrors-20261127.md`](reports/p4-mirrors-20261127.md).
+  pre-draw filters (271 records total; the per-filter negative split is **not
+  measured**, so the 15-record gap to 3,312 is not attributed). The old "3,215
+  in MultiMeshes" counted path-level multi-placements, not post-32 m-cell batch
+  membership. Negative instances are split into their own batch and drawn from
+  a baked local-X mesh variant (winding/normals/tangents fixed); **104**
+  variants / **31,099,116 B** uncompressed estimate and **312** instances on
+  the single-surface `CULL_FRONT` clone fast path, `unbaked=0`. `MIRROR_RECON`
+  reconciles every load, and `source_counts` is apportioned so
+  `PERF_CENSUS.source_sublevels` stays at the **64,660** baseline (`make test`
+  pins it exactly). Standalone `MeshInstance3D` mirrors rely on Godot's native
+  compensation by default; `TAT2_MIRROR_SINGLE=baked` is the measured fallback
+  (223 variants / 61,972,836 B). The synthetic GPU probe
+  (`build/qa/mirror_probe.sh --run`) is the pending visual verdict and now
+  exits non-zero unless the RESULT line reports `pass=1`; `--selftest` is
+  green. Report: [`reports/p4-mirrors-20261127.md`](reports/p4-mirrors-20261127.md).
 - **Landscape — data assertion PASS; pixel A/B pending (P4.4).** The shipped
   `vis > 0.5` discard stays; do not flip it. `TAT2_LANDSCAPE_MASK=discard|raw|off`
   selects the shipped rule, a raw-mask debug view, or no mask read, and the

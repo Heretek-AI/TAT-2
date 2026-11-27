@@ -8,18 +8,26 @@ extends SceneTree
 ##      exact partition helper the draw build uses;
 ##   4. in a real build every negative instance is in a tagged `neg` batch or
 ##      a tagged mirrored standalone node, and no untagged node hides one;
-##   5. `mirrored_multimesh + mirrored_single == mirrored_bases` per load.
+##   5. `mirrored_multimesh + mirrored_single == mirrored_bases` per load;
+##   6. every split item apportions `source_counts` exactly once (P4.2
+##      PERF_CENSUS fix), and the full 17-sublevel load reproduces the
+##      pre-split `PERF_CENSUS.source_sublevels` total of 64,660.
 ##
 ## Run:
 ##   tools/godot --headless --path game --script res://tests/probe_mirror_split.gd
 ##   tools/godot --headless --path game --script res://tests/probe_mirror_split.gd -- --full
 ##
-## `--full` loads the complete Guildhall contract-2 sublevel set (the 3,312
-## mirrored-record census) instead of Guildhall_Geometry alone. It is the
-## measured census command; the default is the fast gate.
+## `--full` loads the complete Guildhall contract-4 sublevel set (15 base +
+## `Guildhall_Contract_04` + `Guildhall_Contract_Teleporters`), matching the
+## `make test` mission load and its 64,660 source-count baseline. The default
+## is the fast Guildhall_Geometry gate.
 
 const LEVELS_ROOT := "res://data/generated/levels/"
 const FLIP_X := Basis(Vector3(-1, 0, 0), Vector3(0, 1, 0), Vector3(0, 0, 1))
+const FULL_EXTRA: Array[String] = [
+	"Guildhall/Guildhall_Contract_04",
+	"Guildhall/Guildhall_Contract_Teleporters",
+]
 const GUILDHALL_SUBLEVELS: Array[String] = [
 	"Buildings/Guildhall/Building_Guildhall_POI",
 	"Buildings/Guildhall/Building_Guildhall_POI_3rdFloor",
@@ -75,6 +83,7 @@ func _run() -> void:
 
 	_test_bake()
 	_test_fast_path()
+	_test_source_split()
 	var authored_neg: int = _test_static_partition()
 	_test_real_load(full, authored_neg)
 
@@ -225,6 +234,79 @@ func _test_fast_path() -> void:
 		"mode=%s" % str(slow.get("mode", "")))
 
 
+static func _dict_sum(d: Dictionary) -> int:
+	var n: int = 0
+	for k: Variant in d.keys():
+		n += int(d[k])
+	return n
+
+
+static func _dicts_add_equal(a: Dictionary, b: Dictionary, whole: Dictionary) -> bool:
+	var keys: Dictionary = {}
+	for k: Variant in a.keys():
+		keys[str(k)] = true
+	for k: Variant in b.keys():
+		keys[str(k)] = true
+	for k: Variant in whole.keys():
+		keys[str(k)] = true
+	for k: Variant in keys.keys():
+		if int(a.get(k, 0)) + int(b.get(k, 0)) != int(whole.get(k, 0)):
+			return false
+	return true
+
+
+## The P4.2 accounting fix: split_source_counts must apportion the item's
+## source map exactly once (pos + neg == item), with no rounding loss and a
+## deterministic tie-break. These are the regression cases for PERF_CENSUS.
+func _test_source_split() -> void:
+	var cases: Array = [
+		{"counts": {"A": 10, "B": 5}, "total": 15, "neg": 0},
+		{"counts": {"A": 10, "B": 5}, "total": 15, "neg": 15},
+		{"counts": {"A": 10, "B": 5}, "total": 15, "neg": 1},
+		{"counts": {"A": 10, "B": 5}, "total": 15, "neg": 7},
+		{"counts": {"A": 10, "B": 5}, "total": 15, "neg": 14},
+		{"counts": {"Guildhall_PeripheryA": 52, "Building_Guildhall_POI": 12}, "total": 64, "neg": 13},
+		{"counts": {"A": 1, "B": 1, "C": 1}, "total": 3, "neg": 1},
+		{"counts": {"A": 999, "B": 1, "C": 1}, "total": 1001, "neg": 500},
+	]
+	var all_ok: bool = true
+	var deterministic: bool = true
+	var sums_ok: bool = true
+	for c_var: Variant in cases:
+		var c: Dictionary = c_var as Dictionary
+		var counts: Dictionary = c["counts"] as Dictionary
+		var total: int = int(c["total"])
+		var neg_n: int = int(c["neg"])
+		var a: Dictionary = _ll.call("split_source_counts", counts, total, neg_n) as Dictionary
+		var b: Dictionary = _ll.call("split_source_counts", counts, total, neg_n) as Dictionary
+		var pos: Dictionary = a.get("pos", {}) as Dictionary
+		var neg: Dictionary = a.get("neg", {}) as Dictionary
+		if not _dicts_add_equal(pos, neg, counts):
+			all_ok = false
+		if _dict_sum(pos) + _dict_sum(neg) != _dict_sum(counts):
+			sums_ok = false
+		if str(a) != str(b):
+			deterministic = false
+		if pos != b.get("pos", {}) or neg != b.get("neg", {}):
+			deterministic = false
+		if neg_n == 0 and not pos.is_empty() and _dict_sum(neg) != 0:
+			all_ok = false
+		if neg_n == total and _dict_sum(pos) != 0:
+			all_ok = false
+	_check(all_ok, "split_source_counts apportions pos+neg == item for every key",
+		"cases=%d" % cases.size())
+	_check(sums_ok, "split_source_counts preserves the total with no rounding loss",
+		"cases=%d" % cases.size())
+	_check(deterministic, "split_source_counts is deterministic across calls",
+		"cases=%d" % cases.size())
+	# Largest-remainder tie-break: sorted key wins the single remainder.
+	var tie: Dictionary = _ll.call("split_source_counts",
+		{"A": 1, "B": 1, "C": 1}, 3, 1) as Dictionary
+	_check(str(tie.get("neg", {})) == str({"A": 1}),
+		"split_source_counts tie-break is the sorted key",
+		"neg=%s" % str(tie.get("neg", {})))
+
+
 ## Returns the authored negative-record count for the Guildhall set.
 func _test_static_partition() -> int:
 	var authored_neg: int = 0
@@ -326,6 +408,8 @@ func _test_real_load(full: bool, authored_neg: int) -> void:
 	if full:
 		for sub: String in GUILDHALL_SUBLEVELS:
 			paths.append(LEVELS_ROOT + sub + ".tatlevel.json")
+		for sub2: String in FULL_EXTRA:
+			paths.append(LEVELS_ROOT + sub2 + ".tatlevel.json")
 	else:
 		paths.append(LEVELS_ROOT + "Guildhall/Guildhall_Geometry.tatlevel.json")
 	var host := Node3D.new()
@@ -334,6 +418,7 @@ func _test_real_load(full: bool, authored_neg: int) -> void:
 	var draw_bases: int = int(res.get("mirrored_bases", -1))
 	var mm_n: int = int(res.get("mirrored_multimesh", -1))
 	var single_n: int = int(res.get("mirrored_single", -1))
+	var split_n: int = int(res.get("mirrored_batches_split", -1))
 	_check(draw_bases == mm_n + single_n,
 		"MIRROR_RECON identity on the real load",
 		"bases=%d multimesh=%d single=%d" % [draw_bases, mm_n, single_n])
@@ -345,6 +430,34 @@ func _test_real_load(full: bool, authored_neg: int) -> void:
 			"transform census covers the draw census (decals/GC excluded from draws)",
 			"transform=%d draw=%d authored=%d" % [
 				int(res.get("mirrored_transform_bases", -1)), draw_bases, authored_neg])
+		# Same load as the `make test` Guildhall mission: baseline values from
+		# docs/reports/logs/final/run_tests.log:245-247. P4.2's split must not
+		# change the instance or source-count totals.
+		_check(int(res.get("authored_meshes", -1)) == 64956,
+			"full load authored count matches the mission baseline",
+			"authored=%d" % int(res.get("authored_meshes", -1)))
+		_check(int(res.get("mesh_instances", -1)) == 64685,
+			"full load applied count matches the mission baseline",
+			"applied=%d" % int(res.get("mesh_instances", -1)))
+	var census: Dictionary = res.get("perf_census", {}) as Dictionary
+	var src_totals: Dictionary = census.get("source_sublevels", {}) as Dictionary
+	var src_sum: int = 0
+	for src_v: Variant in src_totals.values():
+		src_sum += int(src_v)
+	if full:
+		_check(int(census.get("mesh_instances", -1)) == 65132,
+			"full PERF_CENSUS instance count matches the mission baseline",
+			"instances=%d" % int(census.get("mesh_instances", -1)))
+		_check(int(census.get("periph_instances", -1)) == 13446,
+			"full PERF_CENSUS PeripheryA instance count matches the baseline",
+			"periph_instances=%d" % int(census.get("periph_instances", -1)))
+		_check(src_sum == 64660,
+			"PERF_CENSUS.source_sublevels equals the pre-split baseline",
+			"src_sum=%d want=64660" % src_sum)
+	else:
+		_check(src_sum > 0,
+			"geometry PERF_CENSUS source counts are populated",
+			"src_sum=%d instances=%d" % [src_sum, int(census.get("mesh_instances", 0))])
 	var walk: Dictionary = _walk_mirror_nodes(host)
 	_check(int(walk["tagged_mm"]) == mm_n and int(walk["tagged_single"]) == single_n,
 		"tree walk agrees with the loader's split counters",
@@ -356,20 +469,39 @@ func _test_real_load(full: bool, authored_neg: int) -> void:
 	_check(int(walk["tagged_mm"]) + int(walk["tagged_single"]) == draw_bases,
 		"every draw-census mirrored instance is tagged",
 		"walk=%d bases=%d" % [int(walk["tagged_mm"]) + int(walk["tagged_single"]), draw_bases])
+	_check(int(walk["tagged_neg_nodes"]) == split_n,
+		"one negative node per split item (no hidden extra split)",
+		"nodes=%d splits=%d" % [int(walk["tagged_neg_nodes"]), split_n])
+	_check(int(walk["split_checked"]) == split_n and bool(walk["split_source_ok"]),
+		"every split item apportions pos+neg source counts exactly once",
+		"checked=%d splits=%d ok=%s" % [
+			int(walk["split_checked"]), split_n, str(walk["split_source_ok"])])
+	_check(int(walk["cull_front_instances"]) == int(res.get("mirrored_cull_front", -1)),
+		"cull-front counter is per-instance, not per-node",
+		"walk=%d counter=%d" % [
+			int(walk["cull_front_instances"]), int(res.get("mirrored_cull_front", -1))])
+	_check(int(walk["cull_disabled_instances"]) == int(res.get("mirrored_cull_disabled", -1)),
+		"cull-disabled counter is per-instance, not per-node",
+		"walk=%d counter=%d" % [
+			int(walk["cull_disabled_instances"]), int(res.get("mirrored_cull_disabled", -1))])
+	_check((walk["baked_unique"] as Dictionary).size() == int(res.get("mirrored_mesh_count", -1)),
+		"baked-variant counter is per unique mesh, not per node",
+		"walk=%d counter=%d" % [
+			(walk["baked_unique"] as Dictionary).size(), int(res.get("mirrored_mesh_count", -1))])
 	if draw_bases > 0:
 		_check(int(walk["baked_nodes"]) + int(walk["cull_front_nodes"]) + int(walk["cull_disabled_nodes"]) + int(walk["native_nodes"]) > 0,
 			"every tagged node carries a known mirror mode",
 			"baked=%d cull_front=%d cull_disabled=%d native=%d" % [
 				int(walk["baked_nodes"]), int(walk["cull_front_nodes"]),
 				int(walk["cull_disabled_nodes"]), int(walk["native_nodes"])])
-	print("MIRROR_LOAD paths=%d authored_records_neg=%d transform_bases=%d draw_bases=%d mm=%d single=%d split=%d cull_front=%d cull_disabled=%d baked_variants=%d baked_bytes=%d unbaked=%d walk_mm=%d walk_single=%d walk_baked_nodes=%d untagged_neg=%d gc_native_neg=%d" % [
+	print("MIRROR_LOAD paths=%d authored_records_neg=%d transform_bases=%d draw_bases=%d mm=%d single=%d split=%d cull_front=%d cull_disabled=%d baked_variants=%d baked_bytes=%d unbaked=%d walk_mm=%d walk_single=%d walk_baked_nodes=%d untagged_neg=%d gc_native_neg=%d src_sum=%d perf_instances=%d" % [
 		paths.size(),
 		authored_neg,
 		int(res.get("mirrored_transform_bases", -1)),
 		draw_bases,
 		mm_n,
 		single_n,
-		int(res.get("mirrored_batches_split", -1)),
+		split_n,
 		int(res.get("mirrored_cull_front", -1)),
 		int(res.get("mirrored_cull_disabled", -1)),
 		int(res.get("mirrored_mesh_count", -1)),
@@ -380,6 +512,8 @@ func _test_real_load(full: bool, authored_neg: int) -> void:
 		int(walk["baked_nodes"]),
 		int(walk["untagged_neg"]),
 		int(walk["gc_native_neg"]),
+		src_sum,
+		int(census.get("mesh_instances", -1)),
 	])
 	host.queue_free()
 
@@ -388,12 +522,18 @@ func _walk_mirror_nodes(host: Node3D) -> Dictionary:
 	var out: Dictionary = {
 		"tagged_mm": 0,
 		"tagged_single": 0,
+		"tagged_neg_nodes": 0,
+		"split_checked": 0,
+		"split_source_ok": true,
 		"untagged_neg": 0,
 		"gc_native_neg": 0,
 		"baked_nodes": 0,
 		"cull_front_nodes": 0,
 		"cull_disabled_nodes": 0,
 		"native_nodes": 0,
+		"cull_front_instances": 0,
+		"cull_disabled_instances": 0,
+		"native_instances": 0,
 		"baked_unique": {},
 	}
 	var nodes: Array[Node] = host.find_children("*", "GeometryInstance3D", true, false)
@@ -412,6 +552,7 @@ func _walk_mirror_nodes(host: Node3D) -> Dictionary:
 				# coverage is proven by the counters/partition, not this walk.
 				continue
 			out["tagged_mm"] = int(out["tagged_mm"]) + mm.instance_count
+			_note_split_accounting(gi, out)
 			_check(int(gi.get_meta("mirror_instances", -1)) == mm.instance_count,
 				"tagged MultiMesh meta count matches instance_count",
 				"meta=%d instances=%d" % [int(gi.get_meta("mirror_instances", -1)), mm.instance_count])
@@ -425,11 +566,13 @@ func _walk_mirror_nodes(host: Node3D) -> Dictionary:
 					(out["baked_unique"] as Dictionary)[bm.get_instance_id()] = true
 			elif mode == "cull_front":
 				out["cull_front_nodes"] = int(out["cull_front_nodes"]) + 1
+				out["cull_front_instances"] = int(out["cull_front_instances"]) + mm.instance_count
 				_check(_effective_cull(gi, 0) == BaseMaterial3D.CULL_FRONT,
 					"cull-front batch material is CULL_FRONT",
 					"cull=%d" % _effective_cull(gi, 0))
 			elif mode == "cull_disabled":
 				out["cull_disabled_nodes"] = int(out["cull_disabled_nodes"]) + 1
+				out["cull_disabled_instances"] = int(out["cull_disabled_instances"]) + mm.instance_count
 				_check(_effective_cull(gi, 0) == BaseMaterial3D.CULL_DISABLED,
 					"cull-disabled batch is two-sided",
 					"cull=%d" % _effective_cull(gi, 0))
@@ -452,8 +595,10 @@ func _walk_mirror_nodes(host: Node3D) -> Dictionary:
 				out["untagged_neg"] = int(out["untagged_neg"]) + 1
 			continue
 		out["tagged_single"] = int(out["tagged_single"]) + 1
+		_note_split_accounting(gi, out)
 		if mode == "native":
 			out["native_nodes"] = int(out["native_nodes"]) + 1
+			out["native_instances"] = int(out["native_instances"]) + 1
 			_check(mi.transform.basis.determinant() < 0.0,
 				"native standalone keeps the authored negative basis",
 				"det=%.3f" % mi.transform.basis.determinant())
@@ -469,14 +614,37 @@ func _walk_mirror_nodes(host: Node3D) -> Dictionary:
 				(out["baked_unique"] as Dictionary)[mi.mesh.get_instance_id()] = true
 		elif mode == "cull_front":
 			out["cull_front_nodes"] = int(out["cull_front_nodes"]) + 1
+			out["cull_front_instances"] = int(out["cull_front_instances"]) + 1
 			_check(_effective_cull(mi, 0) == BaseMaterial3D.CULL_FRONT,
 				"standalone cull-front material is CULL_FRONT",
 				"cull=%d" % _effective_cull(mi, 0))
 		elif mode == "cull_disabled":
 			out["cull_disabled_nodes"] = int(out["cull_disabled_nodes"]) + 1
+			out["cull_disabled_instances"] = int(out["cull_disabled_instances"]) + 1
 			_check(_effective_cull(mi, 0) == BaseMaterial3D.CULL_DISABLED,
 				"standalone cull-disabled material is two-sided",
 				"cull=%d" % _effective_cull(mi, 0))
 		else:
 			_check(false, "standalone mirror mode is known", "mode=%s" % mode)
 	return out
+
+
+## P4.2: every tagged negative node records the item's full source map and the
+## pos/neg apportionment. Assert pos + neg == item and that the node's own
+## `source_counts` meta is the neg part, so a future split cannot repeat the
+## PERF_CENSUS double count.
+func _note_split_accounting(gi: GeometryInstance3D, out: Dictionary) -> void:
+	out["tagged_neg_nodes"] = int(out["tagged_neg_nodes"]) + 1
+	var item_v: Variant = gi.get_meta("mirror_item_source_counts", null)
+	var pos_v: Variant = gi.get_meta("mirror_pos_source_counts", null)
+	var neg_v: Variant = gi.get_meta("mirror_neg_source_counts", null)
+	var own_v: Variant = gi.get_meta("source_counts", null)
+	if not (item_v is Dictionary) or not (pos_v is Dictionary) or not (neg_v is Dictionary):
+		out["split_source_ok"] = false
+		return
+	out["split_checked"] = int(out["split_checked"]) + 1
+	if not _dicts_add_equal(pos_v as Dictionary, neg_v as Dictionary, item_v as Dictionary):
+		out["split_source_ok"] = false
+		print("MIRROR_SPLIT_ACCOUNT_FAIL item=", item_v, " pos=", pos_v, " neg=", neg_v, " own=", own_v)
+	if not (own_v is Dictionary) or (own_v as Dictionary) != (neg_v as Dictionary):
+		out["split_source_ok"] = false

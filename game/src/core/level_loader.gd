@@ -4173,6 +4173,80 @@ static func _source_summary(sources: Array) -> Dictionary:
 	}
 
 
+## P4.2: apportion one draw item's per-source counts between its positive and
+## negative batches. Every key satisfies pos + neg == item exactly; the negative
+## share uses the largest-remainder method with a sorted-key tie-break, so
+## there is no rounding loss and the result is deterministic. `neg_instances`
+## is the number of negative-determinant instances in the item; the denominator
+## is the item's source-count total (which equals the item count on real data).
+## This keeps PERF_CENSUS.source_sublevels summing to the pre-split baseline:
+## the two nodes together contribute exactly the item's original counts.
+static func split_source_counts(source_counts: Dictionary, total_instances: int, neg_instances: int) -> Dictionary:
+	var pos: Dictionary = {}
+	var neg: Dictionary = {}
+	var csum: int = 0
+	for k: Variant in source_counts.keys():
+		csum += maxi(int(source_counts[k]), 0)
+	if csum <= 0 or total_instances <= 0 or neg_instances <= 0:
+		for k0: Variant in source_counts.keys():
+			pos[str(k0)] = maxi(int(source_counts[k0]), 0)
+		return {"pos": pos, "neg": neg}
+	if neg_instances >= total_instances:
+		for k1: Variant in source_counts.keys():
+			neg[str(k1)] = maxi(int(source_counts[k1]), 0)
+		return {"pos": pos, "neg": neg}
+	var neg_target: int = mini(neg_instances, csum)
+	var keys: Array = source_counts.keys()
+	keys.sort()
+	var remainders: Array = []
+	var assigned: int = 0
+	for k2: Variant in keys:
+		var key: String = str(k2)
+		var c: int = maxi(int(source_counts[k2]), 0)
+		var numer: int = c * neg_target
+		var base: int = numer / csum
+		neg[key] = base
+		assigned += base
+		remainders.append({"key": key, "rem": numer % csum, "cap": c})
+	var need: int = neg_target - assigned
+	remainders.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var ra: int = int(a["rem"])
+		var rb: int = int(b["rem"])
+		if ra != rb:
+			return ra > rb
+		return str(a["key"]) < str(b["key"]))
+	for r: Dictionary in remainders:
+		if need <= 0:
+			break
+		var rkey: String = str(r["key"])
+		if int(neg.get(rkey, 0)) < int(r["cap"]):
+			neg[rkey] = int(neg.get(rkey, 0)) + 1
+			need -= 1
+	if need > 0:
+		# Defensive only: largest-remainder allocation cannot leave a residual
+		# when neg_target <= csum, but a malformed count set must still not lose
+		# or invent a record.
+		for k3: Variant in keys:
+			var k3s: String = str(k3)
+			while need > 0 and int(neg.get(k3s, 0)) < maxi(int(source_counts[k3]), 0):
+				neg[k3s] = int(neg.get(k3s, 0)) + 1
+				need -= 1
+			if need <= 0:
+				break
+	for k4: Variant in keys:
+		var k4s: String = str(k4)
+		var total_k: int = maxi(int(source_counts[k4]), 0)
+		var neg_k: int = int(neg.get(k4s, 0))
+		if neg_k <= 0:
+			neg.erase(k4s)
+		else:
+			neg[k4s] = neg_k
+		var pos_k: int = total_k - neg_k
+		if pos_k > 0:
+			pos[k4s] = pos_k
+	return {"pos": pos, "neg": neg}
+
+
 ## Splits one mesh-path batch into per-cell draw items. Single instances (or
 ## batches that fit in one cell) stay as a single tight-AABB node. Decorative
 ## horizon sublevels pass global_batch=true and keep one node per mesh path:
@@ -5233,6 +5307,15 @@ func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> 
 		else:
 			_mirror_draw_bases += neg_indices.size()
 			_mirror_batches_split += 1
+			# P4.2 accounting: the two nodes must contribute the item's
+			# source_counts exactly once. Apportion by instance count with the
+			# deterministic largest-remainder split; see split_source_counts().
+			# The sublevel tag list stays the item's authored set (the split is
+			# a draw-batch split, not a provenance rewrite); only the counts are
+			# apportioned, so PERF_CENSUS.source_sublevels is unchanged.
+			var source_split: Dictionary = split_source_counts(source_counts, count, neg_indices.size())
+			var pos_source_counts: Dictionary = source_split["pos"] as Dictionary
+			var neg_source_counts: Dictionary = source_split["neg"] as Dictionary
 			# Split, preserving authored order inside each batch. `cpds` only
 			# exists when `use_cpd`, so the parallel arrays stay aligned.
 			var pos_trs: Array = []
@@ -5292,13 +5375,17 @@ func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> 
 			if not pos_trs.is_empty():
 				var pos_node: GeometryInstance3D = _make_draw_batch_node(mesh, pos_trs, pos_cpds, use_cpd)
 				_finish_draw_node(pos_node, item, mp, low_mp, ov_arr, mesh,
-					source_sublevel, source_sublevels, source_counts, far_item,
+					source_sublevel, source_sublevels, pos_source_counts, far_item,
 					use_cpd, hidden_in_game, no_collide, ctx, parent)
 			var neg_node: GeometryInstance3D = _make_draw_batch_node(neg_mesh, neg_trs, neg_cpds, use_cpd)
 			neg_node.set_meta("mirror_neg", true)
 			neg_node.set_meta("mirror_mode", str(variant.get("mode", "native")))
 			neg_node.set_meta("mirror_instances", neg_trs.size())
 			neg_node.set_meta("mirror_source_mesh", mp)
+			# The test-facing apportionment proof: item = pos + neg exactly.
+			neg_node.set_meta("mirror_item_source_counts", source_counts)
+			neg_node.set_meta("mirror_pos_source_counts", pos_source_counts)
+			neg_node.set_meta("mirror_neg_source_counts", neg_source_counts)
 			var neg_mat: Variant = variant.get("material")
 			if neg_mat is Material:
 				neg_node.material_override = neg_mat as Material
@@ -5310,7 +5397,7 @@ func _build_one_draw_item(item: Dictionary, parent: Node3D, ctx: Dictionary) -> 
 						if neg_mats[s_neg] is Material:
 							mi_neg.set_surface_override_material(s_neg, neg_mats[s_neg] as Material)
 			_finish_draw_node(neg_node, item, mp, low_mp, ov_arr, neg_mesh,
-				source_sublevel, source_sublevels, source_counts, far_item,
+				source_sublevel, source_sublevels, neg_source_counts, far_item,
 				use_cpd, hidden_in_game, no_collide, ctx, parent)
 			_mirror_log_split(mp, str(variant.get("mode", "native")),
 				pos_trs.size(), neg_trs.size(), int(variant.get("bytes", 0)),

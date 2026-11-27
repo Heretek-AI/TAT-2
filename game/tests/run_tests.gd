@@ -508,6 +508,14 @@ func _initialize() -> void:
 	# and the PERF_CENSUS counters the perf harness consumes. Headless only.
 	var gh_census: Dictionary = gh_stats.get("perf_census", {}) as Dictionary
 	var gh_src_totals: Dictionary = gh_census.get("source_sublevels", {}) as Dictionary
+	# P4.2: the split must apportion source_counts, not copy the item total to
+	# both nodes. The pre-split Guildhall mission baseline is 64,660 (see
+	# docs/reports/logs/final/run_tests.log:247); the double-counted p4 build
+	# read 88,438. Pin the exact sum so a future split cannot regress it.
+	var gh_src_sum: int = 0
+	for gh_src_v: Variant in gh_src_totals.values():
+		gh_src_sum += int(gh_src_v)
+	var gh_src_sum_ok: bool = gh_src_sum == 64660
 	var gh_census_ok: bool = int(gh_census.get("meshes", 0)) > 0 \
 		and int(gh_census.get("surface_draws", 0)) > 0 \
 		and int(gh_census.get("lights", 0)) > 0 \
@@ -515,7 +523,8 @@ func _initialize() -> void:
 		and int(gh_census.get("periph_nodes", 0)) > 0 \
 		and int(gh_census.get("hero_shadows", -1)) == 6 \
 		and int(gh_census.get("light_budget", -1)) == 160 \
-		and int(gh_src_totals.get("Guildhall_PeripheryA", 0)) > 0
+		and int(gh_src_totals.get("Guildhall_PeripheryA", 0)) > 0 \
+		and gh_src_sum_ok
 	var gh_draw_nodes: int = 0
 	var gh_draw_src_missing: int = 0
 	var gh_draw_periph: int = 0
@@ -534,10 +543,10 @@ func _initialize() -> void:
 		elif str(gh_n.get_meta("source_sublevel", "")).to_lower().find("peripherya") >= 0:
 			gh_draw_periph += 1
 	if not gh_census_ok or gh_draw_nodes < 3000 or gh_draw_src_missing != 0 or gh_draw_periph == 0:
-		printerr("FAIL: 11b W1p census/source metadata (census_ok=", gh_census_ok, " draw_nodes=", gh_draw_nodes, " missing_source=", gh_draw_src_missing, " missing_names=", gh_missing_names, " periph=", gh_draw_periph, " census=", gh_census, ")")
+		printerr("FAIL: 11b W1p census/source metadata (census_ok=", gh_census_ok, " src_sum=", gh_src_sum, " src_sum_want=64660 draw_nodes=", gh_draw_nodes, " missing_source=", gh_draw_src_missing, " missing_names=", gh_missing_names, " periph=", gh_draw_periph, " census=", gh_census, ")")
 		fails += 1
 	else:
-		print("PASS: 11b W1p PERF_CENSUS (meshes=", int(gh_census.get("meshes", 0)), ", surface_draws=", int(gh_census.get("surface_draws", 0)), ", lights=", int(gh_census.get("lights", 0)), ", shadows=", int(gh_census.get("shadow_lights", 0)), ", periph_nodes=", int(gh_census.get("periph_nodes", 0)), ", source-tagged draw nodes=", gh_draw_nodes, " missing=", gh_draw_src_missing, ")")
+		print("PASS: 11b W1p PERF_CENSUS (meshes=", int(gh_census.get("meshes", 0)), ", surface_draws=", int(gh_census.get("surface_draws", 0)), ", lights=", int(gh_census.get("lights", 0)), ", shadows=", int(gh_census.get("shadow_lights", 0)), ", periph_nodes=", int(gh_census.get("periph_nodes", 0)), ", source-tagged draw nodes=", gh_draw_nodes, " missing=", gh_draw_src_missing, ", source_sum=", gh_src_sum, ")")
 	gh_scene.queue_free()
 	await process_frame
 

@@ -302,12 +302,33 @@ func _render_and_read(tag: String) -> void:
 	# a layout regression is visible in the printed colours.
 	print("MIRROR_PROBE nodes=%d" % nodes.size())
 	var controls_ok: bool = str(colors["control_back"]) == "red" and str(colors["control_front"]) == "black"
-	print("MIRROR_PROBE RESULT control_ok=%s native_mm=%s native_single=%s baked_mm=%s cull_front_mm=%s single_baked=%s" % [
+	# Expected port terms: the probe is gateable on the exit code and on the
+	# RESULT line. `TAT2_MIRROR_FAST=off` / `TAT2_MIRROR_SINGLE=baked` select
+	# the port's fallbacks, so the corresponding measured term becomes the
+	# expectation. `native_mm` is the engine verdict, not a port-pass term.
+	var fast_expected: bool = OS.get_environment("TAT2_MIRROR_FAST").strip_edges().to_lower() != "off"
+	var single_baked_expected: bool = OS.get_environment("TAT2_MIRROR_SINGLE").strip_edges().to_lower() == "baked"
+	var baked_identity_ok: bool = str(colors["mm_baked_identity"]) == "red"
+	var baked_mirror_ok: bool = str(colors["mm_baked_mirror"]) == "red"
+	var cull_a_ok: bool = str(colors["mm_cullfront_mirror_a"]) == "red"
+	var cull_b_ok: bool = str(colors["mm_cullfront_mirror_b"]) == "red"
+	var single_baked_ok: bool = _classify(single_baked_c) == "red"
+	var single_native_ok: bool = str(colors["single_native"]) == "red"
+	var pass_ok: bool = controls_ok \
+		and baked_identity_ok and baked_mirror_ok \
+		and single_baked_ok \
+		and (not fast_expected or (cull_a_ok and cull_b_ok)) \
+		and (single_baked_expected or single_native_ok)
+	print("MIRROR_PROBE RESULT control_ok=%s native_mm=%s native_single=%s baked_mm=%s baked_mm_identity=%s cull_front_mm=%s single_baked=%s port_fast=%s port_single=%s pass=%d" % [
 		str(controls_ok),
 		"compensated" if str(colors["mm_native_mirror"]) == "red" else "not_compensated",
-		"compensated" if str(colors["single_native"]) == "red" else "not_compensated",
-		"ok" if str(colors["mm_baked_mirror"]) == "red" else "bad",
-		"ok" if str(colors["mm_cullfront_mirror_a"]) == "red" and str(colors["mm_cullfront_mirror_b"]) == "red" else "bad",
-		"ok" if _classify(single_baked_c) == "red" else "bad",
+		"compensated" if single_native_ok else "not_compensated",
+		"ok" if baked_mirror_ok else "bad",
+		"red" if baked_identity_ok else "bad",
+		"ok" if (cull_a_ok and cull_b_ok) else "bad",
+		"ok" if single_baked_ok else "bad",
+		"on" if fast_expected else "baked",
+		"baked" if single_baked_expected else "native",
+		1 if pass_ok else 0,
 	])
-	quit(0 if controls_ok else 1)
+	quit(0 if pass_ok else 1)

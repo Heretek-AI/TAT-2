@@ -52,9 +52,12 @@ the content is preserved with **identical stable patch-ids**:
 | P4 exposure/IBL | `26ed975` | `12fb0d7`, `518ca94`, `93a518b` | `290b614f9e15…` |
 | UI | `b4471e9` | `79c097b`, `7fa6186`, `495e554` | `8c93e7a23ab8…` |
 | Mirrors | `07ecb56` | `a371852` → `07ecb56` | ancestor (`--ff-only`) |
+| Mirror harness fix (post-integration) | `dd0bec8` | `8111bbe` | `58174ae13e08…` |
 
 Reproduce with `git show <tip> | git patch-id --stable` and the same command on
-the corresponding integrated commit. The six patch-ids match byte-for-byte.
+the corresponding integrated commit. The six lane patch-ids and the seventh
+harness-fix patch-id match byte-for-byte. `dd0bec8` is the probe-winding /
+viewport-scale fix, not a lane tip; its content is the ancestor `8111bbe`.
 
 ## Real-extraction defect found and fixed
 

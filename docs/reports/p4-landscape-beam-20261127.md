@@ -234,7 +234,7 @@ re-score them because no GPU capture was run.
 | beam probe | `res://tests/probe_p1_beams.gd` | `P1_BEAMS PASS checks=9 fails=0` |
 | landscape probe | `res://tests/probe_landscape_mask.gd` | `LANDSCAPE_MASK_SUMMARY: PASS fails=0 checks=7` |
 | capture self-test | `P0B_EVIDENCE_DIR=/tmp/opencode/p4-selftest build/qa/p0b_capture.sh --self-test` | `P0B_SELFTEST PASS checks=23 fails=0` |
-| ROI script | `python3 build/qa/p0b_roi_stats.py --reference-only --pose foyer_beam` | 9/9; `beam_close` prints `P0B_EXTRA` |
+| ROI script | `python3 build/qa/p0b_roi_stats.py --port docs/reference/clip_1795033698901/clean/KF27_03m27s_foyer_security_beam.jpg --reference-only --pose foyer_beam` | 9/9; `beam_close` prints `P0B_EXTRA` |
 | manifest validator | `python3 build/qa/p0b_roi_stats.py --validate-manifest docs/reports/logs/p0b/dry-run/manifest.json` | exit 0 (6-pose historical manifest still valid) |
 
 Blocked / not run in this lane:
@@ -273,7 +273,7 @@ build/qa/p0b_roi_stats.py --port build/qa/p0b/captures/kf27_foyer_beam/foyer_bea
 
 # 3. Beam card on/off A/B at the same foyer_beam pose (optional but useful).
 build/qa/p0b_capture.sh --poses=foyer_beam --beam-card=off --tag=kf27_foyer_beam_nobeam
-build/qa/p0b_roi_stats.py --port build/qa/p0b/captures/kf27_foyer_beam_nobeam/foyer_beam.png --pose foyer_beam
+build/qa/p0b_roi_stats.py --port build/qa/p0b/captures/kf27_foyer_beam_nobeam/foyer_beam_nobeam.png --pose foyer_beam
 
 # 4. Lounge extra, luma only (never KF27 criteria).
 build/qa/p0b_capture.sh --poses=beam_close --tag=lounge_extra
@@ -301,9 +301,11 @@ the `raw` mode is a debug albedo, not a grading target.
    sphere centre is serialized, and the 1 m side lobe without its authored noise
    mask is the cream slab P1 fixed. Do **not** “finish” them with invented maths;
    the next step is a producer/graph recovery or a noise-mask lane.
-4. **The fake-glow core is subtle by design.** It is a 2 cm plateau under the
-   1.5 cm centre line; the visual delta at KF27 is expected to be small. The
-   large gap (49 % row, 131 excess, 12 cream cells) is not claimed fixed.
+4. **The fake-glow core is subtle by design.** The authored `Fake Glow
+   Thickness` parameter is 2 cm, but the clamped additive plateau is only
+   ~1.40 cm full width (~0.70 cm radius) because it sits under the 1.5 cm
+   centre line; the visual delta at KF27 is expected to be small. The large gap
+   (49 % row, 131 excess, 12 cream cells) is not claimed fixed.
 5. **Pose identity.** `foyer_beam` is a fixed camera pose at the KF27 cue
    `(27,29.67,-55) → (23.27,29.76,-57.4)`; the KF27 reference is a hand-held
    frame, so the scoring is approximate framing, not pixel registration.
@@ -318,6 +320,7 @@ the `raw` mode is a debug albedo, not a grading target.
 ## 6. Files changed
 
 ```
+.gitignore                                   tracked kf27_beam_reference.json exception
 build/qa/kf27_beam_reference.json      (new)  one measured KF27 contract
 build/qa/p0b_capture.gd                      foyer_beam cue; beam_close = EXTRA; self-test 23
 build/qa/p0b_live_capture.sh                 scrub template: foyer_beam + Lounge extra label

@@ -44,7 +44,7 @@ The machine was restored after the attempt. Verified state:
   `experimental-11.0-20261112-x86_64`; `buildid=25076818`, `up_to_date:true`
   (last check).
 
-**Decision required before any launch.** Offline is not a fallback. Choose:
+**Options considered (offline is not a fallback):**
 
 - **A — matched-settings live capture, updater out of the path (recommended,
   UNTESTED):** copy the 3.8 GB install to a private path and launch the copy's

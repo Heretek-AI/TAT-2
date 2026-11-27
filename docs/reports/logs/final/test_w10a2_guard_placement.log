@@ -1,0 +1,71 @@
+== FINAL_GATE test_w10a2_guard_placement
+COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/test_w10a2_guard_placement.gd
+CWD: /home/john/.local/share/opencode/worktree/318f41/final-evidence
+STARTED: 2026-11-26T22:38:54-05:00
+
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+TAT-2 Loc: reverse map built from sources.json (3404 keys)
+TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
+INPUT_TABLE source=generated rows=91 shipping=91 actions=52
+INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
+PASS: ground_delta_ok 0.00 m
+PASS: ground_delta_ok 1.99 m
+PASS: ground_delta_ok 2.00 m (inclusive)
+PASS: ground_delta_ok 2.01 m rejected
+PASS: ground_delta_ok NAN rejected
+PASS: ground_delta_ok INF rejected
+PASS: normalize bare bucket
+PASS: normalize authored object name
+PASS: normalize authored asset path
+PASS: guard bucket StandardGuards_Bouncers
+PASS: guard bucket StandardGuards_Lanterns
+PASS: guard bucket StandardGuards_PrivateSecurity_JasperingHall_Lantern
+PASS: guard bucket PrivateSecurity
+PASS: guard bucket PrivateSecurity_Lanterns
+PASS: guard bucket KeyHolder
+PASS: Hauntstable is not a guard bucket
+PASS: civilians are not guard buckets
+PASS: SmartObject posts are not guard buckets
+PASS: empty bucket is not a guard bucket
+PASS: eligible_spawn 9.99 m rejected
+PASS: eligible_spawn 10.00 m rejected (exclusive)
+PASS: eligible_spawn 10.01 m accepted
+PASS: eligible_spawn 119.99 m accepted
+PASS: eligible_spawn 120.00 m rejected (exclusive)
+PASS: eligible_spawn Hauntstable rejected at 30 m
+PASS: eligibility drops the Hauntstable C_16 marker
+PASS: layer-first pick is C_100/C_114/C_18/C_20
+PASS: Novice pick contains the Lounge marker C_20
+PASS: Novice pick never contains the Hauntstable C_16
+PASS: one per layer, then fill in authored order
+PASS: layer winners fill the limit before the duplicate layer
+PASS: shared layer L2 is not double-claimed in the layer pass
+PASS: pick: deterministic across input order
+PASS: pick: limit 0 is empty
+PASS: pick: empty rows is empty
+GUARD_PLACEMENT_SUMMARY: fails=0
+
+EXIT: 0
+FINISHED: 2026-11-26T22:38:55-05:00

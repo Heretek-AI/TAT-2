@@ -1,0 +1,108 @@
+== FINAL_GATE test_audio_control
+COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/test_audio_control.gd
+CWD: /home/john/.local/share/opencode/worktree/318f41/final-evidence
+STARTED: 2026-11-26T22:47:27-05:00
+
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+TAT-2 Loc: reverse map built from sources.json (3404 keys)
+TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
+INPUT_TABLE source=generated rows=91 shipping=91 actions=52
+INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
+PASS: AUD1 control document loads (res://data/generated/audio_control.json)
+PASS: AUD1.1 14 named switch groups (measured; 23 group ids referenced by the bank)
+PASS: AUD1.1 84 named switch values (measured)
+PASS: AUD1.1 4 named state groups (measured; the brief's 5 is not in the extraction)
+PASS: AUD1.1 10 named state values (measured)
+PASS: AUD1.1 16 named RTPCs (34 more are bank ids with no asset dump)
+PASS: AUD1.1 142 authored node/param curves (de-duplicated per curve, not per param)
+PASS: AUD1.1 185 switch containers carry a group + package (1 unset object excluded)
+PASS: AUD1.2 accessor counts agree (switch=14 state=4 rtpc=16)
+PASS: AUD1.2 rtpc_names() lists exactly the 16 named RTPCs
+PASS: AUD2.1 FS_Material carries 14 authored values (Stone/Carpet/Tile/WoodFloor present)
+PASS: AUD2.2 Character_Movement_Mode == Crouch/Jog/Run/Walk/WallClimb
+PASS: AUD2.3 Weather_isExterior == Exterior/Interior
+PASS: AUD2.4 Modal_State == Modal_Gameplay/Modal_Menu
+PASS: AUD2.5 Player_HeightenedSenses has 4 authored states (["HalfListening", "Listening", "MiniGame", "Normal"])
+PASS: AUD2.6 a switch can be changed to any authored value
+PASS: AUD2.6 switch_value() reports the last authored value
+PASS: AUD2.6 an unset group reports "" (not a guessed default)
+PASS: AUD2.7 Player_HeightenedSenses accepts the Listening state
+PASS: AUD2.7 Listening exposes 35 authored override rows (22 volume)
+PASS: AUD2.7 a different state exposes a different row set (4 vs 35)
+PASS: AUD3.1 unknown switch value is refused
+PASS: AUD3.1 refused value leaves the previous switch intact
+PASS: AUD3.2 unknown switch group is refused
+PASS: AUD3.3 unknown state value is refused
+PASS: AUD3.3 refused state leaves the previous state intact
+PASS: AUD3.4 unknown RTPC name is refused
+PASS: AUD3.5 unknown RTPC id is refused
+PASS: AUD4.0 Play_FS_Player_Walk carries 319 media ids (a 319-media event)
+PASS: AUD4.1 FS_Material=Stone narrows 319 media to 44
+PASS: AUD4.2 Stone selection keeps 8 Stone clips
+PASS: AUD4.3 Stone selection drops every non-Stone surface family
+PASS: AUD4.4 FS_Material=WoodFloor selects a different set (44 media)
+PASS: AUD4.5 WoodFloor keeps the bank's WoodBeam family (8) and no Stone clip
+PASS: AUD4.6 unset groups resolve the authored DefaultSwitch (38 media)
+PASS: AUD4.7 media_ids_for() exposes the authored Stone package
+PASS: AUD5.1 detection RTPC accepts 0.0
+PASS: AUD5.1 rtpc_value() reads back the set value
+PASS: AUD5.2 authored music-node gain at 0 is -1.0 dB
+PASS: AUD5.2 authored music-node pitch at 0 is unity
+PASS: AUD5.3 authored curve interpolates at 0.6 (-0.5012 dB)
+PASS: AUD5.3 authored pitch curve at 0.6 is 1.0439
+PASS: AUD5.4 authored gain at full detection is 0 dB
+PASS: AUD5.5 a Constant segment holds the left value
+PASS: AUD5.5 a Linear segment interpolates
+PASS: AUD5.6 values outside the authored range clamp to the endpoints
+PASS: AUD5.7 the detection RTPC has no authored low-pass curve (0 Hz = none)
+PASS: AUD5.8 the id-only low-pass RTPC accepts a value
+PASS: AUD5.8 authored 44% filter -> 422.2 Hz
+PASS: AUD5.9 low-pass evaluation is deterministic (422.243 Hz twice)
+PASS: AUD5.9 curve evaluator counted 20 calls
+PASS: AUD6.0 AudioManager autoload present
+PASS: AUD6.1 AudioManager loaded the control plane
+PASS: AUD6.1 mix_state().control reports the loaded plane
+PASS: AUD6.2 all 9 shipped gameplay tags still resolve a real clip
+PASS: AUD6.2 walk|stone pool unchanged (>= 16)
+PASS: AUD6.2 run|wet pool unchanged (>= 90)
+PASS: AUD6.2 footstep pool entries unchanged (>= 650, got 695)
+PASS: AUD6.3 play_footstep('stone','walk') still plays
+PASS: AUD6.3 the footstep path set FS_Material=Stone
+PASS: AUD6.4 set_environment(true) sets Weather_isExterior=Interior
+PASS: AUD6.4 set_environment(false) sets Weather_isExterior=Exterior
+PASS: AUD6.5 paused sets Modal_State=Modal_Menu
+PASS: AUD6.5 unpaused sets Modal_State=Modal_Gameplay
+PASS: AUD6.6 AudioManager.set_detection_level(0.6) accepted
+PASS: AUD6.6 mix_state().detection_level is 0.6
+PASS: AUD6.6 authored music gain at 0.6 is -0.501 dB
+PASS: AUD7.1 an absent control document degrades instead of failing
+PASS: AUD7.1 degraded_reason() explains the fallback (missing:res://tests/fixtures/__absent__.json)
+PASS: AUD7.2 degraded select_media() returns the input unchanged
+PASS: AUD7.3 the real document reloads after the degraded probe
+AUDIO_CONTROL counts: switch=14/23 values=84 state=4/8 values=10 rtpcs=16/50 curves=142 containers=185
+AUDIO_CONTROL_SUMMARY: fails=0 checks=71
+
+EXIT: 0
+FINISHED: 2026-11-26T22:47:28-05:00

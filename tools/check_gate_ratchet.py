@@ -31,8 +31,8 @@ summary pattern and that every captured count is at or above the floor; for
 the named probe logs must contain their PASS marker.
 
 `report` names the report that must quote the floors, the coverage and the
-`measured_on` commit, so a stale report cannot claim a green gate. It defaults
-to the W7 report for older baselines.
+`measured_on` commit, so a stale report cannot claim a green gate. The default is
+the W10 FINAL report; older baselines name their own report in the JSON.
 
 The hosted CI job runs this plus the Python/tooling checks. The Godot gates
 themselves need the private extract (`extracted/`, `game/assets/`) and run
@@ -48,7 +48,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 RATCHET = ROOT / "tools" / "gate_ratchet.json"
-DEFAULT_REPORT = "docs/reports/w7-integration.md"
+DEFAULT_REPORT = "docs/reports/final-20261127.md"
 
 # Non-numeric wiring only: the log pattern each gate writes and the exact
 # command that regenerates the log. All numbers come from the ratchet JSON.
@@ -89,9 +89,10 @@ LOG_GATES = {
         "equal_groups": (1, 2),
         "passes_key": None,
     },
-    # P0b parity tier p2: authored-data provenance with recorded expected
-    # FAIL/DELTA. `unexpected_fail=0` is the gate; expected_fail/expected_delta
-    # are recorded measurements, not floors (a data wave may fix them).
+    # P0b parity tier p2: authored-data provenance. The W10-P2 data wave fixed
+    # the last expected failure (civilian pants albedo), so expected_fail,
+    # expected_delta and fixed are now exact zeros (`zero_groups`), not recorded
+    # measurements. `unexpected_fail=0` remains part of the pattern.
     "e2e_p2": {
         "command": "tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd -- --tier=p2",
         "pattern": lambda g: (
@@ -99,6 +100,7 @@ LOG_GATES = {
             r"fixed=(\d+) unexpected_fail=0"
         ),
         "minimums": [],
+        "zero_groups": (1, 2, 3),
         "passes_key": None,
     },
     # P0b parity-only governance: every content-override rule is classified and
@@ -116,17 +118,45 @@ LOG_GATES = {
     # P0b port capture: the headless dry-run writes the six-pose manifest and
     # the ROI script validates its schema without a GPU. The validated manifest
     # is the same file the real capture run overwrites, so a schema regression
-    # fails here before any capture time is spent. P1 records its dry-run under
-    # its own evidence dir via P0B_EVIDENCE_DIR (default stays the P0b path).
+    # fails here before any capture time is spent. Each wave records its dry-run
+    # under its own evidence dir via P0B_EVIDENCE_DIR (default stays the P0b path).
     "p0b_capture": {
         "command": (
-            "P0B_EVIDENCE_DIR=docs/reports/logs/p1/full "
+            "P0B_EVIDENCE_DIR=docs/reports/logs/final "
             "build/qa/p0b_capture.sh --dry-run && "
             "build/qa/p0b_roi_stats.py --validate-manifest "
-            "docs/reports/logs/p1/full/dry-run/manifest.json"
+            "docs/reports/logs/final/dry-run/manifest.json"
         ),
         "pattern": lambda g: r"P0B_MANIFEST_OK [^\n]*poses=(\d+) dry_run=true",
         "minimums": [(1, "poses")],
+        "passes_key": None,
+    },
+    # W10-P2/P3/P5 suites and probes. Each prints a stable numeric summary, so
+    # the measured count is a floor (a suite may add checks, never drop them).
+    # Cream suite 119 is GREEN now; `expected_fail=0` is in the literal pattern
+    # because the old RED proof is retired.
+    "test_w10a2_cream": {
+        "command": "tools/godot --headless --path game --script res://tests/test_w10a2_cream.gd",
+        "pattern": lambda g: r"CREAM_PROOF: GREEN passes=(\d+) expected_fail=0",
+        "minimums": [(1, "passes")],
+        "passes_key": None,
+    },
+    "test_audio_control": {
+        "command": "tools/godot --headless --path game --script res://tests/test_audio_control.gd",
+        "pattern": lambda g: r"AUDIO_CONTROL_SUMMARY: fails=0 checks=(\d+)",
+        "minimums": [(1, "checks")],
+        "passes_key": None,
+    },
+    "probe_p5_ui": {
+        "command": "tools/godot --headless --path game --script res://tests/probe_p5_ui.gd",
+        "pattern": lambda g: r"P5_UI PASS checks=(\d+)",
+        "minimums": [(1, "checks")],
+        "passes_key": None,
+    },
+    "probe_den_spawn": {
+        "command": "tools/godot --headless --path game --script res://tests/probe_den_spawn.gd",
+        "pattern": lambda g: r"DEN_SPAWN PASS checks=(\d+) fails=0",
+        "minimums": [(1, "checks")],
         "passes_key": None,
     },
     # P1 route-content probes: one per lane, each prints a stable PASS line with
@@ -322,7 +352,7 @@ PROBE_GATES = {
     # frame scored with the same criteria the port ROI script applies.
     "p0b_capture_self_test": (
         "P0B_SELFTEST PASS",
-        "P0B_EVIDENCE_DIR=docs/reports/logs/p1/full build/qa/p0b_capture.sh --self-test",
+        "P0B_EVIDENCE_DIR=docs/reports/logs/final build/qa/p0b_capture.sh --self-test",
     ),
     "p0b_kf27_reference": (
         "P0B_KF27_REF pose=upper_foyer met=7/7",
@@ -440,6 +470,15 @@ def main() -> int:
             left, right = int(match.group(equal[0])), int(match.group(equal[1]))
             if left != right:
                 fail(f"{log_name}: {gate} passed {left} != total {right}")
+        for group in spec.get("zero_groups", ()):
+            captured = int(match.group(group))
+            if captured != 0:
+                fail(
+                    f"{log_name} records {gate} group {group}={captured}, expected 0 — "
+                    f"run `{command}` and commit the fresh log"
+                )
+            else:
+                print(f"PASS: {log_name} records {gate} group {group}=0")
         num_le_den = spec.get("num_le_den")
         if num_le_den:
             left, right = (

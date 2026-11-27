@@ -1,0 +1,169 @@
+== FINAL_GATE probe_p1_street
+COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/probe_p1_street.gd
+CWD: /home/john/.local/share/opencode/worktree/318f41/final-evidence
+STARTED: 2026-11-26T22:34:50-05:00
+
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+TAT-2 Loc: reverse map built from sources.json (3404 keys)
+TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
+INPUT_TABLE source=generated rows=91 shipping=91 actions=52
+INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
+TAT-2 HUD build: id=1 root_children=29 hp_frame=1 hp_fill=1 objectives=1
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'gloomy'
+TAT-2 IBL: skylight_cubemap=/Game/MaterialLibrary/Utility/Cubemap_GroundFloor_01 converted=res://assets/ue/Raw/MaterialLibrary/Utility/Cubemap_GroundFloor_01.exr available=false sky_contribution=0.0 gi=ssil ao=true
+TAT-2 exposure: preset=gloomy mode=AGX exposure=1.150 authored_bias=0.0 ev100_night=-3.0 authored_curve_bias=-4.00 (curve recorded, not applied)
+MoonPanorama: cached res://assets/ue/Raw/Art/Environment/City/Architecture/BeautifulCorner/Materials/T_Moon_D.png (4096x2048, one decode per session)
+TAT-2 environment: bg=2 ambient_src=2 ambient_energy=0.15999999642372 ambient_color=(1.0, 1.0, 1.0, 1.0) sky=true fog=true fog_density=0.00480000022799
+TAT-2 P1-SAFE dressing: anchor=(126.29, 25.0, -2.28) portal=portal lantern=lantern flyer=spider_flyer missing_meshes=0 missing_materials=0
+TAT-2 scene variants selected=104 seed=1176381077
+TAT-2 run clock: map=guildhall mission=Mission.Guildhall.VaultHeist main_s=7200.0 main_source=mission_row endgame_s=1200.0 endgame_source=project_settings
+FootstepMask: downscaled 1024x1024 -> 128x128 for one-time alpha mask
+FootstepMask: baked one-time alpha mask (128x128, source_alpha=true) from res://assets/ue/Raw/Art/Environment/Props/Containers/Crates/T_Crate_Decal_D.png
+TAT-2 light allocation: map=guildhall authored=914 kept=159 budget=159 forced=7 rooms=152/187 cell_m=16.0
+TAT-2 gate lights: total=160 (generic=159 rect=1) budget=159 forced=7 hero_shadows=6
+WARNING: [level_loader] level Niagara: 452 placements across 8 systems in 66 chunk nodes (2 sprite-masked, 376 parameter sets, 1348 activation-skipped; decode root=res://../extracted/json files=46)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:6740)
+         [1] _store_level_extras (res://src/core/level_loader.gd:6512)
+         [2] load_sublevels_async (res://src/core/level_loader.gd:7081)
+ROUGHNESS_BAKE_MODE on=1 resolution=full cache=process
+WARNING: [level_loader] material flat white: '/Engine/BasicShapes/BasicShapeMaterial' has a colour but no albedo map (albedo_color=(0.9547, 0.9547, 0.9547, 1.0), flat=3)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] get_material_for_ue (res://src/core/level_loader.gd:1801)
+         [1] _get_overridden_mesh (res://src/core/level_loader.gd:2426)
+         [2] _build_one_draw_item (res://src/core/level_loader.gd:4748)
+         [3] load_sublevels_async (res://src/core/level_loader.gd:7106)
+WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Default_White' has a colour but no albedo map (albedo_color=(1.0, 1.0, 1.0, 1.0), flat=6)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] get_material_for_ue (res://src/core/level_loader.gd:1801)
+         [1] _bind_glb_materials (res://src/core/level_loader.gd:2183)
+         [2] _get_mesh_and_shape (res://src/core/level_loader.gd:1976)
+         [3] _build_one_draw_item (res://src/core/level_loader.gd:4702)
+         [4] load_sublevels_async (res://src/core/level_loader.gd:7106)
+COL_PLANAR /Game/Art/Effects/WardZones/SM_SlowWardZone_Quad instances=82 skipped=1
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=343
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=5543 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
+BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
+MESH_RECON authored=64953 applied=64682 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=206 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0
+MATERIAL_EMISSIVE invented_white=1 names=/Game/Art/Environment/Lights/Candles/MI_FlameCandleOrangeB
+PERF_CENSUS meshes=6425 instances=65129 chunk_nodes=6337 plain=2773 multimesh=3652 surface_draws=11451 lights=170 shadow_lights=7 occluders=768 collision_bodies=243 collision_shapes=31049 periph_nodes=3218 periph_instances=13446 periph_surface_draws=6186 periph_plain=1548 periph_multimesh=1670 periph_range=0 merge_mode=off merge_candidates=0 merge_nodes=0 merge_surfaces_before=0 merge_surfaces_after=0 light_budget=160 hero_shadows=6 source_sublevels={ "Guildhall_Landscape": 677, "Building_Guildhall_POI": 9847, "Guildhall_Geometry": 567, "Guildhall_Vault_CeremonialChambers": 908, "Guildhall_PeripheryA": 12378, "Building_Guildhall_POI_3rdFloor": 3624, "Guildhall_Gameplay": 2690, "Guildhall_P": 80, "Guildhall_LightingNoGameplay": 164, "Guildhall_Loot": 175, "Guildhall_SkyboxGeo": 33547 }
+TAT-2 Loaded guildhall: meshes=64682 lights=160
+TAT-2 KF16 car lenses: node=@MeshInstance3D@37093 dist=0.0 glass_surface=1 emission=1.0,0.6186,0.2552 energy=2.0
+TAT-2 KF16 street car: root=(19.0, 18.5304, 66.3382) headlights=2 lens=true prompt=INTERACT
+TAT-2 KF17 clocktower: placed GuildhallSkylineClocktower mat=/Game/Art/Environment/Skybox/Buildings/ML/MI_DistantBuidingA
+TAT-2 KF16 sign letters: node=@MeshInstance3D@37469 surface=1 emission=(1.0, 0.62, 0.2, 1.0) energy=0.10000000149012 albedo=(1.0, 0.6848, 0.2726, 1.0)
+P1_FOYER_DRESSING parts=bulbs,node,plaques,plate bulb_items=11 cyan_node_items=0 cyan_node_created=1 plaque_labels=2 floor_plate=1 floor_plate_approx=1
+TAT-2 KF23 Macleod sign: nodes=3 emission=(1.0, 0.361, 0.078, 1.0) energy=4.0 source=/Game/Art/Effects/HotWire_Ride/M_Crystal_Glow
+TAT-2 Perf: chunks=6337 collision_bodies=243 collision_shapes=31049 occluders=768
+TAT-2 player spawn: source=authored pos=(127.2747, 26.4694, -5.3296) yaw=-3.05432154567525 headroom_clear=true forward_clear=true
+TAT-2 guard spawn: selection=parity_approx_layer_bucket eligible=42 prepared=42 skipped=0 selected=4 from_prepared=4 backfilled=0
+WARNING: [hearing_data] 5 authored investigation-range anomalies clamped: AI.Stim.Hearing.LockPicking.Picked: outer 5.0 m > max 3.0 m (clamped); AI.Stim.Hearing.Alert.ShareKnowledge: outer 30.0 m > max 15.0 m (clamped); AI.Stim.Hearing.Tool.DartLaunch: inner 3.0 m > outer 2.0 m (clamped); AI.Stim.Hearing.EnterExitHedge: outer 8.0 m > max 7.5 m (clamped); AI.Stim.Hearing.Device.SecretSwitch: outer 8.0 m > max 7.5 m (clamped)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _log_anomalies_once (res://src/ai/hearing_data.gd:277)
+         [1] _build_stimuli (res://src/ai/hearing_data.gd:269)
+         [2] ensure_loaded (res://src/ai/hearing_data.gd:187)
+         [3] escalation_row (res://src/ai/hearing_data.gd:615)
+         [4] row (res://src/ai/sight_model.gd:120)
+         [5] escalation_row (res://src/ai/guard_ai.gd:488)
+         [6] _apply_authored_escalation (res://src/ai/guard_ai.gd:527)
+         [7] _ready (res://src/ai/guard_ai.gd:413)
+         [8] _spawn_guards (res://src/missions/mission_controller.gd:4143)
+         [9] start_contract (res://src/missions/mission_controller.gd:929)
+         [10] load_sublevels_async (res://src/core/level_loader.gd:7118)
+TAT-2 quest items: spawned=1 mission=Mission.Guildhall.VaultHeist free_play=false
+TAT-2 loot containers: 107
+TAT-2 clues: spawned=6 set(s)=CLS_Contract_02 map=guildhall
+PQ_PLACE kind=readable y=pin anchor=library_note yaw=none pin_y=28.0021 floor_y=28.0064 pos=(-26.8541, 28.0021, -9.4431)
+TAT-2 personal quest: map=guildhall thief=spider stage=intro plan=1 spawned=1 anchors=library_note
+TAT-2 escape markers: authored=14 spawned=14 grounded=14 connected=14 phase=main
+WARNING: [civilian_npc] navmesh snap deferred: query landed before first map sync (deferred=1); target fails open until sync
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _is_target_valid (res://src/ai/civilian_npc.gd:653)
+         [1] _pick_new_target (res://src/ai/civilian_npc.gd:615)
+         [2] _ready (res://src/ai/civilian_npc.gd:155)
+         [3] _spawn_civilians (res://src/missions/mission_controller.gd:4986)
+         [4] _spawn_spawner_content (res://src/missions/mission_controller.gd:4958)
+         [5] start_contract (res://src/missions/mission_controller.gd:939)
+         [6] load_sublevels_async (res://src/core/level_loader.gd:7118)
+TAT-2 spawners: throwable=133 ammo=45 health=5 civilian=3
+TAT-2 swinging doors: 155 locked=2
+TAT-2 authored devices: 903 (alarm_eye=60, goo_pipe=90, junction=11, light_beam=134, noise_alarm=96, power_switch=29, power_wall=9, pressure_plate=162, turret=229, vault_door=6, ward_blocker=36, ward_slow=41)
+P1_WARD_LOCKDOWN wired ward=Guildhall_Gameplay:BP_WardZone_Blocker_C_31 beam=Guildhall_Gameplay:BP_Detector_LightBeam_C_117 alarm=Guildhall_Gameplay:BP_MagicAlarm_LongRange_Narrow_C_38 shards=233 vine=(30.7, 28.0, -47.1)
+TAT-2 mission_ready map=guildhall meshes=64682 lights=160 chunks=6337
+WARNING: [nav_steering] no synchronised navigation map (no NavigationRegion3D baked for this map); AI uses straight-line steering and will press into corners. Navmesh baking is T09's; this is the documented degradation (RE-I-10).
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_degraded (res://src/ai/nav_steering.gd:181)
+         [1] step_towards (res://src/ai/nav_steering.gd:141)
+         [2] _move_ai (res://src/ai/guard_ai.gd:1608)
+         [3] _physics_process (res://src/ai/guard_ai.gd:1540)
+P1_STREET CHECK PASS BOOT real Contract 02 Guildhall mission loaded timed_out=false
+P1_STREET CHECK PASS MAP active_map_id=guildhall
+P1_STREET CHECK PASS KF15-CRATES authored_near_alley=19 min=16 loaded_map_instances=779
+P1_STREET CHECK PASS KF15-LADDER authored_near_alley=2 expected=2 loaded_map_instances=4
+P1_STREET CHECK PASS KF15-WEEDS authored_near_alley=15 (spike=11 burdock=4) min=5 loaded_map_instances=22
+P1_STREET CHECK PASS KF15-WALLLIGHT authored_near_alley=1 loaded_map_instances=164
+P1_STREET HARD_LIMIT drums alley_records=0 authored_assets=SM_Metal_BarrelA/B/C (loaded_map_instances=60) query=Containers/Barrels+Containers/Casks within 12 m of (-5.6, 24.46, 73.5)
+P1_STREET HARD_LIMIT banner BARRON'S DEMOLITION absent: 0 name hits in 9 Guildhall level JSONs, banners_in_map=12 (SM_BannerB/SM_BannerWall_IronBeam are the KILCAIRN heraldic T_BannerSet_D set)
+P1_STREET CHECK PASS KF16-CAR-LENS SM_Automobile_Lights_B dist=0.004
+P1_STREET CHECK PASS KF16-CAR-BODY SM_Automobile_Cabin_A dist=0.005
+P1_STREET CHECK PASS KF16-CAR-INTERACT street_car nodes=1 expected=1
+P1_STREET CHECK PASS KF16-CAR-PROMPT prompt=[F] INTERACT
+P1_STREET CHECK PASS KF16-CAR-LIGHTS headlight_count=2
+P1_STREET CHECK PASS KF16-FLASH-CURVE curve 0.0=0.00 0.5=1.00 1.5=0.00 authored keys 0@0/1@0.2..1.0/0@1.1
+P1_STREET CHECK PASS KF16-FLASH-LEVEL flash_energy=1.722 authored 50 lm via light_energy_for_intensity
+P1_STREET CHECK PASS KF16-LENS-OFF lens emission at rest=0.000
+P1_STREET CHECK PASS KF16-HORN-CLIP has_real_clip(car_horn)=true play_car_horn=true authored event=Play_Obj_Vehicle_Car_Horn_OneOff
+P1_STREET CHECK PASS KF16-HONK-COUNT honk_count=1
+P1_STREET CHECK PASS KF16-CAR-STIM noise records=1 authored StimTag=AI.Stim.Hearing.CarAlarm
+P1_STREET CHECK PASS KF16-CAR-STIM-RANGE HearingData.max_range_m(car_alarm)=50.00 authored 50.0
+P1_STREET CHECK PASS KF16-FLASH-ON flash=1.000 after 0.5 s
+P1_STREET CHECK PASS KF16-HEADLIGHT-LIT spot energy 4.500 -> 6.222
+P1_STREET CHECK PASS KF16-LENS-FLASH lens emission 0.000 -> 2.000 authored 2.0
+P1_STREET CHECK PASS KF16-FLASH-OFF alarm stopped, base restored
+P1_STREET CHECK PASS KF16-BEAM-AIM both wet-cobble beams point at the gate approach
+P1_STREET CHECK PASS KF16-GATE-SIGN SM_Guildhall_Sign dist=0.000 surfaces=4 expected 4 (letters+crest)
+P1_STREET CHECK PASS KF18-GRIFFINS authored SM_StatueGriffonA=2 expected=2 loaded_map_instances=2 at x5.65/14.55 z24.75
+P1_STREET CHECK PASS KF18-GEAR-PLATE SM_ElectricalTransformer_Main=10 plate_albedo=res://assets/ue/Raw/Art/Gameplay/ElectricPowerSource/ElectricalTransformer/T_ElectricalTransformer_D.png
+P1_STREET CHECK PASS KF23-MACLEOD-PLACE SM_SignMacleod dist=0.000 authored KF23 pos=(116.6284, 53.2895, 22.6352)
+P1_STREET CHECK PASS KF23-MACLEOD-EMISSIVE emission=true colour=(1.0, 0.361, 0.078, 1.0) energy=4.00 authored tint=M_Crystal_Glow/Emissive Amount 2
+P1_STREET CHECK PASS WET-PRESET gloomy ground_wetness=1.0 authored
+P1_STREET CHECK PASS WET-PUDDLE-LAYERS Guildhall landscape Puddle layer bindings=9
+P1_STREET CHECK PASS WET-SHADER tat_landscape material instances=18
+P1_STREET SUMMARY checks=31 fails=0 hard_limits=2
+P1_STREET PASS
+WARNING: 14 ObjectDB instances were leaked at exit (run with `--verbose` for details).
+   at: cleanup (core/object/object.cpp:2536)
+ERROR: 6 resources still in use at exit (run with --verbose for details).
+   at: clear (core/io/resource.cpp:822)
+
+EXIT: 0
+FINISHED: 2026-11-26T22:35:19-05:00

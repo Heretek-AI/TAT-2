@@ -1,0 +1,9 @@
+== FINAL_GATE p0b_manifest_validate
+COMMAND: python3 build/qa/p0b_roi_stats.py --validate-manifest /home/john/.local/share/opencode/worktree/318f41/final-evidence/docs/reports/logs/final/dry-run/manifest.json
+CWD: /home/john/.local/share/opencode/worktree/318f41/final-evidence
+STARTED: 2026-11-26T22:47:41-05:00
+
+P0B_MANIFEST_OK path=/home/john/.local/share/opencode/worktree/318f41/final-evidence/docs/reports/logs/final/dry-run/manifest.json poses=6 dry_run=true run_id=20261127T034740Z_5135f53dfff8_on
+
+EXIT: 0
+FINISHED: 2026-11-26T22:47:41-05:00

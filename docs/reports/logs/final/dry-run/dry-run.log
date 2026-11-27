@@ -1,0 +1,29 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+TAT-2 Loc: reverse map built from sources.json (3404 keys)
+TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
+INPUT_TABLE source=generated rows=91 shipping=91 actions=52
+INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
+P0B_START mode=dry-run run=20261127T034740Z_5135f53dfff8_on poses=gate,upper_foyer,yaw180,lounge,lounge_beam,beam_close beam=on seed=derived fov=54.54 size=(1920, 1080) out=/home/john/.local/share/opencode/worktree/318f41/final-evidence/build/qa/p0b/dry-run manifest=/home/john/.local/share/opencode/worktree/318f41/final-evidence/docs/reports/logs/final/dry-run/manifest.json
+P0B_DRY_RUN manifest=/home/john/.local/share/opencode/worktree/318f41/final-evidence/docs/reports/logs/final/dry-run/manifest.json poses=6 schema=tat2.p0b_capture/1 audio=disabled reason=dry_run

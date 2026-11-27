@@ -1,0 +1,139 @@
+== FINAL_GATE probe_guard_positions_old_manor
+COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/probe_guard_positions.gd -- --map=old_manor --order=3
+CWD: /home/john/.local/share/opencode/worktree/318f41/final-evidence
+STARTED: 2026-11-26T22:35:58-05:00
+
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+TAT-2 Loc: reverse map built from sources.json (3404 keys)
+TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
+INPUT_TABLE source=generated rows=91 shipping=91 actions=52
+INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
+GUARD_CHECK boot map=old_manor order=3 difficulty=1 expect_guards=4 selection=parity_approx_layer_bucket
+GUARD_CHECK difficulty_note=Novice fixed; the Old Manor shipped difficulty capture is unmeasured
+TAT-2 HUD build: id=1 root_children=29 hp_frame=1 hp_fill=1 objectives=1
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'dense_fog_old_manor'
+TAT-2 IBL: skylight_cubemap=/Engine/MapTemplates/daylight converted= available=false sky_contribution=0.0 gi=ssil ao=true
+MoonPanorama: cached res://assets/ue/Raw/Art/Environment/City/Architecture/BeautifulCorner/Materials/T_Moon_D.png (4096x2048, one decode per session)
+TAT-2 environment: bg=2 ambient_src=2 ambient_energy=0.05000000074506 ambient_color=(0.6157, 0.6118, 0.6, 1.0) sky=true fog=true fog_density=0.01200000010431
+TAT-2 scene variants selected=77 seed=2058317633
+TAT-2 run clock: map=old_manor mission=Mission.OldManor.Vault main_s=7200.0 main_source=mission_row endgame_s=1200.0 endgame_source=project_settings
+FootstepMask: downscaled 1024x1024 -> 128x128 for one-time alpha mask
+FootstepMask: baked one-time alpha mask (128x128, source_alpha=true) from res://assets/ue/Raw/Art/Environment/Props/Containers/Crates/T_Crate_Decal_D.png
+TAT-2 light allocation: map=old_manor authored=838 kept=160 budget=160 forced=0 rooms=160/167 cell_m=16.0
+WARNING: [level_loader] level Niagara: 559 placements across 8 systems in 83 chunk nodes (2 sprite-masked, 413 parameter sets, 1252 activation-skipped; decode root=res://../extracted/json files=36)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:6740)
+         [1] _store_level_extras (res://src/core/level_loader.gd:6512)
+         [2] load_sublevels_async (res://src/core/level_loader.gd:7081)
+ROUGHNESS_BAKE_MODE on=1 resolution=full cache=process
+WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Default_White' has a colour but no albedo map (albedo_color=(1.0, 1.0, 1.0, 1.0), flat=2)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] get_material_for_ue (res://src/core/level_loader.gd:1801)
+         [1] _bind_glb_materials (res://src/core/level_loader.gd:2183)
+         [2] _get_mesh_and_shape (res://src/core/level_loader.gd:1976)
+         [3] _build_one_draw_item (res://src/core/level_loader.gd:4702)
+         [4] load_sublevels_async (res://src/core/level_loader.gd:7106)
+WARNING: [level_loader] material flat white: '/Engine/BasicShapes/BasicShapeMaterial' has a colour but no albedo map (albedo_color=(0.9547, 0.9547, 0.9547, 1.0), flat=7)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] get_material_for_ue (res://src/core/level_loader.gd:1801)
+         [1] _get_overridden_mesh (res://src/core/level_loader.gd:2426)
+         [2] _build_one_draw_item (res://src/core/level_loader.gd:4748)
+         [3] load_sublevels_async (res://src/core/level_loader.gd:7106)
+COL_PLANAR /Game/Art/Effects/WardZones/SM_SlowWardZone_Quad instances=78 skipped=1
+AUTHORED_COLLISION meshes=703 hull=698 authored_elements=641 complex=44 no_record=0 prims=380 convex=2739 absent=5 no_collision=13 query_only=5 reduced=35 shapes_per_instance_avg=1.10 elements=3710 load_ms=336
+ROUGHNESS_BAKE count=87 pixels=72220672 ms=5305 bytes=96294196 hits=39 (L8 low+g*(high-low), full-res, process cache)
+BEAM_FIX SM_LightBeam cards=196 axis=col2 length_slot=2 clamp=none max_scale=236.9539 max_length_m=24.169
+BEAM_AXIS cards=196 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
+MESH_RECON authored=24819 applied=24180 duplicate=547 name_skipped=6 wardbox=39 moonshape=47 clamp=287 clamp_worst=500.00x mirrored=780 origin_markers_skipped=0 skipped_merged=0 from_graph=4 graph_missing=0
+TAT-2 Loaded old_manor: meshes=24180 lights=160
+TAT-2 Perf: chunks=4670 collision_bodies=471 collision_shapes=22678 occluders=768
+TAT-2 player spawn: source=authored pos=(5.9512, 9.5283, 126.025) yaw=1.5707963267949 headroom_clear=true forward_clear=true
+TAT-2 guard spawn: selection=parity_approx_layer_bucket eligible=20 prepared=20 skipped=0 selected=4 from_prepared=4 backfilled=0
+WARNING: [hearing_data] 5 authored investigation-range anomalies clamped: AI.Stim.Hearing.LockPicking.Picked: outer 5.0 m > max 3.0 m (clamped); AI.Stim.Hearing.Alert.ShareKnowledge: outer 30.0 m > max 15.0 m (clamped); AI.Stim.Hearing.Tool.DartLaunch: inner 3.0 m > outer 2.0 m (clamped); AI.Stim.Hearing.EnterExitHedge: outer 8.0 m > max 7.5 m (clamped); AI.Stim.Hearing.Device.SecretSwitch: outer 8.0 m > max 7.5 m (clamped)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _log_anomalies_once (res://src/ai/hearing_data.gd:277)
+         [1] _build_stimuli (res://src/ai/hearing_data.gd:269)
+         [2] ensure_loaded (res://src/ai/hearing_data.gd:187)
+         [3] escalation_row (res://src/ai/hearing_data.gd:615)
+         [4] row (res://src/ai/sight_model.gd:120)
+         [5] escalation_row (res://src/ai/guard_ai.gd:488)
+         [6] _apply_authored_escalation (res://src/ai/guard_ai.gd:527)
+         [7] _ready (res://src/ai/guard_ai.gd:413)
+         [8] _spawn_guards (res://src/missions/mission_controller.gd:4143)
+         [9] start_contract (res://src/missions/mission_controller.gd:929)
+         [10] load_sublevels_async (res://src/core/level_loader.gd:7118)
+TAT-2 quest items: spawned=1 mission=Mission.OldManor.Vault free_play=false
+TAT-2 loot containers: 110
+TAT-2 clues: spawned=2 set(s)=CLS_Contract_03 map=old_manor
+TAT-2 escape markers: authored=10 spawned=10 grounded=10 connected=10 phase=main
+WARNING: [civilian_npc] navmesh snap deferred: query landed before first map sync (deferred=1); target fails open until sync
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _is_target_valid (res://src/ai/civilian_npc.gd:653)
+         [1] _pick_new_target (res://src/ai/civilian_npc.gd:615)
+         [2] _ready (res://src/ai/civilian_npc.gd:155)
+         [3] _spawn_civilians (res://src/missions/mission_controller.gd:4986)
+         [4] _spawn_spawner_content (res://src/missions/mission_controller.gd:4958)
+         [5] start_contract (res://src/missions/mission_controller.gd:939)
+         [6] load_sublevels_async (res://src/core/level_loader.gd:7118)
+TAT-2 spawners: throwable=385 ammo=97 health=7 civilian=2
+[swinging_door] authored lock not applied (window): BP_SM_OldManor_WindowB_4x850_C
+[swinging_door] authored lock not applied (window): BP_Manor_WindowB_4x650_C
+TAT-2 swinging doors: 120 locked=4
+TAT-2 authored devices: 1164 (alarm_eye=119, goo_pipe=45, light_beam=196, noise_alarm=40, power_switch=26, power_wall=2, pressure_plate=419, turret=247, vault_door=6, ward_blocker=25, ward_slow=39)
+TAT-2 mission_ready map=old_manor meshes=24180 lights=160 chunks=4670
+WARNING: [nav_steering] no synchronised navigation map (no NavigationRegion3D baked for this map); AI uses straight-line steering and will press into corners. Navmesh baking is T09's; this is the documented degradation (RE-I-10).
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_degraded (res://src/ai/nav_steering.gd:181)
+         [1] step_towards (res://src/ai/nav_steering.gd:141)
+         [2] _move_ai (res://src/ai/guard_ai.gd:1608)
+         [3] _physics_process (res://src/ai/guard_ai.gd:1540)
+GUARD_CHECK boot_state loaded_map=old_manor frames=211 player=true guards=4
+GUARD_CHECK anchor=(5.951,7.266,126.025)
+GUARD_CHECK guard_pool=85
+GUARD_CHECK marker_source=res://data/generated/levels/OldManor markers=85
+GUARD_CHECK guard id=Guard_1 src=BP_MissionSpawner_Character_C_23 bucket=DA_SpawnBucket_PrivateSecurity layers=["Security_Westhall_A", "Security_WestHall_A_Easy", "Security_Westhall_B", "Security_Westhall_B_Easy", "Security_Westhall_C", "Security_Westhall_F"] marker=(-15.896,17.540,44.874) grounded_meta=(-15.896,16.655,44.874) dist_marker=1.181 grounded_to_marker=0.885 floor_ray=hit floor_y=16.505 delta_floor=0.001 lounge=no dist_anchor=84.8 meshes=3 meshes_visible=3 visible_in_tree=true
+GUARD_CHECK guard id=Guard_3 src=BP_MissionSpawner_Character_C_26 bucket=DA_SpawnBucket_PrivateSecurity_Lanterns layers=["Security_YardWest_A", "Security_YardWest_A_Easy"] marker=(-57.535,19.531,52.771) grounded_meta=(-57.535,18.655,52.771) dist_marker=1.026 grounded_to_marker=0.876 floor_ray=hit floor_y=18.505 delta_floor=0.000 lounge=no dist_anchor=97.6 meshes=2 meshes_visible=2 visible_in_tree=true
+GUARD_CHECK guard id=Guard_ClubLantern_0 src=BP_MissionSpawner_Character_C_17 bucket=DA_SpawnBucket_PrivateSecurity layers=["Security_Lounge_E"] marker=(-5.542,11.202,51.934) grounded_meta=(-5.542,10.155,51.934) dist_marker=1.346 grounded_to_marker=1.047 floor_ray=hit floor_y=10.005 delta_floor=0.001 lounge=no dist_anchor=74.4 meshes=4 meshes_visible=4 visible_in_tree=true
+GUARD_CHECK guard id=Guard_ClubLantern_2 src=BP_MissionSpawner_Character_C_25 bucket=DA_SpawnBucket_PrivateSecurity_Lanterns layers=["Security_YardEast_A", "Security_YardEast_A_Easy"] marker=(39.675,9.765,77.035) grounded_meta=(39.675,8.900,77.035) dist_marker=1.181 grounded_to_marker=0.865 floor_ray=hit floor_y=8.750 delta_floor=0.006 lounge=no dist_anchor=59.6 meshes=4 meshes_visible=4 visible_in_tree=true
+GUARD_CHECK lounge_guard=- marker=- bucket=- layers=[]
+GUARD_CHECK lounge_check=not_applicable map=old_manor
+GUARD_CHECK t2 count=4
+GUARD_CHECK t2 id=Guard_1 pos=(-15.030,16.506,40.608) visible_in_tree=true meshes_visible=3
+GUARD_CHECK t2 id=Guard_3 pos=(-56.940,18.505,52.768) visible_in_tree=true meshes_visible=2
+GUARD_CHECK t2 id=Guard_ClubLantern_0 pos=(-5.643,10.006,52.650) visible_in_tree=true meshes_visible=4
+GUARD_CHECK t2 id=Guard_ClubLantern_2 pos=(38.937,8.750,76.334) visible_in_tree=true meshes_visible=4
+GUARD_CHECK persistence disappeared=[] moved_over_0.5m=["Guard_1(3.93)", "Guard_3(0.59)"] hidden_or_meshless=[]
+GUARD_CHECK detail lanterns_t1=2
+GUARD_CHECK SUMMARY map=old_manor order=3 guards_t1=4 guards_t2=4 expected=4 lounge_guards=0 with_meshes=4 with_guard_bucket=4 without_guard_bucket=0 marker_floor_within_0.5m=4/4
+GUARD_CHECK PASS map=old_manor order=3 guards=4 buckets=4/4 lounge=0 lounge_marker=- selection=parity_approx_layer_bucket difficulty=1
+
+EXIT: 0
+FINISHED: 2026-11-26T22:36:44-05:00

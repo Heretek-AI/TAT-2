@@ -1,0 +1,97 @@
+== FINAL_GATE probe_niagara
+COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/probe_niagara.gd
+CWD: /home/john/.local/share/opencode/worktree/318f41/final-evidence
+STARTED: 2026-11-26T22:37:59-05:00
+
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+TAT-2 Loc: reverse map built from sources.json (3404 keys)
+TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
+INPUT_TABLE source=generated rows=91 shipping=91 actions=52
+INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
+WARNING: [level_loader] level Niagara: 1048 placements across 16 systems in 140 chunk nodes (4 sprite-masked, 810 parameter sets, 2647 activation-skipped; decode root=res://../extracted/json files=77)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:6740)
+         [1] _run (res://tests/probe_niagara.gd:122)
+NIAGARA_PROBE files=107 authored=3695 active=1048 skipped=2647 systems=16 nodes=140 sprites=4 params=810 tint(param/material/fallback)=743/12/293
+NIAGARA_SPRITE_TOKENS bound=5 total=39 legacy=5 renderers=82 changed=2 slots=opacity:2,albedo:23,emissive:0,normal:0,orm:0,none:11,subuv:3 reasons=gate:5,kept:18,no_material_record:2,no_texture:9,opacity_fallback:2,subuv_atlas:3 additive_opaque=9 additive_total=16 library=fixed:11/kept:194/none:107 masks=6/29 ms=39 errors=0
+NIAGARA_SPRITE_TOKEN mat=/Game/Art/Environment/Lights/Candles/MI_FlameCandleOrangeB slot=albedo now=T_Atlas_B_01_BC.png before=T_Atlas_B_01_BC.png gate=reject reason=subuv_atlas subuv=8x8
+NIAGARA_SPRITE_TOKEN mat=/Game/Art/Effects/WeaponImpact/MI_BurstEmbers slot=albedo now=vfx_MuzzleFlare01.png before=vfx_MuzzleFlare01.png gate=reject reason=kept
+NIAGARA_SPRITE_TOKEN mat=/Game/Art/Effects/GlyphLock/MI_Candlabra_SmokeWisp slot=albedo now=T_Atlas_B_01_BC.png before=T_Atlas_B_01_BC.png gate=reject reason=subuv_atlas subuv=8x8
+NIAGARA_SPRITE_TOKEN mat=/Game/Art/VFX/Materials/Particle_MATERIALS/MI_SmokeBomb_Wisps slot=albedo now=T_SkyboxSmokestacks_D.png before=T_SkyboxSmokestacks_D.png gate=reject reason=kept
+NIAGARA_SPRITE_TOKEN mat=/Game/Art/Effects/Fireplace/MI_FireBarrelCenter slot=albedo now=T_FireplaceTools_D.png before=T_FireplaceTools_D.png gate=reject reason=kept
+NIAGARA_SPRITE_TOKEN mat=/Game/ThirdParty/BallisticsVFX/Particles/FXMaterials/Explosive/Explosion_Master2 slot= now=- before=- gate=reject reason=no_material_record
+NIAGARA_SPRITE_TOKEN mat=/Game/Art/Effects/Fireplace/MI_Fireplace_AdvancedPlayer slot=albedo now=T_Atlas_B_01_BC.png before=T_Atlas_B_01_BC.png gate=reject reason=subuv_atlas subuv=8x8
+NIAGARA_SPRITE_TOKEN mat=/Game/Art/VFX/BathroomSink/M_WaterDrop slot= now=- before=- gate=reject reason=no_texture
+NIAGARA_SPRITE_TOKEN mat=/Game/Art/Effects/LootAura/M_Sparkle_01 slot=albedo now=T_vfx_Sparkles_02.png before=T_vfx_Sparkles_02.png gate=reject reason=kept additive_lum(cov=0.141 border=0.004 bind)
+NIAGARA_SPRITE_TOKEN mat=/Game/Art/Gameplay/ElectricFence/M_ElectricShocks_01 slot=albedo now=T_Dart_Electric_D.png before=T_Dart_Electric_D.png gate=reject reason=kept additive_lum(cov=0.955 border=0.938 box)
+NIAGARA_SPRITE_TOKEN mat=/Game/Art/Gameplay/ElectricPowerSource/MI_ElectricShocks_PowerSupply slot=albedo now=T_Dart_Electric_D.png before=T_Dart_Electric_D.png gate=reject reason=kept additive_lum(cov=0.955 border=0.938 box)
+NIAGARA_SPRITE_TOKEN mat=/Game/Art/Gameplay/ElectricPowerSource/MI_Smoke_ElectricStand slot=albedo now=T_SkyboxSmokestacks_D.png before=T_SkyboxSmokestacks_D.png gate=reject reason=kept
+NIAGARA_SPRITE_TOKEN mat=/Game/MaterialLibrary/VFX/M_Sparks slot= now=- before=- gate=reject reason=no_texture
+NIAGARA_SPRITE_TOKEN mat=/Game/Art/Gameplay/Gear/Faerie/MI_FaerieBody slot=albedo now=Faerie_Body01.png before=Faerie_Body01.png gate=reject reason=kept additive_lum(cov=0.290 border=0.000 bind)
+NIAGARA_SPRITE_TOKEN mat=/Game/ThirdParty/BallisticsVFX/Particles/FXMaterials/Flares/M_Radial_Gradient slot= now=- before=- gate=reject reason=no_texture
+NIAGARA_SPRITE_TOKEN mat=/Game/ThirdParty/SignalFlaresFX/Materials/MI_Sparks slot=albedo now=T_LootAttract_Shine.png before=T_LootAttract_Shine.png gate=PASS reason=gate
+NIAGARA_SPRITE_TOKEN mat=/Game/Art/Gameplay/Gear/BlowDart/MI_SmokeWispUnlit_01 slot=albedo now=T_SmokeBomb_D.png before=T_SmokeBomb_D.png gate=reject reason=kept
+NIAGARA_SPRITE_TOKEN mat=/Game/Art/Effects/SmokeBomb/MI_SmokeDust_01 slot=albedo now=T_SmokeBomb_D.png before=T_SmokeBomb_D.png gate=reject reason=kept
+NIAGARA_SPRITE_TOKEN mat=/Game/Art/Effects/LootAura/MI_Lightrays_01 slot=albedo now=T_vfx_Sparkles_02.png before=T_vfx_Sparkles_02.png gate=reject reason=kept additive_lum(cov=0.141 border=0.004 bind)
+NIAGARA_SPRITE_TOKEN mat=/Niagara/DefaultAssets/DefaultSpriteMaterial slot= now=- before=- gate=reject reason=no_material_record
+NIAGARA_SPRITE_TOKEN mat=/Game/Art/Effects/Crown_Aura/MI_Styliced_Smoke_MagicEye slot=albedo now=Smoke32.png before=Smoke32.png gate=PASS reason=gate
+NIAGARA_SPRITE_TOKEN mat=/Game/Art/Effects/SmokeBomb/MI_SmokeBomb_Fluid_Smoke slot=albedo now=T_SmokeBomb_D.png before=T_SmokeBomb_D.png gate=reject reason=kept
+NIAGARA_SPRITE_TOKEN mat=/Game/Art/Effects/Leaves/MI_EnvWillowGlow_CameraOffset slot=albedo now=T_LeafWillowGlow_D.png before=T_LeafWillowGlow_D.png gate=PASS reason=gate
+NIAGARA_SPRITE_TOKEN mat=/Game/MaterialLibrary/VFX/M_DustMote_Lit slot= now=- before=- gate=reject reason=no_texture
+NIAGARA_SPRITE_TOKEN mat=/Game/Art/Effects/Goo/M_Goo_Bubbles slot= now=- before=- gate=reject reason=no_texture additive_lum(cov=1.000 border=1.000 box)
+NIAGARA_SPRITE_TOKEN mat=/Game/Art/VFX/M_ElectricSparks slot=albedo now=T_Dart_Electric_D.png before=T_Dart_Electric_D.png gate=reject reason=kept
+NIAGARA_SPRITE_TOKEN mat=/Game/Art/VFX/Materials/Particle_MATERIALS/Sparks/M_Glow_Particle1 slot=albedo now=T_LightGlowsA_D.png before=T_LightGlowsA_D.png gate=PASS reason=gate
+NIAGARA_SPRITE_TOKEN mat=/Game/Art/Effects/AntiStealth/M_AntiStealth_Sparks slot=albedo now=T_AntiStealthDevice_D.png before=T_AntiStealthDevice_D.png gate=reject reason=kept
+NIAGARA_SPRITE_TOKEN mat=/Game/Art/Effects/Chimney/MI_SmokeStack_Smoke_BC slot=albedo now=T_SkyboxSmokestacks_D.png before=T_SkyboxSmokestacks_D.png gate=reject reason=kept
+NIAGARA_SPRITE_TOKEN mat=/Game/Art/Effects/Chimney/MI_SmokeStack_Smoke slot=albedo now=T_SkyboxSmokestacks_D.png before=T_SkyboxSmokestacks_D.png gate=reject reason=kept
+NIAGARA_SPRITE_TOKEN mat=/Game/Art/VFX/Environment/RainStorm/MI_RainDrops_Additive_BC slot=opacity now=T_DropletsMasks_Packed.png before=T_Bomb_Liquid_DA.png gate=reject reason=opacity_fallback additive_lum(cov=0.444 border=0.048 bind)
+NIAGARA_SPRITE_TOKEN mat=/Game/Art/VFX/Environment/RainStorm/MI_RainSplashes_BC slot=opacity now=T_DropletsMasks_Packed.png before=T_Bomb_Liquid_DA.png gate=reject reason=opacity_fallback additive_lum(cov=0.444 border=0.048 bind)
+NIAGARA_SPRITE_TOKEN mat=/Game/ThirdParty/DEKO_VFX/VOL1_Water/Materials/MI_Drop_01a slot= now=- before=- gate=reject reason=no_texture
+NIAGARA_SPRITE_TOKEN mat=/Game/ThirdParty/DEKO_VFX/VOL1_Water/Materials/MM_Leak_02a slot= now=- before=- gate=reject reason=no_texture
+NIAGARA_SPRITE_TOKEN mat=/Game/ThirdParty/DEKO_VFX/VOL1_Water/Materials/MM_Splash_03a slot=albedo now=TX_Splash_Big_01a_ALB.png before=TX_Splash_Big_01a_ALB.png gate=PASS reason=gate
+NIAGARA_SPRITE_TOKEN mat=/Game/ThirdParty/DEKO_VFX/VOL1_Water/Materials/MM_Ripple_Master_01a slot= now=- before=- gate=reject reason=no_texture
+NIAGARA_SPRITE_TOKEN mat=/Game/ThirdParty/DEKO_VFX/VOL1_Water/Materials/MM_Ripple_Drop_Master_01a slot= now=- before=- gate=reject reason=no_texture
+NIAGARA_SPRITE_TOKEN mat=/Game/Art/Effects/LootAura/M_Sparkle_02 slot=albedo now=T_vfx_Sparkles_02.png before=T_vfx_Sparkles_02.png gate=reject reason=kept additive_lum(cov=0.141 border=0.004 bind)
+NIAGARA_SPRITE_TOKEN mat=/Game/Art/Effects/LootAura/MI_Flare_01 slot=albedo now=T_vfx_Sparkles_02.png before=T_vfx_Sparkles_02.png gate=reject reason=kept additive_lum(cov=0.141 border=0.004 bind)
+NIAGARA_SPRITE_TOKENS target 23/29 NOT MET: bound=5 of 39 placed materials; accepted_measured=6/29 (authored data, not the gate: see W9-P1 report)
+NIAGARA_CANDLE Building_Guildhall_POI.tatlevel.json candles=121 flames=140 suppressed=79
+ERROR: Parse JSON failed. Error at line 0: Unknown error getting token
+   at: parse_string (core/io/json.cpp:629)
+   GDScript backtrace (most recent call first):
+       [0] _check_candle_dedup (res://tests/probe_niagara.gd:720)
+       [1] _run (res://tests/probe_niagara.gd:263)
+NIAGARA_CULL near(visible/total)=4/140 far=0/140
+NIAGARA_SWITCH NS_Ripple_02a off_changed=1 restored=true
+WARNING: [level_loader] level Niagara: 219 placements across 4 systems in 39 chunk nodes (1 sprite-masked, 159 parameter sets, 915 activation-skipped; decode root=res://../extracted/json files=17)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:6740)
+         [1] _run (res://tests/probe_niagara.gd:324)
+NIAGARA_CULL_MAP Guildhall_Gameplay active=219 nodes=39 visible=19
+NIAGARA_PROBE PASS
+
+EXIT: 0
+FINISHED: 2026-11-26T22:38:03-05:00

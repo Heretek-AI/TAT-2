@@ -1,0 +1,61 @@
+== FINAL_SUPPLEMENT navmesh_spike
+COMMAND: TAT2_NAV_JSON=/tmp/opencode/nav-spike/nav/Maps/Guildhall/Guildhall_P.json build/qa/navmesh_spike.sh
+CWD: /home/john/.local/share/opencode/worktree/318f41/final-evidence
+NOTE: supplemental headless Detour-tile consumer run after build/qa/run_final_gates.sh. The wrapper takes the Godot lock itself; no GPU. The authored tile JSON is a /tmp extraction artifact (not committed).
+STARTED: 2026-11-26T22:50:30-05:00
+
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+TAT-2 Loc: reverse map built from sources.json (3404 keys)
+TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
+INPUT_TABLE source=generated rows=91 shipping=91 actions=52
+INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
+NAV_TILES tiles=2958 polys=14930 verts=40126 offmesh=221 cache_tiles=2958 cache_bytes=2302750 decompress_fail=0
+NAV_BUILD verts=30918 polys=14709 skipped=0 max_poly_verts=6 read_ms=8 parse_ms=73 build_ms=39
+  PASS  authored tile count == 2958 (got 2958)
+  PASS  authored poly count == 14930 (got 14930)
+  PASS  walkable poly count == 14709 (got 14709)
+  PASS  authored vertex count == 40126 (got 40126)
+  PASS  authored off-mesh connection count == 221 (got 221)
+  PASS  no polygon skipped (got 0)
+NAV_MAP synced=true frames=66 iteration=3 regions=1 cell=0.010 margin=0.050 sync_ms=975 region_enabled=true
+  PASS  navigation map synchronised (region polygons committed)
+  PASS  map carries the spike region
+  PASS  NavigationMesh holds 14709 polys (got 14709)
+NAV_DOOR_PATH actor=BP_Doorless_Civic_DoorA_Wall_Int_6x6_C_281 level=res://data/generated/levels/Buildings/Guildhall/Building_Guildhall_POI.tatlevel.json door=(12.5, 11.5, -45.0) normal=(0.0, 0.0, -1.0) a=(12.5, 11.5, -47.2) b=(12.5, 11.5, -42.8) snapped_a=(12.5, 11.55, -47.2) snapped_b=(13.3, 11.55, -43.13) snap_dist=(0.05,0.87) waypoints=3 length_m=4.15 straight_m=4.15
+  WP 0 (12.5, 11.55, -47.2)
+  WP 1 (13.11, 11.55, -44.27)
+  WP 2 (13.3, 11.55, -43.13)
+  PASS  both door-side points project onto the navmesh (<=2.5 m)
+  PASS  known doorway path has >1 waypoint (got 3)
+  PASS  known doorway path crosses a poly boundary (got 3 waypoints)
+  PASS  path reaches the far side of the doorway (last waypoint 0.00 m from target)
+  PASS  path is not a partial/short path (4.15 >= 4.15 - 0.5)
+  PASS  doorway path is not a wall detour (4.15 <= 4.15 + 3.0)
+  PASS  doorway endpoints are on opposite sides (>2 m)
+NAV_LOAD_MS read=8 parse=73 build=39 sync=975 total=1172 mem_mb=61.8
+NAV_SPIKE_SUMMARY checks=16 fails=0
+
+EXIT: 0
+FINISHED: 2026-11-26T22:50:38-05:00

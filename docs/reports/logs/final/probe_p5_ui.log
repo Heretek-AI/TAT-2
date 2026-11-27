@@ -1,0 +1,81 @@
+== FINAL_GATE probe_p5_ui
+COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/probe_p5_ui.gd
+CWD: /home/john/.local/share/opencode/worktree/318f41/final-evidence
+STARTED: 2026-11-26T22:47:28-05:00
+
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+TAT-2 Loc: reverse map built from sources.json (3404 keys)
+TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
+INPUT_TABLE source=generated rows=91 shipping=91 actions=52
+INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
+TAT-2 HUD build: id=1 root_children=29 hp_frame=1 hp_fill=1 objectives=1
+PASS: P5.1 gem shader sizes the lit cap from amount and places it from the light direction
+PASS: P5.2 gem keeps the circular glazed-sphere mask/normals (W5D contract)
+PASS: P5.3 the frame no longer lerps to a warm colour with exposure
+PASS: P5.4 a light to the right maps to canvas +X (angle 0)
+PASS: P5.5 a light above maps to canvas -Y (angle -90 deg)
+PASS: P5.6 a light on the viewer's side maps to +Z (front-lit cap)
+PASS: P5.7 lit area is 0 / 0.5 / 1.0 for amount 0 / 0.5 / 1.0 (KF17/KF16/KF24)
+PASS: P5.8 lit area is monotonic in the light amount
+PASS: P5.9 sector angle follows the applied direction (-90 deg up)
+PASS: P5.10 the shader material carries the applied amount + direction
+PASS: P5.11 gem frame keeps the authored BPUI Image_177 violet tint
+PASS: P5.11b authored stealth-ball array is recorded as 21 slices
+PASS: P5.12 player card binds the explicit handle (P5 Handle)
+PASS: P5.13 blank handle shows the authored thief title, never the capture persona
+PASS: P5.14 card level badge reads the save (1)
+PASS: P5.15 player card sits in the top-right band (x=1002 y=18)
+PASS: P5.16 compass rule is a wide thin line (560 x 8 px), not a solid bar
+PASS: P5.17 centre tick rises to the rule
+PASS: P5.18 heading letter sits above the rule (feet=31 line=30)
+PASS: P5.19 compass heading still maps 42 deg -> NE
+PASS: P5.20 exactly one visible loot line (no overprint)
+PASS: P5.21 free-play objective is the KF14 inline form with no sub-line
+PASS: P5.22 loot line and objective line do not overlap
+PASS: P5.23 hotbar draws only the authored tool slots 1/2/4 (empty slot 3 omitted)
+PASS: P5.24 visible keycaps are 1/2/4 (slot 4 is not renumbered)
+PASS: P5.25 no ammo/count text is drawn on the hotbar
+PASS: P5.26 preserved 4-label contract keeps the slot-4 infinity text
+PASS: P5.27 pause backdrop blurs the world (screen-texture 13-tap, blur_px>=4)
+PASS: P5.28 pause backdrop also dims the world (alpha 0.86)
+PASS: P5.29 build/difficulty/seed footer is built
+PASS: P5.30 pause hides the live HUD behind the modal
+PASS: P5.31 footer is bottom-left and clear of the modal (x=16 y=1250)
+PASS: P5.32 resume restores the live HUD
+PASS: P5.33 authored ST_Missions letter is the KF13 copy (3 paragraphs, 11 rendered lines)
+PASS: P5.34 HUD wraps the letter into the authored 11-line KF13 layout
+PASS: P5.35 HUD body renders 11 lines with both placeholders substituted
+PASS: P5.36 11 lines fit the parchment text box (shaped 220.0 <= 366.0 px)
+PASS: P5.37 own-salutation letter hides the title and keeps the right scrollbar
+PASS: P5.38 closing the letter restores the HUD
+PASS: P5.39 prep shows one BACK prompt and one action READY prompt (state label + action)
+PASS: P5.40 the duplicate hint line is not drawn; the single action button is
+PASS: P5.41 prep mission selector names the authored heist, never the mission id
+PASS: P5.42 centre crank prompt reads CRANK [LMB] (label then keycap)
+PASS: P5.43 contract list shows authored map names, not internal ids
+P5_UI PASS checks=44
+
+EXIT: 0
+FINISHED: 2026-11-26T22:47:30-05:00

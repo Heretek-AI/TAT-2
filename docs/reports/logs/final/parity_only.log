@@ -1,0 +1,112 @@
+== FINAL_GATE parity_only
+COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/test_parity_only.gd
+CWD: /home/john/.local/share/opencode/worktree/318f41/final-evidence
+STARTED: 2026-11-26T22:47:24-05:00
+
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+TAT-2 Loc: reverse map built from sources.json (3404 keys)
+TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
+INPUT_TABLE source=generated rows=91 shipping=91 actions=52
+INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
+PASS: content_overrides schema is tat2.content_overrides/1
+PASS: parity_classes declares both classes
+PASS: 11 content-override rules
+PASS: every rule has a known parity_class (11/11 classified)
+PASS: every graybox -> authored-material rule is parity_restoration
+PASS: 11 parity_restoration rule(s)
+NOTE: no tat2_expansion content-override rule exists today; the expansion class is exercised by the synthetic rule below
+PASS: runtime rule map covers every rule (11)
+PASS: runtime rule map classes match the table
+PASS: TAT2_PARITY_ONLY=1 enables parity-only
+PASS: 4 expansion records exist
+PASS: 4 expansion records excluded in parity-only
+PASS: every expansion record owner consults ParityGovernance
+PASS: expansion node kinds excluded in parity-only
+PASS: candle_flame node excluded in parity-only
+PASS: co-op transport excluded in parity-only
+PASS: GameState autoload present
+PASS: GameState.parity_only() mirrors the flag
+PASS: GameState.coop_transport_available() is false in parity-only
+PASS: personal_spider chain is empty in parity-only
+PASS: personal quest deploy is a counted no-op in parity-only
+PASS: personal quest hub hook is a counted no-op in parity-only
+TAT-2 prep skyline: TAT2_PARITY_ONLY=1, expansion backdrop excluded (0 pieces)
+PASS: prep skyline is excluded in parity-only (0 pieces)
+PASS: GameData autoload present
+[game_data] TAT2_PARITY_ONLY=1: briefing override overlay excluded; authored quest-graph values stay authoritative
+PASS: briefing overrides excluded in parity-only
+PASS: parity-only endgame window is the authored QG value (480 s)
+WARNING: [net_manager] host refused: TAT2_PARITY_ONLY=1 excludes the TAT-2 co-op transport
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] host (res://src/core/net_manager.gd:106)
+         [1] check_parity_only_excludes (res://tests/test_parity_only.gd:256)
+         [2] _run (res://tests/test_parity_only.gd:86)
+WARNING: [net_manager] join refused: TAT2_PARITY_ONLY=1 excludes the TAT-2 co-op transport
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] join (res://src/core/net_manager.gd:118)
+         [1] check_parity_only_excludes (res://tests/test_parity_only.gd:257)
+         [2] _run (res://tests/test_parity_only.gd:86)
+PASS: co-op host refused in parity-only
+PASS: co-op join refused in parity-only
+PASS: missionlobby-roof-decks-slate-geo3 parity_restoration still applies in parity-only
+PASS: missionlobby-roof-decks-slate-periph parity_restoration still applies in parity-only
+PASS: missionlobby-structure-decks-concrete-geo3 parity_restoration still applies in parity-only
+PASS: missionlobby-structure-decks-concrete-periph parity_restoration still applies in parity-only
+PASS: poi-lounge-floor-tile parity_restoration still applies in parity-only
+PASS: poi-lounge-floorstone parity_restoration still applies in parity-only
+PASS: poi-entrance-hall-floor-tile parity_restoration still applies in parity-only
+PASS: vault-chambers-floorstone parity_restoration still applies in parity-only
+PASS: poi-3rd-floor-tile parity_restoration still applies in parity-only
+PASS: poi-3rd-floorstone parity_restoration still applies in parity-only
+PASS: poi-3rd-roof-deck-slate parity_restoration still applies in parity-only
+PASS: synthetic tat2_expansion rule is excluded in parity-only
+PASS: unclassified rule fails closed in parity-only (skipped, no crash)
+PASS: flag off disables parity-only
+PASS: flag off includes every expansion record
+PASS: flag off includes expansion nodes
+PASS: flag off allows the co-op transport
+PASS: flag off applies a tat2_expansion rule
+PASS: flag off includes the personal_spider chain (9 stages)
+PASS: flag off includes the prep skyline (8 pieces)
+PASS: flag off includes the briefing overrides
+PASS: flag off reports the co-op transport available
+PASS: parity-only filter skips the expansion mesh (1)
+PASS: skip is labelled tat2_expansion (counted diagnostic)
+PASS: parity-only keeps the restoration + untagged meshes (2)
+PASS: parity-only filter returns every non-mesh record unchanged
+PASS: flag off keeps the expansion mesh
+PASS: unknown class is skipped as unclassified in parity-only (no crash)
+PASS: every rule level keeps its shipped records and restoration meshes
+PASS: parity-only keeps all 133 restoration-tagged instances
+PASS: all kept tags are restoration meshes
+PASS: shipped records present in checked levels: markers=3113 guards=198 gc=36 leaves=1 loot=18
+MEASURED: rule_levels=7 tagged_kept=133 explicit_class=133 restoration_rules=11 expansion_rules=0
+PASS: flag off restores the shipped path
+PARITY_ONLY_SUMMARY: fails=0 passed=60 rules=11 restoration=11 expansion=0
+
+EXIT: 0
+FINISHED: 2026-11-26T22:47:25-05:00

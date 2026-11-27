@@ -1,0 +1,51 @@
+== FINAL_GATE e2e_p2
+COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd -- --tier=p2
+CWD: /home/john/.local/share/opencode/worktree/318f41/final-evidence
+STARTED: 2026-11-26T22:47:21-05:00
+
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+TAT-2 Loc: reverse map built from sources.json (3404 keys)
+TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
+INPUT_TABLE source=generated rows=91 shipping=91 actions=52
+INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
+PASS: [P2-GUARD-META] guard provenance markers=116 with_bucket=116 with_layers=113 without_layers=3 unresolved=0
+PASS: [P2-GUARD-BUCKETS] authored bucket census Lanterns=67 Bouncers=35 Hauntstable=14 (the selector must exclude Hauntstable)
+PASS: [P2-GUARD-C20] Lounge marker C_20 authored bucket=Bouncers layers=["Security_GroundFloor_Lounge_A", "Security_GroundFloor_Lounge_A_Easy", "Security_GroundFloor_Lounge_B", "Security_GroundFloor_Lounge_B_Easy"] (MissionSpawner_Character=116)
+PASS: [P2-CIV-SLOTS] authored civilian slots body=3 head=6 (body PantsC/ShirtC/ArmsLegs; head slot 3 Base_Head)
+PASS: [P2-CIV-ALBEDO] authored shirt/head albedo resolve (shirt=T_CivFemale_Common_01_Shirt_D.png head=T_CivFemale_Base_Head_D.png)
+PASS: [P2-CIV-PANTS-ALBEDO] pants albedo='T_CivFemale_Common_01_Pants_D.png' expected='T_CivFemale_Common_01_Pants_D.png' (authored BaseColorOpacity)
+PASS: [P2-CIV-PANTS-OPACITY] the authored pants colour map is no longer emitted in the opacity slot (opacity='')
+PASS: [P2-BEAM-AUTHORED] authored MI_LightBeam_SM BaseColor=[5.0, 4.3813, 3.5156, 0.5] EmissiveMultiplier=3.0 additive=EBlendMode::BLEND_Additive two_sided=true unlit=EMaterialShadingModel::MSM_Unlit
+PASS: [P2-BEAM-SHADER] the loader builds the authored centre-line beam shader (res://src/core/tat_beam.gdshader)
+PASS: [P2-BEAM-AUTHORED-PORT] port=((5.0, 4.3813, 3.5156, 0.5)) emissive=3.00 line=0.015m a=0.50 glow=0.06 fade=25m authored=((5.0, 4.3813, 3.5156, 0.5)) emissive=3.00 line=0.015m a=0.50 glow=0.06 fade=25m
+PASS: [P2-CENSUS-TURRET] authored turret census actors=229 (want 229) visible=1145 (want 1145) hidden=0 missing_glb=0
+PASS: [P2-CENSUS-GC-LOOT] Guildhall_Loot gc_stats components=95 leaves=79 visible_emitted=0 unresolved=0
+PASS: [P2-CENSUS-GC] whole-payload GC census files=107 components=336 hidden=336 visible_emitted=0 unresolved=0 fallback_broken=93 sibling_smc=5 leaves=166
+PASS: [P2-GC-LABEL] GC interaction label is the authored ST_Interactables.PromptDestroyDeployable='Destroy' row; the "[F] [HOLD] " keycap prefix is port copy
+P2_SUMMARY: expected_fail=0 expected_delta=0 fixed=0 unexpected_fail=0
+SUMMARY: fails=0 passed=14 total=14
+
+EXIT: 0
+FINISHED: 2026-11-26T22:47:24-05:00

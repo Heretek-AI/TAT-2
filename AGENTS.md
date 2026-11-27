@@ -61,12 +61,13 @@ TAT-2 expansion content belong in git.
 
 ```bash
 make run         # native 4.7.2 client, F3 overlay
-make test        # tests/run_tests.gd — 322 checks, suites numbered to 120
+make test        # tests/run_tests.gd — 324 checks, suites numbered to 121
 make runtime-smoke # real free-play boot: exit 124 only, ERROR:/push_error scan, allowlist
 make audit       # fail-closed content + producer/output baseline gate
 make gate-ratchet # floors + committed docs/reports/logs evidence agree
 build/qa/test_perf_guard.sh  # perf-wrapper contract, no GPU, no launch
-build/qa/run_p0b_gates.sh    # current full set (40 gates + cream RED) -> docs/reports/logs/p1/full/; no outer flock
+build/qa/run_final_gates.sh  # current full set (44 gates) -> docs/reports/logs/final/; no outer flock
+build/qa/run_p0b_gates.sh    # historical P1 set (40 gates + cream RED) -> docs/reports/logs/p1/full/
 build/qa/run_p0a_gates.sh    # historical P0a 28-gate set -> docs/reports/logs/p0a/
 
 tools/godot --headless --path game --script "$PWD/tools/check_scripts_compile.gd"
@@ -81,25 +82,32 @@ If a headless run reports missing textures (`T1-01-C`, `moon_visible=0.0`), the
 import cache is incomplete — run `tools/godot --headless --path game --import`
 first.
 
-| Gate | Passing value (P1 tip, logs in `docs/reports/logs/p1/full/` — raise, never lower) |
+| Gate | Passing value (W10 FINAL measured_on `5135f53`, logs in `docs/reports/logs/final/` — raise, never lower) |
 |---|---|
-| compile | 213 checked, 0 broken |
-| `run_tests.gd` | `SUMMARY: fails=0` (322 PASS; suites numbered to 120, 119 deliberately unregistered) |
+| compile | 217 checked, 0 broken |
+| `run_tests.gd` | `SUMMARY: fails=0` (324 PASS; suites numbered to 121, 119 cream + 121 audio registered) |
 | `test_m2_player.gd` | `M2_SUMMARY: fails=0` (12 PASS) |
 | P1 route probes (S12/S21/S24/S25–26/S13–20) | `P1_SAFE PASS checks=86` / `P1_DOORS checks=47 fails=0` / `P1_BEAMS PASS checks=7` / `P1_WARD PASS checks=44` / `P1_STREET PASS checks=31 hard_limits=2` |
-| door walk / viewmodel / Niagara probes | `DOORWALK PASS` / `VIEWMODEL_TRUTH PASS` / `NIAGARA_PROBE PASS` (3695 authored / 3308 active / 36 systems) |
+| door walk / viewmodel / Niagara probes | `DOORWALK PASS` / `VIEWMODEL_TRUTH PASS` / `NIAGARA_PROBE PASS` (3695 authored / 1048 active / 16 systems in this probe's map scope; the payload-wide census is 3308 active / 36 systems) |
 | guard selection (P0a) | `GUARD_CHECK PASS` Guildhall `lounge_marker=C_20` `buckets=4/4` and Old Manor `--order=3` (no Hauntstable) |
 | beam geometry (P0a) | `BEAM_GEOMETRY_SUMMARY: fails=0` — 330 cards, `max_axis_err_deg=0.000006`, `clamped=0` |
-| GC / turret / civilian (P0a) | `GC_PROBE PASS` (44) / `GC_TRIGGER PASS` (21) / `TURRET_PROBE PASS` (229 actors, 1145 parts, 0 hidden) / `W10A2_CIV_SUMMARY: fails=0 passed=22` |
+| GC / turret / civilian (P0a/W10) | `GC_PROBE PASS` (44) / `GC_TRIGGER PASS` (21) / `TURRET_PROBE PASS` (229 actors, 1145 parts, 0 hidden) / `W10A2_CIV_SUMMARY: fails=0 passed=23` |
+| collision (W10-P2 truth) | `COL_MAPS PASS maps=3 min_coverage=0.869 dropped=0 planar_skipped=2 coverage_ppm=868852` — authored element coverage 0.910/0.912/0.869, `no_record=0`, no invented fallback |
+| lock inventory | `applied=154 containers=144 door_nodes=10 state=APPLIED` |
 | E2E | `fails=0 passed=300 total=300` (T1=117 T2=110 T3=25 T4=14 S2=12 A2=22; a2 runs inside `all`) |
 | E2E tier a2 | `SUMMARY: fails=0 passed=22 total=22` |
-| E2E tier p2 | `P2_SUMMARY: expected_fail=1 expected_delta=0 fixed=0 unexpected_fail=0` (pants albedo; beam promoted to authored in P1-BEAMS) |
+| E2E tier p2 | `P2_SUMMARY: expected_fail=0 expected_delta=0 fixed=0 unexpected_fail=0` (14/14; both pants checks are hard) |
 | parity-only (P0b) | `PARITY_ONLY_SUMMARY: fails=0 passed=60 rules=11 restoration=11 expansion=0` |
+| cream suite 119 (W10-P2) | `CREAM_PROOF: GREEN passes=5 expected_fail=0`, exit 0 (the old RED proof is retired) |
+| audio control suite 121 (W10-P3) | `AUDIO_CONTROL_SUMMARY: fails=0 checks=71` (switch=14/23, state=4/8, rtpc=16/50, 142 curves) |
+| P5 UI probe (W10-P5) | `P5_UI PASS checks=44` (headless; no visual score) |
+| Den spawn (W10) | `DEN_SPAWN PASS checks=9 fails=0` (`source=authored`, 2434 meshes) |
 | port capture harness (P0b) | dry-run `poses=6` manifest valid; `P0B_SELFTEST PASS checks=21 fails=0`; `P0B_KF27_REF … met=7/7` |
-| cream RED proof (P0b) | expected `exit 1`, `CREAM_PROOF: RED passes=2 expected_fail=2` — not a gate until suite 119 is registered |
-| `make texture-cap-check` | OK — 797 capped, 1 alpha-critical kept, 0 offenders |
+| `make texture-cap-check` | OK — 796 capped, 1 alpha-critical kept, 0 offenders (target set 1567 after the accepted `texture_refs 1523→1522` drop) |
 | `make audit` | exit 0, tracked baseline matches, disk-backed coverage (12660/12703), 0 unexpected, exact-case 0 unexpected, 13/13 content groups |
 | `make string-audit` | `UI_STRINGS total=311 routed=311 authored=199 routed_authored=199 invented=112` (ceiling 112; one documented `Thieves' Den` port copy at `contract_table_ui.gd:362`) |
+| perf guard | `PERF_GUARD_TEST PASS checks=78 fails=0` |
+| `make gate-ratchet` | PASS (`measured_on=5135f53`; floors raised, never lowered) |
 
 The 2026-11-24 W7 wave (five lanes, cherry-picked) re-ran the **complete** set
 serially on `6760dd0` — compile, `run_tests`, M2, the three probes, `probe_leak`
@@ -115,7 +123,9 @@ collision is authored `AggGeom` (98.9 % of meshes), progression is the authored 
 locks are authored-only (154 runtime: 144 container placements + 10 door nodes; 363 is
 the raw record join), UI routing is 100 % of authored rows, and the
 StateTree runtime runs in shadow with a measured ceiling of **0/21 trees fully
-evaluable**. See [`docs/reports/w9-remediation-20261125.md`](docs/reports/w9-remediation-20261125.md).
+evaluable** at W9 (B2.1 later raised it to one structural tree at `5135f53`;
+parity coverage is still zero). See
+[`docs/reports/w9-remediation-20261125.md`](docs/reports/w9-remediation-20261125.md).
 It also added `make runtime-smoke`.
 
 The 2026-11-25 R8 wave merged twelve remediation teams (40 commits, see
@@ -187,6 +197,36 @@ placement (no record), the exact cyan ceiling node (hidden BP/Niagara overlay),
 and the authored circular-lockpick widget art. The port capture and the
 live-reference 120-row score remain **pending** (no GPU run in P1). Report:
 [`docs/reports/p1-integration-20261126.md`](docs/reports/p1-integration-20261126.md).
+
+The 2026-11-27 **W10 FINAL wave** merged the P2/P3/P5 + data lanes and measured
+them at `5135f53` in one serial `build/qa/run_final_gates.sh` run — **44 gates**
+(no expected failure), logs in
+[`docs/reports/logs/final/`](docs/reports/logs/final/), report
+[`docs/reports/final-20261127.md`](docs/reports/final-20261127.md). `compile` is
+**217/0**, `run_tests` **324/0** (suites **119** cream + **121** audio
+registered), M2 **12/0**, E2E **300/300** (T1=117 T2=110 T3=25 T4=14 S2=12
+A2=22), p2 **14/14** with `expected_fail=0 expected_delta=0 fixed=0
+unexpected_fail=0`, parity-only **60/60**, cream **GREEN** `passes=5`, audio
+control **71/0**, P5 UI **44**, Den spawn **9**, and the P1 probes stay
+**86/47/7/44/31**. Collision is re-based to the authored **element** coverage
+(`COL_MAPS PASS min_coverage=0.869 dropped=0 planar_skipped=2
+coverage_ppm=868852`; Guildhall 0.910, Old Manor 0.912, FTUE 0.869, runtime
+`no_record=0`) — the old `976321` counted invented render-trimesh fallbacks, so
+this is a deliberate truth correction, not a regression. The texture cap moved
+797 → 796 with the already-accepted `texture_refs 1523 → 1522` target-set drop
+(`offenders=0` unchanged). P2-ST B2.1 reads payload-v2 node parameters
+(566/566 keys) and measures one structurally covered tree
+(`ST_Subtree_IntruderNoLongerSuspicious`, `fully_parity_covered_trees=0`), but
+`TAT2_STATETREE` stays `off` and the FSM still drives — **no cutover**. P2-NAV
+proved the cooked Guildhall Detour tiles (2,958 tiles / 14,930 polys) and a
+Godot consumer (**16/0**, 3-waypoint doorway, sync 975 ms, total 1,172 ms);
+the **P1 Detour consumer is the next navmesh lane**, still no runtime region.
+The P3 audio control plane is **partial** (14/23 switches, 4/8 states, 16/50
+RTPCs; state property rows, music decision trees and `FS_Layers` deferred). P5
+UI is **headless-verified, not visually scored** (44 checks; Light Gem
+`PORT_APPROX` because the 21-slice array is absent), with one documented
+`Thieves' Den` port copy (string-audit ceiling 112). The live-reference / 120-row
+baseline and a GPU capture remain **pending**.
 
 **Fresh worktree trap (P0b).** A copied `game/.godot` does not know a new global
 `class_name`; scripts that use it fail with `Identifier "X" not declared` and
@@ -293,6 +333,13 @@ build/qa/             tracked capture/probe/export-stamp scripts; PNG output ign
 - **`MI_LightBeam_SM` is a deliberate exception** to the HDR neon path: it uses
   additive `tat_beam.gdshader`. T2-04-C guards the exception plus three
   `StandardMaterial3D` negative controls.
+- **Cream / invented white is closed; do not reintroduce a white fallback.**
+  `_apply_ue_emissive()` requires an authored `EmissiveColor` or emissive map; a
+  strength-only material gets no emission and increments `tat_invented_white`
+  (`invented_white_count()`), while an authored colour still emits. Suite **119**
+  is a normal green gate (`CREAM_PROOF: GREEN passes=5`). The cream bars in the
+  old captures are the `SM_LightBeam` cards (a P4 beam-material item), not the
+  moon planes.
 - **WorldGrid substitution is scoped** to door/gate/fence meshes. WorldGrid is
   still intentional for spheres/emitters; never hide it globally.
 - **Loot/civilian spawns are grounded by mesh AABB + floor ray** (0.03 m
@@ -307,16 +354,25 @@ build/qa/             tracked capture/probe/export-stamp scripts; PNG output ign
 - **Collision is authored `AggGeom`, behind a flag.** `TAT2_COLLISION=authored|aabb`
   (default `authored`). The producer's `half_extent` is the *full* extent (a 2× trap), the
   capsule axis is Z, and convex bakes must carry instance scale — getting any of those wrong
-  produced 95,293 Jolt scale errors. `probe_collision_authored.gd` is the coverage gate
-  (`coverage=0.989`, `dropped=0`). `test_roof_collision.gd` runs both modes; do not restore
-  the old one-hull heuristic.
-- **The StateTree dump is a property dump; the trees are not fully evaluable.** 18/77 task
-  classes and 6/36 condition classes are mapped, and **0 of 21 trees** can be evaluated
-  end-to-end because the payload drops every node parameter (`EAlertnessLevel`,
-  `DelayTask.duration`, `Move To` target, `Bool Compare` operands). The runtime therefore
-  runs in **shadow** (`TAT2_STATETREE=off|shadow`, default off) and reports; the FSM still
-  drives. A cutover needs the producer contract in
-  `build/qa/w9/p4-t01-contract.md`. Do not "finish" a cutover by inventing parameters.
+  produced 95,293 Jolt scale errors. `probe_collision_authored.gd` gates on authored
+  **element** coverage, not the render-trimesh fallback: `COL_MAPS PASS
+  min_coverage=0.869 coverage_ppm=868852 dropped=0` (Guildhall 0.910, Old Manor
+  0.912, FTUE 0.869, runtime `no_record=0`). The older `coverage=0.989` /
+  `976321` counted invented fallback collision and must not come back; the probe
+  still prints it for continuity but `element_coverage=` is the gate.
+  `test_roof_collision.gd` runs both modes; do not restore the old one-hull heuristic.
+- **The StateTree runtime is node-aware but shadow-only; no cutover.** B2.1 reads
+  payload `/2` per-node `parameters`/`bound` (497/566 nodes author data, 676
+  bindings, 139 templates), keys nodes by `(tree,node_index)` (566/566 keys, 0
+  duplicates) and separates structural coverage from data parity:
+  **`fully_covered_trees=1`** (`ST_Subtree_IntruderNoLongerSuspicious`) and
+  **`fully_parity_covered_trees=0`** of 21. Task instances 326 (139 covered / 56
+  blind) and condition instances 233 (35 / 20) are the measured ceiling.
+  `TAT2_STATETREE` stays `off` by default; `patrol` is not enabled and warns that
+  it runs shadow. The FSM still drives. A cutover needs the remaining authored
+  task/condition parameters (the producer contract in
+  `build/qa/w9/p4-t01-contract.md`), never invented values. Suite 110 is **191
+  checks**; suite 111 keeps shadow side-effect free.
 - **The light budget is per-room fair, not a global energy cut.** `plan_light_selection()`
   water-fills the same 160 slots per 16 m room bubble (one light per bubble before any
   second, densest-first, deterministic) instead of ranking all 914 deduped Guildhall lights
@@ -407,10 +463,14 @@ tools/godot … check_scripts_compile.gd  # 0 broken
 make test                               # fails=0
 tools/godot … test_m2_player.gd         # fails=0
 tools/godot … probe_leak.gd             # expected result or documented warning
-tools/godot … probe_collision_authored.gd  # COL_MAPS PASS, per-map coverage >= 0.95, dropped=0
+tools/godot … probe_collision_authored.gd  # COL_MAPS PASS, element coverage >= 0.868, no_record=0, dropped=0
 tools/godot … probe_lock_inventory.gd   # applied == 144 containers + 10 door nodes, never 0
 tools/godot … run_e2e_tests.gd          # 300/300, no new failures
 tools/godot … test_parity_only.gd       # PARITY_ONLY_SUMMARY: fails=0 (needs TAT2_PARITY_ONLY proof)
+tools/godot … test_w10a2_cream.gd       # CREAM_PROOF: GREEN passes=5, exit 0 (suite 119)
+tools/godot … test_audio_control.gd     # AUDIO_CONTROL_SUMMARY: fails=0 checks=71
+tools/godot … probe_p5_ui.gd            # P5_UI PASS checks=44
+tools/godot … probe_den_spawn.gd        # DEN_SPAWN PASS checks=9 fails=0
 tools/godot … probe_p1_safe.gd          # P1_SAFE PASS checks=86 fails=0
 tools/godot … probe_p1_doors.gd         # P1_DOORS checks=47 fails=0
 tools/godot … probe_p1_beams.gd         # P1_BEAMS PASS checks=7 fails=0
@@ -419,7 +479,7 @@ tools/godot … probe_p1_street.gd        # P1_STREET PASS checks=31 hard_limits
 build/qa/runtime_smoke.sh 90            # exit 124 only, 0 unexpected ERROR:, mission_ready
 build/qa/test_runtime_smoke_scan.sh     # 29/29, no engine needed
 build/qa/test_perf_guard.sh             # 78/78, no GPU
-build/qa/run_p0b_gates.sh               # all of the above serially, with the P1 route probes
+build/qa/run_final_gates.sh             # all of the above serially (44 gates, no expected failure)
 make gate-ratchet                       # floors + committed logs agree
 git push origin main
 ```

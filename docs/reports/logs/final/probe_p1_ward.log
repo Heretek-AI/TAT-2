@@ -1,0 +1,111 @@
+== FINAL_GATE probe_p1_ward
+COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/probe_p1_ward.gd
+CWD: /home/john/.local/share/opencode/worktree/318f41/final-evidence
+STARTED: 2026-11-26T22:34:45-05:00
+
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+TAT-2 Loc: reverse map built from sources.json (3404 keys)
+TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
+INPUT_TABLE source=generated rows=91 shipping=91 actions=52
+INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
+PASS: [p1-ward] scripts load (ward, vine, beam, alarm, device layer, status icon)
+PASS: [p1-ward] authored foyer ward / beam / alarm records present
+PASS: [p1-ward] ward zone is the authored (X, Z, Y) box 0.30 x 3.936 x 1.653 m
+PASS: [p1-ward] ward is a blocker and starts inactive (WardInitiallyActive=false)
+PASS: [p1-ward] fallback ward visual is a 7-shard crystal cluster
+PASS: [p1-ward] every fallback shard is a tall faceted crystal with the shard material (no flat pane)
+PASS: [p1-ward] ward active tint is authored base WardColor #FF4DFD (purple), not the flat violet pane
+PASS: [p1-ward] ward emissive energy = authored MI_BlockerWard 1.0
+PASS: [p1-ward] materials.json MI_BlockerWard EmissiveColor is the authored magenta (1.0, 0.1307, 0.7967)
+PASS: [p1-ward] ward adopts authored level shards (one visual)
+PASS: [p1-ward] adopted shards start hidden while the ward is inactive
+PASS: [p1-ward] activate: ward active and blocker layer = bit4 (16)
+PASS: [p1-ward] activate: authored shards become visible (the ward seals the archway)
+PASS: [p1-ward] shatter: ward inactive, blocker layer cleared
+PASS: [p1-ward] shatter: authored shards hidden
+PASS: [p1-ward] shatter emits ward_shattered exactly once
+PASS: [p1-ward] green door ward uses the authored 2.6 x 3.4 m Plane
+PASS: [p1-ward] vine tint is authored MI_DoorWard_OneSided_Green Color (0.1334, 1.0, 0.0)
+PASS: [p1-ward] vine BlockerBox matches authored BoxExtent (4, 128, 168) cm on the plane axes
+PASS: [p1-ward] vine starts hidden and non-solid
+PASS: [p1-ward] beam 117 keeps the authored 9.718 m length
+PASS: [p1-ward] beam_triggered contract still fires once per trip
+PASS: [p1-ward] beam trip activates the ward and seals the green door ward (G5-03)
+PASS: [p1-ward] sealed vine blocks on bit4 (player-only ward layer)
+PASS: [p1-ward] vine shatter opens the door ward and emits shattered once (G5-04)
+PASS: [p1-ward] alarm eye keeps the authored OuterConeAngle 15 deg / AttenuationRadius 15.33 m
+WARNING: [hearing_data] 5 authored investigation-range anomalies clamped: AI.Stim.Hearing.LockPicking.Picked: outer 5.0 m > max 3.0 m (clamped); AI.Stim.Hearing.Alert.ShareKnowledge: outer 30.0 m > max 15.0 m (clamped); AI.Stim.Hearing.Tool.DartLaunch: inner 3.0 m > outer 2.0 m (clamped); AI.Stim.Hearing.EnterExitHedge: outer 8.0 m > max 7.5 m (clamped); AI.Stim.Hearing.Device.SecretSwitch: outer 8.0 m > max 7.5 m (clamped)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _log_anomalies_once (res://src/ai/hearing_data.gd:277)
+         [1] _build_stimuli (res://src/ai/hearing_data.gd:269)
+         [2] ensure_loaded (res://src/ai/hearing_data.gd:187)
+         [3] resolve_stim (res://src/ai/hearing_data.gd:346)
+         [4] build_record (res://src/stealth/noise_bus.gd:105)
+         [5] emit_noise (res://src/stealth/noise_bus.gd:124)
+         [6] _trigger_alarm (res://src/devices/alarm_eye.gd:250)
+         [7] trigger_alarm (res://src/devices/alarm_eye.gd:348)
+         [8] _run (res://tests/probe_p1_ward.gd:264)
+PASS: [p1-ward] alarm spawns the crimson spotlight node (V1-07)
+PASS: [p1-ward] crimson colour = (1.0, 0.07, 0.05) [KF29 approximation]
+PASS: [p1-ward] crimson energy = 4.5 [KF29 approximation, capped]
+PASS: [p1-ward] spot range uses the authored 15.33 m; angle is the documented KF29 32 deg wash
+PASS: [p1-ward] spot aims along the authored alarm-eye forward (straight down)
+PASS: [p1-ward] alarm reset frees the crimson spotlight
+PASS: [p1-ward] HUD exposes set/clear/status_icon_state (UI5-06)
+PASS: [p1-ward] status icon raises with the jaw-trap kind and an 8 s countdown ring
+PASS: [p1-ward] status icon clears
+PASS: [p1-ward] mission controller wires the authored ward/beam/alarm ids and lockdown hooks
+FootstepMask: downscaled 1024x1024 -> 128x128 for one-time alpha mask
+FootstepMask: baked one-time alpha mask (128x128, source_alpha=true) from res://assets/ue/Raw/Art/Environment/Props/Containers/Crates/T_Crate_Decal_D.png
+TAT-2 light allocation: map=guildhall authored=498 kept=96 budget=96 forced=2 rooms=94/121 cell_m=16.0
+TAT-2 gate lights: total=96 (generic=96 rect=0) budget=96 forced=2 hero_shadows=6
+WARNING: [level_loader] level Niagara: 219 placements across 4 systems in 39 chunk nodes (1 sprite-masked, 159 parameter sets, 915 activation-skipped; decode root=res://../extracted/json files=17)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:6740)
+         [1] _store_level_extras (res://src/core/level_loader.gd:6512)
+         [2] load_sublevels_async (res://src/core/level_loader.gd:7081)
+ROUGHNESS_BAKE_MODE on=1 resolution=full cache=process
+COL_PLANAR /Game/Art/Effects/WardZones/SM_SlowWardZone_Quad instances=82 skipped=1
+AUTHORED_COLLISION meshes=53 hull=53 authored_elements=43 complex=9 no_record=0 prims=35 convex=33 absent=0 no_collision=1 query_only=1 reduced=1 shapes_per_instance_avg=0.85 elements=93 load_ms=336
+ROUGHNESS_BAKE count=18 pixels=15204352 ms=1087 bytes=20272462 hits=5 (L8 low+g*(high-low), full-res, process cache)
+BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
+BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
+MESH_RECON authored=2742 applied=2690 duplicate=11 name_skipped=0 wardbox=41 moonshape=0 clamp=83 clamp_worst=1.03x mirrored=0 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0
+MATERIAL_EMISSIVE invented_white=1 names=/Game/Art/Environment/Lights/Candles/MI_FlameCandleOrangeB
+PERF_CENSUS meshes=699 instances=2910 chunk_nodes=659 plain=454 multimesh=245 surface_draws=797 lights=96 shadow_lights=6 occluders=1 collision_bodies=24 collision_shapes=1116 periph_nodes=0 periph_instances=0 periph_surface_draws=0 periph_plain=0 periph_multimesh=0 periph_range=0 merge_mode=off merge_candidates=0 merge_nodes=0 merge_surfaces_before=0 merge_surfaces_after=0 light_budget=96 hero_shadows=6 source_sublevels={ "Guildhall_Gameplay": 2690 }
+PASS: [p1-ward] Guildhall_Gameplay loads all 233 authored SM_BlockerWard shard instances
+PASS: [p1-ward] every authored ward shard starts hidden (no always-on ward)
+PASS: [p1-ward] device census unchanged: 903 devices, 36 ward blockers
+PASS: [p1-ward] device layer pairs every loaded shard: 233/233
+PASS: [p1-ward] foyer archway ward (C_31) owns its authored 7-shard cluster
+PASS: [p1-ward] foyer ward shards stay hidden before the beam trip (KF28 gate)
+PASS: [p1-ward] beam/activation shows the foyer ward's authored shard cluster
+PASS: [p1-ward] foyer ward shatter hides the authored cluster (G5-04)
+P1_WARD PASS checks=44
+
+EXIT: 0
+FINISHED: 2026-11-26T22:34:50-05:00

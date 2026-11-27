@@ -1,0 +1,99 @@
+FINAL_GATE_RUN
+started: 2026-11-26T22:29:51-05:00
+root: /home/john/.local/share/opencode/worktree/318f41/final-evidence
+head: 5135f53dfff8a9b268576f7731588ab7a0be3494
+branch: w10/final-evidence
+godot: 4.7.2.stable.official.ed1daf0bf
+godot_bin: /home/john/.local/share/opencode/worktree/318f41/final-evidence/tools/godot
+lock: /tmp/opencode/tat2-godot.lock
+uncommitted_entries_at_start: 2
+host: Linux 7.4.0-0.rc4.261125g4dce97c6c265.35.fc46.x86_64 x86_64
+nproc: 32
+runner: build/qa/run_final_gates.sh
+
+FINAL_GATES start head=5135f53dfff8a9b268576f7731588ab7a0be3494 branch=w10/final-evidence godot=4.7.2.stable.official.ed1daf0bf
+FINAL_GATE name=compile exit=0 log=docs/reports/logs/final/compile.log
+FINAL_MARKER name=compile marker=scripts checked: [0-9]+, broken: 0
+FINAL_GATE name=run_tests exit=0 log=docs/reports/logs/final/run_tests.log
+FINAL_MARKER name=run_tests marker=SUMMARY: fails=0
+FINAL_GATE name=m2 exit=0 log=docs/reports/logs/final/m2.log
+FINAL_MARKER name=m2 marker=M2_SUMMARY: fails=0
+FINAL_GATE name=probe_p1_safe exit=0 log=docs/reports/logs/final/probe_p1_safe.log
+FINAL_MARKER name=probe_p1_safe marker=P1_SAFE PASS checks=86 fails=0
+FINAL_GATE name=probe_p1_doors exit=0 log=docs/reports/logs/final/probe_p1_doors.log
+FINAL_MARKER name=probe_p1_doors marker=P1_DOORS PASS
+FINAL_GATE name=probe_p1_beams exit=0 log=docs/reports/logs/final/probe_p1_beams.log
+FINAL_MARKER name=probe_p1_beams marker=P1_BEAMS PASS checks=7 fails=0
+FINAL_GATE name=probe_p1_ward exit=0 log=docs/reports/logs/final/probe_p1_ward.log
+FINAL_MARKER name=probe_p1_ward marker=P1_WARD PASS checks=44
+FINAL_GATE name=probe_p1_street exit=0 log=docs/reports/logs/final/probe_p1_street.log
+FINAL_MARKER name=probe_p1_street marker=P1_STREET PASS
+FINAL_GATE name=probe_guard_positions_guildhall exit=0 log=docs/reports/logs/final/probe_guard_positions_guildhall.log
+FINAL_MARKER name=probe_guard_positions_guildhall marker=GUARD_CHECK PASS
+FINAL_GATE name=probe_guard_positions_old_manor exit=0 log=docs/reports/logs/final/probe_guard_positions_old_manor.log
+FINAL_MARKER name=probe_guard_positions_old_manor marker=GUARD_CHECK PASS
+FINAL_GATE name=probe_collision_authored exit=0 log=docs/reports/logs/final/probe_collision_authored.log
+FINAL_MARKER name=probe_collision_authored marker=COL_MAPS PASS
+FINAL_GATE name=probe_lock_inventory exit=0 log=docs/reports/logs/final/probe_lock_inventory.log
+FINAL_MARKER name=probe_lock_inventory marker=state=APPLIED
+FINAL_GATE name=probe_niagara exit=0 log=docs/reports/logs/final/probe_niagara.log
+FINAL_MARKER name=probe_niagara marker=NIAGARA_PROBE PASS
+FINAL_GATE name=probe_door_walk exit=0 log=docs/reports/logs/final/probe_door_walk.log
+FINAL_MARKER name=probe_door_walk marker=DOORWALK PASS
+FINAL_GATE name=probe_viewmodel_truth exit=0 log=docs/reports/logs/final/probe_viewmodel_truth.log
+FINAL_MARKER name=probe_viewmodel_truth marker=VIEWMODEL_TRUTH PASS
+FINAL_GATE name=probe_geometry_placement exit=0 log=docs/reports/logs/final/probe_geometry_placement.log
+FINAL_MARKER name=probe_geometry_placement marker=GEOM_PROBE PASS
+FINAL_GATE name=probe_blackjack_race exit=0 log=docs/reports/logs/final/probe_blackjack_race.log
+FINAL_MARKER name=probe_blackjack_race marker=BLACKJACK_PROBE PASS
+FINAL_GATE name=probe_device_meshes exit=0 log=docs/reports/logs/final/probe_device_meshes.log
+FINAL_MARKER name=probe_device_meshes marker=TURRET_PROBE PASS
+FINAL_GATE name=probe_gc_destruction exit=0 log=docs/reports/logs/final/probe_gc_destruction.log
+FINAL_MARKER name=probe_gc_destruction marker=GC_PROBE PASS
+FINAL_GATE name=test_gc_break_trigger exit=0 log=docs/reports/logs/final/test_gc_break_trigger.log
+FINAL_MARKER name=test_gc_break_trigger marker=GC_TRIGGER PASS
+FINAL_GATE name=test_w10a2_civilian exit=0 log=docs/reports/logs/final/test_w10a2_civilian.log
+FINAL_MARKER name=test_w10a2_civilian marker=W10A2_CIV_SUMMARY: fails=0
+FINAL_GATE name=test_w10a2_guard_placement exit=0 log=docs/reports/logs/final/test_w10a2_guard_placement.log
+FINAL_MARKER name=test_w10a2_guard_placement marker=GUARD_PLACEMENT_SUMMARY: fails=0
+FINAL_GATE name=test_beam_geometry exit=0 log=docs/reports/logs/final/test_beam_geometry.log
+FINAL_MARKER name=test_beam_geometry marker=BEAM_GEOMETRY_SUMMARY: fails=0
+FINAL_GATE name=probe_leak exit=0 log=docs/reports/logs/final/probe_leak.log
+FINAL_MARKER name=probe_leak marker=PROBE start
+FINAL_GATE name=e2e exit=0 log=docs/reports/logs/final/e2e.log
+FINAL_MARKER name=e2e marker=SUMMARY: fails=0 passed=300 total=300
+FINAL_GATE name=e2e_a2 exit=0 log=docs/reports/logs/final/e2e_a2.log
+FINAL_MARKER name=e2e_a2 marker=SUMMARY: fails=0 passed=22 total=22
+FINAL_GATE name=e2e_p2 exit=0 log=docs/reports/logs/final/e2e_p2.log
+FINAL_MARKER name=e2e_p2 marker=P2_SUMMARY: expected_fail=0 expected_delta=0 fixed=0 unexpected_fail=0
+FINAL_GATE name=parity_only exit=0 log=docs/reports/logs/final/parity_only.log
+FINAL_MARKER name=parity_only marker=PARITY_ONLY_SUMMARY: fails=0 passed=60
+FINAL_GATE name=test_w10a2_cream exit=0 log=docs/reports/logs/final/test_w10a2_cream.log
+FINAL_MARKER name=test_w10a2_cream marker=CREAM_PROOF: GREEN passes=5 expected_fail=0
+FINAL_GATE name=test_audio_control exit=0 log=docs/reports/logs/final/test_audio_control.log
+FINAL_MARKER name=test_audio_control marker=AUDIO_CONTROL_SUMMARY: fails=0 checks=71
+FINAL_GATE name=probe_p5_ui exit=0 log=docs/reports/logs/final/probe_p5_ui.log
+FINAL_MARKER name=probe_p5_ui marker=P5_UI PASS checks=44
+FINAL_GATE name=probe_den_spawn exit=0 log=docs/reports/logs/final/probe_den_spawn.log
+FINAL_MARKER name=probe_den_spawn marker=DEN_SPAWN PASS checks=9 fails=0
+FINAL_GATE name=p0b_capture_dry_run exit=0 log=docs/reports/logs/final/p0b_capture_dry_run.log
+FINAL_MARKER name=p0b_capture_dry_run marker=P0B_DRY_RUN
+FINAL_GATE name=p0b_capture_self_test exit=0 log=docs/reports/logs/final/p0b_capture_self_test.log
+FINAL_MARKER name=p0b_capture_self_test marker=P0B_SELFTEST PASS checks=21 fails=0
+FINAL_GATE name=p0b_manifest_validate exit=0 log=docs/reports/logs/final/p0b_manifest_validate.log
+FINAL_MARKER name=p0b_manifest_validate marker=P0B_MANIFEST_OK
+FINAL_GATE name=p0b_kf27_reference exit=0 log=docs/reports/logs/final/p0b_kf27_reference.log
+FINAL_MARKER name=p0b_kf27_reference marker=P0B_KF27_REF pose=upper_foyer met=7/7
+FINAL_GATE name=runtime_smoke exit=0 log=docs/reports/logs/final/runtime_smoke.log
+FINAL_SMOKE_GODOT_LOG /home/john/.local/share/opencode/worktree/318f41/final-evidence/docs/reports/logs/final/runtime_smoke_godot.log (from /tmp/tat2-smoke-tZOvMz.log)
+FINAL_GATE name=runtime_smoke_scan exit=0 log=docs/reports/logs/final/runtime_smoke_scan.log
+FINAL_MARKER name=runtime_smoke_scan marker=RUNTIME_SMOKE_SCAN_TEST PASS
+FINAL_GATE name=string_audit exit=0 log=docs/reports/logs/final/string_audit.log
+FINAL_GATE name=literal_greps exit=0 log=docs/reports/logs/final/literal_greps.log
+FINAL_MARKER name=literal_greps marker=LITERAL_GREPS PASS
+FINAL_GATE name=audit exit=0 log=docs/reports/logs/final/audit.log
+FINAL_GATE name=texture_cap exit=0 log=docs/reports/logs/final/texture_cap.log
+FINAL_GATE name=perf_guard exit=0 log=docs/reports/logs/final/perf_guard.log
+FINAL_GATE name=gate_ratchet exit=0 log=docs/reports/logs/final/gate_ratchet.log
+FINAL_GATES PASS head=5135f53dfff8a9b268576f7731588ab7a0be3494 gates=44
+FINAL_GATES evidence=/home/john/.local/share/opencode/worktree/318f41/final-evidence/docs/reports/logs/final summary=/home/john/.local/share/opencode/worktree/318f41/final-evidence/docs/reports/logs/final/final-summary.txt

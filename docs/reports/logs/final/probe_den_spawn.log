@@ -1,0 +1,90 @@
+== FINAL_GATE probe_den_spawn
+COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/probe_den_spawn.gd
+CWD: /home/john/.local/share/opencode/worktree/318f41/final-evidence
+STARTED: 2026-11-26T22:47:30-05:00
+
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+TAT-2 Loc: reverse map built from sources.json (3404 keys)
+TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
+INPUT_TABLE source=generated rows=91 shipping=91 actions=52
+INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
+DEN_SPAWN boot order=1 difficulty=1 expect_map=thieves_den
+TAT-2 HUD build: id=1 root_children=28 hp_frame=1 hp_fill=1 objectives=1
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'midnight_clear_thieves_den'
+TAT-2 IBL: skylight_cubemap=/Game/MaterialLibrary/Utility/Cubemap_GroundFloor_01 converted=res://assets/ue/Raw/MaterialLibrary/Utility/Cubemap_GroundFloor_01.exr available=false sky_contribution=0.0 gi=ssil ao=true
+TAT-2 exposure: preset=midnight_clear_thieves_den mode=AGX exposure=1.500 authored_bias=0.5 ev100_night=-3.0 authored_curve_bias=-4.00 (curve recorded, not applied)
+MoonPanorama: cached res://assets/ue/Raw/Art/Environment/City/Architecture/BeautifulCorner/Materials/T_Moon_D.png (4096x2048, one decode per session)
+TAT-2 environment: bg=2 ambient_src=2 ambient_energy=0.07999999821186 ambient_color=(0.851, 0.9922, 1.0, 1.0) sky=true fog=true fog_density=0.00899999961257
+TAT-2 run clock: map=thieves_den hub=no_mission_clock main_s=0.0 endgame_s=0.0
+FootstepMask: downscaled 1024x1024 -> 128x128 for one-time alpha mask
+FootstepMask: baked one-time alpha mask (128x128, source_alpha=true) from res://assets/ue/Raw/Art/Environment/Props/Containers/Crates/T_Crate_Decal_D.png
+WARNING: [level_loader] level Niagara: 10 placements across 1 systems in 2 chunk nodes (0 sprite-masked, 10 parameter sets, 13 activation-skipped; decode root=res://../extracted/json files=4)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:6740)
+         [1] _store_level_extras (res://src/core/level_loader.gd:6512)
+         [2] load_sublevels_async (res://src/core/level_loader.gd:7081)
+ROUGHNESS_BAKE_MODE on=1 resolution=full cache=process
+WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Default_White' has a colour but no albedo map (albedo_color=(1.0, 1.0, 1.0, 1.0), flat=1)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] get_material_for_ue (res://src/core/level_loader.gd:1801)
+         [1] _bind_glb_materials (res://src/core/level_loader.gd:2183)
+         [2] _get_mesh_and_shape (res://src/core/level_loader.gd:1976)
+         [3] _build_one_draw_item (res://src/core/level_loader.gd:4702)
+         [4] load_sublevels_async (res://src/core/level_loader.gd:7106)
+AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=345
+ROUGHNESS_BAKE count=34 pixels=25690112 ms=1871 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
+MESH_RECON authored=2440 applied=2434 duplicate=5 name_skipped=0 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.38x mirrored=2 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0
+TAT-2 Loaded thieves_den: meshes=2434 lights=13
+TAT-2 post_process 'PostProcessVolume_1' carries only Lumen/UE-only settings (LumenSkylightLeaking, LumenFullSkylightLeakingDistance, LocalExposureHighlightContrastScale, LocalExposureShadowContrastScale, LocalExposureMiddleGreyBias); nothing Godot-mappable, environment unchanged
+TAT-2 Perf: chunks=793 collision_bodies=88 collision_shapes=3017 occluders=0
+TAT-2 player spawn: source=authored pos=(5.6692, 42.1592, 270.6863) yaw=3.05529569165687 headroom_clear=true forward_clear=true
+TAT-2 Den window staging: source=authored-west-opening anchor=(-6.06, 43.05, 271.4) parsed_windows=1 facing=(-0.848048, 0.0, 0.529919)
+PersistentVfx: 'WindowGodray' caller-owned (ttl<=0); live=1 total=1 (freed with parent; live count via persistent_vfx_count())
+TAT-2 Den KF10 desk spot: energy=2.0 pos=(3.6446, 41.803, 267.8289) range=6.48999977111816 cone=80.0 aimed_at=(2.769, 41.1737, 268.0207)
+TAT-2 Den parchment emission: node=@MeshInstance3D@391 energy=0.2
+WispCap: wisp light energy=0.3 cap=0.65
+TAT-2 den spawn hub-facing: misalign_before_deg=127.6 rotated_to_face=true table=(2.769, 41.1137, 268.0207)
+TAT-2 spawners: throwable=0 ammo=0 health=0 civilian=0
+TAT-2 swinging doors: 1 locked=0
+TAT-2 authored devices: 2 (acoustic_portal=2)
+TAT-2 mission_ready map=thieves_den meshes=2434 lights=13 chunks=793
+DEN_SPAWN boot_state loaded_map=thieves_den frames=16 player=true
+DEN_SPAWN spawn source=authored pos=(5.669,40.117,270.686) yaw=0.828 headroom_clear=true forward_clear=true
+  ok: contract 1 boots the Den hub loaded_map=thieves_den
+  ok: spawn source is authored (never legacy) source=authored
+  ok: player is not at the legacy origin pos=(5.669,40.117,270.686)
+  ok: player is inside the Den hub bounds pos=(5.669,40.117,270.686) bounds=(0.000,40.000,266.000)..(10.000,43.000,276.000)
+  ok: player stands on an authored TATPlayerStart starts=3 nearest_xz=0.000 m
+  ok: producer emitted the Den floor placement /game/developers/gjasp/sm_thievesden_floor
+  ok: loader built the Den floor collider shapes=3
+  ok: loader built the Den shell collider shapes=1
+  ok: authored start ray hits the Den floor start_y=41.159 hit_y=40.117
+DEN_SPAWN stats meshes=2434 collision_shapes=3017 floor_shapes=3 shell_shapes=1
+DEN_SPAWN PASS checks=9 fails=0
+
+EXIT: 0
+FINISHED: 2026-11-26T22:47:39-05:00

@@ -1,0 +1,127 @@
+== FINAL_GATE probe_p1_safe
+COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/probe_p1_safe.gd
+CWD: /home/john/.local/share/opencode/worktree/318f41/final-evidence
+STARTED: 2026-11-26T22:34:36-05:00
+
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+TAT-2 Loc: reverse map built from sources.json (3404 keys)
+TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
+INPUT_TABLE source=generated rows=91 shipping=91 actions=52
+INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
+P1_SAFE probe: safe room / portal / lantern (S12, KF14)
+  ok: escape_gate.gd compiles
+  ok: safe_room_dressing.gd compiles
+A. safe-room dressing build (authored meshes through the live loader)
+  ok: dressing node instantiated
+  ok: dressing node is named SafeRoomDressing (SafeRoomDressing)
+  ok: dressing anchored on the authored sconce wall face (126.29, 25.0, -2.28)
+  report: P1-SAFE dressing: anchor=(126.29, 25.0, -2.28) portal=portal lantern=lantern flyer=spider_flyer missing_meshes=0 missing_materials=0
+  ok: SafeRoomPortalOutline node exists
+  ok: portal outline visible in the safe room
+  ok: portal outline is a QuadMesh wall card
+  ok: portal quad uses the authored SummonBox size (1.840736, 2.386822)
+  ok: portal base sits on the authored safe-room floor line (y=25.000)
+  ok: portal has a ShaderMaterial override
+  ok: portal shader is tat_escape_portal (res://src/core/tat_escape_portal.gdshader)
+  ok: portal core_color is BP_EscapePoint OpenColor #7EFF9B ((0.2078, 1.0, 0.3294, 1.0))
+  ok: portal edge_color is BP_EscapePoint ClosedColor #C651FF ((0.5614, 0.0831, 1.0, 1.0))
+  ok: SafeRoomLanternStation node exists
+  ok: lantern resolved every authored mesh (missing=0)
+  ok: lantern resolved every authored material (missing=0)
+  ok: lantern keeps the interactables group contract
+  ok: cage mesh SM_LanternGuardA bound with its 2 authored surfaces
+  ok: cage surface 0 material present (MI_LanternGuardA)
+  ok: glass surface 1 material present (MI_LanternGuard_Glass_Yellow)
+  ok: emissive flame shape resolved (SM_Sphere2Count)
+  ok: duplicated glass surface material present for the emission toggle
+  ok: authored spot light present
+  ok: spot colour is authored #FFC277 ((1.0, 0.5395, 0.1845, 1.0))
+  ok: spot energy maps authored 5.0 through the loader curve (0.5877)
+  ok: spot range is authored 450 cm (4.50 m)
+  ok: spot cone is authored 80 deg (80.0)
+  ok: spot shadow off (authored LampCastShadow false)
+  ok: unlit prompt is [F] TURN ON ([F] TURN ON)
+  ok: lantern starts unlit: light hidden
+  ok: lantern starts unlit: flame shape hidden
+  ok: interact #1 lights the lantern
+  ok: interact #1 shows the warm spot
+  ok: interact #1 shows the emissive flame
+  ok: lit prompt is [F] TURN OFF ([F] TURN OFF)
+  ok: interact #1 drives the glass emission on
+  ok: interact #2 turns the lantern off
+  ok: interact #2 hides the warm spot
+  ok: interact #2 hides the emissive flame
+  ok: interact #2 drives the glass emission off
+  ok: prompt flips back to [F] TURN ON
+  ok: toggled signal fired on then off ([true, false])
+  ok: interact point targets the lantern body, not the wall anchor
+  ok: SafeRoomSpiderFlyer node exists
+  ok: flyer mesh resolved (SM_PosterWantedA)
+  ok: flyer carries the authored mesh id (/Game/Art/Environment/Props/Posters/SM_PosterWantedA)
+  ok: flyer material present (MI_PosterWanted)
+  ok: flyer UV window is the SPIDER column of T_PosterWanted_DA (umax=0.3242)
+  ok: flyer UV window is one atlas row (dv=0.4507)
+B. escape-gate contract (portal visual + authored light + lifecycle)
+  ok: gate portal visual node is EscapePortalVisual
+  ok: gate portal is a QuadMesh
+  ok: gate portal carries the portal shader
+  ok: gate portal + light are hidden while dormant
+  ok: gate light is authored Door_Light #BF00FF ((0.749, 0.0, 1.0, 1.0))
+  ok: gate light maps authored 30 lm through the loader curve (1.3783)
+  ok: gate light range is authored 450 cm (4.50 m)
+  ok: gate light shadow/fog off (authored 0 volumetric)
+  ok: activate() shows the portal + light
+  ok: expire() hides the portal + light
+  ok: re-arm shows the light again
+  ok: collapse() hides the portal + light for good
+  ok: gate has no floating Label3D
+  ok: gate 3x3x3 trigger kept
+C. authored-data pins (read-only)
+  ok: BP_EscapePoint.OpenColor is #7EFF9B (matches PORTAL_CORE_COLOR)
+  ok: BP_EscapePoint.ClosedColor is #C651FF (matches PORTAL_EDGE_COLOR)
+  ok: BP_EscapePoint.SummonBox Extent is 92.07361 x 119.341095 cm (matches PORTAL_SIZE)
+  ok: BP_EscapePoint.Door_Light is #BF00FF 30 lm / 450 cm (matches PORTAL_LIGHT_*)
+  ok: BP_ToggleableLanternA class defaults present
+  ok: authored LightIntensity 5.0
+  ok: authored AttenuationRadius 450 cm
+  ok: authored OuterConeAngle 80 deg
+  ok: authored EmissiveMaterialStrength 6.0
+  ok: authored LampCastShadow false
+  ok: authored LightColor #FFC277
+  ok: authored EmisShapeColor #FFD08E
+  ok: ST_Interactables.PromptTurnOn is 'Turn On'
+  ok: ST_Interactables.PromptTurnOff is 'Turn Off'
+  ok: authored brick wall panel on the safe-room south wall (SM_Urban_Ext_Wall_4x6 at z=-2.02)
+  ok: authored oval sconce at 126.29, 27.14, -2.28 (SM_WallLightB + MI_LightsSetD)
+  ok: authored BP_ToggleableLanternA instances present in PeripheryA (4)
+  ok: SM_Urban_Ext_Wall_4x6 slot 0 is the brick MI_Urban_Ext_Stone
+  ok: SM_WallLightB authors MI_LightsSetA (instance overrides to MI_LightsSetD)
+  ok: SM_LanternGuardA authors 2 material slots (cage + glass)
+  ok: SM_PosterWantedA authors MI_PosterWanted
+  ok: Contract-02 spawn pose TATSafeRoomPlayerStart_0 at 127.2747, 25.4694, -5.3296
+P1_SAFE PASS checks=86 fails=0 skips=0
+
+EXIT: 0
+FINISHED: 2026-11-26T22:34:38-05:00

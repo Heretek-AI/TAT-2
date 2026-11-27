@@ -6,7 +6,66 @@ extracted through `tools/tat-extract` (CUE4Parse, `EGame.GAME_UE5_5`).
 Generated from `extracted/filelist.txt` (22,005 entries) and the current `extracted/` tree.
 Re-run the census with the commands at the bottom.
 
-## W10-P2 data wave — 2026-11-27 (newest; supersedes the P1 bullets it names)
+## W10 FINAL — 2026-11-27 (newest; supersedes the P1/W10-P2 sections where they differ)
+
+Merged wave: **P2-ST StateTree B2.1**, **P2-NAV Detour spike**, **P3 Wwise
+control plane**, **P5 UI**, **W10-P2 data**, and the **Den restore**. Measured at
+`5135f53` in one serial `build/qa/run_final_gates.sh` run — **44 gates, all exit
+0**, logs in [`reports/logs/final/`](logs/final/), report
+[`reports/final-20261127.md`](reports/final-20261127.md). `compile` **217/0**;
+`run_tests` **324/0** (suites **119** cream and **121** audio registered); M2
+**12/0**; E2E **300/300** (T1=117 T2=110 T3=25 T4=14 S2=12 A2=22); p2 **14/14**
+with `expected_fail=0 expected_delta=0 fixed=0 unexpected_fail=0`; parity-only
+**60/60**; cream **GREEN** (`passes=5`); audio **71**; P5 UI **44**; Den spawn
+**9**; P1 probes **86/47/7/44/31**; audit **12,660/12,703**, 0 unexpected;
+string audit **311/311/199/199/112**; perf guard **78/78**.
+
+- **Collision truth correction.** The probe now gates authored **element**
+  coverage: `COL_MAPS PASS maps=3 min_coverage=0.869 dropped=0 planar_skipped=2
+  coverage_ppm=868852` (Guildhall 866/952 = 0.910, Old Manor 641/703 = 0.912,
+  FTUE 477/549 = 0.869; runtime `no_record=0`). The old `coverage=0.989` /
+  `976321` counted invented render-trimesh fallbacks; the probe still prints it
+  as `coverage=` for continuity but `element_coverage=` is the gate. Not a
+  regression: the element count is invariant across the definition change.
+- **Texture cap target-set move.** `capped 797 → 796` with the accepted
+  `texture_refs 1523 → 1522` drop (the wrong male-top default is no longer a
+  bind); targets 1568 → 1567, `offenders=0`, one alpha-critical kept.
+- **Cream / p2 are closed.** Suite 119 is green and fails on any invented-white
+  regression; both pants checks are hard, so p2 has no expected failure. The
+  checker enforces `expected_fail/expected_delta/fixed` as exact zeros.
+- **P2-ST B2.1 — shadow only.** Payload-v2 node parameters are read by node
+  identity (566/566 keys, 676 bindings). Coverage: `fully_covered_trees=1`
+  (`ST_Subtree_IntruderNoLongerSuspicious`), `fully_parity_covered_trees=0`;
+  task 326/139/56, condition 233/35/20. `TAT2_STATETREE` remains `off`; `patrol`
+  is not enabled. The FSM still drives — **no cutover**.
+- **P2-NAV — data proven, consumer next.** The cooked Guildhall navmesh is
+  extractable (2,958 tiles / 14,930 polys / 221 off-mesh / 240-45-45 cm). The
+  spike builds a Godot mesh and proves a doorway path (**16/0**, 3 waypoints,
+  4.15 m, sync 975 ms, total 1,172 ms, 61.8 MB). No runtime region; the **P1
+  Detour consumer** (compact asset, async commit, 221 `NavigationLink3D`) is the
+  next lane. The closed prison doorway's partial path is the unconsumed authored
+  link, not a tile defect.
+- **P3 audio control plane — partial.** `audio_control.json` carries 14/23
+  switch groups, 4/8 state groups, 16/50 RTPCs and 142 curves; footstep
+  surface/gait, interior/exterior, modal state and the detection RTPC→music
+  gain/pitch are wired. State property rows, music switch decision trees,
+  `FS_Layers` and named-RTPC low-pass are deferred with reasons. Not a full
+  mix/music/VO port.
+- **P5 UI — headless-verified, not visually scored.** Light Gem lit-cap +
+  direction (`PORT_APPROX`; the authored 21-slice array is absent), card/compass,
+  loadout hotbar, pause blur/dim with the HUD hidden, the 11-line KF13 briefing,
+  `CRANK [LMB]`, and authored map names. The one new invented literal is the
+  documented `Thieves' Den` port copy (`contract_table_ui.gd:362`, string-audit
+  ceiling 112).
+- **Den restored.** The narrowed developer-mesh skip brings back the authored
+  shell/floor; `DEN_SPAWN PASS checks=9` pins `source=authored`,
+  `pos=(5.669,40.117,270.686)`, 2,434 meshes, 3,017 collision shapes and the
+  authored start-marker/floor ray.
+- **Still pending:** live reference + 120-row baseline, any GPU capture (UI
+  pixels, beam falloff, exposure), StateTree cutover, audio state/music layers,
+  navmesh runtime consumer, `Destructibles/` + GC census, perf matrix.
+
+## W10-P2 data wave — 2026-11-27 (superseded by W10 FINAL above where they differ)
 
 One lane on `w10/data-wave` (base `8a3ad62`) regenerated the private data copy and
 fixed three measured data defects. Report with all lines:
@@ -468,7 +527,7 @@ and the recorded-run evidence in
 | **Post-process / fog** | 2 `PostProcessVolume`, 1 `ExponentialHeightFog` | fog + Godot-mappable post-process applied; Lumen-only fields logged as unmappable | **wired (9b1a22a)** |
 | **Landscape** | 128 `LandscapeComponent`, 128 heightfield collisions, splines, Nanite components | heightmaps + collision + two-weightmap layer blend (`tat_landscape.gdshader`); 210 components across 3 maps (OldManor 128, Startscreen 64, Guildhall 18) now all have real heightmaps/weightmaps, including OldManor_P's 128 (155 PNGs: 101 heightmaps + 54 weightmaps) | **done (fadefa5, 2a8f3d5, 24abf18; `docs/reports/landscape-weightmaps.md`, `docs/reports/visual-polish.md`)** |
 | **Packed Level Actors** | 39 `BPP_PL_*` classes, 3,210 instanced components, 30,127 instances | all instances expanded with real `PerInstanceSMData`; Guildhall PeripheryA 3,587 -> 12,594 meshes, collidable; **138 LevelInstances / 32,166 meshes** merged at authored transforms | **done (packed-level-instances)** |
-| **Audio** | 5,018 Wwise media chunks + 1,296 event assets | **5,018/5,018 decoded to Ogg** (39,222.2 s, 581,494,198 bytes); 5,862/5,868 event media entries resolved; all 9 gameplay tags wired to verified event/media pairs (`docs/reports/audio-wwise.md`) | **done (2ec9138)** |
+| **Audio** | 5,018 Wwise media chunks + 1,296 event assets | **5,018/5,018 decoded to Ogg** (39,222.2 s, 581,494,198 bytes); 5,862/5,868 event media entries resolved; all 9 gameplay tags wired to verified event/media pairs (`docs/reports/audio-wwise.md`); W10-P3 adds the switch/state/RTPC control plane (14/23 switch groups, 4/8 states, 16/50 RTPCs, 142 curves) — event/selection first slice, state rows/music trees deferred | **extraction done (2ec9138); control plane partial (W10-P3)** |
 | **Tools** | MagicSlime 4 charges / 2 m puddle / 30 s / 10 s slip; smoke 1 ch / 5x5x4 m / 25 s; pickpocket 25 m/9°/0.5 s/4.5 m/s | **implemented** (`50252b5`); projectile flight and player-slip are documented simplifications | **done** |
 | **Combat/health** | fall 6.5→23.25 m curve, 10 s downed, 5 s revive, 15/s guard regen | **implemented** (`16edb4e`) with curve-verified damage and a downed countdown | **done** |
 | **Blueprints (logic)** | 979 `BP_` + 225 `BPUI_` | 963 `BP_` + 225 `BPUI_` dumped; 18 `BP_` missing (Test/ClothSimulation); movement/detection/tools/contracts wired | **graphs not translatable; selective transpiler only** |
@@ -477,7 +536,7 @@ and the recorded-run evidence in
 | **Patrols** | 210 paths / 673 waypoints | 120 Guildhall / 350 points merged; guards use authored waits/yaw/PingPong | **done** |
 | **Clues / quests** | 96 fact rows / 18 QGs | 90 reachable / 6 dead (Spider `03:Reminder` withheld, `04:Renegade` excluded; the producer-dead `01:Intro` is granted at runtime); authored readable clues, quest items, journal, Set/LootTheRoom objectives; **Spider 01→04 personal chain live** (note → electrotype → Owl → courier → informant, 7 facts, 90/90 real-map probe) | **done (`eb55bc1`); residuals in the 2026-11-24 integration entry** |
 | **Player identity** | `PlayerState.GetPlayerName` | explicit handle, else authored `The Spider` / `The Chameleon`; no capture Steam persona | **done (W0a)** |
-| **Localization** | 8 locales | 8 `.translation` registered; 2,946 source→key entries; every visible UI expression routed through `UIStrings` (306/306, 195 authored), **not** `Loc.t()` call sites — `Loc.t(` occurs once, in the `localization.gd` docstring | **partial (111 labelled port-copy rows)** |
+| **Localization** | 8 locales | 8 `.translation` registered; 2,946 source→key entries; every visible UI expression routed through `UIStrings` (311/311, 199 authored), **not** `Loc.t()` call sites — `Loc.t(` occurs once, in the `localization.gd` docstring | **partial (112 labelled port-copy rows)** |
 | Skeletal meshes / skins | 156 `SK_` | 156 GLB | guards play 10 real retargeted clips (a29a06f); player uses real 1P arms (9ef3bdc) |
 | Player model | `Mesh1P_UpperBody/LowerBody`, `Mesh3P_Body/Head` = ThiefNisha meshes | real ThiefNisha 3P body/head + 1P upper-body arms with Walk/Sprint/Crouch 1P clips | **done (9ef3bdc)** |
 

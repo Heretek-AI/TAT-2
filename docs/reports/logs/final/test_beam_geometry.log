@@ -1,0 +1,85 @@
+== FINAL_GATE test_beam_geometry
+COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/test_beam_geometry.gd
+CWD: /home/john/.local/share/opencode/worktree/318f41/final-evidence
+STARTED: 2026-11-26T22:38:55-05:00
+
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+TAT-2 Loc: reverse map built from sources.json (3404 keys)
+TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
+INPUT_TABLE source=generated rows=91 shipping=91 actions=52
+INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
+PASS: P0A-B.1 guildhall has 134 /Game/Art/Effects/LightBeam/SM_LightBeam cards
+PASS: P0A-B.1b guildhall devices_runtime has 134 light_beam records
+PASS: P0A-B.2 guildhall: 134/134 cards pair with their detector record by authored position
+PASS: P0A-B.3 guildhall: 134/134 card axes equal device column 2 within 2 deg (max 0.000006 deg)
+PASS: P0A-B.4 guildhall: 134/134 card lengths match BeamLength within 2% (max err 0.0406%)
+PASS: P0A-B.5 guildhall: 134/134 authored length scales applied verbatim (clamped=0, max 195.5291)
+PASS: P0A-B.6 guildhall: 134/134 cards keep the authored 1 m cross width (Y/Z)
+PASS: P0A-B.7 guildhall authored max scale is 195.5291
+PASS: P0A-B.8 negative control: pre-P0a col0 transform is 90 deg off 134/134 (the stale test hid this axis)
+PASS: P0A-B.8b negative control: pre-P0a col0 lengths pass 134/134 (only its 200-ceiling clips fail)
+PASS: P0A-B.9 negative control: pre-W0R col2+40 m transform fails length 134/134
+PASS: P0A-B.10 negative control: the old 40 m clamp clipped 129/134 guildhall cards
+PASS: P0A-B.11 negative control: the 200 ceiling would clip 0/134 guildhall cards
+PASS: P0A-B.12 guildhall: exactly 1 card has no BeamLength and uses the authored 10 m family default
+  sample: Guildhall_Gameplay:BP_Detector_LightBeam_C_0 len=4.3398 m (auth 4.3415, err 0.040%) dir=(0.0, 0.0, -1.0) scale=42.5468
+BEAM_MAP guildhall cards=134 max_axis_err_deg=0.000006 max_len_err=0.000406 glb_len_err=0.020006 clamped=0 authored_max=195.5291 old40_clipped=129 old200_clipped=0
+PASS: P0A-B.1 old_manor has 196 /Game/Art/Effects/LightBeam/SM_LightBeam cards
+PASS: P0A-B.1b old_manor devices_runtime has 196 light_beam records
+PASS: P0A-B.2 old_manor: 196/196 cards pair with their detector record by authored position
+PASS: P0A-B.3 old_manor: 196/196 card axes equal device column 2 within 2 deg (max 0.000005 deg)
+PASS: P0A-B.4 old_manor: 196/196 card lengths match BeamLength within 2% (max err 0.0406%)
+PASS: P0A-B.5 old_manor: 196/196 authored length scales applied verbatim (clamped=0, max 236.9539)
+PASS: P0A-B.6 old_manor: 196/196 cards keep the authored 1 m cross width (Y/Z)
+PASS: P0A-B.7 old_manor authored max scale is 236.9539
+PASS: P0A-B.8 negative control: pre-P0a col0 transform is 90 deg off 196/196 (the stale test hid this axis)
+PASS: P0A-B.8b negative control: pre-P0a col0 lengths pass 192/196 (only its 200-ceiling clips fail)
+PASS: P0A-B.9 negative control: pre-W0R col2+40 m transform fails length 196/196
+PASS: P0A-B.10 negative control: the old 40 m clamp clipped 193/196 old_manor cards
+PASS: P0A-B.11 negative control: the 200 ceiling would clip 5/196 old_manor cards
+PASS: P0A-B.12 old_manor: exactly 1 card has no BeamLength and uses the authored 10 m family default
+BEAM_MAP old_manor cards=196 max_axis_err_deg=0.000005 max_len_err=0.000406 glb_len_err=0.020005 clamped=0 authored_max=236.9539 old40_clipped=193 old200_clipped=5
+PASS: P0A-B.13 total authored SM_LightBeam cards: 330 (Guildhall 134 + Old Manor 196)
+PASS: P0A-B.14 all 330 cards: axis aligned to device column 2, 0 unmatched (max 0.000006 deg)
+PASS: P0A-B.15 all 330 cards: length within 2% of BeamLength and clamped=0 (max err 0.0406%)
+PASS: P0A-B.16 negative control: pre-P0a col0 transform fails direction 330/330 while passing length 326/330 (4 over-200 cards also fail length)
+PASS: P0A-B.17 negative controls: pre-W0R 40 m clamp clips 322/330; 200 ceiling clips 5/196 Old Manor
+BEAM_AXIS_TOTAL cards=330 max_axis_err_deg=0.000006 max_len_err=0.000406 glb_len_err=0.020006 clamped=0 old40_clipped=322 old200_clipped=5
+  note: GLB card axis is 0.100 m vs the authored 0.102 m (2.001% short in engine)
+PASS: P0A-B.18 _dict_to_transform delegates the exact SM_LightBeam path to beam_card_transform()
+PASS: P0A-B.19 loader applied the beam fix 330 times (BEAM_FIX count)
+PASS: P0A-B.19b loader BEAM_FIX max authored scale 236.9539
+PASS: P0A-B.19c loader BEAM_AXIS max axis error 0.000005 deg (<= 0.01)
+PASS: P0A-B.19d loader BEAM_AXIS max length error 0.00000019 (<= 0.00001)
+PASS: P0A-B.19e loader BEAM_AXIS clamped=0
+PASS: P0A-B.20 runtime beam pivot +Z equals device column 2 (0.000000 deg)
+PASS: P0A-B.21 runtime capsule runs along +Z (centre 2.171, rot X 1.571)
+PASS: P0A-B.22 stand-in visual fallback also runs along +Z
+PASS: P0A-B.23 adopted card is the single visual: unpowered both dark, powered card on and cylinder off
+PASS: P0A-B.24 adopted card long axis equals device column 2 (0.000003 deg)
+BEAM_GEOMETRY_SUMMARY: fails=0
+
+EXIT: 0
+FINISHED: 2026-11-26T22:38:57-05:00

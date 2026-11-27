@@ -44,9 +44,13 @@ authored Light Gem.
 - **P4.1 exposure/IBL** AEM 77/0 and cubemap 37/0 with no PENDING data block.
   `CUBEMAP_ORIENT` records a daylight `+Y < -Y` luminance WARN (0.0680 vs
   0.0712). GPU-measured: the IBL ambient path carries energy **0.00005** and
-  darkens interiors by design (default stays `off`); the AEM `meter` settles at
-  **exposure=0.2615** at an exact fixed point against the authored **1.150**
-  fixed path (gate luma 23.49 → 8.82), a stable residual rather than divergence.
+  darkens interiors by design (default stays `off`). The AEM adaptation loop is
+  at its fixed point (`adapted == target == -4.863`), BUT the meter path is
+  **NOT CALIBRATED**: the metered scene EV100 **-0.863** is 2.14 stops brighter
+  than the **-3.0** anchor assumed by the fixed path
+  (`1.150 / 0.2615 = 4.40`), and no ≥25 s settle measurement has been made
+  (gate luma 23.49 → 8.82). Default stays `fixed`; the `model`/`meter` path is
+  not promoted.
 - **Mirrors** are the negative-determinant split (`07ecb56`); the measured draw
   census is **3,297 = 3,119 MultiMesh + 178 standalone**, with **464** splits and
   **103** baked variants (**31,097,388 B**). The GPU readback is **measured

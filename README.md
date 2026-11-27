@@ -21,7 +21,7 @@ E2E tiers.
 | M2 traversal/tools (`tests/test_m2_player.gd`) | **fails=0** (12) |
 | E2E (`tests/e2e/run_e2e_tests.gd`, tiers 1–4 + `s2` + `a2`) | **300/300** (tier 1: 117) |
 | Door walk · viewmodel truth · Niagara · leak probe | **PASS** |
-| Staged-route self-test (`build/qa/p0b_route.sh --self-test`) | **62/62**, in the 49-gate set (added Phase 0b) |
+| Staged-route self-test (`build/qa/p0b_route.sh --self-test`) | **62/62**, in the 49-gate set (added Phase 0a, measured in Phase 0b) |
 | Steam manifest + content audit (`make audit`) | exit 0, fail-closed tracked baseline, disk-backed coverage 99.7 % (12660/12703), 13/13 content groups |
 | Gate ratchet (`make gate-ratchet`) | **PASS** — floors verified against committed logs at `37bb69e` (49 gates, run `60474c0`) |
 

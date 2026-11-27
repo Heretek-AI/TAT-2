@@ -15,63 +15,49 @@ been restored; the matched-settings capture is still not taken.
 
 ---
 
-## 0. Machine state — RESTORED; the offline path is disproven; one decision blocks the capture
+## 0. Machine state — A path proven; the live capture is the Staff mission, not the Cleanout
 
-The shipped build `25076818` **will not run in Steam Offline Mode**: with
-`WantsOfflineMode=1` it reaches the launcher's `LOGIN FAILED!` with only `QUIT`.
-The launcher requires an online login. The port itself is fully offline; this is
-a capture constraint, not a port requirement.
+The offline finding stands: the shipped launcher needs an online login. On
+2026-11-27 the **A path worked**: the copied install (`~/tat2-ref-build`)
+launched directly through Proton with the copied prefix
+(`/tmp/opencode/tat2-ref-prefix`), reached the startscreen, and the copy wrote
+its prefix while the original did not (copy `system.reg`/`user.reg` at
+01:23:49; original unchanged at 2026-11-26 23:06). The copied prefix has the
+owner save restored (`TAT_ETS.sav` md5
+`976f8730eac989bab1c6c792343b7c00`); the original install, prefix and save are
+untouched. Steam is online for auth; the game may still be at the main menu.
 
-The machine was restored after the attempt. Verified state:
+The live capture is **not the official route**: it is the **Staff of Edinburgh
+Item Collection Heist** (120-minute limit, outdoor canal-side spawn), not the
+Cleanout Heist (55-minute, brick safe room). It is two 600 s parts with a
+226.5 s unrecorded gap (part 2 was lost to a cleanup kill) and part 3 ends at
+541.7 s. Review: `docs/reports/live-ref-review-20261127.md` — 10 beats present /
+12 partial / 2 wrong mission / 3 absent; 0 poses present / 3 partial; 55/120
+rows have supportable look/geometry or HUD/UI subjects; the 120-row tally is
+unchanged (48/56/16).
 
-- `compatdata/3341000` is the **original** prefix again; the swapped-in copy was
-  removed and no `.orig-p0b` remains.
-- `TAT_ETS.sav` md5 `976f8730eac989bab1c6c792343b7c00` matches the archive at
-  `/tmp/opencode/tat2-ref-prefix/.../SaveGames.pre-p0b-20261126-230522/`.
-  The canonical copy's `SaveGames/` holds only `EnhancedInputUserSettings.sav` —
-  there is no fresh `TAT_ETS.sav`; the archive is the only save.
-- Steam is stopped; `WantsOfflineMode=0`; no launch option for 3341000.
-- The failed attempt used the **original** prefix because the
-  `STEAM_COMPAT_DATA_PATH=... %command%` launch option did **not** redirect
-  Proton. It rewrote the original's `pfx/system.reg`, `pfx/user.reg` (now
-  2026-11-26 23:06) and the prefix's `steamclient*.dll` stubs, and grew
-  `vkd3d-proton.cache` 1,743,312 → 1,744,384 B; the `.write` sidecar is now
-  0 B. Save/config hashes are unchanged. Both are benign and were not reverted.
-- The prefix copy is staged: **771 files vs the original's 775**, so
-  `verify-copy` now **FAILs by design**; it is only meaningful before `stage`.
-- Host at the last check: **177 G** free on `/home`; **5,143 MiB** VRAM free
-  (VRAM moves with the desktop; re-run `preflight`); Proton
-  `experimental-11.0-20261112-x86_64`; `buildid=25076818`, `up_to_date:true`
-  (last check).
+**Next capture (Cleanout) checklist:**
 
-**Options considered (offline is not a fallback):**
+- **Mission pre-start:** the prep must read `Cleanout Heist` / `Time Limit: 55
+  minutes`, and the spawn must be the brick safe room. If it reads `Item
+  Collection Heist` / `120 minutes` / Staff of Edinburgh, back out and select
+  the `CONSTABLES' GUILDHALL` Cleanout contract; do not start the recorder.
+- **A path:** use `~/tat2-ref-build` + `/tmp/opencode/tat2-ref-prefix`; keep
+  Steam online for auth; do not use the retired launch option.
+- **Recorder:** one 900 s file, started at the **main menu** (the 2026-11-27 run
+  opened in the Den and missed S01/S02); 2560×1440, High groups, Resolution
+  Scale **100** after the preset, VSync off, 60 cap, FOV 85.
+- **Audio:** Master/Music/SFX/Dialogue **80** (or a level whose 10 s test max is
+  below −1 dBFS); the 2026-11-27 Master 100 peaked at 0.0 dBFS.
+- **Poses:** hold each 3 s; the 2026-11-27 run has 0 poses present, 3 partial.
+- **Window title:** `TAT` (the helper now searches both `TAT` and `Thick As
+  Thieves`).
 
-- **A — matched-settings live capture, updater out of the path (recommended,
-  UNTESTED):** copy the 3.8 GB install to a private path and launch the copy's
-  `TAT-Win64-Shipping.exe` directly under Proton with the copied prefix; keep
-  Steam online only for auth. Steam never launches the app, so
-  `AutoUpdateBehavior=0` cannot replace the reference. The open question is
-  SteamAPI init without the `TAT.exe` launcher; Step 6A of the runbook is the
-  test.
-- **B — Steam Play with the prefix swapped:** stop Steam, snapshot the install
-  and appmanifest, `mv` the original prefix aside and `cp -a` the staged copy
-  in, then start Steam online. Accept the update race only with owner approval;
-  abort on any appmanifest/buildid change.
-- **C — no shipped launch:** re-score the 120 rows from the official clip and
-  keyframes (`~/Videos/clip_1,795,033,698,901.mp4`, 3840×2160 @ 29.67 fps,
-  225.5 s; keyframes in `docs/reference/clip_1795033698901/clean/`), marking
-  live-only rows `UNVERIFIED`. This does not need a capture and can run now.
-
-**Decision (2026-11-26, owner):** run **A first with B as fallback**; restore the
-archived owner save into the isolated prefix (Steam Cloud off); capture at
-**2560×1440**; re-score the 120 rows now from a **port** full-route run. A is
-still untested; runbook Step 6A must pass before a scored run.
-
-**Do not press Play in Steam until the Step 6A isolation proof is in place.**
-The runbook is `docs/reports/p0b-live-capture.md` §5; the pre-attempt Offline
-Mode and launch-option instructions are retired. The live capture is a
-matched-settings **P4/ROI** reference; the 120-row scorecard is re-scored from a
-**port** full-route run, not from this capture.
+The live capture is a P4/ROI reference; the 120-row scorecard is re-scored from
+a **port** full-route run, not from the shipped capture. The V6-03 official cell
+still says `y~56%` / two beams / cyan ceiling diamond; the review measures
+17.8 %/40.0 %, one band, above-door node — correct the cell in the adjudication
+wave.
 
 ---
 
@@ -89,10 +75,11 @@ the previous handoff conflated:
   (**9 PASS / 33 DELTA / 4 MISSING / 2 HARD_LIMIT / 16 UNVERIFIED / 56
   N/A-route**, 2026-11-24) but **stale**: it predates every wave. Re-scoring it
   needs a new **port** full-route run, not a shipped-build capture.
-- **Matched-settings live capture** — still not taken; it is the P4/ROI
-  instrument for exposure/look, not the source of the 120-row tally. Its
-  offline path is disproven; the owner's decision is **A first, B fallback**
-  (§0).
+- **Matched-settings live capture** — taken 2026-11-27, but it is the **Staff of
+  Edinburgh Item Collection Heist**, not the Cleanout; 10 beats present / 12
+  partial / 2 wrong / 3 absent, 0 poses present / 3 partial, 55/120 rows with
+  supportable look/HUD subjects, 120 tally unchanged. **No valid Cleanout live
+  reference exists yet**; see §0/§4.1.
 
 Still open: P4 look/exposure, the navmesh runtime consumer, the StateTree shadow
 ceiling (`fully_parity_covered_trees=0`, FSM authoritative), partial audio
@@ -170,8 +157,9 @@ StateTree shadow ceiling; the authored-element collision floor.
 ### 4.1 Live reference (P4/ROI) and the 120-row re-score
 
 - Shipped launcher requires **online login**; Steam Offline Mode gives
-  `LOGIN FAILED!`. **Decision: A first, B fallback** (see §0); **C** remains the
-  no-launch fallback. A build preflight is not update protection.
+  `LOGIN FAILED!`. **A worked on 2026-11-27**; the capture is the Staff mission,
+  not the Cleanout. The corrected Cleanout checklist is §0; **C** remains the
+  no-launch fallback.
 - The 120-row scorecard is
   `docs/reference/clip_1795033698901/COMPARISON_PORT_20261124.md`; current
   baseline is **9 PASS / 33 DELTA / 4 MISSING / 2 HARD_LIMIT / 16 UNVERIFIED /
@@ -194,6 +182,14 @@ StateTree shadow ceiling; the authored-element collision floor.
   `Mission.Guildhall.VaultHeist`; historical baseline: `LootTheRoom`,
   `free_play=false`). The wrapper exports `TAT2_PARITY_ONLY=1` for every mode.
   Contract and measured runs: [`docs/reports/p0b-route.md`](p0b-route.md).
+
+- **Live-reference review (2026-11-27):**
+  `docs/reports/live-ref-review-20261127.md` — the two-part capture is the
+  Staff of Edinburgh Item Collection Heist, not the Cleanout; 10 present / 12
+  partial / 2 wrong / 3 absent; 0 poses present / 3 partial; 55/120 look/HUD
+  rows supportable; the 120 tally unchanged; 226.5 s gap, part 3 ends at
+  541.7 s; the KF27 official cell correction (17.8 %/40.0 %, one band,
+  above-door node) is pending the adjudication wave.
 
 ### 4.2 P4 look (the visible parity gap)
 
@@ -277,9 +273,9 @@ ceiling is 112 and must not rise further without evidence.
 
 ## 5. Recommended next order
 
-1. **Execute the chosen live-capture path** (§0): **A** first (runbook Step 6A),
-   **B** as fallback. Offline is retired; a preflight is not update protection.
-   Do not fabricate measurements.
+1. **Run the corrected Cleanout capture** (§0) if the live reference is still
+   wanted: the A path is proven, but the 2026-11-27 capture is the Staff mission.
+   The mission pre-start check, 900 s recorder, audio 80 and pose holds are §0.
 2. **P4 look** (exposure/IBL/AEM first, then mirrors/landscape) because it is the
    visible gap in the current playtest and blocks honest visual scoring.
 3. **Navmesh P1 Detour consumer**, then **P2.3 patrol cutover + event bus**.
@@ -337,5 +333,7 @@ build/qa/runtime_smoke.sh 90      # no outer flock
   capture runbook (A/B/C).
 - `docs/reports/p0b-route.md` — staged 27-beat route runner v1 (schema, beat
   status, deferred blockers, owner GPU command).
+- `docs/reports/live-ref-review-20261127.md` — live-reference review
+  (Staff mission, 2026-11-27); plan, three lanes, verification.
 - `docs/reference/clip_1795033698901/COMPARISON_PORT_20261124.md` — 120-row scorecard.
 - `docs/FIDELITY_GAPS.md`, `AGENTS.md` — invariants, traps, gate table.

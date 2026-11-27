@@ -341,6 +341,7 @@ EOF
 cmd_capture_cmd() {
   local wid sink
   wid="$(xdotool search --onlyvisible --name 'Thick As Thieves' 2>/dev/null | head -1 || true)"
+  [ -n "$wid" ] || wid="$(xdotool search --onlyvisible --name '^TAT$' 2>/dev/null | head -1 || true)"
   sink="$(pactl get-default-sink 2>/dev/null || true)"
   mkdir -p "$CAPDIR" 2>/dev/null || true
   cat <<EOF
@@ -350,7 +351,7 @@ cmd_capture_cmd() {
 # It does not start the game; it records the already-running window.
 
 OUT="$CAPDIR"
-WID="${wid:-\$(xdotool search --onlyvisible --name 'Thick As Thieves' | head -1)}"
+WID="${wid:-\$(xdotool search --onlyvisible --name '^TAT$' | head -1)}"
 SINK="${sink:-\$(pactl get-default-sink)}"
 xdotool getwindowgeometry "\$WID"     # must print a 2560x1440 client area
 pactl list short sources | grep "\$SINK.monitor"
@@ -361,7 +362,7 @@ ffmpeg -hide_banner -y \\
   -map 0:v -map 1:a \\
   -c:v libx264rgb -qp 0 -preset ultrafast -pix_fmt bgr0 -fps_mode cfr -r 60 \\
   -c:a flac -ar 48000 -ac 2 \\
-  -t 420 "\$OUT/route_lossless.mkv"
+  -t 900 "\$OUT/route_lossless.mkv"
 
 # -qp 0 + bgr0 = mathematically lossless RGB; ffprobe must report pix_fmt=gbrp.
 # Stop early with q. Keep the whole 27-beat route plus the six hold poses.
@@ -505,7 +506,7 @@ cmd_steps() {
   cat <<'EOF'
 P0b live reference — condensed runbook (full detail: docs/reports/p0b-live-capture.md)
 
- 0. Close every GPU-heavy app; target >= 5.5 GiB VRAM free; project the 420 s disk size (>= 45 GB).
+ 0. Close every GPU-heavy app; target >= 5.5 GiB VRAM free; project the 900 s disk size (measured ~45 MB/s: ~40 GB; budget 2x).
  1. ./p0b_live_capture.sh preflight          # READY; online WARN is expected
  2. ./p0b_live_capture.sh copy               # only if /tmp/opencode/tat2-ref-prefix is gone
  3. ./p0b_live_capture.sh stage              # then restore the archive for the owner save

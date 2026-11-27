@@ -6,14 +6,18 @@
 > *disproves* the offline-first assumption in the preparation below; the
 > pre-attempt Steps 5–7 are rewritten in §5. The machine was restored afterwards (original prefix
 > active, `WantsOfflineMode=0`, save hash unchanged); no capture was taken.
-> The online path needs an update-protection decision first: see §2. See
-> [`HANDOFF_NEXT_AGENT.md`](../HANDOFF_NEXT_AGENT.md) §0.
+> The A path (copied install + direct Proton launch) worked on 2026-11-27; the
+> capture review (`docs/reports/live-ref-review-20261127.md`) found the Staff
+> mission, not the Cleanout. See
+> [`HANDOFF_NEXT_AGENT.md`](../HANDOFF_NEXT_AGENT.md) §0/§4.1.
 
-**Status:** the preparation pass ran 2026-11-26 in worktree `w10/p0b-live`, base
-`09d8a30`. That lane did not launch anything; a later offline attempt (same day)
-failed at the launcher's login and the machine was restored. **No capture
-exists.** The preparation lane's state and the attempt's side effects are in
-§1.1.
+**Status:** the preparation pass ran 2026-11-26; the offline attempt failed and the
+machine was restored. On 2026-11-27 the **A path worked** (direct Proton launch of
+the copied install/prefix, startscreen reached, prefix isolation proven). The
+capture is the **Staff of Edinburgh Item Collection Heist**, not the Cleanout
+Heist; see `docs/reports/live-ref-review-20261127.md`. **No valid Cleanout live
+reference exists yet.** The preparation lane's state and the attempt's side
+effects are in §1.1.
 
 **What exists now:** the appid 3341000 Proton prefix copied and byte-verified at
 `/tmp/opencode/tat2-ref-prefix` (already staged: 771 files, empty `SaveGames/`
@@ -187,7 +191,7 @@ expected.
 | B3 | **VRAM** | **high** | 8188 MiB total; **5,143 MiB free** at the last check. Close Brave, VS Code, Vesktop, ptyxis and every other GPU app; target **≥ 5.5 GiB free**. The helper blocks below 4 GiB; **a READY verdict below 5.5 GiB is not sufficient for a scored 1440p run**. Watch `nvidia-smi dmon`; if it thrashes, stop. |
 | B4 | **Wayland / XWayland** | medium | Session is Wayland; Proton renders through XWayland (`DISPLAY=:0`). `x11grab -window_id` was verified on a 1600×900 X window (120 frames / 2 s). Verify on the *game* window with a 10 s test; fallback: window at 0,0 and `-video_size 2560x1440 -i :0.0+0,0`. Do not switch to a lossy encoder. |
 | B5 | **Audio routing** | low | Default sink is HDMI with a monitor source. If the game selects the USB headset, set it as the default and capture its `.monitor`. Close all other audio sources. |
-| B6 | **Disk** | medium | `/home` has **177 G** free (was 188 G). A 4 s 1440p re-encode of the official clip measured ~1.78 MB/frame ≈ **107 MB/s at 60 fps**, i.e. **≥ 45 GB for 420 s**; a native frame is noisier, so budget 2×. Capture to `/home`, never `/tmp`. Gate on free ≥ 2× the projected size. |
+| B6 | **Disk** | medium | The 2026-11-27 capture measured **~45 MB/s** (27 GB / 600 s); a 900 s run is **~40 GB**, and `/home` had **152 G** free after the two parts. The earlier 107 MB/s figure was a worst-case re-encode of the official clip; budget **2×** the measured projection, and delete the old parts if needed. Capture to `/home`, never `/tmp`. Gate on free ≥ 2× the projected size. |
 | B7 | **Thermals / 60 fps** | medium | Laptop host with a history near 80 °C; the perf matrix is waived. The recorder writes 60 fps, but the game may repeat frames if it drops below 60. Record `nvidia-smi` before/after and state whether the render held 60; duplicated frames are not a native 60 fps render. |
 | B8 | **Steam Cloud** | **high** | If the capture uses a copy of the owner's save, a Cloud sync could overwrite the real progression. **Disable Steam Cloud for 3341000 before the run** and keep it off until the copied prefix is deleted. This setting is in the client, not `localconfig.vdf`. |
 | B9 | **`/tmp` is ephemeral** | medium | The prefix copy (590 M) is on tmpfs and disappears at reboot; the install copy is on `/home`. Re-run `copy` if the prefix is gone; never point the launch at the original prefix. |
@@ -248,9 +252,9 @@ Throughout: `ROOT` = this repo worktree; the helper is
 - Free VRAM target: **≥ 5.5 GiB** (`nvidia-smi --query-gpu=memory.free --format=csv`).
   The helper hard-blocks below 4 GiB as a floor; a READY verdict at 4–5.5 GiB is
   not enough for a scored 1440p run.
-- Free disk: project the 420 s size from a 10 s test and require **≥ 2×** it.
-  At the measured rate, 420 s at 1440p60 lossless RGB is ≥ 45 GB; `/home` has
-  177 G free.
+- Free disk: project the **900 s** size from a 10 s test and require **≥ 2×** it.
+  The 2026-11-27 capture measured ~45 MB/s (27 GB / 600 s), so 900 s is ~40 GB;
+  `/home` had 152 G free after the two parts.
 - Do not reboot after this point unless you re-copy the prefix (it is on tmpfs).
 
 ### Step 1 — preflight (must print READY)
@@ -429,32 +433,38 @@ Settings → Video, then:
 | Resolution | **2560×1440** client area |
 | VSync | **Off** |
 | FPS limit | **60** |
-| Resolution / screen percentage | **100 %** (no DLSS/FSR upscaling) |
-| Quality | **Reset to the shipped default preset**; do not inherit the archived Low/42 % values |
+| Resolution / screen percentage | **100 %** (no DLSS/FSR upscaling). Set the quality preset **first**, then set this to 100; the High preset defaults to 71 %, so a `Custom` label at 100 % is expected. |
+| Quality | **Reset to the shipped default preset**; do not inherit the archived Low/42 % values. The measured 2026-11-27 preset is all quality groups 2 (High) at scale 100. |
+| Audio | Master / Music / SFX / Dialogue **80** (or the level that keeps a 10 s test max below −1 dBFS); record the values. The 2026-11-27 route peaked at **0.0 dBFS** at Master 100 (clipping), so 100 is not a valid audio reference. |
 | HDR | Off |
 
 The copy's archived ini still says 1920×1440 / 42 % / all-Low, so the **first**
 launch will inherit those values. Change them to the table above before the scored
 run, then re-read the ini (or the settings screen) to confirm. Hold the settings
-screen for 3 s so the recording contains the exact values, and record the
-**quality preset** and the actual client area in the run note. 2560×1440 is the
-target because it is the owner's last 16:9 mode (Steam `ResolutionOverride
-2560x1440`); the port harness captures 1920×1080 and the ROI stats downsample both
-to 480 px, so this is a detail superset, not a pixel match. If the host cannot
-hold 1440p at 60, stop — do not silently drop to 1080p.
+screen for 3 s **or** take a settings still; hash it. Record the **quality
+preset** and the actual client area in the run note. Measured 2026-11-27: the
+High preset sets `ResolutionQuality=71`; re-set the scale to 100 afterwards; the
+resulting settings screen reads `Custom` with View Distance/Shadows/Textures High
+and scale 100, which is the intended High quality at 100 %. The game window title
+is **`TAT`**, not `Thick As Thieves`; the window search below must fall back.
+2560×1440 is the target because it is the owner's last 16:9 mode (Steam
+`ResolutionOverride 2560x1440`); the port harness captures 1920×1080 and the ROI
+stats downsample both to 480 px, so this is a detail superset, not a pixel match.
+If the host cannot hold 1440p at 60, stop — do not silently drop to 1080p.
 
 Then check the client area really is 1440p:
 
 ```bash
 WID=$(xdotool search --onlyvisible --name 'Thick As Thieves' | head -1)
+[ -n "$WID" ] || WID=$(xdotool search --onlyvisible --name '^TAT$' | head -1)
 xdotool getwindowgeometry "$WID"     # must print 2560x1440
 ```
 
 If the window is 2560×1471 (title bar) or another size, fix it before recording;
 `-window_id` captures the client window, but the geometry must be 1440p for the
 comparison. If the search returns nothing, list the XWayland windows
-(`xdotool search --onlyvisible --name '.'`) and use the Proton/UE window; the title
-is normally `Thick As Thieves`, but the class may be `TAT-Win64-Shipping`.
+(`xdotool search --onlyvisible --name '.'`) and use the Proton/UE window; the
+measured title is `TAT` (the class may be `TAT-Win64-Shipping`).
 
 ### Step 9 — warm-up, then start the recorder
 
@@ -463,7 +473,9 @@ contract → play ~60 s (move through the gate, fire the zipwire once) → retur
 the menu. This warms the PSO/vkd3d caches. If you cannot return to the menu,
 restart the game; the on-disk PSO cache survives. **The warm-up is not evidence.**
 Start the recorder at the Startscreen; every beat from S01 in the recording is
-evidence.
+evidence. **Measured 2026-11-27:** the recording opened in the Den (S01/S02 absent);
+confirm the first recorded frame is the startscreen, not the Den, and restart at
+the main menu if it is not.
 
 ### Step 10 — lossless capture (exact command)
 
@@ -477,6 +489,7 @@ The helper prints (and does not run):
 ```bash
 OUT="$HOME/Videos/tat2_ref_YYYYMMDD"
 WID=$(xdotool search --onlyvisible --name 'Thick As Thieves' | head -1)
+[ -n "$WID" ] || WID=$(xdotool search --onlyvisible --name '^TAT$' | head -1)
 SINK=$(pactl get-default-sink)
 xdotool getwindowgeometry "$WID"          # 2560x1440
 pactl list short sources | grep "$SINK.monitor"
@@ -487,18 +500,18 @@ ffmpeg -hide_banner -y \
   -map 0:v -map 1:a \
   -c:v libx264rgb -qp 0 -preset ultrafast -pix_fmt bgr0 -fps_mode cfr -r 60 \
   -c:a flac -ar 48000 -ac 2 \
-  -t 420 "$OUT/route_lossless.mkv"
+  -t 900 "$OUT/route_lossless.mkv"
 ```
 
 - `-qp 0` + `bgr0` is mathematically lossless RGB; `ffprobe` must report
   `pix_fmt=gbrp`, `avg_frame_rate=60/1`. This was verified on a real X window.
 - `-draw_mouse 1` keeps the cursor, as in the official clip.
-- `-t 420` covers the 3:45 route plus six 3 s holds and pauses; stop early with `q`.
+- `-t 900` covers the 3:45 route plus six 3 s holds, reading/pauses and the recorder margin; the 2026-11-27 run exceeded 420 s. Stop early with `q`.
 - **Test the first 10 s** (`-t 10` to a scratch file) and check the frame is not
   black before committing to the full run. If `-window_id` yields black (XWayland
   compositor edge case), use the region fallback in §3 B4.
-- **Disk gate:** measure the 10 s file size and project it to 420 s (`bytes ×
-  42`); require free ≥ 2× the projection before the full run. At the measured
+- **Disk gate:** measure the 10 s file size and project it to 900 s (`bytes ×
+  90`); require free ≥ 2× the projection before the full run. At the measured
   rate the full capture is ≥ 45 GB.
 - Do not run OBS, another ffmpeg, or any GPU capture at the same time.
 - Record `nvidia-smi --query-gpu=name,driver_version,memory.used,clocks.current.graphics,temperature.gpu --format=csv`
@@ -542,6 +555,14 @@ official anchors, used only to find the beats, not to force clock alignment.
 Do not change difficulty, mode or settings mid-run. The official run is
 `CONSTABLES' GUILDHALL — Cleanout Heist`, `Novice`, `Solo`.
 
+**Pre-start mission check (2026-11-27):** the map table can start the **Staff of
+Edinburgh Item Collection Heist** (120-minute limit, outdoor canal-side spawn)
+instead of the Cleanout Heist. Before recording, the prep must read `Cleanout
+Heist` / `Time Limit: 55 minutes`, and the spawn must be the brick safe room. If
+it reads `Item Collection Heist` / `120 minutes` / Staff of Edinburgh, back out
+and select the `CONSTABLES' GUILDHALL` Cleanout contract. Do not start the
+recorder until the prep screen confirms 55 minutes.
+
 The route assumes the **official save's progression** for S06 (ledger/Black
 Market) and the footer/level rows. If you chose the empty-save alternative in
 Step 3, those rows are save-state deltas; record the difference and do not score
@@ -549,7 +570,9 @@ them as port parity.
 
 ### Step 12 — the six fixed poses (plus the KF18 still)
 
-Hold each fixed pose for **3 s** (still camera, HUD on) so the frame is stable. The
+Hold each fixed pose for **3 s** (still camera, HUD on) so the frame is stable.
+**Measured 2026-11-27:** the live capture has 0 poses present and 3 partial; the
+holds were not performed. Do not skip them. The
 port coordinates below are **reference cues** from the existing W9 capture poses and
 the measured Guildhall level data (not Lane I teleport targets); navigate by the
 geometry/content in the shipped map.
@@ -593,6 +616,9 @@ Expected output: `P0B_LIVE_VERIFY PASS poses=N video_sha256=…`, plus
 - appmanifest buildid/sha256 and shipping exe sha256/version;
 - Proton version and prefix path;
 - per-pose PNG SHA-256 and timestamps.
+
+**Measured 2026-11-27:** the two-part capture has no `poses.tsv`/manifest; the
+review used per-frame SHA-256. A single 900 s file is required for this verify.
 
 Then verify the **build in-game**: the pause footer must read `1.5.148559` and
 `Novice`. The seed depends on the save: a restored owner save may carry the

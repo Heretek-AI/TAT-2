@@ -1,469 +1,223 @@
 # Handoff — Thick As Thieves Godot 4.7.2 port (next session)
 
-**Repo:** `<repo>`
-**Current tip:** `facf6bd` (PR #17 docs tip; the Phase 3 merge is `c015567`).
-`wip/phase3-gate-integrity-20261127` was merged and auto-deleted on merge; the
-per-task WIP snapshots `wip/phase3-audio-20261127`, `-baseline-20261127`,
-`-gpu-session-20261128`, `-look-code-20261127`, `-nav-20261127` and
-`-statetree-20261127` are contained in `main`, and
-`wip/phase3-played-route-20261128` stays unmerged. `main` is PR-gated by the
-`keep summer safe` ruleset (required `hygiene / *` checks), so land every change
-through a PR.
+**Repo:** `<repo>` · **Current tip:** `9c811a5` (`main`).
+**Phase 3 merge:** PR #16 → `c015567`; docs tips #17 `facf6bd`, #18 `9c811a5`.
 **Measured code/gate head:** `900f8eb` (route-code merge); the final **59-gate**
 run was made at `5337828` (logs commit `0f6942c`). The post-gate repo-hygiene
 commit `95247fb` touches docs, QA scripts and workflows only; compile **234/0**
 and E2E **310/310** were re-run on it.
-**Gate set:** **59/59 exit 0** — compile **234/0**, `run_tests` **329/0**
-(suites 119/121/122/123/124/125/126), `E2E 310/310`, `make gate-ratchet` PASS
-(`measured_on=900f8eb`), `make audit` PASS (12664/12703, floor 12660).
-**Phase 3 status:** 15/16 tasks verified; `played-route` is **blocked** with a
-measured partial (11/27 beats, 45/120 rows, `route_claim=none`, content blockers
-S12/S13/S06/NPCs) — not relabelled played. Its branch
-`wip/phase3-played-route-20261128` stays unmerged.
 **Godot:** `4.7.2.stable` via native `tools/godot` (`godot` is **not** on
 `$PATH`). Forward+ · Jolt 60 Hz · 1280×720 base · Linux x86_64.
-**Working tree:** clean on `main`.
+**Working tree:** clean.
 **Read first:** this is the post-Phase-3 handoff. Final gate evidence:
 [`docs/reports/phase3-final-gates-20261128.md`](reports/phase3-final-gates-20261128.md);
 GPU: [`docs/reports/phase3-gpu-20261128.md`](reports/phase3-gpu-20261128.md);
 route partial: [`docs/reports/phase3-played-route-instruments.md`](reports/phase3-played-route-instruments.md).
 The previous long handoff is archived at
-[`docs/reports/handoff-archive-20261127.md`](reports/handoff-archive-20261127.md).
-**Steam reference:** `/home/john/.steam/steam/steamapps/common/Thick As Thieves/`
-(appid `3341000`, build `25076818`, `1.5.148559`).
+[`docs/reports/handoff-archive-20261128.md`](reports/handoff-archive-20261128.md).
+
+**`main` is PR-gated.** The `keep summer safe` ruleset requires a pull request
+plus the `hygiene / No machine-local paths` and
+`hygiene / Workflow syntax and security` checks (Sonar and CodeQL also run).
+A direct `git push origin main` is rejected — always land through a PR.
+`zizmor.yml` scopes one cosmetic ref-comment check to the two org reusable
+workflows; the security audit itself still runs.
 
 ---
 
-## 0. Phase 3 final (2026-11-28) — current state
+## 1. Where the project stands
 
-**Delivered in this wave (15 tasks verified, 1 blocked):**
-
-| Area | What landed | Evidence |
-|---|---|---|
-| Gate integrity | 59-gate runner; every runner gate bound; 40 orphan tests classified (39 retired + 4 registered); errscan marker + footer + min totals; ratchet fail-closed on missing keys, exact-zero pins and duplicate keys; P1_BEAMS source contract refreshed | 59/59 at `5337828`; `phase3-final-gates-20261128.md` |
-| Look | KF27 `foyer_beam_wide` frames the card at 18.0/40.0 and scores **5/9**; pinned 5/9; the four failures are beam material (band 38.80, 6 bands, glow falloff, core saturation). Landscape `gap_view` A/B measurable (subject ~1 %, RMSE discard↔raw 1.0077, off↔raw 0.0769). AEM meter residual **0.000 EV** at EV100 −0.864, but the fixed path is 2.14 EV brighter (anchor gap; default `fixed`). IBL ambient not a win (0.001540 vs 0.16; default `off`). UI prompt authored `#636EEC` real-renders `#636eec`; contrast 3.03–4.32 = UI2-03 DELTA | `phase3-gpu-20261128.md` |
-| Systems | StateTree default `off`, `patrol` fail-closed, writer spike (0.255 m vs 0.000 off/shadow), census 92 (3 enter + 89 transition), 1/17 events emitted; nav v2 78/2, 60/4, 4/0, door audit, prison blocked both ways, `NAV_DELTA` 22/0; audio rain converter, VO 288/645 (357 tabulated), 3 keys/24 buses declared unrecoverable, `FS_Layers` double-ban refuted; Destructibles extracted, 93 fallback confirmed (0 other diffs); Cleanout first-class (3300 s `mission_row`, safe room, no Contract 2 credit) | lane reports + 59-gate logs |
-| Route | deterministic input driver (0 transform writes), 27→120 scorer (120 rows/27 beats), telescope L4-13 fixed (`DEN_WINDOW 44/0`, 0 drift), NPC distances 85.4–150.7 m | `phase3-played-route-instruments.md` |
-
-**Blocked:** `played-route` is a documented partial: 6 driven + 5 partial + 3
-blocked + 4 unreachable + 9 not attempted = **11/27 beats, 45/120 rows,
-`route_claim=none`**. Blockers: S12 spawn floor 23.1585 vs dressing 25.0; S13
-local area only 5.81 m (KF16 128.7 m, KF15 153.4 m); S06 reach 1.9348 vs 1.75 m;
-S19/S20/S22/S23 NPCs 85.4–150.7 m. These are Phase 3C content items.
-
-**Open (run ledger `OPEN_ISSUES.md`, 240 lines):** the played-route blockers; the
-KF27 beam material terms; the AEM anchor; the UI prompt DELTA; the
-`route_driver.sh` newline `--tag` injection (Medium, operator CLI, runner-
-unreachable); the `verify/evidence` 32-file cap; the `--generating-poststamp`
-direct-invocation residual. The stale 58-gate numbers in this file, `AGENTS.md`,
-`README.md` and `FIDELITY_GAPS.md` were corrected in this wave.
-
-## 1. What just landed (Phase 1/2, 2026-11-27)
-
-Seven lanes were implemented in isolated worktrees, independently verified
-PASS, then integrated in this order:
-
-| Lane | What landed | Key measured values |
-|---|---|---|
-| **P4 landscape/beams** | `TAT2_LANDSCAPE_MASK=discard\|raw\|off`; all **15/15** authored beam scalars consumed; 2 cm fake-glow core; side/sphere/edge uniforms exposed but inert; `foyer_beam` KF27 cue; `beam_close` relabelled the Lounge **extra** | landscape **7/0**; beams **9/0**; safe-room gap comp 12 (`Weightmap_20`, mask 0.0 → visible) |
-| **P4 mirrors** | negative-determinant split; baked `S·M`/`B·S` variant; single-surface `CULL_FRONT` fast path; exact `source_counts` apportionment | draw **3,297 = 3,119 MultiMesh + 178 standalone**; 464 splits; 103 baked / **31,097,388 B**; `PERF_CENSUS.source_sublevels=64,660`; probe **39/0**, full **790/0** |
-| **P4 exposure/IBL** | authored AEM fields (`-10/+1`, `0.2/2.0`, bias 0, V3); pure `auto_exposure.gd`; `TAT2_AEM=fixed\|model\|meter`; 3 cubemaps / 18 faces; CPU cosine IBL; CompositorEffect meter | AEM **77/0**; cubemap **37/0**; fixed 1.150 / ambient 0.160 unchanged; model no-op 1.1500 |
-| **Audio W11** | 645-line VO index + `vo_director`; `FS_Layers`; music decision tree; RTPC domains; state-row report | suite 121 **135/0**; VO 122 **60/0**; 288/645 events reachable (37/76 triples); 357/645 still unmapped — Phase 3B.3; §2 is the `5857589` serial snapshot |
-| **GC/bookcases** | 3 container classes; 8 bookcases + 2 POI + 8 safes; static glass-pane binding (0.472 m); `{leaves, broken}` owner index | Guildhall containers 107→**125**; locks **162 = 152 + 10**; GC **52/0**; p2 **17/17**; A2 static leaves **20** |
-| **Navmesh** | `parse_nav` + `nav_runtime.gd`; one region per map; 80 baked links + door links | Guildhall **221→123→80**, Old Manor **216→113→64**, FTUE **11→8→4**; probe **70/0**; `TAT2_NAV=off` default |
-| **UI** | allowlisted `UTexture2DArray` for `T_stealthball_Array`; 21 slices; HUD `sampler2DArray`; 12-screen capture + pixel stats | `GEM_PAYLOAD present=true: layers=21`, `mapping_kind=directional`; P5 **54/0**; capture **28/28**, sidecars fixed |
-
-Two real integration defects were found and fixed:
-
-1. Array slices were written as `slice_00png` (missing dot), so Godot could not
-   import them and P5 stayed `PORT_APPROX`; `Exporter.cs` now always adds the
-   extension dot.
-2. E2E `T1-13-A` read the procedural `lit_amount` on the authored-array
-   material; it now follows the authored slice path while retaining the
-   centered/frame-tint checks and the procedural fallback.
-
-Data regeneration at the merged HEAD: cubemaps `ok=3 fail=0`; nav Guildhall
-2,958 tiles / 14,930 polys / 221 offmesh, Old Manor 1,469 / 9,275 / 216, FTUE
-1,558 / 5,587 / 11, all `max_poly_verts=6`, `decompress_fail=0`; UI array 21
-slices; `AUDIO_CONTROL_OK … music=2 music_keys=6/9`; audit **12660/12703**,
-texture cap **1567/796/1/0**.
-
----
-
-## 2. Current gates (58, measured at `5857589`; one 23m19s serial run at `5857589`)
-
-| Gate | Value |
+| Item | State |
 |---|---|
-| compile | **229 checked / 0 broken** |
-| `run_tests.gd` | **328 PASS / fails=0** (suites 119 cream, 121 audio, 122 VO, 123 AEM, 124 cubemap, 125 contract holes) |
-| M2 | **12/0** |
-| P1 route probes | safe **86**, doors **49**, beams **9**, ward **44**, street **31** (`hard_limits=2`) |
-| landscape mask | **7/0** |
-| navmesh runtime | **70/0** |
-| guards | Guildhall `C_20`, buckets 4/4; Old Manor order 3, 4/4 |
-| collision | `COL_MAPS PASS min_coverage=0.869 dropped=0 planar_skipped=2 coverage_ppm=868852` |
-| locks | **162** = 152 containers + 10 door nodes |
-| test manifest | **109 tracked / 70 reachable / 39 retired / 0 orphans** |
-| E2E `all` | **300/300** (T1=117 T2=110 T3=25 T4=14 S2=12 A2=22) |
-| E2E p2 | **17/17**, `expected_fail=0 expected_delta=0 fixed=0 unexpected_fail=0` |
-| e2e error scan | **`e2e=31/33 e2e_a2=0/2 run_tests=482/482 new=0`** |
-| parity-only | **60/60**, 11 rules all `parity_restoration` |
-| cream 119 | **GREEN**, `passes=5` |
-| audio 121 | **123/0** |
-| VO director 122 | **53/0** |
-| AEM 123 | **77/0**, no PENDING |
-| cubemap 124 | **37/0**, no PENDING; `CUBEMAP_ORIENT` daylight WARN |
-| P5 UI | **54/0**; `GEM_PAYLOAD present=true: layers=21` |
-| Den spawn / Den window | **9/0** / **34/0** |
-| capture harness | dry-run `poses=7`; self-test **23/0**; KF27 **9/9** (reference-only) |
-| producer tests / P5 filter | **PASS** (stealthball 22, UI pixel 15, parse_nav 7) / **5/5** |
-| runtime smoke | `RUNTIME_SMOKE_SCAN PASS exit=124 errors=0 mission_ready=1` |
-| route self-test | **62/0** |
-| audit / texture / perf / ratchet | **PASS** / 796 capped, 1 alpha, 0 offenders / **78/78** / **PASS** (`measured_on=5857589`) |
-| string audit | 311 routed / 199 authored / **112** invented (ceiling 112) |
+| Phase 3 tasks | **15/16 verified** (worker + verifier + falsifier + security-auditor each) |
+| `played-route` | **blocked** — documented partial, `route_claim=none`, branch unmerged |
+| Final gate | **59/59 exit 0** at `5337828`; `measured_on=900f8eb` |
+| Pre-merge security audit | **PASS** (0 Critical/High; 2 Medium, 7 Low) |
+| Independent victory audit | **VICTORY CONFIRMED 18/18** (R18 via its blocked branch) |
+| `teamwork_final_verify` | **FAIL** by construction (blocked task); 8 reasons, all `played-route` |
+| `main` | `9c811a5` — carries the 15/16 verified work; route branch separate |
 
-The three suites **VO director 122 (53), AEM 123 (77) and cubemap 124 (37)** are
-now real runner gates, produced in-run by the Phase 2.5 baseline; the old
-"carried forward" qualifier no longer applies. `gate_manifest` and
-`e2e_errscan` are runner gates too. The errscan's teardown ceilings were raised
-31→33 and 1→2 after observing the nondeterministic Godot teardown line at 0–1
-per process (ceiling 2 is one-slot headroom), with completion-marker + runner
-footer checks and tamper minima (e2e 31 / run_tests 482 / a2 0); the ceilings
-and minima are pinned in `tools/gate_ratchet.json` (see
-[`docs/reports/phase3-baseline-20261127.md`](reports/phase3-baseline-20261127.md) §5).
+The task-level final gate is **not** green and must not be described as green.
+It cannot pass while `played-route` is blocked and has no verifier/falsifier/
+auditor wave. Nothing was relabelled. The merge to `main` was the operator
+decision after the victory audit confirmed the requirements.
 
-The in-run `docs/reports/logs/final/gate_ratchet.log` is the runner's own
-wrapped log from the Phase 2.5 baseline run (in-run stamp `measured_on=37bb69e`
-because the ratchet was re-stamped only after the run). The post-stamp PASS is
-`docs/reports/logs/final/gate_ratchet_poststamp.log` and the JSON now reads
-`measured_on=5857589`. Do **not** overwrite the in-run log with a post-stamp
-run; redirect any later ratchet check to `gate_ratchet_poststamp.log`.
+**Run artifacts:** `.opencode/teamwork/20261127-1810-phase3/` — `final.md`,
+`OPEN_ISSUES.md` (240 lines), `verify/final.json`, `GATE_STATUS.md`,
+`verify/victory.json`, `verify/security-audit.json`, handoffs, specs.
 
----
+## 2. What landed in Phase 3
 
-## 3. GPU results — measured, not all passing
-
-Run serially under Xvfb on the integrated tree; evidence in
-[`docs/reports/gpu-phase12-20261127.md`](reports/gpu-phase12-20261127.md).
-
-| Probe | Measured | Verdict |
+| Area | Delivered | Evidence |
 |---|---|---|
-| **Mirror readback** | `control_ok=true`; 8 red triangles + 2 expected black (CULL_FRONT control, uncompensated `mm_native_mirror`); `native_mm=not_compensated`, `native_single=compensated`, `baked_mm=ok`, `cull_front_mm=ok`, `single_baked=ok` | **PASS** (`pass=1`, exit 0) |
-| **UI 12-screen capture** | `captures=28 failures=0`; 28/28 sidecars with `roi.*`; authored gem 21 layers; **24 strict fails** | sidecar bug fixed; **4 real prompt-contrast rows** (crank 3.81/4.32, doors 3.24/3.70 vs 4.5); 2 pause-blur box artifacts (actual ratio **0.19/0.18**); 18 ROI-mask artifacts |
-| **KF27 beam** (`foyer_beam`) | **5/9**: one band at **50.00 %** (needs 40.0–40.5), emitter **(0,0)** (not in frame; reference 17.8/40.0), falloff `(+78.04,+79.46)`, cream **1.30 %** | **FAIL/open** |
-| **Landscape A/B** | `upper_foyer`/`gate` contain no landscape subject; RMSE discard↔raw 0.003357 (505 px), off↔raw 0.000164 (3 px); no mode holed the gap | **unmeasured**, not a code failure |
-| **IBL `ambient`** | energy **0.00005**; upper_foyer 39.81→**20.11**, yaw180 39.10→**12.06**; `cubemap_ground_floor_01` near-black (raw irradiance ≈0.0001 vs 0.16) | default **`off`** stays |
-| **AEM `model`** | exposure **1.1500**, ≤241 px vs off | no-op ✔ |
-| **AEM `meter`** | stable **0.2615** (ev100 −0.863, adapted −4.863), frames 88→256 | **not converged** (60-frame capture settle, not the ≥25 s settle) |
+| Gate integrity | 59-gate runner; every runner gate bound; 40 orphan tests classified (39 retired + 4 registered); errscan marker/footer/min totals; ratchet fail-closed on missing/zero/duplicate keys; P1_BEAMS contract refreshed | 59/59 at `5337828` |
+| Look | KF27 wide **5/9** and pinned **5/9**; framing solved (card at 18.0/40.0), four failures are **beam material** (band 38.80, six bands, glow, core saturation). Landscape `gap_view` A/B measurable (RMSE 1.0077 vs 0.0769). AEM residual **0.000 EV** at a **2.14 EV** anchor gap (default `fixed`). IBL ambient **0.001540** vs 0.16 (not a win; default `off`). UI `#636EEC` renders `#636eec`; prompt contrast **3.03–4.32** = UI2-03 DELTA | `phase3-gpu-20261128.md` |
+| Systems | StateTree default `off`, `patrol` fail-closed, census **92** (3 enter + 89 transition), 1/17 events; nav v2 **78/2 · 60/4 · 4/0**, door audit, prison blocked both ways, `NAV_DELTA` 22/0; audio rain converter, VO **288/645** (357 tabulated), 3 keys/24 buses unrecoverable, `FS_Layers` double-ban refuted; GC **93 fallback confirmed**; **Cleanout first-class** (3300 s `mission_row`, safe room, no Contract 2 credit) | lane reports + 59-gate logs |
+| Route instruments | deterministic input driver (0 transform writes), 27→120 scorer (120 rows/27 beats), telescope L4-13 fixed (`DEN_WINDOW 44/0`), NPC re-measure 85.4–150.7 m | `phase3-played-route-instruments.md` |
 
-**Do not cite KF27 `9/9` as a port pass.** That gate scores the tracked reference
-against itself (`--reference-only`); the first port-side `foyer_beam` capture is
-**5/9**.
+## 3. The blocked played route — the Phase 3C backlog
 
----
+`route_claim=none`; **11/27 beats** captured (6 driven + 5 partial + 3 blocked +
+4 unreachable + 9 not attempted), **45/120 rows**, `tokens_emitted=0`. Measured
+content blockers:
 
-## 4. Next actions, in priority order
+- **S12**: authored spawn settles at y **23.1585** vs dressing floor **25.0**.
+- **S13**: local safe-room area only **5.81 m**; KF16 car **128.7 m**, KF15 alley **153.4 m**.
+- **S06**: ledger `Area3D` 0.89 m above the floor; walk reach **1.9348 m** vs **1.75 m**.
+- **S19/S20/S22/S23**: NPCs **85.4–150.7 m** (nearest 85.4 m; 0 within 30 m).
 
-### A. Port-side look fixes (no owner required; GPU re-capture only)
+These are content/placement defects, not driver/scorer defects. Fixing them and
+re-running the driver + scorer is the first task of the next wave.
 
-1. **KF27 beam fidelity.** The measured band is **50.0 %**, not 40.0–40.5; the
-   emitter is absent at (0,0); the glow falloff is wrong. Decide whether the
-   `foyer_beam` pose framing or the beam terms are responsible. Use the authored
-   card `BP_Detector_LightBeam_C_107` at `(23.27,29.76,-57.4)` and the current
-   eye `(27,29.67,-55)`; do not move the pose just to hit the row. If the UE
-   graph/sphere centre remains unavailable, record a `HARD_LIMIT` with the
-   measured 5/9. Re-capture and score with
-   `p0b_roi_stats.py --port … --pose foyer_beam`.
-2. **Landscape A/B.** The data assertion is green; the visual A/B has no
-   landscape in frame. Add a **gap-view** pose only from an authored eye/target
-   (the safe-room gap is Guildhall component 12 / `Weightmap_20`). If no
-   authored camera exists, record that the A/B is not measurable and keep the
-   data gate. Never invent a pose and call it authored.
-3. **AEM meter.** Default is `fixed`; do not flip. To calibrate, run
-   `TAT2_AEM=meter` with a **≥25 s** settle and record the residual; the current
-   60-frame capture gives 0.2615 vs 1.150 and is not convergence. Re-pin the
-   single `AEM_CALIBRATION` only from a measured residual, then re-run suite 123.
-4. **IBL orientation / energy.** `daylight` has a black `nz` face and
-   `+Y 0.0680 < −Y 0.0712` (orientation WARN); `cubemap_ground_floor_01` is
-   near-black on every face. Default stays `off`. Check the UE `ECubeFace` slice
-   order before trusting an ambient direction; decide whether stage 1 needs a
-   normalization/energy term, then A/B `off` vs `ambient` at gate/foyer/yaw180.
-5. **UI prompt contrast.** Four genuine strict rows: crank **3.81/4.32**, doors
-   **3.24/3.70** vs the 4.5 floor, light-blue text over the bright bloom. This is
-   consistent with the reference `UI2-03 DELTA`; either raise the contrast or
-   record it as a parity delta. Do **not** lower the 4.5 threshold. The other 20
-   rows are ROI/mask artifacts; the pause blur is actually 0.19/0.18.
+## 4. Next wave — recommended order
 
-### B. Owner/GPU (Phase 3)
+1. **Phase 3C route content** (highest value): fix S12 spawn/floor, S13 area and
+   KF16/KF15 reach, S06 ledger placement/reach, S19/S20/S22/S23 NPC placement.
+   Re-run `build/qa/route_driver.sh` and the 27→120 scorer; only claim a played
+   route when the beats are driven and tokens are emitted. Acceptance: 27/27
+   beats, or explicit measured blockers with `route_claim=none`.
+2. **KF27 beam material**: the four failing terms are in the `MI_LightBeam_SM`
+   additive path (band 38.80, six bands, glow falloff, core saturation p95 88).
+   `MI_LightBeam_SM` is the deliberate exception to the HDR neon path (T2-04-C);
+   do not delete the negative controls.
+3. **Look decisions**: AEM anchor (fixed path is 2.14 EV brighter; either find
+   the authoritative anchor or record `fixed` as the decision), IBL stays `off`,
+   UI prompt contrast DELTA needs owner adjudication (floor 4.5 unchanged).
+4. **Owner lane #13**: UI adjudication, perf/export — needs the owner; out of
+   agent scope until then.
+5. **Cleanups**: SEC-01 (below), SEC-05 measured-vs-pinned prose, root
+   `summary*.md` files, evidence cap, `--generating-poststamp` binding.
 
-- **#13 — Cleanout live capture** (owner unavailable). The 2026-11-27 capture is
-  the **Staff of Edinburgh Item Collection Heist**, not the Cleanout. Checklist
-  in §5.
-- **Played 120-row run.** Re-score from a **port** full-route run, not the live
-  capture. Current baseline: **9 PASS / 33 DELTA / 4 MISSING / 2 HARD_LIMIT /
-  16 UNVERIFIED / 56 N/A-route** (2026-11-24; predates W10; V4-07/V6-03
-  re-scored in W9-P1). The official V6-03 erratum: emitter **17.8 %/40.0 %**,
-  **one** band at **40.0–40.5 %**, cyan node **above the doors**.
-- **UI visual adjudication.** The 28-frame capture is measured; the gem, pause
-  blur, briefing fit and line weights still need a human/reference score.
-- **Perf matrix / Linux export.** Not run; thermal gate waived; no parallel
-  Godot; host idles near 80 °C. Export only with `make linux-build` +
-  `make linux-stamp-verify`; never hand-edit the stamp.
+## 5. Open issues
 
-### C. Long-standing system gaps
+The full ledger is `.opencode/teamwork/20261127-1810-phase3/OPEN_ISSUES.md`.
+Highest-value entries:
 
-- **StateTree:** shadow only; `fully_parity_covered_trees=0` of 21, one
-  structural tree (`ST_Subtree_IntruderNoLongerSuspicious`, named vacuous: 4
-  states); `TAT2_STATETREE=off` (asserted by suite 111); `patrol` fails closed
-  without the experimental `TAT2_STATETREE_WRITER=on` writer spike; one live
-  event (`StateTreeEvent.StimChange`), 16 of 17 unemitted. FSM drives. Cutover
-  needs the authored task/condition parameters, smart objects/EQS and a real
-  event bus — do not invent values. Report: `docs/reports/statetree-3b1-20261127.md`.
-- **Audio:** VO director is **288/645 lines mapped** (was 249); **357 remain
-  unwired** and are counted by owning-system gap in
-  `docs/reports/phase3-audio-20261127.md` §4.3 (no ambient chatter, private-zone,
-  object-observation, flee/evade, smoke-exposure or DSP speaker system; the
-  noise-heard bark is blocked by an existing sight bark). **The 3 unnamed music
-  keys and the 24 unnamed buses (98 state rows) are NOT recoverable from the
-  cook** — 0/91 `AudioBus` objects are named and the package contains no
-  `AkTrigger` — so stop treating them as pending extraction. The 5 unproduced
-  `FS_Layers` values are a `PORT_DECISION` whose "double-ban" rationale is
-  **refuted** (measured: a layer never removes material media; `MetalPipe`/
-  `MetalSheet`/`Metal` own 0 layer media, `Slime` only on the absent slide
-  action, `Glass` is additive-only). `blood_moon` rain 10.0 now goes through the
-  one documented `WeatherProfile.rain_intensity_01()` converter (saturates to
-  1.0 with a warning; the old 0..1 / 0..1.5 / 0..1 clamps are gone).
-- **GC/destructibles:** `Destructibles/` is **extracted and confirmed**
-  (Phase 3B.4, 2026-11-28). `GC_ChestTrunkALid` has one `AutoInstanceMeshes`
-  entry — the intact `SM_ChestTrunkALid`, `NumInstances: 51` over 51 convex
-  particles — and **no separate fracture-piece mesh**, so the 93 chests stay on
-  the labelled `SM_ChestTrunkALid_Broken` fallback (`fallback_broken=93`,
-  `sibling_smc=5`, `unresolved=0`; probe 55 checks). Bookcases/safes landed; the
-  authored damage-driven break remains open and hold-F `break_container` is a
-  labelled `PORT_DECISION`. Evidence:
-  [`reports/gc-confirm-20261128.md`](reports/gc-confirm-20261128.md).
-- **Navmesh N-P3:** default is `off`; 38/80 door groups were skipped by the
-  2.5 m snap; the prison baked link is one-way; `NavLink_71` is ~6 m off the
-  mesh. Default-on needs a trajectory/full-route delta and a per-actor door
-  audit.
+- **Played-route blockers** (S12/S13/S06/NPC) — §3.
+- **KF27 beam material**; **AEM anchor**; **IBL off**; **UI prompt DELTA**.
+- **SEC-01 (Medium)**: `build/qa/route_driver.sh:47,62` validates `--tag` with a
+  line-anchored `grep -Eq '^[A-Za-z0-9._-]+$'`, so a multi-line value passes.
+  Fix with a `case`/`grep -z` check; SEC-02/03 are related Low findings in
+  `p0b_route.sh` / `route_driver.gd` (operator CLI, not runner-reachable).
+- **SEC-05 (Low)**: the final report row now records `482–495/495`, but
+  `tools/gate_ratchet.json`'s `source` prose still states `0/2 + 495/495` as if
+  measured. The pins themselves (`e2e_a2 0..2`, `run_tests 482..495`) are correct.
+- **SEC-07**: `--generating-poststamp` skips one poststamp binding by design;
+  nothing binds the artifact to a specific run.
+- **SEC-08**: `make audit` runs `manifest_audit` without `--require-usmap`; in a
+  worktree the extraction provenance can be skipped.
+- **SEC-09**: tracked evidence logs embed absolute local paths/hostnames; the
+  hygiene scan excludes recorded evidence on purpose, so this stays a Low.
+- **Victory-audit findings**: `71417ad` relaxed one synthetic `probe_p1_beams`
+  source-text assertion; 1/17 authored `StateTreeEvent` tags emitted; 9/27 beats
+  unattempted behind S13; three `summary*.md` at the repo root; the final run
+  started with 65 uncommitted log files (source clean, logs committed after).
+- **Evidence cap**: `verify/evidence` held 37 files against the engine's 32-file
+  cap; later waves cite the report only (valid for the strict gate).
 
----
+## 6. Current gate set (59) — values to keep
 
-## 5. Machine state and the Cleanout capture checklist
+Measured at `5337828` / `900f8eb`; floors raise, never lower.
 
-The shipped launcher needs an online login; Steam Offline Mode gives
-`LOGIN FAILED!`. The **A path works**: copied install `~/tat2-ref-build` plus a
-copied Proton prefix, launched through Proton, with Steam online for auth.
+| Gate | Value | Gate | Value |
+|---|---|---|---|
+| compile | 234 / 0 | run_tests | 329 / 0 |
+| M2 | 12 / 0 | E2E | 310 / 310 (T1=117 T2=110 T3=25 T4=14 S2=22 A2=22) |
+| parity-only | 60 / 60 | cream 119 | GREEN passes=5 |
+| audio 121 | 135 / 0 | VO 122 | 60 / 0 |
+| AEM 123 | 77 / 0 | cubemap 124 | 51 / 0 |
+| P5 UI | 54; `GEM_PAYLOAD layers=21` | P1 safe/doors/beams/ward/street | 86 / 49 / 9 / 44 / 31 |
+| landscape mask | 7 / 0 | nav runtime | 97 / 0 (78/2, 60/4, 4/0) |
+| GC destruction | 55 / 0 (`fallback_broken=93`) | collision | `min_coverage=0.869 coverage_ppm=868852 dropped=0 planar_skipped=2` |
+| locks | 162 (152 containers + 10 doors) | gate manifest | 112 tracked / 73 reachable / 39 retired / 0 orphans |
+| Den spawn / window / route NPC | 9 / 44 / 4 | capture dry-run / self-test | 9 poses / 23 |
+| KF27 reference | 9/9 reference-only (port 5/9) | route self-test | 62 / 0 |
+| runtime smoke | exit=124 errors=0 `mission_ready=1` | e2e_errscan | `31/33 + 0-1/2 + 482-495/495 new=0` |
+| audit | 12664/12703 (floor 12660), 0 unexpected | texture cap | 1567 / 796 / 1 / 0 |
+| string audit | 311 routed / 199 authored / 112 invented | perf guard | 78 / 78 |
+| gate ratchet | 59 gates / 60 bindings | | |
 
-**Save/reference state (2026-11-27):** the 2026-11-27 system cleanup deleted
-`/tmp/opencode/tat2-ref-prefix` — the 774-file Proton prefix including its
-`TAT_ETS.sav` (previously recorded md5
-**`976f8730eac989bab1c6c792343b7c00`**) and
-`SaveGames.pre-p0b-20261126-230522/`. This was verified in the Phase 2.5
-baseline: the directory is gone and no `TAT_ETS.sav` remains under
-`/tmp/opencode` or `/home/john/tat2-ref-build`. `/home/john/tat2-ref-build`
-survives, but the save md5 is a historical record, **not re-verified**. Issue
-**#13** (Cleanout live capture) now needs a fresh Proton prefix **and** a fresh
-save before the live capture. Never use `stage` + `tail -1` to pick a save; use
-the archive path explicitly.
-
-**Cleanout pre-start checks:**
-
-- The prep must read **Cleanout Heist** / **Time Limit: 55 minutes**; the spawn
-  must be the **brick safe room**. If it reads **Item Collection Heist** /
-  **120 minutes** / Staff of Edinburgh, back out and select the
-  `CONSTABLES' GUILDHALL` Cleanout contract; do not start the recorder.
-- One **900 s** file, started at the **main menu** (the 2026-11-27 run opened in
-  the Den and missed S01/S02); 2560×1440, High groups, Resolution Scale **100**
-  after the preset, VSync off, 60 cap, FOV 85.
-- Audio Master/Music/SFX/Dialogue **80** (or a 10 s test max below −1 dBFS); the
-  2026-11-27 Master 100 peaked at 0.0 dBFS.
-- Hold each pose **3 s**; the last run had 0 poses present / 3 partial.
-- Window title `TAT` (the helper searches `TAT` and `Thick As Thieves`).
-
-**Port route evidence:** the staged 27-beat runner
-`build/qa/p0b_route.sh` captured `route2-clean` at `912a481`
-(`status=captured`, 13 staged / 14 deferred / 17 frames, 18 PNGs at 1920×1080,
-exit 0, `route_claim=none`). It is a **staged port** run, not a played route.
-Evidence: `docs/reports/logs/p0b-route/route2-clean/`.
-
----
-
-## 6. Data state and regeneration
-
-Generated data and extracted assets are **gitignored** and must never be
-committed: `extracted/`, `game/assets/ue/`, `game/data/generated/`, `build/`
-artifacts, `game/.godot/`. Commit producers/code/docs only.
-
-Toolchain: `~/.dotnet10/dotnet` **10.0.404**. The extractor mapping is
-`tools/ue4ss/output/TAT-5.5.4-148559+++TAT+tat_release_nosrc-30afe5ff.usmap`;
-pass `--usmap <abs path>` if the worktree has no `tools/ue4ss/output`.
-
-Minimal regeneration at a merged HEAD:
+Commands:
 
 ```bash
-make build-extractor
-EX=tools/tat-extract/bin/Release/net10.0/tat-extract
-$EX cubemaps
-$EX nav --overwrite --filter 'Maps/(Guildhall|OldManor|FTUE)/.*\.umap$'
-$EX textures                       # writes the allowlisted 21-slice array
-make normalize                     # parse_containers/audio/weather/cubemap/nav/stealthball/...
-tools/godot --headless --path game --import
-make audit-refresh-stamps REASON='<wave>; regenerated after make normalize'
-make audit
-make texture-cap-check             # 1567 targets / 796 capped / 1 alpha / 0 offenders
-```
-
-Success markers: `[cubemaps] ok=3 fail=0`; nav `max_poly_verts=6`,
-`decompress_fail=0`; `textures-array ok=1`; `AUDIO_CONTROL_OK … music=2
-music_keys=6/9`; `STEALTHBALL_ARRAY status=payload_present slices=21
-mapping_kind=directional`; `AUDIT PASS`.
-
----
-
-## 7. Commands and gates
-
-```bash
-make run
-make test                         # 328 checks
+build/qa/run_final_gates.sh          # 59 gates, serial; no outer flock
 tools/godot --headless --path game --script "$PWD/tools/check_scripts_compile.gd"
-tools/godot --headless --path game --script res://tests/run_tests.gd
-tools/godot --headless --path game --script res://tests/test_m2_player.gd
-tools/godot --headless --path game --script res://tests/probe_lock_inventory.gd
-tools/godot --headless --path game --script res://tests/probe_gc_destruction.gd
-tools/godot --headless --path game --script res://tests/probe_landscape_mask.gd
-tools/godot --headless --path game --script res://tests/probe_p1_beams.gd
-tools/godot --headless --path game --script res://tests/probe_p5_ui.gd
-tools/godot --headless --path game --script res://tests/probe_auto_exposure.gd
-tools/godot --headless --path game --script res://tests/probe_cubemap.gd
-build/qa/nav_runtime_probe.sh     # NAV_RUNTIME_PROBE 70/0
-make test-producers
-build/qa/test_capture_p5_ui_filter.sh
-build/qa/runtime_smoke.sh 90      # exit 124 only, no outer flock
-build/qa/run_final_gates.sh       # 58 gates, serial, logs docs/reports/logs/final/
-make audit && make gate-ratchet
+make test                            # run_tests.gd, 329 checks
+tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd
+make audit                           # incl. string-audit + check-greps
+make gate-ratchet                    # floors + committed logs agree
 ```
 
-GPU wrappers (one Godot at a time; they take `/tmp/opencode/tat2-godot.lock` and
-own Xvfb):
+A fresh worktree needs `tools/godot --headless --path game --import` once; a
+missing import cache fails `T1-01-C` with `moon_visible=0.0`. If `make audit`
+fails on the extractor binary being older than `Exporter.cs`, run
+`make build-extractor` (build artifact, not a source change).
 
-```bash
-build/qa/mirror_probe.sh --run --tag=p4mirrors_final
-build/qa/p0b_capture.sh --poses=foyer_beam --tag=kf27_foyer_beam
-build/qa/p0b_capture.sh --poses=beam_close --tag=lounge_extra
-TAT2_LANDSCAPE_MASK=raw build/qa/p0b_capture.sh --poses=upper_foyer --tag=landscape_raw
-TAT2_IBL=off|ambient build/qa/p0b_capture.sh --poses=gate,upper_foyer,yaw180 --tag=ibl_<mode>
-TAT2_AEM=model|meter build/qa/p0b_capture.sh --poses=gate,upper_foyer,yaw180 --tag=aem_<mode>
-xvfb-run -a -s "-screen 0 2560x1440x24" env XDG_DATA_HOME=/tmp/opencode/p5-ui-data \
-  tools/godot --path game --rendering-driver vulkan \
-  --script "$PWD/build/qa/capture_p5_ui.gd"
-```
+## 7. Machine, CI and data state
 
-Use the **absolute** `--script` path; a project-relative path fails.
+- **WIP branches on `origin`:** `wip/phase3-audio-20261127`,
+  `-baseline-20261127`, `-gpu-session-20261128`, `-look-code-20261127`,
+  `-nav-20261127`, `-statetree-20261127` are contained in `main`;
+  `wip/phase3-played-route-20261128` (`ac7b3b2`, +3 commits) is the blocked
+  branch and stays unmerged. The gate-integrity WIP branch was auto-deleted on
+  merge.
+- **Extracted content** (`extracted/`, `game/assets/ue/`,
+  `game/data/generated/`, `build/` artifacts, `game/.godot/`) is git-ignored and
+  private. Never commit it. Regenerate with the producers, never hand-edit.
+- **Steam reference:** `~/.local/share/Steam/steamapps/common/Thick As Thieves/`
+  (appid `3341000`, build `25076818`, `1.5.148559`).
+- **GPU:** one Godot at a time; the host currently measures **125 W** (max 140),
+  not the old 80 W. `TAT2_AEM=fixed` and `TAT2_IBL=off` remain the defaults;
+  `TAT2_NAV=off` and `TAT2_STATETREE=off` remain the defaults (no cutover).
 
----
+## 8. Traps to carry forward (top 10)
 
-## 8. Hazards and traps (current)
-
-- **Never commit extracted/generated content.** `extracted/`,
-  `game/assets/ue/`, `game/data/generated/`, `build/` artifacts, `.godot/` are
-  private/derived. `build/qa/` script sources are tracked; PNG/log artifacts are
-  not.
-- **Never weaken a test or lower a ratchet floor.** Truth corrections already
-  accepted: collision `976321 → 868852` (authored element coverage), texture
-  `797 → 796` (`texture_refs 1523 → 1522`), string ceiling 112. Anything else
-  needs measured evidence and a report note.
-- **KF27 `9/9` is reference-only.** The port capture is **5/9**. Do not merge
-  the two numbers.
-- **Defaults that must not flip without a measured A/B:** `TAT2_IBL=off`,
-  `TAT2_AEM=fixed`, `TAT2_NAV=off`, `TAT2_STATETREE=off`. `TAT2_IBL=ambient`
-  currently darkens (energy 0.00005); `TAT2_AEM=meter` is not converged.
-- **Mirror native behaviour:** MultiMesh negative scale is **not**
-  compensated (`mm_native_mirror=black`); standalone negative scale **is**
-  (`single_native=red`). The port fast path (baked mesh / CULL_FRONT clone) is
-  measured `pass=1`; 103 variants / 31.1 MB (59.1 MB if all standalones bake),
-  caches cleared per load. Do not change the bake math without re-running
-  `probe_mirror_split` and the GPU readback.
-- **Landscape:** keep the authored `vis > 0.5` discard; `TAT2_LANDSCAPE_MASK`
-  is a diagnostic mode, not a convention flip. The safe-room gap is component
-  12 (`Weightmap_20`, mask 0.0); the synthetic 50/50 test counts exactly.
-- **Bookcase glass:** the doors are already static geometry; only the **glass
-  pane** is the GC leaf (16 Guildhall_Loot panes at 0.472 m, nearest other
-  ≥0.838 m). Leaf census is **166 authored / 168 placements / 79 Guildhall**;
-  do not emit duplicate leaves.
-- **Locks are authored only:** **162 = 152 containers + 10 door nodes**; 363 is
-  the raw record join. Do not invent lock levels.
-- **Audio RTPC domains:** disguise integrity is 0..100 at the game layer but the
-  authored curve is 0..1; `push_disguise_integrity` divides by 100. The other
-  four callers are authored-domain. The player signal rebinds per instance
-  (autoload + new player per contract) — do not restore the one-shot bool.
-- **UI capture:** `_save()` extras must be a **flat Array of Strings**; use
-  `_hud_sidecar(hud) + ["pose=…"]`, never `[_hud_sidecar(hud), …]`. The
-  `P5_ONLY` filter fails closed on an unknown shot.
-- **Ratchet log:** never overwrite the runner's in-run
-  `docs/reports/logs/final/gate_ratchet.log`; a later `make gate-ratchet` goes
-  to `gate_ratchet_poststamp.log` or `/tmp`.
-- **Fresh worktree:** run `tools/godot --headless --path game --import` after
-  checkout; a copied `.godot` does not know a new `class_name`. An editor run
-  rewrites `project.godot`; never commit that rewrite.
-- **`export_presets.cfg` must not contain `#` comments**; Godot's `ConfigFile`
-  parser merges the comment into the next key, silently dropping
-  `exclude_filter`. Use `;`.
-- **StateTree trace is budgeted:** 8,192 rows / 16 MiB, then `STATETREE_TRACE
-  capped`; `dropped` is ring drops only.
-- **No parallel GPU.** One Godot at a time, shared lock; the host idles near
-  80 °C.
-- **Main checkout has an untracked 0-byte `-1` artifact.** It is not tracked and
-  not part of any wave; leave it or ignore it.
-
----
+1. `godot` is not on `$PATH`; use `tools/godot` (native 4.7.2).
+2. Never edit `game/` while a Godot process is running.
+3. Do not weaken/skip/delete a test or a ratchet floor to go green; record the
+   defect with evidence instead. Floors raise, never lower.
+4. `A2-WHITE` samples mesh surface materials, not `material_override` — bind the
+   material on the surface as well (`SafeRoomPortalOutline` example).
+5. `MI_LightBeam_SM` is the intentional additive-beam exception to the HDR neon
+   path (T2-04-C); keep its negative controls.
+6. StateTree is shadow-only, default `off`; nav is default `off` and consumes the
+   authored links (78/2 Guildhall, not 221 raw records). No cutover without the
+   producer contract.
+7. The light budget is per-room fair (160 slots per 16 m bubble), not a global
+   energy cut; candle lights are 0/135 by design.
+8. `export_presets.cfg` must not contain `#` comments (Godot's `ConfigFile`
+   parser merges them into the next key).
+9. A HUD `SubViewport` must set `own_world_3d = true` or its lights leak into
+   the gameplay `World3D`.
+10. The run clock has two phases (`main` → `endgame`); an endgame timeout still
+    banks the stashed haul, and every failure path owes exactly one payout.
 
 ## 9. Evidence map
 
-- [`docs/reports/integration-20261127.md`](reports/integration-20261127.md) —
-  merge order, conflicts, cherry-pick provenance (matching patch-ids), regen
-  outputs, 49-gate table.
-- [`docs/reports/integration-verification-20261127.md`](reports/integration-verification-20261127.md)
-  — final independent audit **PASS**.
-- [`docs/reports/gpu-phase12-20261127.md`](reports/gpu-phase12-20261127.md) —
-  every GPU command/result, including mirror PASS, UI 24-row strict table, KF27
-  5/9, landscape no-subject, IBL/AEM.
-- `docs/reports/logs/final/` — the 58-gate logs at `5857589`, including the
-  in-run `gate_ratchet.log` and the post-stamp `gate_ratchet_poststamp.log`.
-- `docs/reports/logs/p4-mirrors/p4mirrors_final.{log,wrapper.log}` — mirror
-  readback.
-- `docs/reports/logs/phase2-ui/20261127T215654Z/` — integrated 28-frame UI
-  capture, sidecars and pixel stats.
-- `docs/reports/logs/p0b-route/route2-clean/` — staged port route.
-- `docs/reports/handoff-archive-20261127.md` — the previous long handoff.
-- Lane reports: `p4-landscape-beam-20261127.md`, `p4-mirrors-20261127.md`,
-  `p4-exposure-ibl-lane.md`, `w11-audio-20261127.md`,
-  `lane-gc-bookcases-20261127.md`, `navmesh-p0-p2-20261127.md`,
-  `phase2-ui-20261127.md`.
-- Scorecard: `docs/reference/clip_1795033698901/COMPARISON_PORT_20261124.md`
-  (9/33/4/2/16/56), `row_route_matrix.md`, `ADJUDICATIONS.md`.
-
-**Provenance:** main advanced `7de2f0c..5dadcfc`; the six lane tips were
-cherry-picked with matching stable patch-ids, mirrors was fast-forwarded
-(`07ecb56`), and the later mirror probe fix was replayed as `8111bbe`
-(patch-id `58174ae13e08…`). The full table is in the integration report.
-
----
+- Final 59-gate table: `docs/reports/phase3-final-gates-20261128.md`; logs in
+  `docs/reports/logs/final/`.
+- GPU look results: `docs/reports/phase3-gpu-20261128.md`.
+- Route instruments + blockers: `docs/reports/phase3-played-route-instruments.md`.
+- Phase 3 baseline (historical): `docs/reports/phase3-baseline-20261127.md`.
+- Fidelity tracker: `docs/FIDELITY_GAPS.md` (Phase 3 final section at the top).
+- Run evidence: `.opencode/teamwork/20261127-1810-phase3/verify/` and `final.md`.
+- Operating rules and the full trap list: `AGENTS.md`.
 
 ## 10. Definition of done for the next wave
 
 ```bash
-git status --short                 # clean (or only intentional new files)
-make test                          # 328 PASS, fails=0
-tools/godot … check_scripts_compile.gd   # 229/0
-tools/godot … run_e2e_tests.gd           # 300/300
-build/qa/run_final_gates.sh              # 58/58
-make audit                         # exit 0
-make gate-ratchet                  # PASS (measured_on=5857589)
-git push origin main
+git status --short                       # clean
+build/qa/run_final_gates.sh              # 59/59 (or more), no expected failure
+make audit                               # exit 0
+make gate-ratchet                        # PASS at the new measured_on
 ```
 
-Then update this handoff, `AGENTS.md` (gate table), `docs/FIDELITY_GAPS.md`, and
-a dated `docs/reports/<wave>.md` with the measured evidence. Record open gaps as
-open; do not turn a reference-only score, a staged route, or an unmeasured GPU
-pose into a parity claim.
+Then, in the same wave:
+
+- update `docs/FIDELITY_GAPS.md`, a `docs/reports/<wave>.md` with measured
+  evidence, and this handoff (HEAD, gates, open work);
+- raise the ratchet floors to the new measured values and re-stamp
+  `measured_on`;
+- land through a PR so the `hygiene / *` checks run;
+- leave `played-route` unmerged unless the beats are actually driven and
+  tokens are emitted — a partial is reported as a partial.

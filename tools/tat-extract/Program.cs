@@ -25,7 +25,9 @@ public static class Program
 {
     public static int Main(string[] args)
     {
-        if (args.Length == 0) { Console.WriteLine("usage: tat-extract <probe|list|json|tables|textures|meshes|anims|levels|audio|raw|cubemaps|nav|all> [opts]"); return 1; }
+        if (args.Length == 0) { Console.WriteLine("usage: tat-extract <probe|list|json|tables|textures|meshes|anims|levels|audio|raw|cubemaps|nav|selftest-face-mean|all> [opts]"); return 1; }
+        // No pak mount / Oodle / game access for the pure face-mean regression.
+        if (args[0] == "selftest-face-mean") return Exporter.SelfTestFaceMean();
         var opt = Opts.Parse(args.Skip(1).ToArray());
         OodleHelper.Initialize(EnsureOodle());
         var provider = new DefaultFileProvider(Path.Combine(opt.Game, "TAT/Content/Paks"), SearchOption.TopDirectoryOnly,

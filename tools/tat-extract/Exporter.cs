@@ -735,14 +735,25 @@ public sealed class Exporter
         }
     }
 
+    // The raw half/float layouts this code can read. This is deliberately an
+    // explicit set, NOT `PixelFormatUtils.IsHDR`: that predicate is false for
+    // PF_FloatRGB and PF_R32G32B32F, which made those switch arms dead.
+    static bool HasRawHdrMean(EPixelFormat f) =>
+        f is EPixelFormat.PF_FloatRGBA
+            or EPixelFormat.PF_FloatRGB
+            or EPixelFormat.PF_A32B32G32R32F
+            or EPixelFormat.PF_R32G32B32F
+            or EPixelFormat.PF_R32_FLOAT
+            or EPixelFormat.PF_R16F;
+
     // Linear face energy for the HDR path: the loader needs the real
     // irradiance scale (the authored sky cube is ~1e-4..1e-3), which the 8-bit
-    // FaceMean clamps to zero. Only raw half/float layouts reach here — a
-    // format that Decode did not expand to raw is reported as null, never
-    // guessed. Returns RGB means without any gamma transform.
+    // FaceMean clamps to zero. Only the raw half/float layouts above are read;
+    // anything else is reported as null, never guessed. Returns RGB means
+    // without any gamma transform.
     static double[]? FaceMeanLinear(CTexture face)
     {
-        if (!PixelFormatUtils.IsHDR(face.PixelFormat)) return null;
+        if (!HasRawHdrMean(face.PixelFormat)) return null;
         int w = face.Width, h = face.Height;
         if (w <= 0 || h <= 0) return null;
         int step = Math.Max(1, Math.Max(w, h) / 32);
@@ -794,6 +805,100 @@ public sealed class Exporter
         }
         if (n == 0) return null;
         return new[] { Math.Round(r / n, 6), Math.Round(g / n, 6), Math.Round(b / n, 6) };
+    }
+
+    // ------------------------------------------------- face-mean self-test
+    // Executed regression for FaceMeanLinear: a source-text assertion cannot
+    // see a dead branch (the round-2 bug gated it on IsHDR, which is false for
+    // PF_FloatRGB/PF_R32G32B32F). `tat-extract selftest-face-mean` runs this
+    // before any pak mount and exits non-zero if any supported layout returns
+    // null or the wrong mean.
+    static byte[] MeanFixtureBytes(EPixelFormat fmt, int w, int h)
+    {
+        int bpp = fmt switch
+        {
+            EPixelFormat.PF_FloatRGBA => 8,
+            EPixelFormat.PF_FloatRGB => 6,
+            EPixelFormat.PF_A32B32G32R32F => 16,
+            EPixelFormat.PF_R32G32B32F => 12,
+            EPixelFormat.PF_R32_FLOAT => 4,
+            EPixelFormat.PF_R16F => 2,
+            _ => 0,
+        };
+        if (bpp <= 0) throw new ArgumentException($"no fixture layout for {fmt}");
+        var data = new byte[w * h * bpp];
+        static void PutHalf(byte[] d, int o, float v)
+        {
+            ushort bits = BitConverter.HalfToUInt16Bits((Half) v);
+            d[o] = (byte) bits; d[o + 1] = (byte) (bits >> 8);
+        }
+        static void PutSingle(byte[] d, int o, float v) => BitConverter.TryWriteBytes(d.AsSpan(o), v);
+        for (int i = 0; i < w * h; i++)
+        {
+            int o = i * bpp;
+            switch (fmt)
+            {
+                case EPixelFormat.PF_FloatRGBA:
+                    PutHalf(data, o, 0.25f); PutHalf(data, o + 2, 0.5f); PutHalf(data, o + 4, 0.75f); PutHalf(data, o + 6, 1f);
+                    break;
+                case EPixelFormat.PF_FloatRGB:
+                    PutHalf(data, o, 0.25f); PutHalf(data, o + 2, 0.5f); PutHalf(data, o + 4, 0.75f);
+                    break;
+                case EPixelFormat.PF_A32B32G32R32F:
+                    PutSingle(data, o, 0.25f); PutSingle(data, o + 4, 0.5f); PutSingle(data, o + 8, 0.75f); PutSingle(data, o + 12, 1f);
+                    break;
+                case EPixelFormat.PF_R32G32B32F:
+                    PutSingle(data, o, 0.25f); PutSingle(data, o + 4, 0.5f); PutSingle(data, o + 8, 0.75f);
+                    break;
+                case EPixelFormat.PF_R32_FLOAT:
+                case EPixelFormat.PF_R16F:
+                    if (fmt == EPixelFormat.PF_R32_FLOAT) PutSingle(data, o, 0.5f); else PutHalf(data, o, 0.5f);
+                    break;
+            }
+        }
+        return data;
+    }
+
+    public static int SelfTestFaceMean()
+    {
+        var cases = new (EPixelFormat Fmt, double R, double G, double B)[]
+        {
+            (EPixelFormat.PF_FloatRGBA, 0.25, 0.5, 0.75),
+            (EPixelFormat.PF_FloatRGB, 0.25, 0.5, 0.75),
+            (EPixelFormat.PF_A32B32G32R32F, 0.25, 0.5, 0.75),
+            (EPixelFormat.PF_R32G32B32F, 0.25, 0.5, 0.75),
+            (EPixelFormat.PF_R16F, 0.5, 0.5, 0.5),
+        };
+        int fails = 0;
+        foreach (var c in cases)
+        {
+            var tex = new CTexture(4, 4, c.Fmt, MeanFixtureBytes(c.Fmt, 4, 4));
+            var mean = FaceMeanLinear(tex);
+            if (mean == null || mean.Length != 3)
+            {
+                Console.WriteLine($"FACE_MEAN format={c.Fmt} null=true ok=false");
+                fails++;
+                continue;
+            }
+            bool ok = Math.Abs(mean[0] - c.R) < 1e-3
+                && Math.Abs(mean[1] - c.G) < 1e-3
+                && Math.Abs(mean[2] - c.B) < 1e-3;
+            Console.WriteLine($"FACE_MEAN format={c.Fmt} r={mean[0]} g={mean[1]} b={mean[2]} null=false ok={ok.ToString().ToLowerInvariant()}");
+            if (!ok) fails++;
+        }
+        // Negative control: a non-float layout is reported as null, not read
+        // with the wrong stride.
+        var ldr = new CTexture(2, 2, EPixelFormat.PF_B8G8R8A8, new byte[2 * 2 * 4]);
+        bool ldrNull = FaceMeanLinear(ldr) == null;
+        Console.WriteLine($"FACE_MEAN_UNSUPPORTED format=PF_B8G8R8A8 null={ldrNull.ToString().ToLowerInvariant()}");
+        if (!ldrNull) fails++;
+        if (fails == 0)
+        {
+            Console.WriteLine($"FACE_MEAN_SELFTEST PASS formats={cases.Length}");
+            return 0;
+        }
+        Console.WriteLine($"FACE_MEAN_SELFTEST FAIL fails={fails}");
+        return 1;
     }
 
     static string UePath(string path)

@@ -129,9 +129,35 @@ def main() -> None:
         'doc["face_mean_linear"] = meansLinear' in cubemaps,
         "the cubemap manifest records the unclamped linear face mean",
     )
+    mean_gate = slice_between(
+        src,
+        "static bool HasRawHdrMean(EPixelFormat f)",
+        "// Linear face energy for the HDR path",
+    )
+    for fmt in (
+        "PF_FloatRGBA",
+        "PF_FloatRGB",
+        "PF_A32B32G32R32F",
+        "PF_R32G32B32F",
+        "PF_R16F",
+    ):
+        check(fmt in mean_gate, f"the face-mean format set includes {fmt}")
     check(
-        "FaceMeanLinear(" in src and "PixelFormatUtils.IsHDR" in src,
-        "the linear mean is read from HDR raw formats, not a guessed gamma",
+        "IsHDR" not in mean_gate,
+        "the face-mean gate is an explicit format set, not IsHDR",
+    )
+    mean_body = slice_between(
+        src,
+        "static double[]? FaceMeanLinear(CTexture face)",
+        "// ------------------------------------------------- face-mean self-test",
+    )
+    check(
+        "HasRawHdrMean(face.PixelFormat)" in mean_body and "IsHDR" not in mean_body,
+        "FaceMeanLinear gates on the explicit set (no dead IsHDR branch)",
+    )
+    check(
+        "public static int SelfTestFaceMean()" in src,
+        "an executable face-mean self-test exists",
     )
     # Negative: the old clamped 8-bit mean is never used as the HDR energy.
     check(
@@ -157,6 +183,11 @@ def main() -> None:
     check(
         "public int FailCount => _fail.Values.Sum();" in src,
         "Exporter exposes the counted failure total",
+    )
+    check(
+        'if (args[0] == "selftest-face-mean") return Exporter.SelfTestFaceMean();'
+        in program,
+        "Program.cs routes the face-mean self-test before any pak mount",
     )
 
     # 4b. Cubemap path/swap hardening.

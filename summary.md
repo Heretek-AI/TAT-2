@@ -1,7 +1,8 @@
-# producers — summary (round 2)
+# producers — summary (round 3)
 
 HEAD: the commit on `teamwork/20261127-1810-phase3-producers` created by this
-round (parent `bd1e42f`). Round 1 content is in `bd1e42f`.
+round (parent `1e2ef16`). Round 1 content is in `bd1e42f`; round 2 in
+`1e2ef16`.
 
 ## Round 2 fixes (falsifier findings)
 
@@ -40,17 +41,31 @@ round (parent `bd1e42f`). Round 1 content is in `bd1e42f`.
    resolved directory is asserted under `Cubemaps/`; all six faces are encoded
    in memory first, stale `face_*` is deleted only after success, new faces are
    written, and the manifest is moved into place last via `.tmp`.
-7. **FaceMeanLinear formats.** Added `PF_FloatRGB`, `PF_R32G32B32F` and
-   `PF_R16F` to the raw half/float readers, so the round-1 null-for-format
-   minor is fixed (unknown raw layouts still return null, never a guess).
+7. **FaceMeanLinear formats (round-3 correction).** Round 2 added
+   `PF_FloatRGB`, `PF_R32G32B32F` and `PF_R16F` switch arms, but the function
+   was still gated on `PixelFormatUtils.IsHDR`, which is false for
+   `PF_FloatRGB` and `PF_R32G32B32F`: those two arms were dead and the round-2
+   claim was false. Round 3 replaces the gate with an explicit
+   `HasRawHdrMean` set covering `PF_FloatRGBA`, `PF_FloatRGB`,
+   `PF_A32B32G32R32F`, `PF_R32G32B32F`, `PF_R32_FLOAT` and `PF_R16F`. The
+   executed `tat-extract selftest-face-mean` command builds tiny 4x4 fixtures
+   for the five required formats and asserts non-null, correct means, plus a
+   null negative control for `PF_B8G8R8A8`.
 
 ## Checks (all green)
 
 - `make build-extractor` → Build succeeded, 0 errors.
 - `python3 -m py_compile` on the touched parsers/tests → OK.
 - `make test-producers` → exit 0. New totals: `EXTRACTOR_CONFIG_TEST PASS
-  checks=35`, `EXTRACT_RECIPE_TEST PASS checks=12`, `PARSE_CUBEMAP_TEST PASS
-  checks=21`, `PARSE_CONTRACTS_TEST PASS checks=9`.
+  checks=43`, `FACE_MEAN_TEST PASS checks=24`, `EXTRACT_RECIPE_TEST PASS
+  checks=12`, `PARSE_CUBEMAP_TEST PASS checks=21`, `PARSE_CONTRACTS_TEST PASS
+  checks=9`.
+- `tat-extract selftest-face-mean` (executed, no pak mount): all five
+  supported formats print `null=false ok=true` with the fixture means
+  (PF_FloatRGBA/PF_FloatRGB/PF_A32B32G32R32F/PF_R32G32B32F = 0.25/0.5/0.75,
+  PF_R16F = 0.5/0.5/0.5), `PF_B8G8R8A8` prints `null=true`, and the command
+  exits 0 with `FACE_MEAN_SELFTEST PASS formats=5`. With the old `IsHDR` gate
+  the two previously-dead formats would print `null=true` and exit 1.
 - Stub `make extract` transcript: `list, raw, tables, levels, nav --overwrite
   --filter 'Maps/(Guildhall|OldManor|FTUE)/.*\.umap$', meshes, materials
   --overwrite, audio, textures, cubemaps --overwrite, anims`, rc 0, empty

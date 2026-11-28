@@ -1,5 +1,5 @@
 // tat-extract: dumps Thick As Thieves content from the user's own Steam install.
-// Usage: tat-extract <command> [--game DIR] [--out DIR] [--usmap FILE] [--filter REGEX]
+// Usage: tat-extract <command> [--game DIR] [--out DIR] [--usmap FILE] [--filter REGEX] [--fail-on-error]
 //   probe                 mount + parse a few known assets
 //   list                  write file list to OUT/filelist.txt
 //   json                  every package matching filter -> OUT/json/<path>.json (property dump)
@@ -82,7 +82,10 @@ public static class Program
             }
         }
         ex.Report();
-        return 0;
+        // `--fail-on-error`: a command that reports fail>0 (e.g. every package
+        // hit a MappingException) must not exit 0. Existing commands keep the
+        // old status unless they opt in.
+        return opt.FailOnError && ex.FailCount > 0 ? 1 : 0;
     }
 
     static string EnsureOodle()
@@ -101,6 +104,7 @@ public sealed class Opts
     public Regex? Filter;
     public int Threads = Environment.ProcessorCount;
     public bool Overwrite;
+    public bool FailOnError;
 
     public static Opts Parse(string[] a)
     {
@@ -115,6 +119,7 @@ public sealed class Opts
                 case "--filter": o.Filter = new Regex(a[++i], RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromSeconds(2)); break;
                 case "--threads": o.Threads = int.Parse(a[++i]); break;
                 case "--overwrite": o.Overwrite = true; break;
+                case "--fail-on-error": o.FailOnError = true; break;
             }
         }
         o.Usmap ??= FindUsmap();

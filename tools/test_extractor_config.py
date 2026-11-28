@@ -139,41 +139,94 @@ def main() -> None:
         "8-bit means and linear means are recorded separately",
     )
 
-    # 5. Program.cs documents the command surface.
+    # 5. Program.cs documents the command surface and can fail non-zero.
     program = PROGRAM.read_text()
     check(
         'case "json": ex.Json();' in program
         and 'case "cubemaps": ex.Cubemaps();' in program,
         "Program.cs still routes the json/cubemaps commands",
     )
+    check(
+        'case "--fail-on-error": o.FailOnError = true;' in program,
+        "Program.cs accepts --fail-on-error",
+    )
+    check(
+        "return opt.FailOnError && ex.FailCount > 0 ? 1 : 0;" in program,
+        "a failed dump exits non-zero under --fail-on-error",
+    )
+    check(
+        "public int FailCount => _fail.Values.Sum();" in src,
+        "Exporter exposes the counted failure total",
+    )
 
-    # 6. Makefile: filtered Destructibles stage + cubemap re-encode.
+    # 4b. Cubemap path/swap hardening.
+    check("SafeCubeId(CubeId(cube.Name))" in cubemaps, "cube ids are sanitised")
+    check(
+        "escapes {cubesRoot}" in cubemaps,
+        "the cube directory is asserted under Cubemaps/",
+    )
+    check(
+        cubemaps.index("if (!ok)")
+        < cubemaps.index('Directory.GetFiles(dir, "face_*")'),
+        "stale faces are deleted only after a successful encode",
+    )
+    check(
+        cubemaps.index("File.WriteAllBytes(Path.Combine(dir, file), bytes)")
+        < cubemaps.index("File.Move(tmpManifest, manifest, true)"),
+        "the manifest is swapped in last",
+    )
+
+    # 6. Makefile: the nav filter survives make, json is standalone, cubemaps
+    # is reached.
     make = MAKEFILE.read_text()
+    json_target = slice_between(make, "json: build-extractor", "\nextract-json:")
     check(
         re.search(r"^json: build-extractor$", make, re.MULTILINE) is not None,
         "Makefile has a standalone json stage",
     )
     check(
-        "$(EX) json --overwrite --filter 'Destructibles/'" in make,
-        "make extract runs the filtered Destructibles json stage",
+        "--usmap '$(USMAP)'" in json_target,
+        "make json passes the resolved mapping file",
+    )
+    check(
+        "--fail-on-error" in json_target,
+        "make json fails non-zero when a package dump fails",
+    )
+    check(
+        "--filter 'Destructibles/'" in json_target,
+        "make json is the filtered Destructibles dump",
     )
     check(
         re.search(r"^extract-json: json$", make, re.MULTILINE) is not None,
         "Makefile documents extract-json as an alias",
     )
+    extract = slice_between(make, "extract: build-extractor", "\nanims:")
     check(
-        "$(EX) cubemaps --overwrite" in make,
+        "$(EX) json" not in extract,
+        "make extract does not repeat the standalone Destructibles json stage",
+    )
+    check(
+        "$(EX) cubemaps --overwrite" in extract,
         "make extract re-encodes cubemaps so HDR replaces stale PNG faces",
     )
-    extract = slice_between(make, "extract: build-extractor", "\nanims:")
     check(
         "$(EX) tables" in extract and "$(EX) levels" in extract,
         "make extract keeps the tables and levels stages",
     )
+    # The round-1 bug: a bare `$'` is make's one-character variable reference.
     check(
-        "$(EX) json"
-        not in slice_between(make, "extract-json: json", "\nextract: build-extractor"),
-        "extract-json is an alias, not a second json dump",
+        "\\.umap$$'" in extract,
+        "the nav filter closes with $$' so make does not eat the quote",
+    )
+    check(
+        re.search(r"(?<!\$)\$'", extract) is None,
+        "no bare $' remains in the extract recipe",
+    )
+    nav_pos = extract.index("$(EX) nav")
+    cube_pos = extract.index("$(EX) cubemaps")
+    check(
+        nav_pos < cube_pos,
+        "cubemaps --overwrite is reached after the nav stage",
     )
 
     print(f"EXTRACTOR_CONFIG_TEST: PASS checks={PASSED}")

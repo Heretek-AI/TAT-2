@@ -34,6 +34,9 @@ public sealed class Exporter
 
     public Exporter(DefaultFileProvider p, Opts o) { _p = p; _o = o; }
 
+    /// <summary>Counted per-operation failures (`fail=` in Report).</summary>
+    public int FailCount => _fail.Values.Sum();
+
     IEnumerable<GameFile> Packages(Func<string, bool>? pathPred = null) =>
         _p.Files.Values.Where(f => (f.Extension == "uasset" || f.Extension == "umap")
                                    && (f.Path.StartsWith("TAT/", StringComparison.OrdinalIgnoreCase)
@@ -695,6 +698,17 @@ public sealed class Exporter
         return sb.ToString();
     }
 
+    // A cube id becomes a directory name below Cubemaps/. Restrict it to the
+    // safe set so a crafted export name cannot introduce a separator or `..`;
+    // the caller also asserts the resolved path stays under the root.
+    static string SafeCubeId(string id)
+    {
+        var sb = new StringBuilder(id.Length);
+        foreach (char c in id)
+            sb.Append((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '-' ? c : '_');
+        return sb.Length == 0 ? "cubemap" : sb.ToString();
+    }
+
     // Cheap orientation gauge for the integrator: an 8-bit face mean over a
     // strided sample. The sky cube's +Y face should read brighter than -Y.
     static double[]? FaceMean(CUE4Parse_Conversion.Textures.CTexture face)
@@ -736,12 +750,17 @@ public sealed class Exporter
         int pixelBytes;
         switch (face.PixelFormat)
         {
-            case EPixelFormat.PF_FloatRGBA: pixelBytes = 8; break;      // 4 x half
-            case EPixelFormat.PF_A32B32G32R32F: pixelBytes = 16; break; // 4 x float
-            case EPixelFormat.PF_R32_FLOAT: pixelBytes = 4; break;      // 1 x float
+            case EPixelFormat.PF_FloatRGBA: pixelBytes = 8; break;       // 4 x half
+            case EPixelFormat.PF_FloatRGB: pixelBytes = 6; break;        // 3 x half
+            case EPixelFormat.PF_A32B32G32R32F: pixelBytes = 16; break;  // 4 x float
+            case EPixelFormat.PF_R32G32B32F: pixelBytes = 12; break;     // 3 x float
+            case EPixelFormat.PF_R32_FLOAT: pixelBytes = 4; break;       // 1 x float
+            case EPixelFormat.PF_R16F: pixelBytes = 2; break;            // 1 x half
             default: return null;
         }
         if ((long) w * h * pixelBytes > data.LongLength) return null;
+        static float HalfAt(byte[] d, int o) =>
+            (float) BitConverter.UInt16BitsToHalf((ushort) (d[o] | (d[o + 1] << 8)));
         double r = 0, g = 0, b = 0; long n = 0;
         for (int y = 0; y < h; y += step)
         {
@@ -749,17 +768,21 @@ public sealed class Exporter
             {
                 int o = (y * w + x) * pixelBytes;
                 float fr, fg, fb;
-                if (face.PixelFormat == EPixelFormat.PF_FloatRGBA)
+                if (face.PixelFormat is EPixelFormat.PF_FloatRGBA or EPixelFormat.PF_FloatRGB)
                 {
-                    fr = (float) BitConverter.UInt16BitsToHalf((ushort) (data[o] | (data[o + 1] << 8)));
-                    fg = (float) BitConverter.UInt16BitsToHalf((ushort) (data[o + 2] | (data[o + 3] << 8)));
-                    fb = (float) BitConverter.UInt16BitsToHalf((ushort) (data[o + 4] | (data[o + 5] << 8)));
+                    fr = HalfAt(data, o);
+                    fg = HalfAt(data, o + 2);
+                    fb = HalfAt(data, o + 4);
                 }
-                else if (face.PixelFormat == EPixelFormat.PF_A32B32G32R32F)
+                else if (face.PixelFormat is EPixelFormat.PF_A32B32G32R32F or EPixelFormat.PF_R32G32B32F)
                 {
                     fr = BitConverter.ToSingle(data, o);
                     fg = BitConverter.ToSingle(data, o + 4);
                     fb = BitConverter.ToSingle(data, o + 8);
+                }
+                else if (face.PixelFormat == EPixelFormat.PF_R16F)
+                {
+                    fr = fg = fb = HalfAt(data, o);
                 }
                 else
                 {
@@ -827,8 +850,12 @@ public sealed class Exporter
                 {
                     if (e is not UTextureCube cube) continue;
                     cubes++;
-                    var id = CubeId(cube.Name);
-                    var dir = Path.Combine(_o.Out, "assets", "TAT", "Content", "Cubemaps", id);
+                    var id = SafeCubeId(CubeId(cube.Name));
+                    var cubesRoot = Path.GetFullPath(Path.Combine(_o.Out, "assets", "TAT", "Content", "Cubemaps"));
+                    var dir = Path.GetFullPath(Path.Combine(cubesRoot, id));
+                    var rootPrefix = cubesRoot.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+                    if (!dir.StartsWith(rootPrefix, StringComparison.Ordinal))
+                        throw new InvalidOperationException($"cube id '{id}' escapes {cubesRoot}");
                     var manifest = Path.Combine(dir, "cubemap.json");
                     Directory.CreateDirectory(dir);
                     if (!_o.Overwrite && File.Exists(manifest)) { CountSkip("cubemaps"); continue; }
@@ -845,15 +872,13 @@ public sealed class Exporter
                         Count("cubemaps", false, $"{f.Path}: decoded {decoded.Width}x{decoded.Height} is not six square {faceH}px faces");
                         continue;
                     }
-                    // A re-run must not leave a stale face_*.png beside the new
-                    // face_*.hdr (or vice versa): the manifest names the files,
-                    // but the directory should not carry both encodings.
-                    if (_o.Overwrite)
-                        foreach (var stale in Directory.GetFiles(dir, "face_*"))
-                            File.Delete(stale);
+                    // Encode all six faces in memory first. No face file or
+                    // manifest is touched until every encode succeeds, so a
+                    // failed re-encode cannot leave a half-written cube.
                     var faces = new Dictionary<string, string>();
                     var means = new Dictionary<string, double[]>();
                     var meansLinear = new Dictionary<string, double[]>();
+                    var encoded = new List<(string File, byte[] Bytes)>();
                     bool hdrEncoded = PixelFormatUtils.IsHDR(decoded.PixelFormat);
                     bool ok = true;
                     for (int i = 0; i < 6; i++)
@@ -867,10 +892,18 @@ public sealed class Exporter
                         if (bytes == null) { ok = false; break; }
                         if (ext != "hdr") hdrEncoded = false;
                         var file = $"face_{CubeFaceNames[i]}.{ext}";
-                        File.WriteAllBytes(Path.Combine(dir, file), bytes);
+                        encoded.Add((file, bytes));
                         faces[CubeFaceNames[i]] = file;
                     }
                     if (!ok) { Count("cubemaps", false, f.Path + ": face encode failed"); continue; }
+                    // Swap: drop the other encoding only now, write the new
+                    // faces, then move the manifest into place last so readers
+                    // never see a manifest that names missing files.
+                    if (_o.Overwrite)
+                        foreach (var stale in Directory.GetFiles(dir, "face_*"))
+                            File.Delete(stale);
+                    foreach (var (file, bytes) in encoded)
+                        File.WriteAllBytes(Path.Combine(dir, file), bytes);
                     var doc = new Dictionary<string, object?>
                     {
                         ["schema"] = "tat2.cubemap/1",
@@ -895,7 +928,9 @@ public sealed class Exporter
                     };
                     // Real (unclamped) linear face energy for the loader.
                     if (meansLinear.Count > 0) doc["face_mean_linear"] = meansLinear;
-                    File.WriteAllText(manifest, JsonConvert.SerializeObject(doc, Formatting.Indented));
+                    var tmpManifest = manifest + ".tmp";
+                    File.WriteAllText(tmpManifest, JsonConvert.SerializeObject(doc, Formatting.Indented));
+                    File.Move(tmpManifest, manifest, true);
                     Count("cubemaps", true);
                     Console.Error.WriteLine($"  cubemap {cube.Name}: {decoded.Width}x{faceH} {decoded.PixelFormat} srgb={cube.SRGB} hdr={hdrEncoded} -> {dir}");
                 }

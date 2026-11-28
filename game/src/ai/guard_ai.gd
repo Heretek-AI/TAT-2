@@ -27,6 +27,9 @@ const NavSteering = preload("res://src/ai/nav_steering.gd")
 ## W9-P4 S1: the authored StateTree shadow interpreter (`TAT2_STATETREE=off|shadow`).
 ## `off` is one null check per frame; nothing is loaded until a guard exists.
 const StateTreeShadow = preload("res://src/ai/statetree/shadow_runner.gd")
+## Phase 3B.1: the authored `StateTreeEvent.*` tag vocabulary and the live
+## emitter census (`StateTreeEvents.EMITTERS`).
+const StateTreeEvents = preload("res://src/ai/statetree/events.gd")
 const LANTERN_GLB_PRIMARY := "res://assets/ue/Content/Art/Environment/Lights/Mobile/SM_LanternGuardA.glb"
 const LANTERN_GLB_FALLBACK := "res://assets/ue/Content/Art/Gameplay/Gear/Lantern/SK_Lantern.glb"
 const DEFAULT_KEY_GLB := "res://assets/ue/Content/Art/Gameplay/KeyCabinets/SM_LootableKeys_LockedRoomKey.glb"
@@ -309,8 +312,12 @@ var bodies_seen: int = 0
 var _roster_cache_key: String = ""
 ## W8 navigation: NavigationAgent3D consumer with documented degradation.
 var _nav: NavSteering = NavSteering.new()
-## W9-P4 S1 shadow runner (null unless TAT2_STATETREE=shadow|patrol).
+## W9-P4 S1 shadow runner (null unless TAT2_STATETREE=shadow, or =patrol with
+## the experimental TAT2_STATETREE_WRITER flag).
 var _st_shadow: RefCounted = null
+## Phase 3B.1 experimental writer (null unless the writer flag is on); when set it
+## replaces `_move_ai` for the NEUTRAL patrol branch. Not a cutover.
+var _st_writer: RefCounted = null
 var _nav_bound: bool = false
 ## Hearing diagnostics: stimuli refused by occlusion / by the role cap.
 var heard_blocked_by_wall: int = 0
@@ -440,8 +447,10 @@ func _ready() -> void:
 		patrol_points = [global_position, global_position + Vector3(6, 0, 0), global_position + Vector3(6, 0, 6)]
 	# W9-P4 S1 shadow mode is attached after the patrol data exists so the first
 	# observation is the real path, not the seeded fallback. `attach` returns null
-	# when the mode is off, so the steady-state cost is one null check per frame.
+	# when the mode is off (or when `patrol` is refused without the experimental
+	# writer flag), so the steady-state cost is one null check per frame.
 	_st_shadow = StateTreeShadow.attach(self)
+	_st_writer = _st_shadow.writer if _st_shadow != null else null
 
 
 ## Authored sense profile for this guard (RE-I-07). The roster bucket wins when
@@ -674,6 +683,18 @@ func _guard_weapon_set() -> String:
 	return "club"
 
 
+## Phase 3B.3: plays an authored guard exertion/attack line through the VO
+## director (`VoDirector.GUARD_BEAT_CUES`). The speaker is this guard's authored
+## weapon set, so a Hauntstable (which never recorded either beat) is refused
+## rather than given an Enforcer1 recording. Audio-only: no state, damage or
+## timing changes here.
+func _play_exertion_vo(beat: String) -> void:
+	if AudioManager == null or not AudioManager.has_method("play_vo_guard_beat"):
+		return
+	var speaker: String = "Hauntstable1" if _guard_weapon_set() == "hauntstable" else "Enforcer1"
+	AudioManager.play_vo_guard_beat(beat, speaker, global_position)
+
+
 ## Real-clip AnimationPlayer (UE sources: ST_Guard StateTree states,
 ## DAM_CharacterAnimationMapping_GuardBase / _GuardHauntsable tags,
 ## AnimSet_Guard_Club / _Hauntsable rows, anims_manifest.json clip GLBs).
@@ -739,6 +760,10 @@ func _play_guard_attack() -> void:
 	_takedown_vic_anim = false
 	anim_player.speed_scale = 1.0
 	anim_player.play(key, 0.15)
+	# Phase 3B.3: the melee swing is the owning system for the authored
+	# ExertionCombat/Attacking bark (9 Enforcer1 recordings; Hauntstable1 has
+	# none and is refused by the director).
+	_play_exertion_vo("attacking")
 	# RE-F-12: the swing owns the damage window. Arm the authored CombatHitbox
 	# states (the _Montage sibling has none, so the clock resolves the sequence)
 	# and let _tick_attack_hit_window apply MELEE_DAMAGE when the club connects.
@@ -1550,7 +1575,12 @@ func _physics_process(delta: float) -> void:
 	_emit_alert_state_if_needed(false)
 	_update_ally_wakeup(delta)
 	_scan_downed_guards(delta)
-	_move_ai(delta, player)
+	if _st_writer != null:
+		# Phase 3B.1 experimental spike: the interpreter's selected leaf drives the
+		# NEUTRAL patrol move instead of `_move_ai`. One authority per frame.
+		_st_writer.apply_step(delta)
+	else:
+		_move_ai(delta, player)
 	_update_guard_anim(delta)
 	if _st_shadow != null:
 		_st_shadow.tick(delta)
@@ -2010,6 +2040,20 @@ func _hear(record: Dictionary) -> void:
 	# band on the guard's side (see HearingData.investigation_point).
 	investigate_pos = HearingData.investigation_point(stim, origin, global_position) if not stim.is_empty() else origin
 	investigation_search_seconds = 8.0 if kind == HearingData.BEHAVIOUR_LONG else 4.0
+	# Phase 3B.1: the one live `StateTreeEvent.*` emitter. PORT INFERENCE, not
+	# authored data: the cook serialises only the tag name, and nothing in the
+	# payload says a heard record is a `StimChange`. The inference is that a
+	# record which passed the authored heard-by/query/range/occlusion filters is
+	# a stimulus change for this listener, so the tag goes into the live
+	# interpreter here -- before the guard_alert early return and before the
+	# reaction-role cap (the stim changed even if the guard takes Standby). The
+	# payload dictionary is trace metadata copied from the record; no bound
+	# parameter is invented.
+	if _st_shadow != null:
+		_st_shadow.push_event(StateTreeEvents.STIM_CHANGE, {
+			"heard_tag": tag,
+			"stim_tag": stim_tag,
+		})
 	# guard_alert is the authored shout path (the only stim-shaped legacy tag):
 	# ST_InvestigateStims_Guard "React To Guard Calling For Help" raises
 	# alertness and investigates. Keep the existing ALERTED transition.
@@ -2078,6 +2122,12 @@ func take_knockout(dmg: float) -> void:
 	# Combat.Hit hearing stimulus (10 m Heavy Long) -- a blackjack one-shot is
 	# the Takedown row instead, which is why this is gated on surviving.
 	if health > 0.0 and state != Alertness.KNOCKED_OUT:
+		# Phase 3B.3: a surviving hit is the owning system for the authored
+		# ExertionCombat/TakingDamage bark (30 Enforcer1 recordings). Played
+		# BEFORE the ALERTED transition so the yelp wins the director's 2 s
+		# priority window and the sight line stays for an actual sighting; the
+		# lethal path stays silent here and the KO bark owns it.
+		_play_exertion_vo("taking_damage")
 		investigate_pos = global_position
 		detection = maxf(detection, DETECTION_ALERTED_AT)
 		if state != Alertness.ALERTED and state != Alertness.COMBAT:

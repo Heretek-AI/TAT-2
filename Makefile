@@ -8,11 +8,36 @@ MOBILE_ABI  ?= arm64
 QA_CONTRACT ?= 0
 KEYSTORE_PROPS := $(HOME)/.config/tat2/keystore.properties
 
-.PHONY: build-extractor extract anims normalize audit audit-bootstrap audit-refresh-stamps audit-imports content-overrides check-logic check-consumers string-audit check-greps gate-ratchet test test-producers run editor review review-capture bake-review bake-review-core desktop-texture-cap texture-cap-check audio-tools linux-build linux-stamp-verify linux-run android-prepare android-debug android-debug-gl android-release
+# Mapping file for unversioned packages. `tools/ue4ss/output` is gitignored and
+# a git worktree usually does not have it, so fall back to the main checkout
+# derived from the shared git dir. An explicit `USMAP=` / `TAT_USMAP=` wins.
+GIT_COMMON := $(shell git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+MAIN_CHECKOUT := $(if $(GIT_COMMON),$(abspath $(GIT_COMMON)/..),)
+USMAP ?= $(TAT_USMAP)
+ifeq ($(USMAP),)
+USMAP := $(firstword $(wildcard tools/ue4ss/output/*.usmap) $(wildcard $(MAIN_CHECKOUT)/tools/ue4ss/output/*.usmap))
+endif
+
+.PHONY: build-extractor extract json extract-json anims normalize audit audit-bootstrap audit-refresh-stamps audit-imports content-overrides check-logic check-consumers string-audit check-greps gate-ratchet test test-producers run editor review review-capture bake-review bake-review-core desktop-texture-cap texture-cap-check audio-tools linux-build linux-stamp-verify linux-run android-prepare android-debug android-debug-gl android-release
 
 build-extractor:
 	DOTNET_ROOT=$(HOME)/.dotnet10 PATH=$(HOME)/.dotnet10:$(PATH) $(DOTNET) build tools/tat-extract -c Release
 	cp tools/tat-extract/native/linux-x64/CUE4Parse-Natives.so tools/tat-extract/bin/Release/net10.0/
+
+# P3-3B.4 / round-2 F3: standalone filtered package dump for Destructibles.
+# This is NOT part of `extract`: the new `TAT/Content/Destructibles/` tables
+# root already dumps GC_ChestTrunkALid and friends in the `tables` stage.
+# `--usmap` is resolved above (env USMAP/TAT_USMAP, the worktree's
+# tools/ue4ss/output, or the main checkout's copy) and `--fail-on-error` makes
+# a package that fails to map exit non-zero instead of a silent ok=0/fail=N.
+json: build-extractor
+	@if [ ! -f "$(USMAP)" ]; then \
+		echo "ERROR: no .usmap found at '$(USMAP)'; set USMAP=/path/to/TAT-*.usmap (worktrees lack tools/ue4ss/output)" >&2; \
+		exit 2; \
+	fi
+	$(EX) json --overwrite --usmap '$(USMAP)' --fail-on-error --filter 'Destructibles/'
+
+extract-json: json
 
 extract: build-extractor
 	$(EX) list
@@ -21,7 +46,10 @@ extract: build-extractor
 	$(EX) levels
 	# N-P0: decoded ARecastNavMesh tiles for the three navmesh maps only. The
 	# generated runtime asset is produced by tools/parse_nav.py in `normalize`.
-	$(EX) nav --overwrite --filter 'Maps/(Guildhall|OldManor|FTUE)/.*\.umap$'
+	# `$$` before the closing quote keeps that quote out of make's variable
+	# expansion (a single dollar plus quote is a one-character variable
+	# reference and leaves the shell with an unmatched quote).
+	$(EX) nav --overwrite --filter 'Maps/(Guildhall|OldManor|FTUE)/.*\.umap$$'
 	# meshes writes *.materials.json sidecars; materials consumes them to queue
 	# authored materials whose names don't start MI_/M_ (CobwebFogy, T_*).
 	# --overwrite keeps a changed material filter effective on an existing tree.
@@ -29,7 +57,9 @@ extract: build-extractor
 	$(EX) materials --overwrite
 	$(EX) audio
 	$(EX) textures
-	$(EX) cubemaps
+	# 3A.4: faces are HDR for HDR cubes; --overwrite re-encodes an existing
+	# PNG tree so a stale 8-bit face cannot survive a code change.
+	$(EX) cubemaps --overwrite
 	$(EX) anims
 
 anims: build-extractor

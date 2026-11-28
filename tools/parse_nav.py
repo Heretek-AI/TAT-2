@@ -36,6 +36,20 @@ Off-mesh merge (the 221 -> 80 result for Guildhall):
      is the most duplicated copy; a link is bidirectional only when both
      directions are present in the census, never from the raw flags (all
      observed records carry flag 64).
+
+Direction census (schema `tat2.nav/1` census_version 2, Phase 3 §3B.2):
+
+  A cluster is bidirectional when the *whole cluster* carries at least one
+  record along +axis and one along -axis (axis = canonical A->B). The first
+  producer revision (census_version 1) counted only records whose endpoints
+  were exactly the canonical pair or its exact reverse, so a reverse copy
+  that the tile/poly split had given different endpoints was invisible:
+  Guildhall read 35/45, Old Manor 15/49, FTUE 0/4 although 43/45/4 of the
+  "one-way" links had an opposite-direction parallel copy. The cluster-wide
+  census reads 78/2, 60/4, 4/0 and the legacy number is kept in the manifest
+  (`links_bidirectional_legacy_canonical`) so the correction stays auditable.
+  The raw pair set is emitted next to the binary (`<map>.pairs.json`) so a
+  future regression can be attributed per link instead of per map total.
 """
 
 from __future__ import annotations
@@ -54,6 +68,10 @@ DEFAULT_OUT = ROOT / "game" / "data" / "generated" / "nav"
 
 SCHEMA = "tat2.nav/1"
 SOURCE_SCHEMA = "tat2.nav_tiles/1"
+PAIRS_SCHEMA = "tat2.nav_pairs/1"
+# 1 = canonical-pair-only direction count (legacy, wrong for poly-split copies);
+# 2 = cluster-wide signed direction count (Phase 3 §3B.2).
+CENSUS_VERSION = 2
 MAGIC = b"TAT2NAV1"
 VERSION = 1
 
@@ -335,7 +353,7 @@ def _unit(a):
     return (a[0] / n, a[1] / n, a[2] / n)
 
 
-def link_census(doc: dict, source: Path) -> tuple[list[dict], dict]:
+def link_census(doc: dict, source: Path) -> tuple[list[dict], dict, list[dict]]:
     records = collect_offmesh(doc, source)
 
     # 1. Collapse exact directional copies into unordered endpoint pairs.
@@ -382,34 +400,67 @@ def link_census(doc: dict, source: Path) -> tuple[list[dict], dict]:
     for i in range(n):
         clusters.setdefault(find(i), []).append(i)
 
+    def rank(i: int):
+        """Canonical pair: the most duplicated copy, then longest, then stable."""
+        a, b = keys[i]
+        return (-len(pairs[keys[i]]), -round(_norm(_sub(b, a)), 3), keys[i])
+
+    # One stable cluster order (by canonical pair) so the pair-set audit file
+    # and the binary link indices never depend on dict/identity ordering.
+    cluster_members = sorted(
+        clusters.values(), key=lambda members: rank(sorted(members, key=rank)[0])
+    )
+
     links: list[dict] = []
     bidirectional = 0
     one_way = 0
-    for members in clusters.values():
-        # Canonical pair: the most duplicated copy, then longest, then stable.
-        def rank(i: int):
-            a, b = keys[i]
-            return (-len(pairs[keys[i]]), -round(_norm(_sub(b, a)), 3), keys[i])
-
+    legacy_bidirectional = 0
+    forward_records = 0
+    reverse_records = 0
+    for cid, members in enumerate(cluster_members):
         canonical = sorted(members, key=rank)[0]
         a, b = keys[canonical]
-        # The merged copies carry the other direction; count the whole cluster
-        # so a one-way raw record pair cannot become bidirectional by accident.
-        dir_ab = sum(
+        axis = _unit(_sub(b, a))
+        # Cluster-wide signed census: every merged copy is projected onto the
+        # canonical axis, so a reverse copy with *different* endpoints (the
+        # tile/poly split) is counted. Counting only exact (a,b)/(b,a) records
+        # is the census_version 1 bug that read 35/45 for Guildhall.
+        forward = 0
+        reverse = 0
+        for i in members:
+            for r in pairs[keys[i]]:
+                d = _dot(_sub(r["b"], r["a"]), axis)
+                if d > 0.0:
+                    forward += 1
+                elif d < 0.0:
+                    reverse += 1
+                else:
+                    fail(
+                        f"{source}: merged copy {r['a']}->{r['b']} is perpendicular "
+                        f"to its cluster axis {a}->{b}; the parallel merge rule is broken"
+                    )
+        # census_version 1 evidence, kept in the manifest so the correction is
+        # attributable rather than a silent flag flip.
+        legacy_ab = sum(
             1 for i in members for r in pairs[keys[i]] if (r["a"], r["b"]) == (a, b)
         )
-        dir_ba = sum(
-            1 for i in members for r in pairs[keys[i]] if (r["a"], r["b"]) in ((b, a),)
+        legacy_ba = sum(
+            1 for i in members for r in pairs[keys[i]] if (r["a"], r["b"]) == (b, a)
         )
-        is_bidirectional = dir_ab > 0 and dir_ba > 0
-        if not is_bidirectional and dir_ab == 0 and dir_ba > 0:
-            # A one-way authored link must keep its A->B direction; the sorted
-            # key is only a canonical grouping id.
+        if legacy_ab > 0 and legacy_ba > 0:
+            legacy_bidirectional += 1
+        is_bidirectional = forward > 0 and reverse > 0
+        if not is_bidirectional and reverse > 0 and forward == 0:
+            # A one-way authored link must keep its authored direction; the
+            # sorted key is only a canonical grouping id.
             a, b = b, a
+            forward, reverse = reverse, forward
         if is_bidirectional:
             bidirectional += 1
         else:
             one_way += 1
+        forward_records += forward
+        reverse_records += reverse
         # Authored radius/height: highest count, then smallest, deterministic.
         rep = sorted(
             (r for i in members for r in pairs[keys[i]]),
@@ -425,20 +476,83 @@ def link_census(doc: dict, source: Path) -> tuple[list[dict], dict]:
                 "bidirectional": is_bidirectional,
                 "records": sum(len(pairs[keys[i]]) for i in members),
                 "copies": len(members),
+                "_cluster": cid,
+                "directions": {"forward": forward, "reverse": reverse},
             }
         )
 
+    # Stable link order -> the binary index of every cluster's link.
     links.sort(key=lambda L: (L["a"], L["b"]))
+    cluster_to_link = {L["_cluster"]: idx for idx, L in enumerate(links)}
+
+    # 3. Emit the raw pair set (one row per authored off-mesh record) so a
+    #    census regression can be attributed per link/pair, not per map total.
+    pair_rows: list[dict] = []
+    for cid, members in enumerate(cluster_members):
+        link = links[cluster_to_link[cid]]
+        axis = _unit(_sub(link["b"], link["a"]))
+        for i in members:
+            for r in pairs[keys[i]]:
+                d = _dot(_sub(r["b"], r["a"]), axis)
+                pair_rows.append(
+                    {
+                        "link": cluster_to_link[cid],
+                        "a": list(r["a"]),
+                        "b": list(r["b"]),
+                        "radius": r["radius"],
+                        "height": r["height"],
+                        "flags": r["flags"],
+                        "dir": "forward" if d > 0.0 else "reverse",
+                        "copies": len(pairs[keys[i]]),
+                    }
+                )
+
     stats = {
+        "census_version": CENSUS_VERSION,
         "raw_offmesh": len(records),
         "offmesh_pairs": len(pairs),
         "links": len(links),
         "links_bidirectional": bidirectional,
         "links_one_way": one_way,
+        "links_bidirectional_legacy_canonical": legacy_bidirectional,
+        "forward_records": forward_records,
+        "reverse_records": reverse_records,
         "merge_max_perp_cm": MERGE_MAX_PERP_CM,
         "merge_max_gap_cm": MERGE_MAX_GAP_CM,
     }
-    return links, stats
+    return links, stats, pair_rows
+
+
+def write_pairs(
+    path: Path,
+    map_id: str,
+    rel_json: str,
+    stats: dict,
+    pair_rows: list[dict],
+) -> None:
+    """Write the raw pair set (one row per authored off-mesh record)."""
+    doc = {
+        "schema": PAIRS_SCHEMA,
+        "map": map_id,
+        "source_json": rel_json,
+        "census_version": stats["census_version"],
+        "census_rule": (
+            "cluster-wide signed direction: a merged cluster is bidirectional "
+            "when it carries both +axis and -axis records (axis = canonical A->B)"
+        ),
+        "records": stats["raw_offmesh"],
+        "pairs": stats["offmesh_pairs"],
+        "links": stats["links"],
+        "links_bidirectional": stats["links_bidirectional"],
+        "links_one_way": stats["links_one_way"],
+        "links_bidirectional_legacy_canonical": stats[
+            "links_bidirectional_legacy_canonical"
+        ],
+        "pair_set": pair_rows,
+    }
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(doc, f, indent=1, sort_keys=True)
+        f.write("\n")
 
 
 def write_bin(path: Path, mesh: dict, links: list[dict]) -> None:
@@ -485,7 +599,7 @@ def parse_map(
     areas = area_table(doc, source)
     nav_cfg = require_nav_config(doc, source)
     mesh = build_mesh(doc, source, areas)
-    links, link_stats = link_census(doc, source)
+    links, link_stats, pair_rows = link_census(doc, source)
 
     counts = mesh["area_counts"]
     area_rows = [
@@ -502,6 +616,8 @@ def parse_map(
     out_bin = out_root / f"{map_id}.nav.bin"
     out_root.mkdir(parents=True, exist_ok=True)
     write_bin(out_bin, mesh, links)
+    out_pairs = out_root / f"{map_id}.pairs.json"
+    write_pairs(out_pairs, map_id, rel_json, link_stats, pair_rows)
 
     entry = {
         "file": out_bin.name,
@@ -509,6 +625,11 @@ def parse_map(
         "source_json": rel_json,
         "source_sha256": sha256_file(source),
         "schema": SOURCE_SCHEMA,
+        "census_version": link_stats["census_version"],
+        "census_rule": (
+            "cluster-wide signed direction across merged parallel copies; "
+            "bidirectional only when both +axis and -axis records exist"
+        ),
         "tiles": int(doc.get("tile_count", 0)),
         "polys": mesh["walkable_polys"],
         "authored_polys_total": int(doc.get("poly_count_total", 0)),
@@ -527,6 +648,13 @@ def parse_map(
         "links": link_stats["links"],
         "links_bidirectional": link_stats["links_bidirectional"],
         "links_one_way": link_stats["links_one_way"],
+        "links_bidirectional_legacy_canonical": link_stats[
+            "links_bidirectional_legacy_canonical"
+        ],
+        "census_forward_records": link_stats["forward_records"],
+        "census_reverse_records": link_stats["reverse_records"],
+        "pairs_file": out_pairs.name,
+        "pairs_sha256": sha256_file(out_pairs),
         "raw_offmesh": link_stats["raw_offmesh"],
         "offmesh_pairs": link_stats["offmesh_pairs"],
         "bin_bytes": out_bin.stat().st_size,
@@ -535,9 +663,10 @@ def parse_map(
         f"NAV_MAP {map_id}: tiles={entry['tiles']} polys={entry['polys']} "
         f"verts={entry['verts']}/{entry['authored_verts']} "
         f"offmesh={entry['raw_offmesh']}->{entry['offmesh_pairs']}pairs->{entry['links']} links "
-        f"(bidirectional={entry['links_bidirectional']} one_way={entry['links_one_way']}) "
+        f"(census_v{entry['census_version']} bidirectional={entry['links_bidirectional']} "
+        f"one_way={entry['links_one_way']} legacy_canonical={entry['links_bidirectional_legacy_canonical']}) "
         f"max_poly_verts={entry['max_poly_verts']} areas={len(area_rows)} "
-        f"bin={entry['bin_bytes']}B"
+        f"bin={entry['bin_bytes']}B pairs={entry['pairs_file']}"
     )
     return entry
 
@@ -574,6 +703,11 @@ def main(argv: list[str]) -> int:
             "rule": "exact-cm vertices; unordered duplicate offmesh pairs; parallel copies <=150 cm perpendicular and overlapping along the link direction",
             "max_perp_cm": MERGE_MAX_PERP_CM,
             "overlap_gap_cm": MERGE_MAX_GAP_CM,
+        },
+        "census": {
+            "version": CENSUS_VERSION,
+            "rule": "cluster-wide signed direction: a merged cluster is bidirectional when it carries both +axis and -axis records (axis = canonical A->B); census_version 1 counted only the exact canonical pair/reverse",
+            "pairs_schema": PAIRS_SCHEMA,
         },
         "maps": {},
     }

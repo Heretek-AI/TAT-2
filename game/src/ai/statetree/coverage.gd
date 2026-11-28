@@ -28,9 +28,17 @@ extends RefCounted
 ##
 ## Nothing here is asserted: the table is recomputed from `guard_behavior.json`
 ## on every run, so a producer change or a new binding moves it.
+##
+## Phase 3B.1 adds two honesty columns:
+##   * `vacuous_trees` names a structurally covered tree whose tasks are PORT
+##     GAPs (`ST_Subtree_IntruderNoLongerSuspicious`, 4 states) so
+##     `fully_covered_trees` cannot be quoted as "a guard tree runs";
+##   * `events` is the authored `StateTreeEvent.*` census (authored / emitted /
+##     unemitted), measured from the payload against `events.gd`.
 
 const TreeModel = preload("res://src/ai/statetree/tree_model.gd")
 const Bindings = preload("res://src/ai/statetree/bindings.gd")
+const StateEvents = preload("res://src/ai/statetree/events.gd")
 
 const PARITY_AUTHORED: String = "authored"
 const PARITY_RUNTIME_FED: String = "runtime-fed"
@@ -38,6 +46,32 @@ const PARITY_UNKNOWN: String = "unknown"
 const PARITY_UNCOVERED: String = "uncovered"
 
 const ROW_KEYS: Array[String] = ["status", "instances", "covered", "blind", "note"]
+
+## The one structurally covered tree is an ALGEBRA result, not behaviour. It
+## must be named as such wherever `fully_covered_trees=1` is quoted, so the
+## number cannot be read as "the port runs a guard StateTree".
+##
+## Authored shape (payload v2): 4 states, 3 task instances, 0 conditions,
+## 0 events, 0 subtree links.
+##   Root -> Set Focus (Set Focus (Actor)) -> VO Line (Request Voice Line)
+##        -> Delay (Delay Task) -> Succeeded (OnStateCompleted, to_kind Succeeded)
+## `Set Focus (Actor)` and `Request Voice Line` are deliberate PORT GAPs: the
+## port has no focus subsystem and its VO is FSM-tag driven, so both are
+## immediately SUCCEEDED vacuously (`VACUOUS_TASKS` in `guard_bindings.gd`).
+## Only the literal `Delay Task` has a port effect. The tree therefore proves
+## the coverage algebra (every instance has a handler) and nothing about
+## behaviour. Removing the gap would need a focus subsystem, which 3B.1 does
+## not fake.
+const VACUOUS_TREES: Dictionary = {
+	"ST_Subtree_IntruderNoLongerSuspicious": {
+		"states": 4,
+		"state_flow": "Set Focus -> Request Voice Line -> Delay -> Succeeded",
+		"payload_states": ["Root", "Set Focus", "VO Line", "Delay"],
+		"tasks": ["Set Focus (Actor)", "Request Voice Line", "Delay Task"],
+		"vacuous_tasks": ["Set Focus (Actor)", "Request Voice Line"],
+		"why": "structurally covered but behaviourally vacuous: 2 of its 3 tasks are PORT GAPs (no focus subsystem, no tree-driven VO) that complete immediately and the leaf exits through a literal Delay Task; it proves the coverage algebra, not guard behaviour",
+	},
+}
 
 
 ## Returns
@@ -82,13 +116,26 @@ static func build(trees: Dictionary, bindings: RefCounted) -> Dictionary:
 		row["fully_parity_covered"] = bool(row["fully_covered"]) and int(row["parity_unknown"]) == 0
 	var fully_covered_trees: Array = []
 	var fully_parity_trees: Array = []
+	var vacuous_trees: Array = []
+	var vacuous_state_mismatch: Array = []
 	for tree_name: Variant in per_tree.keys():
 		if bool((per_tree[tree_name] as Dictionary)["fully_covered"]):
 			fully_covered_trees.append(str(tree_name))
 		if bool((per_tree[tree_name] as Dictionary)["fully_parity_covered"]):
 			fully_parity_trees.append(str(tree_name))
+		if VACUOUS_TREES.has(str(tree_name)):
+			var declared: Dictionary = VACUOUS_TREES[str(tree_name)]
+			var tree_row: Dictionary = per_tree[tree_name]
+			tree_row["vacuous"] = true
+			tree_row["vacuous_state_flow"] = str(declared["state_flow"])
+			tree_row["vacuous_reason"] = str(declared["why"])
+			vacuous_trees.append(str(tree_name))
+			if int(tree_row["states"]) != int(declared["states"]):
+				vacuous_state_mismatch.append("%s declared=%d measured=%d"
+					% [str(tree_name), int(declared["states"]), int(tree_row["states"])])
 	fully_covered_trees.sort()
 	fully_parity_trees.sort()
+	var events: Dictionary = StateEvents.census(trees)
 	var by_status: Dictionary = {}
 	for table: Dictionary in [tasks, conditions]:
 		for name: Variant in table.keys():
@@ -119,6 +166,10 @@ static func build(trees: Dictionary, bindings: RefCounted) -> Dictionary:
 			"by_status": by_status,
 			"fully_covered_trees": fully_covered_trees,
 			"fully_parity_covered_trees": fully_parity_trees,
+			"vacuous_trees": vacuous_trees,
+			"vacuous_state_mismatch": vacuous_state_mismatch,
+			"events": events,
+			"trees_total": per_tree.size(),
 			"instances": instances.size(),
 		},
 		"per_tree": per_tree,
@@ -224,6 +275,21 @@ static func _sum_dict(table: Dictionary, key: String) -> Dictionary:
 	return out
 
 
+## One line per vacuous tree, for the probe/report:
+##   VACUOUS|tree|states|state_flow|reason
+static func vacuous_lines(coverage: Dictionary) -> PackedStringArray:
+	var out: PackedStringArray = []
+	var totals: Dictionary = coverage.get("totals", {})
+	var per_tree: Dictionary = coverage.get("per_tree", {})
+	for tree_name: Variant in totals.get("vacuous_trees", []):
+		var row: Dictionary = per_tree.get(tree_name, {})
+		out.append("VACUOUS|%s|%d|%s|%s" % [
+			str(tree_name), int(row.get("states", 0)),
+			str(row.get("vacuous_state_flow", "")), str(row.get("vacuous_reason", "")),
+		])
+	return out
+
+
 ## A stable human table for the report/probe:
 ##   TASK|name|status|instances|covered|blind|note|param_sources|parity
 static func table_lines(coverage: Dictionary, kind: String = "tasks") -> PackedStringArray:
@@ -257,7 +323,7 @@ static func summary_line(coverage: Dictionary) -> String:
 	var status: Dictionary = t["by_status"]
 	var ts: Dictionary = _sum_dict(coverage["tasks"], "param_sources")
 	var cs: Dictionary = _sum_dict(coverage["conditions"], "param_sources")
-	return "STATETREE_COVERAGE trees=%d task_classes=%d task_instances=%d task_covered=%d task_blind=%d condition_classes=%d condition_instances=%d condition_covered=%d condition_blind=%d implemented=%d mapped=%d unsupported=%d fully_covered_trees=%d fully_parity_covered_trees=%d task_parity_authored=%d task_parity_runtime_fed=%d task_parity_unknown=%d condition_parity_authored=%d condition_parity_runtime_fed=%d condition_parity_unknown=%d task_sources=%s condition_sources=%s" % [
+	return "STATETREE_COVERAGE trees=%d task_classes=%d task_instances=%d task_covered=%d task_blind=%d condition_classes=%d condition_instances=%d condition_covered=%d condition_blind=%d implemented=%d mapped=%d unsupported=%d fully_covered_trees=%d fully_parity_covered_trees=%d task_parity_authored=%d task_parity_runtime_fed=%d task_parity_unknown=%d condition_parity_authored=%d condition_parity_runtime_fed=%d condition_parity_unknown=%d task_sources=%s condition_sources=%s trees_total=%d vacuous_trees=%d vacuous_names=%s authored_events=%d emitted_events=%d unemitted_events=%d event_enter=%d event_transition=%d event_gates=%d event_total=%d" % [
 		(coverage["per_tree"] as Dictionary).size(),
 		int(t["task_classes"]), int(t["task_instances"]), int(t["task_covered"]), int(t["task_blind"]),
 		int(t["condition_classes"]), int(t["condition_instances"]), int(t["condition_covered"]), int(t["condition_blind"]),
@@ -266,4 +332,12 @@ static func summary_line(coverage: Dictionary) -> String:
 		int(t["task_parity_authored"]), int(t["task_parity_runtime_fed"]), int(t["task_parity_unknown"]),
 		int(t["condition_parity_authored"]), int(t["condition_parity_runtime_fed"]), int(t["condition_parity_unknown"]),
 		_compact(ts), _compact(cs),
+		int(t.get("trees_total", 0)), (t["vacuous_trees"] as Array).size(), ",".join(PackedStringArray(t["vacuous_trees"])),
+		int((t["events"] as Dictionary)["counts"]["authored"]),
+		int((t["events"] as Dictionary)["counts"]["emitted"]),
+		int((t["events"] as Dictionary)["counts"]["unemitted"]),
+		int((t["events"] as Dictionary)["counts"]["enter"]),
+		int((t["events"] as Dictionary)["counts"]["transition"]),
+		int((t["events"] as Dictionary)["counts"]["gates"]),
+		int((t["events"] as Dictionary)["counts"]["total"]),
 	]

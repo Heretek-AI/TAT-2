@@ -24,8 +24,10 @@ extends Node3D
 ##
 ## Authored numbers this consumer relies on (measured, navmesh-spike.md):
 ## Guildhall 2,958 tiles / 14,709 walkable polys / 30,918 unique verts /
-## 221 off-mesh records -> 80 logical links (35 bidirectional); Old Manor
-## 1,469 / 9,059 / 17,643 / 216 -> 64; FTUE 1,558 / 5,576 / 11,711 / 11 -> 4.
+## 221 off-mesh records -> 80 logical links (census_version 2: 78 bidirectional
+## / 2 one-way; the v1 canonical-only count read 35/45); Old Manor
+## 1,469 / 9,059 / 17,643 / 216 -> 64 (60/4); FTUE 1,558 / 5,576 / 11,711 / 11
+## -> 4 (4/0).
 ## Area ids are per-map (`NavArea_Default` is 63 and is walkable, never null;
 ## Old Manor has Door=3 / Bushes=4, Guildhall and FTUE Door=4 / Bushes=3).
 
@@ -55,6 +57,24 @@ const DOOR_OPEN_DEG := 70.0
 const DOOR_SIDE_M := 2.2
 const DOOR_SNAP_LIMIT_M := 2.5
 
+## Phase 3 §3B.2: an authored off-mesh link that crosses a door is bound to
+## that door and follows its open/closed state. The rule is deliberately
+## narrow: the baked midpoint must sit within 2.5 m of the door's leaf midpoint
+## and the link direction must be within ~25 deg of the door normal (the walk-
+## through axis). A link is bound to at most one door.
+##
+## Measured on the authored Guildhall asset the rule selects 4 baked links:
+## inside the authored prison door (link 49, midpoint 2.04 m away, direction
+## dot 1.00), a shutter-door link (52) and two window links (21/22). Window
+## pivots share the `swinging_doors` group but the port has no window
+## interaction (`swinging_door.gd`), so their leaves can never pass
+## `DOOR_OPEN_DEG`; adopting the authored window traversal links would disable
+## them permanently. Only a real door (authored class without a window
+## fragment) may adopt a baked link.
+const DOOR_BAKED_RADIUS_M := 2.5
+const DOOR_BAKED_MIN_PARALLEL := 0.90
+const DOOR_BINDING_EXCLUDED_CLASS_FRAGMENTS: Array[String] = ["window"]
+
 const STATE_OFF := "off"
 const STATE_DISABLED := "disabled"
 const STATE_ASSETS_MISSING := "assets_missing"
@@ -70,7 +90,10 @@ var _nav_dir: String = DEFAULT_NAV_DIR
 var _region: NavigationRegion3D = null
 var _navmesh: NavigationMesh = null
 var _links: Array[NavigationLink3D] = []
+var _link_mids: Array[Vector3] = []
 var _door_links: Array[Dictionary] = []
+var _door_audit: Array[Dictionary] = []
+var _baked_bindings: Array[Dictionary] = []
 var _baked_bidirectional: int = 0
 var _baked_one_way: int = 0
 var _door_groups: int = 0
@@ -187,6 +210,7 @@ func setup(map_id: String) -> bool:
 		link.enabled = true
 		add_child(link)
 		_links.append(link)
+		_link_mids.append((link.start_position + link.end_position) * 0.5)
 		if link.bidirectional:
 			_baked_bidirectional += 1
 		else:
@@ -229,25 +253,40 @@ func wait_ready(max_frames: int = READY_MAX_FRAMES) -> bool:
 ## door actor; the link centre is the leaf midpoint and the normal is the
 ## averaged authored leaf plane normal. Call after the doors have entered the
 ## tree and after `wait_ready()`.
+##
+## Phase 3 §3B.2: every group is printed. A skipped group logs its actor,
+## midpoint, normal and the exact reason (`no_leaves`, `no_leaf_normal`,
+## `snap_a`/`snap_b`/`snap_both` with both snap distances), and the audit rows
+## are exposed through `door_audit()` so a probe can assert a route-critical
+## door is in the linked set instead of trusting a total. A linked door also
+## adopts any authored baked off-mesh link that crosses it (radius + parallel
+## rule above), so the prison's always-on baked link cannot cross a closed
+## door.
 func register_swinging_doors() -> int:
 	if _state != STATE_READY:
 		return 0
 	# Rebuild from the current tree so a probe (or a reloaded mission) can call
 	# this again after the authored doors change; the mission calls it once.
 	_free_door_links()
+	_unbind_baked_links()
+	_door_audit.clear()
 	_door_groups = 0
 	_door_skipped = 0
 	var groups: Dictionary = {}
+	var actor_class_by_actor: Dictionary = {}
 	for node_v: Node in get_tree().get_nodes_in_group("swinging_doors"):
 		if not (node_v is Node3D) or not node_v.has_method("open_angle_deg"):
 			continue
 		var door := node_v as Node3D
 		var entry_v: Variant = door.get("door_entry")
 		var actor := str(door.name)
+		var actor_class := ""
 		if typeof(entry_v) == TYPE_DICTIONARY:
 			var actor_v: Variant = (entry_v as Dictionary).get("actor", "")
 			if str(actor_v) != "":
 				actor = str(actor_v)
+			actor_class = str((entry_v as Dictionary).get("class", ""))
+		actor_class_by_actor[actor] = actor_class
 		if not groups.has(actor):
 			groups[actor] = []
 		(groups[actor] as Array).append(door)
@@ -270,17 +309,57 @@ func register_swinging_doors() -> int:
 			if normal.length() > 0.001 and normal.dot(n) < 0.0:
 				n = -n
 			normal += n
-		if doors.is_empty() or normal.length() < 0.001:
+		var actor_class := str(actor_class_by_actor.get(actor, ""))
+		var audit := {
+			"actor": actor,
+			"class": actor_class,
+			"mid": Vector3.ZERO,
+			"normal": Vector3.ZERO,
+			"leaves": doors.size(),
+			"linked": false,
+			"reason": "",
+			"snap_a": -1.0,
+			"snap_b": -1.0,
+			"baked_links": [],
+			"doors": doors,
+		}
+		if doors.is_empty():
+			audit["reason"] = "no_leaves"
+			_door_audit.append(audit)
 			_door_skipped += 1
+			print("NAV_DOOR_SKIP actor=%s class=%s mid=(0.00,0.00,0.00) normal=(0.000,0.000,0.000) reason=no_leaves" % [actor, actor_class])
 			continue
 		mid /= float(doors.size())
+		audit["mid"] = mid
+		if normal.length() < 0.001:
+			audit["reason"] = "no_leaf_normal"
+			_door_audit.append(audit)
+			_door_skipped += 1
+			print("NAV_DOOR_SKIP actor=%s class=%s mid=(%.2f,%.2f,%.2f) normal=(0.000,0.000,0.000) reason=no_leaf_normal" % [
+				actor, actor_class, mid.x, mid.y, mid.z
+			])
+			continue
 		normal = normal.normalized()
+		audit["normal"] = normal
 		var a := mid + normal * DOOR_SIDE_M
 		var b := mid - normal * DOOR_SIDE_M
 		var sa := NavigationServer3D.map_get_closest_point(map_rid, a)
 		var sb := NavigationServer3D.map_get_closest_point(map_rid, b)
-		if sa.distance_to(a) > DOOR_SNAP_LIMIT_M or sb.distance_to(b) > DOOR_SNAP_LIMIT_M:
+		var dist_a := sa.distance_to(a)
+		var dist_b := sb.distance_to(b)
+		audit["snap_a"] = dist_a
+		audit["snap_b"] = dist_b
+		if dist_a > DOOR_SNAP_LIMIT_M or dist_b > DOOR_SNAP_LIMIT_M:
+			var reason := "snap_a" if dist_a > DOOR_SNAP_LIMIT_M else "snap_b"
+			if dist_a > DOOR_SNAP_LIMIT_M and dist_b > DOOR_SNAP_LIMIT_M:
+				reason = "snap_both"
+			audit["reason"] = reason
+			_door_audit.append(audit)
 			_door_skipped += 1
+			print("NAV_DOOR_SKIP actor=%s class=%s mid=(%.2f,%.2f,%.2f) normal=(%.3f,%.3f,%.3f) reason=%s snap_a=%.2f snap_b=%.2f" % [
+				actor, actor_class, mid.x, mid.y, mid.z, normal.x, normal.y, normal.z,
+				reason, dist_a, dist_b
+			])
 			continue
 		var link := NavigationLink3D.new()
 		link.name = "DoorLink_%s" % actor.replace("/", "_")
@@ -294,17 +373,106 @@ func register_swinging_doors() -> int:
 		link.enabled = _doors_open(doors)
 		add_child(link)
 		_door_links.append({"link": link, "doors": doors, "actor": actor})
+		audit["linked"] = true
+		audit["reason"] = "linked"
+		_door_audit.append(audit)
 		made += 1
+		print("NAV_DOOR_LINK actor=%s class=%s mid=(%.2f,%.2f,%.2f) normal=(%.3f,%.3f,%.3f) snap_a=%.2f snap_b=%.2f enabled=%s" % [
+			actor, actor_class, mid.x, mid.y, mid.z, normal.x, normal.y, normal.z,
+			dist_a, dist_b, str(link.enabled)
+		])
+	_bind_baked_links()
 	if not _door_links.is_empty():
 		set_physics_process(true)
-	print("NAV_DOORS groups=%d links=%d skipped=%d open_now=%d" % [
-		_door_groups, made, _door_skipped, _open_door_link_count()
+	print("NAV_DOORS groups=%d links=%d skipped=%d open_now=%d baked_bound=%d" % [
+		_door_groups, made, _door_skipped, _open_door_link_count(), _baked_bindings.size()
 	])
 	return made
 
 
+## Bind authored baked links that physically cross a linked door. The link's
+## state then follows the door exactly like the generated door link, which is
+## what closes the "always-on baked link can cross a closed prison door" hole.
+func _bind_baked_links() -> void:
+	for rec: Dictionary in _door_audit:
+		if not bool(rec.get("linked", false)):
+			continue
+		var doors: Array = rec.get("doors", [])
+		var mid: Vector3 = rec.get("mid", Vector3.ZERO)
+		var normal: Vector3 = rec.get("normal", Vector3.ZERO)
+		var excluded := ""
+		var cls := str(rec.get("class", "")).to_lower()
+		for fragment: String in DOOR_BINDING_EXCLUDED_CLASS_FRAGMENTS:
+			if cls.contains(fragment):
+				excluded = fragment
+		var candidates: Array[int] = []
+		var bound: Array = []
+		for i in range(_links.size()):
+			if _baked_link_index_bound(i) >= 0:
+				continue
+			var link: NavigationLink3D = _links[i]
+			var link_mid: Vector3 = _link_mids[i]
+			var dist := link_mid.distance_to(mid)
+			if dist > DOOR_BAKED_RADIUS_M:
+				continue
+			var dir := link.end_position - link.start_position
+			if dir.length() < 0.001:
+				continue
+			if absf(dir.normalized().dot(normal)) < DOOR_BAKED_MIN_PARALLEL:
+				continue
+			if excluded != "":
+				candidates.append(i)
+				continue
+			var open := _doors_open(doors)
+			link.enabled = open
+			_baked_bindings.append({
+				"link": link, "index": i, "doors": doors,
+				"actor": str(rec.get("actor", "")), "dist": dist,
+			})
+			bound.append({"index": i, "dist": dist})
+		rec["baked_links"] = bound
+		if not candidates.is_empty() and excluded != "":
+			print("NAV_DOOR_BAKED_SKIP actor=%s class=%s indices=%s reason=window_never_opens" % [
+				str(rec.get("actor", "")), str(rec.get("class", "")), str(candidates)
+			])
+		if not bound.is_empty():
+			var indices: Array[int] = []
+			for b: Dictionary in bound:
+				indices.append(int(b["index"]))
+			print("NAV_DOOR_BAKED actor=%s links=%d indices=%s min_dist=%.2f" % [
+				str(rec.get("actor", "")), bound.size(), str(indices),
+				float(bound[0]["dist"])
+			])
+
+
+## Re-enable every bound baked link before the bindings are rebuilt: the
+## authored link's default is enabled, and a re-registration must not leave a
+## link disabled by a previous door state.
+func _unbind_baked_links() -> void:
+	for rec: Dictionary in _baked_bindings:
+		var link: NavigationLink3D = rec.get("link", null) as NavigationLink3D
+		if link != null and is_instance_valid(link):
+			link.enabled = true
+	_baked_bindings.clear()
+
+
+func _baked_link_index_bound(index: int) -> int:
+	for i in range(_baked_bindings.size()):
+		if int(_baked_bindings[i].get("index", -1)) == index:
+			return i
+	return -1
+
+
 func _physics_process(_delta: float) -> void:
 	for rec: Dictionary in _door_links:
+		var link: NavigationLink3D = rec.get("link", null) as NavigationLink3D
+		if link == null or not is_instance_valid(link):
+			continue
+		var open := _doors_open(rec.get("doors", []) as Array)
+		if link.enabled != open:
+			link.enabled = open
+			_door_toggles += 1
+	for rec: Dictionary in _baked_bindings:
 		var link: NavigationLink3D = rec.get("link", null) as NavigationLink3D
 		if link == null or not is_instance_valid(link):
 			continue
@@ -348,10 +516,13 @@ func clear() -> void:
 	for link: NavigationLink3D in _links:
 		_free_node(link)
 	_links.clear()
+	_link_mids.clear()
 	for rec: Dictionary in _door_links:
 		var door_link: NavigationLink3D = rec.get("link", null) as NavigationLink3D
 		_free_node(door_link)
 	_door_links.clear()
+	_door_audit.clear()
+	_baked_bindings.clear()
 	if _region != null and is_instance_valid(_region):
 		_region.navigation_mesh = null
 		_free_node(_region)
@@ -412,6 +583,47 @@ func door_toggle_count() -> int:
 	return _door_toggles
 
 
+## Read-only audit rows for every door group seen by the last
+## `register_swinging_doors()`. Each row: `actor`, `mid`, `normal`, `leaves`,
+## `linked`, `reason` (`linked`/`no_leaves`/`no_leaf_normal`/`snap_a`/`snap_b`/
+## `snap_both`), `snap_a`, `snap_b`, `baked_links` and the live `doors` array.
+## A probe asserts a route-critical actor is present with `linked == true`
+## instead of trusting the linked total.
+func door_audit() -> Array[Dictionary]:
+	return _door_audit
+
+
+func door_audit_entry(actor: String) -> Dictionary:
+	for rec: Dictionary in _door_audit:
+		if str(rec.get("actor", "")) == actor:
+			return rec
+	return {}
+
+
+func baked_door_binding_count() -> int:
+	return _baked_bindings.size()
+
+
+func baked_door_bindings() -> Array[Dictionary]:
+	return _baked_bindings
+
+
+func is_baked_link_bound(index: int) -> bool:
+	return _baked_link_index_bound(index) >= 0
+
+
+func link_midpoint(index: int) -> Vector3:
+	if index < 0 or index >= _link_mids.size():
+		return Vector3.ZERO
+	return _link_mids[index]
+
+
+func link_at(index: int) -> NavigationLink3D:
+	if index < 0 or index >= _links.size():
+		return null
+	return _links[index]
+
+
 func build_ms() -> int:
 	return _build_ms
 
@@ -442,6 +654,7 @@ func report() -> Dictionary:
 		"door_links": _door_links.size(),
 		"door_skipped": _door_skipped,
 		"door_toggles": _door_toggles,
+		"baked_bound": _baked_bindings.size(),
 		"build_ms": _build_ms,
 		"ready_frames": _ready_frames,
 		"ready_ms": _ready_ms,

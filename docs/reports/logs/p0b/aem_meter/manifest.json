@@ -3,95 +3,95 @@
     "buffer_s": 10.0,
     "channels": 2,
     "driver": "PulseAudio",
-    "dropped_frames": 488960,
+    "dropped_frames": 985600,
     "enabled": true,
     "files": [
-      "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b/captures/aem_meter/audio_on.pcm",
-      "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b/captures/aem_meter/audio_on.wav",
-      "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b/captures/aem_meter/audio_on.json"
+      "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b/captures/aem_meter/audio_on.pcm",
+      "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b/captures/aem_meter/audio_on.wav",
+      "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b/captures/aem_meter/audio_on.json"
     ],
-    "frames": 3145728,
+    "frames": 5989376,
     "marks": [
       {
         "beat": "",
         "frame": 0,
         "label": "capture_start",
-        "msec": 2,
+        "msec": 1,
         "t_s": 0.0,
-        "unix": 1795814374.05605,
+        "unix": 1795861602.99953,
         "window": {
-          "frames": 1449984,
-          "peak_dbfs": -180.0,
-          "rms_dbfs": -180.0,
-          "seconds": 32.8794557823129,
-          "zero_fraction": 1.0
+          "frames": 3117568,
+          "peak_dbfs": -15.6595151535705,
+          "rms_dbfs": -38.6331388927345,
+          "seconds": 70.6931519274376,
+          "zero_fraction": 0.502313822825998
         }
       },
       {
         "beat": "",
-        "frame": 1449984,
+        "frame": 3117568,
         "label": "gate",
-        "msec": 50791,
-        "t_s": 32.8794557823129,
-        "unix": 1795814424.84612,
+        "msec": 93151,
+        "t_s": 70.6931519274376,
+        "unix": 1795861696.15097,
         "window": {
-          "frames": 565248,
-          "peak_dbfs": -15.3700905068923,
-          "rms_dbfs": -33.4859633754279,
-          "seconds": 12.8174149659864,
-          "zero_fraction": 0.202722521795743
+          "frames": 1365504,
+          "peak_dbfs": -26.2974601640974,
+          "rms_dbfs": -40.6184914381788,
+          "seconds": 30.9638095238095,
+          "zero_fraction": 0.00133540436351706
         }
       },
       {
         "beat": "",
-        "frame": 2015232,
+        "frame": 4483072,
         "label": "upper_foyer",
-        "msec": 65170,
-        "t_s": 45.6968707482993,
-        "unix": 1795814439.22565,
+        "msec": 124110,
+        "t_s": 101.656961451247,
+        "unix": 1795861727.11048,
         "window": {
-          "frames": 565248,
-          "peak_dbfs": -16.7714700597316,
-          "rms_dbfs": -36.5926898115096,
-          "seconds": 12.8174149659864,
-          "zero_fraction": 0.00123839447463768
+          "frames": 1442304,
+          "peak_dbfs": -26.8569400749972,
+          "rms_dbfs": -40.6960108619562,
+          "seconds": 32.705306122449,
+          "zero_fraction": 0.00136725683351083
         }
       },
       {
         "beat": "",
-        "frame": 2580480,
+        "frame": 5925376,
         "label": "yaw180",
-        "msec": 78862,
-        "t_s": 58.5142857142857,
-        "unix": 1795814452.91815,
+        "msec": 156846,
+        "t_s": 134.362267573696,
+        "unix": 1795861759.84643,
         "window": {
-          "frames": 565248,
-          "peak_dbfs": -26.9272715494539,
-          "rms_dbfs": -40.9001405518698,
-          "seconds": 12.8174149659864,
-          "zero_fraction": 0.00146749745244565
+          "frames": 64000,
+          "peak_dbfs": -28.7761898257875,
+          "rms_dbfs": -40.2986686729551,
+          "seconds": 1.45124716553288,
+          "zero_fraction": 0.0011484375
         }
       }
     ],
-    "pcm": "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b/captures/aem_meter/audio_on.pcm",
-    "peak_dbfs": -15.3700905068923,
-    "pushed_frames": 3660800,
+    "pcm": "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b/captures/aem_meter/audio_on.pcm",
+    "peak_dbfs": -15.6595151535705,
+    "pushed_frames": 5993984,
     "reason": "",
     "sample_rate": 44100,
     "schema": "tat2.audio_capture/1",
-    "seconds": 71.3317006802721,
-    "sidecar": "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b/captures/aem_meter/audio_on.json",
-    "started_at_utc": "2026-11-27T21:19:34",
-    "stopped_at_utc": "2026-11-27T21:21:08",
+    "seconds": 135.813514739229,
+    "sidecar": "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b/captures/aem_meter/audio_on.json",
+    "started_at_utc": "2026-11-28T10:26:42",
+    "stopped_at_utc": "2026-11-28T10:29:21",
     "total": {
-      "frames": 3145728,
-      "peak_dbfs": -15.3700905068923,
-      "rms_dbfs": -38.7125854724965,
-      "seconds": 71.3317006802721,
-      "zero_fraction": 0.49785041809082
+      "frames": 5989376,
+      "peak_dbfs": -15.6595151535705,
+      "rms_dbfs": -39.4849911401776,
+      "seconds": 135.813514739229,
+      "zero_fraction": 0.262108523492264
     },
     "truncated": false,
-    "wav": "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b/captures/aem_meter/audio_on.wav"
+    "wav": "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b/captures/aem_meter/audio_on.wav"
   },
   "beam_card": {
     "hidden": 0,
@@ -104,7 +104,7 @@
     "audio_mix_rate": 44100.0,
     "cmdline": [
       "--script",
-      "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b_capture.gd"
+      "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b_capture.gd"
     ],
     "display_server": "X11",
     "godot": "4.7.2-stable (official)",
@@ -120,12 +120,12 @@
     "TAT2_BEAM_CARD": "on",
     "XDG_SESSION_TYPE": "wayland"
   },
-  "finished_at_utc": "2026-11-27T21:21:08",
+  "finished_at_utc": "2026-11-28T10:29:21",
   "git": {
-    "branch": "phase12-integration",
+    "branch": "teamwork/20261127-1810-phase3-gpu-session",
     "dirty": true,
-    "sha": "cb1941568467e7fc188ac60c5615b9170475e283",
-    "sha_short": "cb1941568467"
+    "sha": "649bece59db86b5656e76f89b788991d8124e130",
+    "sha_short": "649bece59db8"
   },
   "gpu": {
     "available": true,
@@ -135,10 +135,10 @@
       [
         "NVIDIA GeForce RTX 4070 Laptop GPU",
         "620.73.04",
-        "74.44",
-        "5906",
-        "61",
-        "2550"
+        "42.11",
+        "2561",
+        "0",
+        "1980"
       ]
     ],
     "used_by_capture": true
@@ -168,11 +168,12 @@
     "The fixed-pose run marks poses, not route beats. A 27-beat route run must call mark_beat(S01..S27); p0b_audio_stats.py --route prints the reference table.",
     "Reference audio is documented RMS/peak dBFS (not LUFS); the script computes RMS/peak only and states the clip's -43.9 LUFS as context."
   ],
-  "out_dir": "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b/captures/aem_meter",
+  "out_dir": "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b/captures/aem_meter",
   "poses": [
     {
       "beat": "S13",
-      "duration_ms": 13565,
+      "decision": "",
+      "duration_ms": 31709,
       "eye": [
         10.0,
         24.0,
@@ -180,20 +181,21 @@
       ],
       "fov_vertical_deg": 54.54,
       "frames_mean": [
-        8.81536970940964,
-        8.81543018008631,
-        8.81477622946056,
-        8.81619648411037,
-        8.81669210911985
+        8.81780676156421,
+        8.81974484028951,
+        8.81904275695186,
+        8.81837585879046,
+        8.8192122708358
       ],
       "ground_hit": [],
       "grounded": false,
       "id": "gate",
-      "median_index": 1,
+      "median_index": 2,
       "median_lt8": 74.2700617283951,
-      "median_mean": 8.81543018008631,
+      "median_mean": 8.81904275695186,
       "median_peak": 238.830000963807,
       "note": "street-side gate approach (W9 grade-probe pose); reference KF16 is the gate/headlights keyframe",
+      "pitch_deg": 3.18,
       "png": "build/qa/p0b/captures/aem_meter/gate.png",
       "png_size": [
         1920,
@@ -204,6 +206,8 @@
         1920,
         1080
       ],
+      "settle_seconds": 25.0,
+      "settle_waited_ms": 31089,
       "status": "captured",
       "target": [
         10.0,
@@ -213,7 +217,8 @@
     },
     {
       "beat": "S24",
-      "duration_ms": 12937,
+      "decision": "",
+      "duration_ms": 30851,
       "eye": [
         27.0,
         29.6700000762939,
@@ -221,20 +226,21 @@
       ],
       "fov_vertical_deg": 54.54,
       "frames_mean": [
-        14.460199602874,
-        14.4600728358757,
-        14.4600391167332,
-        14.4599788466984,
-        14.4600001584189
+        14.4676968022459,
+        14.4677472960741,
+        14.4678556679923,
+        14.4676678747834,
+        14.4674889318422
       ],
       "ground_hit": [],
       "grounded": false,
       "id": "upper_foyer",
-      "median_index": 2,
-      "median_lt8": 59.358024691358,
-      "median_mean": 14.4600391167332,
+      "median_index": 0,
+      "median_lt8": 59.3240740740741,
+      "median_mean": 14.4676968022459,
       "median_peak": 255.0,
       "note": "authored upper-foyer slot looking into the hall; KF27 is the foyer security-beam keyframe",
+      "pitch_deg": 0.0,
       "png": "build/qa/p0b/captures/aem_meter/upper_foyer.png",
       "png_size": [
         1920,
@@ -245,6 +251,8 @@
         1920,
         1080
       ],
+      "settle_seconds": 25.0,
+      "settle_waited_ms": 29923,
       "status": "captured",
       "target": [
         27.0,
@@ -254,7 +262,8 @@
     },
     {
       "beat": "S24",
-      "duration_ms": 14588,
+      "decision": "",
+      "duration_ms": 32506,
       "eye": [
         27.0,
         29.6700000762939,
@@ -262,20 +271,21 @@
       ],
       "fov_vertical_deg": 54.54,
       "frames_mean": [
-        13.41580401768,
-        13.4154814328317,
-        13.4130782845394,
-        13.4127567181747,
-        13.4123302983942
+        13.4154228138079,
+        13.4153896425169,
+        13.4153234156554,
+        13.4154070345094,
+        13.4152496116608
       ],
       "ground_hit": [],
       "grounded": false,
       "id": "yaw180",
-      "median_index": 2,
-      "median_lt8": 53.7908950617284,
-      "median_mean": 13.4130782845394,
+      "median_index": 1,
+      "median_lt8": 53.7924382716049,
+      "median_mean": 13.4153896425169,
       "median_peak": 255.0,
       "note": "same slot turned 180 deg; W9-P1 showed the armchair/ottoman/vitrine from here",
+      "pitch_deg": 0.0,
       "png": "build/qa/p0b/captures/aem_meter/yaw180.png",
       "png_size": [
         1920,
@@ -286,6 +296,8 @@
         1920,
         1080
       ],
+      "settle_seconds": 25.0,
+      "settle_waited_ms": 31399,
       "status": "captured",
       "target": [
         27.0,
@@ -294,7 +306,7 @@
       ]
     }
   ],
-  "repo_root": "/home/john/.local/share/opencode/worktree/318f41/phase12-integration",
+  "repo_root": "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session",
   "run_id": "aem_meter",
   "schema": "tat2.p0b_capture/1",
   "seed": {
@@ -306,8 +318,11 @@
   "settle": {
     "capture_frames": 5,
     "frames": 60,
+    "min_seconds": 25.0,
+    "mode": "frames+extra",
+    "seconds": 25.0,
     "selector": "median-mean"
   },
-  "started_at_utc": "2026-11-27T21:19:34",
+  "started_at_utc": "2026-11-28T10:26:43",
   "status": "captured"
 }

@@ -3,46 +3,46 @@ Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 TAT-2 Loc: reverse map built from sources.json (3404 keys)
 TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
 INPUT_TABLE source=generated rows=91 shipping=91 actions=52
 INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
-P0B_START mode=self-test run=20261127T210309Z_cb1941568467_on poses=gate,upper_foyer,yaw180,foyer_beam,lounge,lounge_beam,beam_close beam=on seed=derived fov=54.54 size=(1920, 1080) out=/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b/selftest manifest=/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b/selftest/manifest.json
-P0B_SELFTEST ok seven pose ids (incl. KF27 foyer_beam + Lounge extra)
+P0B_START mode=self-test run=20261128T101834Z_649bece59db8_on poses=gate,upper_foyer,yaw180,foyer_beam,foyer_beam_wide,lounge,lounge_beam,beam_close,gap_view beam=on seed=derived settle_s=0.00 fov=54.54 size=(1920, 1080) out=/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b/selftest manifest=/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b/selftest/manifest.json
+P0B_SELFTEST ok nine pose ids (incl. KF27 foyer_beam/wide, gap view + Lounge extra)
 P0B_SELFTEST ok shipped vertical FOV is 54.54
 P0B_SELFTEST ok resolution is 1920x1080
 P0B_SELFTEST ok settle 60 + 5 frames
 P0B_SELFTEST ok official clip seed recorded
 P0B_SELFTEST ok foyer_beam is the KF27 cue (27,29.67,-55) -> (23.27,29.76,-57.4)
 P0B_SELFTEST ok beam_close is the Lounge C_57 extra, not a KF27/S24 frame
-P0B_SELFTEST ok every pose has a distinct eye/target, beat and reference keyframe
-P0B_SELFTEST ok pose selection is non-empty
+P0B_SELFTEST ok poses valid: distinct eye/target, beat/ref; foyer_beam_wide card ~18/40; gap_view start+eye, PORT_DECISION, pitch -42..-53
+P0B_SELFTEST ok pose selection is non-empty; --settle-seconds parses and enforces 0 or >=25 s
 P0B_SELFTEST ok audio_capture.gd loads
 AUDIO_CAPTURE start enabled=false reason=dummy_audio_driver driver=Dummy rate=44100
 WARNING: AudioCaptureTap.mark_beat: unknown beat S99 (expected S01..S27)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
          [0] mark_beat (res://src/core/audio_capture.gd:230)
-         [1] _self_test (/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b_capture.gd:557)
-         [2] _wait (/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b_capture.gd:143)
+         [1] _self_test (/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b_capture.gd:716)
+         [2] _wait (/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b_capture.gd:192)
 AUDIO_CAPTURE stop enabled=false reason=dummy_audio_driver frames=0
 P0B_SELFTEST ok mark_beat rejects S99
 P0B_SELFTEST ok mark_beat accepts S24

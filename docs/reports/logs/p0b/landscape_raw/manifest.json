@@ -3,12 +3,12 @@
     "buffer_s": 10.0,
     "channels": 2,
     "driver": "PulseAudio",
-    "dropped_frames": 155136,
+    "dropped_frames": 1062912,
     "enabled": true,
     "files": [
-      "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b/captures/landscape_raw/audio_on.pcm",
-      "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b/captures/landscape_raw/audio_on.wav",
-      "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b/captures/landscape_raw/audio_on.json"
+      "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b/captures/landscape_raw/audio_on.pcm",
+      "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b/captures/landscape_raw/audio_on.wav",
+      "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b/captures/landscape_raw/audio_on.json"
     ],
     "frames": 2015232,
     "marks": [
@@ -16,52 +16,52 @@
         "beat": "",
         "frame": 0,
         "label": "capture_start",
-        "msec": 2,
+        "msec": 1,
         "t_s": 0.0,
-        "unix": 1795813465.0868,
+        "unix": 1795861360.62663,
         "window": {
-          "frames": 1449984,
-          "peak_dbfs": -180.0,
-          "rms_dbfs": -180.0,
-          "seconds": 32.8794557823129,
-          "zero_fraction": 1.0
+          "frames": 1941504,
+          "peak_dbfs": -15.7046618878205,
+          "rms_dbfs": -39.1838700865223,
+          "seconds": 44.0250340136054,
+          "zero_fraction": 0.805798236830828
         }
       },
       {
         "beat": "",
-        "frame": 1449984,
-        "label": "upper_foyer",
-        "msec": 44802,
-        "t_s": 32.8794557823129,
-        "unix": 1795813509.88788,
+        "frame": 1941504,
+        "label": "gap_view",
+        "msec": 68907,
+        "t_s": 44.0250340136054,
+        "unix": 1795861429.53398,
         "window": {
-          "frames": 565248,
-          "peak_dbfs": -15.4954301946453,
-          "rms_dbfs": -33.181203494509,
-          "seconds": 12.8174149659864,
-          "zero_fraction": 0.202664140341938
+          "frames": 73728,
+          "peak_dbfs": -17.9292202918957,
+          "rms_dbfs": -34.7985156452316,
+          "seconds": 1.67183673469388,
+          "zero_fraction": 0.00111219618055556
         }
       }
     ],
-    "pcm": "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b/captures/landscape_raw/audio_on.pcm",
-    "peak_dbfs": -15.4954301946453,
-    "pushed_frames": 2130944,
+    "pcm": "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b/captures/landscape_raw/audio_on.pcm",
+    "peak_dbfs": -15.7046618878205,
+    "pushed_frames": 2047488,
     "reason": "",
     "sample_rate": 44100,
     "schema": "tat2.audio_capture/1",
     "seconds": 45.6968707482993,
-    "sidecar": "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b/captures/landscape_raw/audio_on.json",
-    "started_at_utc": "2026-11-27T21:04:25",
-    "stopped_at_utc": "2026-11-27T21:05:17",
+    "sidecar": "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b/captures/landscape_raw/audio_on.json",
+    "started_at_utc": "2026-11-28T10:22:40",
+    "stopped_at_utc": "2026-11-28T10:23:51",
     "total": {
       "frames": 2015232,
-      "peak_dbfs": -15.4954301946453,
-      "rms_dbfs": -38.7020636581702,
+      "peak_dbfs": -15.7046618878205,
+      "rms_dbfs": -38.9151074742753,
       "seconds": 45.6968707482993,
-      "zero_fraction": 0.776357014973958
+      "zero_fraction": 0.776358503636306
     },
     "truncated": false,
-    "wav": "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b/captures/landscape_raw/audio_on.wav"
+    "wav": "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b/captures/landscape_raw/audio_on.wav"
   },
   "beam_card": {
     "hidden": 0,
@@ -74,7 +74,7 @@
     "audio_mix_rate": 44100.0,
     "cmdline": [
       "--script",
-      "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b_capture.gd"
+      "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b_capture.gd"
     ],
     "display_server": "X11",
     "godot": "4.7.2-stable (official)",
@@ -90,12 +90,12 @@
     "TAT2_BEAM_CARD": "on",
     "XDG_SESSION_TYPE": "wayland"
   },
-  "finished_at_utc": "2026-11-27T21:05:17",
+  "finished_at_utc": "2026-11-28T10:23:51",
   "git": {
-    "branch": "phase12-integration",
+    "branch": "teamwork/20261127-1810-phase3-gpu-session",
     "dirty": true,
-    "sha": "cb1941568467e7fc188ac60c5615b9170475e283",
-    "sha_short": "cb1941568467"
+    "sha": "649bece59db86b5656e76f89b788991d8124e130",
+    "sha_short": "649bece59db8"
   },
   "gpu": {
     "available": true,
@@ -105,9 +105,9 @@
       [
         "NVIDIA GeForce RTX 4070 Laptop GPU",
         "620.73.04",
-        "70.09",
-        "5857",
-        "17",
+        "44.45",
+        "2561",
+        "0",
         "1980"
       ]
     ],
@@ -138,51 +138,60 @@
     "The fixed-pose run marks poses, not route beats. A 27-beat route run must call mark_beat(S01..S27); p0b_audio_stats.py --route prints the reference table.",
     "Reference audio is documented RMS/peak dBFS (not LUFS); the script computes RMS/peak only and states the clip's -43.9 LUFS as context."
   ],
-  "out_dir": "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b/captures/landscape_raw",
+  "out_dir": "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b/captures/landscape_raw",
   "poses": [
     {
-      "beat": "S24",
-      "duration_ms": 6753,
+      "authored_start": [
+        127.274696350098,
+        25.4694004058838,
+        -5.32959985733032
+      ],
+      "beat": "S12",
+      "decision": "PORT_DECISION",
+      "duration_ms": 6360,
       "eye": [
-        27.0,
-        29.6700000762939,
-        -50.0
+        127.274696350098,
+        27.1381492614746,
+        -5.32959985733032
       ],
       "fov_vertical_deg": 54.54,
       "frames_mean": [
-        39.7525867389253,
-        39.7526169704095,
-        39.757780110932,
-        39.757693552287,
-        39.7577803192676
+        30.3094137959539,
+        30.3087996524278,
+        30.3089937651012,
+        30.3094884950127,
+        30.3094013499551
       ],
       "ground_hit": [],
       "grounded": false,
-      "id": "upper_foyer",
-      "median_index": 3,
-      "median_lt8": 4.61496913580247,
-      "median_mean": 39.757693552287,
-      "median_peak": 255.0,
-      "note": "authored upper-foyer slot looking into the hall; KF27 is the foyer security-beam keyframe",
-      "png": "build/qa/p0b/captures/landscape_raw/upper_foyer.png",
+      "id": "gap_view",
+      "median_index": 4,
+      "median_lt8": 8.18518518518519,
+      "median_mean": 30.3094013499551,
+      "median_peak": 238.830000963807,
+      "note": "landscape-gap A/B view for the P4.4 discard|raw|off comparison: eye = authored SafeRoomPlayerStart_0 x/z + player eye height (1.66875), target = exact authored gap centroid (120.25,18.56,-6.815), so the aim is exact (0.00 % offset). Derived pitch -50.0702 deg (the -48.6 deg figure would need a 26.7041 m eye); labelled PORT_DECISION (no authored camera aims at the gap).",
+      "pitch_deg": -50.07,
+      "png": "build/qa/p0b/captures/landscape_raw/gap_view.png",
       "png_size": [
         1920,
         1080
       ],
-      "ref_keyframe": "KF27",
+      "ref_keyframe": "EXTRA",
       "resolution": [
         1920,
         1080
       ],
+      "settle_seconds": 0.0,
+      "settle_waited_ms": 5164,
       "status": "captured",
       "target": [
-        27.0,
-        29.6700000762939,
-        -60.0
+        120.25,
+        18.5599994659424,
+        -6.81500005722046
       ]
     }
   ],
-  "repo_root": "/home/john/.local/share/opencode/worktree/318f41/phase12-integration",
+  "repo_root": "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session",
   "run_id": "landscape_raw",
   "schema": "tat2.p0b_capture/1",
   "seed": {
@@ -194,8 +203,11 @@
   "settle": {
     "capture_frames": 5,
     "frames": 60,
+    "min_seconds": 25.0,
+    "mode": "frames",
+    "seconds": 0.0,
     "selector": "median-mean"
   },
-  "started_at_utc": "2026-11-27T21:04:25",
+  "started_at_utc": "2026-11-28T10:22:40",
   "status": "captured"
 }

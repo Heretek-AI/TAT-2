@@ -7,6 +7,16 @@ extends SceneTree
 ## keeps the intact leaf (SM_ChestTrunkALid / SM_DisplayCaseADoor) visible; on
 ## break the runtime hides the leaf and shows the authored broken overlay.
 ##
+## Phase 3B.4 (2026-11-28) read the real
+## `Destructibles/GeometryCollections/GC_ChestTrunkALid` dump: it has ONE
+## AutoInstanceMeshes entry — the intact `SM_ChestTrunkALid`, NumInstances=51
+## over the collection's 51 convex particles (52 transforms, RootIndex 0) — and
+## no separate fracture-piece mesh (`bHasMeshData=false`; only Nanite data). A
+## chest must therefore use the labelled `SM_ChestTrunkALid_Broken` fallback:
+## reusing the intact lid would draw an unbroken lid after the smash. The probe
+## fails on any chest overlay row whose mesh is the intact lid, and on a
+## `fallback_broken` count that does not match the 93 authored collection rows.
+##
 ## Phase 2 G-2: the bookcase's two intact glass doors are ALREADY static-batch
 ## geometry (measured: every authored broken overlay has one intact pane at
 ## 0.472 m, second-nearest >= 0.838 m). The loader therefore binds the existing
@@ -93,6 +103,11 @@ func _read_json(path: String) -> Dictionary:
 	return parsed as Dictionary if parsed is Dictionary else {}
 
 
+## UE mesh path -> file stem (drop the trailing `.2`/`.0` index or extension).
+func _mesh_stem(path: String) -> String:
+	return path.get_file().split(".")[0]
+
+
 func _collect_levels(dir_path: String, out: Array[String]) -> void:
 	var da: DirAccess = DirAccess.open(dir_path)
 	if da == null:
@@ -159,6 +174,10 @@ func _payload_census() -> Dictionary:
 		"fallback_broken": 0,
 		"sibling_smc": 0,
 		"unresolved": 0,
+		"chest_collection_rows": 0,
+		"chest_overlay_uses_intact": 0,
+		"broken_fallback_rows": 0,
+		"broken_fallback_mesh_ok": 0,
 		"stats_components": 0,
 		"stats_hidden": 0,
 		"stats_leaves": 0,
@@ -195,6 +214,18 @@ func _payload_census() -> Dictionary:
 					out["fallback_broken"] = int(out["fallback_broken"]) + 1
 				"sibling_smc":
 					out["sibling_smc"] = int(out["sibling_smc"]) + 1
+			# Phase 3B.4: the authored GC_ChestTrunkALid dump auto-instances ONLY
+			# its intact lid (SM_ChestTrunkALid x51) and has no fracture mesh, so
+			# a chest overlay that names that mesh is the intact lid, not a
+			# broken state. Count it so the probe can fail with the reason.
+			if str(g.get("collection", "")) == "GC_ChestTrunkALid":
+				out["chest_collection_rows"] = int(out["chest_collection_rows"]) + 1
+				if _mesh_stem(mesh) == "SM_ChestTrunkALid":
+					out["chest_overlay_uses_intact"] = int(out["chest_overlay_uses_intact"]) + 1
+			if str(g.get("source", "")) == "fallback_broken":
+				out["broken_fallback_rows"] = int(out["broken_fallback_rows"]) + 1
+				if _mesh_stem(mesh).ends_with("_Broken"):
+					out["broken_fallback_mesh_ok"] = int(out["broken_fallback_mesh_ok"]) + 1
 		for l_var: Variant in (d.get("gc_leaves", []) as Array):
 			if l_var is Dictionary:
 				out["leaves"] = int(out["leaves"]) + 1
@@ -292,10 +323,29 @@ func _run() -> void:
 	_check(int(census["leaves"]) == EXPECTED_PLACEMENT_LEAVES, "intact leaf placements",
 		"%d (expected %d = 166 authored + 2 copies)" % [int(census["leaves"]), EXPECTED_PLACEMENT_LEAVES])
 	_check(int(census["stats_fallback_broken"]) == EXPECTED_FALLBACK_BROKEN, "GC_ChestTrunkALid labelled fallback",
-		"%d (expected %d, no dump)" % [int(census["stats_fallback_broken"]), EXPECTED_FALLBACK_BROKEN])
+		"%d (expected %d; the authored dump auto-instances only the intact lid, no fracture mesh)" % [int(census["stats_fallback_broken"]), EXPECTED_FALLBACK_BROKEN])
 	_check(int(census["stats_sibling_smc"]) == EXPECTED_SIBLING_SMC, "bookcase GC sibling-SMC fallback",
-		"%d (expected %d, no AutoInstanceMeshes mesh)" % [int(census["stats_sibling_smc"]), EXPECTED_SIBLING_SMC])
+		"%d (expected %d; GC_BookCaseUpperB_DoorWindow_01 authors a null AutoInstanceMeshes mesh)" % [int(census["stats_sibling_smc"]), EXPECTED_SIBLING_SMC])
 	_check(int(census["unresolved"]) == 0, "unresolved GC records", "%d" % int(census["unresolved"]))
+	# Phase 3B.4: pin the fallback to authored truth. The real
+	# Destructibles/GeometryCollections/GC_ChestTrunkALid dump carries ONE
+	# AutoInstanceMeshes entry (SM_ChestTrunkALid, NumInstances=51) and no
+	# separate fracture mesh, so 93 chest overlays must stay on the labelled
+	# SM_ChestTrunkALid_Broken fallback. If the producer starts emitting the
+	# intact lid as the broken overlay (measured in the Phase 3B regen before
+	# the fix), the count moves and this check names the reason instead of
+	# silently accepting an unbroken chest.
+	_check(int(census["chest_collection_rows"]) == EXPECTED_FALLBACK_BROKEN,
+		"GC_ChestTrunkALid overlay rows",
+		"%d (expected %d)" % [int(census["chest_collection_rows"]), EXPECTED_FALLBACK_BROKEN])
+	_check(int(census["chest_overlay_uses_intact"]) == 0,
+		"chest broken overlay never reuses the intact lid mesh",
+		"%d row(s) point at SM_ChestTrunkALid; the authored collection auto-instances only the intact lid, so that would draw an unbroken chest" % int(census["chest_overlay_uses_intact"]))
+	_check(int(census["broken_fallback_rows"]) == EXPECTED_FALLBACK_BROKEN
+			and int(census["broken_fallback_rows"]) == int(census["stats_fallback_broken"])
+			and int(census["broken_fallback_mesh_ok"]) == int(census["broken_fallback_rows"]),
+		"fallback rows use the authored _Broken sibling mesh",
+		"rows=%d _Broken=%d authored=%d expected=%d" % [int(census["broken_fallback_rows"]), int(census["broken_fallback_mesh_ok"]), int(census["stats_fallback_broken"]), EXPECTED_FALLBACK_BROKEN])
 
 	# --- 2. Real Guildhall_Loot load, GC layers on --------------------------
 	OS.set_environment(ENV_GC_LAYERS, "on")

@@ -193,10 +193,15 @@ against itself (`--reference-only`); the first port-side `foyer_beam` capture is
   action, `Glass` is additive-only). `blood_moon` rain 10.0 now goes through the
   one documented `WeatherProfile.rain_intensity_01()` converter (saturates to
   1.0 with a warning; the old 0..1 / 0..1.5 / 0..1 clamps are gone).
-- **GC/destructibles:** `Destructibles/` is still absent from the shared tree;
-  the 93-chest fallback is a prediction, not a claim. Bookcases/safes landed;
-  the authored damage-driven break remains open and hold-F `break_container` is
-  a labelled `PORT_DECISION`.
+- **GC/destructibles:** `Destructibles/` is **extracted and confirmed**
+  (Phase 3B.4, 2026-11-28). `GC_ChestTrunkALid` has one `AutoInstanceMeshes`
+  entry — the intact `SM_ChestTrunkALid`, `NumInstances: 51` over 51 convex
+  particles — and **no separate fracture-piece mesh**, so the 93 chests stay on
+  the labelled `SM_ChestTrunkALid_Broken` fallback (`fallback_broken=93`,
+  `sibling_smc=5`, `unresolved=0`; probe 55 checks). Bookcases/safes landed; the
+  authored damage-driven break remains open and hold-F `break_container` is a
+  labelled `PORT_DECISION`. Evidence:
+  [`reports/gc-confirm-20261128.md`](reports/gc-confirm-20261128.md).
 - **Navmesh N-P3:** default is `off`; 38/80 door groups were skipped by the
   2.5 m snap; the prison baked link is one-way; `NavLink_71` is ~6 m off the
   mesh. Default-on needs a trajectory/full-route delta and a per-actor door

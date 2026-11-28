@@ -41,8 +41,9 @@ LOOT_GOAL_QUESTS = {
 }
 
 # Canonical mission row per map: the Vault rows carry the shipped
-# 7200/2700/1800 limits; the LootTheRoom rows are side-mission variants and
-# are intentionally NOT used here.
+# 7200/2700/1800 limits. The Cleanout (`Mission.Guildhall.LootTheRoom`) row is
+# NOT a map row and must never replace this map row (that would change the
+# contract timer); it is emitted as its own `mission_durations` entry below.
 MISSIONS = {
     "guildhall": (
         TABLES / "DT_Missions_Guildhall.json",
@@ -54,6 +55,17 @@ MISSIONS = {
         "Mission.Tutorial.ThievesDen",
     ),
     "ftue": (TABLES / "DT_Missions_Tutorial.json", "Mission.Tutorial.Single"),
+}
+
+# Side missions that authors a real match window but are not a map's canonical
+# row. `Mission.Guildhall.LootTheRoom` is the Cleanout Heist free-play row
+# (authored 3300/1200/1200 s); it is keyed by its mission id so a consumer can
+# resolve the Cleanout window without pretending it is the Guildhall map row.
+SIDE_MISSIONS = {
+    "Mission.Guildhall.LootTheRoom": (
+        TABLES / "DT_Missions_Guildhall.json",
+        "Mission.Guildhall.LootTheRoom",
+    ),
 }
 
 
@@ -158,6 +170,41 @@ def qg_loot_goals(path: Path) -> list[int]:
     return [amount for _, amount in sorted(set(found))]
 
 
+def _rel(path: Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
+def mission_row_entry(path: Path, row_key: str) -> dict:
+    """Authored match record for one DT_Missions row.
+
+    Kept a function so the canonical map row and the side-mission row use the
+    same parse (and a missing row is a visible zero-limit, never an invented
+    duration)."""
+    data = json.loads(path.read_text())
+    row = (data.get("rows") or {}).get(row_key, {})
+    durations = [
+        float(row.get("MatchDurationsByDifficulty", 0.0)),
+        float(row.get("MatchDurationsByDifficulty[1]", 0.0)),
+        float(row.get("MatchDurationsByDifficulty[2]", 0.0)),
+    ]
+    qg = row.get("QuestGraph") or {}
+    reward = money_reward(row)
+    return {
+        "durations": durations,
+        "quest_graph_ue_path": str(qg.get("AssetPathName", ""))
+        if isinstance(qg, dict)
+        else "",
+        "title_text": text_of(row.get("Title")),
+        "description_text": text_of(row.get("Description")),
+        "reward_money": reward,
+        "source_table": _rel(path),
+        "source_row": row_key,
+    }
+
+
 def main() -> None:
     rows, source_rel = load_contract_rows()
     contracts = []
@@ -242,31 +289,20 @@ def main() -> None:
     mission_durations: dict = {}
     mission_rewards: dict = {}
     for map_id, (path, row_key) in MISSIONS.items():
-        data = json.loads(path.read_text())
-        row = (data.get("rows") or {}).get(row_key, {})
-        durations = [
-            float(row.get("MatchDurationsByDifficulty", 0.0)),
-            float(row.get("MatchDurationsByDifficulty[1]", 0.0)),
-            float(row.get("MatchDurationsByDifficulty[2]", 0.0)),
-        ]
-        qg = row.get("QuestGraph") or {}
-        reward = money_reward(row)
+        entry = mission_row_entry(path, row_key)
+        mission_durations[map_id] = entry
         mission_rewards[map_id] = {
-            "money": reward,
-            "source_table": str(path.relative_to(ROOT)),
+            "money": entry["reward_money"],
+            "source_table": entry["source_table"],
             "source_row": row_key,
         }
-        mission_durations[map_id] = {
-            "durations": durations,
-            "quest_graph_ue_path": str(qg.get("AssetPathName", ""))
-            if isinstance(qg, dict)
-            else "",
-            "title_text": text_of(row.get("Title")),
-            "description_text": text_of(row.get("Description")),
-            "reward_money": reward,
-            "source_table": str(path.relative_to(ROOT)),
-            "source_row": row_key,
-        }
+    # Side missions keep their own row: never merged into a map entry, never
+    # silently dropped (the old comment treated them as unusable variants).
+    for mission_id, (path, row_key) in SIDE_MISSIONS.items():
+        entry = mission_row_entry(path, row_key)
+        entry["mission_id"] = row_key
+        entry["kind"] = "side_mission"
+        mission_durations[mission_id] = entry
     # TAT-2 expansion maps reuse the FTUE (zero-limit) timing: 0 = unlimited.
     for alias in ("jaspering", "jaspering_hall"):
         mission_durations[alias] = dict(mission_durations["ftue"])

@@ -81,3 +81,30 @@ suite 111 fails=4/exit 1; the string-only census rule → suite 110 fails=3/exit
 Suite 110 `fails=0 checks=214`, suite 111 `fails=0 checks=65`, probe PASS,
 `run_tests` fails=0 (328 PASS), compile 231/0, `make audit` PASS. No default
 flip, no cutover, trace budget untouched.
+
+## Phase 3B.4 — gc-confirm (worker summary, 2026-11-28)
+
+Confirmed the 93 `fallback_broken` chest rows from the real Destructibles dump:
+`GC_ChestTrunkALid` has exactly one `AutoInstanceMeshes` entry — the intact
+`SM_ChestTrunkALid`, `NumInstances: 51` over the collection's 51 convex hulls
+(52 transforms, `RootIndex 0`) — and no separate fracture mesh (`bHasMeshData:
+false`, only Nanite data; `GC_AppleA`/`GC_BottleWineA` show the same species at
+7/65 instances). So the labelled `SM_ChestTrunkALid_Broken` fallback is correct.
+The extraction had exposed a producer regression: with the dump visible, the
+AttachParent-only intact-stem guard never fired (the chest GC attaches to
+`DefaultSceneRoot`), so all 93 chests used the intact lid as the broken overlay
+(`fallback_broken` 93 → 0). `tools/parse_tables.py` now skips any
+`AutoInstanceMeshes` mesh that is one of the owning actor's own static meshes;
+a private-root regeneration restores `components=336 hidden=336 leaves=166
+fallback_broken=93 sibling_smc=5 unresolved=0` and changes exactly those 93 rows
+and nothing else. `probe_gc_destruction.gd` keeps the numeric pins (93/5/0) and
+adds 3 checks (52 → 55) that fail with the reason when the chest overlay reuses
+the intact lid or the count moves. Measured: probe 55/0 on the fixed payload
+(55/3 on the stale shared payload — the detector firing), `test_gc_break_trigger`
+21/0, E2E a2 22/22, E2E p2 17/17 with the fixed data, compile 232/0,
+`run_tests` fails=0, `test_parse_nav.py` exit 0. Hold-F `break_container` stays a
+labelled PORT_DECISION; no damage/health path added, no generated data written.
+The shared `game/data/generated` still carries the stale 0 count, so `make
+audit`/the probe/p2 are red in this branch until the integrator runs
+`parse_tables.py` + `audit-refresh-stamps` — flagged in
+`docs/reports/gc-confirm-20261128.md`.

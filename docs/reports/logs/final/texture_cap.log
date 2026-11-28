@@ -1,10 +1,10 @@
 == FINAL_GATE texture_cap
 COMMAND: make texture-cap-check
-CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
-STARTED: 2026-11-27T17:28:52-05:00
+CWD: .
+STARTED: 2026-11-27T22:11:25-05:00
 
 python3 tools/prebake_texture_cap.py --check --cap 1024
-repo: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
+repo: /home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/baseline-run
 targets: 1567 (materials.json 1522, code 102, scenes 0, unique 1567, dangling literals skipped 4)
 mode: CHECK (cap 1024 px long edge)
 capped: 796
@@ -15,4 +15,4 @@ out-of-scope over-cap: 262 (ui 80, other 182)
 texture cap check: OK
 
 EXIT: 0
-FINISHED: 2026-11-27T17:28:53-05:00
+FINISHED: 2026-11-27T22:11:26-05:00

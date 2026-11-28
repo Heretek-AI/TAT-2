@@ -25,5 +25,5 @@ TAT-2 Loc: reverse map built from sources.json (3404 keys)
 TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
 INPUT_TABLE source=generated rows=91 shipping=91 actions=52
 INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
-P0B_START mode=dry-run run=20261127T222506Z_60474c004d21_on poses=gate,upper_foyer,yaw180,foyer_beam,lounge,lounge_beam,beam_close beam=on seed=derived fov=54.54 size=(1920, 1080) out=/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b/dry-run manifest=/home/john/.local/share/opencode/worktree/318f41/phase12-integration/docs/reports/logs/final/dry-run/manifest.json
-P0B_DRY_RUN manifest=/home/john/.local/share/opencode/worktree/318f41/phase12-integration/docs/reports/logs/final/dry-run/manifest.json poses=7 schema=tat2.p0b_capture/1 audio=disabled reason=dry_run
+P0B_START mode=dry-run run=20261128T030739Z_5857589853e4_on poses=gate,upper_foyer,yaw180,foyer_beam,lounge,lounge_beam,beam_close beam=on seed=derived fov=54.54 size=(1920, 1080) out=/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/baseline-run/build/qa/p0b/dry-run manifest=/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/baseline-run/docs/reports/logs/final/dry-run/manifest.json
+P0B_DRY_RUN manifest=/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/baseline-run/docs/reports/logs/final/dry-run/manifest.json poses=7 schema=tat2.p0b_capture/1 audio=disabled reason=dry_run

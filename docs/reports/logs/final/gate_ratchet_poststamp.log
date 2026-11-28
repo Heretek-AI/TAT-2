@@ -1,3 +1,8 @@
+== POST_STAMP gate_ratchet
+COMMAND: make gate-ratchet
+CWD: .
+STARTED: 2026-11-27T22:16:00-05:00
+
 python3 -m py_compile tools/*.py
 python3 tools/check_content_overrides.py --table-only
 Override rule table:
@@ -16,22 +21,28 @@ Table-only mode: generated-data checks skipped.
 
 CONTENT_OVERRIDES: PASS
 python3 tools/check_gate_ratchet.py
-PASS: measured_on=37bb69e
+PASS: measured_on=5857589
 PASS: audit.coverage_den=12703
 PASS: audit.coverage_num=12660
 PASS: audit.unexpected=0
+PASS: beam_geometry.cards=330
+PASS: beam_geometry.fails=0
 PASS: compile.broken=0
-PASS: compile.checked=228
+PASS: compile.checked=229
 PASS: e2e.fails=0
 PASS: e2e.passed=300
 PASS: e2e.total=300
 PASS: e2e_a2.fails=0
 PASS: e2e_a2.passed=22
 PASS: e2e_a2.total=22
+PASS: e2e_errscan.new=0
 PASS: e2e_p2.expected_delta=0
 PASS: e2e_p2.expected_fail=0
 PASS: e2e_p2.fixed=0
 PASS: e2e_p2.unexpected_fail=0
+PASS: gate_manifest.orphans=0
+PASS: gate_manifest.retired=39
+PASS: gate_manifest.tracked=109
 PASS: literal_greps.code_hits=0
 PASS: literal_greps.ui_rating_literals=0
 PASS: lock_inventory.applied=162
@@ -42,8 +53,11 @@ PASS: m2.passes=12
 PASS: nav_runtime_probe.checks=70
 PASS: nav_runtime_probe.fails=0
 PASS: p0b_capture.poses=7
+PASS: p0b_capture_dry_run.poses=7
 PASS: p0b_capture_self_test.checks=23
 PASS: p0b_capture_self_test.fails=0
+PASS: p0b_kf27_reference.met_den=9
+PASS: p0b_kf27_reference.met_num=9
 PASS: p0b_route_self_test.checks=62
 PASS: p0b_route_self_test.fails=0
 PASS: parity_only.fails=0
@@ -60,35 +74,72 @@ PASS: probe_cubemap.fails=0
 PASS: probe_cubemap.passed=37
 PASS: probe_den_spawn.checks=9
 PASS: probe_den_spawn.fails=0
+PASS: probe_den_window.checks=34
+PASS: probe_device_meshes.actors=229
+PASS: probe_device_meshes.checks=11
+PASS: probe_device_meshes.hidden_parts=0
+PASS: probe_device_meshes.visible_parts=1145
+PASS: probe_gc_destruction.checks=52
+PASS: probe_gc_destruction.fails=0
+PASS: probe_geometry_placement.checks=7
+PASS: probe_geometry_placement.fails=0
+PASS: probe_geometry_placement.pending_regeneration=0
+PASS: probe_guard_positions_guildhall.bucket_hit=4
+PASS: probe_guard_positions_guildhall.bucket_total=4
+PASS: probe_guard_positions_guildhall.guards=4
+PASS: probe_guard_positions_guildhall.lounge=1
+PASS: probe_guard_positions_old_manor.bucket_hit=4
+PASS: probe_guard_positions_old_manor.bucket_total=4
+PASS: probe_guard_positions_old_manor.guards=4
+PASS: probe_guard_positions_old_manor.lounge=0
 PASS: probe_landscape_mask.checks=7
 PASS: probe_landscape_mask.fails=0
+PASS: probe_mirror_split.checks=39
+PASS: probe_niagara.active=1048
+PASS: probe_niagara.authored=3695
+PASS: probe_niagara.files=107
+PASS: probe_niagara.systems=16
 PASS: probe_p1_beams.checks=9
-PASS: probe_p1_doors.checks=47
+PASS: probe_p1_doors.checks=49
 PASS: probe_p1_safe.checks=86
 PASS: probe_p1_street.checks=31
 PASS: probe_p1_ward.checks=44
 PASS: probe_p5_ui.checks=54
+PASS: producer_tests.nav_checks=7
+PASS: producer_tests.stealthball_checks=22
+PASS: producer_tests.ui_pixel_checks=15
 PASS: run_tests.fails=0
-PASS: run_tests.passes=327
+PASS: run_tests.passes=328
 PASS: runtime_smoke.errors=0
 PASS: runtime_smoke.mission_ready=1
+PASS: runtime_smoke_scan.checks=29
+PASS: runtime_smoke_scan.fails=0
 PASS: string_audit.authored=199
 PASS: string_audit.invented=112
 PASS: string_audit.routed=311
 PASS: test_audio_control.checks=123
 PASS: test_audio_control.fails=0
+PASS: test_capture_p5_filter.checks=5
+PASS: test_gc_break_trigger.checks=21
+PASS: test_gc_break_trigger.fails=0
+PASS: test_roof_collision.checks=106
 PASS: test_vo_director.checks=53
 PASS: test_vo_director.fails=0
+PASS: test_w10a2_civilian.fails=0
+PASS: test_w10a2_civilian.passed=23
+PASS: test_w10a2_civilian.total=23
 PASS: test_w10a2_cream.expected_fail=0
 PASS: test_w10a2_cream.passes=5
+PASS: test_w10a2_guard_placement.fails=0
+PASS: test_w10a2_guard_placement.passes=35
 PASS: texture_cap.alpha_kept=1
 PASS: texture_cap.capped=796
 PASS: texture_cap.offenders=0
 PASS: audit coverage 12660/12703 (99.7 %)
 PASS: compile.log proves compile ('scripts checked: (\\d+), broken: 0')
-PASS: compile.log records compile.checked=228 >= 228
+PASS: compile.log records compile.checked=229 >= 229
 PASS: run_tests.log proves run_tests ('SUMMARY: fails=0')
-PASS: run_tests.log records 327 PASS >= 327
+PASS: run_tests.log records 328 PASS >= 328
 PASS: m2.log proves m2 ('M2_SUMMARY: fails=0')
 PASS: m2.log records 12 PASS >= 12
 PASS: e2e.log proves e2e ('SUMMARY: fails=0 passed=(\\d+) total=(\\d+)')
@@ -98,9 +149,9 @@ PASS: e2e_a2.log proves e2e_a2 ('SUMMARY: fails=0 passed=(\\d+) total=(\\d+)')
 PASS: e2e_a2.log records e2e_a2.passed=22 >= 22
 PASS: e2e_a2.log records e2e_a2.total=22 >= 22
 PASS: e2e_p2.log proves e2e_p2 ('P2_SUMMARY: expected_fail=(\\d+) expected_delta=(\\d+) fixed=(\\d+) unexpected_fail=0')
-PASS: e2e_p2.log records e2e_p2 group 1=0
-PASS: e2e_p2.log records e2e_p2 group 2=0
-PASS: e2e_p2.log records e2e_p2 group 3=0
+PASS: e2e_p2.log records e2e_p2 group 1=0 (pinned e2e_p2.expected_fail=0)
+PASS: e2e_p2.log records e2e_p2 group 2=0 (pinned e2e_p2.expected_delta=0)
+PASS: e2e_p2.log records e2e_p2 group 3=0 (pinned e2e_p2.fixed=0)
 PASS: parity_only.log proves parity_only ('PARITY_ONLY_SUMMARY: fails=0 passed=(\\d+)')
 PASS: parity_only.log records parity_only.passes=60 >= 60
 PASS: p0b_manifest_validate.log proves p0b_capture ('P0B_MANIFEST_OK [^\\n]*poses=(\\d+) dry_run=true')
@@ -126,7 +177,7 @@ PASS: probe_den_spawn.log records probe_den_spawn.checks=9 >= 9
 PASS: probe_p1_safe.log proves probe_p1_safe ('P1_SAFE PASS checks=(\\d+) fails=0')
 PASS: probe_p1_safe.log records probe_p1_safe.checks=86 >= 86
 PASS: probe_p1_doors.log proves probe_p1_doors ('P1_DOORS checks=(\\d+) fails=0\\s*\\nP1_DOORS PASS')
-PASS: probe_p1_doors.log records probe_p1_doors.checks=47 >= 47
+PASS: probe_p1_doors.log records probe_p1_doors.checks=49 >= 49
 PASS: probe_p1_beams.log proves probe_p1_beams ('P1_BEAMS PASS checks=(\\d+) fails=0')
 PASS: probe_p1_beams.log records probe_p1_beams.checks=9 >= 9
 PASS: probe_landscape_mask.log proves probe_landscape_mask ('LANDSCAPE_MASK_SUMMARY: PASS fails=0 checks=(\\d+)')
@@ -145,8 +196,9 @@ PASS: perf_guard.log proves perf_guard ('PERF_GUARD_TEST PASS checks=(\\d+) fail
 PASS: perf_guard.log records perf_guard.checks=78 >= 78
 PASS: probe_collision_authored.log proves probe_collision ('COL_MAPS PASS maps=(\\d+) min_coverage=([0-9.]+) dropped=(\\d+) planar_skipped=(\\d+) coverage_ppm=(\\d+)')
 PASS: probe_collision_authored.log records probe_collision.maps=3 >= 3
-PASS: probe_collision_authored.log records probe_collision.dropped=0 >= 0
 PASS: probe_collision_authored.log records probe_collision.coverage_ppm=868852 >= 868852
+PASS: probe_collision_authored.log records probe_collision group 3=0 (pinned probe_collision.dropped=0)
+PASS: probe_collision_authored.log records probe_collision.planar_skipped=2 == 2
 PASS: probe_lock_inventory.log proves lock_inventory ('LOCK_INVENTORY runtime: .*applied=(\\d+) containers=(\\d+) door_nodes=(\\d+) .*state=APPLIED')
 PASS: probe_lock_inventory.log records lock_inventory.applied=162 >= 162
 PASS: probe_lock_inventory.log records lock_inventory.containers=152 >= 152
@@ -156,13 +208,77 @@ PASS: nav_runtime_probe.log records nav_runtime_probe.checks=70 >= 70
 PASS: string_audit.log proves string_audit ('UI_STRINGS total=(\\d+) routed=(\\d+) authored=(\\d+) routed_authored=(\\d+) invented=(\\d+)')
 PASS: string_audit.log records string_audit.routed=311 >= 311
 PASS: string_audit.log records string_audit.authored=199 >= 199
+PASS: string_audit.log records string_audit.invented=112 <= 112
+PASS: literal_greps.log proves literal_greps ('LITERAL_GREPS PASS code_hits=(\\d+) ui_rating_literals=(\\d+)')
+PASS: literal_greps.log records literal_greps group 1=0 (pinned literal_greps.code_hits=0)
+PASS: literal_greps.log records literal_greps group 2=0 (pinned literal_greps.ui_rating_literals=0)
 PASS: runtime_smoke.log proves runtime_smoke ('RUNTIME_SMOKE_SCAN PASS exit=124 errors=(\\d+) .*mission_ready=(\\d+) reason=ok')
-PASS: runtime_smoke.log records runtime_smoke.errors=0 >= 0
 PASS: runtime_smoke.log records runtime_smoke.mission_ready=1 >= 1
+PASS: runtime_smoke.log records runtime_smoke group 1=0 (pinned runtime_smoke.errors=0)
+PASS: probe_guard_positions_guildhall.log proves probe_guard_positions_guildhall ('GUARD_CHECK PASS map=guildhall order=2 guards=(\\d+) buckets=(\\d+)/(\\d+) lounge=(\\d+) lounge_marker=C_20 ')
+PASS: probe_guard_positions_guildhall.log records probe_guard_positions_guildhall.guards=4 >= 4
+PASS: probe_guard_positions_guildhall.log records probe_guard_positions_guildhall.bucket_hit=4 >= 4
+PASS: probe_guard_positions_guildhall.log records probe_guard_positions_guildhall.bucket_total=4 >= 4
+PASS: probe_guard_positions_guildhall.log records probe_guard_positions_guildhall.lounge=1 >= 1
+PASS: probe_guard_positions_old_manor.log proves probe_guard_positions_old_manor ('GUARD_CHECK PASS map=old_manor order=3 guards=(\\d+) buckets=(\\d+)/(\\d+) lounge=(\\d+) lounge_marker=- ')
+PASS: probe_guard_positions_old_manor.log records probe_guard_positions_old_manor.guards=4 >= 4
+PASS: probe_guard_positions_old_manor.log records probe_guard_positions_old_manor.bucket_hit=4 >= 4
+PASS: probe_guard_positions_old_manor.log records probe_guard_positions_old_manor.bucket_total=4 >= 4
+PASS: probe_guard_positions_old_manor.log records probe_guard_positions_old_manor group 4=0 (pinned probe_guard_positions_old_manor.lounge=0)
+PASS: probe_niagara.log proves probe_niagara ('NIAGARA_PROBE files=(\\d+) authored=(\\d+) active=(\\d+) skipped=(\\d+) systems=(\\d+) ')
+PASS: probe_niagara.log records probe_niagara.files=107 >= 107
+PASS: probe_niagara.log records probe_niagara.authored=3695 >= 3695
+PASS: probe_niagara.log records probe_niagara.active=1048 >= 1048
+PASS: probe_niagara.log records probe_niagara.systems=16 >= 16
+PASS: test_beam_geometry.log proves beam_geometry ('loader applied the beam fix (\\d+) times')
+PASS: test_beam_geometry.log records beam_geometry.cards=330 >= 330
+PASS: producer_tests.log proves producer_tests ('STEALTHBALL_ARRAY_TEST PASS checks=(\\d+)[\\s\\S]*UI_PIXEL_STATS_TEST PASS checks=(\\d+)[\\s\\S]*PRODUCER_TESTS PASS')
+PASS: producer_tests.log records producer_tests.stealthball_checks=22 >= 22
+PASS: producer_tests.log records producer_tests.ui_pixel_checks=15 >= 15
+PASS: producer_tests.log records producer_tests.nav_checks=7 >= 7
+PASS: probe_device_meshes.log proves probe_device_meshes ('TURRET_PROBE PASS checks=(\\d+) actors=(\\d+) visible_parts=(\\d+) hidden_parts=(\\d+)')
+PASS: probe_device_meshes.log records probe_device_meshes.checks=11 >= 11
+PASS: probe_device_meshes.log records probe_device_meshes.actors=229 >= 229
+PASS: probe_device_meshes.log records probe_device_meshes.visible_parts=1145 >= 1145
+PASS: probe_device_meshes.log records probe_device_meshes group 4=0 (pinned probe_device_meshes.hidden_parts=0)
+PASS: probe_gc_destruction.log proves probe_gc_destruction ('GC_PROBE checks=(\\d+) fails=0')
+PASS: probe_gc_destruction.log records probe_gc_destruction.checks=52 >= 52
+PASS: test_gc_break_trigger.log proves test_gc_break_trigger ('GC_TRIGGER checks=(\\d+) fails=0')
+PASS: test_gc_break_trigger.log records test_gc_break_trigger.checks=21 >= 21
+PASS: test_w10a2_civilian.log proves test_w10a2_civilian ('W10A2_CIV_SUMMARY: fails=0 passed=(\\d+) total=(\\d+)')
+PASS: test_w10a2_civilian.log records test_w10a2_civilian.passed=23 >= 23
+PASS: test_w10a2_civilian.log records test_w10a2_civilian.total=23 >= 23
+PASS: test_w10a2_guard_placement.log proves test_w10a2_guard_placement ('GUARD_PLACEMENT_SUMMARY: fails=0')
+PASS: test_w10a2_guard_placement.log records 35 PASS >= 35
+PASS: probe_geometry_placement.log proves probe_geometry_placement ('GEOM_PROBE checks=(\\d+) fails=0 pending_regeneration=(\\d+)')
+PASS: probe_geometry_placement.log records probe_geometry_placement.checks=7 >= 7
+PASS: probe_geometry_placement.log records probe_geometry_placement group 2=0 (pinned probe_geometry_placement.pending_regeneration=0)
+PASS: test_capture_p5_filter.log proves test_capture_p5_filter ('CAPTURE_P5_FILTER_TEST PASS checks=(\\d+)')
+PASS: test_capture_p5_filter.log records test_capture_p5_filter.checks=5 >= 5
+PASS: p0b_capture_dry_run.log proves p0b_capture_dry_run ('P0B_DRY_RUN [^\\n]*poses=(\\d+)')
+PASS: p0b_capture_dry_run.log records p0b_capture_dry_run.poses=7 >= 7
+PASS: p0b_kf27_reference.log proves p0b_kf27_reference ('P0B_KF27_REF pose=upper_foyer met=(\\d+)/(\\d+)')
+PASS: p0b_kf27_reference.log records p0b_kf27_reference.met_num=9 >= 9
+PASS: p0b_kf27_reference.log records p0b_kf27_reference.met_den=9 >= 9
+PASS: runtime_smoke_scan.log proves runtime_smoke_scan ('RUNTIME_SMOKE_SCAN_TEST PASS checks=(\\d+) fails=0')
+PASS: runtime_smoke_scan.log records runtime_smoke_scan.checks=29 >= 29
+PASS: gate_manifest.log proves gate_manifest ('GATE_MANIFEST: tracked=(\\d+) reachable=(\\d+) retired=(\\d+) orphans=(\\d+)')
+PASS: gate_manifest.log records gate_manifest.tracked=109 >= 109
+PASS: gate_manifest.log records gate_manifest.retired=39 >= 39
+PASS: gate_manifest.log records gate_manifest group 4=0 (pinned gate_manifest.orphans=0)
+PASS: e2e_errscan.log proves e2e_errscan ('E2E_ERRSCAN PASS e2e=(\\d+)/(\\d+) e2e_a2=(\\d+)/(\\d+) run_tests=(\\d+)/(\\d+) new=(\\d+)')
+PASS: e2e_errscan.log records e2e_errscan group 7=0 (pinned e2e_errscan.new=0)
+PASS: test_roof_collision.log proves test_roof_collision ('ROOF_COLLISION_SUMMARY: fails=0[\\s\\S]*ROOF_COLLISION_SUMMARY: fails=0[\\s\\S]*ROOF_COLLISION_MODES PASS authored=0 aabb=0')
+PASS: test_roof_collision.log records test_roof_collision.checks=106 >= 106
+PASS: probe_den_window.log proves probe_den_window ('(?m)^DEN_WINDOW PASS checks=(\\d+)$')
+PASS: probe_den_window.log records probe_den_window.checks=34 >= 34
+PASS: probe_mirror_split.log proves probe_mirror_split ('(?m)^MIRROR_DATA_SUMMARY: fails=0 checks=(\\d+) mode=geometry$')
+PASS: probe_mirror_split.log records probe_mirror_split.checks=39 >= 39
 PASS: probe_leak.log clean
 PASS: probe_door_walk.log records DOORWALK PASS
 PASS: probe_viewmodel_truth.log records VIEWMODEL_TRUTH PASS
 PASS: probe_niagara.log records NIAGARA_PROBE PASS
+PASS: probe_statetree_shadow.log records PROBE PASS fails=0
 PASS: probe_blackjack_race.log records BLACKJACK_PROBE PASS
 PASS: probe_geometry_placement.log records GEOM_PROBE PASS
 PASS: probe_collision_authored.log records COL_MAPS PASS
@@ -178,11 +294,16 @@ PASS: test_gc_break_trigger.log records GC_TRIGGER PASS
 PASS: test_w10a2_civilian.log records W10A2_CIV_SUMMARY: fails=0
 PASS: test_w10a2_guard_placement.log records GUARD_PLACEMENT_SUMMARY: fails=0
 PASS: p0b_kf27_reference.log records P0B_KF27_REF pose=upper_foyer met=9/9
-PASS: report records compile ('compile\\s*\\|\\s*228\\s*/\\s*0')
-PASS: report records run_tests ('run_tests\\s*\\|\\s*327')
+PASS: gate_ratchet_poststamp.log records GATE_RATCHET: PASS
+PASS: runner/binding self-check 58 gates, 59 ratchet bindings
+PASS: report records compile ('compile\\s*\\|\\s*229\\s*/\\s*0')
+PASS: report records run_tests ('run_tests\\s*\\|\\s*328')
 PASS: report records M2 ('M2\\s*\\|\\s*12')
 PASS: report records E2E ('E2E\\s*\\|\\s*300\\s*/\\s*300')
 PASS: report records coverage ('12660\\s*/\\s*12703')
-PASS: report names measured_on=37bb69e
+PASS: report names measured_on=5857589
 
 GATE_RATCHET: PASS (baseline and committed evidence agree; Godot gates run locally)
+
+EXIT: 0
+FINISHED: 2026-11-27T22:15:28-05:00

@@ -1,7 +1,7 @@
 == FINAL_GATE producer_tests
 COMMAND: qa_producer_tests
-CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
-STARTED: 2026-11-27T17:26:39-05:00
+CWD: .
+STARTED: 2026-11-27T22:09:12-05:00
 
 == tools/test_check_consumers.py
 ok unconsumed table fails the audit
@@ -202,7 +202,7 @@ PASS: prompt contrast is high and unclipped
 PASS: briefing finds the 11 ink lines with no overflow
 PASS: pause dim ratio measures the darkened world
 PASS: pause blur ratio measures the softened world
-UI_PIXEL_STATS dir=/tmp/tmp1lt3u5by frames=5
+UI_PIXEL_STATS dir=/tmp/tmp58789p1v frames=5
   briefing@240x180  briefing lines=11 last_y=142 margin=20 overflow=False
   doors@240x160  prompt contrast=12.77 ink=400 clip=-
   pause@240x160  modal contrast=1.00 ink=800 clip=-  pause dim=0.4941 blur=0.0632
@@ -210,7 +210,7 @@ UI_PIXEL_STATS dir=/tmp/tmp1lt3u5by frames=5
   safe_room@240x160  gem lit=0.078 ang=0.0 dir=[1.0, 0.0] ring=5px  compass rule_row=41 thick=2 span=160 heading=NE
 UI_PIXEL_STATS PASS rows=5
 PASS: clean capture reports PASS
-UI_PIXEL_STATS dir=/tmp/tmp1lt3u5by frames=5
+UI_PIXEL_STATS dir=/tmp/tmp58789p1v frames=5
   briefing@240x180  briefing lines=11 last_y=142 margin=20 overflow=False
   doors@240x160  prompt contrast=12.77 ink=400 clip=-
   pause@240x160  modal contrast=1.00 ink=800 clip=-  pause dim=0.4941 blur=0.0632
@@ -218,14 +218,14 @@ UI_PIXEL_STATS dir=/tmp/tmp1lt3u5by frames=5
   safe_room@240x160  gem lit=0.078 ang=0.0 dir=[1.0, 0.0] ring=5px  compass rule_row=41 thick=2 span=160 heading=NE
 UI_PIXEL_STATS PASS rows=5
 PASS: clean capture passes --strict
-UI_PIXEL_STATS dir=/tmp/tmpc2cyeeby frames=2
+UI_PIXEL_STATS dir=/tmp/tmp6sqqcsr9 frames=2
   doors_clip@240x160  prompt contrast=1.00 ink=490 clip=right
   safe_room@240x160  gem lit=0.078 ang=0.0 dir=[1.0, 0.0] ring=5px  compass rule_row=41 thick=2 span=160 heading=NE
 UI_PIXEL_STATS FAIL doors_clip@240x160 prompt contrast 1.00 < 4.5
 UI_PIXEL_STATS FAIL doors_clip@240x160 prompt text clipped at right
 UI_PIXEL_STATS SUMMARY rows=2 fails=2
 PASS: text clipped at the ROI edge fails --strict
-UI_PIXEL_STATS dir=/tmp/tmp57zasc6i frames=2
+UI_PIXEL_STATS dir=/tmp/tmp0s9kj4ws frames=2
   pause@240x160  modal contrast=1.00 ink=1072 clip=-  pause dim=0.498 blur=0.8911
   pause_backdrop@240x160  modal contrast=1.00 ink=672 clip=-
 UI_PIXEL_STATS FAIL pause@240x160 blur_ratio 0.89 > 0.60
@@ -257,4 +257,4 @@ PASS one-way direction
 PRODUCER_TESTS PASS
 
 EXIT: 0
-FINISHED: 2026-11-27T17:28:43-05:00
+FINISHED: 2026-11-27T22:11:16-05:00

@@ -1,7 +1,7 @@
 == FINAL_GATE e2e
 COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd
-CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
-STARTED: 2026-11-27T17:16:39-05:00
+CWD: .
+STARTED: 2026-11-27T21:58:38-05:00
 
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
@@ -66,8 +66,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [3] _build_one_draw_item (res://src/core/level_loader.gd:5230)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7713)
 MIRROR_SPLIT mp=/Game/Art/Environment/Props/Furniture/Tables/SM_DiningTable_2m_End mode=native pos=1 neg=1 surfaces=3 bytes=0
-AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=353
-ROUGHNESS_BAKE count=34 pixels=25690112 ms=1973 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=344
+ROUGHNESS_BAKE count=34 pixels=25690112 ms=1879 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2440 applied=2434 duplicate=5 name_skipped=0 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.38x mirrored=2 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0 mirrored_bases=2 mirrored_multimesh=1 mirrored_single=1 mirrored_splits=2 mirrored_cull_front=0 mirrored_cull_disabled=0 mirrored_mesh_bytes=36000 mirrored_mesh_count=1 mirrored_unbaked=0
 MIRROR_RECON bases=2 multimesh=1 single=1 split=2 cull_front=0 cull_disabled=0 baked=1 baked_bytes=36000 unbaked=0 suppressed=0 ok=true
 TAT-2 Loaded thieves_den: meshes=2434 lights=13
@@ -201,7 +201,7 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [3] _build_one_draw_item (res://src/core/level_loader.gd:5230)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7713)
 COL_PLANAR /Game/Art/Effects/WardZones/SM_SlowWardZone_Quad instances=82 skipped=1
-AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=353
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=344
 ROUGHNESS_BAKE count=87 pixels=74973184 ms=5519 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
 BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
@@ -424,7 +424,7 @@ MIRROR_SPLIT mp=/Game/Art/Gameplay/ElectricPowerSource/SM_PowerSupplyBodyB mode=
 MIRROR_SPLIT mp=/Game/Art/Gameplay/ElectricPowerSource/SM_PowerSupplyBodyB mode=baked pos=0 neg=3 surfaces=3 bytes=180732
 MIRROR_SPLIT mp=/Game/Art/Gameplay/ElectricPowerSource/SM_PowerSupplyBodyB mode=native pos=0 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_RoofShedB_EndL mode=native pos=1 neg=1 surfaces=2 bytes=0
-ROUGHNESS_BAKE count=31 pixels=22806528 ms=1321 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=31 pixels=22806528 ms=1661 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=3116 applied=3112 duplicate=0 name_skipped=3 wardbox=0 moonshape=1 clamp=68 clamp_worst=4.67x mirrored=444 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0 mirrored_bases=444 mirrored_multimesh=418 mirrored_single=26 mirrored_splits=92 mirrored_cull_front=361 mirrored_cull_disabled=0 mirrored_mesh_bytes=697560 mirrored_mesh_count=8 mirrored_unbaked=0
 MIRROR_RECON bases=444 multimesh=418 single=26 split=92 cull_front=361 cull_disabled=0 baked=8 baked_bytes=697560 unbaked=0 suppressed=28 ok=true
 PASS: [T1-03-A] cam eye_ok=true fov=48.03 pitch=13.67
@@ -586,7 +586,7 @@ MIRROR_SPLIT mp=/Game/Art/Gameplay/ElectricPowerSource/SM_PowerSupplyBodyB mode=
 MIRROR_SPLIT mp=/Game/Art/Gameplay/ElectricPowerSource/SM_PowerSupplyBodyB mode=baked pos=0 neg=3 surfaces=3 bytes=180732
 MIRROR_SPLIT mp=/Game/Art/Gameplay/ElectricPowerSource/SM_PowerSupplyBodyB mode=native pos=0 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_RoofShedB_EndL mode=native pos=1 neg=1 surfaces=2 bytes=0
-ROUGHNESS_BAKE count=31 pixels=22806528 ms=1647 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=31 pixels=22806528 ms=1648 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=3116 applied=3112 duplicate=0 name_skipped=3 wardbox=0 moonshape=1 clamp=68 clamp_worst=4.67x mirrored=444 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0 mirrored_bases=444 mirrored_multimesh=418 mirrored_single=26 mirrored_splits=92 mirrored_cull_front=361 mirrored_cull_disabled=0 mirrored_mesh_bytes=697560 mirrored_mesh_count=8 mirrored_unbaked=0
 MIRROR_RECON bases=444 multimesh=418 single=26 split=92 cull_front=361 cull_disabled=0 baked=8 baked_bytes=697560 unbaked=0 suppressed=28 ok=true
 PASS: [T1-04-C] desktop ssr_enabled on MainMenu=true and Mission/Weather=true
@@ -693,7 +693,7 @@ MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrbanB_Ext_Side_4x8 mod
 MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrban_Ext_EndB_2x4x4 mode=native pos=0 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrbanB_Ext_Corner_4x4x8 mode=native pos=1 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Art/Environment/Civic/Exterior/SM_Civic_CornerB_Wall_Ext_2x8 mode=baked pos=2 neg=2 surfaces=2 bytes=28944
-ROUGHNESS_BAKE count=22 pixels=15728640 ms=1137 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=22 pixels=15728640 ms=1143 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2109 applied=2105 duplicate=0 name_skipped=4 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.00x mirrored=146 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0 mirrored_bases=146 mirrored_multimesh=110 mirrored_single=36 mirrored_splits=67 mirrored_cull_front=24 mirrored_cull_disabled=0 mirrored_mesh_bytes=17881908 mirrored_mesh_count=19 mirrored_unbaked=0
 MIRROR_RECON bases=146 multimesh=110 single=36 split=67 cull_front=24 cull_disabled=0 baked=19 baked_bytes=17881908 unbaked=0 suppressed=3 ok=true
 TAT-2 prep skyline: placed 8/8 expansion pieces (group=prep_skyline)
@@ -887,7 +887,7 @@ MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrbanB_Ext_Side_4x8 mod
 MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrban_Ext_EndB_2x4x4 mode=native pos=0 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrbanB_Ext_Corner_4x4x8 mode=native pos=1 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Art/Environment/Civic/Exterior/SM_Civic_CornerB_Wall_Ext_2x8 mode=baked pos=2 neg=2 surfaces=2 bytes=28944
-ROUGHNESS_BAKE count=22 pixels=15728640 ms=1139 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=22 pixels=15728640 ms=765 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2109 applied=2105 duplicate=0 name_skipped=4 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.00x mirrored=146 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0 mirrored_bases=146 mirrored_multimesh=110 mirrored_single=36 mirrored_splits=67 mirrored_cull_front=24 mirrored_cull_disabled=0 mirrored_mesh_bytes=17881908 mirrored_mesh_count=19 mirrored_unbaked=0
 MIRROR_RECON bases=146 multimesh=110 single=36 split=67 cull_front=24 cull_disabled=0 baked=19 baked_bytes=17881908 unbaked=0 suppressed=3 ok=true
 TAT-2 prep skyline: placed 8/8 expansion pieces (group=prep_skyline)
@@ -1001,7 +1001,7 @@ MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrbanB_Ext_Side_4x8 mod
 MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrban_Ext_EndB_2x4x4 mode=native pos=0 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrbanB_Ext_Corner_4x4x8 mode=native pos=1 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Art/Environment/Civic/Exterior/SM_Civic_CornerB_Wall_Ext_2x8 mode=baked pos=2 neg=2 surfaces=2 bytes=28944
-ROUGHNESS_BAKE count=22 pixels=15728640 ms=1132 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=22 pixels=15728640 ms=1133 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2109 applied=2105 duplicate=0 name_skipped=4 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.00x mirrored=146 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0 mirrored_bases=146 mirrored_multimesh=110 mirrored_single=36 mirrored_splits=67 mirrored_cull_front=24 mirrored_cull_disabled=0 mirrored_mesh_bytes=17881908 mirrored_mesh_count=19 mirrored_unbaked=0
 MIRROR_RECON bases=146 multimesh=110 single=36 split=67 cull_front=24 cull_disabled=0 baked=19 baked_bytes=17881908 unbaked=0 suppressed=3 ok=true
 TAT-2 prep skyline: placed 8/8 expansion pieces (group=prep_skyline)
@@ -1028,8 +1028,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [3] _build_one_draw_item (res://src/core/level_loader.gd:5230)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7713)
 MIRROR_SPLIT mp=/Game/Art/Environment/Props/Furniture/Tables/SM_DiningTable_2m_End mode=native pos=1 neg=1 surfaces=3 bytes=0
-AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=353
-ROUGHNESS_BAKE count=34 pixels=25690112 ms=1860 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=344
+ROUGHNESS_BAKE count=34 pixels=25690112 ms=1884 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2440 applied=2434 duplicate=5 name_skipped=0 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.38x mirrored=2 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0 mirrored_bases=2 mirrored_multimesh=1 mirrored_single=1 mirrored_splits=2 mirrored_cull_front=0 mirrored_cull_disabled=0 mirrored_mesh_bytes=36000 mirrored_mesh_count=1 mirrored_unbaked=0
 MIRROR_RECON bases=2 multimesh=1 single=1 split=2 cull_front=0 cull_disabled=0 baked=1 baked_bytes=36000 unbaked=0 suppressed=0 ok=true
 TAT-2 Loaded thieves_den: meshes=2434 lights=13
@@ -1170,8 +1170,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [2] _get_mesh_and_shape (res://src/core/level_loader.gd:2050)
          [3] _build_one_draw_item (res://src/core/level_loader.gd:5230)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7713)
-AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=353
-ROUGHNESS_BAKE count=87 pixels=74973184 ms=5419 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=344
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=5531 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
 BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=64953 applied=64682 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=206 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0 mirrored_bases=3297 mirrored_multimesh=3119 mirrored_single=178 mirrored_splits=464 mirrored_cull_front=312 mirrored_cull_disabled=0 mirrored_mesh_bytes=31097388 mirrored_mesh_count=103 mirrored_unbaked=0
@@ -1443,8 +1443,8 @@ WARNING: [level_loader] material flat white: '/Engine/BasicShapes/BasicShapeMate
          [1] _get_overridden_mesh (res://src/core/level_loader.gd:2500)
          [2] _build_one_draw_item (res://src/core/level_loader.gd:5276)
          [3] load_sublevels_async (res://src/core/level_loader.gd:7713)
-AUTHORED_COLLISION meshes=703 hull=698 authored_elements=641 complex=44 no_record=0 prims=380 convex=2739 absent=5 no_collision=13 query_only=5 reduced=35 shapes_per_instance_avg=1.10 elements=3710 load_ms=353
-ROUGHNESS_BAKE count=87 pixels=72220672 ms=5206 bytes=96294196 hits=39 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=703 hull=698 authored_elements=641 complex=44 no_record=0 prims=380 convex=2739 absent=5 no_collision=13 query_only=5 reduced=35 shapes_per_instance_avg=1.10 elements=3710 load_ms=344
+ROUGHNESS_BAKE count=87 pixels=72220672 ms=5169 bytes=96294196 hits=39 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=196 axis=col2 length_slot=2 clamp=none max_scale=236.9539 max_length_m=24.169
 BEAM_AXIS cards=196 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=24819 applied=24180 duplicate=547 name_skipped=6 wardbox=39 moonshape=47 clamp=287 clamp_worst=500.00x mirrored=780 origin_markers_skipped=0 skipped_merged=0 from_graph=4 graph_missing=0 mirrored_bases=779 mirrored_multimesh=746 mirrored_single=33 mirrored_splits=86 mirrored_cull_front=177 mirrored_cull_disabled=0 mirrored_mesh_bytes=1501416 mirrored_mesh_count=11 mirrored_unbaked=0
@@ -1467,7 +1467,7 @@ PASS: [T1-21-D] OldManor spawn headroom=true forward=true
 PASS: [T1-21-B] OldManor_P player walk & collision stable (true)
 PASS: [T1-21-C] OldManor_P guard collision stable (true, guards=4)
 PASS: [T1-21-E] OldManor_P dual-weightmap components=7 shader=true
-PASS: [T1-22-A] run_tests ratchet markers=102 max=124 floor=327 log_PASS=327 log_fails=0 log=docs/reports/logs/final/run_tests.log
+PASS: [T1-22-A] run_tests ratchet markers=103 max=125 floor=327 log_PASS=328 log_fails=0 log=docs/reports/logs/final/run_tests.log
 PASS: [T1-22-B] manifest_audit.py & anims_manifest.json intact
 PASS: [T1-22-C] Standalone E2E suite files present under res://tests/e2e/
 PASS: [T1-22-D] build/qa/capture_e2e_parity.{sh,gd} with SHADER/SCRIPT ERROR=0 gate (true)
@@ -1641,7 +1641,7 @@ MIRROR_SPLIT mp=/Game/Art/Gameplay/ElectricPowerSource/SM_PowerSupplyBodyB mode=
 MIRROR_SPLIT mp=/Game/Art/Gameplay/ElectricPowerSource/SM_PowerSupplyBodyB mode=baked pos=0 neg=3 surfaces=3 bytes=180732
 MIRROR_SPLIT mp=/Game/Art/Gameplay/ElectricPowerSource/SM_PowerSupplyBodyB mode=native pos=0 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_RoofShedB_EndL mode=native pos=1 neg=1 surfaces=2 bytes=0
-ROUGHNESS_BAKE count=31 pixels=22806528 ms=1640 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=31 pixels=22806528 ms=1693 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=3116 applied=3112 duplicate=0 name_skipped=3 wardbox=0 moonshape=1 clamp=68 clamp_worst=4.67x mirrored=444 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0 mirrored_bases=444 mirrored_multimesh=418 mirrored_single=26 mirrored_splits=92 mirrored_cull_front=361 mirrored_cull_disabled=0 mirrored_mesh_bytes=697560 mirrored_mesh_count=8 mirrored_unbaked=0
 MIRROR_RECON bases=444 multimesh=418 single=26 split=92 cull_front=361 cull_disabled=0 baked=8 baked_bytes=697560 unbaked=0 suppressed=28 ok=true
 PASS: [T2-03-B] Startscreen DirectionalLight energy=0.4500 == loader authored 0.4500 (>=0.01 floor)
@@ -1753,7 +1753,7 @@ MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrbanB_Ext_Side_4x8 mod
 MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrban_Ext_EndB_2x4x4 mode=native pos=0 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrbanB_Ext_Corner_4x4x8 mode=native pos=1 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Art/Environment/Civic/Exterior/SM_Civic_CornerB_Wall_Ext_2x8 mode=baked pos=2 neg=2 surfaces=2 bytes=28944
-ROUGHNESS_BAKE count=22 pixels=15728640 ms=1140 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=22 pixels=15728640 ms=1145 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2109 applied=2105 duplicate=0 name_skipped=4 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.00x mirrored=146 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0 mirrored_bases=146 mirrored_multimesh=110 mirrored_single=36 mirrored_splits=67 mirrored_cull_front=24 mirrored_cull_disabled=0 mirrored_mesh_bytes=17881908 mirrored_mesh_count=19 mirrored_unbaked=0
 MIRROR_RECON bases=146 multimesh=110 single=36 split=67 cull_front=24 cull_disabled=0 baked=19 baked_bytes=17881908 unbaked=0 suppressed=3 ok=true
 TAT-2 prep skyline: placed 8/8 expansion pieces (group=prep_skyline)
@@ -1999,7 +1999,7 @@ MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrbanB_Ext_Side_4x8 mod
 MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrban_Ext_EndB_2x4x4 mode=native pos=0 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrbanB_Ext_Corner_4x4x8 mode=native pos=1 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Art/Environment/Civic/Exterior/SM_Civic_CornerB_Wall_Ext_2x8 mode=baked pos=2 neg=2 surfaces=2 bytes=28944
-ROUGHNESS_BAKE count=22 pixels=15728640 ms=902 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=22 pixels=15728640 ms=771 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2109 applied=2105 duplicate=0 name_skipped=4 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.00x mirrored=146 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0 mirrored_bases=146 mirrored_multimesh=110 mirrored_single=36 mirrored_splits=67 mirrored_cull_front=24 mirrored_cull_disabled=0 mirrored_mesh_bytes=17881908 mirrored_mesh_count=19 mirrored_unbaked=0
 MIRROR_RECON bases=146 multimesh=110 single=36 split=67 cull_front=24 cull_disabled=0 baked=19 baked_bytes=17881908 unbaked=0 suppressed=3 ok=true
 TAT-2 prep skyline: placed 8/8 expansion pieces (group=prep_skyline)
@@ -2109,7 +2109,7 @@ MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrbanB_Ext_Side_4x8 mod
 MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrban_Ext_EndB_2x4x4 mode=native pos=0 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrbanB_Ext_Corner_4x4x8 mode=native pos=1 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Art/Environment/Civic/Exterior/SM_Civic_CornerB_Wall_Ext_2x8 mode=baked pos=2 neg=2 surfaces=2 bytes=28944
-ROUGHNESS_BAKE count=22 pixels=15728640 ms=1142 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=22 pixels=15728640 ms=773 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2109 applied=2105 duplicate=0 name_skipped=4 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.00x mirrored=146 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0 mirrored_bases=146 mirrored_multimesh=110 mirrored_single=36 mirrored_splits=67 mirrored_cull_front=24 mirrored_cull_disabled=0 mirrored_mesh_bytes=17881908 mirrored_mesh_count=19 mirrored_unbaked=0
 MIRROR_RECON bases=146 multimesh=110 single=36 split=67 cull_front=24 cull_disabled=0 baked=19 baked_bytes=17881908 unbaked=0 suppressed=3 ok=true
 TAT-2 prep skyline: placed 8/8 expansion pieces (group=prep_skyline)
@@ -2145,8 +2145,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [3] _build_one_draw_item (res://src/core/level_loader.gd:5230)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7713)
 MIRROR_SPLIT mp=/Game/Art/Environment/Props/Furniture/Tables/SM_DiningTable_2m_End mode=native pos=1 neg=1 surfaces=3 bytes=0
-AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=353
-ROUGHNESS_BAKE count=34 pixels=25690112 ms=1859 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=344
+ROUGHNESS_BAKE count=34 pixels=25690112 ms=1258 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2440 applied=2434 duplicate=5 name_skipped=0 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.38x mirrored=2 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0 mirrored_bases=2 mirrored_multimesh=1 mirrored_single=1 mirrored_splits=2 mirrored_cull_front=0 mirrored_cull_disabled=0 mirrored_mesh_bytes=36000 mirrored_mesh_count=1 mirrored_unbaked=0
 MIRROR_RECON bases=2 multimesh=1 single=1 split=2 cull_front=0 cull_disabled=0 baked=1 baked_bytes=36000 unbaked=0 suppressed=0 ok=true
 TAT-2 Loaded thieves_den: meshes=2434 lights=13
@@ -2209,7 +2209,7 @@ ERROR: Parameter "material" is null.
    at: material_get_instance_shader_parameters (servers/rendering/dummy/storage/material_storage.cpp:264)
 PASS: [T3-02] Zipwire aim validity + crank progress synced to HUD ring (true)
 TAT-2 HUD build: id=20 root_children=29 hp_frame=1 hp_fill=1 objectives=1
-[T3-03] smoke_clouds=1 blocked=true noise_tags=["smoke", "smoke"] guard_state=SEARCH hud_wave_energy=0.000 min=(9498.283, 498.0633, 9471.01) max=(9503.283, 502.0633, 9476.01) guard=(9500.0, 501.5009, 9470.043) player=(9500.672, 501.3009, 9500.011)
+[T3-03] smoke_clouds=1 blocked=true noise_tags=["smoke", "smoke"] guard_state=SEARCH hud_wave_energy=0.000 min=(9498.282, 498.0633, 9470.726) max=(9503.282, 502.0633, 9475.726) guard=(9500.0, 501.5009, 9470.043) player=(9500.672, 501.3009, 9500.011)
 PASS: [T3-03] Smoke Bomb -> NoiseBus -> guard LOS block composition (true)
 PASS: [T3-04] Lockpicking drains disguise 5/s + 1/s and clears on finish (true)
 PASS: [T3-05] Den Map Table -> MissionPrepUI -> Loading -> Set Objectives contract (true)
@@ -2381,7 +2381,7 @@ MIRROR_SPLIT mp=/Game/Art/Gameplay/ElectricPowerSource/SM_PowerSupplyBodyB mode=
 MIRROR_SPLIT mp=/Game/Art/Gameplay/ElectricPowerSource/SM_PowerSupplyBodyB mode=baked pos=0 neg=3 surfaces=3 bytes=180732
 MIRROR_SPLIT mp=/Game/Art/Gameplay/ElectricPowerSource/SM_PowerSupplyBodyB mode=native pos=0 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_RoofShedB_EndL mode=native pos=1 neg=1 surfaces=2 bytes=0
-ROUGHNESS_BAKE count=31 pixels=22806528 ms=1504 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=31 pixels=22806528 ms=1711 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=3116 applied=3112 duplicate=0 name_skipped=3 wardbox=0 moonshape=1 clamp=68 clamp_worst=4.67x mirrored=444 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0 mirrored_bases=444 mirrored_multimesh=418 mirrored_single=26 mirrored_splits=92 mirrored_cull_front=361 mirrored_cull_disabled=0 mirrored_mesh_bytes=697560 mirrored_mesh_count=8 mirrored_unbaked=0
 MIRROR_RECON bases=444 multimesh=418 single=26 split=92 cull_front=361 cull_disabled=0 baked=8 baked_bytes=697560 unbaked=0 suppressed=28 ok=true
 PASS: [T3-09] Startscreen sky + volumetric mist + neon HDR + SSR/SSIL coexist cleanly (env=true)
@@ -2498,8 +2498,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [2] _get_mesh_and_shape (res://src/core/level_loader.gd:2050)
          [3] _build_one_draw_item (res://src/core/level_loader.gd:5230)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7713)
-AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=353
-ROUGHNESS_BAKE count=87 pixels=74973184 ms=5541 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=344
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=5641 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
 BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=64953 applied=64682 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=206 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0 mirrored_bases=3297 mirrored_multimesh=3119 mirrored_single=178 mirrored_splits=464 mirrored_cull_front=312 mirrored_cull_disabled=0 mirrored_mesh_bytes=31097388 mirrored_mesh_count=103 mirrored_unbaked=0
@@ -2557,8 +2557,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [3] _build_one_draw_item (res://src/core/level_loader.gd:5230)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7713)
 MIRROR_SPLIT mp=/Game/Art/Environment/Props/Furniture/Tables/SM_DiningTable_2m_End mode=native pos=1 neg=1 surfaces=3 bytes=0
-AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=353
-ROUGHNESS_BAKE count=34 pixels=25690112 ms=1738 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=344
+ROUGHNESS_BAKE count=34 pixels=25690112 ms=1869 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2440 applied=2434 duplicate=5 name_skipped=0 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.38x mirrored=2 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0 mirrored_bases=2 mirrored_multimesh=1 mirrored_single=1 mirrored_splits=2 mirrored_cull_front=0 mirrored_cull_disabled=0 mirrored_mesh_bytes=36000 mirrored_mesh_count=1 mirrored_unbaked=0
 MIRROR_RECON bases=2 multimesh=1 single=1 split=2 cull_front=0 cull_disabled=0 baked=1 baked_bytes=36000 unbaked=0 suppressed=0 ok=true
 TAT-2 Loaded thieves_den: meshes=2434 lights=13
@@ -2797,8 +2797,8 @@ WARNING: [level_loader] material flat white: '/Engine/BasicShapes/BasicShapeMate
          [1] _get_overridden_mesh (res://src/core/level_loader.gd:2500)
          [2] _build_one_draw_item (res://src/core/level_loader.gd:5276)
          [3] load_sublevels_async (res://src/core/level_loader.gd:7713)
-AUTHORED_COLLISION meshes=703 hull=698 authored_elements=641 complex=44 no_record=0 prims=380 convex=2739 absent=5 no_collision=13 query_only=5 reduced=35 shapes_per_instance_avg=1.10 elements=3710 load_ms=353
-ROUGHNESS_BAKE count=87 pixels=72220672 ms=5339 bytes=96294196 hits=39 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=703 hull=698 authored_elements=641 complex=44 no_record=0 prims=380 convex=2739 absent=5 no_collision=13 query_only=5 reduced=35 shapes_per_instance_avg=1.10 elements=3710 load_ms=344
+ROUGHNESS_BAKE count=87 pixels=72220672 ms=5209 bytes=96294196 hits=39 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=196 axis=col2 length_slot=2 clamp=none max_scale=236.9539 max_length_m=24.169
 BEAM_AXIS cards=196 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=24819 applied=24180 duplicate=547 name_skipped=6 wardbox=39 moonshape=47 clamp=287 clamp_worst=500.00x mirrored=780 origin_markers_skipped=0 skipped_merged=0 from_graph=4 graph_missing=0 mirrored_bases=779 mirrored_multimesh=746 mirrored_single=33 mirrored_splits=86 mirrored_cull_front=177 mirrored_cull_disabled=0 mirrored_mesh_bytes=1501416 mirrored_mesh_count=11 mirrored_unbaked=0
@@ -2985,7 +2985,7 @@ MIRROR_SPLIT mp=/Game/Art/Gameplay/ElectricPowerSource/SM_PowerSupplyBodyB mode=
 MIRROR_SPLIT mp=/Game/Art/Gameplay/ElectricPowerSource/SM_PowerSupplyBodyB mode=baked pos=0 neg=3 surfaces=3 bytes=180732
 MIRROR_SPLIT mp=/Game/Art/Gameplay/ElectricPowerSource/SM_PowerSupplyBodyB mode=native pos=0 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_RoofShedB_EndL mode=native pos=1 neg=1 surfaces=2 bytes=0
-ROUGHNESS_BAKE count=31 pixels=22806528 ms=1646 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=31 pixels=22806528 ms=1490 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=3116 applied=3112 duplicate=0 name_skipped=3 wardbox=0 moonshape=1 clamp=68 clamp_worst=4.67x mirrored=444 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0 mirrored_bases=444 mirrored_multimesh=418 mirrored_single=26 mirrored_splits=92 mirrored_cull_front=361 mirrored_cull_disabled=0 mirrored_mesh_bytes=697560 mirrored_mesh_count=8 mirrored_unbaked=0
 MIRROR_RECON bases=444 multimesh=418 single=26 split=92 cull_front=361 cull_disabled=0 baked=8 baked_bytes=697560 unbaked=0 suppressed=28 ok=true
 TAT-2 UI settings: theme=res://src/ui/art_nouveau_theme.gd strings=res://data/generated/tables/StringTables/ST_Settings.json
@@ -3012,8 +3012,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [3] _build_one_draw_item (res://src/core/level_loader.gd:5230)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7713)
 MIRROR_SPLIT mp=/Game/Art/Environment/Props/Furniture/Tables/SM_DiningTable_2m_End mode=native pos=1 neg=1 surfaces=3 bytes=0
-AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=353
-ROUGHNESS_BAKE count=34 pixels=25690112 ms=1919 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=344
+ROUGHNESS_BAKE count=34 pixels=25690112 ms=1854 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2440 applied=2434 duplicate=5 name_skipped=0 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.38x mirrored=2 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0 mirrored_bases=2 mirrored_multimesh=1 mirrored_single=1 mirrored_splits=2 mirrored_cull_front=0 mirrored_cull_disabled=0 mirrored_mesh_bytes=36000 mirrored_mesh_count=1 mirrored_unbaked=0
 MIRROR_RECON bases=2 multimesh=1 single=1 split=2 cull_front=0 cull_disabled=0 baked=1 baked_bytes=36000 unbaked=0 suppressed=0 ok=true
 TAT-2 Loaded thieves_den: meshes=2434 lights=13
@@ -3140,7 +3140,7 @@ MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrbanB_Ext_Side_4x8 mod
 MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrban_Ext_EndB_2x4x4 mode=native pos=0 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Art/Environment/Urban/Roofs/SM_RoofUrbanB_Ext_Corner_4x4x8 mode=native pos=1 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Art/Environment/Civic/Exterior/SM_Civic_CornerB_Wall_Ext_2x8 mode=baked pos=2 neg=2 surfaces=2 bytes=28944
-ROUGHNESS_BAKE count=22 pixels=15728640 ms=1203 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=22 pixels=15728640 ms=1157 bytes=20971511 hits=11 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2109 applied=2105 duplicate=0 name_skipped=4 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.00x mirrored=146 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0 mirrored_bases=146 mirrored_multimesh=110 mirrored_single=36 mirrored_splits=67 mirrored_cull_front=24 mirrored_cull_disabled=0 mirrored_mesh_bytes=17881908 mirrored_mesh_count=19 mirrored_unbaked=0
 MIRROR_RECON bases=146 multimesh=110 single=36 split=67 cull_front=24 cull_disabled=0 baked=19 baked_bytes=17881908 unbaked=0 suppressed=3 ok=true
 TAT-2 prep skyline: placed 8/8 expansion pieces (group=prep_skyline)
@@ -3257,8 +3257,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [2] _get_mesh_and_shape (res://src/core/level_loader.gd:2050)
          [3] _build_one_draw_item (res://src/core/level_loader.gd:5230)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7713)
-AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=353
-ROUGHNESS_BAKE count=87 pixels=74973184 ms=5430 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=344
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=5493 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
 BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=64953 applied=64682 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=206 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0 mirrored_bases=3297 mirrored_multimesh=3119 mirrored_single=178 mirrored_splits=464 mirrored_cull_front=312 mirrored_cull_disabled=0 mirrored_mesh_bytes=31097388 mirrored_mesh_count=103 mirrored_unbaked=0
@@ -3402,8 +3402,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [2] _get_mesh_and_shape (res://src/core/level_loader.gd:2050)
          [3] _build_one_draw_item (res://src/core/level_loader.gd:5230)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7713)
-AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=353
-ROUGHNESS_BAKE count=87 pixels=74973184 ms=5424 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=344
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=5421 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
 BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=64953 applied=64682 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=206 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0 mirrored_bases=3297 mirrored_multimesh=3119 mirrored_single=178 mirrored_splits=464 mirrored_cull_front=312 mirrored_cull_disabled=0 mirrored_mesh_bytes=31097388 mirrored_mesh_count=103 mirrored_unbaked=0
@@ -3658,8 +3658,8 @@ WARNING: [level_loader] material flat white: '/Engine/BasicShapes/BasicShapeMate
          [1] _get_overridden_mesh (res://src/core/level_loader.gd:2500)
          [2] _build_one_draw_item (res://src/core/level_loader.gd:5276)
          [3] load_sublevels_async (res://src/core/level_loader.gd:7713)
-AUTHORED_COLLISION meshes=703 hull=698 authored_elements=641 complex=44 no_record=0 prims=380 convex=2739 absent=5 no_collision=13 query_only=5 reduced=35 shapes_per_instance_avg=1.10 elements=3710 load_ms=353
-ROUGHNESS_BAKE count=87 pixels=72220672 ms=5238 bytes=96294196 hits=39 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=703 hull=698 authored_elements=641 complex=44 no_record=0 prims=380 convex=2739 absent=5 no_collision=13 query_only=5 reduced=35 shapes_per_instance_avg=1.10 elements=3710 load_ms=344
+ROUGHNESS_BAKE count=87 pixels=72220672 ms=5375 bytes=96294196 hits=39 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=196 axis=col2 length_slot=2 clamp=none max_scale=236.9539 max_length_m=24.169
 BEAM_AXIS cards=196 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=24819 applied=24180 duplicate=547 name_skipped=6 wardbox=39 moonshape=47 clamp=287 clamp_worst=500.00x mirrored=780 origin_markers_skipped=0 skipped_merged=0 from_graph=4 graph_missing=0 mirrored_bases=779 mirrored_multimesh=746 mirrored_single=33 mirrored_splits=86 mirrored_cull_front=177 mirrored_cull_disabled=0 mirrored_mesh_bytes=1501416 mirrored_mesh_count=11 mirrored_unbaked=0
@@ -3796,8 +3796,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [2] _get_mesh_and_shape (res://src/core/level_loader.gd:2050)
          [3] _build_one_draw_item (res://src/core/level_loader.gd:5230)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7713)
-AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=353
-ROUGHNESS_BAKE count=87 pixels=74973184 ms=5548 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=344
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=5444 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
 BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=64953 applied=64682 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=206 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0 mirrored_bases=3297 mirrored_multimesh=3119 mirrored_single=178 mirrored_splits=464 mirrored_cull_front=312 mirrored_cull_disabled=0 mirrored_mesh_bytes=31097388 mirrored_mesh_count=103 mirrored_unbaked=0
@@ -3941,8 +3941,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [2] _get_mesh_and_shape (res://src/core/level_loader.gd:2050)
          [3] _build_one_draw_item (res://src/core/level_loader.gd:5230)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7713)
-AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=353
-ROUGHNESS_BAKE count=87 pixels=74973184 ms=5445 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=344
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=5806 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
 BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=64953 applied=64682 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=206 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0 mirrored_bases=3297 mirrored_multimesh=3119 mirrored_single=178 mirrored_splits=464 mirrored_cull_front=312 mirrored_cull_disabled=0 mirrored_mesh_bytes=31097388 mirrored_mesh_count=103 mirrored_unbaked=0
@@ -4085,8 +4085,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [2] _get_mesh_and_shape (res://src/core/level_loader.gd:2050)
          [3] _build_one_draw_item (res://src/core/level_loader.gd:5230)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7713)
-AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=353
-ROUGHNESS_BAKE count=87 pixels=74973184 ms=5430 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=344
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=5640 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
 BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=64953 applied=64682 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=206 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0 mirrored_bases=3297 mirrored_multimesh=3119 mirrored_single=178 mirrored_splits=464 mirrored_cull_front=312 mirrored_cull_disabled=0 mirrored_mesh_bytes=31097388 mirrored_mesh_count=103 mirrored_unbaked=0
@@ -4266,8 +4266,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [2] _get_mesh_and_shape (res://src/core/level_loader.gd:2050)
          [3] _build_one_draw_item (res://src/core/level_loader.gd:5230)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7713)
-AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=353
-ROUGHNESS_BAKE count=87 pixels=74973184 ms=5431 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=344
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=5496 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
 BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=64953 applied=64682 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=206 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0 mirrored_bases=3297 mirrored_multimesh=3119 mirrored_single=178 mirrored_splits=464 mirrored_cull_front=312 mirrored_cull_disabled=0 mirrored_mesh_bytes=31097388 mirrored_mesh_count=103 mirrored_unbaked=0
@@ -4327,8 +4327,8 @@ A2_WHITE allowed key=<no ue_mesh> MeshInstance3D count=5 reason=port guard carri
 A2_MEASURE cream_slabs nodes=0 detail=[]
 A2_MEASURE near_white visible_nodes=7030 shader_surfaces=415 unexplained=0 allowed=3 allowlist=5
 PASS: [A2-WHITE] no unexplained near-white visible mesh (visible=7030 shader_surfaces=415 unexplained=0 allowlisted=3)
-A2_MEASURE shell origin=(44.00762, 27.00134, -25.58597) horizontal=4/4 ["+X=hit", "-X=hit", "+Z=hit", "-Z=hit"] floor=hit
-PASS: [A2-SHELL] Lounge shell rays: 4/4 horizontal hits + floor hit (origin=(44.00762, 27.00134, -25.58597), ["+X=hit", "-X=hit", "+Z=hit", "-Z=hit"])
+A2_MEASURE shell origin=(44.0032, 27.00134, -25.59103) horizontal=4/4 ["+X=hit", "-X=hit", "+Z=hit", "-Z=hit"] floor=hit
+PASS: [A2-SHELL] Lounge shell rays: 4/4 horizontal hits + floor hit (origin=(44.0032, 27.00134, -25.59103), ["+X=hit", "-X=hit", "+Z=hit", "-Z=hit"])
 A2_MEASURE turret visible=91 hidden=0 meshless=0 merged_cells=0 multi_path_cells=0 authored=1145/0 paths=5 missing_paths=0 unique_runtime_cells=0
 PASS: [A2-TURRET] turret census authored visible=1145 (want 1145) hidden=0; runtime meshless=0 missing_paths=[] (individual=91, merged_cells=0)
 A2_MEASURE gc layers=174 leaves=80 static_bookcase_leaves=20 visible_broken=0 missing=0
@@ -4340,4 +4340,4 @@ WARNING: 3 ObjectDB instances were leaked at exit (run with `--verbose` for deta
 ERROR: 3 RID allocations of type 'N17RendererSceneCull8InstanceE' were leaked at exit.
 
 EXIT: 0
-FINISHED: 2026-11-27T17:24:07-05:00
+FINISHED: 2026-11-27T22:06:14-05:00

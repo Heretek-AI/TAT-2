@@ -1,7 +1,7 @@
 == FINAL_GATE probe_collision_authored
 COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/probe_collision_authored.gd
-CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
-STARTED: 2026-11-27T17:13:43-05:00
+CWD: .
+STARTED: 2026-11-27T21:55:21-05:00
 
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
@@ -151,18 +151,18 @@ COL_PLANAR /Game/Art/Effects/WardZones/SM_SlowWardZone_Quad instances=82 skipped
 COL_PROGRESS paths=640 shapes=23270 bodies=220 last=/Game/Art/Environment/Vehicles/Train/SM_TrainCabin02
 COL_PROGRESS paths=768 shapes=28976 bodies=237 last=/Game/Art/Environment/Civic/Exterior/SM_Civic_ColumnE_1x8
 COL_PROGRESS paths=896 shapes=30389 bodies=241 last=/Game/Art/Environment/Urban/WallWindow/SM_UrbanShop_WindowBarsA
-AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=372
-ROUGHNESS_BAKE count=87 pixels=74973184 ms=5599 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=354
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=5782 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
 BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=64953 applied=64682 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=205 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0 mirrored_bases=3297 mirrored_multimesh=3119 mirrored_single=178 mirrored_splits=464 mirrored_cull_front=312 mirrored_cull_disabled=0 mirrored_mesh_bytes=31097388 mirrored_mesh_count=103 mirrored_unbaked=0
 MIRROR_RECON bases=3297 multimesh=3119 single=178 split=464 cull_front=312 cull_disabled=0 baked=103 baked_bytes=31097388 unbaked=0 suppressed=400 ok=true
 MATERIAL_EMISSIVE invented_white=1 names=/Game/Art/Environment/Lights/Candles/MI_FlameCandleOrangeB
 PERF_CENSUS meshes=6709 instances=65129 chunk_nodes=6621 plain=2923 multimesh=3786 surface_draws=12090 lights=8 shadow_lights=0 occluders=768 collision_bodies=243 collision_shapes=31049 periph_nodes=3350 periph_instances=13446 periph_surface_draws=6524 periph_plain=1631 periph_multimesh=1719 periph_range=0 merge_mode=off merge_candidates=0 merge_nodes=0 merge_surfaces_before=0 merge_surfaces_after=0 light_budget=8 hero_shadows=6 source_sublevels={ "Guildhall_Landscape": 677, "Building_Guildhall_POI": 9847, "Guildhall_Geometry": 567, "Guildhall_Vault_CeremonialChambers": 908, "Guildhall_PeripheryA": 12378, "Building_Guildhall_POI_3rdFloor": 3624, "Guildhall_Gameplay": 2690, "Guildhall_P": 80, "Guildhall_LightingNoGameplay": 164, "Guildhall_Loot": 175, "Guildhall_SkyboxGeo": 33547 }
-COL_AUDIT mode=authored placed_meshes=952 placed_meshes_seen=952 placed_instances=27426 authored_hull=942 authored_prims=593 absent=10 no_collision=13 query_only=7 reduced=17 shapes=31049 bodies=243 dropped=0 load_ms=22681 coverage=0.989 fps_pose=n/a
-COL_DETAIL payload_meshes=1992 payload_elements=8601 payload_convex=5922 payload_load_ms=372 authored_instances=24608 authored_shape_demand=27915 heuristic_shapes=3511 mode_requested=authored elements_on_placed=2213 convex_on_placed=925 complex_default_paths=63 no_record_paths=0 payload_no_simple=334 placed_paths_payload=952 scale_baked_shapes=4152
+COL_AUDIT mode=authored placed_meshes=952 placed_meshes_seen=952 placed_instances=27426 authored_hull=942 authored_prims=593 absent=10 no_collision=13 query_only=7 reduced=17 shapes=31049 bodies=243 dropped=0 load_ms=23624 coverage=0.989 fps_pose=n/a
+COL_DETAIL payload_meshes=1992 payload_elements=8601 payload_convex=5922 payload_load_ms=354 authored_instances=24608 authored_shape_demand=27915 heuristic_shapes=3511 mode_requested=authored elements_on_placed=2213 convex_on_placed=925 complex_default_paths=63 no_record_paths=0 payload_no_simple=334 placed_paths_payload=952 scale_baked_shapes=4152
 COL_ASSERT coverage=0.989 (942/952) prims_subset=true classification=942+10==952 mode=authored dropped=0 element_coverage=0.910
-COL_MAP map=guildhall files=15 placed_meshes=952 placed_instances=27426 authored=942 elements=866 complex=63 no_record=0 absent=10 coverage=0.910 reduced=17 planar_skipped=1 drops=0 shapes=31049 bodies=243 load_ms=22681
+COL_MAP map=guildhall files=15 placed_meshes=952 placed_instances=27426 authored=942 elements=866 complex=63 no_record=0 absent=10 coverage=0.910 reduced=17 planar_skipped=1 drops=0 shapes=31049 bodies=243 load_ms=23624
 COL_REDUCED map=guildhall path=/Game/Art/Environment/Basement/Floors/SM_FloorStar elements=21 instances=1 shapes=1
 COL_REDUCED map=guildhall path=/Game/Art/Environment/Basement/Floors/SM_FloorStar_railing elements=19 instances=4 shapes=1
 COL_REDUCED map=guildhall path=/Game/Art/Environment/Civic/Ceiling/SM_Civic_Ceiling_2 elements=2 instances=396 shapes=1
@@ -406,13 +406,13 @@ WARNING: [level_loader] material flat white: '/Engine/BasicShapes/BasicShapeMate
          [3] _build_draw_items (res://src/core/level_loader.gd:5941)
          [4] load_sublevels (res://src/core/level_loader.gd:7602)
          [5] _run (res://tests/probe_collision_authored.gd:222)
-AUTHORED_COLLISION meshes=703 hull=698 authored_elements=641 complex=44 no_record=0 prims=380 convex=2739 absent=5 no_collision=13 query_only=5 reduced=35 shapes_per_instance_avg=1.10 elements=3710 load_ms=372
-ROUGHNESS_BAKE count=87 pixels=72220672 ms=5260 bytes=96294196 hits=39 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=703 hull=698 authored_elements=641 complex=44 no_record=0 prims=380 convex=2739 absent=5 no_collision=13 query_only=5 reduced=35 shapes_per_instance_avg=1.10 elements=3710 load_ms=354
+ROUGHNESS_BAKE count=87 pixels=72220672 ms=5315 bytes=96294196 hits=39 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=196 axis=col2 length_slot=2 clamp=none max_scale=236.9539 max_length_m=24.169
 BEAM_AXIS cards=196 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=24819 applied=24180 duplicate=547 name_skipped=6 wardbox=39 moonshape=47 clamp=287 clamp_worst=500.00x mirrored=780 origin_markers_skipped=0 skipped_merged=0 from_graph=4 graph_missing=0 mirrored_bases=779 mirrored_multimesh=746 mirrored_single=33 mirrored_splits=86 mirrored_cull_front=177 mirrored_cull_disabled=0 mirrored_mesh_bytes=1501416 mirrored_mesh_count=11 mirrored_unbaked=0
 MIRROR_RECON bases=779 multimesh=746 single=33 split=86 cull_front=177 cull_disabled=0 baked=11 baked_bytes=1501416 unbaked=0 suppressed=22 ok=true
-COL_MAP map=old_manor files=9 placed_meshes=703 placed_instances=20257 authored=698 elements=641 complex=44 no_record=0 absent=5 coverage=0.912 reduced=35 planar_skipped=1 drops=0 shapes=22678 bodies=471 load_ms=29699
+COL_MAP map=old_manor files=9 placed_meshes=703 placed_instances=20257 authored=698 elements=641 complex=44 no_record=0 absent=5 coverage=0.912 reduced=35 planar_skipped=1 drops=0 shapes=22678 bodies=471 load_ms=30534
 COL_REDUCED map=old_manor path=/Game/Art/Environment/Civic/Planters/SM_Civic_Planter_Round_2x50cm elements=33 instances=2 shapes=1
 COL_REDUCED map=old_manor path=/Game/Art/Environment/Lights/Ceiling/SM_CollapsedChandelier_B elements=18 instances=1 shapes=1
 COL_REDUCED map=old_manor path=/Game/Art/Environment/Lights/Ceiling/SM_MERGED_Chandelier elements=25 instances=2 shapes=1
@@ -550,11 +550,11 @@ WARNING: [level_loader] material flat white: '/Engine/BasicShapes/BasicShapeMate
          [5] _run (res://tests/probe_collision_authored.gd:222)
 COL_PROGRESS paths=384 shapes=30884 bodies=165 last=/Game/Art/Environment/Storefront/Architecture/Facades/SM_Storefront_Facade_1200_Closed
 COL_PROGRESS paths=512 shapes=37266 bodies=179 last=/Game/Art/Environment/Props/Wall/Frames/SM_FrameUpperMedA
-AUTHORED_COLLISION meshes=549 hull=536 authored_elements=477 complex=47 no_record=0 prims=314 convex=695 absent=13 no_collision=12 query_only=1 reduced=20 shapes_per_instance_avg=1.14 elements=1307 load_ms=372
-ROUGHNESS_BAKE count=66 pixels=56754176 ms=4120 bytes=75672209 hits=22 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=549 hull=536 authored_elements=477 complex=47 no_record=0 prims=314 convex=695 absent=13 no_collision=12 query_only=1 reduced=20 shapes_per_instance_avg=1.14 elements=1307 load_ms=354
+ROUGHNESS_BAKE count=66 pixels=56754176 ms=4109 bytes=75672209 hits=22 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=35742 applied=35670 duplicate=68 name_skipped=0 wardbox=0 moonshape=4 clamp=3 clamp_worst=500.00x mirrored=1739 origin_markers_skipped=0 skipped_merged=1 from_graph=0 graph_missing=0 mirrored_bases=1739 mirrored_multimesh=1512 mirrored_single=227 mirrored_splits=562 mirrored_cull_front=248 mirrored_cull_disabled=2 mirrored_mesh_bytes=19596048 mirrored_mesh_count=39 mirrored_unbaked=0
 MIRROR_RECON bases=1739 multimesh=1512 single=227 split=562 cull_front=248 cull_disabled=2 baked=39 baked_bytes=19596048 unbaked=0 suppressed=498 ok=true
-COL_MAP map=ftue files=10 placed_meshes=549 placed_instances=34680 authored=536 elements=477 complex=47 no_record=0 absent=13 coverage=0.869 reduced=20 planar_skipped=0 drops=0 shapes=37630 bodies=180 load_ms=15319
+COL_MAP map=ftue files=10 placed_meshes=549 placed_instances=34680 authored=536 elements=477 complex=47 no_record=0 absent=13 coverage=0.869 reduced=20 planar_skipped=0 drops=0 shapes=37630 bodies=180 load_ms=15356
 COL_REDUCED map=ftue path=/Game/Art/Environment/Civic/Planters/SM_Civic_Planter_Round_1x50cm elements=30 instances=3 shapes=1
 COL_REDUCED map=ftue path=/Game/Art/Environment/Civic/Planters/SM_Civic_Planter_Round_2x50cm elements=33 instances=2 shapes=1
 COL_REDUCED map=ftue path=/Game/Art/Environment/Manor/SM_Manor_Bookcase_Cabinet_2x8 elements=17 instances=6 shapes=1
@@ -577,7 +577,7 @@ COL_REDUCED map=ftue path=/Game/Art/Environment/Urban/Walls/SM_Urban_Ext_BayWind
 COL_REDUCED map=ftue path=/Game/Art/Environment/Urban/Walls/SM_Urban_Ext_BayWindow_Open_6x6_4m elements=22 instances=2 shapes=1
 COL_MAP_ASSERT map=ftue coverage>=0.868 dropped==0 coverage=0.869 dropped=0 PASS
 COL_MAPS PASS maps=3 min_coverage=0.869 dropped=0 planar_skipped=2 coverage_ppm=868852
-COL_WALL total_ms=68555 (whole probe: three map loads)
+COL_WALL total_ms=70405 (whole probe: three map loads)
 
 EXIT: 0
-FINISHED: 2026-11-27T17:14:53-05:00
+FINISHED: 2026-11-27T21:56:33-05:00

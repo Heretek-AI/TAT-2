@@ -1,7 +1,7 @@
 == FINAL_GATE audit
 COMMAND: make audit
-CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
-STARTED: 2026-11-27T17:28:43-05:00
+CWD: .
+STARTED: 2026-11-27T22:11:17-05:00
 
 python3 tools/check_content_overrides.py
 Override rule table:
@@ -38,7 +38,7 @@ Parity classes: parity_restoration=11
 
 CONTENT_OVERRIDES: PASS
 python3 tools/prebake_texture_cap.py --check --cap 1024
-repo: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
+repo: /home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/baseline-run
 targets: 1567 (materials.json 1522, code 102, scenes 0, unique 1567, dangling literals skipped 4)
 mode: CHECK (cap 1024 px long edge)
 capped: 796
@@ -135,9 +135,9 @@ content videos: OK   ogv=15, manifest=15, expected=15, zero_ogv=0
 content scene_variants: OK   count=222, records=222, expected=222
 content niagara: OK   records=3695, min=3695
 provenance: no .usmap under tools/ue4ss/output in this checkout, so the property-name mapping is UNPINNED here (pass --require-usmap to fail instead)
-provenance: extractor binary is newer than its sources (Exporter.cs)
-baseline: matches /home/john/.local/share/opencode/worktree/318f41/phase12-integration/tools/audit_baseline.json
+provenance: extractor binary not built in this checkout (bin/Release/net10.0/tat-extract absent); `make extract` rebuilds it
+baseline: matches /home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/baseline-run/tools/audit_baseline.json
 AUDIT PASS
 
 EXIT: 0
-FINISHED: 2026-11-27T17:28:52-05:00
+FINISHED: 2026-11-27T22:11:25-05:00

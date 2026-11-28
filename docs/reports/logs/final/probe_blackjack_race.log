@@ -1,7 +1,7 @@
 == FINAL_GATE probe_blackjack_race
 COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/probe_blackjack_race.gd
-CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
-STARTED: 2026-11-27T17:15:48-05:00
+CWD: .
+STARTED: 2026-11-27T21:57:38-05:00
 
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
@@ -61,4 +61,4 @@ WARNING: [nav_steering] no synchronised navigation map (no NavigationRegion3D ba
 BLACKJACK_PROBE PASS fails=0
 
 EXIT: 0
-FINISHED: 2026-11-27T17:15:52-05:00
+FINISHED: 2026-11-27T21:57:42-05:00

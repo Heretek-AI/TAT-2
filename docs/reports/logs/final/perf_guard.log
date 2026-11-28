@@ -1,7 +1,7 @@
 == FINAL_GATE perf_guard
 COMMAND: build/qa/test_perf_guard.sh
-CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
-STARTED: 2026-11-27T17:28:53-05:00
+CWD: .
+STARTED: 2026-11-27T22:11:26-05:00
 
 == bash -n ==
 ok   run_perf_matrix.sh parses
@@ -93,4 +93,4 @@ ok   verify prints the artifact digests
 PERF_GUARD_TEST PASS checks=78 fails=0
 
 EXIT: 0
-FINISHED: 2026-11-27T17:28:54-05:00
+FINISHED: 2026-11-27T22:11:28-05:00

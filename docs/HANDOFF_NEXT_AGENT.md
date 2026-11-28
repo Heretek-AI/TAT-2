@@ -1,17 +1,17 @@
 # Handoff — Thick As Thieves Godot 4.7.2 port (next session)
 
 **Repo:** `/home/john/Projects/TAT-2`
-**Current tip:** `101fc91` — local `main` = `origin/main` (pushed).
-**Measured code/gate head:** `37bb69e`; the final 49-gate run was made at its
-docs pre-stamp `60474c0` (code identical). Evidence commit `5a66567`; final
-audit `5dadcfc`.
-**Gate set:** **49/49 exit 0** — compile **228/0**, `run_tests` **327/0**
-(suites 119/121/122/123/124), `make gate-ratchet` PASS, `make audit` PASS.
+**Current tip:** `5857589` (baseline run head; the docs/logs evidence commit is
+on top of this branch).
+**Measured code/gate head:** `5857589`; the final **58-gate** run was made at
+that head (errscan semantics fix; no game-code change).
+**Gate set:** **58/58 exit 0** — compile **229/0**, `run_tests` **328/0**
+(suites 119/121/122/123/124/125), `make gate-ratchet` PASS
+(`measured_on=5857589`), `make audit` PASS.
 **Godot:** `4.7.2.stable` via native `tools/godot` (`godot` is **not** on
 `$PATH`). Forward+ · Jolt 60 Hz · 1280×720 base · Linux x86_64.
-**Working tree:** clean, except an untracked 0-byte `-1` shell artifact in the
-main checkout (not tracked, not part of any wave).
-**Read first:** this is the post-Phase-1/2 handoff. The previous long handoff is
+**Working tree:** clean (baseline logs/report committed on this branch).
+**Read first:** this is the post-Phase-2.5 handoff. The previous long handoff is
 archived at [`docs/reports/handoff-archive-20261127.md`](reports/handoff-archive-20261127.md).
 **Steam reference:** `/home/john/.steam/steam/steamapps/common/Thick As Thieves/`
 (appid `3341000`, build `25076818`, `1.5.148559`).
@@ -50,49 +50,51 @@ texture cap **1567/796/1/0**.
 
 ---
 
-## 2. Current gates (49, measured at `37bb69e`; one serial run at `60474c0`)
+## 2. Current gates (58, measured at `5857589`; one 23m19s serial run at `5857589`)
 
 | Gate | Value |
 |---|---|
-| compile | **228 checked / 0 broken** |
-| `run_tests.gd` | **327 PASS / fails=0** (suites 119 cream, 121 audio, 122 VO, 123 AEM, 124 cubemap) |
+| compile | **229 checked / 0 broken** |
+| `run_tests.gd` | **328 PASS / fails=0** (suites 119 cream, 121 audio, 122 VO, 123 AEM, 124 cubemap, 125 contract holes) |
 | M2 | **12/0** |
-| P1 route probes | safe **86**, doors **47**, beams **9**, ward **44**, street **31** (`hard_limits=2`) |
+| P1 route probes | safe **86**, doors **49**, beams **9**, ward **44**, street **31** (`hard_limits=2`) |
 | landscape mask | **7/0** |
 | navmesh runtime | **70/0** |
 | guards | Guildhall `C_20`, buckets 4/4; Old Manor order 3, 4/4 |
 | collision | `COL_MAPS PASS min_coverage=0.869 dropped=0 planar_skipped=2 coverage_ppm=868852` |
 | locks | **162** = 152 containers + 10 door nodes |
+| test manifest | **109 tracked / 70 reachable / 39 retired / 0 orphans** |
 | E2E `all` | **300/300** (T1=117 T2=110 T3=25 T4=14 S2=12 A2=22) |
 | E2E p2 | **17/17**, `expected_fail=0 expected_delta=0 fixed=0 unexpected_fail=0` |
+| e2e error scan | **`e2e=31/33 e2e_a2=0/2 run_tests=482/482 new=0`** |
 | parity-only | **60/60**, 11 rules all `parity_restoration` |
 | cream 119 | **GREEN**, `passes=5` |
 | audio 121 | **123/0** |
-| VO director 122 | **53/0** † |
-| AEM 123 | **77/0**, no PENDING † |
-| cubemap 124 | **37/0**, no PENDING; `CUBEMAP_ORIENT` daylight WARN † |
+| VO director 122 | **53/0** |
+| AEM 123 | **77/0**, no PENDING |
+| cubemap 124 | **37/0**, no PENDING; `CUBEMAP_ORIENT` daylight WARN |
 | P5 UI | **54/0**; `GEM_PAYLOAD present=true: layers=21` |
-| Den spawn | **9/0**, `source=authored` |
+| Den spawn / Den window | **9/0** / **34/0** |
 | capture harness | dry-run `poses=7`; self-test **23/0**; KF27 **9/9** (reference-only) |
 | producer tests / P5 filter | **PASS** (stealthball 22, UI pixel 15, parse_nav 7) / **5/5** |
 | runtime smoke | `RUNTIME_SMOKE_SCAN PASS exit=124 errors=0 mission_ready=1` |
 | route self-test | **62/0** |
-| audit / texture / perf / ratchet | **PASS** / 796 capped, 1 alpha, 0 offenders / **78/78** / **PASS** |
+| audit / texture / perf / ratchet | **PASS** / 796 capped, 1 alpha, 0 offenders / **78/78** / **PASS** (`measured_on=5857589`) |
 | string audit | 311 routed / 199 authored / **112** invented (ceiling 112) |
 
-† **Carried forward, not reproduced by the committed 49-gate runner.** These
-three counts come from the standalone logs `test_vo_director.log`,
-`probe_auto_exposure.log` and `probe_cubemap.log`, written at **14:51** — before
-the 14:52 merge and ~2 h 15 min before the 17:06 run. The three subjects now run
-transitively inside `run_tests` suites 122/123/124, and those suites print no
-per-suite count, so the 49-gate run itself does not regenerate these numbers. A
-re-run of the three probes is an open Phase 2.5.1 item.
+The three suites **VO director 122 (53), AEM 123 (77) and cubemap 124 (37)** are
+now real runner gates, produced in-run by the Phase 2.5 baseline; the old
+"carried forward" qualifier no longer applies. `gate_manifest` and
+`e2e_errscan` are runner gates too. The errscan's teardown ceilings were raised
+31→33 and 1→2 after measuring the nondeterministic Godot teardown warning at
+0–2 copies (see [`docs/reports/phase3-baseline-20261127.md`](reports/phase3-baseline-20261127.md) §5).
 
 The in-run `docs/reports/logs/final/gate_ratchet.log` is the runner's own
-wrapped log (`sha256 7d859b97…`; its internal `FINISHED:` stamp is 17:28:55 and
-its filesystem mtime is 17:30:01). Do **not** overwrite it with a
-post-stamp run; redirect any later ratchet check to
-`gate_ratchet_poststamp.log`.
+wrapped log from the Phase 2.5 baseline run (in-run stamp `measured_on=37bb69e`
+because the ratchet was re-stamped only after the run). The post-stamp PASS is
+`docs/reports/logs/final/gate_ratchet_poststamp.log` and the JSON now reads
+`measured_on=5857589`. Do **not** overwrite the in-run log with a post-stamp
+run; redirect any later ratchet check to `gate_ratchet_poststamp.log`.
 
 ---
 
@@ -189,15 +191,20 @@ against itself (`--reference-only`); the first port-side `foyer_beam` capture is
 ## 5. Machine state and the Cleanout capture checklist
 
 The shipped launcher needs an online login; Steam Offline Mode gives
-`LOGIN FAILED!`. The **A path works**: copied install `~/tat2-ref-build` plus
-copied prefix `/tmp/opencode/tat2-ref-prefix`, launched through Proton, with
-Steam online for auth. The original install/prefix/save are untouched.
+`LOGIN FAILED!`. The **A path works**: copied install `~/tat2-ref-build` plus a
+copied Proton prefix, launched through Proton, with Steam online for auth.
 
-**Save state:** the copied prefix has **774 files**; `SaveGames/` holds
-`TAT_ETS.sav` md5 **`976f8730eac989bab1c6c792343b7c00`**,
-`EnhancedInputUserSettings.sav`, `steam_autocloud.vdf`. The archive
-`SaveGames.pre-p0b-20261126-230522/` is untouched. Never use `stage` + `tail -1`
-to pick a save; use the archive path explicitly. Issue **#13**.
+**Save/reference state (2026-11-27):** the 2026-11-27 system cleanup deleted
+`/tmp/opencode/tat2-ref-prefix` — the 774-file Proton prefix including its
+`TAT_ETS.sav` (previously recorded md5
+**`976f8730eac989bab1c6c792343b7c00`**) and
+`SaveGames.pre-p0b-20261126-230522/`. This was verified in the Phase 2.5
+baseline: the directory is gone and no `TAT_ETS.sav` remains under
+`/tmp/opencode` or `/home/john/tat2-ref-build`. `/home/john/tat2-ref-build`
+survives, but the save md5 is a historical record, **not re-verified**. Issue
+**#13** (Cleanout live capture) now needs a fresh Proton prefix **and** a fresh
+save before the live capture. Never use `stage` + `tail -1` to pick a save; use
+the archive path explicitly.
 
 **Cleanout pre-start checks:**
 
@@ -257,7 +264,7 @@ mapping_kind=directional`; `AUDIT PASS`.
 
 ```bash
 make run
-make test                         # 327 checks
+make test                         # 328 checks
 tools/godot --headless --path game --script "$PWD/tools/check_scripts_compile.gd"
 tools/godot --headless --path game --script res://tests/run_tests.gd
 tools/godot --headless --path game --script res://tests/test_m2_player.gd
@@ -272,7 +279,7 @@ build/qa/nav_runtime_probe.sh     # NAV_RUNTIME_PROBE 70/0
 make test-producers
 build/qa/test_capture_p5_ui_filter.sh
 build/qa/runtime_smoke.sh 90      # exit 124 only, no outer flock
-build/qa/run_final_gates.sh       # 49 gates, serial, logs docs/reports/logs/final/
+build/qa/run_final_gates.sh       # 58 gates, serial, logs docs/reports/logs/final/
 make audit && make gate-ratchet
 ```
 
@@ -360,8 +367,8 @@ Use the **absolute** `--script` path; a project-relative path fails.
 - [`docs/reports/gpu-phase12-20261127.md`](reports/gpu-phase12-20261127.md) —
   every GPU command/result, including mirror PASS, UI 24-row strict table, KF27
   5/9, landscape no-subject, IBL/AEM.
-- `docs/reports/logs/final/` — the 49-gate logs at `60474c0`, including the
-  in-run `gate_ratchet.log`.
+- `docs/reports/logs/final/` — the 58-gate logs at `5857589`, including the
+  in-run `gate_ratchet.log` and the post-stamp `gate_ratchet_poststamp.log`.
 - `docs/reports/logs/p4-mirrors/p4mirrors_final.{log,wrapper.log}` — mirror
   readback.
 - `docs/reports/logs/phase2-ui/20261127T215654Z/` — integrated 28-frame UI
@@ -386,12 +393,12 @@ cherry-picked with matching stable patch-ids, mirrors was fast-forwarded
 
 ```bash
 git status --short                 # clean (or only intentional new files)
-make test                          # 327 PASS, fails=0
-tools/godot … check_scripts_compile.gd   # 228/0
+make test                          # 328 PASS, fails=0
+tools/godot … check_scripts_compile.gd   # 229/0
 tools/godot … run_e2e_tests.gd           # 300/300
-build/qa/run_final_gates.sh              # 49/49
+build/qa/run_final_gates.sh              # 58/58
 make audit                         # exit 0
-make gate-ratchet                  # PASS (measured_on=37bb69e until a new run)
+make gate-ratchet                  # PASS (measured_on=5857589)
 git push origin main
 ```
 

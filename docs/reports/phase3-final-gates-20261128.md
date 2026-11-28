@@ -36,12 +36,12 @@ behaviour change. The numbers below are the measured logs at this head.
 | KF27 reference | 9/9 reference-only (the port wide/pinned are 5/9; see the GPU report) |
 | route self-test | 62 / 0 |
 | runtime smoke | exit=124 errors=0 mission_ready=1 |
-| e2e_errscan | `e2e=31/33 e2e_a2=0/2 run_tests=495/495 new=0` |
+| e2e_errscan | `e2e=31/33`, `e2e_a2=0-1/2`, `run_tests=482-495/495`, `new=0` (ceilings 33/2/495; the measured counts vary within the known classes) |
 | audit | 12664 measured / 12703 (floor 12660 / 12703), 0 unexpected |
 | texture cap | 1567 targets / 796 capped / 1 alpha / 0 offenders |
 | string audit | 311 routed / 199 authored / 112 invented |
 | perf guard | 78 / 78 |
-| gate ratchet | PASS (post-stamp; the in-run first attempt failed only the stale report/floor check) |
+| gate ratchet | PASS in-run and post-stamp (59 gates / 60 bindings, `measured_on=900f8eb`) |
 
 ## Floors moved (raise only; no floor lowered)
 

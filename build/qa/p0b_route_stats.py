@@ -257,8 +257,42 @@ def emit_tokens(manifest: dict | None, row_report: list[dict]) -> dict:
     }
 
 
+## Capture status a row inherits from the beats it is bound to, strongest first.
+## `driven`/`driven_partial` are the only states that put a row's subject in
+## front of a driven camera; `blocked` means the driver attempted the beat and
+## measured a blocker; `unreachable` is the measured NPC precondition.
+CAPTURE_RANK = ["driven", "driven_partial", "blocked", "unreachable", "not_attempted"]
+
+
+def beat_statuses(manifest: dict | None) -> dict[str, str]:
+    """beat id -> driver status, from the manifest's `beats[]` (tat2.route_driver/2)."""
+    out: dict[str, str] = {}
+    if not manifest:
+        return out
+    beats = manifest.get("beats")
+    if not isinstance(beats, list):
+        return out
+    for row in beats:
+        if isinstance(row, dict):
+            bid = str(row.get("id", ""))
+            if bid:
+                out[bid] = str(row.get("status", "not_attempted"))
+    return out
+
+
+def row_capture_status(beats: list[str], statuses: dict[str, str]) -> str:
+    declared = [statuses.get(b, "absent") for b in beats]
+    if not declared:
+        return "absent"
+    for state in CAPTURE_RANK:
+        if state in declared:
+            return state
+    return "absent"
+
+
 def build_report(manifest: dict | None) -> dict:
     matrix = parse_matrix()
+    statuses = beat_statuses(manifest)
     rows: list[dict] = []
     for row_id, meta in matrix.items():
         beats = ROW_BEATS[row_id]
@@ -288,21 +322,51 @@ def build_report(manifest: dict | None) -> dict:
                 if row_id in FREE_PLAY_SUBSTITUTE_ROWS
                 else "official",
                 "explicit_reason": " | ".join(reasons),
+                "capture_status": row_capture_status(beats, statuses),
+                "capture_note": (
+                    "frame-beat coverage only; headless audio tap disabled — no audio measurement"
+                    if meta["pillar"] == "audio"
+                    else ""
+                ),
+                "beat_statuses": {b: statuses.get(b, "absent") for b in beats},
                 "token": None,
             }
         )
     tokens = emit_tokens(manifest, rows)
+    coverage = {state: 0 for state in CAPTURE_RANK + ["absent"]}
+    for row in rows:
+        coverage[row["capture_status"]] = coverage.get(row["capture_status"], 0) + 1
     return {
-        "schema": "tat2.route_row_map/1",
+        "schema": "tat2.route_row_map/2",
         "route_claim": "none"
         if not manifest
         else str(manifest.get("route_claim", "none")),
         "manifest": str(manifest.get("_source", "")) if manifest else "",
+        "manifest_status": ""
+        if not manifest
+        else str(manifest.get("status", "")),
         "rows": rows,
         "row_count": len(rows),
         "beat_count": len(BEAT_IDS),
         "rows_with_beats": sum(1 for r in rows if r["beats"]),
         "rows_without_beats": sum(1 for r in rows if not r["beats"]),
+        "beat_statuses": statuses,
+        "row_coverage": coverage,
+        "rows_covered": coverage["driven"] + coverage["driven_partial"],
+        "rows_covered_non_audio": sum(
+            1
+            for r in rows
+            if r["pillar"] != "audio" and r["capture_status"] in ("driven", "driven_partial")
+        ),
+        "audio_capture": {
+            "enabled": bool((manifest or {}).get("audio", {}).get("enabled", False))
+            if manifest
+            else False,
+            "reason": str((manifest or {}).get("audio", {}).get("reason", "no_manifest"))
+            if manifest
+            else "no_manifest",
+            "note": "Headless runs use the Dummy audio driver: the tap records enabled=false and no WAV/PCM, so every AU row's beat coverage is frame-coverage only, never an audio measurement.",
+        },
         "npc_measurement": NPC_MEASUREMENT,
         "tokens_emitted": tokens["tokens_emitted"],
         "token_policy": tokens["reason"],
@@ -401,6 +465,58 @@ def self_test() -> int:
         "no row carries a PASS/DELTA/MISSING/HARD_LIMIT/N/A-route token",
     )
 
+    # ---- manifest coverage (tat2.route_driver/2 beats[]) -------------------
+    def manifest_with(status: str, beats: list[str] | None = None) -> dict:
+        ids = beats if beats is not None else BEAT_IDS
+        return {"beats": [{"id": b, "status": status} for b in ids], "route_claim": "none"}
+
+    rep_all = build_report(manifest_with("driven"))
+    check(
+        rep_all["rows_covered"] == 120 and rep_all["row_coverage"]["not_attempted"] == 0,
+        "a 27/27 driven manifest covers all 120 rows",
+        str(rep_all["row_coverage"]),
+    )
+    rep_none = build_report(manifest_with("not_attempted"))
+    check(
+        rep_none["rows_covered"] == 0 and rep_none["row_coverage"]["not_attempted"] == 120,
+        "a not_attempted manifest covers zero rows",
+        str(rep_none["row_coverage"]),
+    )
+    rep_empty = build_report(None)
+    check(
+        rep_empty["rows_covered"] == 0 and rep_empty["row_coverage"]["absent"] == 120,
+        "no manifest reports every row absent (not covered)",
+        str(rep_empty["row_coverage"]),
+    )
+    rep_s24 = build_report(manifest_with("driven", ["S24"]))
+    expect_s24 = {r for r, beats in ROW_BEATS.items() if "S24" in beats}
+    got_s24 = {r["row_id"] for r in rep_s24["rows"] if r["capture_status"] == "driven"}
+    check(
+        got_s24 == expect_s24,
+        "one driven beat covers exactly the rows bound to it (S24)",
+        "got=%s expect=%s" % (sorted(got_s24), sorted(expect_s24)),
+    )
+    rep_partial = build_report(
+        {"beats": [{"id": "S24", "status": "driven_partial"}, {"id": "S13", "status": "blocked"}],
+         "route_claim": "none"}
+    )
+    check(
+        rep_partial["row_coverage"]["driven_partial"] > 0
+        and rep_partial["row_coverage"]["blocked"] > 0
+        and rep_partial["row_coverage"]["driven"] == 0,
+        "partial ranks below driven and blocked below partial",
+        str(rep_partial["row_coverage"]),
+    )
+    check(
+        all(r["capture_status"] in CAPTURE_RANK + ["absent"] for r in rep_all["rows"]),
+        "every row carries a capture status from the fixed vocabulary",
+    )
+    check(
+        sum(rep_all["row_coverage"].values()) == 120
+        and sum(rep_partial["row_coverage"].values()) == 120,
+        "coverage tallies sum to 120 rows",
+    )
+
     ok = fails == 0
     print(
         "P0B_ROUTE_STATS_SELFTEST %s checks=%d fails=%d rows=%d beats=%d"
@@ -430,6 +546,28 @@ def summary(manifest: dict | None) -> int:
             NPC_MEASUREMENT["nearest_m"],
             ",".join(NPC_MEASUREMENT["unreachable_beats"]),
         )
+    )
+    cov = report["row_coverage"]
+    print(
+        "P0B_ROUTE_STATS coverage driven=%d partial=%d blocked=%d unreachable=%d not_attempted=%d absent=%d rows_covered=%d"
+        % (
+            cov["driven"],
+            cov["driven_partial"],
+            cov["blocked"],
+            cov["unreachable"],
+            cov["not_attempted"],
+            cov["absent"],
+            report["rows_covered"],
+        )
+    )
+    by_pillar = {p: {"covered": 0, "total": 0} for p in PILLAR_COUNTS}
+    for row in report["rows"]:
+        by_pillar[row["pillar"]]["total"] += 1
+        if row["capture_status"] in ("driven", "driven_partial"):
+            by_pillar[row["pillar"]]["covered"] += 1
+    print(
+        "P0B_ROUTE_STATS coverage_by_pillar "
+        + " ".join("%s=%d/%d" % (p, v["covered"], v["total"]) for p, v in by_pillar.items())
     )
     print("P0B_ROUTE_STATS token_policy %s" % report["token_policy"])
     return 0

@@ -6,6 +6,36 @@ extracted through `tools/tat-extract` (CUE4Parse, `EGame.GAME_UE5_5`).
 Generated from `extracted/filelist.txt` (22,005 entries) and the current `extracted/` tree.
 Re-run the census with the commands at the bottom.
 
+## Phase 3 played-route — safe-room spawn floor gap (new, 2026-11-28; BLOCKED)
+
+The first continuous input-driven route front (`build/qa/route_driver.gd`
+`--segment=cleanout_route`, report `docs/reports/phase3-played-route.md`)
+reached the first-class Cleanout safe room and measured one content defect that
+blocks S12/S13 and therefore any 27/27 played claim:
+
+- The authored `TATSafeRoomPlayerStart_0` is at y **26.4694**, but the body has
+  no floor at the dressing level: it settles on `LevelCollision_3_-1_0` at y
+  **23.1585** (1.84 m below `safe_room_dressing.gd`'s `WALL_ANCHOR.y = 25.0`).
+- The safe-room lantern is built at **y 26.6** (1.6 m above the dressing floor,
+  correct for `BP_ToggleableLanternA`). From the settled body it is **3.64 m**
+  away 3D / **3.92 m** to its interact point against the authored **1.75 m**
+  reach, so `[F] TURN ON` cannot be driven by walking (S12 `blocked`).
+- A 10×10 floor-height ray grid puts the room floor at 23.11–23.16, 1.1–1.5 m
+  ledges at 24.1–24.6 and the dressing floor at 25.0 (`z ≥ 0`): the spawn sits
+  over a hole in the room floor. The staged route2-clean S12 frame did not expose
+  this because it set `set_lit(true)` with a fixed camera instead of a body.
+- S13 (street) is `blocked` separately: 8 compass probes move the body at most
+  **5.81 m** inside the safe-room complex; the KF16 car is **128.7 m** and the
+  KF15 alley **153.4 m** away, and the driver has no authored door/catwalk
+  waypoint chain.
+- Second measured shortfall: the Den `DenLedgerArea` sits 0.89 m above the floor
+  and the player's 3D reach test stops the walk at **1.9348 m** (0.18 m outside
+  the 1.75 m reach), so S06 is `blocked`.
+
+Fix (owner: level/collision): give the authored safe-room spawn floor collision
+at the dressing level (or correct the spawn/landscape mask), and decide the
+ledger interaction-test point. Do not teleport the body to pass S12.
+
 ## Phase 1/2 integration — 2026-11-27 (newest; headless gates, no GPU score)
 
 Seven lanes merged (six by cherry-pick, mirrors by fast-forward at `07ecb56`)

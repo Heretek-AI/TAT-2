@@ -10,9 +10,12 @@ with `host_state.txt`, `landscape_rmse.txt` and the 2026-11-28 UI sidecars +
 scorer output). No `game/src` file changed and no default was flipped.
 
 Measured: host 125 W current power limit (140 W max), 5.3 W idle before,
-≤ 50.4 °C and 1260 MHz across runs, no power/thermal throttle — but
+peak 50.43 °C and 1365 MHz (different samples), all clock-event reasons
+`Not Active` at the pre-session read — but
 `gaming-desktop` and `split_lock=0` are **not re-proven** (unreadable as uid
-1000 here; carried from the 2026-11-27 report). KF27 `foyer_beam_wide` = **3/9**
+1000 here; carried from the 2026-11-27 report), and the 2026-11-27 GPU report
+(67.8–75.2 °C, no power limit) is not a directly comparable baseline. KF27
+`foyer_beam_wide` = **3/9**
 (6 bands, emitter 6.3/38.7, hot core 88; below 6/9 → material work, not a pose
 tweak); pinned `foyer_beam` untouched and reproduces **5/9**; the 9/9 is
 reference-only. Landscape `gap_view` RMSE: discard↔raw 1.0077/255 (0.94 % px,

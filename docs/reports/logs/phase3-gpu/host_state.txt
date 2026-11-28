@@ -1,13 +1,13 @@
 # GPU host state, 2026-11-28 GPU look session
 # query: nvidia-smi --query-gpu=power.limit,power.draw,temperature.gpu,clocks.current.graphics,memory.used --format=csv
-# BEFORE the first capture (05:14Z):
+# BEFORE the first capture (05:14 local = 10:14Z):
 power.limit [W], power.draw [W], temperature.gpu, clocks.current.graphics [MHz], memory.used [MiB]
 [N/A], 5.30 W, 37.54, 210 MHz, 2442 MiB
-# nvidia-smi -q -d POWER excerpt (05:14Z):
+# nvidia-smi -q -d POWER excerpt (05:14 local = 10:14Z):
 Current Power Limit : 125.00 W
 Max Power Limit : 140.00 W
 Default Power Limit : 80.00 W
-# nvidia-smi -q -d PERFORMANCE "Clocks Event Reasons" excerpt (05:14Z, pre-session):
+# nvidia-smi -q -d PERFORMANCE "Clocks Event Reasons" excerpt (05:14 local = 10:14Z, pre-session):
         Idle                                           : Active
         Applications Clocks Setting                    : Not Active
         SW Power Cap                                   : Not Active

@@ -70,7 +70,19 @@ func run() -> void:
 	h.require(ui_ok, "S2-17", "contract table exposes a CLEANOUT entry wired to the first-class staging path (free_play=false)")
 
 	var fail_ok: bool = await _cleanout_failure_paths_bank_once(mission, mission != null)
-	h.require(fail_ok, "S2-18", "cleanout capture and timeout bank the stashed haul once with no contract credit")
+	h.require(fail_ok, "S2-18", "cleanout capture, timeout and door-collapse bank the stashed haul once with no contract credit")
+
+	var display_ok: bool = await _cleanout_display_copy(mission, mission != null)
+	h.require(display_ok, "S2-19", "cleanout win shows no Contract 2 outcome row and a +0 XP breakdown (measured award 0)")
+
+	var coop_ok: bool = await _coop_cleanout_skips_credit(mission, mission != null)
+	h.require(coop_ok, "S2-20", "co-op cleanout resolve banks once without recording the hosting contract")
+
+	var overlay_ok: bool = await _qa_side_mission_without_overlay()
+	h.require(overlay_ok, "S2-21", "QA cleanout detection works without the contracts.json overlay (authored id/LootTheRoom fallback)")
+
+	var hub_ok: bool = await _hub_return_clears_run_modes(mission, mission != null)
+	h.require(hub_ok, "S2-22", "pause/continue hub return clears free-play and cleanout modes")
 
 	await h.free_node(mission)
 	_restore()
@@ -209,10 +221,12 @@ func _stage_and_finish_cleanout(mission: Node, outcome: String, run_id: String) 
 	GameState.loot_run_id = run_id
 	var before_currency: int = int(SaveSystem.get_currency())
 	mission.set("_payout_applied", false)
-	if outcome == "capture":
-		mission.call("_on_player_downed")
-	else:
-		mission.call("_on_time_expired")
+	var call_name: String = "_on_player_downed"
+	if outcome == "timeout":
+		call_name = "_on_time_expired"
+	elif outcome == "collapse":
+		call_name = "_on_door_collapsed"
+	mission.call(call_name)
 	await h.step_process(1)
 	var last: Dictionary = SaveSystem.call("get_last_match")
 	var ok: bool = (
@@ -225,17 +239,14 @@ func _stage_and_finish_cleanout(mission: Node, outcome: String, run_id: String) 
 		and int(SaveSystem.get_currency()) == before_currency + 100
 	)
 	# Replay the same outcome: the run is already resolved, so nothing banks.
-	if outcome == "capture":
-		mission.call("_on_player_downed")
-	else:
-		mission.call("_on_time_expired")
+	mission.call(call_name)
 	await h.step_process(1)
 	return ok and int(SaveSystem.get_currency()) == before_currency + 100 \
 		and str((SaveSystem.call("get_last_match") as Dictionary).get("match_id", "")) == run_id
 
 
-## Capture and timeout/collapse each keep only the stashed haul and bank exactly
-## once; neither may record Contract 2 or pay a reward.
+## Capture, timeout and door-collapse each keep only the stashed haul and bank
+## exactly once; none may record Contract 2 or pay a reward.
 func _cleanout_failure_paths_bank_once(mission: Node, have_mission: bool) -> bool:
 	if not have_mission:
 		return false
@@ -248,10 +259,12 @@ func _cleanout_failure_paths_bank_once(mission: Node, have_mission: bool) -> boo
 		mission, "capture", "s2-cleanout-capture-%d" % int(Time.get_ticks_usec()))
 	var timeout_ok: bool = await _stage_and_finish_cleanout(
 		mission, "timeout", "s2-cleanout-timeout-%d" % int(Time.get_ticks_usec()))
-	var ok: bool = capture_ok and timeout_ok \
+	var collapse_ok: bool = await _stage_and_finish_cleanout(
+		mission, "collapse", "s2-cleanout-collapse-%d" % int(Time.get_ticks_usec()))
+	var ok: bool = capture_ok and timeout_ok and collapse_ok \
 		and int(save_data.get("xp", 0)) == before_xp \
 		and ((save_data.get("completed_contracts", {}) as Dictionary) == before_contracts) \
-		and int(save_data.get("currency", 0)) == before_currency + 200
+		and int(save_data.get("currency", 0)) == before_currency + 300
 	save_data["completed_contracts"] = before_contracts
 	save_data["xp"] = before_xp
 	save_data["currency"] = before_currency
@@ -296,6 +309,193 @@ func _find_cleanout_button(node: Node) -> Button:
 		if found != null:
 			return found
 	return null
+
+
+## Stage a cleanout escape on the live mission (banks score+stashed, no
+## contract credit) so the post-match display can be inspected.
+func _stage_cleanout_win(mission: Node, run_id: String) -> void:
+	GameState.end_free_play()
+	GameState.begin_cleanout("Mission.Guildhall.LootTheRoom")
+	GameState.state = "playing"
+	GameState.phase = GameState.PHASE_MAIN
+	GameState.loot_value = 500
+	GameState.stashed_loot_value = 100
+	GameState.carried_loot = []
+	GameState.carried_tracking_active = false
+	GameState.set_mission_objectives([], 0)
+	GameState.quest_item_acquired = true
+	GameState.loot_run_id = run_id
+	mission.set("_payout_applied", false)
+	mission.call("_on_extracted")
+	await h.step_process(1)
+
+
+## A Cleanout win must not display a Contract 2 completion row or the
+## +20/+20/+80 successful XP breakdown while the measured award is +0.
+func _cleanout_display_copy(mission: Node, have_mission: bool) -> bool:
+	if not have_mission:
+		return false
+	var ss: Node = h.save_system()
+	var save_data: Dictionary = ss.get("data") as Dictionary
+	var before_contracts: Dictionary = (save_data.get("completed_contracts", {}) as Dictionary).duplicate(true)
+	var before_xp: int = int(save_data.get("xp", 0))
+	var before_currency: int = int(save_data.get("currency", 0))
+	var run_id: String = "s2-cleanout-display-%d" % int(Time.get_ticks_usec())
+	await _stage_cleanout_win(mission, run_id)
+	var last: Dictionary = ss.call("get_last_match")
+	var hud: Node = mission.get("hud") as Node
+	var hud_contract: String = ""
+	var hud_mission: String = ""
+	if hud != null:
+		hud_contract = str(hud.call("_post_match_contract_line", true))
+		hud_mission = str(hud.call("_post_match_mission_line", true))
+	var ui_scr: GDScript = h.load_script("res://src/ui/post_match_ui.gd")
+	var ui: CanvasLayer = null
+	if ui_scr != null:
+		ui = ui_scr.new() as CanvasLayer
+	var ui_ok: bool = false
+	if ui != null:
+		h.tree.root.add_child(ui)
+		await h.step_process(2)
+		ui.call("open_result", true, int(last.get("score", 0)), {}, 0)
+		await h.step_process(2)
+		var contract_lbl: Label = ui.get("_contract_lbl") as Label
+		var contract_text: String = str(contract_lbl.text) if contract_lbl != null else "<missing>"
+		var contract_visible: bool = contract_lbl.visible if contract_lbl != null else true
+		var xp_values: Array[String] = _xp_value_texts(ui.get("_xp_box") as Node)
+		var total_values: Array[String] = _xp_value_texts(ui.get("_total_box") as Node)
+		var ui_text: String = ""
+		for n_v: Node in ui.find_children("*", "Label", true, false):
+			ui_text += (n_v as Label).text + "\n"
+		ui_ok = contract_text == "" and not contract_visible \
+			and not xp_values.is_empty() and _all_plus_zero(xp_values) \
+			and total_values.size() == 1 and total_values[0] == "+0" \
+			and ui_text.find("+20") < 0 and ui_text.find("+80") < 0
+		ui.queue_free()
+		await h.step_process(2)
+	var ok: bool = str(last.get("match_id", "")) == run_id \
+		and hud_contract == "" and hud_mission != "" and ui_ok \
+		and int(save_data.get("xp", 0)) == before_xp \
+		and ((save_data.get("completed_contracts", {}) as Dictionary) == before_contracts)
+	save_data["completed_contracts"] = before_contracts
+	save_data["xp"] = before_xp
+	save_data["currency"] = before_currency
+	ss.call("write_save")
+	return ok
+
+
+## Co-op resolve applies the host's banked record: a Cleanout must bank it but
+## still skip record_contract_complete / XP (host and client share the gate).
+func _coop_cleanout_skips_credit(mission: Node, have_mission: bool) -> bool:
+	if not have_mission:
+		return false
+	var ss: Node = h.save_system()
+	var save_data: Dictionary = ss.get("data") as Dictionary
+	var before_contracts: Dictionary = (save_data.get("completed_contracts", {}) as Dictionary).duplicate(true)
+	var before_xp: int = int(save_data.get("xp", 0))
+	var before_currency: int = int(save_data.get("currency", 0))
+	GameState.end_free_play()
+	GameState.begin_cleanout("Mission.Guildhall.LootTheRoom")
+	GameState.state = "playing"
+	GameState.phase = GameState.PHASE_MAIN
+	var run_id: String = "s2-cleanout-coop-%d" % int(Time.get_ticks_usec())
+	GameState.loot_run_id = run_id
+	mission.set("_payout_applied", false)
+	var payout: Dictionary = {
+		"match_id": run_id,
+		"mission_id": "Mission.Guildhall.LootTheRoom",
+		"contract_order": 2,
+		"map_id": "guildhall",
+		"outcome": "escape",
+		"original": 500,
+		"kept": 500,
+		"stashed": 100,
+		"reward": 0,
+		"score": 500,
+		"money_taken": 600,
+		"stealth_mult": 1.0,
+		"capture": false,
+		"free_play": false,
+		"applied": false,
+		"banked": 0,
+		"carried": [],
+	}
+	mission.call("_on_coop_run_resolved", "escape", payout)
+	await h.step_process(1)
+	var last: Dictionary = ss.call("get_last_match")
+	var ok: bool = str(last.get("match_id", "")) == run_id \
+		and int(last.get("banked", -1)) == 600 \
+		and int(save_data.get("currency", 0)) == before_currency + 600 \
+		and int(save_data.get("xp", 0)) == before_xp \
+		and ((save_data.get("completed_contracts", {}) as Dictionary) == before_contracts) \
+		and str(GameState.state) == "victory"
+	save_data["completed_contracts"] = before_contracts
+	save_data["xp"] = before_xp
+	save_data["currency"] = before_currency
+	ss.call("write_save")
+	return ok
+
+
+## The QA `--qa-mission` cleanout detection must not depend on the gitignored
+## contracts.json overlay: the authored `.LootTheRoom` id (and the authored loot
+## goals) is the fallback. Clearing both overlay-derived maps reproduces a fresh
+## checkout without contracts.json.
+func _qa_side_mission_without_overlay() -> bool:
+	var gd: Node = h.game_data()
+	if gd == null:
+		return false
+	var md_v: Variant = gd.get("mission_durations")
+	var lg_v: Variant = gd.get("mission_loot_goals")
+	var md: Dictionary = (md_v as Dictionary).duplicate(true) if md_v is Dictionary else {}
+	var lg: Dictionary = (lg_v as Dictionary).duplicate(true) if lg_v is Dictionary else {}
+	gd.set("mission_durations", {})
+	gd.set("mission_loot_goals", {})
+	var ok: bool = bool(gd.call("is_side_mission", "Mission.Guildhall.LootTheRoom")) \
+		and bool(gd.call("is_side_mission", "Mission.OldManor.LootTheRoom")) \
+		and not bool(gd.call("is_side_mission", "Mission.Guildhall.VaultHeist")) \
+		and not bool(gd.call("is_side_mission", ""))
+	gd.set("mission_durations", md)
+	gd.set("mission_loot_goals", lg)
+	return ok
+
+
+## Both hub-return paths (pause RETURN TO DEN and post-match Continue) share one
+## reset; no run mode may survive at the hub.
+func _hub_return_clears_run_modes(mission: Node, have_mission: bool) -> bool:
+	if not have_mission:
+		return false
+	var hud: Node = mission.get("hud") as Node
+	if hud == null or not h.has_m(hud, "reset_run_modes_for_hub"):
+		return false
+	GameState.begin_cleanout("Mission.Guildhall.LootTheRoom")
+	GameState.free_play_pending = true
+	GameState.pending_mission_id = "Mission.Guildhall.LootTheRoom"
+	hud.call("reset_run_modes_for_hub")
+	return not GameState.cleanout_run and not GameState.cleanout_pending \
+		and GameState.pending_cleanout_mission_id == "" \
+		and not GameState.free_play and not GameState.free_play_pending \
+		and GameState.pending_mission_id == "" \
+		and int(GameState.active_contract_order) == 1
+
+
+func _xp_value_texts(box: Node) -> Array[String]:
+	var out: Array[String] = []
+	if box == null:
+		return out
+	for row_v: Node in box.get_children():
+		if not (row_v is HBoxContainer):
+			continue
+		var labels: Array[Node] = (row_v as HBoxContainer).get_children()
+		if labels.size() == 2 and labels[0] is Label and labels[1] is Label:
+			out.append((labels[1] as Label).text)
+	return out
+
+
+func _all_plus_zero(values: Array[String]) -> bool:
+	for v: String in values:
+		if v != "+0":
+			return false
+	return true
 
 
 func _snapshot() -> void:

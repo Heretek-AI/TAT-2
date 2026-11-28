@@ -396,7 +396,7 @@ func _refresh_xp() -> void:
 	if _xp_awarded >= 0:
 		var expected: int = _expected_xp()
 		var remainder: int = _xp_awarded - expected
-		if _won and remainder > 0:
+		if _won and _credits_contract() and remainder > 0:
 			var ftue_label: String = UIStringsScript.st_text("ST_PostMatch", "XP.Breakdown.FinishedTutorial", "")
 			if ftue_label != "":
 				_add_row(_total_box, ftue_label, "+" + _money(remainder), ThemeScript.TEAL_MUTED)
@@ -465,7 +465,9 @@ func _rebuild_unlocks(crossed: Dictionary) -> void:
 ## time weight and the difficulty multiplier are only meaningful when won.
 func _xp_rows() -> Array[Dictionary]:
 	var rows: Array[Dictionary] = []
-	if not _won:
+	# A cleanout win banks the haul but earns no campaign credit: the screen
+	# must not claim the Contract/Mission/Extraction XP weights were awarded.
+	if not _won or not _credits_contract():
 		rows.append({"label": UIStringsScript.st_text("ST_PostMatch", "XP.Breakdown.Contract.Unsuccessful", ""), "value": "+0"})
 		rows.append({"label": UIStringsScript.st_text("ST_PostMatch", "XP.Breakdown.Mission.Unsuccessful", ""), "value": "+0"})
 		rows.append({"label": UIStringsScript.st_text("ST_PostMatch", "XP.Breakdown.Extraction.Unsuccessful", ""), "value": "+0"})
@@ -488,8 +490,10 @@ func _xp_rows() -> Array[Dictionary]:
 
 
 ## Difficulty-multiplied base the save actually awards (record_contract_complete).
+## A cleanout/free-play run earns 0: the save refuses the credit, so the screen
+## must not project an award.
 func _expected_xp() -> int:
-	if not _won:
+	if not _won or not _credits_contract():
 		return 0
 	var gs: Node = _autoload("GameState")
 	var minutes: float = maxf(_node_float(gs, "elapsed_sec", 0.0), 0.0) / 60.0
@@ -503,8 +507,11 @@ func _expected_xp() -> int:
 
 ## Authored PostMatch.Contract.<order>.<Result> row ("Contract: Success"), using
 ## the payout record first because mission_controller banks before showing this
-## screen; `info` and GameState are only fallbacks.
+## screen; `info` and GameState are only fallbacks. A cleanout/free-play run
+## never records the hosting contract, so no contract row is shown.
 func _contract_outcome_line() -> String:
+	if not _credits_contract():
+		return ""
 	var order: int = _contract_order()
 	if order <= 0:
 		return ""
@@ -566,6 +573,17 @@ func _contract_order() -> int:
 	if order <= 0:
 		order = _node_int(_autoload("GameState"), "active_contract_order", 0)
 	return order
+
+
+## Single campaign-credit gate shared with the save/mission layer. True for a
+## normal contract deploy; false for free play and a first-class Cleanout, so
+## those screens show neither a contract outcome row nor a successful XP
+## breakdown. A bare SceneTree with no GameState keeps the legacy rows.
+func _credits_contract() -> bool:
+	var gs: Node = _autoload("GameState")
+	if gs != null and gs.has_method("run_credits_contract"):
+		return bool(gs.call("run_credits_contract"))
+	return true
 
 
 func _currency() -> int:

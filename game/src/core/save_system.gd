@@ -1134,9 +1134,10 @@ func _remove_file(path: String) -> void:
 ## At the authored weights a Novice escape with no time bonus is 20+20+80 =
 ## 120 XP; Thief doubles it, Master triples it.
 ##
-## Free play never banks progression (AGENTS rule 7): the award is skipped
-## before the completion row is written, mirroring the callers' `if not
-## GameState.free_play` guard so a direct call cannot farm XP either.
+## Free play never banks progression (AGENTS rule 7), and a first-class
+## Cleanout banks the haul but earns no campaign credit: the award and the
+## completion row are skipped through the same GameState.run_credits_contract()
+## gate the callers use, so a direct call cannot farm XP for either mode.
 ##
 ## `elapsed_sec` is a defaulted parameter exactly so mission_controller.gd keeps
 ## its three-argument call sites untouched: when it is <= 0 the elapsed time is
@@ -1146,8 +1147,13 @@ func _remove_file(path: String) -> void:
 ## is additive (progression.ftue_level_up_xp_is_on_top_of_regular_xp).
 func record_contract_complete(order: int, score: int, ghost: bool, elapsed_sec: float = 0.0) -> void:
 	var gs: Node = get_node_or_null("/root/GameState")
-	if gs != null and bool(gs.get("free_play")):
-		return
+	if gs != null:
+		if gs.has_method("run_credits_contract"):
+			if not bool(gs.call("run_credits_contract")):
+				return
+		elif bool(gs.get("free_play")):
+			# Defensive pre-3B.5 shape (no run_credits_contract method).
+			return
 	var k: String = str(order)
 	var cc_v: Variant = data.get("completed_contracts", {})
 	var cc: Dictionary = cc_v as Dictionary if cc_v is Dictionary else {}

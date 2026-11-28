@@ -2692,8 +2692,12 @@ func _post_match_mission_line(won: bool) -> String:
 	return UIStringsScript.st_text("ST_PostMatch", key, "")
 
 
-## Authored contract outcome row: PostMatch.Contract.<order>.<Result>.
+## Authored contract outcome row: PostMatch.Contract.<order>.<Result>. A
+## first-class Cleanout (and free play) never earns campaign credit, so it must
+## not display a hosting-contract success/failure row.
 func _post_match_contract_line(won: bool) -> String:
+	if not GameState.run_credits_contract():
+		return ""
 	var order: int = int(GameState.active_contract_order)
 	if order <= 0:
 		return ""
@@ -4522,17 +4526,23 @@ func _settle_run_for_exit() -> Dictionary:
 func _pause_return_to_den() -> void:
 	_settle_run_for_exit()
 	_set_paused(false)
-	GameState.active_contract_order = 1
-	GameState.end_free_play()
+	reset_run_modes_for_hub()
 	get_tree().change_scene_to_file(pause_return_scene_path())
 
 
 ## Post-match Continue: mission_controller has already banked the run, so this
 ## only returns to the Den hub (contract 1) through the mission scene.
 func _continue_to_den() -> void:
+	reset_run_modes_for_hub()
+	get_tree().change_scene_to_file(DEN_SCENE_PATH)
+
+
+## Shared hub-return mode reset: a run mode (free play or first-class Cleanout)
+## must never survive at the Den hub, or the next deploy would inherit it.
+func reset_run_modes_for_hub() -> void:
 	GameState.active_contract_order = 1
 	GameState.end_free_play()
-	get_tree().change_scene_to_file(DEN_SCENE_PATH)
+	GameState.end_cleanout()
 
 
 ## C-4 instrumentation: exact in-tree node counts for the elements the recorded

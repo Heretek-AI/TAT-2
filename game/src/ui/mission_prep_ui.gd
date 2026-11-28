@@ -1338,6 +1338,11 @@ func _populate_mission_rows() -> void:
 func _on_mission_selected(idx: int) -> void:
 	if AudioManager != null and AudioManager.has_method("play_ui"):
 		AudioManager.play_ui("click")
+	# Free play / first-class Cleanout run the row pre-selected by id; the
+	# selector is disabled for those modes (see _refresh_all), so a stray
+	# programmatic pick must not rewrite the card or the forced deploy row.
+	if free_play or side_mission_id != "":
+		return
 	if idx >= 0 and idx < _mission_rows.size():
 		_selected_mission_idx = idx
 		_apply_selected_mission_row()
@@ -1346,6 +1351,11 @@ func _on_mission_selected(idx: int) -> void:
 func _refresh_all() -> void:
 	if _mission_rows.is_empty():
 		_populate_mission_rows()
+	if _mission_selector != null:
+		# Free play / first-class Cleanout deploy the row that is forced by id;
+		# leaving the selector live let a pick rewrite the card and time limit
+		# only for READY to put the row back (a no-op). Disable it instead.
+		_mission_selector.disabled = free_play or side_mission_id != ""
 	_select_default_mission_for_map()
 	_refresh_location_card()
 	_refresh_mission_card()

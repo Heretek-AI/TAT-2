@@ -151,6 +151,14 @@ No GPU/Vulkan capture was run. The staged `p0b_route.gd` capture and the
 120-row visual score remain separate tasks; a single short input-driven segment
 does not make the route played.
 
+**Gate registration (round 2).** `probe_route_npcs` is registered in
+`build/qa/run_final_gates.sh` as gate 59 (`$OUT/probe_route_npcs.log`,
+`ROUTE_NPC PASS checks=4 fails=0`), with its floor in `tools/gate_ratchet.json`
+and evidence in `docs/reports/logs/final/probe_route_npcs.log`; the
+`probe_den_window` marker/floor moved from 34 to 44 for the new real-key block.
+`gate_manifest.py` reports `orphans=0`, `check_gate_ratchet.py` passes
+`runner/binding self-check 59 gates`, and `make gate-ratchet` is PASS.
+
 ## 6. What is still owed for a played route
 
 1. Drive S13–S26 (street, zipwire chain, courtyard, portico doors, foyer beams,

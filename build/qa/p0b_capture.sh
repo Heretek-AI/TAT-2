@@ -2,9 +2,10 @@
 # P0b Lane I capture wrapper: one Godot at a time, Xvfb for the real Vulkan
 # capture, the shared flock for every invocation, GPU samples around the run.
 #
-#   build/qa/p0b_capture.sh                        # all six poses, Vulkan
+#   build/qa/p0b_capture.sh                        # all poses, Vulkan
 #   build/qa/p0b_capture.sh --beam-card=off        # TAT2_BEAM_CARD A/B run
 #   build/qa/p0b_capture.sh --poses=lounge_beam,beam_close
+#   build/qa/p0b_capture.sh --settle-seconds=25    # extra >=25 s hold after the frames
 #   build/qa/p0b_capture.sh --tag=run2 --seed=1025051536
 #   build/qa/p0b_capture.sh --dry-run              # headless, no GPU, tracked manifest
 #   build/qa/p0b_capture.sh --self-test            # headless checks only
@@ -32,6 +33,7 @@ AO="${TAT2_AO:-on}"
 SEED="derived"
 POSES=""
 TAG=""
+SETTLE=""
 MODE="capture"
 
 usage() {
@@ -52,6 +54,8 @@ while [ $# -gt 0 ]; do
     --poses) shift; POSES="${1:-}" ;;
     --tag=*) TAG="${1#*=}" ;;
     --tag) shift; TAG="${1:-}" ;;
+    --settle-seconds=*) SETTLE="${1#*=}" ;;
+    --settle-seconds) shift; SETTLE="${1:-}" ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown argument: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -63,6 +67,18 @@ case "$AO" in on|off) ;; *) echo "ABORT: --ao=$AO (on|off)" >&2; exit 2 ;; esac
 if [ -n "$TAG" ] && ! printf '%s' "$TAG" | grep -Eq '^[A-Za-z0-9._-]+$'; then
   echo "ABORT: --tag must be [A-Za-z0-9._-]+" >&2
   exit 2
+fi
+# --settle-seconds is 0 (off) or >=25 s; the AEM/A-B sessions use 25. Reject a
+# small positive value rather than silently shortening the hold.
+if [ -n "$SETTLE" ]; then
+  if ! printf '%s' "$SETTLE" | grep -Eq '^[0-9]+([.][0-9]+)?$'; then
+    echo "ABORT: --settle-seconds must be a non-negative number" >&2
+    exit 2
+  fi
+  if awk -v s="$SETTLE" 'BEGIN { exit !((s + 0) > 0 && (s + 0) < 25) }'; then
+    echo "ABORT: --settle-seconds=$SETTLE is below the 25 s minimum (omit for 0)" >&2
+    exit 2
+  fi
 fi
 
 mkdir -p "$(dirname "$LOCK")" || exit 2
@@ -110,6 +126,7 @@ fi
 
 ARGS="--mode=$MODE --beam-card=$BEAM --seed=$SEED"
 [ -n "$POSES" ] && ARGS="$ARGS --poses=$POSES"
+[ -n "$SETTLE" ] && ARGS="$ARGS --settle-seconds=$SETTLE"
 [ "$MODE" = "capture" ] && ARGS="$ARGS --run-id=$(basename "$OUT")"
 export P0B_OUT="$OUT"
 export P0B_MANIFEST="$MANIFEST"

@@ -1676,10 +1676,16 @@ func _build_reticle_and_prompt(root: Control) -> void:
 	interact_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	interact_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	interact_lbl.add_theme_font_size_override("font_size", 15)
-	interact_lbl.add_theme_color_override("font_color", Color(0.58, 0.72, 0.98, 0.98))
+	# Authored prompt colour #636EEC. Godot canvas colours are linear, so the
+	# authored sRGB hex (99,110,236) is stored as its linear components
+	# (0.124772, 0.155927, 0.838799); the port literal (0.58,0.72,0.98) was
+	# invented. This is fidelity, not a contrast fix: the authored colour is
+	# darker, so the prompt contrast metric drops (recorded as UI2-03 DELTA).
+	interact_lbl.add_theme_color_override("font_color", Color(0.124772, 0.155927, 0.838799, 0.98))
 	interact_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
-	interact_lbl.add_theme_constant_override("shadow_offset_x", 1)
-	interact_lbl.add_theme_constant_override("shadow_offset_y", 1)
+	# Authored 3 px drop shadow/outline (was a 1 px port offset).
+	interact_lbl.add_theme_constant_override("shadow_offset_x", 3)
+	interact_lbl.add_theme_constant_override("shadow_offset_y", 3)
 	if _sans != null:
 		interact_lbl.add_theme_font_override("font", _sans)
 	interact_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1708,10 +1714,12 @@ func _build_reticle_and_prompt(root: Control) -> void:
 	_prompt_secondary_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_prompt_secondary_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_prompt_secondary_lbl.add_theme_font_size_override("font_size", 14)
-	_prompt_secondary_lbl.add_theme_color_override("font_color", Color(0.58, 0.72, 0.98, 0.88))
+	# Same authored #636EEC prompt colour and 3 px shadow as the primary row
+	# (UI2-03 records both prompt rows as DELTA; the 4.5 floor is unchanged).
+	_prompt_secondary_lbl.add_theme_color_override("font_color", Color(0.124772, 0.155927, 0.838799, 0.88))
 	_prompt_secondary_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
-	_prompt_secondary_lbl.add_theme_constant_override("shadow_offset_x", 1)
-	_prompt_secondary_lbl.add_theme_constant_override("shadow_offset_y", 1)
+	_prompt_secondary_lbl.add_theme_constant_override("shadow_offset_x", 3)
+	_prompt_secondary_lbl.add_theme_constant_override("shadow_offset_y", 3)
 	if _sans != null:
 		_prompt_secondary_lbl.add_theme_font_override("font", _sans)
 	_prompt_secondary_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE

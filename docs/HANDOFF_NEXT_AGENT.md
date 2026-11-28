@@ -175,11 +175,20 @@ against itself (`--reference-only`); the first port-side `foyer_beam` capture is
 - **StateTree:** shadow only; `fully_parity_covered_trees=0` of 21, one
   structural tree; `TAT2_STATETREE=off`; FSM drives. Cutover needs the authored
   task/condition parameters and a live event bus — do not invent values.
-- **Audio:** W11 landed, but **396/645 VO lines (41/76 triples) have no caller**;
-  3 unnamed music keys stay id-only; 24 unnamed buses carry 98/183 state rows;
-  5 `FS_Layers` values are unproduced; Hauntstable1 never recorded
-  `ExertionCombat/KnockedOut`; `blood_moon` rain 10.0 is clamped to the RTPC
-  0..1 domain (owner decision).
+- **Audio:** VO director is **288/645 lines mapped** (was 249); **357 remain
+  unwired** and are counted by owning-system gap in
+  `docs/reports/phase3-audio-20261127.md` §4.3 (no ambient chatter, private-zone,
+  object-observation, flee/evade, smoke-exposure or DSP speaker system; the
+  noise-heard bark is blocked by an existing sight bark). **The 3 unnamed music
+  keys and the 24 unnamed buses (98 state rows) are NOT recoverable from the
+  cook** — 0/91 `AudioBus` objects are named and the package contains no
+  `AkTrigger` — so stop treating them as pending extraction. The 5 unproduced
+  `FS_Layers` values are a `PORT_DECISION` whose "double-ban" rationale is
+  **refuted** (measured: a layer never removes material media; `MetalPipe`/
+  `MetalSheet`/`Metal` own 0 layer media, `Slime` only on the absent slide
+  action, `Glass` is additive-only). `blood_moon` rain 10.0 now goes through the
+  one documented `WeatherProfile.rain_intensity_01()` converter (saturates to
+  1.0 with a warning; the old 0..1 / 0..1.5 / 0..1 clamps are gone).
 - **GC/destructibles:** `Destructibles/` is still absent from the shared tree;
   the 93-chest fallback is a prediction, not a claim. Bookcases/safes landed;
   the authored damage-driven break remains open and hold-F `break_container` is

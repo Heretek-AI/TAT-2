@@ -115,6 +115,29 @@ const GUARD_CUES: Dictionary = {
 	],
 }
 
+## Guard exertion/attack barks, keyed by a port beat. The speaker is the guard's
+## own authored speaker (`Enforcer1` / `Hauntstable1`), supplied by the caller;
+## a speaker that never recorded the triple is skipped, never borrowed.
+##
+## Phase 3B.3 measured gap: only `Enforcer1` recorded `ExertionCombat/
+## TakingDamage` (30) and `ExertionCombat/Attacking` (9); `Hauntstable1` has
+## neither, so both beats refuse for a Hauntstable and their two recordings stay
+## silent rather than reusing the Enforcer1 set. Suite 122 pins that gap.
+##
+## `caller` documents the existing port system that owns the beat — these are
+## wired because that system already exists, not because a line was looking for
+## a home:
+##   * taking_damage -> GuardAi.take_knockout(), non-lethal hit only (health > 0)
+##   * attacking     -> GuardAi._play_guard_attack(), the melee swing
+const GUARD_BEAT_CUES: Dictionary = {
+	"taking_damage": [
+		{"verb": "ExertionCombat", "state": "TakingDamage", "priority": 55, "cooldown_s": 6.0},
+	],
+	"attacking": [
+		{"verb": "ExertionCombat", "state": "Attacking", "priority": 45, "cooldown_s": 5.0},
+	],
+}
+
 ## Port cue -> authored candidate triples for the player/quest beats. Speaker is
 ## part of the row because these lines belong to a specific authored character.
 ## `caller` documents the shipping trigger; `caller: none` is an authored line
@@ -251,6 +274,16 @@ func vo_pick_event(cue: String, now_s: float) -> Dictionary:
 	return _pick(key, EVENT_CUES[key] as Array, "", now_s)
 
 
+## Picks the authored exertion/attack bark for a guard beat (see
+## [constant GUARD_BEAT_CUES]). [param speaker] is the guard's authored speaker;
+## a beat that speaker never recorded is refused, never borrowed.
+func vo_pick_guard_beat(cue: String, speaker: String, now_s: float) -> Dictionary:
+	var key: String = cue.strip_edges().to_lower()
+	if not GUARD_BEAT_CUES.has(key):
+		return _refuse(key, "unknown_cue", "no authored guard beat mapping for '%s'" % key)
+	return _pick(key, GUARD_BEAT_CUES[key] as Array, speaker, now_s)
+
+
 ## Generic picker: [param cue] is only for reporting; [param speaker] overrides
 ## the row's speaker when non-empty. Returns `{ok, event, speaker, verb, state,
 ## priority, media_count, cue, reason}`; `ok=false` carries a `reason`
@@ -301,6 +334,7 @@ func report() -> Dictionary:
 		"lines": line_count(),
 		"triples": triple_count(),
 		"guard_cues": GUARD_CUES.size(),
+		"guard_beat_cues": GUARD_BEAT_CUES.size(),
 		"event_cues": EVENT_CUES.size(),
 		"cooldowns": _cooldowns.size(),
 		"picks": _picks,
@@ -317,6 +351,12 @@ func mapped_events() -> PackedStringArray:
 	var out: PackedStringArray = PackedStringArray()
 	for cue: Variant in GUARD_CUES.keys():
 		for row: Dictionary in (GUARD_CUES[cue] as Array):
+			for speaker: String in ["Enforcer1", "Hauntstable1"]:
+				for event: String in _rows(speaker, str(row["verb"]), str(row["state"])):
+					if not out.has(event):
+						out.append(event)
+	for cue: Variant in GUARD_BEAT_CUES.keys():
+		for row: Dictionary in (GUARD_BEAT_CUES[cue] as Array):
 			for speaker: String in ["Enforcer1", "Hauntstable1"]:
 				for event: String in _rows(speaker, str(row["verb"]), str(row["state"])):
 					if not out.has(event):

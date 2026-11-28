@@ -382,6 +382,8 @@ var _vo_director: RefCounted = null
 var _vo_last_transition: Dictionary = {}
 ## W11-A: last resolved player/quest cue (QA only).
 var _vo_last_cue: Dictionary = {}
+## Phase 3B.3: last resolved guard exertion/attack beat (QA only).
+var _vo_last_beat: Dictionary = {}
 ## W11-A: the live player whose `disguise_changed` is connected. A new instance
 ## is created for every contract (`mission_controller._spawn_player`), so this
 ## tracks the *instance* and rebinds when the player changes or is freed.
@@ -654,6 +656,7 @@ func vo_state() -> Dictionary:
 		"authored_lines": lines,
 		"last_transition": _vo_last_transition.duplicate(true),
 		"last_cue": _vo_last_cue.duplicate(true),
+		"last_beat": _vo_last_beat.duplicate(true),
 		"bound_player": _vo_bound_player != null and is_instance_valid(_vo_bound_player),
 	}
 	if _vo_director != null:
@@ -735,6 +738,26 @@ func play_vo_cue(cue: String, pos: Variant = null) -> bool:
 	if not bool(pick.get("ok", false)):
 		return false
 	_vo_last_cue = pick.duplicate(true)
+	return play_vo_line(str(pick.get("event", "")), pos)
+
+
+## Resolves a guard exertion/attack beat (see VoDirector.GUARD_BEAT_CUES) for
+## [param speaker] and plays it. Phase 3B.3: the owning systems already exist
+## (GuardAi damage + melee), so these authored lines are wired here rather than
+## left callerless. A speaker that never recorded the beat is refused by the
+## director, never given another speaker's recording.
+func play_vo_guard_beat(cue: String, speaker: String, pos: Variant = null) -> bool:
+	if _shutdown or _vo_director == null:
+		return false
+	var now_s: float = float(Time.get_ticks_msec()) / 1000.0
+	var pick_v: Variant = _vo_director.callv("vo_pick_guard_beat", [cue, speaker, now_s])
+	if not (pick_v is Dictionary):
+		return false
+	var pick: Dictionary = pick_v
+	_vo_last_beat = pick.duplicate(true)
+	_vo_last_beat["speaker"] = speaker
+	if not bool(pick.get("ok", false)):
+		return false
 	return play_vo_line(str(pick.get("event", "")), pos)
 
 

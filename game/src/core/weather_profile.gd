@@ -68,8 +68,10 @@ const CubemapLoader := preload("res://src/core/cubemap_loader.gd")
 ##   replaces the flat SkyLight colour with the CPU cosine irradiance of the
 ##   authored TextureCube (`cubemap_loader.gd`), energy NOT clamped.
 ## - Fog DirectionalInscattering luminance -> fog_sun_scatter (0..1).
-## - enable_rain / rain_intensity are exposed for later particle wiring; this
-##   module never spawns rain.
+## - enable_rain / rain_intensity are exposed for the particle and audio
+##   wiring; `rain_intensity_01()` is the ONE preset -> 0..1 converter those
+##   consumers use (it saturates an out-of-domain preset and warns, see below).
+##   This module never spawns rain.
 
 const MobileProfile: GDScript = preload("res://src/core/mobile_profile.gd")
 ## W6G: SoundCarry accessor delegates the tag join to the hearing layer, so the
@@ -807,8 +809,90 @@ static func enable_rain(preset: Dictionary) -> bool:
 	return bool(_section(preset, "rain").get("enabled", false))
 
 
+## Raw authored `rain.intensity`. This is the *source* value, not a mix
+## parameter: it can leave the authored game-parameter domain (`blood_moon`
+## authors 10.0). Consumers that feed the authored 0..1 RTPC or a 0..1 visual
+## parameter must go through `rain_intensity_01()`.
 static func rain_intensity(preset: Dictionary) -> Variant:
 	return _section(preset, "rain").get("intensity")
+
+
+## Authored rain domain. The authored `Weather_Rain_Intensity` RTPC curve is
+## authored in 0..1 (`0 -> -1.0 dB`, `0.65 -> 0.0 dB`) and every shipped preset
+## that enables rain sits in that interval (`gloomy`/`heavy_rain`/`stormy` 1.0,
+## `dusk_stormy` 0.5, `example2` 0.1, the off rows 1e-06). One preset,
+## `blood_moon`, authors **10.0** — outside the domain by 10x.
+const RAIN_INTENSITY_MIN: float = 0.0
+const RAIN_INTENSITY_MAX: float = 1.0
+## Phase 3B.3 bookkeeping: every out-of-domain value seen, and the preset ids
+## already reported (one loud line per preset, the rest counted).
+static var _rain_domain_total: int = 0
+static var _rain_domain_warned: Dictionary = {}
+
+
+## The ONE preset -> game-parameter converter for rain intensity (Phase 3B.3).
+##
+## `mission_controller` feeds the authored `Weather_Rain_Intensity` RTPC and
+## `weather_visuals` sizes the rain volume and the lens shader, so this is the
+## single mapping that keeps "the rain you see" and "the rain you hear" in one
+## domain. Before this each caller clamped to its own ceiling (0..1 for the RTPC
+## and the lens, 0..1.5 for the particle count), so `blood_moon` rendered 1.5x
+## the full rain volume while its audio and lens read 1.0.
+##
+## This is a *domain saturation*, not a unit conversion:
+##   * an in-domain value (0..1) passes through unchanged;
+##   * an out-of-domain value is clamped to the nearest endpoint and reported
+##     with `push_warning` (once per preset; every occurrence is counted by
+##     `rain_domain_warnings()`).
+## It deliberately does NOT divide 10.0 by 10 or read it as a percentage: no
+## authored unit for that value was recovered, and inventing a scale would be a
+## fabricated mapping. The 10.0 stays authored data for the asset owner; see
+## `docs/reports/phase3-audio-20261127.md`.
+##
+## Returns `null` when the preset carries no `rain.intensity` (the caller keeps
+## its parameter at the authored/control-plane default).
+static func rain_intensity_01(preset: Dictionary) -> Variant:
+	var raw: Variant = rain_intensity(preset)
+	if raw == null:
+		return null
+	var v: float = float(raw)
+	if not is_finite(v):
+		_rain_domain_note(v, preset)
+		return RAIN_INTENSITY_MIN
+	var clamped: float = clampf(v, RAIN_INTENSITY_MIN, RAIN_INTENSITY_MAX)
+	if not is_equal_approx(v, clamped):
+		_rain_domain_note(v, preset)
+	return clamped
+
+
+## Counts one out-of-domain rain intensity (and warns once per preset id).
+static func _rain_domain_note(value: float, preset: Dictionary) -> void:
+	_rain_domain_total += 1
+	var pid: String = str(preset.get("preset", "?"))
+	if _rain_domain_warned.has(pid):
+		return
+	_rain_domain_warned[pid] = true
+	push_warning("[weather_profile] rain.intensity %s for preset '%s' is outside the authored 0..1 domain; saturated to [%.1f, %.1f]. No authored unit for this value has been recovered, so it is reported as-is (see docs/reports/phase3-audio-20261127.md)" % [
+		str(value), pid, RAIN_INTENSITY_MIN, RAIN_INTENSITY_MAX])
+
+
+## Out-of-domain rain intensities seen this session (the warning path's count;
+## suite 121 asserts it so the branch cannot silently disappear).
+static func rain_domain_warnings() -> int:
+	return _rain_domain_total
+
+
+## Preset ids whose out-of-domain intensity has been reported (sorted).
+static func rain_domain_warned_presets() -> Array:
+	var out: Array = _rain_domain_warned.keys()
+	out.sort()
+	return out
+
+
+## QA hook: forgets the warning bookkeeping (suite 121 / a content reload).
+static func reset_rain_domain_warnings() -> void:
+	_rain_domain_total = 0
+	_rain_domain_warned.clear()
 
 
 static func ground_wetness(preset: Dictionary) -> Variant:

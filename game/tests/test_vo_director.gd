@@ -74,6 +74,7 @@ func _run() -> void:
 	_test_index(aw, index, director)
 	_test_real_events(aw, director)
 	_test_guard_transitions(director)
+	_test_guard_beats(director)
 	_test_event_cues(director)
 	_test_cooldowns(director)
 	_test_zero_media(aw, director)
@@ -259,6 +260,71 @@ func _test_guard_transitions(director: VoDirector) -> void:
 		"VO3.4 unmapped transition returned %s" % str(bad))
 
 
+## 3b. Phase 3B.3: the guard exertion/attack beats whose owning systems already
+## exist (GuardAi.take_knockout / _play_guard_attack). These are wired because
+## the systems exist, not because a line wanted a caller; the speaker is the
+## guard's own, so a Hauntstable cannot borrow an Enforcer1 recording.
+func _test_guard_beats(director: VoDirector) -> void:
+	var expected: Dictionary = {
+		"taking_damage": ["ExertionCombat", "TakingDamage"],
+		"attacking": ["ExertionCombat", "Attacking"],
+	}
+	var wrong: Array = []
+	for cue: Variant in expected.keys():
+		var want: Array = expected[cue]
+		var fresh: VoDirector = VoDirector.new()
+		fresh.load_index(director_index(director))
+		var pick: Dictionary = fresh.vo_pick_guard_beat(str(cue), "Enforcer1", 1.0)
+		if not bool(pick.get("ok", false)):
+			wrong.append("%s refused:%s" % [str(cue), str(pick.get("reason", ""))])
+			continue
+		if (str(pick.get("speaker", "")) != "Enforcer1"
+			or str(pick.get("verb", "")) != str(want[0])
+			or str(pick.get("state", "")) != str(want[1])):
+			wrong.append("%s=%s" % [str(cue), str(pick)])
+	_check(wrong.is_empty(),
+		"VO4.4 the two wired guard beats pick their authored Enforcer1 triple",
+		"VO4.4 wrong guard beat picks: %s" % str(wrong))
+	# The measured authored gap: Hauntstable1 recorded neither exertion bucket,
+	# so both beats refuse instead of borrowing the Enforcer1 set.
+	var gap: Array = []
+	for cue: Variant in expected.keys():
+		var fresh: VoDirector = VoDirector.new()
+		fresh.load_index(director_index(director))
+		var pick: Dictionary = fresh.vo_pick_guard_beat(str(cue), "Hauntstable1", 1.0)
+		if bool(pick.get("ok", false)) or str(pick.get("reason", "")) != "unknown_triple":
+			gap.append("%s=%s" % [str(cue), str(pick)])
+	_check(gap.is_empty(),
+		"VO4.5 Hauntstable1 has no exertion recording and both beats refuse (no borrowed line)",
+		"VO4.5 Hauntstable1 beat gap wrong: %s" % str(gap))
+	# Cooldown: the same beat cannot re-bark inside its authored cooldown.
+	var d: VoDirector = VoDirector.new()
+	d.load_index(director_index(director))
+	var first: Dictionary = d.vo_pick_guard_beat("taking_damage", "Enforcer1", 0.0)
+	var second: Dictionary = d.vo_pick_guard_beat("taking_damage", "Enforcer1", 1.0)
+	_check(bool(first.get("ok", false)) and not bool(second.get("ok", false))
+		and str(second.get("reason", "")) == "cooldown",
+		"VO4.6 a repeated damage beat inside its 6 s cooldown is suppressed",
+		"VO4.6 first=%s second=%s" % [str(first), str(second)])
+	# An unknown beat is refused, never guessed.
+	var fresh_bad: VoDirector = VoDirector.new()
+	fresh_bad.load_index(director_index(director))
+	var bad: Dictionary = fresh_bad.vo_pick_guard_beat("not_a_beat", "Enforcer1", 1.0)
+	_check(not bool(bad.get("ok", false)) and str(bad.get("reason", "")) == "unknown_cue",
+		"VO4.7 an unknown guard beat is refused",
+		"VO4.7 unknown beat returned %s" % str(bad))
+	# The reachable/unwired census moves only by the wired lines: the director
+	# maps 288 of the 645 authored lines; the other 357 are documented families
+	# whose owning systems do not exist (see docs/reports/phase3-audio-20261127.md).
+	var mapped: int = director.mapped_events().size()
+	_check(mapped == 288,
+		"VO4.7 the director maps 288 authored lines (249 W11-A + 39 exertion)",
+		"VO4.7 mapped=%d (want 288)" % mapped)
+	_check(645 - mapped == 357,
+		"VO4.7 357 authored lines stay unmapped and counted (was 396 before 3B.3)",
+		"VO4.7 unmapped=%d (want 357)" % (645 - mapped))
+
+
 ## 4. The player/quest cues and their authored speakers.
 func _test_event_cues(director: VoDirector) -> void:
 	var expected: Dictionary = {
@@ -410,6 +476,16 @@ func _test_runtime(aw: AudioWwise, director: VoDirector) -> void:
 	_check(aw.vo_media_count(str(last.get("event", ""))) > 0,
 		"VO7.4 the played transition is a media-bearing authored line",
 		"VO7.4 played a zero-media line")
+	# Phase 3B.3: the guard exertion beat plays through the same single
+	# playback path and is recorded for QA.
+	if runtime_director != null:
+		runtime_director.call("reset_cooldowns")
+	var beat_played: bool = bool(am.call("play_vo_guard_beat", "taking_damage", "Enforcer1", Vector3.ZERO))
+	var beat: Dictionary = (am.call("vo_state") as Dictionary).get("last_beat", {}) as Dictionary
+	_check(beat_played and not str(beat.get("event", "")).is_empty()
+		and str(beat.get("verb", "")) == "ExertionCombat",
+		"VO7.5 AudioManager.play_vo_guard_beat plays and records the authored damage line",
+		"VO7.5 beat_played=%s last_beat=%s" % [str(beat_played), str(beat)])
 
 
 func row_key(speaker: Variant, verb: Variant, state: Variant) -> String:

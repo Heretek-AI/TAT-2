@@ -15,7 +15,7 @@ over any doc where they disagree.
 
 | Property | Value |
 |---|---|
-| Source | `/home/john/Videos/clip_1,795,033,698,901.mp4` |
+| Source | `$HOME/Videos/clip_1,795,033,698,901.mp4` |
 | Duration | `225.642333 s` (`03:45.64`) |
 | Video | `3840x2160` H.264 High, `29.672 fps` avg, `6,696` frames |
 | Audio | AAC LC `48 kHz` stereo, stream starts at `0.277 s` |

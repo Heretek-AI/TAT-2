@@ -1,6 +1,6 @@
 # TAT-2 Architecture & Asset Pipeline Reference
 
-**TAT-2** is a Godot 4.7.2 (Forward+ / Jolt Physics) port of *Thick As Thieves* (`TAT`), sourced from the Steam installation at `/home/john/.local/share/Steam/steamapps/common/Thick As Thieves/`.
+**TAT-2** is a Godot 4.7.2 (Forward+ / Jolt Physics) port of *Thick As Thieves* (`TAT`), sourced from the Steam installation at `$HOME/.local/share/Steam/steamapps/common/Thick As Thieves/`.
 
 ---
 

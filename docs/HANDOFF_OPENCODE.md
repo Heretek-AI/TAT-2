@@ -6,7 +6,7 @@ Continue the **visual fidelity + gameplay mechanics parity wave** started in Ant
 
 ## Goal (approved task prompt)
 Full-game 1:1 Godot rebuild of Thick As Thieves, **desktop Linux / Vulkan Forward+ only**. Close the highest-impact visual-fidelity and gameplay-mechanics gaps visible in the 56 Steam reference screenshots:
-`/home/john/.local/share/Steam/userdata/397775346/760/remote/3341000/screenshots/*.jpg`
+`$HOME/.local/share/Steam/userdata/397775346/760/remote/3341000/screenshots/*.jpg`
 
 Acceptance:
 - [ ] `make test` → `SUMMARY: fails=0`, zero `SCRIPT ERROR`

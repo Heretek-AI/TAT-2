@@ -1970,7 +1970,12 @@ func _feat_22_verification_gates() -> void:	# T1-22-A: run_tests suite ratchet (
 	h.require(cap_gate_ok, "T1-22-D", "build/qa/capture_e2e_parity.{sh,gd} with SHADER/SCRIPT ERROR=0 gate (%s)" % str(cap_gate_ok))
 
 	# T1-22-E: Steam Screenshot Side-by-Side Parity Audit Preconditions
-	var steam_dir: String = "/home/john/.local/share/Steam/userdata/397775346/760/remote/3341000/screenshots"
+	# The official reference captures live in the local Steam userdata tree.
+	# Resolve it from $HOME (override with TAT2_STEAM_SCREENSHOTS) so a fresh
+	# clone does not carry the capturing machine's absolute path.
+	var steam_dir: String = OS.get_environment("TAT2_STEAM_SCREENSHOTS")
+	if steam_dir == "":
+		steam_dir = OS.get_environment("HOME").path_join(".local/share/Steam/userdata/397775346/760/remote/3341000/screenshots")
 	var jpg_cnt: int = 0
 	var da: DirAccess = DirAccess.open(steam_dir)
 	if da != null:

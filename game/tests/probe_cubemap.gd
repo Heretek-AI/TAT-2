@@ -18,6 +18,12 @@ const INDEX_PATH := "res://data/generated/ibl/cubemaps.json"
 ##   E(n=+Y)/pi = (1/pi) * integral_{-1..1}{-1..1} (1+x^2+z^2)^-2 dx dz
 ## evaluated with an 800x800 midpoint grid (Python, 2026-11-27).
 const REF_PLUS_Y_ONLY := 0.5541266519420135
+## 8-bit linear quantisation step: every texel of a PNG face is a multiple of
+## 1/255, so a cube whose radiance is ~1.5e-3 cannot be represented at all.
+const QUANT8_STEP := 1.0 / 255.0
+## Measured ambient luminance of the pre-fix 8-bit PNG path (P4.1 audit). The
+## HDR faces must clear it by a wide margin, not by a rounding step.
+const QUANT8_MEASURED_LUM := 5.0e-5
 
 var fails: int = 0
 var checks: int = 0
@@ -45,6 +51,8 @@ func _run() -> void:
 	_test_uniform_and_axis()
 	_test_srgb_transfer()
 	_test_off_matches_today()
+	_test_units_expression()
+	_test_real_cube_energy()
 	_test_generated_index()
 	_finish()
 
@@ -165,6 +173,85 @@ func _test_off_matches_today() -> void:
 		_check(true, "converted cubemap index present", INDEX_PATH)
 
 
+## P3-3A.4 units: the IBL ambient energy is
+##   luminance(E(+Y)) * authored sky.intensity * IBL_AMBIENT_PORT_SCALE
+## and deliberately NOT the flat `clamp(intensity * 0.08)` substitute: the two
+## are different quantities (a measured linear radiance vs a tuned Godot
+## energy), so comparing them directly is the defect this pins.
+func _test_units_expression() -> void:
+	var preset: Dictionary = _read_json("res://data/generated/weather/gloomy.json")
+	if preset.is_empty():
+		_check(false, "generated gloomy preset readable for the units check")
+		return
+	var sky_v: Variant = preset.get("sky", {})
+	var sky: Dictionary = sky_v as Dictionary if sky_v is Dictionary else {}
+	var authored: float = float(sky.get("intensity", -1.0))
+	_check(authored > 0.0 and is_equal_approx(WeatherProfile.sky_intensity(preset), authored),
+		"the IBL path reads the authored sky.intensity unchanged (no 0.08, no clamp)",
+		"authored=%.3f applied=%.3f" % [authored, WeatherProfile.sky_intensity(preset)])
+	_check(is_equal_approx(WeatherProfile.sky_intensity({}), 1.0),
+		"a preset that authors no sky.intensity keeps UE's default 1.0")
+	_check(is_equal_approx(WeatherProfile.IBL_AMBIENT_PORT_SCALE, 1.0),
+		"the one port scale is the documented identity (linear radiance -> linear ambient energy)")
+
+	var lum: float = 0.0017
+	var energy: float = WeatherProfile.ibl_ambient_energy(preset, lum)
+	var want: float = lum * authored * WeatherProfile.IBL_AMBIENT_PORT_SCALE
+	_check(is_equal_approx(energy, want) and energy > lum,
+		"IBL energy applies the authored intensity on top of the measured radiance",
+		"%.6f = %.6f * %.3f" % [energy, lum, authored])
+	var flat: float = float(WeatherProfile.ambient_energy(preset))
+	_check(flat > energy and not is_equal_approx(flat, energy),
+		"the flat clamp(intensity*0.08) substitute is a different quantity, not the IBL energy",
+		"flat=%.4f ibl=%.5f ratio=%.1fx" % [flat, energy, flat / maxf(energy, 1e-9)])
+
+
+## The real shipped cube, through the same public entry the game uses. Pins the
+## measured energy against the 8-bit quantisation floor the PNG path produced.
+func _test_real_cube_energy() -> void:
+	OS.set_environment("TAT2_IBL", "ambient")
+	CubemapLoader.reset_cache()
+	var amb: Dictionary = CubemapLoader.ambient_for_ue_path("/Game/MaterialLibrary/Utility/Cubemap_GroundFloor_01")
+	if not bool(amb.get("available", false)):
+		_check(false, "the authored Gloomy cubemap loads as linear radiance",
+			str(amb.get("reason", "")))
+		return
+	var lum: float = float(amb.get("lum", 0.0))
+	# The same cube re-integrated after an 8-bit linear quantisation (round to
+	# 1/255, exactly what the PNG path wrote). This is the falsifier that needs
+	# no remembered constant: the HDR faces must carry energy the 8-bit encoding
+	# cannot represent.
+	var faces: Array = CubemapLoader.cube_faces("cubemap_ground_floor_01")
+	var quant_lum: float = 0.0
+	if faces.size() == 6:
+		var q_e: Color = CubemapLoader.irradiance(_quantise8(faces), Vector3.UP, "linear")
+		quant_lum = 0.2126 * q_e.r + 0.7152 * q_e.g + 0.0722 * q_e.b
+	_check(faces.size() == 6, "the Gloomy cube's six faces load for the quantisation check", "%d" % faces.size())
+	_check(lum > maxf(quant_lum, QUANT8_MEASURED_LUM) * 5.0,
+		"the HDR irradiance clears what the same cube measures at 8 bits",
+		"hdr=%.6f 8bit=%.6f audited_8bit_floor=%.6f ratio=%.1fx" % [
+			lum, quant_lum, QUANT8_MEASURED_LUM, lum / maxf(quant_lum, QUANT8_MEASURED_LUM)])
+	_check(lum < QUANT8_STEP,
+		"the cube still sits below one 8-bit step, so only the .hdr faces can carry it",
+		"lum=%.6f step=%.6f" % [lum, QUANT8_STEP])
+
+	var preset: Dictionary = _read_json("res://data/generated/weather/gloomy.json")
+	if preset.is_empty():
+		_check(false, "generated gloomy preset readable for the apply check")
+		return
+	var env := Environment.new()
+	var moon := DirectionalLight3D.new()
+	var applied: bool = WeatherProfile.apply_environment(env, moon, preset)
+	var want: float = WeatherProfile.ibl_ambient_energy(preset, lum)
+	_check(applied and is_equal_approx(env.ambient_light_energy, want),
+		"TAT2_IBL=ambient sets ambient_light_energy = lum * sky.intensity * port scale",
+		"applied=%.6f want=%.6f" % [env.ambient_light_energy, want])
+	_check(not is_equal_approx(env.ambient_light_energy,
+			float(WeatherProfile.ambient_energy(preset))),
+		"ambient mode does not fall back to the flat SkyLight energy")
+	moon.free()
+
+
 func _test_generated_index() -> void:
 	if not FileAccess.file_exists(INDEX_PATH):
 		print("PENDING: %s absent; the integrator runs the cubemaps extract + parse_cubemap, then this block pins schema/faces" % INDEX_PATH)
@@ -186,10 +273,20 @@ func _test_generated_index() -> void:
 			_check(false, "cubemap %s carries six faces" % id, "%d" % faces.size())
 			continue
 		var ok: bool = true
+		var all_hdr: bool = true
 		for name: String in CubemapLoader.FACE_NAMES:
-			if not ResourceLoader.exists(str(faces.get(name, ""))):
+			var face_path: String = str(faces.get(name, ""))
+			if not ResourceLoader.exists(face_path):
 				ok = false
-		_check(ok, "cubemap %s face PNGs resolve" % id, str(rec.get("ue_path", "")))
+			if not (face_path.get_extension().to_lower() in ["hdr", "exr"]):
+				all_hdr = false
+		_check(ok, "cubemap %s face files resolve" % id, str(rec.get("ue_path", "")))
+		# P3-3A.4: the shipped cubes are PF_FloatRGBA. An 8-bit face clamps
+		# ~1.5e-3 linear radiance to 0 / 1/255 (the measured 0.00005 floor), so a
+		# PNG here is the quantized cube, never an acceptable export.
+		_check(all_hdr and bool(rec.get("hdr", false)),
+			"cubemap %s faces are HDR .hdr (linear radiance, not 8-bit PNG)" % id,
+			"encoding=%s" % str(rec.get("encoding", "")))
 		_check(str(rec.get("transfer", "")) in ["linear", "srgb"], "cubemap %s records its transfer" % id,
 			str(rec.get("transfer", "")))
 		_check(str(by_path.get(str(rec.get("ue_path", "")), "")) == id, "cubemap %s is indexed by UE path" % id)
@@ -198,13 +295,40 @@ func _test_generated_index() -> void:
 			var means: Dictionary = means_v as Dictionary
 			var py: float = _lum(means["py"] as Array)
 			var ny: float = _lum(means["ny"] as Array)
+			var nz: float = _lum(means["nz"] as Array) if means.has("nz") else 0.0
+			# P3-3A.4 orientation record: face order and seams are unchanged
+			# (suite pins the axes); the +Y/-Y ordering is an AUTHORED property
+			# of each cube, not a port decision. With the HDR export it is stable
+			# across re-extractions, so a reversal is information about the
+			# authored sky, never a reason to re-map a face.
 			if py < ny:
-				print("CUBEMAP_ORIENT: WARN %s +Y luminance %.4f < -Y %.4f — check the UE ECubeFace slice order before trusting the ambient direction" % [id, py, ny])
+				print("CUBEMAP_ORIENT: WARN %s +Y luminance %.4f < -Y %.4f — recorded as an authored property (daylight's authored sky is brighter below the horizon); the face order is pinned by the axis test, not by this ordering" % [id, py, ny])
 			else:
-				print("CUBEMAP_ORIENT: %s +Y luminance %.4f >= -Y %.4f (informational)" % [id, py, ny])
+				print("CUBEMAP_ORIENT: %s +Y luminance %.4f >= -Y %.4f (authored; the pre-HDR 8-bit means inverted this by quantisation)" % [id, py, ny])
+			if id == "cubemap_ground_floor_01":
+				# The Gloomy cube's -Z face was near-black under the 8-bit clamp
+				# (0.00011 linear mean) because its radiance sat under one step;
+				# the HDR faces carry the real energy.
+				_check(nz > 1e-4,
+					"the Gloomy cube's -Z face is no longer black (the 8-bit clamp zeroed it)",
+					"-Z lum=%.6f" % nz)
 
 
 # --------------------------------------------------------------------- helpers
+## An 8-bit linear copy of each face (round to 1/255), i.e. what the PNG path
+## would have stored. `convert` runs in C++, so 512^2 x 6 stays cheap.
+func _quantise8(faces: Array) -> Array:
+	var out: Array = []
+	for f: Variant in faces:
+		if not (f is Image):
+			continue
+		var img: Image = (f as Image).duplicate()
+		img.convert(Image.FORMAT_RGBA8)
+		img.convert(Image.FORMAT_RGBAF)
+		out.append(img)
+	return out
+
+
 ## Six images from six colours (8x8 RGBA8; the integral is size-independent).
 func _cube(colors: Array, size: int) -> Array:
 	var out: Array = []

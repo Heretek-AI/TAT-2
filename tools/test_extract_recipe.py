@@ -11,9 +11,16 @@ run the recipe for real (``make -o build-extractor`` skips only the compile)
 with ``EX`` pointing at a stub that logs its argv.
 
 Pinned:
-  * ``extract`` runs list, raw, tables, levels, nav (with the exact regex as
-    one argv and a closed quote), meshes, materials, audio, textures,
-    cubemaps --overwrite, anims — in that order;
+  * ``extract`` runs cubemaps (HDR pass, see below) then list, raw, tables,
+    levels, nav (with the exact regex as one argv and a closed quote), meshes,
+    materials, audio, textures, anims;
+  * ``cubemaps`` (and therefore ``extract``) passes the resolved ``--usmap`` and
+    ``--fail-on-error``: without the mapping an unversioned cube fails to load
+    and the old 8-bit PNG faces survive while the command exits 0;
+  * ``make extract`` fails closed (exit 2, nothing dumped) when no mapping file
+    resolves, and propagates a failing extractor as non-zero;
+  * the ``CUBEMAP_ROOT`` post-check refuses an 8-bit/PNG cube tree and a stale
+    PNG beside an HDR manifest, so a silent 8-bit cubemap cannot pass;
   * the standalone Destructibles ``json`` stage is NOT in ``extract``;
   * ``make json`` passes the resolved ``--usmap`` path, ``--fail-on-error``
     and the Destructibles filter;
@@ -23,6 +30,7 @@ Pinned:
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import tempfile
@@ -44,6 +52,32 @@ def check(condition: bool, name: str, detail: str = "") -> None:
         raise SystemExit(1)
     PASSED += 1
     print(f"PASS: {name}")
+
+
+CUBE_FACES = ["px", "nx", "py", "ny", "pz", "nz"]
+
+
+def write_cube(root: Path, cid: str, *, ext: str = ".hdr", hdr: bool = True) -> Path:
+    """Minimal cube fixture: six face files + the manifest the extractor writes."""
+    cube_dir = root / cid
+    cube_dir.mkdir(parents=True)
+    faces = {name: f"face_{name}{ext}" for name in CUBE_FACES}
+    for rel in faces.values():
+        (cube_dir / rel).write_bytes(b"fixture")
+    (cube_dir / "cubemap.json").write_text(
+        json.dumps(
+            {
+                "schema": "tat2.cubemap/1",
+                "id": cid,
+                "hdr": hdr,
+                "encoding": "hdr" if hdr else "png",
+                "transfer": "linear",
+                "face_order": CUBE_FACES,
+                "faces": faces,
+            }
+        )
+    )
+    return cube_dir
 
 
 def write_stub(base: Path) -> Path:
@@ -107,10 +141,16 @@ def main() -> None:
         base = Path(tmp)
         stub = write_stub(base)
         log = base / "argv.log"
+        usmap = base / "TAT-test.usmap"
+        usmap.write_bytes(b"fixture")
+        # A complete HDR cube tree: the `cubemaps` post-check runs against it.
+        good_root = base / "cubemaps-hdr"
+        write_cube(good_root, "cubemap_ground_floor_01")
 
-        # 1. `make extract` reaches every stage, including cubemaps after nav.
+        # 1. `make extract` reaches every stage; cubemaps runs first (it is a
+        #    prerequisite) so a missing mapping fails before any dump.
         proc = run_make(
-            ["extract", f"EX={stub}"],
+            ["extract", f"EX={stub}", f"USMAP={usmap}", f"CUBEMAP_ROOT={good_root}"],
             {"STUB_LOG": str(log)},
         )
         check(
@@ -122,6 +162,7 @@ def main() -> None:
         check(not errors, "make extract has no shell quote/syntax error", str(errors))
         rows = parse_log(log)
         expected = [
+            ["cubemaps", "--overwrite", "--usmap", str(usmap), "--fail-on-error"],
             ["list"],
             ["raw"],
             ["tables"],
@@ -136,7 +177,6 @@ def main() -> None:
             ["materials", "--overwrite"],
             ["audio"],
             ["textures"],
-            ["cubemaps", "--overwrite"],
             ["anims"],
         ]
         check(rows == expected, "make extract runs the exact command order", f"{rows}")
@@ -145,8 +185,13 @@ def main() -> None:
             "make extract no longer repeats the Destructibles json stage",
         )
         check(
-            rows[-2] == ["cubemaps", "--overwrite"],
-            "cubemaps --overwrite is reached after the nav filter",
+            rows[0][:2] == ["cubemaps", "--overwrite"],
+            "cubemaps runs first and is reached before the nav filter",
+        )
+        check(
+            rows[0][2:] == ["--usmap", str(usmap), "--fail-on-error"],
+            "cubemaps passes the resolved --usmap and --fail-on-error",
+            str(rows[0]),
         )
         log.unlink()
 
@@ -158,9 +203,82 @@ def main() -> None:
             nav[-1],
         )
 
-        # 3. `make json`: resolved usmap + fail-on-error + filter.
-        usmap = base / "TAT-test.usmap"
-        usmap.write_bytes(b"fixture")
+        # 3. The cubemaps post-check refuses an 8-bit/PNG tree (the measured
+        #    pre-fix defect: quantized faces left behind).
+        png_root = base / "cubemaps-png"
+        write_cube(png_root, "cubemap_ground_floor_01", ext=".png", hdr=False)
+        proc = run_make(
+            ["extract", f"EX={stub}", f"USMAP={usmap}", f"CUBEMAP_ROOT={png_root}"],
+            {"STUB_LOG": str(log)},
+        )
+        check(
+            proc.returncode != 0,
+            "make extract fails when the cube tree is still 8-bit PNG",
+            f"rc={proc.returncode}",
+        )
+        check(
+            "CUBEMAP_EXPORT_CHECK FAIL" in proc.stdout,
+            "the failure names the 8-bit faces",
+            proc.stdout[-300:],
+        )
+        log.unlink()
+
+        # 4. A stale PNG beside an HDR manifest is refused too.
+        stale_root = base / "cubemaps-stale"
+        stale_dir = write_cube(stale_root, "cubemap_ground_floor_01")
+        (stale_dir / "face_px.png").write_bytes(b"stale")
+        proc = run_make(
+            ["extract", f"EX={stub}", f"USMAP={usmap}", f"CUBEMAP_ROOT={stale_root}"],
+            {"STUB_LOG": str(log)},
+        )
+        check(
+            proc.returncode != 0 and "stale 8-bit face" in proc.stdout,
+            "make extract fails on a stale PNG beside an HDR manifest",
+            f"rc={proc.returncode} stdout={proc.stdout[-300:]}",
+        )
+        log.unlink()
+
+        # 5. No mapping file: `extract` fails closed before any dump.
+        no_repo = base / "no-repo"
+        no_repo.mkdir()
+        proc = run_make(
+            [
+                "extract",
+                f"EX={stub}",
+                "USMAP=",
+                "TAT_USMAP=",
+                "GIT_COMMON=",
+                "MAIN_CHECKOUT=",
+                f"CUBEMAP_ROOT={good_root}",
+            ],
+            {"STUB_LOG": str(log)},
+            cwd=no_repo,
+        )
+        check(
+            proc.returncode == 2,
+            "make extract without a .usmap exits 2",
+            f"rc={proc.returncode}",
+        )
+        check(
+            "no .usmap" in proc.stderr and "cubemaps" in proc.stderr,
+            "the missing-mapping failure names the cubemaps pass",
+            proc.stderr[-300:],
+        )
+        check(not log.exists(), "the no-usmap failure runs no dump")
+
+        # 6. A failing extractor makes `make extract` non-zero.
+        proc = run_make(
+            ["extract", f"EX={stub}", f"USMAP={usmap}", f"CUBEMAP_ROOT={good_root}"],
+            {"STUB_LOG": str(log), "STUB_EXIT": "1"},
+        )
+        check(
+            proc.returncode != 0,
+            "make extract propagates a failing cubemaps dump",
+            f"rc={proc.returncode}",
+        )
+        log.unlink()
+
+        # 7. `make json`: resolved usmap + fail-on-error + filter.
         proc = run_make(
             ["json", f"EX={stub}", f"USMAP={usmap}"],
             {"STUB_LOG": str(log)},
@@ -185,11 +303,9 @@ def main() -> None:
         )
         log.unlink()
 
-        # 4. `make json` with no mapping file fails closed (exit 2).
+        # 8. `make json` with no mapping file fails closed (exit 2).
         # Run from an empty temp cwd with empty GIT_COMMON/MAIN_CHECKOUT so no
         # wildcard can find a real usmap; the recipe still comes from ROOT.
-        no_repo = base / "no-repo"
-        no_repo.mkdir()
         proc = run_make(
             [
                 "json",
@@ -214,7 +330,7 @@ def main() -> None:
         )
         check(not log.exists(), "the no-usmap failure runs no dump")
 
-        # 5. A failing extractor makes `make json` non-zero.
+        # 9. A failing extractor makes `make json` non-zero.
         proc = run_make(
             ["json", f"EX={stub}", f"USMAP={usmap}"],
             {"STUB_LOG": str(log), "STUB_EXIT": "1"},

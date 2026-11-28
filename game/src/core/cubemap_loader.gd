@@ -20,8 +20,13 @@ extends RefCounted
 ## `TAT2_IBL=off|ambient` (default off). `off` returns available=false and the
 ## caller keeps today's authored ambient colour/energy byte-for-byte. Energy is
 ## the raw irradiance luminance — deliberately NOT clamped to
-## WeatherProfile.AMBIENT_ENERGY_MAX: a stage-1 measurement must not be hidden
-## by a stage-2 tuning ceiling.
+## WeatherProfile.AMBIENT_ENERGY_MAX, and NOT multiplied by the authored
+## SkyLight intensity: a stage-1 measurement must not be hidden behind a
+## stage-2 tuning ceiling or scale. `WeatherProfile.ibl_ambient_energy()` is the
+## single place that turns this measurement into the Godot ambient energy the
+## environment receives (`lum * sky.intensity * IBL_AMBIENT_PORT_SCALE`), so the
+## raw number here and the flat `intensity * 0.08` substitute are never
+## conflated.
 ##
 ## Face order is explicit and never guessed: the extractor names the files
 ## px/nx/py/ny/pz/nz from UE's TextureCube slice order (ECubeFace:
@@ -48,6 +53,18 @@ static var _index_loaded: bool = false
 static var _ambient_cache: Dictionary = {}
 static var _mode_warned: bool = false
 static var _load_warned: Dictionary = {}
+
+
+## QA/test hook: the six loaded face images for one converted cube id (`[]` when
+## the id or any face is missing). The shipped path reaches them only through
+## `ambient_for_ue_path`; probes use this to re-integrate a quantised copy.
+static func cube_faces(id: String) -> Array:
+	var cubes_v: Variant = load_index().get("cubemaps", {})
+	var cubes: Dictionary = cubes_v as Dictionary if cubes_v is Dictionary else {}
+	var rec_v: Variant = cubes.get(id, {})
+	if not (rec_v is Dictionary):
+		return []
+	return _load_faces(rec_v as Dictionary)
 
 
 ## `TAT2_IBL=off|ambient`. Unset/unknown -> off (today's look).

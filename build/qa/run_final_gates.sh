@@ -31,8 +31,14 @@
 #
 # Phase 3 §2.5.1 (2026-11-27) restores the three ratchet-pinned suites that no
 # earlier runner invoked — `test_vo_director` (53), `probe_auto_exposure` (77)
-# and `probe_cubemap` (37) — for 52 gates. Their pinned logs predated the
+# and `probe_cubemap` (37, now 51) — for 52 gates. Their pinned logs predated the
 # 17:06 run; these gates now produce them in-run. No other gate body changes.
+#
+# Phase 3 §3A.4 (2026-11-27) grows `probe_cubemap` from 37 to 51 checks: HDR
+# face assertions, the measured-energy-vs-8-bit-quantisation falsifier and the
+# IBL units expression (`lum * sky.intensity * IBL_AMBIENT_PORT_SCALE`). The
+# ratchet's `probe_cubemap.passed = 37` stays a floor; only the literal marker
+# moves (it is exact by design).
 #
 # Phase 3 test-manifest/errscan lane (2026-11-27) adds six gates — the
 # `gate_manifest` orphan check, the `e2e_errscan` engine-error ceiling scan,
@@ -493,7 +499,7 @@ gate_marker probe_auto_exposure "$OUT/probe_auto_exposure.log" \
 	--script res://tests/probe_auto_exposure.gd
 
 gate_marker probe_cubemap "$OUT/probe_cubemap.log" \
-	"CUBEMAP_PROBE: fails=0 passed=37" \
+	"CUBEMAP_PROBE: fails=0 passed=51" \
 	flock "$LOCK" tools/godot --headless --path game \
 	--script res://tests/probe_cubemap.gd
 

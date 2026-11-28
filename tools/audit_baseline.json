@@ -45,7 +45,7 @@
   "infrastructure": {
     "root:Makefile": {
       "command": "make extract / make normalize",
-      "sha256": "4eb0b2cccee74c8ef0bf8c2fc43ce62321261d099e23808d55cac385d1947a43"
+      "sha256": "3919513306dc82cc27d86d6d26f4c83b8c034bcebcf6051182c4312536b9ee2a"
     },
     "root:tools/audit_allowlists.json": {
       "command": "reviewed coverage allowlist",
@@ -273,7 +273,7 @@
           "bytes": 1874019,
           "exists": true,
           "files": 160,
-          "newest_mtime": 1795849765.057843,
+          "newest_mtime": 1795864964.212686,
           "sha256": "7f2aac5b35da0b9aaed74dae81520e554957f0bc0d1325ec4e5561e32c0667fd"
         }
       },
@@ -301,7 +301,7 @@
           "bytes": 6426616,
           "exists": true,
           "files": 23,
-          "newest_mtime": 1795849795.4776835,
+          "newest_mtime": 1795864979.8312988,
           "sha256": "3491e8b27421ad152bf34353cdfdba7a50d4a058d0dce06a2cc0c3d89a9d55ed"
         }
       },
@@ -537,32 +537,32 @@
           "bytes": 6426616,
           "exists": true,
           "files": 23,
-          "newest_mtime": 1795849795.4776835,
+          "newest_mtime": 1795864979.8312988,
           "sha256": "3491e8b27421ad152bf34353cdfdba7a50d4a058d0dce06a2cc0c3d89a9d55ed"
         },
         "gen:levels": {
-          "bytes": 47853315,
+          "bytes": 47854154,
           "exists": true,
           "files": 108,
-          "newest_mtime": 1795849758.5741282,
-          "sha256": "26631fbea81a7b823362cb19c139d52f17197874202555630326340480301067"
+          "newest_mtime": 1795864978.3496668,
+          "sha256": "030a661c76cab48aa7a9f5ee5f31446aab44f171871276c45b19916ba8762457"
         },
         "gen:scene_variants.json": {
           "bytes": 44415,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795849758.660211,
+          "newest_mtime": 1795864978.434205,
           "sha256": "424e9fe4d92846e74e7e801084718009afb2a94461ca3ab2cfab544c40e39151"
         },
         "gen:tables": {
           "bytes": 1874019,
           "exists": true,
           "files": 160,
-          "newest_mtime": 1795849765.057843,
+          "newest_mtime": 1795864964.212686,
           "sha256": "7f2aac5b35da0b9aaed74dae81520e554957f0bc0d1325ec4e5561e32c0667fd"
         }
       },
-      "sha256": "9734e78460c37cbdc152d2f300a965c40c7c6e2ca3dfd269698cfe505007097b"
+      "sha256": "cdb5d6b158b98d4102ff3db641c8bee3a7811e881a6b75bbefc95b5d3981fe8c"
     },
     "tools/parse_unlocks.py": {
       "command": "python3 tools/parse_unlocks.py",
@@ -805,6 +805,15 @@
       ],
       "reason": "Phase 3B producers/statetree/audio/nav regen 2026-11-28",
       "utc": "2026-11-28T07:25:08Z"
+    },
+    {
+      "notes": [
+        "baseline: tools/parse_tables.py source drift accepted by refresh (newest output 2026-11-28 06:22)",
+        "baseline: output content changed for tools/parse_tables.py: gen:levels (refresh accepted)",
+        "baseline: infrastructure change accepted: root:Makefile"
+      ],
+      "reason": "gc-confirm: Destructibles 93 fallback regeneration 2026-11-28",
+      "utc": "2026-11-28T11:23:07Z"
     }
   ],
   "tool_versions": {
@@ -814,5 +823,5 @@
     "vgmstream": "vgmstream CLI decoder r2168 (Oct 25 2026)"
   },
   "version": 2,
-  "written_utc": "2026-11-28T07:25:08Z"
+  "written_utc": "2026-11-28T11:23:07Z"
 }

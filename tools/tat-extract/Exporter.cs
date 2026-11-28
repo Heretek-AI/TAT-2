@@ -299,7 +299,7 @@ public sealed class Exporter
     // floor), so the six cube faces are written as Radiance .hdr with their
     // linear values intact. Every other texture command keeps DefaultOpts /
     // AnimOpts (exportHdrTexturesAsHdr: false); do not promote this globally.
-    ExportOptions CubemapOpts() => new(
+    static ExportOptions CubemapOpts() => new(
         meshFormat: EMeshFormat.Gltf2,
         naniteMeshFormat: ENaniteMeshFormat.NaniteFirst,
         meshQuality: EMeshQuality.Highest,
@@ -735,16 +735,23 @@ public sealed class Exporter
         }
     }
 
-    // The raw half/float layouts this code can read. This is deliberately an
-    // explicit set, NOT `PixelFormatUtils.IsHDR`: that predicate is false for
-    // PF_FloatRGB and PF_R32G32B32F, which made those switch arms dead.
-    static bool HasRawHdrMean(EPixelFormat f) =>
-        f is EPixelFormat.PF_FloatRGBA
-            or EPixelFormat.PF_FloatRGB
-            or EPixelFormat.PF_A32B32G32R32F
-            or EPixelFormat.PF_R32G32B32F
-            or EPixelFormat.PF_R32_FLOAT
-            or EPixelFormat.PF_R16F;
+    // The raw half/float layouts this code can read, limited to formats the
+    // pinned CUE4Parse 1.2.2.202611 can actually decode and the writer can
+    // encode. This is deliberately an explicit set, NOT
+    // `PixelFormatUtils.IsHDR`: that predicate is false for PF_FloatRGB and
+    // PF_R32G32B32F, and those cannot be claimed anyway (PF_FloatRGB is
+    // R11G11B10_FLOAT in 4 bytes, PF_R32G32B32F is Supported=false so Decode
+    // throws). `selftest-face-mean` iterates this array, so every member is
+    // checked for Supported + encodability.
+    static readonly EPixelFormat[] RawHdrMeanFormats =
+    {
+        EPixelFormat.PF_FloatRGBA,
+        EPixelFormat.PF_A32B32G32R32F,
+        EPixelFormat.PF_R32_FLOAT,
+        EPixelFormat.PF_R16F,
+    };
+
+    static bool HasRawHdrMean(EPixelFormat f) => Array.IndexOf(RawHdrMeanFormats, f) >= 0;
 
     // Linear face energy for the HDR path: the loader needs the real
     // irradiance scale (the authored sky cube is ~1e-4..1e-3), which the 8-bit
@@ -762,9 +769,7 @@ public sealed class Exporter
         switch (face.PixelFormat)
         {
             case EPixelFormat.PF_FloatRGBA: pixelBytes = 8; break;       // 4 x half
-            case EPixelFormat.PF_FloatRGB: pixelBytes = 6; break;        // 3 x half
             case EPixelFormat.PF_A32B32G32R32F: pixelBytes = 16; break;  // 4 x float
-            case EPixelFormat.PF_R32G32B32F: pixelBytes = 12; break;     // 3 x float
             case EPixelFormat.PF_R32_FLOAT: pixelBytes = 4; break;       // 1 x float
             case EPixelFormat.PF_R16F: pixelBytes = 2; break;            // 1 x half
             default: return null;
@@ -779,17 +784,21 @@ public sealed class Exporter
             {
                 int o = (y * w + x) * pixelBytes;
                 float fr, fg, fb;
-                if (face.PixelFormat is EPixelFormat.PF_FloatRGBA or EPixelFormat.PF_FloatRGB)
+                if (face.PixelFormat == EPixelFormat.PF_FloatRGBA)
                 {
                     fr = HalfAt(data, o);
                     fg = HalfAt(data, o + 2);
                     fb = HalfAt(data, o + 4);
                 }
-                else if (face.PixelFormat is EPixelFormat.PF_A32B32G32R32F or EPixelFormat.PF_R32G32B32F)
+                else if (face.PixelFormat == EPixelFormat.PF_A32B32G32R32F)
                 {
-                    fr = BitConverter.ToSingle(data, o);
-                    fg = BitConverter.ToSingle(data, o + 4);
-                    fb = BitConverter.ToSingle(data, o + 8);
+                    // Match CUE4Parse's ToHdrBitmap: A32B32G32R32F is converted
+                    // with flipOrder=true, so the exported R/G/B come from
+                    // components 3/2/1 (bytes 12/8/4), not 0/1/2. The mean must
+                    // describe the exported face.
+                    fr = BitConverter.ToSingle(data, o + 12);
+                    fg = BitConverter.ToSingle(data, o + 8);
+                    fb = BitConverter.ToSingle(data, o + 4);
                 }
                 else if (face.PixelFormat == EPixelFormat.PF_R16F)
                 {
@@ -810,22 +819,16 @@ public sealed class Exporter
     // ------------------------------------------------- face-mean self-test
     // Executed regression for FaceMeanLinear: a source-text assertion cannot
     // see a dead branch (the round-2 bug gated it on IsHDR, which is false for
-    // PF_FloatRGB/PF_R32G32B32F). `tat-extract selftest-face-mean` runs this
-    // before any pak mount and exits non-zero if any supported layout returns
-    // null or the wrong mean.
-    static byte[] MeanFixtureBytes(EPixelFormat fmt, int w, int h)
+    // PF_FloatRGB/PF_R32G32B32F). The set is also checked against the pinned
+    // library: every member must be Supported and encodable by the writer.
+    // `tat-extract selftest-face-mean` runs this before any pak mount.
+    static byte[] MeanFixtureBytes(EPixelFormat fmt, int w, int h, out int components)
     {
-        int bpp = fmt switch
-        {
-            EPixelFormat.PF_FloatRGBA => 8,
-            EPixelFormat.PF_FloatRGB => 6,
-            EPixelFormat.PF_A32B32G32R32F => 16,
-            EPixelFormat.PF_R32G32B32F => 12,
-            EPixelFormat.PF_R32_FLOAT => 4,
-            EPixelFormat.PF_R16F => 2,
-            _ => 0,
-        };
-        if (bpp <= 0) throw new ArgumentException($"no fixture layout for {fmt}");
+        if (!PixelFormatUtils.PixelFormats.TryGetValue(fmt, out var info))
+            throw new ArgumentException($"no library layout for {fmt}");
+        components = info.NumComponents;
+        int bpp = info.BlockBytes / (info.BlockSizeX * info.BlockSizeY * info.BlockSizeZ);
+        if (bpp <= 0) throw new ArgumentException($"no whole-byte layout for {fmt}");
         var data = new byte[w * h * bpp];
         static void PutHalf(byte[] d, int o, float v)
         {
@@ -841,19 +844,19 @@ public sealed class Exporter
                 case EPixelFormat.PF_FloatRGBA:
                     PutHalf(data, o, 0.25f); PutHalf(data, o + 2, 0.5f); PutHalf(data, o + 4, 0.75f); PutHalf(data, o + 6, 1f);
                     break;
-                case EPixelFormat.PF_FloatRGB:
-                    PutHalf(data, o, 0.25f); PutHalf(data, o + 2, 0.5f); PutHalf(data, o + 4, 0.75f);
-                    break;
                 case EPixelFormat.PF_A32B32G32R32F:
-                    PutSingle(data, o, 0.25f); PutSingle(data, o + 4, 0.5f); PutSingle(data, o + 8, 0.75f); PutSingle(data, o + 12, 1f);
-                    break;
-                case EPixelFormat.PF_R32G32B32F:
-                    PutSingle(data, o, 0.25f); PutSingle(data, o + 4, 0.5f); PutSingle(data, o + 8, 0.75f);
+                    // Component order as stored; ToHdrBitmap flips it, so the
+                    // exported R/G/B read components 3/2/1 = 0.25/0.5/0.75.
+                    PutSingle(data, o, 1f); PutSingle(data, o + 4, 0.75f); PutSingle(data, o + 8, 0.5f); PutSingle(data, o + 12, 0.25f);
                     break;
                 case EPixelFormat.PF_R32_FLOAT:
-                case EPixelFormat.PF_R16F:
-                    if (fmt == EPixelFormat.PF_R32_FLOAT) PutSingle(data, o, 0.5f); else PutHalf(data, o, 0.5f);
+                    PutSingle(data, o, 0.5f);
                     break;
+                case EPixelFormat.PF_R16F:
+                    PutHalf(data, o, 0.5f);
+                    break;
+                default:
+                    throw new ArgumentException($"no fixture writer for {fmt}");
             }
         }
         return data;
@@ -861,30 +864,65 @@ public sealed class Exporter
 
     public static int SelfTestFaceMean()
     {
-        var cases = new (EPixelFormat Fmt, double R, double G, double B)[]
+        // One expectation per declared set member. Iterating the declared array
+        // (not a hand-copied case list) means adding a format to the set
+        // without a fixture/expectation fails the self-test.
+        var expected = new Dictionary<EPixelFormat, (double R, double G, double B)>
         {
-            (EPixelFormat.PF_FloatRGBA, 0.25, 0.5, 0.75),
-            (EPixelFormat.PF_FloatRGB, 0.25, 0.5, 0.75),
-            (EPixelFormat.PF_A32B32G32R32F, 0.25, 0.5, 0.75),
-            (EPixelFormat.PF_R32G32B32F, 0.25, 0.5, 0.75),
-            (EPixelFormat.PF_R16F, 0.5, 0.5, 0.5),
+            [EPixelFormat.PF_FloatRGBA] = (0.25, 0.5, 0.75),
+            [EPixelFormat.PF_A32B32G32R32F] = (0.25, 0.5, 0.75),
+            [EPixelFormat.PF_R32_FLOAT] = (0.5, 0.5, 0.5),
+            [EPixelFormat.PF_R16F] = (0.5, 0.5, 0.5),
         };
         int fails = 0;
-        foreach (var c in cases)
+        var opts = CubemapOpts();
+        foreach (var fmt in RawHdrMeanFormats)
         {
-            var tex = new CTexture(4, 4, c.Fmt, MeanFixtureBytes(c.Fmt, 4, 4));
+            if (!expected.TryGetValue(fmt, out var c))
+            {
+                Console.WriteLine($"FACE_MEAN_LAYOUT format={fmt} missing_expectation=true");
+                fails++;
+                continue;
+            }
+            bool found = PixelFormatUtils.PixelFormats.TryGetValue(fmt, out var info);
+            string supported = (found && info.Supported).ToString().ToLowerInvariant();
+            Console.WriteLine(
+                $"FACE_MEAN_LAYOUT format={fmt} block_bytes={(found ? info.BlockBytes : -1)} "
+                + $"components={(found ? info.NumComponents : -1)} supported={supported}");
+            if (!found || !info.Supported)
+            {
+                Console.WriteLine($"FACE_MEAN format={fmt} null=true ok=false reason=unsupported");
+                fails++;
+                continue;
+            }
+            CTexture tex;
+            try
+            {
+                tex = new CTexture(4, 4, fmt, MeanFixtureBytes(fmt, 4, 4, out _));
+            }
+            catch (ArgumentException e)
+            {
+                Console.WriteLine($"FACE_MEAN_LAYOUT format={fmt} fixture_error={e.Message}");
+                fails++;
+                continue;
+            }
             var mean = FaceMeanLinear(tex);
             if (mean == null || mean.Length != 3)
             {
-                Console.WriteLine($"FACE_MEAN format={c.Fmt} null=true ok=false");
+                Console.WriteLine($"FACE_MEAN format={fmt} null=true ok=false");
                 fails++;
                 continue;
             }
             bool ok = Math.Abs(mean[0] - c.R) < 1e-3
                 && Math.Abs(mean[1] - c.G) < 1e-3
                 && Math.Abs(mean[2] - c.B) < 1e-3;
-            Console.WriteLine($"FACE_MEAN format={c.Fmt} r={mean[0]} g={mean[1]} b={mean[2]} null=false ok={ok.ToString().ToLowerInvariant()}");
+            Console.WriteLine($"FACE_MEAN format={fmt} r={mean[0]} g={mean[1]} b={mean[2]} null=false ok={ok.ToString().ToLowerInvariant()}");
             if (!ok) fails++;
+            // Writer check: the same ExportOptions the cubemaps pass uses.
+            var encoded = tex.Encode(opts, out var ext);
+            bool encOk = encoded != null && encoded.Length > 0;
+            Console.WriteLine($"FACE_MEAN_ENCODE format={fmt} ext={ext} bytes={encoded?.Length ?? 0} ok={encOk.ToString().ToLowerInvariant()}");
+            if (!encOk) fails++;
         }
         // Negative control: a non-float layout is reported as null, not read
         // with the wrong stride.
@@ -892,9 +930,21 @@ public sealed class Exporter
         bool ldrNull = FaceMeanLinear(ldr) == null;
         Console.WriteLine($"FACE_MEAN_UNSUPPORTED format=PF_B8G8R8A8 null={ldrNull.ToString().ToLowerInvariant()}");
         if (!ldrNull) fails++;
+        // Excluded formats are not claimed: PF_FloatRGB is R11G11B10 (4 bytes,
+        // not 3xhalf) and PF_R32G32B32F is Supported=false (Decode throws).
+        foreach (var excl in new[] { EPixelFormat.PF_FloatRGB, EPixelFormat.PF_R32G32B32F })
+        {
+            bool inSet = HasRawHdrMean(excl);
+            bool found = PixelFormatUtils.PixelFormats.TryGetValue(excl, out var info);
+            Console.WriteLine(
+                $"FACE_MEAN_EXCLUDED format={excl} in_set={inSet.ToString().ToLowerInvariant()} "
+                + $"library_supported={(found && info.Supported).ToString().ToLowerInvariant()} "
+                + $"block_bytes={(found ? info.BlockBytes : -1)}");
+            if (inSet) fails++;
+        }
         if (fails == 0)
         {
-            Console.WriteLine($"FACE_MEAN_SELFTEST PASS formats={cases.Length}");
+            Console.WriteLine($"FACE_MEAN_SELFTEST PASS formats={RawHdrMeanFormats.Length}");
             return 0;
         }
         Console.WriteLine($"FACE_MEAN_SELFTEST FAIL fails={fails}");

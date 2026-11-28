@@ -3,16 +3,19 @@
 
 Run with: ``python3 tools/test_face_mean.py``
 
-Round 3 exists because the round-2 "format support" was source-text only and
-the function was gated on ``PixelFormatUtils.IsHDR``, which is false for
-``PF_FloatRGB`` and ``PF_R32G32B32F`` — those switch arms were dead. Source
-assertions cannot see a dead branch, so this test builds the extractor (when
-the binary is missing or older than its sources) and runs the real function via
-``tat-extract selftest-face-mean``, which needs no pak mount or game data.
+Round 3 added a self-test because a source-text assertion cannot see a dead
+branch. Round 4 tightened it to the layouts the pinned CUE4Parse
+1.2.2.202611 actually supports:
+  * ``PF_FloatRGB`` was removed — it is R11G11B10_FLOAT in 4 bytes, not 3 x
+    half, and the old 6-byte fixture fabricated a layout;
+  * ``PF_R32G32B32F`` was removed — it is ``Supported=false`` in the pinned
+    library, so ``Decode`` throws before the mean is ever computed;
+  * ``PF_A32B32G32R32F`` is read in the library's ``ToHdrBitmap`` flip order
+    (components 3/2/1), so the mean describes the exported face.
 
-Pinned: PF_FloatRGBA, PF_FloatRGB, PF_A32B32G32R32F, PF_R32G32B32F and PF_R16F
-each return a non-null mean with the fixture values, and a non-float layout
-returns null.
+The test builds the extractor when the binary is missing/stale and runs the
+real function via ``tat-extract selftest-face-mean`` (no pak mount or game
+data). Every set member must be ``Supported`` and encodable by the writer.
 """
 
 from __future__ import annotations
@@ -31,11 +34,16 @@ SOURCES = [
 
 PASSED = 0
 EXPECTED = {
-    "PF_FloatRGBA": (0.25, 0.5, 0.75),
-    "PF_FloatRGB": (0.25, 0.5, 0.75),
-    "PF_A32B32G32R32F": (0.25, 0.5, 0.75),
-    "PF_R32G32B32F": (0.25, 0.5, 0.75),
-    "PF_R16F": (0.5, 0.5, 0.5),
+    # format: (r, g, b, block_bytes, components)
+    "PF_FloatRGBA": (0.25, 0.5, 0.75, 8, 4),
+    "PF_A32B32G32R32F": (0.25, 0.5, 0.75, 16, 4),
+    "PF_R32_FLOAT": (0.5, 0.5, 0.5, 4, 1),
+    "PF_R16F": (0.5, 0.5, 0.5, 2, 1),
+}
+EXCLUDED = {
+    # format: (library_supported, block_bytes)
+    "PF_FloatRGB": (True, 4),  # R11G11B10_FLOAT, not 3 x half
+    "PF_R32G32B32F": (False, 12),  # Supported=false: Decode throws
 }
 
 
@@ -87,45 +95,103 @@ def main() -> None:
         "selftest-face-mean exits 0",
         f"rc={proc.returncode} stderr={proc.stderr[-400:]}",
     )
-    lines = [line for line in proc.stdout.splitlines() if line.startswith("FACE_MEAN")]
-    rows = {}
-    pattern = re.compile(
+    out = proc.stdout
+
+    layout = {}
+    for m in re.finditer(
+        r"^FACE_MEAN_LAYOUT format=(\w+) block_bytes=(-?\d+) components=(-?\d+) "
+        r"supported=(\w+)$",
+        out,
+        re.MULTILINE,
+    ):
+        layout[m.group(1)] = (
+            int(m.group(2)),
+            int(m.group(3)),
+            m.group(4) == "true",
+        )
+    means = {}
+    for m in re.finditer(
         r"^FACE_MEAN format=(\w+) r=([-\d.]+) g=([-\d.]+) b=([-\d.]+) "
-        r"null=(\w+) ok=(\w+)$"
-    )
-    for line in lines:
-        m = pattern.match(line)
-        if not m:
-            continue
-        rows[m.group(1)] = (
+        r"null=(\w+) ok=(\w+)$",
+        out,
+        re.MULTILINE,
+    ):
+        means[m.group(1)] = (
             float(m.group(2)),
             float(m.group(3)),
             float(m.group(4)),
             m.group(5) == "true",
             m.group(6) == "true",
         )
-    for fmt, want in EXPECTED.items():
-        check(fmt in rows, f"{fmt} produced a face mean", str(sorted(rows)))
-        r, g, b, is_null, ok = rows[fmt]
+    encodes = {}
+    for m in re.finditer(
+        r"^FACE_MEAN_ENCODE format=(\w+) ext=(\w+) bytes=(\d+) ok=(\w+)$",
+        out,
+        re.MULTILINE,
+    ):
+        encodes[m.group(1)] = (m.group(2), int(m.group(3)), m.group(4) == "true")
+
+    for fmt, (want_r, want_g, want_b, want_bytes, want_comps) in EXPECTED.items():
+        check(fmt in layout, f"{fmt} has a library layout", str(sorted(layout)))
+        block_bytes, components, supported = layout[fmt]
+        check(
+            block_bytes == want_bytes and components == want_comps,
+            f"{fmt} uses the library block bytes/components ({want_bytes}/{want_comps})",
+            f"{block_bytes}/{components}",
+        )
+        check(supported, f"{fmt} is Supported in the pinned library")
+        check(fmt in means, f"{fmt} produced a face mean", str(sorted(means)))
+        r, g, b, is_null, ok = means[fmt]
         check(not is_null, f"{fmt} is non-null")
         check(ok, f"{fmt} matches the fixture", f"({r},{g},{b})")
         check(
-            abs(r - want[0]) < 1e-3
-            and abs(g - want[1]) < 1e-3
-            and abs(b - want[2]) < 1e-3,
-            f"{fmt} mean is {want}",
+            abs(r - want_r) < 1e-3
+            and abs(g - want_g) < 1e-3
+            and abs(b - want_b) < 1e-3,
+            f"{fmt} mean is ({want_r},{want_g},{want_b})",
             f"({r},{g},{b})",
         )
+        check(fmt in encodes, f"{fmt} was encoded by the writer", str(sorted(encodes)))
+        ext, size, enc_ok = encodes[fmt]
+        check(
+            ext == "hdr" and size > 0 and enc_ok,
+            f"{fmt} encodes as .hdr",
+            f"{ext}/{size}",
+        )
+
     check(
-        "FACE_MEAN_SELFTEST PASS formats=5" in proc.stdout,
-        "the self-test reports PASS formats=5",
+        "FACE_MEAN_SELFTEST PASS formats=4" in out,
+        "the self-test reports PASS formats=4",
     )
     check(
-        "FACE_MEAN_UNSUPPORTED format=PF_B8G8R8A8 null=true" in proc.stdout,
+        "FACE_MEAN_UNSUPPORTED format=PF_B8G8R8A8 null=true" in out,
         "an unsupported layout is reported as null",
     )
+    for fmt, (want_supported, want_bytes) in EXCLUDED.items():
+        m = re.search(
+            rf"^FACE_MEAN_EXCLUDED format={fmt} in_set=(\w+) "
+            rf"library_supported=(\w+) block_bytes=(-?\d+)$",
+            out,
+            re.MULTILINE,
+        )
+        check(m is not None, f"{fmt} is reported as excluded", out[-500:])
+        assert m is not None
+        check(m.group(1) == "false", f"{fmt} is not in the readable set")
+        check(
+            (m.group(2) == "true") == want_supported,
+            f"{fmt} matches the pinned library Supported flag",
+            m.group(2),
+        )
+        check(
+            int(m.group(3)) == want_bytes,
+            f"{fmt} block bytes are the library value ({want_bytes})",
+            m.group(3),
+        )
     check(
-        not any("null=true" in line and "UNSUPPORTED" not in line for line in lines),
+        not any(
+            "null=true" in line and "UNSUPPORTED" not in line
+            for line in out.splitlines()
+        ),
         "no supported format is reported as null (dead-branch guard)",
     )
     print(f"FACE_MEAN_TEST: PASS checks={PASSED}")

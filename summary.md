@@ -1,8 +1,8 @@
-# producers — summary (round 3)
+# producers — summary (round 4)
 
 HEAD: the commit on `teamwork/20261127-1810-phase3-producers` created by this
-round (parent `1e2ef16`). Round 1 content is in `bd1e42f`; round 2 in
-`1e2ef16`.
+round (parent `8412a13`). Round 1 content is in `bd1e42f`; round 2 in
+`1e2ef16`; round 3 in `8412a13`.
 
 ## Round 2 fixes (falsifier findings)
 
@@ -41,31 +41,39 @@ round (parent `1e2ef16`). Round 1 content is in `bd1e42f`; round 2 in
    resolved directory is asserted under `Cubemaps/`; all six faces are encoded
    in memory first, stale `face_*` is deleted only after success, new faces are
    written, and the manifest is moved into place last via `.tmp`.
-7. **FaceMeanLinear formats (round-3 correction).** Round 2 added
-   `PF_FloatRGB`, `PF_R32G32B32F` and `PF_R16F` switch arms, but the function
-   was still gated on `PixelFormatUtils.IsHDR`, which is false for
-   `PF_FloatRGB` and `PF_R32G32B32F`: those two arms were dead and the round-2
-   claim was false. Round 3 replaces the gate with an explicit
-   `HasRawHdrMean` set covering `PF_FloatRGBA`, `PF_FloatRGB`,
-   `PF_A32B32G32R32F`, `PF_R32G32B32F`, `PF_R32_FLOAT` and `PF_R16F`. The
-   executed `tat-extract selftest-face-mean` command builds tiny 4x4 fixtures
-   for the five required formats and asserts non-null, correct means, plus a
-   null negative control for `PF_B8G8R8A8`.
+7. **FaceMeanLinear formats (round-4 correction).** The round-3 set still
+   claimed two layouts the pinned CUE4Parse 1.2.2.202611 cannot decode/encode:
+   `PF_FloatRGB` is R11G11B10_FLOAT in **4 bytes** (not 3 x half; the old
+   6-byte fixture was fabricated) and `PF_R32G32B32F` is `Supported=false`
+   (`Decode` throws before the mean). Both are removed. The final
+   `HasRawHdrMean` set is exactly `PF_FloatRGBA`, `PF_A32B32G32R32F`,
+   `PF_R32_FLOAT`, `PF_R16F`. `PF_A32B32G32R32F` now reads components 3/2/1
+   (bytes 12/8/4) to match the library's `ToHdrBitmap(flipOrder: true)`, so the
+   mean describes the exported face. The executed `tat-extract
+   selftest-face-mean` builds 4x4 fixtures from the library's
+   `BlockBytes`/`NumComponents`, requires every set member to be `Supported`
+   and to encode through the real `CubemapOpts` writer, and reports the two
+   excluded formats with their library facts (`PF_FloatRGB` supported/4 bytes,
+   `PF_R32G32B32F` unsupported/12 bytes). The three shipped cubes are
+   `PF_FloatRGBA`, so no current output changes.
 
 ## Checks (all green)
 
 - `make build-extractor` → Build succeeded, 0 errors.
 - `python3 -m py_compile` on the touched parsers/tests → OK.
 - `make test-producers` → exit 0. New totals: `EXTRACTOR_CONFIG_TEST PASS
-  checks=43`, `FACE_MEAN_TEST PASS checks=24`, `EXTRACT_RECIPE_TEST PASS
+  checks=47`, `FACE_MEAN_TEST PASS checks=48`, `EXTRACT_RECIPE_TEST PASS
   checks=12`, `PARSE_CUBEMAP_TEST PASS checks=21`, `PARSE_CONTRACTS_TEST PASS
   checks=9`.
-- `tat-extract selftest-face-mean` (executed, no pak mount): all five
-  supported formats print `null=false ok=true` with the fixture means
-  (PF_FloatRGBA/PF_FloatRGB/PF_A32B32G32R32F/PF_R32G32B32F = 0.25/0.5/0.75,
-  PF_R16F = 0.5/0.5/0.5), `PF_B8G8R8A8` prints `null=true`, and the command
-  exits 0 with `FACE_MEAN_SELFTEST PASS formats=5`. With the old `IsHDR` gate
-  the two previously-dead formats would print `null=true` and exit 1.
+- `tat-extract selftest-face-mean` (executed, no pak mount): the four set
+  members print `null=false ok=true` with fixture means
+  (PF_FloatRGBA/PF_A32B32G32R32F = 0.25/0.5/0.75, PF_R32_FLOAT/PF_R16F =
+  0.5/0.5/0.5), `FACE_MEAN_ENCODE ... ext=hdr ok=true` for each,
+  `PF_B8G8R8A8` prints `null=true`, the excluded formats print
+  `in_set=false` with `PF_FloatRGB library_supported=true block_bytes=4` and
+  `PF_R32G32B32F library_supported=false block_bytes=12`, and the command
+  exits 0 with `FACE_MEAN_SELFTEST PASS formats=4`. A set member that is
+  unsupported or fails to encode increments `fails` and exits 1.
 - Stub `make extract` transcript: `list, raw, tables, levels, nav --overwrite
   --filter 'Maps/(Guildhall|OldManor|FTUE)/.*\.umap$', meshes, materials
   --overwrite, audio, textures, cubemaps --overwrite, anims`, rc 0, empty

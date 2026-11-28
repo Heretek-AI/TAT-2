@@ -131,17 +131,21 @@ def main() -> None:
     )
     mean_gate = slice_between(
         src,
-        "static bool HasRawHdrMean(EPixelFormat f)",
+        "static readonly EPixelFormat[] RawHdrMeanFormats",
         "// Linear face energy for the HDR path",
     )
     for fmt in (
         "PF_FloatRGBA",
-        "PF_FloatRGB",
         "PF_A32B32G32R32F",
-        "PF_R32G32B32F",
+        "PF_R32_FLOAT",
         "PF_R16F",
     ):
         check(fmt in mean_gate, f"the face-mean format set includes {fmt}")
+    for dead in ("PF_FloatRGB", "PF_R32G32B32F"):
+        check(
+            re.search(rf"\b{dead}\b", mean_gate) is None,
+            f"the face-mean set does not claim undecodable/unsupported {dead}",
+        )
     check(
         "IsHDR" not in mean_gate,
         "the face-mean gate is an explicit format set, not IsHDR",
@@ -155,9 +159,28 @@ def main() -> None:
         "HasRawHdrMean(face.PixelFormat)" in mean_body and "IsHDR" not in mean_body,
         "FaceMeanLinear gates on the explicit set (no dead IsHDR branch)",
     )
+    # ToHdrBitmap converts A32B32G32R32F with flipOrder=true: R/G/B come from
+    # components 3/2/1 (bytes 12/8/4), matching the exported face.
+    check(
+        "BitConverter.ToSingle(data, o + 12)" in mean_body
+        and "BitConverter.ToSingle(data, o + 8)" in mean_body
+        and "BitConverter.ToSingle(data, o + 4)" in mean_body,
+        "A32B32G32R32F reads the library's flipped component order",
+    )
     check(
         "public static int SelfTestFaceMean()" in src,
         "an executable face-mean self-test exists",
+    )
+    selftest = slice_between(
+        src, "public static int SelfTestFaceMean()", "static string UePath(string path)"
+    )
+    check(
+        "FACE_MEAN_LAYOUT" in selftest and "info.BlockBytes" in selftest,
+        "the self-test uses the library block bytes/components",
+    )
+    check(
+        "info.Supported" in selftest and "tex.Encode(opts, out var ext)" in selftest,
+        "the self-test requires Supported and a successful encode",
     )
     # Negative: the old clamped 8-bit mean is never used as the HDR energy.
     check(

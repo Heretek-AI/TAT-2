@@ -86,8 +86,11 @@ The three suites **VO director 122 (53), AEM 123 (77) and cubemap 124 (37)** are
 now real runner gates, produced in-run by the Phase 2.5 baseline; the old
 "carried forward" qualifier no longer applies. `gate_manifest` and
 `e2e_errscan` are runner gates too. The errscan's teardown ceilings were raised
-31→33 and 1→2 after measuring the nondeterministic Godot teardown warning at
-0–2 copies (see [`docs/reports/phase3-baseline-20261127.md`](reports/phase3-baseline-20261127.md) §5).
+31→33 and 1→2 after observing the nondeterministic Godot teardown line at 0–1
+per process (ceiling 2 is one-slot headroom), with completion-marker + runner
+footer checks and tamper minima (e2e 31 / run_tests 482 / a2 0); the ceilings
+and minima are pinned in `tools/gate_ratchet.json` (see
+[`docs/reports/phase3-baseline-20261127.md`](reports/phase3-baseline-20261127.md) §5).
 
 The in-run `docs/reports/logs/final/gate_ratchet.log` is the runner's own
 wrapped log from the Phase 2.5 baseline run (in-run stamp `measured_on=37bb69e`

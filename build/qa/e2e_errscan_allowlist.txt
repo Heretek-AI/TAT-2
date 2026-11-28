@@ -10,11 +10,12 @@
 # ceiling change. Lowering a ceiling or raising a maximum requires a comment
 # here plus a note in the wave report; never edit them silently.
 #
-# 2026-11-27 reviewed raise: `N resources still in use at exit` is Godot
-# teardown noise measured at 0-2 copies per run and can appear in either e2e
-# tier. It is pinned at 2 for each tier (e2e ceiling 31 -> 33, e2e_a2 1 -> 2);
-# this covers an already-audited teardown class, not a new quality floor. Do not
-# raise it silently.
+# 2026-11-27 reviewed raise: `N resources still in use at exit` is a Godot
+# teardown summary line (at most one per process) observed 0-1 across the
+# standalone and full-run samples. It is pinned at 2 per tier (e2e ceiling
+# 31 -> 33, e2e_a2 1 -> 2) as one-slot headroom, not a measured maximum; the
+# binary's per-log minimum totals still reject a log with its known errors
+# deleted. Do not raise this silently.
 #
 # Format: <log><TAB><max><TAB><extended-regex>
 

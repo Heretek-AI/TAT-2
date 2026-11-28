@@ -1,50 +1,39 @@
-PASS. Phase 2.5 baseline complete: **58/58 gates exit 0** in **23m19s** at
-run head `5857589853e43a30339ccc3e2d8cba26c1dde281` (`5857589`).
+PASS (round 3 evidence-chain repair). The 58/58 measured baseline remains at
+`5857589` (23m19s); these commits are tooling/evidence only.
 
-What I did
-- Fixed `build/qa/e2e_errscan.sh`: a log is truncated only when it is empty or
-  missing its tier's completion marker (`SUMMARY: fails=0 …`); a complete log
-  with zero `ERROR:` lines passes. Kept the per-pattern max + `sum == ceiling`
-  rule. Raised e2e 31→33 and e2e_a2 1→2 and allowlisted the nondeterministic
-  `N resources still in use at exit` teardown class at max 2 per tier
-  (measured 0–2; run_tests stays 482).
-- Proved the semantics with six scratch-copy controls: zero+marker PASS,
-  empty FAIL, marker-removed FAIL, new class FAIL, teardown 3 FAIL (max),
-  total 34 FAIL (ceiling).
-- Added the `tools/bin` symlink (git-ignored `vgmstream` the audit needs);
-  recorded the fresh-worktree setup gap in the report, AGENTS.md and
-  OPEN_ISSUES.md.
-- Ran the full runner serially: 58/58 exit 0. Key measured values: compile
-  229/0, run_tests 328/0 (suite 125), M2 12/0, doors 49, manifest 109/70/39/0,
-  e2e_errscan 31/33 + 0/2 + 482/482 new=0, E2E 300/300, p2 17/17, VO 53, AEM
-  77, cubemap 37, P5 54, locks 162, collision 0.869/868852.
-- `make audit` exit 0 twice (no stamp refresh); `make gate-ratchet` PASS
-  in-run at the old stamp and PASS post-stamp at `measured_on=5857589`
-  (`gate_ratchet_poststamp.log`; the in-run log is intact).
-- Updated README, AGENTS.md and HANDOFF_NEXT_AGENT.md with the measured
-  values; wrote `docs/reports/phase3-baseline-20261127.md`.
+What changed
+- **A1 mechanical poststamp + timestamp self-check.** New
+  `build/qa/poststamp_gate_ratchet.sh` captures the poststamp run in one pass:
+  STARTED before `python3 -B tools/check_gate_ratchet.py --generating-poststamp`,
+  the real exit code as `EXIT:`, FINISHED after, then moves the temp into place.
+  `docs/reports/logs/final/gate_ratchet_poststamp.log` is now a real run:
+  `STARTED: 2026-11-27T22:53:58-05:00`, `EXIT: 0`,
+  `FINISHED: 2026-11-27T22:53:58-05:00`, mtime `22:53:58.693` (the old file had
+  STARTED 22:16:00 > FINISHED 22:15:28). `tools/check_gate_ratchet.py` now
+  rejects an evidence log with FINISHED < STARTED, mtime < STARTED, or an
+  incomplete stamp pair. Controls: STARTED=2099 FAIL; mtime=2000 FAIL; restored
+  PASS. A plain checker run after the capture validates the new log end to end.
+- **A3 footer.** `e2e_errscan.sh` now also requires `FINISHED:` and `EXIT: 0`
+  near the end; a log truncated right after `SUMMARY:` fails.
+- **A2 minima.** Per-log minimum totals e2e 31 / run_tests 482 / e2e_a2 0;
+  deleting every e2e or run_tests ERROR line fails. A2 min 0 is intentional
+  (teardown may be absent); residual documented.
+- **Ceilings pinned.** `tools/gate_ratchet.json` now pins e2e 33, e2e_a2 2,
+  run_tests 482 plus the minima (31/0/482); `check_gate_ratchet.py` enforces
+  them from the PASS line and the stale 31/1/482 comment is fixed.
+- **Wording corrected.** The teardown line is observed **0-1** per process, not
+  0-2; ceiling 2 is one-slot headroom. Committed standalone A2 evidence under
+  `docs/reports/logs/errscan-a2/` (0/0/1 runs, all 22/22).
+- **Docs.** `docs/reports/phase3-baseline-20261127.md` §5/§6 and
+  `docs/reports/phase3-plan-20261127.md` §2.5.4 record the reviewed 33/2/482
+  raise and the controls; AGENTS/HANDOFF wording corrected. OPEN_ISSUES items
+  21-24 appended (A1/A2/A3 closed, A5/A6 evidence).
 
-Doc cells changed
-- README: compile 228→229; run_tests 327→328 (suites →125); route self-test
-  "49-gate set"→"58-gate set"; ratchet `37bb69e`/49 gates→`5857589`/58 gates;
-  `make test` 327→328.
-- AGENTS: `make test` 327→328 (suites 125); runner 49→58; gate-table header
-  49/`37bb69e`→58/`5857589`; compile 228→229; run_tests 327→328 (suite 125);
-  doors 47→49; ratchet cell; current-set narrative (58 gates, 229/0, 328/0,
-  manifest/errscan, VO/AEM/cubemap in-run); Phase 0b stamp clause →
-  `5857589`; definition-of-done 327/228/47/49 → 328/229/49/58; parallel-wave
-  setup now includes `tools/bin`; new `e2e_errscan` known trap.
-- HANDOFF: header tip/head/counts; §2 header + table (58, 229/0, 328/0, doors
-  49, manifest, errscan; removed the VO/AEM/cubemap † note and paragraph);
-  §5 prefix/save deletion; §7/§9/§10 counts; ratchet note.
-- `tools/gate_ratchet.json`: `measured_on=5857589`, new `source`, report
-  pointer, floors compile 228→229, run_tests 327→328, doors 47→49,
-  gate_manifest.tracked 108→109. No floor lowered.
-
-Caveats
-- The errscan still pins the teardown class at 2/tier; a 3+ copy run fails by
-  design. No GPU/Vulkan/Xvfb was run; P5/KF27 remain headless/reference-only.
-  The `/tmp` prefix + save (md5 `976f8730…`) are confirmed deleted; the md5 is
-  historical, not re-verified; `/home/john/tat2-ref-build` survives; #13 needs
-  a fresh prefix/save. The 23m19s run is on the fixed 2026-11-27 host and is
-  not a comparison with the old 80 W / 23–30 W host run.
+Affected-gate re-runs (not the full 58)
+- `bash build/qa/e2e_errscan.sh --logdir docs/reports/logs/final` →
+  `E2E_ERRSCAN PASS e2e=31/33 e2e_a2=0/2 run_tests=482/482 new=0`.
+- `bash build/qa/poststamp_gate_ratchet.sh` → exit 0; plain checker → PASS.
+- `make gate-ratchet` → PASS; `make audit` → exit 0.
+- Controls: truncation-after-SUMMARY FAIL (footer); deleted-all-ERROR e2e FAIL
+  (min 31); deleted-all-ERROR run_tests FAIL (min 482); zero A2 PASS; bad
+  STARTED/mtime FAIL. No GPU, no generated data, no lowered floor.

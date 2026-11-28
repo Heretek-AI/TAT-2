@@ -11,19 +11,24 @@
 #       run_tests  482
 #
 # The 2026-11-27 raise from 31/1 is a reviewed change for a nondeterministic
-# Godot teardown warning (`N resources still in use at exit`), measured 0-2
-# copies per run and able to appear in either tier. It is not a lowered quality
-# floor: a new/unmatched ERROR class still fails, and each class keeps its own
-# pinned maximum.
+# Godot teardown warning (`N resources still in use at exit`). It is at most one
+# summary line per process and was observed 0-1 across the standalone and
+# full-run samples, so the ceiling of 2 is one-slot headroom, not a measured
+# maximum. It is not a lowered quality floor: a new/unmatched ERROR class still
+# fails, each class keeps its own pinned maximum, and the per-log minimum totals
+# below still reject a log whose known errors were deleted wholesale.
 #
 # Rules:
 #   * Every ERROR: line must match an allowlist regex for its log; an
 #     unmatched line fails as a NEW error.
 #   * A log is complete only when it is non-empty AND carries its tier's own
-#     completion marker (`SUMMARY: fails=0 passed=… total=…`). A missing marker
-#     or an empty file fails as truncated. Zero ERROR: lines in a complete log
-#     pass: the teardown noise may simply not appear, and absence of noise is
-#     not evidence of truncation.
+#     completion marker (`SUMMARY: fails=0 passed=… total=…`) AND the runner
+#     footer (`FINISHED:` and `EXIT: 0` in the last lines). A missing marker,
+#     missing footer, or an empty file fails as truncated. Zero ERROR: lines in
+#     a complete log pass only where the per-log minimum total is 0.
+#   * A log may not fall below its tamper minimum (e2e 31, e2e_a2 0,
+#     run_tests 482) or exceed its ceiling. A legitimate class disappearance is
+#     a reviewed change to the minimum, never a silent pass.
 #   * A pattern may not exceed its pinned maximum and a log may not exceed its
 #     pinned ceiling. A lower count is fine (noise may disappear).
 #   * The per-log sum of the allowlist maxima must equal the ceiling and every
@@ -43,8 +48,8 @@
 #   build/qa/e2e_errscan.sh [--logdir DIR] [--allowlist FILE]
 #
 # Exit 0 only when every ERROR line is allowlisted, every count is within its
-# pinned maximum/ceiling, every log carries its completion marker, and every
-# log was actually read.
+# pinned maximum/ceiling and tamper minimum, every log carries its completion
+# marker and runner footer, and every log was actually read.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -52,12 +57,14 @@ LOGDIR="$ROOT/docs/reports/logs/final"
 ALLOWLIST="$ROOT/build/qa/e2e_errscan_allowlist.txt"
 LOGS=(e2e e2e_a2 run_tests)
 
-# Pinned ceilings. e2e 33 / e2e_a2 2 / run_tests 482: the 2026-11-27 raise from
-# 31/1 covers the nondeterministic `N resources still in use at exit` teardown
-# class (measured 0-2). Lowering one is a deliberate, reviewed change: add a
-# comment here and a note in the wave report. Raising one because a test
-# legitimately emits a known message is also a reviewed change.
+# Pinned ceilings and tamper minima. e2e 33 / e2e_a2 2 / run_tests 482: the
+# 2026-11-27 raise from 31/1 covers the nondeterministic `N resources still in
+# use at exit` teardown class (observed 0-1; 2 is one-slot headroom). The minima
+# keep a log from passing after its stable known errors were deleted.
+# Lowering a ceiling or a minimum is a deliberate, reviewed change: add a
+# comment here and a note in the wave report.
 declare -A CEILING=([e2e]=33 [e2e_a2]=2 [run_tests]=482)
+declare -A MIN_TOTAL=([e2e]=31 [e2e_a2]=0 [run_tests]=482)
 
 # A complete log must carry its tier's own summary. This is the truncation
 # check: absence of `ERROR:` lines is not truncation, a missing completion
@@ -211,6 +218,18 @@ for log in "${LOGS[@]}"; do
     fi
     continue
   fi
+  # The runner footer proves the gate wrapper closed the log. A file truncated
+  # right after `SUMMARY:` still has the marker but loses the footer.
+  if ! tail -n 6 -- "$path" | grep -Fq -- 'FINISHED:'; then
+    note_fail \
+      "log $path is missing the FINISHED footer; truncated log cannot prove the gate"
+    continue
+  fi
+  if ! tail -n 6 -- "$path" | grep -Fq -- 'EXIT: 0'; then
+    note_fail \
+      "log $path is missing the 'EXIT: 0' footer; truncated log cannot prove the gate"
+    continue
+  fi
   actual="$(count_errors "$path")"
   rc=$?
   if [ "$rc" -eq 2 ]; then
@@ -219,6 +238,10 @@ for log in "${LOGS[@]}"; do
   fi
   if [ "$actual" -gt "${CEILING[$log]}" ]; then
     note_fail "log $log has $actual ERROR: line(s), above the pinned ceiling ${CEILING[$log]}"
+  fi
+  if [ "$actual" -lt "${MIN_TOTAL[$log]}" ]; then
+    note_fail \
+      "log $log has $actual ERROR: line(s), below the minimum total ${MIN_TOTAL[$log]} (a legitimate class disappearance is a reviewed change)"
   fi
 
   # Per-pattern counts start at zero for this log.

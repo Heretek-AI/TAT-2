@@ -8,6 +8,9 @@ baseline: the three previously carried-forward suites are now real runner
 gates, the test manifest and engine-error scan are gates, and the four
 restored orphans run in the gun. No GPU/Vulkan/Xvfb step was run, no producer
 or `make normalize` was run, and no gate log or ratchet floor was lowered.
+The 58/58 measurement remains at `5857589`; the later round-3 commits are
+tooling/evidence only (errscan footer + minimum totals, the ratchet
+timestamp self-check, and a mechanically captured poststamp log).
 
 | Item | Value |
 |---|---|
@@ -143,44 +146,77 @@ as truncated and pinned the nondeterministic `N resources still in use at exit`
 teardown warning at exactly 1 for `e2e_a2` only.
 
 **Semantics now:**
-- A log is complete only if it is non-empty **and** carries its tier's
-  completion marker (`e2e` 300/300, `e2e_a2` 22/22, `run_tests` `fails=0`).
-  A missing marker or an empty file fails; zero `ERROR:` lines in a complete
-  log pass. `grep`'s no-match exit (1) is accepted by the per-line scan.
+- A log is complete only if it is non-empty, carries its tier's completion
+  marker (`e2e` 300/300, `e2e_a2` 22/22, `run_tests` `fails=0`) **and** the
+  runner footer (`FINISHED:` and `EXIT: 0` in the last lines). A missing
+  marker, a missing footer, or an empty file fails as truncated. `grep`'s
+  no-match exit (1) is accepted by the per-line scan.
+- Per-log tamper minimum totals: **e2e 31**, **e2e_a2 0**, **run_tests 482**.
+  Deleting every `ERROR:` line fails for e2e and run_tests; a legitimate class
+  disappearance is a reviewed minimum change, never a silent pass. A2 may be
+  legitimately zero because the teardown warning is intermittent.
 - The per-pattern max + `sum == ceiling` rule is unchanged: e2e
   `13+10+7+1+2 = 33`, e2e_a2 `2`, run_tests `482`.
 - Reviewed raise: e2e ceiling **31→33**, e2e_a2 **1→2**, adding the teardown
-  class at max 2 per tier. This is a raise for measured nondeterministic
-  teardown noise (0–2 copies), not a lowered quality floor; a new/unmatched
-  `ERROR:` class still fails and each class keeps its own maximum.
+  class at max 2 per tier. The teardown line is **observed 0–1** per process
+  (at most one summary line per process), so ceiling 2 is **one-slot
+  headroom**, not a measured maximum. This is not a lowered quality floor: a
+  new/unmatched `ERROR:` class still fails, each class keeps its own maximum,
+  and the minimum totals reject wholesale deletion.
+- The ceilings **33 / 2 / 482** and the minima **31 / 0 / 482** are pinned in
+  `tools/gate_ratchet.json` (`gates.e2e_errscan`) and re-checked by
+  `tools/check_gate_ratchet.py` against the log's PASS line.
 
-**Evidence:** three identical standalone A2 runs measured **0 / 1 / 1**
-`ERROR:` lines, all `fails=0 passed=22 total=22`; in this full run
-`e2e_a2=0/2` (the zero case that used to fail) while `e2e` had 31 and
-`run_tests` 482.
+**Evidence — committed standalone A2 logs** at
+`docs/reports/logs/errscan-a2/a2-standalone-{1,2,3}.log` (measured at
+`5857589`; see the directory README): `ERROR:` lines **0 / 0 / 1**, teardown
+**0 / 0 / 1**, all `fails=0 passed=22 total=22`. Together with the full-run
+`e2e_a2=0/2` and `e2e=31/33`, the teardown class is observed at 0 or 1.
 
-**Negative controls** (scratch copies under `/tmp/opencode/errscan-controls/`,
-committed logs untouched):
+**Negative controls** (scratch copies under `/tmp/opencode/errscan-controls3/`
+and the round-2 set; committed logs untouched):
 
 | Control | Result |
 |---|---|
-| zero ERROR + valid marker | **PASS** (`E2E_ERRSCAN PASS e2e=31/33 e2e_a2=0/2 run_tests=482/482 new=0`) |
+| truncation right after `SUMMARY:` (no footer) | **FAIL** `missing the FINISHED footer` |
+| delete every `ERROR:` from e2e (0 < min 31) | **FAIL** `below the minimum total 31` |
+| delete every `ERROR:` from run_tests (0 < min 482) | **FAIL** `below the minimum total 482` |
+| A2 teardown deleted (0, min 0) | **PASS** `E2E_ERRSCAN PASS e2e=31/33 e2e_a2=0/2 run_tests=482/482 new=0` |
 | empty file | **FAIL** `is empty; a truncated log cannot prove the gate` |
 | marker removed (valid size) | **FAIL** `missing its completion marker` |
 | new ERROR class | **FAIL** `new=1` |
 | e2e teardown count 3 (total 33) | **FAIL** `pattern 4 matched 3 times, above its pinned maximum 2` |
 | e2e total 34 | **FAIL** `has 34 ERROR: line(s), above the pinned ceiling 33` |
 
-## 6. Ratchet
+## 6. Ratchet and evidence chain
 
-- In-run: `docs/reports/logs/final/gate_ratchet.log` — PASS with the
+- **In-run:** `docs/reports/logs/final/gate_ratchet.log` — PASS with the
   historical `measured_on=37bb69e` (kept intact; the floors are minimums and
   the fresh logs satisfy them).
-- Post-stamp: `tools/gate_ratchet.json` is advanced to
+- **Post-stamp:** `tools/gate_ratchet.json` is advanced to
   `measured_on=5857589`, `source` records run head / code head / wall time /
-  host context / count deltas, and `report` points at this file. The post-stamp
-  output is `docs/reports/logs/final/gate_ratchet_poststamp.log`.
+  host context / count deltas, and `report` points at this file.
   `make gate-ratchet` exits 0.
+- **Mechanical capture (A1):** `build/qa/poststamp_gate_ratchet.sh` regenerates
+  `docs/reports/logs/final/gate_ratchet_poststamp.log` in one pass — `STARTED:`
+  before `python3 -B tools/check_gate_ratchet.py --generating-poststamp` (the
+  flag skips only the self-referential poststamp entry while generating), the
+  checker's real output and exit code, then `EXIT:` and `FINISHED:`. No line is
+  hand-assembled. A plain `python3 -B tools/check_gate_ratchet.py` afterwards
+  validates the finished artefact end to end. Measured for this artifact:
+  `STARTED: 2026-11-27T22:53:58-05:00`, `EXIT: 0`,
+  `FINISHED: 2026-11-27T22:53:58-05:00`, mtime `22:53:58.693`.
+- **Timestamp self-check (A1):** `tools/check_gate_ratchet.py` now rejects an
+  evidence log whose `FINISHED:` predates its `STARTED:`, whose mtime predates
+  `STARTED:`, or that carries only one of the pair. Controls in an isolated
+  scratch ROOT: `STARTED=2099…` → **FAIL**
+  `STARTED … is after FINISHED … — the artifact was assembled, not measured`;
+  mtime `2000-01-01` → **FAIL** `mtime … predates STARTED …`; restored artifact
+  → **PASS**. This is the check that rejects the previous hand-assembled file
+  (`STARTED 22:16:00` > `FINISHED 22:15:28`).
+- A plain (non-generating) `python3 -B tools/check_gate_ratchet.py` after the
+  capture re-validates the new poststamp log end to end (content + stamps) and
+  exits 0.
 
 ## 7. Host performance and the `/tmp` reference loss
 
@@ -202,8 +238,11 @@ therefore needs a fresh Proton prefix and a fresh save before the live capture.
 
 ## 8. Caveats
 
-- `e2e_errscan` still pins the teardown class at 2 per tier; a future run with
-  3+ copies fails by design (raise only with a new measurement and a note).
+- `e2e_errscan` pins the teardown class at max 2 per tier with **one-slot
+  headroom** over the observed 0–1, plus tamper minima (e2e 31, run_tests 482;
+  A2 0). A future 3+ run fails by design (raise only with a new measurement and
+  a note). The standalone A2 evidence is committed under
+  `docs/reports/logs/errscan-a2/`.
 - The Niagara probe's 58-gate gate is Guildhall-scoped (`active=219`); the
   payload-wide census (3,308 active / 36 systems) is not re-derived by this
   gate.

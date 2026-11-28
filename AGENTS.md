@@ -329,14 +329,17 @@ build/qa/             tracked capture/probe/export-stamp scripts; PNG output ign
 
 ## Known traps
 
-- **`e2e_errscan` uses completion markers, not zero-ERROR detection.** A log is
-  truncated only when it is empty or missing its tier's `SUMMARY: fails=0 …`
-  marker; a complete log with zero `ERROR:` lines passes. The
-  `N resources still in use at exit` teardown warning is nondeterministic Godot
-  noise (measured 0-2) and may appear in `e2e` or `e2e_a2`; the ceilings are
-  `33 / 2 / 482` (raise only with a fresh measurement and a note). Do not
+- **`e2e_errscan` uses completion markers + footers, not zero-ERROR detection.**
+  A log is truncated when it is empty, missing its tier's `SUMMARY: fails=0 …`
+  marker, or missing the runner footer (`FINISHED:` + `EXIT: 0`). The
+  `N resources still in use at exit` teardown line is nondeterministic Godot
+  noise observed 0-1 per process and may appear in `e2e` or `e2e_a2`; the
+  ceilings are `33 / 2 / 482` (2 is one-slot headroom, not a measured maximum)
+  and the tamper minima are e2e 31 / run_tests 482 / a2 0. Delete-known-errors
+  fails; a legitimate class disappearance is a reviewed minimum change. Do not
   restore the old "zero lines = truncated" rule or pin the teardown warning at
   exactly 1 — that made the gate flaky and blocked the Phase 2.5 baseline twice.
+  Ceilings/minima are pinned in `tools/gate_ratchet.json`.
 
 - **Stair meshes are exempt from the convex element cap.** `authored_collision.gd`
   reduces a convex set above `MAX_CONVEX_ELEMENTS_PER_MESH = 16` to one coalesced

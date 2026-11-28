@@ -22,6 +22,13 @@
 # to the merged measurements (beams 9, audio 123, P5 54, self-test 23, KF27
 # 9/9); no floor is lowered.
 #
+# Phase 3 §3B.2 (2026-11-27) keeps the gate count: `nav_runtime_probe` grows
+# from 70 to 94/97 checks (per-actor door audit, route-critical linked set,
+# prison baked-link binding, census_version 2) and its literal marker becomes
+# the `checks=[0-9]+ fails=0` regex; the ratchet's checks=70 stays a floor. The
+# wrapper also recomputes the link census from the emitted raw pair set once the
+# asset is census_version 2 (PENDING on a legacy v1 asset).
+#
 # Phase 3 §2.5.1 (2026-11-27) restores the three ratchet-pinned suites that no
 # earlier runner invoked — `test_vo_director` (53), `probe_auto_exposure` (77)
 # and `probe_cubemap` (37) — for 52 gates. Their pinned logs predated the
@@ -319,8 +326,11 @@ gate_marker probe_lock_inventory "$OUT/probe_lock_inventory.log" \
 # N-P1/N-P2 authored navmesh runtime: one NavigationRegion3D per map, the 80
 # baked links, the door link state rule and the negative controls. The wrapper
 # takes the Godot lock itself (like runtime_smoke), so no outer flock.
-gate_marker nav_runtime_probe "$OUT/nav_runtime_probe.log" \
-	"NAV_RUNTIME_PROBE checks=70 fails=0" \
+# Phase 3 §3B.2 raised the probe from 70 to 94/97 checks (per-actor door
+# audit, route-critical set, prison baked-link binding, census v2), so the
+# marker is a regex and the ratchet floor (checks=70) stays a floor.
+gate_marker_re nav_runtime_probe "$OUT/nav_runtime_probe.log" \
+	"NAV_RUNTIME_PROBE checks=[0-9]+ fails=0" \
 	"$ROOT/build/qa/nav_runtime_probe.sh"
 
 gate_marker probe_niagara "$OUT/probe_niagara.log" "NIAGARA_PROBE PASS" \

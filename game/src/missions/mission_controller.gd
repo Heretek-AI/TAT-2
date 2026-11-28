@@ -180,6 +180,22 @@ const DEN_WINDOW_MAX_LATERAL_M := 2.5
 var _den_selected_map_id: String = "old_manor"
 var _den_lookat_card: Dictionary = {}
 var _den_tokens: Dictionary = {}
+## L4-13: while the telescope scope is up the player must not keep walking.
+## Before this gate, `[F] PONDER` only swapped the camera; a held forward key
+## kept driving the character into the west opening, so `[F] EXIT` returned the
+## camera to a body already outside on the Den roof. The scope is a gameplay
+## modal (same InputContext path as the lockpick/map/letter): movement, tools,
+## jump/sprint/crouch and interact are released/blocked, look stays on the
+## mission camera, and the F/ESC exit handler in `_unhandled_input` still runs.
+const TELESCOPE_PONDER_MODAL_ID: String = "telescope_ponder"
+const TELESCOPE_PONDER_DISABLED: Array[String] = [
+	"move_forward", "move_backward", "move_left", "move_right",
+	"look_gamepad",
+	"interact", "secondary_interact",
+	"jump", "sprint", "crouch", "crouch_hold",
+	"primary_action", "secondary_action", "ability",
+	"tool_1", "tool_2", "tool_3", "tool_4",
+]
 var _ponder_active: bool = false
 var _ponder_cam: Camera3D = null
 var _ponder_cheese: Node3D = null
@@ -2556,6 +2572,14 @@ func _spawn_ponder_vista() -> void:
 			(child as GeometryInstance3D).layers = 2
 
 
+## The action set the telescope scope releases. Returns a copy so a caller can
+## hand it to InputContext.push_modal without aliasing the const array.
+static func telescope_ponder_disabled_actions() -> Array[String]:
+	var out: Array[String] = []
+	out.assign(TELESCOPE_PONDER_DISABLED)
+	return out
+
+
 func toggle_telescope_ponder() -> void:
 	if not _is_thieves_den:
 		push_warning("[mission_controller] toggle_telescope_ponder called outside thieves_den; ignoring")
@@ -2572,6 +2596,22 @@ func toggle_telescope_ponder() -> void:
 		return
 	set_meta("ponder_toggle_frame", frame_now)
 	_ponder_active = not _ponder_active
+	# L4-13: gate gameplay input for exactly the scope's lifetime. Push/pop is
+	# idempotent in InputContext, and the modal is popped on exit, on mission
+	# teardown (_exit_tree) and before the camera restore below.
+	var input_ctx: Node = get_node_or_null("/root/InputContext")
+	if _ponder_active:
+		if input_ctx != null and input_ctx.has_method("push_modal"):
+			input_ctx.call("push_modal", TELESCOPE_PONDER_MODAL_ID, telescope_ponder_disabled_actions())
+		# Kill any walk/sprint momentum still in the body on the same frame the
+		# scope opens. The modal stops new input; this stops the residual slide
+		# so a player who pressed [F] while running cannot carry 0.1-0.5 m into
+		# the west opening before the 40 m/s^2 modal deceleration settles.
+		if player != null and is_instance_valid(player):
+			player.set("velocity", Vector3.ZERO)
+	else:
+		if input_ctx != null and input_ctx.has_method("pop_modal"):
+			input_ctx.call("pop_modal", TELESCOPE_PONDER_MODAL_ID)
 	# KF05 safeguard: the P1 black lift would also wash the unshaded vista
 	# silhouettes, so the scope view runs on the level-load LUT and the P1 toe
 	# comes back on exit (see _set_ponder_shadow_toe).
@@ -5381,6 +5421,13 @@ func _on_time_expired() -> void:
 ## systems when a mission leaves the tree. Without this the last mission's
 ## textures, LUTs and retarget caches survive shutdown as leaked resources.
 func _exit_tree() -> void:
+	# L4-13: never leave the telescope scope's gameplay gate behind if the
+	# mission is torn down while the scope is up (startscreen return, quit).
+	if _ponder_active:
+		var input_ctx_exit: Node = get_node_or_null("/root/InputContext")
+		if input_ctx_exit != null and input_ctx_exit.has_method("pop_modal"):
+			input_ctx_exit.call("pop_modal", TELESCOPE_PONDER_MODAL_ID)
+		_ponder_active = false
 	# N-P1: remove the navigation region/links before the tree teardown so a
 	# reload cannot stack regions on the default world map.
 	_clear_nav_runtime()

@@ -1,7 +1,7 @@
 == POST_STAMP gate_ratchet
 COMMAND: python3 -B tools/check_gate_ratchet.py --generating-poststamp
 CWD: .
-STARTED: 2026-11-27T23:17:48-05:00
+STARTED: 2026-11-28T07:05:30-05:00
 
 PASS: measured_on=5857589
 PASS: audit.coverage_den=12703
@@ -62,7 +62,7 @@ PASS: probe_cubemap.fails=0
 PASS: probe_cubemap.passed=37
 PASS: probe_den_spawn.checks=9
 PASS: probe_den_spawn.fails=0
-PASS: probe_den_window.checks=34
+PASS: probe_den_window.checks=44
 PASS: probe_device_meshes.actors=229
 PASS: probe_device_meshes.checks=11
 PASS: probe_device_meshes.hidden_parts=0
@@ -93,6 +93,8 @@ PASS: probe_p1_safe.checks=86
 PASS: probe_p1_street.checks=31
 PASS: probe_p1_ward.checks=44
 PASS: probe_p5_ui.checks=54
+PASS: probe_route_npcs.checks=4
+PASS: probe_route_npcs.fails=0
 PASS: producer_tests.nav_checks=7
 PASS: producer_tests.stealthball_checks=22
 PASS: producer_tests.ui_pixel_checks=15
@@ -316,7 +318,10 @@ PASS: test_roof_collision.log proves test_roof_collision ('ROOF_COLLISION_SUMMAR
 PASS: test_roof_collision.log records test_roof_collision.checks=106 >= 106
 PASS: probe_den_window.log stamps coherent (STARTED <= FINISHED, mtime >= STARTED)
 PASS: probe_den_window.log proves probe_den_window ('(?m)^DEN_WINDOW PASS checks=(\\d+)$')
-PASS: probe_den_window.log records probe_den_window.checks=34 >= 34
+PASS: probe_den_window.log records probe_den_window.checks=44 >= 44
+PASS: probe_route_npcs.log stamps coherent (STARTED <= FINISHED, mtime >= STARTED)
+PASS: probe_route_npcs.log proves probe_route_npcs ('(?m)^ROUTE_NPC PASS checks=(\\d+) fails=0')
+PASS: probe_route_npcs.log records probe_route_npcs.checks=4 >= 4
 PASS: probe_mirror_split.log stamps coherent (STARTED <= FINISHED, mtime >= STARTED)
 PASS: probe_mirror_split.log proves probe_mirror_split ('(?m)^MIRROR_DATA_SUMMARY: fails=0 checks=(\\d+) mode=geometry$')
 PASS: probe_mirror_split.log records probe_mirror_split.checks=39 >= 39
@@ -364,7 +369,7 @@ SKIP: gate_ratchet poststamp self-check (generating artifact)
 PASS: e2e.log has 4343 lines >= 4000
 PASS: e2e_a2.log has 253 lines >= 200
 PASS: run_tests.log has 3647 lines >= 3000
-PASS: runner/binding self-check 58 gates, 59 ratchet bindings
+PASS: runner/binding self-check 59 gates, 60 ratchet bindings
 PASS: report records compile ('compile\\s*\\|\\s*229\\s*/\\s*0')
 PASS: report records run_tests ('run_tests\\s*\\|\\s*328')
 PASS: report records M2 ('M2\\s*\\|\\s*12')
@@ -375,4 +380,4 @@ PASS: report names measured_on=5857589
 GATE_RATCHET: PASS (baseline and committed evidence agree; Godot gates run locally)
 
 EXIT: 0
-FINISHED: 2026-11-27T23:17:49-05:00
+FINISHED: 2026-11-28T07:05:30-05:00

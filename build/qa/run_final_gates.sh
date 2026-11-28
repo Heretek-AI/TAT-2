@@ -47,6 +47,10 @@
 # 58 gates. Every `game/tests/**/*.gd` is now a gate or an explicit retired
 # entry in `build/qa/retired_tests.txt`.
 #
+# Phase 3C (2026-11-28) adds `probe_route_npcs` (C4-08/L4-08 route population
+# re-measure, checks=4) and raises `probe_den_window` from 34 to 44 checks for
+# the real-key [F] PONDER/[F] EXIT block — for **59 gates**.
+#
 # Rules encoded here (same contract as P0a/P0b/P1)
 # ------------------------------------------------
 #   * Never hold the Godot lock across the runner. Each Godot invocation takes
@@ -151,7 +155,7 @@ GATE_COUNT=0
 # The committed runner/binding self-check in tools/check_gate_ratchet.py pins
 # the same number. A gate moved into an uncalled function still parses there,
 # but this executed-count assertion catches it before the PASS line.
-EXPECTED_GATES=58
+EXPECTED_GATES=59
 
 _open_log() { # <name> <log> <command...>
 	local name="${1:?gate name}"
@@ -518,12 +522,23 @@ gate_marker probe_den_spawn "$OUT/probe_den_spawn.log" "DEN_SPAWN PASS checks=9 
 	flock "$LOCK" tools/godot --headless --path game \
 	--script res://tests/probe_den_spawn.gd
 
-# W9-P2 B3: Den telescope ponder is camera-only (never writes the player) and
-# the west-window escape is contained, with the blocker as defense in depth.
+# W9-P2 B3 / Phase 3C: Den telescope ponder is camera-only (never writes the
+# player), the scope gates gameplay input, and the west-window escape is
+# contained, with the blocker as defense in depth. Phase 3C added the real-key
+# [F] PONDER/[F] EXIT block, so the probe count grew 34 -> 44.
 gate_marker_re probe_den_window "$OUT/probe_den_window.log" \
-	'^DEN_WINDOW PASS checks=34$' \
+	'^DEN_WINDOW PASS checks=44$' \
 	flock "$LOCK" tools/godot --headless --path game \
 	--script res://tests/probe_den_window.gd
+
+# Phase 3C C4-08/L4-08: route NPC population re-measure. The probe moves
+# nothing; it records the live 4 guards + 3 civilians and their distance from
+# the authored Contract 2 route anchor, which is what makes S19/S20/S22/S23
+# `unreachable` in build/qa/route_driver.gd and the 120-row scorer.
+gate_marker probe_route_npcs "$OUT/probe_route_npcs.log" \
+	"ROUTE_NPC PASS checks=4 fails=0" \
+	flock "$LOCK" tools/godot --headless --path game \
+	--script res://tests/probe_route_npcs.gd
 
 # 8. Port capture harness (headless, no GPU): the wrapper takes the lock itself
 #    and writes its dry-run/self-test evidence under $OUT via P0B_EVIDENCE_DIR.

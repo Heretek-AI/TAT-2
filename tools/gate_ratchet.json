@@ -62,6 +62,7 @@
     "e2e_errscan": "e2e_errscan.log",
     "test_roof_collision": "test_roof_collision.log",
     "probe_den_window": "probe_den_window.log",
+    "probe_route_npcs": "probe_route_npcs.log",
     "probe_mirror_split": "probe_mirror_split.log",
     "probe_statetree_shadow": "probe_statetree_shadow.log",
     "gate_ratchet": "gate_ratchet_poststamp.log"
@@ -285,7 +286,11 @@
       "checks": 106
     },
     "probe_den_window": {
-      "checks": 34
+      "checks": 44
+    },
+    "probe_route_npcs": {
+      "checks": 4,
+      "fails": 0
     },
     "probe_mirror_split": {
       "checks": 39

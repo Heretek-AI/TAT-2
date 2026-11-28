@@ -620,10 +620,19 @@ LOG_GATES = {
         "count_patterns": [(r"(?m)^PASS:", "checks")],
         "passes_key": None,
     },
-    # W9-P2 B3 Den telescope/west-window probe.
+    # W9-P2 B3 Den telescope/west-window probe. Phase 3C added the real-key
+    # [F] PONDER/[F] EXIT block (34 -> 44 checks) and the InputContext gate.
     "probe_den_window": {
         "command": "tools/godot --headless --path game --script res://tests/probe_den_window.gd",
         "pattern": lambda g: r"(?m)^DEN_WINDOW PASS checks=(\d+)$",
+        "minimums": [(1, "checks")],
+        "passes_key": None,
+    },
+    # Phase 3C C4-08/L4-08: route NPC population re-measure. Four guards + three
+    # civilians at their authored Contract 2 distances; moves nothing.
+    "probe_route_npcs": {
+        "command": "tools/godot --headless --path game --script res://tests/probe_route_npcs.gd",
+        "pattern": lambda g: r"(?m)^ROUTE_NPC PASS checks=(\d+) fails=0",
         "minimums": [(1, "checks")],
         "passes_key": None,
     },
@@ -753,7 +762,7 @@ PROBE_GATES = {
 # `$OUT/gate_ratchet.log` *before* this checker reads it; the ratchet binds the
 # static tracked `gate_ratchet_poststamp.log` instead (STATIC_BINDINGS below),
 # and the in-run gate is enforced by its exit code.
-EXPECTED_RUNNER_GATE_COUNT = 58
+EXPECTED_RUNNER_GATE_COUNT = 59
 RUNNER_PATH = ROOT / "build/qa" / "run_final_gates.sh"
 RUNNER_GATE_BINDINGS: dict[str, tuple[str, ...]] = {
     "gate_manifest": ("gate_manifest",),
@@ -800,6 +809,7 @@ RUNNER_GATE_BINDINGS: dict[str, tuple[str, ...]] = {
     "test_capture_p5_filter": ("test_capture_p5_filter",),
     "probe_den_spawn": ("probe_den_spawn",),
     "probe_den_window": ("probe_den_window",),
+    "probe_route_npcs": ("probe_route_npcs",),
     "p0b_capture_dry_run": ("p0b_capture_dry_run",),
     "p0b_capture_self_test": ("p0b_capture_self_test",),
     "p0b_manifest_validate": ("p0b_capture",),

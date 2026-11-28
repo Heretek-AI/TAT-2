@@ -1,0 +1,737 @@
+{
+  "schema": "tat2.route_driver/1",
+  "driver_version": 1,
+  "mode": "driver",
+  "segment": "den_telescope",
+  "route_claim": "none",
+  "driver_seed": 1025051536,
+  "deterministic_replay": true,
+  "input_backend": {
+    "move": "Input.action_press('move_forward'/'move_backward'/'move_left'/'move_right')",
+    "look": "player.add_look_pixel_delta (documented touch-look input hook)",
+    "interact": "InputEventKey KEY_F pushed through SceneTree.root.push_input",
+    "wait": "physics_frame an integer count",
+    "note": "No player.global_position write between beats; the only placement is the mission's authored spawn."
+  },
+  "run_id": "den_telescope_20261128T114246",
+  "started_at_utc": "2026-11-28T11:42:46",
+  "repo_root": "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/route-code",
+  "git": {
+    "sha": "da780d47dfe4350e20c65dcae3a34758ca93ad17",
+    "sha_short": "da780d4",
+    "branch": "teamwork/20261127-1810-phase3-route-code",
+    "dirty": false
+  },
+  "build_stamp": {
+    "path": "build/tat2-linux-x86_64.stamp.json",
+    "present": false,
+    "kind": "source_head",
+    "engine": "4.7.2-stable (official)",
+    "note": "Headless source run; no exported PCK was launched for the driver."
+  },
+  "host": {
+    "name": "AtomMan",
+    "os": "Linux",
+    "processor": "Intel(R) Core(TM) i9-14900HX",
+    "cpu_count": 32,
+    "display": ":0",
+    "renderer": "headless"
+  },
+  "env": {
+    "TAT2_PARITY_ONLY": "1"
+  },
+  "beat_plan": {
+    "S01": {
+      "kind": "ui",
+      "implemented": false,
+      "reason": "startscreen UI beat (main_menu.gd) — no menu input plan in the short Den segment"
+    },
+    "S02": {
+      "kind": "ui",
+      "implemented": false,
+      "reason": "loading screen — UI beat, not part of the Den walk segment"
+    },
+    "S03": {
+      "kind": "world",
+      "implemented": true,
+      "reason": ""
+    },
+    "S04": {
+      "kind": "ui",
+      "implemented": false,
+      "reason": "wardrobe UI beat — no menu input plan in the short segment"
+    },
+    "S05": {
+      "kind": "camera",
+      "implemented": true,
+      "reason": ""
+    },
+    "S06": {
+      "kind": "ui",
+      "implemented": false,
+      "reason": "ledger/black-market UI beat — no menu input plan in the short segment"
+    },
+    "S07": {
+      "kind": "world",
+      "implemented": false,
+      "reason": "multi-subject Den props beat (decoration/gramophone/trunk); no multi-prop driver"
+    },
+    "S08": {
+      "kind": "ui",
+      "implemented": false,
+      "reason": "map-table UI beat — no menu input plan in the short segment"
+    },
+    "S09": {
+      "kind": "ui",
+      "implemented": false,
+      "reason": "mission-prep UI beat — no menu input plan in the short segment"
+    },
+    "S10": {
+      "kind": "ui",
+      "implemented": false,
+      "reason": "loading screen — UI beat, not part of the Den walk segment"
+    },
+    "S11": {
+      "kind": "ui",
+      "implemented": false,
+      "reason": "briefing-letter UI beat — no menu input plan in the short segment"
+    },
+    "S12": {
+      "kind": "world",
+      "implemented": false,
+      "reason": "Guildhall safe-room traversal/lantern beat — not in the Den segment"
+    },
+    "S13": {
+      "kind": "world",
+      "implemented": false,
+      "reason": "street/alley traversal needs a full multi-leg route (vault/crouch/car); short segment only"
+    },
+    "S14": {
+      "kind": "camera",
+      "implemented": false,
+      "reason": "zipwire equip/launch needs the S13 state; short segment only"
+    },
+    "S15": {
+      "kind": "world",
+      "implemented": false,
+      "reason": "2nd zipwire/crank needs the S14 state; short segment only"
+    },
+    "S16": {
+      "kind": "world",
+      "implemented": false,
+      "reason": "roofline/3rd zipwire needs the S14/S15 state; short segment only"
+    },
+    "S17": {
+      "kind": "world",
+      "implemented": false,
+      "reason": "cable/courtyard traversal needs the S14-S16 state; short segment only"
+    },
+    "S18": {
+      "kind": "world",
+      "implemented": false,
+      "reason": "smoke throw needs the courtyard state; short segment only"
+    },
+    "S19": {
+      "kind": "camera",
+      "implemented": false,
+      "reason": "NPC scan beat: measured 4 guards + 3 civilians at 85.4-150.7 m from the route anchor (probe_route_npcs.gd); no guard in reach"
+    },
+    "S20": {
+      "kind": "world",
+      "implemented": false,
+      "reason": "terrace patrol beat: nearest guard measured 85.4 m away (probe_route_npcs.gd); unreachable in this route"
+    },
+    "S21": {
+      "kind": "world",
+      "implemented": false,
+      "reason": "blue-door approach/traversal needs the S20 state; short segment only"
+    },
+    "S22": {
+      "kind": "world",
+      "implemented": false,
+      "reason": "pickpocket beat: no constable in reach (nearest NPC 85.4 m, probe_route_npcs.gd); unreachable"
+    },
+    "S23": {
+      "kind": "camera",
+      "implemented": false,
+      "reason": "takedown beat: needs the S22 constable; no NPC in reach (probe_route_npcs.gd); unreachable"
+    },
+    "S24": {
+      "kind": "world",
+      "implemented": false,
+      "reason": "foyer approach/beams needs the S21/S22/S23 state; short segment only"
+    },
+    "S25": {
+      "kind": "world",
+      "implemented": false,
+      "reason": "beam crossing/ward lockdown must be walked, not triggered; needs the S24 state"
+    },
+    "S26": {
+      "kind": "world",
+      "implemented": false,
+      "reason": "slate-stair/ascent needs the S25 state; short segment only"
+    },
+    "S27": {
+      "kind": "ui",
+      "implemented": false,
+      "reason": "pause-menu UI beat; no menu input plan in the short segment"
+    }
+  },
+  "beats": [
+    {
+      "id": "S01",
+      "kind": "ui",
+      "status": "not_attempted",
+      "reason": "startscreen UI beat (main_menu.gd) — no menu input plan in the short Den segment",
+      "implemented": false,
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {}
+    },
+    {
+      "id": "S02",
+      "kind": "ui",
+      "status": "not_attempted",
+      "reason": "loading screen — UI beat, not part of the Den walk segment",
+      "implemented": false,
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {}
+    },
+    {
+      "id": "S03",
+      "kind": "world",
+      "status": "driven_partial",
+      "reason": "Authored Den spawn reached; the official attic pan is not driven (entry half only).",
+      "implemented": true,
+      "mark_beat_called": true,
+      "mark_beat_ok": true,
+      "input_actions": [
+        "move_forward",
+        "look"
+      ],
+      "waypoints": [],
+      "evidence": {
+        "spawn": [
+          5.6692,
+          40.1172,
+          270.6863
+        ],
+        "player_spawn_meta": "authored"
+      }
+    },
+    {
+      "id": "S04",
+      "kind": "ui",
+      "status": "not_attempted",
+      "reason": "wardrobe UI beat — no menu input plan in the short segment",
+      "implemented": false,
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {}
+    },
+    {
+      "id": "S05",
+      "kind": "camera",
+      "status": "driven",
+      "reason": "",
+      "implemented": true,
+      "mark_beat_called": true,
+      "mark_beat_ok": true,
+      "input_actions": [
+        "move_forward",
+        "look",
+        "interact",
+        "wait"
+      ],
+      "waypoints": [
+        [
+          -3.4,
+          null,
+          270.9
+        ]
+      ],
+      "evidence": {
+        "enter_pos": [
+          -3.342,
+          40.1179,
+          270.8984
+        ],
+        "ponder_frozen_max_m": 0.0,
+        "exit_pos": [
+          -3.342,
+          40.1179,
+          270.8984
+        ],
+        "exit_drift_m": 0.0,
+        "telescope": [
+          -4.9202,
+          40.2669,
+          270.7337
+        ]
+      }
+    },
+    {
+      "id": "S06",
+      "kind": "ui",
+      "status": "not_attempted",
+      "reason": "ledger/black-market UI beat — no menu input plan in the short segment",
+      "implemented": false,
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {}
+    },
+    {
+      "id": "S07",
+      "kind": "world",
+      "status": "not_attempted",
+      "reason": "multi-subject Den props beat (decoration/gramophone/trunk); no multi-prop driver",
+      "implemented": false,
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {}
+    },
+    {
+      "id": "S08",
+      "kind": "ui",
+      "status": "not_attempted",
+      "reason": "map-table UI beat — no menu input plan in the short segment",
+      "implemented": false,
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {}
+    },
+    {
+      "id": "S09",
+      "kind": "ui",
+      "status": "not_attempted",
+      "reason": "mission-prep UI beat — no menu input plan in the short segment",
+      "implemented": false,
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {}
+    },
+    {
+      "id": "S10",
+      "kind": "ui",
+      "status": "not_attempted",
+      "reason": "loading screen — UI beat, not part of the Den walk segment",
+      "implemented": false,
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {}
+    },
+    {
+      "id": "S11",
+      "kind": "ui",
+      "status": "not_attempted",
+      "reason": "briefing-letter UI beat — no menu input plan in the short segment",
+      "implemented": false,
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {}
+    },
+    {
+      "id": "S12",
+      "kind": "world",
+      "status": "not_attempted",
+      "reason": "Guildhall safe-room traversal/lantern beat — not in the Den segment",
+      "implemented": false,
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {}
+    },
+    {
+      "id": "S13",
+      "kind": "world",
+      "status": "not_attempted",
+      "reason": "street/alley traversal needs a full multi-leg route (vault/crouch/car); short segment only",
+      "implemented": false,
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {}
+    },
+    {
+      "id": "S14",
+      "kind": "camera",
+      "status": "not_attempted",
+      "reason": "zipwire equip/launch needs the S13 state; short segment only",
+      "implemented": false,
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {}
+    },
+    {
+      "id": "S15",
+      "kind": "world",
+      "status": "not_attempted",
+      "reason": "2nd zipwire/crank needs the S14 state; short segment only",
+      "implemented": false,
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {}
+    },
+    {
+      "id": "S16",
+      "kind": "world",
+      "status": "not_attempted",
+      "reason": "roofline/3rd zipwire needs the S14/S15 state; short segment only",
+      "implemented": false,
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {}
+    },
+    {
+      "id": "S17",
+      "kind": "world",
+      "status": "not_attempted",
+      "reason": "cable/courtyard traversal needs the S14-S16 state; short segment only",
+      "implemented": false,
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {}
+    },
+    {
+      "id": "S18",
+      "kind": "world",
+      "status": "not_attempted",
+      "reason": "smoke throw needs the courtyard state; short segment only",
+      "implemented": false,
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {}
+    },
+    {
+      "id": "S19",
+      "kind": "camera",
+      "status": "unreachable",
+      "reason": "NPC scan beat: measured 4 guards + 3 civilians at 85.4-150.7 m from the route anchor (probe_route_npcs.gd); no guard in reach",
+      "implemented": false,
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {}
+    },
+    {
+      "id": "S20",
+      "kind": "world",
+      "status": "unreachable",
+      "reason": "terrace patrol beat: nearest guard measured 85.4 m away (probe_route_npcs.gd); unreachable in this route",
+      "implemented": false,
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {}
+    },
+    {
+      "id": "S21",
+      "kind": "world",
+      "status": "not_attempted",
+      "reason": "blue-door approach/traversal needs the S20 state; short segment only",
+      "implemented": false,
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {}
+    },
+    {
+      "id": "S22",
+      "kind": "world",
+      "status": "unreachable",
+      "reason": "pickpocket beat: no constable in reach (nearest NPC 85.4 m, probe_route_npcs.gd); unreachable",
+      "implemented": false,
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {}
+    },
+    {
+      "id": "S23",
+      "kind": "camera",
+      "status": "unreachable",
+      "reason": "takedown beat: needs the S22 constable; no NPC in reach (probe_route_npcs.gd); unreachable",
+      "implemented": false,
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {}
+    },
+    {
+      "id": "S24",
+      "kind": "world",
+      "status": "not_attempted",
+      "reason": "foyer approach/beams needs the S21/S22/S23 state; short segment only",
+      "implemented": false,
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {}
+    },
+    {
+      "id": "S25",
+      "kind": "world",
+      "status": "not_attempted",
+      "reason": "beam crossing/ward lockdown must be walked, not triggered; needs the S24 state",
+      "implemented": false,
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {}
+    },
+    {
+      "id": "S26",
+      "kind": "world",
+      "status": "not_attempted",
+      "reason": "slate-stair/ascent needs the S25 state; short segment only",
+      "implemented": false,
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {}
+    },
+    {
+      "id": "S27",
+      "kind": "ui",
+      "status": "not_attempted",
+      "reason": "pause-menu UI beat; no menu input plan in the short segment",
+      "implemented": false,
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {}
+    }
+  ],
+  "counts": {
+    "beats": 27,
+    "driven": 1,
+    "driven_partial": 1,
+    "unreachable": 4,
+    "not_attempted": 21,
+    "failed": 0,
+    "mark_calls": 2
+  },
+  "asserts": [
+    {
+      "name": "player spawned on the authored Den spawn",
+      "ok": true,
+      "detail": "waited=16"
+    },
+    {
+      "name": "DenTelescopeArea present",
+      "ok": true,
+      "detail": "telescope Area3D missing"
+    },
+    {
+      "name": "telescope Area3D at the authored point",
+      "ok": true,
+      "detail": "[-4.9202, 40.2669, 270.7337]"
+    },
+    {
+      "name": "walked to the telescope approach via input",
+      "ok": true,
+      "detail": "{ \"ok\": true, \"frames\": 151, \"start\": [5.6692, 40.1172, 270.6863], \"end\": [-3.1685, 40.1179, 270.8929], \"distance_m\": 8.84009075164795 }"
+    },
+    {
+      "name": "inside the telescope Area3D radius (1.77 m)",
+      "ok": true,
+      "detail": "dist=1.77"
+    },
+    {
+      "name": "[F] PONDER enters the telescope scope",
+      "ok": true,
+      "detail": "active=true cam=DenTelescopeCam:<Camera3D#453924364419>"
+    },
+    {
+      "name": "held forward cannot walk out of the Den while scoped (max 0.000 m)",
+      "ok": true,
+      "detail": "moved 0.000 m in scope"
+    },
+    {
+      "name": "[F] EXIT leaves the scope",
+      "ok": true,
+      "detail": "active=false"
+    },
+    {
+      "name": "[F] EXIT restores the player camera",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "[F] EXIT does not teleport the body",
+      "ok": true,
+      "detail": "drift=0.000"
+    },
+    {
+      "name": "[F] EXIT leaves the player inside the Den (not the roof)",
+      "ok": true,
+      "detail": "[-3.342, 40.1179, 270.8984]"
+    },
+    {
+      "name": "player walks away after [F] EXIT (4.89 m)",
+      "ok": true,
+      "detail": "{ \"ok\": true, \"frames\": 94, \"start\": [-3.342, 40.1179, 270.8984], \"end\": [1.2933, 40.1179, 269.3363], \"distance_m\": 4.89140796661377 }"
+    }
+  ],
+  "mark_calls": 0,
+  "route_claim_note": "Short input-driven segment only. Not 27/27 played; no staged frame is relabelled played.",
+  "rng_state": 7180767491524514274,
+  "assertions": {
+    "checks": 12,
+    "fails": 0
+  },
+  "transform_writes": 0,
+  "evidence": {
+    "spawn": [
+      5.6692,
+      40.1172,
+      270.6863
+    ],
+    "telescope": [
+      -4.9202,
+      40.2669,
+      270.7337
+    ],
+    "leg_to_telescope": {
+      "ok": true,
+      "frames": 151,
+      "start": [
+        5.6692,
+        40.1172,
+        270.6863
+      ],
+      "end": [
+        -3.1685,
+        40.1179,
+        270.8929
+      ],
+      "distance_m": 8.84009075164795
+    },
+    "leg_after_exit": {
+      "ok": true,
+      "frames": 94,
+      "start": [
+        -3.342,
+        40.1179,
+        270.8984
+      ],
+      "end": [
+        1.2933,
+        40.1179,
+        269.3363
+      ],
+      "distance_m": 4.89140796661377
+    },
+    "exit_pos": [
+      -3.342,
+      40.1179,
+      270.8984
+    ]
+  },
+  "audio": {
+    "schema": "tat2.audio_capture/1",
+    "enabled": false,
+    "reason": "dummy_audio_driver",
+    "driver": "Dummy",
+    "sample_rate": 44100,
+    "channels": 2,
+    "buffer_s": 10.0,
+    "frames": 0,
+    "seconds": 0.0,
+    "started_at_utc": "2026-11-28T11:42:46",
+    "pushed_frames": 0,
+    "dropped_frames": 0,
+    "truncated": false,
+    "marks": [
+      {
+        "label": "route_driver_start",
+        "beat": "",
+        "frame": 0,
+        "t_s": 0.0,
+        "msec": 0,
+        "unix": 1795866166.13742,
+        "window": {
+          "frames": 0,
+          "seconds": 0.0,
+          "rms_dbfs": -120.0,
+          "peak_dbfs": -120.0,
+          "zero_fraction": 0.0
+        }
+      },
+      {
+        "label": "Den arrival (authored spawn)",
+        "beat": "S03",
+        "frame": 0,
+        "t_s": 0.0,
+        "msec": 7156,
+        "unix": 1795866173.29358,
+        "window": {
+          "frames": 0,
+          "seconds": 0.0,
+          "rms_dbfs": -120.0,
+          "peak_dbfs": -120.0,
+          "zero_fraction": 0.0
+        }
+      },
+      {
+        "label": "Telescope scope ([F] PONDER)",
+        "beat": "S05",
+        "frame": 0,
+        "t_s": 0.0,
+        "msec": 10632,
+        "unix": 1795866176.76942,
+        "window": {}
+      }
+    ],
+    "stopped_at_utc": "2026-11-28T11:42:59",
+    "files": [
+      "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/route-code/build/qa/route_driver/den_telescope/audio.json"
+    ],
+    "sidecar": "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/route-code/build/qa/route_driver/den_telescope/audio.json",
+    "mark_kind": "mark_beat",
+    "route_claim": "none",
+    "note": "Short driver segment: mark_beat() is called only for the beats this segment actually drove."
+  },
+  "finished_at_utc": "2026-11-28T11:42:59",
+  "status": "partial_driven"
+}

@@ -2,7 +2,7 @@
 
 Team: **T11-AI** (`guard_ai.gd`, `civilian_npc.gd`, `hearing_data.gd`,
 `noise_bus.gd`, AI-facing `light_probe.gd`, new `game/src/ai/*`).
-Worktree `/home/john/Projects/TAT-2-rem-T11-ai`, branch `rem/T11-ai`, base
+Worktree `<worktree>/T11-ai`, branch `rem/T11-ai`, base
 `fb93f84`. No push, no merge, no rebase, no write to the main checkout.
 
 Programme rule followed: every finding has S1–S6 with a command and its output,

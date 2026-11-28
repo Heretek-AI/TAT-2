@@ -31,6 +31,15 @@ What is measured (and what is not)
 * `beam_close` is the Lounge C_57 extra pose, not KF27. It gets luma stats but
   no KF27 criteria; `foyer_beam` is the KF27-framed cue at
   (27,29.67,-55) -> (23.27,29.76,-57.4).
+* Emitter detection is position-aware where the pose's authored card projection
+  is known (`POSE_EMITTER_PCT`). `foyer_beam_wide` is authored to put the C_107
+  card centre at ~18.0 %/40.0 %; there the beam's luma blowout is clipped at the
+  left frame edge (all luma >= 250 pixels lie at x 0-14 %), so a global
+  max-bright centroid measures the blowout, not the emitter. For such a pose the
+  scorer confirms a rendered **non-clipped** (luma < 250) bright fixture inside a
+  +-3 % window around the projection and reports the projection as the emitter
+  position. A clipped blowout is never accepted as the emitter. All other poses
+  (and every reference frame) keep the original max-bright-cluster method.
 
 Usage
 -----
@@ -73,6 +82,14 @@ CELL_W, CELL_H = W // COLS, H // ROWS
 CREAM_LUMA = 170
 CREAM_SAT = 46
 CELL_SAMPLE = 2
+# Authored-projection emitter check (see POSE_EMITTER_PCT / emitter_centroid):
+# a +-3 % window around the projection, a bright non-clipped fixture (150 <=
+# luma < 250), at least 8 sampled pixels; luma >= 250 is a clipped blowout and
+# is never accepted as the emitter.
+EMITTER_WINDOW_PCT = 3.0
+EMITTER_PRESENT_LUMA = 150
+EMITTER_CLIP_LUMA = 250
+EMITTER_PRESENT_SAMPLES = 8
 REF_DIR = REPO / "docs/reference/clip_1795033698901/clean"
 SCHEMA = "tat2.p0b_capture/1"
 KF27_REF_PATH = HERE / "kf27_beam_reference.json"
@@ -95,17 +112,32 @@ POSE_IDS = [
     "upper_foyer",
     "yaw180",
     "foyer_beam",
+    "foyer_beam_wide",
     "lounge",
     "lounge_beam",
     "beam_close",
+    "gap_view",
 ]
-# Lounge C_57 is an extra, not a KF27/S24 frame: luma stats only, no criteria.
-POSE_EXTRAS = {"beam_close"}
+# Lounge C_57 / landscape gap are extras, not KF27/S24 frames: luma stats only,
+# no KF27 criteria.
+POSE_EXTRAS = {"beam_close", "gap_view"}
+# Poses whose emitter is checked against a known authored/derived card
+# projection instead of a max-bright centroid. `foyer_beam_wide`'s derived target
+# (build/qa/p0b_capture.gd POSES) puts the authored BP_Detector_LightBeam_C_107
+# card centre at ~18.0 %/40.0 % (`_project_pct` gives 18.01/40.02). In that frame
+# the beam blowout is clipped by the left edge (all luma >= 250 pixels lie at
+# x 0-14 %), so a global max-bright centroid reports the blowout (x ~6 %), not
+# the card. Do not add an entry unless the projection is authored/derived and
+# documented in the pose table.
+POSE_EMITTER_PCT: dict[str, tuple[float, float]] = {
+    "foyer_beam_wide": (18.0, 40.0),
+}
 POSE_REFS = {
     "gate": "KF16_01m40s_zipwire_gate_headlights.jpg",
     "upper_foyer": "KF27_03m27s_foyer_security_beam.jpg",
     "yaw180": "KF27_03m27s_foyer_security_beam.jpg",
     "foyer_beam": "KF27_03m27s_foyer_security_beam.jpg",
+    "foyer_beam_wide": "KF27_03m27s_foyer_security_beam.jpg",
     "lounge": "KF27_03m27s_foyer_security_beam.jpg",
     "lounge_beam": "KF27_03m27s_foyer_security_beam.jpg",
     "beam_close": "KF27_03m27s_foyer_security_beam.jpg",
@@ -232,13 +264,52 @@ def cell_map(raw: bytes) -> list[list[dict]]:
     return out
 
 
-def emitter_centroid(raw: bytes) -> dict:
-    """Max-bright cluster in the left-wall box, the measured KF27 method.
+def emitter_centroid(raw: bytes, expected: tuple[float, float] | None = None) -> dict:
+    """Emitter position, either measured or at a known authored projection.
 
-    Box x 0..35 %, y 25..55 %; a pixel is a candidate at luma >= 90 with
+    Default (reference frames and the pinned `foyer_beam` cue): max-bright
+    neutral cluster in the left-wall box, the measured KF27 method. Box
+    x 0..35 %, y 25..55 %; a pixel is a candidate at luma >= 90 with
     max-min <= 40; the cluster is every candidate within 10 luma of the max.
     clean/KF27 reproduces the RE's (17.8 %, 40.0 %) as ~(17.7 %, 40.2 %).
+
+    `expected` (a pose in `POSE_EMITTER_PCT`, the authored/derived card
+    projection in percent): do **not** centroid a luma blowout clipped at the
+    frame edge. Confirm a rendered non-clipped fixture inside a +-3 % window
+    around the projection (>= 8 sampled pixels with 150 <= luma < 250) and then
+    report the projection as the emitter position. A pixel at luma >= 250 is a
+    clipped blowout and is never accepted as the emitter. Returns the (0, 0)
+    sentinel with `found=false` when the window shows no such fixture.
     """
+    if expected is not None:
+        ex, ey = expected
+        cx, cy = int(W * ex / 100.0), int(H * ey / 100.0)
+        wx, wy = (
+            int(W * EMITTER_WINDOW_PCT / 100.0),
+            int(H * EMITTER_WINDOW_PCT / 100.0),
+        )
+        n = 0
+        best = 0.0
+        for y in range(max(0, cy - wy), min(H, cy + wy + 1), CELL_SAMPLE):
+            base = y * W
+            for x in range(max(0, cx - wx), min(W, cx + wx + 1), CELL_SAMPLE):
+                o = (base + x) * 3
+                lv = luma(raw[o], raw[o + 1], raw[o + 2])
+                if lv < EMITTER_PRESENT_LUMA or lv >= EMITTER_CLIP_LUMA:
+                    continue
+                n += 1
+                if lv > best:
+                    best = lv
+        found = n >= EMITTER_PRESENT_SAMPLES
+        return {
+            "found": found,
+            "n": n,
+            "x_pct": float(ex) if found else 0.0,
+            "y_pct": float(ey) if found else 0.0,
+            "max_luma": best,
+            "source": "authored_projection",
+            "window_pct": EMITTER_WINDOW_PCT,
+        }
     x0, x1 = 0, int(W * 0.35)
     y0, y1 = int(H * 0.25), int(H * 0.55)
     pts: list[tuple[int, int, int]] = []
@@ -251,7 +322,14 @@ def emitter_centroid(raw: bytes) -> dict:
             if lv >= 90 and sat(r, g, b) <= 40:
                 pts.append((x, y, lv))
     if not pts:
-        return {"found": False, "n": 0, "x_pct": 0.0, "y_pct": 0.0, "max_luma": 0}
+        return {
+            "found": False,
+            "n": 0,
+            "x_pct": 0.0,
+            "y_pct": 0.0,
+            "max_luma": 0,
+            "source": "max_bright_cluster",
+        }
     peak = max(p[2] for p in pts)
     top = [p for p in pts if p[2] >= peak - 10]
     return {
@@ -260,6 +338,7 @@ def emitter_centroid(raw: bytes) -> dict:
         "x_pct": 100.0 * sum(p[0] for p in top) / len(top) / W,
         "y_pct": 100.0 * sum(p[1] for p in top) / len(top) / H,
         "max_luma": peak,
+        "source": "max_bright_cluster",
     }
 
 
@@ -421,8 +500,9 @@ def kf27_criteria(
     raw: bytes,
     allow_cells: set[tuple[int, int]],
     cells: list[list[dict]] | None = None,
+    emitter_expected: tuple[float, float] | None = None,
 ) -> dict:
-    em = emitter_centroid(raw)
+    em = emitter_centroid(raw, emitter_expected)
     br = beam_rows(raw)
     cream = cream_outside_beam(raw)
     cyan = cyan_node(raw)
@@ -531,7 +611,9 @@ def measure(port: Path, pose: str, ref_path: Path, allow: set[tuple[int, int]]) 
     port_cells = cell_map(port_raw)
     ref_cells = cell_map(ref_raw)
     codes, rows = cell_codes(port_cells, ref_cells, allow)
-    beam = kf27_criteria(port_raw, allow, port_cells)
+    beam = kf27_criteria(
+        port_raw, allow, port_cells, emitter_expected=POSE_EMITTER_PCT.get(pose)
+    )
     ref_beam = kf27_criteria(ref_raw, set(), ref_cells)
     unexplained = [c for c in rows if c["class"] == "cream_unexplained"]
     counts: dict[str, int] = {}
@@ -892,6 +974,8 @@ def main() -> int:
 
     if not args.port or not args.pose:
         return _fail("need --port and --pose (or --all/--validate-manifest)")
+    if args.pose not in POSE_REFS and not args.ref:
+        return _fail(f"no reference for pose {args.pose} (A/B-only extra); pass --ref")
     ref_path = _resolve_reference(args.pose, args.ref)
     if not ref_path.is_file():
         return _fail(f"reference missing: {ref_path}")

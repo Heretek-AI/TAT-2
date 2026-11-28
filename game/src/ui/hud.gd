@@ -1676,10 +1676,23 @@ func _build_reticle_and_prompt(root: Control) -> void:
 	interact_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	interact_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	interact_lbl.add_theme_font_size_override("font_size", 15)
-	interact_lbl.add_theme_color_override("font_color", Color(0.58, 0.72, 0.98, 0.98))
-	interact_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+	# Authored BPUI_Hud_InteractPromptLine `txt_actiondescription`: #636EEC
+	# alpha 1.0, ShadowOffset (1,3), shadow black alpha 0.75.
+	# IMPORTANT (round 3): the UE payload stores a *linear* triple
+	# (0.124772, 0.155927, 0.838799). Godot 4 canvas colours are sRGB when
+	# rendering/rendering_device/hdr_2d=false (the default), so writing that
+	# linear triple as a Color renders #2028D6 (Rec.709 luma ~51), not the
+	# authored #636EEC (luma ~117). Use the sRGB parse instead:
+	#   Color.html("#636EEC") == (0.388235, 0.431373, 0.925490).
+	# The authored offsets are used unchanged (authored row 40 px; this port
+	# label 15 px) rather than scaled, so no PORT_DECISION is introduced. This
+	# is fidelity, not a contrast fix: the authored colour is lighter than the
+	# mistaken linear literal, so the prompt is no longer artificially dark; the
+	# 4.5 floor is unchanged and never tuned to pass.
+	interact_lbl.add_theme_color_override("font_color", Color.html("#636EEC"))
+	interact_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.75))
 	interact_lbl.add_theme_constant_override("shadow_offset_x", 1)
-	interact_lbl.add_theme_constant_override("shadow_offset_y", 1)
+	interact_lbl.add_theme_constant_override("shadow_offset_y", 3)
 	if _sans != null:
 		interact_lbl.add_theme_font_override("font", _sans)
 	interact_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1708,10 +1721,20 @@ func _build_reticle_and_prompt(root: Control) -> void:
 	_prompt_secondary_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_prompt_secondary_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_prompt_secondary_lbl.add_theme_font_size_override("font_size", 14)
-	_prompt_secondary_lbl.add_theme_color_override("font_color", Color(0.58, 0.72, 0.98, 0.88))
-	_prompt_secondary_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
-	_prompt_secondary_lbl.add_theme_constant_override("shadow_offset_x", 1)
-	_prompt_secondary_lbl.add_theme_constant_override("shadow_offset_y", 1)
+	# Authored BPUI_Hud_InteractPromptLine `txt_fallback_key`: #636EEC alpha
+	# 1.0, ShadowOffset (4,2), shadow black alpha 0.75. Same sRGB rule as the
+	# primary row: Color.html("#636EEC"), never the UE-linear triple. The only
+	# authored "3" is OutlineSize 3 with OutlineColor alpha 0.0 — an invisible
+	# outline with no visual effect (HARD_LIMIT: no authored visible outline to
+	# port), applied at its authored zero alpha so it changes no pixel. The
+	# authored offsets are used unchanged (authored 30 px vs this 14 px row).
+	# Both prompt rows are UI2-03 reference DELTAs; the 4.5 floor is unchanged.
+	_prompt_secondary_lbl.add_theme_color_override("font_color", Color.html("#636EEC"))
+	_prompt_secondary_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.75))
+	_prompt_secondary_lbl.add_theme_constant_override("shadow_offset_x", 4)
+	_prompt_secondary_lbl.add_theme_constant_override("shadow_offset_y", 2)
+	_prompt_secondary_lbl.add_theme_constant_override("outline_size", 3)
+	_prompt_secondary_lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.0))
 	if _sans != null:
 		_prompt_secondary_lbl.add_theme_font_override("font", _sans)
 	_prompt_secondary_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -2692,8 +2715,12 @@ func _post_match_mission_line(won: bool) -> String:
 	return UIStringsScript.st_text("ST_PostMatch", key, "")
 
 
-## Authored contract outcome row: PostMatch.Contract.<order>.<Result>.
+## Authored contract outcome row: PostMatch.Contract.<order>.<Result>. A
+## first-class Cleanout (and free play) never earns campaign credit, so it must
+## not display a hosting-contract success/failure row.
 func _post_match_contract_line(won: bool) -> String:
+	if not GameState.run_credits_contract():
+		return ""
 	var order: int = int(GameState.active_contract_order)
 	if order <= 0:
 		return ""
@@ -3202,7 +3229,7 @@ func _update_objectives_and_loot(is_hub: bool) -> void:
 		_loot_lbl.visible = not is_hub
 		var goal_v: Variant = GameState.get("loot_goal")
 		var goal: int = int(goal_v) if (goal_v is int or goal_v is float) else 0
-		if GameState.free_play:
+		if GameState.free_play or GameState.cleanout_run:
 			# Reference Contract Inactive counter: just the take, no "/ £ goal".
 			_loot_lbl.text = "(£) %d" % GameState.loot_value
 		elif goal > 0:
@@ -3220,7 +3247,7 @@ func _update_objectives_and_loot(is_hub: bool) -> void:
 	# Free play: the reference prints the objective inline with its progress in
 	# the same bracket ("Mission: Steal 4,000 in loot value[0/4,000]") and no
 	# timer suffix or ❧ sub-line. Normal contracts keep the formatter below.
-	if GameState.free_play:
+	if GameState.free_play or GameState.cleanout_run:
 		var fp_label: String = UIStringsScript.loc_template("Steal {Amount} in loot value", {"Amount": GameState.format_thousands(maxi(GameState.loot_goal, 0))})
 		var fp_cur: int = 0
 		var fp_tgt: int = maxi(GameState.loot_goal, 0)
@@ -4522,17 +4549,23 @@ func _settle_run_for_exit() -> Dictionary:
 func _pause_return_to_den() -> void:
 	_settle_run_for_exit()
 	_set_paused(false)
-	GameState.active_contract_order = 1
-	GameState.end_free_play()
+	reset_run_modes_for_hub()
 	get_tree().change_scene_to_file(pause_return_scene_path())
 
 
 ## Post-match Continue: mission_controller has already banked the run, so this
 ## only returns to the Den hub (contract 1) through the mission scene.
 func _continue_to_den() -> void:
+	reset_run_modes_for_hub()
+	get_tree().change_scene_to_file(DEN_SCENE_PATH)
+
+
+## Shared hub-return mode reset: a run mode (free play or first-class Cleanout)
+## must never survive at the Den hub, or the next deploy would inherit it.
+func reset_run_modes_for_hub() -> void:
 	GameState.active_contract_order = 1
 	GameState.end_free_play()
-	get_tree().change_scene_to_file(DEN_SCENE_PATH)
+	GameState.end_cleanout()
 
 
 ## C-4 instrumentation: exact in-tree node counts for the elements the recorded

@@ -1,8 +1,10 @@
+> **SUPERSEDED — see [docs/HANDOFF_NEXT_AGENT.md](HANDOFF_NEXT_AGENT.md).**
+
 # TAT-2 — Next Session Handoff (2026-11-18)
 
 > **Superseded for current state:** see [`docs/HANDOFF_NEXT_AGENT.md`](HANDOFF_NEXT_AGENT.md) (2026-11-23, HEAD `a410adc`). That file carries the current gates, open items and operational hazards; this one is kept for history.
 
-Repo: `/home/john/Projects/TAT-2` · Godot `4.7.2.stable.flathub` (Forward+/Jolt) · game project in `game/`.
+Repo: `<repo>` · Godot `4.7.2.stable.flathub` (Forward+/Jolt) · game project in `game/`.
 Source of truth: `/home/john/.local/share/Steam/steamapps/common/Thick As Thieves/` (extracted to `extracted/`, 4.7 GB).
 
 ## Read first

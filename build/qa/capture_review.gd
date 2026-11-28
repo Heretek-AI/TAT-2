@@ -1,7 +1,7 @@
 extends SceneTree
 ## Post-review visual probes: Guildhall POI beams/doors, ornate gate, loot.
 
-const OUT_DIR: String = "/home/john/Projects/TAT-2/build/qa/review"
+var OUT_DIR: String = ProjectSettings.globalize_path("res://../build/qa/review").simplify_path()
 
 func _initialize() -> void:
 	call_deferred("_run")

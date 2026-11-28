@@ -1,3 +1,5 @@
+> **SUPERSEDED — see [docs/HANDOFF_NEXT_AGENT.md](HANDOFF_NEXT_AGENT.md).**
+
 # TAT-2 — Handoff to OpenCode (2026-11-18 11:02 EST)
 
 Continue the **visual fidelity + gameplay mechanics parity wave** started in Antigravity. Read `docs/HANDOFF_NEXT_SESSION.md` first for repo conventions, verification commands, hard limits and QA recipes; this file only covers what changed since then.

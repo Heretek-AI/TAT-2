@@ -1,7 +1,7 @@
 extends SceneTree
 ## Live Vulkan Forward+ visual QA capture script (build/qa/capture_vf.gd, gitignored).
 
-const OUT_DIR: String = "/home/john/Projects/TAT-2/build/qa"
+var OUT_DIR: String = ProjectSettings.globalize_path("res://../build/qa").simplify_path()
 
 
 func _init() -> void:

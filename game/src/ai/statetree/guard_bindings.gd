@@ -37,9 +37,12 @@ extends "res://src/ai/statetree/bindings.gd"
 ##     slots in the payload; the port does not invent their values);
 ##   * the `GlobalParameterData` bags (`ResetAlertness`, `Target`,
 ##     `ShouldReactToIncorrectObjects`, ...): schema only, always UNKNOWN;
-##   * every `OnEvent` transition: the port has **no** `StateTreeEvent.*`
-##     emitter (0 hits in `game/src`). The interpreter's event gates are driven
-##     by synthetic events in tests only; no live event bus is claimed.
+##   * 16 of the 17 authored `StateTreeEvent.*` tags: the port has one live
+##     emitter (Phase 3B.1: `StateTreeEvent.StimChange` from `guard_ai._hear`,
+##     see `events.gd`). The remaining tags have no event bus, so the branches
+##     that listen for them stay unreachable. The interpreter's event gates are
+##     exercised with synthetic events in suite 110; `event_matches` is the path
+##     the one live tag goes through.
 ##
 ## The two conditions that decide the patrol branch are now answered from the
 ## authored values first and fall back to the declared mapping only when the
@@ -625,12 +628,12 @@ func task_exit(_instance: Dictionary) -> void:
 # ---------------------------------------------------------------------------
 
 
-## The port has no `StateTreeEvent.*` emitter. Returning FALSE (not UNKNOWN)
-## keeps the meaning precise: the authored event never happens in this port, so
-## the branch is unreachable -- it is not a data gap in the payload. The
-## interpreter's `required_event_to_enter` / `consume_event_on_select` gates are
-## exercised with synthetic events by suite 110; this method is what a live
-## event would go through.
+## Match one authored `OnEvent` gate against a live event. Phase 3B.1 wires
+## exactly one tag (`StateTreeEvent.StimChange`, from `guard_ai._hear`, see
+## `events.gd`); every other authored tag still never arrives, so its branch is
+## unreachable -- not a data gap in the payload. Returning FALSE (not UNKNOWN)
+## keeps that meaning precise. This method is what the one live tag goes
+## through; suite 110 drives the same gates with synthetic events.
 func event_matches(transition: Dictionary, event: Dictionary) -> int:
 	if str(transition.get("required_event", "")) == str(event.get("tag", "")):
 		events_matched += 1

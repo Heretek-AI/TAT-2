@@ -102,7 +102,9 @@ func _has_cmdline_arg(want: String) -> bool:
 ## packaging tool can set it to a contract order to boot straight into a mission;
 ## `--qa-contract=N` overrides it for export-binary perf and capture runs.
 ## `--qa-free-play` boots the Contract Inactive Cleanout run on the Guildhall
-## hosting order, and `--qa-mission=<id>` picks the mission row by id.
+## hosting order, and `--qa-mission=<id>` picks the mission row by id (a
+## side-mission id such as Mission.Guildhall.LootTheRoom becomes a first-class
+## Cleanout deploy: banked haul, no hosting-contract credit).
 func _maybe_autostart_contract() -> void:
 	var order: int = int(ProjectSettings.get_setting("tat2/debug_autostart_contract", 0))
 	var mission_id: String = ""
@@ -147,8 +149,13 @@ func _maybe_autostart_contract() -> void:
 	# handoff uses; the mission scene republishes them in start_contract().
 	if free_play:
 		GameState.begin_free_play(mission_id)
+	elif mission_id != "" and GameData.is_side_mission(mission_id):
+		# A side-mission id (Guildhall Cleanout) is a first-class Cleanout
+		# deploy: bank the haul, never credit the hosting contract order.
+		GameState.begin_cleanout(mission_id)
 	else:
 		GameState.end_free_play()
+		GameState.end_cleanout()
 		if mission_id != "":
 			GameState.active_mission_id = mission_id
 	get_tree().call_deferred("change_scene_to_file", "res://scenes/mission.tscn")
@@ -745,6 +752,7 @@ func _on_tutorial_pressed() -> void:
 func _start_tutorial_mission() -> void:
 	GameState.active_contract_order = 0
 	GameState.end_free_play()
+	GameState.end_cleanout()
 	GameState.active_map_id = "ftue"
 	GameState.active_mission_id = "Mission.Tutorial.Single"
 	get_tree().change_scene_to_file("res://scenes/mission.tscn")
@@ -755,9 +763,10 @@ func _start_tutorial_mission() -> void:
 ## threads active_mission_id + active_mission_mode across reset_run (T7).
 func _launch() -> void:
 	GameState.active_contract_order = selected_order
-	# PLAY is the normal contract boot: drop any staged free-play mode so a
-	# previous QA Cleanout session cannot leak into this deploy.
+	# PLAY is the normal contract boot: drop any staged free-play/Cleanout mode
+	# so a previous QA session cannot leak into this deploy.
 	GameState.end_free_play()
+	GameState.end_cleanout()
 	# Resolve the map here so the mission's weather preset comes from the
 	# selected contract, not the GameState default ("old_manor").
 	var info: Dictionary = GameData.get_contract_display(selected_order)

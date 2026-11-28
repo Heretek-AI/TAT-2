@@ -4,12 +4,13 @@ extends SceneTree
 ## What this is, and what it is not
 ## --------------------------------
 ## `build/qa/p0b_capture.gd` captures six fixed poses but has no multi-beat
-## runner. A full *played* 27-beat route is blocked by known port defects:
-##   * L4-13 — the telescope exit strands the player on the Den roof
-##     (`docs/reports/r8-live-run-review-20261124.md` §4);
-##   * no NPC population near the route (4 guards + 3 civilians at 48–151 m,
-##     C4-08/L4-08 in the same report);
-##   * no continuous input driver, so no traversal between beats.
+## runner. A full *played* 27-beat route is blocked by remaining port gaps:
+##   * no NPC population near the route (4 guards + 3 civilians at 85.4-150.7 m
+##     at the current HEAD, C4-08/L4-08; re-measured by probe_route_npcs.gd);
+##   * no full continuous input driver for S13-S26 traversal (a short
+##     input-driven Den/telescope segment exists in build/qa/route_driver.gd).
+## L4-13 (telescope `[F] EXIT` stranding) is fixed in Phase 3C; the staged
+## runner still does not drive the exit key.
 ## This runner therefore plans to stage the beats that have a real UI/API hook,
 ## records every other beat as deferred with a reason, and never claims a played
 ## route.
@@ -113,7 +114,7 @@ const BEATS := {
 		"label": "Thieves' Den telescope sky (no exit)",
 		"start": 18.24, "end": 26.58, "class": "camera", "ref": "KF05/KF06",
 		"plan": "staged",
-		"hook": "mission_controller.toggle_telescope_ponder(); the mission's _ponder_cam; never toggled back (L4-13 exit strands the player)",
+		"hook": "mission_controller.toggle_telescope_ponder(); the mission's _ponder_cam; the staged runner captures the scope and does not drive the [F] EXIT key (the live exit is fixed; the input assertion is probe_den_window.gd)",
 		"reason": "",
 		"frames": [{"name": "telescope_sky", "mission_cam": "_ponder_cam"}],
 	},

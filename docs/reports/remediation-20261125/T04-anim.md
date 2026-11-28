@@ -1,6 +1,6 @@
 # T04-ANIM — animation remediation
 
-Worktree: `/home/john/Projects/TAT-2-rem-T04-anim`, branch `rem/T04-anim`.
+Worktree: `<worktree>/T04-anim`, branch `rem/T04-anim`.
 Base: `38e7b03` (W7 merged tree + docs). Two local commits, **not pushed**:
 
 | commit | scope |

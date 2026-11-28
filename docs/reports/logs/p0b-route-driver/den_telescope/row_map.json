@@ -1,0 +1,1754 @@
+{
+  "schema": "tat2.route_row_map/1",
+  "route_claim": "none",
+  "manifest": "docs/reports/logs/p0b-route-driver/den_telescope/manifest.json",
+  "rows": [
+    {
+      "row_id": "V1-01",
+      "pillar": "visual",
+      "lane": "L1",
+      "criterion": "Neon flicker + amber practicals",
+      "scorable": "YES",
+      "beats": [
+        "S01"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "V1-02",
+      "pillar": "visual",
+      "lane": "L1",
+      "criterion": "Volumetric moon shaft vs candle pools",
+      "scorable": "YES",
+      "beats": [
+        "S03"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "V1-03",
+      "pillar": "visual",
+      "lane": "L1",
+      "criterion": "Banker's-lamp pool on the map",
+      "scorable": "YES",
+      "beats": [
+        "S08"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "V1-04",
+      "pillar": "visual",
+      "lane": "L1",
+      "criterion": "Lantern bounce & streetlamp exposure",
+      "scorable": "PARTIAL",
+      "beats": [
+        "S12",
+        "S13"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "V1-05",
+      "pillar": "visual",
+      "lane": "L1",
+      "criterion": "Flashing car-headlight glare",
+      "scorable": "NO",
+      "beats": [
+        "S13",
+        "S14"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear",
+      "token": null
+    },
+    {
+      "row_id": "V1-06",
+      "pillar": "visual",
+      "lane": "L1",
+      "criterion": "Hearth amber radial pool",
+      "scorable": "NO",
+      "beats": [
+        "S22"
+      ],
+      "npc_dependent": true,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear | NPC-dependent: S22; measured nearest NPC 85.4 m (probe_route_npcs.gd)",
+      "token": null
+    },
+    {
+      "row_id": "V1-07",
+      "pillar": "visual",
+      "lane": "L1",
+      "criterion": "Crimson alarm spotlight wash",
+      "scorable": "NO",
+      "beats": [
+        "S26"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear",
+      "token": null
+    },
+    {
+      "row_id": "V2-01",
+      "pillar": "visual",
+      "lane": "L1",
+      "criterion": "Night rain streaks + puddle reflections",
+      "scorable": "YES",
+      "beats": [
+        "S01",
+        "S13"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "V2-02",
+      "pillar": "visual",
+      "lane": "L1",
+      "criterion": "Telescope sky, moon & cheese easter egg",
+      "scorable": "YES",
+      "beats": [
+        "S05"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "V2-03",
+      "pillar": "visual",
+      "lane": "L1",
+      "criterion": "Loading illustration sky",
+      "scorable": "YES",
+      "beats": [
+        "S02",
+        "S10"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "V2-04",
+      "pillar": "visual",
+      "lane": "L1",
+      "criterion": "Volumetric night-mist depth (clocktower, viaduct)",
+      "scorable": "PARTIAL",
+      "beats": [
+        "S13",
+        "S20"
+      ],
+      "npc_dependent": true,
+      "mission_binding": "official",
+      "explicit_reason": "NPC-dependent: S20; measured nearest NPC 85.4 m (probe_route_npcs.gd)",
+      "token": null
+    },
+    {
+      "row_id": "V2-05",
+      "pillar": "visual",
+      "lane": "L1",
+      "criterion": "Rain fade-in after digital silence",
+      "scorable": "PARTIAL",
+      "beats": [
+        "S10",
+        "S11",
+        "S13"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "V3-01",
+      "pillar": "visual",
+      "lane": "L2",
+      "criterion": "Wet-cobble specular",
+      "scorable": "YES",
+      "beats": [
+        "S13"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "V3-02",
+      "pillar": "visual",
+      "lane": "L2",
+      "criterion": "Emissive faceted diamonds",
+      "scorable": "PARTIAL",
+      "beats": [
+        "S03",
+        "S04",
+        "S07"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "V3-03",
+      "pillar": "visual",
+      "lane": "L2",
+      "criterion": "Blue door paint, mullions & brass",
+      "scorable": "NO",
+      "beats": [
+        "S21"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear",
+      "token": null
+    },
+    {
+      "row_id": "V3-04",
+      "pillar": "visual",
+      "lane": "L2",
+      "criterion": "Purple shopfront orb",
+      "scorable": "YES",
+      "beats": [
+        "S01"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "V4-01",
+      "pillar": "visual",
+      "lane": "L2",
+      "criterion": "Startscreen street dressing",
+      "scorable": "YES",
+      "beats": [
+        "S01"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "V4-02",
+      "pillar": "visual",
+      "lane": "L2",
+      "criterion": "Den attic dressing",
+      "scorable": "YES",
+      "beats": [
+        "S03"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "V4-03",
+      "pillar": "visual",
+      "lane": "L2",
+      "criterion": "Wanted poster wall (five posters)",
+      "scorable": "YES",
+      "beats": [
+        "S03",
+        "S05"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "V4-04",
+      "pillar": "visual",
+      "lane": "L2",
+      "criterion": "`BARRON'S DEMOLITION` alley dressing",
+      "scorable": "PARTIAL",
+      "beats": [
+        "S13"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "V4-05",
+      "pillar": "visual",
+      "lane": "L2",
+      "criterion": "Gate arch, griffins & gear plate",
+      "scorable": "NO",
+      "beats": [
+        "S14",
+        "S17"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear",
+      "token": null
+    },
+    {
+      "row_id": "V4-06",
+      "pillar": "visual",
+      "lane": "L2",
+      "criterion": "`MACLEOD` vertical sign",
+      "scorable": "NO",
+      "beats": [
+        "S20"
+      ],
+      "npc_dependent": true,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear | NPC-dependent: S20; measured nearest NPC 85.4 m (probe_route_npcs.gd)",
+      "token": null
+    },
+    {
+      "row_id": "V4-07",
+      "pillar": "visual",
+      "lane": "L2",
+      "criterion": "Foyer dressing (vitrine, armchair, floor plate, plaques)",
+      "scorable": "PARTIAL",
+      "beats": [
+        "S24"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "V5-01",
+      "pillar": "visual",
+      "lane": "L2",
+      "criterion": "Idle guard at shopfront",
+      "scorable": "YES",
+      "beats": [
+        "S01"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "V5-02",
+      "pillar": "visual",
+      "lane": "L2",
+      "criterion": "3D Spider turntable with cap sync",
+      "scorable": "NO",
+      "beats": [
+        "S04"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear",
+      "token": null
+    },
+    {
+      "row_id": "V5-03",
+      "pillar": "visual",
+      "lane": "L2",
+      "criterion": "1P gloved hands + ZipWire viewmodel",
+      "scorable": "YES",
+      "beats": [
+        "S13",
+        "S14",
+        "S15"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "V5-04",
+      "pillar": "visual",
+      "lane": "L2",
+      "criterion": "Constable idle + blue hip baton",
+      "scorable": "NO",
+      "beats": [
+        "S22"
+      ],
+      "npc_dependent": true,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear | NPC-dependent: S22; measured nearest NPC 85.4 m (probe_route_npcs.gd)",
+      "token": null
+    },
+    {
+      "row_id": "V5-05",
+      "pillar": "visual",
+      "lane": "L2",
+      "criterion": "Takedown grapple pose",
+      "scorable": "NO",
+      "beats": [
+        "S23"
+      ],
+      "npc_dependent": true,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear | NPC-dependent: S23; measured nearest NPC 85.4 m (probe_route_npcs.gd)",
+      "token": null
+    },
+    {
+      "row_id": "V6-01",
+      "pillar": "visual",
+      "lane": "L2",
+      "criterion": "Escape portal wall outline",
+      "scorable": "NO",
+      "beats": [
+        "S12"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear",
+      "token": null
+    },
+    {
+      "row_id": "V6-02",
+      "pillar": "visual",
+      "lane": "L2",
+      "criterion": "Smoke bomb plume",
+      "scorable": "NO",
+      "beats": [
+        "S18"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear",
+      "token": null
+    },
+    {
+      "row_id": "V6-03",
+      "pillar": "visual",
+      "lane": "L2",
+      "criterion": "Security beams, emitter & node",
+      "scorable": "NO",
+      "beats": [
+        "S24"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear",
+      "token": null
+    },
+    {
+      "row_id": "V6-04",
+      "pillar": "visual",
+      "lane": "L2",
+      "criterion": "Purple ward + green vine lock",
+      "scorable": "NO",
+      "beats": [
+        "S25"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear",
+      "token": null
+    },
+    {
+      "row_id": "V7-01",
+      "pillar": "visual",
+      "lane": "L1",
+      "criterion": "CineCamera startscreen framing",
+      "scorable": "YES",
+      "beats": [
+        "S01"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "V7-02",
+      "pillar": "visual",
+      "lane": "L1",
+      "criterion": "Telescope scripted hard cuts",
+      "scorable": "YES",
+      "beats": [
+        "S05"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "V7-03",
+      "pillar": "visual",
+      "lane": "L1",
+      "criterion": "DOF blur behind briefing letter",
+      "scorable": "PARTIAL",
+      "beats": [
+        "S11"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "V7-04",
+      "pillar": "visual",
+      "lane": "L1",
+      "criterion": "Takedown camera lunge & pull-back",
+      "scorable": "NO",
+      "beats": [
+        "S23"
+      ],
+      "npc_dependent": true,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear | NPC-dependent: S23; measured nearest NPC 85.4 m (probe_route_npcs.gd)",
+      "token": null
+    },
+    {
+      "row_id": "V7-05",
+      "pillar": "visual",
+      "lane": "L1",
+      "criterion": "Pause darkened blurred backdrop",
+      "scorable": "PARTIAL",
+      "beats": [
+        "S27"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "AU1-01",
+      "pillar": "audio",
+      "lane": "L5",
+      "criterion": "Startscreen rain bed, zero BGM",
+      "scorable": "YES",
+      "beats": [
+        "S01"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "AU1-02",
+      "pillar": "audio",
+      "lane": "L5",
+      "criterion": "Den room tone",
+      "scorable": "YES",
+      "beats": [
+        "S03"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "AU1-03",
+      "pillar": "audio",
+      "lane": "L5",
+      "criterion": "Loading digital silence",
+      "scorable": "YES",
+      "beats": [
+        "S02",
+        "S10"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "AU1-04",
+      "pillar": "audio",
+      "lane": "L5",
+      "criterion": "Rooftop wind swell in telescope view",
+      "scorable": "YES",
+      "beats": [
+        "S05"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "AU1-05",
+      "pillar": "audio",
+      "lane": "L5",
+      "criterion": "Continuous rain bed across exteriors",
+      "scorable": "YES",
+      "beats": [
+        "S13",
+        "S14",
+        "S15",
+        "S16",
+        "S17",
+        "S20"
+      ],
+      "npc_dependent": true,
+      "mission_binding": "official",
+      "explicit_reason": "NPC-dependent: S20; measured nearest NPC 85.4 m (probe_route_npcs.gd)",
+      "token": null
+    },
+    {
+      "row_id": "AU1-06",
+      "pillar": "audio",
+      "lane": "L5",
+      "criterion": "Hearth crackle bed",
+      "scorable": "NO",
+      "beats": [
+        "S22"
+      ],
+      "npc_dependent": true,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear | NPC-dependent: S22; measured nearest NPC 85.4 m (probe_route_npcs.gd)",
+      "token": null
+    },
+    {
+      "row_id": "AU2-01",
+      "pillar": "audio",
+      "lane": "L5",
+      "criterion": "Diegetic gramophone jazz",
+      "scorable": "NO",
+      "beats": [
+        "S07"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear",
+      "token": null
+    },
+    {
+      "row_id": "AU3-01",
+      "pillar": "audio",
+      "lane": "L5",
+      "criterion": "Wooden-plank footsteps",
+      "scorable": "YES",
+      "beats": [
+        "S03"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "AU3-02",
+      "pillar": "audio",
+      "lane": "L5",
+      "criterion": "Wet cobble walk \u2192 sprint \u2192 crouch",
+      "scorable": "YES",
+      "beats": [
+        "S13"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "AU3-03",
+      "pillar": "audio",
+      "lane": "L5",
+      "criterion": "Metal grate steps + vault thud",
+      "scorable": "PARTIAL",
+      "beats": [
+        "S16",
+        "S17"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "AU3-04",
+      "pillar": "audio",
+      "lane": "L5",
+      "criterion": "Hard-sole marble footsteps",
+      "scorable": "YES",
+      "beats": [
+        "S24",
+        "S25",
+        "S26"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "AU3-05",
+      "pillar": "audio",
+      "lane": "L5",
+      "criterion": "Slate stair footfalls + ZipWire clack",
+      "scorable": "PARTIAL",
+      "beats": [
+        "S26"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "AU4-01",
+      "pillar": "audio",
+      "lane": "L5",
+      "criterion": "`PLAY` click",
+      "scorable": "YES",
+      "beats": [
+        "S01",
+        "S02"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "AU4-02",
+      "pillar": "audio",
+      "lane": "L5",
+      "criterion": "Wardrobe browse ticks",
+      "scorable": "NO",
+      "beats": [
+        "S04"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear",
+      "token": null
+    },
+    {
+      "row_id": "AU4-03",
+      "pillar": "audio",
+      "lane": "L5",
+      "criterion": "Ledger parchment & tab clicks",
+      "scorable": "NO",
+      "beats": [
+        "S06"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear",
+      "token": null
+    },
+    {
+      "row_id": "AU4-04",
+      "pillar": "audio",
+      "lane": "L5",
+      "criterion": "Six countdown ticks",
+      "scorable": "YES",
+      "beats": [
+        "S09"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "AU4-05",
+      "pillar": "audio",
+      "lane": "L5",
+      "criterion": "Pause click, \u221219 dB duck, quit clicks",
+      "scorable": "PARTIAL",
+      "beats": [
+        "S27"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "AU5-01",
+      "pillar": "audio",
+      "lane": "L5",
+      "criterion": "Vintage car double-honk",
+      "scorable": "NO",
+      "beats": [
+        "S13"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear",
+      "token": null
+    },
+    {
+      "row_id": "AU5-02",
+      "pillar": "audio",
+      "lane": "L5",
+      "criterion": "ZipWire launch + crank ratchet",
+      "scorable": "YES",
+      "beats": [
+        "S14",
+        "S15",
+        "S16"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "AU5-03",
+      "pillar": "audio",
+      "lane": "L5",
+      "criterion": "Smoke detonation pop + hiss",
+      "scorable": "NO",
+      "beats": [
+        "S18"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear",
+      "token": null
+    },
+    {
+      "row_id": "AU5-04",
+      "pillar": "audio",
+      "lane": "L5",
+      "criterion": "Vistara shimmer/chime",
+      "scorable": "NO",
+      "beats": [
+        "S19"
+      ],
+      "npc_dependent": true,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear | NPC-dependent: S19; measured nearest NPC 85.4 m (probe_route_npcs.gd)",
+      "token": null
+    },
+    {
+      "row_id": "AU5-05",
+      "pillar": "audio",
+      "lane": "L5",
+      "criterion": "Ward tripwire chime, whoosh & hum",
+      "scorable": "NO",
+      "beats": [
+        "S25"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear",
+      "token": null
+    },
+    {
+      "row_id": "AU5-06",
+      "pillar": "audio",
+      "lane": "L5",
+      "criterion": "Barrier shatter + alert sting",
+      "scorable": "NO",
+      "beats": [
+        "S26"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear",
+      "token": null
+    },
+    {
+      "row_id": "AU5-07",
+      "pillar": "audio",
+      "lane": "L5",
+      "criterion": "Key jingle + acquisition chime",
+      "scorable": "NO",
+      "beats": [
+        "S22"
+      ],
+      "npc_dependent": true,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear | NPC-dependent: S22; measured nearest NPC 85.4 m (probe_route_npcs.gd)",
+      "token": null
+    },
+    {
+      "row_id": "AU5-08",
+      "pillar": "audio",
+      "lane": "L5",
+      "criterion": "Takedown thud + KO groan",
+      "scorable": "NO",
+      "beats": [
+        "S23"
+      ],
+      "npc_dependent": true,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear | NPC-dependent: S23; measured nearest NPC 85.4 m (probe_route_npcs.gd)",
+      "token": null
+    },
+    {
+      "row_id": "AU6-01",
+      "pillar": "audio",
+      "lane": "L5",
+      "criterion": "ThiefNisha spawn VO",
+      "scorable": "YES",
+      "beats": [
+        "S12"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "AU6-02",
+      "pillar": "audio",
+      "lane": "L5",
+      "criterion": "Gate guard barks",
+      "scorable": "NO",
+      "beats": [
+        "S13"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear",
+      "token": null
+    },
+    {
+      "row_id": "AU6-03",
+      "pillar": "audio",
+      "lane": "L5",
+      "criterion": "Alert & patrol shouts",
+      "scorable": "NO",
+      "beats": [
+        "S14",
+        "S15",
+        "S16"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear",
+      "token": null
+    },
+    {
+      "row_id": "AU6-04",
+      "pillar": "audio",
+      "lane": "L5",
+      "criterion": "Smoke-reaction barks",
+      "scorable": "NO",
+      "beats": [
+        "S18"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear",
+      "token": null
+    },
+    {
+      "row_id": "AU6-05",
+      "pillar": "audio",
+      "lane": "L5",
+      "criterion": "Post-KO line",
+      "scorable": "NO",
+      "beats": [
+        "S24"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear",
+      "token": null
+    },
+    {
+      "row_id": "AU6-06",
+      "pillar": "audio",
+      "lane": "L5",
+      "criterion": "Distant search & idle barks",
+      "scorable": "NO",
+      "beats": [
+        "S17",
+        "S20"
+      ],
+      "npc_dependent": true,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear | NPC-dependent: S20; measured nearest NPC 85.4 m (probe_route_npcs.gd)",
+      "token": null
+    },
+    {
+      "row_id": "UI1-01",
+      "pillar": "hud_ui",
+      "lane": "L3",
+      "criterion": "Startscreen menu stack",
+      "scorable": "YES",
+      "beats": [
+        "S01"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "UI1-02",
+      "pillar": "hud_ui",
+      "lane": "L3",
+      "criterion": "Pause modal + build footer",
+      "scorable": "YES",
+      "beats": [
+        "S27"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "UI2-01",
+      "pillar": "hud_ui",
+      "lane": "L3",
+      "criterion": "Den station prompt chain",
+      "scorable": "PARTIAL",
+      "beats": [
+        "S03",
+        "S05",
+        "S08"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "UI2-02",
+      "pillar": "hud_ui",
+      "lane": "L3",
+      "criterion": "Wardrobe slots, drawer & tooltips",
+      "scorable": "NO",
+      "beats": [
+        "S04"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear",
+      "token": null
+    },
+    {
+      "row_id": "UI2-03",
+      "pillar": "hud_ui",
+      "lane": "L3",
+      "criterion": "ZipWire action prompts",
+      "scorable": "YES",
+      "beats": [
+        "S13",
+        "S14",
+        "S15"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "UI2-04",
+      "pillar": "hud_ui",
+      "lane": "L3",
+      "criterion": "`CRANK [LMB]` progress ring",
+      "scorable": "YES",
+      "beats": [
+        "S15"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "UI2-05",
+      "pillar": "hud_ui",
+      "lane": "L3",
+      "criterion": "Blue door prompts (`OPEN`/`LOCK` \u2192 `CLOSE`)",
+      "scorable": "YES",
+      "beats": [
+        "S21"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "UI2-06",
+      "pillar": "hud_ui",
+      "lane": "L3",
+      "criterion": "Pickpocket/takedown prompts",
+      "scorable": "NO",
+      "beats": [
+        "S22",
+        "S23"
+      ],
+      "npc_dependent": true,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear | NPC-dependent: S22,S23; measured nearest NPC 85.4 m (probe_route_npcs.gd)",
+      "token": null
+    },
+    {
+      "row_id": "UI2-07",
+      "pillar": "hud_ui",
+      "lane": "L3",
+      "criterion": "Gramophone toggle flip",
+      "scorable": "NO",
+      "beats": [
+        "S07"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear",
+      "token": null
+    },
+    {
+      "row_id": "UI3-01",
+      "pillar": "hud_ui",
+      "lane": "L3",
+      "criterion": "Player card + compass fade-in",
+      "scorable": "YES",
+      "beats": [
+        "S03"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "UI3-02",
+      "pillar": "hud_ui",
+      "lane": "L3",
+      "criterion": "Loot tracker, hotbar & hidden health",
+      "scorable": "PARTIAL",
+      "beats": [
+        "S12",
+        "S13",
+        "S14"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "free_play_substitute",
+      "explicit_reason": "staged/prep form is the free-play substitute, not the official mission selection",
+      "token": null
+    },
+    {
+      "row_id": "UI3-03",
+      "pillar": "hud_ui",
+      "lane": "L3",
+      "criterion": "Health Bar reveal at ~75%",
+      "scorable": "PARTIAL",
+      "beats": [
+        "S17"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "UI3-04",
+      "pillar": "hud_ui",
+      "lane": "L3",
+      "criterion": "`Guildhall Key` HUD row",
+      "scorable": "NO",
+      "beats": [
+        "S22"
+      ],
+      "npc_dependent": true,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear | NPC-dependent: S22; measured nearest NPC 85.4 m (probe_route_npcs.gd)",
+      "token": null
+    },
+    {
+      "row_id": "UI3-05",
+      "pillar": "hud_ui",
+      "lane": "L3",
+      "criterion": "Light Gem exposure states",
+      "scorable": "YES",
+      "beats": [
+        "S12",
+        "S24"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "UI3-06",
+      "pillar": "hud_ui",
+      "lane": "L3",
+      "criterion": "Map-table keybind legend",
+      "scorable": "YES",
+      "beats": [
+        "S08"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "UI4-01",
+      "pillar": "hud_ui",
+      "lane": "L3",
+      "criterion": "`JOURNAL` tab",
+      "scorable": "NO",
+      "beats": [
+        "S06"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear",
+      "token": null
+    },
+    {
+      "row_id": "UI4-02",
+      "pillar": "hud_ui",
+      "lane": "L3",
+      "criterion": "`BLACK MARKET` tab",
+      "scorable": "NO",
+      "beats": [
+        "S06"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear",
+      "token": null
+    },
+    {
+      "row_id": "UI4-03",
+      "pillar": "hud_ui",
+      "lane": "L3",
+      "criterion": "Mission prep cards + READY toggle",
+      "scorable": "YES",
+      "beats": [
+        "S09"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "free_play_substitute",
+      "explicit_reason": "staged/prep form is the free-play substitute, not the official mission selection",
+      "token": null
+    },
+    {
+      "row_id": "UI4-04",
+      "pillar": "hud_ui",
+      "lane": "L3",
+      "criterion": "Briefing letter (11 lines)",
+      "scorable": "PARTIAL",
+      "beats": [
+        "S11"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "UI4-05",
+      "pillar": "hud_ui",
+      "lane": "L3",
+      "criterion": "Loading spinner + gold emblem",
+      "scorable": "YES",
+      "beats": [
+        "S02",
+        "S10"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "UI5-01",
+      "pillar": "hud_ui",
+      "lane": "L3",
+      "criterion": "Red player-noise arcs",
+      "scorable": "YES",
+      "beats": [
+        "S13",
+        "S19"
+      ],
+      "npc_dependent": true,
+      "mission_binding": "official",
+      "explicit_reason": "NPC-dependent: S19; measured nearest NPC 85.4 m (probe_route_npcs.gd)",
+      "token": null
+    },
+    {
+      "row_id": "UI5-02",
+      "pillar": "hud_ui",
+      "lane": "L3",
+      "criterion": "Guard-alert direction pip",
+      "scorable": "NO",
+      "beats": [
+        "S15"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear",
+      "token": null
+    },
+    {
+      "row_id": "UI5-03",
+      "pillar": "hud_ui",
+      "lane": "L3",
+      "criterion": "Guard alert bar + red eyes",
+      "scorable": "NO",
+      "beats": [
+        "S14"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear",
+      "token": null
+    },
+    {
+      "row_id": "UI5-04",
+      "pillar": "hud_ui",
+      "lane": "L3",
+      "criterion": "Vistara RED\u2192GREEN guard states",
+      "scorable": "NO",
+      "beats": [
+        "S19"
+      ],
+      "npc_dependent": true,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear | NPC-dependent: S19; measured nearest NPC 85.4 m (probe_route_npcs.gd)",
+      "token": null
+    },
+    {
+      "row_id": "UI5-05",
+      "pillar": "hud_ui",
+      "lane": "L3",
+      "criterion": "6 s countdown banner",
+      "scorable": "YES",
+      "beats": [
+        "S09"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "UI5-06",
+      "pillar": "hud_ui",
+      "lane": "L3",
+      "criterion": "Status icons above the Light Gem",
+      "scorable": "NO",
+      "beats": [
+        "S25",
+        "S26"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear",
+      "token": null
+    },
+    {
+      "row_id": "UI5-07",
+      "pillar": "hud_ui",
+      "lane": "L3",
+      "criterion": "Sound-ripple + ZipWire gleam",
+      "scorable": "NO",
+      "beats": [
+        "S20"
+      ],
+      "npc_dependent": true,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear | NPC-dependent: S20; measured nearest NPC 85.4 m (probe_route_npcs.gd)",
+      "token": null
+    },
+    {
+      "row_id": "G1-01",
+      "pillar": "gameplay",
+      "lane": "L4",
+      "criterion": "Telescope station",
+      "scorable": "YES",
+      "beats": [
+        "S05"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "G1-02",
+      "pillar": "gameplay",
+      "lane": "L4",
+      "criterion": "Decoration swap + trunk cycle",
+      "scorable": "NO",
+      "beats": [
+        "S07"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear",
+      "token": null
+    },
+    {
+      "row_id": "G1-03",
+      "pillar": "gameplay",
+      "lane": "L4",
+      "criterion": "Mission select + confirmation modal",
+      "scorable": "YES",
+      "beats": [
+        "S08",
+        "S09"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "G1-04",
+      "pillar": "gameplay",
+      "lane": "L4",
+      "criterion": "Vintage car interact",
+      "scorable": "NO",
+      "beats": [
+        "S13"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear",
+      "token": null
+    },
+    {
+      "row_id": "G1-05",
+      "pillar": "gameplay",
+      "lane": "L4",
+      "criterion": "Safe-room lantern toggle",
+      "scorable": "NO",
+      "beats": [
+        "S12"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear",
+      "token": null
+    },
+    {
+      "row_id": "G1-06",
+      "pillar": "gameplay",
+      "lane": "L4",
+      "criterion": "Pickpocket `Guildhall Key`",
+      "scorable": "NO",
+      "beats": [
+        "S22"
+      ],
+      "npc_dependent": true,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear | NPC-dependent: S22; measured nearest NPC 85.4 m (probe_route_npcs.gd)",
+      "token": null
+    },
+    {
+      "row_id": "G2-01",
+      "pillar": "gameplay",
+      "lane": "L4",
+      "criterion": "Den hub walk",
+      "scorable": "YES",
+      "beats": [
+        "S03"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "G2-02",
+      "pillar": "gameplay",
+      "lane": "L4",
+      "criterion": "Alley drop \u2192 sprint \u2192 crouch",
+      "scorable": "PARTIAL",
+      "beats": [
+        "S13"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "G2-03",
+      "pillar": "gameplay",
+      "lane": "L4",
+      "criterion": "ZipWire crank ascent + roofline",
+      "scorable": "PARTIAL",
+      "beats": [
+        "S14",
+        "S15",
+        "S16"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "G2-04",
+      "pillar": "gameplay",
+      "lane": "L4",
+      "criterion": "Cable crossing + courtyard descent",
+      "scorable": "NO",
+      "beats": [
+        "S17"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear",
+      "token": null
+    },
+    {
+      "row_id": "G2-05",
+      "pillar": "gameplay",
+      "lane": "L4",
+      "criterion": "Slate staircase ascent",
+      "scorable": "PARTIAL",
+      "beats": [
+        "S26"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "G3-01",
+      "pillar": "gameplay",
+      "lane": "L4",
+      "criterion": "ZipWire `[1]` equip + 1st launch",
+      "scorable": "PARTIAL",
+      "beats": [
+        "S14"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "G3-02",
+      "pillar": "gameplay",
+      "lane": "L4",
+      "criterion": "Smoke bomb throw + plume cover",
+      "scorable": "NO",
+      "beats": [
+        "S18"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear",
+      "token": null
+    },
+    {
+      "row_id": "G3-03",
+      "pillar": "gameplay",
+      "lane": "L4",
+      "criterion": "Vistara Diamond scan pulse",
+      "scorable": "NO",
+      "beats": [
+        "S19"
+      ],
+      "npc_dependent": true,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear | NPC-dependent: S19; measured nearest NPC 85.4 m (probe_route_npcs.gd)",
+      "token": null
+    },
+    {
+      "row_id": "G3-04",
+      "pillar": "gameplay",
+      "lane": "L4",
+      "criterion": "Tool swap back to `[1]`",
+      "scorable": "NO",
+      "beats": [
+        "S19"
+      ],
+      "npc_dependent": true,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear | NPC-dependent: S19; measured nearest NPC 85.4 m (probe_route_npcs.gd)",
+      "token": null
+    },
+    {
+      "row_id": "G4-01",
+      "pillar": "gameplay",
+      "lane": "L4",
+      "criterion": "Gate guard alert escalation",
+      "scorable": "NO",
+      "beats": [
+        "S13",
+        "S14"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear",
+      "token": null
+    },
+    {
+      "row_id": "G4-02",
+      "pillar": "gameplay",
+      "lane": "L4",
+      "criterion": "Roofline patrol mutter",
+      "scorable": "NO",
+      "beats": [
+        "S16"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear",
+      "token": null
+    },
+    {
+      "row_id": "G4-03",
+      "pillar": "gameplay",
+      "lane": "L4",
+      "criterion": "Distant search & idle barks",
+      "scorable": "NO",
+      "beats": [
+        "S17",
+        "S20"
+      ],
+      "npc_dependent": true,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear | NPC-dependent: S20; measured nearest NPC 85.4 m (probe_route_npcs.gd)",
+      "token": null
+    },
+    {
+      "row_id": "G4-04",
+      "pillar": "gameplay",
+      "lane": "L4",
+      "criterion": "Guard takedown + KO",
+      "scorable": "NO",
+      "beats": [
+        "S23"
+      ],
+      "npc_dependent": true,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear | NPC-dependent: S23; measured nearest NPC 85.4 m (probe_route_npcs.gd)",
+      "token": null
+    },
+    {
+      "row_id": "G4-05",
+      "pillar": "gameplay",
+      "lane": "L4",
+      "criterion": "Distant green guard silhouette",
+      "scorable": "NO",
+      "beats": [
+        "S17"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear",
+      "token": null
+    },
+    {
+      "row_id": "G5-01",
+      "pillar": "gameplay",
+      "lane": "L4",
+      "criterion": "Mission flow: select \u2192 ready \u2192 countdown \u2192 load",
+      "scorable": "YES",
+      "beats": [
+        "S08",
+        "S09",
+        "S10"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "free_play_substitute",
+      "explicit_reason": "staged/prep form is the free-play substitute, not the official mission selection",
+      "token": null
+    },
+    {
+      "row_id": "G5-02",
+      "pillar": "gameplay",
+      "lane": "L4",
+      "criterion": "First fall damage",
+      "scorable": "PARTIAL",
+      "beats": [
+        "S17"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    },
+    {
+      "row_id": "G5-03",
+      "pillar": "gameplay",
+      "lane": "L4",
+      "criterion": "Beam tripwire \u2192 ward lockdown",
+      "scorable": "NO",
+      "beats": [
+        "S25"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear",
+      "token": null
+    },
+    {
+      "row_id": "G5-04",
+      "pillar": "gameplay",
+      "lane": "L4",
+      "criterion": "Ward shatter \u2192 crimson alarm",
+      "scorable": "NO",
+      "beats": [
+        "S26"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "row_route_matrix marks this row NO: the reference situation never occurs on this route, so the listed beat is where the subject would have to appear",
+      "token": null
+    },
+    {
+      "row_id": "G5-05",
+      "pillar": "gameplay",
+      "lane": "L4",
+      "criterion": "Pause \u2192 quit flow",
+      "scorable": "PARTIAL",
+      "beats": [
+        "S27"
+      ],
+      "npc_dependent": false,
+      "mission_binding": "official",
+      "explicit_reason": "",
+      "token": null
+    }
+  ],
+  "row_count": 120,
+  "beat_count": 27,
+  "rows_with_beats": 120,
+  "rows_without_beats": 0,
+  "npc_measurement": {
+    "source": "res://tests/probe_route_npcs.gd",
+    "guards": 4,
+    "civilians": 3,
+    "nearest_m": 85.4,
+    "max_m": 150.7,
+    "anchor": "authored Guildhall Contract 2 safe-room spawn",
+    "unreachable_beats": [
+      "S19",
+      "S20",
+      "S22",
+      "S23"
+    ]
+  },
+  "tokens_emitted": 0,
+  "token_policy": "route_claim is not 'played' (staged capture / short driver segment): no row token may be emitted",
+  "tokens": {}
+}

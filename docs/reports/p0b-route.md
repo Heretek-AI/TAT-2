@@ -115,7 +115,7 @@ build/qa/p0b_route.sh --tag=route2
 which runs, under the shared flock and Xvfb:
 
 ```bash
-cd /home/john/Projects/TAT-2 && timeout 1800 \
+cd <repo> && timeout 1800 \
   xvfb-run -a -s '-screen 0 1920x1080x24' \
   tools/godot --path game --rendering-driver vulkan \
   --script "$PWD/build/qa/p0b_route.gd" -- \
@@ -257,9 +257,11 @@ S04 1, S05 1, S06 2, S08 2, S09 1, S10 1, S11 1, S12 1, S24 3, S27 1 → **17
 beat frames**, plus one non-beat Lounge reference pose in `extras[]`.
 
 Den stage order is deliberately **S03 → S04 → S06 → S08 → S05**: S05 enters the
-telescope view and never exits, because the port's `[F] EXIT` path is L4-13
-(the player is stranded on the Den roof). Guildhall order is S11 (letter) →
-S12 (safe room) → S24 (foyer poses) → Lounge extra → S27 (pause last).
+telescope view and the staged runner does not drive the key exit (the live
+`[F] EXIT` path is fixed in Phase 3C; the input-driven assertion lives in
+`game/tests/probe_den_window.gd` and the short `route_driver.gd` segment).
+Guildhall order is S11 (letter) → S12 (safe room) → S24 (foyer poses) → Lounge
+extra → S27 (pause last).
 
 ### S24 pose identity (KF27)
 
@@ -285,13 +287,24 @@ Hooks confirmed in the tree before writing the runner: `open_wardrobe_ui`,
 
 ## 5. Blockers recorded, not hidden
 
-- **L4-13** — the telescope exit strands the player on the Den roof
-  (`docs/reports/r8-live-run-review-20261124.md` §4). S05 never calls exit.
-- **No NPC population on the route** — 4 guards + 3 civilians spawn at
-  48–151 m (C4-08 / L4-08); every pickpocket/takedown/alert/scan beat is
-  therefore deferred.
-- **No continuous input driver** — there is no recorder that can drive S13–S26
-  traversal; fixed poses are not traversal.
+- **L4-13 — FIXED (Phase 3C).** The telescope scope now pushes an
+  `InputContext` gameplay modal (`telescope_ponder`) and zeroes the body's
+  velocity on entry, so a held forward key cannot carry the player into the
+  west opening; `[F] EXIT` restores the player camera with the body still
+  inside the Den. Verified by `game/tests/probe_den_window.gd`
+  (`DEN_WINDOW PASS checks=44`, including a real-key `[F] PONDER`/`[F] EXIT`
+  block) and by the short driver segment
+  (`build/qa/route_driver.gd`, `S05` driven, frozen drift `0.000 m`).
+- **No NPC population on the route — re-measured (Phase 3C).** At this HEAD
+  the same Novice Contract 2 spawn yields 4 guards + 3 civilians at
+  **85.4–150.7 m** from the route anchor (`game/tests/probe_route_npcs.gd`;
+  the old "nearest 48.1 m" note is superseded). S19/S20/S22/S23 stay
+  unreachable and are recorded as such, not faked.
+- **No full continuous input driver — partially closed (Phase 3C).** A
+  deterministic input driver exists (`build/qa/route_driver.gd` + wrapper)
+  and drives the short `den_telescope` segment (S03 arrival + S05 scope
+  enter/exit); the 27-beat traversal is still not driven. `route_claim` stays
+  `none`.
 - **S25/S26 staging would be fake** — the ward/alarm hooks exist
   (`_spawn_foyer_lockdown`, `security_beam.beam_triggered`) but firing them
   without the player crossing the beam would label a staged lockdown as the

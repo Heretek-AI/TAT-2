@@ -1,7 +1,7 @@
 # T01 — PIPELINE remediation report
 
 Team: **T01-PIPELINE** (extraction → producers → generated data → audit gate).
-Worktree: `/home/john/Projects/TAT-2-rem-T01-pipeline`, branch `rem/T01-pipeline`,
+Worktree: `<worktree>/T01-pipeline`, branch `rem/T01-pipeline`,
 base `38e7b03`. Date: 2026-11-25.
 Inputs: `REMEDIATION_PLAN.md`, `AUDIT_BRIEF.md`, `findings/RE-A-pipeline.md`.
 

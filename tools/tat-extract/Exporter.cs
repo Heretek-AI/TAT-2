@@ -34,6 +34,9 @@ public sealed class Exporter
 
     public Exporter(DefaultFileProvider p, Opts o) { _p = p; _o = o; }
 
+    /// <summary>Counted per-operation failures (`fail=` in Report).</summary>
+    public int FailCount => _fail.Values.Sum();
+
     IEnumerable<GameFile> Packages(Func<string, bool>? pathPred = null) =>
         _p.Files.Values.Where(f => (f.Extension == "uasset" || f.Extension == "umap")
                                    && (f.Path.StartsWith("TAT/", StringComparison.OrdinalIgnoreCase)
@@ -143,11 +146,14 @@ public sealed class Exporter
     public void Tables()
     {
         // Deny-list (documented, unchanged): only DataTable/CurveTable/DataAsset
-        // roots below are queued; any .uasset outside these 12 roots is dropped
+        // roots below are queued; any .uasset outside these roots is dropped
         // before the parsers ever see it and is counted as tables-filtered.
         // P1-2: Art/ThirdParty/Developers added (Art is 10k files; dumping them
         // is slow but silent loss is worse — parsers glob only known tables).
-        var roots = new[] { "TAT/Content/Gameplay/", "TAT/Content/AI/", "TAT/Content/Missions/", "TAT/Content/Character/", "TAT/Content/Core/", "TAT/Content/StringTables/", "TAT/Content/Maps/", "TAT/Content/UI/", "TAT/Content/Audio/", "TAT/Content/Art/", "TAT/Content/ThirdParty/", "TAT/Content/Developers/", "TAT/Content/WwiseAudio/", "TAT/Content/MaterialLibrary/" };
+        // P3-3B.4: Destructibles added so GC_ChestTrunkALid and the other
+        // GeometryCollection packages reach the parsers (previously only the
+        // filtered `json` stage could see them).
+        var roots = new[] { "TAT/Content/Gameplay/", "TAT/Content/AI/", "TAT/Content/Missions/", "TAT/Content/Character/", "TAT/Content/Core/", "TAT/Content/StringTables/", "TAT/Content/Maps/", "TAT/Content/UI/", "TAT/Content/Audio/", "TAT/Content/Art/", "TAT/Content/ThirdParty/", "TAT/Content/Developers/", "TAT/Content/WwiseAudio/", "TAT/Content/MaterialLibrary/", "TAT/Content/Destructibles/" };
         var candidates = Packages(p => p.EndsWith(".uasset")).ToList();
         var queued = candidates.Where(f => roots.Any(f.Path.StartsWith)).ToList();
         CountSkip("tables-filtered", candidates.Count - queued.Count);
@@ -171,13 +177,16 @@ public sealed class Exporter
     public void Levels()
     {
         // Two domains, one dump: every .umap (map files) plus BPP_/SV_/S_/
-        // SS_/QG_ blueprint dumps (packed-actor templates re-consumed by
-        // parse_tables as actor templates, not levels). The S_ prefix also
+        // SS_/QG_/LS_ blueprint dumps (packed-actor templates re-consumed by
+        // parse_tables as actor templates, not levels). LS_ is the authored
+        // LevelSequence prefix (e.g. LS_Airship_Launch); it was previously only
+        // reachable through the tables root's blanket Art/ dump.
+        // The S_ prefix also
         // matches unrelated S_* blueprints (sound/state blueprints); they
         // are dumped, never parsed as levels, and counted below so a future
         // genuine sublevel outside both domains shows as levels-filtered.
         var candidates = Packages().ToList();
-        var queued = candidates.Where(f => f.Path.EndsWith(".umap") || Path.GetFileName(f.Path).StartsWith("BPP_") || Path.GetFileName(f.Path).StartsWith("SV_") || Path.GetFileName(f.Path).StartsWith("S_") || Path.GetFileName(f.Path).StartsWith("SS_") || Path.GetFileName(f.Path).StartsWith("QG_")).ToList();
+        var queued = candidates.Where(f => f.Path.EndsWith(".umap") || Path.GetFileName(f.Path).StartsWith("BPP_") || Path.GetFileName(f.Path).StartsWith("SV_") || Path.GetFileName(f.Path).StartsWith("S_") || Path.GetFileName(f.Path).StartsWith("SS_") || Path.GetFileName(f.Path).StartsWith("QG_") || Path.GetFileName(f.Path).StartsWith("LS_")).ToList();
         CountSkip("levels-filtered", candidates.Count - queued.Count);
         Console.Error.WriteLine($"  levels domains: {queued.Count(f => f.Path.EndsWith(".umap"))} umap + {queued.Count(f => !f.Path.EndsWith(".umap"))} blueprint");
         ForEach(queued, "levels", f => DumpJson(f, "levels"));
@@ -277,6 +286,27 @@ public sealed class Exporter
         textureFormat: ETextureFormat.Png,
         textureQuality: 100,
         exportHdrTexturesAsHdr: false,
+        exportAllTextureMips: false,
+        materialDepth: default,
+        exportMaterials: false,
+        exportMorphTargets: true,
+        socketFormat: ESocketFormat.Bone,
+        compressionFormat: CUE4Parse_Conversion.Writers.UEFormat.Enums.EFileCompressionFormat.None
+    );
+
+    // P3-3A.4: HDR only for the authored sky cubemaps. The 8-bit PNG path
+    // clamps a 1e-4..1e-3 HDR sky to 0 or 1/255 (the measured 0.00005 ambient
+    // floor), so the six cube faces are written as Radiance .hdr with their
+    // linear values intact. Every other texture command keeps DefaultOpts /
+    // AnimOpts (exportHdrTexturesAsHdr: false); do not promote this globally.
+    static ExportOptions CubemapOpts() => new(
+        meshFormat: EMeshFormat.Gltf2,
+        naniteMeshFormat: ENaniteMeshFormat.NaniteFirst,
+        meshQuality: EMeshQuality.Highest,
+        texturePlatform: ETexturePlatform.DesktopMobile,
+        textureFormat: ETextureFormat.Png,
+        textureQuality: 100,
+        exportHdrTexturesAsHdr: true,
         exportAllTextureMips: false,
         materialDepth: default,
         exportMaterials: false,
@@ -668,6 +698,17 @@ public sealed class Exporter
         return sb.ToString();
     }
 
+    // A cube id becomes a directory name below Cubemaps/. Restrict it to the
+    // safe set so a crafted export name cannot introduce a separator or `..`;
+    // the caller also asserts the resolved path stays under the root.
+    static string SafeCubeId(string id)
+    {
+        var sb = new StringBuilder(id.Length);
+        foreach (char c in id)
+            sb.Append((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '-' ? c : '_');
+        return sb.Length == 0 ? "cubemap" : sb.ToString();
+    }
+
     // Cheap orientation gauge for the integrator: an 8-bit face mean over a
     // strided sample. The sky cube's +Y face should read brighter than -Y.
     static double[]? FaceMean(CUE4Parse_Conversion.Textures.CTexture face)
@@ -692,6 +733,222 @@ public sealed class Exporter
         {
             return null; // diagnostics only; never fail the cube export for it
         }
+    }
+
+    // The raw half/float layouts this code can read, limited to formats the
+    // pinned CUE4Parse 1.2.2.202611 can actually decode and the writer can
+    // encode. This is deliberately an explicit set, NOT
+    // `PixelFormatUtils.IsHDR`: that predicate is false for PF_FloatRGB and
+    // PF_R32G32B32F, and those cannot be claimed anyway (PF_FloatRGB is
+    // R11G11B10_FLOAT in 4 bytes, PF_R32G32B32F is Supported=false so Decode
+    // throws). `selftest-face-mean` iterates this array, so every member is
+    // checked for Supported + encodability.
+    static readonly EPixelFormat[] RawHdrMeanFormats =
+    {
+        EPixelFormat.PF_FloatRGBA,
+        EPixelFormat.PF_A32B32G32R32F,
+        EPixelFormat.PF_R32_FLOAT,
+        EPixelFormat.PF_R16F,
+    };
+
+    static bool HasRawHdrMean(EPixelFormat f) => Array.IndexOf(RawHdrMeanFormats, f) >= 0;
+
+    // Linear face energy for the HDR path: the loader needs the real
+    // irradiance scale (the authored sky cube is ~1e-4..1e-3), which the 8-bit
+    // FaceMean clamps to zero. Only the raw half/float layouts above are read;
+    // anything else is reported as null, never guessed. Returns RGB means
+    // without any gamma transform.
+    static double[]? FaceMeanLinear(CTexture face)
+    {
+        if (!HasRawHdrMean(face.PixelFormat)) return null;
+        int w = face.Width, h = face.Height;
+        if (w <= 0 || h <= 0) return null;
+        int step = Math.Max(1, Math.Max(w, h) / 32);
+        var data = face.Data;
+        int pixelBytes;
+        switch (face.PixelFormat)
+        {
+            case EPixelFormat.PF_FloatRGBA: pixelBytes = 8; break;       // 4 x half
+            case EPixelFormat.PF_A32B32G32R32F: pixelBytes = 16; break;  // 4 x float
+            case EPixelFormat.PF_R32_FLOAT: pixelBytes = 4; break;       // 1 x float
+            case EPixelFormat.PF_R16F: pixelBytes = 2; break;            // 1 x half
+            default: return null;
+        }
+        if ((long) w * h * pixelBytes > data.LongLength) return null;
+        static float HalfAt(byte[] d, int o) =>
+            (float) BitConverter.UInt16BitsToHalf((ushort) (d[o] | (d[o + 1] << 8)));
+        double r = 0, g = 0, b = 0; long n = 0;
+        for (int y = 0; y < h; y += step)
+        {
+            for (int x = 0; x < w; x += step)
+            {
+                int o = (y * w + x) * pixelBytes;
+                float fr, fg, fb;
+                if (face.PixelFormat == EPixelFormat.PF_FloatRGBA)
+                {
+                    fr = HalfAt(data, o);
+                    fg = HalfAt(data, o + 2);
+                    fb = HalfAt(data, o + 4);
+                }
+                else if (face.PixelFormat == EPixelFormat.PF_A32B32G32R32F)
+                {
+                    // Match CUE4Parse's ToHdrBitmap: A32B32G32R32F is converted
+                    // with flipOrder=true, so the exported R/G/B come from
+                    // components 3/2/1 (bytes 12/8/4), not 0/1/2. The mean must
+                    // describe the exported face.
+                    fr = BitConverter.ToSingle(data, o + 12);
+                    fg = BitConverter.ToSingle(data, o + 8);
+                    fb = BitConverter.ToSingle(data, o + 4);
+                }
+                else if (face.PixelFormat == EPixelFormat.PF_R16F)
+                {
+                    fr = fg = fb = HalfAt(data, o);
+                }
+                else
+                {
+                    fr = fg = fb = BitConverter.ToSingle(data, o);
+                }
+                if (!float.IsFinite(fr) || !float.IsFinite(fg) || !float.IsFinite(fb)) continue;
+                r += fr; g += fg; b += fb; n++;
+            }
+        }
+        if (n == 0) return null;
+        return new[] { Math.Round(r / n, 6), Math.Round(g / n, 6), Math.Round(b / n, 6) };
+    }
+
+    // ------------------------------------------------- face-mean self-test
+    // Executed regression for FaceMeanLinear: a source-text assertion cannot
+    // see a dead branch (the round-2 bug gated it on IsHDR, which is false for
+    // PF_FloatRGB/PF_R32G32B32F). The set is also checked against the pinned
+    // library: every member must be Supported and encodable by the writer.
+    // `tat-extract selftest-face-mean` runs this before any pak mount.
+    static byte[] MeanFixtureBytes(EPixelFormat fmt, int w, int h, out int components)
+    {
+        if (!PixelFormatUtils.PixelFormats.TryGetValue(fmt, out var info))
+            throw new ArgumentException($"no library layout for {fmt}");
+        components = info.NumComponents;
+        int bpp = info.BlockBytes / (info.BlockSizeX * info.BlockSizeY * info.BlockSizeZ);
+        if (bpp <= 0) throw new ArgumentException($"no whole-byte layout for {fmt}");
+        var data = new byte[w * h * bpp];
+        static void PutHalf(byte[] d, int o, float v)
+        {
+            ushort bits = BitConverter.HalfToUInt16Bits((Half) v);
+            d[o] = (byte) bits; d[o + 1] = (byte) (bits >> 8);
+        }
+        static void PutSingle(byte[] d, int o, float v) => BitConverter.TryWriteBytes(d.AsSpan(o), v);
+        for (int i = 0; i < w * h; i++)
+        {
+            int o = i * bpp;
+            switch (fmt)
+            {
+                case EPixelFormat.PF_FloatRGBA:
+                    PutHalf(data, o, 0.25f); PutHalf(data, o + 2, 0.5f); PutHalf(data, o + 4, 0.75f); PutHalf(data, o + 6, 1f);
+                    break;
+                case EPixelFormat.PF_A32B32G32R32F:
+                    // Component order as stored; ToHdrBitmap flips it, so the
+                    // exported R/G/B read components 3/2/1 = 0.25/0.5/0.75.
+                    PutSingle(data, o, 1f); PutSingle(data, o + 4, 0.75f); PutSingle(data, o + 8, 0.5f); PutSingle(data, o + 12, 0.25f);
+                    break;
+                case EPixelFormat.PF_R32_FLOAT:
+                    PutSingle(data, o, 0.5f);
+                    break;
+                case EPixelFormat.PF_R16F:
+                    PutHalf(data, o, 0.5f);
+                    break;
+                default:
+                    throw new ArgumentException($"no fixture writer for {fmt}");
+            }
+        }
+        return data;
+    }
+
+    public static int SelfTestFaceMean()
+    {
+        // One expectation per declared set member. Iterating the declared array
+        // (not a hand-copied case list) means adding a format to the set
+        // without a fixture/expectation fails the self-test.
+        var expected = new Dictionary<EPixelFormat, (double R, double G, double B)>
+        {
+            [EPixelFormat.PF_FloatRGBA] = (0.25, 0.5, 0.75),
+            [EPixelFormat.PF_A32B32G32R32F] = (0.25, 0.5, 0.75),
+            [EPixelFormat.PF_R32_FLOAT] = (0.5, 0.5, 0.5),
+            [EPixelFormat.PF_R16F] = (0.5, 0.5, 0.5),
+        };
+        int fails = 0;
+        var opts = CubemapOpts();
+        foreach (var fmt in RawHdrMeanFormats)
+        {
+            if (!expected.TryGetValue(fmt, out var c))
+            {
+                Console.WriteLine($"FACE_MEAN_LAYOUT format={fmt} missing_expectation=true");
+                fails++;
+                continue;
+            }
+            bool found = PixelFormatUtils.PixelFormats.TryGetValue(fmt, out var info);
+            string supported = (found && info.Supported).ToString().ToLowerInvariant();
+            Console.WriteLine(
+                $"FACE_MEAN_LAYOUT format={fmt} block_bytes={(found ? info.BlockBytes : -1)} "
+                + $"components={(found ? info.NumComponents : -1)} supported={supported}");
+            if (!found || !info.Supported)
+            {
+                Console.WriteLine($"FACE_MEAN format={fmt} null=true ok=false reason=unsupported");
+                fails++;
+                continue;
+            }
+            CTexture tex;
+            try
+            {
+                tex = new CTexture(4, 4, fmt, MeanFixtureBytes(fmt, 4, 4, out _));
+            }
+            catch (ArgumentException e)
+            {
+                Console.WriteLine($"FACE_MEAN_LAYOUT format={fmt} fixture_error={e.Message}");
+                fails++;
+                continue;
+            }
+            var mean = FaceMeanLinear(tex);
+            if (mean == null || mean.Length != 3)
+            {
+                Console.WriteLine($"FACE_MEAN format={fmt} null=true ok=false");
+                fails++;
+                continue;
+            }
+            bool ok = Math.Abs(mean[0] - c.R) < 1e-3
+                && Math.Abs(mean[1] - c.G) < 1e-3
+                && Math.Abs(mean[2] - c.B) < 1e-3;
+            Console.WriteLine($"FACE_MEAN format={fmt} r={mean[0]} g={mean[1]} b={mean[2]} null=false ok={ok.ToString().ToLowerInvariant()}");
+            if (!ok) fails++;
+            // Writer check: the same ExportOptions the cubemaps pass uses.
+            var encoded = tex.Encode(opts, out var ext);
+            bool encOk = encoded != null && encoded.Length > 0;
+            Console.WriteLine($"FACE_MEAN_ENCODE format={fmt} ext={ext} bytes={encoded?.Length ?? 0} ok={encOk.ToString().ToLowerInvariant()}");
+            if (!encOk) fails++;
+        }
+        // Negative control: a non-float layout is reported as null, not read
+        // with the wrong stride.
+        var ldr = new CTexture(2, 2, EPixelFormat.PF_B8G8R8A8, new byte[2 * 2 * 4]);
+        bool ldrNull = FaceMeanLinear(ldr) == null;
+        Console.WriteLine($"FACE_MEAN_UNSUPPORTED format=PF_B8G8R8A8 null={ldrNull.ToString().ToLowerInvariant()}");
+        if (!ldrNull) fails++;
+        // Excluded formats are not claimed: PF_FloatRGB is R11G11B10 (4 bytes,
+        // not 3xhalf) and PF_R32G32B32F is Supported=false (Decode throws).
+        foreach (var excl in new[] { EPixelFormat.PF_FloatRGB, EPixelFormat.PF_R32G32B32F })
+        {
+            bool inSet = HasRawHdrMean(excl);
+            bool found = PixelFormatUtils.PixelFormats.TryGetValue(excl, out var info);
+            Console.WriteLine(
+                $"FACE_MEAN_EXCLUDED format={excl} in_set={inSet.ToString().ToLowerInvariant()} "
+                + $"library_supported={(found && info.Supported).ToString().ToLowerInvariant()} "
+                + $"block_bytes={(found ? info.BlockBytes : -1)}");
+            if (inSet) fails++;
+        }
+        if (fails == 0)
+        {
+            Console.WriteLine($"FACE_MEAN_SELFTEST PASS formats={RawHdrMeanFormats.Length}");
+            return 0;
+        }
+        Console.WriteLine($"FACE_MEAN_SELFTEST FAIL fails={fails}");
+        return 1;
     }
 
     static string UePath(string path)
@@ -730,7 +987,9 @@ public sealed class Exporter
 
     public void Cubemaps()
     {
-        var opts = DefaultOpts();
+        // HDR face export is scoped to this pass only: .hdr for HDR source
+        // formats, unchanged PNG for the 8-bit cubes (daylight / fake specular).
+        var opts = CubemapOpts();
         var candidates = Packages(p => p.EndsWith(".uasset")).ToList();
         var wanted = candidates.Where(f => AuthoredCubePackages.Contains(f.Path, StringComparer.OrdinalIgnoreCase)).ToList();
         CountSkip("cubemaps-filtered", candidates.Count - wanted.Count);
@@ -746,8 +1005,12 @@ public sealed class Exporter
                 {
                     if (e is not UTextureCube cube) continue;
                     cubes++;
-                    var id = CubeId(cube.Name);
-                    var dir = Path.Combine(_o.Out, "assets", "TAT", "Content", "Cubemaps", id);
+                    var id = SafeCubeId(CubeId(cube.Name));
+                    var cubesRoot = Path.GetFullPath(Path.Combine(_o.Out, "assets", "TAT", "Content", "Cubemaps"));
+                    var dir = Path.GetFullPath(Path.Combine(cubesRoot, id));
+                    var rootPrefix = cubesRoot.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+                    if (!dir.StartsWith(rootPrefix, StringComparison.Ordinal))
+                        throw new InvalidOperationException($"cube id '{id}' escapes {cubesRoot}");
                     var manifest = Path.Combine(dir, "cubemap.json");
                     Directory.CreateDirectory(dir);
                     if (!_o.Overwrite && File.Exists(manifest)) { CountSkip("cubemaps"); continue; }
@@ -764,21 +1027,38 @@ public sealed class Exporter
                         Count("cubemaps", false, $"{f.Path}: decoded {decoded.Width}x{decoded.Height} is not six square {faceH}px faces");
                         continue;
                     }
+                    // Encode all six faces in memory first. No face file or
+                    // manifest is touched until every encode succeeds, so a
+                    // failed re-encode cannot leave a half-written cube.
                     var faces = new Dictionary<string, string>();
                     var means = new Dictionary<string, double[]>();
+                    var meansLinear = new Dictionary<string, double[]>();
+                    var encoded = new List<(string File, byte[] Bytes)>();
+                    bool hdrEncoded = PixelFormatUtils.IsHDR(decoded.PixelFormat);
                     bool ok = true;
                     for (int i = 0; i < 6; i++)
                     {
                         var face = SliceCubeFace(decoded, i, faceH);
                         var mean = FaceMean(face);
                         if (mean != null) means[CubeFaceNames[i]] = mean;
+                        var meanLinear = FaceMeanLinear(face);
+                        if (meanLinear != null) meansLinear[CubeFaceNames[i]] = meanLinear;
                         var bytes = face.Encode(opts, out var ext);
                         if (bytes == null) { ok = false; break; }
+                        if (ext != "hdr") hdrEncoded = false;
                         var file = $"face_{CubeFaceNames[i]}.{ext}";
-                        File.WriteAllBytes(Path.Combine(dir, file), bytes);
+                        encoded.Add((file, bytes));
                         faces[CubeFaceNames[i]] = file;
                     }
                     if (!ok) { Count("cubemaps", false, f.Path + ": face encode failed"); continue; }
+                    // Swap: drop the other encoding only now, write the new
+                    // faces, then move the manifest into place last so readers
+                    // never see a manifest that names missing files.
+                    if (_o.Overwrite)
+                        foreach (var stale in Directory.GetFiles(dir, "face_*"))
+                            File.Delete(stale);
+                    foreach (var (file, bytes) in encoded)
+                        File.WriteAllBytes(Path.Combine(dir, file), bytes);
                     var doc = new Dictionary<string, object?>
                     {
                         ["schema"] = "tat2.cubemap/1",
@@ -789,16 +1069,25 @@ public sealed class Exporter
                         ["height"] = faceH,
                         ["pixel_format"] = cube.Format.ToString(),
                         ["srgb"] = cube.SRGB,
-                        ["transfer"] = cube.SRGB ? "srgb" : "linear",
+                        // HDR faces are linear by construction; never label
+                        // them srgb even if the source flag is set, or the
+                        // loader would apply a second gamma transform.
+                        ["hdr"] = hdrEncoded,
+                        ["encoding"] = hdrEncoded ? "hdr" : "png",
+                        ["transfer"] = hdrEncoded ? "linear" : (cube.SRGB ? "srgb" : "linear"),
                         ["slices"] = 6,
                         ["face_order"] = CubeFaceNames,
                         ["ue_face_order"] = new[] { "PosX", "NegX", "PosY", "NegY", "PosZ", "NegZ" },
                         ["faces"] = faces,
                         ["face_mean_8bit"] = means,
                     };
-                    File.WriteAllText(manifest, JsonConvert.SerializeObject(doc, Formatting.Indented));
+                    // Real (unclamped) linear face energy for the loader.
+                    if (meansLinear.Count > 0) doc["face_mean_linear"] = meansLinear;
+                    var tmpManifest = manifest + ".tmp";
+                    File.WriteAllText(tmpManifest, JsonConvert.SerializeObject(doc, Formatting.Indented));
+                    File.Move(tmpManifest, manifest, true);
                     Count("cubemaps", true);
-                    Console.Error.WriteLine($"  cubemap {cube.Name}: {decoded.Width}x{faceH} {cube.Format} srgb={cube.SRGB} -> {dir}");
+                    Console.Error.WriteLine($"  cubemap {cube.Name}: {decoded.Width}x{faceH} {decoded.PixelFormat} srgb={cube.SRGB} hdr={hdrEncoded} -> {dir}");
                 }
                 if (cubes == 0) Count("cubemaps", false, f.Path + ": no UTextureCube export");
             }

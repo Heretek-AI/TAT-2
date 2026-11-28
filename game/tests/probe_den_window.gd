@@ -78,6 +78,17 @@ func _wait_physics(frames: int) -> void:
 		await physics_frame
 
 
+## Real key press through the SceneTree input path. The probe does not call
+## `toggle_telescope_ponder()` for this section: `[F] PONDER` / `[F] EXIT` must
+## work as input, and the player + mission handlers both see the same event.
+func _press_f(pressed: bool) -> void:
+	var ev := InputEventKey.new()
+	ev.physical_keycode = KEY_F
+	ev.keycode = KEY_F
+	ev.pressed = pressed
+	root.push_input(ev)
+
+
 func _run() -> void:
 	var gs: Node = root.get_node_or_null("/root/GameState")
 	if gs == null:
@@ -164,6 +175,80 @@ func _run() -> void:
 		"telescope toggle never writes the player transform",
 		"pos before=%s after=%s" % [str(pos_before), str(player.global_position)])
 	print("DEN_WINDOW player_before=%s player_after_toggle=%s" % [str(pos_before), str(player.global_position)])
+
+	# --- Input-driven [F] PONDER / [F] EXIT (L4-13) --------------------------
+	# The camera-only block above proves the transform is untouched by the
+	# programmatic toggle. This block proves the real key path: F enters, the
+	# scope pushes the gameplay modal, a held forward key cannot walk the body
+	# out of the Den while the scope is up, and F exits with the body still
+	# inside and the player camera restored. That is the L4-13 regression guard.
+	var ctx: Node = root.get_node_or_null("/root/InputContext")
+	# Park at the authored telescope interaction point (test setup only; the
+	# walked route lives in build/qa/route_driver.gd).
+	player.global_position = Vector3(-3.6, floor_y + 0.05, 271.4)
+	player.rotation = Vector3(0.0, -PI * 0.5, 0.0)
+	player.set("velocity", Vector3.ZERO)
+	await _wait_physics(10)
+	var f_enter_pos: Vector3 = player.global_position
+	_press_f(true)
+	await _wait(2)
+	_press_f(false)
+	await _wait(2)
+	var f_ponder: bool = bool(mission.get("_ponder_active"))
+	_check(f_ponder, "[F] PONDER (real key) enters the telescope scope",
+		"[F] PONDER did not enter (ponder_active=%s)" % str(f_ponder))
+	if ctx != null and ctx.has_method("is_modal"):
+		_check(bool(ctx.call("is_modal", "telescope_ponder")),
+			"scope pushes the telescope_ponder gameplay modal",
+			"telescope_ponder modal missing while in scope")
+		_check(bool(ctx.call("blocks_gameplay")),
+			"scope modal blocks gameplay input",
+			"blocks_gameplay=false while in scope")
+	# Held forward key: the modal must freeze the body, not just the camera.
+	Input.action_press("move_forward")
+	var frozen_max: float = 0.0
+	for _i: int in range(45):
+		await physics_frame
+		frozen_max = maxf(frozen_max, player.global_position.distance_to(f_enter_pos))
+	Input.action_release("move_forward")
+	await _wait_physics(3)
+	print("DEN_WINDOW f_ponder frozen_max=%.4f pos=%s modal=%s blocks=%s" % [
+		frozen_max, str(player.global_position),
+		str(bool(ctx.call("is_modal", "telescope_ponder"))) if ctx != null else "no_ctx",
+		str(bool(ctx.call("blocks_gameplay"))) if ctx != null else "no_ctx"])
+	_check(frozen_max < 0.02,
+		"held forward key cannot move the body while the scope is up (max drift %.3f m)" % frozen_max,
+		"player moved %.3f m while in the telescope scope" % frozen_max)
+
+	var before_exit_pos: Vector3 = player.global_position
+	_press_f(true)
+	await _wait(2)
+	_press_f(false)
+	await _wait(3)
+	var exit_frame_pos: Vector3 = player.global_position
+	var f_exit_ok: bool = not bool(mission.get("_ponder_active"))
+	_check(f_exit_ok, "[F] EXIT (real key) leaves the telescope scope",
+		"[F] EXIT did not leave the scope (ponder_active=%s)" % str(mission.get("_ponder_active")))
+	var pcam_after: Camera3D = player.get("cam") as Camera3D
+	_check(pcam_after != null and pcam_after.current,
+		"[F] EXIT restores the player camera",
+		"player camera not current after [F] EXIT")
+	if ctx != null and ctx.has_method("is_modal"):
+		_check(not bool(ctx.call("is_modal", "telescope_ponder")),
+			"[F] EXIT pops the telescope_ponder modal",
+			"telescope_ponder modal survived the exit")
+		_check(not bool(ctx.call("blocks_gameplay")),
+			"[F] EXIT restores gameplay input",
+			"blocks_gameplay=true after exit")
+	_check(exit_frame_pos.distance_to(before_exit_pos) < 0.05,
+		"[F] EXIT never teleports the body (drift %.3f m)" % exit_frame_pos.distance_to(before_exit_pos),
+		"[F] EXIT moved the body %.3f m" % exit_frame_pos.distance_to(before_exit_pos))
+	_check(exit_frame_pos.x > WALL_PLANE_X and exit_frame_pos.y < OPENING_Y_MAX,
+		"[F] EXIT leaves the player inside the Den (pos=%s)" % str(exit_frame_pos),
+		"[F] EXIT stranded the player outside/on the roof: pos=%s" % str(exit_frame_pos))
+	print("DEN_WINDOW f_exit pos=%s delta=%.4f active=%s player_cam=%s" % [
+		str(exit_frame_pos), exit_frame_pos.distance_to(before_exit_pos),
+		str(bool(mission.get("_ponder_active"))), str(pcam_after != null and pcam_after.current)])
 
 	# --- West-opening blocker -------------------------------------------------
 	var blocker: StaticBody3D = mission.get_node_or_null("DenWestWindowBlocker") as StaticBody3D

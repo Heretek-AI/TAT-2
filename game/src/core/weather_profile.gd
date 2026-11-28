@@ -66,10 +66,17 @@ const CubemapLoader := preload("res://src/core/cubemap_loader.gd")
 ##   per-preset grade.
 ## - `TAT2_IBL=off` (default) leaves ambient exactly as authored. `ambient`
 ##   replaces the flat SkyLight colour with the CPU cosine irradiance of the
-##   authored TextureCube (`cubemap_loader.gd`), energy NOT clamped.
+##   authored TextureCube (`cubemap_loader.gd`) and its energy with
+##   `ibl_ambient_energy()` = luminance(E(+Y)) * authored `sky.intensity` *
+##   `IBL_AMBIENT_PORT_SCALE` (identity, because the `.hdr` faces are linear
+##   radiance). AMBIENT_UE_TO_GODOT (0.08) is the *tuned* off-path substitute and
+##   is never applied to a measured cube, so `raw irradiance` and
+##   `intensity * 0.08` are different quantities — never compare them as one.
 ## - Fog DirectionalInscattering luminance -> fog_sun_scatter (0..1).
-## - enable_rain / rain_intensity are exposed for later particle wiring; this
-##   module never spawns rain.
+## - enable_rain / rain_intensity are exposed for the particle and audio
+##   wiring; `rain_intensity_01()` is the ONE preset -> 0..1 converter those
+##   consumers use (it saturates an out-of-domain preset and warns, see below).
+##   This module never spawns rain.
 
 const MobileProfile: GDScript = preload("res://src/core/mobile_profile.gd")
 ## W6G: SoundCarry accessor delegates the tag join to the hearing layer, so the
@@ -126,6 +133,20 @@ const AMBIENT_ENERGY_MAX := 0.35
 ## lower-door frames lift out of crushed black without turning the foyer's
 ## practicals into a daytime wash.
 const AMBIENT_UE_TO_GODOT := 0.08
+## P3-3A.4: the ONE port scale from measured cube radiance to Godot ambient
+## energy, used only by `ibl_ambient_energy()` (the `TAT2_IBL=ambient` path).
+## The exported faces are `.hdr` Radiance with `transfer: linear`, i.e. linear
+## radiance in the same exposure space as the rest of the environment, and
+## `ambient_light_energy` is a plain multiplier on that linear radiance, so the
+## conversion is the identity. AMBIENT_UE_TO_GODOT (0.08) must NOT be applied on
+## top: it is a *tuning* substitute for exactly the IBL this path replaces (a
+## UI-space SkyLight intensity -> Godot energy fudge calibrated against the
+## reference frames), not a unit conversion. The consequence is explicit and
+## intended: the measured up-normal luminance (7.7e-4 for
+## Cubemap_GroundFloor_01) and `intensity * 0.08` (= 0.16 for gloomy) are
+## different quantities, and their ratio is a property of the authored sky, not
+## an error signal.
+const IBL_AMBIENT_PORT_SCALE := 1.0
 # The authored Guildhall night needs a small exposure lift under AGX; the
 # old ACES 1.0 path left the gate at p50 0.04-0.06 against the reference
 # 0.10-0.11. W5C scoped this to the bare preset id "midnight_clear", which NO
@@ -675,11 +696,37 @@ static func ambient_color(preset: Dictionary) -> Variant:
 	return null
 
 
+## The flat SkyLight substitute: a UI-space authored intensity mapped to a
+## Godot ambient energy and clamped. This is the `TAT2_IBL=off` path and is
+## **not** a measurement of the authored cube — see ibl_ambient_energy().
 static func ambient_energy(preset: Dictionary) -> Variant:
 	var raw: Variant = _section(preset, "sky").get("intensity")
 	if raw == null:
 		return null
 	return clampf(float(raw) * AMBIENT_UE_TO_GODOT, AMBIENT_ENERGY_MIN, AMBIENT_ENERGY_MAX)
+
+
+## Authored SkyLight Intensity: a unitless radiance scale on the specified
+## cubemap (2.0-2.5 for every shipped night preset). Unlike ambient_energy()
+## this is neither clamped nor scaled by AMBIENT_UE_TO_GODOT, because the IBL
+## path multiplies a *measured* linear radiance by it. A SkyLight that authors
+## no Intensity keeps UE's default of 1.0 rather than 0.0 (0.0 would erase the
+## cube instead of leaving it un-scaled).
+static func sky_intensity(preset: Dictionary) -> float:
+	var raw: Variant = _section(preset, "sky").get("intensity")
+	if raw == null:
+		return 1.0
+	return maxf(float(raw), 0.0)
+
+
+## Stage-1 IBL ambient energy from the CPU cosine irradiance of the authored
+## cubemap (cubemap_loader.gd measured it as linear radiance):
+##   energy = luminance(E(+Y)) * sky.intensity * IBL_AMBIENT_PORT_SCALE
+## Do not compare this with ambient_energy(): that one is a tuned 0..0.35
+## substitute for the IBL, so `7.7e-4 * 2.0 = 1.54e-3` here versus
+## `2.0 * 0.08 = 0.16` there is a different-quantity ratio, never a regression.
+static func ibl_ambient_energy(preset: Dictionary, irradiance_lum: float) -> float:
+	return maxf(irradiance_lum, 0.0) * sky_intensity(preset) * IBL_AMBIENT_PORT_SCALE
 
 
 static func background_color(preset: Dictionary) -> Variant:
@@ -807,8 +854,90 @@ static func enable_rain(preset: Dictionary) -> bool:
 	return bool(_section(preset, "rain").get("enabled", false))
 
 
+## Raw authored `rain.intensity`. This is the *source* value, not a mix
+## parameter: it can leave the authored game-parameter domain (`blood_moon`
+## authors 10.0). Consumers that feed the authored 0..1 RTPC or a 0..1 visual
+## parameter must go through `rain_intensity_01()`.
 static func rain_intensity(preset: Dictionary) -> Variant:
 	return _section(preset, "rain").get("intensity")
+
+
+## Authored rain domain. The authored `Weather_Rain_Intensity` RTPC curve is
+## authored in 0..1 (`0 -> -1.0 dB`, `0.65 -> 0.0 dB`) and every shipped preset
+## that enables rain sits in that interval (`gloomy`/`heavy_rain`/`stormy` 1.0,
+## `dusk_stormy` 0.5, `example2` 0.1, the off rows 1e-06). One preset,
+## `blood_moon`, authors **10.0** — outside the domain by 10x.
+const RAIN_INTENSITY_MIN: float = 0.0
+const RAIN_INTENSITY_MAX: float = 1.0
+## Phase 3B.3 bookkeeping: every out-of-domain value seen, and the preset ids
+## already reported (one loud line per preset, the rest counted).
+static var _rain_domain_total: int = 0
+static var _rain_domain_warned: Dictionary = {}
+
+
+## The ONE preset -> game-parameter converter for rain intensity (Phase 3B.3).
+##
+## `mission_controller` feeds the authored `Weather_Rain_Intensity` RTPC and
+## `weather_visuals` sizes the rain volume and the lens shader, so this is the
+## single mapping that keeps "the rain you see" and "the rain you hear" in one
+## domain. Before this each caller clamped to its own ceiling (0..1 for the RTPC
+## and the lens, 0..1.5 for the particle count), so `blood_moon` rendered 1.5x
+## the full rain volume while its audio and lens read 1.0.
+##
+## This is a *domain saturation*, not a unit conversion:
+##   * an in-domain value (0..1) passes through unchanged;
+##   * an out-of-domain value is clamped to the nearest endpoint and reported
+##     with `push_warning` (once per preset; every occurrence is counted by
+##     `rain_domain_warnings()`).
+## It deliberately does NOT divide 10.0 by 10 or read it as a percentage: no
+## authored unit for that value was recovered, and inventing a scale would be a
+## fabricated mapping. The 10.0 stays authored data for the asset owner; see
+## `docs/reports/phase3-audio-20261127.md`.
+##
+## Returns `null` when the preset carries no `rain.intensity` (the caller keeps
+## its parameter at the authored/control-plane default).
+static func rain_intensity_01(preset: Dictionary) -> Variant:
+	var raw: Variant = rain_intensity(preset)
+	if raw == null:
+		return null
+	var v: float = float(raw)
+	if not is_finite(v):
+		_rain_domain_note(v, preset)
+		return RAIN_INTENSITY_MIN
+	var clamped: float = clampf(v, RAIN_INTENSITY_MIN, RAIN_INTENSITY_MAX)
+	if not is_equal_approx(v, clamped):
+		_rain_domain_note(v, preset)
+	return clamped
+
+
+## Counts one out-of-domain rain intensity (and warns once per preset id).
+static func _rain_domain_note(value: float, preset: Dictionary) -> void:
+	_rain_domain_total += 1
+	var pid: String = str(preset.get("preset", "?"))
+	if _rain_domain_warned.has(pid):
+		return
+	_rain_domain_warned[pid] = true
+	push_warning("[weather_profile] rain.intensity %s for preset '%s' is outside the authored 0..1 domain; saturated to [%.1f, %.1f]. No authored unit for this value has been recovered, so it is reported as-is (see docs/reports/phase3-audio-20261127.md)" % [
+		str(value), pid, RAIN_INTENSITY_MIN, RAIN_INTENSITY_MAX])
+
+
+## Out-of-domain rain intensities seen this session (the warning path's count;
+## suite 121 asserts it so the branch cannot silently disappear).
+static func rain_domain_warnings() -> int:
+	return _rain_domain_total
+
+
+## Preset ids whose out-of-domain intensity has been reported (sorted).
+static func rain_domain_warned_presets() -> Array:
+	var out: Array = _rain_domain_warned.keys()
+	out.sort()
+	return out
+
+
+## QA hook: forgets the warning bookkeeping (suite 121 / a content reload).
+static func reset_rain_domain_warnings() -> void:
+	_rain_domain_total = 0
+	_rain_domain_warned.clear()
 
 
 static func ground_wetness(preset: Dictionary) -> Variant:
@@ -966,22 +1095,36 @@ static func apply_environment(env: Environment, moon: DirectionalLight3D, preset
 		# irradiance (cubemap_loader.gd). `TAT2_IBL=off` (default) returns
 		# available=false and everything above stays byte-for-byte today's.
 		# `ambient` replaces the flat SkyLight colour with the measured
-		# irradiance; energy is the raw luminance (no AMBIENT_ENERGY_MAX clamp:
-		# stage 1 must not hide its own measurement behind a tuning ceiling).
+		# irradiance and its energy with `ibl_ambient_energy()`:
+		#   lum(E(+Y)) * sky.intensity * IBL_AMBIENT_PORT_SCALE
+		# i.e. the authored intensity IS applied and the one port scale is the
+		# identity (see IBL_AMBIENT_PORT_SCALE). The flat path's
+		# `intensity * 0.08` is deliberately not mixed in: it is a tuned
+		# substitute for the IBL, not a unit conversion, so the two numbers are
+		# different quantities and their ratio is not an error.
 		var cm_amb: Dictionary = CubemapLoader.ambient_for_preset(preset)
 		if bool(cm_amb.get("available", false)):
+			var irradiance_lum: float = float(cm_amb.get("lum", cm_amb.get("energy", 0.0)))
+			var intensity: float = sky_intensity(preset)
+			var ibl_energy: float = ibl_ambient_energy(preset, irradiance_lum)
 			env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 			env.ambient_light_color = cm_amb.get("color", env.ambient_light_color) as Color
-			env.ambient_light_energy = float(cm_amb.get("energy", env.ambient_light_energy))
+			env.ambient_light_energy = ibl_energy
 			if not _cubemap_ambient_logged:
 				_cubemap_ambient_logged = true
-				print("TAT-2 IBL ambient: mode=%s cubemap=%s energy=%.5f color=(%.4f,%.4f,%.4f) (CPU cosine irradiance, no clamp)" % [
+				var flat_e: Variant = ambient_energy(preset)
+				print("TAT-2 IBL ambient: mode=%s cubemap=%s irradiance_lum=%.6f authored_intensity=%.3f port_scale=%.3f energy=%.6f color=(%.4f,%.4f,%.4f) (energy=lum*intensity*scale, linear HDR radiance; flat_SkyLight_substitute=%s is clamp(intensity*%.2f), a different quantity)" % [
 					str(cm_amb.get("mode", "")),
 					str(cm_amb.get("cubemap", "")),
-					float(cm_amb.get("energy", 0.0)),
+					irradiance_lum,
+					intensity,
+					IBL_AMBIENT_PORT_SCALE,
+					ibl_energy,
 					(env.ambient_light_color as Color).r,
 					(env.ambient_light_color as Color).g,
 					(env.ambient_light_color as Color).b,
+					str(flat_e),
+					AMBIENT_UE_TO_GODOT,
 				])
 		var bg: Variant = background_color(preset)
 		if bg != null:

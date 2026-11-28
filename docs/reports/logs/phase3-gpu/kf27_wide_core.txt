@@ -1,0 +1,9 @@
+# KF27 foyer_beam_wide saturated-core extent, 2026-11-28 (documentation re-read of the saved frame)
+# The frame is gitignored (build/qa/p0b/captures/kf27_wide/foyer_beam_wide.png); regenerate it with:
+#   build/qa/p0b_capture.sh --poses=foyer_beam_wide --tag=kf27_wide
+# Method: Rec.709 luma on the full-res RGB; 'saturated' = luma >= 250.
+
+file=build/qa/p0b/captures/kf27_wide/foyer_beam_wide.png size=1920x1080
+peak row 38.8% = y 419; saturated runs (luma>=250, >=4 px):
+  x 0-219 px = 0.0-11.4% of width
+rows 35-45%: saturated pixels=9990, x range 0.0-14.1% (left edge at 0.0% -> clipped)

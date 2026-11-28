@@ -17,8 +17,16 @@ transfer:
     (PosX, NegX, PosY, NegY, PosZ, NegZ) — the order of the six slices in the
     cooked TextureCube. The extractor writes the names, so the runtime never
     guesses a face index;
-  - `transfer` is "linear" for TC_HDR/float formats (SRGB=false) and "srgb"
-    for the 8-bit face PNGs, so `cubemap_loader.gd` converts once.
+  - `transfer` is "linear" for the HDR (`.hdr`) faces and for TC_HDR/float
+    cubemaps that were exported as 8-bit PNG, and "srgb" only for an authored
+    sRGB 8-bit cube. An HDR face is linear by construction: a manifest that
+    calls it "srgb" is rejected instead of applying a second gamma transform;
+  - `face_mean` is the linear RGB face mean when the extractor recorded
+    `face_mean_linear`; the 8-bit clamped mean (`face_mean_8bit`) is only used
+    for non-HDR cubes and is labelled `face_mean_space: "encoded8"`. The
+    per-face `face_energy` (luminance of that mean) is what the IBL path can
+    compare with the authored SkyLight energy — it is never invented when the
+    HDR mean is absent.
 
 A clean extraction without the `cubemaps` pass is not an error: the index is
 written with zero cubemaps and `available=false` consumers (today's look).
@@ -27,6 +35,7 @@ written cube must never be used as ambient light.
 """
 
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -43,6 +52,40 @@ def _require(rec: dict, key: str, path: Path):
     if key not in rec:
         raise ValueError("%s: missing '%s'" % (path, key))
     return rec[key]
+
+
+def _face_means(rec: dict, hdr: bool, manifest_path: Path) -> tuple[dict | None, str]:
+    """Pick the face-mean set the loader may trust.
+
+    HDR faces carry the real linear energy (`face_mean_linear`); the 8-bit
+    clamped mean is near zero for the authored sky cube and must never be
+    presented as the energy. Non-HDR cubes keep the historical `face_mean_8bit`
+    value, labelled as encoded 8-bit so a consumer cannot mistake it for linear.
+    """
+    linear = rec.get("face_mean_linear")
+    encoded = rec.get("face_mean_8bit") or rec.get("face_mean")
+    source = linear if isinstance(linear, dict) else (None if hdr else encoded)
+    space = "linear" if isinstance(linear, dict) else "encoded8"
+    if source is None:
+        return None, space
+    out: dict = {}
+    for name in FACE_ORDER:
+        m = source.get(name)
+        if not isinstance(m, list) or len(m) != 3:
+            continue
+        try:
+            rgb = [float(c) for c in m]
+        except (TypeError, ValueError):
+            raise ValueError(
+                "%s: face mean '%s' is not three numbers (%r)"
+                % (manifest_path, name, m)
+            )
+        if not all(math.isfinite(c) for c in rgb):
+            raise ValueError(
+                "%s: face mean '%s' is not finite (%r)" % (manifest_path, name, m)
+            )
+        out[name] = [round(c, 6) for c in rgb]
+    return (out or None), space
 
 
 def parse_cube_dir(path: Path) -> dict:
@@ -73,6 +116,7 @@ def parse_cube_dir(path: Path) -> dict:
     if not isinstance(faces, dict):
         raise ValueError("%s: faces is not an object" % manifest_path)
     out_faces = {}
+    face_exts = set()
     for name in FACE_ORDER:
         rel = faces.get(name)
         if not isinstance(rel, str) or not rel:
@@ -83,14 +127,35 @@ def parse_cube_dir(path: Path) -> dict:
                 "%s: face '%s' file is missing (%s)" % (manifest_path, name, disk)
             )
         out_faces[name] = "%s/%s/%s" % (RES_PREFIX, cube_id, rel)
-    means = rec.get("face_mean_8bit") or rec.get("face_mean")
-    out_means = None
-    if isinstance(means, dict):
-        out_means = {}
-        for name in FACE_ORDER:
-            m = means.get(name)
-            if isinstance(m, list) and len(m) == 3:
-                out_means[name] = [round(float(c), 5) for c in m]
+        face_exts.add(Path(rel).suffix.lower())
+    # An HDR cube is six .hdr faces or six PNGs — never a mixed set, and the
+    # physical extension wins over a stale manifest flag.
+    hdr_exts = {".hdr", ".exr"}
+    if face_exts & hdr_exts and face_exts - hdr_exts:
+        raise ValueError(
+            "%s: mixed HDR/LDR face extensions %s" % (manifest_path, sorted(face_exts))
+        )
+    hdr = bool(face_exts & hdr_exts)
+    declared_hdr = bool(rec.get("hdr", False)) or rec.get("encoding") == "hdr"
+    if declared_hdr != hdr:
+        raise ValueError(
+            "%s: manifest hdr=%r does not match the face files %s"
+            % (manifest_path, declared_hdr, sorted(face_exts))
+        )
+    if hdr and transfer != "linear":
+        # HDR is already linear; an sRGB label would make the loader apply a
+        # second gamma transform. Fail closed instead of inventing a transfer.
+        raise ValueError(
+            "%s: HDR faces are linear but transfer='%s' (double-gamma guard)"
+            % (manifest_path, transfer)
+        )
+    out_means, mean_space = _face_means(rec, hdr, manifest_path)
+    out_energy = None
+    if out_means:
+        out_energy = {
+            name: round(0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2], 6)
+            for name, rgb in out_means.items()
+        }
     return {
         "id": cube_id,
         "ue_path": ue_path,
@@ -98,9 +163,14 @@ def parse_cube_dir(path: Path) -> dict:
         "width": width,
         "height": height,
         "pixel_format": rec.get("pixel_format"),
+        "hdr": hdr,
+        "encoding": "hdr" if hdr else "png",
         "transfer": transfer,
         "faces": out_faces,
-        **({"face_mean": out_means} if out_means else {}),
+        **(
+            {"face_mean": out_means, "face_mean_space": mean_space} if out_means else {}
+        ),
+        **({"face_energy": out_energy} if out_energy else {}),
     }
 
 
@@ -165,8 +235,14 @@ def main() -> None:
     )
     for cube_id, rec in cubes.items():
         means = rec.get("face_mean") or {}
+        energies = rec.get("face_energy") or {}
         gauge = ""
-        if "py" in means and "ny" in means:
+        if "py" in energies and "ny" in energies:
+            gauge = " py_lum=%.6f ny_lum=%.6f" % (
+                energies["py"],
+                energies["ny"],
+            )
+        elif "py" in means and "ny" in means:
             gauge = " py_lum=%.4f ny_lum=%.4f" % (
                 0.2126 * means["py"][0]
                 + 0.7152 * means["py"][1]
@@ -176,12 +252,13 @@ def main() -> None:
                 + 0.0722 * means["ny"][2],
             )
         print(
-            "  %-28s %s %dx%d %s%s"
+            "  %-28s %s %dx%d %s%s%s"
             % (
                 cube_id,
                 rec["ue_path"],
                 rec["width"],
                 rec["height"],
+                rec["encoding"],
                 rec["transfer"],
                 gauge,
             )

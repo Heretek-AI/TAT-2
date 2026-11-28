@@ -9,7 +9,7 @@ QA="$ROOT/build/qa"
 OUT_DIR="/tmp/opencode/zip_hang_final"
 LOG="$OUT_DIR/capture_zipwire_hang.log"
 XVFBLOG="$OUT_DIR/xvfb_zipwire_hang.log"
-GODOT_BIN="/home/john/Projects/TAT-2/tools/godot"
+GODOT_BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/tools/godot"
 
 cd "$ROOT" || exit 1
 mkdir -p "$OUT_DIR"

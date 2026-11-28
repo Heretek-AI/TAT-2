@@ -1,0 +1,10 @@
+== FINAL_GATE gate_manifest
+COMMAND: python3 build/qa/gate_manifest.py
+CWD: .
+STARTED: 2026-11-28T08:56:01-05:00
+
+GATE_MANIFEST: tracked=112 reachable=73 retired=39 orphans=0
+GATE_MANIFEST: PASS
+
+EXIT: 0
+FINISHED: 2026-11-28T08:56:02-05:00

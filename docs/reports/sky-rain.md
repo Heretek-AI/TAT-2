@@ -1,7 +1,7 @@
 # Sky + Rain Implementation (stage report)
 
 Stage: replace flat `BG_COLOR` sky with real sky data + weather-driven rain.
-Date: 2026-11-16. Repo: `/home/john/Projects/TAT-2` (Godot 4.7.2).
+Date: 2026-11-16. Repo: `<repo>` (Godot 4.7.2).
 
 ## Deliverables
 

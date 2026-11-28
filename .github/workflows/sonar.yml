@@ -43,6 +43,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Detect SONAR_TOKEN
         id: token
         env:
@@ -54,10 +55,11 @@ jobs:
           else
             echo "present=true" >> "$GITHUB_OUTPUT"
           fi
-      # SonarSource/sonarqube-scan-action v5 (pinned commit, not a moving tag)
+      # SonarSource/sonarqube-scan-action v8.5.1 (patched for GHSA-5xq9-5g24-4g6f;
+      # pinned commit, not a moving tag)
       - name: SonarCloud scan
         if: steps.token.outputs.present == 'true'
-        uses: SonarSource/sonarqube-scan-action@2f77a1ec69fb1d595b06f35ab27e97605bdef703
+        uses: SonarSource/sonarqube-scan-action@70bad232163b09d998ea0707ee80c0ec80798c16
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: https://sonarcloud.io
@@ -68,6 +70,8 @@ jobs:
     steps:
       # actions/checkout v4.4.0
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
       # actions/setup-python v5.6.0
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:

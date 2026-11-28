@@ -206,7 +206,7 @@ one authored container remaining unopenable and out of G-1 scope. Correct.
 
 ## 8. Worktree traps and shared data — PASS
 
-* `game/data/generated` is a symlink to `/home/john/Projects/TAT-2/game/data/generated`; the shared
+* `game/data/generated` is a symlink to `<repo>/game/data/generated`; the shared
   `containers.json` is still the old 4,224-byte 5-class file, mtime
   `2026-11-26 22:16:58` — before the lane. The shared `game/data` was **not**
   regenerated.

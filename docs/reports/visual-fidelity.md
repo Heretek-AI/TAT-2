@@ -1,7 +1,7 @@
 # TAT-2 Visual-Fidelity Wave Report (Phases 1–3)
 
 - **Date**: 2026-11-18
-- **Repo / Branch**: `/home/john/Projects/TAT-2` (`main`)
+- **Repo / Branch**: `<repo>` (`main`)
 - **Engine / Renderer**: Godot `4.7.2.stable.flathub` — Forward+ / Jolt
 - **Vulkan Live QA Hardware**: `Vulkan 1.4.357 - Forward+ - NVIDIA GeForce RTX 4070 Laptop GPU` (via `Xvfb :99`, `1280x720`)
 - **Reference Screenshots**: `/home/john/Pictures/Screenshots/` (30 official UE5 3840x2160 captures)

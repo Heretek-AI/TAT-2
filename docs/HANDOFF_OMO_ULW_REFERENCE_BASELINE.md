@@ -1,7 +1,9 @@
+> **SUPERSEDED — see [docs/HANDOFF_NEXT_AGENT.md](HANDOFF_NEXT_AGENT.md).**
+
 # `omo` (`ulw`) Master Handoff: Complete the Official-Footage Reference Baseline
 
 > **How to launch this in standalone `omo` (pi coding agent):**
-> Run `omo` inside `/home/john/Projects/TAT-2` and send:
+> Run `omo` inside `<repo>` and send:
 > ```text
 > ulw Read and execute docs/HANDOFF_OMO_ULW_REFERENCE_BASELINE.md end to end. Use mass-parallel background agents for independent waves, verify every deliverable deterministically and adversarially, and do not stop until every acceptance gate in §8 passes.
 > ```
@@ -10,10 +12,10 @@
 
 ## 0. Mission & Orchestration Mode (`ulw` / Mass Parallel)
 
-You are completing the **Official Gameplay Footage Reference Baseline** in `/home/john/Projects/TAT-2` (a Godot 4.7 Forward+ port of the UE5 game *Thick As Thieves*). The user recorded gameplay footage of the **official** UE5 build (`/home/john/Videos/clip_1,795,033,698,901.mp4`) and will later record the matching slice from their Godot port for a 1:1 side-by-side comparison.
+You are completing the **Official Gameplay Footage Reference Baseline** in `<repo>` (a Godot 4.7 Forward+ port of the UE5 game *Thick As Thieves*). The user recorded gameplay footage of the **official** UE5 build (`/home/john/Videos/clip_1,795,033,698,901.mp4`) and will later record the matching slice from their Godot port for a 1:1 side-by-side comparison.
 
 ### Execution Architecture (Standalone `omo` `ulw` Mode)
-- **Do NOT use `opencode-teamwork-v2` (`teamwork_*` tools) or per-task git worktrees.** Work directly in `/home/john/Projects/TAT-2` using `omo` **ultrawork (`ulw`)** mass-parallel background agents and atomic file/Hashline edits.
+- **Do NOT use `opencode-teamwork-v2` (`teamwork_*` tools) or per-task git worktrees.** Work directly in `<repo>` using `omo` **ultrawork (`ulw`)** mass-parallel background agents and atomic file/Hashline edits.
 - **No-collision rule for parallel writers:** When fanning out across segments or research tasks, each parallel agent MUST write to its own staging file under `docs/reference/clip_1795033698901/_build/` (e.g., `_build/seg_s05_s13.md`, `_build/audio_metrics.md`, `_build/citations_verified.md`), and the lead orchestrator merges them into `BREAKDOWN.md` / `REFERENCE_BASELINE.md` once all wave agents return.
 - **This is a docs-only task.** You will write zero game code.
 - **Never stop halfway:** Keep driving through Waves 0 → 4 until every check in §8 passes and you have run the adversarial spot checks.
@@ -22,7 +24,7 @@ You are completing the **Official Gameplay Footage Reference Baseline** in `/hom
 
 ## 1. Current State on Disk (Verified M1 + M2 — Do NOT Redo)
 
-Prior work (M1 + M2, including `hud-semantics` and `m2-audit` fixes) has already been synced into `/home/john/Projects/TAT-2/docs/reference/clip_1795033698901/`.
+Prior work (M1 + M2, including `hud-semantics` and `m2-audit` fixes) has already been synced into `<repo>/docs/reference/clip_1795033698901/`.
 
 | Artifact | Status | Details |
 |---|---|---|
@@ -123,7 +125,7 @@ Read/reference these in order of authority (when video and docs disagree, **the 
 ### Wave 0: Preflight & Grounding (Lead Orchestrator)
 1. Confirm baseline integrity before launching Wave 1:
    ```bash
-   cd /home/john/Projects/TAT-2
+   cd <repo>
    /usr/bin/python3 docs/reference/clip_1795033698901/tools/render_annotations.py --check
    /usr/bin/python3 docs/reference/clip_1795033698901/_build/m2_audit_validate.py
    ```

@@ -30,6 +30,11 @@ build/qa/*
 # beam probe and p0b_roi_stats.py both read it); capture PNGs/manifests stay
 # ignored by the rules above.
 !build/qa/kf27_beam_reference.json
+# Phase 3 test-manifest/errscan: the explicit retired-test list and the engine
+# error allowlist are tracked gate inputs (gate_manifest.py and e2e_errscan.sh
+# fail closed without them), not build artifacts.
+!build/qa/retired_tests.txt
+!build/qa/e2e_errscan_allowlist.txt
 .agents/
 .claude/
 .claude-flow/
@@ -38,3 +43,5 @@ extracted.bak/
 game/data/generated.bak/
 extracted.bak/*
 game/data/generated.bak/*
+# stray 0-byte `-1` shell artifact (never tracked; Phase 3 hygiene)
+/-1

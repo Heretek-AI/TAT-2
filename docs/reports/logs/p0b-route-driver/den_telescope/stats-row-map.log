@@ -1,0 +1,4 @@
+P0B_ROUTE_STATS wrote docs/reports/logs/p0b-route-driver/den_telescope/row_map.json rows=120 tokens_emitted=0
+P0B_ROUTE_STATS rows=120 beats=27 rows_with_beats=120 rows_without=0 tokens_emitted=0 route_claim=none
+P0B_ROUTE_STATS npc_measurement guards=4 civilians=3 nearest_m=85.4 unreachable=S19,S20,S22,S23
+P0B_ROUTE_STATS token_policy route_claim is not 'played' (staged capture / short driver segment): no row token may be emitted

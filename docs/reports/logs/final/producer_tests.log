@@ -1,7 +1,7 @@
 == FINAL_GATE producer_tests
 COMMAND: qa_producer_tests
-CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
-STARTED: 2026-11-27T17:26:39-05:00
+CWD: .
+STARTED: 2026-11-28T09:17:28-05:00
 
 == tools/test_check_consumers.py
 ok unconsumed table fails the audit
@@ -29,6 +29,150 @@ ok * does not span directories
 ok parser reads literal roots and loop roots
 ok an unparseable root argument fails closed
 PASS: 24 checks
+== tools/test_cubemap_export_check.py
+PASS: a complete HDR cube passes
+CUBEMAP_EXPORT_CHECK PASS cubes=1
+PASS: the CLI exits 0 on a good tree
+PASS: the PNG cube is still counted
+PASS: PNG faces are refused
+PASS: a manifest hdr=false is refused
+CUBEMAP_EXPORT_CHECK FAIL: cubemap_ground_floor_01: manifest hdr=False (expected true)
+CUBEMAP_EXPORT_CHECK FAIL: cubemap_ground_floor_01: manifest encoding='png' (expected 'hdr')
+CUBEMAP_EXPORT_CHECK FAIL: cubemap_ground_floor_01: face 'px' is 'face_px.png' — an 8-bit/PNG face is the quantized cube this check exists to catch
+CUBEMAP_EXPORT_CHECK FAIL: cubemap_ground_floor_01: face 'nx' is 'face_nx.png' — an 8-bit/PNG face is the quantized cube this check exists to catch
+CUBEMAP_EXPORT_CHECK FAIL: cubemap_ground_floor_01: face 'py' is 'face_py.png' — an 8-bit/PNG face is the quantized cube this check exists to catch
+CUBEMAP_EXPORT_CHECK FAIL: cubemap_ground_floor_01: face 'ny' is 'face_ny.png' — an 8-bit/PNG face is the quantized cube this check exists to catch
+CUBEMAP_EXPORT_CHECK FAIL: cubemap_ground_floor_01: face 'pz' is 'face_pz.png' — an 8-bit/PNG face is the quantized cube this check exists to catch
+CUBEMAP_EXPORT_CHECK FAIL: cubemap_ground_floor_01: face 'nz' is 'face_nz.png' — an 8-bit/PNG face is the quantized cube this check exists to catch
+PASS: the CLI exits 2 on a PNG cube
+PASS: a stale PNG beside an HDR manifest is refused
+PASS: a missing face file is refused
+PASS: an HDR cube with srgb transfer is refused
+PASS: an empty Cubemaps directory fails closed
+PASS: a missing Cubemaps directory fails closed
+PASS: a mixed tree reports only the offending cube
+CUBEMAP_EXPORT_CHECK_TEST: PASS checks=12
+== tools/test_extractor_config.py
+PASS: tables roots include TAT/Content/Destructibles/
+PASS: the Destructibles root keeps its trailing slash
+PASS: levels() queues LS_ level-sequence packages
+PASS: levels() still queues .umap packages
+PASS: LS_ is a file-name prefix, not a path substring
+PASS: DefaultOpts stays non-HDR (other texture passes unchanged)
+PASS: AnimOpts stays non-HDR
+PASS: CubemapOpts sets exportHdrTexturesAsHdr true
+PASS: the cubemaps command uses CubemapOpts
+PASS: exactly one method hard-codes HDR true (CubemapOpts)
+PASS: the cubemaps command no longer uses the 8-bit default opts
+PASS: the cubemap manifest records hdr
+PASS: an HDR cube is always labelled linear
+PASS: the cubemap manifest records the unclamped linear face mean
+PASS: the face-mean format set includes PF_FloatRGBA
+PASS: the face-mean format set includes PF_A32B32G32R32F
+PASS: the face-mean format set includes PF_R32_FLOAT
+PASS: the face-mean format set includes PF_R16F
+PASS: the face-mean set does not claim undecodable/unsupported PF_FloatRGB
+PASS: the face-mean set does not claim undecodable/unsupported PF_R32G32B32F
+PASS: the face-mean gate is an explicit format set, not IsHDR
+PASS: FaceMeanLinear gates on the explicit set (no dead IsHDR branch)
+PASS: A32B32G32R32F reads the library's flipped component order
+PASS: an executable face-mean self-test exists
+PASS: the self-test uses the library block bytes/components
+PASS: the self-test requires Supported and a successful encode
+PASS: 8-bit means and linear means are recorded separately
+PASS: Program.cs still routes the json/cubemaps commands
+PASS: Program.cs accepts --fail-on-error
+PASS: a failed dump exits non-zero under --fail-on-error
+PASS: Exporter exposes the counted failure total
+PASS: Program.cs routes the face-mean self-test before any pak mount
+PASS: cube ids are sanitised
+PASS: the cube directory is asserted under Cubemaps/
+PASS: stale faces are deleted only after a successful encode
+PASS: the manifest is swapped in last
+PASS: Makefile has a standalone json stage
+PASS: make json passes the resolved mapping file
+PASS: make json fails non-zero when a package dump fails
+PASS: make json is the filtered Destructibles dump
+PASS: Makefile documents extract-json as an alias
+PASS: make extract does not repeat the standalone Destructibles json stage
+PASS: make extract re-encodes cubemaps so HDR replaces stale PNG faces
+PASS: make extract keeps the tables and levels stages
+PASS: the nav filter closes with $$' so make does not eat the quote
+PASS: no bare $' remains in the extract recipe
+PASS: cubemaps --overwrite is reached after the nav stage
+EXTRACTOR_CONFIG_TEST: PASS checks=47
+== tools/test_extract_recipe.py
+PASS: make extract exits 0 with a stub extractor
+PASS: make extract has no shell quote/syntax error
+PASS: make extract runs the exact command order
+PASS: make extract no longer repeats the Destructibles json stage
+PASS: cubemaps runs first and is reached before the nav filter
+PASS: cubemaps passes the resolved --usmap and --fail-on-error
+PASS: the nav filter arrives closed and unmodified
+PASS: make extract fails when the cube tree is still 8-bit PNG
+PASS: the failure names the 8-bit faces
+PASS: make extract fails on a stale PNG beside an HDR manifest
+PASS: make extract without a .usmap exits 2
+PASS: the missing-mapping failure names the cubemaps pass
+PASS: the no-usmap failure runs no dump
+PASS: make extract propagates a failing cubemaps dump
+PASS: make json exits 0 with a stub
+PASS: make json passes --usmap/--fail-on-error/--filter
+PASS: make json without a .usmap exits 2
+PASS: the missing-mapping failure names the cause
+PASS: the no-usmap failure runs no dump
+PASS: make json propagates a failing dump
+EXTRACT_RECIPE_TEST: PASS checks=20
+== tools/test_face_mean.py
+PASS: selftest-face-mean exits 0
+PASS: PF_FloatRGBA has a library layout
+PASS: PF_FloatRGBA uses the library block bytes/components (8/4)
+PASS: PF_FloatRGBA is Supported in the pinned library
+PASS: PF_FloatRGBA produced a face mean
+PASS: PF_FloatRGBA is non-null
+PASS: PF_FloatRGBA matches the fixture
+PASS: PF_FloatRGBA mean is (0.25,0.5,0.75)
+PASS: PF_FloatRGBA was encoded by the writer
+PASS: PF_FloatRGBA encodes as .hdr
+PASS: PF_A32B32G32R32F has a library layout
+PASS: PF_A32B32G32R32F uses the library block bytes/components (16/4)
+PASS: PF_A32B32G32R32F is Supported in the pinned library
+PASS: PF_A32B32G32R32F produced a face mean
+PASS: PF_A32B32G32R32F is non-null
+PASS: PF_A32B32G32R32F matches the fixture
+PASS: PF_A32B32G32R32F mean is (0.25,0.5,0.75)
+PASS: PF_A32B32G32R32F was encoded by the writer
+PASS: PF_A32B32G32R32F encodes as .hdr
+PASS: PF_R32_FLOAT has a library layout
+PASS: PF_R32_FLOAT uses the library block bytes/components (4/1)
+PASS: PF_R32_FLOAT is Supported in the pinned library
+PASS: PF_R32_FLOAT produced a face mean
+PASS: PF_R32_FLOAT is non-null
+PASS: PF_R32_FLOAT matches the fixture
+PASS: PF_R32_FLOAT mean is (0.5,0.5,0.5)
+PASS: PF_R32_FLOAT was encoded by the writer
+PASS: PF_R32_FLOAT encodes as .hdr
+PASS: PF_R16F has a library layout
+PASS: PF_R16F uses the library block bytes/components (2/1)
+PASS: PF_R16F is Supported in the pinned library
+PASS: PF_R16F produced a face mean
+PASS: PF_R16F is non-null
+PASS: PF_R16F matches the fixture
+PASS: PF_R16F mean is (0.5,0.5,0.5)
+PASS: PF_R16F was encoded by the writer
+PASS: PF_R16F encodes as .hdr
+PASS: the self-test reports PASS formats=4
+PASS: an unsupported layout is reported as null
+PASS: PF_FloatRGB is reported as excluded
+PASS: PF_FloatRGB is not in the readable set
+PASS: PF_FloatRGB matches the pinned library Supported flag
+PASS: PF_FloatRGB block bytes are the library value (4)
+PASS: PF_R32G32B32F is reported as excluded
+PASS: PF_R32G32B32F is not in the readable set
+PASS: PF_R32G32B32F matches the pinned library Supported flag
+PASS: PF_R32G32B32F block bytes are the library value (12)
+PASS: no supported format is reported as null (dead-branch guard)
+FACE_MEAN_TEST: PASS checks=48
 == tools/test_manifest_audit.py
 ok bootstrap + normal
 ok missing baseline fails then bootstrap
@@ -79,6 +223,44 @@ ok every index is in range and index_count matches (all hulls)
 ok hat hull keeps its 180 authored indices in opt-in mode
 ok two runs are byte-identical in both modes
 PASS: 28 checks
+== tools/test_parse_contracts.py
+PASS: LootTheRoom row carries the authored 3300/1200/1200 s
+PASS: LootTheRoom row keeps its own quest graph
+PASS: Guildhall map row keeps the shipped 7200/2700/1800 s
+PASS: a missing mission row produces no invented duration
+Wrote 1 contracts + 5 mission durations + 0 loot goal ladders -> /tmp/tmpvlqa9vpv/out/contracts.json
+PASS: main keeps the Guildhall map window separate from the Cleanout row
+PASS: main includes Mission.Guildhall.LootTheRoom in mission_durations
+PASS: the Cleanout row is labelled as a side mission
+PASS: Cleanout does not overwrite the map reward row
+PASS: real extracted LootTheRoom row is 3300/1200/1200
+PARSE_CONTRACTS_TEST: PASS checks=9
+== tools/test_parse_cubemap.py
+PASS: HDR cube keeps transfer=linear
+PASS: HDR cube records hdr/encoding
+PASS: HDR face_mean is the linear mean, not the 8-bit clamp
+PASS: HDR face_mean_space is linear
+PASS: HDR face_energy is the linear luminance
+PASS: HDR energy is above the 8-bit quantization floor
+PASS: HDR face paths keep the .hdr extension
+PASS: HDR + transfer=srgb is rejected
+PASS: hdr flag vs PNG faces is rejected
+PASS: mixed face extensions are rejected
+PASS: 8-bit sRGB cube keeps transfer=srgb
+PASS: 8-bit cube is not labelled HDR
+PASS: 8-bit face mean is labelled encoded8, never linear
+PASS: 8-bit face mean keeps the historical values
+PASS: HDR without a linear mean exposes no invented energy
+PASS: a missing face file is rejected
+PASS: a non-finite face mean is rejected
+cubemaps: 2 converged, 0 rejected -> /tmp/tmpmublidyb/out/cubemaps.json
+  cubemap_ground_floor_01      /Game/MaterialLibrary/Utility/cubemap_ground_floor_01 4x4 hdrlinear py_lum=0.000286 ny_lum=0.000286
+  daylight                     /Game/MaterialLibrary/Utility/daylight 4x4 pngsrgb py_lum=0.294125 ny_lum=0.294125
+PASS: main writes the cubemap index schema
+PASS: main keeps the valid HDR cube
+PASS: main keeps the valid 8-bit cube
+PASS: main indexes the cube by UE path
+PARSE_CUBEMAP_TEST: PASS checks=21
 == tools/test_parse_curves.py
 ok fixture: producer exits 0
 ok fixture: curve table file written
@@ -131,7 +313,7 @@ PASS: 10 checks
 == tools/test_parse_level_splines.py
 ..........
 ----------------------------------------------------------------------
-Ran 10 tests in 0.010s
+Ran 10 tests in 0.009s
 
 OK
 == tools/test_parse_project_ini.py
@@ -202,7 +384,7 @@ PASS: prompt contrast is high and unclipped
 PASS: briefing finds the 11 ink lines with no overflow
 PASS: pause dim ratio measures the darkened world
 PASS: pause blur ratio measures the softened world
-UI_PIXEL_STATS dir=/tmp/tmp1lt3u5by frames=5
+UI_PIXEL_STATS dir=/tmp/tmphtx9054t frames=5
   briefing@240x180  briefing lines=11 last_y=142 margin=20 overflow=False
   doors@240x160  prompt contrast=12.77 ink=400 clip=-
   pause@240x160  modal contrast=1.00 ink=800 clip=-  pause dim=0.4941 blur=0.0632
@@ -210,7 +392,7 @@ UI_PIXEL_STATS dir=/tmp/tmp1lt3u5by frames=5
   safe_room@240x160  gem lit=0.078 ang=0.0 dir=[1.0, 0.0] ring=5px  compass rule_row=41 thick=2 span=160 heading=NE
 UI_PIXEL_STATS PASS rows=5
 PASS: clean capture reports PASS
-UI_PIXEL_STATS dir=/tmp/tmp1lt3u5by frames=5
+UI_PIXEL_STATS dir=/tmp/tmphtx9054t frames=5
   briefing@240x180  briefing lines=11 last_y=142 margin=20 overflow=False
   doors@240x160  prompt contrast=12.77 ink=400 clip=-
   pause@240x160  modal contrast=1.00 ink=800 clip=-  pause dim=0.4941 blur=0.0632
@@ -218,14 +400,14 @@ UI_PIXEL_STATS dir=/tmp/tmp1lt3u5by frames=5
   safe_room@240x160  gem lit=0.078 ang=0.0 dir=[1.0, 0.0] ring=5px  compass rule_row=41 thick=2 span=160 heading=NE
 UI_PIXEL_STATS PASS rows=5
 PASS: clean capture passes --strict
-UI_PIXEL_STATS dir=/tmp/tmpc2cyeeby frames=2
+UI_PIXEL_STATS dir=/tmp/tmp3b8un9qb frames=2
   doors_clip@240x160  prompt contrast=1.00 ink=490 clip=right
   safe_room@240x160  gem lit=0.078 ang=0.0 dir=[1.0, 0.0] ring=5px  compass rule_row=41 thick=2 span=160 heading=NE
 UI_PIXEL_STATS FAIL doors_clip@240x160 prompt contrast 1.00 < 4.5
 UI_PIXEL_STATS FAIL doors_clip@240x160 prompt text clipped at right
 UI_PIXEL_STATS SUMMARY rows=2 fails=2
 PASS: text clipped at the ROI edge fails --strict
-UI_PIXEL_STATS dir=/tmp/tmp57zasc6i frames=2
+UI_PIXEL_STATS dir=/tmp/tmprq63_zr2 frames=2
   pause@240x160  modal contrast=1.00 ink=1072 clip=-  pause dim=0.498 blur=0.8911
   pause_backdrop@240x160  modal contrast=1.00 ink=672 clip=-
 UI_PIXEL_STATS FAIL pause@240x160 blur_ratio 0.89 > 0.60
@@ -254,7 +436,8 @@ PASS 7-vertex poly
 PASS NavArea_Null poly
 PASS missing nav_data_config
 PASS one-way direction
+PASS parallel reverse census (cluster-wide signed directions)
 PRODUCER_TESTS PASS
 
 EXIT: 0
-FINISHED: 2026-11-27T17:28:43-05:00
+FINISHED: 2026-11-28T09:19:27-05:00

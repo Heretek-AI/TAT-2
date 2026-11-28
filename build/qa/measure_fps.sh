@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -u
-ROOT="/home/john/Projects/TAT-2"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CONTRACT="${1:?contract}"
 RES="${2:?WxH}"
 FRAMES="${3:?frames}"

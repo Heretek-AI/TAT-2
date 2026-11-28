@@ -69,7 +69,7 @@ func _run() -> void:
 	await RenderingServer.frame_post_draw
 	await RenderingServer.frame_post_draw
 	var img: Image = root.get_texture().get_image()
-	img.save_png("/home/john/Projects/TAT-2/build/qa/sky_moon_after_moon_fogoff.png")
+	img.save_png(ProjectSettings.globalize_path("res://../build/qa/sky_moon_after_moon_fogoff.png").simplify_path())
 
 	cam.global_position = Vector3(107.0, 27.0, -5.0)
 	await process_frame
@@ -77,7 +77,7 @@ func _run() -> void:
 	await RenderingServer.frame_post_draw
 	await RenderingServer.frame_post_draw
 	img = root.get_texture().get_image()
-	img.save_png("/home/john/Projects/TAT-2/build/qa/sky_moon_after_balcony_fogoff.png")
+	img.save_png(ProjectSettings.globalize_path("res://../build/qa/sky_moon_after_balcony_fogoff.png").simplify_path())
 	print("DIAG saved ", img.get_width(), "x", img.get_height(),
 		" fog_sky_affect_after=", env.fog_sky_affect)
 	quit(0)

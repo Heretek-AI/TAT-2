@@ -27,6 +27,9 @@ var coop_mode: String = "Solo"
 ## false: the Den table keeps normal contract flow unless a caller (QA/test or
 ## a future free-play entry) opts in.
 var free_play: bool = false
+## First-class Cleanout flag: true when the table's cleanout entry was used.
+## Threads the side-mission id into prep with free_play left false.
+var cleanout: bool = false
 
 var _contracts: Array[Dictionary] = []
 var _main_root: Control
@@ -89,6 +92,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		var kev: InputEventKey = event as InputEventKey
 		if kev.pressed and not kev.echo and kev.keycode == KEY_G:
 			_start_free_play()
+			get_viewport().set_input_as_handled()
+			return
+		if kev.pressed and not kev.echo and kev.keycode == KEY_C:
+			_start_cleanout()
 			get_viewport().set_input_as_handled()
 			return
 		if kev.pressed and not kev.echo and kev.keycode == KEY_ESCAPE:
@@ -257,6 +264,17 @@ func _build_ui() -> void:
 	ThemeScript.style_teal_button(free_btn, false, 20)
 	free_btn.pressed.connect(_start_free_play)
 	bottom.add_child(free_btn)
+	# First-class Cleanout entry (Phase 3B.5): the authored side mission with
+	# free_play=false. It banks the haul but never credits the hosting contract,
+	# and is deliberately a separate button/[C] key from free play.
+	var cleanout_btn: Button = Button.new()
+	var cleanout_title: String = UIStringsScript.st_upper(
+		"ST_Screens", "Screen.MissionLobby.GuildHall.LootTheRoomTitle", "Cleanout Heist")
+	cleanout_btn.text = "%s [%s]" % [cleanout_title, InputGlyphs.key_label("C")]
+	cleanout_btn.custom_minimum_size = Vector2(280, 44)
+	ThemeScript.style_teal_button(cleanout_btn, false, 20)
+	cleanout_btn.pressed.connect(_start_cleanout)
+	bottom.add_child(cleanout_btn)
 	var deploy_btn: Button = Button.new()
 	# PORT COPY (no authored row): opens the port's own confirmation step, so it
 	# keeps a distinct name from the authored "Prepare for Mission" primary.
@@ -318,9 +336,10 @@ func _on_contract_selected(idx: int, play_sfx: bool = true) -> void:
 		return
 	if play_sfx:
 		_ui_sfx("click")
-	# A normal contract selection is a normal deploy: drop any free-play mode
-	# left over from a cancelled Cleanout prep.
+	# A normal contract selection is a normal deploy: drop any free-play/Cleanout
+	# mode left over from a cancelled alternate prep.
 	free_play = false
+	cleanout = false
 	var c: Dictionary = _contracts[idx]
 	selected_order = int(c.get("order", 1))
 	selected_map_id = str(c.get("map_id", ""))
@@ -589,6 +608,8 @@ func _toggle_mode() -> void:
 func _confirm_prepare() -> void:
 	_hide_confirm(false)
 	_ui_sfx("confirm")
+	free_play = false
+	cleanout = false
 	mission_selected.emit(selected_order, selected_map_id, int(GameState.difficulty), coop_mode)
 	_open_prep()
 
@@ -603,6 +624,7 @@ func _start_free_play() -> void:
 		return
 	_ui_sfx("confirm")
 	free_play = true
+	cleanout = false
 	selected_order = int(GameState.FREE_PLAY_CONTRACT_ORDER)
 	selected_map_id = "guildhall"
 	var sel: Dictionary = {}
@@ -615,6 +637,35 @@ func _start_free_play() -> void:
 	else:
 		_update_splash(selected_map_id)
 	mission_selected.emit(selected_order, selected_map_id, int(GameState.difficulty), coop_mode)
+	_open_prep()
+
+
+## First-class Cleanout entry point: the authored Mission.Guildhall.LootTheRoom
+## side mission on the Guildhall hosting order with free_play=false. It banks
+## the haul but earns no contract progress/reward; the normal list and the
+## free-play button are untouched.
+func _stage_cleanout_selection() -> void:
+	_ui_sfx("confirm")
+	free_play = false
+	cleanout = true
+	selected_order = int(GameState.FREE_PLAY_CONTRACT_ORDER)
+	selected_map_id = "guildhall"
+	var sel: Dictionary = {}
+	for c: Dictionary in _contracts:
+		if int(c.get("order", 0)) == selected_order:
+			sel = c
+			break
+	if not sel.is_empty():
+		_refresh_details(sel)
+	else:
+		_update_splash(selected_map_id)
+	mission_selected.emit(selected_order, selected_map_id, int(GameState.difficulty), coop_mode)
+
+
+func _start_cleanout() -> void:
+	if _confirm_visible:
+		return
+	_stage_cleanout_selection()
 	_open_prep()
 
 
@@ -641,7 +692,8 @@ func _open_prep() -> void:
 	if _main_root != null:
 		_main_root.visible = false
 	if prep.has_method("open_prep"):
-		prep.call("open_prep", selected_map_id, int(GameState.difficulty), coop_mode, selected_order, free_play)
+		prep.call("open_prep", selected_map_id, int(GameState.difficulty), coop_mode, selected_order, free_play,
+			GameState.FREE_PLAY_MISSION_ID if cleanout else "")
 
 
 func _on_prep_ready(p_map_id: String, p_difficulty: int, p_mode: String, p_order: int) -> void:
@@ -663,9 +715,10 @@ func _on_prep_ready(p_map_id: String, p_difficulty: int, p_mode: String, p_order
 
 func _on_prep_closed() -> void:
 	_prep = null
-	# Back out of prep (including a cancelled free-play Cleanout): the table
+	# Back out of prep (including a cancelled free-play/Cleanout prep): the table
 	# returns to the normal contract flow.
 	free_play = false
+	cleanout = false
 	if _main_root != null:
 		_main_root.visible = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE

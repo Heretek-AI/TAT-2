@@ -8,20 +8,53 @@ MOBILE_ABI  ?= arm64
 QA_CONTRACT ?= 0
 KEYSTORE_PROPS := $(HOME)/.config/tat2/keystore.properties
 
-.PHONY: build-extractor extract anims normalize audit audit-bootstrap audit-refresh-stamps audit-imports content-overrides check-logic check-consumers string-audit check-greps gate-ratchet test test-producers run editor review review-capture bake-review bake-review-core desktop-texture-cap texture-cap-check audio-tools linux-build linux-stamp-verify linux-run android-prepare android-debug android-debug-gl android-release
+# Mapping file for unversioned packages. `tools/ue4ss/output` is gitignored and
+# a git worktree usually does not have it, so fall back to the main checkout
+# derived from the shared git dir. An explicit `USMAP=` / `TAT_USMAP=` wins.
+GIT_COMMON := $(shell git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+MAIN_CHECKOUT := $(if $(GIT_COMMON),$(abspath $(GIT_COMMON)/..),)
+USMAP ?= $(TAT_USMAP)
+ifeq ($(USMAP),)
+USMAP := $(firstword $(wildcard tools/ue4ss/output/*.usmap) $(wildcard $(MAIN_CHECKOUT)/tools/ue4ss/output/*.usmap))
+endif
+
+# The `cubemaps` stage's post-condition (tools/check_cubemap_export.py) reads
+# the tree the pass wrote; overridable so the recipe test can point it at a
+# fixture instead of the real extraction.
+CUBEMAP_ROOT ?= extracted/assets/TAT/Content/Cubemaps
+
+.PHONY: build-extractor extract json extract-json cubemaps anims normalize audit audit-bootstrap audit-refresh-stamps audit-imports content-overrides check-logic check-consumers string-audit check-greps gate-ratchet test test-producers run editor review review-capture bake-review bake-review-core desktop-texture-cap texture-cap-check audio-tools linux-build linux-stamp-verify linux-run android-prepare android-debug android-debug-gl android-release
 
 build-extractor:
 	DOTNET_ROOT=$(HOME)/.dotnet10 PATH=$(HOME)/.dotnet10:$(PATH) $(DOTNET) build tools/tat-extract -c Release
 	cp tools/tat-extract/native/linux-x64/CUE4Parse-Natives.so tools/tat-extract/bin/Release/net10.0/
 
-extract: build-extractor
+# P3-3B.4 / round-2 F3: standalone filtered package dump for Destructibles.
+# This is NOT part of `extract`: the new `TAT/Content/Destructibles/` tables
+# root already dumps GC_ChestTrunkALid and friends in the `tables` stage.
+# `--usmap` is resolved above (env USMAP/TAT_USMAP, the worktree's
+# tools/ue4ss/output, or the main checkout's copy) and `--fail-on-error` makes
+# a package that fails to map exit non-zero instead of a silent ok=0/fail=N.
+json: build-extractor
+	@if [ ! -f "$(USMAP)" ]; then \
+		echo "ERROR: no .usmap found at '$(USMAP)'; set USMAP=/path/to/TAT-*.usmap (worktrees lack tools/ue4ss/output)" >&2; \
+		exit 2; \
+	fi
+	$(EX) json --overwrite --usmap '$(USMAP)' --fail-on-error --filter 'Destructibles/'
+
+extract-json: json
+
+extract: build-extractor cubemaps
 	$(EX) list
 	$(EX) raw
 	$(EX) tables
 	$(EX) levels
 	# N-P0: decoded ARecastNavMesh tiles for the three navmesh maps only. The
 	# generated runtime asset is produced by tools/parse_nav.py in `normalize`.
-	$(EX) nav --overwrite --filter 'Maps/(Guildhall|OldManor|FTUE)/.*\.umap$'
+	# `$$` before the closing quote keeps that quote out of make's variable
+	# expansion (a single dollar plus quote is a one-character variable
+	# reference and leaves the shell with an unmatched quote).
+	$(EX) nav --overwrite --filter 'Maps/(Guildhall|OldManor|FTUE)/.*\.umap$$'
 	# meshes writes *.materials.json sidecars; materials consumes them to queue
 	# authored materials whose names don't start MI_/M_ (CobwebFogy, T_*).
 	# --overwrite keeps a changed material filter effective on an existing tree.
@@ -29,8 +62,25 @@ extract: build-extractor
 	$(EX) materials --overwrite
 	$(EX) audio
 	$(EX) textures
-	$(EX) cubemaps
 	$(EX) anims
+
+# 3A.4/IBL: the three authored sky cubes are PF_FloatRGBA (~1.5e-3 linear
+# radiance). `--usmap` is REQUIRED and must be resolved here, not inherited from
+# the extractor's cwd guess (`Opts.FindUsmap` looks in `tools/ue4ss/output`,
+# which a worktree does not have): Cubemap_GroundFloor_01 is an unversioned
+# package, so without the mapping all three cubes fail to load, `--overwrite`
+# never reaches its delete step and the previous 8-bit `face_*.png` files stay
+# on disk. Measured before this guard: `cubemaps ok=0 fail=3` and exit 0, i.e.
+# `make extract` "succeeded" with the quantized cube. `--fail-on-error` makes a
+# failed face encode non-zero; the post-check refuses any tree that is not six
+# complete linear HDR faces (tools/check_cubemap_export.py).
+cubemaps: build-extractor
+	@if [ ! -f "$(USMAP)" ]; then \
+		echo "ERROR: no .usmap found at '$(USMAP)'; the cubemaps pass cannot map Cubemap_GroundFloor_01 and would leave the old 8-bit faces. Set USMAP=/path/to/TAT-*.usmap (worktrees lack tools/ue4ss/output)" >&2; \
+		exit 2; \
+	fi
+	$(EX) cubemaps --overwrite --usmap '$(USMAP)' --fail-on-error
+	python3 tools/check_cubemap_export.py --root '$(CUBEMAP_ROOT)'
 
 anims: build-extractor
 	$(EX) anims

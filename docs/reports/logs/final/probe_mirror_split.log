@@ -1,0 +1,95 @@
+== FINAL_GATE probe_mirror_split
+COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/probe_mirror_split.gd
+CWD: .
+STARTED: 2026-11-28T09:05:20-05:00
+
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
+         [3] _ready (res://src/core/game_data.gd:100)
+TAT-2 Loc: reverse map built from sources.json (3404 keys)
+TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
+INPUT_TABLE source=generated rows=91 shipping=91 actions=52
+INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
+ROUGHNESS_BAKE_MODE on=1 resolution=full cache=process
+PASS: bake produces a distinct ArrayMesh mode=baked baked=true
+PASS: bake keeps the surface count src=3 baked=3
+PASS: bake reuses the authored surface materials (same resources) surfaces=3
+PASS: baked AABB is the local-X mirror src=[P: (-1.028491, -0.000334, -0.095157), S: (1.040238, 3.152106, 0.177659)] baked=[P: (-0.011747, -0.000334, -0.095157), S: (1.040238, 3.152106, 0.177659)] want_pos=(-0.011747, -0.000334, -0.095157)
+PASS: baked mesh carries the provenance/byte metadata bytes=306432
+PASS: baked triangle winding is reversed surfaces=3
+PASS: baked normals negate x surfaces=3
+PASS: baked tangents negate x and w surfaces=3
+PASS: bake does not mutate the source mesh src=[P: (-1.028491, -0.000334, -0.095157), S: (1.040238, 3.152106, 0.177659)]
+PASS: bake variant is cached by mesh+override same=true
+PASS: single-surface BaseMaterial3D uses the CULL_FRONT fast path mode=cull_front
+PASS: fast path clones the material as CULL_FRONT clone=true
+PASS: fast path never mutates the shared source material source_cull=0
+PASS: two-sided single-surface source uses the cull-disabled path mode=cull_disabled
+PASS: TAT2_MIRROR_FAST=off falls back to the baked mesh mode=baked
+PASS: split_source_counts apportions pos+neg == item for every key cases=8
+PASS: split_source_counts preserves the total with no rounding loss cases=8
+PASS: split_source_counts is deterministic across calls cases=8
+PASS: split_source_counts tie-break is the sorted key neg={ "A": 1 }
+PASS: Guildhall payload carries authored mirrored records records=64953 authored_neg=3312
+PASS: partition covers every record exactly once groups=64166
+PASS: every authored negative record lands in a neg batch authored=3312 partition_neg=3312
+PASS: B*S normalization makes every neg basis positive neg=3312
+MIRROR_STATIC_GUILDHALL records=64953 authored_neg=3312 groups=64166 groups_with_neg=3274
+FootstepMask: downscaled 1024x1024 -> 128x128 for one-time alpha mask
+FootstepMask: baked one-time alpha mask (128x128, source_alpha=true) from res://assets/ue/Raw/Art/Environment/Props/Containers/Crates/T_Crate_Decal_D.png
+TAT-2 gate lights: total=7 (generic=7 rect=0) budget=8 forced=0 hero_shadows=6
+WARNING: [level_loader] level Niagara: 16 placements across 1 systems in 1 chunk nodes (0 sprite-masked, 16 parameter sets, 20 activation-skipped; decode root=res://../extracted/json files=3)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _spawn_level_niagara (res://src/core/level_loader.gd:7345)
+         [1] _store_level_extras (res://src/core/level_loader.gd:7117)
+         [2] load_sublevels (res://src/core/level_loader.gd:7595)
+         [3] _test_real_load (res://tests/probe_mirror_split.gd:417)
+         [4] _run (res://tests/probe_mirror_split.gd:88)
+MIRROR_SPLIT mp=/Game/Art/Environment/Prison/SM_Prison_WallA_2x6 mode=cull_front pos=3 neg=3 surfaces=1 bytes=0
+MIRROR_SPLIT mp=/Game/Art/Environment/Prison/SM_Prison_WallA_2x6 mode=cull_front pos=58 neg=58 surfaces=1 bytes=0
+ROUGHNESS_BAKE count=11 pixels=10223616 ms=743 bytes=13631484 hits=5 (L8 low+g*(high-low), full-res, process cache)
+MESH_RECON authored=574 applied=567 duplicate=0 name_skipped=4 wardbox=0 moonshape=3 clamp=0 clamp_worst=1.00x mirrored=61 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0 mirrored_bases=61 mirrored_multimesh=61 mirrored_single=0 mirrored_splits=2 mirrored_cull_front=61 mirrored_cull_disabled=0 mirrored_mesh_bytes=0 mirrored_mesh_count=0 mirrored_unbaked=0
+MIRROR_RECON bases=61 multimesh=61 single=0 split=2 cull_front=61 cull_disabled=0 baked=0 baked_bytes=0 unbaked=0 suppressed=0 ok=true
+PERF_CENSUS meshes=72 instances=584 chunk_nodes=70 plain=21 multimesh=51 surface_draws=99 lights=7 shadow_lights=6 occluders=4 collision_bodies=23 collision_shapes=23 periph_nodes=0 periph_instances=0 periph_surface_draws=0 periph_plain=0 periph_multimesh=0 periph_range=0 merge_mode=off merge_candidates=0 merge_nodes=0 merge_surfaces_before=0 merge_surfaces_after=0 light_budget=8 hero_shadows=6 source_sublevels={ "Guildhall_Geometry": 567 }
+PASS: MIRROR_RECON identity on the real load bases=61 multimesh=61 single=0
+PASS: no mirrored instance fell through unbaked unbaked=0
+PASS: geometry PERF_CENSUS source counts are populated src_sum=567 instances=584
+PASS: tagged MultiMesh meta count matches instance_count meta=3 instances=3
+PASS: cull-front batch material is CULL_FRONT cull=1
+PASS: tagged MultiMesh meta count matches instance_count meta=58 instances=58
+PASS: cull-front batch material is CULL_FRONT cull=1
+PASS: tree walk agrees with the loader's split counters walk_mm=61 want=61 walk_single=0 want=0
+PASS: no negative-determinant draw node hides in an untagged batch untagged_neg=0 gc_native=0
+PASS: every draw-census mirrored instance is tagged walk=61 bases=61
+PASS: one negative node per split item (no hidden extra split) nodes=2 splits=2
+PASS: every split item apportions pos+neg source counts exactly once checked=2 splits=2 ok=true
+PASS: cull-front counter is per-instance, not per-node walk=61 counter=61
+PASS: cull-disabled counter is per-instance, not per-node walk=0 counter=0
+PASS: baked-variant counter is per unique mesh, not per node walk=0 counter=0
+PASS: every tagged node carries a known mirror mode baked=0 cull_front=2 cull_disabled=0 native=0
+MIRROR_LOAD paths=1 authored_records_neg=3312 transform_bases=61 draw_bases=61 mm=61 single=0 split=2 cull_front=61 cull_disabled=0 baked_variants=0 baked_bytes=0 unbaked=0 walk_mm=61 walk_single=0 walk_baked_nodes=0 untagged_neg=0 gc_native_neg=0 src_sum=567 perf_instances=584
+MIRROR_DATA_SUMMARY: fails=0 checks=39 mode=geometry
+
+EXIT: 0
+FINISHED: 2026-11-28T09:05:24-05:00

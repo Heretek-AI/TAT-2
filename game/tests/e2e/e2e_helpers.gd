@@ -177,13 +177,7 @@ func read_json(res_path: String) -> Variant:
 
 
 func repo_path(rel_path: String) -> String:
-	var p1: String = ProjectSettings.globalize_path("res://../" + rel_path)
-	if FileAccess.file_exists(p1) or DirAccess.dir_exists_absolute(p1):
-		return p1
-	var p2: String = "/home/john/Projects/TAT-2/" + rel_path
-	if FileAccess.file_exists(p2) or DirAccess.dir_exists_absolute(p2):
-		return p2
-	return p1
+	return ProjectSettings.globalize_path("res://../" + rel_path)
 
 
 func repo_file_exists(rel_path: String) -> bool:
@@ -223,6 +217,9 @@ func snapshot_state() -> void:
 			"free_play": is_true(gs.get("free_play")),
 			"free_play_pending": is_true(gs.get("free_play_pending")),
 			"pending_mission_id": str(gs.get("pending_mission_id")),
+			"cleanout_run": is_true(gs.get("cleanout_run")),
+			"cleanout_pending": is_true(gs.get("cleanout_pending")),
+			"pending_cleanout_mission_id": str(gs.get("pending_cleanout_mission_id")),
 			"state": str(gs.get("state")),
 			"elapsed_sec": float(gs.get("elapsed_sec")),
 			"run_time_limit": float(gs.get("run_time_limit")),

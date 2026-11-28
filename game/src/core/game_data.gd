@@ -660,6 +660,28 @@ func get_contract_sublevels(order: int) -> Array[String]:
 	return out
 
 
+## True when the mission id is an authored side-mission row (contracts.json
+## `mission_durations[id].kind == "side_mission"`, e.g. the Guildhall Cleanout).
+## A side mission can be deployed on its own (first-class Cleanout) without
+## crediting the hosting contract order.
+##
+## The `contracts.json` overlay is gitignored generated data and may be absent
+## on a fresh checkout, so the authored id convention (`*.LootTheRoom`, the
+## side-mission rows in DT_Missions_Guildhall/OldManor) and the authored loot
+## goals are authoritative fallbacks. Without this, a `--qa-mission` Cleanout
+## would be treated as a contract deploy and re-credit the hosting order.
+func is_side_mission(mission_id: String) -> bool:
+	if mission_id == "":
+		return false
+	var rec_v: Variant = mission_durations.get(mission_id, null)
+	if rec_v is Dictionary:
+		if str((rec_v as Dictionary).get("kind", "")) == "side_mission":
+			return true
+	if mission_id.ends_with(".LootTheRoom"):
+		return true
+	return mission_loot_goals.has(mission_id)
+
+
 ## Mission-row match time limit in seconds for a mission id + difficulty
 ## (1 Novice, 2 Thief, 3 Master Thief), read from
 ## missions_by_id[id].durations (DT_Missions_* MatchDurationsByDifficulty).

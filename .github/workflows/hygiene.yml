@@ -10,6 +10,14 @@ permissions:
 
 jobs:
   hygiene:
-    uses: Heretek-AI/.github/.github/workflows/hygiene.yml@a560a6e0478f0767de3262fdc1645bc3d86d86e0 # main
+    uses: Heretek-AI/.github/.github/workflows/hygiene.yml@c45e3e9db1ed261a6d470c923c949d81f92e598d # c45e3e9
     with:
       audit_workflows: true
+      # Recorded evidence keeps its original capture paths byte-for-byte; the
+      # scan covers source, scripts, docs and workflows.
+      exclude: |
+        .omo
+        docs/reports/logs
+        build/qa/w9
+        build/qa/w10
+        build/qa/review_20261124

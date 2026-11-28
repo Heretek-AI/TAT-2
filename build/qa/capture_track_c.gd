@@ -2,7 +2,7 @@ extends SceneTree
 ## Track C visual QA (gitignored): C1 NPR/SNN, C2 X-ray through-wall, C3 rain
 ## roof occlusion + lens drops + authored local fog. Run under Xvfb Vulkan.
 
-const OUT_DIR := "/home/john/Projects/TAT-2/build/qa"
+var OUT_DIR: String = ProjectSettings.globalize_path("res://../build/qa").simplify_path()
 const WeatherVisuals := preload("res://src/core/weather_visuals.gd")
 const XrayOverlayScript := preload("res://src/core/xray_overlay.gd")
 const OSERendererScript := preload("res://src/core/ose_renderer.gd")

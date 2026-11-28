@@ -22,7 +22,7 @@
     "audio_mix_rate": 44100.0,
     "cmdline": [
       "--script",
-      "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b_capture.gd"
+      "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/sentinel/build/qa/p0b_capture.gd"
     ],
     "display_server": "headless",
     "godot": "4.7.2-stable (official)",
@@ -38,12 +38,12 @@
     "TAT2_BEAM_CARD": "on",
     "XDG_SESSION_TYPE": "wayland"
   },
-  "finished_at_utc": "2026-11-27T22:25:06",
+  "finished_at_utc": "2026-11-28T14:15:55",
   "git": {
-    "branch": "phase12-integration",
+    "branch": "teamwork/base-20261127-1810-phase3",
     "dirty": true,
-    "sha": "60474c004d21b0f19481cdf0b223afde2e12a78a",
-    "sha_short": "60474c004d21"
+    "sha": "5337828922431435e951be47c9dfc363d00db95c",
+    "sha_short": "533782892243"
   },
   "gpu": {
     "available": true,
@@ -53,9 +53,9 @@
       [
         "NVIDIA GeForce RTX 4070 Laptop GPU",
         "620.73.04",
-        "62.83",
-        "3951",
-        "42",
+        "41.15",
+        "2442",
+        "0",
         "210"
       ]
     ],
@@ -85,10 +85,11 @@
     "The fixed-pose run marks poses, not route beats. A 27-beat route run must call mark_beat(S01..S27); p0b_audio_stats.py --route prints the reference table.",
     "Reference audio is documented RMS/peak dBFS (not LUFS); the script computes RMS/peak only and states the clip's -43.9 LUFS as context."
   ],
-  "out_dir": "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b/dry-run",
+  "out_dir": "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/sentinel/build/qa/p0b/dry-run",
   "poses": [
     {
       "beat": "S13",
+      "decision": "",
       "eye": [
         10.0,
         24.0,
@@ -99,6 +100,7 @@
       "grounded": false,
       "id": "gate",
       "note": "street-side gate approach (W9 grade-probe pose); reference KF16 is the gate/headlights keyframe",
+      "pitch_deg": 3.18,
       "ref_keyframe": "KF16",
       "resolution": [
         1920,
@@ -113,6 +115,7 @@
     },
     {
       "beat": "S24",
+      "decision": "",
       "eye": [
         27.0,
         29.6700000762939,
@@ -123,6 +126,7 @@
       "grounded": false,
       "id": "upper_foyer",
       "note": "authored upper-foyer slot looking into the hall; KF27 is the foyer security-beam keyframe",
+      "pitch_deg": 0.0,
       "ref_keyframe": "KF27",
       "resolution": [
         1920,
@@ -137,6 +141,7 @@
     },
     {
       "beat": "S24",
+      "decision": "",
       "eye": [
         27.0,
         29.6700000762939,
@@ -147,6 +152,7 @@
       "grounded": false,
       "id": "yaw180",
       "note": "same slot turned 180 deg; W9-P1 showed the armchair/ottoman/vitrine from here",
+      "pitch_deg": 0.0,
       "ref_keyframe": "KF27",
       "resolution": [
         1920,
@@ -161,6 +167,7 @@
     },
     {
       "beat": "S24",
+      "decision": "",
       "eye": [
         27.0,
         29.6700000762939,
@@ -171,6 +178,7 @@
       "grounded": false,
       "id": "foyer_beam",
       "note": "KF27-framed cue aimed at the authored BP_Detector_LightBeam_C_107 card at (23.27,29.76,-57.4); the one-band/emitter criteria are in build/qa/kf27_beam_reference.json",
+      "pitch_deg": 1.162,
       "ref_keyframe": "KF27",
       "resolution": [
         1920,
@@ -185,6 +193,33 @@
     },
     {
       "beat": "S24",
+      "decision": "",
+      "eye": [
+        17.1000003814697,
+        29.7000007629395,
+        -52.2999992370605
+      ],
+      "fov_vertical_deg": 54.54,
+      "ground_planned": false,
+      "grounded": false,
+      "id": "foyer_beam_wide",
+      "note": "lateral KF27 wide cue: 8.005 m from the authored C_107 card; the derived target rotates the eye->card ray +30.26 deg yaw / -5.81 deg pitch so the emitter projects at 18.0 %/40.0 % (inside the 10-26 % x / 33-47 % y emitter box). foyer_beam is untouched.",
+      "pitch_deg": -5.379,
+      "ref_keyframe": "KF27",
+      "resolution": [
+        1920,
+        1080
+      ],
+      "status": "dry_run",
+      "target": [
+        24.9599990844727,
+        28.9500007629395,
+        -53.5900001525879
+      ]
+    },
+    {
+      "beat": "S24",
+      "decision": "",
       "eye": [
         31.0,
         28.7199993133545,
@@ -195,6 +230,7 @@
       "grounded": false,
       "id": "lounge",
       "note": "Lounge wide view toward guard marker C_20; the C_57 beam crosses the left half",
+      "pitch_deg": 0.0,
       "ref_keyframe": "KF27",
       "resolution": [
         1920,
@@ -209,6 +245,7 @@
     },
     {
       "beat": "S24",
+      "decision": "",
       "eye": [
         34.0,
         28.7199993133545,
@@ -219,6 +256,7 @@
       "grounded": false,
       "id": "lounge_beam",
       "note": "head-on to the C_57 beam card (x=42.34, y=28.9, z=-28.97); the beam runs along Z so it crosses the frame",
+      "pitch_deg": 1.228,
       "ref_keyframe": "KF27",
       "resolution": [
         1920,
@@ -233,6 +271,7 @@
     },
     {
       "beat": "",
+      "decision": "",
       "eye": [
         39.0,
         28.8199996948242,
@@ -243,6 +282,7 @@
       "grounded": false,
       "id": "beam_close",
       "note": "Lounge C_57 extra (not KF27/S24): 3.4 m from the C_57 card; luma stats only, no KF27 criteria",
+      "pitch_deg": 1.348,
       "ref_keyframe": "EXTRA",
       "resolution": [
         1920,
@@ -254,10 +294,41 @@
         28.8999996185303,
         -28.9699993133545
       ]
+    },
+    {
+      "authored_start": [
+        127.274696350098,
+        25.4694004058838,
+        -5.32959985733032
+      ],
+      "beat": "S12",
+      "decision": "PORT_DECISION",
+      "eye": [
+        127.274696350098,
+        27.1381492614746,
+        -5.32959985733032
+      ],
+      "fov_vertical_deg": 54.54,
+      "ground_planned": false,
+      "grounded": false,
+      "id": "gap_view",
+      "note": "landscape-gap A/B view for the P4.4 discard|raw|off comparison: eye = authored SafeRoomPlayerStart_0 x/z + player eye height (1.66875), target = exact authored gap centroid (120.25,18.56,-6.815), so the aim is exact (0.00 % offset). Derived pitch -50.0702 deg (the -48.6 deg figure would need a 26.7041 m eye); labelled PORT_DECISION (no authored camera aims at the gap).",
+      "pitch_deg": -50.07,
+      "ref_keyframe": "EXTRA",
+      "resolution": [
+        1920,
+        1080
+      ],
+      "status": "dry_run",
+      "target": [
+        120.25,
+        18.5599994659424,
+        -6.81500005722046
+      ]
     }
   ],
-  "repo_root": "/home/john/.local/share/opencode/worktree/318f41/phase12-integration",
-  "run_id": "20261127T222506Z_60474c004d21_on",
+  "repo_root": "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/sentinel",
+  "run_id": "20261128T141555Z_533782892243_on",
   "schema": "tat2.p0b_capture/1",
   "seed": {
     "active_map_seed": 0,
@@ -270,9 +341,11 @@
       "upper_foyer",
       "yaw180",
       "foyer_beam",
+      "foyer_beam_wide",
       "lounge",
       "lounge_beam",
-      "beam_close"
+      "beam_close",
+      "gap_view"
     ],
     "tag": ""
   },
@@ -280,7 +353,10 @@
   "settle": {
     "capture_frames": 5,
     "frames": 60,
+    "min_seconds": 25.0,
+    "mode": "frames",
+    "seconds": 0.0,
     "selector": "median-mean"
   },
-  "started_at_utc": "2026-11-27T22:25:06"
+  "started_at_utc": "2026-11-28T14:15:55"
 }

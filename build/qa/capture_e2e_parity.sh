@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -u
 
-ROOT="/home/john/Projects/TAT-2"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 QA="$ROOT/build/qa"
 OUT_DIR="$QA/e2e_parity"
 LOG="$OUT_DIR/capture_e2e_parity.log"

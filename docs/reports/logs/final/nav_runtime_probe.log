@@ -1,36 +1,40 @@
 == FINAL_GATE nav_runtime_probe
-COMMAND: /home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/nav_runtime_probe.sh
-CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
-STARTED: 2026-11-27T17:15:01-05:00
+COMMAND: ./build/qa/nav_runtime_probe.sh
+CWD: .
+STARTED: 2026-11-28T09:04:23-05:00
 
+NAV_CENSUS guildhall: links=80 bidirectional=78 one_way=2 legacy=35 records=221 pairs=123 bin_flags_ok=1
+NAV_CENSUS old_manor: links=64 bidirectional=60 one_way=4 legacy=15 records=216 pairs=113 bin_flags_ok=1
+NAV_CENSUS ftue: links=4 bidirectional=4 one_way=0 legacy=0 records=11 pairs=8 bin_flags_ok=1
+NAV_CENSUS_SUMMARY: PASS maps=3 bidirectional=78/60/4 one_way=2/4/0 legacy=35/15/0
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 TAT-2 Loc: reverse map built from sources.json (3404 keys)
 TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
 INPUT_TABLE source=generated rows=91 shipping=91 actions=52
 INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
-  PASS  nav manifest parses (/home/john/.local/share/opencode/worktree/318f41/phase12-integration/game/data/generated/nav)
+  PASS  nav manifest parses (/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/sentinel/game/data/generated/nav)
   PASS  manifest schema is tat2.nav/1
   PASS  manifest carries guildhall
   PASS  guildhall tiles == 2958 (got 2958)
@@ -38,8 +42,12 @@ INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mapp
   PASS  guildhall deduped verts == 30918 (got 30918)
   PASS  raw offmesh records == 221 (got 221)
   PASS  logical links == 80 (got 80)
-  PASS  bidirectional links == 35 (got 35)
-  PASS  one-way links == 45 (got 45)
+NAV_CENSUS version=2 bidirectional=78 one_way=2 legacy_canonical=35 pairs_file=guildhall.pairs.json
+  PASS  bidirectional links == 78 (census v2; got 78)
+  PASS  one-way links == 2 (census v2; got 2)
+  PASS  legacy canonical census still recorded as 35
+  PASS  raw pair set emitted (guildhall.pairs.json)
+  PASS  raw pair set carries 221 records
   PASS  producer max_poly_verts <= 6
   PASS  8 authored supported areas (got 8)
   PASS  area 63 is NavArea_Default (never Recast null)
@@ -54,8 +62,8 @@ INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mapp
   PASS  NavigationMesh holds 14709 polys (got 14709)
   PASS  NavigationMesh holds 30918 verts (got 30918)
   PASS  runtime created 80 NavigationLink3D (got 80)
-  PASS  runtime bidirectional links == 35
-  PASS  runtime one-way links == 45
+  PASS  runtime bidirectional links == 78 (got 78)
+  PASS  runtime one-way links == 2 (got 2)
   PASS  every NavigationMesh polygon has <= 6 verts (max 6)
   PASS  navigation map committed
   PASS  runtime state is ready (got ready)
@@ -66,7 +74,7 @@ NAV_MAP_ASYNC async=true
   PASS  map edge connection margin 0.05 m
   PASS  map link connection radius 1.0 m
   PASS  map carries 80 baked links (got 80)
-NAV_PROBE_READY frames=72 ready_ms=1030 build_ms=32 links=80
+NAV_PROBE_READY frames=70 ready_ms=1009 build_ms=31 links=80
   PASS  at least 155/160 baked link endpoints project within 2.5 m (got 155)
   PASS  at least 79/80 baked links have one side on the mesh (got 79)
 NAV_LINKS endpoints_near=155/160 links_with_side=79/80
@@ -78,25 +86,66 @@ NAV_DOOR_PATH actor=BP_Doorless_Civic_DoorA_Wall_Int_6x6_C_281 door=(12.5, 11.5,
   PASS  doorless path is not partial
   PASS  doorless path is not a wall detour
   PASS  authored prison door record BP_Prison_WallA_DoorwayB_6x6_C_0
-NAV_DOORS groups=1 links=1 skipped=0 open_now=0
+NAV_DOOR_LINK actor=BP_Prison_WallA_DoorwayB_6x6_C_0 class=BP_Prison_WallA_DoorwayB_6x6_C mid=(1.00,36.50,-64.00) normal=(1.000,0.000,0.000) snap_a=0.10 snap_b=0.52 enabled=false
+NAV_DOOR_BAKED actor=BP_Prison_WallA_DoorwayB_6x6_C_0 links=1 indices=[49] min_dist=2.04
+NAV_DOORS groups=1 links=1 skipped=0 open_now=0 baked_bound=1
   PASS  one prison door link created (got 1)
   PASS  runtime owns one door link
   PASS  door link node found
   PASS  door link starts disabled (open angle 0)
-NAV_DOORLINK start=(3.2, 36.6, -64.0) end=(-1.71, 36.6, -64.0) enabled=false links_on_map=80
+NAV_DOORLINK start=(3.2, 36.6, -64.0) end=(-1.71, 36.6, -64.0) enabled=false links_on_map=81
 NAV_DOORLINK snap start=0.00 end=0.00
 NAV_PRISON off waypoints=4 length_m=3.58 straight_m=4.91 reach=1.33
   PASS  closed prison door blocks east->west (partial path)
   PASS  door link enables at open angle 90
-NAV_DOORLINK on enabled=true links_on_map=81 server_enabled=true iter=1
+NAV_DOORLINK on enabled=true links_on_map=81 server_enabled=true iter=2
 NAV_PRISON on  waypoints=2 length_m=4.91 straight_m=4.91 reach=0.00
   PASS  open prison door reaches the far side (0.00 m short)
   PASS  door link disables when the door closes
   PASS  re-closed prison door blocks again
-NAV_PRISON toggles=2
-NAV_DOORS groups=1 links=0 skipped=1 open_now=0
+NAV_PRISON toggles=4
+NAV_DOOR_SKIP actor=FakeFarDoor class= mid=(0.00,1000.00,0.00) normal=(0.000,0.000,1.000) reason=snap_both snap_a=918.84 snap_b=919.21
+NAV_DOORS groups=1 links=0 skipped=1 open_now=0 baked_bound=0
   PASS  far door creates no link (got 0)
   PASS  far door counted as skipped
+  PASS  route-critical fake leaves created (got 14)
+NAV_DOOR_LINK actor=BP_Prison_WallA_DoorwayB_6x6_C_0 class=BP_Prison_WallA_DoorwayB_6x6_C mid=(1.00,36.50,-64.00) normal=(1.000,0.000,0.000) snap_a=0.10 snap_b=0.52 enabled=false
+NAV_DOOR_LINK actor=BP_Doorless_Civic_DoorA_Wall_Int_6x6_C_281 class=BP_Prison_WallA_DoorwayB_6x6_C mid=(12.50,11.50,-45.00) normal=(0.000,0.000,-1.000) snap_a=0.05 snap_b=0.87 enabled=false
+NAV_DOOR_LINK actor=BP_Manor_Porch_Door_8x8_C_0 class=BP_Civic_Doorway_6x8_C mid=(12.99,27.50,-73.50) normal=(0.000,0.000,-1.000) snap_a=2.01 snap_b=1.34 enabled=false
+NAV_DOOR_LINK actor=BP_Manor_Porch_Door_8x8_C_1 class=BP_Civic_Doorway_6x8_C mid=(6.99,27.50,-73.50) normal=(0.000,0.000,-1.000) snap_a=2.01 snap_b=0.75 enabled=false
+NAV_DOOR_SKIP actor=BP_Prison_WallA_DoorwayA_6x6_C_0 class=BP_Prison_WallA_DoorwayA_6x6_C mid=(-24.00,11.50,-15.00) normal=(0.000,0.000,1.000) reason=snap_both snap_a=4.32 snap_b=3.59
+NAV_DOOR_LINK actor=BP_Manor_WindowB_4x8_Reinforced_C_11 class=BP_Civic_WindowC_6x8_Closed_C mid=(-28.00,28.00,-3.00) normal=(0.000,0.000,1.000) snap_a=1.00 snap_b=1.04 enabled=false
+NAV_DOOR_LINK actor=StaticMeshActor_1606 class=BP_Manor_Doorway_4x8_Shutterdoors_C mid=(-0.01,29.65,-44.99) normal=(1.000,0.000,0.000) snap_a=1.60 snap_b=1.60 enabled=false
+NAV_DOOR_BAKED actor=BP_Prison_WallA_DoorwayB_6x6_C_0 links=1 indices=[49] min_dist=2.04
+NAV_DOOR_BAKED_SKIP actor=BP_Manor_WindowB_4x8_Reinforced_C_11 class=BP_Civic_WindowC_6x8_Closed_C indices=[21] reason=window_never_opens
+NAV_DOOR_BAKED actor=StaticMeshActor_1606 links=1 indices=[52] min_dist=1.70
+NAV_DOORS groups=7 links=6 skipped=1 open_now=0 baked_bound=2
+NAV_ROUTE_DOORS made=6 audit=7 skipped=1 baked_bound=2
+  PASS  door audit has BP_Prison_WallA_DoorwayB_6x6_C_0
+  PASS  door audit has BP_Doorless_Civic_DoorA_Wall_Int_6x6_C_281
+  PASS  door audit has BP_Manor_Porch_Door_8x8_C_0
+  PASS  door audit has BP_Manor_Porch_Door_8x8_C_1
+  PASS  every route-critical door is in the linked set (missing [])
+  PASS  off-mesh door BP_Prison_WallA_DoorwayA_6x6_C_0 is skipped with reason snap_both (got snap_both)
+  PASS  authored prison door record re-read for the baked-link test
+  PASS  a baked link sits on the prison doorway (index 49)
+  PASS  prison baked link 49 is bound to the door
+  PASS  bound prison baked link starts disabled
+NAV_PRISON_BAKED closed w->e wp=2 len=0.00 reach=4.91 | e->w wp=4 len=3.58 reach=1.33
+  PASS  closed prison door blocks the baked west->east direction
+  PASS  closed prison door blocks east->west
+  PASS  bound prison baked link enables with the open door
+NAV_PRISON_BAKED open   w->e wp=2 len=4.91 reach=0.00 | e->w wp=2 len=4.91 reach=0.00
+  PASS  open prison door reaches west->east
+  PASS  open prison door reaches east->west
+  PASS  bound prison baked link disables when the door closes
+  PASS  re-closed prison door blocks the baked west->east direction again
+  PASS  window pivot BP_Manor_WindowB_4x8_Reinforced_C_11 registers a door link
+  PASS  window pivot does not adopt its authored baked link
+  PASS  authored window baked link 21 stays unbound
+  PASS  shutter door StaticMeshActor_1606 registers a door link
+  PASS  shutter-door baked link 52 follows the door
+  PASS  two baked links bound across the authored door set (got 2)
   PASS  clear() returns the runtime to off
   PASS  clear() removes every baked link
   PASS  clear() removes the region
@@ -104,22 +153,22 @@ NAV_DOORS groups=1 links=0 skipped=1 open_now=0
   PASS  nav_runtime.setup(old_manor)
   PASS  old_manor walkable polys == 9059
   PASS  old_manor links == 64
-  PASS  old_manor bidirectional links == 15
+  PASS  old_manor bidirectional links == 60 (census v2; got 60)
   PASS  nav_runtime.setup(ftue)
   PASS  ftue walkable polys == 5576
   PASS  ftue links == 4
-  PASS  ftue bidirectional links == 0
+  PASS  ftue bidirectional links == 4 (census v2; got 4)
   PASS  navigation map has no region after the per-map checks
   PASS  TAT2_NAV=off builds nothing (state disabled)
 WARNING: [nav_runtime] no generated nav manifest at /tmp/opencode/nav-runtime-probe-empty/manifest.json (run tools/parse_nav.py); AI keeps straight-line steering
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _warn_once (res://src/ai/nav_runtime.gd:578)
-         [1] setup (res://src/ai/nav_runtime.gd:104)
-         [2] _run (/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/nav_runtime_probe.gd:294)
-         [3] _frames (/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/nav_runtime_probe.gd:343)
+         [0] _warn_once (res://src/ai/nav_runtime.gd:791)
+         [1] setup (res://src/ai/nav_runtime.gd:127)
+         [2] _run (/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/sentinel/build/qa/nav_runtime_probe.gd:440)
+         [3] _frames (/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/sentinel/build/qa/nav_runtime_probe.gd:533)
   PASS  missing assets fail closed (state assets_missing)
-NAV_RUNTIME_PROBE checks=70 fails=0
+NAV_RUNTIME_PROBE checks=97 fails=0
 
 EXIT: 0
-FINISHED: 2026-11-27T17:15:05-05:00
+FINISHED: 2026-11-28T09:04:31-05:00

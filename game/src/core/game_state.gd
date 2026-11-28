@@ -61,6 +61,13 @@ var free_play: bool = false
 ## closure re-stages them around its own reset_run call.
 var free_play_pending: bool = false
 var pending_mission_id: String = ""
+## First-class Cleanout deploy (Phase 3B.5): the authored side-mission row runs
+## with free_play=false so the haul is banked normally, but the hosting contract
+## is NOT credited (no record_contract_complete, no contract reward). Staged
+## across the map-change reset exactly like free play.
+var cleanout_run: bool = false
+var cleanout_pending: bool = false
+var pending_cleanout_mission_id: String = ""
 # Run-selection state used by SV_* scene variants.
 var active_map_seed: int = 0
 var active_scene_variants: Array[String] = []
@@ -292,6 +299,11 @@ func reset_run(contract_order: int, map_id: String) -> void:
 		free_play = true
 		if pending_mission_id != "":
 			active_mission_id = pending_mission_id
+	cleanout_run = false
+	if cleanout_pending:
+		cleanout_run = true
+		if pending_cleanout_mission_id != "":
+			active_mission_id = pending_cleanout_mission_id
 	elapsed_sec = 0.0
 	run_time_limit = 0.0
 	phase = PHASE_MAIN
@@ -478,6 +490,10 @@ func begin_free_play(mission_id: String = FREE_PLAY_MISSION_ID) -> void:
 	free_play_pending = true
 	pending_mission_id = mission_id
 	active_mission_id = mission_id
+	# The two "no campaign credit" modes are mutually exclusive.
+	cleanout_run = false
+	cleanout_pending = false
+	pending_cleanout_mission_id = ""
 
 
 ## Leave free play (a normal contract deploy / normal READY). Clears both the
@@ -486,6 +502,37 @@ func end_free_play() -> void:
 	free_play = false
 	free_play_pending = false
 	pending_mission_id = ""
+
+
+## Enter a first-class Cleanout deploy: the authored side-mission row runs with
+## free_play=false (so the haul banks) but without crediting the hosting
+## contract. Same staging contract as begin_free_play().
+func begin_cleanout(mission_id: String = FREE_PLAY_MISSION_ID) -> void:
+	cleanout_run = true
+	cleanout_pending = true
+	pending_cleanout_mission_id = mission_id
+	active_mission_id = mission_id
+	free_play = false
+	free_play_pending = false
+	pending_mission_id = ""
+
+
+## Leave Cleanout mode (a normal contract deploy / normal READY).
+func end_cleanout() -> void:
+	cleanout_run = false
+	cleanout_pending = false
+	pending_cleanout_mission_id = ""
+
+
+## True when this run earns campaign credit: a normal contract deploy. False
+## for free play (bank nothing) and for a first-class Cleanout / side-mission
+## row (bank the haul, but never record the hosting contract or pay its reward).
+func run_credits_contract() -> bool:
+	if free_play or cleanout_run:
+		return false
+	if active_mission_id != "" and GameData.is_side_mission(active_mission_id):
+		return false
+	return true
 
 
 ## Group digits with thousands separators (4000 -> "4,000") for HUD/objective

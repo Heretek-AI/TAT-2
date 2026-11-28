@@ -34,7 +34,7 @@
   "coverage": {
     "case_allowlisted": 73,
     "covered": 12703,
-    "disk_missing_allowlisted": 43,
+    "disk_missing_allowlisted": 39,
     "disk_missing_resolved_by_rename": 3,
     "exact_raw": 12630,
     "manifest_tat": 16792,
@@ -45,11 +45,11 @@
   "infrastructure": {
     "root:Makefile": {
       "command": "make extract / make normalize",
-      "sha256": "1da7225075d7cc2d094e179138bf30b22a34478027425ef4f4f0254d08c19df1"
+      "sha256": "3919513306dc82cc27d86d6d26f4c83b8c034bcebcf6051182c4312536b9ee2a"
     },
     "root:tools/audit_allowlists.json": {
       "command": "reviewed coverage allowlist",
-      "sha256": "04fee072ed34599e5c8ec8d42e99d4530100505df76646b86eac8881719d609e"
+      "sha256": "d7460023e237c35b0fc3de580a83e8bf140b81b46141beb257f97e87e39155e8"
     },
     "root:tools/fetch_vgmstream.sh": {
       "command": "make audio-tools",
@@ -69,11 +69,11 @@
     },
     "root:tools/tat-extract/Exporter.cs": {
       "command": "make build-extractor",
-      "sha256": "c0f8d8a0843949b8eff77876afaafa994735b851e12cccc42ad69b60fb60aeee"
+      "sha256": "693a6232a4d77397d770104e4d30cfe31b1d0b7b26bf9883694cca92aecff16f"
     },
     "root:tools/tat-extract/Program.cs": {
       "command": "make build-extractor",
-      "sha256": "5c12d5f6cec16e5738695a1b9d9db7b11fefd42bbda6e603b2a79072484a1b62"
+      "sha256": "4e2b13dafea89818e7cc03853d1614dac79e4cb38c9c8b5ab52fb33dce44e557"
     },
     "root:tools/tat-extract/native/linux-x64/CUE4Parse-Natives.so": {
       "command": "make build-extractor",
@@ -103,7 +103,7 @@
           "bytes": 3532,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795808272.809433,
+          "newest_mtime": 1795849886.1077573,
           "sha256": "86fdefcf12e121de815a3dc05e1889aac230fc41fed452f99e36e01689ad7f08"
         }
       },
@@ -128,14 +128,14 @@
           "bytes": 1463161,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795808268.643256,
+          "newest_mtime": 1795849882.0364432,
           "sha256": "17d852347531c34e3d42545584cd914a3dba6f8a34901d9874be755a3b3c36ff"
         },
         "gen:audio_library.json": {
           "bytes": 1423393,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795808267.9453049,
+          "newest_mtime": 1795849881.3840911,
           "sha256": "27337aac0f53643e58c76d201b1ba30f45f7815750a2a57f1fcc887c96fc3241"
         }
       },
@@ -149,7 +149,7 @@
           "bytes": 581725232,
           "exists": true,
           "files": 5027,
-          "newest_mtime": 1795808168.9609334,
+          "newest_mtime": 1795849802.5986192,
           "sha256": "bef0f231b03ec1cc9ab013f35e022df1bbce63311bdd77982703e6ef4279e3ac"
         }
       },
@@ -163,7 +163,7 @@
           "bytes": 1058776,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795808277.684191,
+          "newest_mtime": 1795849890.5307035,
           "sha256": "70b6c2358b3bd80194a4dfaa23764033a39b9ad45f009a7bebe54e55dc4d6975"
         }
       },
@@ -177,7 +177,7 @@
           "bytes": 524787,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795808270.467985,
+          "newest_mtime": 1795849883.843181,
           "sha256": "e326432c0d54248ea8147d9fddd470dd45a7f4ef4310c4119c85081d0c532682"
         }
       },
@@ -191,7 +191,7 @@
           "bytes": 1514019,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795808148.1410985,
+          "newest_mtime": 1795849783.9493346,
           "sha256": "f147dc87fe6636a32ccb9854d91d07ebfbabb8c5b9baaaa40868f61c4e5c30d0"
         }
       },
@@ -205,8 +205,8 @@
           "bytes": 18311304,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795808166.0104187,
-          "sha256": "4b4e6167e27635f6c907842fe54c3d3e9ed2812a7019eb26dc263dd0dae40046"
+          "newest_mtime": 1795849800.3276298,
+          "sha256": "6291278828b2bf88b658928ff19086e676dbfae9603da8dce99d7c5cb1a9f9eb"
         }
       },
       "sha256": "0ef8aaf738d345a993fc76ba7ecc2cf84f28a8ed35f5d8705e4b84014c5c9d64"
@@ -221,7 +221,7 @@
           "bytes": 10594,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795808156.4012465,
+          "newest_mtime": 1795849791.5894723,
           "sha256": "dc1b0aacd93d175d70297c1e54e1554917e3b8941d492cb1e2bffe1892d0e164"
         }
       },
@@ -235,28 +235,28 @@
       },
       "outputs": {
         "gen:gameplay/contracts.json": {
-          "bytes": 28493,
+          "bytes": 29233,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795808146.1282902,
-          "sha256": "ecbb4e27924dc061ba177b59ca0afa0a263f1b2eb5621e564df3ae5f096ea600"
+          "newest_mtime": 1795849782.1166637,
+          "sha256": "bb423cb8695d897f722f5a1392279864eabd20fb49b0100a075c1294f1111b0c"
         }
       },
-      "sha256": "7f461d850f67e753d985833074485917f16164fcecec06c6c586a152f923a578"
+      "sha256": "0cfe562e064015a3c75b4836f1b9a9b143f1de3cc39f34d7fd67fbcc552aa2b3"
     },
     "tools/parse_cubemap.py": {
       "command": "python3 tools/parse_cubemap.py",
       "metrics": {},
       "outputs": {
         "gen:ibl": {
-          "bytes": 4643,
+          "bytes": 5427,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795808160.4046626,
-          "sha256": "b60d58baf45d94d1f72dd57cb71dc25198139bda625bba69db7f7f7f3d0c767e"
+          "newest_mtime": 1795849795.3731384,
+          "sha256": "cbc59e73dcfd559704c2928bb4c1070ee565eb19e1002ef1db58cd44fcb2143b"
         }
       },
-      "sha256": "2361974a08195c07ff2de4f1df3d5999172408327cc4c42fdc7f6f460f9a06c8"
+      "sha256": "e770b4b50a2ef39acdafc94df5d8e3771d4939f5b98a8300d5d684bec661725b"
     },
     "tools/parse_curves.py": {
       "command": "python3 tools/parse_curves.py",
@@ -266,14 +266,14 @@
           "bytes": 80654,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795808127.8294218,
+          "newest_mtime": 1795849765.058413,
           "sha256": "837ef61fb3880a0d00bf7a9551b9f34b46db94dd18c88ba4217b21bd0963346a"
         },
         "gen:tables": {
           "bytes": 1874019,
           "exists": true,
           "files": 160,
-          "newest_mtime": 1795808127.8288054,
+          "newest_mtime": 1795864964.212686,
           "sha256": "7f2aac5b35da0b9aaed74dae81520e554957f0bc0d1325ec4e5561e32c0667fd"
         }
       },
@@ -287,7 +287,7 @@
           "bytes": 2115474,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795808156.255244,
+          "newest_mtime": 1795849791.4528484,
           "sha256": "39f060106ab1dd0c85752004166ba870548a5b72fa0621c2c6673a62ced9007e"
         }
       },
@@ -298,11 +298,11 @@
       "metrics": {},
       "outputs": {
         "gen:gameplay": {
-          "bytes": 6425876,
+          "bytes": 6426616,
           "exists": true,
           "files": 23,
-          "newest_mtime": 1795808160.5242662,
-          "sha256": "fe9e879559aad4a95b1ad2fbc01f6f2e5a46596ce8314a852ab27065239fde1b"
+          "newest_mtime": 1795864979.8312988,
+          "sha256": "3491e8b27421ad152bf34353cdfdba7a50d4a058d0dce06a2cc0c3d89a9d55ed"
         }
       },
       "sha256": "fb08beef0100ee52dadab6d2154a5e3d958a46f0f89311f56e145066bd69304a"
@@ -315,14 +315,14 @@
           "bytes": 242354,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795808159.9483101,
+          "newest_mtime": 1795849794.9488564,
           "sha256": "2f30d7af62b7d09e69848ef9938ab8a65c006f5111c9ae2f17de08b82a0b080b"
         },
         "gen:gameplay/perception.json": {
           "bytes": 13314,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795808159.9491415,
+          "newest_mtime": 1795849794.9498117,
           "sha256": "a051f2b4a26796916e8d9cd9a8512707afe84c77b9c9a4f9ee790f4ab430d9f0"
         }
       },
@@ -336,7 +336,7 @@
           "bytes": 270658,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795808160.5242662,
+          "newest_mtime": 1795849795.4776835,
           "sha256": "db01b27f0b56a79e0a004982ee9fcf1fd093c99b00cb3a3e7063d9644f1e7f2c"
         }
       },
@@ -350,7 +350,7 @@
           "bytes": 60362,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795808156.436247,
+          "newest_mtime": 1795849791.6214728,
           "sha256": "8bf683e0a8c08e5f83a4114a32ff261b67b393dcb7c92c4244b7b814234acc3f"
         }
       },
@@ -366,7 +366,7 @@
           "bytes": 2181168,
           "exists": true,
           "files": 9,
-          "newest_mtime": 1795808270.6022909,
+          "newest_mtime": 1795849883.9751377,
           "sha256": "ea1767ad076aae99c03299e0fb1aaab2de2724c822113006f7799b8e61ef032c"
         }
       },
@@ -380,7 +380,7 @@
           "bytes": 60762,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795808157.3322632,
+          "newest_mtime": 1795849792.4184873,
           "sha256": "9a758561abaa435be49057e21886757074fe30f8b34a03812892366df5de318e"
         }
       },
@@ -398,21 +398,21 @@
           "bytes": 2776721,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795808382.183288,
+          "newest_mtime": 1795849781.4552896,
           "sha256": "956893d44a08b6871dd51ce05e6ea977cb5810aafcfed7289d833459689048f7"
         },
         "gen:mesh_materials.json": {
           "bytes": 443572,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795808383.1473053,
+          "newest_mtime": 1795849782.0300095,
           "sha256": "74476419aa47e966fdf56fae30315f81073b04504daccc8c0bce8f9329d04bea"
         },
         "gen:mesh_materials_provenance.json": {
           "bytes": 435741,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795808383.1505227,
+          "newest_mtime": 1795849782.0331035,
           "sha256": "e805cb29630a6593c9b5b844a14eabcaf0f654633af52ea9268d7aef8cfd7dca"
         }
       },
@@ -423,14 +423,14 @@
       "metrics": {},
       "outputs": {
         "gen:nav": {
-          "bytes": 1022147,
+          "bytes": 1115916,
           "exists": true,
-          "files": 4,
-          "newest_mtime": 1795808160.8782244,
-          "sha256": "d3c991b03686513a7efbf8f72dc9abb043e2e0d9afe4211bde771eec83379ab0"
+          "files": 7,
+          "newest_mtime": 1795850653.9254446,
+          "sha256": "98c77ab82154be2284475ba0ae58eed5759c0212ff72c355ff819055717afc59"
         }
       },
-      "sha256": "ecc6ad18000ed2928b1b4c17eed4efccc33759759bec4f4c261aabf7a9d52998"
+      "sha256": "3de41641af8b32d9e46497f4b2600d0e35d8fd565efa4762852ec50a8a8d0e47"
     },
     "tools/parse_project_ini.py": {
       "command": "python3 tools/parse_project_ini.py",
@@ -440,7 +440,7 @@
           "bytes": 36776,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795808160.4707334,
+          "newest_mtime": 1795849795.4272316,
           "sha256": "42fd62fd8236235f1edb7d1ff8f9f045f025c08e9463b12584718978905ab976"
         }
       },
@@ -454,7 +454,7 @@
           "bytes": 425493,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795808152.413175,
+          "newest_mtime": 1795849787.8824055,
           "sha256": "4832c39ddf526bdc9a694fac06e61171ec0bfb152428987ed8536f18542343bf"
         }
       },
@@ -468,7 +468,7 @@
           "bytes": 5773,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795808146.1559222,
+          "newest_mtime": 1795849782.1451771,
           "sha256": "996cfca24576f115992a80ff3bf19023ac2e383a863171cb61d1c3e19e906696"
         }
       },
@@ -482,7 +482,7 @@
           "bytes": 10623,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795808157.6092682,
+          "newest_mtime": 1795849792.796494,
           "sha256": "379dc3de638656dc51f3a22b1659d22c19f213095b9bf9e3c116dcdfc1cd7158"
         }
       },
@@ -496,14 +496,14 @@
           "bytes": 1533813,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795808160.112313,
+          "newest_mtime": 1795849795.0995355,
           "sha256": "c6c9a8060d41134fb99a24d87131dda3e2ff021fbd1d7b7528b4d0e29e0c6992"
         },
         "root:docs/reports/w5e-guard-state-tree.md": {
           "bytes": 20380,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795808160.1148667,
+          "newest_mtime": 1795849795.102285,
           "sha256": "b2a19594db39be201f7d9f68122b0d90db45a8a9e7446672fce4b2ddb55b602f"
         }
       },
@@ -517,7 +517,7 @@
           "bytes": 18201,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795808317.9120188,
+          "newest_mtime": 1795849891.174118,
           "sha256": "75625e31a41c4cd6e9fcf8220719cba0a3ada38f17ec79bd141d791ec03a23be"
         }
       },
@@ -534,35 +534,35 @@
       },
       "outputs": {
         "gen:gameplay": {
-          "bytes": 6425876,
+          "bytes": 6426616,
           "exists": true,
           "files": 23,
-          "newest_mtime": 1795808160.5242662,
-          "sha256": "fe9e879559aad4a95b1ad2fbc01f6f2e5a46596ce8314a852ab27065239fde1b"
+          "newest_mtime": 1795864979.8312988,
+          "sha256": "3491e8b27421ad152bf34353cdfdba7a50d4a058d0dce06a2cc0c3d89a9d55ed"
         },
         "gen:levels": {
           "bytes": 47854154,
           "exists": true,
           "files": 108,
-          "newest_mtime": 1795808120.9733262,
+          "newest_mtime": 1795864978.3496668,
           "sha256": "030a661c76cab48aa7a9f5ee5f31446aab44f171871276c45b19916ba8762457"
         },
         "gen:scene_variants.json": {
           "bytes": 44415,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795808121.0626295,
+          "newest_mtime": 1795864978.434205,
           "sha256": "424e9fe4d92846e74e7e801084718009afb2a94461ca3ab2cfab544c40e39151"
         },
         "gen:tables": {
           "bytes": 1874019,
           "exists": true,
           "files": 160,
-          "newest_mtime": 1795808127.8288054,
+          "newest_mtime": 1795864964.212686,
           "sha256": "7f2aac5b35da0b9aaed74dae81520e554957f0bc0d1325ec4e5561e32c0667fd"
         }
       },
-      "sha256": "9734e78460c37cbdc152d2f300a965c40c7c6e2ca3dfd269698cfe505007097b"
+      "sha256": "cdb5d6b158b98d4102ff3db641c8bee3a7811e881a6b75bbefc95b5d3981fe8c"
     },
     "tools/parse_unlocks.py": {
       "command": "python3 tools/parse_unlocks.py",
@@ -572,7 +572,7 @@
           "bytes": 117228,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795808158.377282,
+          "newest_mtime": 1795849793.475334,
           "sha256": "1268019dac3fe30453556cb8f9e2a27c3d96918ca425b1d93f41aa3355ca10e1"
         }
       },
@@ -586,7 +586,7 @@
           "bytes": 1395294,
           "exists": true,
           "files": 2,
-          "newest_mtime": 1795808158.3384466,
+          "newest_mtime": 1795849793.437734,
           "sha256": "86ebada8d6c5f51391d655fad4fa03720fc539e0bf8dd90af5277cc22e554483"
         }
       },
@@ -600,7 +600,7 @@
           "bytes": 41806,
           "exists": true,
           "files": 17,
-          "newest_mtime": 1795808160.369823,
+          "newest_mtime": 1795849795.3369293,
           "sha256": "14e76997ca4d1515609e05642ee9dc44985d0c31a7164c58ca81fc347b8748d7"
         }
       },
@@ -614,7 +614,7 @@
           "bytes": 1378853,
           "exists": true,
           "files": 1,
-          "newest_mtime": 1795808167.3058748,
+          "newest_mtime": 1795849801.437652,
           "sha256": "c87c62c189bb1b5ff5fbb1a1e3aea2ea7a188b37b7ba7c0ac0f0fd2208c95a9d"
         }
       },
@@ -650,9 +650,9 @@
   },
   "provenance": {
     "extractor_binary": {
-      "binary_mtime": 1795808311.3190198,
+      "binary_mtime": 1795849099.745999,
       "bytes": 78192,
-      "newest_source_mtime": 1795808304.0928903,
+      "newest_source_mtime": 1795849089.0108056,
       "path": "tools/tat-extract/bin/Release/net10.0/tat-extract",
       "sha256": "dc806d85be6ce8f1026a9e85642a6ca256e87994ac256df2181b616cf37ddafa"
     }
@@ -786,6 +786,34 @@
       ],
       "reason": "P4.1 AEM/cubemap + nav + audio + GC + UI producers; regenerated after make normalize at the phase 1/2 integration",
       "utc": "2026-11-27T19:39:53Z"
+    },
+    {
+      "notes": [
+        "baseline: output content changed for tools/parse_tables.py: gen:levels, gen:gameplay (refresh accepted)",
+        "baseline: output content changed for tools/parse_collision.py: gen:mesh_collision.json (refresh accepted)",
+        "baseline: output content changed for tools/parse_gameplay.py: gen:gameplay (refresh accepted)",
+        "baseline: tools/parse_contracts.py source drift accepted by refresh (newest output 2026-11-28 02:09)",
+        "baseline: output content changed for tools/parse_contracts.py: gen:gameplay/contracts.json (refresh accepted)",
+        "baseline: tools/parse_cubemap.py source drift accepted by refresh (newest output 2026-11-28 02:09)",
+        "baseline: output content changed for tools/parse_cubemap.py: gen:ibl (refresh accepted)",
+        "baseline: tools/parse_nav.py source drift accepted by refresh (newest output 2026-11-28 02:24)",
+        "baseline: output content changed for tools/parse_nav.py: gen:nav (refresh accepted)",
+        "baseline: infrastructure change accepted: root:Makefile",
+        "baseline: infrastructure change accepted: root:tools/tat-extract/Exporter.cs",
+        "baseline: infrastructure change accepted: root:tools/tat-extract/Program.cs",
+        "baseline: infrastructure change accepted: root:tools/audit_allowlists.json"
+      ],
+      "reason": "Phase 3B producers/statetree/audio/nav regen 2026-11-28",
+      "utc": "2026-11-28T07:25:08Z"
+    },
+    {
+      "notes": [
+        "baseline: tools/parse_tables.py source drift accepted by refresh (newest output 2026-11-28 06:22)",
+        "baseline: output content changed for tools/parse_tables.py: gen:levels (refresh accepted)",
+        "baseline: infrastructure change accepted: root:Makefile"
+      ],
+      "reason": "gc-confirm: Destructibles 93 fallback regeneration 2026-11-28",
+      "utc": "2026-11-28T11:23:07Z"
     }
   ],
   "tool_versions": {
@@ -795,5 +823,5 @@
     "vgmstream": "vgmstream CLI decoder r2168 (Oct 25 2026)"
   },
   "version": 2,
-  "written_utc": "2026-11-27T19:39:53Z"
+  "written_utc": "2026-11-28T11:23:07Z"
 }

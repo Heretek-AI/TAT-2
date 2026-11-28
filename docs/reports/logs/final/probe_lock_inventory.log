@@ -1,38 +1,38 @@
 == FINAL_GATE probe_lock_inventory
 COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/probe_lock_inventory.gd
-CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
-STARTED: 2026-11-27T17:14:53-05:00
+CWD: .
+STARTED: 2026-11-28T09:04:16-05:00
 
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 TAT-2 Loc: reverse map built from sources.json (3404 keys)
 TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
 INPUT_TABLE source=generated rows=91 shipping=91 actions=52
 INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
-LOCK_INVENTORY source=/home/john/.local/share/opencode/worktree/318f41/phase12-integration/extracted/json
+LOCK_INVENTORY source=/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/sentinel/extracted/json
   ok: LOOT_CONTAINER_CLASSES read from level_loader.gd (8 classes)
-  dump json files scanned: 12541
+  dump json files scanned: 12545
   per-map placed `_locked: true` counts:
     Maps/Buildings/Guildhall/Building_Guildhall_POI.json: 1
     Maps/FTUE/FTUE_Building_JewelryStore.json: 1
@@ -65,7 +65,7 @@ LOCK_INVENTORY source=/home/john/.local/share/opencode/worktree/318f41/phase12-i
   ok: authored cap 2 count = 155 (got 155)
   ok: authored cap 1 count = 3 (got 3)
   ok: locked actors with no MaxLockLevel = 15 (got 15)
-  dump records scanned for keys: 12541
+  dump records scanned for keys: 12545
   authored-locked containers inside LOOT_CONTAINER_CLASSES: 152
   authored-locked containers outside the allowlist (never spawned): BP_BookcaseB_C(2), BP_ChestTrunk_C(3)
   authored-locked windows: 8 (no window interaction in the port; not locked)
@@ -85,4 +85,4 @@ LOCK_INVENTORY runtime: authored=173 raw=363 applied=162 containers=152 door_nod
 LOCK_INVENTORY PASS authored_containers=157 authored_doors=8 authored_windows=8 locked_now=363 applied=162 containers=152 door_nodes=10
 
 EXIT: 0
-FINISHED: 2026-11-27T17:15:01-05:00
+FINISHED: 2026-11-28T09:04:23-05:00

@@ -1,6 +1,6 @@
 # T07 — RENDER (lighting / exposure / GI / sky / weather)
 
-Team: T07-RENDER. Worktree `/home/john/Projects/TAT-2-rem-T07-render`, branch
+Team: T07-RENDER. Worktree `<worktree>/T07-render`, branch
 `rem/T07-render`, base `38e7b03` (W7 merged). Nothing pushed, merged or rebased.
 Every number below is from a run on this tree; anything that could not be
 measured headlessly is marked **not verified** and carries the capture that

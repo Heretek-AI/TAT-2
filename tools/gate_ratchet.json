@@ -1,9 +1,9 @@
 {
   "schema": "tat2.gate_ratchet/1",
-  "measured_on": "37bb69e",
-  "source": "49-gate Phase 1/2 integration measurement at the merged mirrors code HEAD 37bb69e (mirrors 07ecb56 + the six lanes + the P4.1 regeneration + the E2E authored-array fix), 2026-11-27, one serial run of build/qa/run_final_gates.sh into docs/reports/logs/final/ (wall 22m38s, uncommitted at start 0, exit 0/49 gates): compile 228/0, run_tests 327/0 (suites 119 cream, 121 audio, 122 VO, 123 AEM, 124 cubemap; 327 PASS lines), M2 12/0, P1 probes safe 86 / doors 47 / beams 9 / ward 44 / street 31, landscape mask 7/0, E2E 300/300 (a2 22/22 with static_bookcase_leaves=20, p2 17/17), parity-only 60/60, cream 5/0, audio control 123/0 (music=2 music_keys=6/9), VO director 53/0, auto-exposure 77/0, cubemap 37/0, P5 UI 54 with GEM_PAYLOAD layers=21, Den spawn 9, capture dry-run 7 poses, self-test 23/0, KF27 9/9, route self-test 62/0, nav runtime 70/0, GC 52/0, collision COL_MAPS PASS coverage_ppm=868852, lock applied=162 (152 containers + 10 doors), runtime-smoke exit=124 errors=0 mission_ready=1, audit 12660/12703 0 unexpected, texture cap 1567 targets / 796 capped / 1 alpha / 0 offenders, perf guard 78/78, literal greps 0 code hits, string audit 311 routed / 199 authored / 112 invented, gate ratchet PASS.",
+  "measured_on": "900f8eb",
+  "source": "Phase 3 final baseline, 2026-11-28, one serial run of build/qa/run_final_gates.sh into docs/reports/logs/final/ at code head 900f8eb (route-code merge; Cleanout, route instruments, GC fallback, HDR cubemaps, nav v2): compile 234/0, run_tests 329/0, M2 12/0, E2E 310/310 (a2 22/22, p2 17/17), P1 safe 86/doors 49/beams 9/ward 44/street 31, landscape 7/0, nav 97/0, GC 55/0, cubemap 51/0, audio 135/0, VO 60/0, AEM 77/0, P5 54, Den 9, Den window 44, route NPC 4, manifest 112/73/39/0, collision 868852/0.869/0/2, locks 162, errscan 31/33 + 0/2 + 495/495 new=0, audit 12660/12703, texture 796/1/0, perf 78, string 311/199/112, gate ratchet PASS. Floors raised, none lowered: compile 229->234, run_tests 328->329, E2E 300->310, nav 70->97, cubemap 37->51, GC 52->55, manifest.tracked 109->112, capture poses 7->9, audio 123->135, VO 53->60, den_window 34->44, route NPC 4 (new), errscan run_tests ceiling 482->495.",
   "note": "Floors, not exact counts: a wave may add tests/files but must never lower a floor or introduce a failure. Counts are read from the committed log and compared with >=; failure counts are exact zeros, e2e.passed must equal e2e.total, and the e2e_p2 expected_fail/expected_delta/fixed values are enforced as exact zeros (zero_groups). Update only with a real gate log in docs/reports/logs/ (see tools/check_gate_ratchet.py for the evidence layout).",
-  "report": "docs/reports/integration-20261127.md",
+  "report": "docs/reports/phase3-final-gates-20261128.md",
   "evidence": {
     "dir": "docs/reports/logs/final",
     "compile": "compile.log",
@@ -55,15 +55,25 @@
     "probe_landscape_mask": "probe_landscape_mask.log",
     "nav_runtime_probe": "nav_runtime_probe.log",
     "producer_tests": "producer_tests.log",
-    "test_capture_p5_filter": "test_capture_p5_filter.log"
+    "test_capture_p5_filter": "test_capture_p5_filter.log",
+    "p0b_capture_dry_run": "p0b_capture_dry_run.log",
+    "runtime_smoke_scan": "runtime_smoke_scan.log",
+    "gate_manifest": "gate_manifest.log",
+    "e2e_errscan": "e2e_errscan.log",
+    "test_roof_collision": "test_roof_collision.log",
+    "probe_den_window": "probe_den_window.log",
+    "probe_route_npcs": "probe_route_npcs.log",
+    "probe_mirror_split": "probe_mirror_split.log",
+    "probe_statetree_shadow": "probe_statetree_shadow.log",
+    "gate_ratchet": "gate_ratchet_poststamp.log"
   },
   "gates": {
     "compile": {
-      "checked": 228,
+      "checked": 234,
       "broken": 0
     },
     "run_tests": {
-      "passes": 327,
+      "passes": 329,
       "fails": 0
     },
     "m2": {
@@ -71,8 +81,8 @@
       "fails": 0
     },
     "e2e": {
-      "passed": 300,
-      "total": 300,
+      "passed": 310,
+      "total": 310,
       "fails": 0
     },
     "e2e_a2": {
@@ -135,7 +145,7 @@
       "checks": 86
     },
     "probe_p1_doors": {
-      "checks": 47
+      "checks": 49
     },
     "probe_p1_beams": {
       "checks": 9
@@ -151,7 +161,7 @@
       "expected_fail": 0
     },
     "test_audio_control": {
-      "checks": 123,
+      "checks": 135,
       "fails": 0
     },
     "probe_p5_ui": {
@@ -166,7 +176,7 @@
       "fails": 0
     },
     "test_vo_director": {
-      "checks": 53,
+      "checks": 60,
       "fails": 0
     },
     "probe_auto_exposure": {
@@ -174,7 +184,7 @@
       "fails": 0
     },
     "probe_cubemap": {
-      "passed": 37,
+      "passed": 51,
       "fails": 0
     },
     "probe_landscape_mask": {
@@ -182,12 +192,108 @@
       "fails": 0
     },
     "nav_runtime_probe": {
-      "checks": 70,
+      "checks": 97,
       "fails": 0
     },
     "p0b_capture_self_test": {
       "checks": 23,
       "fails": 0
+    },
+    "probe_guard_positions_guildhall": {
+      "guards": 4,
+      "bucket_hit": 4,
+      "bucket_total": 4,
+      "lounge": 1
+    },
+    "probe_guard_positions_old_manor": {
+      "guards": 4,
+      "bucket_hit": 4,
+      "bucket_total": 4,
+      "lounge": 0
+    },
+    "probe_niagara": {
+      "files": 107,
+      "authored": 3695,
+      "active": 1048,
+      "systems": 16
+    },
+    "beam_geometry": {
+      "cards": 330,
+      "fails": 0
+    },
+    "producer_tests": {
+      "stealthball_checks": 22,
+      "ui_pixel_checks": 15,
+      "nav_checks": 7
+    },
+    "probe_device_meshes": {
+      "checks": 11,
+      "actors": 229,
+      "visible_parts": 1145,
+      "hidden_parts": 0
+    },
+    "probe_gc_destruction": {
+      "checks": 55,
+      "fails": 0
+    },
+    "test_gc_break_trigger": {
+      "checks": 21,
+      "fails": 0
+    },
+    "test_w10a2_civilian": {
+      "passed": 23,
+      "total": 23,
+      "fails": 0
+    },
+    "test_w10a2_guard_placement": {
+      "passes": 35,
+      "fails": 0
+    },
+    "probe_geometry_placement": {
+      "checks": 7,
+      "fails": 0,
+      "pending_regeneration": 0
+    },
+    "test_capture_p5_filter": {
+      "checks": 5
+    },
+    "p0b_capture_dry_run": {
+      "poses": 9
+    },
+    "p0b_kf27_reference": {
+      "met_num": 9,
+      "met_den": 9
+    },
+    "runtime_smoke_scan": {
+      "checks": 29,
+      "fails": 0
+    },
+    "gate_manifest": {
+      "tracked": 112,
+      "retired": 39,
+      "orphans": 0
+    },
+    "e2e_errscan": {
+      "new": 0,
+      "e2e_min": 31,
+      "e2e_ceiling": 33,
+      "e2e_a2_min": 0,
+      "e2e_a2_ceiling": 2,
+      "run_tests_min": 482,
+      "run_tests_ceiling": 495
+    },
+    "test_roof_collision": {
+      "checks": 106
+    },
+    "probe_den_window": {
+      "checks": 44
+    },
+    "probe_route_npcs": {
+      "checks": 4,
+      "fails": 0
+    },
+    "probe_mirror_split": {
+      "checks": 39
     }
   }
 }

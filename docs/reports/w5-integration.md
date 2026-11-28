@@ -2,7 +2,7 @@
 
 Date: 2026-11-24
 Base: `950f7ca` (docs: record the Spider chain, guard fixes and deferred full gates)
-Integration checkout: `/home/john/Projects/TAT-2` (primary), not a worktree.
+Integration checkout: `<repo>` (primary), not a worktree.
 Mode: serial, one Godot at a time. Thermal gate waived by the user; the perf
 matrix, GI, captures and a parallel Godot were **not** run.
 

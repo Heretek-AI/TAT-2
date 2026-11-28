@@ -1,7 +1,7 @@
 extends SceneTree
 ## Free-play / Contract Inactive capture: prep card + in-mission HUD.
 
-const OUT_DIR: String = "/home/john/Projects/TAT-2/build/qa/freeplay"
+var OUT_DIR: String = ProjectSettings.globalize_path("res://../build/qa/freeplay").simplify_path()
 const MISSION_ID: String = "Mission.Guildhall.LootTheRoom"
 const CONTRACT_ORDER: int = 2
 

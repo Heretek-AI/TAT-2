@@ -2,7 +2,7 @@
 # Start the live QA session: back up project.godot, append the autostart
 # setting, launch the game on :99, and wait for Guildhall to load.
 set -u
-ROOT=/home/john/Projects/TAT-2
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 QA="$ROOT/build/qa"
 cd "$ROOT" || exit 1
 mkdir -p "$QA"

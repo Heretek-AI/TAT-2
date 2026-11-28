@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -u
-ROOT=/home/john/Projects/TAT-2
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 QA="$ROOT/build/qa"
 LOG="$QA/make_test_vulkan_vf.log"
 XVFBLOG="$QA/xvfb_test_vulkan_vf.log"

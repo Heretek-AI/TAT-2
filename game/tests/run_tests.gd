@@ -7678,15 +7678,25 @@ func _initialize() -> void:
 		else:
 			print("PASS: ", w10_suite[0], " ", w10_suite[1], " (", w10_ms, " ms)")
 
-	# 123-124. P4.1 exposure/IBL headless probes (standalone SceneTree children,
-	# the same exit-0 + summary-marker contract as 99/101-122). Suite 123 pins
-	# the authored AEM chain data, the pure AutoExposure model (speeds, clamps,
-	# V3 curve, determinism) and the meter's CPU log-luminance mirror; suite 124
+	# 123-126. Headless probes run as standalone SceneTree children (the same
+	# exit-0 + summary-marker contract as 99/101-122). Suite 123 pins the
+	# authored AEM chain data, the pure AutoExposure model (speeds, clamps, V3
+	# curve, determinism) and the meter's CPU log-luminance mirror; suite 124
 	# pins the cubemap face mapping, the exact-solid-angle cosine irradiance and
-	# `TAT2_IBL=off` compatibility. Neither runs a GPU or the extractor.
+	# `TAT2_IBL=off` compatibility; suite 125 (Phase 3 §2.5.5) pins the five
+	# runtime-contract holes: xray_target membership + highlight restore on real
+	# actors, the TAT2_NAV default/unknown fail-closed resolution, the
+	# TAT2_ROUGH_BAKE=off `rough_high` fallback vs the default full-res bake,
+	# and endgame-timeout banking through the real mission clock; suite 126
+	# (Phase 3 §3B.2) is the NAV_DELTA off/on trajectory harness (stuck frames,
+	# path length, arrival, wait_ready) on the authored Guildhall doorways, with
+	# the default pinned off. None runs a GPU or the extractor; the
+	# door-aperture assertions live in probe_p1_doors.
 	for p4_suite: Array in [
 		["123", "P4.1a/b authored auto-exposure data + pure model + meter reduction", "res://tests/probe_auto_exposure.gd", "AEM_PROBE: fails=0"],
 		["124", "P4.1 IBL cubemap faces + CPU cosine irradiance + off compatibility", "res://tests/probe_cubemap.gd", "CUBEMAP_PROBE: fails=0"],
+		["125", "Phase 3 contract holes: xray membership/restore, TAT2_NAV default, TAT2_ROUGH_BAKE off, endgame clock timeout", "res://tests/probe_contracts_runtime.gd", "CONTRACTS_PROBE: fails=0"],
+		["126", "Phase 3B.2 NAV_DELTA: TAT2_NAV off vs on (stuck frames, path length, arrival, wait_ready)", "res://tests/probe_nav_delta.gd", "NAV_DELTA_SUMMARY: fails=0"],
 	]:
 		var p4_out: Array = []
 		var p4_args: PackedStringArray = [

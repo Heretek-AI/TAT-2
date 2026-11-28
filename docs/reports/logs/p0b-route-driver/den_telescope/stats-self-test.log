@@ -1,0 +1,16 @@
+PASS: [stats] matrix parses 120 rows
+PASS: [stats] pillar counts match the template (37/31/27/25)
+PASS: [stats] scorable tally matches the matrix (43/21/56)
+PASS: [stats] mapping ids exactly equal the matrix ids
+PASS: [stats] mapping has 120 rows
+PASS: [stats] every row has at least one beat
+PASS: [stats] every mapped beat is an official S01..S27 id
+PASS: [stats] all 27 beats are referenced by at least one row
+PASS: [stats] no duplicate beat inside one row binding
+PASS: [stats] every matrix NO row carries an explicit no-route reason
+PASS: [stats] every NPC-dependent row carries the measured unreachable reason
+PASS: [stats] report preserves the full 27-beat coverage
+PASS: [stats] staged/driver run emits zero tokens
+PASS: [stats] played claim alone still emits no invented tokens
+PASS: [stats] no row carries a PASS/DELTA/MISSING/HARD_LIMIT/N/A-route token
+P0B_ROUTE_STATS_SELFTEST PASS checks=15 fails=0 rows=120 beats=27

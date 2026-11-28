@@ -8,9 +8,14 @@ extends RefCounted
 ##             to the guard: the interpreter has no reference to the guard except
 ##             through `guard_bindings.gd`, whose `mutates()` is false, and the
 ##             binding only calls getters/fields;
-##   patrol  - reserved for the S2 cutover. `guard_ai.gd` checks the mode before
-##             using the interpreter as the movement authority; until S2 lands
-##             this behaves exactly like `shadow` and says so once.
+##   patrol  - FAILS CLOSED while `TAT2_STATETREE_WRITER` is off. Before Phase
+##             3B.1 it was a warning-only alias of `shadow`: nothing read the
+##             interpreter, so a green gate could certify a no-op. `attach()` now
+##             returns null, pushes one explicit error and records the refusal
+##             (`patrol_refusal()`), because `guard_bindings.mutates()` is false.
+##             With the explicit experimental writer flag on, the runner creates
+##             a `writer_spike.gd` and `guard_ai` hands movement to it. That is a
+##             spike, not the S2 cutover.
 ##
 ## B2.1 consumes payload /2's per-node `parameters` and `bound` map through
 ## `bindings.resolve()`; the coverage table separates structural coverage
@@ -32,11 +37,15 @@ const Trace = preload("res://src/ai/statetree/trace.gd")
 const GuardBindings = preload("res://src/ai/statetree/guard_bindings.gd")
 const BindingsBase = preload("res://src/ai/statetree/bindings.gd")
 const Coverage = preload("res://src/ai/statetree/coverage.gd")
+const WriterSpike = preload("res://src/ai/statetree/writer_spike.gd")
 
 const MODE_OFF: String = "off"
 const MODE_SHADOW: String = "shadow"
 const MODE_PATROL: String = "patrol"
 const MODE_ENV: String = "TAT2_STATETREE"
+## The resolver's default when the env var is unset. Suite 111 asserts this
+## constant is `off`, so a flip cannot slip in unnoticed.
+const DEFAULT_MODE: String = MODE_OFF
 
 ## A state held this long is reported once as a stall (the FSM has no stuck
 ## timer for guards, RE-I-06; the shadow measures it instead of guessing).
@@ -47,11 +56,13 @@ const GUARD_ROOT: String = "ST_Guard"
 
 static var _mode: String = ""
 static var _library: Dictionary = {}
-static var _patrol_note_emitted: bool = false
+static var _patrol_refusal: String = ""
 
 var guard: Node = null
 var interpreter: RefCounted = null
 var bindings: RefCounted = null
+## Non-null only for `TAT2_STATETREE=patrol` with `TAT2_STATETREE_WRITER=on`.
+var writer: RefCounted = null
 var started: bool = false
 var start_failed: bool = false
 var ticks: int = 0
@@ -60,6 +71,9 @@ var last_state_changed_t: float = 0.0
 var stall_reported: bool = false
 var stalls: int = 0
 var max_state_seconds: float = 0.0
+## Every tag pushed through `push_event()`, so a caller/test can prove a live
+## emission without reading the interpreter's internals.
+var events_emitted: Array[Dictionary] = []
 
 
 # ---------------------------------------------------------------------------
@@ -75,7 +89,9 @@ static func mode() -> String:
 
 static func parse_mode(raw: String) -> String:
 	var value: String = raw.strip_edges().to_lower()
-	if value == "" or value == MODE_OFF:
+	if value == "":
+		return DEFAULT_MODE
+	if value == MODE_OFF:
 		return MODE_OFF
 	if value == MODE_SHADOW:
 		return MODE_SHADOW
@@ -85,8 +101,30 @@ static func parse_mode(raw: String) -> String:
 	return MODE_OFF
 
 
+## Whether a runner may attach at all. `patrol` is only live with the explicit
+## experimental writer flag; without it the mode fails closed instead of running
+## shadow under a `patrol` label.
 static func enabled() -> bool:
-	return mode() != MODE_OFF
+	var current: String = mode()
+	if current == MODE_SHADOW:
+		return true
+	if current == MODE_PATROL:
+		return WriterSpike.enabled()
+	return false
+
+
+## The explicit refusal record for `TAT2_STATETREE=patrol` without the writer.
+## Suite 111 asserts `refused == true` and that the reason names `mutates()`.
+static func patrol_refusal() -> Dictionary:
+	var current: String = mode()
+	var writer_on: bool = WriterSpike.enabled()
+	var refused: bool = current == MODE_PATROL and not writer_on
+	return {
+		"mode": current,
+		"writer": writer_on,
+		"refused": refused,
+		"reason": _patrol_refusal if refused else "",
+	}
 
 
 ## Test-only override. The env var stays the shipping switch; a test flips this
@@ -113,7 +151,7 @@ static func cleanup_static_caches() -> void:
 	Trace.reset_shared()
 	_library = {}
 	_mode = ""
-	_patrol_note_emitted = false
+	_patrol_refusal = ""
 
 
 # ---------------------------------------------------------------------------
@@ -122,16 +160,22 @@ static func cleanup_static_caches() -> void:
 
 
 ## Create and start a shadow runner for one guard. Returns null when shadow mode
-## is off or the tree cannot start, so the caller can keep a single null check.
+## is off, when `patrol` is refused (writer flag off) or when the tree cannot
+## start, so the caller can keep a single null check.
 static func attach(p_guard: Node) -> RefCounted:
+	if mode() == MODE_PATROL and not WriterSpike.enabled():
+		if _patrol_refusal == "":
+			_patrol_refusal = "TAT2_STATETREE=patrol refused: guard_bindings.mutates() is false and no flag makes the interpreter drive a guard; set TAT2_STATETREE_WRITER=on for the experimental writer spike, or use TAT2_STATETREE=shadow"
+			push_error(_patrol_refusal)
+		return null
 	if not enabled():
 		return null
-	if mode() == MODE_PATROL and not _patrol_note_emitted:
-		_patrol_note_emitted = true
-		push_warning("TAT2_STATETREE=patrol: the S2 cutover is not enabled in this build; running shadow only")
 	var runner: RefCounted = load("res://src/ai/statetree/shadow_runner.gd").new()
 	runner.guard = p_guard
 	runner._start()
+	if mode() == MODE_PATROL and runner.started:
+		runner.writer = WriterSpike.new()
+		runner.writer.setup(p_guard, runner)
 	return runner
 
 
@@ -157,9 +201,20 @@ func _start() -> void:
 	}
 	started = interpreter.start()
 	start_failed = not started
+	events_emitted = []
 	if started:
 		last_state = interpreter.current_state()
 		last_state_changed_t = 0.0
+
+
+## Push one authored `StateTreeEvent.*` tag into the live interpreter. This is
+## the only write path an event has; the tag must be an authored one (see
+## `events.gd`). The payload is trace metadata, never an invented parameter bag.
+func push_event(tag: String, payload: Dictionary = {}) -> void:
+	if not started or interpreter == null or tag == "":
+		return
+	interpreter.push_event(tag, payload)
+	events_emitted.append({"tag": tag, "payload": payload.duplicate(true), "t": interpreter.time_s})
 
 
 ## Advance the shadow by one frame. Safe to call when the runner failed to start.
@@ -217,6 +272,8 @@ func summary() -> Dictionary:
 		"unknown_conditions": interpreter.unknown_conditions.duplicate(true),
 		"stalls": stalls,
 		"max_state_seconds": max_state_seconds,
+		"events_emitted": events_emitted.duplicate(true),
+		"writer": writer.summary() if writer != null else {},
 	}
 
 

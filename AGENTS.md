@@ -1,6 +1,6 @@
 # AGENTS.md — operating rules for this repository
 
-Applies to every coding agent working in `/home/john/Projects/TAT-2`, whatever
+Applies to every coding agent working in `<repo>`, whatever
 the harness (OpenCode, Claude Code, Codex). Read this file before editing,
 regenerating data, capturing screenshots or claiming a gate is green.
 
@@ -61,12 +61,12 @@ TAT-2 expansion content belong in git.
 
 ```bash
 make run         # native 4.7.2 client, F3 overlay
-make test        # tests/run_tests.gd — 327 checks, suites numbered to 124
+make test        # tests/run_tests.gd — 329 checks, suites numbered to 126
 make runtime-smoke # real free-play boot: exit 124 only, ERROR:/push_error scan, allowlist
 make audit       # fail-closed content + producer/output baseline gate
 make gate-ratchet # floors + committed docs/reports/logs evidence agree
 build/qa/test_perf_guard.sh  # perf-wrapper contract, no GPU, no launch
-build/qa/run_final_gates.sh  # current full set (49 gates) -> docs/reports/logs/final/; no outer flock
+build/qa/run_final_gates.sh  # current full set (59 gates) -> docs/reports/logs/final/; no outer flock
 build/qa/run_p0b_gates.sh    # historical P1 set (40 gates + cream RED) -> docs/reports/logs/p1/full/
 build/qa/run_p0a_gates.sh    # historical P0a 28-gate set -> docs/reports/logs/p0a/
 
@@ -82,40 +82,41 @@ If a headless run reports missing textures (`T1-01-C`, `moon_visible=0.0`), the
 import cache is incomplete — run `tools/godot --headless --path game --import`
 first.
 
-| Gate | Passing value (49-gate set measured_on `37bb69e`, logs in `docs/reports/logs/final/` — raise, never lower) |
+| Gate | Passing value (59-gate set measured_on `900f8eb`, logs in `docs/reports/logs/final/` — raise, never lower) |
 |---|---|
-| compile | 228 checked, 0 broken |
-| `run_tests.gd` | `SUMMARY: fails=0` (327 PASS; suites numbered to 124, 119 cream + 121 audio + 122 VO + 123 AEM + 124 cubemap registered) |
+| compile | 234 checked, 0 broken |
+| `run_tests.gd` | `SUMMARY: fails=0` (329 PASS; suites numbered to 126, 119 cream + 121 audio + 122 VO + 123 AEM + 124 cubemap + 125 contract holes + 126 nav delta registered) |
 | `test_m2_player.gd` | `M2_SUMMARY: fails=0` (12 PASS) |
-| P1 route probes (S12/S21/S24/S25–26/S13–20) | `P1_SAFE PASS checks=86` / `P1_DOORS checks=47 fails=0` / `P1_BEAMS PASS checks=9` / `P1_WARD PASS checks=44` / `P1_STREET PASS checks=31 hard_limits=2` |
+| P1 route probes (S12/S21/S24/S25–26/S13–20) | `P1_SAFE PASS checks=86` / `P1_DOORS checks=49 fails=0` / `P1_BEAMS PASS checks=9` / `P1_WARD PASS checks=44` / `P1_STREET PASS checks=31 hard_limits=2` |
 | landscape mask (P4.4) | `LANDSCAPE_MASK_SUMMARY: PASS fails=0 checks=7` (`discard|raw|off`, safe-room gap comp 12/`Weightmap_20`) |
-| navmesh runtime (N-P1/P2) | `NAV_RUNTIME_PROBE checks=70 fails=0` (Guildhall 80 links, door rule, negative controls) |
+| navmesh runtime (N-P1/P2) | `NAV_RUNTIME_PROBE checks=97 fails=0` (Guildhall 78 bidir + 2 one-way (v2), door rule, negative controls) |
 | door walk / viewmodel / Niagara probes | `DOORWALK PASS` / `VIEWMODEL_TRUTH PASS` / `NIAGARA_PROBE PASS` (3695 authored / 1048 active / 16 systems in this probe's map scope; the payload-wide census is 3308 active / 36 systems) |
 | guard selection (P0a) | `GUARD_CHECK PASS` Guildhall `lounge_marker=C_20` `buckets=4/4` and Old Manor `--order=3` (no Hauntstable) |
 | beam geometry (P0a) | `BEAM_GEOMETRY_SUMMARY: fails=0` — 330 cards, `max_axis_err_deg=0.000006`, `clamped=0` |
-| GC / turret / civilian (P0a/W10) | `GC_PROBE PASS` (52) / `GC_TRIGGER PASS` (21) / `TURRET_PROBE PASS` (229 actors, 1145 parts, 0 hidden) / `W10A2_CIV_SUMMARY: fails=0 passed=23` |
+| GC / turret / civilian (P0a/W10) | `GC_PROBE PASS` (55) / `GC_TRIGGER PASS` (21) / `TURRET_PROBE PASS` (229 actors, 1145 parts, 0 hidden) / `W10A2_CIV_SUMMARY: fails=0 passed=23` |
 | collision (W10-P2 truth) | `COL_MAPS PASS maps=3 min_coverage=0.869 dropped=0 planar_skipped=2 coverage_ppm=868852` — authored element coverage 0.910/0.912/0.869, `no_record=0`, no invented fallback |
 | lock inventory | `applied=162 containers=152 door_nodes=10 state=APPLIED` |
-| E2E | `fails=0 passed=300 total=300` (T1=117 T2=110 T3=25 T4=14 S2=12 A2=22; a2 runs inside `all`) |
+| E2E | `fails=0 passed=310 total=310` (T1=117 T2=110 T3=25 T4=14 S2=22 A2=22; a2 runs inside `all`) |
 | E2E tier a2 | `SUMMARY: fails=0 passed=22 total=22` (`static_bookcase_leaves>=20`) |
 | E2E tier p2 | `P2_SUMMARY: expected_fail=0 expected_delta=0 fixed=0 unexpected_fail=0` (17/17; both pants checks are hard) |
 | parity-only (P0b) | `PARITY_ONLY_SUMMARY: fails=0 passed=60 rules=11 restoration=11 expansion=0` |
 | cream suite 119 (W10-P2) | `CREAM_PROOF: GREEN passes=5 expected_fail=0`, exit 0 (the old RED proof is retired) |
-| audio control suite 121 (W10-P3/W11) | `AUDIO_CONTROL_SUMMARY: fails=0 checks=123` (switch=14/23, state=4/8, rtpc=16/50, 142 curves, music=2, music_keys=6/9) |
-| VO director suite 122 (W11) | `VO_DIRECTOR_SUMMARY: fails=0 checks=53` |
+| audio control suite 121 (W10-P3/W11) | `AUDIO_CONTROL_SUMMARY: fails=0 checks=135` (switch=14/23, state=4/8, rtpc=16/50, 142 curves, music=2, music_keys=6/9) |
+| VO director suite 122 (W11) | `VO_DIRECTOR_SUMMARY: fails=0 checks=60` |
 | AEM suite 123 (P4.1) | `AEM_PROBE: fails=0 passed=77` (no PENDING after the producer regen) |
-| cubemap suite 124 (P4.1) | `CUBEMAP_PROBE: fails=0 passed=37` (no PENDING; `CUBEMAP_ORIENT` daylight WARN recorded) |
+| cubemap suite 124 (P4.1) | `CUBEMAP_PROBE: fails=0 passed=51` (no PENDING; `CUBEMAP_ORIENT` daylight WARN recorded) |
 | P5 UI probe (W10-P5/U-4) | `P5_UI PASS checks=54`; `GEM_PAYLOAD present=true: layers=21` (headless; no visual score) |
 | Den spawn (W10) | `DEN_SPAWN PASS checks=9 fails=0` (`source=authored`, 2434 meshes) |
-| port capture harness (P0b/P4) | dry-run `poses=7` manifest valid; `P0B_SELFTEST PASS checks=23 fails=0`; `P0B_KF27_REF … met=9/9` |
+| Den window / route NPC (Phase 3C) | `DEN_WINDOW PASS checks=44` / `ROUTE_NPC PASS checks=4 fails=0` (85.4–150.7 m; S19/S20/S22/S23 unreachable) |
+| port capture harness (P0b/P4) | dry-run `poses=9` manifest valid; `P0B_SELFTEST PASS checks=23 fails=0`; `P0B_KF27_REF … met=9/9` (`--reference-only`; the first port `foyer_beam` is 5/9) |
 | route runner self-test (Phase 0a) | `P0B_ROUTE_SELFTEST PASS checks=62 fails=0`; `bash -n` on `p0b_route.sh` and `p0b_live_capture.sh` |
 | producer tests (P1/2) | `make test-producers` + `build/qa/test_parse_nav.py` 7/7; `STEALTHBALL_ARRAY_TEST PASS checks=22`; `UI_PIXEL_STATS_TEST PASS checks=15` |
 | P5 capture filter (U-2) | `CAPTURE_P5_FILTER_TEST PASS checks=5` |
 | `make texture-cap-check` | OK — 796 capped, 1 alpha-critical kept, 0 offenders (target set 1567 after the accepted `texture_refs 1523→1522` drop) |
-| `make audit` | exit 0, tracked baseline matches, disk-backed coverage (12660/12703), 0 unexpected, exact-case 0 unexpected, 13/13 content groups |
+| `make audit` | exit 0, tracked baseline matches, disk-backed coverage (12664/12703 (floor 12660/12703)), 0 unexpected, exact-case 0 unexpected, 13/13 content groups |
 | `make string-audit` | `UI_STRINGS total=311 routed=311 authored=199 routed_authored=199 invented=112` (ceiling 112; one documented `Thieves' Den` port copy at `contract_table_ui.gd:362`) |
 | perf guard | `PERF_GUARD_TEST PASS checks=78 fails=0` |
-| `make gate-ratchet` | PASS (`measured_on=37bb69e`; floors raised, never lowered) |
+| `make gate-ratchet` | PASS (`measured_on=900f8eb`; floors raised, never lowered) |
 
 The 2026-11-27 **Phase 1/2 integration** merged the six P4/GC/nav/audio/UI
 lanes and then fast-forwarded the mirrors lane to `07ecb56` (no conflict). It
@@ -128,14 +129,24 @@ The real extraction exposed one producer bug: array slices were written as
 `PORT_APPROX`; `Exporter.cs` now always adds the extension dot and the array
 rebinds (`GEM_PAYLOAD present=true: layers=21`). `parse_nav` was added to the
 audit `PRODUCERS` map (it was a `NORMALIZERS` entry with no baseline stamp).
-The current set is **49 gates**, measured at `37bb69e`: compile **228/0**,
-`run_tests` **327/0** (suites 119/121/122/123/124), audio **123/0**, VO 53/0,
-AEM 77/0, cubemap 37/0, P5 UI 54, beams 9, landscape 7, nav 70, GC 52, locks
-**162 = 152 containers + 10 doors**, capture 7 poses / self-test 23 / KF27 9/9,
-producer tests and the P5 capture filter included, audit 12660/12703 and texture
-cap 1567/796/1/0 unchanged. No GPU/Vulkan capture was run; the mirror readback,
-landscape A/B, KF27 port capture, IBL/AEM meter and P5 pixel score remain the
-GPU steps. Report:
+The current set is **59 gates**, measured at `900f8eb` (one serial run,
+23m38s; [`docs/reports/phase3-final-gates-20261128.md`](docs/reports/phase3-final-gates-20261128.md)):
+compile **234/0**, `run_tests` **329/0** (suites 119/121/122/123/124/125/126),
+manifest **112 tracked / 73 reachable / 39 retired / 0 orphans**, e2e_errscan
+**31/33 + 0-1/2 + 482-495/495 new=0**, audio **135/0**, VO 60/0, AEM 77/0,
+cubemap 51/0 (all three now produced in-run), P5 UI 54, beams 9, landscape 7,
+nav 97, GC 55, doors **49**, locks **162 = 152 containers + 10 doors**,
+capture 9 poses / self-test 23 / KF27 9/9
+(`--reference-only`; port `foyer_beam` 5/9), producer tests and the P5 capture
+filter included, audit 12664/12703 (floor 12660/12703) and texture
+cap 1567/796/1/0 unchanged. GPU-measured: the mirror readback is PASS
+(`pass=1`), the UI capture is 28/28 frames (prompt rows 3.03–4.32, a UI2-03
+DELTA), the KF27 wide and pinned poses are 5/9 (framing lands the card at
+18.0/40.0; the four failures are beam material terms), the landscape `gap_view`
+A/B has a subject (~1 %, RMSE discard↔raw 1.0077, off↔raw 0.0769), the IBL
+ambient energy is 0.001540 (not a win; `TAT2_IBL=off` stays the default), the
+AEM meter residual is 0.000 EV at a 2.14 EV scene-anchor gap (`TAT2_AEM=fixed`
+stays the default), and the P5 pixel score still needs visual adjudication. Report:
 [`docs/reports/integration-20261127.md`](docs/reports/integration-20261127.md).
 
 The 2026-11-24 W7 wave (five lanes, cherry-picked) re-ran the **complete** set
@@ -264,7 +275,9 @@ identical to the `5135f53` table, logs in `docs/reports/logs/final/`, report
 [`docs/reports/final-20261127-phase0b.md`](docs/reports/final-20261127-phase0b.md).
 The clean route2 capture is `docs/reports/logs/p0b-route/route2-clean/`
 (`status=captured`, `git.dirty=false`, 13/14/0, 17 frames, 18 PNGs at 1920×1080,
-exit 0). The ratchet is re-stamped `measured_on=912a481` and pins
+exit 0). The ratchet has since been re-stamped `measured_on=900f8eb` by the
+Phase 3 59-gate baseline (superseding the Phase 1/2 `37bb69e` and Phase 0b
+`912a481` stamps) and still pins
 `p0b_route_self_test.checks=62`. The 44-gate logs were measured at `5135f53`,
 committed on `main` at `3d62f6b`, and the Phase 0b run replaced the logs in
 place at `912a481` (pre-Phase-0b copies remain recoverable at `912a481` under
@@ -318,6 +331,20 @@ build/qa/             tracked capture/probe/export-stamp scripts; PNG output ign
 ```
 
 ## Known traps
+
+- **`e2e_errscan` uses completion markers + footers, not zero-ERROR detection.**
+  A log is truncated when it is empty, missing its tier's `SUMMARY: fails=0 …`
+  marker, or missing the runner footer (`FINISHED:` + `EXIT: 0`). The
+  `N resources still in use at exit` teardown line is nondeterministic Godot
+  noise observed 0-1 per process and may appear in `e2e` or `e2e_a2`; the
+  ceilings are `33 / 2 / 495` (2 is one-slot headroom, not a measured maximum)
+  and the tamper minima are e2e 31 / run_tests 482 / a2 0. Delete-known-errors
+  fails; a legitimate class disappearance is a reviewed minimum change. The
+  2026-11-28 raise 482→495 covers nav suite 126's known `fd`/font noise
+  (`new=0`); a new class still fails. Do not
+  restore the old "zero lines = truncated" rule or pin the teardown warning at
+  exactly 1 — that made the gate flaky and blocked the Phase 2.5 baseline twice.
+  Ceilings/minima are pinned in `tools/gate_ratchet.json`.
 
 - **Stair meshes are exempt from the convex element cap.** `authored_collision.gd`
   reduces a convex set above `MAX_CONVEX_ELEMENTS_PER_MESH = 16` to one coalesced
@@ -499,11 +526,14 @@ build/qa/             tracked capture/probe/export-stamp scripts; PNG output ign
 ## Parallel waves
 
 Long waves may be split across subagents in separate git worktrees. Symlink
-`game/assets`, `game/data/generated` and `extracted` into the worktree, copy
+`game/assets`, `game/data/generated`, `extracted` and the git-ignored `tools/bin`
+(the `vgmstream` binary the audit version-checks) into the worktree, copy
 `game/.godot` for imports, never edit the main checkout from a worker, and
 cherry-pick the worker commit onto `main` after its gates pass. Resolve conflicts
 by taking both intents (e.g. the `blocking_volume` tag comment), then rerun the
 full gate set on the merged tree — not just the worker's suite.
+A fresh worktree without `tools/bin` fails `make audit` on
+`vgmstream -> 'missing'` (the 2026-11-27 Phase 2.5 baseline hit this).
 
 **The symlinked data tree is read-only for workers.** `game/data` is a single
 shared directory, so a worker that runs `make normalize`, any `tools/parse_*.py`
@@ -525,29 +555,29 @@ tools/godot … test_m2_player.gd         # fails=0
 tools/godot … probe_leak.gd             # expected result or documented warning
 tools/godot … probe_collision_authored.gd  # COL_MAPS PASS, element coverage >= 0.868, no_record=0, dropped=0
 tools/godot … probe_lock_inventory.gd   # applied == 152 containers + 10 door nodes (=162), never 0
-tools/godot … run_e2e_tests.gd          # 300/300, no new failures
+tools/godot … run_e2e_tests.gd          # 310/310, no new failures
 tools/godot … test_parity_only.gd       # PARITY_ONLY_SUMMARY: fails=0 (needs TAT2_PARITY_ONLY proof)
 tools/godot … test_w10a2_cream.gd       # CREAM_PROOF: GREEN passes=5, exit 0 (suite 119)
-tools/godot … test_audio_control.gd     # AUDIO_CONTROL_SUMMARY: fails=0 checks=123
-tools/godot … test_vo_director.gd       # VO_DIRECTOR_SUMMARY: fails=0 checks=53 (suite 122)
+tools/godot … test_audio_control.gd     # AUDIO_CONTROL_SUMMARY: fails=0 checks=135
+tools/godot … test_vo_director.gd       # VO_DIRECTOR_SUMMARY: fails=0 checks=60 (suite 122)
 tools/godot … probe_auto_exposure.gd    # AEM_PROBE: fails=0 passed=77 (suite 123)
-tools/godot … probe_cubemap.gd          # CUBEMAP_PROBE: fails=0 passed=37 (suite 124)
+tools/godot … probe_cubemap.gd          # CUBEMAP_PROBE: fails=0 passed=51 (suite 124)
 tools/godot … probe_p5_ui.gd            # P5_UI PASS checks=54, GEM_PAYLOAD present=true layers=21
 tools/godot … probe_den_spawn.gd        # DEN_SPAWN PASS checks=9 fails=0
 tools/godot … probe_p1_safe.gd          # P1_SAFE PASS checks=86 fails=0
-tools/godot … probe_p1_doors.gd         # P1_DOORS checks=47 fails=0
+tools/godot … probe_p1_doors.gd         # P1_DOORS checks=49 fails=0
 tools/godot … probe_p1_beams.gd         # P1_BEAMS PASS checks=9 fails=0
 tools/godot … probe_p1_ward.gd          # P1_WARD PASS checks=44
 tools/godot … probe_p1_street.gd        # P1_STREET PASS checks=31 hard_limits=2
 tools/godot … probe_landscape_mask.gd   # LANDSCAPE_MASK_SUMMARY: PASS fails=0 checks=7
-build/qa/nav_runtime_probe.sh           # NAV_RUNTIME_PROBE checks=70 fails=0
+build/qa/nav_runtime_probe.sh           # NAV_RUNTIME_PROBE checks=97 fails=0
 make test-producers                     # all tools/test_*.py (includes 22/15)
 python3 build/qa/test_parse_nav.py      # 7/7
 build/qa/test_capture_p5_ui_filter.sh   # CAPTURE_P5_FILTER_TEST PASS checks=5
 build/qa/runtime_smoke.sh 90            # exit 124 only, 0 unexpected ERROR:, mission_ready
 build/qa/test_runtime_smoke_scan.sh     # 29/29, no engine needed
 build/qa/test_perf_guard.sh             # 78/78, no GPU
-build/qa/run_final_gates.sh             # all of the above serially (49 gates, no expected failure)
+build/qa/run_final_gates.sh             # all of the above serially (59 gates, no expected failure)
 make gate-ratchet                       # floors + committed logs agree
 git push origin main
 ```

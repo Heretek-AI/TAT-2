@@ -1,7 +1,7 @@
 == FINAL_GATE audit
 COMMAND: make audit
-CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
-STARTED: 2026-11-27T17:28:43-05:00
+CWD: .
+STARTED: 2026-11-28T09:19:27-05:00
 
 python3 tools/check_content_overrides.py
 Override rule table:
@@ -38,7 +38,7 @@ Parity classes: parity_restoration=11
 
 CONTENT_OVERRIDES: PASS
 python3 tools/prebake_texture_cap.py --check --cap 1024
-repo: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
+repo: /home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/sentinel
 targets: 1567 (materials.json 1522, code 102, scenes 0, unique 1567, dangling literals skipped 4)
 mode: CHECK (cap 1024 px long edge)
 capped: 796
@@ -82,22 +82,22 @@ KINDS _loc=5 _loc_upper=5 loc=127 loc_template=4 st_template=9 st_text=83 st_upp
   game/src/interact/clue_item.gd: 3/3 routed
   game/src/ui/loading_screen.gd: 2/2 routed
 python3 tools/check_literal_greps.py
-LITERAL_GREPS PASS code_hits=0 ui_rating_literals=0 files=112
+LITERAL_GREPS PASS code_hits=0 ui_rating_literals=0 files=114
 python3 tools/manifest_audit.py --min-coverage 0.99 --min-exact-coverage 0.99
 Manifest TAT entries: 16792 (12703 payload, 4088 .ubulk, 1 pak)
 Pak containers excluded: 1 (TAT/Content/Paks/pakchunk0-Windows.pak)
 Mount/path consistency (case-insensitive, pak excluded): 12703/12703 (100.0%)
 Case-sensitive parity: raw 12630/12703 (99.4%), allowlisted 73/73, unexpected 0; effective 100.0%
-Disk-backed content coverage: 12660/12703 (99.7%), resolved by exported-name rename 3, allowlisted missing 43, unexpected 0
+Disk-backed content coverage: 12664/12703 (99.7%), resolved by exported-name rename 3, allowlisted missing 39, unexpected 0
   renamed exports (SK_ authored -> SKM_ exported): SK_TarpC.uasset, SK_TarpB.uasset, SK_TarpA.uasset
-  allowlisted missing by kind: cloth_simulation 1, editor_copy 2, gameplay_asset 2, geometry_collection 4, graybox_template 13, movie_wrapper 18, perf_harness 1, shader_cache 2
+  allowlisted missing by kind: cloth_simulation 1, editor_copy 2, gameplay_asset 2, graybox_template 13, movie_wrapper 18, perf_harness 1, shader_cache 2
 UBULK companions: 4088 manifest, 0 case-insensitive missing, 0 unexpected exact-case missing
 stage raw: 141 payload files (min 120, 0 importer/sidecar files excluded)
-stage json: 12541 payload files (min 12000, 0 importer/sidecar files excluded)
+stage json: 12545 payload files (min 12000, 0 importer/sidecar files excluded)
 stage assets: 6702 payload files (min 6500, 4631 importer/sidecar files excluded)
 stage audio: 5019 payload files (min 5000, 0 importer/sidecar files excluded)
 stage audio-meta: 1441 payload files (min 1200, 0 importer/sidecar files excluded)
-Payload files written to extracted: 25844
+Payload files written to extracted: 25848
 godot-import (separate gate): 10716 .import sidecars, 8 .translation files; run tools/reimport_assets.sh
 Engine/Content files mounted: 4639
 engine-dep OK: Engine/Content/EngineMaterials/WorldGridMaterial.uasset
@@ -107,19 +107,19 @@ engine-dep OK: Engine/Content/BasicShapes/Sphere.uasset
 engine-dep OK: Engine/Content/BasicShapes/Cone.uasset
 engine-dep OK: Engine/Content/BasicShapes/Cylinder.uasset
 errors.log: 0 known-unsupported BlendSpace, 0 unexpected
-freshness levels: fresh (newest src 2026-11-21 21:32, oldest out 2026-11-27 14:35, 108 outputs)
-freshness gameplay: fresh (newest src 2026-11-21 21:32, oldest out 2026-11-27 14:35, 23 outputs)
-freshness tables: fresh (newest src 2026-11-21 21:32, oldest out 2026-11-27 14:35, 161 outputs)
-freshness project_ini: fresh (newest src 2026-11-21 19:16, oldest out 2026-11-27 14:36, 1 outputs)
-freshness input_actions: fresh (newest src 2026-11-21 20:41, oldest out 2026-11-27 14:36, 1 outputs)
-freshness mesh_collision: fresh (newest src 2026-11-21 21:32, oldest out 2026-11-27 14:36, 1 outputs)
-freshness materials: fresh (newest src 2026-11-27 14:38, oldest out 2026-11-27 14:39, 3 outputs)
-freshness audio: fresh (newest src 2026-11-21 19:57, oldest out 2026-11-27 14:37, 2 outputs)
-freshness weather: fresh (newest src 2026-11-21 21:32, oldest out 2026-11-27 14:36, 17 outputs)
-freshness vfx: fresh (newest src 2026-11-21 21:32, oldest out 2026-11-27 14:35, 2 outputs)
+freshness levels: fresh (newest src 2026-11-21 21:32, oldest out 2026-11-28 06:22, 108 outputs)
+freshness gameplay: fresh (newest src 2026-11-21 21:32, oldest out 2026-11-28 02:09, 23 outputs)
+freshness tables: fresh (newest src 2026-11-21 21:32, oldest out 2026-11-28 02:09, 161 outputs)
+freshness project_ini: fresh (newest src 2026-11-21 19:16, oldest out 2026-11-28 02:09, 1 outputs)
+freshness input_actions: fresh (newest src 2026-11-21 20:41, oldest out 2026-11-28 02:09, 1 outputs)
+freshness mesh_collision: fresh (newest src 2026-11-28 01:58, oldest out 2026-11-28 02:10, 1 outputs)
+freshness materials: fresh (newest src 2026-11-28 02:08, oldest out 2026-11-28 02:09, 3 outputs)
+freshness audio: fresh (newest src 2026-11-21 19:57, oldest out 2026-11-28 02:11, 2 outputs)
+freshness weather: fresh (newest src 2026-11-28 01:58, oldest out 2026-11-28 02:09, 17 outputs)
+freshness vfx: fresh (newest src 2026-11-28 01:58, oldest out 2026-11-28 02:09, 2 outputs)
 freshness anims: fresh (newest src 2026-11-25 04:50, oldest out 2026-11-25 04:50, 996 outputs)
-freshness localization: fresh (newest src 2026-11-21 19:16, oldest out 2026-11-27 14:37, 9 outputs)
-freshness scene_variants: fresh (newest src 2026-11-21 21:32, oldest out 2026-11-27 14:35, 1 outputs)
+freshness localization: fresh (newest src 2026-11-21 19:16, oldest out 2026-11-28 02:11, 9 outputs)
+freshness scene_variants: fresh (newest src 2026-11-21 21:32, oldest out 2026-11-28 06:22, 1 outputs)
 freshness videos: fresh (newest src 2026-06-06 23:27, oldest out 2026-11-21 17:39, 16 outputs)
 content levels: OK   files=107, min=107, invalid=0
 content contracts: OK   entries=16, expected=16, loot_goals=True
@@ -136,8 +136,8 @@ content scene_variants: OK   count=222, records=222, expected=222
 content niagara: OK   records=3695, min=3695
 provenance: no .usmap under tools/ue4ss/output in this checkout, so the property-name mapping is UNPINNED here (pass --require-usmap to fail instead)
 provenance: extractor binary is newer than its sources (Exporter.cs)
-baseline: matches /home/john/.local/share/opencode/worktree/318f41/phase12-integration/tools/audit_baseline.json
+baseline: matches /home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/sentinel/tools/audit_baseline.json
 AUDIT PASS
 
 EXIT: 0
-FINISHED: 2026-11-27T17:28:52-05:00
+FINISHED: 2026-11-28T09:19:36-05:00

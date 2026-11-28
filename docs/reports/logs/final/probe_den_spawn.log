@@ -1,30 +1,30 @@
 == FINAL_GATE probe_den_spawn
 COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/probe_den_spawn.gd
-CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
-STARTED: 2026-11-27T17:24:56-05:00
+CWD: .
+STARTED: 2026-11-28T09:14:53-05:00
 
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 TAT-2 Loc: reverse map built from sources.json (3404 keys)
 TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
@@ -57,8 +57,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [3] _build_one_draw_item (res://src/core/level_loader.gd:5230)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7713)
 MIRROR_SPLIT mp=/Game/Art/Environment/Props/Furniture/Tables/SM_DiningTable_2m_End mode=native pos=1 neg=1 surfaces=3 bytes=0
-AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=342
-ROUGHNESS_BAKE count=34 pixels=25690112 ms=1875 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=334
+ROUGHNESS_BAKE count=34 pixels=25690112 ms=1856 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=2440 applied=2434 duplicate=5 name_skipped=0 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.38x mirrored=2 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0 mirrored_bases=2 mirrored_multimesh=1 mirrored_single=1 mirrored_splits=2 mirrored_cull_front=0 mirrored_cull_disabled=0 mirrored_mesh_bytes=36000 mirrored_mesh_count=1 mirrored_unbaked=0
 MIRROR_RECON bases=2 multimesh=1 single=1 split=2 cull_front=0 cull_disabled=0 baked=1 baked_bytes=36000 unbaked=0 suppressed=0 ok=true
 TAT-2 Loaded thieves_den: meshes=2434 lights=13
@@ -90,4 +90,4 @@ DEN_SPAWN stats meshes=2434 collision_shapes=3017 floor_shapes=3 shell_shapes=1
 DEN_SPAWN PASS checks=9 fails=0
 
 EXIT: 0
-FINISHED: 2026-11-27T17:25:05-05:00
+FINISHED: 2026-11-28T09:15:02-05:00

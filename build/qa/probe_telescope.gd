@@ -1,6 +1,6 @@
 extends SceneTree
 
-const OUT_DIR: String = "/home/john/Projects/TAT-2/build/qa"
+var OUT_DIR: String = ProjectSettings.globalize_path("res://../build/qa").simplify_path()
 
 func _init() -> void:
 	call_deferred("_run")

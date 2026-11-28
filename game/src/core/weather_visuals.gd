@@ -441,10 +441,13 @@ static func make_rain(parent: Node3D, preset: Dictionary) -> Node3D:
 		return null
 	if not WeatherProfile.enable_rain(preset):
 		return null
-	var raw: Variant = WeatherProfile.rain_intensity(preset)
+	var raw: Variant = WeatherProfile.rain_intensity_01(preset)
 	if raw == null or float(raw) <= RAIN_MIN_INTENSITY:
 		return null
-	var intensity: float = clampf(float(raw), 0.0, 1.5)
+	# Phase 3B.3: the converter owns the domain (0..1). The old 0..1.5 clamp
+	# here let `blood_moon` (authored 10.0) draw 1.5x the full rain volume while
+	# the RTPC and the lens shader both read 1.0.
+	var intensity: float = float(raw)
 	var tier_scale: float = MobileProfile.rain_scale()
 	var scaled_max: int = maxi(int(float(RAIN_AMOUNT_MAX) * tier_scale), RAIN_AMOUNT_MIN)
 	var total: int = clampi(int(RAIN_AMOUNT_AT_FULL * intensity * tier_scale), RAIN_AMOUNT_MIN, scaled_max)
@@ -545,7 +548,7 @@ static func update_rain_occlusion(rain: Node3D, target: Node3D) -> void:
 static func make_lens_rain(parent: Node, preset: Dictionary) -> CanvasLayer:
 	if parent == null or preset.is_empty() or not WeatherProfile.enable_rain(preset):
 		return null
-	var raw: Variant = WeatherProfile.rain_intensity(preset)
+	var raw: Variant = WeatherProfile.rain_intensity_01(preset)
 	if raw == null or float(raw) <= 0.1:
 		return null
 	if not ResourceLoader.exists(LENS_DROP_TEXTURE):
@@ -563,7 +566,7 @@ static func make_lens_rain(parent: Node, preset: Dictionary) -> CanvasLayer:
 	var mat := ShaderMaterial.new()
 	mat.shader = LENS_RAIN_SHADER
 	mat.set_shader_parameter("drop_tex", tex)
-	mat.set_shader_parameter("intensity", clampf(float(raw), 0.0, 1.0))
+	mat.set_shader_parameter("intensity", float(raw))
 	mat.set_shader_parameter("tiling", 2.0)
 	mat.set_shader_parameter("animation_speed", 0.25)
 	mat.set_shader_parameter("mask_edge", 0.2)

@@ -59,7 +59,7 @@ func _run() -> void:
 			last = pos
 			await RenderingServer.frame_post_draw
 			var img: Image = root.get_texture().get_image()
-			img.save_png("/home/john/Projects/TAT-2/build/qa/probe_west_t%02d.png" % (next_capture / 1000))
+			img.save_png(ProjectSettings.globalize_path("res://../build/qa/").simplify_path() + "/probe_west_t%02d.png" % (next_capture / 1000))
 			next_capture += 2000
 	Input.action_release("move_forward")
 	print("PROBE end pos=", p.global_position, " yaw_deg=", rad_to_deg(p.rotation.y))

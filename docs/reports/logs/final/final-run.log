@@ -1,17 +1,19 @@
 FINAL_GATE_RUN
-started: 2026-11-27T17:06:31-05:00
-root: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
-head: 60474c004d21b0f19481cdf0b223afde2e12a78a
-branch: phase12-integration
+started: 2026-11-28T08:56:01-05:00
+root: .
+head: 5337828922431435e951be47c9dfc363d00db95c
+branch: teamwork/base-20261127-1810-phase3
 godot: 4.7.2.stable.official.ed1daf0bf
-godot_bin: /home/john/.local/share/opencode/worktree/318f41/phase12-integration/tools/godot
+godot_bin: tools/godot
 lock: /tmp/opencode/tat2-godot.lock
-uncommitted_entries_at_start: 0
+uncommitted_entries_at_start: 65
 host: Linux 7.4.0-0.rc4.261125g4dce97c6c265.35.fc46.x86_64 x86_64
 nproc: 32
 runner: build/qa/run_final_gates.sh
 
-FINAL_GATES start head=60474c004d21b0f19481cdf0b223afde2e12a78a branch=phase12-integration godot=4.7.2.stable.official.ed1daf0bf
+FINAL_GATES start head=5337828922431435e951be47c9dfc363d00db95c branch=teamwork/base-20261127-1810-phase3 godot=4.7.2.stable.official.ed1daf0bf
+FINAL_GATE name=gate_manifest exit=0 log=docs/reports/logs/final/gate_manifest.log
+FINAL_MARKER name=gate_manifest marker=GATE_MANIFEST: PASS
 FINAL_GATE name=compile exit=0 log=docs/reports/logs/final/compile.log
 FINAL_MARKER name=compile marker=scripts checked: [0-9]+, broken: 0
 FINAL_GATE name=run_tests exit=0 log=docs/reports/logs/final/run_tests.log
@@ -39,15 +41,19 @@ FINAL_MARKER name=probe_collision_authored marker=COL_MAPS PASS
 FINAL_GATE name=probe_lock_inventory exit=0 log=docs/reports/logs/final/probe_lock_inventory.log
 FINAL_MARKER name=probe_lock_inventory marker=state=APPLIED
 FINAL_GATE name=nav_runtime_probe exit=0 log=docs/reports/logs/final/nav_runtime_probe.log
-FINAL_MARKER name=nav_runtime_probe marker=NAV_RUNTIME_PROBE checks=70 fails=0
+FINAL_MARKER name=nav_runtime_probe marker=NAV_RUNTIME_PROBE checks=[0-9]+ fails=0
 FINAL_GATE name=probe_niagara exit=0 log=docs/reports/logs/final/probe_niagara.log
 FINAL_MARKER name=probe_niagara marker=NIAGARA_PROBE PASS
+FINAL_GATE name=probe_statetree_shadow exit=0 log=docs/reports/logs/final/probe_statetree_shadow.log
+FINAL_MARKER name=probe_statetree_shadow marker=^PROBE PASS fails=0$
 FINAL_GATE name=probe_door_walk exit=0 log=docs/reports/logs/final/probe_door_walk.log
 FINAL_MARKER name=probe_door_walk marker=DOORWALK PASS
 FINAL_GATE name=probe_viewmodel_truth exit=0 log=docs/reports/logs/final/probe_viewmodel_truth.log
 FINAL_MARKER name=probe_viewmodel_truth marker=VIEWMODEL_TRUTH PASS
 FINAL_GATE name=probe_geometry_placement exit=0 log=docs/reports/logs/final/probe_geometry_placement.log
 FINAL_MARKER name=probe_geometry_placement marker=GEOM_PROBE PASS
+FINAL_GATE name=probe_mirror_split exit=0 log=docs/reports/logs/final/probe_mirror_split.log
+FINAL_MARKER name=probe_mirror_split marker=^MIRROR_DATA_SUMMARY: fails=0 checks=39 mode=geometry$
 FINAL_GATE name=probe_blackjack_race exit=0 log=docs/reports/logs/final/probe_blackjack_race.log
 FINAL_MARKER name=probe_blackjack_race marker=BLACKJACK_PROBE PASS
 FINAL_GATE name=probe_device_meshes exit=0 log=docs/reports/logs/final/probe_device_meshes.log
@@ -62,26 +68,40 @@ FINAL_GATE name=test_w10a2_guard_placement exit=0 log=docs/reports/logs/final/te
 FINAL_MARKER name=test_w10a2_guard_placement marker=GUARD_PLACEMENT_SUMMARY: fails=0
 FINAL_GATE name=test_beam_geometry exit=0 log=docs/reports/logs/final/test_beam_geometry.log
 FINAL_MARKER name=test_beam_geometry marker=BEAM_GEOMETRY_SUMMARY: fails=0
+FINAL_GATE name=test_roof_collision exit=0 log=docs/reports/logs/final/test_roof_collision.log
+FINAL_MARKER name=test_roof_collision marker=ROOF_COLLISION_MODES PASS authored=0 aabb=0
 FINAL_GATE name=probe_leak exit=0 log=docs/reports/logs/final/probe_leak.log
 FINAL_MARKER name=probe_leak marker=PROBE start
 FINAL_GATE name=e2e exit=0 log=docs/reports/logs/final/e2e.log
-FINAL_MARKER name=e2e marker=SUMMARY: fails=0 passed=300 total=300
+FINAL_MARKER name=e2e marker=SUMMARY: fails=0 passed=310 total=310
 FINAL_GATE name=e2e_a2 exit=0 log=docs/reports/logs/final/e2e_a2.log
 FINAL_MARKER name=e2e_a2 marker=SUMMARY: fails=0 passed=22 total=22
 FINAL_GATE name=e2e_p2 exit=0 log=docs/reports/logs/final/e2e_p2.log
 FINAL_MARKER name=e2e_p2 marker=P2_SUMMARY: expected_fail=0 expected_delta=0 fixed=0 unexpected_fail=0
+FINAL_GATE name=e2e_errscan exit=0 log=docs/reports/logs/final/e2e_errscan.log
+FINAL_MARKER name=e2e_errscan marker=E2E_ERRSCAN PASS
 FINAL_GATE name=parity_only exit=0 log=docs/reports/logs/final/parity_only.log
 FINAL_MARKER name=parity_only marker=PARITY_ONLY_SUMMARY: fails=0 passed=60
 FINAL_GATE name=test_w10a2_cream exit=0 log=docs/reports/logs/final/test_w10a2_cream.log
 FINAL_MARKER name=test_w10a2_cream marker=CREAM_PROOF: GREEN passes=5 expected_fail=0
 FINAL_GATE name=test_audio_control exit=0 log=docs/reports/logs/final/test_audio_control.log
-FINAL_MARKER name=test_audio_control marker=AUDIO_CONTROL_SUMMARY: fails=0 checks=123
+FINAL_MARKER name=test_audio_control marker=AUDIO_CONTROL_SUMMARY: fails=0 checks=135
+FINAL_GATE name=test_vo_director exit=0 log=docs/reports/logs/final/test_vo_director.log
+FINAL_MARKER name=test_vo_director marker=VO_DIRECTOR_SUMMARY: fails=0 checks=60
+FINAL_GATE name=probe_auto_exposure exit=0 log=docs/reports/logs/final/probe_auto_exposure.log
+FINAL_MARKER name=probe_auto_exposure marker=AEM_PROBE: fails=0 passed=77
+FINAL_GATE name=probe_cubemap exit=0 log=docs/reports/logs/final/probe_cubemap.log
+FINAL_MARKER name=probe_cubemap marker=CUBEMAP_PROBE: fails=0 passed=51
 FINAL_GATE name=probe_p5_ui exit=0 log=docs/reports/logs/final/probe_p5_ui.log
 FINAL_MARKER name=probe_p5_ui marker=P5_UI PASS checks=54
 FINAL_GATE name=test_capture_p5_filter exit=0 log=docs/reports/logs/final/test_capture_p5_filter.log
 FINAL_MARKER name=test_capture_p5_filter marker=CAPTURE_P5_FILTER_TEST PASS checks=5
 FINAL_GATE name=probe_den_spawn exit=0 log=docs/reports/logs/final/probe_den_spawn.log
 FINAL_MARKER name=probe_den_spawn marker=DEN_SPAWN PASS checks=9 fails=0
+FINAL_GATE name=probe_den_window exit=0 log=docs/reports/logs/final/probe_den_window.log
+FINAL_MARKER name=probe_den_window marker=^DEN_WINDOW PASS checks=44$
+FINAL_GATE name=probe_route_npcs exit=0 log=docs/reports/logs/final/probe_route_npcs.log
+FINAL_MARKER name=probe_route_npcs marker=ROUTE_NPC PASS checks=4 fails=0
 FINAL_GATE name=p0b_capture_dry_run exit=0 log=docs/reports/logs/final/p0b_capture_dry_run.log
 FINAL_MARKER name=p0b_capture_dry_run marker=P0B_DRY_RUN
 FINAL_GATE name=p0b_capture_self_test exit=0 log=docs/reports/logs/final/p0b_capture_self_test.log
@@ -93,7 +113,7 @@ FINAL_MARKER name=p0b_kf27_reference marker=P0B_KF27_REF pose=upper_foyer met=9/
 FINAL_GATE name=p0b_route_self_test exit=0 log=docs/reports/logs/final/p0b_route_self_test.log
 FINAL_MARKER name=p0b_route_self_test marker=P0B_ROUTE_SELFTEST PASS checks=62 fails=0
 FINAL_GATE name=runtime_smoke exit=0 log=docs/reports/logs/final/runtime_smoke.log
-FINAL_SMOKE_GODOT_LOG /home/john/.local/share/opencode/worktree/318f41/phase12-integration/docs/reports/logs/final/runtime_smoke_godot.log (from /tmp/tat2-smoke-IRuXzU.log)
+FINAL_SMOKE_GODOT_LOG /home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/sentinel/docs/reports/logs/final/runtime_smoke_godot.log (from /tmp/tat2-smoke-2aywST.log)
 FINAL_GATE name=runtime_smoke_scan exit=0 log=docs/reports/logs/final/runtime_smoke_scan.log
 FINAL_MARKER name=runtime_smoke_scan marker=RUNTIME_SMOKE_SCAN_TEST PASS
 FINAL_GATE name=producer_tests exit=0 log=docs/reports/logs/final/producer_tests.log
@@ -105,5 +125,5 @@ FINAL_GATE name=audit exit=0 log=docs/reports/logs/final/audit.log
 FINAL_GATE name=texture_cap exit=0 log=docs/reports/logs/final/texture_cap.log
 FINAL_GATE name=perf_guard exit=0 log=docs/reports/logs/final/perf_guard.log
 FINAL_GATE name=gate_ratchet exit=0 log=docs/reports/logs/final/gate_ratchet.log
-FINAL_GATES PASS head=60474c004d21b0f19481cdf0b223afde2e12a78a gates=49
-FINAL_GATES evidence=/home/john/.local/share/opencode/worktree/318f41/phase12-integration/docs/reports/logs/final summary=/home/john/.local/share/opencode/worktree/318f41/phase12-integration/docs/reports/logs/final/final-summary.txt
+FINAL_GATES PASS head=5337828922431435e951be47c9dfc363d00db95c gates=59
+FINAL_GATES evidence=/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/sentinel/docs/reports/logs/final summary=/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/sentinel/docs/reports/logs/final/final-summary.txt

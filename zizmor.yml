@@ -1,0 +1,11 @@
+# The two reusable workflows live in Heretek-AI/.github, whose `main` branch
+# advances independently of this repository. zizmor's ref-version check cannot
+# be satisfied by pinning a comment to a full SHA, and the org repository
+# publishes no tags, so the comment would have to name a moving branch. The
+# pins themselves are immutable commit SHAs; suppress only the comment check
+# for those two caller files so the rest of the audit stays enforced.
+rules:
+  ref-version-mismatch:
+    ignore:
+      - hygiene.yml
+      - ocr.yml

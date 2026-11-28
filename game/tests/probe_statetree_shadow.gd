@@ -117,6 +117,14 @@ func _initialize() -> void:
 	print("P4ALL_TREES started=%d blocked=%d rows=%d" % [int(structural["started"]), int(structural["blocked"]), int(structural["rows"])])
 	var coverage: Dictionary = ShadowRunner.coverage(null)
 	print(Coverage.summary_line(coverage))
+	for line: String in Coverage.vacuous_lines(coverage):
+		print(line)
+	var events: Dictionary = (coverage["totals"] as Dictionary)["events"]
+	print("P4EVENTS authored=%d emitted=%d unemitted=%d enter=%d transition=%d total=%d emitted_tags=%s unemitted_tags=%s"
+		% [int((events["counts"] as Dictionary)["authored"]), int((events["counts"] as Dictionary)["emitted"]),
+			int((events["counts"] as Dictionary)["unemitted"]), int((events["counts"] as Dictionary)["enter"]),
+			int((events["counts"] as Dictionary)["transition"]), int((events["counts"] as Dictionary)["total"]),
+			str(events["emitted"]), str(events["unemitted"])])
 	print("PROBE ", "PASS" if fails == 0 else "FAIL", " fails=", fails)
 	quit(0 if fails == 0 else 1)
 

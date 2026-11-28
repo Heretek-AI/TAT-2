@@ -3,6 +3,8 @@ extends SceneTree
 ##
 ## Measures, from the committed generated data and the real door scripts:
 ##
+##   0. DOOR APERTURE — the two authored door-frame meshes collide as trimesh
+##      apertures, not solid AABBs (folded from probe_door_aperture.gd).
 ##   1. RECORDS — the authored S21 door records in `Building_Guildhall_POI`:
 ##      actor `BP_Manor_Porch_Door_8x8_C_0/1`, one `Pivot` + one `SecondPivot`
 ##      leaf each, leaf mesh `SM_Civic_DoorDouble_x4` (6x8 civic double door,
@@ -184,6 +186,27 @@ func _run() -> void:
 	# (the roughness/material caches are process-global otherwise).
 	root.add_child(loader)
 	loader.call("_load_material_dbs")
+
+	# --- 0. door aperture: frames collide as their modelled opening --------
+	# Folded from tests/probe_door_aperture.gd (Phase 3 §2.5.5) without
+	# relaxing its assertion: a door frame must collide as a trimesh aperture,
+	# not as a solid AABB that would seal an opened doorway. The original probe
+	# is kept for standalone use; the check now runs inside this gate too.
+	var aperture_paths: Array[String] = [
+		"/Game/Art/Environment/Urban/Walls/SM_Urban_ext_Door_4x6",
+		"/Game/Art/Environment/OldManor/SM_OldManor_Doorframe_Double_Int_6x8",
+	]
+	for ap_path: String in aperture_paths:
+		var ap_info: Dictionary = loader.call("_get_mesh_and_shape", ap_path) as Dictionary
+		var ap_shape: Shape3D = ap_info.get("shape") as Shape3D
+		var ap_trimesh: bool = ap_shape is ConcavePolygonShape3D
+		_check(ap_trimesh, "door aperture %s collides as a trimesh (got %s)"
+			% [ap_path.get_file(), ap_shape.get_class() if ap_shape != null else "<null>"])
+		print("    DOOR_APERTURE ", ap_path.get_file(),
+			" mesh=", ap_info.get("mesh") != null,
+			" shape=", ap_shape.get_class() if ap_shape != null else "<null>",
+			" trimesh=", ap_trimesh)
+
 	var holder: Node3D = Node3D.new()
 	holder.name = "P1Doors"
 	root.add_child(holder)

@@ -1,19 +1,19 @@
 == POST_STAMP gate_ratchet
 COMMAND: python3 -B tools/check_gate_ratchet.py --generating-poststamp
 CWD: .
-STARTED: 2026-11-28T07:05:30-05:00
+STARTED: 2026-11-28T08:55:50-05:00
 
-PASS: measured_on=5857589
+PASS: measured_on=900f8eb
 PASS: audit.coverage_den=12703
 PASS: audit.coverage_num=12660
 PASS: audit.unexpected=0
 PASS: beam_geometry.cards=330
 PASS: beam_geometry.fails=0
 PASS: compile.broken=0
-PASS: compile.checked=229
+PASS: compile.checked=234
 PASS: e2e.fails=0
-PASS: e2e.passed=300
-PASS: e2e.total=300
+PASS: e2e.passed=310
+PASS: e2e.total=310
 PASS: e2e_a2.fails=0
 PASS: e2e_a2.passed=22
 PASS: e2e_a2.total=22
@@ -22,7 +22,7 @@ PASS: e2e_errscan.e2e_a2_min=0
 PASS: e2e_errscan.e2e_ceiling=33
 PASS: e2e_errscan.e2e_min=31
 PASS: e2e_errscan.new=0
-PASS: e2e_errscan.run_tests_ceiling=482
+PASS: e2e_errscan.run_tests_ceiling=495
 PASS: e2e_errscan.run_tests_min=482
 PASS: e2e_p2.expected_delta=0
 PASS: e2e_p2.expected_fail=0
@@ -30,7 +30,7 @@ PASS: e2e_p2.fixed=0
 PASS: e2e_p2.unexpected_fail=0
 PASS: gate_manifest.orphans=0
 PASS: gate_manifest.retired=39
-PASS: gate_manifest.tracked=109
+PASS: gate_manifest.tracked=112
 PASS: literal_greps.code_hits=0
 PASS: literal_greps.ui_rating_literals=0
 PASS: lock_inventory.applied=162
@@ -38,10 +38,10 @@ PASS: lock_inventory.containers=152
 PASS: lock_inventory.door_nodes=10
 PASS: m2.fails=0
 PASS: m2.passes=12
-PASS: nav_runtime_probe.checks=70
+PASS: nav_runtime_probe.checks=97
 PASS: nav_runtime_probe.fails=0
 PASS: p0b_capture.poses=7
-PASS: p0b_capture_dry_run.poses=7
+PASS: p0b_capture_dry_run.poses=9
 PASS: p0b_capture_self_test.checks=23
 PASS: p0b_capture_self_test.fails=0
 PASS: p0b_kf27_reference.met_den=9
@@ -59,7 +59,7 @@ PASS: probe_collision.dropped=0
 PASS: probe_collision.maps=3
 PASS: probe_collision.planar_skipped=2
 PASS: probe_cubemap.fails=0
-PASS: probe_cubemap.passed=37
+PASS: probe_cubemap.passed=51
 PASS: probe_den_spawn.checks=9
 PASS: probe_den_spawn.fails=0
 PASS: probe_den_window.checks=44
@@ -67,7 +67,7 @@ PASS: probe_device_meshes.actors=229
 PASS: probe_device_meshes.checks=11
 PASS: probe_device_meshes.hidden_parts=0
 PASS: probe_device_meshes.visible_parts=1145
-PASS: probe_gc_destruction.checks=52
+PASS: probe_gc_destruction.checks=55
 PASS: probe_gc_destruction.fails=0
 PASS: probe_geometry_placement.checks=7
 PASS: probe_geometry_placement.fails=0
@@ -99,7 +99,7 @@ PASS: producer_tests.nav_checks=7
 PASS: producer_tests.stealthball_checks=22
 PASS: producer_tests.ui_pixel_checks=15
 PASS: run_tests.fails=0
-PASS: run_tests.passes=328
+PASS: run_tests.passes=329
 PASS: runtime_smoke.errors=0
 PASS: runtime_smoke.mission_ready=1
 PASS: runtime_smoke_scan.checks=29
@@ -107,13 +107,13 @@ PASS: runtime_smoke_scan.fails=0
 PASS: string_audit.authored=199
 PASS: string_audit.invented=112
 PASS: string_audit.routed=311
-PASS: test_audio_control.checks=123
+PASS: test_audio_control.checks=135
 PASS: test_audio_control.fails=0
 PASS: test_capture_p5_filter.checks=5
 PASS: test_gc_break_trigger.checks=21
 PASS: test_gc_break_trigger.fails=0
 PASS: test_roof_collision.checks=106
-PASS: test_vo_director.checks=53
+PASS: test_vo_director.checks=60
 PASS: test_vo_director.fails=0
 PASS: test_w10a2_civilian.fails=0
 PASS: test_w10a2_civilian.passed=23
@@ -128,17 +128,17 @@ PASS: texture_cap.offenders=0
 PASS: audit coverage 12660/12703 (99.7 %)
 PASS: compile.log stamps coherent (STARTED <= FINISHED, mtime >= STARTED)
 PASS: compile.log proves compile ('scripts checked: (\\d+), broken: 0')
-PASS: compile.log records compile.checked=229 >= 229
+PASS: compile.log records compile.checked=234 >= 234
 PASS: run_tests.log stamps coherent (STARTED <= FINISHED, mtime >= STARTED)
 PASS: run_tests.log proves run_tests ('SUMMARY: fails=0')
-PASS: run_tests.log records 328 PASS >= 328
+PASS: run_tests.log records 329 PASS >= 329
 PASS: m2.log stamps coherent (STARTED <= FINISHED, mtime >= STARTED)
 PASS: m2.log proves m2 ('M2_SUMMARY: fails=0')
 PASS: m2.log records 12 PASS >= 12
 PASS: e2e.log stamps coherent (STARTED <= FINISHED, mtime >= STARTED)
 PASS: e2e.log proves e2e ('SUMMARY: fails=0 passed=(\\d+) total=(\\d+)')
-PASS: e2e.log records e2e.passed=300 >= 300
-PASS: e2e.log records e2e.total=300 >= 300
+PASS: e2e.log records e2e.passed=310 >= 310
+PASS: e2e.log records e2e.total=310 >= 310
 PASS: e2e_a2.log stamps coherent (STARTED <= FINISHED, mtime >= STARTED)
 PASS: e2e_a2.log proves e2e_a2 ('SUMMARY: fails=0 passed=(\\d+) total=(\\d+)')
 PASS: e2e_a2.log records e2e_a2.passed=22 >= 22
@@ -153,7 +153,7 @@ PASS: parity_only.log proves parity_only ('PARITY_ONLY_SUMMARY: fails=0 passed=(
 PASS: parity_only.log records parity_only.passes=60 >= 60
 PASS: p0b_manifest_validate.log stamps coherent (STARTED <= FINISHED, mtime >= STARTED)
 PASS: p0b_manifest_validate.log proves p0b_capture ('P0B_MANIFEST_OK [^\\n]*poses=(\\d+) dry_run=true')
-PASS: p0b_manifest_validate.log records p0b_capture.poses=7 >= 7
+PASS: p0b_manifest_validate.log records p0b_capture.poses=9 >= 7
 PASS: p0b_capture_self_test.log stamps coherent (STARTED <= FINISHED, mtime >= STARTED)
 PASS: p0b_capture_self_test.log proves p0b_capture_self_test ('P0B_SELFTEST PASS checks=(\\d+) fails=0')
 PASS: p0b_capture_self_test.log records p0b_capture_self_test.checks=23 >= 23
@@ -165,16 +165,16 @@ PASS: test_w10a2_cream.log proves test_w10a2_cream ('CREAM_PROOF: GREEN passes=(
 PASS: test_w10a2_cream.log records test_w10a2_cream.passes=5 >= 5
 PASS: test_audio_control.log stamps coherent (STARTED <= FINISHED, mtime >= STARTED)
 PASS: test_audio_control.log proves test_audio_control ('AUDIO_CONTROL_SUMMARY: fails=0 checks=(\\d+)')
-PASS: test_audio_control.log records test_audio_control.checks=123 >= 123
+PASS: test_audio_control.log records test_audio_control.checks=135 >= 135
 PASS: test_vo_director.log stamps coherent (STARTED <= FINISHED, mtime >= STARTED)
 PASS: test_vo_director.log proves test_vo_director ('VO_DIRECTOR_SUMMARY: fails=0 checks=(\\d+)')
-PASS: test_vo_director.log records test_vo_director.checks=53 >= 53
+PASS: test_vo_director.log records test_vo_director.checks=60 >= 60
 PASS: probe_auto_exposure.log stamps coherent (STARTED <= FINISHED, mtime >= STARTED)
 PASS: probe_auto_exposure.log proves probe_auto_exposure ('AEM_PROBE: fails=0 passed=(\\d+)')
 PASS: probe_auto_exposure.log records probe_auto_exposure.passed=77 >= 77
 PASS: probe_cubemap.log stamps coherent (STARTED <= FINISHED, mtime >= STARTED)
 PASS: probe_cubemap.log proves probe_cubemap ('CUBEMAP_PROBE: fails=0 passed=(\\d+)')
-PASS: probe_cubemap.log records probe_cubemap.passed=37 >= 37
+PASS: probe_cubemap.log records probe_cubemap.passed=51 >= 51
 PASS: probe_p5_ui.log stamps coherent (STARTED <= FINISHED, mtime >= STARTED)
 PASS: probe_p5_ui.log proves probe_p5_ui ('P5_UI PASS checks=(\\d+)')
 PASS: probe_p5_ui.log records probe_p5_ui.checks=54 >= 54
@@ -201,7 +201,7 @@ PASS: probe_p1_street.log proves probe_p1_street ('P1_STREET SUMMARY checks=(\\d
 PASS: probe_p1_street.log records probe_p1_street.checks=31 >= 31
 PASS: audit.log stamps coherent (STARTED <= FINISHED, mtime >= STARTED)
 PASS: audit.log proves audit ('Disk-backed content coverage: (\\d+)/(\\d+)[^\\n]*unexpected 0')
-PASS: audit.log records audit.coverage_num=12660 >= 12660
+PASS: audit.log records audit.coverage_num=12664 >= 12660
 PASS: audit.log records audit.coverage_den=12703 >= 12703
 PASS: texture_cap.log stamps coherent (STARTED <= FINISHED, mtime >= STARTED)
 PASS: texture_cap.log proves texture_cap ('capped: (\\d+)[\\s\\S]*alpha-critical \\(kept full-res\\): (\\d+)[\\s\\S]*offenders: 0')
@@ -223,7 +223,7 @@ PASS: probe_lock_inventory.log records lock_inventory.containers=152 >= 152
 PASS: probe_lock_inventory.log records lock_inventory.door_nodes=10 >= 10
 PASS: nav_runtime_probe.log stamps coherent (STARTED <= FINISHED, mtime >= STARTED)
 PASS: nav_runtime_probe.log proves nav_runtime_probe ('NAV_RUNTIME_PROBE checks=(\\d+) fails=0')
-PASS: nav_runtime_probe.log records nav_runtime_probe.checks=70 >= 70
+PASS: nav_runtime_probe.log records nav_runtime_probe.checks=97 >= 97
 PASS: string_audit.log stamps coherent (STARTED <= FINISHED, mtime >= STARTED)
 PASS: string_audit.log proves string_audit ('UI_STRINGS total=(\\d+) routed=(\\d+) authored=(\\d+) routed_authored=(\\d+) invented=(\\d+)')
 PASS: string_audit.log records string_audit.routed=311 >= 311
@@ -271,7 +271,7 @@ PASS: probe_device_meshes.log records probe_device_meshes.visible_parts=1145 >= 
 PASS: probe_device_meshes.log records probe_device_meshes group 4=0 (pinned probe_device_meshes.hidden_parts=0)
 PASS: probe_gc_destruction.log stamps coherent (STARTED <= FINISHED, mtime >= STARTED)
 PASS: probe_gc_destruction.log proves probe_gc_destruction ('GC_PROBE checks=(\\d+) fails=0')
-PASS: probe_gc_destruction.log records probe_gc_destruction.checks=52 >= 52
+PASS: probe_gc_destruction.log records probe_gc_destruction.checks=55 >= 55
 PASS: test_gc_break_trigger.log stamps coherent (STARTED <= FINISHED, mtime >= STARTED)
 PASS: test_gc_break_trigger.log proves test_gc_break_trigger ('GC_TRIGGER checks=(\\d+) fails=0')
 PASS: test_gc_break_trigger.log records test_gc_break_trigger.checks=21 >= 21
@@ -291,7 +291,7 @@ PASS: test_capture_p5_filter.log proves test_capture_p5_filter ('CAPTURE_P5_FILT
 PASS: test_capture_p5_filter.log records test_capture_p5_filter.checks=5 >= 5
 PASS: p0b_capture_dry_run.log stamps coherent (STARTED <= FINISHED, mtime >= STARTED)
 PASS: p0b_capture_dry_run.log proves p0b_capture_dry_run ('P0B_DRY_RUN [^\\n]*poses=(\\d+)')
-PASS: p0b_capture_dry_run.log records p0b_capture_dry_run.poses=7 >= 7
+PASS: p0b_capture_dry_run.log records p0b_capture_dry_run.poses=9 >= 9
 PASS: p0b_kf27_reference.log stamps coherent (STARTED <= FINISHED, mtime >= STARTED)
 PASS: p0b_kf27_reference.log proves p0b_kf27_reference ('P0B_KF27_REF pose=upper_foyer met=(\\d+)/(\\d+)')
 PASS: p0b_kf27_reference.log records p0b_kf27_reference.met_num=9 >= 9
@@ -301,18 +301,18 @@ PASS: runtime_smoke_scan.log proves runtime_smoke_scan ('RUNTIME_SMOKE_SCAN_TEST
 PASS: runtime_smoke_scan.log records runtime_smoke_scan.checks=29 >= 29
 PASS: gate_manifest.log stamps coherent (STARTED <= FINISHED, mtime >= STARTED)
 PASS: gate_manifest.log proves gate_manifest ('GATE_MANIFEST: tracked=(\\d+) reachable=(\\d+) retired=(\\d+) orphans=(\\d+)')
-PASS: gate_manifest.log records gate_manifest.tracked=109 >= 109
+PASS: gate_manifest.log records gate_manifest.tracked=112 >= 112
 PASS: gate_manifest.log records gate_manifest.retired=39 >= 39
 PASS: gate_manifest.log records gate_manifest group 4=0 (pinned gate_manifest.orphans=0)
 PASS: e2e_errscan.log stamps coherent (STARTED <= FINISHED, mtime >= STARTED)
 PASS: e2e_errscan.log proves e2e_errscan ('E2E_ERRSCAN PASS e2e=(\\d+)/(\\d+) e2e_a2=(\\d+)/(\\d+) run_tests=(\\d+)/(\\d+) new=(\\d+)')
-PASS: e2e_errscan.log records e2e_errscan.e2e_min=31 >= 31
+PASS: e2e_errscan.log records e2e_errscan.e2e_min=32 >= 31
 PASS: e2e_errscan.log records e2e_errscan.e2e_a2_min=0 >= 0
-PASS: e2e_errscan.log records e2e_errscan.run_tests_min=482 >= 482
+PASS: e2e_errscan.log records e2e_errscan.run_tests_min=495 >= 482
 PASS: e2e_errscan.log records e2e_errscan group 7=0 (pinned e2e_errscan.new=0)
 PASS: e2e_errscan.log records e2e_errscan.e2e_ceiling=33 == 33
 PASS: e2e_errscan.log records e2e_errscan.e2e_a2_ceiling=2 == 2
-PASS: e2e_errscan.log records e2e_errscan.run_tests_ceiling=482 == 482
+PASS: e2e_errscan.log records e2e_errscan.run_tests_ceiling=495 == 495
 PASS: test_roof_collision.log stamps coherent (STARTED <= FINISHED, mtime >= STARTED)
 PASS: test_roof_collision.log proves test_roof_collision ('ROOF_COLLISION_SUMMARY: fails=0[\\s\\S]*ROOF_COLLISION_SUMMARY: fails=0[\\s\\S]*ROOF_COLLISION_MODES PASS authored=0 aabb=0')
 PASS: test_roof_collision.log records test_roof_collision.checks=106 >= 106
@@ -366,18 +366,18 @@ PASS: test_w10a2_guard_placement.log records GUARD_PLACEMENT_SUMMARY: fails=0
 PASS: p0b_kf27_reference.log stamps coherent (STARTED <= FINISHED, mtime >= STARTED)
 PASS: p0b_kf27_reference.log records P0B_KF27_REF pose=upper_foyer met=9/9
 SKIP: gate_ratchet poststamp self-check (generating artifact)
-PASS: e2e.log has 4343 lines >= 4000
+PASS: e2e.log has 4500 lines >= 4000
 PASS: e2e_a2.log has 253 lines >= 200
-PASS: run_tests.log has 3647 lines >= 3000
+PASS: run_tests.log has 3674 lines >= 3000
 PASS: runner/binding self-check 59 gates, 60 ratchet bindings
-PASS: report records compile ('compile\\s*\\|\\s*229\\s*/\\s*0')
-PASS: report records run_tests ('run_tests\\s*\\|\\s*328')
+PASS: report records compile ('compile\\s*\\|\\s*234\\s*/\\s*0')
+PASS: report records run_tests ('run_tests\\s*\\|\\s*329')
 PASS: report records M2 ('M2\\s*\\|\\s*12')
-PASS: report records E2E ('E2E\\s*\\|\\s*300\\s*/\\s*300')
+PASS: report records E2E ('E2E\\s*\\|\\s*310\\s*/\\s*310')
 PASS: report records coverage ('12660\\s*/\\s*12703')
-PASS: report names measured_on=5857589
+PASS: report names measured_on=900f8eb
 
 GATE_RATCHET: PASS (baseline and committed evidence agree; Godot gates run locally)
 
 EXIT: 0
-FINISHED: 2026-11-28T07:05:30-05:00
+FINISHED: 2026-11-28T08:55:50-05:00

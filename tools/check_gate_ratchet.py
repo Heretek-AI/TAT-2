@@ -50,6 +50,45 @@ ROOT = Path(__file__).resolve().parent.parent
 RATCHET = ROOT / "tools" / "gate_ratchet.json"
 DEFAULT_REPORT = "docs/reports/final-20261127.md"
 
+
+class DuplicateKeyError(ValueError):
+    """Raised when the ratchet JSON repeats a key (json's last-wins is unsafe)."""
+
+    def __init__(self, key: str) -> None:
+        self.key = key
+        super().__init__(key)
+
+
+def _no_duplicate_keys(pairs: list[tuple[str, object]]) -> dict:
+    out: dict = {}
+    for key, value in pairs:
+        if key in out:
+            raise DuplicateKeyError(key)
+        out[key] = value
+    return out
+
+
+def _path_is_under(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except (ValueError, OSError):
+        return False
+
+
+def safe_join_under(root: Path, base: Path, name: str) -> Path | None:
+    """Join `name` under `root`/`base`, rejecting absolute and `..` escapes."""
+    raw = str(name)
+    if raw.startswith(("/", "\\", "~")):
+        return None
+    if ".." in Path(raw).parts:
+        return None
+    candidate = root / raw if "/" in raw else base / raw
+    if not _path_is_under(candidate, root):
+        return None
+    return candidate
+
+
 # Non-numeric wiring only: the log pattern each gate writes and the exact
 # command that regenerates the log. All numbers come from the ratchet JSON.
 # `minimums` maps a regex group to the ratchet key it must be >=.
@@ -305,7 +344,9 @@ LOG_GATES = {
             r"COL_MAPS PASS maps=(\d+) min_coverage=([0-9.]+) dropped=(\d+) "
             r"planar_skipped=(\d+) coverage_ppm=(\d+)"
         ),
-        "minimums": [(1, "maps"), (3, "dropped"), (5, "coverage_ppm")],
+        "minimums": [(1, "maps"), (5, "coverage_ppm")],
+        "zero_groups": ((3, "dropped"),),
+        "exact_groups": ((4, "planar_skipped"),),
         "passes_key": None,
     },
     # W10-A: the de-duplicated runtime lock count (raw record count is separate).
@@ -333,6 +374,20 @@ LOG_GATES = {
             r"routed_authored=(\d+) invented=(\d+)"
         ),
         "minimums": [(2, "routed"), (3, "authored")],
+        # `invented` is a documented ceiling (112), not a floor: it may shrink
+        # but a new invented string must be reviewed, not silently accepted.
+        "maximums": [(5, "invented")],
+        "passes_key": None,
+    },
+    # W10-A literal-grep gate: both hit counts are exact zeros. This binds the
+    # numbers to the ratchet; the PROBE_GATES marker alone only proved the line.
+    "literal_greps": {
+        "command": "make check-greps",
+        "pattern": lambda g: (
+            r"LITERAL_GREPS PASS code_hits=(\d+) ui_rating_literals=(\d+)"
+        ),
+        "minimums": [],
+        "zero_groups": ((1, "code_hits"), (2, "ui_rating_literals")),
         "passes_key": None,
     },
     # W10-A D9: only exit 124 (the timeout kill) and a clean scan pass.
@@ -341,7 +396,8 @@ LOG_GATES = {
         "pattern": lambda g: (
             r"RUNTIME_SMOKE_SCAN PASS exit=124 errors=(\d+) .*mission_ready=(\d+) reason=ok"
         ),
-        "minimums": [(1, "errors"), (2, "mission_ready")],
+        "minimums": [(2, "mission_ready")],
+        "zero_groups": ((1, "errors"),),
         "passes_key": None,
     },
     # Phase 3 §2.5.2: numeric floors for the gates that previously had only an
@@ -371,8 +427,8 @@ LOG_GATES = {
             (1, "guards"),
             (2, "bucket_hit"),
             (3, "bucket_total"),
-            (4, "lounge"),
         ],
+        "zero_groups": ((4, "lounge"),),
         "passes_key": None,
     },
     "probe_niagara": {
@@ -814,8 +870,10 @@ def check_runner_bindings(
         log_name = evidence.get(key)
         if not log_name:
             continue
-        path = ROOT / str(log_name) if "/" in str(log_name) else log_dir / str(log_name)
-        if not path.is_file():
+        path = safe_join_under(ROOT, log_dir, str(log_name))
+        if path is None:
+            fail(f"static binding {key!r} path {log_name!r} escapes the repo root")
+        elif not path.is_file():
             fail(f"static binding {key!r} points at a missing log {path}")
 
     print(
@@ -836,7 +894,17 @@ def main() -> int:
     if not RATCHET.exists():
         print(f"FAIL: missing {RATCHET.relative_to(ROOT)}")
         return 1
-    data = json.loads(RATCHET.read_text())
+    try:
+        data = json.loads(RATCHET.read_text(), object_pairs_hook=_no_duplicate_keys)
+    except DuplicateKeyError as exc:
+        print(
+            f"FAIL: duplicate key {exc.key!r} in {RATCHET.relative_to(ROOT)} "
+            "(last-wins would silently replace a pin)"
+        )
+        return 1
+    except json.JSONDecodeError as exc:
+        print(f"FAIL: {RATCHET.relative_to(ROOT)} is not valid JSON: {exc}")
+        return 1
     if data.get("schema") != "tat2.gate_ratchet/1":
         fail(f"schema is {data.get('schema')!r}, expected tat2.gate_ratchet/1")
     measured_on = str(data.get("measured_on") or "")
@@ -897,11 +965,18 @@ def main() -> int:
     # "/" is a repo-root-relative path (a later wave's own log directory); a
     # bare filename lives in `evidence.dir`, so older baselines are unchanged.
     evidence = data.get("evidence") or {}
-    log_dir = ROOT / str(evidence.get("dir") or "docs/reports/logs")
+    raw_dir = str(evidence.get("dir") or "docs/reports/logs")
+    if raw_dir.startswith(("/", "\\", "~")) or ".." in Path(raw_dir).parts:
+        fail(f"evidence.dir {raw_dir!r} escapes the repo root")
+        log_dir = ROOT / "docs/reports/logs"
+    else:
+        log_dir = ROOT / raw_dir
+        if not _path_is_under(log_dir, ROOT):
+            fail(f"evidence.dir {raw_dir!r} escapes the repo root")
+            log_dir = ROOT / "docs/reports/logs"
 
-    def evidence_path(log_name: str) -> Path:
-        name = str(log_name)
-        return ROOT / name if "/" in name else log_dir / name
+    def evidence_path(log_name: str) -> Path | None:
+        return safe_join_under(ROOT, log_dir, str(log_name))
 
     for gate, spec in LOG_GATES.items():
         log_name = evidence.get(gate)
@@ -913,6 +988,12 @@ def main() -> int:
             )
             continue
         path = evidence_path(log_name)
+        if path is None:
+            fail(
+                f"evidence.{gate} path {log_name!r} is absolute or contains '..' "
+                "(it must stay under the repo root)"
+            )
+            continue
         if not path.exists():
             fail(
                 f"missing gate log {path.relative_to(ROOT)} for {gate!r} — "
@@ -961,6 +1042,28 @@ def main() -> int:
                     f"PASS: {log_name} records {gate} group {group}=0 "
                     f"(pinned {gate}.{key}=0)"
                 )
+        # An exact pin: the log value must equal the ratchet value (not a floor).
+        for group, key in spec.get("exact_groups", ()):
+            captured = int(match.group(group))
+            pinned = get(gate, key)
+            if captured != pinned:
+                fail(
+                    f"{log_name} records {gate}.{key}={captured}, expected exactly "
+                    f"{pinned} — run `{command}` and commit the fresh log"
+                )
+            else:
+                print(f"PASS: {log_name} records {gate}.{key}={captured} == {pinned}")
+        # A maximum pin: the log value may fall but not exceed the ceiling.
+        for group, key in spec.get("maximums", ()):
+            captured = int(match.group(group))
+            ceiling = get(gate, key)
+            if captured > ceiling:
+                fail(
+                    f"{log_name} records {gate}.{key}={captured}, above the ceiling "
+                    f"{ceiling} — run `{command}` and commit the fresh log"
+                )
+            else:
+                print(f"PASS: {log_name} records {gate}.{key}={captured} <= {ceiling}")
         # A gate whose log proves N separate cases by one PASS line each (rather
         # than one numeric summary) can bind the case count with a regex.
         for count_re, key in spec.get("count_patterns", ()):
@@ -996,8 +1099,10 @@ def main() -> int:
     # Probe clean-ness (no count in the ratchet; a clean marker + no leaks).
     leak_name = evidence.get("probe_leak")
     if leak_name:
-        path = log_dir / str(leak_name)
-        if not path.exists():
+        path = evidence_path(leak_name)
+        if path is None:
+            fail(f"evidence.probe_leak path {leak_name!r} escapes the repo root")
+        elif not path.exists():
             fail(
                 f"missing gate log {path.relative_to(ROOT)} for probe_leak — run "
                 "`TAT2_NO_DEN_PROBE=1 tools/godot --headless --path game --script res://probe_leak.gd` "
@@ -1023,6 +1128,12 @@ def main() -> int:
             )
             continue
         path = evidence_path(log_name)
+        if path is None:
+            fail(
+                f"evidence.{gate} path {log_name!r} is absolute or contains '..' "
+                "(it must stay under the repo root)"
+            )
+            continue
         if not path.exists():
             fail(
                 f"missing gate log {path.relative_to(ROOT)} for {gate!r} — "
@@ -1049,8 +1160,10 @@ def main() -> int:
     # The report must quote the ratchet values, so a stale report cannot claim a
     # green gate. Regexes are built from the JSON numbers.
     report_name = str(data.get("report") or DEFAULT_REPORT)
-    report = ROOT / report_name
-    if not report.exists():
+    report = safe_join_under(ROOT, ROOT, report_name)
+    if report is None:
+        fail(f"report path {report_name!r} is absolute or escapes the repo root")
+    elif not report.exists():
         fail(f"missing {report.relative_to(ROOT)}")
     else:
         text = report.read_text()

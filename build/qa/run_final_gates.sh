@@ -63,10 +63,39 @@ MASTER="$OUT/final-run.log"
 SUMMARY="$OUT/final-summary.txt"
 LOCK="/tmp/opencode/tat2-godot.lock"
 
+# Refuse an unsafe output root before any truncation: a symlinked or
+# non-directory $OUT would redirect MASTER, SUMMARY and every gate log.
+if [ -L "$OUT" ] || { [ -e "$OUT" ] && [ ! -d "$OUT" ]; }; then
+	printf 'FINAL_GATES FAIL output root %s is unsafe (symlink or non-directory); refusing\n' "$OUT" >&2
+	exit 5
+fi
 mkdir -p "$OUT" "$(dirname "$LOCK")" || exit 2
+if [ -L "$OUT" ] || [ ! -d "$OUT" ]; then
+	printf 'FINAL_GATES FAIL output root %s is not a real directory; refusing\n' "$OUT" >&2
+	exit 5
+fi
 cd "$ROOT" || exit 2
 # Headless capture dry-run/self-test evidence goes to this wave's directory.
 export P0B_EVIDENCE_DIR="$OUT"
+
+# An output file must be absent or a single-link regular file: refuse a
+# symlink, hardlink, FIFO, socket or device before truncating/appending.
+_safe_output_file() { # <path>
+	local p="$1" links
+	[ -L "$p" ] && return 1
+	[ -e "$p" ] || return 0
+	[ -f "$p" ] || return 1
+	links="$(stat -c %h -- "$p" 2>/dev/null || echo 1)"
+	[ "$links" = "1" ] || return 1
+	return 0
+}
+
+for unsafe in "$MASTER" "$SUMMARY"; do
+	if ! _safe_output_file "$unsafe"; then
+		printf 'FINAL_GATES FAIL output file %s is unsafe (symlink/hardlink/non-regular); refusing\n' "$unsafe" >&2
+		exit 5
+	fi
+done
 
 say() {
 	printf '%s\n' "$*"
@@ -82,11 +111,11 @@ DIRTY="$(git status --porcelain | wc -l)"
 {
 	printf 'FINAL_GATE_RUN\n'
 	printf 'started: %s\n' "$(date -Is)"
-	printf 'root: %s\n' "$ROOT"
+	printf 'root: .\n'
 	printf 'head: %s\n' "$HEAD_SHA"
 	printf 'branch: %s\n' "$BRANCH"
 	printf 'godot: %s\n' "$GODOT_VERSION"
-	printf 'godot_bin: %s\n' "$ROOT/tools/godot"
+	printf 'godot_bin: %s\n' "tools/godot"
 	printf 'lock: %s\n' "$LOCK"
 	printf 'uncommitted_entries_at_start: %s\n' "$DIRTY"
 	printf 'host: %s\n' "$(uname -srm)"
@@ -106,23 +135,32 @@ fi
 say "FINAL_GATES start head=$HEAD_SHA branch=$BRANCH godot=$GODOT_VERSION"
 
 GATE_COUNT=0
+# The committed runner/binding self-check in tools/check_gate_ratchet.py pins
+# the same number. A gate moved into an uncalled function still parses there,
+# but this executed-count assertion catches it before the PASS line.
+EXPECTED_GATES=58
 
 _open_log() { # <name> <log> <command...>
 	local name="${1:?gate name}"
 	local log="${2:?gate log path}"
 	shift 2
-	# Never open/truncate through a symlink: a planted link would let a gate
-	# rewrite a tracked file or another lane's evidence. The runner owns a
-	# regular file per gate under $OUT.
-	if [ -L "$log" ]; then
-		say "FINAL_GATES FAIL gate=$name log=$log is a symlink; refusing to open it"
+	# Refuse a symlink, hardlink, FIFO or any other non-regular target before
+	# truncating: a planted link would rewrite a tracked file or hang the run.
+	if ! _safe_output_file "$log"; then
+		say "FINAL_GATES FAIL gate=$name log=$log is unsafe (symlink/hardlink/non-regular); refusing to open it"
 		exit 5
 	fi
+	local rendered="" arg
+	for arg in "$@"; do
+		case "$arg" in
+		"$ROOT"/*) arg="./${arg#"$ROOT"/}" ;;
+		esac
+		rendered+="$(printf ' %q' "$arg")"
+	done
 	{
 		printf '== FINAL_GATE %s\n' "$name"
-		printf 'COMMAND:'
-		printf ' %q' "$@"
-		printf '\nCWD: %s\nSTARTED: %s\n\n' "$ROOT" "$(date -Is)"
+		printf 'COMMAND:%s\n' "$rendered"
+		printf 'CWD: .\nSTARTED: %s\n\n' "$(date -Is)"
 	} >"$log"
 }
 
@@ -551,6 +589,11 @@ gate audit "$OUT/audit.log" make audit
 gate texture_cap "$OUT/texture_cap.log" make texture-cap-check
 gate perf_guard "$OUT/perf_guard.log" build/qa/test_perf_guard.sh
 gate gate_ratchet "$OUT/gate_ratchet.log" make gate-ratchet
+
+if [ "$GATE_COUNT" -ne "$EXPECTED_GATES" ]; then
+	say "FINAL_GATES FAIL gate_count=$GATE_COUNT expected=$EXPECTED_GATES (a gate was skipped, duplicated or not executed)"
+	exit 6
+fi
 
 say "FINAL_GATES PASS head=$HEAD_SHA gates=$GATE_COUNT"
 say "FINAL_GATES evidence=$OUT summary=$SUMMARY"

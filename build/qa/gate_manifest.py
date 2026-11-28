@@ -9,9 +9,13 @@ points the final runner owns:
   * ``build/qa/run_final_gates.sh`` -- including its ``build/qa/*.sh``
     wrappers, which may launch a test themselves.
 
-Reachability is transitive: a reachable test (or wrapper) may ``load()`` /
-``preload()`` / ``--script`` another test file. Comment-only mentions do not
-count, so a tombstone comment cannot keep a dead test "reachable".
+Reachability is transitive and syntactic: a reference counts only when it is a
+real execution path -- a ``load()``/``preload()`` argument, a ``--script``
+argument, or a suite-table row (a list literal whose third string is the test
+path, the convention ``run_tests.gd`` consumes with ``OS.execute``). A bare
+string occurrence, an unused ``const``/``var`` holding a test path, or a
+comment does NOT keep a dead test "reachable". A reference containing ``..`` or
+an absolute path is rejected as unsafe.
 
 Anything else must be named explicitly in ``build/qa/retired_tests.txt`` with a
 reason. The manifest fails on:
@@ -30,9 +34,15 @@ from __future__ import annotations
 import argparse
 import re
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
-GD_REF = re.compile(r"(?:res://|game/)(tests/[A-Za-z0-9_./-]+\.gd)")
+GD_LOAD = re.compile(r"\b(?:load|preload)\s*\(\s*[\"'](res://tests/[^\"']+\.gd)[\"']")
+GD_SCRIPT = re.compile(r'--script["\']?\s*,?\s*["\']?(res://tests/[^"\'\s]+\.gd)["\']?')
+# `["101", "description", "res://tests/x.gd", "MARKER"]` — the suite table that
+# run_tests.gd feeds to OS.execute via str(entry[2]). A scalar const holding the
+# same path does not match this list-literal form.
+GD_SUITE = re.compile(r'\[\s*"[^"]*"\s*,\s*"[^"]*"\s*,\s*"(res://tests/[^"]+\.gd)"\s*,')
+SH_SCRIPT = re.compile(r'--script[\s=]+["\']?(res://tests/[^"\'\s]+\.gd)["\']?')
 # `$ROOT/build/qa/x.sh`, `build/qa/x.sh`; the leading group is just the path.
 SH_REF = re.compile(r"((?:\$ROOT/)?build/qa/[A-Za-z0-9_./-]+\.sh)")
 TEST_PREFIX = "game/tests/"
@@ -93,20 +103,50 @@ def strip_shell_comments(text: str) -> str:
     return "\n".join(out)
 
 
-def refs_in(path: Path) -> set[str]:
+def _normalize(raw: str) -> str:
+    """Map an `res://tests/...` capture to a repo-relative path."""
+    return "game/" + raw.removeprefix("res://")
+
+
+def _safe_ref(raw: str) -> str | None:
+    """Reject absolute paths and `..` components (repo-root escapes)."""
+    rel = raw.removeprefix("$ROOT/")
+    if rel.startswith("/") or rel.startswith("\\"):
+        return None
+    if ".." in PurePosixPath(rel).parts:
+        return None
+    return rel
+
+
+def refs_in(path: Path) -> tuple[set[str], list[str]]:
+    """Return (safe execution refs, unsafe refs) for a reachable file."""
     text = path.read_text(errors="replace")
+    raw_refs: set[str] = set()
     if path.suffix == ".sh":
         text = strip_shell_comments(text)
-        found = {f"game/{m}" for m in GD_REF.findall(text)}
-        for raw in SH_REF.findall(text):
-            found.add(raw.removeprefix("$ROOT/"))
-        return found
-    text = strip_gdscript_comments(text)
-    return {f"game/{m}" for m in GD_REF.findall(text)}
+        raw_refs |= {_normalize(m) for m in SH_SCRIPT.findall(text)}
+        raw_refs |= set(SH_REF.findall(text))
+    else:
+        text = strip_gdscript_comments(text)
+        for pattern in (GD_LOAD, GD_SCRIPT, GD_SUITE):
+            raw_refs |= {_normalize(m) for m in pattern.findall(text)}
+
+    refs: set[str] = set()
+    unsafe: list[str] = []
+    for raw in raw_refs:
+        rel = _safe_ref(raw)
+        if rel is None:
+            unsafe.append(raw)
+        else:
+            refs.add(rel)
+    return refs, unsafe
 
 
 def resolve(root: Path, rel: str) -> Path:
-    return root / rel
+    candidate = (root / rel).resolve()
+    # Defense in depth: even a sanitized ref must stay under the fixture root.
+    candidate.relative_to(root.resolve())
+    return candidate
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -156,12 +196,19 @@ def main(argv: list[str] | None = None) -> int:
         rel = pending.pop()
         if rel in reachable:
             continue
-        path = resolve(root, rel)
+        try:
+            path = resolve(root, rel)
+        except ValueError:
+            fail(f"reference escapes the repo root: {rel}")
+            continue
         if not path.is_file():
             fail(f"entry point or reference does not exist: {rel}")
             continue
         reachable.add(rel)
-        for ref in refs_in(path):
+        refs, unsafe = refs_in(path)
+        for raw in unsafe:
+            fail(f"unsafe reference from {rel}: {raw!r} (absolute or contains '..')")
+        for ref in refs:
             if ref.endswith(".gd") or ref.endswith(".sh"):
                 pending.append(ref)
 

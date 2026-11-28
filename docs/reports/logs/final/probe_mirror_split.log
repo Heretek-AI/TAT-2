@@ -1,7 +1,7 @@
 == FINAL_GATE probe_mirror_split
 COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/probe_mirror_split.gd
-CWD: /home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gates-manifest
-STARTED: 2026-11-27T19:55:32-05:00
+CWD: .
+STARTED: 2026-11-27T20:27:04-05:00
 
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
@@ -68,7 +68,7 @@ WARNING: [level_loader] level Niagara: 16 placements across 1 systems in 1 chunk
          [4] _run (res://tests/probe_mirror_split.gd:88)
 MIRROR_SPLIT mp=/Game/Art/Environment/Prison/SM_Prison_WallA_2x6 mode=cull_front pos=3 neg=3 surfaces=1 bytes=0
 MIRROR_SPLIT mp=/Game/Art/Environment/Prison/SM_Prison_WallA_2x6 mode=cull_front pos=58 neg=58 surfaces=1 bytes=0
-ROUGHNESS_BAKE count=11 pixels=10223616 ms=754 bytes=13631484 hits=5 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=11 pixels=10223616 ms=752 bytes=13631484 hits=5 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=574 applied=567 duplicate=0 name_skipped=4 wardbox=0 moonshape=3 clamp=0 clamp_worst=1.00x mirrored=61 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0 mirrored_bases=61 mirrored_multimesh=61 mirrored_single=0 mirrored_splits=2 mirrored_cull_front=61 mirrored_cull_disabled=0 mirrored_mesh_bytes=0 mirrored_mesh_count=0 mirrored_unbaked=0
 MIRROR_RECON bases=61 multimesh=61 single=0 split=2 cull_front=61 cull_disabled=0 baked=0 baked_bytes=0 unbaked=0 suppressed=0 ok=true
 PERF_CENSUS meshes=72 instances=584 chunk_nodes=70 plain=21 multimesh=51 surface_draws=99 lights=7 shadow_lights=6 occluders=4 collision_bodies=23 collision_shapes=23 periph_nodes=0 periph_instances=0 periph_surface_draws=0 periph_plain=0 periph_multimesh=0 periph_range=0 merge_mode=off merge_candidates=0 merge_nodes=0 merge_surfaces_before=0 merge_surfaces_after=0 light_budget=8 hero_shadows=6 source_sublevels={ "Guildhall_Geometry": 567 }
@@ -92,4 +92,4 @@ MIRROR_LOAD paths=1 authored_records_neg=3312 transform_bases=61 draw_bases=61 m
 MIRROR_DATA_SUMMARY: fails=0 checks=39 mode=geometry
 
 EXIT: 0
-FINISHED: 2026-11-27T19:55:36-05:00
+FINISHED: 2026-11-27T20:27:08-05:00

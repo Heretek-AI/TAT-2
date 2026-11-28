@@ -54,6 +54,6 @@ game/tests/test_w5b_materials.gd	historical	W5B/W6L material-truth standalone; k
 game/tests/test_w6l_searchlight.gd	historical	W6L searchlight material truth; kept for manual diagnosis; not a gate
 game/tests/test_w6u1_briefing.gd	historical	W6U1 briefing/endgame-override gate; briefing overrides are asserted in run_tests
 game/tests/test_w6u2_catalog.gd	historical	W6U2 catalog/ledger gate; catalog and ledger are asserted in run_tests
-game/tests/test_w7e_endgame.gd	historical	W7E two-phase run-clock gate; the clock is covered by the run_tests endgame suites + E2E S2 loot
+game/tests/test_w7e_endgame.gd	historical	W7E two-phase run-clock gate; the run clock is covered by the run_tests endgame suites + E2E S2 loot, but its all-25-authored-escape-markers assertion is NOT covered — tracked in OPEN_ISSUES.md item 13
 game/tests/test_w7h_surface_hearing.gd	historical	W7H surface-hearing/swing-door-noise gate; kept for manual diagnosis; not a gate
 game/tests/test_w7v_ui_acceptance.gd	historical	W7V UI acceptance gate; UI acceptance is gated by probe_p5_ui + E2E tier1

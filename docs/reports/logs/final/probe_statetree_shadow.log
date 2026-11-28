@@ -1,7 +1,7 @@
 == FINAL_GATE probe_statetree_shadow
-COMMAND: qa_statetree_shadow
-CWD: /home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gates-manifest
-STARTED: 2026-11-27T19:55:00-05:00
+COMMAND: env TAT2_STATETREE=shadow flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/probe_statetree_shadow.gd
+CWD: .
+STARTED: 2026-11-27T20:26:32-05:00
 
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
@@ -89,4 +89,4 @@ STATETREE_COVERAGE trees=21 task_classes=77 task_instances=326 task_covered=139 
 PROBE PASS fails=0
 
 EXIT: 0
-FINISHED: 2026-11-27T19:55:07-05:00
+FINISHED: 2026-11-27T20:26:39-05:00

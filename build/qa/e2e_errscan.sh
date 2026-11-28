@@ -14,18 +14,27 @@
 #   * Every ERROR: line must match an allowlist regex for its log; an
 #     unmatched line fails as a NEW error.
 #   * A pattern may not exceed its pinned maximum and a log may not exceed its
-#     pinned ceiling. A lower count is fine (noise may disappear).
-#   * The per-log sum of the allowlist maxima must equal the ceiling. Adding or
-#     widening an entry therefore forces a visible ceiling change instead of
-#     silently hiding a new message.
+#     pinned ceiling. A lower count is fine (noise may disappear), but a log
+#     with zero ERROR: lines is treated as truncated/empty and fails: the known
+#     noise is expected, and an empty log proves nothing was scanned.
+#   * The per-log sum of the allowlist maxima must equal the ceiling and every
+#     individual maximum must be <= the ceiling. Adding or widening an entry
+#     therefore forces a visible ceiling change instead of silently hiding a
+#     new message.
+#   * A maximum is parsed as base-10 and bounded (<= ceiling), so a huge value
+#     cannot overflow bash arithmetic; an empty or non-alphanumeric (wildcard)
+#     pattern is rejected.
+#   * A symlinked --logdir or a symlinked/non-regular log is refused. A grep
+#     that fails for a reason other than "no match" fails the gate; it is not
+#     treated as zero errors.
 #   * Lowering a ceiling (or raising a maximum) needs a comment here plus a
 #     note in the wave report; never edit them silently.
 #
 # Usage:
 #   build/qa/e2e_errscan.sh [--logdir DIR] [--allowlist FILE]
 #
-# Exit 0 only when every ERROR line is allowlisted and every count is within
-# its pinned maximum/ceiling.
+# Exit 0 only when every ERROR line is allowlisted, every count is within its
+# pinned maximum/ceiling, and every log was actually read.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -70,16 +79,42 @@ note_fail() {
   fails=$((fails + 1))
 }
 
-if [ ! -f "$ALLOWLIST" ]; then
-  printf 'E2E_ERRSCAN FAIL reason=missing_allowlist path=%s\n' "$ALLOWLIST"
+# A symlinked logdir would let --logdir redirect the scan to an attacker-chosen
+# tree; require a real directory.
+if [ -L "$LOGDIR" ] || [ ! -d "$LOGDIR" ]; then
+  printf 'E2E_ERRSCAN FAIL reason=unsafe_logdir path=%s\n' "$LOGDIR"
+  exit 1
+fi
+if [ -L "$ALLOWLIST" ] || [ ! -f "$ALLOWLIST" ]; then
+  printf 'E2E_ERRSCAN FAIL reason=missing_or_symlinked_allowlist path=%s\n' "$ALLOWLIST"
   exit 1
 fi
 
-# Parse the TSV allowlist: <log><TAB><max><TAB><extended-regex>.
+# Count ERROR: lines. Return 2 when grep could not read the file, so an
+# unreadable log is a failure rather than a silent zero.
+count_errors() {
+  local p="$1" out rc
+  out="$(grep -c -- 'ERROR:' "$p" 2>/dev/null)"
+  rc=$?
+  if [ "$rc" -gt 1 ]; then
+    return 2
+  fi
+  if [ "$rc" -eq 1 ]; then
+    out=0
+  fi
+  printf '%s\n' "$out"
+  return 0
+}
+
+# Parse the TSV allowlist: <log><TAB><max><TAB><extended-regex>. The maximum
+# must be a bounded base-10 integer (no leading zeros), <= that log's ceiling;
+# the pattern must contain at least one literal alphanumeric character so a
+# bare `.*` cannot whitelist arbitrary lines.
 pat_log=()
 pat_max=()
 pat_re=()
 declare -A SUM=([e2e]=0 [e2e_a2]=0 [run_tests]=0)
+MAX_RE='^(0|[1-9][0-9]{0,7})$'
 lineno=0
 while IFS=$'\t' read -r log max re; do
   lineno=$((lineno + 1))
@@ -90,18 +125,33 @@ while IFS=$'\t' read -r log max re; do
     note_fail "allowlist line $lineno: unknown log '$log'"
     continue
   fi
-  if ! [[ "$max" =~ ^[0-9]+$ ]]; then
-    note_fail "allowlist line $lineno: max '$max' is not a non-negative integer"
+  if ! [[ "$max" =~ $MAX_RE ]]; then
+    note_fail "allowlist line $lineno: max '$max' is not a bounded non-negative integer"
+    continue
+  fi
+  max_i=$((10#$max))
+  if [ "$max_i" -gt "${CEILING[$log]}" ]; then
+    note_fail \
+      "allowlist line $lineno: max $max_i exceeds the $log ceiling ${CEILING[$log]}"
     continue
   fi
   if [ -z "$re" ]; then
     note_fail "allowlist line $lineno: empty regex"
     continue
   fi
+  if [ "${#re}" -gt 400 ]; then
+    note_fail "allowlist line $lineno: regex is longer than 400 chars"
+    continue
+  fi
+  if ! [[ "$re" =~ [A-Za-z0-9] ]]; then
+    note_fail \
+      "allowlist line $lineno: regex has no literal alphanumeric character (wildcard pattern)"
+    continue
+  fi
   pat_log+=("$log")
-  pat_max+=("$max")
+  pat_max+=("$max_i")
   pat_re+=("$re")
-  SUM[$log]=$((${SUM[$log]} + max))
+  SUM[$log]=$((${SUM[$log]} + max_i))
 done <"$ALLOWLIST"
 
 for log in "${LOGS[@]}"; do
@@ -115,16 +165,28 @@ new_errors=0
 declare -A new_error_lines=()
 for log in "${LOGS[@]}"; do
   path="$LOGDIR/$log.log"
-  if [ ! -f "$path" ]; then
+  if [ ! -e "$path" ]; then
     note_fail "missing log $path"
     continue
   fi
-  if [ -L "$path" ]; then
-    note_fail "log $path is a symlink; refusing to scan it"
+  if [ -L "$path" ] || [ ! -f "$path" ]; then
+    note_fail "log $path is a symlink or non-regular file; refusing to scan it"
     continue
   fi
-  actual="$(grep -c -- 'ERROR:' "$path" 2>/dev/null || true)"
-  [ -n "$actual" ] || actual=0
+  if [ ! -s "$path" ]; then
+    note_fail "log $path is empty; a truncated log cannot prove the gate"
+    continue
+  fi
+  actual="$(count_errors "$path")"
+  rc=$?
+  if [ "$rc" -eq 2 ]; then
+    note_fail "cannot read log $path (grep failed)"
+    continue
+  fi
+  if [ "$actual" -le 0 ]; then
+    note_fail "log $path has zero ERROR: lines; empty/truncated log cannot pass"
+    continue
+  fi
   if [ "$actual" -gt "${CEILING[$log]}" ]; then
     note_fail "log $log has $actual ERROR: line(s), above the pinned ceiling ${CEILING[$log]}"
   fi
@@ -137,6 +199,19 @@ for log in "${LOGS[@]}"; do
     fi
   done
 
+  # Materialise the grep output so a read failure is distinguishable from an
+  # empty match set (process substitution would hide grep's exit code).
+  tmp="$(mktemp "${TMPDIR:-/tmp}/tat2-errscan.XXXXXX")" || {
+    note_fail "cannot create a temp file for $log"
+    continue
+  }
+  grep -n -- 'ERROR:' "$path" >"$tmp" 2>/dev/null
+  rc=$?
+  if [ "$rc" -ne 0 ]; then
+    note_fail "cannot read ERROR: lines from $path (grep exit $rc)"
+    rm -f "$tmp"
+    continue
+  fi
   while IFS= read -r raw; do
     [ -n "$raw" ] || continue
     msg="${raw#*ERROR:}"
@@ -157,7 +232,8 @@ for log in "${LOGS[@]}"; do
     else
       counts[$matched]=$((${counts[$matched]} + 1))
     fi
-  done < <(grep -n -- 'ERROR:' "$path" 2>/dev/null || true)
+  done <"$tmp"
+  rm -f "$tmp"
 
   for i in "${!pat_log[@]}"; do
     if [ "${pat_log[$i]}" != "$log" ]; then
@@ -186,8 +262,12 @@ fi
 # Report actual counts (not ceilings) so a shrinking noise floor is visible.
 parts=()
 for log in "${LOGS[@]}"; do
-  actual="$(grep -c -- 'ERROR:' "$LOGDIR/$log.log" 2>/dev/null || true)"
-  [ -n "$actual" ] || actual=0
+  actual="$(count_errors "$LOGDIR/$log.log")"
+  rc=$?
+  if [ "$rc" -eq 2 ]; then
+    printf 'E2E_ERRSCAN FAIL fails=1 new=0 (cannot re-read %s)\n' "$log"
+    exit 1
+  fi
   parts+=("$log=$actual/${CEILING[$log]}")
 done
 printf 'E2E_ERRSCAN PASS %s new=0\n' "${parts[*]}"

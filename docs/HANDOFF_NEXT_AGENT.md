@@ -173,8 +173,12 @@ against itself (`--reference-only`); the first port-side `foyer_beam` capture is
 ### C. Long-standing system gaps
 
 - **StateTree:** shadow only; `fully_parity_covered_trees=0` of 21, one
-  structural tree; `TAT2_STATETREE=off`; FSM drives. Cutover needs the authored
-  task/condition parameters and a live event bus — do not invent values.
+  structural tree (`ST_Subtree_IntruderNoLongerSuspicious`, named vacuous: 4
+  states); `TAT2_STATETREE=off` (asserted by suite 111); `patrol` fails closed
+  without the experimental `TAT2_STATETREE_WRITER=on` writer spike; one live
+  event (`StateTreeEvent.StimChange`), 16 of 17 unemitted. FSM drives. Cutover
+  needs the authored task/condition parameters, smart objects/EQS and a real
+  event bus — do not invent values. Report: `docs/reports/statetree-3b1-20261127.md`.
 - **Audio:** W11 landed, but **396/645 VO lines (41/76 triples) have no caller**;
   3 unnamed music keys stay id-only; 24 unnamed buses carry 98/183 state rows;
   5 `FS_Layers` values are unproduced; Hauntstable1 never recorded

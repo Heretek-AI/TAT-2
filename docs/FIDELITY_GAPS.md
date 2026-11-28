@@ -204,9 +204,14 @@ string audit **311/311/199/199/112**; perf guard **78/78**.
   checker enforces `expected_fail/expected_delta/fixed` as exact zeros.
 - **P2-ST B2.1 — shadow only.** Payload-v2 node parameters are read by node
   identity (566/566 keys, 676 bindings). Coverage: `fully_covered_trees=1`
-  (`ST_Subtree_IntruderNoLongerSuspicious`), `fully_parity_covered_trees=0`;
-  task 326/139/56, condition 233/35/20. `TAT2_STATETREE` remains `off`; `patrol`
-  is not enabled. The FSM still drives — **no cutover**.
+  (`ST_Subtree_IntruderNoLongerSuspicious`, now NAMED vacuous: 4 states, 2 of 3
+  tasks are PORT GAPs), `fully_parity_covered_trees=0 of 21`; task 326/139/56,
+  condition 233/35/20. `TAT2_STATETREE` remains `off` and a test asserts the
+  default; `patrol` now **fails closed** (`attach()==null`, `push_error`) without
+  the experimental `TAT2_STATETREE_WRITER=on` writer spike. One authored event
+  (`StateTreeEvent.StimChange`) is emitted live from the hearing path; 16 of 17
+  remain unemitted. The FSM still drives — **no cutover**. Report:
+  `docs/reports/statetree-3b1-20261127.md`.
 - **P2-NAV — authored consumer landed behind `TAT2_NAV` (off).** The cooked
   Guildhall navmesh is extractable (2,958 tiles / 14,930 polys / 221 raw
   off-mesh records / 240-45-45 cm) and `tools/parse_nav.py` now emits the
@@ -640,7 +645,8 @@ Measured detail: [`reports/w9-remediation-20261125.md`](reports/w9-remediation-2
   spatial or scene-wide grade was tried and **failed its pre-registered criteria**.
 - **StateTree ceiling:** 18/77 task and 6/36 condition classes mapped; **0 of 21 trees
   fully evaluable** because the payload drops node parameters. Runs in shadow
-  (`TAT2_STATETREE=off|shadow`); the FSM still drives. Contract:
+  (`TAT2_STATETREE=off|shadow`); the FSM still drives. `patrol` fails closed
+  without the experimental writer flag (3B.1). Contract:
   `build/qa/w9/p4-t01-contract.md`.
 - **IBL** remains an approximation until the SkyLight cubemap export exists
   (`available=false, sky_contribution=0.0` in the live log).

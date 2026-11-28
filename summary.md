@@ -35,3 +35,28 @@ Verification
 - `make gate-ratchet` → PASS; `make audit` → exit 0;
   `build/qa/e2e_errscan.sh` → PASS.
 - No GPU, no generated data, no lowered floor; 58/58 measurement unchanged.
+
+## Phase 3B.1 — statetree (worker summary)
+
+Made the StateTree path stop certifying a no-op and named what the coverage
+number actually proves: `TAT2_STATETREE` now has an asserted `off` default
+(`DEFAULT_MODE`, unset-env and unknown-value tests) and `TAT2_STATETREE=patrol`
+**fails closed** (`attach()` returns null + one `push_error` + `patrol_refusal()`
+naming `guard_bindings.mutates() == false`) unless the new experimental
+`TAT2_STATETREE_WRITER=on` flag is set; the writer is a new
+`writer_spike.gd::apply_step(dt)` that drives a guard from the interpreter's
+selected leaf on a synthetic arena (default off, not a cutover). Coverage now
+names `ST_Subtree_IntruderNoLongerSuspicious` as structurally covered but
+behaviourally vacuous (4 states: Set Focus → Request Voice Line → Delay →
+Succeeded) and pins `fully_parity_covered_trees=0 of 21`; the event census is
+17 authored / 1 live-emitted (`StateTreeEvent.StimChange`, pushed from the real
+`NoiseBus` hearing path in `guard_ai._hear`) / 16 unemitted, and the report
+records `ST_Patrol`'s 4 missing smart-object/distraction tasks and 3 conditions
+as the cutover floor without faking any subsystem. Measured: suite 110
+205/0, suite 111 56/0 (A/B max per-frame planar deviation: off↔shadow
+0.000000000 m, patrol+writer 0.255 m vs a 0.05 m difference floor and 6.0 m
+bound; writer max step 0.0213 m ≤ 0.0419 m), probe PASS, `run_tests` fails=0
+(328 PASS), compile 231/0, `make audit` PASS. The falsification evidence (flip
+the default → 4 fails; remove the patrol refusal → 3 fails) is in
+`docs/reports/statetree-3b1-20261127.md`. Not done: the 16 unemitted tags, the
+smart-object/EQS floor, and any cutover — all recorded, none invented.

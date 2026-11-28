@@ -46,6 +46,7 @@ func _initialize() -> void:
 	_check_guard_bag()
 	_check_literal_delay()
 	_check_coverage()
+	_check_vacuous_and_events()
 	_check_all_tree_traces()
 	print("W9P4_STATETREE_SUMMARY: fails=%d checks=%d" % [fails, checks])
 	quit(0 if fails == 0 else 1)
@@ -906,6 +907,55 @@ func _check_coverage() -> void:
 		print("P4ROW ", line)
 	for line: String in Coverage.table_lines(coverage, "conditions"):
 		print("P4ROW ", line)
+
+
+func _check_vacuous_and_events() -> void:
+	var coverage: Dictionary = ShadowRunner.coverage(null)
+	var totals: Dictionary = coverage["totals"]
+	var per_tree: Dictionary = coverage["per_tree"]
+	# Phase 3B.1: the one structurally covered tree must be named as an algebra
+	# result. If a future binding makes it behaviourally meaningful this fails and
+	# the note must be revisited -- it must not silently stay "vacuous".
+	var vacuous: Array = totals["vacuous_trees"]
+	_ok(vacuous == ["ST_Subtree_IntruderNoLongerSuspicious"],
+		"the vacuous tree is named (got %s)" % str(vacuous))
+	var intruder: Dictionary = per_tree.get("ST_Subtree_IntruderNoLongerSuspicious", {})
+	_ok(bool(intruder.get("vacuous", false)), "per-tree row is flagged vacuous")
+	_ok(int(intruder.get("states", 0)) == 4,
+		"the vacuous tree has 4 states (got %d)" % int(intruder.get("states", 0)))
+	_ok(str(intruder.get("vacuous_state_flow", "")) == "Set Focus -> Request Voice Line -> Delay -> Succeeded",
+		"the vacuous state flow is the 4-state Set Focus -> Request Voice Line -> Delay -> Succeeded (got %s)"
+			% str(intruder.get("vacuous_state_flow", "")))
+	_ok((totals["vacuous_state_mismatch"] as Array).is_empty(),
+		"the declared vacuous state count matches the payload (%s)" % str(totals["vacuous_state_mismatch"]))
+	# Pin the structural-vs-parity split the plan quotes: 1 structurally covered
+	# tree, 0 of 21 data-parity covered.
+	_ok(int(totals["trees_total"]) == 21, "the coverage table has 21 trees (got %d)" % int(totals["trees_total"]))
+	_ok((totals["fully_covered_trees"] as Array) == ["ST_Subtree_IntruderNoLongerSuspicious"],
+		"exactly one structurally covered tree (got %s)" % str(totals["fully_covered_trees"]))
+	_ok((totals["fully_parity_covered_trees"] as Array).is_empty(),
+		"fully_parity_covered_trees is 0 of 21 (got %s)" % str(totals["fully_parity_covered_trees"]))
+	# Event census: 17 authored tags, 1 live emitter (StimChange), 16 unemitted.
+	var events: Dictionary = totals["events"]
+	var counts: Dictionary = events["counts"]
+	_ok(int(counts["authored"]) == 17,
+		"17 authored StateTreeEvent tags (got %d)" % int(counts["authored"]))
+	_ok(int(counts["gates"]) == 89,
+		"89 authored state/transition event gates (got %d)" % int(counts["gates"]))
+	_ok(int(counts["emitted"]) == 1 and (events["emitted"] as Array) == ["StateTreeEvent.StimChange"],
+		"exactly one live-emitted tag is StateTreeEvent.StimChange (got %s)" % str(events["emitted"]))
+	_ok(int(counts["unemitted"]) == 16,
+		"16 authored tags remain unemitted (got %d)" % int(counts["unemitted"]))
+	_ok(not (events["unemitted"] as Array).has("StateTreeEvent.StimChange"),
+		"StimChange is not counted as unemitted")
+	_ok(str((events["emitters"] as Dictionary).get("StateTreeEvent.StimChange", "")).find("guard_ai._hear") >= 0,
+		"the StimChange emitter is the existing hearing path (got %s)"
+			% str((events["emitters"] as Dictionary).get("StateTreeEvent.StimChange", "")))
+	for line: String in Coverage.vacuous_lines(coverage):
+		print("P4VACUOUS ", line)
+	print("P4EVENTS authored=%d emitted=%d unemitted=%d gates=%d emitted_tags=%s"
+		% [int(counts["authored"]), int(counts["emitted"]), int(counts["unemitted"]),
+			int(counts["gates"]), str(events["emitted"])])
 
 
 func _check_all_tree_traces() -> void:

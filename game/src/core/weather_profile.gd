@@ -66,7 +66,12 @@ const CubemapLoader := preload("res://src/core/cubemap_loader.gd")
 ##   per-preset grade.
 ## - `TAT2_IBL=off` (default) leaves ambient exactly as authored. `ambient`
 ##   replaces the flat SkyLight colour with the CPU cosine irradiance of the
-##   authored TextureCube (`cubemap_loader.gd`), energy NOT clamped.
+##   authored TextureCube (`cubemap_loader.gd`) and its energy with
+##   `ibl_ambient_energy()` = luminance(E(+Y)) * authored `sky.intensity` *
+##   `IBL_AMBIENT_PORT_SCALE` (identity, because the `.hdr` faces are linear
+##   radiance). AMBIENT_UE_TO_GODOT (0.08) is the *tuned* off-path substitute and
+##   is never applied to a measured cube, so `raw irradiance` and
+##   `intensity * 0.08` are different quantities — never compare them as one.
 ## - Fog DirectionalInscattering luminance -> fog_sun_scatter (0..1).
 ## - enable_rain / rain_intensity are exposed for the particle and audio
 ##   wiring; `rain_intensity_01()` is the ONE preset -> 0..1 converter those
@@ -128,6 +133,20 @@ const AMBIENT_ENERGY_MAX := 0.35
 ## lower-door frames lift out of crushed black without turning the foyer's
 ## practicals into a daytime wash.
 const AMBIENT_UE_TO_GODOT := 0.08
+## P3-3A.4: the ONE port scale from measured cube radiance to Godot ambient
+## energy, used only by `ibl_ambient_energy()` (the `TAT2_IBL=ambient` path).
+## The exported faces are `.hdr` Radiance with `transfer: linear`, i.e. linear
+## radiance in the same exposure space as the rest of the environment, and
+## `ambient_light_energy` is a plain multiplier on that linear radiance, so the
+## conversion is the identity. AMBIENT_UE_TO_GODOT (0.08) must NOT be applied on
+## top: it is a *tuning* substitute for exactly the IBL this path replaces (a
+## UI-space SkyLight intensity -> Godot energy fudge calibrated against the
+## reference frames), not a unit conversion. The consequence is explicit and
+## intended: the measured up-normal luminance (7.7e-4 for
+## Cubemap_GroundFloor_01) and `intensity * 0.08` (= 0.16 for gloomy) are
+## different quantities, and their ratio is a property of the authored sky, not
+## an error signal.
+const IBL_AMBIENT_PORT_SCALE := 1.0
 # The authored Guildhall night needs a small exposure lift under AGX; the
 # old ACES 1.0 path left the gate at p50 0.04-0.06 against the reference
 # 0.10-0.11. W5C scoped this to the bare preset id "midnight_clear", which NO
@@ -677,11 +696,37 @@ static func ambient_color(preset: Dictionary) -> Variant:
 	return null
 
 
+## The flat SkyLight substitute: a UI-space authored intensity mapped to a
+## Godot ambient energy and clamped. This is the `TAT2_IBL=off` path and is
+## **not** a measurement of the authored cube — see ibl_ambient_energy().
 static func ambient_energy(preset: Dictionary) -> Variant:
 	var raw: Variant = _section(preset, "sky").get("intensity")
 	if raw == null:
 		return null
 	return clampf(float(raw) * AMBIENT_UE_TO_GODOT, AMBIENT_ENERGY_MIN, AMBIENT_ENERGY_MAX)
+
+
+## Authored SkyLight Intensity: a unitless radiance scale on the specified
+## cubemap (2.0-2.5 for every shipped night preset). Unlike ambient_energy()
+## this is neither clamped nor scaled by AMBIENT_UE_TO_GODOT, because the IBL
+## path multiplies a *measured* linear radiance by it. A SkyLight that authors
+## no Intensity keeps UE's default of 1.0 rather than 0.0 (0.0 would erase the
+## cube instead of leaving it un-scaled).
+static func sky_intensity(preset: Dictionary) -> float:
+	var raw: Variant = _section(preset, "sky").get("intensity")
+	if raw == null:
+		return 1.0
+	return maxf(float(raw), 0.0)
+
+
+## Stage-1 IBL ambient energy from the CPU cosine irradiance of the authored
+## cubemap (cubemap_loader.gd measured it as linear radiance):
+##   energy = luminance(E(+Y)) * sky.intensity * IBL_AMBIENT_PORT_SCALE
+## Do not compare this with ambient_energy(): that one is a tuned 0..0.35
+## substitute for the IBL, so `7.7e-4 * 2.0 = 1.54e-3` here versus
+## `2.0 * 0.08 = 0.16` there is a different-quantity ratio, never a regression.
+static func ibl_ambient_energy(preset: Dictionary, irradiance_lum: float) -> float:
+	return maxf(irradiance_lum, 0.0) * sky_intensity(preset) * IBL_AMBIENT_PORT_SCALE
 
 
 static func background_color(preset: Dictionary) -> Variant:
@@ -1050,22 +1095,36 @@ static func apply_environment(env: Environment, moon: DirectionalLight3D, preset
 		# irradiance (cubemap_loader.gd). `TAT2_IBL=off` (default) returns
 		# available=false and everything above stays byte-for-byte today's.
 		# `ambient` replaces the flat SkyLight colour with the measured
-		# irradiance; energy is the raw luminance (no AMBIENT_ENERGY_MAX clamp:
-		# stage 1 must not hide its own measurement behind a tuning ceiling).
+		# irradiance and its energy with `ibl_ambient_energy()`:
+		#   lum(E(+Y)) * sky.intensity * IBL_AMBIENT_PORT_SCALE
+		# i.e. the authored intensity IS applied and the one port scale is the
+		# identity (see IBL_AMBIENT_PORT_SCALE). The flat path's
+		# `intensity * 0.08` is deliberately not mixed in: it is a tuned
+		# substitute for the IBL, not a unit conversion, so the two numbers are
+		# different quantities and their ratio is not an error.
 		var cm_amb: Dictionary = CubemapLoader.ambient_for_preset(preset)
 		if bool(cm_amb.get("available", false)):
+			var irradiance_lum: float = float(cm_amb.get("lum", cm_amb.get("energy", 0.0)))
+			var intensity: float = sky_intensity(preset)
+			var ibl_energy: float = ibl_ambient_energy(preset, irradiance_lum)
 			env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 			env.ambient_light_color = cm_amb.get("color", env.ambient_light_color) as Color
-			env.ambient_light_energy = float(cm_amb.get("energy", env.ambient_light_energy))
+			env.ambient_light_energy = ibl_energy
 			if not _cubemap_ambient_logged:
 				_cubemap_ambient_logged = true
-				print("TAT-2 IBL ambient: mode=%s cubemap=%s energy=%.5f color=(%.4f,%.4f,%.4f) (CPU cosine irradiance, no clamp)" % [
+				var flat_e: Variant = ambient_energy(preset)
+				print("TAT-2 IBL ambient: mode=%s cubemap=%s irradiance_lum=%.6f authored_intensity=%.3f port_scale=%.3f energy=%.6f color=(%.4f,%.4f,%.4f) (energy=lum*intensity*scale, linear HDR radiance; flat_SkyLight_substitute=%s is clamp(intensity*%.2f), a different quantity)" % [
 					str(cm_amb.get("mode", "")),
 					str(cm_amb.get("cubemap", "")),
-					float(cm_amb.get("energy", 0.0)),
+					irradiance_lum,
+					intensity,
+					IBL_AMBIENT_PORT_SCALE,
+					ibl_energy,
 					(env.ambient_light_color as Color).r,
 					(env.ambient_light_color as Color).g,
 					(env.ambient_light_color as Color).b,
+					str(flat_e),
+					AMBIENT_UE_TO_GODOT,
 				])
 		var bg: Variant = background_color(preset)
 		if bg != null:

@@ -445,7 +445,7 @@ gate_marker probe_leak "$OUT/probe_leak.log" "PROBE start" \
 	--script res://probe_leak.gd
 
 # 6. Full E2E (all tiers, a2 included) and the standalone a2 tier.
-gate_marker e2e "$OUT/e2e.log" "SUMMARY: fails=0 passed=300 total=300" \
+gate_marker e2e "$OUT/e2e.log" "SUMMARY: fails=0 passed=310 total=310" \
 	flock "$LOCK" tools/godot --headless --path game \
 	--script res://tests/e2e/run_e2e_tests.gd
 

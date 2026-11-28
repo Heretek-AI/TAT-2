@@ -1,10 +1,14 @@
 # Handoff — Thick As Thieves Godot 4.7.2 port (next session)
 
 **Repo:** `<repo>`
-**Current tip:** `c015567` (PR #16 merge; `main`). The WIP branch
-`wip/phase3-gate-integrity-20261127` is merged and retained on `origin`;
-`main` is PR-gated by the `keep summer safe` ruleset (required `hygiene / *`
-checks), so land every change through a PR.
+**Current tip:** `facf6bd` (PR #17 docs tip; the Phase 3 merge is `c015567`).
+`wip/phase3-gate-integrity-20261127` was merged and auto-deleted on merge; the
+per-task WIP snapshots `wip/phase3-audio-20261127`, `-baseline-20261127`,
+`-gpu-session-20261128`, `-look-code-20261127`, `-nav-20261127` and
+`-statetree-20261127` are contained in `main`, and
+`wip/phase3-played-route-20261128` stays unmerged. `main` is PR-gated by the
+`keep summer safe` ruleset (required `hygiene / *` checks), so land every change
+through a PR.
 **Measured code/gate head:** `900f8eb` (route-code merge); the final **59-gate**
 run was made at `5337828` (logs commit `0f6942c`). The post-gate repo-hygiene
 commit `95247fb` touches docs, QA scripts and workflows only; compile **234/0**

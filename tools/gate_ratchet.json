@@ -280,7 +280,7 @@
       "e2e_a2_min": 0,
       "e2e_a2_ceiling": 2,
       "run_tests_min": 482,
-      "run_tests_ceiling": 482
+      "run_tests_ceiling": 495
     },
     "test_roof_collision": {
       "checks": 106

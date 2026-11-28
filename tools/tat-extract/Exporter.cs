@@ -143,11 +143,14 @@ public sealed class Exporter
     public void Tables()
     {
         // Deny-list (documented, unchanged): only DataTable/CurveTable/DataAsset
-        // roots below are queued; any .uasset outside these 12 roots is dropped
+        // roots below are queued; any .uasset outside these roots is dropped
         // before the parsers ever see it and is counted as tables-filtered.
         // P1-2: Art/ThirdParty/Developers added (Art is 10k files; dumping them
         // is slow but silent loss is worse — parsers glob only known tables).
-        var roots = new[] { "TAT/Content/Gameplay/", "TAT/Content/AI/", "TAT/Content/Missions/", "TAT/Content/Character/", "TAT/Content/Core/", "TAT/Content/StringTables/", "TAT/Content/Maps/", "TAT/Content/UI/", "TAT/Content/Audio/", "TAT/Content/Art/", "TAT/Content/ThirdParty/", "TAT/Content/Developers/", "TAT/Content/WwiseAudio/", "TAT/Content/MaterialLibrary/" };
+        // P3-3B.4: Destructibles added so GC_ChestTrunkALid and the other
+        // GeometryCollection packages reach the parsers (previously only the
+        // filtered `json` stage could see them).
+        var roots = new[] { "TAT/Content/Gameplay/", "TAT/Content/AI/", "TAT/Content/Missions/", "TAT/Content/Character/", "TAT/Content/Core/", "TAT/Content/StringTables/", "TAT/Content/Maps/", "TAT/Content/UI/", "TAT/Content/Audio/", "TAT/Content/Art/", "TAT/Content/ThirdParty/", "TAT/Content/Developers/", "TAT/Content/WwiseAudio/", "TAT/Content/MaterialLibrary/", "TAT/Content/Destructibles/" };
         var candidates = Packages(p => p.EndsWith(".uasset")).ToList();
         var queued = candidates.Where(f => roots.Any(f.Path.StartsWith)).ToList();
         CountSkip("tables-filtered", candidates.Count - queued.Count);
@@ -171,13 +174,16 @@ public sealed class Exporter
     public void Levels()
     {
         // Two domains, one dump: every .umap (map files) plus BPP_/SV_/S_/
-        // SS_/QG_ blueprint dumps (packed-actor templates re-consumed by
-        // parse_tables as actor templates, not levels). The S_ prefix also
+        // SS_/QG_/LS_ blueprint dumps (packed-actor templates re-consumed by
+        // parse_tables as actor templates, not levels). LS_ is the authored
+        // LevelSequence prefix (e.g. LS_Airship_Launch); it was previously only
+        // reachable through the tables root's blanket Art/ dump.
+        // The S_ prefix also
         // matches unrelated S_* blueprints (sound/state blueprints); they
         // are dumped, never parsed as levels, and counted below so a future
         // genuine sublevel outside both domains shows as levels-filtered.
         var candidates = Packages().ToList();
-        var queued = candidates.Where(f => f.Path.EndsWith(".umap") || Path.GetFileName(f.Path).StartsWith("BPP_") || Path.GetFileName(f.Path).StartsWith("SV_") || Path.GetFileName(f.Path).StartsWith("S_") || Path.GetFileName(f.Path).StartsWith("SS_") || Path.GetFileName(f.Path).StartsWith("QG_")).ToList();
+        var queued = candidates.Where(f => f.Path.EndsWith(".umap") || Path.GetFileName(f.Path).StartsWith("BPP_") || Path.GetFileName(f.Path).StartsWith("SV_") || Path.GetFileName(f.Path).StartsWith("S_") || Path.GetFileName(f.Path).StartsWith("SS_") || Path.GetFileName(f.Path).StartsWith("QG_") || Path.GetFileName(f.Path).StartsWith("LS_")).ToList();
         CountSkip("levels-filtered", candidates.Count - queued.Count);
         Console.Error.WriteLine($"  levels domains: {queued.Count(f => f.Path.EndsWith(".umap"))} umap + {queued.Count(f => !f.Path.EndsWith(".umap"))} blueprint");
         ForEach(queued, "levels", f => DumpJson(f, "levels"));
@@ -277,6 +283,27 @@ public sealed class Exporter
         textureFormat: ETextureFormat.Png,
         textureQuality: 100,
         exportHdrTexturesAsHdr: false,
+        exportAllTextureMips: false,
+        materialDepth: default,
+        exportMaterials: false,
+        exportMorphTargets: true,
+        socketFormat: ESocketFormat.Bone,
+        compressionFormat: CUE4Parse_Conversion.Writers.UEFormat.Enums.EFileCompressionFormat.None
+    );
+
+    // P3-3A.4: HDR only for the authored sky cubemaps. The 8-bit PNG path
+    // clamps a 1e-4..1e-3 HDR sky to 0 or 1/255 (the measured 0.00005 ambient
+    // floor), so the six cube faces are written as Radiance .hdr with their
+    // linear values intact. Every other texture command keeps DefaultOpts /
+    // AnimOpts (exportHdrTexturesAsHdr: false); do not promote this globally.
+    ExportOptions CubemapOpts() => new(
+        meshFormat: EMeshFormat.Gltf2,
+        naniteMeshFormat: ENaniteMeshFormat.NaniteFirst,
+        meshQuality: EMeshQuality.Highest,
+        texturePlatform: ETexturePlatform.DesktopMobile,
+        textureFormat: ETextureFormat.Png,
+        textureQuality: 100,
+        exportHdrTexturesAsHdr: true,
         exportAllTextureMips: false,
         materialDepth: default,
         exportMaterials: false,
@@ -694,6 +721,58 @@ public sealed class Exporter
         }
     }
 
+    // Linear face energy for the HDR path: the loader needs the real
+    // irradiance scale (the authored sky cube is ~1e-4..1e-3), which the 8-bit
+    // FaceMean clamps to zero. Only raw half/float layouts reach here — a
+    // format that Decode did not expand to raw is reported as null, never
+    // guessed. Returns RGB means without any gamma transform.
+    static double[]? FaceMeanLinear(CTexture face)
+    {
+        if (!PixelFormatUtils.IsHDR(face.PixelFormat)) return null;
+        int w = face.Width, h = face.Height;
+        if (w <= 0 || h <= 0) return null;
+        int step = Math.Max(1, Math.Max(w, h) / 32);
+        var data = face.Data;
+        int pixelBytes;
+        switch (face.PixelFormat)
+        {
+            case EPixelFormat.PF_FloatRGBA: pixelBytes = 8; break;      // 4 x half
+            case EPixelFormat.PF_A32B32G32R32F: pixelBytes = 16; break; // 4 x float
+            case EPixelFormat.PF_R32_FLOAT: pixelBytes = 4; break;      // 1 x float
+            default: return null;
+        }
+        if ((long) w * h * pixelBytes > data.LongLength) return null;
+        double r = 0, g = 0, b = 0; long n = 0;
+        for (int y = 0; y < h; y += step)
+        {
+            for (int x = 0; x < w; x += step)
+            {
+                int o = (y * w + x) * pixelBytes;
+                float fr, fg, fb;
+                if (face.PixelFormat == EPixelFormat.PF_FloatRGBA)
+                {
+                    fr = (float) BitConverter.UInt16BitsToHalf((ushort) (data[o] | (data[o + 1] << 8)));
+                    fg = (float) BitConverter.UInt16BitsToHalf((ushort) (data[o + 2] | (data[o + 3] << 8)));
+                    fb = (float) BitConverter.UInt16BitsToHalf((ushort) (data[o + 4] | (data[o + 5] << 8)));
+                }
+                else if (face.PixelFormat == EPixelFormat.PF_A32B32G32R32F)
+                {
+                    fr = BitConverter.ToSingle(data, o);
+                    fg = BitConverter.ToSingle(data, o + 4);
+                    fb = BitConverter.ToSingle(data, o + 8);
+                }
+                else
+                {
+                    fr = fg = fb = BitConverter.ToSingle(data, o);
+                }
+                if (!float.IsFinite(fr) || !float.IsFinite(fg) || !float.IsFinite(fb)) continue;
+                r += fr; g += fg; b += fb; n++;
+            }
+        }
+        if (n == 0) return null;
+        return new[] { Math.Round(r / n, 6), Math.Round(g / n, 6), Math.Round(b / n, 6) };
+    }
+
     static string UePath(string path)
     {
         var rel = path.Replace('\\', '/');
@@ -730,7 +809,9 @@ public sealed class Exporter
 
     public void Cubemaps()
     {
-        var opts = DefaultOpts();
+        // HDR face export is scoped to this pass only: .hdr for HDR source
+        // formats, unchanged PNG for the 8-bit cubes (daylight / fake specular).
+        var opts = CubemapOpts();
         var candidates = Packages(p => p.EndsWith(".uasset")).ToList();
         var wanted = candidates.Where(f => AuthoredCubePackages.Contains(f.Path, StringComparer.OrdinalIgnoreCase)).ToList();
         CountSkip("cubemaps-filtered", candidates.Count - wanted.Count);
@@ -764,16 +845,27 @@ public sealed class Exporter
                         Count("cubemaps", false, $"{f.Path}: decoded {decoded.Width}x{decoded.Height} is not six square {faceH}px faces");
                         continue;
                     }
+                    // A re-run must not leave a stale face_*.png beside the new
+                    // face_*.hdr (or vice versa): the manifest names the files,
+                    // but the directory should not carry both encodings.
+                    if (_o.Overwrite)
+                        foreach (var stale in Directory.GetFiles(dir, "face_*"))
+                            File.Delete(stale);
                     var faces = new Dictionary<string, string>();
                     var means = new Dictionary<string, double[]>();
+                    var meansLinear = new Dictionary<string, double[]>();
+                    bool hdrEncoded = PixelFormatUtils.IsHDR(decoded.PixelFormat);
                     bool ok = true;
                     for (int i = 0; i < 6; i++)
                     {
                         var face = SliceCubeFace(decoded, i, faceH);
                         var mean = FaceMean(face);
                         if (mean != null) means[CubeFaceNames[i]] = mean;
+                        var meanLinear = FaceMeanLinear(face);
+                        if (meanLinear != null) meansLinear[CubeFaceNames[i]] = meanLinear;
                         var bytes = face.Encode(opts, out var ext);
                         if (bytes == null) { ok = false; break; }
+                        if (ext != "hdr") hdrEncoded = false;
                         var file = $"face_{CubeFaceNames[i]}.{ext}";
                         File.WriteAllBytes(Path.Combine(dir, file), bytes);
                         faces[CubeFaceNames[i]] = file;
@@ -789,16 +881,23 @@ public sealed class Exporter
                         ["height"] = faceH,
                         ["pixel_format"] = cube.Format.ToString(),
                         ["srgb"] = cube.SRGB,
-                        ["transfer"] = cube.SRGB ? "srgb" : "linear",
+                        // HDR faces are linear by construction; never label
+                        // them srgb even if the source flag is set, or the
+                        // loader would apply a second gamma transform.
+                        ["hdr"] = hdrEncoded,
+                        ["encoding"] = hdrEncoded ? "hdr" : "png",
+                        ["transfer"] = hdrEncoded ? "linear" : (cube.SRGB ? "srgb" : "linear"),
                         ["slices"] = 6,
                         ["face_order"] = CubeFaceNames,
                         ["ue_face_order"] = new[] { "PosX", "NegX", "PosY", "NegY", "PosZ", "NegZ" },
                         ["faces"] = faces,
                         ["face_mean_8bit"] = means,
                     };
+                    // Real (unclamped) linear face energy for the loader.
+                    if (meansLinear.Count > 0) doc["face_mean_linear"] = meansLinear;
                     File.WriteAllText(manifest, JsonConvert.SerializeObject(doc, Formatting.Indented));
                     Count("cubemaps", true);
-                    Console.Error.WriteLine($"  cubemap {cube.Name}: {decoded.Width}x{faceH} {cube.Format} srgb={cube.SRGB} -> {dir}");
+                    Console.Error.WriteLine($"  cubemap {cube.Name}: {decoded.Width}x{faceH} {decoded.PixelFormat} srgb={cube.SRGB} hdr={hdrEncoded} -> {dir}");
                 }
                 if (cubes == 0) Count("cubemaps", false, f.Path + ": no UTextureCube export");
             }

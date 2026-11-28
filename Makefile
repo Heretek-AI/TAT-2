@@ -8,16 +8,28 @@ MOBILE_ABI  ?= arm64
 QA_CONTRACT ?= 0
 KEYSTORE_PROPS := $(HOME)/.config/tat2/keystore.properties
 
-.PHONY: build-extractor extract anims normalize audit audit-bootstrap audit-refresh-stamps audit-imports content-overrides check-logic check-consumers string-audit check-greps gate-ratchet test test-producers run editor review review-capture bake-review bake-review-core desktop-texture-cap texture-cap-check audio-tools linux-build linux-stamp-verify linux-run android-prepare android-debug android-debug-gl android-release
+.PHONY: build-extractor extract json extract-json anims normalize audit audit-bootstrap audit-refresh-stamps audit-imports content-overrides check-logic check-consumers string-audit check-greps gate-ratchet test test-producers run editor review review-capture bake-review bake-review-core desktop-texture-cap texture-cap-check audio-tools linux-build linux-stamp-verify linux-run android-prepare android-debug android-debug-gl android-release
 
 build-extractor:
 	DOTNET_ROOT=$(HOME)/.dotnet10 PATH=$(HOME)/.dotnet10:$(PATH) $(DOTNET) build tools/tat-extract -c Release
 	cp tools/tat-extract/native/linux-x64/CUE4Parse-Natives.so tools/tat-extract/bin/Release/net10.0/
 
+# P3-3B.4: filtered package dumps for roots the parsers need but that are not
+# `tables` roots. Destructibles carries GC_ChestTrunkALid and the other
+# GeometryCollection packages (the `json` command writes to extracted/json and
+# never changes an existing table output). Run standalone as `make extract-json`.
+json: build-extractor
+	$(EX) json --overwrite --filter 'Destructibles/'
+
+extract-json: json
+
 extract: build-extractor
 	$(EX) list
 	$(EX) raw
 	$(EX) tables
+	# 3B.4: the Destructibles package dumps (GC_ChestTrunkALid et al.). New
+	# files only; it does not rewrite any existing table/level output.
+	$(EX) json --overwrite --filter 'Destructibles/'
 	$(EX) levels
 	# N-P0: decoded ARecastNavMesh tiles for the three navmesh maps only. The
 	# generated runtime asset is produced by tools/parse_nav.py in `normalize`.
@@ -29,7 +41,9 @@ extract: build-extractor
 	$(EX) materials --overwrite
 	$(EX) audio
 	$(EX) textures
-	$(EX) cubemaps
+	# 3A.4: faces are HDR for HDR cubes; --overwrite re-encodes an existing
+	# PNG tree so a stale 8-bit face cannot survive a code change.
+	$(EX) cubemaps --overwrite
 	$(EX) anims
 
 anims: build-extractor

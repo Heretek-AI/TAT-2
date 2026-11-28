@@ -95,17 +95,21 @@ POSE_IDS = [
     "upper_foyer",
     "yaw180",
     "foyer_beam",
+    "foyer_beam_wide",
     "lounge",
     "lounge_beam",
     "beam_close",
+    "gap_view",
 ]
-# Lounge C_57 is an extra, not a KF27/S24 frame: luma stats only, no criteria.
-POSE_EXTRAS = {"beam_close"}
+# Lounge C_57 / landscape gap are extras, not KF27/S24 frames: luma stats only,
+# no KF27 criteria.
+POSE_EXTRAS = {"beam_close", "gap_view"}
 POSE_REFS = {
     "gate": "KF16_01m40s_zipwire_gate_headlights.jpg",
     "upper_foyer": "KF27_03m27s_foyer_security_beam.jpg",
     "yaw180": "KF27_03m27s_foyer_security_beam.jpg",
     "foyer_beam": "KF27_03m27s_foyer_security_beam.jpg",
+    "foyer_beam_wide": "KF27_03m27s_foyer_security_beam.jpg",
     "lounge": "KF27_03m27s_foyer_security_beam.jpg",
     "lounge_beam": "KF27_03m27s_foyer_security_beam.jpg",
     "beam_close": "KF27_03m27s_foyer_security_beam.jpg",
@@ -892,6 +896,8 @@ def main() -> int:
 
     if not args.port or not args.pose:
         return _fail("need --port and --pose (or --all/--validate-manifest)")
+    if args.pose not in POSE_REFS and not args.ref:
+        return _fail(f"no reference for pose {args.pose} (A/B-only extra); pass --ref")
     ref_path = _resolve_reference(args.pose, args.ref)
     if not ref_path.is_file():
         return _fail(f"reference missing: {ref_path}")

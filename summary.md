@@ -1,35 +1,3 @@
-**Cleanout (Phase 3B.5) — round 2: display gating, hub reset, overlay-free QA,
-save-layer guard.** Round 1 made `Mission.Guildhall.LootTheRoom` a first-class
-Cleanout (`begin_cleanout`/`end_cleanout`, `run_credits_contract()` gate,
-3300 s side-mission row, safe-room spawn, Den entry, no Contract 2 bank credit).
-Round 2 closes the falsifier findings:
+# look-code — summary (round 3)
 
-1. **Display-only credit removed.** `hud._post_match_contract_line`, the HUD's
-   post-match contract row, and `post_match_ui._contract_outcome_line` now return
-   empty when `run_credits_contract()` is false; `_xp_rows` shows only the three
-   authored “Unsuccessful” rows at `+0` and `_expected_xp` returns 0, so a
-   Cleanout win no longer claims +20/+20/+80 (the measured award is 0). The
-   FTUE remainder row is gated too.
-2. **Hub return clears the mode.** `hud.reset_run_modes_for_hub()` is shared by
-   pause RETURN TO DEN and post-match Continue and calls `end_free_play()` +
-   `end_cleanout()` (contract order 1), so a Cleanout cannot persist at the Den.
-3. **QA works without the contracts.json overlay.** `GameData.is_side_mission`
-   now falls back to the authored `*.LootTheRoom` id and authored
-   `mission_loot_goals`, so `--qa-mission=Mission.Guildhall.LootTheRoom` stages
-   `begin_cleanout` (no Contract 2 credit / £1,000) even with the overlay absent.
-4. **Save layer refuses credit.** `SaveSystem.record_contract_complete` gates on
-   `GameState.run_credits_contract()` (defensive free-play fallback) and its
-   comment is corrected, so a direct call cannot credit a Cleanout.
-5. **Prep selector no-op removed.** The mission `OptionButton` is disabled for
-   free-play/Cleanout prep (`_refresh_all`), and `_on_mission_selected` ignores
-   programmatic picks in those modes, so the card/time limit cannot be rewritten
-   only to have READY force the row back.
-6. **E2E extended.** Tier `s2` is now 22 checks: S2-18 covers capture, timeout
-   and door-collapse banking; S2-19 asserts the displayed copy/award (no
-   Contract 2 row, +0 breakdown, mission row still shown); S2-20 covers a co-op
-   Cleanout resolve banking without credit; S2-21 proves overlay-free side-mission
-   detection; S2-22 proves the shared hub-return clears both run modes.
-
-Evidence: compile 233/0; `run_tests.gd` fails=0 (329 PASS); full E2E **310/310**;
-`--tier=s2` **22/22**; `make audit` PASS; string audit 311/199/112 unchanged. No
-save schema bump, no lock/texture/audit re-baseline.
+Round 3 fixes the colour-space bug the falsifier proved and closes the round-2 control gaps. **Colour:** the UE payload `extracted/json/UI/HUD/BPUI_Hud_InteractPromptLine.json` stores a *linear* triple `(0.124772, 0.155927, 0.838799)`, but Godot 4 canvas colours are sRGB when `rendering/rendering_device/hdr_2d=false` (the default), so round 2's `Color(0.124772,0.155927,0.838799)` rendered **#2028D6** (Rec.709 luma ≈51), not the authored **#636EEC** (luma ≈117); the runtime readback was circular. `game/src/ui/hud.gd` now uses `Color.html("#636EEC")` (= sRGB `(0.388235, 0.431373, 0.925490)`) on both the primary (`interact_lbl`) and secondary (`_prompt_secondary_lbl`) prompt labels, with the authored shadows kept — primary `(1,3)`, secondary `(4,2)`, shadow alpha 0.75, text alpha 1.0 — and the authored-invisible `OutlineSize 3` with outline alpha 0.0 on the secondary (no visual effect / HARD_LIMIT). The false "Godot canvas colours are linear" comment premise is gone; the comments record the linear source triple vs the sRGB render form. UI2-03 wording corrected: the authored colour is **not** darker — the previous linear literal was; the authored #636EEC is the lighter, correct value, and the 4.5 floor stays untouched. **Proof:** a committed harness `build/qa/check_prompt_colour.gd` has a headless mode (PASS 9/0: `Color.html("#636EEC") == (0.388235,0.431373,0.925490)`, `!=` the UE-linear triple, and both HUD labels/shadows/outline match) and a real Vulkan/Xvfb render mode. The render, taken under `/tmp/opencode/tat2-godot.lock` with no other Godot running, draws a ColorRect + Label in `Color.html("#636EEC")` at 1280×720 and reads the swatch centre: **pixel `(0.3882, 0.4314, 0.9255)` = `#636eec`, expected `#636eec`, delta8=0, label=#636eec, PASS** (the earlier concurrent headless `run_tests` from another lane was no GPU and the measurement was repeated clean). **gap_view:** target is now the exact authored gap centroid `(120.25, 18.56, -6.815)` (midpoint of `(114.5,18.56,-3.2)` and `(126,18.56,-10.43)`), so the aim is exact (0.00 % offset, sub-1 %); the derived pitch with the start+1.66875 eye is **−50.0702°** (the −48.6° figure would need a 26.7041 m eye), still inside the spec's −42..−53° band, labelled PORT_DECISION. **Security:** `p0b_capture.sh --tag` now rejects `.` / `..` / any all-dot component in addition to the CR/LF rejection, so the per-run evidence dir cannot resolve one level up; `--tag=.`, `..`, `...` exit 2 and `.hidden`/`run2` pass. All required checks re-run: `bash -n` OK, `shellcheck` 0, dry-run **poses=9** + `P0B_MANIFEST_OK poses=9`, `--self-test` **PASS checks=23 fails=0**, `check_scripts_compile` **229/0**, `run_tests` **fails=0**, colour headless **9/0**, colour render **PASS #636eec delta 0**. Open: gate-runner adoption of `check_prompt_colour.gd` (I did not edit `run_final_gates.sh`/ratchet, owned by the gates lanes); `p0b_roi_stats.py --all` skips `gap_view` (no reference frame; the landscape A/B is mode-vs-mode RMSE). `summary.md` remains an uncommitted working-tree artifact (do not cherry-pick it over the merged baseline summary). No default flips; no test weakened; no generated data touched.

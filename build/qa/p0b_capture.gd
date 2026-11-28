@@ -8,9 +8,10 @@ extends SceneTree
 ## harness/governance lanes merge.
 ##
 ## Usage (never two GPU jobs at once; the wrapper takes the shared flock):
-##   build/qa/p0b_capture.sh                       # real capture, all six poses
+##   build/qa/p0b_capture.sh                       # real capture, every pose
 ##   build/qa/p0b_capture.sh --beam-card=off       # TAT2_BEAM_CARD A/B
 ##   build/qa/p0b_capture.sh --poses=lounge_beam,beam_close
+##   build/qa/p0b_capture.sh --settle-seconds=25   # extra >=25 s hold after the frames
 ##   build/qa/p0b_capture.sh --dry-run             # headless, no GPU, manifest only
 ##   build/qa/p0b_capture.sh --self-test           # headless checks
 ##
@@ -19,13 +20,20 @@ extends SceneTree
 ##     "xvfb-run -a -s '-screen 0 1920x1080x24' tools/godot --path game \
 ##      --rendering-driver vulkan --script '$PWD/build/qa/p0b_capture.gd' -- --mode=capture"
 ##
-## Poses: gate, upper_foyer, yaw180, foyer_beam, lounge, lounge_beam, beam_close.
+## Poses: gate, upper_foyer, yaw180, foyer_beam, foyer_beam_wide, lounge,
+## lounge_beam, beam_close, gap_view.
 ## `foyer_beam` is the KF27-framed cue at the authored C_107 foyer card;
-## `beam_close` is the Lounge C_57 extra (ref=EXTRA), never a KF27 frame.
+## `foyer_beam_wide` is the lateral KF27 framing of the same authored terms (the
+## card projects at ~18 %/40 % from ~8 m, the reference emitter box);
+## `gap_view` is the authored SafeRoomPlayerStart landscape-gap view with a
+## labelled PORT_DECISION pitch, and `beam_close` is the Lounge C_57 extra
+## (ref=EXTRA), never a KF27 frame.
 ## Lens: the shipped authored 54.54 deg vertical (UE 85 deg horizontal at 16:9),
 ## 1920x1080, KEEP_HEIGHT. Each pose waits SETTLE_FRAMES=60, then captures
-## CAPTURE_FRAMES=5 frames and saves the median-mean frame. The authoritative
-## luma percentiles/beam rows/16x9 cream map come from
+## CAPTURE_FRAMES=5 frames and saves the median-mean frame; an optional
+## `--settle-seconds=N` (0 or >=25) adds a further N-second hold after those
+## frames for the AEM/A-B sessions. The authoritative luma percentiles/beam
+## rows/16x9 cream map come from
 ## build/qa/p0b_roi_stats.py on the saved PNG; the sampled numbers printed here
 ## are only a non-black guard and the median selector.
 ##
@@ -40,9 +48,14 @@ const SHIPPED_FOV: float = 54.54
 const EYE_OFFSET: float = 1.67
 const SETTLE_FRAMES: int = 60
 const CAPTURE_FRAMES: int = 5
+## A requested `--settle-seconds` must be 0 (off) or at least this many seconds;
+## the AEM/A-B sessions use 25 s. It is an *extra* hold after SETTLE_FRAMES.
+const MIN_SETTLE_SECONDS: float = 25.0
+## Authored STAND_HEAD_HEIGHT (thief_character.gd: 1.66875 m above the floor).
+const PLAYER_EYE_HEIGHT: float = 1.66875
 const OFFICIAL_CLIP_SEED: int = 1025051536
 const AUDIO_SRC: String = "res://src/core/audio_capture.gd"
-const POSE_IDS: Array[String] = ["gate", "upper_foyer", "yaw180", "foyer_beam", "lounge", "lounge_beam", "beam_close"]
+const POSE_IDS: Array[String] = ["gate", "upper_foyer", "yaw180", "foyer_beam", "foyer_beam_wide", "lounge", "lounge_beam", "beam_close", "gap_view"]
 
 ## Pose table. `ground=false` uses the authored absolute eye (the W9 capture
 ## poses); `ground=true` casts a downward ray at the authored x/z and places the
@@ -83,6 +96,20 @@ const POSES := {
 		"ref": "KF27",
 		"note": "KF27-framed cue aimed at the authored BP_Detector_LightBeam_C_107 card at (23.27,29.76,-57.4); the one-band/emitter criteria are in build/qa/kf27_beam_reference.json",
 	},
+	"foyer_beam_wide": {
+		# Derived, not authored: eye = card + 8 m * (-0.766, 0, 0.643)
+		#   (23.27 - 6.128, 29.76, -57.4 + 5.144) = (17.1, 29.7, -52.3).
+		# Looking 30.26 deg right / 5.81 deg down of the eye->card ray puts the
+		# authored card centre at 18.0 %/40.0 % of a 54.54 deg KEEP_HEIGHT 16:9
+		# frame (the KF27 reference emitter is 17.8 %/40.0 %, +-2 %). Same
+		# authored terms as foyer_beam; only the lateral framing changes.
+		"eye": Vector3(17.1, 29.7, -52.3),
+		"target": Vector3(24.96, 28.95, -53.59),
+		"ground": false,
+		"beat": "S24",
+		"ref": "KF27",
+		"note": "lateral KF27 wide cue: 8.005 m from the authored C_107 card; the derived target rotates the eye->card ray +30.26 deg yaw / -5.81 deg pitch so the emitter projects at 18.0 %/40.0 % (inside the 10-26 % x / 33-47 % y emitter box). foyer_beam is untouched.",
+	},
 	"lounge": {
 		"eye": Vector3(31.0, 28.72, -26.2),
 		"target": Vector3(44.2, 28.72, -26.2),
@@ -107,6 +134,27 @@ const POSES := {
 		"ref": "EXTRA",
 		"note": "Lounge C_57 extra (not KF27/S24): 3.4 m from the C_57 card; luma stats only, no KF27 criteria",
 	},
+	"gap_view": {
+		# Anchored to the authored TATSafeRoomPlayerStart_0 at
+		# (127.2747, 25.4694, -5.3296); the eye adds the authored player eye
+		# height (STAND_HEAD_HEIGHT = 1.66875) so it is a first-person view from
+		# the start, not the actor origin. The target is the EXACT authored
+		# landscape-gap centroid (120.25, 18.56, -6.815) = the midpoint of the
+		# measured (114.5, 18.56, -3.2) / (126.0, 18.56, -10.43) collision
+		# points, so the aim is exact (0.00 % offset; well inside 1 %). The
+		# derived pitch is -50.0702 deg. The -48.6 deg figure needs a 26.7041 m
+		# eye (start + 1.2347); with the +1.66875 first-person eye the pitch is
+		# -50.07 deg, still inside the spec's -42..-53 deg band. The pitch is
+		# NOT authored -> PORT_DECISION.
+		"eye": Vector3(127.2747, 27.13815, -5.3296),
+		"target": Vector3(120.25, 18.56, -6.815),
+		"ground": false,
+		"beat": "S12",
+		"ref": "EXTRA",
+		"decision": "PORT_DECISION",
+		"authored_start": Vector3(127.2747, 25.4694, -5.3296),
+		"note": "landscape-gap A/B view for the P4.4 discard|raw|off comparison: eye = authored SafeRoomPlayerStart_0 x/z + player eye height (1.66875), target = exact authored gap centroid (120.25,18.56,-6.815), so the aim is exact (0.00 % offset). Derived pitch -50.0702 deg (the -48.6 deg figure would need a 26.7041 m eye); labelled PORT_DECISION (no authored camera aims at the gap).",
+	},
 }
 
 var _mode: String = "capture"
@@ -114,6 +162,7 @@ var _tag: String = ""
 var _poses: Array[String] = []
 var _beam_mode: String = "on"
 var _seed_arg: String = "derived"
+var _settle_seconds: float = 0.0
 var _run_id: String = ""
 var _out_dir: String = ""
 var _manifest_path: String = ""
@@ -141,6 +190,61 @@ func _env(name: String) -> String:
 func _wait(n: int) -> void:
 	for _i: int in range(maxi(n, 1)):
 		await process_frame
+
+
+## Parse `--settle-seconds`: "" -> 0 (off), a non-negative number -> that value,
+## anything else -> -1. The 0-or->=25 contract is enforced separately by
+## _settle_ok so the parser stays a pure value reader.
+func _parse_settle_seconds(raw: String) -> float:
+	var s: String = raw.strip_edges()
+	if s == "":
+		return 0.0
+	if not s.is_valid_float():
+		return -1.0
+	var v: float = s.to_float()
+	if v < 0.0:
+		return -1.0
+	return v
+
+
+func _settle_ok(v: float) -> bool:
+	return v == 0.0 or (v >= MIN_SETTLE_SECONDS and v <= 3600.0)
+
+
+## Gnomonic projection of `point` for a Camera3D at `eye` looking at `target`
+## with the shipped vertical FOV and KEEP_HEIGHT=height. Returns the image
+## percentage from the top-left (x right, y down). Used only by the self-test to
+## prove the derived poses' framing arithmetic mirrors Godot's camera.
+func _project_pct(eye: Vector3, target: Vector3, point: Vector3) -> Vector2:
+	var fwd: Vector3 = (target - eye).normalized()
+	var right: Vector3 = fwd.cross(Vector3.UP).normalized()
+	var up: Vector3 = right.cross(fwd)
+	var v: Vector3 = point - eye
+	var depth: float = v.dot(fwd)
+	if absf(depth) < 1e-6:
+		return Vector2(-1.0, -1.0)
+	var tan_h: float = tan(deg_to_rad(SHIPPED_FOV * 0.5))
+	var x_ndc: float = (v.dot(right) / depth) / (tan_h * (16.0 / 9.0))
+	var y_ndc: float = (v.dot(up) / depth) / tan_h
+	return Vector2(50.0 * (x_ndc + 1.0), 50.0 * (1.0 - y_ndc))
+
+
+func _pitch_deg(eye: Vector3, target: Vector3) -> float:
+	var d: Vector3 = target - eye
+	return rad_to_deg(atan2(d.y, Vector2(d.x, d.z).length()))
+
+
+## Hold the pose: SETTLE_FRAMES first, then an *additional* `_settle_seconds`
+## wall-clock hold when requested. Returns the total waited milliseconds so the
+## manifest can prove the flag was not a no-op.
+func _wait_settle() -> int:
+	var t0: int = Time.get_ticks_msec()
+	await _wait(SETTLE_FRAMES)
+	if _settle_seconds > 0.0:
+		var deadline: int = Time.get_ticks_msec() + int(round(_settle_seconds * 1000.0))
+		while Time.get_ticks_msec() < deadline:
+			await process_frame
+	return Time.get_ticks_msec() - t0
 
 
 func _now_iso() -> String:
@@ -271,6 +375,9 @@ func _base_manifest(dry_run: bool, self_test: bool) -> Dictionary:
 			"frames": SETTLE_FRAMES,
 			"capture_frames": CAPTURE_FRAMES,
 			"selector": "median-mean",
+			"seconds": _settle_seconds,
+			"min_seconds": MIN_SETTLE_SECONDS,
+			"mode": "frames+extra" if _settle_seconds > 0.0 else "frames",
 		},
 		"seed": {
 			"requested": _seed_arg,
@@ -349,6 +456,8 @@ func _validate_manifest(m: Dictionary) -> Array:
 		errs.append("settle.capture_frames != %d" % CAPTURE_FRAMES)
 	if str(settle.get("selector", "")) != "median-mean":
 		errs.append("settle.selector != median-mean")
+	if settle.has("seconds") and float(settle.get("seconds", 0.0)) < 0.0:
+		errs.append("settle.seconds is negative")
 	var seed: Dictionary = m.get("seed", {}) as Dictionary
 	if not seed.has("requested") or not seed.has("active_map_seed") or int(seed.get("official_clip_seed", 0)) != OFFICIAL_CLIP_SEED:
 		errs.append("seed block incomplete")
@@ -450,34 +559,38 @@ func _setup_paths() -> void:
 		_manifest_path = _repo_root.path_join("docs/reports/logs/p0b").path_join(_run_id).path_join("manifest.json")
 
 
+## Per-pose provenance that must survive into every manifest: the labelled
+## decision (only PORT_DECISION poses carry one), the authored anchor if the eye
+## was raised from it, and the look-at pitch so a reviewer can recompute it.
+func _pose_provenance(p: Dictionary) -> Dictionary:
+	var row: Dictionary = {
+		"decision": str(p.get("decision", "")),
+		"pitch_deg": snappedf(_pitch_deg(p["eye"] as Vector3, p["target"] as Vector3), 0.001),
+	}
+	if p.has("authored_start"):
+		row["authored_start"] = _v3(p["authored_start"] as Vector3)
+	return row
+
+
 func _dry_run() -> void:
 	var m: Dictionary = _base_manifest(true, false)
 	var poses: Array = []
 	for pid: String in _poses:
 		var p: Dictionary = POSES[pid] as Dictionary
 		var eye: Vector3 = p["eye"] as Vector3
-		if bool(p.get("ground", false)):
-			# A dry run cannot ground; the authored x/z and the authored y are
-			# recorded with grounded=false so nobody mistakes it for a measurement.
-			poses.append({
-				"id": pid, "status": "dry_run",
-				"beat": str(p.get("beat", "")), "ref_keyframe": str(p.get("ref", "")),
-				"eye": _v3(eye), "target": _v3(p["target"] as Vector3),
-				"grounded": false, "ground_planned": true,
-				"fov_vertical_deg": SHIPPED_FOV,
-				"resolution": [SIZE.x, SIZE.y],
-				"note": str(p.get("note", "")),
-			})
-		else:
-			poses.append({
-				"id": pid, "status": "dry_run",
-				"beat": str(p.get("beat", "")), "ref_keyframe": str(p.get("ref", "")),
-				"eye": _v3(eye), "target": _v3(p["target"] as Vector3),
-				"grounded": false, "ground_planned": false,
-				"fov_vertical_deg": SHIPPED_FOV,
-				"resolution": [SIZE.x, SIZE.y],
-				"note": str(p.get("note", "")),
-			})
+		# A dry run cannot ground; the authored x/z and the authored y are
+		# recorded with grounded=false so nobody mistakes it for a measurement.
+		var row: Dictionary = {
+			"id": pid, "status": "dry_run",
+			"beat": str(p.get("beat", "")), "ref_keyframe": str(p.get("ref", "")),
+			"eye": _v3(eye), "target": _v3(p["target"] as Vector3),
+			"grounded": false, "ground_planned": bool(p.get("ground", false)),
+			"fov_vertical_deg": SHIPPED_FOV,
+			"resolution": [SIZE.x, SIZE.y],
+			"note": str(p.get("note", "")),
+		}
+		row.merge(_pose_provenance(p), true)
+		poses.append(row)
 	m["poses"] = poses
 	m["audio"] = {
 		"schema": "tat2.audio_capture/1",
@@ -519,7 +632,7 @@ func _check(cond: bool, what: String) -> void:
 
 func _self_test() -> void:
 	# 1. Contract constants.
-	_check(POSE_IDS.size() == 7, "seven pose ids (incl. KF27 foyer_beam + Lounge extra)")
+	_check(POSE_IDS.size() == 9, "nine pose ids (incl. KF27 foyer_beam/wide, gap view + Lounge extra)")
 	_check(is_equal_approx(SHIPPED_FOV, 54.54), "shipped vertical FOV is 54.54")
 	_check(SIZE == Vector2i(1920, 1080), "resolution is 1920x1080")
 	_check(SETTLE_FRAMES == 60 and CAPTURE_FRAMES == 5, "settle 60 + 5 frames")
@@ -534,17 +647,63 @@ func _self_test() -> void:
 	_check(str(lounge_extra.get("ref", "")) == "EXTRA"
 		and str(lounge_extra.get("beat", "")) == "",
 		"beam_close is the Lounge C_57 extra, not a KF27/S24 frame")
+	# The two derived poses are validated by arithmetic, not by literal values:
+	# the card centre must project to ~18 %/40 % from the wide eye, and the gap
+	# view must be the authored start + player eye height with a -42..-53 deg
+	# pitch labelled PORT_DECISION. The look-at target must project to 50/50,
+	# which independently proves _project_pct matches the camera convention.
+	var wide: Dictionary = POSES["foyer_beam_wide"] as Dictionary
+	var wide_eye: Vector3 = wide["eye"] as Vector3
+	var wide_tgt: Vector3 = wide["target"] as Vector3
+	var wproj: Vector2 = _project_pct(wide_eye, wide_tgt, Vector3(23.27, 29.76, -57.4))
+	var wcenter: Vector2 = _project_pct(wide_eye, wide_tgt, wide_tgt)
+	var gap: Dictionary = POSES["gap_view"] as Dictionary
+	var gap_eye: Vector3 = gap["eye"] as Vector3
+	var gap_tgt: Vector3 = gap["target"] as Vector3
+	var gap_start: Vector3 = gap["authored_start"] as Vector3
+	var gap_pitch: float = _pitch_deg(gap_eye, gap_tgt)
 	var pose_ok: bool = true
+	var seen_poses: Dictionary = {}
 	for pid: String in POSE_IDS:
 		var p: Dictionary = POSES[pid] as Dictionary
 		if not (p.get("eye") is Vector3) or not (p.get("target") is Vector3):
 			pose_ok = false
-		elif (p["eye"] as Vector3).is_equal_approx(p["target"] as Vector3):
+			continue
+		var eye: Vector3 = p["eye"] as Vector3
+		var tgt: Vector3 = p["target"] as Vector3
+		if eye.is_equal_approx(tgt):
 			pose_ok = false
+		# 9 distinct (eye,target) pairs: a copy-paste duplicate must fail.
+		var key: String = "%.4f,%.4f,%.4f->%.4f,%.4f,%.4f" % [
+			eye.x, eye.y, eye.z, tgt.x, tgt.y, tgt.z,
+		]
+		if seen_poses.has(key):
+			pose_ok = false
+		seen_poses[key] = pid
 		if not p.has("beat") or not p.has("ref"):
 			pose_ok = false
-	_check(pose_ok, "every pose has a distinct eye/target, beat and reference keyframe")
-	_check(_pose_selection().size() >= 1, "pose selection is non-empty")
+	pose_ok = pose_ok \
+		and absf(wcenter.x - 50.0) < 0.01 and absf(wcenter.y - 50.0) < 0.01 \
+		and absf(wproj.x - 18.0) <= 2.0 and absf(wproj.y - 40.0) <= 2.0 \
+		and str(wide.get("ref", "")) == "KF27" \
+		and str(gap.get("decision", "")) == "PORT_DECISION" \
+		and gap_tgt.is_equal_approx(Vector3(120.25, 18.56, -6.815)) \
+		and absf(gap_eye.x - gap_start.x) < 0.0001 \
+		and absf(gap_eye.z - gap_start.z) < 0.0001 \
+		and absf((gap_eye.y - gap_start.y) - PLAYER_EYE_HEIGHT) < 0.0001 \
+		and gap_pitch >= -53.0 and gap_pitch <= -42.0
+	if not pose_ok:
+		printerr("P0B_SELFTEST detail wide_card_pct=", wproj, " wide_center_pct=", wcenter,
+			" gap_pitch_deg=", gap_pitch)
+	_check(pose_ok, "poses valid: distinct eye/target, beat/ref; foyer_beam_wide card ~18/40; gap_view start+eye, PORT_DECISION, pitch -42..-53")
+	_check(_pose_selection().size() >= 1
+		and MIN_SETTLE_SECONDS == 25.0
+		and _parse_settle_seconds("") == 0.0
+		and _parse_settle_seconds("25") == 25.0
+		and _parse_settle_seconds("nope") < 0.0
+		and _settle_ok(0.0) and _settle_ok(25.0) and _settle_ok(30.0)
+		and not _settle_ok(10.0),
+		"pose selection is non-empty; --settle-seconds parses and enforces 0 or >=25 s")
 
 	# 2. Audio tap: must not crash and must report disabled under headless.
 	var tap_script: GDScript = load(AUDIO_SRC) as GDScript
@@ -577,14 +736,16 @@ func _self_test() -> void:
 	var poses: Array = []
 	for pid: String in _poses:
 		var p: Dictionary = POSES[pid] as Dictionary
-		poses.append({
+		var row: Dictionary = {
 			"id": pid, "status": "dry_run",
 			"beat": str(p.get("beat", "")), "ref_keyframe": str(p.get("ref", "")),
 			"eye": _v3(p["eye"] as Vector3), "target": _v3(p["target"] as Vector3),
 			"grounded": false, "ground_planned": bool(p.get("ground", false)),
 			"fov_vertical_deg": SHIPPED_FOV, "resolution": [SIZE.x, SIZE.y],
 			"note": str(p.get("note", "")),
-		})
+		}
+		row.merge(_pose_provenance(p), true)
+		poses.append(row)
 	m["poses"] = poses
 	m["audio"] = {"schema": "tat2.audio_capture/1", "enabled": false, "reason": "self_test", "marks": []}
 	var errs: Array = _validate_manifest(m)
@@ -747,12 +908,17 @@ func _shoot(mission: Node3D, cam: Camera3D, pid: String, tap: Node) -> Dictionar
 	cam.global_position = eye
 	cam.look_at(target, Vector3.UP)
 	cam.current = true
+	var t0: int = Time.get_ticks_msec()
+	var settle_waited_ms: int = await _wait_settle()
+	if _settle_seconds > 0.0:
+		print("P0B_SETTLE pose=%s frames=%d extra_s=%.2f waited_ms=%d" % [
+			pid, SETTLE_FRAMES, _settle_seconds, settle_waited_ms,
+		])
 	if tap != null:
-		# A fixed pose is not a route beat: label it, never claim Sxx. The pose's
+		# Mark at the captured pose (after the settle hold, not before it). A
+		# fixed pose is not a route beat: label it, never claim Sxx. The pose's
 		# beat/reference keyframe stays in the manifest for provenance only.
 		tap.call("mark", pid, "")
-	var t0: int = Time.get_ticks_msec()
-	await _wait(SETTLE_FRAMES)
 	var imgs: Array = []
 	var means: Array = []
 	for i: int in range(CAPTURE_FRAMES):
@@ -789,7 +955,7 @@ func _shoot(mission: Node3D, cam: Camera3D, pid: String, tap: Node) -> Dictionar
 		float(st_med.get("peak", 0.0)), err, med.get_width(), med.get_height(), str(nonblack), _rel(png),
 	])
 	imgs.clear()
-	return {
+	var row: Dictionary = {
 		"id": pid, "status": "captured" if nonblack else "failed",
 		"beat": str(p.get("beat", "")), "ref_keyframe": str(p.get("ref", "")),
 		"eye": _v3(eye), "target": _v3(target),
@@ -801,8 +967,11 @@ func _shoot(mission: Node3D, cam: Camera3D, pid: String, tap: Node) -> Dictionar
 		"median_lt8": float(st_med.get("pct_lt8", 100.0)),
 		"median_peak": float(st_med.get("peak", 0.0)),
 		"png": _rel(png), "duration_ms": Time.get_ticks_msec() - t0,
+		"settle_seconds": _settle_seconds, "settle_waited_ms": settle_waited_ms,
 		"note": str(p.get("note", "")),
 	}
+	row.merge(_pose_provenance(p), true)
+	return row
 
 
 func _capture() -> void:
@@ -885,14 +1054,19 @@ func _run() -> void:
 		quit(2)
 		return
 	_seed_arg = _arg("--seed=", "derived")
+	_settle_seconds = _parse_settle_seconds(_arg("--settle-seconds=", ""))
+	if _settle_seconds < 0.0 or not _settle_ok(_settle_seconds):
+		printerr("P0B bad --settle-seconds (want 0 or >= %.0f s, <= 3600 s)" % MIN_SETTLE_SECONDS)
+		quit(2)
+		return
 	_poses = _pose_selection()
 	if _poses.is_empty():
 		printerr("P0B no poses selected")
 		quit(2)
 		return
 	_setup_paths()
-	print("P0B_START mode=%s run=%s poses=%s beam=%s seed=%s fov=%.2f size=%s out=%s manifest=%s" % [
-		_mode, _run_id, ",".join(_poses), _beam_mode, _seed_arg,
+	print("P0B_START mode=%s run=%s poses=%s beam=%s seed=%s settle_s=%.2f fov=%.2f size=%s out=%s manifest=%s" % [
+		_mode, _run_id, ",".join(_poses), _beam_mode, _seed_arg, _settle_seconds,
 		SHIPPED_FOV, str(SIZE), _out_dir, _manifest_path,
 	])
 	if _mode == "dry-run":

@@ -1,0 +1,9 @@
+== FINAL_GATE e2e_errscan
+COMMAND: bash build/qa/e2e_errscan.sh --logdir ./docs/reports/logs/final
+CWD: .
+STARTED: 2026-11-27T20:27:08-05:00
+
+E2E_ERRSCAN PASS e2e=31/31 e2e_a2=1/1 run_tests=482/482 new=0
+
+EXIT: 0
+FINISHED: 2026-11-27T20:27:08-05:00

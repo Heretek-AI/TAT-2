@@ -1,0 +1,173 @@
+== FINAL_GATE test_roof_collision
+COMMAND: qa_test_roof_collision
+CWD: .
+STARTED: 2026-11-27T20:26:25-05:00
+
+== mode TAT2_COLLISION=authored ==
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+PASS: level JSON parses
+PASS: roof census 733 instances / 46 unique meshes
+PASS: every /roofs/ path has a collision policy
+PASS: pitched roof cubes->convex: 426 instances / 19 unique meshes
+PASS: flat roof pieces keep the box: 307 instances / 27 unique meshes
+PASS: no pitched /roofs/ mesh emits a BoxShape3D (authored hull union)
+PASS: 19 convex roofs: authored per-element union (min 10 hull points), top span < 0.20
+PASS: 27 flat/prop roofs: authored primitive/hull sets; single boxes keep the authored box
+PASS: load-truth census: 19 convex meshes / 426 instances drive the union
+PASS: load-truth instance counts coalesce exactly the 2 over-cap convex roofs (27 els / 13x38)
+PASS: roof occluder count 0 across 46 /roofs/ meshes (733 instances)
+PASS: wall control mesh loads (SM_Urban_Ext_Wall_4x6)
+PASS: exterior wall still an occluder (walls kept)
+PASS: stair occluder count 0 across 32 stair meshes (long, mostly-empty AABBs)
+PASS: all 6 EndA/EndB gable shells encode the authored hull union (92 PeripheryA instances)
+PASS: End shells measure 0.000-0.014 top coverage (no standable plateau)
+PASS: End shells measured at the authored 4.32 m and 8.47 m heights
+PASS: End shell union top matches the visual AABB within 0.10 m
+PASS: End union eave band sits 3.50 m below the AABB top the box floated
+PASS: ridge instance at [115.0, 57.5, 26.5] carries the mirrored EndB and flipped Mid_4x4
+PASS: ridge roofs are uniform-scaled, so the measured hull is the visual
+PASS: ridge SM_RoofUrban_Ext_EndB_2x4x4_Mirror bypasses the box: authored union top coverage 0.000
+PASS: ridge SM_RoofUrban_Ext_Mid_4x4 bypasses the box: authored union top coverage 0.019
+PASS: POI 3rd-floor level JSON parses
+PASS: POI 3rd-floor roof census 29 instances / 4 meshes
+PASS: POI 3rd floor: 28 pitched instances (hull) / 1 roof deck (box)
+PASS: POI roof shapes match their measured policy
+PASS: Old Manor level JSON parses
+PASS: Old Manor tower roofs: 6 meshes = 3 reduced trimeshes + 1 ten-hull set + 1 box + 1 complex trimesh
+PASS: Old Manor tower roofs are outside the /roofs/ policy (kind=none)
+PASS: Old Manor tower roofs match their authored per-mesh encoding
+PASS: Old Manor tower roofs are not occluders
+PASS: MAX_OCCLUDERS is 768
+PASS: Guildhall authored sublevels yield 3588 qualifying occluder instances (cap 768)
+PASS: occluder selection caps at exactly 768
+PASS: occluder selection sequence is deterministic (768 entries)
+PASS: occluder predicate is deterministic on 13 sampled candidate meshes
+PASS: synthetic 44 deg hip yields a convex shape
+PASS: 44 deg hip hull eave edge stays at y=0 (no flat plateau)
+PASS: 44 deg hip hull apex 1.931 m above the eave (box would float here)
+PASS: synthetic 62 deg hip yields a convex shape
+PASS: 62 deg hip hull eave edge stays at y=0 (no flat plateau)
+PASS: 62 deg hip hull apex 3.761 m above the eave (box would float here)
+PASS: 44 deg hip hull apex 1.9314 m == half-span * tan(44 deg) (1.9314 m)
+PASS: 62 deg hip hull apex 3.7615 m == half-span * tan(62 deg) (3.7615 m)
+PASS: box plateau grows with pitch: 3.761 m at 62 deg vs 1.931 m at 44 deg
+PASS: plateau ratio 1.9475 matches tan(62)/tan(44) 1.9475
+PASS: shallow roof (SM_RoofUrban_Ext_Mid_4x4) loads with the authored collision union
+PASS: shallow roof authored union pitch 45.4 deg (rise 4.24 m / run 4.17 m)
+PASS: shallow roof union eave band sits 3.55 m below the AABB top the box used
+PASS: steep roof (SM_RoofUrbanB_Ext_Mid_6x8) loads with the authored collision union
+PASS: steep roof authored union pitch 67.0 deg (rise 8.37 m / run 3.55 m)
+PASS: steep roof union eave band sits 7.09 m below the AABB top the box used
+ROOF_COLLISION_SUMMARY: fails=0
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+TAT-2 Loc: reverse map built from sources.json (3404 keys)
+TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
+INPUT_TABLE source=generated rows=91 shipping=91 actions=52
+INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
+== mode TAT2_COLLISION=aabb ==
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+PASS: level JSON parses
+PASS: roof census 733 instances / 46 unique meshes
+PASS: every /roofs/ path has a collision policy
+PASS: pitched roof cubes->convex: 426 instances / 19 unique meshes
+PASS: flat roof pieces keep the box: 307 instances / 27 unique meshes
+PASS: no pitched /roofs/ mesh emits a BoxShape3D (authored hull union)
+PASS: 19 convex roofs: authored per-element union (min 10 hull points), top span < 0.20
+PASS: 27 flat/prop roofs: authored primitive/hull sets; single boxes keep the authored box
+PASS: load-truth census: 19 convex meshes / 426 instances drive the union
+PASS: load-truth instance counts coalesce exactly the 2 over-cap convex roofs (27 els / 13x38)
+PASS: roof occluder count 0 across 46 /roofs/ meshes (733 instances)
+PASS: wall control mesh loads (SM_Urban_Ext_Wall_4x6)
+PASS: exterior wall still an occluder (walls kept)
+PASS: stair occluder count 0 across 32 stair meshes (long, mostly-empty AABBs)
+PASS: all 6 EndA/EndB gable shells encode the authored hull union (92 PeripheryA instances)
+PASS: End shells measure 0.000-0.014 top coverage (no standable plateau)
+PASS: End shells measured at the authored 4.32 m and 8.47 m heights
+PASS: End shell union top matches the visual AABB within 0.10 m
+PASS: End union eave band sits 3.50 m below the AABB top the box floated
+PASS: ridge instance at [115.0, 57.5, 26.5] carries the mirrored EndB and flipped Mid_4x4
+PASS: ridge roofs are uniform-scaled, so the measured hull is the visual
+PASS: ridge SM_RoofUrban_Ext_EndB_2x4x4_Mirror bypasses the box: authored union top coverage 0.000
+PASS: ridge SM_RoofUrban_Ext_Mid_4x4 bypasses the box: authored union top coverage 0.019
+PASS: POI 3rd-floor level JSON parses
+PASS: POI 3rd-floor roof census 29 instances / 4 meshes
+PASS: POI 3rd floor: 28 pitched instances (hull) / 1 roof deck (box)
+PASS: POI roof shapes match their measured policy
+PASS: Old Manor level JSON parses
+PASS: Old Manor tower roofs: 6 meshes = 3 reduced trimeshes + 1 ten-hull set + 1 box + 1 complex trimesh
+PASS: Old Manor tower roofs are outside the /roofs/ policy (kind=none)
+PASS: Old Manor tower roofs match their authored per-mesh encoding
+PASS: Old Manor tower roofs are not occluders
+PASS: MAX_OCCLUDERS is 768
+PASS: Guildhall authored sublevels yield 3588 qualifying occluder instances (cap 768)
+PASS: occluder selection caps at exactly 768
+PASS: occluder selection sequence is deterministic (768 entries)
+PASS: occluder predicate is deterministic on 13 sampled candidate meshes
+PASS: synthetic 44 deg hip yields a convex shape
+PASS: 44 deg hip hull eave edge stays at y=0 (no flat plateau)
+PASS: 44 deg hip hull apex 1.931 m above the eave (box would float here)
+PASS: synthetic 62 deg hip yields a convex shape
+PASS: 62 deg hip hull eave edge stays at y=0 (no flat plateau)
+PASS: 62 deg hip hull apex 3.761 m above the eave (box would float here)
+PASS: 44 deg hip hull apex 1.9314 m == half-span * tan(44 deg) (1.9314 m)
+PASS: 62 deg hip hull apex 3.7615 m == half-span * tan(62 deg) (3.7615 m)
+PASS: box plateau grows with pitch: 3.761 m at 62 deg vs 1.931 m at 44 deg
+PASS: plateau ratio 1.9475 matches tan(62)/tan(44) 1.9475
+PASS: shallow roof (SM_RoofUrban_Ext_Mid_4x4) loads with the authored collision union
+PASS: shallow roof authored union pitch 45.4 deg (rise 4.24 m / run 4.17 m)
+PASS: shallow roof union eave band sits 3.55 m below the AABB top the box used
+PASS: steep roof (SM_RoofUrbanB_Ext_Mid_6x8) loads with the authored collision union
+PASS: steep roof authored union pitch 67.0 deg (rise 8.37 m / run 3.55 m)
+PASS: steep roof union eave band sits 7.09 m below the AABB top the box used
+ROOF_COLLISION_SUMMARY: fails=0
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _note_map_fallback (res://src/core/game_data.gd:859)
+         [1] _mission_map_id (res://src/core/game_data.gd:959)
+         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [3] _ready (res://src/core/game_data.gd:100)
+TAT-2 Loc: reverse map built from sources.json (3404 keys)
+TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
+INPUT_TABLE source=generated rows=91 shipping=91 actions=52
+INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
+ROOF_COLLISION_MODES PASS authored=0 aabb=0
+
+EXIT: 0
+FINISHED: 2026-11-27T20:26:32-05:00

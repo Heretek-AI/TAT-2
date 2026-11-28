@@ -1,0 +1,59 @@
+# Retired test list for build/qa/gate_manifest.py.
+#
+# Every game/tests/**/*.gd that is NOT reachable from game/tests/run_tests.gd,
+# an E2E tier (game/tests/e2e/), or build/qa/run_final_gates.sh -- directly or
+# through a build/qa/*.sh wrapper that the final runner invokes -- must appear
+# here with a non-empty reason. The manifest fails on an unlisted orphan and on
+# a stale entry (missing path, or a path that is now reachable).
+#
+# This is deliberately explicit: do not add an entry to silence a new test,
+# register the test in build/qa/run_final_gates.sh instead. Four critical
+# orphans were restored that way in Phase 3 (test_roof_collision,
+# probe_den_window, probe_mirror_split, probe_statetree_shadow).
+#
+# Reason codes:
+#   perf        manual GPU/thermal perf matrix; excluded by the thermal rule.
+#   historical  standalone wave test/probe that no current runner invokes;
+#               kept for manual diagnosis only, not a gate.
+#
+# Format: <repo-relative path><TAB><reason-code><TAB><reason>
+
+game/tests/perf/perf_matrix.gd	perf	manual fixed-pose perf matrix (build/qa/run_perf_matrix.sh); GPU/thermal-gated, never a headless gate
+game/tests/perf/perf_matrix_runner.gd	perf	loaded by perf/perf_matrix.gd for the manual perf matrix; not a headless gate
+game/tests/probe_door_aperture.gd	historical	manual door-aperture collision regression probe; door collision is gated by probe_collision_authored + probe_p1_doors
+game/tests/probe_ftue.gd	historical	FTUE collider-budget probe (B3); no runner invokes it; kept for manual diagnosis
+game/tests/probe_npr.gd	historical	NPR/SNN material-toggle probe (C1); kept for manual diagnosis; not a gate
+game/tests/probe_perf_census.gd	historical	full-Guildhall structural census (P4.1); its subset baseline is consumed by probe_mirror_split; not a gate
+game/tests/probe_personal_quest.gd	historical	real-map Spider personal-chain walkthrough; superseded by the run_tests spider suites (86-88)
+game/tests/probe_personal_quest_subset.gd	historical	subset Spider personal-chain probe; superseded by the run_tests spider suites (86-88)
+game/tests/probe_render_t07.gd	historical	T07 render/lighting/exposure probe; visual contract, not a headless gate
+game/tests/probe_scene_variant_apply.gd	historical	scene-variant application probe; kept for manual diagnosis; not a gate
+game/tests/probe_scene_variants.gd	historical	scene-variant selection probe; kept for manual diagnosis; not a gate
+game/tests/probe_t08_level.gd	historical	T08 single-sublevel material probe; kept for manual diagnosis; not a gate
+game/tests/probe_t08_red.gd	historical	T08 red-proof reproduction; the defect is fixed and asserted by the material suites
+game/tests/probe_weather.gd	historical	C3 weather probe (rain occlusion/fog); weather contract is covered by the run_tests weather suites
+game/tests/probe_xray.gd	historical	C2 x-ray material probe; x-ray contract is covered by the run_tests material suites
+game/tests/test_anim_gates.gd	historical	W-era animation gate test; animation contract is covered by test_m2_player + run_tests
+game/tests/test_audio_lifecycle.gd	historical	W5D standalone audio-lifecycle test; superseded by test_audio_control (suite 121)
+game/tests/test_audio_mix.gd	historical	T03 standalone audio-mix test; superseded by test_audio_control (suite 121)
+game/tests/test_audio_occlusion.gd	historical	W9 footstep/one-shot occlusion regression; audio coverage is test_audio_control (suite 121)
+game/tests/test_audio_wwise.gd	historical	T03 Wwise-bridge standalone; audio coverage is test_audio_control (suite 121)
+game/tests/test_content_overrides.gd	historical	W6T static content-override test; parity_only (60/60) covers the override rules
+game/tests/test_hearing_ranges.gd	historical	W6G authored-hearing standalone; kept for manual diagnosis; not a gate
+game/tests/test_hud_gem_compass.gd	historical	W5D HUD gem/compass structural test; HUD is gated by probe_p5_ui (54)
+game/tests/test_input.gd	historical	T06 input standalone; input bindings are asserted in run_tests
+game/tests/test_light_once.gd	historical	W6G single-light standalone; kept for manual diagnosis; not a gate
+game/tests/test_perf_profile.gd	perf	W0p perf-envelope standalone; not a gate
+game/tests/test_perf_structural.gd	perf	W1p structural-perf standalone; not a gate
+game/tests/test_personal_quest_spawner.gd	historical	W3O placement-policy standalone; the spider chain is covered by run_tests suites 86-88
+game/tests/test_review_core_bake.gd	historical	W0T review-core bake proof; scenes/review is excluded from export and is not a gate
+game/tests/test_review_visibility.gd	historical	W0T review-visibility proof; scenes/review is excluded from export and is not a gate
+game/tests/test_t05_ui_contract.gd	historical	T05 UI contract standalone; UI routing is gated by probe_p5_ui + make string-audit
+game/tests/test_t08_materials.gd	historical	T08 material census standalone; kept for manual diagnosis; not a gate
+game/tests/test_w5b_materials.gd	historical	W5B/W6L material-truth standalone; kept for manual diagnosis; not a gate
+game/tests/test_w6l_searchlight.gd	historical	W6L searchlight material truth; kept for manual diagnosis; not a gate
+game/tests/test_w6u1_briefing.gd	historical	W6U1 briefing/endgame-override gate; briefing overrides are asserted in run_tests
+game/tests/test_w6u2_catalog.gd	historical	W6U2 catalog/ledger gate; catalog and ledger are asserted in run_tests
+game/tests/test_w7e_endgame.gd	historical	W7E two-phase run-clock gate; the run clock is covered by the run_tests endgame suites + E2E S2 loot, but its all-25-authored-escape-markers assertion is NOT covered — tracked in OPEN_ISSUES.md item 13
+game/tests/test_w7h_surface_hearing.gd	historical	W7H surface-hearing/swing-door-noise gate; kept for manual diagnosis; not a gate
+game/tests/test_w7v_ui_acceptance.gd	historical	W7V UI acceptance gate; UI acceptance is gated by probe_p5_ui + E2E tier1

@@ -58,6 +58,12 @@
     "test_capture_p5_filter": "test_capture_p5_filter.log",
     "p0b_capture_dry_run": "p0b_capture_dry_run.log",
     "runtime_smoke_scan": "runtime_smoke_scan.log",
+    "gate_manifest": "gate_manifest.log",
+    "e2e_errscan": "e2e_errscan.log",
+    "test_roof_collision": "test_roof_collision.log",
+    "probe_den_window": "probe_den_window.log",
+    "probe_mirror_split": "probe_mirror_split.log",
+    "probe_statetree_shadow": "probe_statetree_shadow.log",
     "gate_ratchet": "gate_ratchet_poststamp.log"
   },
   "gates": {
@@ -260,6 +266,23 @@
     "runtime_smoke_scan": {
       "checks": 29,
       "fails": 0
+    },
+    "gate_manifest": {
+      "tracked": 108,
+      "retired": 39,
+      "orphans": 0
+    },
+    "e2e_errscan": {
+      "new": 0
+    },
+    "test_roof_collision": {
+      "checks": 106
+    },
+    "probe_den_window": {
+      "checks": 34
+    },
+    "probe_mirror_split": {
+      "checks": 39
     }
   }
 }

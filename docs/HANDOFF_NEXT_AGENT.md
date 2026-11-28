@@ -1,19 +1,24 @@
 # Handoff — Thick As Thieves Godot 4.7.2 port (next session)
 
 **Repo:** `<repo>`
-**Current tip:** `0f6942c` (Phase 3 final logs; WIP branch
-`wip/phase3-gate-integrity-20261127` is on `origin`).
+**Current tip:** `c015567` (PR #16 merge; `main`). The WIP branch
+`wip/phase3-gate-integrity-20261127` is merged and retained on `origin`;
+`main` is PR-gated by the `keep summer safe` ruleset (required `hygiene / *`
+checks), so land every change through a PR.
 **Measured code/gate head:** `900f8eb` (route-code merge); the final **59-gate**
-run was made at `5337828` (logs commit `0f6942c`).
+run was made at `5337828` (logs commit `0f6942c`). The post-gate repo-hygiene
+commit `95247fb` touches docs, QA scripts and workflows only; compile **234/0**
+and E2E **310/310** were re-run on it.
 **Gate set:** **59/59 exit 0** — compile **234/0**, `run_tests` **329/0**
 (suites 119/121/122/123/124/125/126), `E2E 310/310`, `make gate-ratchet` PASS
-(`measured_on=900f8eb`), `make audit` PASS (12660/12703).
+(`measured_on=900f8eb`), `make audit` PASS (12664/12703, floor 12660).
 **Phase 3 status:** 15/16 tasks verified; `played-route` is **blocked** with a
 measured partial (11/27 beats, 45/120 rows, `route_claim=none`, content blockers
-S12/S13/S06/NPCs) — not relabelled played.
+S12/S13/S06/NPCs) — not relabelled played. Its branch
+`wip/phase3-played-route-20261128` stays unmerged.
 **Godot:** `4.7.2.stable` via native `tools/godot` (`godot` is **not** on
 `$PATH`). Forward+ · Jolt 60 Hz · 1280×720 base · Linux x86_64.
-**Working tree:** clean (final logs/report committed on this branch).
+**Working tree:** clean on `main`.
 **Read first:** this is the post-Phase-3 handoff. Final gate evidence:
 [`docs/reports/phase3-final-gates-20261128.md`](reports/phase3-final-gates-20261128.md);
 GPU: [`docs/reports/phase3-gpu-20261128.md`](reports/phase3-gpu-20261128.md);

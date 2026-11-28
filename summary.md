@@ -1,37 +1,3 @@
-PASS (round 5 final). The 58/58 measured baseline remains at `5857589`; these
-are tooling/evidence/doc commits only.
+# look-code — summary (round 3)
 
-What changed
-- **B1 poststamp body bound to the ratchet.** `tools/check_gate_ratchet.py`
-  now requires exactly `PASS: measured_on=5857589` and
-  `PASS: report names measured_on=5857589` (no other/duplicate value), the exact
-  line `PASS: runner/binding self-check 58 gates, 59 ratchet bindings`,
-  `PASS: audit coverage 12660/12703`, and structural floors of >=300 total lines
-  and >=300 `^PASS:` lines.
-- **Per-large-log minima** added: e2e >= 4000, run_tests >= 3000, e2e_a2 >= 200
-  lines (current 4343 / 3647 / 253). The check keys by `<name>.log` so a gutted
-  10-line e2e stub fails.
-- **All 59 evidence bindings** (58 unique files; 73 binding→log evaluations)
-  still require both STARTED/FINISHED; a missing pair fails.
-- **Controls (scratch ROOTs):** current real artifact PASS; 122-line stub FAIL
-  (line/PASS floor); stale 25d9c94 body + typed `measured_on=5857589` FAIL
-  (stale value + floor); identity rewrite to `measured_on=37bb69e` FAIL
-  (measured_on binding); gutted 10-line e2e.log FAIL (4000-line minimum).
-- **Report §6 reworded** to state what is actually proven (mechanical capture,
-  stamp coherence, measured_on binding, real-output shape, binding
-  completeness) and that a post-hoc byte edit with intact stamps/mtime can only
-  be caught by re-running the gates. It no longer claims end-to-end validation.
-- **Re-captured poststamp mechanically:** `STARTED 2026-11-27T23:17:48-05:00`,
-  `EXIT: 0`, `FINISHED 2026-11-27T23:17:49-05:00`, mtime `23:17:49.004`,
-  **378 lines / 367 PASS**; plain checker PASS.
-- OPEN_ISSUES item 26 appended. `tools/gate_ratchet.json` measured_on unchanged
-  at `5857589`.
-
-Verification
-- `python3 -B tools/check_gate_ratchet.py` → PASS
-  (`carries real checker output bound to measured_on=5857589 (378 lines, 367
-  PASS, exact bindings)`; large-log minima PASS).
-- `bash build/qa/poststamp_gate_ratchet.sh` → exit 0; plain re-validation PASS.
-- `make gate-ratchet` → PASS; `make audit` → exit 0;
-  `build/qa/e2e_errscan.sh` → PASS.
-- No GPU, no generated data, no lowered floor; 58/58 measurement unchanged.
+Round 3 fixes the colour-space bug the falsifier proved and closes the round-2 control gaps. **Colour:** the UE payload `extracted/json/UI/HUD/BPUI_Hud_InteractPromptLine.json` stores a *linear* triple `(0.124772, 0.155927, 0.838799)`, but Godot 4 canvas colours are sRGB when `rendering/rendering_device/hdr_2d=false` (the default), so round 2's `Color(0.124772,0.155927,0.838799)` rendered **#2028D6** (Rec.709 luma ≈51), not the authored **#636EEC** (luma ≈117); the runtime readback was circular. `game/src/ui/hud.gd` now uses `Color.html("#636EEC")` (= sRGB `(0.388235, 0.431373, 0.925490)`) on both the primary (`interact_lbl`) and secondary (`_prompt_secondary_lbl`) prompt labels, with the authored shadows kept — primary `(1,3)`, secondary `(4,2)`, shadow alpha 0.75, text alpha 1.0 — and the authored-invisible `OutlineSize 3` with outline alpha 0.0 on the secondary (no visual effect / HARD_LIMIT). The false "Godot canvas colours are linear" comment premise is gone; the comments record the linear source triple vs the sRGB render form. UI2-03 wording corrected: the authored colour is **not** darker — the previous linear literal was; the authored #636EEC is the lighter, correct value, and the 4.5 floor stays untouched. **Proof:** a committed harness `build/qa/check_prompt_colour.gd` has a headless mode (PASS 9/0: `Color.html("#636EEC") == (0.388235,0.431373,0.925490)`, `!=` the UE-linear triple, and both HUD labels/shadows/outline match) and a real Vulkan/Xvfb render mode. The render, taken under `/tmp/opencode/tat2-godot.lock` with no other Godot running, draws a ColorRect + Label in `Color.html("#636EEC")` at 1280×720 and reads the swatch centre: **pixel `(0.3882, 0.4314, 0.9255)` = `#636eec`, expected `#636eec`, delta8=0, label=#636eec, PASS** (the earlier concurrent headless `run_tests` from another lane was no GPU and the measurement was repeated clean). **gap_view:** target is now the exact authored gap centroid `(120.25, 18.56, -6.815)` (midpoint of `(114.5,18.56,-3.2)` and `(126,18.56,-10.43)`), so the aim is exact (0.00 % offset, sub-1 %); the derived pitch with the start+1.66875 eye is **−50.0702°** (the −48.6° figure would need a 26.7041 m eye), still inside the spec's −42..−53° band, labelled PORT_DECISION. **Security:** `p0b_capture.sh --tag` now rejects `.` / `..` / any all-dot component in addition to the CR/LF rejection, so the per-run evidence dir cannot resolve one level up; `--tag=.`, `..`, `...` exit 2 and `.hidden`/`run2` pass. All required checks re-run: `bash -n` OK, `shellcheck` 0, dry-run **poses=9** + `P0B_MANIFEST_OK poses=9`, `--self-test` **PASS checks=23 fails=0**, `check_scripts_compile` **229/0**, `run_tests` **fails=0**, colour headless **9/0**, colour render **PASS #636eec delta 0**. Open: gate-runner adoption of `check_prompt_colour.gd` (I did not edit `run_final_gates.sh`/ratchet, owned by the gates lanes); `p0b_roi_stats.py --all` skips `gap_view` (no reference frame; the landscape A/B is mode-vs-mode RMSE). `summary.md` remains an uncommitted working-tree artifact (do not cherry-pick it over the merged baseline summary). No default flips; no test weakened; no generated data touched.

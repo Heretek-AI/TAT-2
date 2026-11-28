@@ -130,21 +130,23 @@ The real extraction exposed one producer bug: array slices were written as
 rebinds (`GEM_PAYLOAD present=true: layers=21`). `parse_nav` was added to the
 audit `PRODUCERS` map (it was a `NORMALIZERS` entry with no baseline stamp).
 The current set is **59 gates**, measured at `900f8eb` (one serial run,
-23m19s; [`docs/reports/phase3-baseline-20261127.md`](docs/reports/phase3-baseline-20261127.md)):
+23m38s; [`docs/reports/phase3-final-gates-20261128.md`](docs/reports/phase3-final-gates-20261128.md)):
 compile **234/0**, `run_tests` **329/0** (suites 119/121/122/123/124/125/126),
 manifest **112 tracked / 73 reachable / 39 retired / 0 orphans**, e2e_errscan
-**31/33 + 0/2 + 495/495 new=0**, audio **135/0**, VO 60/0, AEM 77/0,
+**31/33 + 0-1/2 + 482-495/495 new=0**, audio **135/0**, VO 60/0, AEM 77/0,
 cubemap 51/0 (all three now produced in-run), P5 UI 54, beams 9, landscape 7,
-nav 70, GC 52, doors **49**, locks **162 = 152 containers + 10 doors**,
+nav 97, GC 55, doors **49**, locks **162 = 152 containers + 10 doors**,
 capture 9 poses / self-test 23 / KF27 9/9
 (`--reference-only`; port `foyer_beam` 5/9), producer tests and the P5 capture
 filter included, audit 12664/12703 (floor 12660/12703) and texture
 cap 1567/796/1/0 unchanged. GPU-measured: the mirror readback is PASS
-(`pass=1`), the UI capture is 28/28 frames with 24 strict rows, the KF27 port
-`foyer_beam` is 5/9, the landscape A/B has no subject (unmeasured), the IBL
-ambient energy is 0.00005 (`TAT2_IBL=off` stays the default), the AEM meter
-residual is not calibrated (`TAT2_AEM=fixed` stays the default), and the P5 pixel
-score still needs visual adjudication. Report:
+(`pass=1`), the UI capture is 28/28 frames (prompt rows 3.03–4.32, a UI2-03
+DELTA), the KF27 wide and pinned poses are 5/9 (framing lands the card at
+18.0/40.0; the four failures are beam material terms), the landscape `gap_view`
+A/B has a subject (~1 %, RMSE discard↔raw 1.0077, off↔raw 0.0769), the IBL
+ambient energy is 0.001540 (not a win; `TAT2_IBL=off` stays the default), the
+AEM meter residual is 0.000 EV at a 2.14 EV scene-anchor gap (`TAT2_AEM=fixed`
+stays the default), and the P5 pixel score still needs visual adjudication. Report:
 [`docs/reports/integration-20261127.md`](docs/reports/integration-20261127.md).
 
 The 2026-11-24 W7 wave (five lanes, cherry-picked) re-ran the **complete** set
@@ -335,9 +337,11 @@ build/qa/             tracked capture/probe/export-stamp scripts; PNG output ign
   marker, or missing the runner footer (`FINISHED:` + `EXIT: 0`). The
   `N resources still in use at exit` teardown line is nondeterministic Godot
   noise observed 0-1 per process and may appear in `e2e` or `e2e_a2`; the
-  ceilings are `33 / 2 / 482` (2 is one-slot headroom, not a measured maximum)
-  and the tamper minima are e2e 31 / run_tests 495 / a2 0. Delete-known-errors
-  fails; a legitimate class disappearance is a reviewed minimum change. Do not
+  ceilings are `33 / 2 / 495` (2 is one-slot headroom, not a measured maximum)
+  and the tamper minima are e2e 31 / run_tests 482 / a2 0. Delete-known-errors
+  fails; a legitimate class disappearance is a reviewed minimum change. The
+  2026-11-28 raise 482→495 covers nav suite 126's known `fd`/font noise
+  (`new=0`); a new class still fails. Do not
   restore the old "zero lines = truncated" rule or pin the teardown warning at
   exactly 1 — that made the gate flaky and blocked the Phase 2.5 baseline twice.
   Ceilings/minima are pinned in `tools/gate_ratchet.json`.

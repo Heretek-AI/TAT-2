@@ -79,6 +79,14 @@ if [ -n "$TAG" ] && ! [[ "$TAG" =~ ^[A-Za-z0-9._-]+$ ]]; then
   echo "ABORT: --tag must be [A-Za-z0-9._-]+" >&2
   exit 2
 fi
+# A tag is one path component under the per-run evidence dir; reject "." / ".."
+# (and any all-dot tag) so the evidence dir cannot resolve one level up.
+if [ -n "$TAG" ]; then
+  case "$TAG" in
+    *[!.]*) ;;
+    *) echo "ABORT: --tag must contain at least one non-dot character" >&2; exit 2 ;;
+  esac
+fi
 case "$SEED" in
   *$'\n'* | *$'\r'*) echo "ABORT: --seed must be a single line" >&2; exit 2 ;;
 esac

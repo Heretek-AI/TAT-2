@@ -138,20 +138,22 @@ const POSES := {
 		# Anchored to the authored TATSafeRoomPlayerStart_0 at
 		# (127.2747, 25.4694, -5.3296); the eye adds the authored player eye
 		# height (STAND_HEAD_HEIGHT = 1.66875) so it is a first-person view from
-		# the start, not the actor origin. The target (120, 18.56, -7) is the
-		# authored landscape-gap centroid (midpoint of the measured
-		# (114.5, 18.56, -3.2) / (126.0, 18.56, -10.43) collision points).
-		# Pitch derives to -48.97 deg; from the raw actor origin it is -42.79 deg
-		# (the plan's ~-42 deg example). Both sit in the required -42..-53 deg
-		# band. The pitch is NOT authored -> PORT_DECISION.
+		# the start, not the actor origin. The target is the EXACT authored
+		# landscape-gap centroid (120.25, 18.56, -6.815) = the midpoint of the
+		# measured (114.5, 18.56, -3.2) / (126.0, 18.56, -10.43) collision
+		# points, so the aim is exact (0.00 % offset; well inside 1 %). The
+		# derived pitch is -50.0702 deg. The -48.6 deg figure needs a 26.7041 m
+		# eye (start + 1.2347); with the +1.66875 first-person eye the pitch is
+		# -50.07 deg, still inside the spec's -42..-53 deg band. The pitch is
+		# NOT authored -> PORT_DECISION.
 		"eye": Vector3(127.2747, 27.13815, -5.3296),
-		"target": Vector3(120.0, 18.56, -7.0),
+		"target": Vector3(120.25, 18.56, -6.815),
 		"ground": false,
 		"beat": "S12",
 		"ref": "EXTRA",
 		"decision": "PORT_DECISION",
 		"authored_start": Vector3(127.2747, 25.4694, -5.3296),
-		"note": "landscape-gap A/B view for the P4.4 discard|raw|off comparison: eye = authored SafeRoomPlayerStart_0 x/z + player eye height (1.66875), target = authored gap centroid; the -48.97 deg pitch is a labelled PORT_DECISION (no authored camera aims at the gap).",
+		"note": "landscape-gap A/B view for the P4.4 discard|raw|off comparison: eye = authored SafeRoomPlayerStart_0 x/z + player eye height (1.66875), target = exact authored gap centroid (120.25,18.56,-6.815), so the aim is exact (0.00 % offset). Derived pitch -50.0702 deg (the -48.6 deg figure would need a 26.7041 m eye); labelled PORT_DECISION (no authored camera aims at the gap).",
 	},
 }
 
@@ -685,6 +687,7 @@ func _self_test() -> void:
 		and absf(wproj.x - 18.0) <= 2.0 and absf(wproj.y - 40.0) <= 2.0 \
 		and str(wide.get("ref", "")) == "KF27" \
 		and str(gap.get("decision", "")) == "PORT_DECISION" \
+		and gap_tgt.is_equal_approx(Vector3(120.25, 18.56, -6.815)) \
 		and absf(gap_eye.x - gap_start.x) < 0.0001 \
 		and absf(gap_eye.z - gap_start.z) < 0.0001 \
 		and absf((gap_eye.y - gap_start.y) - PLAYER_EYE_HEIGHT) < 0.0001 \

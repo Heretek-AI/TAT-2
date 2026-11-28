@@ -1676,17 +1676,20 @@ func _build_reticle_and_prompt(root: Control) -> void:
 	interact_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	interact_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	interact_lbl.add_theme_font_size_override("font_size", 15)
-	# Authored BPUI_Hud_InteractPromptLine `txt_actiondescription`:
-	# ColourAndOpacity #636EEC alpha 1.0, ShadowOffset (1,3), shadow black
-	# alpha 0.75. Godot canvas colours are linear, so the authored sRGB hex
-	# (99,110,236) is stored as (0.124772, 0.155927, 0.838799); the port literal
-	# (0.58,0.72,0.98) was invented. The authored offsets are used unchanged
-	# (the authored row is 40 px; this port label is 15 px) rather than scaled,
-	# so no PORT_DECISION is introduced. Fidelity, not a contrast fix: the
-	# authored colour is darker, so the prompt contrast metric drops; the UI2-03
-	# reference row is itself a low-contrast DELTA, and the 4.5 floor is
-	# unchanged (never tuned to pass).
-	interact_lbl.add_theme_color_override("font_color", Color(0.124772, 0.155927, 0.838799, 1.0))
+	# Authored BPUI_Hud_InteractPromptLine `txt_actiondescription`: #636EEC
+	# alpha 1.0, ShadowOffset (1,3), shadow black alpha 0.75.
+	# IMPORTANT (round 3): the UE payload stores a *linear* triple
+	# (0.124772, 0.155927, 0.838799). Godot 4 canvas colours are sRGB when
+	# rendering/rendering_device/hdr_2d=false (the default), so writing that
+	# linear triple as a Color renders #2028D6 (Rec.709 luma ~51), not the
+	# authored #636EEC (luma ~117). Use the sRGB parse instead:
+	#   Color.html("#636EEC") == (0.388235, 0.431373, 0.925490).
+	# The authored offsets are used unchanged (authored row 40 px; this port
+	# label 15 px) rather than scaled, so no PORT_DECISION is introduced. This
+	# is fidelity, not a contrast fix: the authored colour is lighter than the
+	# mistaken linear literal, so the prompt is no longer artificially dark; the
+	# 4.5 floor is unchanged and never tuned to pass.
+	interact_lbl.add_theme_color_override("font_color", Color.html("#636EEC"))
 	interact_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.75))
 	interact_lbl.add_theme_constant_override("shadow_offset_x", 1)
 	interact_lbl.add_theme_constant_override("shadow_offset_y", 3)
@@ -1718,15 +1721,15 @@ func _build_reticle_and_prompt(root: Control) -> void:
 	_prompt_secondary_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_prompt_secondary_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_prompt_secondary_lbl.add_theme_font_size_override("font_size", 14)
-	# Authored BPUI_Hud_InteractPromptLine `txt_fallback_key`: ColourAndOpacity
-	# #636EEC alpha 1.0, ShadowOffset (4,2), shadow black alpha 0.75. The only
+	# Authored BPUI_Hud_InteractPromptLine `txt_fallback_key`: #636EEC alpha
+	# 1.0, ShadowOffset (4,2), shadow black alpha 0.75. Same sRGB rule as the
+	# primary row: Color.html("#636EEC"), never the UE-linear triple. The only
 	# authored "3" is OutlineSize 3 with OutlineColor alpha 0.0 — an invisible
 	# outline with no visual effect (HARD_LIMIT: no authored visible outline to
 	# port), applied at its authored zero alpha so it changes no pixel. The
 	# authored offsets are used unchanged (authored 30 px vs this 14 px row).
-	# Both prompt rows are recorded as UI2-03 reference DELTAs; the 4.5 floor
-	# is unchanged.
-	_prompt_secondary_lbl.add_theme_color_override("font_color", Color(0.124772, 0.155927, 0.838799, 1.0))
+	# Both prompt rows are UI2-03 reference DELTAs; the 4.5 floor is unchanged.
+	_prompt_secondary_lbl.add_theme_color_override("font_color", Color.html("#636EEC"))
 	_prompt_secondary_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.75))
 	_prompt_secondary_lbl.add_theme_constant_override("shadow_offset_x", 4)
 	_prompt_secondary_lbl.add_theme_constant_override("shadow_offset_y", 2)

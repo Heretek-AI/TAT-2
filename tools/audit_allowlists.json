@@ -113,10 +113,6 @@
   "disk_missing": [
     "TAT/Content/Camera/BP_CameraModifier_VelocityFOV.uasset",
     "TAT/Content/ClothSimulation/BP_PhysicalCloth.uasset",
-    "TAT/Content/Destructibles/GeometryCollections/GC_AppleA.uasset",
-    "TAT/Content/Destructibles/GeometryCollections/GC_BottleWineA.uasset",
-    "TAT/Content/Destructibles/GeometryCollections/GC_BottleWineB.uasset",
-    "TAT/Content/Destructibles/GeometryCollections/GC_ChestTrunkALid.uasset",
     "TAT/Content/Graphics/Performance/BP_PerfTest_Camera.uasset",
     "TAT/Content/Matchmaking/Ranking/C_Ranking_EscapeOrderBonus.uasset",
     "TAT/Content/Movies/IntroCinematic/IntroCinematicMediaPlayer.uasset",
@@ -158,10 +154,6 @@
   "disk_missing_kinds": {
     "TAT/Content/Camera/BP_CameraModifier_VelocityFOV.uasset": "gameplay_asset",
     "TAT/Content/ClothSimulation/BP_PhysicalCloth.uasset": "cloth_simulation",
-    "TAT/Content/Destructibles/GeometryCollections/GC_AppleA.uasset": "geometry_collection",
-    "TAT/Content/Destructibles/GeometryCollections/GC_BottleWineA.uasset": "geometry_collection",
-    "TAT/Content/Destructibles/GeometryCollections/GC_BottleWineB.uasset": "geometry_collection",
-    "TAT/Content/Destructibles/GeometryCollections/GC_ChestTrunkALid.uasset": "geometry_collection",
     "TAT/Content/Graphics/Performance/BP_PerfTest_Camera.uasset": "perf_harness",
     "TAT/Content/Matchmaking/Ranking/C_Ranking_EscapeOrderBonus.uasset": "gameplay_asset",
     "TAT/Content/Movies/IntroCinematic/IntroCinematicMediaPlayer.uasset": "movie_wrapper",

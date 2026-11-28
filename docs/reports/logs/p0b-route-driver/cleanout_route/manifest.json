@@ -1,0 +1,1773 @@
+{
+  "schema": "tat2.route_driver/2",
+  "driver_version": 2,
+  "mode": "driver",
+  "segment": "cleanout_route",
+  "route_claim": "none",
+  "route_claim_policy": "played only when all 27 beats are captured, each by the continuous driver with mark_beat; otherwise none",
+  "driver_seed": 1025051536,
+  "deterministic_replay": true,
+  "input_backend": {
+    "move": "Input.action_press('move_forward'/'move_backward'/'move_left'/'move_right')",
+    "look": "player.add_look_pixel_delta (documented touch-look input hook)",
+    "keys": "InputEventKey sent through Input.parse_input_event (Input singleton state + viewport _input/_unhandled_input/GUI focus)",
+    "poll_actions": "Input.action_press/release for actions the HUD polls in _process (pause)",
+    "wait": "physics_frame / process_frame integer counts",
+    "scene_changes": "the game's own change_scene_to_file / reload_current_scene closures",
+    "note": "No player.global_position write between beats; the only placement is the mission's authored spawn."
+  },
+  "run_id": "cleanout_route_20261128T125824",
+  "started_at_utc": "2026-11-28T12:58:24",
+  "repo_root": "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/played-route",
+  "git": {
+    "sha": "1f3a50d43138ae46f65bc3175c5fd524ff90411c",
+    "sha_short": "1f3a50d",
+    "branch": "teamwork/20261127-1810-phase3-played-route",
+    "dirty": false
+  },
+  "git_dirty": {
+    "dirty": false,
+    "offenders": [],
+    "ignored_own_evidence": 1,
+    "note": "Source-tree state at run start; the driver's own manifest/log/media paths are excluded."
+  },
+  "build_stamp": {
+    "path": "build/tat2-linux-x86_64.stamp.json",
+    "present": false,
+    "kind": "source_head",
+    "engine": "4.7.2-stable (official)",
+    "note": "Headless source run; no exported PCK was launched for the driver."
+  },
+  "host": {
+    "name": "AtomMan",
+    "os": "Linux",
+    "processor": "Intel(R) Core(TM) i9-14900HX",
+    "cpu_count": 32,
+    "display": ":0",
+    "renderer": "headless"
+  },
+  "env": {
+    "TAT2_PARITY_ONLY": "1"
+  },
+  "beat_plan": {
+    "S01": {
+      "kind": "ui",
+      "implemented": true,
+      "reason": ""
+    },
+    "S02": {
+      "kind": "ui",
+      "implemented": true,
+      "reason": ""
+    },
+    "S03": {
+      "kind": "world",
+      "implemented": true,
+      "reason": ""
+    },
+    "S04": {
+      "kind": "ui",
+      "implemented": true,
+      "reason": ""
+    },
+    "S05": {
+      "kind": "camera",
+      "implemented": true,
+      "reason": ""
+    },
+    "S06": {
+      "kind": "ui",
+      "implemented": true,
+      "reason": ""
+    },
+    "S07": {
+      "kind": "world",
+      "implemented": true,
+      "reason": ""
+    },
+    "S08": {
+      "kind": "ui",
+      "implemented": true,
+      "reason": ""
+    },
+    "S09": {
+      "kind": "ui",
+      "implemented": true,
+      "reason": ""
+    },
+    "S10": {
+      "kind": "ui",
+      "implemented": true,
+      "reason": ""
+    },
+    "S11": {
+      "kind": "ui",
+      "implemented": true,
+      "reason": ""
+    },
+    "S12": {
+      "kind": "world",
+      "implemented": true,
+      "reason": ""
+    },
+    "S13": {
+      "kind": "world",
+      "implemented": true,
+      "reason": ""
+    },
+    "S14": {
+      "kind": "camera",
+      "implemented": false,
+      "reason": "zipwire equip/launch needs the S13 street state; the driver's S13 attempt does not reach the alley/car"
+    },
+    "S15": {
+      "kind": "world",
+      "implemented": false,
+      "reason": "2nd zipwire + ~7 s crank needs the S14 launch state"
+    },
+    "S16": {
+      "kind": "world",
+      "implemented": false,
+      "reason": "roofline/3rd zipwire needs the S14/S15 state; no linked reference keyframe"
+    },
+    "S17": {
+      "kind": "world",
+      "implemented": false,
+      "reason": "cable crossing / gear plate / courtyard drop needs the S14-S16 state and physics-driven traversal"
+    },
+    "S18": {
+      "kind": "world",
+      "implemented": false,
+      "reason": "smoke throw + plume VFX needs the courtyard state"
+    },
+    "S19": {
+      "kind": "camera",
+      "implemented": false,
+      "reason": "NPC scan beat: 4 guards + 3 civilians measured 85.4-150.7 m from the route anchor (probe_route_npcs.gd); no guard in reach"
+    },
+    "S20": {
+      "kind": "world",
+      "implemented": false,
+      "reason": "terrace patrol beat: nearest guard measured 85.4 m away (probe_route_npcs.gd); unreachable in this route"
+    },
+    "S21": {
+      "kind": "world",
+      "implemented": false,
+      "reason": "blue-door approach/traversal needs the S20 terrace state"
+    },
+    "S22": {
+      "kind": "world",
+      "implemented": false,
+      "reason": "pickpocket beat: no constable in reach (nearest NPC 85.4 m, probe_route_npcs.gd)"
+    },
+    "S23": {
+      "kind": "camera",
+      "implemented": false,
+      "reason": "takedown beat: needs the S22 constable; no NPC in reach (probe_route_npcs.gd)"
+    },
+    "S24": {
+      "kind": "world",
+      "implemented": false,
+      "reason": "foyer approach/beams needs the S21/S22/S23 state"
+    },
+    "S25": {
+      "kind": "world",
+      "implemented": false,
+      "reason": "beam crossing/ward lockdown must be walked, not triggered; needs the S24 state"
+    },
+    "S26": {
+      "kind": "world",
+      "implemented": false,
+      "reason": "slate-stair ascent needs the S25 state"
+    },
+    "S27": {
+      "kind": "ui",
+      "implemented": true,
+      "reason": ""
+    }
+  },
+  "beats": [
+    {
+      "id": "S01",
+      "kind": "ui",
+      "status": "driven",
+      "reason": "",
+      "implemented": true,
+      "segment": "cleanout_route",
+      "mark_beat_called": true,
+      "mark_beat_ok": true,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {
+        "scene": "res://scenes/main_menu.tscn",
+        "buttons": 5,
+        "focus_owner": "PLAY",
+        "note": "The official S01 is a locked-off idle startscreen; the driver observes it as booted (no input)."
+      }
+    },
+    {
+      "id": "S02",
+      "kind": "ui",
+      "status": "driven",
+      "reason": "",
+      "implemented": true,
+      "segment": "cleanout_route",
+      "mark_beat_called": true,
+      "mark_beat_ok": true,
+      "input_actions": [
+        "ui_accept",
+        "wait"
+      ],
+      "waypoints": [],
+      "evidence": {
+        "loading_seen": true,
+        "progress_samples": [
+          0.29,
+          0.32,
+          0.5,
+          0.56,
+          0.59,
+          0.63,
+          0.67,
+          0.71,
+          0.74,
+          0.78,
+          0.82,
+          0.85,
+          0.89,
+          0.93,
+          0.97,
+          0.98
+        ],
+        "note": "The Den deploy's own loading overlay; no staged hook."
+      }
+    },
+    {
+      "id": "S03",
+      "kind": "world",
+      "status": "driven_partial",
+      "reason": "Authored Den spawn reached through PLAY; the official attic pan is not driven (entry half only).",
+      "implemented": true,
+      "segment": "cleanout_route",
+      "mark_beat_called": true,
+      "mark_beat_ok": true,
+      "input_actions": [
+        "move_forward",
+        "look"
+      ],
+      "waypoints": [],
+      "evidence": {
+        "spawn": [
+          5.6692,
+          40.1689,
+          270.6863
+        ],
+        "menu_play": true
+      }
+    },
+    {
+      "id": "S04",
+      "kind": "ui",
+      "status": "driven_partial",
+      "reason": "The real wardrobe screen opens from the authored Area3D; the KF03 cap / KF04 slot-3 states are not cycled.",
+      "implemented": true,
+      "segment": "cleanout_route",
+      "mark_beat_called": true,
+      "mark_beat_ok": true,
+      "input_actions": [
+        "interact",
+        "Escape"
+      ],
+      "waypoints": [],
+      "evidence": {
+        "area": "DenWardrobeArea",
+        "area_pos": [
+          -5.0298,
+          40.1102,
+          274.342
+        ],
+        "approach": {
+          "ok": true,
+          "leg": {
+            "ok": true,
+            "frames": 170,
+            "start": [
+              5.6692,
+              40.1172,
+              270.6863
+            ],
+            "end": [
+              -3.7368,
+              40.1668,
+              273.8969
+            ],
+            "distance_m": 9.93895816802979
+          },
+          "area": [
+            -5.0298,
+            40.1102,
+            274.342
+          ],
+          "end": [
+            -3.8583,
+            40.1668,
+            273.9403
+          ],
+          "dist_m": 1.2398
+        },
+        "ui_opened": true,
+        "ui_node": "",
+        "escape_woke_pause": true
+      }
+    },
+    {
+      "id": "S05",
+      "kind": "camera",
+      "status": "driven",
+      "reason": "",
+      "implemented": true,
+      "segment": "cleanout_route",
+      "mark_beat_called": true,
+      "mark_beat_ok": true,
+      "input_actions": [
+        "move_forward",
+        "look",
+        "interact"
+      ],
+      "waypoints": [
+        [
+          1.2,
+          null,
+          269.8
+        ],
+        [
+          -3.4,
+          null,
+          270.9
+        ]
+      ],
+      "evidence": {
+        "enter_pos": [
+          -3.3337,
+          40.1179,
+          270.8784
+        ],
+        "ponder_active": true,
+        "ponder_frozen_max_m": 0.0093,
+        "exit_pos": [
+          -3.3426,
+          40.1179,
+          270.8813
+        ],
+        "camera_restored": true
+      }
+    },
+    {
+      "id": "S06",
+      "kind": "ui",
+      "status": "blocked",
+      "reason": "could not walk into the DenLedgerArea reach (measured 1.93 m)",
+      "implemented": true,
+      "segment": "cleanout_route",
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {
+        "ok": false,
+        "leg": {
+          "ok": false,
+          "frames": 900,
+          "start": [
+            -3.3426,
+            40.1179,
+            270.8813
+          ],
+          "end": [
+            -3.1178,
+            40.1179,
+            268.7325
+          ],
+          "reason": "frame_budget"
+        },
+        "area": [
+          -2.0558,
+          41.0028,
+          267.3667
+        ],
+        "end": [
+          -3.0533,
+          40.1179,
+          268.7686
+        ],
+        "dist_m": 1.9348
+      }
+    },
+    {
+      "id": "S07",
+      "kind": "world",
+      "status": "driven_partial",
+      "reason": "driven subjects: decoration_pedestal, gramophone; boot-trail decals and the trunk cycle are not driven",
+      "implemented": true,
+      "segment": "cleanout_route",
+      "mark_beat_called": true,
+      "mark_beat_ok": true,
+      "input_actions": [
+        "move_forward",
+        "interact"
+      ],
+      "waypoints": [],
+      "evidence": {
+        "decoration_pedestal": [
+          3.8692,
+          40.2669,
+          272.0863
+        ],
+        "gramophone_area": [
+          3.3192,
+          40.2669,
+          272.0863
+        ],
+        "stand_a": [
+          4.8692,
+          40.2669,
+          272.0863
+        ],
+        "stand_b": [
+          2.3192,
+          40.2669,
+          272.0863
+        ],
+        "leg_a": {
+          "ok": true,
+          "frames": 143,
+          "start": [
+            -3.0233,
+            40.1179,
+            268.7855
+          ],
+          "end": [
+            4.6747,
+            40.1179,
+            272.0076
+          ],
+          "distance_m": 8.34514617919922
+        },
+        "leg_b": {
+          "ok": true,
+          "frames": 49,
+          "start": [
+            4.8289,
+            40.1179,
+            272.0703
+          ],
+          "end": [
+            2.56,
+            40.1179,
+            272.1206
+          ],
+          "distance_m": 2.26948189735413
+        },
+        "nearest_a": "DenDecorationPedestal",
+        "nearest_b": "@Area3D@5078",
+        "decoration_before": "faberge_egg",
+        "decoration_after": "owl_statue",
+        "gramophone_before": false,
+        "gramophone_after": true,
+        "subjects_driven": [
+          "decoration_pedestal",
+          "gramophone"
+        ],
+        "subjects_not_driven": [
+          "boot_trail_decals",
+          "trunk_cycle"
+        ]
+      }
+    },
+    {
+      "id": "S08",
+      "kind": "ui",
+      "status": "driven_partial",
+      "reason": "map table opened and the Cleanout entry selected via [F]/[C]; the 3D table token/camera framing is not adjudicated",
+      "implemented": true,
+      "segment": "cleanout_route",
+      "mark_beat_called": true,
+      "mark_beat_ok": true,
+      "input_actions": [
+        "move_forward",
+        "interact",
+        "cleanout_key"
+      ],
+      "waypoints": [],
+      "evidence": {
+        "area_pos": [
+          2.769,
+          41.1137,
+          268.0207
+        ],
+        "approach": {
+          "ok": true,
+          "leg": {
+            "ok": true,
+            "frames": 51,
+            "start": [
+              2.3728,
+              40.1179,
+              272.0942
+            ],
+            "end": [
+              2.6201,
+              40.1179,
+              269.3737
+            ],
+            "distance_m": 2.7317054271698
+          },
+          "area": [
+            2.769,
+            41.1137,
+            268.0207
+          ],
+          "end": [
+            2.6269,
+            40.1169,
+            269.3355
+          ],
+          "dist_m": 1.656
+        },
+        "table_opened": true,
+        "prep_opened": true,
+        "prep_mission_title": "Cleanout Heist",
+        "prep_time_limit": "The Constables' Guildhall is full of confiscated treasures. Infiltrate the building and reacquire some of the riches they have just left lying around, then slip away before anyone notices.\nTime Limit: 55 minutes",
+        "prep_contract_state": "Contract Inactive"
+      }
+    },
+    {
+      "id": "S09",
+      "kind": "ui",
+      "status": "driven",
+      "reason": "",
+      "implemented": true,
+      "segment": "cleanout_route",
+      "mark_beat_called": true,
+      "mark_beat_ok": true,
+      "input_actions": [
+        "ready"
+      ],
+      "waypoints": [],
+      "evidence": {
+        "countdown_seen": true,
+        "countdown_peak_s": 5.979,
+        "prep_mission_title": "Cleanout Heist",
+        "prep_time_limit": "The Constables' Guildhall is full of confiscated treasures. Infiltrate the building and reacquire some of the riches they have just left lying around, then slip away before anyone notices.\nTime Limit: 55 minutes",
+        "note": "The 6 s READY countdown is the authored deploy path; no hook call."
+      }
+    },
+    {
+      "id": "S10",
+      "kind": "ui",
+      "status": "driven",
+      "reason": "",
+      "implemented": true,
+      "segment": "cleanout_route",
+      "mark_beat_called": true,
+      "mark_beat_ok": true,
+      "input_actions": [
+        "interact",
+        "wait"
+      ],
+      "waypoints": [],
+      "evidence": {
+        "loading_seen": true,
+        "progress_samples": [
+          0.29,
+          0.3,
+          0.33,
+          0.35,
+          0.38,
+          0.4,
+          0.43,
+          0.45,
+          0.48,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.51,
+          0.51,
+          0.51,
+          0.51,
+          0.51,
+          0.51,
+          0.51,
+          0.51,
+          0.51,
+          0.52,
+          0.52,
+          0.52,
+          0.52,
+          0.52,
+          0.52,
+          0.53,
+          0.53,
+          0.54,
+          0.54,
+          0.55,
+          0.55,
+          0.56,
+          0.56,
+          0.57,
+          0.57,
+          0.58,
+          0.58,
+          0.58,
+          0.59,
+          0.59,
+          0.6,
+          0.6,
+          0.61,
+          0.61,
+          0.62,
+          0.62,
+          0.63,
+          0.63,
+          0.64,
+          0.64,
+          0.64,
+          0.65,
+          0.65,
+          0.66,
+          0.66,
+          0.67,
+          0.67,
+          0.68,
+          0.68,
+          0.69,
+          0.69,
+          0.7,
+          0.7,
+          0.7,
+          0.71,
+          0.71,
+          0.72,
+          0.72,
+          0.73,
+          0.73,
+          0.74,
+          0.74,
+          0.75,
+          0.75,
+          0.76,
+          0.76,
+          0.76,
+          0.77,
+          0.77,
+          0.78,
+          0.78,
+          0.79,
+          0.79,
+          0.8,
+          0.8,
+          0.81,
+          0.81,
+          0.82,
+          0.82,
+          0.82,
+          0.83,
+          0.83,
+          0.84,
+          0.84,
+          0.85,
+          0.85,
+          0.86,
+          0.86,
+          0.87,
+          0.87,
+          0.88,
+          0.88,
+          0.88,
+          0.89,
+          0.89,
+          0.9,
+          0.9,
+          0.91,
+          0.91,
+          0.92,
+          0.92,
+          0.93,
+          0.93,
+          0.94,
+          0.94,
+          0.94,
+          0.95,
+          0.95,
+          0.96,
+          0.96,
+          0.97,
+          0.97,
+          0.98,
+          0.98
+        ]
+      }
+    },
+    {
+      "id": "S11",
+      "kind": "ui",
+      "status": "driven",
+      "reason": "",
+      "implemented": true,
+      "segment": "cleanout_route",
+      "mark_beat_called": true,
+      "mark_beat_ok": true,
+      "input_actions": [
+        "pause"
+      ],
+      "waypoints": [],
+      "evidence": {
+        "letter_open_before": true,
+        "letter_closed_after": true,
+        "body_chars": 362,
+        "body_has_55min": true
+      }
+    },
+    {
+      "id": "S12",
+      "kind": "world",
+      "status": "blocked",
+      "reason": "safe-room lantern out of the 1.75 m reach: the body settles on a lower collision level (y=23.16) while the dressing floor is y=25.00 and the lantern is 3.64 m away 3D (3.92 m to its interact point)",
+      "implemented": true,
+      "segment": "cleanout_route",
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [
+        "move_forward",
+        "look",
+        "interact"
+      ],
+      "waypoints": [
+        [
+          126.89,
+          null,
+          -2.285
+        ]
+      ],
+      "evidence": {
+        "lantern": [
+          126.89,
+          26.6,
+          -2.285
+        ],
+        "interact_point": [
+          126.89,
+          26.89,
+          -2.285
+        ],
+        "approach": {
+          "ok": false,
+          "leg": {
+            "ok": true,
+            "frames": 32,
+            "start": [
+              127.2747,
+              23.1588,
+              -5.3296
+            ],
+            "end": [
+              127.0609,
+              23.1595,
+              -3.6214
+            ],
+            "distance_m": 1.72150707244873
+          },
+          "area": [
+            126.89,
+            26.6,
+            -2.285
+          ],
+          "end": [
+            127.0436,
+            23.1595,
+            -3.4936
+          ],
+          "dist_m": 3.6498
+        },
+        "pre_lit": false,
+        "post_lit": false,
+        "nearest_before": "",
+        "player_y_at_spawn_settle": 23.1588,
+        "floor_under_player_settle": 23.1585,
+        "floor_under_lantern": 25.0,
+        "player_to_lantern_3d_m": 3.6406
+      }
+    },
+    {
+      "id": "S13",
+      "kind": "world",
+      "status": "blocked",
+      "reason": "local safe-room area only: max displacement 0.42 m in the 8-direction probes (129 m still to the KF16 car); no authored door/catwalk waypoint chain in the driver warms the route beyond this room",
+      "implemented": true,
+      "segment": "cleanout_route",
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [
+        "move_forward",
+        "move_left",
+        "look"
+      ],
+      "waypoints": [],
+      "evidence": {
+        "start": [
+          127.0399,
+          23.1595,
+          -3.4658
+        ],
+        "end": [
+          126.8463,
+          23.5475,
+          -3.8394
+        ],
+        "moved_m": 0.4208,
+        "direction_probes": [
+          {
+            "deg": 0,
+            "dir": [
+              0.0,
+              1.0
+            ],
+            "moved_m": 0.8875,
+            "end": [
+              127.0349,
+              24.3403,
+              -2.5783
+            ]
+          },
+          {
+            "deg": 45,
+            "dir": [
+              0.71,
+              0.71
+            ],
+            "moved_m": 0.5914,
+            "end": [
+              127.6311,
+              23.2597,
+              -3.4516
+            ]
+          },
+          {
+            "deg": 90,
+            "dir": [
+              1.0,
+              0.0
+            ],
+            "moved_m": 2.9574,
+            "end": [
+              129.9727,
+              24.1484,
+              -3.8461
+            ]
+          },
+          {
+            "deg": 135,
+            "dir": [
+              0.71,
+              -0.71
+            ],
+            "moved_m": 3.085,
+            "end": [
+              129.8395,
+              24.1539,
+              -4.7616
+            ]
+          },
+          {
+            "deg": 180,
+            "dir": [
+              0.0,
+              -1.0
+            ],
+            "moved_m": 4.7072,
+            "end": [
+              127.6292,
+              24.1183,
+              -8.1359
+            ]
+          },
+          {
+            "deg": 225,
+            "dir": [
+              -0.71,
+              -0.71
+            ],
+            "moved_m": 4.2467,
+            "end": [
+              126.4785,
+              24.1372,
+              -7.6752
+            ]
+          },
+          {
+            "deg": 270,
+            "dir": [
+              -1.0,
+              0.0
+            ],
+            "moved_m": 5.811,
+            "end": [
+              121.2292,
+              23.1089,
+              -3.5301
+            ]
+          },
+          {
+            "deg": 315,
+            "dir": [
+              -0.71,
+              0.71
+            ],
+            "moved_m": 2.73,
+            "end": [
+              124.4226,
+              25.0,
+              -2.6894
+            ]
+          }
+        ],
+        "best_probe_m": 5.811,
+        "follow": {
+          "ok": false,
+          "frames": 21,
+          "start": [
+            126.8322,
+            24.4621,
+            -3.396
+          ],
+          "end": [
+            126.8463,
+            23.5475,
+            -3.8394
+          ],
+          "reason": "vertical_climb_abort",
+          "climb_m": -0.9147
+        },
+        "distance_to_kf16_car_m": 128.669,
+        "distance_to_kf15_alley_m": 153.3734,
+        "escaped_safe_room": false
+      }
+    },
+    {
+      "id": "S14",
+      "kind": "camera",
+      "status": "not_attempted",
+      "reason": "zipwire equip/launch needs the S13 street state; the driver's S13 attempt does not reach the alley/car",
+      "implemented": false,
+      "segment": "cleanout_route",
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {}
+    },
+    {
+      "id": "S15",
+      "kind": "world",
+      "status": "not_attempted",
+      "reason": "2nd zipwire + ~7 s crank needs the S14 launch state",
+      "implemented": false,
+      "segment": "cleanout_route",
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {}
+    },
+    {
+      "id": "S16",
+      "kind": "world",
+      "status": "not_attempted",
+      "reason": "roofline/3rd zipwire needs the S14/S15 state; no linked reference keyframe",
+      "implemented": false,
+      "segment": "cleanout_route",
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {}
+    },
+    {
+      "id": "S17",
+      "kind": "world",
+      "status": "not_attempted",
+      "reason": "cable crossing / gear plate / courtyard drop needs the S14-S16 state and physics-driven traversal",
+      "implemented": false,
+      "segment": "cleanout_route",
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {}
+    },
+    {
+      "id": "S18",
+      "kind": "world",
+      "status": "not_attempted",
+      "reason": "smoke throw + plume VFX needs the courtyard state",
+      "implemented": false,
+      "segment": "cleanout_route",
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {}
+    },
+    {
+      "id": "S19",
+      "kind": "camera",
+      "status": "unreachable",
+      "reason": "NPC scan beat: 4 guards + 3 civilians measured 85.4-150.7 m from the route anchor (probe_route_npcs.gd); no guard in reach",
+      "implemented": false,
+      "segment": "cleanout_route",
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {
+        "nearest_npc_m": 85.4,
+        "source": "res://tests/probe_route_npcs.gd"
+      }
+    },
+    {
+      "id": "S20",
+      "kind": "world",
+      "status": "unreachable",
+      "reason": "terrace patrol beat: nearest guard measured 85.4 m away (probe_route_npcs.gd); unreachable in this route",
+      "implemented": false,
+      "segment": "cleanout_route",
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {
+        "nearest_npc_m": 85.4,
+        "source": "res://tests/probe_route_npcs.gd"
+      }
+    },
+    {
+      "id": "S21",
+      "kind": "world",
+      "status": "not_attempted",
+      "reason": "blue-door approach/traversal needs the S20 terrace state",
+      "implemented": false,
+      "segment": "cleanout_route",
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {}
+    },
+    {
+      "id": "S22",
+      "kind": "world",
+      "status": "unreachable",
+      "reason": "pickpocket beat: no constable in reach (nearest NPC 85.4 m, probe_route_npcs.gd)",
+      "implemented": false,
+      "segment": "cleanout_route",
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {
+        "nearest_npc_m": 85.4,
+        "source": "res://tests/probe_route_npcs.gd"
+      }
+    },
+    {
+      "id": "S23",
+      "kind": "camera",
+      "status": "unreachable",
+      "reason": "takedown beat: needs the S22 constable; no NPC in reach (probe_route_npcs.gd)",
+      "implemented": false,
+      "segment": "cleanout_route",
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {
+        "nearest_npc_m": 85.4,
+        "source": "res://tests/probe_route_npcs.gd"
+      }
+    },
+    {
+      "id": "S24",
+      "kind": "world",
+      "status": "not_attempted",
+      "reason": "foyer approach/beams needs the S21/S22/S23 state",
+      "implemented": false,
+      "segment": "cleanout_route",
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {}
+    },
+    {
+      "id": "S25",
+      "kind": "world",
+      "status": "not_attempted",
+      "reason": "beam crossing/ward lockdown must be walked, not triggered; needs the S24 state",
+      "implemented": false,
+      "segment": "cleanout_route",
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {}
+    },
+    {
+      "id": "S26",
+      "kind": "world",
+      "status": "not_attempted",
+      "reason": "slate-stair ascent needs the S25 state",
+      "implemented": false,
+      "segment": "cleanout_route",
+      "mark_beat_called": false,
+      "mark_beat_ok": false,
+      "input_actions": [],
+      "waypoints": [],
+      "evidence": {}
+    },
+    {
+      "id": "S27",
+      "kind": "ui",
+      "status": "driven_partial",
+      "reason": "",
+      "implemented": true,
+      "segment": "cleanout_route",
+      "mark_beat_called": true,
+      "mark_beat_ok": true,
+      "input_actions": [
+        "pause"
+      ],
+      "waypoints": [],
+      "evidence": {
+        "tree_paused": true,
+        "context": "safe room after S12 — NOT the official upper-foyer S26 context"
+      }
+    }
+  ],
+  "counts": {
+    "beats": 27,
+    "driven": 6,
+    "driven_partial": 5,
+    "blocked": 3,
+    "unreachable": 4,
+    "not_attempted": 9,
+    "failed": 0,
+    "mark_calls": 11,
+    "captured": 11
+  },
+  "asserts": [
+    {
+      "name": "main_menu.tscn loads",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "startscreen built with the authored menu buttons",
+      "ok": true,
+      "detail": "buttons=5 focus=@Button@1075:<Button#320948147905>"
+    },
+    {
+      "name": "PLAY button present on the startscreen",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "PLAY deployed the Den mission scene",
+      "ok": true,
+      "detail": "frames=16 loading=true"
+    },
+    {
+      "name": "player spawned at the authored Den spawn",
+      "ok": true,
+      "detail": "[5.6692, 40.1689, 270.6863]"
+    },
+    {
+      "name": "map table [C] opened the Cleanout prep screen",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "prep shows Cleanout Heist ('Cleanout Heist')",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "prep shows Time Limit: 55 minutes ('The Constables' Guildhall is full of confiscated treasures. Infiltrate the building and reacquire some of the riches they have just left lying around, then slip away before anyone notices.\nTime Limit: 55 minutes')",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Cleanout deployed the Guildhall mission scene",
+      "ok": true,
+      "detail": "frames=128 loading=true"
+    },
+    {
+      "name": "first-class Cleanout run (mid=Mission.Guildhall.LootTheRoom free_play=false cleanout=true main_s=3300)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mission title reads Cleanout Heist ('Cleanout Heist')",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "run clock is the live MM:SS countdown of the 3300 s window ('54:50', remaining=3290.6)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "run clock reads the Cleanout Heist 55-minute window (measured 54:50 from main_s=3300)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "run clock source is the mission row (_active_mission_row.id=Mission.Guildhall.LootTheRoom main_source=mission_row)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Cleanout starts at the authored safe-room spawn",
+      "ok": true,
+      "detail": "[127.2747, 23.2105, -5.3296]"
+    },
+    {
+      "name": "briefing letter opened after the deploy",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "SafeRoomLanternStation present in the safe room",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "mark_calls": 11,
+  "blockers": [
+    {
+      "beat": "S06",
+      "reason": "could not walk into the DenLedgerArea reach",
+      "measured": {
+        "ok": false,
+        "leg": {
+          "ok": false,
+          "frames": 900,
+          "start": [
+            -3.3426,
+            40.1179,
+            270.8813
+          ],
+          "end": [
+            -3.1178,
+            40.1179,
+            268.7325
+          ],
+          "reason": "frame_budget"
+        },
+        "area": [
+          -2.0558,
+          41.0028,
+          267.3667
+        ],
+        "end": [
+          -3.0533,
+          40.1179,
+          268.7686
+        ],
+        "dist_m": 1.9348
+      }
+    },
+    {
+      "beat": "S12",
+      "reason": "safe-room lantern unreachable from the authored spawn (floor/dressing height mismatch)",
+      "measured": {
+        "lantern": [
+          126.89,
+          26.6,
+          -2.285
+        ],
+        "interact_point": [
+          126.89,
+          26.89,
+          -2.285
+        ],
+        "approach": {
+          "ok": false,
+          "leg": {
+            "ok": true,
+            "frames": 32,
+            "start": [
+              127.2747,
+              23.1588,
+              -5.3296
+            ],
+            "end": [
+              127.0609,
+              23.1595,
+              -3.6214
+            ],
+            "distance_m": 1.72150707244873
+          },
+          "area": [
+            126.89,
+            26.6,
+            -2.285
+          ],
+          "end": [
+            127.0436,
+            23.1595,
+            -3.4936
+          ],
+          "dist_m": 3.6498
+        },
+        "pre_lit": false,
+        "post_lit": false,
+        "nearest_before": "",
+        "player_y_at_spawn_settle": 23.1588,
+        "floor_under_player_settle": 23.1585,
+        "floor_under_lantern": 25.0,
+        "player_to_lantern_3d_m": 3.6406
+      }
+    },
+    {
+      "beat": "S13",
+      "reason": "safe-room local area only (max probe displacement + 129 m still to the KF16 car); the authored route needs the map's door/catwalk chain",
+      "measured": {
+        "moved_m": 0.4208,
+        "to_car_m": 128.669,
+        "to_alley_m": 153.3734,
+        "direction_probes": [
+          {
+            "deg": 0,
+            "dir": [
+              0.0,
+              1.0
+            ],
+            "moved_m": 0.8875,
+            "end": [
+              127.0349,
+              24.3403,
+              -2.5783
+            ]
+          },
+          {
+            "deg": 45,
+            "dir": [
+              0.71,
+              0.71
+            ],
+            "moved_m": 0.5914,
+            "end": [
+              127.6311,
+              23.2597,
+              -3.4516
+            ]
+          },
+          {
+            "deg": 90,
+            "dir": [
+              1.0,
+              0.0
+            ],
+            "moved_m": 2.9574,
+            "end": [
+              129.9727,
+              24.1484,
+              -3.8461
+            ]
+          },
+          {
+            "deg": 135,
+            "dir": [
+              0.71,
+              -0.71
+            ],
+            "moved_m": 3.085,
+            "end": [
+              129.8395,
+              24.1539,
+              -4.7616
+            ]
+          },
+          {
+            "deg": 180,
+            "dir": [
+              0.0,
+              -1.0
+            ],
+            "moved_m": 4.7072,
+            "end": [
+              127.6292,
+              24.1183,
+              -8.1359
+            ]
+          },
+          {
+            "deg": 225,
+            "dir": [
+              -0.71,
+              -0.71
+            ],
+            "moved_m": 4.2467,
+            "end": [
+              126.4785,
+              24.1372,
+              -7.6752
+            ]
+          },
+          {
+            "deg": 270,
+            "dir": [
+              -1.0,
+              0.0
+            ],
+            "moved_m": 5.811,
+            "end": [
+              121.2292,
+              23.1089,
+              -3.5301
+            ]
+          },
+          {
+            "deg": 315,
+            "dir": [
+              -0.71,
+              0.71
+            ],
+            "moved_m": 2.73,
+            "end": [
+              124.4226,
+              25.0,
+              -2.6894
+            ]
+          }
+        ],
+        "max_probe_m": 5.811
+      }
+    },
+    {
+      "beat": "S19",
+      "reason": "no NPC in reach (nearest 85.4 m, probe_route_npcs.gd)",
+      "measured": {
+        "nearest_npc_m": 85.4
+      }
+    },
+    {
+      "beat": "S20",
+      "reason": "no NPC in reach (nearest 85.4 m, probe_route_npcs.gd)",
+      "measured": {
+        "nearest_npc_m": 85.4
+      }
+    },
+    {
+      "beat": "S22",
+      "reason": "no NPC in reach (nearest 85.4 m, probe_route_npcs.gd)",
+      "measured": {
+        "nearest_npc_m": 85.4
+      }
+    },
+    {
+      "beat": "S23",
+      "reason": "no NPC in reach (nearest 85.4 m, probe_route_npcs.gd)",
+      "measured": {
+        "nearest_npc_m": 85.4
+      }
+    }
+  ],
+  "scene_changes": [
+    {
+      "from": "res://scenes/main_menu.tscn",
+      "to": "res://scenes/mission.tscn",
+      "via": "PLAY button pressed via real ui_accept",
+      "frames": 16
+    },
+    {
+      "from": "res://scenes/mission.tscn (Den)",
+      "to": "res://scenes/mission.tscn (Guildhall Cleanout, reload_current_scene)",
+      "via": "prep [F] READY -> deploy_requested -> reload_current_scene",
+      "frames": 128
+    }
+  ],
+  "route_claim_note": "Input-driven route front only. Any beat not captured keeps its measured status; no staged frame is relabelled played.",
+  "rng_state": 7180767491524514274,
+  "prep": {
+    "mission_title": "Cleanout Heist",
+    "time_limit": "The Constables' Guildhall is full of confiscated treasures. Infiltrate the building and reacquire some of the riches they have just left lying around, then slip away before anyone notices.\nTime Limit: 55 minutes",
+    "contract_state": "Contract Inactive"
+  },
+  "level": {
+    "mission_id": "Mission.Guildhall.LootTheRoom",
+    "free_play": false,
+    "cleanout_run": true,
+    "run_time_limit_s": 3300.0,
+    "main_source": "mission_row",
+    "mission_row_limit_s": 3300.0,
+    "mission_row_id": "Mission.Guildhall.LootTheRoom",
+    "mission_title": "Cleanout Heist",
+    "hud_clock": "54:50",
+    "spawn": [
+      127.2747,
+      23.2105,
+      -5.3296
+    ],
+    "saved_difficulty": 1,
+    "note": "First-class Cleanout: the authored Mission.Guildhall.LootTheRoom side-mission row with free_play=false; the haul banks and the hosting contract is not credited. The engine's own 'TAT-2 run clock: map=guildhall ... main_source=mission_row' line is in the driver log."
+  },
+  "street_attempt": {
+    "escaped": false,
+    "moved_m": 0.4208,
+    "to_car_m": 128.669,
+    "to_alley_m": 153.3734
+  },
+  "assertions": {
+    "checks": 17,
+    "fails": 0
+  },
+  "transform_writes": 0,
+  "continuity": {
+    "single_session": true,
+    "scene_changes": 2,
+    "stitched_segments": false,
+    "note": "One process, one input driver, no instantiate() of a mission scene: the menu PLAY and the prep READY closures did the scene changes."
+  },
+  "evidence": {
+    "spawn": [
+      5.6692,
+      40.1689,
+      270.6863
+    ],
+    "scene_changes": [
+      {
+        "from": "res://scenes/main_menu.tscn",
+        "to": "res://scenes/mission.tscn",
+        "via": "PLAY button pressed via real ui_accept",
+        "frames": 16
+      },
+      {
+        "from": "res://scenes/mission.tscn (Den)",
+        "to": "res://scenes/mission.tscn (Guildhall Cleanout, reload_current_scene)",
+        "via": "prep [F] READY -> deploy_requested -> reload_current_scene",
+        "frames": 128
+      }
+    ],
+    "den_spawn_ok": true,
+    "street_attempt": {
+      "escaped": false,
+      "moved_m": 0.4208,
+      "to_car_m": 128.669,
+      "to_alley_m": 153.3734
+    }
+  },
+  "audio": {
+    "schema": "tat2.audio_capture/1",
+    "enabled": false,
+    "reason": "dummy_audio_driver",
+    "driver": "Dummy",
+    "sample_rate": 44100,
+    "channels": 2,
+    "buffer_s": 10.0,
+    "frames": 0,
+    "seconds": 0.0,
+    "started_at_utc": "2026-11-28T12:58:24",
+    "pushed_frames": 0,
+    "dropped_frames": 0,
+    "truncated": false,
+    "marks": [
+      {
+        "label": "route_driver_start",
+        "beat": "",
+        "frame": 0,
+        "t_s": 0.0,
+        "msec": 0,
+        "unix": 1795870704.11605,
+        "window": {
+          "frames": 0,
+          "seconds": 0.0,
+          "rms_dbfs": -120.0,
+          "peak_dbfs": -120.0,
+          "zero_fraction": 0.0
+        }
+      },
+      {
+        "label": "startscreen (main_menu.tscn, real scene)",
+        "beat": "S01",
+        "frame": 0,
+        "t_s": 0.0,
+        "msec": 6284,
+        "unix": 1795870710.40001,
+        "window": {
+          "frames": 0,
+          "seconds": 0.0,
+          "rms_dbfs": -120.0,
+          "peak_dbfs": -120.0,
+          "zero_fraction": 0.0
+        }
+      },
+      {
+        "label": "loading screen during the deploy (progress 0.50)",
+        "beat": "S02",
+        "frame": 0,
+        "t_s": 0.0,
+        "msec": 7862,
+        "unix": 1795870711.97819,
+        "window": {
+          "frames": 0,
+          "seconds": 0.0,
+          "rms_dbfs": -120.0,
+          "peak_dbfs": -120.0,
+          "zero_fraction": 0.0
+        }
+      },
+      {
+        "label": "Den arrival (authored spawn, via PLAY)",
+        "beat": "S03",
+        "frame": 0,
+        "t_s": 0.0,
+        "msec": 12202,
+        "unix": 1795870716.31868,
+        "window": {
+          "frames": 0,
+          "seconds": 0.0,
+          "rms_dbfs": -120.0,
+          "peak_dbfs": -120.0,
+          "zero_fraction": 0.0
+        }
+      },
+      {
+        "label": "opens the wardrobe UI from the Den",
+        "beat": "S04",
+        "frame": 0,
+        "t_s": 0.0,
+        "msec": 15932,
+        "unix": 1795870720.04833,
+        "window": {
+          "frames": 0,
+          "seconds": 0.0,
+          "rms_dbfs": -120.0,
+          "peak_dbfs": -120.0,
+          "zero_fraction": 0.0
+        }
+      },
+      {
+        "label": "Telescope scope ([F] PONDER/[F] EXIT)",
+        "beat": "S05",
+        "frame": 0,
+        "t_s": 0.0,
+        "msec": 21251,
+        "unix": 1795870725.36751,
+        "window": {
+          "frames": 0,
+          "seconds": 0.0,
+          "rms_dbfs": -120.0,
+          "peak_dbfs": -120.0,
+          "zero_fraction": 0.0
+        }
+      },
+      {
+        "label": "Den props: decoration_pedestal, gramophone",
+        "beat": "S07",
+        "frame": 0,
+        "t_s": 0.0,
+        "msec": 39944,
+        "unix": 1795870744.06152,
+        "window": {
+          "frames": 0,
+          "seconds": 0.0,
+          "rms_dbfs": -120.0,
+          "peak_dbfs": -120.0,
+          "zero_fraction": 0.0
+        }
+      },
+      {
+        "label": "Den map table + first-class Cleanout selection ([F], [C])",
+        "beat": "S08",
+        "frame": 0,
+        "t_s": 0.0,
+        "msec": 42642,
+        "unix": 1795870746.7587,
+        "window": {
+          "frames": 0,
+          "seconds": 0.0,
+          "rms_dbfs": -120.0,
+          "peak_dbfs": -120.0,
+          "zero_fraction": 0.0
+        }
+      },
+      {
+        "label": "mission prep [F] READY (6 s countdown)",
+        "beat": "S09",
+        "frame": 0,
+        "t_s": 0.0,
+        "msec": 55076,
+        "unix": 1795870759.19374,
+        "window": {
+          "frames": 0,
+          "seconds": 0.0,
+          "rms_dbfs": -120.0,
+          "peak_dbfs": -120.0,
+          "zero_fraction": 0.0
+        }
+      },
+      {
+        "label": "loading screen during the deploy (progress 0.33)",
+        "beat": "S10",
+        "frame": 0,
+        "t_s": 0.0,
+        "msec": 55129,
+        "unix": 1795870759.24629,
+        "window": {
+          "frames": 0,
+          "seconds": 0.0,
+          "rms_dbfs": -120.0,
+          "peak_dbfs": -120.0,
+          "zero_fraction": 0.0
+        }
+      },
+      {
+        "label": "briefing letter over the safe room (SPACE/ESC)",
+        "beat": "S11",
+        "frame": 0,
+        "t_s": 0.0,
+        "msec": 73576,
+        "unix": 1795870777.69382,
+        "window": {
+          "frames": 0,
+          "seconds": 0.0,
+          "rms_dbfs": -120.0,
+          "peak_dbfs": -120.0,
+          "zero_fraction": 0.0
+        }
+      },
+      {
+        "label": "pause menu (real pause key)",
+        "beat": "S27",
+        "frame": 0,
+        "t_s": 0.0,
+        "msec": 88963,
+        "unix": 1795870793.08121,
+        "window": {}
+      }
+    ],
+    "stopped_at_utc": "2026-11-28T12:59:53",
+    "files": [
+      "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/played-route/build/qa/route_driver/cleanout_route/audio.json"
+    ],
+    "sidecar": "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/played-route/build/qa/route_driver/cleanout_route/audio.json",
+    "mark_kind": "mark_beat",
+    "route_claim": "none",
+    "note": "mark_beat() is called only for the beats this driver actually drove/captured."
+  },
+  "finished_at_utc": "2026-11-28T12:59:53",
+  "status": "blocked_partial"
+}

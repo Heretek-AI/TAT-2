@@ -4,8 +4,9 @@
 captured** by one continuous input driver — 6 `driven`, 5 `driven_partial` — with
 3 measured blockers, 4 measured-unreachable NPC beats and 9 not attempted.
 **Row tokens emitted: 0.** Headless only (no Xvfb, no Vulkan, no screenshot);
-one Godot at a time under the shared flock. Measured on `900f8eb` (Phase 3 base +
-Cleanout first-class, route driver/scorer/telescope).
+one Godot at a time under the shared flock. Measured on **`1f3a50d`**
+(`900f8eb` + this lane's driver/scorer commit) with `git.dirty=false`; the
+manifest excludes the driver's own evidence paths from the source-dirty signal.
 
 **Why this is not a played route.** `route_claim="played"` requires all 27 beats
 fully driven; this run stops at 11 captured. The driver never teleports, never

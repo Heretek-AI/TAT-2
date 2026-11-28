@@ -26,7 +26,7 @@ TAT-2 Loc: reverse map built from sources.json (3404 keys)
 TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
 INPUT_TABLE source=generated rows=91 shipping=91 actions=52
 INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
-ROUTE_DRIVER start segment=den_telescope tag=den_telescope driver_seed=1025051536 route_claim=none head=da780d4
+ROUTE_DRIVER start segment=den_telescope tag=den_telescope driver_seed=1025051536 route_claim=none head=1f3a50d
 AUDIO_CAPTURE start enabled=false reason=dummy_audio_driver driver=Dummy rate=44100
 TAT-2 HUD build: id=1 root_children=28 hp_frame=1 hp_fill=1 objectives=1
 WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'midnight_clear_thieves_den'
@@ -54,8 +54,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [3] _build_one_draw_item (res://src/core/level_loader.gd:5230)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7713)
 MIRROR_SPLIT mp=/Game/Art/Environment/Props/Furniture/Tables/SM_DiningTable_2m_End mode=native pos=1 neg=1 surfaces=3 bytes=0
-AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=334
-ROUGHNESS_BAKE count=34 pixels=25690112 ms=1871 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=146 hull=146 authored_elements=119 complex=17 no_record=0 prims=61 convex=147 absent=0 no_collision=10 query_only=0 reduced=3 shapes_per_instance_avg=1.25 elements=256 load_ms=348
+ROUGHNESS_BAKE count=34 pixels=25690112 ms=1855 bytes=34253468 hits=6 (L8 low+g*(high-low), full-res, process cache)
 PARITY_ONLY load: skipped_expansion_meshes=0 skipped_expansion_caps=0 skipped_expansion_nodes=0 rules={}
 MESH_RECON authored=2440 applied=2434 duplicate=5 name_skipped=0 wardbox=0 moonshape=0 clamp=1 clamp_worst=1.38x mirrored=2 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0 mirrored_bases=2 mirrored_multimesh=1 mirrored_single=1 mirrored_splits=2 mirrored_cull_front=0 mirrored_cull_disabled=0 mirrored_mesh_bytes=36000 mirrored_mesh_count=1 mirrored_unbaked=0
 MIRROR_RECON bases=2 multimesh=1 single=1 split=2 cull_front=0 cull_disabled=0 baked=1 baked_bytes=36000 unbaked=0 suppressed=0 ok=true
@@ -101,5 +101,8 @@ ROUTE_DRIVER PASS: [F] EXIT does not teleport the body
 ROUTE_DRIVER PASS: [F] EXIT leaves the player inside the Den (not the roof)
 ROUTE_DRIVER PASS: player walks away after [F] EXIT (4.89 m)
 AUDIO_CAPTURE stop enabled=false reason=dummy_audio_driver frames=0
-ROUTE_DRIVER_DONE status=partial_driven segment=den_telescope beats=27 driven=1 partial=1 unreachable=4 not_attempted=21 mark_calls=2 checks=12 fails=0 route_claim=none driver_seed=1025051536 manifest=/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/route-code/docs/reports/logs/p0b-route-driver/den_telescope/manifest.json
-ROUTE_DRIVER_WALL tag=den_telescope seed=1025051536 exit=0 wall=14s (headless, no GPU render)
+ROUTE_DRIVER_DONE status=blocked_partial segment=den_telescope beats=27 driven=1 partial=1 blocked=0 unreachable=4 not_attempted=21 captured=2 mark_calls=2 checks=12 fails=0 route_claim=none driver_seed=1025051536 manifest=/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/played-route/docs/reports/logs/p0b-route-driver/den_telescope/manifest.json
+WARNING: 4 ObjectDB instances were leaked at exit (run with `--verbose` for details).
+   at: cleanup (core/object/object.cpp:2536)
+ERROR: 2 resources still in use at exit (run with --verbose for details).
+   at: clear (core/io/resource.cpp:822)

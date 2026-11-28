@@ -27,6 +27,13 @@
 # and `probe_cubemap` (37) — for 52 gates. Their pinned logs predated the
 # 17:06 run; these gates now produce them in-run. No other gate body changes.
 #
+# Phase 3 test-manifest/errscan lane (2026-11-27) adds six gates — the
+# `gate_manifest` orphan check, the `e2e_errscan` engine-error ceiling scan,
+# and the four restored orphans `test_roof_collision` (authored + aabb modes),
+# `probe_den_window`, `probe_mirror_split` and `probe_statetree_shadow` — for
+# 58 gates. Every `game/tests/**/*.gd` is now a gate or an explicit retired
+# entry in `build/qa/retired_tests.txt`.
+#
 # Rules encoded here (same contract as P0a/P0b/P1)
 # ------------------------------------------------
 #   * Never hold the Godot lock across the runner. Each Godot invocation takes
@@ -104,6 +111,13 @@ _open_log() { # <name> <log> <command...>
 	local name="${1:?gate name}"
 	local log="${2:?gate log path}"
 	shift 2
+	# Never open/truncate through a symlink: a planted link would let a gate
+	# rewrite a tracked file or another lane's evidence. The runner owns a
+	# regular file per gate under $OUT.
+	if [ -L "$log" ]; then
+		say "FINAL_GATES FAIL gate=$name log=$log is a symlink; refusing to open it"
+		exit 5
+	fi
 	{
 		printf '== FINAL_GATE %s\n' "$name"
 		printf 'COMMAND:'
@@ -179,6 +193,13 @@ gate_marker_re() { # gate_marker_re <name> <log> <extended-regex marker> <comman
 	fi
 	say "FINAL_MARKER name=$name marker=$marker"
 }
+
+# 0. Static test manifest: every game/tests/**/*.gd is reachable from
+#    run_tests.gd, an E2E tier or this runner (or is an explicit retired entry
+#    in build/qa/retired_tests.txt). Cheap and lock-free; run it first so an
+#    orphan test fails before any Godot work.
+gate_marker gate_manifest "$OUT/gate_manifest.log" "GATE_MANIFEST: PASS" \
+	python3 build/qa/gate_manifest.py
 
 # 1. Script compile + the two suite runners.
 #    The compile marker is a regex because the checked count grows with every
@@ -268,6 +289,14 @@ gate_marker probe_niagara "$OUT/probe_niagara.log" "NIAGARA_PROBE PASS" \
 	flock "$LOCK" tools/godot --headless --path game \
 	--script res://tests/probe_niagara.gd
 
+# W9-P4 S1 shadow trace: the StateTree interpreter must run (shadow mode) and
+# the probe must pass. `TAT2_STATETREE` stays `off` for the game; this single
+# gate sets it explicitly to prove the shadow path still executes.
+gate_marker_re probe_statetree_shadow "$OUT/probe_statetree_shadow.log" \
+	'^PROBE PASS fails=0$' \
+	env TAT2_STATETREE=shadow flock "$LOCK" tools/godot --headless --path game \
+	--script res://tests/probe_statetree_shadow.gd
+
 gate_marker probe_door_walk "$OUT/probe_door_walk.log" "DOORWALK PASS" \
 	flock "$LOCK" tools/godot --headless --path game \
 	--script res://tests/probe_door_walk.gd
@@ -279,6 +308,15 @@ gate_marker probe_viewmodel_truth "$OUT/probe_viewmodel_truth.log" "VIEWMODEL_TR
 gate_marker probe_geometry_placement "$OUT/probe_geometry_placement.log" "GEOM_PROBE PASS" \
 	flock "$LOCK" tools/godot --headless --path game \
 	--script res://tests/probe_geometry_placement.gd
+
+# P4.2 mirror-split data test (default fast Guildhall_Geometry gate; `--full`
+# is the integrator's perf-census run). It proves the bake math, the cull-front
+# fast path, the authored negative partition and the exact source-count
+# apportionment against the real generated payload.
+gate_marker_re probe_mirror_split "$OUT/probe_mirror_split.log" \
+	'^MIRROR_DATA_SUMMARY: fails=0 checks=39 mode=geometry$' \
+	flock "$LOCK" tools/godot --headless --path game \
+	--script res://tests/probe_mirror_split.gd
 
 gate_marker probe_blackjack_race "$OUT/probe_blackjack_race.log" "BLACKJACK_PROBE PASS" \
 	flock "$LOCK" tools/godot --headless --path game \
@@ -310,6 +348,38 @@ gate_marker test_beam_geometry "$OUT/test_beam_geometry.log" "BEAM_GEOMETRY_SUMM
 	flock "$LOCK" tools/godot --headless --path game \
 	--script res://tests/test_beam_geometry.gd
 
+# W5B/W6L roof collision policy. The probe is mode-independent (it asserts the
+# authored per-element hull union through AuthoredCollision), so run it under
+# BOTH loader modes. Each mode must print its own `fails=0` summary; the marker
+# is printed only after both modes pass.
+qa_test_roof_collision() {
+	local tmp
+	tmp="$(mktemp /tmp/opencode/tat2-roof.XXXXXX)" || return 1
+	printf '== mode TAT2_COLLISION=authored ==\n'
+	if ! env TAT2_COLLISION=authored flock "$LOCK" tools/godot --headless --path game \
+		--script res://tests/test_roof_collision.gd >"$tmp" 2>&1; then
+		cat "$tmp"; rm -f "$tmp"; return 1
+	fi
+	cat "$tmp"
+	if ! grep -q 'ROOF_COLLISION_SUMMARY: fails=0' "$tmp"; then
+		rm -f "$tmp"; return 1
+	fi
+	printf '== mode TAT2_COLLISION=aabb ==\n'
+	if ! env TAT2_COLLISION=aabb flock "$LOCK" tools/godot --headless --path game \
+		--script res://tests/test_roof_collision.gd >"$tmp" 2>&1; then
+		cat "$tmp"; rm -f "$tmp"; return 1
+	fi
+	cat "$tmp"
+	if ! grep -q 'ROOF_COLLISION_SUMMARY: fails=0' "$tmp"; then
+		rm -f "$tmp"; return 1
+	fi
+	rm -f "$tmp"
+	printf 'ROOF_COLLISION_MODES PASS authored=0 aabb=0\n'
+}
+gate_marker test_roof_collision "$OUT/test_roof_collision.log" \
+	"ROOF_COLLISION_MODES PASS authored=0 aabb=0" \
+	qa_test_roof_collision
+
 # 5. Leak probe. The correct path is res://probe_leak.gd (not tests/), and the
 #    7 teardown texture-RID warnings are silenced by TAT2_NO_DEN_PROBE=1.
 gate_marker probe_leak "$OUT/probe_leak.log" "PROBE start" \
@@ -333,6 +403,13 @@ gate_marker e2e_p2 "$OUT/e2e_p2.log" \
 	flock "$LOCK" tools/godot --headless --path game \
 	--script res://tests/e2e/run_e2e_tests.gd -- --tier=p2
 
+# Engine-error scan over the three big Godot logs. `build/qa/e2e_errscan.sh`
+# pins an explicit allowlist with per-message maxima and per-log ceilings
+# (e2e 31 / e2e_a2 1 / run_tests 482). Any new `ERROR:` message fails, and a
+# count above a ceiling fails; a lower count is fine.
+gate_marker e2e_errscan "$OUT/e2e_errscan.log" "E2E_ERRSCAN PASS" \
+	bash build/qa/e2e_errscan.sh --logdir "$OUT"
+
 gate_marker parity_only "$OUT/parity_only.log" \
 	"PARITY_ONLY_SUMMARY: fails=0 passed=60" \
 	flock "$LOCK" tools/godot --headless --path game \
@@ -353,8 +430,10 @@ gate_marker test_audio_control "$OUT/test_audio_control.log" \
 
 # Phase 3 §2.5.1: suites 122-124 were ratchet-pinned but invoked by no runner
 # gate before Phase 3 (their logs predated the 17:06 run). Restore them here so
-# every pinned value is reproduced by this runner. The counts are the measured
-# floors (a suite may add checks, never drop them).
+# every pinned value is reproduced by this runner. gate_marker greps the exact
+# literal summary, so these counts are exact markers, not floors: a suite that
+# adds a check must update this line (the ratchet independently treats the same
+# numbers as `>=` floors).
 gate_marker test_vo_director "$OUT/test_vo_director.log" \
 	"VO_DIRECTOR_SUMMARY: fails=0 checks=53" \
 	flock "$LOCK" tools/godot --headless --path game \
@@ -384,6 +463,13 @@ gate_marker test_capture_p5_filter "$OUT/test_capture_p5_filter.log" \
 gate_marker probe_den_spawn "$OUT/probe_den_spawn.log" "DEN_SPAWN PASS checks=9 fails=0" \
 	flock "$LOCK" tools/godot --headless --path game \
 	--script res://tests/probe_den_spawn.gd
+
+# W9-P2 B3: Den telescope ponder is camera-only (never writes the player) and
+# the west-window escape is contained, with the blocker as defense in depth.
+gate_marker_re probe_den_window "$OUT/probe_den_window.log" \
+	'^DEN_WINDOW PASS checks=34$' \
+	flock "$LOCK" tools/godot --headless --path game \
+	--script res://tests/probe_den_window.gd
 
 # 8. Port capture harness (headless, no GPU): the wrapper takes the lock itself
 #    and writes its dry-run/self-test evidence under $OUT via P0B_EVIDENCE_DIR.

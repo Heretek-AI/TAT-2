@@ -100,7 +100,11 @@ LOG_GATES = {
             r"fixed=(\d+) unexpected_fail=0"
         ),
         "minimums": [],
-        "zero_groups": (1, 2, 3),
+        "zero_groups": (
+            (1, "expected_fail"),
+            (2, "expected_delta"),
+            (3, "fixed"),
+        ),
         "passes_key": None,
     },
     # P0b parity-only governance: every content-override rule is classified and
@@ -391,9 +395,9 @@ LOG_GATES = {
         "minimums": [(1, "cards")],
         "passes_key": None,
     },
-    # `make test-producers` + the parse_nav fixture. The two producer suites
-    # print their own check counts; the seven nav cases are individual PASS
-    # lines, counted by `count_patterns` below.
+    # `make test-producers` + the parse_nav fixture. Each producer suite has an
+    # exact summary line, and the seven nav cases are bound to their exact case
+    # names (not a bare `^PASS`, which an unrelated added line could inflate).
     "producer_tests": {
         "command": "make test-producers && python3 build/qa/test_parse_nav.py",
         "pattern": lambda g: (
@@ -402,7 +406,14 @@ LOG_GATES = {
             r"PRODUCER_TESTS PASS"
         ),
         "minimums": [(1, "stealthball_checks"), (2, "ui_pixel_checks")],
-        "count_patterns": [(r"(?m)^PASS (?!:)", "nav_checks")],
+        "count_patterns": [
+            (
+                r"(?m)^PASS (?:positive merge \+ per-map areas|missing supported_areas|"
+                r"area 63 is not Default|7-vertex poly|NavArea_Null poly|"
+                r"missing nav_data_config|one-way direction)$",
+                "nav_checks",
+            )
+        ],
         "passes_key": None,
     },
     "probe_device_meshes": {
@@ -415,8 +426,10 @@ LOG_GATES = {
             (1, "checks"),
             (2, "actors"),
             (3, "visible_parts"),
-            (4, "hidden_parts"),
         ],
+        # hidden_parts is an exact-zero pin, not a floor: one hidden part is a
+        # regression even though 1 >= 0.
+        "zero_groups": ((4, "hidden_parts"),),
         "passes_key": None,
     },
     "probe_gc_destruction": {
@@ -449,7 +462,10 @@ LOG_GATES = {
         "pattern": lambda g: (
             r"GEOM_PROBE checks=(\d+) fails=0 pending_regeneration=(\d+)"
         ),
-        "minimums": [(1, "checks"), (2, "pending_regeneration")],
+        "minimums": [(1, "checks")],
+        # pending_regeneration is an exact-zero pin: any positive value is a
+        # regeneration backlog, not a floor to exceed.
+        "zero_groups": ((2, "pending_regeneration"),),
         "passes_key": None,
     },
     "test_capture_p5_filter": {
@@ -476,6 +492,66 @@ LOG_GATES = {
         "minimums": [(1, "checks")],
         "passes_key": None,
     },
+    # Phase 3 test-manifest: every game/tests/**/*.gd is reachable from
+    # run_tests.gd, an E2E tier or the final runner, or is an explicit retired
+    # entry. `tracked`/`retired` are floors (a new test must be classified;
+    # dropping a retired entry must be reviewed); `orphans` is an exact zero.
+    "gate_manifest": {
+        "command": "python3 build/qa/gate_manifest.py",
+        "pattern": lambda g: (
+            r"GATE_MANIFEST: tracked=(\d+) reachable=(\d+) retired=(\d+) orphans=(\d+)"
+        ),
+        "minimums": [(1, "tracked"), (3, "retired")],
+        "zero_groups": ((4, "orphans"),),
+        "passes_key": None,
+    },
+    # Phase 3 engine-error ceiling scan. The allowlist and the 31/1/482
+    # ceilings live in build/qa/e2e_errscan.sh + its allowlist; `new` (an
+    # unlisted ERROR: message) is an exact zero.
+    "e2e_errscan": {
+        "command": "bash build/qa/e2e_errscan.sh --logdir docs/reports/logs/final",
+        "pattern": lambda g: (
+            r"E2E_ERRSCAN PASS e2e=(\d+)/(\d+) e2e_a2=(\d+)/(\d+) "
+            r"run_tests=(\d+)/(\d+) new=(\d+)"
+        ),
+        "minimums": [],
+        "zero_groups": ((7, "new"),),
+        "passes_key": None,
+    },
+    # W5B/W6L roof collision policy, run under both loader modes. Each mode
+    # prints its own `fails=0` summary; the wrapper marker proves both ran.
+    "test_roof_collision": {
+        "command": (
+            "TAT2_COLLISION=authored tools/godot --headless --path game "
+            "--script res://tests/test_roof_collision.gd && "
+            "TAT2_COLLISION=aabb tools/godot --headless --path game "
+            "--script res://tests/test_roof_collision.gd"
+        ),
+        "pattern": lambda g: (
+            r"ROOF_COLLISION_SUMMARY: fails=0[\s\S]*"
+            r"ROOF_COLLISION_SUMMARY: fails=0[\s\S]*"
+            r"ROOF_COLLISION_MODES PASS authored=0 aabb=0"
+        ),
+        "minimums": [],
+        "count_patterns": [(r"(?m)^PASS:", "checks")],
+        "passes_key": None,
+    },
+    # W9-P2 B3 Den telescope/west-window probe.
+    "probe_den_window": {
+        "command": "tools/godot --headless --path game --script res://tests/probe_den_window.gd",
+        "pattern": lambda g: r"(?m)^DEN_WINDOW PASS checks=(\d+)$",
+        "minimums": [(1, "checks")],
+        "passes_key": None,
+    },
+    # P4.2 mirror-split data test (default fast Guildhall_Geometry gate).
+    "probe_mirror_split": {
+        "command": "tools/godot --headless --path game --script res://tests/probe_mirror_split.gd",
+        "pattern": lambda g: (
+            r"(?m)^MIRROR_DATA_SUMMARY: fails=0 checks=(\d+) mode=geometry$"
+        ),
+        "minimums": [(1, "checks")],
+        "passes_key": None,
+    },
 }
 
 # Probe logs have no numeric floor: a named marker and a clean run are the gate.
@@ -491,6 +567,12 @@ PROBE_GATES = {
     "probe_niagara": (
         "NIAGARA_PROBE PASS",
         "tools/godot --headless --path game --script res://tests/probe_niagara.gd",
+    ),
+    # W9-P4 S1 shadow trace: the probe refuses to run unless the interpreter is
+    # enabled, so the command pins TAT2_STATETREE=shadow explicitly.
+    "probe_statetree_shadow": (
+        "PROBE PASS fails=0",
+        "TAT2_STATETREE=shadow tools/godot --headless --path game --script res://tests/probe_statetree_shadow.gd",
     ),
     "probe_blackjack_race": (
         "BLACKJACK_PROBE PASS",
@@ -576,6 +658,172 @@ PROBE_GATES = {
     ),
 }
 
+# --- runner <-> ratchet binding self-check --------------------------------
+# Every gate `build/qa/run_final_gates.sh` invokes must be bound here to the
+# ratchet key(s) that prove it. This is a committed assertion, not a count
+# derived at runtime: deleting a runner gate, deleting a binding, pointing a
+# binding at the wrong log, or adding an unbound gate fails before the full
+# suite runs (the checker parses the runner; see `check_runner_bindings`).
+#
+# `gate_ratchet` maps to no in-run key because the runner truncates
+# `$OUT/gate_ratchet.log` *before* this checker reads it; the ratchet binds the
+# static tracked `gate_ratchet_poststamp.log` instead (STATIC_BINDINGS below),
+# and the in-run gate is enforced by its exit code.
+EXPECTED_RUNNER_GATE_COUNT = 58
+RUNNER_PATH = ROOT / "build/qa" / "run_final_gates.sh"
+RUNNER_GATE_BINDINGS: dict[str, tuple[str, ...]] = {
+    "gate_manifest": ("gate_manifest",),
+    "compile": ("compile",),
+    "run_tests": ("run_tests",),
+    "m2": ("m2",),
+    "probe_p1_safe": ("probe_p1_safe",),
+    "probe_p1_doors": ("probe_p1_doors",),
+    "probe_p1_beams": ("probe_p1_beams",),
+    "probe_landscape_mask": ("probe_landscape_mask",),
+    "probe_p1_ward": ("probe_p1_ward",),
+    "probe_p1_street": ("probe_p1_street",),
+    "probe_guard_positions_guildhall": ("probe_guard_positions_guildhall",),
+    "probe_guard_positions_old_manor": ("probe_guard_positions_old_manor",),
+    "probe_collision_authored": ("probe_collision", "probe_collision_maps"),
+    "probe_lock_inventory": ("lock_inventory",),
+    "nav_runtime_probe": ("nav_runtime_probe",),
+    "probe_niagara": ("probe_niagara",),
+    "probe_statetree_shadow": ("probe_statetree_shadow",),
+    "probe_door_walk": ("probe_door_walk",),
+    "probe_viewmodel_truth": ("probe_viewmodel_truth",),
+    "probe_geometry_placement": ("probe_geometry_placement",),
+    "probe_mirror_split": ("probe_mirror_split",),
+    "probe_blackjack_race": ("probe_blackjack_race",),
+    "probe_device_meshes": ("probe_device_meshes",),
+    "probe_gc_destruction": ("probe_gc_destruction",),
+    "test_gc_break_trigger": ("test_gc_break_trigger",),
+    "test_w10a2_civilian": ("test_w10a2_civilian",),
+    "test_w10a2_guard_placement": ("test_w10a2_guard_placement",),
+    "test_beam_geometry": ("beam_geometry",),
+    "test_roof_collision": ("test_roof_collision",),
+    "probe_leak": ("probe_leak",),
+    "e2e": ("e2e",),
+    "e2e_a2": ("e2e_a2",),
+    "e2e_p2": ("e2e_p2",),
+    "e2e_errscan": ("e2e_errscan",),
+    "parity_only": ("parity_only",),
+    "test_w10a2_cream": ("test_w10a2_cream",),
+    "test_audio_control": ("test_audio_control",),
+    "test_vo_director": ("test_vo_director",),
+    "probe_auto_exposure": ("probe_auto_exposure",),
+    "probe_cubemap": ("probe_cubemap",),
+    "probe_p5_ui": ("probe_p5_ui",),
+    "test_capture_p5_filter": ("test_capture_p5_filter",),
+    "probe_den_spawn": ("probe_den_spawn",),
+    "probe_den_window": ("probe_den_window",),
+    "p0b_capture_dry_run": ("p0b_capture_dry_run",),
+    "p0b_capture_self_test": ("p0b_capture_self_test",),
+    "p0b_manifest_validate": ("p0b_capture",),
+    "p0b_kf27_reference": ("p0b_kf27_reference",),
+    "p0b_route_self_test": ("p0b_route_self_test",),
+    "runtime_smoke": ("runtime_smoke",),
+    "runtime_smoke_scan": ("runtime_smoke_scan",),
+    "producer_tests": ("producer_tests",),
+    "string_audit": ("string_audit",),
+    "literal_greps": ("literal_greps",),
+    "audit": ("audit",),
+    "texture_cap": ("texture_cap",),
+    "perf_guard": ("perf_guard",),
+    "gate_ratchet": (),
+}
+# Ratchet keys that are deliberately bound to a static tracked log instead of a
+# runner gate's `$OUT` log.
+STATIC_BINDINGS: dict[str, str] = {
+    "gate_ratchet": (
+        "the runner truncates gate_ratchet.log before this checker reads it; "
+        "bound to the static tracked gate_ratchet_poststamp.log run"
+    ),
+}
+
+RUNNER_GATE_RE = re.compile(
+    r'^\s*(?:gate|gate_marker|gate_marker_re)\s+([a-z0-9_]+)\s+"\$OUT/([A-Za-z0-9_.-]+)"',
+    re.MULTILINE,
+)
+
+
+def check_runner_bindings(
+    evidence: dict, binding_keys: set[str], log_dir: Path
+) -> None:
+    """Assert the runner gate set and the ratchet binding set agree."""
+    if not RUNNER_PATH.is_file():
+        fail(f"missing runner {RUNNER_PATH.relative_to(ROOT)}")
+        return
+    text = RUNNER_PATH.read_text()
+    runner: dict[str, str] = {}
+    for match in RUNNER_GATE_RE.finditer(text):
+        name, log_name = match.group(1), match.group(2)
+        if name in runner:
+            fail(f"runner declares gate {name!r} more than once")
+        runner[name] = log_name
+
+    if len(runner) != EXPECTED_RUNNER_GATE_COUNT:
+        fail(
+            f"runner declares {len(runner)} gates, expected "
+            f"{EXPECTED_RUNNER_GATE_COUNT}; a gate was deleted or added without "
+            "updating check_gate_ratchet.py"
+        )
+
+    declared = set(RUNNER_GATE_BINDINGS)
+    parsed = set(runner)
+    for name in sorted(parsed - declared):
+        fail(
+            f"runner gate {name!r} has no binding in check_gate_ratchet.py "
+            "(add it to RUNNER_GATE_BINDINGS with its ratchet key)"
+        )
+    for name in sorted(declared - parsed):
+        fail(
+            f"RUNNER_GATE_BINDINGS names {name!r} but the runner no longer "
+            "declares that gate"
+        )
+
+    for name in sorted(parsed & declared):
+        for key in RUNNER_GATE_BINDINGS[name]:
+            if key not in binding_keys:
+                fail(
+                    f"runner gate {name!r} maps to unknown ratchet key {key!r} "
+                    "(no LOG_GATES/PROBE_GATES binding)"
+                )
+                continue
+            log_name = evidence.get(key)
+            if not log_name:
+                # The main loop already reports the missing evidence entry.
+                continue
+            expected_log = Path(str(log_name)).name
+            if expected_log != runner[name]:
+                fail(
+                    f"runner gate {name!r} writes {runner[name]!r} but ratchet "
+                    f"key {key!r} binds {expected_log!r}"
+                )
+
+    used = {key for keys in RUNNER_GATE_BINDINGS.values() for key in keys}
+    for key in sorted(binding_keys - used - set(STATIC_BINDINGS)):
+        fail(
+            f"ratchet binding {key!r} is not bound to any runner gate "
+            "and is not a declared static binding"
+        )
+    for key in sorted(set(STATIC_BINDINGS) - binding_keys):
+        fail(f"static binding {key!r} is not a LOG_GATES/PROBE_GATES key")
+
+    # The static bindings must still exist and be inside the evidence dir.
+    for key in sorted(STATIC_BINDINGS):
+        log_name = evidence.get(key)
+        if not log_name:
+            continue
+        path = ROOT / str(log_name) if "/" in str(log_name) else log_dir / str(log_name)
+        if not path.is_file():
+            fail(f"static binding {key!r} points at a missing log {path}")
+
+    print(
+        f"PASS: runner/binding self-check {len(runner)} gates, "
+        f"{len(binding_keys)} ratchet bindings"
+    )
+
+
 fails: list[str] = []
 
 
@@ -618,7 +866,16 @@ def main() -> int:
 
     # Structural invariants, derived from the gate names (not from counts).
     def get(gate: str, key: str) -> int:
-        return int((gates.get(gate) or {}).get(key, -1))
+        group = gates.get(gate)
+        if not isinstance(group, dict) or key not in group:
+            # Fail closed: a deleted pinned key must never fall through to a
+            # -1 default that makes every `captured >= floor` comparison pass.
+            fail(
+                f"missing pinned key {gate}.{key} in gate_ratchet.json "
+                "(fail closed; restore the key or re-measure the gate)"
+            )
+            return 0
+        return int(group[key])
 
     for gate in ("compile", "run_tests", "m2", "e2e"):
         if get(gate, "broken" if gate == "compile" else "fails") != 0:
@@ -686,15 +943,24 @@ def main() -> int:
             left, right = int(match.group(equal[0])), int(match.group(equal[1]))
             if left != right:
                 fail(f"{log_name}: {gate} passed {left} != total {right}")
-        for group in spec.get("zero_groups", ()):
+        for group, key in spec.get("zero_groups", ()):
             captured = int(match.group(group))
+            pinned = get(gate, key) if key else 0
             if captured != 0:
                 fail(
                     f"{log_name} records {gate} group {group}={captured}, expected 0 — "
                     f"run `{command}` and commit the fresh log"
                 )
+            elif pinned != 0:
+                fail(
+                    f"{gate}.{key}={pinned} must be an exact zero, not a floor — "
+                    "restore the 0 pin"
+                )
             else:
-                print(f"PASS: {log_name} records {gate} group {group}=0")
+                print(
+                    f"PASS: {log_name} records {gate} group {group}=0 "
+                    f"(pinned {gate}.{key}=0)"
+                )
         # A gate whose log proves N separate cases by one PASS line each (rather
         # than one numeric summary) can bind the case count with a regex.
         for count_re, key in spec.get("count_patterns", ()):
@@ -717,7 +983,7 @@ def main() -> int:
                 fail(f"{log_name}: {gate} coverage {left}/{right} is impossible")
         passes_key = spec["passes_key"]
         if passes_key:
-            floor = int(gates[gate][passes_key])
+            floor = get(gate, passes_key)
             passes = len(re.findall(r"^PASS\b", text, flags=re.MULTILINE))
             if passes >= floor:
                 print(f"PASS: {log_name} records {passes} PASS >= {floor}")
@@ -770,6 +1036,15 @@ def main() -> int:
             fail(f"{log_name} contains a SCRIPT ERROR; the probe must be clean")
         else:
             print(f"PASS: {log_name} records {marker}")
+
+    # Committed self-check: the runner gate set and the ratchet binding set must
+    # agree. This runs before the report check and needs no Godot run, so a gate
+    # or binding deleted on one side fails immediately.
+    check_runner_bindings(
+        evidence,
+        set(LOG_GATES) | set(PROBE_GATES) | {"probe_leak"},
+        log_dir,
+    )
 
     # The report must quote the ratchet values, so a stale report cannot claim a
     # green gate. Regexes are built from the JSON numbers.

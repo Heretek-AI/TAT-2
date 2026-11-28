@@ -340,6 +340,142 @@ LOG_GATES = {
         "minimums": [(1, "errors"), (2, "mission_ready")],
         "passes_key": None,
     },
+    # Phase 3 §2.5.2: numeric floors for the gates that previously had only an
+    # exit code or a bare marker. Every gate `build/qa/run_final_gates.sh`
+    # invokes now has a bound floor here or a marker in PROBE_GATES.
+    "probe_guard_positions_guildhall": {
+        "command": "tools/godot --headless --path game --script res://tests/probe_guard_positions.gd",
+        "pattern": lambda g: (
+            r"GUARD_CHECK PASS map=guildhall order=2 guards=(\d+) "
+            r"buckets=(\d+)/(\d+) lounge=(\d+) lounge_marker=C_20 "
+        ),
+        "minimums": [
+            (1, "guards"),
+            (2, "bucket_hit"),
+            (3, "bucket_total"),
+            (4, "lounge"),
+        ],
+        "passes_key": None,
+    },
+    "probe_guard_positions_old_manor": {
+        "command": "tools/godot --headless --path game --script res://tests/probe_guard_positions.gd -- --map=old_manor --order=3",
+        "pattern": lambda g: (
+            r"GUARD_CHECK PASS map=old_manor order=3 guards=(\d+) "
+            r"buckets=(\d+)/(\d+) lounge=(\d+) lounge_marker=- "
+        ),
+        "minimums": [
+            (1, "guards"),
+            (2, "bucket_hit"),
+            (3, "bucket_total"),
+            (4, "lounge"),
+        ],
+        "passes_key": None,
+    },
+    "probe_niagara": {
+        "command": "tools/godot --headless --path game --script res://tests/probe_niagara.gd",
+        "pattern": lambda g: (
+            r"NIAGARA_PROBE files=(\d+) authored=(\d+) active=(\d+) "
+            r"skipped=(\d+) systems=(\d+) "
+        ),
+        "minimums": [
+            (1, "files"),
+            (2, "authored"),
+            (3, "active"),
+            (5, "systems"),
+        ],
+        "passes_key": None,
+    },
+    "beam_geometry": {
+        "command": "tools/godot --headless --path game --script res://tests/test_beam_geometry.gd",
+        "pattern": lambda g: r"loader applied the beam fix (\d+) times",
+        "minimums": [(1, "cards")],
+        "passes_key": None,
+    },
+    # `make test-producers` + the parse_nav fixture. The two producer suites
+    # print their own check counts; the seven nav cases are individual PASS
+    # lines, counted by `count_patterns` below.
+    "producer_tests": {
+        "command": "make test-producers && python3 build/qa/test_parse_nav.py",
+        "pattern": lambda g: (
+            r"STEALTHBALL_ARRAY_TEST PASS checks=(\d+)[\s\S]*"
+            r"UI_PIXEL_STATS_TEST PASS checks=(\d+)[\s\S]*"
+            r"PRODUCER_TESTS PASS"
+        ),
+        "minimums": [(1, "stealthball_checks"), (2, "ui_pixel_checks")],
+        "count_patterns": [(r"(?m)^PASS (?!:)", "nav_checks")],
+        "passes_key": None,
+    },
+    "probe_device_meshes": {
+        "command": "tools/godot --headless --path game --script res://tests/probe_device_meshes.gd",
+        "pattern": lambda g: (
+            r"TURRET_PROBE PASS checks=(\d+) actors=(\d+) "
+            r"visible_parts=(\d+) hidden_parts=(\d+)"
+        ),
+        "minimums": [
+            (1, "checks"),
+            (2, "actors"),
+            (3, "visible_parts"),
+            (4, "hidden_parts"),
+        ],
+        "passes_key": None,
+    },
+    "probe_gc_destruction": {
+        "command": "tools/godot --headless --path game --script res://tests/probe_gc_destruction.gd",
+        "pattern": lambda g: r"GC_PROBE checks=(\d+) fails=0",
+        "minimums": [(1, "checks")],
+        "passes_key": None,
+    },
+    "test_gc_break_trigger": {
+        "command": "tools/godot --headless --path game --script res://tests/test_gc_break_trigger.gd",
+        "pattern": lambda g: r"GC_TRIGGER checks=(\d+) fails=0",
+        "minimums": [(1, "checks")],
+        "passes_key": None,
+    },
+    "test_w10a2_civilian": {
+        "command": "tools/godot --headless --path game --script res://tests/test_w10a2_civilian.gd",
+        "pattern": lambda g: r"W10A2_CIV_SUMMARY: fails=0 passed=(\d+) total=(\d+)",
+        "minimums": [(1, "passed"), (2, "total")],
+        "equal_groups": (1, 2),
+        "passes_key": None,
+    },
+    "test_w10a2_guard_placement": {
+        "command": "tools/godot --headless --path game --script res://tests/test_w10a2_guard_placement.gd",
+        "pattern": lambda g: r"GUARD_PLACEMENT_SUMMARY: fails=0",
+        "minimums": [],
+        "passes_key": "passes",
+    },
+    "probe_geometry_placement": {
+        "command": "tools/godot --headless --path game --script res://tests/probe_geometry_placement.gd",
+        "pattern": lambda g: (
+            r"GEOM_PROBE checks=(\d+) fails=0 pending_regeneration=(\d+)"
+        ),
+        "minimums": [(1, "checks"), (2, "pending_regeneration")],
+        "passes_key": None,
+    },
+    "test_capture_p5_filter": {
+        "command": "build/qa/test_capture_p5_ui_filter.sh",
+        "pattern": lambda g: r"CAPTURE_P5_FILTER_TEST PASS checks=(\d+)",
+        "minimums": [(1, "checks")],
+        "passes_key": None,
+    },
+    "p0b_capture_dry_run": {
+        "command": "P0B_EVIDENCE_DIR=docs/reports/logs/final build/qa/p0b_capture.sh --dry-run",
+        "pattern": lambda g: r"P0B_DRY_RUN [^\n]*poses=(\d+)",
+        "minimums": [(1, "poses")],
+        "passes_key": None,
+    },
+    "p0b_kf27_reference": {
+        "command": "build/qa/p0b_roi_stats.py --port docs/reference/clip_1795033698901/clean/KF27_03m27s_foyer_security_beam.jpg --pose upper_foyer --reference-only",
+        "pattern": lambda g: r"P0B_KF27_REF pose=upper_foyer met=(\d+)/(\d+)",
+        "minimums": [(1, "met_num"), (2, "met_den")],
+        "passes_key": None,
+    },
+    "runtime_smoke_scan": {
+        "command": "build/qa/test_runtime_smoke_scan.sh",
+        "pattern": lambda g: r"RUNTIME_SMOKE_SCAN_TEST PASS checks=(\d+) fails=0",
+        "minimums": [(1, "checks")],
+        "passes_key": None,
+    },
 }
 
 # Probe logs have no numeric floor: a named marker and a clean run are the gate.
@@ -428,6 +564,15 @@ PROBE_GATES = {
     "p0b_kf27_reference": (
         "P0B_KF27_REF pose=upper_foyer met=9/9",
         "build/qa/p0b_roi_stats.py --port docs/reference/clip_1795033698901/clean/KF27_03m27s_foyer_security_beam.jpg --pose upper_foyer --reference-only",
+    ),
+    # The ratchet gate itself. It cannot bind to the runner's in-run
+    # `gate_ratchet.log`: the runner truncates that file while opening the gate,
+    # *before* this checker runs, so a self-read would be circular. It binds to
+    # the static tracked `gate_ratchet_poststamp.log` (a real `make gate-ratchet`
+    # PASS output) instead. The in-run gate is enforced by its exit code.
+    "gate_ratchet": (
+        "GATE_RATCHET: PASS",
+        "make gate-ratchet",
     ),
 }
 
@@ -550,6 +695,18 @@ def main() -> int:
                 )
             else:
                 print(f"PASS: {log_name} records {gate} group {group}=0")
+        # A gate whose log proves N separate cases by one PASS line each (rather
+        # than one numeric summary) can bind the case count with a regex.
+        for count_re, key in spec.get("count_patterns", ()):
+            captured = len(re.findall(count_re, text))
+            floor = get(gate, key)
+            if captured < floor:
+                fail(
+                    f"{log_name} records {gate}.{key}={captured}, below the floor "
+                    f"{floor} — run `{command}` and commit the fresh log"
+                )
+            else:
+                print(f"PASS: {log_name} records {gate}.{key}={captured} >= {floor}")
         num_le_den = spec.get("num_le_den")
         if num_le_den:
             left, right = (

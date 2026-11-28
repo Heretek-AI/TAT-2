@@ -1,7 +1,7 @@
 # Handoff — Thick As Thieves Godot 4.7.2 port (next session)
 
 **Repo:** `/home/john/Projects/TAT-2`
-**Current tip:** `5dadcfc` — local `main` = `origin/main` (pushed).
+**Current tip:** `101fc91` — local `main` = `origin/main` (pushed).
 **Measured code/gate head:** `37bb69e`; the final 49-gate run was made at its
 docs pre-stamp `60474c0` (code identical). Evidence commit `5a66567`; final
 audit `5dadcfc`.
@@ -68,9 +68,9 @@ texture cap **1567/796/1/0**.
 | parity-only | **60/60**, 11 rules all `parity_restoration` |
 | cream 119 | **GREEN**, `passes=5` |
 | audio 121 | **123/0** |
-| VO director 122 | **53/0** |
-| AEM 123 | **77/0**, no PENDING |
-| cubemap 124 | **37/0**, no PENDING; `CUBEMAP_ORIENT` daylight WARN |
+| VO director 122 | **53/0** † |
+| AEM 123 | **77/0**, no PENDING † |
+| cubemap 124 | **37/0**, no PENDING; `CUBEMAP_ORIENT` daylight WARN † |
 | P5 UI | **54/0**; `GEM_PAYLOAD present=true: layers=21` |
 | Den spawn | **9/0**, `source=authored` |
 | capture harness | dry-run `poses=7`; self-test **23/0**; KF27 **9/9** (reference-only) |
@@ -80,8 +80,17 @@ texture cap **1567/796/1/0**.
 | audit / texture / perf / ratchet | **PASS** / 796 capped, 1 alpha, 0 offenders / **78/78** / **PASS** |
 | string audit | 311 routed / 199 authored / **112** invented (ceiling 112) |
 
+† **Carried forward, not reproduced by the committed 49-gate runner.** These
+three counts come from the standalone logs `test_vo_director.log`,
+`probe_auto_exposure.log` and `probe_cubemap.log`, written at **14:51** — before
+the 14:52 merge and ~2 h 15 min before the 17:06 run. The three subjects now run
+transitively inside `run_tests` suites 122/123/124, and those suites print no
+per-suite count, so the 49-gate run itself does not regenerate these numbers. A
+re-run of the three probes is an open Phase 2.5.1 item.
+
 The in-run `docs/reports/logs/final/gate_ratchet.log` is the runner's own
-wrapped log (`sha256 7d859b97…`, mtime 17:28:55). Do **not** overwrite it with a
+wrapped log (`sha256 7d859b97…`; its internal `FINISHED:` stamp is 17:28:55 and
+its filesystem mtime is 17:30:01). Do **not** overwrite it with a
 post-stamp run; redirect any later ratchet check to
 `gate_ratchet_poststamp.log`.
 

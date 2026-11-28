@@ -1,3 +1,5 @@
+> **SUPERSEDED — see [docs/HANDOFF_NEXT_AGENT.md](HANDOFF_NEXT_AGENT.md).**
+
 # `omo` (`ulw`) Master Handoff: Complete the Official-Footage Reference Baseline
 
 > **How to launch this in standalone `omo` (pi coding agent):**

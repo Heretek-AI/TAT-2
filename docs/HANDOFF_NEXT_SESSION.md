@@ -1,3 +1,5 @@
+> **SUPERSEDED — see [docs/HANDOFF_NEXT_AGENT.md](HANDOFF_NEXT_AGENT.md).**
+
 # TAT-2 — Next Session Handoff (2026-11-18)
 
 > **Superseded for current state:** see [`docs/HANDOFF_NEXT_AGENT.md`](HANDOFF_NEXT_AGENT.md) (2026-11-23, HEAD `a410adc`). That file carries the current gates, open items and operational hazards; this one is kept for history.

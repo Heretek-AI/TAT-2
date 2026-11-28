@@ -16,14 +16,14 @@ E2E tiers.
 
 | Gate | Result |
 |---|---|
-| GDScript compile (`tools/check_scripts_compile.gd`) | **217 scripts, 0 broken** |
-| Unit/integration (`tests/run_tests.gd`) | **324 checks, fails=0** (suites numbered to 121) |
+| GDScript compile (`tools/check_scripts_compile.gd`) | **228 scripts, 0 broken** |
+| Unit/integration (`tests/run_tests.gd`) | **327 checks, fails=0** (suites numbered to 124) |
 | M2 traversal/tools (`tests/test_m2_player.gd`) | **fails=0** (12) |
 | E2E (`tests/e2e/run_e2e_tests.gd`, tiers 1–4 + `s2` + `a2`) | **300/300** (tier 1: 117) |
 | Door walk · viewmodel truth · Niagara · leak probe | **PASS** |
-| Staged-route self-test (`build/qa/p0b_route.sh --self-test`) | **62/62**, in the 45-gate set (Phase 0b) |
+| Staged-route self-test (`build/qa/p0b_route.sh --self-test`) | **62/62**, in the 49-gate set (added Phase 0a, measured in Phase 0b) |
 | Steam manifest + content audit (`make audit`) | exit 0, fail-closed tracked baseline, disk-backed coverage 99.7 % (12660/12703), 13/13 content groups |
-| Gate ratchet (`make gate-ratchet`) | **PASS** — floors verified against committed logs at `912a481` (45 gates) |
+| Gate ratchet (`make gate-ratchet`) | **PASS** — floors verified against committed logs at `37bb69e` (49 gates, run `60474c0`) |
 
 Not yet measured: the perf matrix (no publishable FPS run) and the editor's
 per-process VRAM. Do not quote frame rates from any older run.
@@ -56,7 +56,7 @@ builds are documented in [`docs/ANDROID.md`](docs/ANDROID.md).
 | Command | Purpose |
 |---|---|
 | `make run` | Launch the desktop client (`F3` = FPS/draw-call overlay) |
-| `make test` | Headless integration run (324 checks) |
+| `make test` | Headless integration run (327 checks) |
 | `make audit` | Fail-closed gate: texture cap, mount/disk coverage, 13 content domains, producer output hashes, `errors.log` marker, freshness |
 | `make gate-ratchet` | Assert the gate floors in `tools/gate_ratchet.json` against the committed logs in `docs/reports/logs/` |
 | `make audit-bootstrap` | Explicit first run; writes the tracked `tools/audit_baseline.json` |

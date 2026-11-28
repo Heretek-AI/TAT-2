@@ -1,3 +1,5 @@
+> **SUPERSEDED — by [docs/reports/phase3-plan-20261127.md](phase3-plan-20261127.md).**
+
 # TAT-2 next phases — execution plan (2026-11-27)
 
 **Status:** HEAD `912a481` = `origin/main`; **measured gate baseline `912a481`

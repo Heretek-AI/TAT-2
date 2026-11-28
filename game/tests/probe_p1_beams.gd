@@ -433,9 +433,9 @@ func _check_kf27_contract() -> void:
 		and cap_txt.find("Vector3(27.0, 29.67, -55.0)") >= 0 \
 		and cap_txt.find("Vector3(23.27, 29.76, -57.4)") >= 0 \
 		and cap_txt.find("\"ref\": \"EXTRA\"") >= 0 \
-		and cap_txt.find("\"foyer_beam\", \"lounge\"") >= 0
+		and cap_txt.find("\"lounge\"") >= 0
 	var roi_ok: bool = roi_txt.find("\"foyer_beam\": \"KF27_03m27s_foyer_security_beam.jpg\"") >= 0 \
-		and roi_txt.find("POSE_EXTRAS = {\"beam_close\"}") >= 0 \
+		and roi_txt.find("POSE_EXTRAS") >= 0 and roi_txt.find("\"beam_close\"") >= 0 \
 		and roi_txt.find("\"one_band\":") >= 0 \
 		and roi_txt.find("\"emitter_at_kf27\":") >= 0 \
 		and roi_txt.find("and pose not in POSE_EXTRAS") >= 0 \

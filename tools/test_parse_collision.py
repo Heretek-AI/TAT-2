@@ -23,7 +23,13 @@ ROOT = Path(__file__).resolve().parent.parent
 PRODUCER = ROOT / "tools" / "parse_collision.py"
 EXTRACTED = ROOT / "extracted"
 
-# Measured 2026-11-25 over all 12,541 extracted/json/*.json dumps.
+# Measured 2026-11-25 over all 12,541 extracted/json/*.json dumps, then raised
+# to 12,545 on 2026-11-28: the Phase 3B Destructibles json stage (`make json`,
+# `--filter 'Destructibles/'`) added exactly four package dumps under
+# extracted/json/Destructibles/GeometryCollections/ (GC_ChestTrunkALid,
+# GC_AppleA, GC_BottleWineA, GC_BottleWineB). Only the scanned-file count moved:
+# a GC package carries no StaticMesh BodySetup, so meshes/body_setups/elements
+# and the nav census are unchanged and every other pin below stays as measured.
 MEASURED_COUNTS = {
     "meshes": 1992,
     "body_setups": 2935,
@@ -43,7 +49,7 @@ MEASURED_COUNTS = {
     "nav_collision_packages": 1977,
     "nav_collision_packages_with_area_data": 0,
     "nav_collision_packages_without_simple_collision": 330,
-    "files_scanned": 12541,
+    "files_scanned": 12545,
     "non_package_documents": 0,
 }
 

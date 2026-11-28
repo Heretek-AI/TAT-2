@@ -6,7 +6,7 @@ in **23m19s** (1399 s), from a clean worktree
 (`uncommitted_entries_at_start: 0`). This is the Phase 2.5 gate-integrity
 baseline: the three previously carried-forward suites are now real runner
 gates, the test manifest and engine-error scan are gates, and the four
-restored orphans run in the gun. No GPU/Vulkan/Xvfb step was run, no producer
+restored orphans run as gates. No GPU/Vulkan/Xvfb step was run, no producer
 or `make normalize` was run, and no gate log or ratchet floor was lowered.
 The 58/58 measurement remains at `5857589`; the later round-3 commits are
 tooling/evidence only (errscan footer + minimum totals, the ratchet
@@ -204,19 +204,25 @@ and the round-2 set; committed logs untouched):
   checker's real output and exit code, then `EXIT:` and `FINISHED:`. No line is
   hand-assembled. A plain `python3 -B tools/check_gate_ratchet.py` afterwards
   validates the finished artefact end to end. Measured for this artifact:
-  `STARTED: 2026-11-27T22:53:58-05:00`, `EXIT: 0`,
-  `FINISHED: 2026-11-27T22:53:58-05:00`, mtime `22:53:58.693`.
-- **Timestamp self-check (A1):** `tools/check_gate_ratchet.py` now rejects an
-  evidence log whose `FINISHED:` predates its `STARTED:`, whose mtime predates
-  `STARTED:`, or that carries only one of the pair. Controls in an isolated
-  scratch ROOT: `STARTED=2099…` → **FAIL**
-  `STARTED … is after FINISHED … — the artifact was assembled, not measured`;
-  mtime `2000-01-01` → **FAIL** `mtime … predates STARTED …`; restored artifact
-  → **PASS**. This is the check that rejects the previous hand-assembled file
-  (`STARTED 22:16:00` > `FINISHED 22:15:28`).
-- A plain (non-generating) `python3 -B tools/check_gate_ratchet.py` after the
-  capture re-validates the new poststamp log end to end (content + stamps) and
-  exits 0.
+  `STARTED: 2026-11-27T23:03:14-05:00`, `EXIT: 0`,
+  `FINISHED: 2026-11-27T23:03:15-05:00`, mtime `23:03:15.049` (375 lines).
+- **Timestamp self-check (A1):** `tools/check_gate_ratchet.py` requires **both**
+  `STARTED:` and `FINISHED:` on every one of the 59 bound evidence logs (the
+  duplicate collision binding shares one file); a missing pair fails with
+  `missing stamp pair`, as does `FINISHED < STARTED` or `mtime < STARTED`.
+  Controls in isolated scratch ROOTs: the old `25d9c94` headerless poststamp
+  → **FAIL** `missing stamp pair`; both stamps deleted from `e2e.log` →
+  **FAIL** `missing stamp pair`; `STARTED=2099…` → **FAIL** after-FINISHED;
+  mtime `2000-01-01` → **FAIL** predates-STARTED; restored artifact → **PASS**.
+  The check rejects the round-2 hand-assembled file (`STARTED 22:16:00` >
+  `FINISHED 22:15:28`).
+- **Poststamp body check (B1):** the poststamp binding must carry real checker
+  output, not just the marker: a **≥100-line** body containing
+  `PASS: measured_on=`, `PASS: audit coverage`,
+  `PASS: runner/binding self-check` and `GATE_RATCHET: PASS`. A body reduced to
+  the marker line (5 lines, valid stamps) → **FAIL** `below the 100-line
+  minimum … a bare PASS marker is not evidence`; the current artifact (375
+  lines) **PASS**es.
 
 ## 7. Host performance and the `/tmp` reference loss
 

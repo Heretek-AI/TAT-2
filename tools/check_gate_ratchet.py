@@ -58,6 +58,12 @@ DEFAULT_REPORT = "docs/reports/final-20261127.md"
 STARTED_RE = re.compile(r"^STARTED:\s*(\S+)\s*$", re.MULTILINE)
 FINISHED_RE = re.compile(r"^FINISHED:\s*(\S+)\s*$", re.MULTILINE)
 
+# The poststamp artifact is a static evidence log that asserts the ratchet PASS.
+# A bare `GATE_RATCHET: PASS` line is not proof; require the checker's own real
+# output and a body long enough to be that output (the real artifact is ~360
+# lines).
+POSTSTAMP_MIN_LINES = 100
+
 
 class DuplicateKeyError(ValueError):
     """Raised when the ratchet JSON repeats a key (json's last-wins is unsafe)."""
@@ -999,30 +1005,27 @@ def main() -> int:
         return safe_join_under(ROOT, log_dir, str(log_name))
 
     # Evidence-log timestamp coherence. The runner writes STARTED: before a gate
-    # and FINISHED: after it; the file mtime is the final write. A log whose
-    # FINISHED predates STARTED, or whose mtime predates STARTED, is an
-    # assembled artifact, not a measurement. When the poststamp log itself is
-    # being generated (`--generating-poststamp`), it is skipped here because the
-    # checker is reading the previous artifact; a plain run after the mechanical
-    # capture validates the new one.
-    stamp_checked: set[str] = set()
+    # and FINISHED: after it; the file mtime is the final write. EVERY bound log
+    # must carry both stamps: a log without them (or whose FINISHED predates
+    # STARTED, or whose mtime predates STARTED) is an assembled artifact, not a
+    # measurement. When the poststamp log itself is being generated
+    # (`--generating-poststamp`), it is skipped here because the checker is
+    # reading the previous artifact; a plain run after the mechanical capture
+    # validates the new one.
     poststamp_log = str(evidence.get("gate_ratchet") or "")
 
     def verify_stamps(path: Path, log_name: str) -> None:
         if generating_poststamp and log_name == poststamp_log:
             print(f"SKIP: {log_name} timestamp self-check (generating artifact)")
             return
-        key = str(path)
-        if key in stamp_checked:
-            return
-        stamp_checked.add(key)
         text = path.read_text(errors="replace")
         starts = STARTED_RE.findall(text)
         finishes = FINISHED_RE.findall(text)
-        if not starts and not finishes:
-            return
         if not starts or not finishes:
-            fail(f"{log_name}: incomplete STARTED/FINISHED stamp pair")
+            fail(
+                f"{log_name}: missing stamp pair (both STARTED: and FINISHED: "
+                "are required) — an assembled artifact cannot prove a measurement"
+            )
             return
         try:
             t0 = datetime.fromisoformat(starts[0])
@@ -1222,6 +1225,40 @@ def main() -> int:
             fail(f"{log_name} contains a SCRIPT ERROR; the probe must be clean")
         else:
             print(f"PASS: {log_name} records {marker}")
+
+    # The poststamp artifact must carry the checker's real output, not a bare
+    # marker. Skipped while generating (the file is then the previous artifact);
+    # the plain run after capture enforces it.
+    if not generating_poststamp:
+        poststamp_name = evidence.get("gate_ratchet")
+        if poststamp_name:
+            path = evidence_path(str(poststamp_name))
+            if path is not None and path.exists():
+                text = path.read_text(errors="replace")
+                lines = text.count("\n") + (0 if text.endswith("\n") else 1)
+                required = (
+                    "PASS: measured_on=",
+                    "PASS: audit coverage",
+                    "PASS: runner/binding self-check",
+                    "GATE_RATCHET: PASS",
+                )
+                missing = [needle for needle in required if needle not in text]
+                if lines < POSTSTAMP_MIN_LINES:
+                    fail(
+                        f"{poststamp_name} has {lines} line(s), below the "
+                        f"{POSTSTAMP_MIN_LINES}-line minimum for real checker output "
+                        "— a bare PASS marker is not evidence"
+                    )
+                elif missing:
+                    fail(
+                        f"{poststamp_name} is missing real checker output "
+                        f"{missing!r}; a bare PASS marker is not evidence"
+                    )
+                else:
+                    print(
+                        f"PASS: {poststamp_name} carries real checker output "
+                        f"({lines} lines; measured_on/coverage/bindings present)"
+                    )
 
     # Committed self-check: the runner gate set and the ratchet binding set must
     # agree. This runs before the report check and needs no Godot run, so a gate

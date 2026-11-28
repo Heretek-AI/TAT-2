@@ -1,22 +1,53 @@
 # Handoff — Thick As Thieves Godot 4.7.2 port (next session)
 
 **Repo:** `/home/john/Projects/TAT-2`
-**Current tip:** `5857589` (baseline run head; the docs/logs evidence commit is
-on top of this branch).
-**Measured code/gate head:** `5857589`; the final **58-gate** run was made at
-that head (errscan semantics fix; no game-code change).
-**Gate set:** **58/58 exit 0** — compile **229/0**, `run_tests` **328/0**
-(suites 119/121/122/123/124/125), `make gate-ratchet` PASS
-(`measured_on=5857589`), `make audit` PASS.
+**Current tip:** `0f6942c` (Phase 3 final logs; WIP branch
+`wip/phase3-gate-integrity-20261127` is on `origin`).
+**Measured code/gate head:** `900f8eb` (route-code merge); the final **59-gate**
+run was made at `5337828` (logs commit `0f6942c`).
+**Gate set:** **59/59 exit 0** — compile **234/0**, `run_tests` **329/0**
+(suites 119/121/122/123/124/125/126), `E2E 310/310`, `make gate-ratchet` PASS
+(`measured_on=900f8eb`), `make audit` PASS (12660/12703).
+**Phase 3 status:** 15/16 tasks verified; `played-route` is **blocked** with a
+measured partial (11/27 beats, 45/120 rows, `route_claim=none`, content blockers
+S12/S13/S06/NPCs) — not relabelled played.
 **Godot:** `4.7.2.stable` via native `tools/godot` (`godot` is **not** on
 `$PATH`). Forward+ · Jolt 60 Hz · 1280×720 base · Linux x86_64.
-**Working tree:** clean (baseline logs/report committed on this branch).
-**Read first:** this is the post-Phase-2.5 handoff. The previous long handoff is
-archived at [`docs/reports/handoff-archive-20261127.md`](reports/handoff-archive-20261127.md).
+**Working tree:** clean (final logs/report committed on this branch).
+**Read first:** this is the post-Phase-3 handoff. Final gate evidence:
+[`docs/reports/phase3-final-gates-20261128.md`](reports/phase3-final-gates-20261128.md);
+GPU: [`docs/reports/phase3-gpu-20261128.md`](reports/phase3-gpu-20261128.md);
+route partial: [`docs/reports/phase3-played-route-instruments.md`](reports/phase3-played-route-instruments.md).
+The previous long handoff is archived at
+[`docs/reports/handoff-archive-20261127.md`](reports/handoff-archive-20261127.md).
 **Steam reference:** `/home/john/.steam/steam/steamapps/common/Thick As Thieves/`
 (appid `3341000`, build `25076818`, `1.5.148559`).
 
 ---
+
+## 0. Phase 3 final (2026-11-28) — current state
+
+**Delivered in this wave (15 tasks verified, 1 blocked):**
+
+| Area | What landed | Evidence |
+|---|---|---|
+| Gate integrity | 59-gate runner; every runner gate bound; 40 orphan tests classified (39 retired + 4 registered); errscan marker + footer + min totals; ratchet fail-closed on missing keys, exact-zero pins and duplicate keys; P1_BEAMS source contract refreshed | 59/59 at `5337828`; `phase3-final-gates-20261128.md` |
+| Look | KF27 `foyer_beam_wide` frames the card at 18.0/40.0 and scores **5/9**; pinned 5/9; the four failures are beam material (band 38.80, 6 bands, glow falloff, core saturation). Landscape `gap_view` A/B measurable (subject ~1 %, RMSE discard↔raw 1.0077, off↔raw 0.0769). AEM meter residual **0.000 EV** at EV100 −0.864, but the fixed path is 2.14 EV brighter (anchor gap; default `fixed`). IBL ambient not a win (0.001540 vs 0.16; default `off`). UI prompt authored `#636EEC` real-renders `#636eec`; contrast 3.03–4.32 = UI2-03 DELTA | `phase3-gpu-20261128.md` |
+| Systems | StateTree default `off`, `patrol` fail-closed, writer spike (0.255 m vs 0.000 off/shadow), census 92 (3 enter + 89 transition), 1/17 events emitted; nav v2 78/2, 60/4, 4/0, door audit, prison blocked both ways, `NAV_DELTA` 22/0; audio rain converter, VO 288/645 (357 tabulated), 3 keys/24 buses declared unrecoverable, `FS_Layers` double-ban refuted; Destructibles extracted, 93 fallback confirmed (0 other diffs); Cleanout first-class (3300 s `mission_row`, safe room, no Contract 2 credit) | lane reports + 59-gate logs |
+| Route | deterministic input driver (0 transform writes), 27→120 scorer (120 rows/27 beats), telescope L4-13 fixed (`DEN_WINDOW 44/0`, 0 drift), NPC distances 85.4–150.7 m | `phase3-played-route-instruments.md` |
+
+**Blocked:** `played-route` is a documented partial: 6 driven + 5 partial + 3
+blocked + 4 unreachable + 9 not attempted = **11/27 beats, 45/120 rows,
+`route_claim=none`**. Blockers: S12 spawn floor 23.1585 vs dressing 25.0; S13
+local area only 5.81 m (KF16 128.7 m, KF15 153.4 m); S06 reach 1.9348 vs 1.75 m;
+S19/S20/S22/S23 NPCs 85.4–150.7 m. These are Phase 3C content items.
+
+**Open (run ledger `OPEN_ISSUES.md`, 240 lines):** the played-route blockers; the
+KF27 beam material terms; the AEM anchor; the UI prompt DELTA; the
+`route_driver.sh` newline `--tag` injection (Medium, operator CLI, runner-
+unreachable); the `verify/evidence` 32-file cap; the `--generating-poststamp`
+direct-invocation residual. The stale 58-gate numbers in this file, `AGENTS.md`,
+`README.md` and `FIDELITY_GAPS.md` were corrected in this wave.
 
 ## 1. What just landed (Phase 1/2, 2026-11-27)
 

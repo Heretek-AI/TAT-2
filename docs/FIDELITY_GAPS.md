@@ -6,7 +6,57 @@ extracted through `tools/tat-extract` (CUE4Parse, `EGame.GAME_UE5_5`).
 Generated from `extracted/filelist.txt` (22,005 entries) and the current `extracted/` tree.
 Re-run the census with the commands at the bottom.
 
-## Phase 1/2 integration — 2026-11-27 (newest; headless gates, no GPU score)
+## Phase 3 final — 2026-11-28 (newest)
+
+Fifteen of sixteen tasks verified; `played-route` is a documented blocked
+partial. Final gate evidence: `docs/reports/phase3-final-gates-20261128.md`
+(59/59 at `5337828`, code head `900f8eb`, `measured_on=900f8eb`). GPU:
+`docs/reports/phase3-gpu-20261128.md`. Route:
+`docs/reports/phase3-played-route-instruments.md`.
+
+- **Gate integrity:** 59 gates, every runner gate bound, 40 orphans classified
+  (39 retired + 4 registered), errscan marker/footer/min totals, ratchet
+  fail-closed on missing/zero/duplicate keys. Floors raised (compile 234,
+  run_tests 329, E2E 310, nav 97, cubemap 51, GC 55, manifest 112/73, audio 135,
+  VO 60, den_window 44, route NPC 4, errscan run_tests 495); none lowered.
+- **KF27:** `foyer_beam_wide` frames the authored card at **18.0/40.0** and
+  scores **5/9**; the pinned `foyer_beam` is **5/9**. The four failures are
+  beam material (band **38.80 %**, **six** bands, glow falloff, core saturation
+  p95 88), not framing. Reference-only remains **9/9**.
+- **Landscape:** `gap_view` has a subject (~1 % of frame); RMSE
+  discard↔raw **1.0077** (19,489 px), off↔raw **0.0769** (1,360), so the A/B is
+  measurable. The mask itself is unchanged (`vis > 0.5` discard).
+- **AEM:** meter reaches an exact fixed point at scene EV100 **−0.864**
+  (target=adapted −4.864, exposure 0.2617, residual **0.000 EV**), but the
+  fixed path (1.150) is **2.14 EV** brighter; default stays `fixed`, the meter
+  is not promoted.
+- **IBL:** HDR faces are real (all three cubes `.hdr`, `transfer=linear`,
+  non-zero energy); ambient energy **0.001540** vs the 0.16 flat substitute and
+  darkens the scene, so default stays `off`.
+- **UI:** authored `#636EEC` renders `#636eec` (delta 0); prompt contrast
+  **3.03–4.32** is recorded as a UI2-03 DELTA, floor 4.5 unchanged.
+- **StateTree:** census **92** (3 enter + 89 transition), default `off`,
+  `patrol` fail-closed; writer spike deviates 0.255 m (off/shadow 0.000);
+  1/17 authored events emitted. No cutover.
+- **Nav:** v2 census **78/2** (Guildhall), **60/4** (Old Manor), **4/0** (FTUE);
+  raw pairs emitted; per-actor door audit; prison blocked both ways when closed;
+  `NAV_DELTA` 22/0. Default `off`.
+- **Audio:** rain converter 10→1 with warning; VO **288/645** mapped (357
+  tabulated); the 3 music keys and 24 unnamed buses are **not recoverable** from
+  the cook; `FS_Layers` double-ban refuted (five remain PORT_DECISION).
+- **GC / Destructibles:** `GC_ChestTrunkALid` extracted; **93 fallback
+  confirmed** (intact lid only, no fracture mesh; 0 other diffs). Hold-F stays a
+  labelled PORT_DECISION.
+- **Cleanout:** first-class mode; `Mission.Guildhall.LootTheRoom`, `free_play=false`,
+  **3300 s mission_row**, safe-room spawn; banks once without Contract 2 credit
+  or reward; S2-13..22 (E2E 310/310).
+- **Played route (blocked, not relabelled):** 11/27 beats captured (6 driven +
+  5 partial), 45/120 rows, `route_claim=none`; blockers S12 spawn floor 23.1585
+  vs dressing 25.0, S13 local area only 5.81 m, S06 reach 1.9348 vs 1.75 m,
+  S19/S20/S22/S23 NPCs 85.4–150.7 m. The driver/scorer/telescope are in place;
+  the remaining work is Phase 3C content.
+
+## Phase 1/2 integration — 2026-11-27 (headless gates, no GPU score)
 
 Seven lanes merged (six by cherry-pick, mirrors by fast-forward at `07ecb56`)
 and the P4.1 producers were regenerated. The port now has the authored

@@ -16,14 +16,14 @@ E2E tiers.
 
 | Gate | Result |
 |---|---|
-| GDScript compile (`tools/check_scripts_compile.gd`) | **229 scripts, 0 broken** |
-| Unit/integration (`tests/run_tests.gd`) | **328 checks, fails=0** (suites numbered to 125) |
+| GDScript compile (`tools/check_scripts_compile.gd`) | **234 scripts, 0 broken** |
+| Unit/integration (`tests/run_tests.gd`) | **329 checks, fails=0** (suites numbered to 126) |
 | M2 traversal/tools (`tests/test_m2_player.gd`) | **fails=0** (12) |
-| E2E (`tests/e2e/run_e2e_tests.gd`, tiers 1–4 + `s2` + `a2`) | **300/300** (tier 1: 117) |
+| E2E (`tests/e2e/run_e2e_tests.gd`, tiers 1–4 + `s2` + `a2`) | **310/310** (tier 1: 117, S2 22) |
 | Door walk · viewmodel truth · Niagara · leak probe | **PASS** |
-| Staged-route self-test (`build/qa/p0b_route.sh --self-test`) | **62/62**, in the 58-gate set (added Phase 0a, measured in the Phase 2.5 baseline) |
-| Steam manifest + content audit (`make audit`) | exit 0, fail-closed tracked baseline, disk-backed coverage 99.7 % (12660/12703), 13/13 content groups |
-| Gate ratchet (`make gate-ratchet`) | **PASS** — floors verified against committed logs at `5857589` (58 gates, run `5857589`) |
+| Staged-route self-test (`build/qa/p0b_route.sh --self-test`) | **62/62**, in the 59-gate set (added Phase 0a, measured in the Phase 2.5 baseline) |
+| Steam manifest + content audit (`make audit`) | exit 0, fail-closed tracked baseline, disk-backed coverage 99.7 % (12664/12703), 13/13 content groups |
+| Gate ratchet (`make gate-ratchet`) | **PASS** — floors verified against committed logs at `900f8eb` (59 gates, run `5337828`) |
 
 Not yet measured: the perf matrix (no publishable FPS run) and the editor's
 per-process VRAM. Do not quote frame rates from any older run.

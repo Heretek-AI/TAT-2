@@ -60,3 +60,24 @@ bound; writer max step 0.0213 m ≤ 0.0419 m), probe PASS, `run_tests` fails=0
 the default → 4 fails; remove the patrol refusal → 3 fails) is in
 `docs/reports/statetree-3b1-20261127.md`. Not done: the 16 unemitted tags, the
 smart-object/EQS floor, and any cutover — all recorded, none invented.
+
+### Round 2 (statetree, 2026-11-28)
+
+Fixed the falsifier's finding: `events.gd` counted a state's
+`required_event_to_enter` only in its String shape, but payload /2 stores it as
+`{tag, payload_struct}` (`tree_model.gd::_normalise_required_event`), so 3
+enabled state-entry gates were dropped. The census now reads both shapes and
+reports `authored=17 emitted=1 unemitted=16 enter=3 transition=89 total=92`
+(89 was round 1). Suite 110 now pins enter/transition/total and adds a
+raw-payload negative control (a string-only counter = 89 must fail);
+suite 111 adds a negative control proving the `StimChange` push sits *after* the
+range/KO filters (out-of-range and KNOCKED_OUT records emit nothing), and the
+A/B bound is tightened from the loose 6.0 m to the actual 4x4 m arena diagonal
+(5.657 m). The `StimChange` mapping is labelled a PORT INFERENCE in `events.gd`
+and `guard_ai._hear`; the round-1 handoff's "ST_Guard has no StimChange gate"
+was wrong — it has 4 (ST_Civilian has 10) and round 2 corrects it. Falsified by
+hand (then reverted, `diff -q` clean): a pre-filter promiscuous emitter →
+suite 111 fails=4/exit 1; the string-only census rule → suite 110 fails=3/exit 1.
+Suite 110 `fails=0 checks=214`, suite 111 `fails=0 checks=65`, probe PASS,
+`run_tests` fails=0 (328 PASS), compile 231/0, `make audit` PASS. No default
+flip, no cutover, trace budget untouched.

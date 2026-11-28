@@ -2024,13 +2024,15 @@ func _hear(record: Dictionary) -> void:
 	# band on the guard's side (see HearingData.investigation_point).
 	investigate_pos = HearingData.investigation_point(stim, origin, global_position) if not stim.is_empty() else origin
 	investigation_search_seconds = 8.0 if kind == HearingData.BEHAVIOUR_LONG else 4.0
-	# Phase 3B.1: the one live `StateTreeEvent.*` emitter. An accepted hearing
-	# record IS a stimulus change, so the authored `StateTreeEvent.StimChange` tag
-	# goes into the live interpreter here. Emitted before the guard_alert early
-	# return and before the reaction-role cap: the event states that the stim
-	# changed for this listener, not that the guard chose to investigate it. The
-	# payload is trace metadata copied from the record (the payload serialises the
-	# tag only); no bound parameter is invented.
+	# Phase 3B.1: the one live `StateTreeEvent.*` emitter. PORT INFERENCE, not
+	# authored data: the cook serialises only the tag name, and nothing in the
+	# payload says a heard record is a `StimChange`. The inference is that a
+	# record which passed the authored heard-by/query/range/occlusion filters is
+	# a stimulus change for this listener, so the tag goes into the live
+	# interpreter here -- before the guard_alert early return and before the
+	# reaction-role cap (the stim changed even if the guard takes Standby). The
+	# payload dictionary is trace metadata copied from the record; no bound
+	# parameter is invented.
 	if _st_shadow != null:
 		_st_shadow.push_event(StateTreeEvents.STIM_CHANGE, {
 			"heard_tag": tag,

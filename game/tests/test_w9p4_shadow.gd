@@ -11,10 +11,12 @@ extends SceneTree
 ## every frame's planar position. The A/B metric is the MAX PER-FRAME PLANAR
 ## DEVIATION from the `off` trajectory (metres):
 ##   * off vs shadow  must be 0.000 m (identical, <= 1e-9 m);
-##   * patrol vs off  must be >= 0.05 m (different) and <= 6.0 m (bounded; the
-##     6x6 m waypoint square means a divergent writer would exceed it), and the
-##     writer's own max planar step must be <= patrol_speed/60 * 1.5 + 0.01 m
-##     (one bounded `move_and_slide`, no teleport).
+##   * patrol vs off  must be >= 0.05 m (different) and <= 5.657 m (bounded; the
+##     arena is the 4x4 m waypoint square whose diagonal is sqrt(32) = 5.657 m,
+##     so any two points on the same loop are at most the diagonal apart, and a
+##     divergent writer would exceed it), and the writer's own max planar step
+##     must be <= patrol_speed/60 * 1.5 + 0.01 m (one bounded `move_and_slide`,
+##     no teleport).
 ##
 ## One process, three arms, rather than four child engines: a child boot is
 ## ~150 s on this host, so the arms cannot each pay it and stay in the gate
@@ -35,7 +37,11 @@ const FRAMES: int = 240
 ## A/B tolerances (documented in the header and the 3B.1 report).
 const IDENTICAL_TOLERANCE_M: float = 1e-9
 const DIFFERENT_MIN_M: float = 0.05
-const BOUNDED_MAX_M: float = 6.0
+## The arena is the 4x4 m square below; any two points on that loop are at most
+## its diagonal apart: sqrt(4^2 + 4^2) = 5.657 m. This is the tight bound (the
+## round-1 6.0 m was 0.343 m loose).
+const ARENA_SPAN_M: float = 4.0
+const BOUNDED_MAX_M: float = 5.657
 const STEP_SLACK_M: float = 0.01
 const STEP_FACTOR: float = 1.5
 
@@ -47,6 +53,7 @@ func _initialize() -> void:
 	await process_frame
 	_check_env_flag()
 	await _check_live_event()
+	await _check_event_negative_control()
 	var off: Dictionary = await _phase("off")
 	var shadow: Dictionary = await _phase("shadow")
 	var patrol: Dictionary = await _phase("patrol", true)
@@ -168,6 +175,8 @@ func _check_ab(off: Dictionary, shadow: Dictionary, patrol: Dictionary) -> void:
 	var dev_patrol: float = _max_deviation(off_track, patrol_track)
 	patrol["dev_off_shadow"] = dev_shadow
 	patrol["dev_from_off"] = dev_patrol
+	_ok(absf(BOUNDED_MAX_M - sqrt(2.0) * ARENA_SPAN_M) <= 0.01,
+		"the bounded tolerance is the 4x4 arena diagonal (%.3f m)" % (sqrt(2.0) * ARENA_SPAN_M))
 	_ok(dev_shadow <= IDENTICAL_TOLERANCE_M,
 		"off and shadow trajectories are identical (max deviation %.9f m <= %s m)"
 			% [dev_shadow, str(IDENTICAL_TOLERANCE_M)])
@@ -271,6 +280,75 @@ func _check_live_event() -> void:
 		"the hearing path accepted the record (last_heard_tag=%s)" % str(guard.get("last_heard_tag")))
 	print("W9P4_EVENT tag=%s count=%d last_heard=%s stats_events=%d"
 		% ["StateTreeEvent.StimChange", emitted.size(), str(guard.get("last_heard_tag")),
+			int(runner.interpreter.stats.get("events", 0))])
+	guard.queue_free()
+	floor_body.queue_free()
+	for _i: int in range(3):
+		await process_frame
+
+
+## NEGATIVE CONTROL for the live-event placement (round 2). If the emitter were
+## promiscuous -- i.e. moved before `_hear()`'s authored filters -- an
+## out-of-range record and a record heard while KNOCKED_OUT would both push a
+## tag. They must not: both return before the emission point. This test fails if
+## the push is hoisted above the range/occlusion/KO filters.
+func _check_event_negative_control() -> void:
+	ShadowRunner.set_mode_for_test("shadow")
+	WriterSpike.set_for_test("off")
+	Trace.reset_shared()
+	var root: Window = get_root()
+	var gs: Node = root.get_node_or_null("GameState")
+	if gs == null:
+		printerr("FAIL: GameState autoload missing")
+		fails += 1
+		return
+	gs.set("state", "playing")
+	var floor_body: StaticBody3D = _build_floor(root, Vector3(0, -0.55, 0))
+	await physics_frame
+	var guard: CharacterBody3D = (load(GUARD_SCRIPT) as GDScript).new() as CharacterBody3D
+	guard.name = "NegEventGuard"
+	guard.position = Vector3(0, 0, 0)
+	guard.set("patrol_points", [Vector3(0, 0, 0), Vector3(0, 0, 4)] as Array[Vector3])
+	root.add_child(guard)
+	var runner: RefCounted = guard.get("_st_shadow")
+	await physics_frame
+	await physics_frame
+	_ok(runner != null, "the negative-control guard has a shadow runner")
+	var noise_bus: Node = root.get_node_or_null("NoiseBus")
+	_ok(noise_bus != null, "NoiseBus autoload present (negative control)")
+	if runner == null or noise_bus == null:
+		guard.queue_free()
+		floor_body.queue_free()
+		return
+	_ok((runner.events_emitted as Array).is_empty(), "negative control starts with 0 events")
+	# (a) OUT OF RANGE: 100 m from the guard, far beyond the 25 m authored
+	# hearing range. `_hear()` returns at the radius check, before the push.
+	noise_bus.call("emit_noise", (guard as Node3D).global_position + Vector3(100.0, 0, 0), 3.0, null, "footstep")
+	await physics_frame
+	await physics_frame
+	_ok((runner.events_emitted as Array).is_empty(),
+		"an out-of-range record emits no StateTreeEvent (got %d)"
+			% (runner.events_emitted as Array).size())
+	_ok(str(guard.get("last_heard_tag")) == "",
+		"an out-of-range record never reaches the heard state (last_heard_tag=%s)"
+			% str(guard.get("last_heard_tag")))
+	# (b) KNOCKED OUT: `_hear()` returns on `state == KNOCKED_OUT` before any
+	# hearing bookkeeping. A close, otherwise-accepted record must not emit.
+	guard.call("knock_out", 2.0)
+	await physics_frame
+	_ok(int(guard.get("state")) == 5, "the guard is KNOCKED_OUT for the negative control (state=%d)"
+		% int(guard.get("state")))
+	noise_bus.call("emit_noise", (guard as Node3D).global_position + Vector3(1.0, 0, 0), 3.0, null, "footstep")
+	await physics_frame
+	await physics_frame
+	_ok((runner.events_emitted as Array).is_empty(),
+		"a record heard while KNOCKED_OUT emits no StateTreeEvent (got %d)"
+			% (runner.events_emitted as Array).size())
+	_ok(int(runner.interpreter.stats.get("events", 0)) == 0,
+		"the interpreter saw no event in the negative control (stats.events=%d)"
+			% int(runner.interpreter.stats.get("events", 0)))
+	print("W9P4_EVENT_NEG out_of_range_events=%d ko_events=%d stats_events=%d"
+		% [(runner.events_emitted as Array).size(), (runner.events_emitted as Array).size(),
 			int(runner.interpreter.stats.get("events", 0))])
 	guard.queue_free()
 	floor_body.queue_free()

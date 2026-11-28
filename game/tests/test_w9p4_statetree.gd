@@ -936,12 +936,20 @@ func _check_vacuous_and_events() -> void:
 	_ok((totals["fully_parity_covered_trees"] as Array).is_empty(),
 		"fully_parity_covered_trees is 0 of 21 (got %s)" % str(totals["fully_parity_covered_trees"]))
 	# Event census: 17 authored tags, 1 live emitter (StimChange), 16 unemitted.
+	# Round 2: a state's `required_event_to_enter` is `{tag, payload_struct}` in
+	# payload /2 (tree_model.gd `_normalise_required_event`), so the census is
+	# 92 = 89 transition gates + 3 enabled state-enter gates, not 89.
 	var events: Dictionary = totals["events"]
 	var counts: Dictionary = events["counts"]
 	_ok(int(counts["authored"]) == 17,
 		"17 authored StateTreeEvent tags (got %d)" % int(counts["authored"]))
-	_ok(int(counts["gates"]) == 89,
-		"89 authored state/transition event gates (got %d)" % int(counts["gates"]))
+	_ok(int(counts["enter"]) == 3,
+		"3 enabled state required_event_to_enter gates (got %d)" % int(counts["enter"]))
+	_ok(int(counts["transition"]) == 89,
+		"89 transition required_event gates (got %d)" % int(counts["transition"]))
+	_ok(int(counts["gates"]) == 92 and int(counts["total"]) == 92,
+		"92 authored event gates in total (gates=%d total=%d)"
+			% [int(counts["gates"]), int(counts["total"])])
 	_ok(int(counts["emitted"]) == 1 and (events["emitted"] as Array) == ["StateTreeEvent.StimChange"],
 		"exactly one live-emitted tag is StateTreeEvent.StimChange (got %s)" % str(events["emitted"]))
 	_ok(int(counts["unemitted"]) == 16,
@@ -951,11 +959,103 @@ func _check_vacuous_and_events() -> void:
 	_ok(str((events["emitters"] as Dictionary).get("StateTreeEvent.StimChange", "")).find("guard_ai._hear") >= 0,
 		"the StimChange emitter is the existing hearing path (got %s)"
 			% str((events["emitters"] as Dictionary).get("StateTreeEvent.StimChange", "")))
+	# NEGATIVE CONTROL, derived from the RAW payload (not by re-applying the
+	# census rule): build the gate list straight from the JSON file, counting a
+	# state's `required_event_to_enter` in BOTH its String and `{tag}` shapes.
+	# A string-only counter (the round-1 bug) yields 89 and must NOT match: the
+	# three Dictionary-shaped enter gates are the point of this test.
+	var raw: Dictionary = _raw_payload_event_gates()
+	var raw_total: int = int(raw.get("total", -1))
+	var raw_enter: int = int(raw.get("enter", -1))
+	var raw_transition: int = int(raw.get("transition", -1))
+	var string_only: int = int(raw.get("string_only", -1))
+	_ok(raw_enter == 3, "raw payload: 3 state-entry gates (got %d)" % raw_enter)
+	_ok(raw_transition == 89, "raw payload: 89 transition gates (got %d)" % raw_transition)
+	_ok(raw_total == 92, "raw payload: 92 gates in total (got %d)" % raw_total)
+	_ok(raw_total == int(counts["total"]),
+		"the census counts the same gates as the raw payload (%d vs %d)"
+			% [int(counts["total"]), raw_total])
+	_ok(string_only == 89 and string_only != raw_total,
+		"a string-only counter is wrong (89 != 92; got string_only=%d raw_total=%d)"
+			% [string_only, raw_total])
+	_ok(raw_total - string_only == raw_enter,
+		"the missing gates are exactly the %d Dictionary-shaped enter gates" % raw_enter)
+	_ok(str(raw.get("enter_gates", [])) == str([
+		"ST_InvestigateStims_Guard#Extract Reaction Role from Event:StateTreeEvent.ReactionRoleChange",
+		"ST_Patrol#Extract distraction Event:StateTreeEvent.DistractionEvent",
+		"ST_Subtree_Combat#Extract Reaction Role from Event:StateTreeEvent.ReactionRoleChange",
+	]), "the 3 enter gates are the authored ones (got %s)" % str(raw.get("enter_gates", [])))
 	for line: String in Coverage.vacuous_lines(coverage):
 		print("P4VACUOUS ", line)
-	print("P4EVENTS authored=%d emitted=%d unemitted=%d gates=%d emitted_tags=%s"
+	print("P4EVENTS authored=%d emitted=%d unemitted=%d enter=%d transition=%d total=%d raw_total=%d string_only=%d"
 		% [int(counts["authored"]), int(counts["emitted"]), int(counts["unemitted"]),
-			int(counts["gates"]), str(events["emitted"])])
+			int(counts["enter"]), int(counts["transition"]), int(counts["total"]),
+			raw_total, string_only])
+	print("P4ENTER_GATES %s" % str(raw.get("enter_gates", [])))
+
+
+## Reads the raw payload JSON (not the normalised model, so the test cannot
+## inherit the bug it is checking) and counts event gates in both shapes.
+func _raw_payload_event_gates() -> Dictionary:
+	var path: String = TreeModel.DEFAULT_PATH
+	if not FileAccess.file_exists(path):
+		_ok(false, "raw payload present at %s" % path)
+		return {}
+	var file: FileAccess = FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		_ok(false, "raw payload openable at %s" % path)
+		return {}
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	file.close()
+	if not (parsed is Dictionary):
+		_ok(false, "raw payload parses as JSON")
+		return {}
+	var raw_trees: Variant = (parsed as Dictionary).get("trees", {})
+	if not (raw_trees is Dictionary):
+		_ok(false, "raw payload has a trees object")
+		return {}
+	var enter: int = 0
+	var transition: int = 0
+	var string_only: int = 0
+	var enter_gates: Array = []
+	for tree_name: Variant in (raw_trees as Dictionary).keys():
+		var tree: Dictionary = (raw_trees as Dictionary)[tree_name]
+		for state: Variant in (tree.get("states", []) as Array):
+			if not (state is Dictionary):
+				continue
+			var sd: Dictionary = state
+			var required: Variant = sd.get("required_event_to_enter")
+			if required is Dictionary:
+				var tag: String = str((required as Dictionary).get("tag", ""))
+				if tag != "":
+					enter += 1
+					enter_gates.append("%s#%s:%s" % [str(tree_name), str(sd.get("name", "")), tag])
+			elif required is String and str(required) != "":
+				enter += 1
+				string_only += 1
+				enter_gates.append("%s#%s:%s" % [str(tree_name), str(sd.get("name", "")), str(required)])
+			for tr: Variant in (sd.get("transitions", []) as Array):
+				if not (tr is Dictionary):
+					continue
+				var event: Variant = (tr as Dictionary).get("required_event")
+				if event is String and str(event) != "":
+					transition += 1
+					string_only += 1
+				elif event is Dictionary:
+					# Round-1 string-only rule would also drop this shape.
+					var tr_tag: String = str((event as Dictionary).get("tag", ""))
+					if tr_tag != "":
+						transition += 1
+	enter_gates.sort()
+	return {
+		"enter": enter,
+		"transition": transition,
+		"total": enter + transition,
+		# What the round-1 rule counted: every transition tag (all Strings) plus
+		# only the String-shaped enter gates.
+		"string_only": string_only,
+		"enter_gates": enter_gates,
+	}
 
 
 func _check_all_tree_traces() -> void:

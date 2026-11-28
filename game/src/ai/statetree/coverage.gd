@@ -323,7 +323,7 @@ static func summary_line(coverage: Dictionary) -> String:
 	var status: Dictionary = t["by_status"]
 	var ts: Dictionary = _sum_dict(coverage["tasks"], "param_sources")
 	var cs: Dictionary = _sum_dict(coverage["conditions"], "param_sources")
-	return "STATETREE_COVERAGE trees=%d task_classes=%d task_instances=%d task_covered=%d task_blind=%d condition_classes=%d condition_instances=%d condition_covered=%d condition_blind=%d implemented=%d mapped=%d unsupported=%d fully_covered_trees=%d fully_parity_covered_trees=%d task_parity_authored=%d task_parity_runtime_fed=%d task_parity_unknown=%d condition_parity_authored=%d condition_parity_runtime_fed=%d condition_parity_unknown=%d task_sources=%s condition_sources=%s trees_total=%d vacuous_trees=%d vacuous_names=%s authored_events=%d emitted_events=%d unemitted_events=%d event_gates=%d" % [
+	return "STATETREE_COVERAGE trees=%d task_classes=%d task_instances=%d task_covered=%d task_blind=%d condition_classes=%d condition_instances=%d condition_covered=%d condition_blind=%d implemented=%d mapped=%d unsupported=%d fully_covered_trees=%d fully_parity_covered_trees=%d task_parity_authored=%d task_parity_runtime_fed=%d task_parity_unknown=%d condition_parity_authored=%d condition_parity_runtime_fed=%d condition_parity_unknown=%d task_sources=%s condition_sources=%s trees_total=%d vacuous_trees=%d vacuous_names=%s authored_events=%d emitted_events=%d unemitted_events=%d event_enter=%d event_transition=%d event_gates=%d event_total=%d" % [
 		(coverage["per_tree"] as Dictionary).size(),
 		int(t["task_classes"]), int(t["task_instances"]), int(t["task_covered"]), int(t["task_blind"]),
 		int(t["condition_classes"]), int(t["condition_instances"]), int(t["condition_covered"]), int(t["condition_blind"]),
@@ -336,5 +336,8 @@ static func summary_line(coverage: Dictionary) -> String:
 		int((t["events"] as Dictionary)["counts"]["authored"]),
 		int((t["events"] as Dictionary)["counts"]["emitted"]),
 		int((t["events"] as Dictionary)["counts"]["unemitted"]),
+		int((t["events"] as Dictionary)["counts"]["enter"]),
+		int((t["events"] as Dictionary)["counts"]["transition"]),
 		int((t["events"] as Dictionary)["counts"]["gates"]),
+		int((t["events"] as Dictionary)["counts"]["total"]),
 	]

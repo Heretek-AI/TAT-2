@@ -661,12 +661,23 @@ func _self_test() -> void:
 	var gap_start: Vector3 = gap["authored_start"] as Vector3
 	var gap_pitch: float = _pitch_deg(gap_eye, gap_tgt)
 	var pose_ok: bool = true
+	var seen_poses: Dictionary = {}
 	for pid: String in POSE_IDS:
 		var p: Dictionary = POSES[pid] as Dictionary
 		if not (p.get("eye") is Vector3) or not (p.get("target") is Vector3):
 			pose_ok = false
-		elif (p["eye"] as Vector3).is_equal_approx(p["target"] as Vector3):
+			continue
+		var eye: Vector3 = p["eye"] as Vector3
+		var tgt: Vector3 = p["target"] as Vector3
+		if eye.is_equal_approx(tgt):
 			pose_ok = false
+		# 9 distinct (eye,target) pairs: a copy-paste duplicate must fail.
+		var key: String = "%.4f,%.4f,%.4f->%.4f,%.4f,%.4f" % [
+			eye.x, eye.y, eye.z, tgt.x, tgt.y, tgt.z,
+		]
+		if seen_poses.has(key):
+			pose_ok = false
+		seen_poses[key] = pid
 		if not p.has("beat") or not p.has("ref"):
 			pose_ok = false
 	pose_ok = pose_ok \
@@ -894,16 +905,17 @@ func _shoot(mission: Node3D, cam: Camera3D, pid: String, tap: Node) -> Dictionar
 	cam.global_position = eye
 	cam.look_at(target, Vector3.UP)
 	cam.current = true
-	if tap != null:
-		# A fixed pose is not a route beat: label it, never claim Sxx. The pose's
-		# beat/reference keyframe stays in the manifest for provenance only.
-		tap.call("mark", pid, "")
 	var t0: int = Time.get_ticks_msec()
 	var settle_waited_ms: int = await _wait_settle()
 	if _settle_seconds > 0.0:
 		print("P0B_SETTLE pose=%s frames=%d extra_s=%.2f waited_ms=%d" % [
 			pid, SETTLE_FRAMES, _settle_seconds, settle_waited_ms,
 		])
+	if tap != null:
+		# Mark at the captured pose (after the settle hold, not before it). A
+		# fixed pose is not a route beat: label it, never claim Sxx. The pose's
+		# beat/reference keyframe stays in the manifest for provenance only.
+		tap.call("mark", pid, "")
 	var imgs: Array = []
 	var means: Array = []
 	for i: int in range(CAPTURE_FRAMES):

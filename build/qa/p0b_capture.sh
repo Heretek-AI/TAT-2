@@ -20,8 +20,12 @@
 # the default stays docs/reports/logs/p0b and a real capture always writes there.
 #
 # The wrapper refuses to start a GPU run while another Godot/game process is
-# live or the lock is held. It never holds the lock across the run itself: the
-# `flock ... -c` invocation owns it for exactly the Godot process.
+# live or the lock is held. It holds the lock on an fd only around the Godot
+# process (no shell string is built from user input) and samples the GPU
+# outside it. Every user string is validated with a whole-string bash ERE so an
+# embedded newline cannot reach a command line. The capture timeout scales with
+# the selected pose count and --settle-seconds so a legal long settle is never
+# killed by the 1800 s default.
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -64,14 +68,51 @@ done
 
 case "$BEAM" in on|off) ;; *) echo "ABORT: --beam-card=$BEAM (on|off)" >&2; exit 2 ;; esac
 case "$AO" in on|off) ;; *) echo "ABORT: --ao=$AO (on|off)" >&2; exit 2 ;; esac
-if [ -n "$TAG" ] && ! printf '%s' "$TAG" | grep -Eq '^[A-Za-z0-9._-]+$'; then
+# Validate with [[ =~ ]], not `grep -E '^...$'`: POSIX grep `$` matches before
+# a newline, so `$'25\n<cmd>'` passes a line-anchored check and then reaches the
+# executed command line. Bash [[ =~ ]] anchors ^$ to the whole string and the
+# case guards reject CR/LF explicitly.
+case "$TAG" in
+  *$'\n'* | *$'\r'*) echo "ABORT: --tag must be a single line" >&2; exit 2 ;;
+esac
+if [ -n "$TAG" ] && ! [[ "$TAG" =~ ^[A-Za-z0-9._-]+$ ]]; then
   echo "ABORT: --tag must be [A-Za-z0-9._-]+" >&2
   exit 2
+fi
+case "$SEED" in
+  *$'\n'* | *$'\r'*) echo "ABORT: --seed must be a single line" >&2; exit 2 ;;
+esac
+if [ "$SEED" != "derived" ] && ! [[ "$SEED" =~ ^-?[0-9]+$ ]]; then
+  echo "ABORT: --seed must be 'derived' or an integer" >&2
+  exit 2
+fi
+# --poses must be a comma list of the same ids POSE_IDS declares in
+# p0b_capture.gd; unknown or empty tokens abort before Godot is launched.
+POSE_ALLOW=(gate upper_foyer yaw180 foyer_beam foyer_beam_wide lounge lounge_beam beam_close gap_view)
+if [ -n "$POSES" ]; then
+  case "$POSES" in
+    *$'\n'* | *$'\r'*) echo "ABORT: --poses must be a single line" >&2; exit 2 ;;
+  esac
+  IFS=',' read -r -a _pose_tokens <<< "$POSES"
+  for _p in "${_pose_tokens[@]}"; do
+    _ok=0
+    for _allowed in "${POSE_ALLOW[@]}"; do
+      if [ "$_p" = "$_allowed" ]; then _ok=1; break; fi
+    done
+    if [ "$_ok" -ne 1 ]; then
+      echo "ABORT: --poses unknown pose '$_p' (allowed: ${POSE_ALLOW[*]})" >&2
+      exit 2
+    fi
+  done
 fi
 # --settle-seconds is 0 (off) or >=25 s; the AEM/A-B sessions use 25. Reject a
 # small positive value rather than silently shortening the hold.
 if [ -n "$SETTLE" ]; then
-  if ! printf '%s' "$SETTLE" | grep -Eq '^[0-9]+([.][0-9]+)?$'; then
+  case "$SETTLE" in
+    *$'\n'* | *$'\r'*) echo "ABORT: --settle-seconds must be a single line" >&2; exit 2 ;;
+    *[!0-9.]* | .* | *.*.*) echo "ABORT: --settle-seconds must be a plain non-negative number" >&2; exit 2 ;;
+  esac
+  if ! [[ "$SETTLE" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
     echo "ABORT: --settle-seconds must be a non-negative number" >&2
     exit 2
   fi
@@ -124,10 +165,23 @@ if [ "$MODE" = "capture" ]; then
   fi
 fi
 
-ARGS="--mode=$MODE --beam-card=$BEAM --seed=$SEED"
-[ -n "$POSES" ] && ARGS="$ARGS --poses=$POSES"
-[ -n "$SETTLE" ] && ARGS="$ARGS --settle-seconds=$SETTLE"
-[ "$MODE" = "capture" ] && ARGS="$ARGS --run-id=$(basename "$OUT")"
+# Build an argv array; never interpolate a user string into a shell command.
+ARGS=(--mode="$MODE" --beam-card="$BEAM" --seed="$SEED")
+[ -n "$POSES" ] && ARGS+=(--poses="$POSES")
+[ -n "$SETTLE" ] && ARGS+=(--settle-seconds="$SETTLE")
+[ "$MODE" = "capture" ] && ARGS+=(--run-id="$(basename "$OUT")")
+# Scale the outer timeout: a fixed 1800 s default would kill a legal long
+# --settle-seconds hold (up to 3600 s per pose), so add pose_count * settle.
+CAPTURE_TIMEOUT=1800
+if [ -n "$SETTLE" ]; then
+  _pose_n="${#POSE_ALLOW[@]}"
+  if [ -n "$POSES" ]; then
+    IFS=',' read -r -a _sel <<< "$POSES"
+    _pose_n="${#_sel[@]}"
+  fi
+  _settle_i="$(awk -v s="$SETTLE" 'BEGIN { printf "%d", s }')"
+  CAPTURE_TIMEOUT=$(( 1800 + _pose_n * _settle_i ))
+fi
 export P0B_OUT="$OUT"
 export P0B_MANIFEST="$MANIFEST"
 export TAT2_AO="$AO"
@@ -137,25 +191,35 @@ GPU_Q="name,driver_version,temperature.gpu,memory.used,utilization.gpu,clocks.cu
 if [ "$MODE" = "capture" ]; then
   nvidia-smi --query-gpu="$GPU_Q" --format=csv,noheader > "$LOG.gpu_before" 2>&1
   START="$(date +%s)"
-  flock "$LOCK" -c \
-    "cd '$ROOT' && timeout 1800 xvfb-run -a -s '-screen 0 1920x1080x24' \
-     tools/godot --path game --rendering-driver vulkan \
-     --script '$SCRIPT' -- $ARGS" \
-    > "$TMPLOG" 2>&1
+  exec 9>"$LOCK" || { echo "ABORT: cannot open $LOCK" >&2; exit 2; }
+  flock 9
+  (
+    cd "$ROOT" || exit 3
+    exec timeout "$CAPTURE_TIMEOUT" xvfb-run -a -s '-screen 0 1920x1080x24' \
+      tools/godot --path game --rendering-driver vulkan \
+      --script "$SCRIPT" -- "${ARGS[@]}"
+  ) > "$TMPLOG" 2>&1
   ST=$?
+  flock -u 9
+  exec 9>&-
   mv -f "$TMPLOG" "$LOG"
   END="$(date +%s)"
   nvidia-smi --query-gpu="$GPU_Q" --format=csv,noheader > "$LOG.gpu_after" 2>&1
-  echo "P0B_CAPTURE_WALL mode=$MODE run=$(basename "$OUT") beam=$BEAM ao=$AO exit=$ST wall=$((END - START))s"
+  echo "P0B_CAPTURE_WALL mode=$MODE run=$(basename "$OUT") beam=$BEAM ao=$AO exit=$ST wall=$((END - START))s timeout=${CAPTURE_TIMEOUT}s"
   echo "GPU before: $(cat "$LOG.gpu_before" 2>/dev/null)"
   echo "GPU after:  $(cat "$LOG.gpu_after" 2>/dev/null)"
 else
   START="$(date +%s)"
-  flock "$LOCK" -c \
-    "cd '$ROOT' && timeout 600 tools/godot --headless --path game \
-     --script '$SCRIPT' -- $ARGS" \
-    > "$TMPLOG" 2>&1
+  exec 9>"$LOCK" || { echo "ABORT: cannot open $LOCK" >&2; exit 2; }
+  flock 9
+  (
+    cd "$ROOT" || exit 3
+    exec timeout 600 tools/godot --headless --path game \
+      --script "$SCRIPT" -- "${ARGS[@]}"
+  ) > "$TMPLOG" 2>&1
   ST=$?
+  flock -u 9
+  exec 9>&-
   mv -f "$TMPLOG" "$LOG"
   END="$(date +%s)"
   echo "P0B_CAPTURE_WALL mode=$MODE exit=$ST wall=$((END - START))s (headless, no GPU)"

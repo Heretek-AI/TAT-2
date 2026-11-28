@@ -1676,15 +1676,19 @@ func _build_reticle_and_prompt(root: Control) -> void:
 	interact_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	interact_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	interact_lbl.add_theme_font_size_override("font_size", 15)
-	# Authored prompt colour #636EEC. Godot canvas colours are linear, so the
-	# authored sRGB hex (99,110,236) is stored as its linear components
-	# (0.124772, 0.155927, 0.838799); the port literal (0.58,0.72,0.98) was
-	# invented. This is fidelity, not a contrast fix: the authored colour is
-	# darker, so the prompt contrast metric drops (recorded as UI2-03 DELTA).
-	interact_lbl.add_theme_color_override("font_color", Color(0.124772, 0.155927, 0.838799, 0.98))
-	interact_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
-	# Authored 3 px drop shadow/outline (was a 1 px port offset).
-	interact_lbl.add_theme_constant_override("shadow_offset_x", 3)
+	# Authored BPUI_Hud_InteractPromptLine `txt_actiondescription`:
+	# ColourAndOpacity #636EEC alpha 1.0, ShadowOffset (1,3), shadow black
+	# alpha 0.75. Godot canvas colours are linear, so the authored sRGB hex
+	# (99,110,236) is stored as (0.124772, 0.155927, 0.838799); the port literal
+	# (0.58,0.72,0.98) was invented. The authored offsets are used unchanged
+	# (the authored row is 40 px; this port label is 15 px) rather than scaled,
+	# so no PORT_DECISION is introduced. Fidelity, not a contrast fix: the
+	# authored colour is darker, so the prompt contrast metric drops; the UI2-03
+	# reference row is itself a low-contrast DELTA, and the 4.5 floor is
+	# unchanged (never tuned to pass).
+	interact_lbl.add_theme_color_override("font_color", Color(0.124772, 0.155927, 0.838799, 1.0))
+	interact_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.75))
+	interact_lbl.add_theme_constant_override("shadow_offset_x", 1)
 	interact_lbl.add_theme_constant_override("shadow_offset_y", 3)
 	if _sans != null:
 		interact_lbl.add_theme_font_override("font", _sans)
@@ -1714,12 +1718,20 @@ func _build_reticle_and_prompt(root: Control) -> void:
 	_prompt_secondary_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_prompt_secondary_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_prompt_secondary_lbl.add_theme_font_size_override("font_size", 14)
-	# Same authored #636EEC prompt colour and 3 px shadow as the primary row
-	# (UI2-03 records both prompt rows as DELTA; the 4.5 floor is unchanged).
-	_prompt_secondary_lbl.add_theme_color_override("font_color", Color(0.124772, 0.155927, 0.838799, 0.88))
-	_prompt_secondary_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
-	_prompt_secondary_lbl.add_theme_constant_override("shadow_offset_x", 3)
-	_prompt_secondary_lbl.add_theme_constant_override("shadow_offset_y", 3)
+	# Authored BPUI_Hud_InteractPromptLine `txt_fallback_key`: ColourAndOpacity
+	# #636EEC alpha 1.0, ShadowOffset (4,2), shadow black alpha 0.75. The only
+	# authored "3" is OutlineSize 3 with OutlineColor alpha 0.0 — an invisible
+	# outline with no visual effect (HARD_LIMIT: no authored visible outline to
+	# port), applied at its authored zero alpha so it changes no pixel. The
+	# authored offsets are used unchanged (authored 30 px vs this 14 px row).
+	# Both prompt rows are recorded as UI2-03 reference DELTAs; the 4.5 floor
+	# is unchanged.
+	_prompt_secondary_lbl.add_theme_color_override("font_color", Color(0.124772, 0.155927, 0.838799, 1.0))
+	_prompt_secondary_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.75))
+	_prompt_secondary_lbl.add_theme_constant_override("shadow_offset_x", 4)
+	_prompt_secondary_lbl.add_theme_constant_override("shadow_offset_y", 2)
+	_prompt_secondary_lbl.add_theme_constant_override("outline_size", 3)
+	_prompt_secondary_lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.0))
 	if _sans != null:
 		_prompt_secondary_lbl.add_theme_font_override("font", _sans)
 	_prompt_secondary_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE

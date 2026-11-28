@@ -8,9 +8,9 @@
 This report records what was **measured**, what was **wired**, and what is
 **not recoverable from the cook**. It does not claim a full Wwise parity: the
 control plane is still the W11 slice (14/23 switch groups, 4/8 states, 16/50
-RTPCs), and 357 of the 645 authored VO lines are still unwired — most because
-no subsystem owns them, a few at an existing path whose open item is an
-attribution decision (§4.3).
+RTPCs), and 357 of the 645 authored VO lines are still unwired — 254 with no
+owning subsystem, 102 unwired at an existing path (where the open item is an
+attribution/behaviour decision), and 1 authored silence (§4.3).
 
 ## 1. What changed
 
@@ -159,12 +159,17 @@ Every row below is a partition of the 357 unmapped lines: each authored
 column sums to **357** (sum check recorded in §4.4). The table separates two
 cases, and each row's gap cell says which one it is:
 
-* a **genuinely missing subsystem** — nothing in the port owns the beat; or
+* a **genuinely missing subsystem** — nothing in the port owns the beat
+  (**254** of the 357 lines: 224 in wholly-missing rows plus the 30 flee/evade
+  lines inside the mixed row 9); or
 * a **beat that is unwired at an existing path** — the owning path exists and is
   reachable, and the open item is an attribution/behaviour decision, not a
-  missing system.
+  missing system (**102** of the 357 lines: 61 `NoiseHeard`, 19
+  `ChasingThiefKnockOutThief`, 9 `AboutToWakeUp`, 8 `RevivedByAlly`, 5
+  `SlippingLosingBalance`).
 
-`ChasingThiefKnockOutThief` is the second kind: the terminal
+The remaining 1 line is **authored silence** (`Silent/Empty`, 0 media), which is
+neither. `ChasingThiefKnockOutThief` is the second kind: the terminal
 downed→capture path exists and is reachable (§4.3.1). Every line stays indexed
 and is playable by name through `play_vo_event()`; none is invented or re-mapped
 onto another event.
@@ -201,9 +206,10 @@ sources, all through the same `take_damage` entry:
 
 `take_damage` floors health at 0 (`thief_character.gd:2499`) and calls
 `_enter_downed()` (`:723`), which emits `downed_started` (`:734`); when the
-downed timer expires `_tick_downed` emits `downed` (`:743`). Both are connected
-at `mission_controller.gd:3722-3723`, and `_on_player_downed` (`:5363-5364`)
-calls `_finish_run("capture")`.
+downed timer expires `_tick_downed` emits `downed` (`:743`). The two connects are
+`mission_controller.gd:3721` (`downed_started.connect(_on_player_downed_started)`)
+and `:3722` (`downed.connect(_on_player_downed)`); `:3723` is `add_child`. Then
+`_on_player_downed` (`:5363-5364`) calls `_finish_run("capture")`.
 
 Two facts matter for the audio decision:
 
@@ -217,9 +223,13 @@ Two facts matter for the audio decision:
 The open item is therefore **attribution, not existence**: which source owns the
 line (the guard that landed the blow, only a melee finisher rather than fall
 damage, or the nearest chaser at the `downed` signal), and what should happen in
-a build where `revive()` (`thief_character.gd:756`, no caller in this
-single-player tree) clears `downed` before the timer fires. Those are behaviour
-decisions for the owner, so the line is not wired here.
+a build where `revive()` (`thief_character.gd:756`) clears `downed` before the
+timer fires. That method has **no production caller** in this tree — the only
+callers are tests (`e2e_tier2_boundaries.gd:801,809`,
+`e2e_tier4_scenarios.gd:295`), which use it to exercise the downed/revive
+contract — so no shipped path pre-empts the capture today, but a future reviver
+would. Those are behaviour decisions for the owner, so the line is not wired
+here.
 
 
 ### 4.4 Sum check (recorded)
@@ -230,30 +240,39 @@ counts (now **18 + 19 + 12 = 49**), and the 19 DSP idle lines were listed inside
 the idle-chatter row as well as in their own row (now **only** their own row,
 with the 74 idle-chatter row re-derived as `40 + 19 + 15`).
 
-Round 3 adds no numbers; it makes the check **keyed by family** rather than
-positional (so swapping the numbers of two equal-size rows fails instead of
-passing), asserts the corrected framing (the old "no owning system" claim must
-be gone), and pins the round-3 falsifier finding that the
-`ChasingThiefKnockOutThief` path exists (`_finish_run("capture")` on `downed`,
-no player health regeneration). It parses the §4.3 table from this file,
-rebuilds the mapped/unmapped partition from the authored index and the
-director's three const tables, and cross-checks document and data per family.
-Run from the repository root:
+Round 3 corrected the framing: row 9 no longer claims the thief-KO beat is a
+missing sub-state, and §4.3.1 records the reachable downed→capture path.
+
+Round 4 adds no numbers; it makes the check **row-specific** rather than relying
+on one document-wide token, so deleting only row 9's KO/attribution clause fails
+even though the rest of the wording still mentions an existing path. The check
+now also:
+
+* parses the row labels and re-derives the split asserted in §4.3 —
+  **254** have no owning subsystem, **102** are unwired at an existing path
+  (61 `NoiseHeard` + 19 thief-KO + 9 pre-wake + 8 ally-revive + 5 slip), and
+  **1** is authored silence, so a mislabelled row fails;
+* pins the round-4 citations — `mission_controller.gd:3721`/`:3722` are the two
+  connects (`:3723` is `add_child`, so a range ending there would be wrong) and
+  `revive()` has **no production caller** (`e2e_tier2_boundaries.gd:801,809`,
+  `e2e_tier4_scenarios.gd:295` call it as a test API);
+* keeps the round-3 downed→capture assertions (no player health regeneration,
+  `_finish_run("capture")` on `downed`).
+
+It parses the §4.3 table from this file, rebuilds the mapped/unmapped partition
+from the authored index and the director's three const tables, and cross-checks
+document and data per family. Run from the repository root:
 
 ```
 $ python3 - <<'EOF'
 import json, re
 
-# 1) DOCUMENT SIDE — parse §4.3 into {first family token: Lines}. Keying by the
-#    family token (not row order) means swapping the numbers of two equal-size
-#    rows fails, which a positional sum cannot catch. Also assert the old
-#    "no owning system" framing is gone.
+# 1) DOCUMENT SIDE — parse §4.3 into {first family token: Lines} (keyed, so a
+#    same-size row swap fails) and classify every row by its gap-cell label.
 doc = open("docs/reports/phase3-audio-20261127.md").read()
 sec = doc.split("### 4.3 ")[1].split("### 4.4 ")[0]
-doc_rows = {
-    m.group(2): int(m.group(1))
-    for m in re.finditer(r"^\| (\d+) \| `([^`]+)`", sec, re.M)
-}
+rows = re.findall(r"^\| (\d+) \| `([^`]+)`[^|]*\| (.+?) \|$", sec, re.M)
+doc_rows = {tok: int(n) for n, tok, _gap in rows}
 EXPECT = {
     "IdleAloneOnPatrol/NonSpoken": 74,
     "Enforcer1_HauntstableDSP/IdleAloneOnPatrol/NonSpoken": 19,
@@ -273,8 +292,13 @@ EXPECT = {
 }
 assert doc_rows == EXPECT, doc_rows
 assert len(doc_rows) == 15 and sum(doc_rows.values()) == 357
+# Framing must be row-specific, not one document-wide token: the mixed row has
+# to keep the KO attribution clause, and the old false claim must be gone.
+row9 = [g for n, tok, g in rows if tok == "ThiefObserved/ChasingThiefFightingThenFlees"]
+assert len(row9) == 1 and "attribution" in row9[0].lower(), row9
+assert "existing path" in row9[0].lower() and "downed" in row9[0].lower(), row9
+assert "no flee, thief-KO or evade sub-state" not in sec
 assert "Every family has **no owning system" not in sec
-assert "unwired at an existing path" in sec.lower()
 
 # 2) DATA SIDE — rebuild mapped/unmapped from the authored index + the director.
 d = json.load(open("game/data/generated/audio_wwise.json"))
@@ -360,14 +384,39 @@ assert data_rows == EXPECT == doc_rows
 covered = [b for buckets in FAM.values() for b in buckets]
 assert len(covered) == len(set(covered)) == len(rem) and set(rem) == set(covered)
 
-# 4) The round-2 corrections and the round-3 framing fact.
-assert sum(rem[k] for k in rem if k[1] == "BrokenObjectObserved") == 19
-assert rem[("Enforcer1", "BrokenObjectObserved", "Door")] == 4
-trio = [
+# 4) Classify the table by its row labels and re-derive the 254 / 102 / 1 split.
+missing_doc = sum(
+    int(n) for n, _tok, gap in rows if gap.startswith("**Missing subsystem")
+)
+unwired_doc = sum(
+    int(n) for n, _tok, gap in rows if gap.startswith("**Unwired at an existing path")
+)
+silence_doc = sum(
+    int(n) for n, _tok, gap in rows if gap.startswith("**Authored silence")
+)
+mixed = [int(n) for n, _tok, gap in rows if gap.startswith("**Mixed")]
+assert len(mixed) == 1, mixed
+flee, ko, evaded = (
     rem[("Enforcer1", "ThiefObserved", s)] + rem[("Hauntstable1", "ThiefObserved", s)]
     for s in TRIO
-]
-assert trio == [18, 19, 12], trio
+)
+assert (flee, ko, evaded) == (18, 19, 12)
+missing, unwired = missing_doc + flee + evaded, unwired_doc + ko
+assert (missing, unwired, silence_doc) == (254, 102, 1), (missing, unwired, silence_doc)
+assert missing + unwired + silence_doc == 357
+plain = sec.replace('**', '')
+assert '254 of the 357' in plain and '102 of the 357' in plain
+
+# 5) The two round-4 citation fixes.
+# (checked against §4.3 prose only: this check's own text lives in §4.4)
+assert "mission_controller.gd:3721" in sec and ":3722" in sec
+assert not re.search(r"mission_controller\.gd:37\d\d-\d", sec)
+assert "no production caller" in sec
+assert "e2e_tier2_boundaries.gd:801,809" in sec and "e2e_tier4_scenarios.gd:295" in sec
+
+# 6) Round-2/3 facts still hold.
+assert sum(rem[k] for k in rem if k[1] == "BrokenObjectObserved") == 19
+assert rem[("Enforcer1", "BrokenObjectObserved", "Door")] == 4
 dsp = sum(n for k, n in rem.items() if k[0] == "Enforcer1_HauntstableDSP")
 assert (
     dsp == 19
@@ -378,14 +427,11 @@ assert (
     )
     == 74
 )
-assert rem[("Enforcer1", "ThiefObserved", "ChasingThiefKnockOutThief")] == 10
-assert rem[("Hauntstable1", "ThiefObserved", "ChasingThiefKnockOutThief")] == 9
-# The path that owns the KO beat exists (round-3 falsifier finding): the capture
-# finish, the downed signal, and the no-regen health writes are all in the tree.
 mc = open("game/src/missions/mission_controller.gd").read()
 th = open("game/src/player/thief_character.gd").read()
 ga = open("game/src/ai/guard_ai.gd").read()
 assert 'func _on_player_downed() -> void:\n\t_finish_run("capture")' in mc
+assert "player.downed_started.connect(_on_player_downed_started)" in mc
 assert "player.downed.connect(_on_player_downed)" in mc
 assert "func _enter_downed()" in th and "downed.emit()" in th
 assert "player.take_damage(MELEE_DAMAGE)" in ga
@@ -393,15 +439,18 @@ assert re.search(r"^\s*health = maxf\(0\.0, health - amount\)$", th, re.M)
 assert len(re.findall(r"^\s*health = max_health$", th, re.M)) == 2  # init + revive only
 
 print(
-    "OK rows=%d sum=%d mapped=%d unmapped=%d broken=%d trio=%s dsp=%d idle_only=%d "
-    "ko_path=downed->capture leftover=0"
+    "OK rows=%d sum=%d mapped=%d unmapped=%d missing=%d unwired=%d silence=%d "
+    "broken=%d trio=%s dsp=%d idle_only=%d ko_path=downed->capture leftover=0"
     % (
         len(doc_rows),
         sum(doc_rows.values()),
         len(mapped),
         645 - len(mapped),
+        missing,
+        unwired,
+        silence_doc,
         sum(rem[k] for k in rem if k[1] == "BrokenObjectObserved"),
-        trio,
+        [flee, ko, evaded],
         dsp,
         sum(
             n
@@ -411,12 +460,12 @@ print(
     )
 )
 EOF
-OK rows=15 sum=357 mapped=288 unmapped=357 broken=19 trio=[18, 19, 12] dsp=19 idle_only=74 ko_path=downed->capture leftover=0
+OK rows=15 sum=357 mapped=288 unmapped=357 missing=254 unwired=102 silence=1 broken=19 trio=[18, 19, 12] dsp=19 idle_only=74 ko_path=downed->capture leftover=0
 ```
 
-Because both sides are compared as `{family token: Lines}` maps, the table can
-no longer drift from the data even where two rows share the same line count
-(the three single-line rows, the two 8-line rows). The check also proves the
+Both sides are compared as `{family token: Lines}` maps, so the table can no
+longer drift from the data even where two rows share the same line count (the
+three single-line rows, the two 8-line rows). The check also proves the
 partition is complete: every remaining bucket is covered exactly once
 (`leftover=0`), so the DSP 19 is disjoint from the 74 idle-chatter lines.
 

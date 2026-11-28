@@ -202,27 +202,42 @@ and the round-2 set; committed logs untouched):
   before `python3 -B tools/check_gate_ratchet.py --generating-poststamp` (the
   flag skips only the self-referential poststamp entry while generating), the
   checker's real output and exit code, then `EXIT:` and `FINISHED:`. No line is
-  hand-assembled. A plain `python3 -B tools/check_gate_ratchet.py` afterwards
-  validates the finished artefact end to end. Measured for this artifact:
-  `STARTED: 2026-11-27T23:03:14-05:00`, `EXIT: 0`,
-  `FINISHED: 2026-11-27T23:03:15-05:00`, mtime `23:03:15.049` (375 lines).
+  hand-assembled. Measured for this artifact: `STARTED:
+  2026-11-27T23:17:48-05:00`, `EXIT: 0`,
+  `FINISHED: 2026-11-27T23:17:49-05:00`, mtime `23:17:49.004`
+  (**378 lines / 367 PASS**).
 - **Timestamp self-check (A1):** `tools/check_gate_ratchet.py` requires **both**
-  `STARTED:` and `FINISHED:` on every one of the 59 bound evidence logs (the
-  duplicate collision binding shares one file); a missing pair fails with
+  `STARTED:` and `FINISHED:` on every evidence binding — 59 bindings, 58 unique
+  files (the duplicate collision binding shares one file; 14 numeric+marker logs
+  are evaluated twice, 73 binding→log evaluations). A missing pair fails with
   `missing stamp pair`, as does `FINISHED < STARTED` or `mtime < STARTED`.
   Controls in isolated scratch ROOTs: the old `25d9c94` headerless poststamp
   → **FAIL** `missing stamp pair`; both stamps deleted from `e2e.log` →
   **FAIL** `missing stamp pair`; `STARTED=2099…` → **FAIL** after-FINISHED;
   mtime `2000-01-01` → **FAIL** predates-STARTED; restored artifact → **PASS**.
-  The check rejects the round-2 hand-assembled file (`STARTED 22:16:00` >
-  `FINISHED 22:15:28`).
-- **Poststamp body check (B1):** the poststamp binding must carry real checker
-  output, not just the marker: a **≥100-line** body containing
-  `PASS: measured_on=`, `PASS: audit coverage`,
-  `PASS: runner/binding self-check` and `GATE_RATCHET: PASS`. A body reduced to
-  the marker line (5 lines, valid stamps) → **FAIL** `below the 100-line
-  minimum … a bare PASS marker is not evidence`; the current artifact (375
-  lines) **PASS**es.
+- **Poststamp body bound to the ratchet (B1):** the artifact must contain
+  exactly `PASS: measured_on=5857589` and
+  `PASS: report names measured_on=5857589` (any other or duplicate value
+  fails), the exact line
+  `PASS: runner/binding self-check 58 gates, 59 ratchet bindings`,
+  `PASS: audit coverage 12660/12703`, **≥300 lines** and **≥300 `^PASS:` lines**
+  (current: 378 / 367). Controls: a 122-line stub → **FAIL** (line/PASS
+  floor); the stale `25d9c94` body plus a typed `measured_on=5857589` line →
+  **FAIL** (stale `37bb69e` value and line/PASS floor); an identity rewrite of
+  the current body to `measured_on=37bb69e` → **FAIL** (measured_on binding);
+  the current artifact → **PASS**.
+- **Per-large-log minima:** `e2e.log ≥ 4000`, `run_tests.log ≥ 3000`,
+  `e2e_a2.log ≥ 200` lines (current 4343 / 3647 / 253). A gutted 10-line
+  `e2e.log` with a matching summary and stamps → **FAIL**
+  `below the pinned 4000-line minimum`.
+- **What the checks prove, and what they do not.** They prove the artifact was
+  mechanically captured (stamps bracket a real checker run), its stamps are
+  coherent, its `measured_on` and binding lines match this ratchet, its body has
+  the real checker's shape/size, and every bound log is present with both
+  stamps. They do **not** prove the body is byte-identical to a fresh run: a
+  post-hoc byte edit that preserves the stamps, mtime, and shape would pass
+  these checks. Only re-running the gates and regenerating the poststamp
+  catches that. The 58/58 measurement at `5857589` is unchanged.
 
 ## 7. Host performance and the `/tmp` reference loss
 

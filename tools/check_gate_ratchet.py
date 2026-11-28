@@ -60,9 +60,16 @@ FINISHED_RE = re.compile(r"^FINISHED:\s*(\S+)\s*$", re.MULTILINE)
 
 # The poststamp artifact is a static evidence log that asserts the ratchet PASS.
 # A bare `GATE_RATCHET: PASS` line is not proof; require the checker's own real
-# output and a body long enough to be that output (the real artifact is ~360
-# lines).
-POSTSTAMP_MIN_LINES = 100
+# output, bound to the ratchet's measured_on, and a body long enough to be that
+# output. The current real artifact is 375 lines / 364 PASS lines; a 122-line
+# stub or a marker-only body must fail.
+POSTSTAMP_MIN_LINES = 300
+POSTSTAMP_MIN_PASS = 300
+
+# The three large gate logs keep their summary/footer even when gutted. Pin a
+# minimum size so a 10-line e2e stub cannot pass on a matching summary and an
+# allowlisted ERROR count. Current sizes: e2e ~4.3k, run_tests ~3.6k, a2 ~250.
+LARGE_LOG_MIN_LINES = {"e2e": 4000, "run_tests": 3000, "e2e_a2": 200}
 
 
 class DuplicateKeyError(ValueError):
@@ -1226,9 +1233,29 @@ def main() -> int:
         else:
             print(f"PASS: {log_name} records {marker}")
 
+    # A gate log that keeps its summary/footer but is otherwise gutted is not a
+    # measurement. Pin a minimum size for the three large logs; a 10-line e2e
+    # stub fails even if its summary and ERROR count look right.
+    for log_name, min_lines in sorted(LARGE_LOG_MIN_LINES.items()):
+        filename = f"{log_name}.log"
+        lpath = log_dir / filename
+        if not lpath.is_file():
+            continue  # the evidence loops already fail a missing bound log
+        n = len(lpath.read_text(errors="replace").splitlines())
+        if n < min_lines:
+            fail(
+                f"{filename} has {n} line(s), below the pinned {min_lines}-line "
+                "minimum — a gutted gate log is not a measurement"
+            )
+        else:
+            print(f"PASS: {filename} has {n} lines >= {min_lines}")
+
     # The poststamp artifact must carry the checker's real output, not a bare
-    # marker. Skipped while generating (the file is then the previous artifact);
-    # the plain run after capture enforces it.
+    # marker, and it must be bound to THIS ratchet: the measured_on lines must
+    # equal the ratchet's measured_on, the runner/binding line must name the
+    # exact committed counts, and the body must have the structural size of a
+    # real run. Skipped while generating (the file is then the previous
+    # artifact); a plain run after capture enforces it.
     if not generating_poststamp:
         poststamp_name = evidence.get("gate_ratchet")
         if poststamp_name:
@@ -1236,28 +1263,53 @@ def main() -> int:
             if path is not None and path.exists():
                 text = path.read_text(errors="replace")
                 lines = text.count("\n") + (0 if text.endswith("\n") else 1)
-                required = (
-                    "PASS: measured_on=",
-                    "PASS: audit coverage",
-                    "PASS: runner/binding self-check",
-                    "GATE_RATCHET: PASS",
+                pass_lines = len(re.findall(r"^PASS:", text, re.MULTILINE))
+                measured_lines = re.findall(
+                    r"^PASS: measured_on=(\S+)$", text, re.MULTILINE
                 )
-                missing = [needle for needle in required if needle not in text]
-                if lines < POSTSTAMP_MIN_LINES:
-                    fail(
-                        f"{poststamp_name} has {lines} line(s), below the "
-                        f"{POSTSTAMP_MIN_LINES}-line minimum for real checker output "
-                        "— a bare PASS marker is not evidence"
+                report_lines = re.findall(
+                    r"^PASS: report names measured_on=(\S+)$", text, re.MULTILINE
+                )
+                binding_count = len(set(LOG_GATES) | set(PROBE_GATES) | {"probe_leak"})
+                expected_binding = (
+                    f"PASS: runner/binding self-check "
+                    f"{EXPECTED_RUNNER_GATE_COUNT} gates, "
+                    f"{binding_count} ratchet bindings"
+                )
+                expected_coverage = (
+                    f"PASS: audit coverage "
+                    f"{get('audit', 'coverage_num')}/{get('audit', 'coverage_den')}"
+                )
+                problems = []
+                if measured_lines != [measured_on]:
+                    problems.append(
+                        f"measured_on lines {measured_lines!r} != [{measured_on!r}]"
                     )
-                elif missing:
+                if report_lines != [measured_on]:
+                    problems.append(
+                        f"report measured_on lines {report_lines!r} != "
+                        f"[{measured_on!r}]"
+                    )
+                if expected_binding not in text.splitlines():
+                    problems.append(f"missing exact line {expected_binding!r}")
+                if expected_coverage not in text:
+                    problems.append(f"missing {expected_coverage!r}")
+                if lines < POSTSTAMP_MIN_LINES:
+                    problems.append(f"{lines} line(s) < {POSTSTAMP_MIN_LINES} minimum")
+                if pass_lines < POSTSTAMP_MIN_PASS:
+                    problems.append(
+                        f"{pass_lines} PASS line(s) < {POSTSTAMP_MIN_PASS} minimum"
+                    )
+                if problems:
                     fail(
-                        f"{poststamp_name} is missing real checker output "
-                        f"{missing!r}; a bare PASS marker is not evidence"
+                        f"{poststamp_name} is not real checker output bound to "
+                        f"measured_on={measured_on}: " + "; ".join(problems)
                     )
                 else:
                     print(
                         f"PASS: {poststamp_name} carries real checker output "
-                        f"({lines} lines; measured_on/coverage/bindings present)"
+                        f"bound to measured_on={measured_on} "
+                        f"({lines} lines, {pass_lines} PASS, exact bindings)"
                     )
 
     # Committed self-check: the runner gate set and the ratchet binding set must

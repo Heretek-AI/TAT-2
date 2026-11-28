@@ -1,7 +1,7 @@
 == POST_STAMP gate_ratchet
 COMMAND: python3 -B tools/check_gate_ratchet.py --generating-poststamp
 CWD: .
-STARTED: 2026-11-27T23:03:14-05:00
+STARTED: 2026-11-27T23:17:48-05:00
 
 PASS: measured_on=5857589
 PASS: audit.coverage_den=12703
@@ -361,6 +361,9 @@ PASS: test_w10a2_guard_placement.log records GUARD_PLACEMENT_SUMMARY: fails=0
 PASS: p0b_kf27_reference.log stamps coherent (STARTED <= FINISHED, mtime >= STARTED)
 PASS: p0b_kf27_reference.log records P0B_KF27_REF pose=upper_foyer met=9/9
 SKIP: gate_ratchet poststamp self-check (generating artifact)
+PASS: e2e.log has 4343 lines >= 4000
+PASS: e2e_a2.log has 253 lines >= 200
+PASS: run_tests.log has 3647 lines >= 3000
 PASS: runner/binding self-check 58 gates, 59 ratchet bindings
 PASS: report records compile ('compile\\s*\\|\\s*229\\s*/\\s*0')
 PASS: report records run_tests ('run_tests\\s*\\|\\s*328')
@@ -372,4 +375,4 @@ PASS: report names measured_on=5857589
 GATE_RATCHET: PASS (baseline and committed evidence agree; Godot gates run locally)
 
 EXIT: 0
-FINISHED: 2026-11-27T23:03:15-05:00
+FINISHED: 2026-11-27T23:17:49-05:00

@@ -22,7 +22,7 @@
     "audio_mix_rate": 44100.0,
     "cmdline": [
       "--script",
-      "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b_capture.gd"
+      "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/baseline-run/build/qa/p0b_capture.gd"
     ],
     "display_server": "headless",
     "godot": "4.7.2-stable (official)",
@@ -38,12 +38,12 @@
     "TAT2_BEAM_CARD": "on",
     "XDG_SESSION_TYPE": "wayland"
   },
-  "finished_at_utc": "2026-11-27T22:25:06",
+  "finished_at_utc": "2026-11-28T03:07:39",
   "git": {
-    "branch": "phase12-integration",
+    "branch": "teamwork/20261127-1810-phase3-baseline-run",
     "dirty": true,
-    "sha": "60474c004d21b0f19481cdf0b223afde2e12a78a",
-    "sha_short": "60474c004d21"
+    "sha": "5857589853e43a30339ccc3e2d8cba26c1dde281",
+    "sha_short": "5857589853e4"
   },
   "gpu": {
     "available": true,
@@ -53,10 +53,10 @@
       [
         "NVIDIA GeForce RTX 4070 Laptop GPU",
         "620.73.04",
-        "62.83",
-        "3951",
-        "42",
-        "210"
+        "59.65",
+        "5822",
+        "17",
+        "1980"
       ]
     ],
     "used_by_capture": false
@@ -85,7 +85,7 @@
     "The fixed-pose run marks poses, not route beats. A 27-beat route run must call mark_beat(S01..S27); p0b_audio_stats.py --route prints the reference table.",
     "Reference audio is documented RMS/peak dBFS (not LUFS); the script computes RMS/peak only and states the clip's -43.9 LUFS as context."
   ],
-  "out_dir": "/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b/dry-run",
+  "out_dir": "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/baseline-run/build/qa/p0b/dry-run",
   "poses": [
     {
       "beat": "S13",
@@ -256,8 +256,8 @@
       ]
     }
   ],
-  "repo_root": "/home/john/.local/share/opencode/worktree/318f41/phase12-integration",
-  "run_id": "20261127T222506Z_60474c004d21_on",
+  "repo_root": "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/baseline-run",
+  "run_id": "20261128T030739Z_5857589853e4_on",
   "schema": "tat2.p0b_capture/1",
   "seed": {
     "active_map_seed": 0,
@@ -282,5 +282,5 @@
     "frames": 60,
     "selector": "median-mean"
   },
-  "started_at_utc": "2026-11-27T22:25:06"
+  "started_at_utc": "2026-11-28T03:07:39"
 }

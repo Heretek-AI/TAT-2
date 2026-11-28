@@ -1,7 +1,7 @@
 == FINAL_GATE e2e_a2
 COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/e2e/run_e2e_tests.gd -- --tier=a2
-CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
-STARTED: 2026-11-27T17:24:07-05:00
+CWD: .
+STARTED: 2026-11-27T22:06:14-05:00
 
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
@@ -148,8 +148,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [3] _build_one_draw_item (res://src/core/level_loader.gd:5230)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7713)
 COL_PLANAR /Game/Art/Effects/WardZones/SM_SlowWardZone_Quad instances=82 skipped=1
-AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=360
-ROUGHNESS_BAKE count=87 pixels=74973184 ms=5555 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=336
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=5546 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
 BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=64953 applied=64682 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=206 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0 mirrored_bases=3297 mirrored_multimesh=3119 mirrored_single=178 mirrored_splits=464 mirrored_cull_front=312 mirrored_cull_disabled=0 mirrored_mesh_bytes=31097388 mirrored_mesh_count=103 mirrored_unbaked=0
@@ -213,17 +213,17 @@ PASS: [A2-02] boot identity map=guildhall mission=Mission.Guildhall.VaultHeist
 PASS: [A2-03] boot identity difficulty=1 free_play=false phase=main
 PASS: [A2-04] run clock run_time_limit=7200 s == authored mission row 7200 s
 PASS: [A2-05] Novice guard count 4 == 4 (PORT_DECISION 4/6/8)
-A2_MEASURE guard=Guard_1 marker=(49.2489, 46.3155, -35.9301) dist=1.302 bucket=DA_SpawnBucket_StandardGuards_Lanterns layers=["Security_Tower_D"]
-A2_MEASURE guard=Guard_3 marker=(43.7149, 27.05, -26.2188) dist=1.096 bucket=DA_SpawnBucket_StandardGuards_Bouncers layers=["Security_GroundFloor_Lounge_A", "Security_GroundFloor_Lounge_A_Easy", "Security_GroundFloor_Lounge_B", "Security_GroundFloor_Lounge_B_Easy"]
+A2_MEASURE guard=Guard_1 marker=(49.2489, 46.3155, -35.9301) dist=1.297 bucket=DA_SpawnBucket_StandardGuards_Lanterns layers=["Security_Tower_D"]
+A2_MEASURE guard=Guard_3 marker=(43.7149, 27.05, -26.2188) dist=1.090 bucket=DA_SpawnBucket_StandardGuards_Bouncers layers=["Security_GroundFloor_Lounge_A", "Security_GroundFloor_Lounge_A_Easy", "Security_GroundFloor_Lounge_B", "Security_GroundFloor_Lounge_B_Easy"]
 A2_MEASURE guard=Guard_ClubLantern_0 marker=(39.5989, 36.5, -13.8801) dist=0.967 bucket=DA_SpawnBucket_StandardGuards_Lanterns layers=["Security_SecondFloor_D"]
-A2_MEASURE guard=Guard_ClubLantern_2 marker=(30.9197, 12.4488, -31.5598) dist=1.000 bucket=DA_SpawnBucket_StandardGuards_Bouncers layers=["Security_Basement_Storage_A_Easy", "Security_Basement_Storage_A"]
+A2_MEASURE guard=Guard_ClubLantern_2 marker=(30.9197, 12.4488, -31.5598) dist=0.993 bucket=DA_SpawnBucket_StandardGuards_Bouncers layers=["Security_Basement_Storage_A_Easy", "Security_Basement_Storage_A"]
 PASS: [A2-GUARD-META] every guard carries its own spawn_marker meta ([])
 PASS: [A2-GUARD-DIST] every guard <= 2.0 m from its spawn marker ([])
 PASS: [A2-GUARD-FLOOR] every guard <= 0.5 m off its marker floor ray ([])
 PASS: [A2-GUARD-BUCKET] every guard selected through an authored guard bucket, never Hauntstable ([])
 PASS: [A2-GUARD-VISIBLE] every guard visible with meshes ([])
 PASS: [A2-LOUNGE-BBOX] tracked poi-lounge-floor bbox read from content_overrides.json ([P: (20.0, 24.0, -46.0), S: (32.0, 8.0, 41.0)])
-PASS: [A2-LOUNGE-GUARD] Lounge guard marker=C_20 inside the tracked bbox at (43.83867, 26.00134, -25.92506) (guards in bbox=1)
+PASS: [A2-LOUNGE-GUARD] Lounge guard marker=C_20 inside the tracked bbox at (43.83042, 26.00134, -25.94464) (guards in bbox=1)
 PASS: [A2-CIV-COUNT] civilian count 3 == 3
 A2_MEASURE civilian=@CharacterBody3D@41156 pos=(44.0425, 26.00162, -25.6772) in_lounge=true
 A2_MEASURE civilian=@CharacterBody3D@41159 pos=(7.5943, 28.0012, -43.3089) in_lounge=false
@@ -248,10 +248,6 @@ A2_MEASURE gc layers=174 leaves=80 static_bookcase_leaves=20 visible_broken=0 mi
 PASS: [A2-GC-STATS] runtime GC census layers=174 (>=95) leaves=80 (>=79) static_bookcase_leaves=20 (>=20) visible_broken=0 missing=0
 PASS: [A2-GC-SWAP] one chest swap @Area3D@40492 -> leaf (broken=true opened=true)
 SUMMARY: fails=0 passed=22 total=22
-WARNING: 12 ObjectDB instances were leaked at exit (run with `--verbose` for details).
-   at: cleanup (core/object/object.cpp:2536)
-ERROR: 6 resources still in use at exit (run with --verbose for details).
-   at: clear (core/io/resource.cpp:822)
 
 EXIT: 0
-FINISHED: 2026-11-27T17:24:37-05:00
+FINISHED: 2026-11-27T22:06:44-05:00

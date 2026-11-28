@@ -1,10 +1,10 @@
 == FINAL_GATE literal_greps
 COMMAND: make check-greps
-CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
-STARTED: 2026-11-27T17:28:43-05:00
+CWD: .
+STARTED: 2026-11-27T22:11:17-05:00
 
 python3 tools/check_literal_greps.py
 LITERAL_GREPS PASS code_hits=0 ui_rating_literals=0 files=112
 
 EXIT: 0
-FINISHED: 2026-11-27T17:28:43-05:00
+FINISHED: 2026-11-27T22:11:17-05:00

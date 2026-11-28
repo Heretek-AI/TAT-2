@@ -44,11 +44,32 @@ from __future__ import annotations
 import json
 import re
 import sys
+from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 RATCHET = ROOT / "tools" / "gate_ratchet.json"
 DEFAULT_REPORT = "docs/reports/final-20261127.md"
+
+# Runner gate logs (and the mechanically captured poststamp log) open with
+# `STARTED: <iso>` and close with `FINISHED: <iso>`. A committed artifact whose
+# finish predates its start, or whose file mtime predates its start, was
+# assembled by hand rather than measured; the evidence chain rejects it.
+STARTED_RE = re.compile(r"^STARTED:\s*(\S+)\s*$", re.MULTILINE)
+FINISHED_RE = re.compile(r"^FINISHED:\s*(\S+)\s*$", re.MULTILINE)
+
+# The poststamp artifact is a static evidence log that asserts the ratchet PASS.
+# A bare `GATE_RATCHET: PASS` line is not proof; require the checker's own real
+# output, bound to the ratchet's measured_on, and a body long enough to be that
+# output. The current real artifact is 375 lines / 364 PASS lines; a 122-line
+# stub or a marker-only body must fail.
+POSTSTAMP_MIN_LINES = 300
+POSTSTAMP_MIN_PASS = 300
+
+# The three large gate logs keep their summary/footer even when gutted. Pin a
+# minimum size so a 10-line e2e stub cannot pass on a matching summary and an
+# allowlisted ERROR count. Current sizes: e2e ~4.3k, run_tests ~3.6k, a2 ~250.
+LARGE_LOG_MIN_LINES = {"e2e": 4000, "run_tests": 3000, "e2e_a2": 200}
 
 
 class DuplicateKeyError(ValueError):
@@ -561,16 +582,23 @@ LOG_GATES = {
         "zero_groups": ((4, "orphans"),),
         "passes_key": None,
     },
-    # Phase 3 engine-error ceiling scan. The allowlist and the 31/1/482
-    # ceilings live in build/qa/e2e_errscan.sh + its allowlist; `new` (an
-    # unlisted ERROR: message) is an exact zero.
+    # Phase 3 engine-error ceiling scan. The allowlist and the 33/2/482
+    # ceilings/minimum totals live in build/qa/e2e_errscan.sh + its allowlist;
+    # the ceilings are pinned in gate_ratchet.json too, `new` (an unlisted
+    # ERROR: message) is an exact zero, and the actual counts must stay at or
+    # above the tamper minima (e2e 31, e2e_a2 0, run_tests 482).
     "e2e_errscan": {
         "command": "bash build/qa/e2e_errscan.sh --logdir docs/reports/logs/final",
         "pattern": lambda g: (
             r"E2E_ERRSCAN PASS e2e=(\d+)/(\d+) e2e_a2=(\d+)/(\d+) "
             r"run_tests=(\d+)/(\d+) new=(\d+)"
         ),
-        "minimums": [],
+        "minimums": [(1, "e2e_min"), (3, "e2e_a2_min"), (5, "run_tests_min")],
+        "exact_groups": [
+            (2, "e2e_ceiling"),
+            (4, "e2e_a2_ceiling"),
+            (6, "run_tests_ceiling"),
+        ],
         "zero_groups": ((7, "new"),),
         "passes_key": None,
     },
@@ -891,6 +919,11 @@ def fail(msg: str) -> None:
 
 
 def main() -> int:
+    generating_poststamp = "--generating-poststamp" in sys.argv[1:]
+    unknown = [arg for arg in sys.argv[1:] if arg != "--generating-poststamp"]
+    if unknown:
+        print(f"FAIL: unknown argument(s) {unknown!r}")
+        return 1
     if not RATCHET.exists():
         print(f"FAIL: missing {RATCHET.relative_to(ROOT)}")
         return 1
@@ -978,6 +1011,52 @@ def main() -> int:
     def evidence_path(log_name: str) -> Path | None:
         return safe_join_under(ROOT, log_dir, str(log_name))
 
+    # Evidence-log timestamp coherence. The runner writes STARTED: before a gate
+    # and FINISHED: after it; the file mtime is the final write. EVERY bound log
+    # must carry both stamps: a log without them (or whose FINISHED predates
+    # STARTED, or whose mtime predates STARTED) is an assembled artifact, not a
+    # measurement. When the poststamp log itself is being generated
+    # (`--generating-poststamp`), it is skipped here because the checker is
+    # reading the previous artifact; a plain run after the mechanical capture
+    # validates the new one.
+    poststamp_log = str(evidence.get("gate_ratchet") or "")
+
+    def verify_stamps(path: Path, log_name: str) -> None:
+        if generating_poststamp and log_name == poststamp_log:
+            print(f"SKIP: {log_name} timestamp self-check (generating artifact)")
+            return
+        text = path.read_text(errors="replace")
+        starts = STARTED_RE.findall(text)
+        finishes = FINISHED_RE.findall(text)
+        if not starts or not finishes:
+            fail(
+                f"{log_name}: missing stamp pair (both STARTED: and FINISHED: "
+                "are required) — an assembled artifact cannot prove a measurement"
+            )
+            return
+        try:
+            t0 = datetime.fromisoformat(starts[0])
+            t1 = datetime.fromisoformat(finishes[-1])
+        except ValueError as exc:
+            fail(f"{log_name}: unparseable STARTED/FINISHED stamp ({exc})")
+            return
+        if t0.timestamp() > t1.timestamp():
+            fail(
+                f"{log_name}: STARTED {starts[0]} is after FINISHED {finishes[-1]} "
+                "— the artifact was assembled, not measured"
+            )
+            return
+        mtime = path.stat().st_mtime
+        if mtime < t0.timestamp():
+            fail(
+                f"{log_name}: mtime {datetime.fromtimestamp(mtime).isoformat()} "
+                f"predates STARTED {starts[0]} — the artifact was assembled, not measured"
+            )
+            return
+        print(
+            f"PASS: {log_name} stamps coherent (STARTED <= FINISHED, mtime >= STARTED)"
+        )
+
     for gate, spec in LOG_GATES.items():
         log_name = evidence.get(gate)
         command = spec["command"]
@@ -1001,6 +1080,7 @@ def main() -> int:
             )
             continue
         text = path.read_text(errors="replace")
+        verify_stamps(path, log_name)
         match = re.search(spec["pattern"](gates[gate]), text)
         if match is None:
             fail(
@@ -1110,6 +1190,7 @@ def main() -> int:
             )
         else:
             text = path.read_text(errors="replace")
+            verify_stamps(path, leak_name)
             if "PROBE start" not in text:
                 fail(f"{leak_name} is not a probe_leak run (no 'PROBE start')")
             elif re.search(r"leaked at exit|SCRIPT ERROR", text):
@@ -1120,6 +1201,9 @@ def main() -> int:
                 print(f"PASS: {leak_name} clean")
 
     for gate, (marker, command) in PROBE_GATES.items():
+        if generating_poststamp and gate == "gate_ratchet":
+            print("SKIP: gate_ratchet poststamp self-check (generating artifact)")
+            continue
         log_name = evidence.get(gate)
         if not log_name:
             fail(
@@ -1141,12 +1225,92 @@ def main() -> int:
             )
             continue
         text = path.read_text(errors="replace")
+        verify_stamps(path, log_name)
         if marker not in text:
             fail(f"{log_name} does not contain {marker!r} — run `{command}`")
         elif re.search(r"SCRIPT ERROR", text):
             fail(f"{log_name} contains a SCRIPT ERROR; the probe must be clean")
         else:
             print(f"PASS: {log_name} records {marker}")
+
+    # A gate log that keeps its summary/footer but is otherwise gutted is not a
+    # measurement. Pin a minimum size for the three large logs; a 10-line e2e
+    # stub fails even if its summary and ERROR count look right.
+    for log_name, min_lines in sorted(LARGE_LOG_MIN_LINES.items()):
+        filename = f"{log_name}.log"
+        lpath = log_dir / filename
+        if not lpath.is_file():
+            continue  # the evidence loops already fail a missing bound log
+        n = len(lpath.read_text(errors="replace").splitlines())
+        if n < min_lines:
+            fail(
+                f"{filename} has {n} line(s), below the pinned {min_lines}-line "
+                "minimum — a gutted gate log is not a measurement"
+            )
+        else:
+            print(f"PASS: {filename} has {n} lines >= {min_lines}")
+
+    # The poststamp artifact must carry the checker's real output, not a bare
+    # marker, and it must be bound to THIS ratchet: the measured_on lines must
+    # equal the ratchet's measured_on, the runner/binding line must name the
+    # exact committed counts, and the body must have the structural size of a
+    # real run. Skipped while generating (the file is then the previous
+    # artifact); a plain run after capture enforces it.
+    if not generating_poststamp:
+        poststamp_name = evidence.get("gate_ratchet")
+        if poststamp_name:
+            path = evidence_path(str(poststamp_name))
+            if path is not None and path.exists():
+                text = path.read_text(errors="replace")
+                lines = text.count("\n") + (0 if text.endswith("\n") else 1)
+                pass_lines = len(re.findall(r"^PASS:", text, re.MULTILINE))
+                measured_lines = re.findall(
+                    r"^PASS: measured_on=(\S+)$", text, re.MULTILINE
+                )
+                report_lines = re.findall(
+                    r"^PASS: report names measured_on=(\S+)$", text, re.MULTILINE
+                )
+                binding_count = len(set(LOG_GATES) | set(PROBE_GATES) | {"probe_leak"})
+                expected_binding = (
+                    f"PASS: runner/binding self-check "
+                    f"{EXPECTED_RUNNER_GATE_COUNT} gates, "
+                    f"{binding_count} ratchet bindings"
+                )
+                expected_coverage = (
+                    f"PASS: audit coverage "
+                    f"{get('audit', 'coverage_num')}/{get('audit', 'coverage_den')}"
+                )
+                problems = []
+                if measured_lines != [measured_on]:
+                    problems.append(
+                        f"measured_on lines {measured_lines!r} != [{measured_on!r}]"
+                    )
+                if report_lines != [measured_on]:
+                    problems.append(
+                        f"report measured_on lines {report_lines!r} != "
+                        f"[{measured_on!r}]"
+                    )
+                if expected_binding not in text.splitlines():
+                    problems.append(f"missing exact line {expected_binding!r}")
+                if expected_coverage not in text:
+                    problems.append(f"missing {expected_coverage!r}")
+                if lines < POSTSTAMP_MIN_LINES:
+                    problems.append(f"{lines} line(s) < {POSTSTAMP_MIN_LINES} minimum")
+                if pass_lines < POSTSTAMP_MIN_PASS:
+                    problems.append(
+                        f"{pass_lines} PASS line(s) < {POSTSTAMP_MIN_PASS} minimum"
+                    )
+                if problems:
+                    fail(
+                        f"{poststamp_name} is not real checker output bound to "
+                        f"measured_on={measured_on}: " + "; ".join(problems)
+                    )
+                else:
+                    print(
+                        f"PASS: {poststamp_name} carries real checker output "
+                        f"bound to measured_on={measured_on} "
+                        f"({lines} lines, {pass_lines} PASS, exact bindings)"
+                    )
 
     # Committed self-check: the runner gate set and the ratchet binding set must
     # agree. This runs before the report check and needs no Godot run, so a gate

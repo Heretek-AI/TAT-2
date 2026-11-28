@@ -1,9 +1,9 @@
 == FINAL_GATE p0b_manifest_validate
-COMMAND: python3 build/qa/p0b_roi_stats.py --validate-manifest /home/john/.local/share/opencode/worktree/318f41/phase12-integration/docs/reports/logs/final/dry-run/manifest.json
-CWD: /home/john/.local/share/opencode/worktree/318f41/phase12-integration
-STARTED: 2026-11-27T17:25:07-05:00
+COMMAND: python3 build/qa/p0b_roi_stats.py --validate-manifest ./docs/reports/logs/final/dry-run/manifest.json
+CWD: .
+STARTED: 2026-11-27T22:07:40-05:00
 
-P0B_MANIFEST_OK path=/home/john/.local/share/opencode/worktree/318f41/phase12-integration/docs/reports/logs/final/dry-run/manifest.json poses=7 dry_run=true run_id=20261127T222506Z_60474c004d21_on
+P0B_MANIFEST_OK path=/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/baseline-run/docs/reports/logs/final/dry-run/manifest.json poses=7 dry_run=true run_id=20261128T030739Z_5857589853e4_on
 
 EXIT: 0
-FINISHED: 2026-11-27T17:25:07-05:00
+FINISHED: 2026-11-27T22:07:40-05:00

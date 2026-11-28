@@ -61,12 +61,12 @@ TAT-2 expansion content belong in git.
 
 ```bash
 make run         # native 4.7.2 client, F3 overlay
-make test        # tests/run_tests.gd — 327 checks, suites numbered to 124
+make test        # tests/run_tests.gd — 328 checks, suites numbered to 125
 make runtime-smoke # real free-play boot: exit 124 only, ERROR:/push_error scan, allowlist
 make audit       # fail-closed content + producer/output baseline gate
 make gate-ratchet # floors + committed docs/reports/logs evidence agree
 build/qa/test_perf_guard.sh  # perf-wrapper contract, no GPU, no launch
-build/qa/run_final_gates.sh  # current full set (49 gates) -> docs/reports/logs/final/; no outer flock
+build/qa/run_final_gates.sh  # current full set (58 gates) -> docs/reports/logs/final/; no outer flock
 build/qa/run_p0b_gates.sh    # historical P1 set (40 gates + cream RED) -> docs/reports/logs/p1/full/
 build/qa/run_p0a_gates.sh    # historical P0a 28-gate set -> docs/reports/logs/p0a/
 
@@ -82,12 +82,12 @@ If a headless run reports missing textures (`T1-01-C`, `moon_visible=0.0`), the
 import cache is incomplete — run `tools/godot --headless --path game --import`
 first.
 
-| Gate | Passing value (49-gate set measured_on `37bb69e`, logs in `docs/reports/logs/final/` — raise, never lower) |
+| Gate | Passing value (58-gate set measured_on `5857589`, logs in `docs/reports/logs/final/` — raise, never lower) |
 |---|---|
-| compile | 228 checked, 0 broken |
-| `run_tests.gd` | `SUMMARY: fails=0` (327 PASS; suites numbered to 124, 119 cream + 121 audio + 122 VO + 123 AEM + 124 cubemap registered) |
+| compile | 229 checked, 0 broken |
+| `run_tests.gd` | `SUMMARY: fails=0` (328 PASS; suites numbered to 125, 119 cream + 121 audio + 122 VO + 123 AEM + 124 cubemap + 125 contract holes registered) |
 | `test_m2_player.gd` | `M2_SUMMARY: fails=0` (12 PASS) |
-| P1 route probes (S12/S21/S24/S25–26/S13–20) | `P1_SAFE PASS checks=86` / `P1_DOORS checks=47 fails=0` / `P1_BEAMS PASS checks=9` / `P1_WARD PASS checks=44` / `P1_STREET PASS checks=31 hard_limits=2` |
+| P1 route probes (S12/S21/S24/S25–26/S13–20) | `P1_SAFE PASS checks=86` / `P1_DOORS checks=49 fails=0` / `P1_BEAMS PASS checks=9` / `P1_WARD PASS checks=44` / `P1_STREET PASS checks=31 hard_limits=2` |
 | landscape mask (P4.4) | `LANDSCAPE_MASK_SUMMARY: PASS fails=0 checks=7` (`discard|raw|off`, safe-room gap comp 12/`Weightmap_20`) |
 | navmesh runtime (N-P1/P2) | `NAV_RUNTIME_PROBE checks=70 fails=0` (Guildhall 80 links, door rule, negative controls) |
 | door walk / viewmodel / Niagara probes | `DOORWALK PASS` / `VIEWMODEL_TRUTH PASS` / `NIAGARA_PROBE PASS` (3695 authored / 1048 active / 16 systems in this probe's map scope; the payload-wide census is 3308 active / 36 systems) |
@@ -115,7 +115,7 @@ first.
 | `make audit` | exit 0, tracked baseline matches, disk-backed coverage (12660/12703), 0 unexpected, exact-case 0 unexpected, 13/13 content groups |
 | `make string-audit` | `UI_STRINGS total=311 routed=311 authored=199 routed_authored=199 invented=112` (ceiling 112; one documented `Thieves' Den` port copy at `contract_table_ui.gd:362`) |
 | perf guard | `PERF_GUARD_TEST PASS checks=78 fails=0` |
-| `make gate-ratchet` | PASS (`measured_on=37bb69e`; floors raised, never lowered) |
+| `make gate-ratchet` | PASS (`measured_on=5857589`; floors raised, never lowered) |
 
 The 2026-11-27 **Phase 1/2 integration** merged the six P4/GC/nav/audio/UI
 lanes and then fast-forwarded the mirrors lane to `07ecb56` (no conflict). It
@@ -128,10 +128,14 @@ The real extraction exposed one producer bug: array slices were written as
 `PORT_APPROX`; `Exporter.cs` now always adds the extension dot and the array
 rebinds (`GEM_PAYLOAD present=true: layers=21`). `parse_nav` was added to the
 audit `PRODUCERS` map (it was a `NORMALIZERS` entry with no baseline stamp).
-The current set is **49 gates**, measured at `37bb69e`: compile **228/0**,
-`run_tests` **327/0** (suites 119/121/122/123/124), audio **123/0**, VO 53/0,
-AEM 77/0, cubemap 37/0, P5 UI 54, beams 9, landscape 7, nav 70, GC 52, locks
-**162 = 152 containers + 10 doors**, capture 7 poses / self-test 23 / KF27 9/9
+The current set is **58 gates**, measured at `5857589` (one serial run,
+23m19s; [`docs/reports/phase3-baseline-20261127.md`](docs/reports/phase3-baseline-20261127.md)):
+compile **229/0**, `run_tests` **328/0** (suites 119/121/122/123/124/125),
+manifest **109 tracked / 70 reachable / 39 retired / 0 orphans**, e2e_errscan
+**31/33 + 0/2 + 482/482 new=0**, audio **123/0**, VO 53/0, AEM 77/0,
+cubemap 37/0 (all three now produced in-run), P5 UI 54, beams 9, landscape 7,
+nav 70, GC 52, doors **49**, locks **162 = 152 containers + 10 doors**,
+capture 7 poses / self-test 23 / KF27 9/9
 (`--reference-only`; port `foyer_beam` 5/9), producer tests and the P5 capture
 filter included, audit 12660/12703 and texture
 cap 1567/796/1/0 unchanged. GPU-measured: the mirror readback is PASS
@@ -268,8 +272,9 @@ identical to the `5135f53` table, logs in `docs/reports/logs/final/`, report
 [`docs/reports/final-20261127-phase0b.md`](docs/reports/final-20261127-phase0b.md).
 The clean route2 capture is `docs/reports/logs/p0b-route/route2-clean/`
 (`status=captured`, `git.dirty=false`, 13/14/0, 17 frames, 18 PNGs at 1920×1080,
-exit 0). The ratchet has since been re-stamped `measured_on=37bb69e` by the
-Phase 1/2 49-gate run (superseding the Phase 0b `912a481` stamp) and still pins
+exit 0). The ratchet has since been re-stamped `measured_on=5857589` by the
+Phase 2.5 58-gate baseline (superseding the Phase 1/2 `37bb69e` and Phase 0b
+`912a481` stamps) and still pins
 `p0b_route_self_test.checks=62`. The 44-gate logs were measured at `5135f53`,
 committed on `main` at `3d62f6b`, and the Phase 0b run replaced the logs in
 place at `912a481` (pre-Phase-0b copies remain recoverable at `912a481` under
@@ -323,6 +328,18 @@ build/qa/             tracked capture/probe/export-stamp scripts; PNG output ign
 ```
 
 ## Known traps
+
+- **`e2e_errscan` uses completion markers + footers, not zero-ERROR detection.**
+  A log is truncated when it is empty, missing its tier's `SUMMARY: fails=0 …`
+  marker, or missing the runner footer (`FINISHED:` + `EXIT: 0`). The
+  `N resources still in use at exit` teardown line is nondeterministic Godot
+  noise observed 0-1 per process and may appear in `e2e` or `e2e_a2`; the
+  ceilings are `33 / 2 / 482` (2 is one-slot headroom, not a measured maximum)
+  and the tamper minima are e2e 31 / run_tests 482 / a2 0. Delete-known-errors
+  fails; a legitimate class disappearance is a reviewed minimum change. Do not
+  restore the old "zero lines = truncated" rule or pin the teardown warning at
+  exactly 1 — that made the gate flaky and blocked the Phase 2.5 baseline twice.
+  Ceilings/minima are pinned in `tools/gate_ratchet.json`.
 
 - **Stair meshes are exempt from the convex element cap.** `authored_collision.gd`
   reduces a convex set above `MAX_CONVEX_ELEMENTS_PER_MESH = 16` to one coalesced
@@ -504,11 +521,14 @@ build/qa/             tracked capture/probe/export-stamp scripts; PNG output ign
 ## Parallel waves
 
 Long waves may be split across subagents in separate git worktrees. Symlink
-`game/assets`, `game/data/generated` and `extracted` into the worktree, copy
+`game/assets`, `game/data/generated`, `extracted` and the git-ignored `tools/bin`
+(the `vgmstream` binary the audit version-checks) into the worktree, copy
 `game/.godot` for imports, never edit the main checkout from a worker, and
 cherry-pick the worker commit onto `main` after its gates pass. Resolve conflicts
 by taking both intents (e.g. the `blocking_volume` tag comment), then rerun the
 full gate set on the merged tree — not just the worker's suite.
+A fresh worktree without `tools/bin` fails `make audit` on
+`vgmstream -> 'missing'` (the 2026-11-27 Phase 2.5 baseline hit this).
 
 **The symlinked data tree is read-only for workers.** `game/data` is a single
 shared directory, so a worker that runs `make normalize`, any `tools/parse_*.py`
@@ -540,7 +560,7 @@ tools/godot … probe_cubemap.gd          # CUBEMAP_PROBE: fails=0 passed=37 (su
 tools/godot … probe_p5_ui.gd            # P5_UI PASS checks=54, GEM_PAYLOAD present=true layers=21
 tools/godot … probe_den_spawn.gd        # DEN_SPAWN PASS checks=9 fails=0
 tools/godot … probe_p1_safe.gd          # P1_SAFE PASS checks=86 fails=0
-tools/godot … probe_p1_doors.gd         # P1_DOORS checks=47 fails=0
+tools/godot … probe_p1_doors.gd         # P1_DOORS checks=49 fails=0
 tools/godot … probe_p1_beams.gd         # P1_BEAMS PASS checks=9 fails=0
 tools/godot … probe_p1_ward.gd          # P1_WARD PASS checks=44
 tools/godot … probe_p1_street.gd        # P1_STREET PASS checks=31 hard_limits=2
@@ -552,7 +572,7 @@ build/qa/test_capture_p5_ui_filter.sh   # CAPTURE_P5_FILTER_TEST PASS checks=5
 build/qa/runtime_smoke.sh 90            # exit 124 only, 0 unexpected ERROR:, mission_ready
 build/qa/test_runtime_smoke_scan.sh     # 29/29, no engine needed
 build/qa/test_perf_guard.sh             # 78/78, no GPU
-build/qa/run_final_gates.sh             # all of the above serially (49 gates, no expected failure)
+build/qa/run_final_gates.sh             # all of the above serially (58 gates, no expected failure)
 make gate-ratchet                       # floors + committed logs agree
 git push origin main
 ```

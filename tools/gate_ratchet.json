@@ -1,9 +1,9 @@
 {
   "schema": "tat2.gate_ratchet/1",
-  "measured_on": "37bb69e",
-  "source": "49-gate Phase 1/2 integration measurement, 2026-11-27, one serial run of build/qa/run_final_gates.sh into docs/reports/logs/final/ (run head 60474c0, game code head 06c8956, measured_on 37bb69e = mirrors 07ecb56 + the six lanes + the P4.1 regeneration + the E2E authored-array fix, wall 22m24s, uncommitted at start 0, exit 0/49 gates; Phase 3 §2.5.1 restores suites 122-124 as 52 gates from the same logs): compile 228/0, run_tests 327/0 (suites 119 cream, 121 audio, 122 VO, 123 AEM, 124 cubemap; 327 PASS lines), M2 12/0, P1 probes safe 86 / doors 47 / beams 9 / ward 44 / street 31, landscape mask 7/0, E2E 300/300 (a2 22/22 with static_bookcase_leaves=20, p2 17/17), parity-only 60/60, cream 5/0, audio control 123/0 (music=2 music_keys=6/9), VO director 53/0, auto-exposure 77/0, cubemap 37/0, P5 UI 54 with GEM_PAYLOAD layers=21, Den spawn 9, capture dry-run 7 poses, self-test 23/0, KF27 9/9, route self-test 62/0, nav runtime 70/0, GC 52/0, collision COL_MAPS PASS coverage_ppm=868852, lock applied=162 (152 containers + 10 doors), runtime-smoke exit=124 errors=0 mission_ready=1, audit 12660/12703 0 unexpected, texture cap 1567 targets / 796 capped / 1 alpha / 0 offenders, perf guard 78/78, literal greps 0 code hits, string audit 311 routed / 199 authored / 112 invented, gate ratchet PASS.",
+  "measured_on": "5857589",
+  "source": "58-gate Phase 2.5 baseline, 2026-11-27, one serial run of build/qa/run_final_gates.sh into docs/reports/logs/final/ (run head 5857589 = code head; errscan semantics fix + reviewed teardown ceiling raise; wall 23m19s, 1399 s, uncommitted at start 0, exit 0, 58/58 gates; host fixes active: nvidia-powerd 140 W, gaming-desktop profile, split_lock_mitigate=0, vents cleaned, /tmp reclaimed; the earlier 22m24s 49-gate run was on the 80 W GPU / 23-30 W CPU 0.8-1.5 GHz host): compile 229/0, run_tests 328/0 (suite 125 contract holes registered; 328 PASS lines), M2 12/0, P1 probes safe 86 / doors 49 / beams 9 / ward 44 / street 31, landscape mask 7/0, E2E 300/300 (a2 22/22 static_bookcase_leaves=20, p2 17/17), parity-only 60/60, cream 5/0, audio control 123/0, VO director 53/0, auto-exposure 77/0, cubemap 37/0, P5 UI 54 with GEM_PAYLOAD layers=21, Den spawn 9, Den window 34, capture dry-run 7 poses, self-test 23/0, KF27 9/9 reference-only, route self-test 62/0, nav runtime 70/0, GC 52/0, collision COL_MAPS PASS coverage_ppm=868852, lock applied=162 (152 containers + 10 doors), runtime-smoke exit=124 errors=0 mission_ready=1, e2e_errscan 31/33 + 0/2 + 482/482 new=0, audit 12660/12703 0 unexpected, texture cap 1567 targets / 796 capped / 1 alpha / 0 offenders, perf guard 78/78, literal greps 0 code hits, string audit 311 routed / 199 authored / 112 invented, gate ratchet PASS. Changed floors: compile 228->229, run_tests 327->328, probe_p1_doors 47->49, gate_manifest.tracked 108->109; no floor lowered. The errscan teardown ceilings were raised 31->33 and 1->2 for observed 0-1 nondeterministic Godot teardown warnings, with complete-log markers replacing the zero-errors-is-truncated rule.",
   "note": "Floors, not exact counts: a wave may add tests/files but must never lower a floor or introduce a failure. Counts are read from the committed log and compared with >=; failure counts are exact zeros, e2e.passed must equal e2e.total, and the e2e_p2 expected_fail/expected_delta/fixed values are enforced as exact zeros (zero_groups). Update only with a real gate log in docs/reports/logs/ (see tools/check_gate_ratchet.py for the evidence layout).",
-  "report": "docs/reports/integration-20261127.md",
+  "report": "docs/reports/phase3-baseline-20261127.md",
   "evidence": {
     "dir": "docs/reports/logs/final",
     "compile": "compile.log",
@@ -68,11 +68,11 @@
   },
   "gates": {
     "compile": {
-      "checked": 228,
+      "checked": 229,
       "broken": 0
     },
     "run_tests": {
-      "passes": 327,
+      "passes": 328,
       "fails": 0
     },
     "m2": {
@@ -144,7 +144,7 @@
       "checks": 86
     },
     "probe_p1_doors": {
-      "checks": 47
+      "checks": 49
     },
     "probe_p1_beams": {
       "checks": 9
@@ -268,12 +268,18 @@
       "fails": 0
     },
     "gate_manifest": {
-      "tracked": 108,
+      "tracked": 109,
       "retired": 39,
       "orphans": 0
     },
     "e2e_errscan": {
-      "new": 0
+      "new": 0,
+      "e2e_min": 31,
+      "e2e_ceiling": 33,
+      "e2e_a2_min": 0,
+      "e2e_a2_ceiling": 2,
+      "run_tests_min": 482,
+      "run_tests_ceiling": 482
     },
     "test_roof_collision": {
       "checks": 106

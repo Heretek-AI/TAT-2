@@ -5,10 +5,17 @@
 # named log; the first two columns are the log name and the maximum.
 #
 # The per-log sum of these maxima MUST equal the per-log ceiling declared in
-# build/qa/e2e_errscan.sh (31 / 1 / 482). That equality is checked at runtime,
+# build/qa/e2e_errscan.sh (33 / 2 / 482). That equality is checked at runtime,
 # so adding or widening an entry to hide a new error also forces a visible
 # ceiling change. Lowering a ceiling or raising a maximum requires a comment
 # here plus a note in the wave report; never edit them silently.
+#
+# 2026-11-27 reviewed raise: `N resources still in use at exit` is a Godot
+# teardown summary line (at most one per process) observed 0-1 across the
+# standalone and full-run samples. It is pinned at 2 per tier (e2e ceiling
+# 31 -> 33, e2e_a2 1 -> 2) as one-slot headroom, not a measured maximum; the
+# binary's per-log minimum totals still reject a log with its known errors
+# deleted. Do not raise this silently.
 #
 # Format: <log><TAB><max><TAB><extended-regex>
 
@@ -16,8 +23,9 @@ e2e	13	Lambda capture at index 0 was freed\. Passed "null" instead\.
 e2e	10	Condition "!is_inside_tree\(\)" is true\. Returning: Transform3D\(\)
 e2e	7	Parameter "material" is null\.
 e2e	1	[0-9]+ RID allocations of type 'N17RendererSceneCull8InstanceE' were leaked at exit\.
+e2e	2	[0-9]+ resources still in use at exit \(run with --verbose for details\)\.
 
-e2e_a2	1	[0-9]+ resources still in use at exit \(run with --verbose for details\)\.
+e2e_a2	2	[0-9]+ resources still in use at exit \(run with --verbose for details\)\.
 
 run_tests	408	Parameter "fd" is null\.
 run_tests	58	Error calling deferred method: 'CanvasLayer\(hud\.gd\)::_hide_loot_label_if_grouped': Cannot convert argument 1 from Object to Object\.

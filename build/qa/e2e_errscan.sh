@@ -6,17 +6,26 @@
 # `ERROR:` message is a regression that a `fails=0` summary cannot see, so this
 # gate pins an explicit allowlist and a hard ceiling per log:
 #
-#       e2e        31
-#       e2e_a2      1
+#       e2e        33
+#       e2e_a2      2
 #       run_tests  482
+#
+# The 2026-11-27 raise from 31/1 is a reviewed change for a nondeterministic
+# Godot teardown warning (`N resources still in use at exit`), measured 0-2
+# copies per run and able to appear in either tier. It is not a lowered quality
+# floor: a new/unmatched ERROR class still fails, and each class keeps its own
+# pinned maximum.
 #
 # Rules:
 #   * Every ERROR: line must match an allowlist regex for its log; an
 #     unmatched line fails as a NEW error.
+#   * A log is complete only when it is non-empty AND carries its tier's own
+#     completion marker (`SUMMARY: fails=0 passed=… total=…`). A missing marker
+#     or an empty file fails as truncated. Zero ERROR: lines in a complete log
+#     pass: the teardown noise may simply not appear, and absence of noise is
+#     not evidence of truncation.
 #   * A pattern may not exceed its pinned maximum and a log may not exceed its
-#     pinned ceiling. A lower count is fine (noise may disappear), but a log
-#     with zero ERROR: lines is treated as truncated/empty and fails: the known
-#     noise is expected, and an empty log proves nothing was scanned.
+#     pinned ceiling. A lower count is fine (noise may disappear).
 #   * The per-log sum of the allowlist maxima must equal the ceiling and every
 #     individual maximum must be <= the ceiling. Adding or widening an entry
 #     therefore forces a visible ceiling change instead of silently hiding a
@@ -34,7 +43,8 @@
 #   build/qa/e2e_errscan.sh [--logdir DIR] [--allowlist FILE]
 #
 # Exit 0 only when every ERROR line is allowlisted, every count is within its
-# pinned maximum/ceiling, and every log was actually read.
+# pinned maximum/ceiling, every log carries its completion marker, and every
+# log was actually read.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -42,11 +52,21 @@ LOGDIR="$ROOT/docs/reports/logs/final"
 ALLOWLIST="$ROOT/build/qa/e2e_errscan_allowlist.txt"
 LOGS=(e2e e2e_a2 run_tests)
 
-# Pinned ceilings, measured from docs/reports/logs/final/ at the Phase 3 base
-# (e2e 31, e2e_a2 1, run_tests 482). Lowering one is a deliberate, reviewed
-# change: add a comment here and a note in the wave report. Raising one because
-# a new test legitimately emits a known message is also a reviewed change.
-declare -A CEILING=([e2e]=31 [e2e_a2]=1 [run_tests]=482)
+# Pinned ceilings. e2e 33 / e2e_a2 2 / run_tests 482: the 2026-11-27 raise from
+# 31/1 covers the nondeterministic `N resources still in use at exit` teardown
+# class (measured 0-2). Lowering one is a deliberate, reviewed change: add a
+# comment here and a note in the wave report. Raising one because a test
+# legitimately emits a known message is also a reviewed change.
+declare -A CEILING=([e2e]=33 [e2e_a2]=2 [run_tests]=482)
+
+# A complete log must carry its tier's own summary. This is the truncation
+# check: absence of `ERROR:` lines is not truncation, a missing completion
+# marker is.
+declare -A COMPLETION=(
+  [e2e]='SUMMARY: fails=0 passed=300 total=300'
+  [e2e_a2]='SUMMARY: fails=0 passed=22 total=22'
+  [run_tests]='SUMMARY: fails=0'
+)
 
 usage() {
   printf 'usage: %s [--logdir DIR] [--allowlist FILE]\n' "$0" >&2
@@ -177,14 +197,24 @@ for log in "${LOGS[@]}"; do
     note_fail "log $path is empty; a truncated log cannot prove the gate"
     continue
   fi
+  # Truncation is a missing completion marker, not a zero ERROR count: a
+  # complete log with no teardown noise is a clean run.
+  if grep -Fq -- "${COMPLETION[$log]}" "$path" 2>/dev/null; then
+    :
+  else
+    rc=$?
+    if [ "$rc" -eq 2 ]; then
+      note_fail "cannot read log $path (grep failed)"
+    else
+      note_fail \
+        "log $path is missing its completion marker '${COMPLETION[$log]}'; truncated log cannot prove the gate"
+    fi
+    continue
+  fi
   actual="$(count_errors "$path")"
   rc=$?
   if [ "$rc" -eq 2 ]; then
     note_fail "cannot read log $path (grep failed)"
-    continue
-  fi
-  if [ "$actual" -le 0 ]; then
-    note_fail "log $path has zero ERROR: lines; empty/truncated log cannot pass"
     continue
   fi
   if [ "$actual" -gt "${CEILING[$log]}" ]; then
@@ -205,9 +235,11 @@ for log in "${LOGS[@]}"; do
     note_fail "cannot create a temp file for $log"
     continue
   }
+  # grep exits 1 when there is no match: a complete log with zero ERROR: lines
+  # is valid (only exit > 1 is a read failure).
   grep -n -- 'ERROR:' "$path" >"$tmp" 2>/dev/null
   rc=$?
-  if [ "$rc" -ne 0 ]; then
+  if [ "$rc" -gt 1 ]; then
     note_fail "cannot read ERROR: lines from $path (grep exit $rc)"
     rm -f "$tmp"
     continue

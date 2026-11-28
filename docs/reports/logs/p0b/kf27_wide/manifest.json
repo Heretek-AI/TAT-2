@@ -1,0 +1,208 @@
+{
+  "audio": {
+    "buffer_s": 10.0,
+    "channels": 2,
+    "driver": "PulseAudio",
+    "dropped_frames": 897024,
+    "enabled": true,
+    "files": [
+      "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b/captures/kf27_wide/audio_on.pcm",
+      "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b/captures/kf27_wide/audio_on.wav",
+      "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b/captures/kf27_wide/audio_on.json"
+    ],
+    "frames": 2015232,
+    "marks": [
+      {
+        "beat": "",
+        "frame": 0,
+        "label": "capture_start",
+        "msec": 1,
+        "t_s": 0.0,
+        "unix": 1795861125.3095,
+        "window": {
+          "frames": 1941504,
+          "peak_dbfs": -15.5715114662259,
+          "rms_dbfs": -39.1499483266774,
+          "seconds": 44.0250340136054,
+          "zero_fraction": 0.805810855913766
+        }
+      },
+      {
+        "beat": "",
+        "frame": 1941504,
+        "label": "foyer_beam_wide",
+        "msec": 65434,
+        "t_s": 44.0250340136054,
+        "unix": 1795861190.74347,
+        "window": {
+          "frames": 73728,
+          "peak_dbfs": -17.6436704760859,
+          "rms_dbfs": -34.7232090658263,
+          "seconds": 1.67183673469388,
+          "zero_fraction": 0.00103759765625
+        }
+      }
+    ],
+    "pcm": "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b/captures/kf27_wide/audio_on.pcm",
+    "peak_dbfs": -15.5715114662259,
+    "pushed_frames": 2039296,
+    "reason": "",
+    "sample_rate": 44100,
+    "schema": "tat2.audio_capture/1",
+    "seconds": 45.6968707482993,
+    "sidecar": "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b/captures/kf27_wide/audio_on.json",
+    "started_at_utc": "2026-11-28T10:18:45",
+    "stopped_at_utc": "2026-11-28T10:19:51",
+    "total": {
+      "frames": 2015232,
+      "peak_dbfs": -15.5715114662259,
+      "rms_dbfs": -38.8772621359698,
+      "seconds": 45.6968707482993,
+      "zero_fraction": 0.776367931831174
+    },
+    "truncated": false,
+    "wav": "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b/captures/kf27_wide/audio_on.wav"
+  },
+  "beam_card": {
+    "hidden": 0,
+    "mechanism": "capture-side runtime hide of the lightbeam_cards group; level_loader.gd has no TAT2_BEAM_CARD flag and the beam fix is unchanged",
+    "mode": "on"
+  },
+  "dry_run": false,
+  "engine": {
+    "audio_driver": "PulseAudio",
+    "audio_mix_rate": 44100.0,
+    "cmdline": [
+      "--script",
+      "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b_capture.gd"
+    ],
+    "display_server": "X11",
+    "godot": "4.7.2-stable (official)",
+    "godot_hex": "263938",
+    "rendering_driver": "vulkan",
+    "video_adapter": "NVIDIA GeForce RTX 4070 Laptop GPU",
+    "video_api": "1.4.357",
+    "video_vendor": "NVIDIA"
+  },
+  "env": {
+    "DISPLAY": ":99",
+    "TAT2_AO": "on",
+    "TAT2_BEAM_CARD": "on",
+    "XDG_SESSION_TYPE": "wayland"
+  },
+  "finished_at_utc": "2026-11-28T10:19:52",
+  "git": {
+    "branch": "teamwork/20261127-1810-phase3-gpu-session",
+    "dirty": true,
+    "sha": "649bece59db86b5656e76f89b788991d8124e130",
+    "sha_short": "649bece59db8"
+  },
+  "gpu": {
+    "available": true,
+    "command": "nvidia-smi --query-gpu=name,driver_version,temperature.gpu,memory.used,utilization.gpu,clocks.current.graphics --format=csv,noheader,nounits",
+    "query": "name,driver_version,temperature.gpu,memory.used,utilization.gpu,clocks.current.graphics",
+    "rows": [
+      [
+        "NVIDIA GeForce RTX 4070 Laptop GPU",
+        "620.73.04",
+        "42.32",
+        "2561",
+        "0",
+        "1980"
+      ]
+    ],
+    "used_by_capture": true
+  },
+  "host": {
+    "cpu": "Intel(R) Core(TM) i9-14900HX",
+    "hostname": "AtomMan",
+    "nproc": 32,
+    "os": "Linux",
+    "os_version": "46 (KDE Plasma Desktop Edition Prerelease)"
+  },
+  "lens": {
+    "aspect": 1.77777777777778,
+    "fov_source": "shipped authored lens: UE 85 deg horizontal at 16:9 -> 54.54 deg vertical",
+    "fov_vertical_deg": 54.54,
+    "keep_aspect": "height",
+    "resolution": [
+      1920,
+      1080
+    ]
+  },
+  "manifest_errors": [],
+  "notes": [
+    "Pose alignment against the reference keyframe is approximate; p0b_roi_stats.py reports numbers, not a pixel registration.",
+    "The beam numbers are diagnostic: KF27 criteria are encoded in p0b_roi_stats.py from the cream/beam RE (emitter x~17.8% y~40.0%, beam rows 39-40%).",
+    "TAT2_BEAM_CARD=off hides the lightbeam_cards group at runtime; it is an A/B control, not a game setting.",
+    "The fixed-pose run marks poses, not route beats. A 27-beat route run must call mark_beat(S01..S27); p0b_audio_stats.py --route prints the reference table.",
+    "Reference audio is documented RMS/peak dBFS (not LUFS); the script computes RMS/peak only and states the clip's -43.9 LUFS as context."
+  ],
+  "out_dir": "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b/captures/kf27_wide",
+  "poses": [
+    {
+      "beat": "S24",
+      "decision": "",
+      "duration_ms": 6637,
+      "eye": [
+        17.1000003814697,
+        29.7000007629395,
+        -52.2999992370605
+      ],
+      "fov_vertical_deg": 54.54,
+      "frames_mean": [
+        24.22788494112,
+        24.22788494112,
+        24.22788494112,
+        24.2283795090779,
+        24.2283795090779
+      ],
+      "ground_hit": [],
+      "grounded": false,
+      "id": "foyer_beam_wide",
+      "median_index": 2,
+      "median_lt8": 2.63657407407407,
+      "median_mean": 24.22788494112,
+      "median_peak": 255.0,
+      "note": "lateral KF27 wide cue: 8.005 m from the authored C_107 card; the derived target rotates the eye->card ray +30.26 deg yaw / -5.81 deg pitch so the emitter projects at 18.0 %/40.0 % (inside the 10-26 % x / 33-47 % y emitter box). foyer_beam is untouched.",
+      "pitch_deg": -5.379,
+      "png": "build/qa/p0b/captures/kf27_wide/foyer_beam_wide.png",
+      "png_size": [
+        1920,
+        1080
+      ],
+      "ref_keyframe": "KF27",
+      "resolution": [
+        1920,
+        1080
+      ],
+      "settle_seconds": 0.0,
+      "settle_waited_ms": 5742,
+      "status": "captured",
+      "target": [
+        24.9599990844727,
+        28.9500007629395,
+        -53.5900001525879
+      ]
+    }
+  ],
+  "repo_root": "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session",
+  "run_id": "kf27_wide",
+  "schema": "tat2.p0b_capture/1",
+  "seed": {
+    "active_map_seed": 1075715363,
+    "official_clip_seed": 1025051536,
+    "requested": "derived"
+  },
+  "self_test": false,
+  "settle": {
+    "capture_frames": 5,
+    "frames": 60,
+    "min_seconds": 25.0,
+    "mode": "frames",
+    "seconds": 0.0,
+    "selector": "median-mean"
+  },
+  "started_at_utc": "2026-11-28T10:18:45",
+  "status": "captured"
+}

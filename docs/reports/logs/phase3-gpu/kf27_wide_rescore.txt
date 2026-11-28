@@ -1,0 +1,14 @@
+# KF27 corrected-emitter re-score, 2026-11-28 (round 4, no recapture)
+# scorer: build/qa/p0b_roi_stats.py with POSE_EMITTER_PCT/emitter_centroid(expected)
+# command: python3 build/qa/p0b_roi_stats.py --port build/qa/p0b/captures/kf27_wide/foyer_beam_wide.png --pose foyer_beam_wide
+
+P0B_BEAM pose=foyer_beam_wide emitter_pct=(18.0,40.0) peak_row=38.80% excess=17.80 bands=6 peaks=(38.8@17.8,36.6@17.8,40.2@17.7) core_px=122 glow_1pct=(+17.50,+17.54) core_sat_p95=88 cream_outside_band=0.40% cyan=(found=False,pct=0.000)
+P0B_BEAM_REF pose=foyer_beam_wide emitter_pct=(17.7,40.2) peak_row=40.19% excess=10.51 bands=1 peaks=(40.2@10.5,35.7@2.1,34.8@2.0) core_px=19 glow_1pct=(+1.86,+2.57) core_sat_p95=35 cream_outside_band=0.12%
+P0B_KF27 pose=foyer_beam_wide met=5/9 emitter_box=true emitter_at_kf27=true beam_row_band=false one_band=false row_excess_ge_2=true glow_falloff=false core_neutral=false no_cream_slab_10pct=true cream_reference_like_2pct=true
+
+# pinned pose (must stay 5/9): python3 build/qa/p0b_roi_stats.py --port build/qa/p0b/captures/kf27_pinned/foyer_beam.png --pose foyer_beam
+P0B_BEAM pose=foyer_beam emitter_pct=(0.0,0.0) peak_row=50.00% excess=82.62 bands=1 peaks=(50.0@82.6) core_px=59 glow_1pct=(+78.04,+79.46) core_sat_p95=0 cream_outside_band=1.30% cyan=(found=False,pct=0.000)
+P0B_KF27 pose=foyer_beam met=5/9 emitter_box=false emitter_at_kf27=false beam_row_band=false one_band=true row_excess_ge_2=true glow_falloff=false core_neutral=true no_cream_slab_10pct=true cream_reference_like_2pct=true
+
+# reference-only calibration (must stay 9/9, gate pose): python3 build/qa/p0b_roi_stats.py --port docs/reference/clip_1795033698901/clean/KF27_03m27s_foyer_security_beam.jpg --pose upper_foyer --reference-only
+P0B_KF27_REF pose=upper_foyer met=9/9 emitter_box=true emitter_at_kf27=true beam_row_band=true one_band=true row_excess_ge_2=true glow_falloff=true core_neutral=true no_cream_slab_10pct=true cream_reference_like_2pct=true

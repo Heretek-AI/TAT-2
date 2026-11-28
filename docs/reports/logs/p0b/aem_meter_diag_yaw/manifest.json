@@ -1,0 +1,208 @@
+{
+  "audio": {
+    "buffer_s": 10.0,
+    "channels": 2,
+    "driver": "PulseAudio",
+    "dropped_frames": 841728,
+    "enabled": true,
+    "files": [
+      "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b/captures/aem_meter_diag_yaw/audio_on.pcm",
+      "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b/captures/aem_meter_diag_yaw/audio_on.wav",
+      "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b/captures/aem_meter_diag_yaw/audio_on.json"
+    ],
+    "frames": 3203584,
+    "marks": [
+      {
+        "beat": "",
+        "frame": 0,
+        "label": "capture_start",
+        "msec": 1,
+        "t_s": 0.0,
+        "unix": 1795862635.96929,
+        "window": {
+          "frames": 3137024,
+          "peak_dbfs": -15.5651458450996,
+          "rms_dbfs": -38.5244195303743,
+          "seconds": 71.1343310657596,
+          "zero_fraction": 0.499198125357026
+        }
+      },
+      {
+        "beat": "",
+        "frame": 3137024,
+        "label": "yaw180",
+        "msec": 90359,
+        "t_s": 71.1343310657596,
+        "unix": 1795862726.32938,
+        "window": {
+          "frames": 66560,
+          "peak_dbfs": -29.2859482502467,
+          "rms_dbfs": -41.3417358037104,
+          "seconds": 1.5092970521542,
+          "zero_fraction": 0.00151742788461538
+        }
+      }
+    ],
+    "pcm": "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b/captures/aem_meter_diag_yaw/audio_on.pcm",
+    "peak_dbfs": -15.5651458450996,
+    "pushed_frames": 3218944,
+    "reason": "",
+    "sample_rate": 44100,
+    "schema": "tat2.audio_capture/1",
+    "seconds": 72.6436281179138,
+    "sidecar": "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b/captures/aem_meter_diag_yaw/audio_on.json",
+    "started_at_utc": "2026-11-28T10:43:55",
+    "stopped_at_utc": "2026-11-28T10:45:28",
+    "total": {
+      "frames": 3203584,
+      "peak_dbfs": -15.5651458450996,
+      "rms_dbfs": -38.5677005830833,
+      "seconds": 72.6436281179138,
+      "zero_fraction": 0.48885794784841
+    },
+    "truncated": false,
+    "wav": "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b/captures/aem_meter_diag_yaw/audio_on.wav"
+  },
+  "beam_card": {
+    "hidden": 0,
+    "mechanism": "capture-side runtime hide of the lightbeam_cards group; level_loader.gd has no TAT2_BEAM_CARD flag and the beam fix is unchanged",
+    "mode": "on"
+  },
+  "dry_run": false,
+  "engine": {
+    "audio_driver": "PulseAudio",
+    "audio_mix_rate": 44100.0,
+    "cmdline": [
+      "--script",
+      "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b_capture.gd"
+    ],
+    "display_server": "X11",
+    "godot": "4.7.2-stable (official)",
+    "godot_hex": "263938",
+    "rendering_driver": "vulkan",
+    "video_adapter": "NVIDIA GeForce RTX 4070 Laptop GPU",
+    "video_api": "1.4.357",
+    "video_vendor": "NVIDIA"
+  },
+  "env": {
+    "DISPLAY": ":99",
+    "TAT2_AO": "on",
+    "TAT2_BEAM_CARD": "on",
+    "XDG_SESSION_TYPE": "wayland"
+  },
+  "finished_at_utc": "2026-11-28T10:45:28",
+  "git": {
+    "branch": "teamwork/20261127-1810-phase3-gpu-session",
+    "dirty": true,
+    "sha": "649bece59db86b5656e76f89b788991d8124e130",
+    "sha_short": "649bece59db8"
+  },
+  "gpu": {
+    "available": true,
+    "command": "nvidia-smi --query-gpu=name,driver_version,temperature.gpu,memory.used,utilization.gpu,clocks.current.graphics --format=csv,noheader,nounits",
+    "query": "name,driver_version,temperature.gpu,memory.used,utilization.gpu,clocks.current.graphics",
+    "rows": [
+      [
+        "NVIDIA GeForce RTX 4070 Laptop GPU",
+        "620.73.04",
+        "41.30",
+        "2561",
+        "0",
+        "1980"
+      ]
+    ],
+    "used_by_capture": true
+  },
+  "host": {
+    "cpu": "Intel(R) Core(TM) i9-14900HX",
+    "hostname": "AtomMan",
+    "nproc": 32,
+    "os": "Linux",
+    "os_version": "46 (KDE Plasma Desktop Edition Prerelease)"
+  },
+  "lens": {
+    "aspect": 1.77777777777778,
+    "fov_source": "shipped authored lens: UE 85 deg horizontal at 16:9 -> 54.54 deg vertical",
+    "fov_vertical_deg": 54.54,
+    "keep_aspect": "height",
+    "resolution": [
+      1920,
+      1080
+    ]
+  },
+  "manifest_errors": [],
+  "notes": [
+    "Pose alignment against the reference keyframe is approximate; p0b_roi_stats.py reports numbers, not a pixel registration.",
+    "The beam numbers are diagnostic: KF27 criteria are encoded in p0b_roi_stats.py from the cream/beam RE (emitter x~17.8% y~40.0%, beam rows 39-40%).",
+    "TAT2_BEAM_CARD=off hides the lightbeam_cards group at runtime; it is an A/B control, not a game setting.",
+    "The fixed-pose run marks poses, not route beats. A 27-beat route run must call mark_beat(S01..S27); p0b_audio_stats.py --route prints the reference table.",
+    "Reference audio is documented RMS/peak dBFS (not LUFS); the script computes RMS/peak only and states the clip's -43.9 LUFS as context."
+  ],
+  "out_dir": "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b/captures/aem_meter_diag_yaw",
+  "poses": [
+    {
+      "beat": "S24",
+      "decision": "",
+      "duration_ms": 31801,
+      "eye": [
+        27.0,
+        29.6700000762939,
+        -50.0
+      ],
+      "fov_vertical_deg": 54.54,
+      "frames_mean": [
+        13.3806702825439,
+        13.3806862933441,
+        13.3799443411695,
+        13.3798149507542,
+        13.3797157146431
+      ],
+      "ground_hit": [],
+      "grounded": false,
+      "id": "yaw180",
+      "median_index": 2,
+      "median_lt8": 53.8966049382716,
+      "median_mean": 13.3799443411695,
+      "median_peak": 255.0,
+      "note": "same slot turned 180 deg; W9-P1 showed the armchair/ottoman/vitrine from here",
+      "pitch_deg": 0.0,
+      "png": "build/qa/p0b/captures/aem_meter_diag_yaw/yaw180.png",
+      "png_size": [
+        1920,
+        1080
+      ],
+      "ref_keyframe": "KF27",
+      "resolution": [
+        1920,
+        1080
+      ],
+      "settle_seconds": 25.0,
+      "settle_waited_ms": 30650,
+      "status": "captured",
+      "target": [
+        27.0,
+        29.6700000762939,
+        -40.0
+      ]
+    }
+  ],
+  "repo_root": "/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session",
+  "run_id": "aem_meter_diag_yaw",
+  "schema": "tat2.p0b_capture/1",
+  "seed": {
+    "active_map_seed": 1075715363,
+    "official_clip_seed": 1025051536,
+    "requested": "derived"
+  },
+  "self_test": false,
+  "settle": {
+    "capture_frames": 5,
+    "frames": 60,
+    "min_seconds": 25.0,
+    "mode": "frames+extra",
+    "seconds": 25.0,
+    "selector": "median-mean"
+  },
+  "started_at_utc": "2026-11-28T10:43:55",
+  "status": "captured"
+}

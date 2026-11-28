@@ -4,29 +4,29 @@ Vulkan 1.4.357 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 4070 La
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 TAT-2 Loc: reverse map built from sources.json (3404 keys)
 TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
 INPUT_TABLE source=generated rows=91 shipping=91 actions=52
 INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
-P0B_START mode=capture run=landscape_off poses=upper_foyer beam=on seed=derived fov=54.54 size=(1920, 1080) out=/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b/captures/landscape_off manifest=/home/john/.local/share/opencode/worktree/318f41/phase12-integration/docs/reports/logs/p0b/landscape_off/manifest.json
+P0B_START mode=capture run=landscape_off poses=gap_view beam=on seed=derived settle_s=0.00 fov=54.54 size=(1920, 1080) out=/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b/captures/landscape_off manifest=/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/docs/reports/logs/p0b/landscape_off/manifest.json
 AUDIO_CAPTURE start enabled=true driver=PulseAudio rate=44100 buffer_s=10.00 buffer_frames=524288 bus=0
 TAT-2 HUD build: id=1 root_children=29 hp_frame=1 hp_fill=1 objectives=1
 WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'gloomy'
@@ -147,8 +147,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [4] load_sublevels_async (res://src/core/level_loader.gd:7713)
 COL_PLANAR /Game/Art/Effects/WardZones/SM_SlowWardZone_Quad instances=82 skipped=1
 COL_PLANAR /Game/Art/VFX/Meshes/FXSHAPES_1_FXQuadPivotDownEdge instances=1 skipped=1
-AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=421
-ROUGHNESS_BAKE count=87 pixels=74973184 ms=6224 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=332
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=5775 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
 BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=64956 applied=64685 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=208 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0 mirrored_bases=3297 mirrored_multimesh=3119 mirrored_single=178 mirrored_splits=464 mirrored_cull_front=312 mirrored_cull_disabled=0 mirrored_mesh_bytes=31097388 mirrored_mesh_count=103 mirrored_unbaked=0
@@ -174,11 +174,11 @@ WARNING: [hearing_data] 5 authored investigation-range anomalies clamped: AI.Sti
          [2] ensure_loaded (res://src/ai/hearing_data.gd:187)
          [3] escalation_row (res://src/ai/hearing_data.gd:615)
          [4] row (res://src/ai/sight_model.gd:120)
-         [5] escalation_row (res://src/ai/guard_ai.gd:488)
-         [6] _apply_authored_escalation (res://src/ai/guard_ai.gd:527)
-         [7] _ready (res://src/ai/guard_ai.gd:413)
-         [8] _spawn_guards (res://src/missions/mission_controller.gd:4174)
-         [9] start_contract (res://src/missions/mission_controller.gd:961)
+         [5] escalation_row (res://src/ai/guard_ai.gd:497)
+         [6] _apply_authored_escalation (res://src/ai/guard_ai.gd:536)
+         [7] _ready (res://src/ai/guard_ai.gd:420)
+         [8] _spawn_guards (res://src/missions/mission_controller.gd:4181)
+         [9] start_contract (res://src/missions/mission_controller.gd:963)
          [10] load_sublevels_async (res://src/core/level_loader.gd:7725)
 TAT-2 quest items: spawned=1 mission=Mission.Guildhall.VaultHeist free_play=false
 TAT-2 loot containers: 125
@@ -192,9 +192,9 @@ WARNING: [civilian_npc] navmesh snap deferred: query landed before first map syn
          [0] _is_target_valid (res://src/ai/civilian_npc.gd:653)
          [1] _pick_new_target (res://src/ai/civilian_npc.gd:615)
          [2] _ready (res://src/ai/civilian_npc.gd:155)
-         [3] _spawn_civilians (res://src/missions/mission_controller.gd:5067)
-         [4] _spawn_spawner_content (res://src/missions/mission_controller.gd:5039)
-         [5] start_contract (res://src/missions/mission_controller.gd:971)
+         [3] _spawn_civilians (res://src/missions/mission_controller.gd:5074)
+         [4] _spawn_spawner_content (res://src/missions/mission_controller.gd:5046)
+         [5] start_contract (res://src/missions/mission_controller.gd:973)
          [6] load_sublevels_async (res://src/core/level_loader.gd:7725)
 TAT-2 spawners: throwable=133 ammo=45 health=5 civilian=3
 TAT-2 authored devices: 903 (alarm_eye=60, goo_pipe=90, junction=11, light_beam=134, noise_alarm=96, power_switch=29, power_wall=9, pressure_plate=162, turret=229, vault_door=6, ward_blocker=36, ward_slow=41)
@@ -205,14 +205,14 @@ WARNING: [nav_steering] no synchronised navigation map (no NavigationRegion3D ba
      GDScript backtrace (most recent call first):
          [0] _note_degraded (res://src/ai/nav_steering.gd:181)
          [1] step_towards (res://src/ai/nav_steering.gd:141)
-         [2] _move_ai (res://src/ai/guard_ai.gd:1621)
-         [3] _physics_process (res://src/ai/guard_ai.gd:1553)
+         [2] _move_ai (res://src/ai/guard_ai.gd:1651)
+         [3] _physics_process (res://src/ai/guard_ai.gd:1583)
 P0B_MISSION ready waited=128 player=true doors=155 seed_requested=derived active_seed=1075715363
-P0B_FRAME pose=upper_foyer frame=0 mean601=39.76 lt8=4.6 peak=255.0
-P0B_FRAME pose=upper_foyer frame=1 mean601=39.76 lt8=4.6 peak=255.0
-P0B_FRAME pose=upper_foyer frame=2 mean601=39.76 lt8=4.6 peak=255.0
-P0B_FRAME pose=upper_foyer frame=3 mean601=39.76 lt8=4.6 peak=255.0
-P0B_FRAME pose=upper_foyer frame=4 mean601=39.76 lt8=4.6 peak=255.0
-P0B_SHOT pose=upper_foyer median=0 mean601=39.76 lt8=4.6 peak=255.0 err=0 size=1920x1080 nonblack=true png=build/qa/p0b/captures/landscape_off/upper_foyer.png
-AUDIO_CAPTURE stop enabled=true frames=2015232 seconds=45.697 rate=44100 rms=-38.70 peak=-15.51 dropped=334336 files=3
-P0B_CAPTURE_DONE status=captured poses=1 ok=true manifest=/home/john/.local/share/opencode/worktree/318f41/phase12-integration/docs/reports/logs/p0b/landscape_off/manifest.json out=/home/john/.local/share/opencode/worktree/318f41/phase12-integration/build/qa/p0b/captures/landscape_off
+P0B_FRAME pose=gap_view frame=0 mean601=30.31 lt8=8.2 peak=238.8
+P0B_FRAME pose=gap_view frame=1 mean601=30.31 lt8=8.2 peak=238.8
+P0B_FRAME pose=gap_view frame=2 mean601=30.31 lt8=8.2 peak=238.8
+P0B_FRAME pose=gap_view frame=3 mean601=30.31 lt8=8.2 peak=238.8
+P0B_FRAME pose=gap_view frame=4 mean601=30.31 lt8=8.2 peak=238.8
+P0B_SHOT pose=gap_view median=1 mean601=30.31 lt8=8.2 peak=238.8 err=0 size=1920x1080 nonblack=true png=build/qa/p0b/captures/landscape_off/gap_view.png
+AUDIO_CAPTURE stop enabled=true frames=2015232 seconds=45.697 rate=44100 rms=-38.86 peak=-15.62 dropped=1038336 files=3
+P0B_CAPTURE_DONE status=captured poses=1 ok=true manifest=/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/docs/reports/logs/p0b/landscape_off/manifest.json out=/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/gpu-session/build/qa/p0b/captures/landscape_off

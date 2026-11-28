@@ -1,0 +1,17 @@
+capture=prep_p5_1280x720
+shot=prep
+tag=p5
+run_id=20261128T103617Z
+size=1280x720
+engine=4.7.2-stable (official)
+renderer=forward_plus
+timestamp=2026-11-28T05:37:07
+save_home=/tmp/opencode/p5-ui-data
+save_path=
+profile=thief:spider level:<null> currency:<null> map:thieves_den contract:1 mode:Solo free_play:false
+camera.pos=12.6065,-0.1670,-1.0538 fwd=-0.9862,0.1164,0.1178 fov=20.000 keep_aspect=0 far=2000.0
+pose=prep guildhall contract1 Solo
+staged=mission_prep_ui.open_prep
+roi.cards=0.0400,0.1400,0.5600,0.6000 mean=0.1218 max=0.9671 px=77544
+roi.stage=0.6000,0.0600,0.3900,0.8800 mean=0.1388 max=0.9908 px=79250
+roi.prompt=0.3400,0.7200,0.3200,0.2000 mean=0.0824 max=0.9219 px=14760

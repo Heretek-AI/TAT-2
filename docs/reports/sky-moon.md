@@ -1,7 +1,7 @@
 # Sky and moon implementation report
 
 Stage: real TAT night sky and moon disc from the extracted weather presets.
-Date: 2026-11-17. Repo: `/home/john/Projects/TAT-2` (Godot 4.7.2 flatpak).
+Date: 2026-11-17. Repo: `<repo>` (Godot 4.7.2 flatpak).
 Wave commits: `9f337cf`, `cfd9771`, `48e67c6`, `7ea5d59`, `156999e`, `7e240bb`
 (on top of `badf7d5`).
 
@@ -369,7 +369,7 @@ Capture procedure:
    `python3 tools/parse_weather.py`, repeat steps 1–4, then
    `git checkout HEAD -- <the six source files>` and regenerate the presets.
 6. Fog-off diagnostic: run the external `build/qa/capture_fogoff.gd` with
-   `--path game --script /home/john/Projects/TAT-2/build/qa/capture_fogoff.gd`.
+   `--path game --script <repo>/build/qa/capture_fogoff.gd`.
    It loads contract 4, sets `Environment.fog_sky_affect = 0.0` at runtime,
    places a free camera at the authored moon direction, and saves the
    diagnostic PNGs. It does not modify project files.

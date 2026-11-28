@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # QA-only luminance statistics via ImageMagick (gitignored build/qa).
 set -u
-cd /home/john/Projects/TAT-2/build/qa || exit 1
+cd "$(dirname "${BASH_SOURCE[0]}")" || exit 1
 GAME=1280x720+160+140
 
 mean_sd() {

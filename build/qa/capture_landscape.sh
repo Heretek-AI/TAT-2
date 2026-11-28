@@ -5,7 +5,7 @@ set -u
 
 MODE="${1:?usage: capture_landscape.sh safe|sky [tag]}"
 TAG="${2:-}"
-ROOT=/home/john/Projects/TAT-2
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 QA="$ROOT/build/qa"
 case "$MODE" in
   sky) VIEW=courtyard ;;

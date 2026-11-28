@@ -177,13 +177,7 @@ func read_json(res_path: String) -> Variant:
 
 
 func repo_path(rel_path: String) -> String:
-	var p1: String = ProjectSettings.globalize_path("res://../" + rel_path)
-	if FileAccess.file_exists(p1) or DirAccess.dir_exists_absolute(p1):
-		return p1
-	var p2: String = "/home/john/Projects/TAT-2/" + rel_path
-	if FileAccess.file_exists(p2) or DirAccess.dir_exists_absolute(p2):
-		return p2
-	return p1
+	return ProjectSettings.globalize_path("res://../" + rel_path)
 
 
 func repo_file_exists(rel_path: String) -> bool:

@@ -115,7 +115,7 @@ build/qa/p0b_route.sh --tag=route2
 which runs, under the shared flock and Xvfb:
 
 ```bash
-cd /home/john/Projects/TAT-2 && timeout 1800 \
+cd <repo> && timeout 1800 \
   xvfb-run -a -s '-screen 0 1920x1080x24' \
   tools/godot --path game --rendering-driver vulkan \
   --script "$PWD/build/qa/p0b_route.gd" -- \

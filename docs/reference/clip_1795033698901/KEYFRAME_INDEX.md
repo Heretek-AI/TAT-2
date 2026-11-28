@@ -67,7 +67,7 @@ Every segment below is strictly contiguous (`Seg[n].End == Seg[n+1].Start`) acro
 
 ## 3. Keyframe Extraction Table (`KF01–KF30`)
 
-All `30` files reside in `/home/john/Projects/TAT-2/docs/reference/clip_1795033698901/clean/`, downscaled via Pillow `13.0.0` `LANCZOS` from native `3840x2160` PNG captures to `1920x1080` RGB JPEGs (`quality=90, optimize=True`). Verified total: `6,186,081` bytes (`5.90 MiB`), every file `< 344 KB`.
+All `30` files reside in `<repo>/docs/reference/clip_1795033698901/clean/`, downscaled via Pillow `13.0.0` `LANCZOS` from native `3840x2160` PNG captures to `1920x1080` RGB JPEGs (`quality=90, optimize=True`). Verified total: `6,186,081` bytes (`5.90 MiB`), every file `< 344 KB`.
 
 | KF_ID | Timestamp_Exact | Segment | Filename | Resolution | Size_KB | Verified_OnScreen_Text | Key_Observed_Elements |
 |---|---|---|---|---|---|---|---|

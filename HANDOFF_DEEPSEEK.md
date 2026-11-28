@@ -1,6 +1,6 @@
 # DeepSeek Engineering Handoff — TAT-2 (Thick As Thieves Godot 4.7 Port)
 
-This document is a complete technical handoff for **DeepSeek** to optimize performance and finish visual/gameplay/UI refinement in `/home/john/Projects/TAT-2`.
+This document is a complete technical handoff for **DeepSeek** to optimize performance and finish visual/gameplay/UI refinement in `<repo>`.
 
 > **Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full pipeline and module map.**
 
@@ -8,7 +8,7 @@ This document is a complete technical handoff for **DeepSeek** to optimize perfo
 
 ## 1. Environment & Verification Commands
 
-- **Project Path**: `/home/john/Projects/TAT-2` (Godot project at `/home/john/Projects/TAT-2/game`)
+- **Project Path**: `<repo>` (Godot project at `<repo>/game`)
 - **Original Game**: `/home/john/.local/share/Steam/steamapps/common/Thick As Thieves/`
 - **Engine**: Godot `4.7.2.stable.flathub` (`Forward+` renderer, `Jolt Physics`)
 - **Commands**:
@@ -77,7 +77,7 @@ Even on an **NVIDIA GeForce RTX 4070 Laptop GPU**, large maps (`Guildhall`: `15,
 ## 5. Ready-to-Use Prompt for DeepSeek
 
 ```text
-You are taking over optimization and final refinement of TAT-2 in `/home/john/Projects/TAT-2` (Godot 4.7.2, Forward+, Jolt Physics).
+You are taking over optimization and final refinement of TAT-2 in `<repo>` (Godot 4.7.2, Forward+, Jolt Physics).
 First read `HANDOFF_DEEPSEEK.md` and `docs/ARCHITECTURE.md` in full.
 
 Your primary goals:

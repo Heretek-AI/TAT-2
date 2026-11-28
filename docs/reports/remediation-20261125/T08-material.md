@@ -1,7 +1,7 @@
 # T08 MATERIAL — remediation report
 
 Team: **T08-MATERIAL** (materials / textures / material shaders).
-Worktree: `/home/john/Projects/TAT-2-rem-T08-material`, branch `rem/T08-material`.
+Worktree: `<worktree>/T08-material`, branch `rem/T08-material`.
 Base: `fb93f84` (`docs(audit): reclassify audio rows after the capture-artefact proof`).
 Worker branches merged in by cherry-pick: `rem/T08-wA-producer` (`a2dadbd`),
 `rem/T08-wB-cap` (`58a4fc7`).

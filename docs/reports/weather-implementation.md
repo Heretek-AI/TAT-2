@@ -1,7 +1,7 @@
 # Weather implementation report
 
 Stage: real TAT weather data (lighting/fog) replacing hand-tuned values.
-Date: 2026-11-16. Repo: `/home/john/Projects/TAT-2` (Godot 4.7.2 flatpak).
+Date: 2026-11-16. Repo: `<repo>` (Godot 4.7.2 flatpak).
 
 ## Deliverables
 

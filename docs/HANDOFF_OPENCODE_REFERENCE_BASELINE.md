@@ -9,7 +9,7 @@
 
 ## 0. Who you are and what this is
 
-You are finishing a documentation and analysis job in the repo `/home/john/Projects/TAT-2`. This repo is a
+You are finishing a documentation and analysis job in the repo `<repo>`. This repo is a
 **Godot 4.7 port of the UE5 game *Thick As Thieves***. The user recorded gameplay footage of the **official**
 game and wants a frame-accurate, timestamped **reference baseline**. They will later record the same slice in
 the Godot port and compare the two side by side, so everything you write must be **comparison-ready**.
@@ -379,7 +379,7 @@ Then do these **manual adversarial spot checks**, and record the results in a `#
 **Hygiene, last:**
 
 ```bash
-cd /home/john/Projects/TAT-2
+cd <repo>
 git status --short          # expect ONLY: " M game/src/missions/mission_controller.gd" (pre-existing),
                             # "?? docs/REFERENCE_BASELINE.md", "?? docs/reference/", and optionally
                             # " M docs/HANDOFF_NEXT_SESSION.md" and this handoff file.

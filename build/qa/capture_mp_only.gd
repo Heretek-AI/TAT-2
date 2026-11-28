@@ -14,6 +14,6 @@ func _go() -> void:
 	for _i: int in range(10):
 		await process_frame
 	await RenderingServer.frame_post_draw
-	root.get_texture().get_image().save_png("/home/john/Projects/TAT-2/build/qa/vf_mission_prep.png")
+	root.get_texture().get_image().save_png(ProjectSettings.globalize_path("res://../build/qa/vf_mission_prep.png").simplify_path())
 	mp.queue_free()
 	quit(0)

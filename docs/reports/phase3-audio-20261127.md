@@ -1,7 +1,7 @@
 # Phase 3B.3 — audio domains, unrecoverable IDs, VO wiring, `FS_Layers` proof
 
 **Lane:** Phase 3B.3 (audio), worktree
-`/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/audio`, branch
+`<teamwork-worktrees>/20261127-1810-phase3/audio`, branch
 `teamwork/20261127-1810-phase3-audio`, base = the merged 58-gate baseline
 (`55fb588`). **Headless only:** no GPU, no Master tap, no audio-device run.
 

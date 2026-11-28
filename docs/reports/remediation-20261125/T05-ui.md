@@ -1,6 +1,6 @@
 # T05-UI — remediation report
 
-Team: **T05-UI** · branch `rem/T05-ui` · worktree `/home/john/Projects/TAT-2-rem-T05-ui`
+Team: **T05-UI** · branch `rem/T05-ui` · worktree `<worktree>/T05-ui`
 Base: `38e7b03` · Date: 2026-11-25
 Scope: `game/src/ui/**` (hud, main_menu, contract_table_ui, mission_prep_ui,
 art_nouveau_theme, new `ui_strings.gd`), new tests under `game/tests/`.

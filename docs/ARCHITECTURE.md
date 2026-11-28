@@ -7,7 +7,7 @@
 ## 1. Repository Layout
 
 ```text
-/home/john/Projects/TAT-2/
+<repo>/
 ├── Makefile                  # build-extractor, extract, normalize, audit, test, run
 ├── extracted/                # Raw CUE4Parse dumps (assets/, json/, audio/, filelist.txt)
 ├── tools/

@@ -4,7 +4,7 @@
 set -u
 
 MODE="${1:?usage: capture_lighting.sh safe|sky|moon}"
-ROOT=/home/john/Projects/TAT-2
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 QA="$ROOT/build/qa"
 OUT="$QA/lighting_after_${MODE}.png"
 RUNLOG="$QA/run_light_${MODE}.log"

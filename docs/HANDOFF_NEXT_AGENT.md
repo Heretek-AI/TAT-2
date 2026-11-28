@@ -1,6 +1,6 @@
 # Handoff — Thick As Thieves Godot 4.7.2 port (next session)
 
-**Repo:** `/home/john/Projects/TAT-2`
+**Repo:** `<repo>`
 **Current tip:** `0f6942c` (Phase 3 final logs; WIP branch
 `wip/phase3-gate-integrity-20261127` is on `origin`).
 **Measured code/gate head:** `900f8eb` (route-code merge); the final **59-gate**

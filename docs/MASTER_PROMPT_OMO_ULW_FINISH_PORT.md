@@ -3,7 +3,7 @@
 # `omo` Mass-`ulw` Master Prompt: Finish TAT-2 (Godot 4.7.2 · Linux 60 FPS · Visual & Gameplay Parity)
 
 > **How to launch this in standalone `omo` (pi coding agent):**
-> Run `omo` inside `/home/john/Projects/TAT-2` and send:
+> Run `omo` inside `<repo>` and send:
 > ```text
 > ulw Read and execute docs/MASTER_PROMPT_OMO_ULW_FINISH_PORT.md end to end. Orchestrate mass-parallel background agents across Waves 0–5, verify every fix both headlessly and on live Vulkan Forward+ + the exported Linux binary, score all 120 rows of docs/reference/clip_1795033698901/COMPARISON_TEMPLATE.md, and do not stop until every Tier-1 gate in §10 passes.
 > ```
@@ -12,9 +12,9 @@
 
 ## 0. Mission & Scope
 
-You are completing the **Godot 4.7.2 Forward+ / Jolt Physics** port of *Thick As Thieves* in `/home/john/Projects/TAT-2`, using:
+You are completing the **Godot 4.7.2 Forward+ / Jolt Physics** port of *Thick As Thieves* in `<repo>`, using:
 - **Official UE5 installation (reverse-engineering source of truth):** `/home/john/.local/share/Steam/steamapps/common/Thick As Thieves/` (and pre-extracted `extracted/`, 4.7 GB)
-- **Official-footage reference baseline (visual, audio, UI, and gameplay comparison target):** `/home/john/Projects/TAT-2/docs/REFERENCE_BASELINE.md` and `/home/john/Projects/TAT-2/docs/reference/clip_1795033698901/`
+- **Official-footage reference baseline (visual, audio, UI, and gameplay comparison target):** `<repo>/docs/REFERENCE_BASELINE.md` and `<repo>/docs/reference/clip_1795033698901/`
 
 ### Scope Tiers
 - **Tier 1 (MANDATORY for `<promise>DONE</promise>`):**
@@ -30,7 +30,7 @@ You are completing the **Godot 4.7.2 Forward+ / Jolt Physics** port of *Thick As
 
 ## 1. Orchestration Rules (`omo` Mass `ulw` Mode)
 
-- **Do NOT use `opencode-teamwork-v2` (`teamwork_*` tools) or per-task git worktrees.** Run directly in `/home/john/Projects/TAT-2` using `omo` `ultrawork` (`ulw`) parallel background agents, Hashline edits, and disciplined wave merges.
+- **Do NOT use `opencode-teamwork-v2` (`teamwork_*` tools) or per-task git worktrees.** Run directly in `<repo>` using `omo` `ultrawork` (`ulw`) parallel background agents, Hashline edits, and disciplined wave merges.
 - **File-ownership discipline (zero concurrent edit collisions):**
   - Never let two parallel agents edit the same `.gd` or `.gdshader` file at the same time.
   - Partition Wave 1–2 workers strictly by subsystem/file ownership (e.g., `audio_manager.gd` + `save_system.gd` vs. `main_menu.gd` + `tat_hdr_emissive.gdshader` vs. `guard_ai.gd` + `thief_character.gd` vs. `mission_controller.gd`).

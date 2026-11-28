@@ -1,6 +1,6 @@
 # T03 — AUDIO remediation report
 
-Branch `rem/T03-audio`, worktree `/home/john/Projects/TAT-2-rem-T03-audio`.
+Branch `rem/T03-audio`, worktree `<worktree>/T03-audio`.
 Inputs: `findings/RE-M-audio.md` (RE-M-01…14), `findings/L5-audio.md` (AU1-01…AU6-05),
 `REMEDIATION_PLAN.md` invariants S1–S6.
 
@@ -31,7 +31,7 @@ proved gain-invariantly in §L5-01.
 ## Instrumentation used everywhere below
 
 ```bash
-P=/home/john/Projects/TAT-2-rem-T03-audio
+P=<worktree>/T03-audio
 cd $P
 tools/godot --headless --path game --script "$PWD/tools/check_scripts_compile.gd"
 tools/godot --headless --path game --script res://tests/test_audio_wwise.gd
@@ -719,7 +719,7 @@ For the integrator to apply (AGENTS.md / README / FIDELITY_GAPS / HANDOFF):
 
 ```bash
 # on main, after cherry-picking rem/T03-audio
-cd /home/john/Projects/TAT-2
+cd <repo>
 python3 tools/parse_wwise.py --out game/data/generated --check
 # expect: WWISE_OK buses=130 audio=91 aux=39 named=16 fx=46+199 attenuation=23 \
 #         events=3544 dumps=1296 play=3228 bus=1757 att=1580 2d=227 \

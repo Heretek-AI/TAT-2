@@ -26,10 +26,10 @@ timestamp self-check, and a mechanically captured poststamp log).
 ## 1. Worktree setup
 
 ```bash
-ln -s /home/john/Projects/TAT-2/extracted extracted
-ln -s /home/john/Projects/TAT-2/game/data/generated game/data/generated
-ln -s /home/john/Projects/TAT-2/game/assets/ue game/assets/ue
-ln -s /home/john/Projects/TAT-2/tools/bin tools/bin   # NEW: git-ignored tool dir
+ln -s <repo>/extracted extracted
+ln -s <repo>/game/data/generated game/data/generated
+ln -s <repo>/game/assets/ue game/assets/ue
+ln -s <repo>/tools/bin tools/bin   # NEW: git-ignored tool dir
 tools/godot --headless --path game --import           # 8m32s
 ```
 

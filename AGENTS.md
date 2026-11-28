@@ -1,6 +1,6 @@
 # AGENTS.md — operating rules for this repository
 
-Applies to every coding agent working in `/home/john/Projects/TAT-2`, whatever
+Applies to every coding agent working in `<repo>`, whatever
 the harness (OpenCode, Claude Code, Codex). Read this file before editing,
 regenerating data, capturing screenshots or claiming a gate is green.
 

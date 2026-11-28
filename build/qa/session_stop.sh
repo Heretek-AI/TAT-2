@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Stop the live QA session and restore game/project.godot exactly.
 set -u
-ROOT=/home/john/Projects/TAT-2
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 QA="$ROOT/build/qa"
 cd "$ROOT" || exit 1
 

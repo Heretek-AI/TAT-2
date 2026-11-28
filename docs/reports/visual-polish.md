@@ -1,7 +1,7 @@
 # Visual-Polish Wave (2026-11-18)
 
 - **Date**: 2026-11-18
-- **Repo / Branch**: `/home/john/Projects/TAT-2` (`main`)
+- **Repo / Branch**: `<repo>` (`main`)
 - **Engine / Renderer**: Godot `4.7.2.stable.flathub` — Forward+ / Jolt
 - **Live Vulkan QA Hardware**: `Vulkan 1.4.357 - Forward+ - NVIDIA GeForce RTX 4070 Laptop GPU` (via `Xvfb :99`, `1280x720`)
 - **Verification**:

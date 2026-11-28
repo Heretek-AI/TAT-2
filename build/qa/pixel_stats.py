@@ -8,7 +8,7 @@ from pathlib import Path
 
 from PIL import Image
 
-QA = Path("/home/john/Projects/TAT-2/build/qa")
+QA = Path(__file__).resolve().parent
 GAME = (160, 140, 1440, 860)  # 1280x720 game viewport inside the 1600x1000 root
 
 

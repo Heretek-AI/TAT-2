@@ -1,7 +1,7 @@
 # T12-VFX — Niagara / visual effects remediation
 
 Team: T12-VFX (wave 5). Branch `rem/T12-vfx`, worktree
-`/home/john/Projects/TAT-2-rem-T12-vfx`, base `fb93f84`. Never pushed, merged,
+`<worktree>/T12-vfx`, base `fb93f84`. Never pushed, merged,
 rebased or cherry-picked. No producer was run and `game/data/generated/` was not
 written: all new runtime data comes from files that already existed
 (`systems.json`, `materials.json`, `levels/**`, `extracted/json/**`).

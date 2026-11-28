@@ -151,7 +151,7 @@ and the manifest explicitly says the Lounge C_57 beam is not the S24/KF27 beam.
 <summary><code>upper_foyer</code> — full stdout</summary>
 
 ```
-P0B_STATS kind=reference pose=upper_foyer file=/home/john/Projects/TAT-2/docs/reference/clip_1795033698901/clean/KF27_03m27s_foyer_security_beam.jpg mean=16.7 p50=15 p95=34 lt8=16.7 lt16=53.8 gt200=0.03
+P0B_STATS kind=reference pose=upper_foyer file=<repo>/docs/reference/clip_1795033698901/clean/KF27_03m27s_foyer_security_beam.jpg mean=16.7 p50=15 p95=34 lt8=16.7 lt16=53.8 gt200=0.03
 P0B_STATS kind=port pose=upper_foyer file=build/qa/p0b_route/route2/S24_upper_foyer.png mean=40.8 p50=29 p95=99 lt8=1.5 lt16=6.8 gt200=1.46
 P0B_DELTA pose=upper_foyer d_mean=+24.1 d_p50=+14 d_p95=+65 d_lt8=-15.2 d_gt200=+1.43
 P0B_BEAM pose=upper_foyer emitter_pct=(29.9,49.1) peak_row=49.07% excess=131.15 peaks=(49.1@131.2,43.5@5.1,38.8@1.4) core_px=61 glow_1pct=(+93.16,+88.57) core_sat_p95=0 cream_outside_band=1.39% cyan=(found=False,pct=0.000)
@@ -177,7 +177,7 @@ P0B_CELLMAP_COUNTS brighter=68 cream_match=2 cream_unexplained=12 darker=2 ok=60
 <summary><code>yaw180</code> — full stdout</summary>
 
 ```
-P0B_STATS kind=reference pose=yaw180 file=/home/john/Projects/TAT-2/docs/reference/clip_1795033698901/clean/KF27_03m27s_foyer_security_beam.jpg mean=16.7 p50=15 p95=34 lt8=16.7 lt16=53.8 gt200=0.03
+P0B_STATS kind=reference pose=yaw180 file=<repo>/docs/reference/clip_1795033698901/clean/KF27_03m27s_foyer_security_beam.jpg mean=16.7 p50=15 p95=34 lt8=16.7 lt16=53.8 gt200=0.03
 P0B_STATS kind=port pose=yaw180 file=build/qa/p0b_route/route2/S24_yaw180.png mean=43.9 p50=34 p95=131 lt8=2.7 lt16=12.2 gt200=0.76
 P0B_DELTA pose=yaw180 d_mean=+27.2 d_p50=+19 d_p95=+97 d_lt8=-14.0 d_gt200=+0.73
 P0B_BEAM pose=yaw180 emitter_pct=(23.9,42.1) peak_row=49.07% excess=25.24 peaks=(49.1@25.2,47.2@10.7,46.5@9.5) core_px=56 glow_1pct=(+13.64,+14.73) core_sat_p95=7 cream_outside_band=1.28% cyan=(found=True,pct=0.003)
@@ -203,7 +203,7 @@ P0B_CELLMAP_COUNTS brighter=72 cream_match=2 cream_unexplained=12 darker=3 ok=55
 <summary><code>beam_close</code> (Lounge extra) — full stdout</summary>
 
 ```
-P0B_STATS kind=reference pose=beam_close file=/home/john/Projects/TAT-2/docs/reference/clip_1795033698901/clean/KF27_03m27s_foyer_security_beam.jpg mean=16.7 p50=15 p95=34 lt8=16.7 lt16=53.8 gt200=0.03
+P0B_STATS kind=reference pose=beam_close file=<repo>/docs/reference/clip_1795033698901/clean/KF27_03m27s_foyer_security_beam.jpg mean=16.7 p50=15 p95=34 lt8=16.7 lt16=53.8 gt200=0.03
 P0B_STATS kind=port pose=beam_close file=build/qa/p0b_route/route2/extra_lounge_beam_close_pose.png mean=20.2 p50=20 p95=29 lt8=1.1 lt16=24.5 gt200=0.15
 P0B_DELTA pose=beam_close d_mean=+3.5 d_p50=+5 d_p95=-5 d_lt8=-15.5 d_gt200=+0.12
 P0B_BEAM pose=beam_close emitter_pct=(0.0,0.0) peak_row=28.06% excess=0.47 peaks=(none) core_px=1 glow_1pct=(+0.46,+0.41) core_sat_p95=11 cream_outside_band=0.28% cyan=(found=False,pct=0.000)

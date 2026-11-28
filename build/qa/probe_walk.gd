@@ -54,6 +54,6 @@ func _run() -> void:
 	await process_frame
 	await RenderingServer.frame_post_draw
 	var img: Image = root.get_texture().get_image()
-	img.save_png("/home/john/Projects/TAT-2/build/qa/probe_walk_end.png")
+	img.save_png(ProjectSettings.globalize_path("res://../build/qa/probe_walk_end.png").simplify_path())
 	print("PROBE saved probe_walk_end.png ", img.get_width(), "x", img.get_height())
 	quit(0)

@@ -1,6 +1,6 @@
 # T06-INPUT — controls & input remediation
 
-Team: **T06-INPUT** · worktree `/home/john/Projects/TAT-2-rem-T06-input` · branch `rem/T06-input`
+Team: **T06-INPUT** · worktree `<worktree>/T06-input` · branch `rem/T06-input`
 Base: `38e7b03` (main at spawn). Findings: RE-H-01…14 (plus adjacent 15/16/17).
 Plan: `../REMEDIATION_PLAN.md` §1 invariants, §2 S1–S6. No push, no merge, no rebase.
 

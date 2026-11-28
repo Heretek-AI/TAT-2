@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -u
-ROOT="/home/john/Projects/TAT-2"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RES="${1:-1920x1080}"
 OUT="$ROOT/build/qa/perf"
 LOG="$OUT/probe_${RES}.log"

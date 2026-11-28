@@ -1,7 +1,7 @@
 # Track C — materials, NPR/SNN, X-ray, weather
 
 Date: 2026-11-21
-Repo: `/home/john/Projects/TAT-2` (`main`)
+Repo: `<repo>` (`main`)
 Engine: Godot `4.7.2.stable.flathub` — Forward+ / Jolt 60 Hz
 Commits: `2d86930` (C5 + teardown), `79820d6` (#11), `b9ad345` (C1/C2/C3), `e7390d2` (M2 harness)
 

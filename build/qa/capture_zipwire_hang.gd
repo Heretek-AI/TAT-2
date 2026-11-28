@@ -3,7 +3,7 @@ extends SceneTree
 ## RMB cable hang/crank, early release hold. Live Vulkan 1920x1080:
 ##   bash build/qa/capture_zipwire_hang.sh
 ## Sweep-only (no GPU, prints the chosen spot then quits):
-##   /home/john/Projects/TAT-2/tools/godot --headless --path game \
+##   tools/godot --headless --path game \
 ##     --script build/qa/capture_zipwire_hang.gd -- --sweep-only
 ## Output: /tmp/opencode/zip_hang_final/kf16_*.png / kf17_*.png
 ##

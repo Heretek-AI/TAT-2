@@ -1,6 +1,6 @@
 # T09-GEOMETRY — world geometry, placement & meshing remediation
 
-Worktree: `/home/john/Projects/TAT-2-rem-T09-geometry`, branch `rem/T09-geometry`.
+Worktree: `<worktree>/T09-geometry`, branch `rem/T09-geometry`.
 Base: `fb93f84` (W7 merged tree + docs). **Local commits only — not pushed, not merged.**
 
 Scope owned and touched: the geometry/placement functions of

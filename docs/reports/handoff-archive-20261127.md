@@ -1,6 +1,6 @@
 # Handoff — Thick As Thieves Godot 4.7.2 port (next session)
 
-**Repo:** `/home/john/Projects/TAT-2`
+**Repo:** `<repo>`
 **Code/data tip:** `37bb69e` (mirrors + six lanes + P4.1 regeneration + gate wiring).
 **Docs/evidence tip:** `37bb69e` + this integration evidence commit (local, **not
 pushed**); `origin/main` is `7de2f0c`.

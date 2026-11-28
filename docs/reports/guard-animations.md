@@ -2,7 +2,7 @@
 
 Stage: guard-animations (subagent of TAT-2 wave fleet)
 Date: 2026-11-16
-Repo: `/home/john/Projects/TAT-2` (Godot 4.7.2, `main`)
+Repo: `<repo>` (Godot 4.7.2, `main`)
 
 Guards now play the REAL extracted UE animation clips instead of procedural
 bobbing. No placeholder/fabricated motion: every played track is baked source

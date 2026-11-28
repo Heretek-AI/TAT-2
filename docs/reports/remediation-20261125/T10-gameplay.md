@@ -1,7 +1,7 @@
 # T10-GAMEPLAY — remediation report
 
 Team: **T10-GAMEPLAY** (missions / loot / devices / doors / clock).
-Worktree: `/home/john/Projects/TAT-2-rem-T10-gameplay`, branch `rem/T10-gameplay`,
+Worktree: `<worktree>/T10-gameplay`, branch `rem/T10-gameplay`,
 base **`38e7b03`**, commit **`ae47adb`** (one coherent commit; this report file is
 deliberately untracked — `build/qa/*` is ignored, the integrator reads it here).
 Local commits only; **no push, no merge, no rebase**.

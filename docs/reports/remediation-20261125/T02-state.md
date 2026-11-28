@@ -1,7 +1,7 @@
 # T02-STATE — remediation report (RE-N 01–18)
 
 Team: T02-STATE (lane lead + 2 workers, disjoint files).
-Worktree `/home/john/Projects/TAT-2-rem-T02-state`, branch `rem/T02-state`.
+Worktree `<worktree>/T02-state`, branch `rem/T02-state`.
 Base `38e7b03` (= the tree lane N reviewed). No push, no merge, no rebase. No
 producer was run; `game/data/generated/` and `extracted/` were not written.
 

@@ -7,7 +7,7 @@ extends SceneTree
 ##  3. Window godray (teal-cyan retune).
 ## Pass gate: SHADER ERROR = 0 and SCRIPT ERROR = 0 in the log.
 
-const OUT_DIR: String = "/home/john/Projects/TAT-2/build/qa"
+var OUT_DIR: String = ProjectSettings.globalize_path("res://../build/qa").simplify_path()
 
 
 func _init() -> void:

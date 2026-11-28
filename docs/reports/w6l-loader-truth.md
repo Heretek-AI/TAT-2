@@ -209,7 +209,7 @@ intentional elsewhere (`SM_Sphere_100cm` control).
 
 `make audit` in this worktree fails **only** on producer/tool baselines that
 live in the shared checkout this worktree symlinks (`game/data` →
-`/home/john/Projects/TAT-2/game/data`): `gen:gameplay` differs from
+`<repo>/game/data`): `gen:gameplay` differs from
 `tools/audit_baseline.json` for `parse_tables.py`, `parse_gameplay.py` and
 `parse_unlocks.py` (sibling W6G regenerated them in the main checkout), and the
 `vgmstream` CLI is absent on this host. Manifest coverage (12703 payload,

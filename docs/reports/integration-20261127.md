@@ -82,7 +82,7 @@ was weakened; T1 is 117/117, T3 25/25 and the full E2E is 300/300 again.
 
 The worktree has no `tools/ue4ss/output`, so the extractor was given the main
 checkout's mapping explicitly:
-`--usmap /home/john/Projects/TAT-2/tools/ue4ss/output/TAT-5.5.4-148559+++TAT+tat_release_nosrc-30afe5ff.usmap`.
+`--usmap <repo>/tools/ue4ss/output/TAT-5.5.4-148559+++TAT+tat_release_nosrc-30afe5ff.usmap`.
 The first run without it failed with `MappingException: Package has unversioned
 properties but mapping file is missing`; rerunning with `--usmap` is the
 recorded path.

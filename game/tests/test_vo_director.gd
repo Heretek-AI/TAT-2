@@ -314,8 +314,11 @@ func _test_guard_beats(director: VoDirector) -> void:
 		"VO4.7 an unknown guard beat is refused",
 		"VO4.7 unknown beat returned %s" % str(bad))
 	# The reachable/unwired census moves only by the wired lines: the director
-	# maps 288 of the 645 authored lines; the other 357 are documented families
-	# whose owning systems do not exist (see docs/reports/phase3-audio-20261127.md).
+	# maps 288 of the 645 authored lines. The other 357 are documented in
+	# docs/reports/phase3-audio-20261127.md §4.3, where every family is either a
+	# genuinely missing subsystem or a beat that is unwired at an existing path
+	# (the thief-KO triple's downed->capture path exists; its open item is the
+	# attribution decision, not a missing system).
 	var mapped: int = director.mapped_events().size()
 	_check(mapped == 288,
 		"VO4.7 the director maps 288 authored lines (249 W11-A + 39 exertion)",

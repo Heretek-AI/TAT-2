@@ -8,7 +8,9 @@
 This report records what was **measured**, what was **wired**, and what is
 **not recoverable from the cook**. It does not claim a full Wwise parity: the
 control plane is still the W11 slice (14/23 switch groups, 4/8 states, 16/50
-RTPCs), and 357 of the 645 authored VO lines still have no owning system.
+RTPCs), and 357 of the 645 authored VO lines are still unwired — most because
+no subsystem owns them, a few at an existing path whose open item is an
+attribution decision (§4.3).
 
 ## 1. What changed
 
@@ -154,29 +156,71 @@ cannot drift silently.
 
 Every row below is a partition of the 357 unmapped lines: each authored
 `(speaker, verb, state)` bucket appears in **exactly one** row, and the `Lines`
-column sums to **357** (sum check recorded in §4.4). Every family has **no
-owning system in the port** (verified by grepping the shipping code, not
-assumed). Each stays indexed and is playable by name through
-`play_vo_event()`; none is invented or re-mapped onto another event.
+column sums to **357** (sum check recorded in §4.4). The table separates two
+cases, and each row's gap cell says which one it is:
+
+* a **genuinely missing subsystem** — nothing in the port owns the beat; or
+* a **beat that is unwired at an existing path** — the owning path exists and is
+  reachable, and the open item is an attribution/behaviour decision, not a
+  missing system.
+
+`ChasingThiefKnockOutThief` is the second kind: the terminal
+downed→capture path exists and is reachable (§4.3.1). Every line stays indexed
+and is playable by name through `play_vo_event()`; none is invented or re-mapped
+onto another event.
 
 | Lines | Family (authored rows) | Owning subsystem gap |
 |---:|---|---|
-| 74 | `IdleAloneOnPatrol/NonSpoken` (Enforcer1 40) + `/NearOtherGuard` (Enforcer1 19, Hauntstable1 15) | **Ambient patrol chatter** — no idle-bark scheduler / proximity chatter system. `IdleAloneOnPatrol/Idle` *is* mapped (wake-up), these variants are not. |
-| 19 | `Enforcer1_HauntstableDSP/IdleAloneOnPatrol/NonSpoken` (19) | **DSP speaker** — an authored DSP-variant speaker with no owning system. Counted here **only**, never inside the idle-chatter row above. |
-| 48 | `ThiefObserved/InsidePrivateZoneFoundThief` (Enforcer1 26, Hauntstable1 9) + `/InsidePrivateZoneTooLongSuspicious` (Enforcer1 4, Hauntstable1 5) + `/InsidePrivateZoneTooLong` (Hauntstable1 4) | **Private-zone trespass** — no private/locked-zone system exists (`grep private_zone` → none). |
-| 61 | `NoiseHeard/LowSeverityNoise` (Enforcer1 10, Hauntstable1 10) + `HighSeverityNoise` (Enforcer1 2) + `HighSeverityNoiseSearching` (Enforcer1 10, Hauntstable1 10) + `NothingFoundLowSeverity` (Enforcer1 9, Hauntstable1 10) | **Hearing exists, but the bark is already owned**: a heard noise raises `NEUTRAL→SUSPICIOUS`, whose guard transition (`ThiefSeen/VisionStim`) already barks; wiring both would double-bark. The two `LowSeverityNoiseSearching` buckets (19) are already mapped through the `NEUTRAL>SEARCH` transition and are NOT in this row. |
-| 40 | `GenericStim/React` (Hauntstable1 21) + `ExertionCombat/React` (Enforcer1 14) + `Exertion/AffectedBySoundEmitter` (Hauntstable1 5) | **Generic stimulus "React"** — the port's stimulus reactions are the alertness transitions (already mapped); no distinct generic-react beat. |
-| 14 | `IncorrectStateObserved/General` (10) + `/FixedGeneral` (4) | **Object-state observation** — no "this door should be closed / this object moved" guard observation system. |
-| 19 | `BrokenObjectObserved/Chest` (4) + `/Door` (4) + `/InitialSightingOfBrokenObject` (4) + `/InspectionOfBrokenObjectGeneral` (4) + `/Window` (3) | **Broken-object observation** — `break_container` exists as a player action, but no guard observation beat. |
-| 1 | `MainQuestLoot/ContainerSeenOpen` (1) | **Open-container observation** — no quest-loot observation beat. |
-| 49 | `ThiefObserved/ChasingThiefFightingThenFlees` (Enforcer1 10 + Hauntstable1 8 = 18) + `/ChasingThiefKnockOutThief` (Enforcer1 10 + Hauntstable1 9 = 19) + `/ChasingThiefLostTargetEvaded` (Enforcer1 4 + Hauntstable1 8 = 12) | **Combat sub-behaviours** — the FSM has no flee, thief-KO or evade sub-state. |
-| 8 | `SmokeGrenade/Cough` (8) | **Smoke exposure** — smoke only blocks LOS (`is_blocked_by_smoke`); guards are never "in" the cloud. |
-| 9 | `WakingUp/AboutToWakeUp` (9) | **KO timer** exists, but there is no authored pre-wake threshold; wiring would invent the timing. |
-| 8 | `WakingUp/RevivedByAlly` (8) | **Ally revive** exists, but the revived guard already plays `WakingUp/RevivedSelf` on `KO→NEUTRAL`; a second line would double-bark. |
-| 5 | `SlippingLosingBalance` (5) | **`slip_puddle` → `play_slip()` exists**, but `play_slip()` forces the KO which already barks `ExertionCombat/KnockedOut`; a third line in the same frame is a mix decision left open. |
-| 1 | `InsultFairy/Active/OneOffs` (1) | **InsultFairy** — no insult system in the port. |
+| 74 | `IdleAloneOnPatrol/NonSpoken` (Enforcer1 40) + `/NearOtherGuard` (Enforcer1 19, Hauntstable1 15) | **Missing subsystem: ambient patrol chatter** — no idle-bark scheduler / proximity chatter system. `IdleAloneOnPatrol/Idle` *is* mapped (wake-up), these variants are not. |
+| 19 | `Enforcer1_HauntstableDSP/IdleAloneOnPatrol/NonSpoken` (19) | **Missing subsystem: DSP speaker** — an authored DSP-variant speaker with no owning system. Counted here **only**, never inside the idle-chatter row above. |
+| 48 | `ThiefObserved/InsidePrivateZoneFoundThief` (Enforcer1 26, Hauntstable1 9) + `/InsidePrivateZoneTooLongSuspicious` (Enforcer1 4, Hauntstable1 5) + `/InsidePrivateZoneTooLong` (Hauntstable1 4) | **Missing subsystem: private-zone trespass** — no private/locked-zone system exists (`grep private_zone` → none). |
+| 61 | `NoiseHeard/LowSeverityNoise` (Enforcer1 10, Hauntstable1 10) + `HighSeverityNoise` (Enforcer1 2) + `HighSeverityNoiseSearching` (Enforcer1 10, Hauntstable1 10) + `NothingFoundLowSeverity` (Enforcer1 9, Hauntstable1 10) | **Unwired at an existing path: the bark is already owned** — a heard noise raises `NEUTRAL→SUSPICIOUS`, whose guard transition (`ThiefSeen/VisionStim`) already barks; wiring both would double-bark. Making the noise line win is an authored-behaviour substitution (which line wins on a heard-only stimulus) and is left as a labelled follow-up, not invented here. The two `LowSeverityNoiseSearching` buckets (19) are already mapped through the `NEUTRAL>SEARCH` transition and are NOT in this row. |
+| 40 | `GenericStim/React` (Hauntstable1 21) + `ExertionCombat/React` (Enforcer1 14) + `Exertion/AffectedBySoundEmitter` (Hauntstable1 5) | **Missing subsystem: generic "react"** — the port's stimulus reactions are the alertness transitions (already mapped); no distinct generic-react beat. |
+| 14 | `IncorrectStateObserved/General` (10) + `/FixedGeneral` (4) | **Missing subsystem: object-state observation** — no "this door should be closed / this object moved" guard observation system. |
+| 19 | `BrokenObjectObserved/Chest` (4) + `/Door` (4) + `/InitialSightingOfBrokenObject` (4) + `/InspectionOfBrokenObjectGeneral` (4) + `/Window` (3) | **Missing subsystem: broken-object observation** — `break_container` exists as a player action, but no guard observation beat. |
+| 1 | `MainQuestLoot/ContainerSeenOpen` (1) | **Missing subsystem: open-container observation** — no quest-loot observation beat. |
+| 49 | `ThiefObserved/ChasingThiefFightingThenFlees` (Enforcer1 10 + Hauntstable1 8 = 18) + `/ChasingThiefKnockOutThief` (Enforcer1 10 + Hauntstable1 9 = 19) + `/ChasingThiefLostTargetEvaded` (Enforcer1 4 + Hauntstable1 8 = 12) | **Mixed.** `ChasingThiefFightingThenFlees` (18) and `ChasingThiefLostTargetEvaded` (12): **missing sub-state** — a chase ends only as `ChasingThiefLostTargetSearching` / `LostTargetFound` (both mapped), with no "thief fled mid-fight" or "search ended in evasion" beat. `ChasingThiefKnockOutThief` (19): **unwired at an existing path** — guard damage → `take_damage` → `_enter_downed()` → `downed` → `_finish_run("capture")` is reachable today (§4.3.1); the open item is the **attribution decision** (which damage source / which guard owns the line), not a missing system. |
+| 8 | `SmokeGrenade/Cough` (8) | **Missing subsystem: smoke exposure** — smoke only blocks LOS (`is_blocked_by_smoke`); guards are never "in" the cloud. |
+| 9 | `WakingUp/AboutToWakeUp` (9) | **Unwired at an existing path: KO timer** — `ko_timer` exists, but there is no authored pre-wake threshold; wiring would invent the timing. |
+| 8 | `WakingUp/RevivedByAlly` (8) | **Unwired at an existing path: ally revive** — the revive exists, but the revived guard already plays `WakingUp/RevivedSelf` on `KO→NEUTRAL`; a second line would double-bark. |
+| 5 | `SlippingLosingBalance` (5) | **Unwired at an existing path: slip** — `slip_puddle` → `play_slip()` exists, but `play_slip()` forces the KO which already barks `ExertionCombat/KnockedOut`; a third line in the same frame is a mix decision left open. |
+| 1 | `InsultFairy/Active/OneOffs` (1) | **Missing subsystem: InsultFairy** — no insult system in the port. |
 | 1 | `Silent/Empty` (1) | **Authored silence** (0 media) — refused by design, counted, never played. |
 | **357** | **15 rows, each authored bucket in exactly one row** | — |
+
+### 4.3.1 The existing downed→capture path behind `ChasingThiefKnockOutThief`
+
+The player's terminal health path exists and is reachable from three damage
+sources, all through the same `take_damage` entry:
+
+| Source | Call site |
+|---|---|
+| guard melee | `guard_ai.gd:804-805` → `player.take_damage(MELEE_DAMAGE)` |
+| ranged shock | `ranged_attack.gd:133-134` → `victim.call("take_damage", …)` |
+| fall | `thief_character.gd:648` → `take_damage(dmg, "fall")` |
+
+`take_damage` floors health at 0 (`thief_character.gd:2499`) and calls
+`_enter_downed()` (`:723`), which emits `downed_started` (`:734`); when the
+downed timer expires `_tick_downed` emits `downed` (`:743`). Both are connected
+at `mission_controller.gd:3722-3723`, and `_on_player_downed` (`:5363-5364`)
+calls `_finish_run("capture")`.
+
+Two facts matter for the audio decision:
+
+* the player has **no health regeneration** — `health` is only set to
+  `max_health` at init (`:549`) and in `revive()` (`:760`), and reduced in
+  `take_damage` (`:2499`), so a downed player cannot walk the health back up;
+* **nothing plays VO at downed or capture** — the only `play_vo` in
+  `mission_controller.gd` is the fairy intro, so attributing the line there
+  cannot double-bark.
+
+The open item is therefore **attribution, not existence**: which source owns the
+line (the guard that landed the blow, only a melee finisher rather than fall
+damage, or the nearest chaser at the `downed` signal), and what should happen in
+a build where `revive()` (`thief_character.gd:756`, no caller in this
+single-player tree) clears `downed` before the timer fires. Those are behaviour
+decisions for the owner, so the line is not wired here.
+
 
 ### 4.4 Sum check (recorded)
 
@@ -184,22 +228,53 @@ Round 2 fixed three defects in the §4.3 table: `BrokenObjectObserved/*` was 15
 and had dropped `Door`'s 4 (now **19**), the combat trio used two single-speaker
 counts (now **18 + 19 + 12 = 49**), and the 19 DSP idle lines were listed inside
 the idle-chatter row as well as in their own row (now **only** their own row,
-with the 74 idle-chatter row re-derived as `40 + 19 + 15`). The check below
-parses the §4.3 table from this file, rebuilds the mapped/unmapped partition
-from the authored index and the director's three const tables, and asserts that
-each tabulated row equals its buckets' sum, that the rows sum to 357, that the
-mapped/unmapped split stays 288/357, and that the three corrections hold. Run
-from the repository root:
+with the 74 idle-chatter row re-derived as `40 + 19 + 15`).
+
+Round 3 adds no numbers; it makes the check **keyed by family** rather than
+positional (so swapping the numbers of two equal-size rows fails instead of
+passing), asserts the corrected framing (the old "no owning system" claim must
+be gone), and pins the round-3 falsifier finding that the
+`ChasingThiefKnockOutThief` path exists (`_finish_run("capture")` on `downed`,
+no player health regeneration). It parses the §4.3 table from this file,
+rebuilds the mapped/unmapped partition from the authored index and the
+director's three const tables, and cross-checks document and data per family.
+Run from the repository root:
 
 ```
 $ python3 - <<'EOF'
 import json, re
 
-# 1) DOCUMENT SIDE — parse the §4.3 rows (first cell all digits) and sum them.
+# 1) DOCUMENT SIDE — parse §4.3 into {first family token: Lines}. Keying by the
+#    family token (not row order) means swapping the numbers of two equal-size
+#    rows fails, which a positional sum cannot catch. Also assert the old
+#    "no owning system" framing is gone.
 doc = open("docs/reports/phase3-audio-20261127.md").read()
 sec = doc.split("### 4.3 ")[1].split("### 4.4 ")[0]
-rows = [int(m) for m in re.findall(r"^\| (\d+) \|", sec, re.M)]
-assert (len(rows), sum(rows)) == (15, 357), (len(rows), sum(rows))
+doc_rows = {
+    m.group(2): int(m.group(1))
+    for m in re.finditer(r"^\| (\d+) \| `([^`]+)`", sec, re.M)
+}
+EXPECT = {
+    "IdleAloneOnPatrol/NonSpoken": 74,
+    "Enforcer1_HauntstableDSP/IdleAloneOnPatrol/NonSpoken": 19,
+    "ThiefObserved/InsidePrivateZoneFoundThief": 48,
+    "NoiseHeard/LowSeverityNoise": 61,
+    "GenericStim/React": 40,
+    "IncorrectStateObserved/General": 14,
+    "BrokenObjectObserved/Chest": 19,
+    "MainQuestLoot/ContainerSeenOpen": 1,
+    "ThiefObserved/ChasingThiefFightingThenFlees": 49,
+    "SmokeGrenade/Cough": 8,
+    "WakingUp/AboutToWakeUp": 9,
+    "WakingUp/RevivedByAlly": 8,
+    "SlippingLosingBalance": 5,
+    "InsultFairy/Active/OneOffs": 1,
+    "Silent/Empty": 1,
+}
+assert doc_rows == EXPECT, doc_rows
+assert len(doc_rows) == 15 and sum(doc_rows.values()) == 357
+assert "Every family has **no owning system" not in sec
+assert "unwired at an existing path" in sec.lower()
 
 # 2) DATA SIDE — rebuild mapped/unmapped from the authored index + the director.
 d = json.load(open("game/data/generated/audio_wwise.json"))
@@ -224,53 +299,39 @@ mapped |= {ev for sp, verb, st in triples(e) for ev in idx.get((sp, verb, st), [
 rem = {k: n for k, v in idx.items() if (n := len([x for x in v if x not in mapped]))}
 assert (len(mapped), 645 - len(mapped)) == (288, 357) == (288, sum(rem.values()))
 
-# 3) The three round-2 corrections, asserted against the authored buckets.
-broken = sum(n for k, n in rem.items() if k[1] == "BrokenObjectObserved")
-trio_states = (
+# 3) FAMILY -> authored buckets, keyed by the same token as the table row.
+TRIO = (
     "ChasingThiefFightingThenFlees",
     "ChasingThiefKnockOutThief",
     "ChasingThiefLostTargetEvaded",
 )
-trio = [
-    rem[("Enforcer1", "ThiefObserved", s)] + rem[("Hauntstable1", "ThiefObserved", s)]
-    for s in trio_states
-]
-dsp = sum(n for k, n in rem.items() if k[0] == "Enforcer1_HauntstableDSP")
-idle_only = sum(
-    n
-    for k, n in rem.items()
-    if k[1] == "IdleAloneOnPatrol" and k[0] != "Enforcer1_HauntstableDSP"
-)
-assert broken == 19 and rem[("Enforcer1", "BrokenObjectObserved", "Door")] == 4
-assert trio == [18, 19, 12], trio
-assert dsp == 19 and idle_only == 74, (dsp, idle_only)
-
-# 4) The table is a partition: each remaining bucket is in exactly one row.
-F = [
-    [
+FAM = {
+    "IdleAloneOnPatrol/NonSpoken": [
         ("Enforcer1", "IdleAloneOnPatrol", "NonSpoken"),
         ("Enforcer1", "IdleAloneOnPatrol", "NearOtherGuard"),
         ("Hauntstable1", "IdleAloneOnPatrol", "NearOtherGuard"),
     ],
-    [("Enforcer1_HauntstableDSP", "IdleAloneOnPatrol", "NonSpoken")],
-    [
+    "Enforcer1_HauntstableDSP/IdleAloneOnPatrol/NonSpoken": [
+        ("Enforcer1_HauntstableDSP", "IdleAloneOnPatrol", "NonSpoken")
+    ],
+    "ThiefObserved/InsidePrivateZoneFoundThief": [
         ("Enforcer1", "ThiefObserved", "InsidePrivateZoneFoundThief"),
         ("Hauntstable1", "ThiefObserved", "InsidePrivateZoneFoundThief"),
         ("Enforcer1", "ThiefObserved", "InsidePrivateZoneTooLongSuspicious"),
         ("Hauntstable1", "ThiefObserved", "InsidePrivateZoneTooLongSuspicious"),
         ("Hauntstable1", "ThiefObserved", "InsidePrivateZoneTooLong"),
     ],
-    [k for k in rem if k[1] == "NoiseHeard"],
-    [
+    "NoiseHeard/LowSeverityNoise": [k for k in rem if k[1] == "NoiseHeard"],
+    "GenericStim/React": [
         ("Hauntstable1", "GenericStim", "React"),
         ("Enforcer1", "ExertionCombat", "React"),
         ("Hauntstable1", "Exertion", "AffectedBySoundEmitter"),
     ],
-    [
+    "IncorrectStateObserved/General": [
         ("Enforcer1", "IncorrectStateObserved", "General"),
         ("Enforcer1", "IncorrectStateObserved", "FixedGeneral"),
     ],
-    [
+    "BrokenObjectObserved/Chest": [
         ("Enforcer1", "BrokenObjectObserved", s)
         for s in (
             "Chest",
@@ -280,43 +341,84 @@ F = [
             "Window",
         )
     ],
-    [("Enforcer1", "MainQuestLoot", "ContainerSeenOpen")],
-    [("Enforcer1", "ThiefObserved", s) for s in trio_states]
-    + [("Hauntstable1", "ThiefObserved", s) for s in trio_states],
-    [("Enforcer1", "SmokeGrenade", "Cough")],
-    [("Enforcer1", "WakingUp", "AboutToWakeUp")],
-    [("Enforcer1", "WakingUp", "RevivedByAlly")],
-    [("Enforcer1", "SlippingLosingBalance", "")],
-    [("InsultFairy", "Active", "OneOffs")],
-    [("Enforcer1", "Silent", "Empty")],
-]
-covered = [k for keys in F for k in keys]
-assert [sum(rem[k] for k in keys) for keys in F] == rows, "row composition != table"
+    "MainQuestLoot/ContainerSeenOpen": [
+        ("Enforcer1", "MainQuestLoot", "ContainerSeenOpen")
+    ],
+    "ThiefObserved/ChasingThiefFightingThenFlees": [
+        ("Enforcer1", "ThiefObserved", s) for s in TRIO
+    ]
+    + [("Hauntstable1", "ThiefObserved", s) for s in TRIO],
+    "SmokeGrenade/Cough": [("Enforcer1", "SmokeGrenade", "Cough")],
+    "WakingUp/AboutToWakeUp": [("Enforcer1", "WakingUp", "AboutToWakeUp")],
+    "WakingUp/RevivedByAlly": [("Enforcer1", "WakingUp", "RevivedByAlly")],
+    "SlippingLosingBalance": [("Enforcer1", "SlippingLosingBalance", "")],
+    "InsultFairy/Active/OneOffs": [("InsultFairy", "Active", "OneOffs")],
+    "Silent/Empty": [("Enforcer1", "Silent", "Empty")],
+}
+data_rows = {k: sum(rem.get(b, 0) for b in buckets) for k, buckets in FAM.items()}
+assert data_rows == EXPECT == doc_rows
+covered = [b for buckets in FAM.values() for b in buckets]
 assert len(covered) == len(set(covered)) == len(rem) and set(rem) == set(covered)
-assert 357 - sum(rem[k] for k in covered) == 0
+
+# 4) The round-2 corrections and the round-3 framing fact.
+assert sum(rem[k] for k in rem if k[1] == "BrokenObjectObserved") == 19
+assert rem[("Enforcer1", "BrokenObjectObserved", "Door")] == 4
+trio = [
+    rem[("Enforcer1", "ThiefObserved", s)] + rem[("Hauntstable1", "ThiefObserved", s)]
+    for s in TRIO
+]
+assert trio == [18, 19, 12], trio
+dsp = sum(n for k, n in rem.items() if k[0] == "Enforcer1_HauntstableDSP")
+assert (
+    dsp == 19
+    and sum(
+        n
+        for k, n in rem.items()
+        if k[1] == "IdleAloneOnPatrol" and k[0] != "Enforcer1_HauntstableDSP"
+    )
+    == 74
+)
+assert rem[("Enforcer1", "ThiefObserved", "ChasingThiefKnockOutThief")] == 10
+assert rem[("Hauntstable1", "ThiefObserved", "ChasingThiefKnockOutThief")] == 9
+# The path that owns the KO beat exists (round-3 falsifier finding): the capture
+# finish, the downed signal, and the no-regen health writes are all in the tree.
+mc = open("game/src/missions/mission_controller.gd").read()
+th = open("game/src/player/thief_character.gd").read()
+ga = open("game/src/ai/guard_ai.gd").read()
+assert 'func _on_player_downed() -> void:\n\t_finish_run("capture")' in mc
+assert "player.downed.connect(_on_player_downed)" in mc
+assert "func _enter_downed()" in th and "downed.emit()" in th
+assert "player.take_damage(MELEE_DAMAGE)" in ga
+assert re.search(r"^\s*health = maxf\(0\.0, health - amount\)$", th, re.M)
+assert len(re.findall(r"^\s*health = max_health$", th, re.M)) == 2  # init + revive only
 
 print(
-    "OK rows=%d sum=%d mapped=%d unmapped=%d broken=%d trio=%s dsp=%d idle_only=%d leftover=0"
+    "OK rows=%d sum=%d mapped=%d unmapped=%d broken=%d trio=%s dsp=%d idle_only=%d "
+    "ko_path=downed->capture leftover=0"
     % (
-        len(rows),
-        sum(rows),
+        len(doc_rows),
+        sum(doc_rows.values()),
         len(mapped),
         645 - len(mapped),
-        broken,
+        sum(rem[k] for k in rem if k[1] == "BrokenObjectObserved"),
         trio,
         dsp,
-        idle_only,
+        sum(
+            n
+            for k, n in rem.items()
+            if k[1] == "IdleAloneOnPatrol" and k[0] != "Enforcer1_HauntstableDSP"
+        ),
     )
 )
 EOF
-OK rows=15 sum=357 mapped=288 unmapped=357 broken=19 trio=[18, 19, 12] dsp=19 idle_only=74 leftover=0
+OK rows=15 sum=357 mapped=288 unmapped=357 broken=19 trio=[18, 19, 12] dsp=19 idle_only=74 ko_path=downed->capture leftover=0
 ```
 
-The check is a partition proof, not only a total: each of the 15 rows is
-recomputed from its authored buckets and must equal the row as written, and the
-covered buckets must equal the remaining set exactly (`leftover=0`), so no line
-is counted twice (the DSP 19 is disjoint from the 74 idle-chatter lines) and
-none is dropped.
+Because both sides are compared as `{family token: Lines}` maps, the table can
+no longer drift from the data even where two rows share the same line count
+(the three single-line rows, the two 8-line rows). The check also proves the
+partition is complete: every remaining bucket is covered exactly once
+(`leftover=0`), so the DSP 19 is disjoint from the 74 idle-chatter lines.
 
 ## 5. 3B.3d — the 5 unproduced `FS_Layers` values: the double-ban claim is REFUTED
 

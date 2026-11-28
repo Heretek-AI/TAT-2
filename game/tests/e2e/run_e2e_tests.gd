@@ -108,6 +108,19 @@ func _initialize() -> void:
 			h.require(false, "S2-BOOT", "Failed to load e2e_s2_loot.gd")
 		await _settle_harness()
 
+	# Phase 3B.5 Cleanout tier: one real first-class Cleanout deploy (authored
+	# side-mission row with free_play=false), bank/contract checks and the Den
+	# table's separate Cleanout entry. Runs in `all` after s2_loot.
+	if tier_filter == "all" or tier_filter == "s2":
+		await _settle_harness()
+		var co_scr: GDScript = load("res://tests/e2e/e2e_s2_cleanout.gd") as GDScript
+		if co_scr != null:
+			var co: RefCounted = co_scr.new(h)
+			await co.call("run")
+		else:
+			h.require(false, "S2C-BOOT", "Failed to load e2e_s2_cleanout.gd")
+		await _settle_harness()
+
 	# P0b acceptance tier "a2": one real Contract 02 Novice mission. Runs last in
 	# `all` (after s2) because it snapshots/restores GameState and frees the
 	# mission, so nothing later depends on its actors. Standalone `--tier=a2`

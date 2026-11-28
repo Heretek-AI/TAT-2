@@ -2692,8 +2692,12 @@ func _post_match_mission_line(won: bool) -> String:
 	return UIStringsScript.st_text("ST_PostMatch", key, "")
 
 
-## Authored contract outcome row: PostMatch.Contract.<order>.<Result>.
+## Authored contract outcome row: PostMatch.Contract.<order>.<Result>. A
+## first-class Cleanout (and free play) never earns campaign credit, so it must
+## not display a hosting-contract success/failure row.
 func _post_match_contract_line(won: bool) -> String:
+	if not GameState.run_credits_contract():
+		return ""
 	var order: int = int(GameState.active_contract_order)
 	if order <= 0:
 		return ""
@@ -3202,7 +3206,7 @@ func _update_objectives_and_loot(is_hub: bool) -> void:
 		_loot_lbl.visible = not is_hub
 		var goal_v: Variant = GameState.get("loot_goal")
 		var goal: int = int(goal_v) if (goal_v is int or goal_v is float) else 0
-		if GameState.free_play:
+		if GameState.free_play or GameState.cleanout_run:
 			# Reference Contract Inactive counter: just the take, no "/ £ goal".
 			_loot_lbl.text = "(£) %d" % GameState.loot_value
 		elif goal > 0:
@@ -3220,7 +3224,7 @@ func _update_objectives_and_loot(is_hub: bool) -> void:
 	# Free play: the reference prints the objective inline with its progress in
 	# the same bracket ("Mission: Steal 4,000 in loot value[0/4,000]") and no
 	# timer suffix or ❧ sub-line. Normal contracts keep the formatter below.
-	if GameState.free_play:
+	if GameState.free_play or GameState.cleanout_run:
 		var fp_label: String = UIStringsScript.loc_template("Steal {Amount} in loot value", {"Amount": GameState.format_thousands(maxi(GameState.loot_goal, 0))})
 		var fp_cur: int = 0
 		var fp_tgt: int = maxi(GameState.loot_goal, 0)
@@ -4522,17 +4526,23 @@ func _settle_run_for_exit() -> Dictionary:
 func _pause_return_to_den() -> void:
 	_settle_run_for_exit()
 	_set_paused(false)
-	GameState.active_contract_order = 1
-	GameState.end_free_play()
+	reset_run_modes_for_hub()
 	get_tree().change_scene_to_file(pause_return_scene_path())
 
 
 ## Post-match Continue: mission_controller has already banked the run, so this
 ## only returns to the Den hub (contract 1) through the mission scene.
 func _continue_to_den() -> void:
+	reset_run_modes_for_hub()
+	get_tree().change_scene_to_file(DEN_SCENE_PATH)
+
+
+## Shared hub-return mode reset: a run mode (free play or first-class Cleanout)
+## must never survive at the Den hub, or the next deploy would inherit it.
+func reset_run_modes_for_hub() -> void:
 	GameState.active_contract_order = 1
 	GameState.end_free_play()
-	get_tree().change_scene_to_file(DEN_SCENE_PATH)
+	GameState.end_cleanout()
 
 
 ## C-4 instrumentation: exact in-tree node counts for the elements the recorded

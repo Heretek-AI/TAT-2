@@ -1,30 +1,30 @@
 == FINAL_GATE probe_gc_destruction
 COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/probe_gc_destruction.gd
 CWD: .
-STARTED: 2026-11-27T21:57:44-05:00
+STARTED: 2026-11-28T09:05:29-05:00
 
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 TAT-2 Loc: reverse map built from sources.json (3404 keys)
 TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
@@ -41,9 +41,12 @@ GC_CHECK PASS broken layers emitted 375/375
 GC_CHECK PASS authored-visible GC emitted 0 (expected 0 today)
 GC_CHECK PASS authored intact leaf records 166 (expected 166)
 GC_CHECK PASS intact leaf placements 168 (expected 168 = 166 authored + 2 copies)
-GC_CHECK PASS GC_ChestTrunkALid labelled fallback 93 (expected 93, no dump)
-GC_CHECK PASS bookcase GC sibling-SMC fallback 5 (expected 5, no AutoInstanceMeshes mesh)
+GC_CHECK PASS GC_ChestTrunkALid labelled fallback 93 (expected 93; the authored dump auto-instances only the intact lid, no fracture mesh)
+GC_CHECK PASS bookcase GC sibling-SMC fallback 5 (expected 5; GC_BookCaseUpperB_DoorWindow_01 authors a null AutoInstanceMeshes mesh)
 GC_CHECK PASS unresolved GC records 0
+GC_CHECK PASS GC_ChestTrunkALid overlay rows 93 (expected 93)
+GC_CHECK PASS chest broken overlay never reuses the intact lid mesh 0 row(s) point at SM_ChestTrunkALid; the authored collection auto-instances only the intact lid, so that would draw an unbroken chest
+GC_CHECK PASS fallback rows use the authored _Broken sibling mesh rows=93 _Broken=93 authored=93 expected=93
 FootstepMask: downscaled 1024x1024 -> 128x128 for one-time alpha mask
 FootstepMask: baked one-time alpha mask (128x128, source_alpha=true) from res://assets/ue/Raw/Art/Environment/Props/Containers/Crates/T_Crate_Decal_D.png
 TAT-2 gate lights: total=0 (generic=0 rect=0) budget=8 forced=0 hero_shadows=6
@@ -58,7 +61,7 @@ MIRROR_SPLIT mp=/Game/Art/Environment/Manor/SM_Manor_Bookcase_Cabinet_Door_Glass
 MIRROR_SPLIT mp=/Game/Art/Environment/Manor/SM_Manor_Bookcase_Cabinet_Door_Glass_2x8 mode=native pos=0 neg=1 surfaces=1 bytes=0
 MIRROR_SPLIT mp=/Game/Art/Environment/Manor/SM_Manor_Bookcase_Cabinet_Door_Glass_2x8 mode=native pos=0 neg=1 surfaces=1 bytes=0
 MIRROR_SPLIT mp=/Game/Art/Environment/Manor/SM_Manor_Bookcase_Cabinet_Door_Glass_2x8 mode=native pos=0 neg=1 surfaces=1 bytes=0
-AUTHORED_COLLISION meshes=7 hull=7 authored_elements=7 complex=0 no_record=0 prims=4 convex=24 absent=0 no_collision=0 query_only=0 reduced=1 shapes_per_instance_avg=1.46 elements=47 load_ms=336
+AUTHORED_COLLISION meshes=7 hull=7 authored_elements=7 complex=0 no_record=0 prims=4 convex=24 absent=0 no_collision=0 query_only=0 reduced=1 shapes_per_instance_avg=1.46 elements=47 load_ms=331
 ROUGHNESS_BAKE count=6 pixels=5373952 ms=390 bytes=7165267 hits=0 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=175 applied=175 duplicate=0 name_skipped=0 wardbox=0 moonshape=0 clamp=0 clamp_worst=1.00x mirrored=16 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0 mirrored_bases=16 mirrored_multimesh=8 mirrored_single=8 mirrored_splits=10 mirrored_cull_front=0 mirrored_cull_disabled=0 mirrored_mesh_bytes=85584 mirrored_mesh_count=1 mirrored_unbaked=0
 MIRROR_RECON bases=16 multimesh=8 single=8 split=10 cull_front=0 cull_disabled=0 baked=1 baked_bytes=85584 unbaked=0 suppressed=0 ok=true
@@ -91,7 +94,7 @@ MIRROR_SPLIT mp=/Game/Art/Environment/Manor/SM_Manor_Bookcase_Cabinet_Door_Glass
 MIRROR_SPLIT mp=/Game/Art/Environment/Manor/SM_Manor_Bookcase_Cabinet_Door_Glass_2x8 mode=native pos=0 neg=1 surfaces=1 bytes=0
 MIRROR_SPLIT mp=/Game/Art/Environment/Manor/SM_Manor_Bookcase_Cabinet_Door_Glass_2x8 mode=native pos=0 neg=1 surfaces=1 bytes=0
 MIRROR_SPLIT mp=/Game/Art/Environment/Manor/SM_Manor_Bookcase_Cabinet_Door_Glass_2x8 mode=native pos=0 neg=1 surfaces=1 bytes=0
-AUTHORED_COLLISION meshes=7 hull=7 authored_elements=7 complex=0 no_record=0 prims=4 convex=24 absent=0 no_collision=0 query_only=0 reduced=1 shapes_per_instance_avg=1.46 elements=47 load_ms=336
+AUTHORED_COLLISION meshes=7 hull=7 authored_elements=7 complex=0 no_record=0 prims=4 convex=24 absent=0 no_collision=0 query_only=0 reduced=1 shapes_per_instance_avg=1.46 elements=47 load_ms=331
 ROUGHNESS_BAKE count=0 pixels=0 ms=0 bytes=0 hits=6 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=175 applied=175 duplicate=0 name_skipped=0 wardbox=0 moonshape=0 clamp=0 clamp_worst=1.00x mirrored=16 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0 mirrored_bases=16 mirrored_multimesh=8 mirrored_single=8 mirrored_splits=10 mirrored_cull_front=0 mirrored_cull_disabled=0 mirrored_mesh_bytes=85584 mirrored_mesh_count=1 mirrored_unbaked=0
 MIRROR_RECON bases=16 multimesh=8 single=8 split=10 cull_front=0 cull_disabled=0 baked=1 baked_bytes=85584 unbaked=0 suppressed=0 ok=true
@@ -117,7 +120,7 @@ WARNING: [hearing_data] 5 authored investigation-range anomalies clamped: AI.Sti
          [4] build_record (res://src/stealth/noise_bus.gd:105)
          [5] emit_noise (res://src/stealth/noise_bus.gd:124)
          [6] break_container (res://src/interact/loot_container.gd:336)
-         [7] _run (res://tests/probe_gc_destruction.gd:507)
+         [7] _run (res://tests/probe_gc_destruction.gd:557)
 GC_CHECK PASS chest break is one-shot first=true second=false
 GC_CHECK PASS chest intact -> broken swap leaf=false broken=true
 GC_CHECK PASS chest broken state recorded is_broken + meta
@@ -133,8 +136,8 @@ GC_CHECK PASS bookcase break created no duplicate glass node static_panes=16 bef
 GC_PROBE after_break visible_broken=4 of 95
 GC_CHECK PASS only the four broken overlays are visible 4/95
 GC_CHECK PASS only the two emitted intact leaves were hidden 77/79 visible
-GC_PROBE checks=52 fails=0
+GC_PROBE checks=55 fails=0
 GC_PROBE PASS
 
 EXIT: 0
-FINISHED: 2026-11-27T21:57:47-05:00
+FINISHED: 2026-11-28T09:05:33-05:00

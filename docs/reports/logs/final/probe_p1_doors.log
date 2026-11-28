@@ -1,37 +1,37 @@
 == FINAL_GATE probe_p1_doors
 COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/probe_p1_doors.gd
 CWD: .
-STARTED: 2026-11-27T21:53:10-05:00
+STARTED: 2026-11-28T09:01:01-05:00
 
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 TAT-2 Loc: reverse map built from sources.json (3404 keys)
 TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
 INPUT_TABLE source=generated rows=91 shipping=91 actions=52
 INPUT_TABLE_SKIPPED contexts=IMC_Character_ClimbTest, IMC_Character_Testing mappings=146 dev_only_actions=IA_AbilityLoadout_01, IA_Ability_SpecialAttack
 P1_DOORS probe — S21 blue double doors (KF24)
-  project=/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/baseline-run/game
+  project=/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/sentinel/game
   ok: S21 records = 4 (2 actors x Pivot+SecondPivot), got 4
   ok: every S21 record: class BP_Civic_Doorway_6x8_C, 1 leaf /Game/Art/Environment/Civic/Doors/SM_Civic_DoorDouble_x4, unlocked, lockpickable
     record BP_Manor_Porch_Door_8x8_C_0.Pivot@(11.50,27.50,-73.50)
@@ -76,7 +76,7 @@ WARNING: [hearing_data] 5 authored investigation-range anomalies clamped: AI.Sti
          [10] _wait_frames (res://tests/probe_p1_doors.gd:133)
   ok: during the swing primary flips to "[F] CLOSE" (got "[F] CLOSE")
   ok: during the swing the [HOLD] LOCK row is withdrawn (got "")
-  ok: the leaf is swinging (angle 0.0 -> 22.5 deg)
+  ok: the leaf is swinging (angle 0.0 -> 26.7 deg)
   ok: swing completes at the authored 90 deg (got 90.0)
   ok: open door stays on "[F] CLOSE"
   ok: while closing primary is "[F] OPEN" (got "[F] OPEN")
@@ -114,10 +114,6 @@ TAT-2 HUD build: id=1 root_children=29 hp_frame=1 hp_fill=1 objectives=1
     PORT_DECISION: PG-2's parity scenario looks for LockpickWheel/LockpickArc; the port's nodes are LockpickMinigameOverlay/LockpickDial (no authored name to rename to).
 P1_DOORS checks=49 fails=0
 P1_DOORS PASS
-WARNING: 4 ObjectDB instances were leaked at exit (run with `--verbose` for details).
-   at: cleanup (core/object/object.cpp:2536)
-ERROR: 2 resources still in use at exit (run with --verbose for details).
-   at: clear (core/io/resource.cpp:822)
 
 EXIT: 0
-FINISHED: 2026-11-27T21:53:16-05:00
+FINISHED: 2026-11-28T09:01:07-05:00

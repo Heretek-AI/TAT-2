@@ -1,13 +1,13 @@
 == FINAL_GATE p0b_capture_dry_run
 COMMAND: ./build/qa/p0b_capture.sh --dry-run
 CWD: .
-STARTED: 2026-11-27T22:07:38-05:00
+STARTED: 2026-11-28T09:15:54-05:00
 
 P0B_CAPTURE_WALL mode=dry-run exit=0 wall=1s (headless, no GPU)
-manifest: /home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/baseline-run/docs/reports/logs/final/dry-run/manifest.json
-log:      /home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/baseline-run/docs/reports/logs/final/dry-run/dry-run.log
-P0B_START mode=dry-run run=20261128T030739Z_5857589853e4_on poses=gate,upper_foyer,yaw180,foyer_beam,lounge,lounge_beam,beam_close beam=on seed=derived fov=54.54 size=(1920, 1080) out=/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/baseline-run/build/qa/p0b/dry-run manifest=/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/baseline-run/docs/reports/logs/final/dry-run/manifest.json
-P0B_DRY_RUN manifest=/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/baseline-run/docs/reports/logs/final/dry-run/manifest.json poses=7 schema=tat2.p0b_capture/1 audio=disabled reason=dry_run
+manifest: /home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/sentinel/docs/reports/logs/final/dry-run/manifest.json
+log:      /home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/sentinel/docs/reports/logs/final/dry-run/dry-run.log
+P0B_START mode=dry-run run=20261128T141555Z_533782892243_on poses=gate,upper_foyer,yaw180,foyer_beam,foyer_beam_wide,lounge,lounge_beam,beam_close,gap_view beam=on seed=derived settle_s=0.00 fov=54.54 size=(1920, 1080) out=/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/sentinel/build/qa/p0b/dry-run manifest=/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/sentinel/docs/reports/logs/final/dry-run/manifest.json
+P0B_DRY_RUN manifest=/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/sentinel/docs/reports/logs/final/dry-run/manifest.json poses=9 schema=tat2.p0b_capture/1 audio=disabled reason=dry_run
 
 EXIT: 0
-FINISHED: 2026-11-27T22:07:39-05:00
+FINISHED: 2026-11-28T09:15:55-05:00

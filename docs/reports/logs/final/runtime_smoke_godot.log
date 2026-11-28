@@ -3,23 +3,23 @@ Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 TAT-2 Loc: reverse map built from sources.json (3404 keys)
 TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
@@ -34,7 +34,7 @@ WARNING: [level_loader] level Niagara: 5 placements across 3 systems in 4 chunk 
          [0] _spawn_level_niagara (res://src/core/level_loader.gd:7345)
          [1] _store_level_extras (res://src/core/level_loader.gd:7117)
          [2] load_sublevels (res://src/core/level_loader.gd:7595)
-         [3] _build_3d_backdrop (res://src/ui/main_menu.gd:178)
+         [3] _build_3d_backdrop (res://src/ui/main_menu.gd:185)
          [4] _ready (res://src/ui/main_menu.gd:86)
 LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(-252.00,-0.10,-252.00) wm=Weightmap_18.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
 LANDSCAPE_MASK src=Menus/MainMenu/BeautifulCorner_Startscreen_P comp=(-189.00,-0.10,-252.00) wm=Weightmap_18.png mode=discard mask=absent tex=-1 ch=-1 sample=1 discard=1 raw=0
@@ -110,7 +110,7 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [3] _build_one_draw_item (res://src/core/level_loader.gd:5230)
          [4] _build_draw_items (res://src/core/level_loader.gd:5941)
          [5] load_sublevels (res://src/core/level_loader.gd:7602)
-         [6] _build_3d_backdrop (res://src/ui/main_menu.gd:178)
+         [6] _build_3d_backdrop (res://src/ui/main_menu.gd:185)
          [7] _ready (res://src/ui/main_menu.gd:86)
 MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_RailingA_1m mode=cull_front pos=23 neg=30 surfaces=1 bytes=0
 MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_RailingA_1m mode=cull_front pos=16 neg=22 surfaces=1 bytes=0
@@ -176,7 +176,7 @@ MIRROR_SPLIT mp=/Game/Art/Gameplay/ElectricPowerSource/SM_PowerSupplyBodyB mode=
 MIRROR_SPLIT mp=/Game/Art/Gameplay/ElectricPowerSource/SM_PowerSupplyBodyB mode=baked pos=0 neg=3 surfaces=3 bytes=180732
 MIRROR_SPLIT mp=/Game/Art/Gameplay/ElectricPowerSource/SM_PowerSupplyBodyB mode=native pos=0 neg=1 surfaces=3 bytes=0
 MIRROR_SPLIT mp=/Game/Test/LevelKits/Graybox/GB_RoofShedB_EndL mode=native pos=1 neg=1 surfaces=2 bytes=0
-ROUGHNESS_BAKE count=31 pixels=22806528 ms=1669 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
+ROUGHNESS_BAKE count=31 pixels=22806528 ms=1635 bytes=30408692 hits=5 (L8 low+g*(high-low), full-res, process cache)
 MESH_RECON authored=3116 applied=3112 duplicate=0 name_skipped=3 wardbox=0 moonshape=1 clamp=68 clamp_worst=4.67x mirrored=444 origin_markers_skipped=0 skipped_merged=0 from_graph=0 graph_missing=0 mirrored_bases=444 mirrored_multimesh=418 mirrored_single=26 mirrored_splits=92 mirrored_cull_front=361 mirrored_cull_disabled=0 mirrored_mesh_bytes=697560 mirrored_mesh_count=8 mirrored_unbaked=0
 MIRROR_RECON bases=444 multimesh=418 single=26 split=92 cull_front=361 cull_disabled=0 baked=8 baked_bytes=697560 unbaked=0 suppressed=28 ok=true
 TAT-2 QA autostart contract=2 map=guildhall mission=Mission.Guildhall.LootTheRoom free_play=true
@@ -295,8 +295,8 @@ WARNING: [level_loader] material flat white: '/Game/MaterialLibrary/Debug/MI_Def
          [3] _build_one_draw_item (res://src/core/level_loader.gd:5230)
          [4] load_sublevels_async (res://src/core/level_loader.gd:7713)
 COL_PLANAR /Game/Art/Effects/WardZones/SM_SlowWardZone_Quad instances=82 skipped=1
-AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=359
-ROUGHNESS_BAKE count=87 pixels=74973184 ms=5503 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=952 hull=942 authored_elements=866 complex=63 no_record=0 prims=593 convex=925 absent=10 no_collision=13 query_only=7 reduced=17 shapes_per_instance_avg=1.13 elements=2213 load_ms=350
+ROUGHNESS_BAKE count=87 pixels=74973184 ms=5393 bytes=99964212 hits=49 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=134 axis=col2 length_slot=2 clamp=none max_scale=195.5291 max_length_m=19.944
 BEAM_AXIS cards=134 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=64953 applied=64682 duplicate=130 name_skipped=30 wardbox=41 moonshape=70 clamp=206 clamp_worst=500.00x mirrored=3329 origin_markers_skipped=0 skipped_merged=0 from_graph=3 graph_missing=0 mirrored_bases=3297 mirrored_multimesh=3119 mirrored_single=178 mirrored_splits=464 mirrored_cull_front=312 mirrored_cull_disabled=0 mirrored_mesh_bytes=31097388 mirrored_mesh_count=103 mirrored_unbaked=0
@@ -322,11 +322,11 @@ WARNING: [hearing_data] 5 authored investigation-range anomalies clamped: AI.Sti
          [2] ensure_loaded (res://src/ai/hearing_data.gd:187)
          [3] escalation_row (res://src/ai/hearing_data.gd:615)
          [4] row (res://src/ai/sight_model.gd:120)
-         [5] escalation_row (res://src/ai/guard_ai.gd:488)
-         [6] _apply_authored_escalation (res://src/ai/guard_ai.gd:527)
-         [7] _ready (res://src/ai/guard_ai.gd:413)
-         [8] _spawn_guards (res://src/missions/mission_controller.gd:4174)
-         [9] start_contract (res://src/missions/mission_controller.gd:961)
+         [5] escalation_row (res://src/ai/guard_ai.gd:497)
+         [6] _apply_authored_escalation (res://src/ai/guard_ai.gd:536)
+         [7] _ready (res://src/ai/guard_ai.gd:420)
+         [8] _spawn_guards (res://src/missions/mission_controller.gd:4221)
+         [9] start_contract (res://src/missions/mission_controller.gd:979)
          [10] load_sublevels_async (res://src/core/level_loader.gd:7725)
 TAT-2 loot containers: 125
 TAT-2 loot economy: 20395 >= loot_goal 4000
@@ -340,9 +340,9 @@ WARNING: [civilian_npc] navmesh snap deferred: query landed before first map syn
          [0] _is_target_valid (res://src/ai/civilian_npc.gd:653)
          [1] _pick_new_target (res://src/ai/civilian_npc.gd:615)
          [2] _ready (res://src/ai/civilian_npc.gd:155)
-         [3] _spawn_civilians (res://src/missions/mission_controller.gd:5067)
-         [4] _spawn_spawner_content (res://src/missions/mission_controller.gd:5039)
-         [5] start_contract (res://src/missions/mission_controller.gd:971)
+         [3] _spawn_civilians (res://src/missions/mission_controller.gd:5114)
+         [4] _spawn_spawner_content (res://src/missions/mission_controller.gd:5086)
+         [5] start_contract (res://src/missions/mission_controller.gd:989)
          [6] load_sublevels_async (res://src/core/level_loader.gd:7725)
 TAT-2 spawners: throwable=133 ammo=45 health=5 civilian=3
 TAT-2 authored devices: 903 (alarm_eye=60, goo_pipe=90, junction=11, light_beam=134, noise_alarm=96, power_switch=29, power_wall=9, pressure_plate=162, turret=229, vault_door=6, ward_blocker=36, ward_slow=41)
@@ -354,5 +354,5 @@ WARNING: [nav_steering] no synchronised navigation map (no NavigationRegion3D ba
      GDScript backtrace (most recent call first):
          [0] _note_degraded (res://src/ai/nav_steering.gd:181)
          [1] step_towards (res://src/ai/nav_steering.gd:141)
-         [2] _move_ai (res://src/ai/guard_ai.gd:1621)
-         [3] _physics_process (res://src/ai/guard_ai.gd:1553)
+         [2] _move_ai (res://src/ai/guard_ai.gd:1651)
+         [3] _physics_process (res://src/ai/guard_ai.gd:1583)

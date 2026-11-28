@@ -1,30 +1,30 @@
 == FINAL_GATE probe_cubemap
 COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/probe_cubemap.gd
 CWD: .
-STARTED: 2026-11-27T22:06:54-05:00
+STARTED: 2026-11-28T09:14:41-05:00
 
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 TAT-2 Loc: reverse map built from sources.json (3404 keys)
 TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
@@ -35,9 +35,9 @@ PASS: TAT2_IBL=ambient selects stage-1 IBL
 WARNING: TAT2_IBL='bogus' is not one of ["off", "ambient"]; using off
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] mode (res://src/core/cubemap_loader.gd:62)
-         [1] _test_mode (res://tests/probe_cubemap.gd:58)
-         [2] _run (res://tests/probe_cubemap.gd:43)
+         [0] mode (res://src/core/cubemap_loader.gd:79)
+         [1] _test_mode (res://tests/probe_cubemap.gd:66)
+         [2] _run (res://tests/probe_cubemap.gd:49)
 PASS: an unknown TAT2_IBL falls back to off
 PASS: face centres round-trip to their axis (0..5 = +X,-X,+Y,-Y,+Z,-Z)
 PASS: face_index picks the dominant axis (-X)
@@ -63,23 +63,490 @@ PASS: gloomy preset still applies with TAT2_IBL=off
 PASS: off keeps the authored SkyLight colour ((1.0, 1.0, 1.0, 1.0))
 PASS: off keeps the authored SkyLight energy (0.160000)
 PASS: off keeps sky_ibl_state unavailable (no sky_contribution flip)
+ERROR: Unable to open file: res://.godot/imported/face_px.hdr-26860d7b1bd1b480bd1b5aa8058e3796.ctex.
+   at: _load_data (scene/resources/compressed_texture.cpp:45)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] ambient_for_ue_path (res://src/core/cubemap_loader.gd:138)
+       [3] ambient_for_preset (res://src/core/cubemap_loader.gd:110)
+       [4] _test_off_matches_today (res://tests/probe_cubemap.gd:168)
+       [5] _run (res://tests/probe_cubemap.gd:53)
+ERROR: Failed loading resource: res://.godot/imported/face_px.hdr-26860d7b1bd1b480bd1b5aa8058e3796.ctex.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] ambient_for_ue_path (res://src/core/cubemap_loader.gd:138)
+       [3] ambient_for_preset (res://src/core/cubemap_loader.gd:110)
+       [4] _test_off_matches_today (res://tests/probe_cubemap.gd:168)
+       [5] _run (res://tests/probe_cubemap.gd:53)
+ERROR: Failed loading resource: res://assets/ue/Content/Cubemaps/cubemap_ground_floor_01/face_px.hdr.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] ambient_for_ue_path (res://src/core/cubemap_loader.gd:138)
+       [3] ambient_for_preset (res://src/core/cubemap_loader.gd:110)
+       [4] _test_off_matches_today (res://tests/probe_cubemap.gd:168)
+       [5] _run (res://tests/probe_cubemap.gd:53)
+ERROR: Unable to open file: res://.godot/imported/face_nx.hdr-59f7a5eec2113a4230a2205a648e43d4.ctex.
+   at: _load_data (scene/resources/compressed_texture.cpp:45)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] ambient_for_ue_path (res://src/core/cubemap_loader.gd:138)
+       [3] ambient_for_preset (res://src/core/cubemap_loader.gd:110)
+       [4] _test_off_matches_today (res://tests/probe_cubemap.gd:168)
+       [5] _run (res://tests/probe_cubemap.gd:53)
+ERROR: Failed loading resource: res://.godot/imported/face_nx.hdr-59f7a5eec2113a4230a2205a648e43d4.ctex.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] ambient_for_ue_path (res://src/core/cubemap_loader.gd:138)
+       [3] ambient_for_preset (res://src/core/cubemap_loader.gd:110)
+       [4] _test_off_matches_today (res://tests/probe_cubemap.gd:168)
+       [5] _run (res://tests/probe_cubemap.gd:53)
+ERROR: Failed loading resource: res://assets/ue/Content/Cubemaps/cubemap_ground_floor_01/face_nx.hdr.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] ambient_for_ue_path (res://src/core/cubemap_loader.gd:138)
+       [3] ambient_for_preset (res://src/core/cubemap_loader.gd:110)
+       [4] _test_off_matches_today (res://tests/probe_cubemap.gd:168)
+       [5] _run (res://tests/probe_cubemap.gd:53)
+ERROR: Unable to open file: res://.godot/imported/face_py.hdr-ee263785b5446d7f5493c90fe407e593.ctex.
+   at: _load_data (scene/resources/compressed_texture.cpp:45)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] ambient_for_ue_path (res://src/core/cubemap_loader.gd:138)
+       [3] ambient_for_preset (res://src/core/cubemap_loader.gd:110)
+       [4] _test_off_matches_today (res://tests/probe_cubemap.gd:168)
+       [5] _run (res://tests/probe_cubemap.gd:53)
+ERROR: Failed loading resource: res://.godot/imported/face_py.hdr-ee263785b5446d7f5493c90fe407e593.ctex.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] ambient_for_ue_path (res://src/core/cubemap_loader.gd:138)
+       [3] ambient_for_preset (res://src/core/cubemap_loader.gd:110)
+       [4] _test_off_matches_today (res://tests/probe_cubemap.gd:168)
+       [5] _run (res://tests/probe_cubemap.gd:53)
+ERROR: Failed loading resource: res://assets/ue/Content/Cubemaps/cubemap_ground_floor_01/face_py.hdr.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] ambient_for_ue_path (res://src/core/cubemap_loader.gd:138)
+       [3] ambient_for_preset (res://src/core/cubemap_loader.gd:110)
+       [4] _test_off_matches_today (res://tests/probe_cubemap.gd:168)
+       [5] _run (res://tests/probe_cubemap.gd:53)
+ERROR: Unable to open file: res://.godot/imported/face_ny.hdr-03e83ea8abcc6c642efc1d8c26acdabc.ctex.
+   at: _load_data (scene/resources/compressed_texture.cpp:45)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] ambient_for_ue_path (res://src/core/cubemap_loader.gd:138)
+       [3] ambient_for_preset (res://src/core/cubemap_loader.gd:110)
+       [4] _test_off_matches_today (res://tests/probe_cubemap.gd:168)
+       [5] _run (res://tests/probe_cubemap.gd:53)
+ERROR: Failed loading resource: res://.godot/imported/face_ny.hdr-03e83ea8abcc6c642efc1d8c26acdabc.ctex.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] ambient_for_ue_path (res://src/core/cubemap_loader.gd:138)
+       [3] ambient_for_preset (res://src/core/cubemap_loader.gd:110)
+       [4] _test_off_matches_today (res://tests/probe_cubemap.gd:168)
+       [5] _run (res://tests/probe_cubemap.gd:53)
+ERROR: Failed loading resource: res://assets/ue/Content/Cubemaps/cubemap_ground_floor_01/face_ny.hdr.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] ambient_for_ue_path (res://src/core/cubemap_loader.gd:138)
+       [3] ambient_for_preset (res://src/core/cubemap_loader.gd:110)
+       [4] _test_off_matches_today (res://tests/probe_cubemap.gd:168)
+       [5] _run (res://tests/probe_cubemap.gd:53)
+ERROR: Unable to open file: res://.godot/imported/face_pz.hdr-eb252792d1c3aab0a01869c5e7c14524.ctex.
+   at: _load_data (scene/resources/compressed_texture.cpp:45)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] ambient_for_ue_path (res://src/core/cubemap_loader.gd:138)
+       [3] ambient_for_preset (res://src/core/cubemap_loader.gd:110)
+       [4] _test_off_matches_today (res://tests/probe_cubemap.gd:168)
+       [5] _run (res://tests/probe_cubemap.gd:53)
+ERROR: Failed loading resource: res://.godot/imported/face_pz.hdr-eb252792d1c3aab0a01869c5e7c14524.ctex.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] ambient_for_ue_path (res://src/core/cubemap_loader.gd:138)
+       [3] ambient_for_preset (res://src/core/cubemap_loader.gd:110)
+       [4] _test_off_matches_today (res://tests/probe_cubemap.gd:168)
+       [5] _run (res://tests/probe_cubemap.gd:53)
+ERROR: Failed loading resource: res://assets/ue/Content/Cubemaps/cubemap_ground_floor_01/face_pz.hdr.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] ambient_for_ue_path (res://src/core/cubemap_loader.gd:138)
+       [3] ambient_for_preset (res://src/core/cubemap_loader.gd:110)
+       [4] _test_off_matches_today (res://tests/probe_cubemap.gd:168)
+       [5] _run (res://tests/probe_cubemap.gd:53)
+ERROR: Unable to open file: res://.godot/imported/face_nz.hdr-31ea9f40c75c0c0991cce475ab8adcfa.ctex.
+   at: _load_data (scene/resources/compressed_texture.cpp:45)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] ambient_for_ue_path (res://src/core/cubemap_loader.gd:138)
+       [3] ambient_for_preset (res://src/core/cubemap_loader.gd:110)
+       [4] _test_off_matches_today (res://tests/probe_cubemap.gd:168)
+       [5] _run (res://tests/probe_cubemap.gd:53)
+ERROR: Failed loading resource: res://.godot/imported/face_nz.hdr-31ea9f40c75c0c0991cce475ab8adcfa.ctex.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] ambient_for_ue_path (res://src/core/cubemap_loader.gd:138)
+       [3] ambient_for_preset (res://src/core/cubemap_loader.gd:110)
+       [4] _test_off_matches_today (res://tests/probe_cubemap.gd:168)
+       [5] _run (res://tests/probe_cubemap.gd:53)
+ERROR: Failed loading resource: res://assets/ue/Content/Cubemaps/cubemap_ground_floor_01/face_nz.hdr.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] ambient_for_ue_path (res://src/core/cubemap_loader.gd:138)
+       [3] ambient_for_preset (res://src/core/cubemap_loader.gd:110)
+       [4] _test_off_matches_today (res://tests/probe_cubemap.gd:168)
+       [5] _run (res://tests/probe_cubemap.gd:53)
 PASS: converted cubemap index present (res://data/generated/ibl/cubemaps.json)
+PASS: the IBL path reads the authored sky.intensity unchanged (no 0.08, no clamp) (authored=2.000 applied=2.000)
+PASS: a preset that authors no sky.intensity keeps UE's default 1.0
+PASS: the one port scale is the documented identity (linear radiance -> linear ambient energy)
+PASS: IBL energy applies the authored intensity on top of the measured radiance (0.003400 = 0.001700 * 2.000)
+PASS: the flat clamp(intensity*0.08) substitute is a different quantity, not the IBL energy (flat=0.1600 ibl=0.00340 ratio=47.1x)
+ERROR: Unable to open file: res://.godot/imported/face_px.hdr-26860d7b1bd1b480bd1b5aa8058e3796.ctex.
+   at: _load_data (scene/resources/compressed_texture.cpp:45)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] ambient_for_ue_path (res://src/core/cubemap_loader.gd:138)
+       [3] _test_real_cube_energy (res://tests/probe_cubemap.gd:214)
+       [4] _run (res://tests/probe_cubemap.gd:55)
+ERROR: Failed loading resource: res://.godot/imported/face_px.hdr-26860d7b1bd1b480bd1b5aa8058e3796.ctex.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] ambient_for_ue_path (res://src/core/cubemap_loader.gd:138)
+       [3] _test_real_cube_energy (res://tests/probe_cubemap.gd:214)
+       [4] _run (res://tests/probe_cubemap.gd:55)
+ERROR: Failed loading resource: res://assets/ue/Content/Cubemaps/cubemap_ground_floor_01/face_px.hdr.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] ambient_for_ue_path (res://src/core/cubemap_loader.gd:138)
+       [3] _test_real_cube_energy (res://tests/probe_cubemap.gd:214)
+       [4] _run (res://tests/probe_cubemap.gd:55)
+ERROR: Unable to open file: res://.godot/imported/face_nx.hdr-59f7a5eec2113a4230a2205a648e43d4.ctex.
+   at: _load_data (scene/resources/compressed_texture.cpp:45)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] ambient_for_ue_path (res://src/core/cubemap_loader.gd:138)
+       [3] _test_real_cube_energy (res://tests/probe_cubemap.gd:214)
+       [4] _run (res://tests/probe_cubemap.gd:55)
+ERROR: Failed loading resource: res://.godot/imported/face_nx.hdr-59f7a5eec2113a4230a2205a648e43d4.ctex.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] ambient_for_ue_path (res://src/core/cubemap_loader.gd:138)
+       [3] _test_real_cube_energy (res://tests/probe_cubemap.gd:214)
+       [4] _run (res://tests/probe_cubemap.gd:55)
+ERROR: Failed loading resource: res://assets/ue/Content/Cubemaps/cubemap_ground_floor_01/face_nx.hdr.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] ambient_for_ue_path (res://src/core/cubemap_loader.gd:138)
+       [3] _test_real_cube_energy (res://tests/probe_cubemap.gd:214)
+       [4] _run (res://tests/probe_cubemap.gd:55)
+ERROR: Unable to open file: res://.godot/imported/face_py.hdr-ee263785b5446d7f5493c90fe407e593.ctex.
+   at: _load_data (scene/resources/compressed_texture.cpp:45)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] ambient_for_ue_path (res://src/core/cubemap_loader.gd:138)
+       [3] _test_real_cube_energy (res://tests/probe_cubemap.gd:214)
+       [4] _run (res://tests/probe_cubemap.gd:55)
+ERROR: Failed loading resource: res://.godot/imported/face_py.hdr-ee263785b5446d7f5493c90fe407e593.ctex.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] ambient_for_ue_path (res://src/core/cubemap_loader.gd:138)
+       [3] _test_real_cube_energy (res://tests/probe_cubemap.gd:214)
+       [4] _run (res://tests/probe_cubemap.gd:55)
+ERROR: Failed loading resource: res://assets/ue/Content/Cubemaps/cubemap_ground_floor_01/face_py.hdr.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] ambient_for_ue_path (res://src/core/cubemap_loader.gd:138)
+       [3] _test_real_cube_energy (res://tests/probe_cubemap.gd:214)
+       [4] _run (res://tests/probe_cubemap.gd:55)
+ERROR: Unable to open file: res://.godot/imported/face_ny.hdr-03e83ea8abcc6c642efc1d8c26acdabc.ctex.
+   at: _load_data (scene/resources/compressed_texture.cpp:45)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] ambient_for_ue_path (res://src/core/cubemap_loader.gd:138)
+       [3] _test_real_cube_energy (res://tests/probe_cubemap.gd:214)
+       [4] _run (res://tests/probe_cubemap.gd:55)
+ERROR: Failed loading resource: res://.godot/imported/face_ny.hdr-03e83ea8abcc6c642efc1d8c26acdabc.ctex.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] ambient_for_ue_path (res://src/core/cubemap_loader.gd:138)
+       [3] _test_real_cube_energy (res://tests/probe_cubemap.gd:214)
+       [4] _run (res://tests/probe_cubemap.gd:55)
+ERROR: Failed loading resource: res://assets/ue/Content/Cubemaps/cubemap_ground_floor_01/face_ny.hdr.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] ambient_for_ue_path (res://src/core/cubemap_loader.gd:138)
+       [3] _test_real_cube_energy (res://tests/probe_cubemap.gd:214)
+       [4] _run (res://tests/probe_cubemap.gd:55)
+ERROR: Unable to open file: res://.godot/imported/face_pz.hdr-eb252792d1c3aab0a01869c5e7c14524.ctex.
+   at: _load_data (scene/resources/compressed_texture.cpp:45)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] ambient_for_ue_path (res://src/core/cubemap_loader.gd:138)
+       [3] _test_real_cube_energy (res://tests/probe_cubemap.gd:214)
+       [4] _run (res://tests/probe_cubemap.gd:55)
+ERROR: Failed loading resource: res://.godot/imported/face_pz.hdr-eb252792d1c3aab0a01869c5e7c14524.ctex.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] ambient_for_ue_path (res://src/core/cubemap_loader.gd:138)
+       [3] _test_real_cube_energy (res://tests/probe_cubemap.gd:214)
+       [4] _run (res://tests/probe_cubemap.gd:55)
+ERROR: Failed loading resource: res://assets/ue/Content/Cubemaps/cubemap_ground_floor_01/face_pz.hdr.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] ambient_for_ue_path (res://src/core/cubemap_loader.gd:138)
+       [3] _test_real_cube_energy (res://tests/probe_cubemap.gd:214)
+       [4] _run (res://tests/probe_cubemap.gd:55)
+ERROR: Unable to open file: res://.godot/imported/face_nz.hdr-31ea9f40c75c0c0991cce475ab8adcfa.ctex.
+   at: _load_data (scene/resources/compressed_texture.cpp:45)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] ambient_for_ue_path (res://src/core/cubemap_loader.gd:138)
+       [3] _test_real_cube_energy (res://tests/probe_cubemap.gd:214)
+       [4] _run (res://tests/probe_cubemap.gd:55)
+ERROR: Failed loading resource: res://.godot/imported/face_nz.hdr-31ea9f40c75c0c0991cce475ab8adcfa.ctex.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] ambient_for_ue_path (res://src/core/cubemap_loader.gd:138)
+       [3] _test_real_cube_energy (res://tests/probe_cubemap.gd:214)
+       [4] _run (res://tests/probe_cubemap.gd:55)
+ERROR: Failed loading resource: res://assets/ue/Content/Cubemaps/cubemap_ground_floor_01/face_nz.hdr.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] ambient_for_ue_path (res://src/core/cubemap_loader.gd:138)
+       [3] _test_real_cube_energy (res://tests/probe_cubemap.gd:214)
+       [4] _run (res://tests/probe_cubemap.gd:55)
+ERROR: Unable to open file: res://.godot/imported/face_px.hdr-26860d7b1bd1b480bd1b5aa8058e3796.ctex.
+   at: _load_data (scene/resources/compressed_texture.cpp:45)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] cube_faces (res://src/core/cubemap_loader.gd:67)
+       [3] _test_real_cube_energy (res://tests/probe_cubemap.gd:224)
+       [4] _run (res://tests/probe_cubemap.gd:55)
+ERROR: Failed loading resource: res://.godot/imported/face_px.hdr-26860d7b1bd1b480bd1b5aa8058e3796.ctex.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] cube_faces (res://src/core/cubemap_loader.gd:67)
+       [3] _test_real_cube_energy (res://tests/probe_cubemap.gd:224)
+       [4] _run (res://tests/probe_cubemap.gd:55)
+ERROR: Failed loading resource: res://assets/ue/Content/Cubemaps/cubemap_ground_floor_01/face_px.hdr.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] cube_faces (res://src/core/cubemap_loader.gd:67)
+       [3] _test_real_cube_energy (res://tests/probe_cubemap.gd:224)
+       [4] _run (res://tests/probe_cubemap.gd:55)
+ERROR: Unable to open file: res://.godot/imported/face_nx.hdr-59f7a5eec2113a4230a2205a648e43d4.ctex.
+   at: _load_data (scene/resources/compressed_texture.cpp:45)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] cube_faces (res://src/core/cubemap_loader.gd:67)
+       [3] _test_real_cube_energy (res://tests/probe_cubemap.gd:224)
+       [4] _run (res://tests/probe_cubemap.gd:55)
+ERROR: Failed loading resource: res://.godot/imported/face_nx.hdr-59f7a5eec2113a4230a2205a648e43d4.ctex.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] cube_faces (res://src/core/cubemap_loader.gd:67)
+       [3] _test_real_cube_energy (res://tests/probe_cubemap.gd:224)
+       [4] _run (res://tests/probe_cubemap.gd:55)
+ERROR: Failed loading resource: res://assets/ue/Content/Cubemaps/cubemap_ground_floor_01/face_nx.hdr.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] cube_faces (res://src/core/cubemap_loader.gd:67)
+       [3] _test_real_cube_energy (res://tests/probe_cubemap.gd:224)
+       [4] _run (res://tests/probe_cubemap.gd:55)
+ERROR: Unable to open file: res://.godot/imported/face_py.hdr-ee263785b5446d7f5493c90fe407e593.ctex.
+   at: _load_data (scene/resources/compressed_texture.cpp:45)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] cube_faces (res://src/core/cubemap_loader.gd:67)
+       [3] _test_real_cube_energy (res://tests/probe_cubemap.gd:224)
+       [4] _run (res://tests/probe_cubemap.gd:55)
+ERROR: Failed loading resource: res://.godot/imported/face_py.hdr-ee263785b5446d7f5493c90fe407e593.ctex.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] cube_faces (res://src/core/cubemap_loader.gd:67)
+       [3] _test_real_cube_energy (res://tests/probe_cubemap.gd:224)
+       [4] _run (res://tests/probe_cubemap.gd:55)
+ERROR: Failed loading resource: res://assets/ue/Content/Cubemaps/cubemap_ground_floor_01/face_py.hdr.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] cube_faces (res://src/core/cubemap_loader.gd:67)
+       [3] _test_real_cube_energy (res://tests/probe_cubemap.gd:224)
+       [4] _run (res://tests/probe_cubemap.gd:55)
+ERROR: Unable to open file: res://.godot/imported/face_ny.hdr-03e83ea8abcc6c642efc1d8c26acdabc.ctex.
+   at: _load_data (scene/resources/compressed_texture.cpp:45)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] cube_faces (res://src/core/cubemap_loader.gd:67)
+       [3] _test_real_cube_energy (res://tests/probe_cubemap.gd:224)
+       [4] _run (res://tests/probe_cubemap.gd:55)
+ERROR: Failed loading resource: res://.godot/imported/face_ny.hdr-03e83ea8abcc6c642efc1d8c26acdabc.ctex.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] cube_faces (res://src/core/cubemap_loader.gd:67)
+       [3] _test_real_cube_energy (res://tests/probe_cubemap.gd:224)
+       [4] _run (res://tests/probe_cubemap.gd:55)
+ERROR: Failed loading resource: res://assets/ue/Content/Cubemaps/cubemap_ground_floor_01/face_ny.hdr.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] cube_faces (res://src/core/cubemap_loader.gd:67)
+       [3] _test_real_cube_energy (res://tests/probe_cubemap.gd:224)
+       [4] _run (res://tests/probe_cubemap.gd:55)
+ERROR: Unable to open file: res://.godot/imported/face_pz.hdr-eb252792d1c3aab0a01869c5e7c14524.ctex.
+   at: _load_data (scene/resources/compressed_texture.cpp:45)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] cube_faces (res://src/core/cubemap_loader.gd:67)
+       [3] _test_real_cube_energy (res://tests/probe_cubemap.gd:224)
+       [4] _run (res://tests/probe_cubemap.gd:55)
+ERROR: Failed loading resource: res://.godot/imported/face_pz.hdr-eb252792d1c3aab0a01869c5e7c14524.ctex.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] cube_faces (res://src/core/cubemap_loader.gd:67)
+       [3] _test_real_cube_energy (res://tests/probe_cubemap.gd:224)
+       [4] _run (res://tests/probe_cubemap.gd:55)
+ERROR: Failed loading resource: res://assets/ue/Content/Cubemaps/cubemap_ground_floor_01/face_pz.hdr.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] cube_faces (res://src/core/cubemap_loader.gd:67)
+       [3] _test_real_cube_energy (res://tests/probe_cubemap.gd:224)
+       [4] _run (res://tests/probe_cubemap.gd:55)
+ERROR: Unable to open file: res://.godot/imported/face_nz.hdr-31ea9f40c75c0c0991cce475ab8adcfa.ctex.
+   at: _load_data (scene/resources/compressed_texture.cpp:45)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] cube_faces (res://src/core/cubemap_loader.gd:67)
+       [3] _test_real_cube_energy (res://tests/probe_cubemap.gd:224)
+       [4] _run (res://tests/probe_cubemap.gd:55)
+ERROR: Failed loading resource: res://.godot/imported/face_nz.hdr-31ea9f40c75c0c0991cce475ab8adcfa.ctex.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] cube_faces (res://src/core/cubemap_loader.gd:67)
+       [3] _test_real_cube_energy (res://tests/probe_cubemap.gd:224)
+       [4] _run (res://tests/probe_cubemap.gd:55)
+ERROR: Failed loading resource: res://assets/ue/Content/Cubemaps/cubemap_ground_floor_01/face_nz.hdr.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _load_image (res://src/core/cubemap_loader.gd:288)
+       [1] _load_faces (res://src/core/cubemap_loader.gd:278)
+       [2] cube_faces (res://src/core/cubemap_loader.gd:67)
+       [3] _test_real_cube_energy (res://tests/probe_cubemap.gd:224)
+       [4] _run (res://tests/probe_cubemap.gd:55)
+PASS: the Gloomy cube's six faces load for the quantisation check (6)
+PASS: the HDR irradiance clears what the same cube measures at 8 bits (hdr=0.000770 8bit=0.000051 audited_8bit_floor=0.000050 ratio=15.2x)
+PASS: the cube still sits below one 8-bit step, so only the .hdr faces can carry it (lum=0.000770 step=0.003922)
+WeatherQuality: desktop level=2 (0=low 1=medium 2=high) for preset 'gloomy'
+TAT-2 IBL ambient: mode=ambient cubemap=cubemap_ground_floor_01 irradiance_lum=0.000770 authored_intensity=2.000 port_scale=1.000 energy=0.001540 color=(1.7585,0.8483,0.2696) (energy=lum*intensity*scale, linear HDR radiance; flat_SkyLight_substitute=0.16 is clamp(intensity*0.08), a different quantity)
+TAT-2 exposure: preset=gloomy mode=AGX exposure=1.150 authored_bias=0.0 ev100_night=-3.0 authored_curve_bias=-4.00 (curve recorded, not applied)
+PASS: TAT2_IBL=ambient sets ambient_light_energy = lum * sky.intensity * port scale (applied=0.001540 want=0.001540)
+PASS: ambient mode does not fall back to the flat SkyLight energy
 PASS: cubemap index schema (tat2.cubemaps/1)
 PASS: cubemap face order is explicit
 PASS: cubemap index has at least one converged cube (3)
-PASS: cubemap cubemap_ground_floor_01 face PNGs resolve (/Game/MaterialLibrary/Utility/Cubemap_GroundFloor_01)
+PASS: cubemap cubemap_ground_floor_01 face files resolve (/Game/MaterialLibrary/Utility/Cubemap_GroundFloor_01)
+PASS: cubemap cubemap_ground_floor_01 faces are HDR .hdr (linear radiance, not 8-bit PNG) (encoding=hdr)
 PASS: cubemap cubemap_ground_floor_01 records its transfer (linear)
 PASS: cubemap cubemap_ground_floor_01 is indexed by UE path
-CUBEMAP_ORIENT: cubemap_ground_floor_01 +Y luminance 0.0001 >= -Y 0.0001 (informational)
-PASS: cubemap daylight face PNGs resolve (/Engine/MapTemplates/daylight)
+CUBEMAP_ORIENT: cubemap_ground_floor_01 +Y luminance 0.0009 >= -Y 0.0007 (authored; the pre-HDR 8-bit means inverted this by quantisation)
+PASS: the Gloomy cube's -Z face is no longer black (the 8-bit clamp zeroed it) (-Z lum=0.000943)
+PASS: cubemap daylight face files resolve (/Engine/MapTemplates/daylight)
+PASS: cubemap daylight faces are HDR .hdr (linear radiance, not 8-bit PNG) (encoding=hdr)
 PASS: cubemap daylight records its transfer (linear)
 PASS: cubemap daylight is indexed by UE path
-CUBEMAP_ORIENT: WARN daylight +Y luminance 0.0680 < -Y 0.0712 — check the UE ECubeFace slice order before trusting the ambient direction
-PASS: cubemap t_fake_specular1 face PNGs resolve (/Game/ThirdParty/FluidNinjaLive/UseCases/007_SmallWater/T_FakeSpecular1)
+CUBEMAP_ORIENT: WARN daylight +Y luminance 0.0690 < -Y 0.0723 — recorded as an authored property (daylight's authored sky is brighter below the horizon); the face order is pinned by the axis test, not by this ordering
+PASS: cubemap t_fake_specular1 face files resolve (/Game/ThirdParty/FluidNinjaLive/UseCases/007_SmallWater/T_FakeSpecular1)
+PASS: cubemap t_fake_specular1 faces are HDR .hdr (linear radiance, not 8-bit PNG) (encoding=hdr)
 PASS: cubemap t_fake_specular1 records its transfer (linear)
 PASS: cubemap t_fake_specular1 is indexed by UE path
-CUBEMAP_ORIENT: t_fake_specular1 +Y luminance 0.0000 >= -Y 0.0000 (informational)
-CUBEMAP_PROBE: fails=0 passed=37
+CUBEMAP_ORIENT: t_fake_specular1 +Y luminance 0.0000 >= -Y 0.0000 (authored; the pre-HDR 8-bit means inverted this by quantisation)
+CUBEMAP_PROBE: fails=0 passed=51
 
 EXIT: 0
-FINISHED: 2026-11-27T22:06:55-05:00
+FINISHED: 2026-11-28T09:14:42-05:00

@@ -1,21 +1,21 @@
 == FINAL_GATE p0b_capture_self_test
 COMMAND: ./build/qa/p0b_capture.sh --self-test
 CWD: .
-STARTED: 2026-11-27T22:07:39-05:00
+STARTED: 2026-11-28T09:15:55-05:00
 
 P0B_CAPTURE_WALL mode=self-test exit=0 wall=1s (headless, no GPU)
-manifest: /home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/baseline-run/build/qa/p0b/selftest/manifest.json
-log:      /home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/baseline-run/docs/reports/logs/final/self-test/self-test.log
-P0B_START mode=self-test run=20261128T030740Z_5857589853e4_on poses=gate,upper_foyer,yaw180,foyer_beam,lounge,lounge_beam,beam_close beam=on seed=derived fov=54.54 size=(1920, 1080) out=/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/baseline-run/build/qa/p0b/selftest manifest=/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/baseline-run/build/qa/p0b/selftest/manifest.json
-P0B_SELFTEST ok seven pose ids (incl. KF27 foyer_beam + Lounge extra)
+manifest: /home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/sentinel/build/qa/p0b/selftest/manifest.json
+log:      /home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/sentinel/docs/reports/logs/final/self-test/self-test.log
+P0B_START mode=self-test run=20261128T141556Z_533782892243_on poses=gate,upper_foyer,yaw180,foyer_beam,foyer_beam_wide,lounge,lounge_beam,beam_close,gap_view beam=on seed=derived settle_s=0.00 fov=54.54 size=(1920, 1080) out=/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/sentinel/build/qa/p0b/selftest manifest=/home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/sentinel/build/qa/p0b/selftest/manifest.json
+P0B_SELFTEST ok nine pose ids (incl. KF27 foyer_beam/wide, gap view + Lounge extra)
 P0B_SELFTEST ok shipped vertical FOV is 54.54
 P0B_SELFTEST ok resolution is 1920x1080
 P0B_SELFTEST ok settle 60 + 5 frames
 P0B_SELFTEST ok official clip seed recorded
 P0B_SELFTEST ok foyer_beam is the KF27 cue (27,29.67,-55) -> (23.27,29.76,-57.4)
 P0B_SELFTEST ok beam_close is the Lounge C_57 extra, not a KF27/S24 frame
-P0B_SELFTEST ok every pose has a distinct eye/target, beat and reference keyframe
-P0B_SELFTEST ok pose selection is non-empty
+P0B_SELFTEST ok poses valid: distinct eye/target, beat/ref; foyer_beam_wide card ~18/40; gap_view start+eye, PORT_DECISION, pitch -42..-53
+P0B_SELFTEST ok pose selection is non-empty; --settle-seconds parses and enforces 0 or >=25 s
 P0B_SELFTEST ok audio_capture.gd loads
 AUDIO_CAPTURE start enabled=false reason=dummy_audio_driver driver=Dummy rate=44100
 AUDIO_CAPTURE stop enabled=false reason=dummy_audio_driver frames=0
@@ -36,4 +36,4 @@ P0B_SELFTEST_SUMMARY checks=23 fails=0
 P0B_SELFTEST PASS checks=23 fails=0
 
 EXIT: 0
-FINISHED: 2026-11-27T22:07:40-05:00
+FINISHED: 2026-11-28T09:15:56-05:00

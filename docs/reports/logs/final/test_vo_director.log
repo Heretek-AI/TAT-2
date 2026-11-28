@@ -1,30 +1,30 @@
 == FINAL_GATE test_vo_director
 COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/test_vo_director.gd
 CWD: .
-STARTED: 2026-11-27T22:06:51-05:00
+STARTED: 2026-11-28T09:14:39-05:00
 
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 TAT-2 Loc: reverse map built from sources.json (3404 keys)
 TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
@@ -43,7 +43,7 @@ PASS: VO1.2 the zero-media authored line is indexed under Enforcer1/Silent/Empty
 PASS: VO1.2 a null authored state indexes under the "" bucket
 PASS: VO1.2 no row is invented under the literal state "None"
 PASS: VO1.3 exactly one authored zero-media line is flagged
-PASS: VO2.0 the director maps 249 authored lines
+PASS: VO2.0 the director maps 288 authored lines
 PASS: VO2.1 every mapped event is one of the 645 authored lines
 PASS: VO2.2 no mapped event is the zero-media authored line
 PASS: VO2.3 every mapped event joins >= 1 authored media id
@@ -54,6 +54,12 @@ PASS: VO3.2 the only authored guard gap is Hauntstable1's 5 KO transitions (meas
 PASS: VO3.3 NEUTRAL>SUSPICIOUS picks ThiefSeen/VisionStim
 PASS: VO3.3 NEUTRAL>KNOCKED_OUT picks ExertionCombat/KnockedOut for Enforcer1
 PASS: VO3.4 an unmapped transition is refused (no invented line)
+PASS: VO4.4 the two wired guard beats pick their authored Enforcer1 triple
+PASS: VO4.5 Hauntstable1 has no exertion recording and both beats refuse (no borrowed line)
+PASS: VO4.6 a repeated damage beat inside its 6 s cooldown is suppressed
+PASS: VO4.7 an unknown guard beat is refused
+PASS: VO4.7 the director maps 288 authored lines (249 W11-A + 39 exertion)
+PASS: VO4.7 357 authored lines stay unmapped and counted (was 396 before 3B.3)
 PASS: VO4.1 the six wired player/quest cues pick their authored triple
 PASS: VO4.2 the 8 documented callerless cues still resolve an authored line
 PASS: VO4.3 an unknown cue is refused
@@ -74,6 +80,7 @@ PASS: VO7.2 AudioManager.play_vo_transition plays an authored line
 PASS: VO7.2 the resolved event is recorded (Play_VO_Enforcer1_169_ThiefSeen_VisionStim_Heavy_01)
 PASS: VO7.3 AudioManager.play_vo_cue plays an authored player line
 PASS: VO7.4 the played transition is a media-bearing authored line
+PASS: VO7.5 AudioManager.play_vo_guard_beat plays and records the authored damage line
 PASS: VO8.1 the first player's disguise_changed is bound exactly once
 PASS: VO8.2 the first player's disguise RTPC stores 25 as 0.25
 PASS: VO8.2 repeated frames do not duplicate the connection
@@ -83,7 +90,7 @@ PASS: VO8.4 the second player's 0 integrity plays the authored ending line
 PASS: VO8.4 the ending line emits its functional subtitle
 PASS: VO8.4 the second player's 0 integrity stores 0.0
 PASS: VO8.5 the player binding is cleared when no player exists
-VO_DIRECTOR_SUMMARY: fails=0 checks=53
+VO_DIRECTOR_SUMMARY: fails=0 checks=60
 
 EXIT: 0
-FINISHED: 2026-11-27T22:06:53-05:00
+FINISHED: 2026-11-28T09:14:40-05:00

@@ -1,13 +1,13 @@
 == FINAL_GATE p0b_route_self_test
 COMMAND: qa_route_self_test
 CWD: .
-STARTED: 2026-11-27T22:07:41-05:00
+STARTED: 2026-11-28T09:15:57-05:00
 
 bash -n build/qa/p0b_route.sh
 bash -n build/qa/p0b_live_capture.sh
 P0B_ROUTE_WALL mode=self-test exit=0 wall=1s (headless, no GPU render)
-manifest: /home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/baseline-run/build/qa/p0b_route/selftest/manifest.json
-log:      /home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/baseline-run/docs/reports/logs/final/self-test/self-test.log
+manifest: /home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/sentinel/build/qa/p0b_route/selftest/manifest.json
+log:      /home/john/Projects/.teamwork-worktrees/20261127-1810-phase3/sentinel/docs/reports/logs/final/self-test/self-test.log
 P0B_ROUTE_SELFTEST ok S24 does not use the Lounge beam_close pose
 P0B_ROUTE_SELFTEST ok Lounge C_57 extra pose is labelled separately
 P0B_ROUTE_SELFTEST ok foyer beam cue targets the authored C_107 card
@@ -50,4 +50,4 @@ P0B_ROUTE_SELFTEST_SUMMARY checks=62 fails=0
 P0B_ROUTE_SELFTEST PASS checks=62 fails=0
 
 EXIT: 0
-FINISHED: 2026-11-27T22:07:42-05:00
+FINISHED: 2026-11-28T09:15:58-05:00

@@ -1,30 +1,30 @@
 == FINAL_GATE probe_guard_positions_old_manor
 COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/probe_guard_positions.gd -- --map=old_manor --order=3
 CWD: .
-STARTED: 2026-11-27T21:54:35-05:00
+STARTED: 2026-11-28T09:02:23-05:00
 
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 TAT-2 Loc: reverse map built from sources.json (3404 keys)
 TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
@@ -257,8 +257,8 @@ WARNING: [level_loader] material flat white: '/Engine/BasicShapes/BasicShapeMate
          [2] _build_one_draw_item (res://src/core/level_loader.gd:5276)
          [3] load_sublevels_async (res://src/core/level_loader.gd:7713)
 COL_PLANAR /Game/Art/Effects/WardZones/SM_SlowWardZone_Quad instances=78 skipped=1
-AUTHORED_COLLISION meshes=703 hull=698 authored_elements=641 complex=44 no_record=0 prims=380 convex=2739 absent=5 no_collision=13 query_only=5 reduced=35 shapes_per_instance_avg=1.10 elements=3710 load_ms=343
-ROUGHNESS_BAKE count=87 pixels=72220672 ms=5397 bytes=96294196 hits=39 (L8 low+g*(high-low), full-res, process cache)
+AUTHORED_COLLISION meshes=703 hull=698 authored_elements=641 complex=44 no_record=0 prims=380 convex=2739 absent=5 no_collision=13 query_only=5 reduced=35 shapes_per_instance_avg=1.10 elements=3710 load_ms=332
+ROUGHNESS_BAKE count=87 pixels=72220672 ms=5231 bytes=96294196 hits=39 (L8 low+g*(high-low), full-res, process cache)
 BEAM_FIX SM_LightBeam cards=196 axis=col2 length_slot=2 clamp=none max_scale=236.9539 max_length_m=24.169
 BEAM_AXIS cards=196 max_axis_err_deg=0.0 max_len_err=0.0 clamped=0
 MESH_RECON authored=24819 applied=24180 duplicate=547 name_skipped=6 wardbox=39 moonshape=47 clamp=287 clamp_worst=500.00x mirrored=780 origin_markers_skipped=0 skipped_merged=0 from_graph=4 graph_missing=0 mirrored_bases=779 mirrored_multimesh=746 mirrored_single=33 mirrored_splits=86 mirrored_cull_front=177 mirrored_cull_disabled=0 mirrored_mesh_bytes=1501416 mirrored_mesh_count=11 mirrored_unbaked=0
@@ -278,11 +278,11 @@ WARNING: [hearing_data] 5 authored investigation-range anomalies clamped: AI.Sti
          [2] ensure_loaded (res://src/ai/hearing_data.gd:187)
          [3] escalation_row (res://src/ai/hearing_data.gd:615)
          [4] row (res://src/ai/sight_model.gd:120)
-         [5] escalation_row (res://src/ai/guard_ai.gd:488)
-         [6] _apply_authored_escalation (res://src/ai/guard_ai.gd:527)
-         [7] _ready (res://src/ai/guard_ai.gd:413)
-         [8] _spawn_guards (res://src/missions/mission_controller.gd:4174)
-         [9] start_contract (res://src/missions/mission_controller.gd:961)
+         [5] escalation_row (res://src/ai/guard_ai.gd:497)
+         [6] _apply_authored_escalation (res://src/ai/guard_ai.gd:536)
+         [7] _ready (res://src/ai/guard_ai.gd:420)
+         [8] _spawn_guards (res://src/missions/mission_controller.gd:4221)
+         [9] start_contract (res://src/missions/mission_controller.gd:979)
          [10] load_sublevels_async (res://src/core/level_loader.gd:7725)
 TAT-2 quest items: spawned=1 mission=Mission.OldManor.Vault free_play=false
 TAT-2 loot containers: 111
@@ -294,9 +294,9 @@ WARNING: [civilian_npc] navmesh snap deferred: query landed before first map syn
          [0] _is_target_valid (res://src/ai/civilian_npc.gd:653)
          [1] _pick_new_target (res://src/ai/civilian_npc.gd:615)
          [2] _ready (res://src/ai/civilian_npc.gd:155)
-         [3] _spawn_civilians (res://src/missions/mission_controller.gd:5067)
-         [4] _spawn_spawner_content (res://src/missions/mission_controller.gd:5039)
-         [5] start_contract (res://src/missions/mission_controller.gd:971)
+         [3] _spawn_civilians (res://src/missions/mission_controller.gd:5114)
+         [4] _spawn_spawner_content (res://src/missions/mission_controller.gd:5086)
+         [5] start_contract (res://src/missions/mission_controller.gd:989)
          [6] load_sublevels_async (res://src/core/level_loader.gd:7725)
 TAT-2 spawners: throwable=385 ammo=97 health=7 civilian=2
 TAT-2 authored devices: 1164 (alarm_eye=119, goo_pipe=45, light_beam=196, noise_alarm=40, power_switch=26, power_wall=2, pressure_plate=419, turret=247, vault_door=6, ward_blocker=25, ward_slow=39)
@@ -306,8 +306,8 @@ WARNING: [nav_steering] no synchronised navigation map (no NavigationRegion3D ba
      GDScript backtrace (most recent call first):
          [0] _note_degraded (res://src/ai/nav_steering.gd:181)
          [1] step_towards (res://src/ai/nav_steering.gd:141)
-         [2] _move_ai (res://src/ai/guard_ai.gd:1621)
-         [3] _physics_process (res://src/ai/guard_ai.gd:1553)
+         [2] _move_ai (res://src/ai/guard_ai.gd:1651)
+         [3] _physics_process (res://src/ai/guard_ai.gd:1583)
 GUARD_CHECK boot_state loaded_map=old_manor frames=211 player=true guards=4
 GUARD_CHECK anchor=(5.951,7.266,126.025)
 GUARD_CHECK guard_pool=85
@@ -329,4 +329,4 @@ GUARD_CHECK SUMMARY map=old_manor order=3 guards_t1=4 guards_t2=4 expected=4 lou
 GUARD_CHECK PASS map=old_manor order=3 guards=4 buckets=4/4 lounge=0 lounge_marker=- selection=parity_approx_layer_bucket difficulty=1
 
 EXIT: 0
-FINISHED: 2026-11-27T21:55:21-05:00
+FINISHED: 2026-11-28T09:03:08-05:00

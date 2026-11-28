@@ -42,6 +42,7 @@ probe_p5_ui	exit=0	docs/reports/logs/final/probe_p5_ui.log
 test_capture_p5_filter	exit=0	docs/reports/logs/final/test_capture_p5_filter.log
 probe_den_spawn	exit=0	docs/reports/logs/final/probe_den_spawn.log
 probe_den_window	exit=0	docs/reports/logs/final/probe_den_window.log
+probe_route_npcs	exit=0	docs/reports/logs/final/probe_route_npcs.log
 p0b_capture_dry_run	exit=0	docs/reports/logs/final/p0b_capture_dry_run.log
 p0b_capture_self_test	exit=0	docs/reports/logs/final/p0b_capture_self_test.log
 p0b_manifest_validate	exit=0	docs/reports/logs/final/p0b_manifest_validate.log

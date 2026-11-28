@@ -1,30 +1,30 @@
 == FINAL_GATE test_audio_control
 COMMAND: flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/test_audio_control.gd
 CWD: .
-STARTED: 2026-11-27T22:06:50-05:00
+STARTED: 2026-11-28T09:14:37-05:00
 
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 TAT-2 Loc: reverse map built from sources.json (3404 keys)
 TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
@@ -102,6 +102,9 @@ PASS: AUD7.7 the Escape container authors no stinger
 PASS: AUD8.1 layer_for() maps the authored wet/glass/foliage/grass surfaces (8 cases)
 PASS: AUD8.2 the resolver produces exactly the five documented layer values
 PASS: AUD8.3 FS_Layers carries the 10 authored values (5 produced, 5 documented)
+PASS: AUD8.4 FS_Layers=MetalPipe/MetalSheet/Metal/Slime changes nothing (44 -> 44): no double-ban
+PASS: AUD8.5 FS_Layers=Glass is additive (+5 recordings, 0 lost): a layer never bans material media
+PASS: AUD8.6 the authored FS_Layers containers own 0 media for MetalPipe/MetalSheet/Metal/Slime and 5 for Glass
 PASS: AUD9.1 the stamina RTPC accepts the authored 0..100 domain
 PASS: AUD9.2 stamina 63.67521 -> exactly -0.317507 dB
 PASS: AUD9.2 stamina 100 -> exactly -1.0 dB
@@ -117,6 +120,36 @@ PASS: AUD9.5 rain 0.3 -> -0.538462 dB (authored linear segment)
 PASS: AUD9.6 disguise curve x=0 -> 0 dB
 PASS: AUD9.6 disguise curve x=1 -> exactly -1.0 dB (authored 0..1 domain)
 PASS: AUD9.6 the disguise RTPC is left at the authored 1.0 (not 100.0)
+PASS: AUD9.7 the authored blood_moon preset loads
+PASS: AUD9.7 the raw authored blood_moon rain.intensity is 10.0 (out of domain)
+WARNING: [weather_profile] rain.intensity 10.0 for preset 'blood_moon' is outside the authored 0..1 domain; saturated to [0.0, 1.0]. No authored unit for this value has been recovered, so it is reported as-is (see docs/reports/phase3-audio-20261127.md)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _rain_domain_note (res://src/core/weather_profile.gd:920)
+         [1] rain_intensity_01 (res://src/core/weather_profile.gd:909)
+         [2] _test_rain_converter (res://tests/test_audio_control.gd:656)
+         [3] _run (res://tests/test_audio_control.gd:97)
+PASS: AUD9.7 blood_moon 10.0 converts to 1.0 (documented domain saturation)
+PASS: AUD9.8 the converter maps 0->0, 1->1, 0.5->0.5 and 0.65->0.65 (in-domain unchanged)
+PASS: AUD9.8 a preset with no rain.intensity converts to null
+WARNING: [weather_profile] rain.intensity -2.0 for preset 'negative_case' is outside the authored 0..1 domain; saturated to [0.0, 1.0]. No authored unit for this value has been recovered, so it is reported as-is (see docs/reports/phase3-audio-20261127.md)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _rain_domain_note (res://src/core/weather_profile.gd:920)
+         [1] rain_intensity_01 (res://src/core/weather_profile.gd:909)
+         [2] _test_rain_converter (res://tests/test_audio_control.gd:676)
+         [3] _run (res://tests/test_audio_control.gd:97)
+PASS: AUD9.8 a negative intensity saturates at 0.0
+WARNING: [weather_profile] rain.intensity 10.0 for preset 'ten_again' is outside the authored 0..1 domain; saturated to [0.0, 1.0]. No authored unit for this value has been recovered, so it is reported as-is (see docs/reports/phase3-audio-20261127.md)
+     at: push_warning (core/variant/variant_utility.cpp:1033)
+     GDScript backtrace (most recent call first):
+         [0] _rain_domain_note (res://src/core/weather_profile.gd:920)
+         [1] rain_intensity_01 (res://src/core/weather_profile.gd:909)
+         [2] _test_rain_converter (res://tests/test_audio_control.gd:686)
+         [3] _run (res://tests/test_audio_control.gd:97)
+PASS: AUD9.9 the out-of-domain path warns and counts each occurrence (2 -> 5, presets=["blood_moon", "negative_case", "ten_again"])
+PASS: AUD9.9 the five shipped in-domain presets take no warning path
+PASS: AUD9.9 the converted blood_moon value evaluates the authored 1.0 endpoint (0 dB)
 PASS: AUD10.1 the state table has 183 authored row references
 PASS: AUD10.1 those rows target 62 authored nodes
 PASS: AUD10.2 98 rows target 24 AudioBus nodes
@@ -154,7 +187,7 @@ PASS: AUD7.1 degraded_reason() explains the fallback (missing:res://tests/fixtur
 PASS: AUD7.2 degraded select_media() returns the input unchanged
 PASS: AUD7.3 the real document reloads after the degraded probe
 AUDIO_CONTROL counts: switch=14/23 values=84 state=4/8 values=10 rtpcs=16/50 curves=142 containers=185
-AUDIO_CONTROL_SUMMARY: fails=0 checks=123
+AUDIO_CONTROL_SUMMARY: fails=0 checks=135
 
 EXIT: 0
-FINISHED: 2026-11-27T22:06:51-05:00
+FINISHED: 2026-11-28T09:14:39-05:00

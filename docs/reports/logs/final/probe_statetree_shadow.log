@@ -1,30 +1,30 @@
 == FINAL_GATE probe_statetree_shadow
 COMMAND: env TAT2_STATETREE=shadow flock /tmp/opencode/tat2-godot.lock tools/godot --headless --path game --script res://tests/probe_statetree_shadow.gd
 CWD: .
-STARTED: 2026-11-27T21:56:48-05:00
+STARTED: 2026-11-28T09:04:35-05:00
 
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Multi' (fallbacks=1, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Vault' (fallbacks=2, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 WARNING: [game_data] map fallback (unrecognized mission row routes to example) for row 'Mission.Example.Clue' (fallbacks=3, cap=64)
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
-         [0] _note_map_fallback (res://src/core/game_data.gd:859)
-         [1] _mission_map_id (res://src/core/game_data.gd:959)
-         [2] _load_missions (res://src/core/game_data.gd:1016)
+         [0] _note_map_fallback (res://src/core/game_data.gd:881)
+         [1] _mission_map_id (res://src/core/game_data.gd:981)
+         [2] _load_missions (res://src/core/game_data.gd:1038)
          [3] _ready (res://src/core/game_data.gd:100)
 TAT-2 Loc: reverse map built from sources.json (3404 keys)
 TAT-2 Loc: 8 translations, reverse map 2946/3404 en.csv keys, locale=en
@@ -38,17 +38,17 @@ WARNING: [hearing_data] 5 authored investigation-range anomalies clamped: AI.Sti
          [2] ensure_loaded (res://src/ai/hearing_data.gd:187)
          [3] escalation_row (res://src/ai/hearing_data.gd:615)
          [4] row (res://src/ai/sight_model.gd:120)
-         [5] escalation_row (res://src/ai/guard_ai.gd:488)
-         [6] _apply_authored_escalation (res://src/ai/guard_ai.gd:527)
-         [7] _ready (res://src/ai/guard_ai.gd:413)
+         [5] escalation_row (res://src/ai/guard_ai.gd:497)
+         [6] _apply_authored_escalation (res://src/ai/guard_ai.gd:536)
+         [7] _ready (res://src/ai/guard_ai.gd:420)
          [8] _initialize (res://tests/probe_statetree_shadow.gd:61)
 WARNING: [nav_steering] no synchronised navigation map (no NavigationRegion3D baked for this map); AI uses straight-line steering and will press into corners. Navmesh baking is T09's; this is the documented degradation (RE-I-10).
      at: push_warning (core/variant/variant_utility.cpp:1033)
      GDScript backtrace (most recent call first):
          [0] _note_degraded (res://src/ai/nav_steering.gd:181)
          [1] step_towards (res://src/ai/nav_steering.gd:141)
-         [2] _move_ai (res://src/ai/guard_ai.gd:1621)
-         [3] _physics_process (res://src/ai/guard_ai.gd:1553)
+         [2] _move_ai (res://src/ai/guard_ai.gd:1651)
+         [3] _physics_process (res://src/ai/guard_ai.gd:1583)
 P4TRACE mode=shadow frames=300 rows=66
 TREE_ENTER tick=0 tree=ST_Guard state=Root path=ST_Guard:Root
 TREE_ENTER tick=0 tree=ST_Guard state=Standard States path=ST_Guard:Root -> ST_Guard:Root/Standard States
@@ -85,8 +85,10 @@ FSM_WP frame=0 wp=1 wait_left=0.00 pos=0.00,0.04
 FSM_WP frame=172 wp=2 wait_left=0.00 pos=0.00,3.02
 P4SHADOW guard=ProbeShadowGuard ticks=301 visited=16 transitions=10 blocks=1 unknown=1 stalls=0 path=ST_Guard:Root -> ST_Guard:Root/Standard States -> ST_Guard:Root/Standard States/React To Stims, Intruder, Broken Object and Conversation Event/Return To Normal -> ST_Guard:Root/Standard States/React To Stims, Intruder, Broken Object and Conversation Event/Return To Normal/Patrolling -> ST_Patrol:Root -> ST_Patrol:Root/Distractable Window -> ST_Patrol:Root/Distractable Window/Patrol -> ST_Patrol:Root/Distractable Window/Patrol/Is Patrol Point A Patrol to Location -> ST_Patrol:Root/Distractable Window/Patrol/Is Patrol Point A Patrol to Location/Move To Point
 P4ALL_TREES started=21 blocked=0 rows=139
-STATETREE_COVERAGE trees=21 task_classes=77 task_instances=326 task_covered=139 task_blind=56 condition_classes=36 condition_instances=233 condition_covered=35 condition_blind=20 implemented=0 mapped=24 unsupported=89 fully_covered_trees=1 fully_parity_covered_trees=0 task_parity_authored=80 task_parity_runtime_fed=3 task_parity_unknown=56 condition_parity_authored=13 condition_parity_runtime_fed=2 condition_parity_unknown=20 task_sources=bound-authored-record=3,bound-unknown=78,context=4,inherited=57,literal=105,ref-access=79 condition_sources=bound-authored-record=2,bound-unknown=101,inherited=8,literal=122
+STATETREE_COVERAGE trees=21 task_classes=77 task_instances=326 task_covered=139 task_blind=56 condition_classes=36 condition_instances=233 condition_covered=35 condition_blind=20 implemented=0 mapped=24 unsupported=89 fully_covered_trees=1 fully_parity_covered_trees=0 task_parity_authored=80 task_parity_runtime_fed=3 task_parity_unknown=56 condition_parity_authored=13 condition_parity_runtime_fed=2 condition_parity_unknown=20 task_sources=bound-authored-record=3,bound-unknown=78,context=4,inherited=57,literal=105,ref-access=79 condition_sources=bound-authored-record=2,bound-unknown=101,inherited=8,literal=122 trees_total=21 vacuous_trees=1 vacuous_names=ST_Subtree_IntruderNoLongerSuspicious authored_events=17 emitted_events=1 unemitted_events=16 event_enter=3 event_transition=89 event_gates=92 event_total=92
+VACUOUS|ST_Subtree_IntruderNoLongerSuspicious|4|Set Focus -> Request Voice Line -> Delay -> Succeeded|structurally covered but behaviourally vacuous: 2 of its 3 tasks are PORT GAPs (no focus subsystem, no tree-driven VO) that complete immediately and the leaf exits through a literal Delay Task; it proves the coverage algebra, not guard behaviour
+P4EVENTS authored=17 emitted=1 unemitted=16 enter=3 transition=89 total=92 emitted_tags=["StateTreeEvent.StimChange"] unemitted_tags=["StateTreeEvent.AbandonLockdown", "StateTreeEvent.Civilian.Flee", "StateTreeEvent.ClueChange", "StateTreeEvent.ConversationEvent", "StateTreeEvent.ConversationEvent.Response", "StateTreeEvent.DistractionEvent", "StateTreeEvent.GameplayTagChange", "StateTreeEvent.LockdownEvent", "StateTreeEvent.LockdownGuardLeaving", "StateTreeEvent.LockdownHoldPosition", "StateTreeEvent.LockdownNewAlarmGuard", "StateTreeEvent.ReactionEventEnd", "StateTreeEvent.ReactionRoleChange", "StateTreeEvent.SharePartnerLost", "StateTreeEvent.ShareTarget", "StateTreeEvent.TargetChange"]
 PROBE PASS fails=0
 
 EXIT: 0
-FINISHED: 2026-11-27T21:56:54-05:00
+FINISHED: 2026-11-28T09:04:41-05:00

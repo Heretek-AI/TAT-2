@@ -25,3 +25,19 @@ so S19/S20/S22/S23 are recorded `unreachable`. Gates: compile 234/0, `run_tests`
 Flag for the verifier: this is explicitly **not** a played route (`route_claim=none`);
 the full 27-beat traversal and the UI/menu beats remain undriven, and the report's
 `da780d4` code head sits one evidence commit below the branch tip `06d46b9`.
+
+## Round 2 — gate integration
+
+`probe_route_npcs` is now a first-class gate: `run_final_gates.sh` gains the
+`probe_route_npcs` gate (`$OUT/probe_route_npcs.log`, marker `ROUTE_NPC PASS
+checks=4 fails=0`), `EXPECTED_GATES` 58→59, with `checks=4`/`fails=0` and its
+evidence log bound in `tools/gate_ratchet.json` and `check_gate_ratchet.py`
+(LOG_GATES + binding + expected runner count 59). The same round also raises the
+`probe_den_window` gate marker/floor 34→44, because the Phase 3C real-key
+`[F] PONDER`/`[F] EXIT` block made the old literal marker fail the runner.
+Measured: `gate_manifest.py` `orphans=0` (was 1); the new gate exits 0 and
+greps `ROUTE_NPC PASS checks=4 fails=0`; `make gate-ratchet` PASS
+(`runner/binding self-check 59 gates, 60 ratchet bindings`). No game-code or
+claim change: `route_claim=none`, 1 driven / 1 partial / 4 unreachable /
+21 not_attempted.
+

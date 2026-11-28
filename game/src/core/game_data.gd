@@ -660,6 +660,19 @@ func get_contract_sublevels(order: int) -> Array[String]:
 	return out
 
 
+## True when the mission id is an authored side-mission row (contracts.json
+## `mission_durations[id].kind == "side_mission"`, e.g. the Guildhall Cleanout).
+## A side mission can be deployed on its own (first-class Cleanout) without
+## crediting the hosting contract order.
+func is_side_mission(mission_id: String) -> bool:
+	if mission_id == "":
+		return false
+	var rec_v: Variant = mission_durations.get(mission_id, null)
+	if rec_v is Dictionary:
+		return str((rec_v as Dictionary).get("kind", "")) == "side_mission"
+	return false
+
+
 ## Mission-row match time limit in seconds for a mission id + difficulty
 ## (1 Novice, 2 Thief, 3 Master Thief), read from
 ## missions_by_id[id].durations (DT_Missions_* MatchDurationsByDifficulty).

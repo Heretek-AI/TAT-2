@@ -199,6 +199,10 @@ var contract_order: int = 1
 ## Free-play ("Contract Inactive") prep: no contract card, the Guildhall
 ## Cleanout row pre-selected by id, and READY stages the mode for reset_run.
 var free_play: bool = false
+## First-class Cleanout prep: non-empty id of an authored side-mission row
+## (Mission.Guildhall.LootTheRoom). READY stages GameState.begin_cleanout():
+## free_play stays false, the haul banks, the hosting contract is not credited.
+var side_mission_id: String = ""
 
 var _location_body: Label
 var _location_title_lbl: Label
@@ -242,12 +246,15 @@ func _ready() -> void:
 
 
 ## Show the prep screen for the given settings and take mouse control.
-func open_prep(p_map_id: String, p_difficulty: int, p_mode: String, p_contract_order: int, p_free_play: bool = false) -> void:
+## `p_side_mission_id` non-empty opens a first-class Cleanout prep for that
+## authored side-mission row with free_play left false.
+func open_prep(p_map_id: String, p_difficulty: int, p_mode: String, p_contract_order: int, p_free_play: bool = false, p_side_mission_id: String = "") -> void:
 	map_id = p_map_id
 	difficulty = clampi(p_difficulty, 1, 3)
 	mode = p_mode
 	contract_order = p_contract_order
 	free_play = p_free_play
+	side_mission_id = "" if p_free_play else p_side_mission_id
 	# A re-opened prep is a fresh decision: never carry a running countdown
 	# (or its audio ticks) across open_prep calls.
 	_cancel_countdown(false)
@@ -370,11 +377,17 @@ func _emit_ready() -> void:
 	if picked_id != "":
 		GameState.active_mission_id = picked_id
 	# Free-play READY stages mode + mission id together: reset_run clears the
-	# live flag on the map-change reset and republishes this stash.
+	# live flag on the map-change reset and republishes this stash. A
+	# first-class Cleanout stages begin_cleanout() instead: free_play stays
+	# false and the side-mission row is forced by id.
 	if free_play:
 		GameState.begin_free_play(picked_id if picked_id != "" else GameState.FREE_PLAY_MISSION_ID)
+	elif side_mission_id != "":
+		GameState.active_mission_id = side_mission_id
+		GameState.begin_cleanout(side_mission_id)
 	else:
 		GameState.end_free_play()
+		GameState.end_cleanout()
 	ready_pressed.emit(map_id, difficulty, mode, contract_order)
 	visible = false
 	queue_free()
@@ -1341,11 +1354,12 @@ func _refresh_all() -> void:
 
 
 func _select_default_mission_for_map() -> void:
-	if free_play:
-		# Free play selects the Cleanout row by id, not positionally: the
-		# authored thresholds/duration live on Mission.Guildhall.LootTheRoom.
+	var wanted_id: String = GameState.FREE_PLAY_MISSION_ID if free_play else side_mission_id
+	if wanted_id != "":
+		# Free play / first-class Cleanout select the Cleanout row by id, not
+		# positionally: the authored thresholds/duration live on the row.
 		for i: int in range(_mission_rows.size()):
-			if str(_mission_rows[i].get("id", "")) == GameState.FREE_PLAY_MISSION_ID:
+			if str(_mission_rows[i].get("id", "")) == wanted_id:
 				_selected_mission_idx = i
 				if _mission_selector != null and i < _mission_selector.item_count:
 					_mission_selector.select(i)
@@ -1493,6 +1507,14 @@ func _refresh_contract_card() -> void:
 func _contract_info() -> Array:
 	if free_play:
 		return [_loc(CONTRACT_INACTIVE), UIStringsScript.loc("Free play: clean out the location for a score. No contract progress is recorded.")] ## PORT COPY (no authored row)
+	if side_mission_id != "":
+		# First-class Cleanout: the card names the authored side mission and its
+		# own description; the hosting contract order is only a map host.
+		var side_v: Variant = GameData.missions_by_id.get(side_mission_id)
+		var side_body: String = ""
+		if side_v is Dictionary:
+			side_body = str((side_v as Dictionary).get("description", ""))
+		return [_loc(CONTRACT_INACTIVE), side_body]
 	if contract_order <= 0:
 		return [_loc(CONTRACT_INACTIVE), UIStringsScript.st_text("ST_Screens", "Screen.MissionLobby.ContractWrongMap",
 			"Your active contract is not available for the currently selected map.")]

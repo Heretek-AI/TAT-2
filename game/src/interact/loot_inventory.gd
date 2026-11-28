@@ -418,7 +418,9 @@ static func build_payout(outcome: String, opts: Dictionary = {}) -> Dictionary:
 	var free_play: bool = GameState.free_play
 	var complete: bool = bool(opts.get("objectives_complete", false))
 	var reward: int = 0
-	if outcome == "escape" and complete and not free_play:
+	# A first-class Cleanout banks the haul but earns no contract reward: the
+	# hosting contract was never played (GameState.run_credits_contract).
+	if outcome == "escape" and complete and GameState.run_credits_contract():
 		reward = contract_reward(GameState.active_map_id)
 	var money_taken: int = score + stashed + reward
 	var entries: Array = []

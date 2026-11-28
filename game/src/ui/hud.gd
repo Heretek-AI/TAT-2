@@ -3202,7 +3202,7 @@ func _update_objectives_and_loot(is_hub: bool) -> void:
 		_loot_lbl.visible = not is_hub
 		var goal_v: Variant = GameState.get("loot_goal")
 		var goal: int = int(goal_v) if (goal_v is int or goal_v is float) else 0
-		if GameState.free_play:
+		if GameState.free_play or GameState.cleanout_run:
 			# Reference Contract Inactive counter: just the take, no "/ £ goal".
 			_loot_lbl.text = "(£) %d" % GameState.loot_value
 		elif goal > 0:
@@ -3220,7 +3220,7 @@ func _update_objectives_and_loot(is_hub: bool) -> void:
 	# Free play: the reference prints the objective inline with its progress in
 	# the same bracket ("Mission: Steal 4,000 in loot value[0/4,000]") and no
 	# timer suffix or ❧ sub-line. Normal contracts keep the formatter below.
-	if GameState.free_play:
+	if GameState.free_play or GameState.cleanout_run:
 		var fp_label: String = UIStringsScript.loc_template("Steal {Amount} in loot value", {"Amount": GameState.format_thousands(maxi(GameState.loot_goal, 0))})
 		var fp_cur: int = 0
 		var fp_tgt: int = maxi(GameState.loot_goal, 0)

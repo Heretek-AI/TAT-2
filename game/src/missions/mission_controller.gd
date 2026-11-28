@@ -282,7 +282,7 @@ func _on_coop_run_resolved(outcome: String, payout: Dictionary) -> void:
 	GameState.last_payout = banked_record if not banked_record.is_empty() else payout.duplicate(true)
 	var final_score: int = int((GameState.last_payout as Dictionary).get("score", payout.get("score", 0)))
 	if outcome == "escape":
-		if not GameState.free_play:
+		if GameState.run_credits_contract():
 			SaveSystem.record_contract_complete(GameState.active_contract_order, final_score, not GameState.ever_spotted)
 		GameState.state = "victory"
 	else:
@@ -861,11 +861,11 @@ func start_contract(order: int) -> void:
 	# (1200 s) or the authored QG EndgameDuration node (480 s / VaultHeist 300).
 	_setup_mission_objectives(map_id, order)
 	_apply_run_clock(map_id)
-	if GameState.free_play:
-		# Free play is the side mission itself, not the hosting contract: the
-		# letter/loading screen carry the mission row title ("Cleanout Heist")
-		# and its description, while the Guildhall contract order only supplies
-		# map + sublevels.
+	if GameState.free_play or GameState.cleanout_run:
+		# Free play and the first-class Cleanout are the side mission itself, not
+		# the hosting contract: the letter/loading screen carry the mission row
+		# title ("Cleanout Heist") and its description, while the Guildhall
+		# contract order only supplies map + sublevels.
 		var fp_title: String = str(_active_mission_row.get("title", contract_info.get("title", UIStringsScript.st_text("ST_MapTool", "Legend.Contract", "Contract"))))
 		var fp_desc: String = str(_active_mission_row.get("description", "")).strip_edges()
 		if fp_title != "":
@@ -2939,13 +2939,17 @@ func open_contract_table_ui() -> void:
 			var pending_mission_id: String = GameState.active_mission_id
 			var pending_mode: String = GameState.active_mission_mode
 			var pending_free_play: bool = GameState.free_play
+			var pending_cleanout: bool = GameState.cleanout_run
 			GameState.reset_run(order_id, map_id)
 			GameState.active_mission_id = pending_mission_id
 			GameState.active_mission_mode = pending_mode
 			if pending_free_play:
 				GameState.begin_free_play(pending_mission_id)
+			elif pending_cleanout:
+				GameState.begin_cleanout(pending_mission_id)
 			else:
 				GameState.end_free_play()
+				GameState.end_cleanout()
 			get_tree().reload_current_scene()
 		)
 	if ui.has_method("open_table"):
@@ -2992,9 +2996,10 @@ func _is_side_mission_row(mission_id: String) -> bool:
 
 
 ## R10: substitute the authored contract row for a side-mission pick on a
-## contract deploy. Free play (and a deploy with no mission id) is unchanged.
+## contract deploy. Free play, a first-class Cleanout deploy (Phase 3B.5) and a
+## deploy with no mission id keep the player's pick.
 func _resolve_deploy_mission_row(map_id: String, row: Dictionary) -> Dictionary:
-	if GameState.free_play or row.is_empty():
+	if GameState.free_play or GameState.cleanout_run or row.is_empty():
 		return row
 	var mid: String = str(row.get("id", ""))
 	if not _is_side_mission_row(mid):
@@ -3012,7 +3017,7 @@ func _resolve_deploy_mission_row(map_id: String, row: Dictionary) -> Dictionary:
 
 ## Id-only twin of _resolve_deploy_mission_row for the run clock.
 func _resolve_deploy_mission_id(map_id: String, mission_id: String) -> String:
-	if GameState.free_play or mission_id == "" or not _is_side_mission_row(mission_id):
+	if GameState.free_play or GameState.cleanout_run or mission_id == "" or not _is_side_mission_row(mission_id):
 		return mission_id
 	var canon: Dictionary = _authored_contract_mission_row(map_id)
 	if canon.is_empty():
@@ -3127,7 +3132,7 @@ func _setup_mission_objectives(map_id: String, _order: int) -> void:
 ## reachable QG objective; a contract deploy reads the contract row's authored
 ## objective (DT_LootInfo_Quest items). Returns {"objective", "plan"}.
 func _active_quest_objective() -> Dictionary:
-	if GameState.free_play and GameState.active_mission_id != "":
+	if (GameState.free_play or GameState.cleanout_run) and GameState.active_mission_id != "":
 		var plan: Dictionary = GameData.get_mission_plan(GameState.active_mission_id)
 		var plan_obj: Dictionary = _plan_objective_for_difficulty(plan)
 		if not plan_obj.is_empty():
@@ -3166,7 +3171,7 @@ func _trigger_mission_start_letter() -> void:
 	# its own salutation, so the HUD title is empty; the 55/20 minute values are
 	# substituted from seconds plus the tracked endgame override (never typed
 	# into UI code).
-	if GameState.free_play and GameState.active_mission_id != "":
+	if (GameState.free_play or GameState.cleanout_run) and GameState.active_mission_id != "":
 		var mid: String = GameState.active_mission_id
 		var rec: Dictionary = GameData.get_mission_briefing_record(mid)
 		if not rec.is_empty() and str(rec.get("text", "")).strip_edges() != "":
@@ -3243,7 +3248,7 @@ func _spawn_clues(_ue_spawns: Array, _anchor: Vector3) -> void:
 
 func _active_clue_requests() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
-	if GameState.free_play and GameState.active_mission_id != "":
+	if (GameState.free_play or GameState.cleanout_run) and GameState.active_mission_id != "":
 		var plan: Dictionary = GameData.get_mission_plan(GameState.active_mission_id)
 		var refs_v: Variant = plan.get("clue_set_nodes", [])
 		if refs_v is Array:
@@ -5268,7 +5273,9 @@ func _on_escape_gate_extracted(source: Node = null) -> void:
 ## registers the peer, banks once, mirrors the *banked* record into
 ## GameState.last_payout and resolves the phase — so no path can skip the
 ## `_payout_applied` guard or leave applied/banked stale. Free play records the
-## numbers but banks nothing; a contract completion record is escape-only.
+## numbers but banks nothing; a first-class Cleanout banks the haul but never
+## credits its hosting contract. A contract completion record is escape-only and
+## only for a run that actually earns campaign credit (GameState.run_credits_contract).
 func _finish_run(outcome: String, reason: String = "", peer_id: int = -1) -> void:
 	# Guard split: `GameState.state` gates the RUN (a run resolves once) while
 	# `_payout_applied` gates the PAYOUT (a match banks once). They are not the
@@ -5305,7 +5312,7 @@ func _finish_run(outcome: String, reason: String = "", peer_id: int = -1) -> voi
 		GameState.last_payout = payout
 	var final_score: int = int((GameState.last_payout as Dictionary).get("score", payout.get("score", 0)))
 	if outcome == "escape":
-		if not GameState.free_play:
+		if GameState.run_credits_contract():
 			SaveSystem.record_contract_complete(GameState.active_contract_order, final_score, not GameState.ever_spotted)
 		GameState.state = "victory"
 	else:

@@ -13,7 +13,7 @@
 ## 0. Mission & Scope
 
 You are completing the **Godot 4.7.2 Forward+ / Jolt Physics** port of *Thick As Thieves* in `<repo>`, using:
-- **Official UE5 installation (reverse-engineering source of truth):** `/home/john/.local/share/Steam/steamapps/common/Thick As Thieves/` (and pre-extracted `extracted/`, 4.7 GB)
+- **Official UE5 installation (reverse-engineering source of truth):** `$HOME/.local/share/Steam/steamapps/common/Thick As Thieves/` (and pre-extracted `extracted/`, 4.7 GB)
 - **Official-footage reference baseline (visual, audio, UI, and gameplay comparison target):** `<repo>/docs/REFERENCE_BASELINE.md` and `<repo>/docs/reference/clip_1795033698901/`
 
 ### Scope Tiers
@@ -44,9 +44,9 @@ You are completing the **Godot 4.7.2 Forward+ / Jolt Physics** port of *Thick As
 | Item | Exact Value / Rule |
 |---|---|
 | **Godot binary** | `flatpak run org.godotengine.Godot` (`4.7.2.stable.flathub`) |
-| **Linux export templates** | `/home/john/.var/app/org.godotengine.Godot/data/godot/export_templates/4.7.2.stable/` (already installed) |
+| **Linux export templates** | `$HOME/.var/app/org.godotengine.Godot/data/godot/export_templates/4.7.2.stable/` (already installed) |
 | **Python** | `/usr/bin/python3` for Pillow/numpy scripts (`docs/reference/...`); check `Makefile` (`python3`) for `tools/parse_*.py` |
-| **Official UE5 build** | `"/home/john/.local/share/Steam/steamapps/common/Thick As Thieves/"` (quote path — spaces!) |
+| **Official UE5 build** | `"$HOME/.local/share/Steam/steamapps/common/Thick As Thieves/"` (quote path — spaces!) |
 | **Extracted UE5 dump** | `extracted/` (13,162 packages, 2,045 GLB, 2,416 PNG, 107 level dumps, 141 tables, 1,437 BP/mat dumps) |
 | **Reference baseline** | `docs/REFERENCE_BASELINE.md` + `docs/reference/clip_1795033698901/{KEYFRAME_INDEX.md,BREAKDOWN.md,CALLOUT_LEGENDS.md,COMPARISON_TEMPLATE.md,clean/,annotated/,tools/}` |
 | **Repo docs** | `docs/HANDOFF_NEXT_SESSION.md`, `docs/FIDELITY_GAPS.md`, `docs/ARCHITECTURE.md`, `docs/PERFORMANCE.md`, `docs/reports/*.md` |
@@ -65,11 +65,11 @@ You are completing the **Godot 4.7.2 Forward+ / Jolt Physics** port of *Thick As
 
 ## 3. Reverse-Engineering & Recreation Policy
 
-1. **Extract before inventing:** When a gameplay constant, UI string, material parameter, level prop, or Wwise audio event is missing or wrong, inspect `extracted/`, `tools/tat-extract/`, `tools/parse_*.py`, and `"/home/john/.local/share/Steam/steamapps/common/Thick As Thieves/"` first.
+1. **Extract before inventing:** When a gameplay constant, UI string, material parameter, level prop, or Wwise audio event is missing or wrong, inspect `extracted/`, `tools/tat-extract/`, `tools/parse_*.py`, and `"$HOME/.local/share/Steam/steamapps/common/Thick As Thieves/"` first.
 2. **Authorized reference-matched recreation for Hard Limits (`HL-1`, `HL-2`, `HL-4`, `HL-6`, `HL-7`):**
    - Because compiled Niagara VectorVM rates (`HL-1`) and expressionless cooked UE5 material node graphs (`HL-2`) cannot be extracted, you are **explicitly authorized** to build **reference-matched procedural Godot shaders, materials, and `GPUParticles3D` systems** calibrated visually against `docs/reference/clip_1795033698901/clean/KF01..KF30` and `BREAKDOWN.md`.
    - Document every such recreation honestly in `docs/FIDELITY_GAPS.md` / `docs/reports/` as `APPROX_SHADER` / `REFERENCE_MATCHED` (never claim it was VM-decompiled).
-3. **Truth hierarchy:** Official footage (`docs/reference/` + `/home/john/Videos/clip_1,795,033,698,901.mp4`) + live official game assets > `docs/HANDOFF_NEXT_SESSION.md` > older reports.
+3. **Truth hierarchy:** Official footage (`docs/reference/` + `$HOME/Videos/clip_1,795,033,698,901.mp4`) + live official game assets > `docs/HANDOFF_NEXT_SESSION.md` > older reports.
 
 ---
 
@@ -143,7 +143,7 @@ Compare directly against `docs/reference/clip_1795033698901/clean/KF01..KF30` an
 ## 8. Workstream 5 — Standalone Godot 4.7.2 Linux Export Build
 
 1. **Create `game/export_presets.cfg`:**
-   - Configure `[preset.0]` for `"Linux"` (`platform="Linux"`, `export_path="../build/tat2-linux-x86_64"`, `binary_format/architecture="x86_64"`, `custom_template/debug` & `release` pointing to `/home/john/.var/app/org.godotengine.Godot/data/godot/export_templates/4.7.2.stable/linux_debug.x86_64` and `linux_release.x86_64` or default template discovery).
+   - Configure `[preset.0]` for `"Linux"` (`platform="Linux"`, `export_path="../build/tat2-linux-x86_64"`, `binary_format/architecture="x86_64"`, `custom_template/debug` & `release` left empty so Godot discovers the installed 4.7.2 export templates itself — under the Flatpak editor that resolves to `$HOME/.var/app/org.godotengine.Godot/data/godot/export_templates/4.7.2.stable/`, under a native build to `$HOME/.local/share/godot/export_templates/4.7.2.stable/`).
 2. **Add `Makefile` targets (`linux-build`, `linux-release`, `linux-run`):**
    - `$(GODOT) --headless --path game --export-release "Linux" $(CURDIR)/build/tat2-linux-x86_64` (output under gitignored `build/`).
 3. **Verify exported Linux binary:**

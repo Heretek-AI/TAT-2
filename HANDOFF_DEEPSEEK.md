@@ -9,7 +9,7 @@ This document is a complete technical handoff for **DeepSeek** to optimize perfo
 ## 1. Environment & Verification Commands
 
 - **Project Path**: `<repo>` (Godot project at `<repo>/game`)
-- **Original Game**: `/home/john/.local/share/Steam/steamapps/common/Thick As Thieves/`
+- **Original Game**: `$HOME/.local/share/Steam/steamapps/common/Thick As Thieves/`
 - **Engine**: Godot `4.7.2.stable.flathub` (`Forward+` renderer, `Jolt Physics`)
 - **Commands**:
   - `make test` — Runs `res://tests/run_tests.gd` (15 headless integration/verification tests; must stay `SUMMARY: fails=0` with zero `SCRIPT ERROR`s).

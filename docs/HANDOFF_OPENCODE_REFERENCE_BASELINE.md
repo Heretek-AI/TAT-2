@@ -37,7 +37,7 @@ This is a **docs-only task**. You will write no game code.
 | 9 | `_carryover/survey2_subsystems_gaps_limits.md` | **Catalog of TAT-2 Subsystems `#1–#18`, Hard Limits `HL-1..HL-9`, Parity Gaps `PG-1..PG-8`**, with exact repo citations, plus a recommended cross-reference schema (§4.1). |
 | 10 | `_carryover/survey1_visual_audio.md`, `survey3_visual_audio.md` | Two independent first-pass surveys of the video (visual + audio). Useful but **superseded by KEYFRAME_INDEX.md wherever they disagree.** |
 | 11 | `docs/FIDELITY_GAPS.md`, `docs/ARCHITECTURE.md`, `docs/PERFORMANCE.md`, `docs/ANDROID.md`, `docs/HANDOFF_OPENCODE.md`, `docs/reports/*.md` | Repo docs. Use them to confirm cross-reference citations. |
-| 12 | `/home/john/Videos/clip_1,795,033,698,901.mp4` | **The source video.** 3840×2160 H.264, ~29.67 fps, 6,696 frames, 225.642 s (`03:45.64`), 48 kHz stereo AAC, about −43.9 LUFS. Note the commas in the filename: **always quote the path.** |
+| 12 | `$HOME/Videos/clip_1,795,033,698,901.mp4` | **The source video.** 3840×2160 H.264, ~29.67 fps, 6,696 frames, 225.642 s (`03:45.64`), 48 kHz stereo AAC, about −43.9 LUFS. Note the commas in the filename: **always quote the path.** |
 
 `_carryover/` = `docs/reference/clip_1795033698901/_carryover/`.
 
@@ -152,7 +152,7 @@ source frame at that timestamp:
 
 ```bash
 T=$(mktemp -d)
-ffmpeg -v error -ss 00:01.000 -i "/home/john/Videos/clip_1,795,033,698,901.mp4" -frames:v 1 "$T/kf01_4k.png"
+ffmpeg -v error -ss 00:01.000 -i "$HOME/Videos/clip_1,795,033,698,901.mp4" -frames:v 1 "$T/kf01_4k.png"
 # crop to zoom (4K coords = 2x the 1080p coords):
 magick "$T/kf01_4k.png" -crop 1000x600+2590+560 +repage "$T/kf01_zoom.png"
 ```
@@ -273,7 +273,7 @@ Sourcing rules for the breakdown:
 - Pull from `KEYFRAME_INDEX.md` first, then the callout spec, then the surveys. **Before writing each segment, scrub
   the video for that segment** so you cover what happens *between* keyframes. Contact sheets help:
   ```bash
-  ffmpeg -v error -ss <start> -to <end> -i "/home/john/Videos/clip_1,795,033,698,901.mp4" \
+  ffmpeg -v error -ss <start> -to <end> -i "$HOME/Videos/clip_1,795,033,698,901.mp4" \
     -vf "fps=2,scale=480:-1,tile=6x5" -frames:v 1 "$T/S07_sheet.png"
   ```
   Then look at the sheet. For fast action (zipwire, takedowns, alarm), use `fps=6` on a shorter window.

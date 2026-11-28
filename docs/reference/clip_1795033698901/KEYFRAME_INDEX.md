@@ -1,6 +1,6 @@
 # Canonical Keyframe Index & Continuous Timeline — `clip_1,795,033,698,901.mp4`
 
-This document is the canonical M1 baseline catalog for `/home/john/Videos/clip_1,795,033,698,901.mp4`. All timestamps, stream metrics, pixel verifications, verbatim UI strings, and audio/VO cues are directly verified from the native `3840x2160` source video and its PTS-aligned `48 kHz` audio stream (`first_pts=0`).
+This document is the canonical M1 baseline catalog for `$HOME/Videos/clip_1,795,033,698,901.mp4`. All timestamps, stream metrics, pixel verifications, verbatim UI strings, and audio/VO cues are directly verified from the native `3840x2160` source video and its PTS-aligned `48 kHz` audio stream (`first_pts=0`).
 
 > **Provenance note (W0a, 2026-11-24):** `Johnny Cipher` in the observed frames
 > is the capture machine's Steam account persona, not shipped game copy. The
@@ -14,7 +14,7 @@ This document is the canonical M1 baseline catalog for `/home/john/Videos/clip_1
 
 | Property | Verified Value |
 |---|---|
-| **Source File** | `/home/john/Videos/clip_1,795,033,698,901.mp4` |
+| **Source File** | `$HOME/Videos/clip_1,795,033,698,901.mp4` |
 | **Container / Format** | `mov,mp4,m4a,3gp,3g2,mj2` (`major_brand: isom`, `compatible_brands: isomiso2avc1mp41`, `encoder: Lavf62.12.102`) |
 | **Format Duration** | `225.642333 s` (`03:45.64`, `start_time: 0.000000`) |
 | **File Size** | `265,161,125` bytes (`252.88 MiB`) |
@@ -268,4 +268,4 @@ HUD-semantics correction (`2026-11-19T00:09:10Z`, worker `hud-semantics`, run `2
 
 Adversarial spot-check correction (`2026-11-19`, source `_build/adv_visual_hud.md` row 9 - REFUTED). Each entry: old text, new text, how verified.
 
-- **§2 S24**, **§3 KF27**, **§5.1 Foyer Security System, Wards & Stairs**: old: "beam emitter on the left wall (`x~17%, y~56%`)" / new: "beam emitter on the left wall (`x~17%, y~40%`)" / verified: 4K re-extraction of the segment's own keyframe (`/usr/bin/ffmpeg -ss 207.60 -i "/home/john/Videos/clip_1,795,033,698,901.mp4" -frames:v 1`) and the `clean/KF27` 1920x1080 frame: the max-bright-cluster centroid of the emitter measures `(17.8%, 40.3%)` in the 4K extract and `(17.8%, 40.0%)` in `clean/KF27`; the `annotated/KF27` badge #1 leader dot sits at `y≈40%`; the S24 cross-check at `03:28.90` puts the beam rows at `39–40%`. `x~17%` is unchanged; only the vertical coordinate was wrong (by ~16 points of frame height, ≈350 px at 4K). `BREAKDOWN.md:1209` carries the same corrected coordinate.
+- **§2 S24**, **§3 KF27**, **§5.1 Foyer Security System, Wards & Stairs**: old: "beam emitter on the left wall (`x~17%, y~56%`)" / new: "beam emitter on the left wall (`x~17%, y~40%`)" / verified: 4K re-extraction of the segment's own keyframe (`/usr/bin/ffmpeg -ss 207.60 -i "$HOME/Videos/clip_1,795,033,698,901.mp4" -frames:v 1`) and the `clean/KF27` 1920x1080 frame: the max-bright-cluster centroid of the emitter measures `(17.8%, 40.3%)` in the 4K extract and `(17.8%, 40.0%)` in `clean/KF27`; the `annotated/KF27` badge #1 leader dot sits at `y≈40%`; the S24 cross-check at `03:28.90` puts the beam rows at `39–40%`. `x~17%` is unchanged; only the vertical coordinate was wrong (by ~16 points of frame height, ≈350 px at 4K). `BREAKDOWN.md:1209` carries the same corrected coordinate.

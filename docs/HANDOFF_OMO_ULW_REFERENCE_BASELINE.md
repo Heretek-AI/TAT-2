@@ -12,7 +12,7 @@
 
 ## 0. Mission & Orchestration Mode (`ulw` / Mass Parallel)
 
-You are completing the **Official Gameplay Footage Reference Baseline** in `<repo>` (a Godot 4.7 Forward+ port of the UE5 game *Thick As Thieves*). The user recorded gameplay footage of the **official** UE5 build (`/home/john/Videos/clip_1,795,033,698,901.mp4`) and will later record the matching slice from their Godot port for a 1:1 side-by-side comparison.
+You are completing the **Official Gameplay Footage Reference Baseline** in `<repo>` (a Godot 4.7 Forward+ port of the UE5 game *Thick As Thieves*). The user recorded gameplay footage of the **official** UE5 build (`$HOME/Videos/clip_1,795,033,698,901.mp4`) and will later record the matching slice from their Godot port for a 1:1 side-by-side comparison.
 
 ### Execution Architecture (Standalone `omo` `ulw` Mode)
 - **Do NOT use `opencode-teamwork-v2` (`teamwork_*` tools) or per-task git worktrees.** Work directly in `<repo>` using `omo` **ultrawork (`ulw`)** mass-parallel background agents and atomic file/Hashline edits.
@@ -47,7 +47,7 @@ Prior work (M1 + M2, including `hud-semantics` and `m2-audit` fixes) has already
 
 Read/reference these in order of authority (when video and docs disagree, **the video wins**):
 
-1. `/home/john/Videos/clip_1,795,033,698,901.mp4` — **Source video**: `225.642333 s` (`03:45.64`), `3840x2160` H.264 High, `~29.672 fps` (6,696 frames), `48 kHz` stereo AAC (`-43.9 LUFS`). **Always quote the path** because of the commas.
+1. `$HOME/Videos/clip_1,795,033,698,901.mp4` — **Source video**: `225.642333 s` (`03:45.64`), `3840x2160` H.264 High, `~29.672 fps` (6,696 frames), `48 kHz` stereo AAC (`-43.9 LUFS`). **Always quote the path** because of the commas.
 2. `docs/reference/clip_1795033698901/KEYFRAME_INDEX.md` — Factual spine for timestamps, segments `S01–S27`, verbatim UI text, and VO/audio cues.
 3. `docs/reference/clip_1795033698901/callout_spec.json` & `CALLOUT_LEGENDS.md` — Verified 195 callouts across `KF01–KF30`.
 4. `docs/HANDOFF_NEXT_SESSION.md` — Ground truth for TAT-2 port status, subsystems, parity gaps, and hard limits.
@@ -66,7 +66,7 @@ Read/reference these in order of authority (when video and docs disagree, **the 
 2. **NEVER touch** `game/`, `tools/`, `build/`, `extracted/`, `game/.godot/`, `game/data/generated/`, or `game/src/missions/mission_controller.gd`.
 3. **NEVER modify `clean/*.jpg`.** Only edit `KEYFRAME_INDEX.md` if you prove a factual error directly against the 4K video/audio; log every fix in `KEYFRAME_INDEX.md` `## Errata`.
 4. **Python executable:** Always use **`/usr/bin/python3`** (has `Pillow 13.0.0`, `numpy`, `matplotlib`). Never use bare `python3` (resolves to Linuxbrew without `PIL`).
-5. **Media tools:** `/usr/bin/ffmpeg`, `/usr/bin/ffprobe`, `/usr/bin/magick`. Always quote `"/home/john/Videos/clip_1,795,033,698,901.mp4"`.
+5. **Media tools:** `/usr/bin/ffmpeg`, `/usr/bin/ffprobe`, `/usr/bin/magick`. Always quote `"$HOME/Videos/clip_1,795,033,698,901.mp4"`.
 6. **Temp files:** Create one temp root `T=$(mktemp -d)` for scratch frames, contact sheets, `.wav` slices, and spectrograms; delete it with `rm -rf "$T"` before finishing. Leave nothing in `/tmp`.
 7. **Folder size budget:** `docs/reference/clip_1795033698901/` MUST stay **`<= 25 MiB`** (currently `16 MiB`).
 8. **Evidence-only rule:** Never invent mechanics, engine parameters, off-screen events, or VO lines. Use `UNCERTAIN:` if unclear. Because you cannot listen to audio directly, phrase every audio observation from measured `ffmpeg` evidence (`showspectrumpic`, `astats` peak/RMS dBFS, `ebur128`) plus verified `KEYFRAME_INDEX.md` §4 quotes.
@@ -252,7 +252,7 @@ Match `S01–S04` already in `BREAKDOWN.md`. Every segment `S05–S27` MUST incl
 ## 7. Quick Pitfall Reference
 - **Never** run bare `python3` — always `/usr/bin/python3`.
 - **Never** leave `threat arcs` / `enemy threat` outside `KEYFRAME_INDEX.md` `## Errata`.
-- **Always** quote `"/home/john/Videos/clip_1,795,033,698,901.mp4"`.
+- **Always** quote `"$HOME/Videos/clip_1,795,033,698,901.mp4"`.
 - **Always** check `du -sh docs/reference/clip_1795033698901` (`<= 25 MiB`) and `git diff -- game/src/missions/mission_controller.gd` (must be empty).
 
 ---

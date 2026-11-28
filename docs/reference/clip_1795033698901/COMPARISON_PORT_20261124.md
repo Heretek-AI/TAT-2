@@ -6,7 +6,7 @@ HUD/UI 27, Gameplay 25). Only **Port observation** and **Score** are new. The te
 column (pre-stated caveats) is omitted; where a caveat applies it is cited inside the Port
 observation. Official observations are copied from the template row for row; ids and order are unchanged.
 
-**The run.** `/home/john/Videos/2026-11-24 22-47-16.mp4` — 281.333 s, 3840×2160 @ 30 fps, 8 440
+**The run.** `$HOME/Videos/2026-11-24 22-47-16.mp4` — 281.333 s, 3840×2160 @ 30 fps, 8 440
 frames, h264 8.08 Mbit/s, AAC 48 kHz. Client area 3840×2090 (70 px title bar cropped). Session log
 `~/.local/share/godot/app_userdata/Thick As Thieves 2/logs/godot2026-11-24T22.47.10.log` (168 lines,
 ends `TAT-2 mission_ready map=guildhall meshes=62950`). One deployment: `Mission.Guildhall.LootTheRoom`,
@@ -35,7 +35,7 @@ settle it, the owning lane is used, or `UNVERIFIED` with the named experiment �
 
 **Provenance (Phase 0a, 2026-11-27).** `ADJUDICATIONS.md` and `row_route_matrix.md` were moved from
 the git-ignored `build/qa/review_20261124/` into this reference directory and are now tracked. The
-2026-11-24 recording (`/home/john/Videos/2026-11-24 22-47-16.mp4`) and its 281 frames
+2026-11-24 recording (`$HOME/Videos/2026-11-24 22-47-16.mp4`) and its 281 frames
 (`build/qa/review_20261124/frames_client/`, `frames_1080/`, `frames_4k/`) remain **outside git** —
 they are private capture media, not committed; the image slots in §3 are private-local links. Only
 the scorecard and the two provenance documents are tracked.

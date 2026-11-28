@@ -482,7 +482,7 @@ gate_marker test_w10a2_cream "$OUT/test_w10a2_cream.log" \
 	--script res://tests/test_w10a2_cream.gd
 
 gate_marker test_audio_control "$OUT/test_audio_control.log" \
-	"AUDIO_CONTROL_SUMMARY: fails=0 checks=123" \
+	"AUDIO_CONTROL_SUMMARY: fails=0 checks=135" \
 	flock "$LOCK" tools/godot --headless --path game \
 	--script res://tests/test_audio_control.gd
 
@@ -493,7 +493,7 @@ gate_marker test_audio_control "$OUT/test_audio_control.log" \
 # adds a check must update this line (the ratchet independently treats the same
 # numbers as `>=` floors).
 gate_marker test_vo_director "$OUT/test_vo_director.log" \
-	"VO_DIRECTOR_SUMMARY: fails=0 checks=53" \
+	"VO_DIRECTOR_SUMMARY: fails=0 checks=60" \
 	flock "$LOCK" tools/godot --headless --path game \
 	--script res://tests/test_vo_director.gd
 

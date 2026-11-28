@@ -161,7 +161,7 @@
       "expected_fail": 0
     },
     "test_audio_control": {
-      "checks": 123,
+      "checks": 135,
       "fails": 0
     },
     "probe_p5_ui": {
@@ -176,7 +176,7 @@
       "fails": 0
     },
     "test_vo_director": {
-      "checks": 53,
+      "checks": 60,
       "fails": 0
     },
     "probe_auto_exposure": {

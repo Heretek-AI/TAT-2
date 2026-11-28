@@ -683,6 +683,18 @@ func _guard_weapon_set() -> String:
 	return "club"
 
 
+## Phase 3B.3: plays an authored guard exertion/attack line through the VO
+## director (`VoDirector.GUARD_BEAT_CUES`). The speaker is this guard's authored
+## weapon set, so a Hauntstable (which never recorded either beat) is refused
+## rather than given an Enforcer1 recording. Audio-only: no state, damage or
+## timing changes here.
+func _play_exertion_vo(beat: String) -> void:
+	if AudioManager == null or not AudioManager.has_method("play_vo_guard_beat"):
+		return
+	var speaker: String = "Hauntstable1" if _guard_weapon_set() == "hauntstable" else "Enforcer1"
+	AudioManager.play_vo_guard_beat(beat, speaker, global_position)
+
+
 ## Real-clip AnimationPlayer (UE sources: ST_Guard StateTree states,
 ## DAM_CharacterAnimationMapping_GuardBase / _GuardHauntsable tags,
 ## AnimSet_Guard_Club / _Hauntsable rows, anims_manifest.json clip GLBs).
@@ -748,6 +760,10 @@ func _play_guard_attack() -> void:
 	_takedown_vic_anim = false
 	anim_player.speed_scale = 1.0
 	anim_player.play(key, 0.15)
+	# Phase 3B.3: the melee swing is the owning system for the authored
+	# ExertionCombat/Attacking bark (9 Enforcer1 recordings; Hauntstable1 has
+	# none and is refused by the director).
+	_play_exertion_vo("attacking")
 	# RE-F-12: the swing owns the damage window. Arm the authored CombatHitbox
 	# states (the _Montage sibling has none, so the clock resolves the sequence)
 	# and let _tick_attack_hit_window apply MELEE_DAMAGE when the club connects.
@@ -2106,6 +2122,12 @@ func take_knockout(dmg: float) -> void:
 	# Combat.Hit hearing stimulus (10 m Heavy Long) -- a blackjack one-shot is
 	# the Takedown row instead, which is why this is gated on surviving.
 	if health > 0.0 and state != Alertness.KNOCKED_OUT:
+		# Phase 3B.3: a surviving hit is the owning system for the authored
+		# ExertionCombat/TakingDamage bark (30 Enforcer1 recordings). Played
+		# BEFORE the ALERTED transition so the yelp wins the director's 2 s
+		# priority window and the sight line stays for an actual sighting; the
+		# lethal path stays silent here and the KO bark owns it.
+		_play_exertion_vo("taking_damage")
 		investigate_pos = global_position
 		detection = maxf(detection, DETECTION_ALERTED_AT)
 		if state != Alertness.ALERTED and state != Alertness.COMBAT:

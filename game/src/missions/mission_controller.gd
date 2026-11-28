@@ -936,13 +936,15 @@ func start_contract(order: int) -> void:
 	var weather_preset: Dictionary = WeatherProfile.preset_for_map(map_id)
 	rain_node = WeatherVisuals.make_rain(self, weather_preset)
 	lens_rain_node = WeatherVisuals.make_lens_rain(self, weather_preset)
-	# W11-D: the same preset's rain intensity (0..1) drives the authored
-	# Weather_Rain_Intensity RTPC, so the rain you see and the rain you hear come
-	# from one value. A preset with no authored intensity leaves the parameter
-	# at the control plane's default.
-	var rain_intensity_v: Variant = WeatherProfile.rain_intensity(weather_preset)
+	# W11-D / Phase 3B.3: the same preset's rain intensity drives the authored
+	# Weather_Rain_Intensity RTPC through the ONE documented preset -> 0..1
+	# converter, so the rain you see and the rain you hear come from one value
+	# and one domain (the old per-caller clamp lived here and in weather_visuals).
+	# A preset with no authored intensity leaves the parameter at the control
+	# plane's default.
+	var rain_intensity_v: Variant = WeatherProfile.rain_intensity_01(weather_preset)
 	if rain_intensity_v != null and AudioManager != null and AudioManager.has_method("set_rtpc"):
-		AudioManager.set_rtpc("Weather_Rain_Intensity", clampf(float(rain_intensity_v), 0.0, 1.0))
+		AudioManager.set_rtpc("Weather_Rain_Intensity", float(rain_intensity_v))
 	if player != null and hud != null:
 		if player.has_signal("thief_vision_toggled") and hud.has_method("set_thief_vision"):
 			player.thief_vision_toggled.connect(hud.set_thief_vision)

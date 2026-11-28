@@ -28,7 +28,7 @@ PASS, then integrated in this order:
 | **P4 landscape/beams** | `TAT2_LANDSCAPE_MASK=discard\|raw\|off`; all **15/15** authored beam scalars consumed; 2 cm fake-glow core; side/sphere/edge uniforms exposed but inert; `foyer_beam` KF27 cue; `beam_close` relabelled the Lounge **extra** | landscape **7/0**; beams **9/0**; safe-room gap comp 12 (`Weightmap_20`, mask 0.0 → visible) |
 | **P4 mirrors** | negative-determinant split; baked `S·M`/`B·S` variant; single-surface `CULL_FRONT` fast path; exact `source_counts` apportionment | draw **3,297 = 3,119 MultiMesh + 178 standalone**; 464 splits; 103 baked / **31,097,388 B**; `PERF_CENSUS.source_sublevels=64,660`; probe **39/0**, full **790/0** |
 | **P4 exposure/IBL** | authored AEM fields (`-10/+1`, `0.2/2.0`, bias 0, V3); pure `auto_exposure.gd`; `TAT2_AEM=fixed\|model\|meter`; 3 cubemaps / 18 faces; CPU cosine IBL; CompositorEffect meter | AEM **77/0**; cubemap **37/0**; fixed 1.150 / ambient 0.160 unchanged; model no-op 1.1500 |
-| **Audio W11** | 645-line VO index + `vo_director`; `FS_Layers`; music decision tree; RTPC domains; state-row report | suite 121 **123/0**; VO 122 **53/0**; 249/645 events reachable (35 triples); 396/645 still unmapped |
+| **Audio W11** | 645-line VO index + `vo_director`; `FS_Layers`; music decision tree; RTPC domains; state-row report | suite 121 **135/0**; VO 122 **60/0**; 288/645 events reachable (37/76 triples); 357/645 still unmapped — Phase 3B.3; §2 is the `5857589` serial snapshot |
 | **GC/bookcases** | 3 container classes; 8 bookcases + 2 POI + 8 safes; static glass-pane binding (0.472 m); `{leaves, broken}` owner index | Guildhall containers 107→**125**; locks **162 = 152 + 10**; GC **52/0**; p2 **17/17**; A2 static leaves **20** |
 | **Navmesh** | `parse_nav` + `nav_runtime.gd`; one region per map; 80 baked links + door links | Guildhall **221→123→80**, Old Manor **216→113→64**, FTUE **11→8→4**; probe **70/0**; `TAT2_NAV=off` default |
 | **UI** | allowlisted `UTexture2DArray` for `T_stealthball_Array`; 21 slices; HUD `sampler2DArray`; 12-screen capture + pixel stats | `GEM_PAYLOAD present=true: layers=21`, `mapping_kind=directional`; P5 **54/0**; capture **28/28**, sidecars fixed |
@@ -179,11 +179,20 @@ against itself (`--reference-only`); the first port-side `foyer_beam` capture is
   event (`StateTreeEvent.StimChange`), 16 of 17 unemitted. FSM drives. Cutover
   needs the authored task/condition parameters, smart objects/EQS and a real
   event bus — do not invent values. Report: `docs/reports/statetree-3b1-20261127.md`.
-- **Audio:** W11 landed, but **396/645 VO lines (41/76 triples) have no caller**;
-  3 unnamed music keys stay id-only; 24 unnamed buses carry 98/183 state rows;
-  5 `FS_Layers` values are unproduced; Hauntstable1 never recorded
-  `ExertionCombat/KnockedOut`; `blood_moon` rain 10.0 is clamped to the RTPC
-  0..1 domain (owner decision).
+- **Audio:** VO director is **288/645 lines mapped** (was 249); **357 remain
+  unwired** and are counted by owning-system gap in
+  `docs/reports/phase3-audio-20261127.md` §4.3 (no ambient chatter, private-zone,
+  object-observation, flee/evade, smoke-exposure or DSP speaker system; the
+  noise-heard bark is blocked by an existing sight bark). **The 3 unnamed music
+  keys and the 24 unnamed buses (98 state rows) are NOT recoverable from the
+  cook** — 0/91 `AudioBus` objects are named and the package contains no
+  `AkTrigger` — so stop treating them as pending extraction. The 5 unproduced
+  `FS_Layers` values are a `PORT_DECISION` whose "double-ban" rationale is
+  **refuted** (measured: a layer never removes material media; `MetalPipe`/
+  `MetalSheet`/`Metal` own 0 layer media, `Slime` only on the absent slide
+  action, `Glass` is additive-only). `blood_moon` rain 10.0 now goes through the
+  one documented `WeatherProfile.rain_intensity_01()` converter (saturates to
+  1.0 with a warning; the old 0..1 / 0..1.5 / 0..1 clamps are gone).
 - **GC/destructibles:** `Destructibles/` is still absent from the shared tree;
   the 93-chest fallback is a prediction, not a claim. Bookcases/safes landed;
   the authored damage-driven break remains open and hold-F `break_container` is

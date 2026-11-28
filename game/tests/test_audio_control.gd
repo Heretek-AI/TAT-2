@@ -46,6 +46,8 @@ const DETECTION_MUSIC_NODE: String = "MusicRandomSequenceContainer:248405997"
 const LPF_RTPC: int = 2141048674
 ## W11-C: the surface resolver owns the FS_Layers mapping.
 const SurfaceResolverScript := preload("res://src/stealth/surface_resolver.gd")
+## Phase 3B.3: the ONE preset -> RTPC/visual rain converter lives in WeatherProfile.
+const WeatherProfileScript := preload("res://src/core/weather_profile.gd")
 
 ## Surface families that must NOT survive FS_Material=Stone.
 const NOT_STONE: Array[String] = ["carpet", "tile", "dirt", "mud", "grassrustle",
@@ -92,6 +94,7 @@ func _run() -> void:
 	_test_music(ctl)
 	_test_layers(ctl)
 	_test_rtpc_callers(ctl)
+	_test_rain_converter(ctl)
 	_test_state_report(ctl)
 	await _test_runtime(ctl)
 	_test_degraded(ctl)
@@ -492,6 +495,62 @@ func _test_layers(ctl: AudioControl) -> void:
 		and names.has("Foliage") and names.has("Grass") and names.has("Nothing"),
 		"AUD8.3 FS_Layers carries the 10 authored values (5 produced, 5 documented)",
 		"AUD8.3 FS_Layers=%s" % str(names))
+	# Phase 3B.3: prove or refute the "double-ban" rationale for the five values
+	# the port does not produce (MetalPipe, MetalSheet, Glass, Metal, Slime).
+	#
+	# The claim was: a shared FS_Material family re-selected as a layer would ban
+	# the same clips twice and empty the selection. Measured from the authored
+	# switch containers it is REFUTED: the ban is confined to the FS_Layers
+	# branch, so material-selected media is never removed. The real reasons the
+	# five stay unproduced are recorded in docs/reports/phase3-audio-20261127.md.
+	var media: Array = _event_media(FOOTSTEP_EVENT)
+	_select(ctl, "Stone")
+	var base: Array = ctl.select_media(FOOTSTEP_EVENT, media)
+	var lost_any: Array = []
+	var zero_media_values: Array[String] = ["MetalPipe", "MetalSheet", "Metal", "Slime"]
+	for value: String in zero_media_values:
+		_select(ctl, "Stone")
+		ctl.set_switch("FS_Layers", value)
+		var sel: Array = ctl.select_media(FOOTSTEP_EVENT, media)
+		var added: int = 0
+		for mid: Variant in sel:
+			if not base.has(int(mid)):
+				added += 1
+		if added != 0:
+			lost_any.append("%s +%d" % [value, added])
+		if sel.size() != base.size():
+			lost_any.append("%s size %d != %d" % [value, sel.size(), base.size()])
+		for mid: Variant in base:
+			if not sel.has(int(mid)):
+				lost_any.append("%s lost %d" % [value, int(mid)])
+	_check(lost_any.is_empty() and base.size() == 44,
+		"AUD8.4 FS_Layers=MetalPipe/MetalSheet/Metal/Slime changes nothing (44 -> 44): no double-ban",
+		"AUD8.4 double-ban or divergence measured: %s" % str(lost_any))
+	# Glass is the one shared value whose layer package carries media on the
+	# footstep events: it is purely additive (+5, 0 lost), which also refutes a
+	# ban (the claim would predict a shrinking set).
+	_select(ctl, "Stone")
+	ctl.set_switch("FS_Layers", "Glass")
+	var glass: Array = ctl.select_media(FOOTSTEP_EVENT, media)
+	var glass_lost: int = 0
+	for mid: Variant in base:
+		if not glass.has(int(mid)):
+			glass_lost += 1
+	_check(glass.size() == base.size() + 5 and glass_lost == 0,
+		"AUD8.5 FS_Layers=Glass is additive (+5 recordings, 0 lost): a layer never bans material media",
+		"AUD8.5 Glass selection=%d lost=%d (want %d / 0)" % [glass.size(), glass_lost, base.size() + 5])
+	# The container-side census: the four zero-media values own no recording on
+	# this event, so producing them could not change playback; Glass owns 5.
+	var census_wrong: Array = []
+	for value: String in zero_media_values:
+		if ctl.media_ids_for(FOOTSTEP_EVENT, "FS_Layers", value).size() != 0:
+			census_wrong.append(value)
+	if ctl.media_ids_for(FOOTSTEP_EVENT, "FS_Layers", "Glass").size() != 5:
+		census_wrong.append("Glass")
+	_check(census_wrong.is_empty(),
+		"AUD8.6 the authored FS_Layers containers own 0 media for MetalPipe/MetalSheet/Metal/Slime and 5 for Glass",
+		"AUD8.6 layer media census mismatch: %s" % str(census_wrong))
+	ctl.set_switch("FS_Layers", "Nothing")
 
 
 ## 8. W11-D: the five authored mix parameters and their exact curve values.
@@ -576,6 +635,77 @@ func _test_rtpc_callers(ctl: AudioControl) -> void:
 	_check(_approx(ctl.rtpc_value(disguise), 1.0),
 		"AUD9.6 the disguise RTPC is left at the authored 1.0 (not 100.0)",
 		"AUD9.6 disguise rest value=%f" % ctl.rtpc_value(disguise))
+
+
+## 9b. Phase 3B.3: the ONE preset -> authored-0..1 rain converter.
+##
+## The authored `Weather_Rain_Intensity` curve is 0..1 (AUD9.5). Every shipped
+## preset is in that domain except `blood_moon`, which authors 10.0. The
+## converter passes in-domain values through, saturates an out-of-domain value
+## at the endpoint, and reports it — it never invents a unit for 10.0.
+func _test_rain_converter(ctl: AudioControl) -> void:
+	WeatherProfileScript.reset_rain_domain_warnings()
+	# The real authored preset (read from disk, never regenerated here).
+	var blood_moon: Dictionary = WeatherProfileScript.load_preset("blood_moon")
+	_check(not blood_moon.is_empty(),
+		"AUD9.7 the authored blood_moon preset loads",
+		"AUD9.7 blood_moon preset missing")
+	_check(_approx(float(WeatherProfileScript.rain_intensity(blood_moon)), 10.0, 0.0001),
+		"AUD9.7 the raw authored blood_moon rain.intensity is 10.0 (out of domain)",
+		"AUD9.7 raw rain.intensity=%s (want 10.0)" % str(WeatherProfileScript.rain_intensity(blood_moon)))
+	var converted_blood: Variant = WeatherProfileScript.rain_intensity_01(blood_moon)
+	_check(converted_blood != null and _approx(float(converted_blood), 1.0, 0.000001),
+		"AUD9.7 blood_moon 10.0 converts to 1.0 (documented domain saturation)",
+		"AUD9.7 blood_moon converted to %s (want 1.0)" % str(converted_blood))
+	# The documented unit cases: 0 -> 0, 1 -> 1, and an in-domain pass-through.
+	var cases: Array = [[0.0, 0.0], [1.0, 1.0], [0.5, 0.5], [0.65, 0.65]]
+	var wrong: Array = []
+	for pair: Array in cases:
+		var got: Variant = WeatherProfileScript.rain_intensity_01(
+			{"preset": "case", "rain": {"intensity": float(pair[0])}})
+		if got == null or not _approx(float(got), float(pair[1]), 0.000001):
+			wrong.append("%s->%s" % [str(pair[0]), str(got)])
+	_check(wrong.is_empty(),
+		"AUD9.8 the converter maps 0->0, 1->1, 0.5->0.5 and 0.65->0.65 (in-domain unchanged)",
+		"AUD9.8 wrong in-domain conversions: %s" % str(wrong))
+	# A preset without the field stays null (the caller keeps its default).
+	_check(WeatherProfileScript.rain_intensity_01({"preset": "no_rain"}) == null,
+		"AUD9.8 a preset with no rain.intensity converts to null",
+		"AUD9.8 a missing field produced %s" % str(WeatherProfileScript.rain_intensity_01({"preset": "no_rain"})))
+	# A negative value saturates at the low endpoint and is reported too.
+	var neg: Variant = WeatherProfileScript.rain_intensity_01(
+		{"preset": "negative_case", "rain": {"intensity": -2.0}})
+	_check(neg != null and _approx(float(neg), 0.0, 0.000001),
+		"AUD9.8 a negative intensity saturates at 0.0",
+		"AUD9.8 negative converted to %s" % str(neg))
+	# Warning path: every out-of-domain occurrence is counted and the preset id
+	# is recorded once (one loud line per preset, the count keeps incrementing).
+	var before: int = WeatherProfileScript.rain_domain_warnings()
+	WeatherProfileScript.rain_intensity_01(blood_moon)
+	WeatherProfileScript.rain_intensity_01(blood_moon)
+	WeatherProfileScript.rain_intensity_01({"preset": "ten_again", "rain": {"intensity": 10.0}})
+	var after: int = WeatherProfileScript.rain_domain_warnings()
+	var warned: Array = WeatherProfileScript.rain_domain_warned_presets()
+	_check(after - before == 3 and warned.has("blood_moon") and warned.has("ten_again"),
+		"AUD9.9 the out-of-domain path warns and counts each occurrence (%d -> %d, presets=%s)" % [
+			before, after, str(warned)],
+		"AUD9.9 warning count %d -> %d, presets=%s" % [before, after, str(warned)])
+	# In-domain presets never take the warning path.
+	var quiet_before: int = WeatherProfileScript.rain_domain_warnings()
+	for name: String in ["gloomy", "heavy_rain", "stormy", "dusk_stormy", "midnight_clear"]:
+		var p: Dictionary = WeatherProfileScript.load_preset(name)
+		WeatherProfileScript.rain_intensity_01(p)
+	_check(WeatherProfileScript.rain_domain_warnings() == quiet_before,
+		"AUD9.9 the five shipped in-domain presets take no warning path",
+		"AUD9.9 in-domain presets incremented the warning count")
+	# End to end: the converted 10.0 reaches the authored curve's 0 dB endpoint.
+	ctl.set_rtpc("Weather_Rain_Intensity", float(converted_blood))
+	_check(_approx(ctl.gain_db("Weather_Rain_Intensity"), 0.0, 0.000001),
+		"AUD9.9 the converted blood_moon value evaluates the authored 1.0 endpoint (0 dB)",
+		"AUD9.9 converted value gave %f dB" % ctl.gain_db("Weather_Rain_Intensity"))
+	# Leave the authored rest value for the later runtime assertions.
+	ctl.set_rtpc("Weather_Rain_Intensity", 0.0)
+	WeatherProfileScript.reset_rain_domain_warnings()
 
 
 ## 9. W11-E: the counted state-override table and the deferred unnamed buses.

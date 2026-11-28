@@ -38,9 +38,15 @@ authored Light Gem.
   Manor 1469 / 9275; FTUE 1558 / 5587; `max_poly_verts=6`,
   `decompress_fail=0`). `nav_runtime_probe` is 70/0; `TAT2_NAV` defaults **off**
   and the FSM still drives. N-P3 default-on and trajectory deltas remain.
-- **Audio** control is 123/0 with `music=2 music_keys=6/9`; 14/23 switches,
-  4/8 states, 16/50 RTPCs and 142 curves. State-property rows and the full
-  Wwise effects/mix are still deferred; VO director 53/0.
+- **Audio** control is **135/0** (was 123) with `music=2 music_keys=6/9`; 14/23
+  switches, 4/8 states, 16/50 RTPCs and 142 curves. VO director **60/0** (was
+  53) with **288/645 lines mapped, 357 unwired** and counted by owning-system
+  gap. State-property rows and the full Wwise effects/mix are still deferred;
+  the 3 unnamed music keys and 24 unnamed buses are **not recoverable from the
+  cook** (0/91 `AudioBus` named, no `AkTrigger`) — not pending extraction. The
+  `blood_moon` rain 10.0 now uses the one documented
+  `rain_intensity_01()` converter (see
+  [`phase3-audio-20261127.md`](reports/phase3-audio-20261127.md)).
 - **P4.1 exposure/IBL** AEM 77/0 and cubemap 37/0 with no PENDING data block.
   `CUBEMAP_ORIENT` records a daylight `+Y < -Y` luminance WARN (0.0680 vs
   0.0712). GPU-measured: the IBL ambient path carries energy **0.00005** and
@@ -228,11 +234,15 @@ string audit **311/311/199/199/112**; perf guard **78/78**.
   ~6 m off the mesh. The closed prison doorway's partial path was the
   unconsumed authored link, not a tile defect.
 
-- **P3 audio control plane — partial.** `audio_control.json` carries 14/23
-  switch groups, 4/8 state groups, 16/50 RTPCs and 142 curves; footstep
-  surface/gait, interior/exterior, modal state and the detection RTPC→music
-  gain/pitch are wired. State property rows, music switch decision trees,
-  `FS_Layers` and named-RTPC low-pass are deferred with reasons. Not a full
+- **P3 audio control plane — partial (post-3B.3).** `audio_control.json` carries
+  14/23 switch groups, 4/8 state groups, 16/50 RTPCs and 142 curves; footstep
+  surface/gait, interior/exterior, modal state, `FS_Layers` and the detection
+  RTPC→music gain/pitch are wired, and the sound→**sound** VO beats whose
+  systems exist are wired (guard damage/attack: 39 lines). State property rows,
+  music switch decision trees and named-RTPC low-pass are deferred with reasons.
+  The 3 unnamed music keys / 24 unnamed buses are **not recoverable from the
+  cook** (0/91 `AudioBus` named, no `AkTrigger`); the 5 unproduced `FS_Layers`
+  values are a `PORT_DECISION` with the double-ban rationale refuted. Not a full
   mix/music/VO port.
 - **P5 UI — headless-verified, not visually scored.** Light Gem lit-cap +
   direction plus the U-4 authored 21-slice array bind/selection (payload absent

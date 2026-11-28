@@ -1,0 +1,23 @@
+capture=doors_p5_1280x720
+shot=doors
+tag=p5
+run_id=20261128T103617Z
+size=1280x720
+engine=4.7.2-stable (official)
+renderer=forward_plus
+timestamp=2026-11-28T05:38:07
+save_home=/tmp/opencode/p5-ui-data
+save_path=
+profile=thief:spider level:<null> currency:<null> map:guildhall contract:2 mode:Solo free_play:true
+camera.pos=127.2747,27.1382,-5.3296 fwd=-0.4563,-0.1273,0.8807 fov=54.540 keep_aspect=1 far=4000.0
+pose=safe_room (HUD staging only)
+staged=hud.set_steal_prompt('[F] Open Door') + _set_secondary_prompt('[F] [HOLD] LOCK')
+hud.gem=path:authored_array bound:true layers:21 kind:directional slice:18 amount:0.000 lit_area:0.000 angle:-136.9
+hud.compass=SW
+hud.prompt=[F] Open Door
+hud.prompt_secondary=[HOLD] LOCK
+hud.keys=
+hud.letter_open=false
+hud.tree_paused=false
+roi.prompt=0.3600,0.5200,0.2800,0.0500 mean=0.4401 max=1.0000 px=3240
+roi.prompt_secondary=0.3600,0.5500,0.2800,0.0500 mean=0.3563 max=1.0000 px=3240

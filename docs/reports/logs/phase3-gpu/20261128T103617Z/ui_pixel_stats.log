@@ -1,0 +1,30 @@
+UI_PIXEL_STATS dir=/tmp/opencode/p5-ui-captures/20261128T103617Z frames=28
+  briefing@1280x720  briefing lines=11 last_y=484 margin=95 overflow=False
+  briefing@1920x1080  briefing lines=10 last_y=727 margin=142 overflow=False
+  contract_table@1280x720  legend contrast=7.11 ink=781 clip=left,top
+  contract_table@1920x1080  legend contrast=5.54 ink=1570 clip=left,top
+  crank@1280x720  gem lit=0.016 ang=-50.13 dir=[0.641, -0.7675] ring=6px  GEM_ANGLE_ERR=86.8  prompt contrast=3.73 ink=2073 clip=top,bottom
+  crank@1920x1080  gem lit=0.023 ang=-47.54 dir=[0.6751, -0.7378] ring=9px  GEM_ANGLE_ERR=89.4  prompt contrast=4.32 ink=4012 clip=top,bottom
+  den_hud@1280x720  compass rule_row=52 thick=7 span=311 heading=NW
+  den_hud@1920x1080  compass rule_row=80 thick=9 span=466 heading=NW
+  doors@1280x720  prompt contrast=3.03 ink=1284 clip=top,bottom  prompt_secondary contrast=3.61 ink=925 clip=top,bottom
+  doors@1920x1080  prompt contrast=3.68 ink=2551 clip=top,bottom  prompt_secondary contrast=4.51 ink=1665 clip=top,bottom
+  key@1280x720  key_row contrast=3.42 ink=77 clip=bottom
+  key@1920x1080  key_row contrast=3.62 ink=161 clip=bottom
+  ledger@1280x720  tabs contrast=7.75 ink=1457 clip=bottom
+  ledger@1920x1080  tabs contrast=7.64 ink=3464 clip=bottom
+  ledger_market@1280x720  tabs contrast=8.08 ink=1492 clip=bottom
+  ledger_market@1920x1080  tabs contrast=7.75 ink=3590 clip=bottom
+  pause@1280x720  footer contrast=1.10 ink=0 clip=-  modal contrast=5.85 ink=2938 clip=-  pause dim=0.2996 blur=7.8932
+  pause@1920x1080  footer contrast=1.10 ink=0 clip=-  modal contrast=5.85 ink=7202 clip=-  pause dim=0.309 blur=6.5561
+  pause_backdrop@1280x720
+  pause_backdrop@1920x1080
+  prep@1280x720  prompt contrast=8.20 ink=558 clip=left,top,bottom  cards contrast=8.35 ink=6262 clip=left,top,bottom
+  prep@1920x1080  prompt contrast=7.92 ink=1112 clip=left,top,bottom  cards contrast=8.33 ink=13170 clip=left,top
+  safe_room@1280x720  gem lit=0.079 ang=-66.54 dir=[0.3981, -0.9173] ring=5px
+  safe_room@1920x1080  gem lit=0.082 ang=-65.34 dir=[0.4172, -0.9088] ring=3px
+  startscreen@1280x720
+  startscreen@1920x1080
+  wardrobe@1280x720
+  wardrobe@1920x1080
+UI_PIXEL_STATS PASS rows=28

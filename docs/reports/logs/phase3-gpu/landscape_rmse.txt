@@ -1,0 +1,23 @@
+# landscape gap_view A/B, 2026-11-28
+# Decoded with tools/png_rgba.py at full 1920x1080, RGB channels only.
+# RMSE8 = per-channel RMS in 0..255; RMSE/255 = normalised; RMSE16 = ImageMagick-comparable 0..65535.
+# diff_px counts pixels with any channel difference; maxdiff is the largest single-channel |delta|.
+
+pose=gap_view 1920x1080
+pair            RMSE8   RMSE/255  RMSE16   diff_px        %px     maxdiff
+discard-raw       1.0077  0.003952  258.983    19489/2073600  0.9399%     192
+    off-raw       0.0769  0.000302   19.770     1360/2073600  0.0656%      48
+discard-off       1.0050  0.003941  258.274    19373/2073600  0.9343%     192
+
+mask-responsive pixels (discard vs raw, |delta|>8) per 16x9 cell (cell 120x120 px):
+row0     0     0     0   265     0     0     0     0     0     0     0     0     0     0     0     0
+row1     0     0     0     0     0     0     0     0     0     0     0     2     0     0     0     0
+row2     3     0     0     0     0     0     0     0     0     0     0     0     3     0     0     0
+row3     0     0     0     0     0     0     0     0     0     0     0     0     0     4     0     0
+row4     0     0     0     0     0     0     0     0     0     0     0     0     0     0     0     0
+row5     0     0     0     0     0     0     0     0     0     0     0     0     0     0     0     0
+row6     0     0     0     0     0     0     0     0     0     0     0     0     0     0     0     0
+row7     0     0     0     0     0     0     0   359    39     0     0     0     0     0     0     0
+row8     0     0     0     0     0     0     0   507    71     0     0     0     0     0     0     0
+
+total >8 cells=9; dominant cluster: rows 7-8 x cols 7-8 = 976 px; top sliver row0 col3 = 265 px

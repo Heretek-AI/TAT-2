@@ -126,22 +126,33 @@ count shift:
 The stale-payload detector was exercised against the shared base data: 55
 checks, **3 fails** (`fallback_broken 0`; `93 rows point at
 SM_ChestTrunkALid`; `rows=0 … expected=93`), exit 1 — the intended fail-loud
-behaviour. Against the fixed private payload: `GC_PROBE checks=55 fails=0`,
+behaviour. Against the fixed-complete copy (§5): `GC_PROBE checks=55 fails=0`,
 exit 0.
 
 ## 5. Gates run (serial, headless, worktree)
 
-| gate | result |
-|---|---|
-| `check_scripts_compile.gd` | `scripts checked: 232, broken: 0` |
-| `run_tests.gd` | `SUMMARY: fails=0` (exit 0) |
-| `probe_gc_destruction.gd`, shared (stale) data | `checks=55 fails=2` — detector fires on the regression (expected) |
-| `probe_gc_destruction.gd`, fixed private data | `GC_PROBE checks=55 fails=0` PASS |
-| `test_gc_break_trigger.gd` | `GC_TRIGGER checks=21 fails=0` PASS |
-| E2E tier `a2`, shared data | `fails=0 passed=22 total=22` (GC-STATS layers=174 leaves=80 static=20) |
-| E2E tier `p2`, fixed private data | `fails=0 passed=17 total=17`, `P2-CENSUS-GC … fallback_broken=93 sibling_smc=5 leaves=166` |
-| `python3 build/qa/test_parse_nav.py` | all PASS (exit 0) |
-| `python3 -m py_compile tools/parse_tables.py` | OK |
+| gate | tree / input | result |
+|---|---|---|
+| `check_scripts_compile.gd` | worktree sources (no generated-data read) | `scripts checked: 232, broken: 0` |
+| `run_tests.gd` | worktree sources + shared generated tree (stale) | `SUMMARY: fails=0` (exit 0) |
+| `probe_gc_destruction.gd` | shared tree (stale `fallback_broken=0`) | `checks=55 fails=3` — detector fires on the regression (expected) |
+| `probe_gc_destruction.gd` | fixed-complete copy (shared generated tree + the private `parse_tables` `levels/`) | `GC_PROBE checks=55 fails=0` PASS |
+| `test_gc_break_trigger.gd` | shared tree, and again on the fixed-complete copy | `GC_TRIGGER checks=21 fails=0` PASS in both. **Not** runnable on the bare `parse_tables`-only private root: that tree lacks the other producers' payload, and the test reports `checks=21 fails=1` (`interact starts the lockpick minigame`), so it is not a valid trigger environment |
+| E2E tier `a2` | shared tree (stale) | `fails=0 passed=22 total=22` (GC-STATS layers=174 leaves=80 static=20) |
+| E2E tier `p2` | fixed-complete copy | `fails=0 passed=17 total=17`, `P2-CENSUS-GC … fallback_broken=93 sibling_smc=5 leaves=166` |
+| `python3 build/qa/test_parse_nav.py` | tooling only (no generated tree read) | all PASS (exit 0) |
+| `python3 -m py_compile tools/parse_tables.py` | tooling only | OK |
+
+Tree definitions used above:
+
+* **shared tree** — the worktree's `game/data/generated` symlink to the main
+  checkout (base regeneration, chest `fallback_broken=0`).
+* **fixed-complete copy** — `/tmp/opencode/gcverify/full`: a full copy of the
+  shared generated tree with only `levels/` replaced by the private
+  `parse_tables` output (the fix in place).
+* **bare `parse_tables`-only private root** — `/tmp/opencode/gcverify/game/data/generated`:
+  sufficient for the GC payload probe, incomplete for tests that touch other
+  producers (the trigger's lockpick check needs `gameplay/*`).
 
 `make audit` will be **red in this branch** (`tools/parse_tables.py` changed
 since the baseline) until the integrator regenerates and runs
@@ -159,7 +170,17 @@ and the audit baseline are integrator-owned.
 3. Re-run the GC probe/trigger and E2E `p2` at the merged HEAD; the probe floor
    may be raised 52 → 55 (never lowered).
 4. Docs: the "no dump" wording for `GC_ChestTrunkALid` is superseded by this
-   report; the 93 fallback is now dump-backed.
+   report; the 93 fallback is now dump-backed. Two tracked docs are falsified by
+   this task and are **updated in this branch**:
+   * `docs/HANDOFF_NEXT_AGENT.md` (the "GC/destructibles" bullet): no longer
+     "`Destructibles/` is still absent … the 93-chest fallback is a prediction";
+     it now states the dump is extracted and the 93 chests are confirmed with no
+     separate fracture pieces.
+   * `docs/FIDELITY_GAPS.md` (Destructibles / GC): `probe_gc_destruction`
+     `44 checks` → `55 checks`.
+   Any other doc still calling the 93 fallback a prediction (e.g. older wave
+   reports) is historical and should be read through this report; do not
+   re-assert the prediction in new docs.
 
 ## 7. Not claimed
 

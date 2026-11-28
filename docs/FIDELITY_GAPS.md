@@ -537,8 +537,12 @@ run by `build/qa/run_p0a_gates.sh` (28 gates). Evidence:
   The deliberate held-secondary smash (same stacked hold doors use) is the only
   break path; ordinary tap keeps the lockpick path. That smash is a temporary
   **`PORT_DECISION`** — the authored damage path is required before Parity
-  Complete. Gates: `probe_gc_destruction` (44 checks) + `test_gc_break_trigger`
-  (21 checks).
+  Complete. Gates: `probe_gc_destruction` (55 checks) + `test_gc_break_trigger`
+  (21 checks). The `Destructibles/` dump is now extracted (Phase 3B.4,
+  2026-11-28): `GC_ChestTrunkALid` auto-instances only its intact lid
+  (`SM_ChestTrunkALid` x51) with no separate fracture mesh, so the labelled
+  `SM_ChestTrunkALid_Broken` fallback (`fallback_broken=93`) is confirmed, not a
+  prediction — see [`reports/gc-confirm-20261128.md`](reports/gc-confirm-20261128.md).
 - **Turrets and civilian (measured here; landed between W10-A and P0a).** 229
   turret actors now emit **1,145 visible parts, 0 hidden** (`TURRET_PROBE PASS`);
   the civilian body/head is dressed and sight casts from the head

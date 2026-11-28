@@ -101,7 +101,9 @@ and nothing else. `probe_gc_destruction.gd` keeps the numeric pins (93/5/0) and
 adds 3 checks (52 → 55) that fail with the reason when the chest overlay reuses
 the intact lid or the count moves. Measured: probe 55/0 on the fixed payload
 (55/3 on the stale shared payload — the detector firing), `test_gc_break_trigger`
-21/0, E2E a2 22/22, E2E p2 17/17 with the fixed data, compile 232/0,
+21/0 on the complete shared and fixed-complete trees (21/1 on the bare
+`parse_tables`-only private root, which lacks the other producers' payload),
+E2E a2 22/22, E2E p2 17/17 with the fixed data, compile 232/0,
 `run_tests` fails=0, `test_parse_nav.py` exit 0. Hold-F `break_container` stays a
 labelled PORT_DECISION; no damage/health path added, no generated data written.
 The shared `game/data/generated` still carries the stale 0 count, so `make
